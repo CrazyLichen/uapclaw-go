@@ -164,10 +164,10 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 
 	// 步骤4：注册 WebChannel（对齐 Python register_channel_with_inbound）
 	// web_norm_and_forward 回调：三层路由逻辑，对齐 Python _make_norm_and_forward
-	webNormAndForward := web.MakeNormAndForward(
+	webNormAndForward := MakeNormAndForward(
 		channelMgr,
-		web.ForwardReqMethods,
-		web.ForwardNoLocalHandlerMethods,
+		ForwardReqMethods,
+		ForwardNoLocalHandlerMethods,
 	)
 	channelMgr.RegisterChannelWithInbound(wc, webNormAndForward)
 

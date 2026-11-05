@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
 
@@ -94,8 +93,8 @@ func BuildACPRouteBinding(path, channelID string) *routing.RouteBinding {
 	return &routing.RouteBinding{
 		Path:                         path,
 		ChannelID:                    channelID,
-		ForwardMethods:               web.ForwardReqMethods,
-		ForwardNoLocalHandlerMethods: web.ForwardNoLocalHandlerMethods,
+		ForwardMethods:               ForwardReqMethods,
+		ForwardNoLocalHandlerMethods: ForwardNoLocalHandlerMethods,
 	}
 }
 

@@ -17,7 +17,6 @@
 //	├── doc.go              # 包文档
 //	├── web_connect.go      # WebChannel 核心（WS 服务端 + 连接管理 + 两层消息架构）
 //	├── app_web_handlers.go # 全部 RPC handler + 注册 + 配置写入 + 内存采集
-//	└── web_normalize.go    # 消息标准化（NormalizeGatewayMessage + MakeNormAndForward）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/web/
 // （前端源码与静态/文件服务在 channels/web，对齐 Python channels/web/）

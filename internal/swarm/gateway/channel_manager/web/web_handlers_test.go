@@ -33,53 +33,62 @@ func (f *fakeCryptoHandler) Decrypt(_ context.Context, ciphertext string) (strin
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestNewRPCDispatcher(t *testing.T) {
-	d := NewRPCDispatcher()
+func TestNewWebChannelMethods(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
 	assert.NotNil(t, d)
-	assert.Empty(t, d.handlers)
+	assert.Empty(t, d.methodHandlers)
 }
 
-func TestRPCDispatcher_Register(t *testing.T) {
-	d := NewRPCDispatcher()
+func TestWebChannelMethods_Register(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
 	called := false
-	d.Register("test.method", func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+	d.registerMethod("test.method", func(_ wsSender, _ string, _ map[string]any, _ string) {
 		called = true
-		return map[string]any{"ok": true}, nil
-	})
-	assert.Len(t, d.handlers, 1)
+	}, false)
+	assert.Len(t, d.methodHandlers, 1)
 	assert.False(t, called) // 仅注册，未调用
 }
 
-func TestRPCDispatcher_Dispatch_正常分发(t *testing.T) {
-	d := NewRPCDispatcher()
-	d.Register("test.echo", func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
-		return params, nil
-	})
+func TestWebChannelMethods_Register_localOnly(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
+	d.registerMethod("test.local", func(wsSender, string, map[string]any, string) {}, true)
+	assert.True(t, d.localOnlyMethods["test.local"])
 
-	result, err := d.Dispatch("test.echo", map[string]any{"msg": "hello"}, "sess_1")
+	d.unregisterMethod("test.local")
+	assert.NotContains(t, d.methodHandlers, "test.local")
+	assert.False(t, d.localOnlyMethods["test.local"])
+}
+
+func TestWebChannelMethods_Dispatch_正常分发(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
+	d.registerMethod("test.echo", func(ws wsSender, reqID string, params map[string]any, _ string) {
+		d.sendResponse(ws, reqID, true, params, "", "")
+	}, false)
+
+	result, err := dispatch(d, "test.echo", map[string]any{"msg": "hello"}, "sess_1")
 	assert.NoError(t, err)
 	assert.Equal(t, "hello", result["msg"])
 }
 
-func TestRPCDispatcher_Dispatch_方法未找到(t *testing.T) {
-	d := NewRPCDispatcher()
-	_, err := d.Dispatch("nonexistent.method", nil, "")
+func TestWebChannelMethods_Dispatch_方法未找到(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
+	_, err := dispatch(d, "nonexistent.method", nil, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "未找到")
 }
 
-func TestRPCDispatcher_Dispatch_并发安全(t *testing.T) {
-	d := NewRPCDispatcher()
-	d.Register("test.concurrent", func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		return map[string]any{"ok": true}, nil
-	})
+func TestWebChannelMethods_Dispatch_并发安全(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
+	d.registerMethod("test.concurrent", func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		d.sendResponse(ws, reqID, true, map[string]any{"ok": true}, "", "")
+	}, false)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := d.Dispatch("test.concurrent", nil, "")
+			result, err := dispatch(d, "test.concurrent", nil, "")
 			assert.NoError(t, err)
 			assert.True(t, result["ok"].(bool))
 		}()
@@ -87,14 +96,14 @@ func TestRPCDispatcher_Dispatch_并发安全(t *testing.T) {
 	wg.Wait()
 }
 
-func TestRPCDispatcher_Dispatch_handler返回错误(t *testing.T) {
-	d := NewRPCDispatcher()
-	d.Register("test.err", func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		return nil, fmt.Errorf("handler error")
-	})
-	result, err := d.Dispatch("test.err", nil, "")
+func TestWebChannelMethods_Dispatch_handler返回错误(t *testing.T) {
+	d := NewWebChannel(WebChannelConfig{}, nil, nil)
+	d.registerMethod("test.err", func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		d.sendResponse(ws, reqID, false, nil, "handler error", WsErrInternalError)
+	}, false)
+	result, err := dispatch(d, "test.err", nil, "")
 	assert.Error(t, err)
-	assert.Nil(t, result)
+	assert.NotNil(t, result)
 }
 
 func TestRegisterWebHandlers_全量注册(t *testing.T) {
@@ -124,7 +133,7 @@ func TestRegisterWebHandlers_全量注册(t *testing.T) {
 	}
 
 	for _, method := range expectedMethods {
-		_, ok := d.handlers[method]
+		_, ok := d.methodHandlers[method]
 		assert.True(t, ok, "方法 %q 应已注册", method)
 	}
 }
@@ -138,7 +147,7 @@ func TestHandleConfigGet(t *testing.T) {
 		_ = os.Unsetenv("MODEL_NAME")
 	}()
 
-	handler := handleConfigGet(nil)
+	handler := configGet(nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 
@@ -156,8 +165,8 @@ func TestHandleConfigGet(t *testing.T) {
 }
 
 func TestHandleConfigSet(t *testing.T) {
-	// 测试 handleConfigSet 逻辑（onConfigSaved 为 nil，跳过热重载）
-	handler := handleConfigSet(nil, nil, nil)
+	// 测试 configSet 逻辑（onConfigSaved 为 nil，跳过热重载）
+	handler := configSet(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"model_provider": "OpenAI",
 		"model":          "gpt-4",
@@ -176,7 +185,7 @@ func TestHandleConfigSet(t *testing.T) {
 }
 
 func TestHandleChannelGet(t *testing.T) {
-	handler := handleChannelGet(nil)
+	handler := channelGet(nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 
@@ -196,7 +205,7 @@ func TestHandleSessionList_空目录(t *testing.T) {
 	sessionsDir := workspace.AgentSessionsDir()
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o755))
 
-	result, err := handleSessionList(context.Background(), nil, "")
+	result, err := sessionList(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "sessions")
 	sessionList, ok := result["sessions"].([]map[string]any)
@@ -213,7 +222,7 @@ func TestHandleSessionCreate(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
-	result, err := handleSessionCreate(context.Background(), map[string]any{
+	result, err := sessionCreate(context.Background(), map[string]any{
 		"session_id": "test-create-session",
 		"title":      "test-session",
 	}, "")
@@ -232,7 +241,7 @@ func TestHandleSessionCreate(t *testing.T) {
 }
 
 func TestHandleSessionCreate_缺少SessionID(t *testing.T) {
-	result, err := handleSessionCreate(context.Background(), map[string]any{}, "")
+	result, err := sessionCreate(context.Background(), map[string]any{}, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
 	assert.Equal(t, WsErrBadRequest, result["code"])
@@ -274,30 +283,30 @@ func TestStubHandler(t *testing.T) {
 
 func TestChatMethods_Ack响应(t *testing.T) {
 	// chat.send 方法
-	result, err := handleChatSend()(context.Background(), nil, "sess_1")
+	result, err := chatSend()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
 	// chat.resume 方法
-	result, err = handleChatResume()(context.Background(), nil, "sess_1")
+	result, err = chatResume()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 
 	// chat.interrupt（无 intent 参数时不设置 intent 键）
-	result, err = handleChatInterrupt()(context.Background(), nil, "sess_1")
+	result, err = chatInterrupt()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
 	// chat.interrupt（有 intent 参数时包含 intent）
-	result, err = handleChatInterrupt()(context.Background(), map[string]any{"intent": "cancel"}, "sess_1")
+	result, err = chatInterrupt()(context.Background(), map[string]any{"intent": "cancel"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "cancel", result["intent"])
 
 	// chat.user_answer 方法
-	result, err = handleChatUserAnswer()(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
+	result, err = chatUserAnswer()(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "req_1", result["request_id"])
@@ -310,7 +319,7 @@ func TestConfigEnvMap_条目数(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_params为空(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil, nil)
+	handler := configSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
@@ -318,7 +327,7 @@ func TestHandleConfigSaveAll_params为空(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_仅config子载荷(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil, nil)
+	handler := configSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"config": map[string]any{
 			"model_provider": "OpenAI",
@@ -330,7 +339,7 @@ func TestHandleConfigSaveAll_仅config子载荷(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_config非对象(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil, nil)
+	handler := configSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"config": "not an object",
 	}, "")
@@ -340,7 +349,7 @@ func TestHandleConfigSaveAll_config非对象(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_models无效类型(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil, nil)
+	handler := configSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"models": "not a list",
 	}, "")
@@ -349,7 +358,7 @@ func TestHandleConfigSaveAll_models无效类型(t *testing.T) {
 }
 
 func TestHandleModelsList_无配置(t *testing.T) {
-	handler := handleModelsList()
+	handler := modelsList()
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "models")
@@ -361,7 +370,7 @@ func TestHandleModelsList_有crypto(t *testing.T) {
 	defer crypto.SetCryptoProvider(original)
 	crypto.SetCryptoProvider(&fakeCryptoHandler{})
 
-	handler := handleModelsList()
+	handler := modelsList()
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "models")
@@ -369,7 +378,7 @@ func TestHandleModelsList_有crypto(t *testing.T) {
 
 func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 	// 测试 nil ChannelManager 返回空
-	handler := handleChannelGet(nil)
+	handler := channelGet(nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	channels := result["channels"].([]map[string]any)
@@ -377,7 +386,7 @@ func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil, nil)
+	handler := configSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"config": map[string]any{
 			"model_provider": "OpenAI",
@@ -391,7 +400,7 @@ func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_空params对象(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil, nil)
+	handler := configSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{}, "")
 	require.NoError(t, err)
 	assert.True(t, result["ok"].(bool))
@@ -416,7 +425,7 @@ func TestHandleSessionList_有会话目录(t *testing.T) {
 	sessDir2 := filepath.Join(sessionsDir, "test-sess-2")
 	require.NoError(t, os.MkdirAll(sessDir2, 0o755))
 
-	result, err := handleSessionList(context.Background(), nil, "")
+	result, err := sessionList(context.Background(), nil, "")
 	require.NoError(t, err)
 	sessionList, ok := result["sessions"].([]map[string]any)
 	require.True(t, ok)
@@ -430,13 +439,13 @@ func TestHandleSessionCreate_已存在(t *testing.T) {
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	// 先创建
-	_, err := handleSessionCreate(context.Background(), map[string]any{
+	_, err := sessionCreate(context.Background(), map[string]any{
 		"session_id": "dup-session",
 	}, "")
 	require.NoError(t, err)
 
 	// 重复创建应报 ALREADY_EXISTS
-	result, err := handleSessionCreate(context.Background(), map[string]any{
+	result, err := sessionCreate(context.Background(), map[string]any{
 		"session_id": "dup-session",
 	}, "")
 	require.NoError(t, err)
@@ -450,7 +459,7 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
-	result, err := handleSessionCreate(context.Background(), map[string]any{
+	result, err := sessionCreate(context.Background(), map[string]any{
 		"session_id": "full-session",
 		"channel_id": "web",
 		"user_id":    "user1",
@@ -463,14 +472,14 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 }
 
 func TestHandleConfigSet_params为空(t *testing.T) {
-	handler := handleConfigSet(nil, nil, nil)
+	handler := configSet(nil, nil, nil)
 	result, err := handler(context.Background(), nil, "")
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
 
 func TestHandleConfigSet_无效Provider(t *testing.T) {
-	handler := handleConfigSet(nil, nil, nil)
+	handler := configSet(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"model_provider": "InvalidProvider",
 	}, "")
@@ -669,7 +678,7 @@ func TestNormalizeTruthy(t *testing.T) {
 }
 
 func TestHandleHistoryGet(t *testing.T) {
-	handler := handleHistoryGet()
+	handler := historyGet()
 	result, err := handler(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
@@ -677,7 +686,7 @@ func TestHandleHistoryGet(t *testing.T) {
 }
 
 func TestHandleHistoryGet_带参数(t *testing.T) {
-	handler := handleHistoryGet()
+	handler := historyGet()
 	result, err := handler(context.Background(), map[string]any{
 		"session_id": "custom-sess",
 		"page_idx":   2,
@@ -706,7 +715,7 @@ func TestHandleSessionList_分页(t *testing.T) {
 	}
 
 	// 测试 limit=2, offset=1
-	result, err := handleSessionList(context.Background(), map[string]any{
+	result, err := sessionList(context.Background(), map[string]any{
 		"limit":  2,
 		"offset": 1,
 	}, "")
@@ -719,14 +728,14 @@ func TestHandleSessionList_分页(t *testing.T) {
 }
 
 func TestHandleModelsReplaceAll_缺models(t *testing.T) {
-	handler := handleModelsReplaceAll(nil, nil)
+	handler := modelsReplaceAll(nil, nil)
 	result, err := handler(context.Background(), map[string]any{}, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
 }
 
 func TestHandleModelsValidate_缺必填字段(t *testing.T) {
-	handler := handleModelsValidate()
+	handler := modelsValidate()
 	result, err := handler(context.Background(), map[string]any{}, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
@@ -734,7 +743,7 @@ func TestHandleModelsValidate_缺必填字段(t *testing.T) {
 }
 
 func TestHandleModelsValidate_缺apiBase(t *testing.T) {
-	handler := handleModelsValidate()
+	handler := modelsValidate()
 	result, err := handler(context.Background(), map[string]any{
 		"api_key": "key1",
 		"model":   "gpt-4",
@@ -801,7 +810,7 @@ func TestHandleConfigGet_解密失败保留原值(t *testing.T) {
 	_ = os.Setenv("API_KEY", "rawcipher")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	handler := handleConfigGet(&fakeCryptoFailDecrypt{})
+	handler := configGet(&fakeCryptoFailDecrypt{})
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	if result["api_key"] != "rawcipher" {
@@ -814,7 +823,7 @@ func TestHandleConfigGet_解密成功(t *testing.T) {
 	_ = os.Setenv("API_KEY", "cipher")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	handler := handleConfigGet(&fakeCryptoHandler{})
+	handler := configGet(&fakeCryptoHandler{})
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	if result["api_key"] != "dec(cipher)" {
@@ -831,7 +840,7 @@ func TestHandleConfigGet_全局provider(t *testing.T) {
 	_ = os.Setenv("API_KEY", "cipher")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	handler := handleConfigGet(nil)
+	handler := configGet(nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	if result["api_key"] != "dec(cipher)" {
@@ -863,7 +872,7 @@ func TestHandleModelsList_走config层解密(t *testing.T) {
 	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: " + ciphertext + "\n      model_config_obj:\n        temperature: 0.7\n"
 	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
 
-	handler := handleModelsList()
+	handler := modelsList()
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 
@@ -891,7 +900,7 @@ func TestHandleModelsList_无provider保持密文(t *testing.T) {
 	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: rawcipher\n"
 	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
 
-	handler := handleModelsList()
+	handler := modelsList()
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 

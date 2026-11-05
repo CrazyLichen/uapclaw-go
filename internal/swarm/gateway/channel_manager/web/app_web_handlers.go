@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,17 +42,6 @@ import (
 type MessageHandler interface {
 	// PublishRobotMessages 通过消息管道推送机器人消息
 	PublishRobotMessages(ctx context.Context, msg *schema.Message) error
-}
-
-// RPCDispatcher RPC 方法注册与分发。
-//
-// Python: app_web_handlers.py 中的方法注册模式：
-// 所有 RPC 方法通过 Register 注册，Dispatch 按 method 查找并调用。
-type RPCDispatcher struct {
-	// handlers 已注册的 RPC 方法处理函数
-	handlers map[string]RPCHandlerFunc
-	// mu 保护 handlers 的并发访问
-	mu sync.RWMutex
 }
 
 // WebHandlersBindParams WebHandlers 绑定参数。
@@ -135,7 +123,7 @@ type EventSender func(event string, payload map[string]any)
 //   - configPayload: 完整配置快照
 type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
 
-// RPCHandlerFunc RPC 方法处理函数签名。
+// unaryHandler RPC 方法处理函数签名。
 //
 // 参数：
 //   - ctx：请求上下文
@@ -145,7 +133,7 @@ type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, con
 // 返回值：
 //   - map[string]any：响应负载
 //   - error：处理错误
-type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
+type unaryHandler func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -246,20 +234,37 @@ var configEnvMap = map[string]string{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewRPCDispatcher 创建空的 RPC 分发器。
-func NewRPCDispatcher() *RPCDispatcher {
-	return &RPCDispatcher{
-		handlers: make(map[string]RPCHandlerFunc),
+// wrapUnary 把"返回 payload"的 handler 适配成 methodHandler。
+//
+// ⤵️ 本仓既有 handler 仍返回 (payload, error)，由本适配器统一转成一帧 res；
+// B1b 各批新增方法直接写原生 methodHandler（可多帧），不再走此适配。
+func (wc *WebChannel) wrapUnary(fn unaryHandler) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
+		payload, err := fn(context.Background(), params, sessionID)
+		if err != nil {
+			code := WsErrInternalError
+			if strings.Contains(err.Error(), "未找到") {
+				code = WsErrMethodNotFound
+			}
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), code)
+			return
+		}
+		wc.sendResponse(ws, reqID, true, payload, "", "")
 	}
 }
 
-// RegisterWebHandlers 创建 RPC 分发器并注册所有应用方法。
+// RegisterWebHandlers 把全部 RPC 方法注册到 WebChannel 上。
 //
-// Python: app_web_handlers.py 中 _register_web_handlers(bind)，
-// 包括本地实现方法、chat 类方法和 stub 占位方法。
-// 消息转发由两层架构的第一层（normAndForward）处理，本地 handler 仅返回 ack。
-func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
-	d := NewRPCDispatcher()
+// Python: app_web_handlers.py 中 _register_web_handlers(bind)；
+// 注册表就是 WebChannel._method_handlers（web_connect.py:227/371-387），
+// 不存在独立的 dispatcher 类型。bind.Channel 为空时（测试场景）新建一个裸通道。
+func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
+	wc := (*WebChannel)(nil)
+	if bind != nil && bind.Channel != nil {
+		wc = bind.Channel
+	} else {
+		wc = NewWebChannel(WebChannelConfig{}, nil, nil)
+	}
 
 	// 从 bind 中提取事件发送器和配置保存回调（bind 可为 nil）
 	var sendEvent EventSender
@@ -286,114 +291,114 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	}
 
 	// ─── 本地实现方法 ───
-	d.Register("config.get", handleConfigGet(cryptoProv))
-	d.Register("config.set", handleConfigSet(sendEvent, onConfigSaved, cryptoProv))
-	d.Register("models.list", handleModelsList())
-	d.Register("channel.get", handleChannelGet(channelMgr))
-	d.Register("session.list", handleSessionList)
-	d.Register("session.create", handleSessionCreate)
+	wc.registerMethod("config.get", wc.wrapUnary(configGet(cryptoProv)), false)
+	wc.registerMethod("config.set", wc.wrapUnary(configSet(sendEvent, onConfigSaved, cryptoProv)), false)
+	wc.registerMethod("models.list", wc.wrapUnary(modelsList()), false)
+	wc.registerMethod("channel.get", wc.wrapUnary(channelGet(channelMgr)), false)
+	wc.registerMethod("session.list", wc.wrapUnary(sessionList), false)
+	wc.registerMethod("session.create", wc.wrapUnary(sessionCreate), false)
 
 	// ─── 历史辅助方法 ───
-	d.Register("history.get", handleHistoryGet())
+	wc.registerMethod("history.get", wc.wrapUnary(historyGet()), false)
 
 	// ─── config 辅助方法 ───
-	d.Register("config.save_all", handleConfigSaveAll(sendEvent, onConfigSaved, cryptoProv))
-	d.Register("config.validate_model", stubHandler("config.validate_model", map[string]any{"ok": true}))
+	wc.registerMethod("config.save_all", wc.wrapUnary(configSaveAll(sendEvent, onConfigSaved, cryptoProv)), false)
+	wc.registerMethod("config.validate_model", wc.wrapUnary(stubHandler("config.validate_model", map[string]any{"ok": true})), false)
 
 	// ─── models 辅助方法 ───
-	d.Register("models.replace_all", handleModelsReplaceAll(onConfigSaved, cryptoProv))
-	d.Register("models.validate", handleModelsValidate())
+	wc.registerMethod("models.replace_all", wc.wrapUnary(modelsReplaceAll(onConfigSaved, cryptoProv)), false)
+	wc.registerMethod("models.validate", wc.wrapUnary(modelsValidate()), false)
 
 	// ─── session 辅助方法 ───
 
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
-	d.Register("chat.send", handleChatSend())
-	d.Register("chat.resume", handleChatResume())
-	d.Register("chat.interrupt", handleChatInterrupt())
-	d.Register("chat.user_answer", handleChatUserAnswer())
+	wc.registerMethod("chat.send", wc.wrapUnary(chatSend()), false)
+	wc.registerMethod("chat.resume", wc.wrapUnary(chatResume()), false)
+	wc.registerMethod("chat.interrupt", wc.wrapUnary(chatInterrupt()), false)
+	wc.registerMethod("chat.user_answer", wc.wrapUnary(chatUserAnswer()), false)
 
 	// ─── 路径配置 ───
-	d.Register("path.get", stubHandler("path.get", map[string]any{"path": ""}))
-	d.Register("path.set", stubHandler("path.set", map[string]any{"ok": true}))
+	wc.registerMethod("path.get", wc.wrapUnary(stubHandler("path.get", map[string]any{"path": ""})), false)
+	wc.registerMethod("path.set", wc.wrapUnary(stubHandler("path.set", map[string]any{"ok": true})), false)
 
 	// ─── 内存信息 ───
 	// Python: _memory_compute (app_web_handlers.py L1414-1427)，psutil 真实采集
-	d.Register("memory.compute", handleMemoryCompute())
+	wc.registerMethod("memory.compute", wc.wrapUnary(memoryCompute()), false)
 
 	// ─── 语言配置 ───
-	d.Register("locale.get_conf", stubHandler("locale.get_conf", map[string]any{"preferred_language": "zh"}))
-	d.Register("locale.set_conf", stubHandler("locale.set_conf", map[string]any{"ok": true}))
+	wc.registerMethod("locale.get_conf", wc.wrapUnary(stubHandler("locale.get_conf", map[string]any{"preferred_language": "zh"})), false)
+	wc.registerMethod("locale.set_conf", wc.wrapUnary(stubHandler("locale.set_conf", map[string]any{"ok": true})), false)
 
 	// ─── 心跳配置 ───
 	// 11.11 已回填：注入服务时接真实 handler（对齐 Python _heartbeat_get_conf/_set_conf/_get_path）
 	if heartbeatSvc != nil {
-		d.Register("heartbeat.get_conf", handleHeartbeatGetConf(heartbeatSvc))
-		d.Register("heartbeat.set_conf", handleHeartbeatSetConf(heartbeatSvc, agentClient))
+		wc.registerMethod("heartbeat.get_conf", wc.wrapUnary(heartbeatGetConf(heartbeatSvc)), false)
+		wc.registerMethod("heartbeat.set_conf", wc.wrapUnary(heartbeatSetConf(heartbeatSvc, agentClient)), false)
 	} else {
-		d.Register("heartbeat.get_conf", stubHandler("heartbeat.get_conf", map[string]any{
+		wc.registerMethod("heartbeat.get_conf", wc.wrapUnary(stubHandler("heartbeat.get_conf", map[string]any{
 			"every": 0, "target": "", "active_hours": map[string]any{},
-		}))
-		d.Register("heartbeat.set_conf", stubHandler("heartbeat.set_conf", map[string]any{"ok": true}))
+		})), false)
+		wc.registerMethod("heartbeat.set_conf", wc.wrapUnary(stubHandler("heartbeat.set_conf", map[string]any{"ok": true})), false)
 	}
 
 	// ─── 更新器 ───
 	updaterStub := stubHandler("updater", map[string]any{"status": "up_to_date"})
-	d.Register("updater.check", updaterStub)
-	d.Register("updater.download", updaterStub)
-	d.Register("updater.get_status", updaterStub)
+	wc.registerMethod("updater.check", wc.wrapUnary(updaterStub), false)
+	wc.registerMethod("updater.download", wc.wrapUnary(updaterStub), false)
+	wc.registerMethod("updater.get_status", wc.wrapUnary(updaterStub), false)
 
 	// ─── 钩子 ───
-	d.Register("hooks.list", stubHandler("hooks.list", map[string]any{"hooks": []any{}}))
+	wc.registerMethod("hooks.list", wc.wrapUnary(stubHandler("hooks.list", map[string]any{"hooks": []any{}})), false)
 
 	// ─── 权限 ───
 	// Python: owner_scopes.get/set 在 web_handlers 中直接处理（不经 E2A / config_rpc）
 	// Python: tools/rules/approval_overrides 通过 _forward_permissions_to_agent 转发到 AgentServer
-	d.Register("permissions.owner_scopes.get", handlePermissionsOwnerScopesGet())
-	d.Register("permissions.owner_scopes.set", handlePermissionsOwnerScopesSet())
-	d.Register("permissions.tools.get", handlePermissionsForwardToAgent(agentClient, "permissions.tools.get"))
-	d.Register("permissions.tools.set", handlePermissionsForwardToAgent(agentClient, "permissions.tools.set"))
-	d.Register("permissions.tools.update", handlePermissionsForwardToAgent(agentClient, "permissions.tools.update"))
-	d.Register("permissions.tools.delete", handlePermissionsForwardToAgent(agentClient, "permissions.tools.delete"))
-	d.Register("permissions.rules.get", handlePermissionsForwardToAgent(agentClient, "permissions.rules.get"))
-	d.Register("permissions.rules.create", handlePermissionsForwardToAgent(agentClient, "permissions.rules.create"))
-	d.Register("permissions.rules.update", handlePermissionsForwardToAgent(agentClient, "permissions.rules.update"))
-	d.Register("permissions.rules.delete", handlePermissionsForwardToAgent(agentClient, "permissions.rules.delete"))
-	d.Register("permissions.approval_overrides.get", handlePermissionsForwardToAgent(agentClient, "permissions.approval_overrides.get"))
-	d.Register("permissions.approval_overrides.delete", handlePermissionsForwardToAgent(agentClient, "permissions.approval_overrides.delete"))
+	wc.registerMethod("permissions.owner_scopes.get", wc.wrapUnary(permissionsOwnerScopesGet()), false)
+	wc.registerMethod("permissions.owner_scopes.set", wc.wrapUnary(permissionsOwnerScopesSet()), false)
+	wc.registerMethod("permissions.tools.get", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.get")), false)
+	wc.registerMethod("permissions.tools.set", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.set")), false)
+	wc.registerMethod("permissions.tools.update", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.update")), false)
+	wc.registerMethod("permissions.tools.delete", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.delete")), false)
+	wc.registerMethod("permissions.rules.get", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.get")), false)
+	wc.registerMethod("permissions.rules.create", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.create")), false)
+	wc.registerMethod("permissions.rules.update", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.update")), false)
+	wc.registerMethod("permissions.rules.delete", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.delete")), false)
+	wc.registerMethod("permissions.approval_overrides.get", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.approval_overrides.get")), false)
+	wc.registerMethod("permissions.approval_overrides.delete", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.approval_overrides.delete")), false)
 
 	// ─── 禁止记忆 ───
-	d.Register("memory.forbidden.get", handleMemoryForbiddenGet())
-	d.Register("memory.forbidden.set", handleMemoryForbiddenSet())
+	wc.registerMethod("memory.forbidden.get", wc.wrapUnary(memoryForbiddenGet()), false)
+	wc.registerMethod("memory.forbidden.set", wc.wrapUnary(memoryForbiddenSet()), false)
 
 	// ─── IM 平台配置 ───
 	channelConfStub := stubHandler("channel.conf", map[string]any{})
 	for _, platform := range []string{"feishu", "dingtalk", "telegram", "discord", "whatsapp", "wecom", "xiaoyi"} {
-		d.Register("channel."+platform+".get_conf", channelConfStub)
-		d.Register("channel."+platform+".set_conf", channelConfStub)
+		wc.registerMethod("channel."+platform+".get_conf", wc.wrapUnary(channelConfStub), false)
+		wc.registerMethod("channel."+platform+".set_conf", wc.wrapUnary(channelConfStub), false)
 	}
-	d.Register("channel.wechat.get_login_ui", stubHandler("channel.wechat.get_login_ui", map[string]any{}))
-	d.Register("channel.wechat.unbind", stubHandler("channel.wechat.unbind", map[string]any{}))
+	wc.registerMethod("channel.wechat.get_login_ui", wc.wrapUnary(stubHandler("channel.wechat.get_login_ui", map[string]any{})), false)
+	wc.registerMethod("channel.wechat.unbind", wc.wrapUnary(stubHandler("channel.wechat.unbind", map[string]any{})), false)
 
 	// ─── 定时任务 ───
 	// 11.10 已回填：8 个 cron.job.* 端点接真实 CronController
 	// （对齐 Python register_method：list/get/create/update/delete/toggle/preview/run_now）
 	if cronController != nil {
 		cc := cronController
-		d.Register("cron.job.list", handleCronJobList(cc))
-		d.Register("cron.job.get", handleCronJobGet(cc))
-		d.Register("cron.job.create", handleCronJobCreate(cc))
-		d.Register("cron.job.update", handleCronJobUpdate(cc))
-		d.Register("cron.job.delete", handleCronJobDelete(cc))
-		d.Register("cron.job.toggle", handleCronJobToggle(cc))
-		d.Register("cron.job.preview", handleCronJobPreview(cc))
-		d.Register("cron.job.run_now", handleCronJobRunNow(cc))
+		wc.registerMethod("cron.job.list", wc.wrapUnary(cronJobList(cc)), false)
+		wc.registerMethod("cron.job.get", wc.wrapUnary(cronJobGet(cc)), false)
+		wc.registerMethod("cron.job.create", wc.wrapUnary(cronJobCreate(cc)), false)
+		wc.registerMethod("cron.job.update", wc.wrapUnary(cronJobUpdate(cc)), false)
+		wc.registerMethod("cron.job.delete", wc.wrapUnary(cronJobDelete(cc)), false)
+		wc.registerMethod("cron.job.toggle", wc.wrapUnary(cronJobToggle(cc)), false)
+		wc.registerMethod("cron.job.preview", wc.wrapUnary(cronJobPreview(cc)), false)
+		wc.registerMethod("cron.job.run_now", wc.wrapUnary(cronJobRunNow(cc)), false)
 	} else {
 		cronListStub := stubHandler("cron", map[string]any{"jobs": []any{}})
 		cronOkStub := stubHandler("cron", map[string]any{"ok": true})
-		d.Register("cron.job.list", cronListStub)
-		d.Register("cron.job.create", cronOkStub)
-		d.Register("cron.job.update", cronOkStub)
-		d.Register("cron.job.delete", cronOkStub)
+		wc.registerMethod("cron.job.list", wc.wrapUnary(cronListStub), false)
+		wc.registerMethod("cron.job.create", wc.wrapUnary(cronOkStub), false)
+		wc.registerMethod("cron.job.update", wc.wrapUnary(cronOkStub), false)
+		wc.registerMethod("cron.job.delete", wc.wrapUnary(cronOkStub), false)
 	}
 
 	// ─── 运行时 ───
@@ -477,7 +482,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		"schedule.delete":        {"ok": true},
 	}
 	for method, payload := range forwardStubs {
-		d.Register(method, stubHandler(method, payload))
+		wc.registerMethod(method, wc.wrapUnary(stubHandler(method, payload)), false)
 	}
 
 	// ─── 注册 onConnect 钩子：发送 connection.ack ───
@@ -524,52 +529,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		})
 	}
 
-	// 将 dispatcher 设到 channel 上
-	if channel != nil {
-		channel.dispatcher = d
-	}
-
-	return d
-}
-
-// Register 注册 RPC 方法处理函数。
-//
-// Python: app_web_handlers.py 中 @register_rpc_method 装饰器模式。
-func (d *RPCDispatcher) Register(method string, handler RPCHandlerFunc) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.handlers[method] = handler
-	logger.Debug(logComponent).
-		Str("method", method).
-		Msg("RPC method registered")
-}
-
-// Dispatch 分发 RPC 请求到对应处理函数。
-//
-// Python: _handle_rpc_request 中 method 查找与调用逻辑。
-// 方法未找到时返回 METHOD_NOT_FOUND 错误。
-func (d *RPCDispatcher) Dispatch(method string, params map[string]any, sessionID string) (map[string]any, error) {
-	d.mu.RLock()
-	handler, ok := d.handlers[method]
-	d.mu.RUnlock()
-
-	if !ok {
-		logger.Warn(logComponent).
-			Str("method", method).
-			Msg("RPC method not found")
-		return nil, fmt.Errorf("方法 %q 未找到", method)
-	}
-
-	ctx := context.Background()
-	result, err := handler(ctx, params, sessionID)
-	if err != nil {
-		logger.Error(logComponent).
-			Str("method", method).
-			Err(err).
-			Msg("RPC method handling failed")
-	}
-	return result, err
+	return wc
 }
 
 // MakeSessionID 生成会话标识。
@@ -602,11 +562,11 @@ func strOrEmpty(val any) string {
 	return s
 }
 
-// handleMemoryForbiddenGet 处理 memory.forbidden.get 请求。
+// memoryForbiddenGet 处理 memory.forbidden.get 请求。
 //
 // 从 config.yaml 读取 memory.forbidden_memory_definition 并返回。
 // Python: _memory_forbidden_get (app_web_handlers.py)。
-func handleMemoryForbiddenGet() RPCHandlerFunc {
+func memoryForbiddenGet() unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		cfg, err := loadAppConfig()
 		if err != nil {
@@ -622,11 +582,11 @@ func handleMemoryForbiddenGet() RPCHandlerFunc {
 	}
 }
 
-// handleMemoryForbiddenSet 处理 memory.forbidden.set 请求。
+// memoryForbiddenSet 处理 memory.forbidden.set 请求。
 //
 // 接收 params，调用 updateMemoryForbiddenInConfig 写回。
 // Python: _memory_forbidden_set (app_web_handlers.py) + update_memory_forbidden_in_config (config.py)。
-func handleMemoryForbiddenSet() RPCHandlerFunc {
+func memoryForbiddenSet() unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
@@ -642,18 +602,18 @@ func handleMemoryForbiddenSet() RPCHandlerFunc {
 // stubHandler 返回固定 stub 响应的处理函数。
 //
 // 用于尚未实现转发的 RPC 方法，返回占位数据使前端不报错。
-func stubHandler(_ string, payload map[string]any) RPCHandlerFunc {
+func stubHandler(_ string, payload map[string]any) unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		return payload, nil
 	}
 }
 
-// handleConfigGet 处理 config.get 请求。
+// configGet 处理 config.get 请求。
 //
 // 全量实现：读取 configEnvMap 中 47 个环境变量 + config.yaml 补充字段 + app_version。
 // Python: config_get_handler 中 ~65 字段的返回。
 // cryptoProv 用于解密 api_key/token 等敏感字段。
-func handleConfigGet(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
+func configGet(cryptoProv crypto.CryptoProvider) unaryHandler {
 	return func(ctx context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		p := resolveCrypto(cryptoProv)
 		result := make(map[string]any, len(configEnvMap)+10)
@@ -782,11 +742,11 @@ func normalizeTruthy(val string) string {
 	return "false"
 }
 
-// handleConfigSet 处理 config.set 请求。
+// configSet 处理 config.set 请求。
 //
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
 // Python: _config_set (app_web_handlers.py L870-895)。
-func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
+func configSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) unaryHandler {
 	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params 不能为空")
@@ -825,13 +785,13 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cry
 	}
 }
 
-// handleConfigSaveAll 处理 config.save_all 请求。
+// configSaveAll 处理 config.save_all 请求。
 //
 // 批量保存配置面板变更并触发热重载。
 // Python: _config_save_all (app_web_handlers.py L1086-1151)。
 //
 // 支持子载荷：config、models、agents、team。
-func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
+func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) unaryHandler {
 	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
@@ -926,14 +886,14 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 	}
 }
 
-// handleModelsList 处理 models.list 请求。
+// modelsList 处理 models.list 请求。
 //
 // Python: _models_list (app_web_handlers.py L1023-1055)。
 // 数据流对齐 Python：get_config() → get_default_models(config) → _decrypt_model_entries
 // ——解密发生在 config 层（GetDefaultModels 内部经 decryptModelEntries 查全局 provider），
 // handler 层零解密（对齐 Python handler 不持 crypto）。api_key 解密失败由
 // decryptModelEntries 保留原值（对齐 Python except: pass）。
-func handleModelsList() RPCHandlerFunc {
+func modelsList() unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		// 对齐 Python: config = get_config(); models = get_default_models(config)
 		models := config.GetDefaultModels(nil)
@@ -1007,11 +967,11 @@ func handleModelsList() RPCHandlerFunc {
 	}
 }
 
-// handleChannelGet 处理 channel.get 请求。
+// channelGet 处理 channel.get 请求。
 //
 // 从 ChannelManager 动态读取已启用的渠道列表。
 // Python: channel_get_handler，返回数组 [{channel_id: cid}]。
-func handleChannelGet(channelMgr *cm.ChannelManager) RPCHandlerFunc {
+func channelGet(channelMgr *cm.ChannelManager) unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		channels := make([]map[string]any, 0)
 		if channelMgr != nil {
@@ -1023,11 +983,11 @@ func handleChannelGet(channelMgr *cm.ChannelManager) RPCHandlerFunc {
 	}
 }
 
-// handleSessionList 处理 session.list 请求。
+// sessionList 处理 session.list 请求。
 //
 // 遍历会话目录，读取每个 session 的 metadata.json 返回列表。
 // 支持分页：limit 和 offset 参数，对齐 Python (L1264-1293)。
-func handleSessionList(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func sessionList(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 	sessionsDir := workspace.AgentSessionsDir()
 
 	// 解析分页参数（对齐 Python L1264-1271）
@@ -1148,11 +1108,11 @@ func sessionLastMessageAt(session map[string]any) float64 {
 	}
 }
 
-// handleSessionCreate 处理 session.create 请求。
+// sessionCreate 处理 session.create 请求。
 //
 // 创建会话目录和 metadata.json。
 // Python: session_create_handler，要求 session_id 非空，已存在则 ALREADY_EXISTS。
-func handleSessionCreate(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func sessionCreate(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 	// 要求 session_id（对齐 Python: 必填参数）
 	sessionID, _ := params["session_id"].(string)
 	if sessionID == "" {
@@ -1199,7 +1159,7 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 }
 
 // Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
-func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
+func modelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) unaryHandler {
 	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params 不能为空")
@@ -1233,11 +1193,11 @@ func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.C
 	}
 }
 
-// handleModelsValidate 处理 models.validate 请求。
+// modelsValidate 处理 models.validate 请求。
 //
 // Python: _config_validate_model (app_web_handlers.py L897-1019)。
 // 调用 LLM 验证 api_key 和 api_base 是否有效。
-func handleModelsValidate() RPCHandlerFunc {
+func modelsValidate() unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return map[string]any{"ok": false, "error": "params 是必填项", "code": WsErrBadRequest}, nil
@@ -1328,11 +1288,11 @@ func handleModelsValidate() RPCHandlerFunc {
 	}
 }
 
-// handleHistoryGet 处理 history.get 本地请求。
+// historyGet 处理 history.get 本地请求。
 //
 // 返回 ack 响应，实际历史数据由 AgentServer 转发路径提供。
 // Python: (L1459-1466)。
-func handleHistoryGet() RPCHandlerFunc {
+func historyGet() unaryHandler {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		payload := map[string]any{"accepted": true, "session_id": sessionID}
 		if params != nil {
@@ -1347,31 +1307,31 @@ func handleHistoryGet() RPCHandlerFunc {
 	}
 }
 
-// handleChatSend 处理 chat.send 请求。
+// chatSend 处理 chat.send 请求。
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
 // Python: chat.send handler 仅返回 ack。
-func handleChatSend() RPCHandlerFunc {
+func chatSend() unaryHandler {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
 	}
 }
 
-// handleChatResume 处理 chat.resume 请求。
+// chatResume 处理 chat.resume 请求。
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
-func handleChatResume() RPCHandlerFunc {
+func chatResume() unaryHandler {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
 	}
 }
 
-// handleChatInterrupt 处理 chat.interrupt 请求。
+// chatInterrupt 处理 chat.interrupt 请求。
 //
 // 返回即时 ack 响应，从 params 中提取 intent。
 // Python: chat.interrupt handler，intent 默认 "interrupt"，可从 params 覆写。
 // 消息转发由两层架构第一层（normAndForward）处理。
-func handleChatInterrupt() RPCHandlerFunc {
+func chatInterrupt() unaryHandler {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		payload := map[string]any{"accepted": true, "session_id": sessionID}
 		if params != nil {
@@ -1383,10 +1343,10 @@ func handleChatInterrupt() RPCHandlerFunc {
 	}
 }
 
-// handleChatUserAnswer 处理 chat.user_answer 请求。
+// chatUserAnswer 处理 chat.user_answer 请求。
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
-func handleChatUserAnswer() RPCHandlerFunc {
+func chatUserAnswer() unaryHandler {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		requestID, _ := params["request_id"].(string)
 		return map[string]any{"accepted": true, "session_id": sessionID, "request_id": requestID}, nil
@@ -1722,10 +1682,10 @@ func sortedKeys(m map[string]string) []string {
 
 // ──────────────────────────── 权限 RPC 处理函数 ────────────────────────────
 
-// handlePermissionsOwnerScopesGet 处理 permissions.owner_scopes.get 请求。
+// permissionsOwnerScopesGet 处理 permissions.owner_scopes.get 请求。
 // Python: _permissions_owner_scopes_get (app_web_handlers.py L2275-2283)
 // 直接从配置读取 owner_scopes，不经 E2A / config_rpc。
-func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
+func permissionsOwnerScopesGet() unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		// Python: get_permissions_owner_scopes() — get_config()（normalize 后）
 		cfgPath := workspace.ConfigFile()
@@ -1758,10 +1718,10 @@ func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 	}
 }
 
-// handlePermissionsOwnerScopesSet 处理 permissions.owner_scopes.set 请求。
+// permissionsOwnerScopesSet 处理 permissions.owner_scopes.set 请求。
 // Python: _permissions_owner_scopes_set (app_web_handlers.py L2285-2298)
 // 直接调用 UpdatePermissionsOwnerScopesInConfig 统一写路径，不经 E2A / config_rpc。
-func handlePermissionsOwnerScopesSet() RPCHandlerFunc {
+func permissionsOwnerScopesSet() unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params must be object")
@@ -1774,10 +1734,10 @@ func handlePermissionsOwnerScopesSet() RPCHandlerFunc {
 	}
 }
 
-// handlePermissionsForwardToAgent 处理权限 RPC 请求，优先经 E2A 转发到 AgentServer；
+// permissionsForwardToAgent 处理权限 RPC 请求，优先经 E2A 转发到 AgentServer；
 // AgentServer 未就绪时本地执行（与 config_rpc 同源）。
 // Python: _forward_permissions_to_agent (app_web_handlers.py L2303-2365)
-func handlePermissionsForwardToAgent(ac *routing.AgentClient, method string) RPCHandlerFunc {
+func permissionsForwardToAgent(ac *routing.AgentClient, method string) unaryHandler {
 	return func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		// AgentServer 已就绪 → E2A 转发
 		if ac != nil && ac.ServerReady() {
@@ -1818,9 +1778,9 @@ func handlePermissionsForwardToAgent(ac *routing.AgentClient, method string) RPC
 	}
 }
 
-// handleCronJobList 处理 cron.job.list。
+// cronJobList 处理 cron.job.list。
 // Python: _cron_job_list (app_web_handlers.py L2050-2056)。
-func handleCronJobList(cc CronJobController) RPCHandlerFunc {
+func cronJobList(cc CronJobController) unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		jobs, err := cc.ListJobs()
 		if err != nil {
@@ -1830,9 +1790,9 @@ func handleCronJobList(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobGet 处理 cron.job.get。
+// cronJobGet 处理 cron.job.get。
 // Python: _cron_job_get (L2058-2074)。id 必填；job 不存在 → NOT_FOUND。
-func handleCronJobGet(cc CronJobController) RPCHandlerFunc {
+func cronJobGet(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -1852,9 +1812,9 @@ func handleCronJobGet(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobCreate 处理 cron.job.create。
+// cronJobCreate 处理 cron.job.create。
 // Python: _cron_job_create (L2076-2089)。异常 → BAD_REQUEST。
-func handleCronJobCreate(cc CronJobController) RPCHandlerFunc {
+func cronJobCreate(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -1867,9 +1827,9 @@ func handleCronJobCreate(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobUpdate 处理 cron.job.update。
+// cronJobUpdate 处理 cron.job.update。
 // Python: _cron_job_update (L2091-2115)。job not found → NOT_FOUND，其余 → BAD_REQUEST。
-func handleCronJobUpdate(cc CronJobController) RPCHandlerFunc {
+func cronJobUpdate(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -1893,9 +1853,9 @@ func handleCronJobUpdate(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobDelete 处理 cron.job.delete。
+// cronJobDelete 处理 cron.job.delete。
 // Python: _cron_job_delete (L2117-2136)。未删除 → NOT_FOUND。
-func handleCronJobDelete(cc CronJobController) RPCHandlerFunc {
+func cronJobDelete(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -1915,9 +1875,9 @@ func handleCronJobDelete(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobToggle 处理 cron.job.toggle。
+// cronJobToggle 处理 cron.job.toggle。
 // Python: _cron_job_toggle (L2138-2161)。enabled 必填；job not found → NOT_FOUND。
-func handleCronJobToggle(cc CronJobController) RPCHandlerFunc {
+func cronJobToggle(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -1945,9 +1905,9 @@ func handleCronJobToggle(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobPreview 处理 cron.job.preview。
+// cronJobPreview 处理 cron.job.preview。
 // Python: _cron_job_preview (L2163-2180)。count 默认 5；job not found → NOT_FOUND。
-func handleCronJobPreview(cc CronJobController) RPCHandlerFunc {
+func cronJobPreview(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -1971,9 +1931,9 @@ func handleCronJobPreview(cc CronJobController) RPCHandlerFunc {
 	}
 }
 
-// handleCronJobRunNow 处理 cron.job.run_now。
+// cronJobRunNow 处理 cron.job.run_now。
 // Python: _cron_job_run_now (L2182-2198)。job not found → NOT_FOUND，其余 → INTERNAL_ERROR。
-func handleCronJobRunNow(cc CronJobController) RPCHandlerFunc {
+func cronJobRunNow(cc CronJobController) unaryHandler {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
@@ -2009,9 +1969,9 @@ func cronStrVal(v any) string {
 
 // ──────────────────────────── 心跳配置 handler（11.11） ────────────────────────────
 
-// handleHeartbeatGetConf 处理 heartbeat.get_conf。
+// heartbeatGetConf 处理 heartbeat.get_conf。
 // Python: _heartbeat_get_conf (app_web_handlers.py L1513-1525)。
-func handleHeartbeatGetConf(svc HeartbeatConfService) RPCHandlerFunc {
+func heartbeatGetConf(svc HeartbeatConfService) unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		if svc == nil {
 			return heartbeatErrPayload(WsErrServiceUnavailable, "heartbeat service not available"), nil
@@ -2020,9 +1980,9 @@ func handleHeartbeatGetConf(svc HeartbeatConfService) RPCHandlerFunc {
 	}
 }
 
-// handleHeartbeatSetConf 处理 heartbeat.set_conf。
+// heartbeatSetConf 处理 heartbeat.set_conf。
 // Python: _heartbeat_set_conf (app_web_handlers.py L1527-1563)。
-func handleHeartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) RPCHandlerFunc {
+func heartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) unaryHandler {
 	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if svc == nil {
 			return heartbeatErrPayload(WsErrServiceUnavailable, "heartbeat service not available"), nil
@@ -3167,12 +3127,12 @@ var systemVirtualMemory = mem.VirtualMemory
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// handleMemoryCompute 处理 memory.compute 请求，返回进程与系统内存占用。
+// memoryCompute 处理 memory.compute 请求，返回进程与系统内存占用。
 //
 // Python: _memory_compute (app_web_handlers.py L1414-1427)
 // 偏差：Python 计算了 mem.percent 却未放进 payload，此处补 used_percent 为超集
 // （Go 前端 ToolPanel 读取该键，见 spec D1）。
-func handleMemoryCompute() RPCHandlerFunc {
+func memoryCompute() unaryHandler {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		rssBytes, totalBytes, availableBytes, usedPercent, err := collectMemory()
 		if err != nil {

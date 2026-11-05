@@ -25,7 +25,7 @@ func TestNewWebChannel_默认配置(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", wc.config.Host)
 	assert.Equal(t, 19000, wc.config.Port)
 	assert.Equal(t, "/ws", wc.config.Path)
-	assert.NotNil(t, wc.dispatcher)
+	assert.NotNil(t, wc.methodHandlers)
 	assert.NotNil(t, wc.upgrader.CheckOrigin)
 }
 

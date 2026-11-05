@@ -47,8 +47,12 @@ type WebChannel struct {
 	clients map[*websocket.Conn]bool
 	// clientsMu 保护 clients 的并发访问
 	clientsMu sync.RWMutex
-	// dispatcher RPC 分发器
-	dispatcher *RPCDispatcher
+	// methodHandlers RPC 方法注册表（对齐 Python WebChannel._method_handlers）
+	methodHandlers map[string]methodHandler
+	// localOnlyMethods 仅本地处理、不转发 Agent 的方法集（对齐 _local_only_methods）
+	localOnlyMethods map[string]bool
+	// methodsMu 保护 methodHandlers / localOnlyMethods
+	methodsMu sync.RWMutex
 	// upgrader gorilla WebSocket 升级器实例
 	upgrader websocket.Upgrader
 	// running 是否正在运行
@@ -68,6 +72,22 @@ type WebChannel struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// wsSender 一帧写出的目标。
+//
+// 偏差（规则 9.6）：Python 靠 duck typing 直接把 ws 对象传给 handler（调 ws.send_text）；
+// Go 需要静态类型，故用只含 WriteJSON 的窄接口等价该形参。生产实现是帧收集器，
+// 测试用 fake 记录帧。
+type wsSender interface {
+	// WriteJSON 写出一帧
+	WriteJSON(v any) error
+}
+
+// methodHandler RPC 方法处理器签名。
+//
+// Python: app_web_handlers.py handler 签名 `(ws, req_id, params, session_id)`；
+// 响应由 handler 内部经 sendResponse 直接下发（部分方法多帧）。
+type methodHandler func(ws wsSender, reqID string, params map[string]any, sessionID string)
 
 // ConnectHook 连接建立钩子函数。
 //
@@ -116,8 +136,10 @@ func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfig
 		upgrader: websocket.Upgrader{
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
-		onConfigSavedCb: onConfigSaved,
-		channelMgr:      channelMgr,
+		onConfigSavedCb:  onConfigSaved,
+		channelMgr:       channelMgr,
+		methodHandlers:   make(map[string]methodHandler),
+		localOnlyMethods: make(map[string]bool),
 	}
 
 	return wc
@@ -255,24 +277,25 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// 第二层：本地 method handler（返回 ack 响应给客户端）
 		// 分发 RPC 请求
-		result, err := wc.dispatcher.Dispatch(method, params, sid)
-		if err != nil {
-			code := WsErrInternalError
-			if strings.Contains(err.Error(), "未找到") {
-				code = WsErrMethodNotFound
-			}
-			wc.writeError(conn, reqID, err.Error(), code)
+		// 调用本地方法：handler 自己写帧（对齐上游 send_response/send_event），
+		// 用一个收集器把帧接住再统一写出，天然支持多帧方法。
+		collector := &frameCollector{}
+		if !wc.invokeMethod(collector, method, reqID, params, sid) {
+			wc.writeError(conn, reqID, "unknown method: "+method, WsErrMethodNotFound)
 			continue
 		}
-
-		// 写入成功响应
-		res := map[string]any{"type": "res", "id": reqID, "ok": true, "payload": result}
-		resData, _ := json.Marshal(res)
-		if err := wswrite.Write(conn, resData); err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Str("method", method).
-				Msg("failed to write response")
+		for _, frame := range collector.frames {
+			data, marshalErr := json.Marshal(frame)
+			if marshalErr != nil {
+				logger.Error(logComponent).Err(marshalErr).Str("method", method).Msg("failed to marshal response")
+				continue
+			}
+			if err := wswrite.Write(conn, data); err != nil {
+				logger.Error(logComponent).
+					Err(err).
+					Str("method", method).
+					Msg("failed to write response")
+			}
 		}
 	}
 }
@@ -491,6 +514,77 @@ func (wc *WebChannel) writeError(conn *websocket.Conn, reqID, errMsg, code strin
 	}
 }
 
+// frameCollector 收集 handler 写出的帧，供调用方统一写回连接。
+type frameCollector struct {
+	// frames 已收集的帧
+	frames []map[string]any
+}
+
+// WriteJSON 收集一帧（实现 wsSender）。
+func (c *frameCollector) WriteJSON(v any) error {
+	frame, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("帧必须是 map[string]any，收到 %T", v)
+	}
+	c.frames = append(c.frames, frame)
+	return nil
+}
+
+// registerMethod 注册 req method 处理器。
+//
+// Python: WebChannel.register_method (web_connect.py:371-382)。
+func (wc *WebChannel) registerMethod(method string, handler methodHandler, localOnly bool) {
+	wc.methodsMu.Lock()
+	defer wc.methodsMu.Unlock()
+	wc.methodHandlers[method] = handler
+	if localOnly {
+		wc.localOnlyMethods[method] = true
+	}
+}
+
+// unregisterMethod 移除方法及其 localOnly 标记。
+//
+// Python: WebChannel.unregister_method (web_connect.py:384-387)。
+func (wc *WebChannel) unregisterMethod(method string) {
+	wc.methodsMu.Lock()
+	defer wc.methodsMu.Unlock()
+	delete(wc.methodHandlers, method)
+	delete(wc.localOnlyMethods, method)
+}
+
+// invokeMethod 查找并调用方法处理器；未注册返回 false。
+//
+// Python: handler = self._method_handlers.get(method)（web_connect.py:2180）。
+func (wc *WebChannel) invokeMethod(ws wsSender, method, reqID string, params map[string]any, sessionID string) bool {
+	wc.methodsMu.RLock()
+	handler, ok := wc.methodHandlers[method]
+	wc.methodsMu.RUnlock()
+	if !ok {
+		return false
+	}
+	handler(ws, reqID, params, sessionID)
+	return true
+}
+
+// sendResponse 向客户端回一帧 res。
+//
+// Python: WebChannel.send_response。
+func (wc *WebChannel) sendResponse(ws wsSender, reqID string, ok bool, payload map[string]any, errMsg, code string) {
+	frame := map[string]any{"type": "res", "id": reqID, "ok": ok}
+	if payload != nil {
+		frame["payload"] = payload
+	}
+	if errMsg != "" {
+		frame["error"] = errMsg
+	}
+	if code != "" {
+		frame["code"] = code
+	}
+	if err := ws.WriteJSON(frame); err != nil {
+		logger.Warn(logComponent).Err(err).Str("req_id", reqID).Msg("写 res 帧失败")
+	}
+}
+
 // clientCount 返回当前客户端连接数。
 func (wc *WebChannel) clientCount() int {
 	wc.clientsMu.RLock()
@@ -628,4 +722,36 @@ func (wc *WebChannel) broadcastInterruptSideEffect(msg *schema.Message) {
 		"session_id":    msg.SessionID,
 	}
 	wc.broadcastEvent("chat.processing_status", statusPayload)
+}
+
+// BuildUserMessage 从 RPC 请求参数构建入站 Message。
+//
+// Python: WebChannel._handle_raw_message 中构建 user_message 的逻辑。
+func BuildUserMessage(reqID, method string, params map[string]any, sessionID string, query map[string][]string) *schema.Message {
+	reqMethod, _ := schema.ParseReqMethod(method)
+	paramsJSON, _ := json.Marshal(params)
+
+	return &schema.Message{
+		ID:        reqID,
+		Type:      schema.MessageTypeReq,
+		ChannelID: "web",
+		SessionID: sessionID,
+		Params:    paramsJSON,
+		Timestamp: float64(time.Now().UnixMilli()) / 1000.0,
+		OK:        true,
+		ReqMethod: reqMethod,
+		Mode:      parseMode(params["mode"]),
+		Metadata:  map[string]any{"method": method, "query": query},
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// parseMode 从 params 解析运行模式。
+//
+// Python: WebChannel._parse_mode (web_connect.py:2356-2358)：
+// `Mode.from_raw(raw_mode, default=Mode.AGENT_WORK_NORMAL)`——先经 DEPRECATION_MAP
+// 归一旧 canonical，缺省/非法值回落 agent.work.normal（plan 是运行期状态，不是缺省档）。
+func parseMode(rawMode any) schema.Mode {
+	return schema.ModeFromRaw(rawMode, schema.ModeAgentWorkNormal)
 }

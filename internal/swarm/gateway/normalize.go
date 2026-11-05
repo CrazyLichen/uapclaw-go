@@ -1,8 +1,21 @@
-package web
+// Package gateway 提供 Gateway 服务端实现。
+//
+// normalize.go 承载入站消息标准化与三层路由转发回调，
+// 对齐上游 app_gateway.py 中的 _normalize_gateway_message / _norm_and_forward。
+//
+// 文件目录：
+//
+//	gateway/
+//	├── app_gateway.go            # HTTP/WS 服务入口与路由装配
+//	├── normalize.go              # 入站标准化 + 三层路由转发
+//	├── gateway_server.go         # GatewayServer 主体
+//	└── ...
+//
+// 对应 Python 代码：jiuwenswarm/gateway/app_gateway.py
+package gateway
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
@@ -281,36 +294,4 @@ func MakeNormAndForward(
 		}
 		return false
 	}
-}
-
-// BuildUserMessage 从 RPC 请求参数构建入站 Message。
-//
-// Python: WebChannel._handle_raw_message 中构建 user_message 的逻辑。
-func BuildUserMessage(reqID, method string, params map[string]any, sessionID string, query map[string][]string) *schema.Message {
-	reqMethod, _ := schema.ParseReqMethod(method)
-	paramsJSON, _ := json.Marshal(params)
-
-	return &schema.Message{
-		ID:        reqID,
-		Type:      schema.MessageTypeReq,
-		ChannelID: "web",
-		SessionID: sessionID,
-		Params:    paramsJSON,
-		Timestamp: float64(time.Now().UnixMilli()) / 1000.0,
-		OK:        true,
-		ReqMethod: reqMethod,
-		Mode:      parseMode(params["mode"]),
-		Metadata:  map[string]any{"method": method, "query": query},
-	}
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// parseMode 从 params 解析运行模式。
-//
-// Python: WebChannel._parse_mode (web_connect.py:2356-2358)：
-// `Mode.from_raw(raw_mode, default=Mode.AGENT_WORK_NORMAL)`——先经 DEPRECATION_MAP
-// 归一旧 canonical，缺省/非法值回落 agent.work.normal（plan 是运行期状态，不是缺省档）。
-func parseMode(rawMode any) schema.Mode {
-	return schema.ModeFromRaw(rawMode, schema.ModeAgentWorkNormal)
 }

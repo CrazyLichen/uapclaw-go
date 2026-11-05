@@ -23,7 +23,7 @@ func TestHandleMemoryCompute_字节换算为MB(t *testing.T) {
 		return 1048576, 2097152, 524288, 25.5, nil
 	}
 
-	payload, err := handleMemoryCompute()(context.Background(), nil, "")
+	payload, err := memoryCompute()(context.Background(), nil, "")
 	require.NoError(t, err)
 	require.Equal(t, 1.0, payload["rss_mb"])
 	require.Equal(t, 2.0, payload["total_mb"])
@@ -33,7 +33,7 @@ func TestHandleMemoryCompute_字节换算为MB(t *testing.T) {
 
 // TestHandleMemoryCompute_真实采集四字段 断言真实 gopsutil 采集的取值范围。
 func TestHandleMemoryCompute_真实采集四字段(t *testing.T) {
-	payload, err := handleMemoryCompute()(context.Background(), nil, "")
+	payload, err := memoryCompute()(context.Background(), nil, "")
 	require.NoError(t, err)
 
 	rssMB, ok := payload["rss_mb"].(float64)
@@ -64,7 +64,7 @@ func TestHandleMemoryCompute_进程RSS采集失败(t *testing.T) {
 		return 0, errors.New("rss failed")
 	}
 
-	_, err := handleMemoryCompute()(context.Background(), nil, "")
+	_, err := memoryCompute()(context.Background(), nil, "")
 	require.ErrorContains(t, err, "rss failed")
 }
 
@@ -76,7 +76,7 @@ func TestHandleMemoryCompute_系统内存采集失败(t *testing.T) {
 		return nil, errors.New("vm failed")
 	}
 
-	_, err := handleMemoryCompute()(context.Background(), nil, "")
+	_, err := memoryCompute()(context.Background(), nil, "")
 	require.ErrorContains(t, err, "vm failed")
 }
 
@@ -86,7 +86,7 @@ func TestHandleMemoryCompute_进程不存在(t *testing.T) {
 	defer func() { currentPID = orig }()
 	currentPID = func() int { return -1 }
 
-	_, err := handleMemoryCompute()(context.Background(), nil, "")
+	_, err := memoryCompute()(context.Background(), nil, "")
 	require.Error(t, err)
 }
 
@@ -98,7 +98,7 @@ func TestHandleMemoryCompute_采集失败返回错误(t *testing.T) {
 		return 0, 0, 0, 0, errors.New("collect failed")
 	}
 
-	payload, err := handleMemoryCompute()(context.Background(), nil, "")
+	payload, err := memoryCompute()(context.Background(), nil, "")
 	require.Error(t, err)
 	require.Nil(t, payload)
 }

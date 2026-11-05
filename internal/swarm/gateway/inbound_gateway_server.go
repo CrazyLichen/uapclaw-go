@@ -6,7 +6,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -101,10 +100,10 @@ func (s *InboundGatewayServer) HandleMessage(ctx context.Context, msg *schema.Me
 // NormalizeAndForwardMessage 标准化并入站转发到 MessageHandler。
 //
 // Python: _normalize_and_forward_message（app_gateway.py L125-129）。
-// 与 web.MakeNormAndForward 的本质区别：本函数恒转发不短路（无三层路由
+// 与 MakeNormAndForward 的本质区别：本函数恒转发不短路（无三层路由
 // 判断）——入站路由判断已在 handleRawMessage 的 ForwardMethods 集合处完成。
 func NormalizeAndForwardMessage(msg *schema.Message, channelMgr *channel_manager.ChannelManager) {
-	normalized := web.NormalizeGatewayMessage(msg)
+	normalized := NormalizeGatewayMessage(msg)
 	channelMgr.DeliverToMessageHandler(normalized)
 	logger.Info(logComponent).
 		Str("msg_id", msg.ID).

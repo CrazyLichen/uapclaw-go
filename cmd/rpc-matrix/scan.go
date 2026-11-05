@@ -28,7 +28,7 @@ var (
 	// frontendCallRe 前端包装器调用：call('x.y') / request("x.y") 等。
 	frontendCallRe = regexp.MustCompile(`(?:call|request|invoke|rpc|send)\(\s*['"]` + methodPattern + `['"]`)
 	// goRegisterRe 本仓注册：Register("x.y", h) 与 RegisterLocalHandler(path, "x.y", h)。
-	goRegisterRe = regexp.MustCompile(`\.(?:Register|RegisterLocalHandler)\(\s*(?:[^,()]*,\s*)?["` + "`" + `]` + methodPattern + `["` + "`" + `]`)
+	goRegisterRe = regexp.MustCompile(`\.(?:Register|registerMethod|RegisterLocalHandler)\(\s*(?:[^,()]*,\s*)?["` + "`" + `]` + methodPattern + `["` + "`" + `]`)
 	// pyRegisterRe 上游注册：register_method("x.y", h)。
 	pyRegisterRe = regexp.MustCompile(`register_method\(\s*["']` + methodPattern + `["']\s*,\s*([A-Za-z_][A-Za-z0-9_]*)`)
 	// pyConfigProxyRe 上游 config 代理注册：_register_config_proxy("x.y", _ConfigReq.XXX, ...)。

@@ -1,16 +1,14 @@
-package web
+package gateway
 
 import (
 	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// TestNormalizeGatewayMessage_content转query 测试 content→query 映射
 func TestNormalizeGatewayMessage_content转query(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{"content": "你好"})
 	msg := &schema.Message{
@@ -33,6 +31,7 @@ func TestNormalizeGatewayMessage_content转query(t *testing.T) {
 }
 
 // TestNormalizeGatewayMessage_已有query不覆盖 测试 params 中已有 query 时不覆盖
+
 func TestNormalizeGatewayMessage_已有query不覆盖(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{"query": "原始查询", "content": "其他内容"})
 	msg := &schema.Message{
@@ -53,6 +52,7 @@ func TestNormalizeGatewayMessage_已有query不覆盖(t *testing.T) {
 }
 
 // TestNormalizeGatewayMessage_resume转cancel 测试 resume→cancel+intent=resume
+
 func TestNormalizeGatewayMessage_resume转cancel(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{})
 	msg := &schema.Message{
@@ -74,6 +74,7 @@ func TestNormalizeGatewayMessage_resume转cancel(t *testing.T) {
 }
 
 // TestNormalizeGatewayMessage_resume已有intent不覆盖 测试 resume 时已有 intent 不覆盖
+
 func TestNormalizeGatewayMessage_resume已有intent不覆盖(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{"intent": "pause"})
 	msg := &schema.Message{
@@ -95,6 +96,7 @@ func TestNormalizeGatewayMessage_resume已有intent不覆盖(t *testing.T) {
 }
 
 // TestNormalizeGatewayMessage_isStream推断 测试 is_stream 推断逻辑
+
 func TestNormalizeGatewayMessage_isStream推断(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -129,6 +131,7 @@ func TestNormalizeGatewayMessage_isStream推断(t *testing.T) {
 }
 
 // TestNormalizeGatewayMessage_不修改原始消息 测试 normalize 不修改原始消息
+
 func TestNormalizeGatewayMessage_不修改原始消息(t *testing.T) {
 	originalParams, _ := json.Marshal(map[string]any{"content": "原始"})
 	msg := &schema.Message{
@@ -151,6 +154,7 @@ func TestNormalizeGatewayMessage_不修改原始消息(t *testing.T) {
 }
 
 // TestNormalizeGatewayMessage_默认reqMethod 测试 req_method 为空时默认为 chat.send
+
 func TestNormalizeGatewayMessage_默认reqMethod(t *testing.T) {
 	msg := &schema.Message{
 		ID:        "msg-default",
@@ -168,19 +172,7 @@ func TestNormalizeGatewayMessage_默认reqMethod(t *testing.T) {
 }
 
 // TestBuildUserMessage_基本构造 测试从 RPC 参数构造 Message
-func TestBuildUserMessage_基本构造(t *testing.T) {
-	params := map[string]any{"query": "你好", "session_id": "sess-1"}
-	msg := BuildUserMessage("req-1", "chat.send", params, "sess-1", nil)
 
-	assert.Equal(t, "req-1", msg.ID)
-	assert.Equal(t, schema.MessageTypeReq, msg.Type)
-	assert.Equal(t, "web", msg.ChannelID)
-	assert.Equal(t, "sess-1", msg.SessionID)
-	assert.Equal(t, schema.ReqMethodChatSend, msg.ReqMethod)
-	assert.True(t, msg.OK)
-}
-
-// TestForwardReqMethods_核心方法 测试核心方法在集合中
 func TestForwardReqMethods_核心方法(t *testing.T) {
 	coreMethods := []string{
 		"chat.send", "chat.interrupt", "chat.resume", "chat.user_answer",
@@ -192,6 +184,7 @@ func TestForwardReqMethods_核心方法(t *testing.T) {
 }
 
 // TestForwardNoLocalHandlerMethods_核心方法 测试核心方法在集合中
+
 func TestForwardNoLocalHandlerMethods_核心方法(t *testing.T) {
 	coreMethods := []string{
 		"initialize", "acp.tool_response", "team.delete",
@@ -203,6 +196,7 @@ func TestForwardNoLocalHandlerMethods_核心方法(t *testing.T) {
 }
 
 // TestForwardNoLocalHandlerMethods_chat方法不在集合中 测试 chat 方法不在无本地 handler 集合中
+
 func TestForwardNoLocalHandlerMethods_chat方法不在集合中(t *testing.T) {
 	chatMethods := []string{"chat.send", "chat.interrupt", "chat.resume", "chat.user_answer"}
 	for _, method := range chatMethods {
@@ -211,6 +205,7 @@ func TestForwardNoLocalHandlerMethods_chat方法不在集合中(t *testing.T) {
 }
 
 // TestMakeNormAndForward_转发方法NoLocalHandler 测试 initialize 在 noLocalHandlerMethods 中
+
 func TestMakeNormAndForward_转发方法NoLocalHandler(t *testing.T) {
 	normFn := MakeNormAndForward(nil, ForwardReqMethods, ForwardNoLocalHandlerMethods)
 	// nil channelMgr 会 panic，仅验证函数创建成功
@@ -218,6 +213,7 @@ func TestMakeNormAndForward_转发方法NoLocalHandler(t *testing.T) {
 }
 
 // TestMakeNormAndForward_非转发方法有Metadata 测试非转发方法返回 false
+
 func TestMakeNormAndForward_非转发方法有Metadata(t *testing.T) {
 	normFn := MakeNormAndForward(nil, map[string]bool{}, map[string]bool{})
 
@@ -231,30 +227,3 @@ func TestMakeNormAndForward_非转发方法有Metadata(t *testing.T) {
 }
 
 // TestParseMode_有mode 验证合法 canonical 直通（对齐 Mode.from_raw）
-func TestParseMode_有mode(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode("agent.work.plan"))
-	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode("agent.work.normal"))
-}
-
-// TestParseMode_legacy归一 验证旧 canonical 归一（agent.plan → agent.work.plan）
-func TestParseMode_legacy归一(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode("agent.plan"))
-	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode("agent"))
-}
-
-// TestParseMode_缺省与非法 验证缺省/非法值回落 agent.work.normal（不再是 plan）
-func TestParseMode_缺省与非法(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode(nil))
-	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode(""))
-	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode("BUILD"))
-	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode([]any{"agent"}))
-}
-
-// TestBuildUserMessage_带Query 测试带 query 参数构造
-func TestBuildUserMessage_带Query(t *testing.T) {
-	params := map[string]any{"query": "你好"}
-	query := map[string][]string{"mode": {"BUILD"}}
-	msg := BuildUserMessage("req-1", "chat.send", params, "sess-1", query)
-	assert.Equal(t, "req-1", msg.ID)
-	assert.Equal(t, query, msg.Metadata["query"])
-}
