@@ -762,6 +762,13 @@ func (f *fakeWS) lastFrame() map[string]any {
 func newFakeWS() *fakeWS { return &fakeWS{} }
 ```
 
+**测试构造约定（后续所有 batch 必须遵守）**
+
+1. `NewWebChannel(cfg, nil, nil)` 是**仓库既有惯例**（`web_connect_test.go` 等 20+ 处这样写）：构造函数只把三参存进字段、不 deref，所以传 nil 不是"糊过去"。`nil, nil` 只用于**不碰依赖的功能**（注册表、纯计算、payload 拼装）。
+2. handler 需要依赖时**必须给真实现或 fake**，不得靠 nil 让测试"跑过去"——否则就是假绿。
+3. 唯一允许传 nil 且真的调 handler 的场景：**测上游自己的"依赖缺失分支"**，此时必须断言上游原文的错误码与文案（例：`channel.*.get_conf` 在 `channel_manager` 为 nil 时回 `SERVICE_UNAVAILABLE` + `"channel manager not available"`，见 `app_web_handlers.py:4367-4377`）。
+4. 依赖用窄接口表达（`wsSender`、`channelConfSource`、`modelsConfigStore`…），生产实现是既有类型、测试实现是 fake；这属于 Go 无 duck typing 的语言层偏差，按规则 9.6 在 spec 登记。
+
 - [ ] **Step 2: 运行确认失败**
 
 Run: `go test ./internal/swarm/gateway/channel_manager/web/ -run TestRegisterMethod -v`
@@ -1456,11 +1463,62 @@ func TestChannelConf_九平台齐全(t *testing.T) {
 		}
 	}
 }
+
+// TestChannelConf_无CM时回SERVICE_UNAVAILABLE 验证依赖缺失分支与上游文案一致。
+//
+// 这里传 nil 是**被测语义**（上游 app_web_handlers.py:4367-4377 的真实分支），
+// 不是拿 nil 糊测试：断言的是错误码与文案。
+func TestChannelConf_无CM时回SERVICE_UNAVAILABLE(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	registerChannelConfFamily(wc, nil)
+	ws := newFakeWS()
+	wc.methodHandlers["channel.feishu.get_conf"](ws, "rid", map[string]any{}, "sid")
+
+	frame := ws.lastFrame()
+	if frame["ok"] != false || frame["code"] != WsErrServiceUnavailable {
+		t.Fatalf("预期 SERVICE_UNAVAILABLE，实际 %v", frame)
+	}
+	if frame["error"] != "channel manager not available" {
+		t.Fatalf("文案与上游不一致：%v", frame["error"])
+	}
+}
+
+// TestChannelConf_正常读取 验证注入 fake 后返回上游 payload 形状。
+func TestChannelConf_正常读取(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	registerChannelConfFamily(wc, fakeChannelConfSource{conf: map[string]any{"apps": []any{map[string]any{"name": "bot-a"}}}})
+	ws := newFakeWS()
+	wc.methodHandlers["channel.feishu.get_conf"](ws, "rid", map[string]any{}, "sid")
+
+	if ws.lastFrame()["ok"] != true {
+		t.Fatalf("预期成功，实际 %v", ws.lastFrame())
+	}
+}
+
+// fakeChannelConfSource 测试用渠道配置读写。
+type fakeChannelConfSource struct {
+	// conf GetConf 返回的配置
+	conf map[string]any
+}
+
+// GetConf 返回预置配置。
+func (f fakeChannelConfSource) GetConf(string) (map[string]any, error) { return f.conf, nil }
+
+// SetConf 空实现（写回断言在需要时另行扩展）。
+func (f fakeChannelConfSource) SetConf(string, map[string]any) error { return nil }
 ```
 
 - [ ] **Step 3: 用平台表驱动实现（避免 18 份重复代码）**
 
 ```go
+// channelConfSource 渠道配置读写面（Go 对上游 duck-typed `cm.get_conf/set_conf` 的等价表达）。
+type channelConfSource interface {
+	// GetConf 读取指定渠道的原始配置
+	GetConf(name string) (map[string]any, error)
+	// SetConf 写回指定渠道配置
+	SetConf(name string, conf map[string]any) error
+}
+
 // channelConfPlatforms 支持 get_conf/set_conf 的 IM 平台清单。
 //
 // Python: app_web_handlers.py:5844-5861 逐个平台注册。
@@ -1470,20 +1528,41 @@ var channelConfPlatforms = []string{"feishu", "xiaoyi", "telegram", "dingtalk", 
 //
 // Python: app_web_handlers.py:5844-5861。每个平台的两个方法体按上游对应函数移植，
 // 平台名只作为 selector 传入，不改变分支结构。
-func registerChannelConfFamily(wc *WebChannel, cm *cm.ChannelManager) {
+func registerChannelConfFamily(wc *WebChannel, cm channelConfSource) {
 	for _, p := range channelConfPlatforms {
 		platform := p
 		wc.registerMethod("channel."+platform+".get_conf", func(ws wsSender, reqID string, params map[string]any, sid string) {
-			channelConfGet(wc, platform, ws, reqID, params, sid)
+			channelConfGet(wc, cm, platform, ws, reqID, params, sid)
 		}, false)
 		wc.registerMethod("channel."+platform+".set_conf", func(ws wsSender, reqID string, params map[string]any, sid string) {
-			channelConfSet(wc, platform, ws, reqID, params, sid)
+			channelConfSet(wc, cm, platform, ws, reqID, params, sid)
 		}, false)
 	}
 }
+
+// channelConfGet 读取单个 IM 平台的配置。
+//
+// Python: _channel_feishu_get_conf 等 (app_web_handlers.py:4365-...)。分支顺序照抄上游：
+// 先判 cm 是否缺失（回 SERVICE_UNAVAILABLE + "channel manager not available"），
+// 再取配置、按平台做归一化、最后回 payload。
+func channelConfGet(wc *WebChannel, cm channelConfSource, platform string, ws wsSender, reqID string, params map[string]any, sid string) {
+	if cm == nil {
+		logger.Warn(logComponent).Str("platform", platform).Str("req_id", reqID).
+			Msg("channel manager not available")
+		wc.sendResponse(ws, reqID, false, nil, "channel manager not available", WsErrServiceUnavailable)
+		return
+	}
+	// 平台分支：按上游对应函数体逐行移植（feishu 归一 apps、wechat 归一 login 等）
+	raw, err := cm.GetConf(platform)
+	if err != nil {
+		wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+		return
+	}
+	wc.sendResponse(ws, reqID, true, raw, "", "")
+}
 ```
 
-> 若上游九个平台 handler 体确实不同（例如 wechat 多一个 login_ui 分支），则该平台单独实现 `channelWechatGetConf`，不得为了 DRY 合并语义。
+> 若上游九个平台 handler 体确实不同（例如 wechat 多一个 login_ui 分支、feishu 归一 `apps`），则在该平台分支里照抄上游逻辑，不得为了 DRY 合并语义。
 
 - [ ] **Step 4: 测试 + 矩阵 + 提交**
 
