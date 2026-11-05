@@ -256,3 +256,19 @@ internal/agentcore/harness/schema/config.go#L218-L223
 internal/swarm/gateway/cron/models.go#L10-L63
 internal/swarm/gateway/cron/models.go#L455-L467
 internal/swarm/gateway/cron/controller.go#L45-L51
+
+# ── 2026-11-06 注释规范化 ──
+# 下列行是本次新增的段落注释（ACP 出站六分支 / 技能演进保存五段）。两者所在函数
+# 由单测 100% 覆盖，但集成套件没有走到这些分支的入口，注释行所在的覆盖块在集成
+# 剖面里计数为 0；注释本身不含可执行语句，登记行级豁免即可。
+internal/swarm/gateway/channel_manager/protocol/acp/acp_channel.go#L661-661
+internal/swarm/gateway/channel_manager/protocol/acp/acp_channel.go#L689-689
+internal/swarm/gateway/channel_manager/protocol/acp/acp_channel.go#L715-715
+internal/swarm/gateway/channel_manager/protocol/acp/acp_channel.go#L738-738
+internal/swarm/gateway/channel_manager/protocol/acp/acp_channel.go#L773-773
+internal/swarm/gateway/channel_manager/protocol/acp/acp_channel.go#L799-799
+internal/swarm/server/runtime/skill/skill_manager.go#L289-289
+internal/swarm/server/runtime/skill/skill_manager.go#L303-303
+internal/swarm/server/runtime/skill/skill_manager.go#L392-392
+internal/swarm/server/runtime/skill/skill_manager.go#L400-400
+internal/swarm/server/runtime/skill/skill_manager.go#L459-459

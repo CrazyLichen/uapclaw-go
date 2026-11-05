@@ -1143,7 +1143,7 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 					scaled := vector.ConvertCosineDistance(*rawScoreVal)
 					rawScoreScaled = &scaled
 					finalScore = scaled
-				default: // ip 内积距离
+				default: // ip
 					scaled := vector.ConvertIPDistance(*rawScoreVal)
 					rawScoreScaled = &scaled
 					finalScore = scaled

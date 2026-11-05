@@ -1332,7 +1332,7 @@ func (s *MilvusVectorStore) milvusResultToSearchResults(rs milvusclient.ResultSe
 				scaled := vector.ConvertCosineSimilarity(*rawScoreVal)
 				rawScoreScaled = &scaled
 				finalScore = scaled
-			default: // IP 内积相似度
+			default: // IP
 				scaled := vector.ConvertIPSimilarity(*rawScoreVal)
 				rawScoreScaled = &scaled
 				finalScore = scaled
