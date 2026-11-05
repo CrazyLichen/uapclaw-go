@@ -9,10 +9,12 @@ import (
 const (
 	// statusOK 三方一致（上游有、本仓有）。
 	statusOK = "✅ 一致"
-	// statusDrift 本仓有但上游未注册（自造或上游走 HTTP 映射）。
+	// statusDrift 本仓有但上游没有该方法（自造，或上游 0.2.5 已删除）。
 	statusDrift = "⚠️ 漂移"
 	// statusMissing 上游有、本仓无。
 	statusMissing = "❌ 缺"
+	// statusFrontendOnly 前端在调，但上游与本仓都没有（前端独有或上游未实现）。
+	statusFrontendOnly = "❓ 前端独有"
 )
 
 // matrixRow 矩阵一行。
@@ -52,8 +54,10 @@ func buildMatrix(frontend, local, upstream map[string][]string) []matrixRow {
 			row.Status = statusOK
 		case len(upstream[m]) > 0:
 			row.Status = statusMissing
-		default:
+		case len(local[m]) > 0:
 			row.Status = statusDrift
+		default:
+			row.Status = statusFrontendOnly
 		}
 		rows = append(rows, row)
 	}
@@ -69,6 +73,23 @@ func attachDownstream(rows []matrixRow, downs map[string]downstream) {
 			continue
 		}
 		rows[i].Down = downstream{Status: downLocal, Note: "非上游方法（本仓自造/漂移）"}
+	}
+}
+
+// annotateHTTP 给漂移行补一句"上游以 HTTP 暴露"，用于区分
+// 「上游换了传输方式」与「上游从没有过 / 已删除」。
+func annotateHTTP(rows []matrixRow, httpOnly map[string][]string) {
+	for i := range rows {
+		if rows[i].Status != statusDrift {
+			continue
+		}
+		if sites, ok := httpOnly[rows[i].Method]; ok && len(sites) > 0 {
+			rows[i].Down.Note = "上游以 HTTP 暴露（非 WS 注册）：" + joinSites(sites)
+			continue
+		}
+		if rows[i].Down.Note == "非上游方法（本仓自造/漂移）" {
+			rows[i].Down.Note = "上游无此方法（自造，或上游 0.2.5 已删除）"
+		}
 	}
 }
 
@@ -97,24 +118,29 @@ func countByDownstream(rows []matrixRow) map[string]int {
 
 // render 生成 Markdown 矩阵文档。
 func render(rows []matrixRow) string {
-	var ok, drift int
+	var ok, drift, miss, feOnly int
 	for _, r := range rows {
 		switch r.Status {
 		case statusOK:
 			ok++
 		case statusDrift:
 			drift++
+		case statusMissing:
+			miss++
+		case statusFrontendOnly:
+			feOnly++
 		}
 	}
-	miss := len(rows) - ok - drift
 	counts := countByDownstream(rows)
 
 	var b strings.Builder
 	b.WriteString("# Web WS RPC 契约矩阵\n\n")
 	b.WriteString("> 由 `go run ./cmd/rpc-matrix` 生成，勿手工编辑。\n\n")
-	fmt.Fprintf(&b, "- 方法总数：%d（✅ 一致 %d / ⚠️ 漂移 %d / ❌ 缺 %d）\n", len(rows), ok, drift, miss)
+	fmt.Fprintf(&b, "- 方法总数：%d（✅ 一致 %d / ⚠️ 漂移 %d / ❌ 缺 %d / ❓ 前端独有 %d）\n", len(rows), ok, drift, miss, feOnly)
 	fmt.Fprintf(&b, "- 缺口下游分布：local %d / agent:ok %d / agent:const-only %d / agent:missing %d / dep %d\n\n",
 		counts[downLocal], counts[downAgentOK], counts[downAgentConst], counts[downAgentMissing], counts[downDep])
+	b.WriteString("覆盖状态：`一致` 上游有本仓也有；`漂移` 本仓有但上游没有（自造或上游已删）；")
+	b.WriteString("`缺` 上游有本仓无；`前端独有` 前端在调但两侧都没注册（前端独占能力或上游未实现）。\n\n")
 	b.WriteString("下游状态含义：`local` 网关本地可实现；`agent:ok` 代理且本仓已有处理器；")
 	b.WriteString("`agent:const-only` 有常量无处理器；`agent:missing` 常量与处理器皆无；`dep` 依赖未迁移子系统。\n\n")
 	b.WriteString("| 方法 | 覆盖 | 下游 | 下游说明 | 前端引用 | 本仓注册 | 上游注册 |\n")

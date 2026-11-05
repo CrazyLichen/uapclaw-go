@@ -31,15 +31,17 @@ var (
 	pyRegisterRe = regexp.MustCompile(`register_method\(\s*["']` + methodPattern + `["']\s*,\s*([A-Za-z_][A-Za-z0-9_]*)`)
 	// pyConfigProxyRe 上游 config 代理注册：_register_config_proxy("x.y", _ConfigReq.XXX, ...)。
 	pyConfigProxyRe = regexp.MustCompile(`_register_config_proxy\(\s*["']` + methodPattern + `["']`)
+	// httpRouteMethodRe HTTP 路由表里的方法名（mapped.py 的第三个字符串、http_routes 的 dispatch 实参）。
+	httpRouteMethodRe = regexp.MustCompile(`["']` + methodPattern + `["']`)
 	// skipDirs 扫描时跳过的目录（依赖与构建产物）。
 	skipDirs = map[string]bool{"node_modules": true, "dist": true, ".git": true}
 )
 
 // scanTree 遍历 root，按 exts 过滤文件，用 re 提取方法名，返回登记点列表。
 //
-// 返回值 Site 使用相对 root 的路径，便于矩阵里直接读懂；handler 分组由调用方
-// 通过 handlerIndex 另行解析（正则分组数量随 re 不同，此处只取第 1 组）。
-func scanTree(root string, exts map[string]bool, re *regexp.Regexp) ([]rpcSite, error) {
+// keep 为 nil 表示全部文件参与；非 nil 时按相对路径过滤（用于只扫 HTTP 路由表）。
+// 返回值 Site 使用相对 root 的路径，便于矩阵里直接读懂。
+func scanTree(root string, exts map[string]bool, re *regexp.Regexp, keep func(rel string) bool) ([]rpcSite, error) {
 	var sites []rpcSite
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -54,17 +56,21 @@ func scanTree(root string, exts map[string]bool, re *regexp.Regexp) ([]rpcSite, 
 		if !exts[strings.ToLower(filepath.Ext(path))] {
 			return nil
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("读取 %s: %w", path, err)
-		}
 		rel, relErr := filepath.Rel(root, path)
 		if relErr != nil {
 			rel = path
 		}
+		relSlash := filepath.ToSlash(rel)
+		if keep != nil && !keep(relSlash) {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("读取 %s: %w", path, err)
+		}
 		for i, line := range strings.Split(string(data), "\n") {
 			for _, m := range re.FindAllStringSubmatch(line, -1) {
-				site := rpcSite{Method: m[1], Site: fmt.Sprintf("%s:%d", filepath.ToSlash(rel), i+1)}
+				site := rpcSite{Method: m[1], Site: fmt.Sprintf("%s:%d", relSlash, i+1)}
 				if len(m) > 2 {
 					site.Handler = m[2]
 				}
@@ -79,23 +85,40 @@ func scanTree(root string, exts map[string]bool, re *regexp.Regexp) ([]rpcSite, 
 	return sites, nil
 }
 
+// skipTestSites 过滤掉测试文件里的登记点（测试夹具不是生产契约）。
+func skipTestSites(sites []rpcSite) []rpcSite {
+	out := sites[:0]
+	for _, s := range sites {
+		if strings.HasSuffix(strings.SplitN(s.Site, ":", 2)[0], "_test.go") ||
+			strings.Contains(s.Site, "/tests/") || strings.Contains(s.Site, "test_") {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
 // scanFrontend 扫描前端源码里的 RPC 调用。
 func scanFrontend(root string) ([]rpcSite, error) {
-	return scanTree(root, map[string]bool{".ts": true, ".tsx": true, ".js": true, ".jsx": true}, frontendCallRe)
+	return scanTree(root, map[string]bool{".ts": true, ".tsx": true, ".js": true, ".jsx": true}, frontendCallRe, nil)
 }
 
-// scanGo 扫描本仓的 RPC 注册点。
+// scanGo 扫描本仓的 RPC 注册点（排除测试文件，避免把夹具当契约）。
 func scanGo(root string) ([]rpcSite, error) {
-	return scanTree(root, map[string]bool{".go": true}, goRegisterRe)
-}
-
-// scanUpstream 扫描上游 Python 的 RPC 注册点（含 config 代理），并带回 handler 符号。
-func scanUpstream(root string) ([]rpcSite, error) {
-	sites, err := scanTree(root, map[string]bool{".py": true}, pyRegisterRe)
+	sites, err := scanTree(root, map[string]bool{".go": true}, goRegisterRe, nil)
 	if err != nil {
 		return nil, err
 	}
-	proxies, err := scanTree(root, map[string]bool{".py": true}, pyConfigProxyRe)
+	return skipTestSites(sites), nil
+}
+
+// scanUpstream 扫描上游 Python 的 WS 注册点（含 config 代理），并带回 handler 符号。
+func scanUpstream(root string) ([]rpcSite, error) {
+	sites, err := scanTree(root, map[string]bool{".py": true}, pyRegisterRe, nil)
+	if err != nil {
+		return nil, err
+	}
+	proxies, err := scanTree(root, map[string]bool{".py": true}, pyConfigProxyRe, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +136,13 @@ func scanUpstream(root string) ([]rpcSite, error) {
 		seen[p.Method] = true
 	}
 	return sites, nil
+}
+
+// scanUpstreamHTTP 扫描上游以 HTTP 路由暴露的方法名（不参与 WS 契约，只用于解释漂移）。
+func scanUpstreamHTTP(root string) ([]rpcSite, error) {
+	return scanTree(root, map[string]bool{".py": true}, httpRouteMethodRe, func(rel string) bool {
+		return strings.Contains(rel, "http_routes/") || strings.HasSuffix(rel, "web_http_routes.py")
+	})
 }
 
 // groupByMethod 把登记点按方法名聚合，站点列表去重。

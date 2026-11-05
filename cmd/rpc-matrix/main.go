@@ -58,6 +58,11 @@ func main() {
 	rows := buildMatrix(groupByMethod(frontendSites), groupByMethod(localSites), groupByMethod(upstreamSites))
 	if src != nil {
 		attachDownstream(rows, collectDownstream(upstreamHandlers(upstreamSites), src, caps))
+		httpSites, httpErr := scanUpstreamHTTP(upstreamRoot)
+		if httpErr != nil {
+			fail("扫描上游 HTTP 路由", httpErr)
+		}
+		annotateHTTP(rows, groupByMethod(httpSites))
 	}
 
 	if err := writeOutputFile(*out, render(rows)); err != nil {
