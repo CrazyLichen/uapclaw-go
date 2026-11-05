@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	sections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	codetool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/code"
@@ -24,6 +25,8 @@ import (
 	skilltools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
@@ -64,12 +67,18 @@ type SkillUseRail struct {
 	maxTotalChars int
 	// currentQuery 当前轮用户查询（用于技能预算的关键词排序）
 	currentQuery string
+	// lastSignature 上次技能目录签名（增量刷新判断）
+	// Python: self._skills_snapshot_signature
+	lastSignature []string
 
 	// ── 运行时状态 ──
 	// skills 当前已加载技能列表
 	skills []*skillpkg.Skill
 	// systemPromptBuilder 系统提示词构建器引用（Init 中获取）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
+	// attachmentManagerFor 会话级附件管理器获取函数（Init 中从 agent 取）
+	// Python: self.attachment_manager（DeepAgent 共享给内层 ReActAgent 与各 rail）
+	attachmentManagerFor func() *hprompts.Manager
 
 	// ── 缓存 ──
 	// skillCache 增量缓存 absPath → Skill
@@ -88,6 +97,25 @@ type SkillUseRail struct {
 	ownedToolIDs map[string]struct{}
 }
 
+// skillBaselineState 会话技能基线持久化结构
+// Python: _save_session_baseline 写入的 dict (:733-750)
+type skillBaselineState struct {
+	// SchemaVersion 结构版本，不匹配则整份忽略
+	SchemaVersion int `json:"schema_version"`
+	// BaselineSkills 首次快照时的技能列表
+	BaselineSkills []skillBaselineEntry `json:"baseline_skills"`
+}
+
+// skillBaselineEntry 单条基线技能
+type skillBaselineEntry struct {
+	// Name 技能名
+	Name string `json:"name"`
+	// Description 技能描述
+	Description string `json:"description"`
+	// Directory 技能目录绝对路径（skill_tool 读文件必需）
+	Directory string `json:"directory"`
+}
+
 // SkillUseRailOption SkillUseRail 构造选项
 type SkillUseRailOption func(*SkillUseRail)
 
@@ -102,8 +130,21 @@ const (
 	SkillModeAutoList = "auto_list"
 
 	// skillUseRailPriority SkillUseRail 优先级
-	// Python: SkillUseRail.priority = 100
-	skillUseRailPriority = 100
+	// Python: SkillUseRail.priority = 95（必须晚于真正持有 read_file/code/bash 的 rail 初始化，
+	// 否则 init 的 owner 检查没有意义）(skill_use_rail.py:57-61)
+	skillUseRailPriority = 95
+
+	// skillSessionStateKey 会话技能基线的 session state 键
+	// Python: SkillUseRail._SESSION_STATE_KEY (skill_use_rail.py:65)
+	skillSessionStateKey = "skill_use"
+	// skillSessionStateSchemaVersion 基线结构版本
+	// Python: SkillUseRail._SESSION_STATE_SCHEMA_VERSION (:66)
+	skillSessionStateSchemaVersion = 1
+	// runtimeSkillAttachmentSection 运行时技能变更附件节名
+	// Python: SkillUseRail._RUNTIME_ATTACHMENT_SECTION (:67)
+	runtimeSkillAttachmentSection = "skills.runtime_changes"
+	// runtimeSkillAttachmentSource 附件来源标识
+	runtimeSkillAttachmentSource = "skill_use_rail"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -226,6 +267,18 @@ func (r *SkillUseRail) ReloadSkills(ctx context.Context) error {
 	return nil
 }
 
+// SetSkillsDir 更新技能扫描根（热刷新用）。
+// Python: refresh_skill_rails 直接赋值 self._skill_rail.skills_dir (interface_deep.py:11214-11216)
+func (r *SkillUseRail) SetSkillsDir(dirs []string) {
+	r.skillsDir = dirs
+}
+
+// SetDisabledSkills 更新禁用名单（热刷新用）。
+// Python: refresh_skill_rails 赋值 disabled_skills (interface_deep.py:11217-11218)
+func (r *SkillUseRail) SetDisabledSkills(names []string) {
+	r.disabledSkills = normalizeNameSet(names)
+}
+
 // ClearSkills 清空缓存。
 // Python: SkillUseRail.clear_skills()
 func (r *SkillUseRail) ClearSkills() {
@@ -241,10 +294,51 @@ func (r *SkillUseRail) Priority() int {
 	return skillUseRailPriority
 }
 
+// GetSkillsForSession 返回会话可见技能视图：基线 ∪ 当前新发现（按 name 去重）。
+// Python: get_skills_for_session (:673-687)
+func (r *SkillUseRail) GetSkillsForSession(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill {
+	if _, ok := r.loadSessionState(sess); !ok {
+		out := make([]*skillpkg.Skill, len(r.skills))
+		copy(out, r.skills)
+		return out
+	}
+	baseline := r.loadSessionBaseline(sess)
+	known := make(map[string]struct{}, len(baseline))
+	merged := make([]*skillpkg.Skill, 0, len(baseline)+len(r.skills))
+	for _, skill := range baseline {
+		known[skill.Name] = struct{}{}
+		merged = append(merged, skill)
+	}
+	for _, skill := range r.skills {
+		if skill == nil {
+			continue
+		}
+		if _, ok := known[skill.Name]; ok {
+			continue
+		}
+		merged = append(merged, skill)
+	}
+	return merged
+}
+
+// ClearSessionBaseline 清除会话基线，下次同步时按当前集合重拍。
+// Python: JiuWenSwarmDeepAdapter._clear_skill_session_baseline (interface_deep.py:11261-11274)
+func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade) error {
+	if sess == nil {
+		return nil
+	}
+	sess.UpdateState(map[string]any{skillSessionStateKey: nil})
+	return nil
+}
+
 // Init 注册工具到 ResourceMgr + AbilityManager。
 // Python: SkillUseRail.init() L237-306
 func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
+	// Python: self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	if provider, ok := agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
+		r.attachmentManagerFor = provider.PromptAttachments
+	}
 
 	var language string
 	if r.systemPromptBuilder != nil {
@@ -260,22 +354,25 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 
 	op := r.SysOperation()
 
+	// Python: enable_read_image_multimodal = build_read_image_multimodal_resolver(agent)
+	enableImageMultimodal := true
+	if r.enableImageMultimodal != nil {
+		enableImageMultimodal = *r.enableImageMultimodal
+	}
+
 	var tools []tool.Tool
 
 	// Python: L246-253: 始终注册 SkillTool
 	tools = append(tools, skilltools.NewSkillTool(
 		op,
-		func() []*skillpkg.Skill { return r.skills },
+		func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill { return r.GetSkillsForSession(sess) },
 		language,
 		agentID,
+		enableImageMultimodal,
 	))
 
 	// Python: L255-271: includeTools 时注册 ReadFileTool/CodeTool/BashTool
 	if r.includeTools {
-		enableImageMultimodal := true
-		if r.enableImageMultimodal != nil {
-			enableImageMultimodal = *r.enableImageMultimodal
-		}
 		tools = append(tools,
 			filesystemtool.NewReadFileTool(op, language, agentID, enableImageMultimodal),
 			codetool.NewCodeTool(op, language, agentID),
@@ -286,47 +383,44 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 	// Python: L273-281: auto_list 模式注册 ListSkillTool
 	if r.skillMode == SkillModeAutoList {
 		tools = append(tools, skilltools.NewListSkillTool(
-			func() []*skillpkg.Skill { return r.skills },
+			func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill { return r.GetSkillsForSession(sess) },
 			r.listSkillModel,
 			language,
 			agentID,
 		))
 	}
 
-	// Python: L283-294: 幂等注册到 ResourceMgr
+	// Python: L296-306 单入口注册（add_ability），已由其他 rail 拥有的能力不抢注册——
+	// 对方的实例携带本 rail 无法复现的策略（只读模式、bash deny 规则、多模态覆盖）
+	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range tools {
+		name := t.Card().Name
+		if am != nil && am.Get(name) != nil {
+			logger.Debug(logger.ComponentAgentCore).
+				Str("tool_name", name).
+				Msg("ability already owned by another rail, skip fallback registration")
+			continue
+		}
 		toolID := t.Card().ID
 		if resourceMgr != nil && toolID != "" {
-			existing, err := resourceMgr.GetTool([]string{toolID})
-			if err == nil && len(existing) > 0 {
-				if _, removeErr := resourceMgr.RemoveTool([]string{toolID}); removeErr != nil {
-					logger.Warn(logger.ComponentAgentCore).
-						Str("tool_id", toolID).
-						Err(removeErr).
-						Msg("failed to remove old tool from ResourceMgr")
-				}
-			}
 			if err := resourceMgr.AddTool(t); err != nil {
+				// 同 ID 可能已被占用（同 agent 重复 Init / 全局注册表残留）：
+				// 记录告警但不阻断能力注册，否则工具对模型不可见。
 				logger.Warn(logger.ComponentAgentCore).
 					Str("tool_id", toolID).
 					Err(err).
 					Msg("failed to add tool resource to resource_mgr")
+			} else {
+				r.ownedToolIDs[toolID] = struct{}{}
 			}
-			r.ownedToolIDs[toolID] = struct{}{}
 		}
-	}
-
-	// Python: L296-306: 注册到 AbilityManager
-	am := agent.AbilityManager()
-	if am != nil {
-		for _, t := range tools {
-			result := am.Add(t.Card())
-			if result.Added {
-				r.ownedToolNames[t.Card().Name] = struct{}{}
+		if am != nil {
+			if result := am.Add(t.Card()); result.Added {
+				r.ownedToolNames[name] = struct{}{}
 			} else {
 				logger.Warn(logger.ComponentAgentCore).
-					Str("tool_name", t.Card().Name).
+					Str("tool_name", name).
 					Msg("failed to add tool card to ability_manager")
 			}
 		}
@@ -362,16 +456,23 @@ func (r *SkillUseRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
-// BeforeInvoke 调用 refreshSkillPrompt。
-// Python: SkillUseRail.before_invoke()
-func (r *SkillUseRail) BeforeInvoke(ctx context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+// BeforeInvoke 刷新技能并落盘基线。
+// Python: SkillUseRail.before_invoke (:437-442)
+func (r *SkillUseRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	r.refreshSkillPrompt(ctx)
-	return nil
+	var sess sessioninterfaces.SessionFacade
+	if cbc != nil {
+		sess = cbc.Session()
+	}
+	if err := r.ensureSessionBaseline(sess); err != nil {
+		return err
+	}
+	return r.syncSkillPromptAndAttachment(ctx, cbc)
 }
 
-// BeforeModelCall 构建 skills section 并注入 systemPromptBuilder。
-// Python: SkillUseRail.before_model_call() L359-372
-func (r *SkillUseRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+// BeforeModelCall 用会话基线渲染稳定 skills 节并刷新变更附件。
+// Python: SkillUseRail.before_model_call (:475-485)
+func (r *SkillUseRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 记录当前查询：技能预算按与查询的关键词重叠度排序。
 	// 上游从**本次模型调用的 messages** 里倒序找最后一条 UserMessage（follow-up /
 	// steering / 附件注入后 messages 尾部才是真实查询，inputs.Query 可能是旧值）。
@@ -384,16 +485,7 @@ func (r *SkillUseRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.A
 	if r.systemPromptBuilder == nil {
 		return nil
 	}
-	section := r.buildSkillsSection()
-	if section == nil {
-		r.systemPromptBuilder.RemoveSection(sections.SectionSkills)
-		return nil
-	}
-	// skills 节是稳定系统提示词，上游走 add_section
-	// Python: self.system_prompt_builder.add_section(skills_section)（skill_use_rail.py:505）
-	// 动态的「技能变更/演进经验」才走附件（_update_runtime_skill_attachment:760，Go 侧未移植该子特性）
-	r.systemPromptBuilder.AddSection(*section)
-	return nil
+	return r.syncSkillPromptAndAttachment(ctx, cbc)
 }
 
 // AfterInvoke 空操作。
@@ -496,6 +588,354 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 func (r *SkillUseRail) refreshSkillPrompt(ctx context.Context) {
 	_ = r.prepareSkills(ctx)
 	r.fetchEvolutionTexts(ctx)
+	// Python: refresh_skill_prompt 末尾重算签名 (:430-435)
+	r.lastSignature = r.buildSkillsSnapshotSignature()
+}
+
+// syncSkillPromptAndAttachment 刷新稳定 skills 节与变更附件。
+// Python: _sync_skill_prompt_and_attachment (:486-508)
+func (r *SkillUseRail) syncSkillPromptAndAttachment(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	if r.systemPromptBuilder == nil {
+		return nil
+	}
+	var sess sessioninterfaces.SessionFacade
+	if cbc != nil {
+		sess = cbc.Session()
+	}
+	if err := r.refreshSkillPromptIfChanged(ctx); err != nil {
+		return err
+	}
+	// 进化记录可能在不改 SKILL.md 的情况下变化，需与技能快照解耦刷新。
+	// 部分 task_loop 路径不经 BeforeInvoke，故此处也要保证基线存在。
+	if err := r.ensureSessionBaseline(sess); err != nil {
+		return err
+	}
+	var baseline []*skillpkg.Skill
+	if _, ok := r.loadSessionState(sess); ok {
+		baseline = r.loadSessionBaseline(sess)
+	} else {
+		baseline = r.skills
+	}
+	r.fetchEvolutionTextsFor(ctx, append(append([]*skillpkg.Skill{}, baseline...), r.skills...))
+
+	section := r.buildSkillsSectionFor(baseline)
+	if section == nil {
+		r.systemPromptBuilder.RemoveSection(sections.SectionSkills)
+	} else {
+		r.systemPromptBuilder.AddSection(*section)
+	}
+	return r.updateRuntimeSkillAttachment(cbc, baseline)
+}
+
+// refreshSkillPromptIfChanged 目录或 mtime 签名变化时才重建技能集合。
+// Python: _refresh_skill_prompt_if_changed (:510-516)
+func (r *SkillUseRail) refreshSkillPromptIfChanged(ctx context.Context) error {
+	if r.skillsSignatureEquals() {
+		return nil
+	}
+	r.refreshSkillPrompt(ctx)
+	return nil
+}
+
+// skillsSignatureEquals 比较当前磁盘签名与上次快照。
+// Python: _build_skills_snapshot_signature (:518-524)
+func (r *SkillUseRail) skillsSignatureEquals() bool {
+	sig := r.buildSkillsSnapshotSignature()
+	if len(sig) != len(r.lastSignature) {
+		return false
+	}
+	for i := range sig {
+		if sig[i] != r.lastSignature[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// buildSkillsSnapshotSignature 生成 (绝对路径, mtime) 序列签名。
+// Python: _build_skills_snapshot_signature (:518-524)
+func (r *SkillUseRail) buildSkillsSnapshotSignature() []string {
+	roots := r.normalizeSkillDirs()
+	sig := make([]string, 0, len(roots))
+	for _, root := range roots {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			sig = append(sig, filepath.Join(root, entry.Name())+"@"+info.ModTime().UTC().Format(time.RFC3339Nano))
+		}
+	}
+	sort.Strings(sig)
+	return sig
+}
+
+// fetchEvolutionTextsFor 按给定技能列表抓取演化经验文本（同名去重）。
+// Python: _fetch_evolution_texts (:444-462)
+func (r *SkillUseRail) fetchEvolutionTextsFor(ctx context.Context, skills []*skillpkg.Skill) {
+	if r.evolutionStore == nil {
+		return
+	}
+	seen := map[string]struct{}{}
+	for _, skill := range skills {
+		if skill == nil {
+			continue
+		}
+		if _, ok := seen[skill.Name]; ok {
+			continue
+		}
+		seen[skill.Name] = struct{}{}
+		text := r.evolutionStore.FormatDescExperienceText(ctx, skill.Name, 5)
+		r.evolutionTexts[skill.Name] = text
+	}
+}
+
+// ensureSessionBaseline 首次使用时落盘会话基线。
+// Python: _ensure_session_baseline (:692-698)
+func (r *SkillUseRail) ensureSessionBaseline(sess sessioninterfaces.SessionFacade) error {
+	if sess == nil {
+		return nil
+	}
+	if _, ok := r.loadSessionState(sess); ok {
+		return nil
+	}
+	return r.saveSessionBaseline(sess, r.skills)
+}
+
+// loadSessionBaseline 读取会话基线；无有效 state 时返回空切片。
+// Python: _load_session_baseline (:700-721)
+func (r *SkillUseRail) loadSessionBaseline(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill {
+	stateMap, ok := r.loadSessionState(sess)
+	if !ok {
+		return nil
+	}
+	raw, exists := stateMap["baseline_skills"]
+	if !exists {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		logger.Warn(logger.ComponentAgentCore).Msg("invalid persisted baseline_skills, ignoring")
+		return nil
+	}
+	skills := make([]*skillpkg.Skill, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := stringField(entry, "name")
+		directory := stringField(entry, "directory")
+		if name == "" || directory == "" {
+			continue
+		}
+		skills = append(skills, &skillpkg.Skill{
+			Name:        name,
+			Description: stringField(entry, "description"),
+			Directory:   directory,
+		})
+	}
+	return skills
+}
+
+// loadSessionState 读取并校验 skill_use state。
+// Python: _load_session_state (:722-731)
+func (r *SkillUseRail) loadSessionState(sess sessioninterfaces.SessionFacade) (map[string]any, bool) {
+	if sess == nil {
+		return nil, false
+	}
+	raw, err := sess.GetState(state.StringKey(skillSessionStateKey))
+	if err != nil || raw == nil {
+		return nil, false
+	}
+	stateMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	if schemaVersion(stateMap["schema_version"]) != skillSessionStateSchemaVersion {
+		logger.Warn(logger.ComponentAgentCore).
+			Any("schema_version", stateMap["schema_version"]).
+			Msg("unsupported persisted skill state schema, ignoring")
+		return nil, false
+	}
+	return stateMap, true
+}
+
+// saveSessionBaseline 把技能列表写入会话基线。
+// Python: _save_session_baseline (:733-750)
+func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade, skills []*skillpkg.Skill) error {
+	if sess == nil {
+		return nil
+	}
+	entries := make([]any, 0, len(skills))
+	for _, skill := range skills {
+		if skill == nil {
+			continue
+		}
+		entries = append(entries, map[string]any{
+			"name":        skill.Name,
+			"description": skill.Description,
+			"directory":   skill.Directory,
+		})
+	}
+	sess.UpdateState(map[string]any{
+		skillSessionStateKey: map[string]any{
+			"schema_version":  skillSessionStateSchemaVersion,
+			"baseline_skills": entries,
+		},
+	})
+	return nil
+}
+
+// stringField 读取 map 的字符串字段，缺失或非字符串返回空串。
+func stringField(m map[string]any, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// schemaVersion 归一化版本号：落盘回读可能是 int 或 float64。
+func schemaVersion(v any) int {
+	switch typed := v.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	}
+	return -1
+}
+
+// updateRuntimeSkillAttachment 把技能新增/移除/进化经验写入变更附件。
+// Python: _update_runtime_skill_attachment (:752-781)
+func (r *SkillUseRail) updateRuntimeSkillAttachment(cbc *agentinterfaces.AgentCallbackContext, baseline []*skillpkg.Skill) error {
+	if r.attachmentManagerFor == nil || cbc == nil {
+		return nil
+	}
+	mgr := r.attachmentManagerFor()
+	if mgr == nil || cbc.Session() == nil {
+		return nil
+	}
+	sessionID := cbc.Session().GetSessionID()
+	if sessionID == "" {
+		return nil
+	}
+
+	baselineByName := make(map[string]struct{}, len(baseline))
+	for _, skill := range baseline {
+		baselineByName[skill.Name] = struct{}{}
+	}
+	currentByName := make(map[string]struct{}, len(r.skills))
+	var additions []*skillpkg.Skill
+	for _, skill := range r.skills {
+		if skill == nil {
+			continue
+		}
+		currentByName[skill.Name] = struct{}{}
+		if _, ok := baselineByName[skill.Name]; !ok {
+			additions = append(additions, skill)
+		}
+	}
+	var removals []*skillpkg.Skill
+	for _, skill := range baseline {
+		if _, ok := currentByName[skill.Name]; !ok {
+			removals = append(removals, skill)
+		}
+	}
+
+	content := r.buildRuntimeSkillChangeContent(additions, removals, baseline)
+	if content == "" {
+		if _, err := mgr.ClearSection(sessionID, runtimeSkillAttachmentSection); err != nil {
+			return err
+		}
+		return nil
+	}
+	_, err := mgr.AddSection(sessionID, runtimeSkillAttachmentSection, content, hprompts.AttachmentSkill, runtimeSkillAttachmentSource)
+	return err
+}
+
+// buildRuntimeSkillChangeContent 渲染技能变更 + 进化经验，全空返回空串。
+// Python: _build_runtime_skill_change_content (:783-849)
+func (r *SkillUseRail) buildRuntimeSkillChangeContent(additions, removals, baseline []*skillpkg.Skill) string {
+	isEnglish := strings.HasPrefix(strings.ToLower(r.language()), "en")
+
+	var evolutionSkills []*skillpkg.Skill
+	seen := map[string]struct{}{}
+	for _, skill := range append(append([]*skillpkg.Skill{}, baseline...), additions...) {
+		if skill == nil {
+			continue
+		}
+		if _, ok := seen[skill.Name]; ok {
+			continue
+		}
+		if strings.TrimSpace(r.evolutionTexts[skill.Name]) == "" {
+			continue
+		}
+		seen[skill.Name] = struct{}{}
+		evolutionSkills = append(evolutionSkills, skill)
+	}
+
+	if len(additions) == 0 && len(removals) == 0 && len(evolutionSkills) == 0 {
+		return ""
+	}
+
+	var lines []string
+	if isEnglish {
+		lines = append(lines, "Skill environment status update. Invoke relevant skills only when needed for the current task.")
+		if len(additions) > 0 {
+			lines = append(lines, "Newly available skills:")
+			for idx, skill := range additions {
+				lines = append(lines, sections.BuildSkillLine(idx, skill.Name, skill.Description, ""))
+			}
+		}
+		if len(removals) > 0 {
+			lines = append(lines, "Unavailable skills (removed from the environment):")
+			for _, skill := range removals {
+				lines = append(lines, "- "+skill.Name)
+			}
+		}
+		if len(evolutionSkills) > 0 {
+			lines = append(lines, "Skill evolution experience reference:")
+			for _, skill := range evolutionSkills {
+				lines = append(lines, "[Skill: "+skill.Name+"]")
+				lines = append(lines, strings.TrimSpace(r.evolutionTexts[skill.Name]))
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	lines = append(lines, "Skill 环境状态更新。请根据当前任务需要，按需调用相关 Skill。")
+	if len(additions) > 0 {
+		lines = append(lines, "新增可用 Skill：")
+		for idx, skill := range additions {
+			lines = append(lines, sections.BuildSkillLine(idx, skill.Name, skill.Description, ""))
+		}
+	}
+	if len(removals) > 0 {
+		lines = append(lines, "已移除、当前不可用的 Skill：")
+		for _, skill := range removals {
+			lines = append(lines, "- "+skill.Name)
+		}
+	}
+	if len(evolutionSkills) > 0 {
+		lines = append(lines, "Skill 演进经验参考：")
+		for _, skill := range evolutionSkills {
+			lines = append(lines, "[Skill: "+skill.Name+"]")
+			lines = append(lines, strings.TrimSpace(r.evolutionTexts[skill.Name]))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // prepareSkills 增量刷新 + 过滤。
@@ -759,24 +1199,23 @@ func (r *SkillUseRail) getSkillDescription(skill *skillpkg.Skill) string {
 	return desc
 }
 
-// buildSkillsSection 构建 PromptSection。
-// Python: SkillUseRail._build_skills_section()
-func (r *SkillUseRail) buildSkillsSection() *saprompt.PromptSection {
+// buildSkillsSectionFor 按给定技能集合构建 PromptSection。
+// Python: _build_skills_section (:526-558)
+func (r *SkillUseRail) buildSkillsSectionFor(skills []*skillpkg.Skill) *saprompt.PromptSection {
 	if r.skillMode == SkillModeAll {
-		return r.buildAllModeSection()
+		return r.buildAllModeSectionFor(skills)
 	}
-	// auto_list 模式
-	section := sections.BuildSkillsSection("auto_list", "", r.language())
-	return section
+	// auto_list 模式：提示词只给一句指引，不列技能（上游忽略 skill_lines）
+	return sections.BuildSkillsSection("auto_list", "", r.language())
 }
 
-// buildAllModeSection 构建 all 模式 PromptSection。
-// Python: SkillUseRail._build_skills_section() all 分支
-func (r *SkillUseRail) buildAllModeSection() *saprompt.PromptSection {
+// buildAllModeSectionFor 用给定集合构建 all 模式 PromptSection。
+// Python: _build_skills_section all 分支 (:526-558)
+func (r *SkillUseRail) buildAllModeSectionFor(skills []*skillpkg.Skill) *saprompt.PromptSection {
 	// 预算裁剪：按与当前查询的关键词重叠度排序后整块丢弃低排名技能
-	skills := applySkillBudget(r.skills, r.currentQuery, r.maxSkills, r.maxTotalChars)
+	budgeted := applySkillBudget(skills, r.currentQuery, r.maxSkills, r.maxTotalChars)
 	var bodyLines []string
-	for idx, skill := range skills {
+	for idx, skill := range budgeted {
 		bodyLines = append(bodyLines, sections.BuildSkillLine(
 			idx,
 			skill.Name,
@@ -785,8 +1224,7 @@ func (r *SkillUseRail) buildAllModeSection() *saprompt.PromptSection {
 		))
 	}
 	skillLines := sections.BuildSkillLines(bodyLines)
-	section := sections.BuildSkillsSection("all", skillLines, r.language())
-	return section
+	return sections.BuildSkillsSection("all", skillLines, r.language())
 }
 
 // language 获取当前语言

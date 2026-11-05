@@ -102,6 +102,13 @@ func (d *DeepAdapter) syncMcpServersForRuntime(ctx context.Context, configBase m
 		}
 	}
 
+	// MCP 可能携带技能包（skill_installer 写盘），服务增删后必须重载技能 rail
+	// 并清会话基线，否则新装技能在本会话不可见、卸载技能仍可调用。
+	// Python: agent_ws_server 在 MCP 卸载/断开/删除后调用 refresh_skill_rails
+	if err := d.RefreshSkillRails(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("refresh skill rails after mcp sync failed")
+	}
+
 	logger.Info(logComponent).Str("tag", tag).Msg("MCP service hot-sync completed")
 	return nil
 }

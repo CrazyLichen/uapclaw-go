@@ -19,6 +19,7 @@
 //	├── deep_adapter.go           # DeepAdapter 核心结构体 + 8 接口方法 + 模型构建 + CWD 种子
 //	├── deep_adapter_rails.go     # ~20 个 rail builder + buildAgentRails + 幂等 UpdateAgentRails
 //	├── deep_adapter_plan.go      # plan 状态机接入（EnsureState/check_post_process_exit/控制事件）
+//	├── deep_adapter_skills.go    # 技能 rail 热刷新（RefreshSkillRails）+ 技能扫描根汇总
 //	├── deep_adapter_mcp.go       # MCP 管理 6 方法
 //	├── deep_adapter_a2x.go       # A2X 客户端 5 方法 + Cron 上下文 2 方法（⤵️）
 //	├── deep_adapter_tools.go     # Tool 同步 5 方法 + 多模态配置 + ToolCards 构建 + 工具名常量

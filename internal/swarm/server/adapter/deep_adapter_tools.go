@@ -680,6 +680,8 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       Python: tool_cards.append(tool.card)
 	if d.skillManager != nil {
 		skillToolkit := skilltools.NewSkillToolkit(d.skillManager)
+		// 安装/卸载技能后重载技能 rail 并清会话基线
+		skillToolkit.SetSkillsChangedHook(d.RefreshSkillRails)
 		var skillToolNames []string
 		for _, t := range skillToolkit.GetTools() {
 			existing, _ := runner.GetResourceMgr().GetTool([]string{t.Card().ID})

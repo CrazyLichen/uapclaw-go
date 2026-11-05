@@ -651,7 +651,7 @@ func TestBuildSkillsSection_all模式(t *testing.T) {
 		skillpkg.NewSkill("b", "技能 B", "/b"),
 	}
 
-	section := r.buildSkillsSection()
+	section := r.buildSkillsSectionFor(r.skills)
 	if section == nil {
 		t.Fatal("section 不应为 nil")
 	}
@@ -668,7 +668,7 @@ func TestBuildSkillsSection_autoList模式(t *testing.T) {
 	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 
-	section := r.buildSkillsSection()
+	section := r.buildSkillsSectionFor(r.skills)
 	if section == nil {
 		t.Fatal("section 不应为 nil")
 	}
@@ -683,7 +683,7 @@ func TestBuildSkillsSection_空skills(t *testing.T) {
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 	r.skills = nil
 
-	section := r.buildSkillsSection()
+	section := r.buildSkillsSectionFor(r.skills)
 	if section == nil {
 		t.Fatal("section 不应为 nil")
 	}
@@ -734,8 +734,8 @@ func TestInit_工具注册(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init 错误: %v", err)
 	}
-	if len(r.ownedToolIDs) == 0 {
-		t.Error("Init 应注册工具到 ResourceMgr")
+	if len(r.ownedToolNames) == 0 {
+		t.Error("Init 应注册工具到 AbilityManager")
 	}
 }
 
@@ -751,8 +751,8 @@ func TestInit_autoList注册ListSkillTool(t *testing.T) {
 		t.Fatalf("Init 错误: %v", err)
 	}
 	// auto_list 模式应注册 SkillTool + ListSkillTool = 2 个工具
-	if len(r.ownedToolIDs) < 2 {
-		t.Errorf("auto_list 模式至少应注册 2 个工具，实际 %d", len(r.ownedToolIDs))
+	if len(r.ownedToolNames) < 2 {
+		t.Errorf("auto_list 模式至少应注册 2 个工具，实际 %d", len(r.ownedToolNames))
 	}
 }
 

@@ -153,6 +153,12 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python: self._refresh_acp_runtime_tools(session_id, request_id, channel_id, request_metadata) (L3170)
 	d.refreshAcpRuntimeTools(config)
 
+	// 步骤 7.7: 配置热更新可能改动 skill_mode / 禁用开关 → 重载技能 rail 并清基线
+	// Python: agent_manager.refresh_skill_rails 在配置变更后调用
+	if err := d.RefreshSkillRails(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("refresh skill rails after runtime config update failed")
+	}
+
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
 		Str("language", resolvedLanguage).

@@ -2,7 +2,7 @@
 //
 // SkillTool 通过 SysOperation 读取技能目录下的指定文件（默认 SKILL.md），
 // ListSkillTool 列出所有可用技能或通过 LLM 路由筛选相关技能。
-// 两个工具均通过 getSkills 回调获取当前已启用的技能列表，
+// 两个工具均通过 getSkills 回调获取会话可见技能视图（技能会话基线 ∪ 新发现），
 // 由 SkillUseRail（9.19-23）在 init 时注册到 Agent。
 //
 // routeSkills 方法依赖真实 LLM API 调用（llm.Model 是具体结构体，非接口），
@@ -11,9 +11,11 @@
 // 文件目录：
 //
 //	skills/
-//	├── doc.go           # 包文档
-//	├── skill_tool.go    # SkillTool 技能查看工具
-//	└── list_skill.go    # ListSkillTool 技能列表/路由工具
+//	├── doc.go              # 包文档
+//	├── skill_tool.go       # SkillTool 技能查看工具
+//	├── skill_layout.go     # 技能目录树/嵌套子技能/布局附录渲染
+//	├── markdown_media.go   # markdown/HTML 媒体引用检测
+//	└── list_skill.go       # ListSkillTool 技能列表/路由工具
 //
 // 对应 Python 代码：openjiuwen/harness/tools/skills/
 package skills
