@@ -269,31 +269,9 @@ func TestBuildWorkspaceSection_双语言(t *testing.T) {
 	}
 }
 
-// TestBuildNavigationSection_基本验证 测试工具导航节基本属性
-func TestBuildNavigationSection_基本验证(t *testing.T) {
-	s := BuildNavigationSection([]string{"entry1", "entry2"}, "cn")
-	if s.Name != SectionToolNavigation {
-		t.Errorf("Name = %q, want %q", s.Name, SectionToolNavigation)
-	}
-	if s.Priority != 70 {
-		t.Errorf("Priority = %d, want 70", s.Priority)
-	}
-	if !strings.Contains(s.Content["cn"], "entry1") {
-		t.Error("Content[cn] 应包含导航条目")
-	}
-}
-
-// TestBuildNavigationSection_空条目 测试工具导航节空条目
-func TestBuildNavigationSection_空条目(t *testing.T) {
-	s := BuildNavigationSection(nil, "cn")
-	if !strings.Contains(s.Content["cn"], "当前无可展示的导航条目") {
-		t.Error("空条目应包含提示信息")
-	}
-}
-
 // TestBuildProgressiveToolRulesSection_基本验证 测试渐进式工具规则节
 func TestBuildProgressiveToolRulesSection_基本验证(t *testing.T) {
-	s := BuildProgressiveToolRulesSection("cn")
+	s := BuildProgressiveToolRulesSection(map[string]string{"tool_a": "工具 A"})
 	if s.Name != SectionProgressiveToolRules {
 		t.Errorf("Name = %q, want %q", s.Name, SectionProgressiveToolRules)
 	}
@@ -539,18 +517,6 @@ func TestSectionName常量(t *testing.T) {
 	}
 }
 
-// TestBuildNavigationEntry_中文冒号 测试导航条目中文冒号
-func TestBuildNavigationEntry_中文冒号(t *testing.T) {
-	cn := BuildNavigationEntry("tool1", "group1", "loaded", "desc1", "cn")
-	if !strings.Contains(cn, "：") {
-		t.Error("CN 导航条目应使用中文冒号")
-	}
-	en := BuildNavigationEntry("tool1", "group1", "loaded", "desc1", "en")
-	if !strings.Contains(en, ":") {
-		t.Error("EN 导航条目应使用英文冒号")
-	}
-}
-
 // TestGetListSkillSystemPrompt_双语言 测试技能选择系统提示词双语言
 func TestGetListSkillSystemPrompt_双语言(t *testing.T) {
 	cn := GetListSkillSystemPrompt("cn")
@@ -713,20 +679,9 @@ func TestBuildCompletionSignalSection_英文(t *testing.T) {
 	}
 }
 
-// TestBuildNavigationSection_英文 测试导航节英文
-func TestBuildNavigationSection_英文(t *testing.T) {
-	s := BuildNavigationSection([]string{"entry"}, "en")
-	if s.Content["en"] == "" {
-		t.Error("Content[en] 不应为空")
-	}
-	if !strings.Contains(s.Content["en"], "entry") {
-		t.Error("Content[en] 应包含导航条目")
-	}
-}
-
 // TestBuildProgressiveToolRulesSection_英文 测试渐进式工具规则节英文
 func TestBuildProgressiveToolRulesSection_英文(t *testing.T) {
-	s := BuildProgressiveToolRulesSection("en")
+	s := BuildProgressiveToolRulesSection(map[string]string{"tool_a": "tool A"})
 	if s.Content["en"] == "" {
 		t.Error("Content[en] 不应为空")
 	}
