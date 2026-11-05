@@ -52,6 +52,23 @@ const (
 	// defaultSkillFileName 默认技能文件名
 	// 一比一复刻 Python: SKILL.md by default (skill_tool.py L44)
 	defaultSkillFileName = "SKILL.md"
+
+	// skillToolMarkdownImagesHint 图片提示（读图多模态可用）
+	// Python: SKILL_TOOL_MARKDOWN_IMAGES_HINT (skill_tool.py:30-34)
+	skillToolMarkdownImagesHint = "Embedded figures in this skill are markdown links (paths/URLs) only; pixel data is not " +
+		"attached. Call read_file on the image path under skills/<skill-name>/… when you need " +
+		"to inspect a reference screenshot."
+	// skillToolMarkdownImagesVisionHint 图片提示（读图多模态关闭）
+	// Python: SKILL_TOOL_MARKDOWN_IMAGES_VISION_HINT (skill_tool.py:36-41)
+	skillToolMarkdownImagesVisionHint = "Embedded figures in this skill are markdown links (paths/URLs) only; pixel data is not " +
+		"attached. read_file native image multimodal input is disabled. If a vision tool is " +
+		"configured, call visual_question_answering on the image path under " +
+		"skills/<skill-name>/… when you need to inspect a reference screenshot."
+	// skillToolMarkdownVideosHint 视频提示
+	// Python: SKILL_TOOL_MARKDOWN_VIDEOS_HINT (skill_tool.py:43-46)
+	skillToolMarkdownVideosHint = "Embedded videos in this skill are link references only. Skill videos are consumed in " +
+		"branch mode (multimodal_skill_mode=branch); do not read_file skill videos on the " +
+		"main agent loop as it makes the context window too large."
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -107,6 +124,14 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		}
 	}
 
+	// Python: skill_tool.py:385-393 路径安全校验
+	if !isSafeRelativeFilePath(relativeFilePath) {
+		return map[string]any{
+			"success": false,
+			"error":   "Invalid relative_file_path: absolute paths and '..' traversal components are not allowed",
+		}, nil
+	}
+
 	callOpts := tool.NewToolCallOptions(opts...)
 	var sess sessioninterfaces.SessionFacade
 	if callOpts != nil {
@@ -124,7 +149,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		}, nil
 	}
 
-	filePath := filepath.Join(skill.Directory, relativeFilePath)
+	filePath := filepath.Join(skill.Directory, filepath.FromSlash(strings.ReplaceAll(relativeFilePath, "\\", "/")))
 	readFileResult, readErr := t.operation.Fs().ReadFile(ctx, filePath)
 
 	if readErr != nil {
@@ -151,9 +176,29 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		}, nil
 	}
 
-	skillFileContent := ""
+	body := ""
 	if readFileResult.Data != nil {
-		skillFileContent = readFileResult.Data.Content
+		body = readFileResult.Data.Content
+	}
+	// Python: hint 模式对 markdown 媒体引用加提示（skill_tool.py:412-419）
+	if skillMarkdownHasMedia(body) {
+		body = applySkillToolMarkdownImagesHint(body, t.enableReadImageMultimodal)
+	}
+
+	layout := skillLayoutMetadata(skill.Directory)
+	data := map[string]any{
+		"skill_directory": skill.Directory,
+		"skill_content":   body,
+	}
+	for key, value := range layout {
+		data[key] = value
+	}
+	// content 必须无条件设置：AbilityManager 优先取 data["content"]，
+	// 否则退化为 JSON dump，把正文与附录一起埋掉（Python: skill_tool.py:432-436）
+	if appendix := formatLayoutAppendixForModel(layout, skill.Name); appendix != "" {
+		data["content"] = strings.TrimRight(body, "\n") + "\n\n" + appendix
+	} else {
+		data["content"] = body
 	}
 
 	logger.Info(logComponent).
@@ -161,13 +206,54 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		Str("file_path", filePath).
 		Msg("SkillTool read skill file")
 
-	return map[string]any{
-		"success": true,
-		"data": map[string]any{
-			"skill_directory": skill.Directory,
-			"skill_content":   skillFileContent,
-		},
-	}, nil
+	return map[string]any{"success": true, "data": data}, nil
+}
+
+// applySkillToolMarkdownImagesHint 剥离旧提示后按媒体类型前置提示（最多一次）。
+// Python: apply_skill_tool_markdown_images_hint (skill_tool.py:68-86)
+func applySkillToolMarkdownImagesHint(body string, enableReadImageMultimodal bool) string {
+	normalized := stripSkillToolInjectedHints(body)
+	var hints []string
+	if markdownHasImageReference(normalized) {
+		if enableReadImageMultimodal {
+			hints = append(hints, skillToolMarkdownImagesHint)
+		} else {
+			hints = append(hints, skillToolMarkdownImagesVisionHint)
+		}
+	}
+	if markdownHasVideoReference(normalized) {
+		hints = append(hints, skillToolMarkdownVideosHint)
+	}
+	if len(hints) == 0 {
+		return normalized
+	}
+	return strings.Join(hints, "\n\n") + "\n\n" + normalized
+}
+
+// skillMarkdownHasMedia 判断技能正文是否含图片或视频引用。
+// Python: skill_markdown_has_media (skill_tool.py:88-92)
+func skillMarkdownHasMedia(content string) bool {
+	return markdownHasImageReference(content) || markdownHasVideoReference(content)
+}
+
+// stripSkillToolInjectedHints 反复剥离已注入的三类提示前缀。
+// Python: _strip_skill_tool_injected_hints (skill_tool.py:47-66)
+func stripSkillToolInjectedHints(body string) string {
+	s := body
+	for {
+		stripped := false
+		for _, hint := range []string{skillToolMarkdownImagesHint, skillToolMarkdownImagesVisionHint, skillToolMarkdownVideosHint} {
+			prefix := hint + "\n\n"
+			if strings.HasPrefix(s, prefix) {
+				s = strings.TrimPrefix(s, prefix)
+				stripped = true
+			}
+		}
+		if !stripped {
+			break
+		}
+	}
+	return s
 }
 
 // Stream SkillTool 不支持流式调用。

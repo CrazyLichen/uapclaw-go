@@ -3,6 +3,9 @@ package skills
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -615,5 +618,73 @@ func TestSkillTool_按会话视图查找技能(t *testing.T) {
 	}
 	if miss["success"] != false {
 		t.Fatalf("无会话时期望 success=false, 实际 %v", miss)
+	}
+}
+
+// TestSkillTool_返回目录布局与纯文本内容 验证 content/layout/媒体提示三件套。
+func TestSkillTool_返回目录布局与纯文本内容(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "designer"), 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "designer", "SKILL.md"), []byte("# sub"), 0o644); err != nil {
+		t.Fatalf("写子技能失败: %v", err)
+	}
+
+	body := "# demo\n\nsee ![shot](assets/a.png)"
+	op := &fakeSysOperation{fsOp: &fakeFsOperation{
+		readFileResult: &result.ReadFileResult{
+			BaseResult: result.BaseResult{Code: 0, Message: "success"},
+			Data:       &result.ReadFileData{Content: body, Mode: "text"},
+		},
+	}}
+	skillsList := []*skills.Skill{{Name: "demo", Directory: root}}
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return skillsList }, "cn", "", true)
+
+	got, err := st.Invoke(context.Background(), map[string]any{"skill_name": "demo"})
+	if err != nil {
+		t.Fatalf("不应返回 Go error: %v", err)
+	}
+	if got["success"] != true {
+		t.Fatalf("期望 success=true, 实际 %v", got)
+	}
+	data, ok := got["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data 类型错误: %T", got["data"])
+	}
+	content, _ := data["content"].(string)
+	if !strings.HasPrefix(content, skillToolMarkdownImagesHint) {
+		t.Error("content 应以图片提示开头")
+	}
+	if !strings.Contains(content, "## Directory layout") {
+		t.Error("content 应包含目录布局")
+	}
+	if !strings.Contains(content, "## Nested skills") {
+		t.Error("content 应包含嵌套技能说明")
+	}
+	if _, ok := data["directory_tree"]; !ok {
+		t.Error("data 应包含 directory_tree")
+	}
+	if names, ok := data["discovered_skill_names"].([]string); !ok || len(names) != 1 || names[0] != "designer" {
+		t.Errorf("discovered_skill_names 期望 [designer], 实际 %v", data["discovered_skill_names"])
+	}
+}
+
+// TestSkillTool_拒绝路径穿越 验证 relative_file_path 安全校验。
+func TestSkillTool_拒绝路径穿越(t *testing.T) {
+	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+
+	for _, bad := range []string{"../../etc/passwd", "/etc/passwd"} {
+		got, err := st.Invoke(context.Background(), map[string]any{
+			"skill_name":         "python_coder",
+			"relative_file_path": bad,
+		})
+		if err != nil {
+			t.Fatalf("不应返回 Go error: %v", err)
+		}
+		if got["success"] != false {
+			t.Errorf("%q 应被拒绝, 实际 %v", bad, got)
+		}
 	}
 }
