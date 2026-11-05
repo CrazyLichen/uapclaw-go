@@ -54,6 +54,12 @@ type AbilityManager struct {
 	contextEngine iface.ContextEngine
 	// resourceMgr 资源管理器
 	resourceMgr *resourcesmanager.ResourceMgr
+	// registryRevision 注册表单调递增版本，供 startup 建立的索引复用判断
+	registryRevision int
+	// progressiveToolEnabled 渐进式工具暴露开关（注册期策略）
+	progressiveToolEnabled bool
+	// directToolNames 渐进模式下保持直接可调用的工具名集合
+	directToolNames map[string]struct{}
 }
 
 // toolItem 内部辅助类型，用于 prioritizePaidSearch 的输入。
@@ -83,7 +89,62 @@ func NewAbilityManager(resourceMgr *resourcesmanager.ResourceMgr) *AbilityManage
 		agents:      make(map[string]*agentschema.AgentCard),
 		mcpServers:  make(map[string]*mcptypes.McpServerConfig),
 		resourceMgr: resourceMgr,
+		// 默认只把 tool_search 视为直通（对齐上游 _direct_tool_names 初值）
+		directToolNames: map[string]struct{}{"tool_search": {}},
 	}
+}
+
+// SetToolExposurePolicy 设置后续注册使用的默认曝光策略。
+//
+// 已注册卡片不会被改写：曝光是注册期决策，热重配只影响此后注册的卡片。
+//
+// Python: AbilityManager.set_tool_exposure_policy
+func (am *AbilityManager) SetToolExposurePolicy(progressiveToolEnabled bool, directToolNames []string) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+	am.progressiveToolEnabled = progressiveToolEnabled
+	if directToolNames == nil {
+		return
+	}
+	names := make(map[string]struct{}, len(directToolNames))
+	for _, name := range directToolNames {
+		trimmed := strings.TrimSpace(name)
+		if trimmed != "" {
+			names[trimmed] = struct{}{}
+		}
+	}
+	am.directToolNames = names
+}
+
+// RegistryRevision 返回注册表版本号。
+//
+// Python: AbilityManager.registry_revision
+func (am *AbilityManager) RegistryRevision() int {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	return am.registryRevision
+}
+
+// applyToolExposurePolicy 在注册期解析并写回卡片曝光策略（调用方须持锁）。
+//
+// 显式声明优先；否则命中 direct 名单 → direct；否则渐进开启 → deferred。
+//
+// Python: AbilityManager._apply_tool_exposure_policy
+func (am *AbilityManager) applyToolExposurePolicy(card *tool.ToolCard) tool.ToolExposure {
+	if declared, ok := card.GetExposureDeclared(); ok && declared {
+		return card.EffectiveExposure()
+	}
+	var resolved tool.ToolExposure
+	if _, direct := am.directToolNames[card.Name]; direct {
+		resolved = tool.ToolExposureDirect
+	} else if am.progressiveToolEnabled {
+		resolved = tool.ToolExposureDeferred
+	} else {
+		resolved = tool.ToolExposureDirect
+	}
+	card.Exposure = resolved
+	card.SetExposureDeclared(true)
+	return resolved
 }
 
 // SetContextEngine 设置上下文引擎。
@@ -107,7 +168,9 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 				Msg("duplicate tool ability detected, keeping existing, skipping add")
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_tool"}
 		}
+		am.applyToolExposurePolicy(a)
 		am.tools[a.Name] = a
+		am.registryRevision++
 		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_tool"}
 
 	case *schema.WorkflowCard:
@@ -121,6 +184,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_workflow"}
 		}
 		am.workflows[a.Name] = a
+		am.registryRevision++
 		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_workflow"}
 
 	case *agentschema.AgentCard:
@@ -134,6 +198,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_agent"}
 		}
 		am.agents[a.Name] = a
+		am.registryRevision++
 		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_agent"}
 
 	case *mcptypes.McpServerConfig:
@@ -147,6 +212,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 			return agentschema.AddAbilityResult{Name: a.ServerName, Added: false, Reason: "duplicate_mcp_server"}
 		}
 		am.mcpServers[a.ServerName] = a
+		am.registryRevision++
 		return agentschema.AddAbilityResult{Name: a.ServerName, Added: true, Reason: "added_mcp_server"}
 
 	default:
@@ -198,6 +264,8 @@ func (am *AbilityManager) Remove(name string) schema.Ability {
 				delete(am.tools, toolName)
 			}
 		}
+		// 对齐上游：仅 MCP 卸载路径推进注册版本；普通工具移除不推进
+		am.registryRevision++
 		return mcpServer
 	}
 	return nil
