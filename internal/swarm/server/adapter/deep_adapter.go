@@ -165,6 +165,8 @@ type DeepAdapter struct {
 	// responsePromptRail 响应提示词护栏
 	// ✅ 10.6.3-10: ResponsePromptRail
 	responsePromptRail sainterfaces.AgentRail
+	// modelAnomalyRail 模型异常检测护栏（重复输出/流超时/瞬时失败/工具循环压缩）
+	modelAnomalyRail sainterfaces.AgentRail
 	// securityRail 安全护栏
 	// ✅ 已回填：SafetyPromptRail（对齐 Python: _security_rail: SecurityRail | None）
 	securityRail sainterfaces.AgentRail
@@ -580,6 +582,13 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
 
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
+	// Python: L13239-13241 enable_model_anomaly_detection_rail=(execution_guard...).get("enabled", False)
+	anomalyEnabled := false
+	if guard, ok := configBase["execution_guard"].(map[string]any); ok {
+		if guardCfg, ok := guard["model_anomaly_detection_rail"].(map[string]any); ok {
+			anomalyEnabled, _ = guardCfg["enabled"].(bool)
+		}
+	}
 	// Python: self._instance = create_deep_agent(**common_kwargs, ...)
 	resolvedLanguage := d.resolveRuntimeLanguage()
 	systemPrompt := commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage())
@@ -602,6 +611,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		VisionModelConfig:      d.visionModelConfig,
 		AudioModelConfig:       d.audioModelConfig,
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
+		// 开关与 builder 必须成对：builder 已构建时工厂不再补默认，反之亦然
+		EnableModelAnomalyDetectionRail: &anomalyEnabled,
 		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）
 		TodoModifyFactory:   swarmtools.NewCompatibleTodoModifyTool,
 		AutoCreateWorkspace: false,                                              // Python: 硬编码 false

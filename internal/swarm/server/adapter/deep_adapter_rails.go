@@ -119,34 +119,40 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		railsList = append(railsList, sec)
 	}
 
-	// 步骤 8: heartbeatRail — Python: _heartbeat_rail
+	// 步骤 8: modelAnomalyDetectionRail — Python: _model_anomaly_detection_rail
+	if anomaly := d.buildModelAnomalyDetectionRail(configBase); anomaly != nil {
+		d.modelAnomalyRail = anomaly
+		railsList = append(railsList, anomaly)
+	}
+
+	// 步骤 9: heartbeatRail — Python: _heartbeat_rail
 	hb := d.buildHeartbeatRail()
 	if hb != nil {
 		d.heartbeatRail = hb
 		railsList = append(railsList, hb)
 	}
 
-	// 步骤 9: avatarRail — Python: _avatar_rail
+	// 步骤 10: avatarRail — Python: _avatar_rail
 	av := d.buildAvatarRail()
 	if av != nil {
 		d.avatarRail = av
 		railsList = append(railsList, av)
 	}
 
-	// 步骤 10: subagentRail — Python: _subagent_rail
+	// 步骤 11: subagentRail — Python: _subagent_rail
 	// buildSubagentRail 已返回具体类型，无需类型断言（原先的断言失败会静默丢 rail）
 	sa := d.buildSubagentRail()
 	d.subagentRail = sa
 	railsList = append(railsList, sa)
 
-	// 步骤 11: permissionRail — Python: _permission_rail
+	// 步骤 12: permissionRail — Python: _permission_rail
 	perm := d.buildPermissionRail(configBase)
 	if perm != nil {
 		d.permissionRail = perm
 		railsList = append(railsList, perm)
 	}
 
-	// 步骤 12: contextProcessorRail — Python: _context_processor_rail
+	// 步骤 13: contextProcessorRail — Python: _context_processor_rail
 	cp := d.buildContextProcessorRail(d.configCacheSnapshot())
 	d.contextProcessorRail = cp
 	railsList = append(railsList, cp)
@@ -1627,4 +1633,51 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 			Msg("unknown dynamic Rail builder method name")
 		return nil
 	}
+}
+
+// buildModelAnomalyDetectionRail 按 execution_guard 配置构建模型异常检测 Rail。
+//
+// 配置缺省或 enabled 非 true 时返回 nil（对齐上游 retry_cfg.get("enabled", False)）；
+// 构造失败只告警不阻断冷启动（对齐上游 try/except 返回 None）。
+// Python: interface_deep.py L11036-11078 _build_model_anomaly_detection_rail
+func (d *DeepAdapter) buildModelAnomalyDetectionRail(configBase map[string]any) *rails.ModelAnomalyDetectionRail {
+	guard, _ := configBase["execution_guard"].(map[string]any)
+	cfg, _ := guard["model_anomaly_detection_rail"].(map[string]any)
+	if !paramsBool(cfg, "enabled", false) {
+		logger.Info(logComponent).Msg("[DeepAdapter] ModelAnomalyDetectionRail disabled by config")
+		return nil
+	}
+
+	opts := []rails.ModelAnomalyOption{
+		rails.WithMaxRetries(paramsInt(cfg, "max_retries", 2)),
+		rails.WithRepeatMinPatternChars(paramsInt(cfg, "repeat_min_pattern_chars", 2)),
+		rails.WithRepeatMaxPatternChars(paramsInt(cfg, "repeat_max_pattern_chars", 64)),
+		rails.WithRepeatMinCount(paramsInt(cfg, "repeat_min_count", 6)),
+		rails.WithRepeatMinTotalChars(paramsInt(cfg, "repeat_min_total_chars", 160)),
+		rails.WithRepeatWindowChars(paramsInt(cfg, "repeat_window_chars", 1024)),
+		rails.WithSingleCharRepeatCount(paramsInt(cfg, "single_char_repeat_count", 100)),
+	}
+	if compact, ok := cfg["tool_loop_compact"].(map[string]any); ok && compact != nil {
+		opts = append(opts, rails.WithToolLoopCompact(rails.ToolLoopCompactConfig{
+			Enabled:              paramsBool(compact, "enabled", false),
+			ConsecutiveThreshold: paramsInt(compact, "consecutive_threshold", 4),
+			BailoutThreshold:     paramsInt(compact, "bailout_threshold", 3),
+		}))
+	}
+
+	rail, err := rails.NewModelAnomalyDetectionRail(opts...)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[DeepAdapter] ModelAnomalyDetectionRail create failed")
+		return nil
+	}
+	logger.Info(logComponent).Msg("[DeepAdapter] ModelAnomalyDetectionRail create success")
+	return rail
+}
+
+// paramsBool 从配置映射中获取布尔值，不存在时返回默认值。
+func paramsBool(m map[string]any, key string, defaultVal bool) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return defaultVal
 }
