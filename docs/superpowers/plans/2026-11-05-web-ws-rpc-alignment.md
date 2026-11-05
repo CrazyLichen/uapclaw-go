@@ -6,7 +6,7 @@
 
 **Architecture:** 先用 `cmd/rpc-matrix` 把三方（前端 / 本仓 / 上游）方法集合变成可验收矩阵并接进 CI（无白名单），矩阵带**下游状态**列区分"本层能做实"与"需要 AgentServer"；再把现有 5 个 Go 文件按上游职责归位（删自造 `frame`/`RPCDispatcher`，normalize 迁 `gateway` 包，handler 改名到 Python 名）；最后按上游行区相邻性分七批补齐 49 个方法，每批一个提交、单独 CI 四绿。
 
-**实测基线（2026-11-05，`cmd/rpc-matrix` 生成）:** 三方方法 186 = ✅ 一致 40 / ⚠️ 漂移 38 / ❌ 缺 108；缺口下游分布 `local 47 / agent:ok 2 / agent:const-only 2 / agent:missing 40 / dep 17`。
+**实测基线（2026-11-05，`cmd/rpc-matrix` 生成）:** 三方方法 181 = ✅ 一致 40 / ⚠️ 漂移 26 / ❌ 缺 108 / ❓ 前端独有 7；缺口下游分布 `local 47 / agent:ok 2 / agent:const-only 2 / agent:missing 40 / dep 17`。漂移 26 的来源见 spec §1.2（上游删除 1 / 上游走 HTTP 12 / 本仓自造 13）。
 
 **Tech Stack:** Go 1.22（`sqlite_fts5` tag）、gorilla/websocket、标准库 `regexp`、现有 `cmd/integration-audit` 门禁模式、`tests/integration/swarm/gateway` 的 `CliRouteFullChainSuite` 装配。
 

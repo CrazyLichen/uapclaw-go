@@ -24,9 +24,10 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 
 | 口径 | 数量 | 说明 |
 |---|---|---|
-| 三方方法总数 | **186** | 前端引用 ∪ 本仓注册 ∪ 上游注册 |
+| 三方方法总数 | **181** | 前端引用 ∪ 本仓注册 ∪ 上游 WS 注册 |
 | ✅ 一致 | **40** | 上游有、本仓有 |
-| ⚠️ 漂移 | **38** | 本仓有、上游未注册为 WS 方法（含 `test.*`、`permissions.*` 走 HTTP 映射等） |
+| ⚠️ 漂移 | **26** | 本仓有、上游没有（细见 §1.3） |
+| ❓ 前端独有 | **7** | 前端在调，两侧都没注册（前端独占能力或上游未实现） |
 | ❌ 缺 | **108** | 见下方下游分布 |
 | 缺口·`local` | **47** | 上游在网关本地实现，**本层补齐即可真跑** |
 | 缺口·`agent:ok` | **2** | `session.rename`/`session.plan_status`，薄代理且本仓 AgentServer 已有分支 |
@@ -49,15 +50,18 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 | `web_normalize.go`（位于 web 包） | `_normalize_gateway_message`/`_norm_and_forward` 在 `app_gateway.py:314/:353/:2508` | 迁 `gateway` 包 |
 | `config_apply.go` / `memory_compute.go` 独立文件 | 同属 `app_web_handlers.py` | 合并回 `app_web_handlers.go` |
 
-### 1.2 漂移/自造方法（21 个）
+### 1.2 漂移方法（26 个，按来源三分）
 
-| 方法 | 上游是否注册 | 判定 |
-|---|---|---|
-| `harness.list/install/uninstall/enable/disable/get_status/rebuild`（7） | **零命中** | 上游只有 `harness.import`/`harness.export` → 删除自造 7 个，补 2 个 |
-| `cron.job.disable/enable/run/status`（4） | **零命中** | 上游是 `cron.job.toggle`/`run_now`/`meta` → 删除改名 |
-| `heartbeat.get_path`（1） | **零命中** | 删除 |
-| `updater.cancel`/`updater.install`（2） | **零命中** | 删除（上游为 `updater.upgrade`/`reset_source`） |
-| `permissions.rules.*`/`permissions.tools.set`/`permissions.approval_overrides.*`（7） | 有，但走 `http_routes/mapped.py` + `app_web_handlers.py` | 保留；矩阵标注"上游 HTTP 映射" |
+> 判定口径：漂移 = **本仓有、上游 WS 注册表里没有**。逐条对照上游 0.2.0 基线
+> （`/home/opensource/backup-20261104/jiuwenswarm-develop`）与 0.2.5。
+
+| 来源 | 数量 | 方法 | 结论与处置 |
+|---|---|---|---|
+| 上游 0.2.0 有、0.2.5 **已删除** | **1** | `heartbeat.get_path` | 跟随上游删除 |
+| 上游有，但走 **HTTP 路由 / TUI 本地 handler**，非 WS 注册 | **12** | `permissions.rules.{get,create,update,delete}`、`permissions.tools.{get,set,update,delete}`、`permissions.approval_overrides.{get,delete}`、`session.delete`、`session.switch` | 功能上游存在（`http_routes/mapped.py:269-300`、`tui_connect.py`），只是传输不同；本仓挂在 WS 上 → **保留**，矩阵标注"上游以 HTTP 暴露"，是否收敛到 HTTP 另议 |
+| 两版上游**都没有**（本仓自造） | **13** | `harness.{list,install,uninstall,enable,disable,get_status,rebuild}`（7）、`cron.job.{disable,enable,run,status}`（4）、`updater.{cancel,install}`（2） | 上游对应能力分别是 `harness.import/export`、`cron.job.{toggle,run_now,meta}`、`updater.{upgrade,reset_source}` → **删除或以上游名替代**（见 §6 删除清单） |
+
+**结论：不是"Python 更新后把我们砍了"，只有 1 个是上游真删。** 12 个是传输方式差异，13 个是本仓自造名。
 
 ---
 
