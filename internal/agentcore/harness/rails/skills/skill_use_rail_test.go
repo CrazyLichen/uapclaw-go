@@ -734,8 +734,8 @@ func TestInit_工具注册(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init 错误: %v", err)
 	}
-	if len(r.ownedToolIDs) == 0 {
-		t.Error("Init 应注册工具到 ResourceMgr")
+	if len(r.ownedToolNames) == 0 {
+		t.Error("Init 应注册工具到 AbilityManager")
 	}
 }
 
@@ -751,8 +751,8 @@ func TestInit_autoList注册ListSkillTool(t *testing.T) {
 		t.Fatalf("Init 错误: %v", err)
 	}
 	// auto_list 模式应注册 SkillTool + ListSkillTool = 2 个工具
-	if len(r.ownedToolIDs) < 2 {
-		t.Errorf("auto_list 模式至少应注册 2 个工具，实际 %d", len(r.ownedToolIDs))
+	if len(r.ownedToolNames) < 2 {
+		t.Errorf("auto_list 模式至少应注册 2 个工具，实际 %d", len(r.ownedToolNames))
 	}
 }
 

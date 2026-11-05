@@ -2,13 +2,17 @@ package skills
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	ptools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -301,4 +305,121 @@ func TestBuildRuntimeSkillChangeContent(t *testing.T) {
 		assert.Contains(t, content, "Skill 演进经验参考：")
 		assert.Contains(t, content, "经验正文")
 	})
+}
+
+// TestSkillUseRailPriority 与上游一致（95，晚于文件系统 rail）
+// Python: SkillUseRail.priority = 95 (skill_use_rail.py:57-61)
+func TestSkillUseRailPriority(t *testing.T) {
+	r := NewSkillUseRail([]string{t.TempDir()})
+	assert.Equal(t, 95, r.Priority())
+}
+
+// TestInit_已存在的工具不再覆盖注册 他人拥有的能力不抢注册
+// Python: skill_use_rail.py:377-386
+func TestInit_已存在的工具不再覆盖注册(t *testing.T) {
+	ownerCard, err := ptools.BuildToolCard("read_file", "ReadFileTool", "cn", nil, "agent")
+	require.NoError(t, err)
+
+	am := newMockAbilityManager()
+	am.abilities["read_file"] = ownerCard
+
+	agent := newMockBaseAgent(newMockSystemPromptBuilder("cn"), am)
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(true))
+	require.NoError(t, r.Init(context.Background(), agent))
+
+	_, owned := r.ownedToolNames["read_file"]
+	assert.False(t, owned, "他人拥有的工具不得被本 rail 认领")
+	assert.Same(t, ownerCard, am.abilities["read_file"], "原持有者实例不应被替换")
+}
+
+// TestSchemaVersion 版本号归一化
+func TestSchemaVersion(t *testing.T) {
+	assert.Equal(t, 1, schemaVersion(1))
+	assert.Equal(t, 1, schemaVersion(int64(1)))
+	assert.Equal(t, 1, schemaVersion(float64(1.0)))
+	assert.Equal(t, -1, schemaVersion("1"))
+	assert.Equal(t, -1, schemaVersion(nil))
+}
+
+// TestWithSkillBudget 预算选项
+func TestWithSkillBudget(t *testing.T) {
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillBudget(5, 1000))
+	assert.Equal(t, 5, r.maxSkills)
+	assert.Equal(t, 1000, r.maxTotalChars)
+}
+
+// TestLanguage 语言回退
+func TestLanguage(t *testing.T) {
+	r := newRailWithSkills()
+	assert.Equal(t, "cn", r.language())
+	r.systemPromptBuilder = newMockSystemPromptBuilder("en")
+	assert.Equal(t, "en", r.language())
+}
+
+// TestGetCallbacks 回调映射包含两个 hook
+func TestGetCallbacks(t *testing.T) {
+	r := newRailWithSkills()
+	cbs := r.GetCallbacks()
+	assert.Contains(t, cbs, agentinterfaces.CallbackBeforeInvoke)
+	assert.Contains(t, cbs, agentinterfaces.CallbackBeforeModelCall)
+}
+
+// TestSaveSessionBaseline_跳过nil技能 空技能不落盘
+func TestSaveSessionBaseline_跳过nil技能(t *testing.T) {
+	r := newRailWithSkills()
+	sess := newSkillFakeSession("s1")
+	require.NoError(t, r.saveSessionBaseline(sess, []*skillpkg.Skill{nil}))
+	_, ok := r.loadSessionState(sess)
+	assert.True(t, ok, "即使技能为空也应写入合法 state")
+	assert.Empty(t, r.loadSessionBaseline(sess))
+}
+
+// TestBeforeModelCall_NilBuilder 未注入 builder 时安全返回
+func TestBeforeModelCall_NilBuilder(t *testing.T) {
+	r := newRailWithSkills(testSkill("alpha"))
+	assert.NoError(t, r.BeforeModelCall(context.Background(), nil))
+}
+
+// TestBuildRuntimeSkillChangeContent_仅移除 只有移除时也应产出内容
+func TestBuildRuntimeSkillChangeContent_仅移除(t *testing.T) {
+	r := newRailWithSkills()
+	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
+	content := r.buildRuntimeSkillChangeContent(nil, []*skillpkg.Skill{testSkill("alpha")}, nil)
+	assert.Contains(t, content, "已移除、当前不可用的 Skill：")
+	assert.Contains(t, content, "- alpha")
+}
+
+// TestBeforeModelCall_提取查询并注入 每次模型调用都刷新基线视图
+func TestBeforeModelCall_提取查询并注入(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "alpha"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "alpha", "SKILL.md"), []byte("# alpha"), 0o644))
+
+	r := NewSkillUseRail([]string{root}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
+
+	sess := newSkillFakeSession("s1")
+	cbc := agentinterfaces.NewAgentCallbackContext(nil,
+		&agentinterfaces.ModelCallInputs{Messages: []llmschema.BaseMessage{llmschema.NewUserMessage("帮我处理 pdf")}}, sess)
+
+	require.NoError(t, r.BeforeModelCall(context.Background(), cbc))
+	assert.Equal(t, "帮我处理 pdf", r.currentQuery)
+	section := r.systemPromptBuilder.(*mockSystemPromptBuilder).GetSection(sections.SectionSkills)
+	require.NotNil(t, section)
+	assert.Contains(t, section.Content["cn"], "alpha")
+}
+
+// TestSkillsSignatureEquals 签名比较
+func TestSkillsSignatureEquals(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "alpha"), 0o755))
+
+	r := NewSkillUseRail([]string{root}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	assert.False(t, r.skillsSignatureEquals(), "首次无签名应判为变化")
+
+	r.lastSignature = r.buildSkillsSnapshotSignature()
+	assert.True(t, r.skillsSignatureEquals())
+
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "beta"), 0o755))
+	assert.False(t, r.skillsSignatureEquals(), "新增技能目录应判为变化")
 }

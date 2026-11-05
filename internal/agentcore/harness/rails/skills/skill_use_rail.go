@@ -130,8 +130,9 @@ const (
 	SkillModeAutoList = "auto_list"
 
 	// skillUseRailPriority SkillUseRail 优先级
-	// Python: SkillUseRail.priority = 100
-	skillUseRailPriority = 100
+	// Python: SkillUseRail.priority = 95（必须晚于真正持有 read_file/code/bash 的 rail 初始化，
+	// 否则 init 的 owner 检查没有意义）(skill_use_rail.py:57-61)
+	skillUseRailPriority = 95
 
 	// skillSessionStateKey 会话技能基线的 session state 键
 	// Python: SkillUseRail._SESSION_STATE_KEY (skill_use_rail.py:65)
@@ -377,40 +378,37 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 		))
 	}
 
-	// Python: L283-294: 幂等注册到 ResourceMgr
+	// Python: L296-306 单入口注册（add_ability），已由其他 rail 拥有的能力不抢注册——
+	// 对方的实例携带本 rail 无法复现的策略（只读模式、bash deny 规则、多模态覆盖）
+	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range tools {
+		name := t.Card().Name
+		if am != nil && am.Get(name) != nil {
+			logger.Debug(logger.ComponentAgentCore).
+				Str("tool_name", name).
+				Msg("ability already owned by another rail, skip fallback registration")
+			continue
+		}
 		toolID := t.Card().ID
 		if resourceMgr != nil && toolID != "" {
-			existing, err := resourceMgr.GetTool([]string{toolID})
-			if err == nil && len(existing) > 0 {
-				if _, removeErr := resourceMgr.RemoveTool([]string{toolID}); removeErr != nil {
-					logger.Warn(logger.ComponentAgentCore).
-						Str("tool_id", toolID).
-						Err(removeErr).
-						Msg("failed to remove old tool from ResourceMgr")
-				}
-			}
 			if err := resourceMgr.AddTool(t); err != nil {
+				// 同 ID 可能已被占用（同 agent 重复 Init / 全局注册表残留）：
+				// 记录告警但不阻断能力注册，否则工具对模型不可见。
 				logger.Warn(logger.ComponentAgentCore).
 					Str("tool_id", toolID).
 					Err(err).
 					Msg("failed to add tool resource to resource_mgr")
+			} else {
+				r.ownedToolIDs[toolID] = struct{}{}
 			}
-			r.ownedToolIDs[toolID] = struct{}{}
 		}
-	}
-
-	// Python: L296-306: 注册到 AbilityManager
-	am := agent.AbilityManager()
-	if am != nil {
-		for _, t := range tools {
-			result := am.Add(t.Card())
-			if result.Added {
-				r.ownedToolNames[t.Card().Name] = struct{}{}
+		if am != nil {
+			if result := am.Add(t.Card()); result.Added {
+				r.ownedToolNames[name] = struct{}{}
 			} else {
 				logger.Warn(logger.ComponentAgentCore).
-					Str("tool_name", t.Card().Name).
+					Str("tool_name", name).
 					Msg("failed to add tool card to ability_manager")
 			}
 		}
