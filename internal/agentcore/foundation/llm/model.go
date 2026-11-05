@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"runtime/debug"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -250,8 +252,13 @@ func (m *Model) Stream(
 	})
 
 	// 调用底层客户端
-	chunkChan, err := m.client.Stream(ctx, messages, opts...)
+	//
+	// 帧超时需要主动断开底层流：派生可取消 ctx，超时即 cancel。
+	// 注意 cancelStream 必须在包装 goroutine 里 defer（Stream 返回时不能取消）。
+	streamCtx, cancelStream := context.WithCancel(ctx)
+	chunkChan, err := m.client.Stream(streamCtx, messages, opts...)
 	if err != nil {
+		cancelStream()
 		// 触发 callback.LLMCallError 事件
 		_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
@@ -289,7 +296,102 @@ func (m *Model) Stream(
 				}
 			}
 		}()
-		for chunk := range chunkChan {
+		defer cancelStream()
+
+		// 帧超时预算（对齐 Python: model.py L228-229/257-330）：
+		// 首帧预算作用于"首个携带输出"的分片；此后切到空闲预算。
+		// waitedSinceProgress 只累计"等待 __anext__ 的时间"，框架帧（role/usage）
+		// 既不重置也不计入首帧，避免心跳帧把卡死的流一直吊着。
+		firstBudget := m.ClientConfig.StreamFirstChunkTimeout
+		idleBudget := m.ClientConfig.StreamIdleTimeout
+		chunkCount := 0
+		tokenChunkCount := 0
+		waitedSinceProgress := 0.0
+		startedAt := time.Now()
+
+		for {
+			budget := idleBudget
+			stage := "idle_token"
+			elapsedLabel := "idle_elapsed"
+			if tokenChunkCount == 0 {
+				budget, stage, elapsedLabel = firstBudget, "first_token", "first_token_elapsed"
+			}
+
+			waitStartedAt := time.Now()
+			var chunk *llmschema.AssistantMessageChunk
+			var ok bool
+			if budget == nil {
+				chunk, ok = <-chunkChan
+			} else {
+				remaining := *budget - waitedSinceProgress
+				if remaining < 0 {
+					remaining = 0
+				}
+				timer := time.NewTimer(time.Duration(remaining * float64(time.Second)))
+				select {
+				case chunk, ok = <-chunkChan:
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+				case <-timer.C:
+					if ctx.Err() != nil {
+						// 父 ctx 取消优先：不构造超时错误，交给取消语义收尾
+						for range chunkChan {
+						}
+						return
+					}
+					now := time.Now()
+					totalElapsed := now.Sub(startedAt).Seconds()
+					waitElapsed := waitedSinceProgress + now.Sub(waitStartedAt).Seconds()
+					cancelStream()
+					for range chunkChan {
+					}
+					timeoutErr := exception.BuildError(exception.StatusModelCallFailed,
+						exception.WithMsg(fmt.Sprintf(
+							"LLM stream timeout: stream frame timeout: stage=%s, timeout=%ss, chunk_count=%d, token_chunk_count=%d, %s=%.2fs, total_elapsed=%.2fs, model=%s",
+							stage, utils.PyFloatStr(*budget), chunkCount, tokenChunkCount,
+							elapsedLabel, waitElapsed, totalElapsed, modelName)))
+					_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
+						Event:         callback.LLMCallError,
+						ModelName:     modelName,
+						ModelProvider: m.ClientConfig.ClientProvider,
+						IsStream:      true,
+						Error:         timeoutErr,
+						Extra: map[string]any{
+							"model_config":        m.ModelConfig,
+							"model_client_config": m.ClientConfig,
+						},
+					})
+					logger.Error(logComponent).
+						Str("event_type", "LLM_CALL_ERROR").
+						Str("stage", stage).
+						Float64("timeout", *budget).
+						Int("chunk_count", chunkCount).
+						Int("token_chunk_count", tokenChunkCount).
+						Float64("total_elapsed", totalElapsed).
+						Msg("LLM stream timeout.")
+					select {
+					case out <- llmschema.NewAssistantMessageChunk("",
+						llmschema.WithChunkStreamError(timeoutErr)):
+					case <-ctx.Done():
+					}
+					return
+				}
+			}
+			if !ok {
+				break
+			}
+
+			chunkCount++
+			waitedSinceProgress += time.Since(waitStartedAt).Seconds()
+			if chunk == nil || chunk.CarriesOutputToken() {
+				tokenChunkCount++
+				waitedSinceProgress = 0
+			}
+
 			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
 			if transformed := fw.TransformLLMIOOutput(ctx, callback.LLMStreamOutput, chunk); transformed != nil {
 				if v, ok := transformed.(*llmschema.AssistantMessageChunk); ok {
