@@ -78,7 +78,10 @@ type WebHandlersBindParams struct {
 	// gateway/cron.CronController 隐式实现
 	CronController CronJobController
 	// UpdaterService 更新服务，可为 nil
-	// ⤵️ 11.17: UpdaterService，注入后处理 update.* 方法
+	//
+	// ⚠️ 未接线：`updater.*` 当前一律回默认（spec §10），注入本字段不会生效。
+	// 恢复升级子系统（gateway/common/updater.py）时须把它改成类型化字段并真正接线，
+	// 否则注入会被静默忽略。
 	UpdaterService any
 }
 
