@@ -1207,7 +1207,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 批次 | 状态 | 内容 | 上游 | 估算 |
 |------|------|------|------|------|
 | B0 | ✅ | **RPC 契约矩阵 + 文件映射矩阵**：脚本扫前端 RPC 名 ↔ Go 注册表 ↔ 上游 handler 注册，产出 `docs/sync/web-rpc-matrix.md`；顺带修 `models.*`/`schedule.*`/`heartbeat.*` 命名漂移 | — | 0.5 人日 |
-| B1 | ✅ | `web_connect.py` 单一化：三文件合并、删 frame DTO、方法归属回 `WebChannel`。**B1a**（`b86278c9`…`c510ab75`）：删 `frame.go`/`RPCDispatcher`、59 个 handler 转原生 `methodHandler`（帧级 `ok=false/error/code`）、分发顺序改上游四段式。**B1b 六批**（`968bafac`…`d430411d`）：补齐 41 个本地方法 —— 9 平台 IM 配置 18、health_check×2 + cron.job.meta + updater×4、杂项 4、external_cli 7、path.select_file 1、session 薄代理 2 | `web_connect.py` 2,366 | 3 人日 |
+| B1 | ✅ | `web_connect.py` 单一化：三文件合并、删 frame DTO、方法归属回 `WebChannel`。**B1a**（`b86278c9`…`c510ab75`）：删 `frame.go`/`RPCDispatcher`、59 个 handler 转原生 `methodHandler`（帧级 `ok=false/error/code`）、分发顺序改上游四段式。**B1b 六批**（`968bafac`…`d430411d`）：补齐 39 个本地方法 —— 9 平台 IM 配置 18、health_check×2 + cron.job.meta + updater×4、杂项 4、external_cli 7、path.select_file 1、session 薄代理 2 | `web_connect.py` 2,366 | 3 人日 |
 
 > **27-A B0/B1 收口口径（2026-11-05）**：矩阵 196 方法，**漂移 0**；本层承诺（`local` + `agent:ok`）剩余缺口
 > 全部为下游或已裁定跳过项 —— `local` 剩 10 个（`models.*`/`model_groups.*`/`vendors.*`/`session.selection.set`，
