@@ -350,12 +350,10 @@ func (r *ModelAnomalyDetectionRail) InspectStreamChunk(_ context.Context, cbc *a
 func (r *ModelAnomalyDetectionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 	callbacks[agentinterfaces.CallbackBeforeInvoke] = func(ctx context.Context, railCtx any) error {
-		r.BeforeInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
-		return nil
+		return r.BeforeInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
 	}
 	callbacks[agentinterfaces.CallbackAfterInvoke] = func(ctx context.Context, railCtx any) error {
-		r.AfterInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
-		return nil
+		return r.AfterInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
 	}
 	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
 		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
@@ -369,18 +367,20 @@ func (r *ModelAnomalyDetectionRail) GetCallbacks() map[agentinterfaces.AgentCall
 // BeforeInvoke 清零本次 invoke 的三类重试计数与压缩计数。
 //
 // Python: before_invoke (L417-422)
-func (r *ModelAnomalyDetectionRail) BeforeInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) {
+func (r *ModelAnomalyDetectionRail) BeforeInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	r.resetRetryCounters(cbc)
 	r.resetCompactCount(cbc)
+	return nil
 }
 
 // AfterInvoke 释放本会话条目，避免映射随会话数增长。
 //
 // Python: after_invoke (L424-425) 只清压缩计数；Go 侧一并清重试计数，
 // 因为本实现把重试计数也按会话分桶（只存正计数，归零即删）。
-func (r *ModelAnomalyDetectionRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) {
+func (r *ModelAnomalyDetectionRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	r.resetRetryCounters(cbc)
 	r.resetCompactCount(cbc)
+	return nil
 }
 
 // BeforeModelCall 压缩工具循环、重置重复检测尾窗并安装流式分片检查器。

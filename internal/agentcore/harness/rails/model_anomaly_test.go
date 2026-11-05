@@ -326,7 +326,7 @@ func repeatErr() error {
 func TestOnModelException_重复异常按退避表重试(t *testing.T) {
 	r, _ := NewModelAnomalyDetectionRail(WithBackoffSeconds([]float64{0.5, 1.0}))
 	cbc := newTestCBC()
-	r.BeforeInvoke(context.Background(), cbc)
+	_ = r.BeforeInvoke(context.Background(), cbc)
 
 	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
 	req := cbc.ConsumeRetryRequest()
@@ -355,7 +355,7 @@ func TestOnModelException_重复异常按退避表重试(t *testing.T) {
 func TestOnModelException_流超时与重复各自计数(t *testing.T) {
 	r, _ := NewModelAnomalyDetectionRail(WithMaxRetries(1), WithBackoffSeconds([]float64{0}))
 	cbc := newTestCBC()
-	r.BeforeInvoke(context.Background(), cbc)
+	_ = r.BeforeInvoke(context.Background(), cbc)
 
 	timeoutErr := exception.BuildError(exception.StatusModelCallFailed,
 		exception.WithMsg("LLM stream timeout: stream frame timeout: stage=idle_token"))
@@ -379,7 +379,7 @@ func TestOnModelException_流超时与重复各自计数(t *testing.T) {
 func TestOnModelException_已输出可见内容时不做瞬时重试(t *testing.T) {
 	r, _ := NewModelAnomalyDetectionRail()
 	cbc := newTestCBC()
-	r.BeforeInvoke(context.Background(), cbc)
+	_ = r.BeforeInvoke(context.Background(), cbc)
 	cbc.SetModelVisibleOutputEmitted(true)
 
 	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, nil, "429")))
@@ -397,7 +397,7 @@ func TestOnModelException_已输出可见内容时不做瞬时重试(t *testing.
 func TestOnModelException_瞬时重试指数退避与耗尽(t *testing.T) {
 	r, _ := NewModelAnomalyDetectionRail(WithTransientMaxRetries(2), WithTransientBaseDelaySeconds(2))
 	cbc := newTestCBC()
-	r.BeforeInvoke(context.Background(), cbc)
+	_ = r.BeforeInvoke(context.Background(), cbc)
 
 	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, nil, "429")))
 	if req := cbc.ConsumeRetryRequest(); req == nil || req.DelaySeconds != 2 {
@@ -417,7 +417,7 @@ func TestOnModelException_瞬时重试指数退避与耗尽(t *testing.T) {
 func TestOnModelException_RetryAfter优先(t *testing.T) {
 	r, _ := NewModelAnomalyDetectionRail()
 	cbc := newTestCBC()
-	r.BeforeInvoke(context.Background(), cbc)
+	_ = r.BeforeInvoke(context.Background(), cbc)
 
 	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, map[string]any{"retry_after": "7"}, "429")))
 	if req := cbc.ConsumeRetryRequest(); req == nil || req.DelaySeconds != 7 {
@@ -430,8 +430,8 @@ func TestRetryCounters_按会话隔离且归零即删(t *testing.T) {
 	r, _ := NewModelAnomalyDetectionRail(WithMaxRetries(1), WithBackoffSeconds([]float64{0}))
 	cbcA := newTestCBCWithSession("session-a")
 	cbcB := newTestCBCWithSession("session-b")
-	r.BeforeInvoke(context.Background(), cbcA)
-	r.BeforeInvoke(context.Background(), cbcB)
+	_ = r.BeforeInvoke(context.Background(), cbcA)
+	_ = r.BeforeInvoke(context.Background(), cbcB)
 
 	_ = r.OnModelException(context.Background(), withException(cbcA, repeatErr()))
 	cbcA.ConsumeRetryRequest()
@@ -440,7 +440,7 @@ func TestRetryCounters_按会话隔离且归零即删(t *testing.T) {
 		t.Fatal("会话 A 的计数不应影响会话 B")
 	}
 
-	r.AfterInvoke(context.Background(), cbcA)
+	_ = r.AfterInvoke(context.Background(), cbcA)
 	if _, ok := r.counters["session-a"]; ok {
 		t.Fatal("AfterInvoke 应删除该会话条目")
 	}

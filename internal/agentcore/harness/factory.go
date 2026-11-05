@@ -578,6 +578,22 @@ func addDefaultRails(
 		logger.Debug(logComponent).Msg("SafetyPromptRail added (SecurityRail)")
 	}
 
+	// ModelAnomalyDetectionRail — 默认开启（Python factory.py default_rails）。
+	// nil → true；显式 false 时不注册；调用方已提供同类型实例时不重复追加。
+	enableAnomaly := true
+	if params.EnableModelAnomalyDetectionRail != nil {
+		enableAnomaly = *params.EnableModelAnomalyDetectionRail
+	}
+	if enableAnomaly && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.ModelAnomalyDetectionRail{})) {
+		anomalyRail, anomalyErr := rails.NewModelAnomalyDetectionRail()
+		if anomalyErr != nil {
+			logger.Warn(logComponent).Err(anomalyErr).Msg("ModelAnomalyDetectionRail construction failed, skipped")
+		} else {
+			agent.AddRail(anomalyRail)
+			logger.Debug(logComponent).Msg("ModelAnomalyDetectionRail added")
+		}
+	}
+
 	// AskUserRail — 始终添加（拦截 ask_user 工具，实现 HITL 用户交互）
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&interrupt.AskUserRail{})) {
 		agent.AddRail(interrupt.NewAskUserRail())
