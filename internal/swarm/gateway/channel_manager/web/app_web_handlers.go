@@ -8,7 +8,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +28,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
@@ -331,6 +335,16 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("updater.set_conf", updaterDefaultConf, false)
 	wc.registerMethod("updater.reset_source", updaterDefaultConf, false)
 	wc.registerMethod("updater.upgrade", stubHandler(wc, map[string]any{"state": "idle"}), false)
+
+	// ─── 外部 CLI（codex / claude，B1b-5） ───
+	// Python: app_web_handlers.py:5496-5502
+	wc.registerMethod("external_cli.detect", externalCLIDetect(wc), false)
+	wc.registerMethod("external_cli.validate_paths", externalCLIValidatePaths(wc), false)
+	wc.registerMethod("external_cli.prune_path_histories", externalCLIPrunePathHistories(wc), false)
+	wc.registerMethod("external_cli.codex_install_status", stubHandler(wc, defaultExternalCLIInstallStatus()), false)
+	wc.registerMethod("external_cli.install_status", externalCLIInstallStatus(wc), false)
+	wc.registerMethod("external_cli.install", stubHandler(wc, map[string]any{"installing": false}), false)
+	wc.registerMethod("external_cli.custom_agent.remove", stubHandler(wc, map[string]any{"cli_agent": ""}), false)
 
 	// ─── 杂项本地方法（B1b-4） ───
 	// Python: app_web_handlers.py:5676-5684 / 5775 / 5637 / 5818
@@ -3778,4 +3792,385 @@ func chatSwarmflowReply(wc *WebChannel) methodHandler {
 			"session_id": sessionID,
 		}, "", "")
 	}
+}
+
+// ──────────────────────────── 外部 CLI（B1b-5） ────────────────────────────
+
+// externalCLIAgentKinds 内置外部 CLI 种类（对齐 Python EXTERNAL_CLI_AGENT_KINDS）。
+var externalCLIAgentKinds = []string{"claude", "codex"}
+
+// externalCLIPruneMaxPaths prune 单次最多处理的路径数（对齐 _EXTERNAL_CLI_PRUNE_PATH_HISTORIES_MAX_PATHS）。
+const externalCLIPruneMaxPaths = 50
+
+// externalCLIPathHistoriesKey 路径历史在 config.yaml 中的位置。
+//
+// Python: EXTERNAL_CLI_PATH_HISTORIES_CONFIG_PATH (common/config.py:43)。
+const externalCLIPathHistoriesKey = "modes.team.jiuwen_team.external_cli_path_histories"
+
+// externalCLIDetect 探测外部 CLI 的可执行路径与版本。
+//
+// Python: _external_cli_detect (app_web_handlers.py:2268-2277) →
+// detect_external_cli_agent (common/config_panel/config_set_handlers.py:464-563)。
+func externalCLIDetect(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		if params == nil {
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
+		}
+		cliAgent := strings.ToLower(strings.TrimSpace(strOrEmpty(params["cli_agent"])))
+		cliPath := strings.TrimSpace(strOrEmpty(params["cli_path"]))
+		// use_builtin：True 或字符串 "true"（对齐上游 raw is True or str(raw).lower()=="true"）
+		useBuiltin := false
+		if raw, ok := params["use_builtin"]; ok {
+			if b, isBool := raw.(bool); isBool && b {
+				useBuiltin = true
+			} else if strings.ToLower(strings.TrimSpace(fmt.Sprint(raw))) == "true" {
+				useBuiltin = true
+			}
+		}
+		wc.sendResponse(ws, reqID, true, detectExternalCLIAgent(cliAgent, cliPath, useBuiltin), "", "")
+	}
+}
+
+// externalCLIValidatePaths 批量探测路径是否为存在的文件（三值：true/false/null）。
+//
+// Python: _external_cli_validate_paths (app_web_handlers.py:2280-2303)：
+// 单次最多 50 条；null 表示"无法判定"（锁定/无权限/离线盘），调用方只应据 false 清理历史。
+func externalCLIValidatePaths(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		if params == nil {
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
+		}
+		rawPaths, ok := params["paths"].([]any)
+		if !ok {
+			wc.sendResponse(ws, reqID, false, nil, "paths must be array", WsErrBadRequest)
+			return
+		}
+		if len(rawPaths) > externalCLIPruneMaxPaths {
+			rawPaths = rawPaths[:externalCLIPruneMaxPaths]
+		}
+		results := make(map[string]any, len(rawPaths))
+		for _, item := range rawPaths {
+			path := strings.TrimSpace(strOrEmpty(item))
+			if path == "" {
+				continue
+			}
+			expanded := pathutil.ExpandHome(path)
+			info, err := os.Stat(expanded)
+			switch {
+			case err != nil && os.IsNotExist(err):
+				results[path] = false
+			case err != nil:
+				// 无法判定（权限/锁定/其他 IO 错误）→ null
+				results[path] = nil
+			default:
+				results[path] = !info.IsDir()
+			}
+		}
+		wc.sendResponse(ws, reqID, true, map[string]any{"results": results}, "", "")
+	}
+}
+
+// externalCLIPrunePathHistories 从指定种类的持久化路径历史里删除已确认缺失的路径。
+//
+// Python: _external_cli_prune_path_histories (app_web_handlers.py:2304-2326) →
+// prune_external_cli_path_histories_in_config (common/config.py:1495-1550)。
+func externalCLIPrunePathHistories(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		if params == nil {
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
+		}
+		cliAgent := strings.ToLower(strings.TrimSpace(strOrEmpty(params["cli_agent"])))
+		rawRemove, ok := params["remove_paths"].([]any)
+		if cliAgent == "" {
+			wc.sendResponse(ws, reqID, false, nil, "cli_agent is required", WsErrBadRequest)
+			return
+		}
+		if !ok {
+			wc.sendResponse(ws, reqID, false, nil, "remove_paths must be array", WsErrBadRequest)
+			return
+		}
+		if len(rawRemove) > externalCLIPruneMaxPaths {
+			rawRemove = rawRemove[:externalCLIPruneMaxPaths]
+		}
+		paths := make([]string, 0, len(rawRemove))
+		for _, item := range rawRemove {
+			paths = append(paths, strOrEmpty(item))
+		}
+		surviving, err := pruneExternalCLIPathHistories(cliAgent, paths)
+		if err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("cli_agent", cliAgent).
+				Msg("[external_cli.prune_path_histories] 剪枝失败")
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
+		}
+		wc.sendResponse(ws, reqID, true, map[string]any{"histories": surviving}, "", "")
+	}
+}
+
+// externalCLIInstallStatus 返回外部 CLI 依赖安装状态。
+//
+// Python: _external_cli_install_status (app_web_handlers.py:2330-2340)：未知种类 → BAD_REQUEST；
+// 否则回安装状态快照（冻结运行时再叠加 managed runtime 状态）。
+//
+// ⤵️ 安装器子系统（gateway/common/external_cli_runtime.py，1,121 行）本期未移植，
+// 这里只做参数校验 + 默认快照（未安装/未在跑）。
+func externalCLIInstallStatus(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		cliAgent := strings.ToLower(strings.TrimSpace(strOrEmpty(params["cli_agent"])))
+		if !isKnownExternalCLIAgent(cliAgent) {
+			wc.sendResponse(ws, reqID, false, nil, "unsupported external cli agent", WsErrBadRequest)
+			return
+		}
+		payload := defaultExternalCLIInstallStatus()
+		payload["cli_agent"] = cliAgent
+		wc.sendResponse(ws, reqID, true, payload, "", "")
+	}
+}
+
+// defaultExternalCLIInstallStatus 返回安装状态默认快照（未安装、无进行中任务）。
+func defaultExternalCLIInstallStatus() map[string]any {
+	return map[string]any{
+		"installing": false,
+		"installed":  false,
+		"state":      "idle",
+		"progress":   0,
+		"error":      "",
+	}
+}
+
+// isKnownExternalCLIAgent 判断是否为内置外部 CLI 种类。
+func isKnownExternalCLIAgent(agent string) bool {
+	for _, kind := range externalCLIAgentKinds {
+		if kind == agent {
+			return true
+		}
+	}
+	return false
+}
+
+// detectExternalCLIAgent 探测外部 CLI 的路径/版本，返回上游同形状的 DTO。
+//
+// Python: detect_external_cli_agent / _detect_cli_at
+// (config_set_handlers.py:464-563)。本仓差异：
+//   - 无自定义 agent 注册表，未知种类直接回 status=unavailable；
+//   - reference_version 取 Python 侧包元数据（claude_agent_sdk / openai-codex），本仓无此依赖，恒回空串；
+//   - 不做 use_builtin 的托管 CLI 解析（managed runtime 未移植），退回 PATH 搜索。
+func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[string]any {
+	if !isKnownExternalCLIAgent(cliAgent) {
+		return map[string]any{
+			"cli_agent":         cliAgent,
+			"status":            "unavailable",
+			"path":              "",
+			"version":           "",
+			"reference_version": "",
+			"message":           "unsupported cli_agent: " + cliAgent,
+		}
+	}
+	_ = useBuiltin
+
+	resolved, reason, message := resolveExternalCLIPath(cliAgent, cliPath)
+	if resolved == "" {
+		status := "missing"
+		if reason == "directory" || reason == "windows_script" {
+			status = "unsupported"
+		}
+		return map[string]any{
+			"cli_agent":         cliAgent,
+			"status":            status,
+			"path":              "",
+			"version":           "",
+			"reference_version": "",
+			"reason":            reason,
+			"message":           message,
+		}
+	}
+
+	versionOutput, versionErr := runExternalCLIVersionCommand(resolved)
+	version := ""
+	if match := externalCLIVersionRe.FindStringSubmatch(versionOutput); match != nil {
+		version = match[1]
+	}
+	if strings.TrimSpace(versionOutput) == "" {
+		return map[string]any{
+			"cli_agent":         cliAgent,
+			"status":            "unavailable",
+			"path":              resolved,
+			"version":           "",
+			"reference_version": "",
+			"message":           firstNonEmpty(versionErr, "version command failed"),
+		}
+	}
+	status := "ok"
+	message = ""
+	if version == "" {
+		status = "warning"
+		message = "version output could not be parsed"
+	}
+	return map[string]any{
+		"cli_agent":         cliAgent,
+		"status":            status,
+		"path":              resolved,
+		"version":           version,
+		"reference_version": "",
+		"message":           message,
+	}
+}
+
+// externalCLIVersionRe 从 --version 输出里提取语义版本号。
+//
+// Python: re.search(r"(\d+\.\d+\.\d+)", version_output) (config_set_handlers.py:537)。
+var externalCLIVersionRe = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
+
+// resolveExternalCLIPath 解析外部 CLI 可执行文件路径。
+//
+// 显式路径：必须是存在的文件且不是目录（Python resolve_external_cli_path 的
+// directory / windows_script 两个 reason 在此覆盖）；空路径回退 PATH 搜索。
+func resolveExternalCLIPath(cliAgent, cliPath string) (resolved, reason, message string) {
+	if p := strings.TrimSpace(cliPath); p != "" {
+		expanded := pathutil.ExpandHome(p)
+		info, err := os.Stat(expanded)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", "not_found", "not found: " + p
+			}
+			return "", "unreadable", err.Error()
+		}
+		if info.IsDir() {
+			return "", "directory", "path is a directory: " + p
+		}
+		if runtime.GOOS == "windows" && isWindowsScriptPath(expanded) {
+			return "", "windows_script", "windows_script"
+		}
+		return expanded, "", ""
+	}
+	found, err := exec.LookPath(cliAgent)
+	if err != nil {
+		return "", "not_found", err.Error()
+	}
+	if runtime.GOOS == "windows" && isWindowsScriptPath(found) {
+		return "", "windows_script", "windows_script"
+	}
+	return found, "", ""
+}
+
+// isWindowsScriptPath 判断是否是不受支持的 Windows 脚本（.bat/.cmd/.ps1）。
+func isWindowsScriptPath(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".bat", ".cmd", ".ps1":
+		return true
+	}
+	return false
+}
+
+// runExternalCLIVersionCommand 执行 `<cli> --version` 并返回合并输出。
+//
+// 失败时返回的错误信息会作为 message 透传给前端（对齐上游 version_error）。
+func runExternalCLIVersionCommand(resolved string) (string, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, resolved, "--version")
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil && text == "" {
+		return "", err.Error()
+	}
+	return text, ""
+}
+
+// pruneExternalCLIPathHistories 从 config.yaml 的路径历史里删除已确认缺失的项。
+//
+// Python: prune_external_cli_path_histories_in_config (common/config.py:1495-1550)：
+// 只删除「既有历史 ∩ removePaths」，去重保序；删完为空则移除该 key，整段为空则移除父键；
+// 无变化时不写盘。
+func pruneExternalCLIPathHistories(cliAgent string, removePaths []string) ([]string, error) {
+	name := strings.TrimSpace(cliAgent)
+	removeSet := make(map[string]struct{}, len(removePaths))
+	for _, raw := range removePaths {
+		if v := strings.TrimSpace(raw); v != "" {
+			removeSet[v] = struct{}{}
+		}
+	}
+	if name == "" || len(removeSet) == 0 {
+		return []string{}, nil
+	}
+
+	cfg, err := config.New("")
+	if err != nil {
+		return nil, fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	if _, err := cfg.Load(); err != nil {
+		return nil, fmt.Errorf("加载配置失败: %w", err)
+	}
+	histories, _ := cfg.Get(externalCLIPathHistoriesKey).(map[string]any)
+	current, _ := histories[name].([]any)
+	if histories == nil || current == nil {
+		return []string{}, nil
+	}
+
+	surviving := make([]string, 0, len(current))
+	seen := make(map[string]struct{}, len(current))
+	original := make([]string, 0, len(current))
+	for _, item := range current {
+		value := strings.TrimSpace(strOrEmpty(item))
+		if value == "" {
+			continue
+		}
+		original = append(original, value)
+		if _, dup := seen[value]; dup {
+			continue
+		}
+		seen[value] = struct{}{}
+		if _, drop := removeSet[value]; !drop {
+			surviving = append(surviving, value)
+		}
+	}
+	if len(surviving) == len(original) {
+		return surviving, nil
+	}
+
+	next := make(map[string]any, len(histories))
+	for k, v := range histories {
+		next[k] = v
+	}
+	if len(surviving) > 0 {
+		next[name] = toAnySlice(surviving)
+	} else {
+		delete(next, name)
+	}
+	if len(next) == 0 {
+		// 整段清空：写空 mapping（对读取等价于上游 pop）
+		if err := cfg.SetRoundTrip(externalCLIPathHistoriesKey, map[string]any{}); err != nil {
+			return nil, fmt.Errorf("写回路径历史失败: %w", err)
+		}
+		return surviving, nil
+	}
+	if err := cfg.SetRoundTrip(externalCLIPathHistoriesKey, next); err != nil {
+		return nil, fmt.Errorf("写回路径历史失败: %w", err)
+	}
+	return surviving, nil
+}
+
+// toAnySlice 把 []string 转成 []any（写入 YAML 前统一形状）。
+func toAnySlice(values []string) []any {
+	out := make([]any, len(values))
+	for i, v := range values {
+		out[i] = v
+	}
+	return out
+}
+
+// firstNonEmpty 返回第一个非空字符串，全空时返回 fallback。
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }

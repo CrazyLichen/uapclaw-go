@@ -326,3 +326,16 @@ internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L2198-L2200
 internal/common/config/roundtrip.go#L217-L223
 internal/common/config/roundtrip.go#L250-L252
 internal/common/config/roundtrip.go#L262-L264
+
+# ── 2026-11-05 27-A B1b-5 external_cli ──
+# app_web_handlers.go L4046-L4048 / L4055-L4057 — Windows 专用的 windows_script 分支，
+# 需 runtime.GOOS=="windows" 才可达（CI 与本地均为 linux）；后缀判定 isWindowsScriptPath
+# 已由 TestIsWindowsScriptPath_后缀判定 覆盖。
+# L4104-L4106 — prune 里 config.New("") 失败分支，默认路径由 workspace 解析，测试进程下不可能失败。
+# L4148-L4150 / L4153-L4155 — SetRoundTrip 失败分支：配置不可写时前面的 Load 已先失败
+# （TestExternalCLIPrune_写回失败 走的就是 Load 失败路径）。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4046-L4048
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4055-L4057
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4104-L4106
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4148-L4150
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4153-L4155

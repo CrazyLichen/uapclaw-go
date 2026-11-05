@@ -16,7 +16,7 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认）；**Task 11（4 个杂项本地方法）已完成**，后续从 Task 12 开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认）；**Task 11（4 个杂项本地方法）已完成**；**Task 12（external_cli 7 个）已完成**（安装器保留 handler 回默认），后续从 Task 13 开始。
 
 **CI 红灯归属（2026-11-05 记录）**：本计划的 B1b 各批自身门禁（Build/Lint/Unit/改动行覆盖）已通过；Integration 仍红在两处**非本计划文件**：
 
@@ -1663,11 +1663,11 @@ git add -A && git commit -m "feat(web): 补齐 connection/commands/moa/swarmflow
 | `external_cli.install` | `:5501` → `:2342` |
 | `external_cli.custom_agent.remove` | `:5502` → `:2361` |
 
-- [ ] **Step 1: 读上游**
+- [x] **Step 1: 读上游**
 
 Run: `sed -n '2268,2380p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 ```go
 // TestExternalCLI_注册齐全 验证 7 个方法已注册。
@@ -1686,17 +1686,38 @@ func TestExternalCLI_注册齐全(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 7 个 handler 按上游 1:1 移植 + 注册**
+- [x] **Step 3: 7 个 handler 按上游 1:1 移植 + 注册**
 
 安装器与状态轮询是 gateway 本地能力（上游注释明确），依赖 `exec` 与本地文件；测试只做参数校验分支与注册，真安装不测。
 
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
+- [x] **Step 4: 测试 + 矩阵 + 提交**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestExternalCLI -v
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
 git add -A && git commit -m "feat(web): 补齐 external_cli 7 个方法"
 ```
+
+---
+
+**实施记录（2026-11-05 完成；安装器按"保留 handler 回默认"口径）：**
+
+- 真实现 3 个（不依赖安装子系统）：
+  - `external_cli.detect`：内置种类 `claude`/`codex`；显式路径 → 必须存在且非目录（`directory`）、
+    Windows 脚本后缀 `.bat/.cmd/.ps1` → `windows_script`；无路径 → PATH 搜索；再跑 `--version`
+    用 `(\d+\.\d+\.\d+)` 取版本，`ok` / `warning`（解析不出）/ `missing` / `unavailable` 四态对齐上游。
+  - `external_cli.validate_paths`：单次最多 50 条，三值 `true/false/null`（`null`=无法判定，
+    调用方只应据 `false` 清历史），空串跳过。
+  - `external_cli.prune_path_histories`：按 `modes.team.jiuwen_team.external_cli_path_histories.<agent>`
+    做「既有历史 ∩ removePaths」删除、去重保序、无变化不写盘、删空写空 mapping。
+- 回默认 4 个：`codex_install_status` / `install_status` / `install` / `custom_agent.remove`
+  —— 安装器子系统 `gateway/common/external_cli_runtime.py`（1,121 行）+ `external_providers.py`（70 行）
+  未移植；`install_status` 保留参数校验（未知种类 BAD_REQUEST），其余回 `{installing:false, installed:false,
+  state:"idle", ...}` 默认快照。**偏差已在 spec §10 登记**（面板可渲染、不会真装）。
+- 其它偏差：`reference_version` 上游读 `claude_agent_sdk` / `openai-codex` 包元数据，本仓无该依赖 → 恒空串；
+  `use_builtin` 的托管 CLI 解析依赖 managed runtime → 退回 PATH 搜索。
+- 矩阵：`local` 缺口 18 → 11。
+
 
 ---
 
