@@ -19,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -136,6 +137,8 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	if params.TaskLoopNoProgressGuard != nil {
 		config.TaskLoopNoProgressGuard = *params.TaskLoopNoProgressGuard
 	}
+	config.SkillBudgetMaxSkills = params.SkillBudgetMaxSkills
+	config.SkillBudgetMaxTotalChars = params.SkillBudgetMaxTotalChars
 	// Python: subagents=effective_subagents or None（空列表 → nil）
 	if len(effectiveSubagents) > 0 {
 		config.Subagents = effectiveSubagents
@@ -616,17 +619,17 @@ func addDefaultRails(
 			Msg("TaskPlanningRail added")
 	}
 
-	// SkillUseRail — 仅当有 skills 或启用了 skill_discovery 时添加
-	if (len(params.Skills) > 0 || config.EnableSkillDiscovery) &&
-		!alreadyProvidedByType(userProvidedTypes, nil) {
-		// ⤵️ 9.8-9.24 回填：SkillUseRail 具体实例化（含 skills_dir + disabled_skills）
-		agent.AddRail(agentinterfaces.NewBaseRail())
-		// 收集被禁用的技能名称（逻辑保留，后续 SkillUseRail 使用）
-		disabledSkills := collectDisabledSkillsFromState(params.Skills)
-		logger.Debug(logComponent).
-			Int("skills_count", len(params.Skills)).
-			Int("disabled_count", len(disabledSkills)).
-			Msg("default SkillUseRail placeholder added, backfill 9.8-9.24")
+	// SkillUseRail — 仅当有 skills 或启用了 skill_discovery 时添加。
+	//
+	// Python: factory.py L358-389 default_rails 的 SkillUseRail 分支（_make_skill_rail）。
+	// 判定必须用真实类型：早前传 nil 时恒为 false，导致调用方已提供真实 rail 时仍追加
+	// 一个空 BaseRail（与 TaskPlanningRail 双实例同类问题）。
+	if len(params.Skills) > 0 || config.EnableSkillDiscovery {
+		if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&skillrails.SkillUseRail{})) {
+			if rail := buildDefaultSkillUseRail(config, ws, userProvidedTypes); rail != nil {
+				agent.AddRail(rail)
+			}
+		}
 	}
 
 	// SubagentRail — 仅当有 subagents 时添加
@@ -735,4 +738,51 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 		EnableAsyncSubagent:    kwargs.EnableAsyncSubagent,
 		AddGeneralPurposeAgent: kwargs.AddGeneralPurposeAgent,
 	}
+}
+
+// buildDefaultSkillUseRail 构造工厂默认的 SkillUseRail（上游 _make_skill_rail 的等价实现）。
+//
+// skills 目录 = 工作空间 skills 节点 + 各 team link 下的 skills（team link 是指向共享
+// 工作空间根的符号链接，故 {link}/skills 即团队共享技能）；禁用列表从各根目录的
+// skills_state.json 读取；include_tools 取决于调用方是否已提供 SysOperationRail
+// （它自己会注册 read_file/code/bash，重复注册会产生 refresh 与重复能力告警）。
+//
+// Python: factory.py _make_skill_rail() L355-389
+func buildDefaultSkillUseRail(
+	config *hschema.DeepAgentConfig,
+	ws *workspace.Workspace,
+	userProvidedTypes map[reflect.Type]bool,
+) *skillrails.SkillUseRail {
+	var skillsDirs []string
+	if ws != nil {
+		if skillsBase := ws.GetNodePath(workspace.WorkspaceNodeSkills); skillsBase != nil {
+			skillsDirs = append(skillsDirs, *skillsBase)
+		}
+		// 团队挂载：{root}/.team/{team_id} 是指向共享工作空间根的符号链接
+		for _, teamID := range ws.ListTeamLinks() {
+			skillsDirs = append(skillsDirs, filepath.Join(ws.RootPath, workspace.TeamLinksDir, teamID, "skills"))
+		}
+	}
+	if len(skillsDirs) == 0 {
+		logger.Debug(logComponent).Msg("no skills dir resolved, skip default SkillUseRail")
+		return nil
+	}
+
+	disabledSkills := collectDisabledSkillsFromState(skillsDirs)
+	// 已由调用方提供 SysOperationRail → 它独占 read_file/code/bash
+	includeTools := !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.SysOperationRail{}))
+
+	rail := skillrails.NewSkillUseRail(
+		skillsDirs,
+		skillrails.WithSkillMode(skillrails.SkillModeAll),
+		skillrails.WithIncludeTools(includeTools),
+		skillrails.WithDisabledSkills(disabledSkills),
+		skillrails.WithSkillBudget(config.SkillBudgetMaxSkills, config.SkillBudgetMaxTotalChars),
+	)
+	logger.Debug(logComponent).
+		Strs("skills_dirs", skillsDirs).
+		Int("disabled_count", len(disabledSkills)).
+		Bool("include_tools", includeTools).
+		Msg("default SkillUseRail added")
+	return rail
 }

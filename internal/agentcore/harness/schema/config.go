@@ -215,6 +215,12 @@ type DeepAgentConfig struct {
 	MaxIterations int `json:"max_iterations,omitempty"`
 	// TaskLoopNoProgressGuard 任务循环无进展守卫
 	TaskLoopNoProgressGuard TaskLoopNoProgressGuardConfig `json:"task_loop_no_progress_guard"`
+	// SkillBudgetMaxSkills 技能提示词最大技能数，0 表示不限
+	// Python: DeepAgentConfig.skill_budget_max_skills
+	SkillBudgetMaxSkills int `json:"skill_budget_max_skills,omitempty"`
+	// SkillBudgetMaxTotalChars 技能提示词字符总预算，0 表示不限
+	// Python: DeepAgentConfig.skill_budget_max_total_chars
+	SkillBudgetMaxTotalChars int `json:"skill_budget_max_total_chars,omitempty"`
 	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
 	// Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
 	Subagents []SubagentSpec `json:"-"`

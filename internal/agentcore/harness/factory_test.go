@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -426,4 +427,43 @@ func TestEmbeddedRailTypes_识别内嵌基类(t *testing.T) {
 	assert.NotContains(t, embeddedRailTypes(reflect.TypeOf(rails.NewTaskPlanningRail())),
 		reflect.TypeOf(&rails.TaskPlanningRail{}))
 	assert.Empty(t, embeddedRailTypes(nil))
+}
+
+// TestCreateDeepAgent_默认装配SkillUseRail 验证不经 adapter 也能拿到真实技能 rail
+//
+// 回归背景：该分支长期是 `AddRail(NewBaseRail())` 占位，导致 harness-only 路径
+// （wiki_tools / agent_tool 子代理 / agent_teams）根本得不到技能能力；且占位判定
+// 传 nil 类型恒 false，调用方已提供真实 rail 时还会重复挂一个空 rail。
+func TestCreateDeepAgent_默认装配SkillUseRail(t *testing.T) {
+	ctx := context.Background()
+	ws := workspace.NewWorkspace(t.TempDir(), "cn")
+	require.NoError(t, os.MkdirAll(filepath.Join(ws.RootPath, "skills"), 0o755))
+
+	agent, err := CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Workspace:            ws,
+		EnableSkillDiscovery: true,
+	})
+	require.NoError(t, err)
+
+	railType := reflect.TypeOf(&skillrails.SkillUseRail{})
+	assert.Len(t, agent.FindRailsByType(railType), 1, "应自动装配一个真实 SkillUseRail")
+}
+
+// TestCreateDeepAgent_已提供SkillUseRail不重复装配 验证类型去重生效
+func TestCreateDeepAgent_已提供SkillUseRail不重复装配(t *testing.T) {
+	ctx := context.Background()
+	ws := workspace.NewWorkspace(t.TempDir(), "cn")
+	skillsDir := filepath.Join(ws.RootPath, "skills")
+	require.NoError(t, os.MkdirAll(skillsDir, 0o755))
+
+	custom := skillrails.NewSkillUseRail([]string{skillsDir}, skillrails.WithSkillMode(skillrails.SkillModeAll))
+	agent, err := CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Workspace:            ws,
+		EnableSkillDiscovery: true,
+		Rails:                []agentinterfaces.AgentRail{custom},
+	})
+	require.NoError(t, err)
+
+	assert.Len(t, agent.FindRailsByType(reflect.TypeOf(&skillrails.SkillUseRail{})), 1,
+		"调用方已提供时应只保留一个实例")
 }
