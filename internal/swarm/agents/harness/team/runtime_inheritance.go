@@ -352,6 +352,59 @@ func FilterInheritableAbilityCards(mainAgent interfaces.DeepAgentInterface) []*t
 	return result
 }
 
+// BuildModelAnomalyDetectionRail 为团队成员构建模型异常检测 Rail。
+//
+// 与单 agent 路径读同一段配置（execution_guard.model_anomaly_detection_rail），
+// 保证 leader 与成员的护栏参数一致；未开启时返回 nil。
+// Python: agents/swarm/providers/member_rails.py:613 _build_model_anomaly_detection
+func BuildModelAnomalyDetectionRail(config map[string]any) *rails.ModelAnomalyDetectionRail {
+	guard, _ := config["execution_guard"].(map[string]any)
+	cfg, _ := guard["model_anomaly_detection_rail"].(map[string]any)
+	if enabled, _ := cfg["enabled"].(bool); !enabled {
+		return nil
+	}
+
+	opts := []rails.ModelAnomalyOption{
+		rails.WithMaxRetries(intFieldOr(cfg, "max_retries", 2)),
+		rails.WithRepeatMinPatternChars(intFieldOr(cfg, "repeat_min_pattern_chars", 2)),
+		rails.WithRepeatMaxPatternChars(intFieldOr(cfg, "repeat_max_pattern_chars", 64)),
+		rails.WithRepeatMinCount(intFieldOr(cfg, "repeat_min_count", 6)),
+		rails.WithRepeatMinTotalChars(intFieldOr(cfg, "repeat_min_total_chars", 160)),
+		rails.WithRepeatWindowChars(intFieldOr(cfg, "repeat_window_chars", 1024)),
+		rails.WithSingleCharRepeatCount(intFieldOr(cfg, "single_char_repeat_count", 100)),
+	}
+	if compact, ok := cfg["tool_loop_compact"].(map[string]any); ok && compact != nil {
+		compactEnabled, _ := compact["enabled"].(bool)
+		opts = append(opts, rails.WithToolLoopCompact(rails.ToolLoopCompactConfig{
+			Enabled:              compactEnabled,
+			ConsecutiveThreshold: intFieldOr(compact, "consecutive_threshold", 4),
+			BailoutThreshold:     intFieldOr(compact, "bailout_threshold", 3),
+		}))
+	}
+
+	rail, err := rails.NewModelAnomalyDetectionRail(opts...)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[TeamRuntime] ModelAnomalyDetectionRail create failed")
+		return nil
+	}
+	logger.Info(logComponent).Msg("[TeamRuntime] ModelAnomalyDetectionRail created")
+	return rail
+}
+
+// intFieldOr 读取 map 中的整数字段（兼容 YAML 的 int 与 JSON 的 float64）。
+func intFieldOr(m map[string]any, key string, fallback int) int {
+	switch typed := m[key].(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		return fallback
+	}
+}
+
 // BuildContextProcessorRail 为团队成员构造 preset ContextProcessorRail。
 // 对齐 Python: _build_context_processor_rail (L540-587)
 //
@@ -526,21 +579,29 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		return rail, nil
 	}, "SecurityRail")
 
-	// 7. HeartbeatRail 心跳
+	// 7. ModelAnomalyDetectionRail（对齐上游 _COMMON_RAIL_NAMES：SECURITY → MODEL_ANOMALY_DETECTION → HEARTBEAT）
+	// 未开启时构造结果为 nil，必须跳过而不是把 nil 塞进 railsList
+	if anomalyRail := BuildModelAnomalyDetectionRail(config); anomalyRail != nil {
+		appendRail(func() (agentinterfaces.AgentRail, error) {
+			return anomalyRail, nil
+		}, "ModelAnomalyDetectionRail")
+	}
+
+	// 8. HeartbeatRail 心跳
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := rails.NewHeartbeatRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] HeartbeatRail created")
 		return rail, nil
 	}, "HeartbeatRail")
 
-	// 8. AvatarPromptRail 头像提示
+	// 9. AvatarPromptRail 头像提示
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := swarmrails.NewAvatarPromptRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] AvatarPromptRail created")
 		return rail, nil
 	}, "AvatarPromptRail")
 
-	// 9. team_ws_root 非空 → TeamWorkspaceReportPathRail
+	// 10. team_ws_root 非空 → TeamWorkspaceReportPathRail
 	if teamWsRoot != "" {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
 			rail := NewTeamWorkspaceReportPathRail(teamWsRoot, teamID, language)
@@ -550,7 +611,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		}, "TeamWorkspaceReportPathRail")
 	}
 
-	// 10. Leader-only: TeamSkillEvolutionRail（团队技能演进）
+	// 11. Leader-only: TeamSkillEvolutionRail（团队技能演进）
 	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
 			if err := os.MkdirAll(teamWsSkillsDir, 0o755); err != nil {
@@ -594,7 +655,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		}, "TeamSkillEvolutionRail")
 	}
 
-	// 11. Leader-only: TeamSkillCreateRail（需 skill_create 配置启用；env SKILL_CREATE 优先）
+	// 12. Leader-only: TeamSkillCreateRail（需 skill_create 配置启用；env SKILL_CREATE 优先）
 	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" && GetSkillCreateEnabled(config) {
 		appendRail(func() (agentinterfaces.AgentRail, error) {
 			rail := evolution.NewTeamSkillCreateRail(
@@ -608,7 +669,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		}, "TeamSkillCreateRail")
 	}
 
-	// 12. Non-leader: SkillEvolutionRail（成员技能自演化）
+	// 13. Non-leader: SkillEvolutionRail（成员技能自演化）
 	if roleStr(memberInfo.Role) != "leader" && teamWsSkillsDir != "" {
 		// Python 直接调 build_skill_evolution_rail（内部自带 try/except 返回 None）
 		var teamSink trajectory.TrajectorySink
@@ -622,7 +683,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		}
 	}
 
-	// 13. ContextProcessorRail（leader + teammate 均可，需开关启用，默认 true）
+	// 14. ContextProcessorRail（leader + teammate 均可，需开关启用，默认 true）
 	if GetContextEngineEnabled(config) {
 		if rail := BuildContextProcessorRail(config); rail != nil {
 			railsList = append(railsList, rail)
