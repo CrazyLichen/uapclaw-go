@@ -1,7 +1,7 @@
 // Package web 提供 Web 渠道的 WebSocket 服务端实现。
 //
-// WebChannel 通过 WebSocket 协议与前端浏览器通信，
-// 支持 req/res/event 三种帧类型，实现了全量 RPC 方法注册与分发。
+// WebChannel 通过 WebSocket 协议与前端浏览器通信，帧以 map 直接编解码
+// （对齐上游全程 dict、无帧结构体），实现了全量 RPC 方法注册与分发。
 //
 // 两层消息架构（对齐 Python _handle_raw_message）：
 //   - 第一层：normAndForward（NormalizeGatewayMessage → DeliverToMessageHandler），返回 false 不短路
@@ -15,7 +15,6 @@
 //
 //	web/
 //	├── doc.go              # 包文档
-//	├── frame.go            # 帧协议类型定义和编解码
 //	├── config_apply.go     # 配置写入逻辑（ApplyConfigPayload、NotifyConfigSavedOnce）
 //	├── memory_compute.go   # memory.compute：进程/系统内存采集（gopsutil，对齐 Python _memory_compute）
 //	├── web_connect.go      # WebChannel 核心（WS 服务端 + 连接管理 + 两层消息架构）

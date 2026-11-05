@@ -120,8 +120,8 @@ func TestMemoryCompute_真实WS返回四字段(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	reqFrame := ReqFrame{Type: "req", ID: "mem-1", Method: "memory.compute"}
-	reqData, err := reqFrame.Encode()
+	reqFrame := map[string]any{"type": "req", "id": "mem-1", "method": "memory.compute"}
+	reqData, err := json.Marshal(reqFrame)
 	require.NoError(t, err)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
 

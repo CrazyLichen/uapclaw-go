@@ -138,12 +138,8 @@ func TestWebChannel_WebSocket连接生命周期(t *testing.T) {
 	// 此处直接发送 RPC 请求验证通道工作
 
 	// 发送 RPC 请求
-	reqFrame := ReqFrame{
-		Type:   "req",
-		ID:     "test-1",
-		Method: "channel.get",
-	}
-	reqData, _ := reqFrame.Encode()
+	reqFrame := map[string]any{"type": "req", "id": "test-1", "method": "channel.get"}
+	reqData, _ := json.Marshal(reqFrame)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
 
 	// 读取响应
@@ -566,8 +562,8 @@ func TestWebChannel_WebSocket连接_未知方法(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	reqFrame := ReqFrame{Type: "req", ID: "test-1", Method: "nonexistent.method"}
-	reqData, _ := reqFrame.Encode()
+	reqFrame := map[string]any{"type": "req", "id": "test-1", "method": "nonexistent.method"}
+	reqData, _ := json.Marshal(reqFrame)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
 
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -596,13 +592,8 @@ func TestWebChannel_WebSocket连接_带params(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	reqFrame := ReqFrame{
-		Type:   "req",
-		ID:     "test-2",
-		Method: "channel.get",
-		Params: json.RawMessage(`{}`),
-	}
-	reqData, _ := reqFrame.Encode()
+	reqFrame := map[string]any{"type": "req", "id": "test-2", "method": "channel.get", "params": json.RawMessage(`{}`)}
+	reqData, _ := json.Marshal(reqFrame)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
 
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -630,13 +621,8 @@ func TestWebChannel_WebSocket连接_带sessionID(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 
-	reqFrame := ReqFrame{
-		Type:   "req",
-		ID:     "test-3",
-		Method: "channel.get",
-		Params: json.RawMessage(`{"session_id": "sess_custom"}`),
-	}
-	reqData, _ := reqFrame.Encode()
+	reqFrame := map[string]any{"type": "req", "id": "test-3", "method": "channel.get", "params": json.RawMessage(`{"session_id": "sess_custom"}`)}
+	reqData, _ := json.Marshal(reqFrame)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
 
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))

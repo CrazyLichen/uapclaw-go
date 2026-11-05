@@ -204,24 +204,23 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 解析请求帧
-		req, err := DecodeReqFrame(message)
-		if err != nil {
+		// 解析请求帧（对齐 Python: data = json.loads(...)，全程 dict，无帧结构体）
+		var data map[string]any
+		if err := json.Unmarshal(message, &data); err != nil {
 			wc.writeError(conn, "", "JSON 解码失败: "+err.Error(), WsErrBadRequest)
 			continue
 		}
 
-		// 校验帧
-		if err := req.Validate(); err != nil {
-			wc.writeError(conn, req.ID, err.Error(), WsErrBadRequest)
+		// 校验帧：type 必须是 req，id 与 method 必须是非空字符串
+		reqID, _ := data["id"].(string)
+		method, _ := data["method"].(string)
+		if data["type"] != "req" || reqID == "" || method == "" {
+			wc.writeError(conn, reqID, "invalid request", WsErrBadRequest)
 			continue
 		}
 
 		// 解析 params
-		var params map[string]any
-		if len(req.Params) > 0 {
-			_ = json.Unmarshal(req.Params, &params) // 解析失败使用空 map
-		}
+		params, _ := data["params"].(map[string]any)
 		if params == nil {
 			params = make(map[string]any)
 		}
@@ -240,11 +239,11 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// 第一层：构建 user_message 并通过 onMessageCb（normAndForward）转发
 		handledByCallback := false
 		if wc.onMessageCb != nil {
-			userMessage := BuildUserMessage(req.ID, req.Method, params, sid, query)
+			userMessage := BuildUserMessage(reqID, method, params, sid, query)
 			handledByCallback = wc.onMessageCb(userMessage)
 		} else if wc.channelMgr != nil {
 			// fallback: 对齐 Python self.bus.publish_user_messages
-			userMessage := BuildUserMessage(req.ID, req.Method, params, sid, query)
+			userMessage := BuildUserMessage(reqID, method, params, sid, query)
 			wc.channelMgr.DeliverToMessageHandler(userMessage)
 		}
 
@@ -256,23 +255,23 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// 第二层：本地 method handler（返回 ack 响应给客户端）
 		// 分发 RPC 请求
-		result, err := wc.dispatcher.Dispatch(req.Method, params, sid)
+		result, err := wc.dispatcher.Dispatch(method, params, sid)
 		if err != nil {
 			code := WsErrInternalError
 			if strings.Contains(err.Error(), "未找到") {
 				code = WsErrMethodNotFound
 			}
-			wc.writeError(conn, req.ID, err.Error(), code)
+			wc.writeError(conn, reqID, err.Error(), code)
 			continue
 		}
 
 		// 写入成功响应
-		res := NewResFrame(req.ID, true, result, "", "")
-		resData, _ := res.Encode()
+		res := map[string]any{"type": "res", "id": reqID, "ok": true, "payload": result}
+		resData, _ := json.Marshal(res)
 		if err := wswrite.Write(conn, resData); err != nil {
 			logger.Error(logComponent).
 				Err(err).
-				Str("method", req.Method).
+				Str("method", method).
 				Msg("failed to write response")
 		}
 	}
@@ -368,17 +367,17 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 			resPayload = make(map[string]any)
 		}
 
-		res := NewResFrame(msg.ID, msg.OK, resPayload, "", "")
+		res := map[string]any{"type": "res", "id": msg.ID, "ok": msg.OK, "payload": resPayload}
 		if !msg.OK {
 			// ok=false 时从 payload 提取 error/code 到顶层
 			if errText, ok := resPayload["error"].(string); ok && errText != "" {
-				res.Error = errText
+				res["error"] = errText
 			}
 			if codeText, ok := resPayload["code"].(string); ok && codeText != "" {
-				res.Code = codeText
+				res["code"] = codeText
 			}
 		}
-		resData, _ := res.Encode()
+		resData, _ := json.Marshal(res)
 		wc.broadcastRaw(resData)
 		return nil
 	}
@@ -451,8 +450,8 @@ func (wc *WebChannel) ClientCount() int {
 
 // broadcastEvent 向所有已连接客户端广播事件帧。
 func (wc *WebChannel) broadcastEvent(event string, payload map[string]any) {
-	frame := NewEventFrame(event, payload, 0, "")
-	data, err := frame.Encode()
+	frame := map[string]any{"type": "event", "event": event, "payload": payload}
+	data, err := json.Marshal(frame)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event", event).
@@ -480,8 +479,11 @@ func (wc *WebChannel) broadcastRaw(data []byte) {
 
 // writeError 写入错误响应帧。
 func (wc *WebChannel) writeError(conn *websocket.Conn, reqID, errMsg, code string) {
-	res := NewResFrame(reqID, false, make(map[string]any), errMsg, code)
-	data, _ := res.Encode()
+	res := map[string]any{"type": "res", "id": reqID, "ok": false, "payload": make(map[string]any), "error": errMsg}
+	if code != "" {
+		res["code"] = code
+	}
+	data, _ := json.Marshal(res)
 	if err := wswrite.Write(conn, data); err != nil {
 		logger.Error(logComponent).
 			Err(err).

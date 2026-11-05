@@ -1648,7 +1648,7 @@ func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	}
 }
 
-//  5. 空值写为 KEY=
+// 5. 空值写为 KEY=
 func persistEnvUpdates(updated map[string]string) error {
 	envPath := workspace.EnvFile()
 
