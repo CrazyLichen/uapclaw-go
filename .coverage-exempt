@@ -279,3 +279,8 @@ internal/swarm/agents/harness/team/distributed_runtime.go#L472-L557
 # 服务装配，单测成本过高；判定逻辑本身（L476-L485 trajectorySuccess）由
 # TestTrajectorySuccess 五例 100% 覆盖。
 internal/agentcore/context_evolver/context_evolving_react_agent.go#L240-L246
+
+# ── 2026-11-04 技能预算配置字段 ──
+# config.go L218-L223 — 两个纯字段声明（无语句），覆盖剖面里没有可执行行，改动行
+# 必然 0%。读取方是工厂默认 SkillUseRail 装配（factory.go 改动行 86.4% OK）。
+internal/agentcore/harness/schema/config.go#L218-L223
