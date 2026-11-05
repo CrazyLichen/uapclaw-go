@@ -30,6 +30,7 @@ import (
 	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	commandParser "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -330,6 +331,13 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("updater.set_conf", updaterDefaultConf, false)
 	wc.registerMethod("updater.reset_source", updaterDefaultConf, false)
 	wc.registerMethod("updater.upgrade", stubHandler(wc, map[string]any{"state": "idle"}), false)
+
+	// ─── 杂项本地方法（B1b-4） ───
+	// Python: app_web_handlers.py:5676-5684 / 5775 / 5637 / 5818
+	wc.registerMethod("connection.status", connectionStatus(wc, agentClient), false)
+	wc.registerMethod("commands.list", commandsList(wc), false)
+	wc.registerMethod("config.moa_status", configMoaStatus(wc), false)
+	wc.registerMethod("chat.swarmflow_reply", chatSwarmflowReply(wc), false)
 
 	// ─── 钩子 ───
 	wc.registerMethod("hooks.list", stubHandler(wc, map[string]any{"hooks": []any{}}), false)
@@ -3717,5 +3725,57 @@ func defaultUpdaterRuntimeConfig() map[string]any {
 		"timeout_seconds":            20,
 		"pypi_mirror":                "https://mirrors.aliyun.com/pypi",
 		"access_token":               "",
+	}
+}
+
+// ──────────────────────────── 杂项本地方法（B1b-4） ────────────────────────────
+
+// connectionStatus 返回 Gateway / AgentServer 就绪状态，供 Web 客户端探测后端链路。
+//
+// Python: _connection_status (app_web_handlers.py:5676-5684)。
+func connectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		ready := agentClient != nil && agentClient.ServerReady()
+		wc.sendResponse(ws, reqID, true, map[string]any{
+			"agent_ready":      ready,
+			"protocol_version": "1.0",
+		}, "", "")
+	}
+}
+
+// commandsList 下发快捷面板命令清单（静态元数据，本地返回不转发）。
+//
+// Python: _commands_list (app_web_handlers.py:4010-4019) → list_builtin_commands；
+// 异常回 INTERNAL_ERROR。
+func commandsList(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		wc.sendResponse(ws, reqID, true, commandParser.ListBuiltinCommands(params), "", "")
+	}
+}
+
+// configMoaStatus 返回 MoA（多模型聚合）就绪状态。
+//
+// Python: config.moa_status 走 E2A 到 AgentServer 的 moa_status()
+// （jiuwenswarm/server/runtime/moa_runtime.py:106-119），后者在选中的 model group
+// 缺失/不可解析时固定回 {"configured": false}。
+//
+// ⤵️ 模型目录子系统本期未移植（见计划 Task 8），因此这里固定返回"未配置"的默认 DTO；
+// 面板据此显示 MoA 未启用，不会误报可用。
+func configMoaStatus(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		wc.sendResponse(ws, reqID, true, map[string]any{"configured": false}, "", "")
+	}
+}
+
+// chatSwarmflowReply 空 ack：三层路由把 reply 转发给 agent adapter（由其构造
+// HumanAgentMessage 交给 team_manager），HTTP 层只需应答。
+//
+// Python: _chat_swarmflow_reply (app_web_handlers.py:4158-4163)。
+func chatSwarmflowReply(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
+		wc.sendResponse(ws, reqID, true, map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}, "", "")
 	}
 }

@@ -2,6 +2,9 @@ package command_parser
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
@@ -534,4 +537,56 @@ func TestParsedControlActionString(t *testing.T) {
 			t.Errorf("ParsedControlActionString(%d) = %q, want %q", int(tc.action), got, tc.want)
 		}
 	}
+}
+
+// TestListBuiltinCommands_字段与上游一致 5 条命令、description 由 zh 派生、按顺序返回。
+func TestListBuiltinCommands_字段与上游一致(t *testing.T) {
+	out := ListBuiltinCommands(nil)
+
+	raw, ok := out["commands"].([]any)
+	require.True(t, ok, "commands 应为数组")
+	require.Len(t, raw, 5)
+
+	wantNames := []string{"fork", "compact", "plan", "goal", "persist"}
+	for i, item := range raw {
+		cmd, isMap := item.(map[string]any)
+		require.True(t, isMap)
+		assert.Equal(t, wantNames[i], cmd["name"], "顺序须与 BUILTIN_COMMANDS_META 一致")
+		assert.Equal(t, "built-in", cmd["kind"])
+		descriptions, _ := cmd["description_i18n"].(map[string]any)
+		require.NotNil(t, descriptions)
+		assert.Equal(t, descriptions["zh"], cmd["description"])
+		assert.NotEmpty(t, descriptions["en"], "英文文案不得为空")
+	}
+}
+
+// TestListBuiltinCommands_workMode不过滤 所有命令 available_modes 为空，传 work_mode 仍全量返回。
+func TestListBuiltinCommands_workMode不过滤(t *testing.T) {
+	out := ListBuiltinCommands(map[string]any{"work_mode": "agent"})
+	assert.Len(t, out["commands"].([]any), 5)
+}
+
+// TestListBuiltinCommands_按workMode过滤 过滤分支用合成条目覆盖（上游 5 条 available_modes 全 null，
+// 真实数据走不到该分支；若上游后续给某条命令加 mode 限制，这里保证行为已就绪）。
+func TestListBuiltinCommands_按workMode过滤(t *testing.T) {
+	original := builtinCommandsMeta
+	t.Cleanup(func() { builtinCommandsMeta = original })
+	builtinCommandsMeta = append(append([]map[string]any{}, original...), map[string]any{
+		"name":             "plan-only",
+		"description_i18n": map[string]any{"zh": "仅 plan 模式", "en": "plan only"},
+		"kind":             "built-in",
+		"available_modes":  []any{"agent.plan"},
+	})
+
+	all := ListBuiltinCommands(nil)["commands"].([]any)
+	require.Len(t, all, 6, "无 work_mode 时不过滤")
+
+	filtered := ListBuiltinCommands(map[string]any{"work_mode": "agent"})["commands"].([]any)
+	require.Len(t, filtered, 5, "work_mode 不匹配的条目应被过滤")
+	for _, item := range filtered {
+		assert.NotEqual(t, "plan-only", item.(map[string]any)["name"])
+	}
+
+	matched := ListBuiltinCommands(map[string]any{"work_mode": "agent.plan"})["commands"].([]any)
+	require.Len(t, matched, 6, "work_mode 匹配时保留")
 }

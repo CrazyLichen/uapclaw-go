@@ -211,6 +211,95 @@ var ValidSwitchLines = buildValidSwitchLines()
 var ValidSwitchSubcommands = buildSwitchSubcommandValues()
 
 // ControlMessageTexts 控制消息文本映射
+// builtinCommandsMeta 快捷面板展示的内置命令元数据（静态，无 IO）。
+//
+// Python: BUILTIN_COMMANDS_META (gateway/message_handler/command_parser/slash_command.py:483-572)。
+// description 由 description_i18n["zh"] 派生（对齐 list_builtin_commands 的旧客户端兼容）。
+var builtinCommandsMeta = []map[string]any{
+	{
+		"name": "fork",
+		"description_i18n": map[string]any{
+			"zh": "分叉当前会话并切换到副本",
+			"en": "Fork the current conversation and switch to the copy",
+		},
+		"usage":            "/fork",
+		"example":          nil,
+		"kind":             "built-in",
+		"takesArgs":        false,
+		"scope":            "agent",
+		"execution":        "rpc",
+		"req_method":       "session.fork",
+		"requires_session": true,
+		"available_modes":  nil,
+	},
+	{
+		"name": "compact",
+		"description_i18n": map[string]any{
+			"zh": "压缩对话历史，保留摘要以节省上下文",
+			"en": "Compress conversation history into a summary to save context space",
+		},
+		"usage":            "/compact",
+		"example":          nil,
+		"kind":             "built-in",
+		"takesArgs":        false,
+		"scope":            "agent",
+		"execution":        "rpc",
+		"req_method":       "command.compact",
+		"requires_session": true,
+		"available_modes":  nil,
+	},
+	{
+		// Web 侧复用现有 Plan 开关：面板选中后立即翻转，不向输入框插入命令。
+		"name": "plan",
+		"description_i18n": map[string]any{
+			"zh": "切换计划模式（只读规划 → 审批 → 执行）",
+			"en": "Toggle plan mode (read-only planning → approval → execution)",
+		},
+		"usage":             "/plan",
+		"example":           nil,
+		"kind":              "built-in",
+		"takesArgs":         false,
+		"scope":             "agent",
+		"execution":         "chat.send_with_mode",
+		"mode":              "agent.plan",
+		"plan_entry_source": "slash_command",
+		"requires_session":  false,
+		"available_modes":   nil,
+	},
+	{
+		"name": "goal",
+		"description_i18n": map[string]any{
+			"zh": "设置、查看、暂停、恢复或清除持续目标",
+			"en": "Set, view, pause, resume, or clear a persistent goal",
+		},
+		"usage":            "/goal [set <目标>|pause|resume|clear]",
+		"example":          "/goal 持续修复测试直到全部通过",
+		"kind":             "built-in",
+		"takesArgs":        true,
+		"scope":            "client",
+		"execution":        "rpc",
+		"req_method":       "command.goal",
+		"requires_session": false,
+		"available_modes":  nil,
+	},
+	{
+		"name": "persist",
+		"description_i18n": map[string]any{
+			"zh": "开启永续会话并开始任务（仅限新会话，创建后不可更改）",
+			"en": "Start a persistent conversation and begin a task " +
+				"(new conversations only; cannot be changed after creation)",
+		},
+		"usage":            "/persist <任务>",
+		"example":          "/persist 帮我持续跟进这次产品发布",
+		"kind":             "built-in",
+		"takesArgs":        true,
+		"scope":            "client",
+		"execution":        "session.create",
+		"requires_session": false,
+		"available_modes":  nil,
+	},
+}
+
 var ControlMessageTexts = buildControlMessageTexts()
 
 // FirstBatchRegistry 首批注册表
@@ -614,4 +703,44 @@ func allSwitchSubcommands() []string {
 		result = append(result, v)
 	}
 	return result
+}
+
+// ListBuiltinCommands 返回快捷面板要展示的命令清单（静态元数据，无 IO）。
+//
+// Python: list_builtin_commands (slash_command.py:574-592)。params.work_mode 用于按
+// available_modes 过滤；description 保留中文供旧客户端，description_i18n 供新客户端选语言。
+func ListBuiltinCommands(params map[string]any) map[string]any {
+	workMode := ""
+	if params != nil {
+		if v, ok := params["work_mode"].(string); ok {
+			workMode = v
+		}
+	}
+	out := make([]any, 0, len(builtinCommandsMeta))
+	for _, cmd := range builtinCommandsMeta {
+		if modes, has := cmd["available_modes"].([]any); has && len(modes) > 0 && workMode != "" {
+			allowed := false
+			for _, m := range modes {
+				if s, ok := m.(string); ok && s == workMode {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				continue
+			}
+		}
+		entry := make(map[string]any, len(cmd)+1)
+		for k, v := range cmd {
+			entry[k] = v
+		}
+		descriptions, _ := cmd["description_i18n"].(map[string]any)
+		if descriptions != nil {
+			if zh, ok := descriptions["zh"].(string); ok {
+				entry["description"] = zh
+			}
+		}
+		out = append(out, entry)
+	}
+	return map[string]any{"commands": out}
 }

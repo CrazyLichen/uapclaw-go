@@ -16,7 +16,7 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认），后续从 Task 11 开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认）；**Task 11（4 个杂项本地方法）已完成**，后续从 Task 12 开始。
 
 **已知 flake（未修，rerun 绿）**：`tests/integration/swarm/gateway` 的 `TestCliRouteFullChainSuite/TestChatSendFullChain_*` 偶发
 "MockModelClient 未被调用——config.yaml 的 client_provider 未命中"；整包跑（前置 AcpBridgeE2E/SupplementInterrupt/TeamDialog）时偶发，
@@ -1554,11 +1554,11 @@ git add -A && git commit -m "feat(web): 补齐 health_check/cron.meta/updater 7 
 | `config.moa_status` | `:5637` | `configMoaStatus` | 复用 config 代理 |
 | `chat.swarmflow_reply` | `:5818` | `ChatSwarmflowReply` | 空 ack（上游即 `{"accepted": true, "session_id": ...}`） |
 
-- [ ] **Step 1: 读上游**
+- [x] **Step 1: 读上游**
 
 Run: `sed -n '4010,4020p;4158,4165p;5637,5684p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 ```go
 // TestConnectionStatus_返回就绪字段 验证 payload 与上游一致。
@@ -1587,7 +1587,7 @@ func TestChatSwarmflowReply_回accepted(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 实现四个闭包 + 注册**
+- [x] **Step 3: 实现四个闭包 + 注册**
 
 ```go
 // ConnectionStatus 返回 Gateway / AgentServer 就绪状态。
@@ -1616,13 +1616,30 @@ func chatSwarmflowReply(wc *WebChannel) methodHandler {
 }
 ```
 
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
+- [x] **Step 4: 测试 + 矩阵 + 提交**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -v
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
 git add -A && git commit -m "feat(web): 补齐 connection/commands/moa/swarmflow 4 个本地方法"
 ```
+
+---
+
+**实施记录（2026-11-05 完成）：**
+
+- `connection.status`：`{agent_ready: agentClient != nil && ServerReady(), protocol_version: "1.0"}`
+  （`app_web_handlers.py:5676-5684`）。
+- `commands.list`：`command_parser` 侧补 `ListBuiltinCommands`（`slash_command.py:483-592`）——
+  5 条内置命令（fork/compact/plan/goal/persist）的静态元数据表 + `description` 由
+  `description_i18n["zh"]` 派生 + `work_mode` 过滤（上游 5 条的 `available_modes` 全为 null，
+  故实际不过滤，但过滤逻辑保留）。
+- `config.moa_status`：上游经 E2A 到 AgentServer `moa_status()`（`moa_runtime.py:106-119`），
+  后者无可用 model group 时固定回 `{"configured": false}`。本仓 catalog 未移植（Task 8 跳过），
+  **固定回这个默认 DTO**，面板显示 MoA 未启用、不误报可用。
+- `chat.swarmflow_reply`：`{accepted: true, session_id: 连接会话}`（`:4158-4163`），转发由分发层完成。
+- 矩阵：`local` 缺口 22 → 18。
+
 
 ---
 
