@@ -77,6 +77,7 @@ func (mh *MessageHandler) applyOutboundPipeline(ctx context.Context, msg *schema
 // Python: _forward_loop (L2163-L2558) 的 11 步骤：
 //
 //	步骤1:  handleChannelControl(msg)
+//	步骤1b: resolveExternalChannelSession(msg)（a2a 协议会话 → 本地会话）
 //	步骤2:  ApplyChannelState(msg)
 //	步骤3:  Gateway hook: UserPromptSubmit（预留 TODO）
 //	步骤4:  CHAT_ANSWER 分支
@@ -118,6 +119,10 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				if mh.handleChannelControl(ctx, msg) {
 					return
 				}
+
+				// 步骤1b: 外部协议会话（a2a）映射到本地会话
+				// Python: await self._resolve_external_channel_session(msg)（L4965）
+				mh.resolveExternalChannelSession(ctx, msg)
 
 				// 步骤2: 注入渠道状态（session_id / mode）
 				mh.ApplyChannelState(msg)

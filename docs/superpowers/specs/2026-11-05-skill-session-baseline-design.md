@@ -289,3 +289,22 @@ if provider, ok := cbc.Agent().(interface{ PromptAttachments() *hprompts.Manager
 2. **阈值门禁**：`skill_use_rail.go` 由 1041 行增至约 1240 行，改动行覆盖率需 ≥85%，新增方法必须全覆盖。
 3. **附件与历史**：`Sync` 会写 `UserMessage` 进历史；接入后若 section 内容每轮抖动（如演进经验变化），会产生额外历史消息。上游行为如此，测试需用稳定数据断言，避免偶发。
 4. **优先级调整（R-1）**若纳入，会改变 rail init 顺序，可能影响现有依赖注册顺序的用例，需全量回归。
+
+## 9. 实施后复核与追加决策（2026-11-05）
+
+首版实现（merge `00d8cbbc`）落地后做了一次逐条复核，发现 5 处与上游不符/来源错误，并逐项定了处置：
+
+| 编号 | 复核发现 | 决策 |
+|---|---|---|
+| D-1 | `RefreshSkillRails` 被挂在 `updateRuntimeConfig` 末尾，而该函数在 `ProcessMessageImpl` 步骤 16-17 **每条消息**都执行；Python `_update_runtime_config`（`interface_deep.py:14671`）整段不碰技能 rail，刷新只发生在技能域 RPC / MCP 卸载 / `install_candidate` | **B（零偏差）**：删除该调用，不做替代；禁用对存量会话不即时生效一事记 ⤵️ 领域二十七（visibility 写 handler 落地后在其处清基线） |
+| D-2 | 只有新增的 `buildSkillsSnapshotSignature` 用**目录** mtime；loader `refreshSkillsIncrementally` 本身已用 `SKILL.md` mtime（与 Python 一致） | **A**：抽共享 `discoverSkillDirs`，loader 与签名同源，签名取 `SKILL.md` mtime |
+| D-3 | 技能发现只扫一层；上游 `_discover_skill_dirs` 递归 + 遇首个 SKILL.md 即止 + 跳过 `.`/`output,temp,assets,node_modules` + `visited` 环保护 | **A**：与 D-2 合并实现（递归 + 停止边界 + 跳过表 + 环保护 + 逐层排序）；rail 侧跳过表与 `skill_tool` 侧 `_TREE_SKIP_DIR_NAMES` 按上游保持两套独立常量 |
+| D-4 | `RefreshSkillRails` 在扫描根为空时提前 return，跳过 disabled 更新/重载/清基线 | **A**：删除提前 return，按 Python 顺序无条件执行（空目录只导致 reload 告警） |
+| D-5 | `skillScanDirs` 读 `instanceOverrides["skills"]`：来源错误且 Go 侧**无写入方**。Python 的 `deep_config.skills` 由 `_bind_skill`（`extension_binder.py:216`）在包绑定时写入，`_instance_overrides`（`interface_deep.py:2108`）只是 create_instance 透传 dict，两者不是同一来源 | **C2**：本轮把 `extension_binder` 全量移植登记为 **15.15a**，落地后回填 `skillScanDirs` 数据源为 `DeepAgentConfig.Skills` 并删除错误分支 |
+
+同时确认的两条事实（写入 §2/§6 口径）：
+
+- Go `DeepAgentConfig.Skills`（`schema/config.go:234`）与 `CreateDeepAgentParams.Skills`（`harness_config/params.go:58`）**字段已对齐**，factory 默认 rail 分支在用（`factory.go:631`）；缺的是**运行时写入侧**（`extension_binder` 未移植，Go 全仓 `ResolvedSkill`/`ResourceRef`/`LoadRecord`/`ExtensionParts` 0 命中）。
+- 会话 MCP 技能目录未纳入扫描根，属 §6 D-1（无 session-scoped adapter）的必然结果，不是新增偏差；上游只在 session-scoped 子 adapter 上追加（`interface_deep.py:10217-10229`）。
+
+下一步：先落地 D-2/D-3/D-4 并补齐覆盖率与集成用例隔离（使 CI 转绿），再按 15.15a 的独立计划移植扩展绑定器。

@@ -38,6 +38,15 @@ type ChannelMode string
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// externalSessionChannelA2A 需要做外部会话别名映射的通道 ID
+	externalSessionChannelA2A = "a2a"
+	// externalSessionMetadataKey 外部原始会话 ID 在 metadata 中的键
+	externalSessionMetadataKey = "external_session_id"
+	// defaultExternalSessionMode 外部消息未带 mode 时的默认模式
+	defaultExternalSessionMode = "agent"
+)
+
+const (
 	// ChannelModeAgent 代理模式（历史值；plan/fast 已合并到 agent）
 	ChannelModeAgent ChannelMode = "agent"
 	// ChannelModeAgentPlan 代理规划模式（历史值，仅用于反解析旧持久化状态）
@@ -265,6 +274,59 @@ func (mh *MessageHandler) EnsureInboundSession(ctx context.Context, msg *schema.
 	}
 	mh.statesMu.Unlock()
 	return nil
+}
+
+// resolveExternalChannelSession 把 A2A 协议会话 ID 映射到 AgentServer 会话。
+//
+// Python: _resolve_external_channel_session (message_handler.py:1028-1061)。
+// 仅处理 a2a 通道（ssh 是 AgentOS 纯中继，不分配本地会话）：以 (channel_id, 外部
+// session_id) 为键查进程级别名表，未命中时按外部消息 params.mode（缺省 agent）分配
+// 本地会话并记录。随后把外部原始 ID 留在 metadata.external_session_id，并把
+// msg.session_id 换成本地会话 ID，保证同一段外部对话始终落在同一个本地会话。
+//
+// 锁语义对齐上游：分配在锁内完成（上游是全局 asyncio.Lock 内 await 分配），并发首轮
+// 只会创建一个会话；a2a 首轮分配本身罕见，串行化的代价可接受。
+func (mh *MessageHandler) resolveExternalChannelSession(ctx context.Context, msg *schema.Message) {
+	channelID := strings.TrimSpace(msg.ChannelID)
+	externalID := strings.TrimSpace(msg.SessionID)
+	if channelID != externalSessionChannelA2A || externalID == "" {
+		return
+	}
+
+	key := externalSessionAliasKey{channelID: channelID, externalID: externalID}
+	mh.externalAliasMu.Lock()
+	resolved, cached := mh.externalSessionAliases[key]
+	if !cached {
+		rawMode := defaultExternalSessionMode
+		if params := decodeMessageParams(msg); params != nil {
+			if v := strings.TrimSpace(strScalar(params["mode"])); v != "" {
+				rawMode = v
+			}
+		}
+		state := &ChannelControlState{Mode: channelModeFromStr(rawMode)}
+		sessionID, err := mh.allocateChannelSession(ctx, msg, state, false)
+		if err != nil {
+			mh.externalAliasMu.Unlock()
+			logger.Warn(logComponent).
+				Err(err).
+				Str("msg_id", msg.ID).
+				Str("channel_id", channelID).
+				Str("external_session_id", externalID).
+				Msg("allocate session for external channel failed")
+			return
+		}
+		resolved = sessionID
+		mh.externalSessionAliases[key] = resolved
+	}
+	mh.externalAliasMu.Unlock()
+
+	if msg.Metadata == nil {
+		msg.Metadata = make(map[string]any, 1)
+	}
+	if _, has := msg.Metadata[externalSessionMetadataKey]; !has {
+		msg.Metadata[externalSessionMetadataKey] = externalID
+	}
+	msg.SessionID = resolved
 }
 
 // IsUnknownTeamModeSend 判断是否为"mode 以 team 开头但不是已知 Team 模式"的 chat.send。

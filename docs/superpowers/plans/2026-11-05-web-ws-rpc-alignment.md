@@ -1961,6 +1961,11 @@ Expected: Build / Lint / Unit Test / Integration Test 四 job SUCCESS。
   （CI 克隆的上游 HEAD 已无 `gateway/`，只会拿降级矩阵误报过期），矩阵改为本地命令。
 - **Step 3（计划登记）**：`IMPLEMENTATION_PLAN.md` 27-A 的 B0/B1 已改 ✅，并补一段收口口径说明
   （矩阵方法数、剩余缺口归属、`updater.*`/`external_cli.*` 回默认的登记位置）。B2-B11 未动。
+- **Step 3 里本文原写的「24.13 行由 🔄 → ✅」是错的**（照抄未核代码）：24.13 仍为 🔄 —— 主体
+  （mode 枚举/白名单/守卫/D1/D2）确已在 `36f85699` 落地，但 `_resolve_external_channel_session`
+  （a2a 协议会话 → 本地会话别名）当时**未实现**，2026-11-05 已补（见 24.13 行的 ✅ 回填标记）；
+  另有一项「非流式 team 拒绝」尚未定位到确切锚点，故 24.13 保持 🔄 并留 ⤵️ 标记。
+  同时修正该行过期路径：`web/channel_manager/web_normalize.go` → `gateway/normalize.go`（B1a 已迁）。
 - **Step 4（全量验收）**：`go build`、`go test ./internal/swarm/...`、矩阵重算、`integration-audit -verify`
   均已跑通；集成测试的 `TestEvolutionConsumptionE2E` 与 `TestCliRouteFullChainSuite` 两处红灯归属见
   本文件开头的「CI 红灯归属」段（非本计划文件）。

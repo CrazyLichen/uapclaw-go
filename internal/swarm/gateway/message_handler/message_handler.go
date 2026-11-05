@@ -47,6 +47,16 @@ type streamTaskEntry struct {
 // MessageHandler 消息处理器
 // 入站：Channel → MessageHandler → AgentClient → AgentServer
 // 出站：AgentServer → AgentClient → MessageHandler → ChannelManager → Channel
+// externalSessionAliasKey 外部会话别名的键：(channel_id, 外部 session_id)。
+//
+// Python: _external_session_aliases 的 tuple 键 (message_handler.py:394)。
+type externalSessionAliasKey struct {
+	// channelID 来源渠道（目前仅 a2a）
+	channelID string
+	// externalID 外部协议侧的会话 ID
+	externalID string
+}
+
 type MessageHandler struct {
 	// agentClient AgentServer 客户端（封装 Transport 通信）
 	agentClient *routing.AgentClient
@@ -104,6 +114,13 @@ type MessageHandler struct {
 	// sessionLastUserQuery 用户最近查询：sessionID → last query
 	// Python: _session_last_user_query
 	sessionLastUserQuery map[string]string
+
+	// externalAliasMu 外部（a2a）会话别名锁
+	// Python: _external_session_alias_lock (message_handler.py:395)
+	externalAliasMu sync.Mutex
+	// externalSessionAliases a2a 协议会话 → 本地会话（进程级，重启即失效）
+	// Python: _external_session_aliases (message_handler.py:394)
+	externalSessionAliases map[externalSessionAliasKey]string
 
 	// getConfigRaw 读取 config 原始数据回调（对齐 Python _get_config_raw，由外部注入）
 	getConfigRaw func() map[string]any
@@ -207,6 +224,7 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		sessionLastUserQuery:        make(map[string]string),
 		acpSessionAliases:           make(map[string]string),
 		acpSessionAliasInflight:     make(map[string]chan struct{}),
+		externalSessionAliases:      make(map[externalSessionAliasKey]string),
 	}
 
 	// 11.7：企业通道会话映射（scope 从 config 读一次）
