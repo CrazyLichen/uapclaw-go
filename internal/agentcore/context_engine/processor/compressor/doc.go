@@ -15,7 +15,10 @@
 //	├── current_round_compressor.go     # CurrentRoundCompressor 当轮增量压缩器
 //	├── round_level_compressor.go       # RoundLevelCompressor 轮级渐进式压缩器
 //	├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
-//	└── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
+//	├── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
+//	└── recall/
+//	    ├── doc.go                      # recall 包文档
+//	    └── bm25.go                     # BM25Index + 中英混排分词
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/compressor/
 package compressor
