@@ -36,6 +36,12 @@ type ToolCard struct {
 	InputParams []*schema.Param
 	// Properties 扩展属性
 	Properties map[string]any
+	// Exposure 注册期解析的曝光策略（direct/deferred），零值等价 direct
+	Exposure ToolExposure `json:"-"`
+	// exposureDeclared 曝光策略是否已解析并锁定
+	exposureDeclared bool
+	// exposureDeclaredSet exposureDeclared 是否被显式设置过（对齐 Python bool|None）
+	exposureDeclaredSet bool
 }
 
 // ToolCallOptions 工具调用的扩展选项。
