@@ -1964,7 +1964,9 @@ Expected: Build / Lint / Unit Test / Integration Test 四 job SUCCESS。
 - **Step 3 里本文原写的「24.13 行由 🔄 → ✅」是错的**（照抄未核代码）：24.13 仍为 🔄 —— 主体
   （mode 枚举/白名单/守卫/D1/D2）确已在 `36f85699` 落地，但 `_resolve_external_channel_session`
   （a2a 协议会话 → 本地会话别名）当时**未实现**，2026-11-05 已补（见 24.13 行的 ✅ 回填标记）；
-  另有一项「非流式 team 拒绝」尚未定位到确切锚点，故 24.13 保持 🔄 并留 ⤵️ 标记。
+  另一项「非流式 team 拒绝」已定位到 `feishu_connect.py:3003-3013`（`enable_streaming=False` 时拦截
+  `/mode team` 与 `/join` 并回卡片提示）—— 属**飞书通道**内部逻辑，本仓无 `im_platforms/feishu`，
+  已改为 ⤴️ 回填到 26.1 IM 平台；因此 24.13 现可收口为 ✅。
   同时修正该行过期路径：`web/channel_manager/web_normalize.go` → `gateway/normalize.go`（B1a 已迁）。
 - **Step 4（全量验收）**：`go build`、`go test ./internal/swarm/...`、矩阵重算、`integration-audit -verify`
   均已跑通；集成测试的 `TestEvolutionConsumptionE2E` 与 `TestCliRouteFullChainSuite` 两处红灯归属见
