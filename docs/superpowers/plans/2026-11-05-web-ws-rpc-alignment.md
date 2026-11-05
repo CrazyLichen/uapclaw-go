@@ -18,6 +18,10 @@
 
 **进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认），后续从 Task 11 开始。
 
+**已知 flake（未修，rerun 绿）**：`tests/integration/swarm/gateway` 的 `TestCliRouteFullChainSuite/TestChatSendFullChain_*` 偶发
+"MockModelClient 未被调用——config.yaml 的 client_provider 未命中"；整包跑（前置 AcpBridgeE2E/SupplementInterrupt/TeamDialog）时偶发，
+单套件 `-count=5` 不复现。CI 两轮红均此例、rerun 绿。**待专门一批排查该套件的全局状态隔离**（provider 注册 / config.yaml / 残留 goroutine）。
+
 **B1a 收口结论（两处遗留偏差已清零，详见 Task 7b）**：① 删除 `unaryHandler`/`wrapUnary`，59 个注册点一律原生 `methodHandler`，失败帧抬到帧级 `ok=false + error + code`；② 分发顺序改为上游四段式（`local_only` → `handler-before-callback`(`chat.send`) → 回调 → handler）。残留差异见 spec §10（错误文案语言、permissions 本地回退、CI 矩阵上游来源）。
 
 ---
