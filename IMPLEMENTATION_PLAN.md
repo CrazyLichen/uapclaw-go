@@ -1186,7 +1186,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 27.1 | ☐ | Code 模式 | 前端 MVP 后端、git 状态按轮次索引、last-turn 审核、按轮 diff 统计、work/code 双模式 | `internal/swarm/channels/web/codemode/` ← `jiuwenswarm/channels/web` · `jiuwenswarm/agents/...aipc*` |
 | 27.2 | ☐ | Goal | goal 流式（is_stream）、失败文案、历史写入、目标与计划模式互斥 | `internal/swarm/channels/web/goal/` ← `jiuwenswarm/server` · `jiuwenswarm/channels/web` |
 | 27.3 | ☐ | 轨迹面板 | token 成本时间线、成员泳道、错误原因、上下文压缩标记 | 同上 ← `jiuwenswarm/channels/web`（trajectory） |
-| 27.4 | ☐ | 配置面板 | `/config` 交互面板、模型增删改、多模态开关、实验特性开关、API Key 长度 2048 | 同上 ← `jiuwenswarm/gateway/channel_manager/web` |
+| 27.4 | ☐ | 配置面板 | `/config` 交互面板、模型增删改、多模态开关、实验特性开关、API Key 长度 2048。⤴️ **待回填**：27-A Task 8 的 10 个 config 代理 RPC（`models.get/upsert/delete/references`、`model_groups.list/upsert/delete`、`vendors.list/fetch_models`、`session.selection.set`）—— 个人版恒走 E2A 而本仓无对应 `ReqMethod`，需先移植模型目录子系统（`model_catalog`+`model_selection`+`model_errors`+config upsert/delete+`model_vendor_registry` ≈1,200 行），详见 `docs/superpowers/plans/2026-11-05-web-ws-rpc-alignment.md` Task 8 | 同上 ← `jiuwenswarm/gateway/channel_manager/web` |
 | 27.5 | ☐ | 技能与市场 | 技能广场/我的技能/插件市场/MCP 市场、Hub 缓存与四类资产统一列表 | 同上 ← `jiuwenswarm/server`（marketplace/skills） |
 | 27.6 | ☐ | 会话导航 | 归档/恢复/删除、ephemeral/fork 会话、项目维度归档、会话侧边栏数据 | 同上 ← `jiuwenswarm/server`（session） |
 | 27.7 | ☐ | 心跳与定时任务面板 | 执行与聊天会话统一、未读标记、模式/模型选择、抽屉交互契约 | 同上 ← `jiuwenswarm/channels/web` |
