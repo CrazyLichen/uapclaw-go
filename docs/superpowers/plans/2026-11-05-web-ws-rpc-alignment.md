@@ -62,7 +62,7 @@ internal/swarm/gateway/
 - Create: `cmd/rpc-matrix/scan.go`
 - Test: `cmd/rpc-matrix/scan_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `cmd/rpc-matrix/scan_test.go`：
 
@@ -153,12 +153,12 @@ func TestScanUpstream_识别两种注册函数(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `go test ./cmd/rpc-matrix/ -run TestScan -v`
 Expected: FAIL，`undefined: scanFrontend` 等编译错误。
 
-- [ ] **Step 3: 实现扫描器**
+- [x] **Step 3: 实现扫描器**
 
 `cmd/rpc-matrix/doc.go`：
 
@@ -291,12 +291,12 @@ func groupByMethod(sites []rpcSite) map[string][]string {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `go test ./cmd/rpc-matrix/ -run TestScan -v`
 Expected: PASS（3 个用例）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add cmd/rpc-matrix/
@@ -313,7 +313,7 @@ git commit -m "feat(rpc-matrix): 三方 RPC 注册扫描器（前端/本仓/上�
 - Modify: `.github/workflows/ci.yml`（Build job 增加一步）
 - Output: `docs/sync/web-rpc-matrix.md`
 
-- [ ] **Step 1: 写失败测试（归类规则）**
+- [x] **Step 1: 写失败测试（归类规则）**
 
 追加到 `cmd/rpc-matrix/scan_test.go`：
 
@@ -354,12 +354,12 @@ func TestMissing_只统计缺的行(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `go test ./cmd/rpc-matrix/ -run "TestBuildMatrix|TestMissing" -v`
 Expected: FAIL，`undefined: buildMatrix`。
 
-- [ ] **Step 3: 实现归类与渲染**
+- [x] **Step 3: 实现归类与渲染**
 
 `cmd/rpc-matrix/matrix.go`：
 
@@ -477,7 +477,7 @@ func joinSites(sites []string) string {
 }
 ```
 
-- [ ] **Step 4: 实现入口**
+- [x] **Step 4: 实现入口**
 
 `cmd/rpc-matrix/main.go`：
 
@@ -555,7 +555,7 @@ func main() {
 }
 ```
 
-- [ ] **Step 5: 运行测试 + 首次生成矩阵**
+- [x] **Step 5: 运行测试 + 首次生成矩阵**
 
 Run:
 ```bash
@@ -564,7 +564,7 @@ go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop -out docs
 ```
 Expected: 测试 PASS；输出「共 15x 个方法，缺 10x 个」；`docs/sync/web-rpc-matrix.md` 入库。
 
-- [ ] **Step 6: 接进 CI（Build job）**
+- [x] **Step 6: 接进 CI（Build job）**
 
 `.github/workflows/ci.yml` 在「验证编译」步骤之后插入（缩进与该 job 其余 step 对齐）：
 
@@ -584,7 +584,7 @@ Expected: 测试 PASS；输出「共 15x 个方法，缺 10x 个」；`docs/sync
 
 > 上游不可达时只跳过校验，不因克隆失败而红；`-verify` 的 `❌` 判据在 Task 17 收尾时转为强制。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add cmd/rpc-matrix/ docs/sync/web-rpc-matrix.md .github/workflows/ci.yml
@@ -600,12 +600,12 @@ git commit -m "feat(rpc-matrix): 生成契约矩阵并接入 CI 漂移校验"
 - Delete: `internal/swarm/gateway/channel_manager/web/frame_test.go`
 - Modify: `internal/swarm/gateway/channel_manager/web/doc.go`
 
-- [ ] **Step 1: 确认零生产引用**
+- [x] **Step 1: 确认零生产引用**
 
 Run: `grep -rn "web\.Frame\|NewResFrame\|NewEventFrame\|DecodeReqFrame\|ReqFrame{" --include=*.go internal/ tests/ cmd/ | grep -v frame_test.go`
 Expected: 无输出（仅 `frame.go`/`frame_test.go` 自身命中）。
 
-- [ ] **Step 2: 删除文件并同步 doc.go**
+- [x] **Step 2: 删除文件并同步 doc.go**
 
 ```bash
 git rm internal/swarm/gateway/channel_manager/web/frame.go internal/swarm/gateway/channel_manager/web/frame_test.go
@@ -617,12 +617,12 @@ git rm internal/swarm/gateway/channel_manager/web/frame.go internal/swarm/gatewa
 // 说明：上游 Web 通道全程以 dict 传递帧，无 frame DTO；本包同样不定义帧结构体。
 ```
 
-- [ ] **Step 3: 编译与测试**
+- [x] **Step 3: 编译与测试**
 
 Run: `CGO_ENABLED=1 go build -tags sqlite_fts5 ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...`
 Expected: 全绿。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add -A internal/swarm/gateway/channel_manager/web/
@@ -638,14 +638,14 @@ git commit -m "refactor(web): 删除上游不存在的 frame DTO（规则 8/9）
 - Delete: `web/config_apply.go`、`web/memory_compute.go`
 - Modify: `web/doc.go`
 
-- [ ] **Step 1: 文件改名**
+- [x] **Step 1: 文件改名**
 
 ```bash
 cd internal/swarm/gateway/channel_manager/web
 git mv web_handlers.go app_web_handlers.go
 ```
 
-- [ ] **Step 2: 合并另两个文件的内容**
+- [x] **Step 2: 合并另两个文件的内容**
 
 把 `config_apply.go` 与 `memory_compute.go` 的全部声明按规则 2 的分区顺序合并进 `app_web_handlers.go`：
 
@@ -659,12 +659,12 @@ git mv web_handlers.go app_web_handlers.go
 git rm config_apply.go memory_compute.go
 ```
 
-- [ ] **Step 3: 编译验证（此时不应有行为变化）**
+- [x] **Step 3: 编译验证（此时不应有行为变化）**
 
 Run: `CGO_ENABLED=1 go build -tags sqlite_fts5 ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/`
 Expected: 与 Step 0 相同结果（无新增失败）。
 
-- [ ] **Step 4: 同步 doc.go 文件目录**
+- [x] **Step 4: 同步 doc.go 文件目录**
 
 把 `web_handlers.go`/`config_apply.go`/`memory_compute.go` 三行替换为：
 
@@ -675,7 +675,7 @@ Expected: 与 Step 0 相同结果（无新增失败）。
 //	└── app_web_handlers.go # 全部 RPC handler（对齐 app_web_handlers.py）
 ```
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add -A internal/swarm/gateway/channel_manager/web/
@@ -692,7 +692,7 @@ git commit -m "refactor(web): 三个 handler 文件合并为 app_web_handlers.go
 
 **对齐依据：** `web_connect.py:371-400`（`register_method`/`unregister_method`）、`:103-105`（`_HANDLER_BEFORE_CALLBACK_METHODS`/`_LOCAL_ONLY_METHODS`）、`:2180-2231`（分发顺序：local_only → handler-before-callback → on_message 回调 → 路由）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `web/web_connect_methods_test.go`（新文件）：
 
@@ -785,12 +785,12 @@ func newFakeWS() *fakeWS { return &fakeWS{} }
 3. 唯一允许传 nil 且真的调 handler 的场景：**测上游自己的"依赖缺失分支"**，此时必须断言上游原文的错误码与文案（例：`channel.*.get_conf` 在 `channel_manager` 为 nil 时回 `SERVICE_UNAVAILABLE` + `"channel manager not available"`，见 `app_web_handlers.py:4367-4377`）。
 4. 依赖用窄接口表达（`wsSender`、`channelConfSource`、`modelsConfigStore`…），生产实现是既有类型、测试实现是 fake；这属于 Go 无 duck typing 的语言层偏差，按规则 9.6 在 spec 登记。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `go test ./internal/swarm/gateway/channel_manager/web/ -run TestRegisterMethod -v`
 Expected: FAIL，`undefined: wc.registerMethod`。
 
-- [ ] **Step 3: 在 `web_connect.go` 增加注册表**
+- [x] **Step 3: 在 `web_connect.go` 增加注册表**
 
 ```go
 // wsSender 一帧写出的目标。
@@ -852,7 +852,7 @@ func (wc *WebChannel) unregisterMethod(method string) {
 	}
 ```
 
-- [ ] **Step 4: 迁移 71 个 handler 的签名与注册**
+- [x] **Step 4: 迁移 71 个 handler 的签名与注册**
 
 统一规则（逐条机械替换，不改变函数体逻辑）。**注意保持上游的闭包形态**：上游 handler 是 `_register_web_handlers(bind)` 内的嵌套函数，捕获 `channel`/`agent_client` 等，Go 侧同样是闭包（`func(ws wsSender, ...)` 形式，捕获 `wc` 与依赖），**不改成 WebChannel 的方法**（否则方法归属与上游不一致，违反规则 9.2）：
 
@@ -897,7 +897,7 @@ func (wc *WebChannel) sendResponse(ws wsSender, reqID string, ok bool, payload m
 
 `ws.WriteJSON` 由 `wsSender` 接口提供；生产路径用 `connSender{conn}` 包装现有 `*websocket.Conn`（多协程并发写仍走既有 `wswrite` 包，`connSender` 只在单帧回复路径使用）。
 
-- [ ] **Step 5: 分发顺序对齐 `web_connect.py:2180-2231`**
+- [x] **Step 5: 分发顺序对齐 `web_connect.py:2180-2231`**
 
 `web_connect.go` 中原 `wc.dispatcher.Dispatch(...)` 调用点改为：
 
@@ -946,12 +946,12 @@ func handlerBeforeCallback(method string) bool { return handlerBeforeCallbackMet
 
 > 现有 `ForwardNoLocalHandlerMethods` 等表在 Task 6 一并迁走；本步先保证同一顺序语义。
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/... ./internal/swarm/channels/...`
 Expected: 全绿（handler 级测试改为直接调用 `xxx(...)(fakeWS, "rid", params, "sid")` 或经 `methodHandlers` 表）。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add -A internal/swarm/gateway/channel_manager/web/
@@ -970,7 +970,7 @@ git commit -m "refactor(web): 删除 RPCDispatcher，注册与分发回挂 WebCh
 
 **对齐依据：** `app_gateway.py:314`（`_normalize_gateway_message`）、`:353`（`_normalize_and_forward_message`）、`:2508`（调用点）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `internal/swarm/gateway/normalize_test.go`：
 
@@ -1002,12 +1002,12 @@ func TestNormalizeGatewayMessage_内容补query(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `go test ./internal/swarm/gateway/ -run TestNormalizeGatewayMessage_内容补query -v`
 Expected: FAIL，`undefined: NormalizeGatewayMessage`。
 
-- [ ] **Step 3: 迁移实现**
+- [x] **Step 3: 迁移实现**
 
 把 `web/web_normalize.go` 中以下符号整体搬到 `internal/swarm/gateway/normalize.go`，包名改 `gateway`，函数体不动：
 
@@ -1022,15 +1022,15 @@ Expected: FAIL，`undefined: NormalizeGatewayMessage`。
 // normalize.go 包内引用调整：把 schema.XXX 保持原样；sendEvent 等 web 包内类型改为参数传入。
 ```
 
-- [ ] **Step 4: `BuildUserMessage`/`parseMode` 留在 web 包**
+- [x] **Step 4: `BuildUserMessage`/`parseMode` 留在 web 包**
 
 这两个符号移到 `web/web_connect.go`（上游属 `handle_connection` 内联构造 + `_parse_mode`），签名与实现不变。
 
-- [ ] **Step 5: 改调用点**
+- [x] **Step 5: 改调用点**
 
 `internal/swarm/gateway/gateway_server.go` 里对 `web.NormalizeGatewayMessage` / `web.MakeNormAndForward` 的调用改为包内 `NormalizeGatewayMessage` / `MakeNormAndForward`。
 
-- [ ] **Step 6: 测试与清理**
+- [x] **Step 6: 测试与清理**
 
 Run:
 ```bash
@@ -1039,7 +1039,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
 ```
 Expected: grep 无输出；测试全绿。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add -A internal/swarm/gateway/
@@ -1056,12 +1056,12 @@ git commit -m "refactor(gateway): normalize/forward 迁回 gateway 包（对齐 
 
 **规则：** Go 名 = 上游 handler 函数名去前导下划线转 lowerCamel（`_config_get` → `configGet`，`_hb_job_list` → `hbJobList`）。
 
-- [ ] **Step 1: 生成改名清单**
+- [x] **Step 1: 生成改名清单**
 
 Run: `grep -n "^func (wc \*WebChannel)" internal/swarm/gateway/channel_manager/web/app_web_handlers.go`
 按上表逐条对照上游函数名列出映射，写入提交说明。
 
-- [ ] **Step 2: 机械改名（示例 8 条，其余同规则）**
+- [x] **Step 2: 机械改名（示例 8 条，其余同规则）**
 
 | 现名 | 新名（上游） | 上游位置 |
 |---|---|---|
@@ -1076,7 +1076,7 @@ Run: `grep -n "^func (wc \*WebChannel)" internal/swarm/gateway/channel_manager/w
 
 > 现名是 `handleConfigGet` 这类自创前缀时一律改为上游名；已经是上游名的保持不动。
 
-- [ ] **Step 3: 批量替换**
+- [x] **Step 3: 批量替换**
 
 ```bash
 cd internal/swarm/gateway/channel_manager/web
@@ -1084,17 +1084,17 @@ cd internal/swarm/gateway/channel_manager/web
 sed -i 's/\bhandleConfigGet\b/configGet/g; s/\bhandleConfigSet\b/configSet/g; s/\bhandleModelsList\b/modelsList/g' app_web_handlers.go *_test.go
 ```
 
-- [ ] **Step 4: 验证无自创前缀残留**
+- [x] **Step 4: 验证无自创前缀残留**
 
 Run: `grep -rn "handle[A-Z]" --include=*.go internal/swarm/gateway/channel_manager/web/ | grep -v "_test.go"`
 Expected: 无输出。
 
-- [ ] **Step 5: 覆盖率门禁核对（纯搬移批必做）**
+- [x] **Step 5: 覆盖率门禁核对（纯搬移批必做）**
 
 Run: `bash scripts/check-changed-line-coverage.sh`
 Expected: 改动行覆盖率 ≥ 85%（含 5% 容差）。未达线时**在同批补测试**（把原测试文件改指向新名字后仍应真实执行到这些行），不做整段豁免——审查 M-13 已点名"把整段入口代码登记掉（1382 行）"不可接受。
 
-- [ ] **Step 6: 测试与提交**
+- [x] **Step 6: 测试与提交**
 
 ```bash
 CGO_ENABLED=1 go build -tags sqlite_fts5 ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
