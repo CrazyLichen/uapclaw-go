@@ -74,7 +74,7 @@ func NewToolSearchTool(
 	language string,
 	agentID string,
 	resultLimit int,
-) tool.Tool {
+) *ToolSearchTool {
 	card, err := tools.BuildToolCard("tool_search", "ToolSearchTool", language, nil, agentID)
 	if err != nil {
 		// Python: build_tool_card 失败时退化为同名卡片
