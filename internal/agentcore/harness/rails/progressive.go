@@ -967,9 +967,10 @@ func resolveProgressiveDiscovery(card *tool.ToolCard, language string) (string, 
 // localizedDisplay 按语言候选取本地化描述。
 func localizedDisplay(display map[string]any, language string) string {
 	candidates := []string{language}
-	if language == "cn" {
+	switch language {
+	case "cn":
 		candidates = []string{"cn", "zh"}
-	} else if language == "zh" {
+	case "zh":
 		candidates = []string{"zh", "cn"}
 	}
 	for _, candidate := range candidates {
