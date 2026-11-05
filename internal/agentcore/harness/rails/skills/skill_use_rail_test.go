@@ -651,7 +651,7 @@ func TestBuildSkillsSection_all模式(t *testing.T) {
 		skillpkg.NewSkill("b", "技能 B", "/b"),
 	}
 
-	section := r.buildSkillsSection()
+	section := r.buildSkillsSectionFor(r.skills)
 	if section == nil {
 		t.Fatal("section 不应为 nil")
 	}
@@ -668,7 +668,7 @@ func TestBuildSkillsSection_autoList模式(t *testing.T) {
 	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 
-	section := r.buildSkillsSection()
+	section := r.buildSkillsSectionFor(r.skills)
 	if section == nil {
 		t.Fatal("section 不应为 nil")
 	}
@@ -683,7 +683,7 @@ func TestBuildSkillsSection_空skills(t *testing.T) {
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 	r.skills = nil
 
-	section := r.buildSkillsSection()
+	section := r.buildSkillsSectionFor(r.skills)
 	if section == nil {
 		t.Fatal("section 不应为 nil")
 	}

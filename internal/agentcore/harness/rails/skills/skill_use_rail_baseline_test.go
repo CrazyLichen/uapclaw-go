@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -199,6 +200,26 @@ var _ sessioninterfaces.SessionFacade = (*skillFakeSession)(nil)
 func newCBC(t *testing.T, sess sessioninterfaces.SessionFacade) *agentinterfaces.AgentCallbackContext {
 	t.Helper()
 	return agentinterfaces.NewAgentCallbackContext(nil, nil, sess)
+}
+
+// TestSyncSkillPromptAndAttachment 提示词节取自会话基线
+func TestSyncSkillPromptAndAttachment(t *testing.T) {
+	r := newRailWithSkills(testSkill("alpha"))
+	r.skillsDir = []string{t.TempDir()} // 空目录 → 签名恒为空，跳过增量刷新
+	r.skillMode = SkillModeAll
+	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
+
+	sess := newSkillFakeSession("s1")
+	require.NoError(t, r.ensureSessionBaseline(sess))
+
+	// 基线落盘后新增 beta：提示词节仍只应包含 alpha
+	r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
+	require.NoError(t, r.syncSkillPromptAndAttachment(context.Background(), newCBC(t, sess)))
+
+	section := r.systemPromptBuilder.(*mockSystemPromptBuilder).GetSection(sections.SectionSkills)
+	require.NotNil(t, section)
+	assert.Contains(t, section.Content["cn"], "alpha")
+	assert.NotContains(t, section.Content["cn"], "beta", "系统提示词必须取自基线")
 }
 
 // TestUpdateRuntimeSkillAttachment 运行时变更附件
