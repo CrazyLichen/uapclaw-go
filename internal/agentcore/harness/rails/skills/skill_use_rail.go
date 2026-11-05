@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -347,7 +348,7 @@ func (r *SkillUseRail) GetSkillsForSession(sess sessioninterfaces.SessionFacade)
 // ClearSessionBaseline 清除会话基线，下次同步时按当前集合重拍。
 // Python: JiuWenSwarmDeepAdapter._clear_skill_session_baseline (interface_deep.py:11261-11274)
 func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade) {
-	if sess == nil {
+	if isNilSession(sess) {
 		return
 	}
 	sess.UpdateState(map[string]any{skillSessionStateKey: nil})
@@ -777,7 +778,7 @@ func (r *SkillUseRail) fetchEvolutionTextsFor(ctx context.Context, skills []*ski
 // ensureSessionBaseline 首次使用时落盘会话基线。
 // Python: _ensure_session_baseline (:692-698)
 func (r *SkillUseRail) ensureSessionBaseline(sess sessioninterfaces.SessionFacade) {
-	if sess == nil {
+	if isNilSession(sess) {
 		return
 	}
 	if _, ok := r.loadSessionState(sess); ok {
@@ -825,7 +826,7 @@ func (r *SkillUseRail) loadSessionBaseline(sess sessioninterfaces.SessionFacade)
 // loadSessionState 读取并校验 skill_use state。
 // Python: _load_session_state (:722-731)
 func (r *SkillUseRail) loadSessionState(sess sessioninterfaces.SessionFacade) (map[string]any, bool) {
-	if sess == nil {
+	if isNilSession(sess) {
 		return nil, false
 	}
 	raw, err := sess.GetState(state.StringKey(skillSessionStateKey))
@@ -848,7 +849,7 @@ func (r *SkillUseRail) loadSessionState(sess sessioninterfaces.SessionFacade) (m
 // saveSessionBaseline 把技能列表写入会话基线。
 // Python: _save_session_baseline (:733-750)
 func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade, skills []*skillpkg.Skill) {
-	if sess == nil {
+	if isNilSession(sess) {
 		return
 	}
 	entries := make([]any, 0, len(skills))
@@ -868,6 +869,19 @@ func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade,
 			"baseline_skills": entries,
 		},
 	})
+}
+
+// isNilSession 判断会话是否为空（含 typed-nil：接口内装 nil 指针时 != nil 仍成立）。
+func isNilSession(sess sessioninterfaces.SessionFacade) bool {
+	if sess == nil {
+		return true
+	}
+	v := reflect.ValueOf(sess)
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func:
+		return v.IsNil()
+	}
+	return false
 }
 
 // stringField 读取 map 的字符串字段，缺失或非字符串返回空串。

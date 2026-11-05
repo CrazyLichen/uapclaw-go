@@ -67,7 +67,12 @@ func (d *DeepAdapter) loopSession() sessioninterfaces.SessionFacade {
 	if d.instance == nil {
 		return nil
 	}
-	return d.instance.LoopSession()
+	sess := d.instance.LoopSession()
+	if sess == nil {
+		// typed-nil：*session.Session(nil) 装进接口后 != nil，必须显式判空
+		return nil
+	}
+	return sess
 }
 
 // skillScanDirs 汇总技能扫描根：绑定包目录在前，workspace 技能目录在后，去重。

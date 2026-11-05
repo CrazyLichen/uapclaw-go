@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	session "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 )
@@ -154,4 +155,10 @@ func TestFetchEvolutionTextsFor_去重且无记录时写入空文本(t *testing.
 	assert.Len(t, rail.evolutionTexts, 2)
 	assert.Equal(t, "", rail.evolutionTexts["alpha"])
 	assert.Equal(t, "", rail.evolutionTexts["beta"])
+}
+
+func TestClearSessionBaseline_typedNil不panic(t *testing.T) {
+	var typedNil *session.Session
+	rail := NewSkillUseRail([]string{t.TempDir()})
+	assert.NotPanics(t, func() { rail.ClearSessionBaseline(typedNil) })
 }

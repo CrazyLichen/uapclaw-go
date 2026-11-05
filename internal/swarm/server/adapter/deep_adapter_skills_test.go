@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -160,4 +161,11 @@ func (f *refreshFakeSession) ClearSession(context.Context)                 {}
 func TestSyncMcpServersForRuntime_空配置仍刷新技能(t *testing.T) {
 	d := &DeepAdapter{instanceOverrides: map[string]any{}}
 	require.NoError(t, d.syncMcpServersForRuntime(context.Background(), map[string]any{}, "test"))
+}
+
+// TestLoopSession_typedNil返回nil 实例存在但未绑定会话时，接口值必须是 nil
+// （*session.Session(nil) 装进接口后 != nil，直接调 UpdateState 会 panic）
+func TestLoopSession_typedNil返回nil(t *testing.T) {
+	d := &DeepAdapter{instance: &harness.DeepAgent{}}
+	assert.Nil(t, d.loopSession())
 }
