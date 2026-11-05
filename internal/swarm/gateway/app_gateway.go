@@ -191,9 +191,22 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	s.cronScheduler = cronScheduler
 
 	// 步骤4.6：Heartbeat 心跳服务装配（11.11，对齐 Python app_gateway.py L867-912）
-	// 1) 读探活配置段：优先 health_check（新版），回退 heartbeat（旧版）
-	//    对齐 Python migrate_legacy_heartbeat_probe_config 的"新段优先"读语义
-	//    （gateway/common/config.py:466-500）；本仓不做破坏性迁移，仅读侧兼容。
+	// 0) 旧探活键迁移：heartbeat.{every,target,active_hours} → health_check.*
+	//    对齐 app_gateway.py:192-206（失败只 Warn，不丢弃可读配置；成功后重载 cfg）
+	if migrated, migErr := config.MigrateLegacyHeartbeatProbeConfig(); migErr != nil {
+		logger.Warn(logComponent).
+			Err(migErr).
+			Msg("failed to migrate legacy heartbeat probe config; continuing with the existing config")
+	} else if migrated {
+		logger.Info(logComponent).Msg("migrated legacy heartbeat probe config to health_check")
+		if cfg != nil {
+			if reloadErr := cfg.Reload(); reloadErr != nil {
+				logger.Warn(logComponent).Err(reloadErr).Msg("failed to reload config after heartbeat probe migration")
+			}
+		}
+	}
+
+	// 1) 读探活配置段：优先 health_check（新版），回退 heartbeat（迁移失败时的兜底）
 	var heartbeatCfgMap map[string]any
 	if cfg != nil {
 		data, err := cfg.Load()

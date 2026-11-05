@@ -317,3 +317,12 @@ internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L3587-L3589
 # app_web_handlers.go L2198-L2200 — feishuHasPushTarget 里 config.New("") 失败分支。
 # 默认路径由 workspace 解析，测试进程下不可能失败（同既有 config.New 调用点口径）。
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L2198-L2200
+
+# ── 2026-11-05 探活键迁移（MigrateLegacyHeartbeatProbeConfig） ──
+# roundtrip.go L217-L223 — config.New("")/Load 失败分支：默认路径由 workspace 解析，
+# 测试进程下不可能失败（同既有 config.New 调用点口径）。
+# L250-L252 / L262-L264 — 两个 SetRoundTrip 失败分支：round-trip 写回只在与磁盘交互时
+# 失败（权限/只读介质），测试以 root 运行，chmod 不生效；损坏 YAML 会先在 Load 处返回。
+internal/common/config/roundtrip.go#L217-L223
+internal/common/config/roundtrip.go#L250-L252
+internal/common/config/roundtrip.go#L262-L264

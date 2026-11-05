@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // writeTestYAML 写入测试配置文件。
@@ -212,4 +216,87 @@ func TestSetRoundTrip_写回列表值(t *testing.T) {
 	if !strings.Contains(got, "name: m1") {
 		t.Errorf("列表值未写入: %s", got)
 	}
+}
+
+// TestMigrateLegacyHeartbeatProbeConfig_迁移探活键 旧 heartbeat 段三个探活键搬到 health_check，
+// heartbeat.jobs 保留，旧段搬空后不再含探活键。
+func TestMigrateLegacyHeartbeatProbeConfig_迁移探活键(t *testing.T) {
+	path := setupMigrateConfig(t, `heartbeat:
+  every: 120
+  target: feishu
+  active_hours:
+    start: "09:00"
+    end: "18:00"
+  jobs:
+    - id: j1
+`)
+
+	migrated, err := MigrateLegacyHeartbeatProbeConfig()
+	require.NoError(t, err)
+	assert.True(t, migrated, "存在旧探活键时应报告已迁移")
+
+	cfg, err := New(path)
+	require.NoError(t, err)
+	data, err := cfg.Load()
+	require.NoError(t, err)
+
+	hc, _ := data["health_check"].(map[string]any)
+	require.NotNil(t, hc)
+	assert.EqualValues(t, 120, hc["every"])
+	assert.Equal(t, "feishu", hc["target"])
+	assert.NotNil(t, hc["active_hours"])
+
+	legacy, _ := data["heartbeat"].(map[string]any)
+	require.NotNil(t, legacy)
+	assert.NotContains(t, legacy, "every", "已迁键必须从旧段移除")
+	assert.NotContains(t, legacy, "target")
+	assert.NotContains(t, legacy, "active_hours")
+	assert.Contains(t, legacy, "jobs", "heartbeat.jobs 不得被迁走")
+}
+
+// TestMigrateLegacyHeartbeatProbeConfig_目标段优先 health_check 已有同名键时保留现值（setdefault）。
+func TestMigrateLegacyHeartbeatProbeConfig_目标段优先(t *testing.T) {
+	path := setupMigrateConfig(t, `heartbeat:
+  every: 120
+health_check:
+  every: 300
+`)
+
+	migrated, err := MigrateLegacyHeartbeatProbeConfig()
+	require.NoError(t, err)
+	assert.True(t, migrated)
+
+	cfg, err := New(path)
+	require.NoError(t, err)
+	data, err := cfg.Load()
+	require.NoError(t, err)
+	hc, _ := data["health_check"].(map[string]any)
+	assert.EqualValues(t, 300, hc["every"], "目标段现值优先")
+}
+
+// TestMigrateLegacyHeartbeatProbeConfig_无旧键 no-op：没有探活键或没有 heartbeat 段时不写文件。
+func TestMigrateLegacyHeartbeatProbeConfig_无旧键(t *testing.T) {
+	setupMigrateConfig(t, "heartbeat:\n  jobs:\n    - id: j1\n")
+	migrated, err := MigrateLegacyHeartbeatProbeConfig()
+	require.NoError(t, err)
+	assert.False(t, migrated, "只有 jobs 时不算迁移")
+
+	setupMigrateConfig(t, "channels: {}\n")
+	migrated, err = MigrateLegacyHeartbeatProbeConfig()
+	require.NoError(t, err)
+	assert.False(t, migrated, "无 heartbeat 段时不迁移")
+}
+
+// setupMigrateConfig 在临时数据目录写一份 config.yaml 并返回其路径。
+func setupMigrateConfig(t *testing.T, yamlContent string) string {
+	t.Helper()
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	t.Setenv("UAPCLAW_DATA_DIR", dir)
+	pathutil.ResetCache()
+
+	path := filepath.Join(configDir, DefaultConfigFile)
+	require.NoError(t, os.WriteFile(path, []byte(yamlContent), 0o644))
+	return path
 }

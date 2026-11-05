@@ -1525,7 +1525,8 @@ git add -A && git commit -m "feat(web): 补齐 health_check/cron.meta/updater 7 
   ② set 补**飞书目标校验**（`target=="feishu"` 时要求每个 app 都有 `last_chat_id`/`chat_id`，否则回
   `error=code="feishuNoTarget"`，`app_web_handlers.py:4290-4325`）；③ 写回段从 `heartbeat.*` 改为 **`health_check.*`**
   （`update_health_check_in_config`，config.py:451-463），启动读侧改为「优先 health_check、回退 heartbeat」。
-  **偏差**：本仓不做上游 `migrate_legacy_heartbeat_probe_config` 的破坏性迁移（旧键保留，仅读侧兼容）。
+  ④ 启动时执行 `config.MigrateLegacyHeartbeatProbeConfig()`（`config.py:466-493`）：只搬 `every/target/active_hours`、
+  目标段 setdefault 优先、`heartbeat.jobs` 不动、搬空写空 mapping；失败只 Warn（对齐 `app_gateway.py:192-206`），随后 `cfg.Reload()`。
 - `cron.job.meta`：`CronJobController` 加 `JobMetadata()`，`gateway/cron` 落 `CronJobMetadata()`
   （`runtime/cron/models.py:172-180`）：modes 22 个（21 字面量 + `team.plan.normal`/`team.plan.code`，按 Python
   `sorted()` 字典序）、`default_mode=agent`、default/default_team/max timeout = 3600/3600/259200。

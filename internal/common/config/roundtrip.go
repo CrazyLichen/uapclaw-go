@@ -206,3 +206,61 @@ func valueToNode(value any) (*yaml.Node, error) {
 	}
 	return &node, nil
 }
+
+// MigrateLegacyHeartbeatProbeConfig 把旧 probe 键从 heartbeat 段迁到 health_check 段。
+//
+// Python: migrate_legacy_heartbeat_probe_config (gateway/common/config.py:466-493)：
+// 只搬 every / target / active_hours 三个探活键，**不动 heartbeat.jobs**；目标段已有同名键时
+// 保留目标段的现值（setdefault）；heartbeat 段搬空后整段删除。返回是否发生了迁移。
+func MigrateLegacyHeartbeatProbeConfig() (bool, error) {
+	cfg, err := New("")
+	if err != nil {
+		return false, fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	raw, err := cfg.Load()
+	if err != nil {
+		return false, fmt.Errorf("加载配置失败: %w", err)
+	}
+	legacy, ok := raw["heartbeat"].(map[string]any)
+	if !ok {
+		return false, nil
+	}
+	probeKeys := []string{"every", "target", "active_hours"}
+	present := make([]string, 0, len(probeKeys))
+	for _, key := range probeKeys {
+		if _, has := legacy[key]; has {
+			present = append(present, key)
+		}
+	}
+	if len(present) == 0 {
+		return false, nil
+	}
+
+	// 目标段：已有键保持现值，缺的从旧段搬过来
+	current, _ := raw["health_check"].(map[string]any)
+	next := make(map[string]any, len(current)+len(present))
+	for k, v := range current {
+		next[k] = v
+	}
+	for _, key := range present {
+		if _, has := next[key]; !has {
+			next[key] = legacy[key]
+		}
+	}
+	if err := cfg.SetRoundTrip("health_check", next); err != nil {
+		return false, fmt.Errorf("写入 health_check 失败: %w", err)
+	}
+
+	// 旧段移除已迁键；搬空后写空 mapping（等价上游 pop 整段，读侧同样视为无配置）
+	rest := make(map[string]any, len(legacy))
+	for k, v := range legacy {
+		rest[k] = v
+	}
+	for _, key := range present {
+		delete(rest, key)
+	}
+	if err := cfg.SetRoundTrip("heartbeat", rest); err != nil {
+		return false, fmt.Errorf("写回 heartbeat 失败: %w", err)
+	}
+	return true, nil
+}
