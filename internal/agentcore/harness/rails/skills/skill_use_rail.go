@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	sections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	codetool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/code"
@@ -72,6 +73,9 @@ type SkillUseRail struct {
 	skills []*skillpkg.Skill
 	// systemPromptBuilder 系统提示词构建器引用（Init 中获取）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
+	// attachmentManagerFor 会话级附件管理器获取函数（Init 中从 agent 取）
+	// Python: self.attachment_manager（DeepAgent 共享给内层 ReActAgent 与各 rail）
+	attachmentManagerFor func() *hprompts.Manager
 
 	// ── 缓存 ──
 	// skillCache 增量缓存 absPath → Skill
@@ -315,6 +319,10 @@ func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade
 // Python: SkillUseRail.init() L237-306
 func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
+	// Python: self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	if provider, ok := agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
+		r.attachmentManagerFor = provider.PromptAttachments
+	}
 
 	var language string
 	if r.systemPromptBuilder != nil {
@@ -686,6 +694,127 @@ func schemaVersion(v any) int {
 		return int(typed)
 	}
 	return -1
+}
+
+// updateRuntimeSkillAttachment 把技能新增/移除/进化经验写入变更附件。
+// Python: _update_runtime_skill_attachment (:752-781)
+func (r *SkillUseRail) updateRuntimeSkillAttachment(cbc *agentinterfaces.AgentCallbackContext, baseline []*skillpkg.Skill) error {
+	if r.attachmentManagerFor == nil || cbc == nil {
+		return nil
+	}
+	mgr := r.attachmentManagerFor()
+	if mgr == nil || cbc.Session() == nil {
+		return nil
+	}
+	sessionID := cbc.Session().GetSessionID()
+	if sessionID == "" {
+		return nil
+	}
+
+	baselineByName := make(map[string]struct{}, len(baseline))
+	for _, skill := range baseline {
+		baselineByName[skill.Name] = struct{}{}
+	}
+	currentByName := make(map[string]struct{}, len(r.skills))
+	var additions []*skillpkg.Skill
+	for _, skill := range r.skills {
+		if skill == nil {
+			continue
+		}
+		currentByName[skill.Name] = struct{}{}
+		if _, ok := baselineByName[skill.Name]; !ok {
+			additions = append(additions, skill)
+		}
+	}
+	var removals []*skillpkg.Skill
+	for _, skill := range baseline {
+		if _, ok := currentByName[skill.Name]; !ok {
+			removals = append(removals, skill)
+		}
+	}
+
+	content := r.buildRuntimeSkillChangeContent(additions, removals, baseline)
+	if content == "" {
+		if _, err := mgr.ClearSection(sessionID, runtimeSkillAttachmentSection); err != nil {
+			return err
+		}
+		return nil
+	}
+	_, err := mgr.AddSection(sessionID, runtimeSkillAttachmentSection, content, hprompts.AttachmentSkill, runtimeSkillAttachmentSource)
+	return err
+}
+
+// buildRuntimeSkillChangeContent 渲染技能变更 + 进化经验，全空返回空串。
+// Python: _build_runtime_skill_change_content (:783-849)
+func (r *SkillUseRail) buildRuntimeSkillChangeContent(additions, removals, baseline []*skillpkg.Skill) string {
+	isEnglish := strings.HasPrefix(strings.ToLower(r.language()), "en")
+
+	var evolutionSkills []*skillpkg.Skill
+	seen := map[string]struct{}{}
+	for _, skill := range append(append([]*skillpkg.Skill{}, baseline...), additions...) {
+		if skill == nil {
+			continue
+		}
+		if _, ok := seen[skill.Name]; ok {
+			continue
+		}
+		if strings.TrimSpace(r.evolutionTexts[skill.Name]) == "" {
+			continue
+		}
+		seen[skill.Name] = struct{}{}
+		evolutionSkills = append(evolutionSkills, skill)
+	}
+
+	if len(additions) == 0 && len(removals) == 0 && len(evolutionSkills) == 0 {
+		return ""
+	}
+
+	var lines []string
+	if isEnglish {
+		lines = append(lines, "Skill environment status update. Invoke relevant skills only when needed for the current task.")
+		if len(additions) > 0 {
+			lines = append(lines, "Newly available skills:")
+			for idx, skill := range additions {
+				lines = append(lines, sections.BuildSkillLine(idx, skill.Name, skill.Description, ""))
+			}
+		}
+		if len(removals) > 0 {
+			lines = append(lines, "Unavailable skills (removed from the environment):")
+			for _, skill := range removals {
+				lines = append(lines, "- "+skill.Name)
+			}
+		}
+		if len(evolutionSkills) > 0 {
+			lines = append(lines, "Skill evolution experience reference:")
+			for _, skill := range evolutionSkills {
+				lines = append(lines, "[Skill: "+skill.Name+"]")
+				lines = append(lines, strings.TrimSpace(r.evolutionTexts[skill.Name]))
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	lines = append(lines, "Skill 环境状态更新。请根据当前任务需要，按需调用相关 Skill。")
+	if len(additions) > 0 {
+		lines = append(lines, "新增可用 Skill：")
+		for idx, skill := range additions {
+			lines = append(lines, sections.BuildSkillLine(idx, skill.Name, skill.Description, ""))
+		}
+	}
+	if len(removals) > 0 {
+		lines = append(lines, "已移除、当前不可用的 Skill：")
+		for _, skill := range removals {
+			lines = append(lines, "- "+skill.Name)
+		}
+	}
+	if len(evolutionSkills) > 0 {
+		lines = append(lines, "Skill 演进经验参考：")
+		for _, skill := range evolutionSkills {
+			lines = append(lines, "[Skill: "+skill.Name+"]")
+			lines = append(lines, strings.TrimSpace(r.evolutionTexts[skill.Name]))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // prepareSkills 增量刷新 + 过滤。

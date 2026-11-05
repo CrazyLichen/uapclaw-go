@@ -7,8 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 )
 
@@ -192,3 +194,90 @@ func TestLoadSessionBaseline(t *testing.T) {
 
 // 编译期断言：假会话满足门面
 var _ sessioninterfaces.SessionFacade = (*skillFakeSession)(nil)
+
+// newCBC 构造带会话的回调上下文（agent 为 nil，附件管理器由 attachmentManagerFor 注入）。
+func newCBC(t *testing.T, sess sessioninterfaces.SessionFacade) *agentinterfaces.AgentCallbackContext {
+	t.Helper()
+	return agentinterfaces.NewAgentCallbackContext(nil, nil, sess)
+}
+
+// TestUpdateRuntimeSkillAttachment 运行时变更附件
+func TestUpdateRuntimeSkillAttachment(t *testing.T) {
+	t.Run("新增技能写入附件", func(t *testing.T) {
+		r := newRailWithSkills(testSkill("alpha"))
+		r.skillMode = SkillModeAll
+		r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
+
+		sess := newSkillFakeSession("s1")
+		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
+
+		mgr := prompts.NewManager()
+		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+
+		require.NoError(t, r.updateRuntimeSkillAttachment(newCBC(t, sess), r.loadSessionBaseline(sess)))
+
+		att := mgr.Find("s1", runtimeSkillAttachmentSection, runtimeSkillAttachmentSource)
+		require.NotNil(t, att)
+		assert.Contains(t, att.Content, "beta")
+		assert.NotContains(t, att.Content, "alpha", "基线内技能不进变更附件")
+	})
+
+	t.Run("无变化清除附件", func(t *testing.T) {
+		r := newRailWithSkills(testSkill("alpha"))
+		r.skillMode = SkillModeAll
+		r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
+
+		sess := newSkillFakeSession("s1")
+		require.NoError(t, r.ensureSessionBaseline(sess))
+
+		mgr := prompts.NewManager()
+		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		_, err := mgr.AddSection("s1", runtimeSkillAttachmentSection, "stale", prompts.AttachmentSkill, runtimeSkillAttachmentSource)
+		require.NoError(t, err)
+
+		require.NoError(t, r.updateRuntimeSkillAttachment(newCBC(t, sess), r.loadSessionBaseline(sess)))
+		assert.Nil(t, mgr.Find("s1", runtimeSkillAttachmentSection, runtimeSkillAttachmentSource))
+	})
+
+	t.Run("无会话时不panic", func(t *testing.T) {
+		r := newRailWithSkills(testSkill("alpha"))
+		mgr := prompts.NewManager()
+		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		assert.NoError(t, r.updateRuntimeSkillAttachment(nil, nil))
+	})
+}
+
+// TestBuildRuntimeSkillChangeContent 附件文案
+func TestBuildRuntimeSkillChangeContent(t *testing.T) {
+	t.Run("无变化返回空串", func(t *testing.T) {
+		r := newRailWithSkills(testSkill("alpha"))
+		r.systemPromptBuilder = newMockSystemPromptBuilder("en")
+		content := r.buildRuntimeSkillChangeContent(nil, nil, []*skillpkg.Skill{testSkill("alpha")})
+		assert.Equal(t, "", content)
+	})
+
+	t.Run("英文包含移除段", func(t *testing.T) {
+		r := newRailWithSkills()
+		r.systemPromptBuilder = newMockSystemPromptBuilder("en")
+		content := r.buildRuntimeSkillChangeContent(
+			[]*skillpkg.Skill{testSkill("beta")},
+			[]*skillpkg.Skill{testSkill("alpha")},
+			[]*skillpkg.Skill{testSkill("alpha")},
+		)
+		assert.Contains(t, content, "Skill environment status update")
+		assert.Contains(t, content, "Newly available skills:")
+		assert.Contains(t, content, "Unavailable skills (removed from the environment):")
+		assert.Contains(t, content, "alpha")
+	})
+
+	t.Run("中文包含演进经验段", func(t *testing.T) {
+		r := newRailWithSkills()
+		r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
+		r.evolutionTexts["alpha"] = "  经验正文  "
+		content := r.buildRuntimeSkillChangeContent(nil, nil, []*skillpkg.Skill{testSkill("alpha")})
+		assert.Contains(t, content, "Skill 环境状态更新")
+		assert.Contains(t, content, "Skill 演进经验参考：")
+		assert.Contains(t, content, "经验正文")
+	})
+}
