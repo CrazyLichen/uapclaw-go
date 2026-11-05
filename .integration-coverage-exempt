@@ -247,3 +247,12 @@ internal/agentcore/context_evolver/context_evolving_react_agent.go#L476-L485
 # 必然 0%。字段的读取方是工厂默认 SkillUseRail 装配（factory.go 改动行 8.1% OK），
 # 语义由 TestCreateDeepAgent_默认装配SkillUseRail 覆盖。
 internal/agentcore/harness/schema/config.go#L218-L223
+
+# ── 2026-11-05 27-A B1b-3 cron.job.meta ──
+# cron/models.go L10-L63 / L455-L467 与 cron/controller.go L45-L51 —— 纯 schema 常量
+# （22 个 mode 字面量、3 个超时常量）与两行转发方法，语义由 gate 单测 100% 覆盖
+# （TestCronJobMetadata_字段与上游一致 / TestCronControllerJobMetadata）；集成套件
+# 没有 cron 门面的 RPC 入口，这些声明行在集成剖面里恒为 0%。
+internal/swarm/gateway/cron/models.go#L10-L63
+internal/swarm/gateway/cron/models.go#L455-L467
+internal/swarm/gateway/cron/controller.go#L45-L51
