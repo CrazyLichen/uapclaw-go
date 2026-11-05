@@ -73,21 +73,6 @@ jobs:
           go build -mod=mod ./...
           echo "编译通过"
 
-      # Web WS 契约矩阵：上游可达时重生成并与入库版本比对，防止矩阵过期。
-      # 上游不可达时跳过（不因外部网络问题判红）；-verify 缺口门禁在 27-A B1
-      # 收尾后才转强制。
-      - name: 校验 Web RPC 契约矩阵
-        run: |
-          if git clone --depth 1 https://gitcode.com/openJiuwen/jiuwenswarm.git /tmp/upstream; then
-            go run ./cmd/rpc-matrix -upstream /tmp/upstream
-            if ! git diff --exit-code -- docs/sync/web-rpc-matrix.md docs/sync/web-rpc-downstream-gaps.md; then
-              echo "矩阵已过期：请本地重跑 go run ./cmd/rpc-matrix 并提交 docs/sync/ 下两份文档"
-              exit 1
-            fi
-          else
-            echo "上游不可达，跳过矩阵漂移校验"
-          fi
-
   # ──────────────────────────── Lint ────────────────────────────
 
   lint:

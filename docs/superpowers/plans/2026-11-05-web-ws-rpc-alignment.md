@@ -1129,9 +1129,9 @@ git commit -m "refactor(web): handler 函数名对齐上游 Python 名（规则 
 
 `hot_reload` 集成用例改用真实 WS 连接（`httptest` + `HandleWebSocket` + 一帧 `config.save_all`）验证热重载回调。
 
-- [x] **Step 7: 矩阵工具的降级行为**
+- [x] **Step 7: 撤掉 CI 的矩阵校验步骤（用户裁定）**
 
-上游目录不可用且非 `-verify` 时整轮跳过、不覆写 `docs/sync/`（此前会写回"两方矩阵"，让 CI 的 `git diff` 误报"矩阵已过期"）。
+`ci.yml` Build job 删除「校验 Web RPC 契约矩阵」：CI 克隆的上游 HEAD 已无 `gateway/`（代码在 `jiuwenswarm/…` 下，且 tag `0.2.5.beta1` 的文件与计划基准快照行数不同），该步骤只能拿降级矩阵误报"已过期"。矩阵与缺口清单改为**本地命令**（`go run ./cmd/rpc-matrix -upstream <快照>`），漂移不再由 CI 拦截，登记在 spec §10。
 
 - [x] **Step 8: 验收**
 

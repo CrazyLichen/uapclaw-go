@@ -284,3 +284,25 @@ internal/agentcore/context_evolver/context_evolving_react_agent.go#L240-L246
 # config.go L218-L223 — 两个纯字段声明（无语句），覆盖剖面里没有可执行行，改动行
 # 必然 0%。读取方是工厂默认 SkillUseRail 装配（factory.go 改动行 86.4% OK）。
 internal/agentcore/harness/schema/config.go#L218-L223
+
+# ── 2026-11-05 27-A B1a 收口（handler 全转原生 methodHandler，帧级错误） ──
+# app_web_handlers.go L795-L796 / L1181-L1182 — config.save_all 与 models.replace_all 的
+# 「buildModelsDefaultsFromFrontend 返回非 ConfigBadRequest」分支。该助手函数只返回
+# *ConfigBadRequest 或 nil（见 L2685 起全部 return 点），此分支是照上游
+# `except Exception → INTERNAL_ERROR` 保留的防御兜底，无可达路径。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L795-L796
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1181-L1182
+
+# app_web_handlers.go L1149-L1152 — session.create 写 metadata.json 失败分支。前置的
+# os.Stat(sessionDir) 已把「同名路径存在」判成 ALREADY_EXISTS，单线程下拿不到
+# 「目录新建成功但文件写失败」的状态，只能靠并发竞态构造。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1149-L1152
+
+# app_web_handlers.go L1300 — models.validate 成功帧。要真实调通 LLM 才可达，
+# 属「无法 mock 的真实外部服务」（同 llm 构建标签口径）。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1300
+
+# app_web_handlers.go L1790-L1799 — permissionsForwardToAgent 的「E2A 已转发但
+# AgentServer 回 ok=false」分支：需要 AgentClient.ServerReady() 为真且对端返回失败帧，
+# 属进程/网络边界，需起假 AgentServer 才能触达。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1790-L1799
