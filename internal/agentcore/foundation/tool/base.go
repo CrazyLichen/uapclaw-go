@@ -62,6 +62,8 @@ type ToolCallOptions struct {
 	// 历史注释"使用 any 避免循环依赖：tool → session → controller → schema → tool"
 	// 已不适用——当前 session/interfaces 不依赖 foundation/tool，无循环依赖。
 	Session interfaces.SessionFacade
+	// CallbackContext 执行期回调上下文（对齐 Python kwargs["_tool_callback_context"]）
+	CallbackContext ToolCallbackContext
 }
 
 // StreamChunk 流式执行的返回块。
