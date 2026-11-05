@@ -241,3 +241,9 @@ internal/evolving/optimizer/skill_call/team_optimizer.go#L265-L468
 # 五例覆盖（answer/error/大写/nil/无 result_type）。
 internal/agentcore/context_evolver/context_evolving_react_agent.go#L240-L246
 internal/agentcore/context_evolver/context_evolving_react_agent.go#L476-L485
+
+# ── 2026-11-04 技能预算配置字段 ──
+# config.go L218-L223 — 两个纯字段声明（无语句），集成剖面里没有可执行行，改动行
+# 必然 0%。字段的读取方是工厂默认 SkillUseRail 装配（factory.go 改动行 8.1% OK），
+# 语义由 TestCreateDeepAgent_默认装配SkillUseRail 覆盖。
+internal/agentcore/harness/schema/config.go#L218-L223
