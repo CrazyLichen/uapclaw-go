@@ -1877,6 +1877,10 @@ git add -A && git commit -m "feat(web): 补齐 session.rename/plan_status 两个
   `BAD_REQUEST`（上游 `default_error_code`）。
 - 测试：注册齐全 + 无客户端分支；E2A 成功/失败分支需真实 AgentServer 客户端（进程边界），
   已在 `.coverage-exempt` 登记行级豁免（同 `permissions.*` E2A 分支口径）。
+- **与本文 Step 3 草稿的偏差（2026-11-05 裁定保留）**：草稿定义了 `sessionProxyClient` 接口，
+  实际直接用具体类型 `*routing.AgentClient`（web 包本就 import routing，`routing` 不 import web，
+  **无循环依赖**；上游 `proxy_unary_request` 也是直接吃 client 对象，没有这层接口）。代价是
+  E2A 三分支不可注入假客户端，靠行级豁免；换取的是不多一层 Python 不存在的抽象（规则 9）。
 - 矩阵：`local` 缺口 10 → 9，`agent:ok` 缺口 7 → 5（两个会话代理接上）。
 
 
