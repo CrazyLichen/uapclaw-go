@@ -63,14 +63,20 @@ func TestScanGo_识别注册点(t *testing.T) {
 	}
 }
 
-// TestScanUpstream_识别两种注册函数 验证 register_method 与 config 代理。
-func TestScanUpstream_识别两种注册函数(t *testing.T) {
+// TestScanUpstream_识别直接与间接注册 验证 register_method 与助手封装两种写法。
+func TestScanUpstream_识别直接与间接注册(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "gateway", "h.py"),
 		"    channel.register_method(\"models.get\", _models_get)\n"+
-			"    _register_config_proxy(\"vendors.list\", _ConfigReq.VENDORS_LIST)\n")
+			"    def _register_perm(method_name, rm):\n"+
+			"        channel.register_method(method_name, _h)\n"+
+			"    _register_perm(\"permissions.rules.create\", _PermReq.CREATE)\n")
 
-	sites, err := scanUpstream(root)
+	src, err := loadUpstreamSource(root)
+	if err != nil {
+		t.Fatalf("loadUpstreamSource: %v", err)
+	}
+	sites, err := scanUpstream(root, detectRegistrars(src))
 	if err != nil {
 		t.Fatalf("scanUpstream: %v", err)
 	}
@@ -80,7 +86,7 @@ func TestScanUpstream_识别两种注册函数(t *testing.T) {
 		got[s.Method] = true
 		handlers[s.Method] = s.Handler
 	}
-	if !got["models.get"] || !got["vendors.list"] {
+	if !got["models.get"] || !got["permissions.rules.create"] {
 		t.Fatalf("未识别到上游注册，实际：%v", got)
 	}
 	if handlers["models.get"] != "_models_get" {
@@ -164,10 +170,21 @@ func TestClassifyDownstream_四种形态(t *testing.T) {
 		{"openai_account.auth.status", "_local", downDep},
 	}
 	for _, c := range cases {
-		got, note := classifyDownstream(c.method, c.handler, src, caps)
+		got, note := classifyDownstream(c.method, upstreamRef{Handler: c.handler}, nil, src, caps)
 		if got != c.want {
 			t.Errorf("%s 下游状态 = %s（%s），want %s", c.method, got, note, c.want)
 		}
+	}
+
+	// 间接注册：方法名与常量都在调用处，按常量直接判定。
+	got, note := classifyDownstream("permissions.rules.get", upstreamRef{Token: "PERMISSIONS_RULES_GET"}, nil, src, caps)
+	if got != downAgentMissing {
+		t.Errorf("间接注册应按常量判定为 agent:missing，实际 %s（%s）", got, note)
+	}
+	// config 代理族归 local（单用户本地执行）。
+	got, note = classifyDownstream("models.get", upstreamRef{Token: "MODELS_GET"}, map[string]bool{"models.get": true}, src, caps)
+	if got != downLocal {
+		t.Errorf("config 代理族应为 local，实际 %s（%s）", got, note)
 	}
 }
 

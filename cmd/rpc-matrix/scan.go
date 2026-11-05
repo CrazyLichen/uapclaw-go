@@ -17,6 +17,8 @@ type rpcSite struct {
 	Site string
 	// Handler 上游注册时绑定的 handler 符号（仅上游侧填充）
 	Handler string
+	// Token 间接注册时从调用处解析出的 req method 常量名（如 PERMISSIONS_RULES_GET）
+	Token string
 }
 
 // methodPattern 方法名的统一形状：小写点分 2~4 段。
@@ -112,13 +114,12 @@ func scanGo(root string) ([]rpcSite, error) {
 	return skipTestSites(sites), nil
 }
 
-// scanUpstream 扫描上游 Python 的 WS 注册点（含 config 代理），并带回 handler 符号。
-func scanUpstream(root string) ([]rpcSite, error) {
+// scanUpstream 扫描上游 Python 的 WS 注册点（直接 register_method + 间接注册助手）。
+//
+// registrars 为「函数体内会调 register_method 的本地助手名」，如 `_register_perm`；
+// 这些助手的方法名字面量出现在调用处，必须单独扫，否则会误判成"上游没有"。
+func scanUpstream(root string, registrars map[string]bool) ([]rpcSite, error) {
 	sites, err := scanTree(root, map[string]bool{".py": true}, pyRegisterRe, nil)
-	if err != nil {
-		return nil, err
-	}
-	proxies, err := scanTree(root, map[string]bool{".py": true}, pyConfigProxyRe, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,16 +127,75 @@ func scanUpstream(root string) ([]rpcSite, error) {
 	for _, s := range sites {
 		seen[s.Method] = true
 	}
-	for _, p := range proxies {
-		if seen[p.Method] {
+
+	if len(registrars) > 0 {
+		names := make([]string, 0, len(registrars))
+		for name := range registrars {
+			names = append(names, regexp.QuoteMeta(name))
+		}
+		// 助手调用：NAME("x.y", _PermReq.XXX, ...) —— 第一段参数是方法名，
+		// 第二段里的 `ReqMethod|_PermReq|_ConfigReq.XXX` 是代理目标常量。
+		helperRe := regexp.MustCompile(`(?:` + strings.Join(names, "|") + `)\(\s*["']` + methodPattern + `["']\s*,\s*([^\n]*)`)
+		helperSites, helperErr := scanTree(root, map[string]bool{".py": true}, helperRe, nil)
+		if helperErr != nil {
+			return nil, helperErr
+		}
+		for _, s := range helperSites {
+			if seen[s.Method] {
+				continue
+			}
+			// 间接注册：scanTree 把第二段参数塞进了 Handler 字段，这里转成 req method 常量。
+			s.Token = reqTokenFromExpr(s.Handler)
+			s.Handler = ""
+			sites = append(sites, s)
+			seen[s.Method] = true
+		}
+	}
+
+	// 表驱动注册：`rsi_methods = [("x.y", ReqMethod.X), ...]` —— 方法名与常量成对出现。
+	tableRe := regexp.MustCompile(`["']` + methodPattern + `["']\s*,\s*[A-Za-z_]*Req\.([A-Z][A-Z0-9_]*)`)
+	tableSites, tableErr := scanTree(root, map[string]bool{".py": true}, tableRe, nil)
+	if tableErr != nil {
+		return nil, tableErr
+	}
+	for _, s := range tableSites {
+		if seen[s.Method] {
 			continue
 		}
-		// config 代理没有独立 handler 符号，标记为 proxy 由 classify 判定。
-		p.Handler = ""
-		sites = append(sites, p)
-		seen[p.Method] = true
+		// scanTree 把常量名放进了 Handler 字段。
+		s.Token = s.Handler
+		s.Handler = ""
+		sites = append(sites, s)
+		seen[s.Method] = true
 	}
 	return sites, nil
+}
+
+// reqTokenRe 从表达式里取 req method 常量名（ReqMethod.X / _PermReq.X / _HarnessReq.X …）。
+var reqTokenRe = regexp.MustCompile(`[A-Za-z_]*Req\.([A-Z][A-Z0-9_]*)`)
+
+// reqTokenFromExpr 从参数字符串里提取 req method 常量名；无法提取时返回空串。
+func reqTokenFromExpr(expr string) string {
+	if m := reqTokenRe.FindStringSubmatch(expr); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// scanConfigProxyMethods 返回上游用 `_register_config_proxy` 注册的方法集合。
+//
+// 这类方法在单用户部署下走网关本地 handler，只有 AgentOS 多用户才代理，
+// 下游判定必须归为 local，不能按代理处理。
+func scanConfigProxyMethods(root string) (map[string]bool, error) {
+	sites, err := scanTree(root, map[string]bool{".py": true}, pyConfigProxyRe, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(sites))
+	for _, s := range sites {
+		out[s.Method] = true
+	}
+	return out, nil
 }
 
 // scanUpstreamHTTP 扫描上游以 HTTP 路由暴露的方法名（不参与 WS 契约，只用于解释漂移）。
@@ -162,15 +222,26 @@ func groupByMethod(sites []rpcSite) map[string][]string {
 	return out
 }
 
-// upstreamHandlers 返回 方法名 → 上游 handler 符号（无符号时为空串）。
-func upstreamHandlers(sites []rpcSite) map[string]string {
-	out := make(map[string]string, len(sites))
+// upstreamRef 上游某个方法的注册信息。
+type upstreamRef struct {
+	// Handler 直接注册时的 handler 符号
+	Handler string
+	// Token 间接注册时从调用处解析出的 req method 常量名
+	Token string
+}
+
+// upstreamHandlers 返回 方法名 → 上游注册信息。
+func upstreamHandlers(sites []rpcSite) map[string]upstreamRef {
+	out := make(map[string]upstreamRef, len(sites))
 	for _, s := range sites {
+		ref := out[s.Method]
 		if s.Handler != "" {
-			out[s.Method] = s.Handler
-		} else if _, ok := out[s.Method]; !ok {
-			out[s.Method] = ""
+			ref.Handler = s.Handler
 		}
+		if s.Token != "" {
+			ref.Token = s.Token
+		}
+		out[s.Method] = ref
 	}
 	return out
 }

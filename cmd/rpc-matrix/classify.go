@@ -41,6 +41,21 @@ var depOverrides = map[string]string{
 	"3rdagent.":       "web_proxy 子系统",
 }
 
+// detectRegistrars 找上游的"间接注册助手"：函数体里调 register_method 的本地函数。
+//
+// 上游有多种一层封装的注册写法（`_register_perm(name, req)`、
+// `_register_config_proxy(name, req, ...)`），方法名字面量出现在调用处而不是
+// register_method 处；只扫 register_method 会把这些方法误判为"上游没有"。
+func detectRegistrars(src *upstreamSource) map[string]bool {
+	out := map[string]bool{}
+	for name, body := range src.bodies {
+		if strings.Contains(body, "register_method(") {
+			out[name] = true
+		}
+	}
+	return out
+}
+
 // upstreamSource 上游源码索引：handler 符号 → 函数体窗口。
 type upstreamSource struct {
 	// bodies handler 符号 → 函数体前若干行
@@ -167,18 +182,26 @@ func isProxyHandlerBody(body string) bool {
 
 // classifyDownstream 判定某方法的下游状态。
 //
-// 判定顺序：依赖覆盖表 → 上游无 handler（config 代理族，本地语义）→
+// 判定顺序：依赖覆盖表 → config 代理族（本地语义）→ 间接注册（用调用处常量）→
 // 上游函数体含代理调用 → 查本仓常量/处理器；否则视为网关本地实现。
-func classifyDownstream(method, handler string, src *upstreamSource, caps *goCapabilities) (string, string) {
+func classifyDownstream(method string, ref upstreamRef, configProxy map[string]bool, src *upstreamSource, caps *goCapabilities) (string, string) {
 	for prefix, note := range depOverrides {
 		if strings.HasPrefix(method, prefix) {
 			return downDep, note
 		}
 	}
-	if handler == "" {
+	if configProxy[method] {
 		return downLocal, "config 代理族（单用户走本地配置读写）"
 	}
-	body, ok := src.bodies[handler]
+
+	// 间接注册（_register_perm 等）：方法名与目标常量都在调用处，直接按常量判定。
+	if ref.Handler == "" && ref.Token != "" {
+		return classifyByToken(caps, ref.Token)
+	}
+	if ref.Handler == "" {
+		return downLocal, "间接注册且未解析到代理目标（按本地实现处理）"
+	}
+	body, ok := src.bodies[ref.Handler]
 	if !ok {
 		return downLocal, "handler 未定位（按本地实现处理）"
 	}
@@ -199,7 +222,11 @@ func classifyDownstream(method, handler string, src *upstreamSource, caps *goCap
 	if token == "" {
 		return downAgentMissing, "代理目标 req method 未识别"
 	}
+	return classifyByToken(caps, token)
+}
 
+// classifyByToken 按 req method 常量名判定本仓下游是否就绪。
+func classifyByToken(caps *goCapabilities, token string) (string, string) {
 	ident := "ReqMethod" + snakeToCamel(token)
 	note := "代理 " + token
 	switch {
@@ -213,10 +240,10 @@ func classifyDownstream(method, handler string, src *upstreamSource, caps *goCap
 }
 
 // collectDownstream 为每个方法计算下游状态，返回 方法名 → (状态, 说明)。
-func collectDownstream(methods map[string]string, src *upstreamSource, caps *goCapabilities) map[string]downstream {
+func collectDownstream(methods map[string]upstreamRef, configProxy map[string]bool, src *upstreamSource, caps *goCapabilities) map[string]downstream {
 	out := make(map[string]downstream, len(methods))
-	for method, handler := range methods {
-		status, note := classifyDownstream(method, handler, src, caps)
+	for method, ref := range methods {
+		status, note := classifyDownstream(method, ref, configProxy, src, caps)
 		out[method] = downstream{Status: status, Note: note}
 	}
 	return out

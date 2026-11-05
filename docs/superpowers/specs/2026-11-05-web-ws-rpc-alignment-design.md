@@ -24,20 +24,20 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 
 | 口径 | 数量 | 说明 |
 |---|---|---|
-| 三方方法总数 | **181** | 前端引用 ∪ 本仓注册 ∪ 上游 WS 注册 |
-| ✅ 一致 | **40** | 上游有、本仓有 |
-| ⚠️ 漂移 | **26** | 本仓有、上游没有（细见 §1.3） |
+| 三方方法总数 | **211** | 前端引用 ∪ 本仓注册 ∪ 上游 Web 通道注册（含直接/间接助手/表驱动三种写法） |
+| ✅ 一致 | **50** | 上游有、本仓有 |
+| ⚠️ 漂移 | **16** | 本仓有、上游 Web 侧没有（细见 §1.2） |
 | ❓ 前端独有 | **7** | 前端在调，两侧都没注册（前端独占能力或上游未实现） |
-| ❌ 缺 | **108** | 见下方下游分布 |
+| ❌ 缺 | **138** | 见下方下游分布 |
 | 缺口·`local` | **47** | 上游在网关本地实现，**本层补齐即可真跑** |
-| 缺口·`agent:ok` | **2** | `session.rename`/`session.plan_status`，薄代理且本仓 AgentServer 已有分支 |
-| 缺口·`agent:const-only` | **2** | `harness.import`/`harness.export`：有 req method 常量，AgentServer 无分支 |
-| 缺口·`agent:missing` | **40** | project 20、topic_starters 8、session 3、prompt_suggestion 2、path 2、media 2、document 2、file 1 |
+| 缺口·`agent:ok` | **7** | `harness.packages/scan/activate/deactivate/delete`（5）+ `session.rename`/`session.plan_status`（2） |
+| 缺口·`agent:const-only` | **2** | `harness.import`/`harness.export`：有常量，AgentServer 无分支 |
+| 缺口·`agent:missing` | **65** | project 20、rsi 18、topic_starters 8、session 3、prompt_suggestion 2、path 2、media 2、document 2、file 1、其余 |
 | 缺口·`dep` | **17** | heartbeat.job 10、openai_account 6、task.asr 1 |
 | 上游行数 | 19,789 行 / 38 py | `web_connect.py` 2,366、`app_web_handlers.py` 6,580 为大头 |
 | 本仓行数 | 4,565 行 / 5 go（非测试） | `web_connect` 629、`web_normalize` 316、`frame` 209、`web_handlers` 2,271、`config_apply` 1,024、`memory_compute` 89、`doc` 27；另有测试 3,959 行 |
 
-**本期范围判定（2026-11-05 用户决定）**：本计划**只做 web_channel 层**，即 47 个 `local` + 2 个 `agent:ok` = **49 个方法**；其余 **59 个**（const-only 2 / agent:missing 40 / dep 17）**不接线**，只登记在 `docs/sync/web-rpc-downstream-gaps.md` 作为后续章节输入。因此本层"覆盖全绿"不等于"功能可用"，矩阵必须保留下游列以示区分。
+**本期范围判定（2026-11-05 用户决定）**：本计划**只做 web_channel 层**，即 47 个 `local` + 7 个 `agent:ok` = **54 个方法**；其余 **84 个**（const-only 2 / agent:missing 65 / dep 17）**不接线**，只登记在 `docs/sync/web-rpc-downstream-gaps.md` 作为后续章节输入。因此本层"覆盖全绿"不等于"功能可用"，矩阵必须保留下游列以示区分。
 
 > 计划 27-A 原写"8 个 go / 8,514 行"把 `_test.go` 计入了，本设计按非测试口径核算。
 
@@ -52,16 +52,19 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 
 ### 1.2 漂移方法（26 个，按来源三分）
 
-> 判定口径：漂移 = **本仓有、上游 WS 注册表里没有**。逐条对照上游 0.2.0 基线
+> 判定口径：漂移 = **本仓有、上游 Web 通道注册表里没有**。逐条对照上游 0.2.0 基线
 > （`/home/opensource/backup-20261104/jiuwenswarm-develop`）与 0.2.5。
+> `permissions.*` 曾被误判为漂移——上游用 `_register_perm` 间接注册（`app_web_handlers.py:6260-6275`），
+> 工具已支持"间接助手注册"后归入一致。
 
-| 来源 | 数量 | 方法 | 结论与处置 |
+| 来源 | 数量 | 方法 | 处置（2026-11-05 用户决定：全部对齐上游） |
 |---|---|---|---|
-| 上游 0.2.0 有、0.2.5 **已删除** | **1** | `heartbeat.get_path` | 跟随上游删除 |
-| 上游有，但走 **HTTP 路由 / TUI 本地 handler**，非 WS 注册 | **12** | `permissions.rules.{get,create,update,delete}`、`permissions.tools.{get,set,update,delete}`、`permissions.approval_overrides.{get,delete}`、`session.delete`、`session.switch` | 功能上游存在（`http_routes/mapped.py:269-300`、`tui_connect.py`），只是传输不同；本仓挂在 WS 上 → **保留**，矩阵标注"上游以 HTTP 暴露"，是否收敛到 HTTP 另议 |
-| 两版上游**都没有**（本仓自造） | **13** | `harness.{list,install,uninstall,enable,disable,get_status,rebuild}`（7）、`cron.job.{disable,enable,run,status}`（4）、`updater.{cancel,install}`（2） | 上游对应能力分别是 `harness.import/export`、`cron.job.{toggle,run_now,meta}`、`updater.{upgrade,reset_source}` → **删除或以上游名替代**（见 §6 删除清单） |
+| 上游 0.2.0 有、0.2.5 **已删除** | **1** | `heartbeat.get_path` | **删除** |
+| 上游 Web 侧无此方法，但 HTTP 路由有 | **1** | `session.delete`（上游 `DELETE /sessions/{session_id}`，`http_routes/mapped.py:877`） | **改造成 HTTP 路由**，不再注册为 WS 方法 |
+| 上游只有 TUI 本地 handler，Web 侧完全没有 | **1** | `session.switch` | **删除 WS 注册**（TUI 自身 local handler 保留） |
+| 两版上游 Web 侧**都没有**（本仓自造） | **13** | `harness.{list,install,uninstall,enable,disable,get_status,rebuild}`（7）、`cron.job.{disable,enable,run,status}`（4）、`updater.{cancel,install}`（2） | **全部删除**；对应能力改用上游名：`harness.{packages,packages.scan,activate,deactivate,delete,import,export}`、`cron.job.{toggle,run_now,meta}`、`updater.{upgrade,get_conf,set_conf,reset_source}` |
 
-**结论：不是"Python 更新后把我们砍了"，只有 1 个是上游真删。** 12 个是传输方式差异，13 个是本仓自造名。
+**结论：16 个漂移里 15 个要删，1 个改 HTTP。** 只有 `heartbeat.get_path` 是"上游更新后删除"，其余是本仓命名/通道与上游不一致。
 
 ---
 

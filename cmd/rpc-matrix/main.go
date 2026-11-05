@@ -18,7 +18,7 @@ func main() {
 		verifyAll   = flag.Bool("verify-all", false, "严格门禁：任何 ❌ 都失败（下游缺口清零后启用）")
 		frontDir    = flag.String("frontend", "internal/swarm/channels/web/frontend", "前端源码目录（相对 repo）")
 		goDir       = flag.String("go", "internal/swarm", "本仓扫描目录（相对 repo）")
-		upstreamDir = flag.String("upstream-dir", "gateway", "上游扫描子目录（相对 upstream）")
+		upstreamDir = flag.String("upstream-dir", "gateway/channel_manager/web", "上游扫描子目录（相对 upstream，只扫 Web 通道）")
 	)
 	flag.Parse()
 
@@ -40,13 +40,13 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "警告：上游目录不可用，矩阵仅含前端与本仓两侧: %v\n", statErr)
 	} else {
-		upstreamSites, err = scanUpstream(upstreamRoot)
-		if err != nil {
-			fail("扫描上游", err)
-		}
 		src, err = loadUpstreamSource(upstreamRoot)
 		if err != nil {
 			fail("索引上游函数体", err)
+		}
+		upstreamSites, err = scanUpstream(upstreamRoot, detectRegistrars(src))
+		if err != nil {
+			fail("扫描上游", err)
 		}
 	}
 
@@ -57,7 +57,11 @@ func main() {
 
 	rows := buildMatrix(groupByMethod(frontendSites), groupByMethod(localSites), groupByMethod(upstreamSites))
 	if src != nil {
-		attachDownstream(rows, collectDownstream(upstreamHandlers(upstreamSites), src, caps))
+		configProxy, cfgErr := scanConfigProxyMethods(upstreamRoot)
+		if cfgErr != nil {
+			fail("扫描 config 代理注册", cfgErr)
+		}
+		attachDownstream(rows, collectDownstream(upstreamHandlers(upstreamSites), configProxy, src, caps))
 		httpSites, httpErr := scanUpstreamHTTP(upstreamRoot)
 		if httpErr != nil {
 			fail("扫描上游 HTTP 路由", httpErr)
