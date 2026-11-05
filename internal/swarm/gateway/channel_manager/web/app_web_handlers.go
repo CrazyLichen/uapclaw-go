@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,12 +17,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	permrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
@@ -2134,4 +2139,1088 @@ func clearAgentConfigCache(ac *routing.AgentClient, ctx context.Context) {
 		e2a.WithFieldReqMethod(string(schema.ReqMethodAgentReloadConfig)),
 	)
 	_, _ = ac.SendRequest(reloadCtx, envelope)
+}
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ConfigBadRequest 配置请求参数错误。
+// Python: _ConfigBadRequest(ValueError)。
+type ConfigBadRequest struct {
+	// Message 错误信息
+	Message string
+}
+
+// ConfigInternalError 配置内部错误。
+// Python: _ConfigInternalError(RuntimeError)。
+type ConfigInternalError struct {
+	// Message 错误信息
+	Message string
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponentConfigApply 本文件日志组件
+const logComponentConfigApply = logger.ComponentGateway
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// configYAMLKeys 需要写入 config.yaml 的配置键集合。
+// Python: _CONFIG_YAML_KEYS (app_web_handlers.py L371-377)。
+var configYAMLKeys = map[string]bool{
+	"context_engine_enabled":       true,
+	"kv_cache_affinity_enabled":    true,
+	"permissions_enabled":          true,
+	"memory_forbidden_enabled":     true,
+	"memory_forbidden_description": true,
+}
+
+// availableModelProviders 可用的模型服务商列表。
+// Python: [provider.value for provider in ProviderType]。
+var availableModelProviders = []string{
+	"OpenAI",
+	"OpenRouter",
+	"SiliconFlow",
+	"DashScope",
+	"DeepSeek",
+	"InferenceAffinity",
+	"intelli_router",
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Error 实现 error 接口。
+func (e *ConfigBadRequest) Error() string { return e.Message }
+
+// Error 实现 error 接口。
+func (e *ConfigInternalError) Error() string { return e.Message }
+
+// ApplyConfigPayload 将 config.set 风格的参数应用到 .env 和 config.yaml，不触发重载。
+// Python: _apply_config_payload (app_web_handlers.py L701-761)。
+//
+// 返回值：
+//   - envUpdates: 本次变更的环境变量增量
+//   - yamlUpdated: 本次变更的 YAML 键列表
+func ApplyConfigPayload(ctx context.Context, params map[string]any, cryptoProv crypto.CryptoProvider) (envUpdates map[string]string, yamlUpdated []string, err error) {
+	// Python: _encrypt_config_params (L692-699):
+	// 遍历 params，key 名包含 api_key 或 token 时加密。
+	// 加密失败保留明文 + Warn（Go error 签名；对齐 Python 无 error 概念的宽容语义）
+	if cryptoProv != nil {
+		for key, val := range params {
+			kl := strings.ToLower(key)
+			if strings.Contains(kl, "api_key") || strings.Contains(kl, "token") {
+				if strVal, ok := val.(string); ok && strVal != "" {
+					if enc, encErr := cryptoProv.Encrypt(ctx, strVal); encErr == nil {
+						params[key] = enc
+					} else {
+						logger.Warn(logComponentConfigApply).
+							Str("key", key).
+							Err(encErr).
+							Msg("加密失败，保留明文写入")
+					}
+				}
+			}
+		}
+	}
+
+	envUpdates = make(map[string]string)
+	yamlUpdated = make([]string, 0)
+
+	// 环境变量映射处理
+	for paramKey, envKey := range configEnvMap {
+		val, ok := params[paramKey]
+		if !ok {
+			continue
+		}
+		// provider 校验（对齐 Python available_model_providers 校验，仅非空值校验）
+		if strings.HasSuffix(paramKey, "_provider") {
+			strVal := strings.TrimSpace(fmt.Sprintf("%v", val))
+			if strVal != "" && !isAvailableProvider(strVal) {
+				return nil, nil, &ConfigBadRequest{
+					Message: fmt.Sprintf("Model provider must in: %v", availableModelProviders),
+				}
+			}
+		}
+		if val == nil {
+			envUpdates[envKey] = ""
+		} else {
+			envUpdates[envKey] = strings.TrimSpace(fmt.Sprintf("%v", val))
+		}
+	}
+
+	// agents/team 写入 config.yaml
+	if _, hasAgents := params["agents"]; hasAgents {
+		if err := replaceTeamsInConfig(params); err != nil {
+			logger.Warn(logComponentConfigApply).
+				Err(err).
+				Msg("failed to write back modes.team")
+			return nil, nil, &ConfigInternalError{Message: "failed to update modes.team"}
+		}
+		yamlUpdated = append(yamlUpdated, "modes.team")
+	} else if _, hasTeam := params["team"]; hasTeam {
+		if err := replaceTeamsInConfig(params); err != nil {
+			logger.Warn(logComponentConfigApply).
+				Err(err).
+				Msg("failed to write back modes.team")
+			return nil, nil, &ConfigInternalError{Message: "failed to update modes.team"}
+		}
+		yamlUpdated = append(yamlUpdated, "modes.team")
+	}
+
+	// YAML 键写入 config.yaml
+	for paramKey := range configYAMLKeys {
+		val, ok := params[paramKey]
+		if !ok {
+			continue
+		}
+		if err := updateYAMLKeyInConfig(paramKey, val); err != nil {
+			logger.Warn(logComponentConfigApply).
+				Str("key", paramKey).
+				Err(err).
+				Msg("failed to write back config.yaml")
+		} else {
+			yamlUpdated = append(yamlUpdated, paramKey)
+		}
+	}
+
+	// 设置环境变量 + 持久化 .env
+	for envKey, value := range envUpdates {
+		_ = os.Setenv(envKey, value)
+	}
+	if len(envUpdates) > 0 {
+		if err := persistEnvUpdates(envUpdates); err != nil {
+			logger.Warn(logComponentConfigApply).
+				Err(err).
+				Msg("failed to persist .env file")
+		} else {
+			logger.Info(logComponentConfigApply).
+				Strs("keys", sortedKeys(envUpdates)).
+				Msg(".env updated")
+		}
+	}
+	if len(yamlUpdated) > 0 {
+		logger.Info(logComponentConfigApply).
+			Strs("keys", yamlUpdated).
+			Msg("config.yaml updated")
+	}
+
+	return envUpdates, yamlUpdated, nil
+}
+
+// NotifyConfigSavedOnce 在所有文件写入完成后触发一次热重载。
+// Python: _notify_config_saved_once (app_web_handlers.py L763-782)。
+func NotifyConfigSavedOnce(
+	onConfigSaved OnConfigSavedFunc,
+	envUpdates map[string]string,
+	yamlUpdated []string,
+	force bool,
+) {
+	if !force && len(envUpdates) == 0 && len(yamlUpdated) == 0 {
+		return
+	}
+	if onConfigSaved == nil {
+		// ⤵️ 对齐 Python: _clear_agent_config_cache(agent_client)
+		logger.Debug(logComponentConfigApply).Msg("onConfigSaved is nil, clearAgentConfigCache pending implementation")
+		return
+	}
+
+	// 获取最新配置快照
+	configPayload := getConfigSnapshot()
+
+	// 合并变更键（对齐 Python: set(env_updates.keys()) | set(yaml_updated)，使用 map 去重）
+	seen := make(map[string]struct{}, len(envUpdates)+len(yamlUpdated))
+	updatedKeys := make([]string, 0, len(envUpdates)+len(yamlUpdated))
+	for k := range envUpdates {
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			updatedKeys = append(updatedKeys, k)
+		}
+	}
+	for _, k := range yamlUpdated {
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			updatedKeys = append(updatedKeys, k)
+		}
+	}
+
+	// envUpdates 转 map[string]any
+	envUpdatesAny := make(map[string]any, len(envUpdates))
+	for k, v := range envUpdates {
+		envUpdatesAny[k] = v
+	}
+
+	// 调用回调
+	if err := onConfigSaved(updatedKeys, envUpdatesAny, configPayload); err != nil {
+		logger.Warn(logComponentConfigApply).
+			Err(err).
+			Msg("onConfigSaved callback failed")
+	}
+}
+
+// ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
+//
+// Python: _process_files (web_connect.py L189-221)。
+func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
+	files, ok := params["files"]
+	if !ok {
+		return params
+	}
+	filesList, ok := files.([]any)
+	if !ok || len(filesList) == 0 {
+		return params
+	}
+
+	workspaceDir := workspace.AgentWorkspaceDir()
+	downloadedFiles := make([]any, 0, len(filesList))
+
+	for _, fileItem := range filesList {
+		fileInfo, ok := fileItem.(map[string]any)
+		if !ok {
+			downloadedFiles = append(downloadedFiles, fileItem)
+			continue
+		}
+
+		fileURL := ""
+		if u, ok := fileInfo["url"].(string); ok && u != "" {
+			fileURL = u
+		} else if u, ok := fileInfo["uri"].(string); ok && u != "" {
+			fileURL = u
+		}
+
+		fileName := "unknown_file"
+		if n, ok := fileInfo["name"].(string); ok && n != "" {
+			fileName = n
+		} else if n, ok := fileInfo["filename"].(string); ok && n != "" {
+			fileName = n
+		}
+
+		if fileURL != "" {
+			fileContent, err := downloadFile(ctx, fileURL)
+			if err != nil {
+				logger.Warn(logComponentConfigApply).
+					Str("url", fileURL).
+					Err(err).
+					Msg("file download failed")
+			} else if fileContent != nil {
+				if err := os.MkdirAll(workspaceDir, 0o755); err == nil {
+					filePath := filepath.Join(workspaceDir, fileName)
+					if err := os.WriteFile(filePath, fileContent, 0o644); err != nil {
+						logger.Warn(logComponentConfigApply).Err(err).Msg("file save failed")
+					} else {
+						fileInfo["path"] = filePath
+					}
+				}
+			}
+		}
+		downloadedFiles = append(downloadedFiles, fileInfo)
+	}
+
+	params["files"] = downloadedFiles
+	return params
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isAvailableProvider 检查 provider 是否在可用列表中。
+func isAvailableProvider(provider string) bool {
+	for _, p := range availableModelProviders {
+		if p == provider {
+			return true
+		}
+	}
+	return false
+}
+
+// updateYAMLKeyInConfig 将单个 YAML 键写入 config.yaml。
+// Python: update_context_engine_enabled_in_config 等系列函数。
+func updateYAMLKeyInConfig(key string, value any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+
+	// 加载当前配置
+	cfgData, err := cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	parsed := isTruthy(value)
+
+	switch key {
+	case "context_engine_enabled":
+		// M-05: SetRoundTrip（yaml.v3 Node 保注释）替代 Set（yaml.Marshal 全量重写丢注释），
+		// 对齐 Python 各 update_*_in_config 的 ruamel round-trip 写回
+		return cfg.SetRoundTrip("react.context_engine_config.enabled", parsed)
+	case "kv_cache_affinity_enabled":
+		return cfg.SetRoundTrip("react.context_engine_config.enable_kv_cache_release", parsed)
+	case "permissions_enabled":
+		return cfg.SetRoundTrip("permissions.enabled", parsed)
+	case "memory_forbidden_enabled":
+		return cfg.SetRoundTrip("memory.forbidden_memory_definition.enabled", parsed)
+	case "memory_forbidden_description":
+		// Python: update_memory_forbidden_description_in_config
+		// 先读后合并：current_desc = config.get("memory.forbidden_memory_definition.description", {})
+		// Python: config.set("memory.forbidden_memory_definition.description", {**current_desc, **description})
+		descMap := cfg.Get("memory.forbidden_memory_definition.description")
+		currentDesc := make(map[string]any)
+		if descMap != nil {
+			if m, ok := descMap.(map[string]any); ok {
+				currentDesc = m
+			}
+		}
+		// 合并：新值覆盖同名 key，旧的其他 key 保留
+		if descVal, ok := value.(map[string]any); ok {
+			for k, v := range descVal {
+				currentDesc[k] = v
+			}
+		} else if descStr, ok := value.(string); ok {
+			// 单语言字符串：用 preferred_language 确定写入的 key
+			preferredLang := "zh"
+			if lang, ok := cfgData["preferred_language"].(string); ok && lang != "" {
+				preferredLang = lang
+			}
+			currentDesc[preferredLang] = strings.TrimSpace(descStr)
+		}
+		return cfg.SetRoundTrip("memory.forbidden_memory_definition.description", currentDesc)
+	default:
+		return fmt.Errorf("未知的 YAML 配置键: %s", key)
+	}
+}
+
+// replaceTeamsInConfig 替换 config.yaml 中的 modes.team 配置。
+// Python: replace_teams_in_config (common/config.py L989-1038)。
+func replaceTeamsInConfig(params map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+
+	_, err = cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	// team 数据
+	teamData, hasTeam := params["team"]
+	if hasTeam {
+		// 空数组：删除 modes.team（对齐 Python replace_teams_in_config L1017-1021）
+		if teamList, ok := teamData.([]any); ok && len(teamList) == 0 {
+			data, err := cfg.Load()
+			if err != nil {
+				return fmt.Errorf("加载配置失败: %w", err)
+			}
+			// Python: if "modes" in data and isinstance(data["modes"], dict) and "team" in data["modes"]: del data["modes"]["team"]
+			if modes, ok := data["modes"].(map[string]any); ok {
+				if _, hasTeamKey := modes["team"]; hasTeamKey {
+					delete(modes, "team")
+					// M-05: Save → SetRoundTrip 不可行（删除无对应 API），
+					// 保留 Save 全量写回（Python ruamel del + dump 等价路径）
+					if err := cfg.Save(data); err != nil {
+						return fmt.Errorf("保存配置失败（删除 modes.team）: %w", err)
+					}
+					logger.Info(logComponentConfigApply).Msg("modes.team empty array, config node deleted")
+				}
+			}
+			return nil
+		}
+		// 非空数组：写入 modes.team
+		// M-05: SetRoundTrip 保注释写回
+		if err := cfg.SetRoundTrip("modes.team", teamData); err != nil {
+			return fmt.Errorf("写入 modes.team 失败: %w", err)
+		}
+	}
+
+	// agents 数据写入 web_config_panel.agent_team_agents
+	agentsData, hasAgents := params["agents"]
+	if hasAgents {
+		// M-05: SetRoundTrip 保注释写回
+		if err := cfg.SetRoundTrip("web_config_panel.agent_team_agents", agentsData); err != nil {
+			return fmt.Errorf("写入 web_config_panel.agent_team_agents 失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// updateDefaultModelsInConfig 将默认模型列表写入 config.yaml 的 models.defaults 段。
+// Python: update_default_models_in_config (common/config.py L734-742)。
+func updateDefaultModelsInConfig(models []map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+
+	_, err = cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	if err := cfg.SetRoundTrip("models.defaults", models); err != nil {
+		return fmt.Errorf("写入 models.defaults 失败: %w", err)
+	}
+
+	return nil
+}
+
+// updateHeartbeatInConfig 只更新 heartbeat 段并写回。
+// Python: update_heartbeat_in_config (common/config.py L152-164)。
+// 逐键条件写回（if "every" in payload ...），SetRoundTrip 保注释（M-05 先例）。
+func updateHeartbeatInConfig(payload map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	_, err = cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	if v, ok := payload["every"]; ok {
+		if err := cfg.SetRoundTrip("heartbeat.every", v); err != nil {
+			return fmt.Errorf("写入 heartbeat.every 失败: %w", err)
+		}
+	}
+	if v, ok := payload["target"]; ok {
+		if err := cfg.SetRoundTrip("heartbeat.target", v); err != nil {
+			return fmt.Errorf("写入 heartbeat.target 失败: %w", err)
+		}
+	}
+	if v, ok := payload["active_hours"]; ok {
+		if err := cfg.SetRoundTrip("heartbeat.active_hours", v); err != nil {
+			return fmt.Errorf("写入 heartbeat.active_hours 失败: %w", err)
+		}
+	}
+	return nil
+}
+
+// updateMemoryForbiddenInConfig 更新 memory.forbidden_memory_definition 并写回。
+// Python: update_memory_forbidden_in_config (common/config.py)。
+// description 字段使用先读后合并逻辑（新值覆盖同名 key，旧的其他 key 保留）。
+func updateMemoryForbiddenInConfig(updates map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+
+	cfgData, err := cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	// 读取当前 memory.forbidden_memory_definition
+	section := make(map[string]any)
+	if memRaw, ok := cfgData["memory"].(map[string]any); ok {
+		if fmd, ok := memRaw["forbidden_memory_definition"].(map[string]any); ok {
+			section = fmd
+		}
+	}
+
+	// 合并更新
+	for k, v := range updates {
+		if k == "description" {
+			// Python: description 字段先读后合并
+			// {**current_desc, **description}：新值覆盖同名 key，旧的其他 key 保留
+			currentDesc := make(map[string]any)
+			if existing, ok := section["description"].(map[string]any); ok {
+				for dk, dv := range existing {
+					currentDesc[dk] = dv
+				}
+			}
+			if newDesc, ok := v.(map[string]any); ok {
+				for dk, dv := range newDesc {
+					currentDesc[dk] = dv
+				}
+			} else {
+				// 非字典类型直接覆盖
+				currentDesc = map[string]any{"_value": v}
+			}
+			section[k] = currentDesc
+		} else {
+			section[k] = v
+		}
+	}
+
+	// 写回 memory.forbidden_memory_definition
+	// M-05: SetRoundTrip 保注释写回（对齐 Python ruamel round-trip）
+	if err := cfg.SetRoundTrip("memory.forbidden_memory_definition", section); err != nil {
+		return fmt.Errorf("写入 memory.forbidden_memory_definition 失败: %w", err)
+	}
+
+	return nil
+}
+
+// buildModelsDefaultsFromFrontend 从前端 models 参数构建 models.defaults 列表。
+// Python: _build_models_defaults_from_frontend (app_web_handlers.py L784-868)。
+// cryptoProv 用于加密 api_key；rawModels 中的 origin_index 用于匹配原始 YAML 条目。
+func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoProv crypto.CryptoProvider) ([]map[string]any, error) {
+	modelsList, ok := rawModels.([]any)
+	if !ok || len(modelsList) == 0 {
+		return nil, &ConfigBadRequest{Message: "models must be a non-empty list"}
+	}
+
+	parsed := make([]map[string]any, 0, len(modelsList))
+	aliasesSeen := make(map[string]int)
+
+	for idx, item := range modelsList {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d] must be object", idx)}
+		}
+
+		modelNameRaw, hasModelName := itemMap["model_name"]
+		if !hasModelName || modelNameRaw == nil {
+			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].model_name is required", idx)}
+		}
+		modelName := strings.TrimSpace(fmt.Sprintf("%v", modelNameRaw))
+		if modelName == "" {
+			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].model_name is required", idx)}
+		}
+
+		apiKeyRaw, hasAPIKey := itemMap["api_key"]
+		originIndex := itemMap["origin_index"] // 可为 nil
+		apiKey := ""
+		if hasAPIKey && apiKeyRaw != nil {
+			apiKey = strings.TrimSpace(fmt.Sprintf("%v", apiKeyRaw))
+		}
+		if apiKey == "" && originIndex == nil {
+			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].api_key is required", idx)}
+		}
+
+		apiBase := strings.TrimSpace(fmt.Sprintf("%v", itemMap["api_base"]))
+		modelProvider := ""
+		if mp, ok := itemMap["model_provider"]; ok && mp != nil {
+			modelProvider = strings.TrimSpace(fmt.Sprintf("%v", mp))
+		}
+		// provider 校验：仅当值非空时才检查（对齐 Python 逻辑）
+		if modelProvider != "" && !isAvailableProvider(modelProvider) {
+			return nil, &ConfigBadRequest{
+				Message: fmt.Sprintf("models[%d].model_provider must be one of: %v", idx, availableModelProviders),
+			}
+		}
+
+		temperature := 0.95
+		if t, ok := itemMap["temperature"]; ok {
+			if f, err := parseFloat(t); err == nil {
+				temperature = f
+			}
+		}
+
+		timeout := 1800
+		if t, ok := itemMap["timeout"]; ok {
+			if i, err := parseInt(t); err == nil {
+				timeout = i
+			}
+		}
+
+		alias := ""
+		if a, ok := itemMap["alias"]; ok && a != nil {
+			alias = strings.TrimSpace(fmt.Sprintf("%v", a))
+		}
+		if alias != "" {
+			if prevIdx, exists := aliasesSeen[alias]; exists {
+				return nil, &ConfigBadRequest{
+					Message: fmt.Sprintf("Alias '%s' is used by both models[%d] and models[%d]", alias, prevIdx, idx),
+				}
+			}
+			aliasesSeen[alias] = idx
+		}
+
+		isDefault := false
+		if d, ok := itemMap["is_default"]; ok {
+			isDefault = isTruthy(d)
+		}
+
+		verifySSL := false
+		if v, ok := itemMap["verify_ssl"].(bool); ok {
+			verifySSL = v
+		}
+
+		// max_input_tokens / max_output_tokens：0 表示未配置，可覆盖旧值。
+		// 与 Python 不同（Python 侧暂无此字段），本实现按设计 D2/D3 落位 model_client_config。
+		maxInputTokens := 0
+		if v, ok := itemMap["max_input_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
+			n, perr := parseInt(v)
+			if perr != nil || n < 0 {
+				return nil, &ConfigBadRequest{
+					Message: fmt.Sprintf("models[%d].max_input_tokens 必须是非负整数", idx),
+				}
+			}
+			maxInputTokens = n
+		}
+
+		maxOutputTokens := 0
+		if v, ok := itemMap["max_output_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
+			n, perr := parseInt(v)
+			if perr != nil || n < 0 {
+				return nil, &ConfigBadRequest{
+					Message: fmt.Sprintf("models[%d].max_output_tokens 必须是非负整数", idx),
+				}
+			}
+			maxOutputTokens = n
+		}
+
+		entry := map[string]any{
+			"model_client_config": map[string]any{
+				"model_name":      modelName,
+				"api_base":        apiBase,
+				"api_key":         apiKey,
+				"client_provider": modelProvider,
+				"timeout":         timeout,
+				"verify_ssl":      verifySSL,
+				// 输入上限（token）：上下文窗口分母来源；0 = 未配置
+				"max_input_tokens": maxInputTokens,
+				// 输出上限（token）：请求 max_tokens 默认值；0 = 不限制
+				"max_output_tokens": maxOutputTokens,
+			},
+			"model_config_obj": map[string]any{
+				"temperature": temperature,
+			},
+			"is_default": isDefault,
+			"alias":      alias,
+		}
+		if originIndex != nil {
+			entry["origin_index"] = originIndex
+		}
+
+		parsed = append(parsed, entry)
+	}
+
+	// alias 与其他条目的 model_name 冲突校验
+	for i, p := range parsed {
+		a, _ := p["alias"].(string)
+		if a == "" {
+			continue
+		}
+		for j, q := range parsed {
+			if i == j {
+				continue
+			}
+			if q["model_client_config"] != nil {
+				if mcc, ok := q["model_client_config"].(map[string]any); ok {
+					if mn, _ := mcc["model_name"].(string); mn == a {
+						return nil, &ConfigBadRequest{
+							Message: fmt.Sprintf("Alias '%s' on models[%d] conflicts with model_name on models[%d]", a, i, j),
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 合并原始 YAML 条目（对齐 Python _merge_models_for_replace_all）
+	rawDefaults := loadRawModelsDefaults()
+	resolvedDefaults := config.GetDefaultModels(nil)
+	merged := mergeModelsForReplaceAll(ctx, parsed, rawDefaults, resolvedDefaults, cryptoProv)
+
+	// 推断 is_default（对齐 Python _infer_is_default）
+	merged = inferIsDefault(merged)
+
+	return merged, nil
+}
+
+// getConfigSnapshot 获取当前配置快照。
+// Python: get_config()（含 _normalize_config——2026-10-28 审查接线）。
+func getConfigSnapshot() map[string]any {
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+	if err != nil {
+		return make(map[string]any)
+	}
+	data, err := cfg.Load()
+	if err != nil {
+		return make(map[string]any)
+	}
+	return data
+}
+
+// isTruthy 判断值是否为真（对齐 Python bool 语义）。
+func isTruthy(val any) bool {
+	switch v := val.(type) {
+	case bool:
+		return v
+	case string:
+		lower := strings.ToLower(strings.TrimSpace(v))
+		return lower == "true" || lower == "1" || lower == "yes"
+	case int:
+		return v != 0
+	case float64:
+		return v != 0
+	default:
+		return fmt.Sprintf("%v", val) != ""
+	}
+}
+
+// parseFloat 安全解析浮点数。
+func parseFloat(val any) (float64, error) {
+	switch v := val.(type) {
+	case float64:
+		return v, nil
+	case int:
+		return float64(v), nil
+	case string:
+		var f float64
+		_, err := fmt.Sscanf(v, "%f", &f)
+		return f, err
+	default:
+		return 0, fmt.Errorf("无法解析为浮点数: %v", val)
+	}
+}
+
+// parseInt 安全解析整数。
+func parseInt(val any) (int, error) {
+	switch v := val.(type) {
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil
+	case string:
+		var i int
+		_, err := fmt.Sscanf(v, "%d", &i)
+		return i, err
+	default:
+		return 0, fmt.Errorf("无法解析为整数: %v", val)
+	}
+}
+
+// processFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
+//
+// Python: _process_files (web_connect.py L189-221)。
+// 供 HandleWebSocket 内部调用，外部请使用 ProcessFiles。
+func processFiles(ctx context.Context, params map[string]any) map[string]any {
+	return ProcessFiles(ctx, params)
+}
+
+// downloadFile 下载指定 URL 的文件内容。
+func downloadFile(ctx context.Context, url string) ([]byte, error) {
+	childCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(childCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// valuesMatch 比较前端发送值与解析后的值是否相同。
+// Python: _values_match (app_web_handlers.py L63-79)。
+func valuesMatch(parsedVal, resolvedVal any) bool {
+	// bool 比较
+	if _, ok := parsedVal.(bool); ok {
+		return fmt.Sprintf("%v", parsedVal) == fmt.Sprintf("%v", resolvedVal)
+	}
+	if _, ok := resolvedVal.(bool); ok {
+		return fmt.Sprintf("%v", parsedVal) == fmt.Sprintf("%v", resolvedVal)
+	}
+	// nil 比较
+	if parsedVal == nil && resolvedVal == nil {
+		return true
+	}
+	// 数值比较
+	pF, pErr := parseFloat(parsedVal)
+	rF, rErr := parseFloat(resolvedVal)
+	if pErr == nil && rErr == nil {
+		return pF == rF
+	}
+	// 字符串比较
+	pStr := ""
+	if parsedVal != nil {
+		pStr = fmt.Sprintf("%v", parsedVal)
+	}
+	rStr := ""
+	if resolvedVal != nil {
+		rStr = fmt.Sprintf("%v", resolvedVal)
+	}
+	return pStr == rStr
+}
+
+// encryptAPIKey 加密条目的 api_key（cryptoProv nil 或加密失败时保留明文 + Warn）
+func encryptAPIKey(ctx context.Context, mcc map[string]any, cryptoProv crypto.CryptoProvider) {
+	if cryptoProv == nil {
+		return
+	}
+	apiKey, ok := mcc["api_key"].(string)
+	if !ok || apiKey == "" {
+		return
+	}
+	enc, err := cryptoProv.Encrypt(ctx, apiKey)
+	if err != nil {
+		logger.Warn(logComponentConfigApply).
+			Err(err).
+			Msg("api_key 加密失败，保留明文")
+		return
+	}
+	mcc["api_key"] = enc
+}
+
+// mergeModelsForReplaceAll 用 origin_index 匹配原始 YAML 条目，保留占位符和未暴露字段，仅覆写变化字段。
+// Python: _merge_models_for_replace_all (app_web_handlers.py L82-156)。
+//
+// 对每个前端条目：
+//   - 有 origin_index 指向已有原始条目：深拷贝原始条目，仅覆写与解析快照不同的字段
+//   - 比较时用 resolvedDefaults[oi] 与前端值比较，匹配时保留 rawDefaults[oi] 的值
+//   - api_key 变更时加密，未变更时保留原始值
+//   - 新条目（无 origin_index）：加密 api_key 后原样存入
+func mergeModelsForReplaceAll(ctx context.Context, parsed []map[string]any, rawDefaults []map[string]any, resolvedDefaults []map[string]any, cryptoProv crypto.CryptoProvider) []map[string]any {
+
+	result := make([]map[string]any, 0, len(parsed))
+
+	for _, entry := range parsed {
+		originIndexVal, hasOrigin := entry["origin_index"]
+		if !hasOrigin || originIndexVal == nil {
+			// 新条目：加密 api_key 后原样存入
+			newEntry := utils.DeepCopyMap(entry)
+			if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
+				encryptAPIKey(ctx, mcc, cryptoProv)
+			}
+			result = append(result, newEntry)
+			continue
+		}
+
+		// 解析 origin_index
+		oi := -1
+		switch v := originIndexVal.(type) {
+		case int:
+			oi = v
+		case float64:
+			oi = int(v)
+		default:
+			if i, err := parseInt(v); err == nil {
+				oi = i
+			}
+		}
+
+		if oi < 0 || oi >= len(rawDefaults) {
+			// origin_index 越界，当作新条目处理
+			newEntry := utils.DeepCopyMap(entry)
+			if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
+				encryptAPIKey(ctx, mcc, cryptoProv)
+			}
+			result = append(result, newEntry)
+			continue
+		}
+
+		// 深拷贝原始条目（保留占位符、custom_headers 等未暴露字段）
+		merged := utils.DeepCopyMap(rawDefaults[oi])
+
+		// 获取解析后的默认条目（用于与前端值比较）
+		var resolvedEntry map[string]any
+		if oi < len(resolvedDefaults) {
+			resolvedEntry = resolvedDefaults[oi]
+		}
+
+		// 前端解析后的快照（即 entry 中的解析值）
+		// 用 resolvedDefaults 与前端值比较，匹配时保留 rawDefaults 的值
+		if frontMCC, ok := entry["model_client_config"].(map[string]any); ok {
+			if mergedMCC, ok := merged["model_client_config"].(map[string]any); ok {
+				// 获取解析后的 model_client_config
+				var resolvedMCC map[string]any
+				if resolvedEntry != nil {
+					resolvedMCC, _ = resolvedEntry["model_client_config"].(map[string]any)
+				}
+				for k, parsedVal := range frontMCC {
+					// 用 resolvedDefaults 的值比较，而非 rawDefaults
+					resolvedVal := mergedMCC[k] // 默认 fallback 到 raw
+					if resolvedMCC != nil {
+						if rv, ok := resolvedMCC[k]; ok {
+							resolvedVal = rv
+						}
+					}
+					if !valuesMatch(parsedVal, resolvedVal) {
+						// 前端值与解析值不同，覆写
+						if k == "api_key" {
+							// api_key 特殊处理：加密后写入（失败保留明文 + Warn）
+							if apiKeyStr, ok := parsedVal.(string); ok && apiKeyStr != "" && cryptoProv != nil {
+								if enc, encErr := cryptoProv.Encrypt(ctx, apiKeyStr); encErr == nil {
+									mergedMCC[k] = enc
+								} else {
+									logger.Warn(logComponentConfigApply).Err(encErr).Msg("api_key 加密失败，保留明文")
+									mergedMCC[k] = parsedVal
+								}
+							} else {
+								mergedMCC[k] = parsedVal
+							}
+						} else {
+							mergedMCC[k] = parsedVal
+						}
+					}
+					// 前端值与解析值相同，保留原始值（含占位符等）
+				}
+			}
+		}
+
+		if frontMCO, ok := entry["model_config_obj"].(map[string]any); ok {
+			if mergedMCO, ok := merged["model_config_obj"].(map[string]any); ok {
+				// 获取解析后的 model_config_obj
+				var resolvedMCO map[string]any
+				if resolvedEntry != nil {
+					resolvedMCO, _ = resolvedEntry["model_config_obj"].(map[string]any)
+				}
+				for k, parsedVal := range frontMCO {
+					resolvedVal := mergedMCO[k] // 默认 fallback 到 raw
+					if resolvedMCO != nil {
+						if rv, ok := resolvedMCO[k]; ok {
+							resolvedVal = rv
+						}
+					}
+					if !valuesMatch(parsedVal, resolvedVal) {
+						mergedMCO[k] = parsedVal
+					}
+				}
+			}
+		}
+
+		// 覆写顶层字段
+		for _, k := range []string{"is_default", "alias"} {
+			parsedVal, hasParsed := entry[k]
+			resolvedVal, hasResolved := merged[k]
+			if resolvedEntry != nil {
+				if rv, ok := resolvedEntry[k]; ok {
+					resolvedVal = rv
+					hasResolved = true
+				}
+			}
+			if hasParsed {
+				if !hasResolved || !valuesMatch(parsedVal, resolvedVal) {
+					merged[k] = parsedVal
+				}
+			}
+		}
+
+		// 移除 origin_index（不需要持久化到 YAML）
+		delete(merged, "origin_index")
+
+		result = append(result, merged)
+	}
+
+	return result
+}
+
+// inferIsDefault 确保模型列表中恰好一个 is_default=true。
+// Python: _infer_is_default。
+func inferIsDefault(models []map[string]any) []map[string]any {
+	if len(models) == 0 {
+		return models
+	}
+	hasDefault := false
+	for _, m := range models {
+		if isTruthy(m["is_default"]) {
+			if hasDefault {
+				// 后续 true 设为 false，确保恰好一个
+				m["is_default"] = false
+			} else {
+				hasDefault = true
+			}
+		}
+	}
+	if !hasDefault {
+		// 无 true 时，设第一个为 true
+		models[0]["is_default"] = true
+	}
+	return models
+}
+
+// loadRawModelsDefaults 从 config.yaml 加载原始 models.defaults 列表。
+func loadRawModelsDefaults() []map[string]any {
+	cfgData := getConfigSnapshot()
+	rawVal := getConfigAny(cfgData, "models.defaults", nil)
+	if rawVal == nil {
+		return nil
+	}
+	rawList, ok := rawVal.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(rawList))
+	for _, item := range rawList {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// collectMemory 采集本进程与系统内存，返回字节数及系统内存使用百分比。
+//
+// 以包级变量暴露供测试注入：gopsutil 的错误分支无法由真实环境稳定触发。
+var collectMemory = defaultCollectMemory
+
+// processRSSBytes 采集本进程 RSS 字节数（测试注入点）。
+var processRSSBytes = defaultProcessRSSBytes
+
+// currentPID 当前进程 PID（测试注入点）。
+var currentPID = os.Getpid
+
+// systemVirtualMemory 采集系统内存（测试注入点）。
+var systemVirtualMemory = mem.VirtualMemory
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// handleMemoryCompute 处理 memory.compute 请求，返回进程与系统内存占用。
+//
+// Python: _memory_compute (app_web_handlers.py L1414-1427)
+// 偏差：Python 计算了 mem.percent 却未放进 payload，此处补 used_percent 为超集
+// （Go 前端 ToolPanel 读取该键，见 spec D1）。
+func handleMemoryCompute() RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		rssBytes, totalBytes, availableBytes, usedPercent, err := collectMemory()
+		if err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("method", "memory.compute").
+				Msg("memory.compute collect failed")
+			return nil, err
+		}
+		return map[string]any{
+			"rss_mb":       bytesToMB(rssBytes),
+			"total_mb":     bytesToMB(totalBytes),
+			"available_mb": bytesToMB(availableBytes),
+			"used_percent": usedPercent,
+		}, nil
+	}
+}
+
+// defaultCollectMemory 组合进程 RSS 与系统内存采集（psutil 等价物）。
+//
+// Python: process = psutil.Process(); process.memory_info().rss; psutil.virtual_memory()
+// 错误原样透传，对齐 Python「psutil 异常直接冒到 register_method 包装层」语义。
+func defaultCollectMemory() (rssBytes, totalBytes, availableBytes uint64, usedPercent float64, err error) {
+	rssBytes, err = processRSSBytes()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	vm, err := systemVirtualMemory()
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return rssBytes, vm.Total, vm.Available, vm.UsedPercent, nil
+}
+
+// defaultProcessRSSBytes 读取本进程物理内存（RSS）。
+func defaultProcessRSSBytes() (uint64, error) {
+	proc, err := process.NewProcess(int32(currentPID()))
+	if err != nil {
+		return 0, err
+	}
+	procMem, err := proc.MemoryInfo()
+	if err != nil {
+		return 0, err
+	}
+	return procMem.RSS, nil
+}
+
+// bytesToMB 字节转 MB，对齐 Python bytes / (1024 * 1024)。
+func bytesToMB(b uint64) float64 {
+	return float64(b) / (1024 * 1024)
 }
