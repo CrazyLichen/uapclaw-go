@@ -1,8 +1,13 @@
 package rails
 
 import (
+	"context"
+	"strconv"
 	"strings"
 	"testing"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -73,5 +78,126 @@ func TestNewModelAnomalyDetectionRail_退避表越界取末项(t *testing.T) {
 	}
 	if got := r.BackoffDelay(5); got != 1.0 {
 		t.Fatalf("越界应取末项 1.0，实际 %v", got)
+	}
+}
+
+// ──────────────────────────── 重复检测测试辅助 ────────────────────────────
+
+// newTestCBC 构造不带会话的空回调上下文。
+func newTestCBC() *agentinterfaces.AgentCallbackContext {
+	return agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+}
+
+// feedChunk 向检查器投递一个分片。
+func feedChunk(r *ModelAnomalyDetectionRail, cbc *agentinterfaces.AgentCallbackContext, reasoning, content string) error {
+	return r.InspectStreamChunk(context.Background(), cbc,
+		&llmschema.AssistantMessageChunk{AssistantMessage: llmschema.AssistantMessage{
+			DefaultMessage:   llmschema.DefaultMessage{Content: llmschema.NewTextContent(content)},
+			ReasoningContent: reasoning,
+		}})
+}
+
+// noiseText 生成不含重复后缀的噪声文本，用于验证尾窗滚动。
+func noiseText(n int) string {
+	var b strings.Builder
+	for i := 0; b.Len() < n; i++ {
+		b.WriteString(strconv.Itoa(i*7919 + 13))
+		b.WriteByte(';')
+	}
+	return b.String()
+}
+
+// TestInspectStreamChunk_多字符重复触发 54 次 abc → 命中多字符检测（上游默认阈值）。
+func TestInspectStreamChunk_多字符重复触发(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	var err error
+	for i := 0; i < 54 && err == nil; i++ {
+		err = feedChunk(r, cbc, "abc", "")
+	}
+	if err == nil {
+		t.Fatal("54 次 abc 应触发重复检测")
+	}
+	msg := err.Error()
+	for _, want := range []string{repeatErrorMarker, "field=reasoning_content", "unit='abc'", "repeat_count="} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("文案缺少 %q: %s", want, msg)
+		}
+	}
+}
+
+// TestInspectStreamChunk_短重复不触发 5 次 abc（15 字符）不达总长阈值。
+func TestInspectStreamChunk_短重复不触发(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	for i := 0; i < 5; i++ {
+		if err := feedChunk(r, cbc, "", "abc"); err != nil {
+			t.Fatalf("不应触发: %v", err)
+		}
+	}
+}
+
+// TestInspectStreamChunk_单字符重复触发 100 个 '-' 命中单字符阈值。
+func TestInspectStreamChunk_单字符重复触发(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	var err error
+	for i := 0; i < 100 && err == nil; i++ {
+		err = feedChunk(r, cbc, "", "-")
+	}
+	if err == nil {
+		t.Fatal("100 个 '-' 应触发单字符重复检测")
+	}
+	if !strings.Contains(err.Error(), "unit='-'") {
+		t.Fatalf("文案应含 unit='-'，实际 %s", err.Error())
+	}
+}
+
+// TestInspectStreamChunk_空白后缀不触发 空白字符不参与重复判定。
+func TestInspectStreamChunk_空白后缀不触发(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	for i := 0; i < 200; i++ {
+		if err := feedChunk(r, cbc, "", " "); err != nil {
+			t.Fatalf("空白重复不应触发: %v", err)
+		}
+	}
+}
+
+// TestInspectStreamChunk_两字段独立窗口 两个字段各自累计、互不影响。
+func TestInspectStreamChunk_两字段独立窗口(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	for i := 0; i < 3; i++ {
+		if err := feedChunk(r, cbc, "xy", "zz"); err != nil {
+			t.Fatalf("不应触发: %v", err)
+		}
+	}
+	raw, _ := cbc.GetExtra(modelAnomalyStateKey)
+	state := raw.(*anomalyState)
+	if state.content != "zzzzzz" || state.reasoningContent != "xyxyxy" {
+		t.Fatalf("两字段应各自累计，实际 content=%q reasoning=%q", state.content, state.reasoningContent)
+	}
+}
+
+// TestInspectStreamChunk_尾窗滚动仍能检出 噪声超过窗口后仍能检出尾部重复。
+func TestInspectStreamChunk_尾窗滚动仍能检出(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	if err := feedChunk(r, cbc, "", noiseText(2000)); err != nil {
+		t.Fatalf("噪声不应触发: %v", err)
+	}
+	var err error
+	for i := 0; i < 60 && err == nil; i++ {
+		err = feedChunk(r, cbc, "", "abc")
+	}
+	if err == nil {
+		t.Fatal("滚动窗口内仍应检出")
 	}
 }

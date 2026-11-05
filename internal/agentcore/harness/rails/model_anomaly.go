@@ -1,8 +1,15 @@
 package rails
 
 import (
+	"context"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -291,7 +298,199 @@ func (r *ModelAnomalyDetectionRail) BackoffDelay(retryIndex int) float64 {
 	return r.backoffSeconds[retryIndex]
 }
 
+// InspectStreamChunk 逐分片检查 reasoning_content / content 是否退化重复。
+//
+// Python: inspect_stream_chunk (L445-452) + _append_and_check (L483-497)
+func (r *ModelAnomalyDetectionRail) InspectStreamChunk(_ context.Context, cbc *agentinterfaces.AgentCallbackContext, chunk *llmschema.AssistantMessageChunk) error {
+	if chunk == nil {
+		return nil
+	}
+	state := r.anomalyState(cbc)
+	if chunk.ReasoningContent != "" {
+		if err := r.appendAndCheck(state, "reasoning_content", chunk.ReasoningContent); err != nil {
+			return err
+		}
+	}
+	if text := chunk.Content.Text(); text != "" {
+		if err := r.appendAndCheck(state, "content", text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// anomalyState 取（或创建）本次模型调用的尾窗状态。
+func (r *ModelAnomalyDetectionRail) anomalyState(cbc *agentinterfaces.AgentCallbackContext) *anomalyState {
+	if v, ok := cbc.GetExtra(modelAnomalyStateKey); ok {
+		if state, ok := v.(*anomalyState); ok && state != nil {
+			return state
+		}
+	}
+	state := &anomalyState{}
+	cbc.SetExtra(modelAnomalyStateKey, state)
+	return state
+}
+
+// appendAndCheck 追加文本、截断尾窗并做重复检测。
+//
+// Python: _append_and_check (L483-497)：窗口按字符截断，错误文案带 repr(unit)。
+func (r *ModelAnomalyDetectionRail) appendAndCheck(state *anomalyState, field, text string) error {
+	var tail string
+	if field == "reasoning_content" {
+		tail = lastRunes(state.reasoningContent+text, r.repeatWindowChars)
+		state.reasoningContent = tail
+	} else {
+		tail = lastRunes(state.content+text, r.repeatWindowChars)
+		state.content = tail
+	}
+
+	unit, count, ok := r.detectRepeatedSuffix(tail)
+	if !ok {
+		return nil
+	}
+	return exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg(fmt.Sprintf("%s: field=%s, unit=%s, repeat_count=%d",
+			repeatErrorMarker, field, pyReprString(formatUnit(unit)), count)))
+}
+
+// detectRepeatedSuffix 检测文本尾部的退化重复（先单字符，再多字符）。
+//
+// Python: _detect_repeated_suffix (L499-523)
+func (r *ModelAnomalyDetectionRail) detectRepeatedSuffix(text string) (string, int, bool) {
+	runes := []rune(text)
+	if len(runes) == 0 {
+		return "", 0, false
+	}
+	if unit, count, ok := r.detectSingleCharSuffix(runes); ok {
+		return unit, count, true
+	}
+
+	maxUnitLen := r.repeatMaxPatternChars
+	if limit := len(runes) / r.repeatMinCount; limit < maxUnitLen {
+		maxUnitLen = limit
+	}
+	for unitLen := r.repeatMinPatternChars; unitLen <= maxUnitLen; unitLen++ {
+		unit := string(runes[len(runes)-unitLen:])
+		if strings.TrimSpace(unit) == "" || isSingleCharPattern(unit) {
+			continue
+		}
+		required := (r.repeatMinTotalChars + unitLen - 1) / unitLen
+		if required < r.repeatMinCount {
+			required = r.repeatMinCount
+		}
+		count := 1
+		for pos := len(runes) - unitLen*2; pos >= 0; pos -= unitLen {
+			if string(runes[pos:pos+unitLen]) != unit {
+				break
+			}
+			count++
+		}
+		if count >= required {
+			return unit, count, true
+		}
+	}
+	return "", 0, false
+}
+
+// detectSingleCharSuffix 检测末尾同字符连续重复。
+//
+// Python: _detect_single_char_suffix (L525-539)
+func (r *ModelAnomalyDetectionRail) detectSingleCharSuffix(runes []rune) (string, int, bool) {
+	last := runes[len(runes)-1]
+	if strings.TrimSpace(string(last)) == "" {
+		return "", 0, false
+	}
+	count := 1
+	for i := len(runes) - 2; i >= 0; i-- {
+		if runes[i] != last {
+			break
+		}
+		count++
+		if count >= r.singleCharRepeatCount {
+			return string(last), count, true
+		}
+	}
+	return "", 0, false
+}
+
+// lastRunes 取末尾 n 个字符（按 rune，与上游按字符切片一致）。
+func lastRunes(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[len(runes)-n:])
+}
+
+// isSingleCharPattern 判断片段是否由同一个字符组成。
+//
+// Python: _is_single_char_pattern (L541-543)
+func isSingleCharPattern(unit string) bool {
+	runes := []rune(unit)
+	for _, ch := range runes[1:] {
+		if ch != runes[0] {
+			return false
+		}
+	}
+	return true
+}
+
+// formatUnit 转义换行并截断到 80 个字符。
+//
+// Python: _format_unit (L545-550)
+func formatUnit(unit string) string {
+	const limit = 80
+	formatted := strings.ReplaceAll(strings.ReplaceAll(unit, "\r", `\r`), "\n", `\n`)
+	runes := []rune(formatted)
+	if len(runes) <= limit {
+		return formatted
+	}
+	return string(runes[:limit]) + "..."
+}
+
+// pyReprString 按 Python str.__repr__ 的常用分支渲染（单引号 + 转义）。
+//
+// 用于错误文案与上游逐字一致（上游用 {unit!r}）。非可打印控制字符不展开为
+// \xNN——入参已由 formatUnit 处理过 \r/\n，其余控制字符在模型输出中极罕见。
+func pyReprString(s string) string {
+	var b strings.Builder
+	b.WriteByte('\'')
+	for _, ch := range s {
+		switch ch {
+		case '\\':
+			b.WriteString(`\\`)
+		case '\'':
+			b.WriteString(`\'`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteRune(ch)
+		}
+	}
+	b.WriteByte('\'')
+	return b.String()
+}
+
+// funcPtrEqual 比较两个检查器的代码指针。
+//
+// Go 函数值不可 == 比较，只能取代码指针；同一方法的不同 receiver 代码指针相同，
+// 因此"同一 rail 双实例"会被判相等（可接受：双实例已被 factory 去重禁止）。
+// 先例：agentbuilder/utils/progress.go funcPtrEqual、sys_operation/registry.go:73
+func funcPtrEqual(a, b agentinterfaces.StreamChunkInspectorFunc) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
+}
 
 // validate 对齐上游 __init__ 的 10 条参数校验（L345-372）。
 func (r *ModelAnomalyDetectionRail) validate() error {
