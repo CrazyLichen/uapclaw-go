@@ -1,11 +1,14 @@
 package rails
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -123,6 +126,22 @@ type ModelAnomalyDetectionRail struct {
 	counters map[string]*retryCounters
 	// compactCounts 会话 id → 压缩命中计数
 	compactCounts map[string]int
+}
+
+// callItem 折叠警告里的工具调用条目（字段顺序影响 JSON 文本，必须用 struct）。
+type callItem struct {
+	// Name 工具名
+	Name string `json:"name"`
+	// Arguments 解析后的入参
+	Arguments any `json:"arguments"`
+}
+
+// resultItem 折叠警告里的工具结果条目。
+type resultItem struct {
+	// Name 工具名
+	Name string `json:"name"`
+	// Content 结果正文
+	Content string `json:"content"`
 }
 
 // ModelAnomalyOption Rail 构造选项。
@@ -325,7 +344,6 @@ func (r *ModelAnomalyDetectionRail) InspectStreamChunk(_ context.Context, cbc *a
 	return nil
 }
 
-
 // GetCallbacks 注册本 Rail 关心的 4 个事件。
 //
 // Python: DeepAgentRail 子类按事件自动注册；Go 必须显式声明。
@@ -363,6 +381,29 @@ func (r *ModelAnomalyDetectionRail) BeforeInvoke(_ context.Context, cbc *agentin
 func (r *ModelAnomalyDetectionRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) {
 	r.resetRetryCounters(cbc)
 	r.resetCompactCount(cbc)
+}
+
+// BeforeModelCall 压缩工具循环、重置重复检测尾窗并安装流式分片检查器。
+//
+// 顺序不可换：先压缩（上一轮工具结果刚提交进上下文），再清尾窗，最后装检查器。
+// Python: before_model_call (L427-443)
+func (r *ModelAnomalyDetectionRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	if err := r.maybeCompactOrBailoutToolLoop(cbc); err != nil {
+		return err
+	}
+	cbc.SetExtra(modelAnomalyStateKey, &anomalyState{})
+
+	existing := cbc.StreamChunkInspectors()
+	kept := make([]agentinterfaces.StreamChunkInspectorFunc, 0, len(existing)+1)
+	for _, inspector := range existing {
+		if inspector == nil || funcPtrEqual(inspector, r.InspectStreamChunk) {
+			continue
+		}
+		kept = append(kept, inspector)
+	}
+	kept = append(kept, r.InspectStreamChunk)
+	cbc.SetStreamChunkInspectors(kept)
+	return nil
 }
 
 // OnModelException 对可重试的模型异常请求整调用重试。
@@ -493,7 +534,6 @@ func (r *ModelAnomalyDetectionRail) detectSingleCharSuffix(runes []rune) (string
 	}
 	return "", 0, false
 }
-
 
 // requestRetryOrReset 重复输出/流超时共用的重试记账。
 //
@@ -1066,4 +1106,325 @@ func sessionKey(cbc *agentinterfaces.AgentCallbackContext) string {
 		return id
 	}
 	return fmt.Sprintf("session@%p", sess)
+}
+
+// maybeCompactOrBailoutToolLoop 折叠连续相同工具调用，或第 N 次命中时兜底中止。
+//
+// 必须在 before_model_call 执行：此时上一轮工具结果刚提交进上下文，
+// 晚一轮会把最新一轮也折进去却看不到它。
+// Python: _maybe_compact_or_bailout_tool_loop (L648-718)
+func (r *ModelAnomalyDetectionRail) maybeCompactOrBailoutToolLoop(cbc *agentinterfaces.AgentCallbackContext) error {
+	config := r.toolLoopCompact
+	if !config.Enabled {
+		return nil
+	}
+	modelContext := cbc.ModelContext()
+	if modelContext == nil {
+		return nil
+	}
+	messages, err := modelContext.GetMessages(0, false)
+	if err != nil || len(messages) == 0 {
+		return nil
+	}
+
+	foldStart, foldEnd, rounds, ok := findToolLoopCompactRange(messages, config.ConsecutiveThreshold)
+	if !ok {
+		return nil
+	}
+
+	key := sessionKey(cbc)
+	next := r.compactCount(key) + 1
+	if config.BailoutThreshold > 0 && next >= config.BailoutThreshold {
+		r.setCompactCount(key, 0)
+		logger.Warn(logComponent).
+			Str("event_type", "tool_loop_bailout").
+			Int("next_compaction", next).
+			Int("threshold", config.BailoutThreshold).
+			Msg("tool-loop bailout")
+		return cb.NewAbortError(toolLoopBailoutMessage,
+			exception.BuildError(exception.StatusContextExecutionError,
+				exception.WithMsg(toolLoopBailoutMessage)))
+	}
+
+	latest := rounds[len(rounds)-1]
+	callsText, resultsText := collectCallAndResultSets(messages[latest.start:latest.end])
+	warning := llmschema.NewUserMessage(buildToolLoopWarningContent(
+		resolveToolLoopWarningLanguage(cbc), callsText, resultsText))
+
+	compacted := make([]llmschema.BaseMessage, 0, len(messages)-(foldEnd-foldStart)+1)
+	compacted = append(compacted, messages[:foldStart]...)
+	compacted = append(compacted, warning)
+	compacted = append(compacted, messages[foldEnd:]...)
+	modelContext.SetMessages(compacted, false)
+	r.setCompactCount(key, next)
+
+	logger.Info(logComponent).
+		Str("event_type", "tool_loop_compacted").
+		Int("before", len(messages)).
+		Int("after", len(compacted)).
+		Int("compact_count", next).
+		Msg("compacted consecutive identical tool loops")
+	return nil
+}
+
+// findToolLoopCompactRange 找出尾部背靠背相邻的相同工具轮次区间。
+//
+// 两个 break 条件缺一不可：指纹不同，或两轮之间夹了消息（end != 下一轮 start）。
+// 后者是 A-09（589da12a）的核心：读文件 → 用户新输入 → 再读同一文件不是循环，
+// 折了会把用户输入一起删掉。
+// Python: _find_tool_loop_compact_range (L728-757)
+func findToolLoopCompactRange(messages []llmschema.BaseMessage, threshold int) (int, int, []toolRound, bool) {
+	if threshold < 2 {
+		return 0, 0, nil, false
+	}
+	rounds := collectToolRounds(messages)
+	if len(rounds) < threshold {
+		return 0, 0, nil, false
+	}
+
+	eligible := make([]toolRound, 0, len(rounds))
+	for i := len(rounds) - 1; i >= 0; i-- {
+		current := rounds[i]
+		if len(eligible) == 0 {
+			eligible = append(eligible, current)
+			continue
+		}
+		previous := eligible[len(eligible)-1]
+		if !sameFingerprint(current.fingerprint, previous.fingerprint) {
+			break
+		}
+		if current.end != previous.start {
+			break
+		}
+		eligible = append(eligible, current)
+	}
+	for i, j := 0, len(eligible)-1; i < j; i, j = i+1, j-1 {
+		eligible[i], eligible[j] = eligible[j], eligible[i]
+	}
+	if len(eligible) < threshold {
+		return 0, 0, nil, false
+	}
+	return eligible[0].start, eligible[len(eligible)-1].end, eligible, true
+}
+
+// collectToolRounds 收集所有"完整"的工具调用轮次。
+//
+// 完整性要求：assistant 的每个 tool_call 后面紧跟对应 tool 消息；缺一个就不算一轮。
+// 匹配只看工具名 + 规范化入参，返回值不参与。
+// Python: _collect_tool_rounds (L760-829)
+func collectToolRounds(messages []llmschema.BaseMessage) []toolRound {
+	var rounds []toolRound
+	index := 0
+	total := len(messages)
+	for index < total {
+		assistant, ok := messages[index].(*llmschema.AssistantMessage)
+		if !ok || len(assistant.ToolCalls) == 0 {
+			index++
+			continue
+		}
+		pending := make(map[string]bool, len(assistant.ToolCalls))
+		for _, call := range assistant.ToolCalls {
+			if call != nil && call.ID != "" {
+				pending[call.ID] = true
+			}
+		}
+		if len(pending) == 0 {
+			index++
+			continue
+		}
+
+		callByID := make(map[string]toolFingerprintItem, len(assistant.ToolCalls))
+		for _, call := range assistant.ToolCalls {
+			if call == nil {
+				continue
+			}
+			name := strings.TrimSpace(call.Name)
+			if call.ID == "" || name == "" {
+				continue
+			}
+			callByID[call.ID] = toolFingerprintItem{name: name, args: canonicalArgumentsText(call.Arguments)}
+		}
+		if len(callByID) == 0 {
+			index++
+			continue
+		}
+
+		cursor := index + 1
+		for cursor < total && len(pending) > 0 {
+			toolMessage, ok := messages[cursor].(*llmschema.ToolMessage)
+			if !ok {
+				break
+			}
+			if !pending[toolMessage.ToolCallID] {
+				break
+			}
+			delete(pending, toolMessage.ToolCallID)
+			cursor++
+		}
+		if len(pending) > 0 {
+			index++
+			continue
+		}
+
+		fingerprint := make([]toolFingerprintItem, 0, len(callByID))
+		for _, item := range callByID {
+			fingerprint = append(fingerprint, item)
+		}
+		sort.Slice(fingerprint, func(i, j int) bool {
+			if fingerprint[i].name != fingerprint[j].name {
+				return fingerprint[i].name < fingerprint[j].name
+			}
+			return fingerprint[i].args < fingerprint[j].args
+		})
+		rounds = append(rounds, toolRound{start: index, end: cursor, fingerprint: fingerprint})
+		index = cursor
+	}
+	return rounds
+}
+
+// sameFingerprint 比较两轮指纹是否完全一致。
+func sameFingerprint(a, b []toolFingerprintItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// collectCallAndResultSets 把折叠区间的调用与结果序列化为 JSON 文本。
+//
+// Python: _collect_call_and_result_sets (L832-861)
+func collectCallAndResultSets(folded []llmschema.BaseMessage) (string, string) {
+	var callItems []callItem
+	var resultItems []resultItem
+	nameByID := make(map[string]string)
+
+	for _, message := range folded {
+		switch typed := message.(type) {
+		case *llmschema.AssistantMessage:
+			for _, call := range typed.ToolCalls {
+				if call == nil {
+					continue
+				}
+				name := strings.TrimSpace(call.Name)
+				if name == "" {
+					name = "(unknown)"
+				}
+				if call.ID != "" {
+					nameByID[call.ID] = name
+				}
+				callItems = append(callItems, callItem{Name: name, Arguments: parseToolArguments(call.Arguments)})
+			}
+		case *llmschema.ToolMessage:
+			content := typed.Content.Text()
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			name := nameByID[typed.ToolCallID]
+			if name == "" {
+				name = "(unknown)"
+			}
+			resultItems = append(resultItems, resultItem{Name: name, Content: strings.TrimSpace(content)})
+		}
+	}
+	return dumpsJSONList(callItems), dumpsJSONList(resultItems)
+}
+
+// parseToolArguments 解析工具入参；非法 JSON 原样返回文本。
+//
+// Python: _parse_tool_arguments (L877-888)
+func parseToolArguments(raw string) any {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return map[string]any{}
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		return text
+	}
+	return parsed
+}
+
+// canonicalArgumentsText 规范化入参文本（键有序、无多余空格）。
+//
+// Python: _canonical_arguments_text (L891-896)
+func canonicalArgumentsText(raw string) string {
+	return dumpsJSONCompact(parseToolArguments(raw))
+}
+
+// dumpsJSONList 渲染 JSON 数组（缩进 2、不转义 HTML）；空列表返回 "[]"。
+//
+// Python: _dumps_json_list (L899-902)
+func dumpsJSONList[T any](items []T) string {
+	if len(items) == 0 {
+		return "[]"
+	}
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(items); err != nil {
+		return "[]"
+	}
+	return strings.TrimRight(buffer.String(), "\n")
+}
+
+// dumpsJSONCompact 渲染紧凑 JSON（对应 Python separators=(",",":")）。
+func dumpsJSONCompact(value any) string {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return fmt.Sprint(value)
+	}
+	return strings.TrimRight(buffer.String(), "\n")
+}
+
+// buildToolLoopWarningContent 渲染双语警告正文。
+//
+// Python: _build_tool_loop_warning_content (L864-874)
+func buildToolLoopWarningContent(language, toolCalls, toolResults string) string {
+	template := toolLoopWarningTemplateCN
+	if language == "en" {
+		template = toolLoopWarningTemplateEN
+	}
+	content := strings.ReplaceAll(template, "{tool_calls}", toolCalls)
+	content = strings.ReplaceAll(content, "{tool_results}", toolResults)
+	return strings.TrimSpace(content)
+}
+
+// resolveToolLoopWarningLanguage 取提示词构建器语言并归一化。
+//
+// Python: _resolve_tool_loop_warning_language (L721-725)
+func resolveToolLoopWarningLanguage(cbc *agentinterfaces.AgentCallbackContext) string {
+	agent := cbc.Agent()
+	if agent == nil {
+		return "cn"
+	}
+	builder := agent.SystemPromptBuilder()
+	if builder == nil {
+		return "cn"
+	}
+	return normalizeLanguage(builder.Language())
+}
+
+// normalizeLanguage 归一化语言标记（zh* / cn → cn，en → en，其余 cn）。
+//
+// Python: _normalize_language (L905-911)
+func normalizeLanguage(language string) string {
+	normalized := strings.ToLower(strings.TrimSpace(language))
+	if normalized == "" {
+		return "cn"
+	}
+	if strings.HasPrefix(normalized, "zh") || normalized == "cn" {
+		return "cn"
+	}
+	if normalized == "en" {
+		return "en"
+	}
+	return "cn"
 }

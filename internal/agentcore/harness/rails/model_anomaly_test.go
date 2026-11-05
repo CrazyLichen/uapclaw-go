@@ -3,14 +3,18 @@ package rails
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -439,5 +443,398 @@ func TestRetryCounters_按会话隔离且归零即删(t *testing.T) {
 	r.AfterInvoke(context.Background(), cbcA)
 	if _, ok := r.counters["session-a"]; ok {
 		t.Fatal("AfterInvoke 应删除该会话条目")
+	}
+}
+
+// ──────────────────────────── 工具循环压缩测试 ────────────────────────────
+
+// fakeToolLoopContext 最小 ModelContext，只实现 GetMessages/SetMessages。
+type fakeToolLoopContext struct {
+	ceinterface.ModelContext
+	// msgs 当前上下文消息
+	msgs []llmschema.BaseMessage
+}
+
+// GetMessages 返回全量消息（对齐 Python context.get_messages()）。
+func (f *fakeToolLoopContext) GetMessages(int, bool) ([]llmschema.BaseMessage, error) {
+	return f.msgs, nil
+}
+
+// SetMessages 覆盖消息列表。
+func (f *fakeToolLoopContext) SetMessages(msgs []llmschema.BaseMessage, _ bool) {
+	f.msgs = msgs
+}
+
+// toolRoundMessages 构造 rounds 轮相同工具调用（含结果）。
+func toolRoundMessages(args string, rounds int) []llmschema.BaseMessage {
+	messages := make([]llmschema.BaseMessage, 0, rounds*2)
+	for i := 0; i < rounds; i++ {
+		call := llmschema.NewToolCall(fmt.Sprintf("id-%d", i), "read_file", args)
+		messages = append(messages,
+			llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{call})),
+			llmschema.NewToolMessage(fmt.Sprintf("id-%d", i), "content"))
+	}
+	return messages
+}
+
+// newCompactRail 构造启用压缩的 rail 与上下文。
+func newCompactRail(t *testing.T, threshold, bailout int) (*ModelAnomalyDetectionRail, *agentinterfaces.AgentCallbackContext, *fakeToolLoopContext) {
+	t.Helper()
+	r, err := NewModelAnomalyDetectionRail(WithToolLoopCompact(ToolLoopCompactConfig{
+		Enabled:              true,
+		ConsecutiveThreshold: threshold,
+		BailoutThreshold:     bailout,
+	}))
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	cbc := newTestCBC()
+	mc := &fakeToolLoopContext{}
+	cbc.SetModelContext(mc)
+	return r, cbc, mc
+}
+
+// TestBeforeModelCall_安装检查器且幂等 防"嵌入 no-op 遮蔽"回归。
+func TestBeforeModelCall_安装检查器且幂等(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+
+	if err := r.BeforeModelCall(context.Background(), cbc); err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if got := len(cbc.StreamChunkInspectors()); got != 1 {
+		t.Fatalf("应安装 1 个检查器，实际 %d", got)
+	}
+	if err := r.BeforeModelCall(context.Background(), cbc); err != nil {
+		t.Fatalf("第二次不应报错: %v", err)
+	}
+	if got := len(cbc.StreamChunkInspectors()); got != 1 {
+		t.Fatalf("重复调用应幂等（仍 1 个），实际 %d", got)
+	}
+	if _, ok := cbc.GetExtra(modelAnomalyStateKey); !ok {
+		t.Fatal("应重置重复检测尾窗状态")
+	}
+}
+
+// TestToolLoopCompact_三轮相同折叠 3 轮相同调用折叠为 1 条中文警告。
+func TestToolLoopCompact_三轮相同折叠(t *testing.T) {
+	r, cbc, mc := newCompactRail(t, 3, 0)
+	mc.msgs = toolRoundMessages(`{"path":"a.txt"}`, 3)
+
+	if err := r.BeforeModelCall(context.Background(), cbc); err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if len(mc.msgs) != 1 {
+		t.Fatalf("3 轮应折叠为 1 条警告，实际 %d 条", len(mc.msgs))
+	}
+	userMessage, ok := mc.msgs[0].(*llmschema.UserMessage)
+	if !ok {
+		t.Fatalf("折叠结果应为 UserMessage，实际 %T", mc.msgs[0])
+	}
+	if !strings.Contains(userMessage.Content.Text(), "请跳出重复工具调用") {
+		t.Fatalf("应使用中文模板（默认 cn），实际 %s", userMessage.Content.Text())
+	}
+}
+
+// TestToolLoopCompact_参数不同不折叠 指纹不同即断。
+func TestToolLoopCompact_参数不同不折叠(t *testing.T) {
+	r, cbc, mc := newCompactRail(t, 3, 0)
+	mc.msgs = append(toolRoundMessages(`{"path":"a"}`, 1), toolRoundMessages(`{"path":"b"}`, 2)...)
+
+	_ = r.BeforeModelCall(context.Background(), cbc)
+	if len(mc.msgs) != 6 {
+		t.Fatalf("参数不同不应折叠，实际 %d 条", len(mc.msgs))
+	}
+}
+
+// TestToolLoopCompact_返回值不同仍折叠 返回值不参与匹配。
+func TestToolLoopCompact_返回值不同仍折叠(t *testing.T) {
+	r, cbc, mc := newCompactRail(t, 3, 0)
+	for i := 0; i < 3; i++ {
+		call := llmschema.NewToolCall(fmt.Sprintf("id-%d", i), "read_file", `{"path":"a"}`)
+		mc.msgs = append(mc.msgs,
+			llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{call})),
+			llmschema.NewToolMessage(fmt.Sprintf("id-%d", i), fmt.Sprintf("result-%d", i)))
+	}
+	_ = r.BeforeModelCall(context.Background(), cbc)
+	if len(mc.msgs) != 1 {
+		t.Fatalf("返回值不参与匹配，应折叠，实际 %d 条", len(mc.msgs))
+	}
+}
+
+// TestToolLoopCompact_用户输入隔开不折叠 A-09 核心护栏：只折背靠背尾段。
+func TestToolLoopCompact_用户输入隔开不折叠(t *testing.T) {
+	r, cbc, mc := newCompactRail(t, 2, 0)
+	mc.msgs = toolRoundMessages(`{"path":"a"}`, 1)
+	mc.msgs = append(mc.msgs, llmschema.NewUserMessage("继续"))
+	mc.msgs = append(mc.msgs, toolRoundMessages(`{"path":"a"}`, 2)...)
+
+	_ = r.BeforeModelCall(context.Background(), cbc)
+	// 折叠后：轮1(2 条) + 用户输入 + 警告 = 4 条
+	if len(mc.msgs) != 4 {
+		t.Fatalf("只应折叠背靠背尾段，实际 %d 条", len(mc.msgs))
+	}
+	userMessage, ok := mc.msgs[2].(*llmschema.UserMessage)
+	if !ok || userMessage.Content.Text() != "继续" {
+		t.Fatal("用户输入必须保留（A-09 回归护栏）")
+	}
+}
+
+// TestToolLoopCompact_第三次命中bailout 第 3 次命中抛 AbortError 且 cause 为兜底错误。
+func TestToolLoopCompact_第三次命中bailout(t *testing.T) {
+	r, cbc, mc := newCompactRail(t, 2, 3)
+	for i := 0; i < 3; i++ {
+		mc.msgs = toolRoundMessages(`{"path":"a"}`, 2)
+		err := r.BeforeModelCall(context.Background(), cbc)
+		if i < 2 && err != nil {
+			t.Fatalf("第 %d 次不应中止: %v", i+1, err)
+		}
+		if i < 2 {
+			continue
+		}
+		if err == nil {
+			t.Fatal("第 3 次应 bailout")
+		}
+		var abortErr *cb.AbortError
+		if !errors.As(err, &abortErr) {
+			t.Fatalf("应返回 *AbortError，实际 %T", err)
+		}
+		if abortErr.Cause == nil || !strings.Contains(abortErr.Cause.Error(), "automatically aborted") {
+			t.Fatalf("cause 应为兜底错误，实际 %v", abortErr.Cause)
+		}
+	}
+}
+
+// TestToolLoopCompact_默认关闭不动作 默认 enabled=false 时不动消息。
+func TestToolLoopCompact_默认关闭不动作(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+	mc := &fakeToolLoopContext{msgs: toolRoundMessages(`{"path":"a"}`, 5)}
+	cbc.SetModelContext(mc)
+
+	_ = r.BeforeModelCall(context.Background(), cbc)
+	if len(mc.msgs) != 10 {
+		t.Fatalf("默认关闭时不应改动消息，实际 %d 条", len(mc.msgs))
+	}
+}
+
+// ──────────────────────────── 边界与分支补测 ────────────────────────────
+
+// TestGetCallbacks_注册四个事件 验证事件映射与 BeforeModelCall 解析到本 rail。
+func TestGetCallbacks_注册四个事件(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	callbacks := r.GetCallbacks()
+	for _, event := range []agentinterfaces.AgentCallbackEvent{
+		agentinterfaces.CallbackBeforeInvoke,
+		agentinterfaces.CallbackAfterInvoke,
+		agentinterfaces.CallbackBeforeModelCall,
+		agentinterfaces.CallbackOnModelException,
+	} {
+		if callbacks[event] == nil {
+			t.Fatalf("事件 %s 未注册", event)
+		}
+	}
+
+	cbc := newTestCBC()
+	if err := callbacks[agentinterfaces.CallbackBeforeModelCall](context.Background(), cbc); err != nil {
+		t.Fatalf("BeforeModelCall 回调失败: %v", err)
+	}
+	if len(cbc.StreamChunkInspectors()) != 1 {
+		t.Fatal("回调必须命中共体方法（嵌入 no-op 不得遮蔽）")
+	}
+	if err := callbacks[agentinterfaces.CallbackAfterInvoke](context.Background(), cbc); err != nil {
+		t.Fatalf("AfterInvoke 回调失败: %v", err)
+	}
+}
+
+// TestNormalizeLanguage 覆盖 zh* / cn / en / 其余 / 空 五种输入。
+func TestNormalizeLanguage(t *testing.T) {
+	cases := map[string]string{
+		"":      "cn",
+		"zh-CN": "cn",
+		"CN":    "cn",
+		"en":    "en",
+		"fr":    "cn",
+	}
+	for input, want := range cases {
+		if got := normalizeLanguage(input); got != want {
+			t.Errorf("%q: 期望 %q，实际 %q", input, want, got)
+		}
+	}
+}
+
+// TestBuildToolLoopWarningContent_英文模板 en 使用英文模板。
+func TestBuildToolLoopWarningContent_英文模板(t *testing.T) {
+	content := buildToolLoopWarningContent("en", "[]", "[]")
+	if !strings.Contains(content, "Please break out of the repeated tool calls") {
+		t.Fatalf("应使用英文模板，实际 %s", content)
+	}
+	if strings.Contains(content, "{tool_calls}") {
+		t.Fatal("占位符必须被替换")
+	}
+}
+
+// TestPyReprString_转义 单引号与反斜杠按 Python repr 语义转义。
+func TestPyReprString_转义(t *testing.T) {
+	if got := pyReprString(`a'b\c`); got != `'a\'b\\c'` {
+		t.Fatalf("转义结果不符，实际 %s", got)
+	}
+	if got := pyReprString("tab\there"); got != `'tab\there'` {
+		t.Fatalf("制表符应转义，实际 %s", got)
+	}
+}
+
+// TestFuncPtrEqual 同一方法相等、不同方法不等、nil 一律不等。
+func TestFuncPtrEqual(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	other := func(context.Context, *agentinterfaces.AgentCallbackContext, *llmschema.AssistantMessageChunk) error {
+		return nil
+	}
+	if !funcPtrEqual(r.InspectStreamChunk, r.InspectStreamChunk) {
+		t.Fatal("同一方法应相等")
+	}
+	if funcPtrEqual(r.InspectStreamChunk, other) {
+		t.Fatal("不同方法不应相等")
+	}
+	if funcPtrEqual(nil, r.InspectStreamChunk) || funcPtrEqual(r.InspectStreamChunk, nil) {
+		t.Fatal("nil 不应相等")
+	}
+}
+
+// TestToFloat_五种形态 兼容 int/int64/float64/字符串/其他。
+func TestToFloat_五种形态(t *testing.T) {
+	cases := []struct {
+		value any
+		want  float64
+		ok    bool
+	}{
+		{3, 3, true},
+		{int64(4), 4, true},
+		{1.5, 1.5, true},
+		{" 2.5 ", 2.5, true},
+		{"abc", 0, false},
+		{true, 0, false},
+	}
+	for _, c := range cases {
+		got, ok := toFloat(c.value)
+		if ok != c.ok || (ok && got != c.want) {
+			t.Errorf("%v: 期望 (%v,%v)，实际 (%v,%v)", c.value, c.want, c.ok, got, ok)
+		}
+	}
+}
+
+// TestStatusCodeOf_ProviderCode details.provider_code 也应被识别为状态码。
+func TestStatusCodeOf_ProviderCode(t *testing.T) {
+	err := exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg("provider response error"),
+		exception.WithDetails(map[string]any{"provider_code": 500}))
+	code := statusCodeOf(err)
+	if code == nil || *code != 500 {
+		t.Fatalf("应取 details.provider_code=500，实际 %v", code)
+	}
+}
+
+// TestCoerceStatusCode_布尔与字符串 bool 不参与、数字字符串可解析。
+func TestCoerceStatusCode_布尔与字符串(t *testing.T) {
+	if code := coerceStatusCode(true); code != nil {
+		t.Fatalf("bool 应视为无状态码，实际 %v", *code)
+	}
+	if code := coerceStatusCode("429"); code == nil || *code != 429 {
+		t.Fatalf("数字字符串应解析为 429，实际 %v", code)
+	}
+	if code := coerceStatusCode(0); code != nil {
+		t.Fatalf("0 应视为无状态码，实际 %v", *code)
+	}
+}
+
+// TestBackoffDelay_负索引取首项 对齐 Python min(retry_index, len-1) 的下界保护。
+func TestBackoffDelay_负索引取首项(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	if got := r.BackoffDelay(-3); got != 0.5 {
+		t.Fatalf("负索引应取首项 0.5，实际 %v", got)
+	}
+	empty, _ := NewModelAnomalyDetectionRail(WithBackoffSeconds(nil))
+	if got := empty.BackoffDelay(0); got != 0 {
+		t.Fatalf("空退避表应返回 0，实际 %v", got)
+	}
+}
+
+// TestParseToolArguments_三种输入 空串→{}、非法 JSON→原样、合法→解析。
+func TestParseToolArguments_三种输入(t *testing.T) {
+	if _, ok := parseToolArguments("").(map[string]any); !ok {
+		t.Fatal("空串应返回空 map")
+	}
+	if got := parseToolArguments("not-json"); got != "not-json" {
+		t.Fatalf("非法 JSON 应原样返回，实际 %v", got)
+	}
+	parsed, ok := parseToolArguments(`{"b":1,"a":2}`).(map[string]any)
+	if !ok || len(parsed) != 2 {
+		t.Fatalf("合法 JSON 应解析为 map，实际 %v", parsed)
+	}
+}
+
+// TestCollectToolRounds_不完整轮次跳过 有 call 无 result 不算一轮。
+func TestCollectToolRounds_不完整轮次跳过(t *testing.T) {
+	callA := llmschema.NewToolCall("id-a", "read_file", `{"p":1}`)
+	callB := llmschema.NewToolCall("id-b", "read_file", `{"p":2}`)
+	messages := []llmschema.BaseMessage{
+		llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{callA, callB})),
+		llmschema.NewToolMessage("id-a", "only one"),
+	}
+	if rounds := collectToolRounds(messages); len(rounds) != 0 {
+		t.Fatalf("不完整轮次应被跳过，实际 %d 轮", len(rounds))
+	}
+}
+
+// fakeAgent 最小 BaseAgent 包装，仅提供 SystemPromptBuilder。
+type fakeAgent struct {
+	agentinterfaces.BaseAgent
+	// builder 提示词构建器
+	builder saprompt.SystemPromptBuilderInterface
+}
+
+// SystemPromptBuilder 返回注入的构建器。
+func (f *fakeAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return f.builder }
+
+// fakePromptBuilder 最小提示词构建器，仅提供语言。
+type fakePromptBuilder struct {
+	saprompt.SystemPromptBuilderInterface
+	// lang 语言标记
+	lang string
+}
+
+// Language 返回注入的语言。
+func (f *fakePromptBuilder) Language() string { return f.lang }
+
+// TestResolveToolLoopWarningLanguage_三分支 builder/nil 与语言归一化。
+func TestResolveToolLoopWarningLanguage_三分支(t *testing.T) {
+	if got := resolveToolLoopWarningLanguage(newTestCBC()); got != "cn" {
+		t.Fatalf("无 agent 时应为 cn，实际 %q", got)
+	}
+
+	withAgentNoBuilder := agentinterfaces.NewAgentCallbackContext(&fakeAgent{}, nil, nil)
+	if got := resolveToolLoopWarningLanguage(withAgentNoBuilder); got != "cn" {
+		t.Fatalf("builder 为 nil 时应为 cn，实际 %q", got)
+	}
+
+	english := agentinterfaces.NewAgentCallbackContext(&fakeAgent{builder: &fakePromptBuilder{lang: "en-US"}}, nil, nil)
+	if got := resolveToolLoopWarningLanguage(english); got != "cn" {
+		t.Fatalf("en-US 非 en 精确匹配，应为 cn，实际 %q", got)
+	}
+
+	englishExact := agentinterfaces.NewAgentCallbackContext(&fakeAgent{builder: &fakePromptBuilder{lang: "en"}}, nil, nil)
+	if got := resolveToolLoopWarningLanguage(englishExact); got != "en" {
+		t.Fatalf("en 应为 en，实际 %q", got)
+	}
+}
+
+// TestWithRepeatMaxPatternChars_生效 选项可独立设置上限。
+func TestWithRepeatMaxPatternChars_生效(t *testing.T) {
+	r, err := NewModelAnomalyDetectionRail(WithRepeatMaxPatternChars(16))
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if r.repeatMaxPatternChars != 16 {
+		t.Fatalf("上限应为 16，实际 %d", r.repeatMaxPatternChars)
 	}
 }
