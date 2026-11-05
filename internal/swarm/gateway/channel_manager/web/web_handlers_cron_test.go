@@ -1,11 +1,11 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -158,11 +158,10 @@ func TestCronJobList_控制器报错(t *testing.T) {
 	cc := &fakeCronJobController{err: errors.New("disk error")}
 	d := newCronTestDispatcher(cc)
 
-	result, err := dispatch(d, "cron.job.list", nil, "s")
-	assert.NoError(t, err)
-	assert.Equal(t, false, result["ok"])
-	assert.Equal(t, "disk error", result["error"])
-	assert.Equal(t, WsErrInternalError, result["code"])
+	_, err := dispatch(d, "cron.job.list", nil, "s")
+	require.Error(t, err)
+	assert.Equal(t, "disk error", err.Error())
+	assert.Equal(t, WsErrInternalError, errorCode(err))
 }
 
 // TestCronJobGet get 正常 + 缺 id + 不存在
@@ -176,14 +175,14 @@ func TestCronJobGet(t *testing.T) {
 	assert.Equal(t, "j1", result["job"].(map[string]any)["id"])
 
 	// 缺 id
-	result, _ = dispatch(d, "cron.job.get", map[string]any{}, "s")
-	assert.Equal(t, WsErrBadRequest, result["code"])
-	assert.Equal(t, "id is required", result["error"])
+	_, err = dispatch(d, "cron.job.get", map[string]any{}, "s")
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
+	assert.Equal(t, "id is required", err.Error())
 
 	// 不存在 → NOT_FOUND
-	result, _ = dispatch(d, "cron.job.get", map[string]any{"id": "ghost"}, "s")
-	assert.Equal(t, WsErrNotFound, result["code"])
-	assert.Equal(t, "job not found", result["error"])
+	_, err = dispatch(d, "cron.job.get", map[string]any{"id": "ghost"}, "s")
+	assert.Equal(t, WsErrNotFound, errorCode(err))
+	assert.Equal(t, "job not found", err.Error())
 }
 
 // TestCronJobCreate create 正常 + 异常 → BAD_REQUEST
@@ -200,9 +199,9 @@ func TestCronJobCreate(t *testing.T) {
 
 	// 控制器异常 → BAD_REQUEST
 	cc.err = errors.New("invalid cron expr")
-	result, _ = dispatch(d, "cron.job.create", map[string]any{"name": "x"}, "s")
-	assert.Equal(t, WsErrBadRequest, result["code"])
-	assert.Equal(t, "invalid cron expr", result["error"])
+	_, err = dispatch(d, "cron.job.create", map[string]any{"name": "x"}, "s")
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
+	assert.Equal(t, "invalid cron expr", err.Error())
 }
 
 // TestCronJobUpdate update 正常 + not found
@@ -220,18 +219,18 @@ func TestCronJobUpdate(t *testing.T) {
 
 	// 任务不存在 → NOT_FOUND
 	cc.err = errors.New("job not found")
-	result, _ = dispatch(d, "cron.job.update", map[string]any{"id": "ghost", "patch": map[string]any{}}, "s")
-	assert.Equal(t, WsErrNotFound, result["code"])
+	_, err = dispatch(d, "cron.job.update", map[string]any{"id": "ghost", "patch": map[string]any{}}, "s")
+	assert.Equal(t, WsErrNotFound, errorCode(err))
 
 	// 其他错误 → BAD_REQUEST
 	cc.err = errors.New("bad patch")
-	result, _ = dispatch(d, "cron.job.update", map[string]any{"id": "j1", "patch": map[string]any{}}, "s")
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	_, err = dispatch(d, "cron.job.update", map[string]any{"id": "j1", "patch": map[string]any{}}, "s")
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 
 	// patch 非 object
 	cc.err = nil
-	result, _ = dispatch(d, "cron.job.update", map[string]any{"id": "j1", "patch": "not-map"}, "s")
-	assert.Equal(t, "patch must be object", result["error"])
+	_, err = dispatch(d, "cron.job.update", map[string]any{"id": "j1", "patch": "not-map"}, "s")
+	assert.Equal(t, "patch must be object", err.Error())
 }
 
 // TestCronJobDelete delete 正常 + 未删除 → NOT_FOUND
@@ -244,8 +243,8 @@ func TestCronJobDelete(t *testing.T) {
 	assert.Equal(t, true, result["deleted"])
 
 	// 不存在 → NOT_FOUND
-	result, _ = dispatch(d, "cron.job.delete", map[string]any{"id": "ghost"}, "s")
-	assert.Equal(t, WsErrNotFound, result["code"])
+	_, err = dispatch(d, "cron.job.delete", map[string]any{"id": "ghost"}, "s")
+	assert.Equal(t, WsErrNotFound, errorCode(err))
 }
 
 // TestCronJobToggle toggle 正常 + 缺 enabled + not found
@@ -261,14 +260,14 @@ func TestCronJobToggle(t *testing.T) {
 	assert.True(t, cc.lastToggle.enabled)
 
 	// 缺 enabled
-	result, _ = dispatch(d, "cron.job.toggle", map[string]any{"id": "j1"}, "s")
-	assert.Equal(t, WsErrBadRequest, result["code"])
-	assert.Equal(t, "enabled is required", result["error"])
+	_, err = dispatch(d, "cron.job.toggle", map[string]any{"id": "j1"}, "s")
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
+	assert.Equal(t, "enabled is required", err.Error())
 
 	// 任务不存在
 	cc.err = errors.New("job not found")
-	result, _ = dispatch(d, "cron.job.toggle", map[string]any{"id": "g", "enabled": true}, "s")
-	assert.Equal(t, WsErrNotFound, result["code"])
+	_, err = dispatch(d, "cron.job.toggle", map[string]any{"id": "g", "enabled": true}, "s")
+	assert.Equal(t, WsErrNotFound, errorCode(err))
 }
 
 // TestCronJobPreview preview 正常 + count 解析 + 默认 5
@@ -290,8 +289,8 @@ func TestCronJobPreview(t *testing.T) {
 
 	// 任务不存在
 	cc.err = errors.New("job not found")
-	result, _ = dispatch(d, "cron.job.preview", map[string]any{"id": "g"}, "s")
-	assert.Equal(t, WsErrNotFound, result["code"])
+	_, err = dispatch(d, "cron.job.preview", map[string]any{"id": "g"}, "s")
+	assert.Equal(t, WsErrNotFound, errorCode(err))
 }
 
 // TestCronJobRunNow run_now 正常 + not found + 内部错误
@@ -306,13 +305,13 @@ func TestCronJobRunNow(t *testing.T) {
 
 	// 任务不存在 → NOT_FOUND
 	cc.err = errors.New("job not found")
-	result, _ = dispatch(d, "cron.job.run_now", map[string]any{"id": "g"}, "s")
-	assert.Equal(t, WsErrNotFound, result["code"])
+	_, err = dispatch(d, "cron.job.run_now", map[string]any{"id": "g"}, "s")
+	assert.Equal(t, WsErrNotFound, errorCode(err))
 
 	// 内部错误 → INTERNAL_ERROR
 	cc.err = errors.New("scheduler dead")
-	result, _ = dispatch(d, "cron.job.run_now", map[string]any{"id": "j1"}, "s")
-	assert.Equal(t, WsErrInternalError, result["code"])
+	_, err = dispatch(d, "cron.job.run_now", map[string]any{"id": "j1"}, "s")
+	assert.Equal(t, WsErrInternalError, errorCode(err))
 }
 
 // TestCronJobHandlers_paramsNil 所有端点 params nil → BAD_REQUEST
@@ -323,9 +322,9 @@ func TestCronJobHandlers_paramsNil(t *testing.T) {
 		"cron.job.toggle", "cron.job.preview", "cron.job.run_now",
 	}
 	for _, method := range methods {
-		result, err := dispatch(d, method, nil, "s")
-		assert.NoError(t, err, "%s nil params should not error", method)
-		assert.Equal(t, WsErrBadRequest, result["code"], "%s nil params code", method)
+		_, err := dispatch(d, method, nil, "s")
+		require.Error(t, err, "%s nil params should error", method)
+		assert.Equal(t, WsErrBadRequest, errorCode(err), "%s nil params code", method)
 	}
 }
 
@@ -337,16 +336,4 @@ func TestCronJobHandlers_接口断言(t *testing.T) {
 	d := RegisterWebHandlers(&WebHandlersBindParams{CronController: nil})
 	_, ok := d.methodHandlers["cron.job.list"]
 	assert.True(t, ok, "nil controller should fall back to stub branch")
-}
-
-// TestCronJobContextPassing ctx 与 sessionID 透传
-func TestCronJobContextPassing(t *testing.T) {
-	cc := &fakeCronJobController{jobs: []map[string]any{{"id": "j1"}}}
-	d := newCronTestDispatcher(cc)
-
-	// Dispatch 内部传 ctx/sessionID；handler 忽略但签名兼容
-	result, err := dispatch(d, "cron.job.list", map[string]any{}, "sess-x")
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	_ = context.Background()
 }

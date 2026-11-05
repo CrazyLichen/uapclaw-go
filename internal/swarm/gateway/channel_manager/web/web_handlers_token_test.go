@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,8 +32,8 @@ func TestHandleModelsList_Token字段回填(t *testing.T) {
 		t.Fatalf("写 fixture 失败: %v", err)
 	}
 
-	handler := modelsList()
-	resp, err := handler(context.Background(), nil, "")
+	handler := modelsList(newTestChannel())
+	resp, err := callHandler(handler, nil, "")
 	if err != nil {
 		t.Fatalf("handler 报错: %v", err)
 	}
@@ -74,8 +73,8 @@ func TestHandleModelsList_Token字段非法值不回填(t *testing.T) {
 		t.Fatalf("写 fixture 失败: %v", err)
 	}
 
-	handler := modelsList()
-	resp, err := handler(context.Background(), nil, "")
+	handler := modelsList(newTestChannel())
+	resp, err := callHandler(handler, nil, "")
 	if err != nil {
 		t.Fatalf("handler 报错: %v", err)
 	}

@@ -16,9 +16,9 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`）。后续从 Task 8（B1b 功能批）开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。后续从 Task 8（B1b 功能批）开始。
 
-**B1a 遗留偏差（写进 spec §10）**：① 既有 30 个 handler 仍返回 `(payload, error)`，经 `wrapUnary` 适配成 `methodHandler`，B1b 新方法直接写原生 `methodHandler`；② 分发顺序当前为「回调优先 → 本地 handler」，上游为「local_only / handler-before-callback(`chat.send`) → 回调 → handler」，未改（避免破坏既有行为），待 chat.* 批一并处理。
+**B1a 收口结论（两处遗留偏差已清零，详见 Task 7b）**：① 删除 `unaryHandler`/`wrapUnary`，59 个注册点一律原生 `methodHandler`，失败帧抬到帧级 `ok=false + error + code`；② 分发顺序改为上游四段式（`local_only` → `handler-before-callback`(`chat.send`) → 回调 → handler）。残留差异见 spec §10（错误文案语言、permissions 本地回退、CI 矩阵上游来源）。
 
 ---
 
@@ -849,7 +849,7 @@ func (wc *WebChannel) unregisterMethod(method string) {
 统一规则（逐条机械替换，不改变函数体逻辑）。**注意保持上游的闭包形态**：上游 handler 是 `_register_web_handlers(bind)` 内的嵌套函数，捕获 `channel`/`agent_client` 等，Go 侧同样是闭包（`func(ws wsSender, ...)` 形式，捕获 `wc` 与依赖），**不改成 WebChannel 的方法**（否则方法归属与上游不一致，违反规则 9.2）：
 
 1. `func handleXxx(dep ...) RPCHandlerFunc { return func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error) {` →
-   `func makeXxx(wc *WebChannel, dep ...) methodHandler { return func(ws wsSender, reqID string, params map[string]any, sessionID string) {`
+   `func xxx(wc *WebChannel, dep ...) methodHandler { return func(ws wsSender, reqID string, params map[string]any, sessionID string) {`
 2. 返回 `payload, nil` → `wc.sendResponse(ws, reqID, true, payload, "", "")`
 3. 返回 `nil, fmt.Errorf(...)` + 调用方按 code 转换 → 直接在原地 `wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)` 并 `return`
 4. `stubHandler("x", payload)` → `func(ws wsSender, reqID string, _ map[string]any, _ string) { wc.sendResponse(ws, reqID, true, payload, "", "") }`
@@ -941,7 +941,7 @@ func handlerBeforeCallback(method string) bool { return handlerBeforeCallbackMet
 - [ ] **Step 6: 运行测试**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/... ./internal/swarm/channels/...`
-Expected: 全绿（handler 级测试改为直接调用 `makeXxx(...)(fakeWS, "rid", params, "sid")` 或经 `methodHandlers` 表）。
+Expected: 全绿（handler 级测试改为直接调用 `xxx(...)(fakeWS, "rid", params, "sid")` 或经 `methodHandlers` 表）。
 
 - [ ] **Step 7: 提交**
 
@@ -1096,6 +1096,54 @@ git commit -m "refactor(web): handler 函数名对齐上游 Python 名（规则 
 
 ---
 
+## Task 7b: B1a 收口 —— 原生 handler + 分发顺序（已完成）
+
+**背景：** Task 7 结束时留了两处偏差：① 59 个注册点全部经 `wrapUnary` 把 `(payload, error)` 适配成 `methodHandler`，失败信息塞在 payload 内（`{ok:false,error,code}`）而帧级 `ok` 恒为 true；② 分发顺序是「回调优先 → 本地 handler」，与上游相反。两处都在本 Task 清零（用户裁定：一次性全转 native + 分发顺序同批改）。
+
+**Files:**
+- Modify: `web/web_connect.go`、`web/app_web_handlers.go`
+- Test: `web/web_dispatch_order_test.go`（新增）、`web/testhelper_dispatch_test.go`、全部 `web/*_test.go`
+- Fix: `tests/integration/swarm/gateway/hot_reload/hot_reload_test.go`（Task 5 删 `RPCDispatcher` 后遗留的 `Dispatch` 调用）、`cmd/rpc-matrix/main.go`
+
+- [x] **Step 1: 帧形状对齐上游 `send_response`**
+
+`web_connect.go` 的 `sendResponse` 改为 `web_connect.py:487-507` 的形状：`payload` 恒存在（nil 落 `{}`）；`error`/`code` 只在 `ok=false` 时写出；`error` 为空时兜底 `"request failed"`。
+
+- [x] **Step 2: 删除 `unaryHandler` / `wrapUnary`，59 个注册点全转原生**
+
+每个 handler 改成 `func xxx(wc *WebChannel, deps...) methodHandler`，内部 `return func(ws wsSender, reqID string, params map[string]any, sessionID string)`；所有失败分支改 `wc.sendResponse(ws, reqID, false, nil, errMsg, code)`，成功分支 `wc.sendResponse(ws, reqID, true, payload, "", "")`。`stubHandler` 去掉无用的方法名参数（`stubHandler(wc, payload)`）。顺手对齐三处文案/键形状：`config.set`/`config.save_all`/`memory.forbidden.set`/`permissions.owner_scopes.set` 的 params 校验回上游英文；`history.get` 补 `cursor`/`limit` 透传（`app_web_handlers.py:4165-4176`）；`chat.user_answer` 的 `request_id` 仅非空时透出（`:4151-4156`）。
+
+- [x] **Step 3: handler 异常兜底**
+
+新增 `invokeMethodHandler`（对齐 `web_connect.py:624-678`）：`recover` 后记诊断日志、回 `INTERNAL_ERROR` 帧、返回 false；原 `invokeMethod` 删除。
+
+- [x] **Step 4: 分发顺序四段式**
+
+`handleWebSocket` 读循环改为上游顺序：`local_only`（空集）→ `handler-before-callback`（`chat.send`，见全局变量 `handlerBeforeCallbackMethods`）→ 回调转发 → 本地 handler / `unknown method`。`chat.send` 的 ack 在回调前**立即写出**（`writeCollectedFrames`），不再攒到回调结束后。
+
+- [x] **Step 5: 测试迁移与新增**
+
+`callHandler` / `errorCode` 测试助手取代旧 `(payload, error)` 直调；失败断言由 `result["ok"]==false`/`result["code"]` 改为 `require.Error` + `errorCode(err)`。新增 `web_dispatch_order_test.go` 11 例：帧形状 3 例、异常兜底 2 例、分发顺序 6 例（trail 记录同 goroutine 上的执行次序，不靠 socket 时序）。
+
+- [x] **Step 6: 修 Task 5 遗留的集成测试断点**
+
+`hot_reload` 集成用例改用真实 WS 连接（`httptest` + `HandleWebSocket` + 一帧 `config.save_all`）验证热重载回调。
+
+- [x] **Step 7: 矩阵工具的降级行为**
+
+上游目录不可用且非 `-verify` 时整轮跳过、不覆写 `docs/sync/`（此前会写回"两方矩阵"，让 CI 的 `git diff` 误报"矩阵已过期"）。
+
+- [x] **Step 8: 验收**
+
+```bash
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/...
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/gateway/...
+go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
+go run ./cmd/integration-audit -verify
+```
+
+---
+
 ## Task 8: B1b-1 config 代理族（10 个，`local`）
 
 **Files:**
@@ -1176,16 +1224,16 @@ func (f fakeModelsConfigStore) GetModels() (map[string]any, error) { return f.mo
 // 与上游一致：handler 是 _register_web_handlers(bind) 内的闭包，捕获 channel 与
 // 配置读写函数，因此这里用闭包而非 WebChannel 方法。
 func registerModelsFamily(wc *WebChannel, cfg modelsConfigStore) {
-	wc.registerMethod("models.get", makeModelsGet(wc, cfg), false)
-	wc.registerMethod("models.upsert", makeModelsUpsert(wc, cfg), false)
-	wc.registerMethod("models.delete", makeModelsDelete(wc, cfg), false)
-	wc.registerMethod("models.references", makeModelsReferences(wc, cfg), false)
-	wc.registerMethod("model_groups.list", makeModelGroupsList(wc, cfg), false)
-	wc.registerMethod("model_groups.upsert", makeModelGroupsUpsert(wc, cfg), false)
-	wc.registerMethod("model_groups.delete", makeModelGroupsDelete(wc, cfg), false)
-	wc.registerMethod("session.selection.set", makeSessionSelectionSet(wc, cfg), false)
-	wc.registerMethod("vendors.list", makeVendorsList(wc, cfg), false)
-	wc.registerMethod("vendors.fetch_models", makeVendorsFetchModels(wc, cfg), false)
+	wc.registerMethod("models.get", modelsGet(wc, cfg), false)
+	wc.registerMethod("models.upsert", modelsUpsert(wc, cfg), false)
+	wc.registerMethod("models.delete", modelsDelete(wc, cfg), false)
+	wc.registerMethod("models.references", modelsReferences(wc, cfg), false)
+	wc.registerMethod("model_groups.list", modelGroupsList(wc, cfg), false)
+	wc.registerMethod("model_groups.upsert", modelGroupsUpsert(wc, cfg), false)
+	wc.registerMethod("model_groups.delete", modelGroupsDelete(wc, cfg), false)
+	wc.registerMethod("session.selection.set", sessionSelectionSet(wc, cfg), false)
+	wc.registerMethod("vendors.list", vendorsList(wc, cfg), false)
+	wc.registerMethod("vendors.fetch_models", vendorsFetchModels(wc, cfg), false)
 }
 
 // modelsConfigStore 配置代理族所需的读写面（生产实现复用 config_apply 内的读写函数）。
@@ -1212,11 +1260,11 @@ type modelsConfigStore interface {
 	FetchVendorModels(params map[string]any) (map[string]any, error)
 }
 
-// makeModelsGet 读取模型配置。
+// ModelsGet 读取模型配置。
 //
 // Python: _register_config_proxy("models.get", _ConfigReq.MODELS_GET, <local handler>)。
 // 移植要求：返回 payload 的键名与上游 local handler 完全一致。
-func makeModelsGet(wc *WebChannel, cfg modelsConfigStore) methodHandler {
+func modelsGet(wc *WebChannel, cfg modelsConfigStore) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		payload, err := cfg.GetModels()
 		if err != nil {
@@ -1427,10 +1475,10 @@ git add -A && git commit -m "feat(web): 补齐 health_check/cron.meta/updater 7 
 
 | 方法 | 上游 | Go 名 | 说明 |
 |---|---|---|---|
-| `connection.status` | `:5676` | `makeConnectionStatus` | 返回 `agent_ready` + `protocol_version` |
-| `commands.list` | `:5775` | `makeCommandsList` | 静态命令清单，本地返回 |
+| `connection.status` | `:5676` | `ConnectionStatus` | 返回 `agent_ready` + `protocol_version` |
+| `commands.list` | `:5775` | `CommandsList` | 静态命令清单，本地返回 |
 | `config.moa_status` | `:5637` | `configMoaStatus` | 复用 config 代理 |
-| `chat.swarmflow_reply` | `:5818` | `makeChatSwarmflowReply` | 空 ack（上游即 `{"accepted": true, "session_id": ...}`） |
+| `chat.swarmflow_reply` | `:5818` | `ChatSwarmflowReply` | 空 ack（上游即 `{"accepted": true, "session_id": ...}`） |
 
 - [ ] **Step 1: 读上游**
 
@@ -1443,7 +1491,7 @@ Run: `sed -n '4010,4020p;4158,4165p;5637,5684p' /home/opensource/jiuwenswarm-dev
 func TestConnectionStatus_返回就绪字段(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
 	ws := newFakeWS()
-	makeConnectionStatus(wc, nil)(ws, "rid", map[string]any{}, "sid")
+	connectionStatus(wc, nil)(ws, "rid", map[string]any{}, "sid")
 	p := ws.lastFrame()["payload"].(map[string]any)
 	if p["protocol_version"] != "1.0" {
 		t.Fatalf("protocol_version 不符：%v", p)
@@ -1457,7 +1505,7 @@ func TestConnectionStatus_返回就绪字段(t *testing.T) {
 func TestChatSwarmflowReply_回accepted(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
 	ws := newFakeWS()
-	makeChatSwarmflowReply(wc)(ws, "rid", map[string]any{}, "sid-1")
+	chatSwarmflowReply(wc)(ws, "rid", map[string]any{}, "sid-1")
 	p := ws.lastFrame()["payload"].(map[string]any)
 	if p["accepted"] != true || p["session_id"] != "sid-1" {
 		t.Fatalf("ack 形状不符：%v", p)
@@ -1468,10 +1516,10 @@ func TestChatSwarmflowReply_回accepted(t *testing.T) {
 - [ ] **Step 3: 实现四个闭包 + 注册**
 
 ```go
-// makeConnectionStatus 返回 Gateway / AgentServer 就绪状态。
+// ConnectionStatus 返回 Gateway / AgentServer 就绪状态。
 //
 // Python: _connection_status (app_web_handlers.py:5676-5684)。
-func makeConnectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHandler {
+func connectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		ready := agentClient != nil && agentClient.ServerReady()
 		wc.sendResponse(ws, reqID, true, map[string]any{
@@ -1481,10 +1529,10 @@ func makeConnectionStatus(wc *WebChannel, agentClient *routing.AgentClient) meth
 	}
 }
 
-// makeChatSwarmflowReply 回空 ack，由三层路由继续转发给 agent adapter。
+// ChatSwarmflowReply 回空 ack，由三层路由继续转发给 agent adapter。
 //
 // Python: _chat_swarmflow_reply (app_web_handlers.py:4158-4163)。
-func makeChatSwarmflowReply(wc *WebChannel) methodHandler {
+func chatSwarmflowReply(wc *WebChannel) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
 		wc.sendResponse(ws, reqID, true, map[string]any{
 			"accepted":   true,
@@ -1577,7 +1625,7 @@ Run: `sed -n '3948,4010p' /home/opensource/jiuwenswarm-develop/gateway/channel_m
 func TestPathSelectFile_非法参数回BAD_REQUEST(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
 	ws := newFakeWS()
-	wc.registerMethod("path.select_file", makePathSelectFile(wc), false)
+	wc.registerMethod("path.select_file", PathSelectFile(wc), false)
 	wc.methodHandlers["path.select_file"](ws, "rid", map[string]any{"initial_dir": 123}, "sid")
 	if ws.lastFrame()["code"] != WsErrBadRequest {
 		t.Fatalf("预期 BAD_REQUEST，实际 %v", ws.lastFrame())
@@ -1653,12 +1701,12 @@ type sessionProxyClient interface {
 // Python: _session_rename / _session_plan_status（app_web_handlers.py:3060-3140），
 // 都是 proxy_unary_request 薄代理；本仓 AgentServer 已有对应分支，故只需转发。
 func registerSessionProxyFamily(wc *WebChannel, client sessionProxyClient) {
-	wc.registerMethod("session.rename", makeSessionProxy(wc, client, "session.rename", "SESSION_RENAME"), false)
-	wc.registerMethod("session.plan_status", makeSessionProxy(wc, client, "session.plan_status", "SESSION_PLAN_STATUS"), false)
+	wc.registerMethod("session.rename", SessionProxy(wc, client, "session.rename", "SESSION_RENAME"), false)
+	wc.registerMethod("session.plan_status", SessionProxy(wc, client, "session.plan_status", "SESSION_PLAN_STATUS"), false)
 }
 
-// makeSessionProxy 构造单个薄代理 handler。
-func makeSessionProxy(wc *WebChannel, client sessionProxyClient, label, reqMethod string) methodHandler {
+// SessionProxy 构造单个薄代理 handler。
+func SessionProxy(wc *WebChannel, client sessionProxyClient, label, reqMethod string) methodHandler {
 	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
 		if client == nil {
 			logger.Warn(logComponent).Str("label", label).Str("req_id", reqID).

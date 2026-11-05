@@ -123,18 +123,6 @@ type EventSender func(event string, payload map[string]any)
 //   - configPayload: 完整配置快照
 type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
 
-// unaryHandler RPC 方法处理函数签名。
-//
-// 参数：
-//   - ctx：请求上下文
-//   - params：RPC 请求参数
-//   - sessionID：会话标识
-//
-// 返回值：
-//   - map[string]any：响应负载
-//   - error：处理错误
-type unaryHandler func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -234,25 +222,6 @@ var configEnvMap = map[string]string{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// wrapUnary 把"返回 payload"的 handler 适配成 methodHandler。
-//
-// ⤵️ 本仓既有 handler 仍返回 (payload, error)，由本适配器统一转成一帧 res；
-// B1b 各批新增方法直接写原生 methodHandler（可多帧），不再走此适配。
-func (wc *WebChannel) wrapUnary(fn unaryHandler) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
-		payload, err := fn(context.Background(), params, sessionID)
-		if err != nil {
-			code := WsErrInternalError
-			if strings.Contains(err.Error(), "未找到") {
-				code = WsErrMethodNotFound
-			}
-			wc.sendResponse(ws, reqID, false, nil, err.Error(), code)
-			return
-		}
-		wc.sendResponse(ws, reqID, true, payload, "", "")
-	}
-}
-
 // RegisterWebHandlers 把全部 RPC 方法注册到 WebChannel 上。
 //
 // Python: app_web_handlers.py 中 _register_web_handlers(bind)；
@@ -291,114 +260,114 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	}
 
 	// ─── 本地实现方法 ───
-	wc.registerMethod("config.get", wc.wrapUnary(configGet(cryptoProv)), false)
-	wc.registerMethod("config.set", wc.wrapUnary(configSet(sendEvent, onConfigSaved, cryptoProv)), false)
-	wc.registerMethod("models.list", wc.wrapUnary(modelsList()), false)
-	wc.registerMethod("channel.get", wc.wrapUnary(channelGet(channelMgr)), false)
-	wc.registerMethod("session.list", wc.wrapUnary(sessionList), false)
-	wc.registerMethod("session.create", wc.wrapUnary(sessionCreate), false)
+	wc.registerMethod("config.get", configGet(wc, cryptoProv), false)
+	wc.registerMethod("config.set", configSet(wc, sendEvent, onConfigSaved, cryptoProv), false)
+	wc.registerMethod("models.list", modelsList(wc), false)
+	wc.registerMethod("channel.get", channelGet(wc, channelMgr), false)
+	wc.registerMethod("session.list", sessionList(wc), false)
+	wc.registerMethod("session.create", sessionCreate(wc), false)
 
 	// ─── 历史辅助方法 ───
-	wc.registerMethod("history.get", wc.wrapUnary(historyGet()), false)
+	wc.registerMethod("history.get", historyGet(wc), false)
 
 	// ─── config 辅助方法 ───
-	wc.registerMethod("config.save_all", wc.wrapUnary(configSaveAll(sendEvent, onConfigSaved, cryptoProv)), false)
-	wc.registerMethod("config.validate_model", wc.wrapUnary(stubHandler("config.validate_model", map[string]any{"ok": true})), false)
+	wc.registerMethod("config.save_all", configSaveAll(wc, sendEvent, onConfigSaved, cryptoProv), false)
+	wc.registerMethod("config.validate_model", stubHandler(wc, map[string]any{"ok": true}), false)
 
 	// ─── models 辅助方法 ───
-	wc.registerMethod("models.replace_all", wc.wrapUnary(modelsReplaceAll(onConfigSaved, cryptoProv)), false)
-	wc.registerMethod("models.validate", wc.wrapUnary(modelsValidate()), false)
+	wc.registerMethod("models.replace_all", modelsReplaceAll(wc, onConfigSaved, cryptoProv), false)
+	wc.registerMethod("models.validate", modelsValidate(wc), false)
 
 	// ─── session 辅助方法 ───
 
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
-	wc.registerMethod("chat.send", wc.wrapUnary(chatSend()), false)
-	wc.registerMethod("chat.resume", wc.wrapUnary(chatResume()), false)
-	wc.registerMethod("chat.interrupt", wc.wrapUnary(chatInterrupt()), false)
-	wc.registerMethod("chat.user_answer", wc.wrapUnary(chatUserAnswer()), false)
+	wc.registerMethod("chat.send", chatSend(wc), false)
+	wc.registerMethod("chat.resume", chatResume(wc), false)
+	wc.registerMethod("chat.interrupt", chatInterrupt(wc), false)
+	wc.registerMethod("chat.user_answer", chatUserAnswer(wc), false)
 
 	// ─── 路径配置 ───
-	wc.registerMethod("path.get", wc.wrapUnary(stubHandler("path.get", map[string]any{"path": ""})), false)
-	wc.registerMethod("path.set", wc.wrapUnary(stubHandler("path.set", map[string]any{"ok": true})), false)
+	wc.registerMethod("path.get", stubHandler(wc, map[string]any{"path": ""}), false)
+	wc.registerMethod("path.set", stubHandler(wc, map[string]any{"ok": true}), false)
 
 	// ─── 内存信息 ───
 	// Python: _memory_compute (app_web_handlers.py L1414-1427)，psutil 真实采集
-	wc.registerMethod("memory.compute", wc.wrapUnary(memoryCompute()), false)
+	wc.registerMethod("memory.compute", memoryCompute(wc), false)
 
 	// ─── 语言配置 ───
-	wc.registerMethod("locale.get_conf", wc.wrapUnary(stubHandler("locale.get_conf", map[string]any{"preferred_language": "zh"})), false)
-	wc.registerMethod("locale.set_conf", wc.wrapUnary(stubHandler("locale.set_conf", map[string]any{"ok": true})), false)
+	wc.registerMethod("locale.get_conf", stubHandler(wc, map[string]any{"preferred_language": "zh"}), false)
+	wc.registerMethod("locale.set_conf", stubHandler(wc, map[string]any{"ok": true}), false)
 
 	// ─── 心跳配置 ───
 	// 11.11 已回填：注入服务时接真实 handler（对齐 Python _heartbeat_get_conf/_set_conf/_get_path）
 	if heartbeatSvc != nil {
-		wc.registerMethod("heartbeat.get_conf", wc.wrapUnary(heartbeatGetConf(heartbeatSvc)), false)
-		wc.registerMethod("heartbeat.set_conf", wc.wrapUnary(heartbeatSetConf(heartbeatSvc, agentClient)), false)
+		wc.registerMethod("heartbeat.get_conf", heartbeatGetConf(wc, heartbeatSvc), false)
+		wc.registerMethod("heartbeat.set_conf", heartbeatSetConf(wc, heartbeatSvc, agentClient), false)
 	} else {
-		wc.registerMethod("heartbeat.get_conf", wc.wrapUnary(stubHandler("heartbeat.get_conf", map[string]any{
+		wc.registerMethod("heartbeat.get_conf", stubHandler(wc, map[string]any{
 			"every": 0, "target": "", "active_hours": map[string]any{},
-		})), false)
-		wc.registerMethod("heartbeat.set_conf", wc.wrapUnary(stubHandler("heartbeat.set_conf", map[string]any{"ok": true})), false)
+		}), false)
+		wc.registerMethod("heartbeat.set_conf", stubHandler(wc, map[string]any{"ok": true}), false)
 	}
 
 	// ─── 更新器 ───
-	updaterStub := stubHandler("updater", map[string]any{"status": "up_to_date"})
-	wc.registerMethod("updater.check", wc.wrapUnary(updaterStub), false)
-	wc.registerMethod("updater.download", wc.wrapUnary(updaterStub), false)
-	wc.registerMethod("updater.get_status", wc.wrapUnary(updaterStub), false)
+	updaterStub := stubHandler(wc, map[string]any{"status": "up_to_date"})
+	wc.registerMethod("updater.check", updaterStub, false)
+	wc.registerMethod("updater.download", updaterStub, false)
+	wc.registerMethod("updater.get_status", updaterStub, false)
 
 	// ─── 钩子 ───
-	wc.registerMethod("hooks.list", wc.wrapUnary(stubHandler("hooks.list", map[string]any{"hooks": []any{}})), false)
+	wc.registerMethod("hooks.list", stubHandler(wc, map[string]any{"hooks": []any{}}), false)
 
 	// ─── 权限 ───
 	// Python: owner_scopes.get/set 在 web_handlers 中直接处理（不经 E2A / config_rpc）
 	// Python: tools/rules/approval_overrides 通过 _forward_permissions_to_agent 转发到 AgentServer
-	wc.registerMethod("permissions.owner_scopes.get", wc.wrapUnary(permissionsOwnerScopesGet()), false)
-	wc.registerMethod("permissions.owner_scopes.set", wc.wrapUnary(permissionsOwnerScopesSet()), false)
-	wc.registerMethod("permissions.tools.get", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.get")), false)
-	wc.registerMethod("permissions.tools.set", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.set")), false)
-	wc.registerMethod("permissions.tools.update", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.update")), false)
-	wc.registerMethod("permissions.tools.delete", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.tools.delete")), false)
-	wc.registerMethod("permissions.rules.get", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.get")), false)
-	wc.registerMethod("permissions.rules.create", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.create")), false)
-	wc.registerMethod("permissions.rules.update", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.update")), false)
-	wc.registerMethod("permissions.rules.delete", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.rules.delete")), false)
-	wc.registerMethod("permissions.approval_overrides.get", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.approval_overrides.get")), false)
-	wc.registerMethod("permissions.approval_overrides.delete", wc.wrapUnary(permissionsForwardToAgent(agentClient, "permissions.approval_overrides.delete")), false)
+	wc.registerMethod("permissions.owner_scopes.get", permissionsOwnerScopesGet(wc), false)
+	wc.registerMethod("permissions.owner_scopes.set", permissionsOwnerScopesSet(wc), false)
+	wc.registerMethod("permissions.tools.get", permissionsForwardToAgent(wc, agentClient, "permissions.tools.get"), false)
+	wc.registerMethod("permissions.tools.set", permissionsForwardToAgent(wc, agentClient, "permissions.tools.set"), false)
+	wc.registerMethod("permissions.tools.update", permissionsForwardToAgent(wc, agentClient, "permissions.tools.update"), false)
+	wc.registerMethod("permissions.tools.delete", permissionsForwardToAgent(wc, agentClient, "permissions.tools.delete"), false)
+	wc.registerMethod("permissions.rules.get", permissionsForwardToAgent(wc, agentClient, "permissions.rules.get"), false)
+	wc.registerMethod("permissions.rules.create", permissionsForwardToAgent(wc, agentClient, "permissions.rules.create"), false)
+	wc.registerMethod("permissions.rules.update", permissionsForwardToAgent(wc, agentClient, "permissions.rules.update"), false)
+	wc.registerMethod("permissions.rules.delete", permissionsForwardToAgent(wc, agentClient, "permissions.rules.delete"), false)
+	wc.registerMethod("permissions.approval_overrides.get", permissionsForwardToAgent(wc, agentClient, "permissions.approval_overrides.get"), false)
+	wc.registerMethod("permissions.approval_overrides.delete", permissionsForwardToAgent(wc, agentClient, "permissions.approval_overrides.delete"), false)
 
 	// ─── 禁止记忆 ───
-	wc.registerMethod("memory.forbidden.get", wc.wrapUnary(memoryForbiddenGet()), false)
-	wc.registerMethod("memory.forbidden.set", wc.wrapUnary(memoryForbiddenSet()), false)
+	wc.registerMethod("memory.forbidden.get", memoryForbiddenGet(wc), false)
+	wc.registerMethod("memory.forbidden.set", memoryForbiddenSet(wc), false)
 
 	// ─── IM 平台配置 ───
-	channelConfStub := stubHandler("channel.conf", map[string]any{})
+	channelConfStub := stubHandler(wc, map[string]any{})
 	for _, platform := range []string{"feishu", "dingtalk", "telegram", "discord", "whatsapp", "wecom", "xiaoyi"} {
-		wc.registerMethod("channel."+platform+".get_conf", wc.wrapUnary(channelConfStub), false)
-		wc.registerMethod("channel."+platform+".set_conf", wc.wrapUnary(channelConfStub), false)
+		wc.registerMethod("channel."+platform+".get_conf", channelConfStub, false)
+		wc.registerMethod("channel."+platform+".set_conf", channelConfStub, false)
 	}
-	wc.registerMethod("channel.wechat.get_login_ui", wc.wrapUnary(stubHandler("channel.wechat.get_login_ui", map[string]any{})), false)
-	wc.registerMethod("channel.wechat.unbind", wc.wrapUnary(stubHandler("channel.wechat.unbind", map[string]any{})), false)
+	wc.registerMethod("channel.wechat.get_login_ui", stubHandler(wc, map[string]any{}), false)
+	wc.registerMethod("channel.wechat.unbind", stubHandler(wc, map[string]any{}), false)
 
 	// ─── 定时任务 ───
 	// 11.10 已回填：8 个 cron.job.* 端点接真实 CronController
 	// （对齐 Python register_method：list/get/create/update/delete/toggle/preview/run_now）
 	if cronController != nil {
 		cc := cronController
-		wc.registerMethod("cron.job.list", wc.wrapUnary(cronJobList(cc)), false)
-		wc.registerMethod("cron.job.get", wc.wrapUnary(cronJobGet(cc)), false)
-		wc.registerMethod("cron.job.create", wc.wrapUnary(cronJobCreate(cc)), false)
-		wc.registerMethod("cron.job.update", wc.wrapUnary(cronJobUpdate(cc)), false)
-		wc.registerMethod("cron.job.delete", wc.wrapUnary(cronJobDelete(cc)), false)
-		wc.registerMethod("cron.job.toggle", wc.wrapUnary(cronJobToggle(cc)), false)
-		wc.registerMethod("cron.job.preview", wc.wrapUnary(cronJobPreview(cc)), false)
-		wc.registerMethod("cron.job.run_now", wc.wrapUnary(cronJobRunNow(cc)), false)
+		wc.registerMethod("cron.job.list", cronJobList(wc, cc), false)
+		wc.registerMethod("cron.job.get", cronJobGet(wc, cc), false)
+		wc.registerMethod("cron.job.create", cronJobCreate(wc, cc), false)
+		wc.registerMethod("cron.job.update", cronJobUpdate(wc, cc), false)
+		wc.registerMethod("cron.job.delete", cronJobDelete(wc, cc), false)
+		wc.registerMethod("cron.job.toggle", cronJobToggle(wc, cc), false)
+		wc.registerMethod("cron.job.preview", cronJobPreview(wc, cc), false)
+		wc.registerMethod("cron.job.run_now", cronJobRunNow(wc, cc), false)
 	} else {
-		cronListStub := stubHandler("cron", map[string]any{"jobs": []any{}})
-		cronOkStub := stubHandler("cron", map[string]any{"ok": true})
-		wc.registerMethod("cron.job.list", wc.wrapUnary(cronListStub), false)
-		wc.registerMethod("cron.job.create", wc.wrapUnary(cronOkStub), false)
-		wc.registerMethod("cron.job.update", wc.wrapUnary(cronOkStub), false)
-		wc.registerMethod("cron.job.delete", wc.wrapUnary(cronOkStub), false)
+		cronListStub := stubHandler(wc, map[string]any{"jobs": []any{}})
+		cronOkStub := stubHandler(wc, map[string]any{"ok": true})
+		wc.registerMethod("cron.job.list", cronListStub, false)
+		wc.registerMethod("cron.job.create", cronOkStub, false)
+		wc.registerMethod("cron.job.update", cronOkStub, false)
+		wc.registerMethod("cron.job.delete", cronOkStub, false)
 	}
 
 	// ─── 运行时 ───
@@ -482,7 +451,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		"schedule.delete":        {"ok": true},
 	}
 	for method, payload := range forwardStubs {
-		wc.registerMethod(method, wc.wrapUnary(stubHandler(method, payload)), false)
+		wc.registerMethod(method, stubHandler(wc, payload), false)
 	}
 
 	// ─── 注册 onConnect 钩子：发送 connection.ack ───
@@ -565,46 +534,50 @@ func strOrEmpty(val any) string {
 // memoryForbiddenGet 处理 memory.forbidden.get 请求。
 //
 // 从 config.yaml 读取 memory.forbidden_memory_definition 并返回。
-// Python: _memory_forbidden_get (app_web_handlers.py)。
-func memoryForbiddenGet() unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+// Python: _memory_forbidden_get (app_web_handlers.py:6381)。
+func memoryForbiddenGet(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		cfg, err := loadAppConfig()
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Msg("memory.forbidden.get load config failed")
-			return map[string]any{}, nil
+			wc.sendResponse(ws, reqID, true, map[string]any{}, "", "")
+			return
 		}
 		// Python: cfg.get("memory", {}).get("forbidden_memory_definition", {})
 		payload := getConfigAny(cfg, "memory.forbidden_memory_definition", map[string]any{})
 		if m, ok := payload.(map[string]any); ok {
-			return m, nil
+			wc.sendResponse(ws, reqID, true, m, "", "")
+			return
 		}
-		return map[string]any{}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{}, "", "")
 	}
 }
 
 // memoryForbiddenSet 处理 memory.forbidden.set 请求。
 //
 // 接收 params，调用 updateMemoryForbiddenInConfig 写回。
-// Python: _memory_forbidden_set (app_web_handlers.py) + update_memory_forbidden_in_config (config.py)。
-func memoryForbiddenSet() unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+// Python: _memory_forbidden_set (app_web_handlers.py:6403) + update_memory_forbidden_in_config (config.py)。
+func memoryForbiddenSet(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		if err := updateMemoryForbiddenInConfig(params); err != nil {
 			logger.Error(logComponent).Err(err).Msg("memory.forbidden.set write back config failed")
-			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
-		return map[string]any{"ok": true}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"ok": true}, "", "")
 	}
 }
 
 // stubHandler 返回固定 stub 响应的处理函数。
 //
 // 用于尚未实现转发的 RPC 方法，返回占位数据使前端不报错。
-func stubHandler(_ string, payload map[string]any) unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		return payload, nil
+func stubHandler(wc *WebChannel, payload map[string]any) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		wc.sendResponse(ws, reqID, true, payload, "", "")
 	}
 }
 
@@ -613,8 +586,9 @@ func stubHandler(_ string, payload map[string]any) unaryHandler {
 // 全量实现：读取 configEnvMap 中 47 个环境变量 + config.yaml 补充字段 + app_version。
 // Python: config_get_handler 中 ~65 字段的返回。
 // cryptoProv 用于解密 api_key/token 等敏感字段。
-func configGet(cryptoProv crypto.CryptoProvider) unaryHandler {
-	return func(ctx context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func configGet(wc *WebChannel, cryptoProv crypto.CryptoProvider) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		ctx := context.Background()
 		p := resolveCrypto(cryptoProv)
 		result := make(map[string]any, len(configEnvMap)+10)
 
@@ -708,7 +682,7 @@ func configGet(cryptoProv crypto.CryptoProvider) unaryHandler {
 		// 展平 team 配置
 		flattenTeamConfig(cfg, result)
 
-		return result, nil
+		wc.sendResponse(ws, reqID, true, result, "", "")
 	}
 }
 
@@ -746,10 +720,12 @@ func normalizeTruthy(val string) string {
 //
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
 // Python: _config_set (app_web_handlers.py L870-895)。
-func configSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) unaryHandler {
-	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
+func configSet(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		ctx := context.Background()
 		if params == nil {
-			return nil, fmt.Errorf("params 不能为空")
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		p := resolveCrypto(cryptoProv)
 
@@ -758,9 +734,11 @@ func configSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoPro
 		if err != nil {
 			// 区分 BadRequest 和 InternalError
 			if _, ok := err.(*ConfigBadRequest); ok {
-				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+				return
 			}
-			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
 
 		// 步骤6: 回包给前端（对齐 Python: 先回包后通知）
@@ -778,10 +756,10 @@ func configSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoPro
 			NotifyConfigSavedOnce(onConfigSaved, envUpdates, yamlUpdated, false)
 		}
 
-		return map[string]any{
+		wc.sendResponse(ws, reqID, true, map[string]any{
 			"updated":                 updatedParamKeys,
 			"applied_without_restart": appliedWithoutRestart,
-		}, nil
+		}, "", "")
 	}
 }
 
@@ -791,10 +769,12 @@ func configSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoPro
 // Python: _config_save_all (app_web_handlers.py L1086-1151)。
 //
 // 支持子载荷：config、models、agents、team。
-func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) unaryHandler {
-	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
+func configSaveAll(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		ctx := context.Background()
 		if params == nil {
-			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		p := resolveCrypto(cryptoProv)
 
@@ -809,9 +789,11 @@ func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, crypt
 			parsed, err := buildModelsDefaultsFromFrontend(ctx, modelsVal, p)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
-					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+					wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+					return
 				}
-				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+				return
 			}
 			newModels = parsed
 		}
@@ -821,7 +803,8 @@ func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, crypt
 		if rawConfig, ok := params["config"]; ok && rawConfig != nil {
 			configMap, ok := rawConfig.(map[string]any)
 			if !ok {
-				return map[string]any{"ok": false, "error": "config 必须是对象", "code": WsErrBadRequest}, nil
+				wc.sendResponse(ws, reqID, false, nil, "config must be object", WsErrBadRequest)
+				return
 			}
 			for k, v := range configMap {
 				configParams[k] = v
@@ -839,9 +822,11 @@ func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, crypt
 			appliedEnv, appliedYAML, err := ApplyConfigPayload(ctx, configParams, p)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
-					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+					wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+					return
 				}
-				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+				return
 			}
 			for k, v := range appliedEnv {
 				envUpdates[k] = v
@@ -855,7 +840,8 @@ func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, crypt
 				logger.Warn(logComponent).
 					Err(err).
 					Msg("failed to write models.defaults")
-				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+				return
 			}
 			yamlUpdated = append(yamlUpdated, "models.defaults")
 			modelsCount = len(newModels)
@@ -882,7 +868,7 @@ func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, crypt
 			NotifyConfigSavedOnce(onConfigSaved, envUpdates, yamlUpdated, true)
 		}
 
-		return result, nil
+		wc.sendResponse(ws, reqID, true, result, "", "")
 	}
 }
 
@@ -893,12 +879,13 @@ func configSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, crypt
 // ——解密发生在 config 层（GetDefaultModels 内部经 decryptModelEntries 查全局 provider），
 // handler 层零解密（对齐 Python handler 不持 crypto）。api_key 解密失败由
 // decryptModelEntries 保留原值（对齐 Python except: pass）。
-func modelsList() unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func modelsList(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		// 对齐 Python: config = get_config(); models = get_default_models(config)
 		models := config.GetDefaultModels(nil)
 		if len(models) == 0 {
-			return map[string]any{"models": []any{}, "active_model": ""}, nil
+			wc.sendResponse(ws, reqID, true, map[string]any{"models": []any{}, "active_model": ""}, "", "")
+			return
 		}
 
 		// 展平为前端格式：从嵌套的 model_client_config/model_config_obj 提取字段
@@ -963,7 +950,7 @@ func modelsList() unaryHandler {
 			}
 		}
 
-		return map[string]any{"models": result, "active_model": activeModel}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"models": result, "active_model": activeModel}, "", "")
 	}
 }
 
@@ -971,15 +958,15 @@ func modelsList() unaryHandler {
 //
 // 从 ChannelManager 动态读取已启用的渠道列表。
 // Python: channel_get_handler，返回数组 [{channel_id: cid}]。
-func channelGet(channelMgr *cm.ChannelManager) unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func channelGet(wc *WebChannel, channelMgr *cm.ChannelManager) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		channels := make([]map[string]any, 0)
 		if channelMgr != nil {
 			for _, cid := range channelMgr.GetEnabledChannels() {
 				channels = append(channels, map[string]any{"channel_id": cid})
 			}
 		}
-		return map[string]any{"channels": channels}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"channels": channels}, "", "")
 	}
 }
 
@@ -987,101 +974,105 @@ func channelGet(channelMgr *cm.ChannelManager) unaryHandler {
 //
 // 遍历会话目录，读取每个 session 的 metadata.json 返回列表。
 // 支持分页：limit 和 offset 参数，对齐 Python (L1264-1293)。
-func sessionList(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
-	sessionsDir := workspace.AgentSessionsDir()
+func sessionList(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		sessionsDir := workspace.AgentSessionsDir()
 
-	// 解析分页参数（对齐 Python L1264-1271）
-	// Python 默认 limit=20，截断限制：limit = max(1, min(limit, 200))
-	limit := 20
-	offset := 0
-	if params != nil {
-		if v, ok := params["limit"]; ok {
-			switch lv := v.(type) {
-			case int:
-				limit = lv
-			case float64:
-				limit = int(lv)
+		// 解析分页参数（对齐 Python L1264-1271）
+		// Python 默认 limit=20，截断限制：limit = max(1, min(limit, 200))
+		limit := 20
+		offset := 0
+		if params != nil {
+			if v, ok := params["limit"]; ok {
+				switch lv := v.(type) {
+				case int:
+					limit = lv
+				case float64:
+					limit = int(lv)
+				}
+			}
+			if v, ok := params["offset"]; ok {
+				switch ov := v.(type) {
+				case int:
+					offset = ov
+				case float64:
+					offset = int(ov)
+				}
 			}
 		}
-		if v, ok := params["offset"]; ok {
-			switch ov := v.(type) {
-			case int:
-				offset = ov
-			case float64:
-				offset = int(ov)
-			}
+		// 截断限制：limit = max(1, min(limit, 200))
+		if limit < 1 {
+			limit = 1
 		}
-	}
-	// 截断限制：limit = max(1, min(limit, 200))
-	if limit < 1 {
-		limit = 1
-	}
-	if limit > 200 {
-		limit = 200
-	}
+		if limit > 200 {
+			limit = 200
+		}
 
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return map[string]any{"sessions": []any{}, "total": 0, "limit": limit, "offset": offset}, nil
-		}
-		return nil, fmt.Errorf("读取会话目录失败: %w", err)
-	}
-
-	var sessions []map[string]any
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		// heartbeat_ 前缀会话不参与列表展示
-		// 对齐 Python session_metadata.py L31/L416 _HEARTBEAT_SESSION_PREFIX = "heartbeat_"
-		// （偏差⑨：与 session_startup.go 既有常量 heartbeatSessionPrefix 语义一致；
-		// dreaming sweeper 的无下划线 "heartbeat" 是另一处独立先例，不适用本过滤点）
-		if strings.HasPrefix(entry.Name(), "heartbeat_") {
-			continue
-		}
-		metaPath := filepath.Join(sessionsDir, entry.Name(), "metadata.json")
-		data, err := os.ReadFile(metaPath)
+		entries, err := os.ReadDir(sessionsDir)
 		if err != nil {
-			// 无 metadata.json 的会话目录，用默认值
-			sessions = append(sessions, map[string]any{
-				"session_id": entry.Name(),
-			})
-			continue
+			if os.IsNotExist(err) {
+				wc.sendResponse(ws, reqID, true, map[string]any{"sessions": []any{}, "total": 0, "limit": limit, "offset": offset}, "", "")
+				return
+			}
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("读取会话目录失败: %v", err), WsErrInternalError)
+			return
 		}
-		var meta map[string]any
-		if err := json.Unmarshal(data, &meta); err != nil {
-			sessions = append(sessions, map[string]any{
-				"session_id": entry.Name(),
-			})
-			continue
+
+		var sessions []map[string]any
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			// heartbeat_ 前缀会话不参与列表展示
+			// 对齐 Python session_metadata.py L31/L416 _HEARTBEAT_SESSION_PREFIX = "heartbeat_"
+			// （偏差⑨：与 session_startup.go 既有常量 heartbeatSessionPrefix 语义一致；
+			// dreaming sweeper 的无下划线 "heartbeat" 是另一处独立先例，不适用本过滤点）
+			if strings.HasPrefix(entry.Name(), "heartbeat_") {
+				continue
+			}
+			metaPath := filepath.Join(sessionsDir, entry.Name(), "metadata.json")
+			data, err := os.ReadFile(metaPath)
+			if err != nil {
+				// 无 metadata.json 的会话目录，用默认值
+				sessions = append(sessions, map[string]any{
+					"session_id": entry.Name(),
+				})
+				continue
+			}
+			var meta map[string]any
+			if err := json.Unmarshal(data, &meta); err != nil {
+				sessions = append(sessions, map[string]any{
+					"session_id": entry.Name(),
+				})
+				continue
+			}
+			meta["session_id"] = entry.Name()
+			sessions = append(sessions, meta)
 		}
-		meta["session_id"] = entry.Name()
-		sessions = append(sessions, meta)
-	}
 
-	// 分页截取（对齐 Python L1286-1291）
-	// 审查修复 M-06：①负 offset clamp 到 0（对齐 Python max(0, offset)，
-	// 原实现负值直通 sessions[offset:] 切片 panic）；②按 last_message_at
-	// 降序排序（对齐 Python sessions.sort(key=lambda x: x.get(
-	// "last_message_at", 0), reverse=True)——原 ReadDir 词法序每次都
-	// 偏离 Python 展示序；缺键兜底 0，JSON 解码值为 float64）。
-	sort.Slice(sessions, func(i, j int) bool {
-		return sessionLastMessageAt(sessions[i]) > sessionLastMessageAt(sessions[j])
-	})
-	total := len(sessions)
-	if offset < 0 {
-		offset = 0
-	}
-	if offset > total {
-		offset = total
-	}
-	sessions = sessions[offset:]
-	if limit < len(sessions) {
-		sessions = sessions[:limit]
-	}
+		// 分页截取（对齐 Python L1286-1291）
+		// 审查修复 M-06：①负 offset clamp 到 0（对齐 Python max(0, offset)，
+		// 原实现负值直通 sessions[offset:] 切片 panic）；②按 last_message_at
+		// 降序排序（对齐 Python sessions.sort(key=lambda x: x.get(
+		// "last_message_at", 0), reverse=True)——原 ReadDir 词法序每次都
+		// 偏离 Python 展示序；缺键兜底 0，JSON 解码值为 float64）。
+		sort.Slice(sessions, func(i, j int) bool {
+			return sessionLastMessageAt(sessions[i]) > sessionLastMessageAt(sessions[j])
+		})
+		total := len(sessions)
+		if offset < 0 {
+			offset = 0
+		}
+		if offset > total {
+			offset = total
+		}
+		sessions = sessions[offset:]
+		if limit < len(sessions) {
+			sessions = sessions[:limit]
+		}
 
-	return map[string]any{"sessions": sessions, "total": total, "limit": limit, "offset": offset}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"sessions": sessions, "total": total, "limit": limit, "offset": offset}, "", "")
+	}
 }
 
 // sessionLastMessageAt 读取会话 metadata 的 last_message_at（缺键/非数值兜底 0）。
@@ -1112,84 +1103,96 @@ func sessionLastMessageAt(session map[string]any) float64 {
 //
 // 创建会话目录和 metadata.json。
 // Python: session_create_handler，要求 session_id 非空，已存在则 ALREADY_EXISTS。
-func sessionCreate(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
-	// 要求 session_id（对齐 Python: 必填参数）
-	sessionID, _ := params["session_id"].(string)
-	if sessionID == "" {
-		return map[string]any{"ok": false, "error": "session_id 是必填项", "code": WsErrBadRequest}, nil
-	}
-
-	sessionsDir := workspace.AgentSessionsDir()
-	sessionDir := filepath.Join(sessionsDir, sessionID)
-
-	// 检查是否已存在（对齐 Python: ALREADY_EXISTS）
-	if _, err := os.Stat(sessionDir); err == nil {
-		return map[string]any{"ok": false, "error": "会话已存在", "code": WsErrAlreadyExists}, nil
-	}
-
-	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
-		return nil, fmt.Errorf("创建会话目录失败: %w", err)
-	}
-
-	// 写入完整 metadata.json（对齐 Python: 写入 session_id, channel_id, user_id, title, mode）
-	meta := map[string]any{
-		"session_id": sessionID,
-		"created_at": time.Now().Format(time.RFC3339),
-	}
-	if params != nil {
-		if v, ok := params["channel_id"].(string); ok && v != "" {
-			meta["channel_id"] = v
+func sessionCreate(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		// 要求 session_id（对齐 Python: 必填参数）
+		sessionID, _ := params["session_id"].(string)
+		if sessionID == "" {
+			wc.sendResponse(ws, reqID, false, nil, "session_id 是必填项", WsErrBadRequest)
+			return
 		}
-		if v, ok := params["user_id"].(string); ok && v != "" {
-			meta["user_id"] = v
-		}
-		if v, ok := params["title"].(string); ok && v != "" {
-			meta["title"] = v
-		}
-		if v, ok := params["mode"].(string); ok && v != "" {
-			meta["mode"] = v
-		}
-	}
-	metaData, _ := json.MarshalIndent(meta, "", "  ")
-	if err := os.WriteFile(filepath.Join(sessionDir, "metadata.json"), metaData, 0o644); err != nil {
-		return nil, fmt.Errorf("写入 metadata.json 失败: %w", err)
-	}
 
-	return map[string]any{"session_id": sessionID}, nil
+		sessionsDir := workspace.AgentSessionsDir()
+		sessionDir := filepath.Join(sessionsDir, sessionID)
+
+		// 检查是否已存在（对齐 Python: ALREADY_EXISTS）
+		if _, err := os.Stat(sessionDir); err == nil {
+			wc.sendResponse(ws, reqID, false, nil, "会话已存在", WsErrAlreadyExists)
+			return
+		}
+
+		if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("创建会话目录失败: %v", err), WsErrInternalError)
+			return
+		}
+
+		// 写入完整 metadata.json（对齐 Python: 写入 session_id, channel_id, user_id, title, mode）
+		meta := map[string]any{
+			"session_id": sessionID,
+			"created_at": time.Now().Format(time.RFC3339),
+		}
+		if params != nil {
+			if v, ok := params["channel_id"].(string); ok && v != "" {
+				meta["channel_id"] = v
+			}
+			if v, ok := params["user_id"].(string); ok && v != "" {
+				meta["user_id"] = v
+			}
+			if v, ok := params["title"].(string); ok && v != "" {
+				meta["title"] = v
+			}
+			if v, ok := params["mode"].(string); ok && v != "" {
+				meta["mode"] = v
+			}
+		}
+		metaData, _ := json.MarshalIndent(meta, "", "  ")
+		if err := os.WriteFile(filepath.Join(sessionDir, "metadata.json"), metaData, 0o644); err != nil {
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("写入 metadata.json 失败: %v", err), WsErrInternalError)
+			return
+		}
+
+		wc.sendResponse(ws, reqID, true, map[string]any{"session_id": sessionID}, "", "")
+	}
 }
 
 // Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
-func modelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) unaryHandler {
-	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
+func modelsReplaceAll(wc *WebChannel, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		ctx := context.Background()
 		if params == nil {
-			return nil, fmt.Errorf("params 不能为空")
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		p := resolveCrypto(cryptoProv)
 
 		modelsVal, ok := params["models"]
 		if !ok || modelsVal == nil {
-			return map[string]any{"ok": false, "error": "models 是必填项", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "models 是必填项", WsErrBadRequest)
+			return
 		}
 
 		// 调用 buildModelsDefaultsFromFrontend（内部会调 merge + infer）
 		newModels, err := buildModelsDefaultsFromFrontend(ctx, modelsVal, p)
 		if err != nil {
 			if _, ok := err.(*ConfigBadRequest); ok {
-				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+				return
 			}
-			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
 
 		// 写入 config: models.defaults
 		if err := updateDefaultModelsInConfig(newModels); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("write models.defaults failed")
-			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
 
 		// 触发热重载（对齐 Python: _notify_config_saved_once(force=True)）
 		NotifyConfigSavedOnce(onConfigSaved, nil, []string{"models.defaults"}, true)
 
-		return map[string]any{"count": len(newModels)}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"count": len(newModels)}, "", "")
 	}
 }
 
@@ -1197,10 +1200,11 @@ func modelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoP
 //
 // Python: _config_validate_model (app_web_handlers.py L897-1019)。
 // 调用 LLM 验证 api_key 和 api_base 是否有效。
-func modelsValidate() unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func modelsValidate(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return map[string]any{"ok": false, "error": "params 是必填项", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "params 是必填项", WsErrBadRequest)
+			return
 		}
 
 		apiBase, _ := params["api_base"].(string)
@@ -1210,21 +1214,26 @@ func modelsValidate() unaryHandler {
 
 		// 校验必填字段
 		if apiBase == "" {
-			return map[string]any{"ok": false, "error": "api_base 是必填项", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "api_base 是必填项", WsErrBadRequest)
+			return
 		}
 		if apiKey == "" {
-			return map[string]any{"ok": false, "error": "api_key 是必填项", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "api_key 是必填项", WsErrBadRequest)
+			return
 		}
 		if model == "" {
-			return map[string]any{"ok": false, "error": "model 是必填项", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "model 是必填项", WsErrBadRequest)
+			return
 		}
 		if modelProvider == "" {
-			return map[string]any{"ok": false, "error": "model_provider 是必填项", "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, "model_provider 是必填项", WsErrBadRequest)
+			return
 		}
 
 		// 校验 model_provider 在可用列表中
 		if modelProvider != "" && !isAvailableProvider(modelProvider) {
-			return map[string]any{"ok": false, "error": fmt.Sprintf("model_provider 必须是以下之一: %v", availableModelProviders), "code": WsErrBadRequest}, nil
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("model_provider 必须是以下之一: %v", availableModelProviders), WsErrBadRequest)
+			return
 		}
 
 		// 清理 api_base（去掉末尾 /chat/completions 和 /）
@@ -1260,7 +1269,8 @@ func modelsValidate() unaryHandler {
 		modelInst, err := llm.NewModel(clientConfig, modelConfig)
 		if err != nil {
 			logger.Warn(logComponent).Err(err).Str("model_provider", modelProvider).Msg("models.validate createmodel failed")
-			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrLLMError}, nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrLLMError)
+			return
 		}
 
 		messages := model_clients.NewMessagesParam(llmSchema.NewUserMessage("hi"))
@@ -1271,20 +1281,23 @@ func modelsValidate() unaryHandler {
 			modelConfig.MaxTokens = &maxTokens16
 			modelInst2, err2 := llm.NewModel(clientConfig, modelConfig)
 			if err2 != nil {
-				return map[string]any{"ok": false, "error": err2.Error(), "code": WsErrLLMError}, nil
+				wc.sendResponse(ws, reqID, false, nil, err2.Error(), WsErrLLMError)
+				return
 			}
 			resp, err = modelInst2.Invoke(ctx, messages)
 			if err != nil {
-				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrLLMError}, nil
+				wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrLLMError)
+				return
 			}
 		}
 
 		// 检查响应内容非空
 		if resp == nil || resp.Content.Text() == "" {
-			return map[string]any{"ok": false, "error": "模型返回空响应", "code": WsErrLLMError}, nil
+			wc.sendResponse(ws, reqID, false, nil, "模型返回空响应", WsErrLLMError)
+			return
 		}
 
-		return map[string]any{"ok": true, "model_provider": modelProvider}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"ok": true, "model_provider": modelProvider}, "", "")
 	}
 }
 
@@ -1292,18 +1305,25 @@ func modelsValidate() unaryHandler {
 //
 // 返回 ack 响应，实际历史数据由 AgentServer 转发路径提供。
 // Python: (L1459-1466)。
-func historyGet() unaryHandler {
-	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
+func historyGet(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
 		payload := map[string]any{"accepted": true, "session_id": sessionID}
 		if params != nil {
-			if sid, ok := params["session_id"].(string); ok && sid != "" {
+			// Python: if "session_id" in params → 原值透传（含空串）
+			if sid, ok := params["session_id"]; ok {
 				payload["session_id"] = sid
 			}
 			if _, ok := params["page_idx"]; ok {
 				payload["page_idx"] = params["page_idx"]
 			}
+			if _, ok := params["cursor"]; ok {
+				payload["cursor"] = params["cursor"]
+			}
+			if _, ok := params["limit"]; ok {
+				payload["limit"] = params["limit"]
+			}
 		}
-		return payload, nil
+		wc.sendResponse(ws, reqID, true, payload, "", "")
 	}
 }
 
@@ -1311,18 +1331,18 @@ func historyGet() unaryHandler {
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
 // Python: chat.send handler 仅返回 ack。
-func chatSend() unaryHandler {
-	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		return map[string]any{"accepted": true, "session_id": sessionID}, nil
+func chatSend(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
+		wc.sendResponse(ws, reqID, true, map[string]any{"accepted": true, "session_id": sessionID}, "", "")
 	}
 }
 
 // chatResume 处理 chat.resume 请求。
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
-func chatResume() unaryHandler {
-	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		return map[string]any{"accepted": true, "session_id": sessionID}, nil
+func chatResume(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
+		wc.sendResponse(ws, reqID, true, map[string]any{"accepted": true, "session_id": sessionID}, "", "")
 	}
 }
 
@@ -1331,25 +1351,29 @@ func chatResume() unaryHandler {
 // 返回即时 ack 响应，从 params 中提取 intent。
 // Python: chat.interrupt handler，intent 默认 "interrupt"，可从 params 覆写。
 // 消息转发由两层架构第一层（normAndForward）处理。
-func chatInterrupt() unaryHandler {
-	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
+func chatInterrupt(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
 		payload := map[string]any{"accepted": true, "session_id": sessionID}
 		if params != nil {
 			if intent, ok := params["intent"].(string); ok && intent != "" {
 				payload["intent"] = intent
 			}
 		}
-		return payload, nil
+		wc.sendResponse(ws, reqID, true, payload, "", "")
 	}
 }
 
 // chatUserAnswer 处理 chat.user_answer 请求。
 //
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
-func chatUserAnswer() unaryHandler {
-	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		requestID, _ := params["request_id"].(string)
-		return map[string]any{"accepted": true, "session_id": sessionID, "request_id": requestID}, nil
+func chatUserAnswer(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
+		payload := map[string]any{"accepted": true, "session_id": sessionID}
+		// Python: request_id 仅在非空字符串时透出（:4153-4155）
+		if requestID, ok := params["request_id"].(string); ok && requestID != "" {
+			payload["request_id"] = requestID
+		}
+		wc.sendResponse(ws, reqID, true, payload, "", "")
 	}
 }
 
@@ -1685,8 +1709,8 @@ func sortedKeys(m map[string]string) []string {
 // permissionsOwnerScopesGet 处理 permissions.owner_scopes.get 请求。
 // Python: _permissions_owner_scopes_get (app_web_handlers.py L2275-2283)
 // 直接从配置读取 owner_scopes，不经 E2A / config_rpc。
-func permissionsOwnerScopesGet() unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func permissionsOwnerScopesGet(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		// Python: get_permissions_owner_scopes() — get_config()（normalize 后）
 		cfgPath := workspace.ConfigFile()
 		// 2026-10-28 审查接线：改走 Load+WithNormalize，对齐 Python get_config()
@@ -1695,12 +1719,14 @@ func permissionsOwnerScopesGet() unaryHandler {
 		cfg, err := config.New(cfgPath, config.WithNormalize(config.NormalizeConfig))
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get load config failed")
-			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("读取 owner_scopes 配置失败: %v", err), WsErrInternalError)
+			return
 		}
 		raw, err := cfg.Load()
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get read config failed")
-			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("读取 owner_scopes 配置失败: %v", err), WsErrInternalError)
+			return
 		}
 		permCfg, _ := raw["permissions"].(map[string]any)
 		if permCfg == nil {
@@ -1711,34 +1737,35 @@ func permissionsOwnerScopesGet() unaryHandler {
 			ownerScopes = map[string]any{}
 		}
 		denyGuidance, _ := permCfg["deny_guidance_message"].(string)
-		return map[string]any{
+		wc.sendResponse(ws, reqID, true, map[string]any{
 			"owner_scopes":          ownerScopes,
 			"deny_guidance_message": denyGuidance,
-		}, nil
+		}, "", "")
 	}
 }
 
 // permissionsOwnerScopesSet 处理 permissions.owner_scopes.set 请求。
-// Python: _permissions_owner_scopes_set (app_web_handlers.py L2285-2298)
+// Python: _permissions_owner_scopes_set (app_web_handlers.py:6221)
 // 直接调用 UpdatePermissionsOwnerScopesInConfig 统一写路径，不经 E2A / config_rpc。
-func permissionsOwnerScopesSet() unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func permissionsOwnerScopesSet(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return nil, fmt.Errorf("params must be object")
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
-		_, err := permrpc.UpdatePermissionsOwnerScopesInConfig(params)
-		if err != nil {
-			return nil, fmt.Errorf("更新 owner_scopes 配置失败: %w", err)
+		if _, err := permrpc.UpdatePermissionsOwnerScopesInConfig(params); err != nil {
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("更新 owner_scopes 配置失败: %v", err), WsErrInternalError)
+			return
 		}
-		return map[string]any{"ok": true}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"ok": true}, "", "")
 	}
 }
 
 // permissionsForwardToAgent 处理权限 RPC 请求，优先经 E2A 转发到 AgentServer；
 // AgentServer 未就绪时本地执行（与 config_rpc 同源）。
-// Python: _forward_permissions_to_agent (app_web_handlers.py L2303-2365)
-func permissionsForwardToAgent(ac *routing.AgentClient, method string) unaryHandler {
-	return func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error) {
+// Python: _forward_permissions_to_agent (app_web_handlers.py:6237)
+func permissionsForwardToAgent(wc *WebChannel, ac *routing.AgentClient, method string) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
 		// AgentServer 已就绪 → E2A 转发
 		if ac != nil && ac.ServerReady() {
 			env := e2a.E2AFromAgentFields("",
@@ -1747,148 +1774,182 @@ func permissionsForwardToAgent(ac *routing.AgentClient, method string) unaryHand
 				e2a.WithFieldReqMethod(method),
 				e2a.WithFieldParams(params),
 			)
-			resp, err := ac.SendRequest(ctx, env)
+			resp, err := ac.SendRequest(context.Background(), env)
 			if err != nil {
 				logger.Error(logComponent).Err(err).Str("method", method).Msg("permission RPC forwarding to AgentServer failed")
 				// 转发失败，回退到本地 dispatch
 			} else if resp != nil {
 				if resp.OK {
-					return resp.Payload, nil
+					wc.sendResponse(ws, reqID, true, resp.Payload, "", "")
+					return
 				}
 				errPayload := resp.Payload
 				if errPayload == nil {
 					errPayload = map[string]any{"error": "request failed"}
 				}
-				return nil, fmt.Errorf("权限 RPC 失败: %v", errPayload)
+				errMsg := "request failed"
+				if e, ok := errPayload["error"].(string); ok && e != "" {
+					errMsg = e
+				}
+				code := WsErrInternalError
+				if c, ok := errPayload["code"].(string); ok && c != "" {
+					code = c
+				}
+				wc.sendResponse(ws, reqID, false, nil, errMsg, code)
+				return
 			}
 		}
 
 		// AgentServer 未就绪或转发失败 → 本地 dispatch（对齐 Python: dispatch_permissions_config_request）
 		ok, payload := permrpc.DispatchPermissionsConfigRequest(method, params)
 		if ok {
-			return payload, nil
+			wc.sendResponse(ws, reqID, true, payload, "", "")
+			return
 		}
 		errMsg := "request failed"
+		code := WsErrInternalError
 		if payload != nil {
 			if e, ok := payload["error"].(string); ok && e != "" {
 				errMsg = e
 			}
+			if c, ok := payload["code"].(string); ok && c != "" {
+				code = c
+			}
 		}
-		return nil, fmt.Errorf("权限 RPC 本地 dispatch 失败: %s", errMsg)
+		wc.sendResponse(ws, reqID, false, nil, errMsg, code)
 	}
 }
 
 // cronJobList 处理 cron.job.list。
 // Python: _cron_job_list (app_web_handlers.py L2050-2056)。
-func cronJobList(cc CronJobController) unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func cronJobList(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		jobs, err := cc.ListJobs()
 		if err != nil {
-			return cronErrPayload(WsErrInternalError, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
-		return map[string]any{"jobs": jobs}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"jobs": jobs}, "", "")
 	}
 }
 
 // cronJobGet 处理 cron.job.get。
 // Python: _cron_job_get (L2058-2074)。id 必填；job 不存在 → NOT_FOUND。
-func cronJobGet(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobGet(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		jobID := strings.TrimSpace(cronStrVal(params["id"]))
 		if jobID == "" {
-			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "id is required", WsErrBadRequest)
+			return
 		}
 		job, err := cc.GetJob(jobID)
 		if err != nil {
-			return cronErrPayload(WsErrInternalError, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
 		if job == nil {
-			return cronErrPayload(WsErrNotFound, "job not found"), nil
+			wc.sendResponse(ws, reqID, false, nil, "job not found", WsErrNotFound)
+			return
 		}
-		return map[string]any{"job": job}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"job": job}, "", "")
 	}
 }
 
 // cronJobCreate 处理 cron.job.create。
 // Python: _cron_job_create (L2076-2089)。异常 → BAD_REQUEST。
-func cronJobCreate(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobCreate(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		job, err := cc.CreateJob(params)
 		if err != nil {
-			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
 		}
-		return map[string]any{"job": job}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"job": job}, "", "")
 	}
 }
 
 // cronJobUpdate 处理 cron.job.update。
 // Python: _cron_job_update (L2091-2115)。job not found → NOT_FOUND，其余 → BAD_REQUEST。
-func cronJobUpdate(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobUpdate(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		jobID := strings.TrimSpace(cronStrVal(params["id"]))
 		if jobID == "" {
-			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "id is required", WsErrBadRequest)
+			return
 		}
 		patch, _ := params["patch"].(map[string]any)
 		if params["patch"] != nil && patch == nil {
-			return cronErrPayload(WsErrBadRequest, "patch must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "patch must be object", WsErrBadRequest)
+			return
 		}
 		job, err := cc.UpdateJob(jobID, patch)
 		if err != nil {
 			if strings.Contains(err.Error(), "job not found") {
-				return cronErrPayload(WsErrNotFound, "job not found"), nil
+				wc.sendResponse(ws, reqID, false, nil, "job not found", WsErrNotFound)
+				return
 			}
-			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
 		}
-		return map[string]any{"job": job}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"job": job}, "", "")
 	}
 }
 
 // cronJobDelete 处理 cron.job.delete。
 // Python: _cron_job_delete (L2117-2136)。未删除 → NOT_FOUND。
-func cronJobDelete(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobDelete(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		jobID := strings.TrimSpace(cronStrVal(params["id"]))
 		if jobID == "" {
-			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "id is required", WsErrBadRequest)
+			return
 		}
 		deleted, err := cc.DeleteJob(jobID)
 		if err != nil {
-			return cronErrPayload(WsErrInternalError, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
 		if !deleted {
-			return cronErrPayload(WsErrNotFound, "job not found"), nil
+			wc.sendResponse(ws, reqID, false, nil, "job not found", WsErrNotFound)
+			return
 		}
-		return map[string]any{"deleted": true}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"deleted": true}, "", "")
 	}
 }
 
 // cronJobToggle 处理 cron.job.toggle。
 // Python: _cron_job_toggle (L2138-2161)。enabled 必填；job not found → NOT_FOUND。
-func cronJobToggle(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobToggle(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		jobID := strings.TrimSpace(cronStrVal(params["id"]))
 		if jobID == "" {
-			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "id is required", WsErrBadRequest)
+			return
 		}
 		enabledRaw, hasEnabled := params["enabled"]
 		if !hasEnabled || enabledRaw == nil {
-			return cronErrPayload(WsErrBadRequest, "enabled is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "enabled is required", WsErrBadRequest)
+			return
 		}
 		enabled := false
 		if b, ok := enabledRaw.(bool); ok {
@@ -1897,24 +1958,28 @@ func cronJobToggle(cc CronJobController) unaryHandler {
 		job, err := cc.ToggleJob(jobID, enabled)
 		if err != nil {
 			if strings.Contains(err.Error(), "job not found") {
-				return cronErrPayload(WsErrNotFound, "job not found"), nil
+				wc.sendResponse(ws, reqID, false, nil, "job not found", WsErrNotFound)
+				return
 			}
-			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
 		}
-		return map[string]any{"job": job}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"job": job}, "", "")
 	}
 }
 
 // cronJobPreview 处理 cron.job.preview。
 // Python: _cron_job_preview (L2163-2180)。count 默认 5；job not found → NOT_FOUND。
-func cronJobPreview(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobPreview(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		jobID := strings.TrimSpace(cronStrVal(params["id"]))
 		if jobID == "" {
-			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "id is required", WsErrBadRequest)
+			return
 		}
 		count := 5
 		if v, ok := params["count"].(float64); ok {
@@ -1923,40 +1988,40 @@ func cronJobPreview(cc CronJobController) unaryHandler {
 		rows, err := cc.PreviewJob(jobID, count)
 		if err != nil {
 			if strings.Contains(err.Error(), "job not found") {
-				return cronErrPayload(WsErrNotFound, "job not found"), nil
+				wc.sendResponse(ws, reqID, false, nil, "job not found", WsErrNotFound)
+				return
 			}
-			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
 		}
-		return map[string]any{"next": rows}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"next": rows}, "", "")
 	}
 }
 
 // cronJobRunNow 处理 cron.job.run_now。
 // Python: _cron_job_run_now (L2182-2198)。job not found → NOT_FOUND，其余 → INTERNAL_ERROR。
-func cronJobRunNow(cc CronJobController) unaryHandler {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+func cronJobRunNow(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
 		if params == nil {
-			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 		jobID := strings.TrimSpace(cronStrVal(params["id"]))
 		if jobID == "" {
-			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+			wc.sendResponse(ws, reqID, false, nil, "id is required", WsErrBadRequest)
+			return
 		}
 		runID, err := cc.RunNow(jobID)
 		if err != nil {
 			if strings.Contains(err.Error(), "job not found") {
-				return cronErrPayload(WsErrNotFound, "job not found"), nil
+				wc.sendResponse(ws, reqID, false, nil, "job not found", WsErrNotFound)
+				return
 			}
-			return cronErrPayload(WsErrInternalError, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
-		return map[string]any{"run_id": runID}, nil
+		wc.sendResponse(ws, reqID, true, map[string]any{"run_id": runID}, "", "")
 	}
-}
-
-// cronErrPayload 构造 cron 端点错误响应。
-// 对齐 Python channel.send_response(ok=False, error=..., code=...)。
-func cronErrPayload(code, msg string) map[string]any {
-	return map[string]any{"ok": false, "error": msg, "code": code}
 }
 
 // cronStrVal 安全取字符串。
@@ -1971,24 +2036,28 @@ func cronStrVal(v any) string {
 
 // heartbeatGetConf 处理 heartbeat.get_conf。
 // Python: _heartbeat_get_conf (app_web_handlers.py L1513-1525)。
-func heartbeatGetConf(svc HeartbeatConfService) unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func heartbeatGetConf(wc *WebChannel, svc HeartbeatConfService) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		if svc == nil {
-			return heartbeatErrPayload(WsErrServiceUnavailable, "heartbeat service not available"), nil
+			wc.sendResponse(ws, reqID, false, nil, "heartbeat service not available", WsErrServiceUnavailable)
+			return
 		}
-		return svc.GetHeartbeatConf(), nil
+		wc.sendResponse(ws, reqID, true, svc.GetHeartbeatConf(), "", "")
 	}
 }
 
 // heartbeatSetConf 处理 heartbeat.set_conf。
 // Python: _heartbeat_set_conf (app_web_handlers.py L1527-1563)。
-func heartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) unaryHandler {
-	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
+func heartbeatSetConf(wc *WebChannel, svc HeartbeatConfService, ac *routing.AgentClient) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		ctx := context.Background()
 		if svc == nil {
-			return heartbeatErrPayload(WsErrServiceUnavailable, "heartbeat service not available"), nil
+			wc.sendResponse(ws, reqID, false, nil, "heartbeat service not available", WsErrServiceUnavailable)
+			return
 		}
 		if params == nil {
-			return heartbeatErrPayload(WsErrBadRequest, "params must be object"), nil
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
 		}
 
 		// 三值提取（对齐 Python L1538-1550）
@@ -1996,7 +2065,8 @@ func heartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) unaryHa
 		if v, ok := params["every"]; ok && v != nil {
 			f, err := heartbeatAnyToFloat(v)
 			if err != nil {
-				return heartbeatErrPayload(WsErrBadRequest, "every must be number"), nil
+				wc.sendResponse(ws, reqID, false, nil, "every must be number", WsErrBadRequest)
+				return
 			}
 			every = &f
 		}
@@ -2035,7 +2105,8 @@ func heartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) unaryHa
 
 		if err := svc.SetHeartbeatConf(every, target, activeHours); err != nil {
 			// 对齐 Python except ValueError → BAD_REQUEST
-			return heartbeatErrPayload(WsErrBadRequest, err.Error()), nil
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
+			return
 		}
 		payload := svc.GetHeartbeatConf()
 
@@ -2048,13 +2119,8 @@ func heartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) unaryHa
 			// 清 Agent 侧配置缓存（对齐 _clear_agent_config_cache，失败静默 pass）
 			clearAgentConfigCache(ac, ctx)
 		}
-		return payload, nil
+		wc.sendResponse(ws, reqID, true, payload, "", "")
 	}
-}
-
-// heartbeatErrPayload 心跳 RPC 错误载荷。
-func heartbeatErrPayload(code, msg string) map[string]any {
-	return map[string]any{"ok": false, "error": msg, "code": code}
 }
 
 // heartbeatAnyToFloat every 参数数值化。
@@ -3132,22 +3198,23 @@ var systemVirtualMemory = mem.VirtualMemory
 // Python: _memory_compute (app_web_handlers.py L1414-1427)
 // 偏差：Python 计算了 mem.percent 却未放进 payload，此处补 used_percent 为超集
 // （Go 前端 ToolPanel 读取该键，见 spec D1）。
-func memoryCompute() unaryHandler {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+func memoryCompute(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		rssBytes, totalBytes, availableBytes, usedPercent, err := collectMemory()
 		if err != nil {
 			logger.Warn(logComponent).
 				Err(err).
 				Str("method", "memory.compute").
 				Msg("memory.compute collect failed")
-			return nil, err
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
 		}
-		return map[string]any{
+		wc.sendResponse(ws, reqID, true, map[string]any{
 			"rss_mb":       bytesToMB(rssBytes),
 			"total_mb":     bytesToMB(totalBytes),
 			"available_mb": bytesToMB(availableBytes),
 			"used_percent": usedPercent,
-		}, nil
+		}, "", "")
 	}
 }
 

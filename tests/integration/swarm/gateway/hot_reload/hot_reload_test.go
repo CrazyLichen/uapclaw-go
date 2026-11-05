@@ -6,12 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/suite"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
@@ -280,25 +284,55 @@ func (s *HotReloadSuite) runTurn(d *adapter.DeepAdapter, sessionID, requestID, q
 //
 // 回调体等价 AgentManager.ReloadAgentsConfig 对单个 agent 的动作
 // （agent_manager.go:396 → entry.agent.ReloadAgentConfig）。
+//
+// 走真实 WS 连接：B1a 删除了 RPCDispatcher.Dispatch 兼容壳，本地 handler 只经
+// WebChannel 分发（对齐上游 handler 闭包 + register_method），因此这里起
+// httptest + WebSocket 走完整入站链路。
 func (s *HotReloadSuite) uiSaveConfig(d *adapter.DeepAdapter, models []map[string]any) {
 	s.T().Helper()
 
 	var reloaded bool
 	var reloadErr error
-	dispatcher := web.RegisterWebHandlers(&web.WebHandlersBindParams{
+	wc := web.RegisterWebHandlers(&web.WebHandlersBindParams{
 		OnConfigSaved: func(_ []string, envUpdates map[string]any, configPayload map[string]any) error {
 			reloaded = true
 			reloadErr = d.ReloadAgentConfig(s.Ctx, configPayload, envUpdates)
 			return reloadErr
 		},
 	})
+	s.Require().NoError(wc.Start(s.Ctx))
+	defer func() { _ = wc.Stop(s.Ctx) }()
 
-	resp, err := dispatcher.Dispatch("config.save_all", map[string]any{
-		"config": map[string]any{},
-		"models": toAnyList(models),
-	}, "")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wc.HandleWebSocket)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	s.Require().NoError(err)
-	s.Require().Equal(true, resp["ok"], "config.save_all 应成功，实际回包: %+v", resp)
+	defer func() { _ = conn.Close() }()
+
+	req := map[string]any{
+		"type":   "req",
+		"id":     "hot-reload-save-1",
+		"method": "config.save_all",
+		"params": map[string]any{
+			"config": map[string]any{},
+			"models": toAnyList(models),
+		},
+	}
+	reqData, err := json.Marshal(req)
+	s.Require().NoError(err)
+	s.Require().NoError(conn.WriteMessage(websocket.TextMessage, reqData))
+
+	s.Require().NoError(conn.SetReadDeadline(time.Now().Add(10 * time.Second)))
+	_, respData, err := conn.ReadMessage()
+	s.Require().NoError(err)
+	var frame map[string]any
+	s.Require().NoError(json.Unmarshal(respData, &frame))
+	s.Require().Equal("res", frame["type"])
+	s.Require().Equal(true, frame["ok"], "config.save_all 应成功，实际回包: %+v", frame)
 	s.Require().True(reloaded, "保存后必须触发热重载回调（等价 agent.reload_config）")
 	s.Require().NoError(reloadErr, "热重载本身不应报错")
 }

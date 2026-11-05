@@ -111,11 +111,19 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// handlerBeforeCallbackMethods 需在回调转发之前先执行本地 handler 的方法集。
+//
+// Python: _HANDLER_BEFORE_CALLBACK_METHODS = frozenset({ReqMethod.CHAT_SEND.value})
+// （web_connect.py:101）。chat.send 的 ack 必须先于 AgentServer 事件写出。
+var handlerBeforeCallbackMethods = map[string]bool{
+	"chat.send": true,
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWebChannel 创建 Web 通道实例。
 //
-// 初始化 RPCDispatcher、WebSocket Upgrader 和连接管理。
+// 初始化方法注册表、WebSocket Upgrader 和连接管理。
 // onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入。
 // Python: WebChannel.__init__ + _register_web_handlers(bind)。
 func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfigSaved OnConfigSavedFunc) *WebChannel {
@@ -257,8 +265,44 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
 		params = processFiles(ctx, params)
 
-		// ─── 两层消息架构（对齐 Python _handle_raw_message）───
-		// 第一层：构建 user_message 并通过 onMessageCb（normAndForward）转发
+		// ─── 两层消息架构（对齐 Python _handle_raw_message:2180-2231）───
+		// 上游分发顺序：
+		//   ① local_only → 仅本地 handler，不转发
+		//   ② handler-before-callback（chat.send）→ 先回 ack 再转发
+		//   ③ 回调转发（_on_message_cb，否则 bus.publish_user_messages）
+		//   ④ 本地 handler / unknown method
+		wc.methodsMu.RLock()
+		handler, hasHandler := wc.methodHandlers[method]
+		localOnly := wc.localOnlyMethods[method]
+		wc.methodsMu.RUnlock()
+
+		// ① local_only：不转发，直接本地处理
+		if localOnly {
+			if !hasHandler {
+				wc.writeError(conn, reqID, "unknown method: "+method, WsErrMethodNotFound)
+				continue
+			}
+			collector := &frameCollector{}
+			wc.invokeMethodHandler(collector, handler, method, reqID, params, sid)
+			writeCollectedFrames(conn, collector, method)
+			continue
+		}
+
+		collector := &frameCollector{}
+		handlerAlreadyCalled := false
+
+		// ② handler-before-callback：先执行 handler 并立即写出，再转发
+		if handlerBeforeCallbackMethods[method] && hasHandler {
+			called := wc.invokeMethodHandler(collector, handler, method, reqID, params, sid)
+			writeCollectedFrames(conn, collector, method)
+			if !called {
+				// Python: if not handler_already_called: return
+				continue
+			}
+			handlerAlreadyCalled = true
+		}
+
+		// ③ 第一层：构建 user_message 并通过 onMessageCb（normAndForward）转发
 		handledByCallback := false
 		if wc.onMessageCb != nil {
 			userMessage := BuildUserMessage(reqID, method, params, sid, query)
@@ -269,34 +313,19 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			wc.channelMgr.DeliverToMessageHandler(userMessage)
 		}
 
-		if handledByCallback {
-			// handledByCallback=true 时短路后续本地 handler
-			// Python: if handled_by_callback: return
+		// Python: if handled_by_callback: return / if handler_already_called: return
+		if handledByCallback || handlerAlreadyCalled {
 			continue
 		}
 
-		// 第二层：本地 method handler（返回 ack 响应给客户端）
-		// 分发 RPC 请求
-		// 调用本地方法：handler 自己写帧（对齐上游 send_response/send_event），
-		// 用一个收集器把帧接住再统一写出，天然支持多帧方法。
-		collector := &frameCollector{}
-		if !wc.invokeMethod(collector, method, reqID, params, sid) {
-			wc.writeError(conn, reqID, "unknown method: "+method, WsErrMethodNotFound)
+		// ④ 第二层：本地 method handler（handler 自己写帧，对齐上游 send_response/send_event），
+		// 用收集器接住再统一写出，天然支持多帧方法。
+		if hasHandler {
+			wc.invokeMethodHandler(collector, handler, method, reqID, params, sid)
+			writeCollectedFrames(conn, collector, method)
 			continue
 		}
-		for _, frame := range collector.frames {
-			data, marshalErr := json.Marshal(frame)
-			if marshalErr != nil {
-				logger.Error(logComponent).Err(marshalErr).Str("method", method).Msg("failed to marshal response")
-				continue
-			}
-			if err := wswrite.Write(conn, data); err != nil {
-				logger.Error(logComponent).
-					Err(err).
-					Str("method", method).
-					Msg("failed to write response")
-			}
-		}
+		wc.writeError(conn, reqID, "unknown method: "+method, WsErrMethodNotFound)
 	}
 }
 
@@ -552,33 +581,59 @@ func (wc *WebChannel) unregisterMethod(method string) {
 	delete(wc.localOnlyMethods, method)
 }
 
-// invokeMethod 查找并调用方法处理器；未注册返回 false。
+// invokeMethodHandler 调用方法处理器，返回 handler 是否已应答。
 //
-// Python: handler = self._method_handlers.get(method)（web_connect.py:2180）。
-func (wc *WebChannel) invokeMethod(ws wsSender, method, reqID string, params map[string]any, sessionID string) bool {
-	wc.methodsMu.RLock()
-	handler, ok := wc.methodHandlers[method]
-	wc.methodsMu.RUnlock()
-	if !ok {
-		return false
-	}
+// Python: WebChannel._invoke_method_handler (web_connect.py:624-678)：
+// handler 抛异常时记录诊断日志、回 INTERNAL_ERROR 帧并返回 False
+// （调用方据此决定不再转发/不再重复调用）；正常返回 True。
+func (wc *WebChannel) invokeMethodHandler(ws wsSender, handler methodHandler, method, reqID string, params map[string]any, sessionID string) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Str("method", method).
+				Str("id", reqID).
+				Str("session_id", sessionID).
+				Str("panic", fmt.Sprintf("%v", r)).
+				Msg("WebChannel method handler error")
+			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("handler error: %v", r), WsErrInternalError)
+			ok = false
+		}
+	}()
 	handler(ws, reqID, params, sessionID)
 	return true
+}
+
+// writeCollectedFrames 把 handler 写出的帧按序写回连接。
+func writeCollectedFrames(conn *websocket.Conn, collector *frameCollector, method string) {
+	for _, frame := range collector.frames {
+		data, err := json.Marshal(frame)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Str("method", method).Msg("failed to marshal response")
+			continue
+		}
+		if err := wswrite.Write(conn, data); err != nil {
+			logger.Error(logComponent).Err(err).Str("method", method).Msg("failed to write response")
+		}
+	}
+	collector.frames = nil
 }
 
 // sendResponse 向客户端回一帧 res。
 //
 // Python: WebChannel.send_response。
 func (wc *WebChannel) sendResponse(ws wsSender, reqID string, ok bool, payload map[string]any, errMsg, code string) {
-	frame := map[string]any{"type": "res", "id": reqID, "ok": ok}
-	if payload != nil {
-		frame["payload"] = payload
+	if payload == nil {
+		payload = make(map[string]any)
 	}
-	if errMsg != "" {
+	frame := map[string]any{"type": "res", "id": reqID, "ok": ok, "payload": payload}
+	if !ok {
+		if errMsg == "" {
+			errMsg = "request failed"
+		}
 		frame["error"] = errMsg
-	}
-	if code != "" {
-		frame["code"] = code
+		if code != "" {
+			frame["code"] = code
+		}
 	}
 	if err := ws.WriteJSON(frame); err != nil {
 		logger.Warn(logComponent).Err(err).Str("req_id", reqID).Msg("写 res 帧失败")

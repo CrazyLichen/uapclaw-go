@@ -38,16 +38,20 @@ func main() {
 		if *verify || *verifyAll {
 			fail("上游目录不可用，无法校验矩阵", statErr)
 		}
-		fmt.Fprintf(os.Stderr, "警告：上游目录不可用，矩阵仅含前端与本仓两侧: %v\n", statErr)
-	} else {
-		src, err = loadUpstreamSource(upstreamRoot)
-		if err != nil {
-			fail("索引上游函数体", err)
-		}
-		upstreamSites, err = scanUpstream(upstreamRoot, detectRegistrars(src))
-		if err != nil {
-			fail("扫描上游", err)
-		}
+		// 非门禁模式且上游不可用：整轮跳过，不覆写文档。
+		// 否则会把"三方矩阵"降级成"两方矩阵"写回 docs/，让 CI 的
+		// git diff 校验误报"矩阵已过期"（CI 克隆的上游 HEAD 无 gateway/ 目录时即如此）。
+		fmt.Fprintf(os.Stderr, "警告：上游目录不可用，跳过本次矩阵渲染（不改写 %s / %s）: %v\n",
+			*out, *gapsOut, statErr)
+		return
+	}
+	src, err = loadUpstreamSource(upstreamRoot)
+	if err != nil {
+		fail("索引上游函数体", err)
+	}
+	upstreamSites, err = scanUpstream(upstreamRoot, detectRegistrars(src))
+	if err != nil {
+		fail("扫描上游", err)
 	}
 
 	caps, err := loadGoCapabilities(*repo)

@@ -88,9 +88,8 @@ func TestWebChannelMethods_Dispatch_并发安全(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := dispatch(d, "test.concurrent", nil, "")
+			_, err := dispatch(d, "test.concurrent", nil, "")
 			assert.NoError(t, err)
-			assert.True(t, result["ok"].(bool))
 		}()
 	}
 	wg.Wait()
@@ -147,8 +146,8 @@ func TestHandleConfigGet(t *testing.T) {
 		_ = os.Unsetenv("MODEL_NAME")
 	}()
 
-	handler := configGet(nil)
-	result, err := handler(context.Background(), nil, "")
+	handler := configGet(newTestChannel(), nil)
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 
 	// 验证环境变量映射
@@ -166,8 +165,8 @@ func TestHandleConfigGet(t *testing.T) {
 
 func TestHandleConfigSet(t *testing.T) {
 	// 测试 configSet 逻辑（onConfigSaved 为 nil，跳过热重载）
-	handler := configSet(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{
+	handler := configSet(newTestChannel(), nil, nil, nil)
+	result, err := callHandler(handler, map[string]any{
 		"model_provider": "OpenAI",
 		"model":          "gpt-4",
 	}, "sess_test")
@@ -185,8 +184,8 @@ func TestHandleConfigSet(t *testing.T) {
 }
 
 func TestHandleChannelGet(t *testing.T) {
-	handler := channelGet(nil)
-	result, err := handler(context.Background(), nil, "")
+	handler := channelGet(newTestChannel(), nil)
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 
 	channels, ok := result["channels"].([]map[string]any)
@@ -205,7 +204,7 @@ func TestHandleSessionList_空目录(t *testing.T) {
 	sessionsDir := workspace.AgentSessionsDir()
 	require.NoError(t, os.MkdirAll(sessionsDir, 0o755))
 
-	result, err := sessionList(context.Background(), nil, "")
+	result, err := callHandler(sessionList(newTestChannel()), nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "sessions")
 	sessionList, ok := result["sessions"].([]map[string]any)
@@ -222,7 +221,7 @@ func TestHandleSessionCreate(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
-	result, err := sessionCreate(context.Background(), map[string]any{
+	result, err := callHandler(sessionCreate(newTestChannel()), map[string]any{
 		"session_id": "test-create-session",
 		"title":      "test-session",
 	}, "")
@@ -241,10 +240,9 @@ func TestHandleSessionCreate(t *testing.T) {
 }
 
 func TestHandleSessionCreate_缺少SessionID(t *testing.T) {
-	result, err := sessionCreate(context.Background(), map[string]any{}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	_, err := callHandler(sessionCreate(newTestChannel()), map[string]any{}, "")
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 func TestMakeSessionID_格式(t *testing.T) {
@@ -274,39 +272,39 @@ func TestMakeSessionID_唯一性(t *testing.T) {
 
 func TestStubHandler(t *testing.T) {
 	payload := map[string]any{"status": "ok", "count": 42}
-	handler := stubHandler("test", payload)
+	handler := stubHandler(newTestChannel(), payload)
 
-	result, err := handler(context.Background(), map[string]any{"foo": "bar"}, "sess_1")
+	result, err := callHandler(handler, map[string]any{"foo": "bar"}, "sess_1")
 	assert.NoError(t, err)
 	assert.Equal(t, payload, result)
 }
 
 func TestChatMethods_Ack响应(t *testing.T) {
 	// chat.send 方法
-	result, err := chatSend()(context.Background(), nil, "sess_1")
+	result, err := callHandler(chatSend(newTestChannel()), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
 	// chat.resume 方法
-	result, err = chatResume()(context.Background(), nil, "sess_1")
+	result, err = callHandler(chatResume(newTestChannel()), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 
 	// chat.interrupt（无 intent 参数时不设置 intent 键）
-	result, err = chatInterrupt()(context.Background(), nil, "sess_1")
+	result, err = callHandler(chatInterrupt(newTestChannel()), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
 	// chat.interrupt（有 intent 参数时包含 intent）
-	result, err = chatInterrupt()(context.Background(), map[string]any{"intent": "cancel"}, "sess_1")
+	result, err = callHandler(chatInterrupt(newTestChannel()), map[string]any{"intent": "cancel"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "cancel", result["intent"])
 
 	// chat.user_answer 方法
-	result, err = chatUserAnswer()(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
+	result, err = callHandler(chatUserAnswer(newTestChannel()), map[string]any{"request_id": "req_1"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "req_1", result["request_id"])
@@ -319,47 +317,44 @@ func TestConfigEnvMap_条目数(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_params为空(t *testing.T) {
-	handler := configSaveAll(nil, nil, nil)
-	result, err := handler(context.Background(), nil, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	handler := configSaveAll(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, nil, "")
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 func TestHandleConfigSaveAll_仅config子载荷(t *testing.T) {
-	handler := configSaveAll(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{
+	handler := configSaveAll(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, map[string]any{
 		"config": map[string]any{
 			"model_provider": "OpenAI",
 		},
 	}, "")
 	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
+	assert.NoError(t, err)
 	_ = os.Unsetenv("MODEL_PROVIDER")
 }
 
 func TestHandleConfigSaveAll_config非对象(t *testing.T) {
-	handler := configSaveAll(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{
+	handler := configSaveAll(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, map[string]any{
 		"config": "not an object",
 	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 func TestHandleConfigSaveAll_models无效类型(t *testing.T) {
-	handler := configSaveAll(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{
+	handler := configSaveAll(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, map[string]any{
 		"models": "not a list",
 	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
+	require.Error(t, err)
 }
 
 func TestHandleModelsList_无配置(t *testing.T) {
-	handler := modelsList()
-	result, err := handler(context.Background(), nil, "")
+	handler := modelsList(newTestChannel())
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "models")
 }
@@ -370,24 +365,24 @@ func TestHandleModelsList_有crypto(t *testing.T) {
 	defer crypto.SetCryptoProvider(original)
 	crypto.SetCryptoProvider(&fakeCryptoHandler{})
 
-	handler := modelsList()
-	result, err := handler(context.Background(), nil, "")
+	handler := modelsList(newTestChannel())
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "models")
 }
 
 func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 	// 测试 nil ChannelManager 返回空
-	handler := channelGet(nil)
-	result, err := handler(context.Background(), nil, "")
+	handler := channelGet(newTestChannel(), nil)
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 	channels := result["channels"].([]map[string]any)
 	assert.Empty(t, channels)
 }
 
 func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
-	handler := configSaveAll(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{
+	handler := configSaveAll(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, map[string]any{
 		"config": map[string]any{
 			"model_provider": "OpenAI",
 		},
@@ -395,15 +390,15 @@ func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
 		"team":   []any{map[string]any{"name": "team1"}},
 	}, "")
 	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
+	assert.NoError(t, err)
 	_ = os.Unsetenv("MODEL_PROVIDER")
 }
 
 func TestHandleConfigSaveAll_空params对象(t *testing.T) {
-	handler := configSaveAll(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{}, "")
+	handler := configSaveAll(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, map[string]any{}, "")
 	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
+	assert.NoError(t, err)
 }
 
 func TestHandleSessionList_有会话目录(t *testing.T) {
@@ -425,7 +420,7 @@ func TestHandleSessionList_有会话目录(t *testing.T) {
 	sessDir2 := filepath.Join(sessionsDir, "test-sess-2")
 	require.NoError(t, os.MkdirAll(sessDir2, 0o755))
 
-	result, err := sessionList(context.Background(), nil, "")
+	result, err := callHandler(sessionList(newTestChannel()), nil, "")
 	require.NoError(t, err)
 	sessionList, ok := result["sessions"].([]map[string]any)
 	require.True(t, ok)
@@ -439,18 +434,17 @@ func TestHandleSessionCreate_已存在(t *testing.T) {
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	// 先创建
-	_, err := sessionCreate(context.Background(), map[string]any{
+	_, err := callHandler(sessionCreate(newTestChannel()), map[string]any{
 		"session_id": "dup-session",
 	}, "")
 	require.NoError(t, err)
 
 	// 重复创建应报 ALREADY_EXISTS
-	result, err := sessionCreate(context.Background(), map[string]any{
+	_, err = callHandler(sessionCreate(newTestChannel()), map[string]any{
 		"session_id": "dup-session",
 	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrAlreadyExists, result["code"])
+	require.Error(t, err)
+	assert.Equal(t, WsErrAlreadyExists, errorCode(err))
 }
 
 func TestHandleSessionCreate_含全部字段(t *testing.T) {
@@ -459,7 +453,7 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
-	result, err := sessionCreate(context.Background(), map[string]any{
+	result, err := callHandler(sessionCreate(newTestChannel()), map[string]any{
 		"session_id": "full-session",
 		"channel_id": "web",
 		"user_id":    "user1",
@@ -472,20 +466,19 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 }
 
 func TestHandleConfigSet_params为空(t *testing.T) {
-	handler := configSet(nil, nil, nil)
-	result, err := handler(context.Background(), nil, "")
+	handler := configSet(newTestChannel(), nil, nil, nil)
+	result, err := callHandler(handler, nil, "")
 	assert.Error(t, err)
-	assert.Nil(t, result)
+	assert.Empty(t, result)
 }
 
 func TestHandleConfigSet_无效Provider(t *testing.T) {
-	handler := configSet(nil, nil, nil)
-	result, err := handler(context.Background(), map[string]any{
+	handler := configSet(newTestChannel(), nil, nil, nil)
+	_, err := callHandler(handler, map[string]any{
 		"model_provider": "InvalidProvider",
 	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 func TestGetConfigString_路径不存在(t *testing.T) {
@@ -678,16 +671,16 @@ func TestNormalizeTruthy(t *testing.T) {
 }
 
 func TestHandleHistoryGet(t *testing.T) {
-	handler := historyGet()
-	result, err := handler(context.Background(), nil, "sess_1")
+	handler := historyGet(newTestChannel())
+	result, err := callHandler(handler, nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 }
 
 func TestHandleHistoryGet_带参数(t *testing.T) {
-	handler := historyGet()
-	result, err := handler(context.Background(), map[string]any{
+	handler := historyGet(newTestChannel())
+	result, err := callHandler(handler, map[string]any{
 		"session_id": "custom-sess",
 		"page_idx":   2,
 	}, "sess_1")
@@ -715,7 +708,7 @@ func TestHandleSessionList_分页(t *testing.T) {
 	}
 
 	// 测试 limit=2, offset=1
-	result, err := sessionList(context.Background(), map[string]any{
+	result, err := callHandler(sessionList(newTestChannel()), map[string]any{
 		"limit":  2,
 		"offset": 1,
 	}, "")
@@ -728,29 +721,26 @@ func TestHandleSessionList_分页(t *testing.T) {
 }
 
 func TestHandleModelsReplaceAll_缺models(t *testing.T) {
-	handler := modelsReplaceAll(nil, nil)
-	result, err := handler(context.Background(), map[string]any{}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
+	handler := modelsReplaceAll(newTestChannel(), nil, nil)
+	_, err := callHandler(handler, map[string]any{}, "")
+	require.Error(t, err)
 }
 
 func TestHandleModelsValidate_缺必填字段(t *testing.T) {
-	handler := modelsValidate()
-	result, err := handler(context.Background(), map[string]any{}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	handler := modelsValidate(newTestChannel())
+	_, err := callHandler(handler, map[string]any{}, "")
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 func TestHandleModelsValidate_缺apiBase(t *testing.T) {
-	handler := modelsValidate()
-	result, err := handler(context.Background(), map[string]any{
+	handler := modelsValidate(newTestChannel())
+	_, err := callHandler(handler, map[string]any{
 		"api_key": "key1",
 		"model":   "gpt-4",
 	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -810,8 +800,8 @@ func TestHandleConfigGet_解密失败保留原值(t *testing.T) {
 	_ = os.Setenv("API_KEY", "rawcipher")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	handler := configGet(&fakeCryptoFailDecrypt{})
-	result, err := handler(context.Background(), nil, "")
+	handler := configGet(newTestChannel(), &fakeCryptoFailDecrypt{})
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 	if result["api_key"] != "rawcipher" {
 		t.Errorf("api_key = %v, 期望解密失败时保留原值", result["api_key"])
@@ -823,8 +813,8 @@ func TestHandleConfigGet_解密成功(t *testing.T) {
 	_ = os.Setenv("API_KEY", "cipher")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	handler := configGet(&fakeCryptoHandler{})
-	result, err := handler(context.Background(), nil, "")
+	handler := configGet(newTestChannel(), &fakeCryptoHandler{})
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 	if result["api_key"] != "dec(cipher)" {
 		t.Errorf("api_key = %v, 期望 dec(cipher)", result["api_key"])
@@ -840,8 +830,8 @@ func TestHandleConfigGet_全局provider(t *testing.T) {
 	_ = os.Setenv("API_KEY", "cipher")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	handler := configGet(nil)
-	result, err := handler(context.Background(), nil, "")
+	handler := configGet(newTestChannel(), nil)
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 	if result["api_key"] != "dec(cipher)" {
 		t.Errorf("api_key = %v, 期望全局 provider 解密 dec(cipher)", result["api_key"])
@@ -872,8 +862,8 @@ func TestHandleModelsList_走config层解密(t *testing.T) {
 	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: " + ciphertext + "\n      model_config_obj:\n        temperature: 0.7\n"
 	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
 
-	handler := modelsList()
-	result, err := handler(context.Background(), nil, "")
+	handler := modelsList(newTestChannel())
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 
 	models, ok := result["models"].([]map[string]any)
@@ -900,8 +890,8 @@ func TestHandleModelsList_无provider保持密文(t *testing.T) {
 	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: rawcipher\n"
 	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
 
-	handler := modelsList()
-	result, err := handler(context.Background(), nil, "")
+	handler := modelsList(newTestChannel())
+	result, err := callHandler(handler, nil, "")
 	require.NoError(t, err)
 
 	models := result["models"].([]map[string]any)

@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,11 +99,10 @@ func TestHandleHeartbeatGetConf_成功(t *testing.T) {
 // TestHandleHeartbeatGetConf_服务nil SERVICE_UNAVAILABLE。
 func TestHandleHeartbeatGetConf_服务nil(t *testing.T) {
 	// 直接构造 handler nil 服务（注册分支不覆盖此路径，防御保留）
-	h := heartbeatGetConf(nil)
-	res, err := h(context.Background(), nil, "")
-	require.NoError(t, err)
-	assert.False(t, res["ok"].(bool))
-	assert.Equal(t, WsErrServiceUnavailable, res["code"])
+	h := heartbeatGetConf(newTestChannel(), nil)
+	_, err := callHandler(h, nil, "")
+	require.Error(t, err)
+	assert.Equal(t, WsErrServiceUnavailable, errorCode(err))
 }
 
 // ──────────────────────────── set_conf 写入配置 ────────────────────────────
@@ -112,20 +110,18 @@ func TestHandleHeartbeatGetConf_服务nil(t *testing.T) {
 // TestHandleHeartbeatSetConf_params非对象 BAD_REQUEST。
 func TestHandleHeartbeatSetConf_params非对象(t *testing.T) {
 	d := newHeartbeatTestChannel(&fakeHeartbeatSvc{})
-	res, err := dispatch(d, "heartbeat.set_conf", nil, "")
-	require.NoError(t, err)
-	assert.False(t, res["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, res["code"])
+	_, err := dispatch(d, "heartbeat.set_conf", nil, "")
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 // TestHandleHeartbeatSetConf_every非法 BAD_REQUEST 载荷。
 func TestHandleHeartbeatSetConf_every非法(t *testing.T) {
 	hb := &fakeHeartbeatSvc{setErr: assert.AnError}
 	d := newHeartbeatTestChannel(hb)
-	res, err := dispatch(d, "heartbeat.set_conf", map[string]any{"every": -1}, "")
-	require.NoError(t, err)
-	assert.False(t, res["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, res["code"])
+	_, err := dispatch(d, "heartbeat.set_conf", map[string]any{"every": -1}, "")
+	require.Error(t, err)
+	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
 // TestHandleHeartbeatSetConf_every字符串数字 "60" 经 heartbeatAnyToFloat 转 60.0。
@@ -145,10 +141,9 @@ func TestHandleHeartbeatSetConf_every字符串数字(t *testing.T) {
 func TestHandleHeartbeatSetConf_every非法类型(t *testing.T) {
 	hb := &fakeHeartbeatSvc{}
 	d := newHeartbeatTestChannel(hb)
-	res, err := dispatch(d, "heartbeat.set_conf", map[string]any{"every": true}, "")
-	require.NoError(t, err)
-	assert.False(t, res["ok"].(bool))
-	assert.Contains(t, res["error"], "every must be number")
+	_, err := dispatch(d, "heartbeat.set_conf", map[string]any{"every": true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "every must be number")
 }
 
 // TestHandleHeartbeatSetConf_activeHours清除 传 {}（空 map）→ 非 nil 空 map 透传
@@ -258,7 +253,7 @@ func TestHandleSessionList_Heartbeat过滤(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(sessionsDir, "heartbeat_xxx_abc123"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(sessionsDir, "normal-session"), 0o755))
 
-	result, err := sessionList(context.Background(), nil, "")
+	result, err := callHandler(sessionList(newTestChannel()), nil, "")
 	require.NoError(t, err)
 	sessions, _ := result["sessions"].([]map[string]any)
 	for _, s := range sessions {
