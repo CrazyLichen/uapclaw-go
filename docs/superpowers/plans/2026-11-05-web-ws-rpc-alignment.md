@@ -2,17 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把本仓 Web WS 端点从「45/154 同名命中」推进到「154 全量对齐」，同时把该层的文件划分、方法归属、函数名与上游 `gateway/channel_manager/web/` 做成 1:1。
+**Goal:** 把本仓 Web WS 端点在本层承诺范围内对齐上游：47 个 `local` + 2 个 `agent:ok` = **49 个方法补齐**（现有 40 个已一致），同时把该层的文件划分、方法归属、函数名与上游 `gateway/channel_manager/web/` 做成 1:1。**下游缺口 59 条不在本计划接线**，只登记清单。
 
-**Architecture:** 先用 `cmd/rpc-matrix` 把三方（前端 / 本仓 / 上游）方法集合变成可验收矩阵并接进 CI（无白名单）；再把现有 5 个 Go 文件按上游职责归位（删自造 `frame`/`RPCDispatcher`，normalize 迁 `gateway` 包，handler 改名到 Python 名）；最后按上游行区相邻性分九批补齐 109 个方法，每批一个提交、单独 CI 四绿。
+**Architecture:** 先用 `cmd/rpc-matrix` 把三方（前端 / 本仓 / 上游）方法集合变成可验收矩阵并接进 CI（无白名单），矩阵带**下游状态**列区分"本层能做实"与"需要 AgentServer"；再把现有 5 个 Go 文件按上游职责归位（删自造 `frame`/`RPCDispatcher`，normalize 迁 `gateway` 包，handler 改名到 Python 名）；最后按上游行区相邻性分七批补齐 49 个方法，每批一个提交、单独 CI 四绿。
 
-**Tech Stack:** Go 1.22（`sqlite_fts5` tag）、gorilla/websocket、标准库 `regexp`/`go/ast`、现有 `cmd/integration-audit` 门禁模式、`tests/integration/swarm/gateway` 的 `CliRouteFullChainSuite` 装配。
+**实测基线（2026-11-05，`cmd/rpc-matrix` 生成）:** 三方方法 186 = ✅ 一致 40 / ⚠️ 漂移 38 / ❌ 缺 108；缺口下游分布 `local 47 / agent:ok 2 / agent:const-only 2 / agent:missing 40 / dep 17`。
+
+**Tech Stack:** Go 1.22（`sqlite_fts5` tag）、gorilla/websocket、标准库 `regexp`、现有 `cmd/integration-audit` 门禁模式、`tests/integration/swarm/gateway` 的 `CliRouteFullChainSuite` 装配。
 
 **上游源码：** `/home/opensource/jiuwenswarm-develop`（`jiuwenswarm` 0.2.5.beta1）。本计划所有「上游 :行号」均指该目录下 `gateway/channel_manager/web/app_web_handlers.py`（除另行注明）。
 
-**移植铁律（规则 9）:** 109 个 handler 一律按上游函数体逐行移植，函数名 = 上游函数名去前导下划线转 lowerCamel，参数顺序 = `(ws, reqID, params, sessionID)`。**不得**为了适配 Go 习惯合并/拆分步骤、改参数语义、换错误码。
+**移植铁律（规则 9）:** 49 个 handler 一律按上游函数体逐行移植，函数名 = 上游函数名去前导下划线转 lowerCamel，参数顺序 = `(ws, reqID, params, sessionID)`。**不得**为了适配 Go 习惯合并/拆分步骤、改参数语义、换错误码。
 
-**关于「不重抄函数体」:** 本计划不把上游约 3k 行函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
+**关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
+
+**进度：Task 1-2（B0）已完成并入库**（`cmd/rpc-matrix` + 两份 sync 文档 + CI 漂移校验），后续任务从 Task 3 开始。
 
 ---
 
@@ -21,11 +25,13 @@
 ```
 cmd/rpc-matrix/
 ├── doc.go              # 包注释（规则 1）
-├── main.go             # 入口：-verify / -out
+├── main.go             # 入口：-verify / -verify-all / -out
 ├── scan.go             # 三方扫描器
-├── matrix.go           # 归类 + Markdown 渲染
-└── scan_test.go        # 扫描/归类单测
+├── classify.go         # 上游 handler 形态与下游状态判定
+├── matrix.go           # 归类 + Markdown 渲染（矩阵 + 缺口清单）
+└── scan_test.go        # 扫描/判定/渲染单测
 docs/sync/web-rpc-matrix.md            # 生成物（入库）
+docs/sync/web-rpc-downstream-gaps.md   # 生成物（入库）
 internal/swarm/gateway/channel_manager/web/
 ├── doc.go              # 文件目录同步
 ├── web_connect.go      # 对齐 web_connect.py（连接/帧/分发/register_method）
@@ -1088,13 +1094,13 @@ git commit -m "refactor(web): handler 函数名对齐上游 Python 名（规则 
 
 ---
 
-## Task 8: B1b-1 config 代理族（10 个）
+## Task 8: B1b-1 config 代理族（10 个，`local`）
 
 **Files:**
 - Modify: `web/app_web_handlers.go`
 - Test: `web/app_web_handlers_models_test.go`
 
-**方法清单（上游 `_register_config_proxy`）:**
+**方法清单（上游 `_register_config_proxy`，单用户走本地配置读写）:**
 
 | 方法 | 上游 | Go 名 |
 |---|---|---|
@@ -1112,15 +1118,15 @@ git commit -m "refactor(web): handler 函数名对齐上游 Python 名（规则 
 - [ ] **Step 1: 读上游实现**
 
 Run: `sed -n '5504,5700p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
-要点：`_register_config_proxy(name, req_method, local_handler)` 单用户走 `local_handler`，AgentOS 多用户走 `_proxy_config_request`（E2A `proxy_unary_request`）。本仓当前只有单用户路径 → **只实现 local_handler 语义**，多用户分支在函数注释中标 ⤵️ 并登记计划。
+要点：`_register_config_proxy(name, req_method, local_handler)` 在**单用户**下走 `local_handler`；AgentOS 多用户才走 `_proxy_config_request`（E2A）。本仓只有单用户路径 → 只实现 local_handler 语义，多用户分支在函数注释标 ⤵️。
 
-- [ ] **Step 2: 写失败测试（表驱动）**
+- [ ] **Step 2: 写失败测试**
 
 ```go
 // TestModelsFamily_注册齐全 验证 10 个方法都已注册。
 func TestModelsFamily_注册齐全(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	registerModelsFamily(wc)
+	registerModelsFamily(wc, fakeModelsConfigStore{})
 	for _, m := range []string{
 		"models.get", "models.upsert", "models.delete", "models.references",
 		"model_groups.list", "model_groups.upsert", "model_groups.delete",
@@ -1131,7 +1137,33 @@ func TestModelsFamily_注册齐全(t *testing.T) {
 		}
 	}
 }
+
+// TestModelsGet_返回配置 验证正向路径 payload 透出。
+func TestModelsGet_返回配置(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	registerModelsFamily(wc, fakeModelsConfigStore{
+		models: map[string]any{"models": []any{map[string]any{"name": "qwen-max"}}},
+	})
+	ws := newFakeWS()
+	wc.methodHandlers["models.get"](ws, "rid", map[string]any{}, "sid")
+	if ws.lastFrame()["ok"] != true {
+		t.Fatalf("预期成功，实际 %v", ws.lastFrame())
+	}
+}
+
+// fakeModelsConfigStore 测试用配置读写。
+type fakeModelsConfigStore struct {
+	// models GetModels 返回值
+	models map[string]any
+}
+
+// GetModels 返回预置模型清单。
+func (f fakeModelsConfigStore) GetModels() (map[string]any, error) { return f.models, nil }
+
+// 其余方法在需要断言的用例中按需实现，未实现的返回零值。
 ```
+
+> `modelsConfigStore` 接口其余方法（`UpsertModel` 等）在 fake 上补空实现即可，编译期由接口约束保证签名一致。
 
 - [ ] **Step 3: 实现（模板，其余 9 个同构）**
 
@@ -1154,7 +1186,7 @@ func registerModelsFamily(wc *WebChannel, cfg modelsConfigStore) {
 	wc.registerMethod("vendors.fetch_models", makeVendorsFetchModels(wc, cfg), false)
 }
 
-// modelsConfigStore 配置代理族所需的读写面（生产实现复用现有 config_apply 内的读写函数）。
+// modelsConfigStore 配置代理族所需的读写面（生产实现复用 config_apply 内的读写函数）。
 type modelsConfigStore interface {
 	// GetModels 读取模型清单与默认项
 	GetModels() (map[string]any, error)
@@ -1178,12 +1210,12 @@ type modelsConfigStore interface {
 	FetchVendorModels(params map[string]any) (map[string]any, error)
 }
 
-// makeModelsGet 读取单个模型配置。
+// makeModelsGet 读取模型配置。
 //
 // Python: _register_config_proxy("models.get", _ConfigReq.MODELS_GET, <local handler>)。
 // 移植要求：返回 payload 的键名与上游 local handler 完全一致。
 func makeModelsGet(wc *WebChannel, cfg modelsConfigStore) methodHandler {
-	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		payload, err := cfg.GetModels()
 		if err != nil {
 			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
@@ -1196,269 +1228,49 @@ func makeModelsGet(wc *WebChannel, cfg modelsConfigStore) methodHandler {
 
 > 其余 9 个 `make*` 同构：只把接口方法与错误分支换成上游对应函数体；`params` 取值键名逐字对齐上游。
 
-- [ ] **Step 4: 跑测试**
+- [ ] **Step 4: 跑单测**
 
-Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestModelsFamily -v`
+Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run "TestModels" -v`
 Expected: PASS。
 
-- [ ] **Step 5: 集成用例**
-
-在 `tests/integration/swarm/web/` 新增：
-
-```go
-// TestModelsFamily_真实WS帧 验证前端真实帧可命中 models.get。
-func (s *WebRPCFullChainSuite) TestModelsFamily_真实WS帧() {
-	s.sendRPC("models.get", map[string]any{"name": "default"})
-	res := s.waitRPC("models.get")
-	if !res.OK && res.Code != "INTERNAL_ERROR" {
-		t.Fatalf("预期 ok 或业务错误，实际 code=%s", res.Code)
-	}
-}
-```
-
-- [ ] **Step 6: 更新矩阵并提交**
+- [ ] **Step 5: 更新矩阵并提交**
 
 ```bash
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A internal/swarm/gateway/channel_manager/web/ tests/integration/swarm/web/ docs/sync/web-rpc-matrix.md
+git add -A internal/swarm/gateway/channel_manager/web/ docs/sync/
 git commit -m "feat(web): 补齐 models/model_groups/vendors/session.selection 方法族（10 个）"
 ```
 
 ---
 
-## Task 9: B1b-2 heartbeat.job.*（10 个）
-
-**Files:**
-- Modify: `web/app_web_handlers.go`
-- Delete: `heartbeat.get_path` 注册
-- Test: `web/app_web_handlers_heartbeat_job_test.go`
-
-**方法清单：** `heartbeat.job.list/get/meta/create/update/delete/toggle/preview/run_now/cancel`（上游 `:6196-6205`，handler `_hb_job_*`；实体在 `:5887` 起的 `_hb_job_list` 一族）。
-
-- [ ] **Step 1: 读上游**
-
-Run: `sed -n '5860,6220p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
-要点：`_get_heartbeat()` 返回 None 时回 `_heartbeat_unavailable`（错误 code 从该函数体抄，勿自拟）。
-
-- [ ] **Step 2: 写失败测试**
-
-```go
-// TestHeartbeatJob_注册且未注入服务时报错 验证 10 个方法与缺依赖语义。
-func TestHeartbeatJob_注册且未注入服务时报错(t *testing.T) {
-	for _, m := range heartbeatJobMethods {
-		wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-		registerHeartbeatFamily(wc, nil)
-		h, ok := wc.methodHandlers[m]
-		if !ok {
-			t.Fatalf("方法未注册: %s", m)
-		}
-		h(nil, "rid", map[string]any{}, "sid") // 不 panic 即通过；错误帧由 fake ws 断言
-	}
-}
-```
-
-- [ ] **Step 3: 实现 + 注册**
-
-按上游 `_hb_job_*` 逐函数移植，统一命名 `hbJobList`/`hbJobGet`/…；`heartbeatJobMethods` 变量列出 10 个方法名供测试与注册共用。
-
-`bind.HeartbeatService` 现有接口只有 `GetHeartbeatConf`/`SetHeartbeatConf` → 需扩出 job 面：
-
-```go
-// HeartbeatJobService 心跳任务面（对齐上游 heartbeat 服务 list_jobs/get_job/... 方法）。
-type HeartbeatJobService interface {
-	ListJobs(params map[string]any, accessSessionID, userID string) (map[string]any, error)
-	GetJob(jobID string) (map[string]any, error)
-	JobMeta() (map[string]any, error)
-	CreateJob(params map[string]any) (map[string]any, error)
-	UpdateJob(jobID string, params map[string]any) (map[string]any, error)
-	DeleteJob(jobID string) (bool, error)
-	ToggleJob(jobID string, enabled bool) (map[string]any, error)
-	PreviewJob(jobID string, count int) (map[string]any, error)
-	RunNow(jobID string) (string, error)
-	CancelJob(jobID string) (bool, error)
-}
-```
-
-- [ ] **Step 4: 删除 `heartbeat.get_path`**
-
-```bash
-grep -rn "heartbeat.get_path" --include=*.go internal/ | grep -v _test
-```
-逐处删除注册与 handler；测试同步删断言。
-
-- [ ] **Step 5: 测试 + 集成 + 提交**
-
-```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
-go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 heartbeat.job.* 10 个方法并删除自造 heartbeat.get_path"
-```
-
----
-
-## Task 10: B1b-3 cron.meta / health_check / updater（7 个）
-
-**Files:**
-- Modify: `web/app_web_handlers.go`
-- Test: `web/app_web_handlers_cron_health_test.go`
-
-**方法清单：**
-
-| 方法 | 上游 | Go 名 |
-|---|---|---|
-| `cron.job.meta` | `:5865` | `cronJobMeta` |
-| `health_check.get_conf` | `:5839` | `healthCheckGetConf` |
-| `health_check.set_conf` | `:5840` | `healthCheckSetConf` |
-| `updater.upgrade` | `:5835` | `updaterUpgrade` |
-| `updater.get_conf` | `:5836` | `updaterGetConf` |
-| `updater.reset_source` | `:5837` | `updaterResetSource` |
-| `updater.set_conf` | `:5838` | `updaterSetConf` |
-
-- [ ] **Step 1: 读上游**
-
-Run: `sed -n '4240,4270p;5820,5870p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
-
-关键语义（`_health_check_get_conf` 原文）：服务为 None → `ok=False, error="health_check service not available", code="SERVICE_UNAVAILABLE"`；异常 → `code="INTERNAL_ERROR"`。**逐字照抄，勿改文案**。
-
-- [ ] **Step 2: 写失败测试**
-
-```go
-// TestHealthCheck_缺服务时返回SERVICE_UNAVAILABLE 验证错误码与文案对齐上游。
-func TestHealthCheck_缺服务时返回SERVICE_UNAVAILABLE(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	ws := newFakeWS()
-	registerHealthCheckFamily(wc, nil)
-	wc.methodHandlers["health_check.get_conf"](ws, "rid", map[string]any{}, "sid")
-	frame := ws.lastFrame()
-	if frame["ok"] != false || frame["code"] != "SERVICE_UNAVAILABLE" {
-		t.Fatalf("错误码不符：%v", frame)
-	}
-	if frame["error"] != "health_check service not available" {
-		t.Fatalf("文案不符：%v", frame["error"])
-	}
-}
-```
-
-- [ ] **Step 3: 实现 + 注册**（模板同 Task 8，逐函数 1:1 移植）
-
-- [ ] **Step 4: 删除 `updater.cancel`/`updater.install`**
-
-上游零命中，删除注册与 handler，测试同步删除。
-
-- [ ] **Step 5: 测试 + 矩阵 + 提交**
-
-```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
-go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 cron.meta/health_check/updater 7 个方法并删除自造 updater.cancel|install"
-```
-
----
-
-## Task 11: B1b-4 session 族与杂项（9 个）
-
-**Files:**
-- Modify: `web/app_web_handlers.go`
-- Test: `web/app_web_handlers_session_test.go`
-
-**方法清单：**
-
-| 方法 | 上游 | Go 名 |
-|---|---|---|
-| `session.get_metadata` | `:5690` | `sessionGetMetadata` |
-| `session.message.continue_queued` | `:5691` | `sessionMessageContinueQueued` |
-| `session.plan_status` | `:5692` | `sessionPlanStatus` |
-| `session.rename` | `:5693` | `sessionRename` |
-| `session.pin` | `:5694` | `sessionPin` |
-| `chat.swarmflow_reply` | `:5818` | `chatSwarmflowReply` |
-| `commands.list` | `:5775` | `commandsList` |
-| `connection.status` | `:5676` | `connectionStatus` |
-| `config.moa_status` | `:5637` | `configMoaStatus` |
-
-- [ ] **Step 1: 读上游**
-
-Run: `sed -n '5630,5680p;5688,5700p;5770,5785p;5810,5830p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
-
-`_connection_status` 原文（已确认）：返回 `{"agent_ready": ac is not None and bool(getattr(ac, "server_ready", False)), "protocol_version": "1.0"}`。
-
-- [ ] **Step 2: 写失败测试**
-
-```go
-// TestConnectionStatus_返回就绪字段 验证 payload 与上游一致。
-func TestConnectionStatus_返回就绪字段(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	ws := newFakeWS()
-	wc.registerMethod("connection.status", wc.connectionStatus, false)
-	wc.methodHandlers["connection.status"](ws, "rid", map[string]any{}, "sid")
-	p := ws.lastFrame()["payload"].(map[string]any)
-	if p["protocol_version"] != "1.0" {
-		t.Fatalf("protocol_version 不符：%v", p)
-	}
-	if _, ok := p["agent_ready"]; !ok {
-		t.Fatalf("缺 agent_ready")
-	}
-}
-```
-
-- [ ] **Step 3: 实现 `connectionStatus`（完整代码）**
-
-```go
-// connectionStatus 返回 Gateway / AgentServer 就绪状态。
-//
-// Python: _connection_status (app_web_handlers.py:5676-5684)。
-//
-// 与上游一致：handler 是 _register_web_handlers(bind) 内的闭包，捕获 agent_client，
-// 故 Go 侧写成捕获 bind.AgentClient 的闭包，而不是 WebChannel 的方法。
-func makeConnectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHandler {
-	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
-		agentReady := agentClient != nil && agentClient.ServerReady()
-		wc.sendResponse(ws, reqID, true, map[string]any{
-			"agent_ready":      agentReady,
-			"protocol_version": "1.0",
-		}, "", "")
-	}
-}
-```
-
-> `ServerReady()` 若 `routing.AgentClient` 没有，先在同包加只读访问器暴露 `server_ready` 字段，不在 handler 里另建状态。
-
-- [ ] **Step 4: 其余 8 个按上游 1:1 移植 + 注册**
-
-- [ ] **Step 5: 测试 + 矩阵 + 提交**
-
-```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
-go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 session 族与 connection/commands/moa/swarmflow 9 个方法"
-```
-
----
-
-## Task 12: B1b-5 九个 IM 平台的 get_conf/set_conf（18 个）
+## Task 9: B1b-2 九个 IM 平台配置（18 个，`local`）
 
 **Files:**
 - Modify: `web/app_web_handlers.go`
 - Test: `web/app_web_handlers_channel_conf_test.go`
 
-**方法清单：** 对 `feishu / xiaoyi / telegram / dingtalk / whatsapp / discord / slack / wecom / wechat` 各一对 `channel.<p>.get_conf` / `channel.<p>.set_conf`（上游 `:5844-5861`，handler `_channel_<p>_get_conf` / `_channel_<p>_set_conf`）。
+**方法清单：** `feishu / xiaoyi / telegram / dingtalk / whatsapp / discord / slack / wecom / wechat` 各一对 `channel.<p>.get_conf` / `channel.<p>.set_conf`（上游 `:5844-5861`）。
 
 - [ ] **Step 1: 读上游 9 组实现**
 
-Run: `sed -n '5780,5870p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
-若 handler 体在更早位置（定义与注册分离）：`grep -n "_channel_feishu_get_conf" -A 20 <file>`
+```bash
+cd /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web
+sed -n '4360,4420p;5780,5870p' app_web_handlers.py
+grep -n "_channel_.*_set_conf" -A 20 app_web_handlers.py | head -60
+```
+要点（`_channel_feishu_get_conf` 原文）：`cm is None` → `ok=False`、`error="channel manager not available"`、`code="SERVICE_UNAVAILABLE"`。
 
-- [ ] **Step 2: 写表驱动失败测试**
+- [ ] **Step 2: 写失败测试（注册 + nil 分支 + 正向）**
 
 ```go
 // TestChannelConf_九平台齐全 验证 9 平台 × 2 方法全部注册。
 func TestChannelConf_九平台齐全(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
 	registerChannelConfFamily(wc, nil)
-	for _, p := range []string{"feishu", "xiaoyi", "telegram", "dingtalk", "whatsapp", "discord", "slack", "wecom", "wechat"} {
+	for _, p := range channelConfPlatforms {
 		for _, suffix := range []string{"get_conf", "set_conf"} {
-			m := "channel." + p + "." + suffix
-			if _, ok := wc.methodHandlers[m]; !ok {
-				t.Errorf("方法未注册: %s", m)
+			if _, ok := wc.methodHandlers["channel."+p+"."+suffix]; !ok {
+				t.Errorf("方法未注册: channel.%s.%s", p, suffix)
 			}
 		}
 	}
@@ -1466,14 +1278,12 @@ func TestChannelConf_九平台齐全(t *testing.T) {
 
 // TestChannelConf_无CM时回SERVICE_UNAVAILABLE 验证依赖缺失分支与上游文案一致。
 //
-// 这里传 nil 是**被测语义**（上游 app_web_handlers.py:4367-4377 的真实分支），
-// 不是拿 nil 糊测试：断言的是错误码与文案。
+// 传 nil 是**被测语义**（上游 app_web_handlers.py:4367-4377 的真实分支）。
 func TestChannelConf_无CM时回SERVICE_UNAVAILABLE(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
 	registerChannelConfFamily(wc, nil)
 	ws := newFakeWS()
 	wc.methodHandlers["channel.feishu.get_conf"](ws, "rid", map[string]any{}, "sid")
-
 	frame := ws.lastFrame()
 	if frame["ok"] != false || frame["code"] != WsErrServiceUnavailable {
 		t.Fatalf("预期 SERVICE_UNAVAILABLE，实际 %v", frame)
@@ -1482,33 +1292,9 @@ func TestChannelConf_无CM时回SERVICE_UNAVAILABLE(t *testing.T) {
 		t.Fatalf("文案与上游不一致：%v", frame["error"])
 	}
 }
-
-// TestChannelConf_正常读取 验证注入 fake 后返回上游 payload 形状。
-func TestChannelConf_正常读取(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	registerChannelConfFamily(wc, fakeChannelConfSource{conf: map[string]any{"apps": []any{map[string]any{"name": "bot-a"}}}})
-	ws := newFakeWS()
-	wc.methodHandlers["channel.feishu.get_conf"](ws, "rid", map[string]any{}, "sid")
-
-	if ws.lastFrame()["ok"] != true {
-		t.Fatalf("预期成功，实际 %v", ws.lastFrame())
-	}
-}
-
-// fakeChannelConfSource 测试用渠道配置读写。
-type fakeChannelConfSource struct {
-	// conf GetConf 返回的配置
-	conf map[string]any
-}
-
-// GetConf 返回预置配置。
-func (f fakeChannelConfSource) GetConf(string) (map[string]any, error) { return f.conf, nil }
-
-// SetConf 空实现（写回断言在需要时另行扩展）。
-func (f fakeChannelConfSource) SetConf(string, map[string]any) error { return nil }
 ```
 
-- [ ] **Step 3: 用平台表驱动实现（避免 18 份重复代码）**
+- [ ] **Step 3: 用平台表驱动实现**
 
 ```go
 // channelConfSource 渠道配置读写面（Go 对上游 duck-typed `cm.get_conf/set_conf` 的等价表达）。
@@ -1525,34 +1311,30 @@ type channelConfSource interface {
 var channelConfPlatforms = []string{"feishu", "xiaoyi", "telegram", "dingtalk", "whatsapp", "discord", "slack", "wecom", "wechat"}
 
 // registerChannelConfFamily 注册九个 IM 平台的配置读写方法。
-//
-// Python: app_web_handlers.py:5844-5861。每个平台的两个方法体按上游对应函数移植，
-// 平台名只作为 selector 传入，不改变分支结构。
 func registerChannelConfFamily(wc *WebChannel, cm channelConfSource) {
 	for _, p := range channelConfPlatforms {
 		platform := p
 		wc.registerMethod("channel."+platform+".get_conf", func(ws wsSender, reqID string, params map[string]any, sid string) {
-			channelConfGet(wc, cm, platform, ws, reqID, params, sid)
+			channelConfGet(wc, cm, platform, ws, reqID)
 		}, false)
 		wc.registerMethod("channel."+platform+".set_conf", func(ws wsSender, reqID string, params map[string]any, sid string) {
-			channelConfSet(wc, cm, platform, ws, reqID, params, sid)
+			channelConfSet(wc, cm, platform, ws, reqID, params)
 		}, false)
 	}
 }
 
 // channelConfGet 读取单个 IM 平台的配置。
 //
-// Python: _channel_feishu_get_conf 等 (app_web_handlers.py:4365-...)。分支顺序照抄上游：
-// 先判 cm 是否缺失（回 SERVICE_UNAVAILABLE + "channel manager not available"），
-// 再取配置、按平台做归一化、最后回 payload。
-func channelConfGet(wc *WebChannel, cm channelConfSource, platform string, ws wsSender, reqID string, params map[string]any, sid string) {
+// Python: _channel_feishu_get_conf 等 (app_web_handlers.py:4365-...)。分支顺序照抄：
+// 先判 cm 缺失（SERVICE_UNAVAILABLE + "channel manager not available"），
+// 再取配置、按平台归一化、最后回 payload。
+func channelConfGet(wc *WebChannel, cm channelConfSource, platform string, ws wsSender, reqID string) {
 	if cm == nil {
 		logger.Warn(logComponent).Str("platform", platform).Str("req_id", reqID).
 			Msg("channel manager not available")
 		wc.sendResponse(ws, reqID, false, nil, "channel manager not available", WsErrServiceUnavailable)
 		return
 	}
-	// 平台分支：按上游对应函数体逐行移植（feishu 归一 apps、wechat 归一 login 等）
 	raw, err := cm.GetConf(platform)
 	if err != nil {
 		wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
@@ -1562,7 +1344,7 @@ func channelConfGet(wc *WebChannel, cm channelConfSource, platform string, ws ws
 }
 ```
 
-> 若上游九个平台 handler 体确实不同（例如 wechat 多一个 login_ui 分支、feishu 归一 `apps`），则在该平台分支里照抄上游逻辑，不得为了 DRY 合并语义。
+> 若上游某平台 handler 体确有差异（feishu 归一 `apps`、wechat 多 login 分支），在该平台分支里照抄，不得为了 DRY 合并语义。
 
 - [ ] **Step 4: 测试 + 矩阵 + 提交**
 
@@ -1574,215 +1356,183 @@ git add -A && git commit -m "feat(web): 补齐九个 IM 平台配置读写 18 �
 
 ---
 
-## Task 13: B1b-6 project 族（20 个，含 9 个 git）
-
-**Files:**
-- Create: `internal/swarm/gateway/channel_manager/web/project_git.go`（对齐 `project_git.py`）
-- Create: `internal/swarm/gateway/channel_manager/web/git_ws_handler.go`（对齐 `git_ws_handler.py`）
-- Modify: `web/app_web_handlers.go`（`project.*` CRUD 10 个）
-- Test: 上述两文件的 `_test.go` + `app_web_handlers_project_test.go`
-
-**方法清单：**
-
-| 方法 | 上游 | Go 文件 |
-|---|---|---|
-| `project.list/info/get_sessions/get_cron_sessions/create/rename/pin/pinned_sessions/remove/restore` | `:5701-5716` | `app_web_handlers.go` |
-| `project.git.status/probe/init/switch_branch/create_branch/commit/push/diff_status/turn_diff_list/turn_diff` | `:5719-5728` | `project_git.go` + `git_ws_handler.go` |
-
-- [ ] **Step 1: 读上游**
-
-Run:
-```bash
-cd /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web
-sed -n '5700,5730p' app_web_handlers.py
-wc -l project_git.py git_ws_handler.py git_diff_status.py git_diff_watcher.py
-```
-
-- [ ] **Step 2: 先写 project CRUD 测试**
-
-```go
-// TestProjectCrud_注册齐全 验证 10 个 project 方法已注册。
-func TestProjectCrud_注册齐全(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	registerProjectFamily(wc)
-	for _, m := range []string{
-		"project.list", "project.info", "project.get_sessions", "project.get_cron_sessions",
-		"project.create", "project.rename", "project.pin", "project.pinned_sessions",
-		"project.remove", "project.restore",
-	} {
-		if _, ok := wc.methodHandlers[m]; !ok {
-			t.Errorf("方法未注册: %s", m)
-		}
-	}
-}
-```
-
-- [ ] **Step 3: 实现 project CRUD（按上游 `_project_*` 1:1）**
-
-- [ ] **Step 4: git 族按上游文件归属落地**
-
-`project_git.py` 的 `project_git_status/probe/init/switch_branch/create_branch/commit/push/diff_status/turn_diff_list/turn_diff` → `project_git.go`；`git_ws_handler.py` 的 WS 侧封装 → `git_ws_handler.go`。测试用 `t.TempDir()` 造真仓库验证 status/diff 输出形状（不 mock git）。
-
-- [ ] **Step 5: 集成用例（真 git 仓库）**
-
-```go
-// TestProjectGit_真实仓库状态 验证 project.git.status 在临时仓库上返回分支与改动。
-func (s *WebRPCFullChainSuite) TestProjectGit_真实仓库状态() {
-	repo := s.initGitRepo()
-	s.sendRPC("project.git.status", map[string]any{"project_dir": repo})
-	res := s.waitRPC("project.git.status")
-	if !res.OK {
-		t.Fatalf("status 失败：%+v", res)
-	}
-}
-```
-
-- [ ] **Step 6: 测试 + 矩阵 + 提交**
-
-```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run "TestProject" -v
-go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 project 族 20 个方法（含 git 9 个，真仓库测试）"
-```
-
----
-
-## Task 14: B1b-7 file / media / document / path（8 个）
+## Task 10: B1b-3 health_check / cron / updater（7 个，`local`）
 
 **Files:**
 - Modify: `web/app_web_handlers.go`
-- Test: `web/app_web_handlers_assets_test.go`
-
-| 方法 | 上游 | 备注 |
-|---|---|---|
-| `file.upload_chunk` | `:5802` | 分片上传，后续实现参照 `container_file_http.py` |
-| `media.persist` / `media.discard` | `:5811-5812` | |
-| `document.persist` / `document.formats` | `:5813-5814` | |
-| `path.select_file` / `path.select_files` / `path.select_directory` | `:5732-5734` | 对齐 `file_picker.py` / `directory_picker.py` |
-
-- [ ] **Step 1: 读上游四个入口**
-
-```bash
-cd /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web
-sed -n '5730,5740p;5800,5820p' app_web_handlers.py
-grep -n "def _path_select_file\|def _media_persist\|def _document_persist\|def _file_upload_chunk" -A 15 app_web_handlers.py
-```
-
-- [ ] **Step 2: 写失败测试**
-
-```go
-// TestPathSelect_缺桌面会话时返回对齐错误 验证 path.select_file 的错误分支。
-func TestPathSelect_缺桌面会话时返回对齐错误(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	ws := newFakeWS()
-	wc.registerMethod("path.select_file", wc.pathSelectFile, false)
-	wc.methodHandlers["path.select_file"](ws, "rid", map[string]any{}, "sid")
-	if ws.lastFrame()["ok"] == true {
-		t.Fatalf("无桌面选择器时应失败")
-	}
-}
-```
-
-- [ ] **Step 3: 8 个 handler 按上游 1:1 移植 + 注册**
-
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
-
-```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -v
-go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 file/media/document/path 8 个方法"
-```
-
----
-
-## Task 15: B1b-8 harness / external_cli（9 个 + 删 7 个自造）
-
-**Files:**
-- Modify: `web/app_web_handlers.go`
-- Delete: 7 个 `harness.*` 自造 handler
-- Test: `web/app_web_handlers_harness_test.go`
+- Test: `web/app_web_handlers_cron_health_test.go`
 
 | 方法 | 上游 | Go 名 |
 |---|---|---|
-| `harness.import` | `:6555` | `harnessImport` |
-| `harness.export` | `:6567` | `harnessExport` |
-| `external_cli.detect` | `:5496` | `externalCliDetect` |
-| `external_cli.validate_paths` | `:5497` | `externalCliValidatePaths` |
-| `external_cli.prune_path_histories` | `:5498` | `externalCliPrunePathHistories` |
-| `external_cli.codex_install_status` | `:5499` | `externalCliCodexInstallStatus` |
-| `external_cli.install_status` | `:5500` | `externalCliInstallStatus` |
-| `external_cli.install` | `:5501` | `externalCliInstall` |
-| `external_cli.custom_agent.remove` | `:5502` | `externalCliCustomAgentRemove` |
+| `health_check.get_conf` | `:5839` | `healthCheckGetConf` |
+| `health_check.set_conf` | `:5840` | `healthCheckSetConf` |
+| `cron.job.meta` | `:5865` | `cronJobMeta` |
+| `updater.upgrade` | `:5835` | `updaterUpgrade` |
+| `updater.get_conf` | `:5836` | `updaterGetConf` |
+| `updater.reset_source` | `:5837` | `updaterResetSource` |
+| `updater.set_conf` | `:5838` | `updaterSetConf` |
 
 - [ ] **Step 1: 读上游**
 
-Run: `sed -n '2268,2380p;5540,5700p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
+Run: `sed -n '4252,4270p;5820,5870p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
+要点（`_health_check_get_conf` 原文）：服务为 None → `ok=False, error="health_check service not available", code="SERVICE_UNAVAILABLE"`；异常 → `code="INTERNAL_ERROR"`。
 
 - [ ] **Step 2: 写失败测试**
 
 ```go
-// TestHarnessExportImport_注册 验证 2 个方法与 7 个自造方法已清除。
-func TestHarnessExportImport_注册(t *testing.T) {
+// TestHealthCheck_缺服务时返回SERVICE_UNAVAILABLE 验证错误码与文案对齐上游。
+func TestHealthCheck_缺服务时返回SERVICE_UNAVAILABLE(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	registerHarnessFamily(wc)
-	if _, ok := wc.methodHandlers["harness.export"]; !ok {
-		t.Fatalf("harness.export 未注册")
+	ws := newFakeWS()
+	registerHealthCheckFamily(wc, nil)
+	wc.methodHandlers["health_check.get_conf"](ws, "rid", map[string]any{}, "sid")
+	frame := ws.lastFrame()
+	if frame["ok"] != false || frame["code"] != WsErrServiceUnavailable {
+		t.Fatalf("错误码不符：%v", frame)
 	}
-	for _, gone := range []string{"harness.list", "harness.install", "harness.uninstall", "harness.enable", "harness.disable", "harness.get_status", "harness.rebuild"} {
-		if _, ok := wc.methodHandlers[gone]; ok {
-			t.Errorf("自造方法未删除: %s", gone)
-		}
+	if frame["error"] != "health_check service not available" {
+		t.Fatalf("文案不符：%v", frame["error"])
 	}
 }
 ```
 
-- [ ] **Step 3: 实现 9 个 + 删除 7 个自造 handler 与其测试**
+- [ ] **Step 3: 实现并注册 7 个方法**
 
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
+`health_check.*` 复用既有 `HeartbeatConfService`（Go 已有 `GetHeartbeatConf`/`SetHeartbeatConf`，上游 `hb.get_health_check_conf()` 同源，别名接入即可）；`cron.job.meta` 在 `CronJobController` 上补 `Meta() (map[string]any, error)` 并在 controller 实现（上游 `_cron_job_meta` 返回静态元数据）；`updater.*` 在 `UpdaterService` 接口上补 conf 面（`GetConf`/`SetConf`/`ResetSource`/`Upgrade`）。
+
+- [ ] **Step 4: 删除自造与漂移名**
 
 ```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -v
+grep -rn '"cron.job.disable"\|"cron.job.enable"\|"cron.job.run"\|"cron.job.status"\|"updater.cancel"\|"updater.install"\|"heartbeat.get_path"' --include=*.go internal/
+```
+逐处删除注册与 handler，测试同步删断言。
+
+- [ ] **Step 5: 测试 + 矩阵 + 提交**
+
+```bash
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 harness.import|export 与 external_cli 9 个方法；删除 7 个自造 harness.*"
+git add -A && git commit -m "feat(web): 补齐 health_check/cron.meta/updater 7 个方法；删除 7 个自造漂移名"
 ```
 
 ---
 
-## Task 16: B1b-9 openai_account / topic_starters / prompt_suggestion / asr / 3rdagent（18 个）
+## Task 11: B1b-4 杂项本地方法（4 个，`local`）
 
 **Files:**
 - Modify: `web/app_web_handlers.go`
 - Test: `web/app_web_handlers_misc_test.go`
 
-| 方法 | 上游 |
-|---|---|
-| `openai_account.auth.status/start_login/pending_login/poll_login/logout`、`openai_account.models.list` | `:5681-5686` → `:2778` 起实现 |
-| `topic_starters.profile/restore_direction/control/status/select_model/get/foreground/event` | `:5820-5827` |
-| `prompt_suggestion.event/get` | `:5828-5829` |
-| `task.asr.transcribe` | `:5680` |
-| `3rdagent.web` | `protocol/web_proxy/web_proxy_listen.py:883` |
+| 方法 | 上游 | Go 名 | 说明 |
+|---|---|---|---|
+| `connection.status` | `:5676` | `makeConnectionStatus` | 返回 `agent_ready` + `protocol_version` |
+| `commands.list` | `:5775` | `makeCommandsList` | 静态命令清单，本地返回 |
+| `config.moa_status` | `:5637` | `configMoaStatus` | 复用 config 代理 |
+| `chat.swarmflow_reply` | `:5818` | `makeChatSwarmflowReply` | 空 ack（上游即 `{"accepted": true, "session_id": ...}`） |
 
 - [ ] **Step 1: 读上游**
 
-Run:
-```bash
-cd /home/opensource/jiuwenswarm-develop/gateway
-sed -n '2778,2830p' channel_manager/web/app_web_handlers.py
-sed -n '5820,5835p' channel_manager/web/app_web_handlers.py
-sed -n '870,900p' channel_manager/protocol/web_proxy/web_proxy_listen.py
-```
+Run: `sed -n '4010,4020p;4158,4165p;5637,5684p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 
 - [ ] **Step 2: 写失败测试**
 
 ```go
-// TestTopicStarters_注册齐全 验证 8 个 topic_starters 方法已注册。
-func TestTopicStarters_注册齐全(t *testing.T) {
+// TestConnectionStatus_返回就绪字段 验证 payload 与上游一致。
+func TestConnectionStatus_返回就绪字段(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
-	registerTopicStartersFamily(wc, nil)
+	ws := newFakeWS()
+	makeConnectionStatus(wc, nil)(ws, "rid", map[string]any{}, "sid")
+	p := ws.lastFrame()["payload"].(map[string]any)
+	if p["protocol_version"] != "1.0" {
+		t.Fatalf("protocol_version 不符：%v", p)
+	}
+	if _, ok := p["agent_ready"]; !ok {
+		t.Fatalf("缺 agent_ready")
+	}
+}
+
+// TestChatSwarmflowReply_回accepted 验证空 ack 形状。
+func TestChatSwarmflowReply_回accepted(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	ws := newFakeWS()
+	makeChatSwarmflowReply(wc)(ws, "rid", map[string]any{}, "sid-1")
+	p := ws.lastFrame()["payload"].(map[string]any)
+	if p["accepted"] != true || p["session_id"] != "sid-1" {
+		t.Fatalf("ack 形状不符：%v", p)
+	}
+}
+```
+
+- [ ] **Step 3: 实现四个闭包 + 注册**
+
+```go
+// makeConnectionStatus 返回 Gateway / AgentServer 就绪状态。
+//
+// Python: _connection_status (app_web_handlers.py:5676-5684)。
+func makeConnectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		ready := agentClient != nil && agentClient.ServerReady()
+		wc.sendResponse(ws, reqID, true, map[string]any{
+			"agent_ready":      ready,
+			"protocol_version": "1.0",
+		}, "", "")
+	}
+}
+
+// makeChatSwarmflowReply 回空 ack，由三层路由继续转发给 agent adapter。
+//
+// Python: _chat_swarmflow_reply (app_web_handlers.py:4158-4163)。
+func makeChatSwarmflowReply(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
+		wc.sendResponse(ws, reqID, true, map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}, "", "")
+	}
+}
+```
+
+- [ ] **Step 4: 测试 + 矩阵 + 提交**
+
+```bash
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -v
+go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
+git add -A && git commit -m "feat(web): 补齐 connection/commands/moa/swarmflow 4 个本地方法"
+```
+
+---
+
+## Task 12: B1b-5 external_cli（7 个，`local`）
+
+**Files:**
+- Modify: `web/app_web_handlers.go`
+- Test: `web/app_web_handlers_external_cli_test.go`
+
+| 方法 | 上游 |
+|---|---|
+| `external_cli.detect` | `:5496` → `_external_cli_detect` (`:2268`) |
+| `external_cli.validate_paths` | `:5497` → `:2280` |
+| `external_cli.prune_path_histories` | `:5498` → `:2304` |
+| `external_cli.codex_install_status` | `:5499` → `:2327` |
+| `external_cli.install_status` | `:5500` → `:2330` |
+| `external_cli.install` | `:5501` → `:2342` |
+| `external_cli.custom_agent.remove` | `:5502` → `:2361` |
+
+- [ ] **Step 1: 读上游**
+
+Run: `sed -n '2268,2380p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
+
+- [ ] **Step 2: 写失败测试**
+
+```go
+// TestExternalCLI_注册齐全 验证 7 个方法已注册。
+func TestExternalCLI_注册齐全(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	registerExternalCLIFamily(wc, nil)
 	for _, m := range []string{
-		"topic_starters.profile", "topic_starters.restore_direction", "topic_starters.control",
-		"topic_starters.status", "topic_starters.select_model", "topic_starters.get",
-		"topic_starters.foreground", "topic_starters.event",
+		"external_cli.detect", "external_cli.validate_paths", "external_cli.prune_path_histories",
+		"external_cli.codex_install_status", "external_cli.install_status",
+		"external_cli.install", "external_cli.custom_agent.remove",
 	} {
 		if _, ok := wc.methodHandlers[m]; !ok {
 			t.Errorf("方法未注册: %s", m)
@@ -1791,71 +1541,182 @@ func TestTopicStarters_注册齐全(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 实现 12 个可落地方法（topic_starters 8 + prompt_suggestion 2 + task.asr 1 + openai_account.models.list 1）**
+- [ ] **Step 3: 7 个 handler 按上游 1:1 移植 + 注册**
 
-按上游 1:1 移植；`task.asr.transcribe` 对齐 `task_asr.py`。
+安装器与状态轮询是 gateway 本地能力（上游注释明确），依赖 `exec` 与本地文件；测试只做参数校验分支与注册，真安装不测。
 
-- [ ] **Step 4: 两个依赖缺口按偏差处置（不做假实现、不加白名单）**
-
-- `openai_account.auth.*`（5 个）：上游委托 `openai_account_auth` 设备码模块，属计划 23.6。本步**只注册方法并返回与上游相同的错误形状**：
-
-```go
-// openaiAccountAuthStatus 查询 OpenAI 账号授权状态。
-//
-// Python: _openai_account_auth_status (app_web_handlers.py:2778-2795)。
-// ⤵️ 依赖 23.6（openai_account_auth 设备码模块）未迁移：当前统一回 SERVICE_UNAVAILABLE，
-// 与上游"模块不可用"分支的 code 一致；23.6 落地后替换为真实调用。
-func makeOpenAIAccountAuthStatus(wc *WebChannel) methodHandler {
-	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
-		wc.sendResponse(ws, reqID, false, nil, "openai account auth unavailable", WsErrServiceUnavailable)
-	}
-}
-```
-
-  同批在 `IMPLEMENTATION_PLAN.md` 的 23.6 行加 ⤴️ 回填标记，写明"Web 侧 5 个 openai_account.auth.* 已注册待接"。
-
-- `3rdagent.web`：同样先注册，转 `web_proxy` 未迁移的 ⤵️；等 `web_proxy` 批落地后接真实现。
-
-- [ ] **Step 5: 测试 + 矩阵 + 提交**
+- [ ] **Step 4: 测试 + 矩阵 + 提交**
 
 ```bash
-CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -v
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestExternalCLI -v
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
-git add -A && git commit -m "feat(web): 补齐 topic_starters/prompt_suggestion/asr 等方法；openai_account 与 3rdagent 注册待依赖回填"
+git add -A && git commit -m "feat(web): 补齐 external_cli 7 个方法"
 ```
 
 ---
 
-## Task 17: 收尾 —— 矩阵归零、门禁转强制、计划登记
+## Task 13: B1b-6 `path.select_file`（1 个，`local`）
+
+**Files:**
+- Modify: `web/app_web_handlers.go`
+- Test: `web/app_web_handlers_path_test.go`
+
+> `path.select_files` 与 `path.select_directory` 在上游是薄代理（`PATH_SELECT_*` → AgentServer），属下游缺口，**不在本期**。
+
+- [ ] **Step 1: 读上游**
+
+Run: `sed -n '3948,4010p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
+要点：先校验 `initial_dir`/`initial_path` 为字符串（非法回 `BAD_REQUEST`），再走本地文件选择。
+
+- [ ] **Step 2: 写失败测试**
+
+```go
+// TestPathSelectFile_非法参数回BAD_REQUEST 验证参数校验分支。
+func TestPathSelectFile_非法参数回BAD_REQUEST(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	ws := newFakeWS()
+	wc.registerMethod("path.select_file", makePathSelectFile(wc), false)
+	wc.methodHandlers["path.select_file"](ws, "rid", map[string]any{"initial_dir": 123}, "sid")
+	if ws.lastFrame()["code"] != WsErrBadRequest {
+		t.Fatalf("预期 BAD_REQUEST，实际 %v", ws.lastFrame())
+	}
+}
+```
+
+- [ ] **Step 3: 实现 + 注册**
+
+- [ ] **Step 4: 测试 + 矩阵 + 提交**
+
+```bash
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestPathSelectFile -v
+go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
+git add -A && git commit -m "feat(web): 补齐 path.select_file（本地选择分支）"
+```
+
+---
+
+## Task 14: B1b-7 session 薄代理（2 个，`agent:ok`）
+
+**Files:**
+- Modify: `web/app_web_handlers.go`
+- Test: `web/app_web_handlers_session_proxy_test.go`
+
+| 方法 | 上游 | 代理 req method | 本仓下游 |
+|---|---|---|---|
+| `session.rename` | `:5693` | `SESSION_RENAME` | `ReqMethodSessionRename` 已有分支 |
+| `session.plan_status` | `:5692` | `SESSION_PLAN_STATUS` | `ReqMethodSessionPlanStatus` 已有分支 |
+
+- [ ] **Step 1: 读上游**
+
+Run: `sed -n '3060,3140p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
+要点：两个都是 `proxy_unary_request(..., req_method=ReqMethod.SESSION_*)` 薄代理，携带 `session_id` 与 `params`。
+
+- [ ] **Step 2: 写失败测试**
+
+```go
+// TestSessionProxy_注册齐全 验证两个代理方法已注册。
+func TestSessionProxy_注册齐全(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	registerSessionProxyFamily(wc, nil)
+	for _, m := range []string{"session.rename", "session.plan_status"} {
+		if _, ok := wc.methodHandlers[m]; !ok {
+			t.Errorf("方法未注册: %s", m)
+		}
+	}
+}
+
+// TestSessionProxy_无客户端时回SERVICE_UNAVAILABLE 验证代理缺客户端的分支。
+func TestSessionProxy_无客户端时回SERVICE_UNAVAILABLE(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{}, nil, nil)
+	ws := newFakeWS()
+	registerSessionProxyFamily(wc, nil)
+	wc.methodHandlers["session.rename"](ws, "rid", map[string]any{"title": "x"}, "sid")
+	if ws.lastFrame()["ok"] == true {
+		t.Fatalf("无 AgentServer 客户端时应失败，实际 %v", ws.lastFrame())
+	}
+}
+```
+
+- [ ] **Step 3: 实现薄代理**
+
+```go
+// sessionProxyClient 会话类薄代理所需的单请求转发面。
+type sessionProxyClient interface {
+	// Unary 转发一次单请求并返回回包
+	Unary(reqMethod string, params map[string]any, sessionID string) (ok bool, payload map[string]any, errMsg, code string)
+}
+
+// registerSessionProxyFamily 注册 session 族薄代理方法。
+//
+// Python: _session_rename / _session_plan_status（app_web_handlers.py:3060-3140），
+// 都是 proxy_unary_request 薄代理；本仓 AgentServer 已有对应分支，故只需转发。
+func registerSessionProxyFamily(wc *WebChannel, client sessionProxyClient) {
+	wc.registerMethod("session.rename", makeSessionProxy(wc, client, "session.rename", "SESSION_RENAME"), false)
+	wc.registerMethod("session.plan_status", makeSessionProxy(wc, client, "session.plan_status", "SESSION_PLAN_STATUS"), false)
+}
+
+// makeSessionProxy 构造单个薄代理 handler。
+func makeSessionProxy(wc *WebChannel, client sessionProxyClient, label, reqMethod string) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
+		if client == nil {
+			logger.Warn(logComponent).Str("label", label).Str("req_id", reqID).
+				Msg("agent client not available")
+			wc.sendResponse(ws, reqID, false, nil, "agent client not available", WsErrServiceUnavailable)
+			return
+		}
+		ok, payload, errMsg, code := client.Unary(reqMethod, params, sessionID)
+		if !ok {
+			wc.sendResponse(ws, reqID, false, payload, errMsg, code)
+			return
+		}
+		wc.sendResponse(ws, reqID, true, payload, "", "")
+	}
+}
+```
+
+- [ ] **Step 4: 测试 + 矩阵 + 提交**
+
+```bash
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestSessionProxy -v
+go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
+git add -A && git commit -m "feat(web): 补齐 session.rename/plan_status 两个薄代理方法"
+```
+
+---
+
+## Task 15: 收尾 —— 承诺范围归零、门禁转强制、计划登记
 
 **Files:**
 - Modify: `.github/workflows/ci.yml`（`-verify` 转强制）
 - Modify: `IMPLEMENTATION_PLAN.md`（27-A、27.x 状态与 ⤵️/⤴️）
 - Modify: `docs/superpowers/specs/2026-11-05-web-ws-rpc-alignment-design.md`（偏差回收记录）
 
-- [ ] **Step 1: 确认矩阵无 ❌**
+- [ ] **Step 1: 确认承诺范围无 ❌**
 
 Run: `go run ./cmd/rpc-matrix -verify -upstream /home/opensource/jiuwenswarm-develop`
-Expected: 退出码 0，输出「缺 0 个」。
+Expected: 退出码 0。说明：`-verify` 只看 `local` + `agent:ok`；下游缺口仍会打印在缺口清单里，不判失败。全部清零后再改用 `-verify-all`。
 
 - [ ] **Step 2: CI 转强制**
 
-把 Task 2 里的步骤改为：
+把 Task 2 里的步骤改为（保持上游不可达时跳过）：
 
 ```yaml
       - name: 校验 Web RPC 契约矩阵
         run: |
-          git clone --depth 1 https://gitcode.com/openJiuwen/jiuwenswarm.git /tmp/upstream
-          go run ./cmd/rpc-matrix -verify -upstream /tmp/upstream -out docs/sync/web-rpc-matrix.md
-          git diff --exit-code -- docs/sync/web-rpc-matrix.md
+          if git clone --depth 1 https://gitcode.com/openJiuwen/jiuwenswarm.git /tmp/upstream; then
+            go run ./cmd/rpc-matrix -verify -upstream /tmp/upstream
+            git diff --exit-code -- docs/sync/web-rpc-matrix.md docs/sync/web-rpc-downstream-gaps.md
+          else
+            echo "上游不可达，跳过矩阵校验"
+          fi
 ```
 
 - [ ] **Step 3: 计划登记**
 
 `IMPLEMENTATION_PLAN.md`：
-- 27-A 的 B0、B1 行 → ✅，并写明"RPC 154 全量对齐，矩阵 `docs/sync/web-rpc-matrix.md`"
+- 27-A 的 B0、B1 行 → ✅，写明"本层承诺 49/49 落地，下游缺口 59 条见 `docs/sync/web-rpc-downstream-gaps.md`"
 - 27.1-27.10 中受本计划影响的行补记方法数
-- 新增偏差行：`openai_account.auth.*`（⤵️ 23.6）、`3rdagent.web`（⤵️ web_proxy）
+- 新增偏差/回填行（按缺口清单分组）：`project.*` 20 → 27.x；`topic_starters.*`/`prompt_suggestion.*` 10 → recommendation；`session.get_metadata/pin/continue_queued` 3 → 27.6；`path.select_files/select_directory`/`media.*`/`document.*`/`file.upload_chunk` 7 → 27.8；`harness.import/export` 2 → AgentServer；`heartbeat.job.*` 10 → 24.x/11.11；`openai_account.*` 6 → 23.6；`task.asr.transcribe` 1 → 23.9
 - 24.13 行状态由 🔄 → ✅（代码已在 `36f85699` 落地，本步仅补记）
 
 - [ ] **Step 4: 全量验收**
@@ -1874,7 +1735,7 @@ Expected: 全部通过。
 
 ```bash
 git add -A
-git commit -m "chore(web): RPC 矩阵归零，-verify 转 CI 强制；计划登记 27-A/24.13"
+git commit -m "chore(web): 本层承诺 49/49 落地，-verify 转 CI 强制；计划登记 27-A/24.13 与 59 条下游缺口"
 git push
 gh run list --limit 3
 ```
@@ -1884,5 +1745,6 @@ Expected: Build / Lint / Unit Test / Integration Test 四 job SUCCESS。
 
 ## 附：后续独立计划（不在本计划内）
 
+- **59 条下游缺口**：见 `docs/sync/web-rpc-downstream-gaps.md`（const-only 2 / agent:missing 40 / dep 17）。每组需在对应章节补 req method 常量 + AgentServer 分支 + 数据层，属 27.x / 23.x / 24.x 范围。
 - **入站主流程对齐**：24.13 剩余两步（`_resolve_external_channel_session`、非流式 team 拒绝）+ 审查 M-07 六步（`prepare_im_session_input`、`session_input` 校验归一、`session_busy`/`steer`、`godview` 注册）。改 `forward_loop.go`/`message_handler`，与 WebChannel RPC 表面无交集，须单独 spec。
 - **27-A B2~B8 整域模块**：HTTP 路由/鉴权、文件与目录面板、git diff watcher、分享导出、轨迹诊断、MCP/沙箱 OAuth（28-33 人日）。

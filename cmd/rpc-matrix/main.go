@@ -14,7 +14,8 @@ func main() {
 		upstream    = flag.String("upstream", "/home/opensource/jiuwenswarm-develop", "上游 Python 仓库根目录")
 		out         = flag.String("out", "docs/sync/web-rpc-matrix.md", "矩阵输出路径")
 		gapsOut     = flag.String("gaps-out", "docs/sync/web-rpc-downstream-gaps.md", "下游缺口清单输出路径")
-		verify      = flag.Bool("verify", false, "门禁模式：存在 ❌ 或缺上游目录即失败")
+		verify      = flag.Bool("verify", false, "门禁模式：本层承诺范围（local/agent:ok）存在 ❌ 即失败")
+		verifyAll   = flag.Bool("verify-all", false, "严格门禁：任何 ❌ 都失败（下游缺口清零后启用）")
 		frontDir    = flag.String("frontend", "internal/swarm/channels/web/frontend", "前端源码目录（相对 repo）")
 		goDir       = flag.String("go", "internal/swarm", "本仓扫描目录（相对 repo）")
 		upstreamDir = flag.String("upstream-dir", "gateway", "上游扫描子目录（相对 upstream）")
@@ -34,7 +35,7 @@ func main() {
 	var upstreamSites []rpcSite
 	var src *upstreamSource
 	if _, statErr := os.Stat(upstreamRoot); statErr != nil {
-		if *verify {
+		if *verify || *verifyAll {
 			fail("上游目录不可用，无法校验矩阵", statErr)
 		}
 		fmt.Fprintf(os.Stderr, "警告：上游目录不可用，矩阵仅含前端与本仓两侧: %v\n", statErr)
@@ -73,13 +74,31 @@ func main() {
 		counts[downLocal], counts[downAgentOK], counts[downAgentConst], counts[downAgentMissing], counts[downDep])
 	fmt.Printf("缺口清单：%s\n", *gapsOut)
 
-	if *verify && len(miss) > 0 {
-		fmt.Fprintf(os.Stderr, "存在 %d 个上游已注册但本仓缺失的方法：\n", len(miss))
-		for _, r := range miss {
+	pending := miss
+	if !*verifyAll {
+		pending = inScope(miss)
+	}
+	if (*verify || *verifyAll) && len(pending) > 0 {
+		fmt.Fprintf(os.Stderr, "存在 %d 个本仓缺失且属于本期承诺范围的方法：\n", len(pending))
+		for _, r := range pending {
 			fmt.Fprintf(os.Stderr, "  ❌ %s（下游 %s）\n", r.Method, r.Down.Status)
 		}
 		os.Exit(1)
 	}
+}
+
+// inScope 过滤出本期承诺范围的缺口（网关本地可做，或下游已就绪）。
+//
+// agent:const-only / agent:missing / dep 属下游缺口，登记在
+// docs/sync/web-rpc-downstream-gaps.md，不计入本层门禁。
+func inScope(rows []matrixRow) []matrixRow {
+	var out []matrixRow
+	for _, r := range rows {
+		if r.Down.Status == downLocal || r.Down.Status == downAgentOK {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // writeFile 写文件并按需建目录。

@@ -18,17 +18,25 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 
 ---
 
-## 1. 事实基线（2026-11-05 实测）
+## 1. 事实基线（2026-11-05 实测，`cmd/rpc-matrix` 生成）
+
+> 数据来源：`docs/sync/web-rpc-matrix.md`（一次扫描即入库，CI 校验不漂移）。
 
 | 口径 | 数量 | 说明 |
 |---|---|---|
-| 上游 Web 侧注册方法（并集） | **154** | `register_method(` 149 + `_register_config_proxy(` 补 5；含 `http_routes/mapped.py` 里同时暴露的 HTTP 版本 |
-| 前端 `frontend/src` 引用的已知方法 | 122 | 正则扫 RPC 包装器首参；计划的"163"含历史/未引用项，以 B0 脚本为准 |
-| 本仓 `Register(` / `RegisterLocalHandler(` | 71 | 含 4 个 `test.*`，功能 67；**同名命中上游仅 45** |
-| 缺口 | **109** | 108 个在 `app_web_handlers.py`，1 个（`3rdagent.web`）在 `web_proxy_listen.py:883` |
-| 本仓自造/漂移名 | **21** | 见 §1.2 |
+| 三方方法总数 | **186** | 前端引用 ∪ 本仓注册 ∪ 上游注册 |
+| ✅ 一致 | **40** | 上游有、本仓有 |
+| ⚠️ 漂移 | **38** | 本仓有、上游未注册为 WS 方法（含 `test.*`、`permissions.*` 走 HTTP 映射等） |
+| ❌ 缺 | **108** | 见下方下游分布 |
+| 缺口·`local` | **47** | 上游在网关本地实现，**本层补齐即可真跑** |
+| 缺口·`agent:ok` | **2** | `session.rename`/`session.plan_status`，薄代理且本仓 AgentServer 已有分支 |
+| 缺口·`agent:const-only` | **2** | `harness.import`/`harness.export`：有 req method 常量，AgentServer 无分支 |
+| 缺口·`agent:missing` | **40** | project 20、topic_starters 8、session 3、prompt_suggestion 2、path 2、media 2、document 2、file 1 |
+| 缺口·`dep` | **17** | heartbeat.job 10、openai_account 6、task.asr 1 |
 | 上游行数 | 19,789 行 / 38 py | `web_connect.py` 2,366、`app_web_handlers.py` 6,580 为大头 |
 | 本仓行数 | 4,565 行 / 5 go（非测试） | `web_connect` 629、`web_normalize` 316、`frame` 209、`web_handlers` 2,271、`config_apply` 1,024、`memory_compute` 89、`doc` 27；另有测试 3,959 行 |
+
+**本期范围判定（2026-11-05 用户决定）**：本计划**只做 web_channel 层**，即 47 个 `local` + 2 个 `agent:ok` = **49 个方法**；其余 **59 个**（const-only 2 / agent:missing 40 / dep 17）**不接线**，只登记在 `docs/sync/web-rpc-downstream-gaps.md` 作为后续章节输入。因此本层"覆盖全绿"不等于"功能可用"，矩阵必须保留下游列以示区分。
 
 > 计划 27-A 原写"8 个 go / 8,514 行"把 `_test.go` 计入了，本设计按非测试口径核算。
 
@@ -74,14 +82,37 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 | 本仓 | `internal/swarm/**` 的 `Register("…")`、`RegisterLocalHandler(…, "…", …)` 字面量（AST） |
 | 上游 | `gateway/**/*.py` 的 `register_method("…")`、`_register_config_proxy("…")`，加 `channel_manager/web/http_routes/mapped.py` 的 `(METHOD, path, req_method)` 表 |
 
-**输出** `docs/sync/web-rpc-matrix.md`：每行 `方法名 | 前端引用位置 | 本仓注册点 | 上游注册点 | 状态`
+**输出**（两份，均入库、均幂等）
 
-状态仅三值（对应 I4）：
+1. `docs/sync/web-rpc-matrix.md`：每行 `方法名 | 覆盖状态 | 下游状态 | 下游说明 | 前端引用 | 本仓注册 | 上游注册`
+2. `docs/sync/web-rpc-downstream-gaps.md`：只列"网关层补齐也不能真正工作"的方法，按下游缺口分三组
+
+**覆盖状态**仅三值（对应 I4）：
 - `✅ 一致`
 - `⚠️ 漂移`（本仓有此名但上游无 / 上游走 HTTP 映射）
 - `❌ 缺`（上游有、本仓无）
 
-**门禁**：`-verify` 模式下，出现任何 `❌` 或未登记的 `⚠️` 即退出非 0。进 CI **Build** job（此时前端产物已构建，扫描成本可忽略）。**不提供豁免文件**。
+**下游状态**（`cmd/rpc-matrix` 自动判定，判定依据见 §3.1）：
+- `local` —— 上游 handler 无代理调用，网关本地实现
+- `agent:ok` —— 薄代理，本仓已有 req method 常量 + AgentServer 分支
+- `agent:const-only` —— 有常量，AgentServer 无分支
+- `agent:missing` —— 常量与分支皆无
+- `dep` —— 依赖未迁移子系统（heartbeat job store / OAuth / ASR / web_proxy）
+
+### 3.1 下游状态判定算法
+
+1. 从 `channel.register_method("x", handler)` 取 handler 符号；`_register_config_proxy("x", …)` 无 handler → `local`（单用户走本地配置读写）。
+2. 在 `gateway/**/*.py` 里定位该 handler 的函数体窗口（`def` 起到下一个 `def`/工厂赋值，上限 80 行）。
+3. 函数体含以下任一即判为薄代理（四类上游写法，缺一不可）：
+   - `proxy_unary_request(`
+   - `fetch_agent_unary(`
+   - `_forward_recommendation(`
+   - `_make_*proxy*` 工厂调用（git 族）
+4. 从函数体取第一个 `ReqMethod.XXX`；`_forward_recommendation` 固定为 `RECOMMENDATION`。
+5. 常量名转本仓标识符：`SESSION_GET_METADATA` → `ReqMethodSessionGetMetadata`；查 `schema/req_method.go` 是否有该常量、`server/handle_message.go` 是否有 `case schema.<ident>`。
+6. `depOverrides` 表按方法前缀覆盖（`heartbeat.job.` / `openai_account.` / `task.asr.` / `3rdagent.`）。
+
+**门禁**：`-verify` 模式下，出现任何 `❌` 即退出非 0。进 CI **Build** job（前端产物已构建，扫描成本可忽略）。**不提供豁免文件**；`agent:*` 缺口不是豁免——本期只承诺 `local` + `agent:ok`，其余登记在缺口清单。
 
 ---
 
@@ -99,29 +130,40 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
    `def _config_get(ws, req_id, params, session_id)` → `func (wc *WebChannel) configGet(ws *wsConn, reqID string, params map[string]any, sessionID string)`。
    不引入 `rpcRequest` 之类的打包结构（属上游没有的抽象，违反 I1）。
 
-**不做**：不动 109 个缺失方法、不动业务逻辑、不动 HTTP 路由、不动 `channels/web`。
+**不做**：不动缺失方法、不动业务逻辑、不动 HTTP 路由、不动 `channels/web`。
 
 ---
 
-## 5. B1b：九批补齐 109 个方法
+## 5. B1b：七批补齐 49 个方法（只做 `local` + `agent:ok`）
 
-排序依据：前端"打开就报错"的路径优先；同上游行区相邻的合并一批（一次读懂、一次对齐）。
+范围 = 47 个 `local` + 2 个 `agent:ok`。排序依据：前端"打开就报错"的路径优先；同上游行区相邻的合并一批。
 
-| 批 | 域 | 数 | 目标方法 | 上游位置（`app_web_handlers.py` 除注明） |
-|---|---|---|---|---|
-| **1** | config 代理族 | 10 | `models.get/upsert/delete/references`、`model_groups.list/upsert/delete`、`vendors.list/fetch_models`、`session.selection.set` | `5643-5659`（`_register_config_proxy`） |
-| **2** | heartbeat | 10 | `heartbeat.job.list/get/meta/create/update/delete/toggle/preview/run_now/cancel` | `6196-6205`（`_hb_job_*`） |
-| **3** | cron / health_check / updater | 7 | `cron.job.meta`、`health_check.get_conf/set_conf`、`updater.upgrade/get_conf/set_conf/reset_source` | `5865`、`5839-5840`、`5835-5838` |
-| **4** | session / 杂项 | 9 | `session.get_metadata/pin/rename/plan_status/message.continue_queued`、`chat.swarmflow_reply`、`commands.list`、`connection.status`、`config.moa_status` | `5690-5694`、`5818`、`5775`、`5676`、`5637` |
-| **5** | IM 渠道配置 | 18 | `channel.<feishu/xiaoyi/telegram/dingtalk/whatsapp/discord/slack/wecom/wechat>.{get_conf,set_conf}` | `5844-5861`（九个平台各一对，`_channel_<p>_get_conf/set_conf`） |
-| **6** | project | 20 | `project.list/info/get_sessions/get_cron_sessions/create/rename/pin/remove/restore/pinned_sessions` + `project.git.status/probe/init/switch_branch/create_branch/commit/push/diff_status/turn_diff_list/turn_diff` | `5701-5728`；实现落 `project_git.go`（上游 `project_git.py`）+ `git_ws_handler.go` |
-| **7** | 文件/媒体/文档/路径 | 8 | `file.upload_chunk`、`media.persist/discard`、`document.persist/formats`、`path.select_file/select_files/select_directory` | `5802`、`5811-5814`、`5732-5734` |
-| **8** | harness / external_cli | 9 | `harness.import/export`、`external_cli.detect/validate_paths/prune_path_histories/codex_install_status/install_status/install/custom_agent.remove` | `6555`、`6567`、`5496-5502` |
-| **9** | openai_account / topic_starters / prompt_suggestion / asr / 3rdagent | 18 | `openai_account.auth.{status,start_login,pending_login,poll_login,logout}`、`openai_account.models.list`、`topic_starters.{profile,restore_direction,control,status,select_model,get,foreground,event}`、`prompt_suggestion.{event,get}`、`task.asr.transcribe`、`3rdagent.web` | `5681-5686`、`5820-5827`、`5828-5829`、`5680`；`3rdagent.web` 在 `protocol/web_proxy/web_proxy_listen.py:883` |
+| 批 | 域 | 数 | 目标方法 | 下游 | 上游位置（`app_web_handlers.py` 除注明） |
+|---|---|---|---|---|---|
+| **1** | config 代理族 | 10 | `models.get/upsert/delete/references`、`model_groups.list/upsert/delete`、`vendors.list/fetch_models`、`session.selection.set` | local | `5643-5659`（`_register_config_proxy`） |
+| **2** | IM 渠道配置 | 18 | `channel.<feishu/xiaoyi/telegram/dingtalk/whatsapp/discord/slack/wecom/wechat>.{get_conf,set_conf}` | local | `5844-5861` |
+| **3** | health_check / cron / updater | 7 | `health_check.get_conf/set_conf`、`cron.job.meta`、`updater.upgrade/get_conf/set_conf/reset_source` | local | `5839-5840`、`5865`、`5835-5838` |
+| **4** | 杂项本地方法 | 4 | `connection.status`、`commands.list`、`config.moa_status`、`chat.swarmflow_reply` | local | `5676`、`5775`、`5637`、`5818` |
+| **5** | external_cli | 7 | `external_cli.detect/validate_paths/prune_path_histories/codex_install_status/install_status/install/custom_agent.remove` | local | `5496-5502` |
+| **6** | 路径选择 | 1 | `path.select_file`（`select_files`/`select_directory` 是代理，属下游缺口） | local | `5734` |
+| **7** | session 薄代理 | 2 | `session.rename`、`session.plan_status` | agent:ok | `5693`、`5692` |
 
-合计 **109**。每批产出：方法注册 + handler 实现 + 单测 + 集成用例 + 矩阵更新（`✅`），单独提交、单独 CI 四绿。漂移清理随对应批执行（§1.2）：批 2 删 `heartbeat.get_path`；批 3 删 `cron.job.disable/enable/run/status`、`updater.cancel/install`；批 8 删 7 个自造 `harness.*`。
+合计 **49**。每批产出：方法注册 + handler 实现 + 单测 + 集成用例 + 矩阵更新，单独提交、单独 CI 四绿。
 
-依赖顺序：批 1 必须最先（config 代理是 model/vendor/session 选择的地基，其余批会复用 `_proxy_config_request` 的 Go 等价物）；批 6 依赖 git 侧 `project_git` 的 port。
+漂移清理随对应批执行（§1.2）：批 3 删 `cron.job.disable/enable/run/status`、`updater.cancel/install`；批 6 删除 `path.get/path.set` 之外的自造项（若有）；`heartbeat.get_path` 随批 3 一并删除。
+
+**不在本期实现（59 个）**：`agent:const-only` 2、`agent:missing` 40、`dep` 17。它们的清单在 `docs/sync/web-rpc-downstream-gaps.md`，作为以下章节的输入：
+
+| 缺口组 | 数量 | 归属章节 |
+|---|---|---|
+| `project.*`（含 git 9） | 20 | 27.x 项目/工作区 + AgentServer `PROJECT_*` 适配 |
+| `topic_starters.*` / `prompt_suggestion.*` | 10 | 27.3/27.x recommendation 链路（AgentServer `RECOMMENDATION`） |
+| `session.get_metadata/pin/message.continue_queued` | 3 | 27.6 会话导航（AgentServer SessionAdapter） |
+| `path.select_files/select_directory`、`media.*`、`document.*`、`file.upload_chunk` | 7 | 27.8/27.x 富媒体与文件（WorkspaceFileAdapter） |
+| `harness.import/export` | 2 | AgentServer `HARNESS_PACKAGES_*` 分支 |
+| `heartbeat.job.*` | 10 | 24.x/11.11 心跳任务存储 |
+| `openai_account.*` | 6 | 23.6 |
+| `task.asr.transcribe` | 1 | 23.9 / 27.x ASR |
 
 ---
 
@@ -153,7 +195,8 @@ grep 锚点验收：`frame\.`、`RPCDispatcher`、`handleConfigGet` 在 `interna
 - **禁止**：白名单、`t.Skip("依赖未就绪")`、只断言 `err == nil`。
 
 **门禁**
-- `go run ./cmd/rpc-matrix -verify`：0 个 `❌`、`⚠️` 全部显式登记。
+- `go run ./cmd/rpc-matrix -verify`：本层承诺范围（`local` + `agent:ok`）内 0 个 `❌`。
+- `go run ./cmd/rpc-matrix -verify-all`：任何 `❌` 都失败（下游缺口清零后再启用）。
 - `go run ./cmd/integration-audit -verify`：目录跨度 + 覆盖交叉验证。
 
 ---
@@ -172,8 +215,8 @@ grep 锚点验收：`frame\.`、`RPCDispatcher`、`handleConfigGet` 在 `interna
 |---|---|---|
 | `app_web_handlers.go` 单文件 ≈3,400 行 | 可读性差 | 与上游 6,580 行单文件 1:1，符合 I3；不做人为拆分 |
 | 71 个 handler 改名一次提交 | 波及大量测试 | 改名机械可批量；E2E 用 `go build` + 全包测试兜底；分批提交不给中间态留窗口 |
-| 批 5（18 个 IM 配置）机械重复 | 容易抄错平台名 | 用上游同名函数逐一对照；单测表驱动覆盖 9 平台 × 2 |
-| 批 9 依赖未迁移子系统 | 无法真实实现 | 见 §10，落 ⤵️ 计划行，不设测试白名单 |
+| 批 2（18 个 IM 配置）机械重复 | 容易抄错平台名 | 用上游同名函数逐一对照；单测表驱动覆盖 9 平台 × 2 |
+| 59 条下游缺口不在本期 | 前端调到会拿到上游同形错误，但功能不完整 | 清单落 `docs/sync/web-rpc-downstream-gaps.md` 并按章节归属排期；矩阵保留下游列，避免"绿但不通" |
 
 ---
 
@@ -181,9 +224,9 @@ grep 锚点验收：`frame\.`、`RPCDispatcher`、`handleConfigGet` 在 `interna
 
 | 项 | 上游 | 现状 | 处置 |
 |---|---|---|---|
-| `openai_account.*`（6） | `app_web_handlers.py:5681-5686` → `_openai_account_*` → `openai_account_auth` 模块（设备码 OAuth） | 该模块属计划 23.6，未迁移 | 批 9 内：网关侧 handler 按上游结构实现，底层 OAuth 随 23.6 落地；计划落 ⤵️ 行，回收条件"23.6 完成" |
-| `3rdagent.web`（1） | `protocol/web_proxy/web_proxy_listen.py:883` | `web_proxy` 子系统未迁移 | 同上，随 `web_proxy` 迁移回填；不设测试白名单 |
-| `permissions.*`（7） | 上游走 `http_routes/mapped.py`，不注册为 WS 方法 | 本仓注册为 WS 方法 | 保留现状（前端已依赖），矩阵标 `⚠️ 上游 HTTP 映射`；是否收敛到 HTTP 另议 |
+| 59 条下游缺口 | 见 `docs/sync/web-rpc-downstream-gaps.md`（const-only 2 / agent:missing 40 / dep 17） | 本仓 AgentServer 无对应 req method 或分支 | **本期不接线**；缺口清单作为 27.x / 23.x / 24.x 的输入，逐组排期 |
+| `permissions.*`（7） | 上游走 `http_routes/mapped.py`，不注册为 WS 方法 | 本仓注册为 WS 方法 | 保留现状（前端已依赖），矩阵标"上游 HTTP 映射"；是否收敛到 HTTP 另议 |
+| `wsSender` / `channelConfSource` / `modelsConfigStore` 等窄接口 | Python 为 duck typing，无静态类型 | Go 需显式接口 | 仅为等价的形参形状，不改语义；生产实现即既有类型 |
 
 ---
 
@@ -199,4 +242,4 @@ go run ./cmd/integration-audit -verify
 ```
 
 - 每批一个提交，远端 CI 四 job 全绿（Build / Lint / Unit / Integration）
-- `docs/sync/web-rpc-matrix.md` 中 `❌` 归零
+- `docs/sync/web-rpc-matrix.md` 中**本层承诺范围**（`local` + `agent:ok`）的 `❌` 归零；下游缺口保留并登记在 `docs/sync/web-rpc-downstream-gaps.md`

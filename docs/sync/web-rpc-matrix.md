@@ -3,7 +3,7 @@
 > 由 `go run ./cmd/rpc-matrix` 生成，勿手工编辑。
 
 - 方法总数：186（✅ 一致 40 / ⚠️ 漂移 38 / ❌ 缺 108）
-- 缺口下游分布：local 58 / agent:ok 2 / agent:const-only 2 / agent:missing 29 / dep 17
+- 缺口下游分布：local 47 / agent:ok 2 / agent:const-only 2 / agent:missing 40 / dep 17
 
 下游状态含义：`local` 网关本地可实现；`agent:ok` 代理且本仓已有处理器；`agent:const-only` 有常量无处理器；`agent:missing` 常量与处理器皆无；`dep` 依赖未迁移子系统。
 
@@ -135,22 +135,22 @@
 | `project.create` | ❌ 缺 | agent:missing | 代理目标 req method 未识别 | — | — | channel_manager/web/app_web_handlers.py:5705 |
 | `project.get_cron_sessions` | ❌ 缺 | agent:missing | 代理 PROJECT_GET_CRON_SESSIONS（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5704 |
 | `project.get_sessions` | ❌ 缺 | agent:missing | 代理 PROJECT_GET_SESSIONS（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5703 |
-| `project.git.commit` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5724 |
-| `project.git.create_branch` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5723 |
-| `project.git.diff_status` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5726 |
+| `project.git.commit` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_COMMIT（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5724 |
+| `project.git.create_branch` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_CREATE_BRANCH（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5723 |
+| `project.git.diff_status` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_DIFF_STATUS（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5726 |
 | `project.git.diff_unwatch` | ⚠️ 漂移 | local | 非上游方法（本仓自造/漂移） | src/features/code-mode/useCodeGitDiffWatch.ts:149<br>src/features/code-mode/useCodeGitDiffWatch.ts:248<br>src/features/code-mode/useCodeGitDiffWatch.ts:301 | — | — |
-| `project.git.init` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5721 |
-| `project.git.probe` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5720 |
-| `project.git.push` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5725 |
-| `project.git.status` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5719 |
-| `project.git.switch_branch` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5722 |
-| `project.git.turn_diff` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5728 |
-| `project.git.turn_diff_list` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5727 |
+| `project.git.init` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_INIT（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5721 |
+| `project.git.probe` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_PROBE（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5720 |
+| `project.git.push` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_PUSH（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5725 |
+| `project.git.status` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_STATUS（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5719 |
+| `project.git.switch_branch` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_SWITCH_BRANCH（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5722 |
+| `project.git.turn_diff` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_TURN_DIFF（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5728 |
+| `project.git.turn_diff_list` | ❌ 缺 | agent:missing | 代理 PROJECT_GIT_TURN_DIFF_LIST（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5727 |
 | `project.info` | ❌ 缺 | agent:missing | 代理 PROJECT_INFO（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5702 |
 | `project.list` | ❌ 缺 | agent:missing | 代理 PROJECT_LIST（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5701 |
 | `project.pin` | ❌ 缺 | agent:missing | 代理 PROJECT_PIN（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5707 |
 | `project.pinned_sessions` | ❌ 缺 | agent:missing | 代理 PROJECT_PINNED_SESSIONS（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5716 |
-| `project.remove` | ❌ 缺 | local | 网关本地实现 | — | — | channel_manager/web/app_web_handlers.py:5708 |
+| `project.remove` | ❌ 缺 | agent:missing | 代理目标 req method 未识别 | — | — | channel_manager/web/app_web_handlers.py:5708 |
 | `project.rename` | ❌ 缺 | agent:missing | 代理 PROJECT_RENAME（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5706 |
 | `project.restore` | ❌ 缺 | agent:missing | 代理目标 req method 未识别 | — | — | channel_manager/web/app_web_handlers.py:5709 |
 | `prompt_suggestion.event` | ❌ 缺 | agent:missing | 代理 RECOMMENDATION（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5828 |
@@ -160,7 +160,7 @@
 | `session.create` | ✅ 一致 | agent:const-only | 代理 SESSION_CREATE（有常量，AgentServer 无分支） | — | gateway/channel_manager/web/web_handlers.go:289 | channel_manager/web/app_web_handlers.py:5689 |
 | `session.delete` | ⚠️ 漂移 | local | 非上游方法（本仓自造/漂移） | — | gateway/channel_manager/web/web_handlers.go:290 | — |
 | `session.get_metadata` | ❌ 缺 | agent:missing | 代理 SESSION_GET_METADATA（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5690 |
-| `session.list` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/web_handlers.go:288 | channel_manager/web/app_web_handlers.py:5688 |
+| `session.list` | ✅ 一致 | agent:ok | 代理 SESSION_LIST | — | gateway/channel_manager/web/web_handlers.go:288 | channel_manager/web/app_web_handlers.py:5688 |
 | `session.message.continue_queued` | ❌ 缺 | agent:missing | 代理 SESSION_MESSAGE_CONTINUE_QUEUED（本仓无该 req method） | src/App.tsx:2096 | — | channel_manager/web/app_web_handlers.py:5691 |
 | `session.pin` | ❌ 缺 | agent:missing | 代理 SESSION_PIN（本仓无该 req method） | — | — | channel_manager/web/app_web_handlers.py:5694 |
 | `session.plan_status` | ❌ 缺 | agent:ok | 代理 SESSION_PLAN_STATUS | — | — | channel_manager/web/app_web_handlers.py:5692 |

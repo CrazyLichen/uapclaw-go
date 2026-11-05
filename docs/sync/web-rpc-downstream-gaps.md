@@ -10,7 +10,7 @@
 | `harness.export` | 代理 HARNESS_PACKAGES_EXPORT（有常量，AgentServer 无分支） | channel_manager/web/app_web_handlers.py:6567 |
 | `harness.import` | 代理 HARNESS_PACKAGES_IMPORT（有常量，AgentServer 无分支） | channel_manager/web/app_web_handlers.py:6555 |
 
-## 二、既无常量也无处理器（29 个）
+## 二、既无常量也无处理器（40 个）
 
 | 方法 | 下游说明 | 上游注册 |
 |---|---|---|
@@ -24,10 +24,21 @@
 | `project.create` | 代理目标 req method 未识别 | channel_manager/web/app_web_handlers.py:5705 |
 | `project.get_cron_sessions` | 代理 PROJECT_GET_CRON_SESSIONS（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5704 |
 | `project.get_sessions` | 代理 PROJECT_GET_SESSIONS（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5703 |
+| `project.git.commit` | 代理 PROJECT_GIT_COMMIT（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5724 |
+| `project.git.create_branch` | 代理 PROJECT_GIT_CREATE_BRANCH（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5723 |
+| `project.git.diff_status` | 代理 PROJECT_GIT_DIFF_STATUS（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5726 |
+| `project.git.init` | 代理 PROJECT_GIT_INIT（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5721 |
+| `project.git.probe` | 代理 PROJECT_GIT_PROBE（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5720 |
+| `project.git.push` | 代理 PROJECT_GIT_PUSH（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5725 |
+| `project.git.status` | 代理 PROJECT_GIT_STATUS（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5719 |
+| `project.git.switch_branch` | 代理 PROJECT_GIT_SWITCH_BRANCH（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5722 |
+| `project.git.turn_diff` | 代理 PROJECT_GIT_TURN_DIFF（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5728 |
+| `project.git.turn_diff_list` | 代理 PROJECT_GIT_TURN_DIFF_LIST（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5727 |
 | `project.info` | 代理 PROJECT_INFO（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5702 |
 | `project.list` | 代理 PROJECT_LIST（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5701 |
 | `project.pin` | 代理 PROJECT_PIN（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5707 |
 | `project.pinned_sessions` | 代理 PROJECT_PINNED_SESSIONS（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5716 |
+| `project.remove` | 代理目标 req method 未识别 | channel_manager/web/app_web_handlers.py:5708 |
 | `project.rename` | 代理 PROJECT_RENAME（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5706 |
 | `project.restore` | 代理目标 req method 未识别 | channel_manager/web/app_web_handlers.py:5709 |
 | `prompt_suggestion.event` | 代理 RECOMMENDATION（本仓无该 req method） | channel_manager/web/app_web_handlers.py:5828 |

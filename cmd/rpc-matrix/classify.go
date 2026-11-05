@@ -144,6 +144,27 @@ func snakeToCamel(s string) string {
 	return b.String()
 }
 
+// proxyHelperRe 代理工厂调用（如 _make_git_proxy_handler）。
+var proxyHelperRe = regexp.MustCompile(`_make_[a-z0-9_]*proxy[a-z0-9_]*`)
+
+// isProxyHandlerBody 判断上游 handler 函数体是否是薄代理。
+//
+// 上游有四类代理写法，缺一不可识别：
+//  1. `proxy_unary_request(...)` —— 统一薄代理
+//  2. `fetch_agent_unary(...)` —— 早期代理助手（project.remove 等）
+//  3. `_forward_recommendation(...)` —— recommendation 族固定转发
+//  4. `_make_git_proxy_handler(...)` —— git 族代理工厂
+func isProxyHandlerBody(body string) bool {
+	switch {
+	case strings.Contains(body, "proxy_unary_request"),
+		strings.Contains(body, "fetch_agent_unary"),
+		strings.Contains(body, "_forward_recommendation"):
+		return true
+	default:
+		return proxyHelperRe.MatchString(body)
+	}
+}
+
 // classifyDownstream 判定某方法的下游状态。
 //
 // 判定顺序：依赖覆盖表 → 上游无 handler（config 代理族，本地语义）→
@@ -162,9 +183,9 @@ func classifyDownstream(method, handler string, src *upstreamSource, caps *goCap
 		return downLocal, "handler 未定位（按本地实现处理）"
 	}
 
-	isProxy := strings.Contains(body, "proxy_unary_request")
+	isProxy := isProxyHandlerBody(body)
 	forwardRecommendation := strings.Contains(body, "_forward_recommendation")
-	if !isProxy && !forwardRecommendation {
+	if !isProxy {
 		return downLocal, "网关本地实现"
 	}
 

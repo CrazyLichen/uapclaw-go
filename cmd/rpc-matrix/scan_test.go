@@ -190,6 +190,25 @@ func TestRenderGaps_只列非本地缺口(t *testing.T) {
 	}
 }
 
+// TestInScope_只保留本层承诺范围 验证门禁口径按下游状态过滤。
+func TestInScope_只保留本层承诺范围(t *testing.T) {
+	rows := []matrixRow{
+		{Method: "a.local", Down: downstream{Status: downLocal}},
+		{Method: "b.ok", Down: downstream{Status: downAgentOK}},
+		{Method: "c.proxy", Down: downstream{Status: downAgentMissing}},
+		{Method: "d.dep", Down: downstream{Status: downDep}},
+	}
+	got := inScope(rows)
+	if len(got) != 2 {
+		t.Fatalf("inScope 应保留 2 条，实际 %d", len(got))
+	}
+	for _, r := range got {
+		if r.Down.Status != downLocal && r.Down.Status != downAgentOK {
+			t.Fatalf("inScope 混入下游缺口：%s", r.Method)
+		}
+	}
+}
+
 // containsStr 判断子串是否出现（测试助手）。
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (func() bool {
