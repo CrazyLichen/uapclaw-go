@@ -950,6 +950,8 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 			// 构建 SkillToolkit 并注册到 ResourceMgr，与 Deep 模式步骤 9 逻辑一致
 			if c.deep.skillManager != nil {
 				skillToolkit := skilltools.NewSkillToolkit(c.deep.skillManager)
+				// 安装/卸载技能后重载技能 rail 并清会话基线
+				skillToolkit.SetSkillsChangedHook(c.deep.RefreshSkillRails)
 				for _, t := range skillToolkit.GetTools() {
 					existing, _ := runner.GetResourceMgr().GetTool([]string{t.Card().ID})
 					if len(existing) == 0 {

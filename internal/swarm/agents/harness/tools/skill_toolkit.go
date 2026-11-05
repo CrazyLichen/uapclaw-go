@@ -23,6 +23,9 @@ import (
 type SkillToolkit struct {
 	// manager 技能管理器实例
 	manager *skillpkg.SkillManager
+	// onSkillsChanged 技能环境变化回调（安装/卸载成功后触发）
+	// 由 adapter 注入为 DeepAdapter.RefreshSkillRails，负责重载技能 rail 并清会话基线
+	onSkillsChanged func(ctx context.Context) error
 }
 
 // SkillSearchItem 搜索结果归一化项，替代 map[string]any 的动态结构。
@@ -158,6 +161,22 @@ func (r *ListInstalledResult) ToMap() map[string]any {
 // Python: SkillToolkit.__init__(manager)
 func NewSkillToolkit(manager *skillpkg.SkillManager) *SkillToolkit {
 	return &SkillToolkit{manager: manager}
+}
+
+// SetSkillsChangedHook 注入技能环境变化回调（adapter 构造 toolkit 时调用）。
+func (tk *SkillToolkit) SetSkillsChangedHook(hook func(ctx context.Context) error) {
+	tk.onSkillsChanged = hook
+}
+
+// notifySkillsChanged 技能环境变化后通知调用方重载 rail。
+// Python: skill_installer 写盘后由 agent_manager.refresh_skill_rails 统一处理
+func (tk *SkillToolkit) notifySkillsChanged(ctx context.Context) {
+	if tk.onSkillsChanged == nil {
+		return
+	}
+	if err := tk.onSkillsChanged(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("skills changed hook failed")
+	}
 }
 
 // GetTools 返回技能管理工具列表，供 agent 注册。
@@ -426,6 +445,9 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 		Str("skill_dir", installedItem.SkillDir).
 		Msg("SkillToolkit: install_skill succeeded")
 
+	// 技能目录已变化：重载技能 rail 并清会话基线，否则本会话仍看不到新技能
+	tk.notifySkillsChanged(ctx)
+
 	return map[string]any{
 		"success":     true,
 		"source":      normalizedSource,
@@ -510,6 +532,9 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 			"detail": strings.TrimSpace(toString(payload["detail"])),
 		}, nil
 	}
+
+	// 技能目录已变化：重载技能 rail 并清会话基线，确保被卸载技能立刻不可见
+	tk.notifySkillsChanged(ctx)
 
 	return map[string]any{
 		"success": true, "removed": true, "name": skillName,

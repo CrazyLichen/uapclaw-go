@@ -267,6 +267,18 @@ func (r *SkillUseRail) ReloadSkills(ctx context.Context) error {
 	return nil
 }
 
+// SetSkillsDir 更新技能扫描根（热刷新用）。
+// Python: refresh_skill_rails 直接赋值 self._skill_rail.skills_dir (interface_deep.py:11214-11216)
+func (r *SkillUseRail) SetSkillsDir(dirs []string) {
+	r.skillsDir = dirs
+}
+
+// SetDisabledSkills 更新禁用名单（热刷新用）。
+// Python: refresh_skill_rails 赋值 disabled_skills (interface_deep.py:11217-11218)
+func (r *SkillUseRail) SetDisabledSkills(names []string) {
+	r.disabledSkills = normalizeNameSet(names)
+}
+
 // ClearSkills 清空缓存。
 // Python: SkillUseRail.clear_skills()
 func (r *SkillUseRail) ClearSkills() {
