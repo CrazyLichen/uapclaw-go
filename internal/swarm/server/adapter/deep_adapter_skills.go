@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -45,8 +44,12 @@ func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 	// 4. 清会话基线，强制下轮按新集合重拍。
 	// Python: _clear_skill_session_baseline (interface_deep.py:11261-11274)；
 	// 无活跃会话时本就是 no-op（上游 getattr(instance, "_loop_session", None) 为 None 直接 return）
-	if sess := d.loopSession(); sess != nil {
-		rail.ClearSessionBaseline(sess)
+	if d.instance != nil {
+		// Python: getattr(self._instance, "_loop_session", None)（None 时直接 return）
+		// 用具体指针判空：*session.Session(nil) 装进接口后 != nil，会让判空失效
+		if sess := d.instance.LoopSession(); sess != nil {
+			rail.ClearSessionBaseline(sess)
+		}
 	}
 
 	logger.Info(logComponent).
@@ -56,24 +59,6 @@ func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// loopSession 返回当前活跃的循环会话，无活跃会话时为 nil。
-//
-// Python: getattr(self._instance, "_loop_session", None) (interface_deep.py:11270-11273)
-func (d *DeepAdapter) loopSession() sessioninterfaces.SessionFacade {
-	if d.loopSessionProvider != nil {
-		return d.loopSessionProvider()
-	}
-	if d.instance == nil {
-		return nil
-	}
-	sess := d.instance.LoopSession()
-	if sess == nil {
-		// typed-nil：*session.Session(nil) 装进接口后 != nil，必须显式判空
-		return nil
-	}
-	return sess
-}
 
 // skillScanDirs 汇总技能扫描根：绑定包目录在前，workspace 技能目录在后，去重。
 // Python: _skill_scan_dirs (interface_deep.py:11190-11220)

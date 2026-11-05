@@ -183,6 +183,27 @@ var skillScanSkipDirs = map[string]struct{}{
 // _ 编译时验证 SkillUseRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*SkillUseRail)(nil)
 
+// skillStopWords 关键词提取的停用词（与上游 _STOP_WORDS 一致）。
+//
+// Python: SkillUseRail._STOP_WORDS (L636-646)
+var skillStopWords = map[string]bool{
+	"the": true, "a": true, "an": true, "is": true, "are": true, "was": true,
+	"were": true, "be": true, "been": true, "being": true, "to": true, "of": true,
+	"and": true, "or": true, "in": true, "on": true, "at": true, "by": true,
+	"for": true, "with": true, "as": true, "this": true, "that": true,
+	"these": true, "those": true, "it": true, "its": true, "from": true,
+	"have": true, "has": true, "had": true, "do": true, "does": true, "did": true,
+	"will": true, "would": true, "could": true, "should": true, "may": true,
+	"might": true, "can": true, "shall": true, "you": true, "your": true,
+	"we": true, "our": true, "i": true, "my": true, "he": true, "she": true,
+	"they": true, "them": true, "their": true, "what": true, "which": true,
+	"who": true, "when": true, "where": true, "why": true, "how": true,
+	"all": true, "each": true, "every": true, "both": true, "few": true,
+	"more": true, "most": true, "other": true, "some": true, "such": true,
+	"no": true, "nor": true, "not": true, "only": true, "own": true,
+	"same": true, "so": true,
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillUseRail 创建 SkillUseRail 实例。
@@ -877,11 +898,8 @@ func isNilSession(sess sessioninterfaces.SessionFacade) bool {
 		return true
 	}
 	v := reflect.ValueOf(sess)
-	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func:
-		return v.IsNil()
-	}
-	return false
+	// SessionFacade 的实现都是指针类型，只有指针需要判 nil
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 // stringField 读取 map 的字符串字段，缺失或非字符串返回空串。
@@ -1474,27 +1492,6 @@ func applySkillBudget(skills []*skillpkg.Skill, query string, maxSkills, maxTota
 		}
 	}
 	return ranked
-}
-
-// skillStopWords 关键词提取的停用词（与上游 _STOP_WORDS 一致）。
-//
-// Python: SkillUseRail._STOP_WORDS (L636-646)
-var skillStopWords = map[string]bool{
-	"the": true, "a": true, "an": true, "is": true, "are": true, "was": true,
-	"were": true, "be": true, "been": true, "being": true, "to": true, "of": true,
-	"and": true, "or": true, "in": true, "on": true, "at": true, "by": true,
-	"for": true, "with": true, "as": true, "this": true, "that": true,
-	"these": true, "those": true, "it": true, "its": true, "from": true,
-	"have": true, "has": true, "had": true, "do": true, "does": true, "did": true,
-	"will": true, "would": true, "could": true, "should": true, "may": true,
-	"might": true, "can": true, "shall": true, "you": true, "your": true,
-	"we": true, "our": true, "i": true, "my": true, "he": true, "she": true,
-	"they": true, "them": true, "their": true, "what": true, "which": true,
-	"who": true, "when": true, "where": true, "why": true, "how": true,
-	"all": true, "each": true, "every": true, "both": true, "few": true,
-	"more": true, "most": true, "other": true, "some": true, "such": true,
-	"no": true, "nor": true, "not": true, "only": true, "own": true,
-	"same": true, "so": true,
 }
 
 // extractSkillKeywords 提取小写字母数字关键词（去停用词、长度 > 2）。
