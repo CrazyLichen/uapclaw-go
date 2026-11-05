@@ -164,7 +164,7 @@ func (s *SkillBaselineSuite) TestBaselineLifecycle() {
 
 	// ③ 清基线后重拍：移除 alpha 后视图只剩 beta（禁用/卸载即时生效）
 	require.NoError(s.T(), os.RemoveAll(filepath.Join(s.skillsRoot, "alpha")))
-	require.NoError(s.T(), rail.ClearSessionBaseline(sess))
+	rail.ClearSessionBaseline(sess)
 	require.NoError(s.T(), rail.BeforeInvoke(ctx, cbc))
 	assert.Equal(s.T(), []string{"beta"}, namesOf(rail.GetSkillsForSession(sess)))
 }
@@ -186,4 +186,76 @@ func namesOf(items []*skillpkg.Skill) []string {
 		out = append(out, item.Name)
 	}
 	return out
+}
+
+// TestNestedSkillDiscovery 分组目录下的技能可被发现，且嵌套子技能经 skill_tool 披露
+// 覆盖 D-3（递归发现 + 首个 SKILL.md 停止下钻）与 skill_layout 的 Nested skills 附录。
+func (s *SkillBaselineSuite) TestNestedSkillDiscovery() {
+	ctx := context.Background()
+	// 分组目录 lark 自身没有 SKILL.md；lark-doc 是技能；designer 是它的嵌套子技能
+	writeSkill(s.T(), filepath.Join(s.skillsRoot, "lark"), "lark-doc")
+	require.NoError(s.T(), os.MkdirAll(filepath.Join(s.skillsRoot, "lark", "lark-doc", "designer"), 0o755))
+	require.NoError(s.T(), os.WriteFile(
+		filepath.Join(s.skillsRoot, "lark", "lark-doc", "designer", "SKILL.md"), []byte("# designer"), 0o644))
+
+	rail, agent, sess := s.newRailAndSession()
+	require.NoError(s.T(), rail.Init(ctx, agent))
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, nil, sess)
+	require.NoError(s.T(), rail.BeforeInvoke(ctx, cbc))
+
+	assert.Equal(s.T(), []string{"lark-doc"}, namesOf(rail.GetSkillsForSession(sess)),
+		"分组目录内的技能必须被发现，嵌套子技能不注册为顶层技能")
+	section := agent.builder.GetSection("skills")
+	require.NotNil(s.T(), section)
+	assert.Contains(s.T(), section.Content["cn"], "lark-doc")
+
+	res, err := newSkillTool(rail).Invoke(ctx, map[string]any{"skill_name": "lark-doc"}, tool.WithToolSession(sess))
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), true, res["success"])
+	data, ok := res["data"].(map[string]any)
+	require.True(s.T(), ok)
+	content, _ := data["content"].(string)
+	assert.Contains(s.T(), content, "## Nested skills")
+	assert.Contains(s.T(), content, "designer/SKILL.md")
+}
+
+// TestSkillToolRejectsPathTraversal skill_tool 拒绝绝对路径与 .. 穿越
+func (s *SkillBaselineSuite) TestSkillToolRejectsPathTraversal() {
+	ctx := context.Background()
+	writeSkill(s.T(), s.skillsRoot, "alpha")
+
+	rail, agent, sess := s.newRailAndSession()
+	require.NoError(s.T(), rail.Init(ctx, agent))
+	require.NoError(s.T(), rail.BeforeInvoke(ctx, agentinterfaces.NewAgentCallbackContext(agent, nil, sess)))
+
+	for _, bad := range []string{"../secret.md", "/etc/passwd", `..\..\x.md`} {
+		res, err := newSkillTool(rail).Invoke(ctx, map[string]any{
+			"skill_name": "alpha", "relative_file_path": bad,
+		}, tool.WithToolSession(sess))
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), false, res["success"], "非法路径必须被拒绝: %s", bad)
+		assert.Contains(s.T(), res["error"], "Invalid relative_file_path")
+	}
+}
+
+// newRailAndSession 构造 rail、测试 agent 与会话（各用例独立 agent id，避免全局注册表串味）
+func (s *SkillBaselineSuite) newRailAndSession() (*skillrails.SkillUseRail, *itAgent, *itSession) {
+	rail := skillrails.NewSkillUseRail([]string{s.skillsRoot}, skillrails.WithSkillMode(skillrails.SkillModeAll))
+	rail.SetSysOperation(sysop.NewLocalSysOperation(&sysop.SysOperationCard{}))
+	agent := &itAgent{
+		builder:   saprompt.NewSystemPromptBuilder(),
+		ability:   ability.NewAbilityManager(nil),
+		attachMgr: prompts.NewManager(),
+		id:        "it-agent-" + s.T().Name(),
+	}
+	return rail, agent, &itSession{id: "sess-" + s.T().Name(), stateMap: map[string]any{}}
+}
+
+// newSkillTool 用 rail 的会话视图构造 skill_tool
+func newSkillTool(rail *skillrails.SkillUseRail) *skilltools.SkillTool {
+	return skilltools.NewSkillTool(
+		rail.SysOperation(),
+		func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill { return rail.GetSkillsForSession(sess) },
+		"cn", "it-agent", true,
+	)
 }

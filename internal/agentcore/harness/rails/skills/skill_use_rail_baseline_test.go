@@ -89,7 +89,7 @@ func TestEnsureSessionBaseline(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
 		sess := newSkillFakeSession("s1")
 
-		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.ensureSessionBaseline(sess)
 
 		raw, err := sess.GetState(state.StringKey(skillSessionStateKey))
 		require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestEnsureSessionBaseline(t *testing.T) {
 
 		// 第二次：rail 侧技能集合变化，基线保持不变（快照语义）
 		r.skills = []*skillpkg.Skill{testSkill("beta")}
-		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.ensureSessionBaseline(sess)
 
 		baseline := r.loadSessionBaseline(sess)
 		require.Len(t, baseline, 1)
@@ -106,7 +106,7 @@ func TestEnsureSessionBaseline(t *testing.T) {
 
 	t.Run("nil会话不panic", func(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
-		assert.NoError(t, r.ensureSessionBaseline(nil))
+		assert.NotPanics(t, func() { r.ensureSessionBaseline(nil) })
 	})
 }
 
@@ -114,15 +114,15 @@ func TestEnsureSessionBaseline(t *testing.T) {
 func TestClearSessionBaseline(t *testing.T) {
 	t.Run("nil会话不panic", func(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
-		assert.NoError(t, r.ClearSessionBaseline(nil))
+		assert.NotPanics(t, func() { r.ClearSessionBaseline(nil) })
 	})
 
 	t.Run("清除后视图回落到当前集合", func(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
 		sess := newSkillFakeSession("s1")
-		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.ensureSessionBaseline(sess)
 
-		require.NoError(t, r.ClearSessionBaseline(sess))
+		r.ClearSessionBaseline(sess)
 		assert.Equal(t, []*skillpkg.Skill{r.skills[0]}, r.GetSkillsForSession(sess))
 	})
 }
@@ -132,7 +132,7 @@ func TestGetSkillsForSession(t *testing.T) {
 	t.Run("基线并集新发现", func(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
 		sess := newSkillFakeSession("s1")
-		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.ensureSessionBaseline(sess)
 
 		// 会话中途新增 beta（应作为 runtime addition 可见）
 		r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
@@ -214,7 +214,7 @@ func TestSyncSkillPromptAndAttachment(t *testing.T) {
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 
 	sess := newSkillFakeSession("s1")
-	require.NoError(t, r.ensureSessionBaseline(sess))
+	r.ensureSessionBaseline(sess)
 
 	// 基线落盘后新增 beta：提示词节仍只应包含 alpha
 	r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
@@ -234,7 +234,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 		r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 
 		sess := newSkillFakeSession("s1")
-		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.ensureSessionBaseline(sess)
 		r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
 
 		mgr := prompts.NewManager()
@@ -254,7 +254,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 		r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 
 		sess := newSkillFakeSession("s1")
-		require.NoError(t, r.ensureSessionBaseline(sess))
+		r.ensureSessionBaseline(sess)
 
 		mgr := prompts.NewManager()
 		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
@@ -368,7 +368,7 @@ func TestGetCallbacks(t *testing.T) {
 func TestSaveSessionBaseline_跳过nil技能(t *testing.T) {
 	r := newRailWithSkills()
 	sess := newSkillFakeSession("s1")
-	require.NoError(t, r.saveSessionBaseline(sess, []*skillpkg.Skill{nil}))
+	r.saveSessionBaseline(sess, []*skillpkg.Skill{nil})
 	_, ok := r.loadSessionState(sess)
 	assert.True(t, ok, "即使技能为空也应写入合法 state")
 	assert.Empty(t, r.loadSessionBaseline(sess))
@@ -413,13 +413,15 @@ func TestBeforeModelCall_提取查询并注入(t *testing.T) {
 func TestSkillsSignatureEquals(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "alpha"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "alpha", "SKILL.md"), []byte("# alpha"), 0o644))
 
 	r := NewSkillUseRail([]string{root}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 	assert.False(t, r.skillsSignatureEquals(), "首次无签名应判为变化")
 
-	r.lastSignature = r.buildSkillsSnapshotSignature()
+	r.refreshSkillPrompt(context.Background())
 	assert.True(t, r.skillsSignatureEquals())
 
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "beta"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "beta", "SKILL.md"), []byte("# beta"), 0o644))
 	assert.False(t, r.skillsSignatureEquals(), "新增技能目录应判为变化")
 }

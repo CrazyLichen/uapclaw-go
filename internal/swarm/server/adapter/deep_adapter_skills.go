@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -13,8 +14,9 @@ import (
 
 // RefreshSkillRails 技能环境变化后重载技能 rail 并清会话基线。
 //
-// 三类触发点：技能安装/卸载（SkillToolkit）、MCP 服务增删（syncMcpServersForRuntime）、
-// 配置热更新（updateRuntimeConfig）。
+// 触发点：技能安装/卸载（SkillToolkit）、MCP 服务增删（syncMcpServersForRuntime）。
+// 配置热更新**不**触发——Python `_update_runtime_config`（interface_deep.py:14671）
+// 整段不碰技能 rail；禁用开关对存量会话的即时生效等 27 章 visibility 写 handler 落地后补。
 //
 // Python: JiuWenSwarmDeepAdapter.refresh_skill_rails (interface_deep.py:11154-11260)
 func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
@@ -23,11 +25,11 @@ func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 		return nil
 	}
 
-	// 1. 重算扫描根（绑定包目录前置 + workspace 技能目录，去重）
+	// 1. 重算扫描根（绑定包目录前置 + workspace 技能目录，去重）。
+	// 扫描根为空也照常往下走：Python 侧无条件执行「更新 roots → 更新 disabled →
+	// reload（空目录只告警）→ 清基线」，提前 return 会让技能安装/卸载后的
+	// 清基线静默失效（技能视图仍是旧基线）。
 	dirs := d.skillScanDirs()
-	if len(dirs) == 0 {
-		return nil
-	}
 	rail.SetSkillsDir(dirs)
 
 	// 2. 更新 disabled 列表
@@ -43,12 +45,8 @@ func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 	// 4. 清会话基线，强制下轮按新集合重拍。
 	// Python: _clear_skill_session_baseline (interface_deep.py:11261-11274)；
 	// 无活跃会话时本就是 no-op（上游 getattr(instance, "_loop_session", None) 为 None 直接 return）
-	if d.instance != nil {
-		if sess := d.instance.LoopSession(); sess != nil {
-			if err := rail.ClearSessionBaseline(sess); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("clear skill session baseline failed")
-			}
-		}
+	if sess := d.loopSession(); sess != nil {
+		rail.ClearSessionBaseline(sess)
 	}
 
 	logger.Info(logComponent).
@@ -58,6 +56,19 @@ func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// loopSession 返回当前活跃的循环会话，无活跃会话时为 nil。
+//
+// Python: getattr(self._instance, "_loop_session", None) (interface_deep.py:11270-11273)
+func (d *DeepAdapter) loopSession() sessioninterfaces.SessionFacade {
+	if d.loopSessionProvider != nil {
+		return d.loopSessionProvider()
+	}
+	if d.instance == nil {
+		return nil
+	}
+	return d.instance.LoopSession()
+}
 
 // skillScanDirs 汇总技能扫描根：绑定包目录在前，workspace 技能目录在后，去重。
 // Python: _skill_scan_dirs (interface_deep.py:11190-11220)

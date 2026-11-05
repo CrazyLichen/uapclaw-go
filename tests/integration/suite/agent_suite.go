@@ -5,6 +5,7 @@ package suite
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
@@ -120,7 +121,9 @@ func (s *AgentSuite) NewDeepAgentForTest(
 	}
 	// 默认 AgentCard
 	if params.Card == nil {
-		params.Card = s.NewAgentCard("itest_deep_agent", "测试DeepAgent")
+		// agent id 必须每实例唯一：全局 ResourceMgr / 回调框架按 id 归集，
+		// 固定 id 会让上一个用例的 rail 继续处理下个用例的会话（技能基线写进错的 session）。
+		params.Card = s.NewAgentCard(fmt.Sprintf("itest_deep_agent_%d", time.Now().UnixNano()), "测试DeepAgent")
 	}
 	return harness.CreateDeepAgent(ctx, params)
 }

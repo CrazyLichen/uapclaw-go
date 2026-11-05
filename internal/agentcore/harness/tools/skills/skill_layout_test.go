@@ -1,10 +1,14 @@
 package skills
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // buildSkillFixture 构造技能目录夹具。
@@ -184,4 +188,36 @@ func TestApplySkillToolMarkdownImagesHint(t *testing.T) {
 	if !skillMarkdownHasMedia("[v](a.mp4)") || skillMarkdownHasMedia("plain") {
 		t.Error("skillMarkdownHasMedia 判定错误")
 	}
+}
+
+func TestCollectNestedSkillNames_超过上限截断(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < skillNestedNamesMax+2; i++ {
+		dir := filepath.Join(root, fmt.Sprintf("sub%03d", i))
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("# sub"), 0o644))
+	}
+
+	names, truncated := collectNestedSkillNames(root)
+	assert.Len(t, names, skillNestedNamesMax)
+	assert.True(t, truncated)
+}
+
+func TestCollectNestedSkillNames_非目录返回空(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "note.txt")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+
+	names, truncated := collectNestedSkillNames(file)
+	assert.Empty(t, names)
+	assert.False(t, truncated)
+}
+
+func TestCollectNestedSkillNames_跳过指向根外的符号链接(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "SKILL.md"), []byte("# outside"), 0o644))
+	require.NoError(t, os.Symlink(outside, filepath.Join(root, "linked")))
+
+	names, _ := collectNestedSkillNames(root)
+	assert.NotContains(t, names, "linked", "指向技能根之外的链接不得算作子技能")
 }

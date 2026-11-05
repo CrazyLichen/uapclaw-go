@@ -8,6 +8,16 @@ import (
 	"strings"
 	"testing"
 
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -687,4 +697,62 @@ func TestSkillTool_拒绝路径穿越(t *testing.T) {
 			t.Errorf("%q 应被拒绝, 实际 %v", bad, got)
 		}
 	}
+}
+
+// listSkillRoutingClient 只实现 Invoke 的路由模型客户端
+type listSkillRoutingClient struct {
+	model_clients.BaseModelClient
+	// content 返回的助手消息正文
+	content string
+	// err 返回的错误
+	err error
+}
+
+func (c *listSkillRoutingClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	if c.err != nil {
+		return nil, c.err
+	}
+	return &llmschema.AssistantMessage{
+		DefaultMessage: llmschema.DefaultMessage{Content: llmschema.NewTextContent(c.content)},
+	}, nil
+}
+
+// newListSkillRoutingModel 构造指向假客户端的 Model
+func newListSkillRoutingModel(t *testing.T, client model_clients.BaseModelClient) *llm.Model {
+	t.Helper()
+	provider := fmt.Sprintf("mock_list_skill_%d", time.Now().UnixNano())
+	model_clients.GetClientRegistry().Register(provider, "llm", func(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+		return client, nil
+	})
+	model, err := llm.NewModel(
+		&llmschema.ModelClientConfig{ClientProvider: provider, ClientID: provider + "_id"},
+		&llmschema.ModelRequestConfig{ModelName: "mock-model"},
+	)
+	require.NoError(t, err)
+	return model
+}
+
+func TestListSkillTool_路由筛选成功(t *testing.T) {
+	model := newListSkillRoutingModel(t, &listSkillRoutingClient{content: `{"skills": ["python_coder"]}`})
+	lt := NewListSkillTool(func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, model, "cn", "test_agent")
+
+	got, err := lt.Invoke(context.Background(), map[string]any{"query": "帮我写 python"})
+	require.NoError(t, err)
+
+	data, ok := got["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "filtered", data["mode"])
+	names, ok := data["selected_skill_names"].([]string)
+	require.True(t, ok)
+	assert.Equal(t, []string{"python_coder"}, names)
+}
+
+func TestListSkillTool_路由调用失败(t *testing.T) {
+	model := newListSkillRoutingModel(t, &listSkillRoutingClient{err: errors.New("boom")})
+	lt := NewListSkillTool(func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, model, "cn", "test_agent")
+
+	got, err := lt.Invoke(context.Background(), map[string]any{"query": "帮我写 python"})
+	require.NoError(t, err, "路由失败按 ToolOutput 语义返回，不抛 error")
+	assert.Equal(t, false, got["success"])
+	assert.Contains(t, got["error"], "LLM 路由调用失败")
 }

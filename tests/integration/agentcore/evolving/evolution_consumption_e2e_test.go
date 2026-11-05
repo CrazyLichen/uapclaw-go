@@ -181,7 +181,10 @@ func (s *EvolutionConsumptionSuite) TestEvolutionConsumption_经验写回后被�
 	s.Require().NoError(err)
 	s.Require().NotNil(agent)
 
-	output, err := agent.Invoke(ctx, map[string]any{"query": "用 data-processor 技能读取系统配置"})
+	// 每个用例独立会话：技能会话基线（skill_use state）与历史都挂在 session 上，
+	// 复用默认会话会让上一个用例的技能集合/基线泄漏进来。
+	sess := s.NewTestSession(fmt.Sprintf("evolution-consumption-%d", time.Now().UnixNano()))
+	output, err := agent.Invoke(ctx, map[string]any{"query": "用 data-processor 技能读取系统配置"}, agentinterfaces.WithSession(sess))
 	s.Require().NoError(err, "Invoke 不应返回错误")
 	s.Contains(fmt.Sprintf("%v", output), "已按技能经验完成处理")
 
@@ -227,7 +230,8 @@ func (s *EvolutionConsumptionSuite) TestEvolutionConsumption_技能目录未被�
 		RestrictToWorkDir: &restrictToWorkDir,
 	})
 	s.Require().NoError(err)
-	_, err = agent.Invoke(ctx, map[string]any{"query": "使用 plain-skill"})
+	reverseSess := s.NewTestSession(fmt.Sprintf("evolution-reverse-%d", time.Now().UnixNano()))
+	_, err = agent.Invoke(ctx, map[string]any{"query": "使用 plain-skill"}, agentinterfaces.WithSession(reverseSess))
 	s.Require().NoError(err)
 
 	spb := agent.SystemPromptBuilder()

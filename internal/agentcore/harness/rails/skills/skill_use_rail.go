@@ -70,6 +70,8 @@ type SkillUseRail struct {
 	// lastSignature 上次技能目录签名（增量刷新判断）
 	// Python: self._skills_snapshot_signature
 	lastSignature []string
+	// signatureSet 是否已生成过签名（对齐 Python 初值 None：首轮必刷新）
+	signatureSet bool
 
 	// ── 运行时状态 ──
 	// skills 当前已加载技能列表
@@ -116,6 +118,15 @@ type skillBaselineEntry struct {
 	Directory string `json:"directory"`
 }
 
+// skillDirEntry 技能目录发现结果
+// Python: _discover_skill_dirs 返回的 (skill_dir, skill_md_mtime) 对
+type skillDirEntry struct {
+	// Dir 技能目录路径
+	Dir string
+	// SkillMD 该目录下 SKILL.md 的修改时间
+	SkillMD time.Time
+}
+
 // SkillUseRailOption SkillUseRail 构造选项
 type SkillUseRailOption func(*SkillUseRail)
 
@@ -153,6 +164,18 @@ const (
 var ValidSkillModes = map[string]struct{}{
 	SkillModeAll:      {},
 	SkillModeAutoList: {},
+}
+
+// skillScanSkipDirs 技能库扫描跳过的目录名（分组目录仍会下钻，这些不）。
+// Python: _SKILL_SCAN_SKIP_DIRS (skill_use_rail.py:40-48)
+//
+// 与 skills 工具侧 skillTreeSkipDirs 是两套独立常量——上游同样是两份
+// （脚本注释："two sets are deliberately independent even though they currently agree"）。
+var skillScanSkipDirs = map[string]struct{}{
+	"output":       {},
+	"temp":         {},
+	"assets":       {},
+	"node_modules": {},
 }
 
 // 编译时接口检查
@@ -323,12 +346,11 @@ func (r *SkillUseRail) GetSkillsForSession(sess sessioninterfaces.SessionFacade)
 
 // ClearSessionBaseline 清除会话基线，下次同步时按当前集合重拍。
 // Python: JiuWenSwarmDeepAdapter._clear_skill_session_baseline (interface_deep.py:11261-11274)
-func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade) error {
+func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
-		return nil
+		return
 	}
 	sess.UpdateState(map[string]any{skillSessionStateKey: nil})
-	return nil
 }
 
 // Init 注册工具到 ResourceMgr + AbilityManager。
@@ -464,9 +486,8 @@ func (r *SkillUseRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 	if cbc != nil {
 		sess = cbc.Session()
 	}
-	if err := r.ensureSessionBaseline(sess); err != nil {
-		return err
-	}
+	// Python: _ensure_session_baseline 无返回值（写 state 不会失败）
+	r.ensureSessionBaseline(sess)
 	return r.syncSkillPromptAndAttachment(ctx, cbc)
 }
 
@@ -590,6 +611,7 @@ func (r *SkillUseRail) refreshSkillPrompt(ctx context.Context) {
 	r.fetchEvolutionTexts(ctx)
 	// Python: refresh_skill_prompt 末尾重算签名 (:430-435)
 	r.lastSignature = r.buildSkillsSnapshotSignature()
+	r.signatureSet = true
 }
 
 // syncSkillPromptAndAttachment 刷新稳定 skills 节与变更附件。
@@ -602,14 +624,10 @@ func (r *SkillUseRail) syncSkillPromptAndAttachment(ctx context.Context, cbc *ag
 	if cbc != nil {
 		sess = cbc.Session()
 	}
-	if err := r.refreshSkillPromptIfChanged(ctx); err != nil {
-		return err
-	}
+	r.refreshSkillPromptIfChanged(ctx)
 	// 进化记录可能在不改 SKILL.md 的情况下变化，需与技能快照解耦刷新。
 	// 部分 task_loop 路径不经 BeforeInvoke，故此处也要保证基线存在。
-	if err := r.ensureSessionBaseline(sess); err != nil {
-		return err
-	}
+	r.ensureSessionBaseline(sess)
 	var baseline []*skillpkg.Skill
 	if _, ok := r.loadSessionState(sess); ok {
 		baseline = r.loadSessionBaseline(sess)
@@ -629,17 +647,20 @@ func (r *SkillUseRail) syncSkillPromptAndAttachment(ctx context.Context, cbc *ag
 
 // refreshSkillPromptIfChanged 目录或 mtime 签名变化时才重建技能集合。
 // Python: _refresh_skill_prompt_if_changed (:510-516)
-func (r *SkillUseRail) refreshSkillPromptIfChanged(ctx context.Context) error {
+func (r *SkillUseRail) refreshSkillPromptIfChanged(ctx context.Context) {
 	if r.skillsSignatureEquals() {
-		return nil
+		return
 	}
 	r.refreshSkillPrompt(ctx)
-	return nil
 }
 
 // skillsSignatureEquals 比较当前磁盘签名与上次快照。
 // Python: _build_skills_snapshot_signature (:518-524)
 func (r *SkillUseRail) skillsSignatureEquals() bool {
+	if !r.signatureSet {
+		// Python: 初值 None，任何签名都不等于 None → 首轮必刷新
+		return false
+	}
 	sig := r.buildSkillsSnapshotSignature()
 	if len(sig) != len(r.lastSignature) {
 		return false
@@ -656,25 +677,81 @@ func (r *SkillUseRail) skillsSignatureEquals() bool {
 // Python: _build_skills_snapshot_signature (:518-524)
 func (r *SkillUseRail) buildSkillsSnapshotSignature() []string {
 	roots := r.normalizeSkillDirs()
-	sig := make([]string, 0, len(roots))
-	for _, root := range roots {
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			continue
+	discovered := discoverSkillDirs(roots)
+	sig := make([]string, 0, len(discovered))
+	for _, entry := range discovered {
+		// 签名取 SKILL.md 的 mtime：目录 mtime 不随文件内容变化，
+		// 演进写回只改 SKILL.md 时目录签名会漏检。
+		// Python: _build_skills_snapshot_signature (:518-524) 用的是 _discover_skill_dirs 的 SKILL.md mtime
+		sig = append(sig, entry.Dir+"@"+entry.SkillMD.UTC().Format(time.RFC3339Nano))
+	}
+	sort.Strings(sig)
+	return sig
+}
+
+// discoverSkillDirs 递归发现技能目录，返回目录与 SKILL.md mtime。
+//
+// 规则与上游一致：一个分支上遇到第一个 SKILL.md 即认定该目录是技能并停止下钻
+// （其内部子技能由 skill_tool 的 discovered_skill_names 披露，不注册为顶层技能）；
+// 跳过 "." 开头的目录与 _SKILL_SCAN_SKIP_DIRS；用 visited 防止符号链接成环。
+//
+// Python: SkillUseRail._discover_skill_dirs (:1043-1125)
+func discoverSkillDirs(roots []string) []skillDirEntry {
+	found := make([]skillDirEntry, 0, len(roots))
+	visited := make(map[string]struct{})
+
+	var walk func(dir string)
+	walk = func(dir string) {
+		key := dir
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			key = resolved
 		}
+		if _, ok := visited[key]; ok {
+			return
+		}
+		visited[key] = struct{}{}
+
+		// 显式根自身也可能就是一个技能目录
+		skillMDPath := filepath.Join(dir, "SKILL.md")
+		if info, err := os.Stat(skillMDPath); err == nil && !info.IsDir() {
+			found = append(found, skillDirEntry{Dir: dir, SkillMD: info.ModTime()})
+			return
+		}
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			logger.Debug(logger.ComponentAgentCore).Str("dir", dir).Err(err).Msg("cannot list skill directory")
+			return
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
-			info, err := entry.Info()
-			if err != nil {
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") {
 				continue
 			}
-			sig = append(sig, filepath.Join(root, entry.Name())+"@"+info.ModTime().UTC().Format(time.RFC3339Nano))
+			if _, skip := skillScanSkipDirs[name]; skip {
+				continue
+			}
+			walk(filepath.Join(dir, name))
 		}
 	}
-	sort.Strings(sig)
-	return sig
+
+	for _, root := range roots {
+		info, err := os.Stat(root)
+		if err != nil {
+			logger.Debug(logger.ComponentAgentCore).Str("skills_dir", root).Msg("skills_dir does not exist, skipping")
+			continue
+		}
+		if !info.IsDir() {
+			logger.Debug(logger.ComponentAgentCore).Str("skills_dir", root).Msg("skills_dir is not a directory, skipping")
+			continue
+		}
+		walk(root)
+	}
+	return found
 }
 
 // fetchEvolutionTextsFor 按给定技能列表抓取演化经验文本（同名去重）。
@@ -699,14 +776,14 @@ func (r *SkillUseRail) fetchEvolutionTextsFor(ctx context.Context, skills []*ski
 
 // ensureSessionBaseline 首次使用时落盘会话基线。
 // Python: _ensure_session_baseline (:692-698)
-func (r *SkillUseRail) ensureSessionBaseline(sess sessioninterfaces.SessionFacade) error {
+func (r *SkillUseRail) ensureSessionBaseline(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
-		return nil
+		return
 	}
 	if _, ok := r.loadSessionState(sess); ok {
-		return nil
+		return
 	}
-	return r.saveSessionBaseline(sess, r.skills)
+	r.saveSessionBaseline(sess, r.skills)
 }
 
 // loadSessionBaseline 读取会话基线；无有效 state 时返回空切片。
@@ -770,9 +847,9 @@ func (r *SkillUseRail) loadSessionState(sess sessioninterfaces.SessionFacade) (m
 
 // saveSessionBaseline 把技能列表写入会话基线。
 // Python: _save_session_baseline (:733-750)
-func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade, skills []*skillpkg.Skill) error {
+func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade, skills []*skillpkg.Skill) {
 	if sess == nil {
-		return nil
+		return
 	}
 	entries := make([]any, 0, len(skills))
 	for _, skill := range skills {
@@ -791,7 +868,6 @@ func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade,
 			"baseline_skills": entries,
 		},
 	})
-	return nil
 }
 
 // stringField 读取 map 的字符串字段，缺失或非字符串返回空串。
@@ -954,72 +1030,37 @@ func (r *SkillUseRail) prepareSkills(ctx context.Context) error {
 	return nil
 }
 
-// refreshSkillsIncrementally 遍历 skillsDir，mtime 增量比对。
-// Python: SkillUseRail._refresh_skills_incrementally() L123-175
+// refreshSkillsIncrementally 递归发现技能目录，按 SKILL.md mtime 增量比对。
+// Python: SkillUseRail._refresh_skills_incrementally() (:232-260)
 func (r *SkillUseRail) refreshSkillsIncrementally(ctx context.Context) error {
 	roots := r.normalizeSkillDirs()
 	if len(roots) == 0 {
 		return errors.New("skills_dir is empty")
 	}
 
-	discoveredKeys := make(map[string]struct{})
-	var orderedKeys []string
+	discovered := discoverSkillDirs(roots)
+	discoveredKeys := make(map[string]struct{}, len(discovered))
+	orderedKeys := make([]string, 0, len(discovered))
 
-	for _, root := range roots {
-		if _, err := os.Stat(root); os.IsNotExist(err) {
-			logger.Debug(logger.ComponentAgentCore).
-				Str("skills_dir", root).
-				Msg("skills_dir does not exist, skipping")
-			continue
-		}
-		info, err := os.Stat(root)
-		if err != nil || !info.IsDir() {
-			logger.Debug(logger.ComponentAgentCore).
-				Str("skills_dir", root).
-				Msg("skills_dir is not a directory, skipping")
-			continue
+	for _, entry := range discovered {
+		key, err := filepath.Abs(entry.Dir)
+		if err != nil {
+			key = entry.Dir
 		}
 
-		entries, err := os.ReadDir(root)
+		discoveredKeys[key] = struct{}{}
+		orderedKeys = append(orderedKeys, key)
+
+		if cachedSkill, ok := r.skillCache[key]; ok && r.skillUpdateAt[key].Equal(entry.SkillMD) {
+			_ = cachedSkill
+			continue
+		}
+		skill, err := r.loadSkill(ctx, entry.Dir, entry.SkillMD)
 		if err != nil {
 			continue
 		}
-		sort.Slice(entries, func(i, j int) bool {
-			return entries[i].Name() < entries[j].Name()
-		})
-
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-
-			skillMDPath := filepath.Join(root, entry.Name(), "SKILL.md")
-			if _, err := os.Stat(skillMDPath); os.IsNotExist(err) {
-				continue
-			}
-
-			fileInfo, err := os.Stat(skillMDPath)
-			if err != nil {
-				continue
-			}
-
-			key, _ := filepath.Abs(filepath.Join(root, entry.Name()))
-			updateAt := fileInfo.ModTime()
-
-			discoveredKeys[key] = struct{}{}
-			orderedKeys = append(orderedKeys, key)
-
-			cachedSkill := r.skillCache[key]
-			cachedUpdateAt := r.skillUpdateAt[key]
-
-			if cachedSkill == nil || !cachedUpdateAt.Equal(updateAt) {
-				skill, err := r.loadSkill(ctx, filepath.Join(root, entry.Name()), updateAt)
-				if err == nil {
-					r.skillCache[key] = skill
-					r.skillUpdateAt[key] = updateAt
-				}
-			}
-		}
+		r.skillCache[key] = skill
+		r.skillUpdateAt[key] = entry.SkillMD
 	}
 
 	// 清理已消失的技能

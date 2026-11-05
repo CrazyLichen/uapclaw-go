@@ -153,11 +153,11 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python: self._refresh_acp_runtime_tools(session_id, request_id, channel_id, request_metadata) (L3170)
 	d.refreshAcpRuntimeTools(config)
 
-	// 步骤 7.7: 配置热更新可能改动 skill_mode / 禁用开关 → 重载技能 rail 并清基线
-	// Python: agent_manager.refresh_skill_rails 在配置变更后调用
-	if err := d.RefreshSkillRails(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("refresh skill rails after runtime config update failed")
-	}
+	// 注意：这里**不**刷新技能 rail。本函数在 ProcessMessageImpl 步骤 16-17 每条消息都会执行，
+	// 而 Python `_update_runtime_config`（interface_deep.py:14671）整段不碰技能 rail——
+	// 技能刷新只发生在技能域 RPC（install/uninstall/visibility/evolution save）、
+	// MCP 卸载/断开/删除与 install_candidate。禁用开关对存量会话的即时生效
+	// 等 27 章 visibility 写 handler 落地后在其处清基线（见 IMPLEMENTATION_PLAN 9.19-23 ⤵️）。
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).

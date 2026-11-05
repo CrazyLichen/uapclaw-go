@@ -31,6 +31,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -140,6 +141,11 @@ type DeepAdapter struct {
 	// [Go 适配] 对齐 Python _has_valid_model_config 第 4 步的 get_config() 兜底；
 	// 抽成函数字段便于单测注入（Python 侧靠模块级 get_config 缓存，无法在测试中替换）。
 	defaultModelConfigReader func() map[string]any
+	// loopSessionProvider 返回当前活跃循环会话（技能 rail 清基线用）。
+	// [Go 适配] Python 直接读 self._instance._loop_session；Go 的 LoopSession 字段不可从
+	// adapter 包注入，抽成函数字段便于单测覆盖「清基线」分支（与 defaultModelConfigReader 同款先例）。
+	// 为 nil 时回落到 d.instance.LoopSession()。
+	loopSessionProvider func() sessioninterfaces.SessionFacade
 
 	// ─── ⤵️ 10.6.3-10: 轨道（Rails）───
 

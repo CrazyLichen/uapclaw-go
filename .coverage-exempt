@@ -349,3 +349,14 @@ internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4153-L4155
 # 往返（同 permissions.* E2A 分支口径）。
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4255-L4278
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4339-L4370
+
+# ── 2026-11-05 skill 会话基线（9.19-23 回填）──
+# prompts/tools/skill_tool.go 的工具描述是包级 map 字面量（纯双语文案，无语句），
+# Go 覆盖率不插桩包级 var 初始化，改文案必然判成「改动行未被执行」。
+# 文案正确性由 tools_test.go 的注册表断言与 skills_test.go 的行为用例保证。
+internal/agentcore/harness/prompts/tools/skill_tool.go#L15-L24
+
+# code_adapter.go 的 setupTools 步骤 "skill_toolkit" 分支：单行钩子接线，
+# 所在分支要求完整 CodeAdapter 装配（agent card/configBase/沙箱路径齐全），
+# 与 deep 侧同一接线已由 TestGetToolCards_SkillToolkit接线 覆盖。
+internal/swarm/server/adapter/code_adapter.go#L954

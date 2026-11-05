@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+
+	skill "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -98,5 +100,22 @@ func TestGetToolCards_步骤1_wiki三工具(t *testing.T) {
 		if !names[want] {
 			t.Errorf("缺少 wiki 工具卡: %s", want)
 		}
+	}
+}
+
+// TestGetToolCards_SkillToolkit接线 有 skillManager 时注册技能工具卡并接上变化钩子。
+// 覆盖 getToolCards 步骤 9（SkillToolkit 构造 + SetSkillsChangedHook）。
+func TestGetToolCards_SkillToolkit接线(t *testing.T) {
+	d := NewDeepAdapter()
+	d.configBase = map[string]any{}
+	d.skillManager = skill.NewSkillManager(t.TempDir())
+
+	cards := d.getToolCards("agent-1")
+	names := map[string]bool{}
+	for _, c := range cards {
+		names[c.Name] = true
+	}
+	if !names["install_skill"] && !names["search_skill"] {
+		t.Fatalf("应注册 SkillToolkit 工具卡，实际: %v", names)
 	}
 }
