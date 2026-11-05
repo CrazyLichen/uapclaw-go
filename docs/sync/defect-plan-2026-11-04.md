@@ -167,7 +167,7 @@ rg -n "<Python 符号>" internal/
 | D-15 | MCP 工具结果 content blocks 被丢弃（多模态/多段结果丢失） | `5a5d7c61` | 结果解析 | P1 | 🔍 |
 | D-16 | MCP 错误状态在结果抽取中丢失（失败被当成成功） | `5d2eef7f` | 结果解析 | P1 | 🔍 |
 | D-17 | MCP 跨 task context 退出导致 CPU 100% / 资源泄漏 | `0988e98c` | 客户端生命周期 | P2 | ➖（Go 无 task 概念，但需核验连接释放） |
-| D-18 | `tool_search` 延迟工具机制缺失：deferred 工具、精确名优先、参数变更重建 BM25、保留 deferred 中断；`todos` 省略数组应拒绝；提示词空占位符需容忍 | `27a2e99b`、`1d257566`、`7915973`、`0af325eb`、`6e7f3bd9`、`c1395370`、`d8c226fa` | `ability`、`foundation/prompt` | P1 | 🔍 |
+| D-18 | `tool_search` 延迟工具机制缺失：deferred 工具、精确名优先、参数变更重建 BM25、保留 deferred 中断；`todos` 省略数组应拒绝；提示词空占位符需容忍 | `27a2e99b`、`1d257566`、`7915973`、`0af325eb`、`6e7f3bd9`、`c1395370`、`d8c226fa` | `ability`、`foundation/prompt` | P1 | ✅（9.11a 处置：exposure 策略 + BM25 精确名优先 + 参数变更重建 + deferred 中断透传，见 docs/superpowers/specs/2026-11-05-progressive-deferred-tool-catalog-design.md） |
 
 ### E. 记忆
 

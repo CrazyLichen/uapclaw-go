@@ -15,7 +15,7 @@
 //	├── memory.go                # 记忆节（主动/被动/只读）
 //	├── external_memory.go       # 外部记忆节
 //	├── workspace.go             # 工作空间节
-//	├── progressive_tool_rail.go # 渐进式工具导航与规则节
+//	├── progressive_tool_rail.go # 渐进式工具规则节 + 延迟工具目录 snapshot/delta 渲染
 //	├── heartbeat.go             # 心跳节
 //	├── coding_memory.go         # 编码记忆节
 //	├── session_tools.go         # 会话工具节

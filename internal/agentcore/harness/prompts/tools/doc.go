@@ -20,12 +20,12 @@
 //	├── exit_worktree.go     # exit_worktree 工具
 //	├── filesystem.go        # read_file / write_file / edit_file / glob / list_files / grep 工具
 //	├── list_skill.go        # list_skill 工具
-//	├── load_tools.go        # load_tools 工具
 //	├── lsp_tool.go          # lsp 工具
 //	├── mcp.go               # list_mcp_resources / read_mcp_resource 工具
 //	├── memory.go            # memory_search / memory_get / write_memory / edit_memory / read_memory 工具
 //	├── powershell.go        # powershell 工具
-//	├── search_tools.go      # search_tools 工具
+//	├── tool_search.go      # tool_search 工具
+//	├── tool_call.go        # tool_call 工具
 //	├── session_tools.go     # sessions_list / sessions_spawn / sessions_cancel 工具
 //	├── skill_tool.go        # skill_tool 工具
 //	├── task_tool.go         # task_tool 工具

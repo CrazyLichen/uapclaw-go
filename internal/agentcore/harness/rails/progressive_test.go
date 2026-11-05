@@ -10,11 +10,13 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/tool_discovery"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -584,11 +586,28 @@ func toolFingerprintOf(card *tool.ToolCard) string {
 	return tool_discovery.ToolFingerprint(card.ToolInfo())
 }
 
-// progressiveFakeInitAgent 测试用 BaseAgent（只提供 AbilityManager/Card）。
+// progressiveFakeInitAgent 测试用 BaseAgent（提供 AbilityManager/Card/Builder/附件）。
 type progressiveFakeInitAgent struct {
 	agentinterfaces.BaseAgent
 	// abilityManager 能力管理器
 	abilityManager agentinterfaces.AbilityManagerInterface
+	// builder 系统提示词构建器
+	builder *saprompt.SystemPromptBuilder
+	// attachments 动态提示词管理器
+	attachments *prompts.Manager
+}
+
+// SystemPromptBuilder 返回构建器。
+func (f *progressiveFakeInitAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	if f.builder == nil {
+		return nil
+	}
+	return f.builder
+}
+
+// PromptAttachments 返回动态提示词管理器。
+func (f *progressiveFakeInitAgent) PromptAttachments() *prompts.Manager {
+	return f.attachments
 }
 
 // AbilityManager 返回能力管理器。
@@ -598,3 +617,221 @@ func (f *progressiveFakeInitAgent) AbilityManager() agentinterfaces.AbilityManag
 
 // Card 返回 Agent 卡片。
 func (f *progressiveFakeInitAgent) Card() *agentschema.AgentCard { return nil }
+
+// TestLifecycleHooks_注入规则与过滤 验证 BeforeInvoke/BeforeModelCall 的完整链路。
+func TestLifecycleHooks_注入规则与过滤(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	deferredCard := newProgressiveDeferredCard("xlsx_read", "读取 Excel 表格")
+	directCard := &tool.ToolCard{}
+	directCard.Name = "read_file"
+	directCard.Exposure = tool.ToolExposureDirect
+	manager.cards["xlsx_read"] = deferredCard
+	manager.cards["read_file"] = directCard
+
+	agent := &progressiveFakeInitAgent{
+		abilityManager: manager,
+		builder:        saprompt.NewSystemPromptBuilder(),
+		attachments:    prompts.NewManager(),
+	}
+	if err := rail.Init(context.Background(), agent); err != nil {
+		t.Fatalf("Init 失败: %v", err)
+	}
+	// 元工具占用了 tool_search/tool_call，deferred 工具仍需存在
+	manager.cards["xlsx_read"] = deferredCard
+
+	session := newProgressiveFakeSession("s1")
+	inputs := &agentinterfaces.ModelCallInputs{Tools: []cschema.ToolInfoInterface{
+		deferredCard.ToolInfo(),
+		directCard.ToolInfo(),
+	}}
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, session)
+
+	if err := rail.BeforeInvoke(context.Background(), cbc); err != nil {
+		t.Fatalf("BeforeInvoke 失败: %v", err)
+	}
+	if len(rail.cachedAllToolInfos) == 0 {
+		t.Fatal("BeforeInvoke 应缓存全量工具清单")
+	}
+	if err := rail.BeforeModelCall(context.Background(), cbc); err != nil {
+		t.Fatalf("BeforeModelCall 失败: %v", err)
+	}
+	if !agent.builder.HasSection(sections.SectionProgressiveToolRules) {
+		t.Fatal("应注入渐进式工具规则节")
+	}
+	if len(inputs.Tools) != 1 || inputs.Tools[0].GetName() != "read_file" {
+		t.Fatalf("顶层工具应只留 direct，got %v", inputs.Tools)
+	}
+	if rail.attachments(cbc) == nil {
+		t.Fatal("应能从 agent 取得附件管理器")
+	}
+	if got := rail.attachments(nil); got != nil {
+		t.Fatal("nil 回调上下文应返回 nil 附件管理器")
+	}
+}
+
+// TestBeforeToolCall_四分支 验证门卫的四个分支。
+func TestBeforeToolCall_四分支(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	directCard := &tool.ToolCard{}
+	directCard.Name = "read_file"
+	directCard.Exposure = tool.ToolExposureDirect
+	manager.cards["read_file"] = directCard
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	rail.metaToolNames = map[string]struct{}{"tool_search": {}, "tool_call": {}}
+	rail.toolSearchRegistry = manager
+
+	session := newProgressiveFakeSession("s1")
+	agent := &progressiveFakeInitAgent{abilityManager: manager}
+
+	// ① direct 放行
+	if err := rail.BeforeToolCall(context.Background(), toolCallCtx(agent, session, "read_file")); err != nil {
+		t.Fatalf("direct 应放行: %v", err)
+	}
+	// ② 元工具放行
+	if err := rail.BeforeToolCall(context.Background(), toolCallCtx(agent, session, "tool_search")); err != nil {
+		t.Fatalf("元工具应放行: %v", err)
+	}
+	// ③ deferred 无嵌套标记 → 拒绝
+	rejected := toolCallCtx(agent, session, "xlsx_read")
+	if err := rail.BeforeToolCall(context.Background(), rejected); err != nil {
+		t.Fatalf("拒绝不应返回 error: %v", err)
+	}
+	if skipped, _ := rejected.GetExtra("_skip_tool"); skipped != true {
+		t.Fatal("deferred 直调应设置 _skip_tool")
+	}
+	// ④ 有嵌套标记 + 已授权 → 放行
+	rail.setDiscoveredTools(session, []string{"xlsx_read"}, nil)
+	nested := toolCallCtx(agent, session, "xlsx_read")
+	nested.SetExtra(nestedToolCallKey, true)
+	if err := rail.BeforeToolCall(context.Background(), nested); err != nil {
+		t.Fatalf("嵌套已授权应放行: %v", err)
+	}
+	// ⑤ 未知工具 → 拒绝
+	unknown := toolCallCtx(agent, session, "no_such_tool")
+	if err := rail.BeforeToolCall(context.Background(), unknown); err != nil {
+		t.Fatalf("拒绝不应返回 error: %v", err)
+	}
+	if skipped, _ := unknown.GetExtra("_skip_tool"); skipped != true {
+		t.Fatal("未知工具应设置 _skip_tool")
+	}
+	if toolNameOf(nil) != "" {
+		t.Fatal("nil 回调上下文应返回空工具名")
+	}
+	if !rail.isCachedTool("") == false {
+		_ = rail.isCachedTool("read_file")
+	}
+}
+
+// TestFinalizeStartupAsync_建首份索引 验证启动收尾。
+func TestFinalizeStartupAsync_建首份索引(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	agent := &progressiveFakeInitAgent{abilityManager: manager}
+
+	if err := rail.FinalizeStartupAsync(context.Background(), agent); err != nil {
+		t.Fatalf("收尾失败: %v", err)
+	}
+	if rail.toolSearchIndex == nil {
+		t.Fatal("启动收尾应建立 BM25 索引")
+	}
+	if rail.toolSearchIndex.DocumentCount() != 1 {
+		t.Fatalf("索引应含 1 个 deferred 工具，got %d", rail.toolSearchIndex.DocumentCount())
+	}
+}
+
+// TestGetCallbacks_注册三事件 验证回调映射。
+func TestGetCallbacks_注册三事件(t *testing.T) {
+	rail := newProgressiveRail(true)
+	callbacks := rail.GetCallbacks()
+	for _, event := range []agentinterfaces.AgentCallbackEvent{
+		agentinterfaces.CallbackBeforeInvoke,
+		agentinterfaces.CallbackBeforeModelCall,
+		agentinterfaces.CallbackBeforeToolCall,
+	} {
+		if _, ok := callbacks[event]; !ok {
+			t.Fatalf("缺少回调 %s", event)
+		}
+	}
+}
+
+// TestDispatchToolCall_上下文校验 验证 tool_call 分发入口。
+func TestDispatchToolCall_上下文校验(t *testing.T) {
+	rail := newProgressiveRail(true)
+	if _, err := rail.dispatchToolCall(context.Background(), "x", nil, nil); err == nil {
+		t.Fatal("缺少回调上下文应报错")
+	}
+}
+
+// TestCallDiscoveredTool_非deferred工具拒绝 验证曝光校验分支。
+func TestCallDiscoveredTool_非deferred工具拒绝(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	directCard := &tool.ToolCard{}
+	directCard.Name = "read_file"
+	directCard.Exposure = tool.ToolExposureDirect
+	manager.cards["read_file"] = directCard
+	rail.toolSearchRegistry = manager
+
+	session := newProgressiveFakeSession("s1")
+	rail.setDiscoveredTools(session, []string{"read_file"}, nil)
+	agent := &progressiveFakeInitAgent{abilityManager: manager}
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ToolCallInputs{}, session)
+
+	result, err := rail.callDiscoveredTool(context.Background(), "read_file", nil, session, cbc)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if !strings.Contains(result.Err().Error(), "not a deferred search result") {
+		t.Fatalf("文案不符: %v", result.Err())
+	}
+}
+
+// TestCallDiscoveredTool_无执行结果 验证 Execute 空结果分支。
+func TestCallDiscoveredTool_无执行结果(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	card := newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	manager.cards["xlsx_read"] = card
+	rail.toolSearchRegistry = manager
+
+	session := newProgressiveFakeSession("s1")
+	rail.setDiscoveredTools(session, []string{"xlsx_read"},
+		map[string]string{"xlsx_read": toolFingerprintOf(card)})
+	agent := &progressiveFakeInitAgent{abilityManager: manager}
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ToolCallInputs{}, session)
+
+	result, err := rail.callDiscoveredTool(context.Background(), "xlsx_read", nil, session, cbc)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if !strings.Contains(result.Err().Error(), "returned no execution result") {
+		t.Fatalf("文案不符: %v", result.Err())
+	}
+}
+
+// TestManagerAdapter_转发三方法 验证附件适配器。
+func TestManagerAdapter_转发三方法(t *testing.T) {
+	manager := prompts.NewManager()
+	adapter := &managerAdapter{manager: manager, history: nil}
+	if _, err := adapter.AddSection("s1", "sec", "内容", prompts.AttachmentTool, "src"); err != nil {
+		t.Fatalf("写入失败: %v", err)
+	}
+	if found := adapter.Find("s1", "sec", "src"); found == nil || found.Content != "内容" {
+		t.Fatalf("查询失败: %+v", found)
+	}
+	if adapter.HasHistorySnapshot("s1") {
+		t.Fatal("无历史上下文应返回 false")
+	}
+}
+
+// toolCallCtx 构造工具调用回调上下文（测试助手）。
+func toolCallCtx(agent agentinterfaces.BaseAgent, session sessioninterfaces.SessionFacade, toolName string) *agentinterfaces.AgentCallbackContext {
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ToolCallInputs{
+		ToolCall: llmschema.NewToolCall("call-"+toolName, toolName, `{}`),
+		ToolName: toolName,
+	}, session)
+	return cbc
+}

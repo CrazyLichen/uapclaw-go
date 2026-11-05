@@ -39,7 +39,7 @@ func TestGetToolProvider_已注册工具(t *testing.T) {
 		"bash", "code", "ask_user",
 		"read_file", "write_file", "edit_file", "glob", "list_files", "grep",
 		"audio_transcription", "audio_question_answering", "audio_metadata",
-		"list_skill", "load_tools", "search_tools", "skill_tool",
+		"list_skill", "tool_search", "tool_call", "skill_tool",
 		"switch_mode", "enter_plan_mode", "exit_plan_mode",
 		"coding_memory_read", "coding_memory_write", "coding_memory_edit",
 		"cron",
@@ -341,15 +341,15 @@ func (p *testBadProvider) GetInputParams(language string) map[string]any {
 // ──────────────────────────── BuildToolCard 测试 ────────────────────────────
 
 func TestBuildToolCard_已注册工具(t *testing.T) {
-	card, err := BuildToolCard("search_tools", "SearchToolsTool", "cn", nil, "agent1")
+	card, err := BuildToolCard("tool_search", "ToolSearchTool", "cn", nil, "agent1")
 	if err != nil {
 		t.Fatalf("BuildToolCard 失败: %v", err)
 	}
-	if card.GetName() != "search_tools" {
-		t.Errorf("GetName() = %q, 期望 %q", card.GetName(), "search_tools")
+	if card.GetName() != "tool_search" {
+		t.Errorf("GetName() = %q, 期望 %q", card.GetName(), "tool_search")
 	}
-	if !strings.Contains(card.GetID(), "SearchToolsTool_agent1") {
-		t.Errorf("GetID() = %q, 应包含 'SearchToolsTool_agent1'", card.GetID())
+	if !strings.Contains(card.GetID(), "ToolSearchTool_agent1") {
+		t.Errorf("GetID() = %q, 应包含 'ToolSearchTool_agent1'", card.GetID())
 	}
 	if card.GetDescription() == "" {
 		t.Error("GetDescription() 不应为空")
@@ -360,11 +360,11 @@ func TestBuildToolCard_已注册工具(t *testing.T) {
 }
 
 func TestBuildToolCard_双语切换(t *testing.T) {
-	cardCN, err1 := BuildToolCard("search_tools", "SearchToolsTool", "cn", nil, "")
+	cardCN, err1 := BuildToolCard("tool_search", "ToolSearchTool", "cn", nil, "")
 	if err1 != nil {
 		t.Fatalf("BuildToolCard cn 失败: %v", err1)
 	}
-	cardEN, err2 := BuildToolCard("search_tools", "SearchToolsTool", "en", nil, "")
+	cardEN, err2 := BuildToolCard("tool_search", "ToolSearchTool", "en", nil, "")
 	if err2 != nil {
 		t.Fatalf("BuildToolCard en 失败: %v", err2)
 	}
@@ -397,12 +397,12 @@ func TestBuildToolCard_formatArgs填充(t *testing.T) {
 }
 
 func TestBuildToolCard_无AgentID时自动生成UUID(t *testing.T) {
-	card, err := BuildToolCard("search_tools", "SearchToolsTool", "en", nil, "")
+	card, err := BuildToolCard("tool_search", "ToolSearchTool", "en", nil, "")
 	if err != nil {
 		t.Fatalf("BuildToolCard 失败: %v", err)
 	}
 	// 当 agentID 为空时，ID 应包含 toolID + "_" + uuid 前 8 位
-	if !strings.Contains(card.GetID(), "SearchToolsTool_") {
+	if !strings.Contains(card.GetID(), "ToolSearchTool_") {
 		t.Errorf("GetID() = %q, 应包含 'SearchToolsTool_'", card.GetID())
 	}
 }
