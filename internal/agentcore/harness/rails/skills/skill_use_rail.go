@@ -24,6 +24,8 @@ import (
 	skilltools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
@@ -88,6 +90,25 @@ type SkillUseRail struct {
 	ownedToolIDs map[string]struct{}
 }
 
+// skillBaselineState 会话技能基线持久化结构
+// Python: _save_session_baseline 写入的 dict (:733-750)
+type skillBaselineState struct {
+	// SchemaVersion 结构版本，不匹配则整份忽略
+	SchemaVersion int `json:"schema_version"`
+	// BaselineSkills 首次快照时的技能列表
+	BaselineSkills []skillBaselineEntry `json:"baseline_skills"`
+}
+
+// skillBaselineEntry 单条基线技能
+type skillBaselineEntry struct {
+	// Name 技能名
+	Name string `json:"name"`
+	// Description 技能描述
+	Description string `json:"description"`
+	// Directory 技能目录绝对路径（skill_tool 读文件必需）
+	Directory string `json:"directory"`
+}
+
 // SkillUseRailOption SkillUseRail 构造选项
 type SkillUseRailOption func(*SkillUseRail)
 
@@ -104,6 +125,18 @@ const (
 	// skillUseRailPriority SkillUseRail 优先级
 	// Python: SkillUseRail.priority = 100
 	skillUseRailPriority = 100
+
+	// skillSessionStateKey 会话技能基线的 session state 键
+	// Python: SkillUseRail._SESSION_STATE_KEY (skill_use_rail.py:65)
+	skillSessionStateKey = "skill_use"
+	// skillSessionStateSchemaVersion 基线结构版本
+	// Python: SkillUseRail._SESSION_STATE_SCHEMA_VERSION (:66)
+	skillSessionStateSchemaVersion = 1
+	// runtimeSkillAttachmentSection 运行时技能变更附件节名
+	// Python: SkillUseRail._RUNTIME_ATTACHMENT_SECTION (:67)
+	runtimeSkillAttachmentSection = "skills.runtime_changes"
+	// runtimeSkillAttachmentSource 附件来源标识
+	runtimeSkillAttachmentSource = "skill_use_rail"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -239,6 +272,43 @@ func (r *SkillUseRail) ClearSkills() {
 // 覆盖 BaseRail.Priority() 以返回 skillUseRailPriority
 func (r *SkillUseRail) Priority() int {
 	return skillUseRailPriority
+}
+
+// GetSkillsForSession 返回会话可见技能视图：基线 ∪ 当前新发现（按 name 去重）。
+// Python: get_skills_for_session (:673-687)
+func (r *SkillUseRail) GetSkillsForSession(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill {
+	if _, ok := r.loadSessionState(sess); !ok {
+		out := make([]*skillpkg.Skill, len(r.skills))
+		copy(out, r.skills)
+		return out
+	}
+	baseline := r.loadSessionBaseline(sess)
+	known := make(map[string]struct{}, len(baseline))
+	merged := make([]*skillpkg.Skill, 0, len(baseline)+len(r.skills))
+	for _, skill := range baseline {
+		known[skill.Name] = struct{}{}
+		merged = append(merged, skill)
+	}
+	for _, skill := range r.skills {
+		if skill == nil {
+			continue
+		}
+		if _, ok := known[skill.Name]; ok {
+			continue
+		}
+		merged = append(merged, skill)
+	}
+	return merged
+}
+
+// ClearSessionBaseline 清除会话基线，下次同步时按当前集合重拍。
+// Python: JiuWenSwarmDeepAdapter._clear_skill_session_baseline (interface_deep.py:11261-11274)
+func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade) error {
+	if sess == nil {
+		return nil
+	}
+	sess.UpdateState(map[string]any{skillSessionStateKey: nil})
+	return nil
 }
 
 // Init 注册工具到 ResourceMgr + AbilityManager。
@@ -496,6 +566,126 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 func (r *SkillUseRail) refreshSkillPrompt(ctx context.Context) {
 	_ = r.prepareSkills(ctx)
 	r.fetchEvolutionTexts(ctx)
+}
+
+// ensureSessionBaseline 首次使用时落盘会话基线。
+// Python: _ensure_session_baseline (:692-698)
+func (r *SkillUseRail) ensureSessionBaseline(sess sessioninterfaces.SessionFacade) error {
+	if sess == nil {
+		return nil
+	}
+	if _, ok := r.loadSessionState(sess); ok {
+		return nil
+	}
+	return r.saveSessionBaseline(sess, r.skills)
+}
+
+// loadSessionBaseline 读取会话基线；无有效 state 时返回空切片。
+// Python: _load_session_baseline (:700-721)
+func (r *SkillUseRail) loadSessionBaseline(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill {
+	stateMap, ok := r.loadSessionState(sess)
+	if !ok {
+		return nil
+	}
+	raw, exists := stateMap["baseline_skills"]
+	if !exists {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		logger.Warn(logger.ComponentAgentCore).Msg("invalid persisted baseline_skills, ignoring")
+		return nil
+	}
+	skills := make([]*skillpkg.Skill, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := stringField(entry, "name")
+		directory := stringField(entry, "directory")
+		if name == "" || directory == "" {
+			continue
+		}
+		skills = append(skills, &skillpkg.Skill{
+			Name:        name,
+			Description: stringField(entry, "description"),
+			Directory:   directory,
+		})
+	}
+	return skills
+}
+
+// loadSessionState 读取并校验 skill_use state。
+// Python: _load_session_state (:722-731)
+func (r *SkillUseRail) loadSessionState(sess sessioninterfaces.SessionFacade) (map[string]any, bool) {
+	if sess == nil {
+		return nil, false
+	}
+	raw, err := sess.GetState(state.StringKey(skillSessionStateKey))
+	if err != nil || raw == nil {
+		return nil, false
+	}
+	stateMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	if schemaVersion(stateMap["schema_version"]) != skillSessionStateSchemaVersion {
+		logger.Warn(logger.ComponentAgentCore).
+			Any("schema_version", stateMap["schema_version"]).
+			Msg("unsupported persisted skill state schema, ignoring")
+		return nil, false
+	}
+	return stateMap, true
+}
+
+// saveSessionBaseline 把技能列表写入会话基线。
+// Python: _save_session_baseline (:733-750)
+func (r *SkillUseRail) saveSessionBaseline(sess sessioninterfaces.SessionFacade, skills []*skillpkg.Skill) error {
+	if sess == nil {
+		return nil
+	}
+	entries := make([]any, 0, len(skills))
+	for _, skill := range skills {
+		if skill == nil {
+			continue
+		}
+		entries = append(entries, map[string]any{
+			"name":        skill.Name,
+			"description": skill.Description,
+			"directory":   skill.Directory,
+		})
+	}
+	sess.UpdateState(map[string]any{
+		skillSessionStateKey: map[string]any{
+			"schema_version":  skillSessionStateSchemaVersion,
+			"baseline_skills": entries,
+		},
+	})
+	return nil
+}
+
+// stringField 读取 map 的字符串字段，缺失或非字符串返回空串。
+func stringField(m map[string]any, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// schemaVersion 归一化版本号：落盘回读可能是 int 或 float64。
+func schemaVersion(v any) int {
+	switch typed := v.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	}
+	return -1
 }
 
 // prepareSkills 增量刷新 + 过滤。
