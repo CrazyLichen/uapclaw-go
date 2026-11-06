@@ -98,7 +98,7 @@ func InitModel(
 	// 构建 ModelRequestConfig
 	requestConfigOpts := []llmschema.ModelRequestConfigOption{
 		llmschema.WithModelName(modelName),
-		llmschema.WithTemperature(cfg.temperature),
+		llmschema.WithTemperatureValue(cfg.temperature),
 		llmschema.WithTopP(cfg.topP),
 	}
 	if cfg.maxTokens != nil {

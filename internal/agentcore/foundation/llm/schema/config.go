@@ -61,8 +61,9 @@ type ModelClientConfig struct {
 type ModelRequestConfig struct {
 	// ModelName 模型名称，如 "gpt-4"，JSON 键名为 "model"
 	ModelName string `json:"model"`
-	// Temperature 温度参数，控制输出随机性，默认 0.95
-	Temperature float64 `json:"temperature"`
+	// Temperature 温度参数，控制输出随机性；nil = 未设置（不下发给 provider）
+	// Python: schema/config.py:262-264 temperature: Optional[float] = None
+	Temperature *float64 `json:"temperature,omitempty"`
 	// TopP Top-p 采样参数，默认 0.1，对齐 Python: top_p=0.1
 	TopP *float64 `json:"top_p,omitempty"`
 	// MaxTokens 最大生成 token 数（可选）
@@ -478,9 +479,14 @@ func WithModelName(name string) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.ModelName = name }
 }
 
-// WithTemperature 设置温度参数。
-func WithTemperature(temp float64) ModelRequestConfigOption {
+// WithTemperature 设置温度参数（指针形，nil 表示不设置）。
+func WithTemperature(temp *float64) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.Temperature = temp }
+}
+
+// WithTemperatureValue 设置温度参数（值便捷形，内部取址）。
+func WithTemperatureValue(temp float64) ModelRequestConfigOption {
+	return func(c *ModelRequestConfig) { c.Temperature = &temp }
 }
 
 // WithTopP 设置 Top-p 采样参数。
@@ -518,11 +524,9 @@ func WithRequestExtra(extra map[string]any) ModelRequestConfigOption {
 
 // NewModelRequestConfig 创建模型请求配置，默认温度 0.95、TopP 0.1（对齐 Python）。
 func NewModelRequestConfig(opts ...ModelRequestConfigOption) *ModelRequestConfig {
-	defaultTopP := 0.1
-	cfg := &ModelRequestConfig{
-		Temperature: 0.95,
-		TopP:        &defaultTopP,
-	}
+	// 采样参数默认 nil（未设置不下发）——Python: schema/config.py:262-266
+	// 应用层需要 0.95 的地方自行显式设置（deep_adapter / default_models / runtime_inheritance）
+	cfg := &ModelRequestConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}

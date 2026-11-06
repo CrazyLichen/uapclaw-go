@@ -1314,7 +1314,8 @@ func modelsValidate(wc *WebChannel) methodHandler {
 		modelConfig := llmSchema.NewModelRequestConfig()
 		modelConfig.ModelName = model
 		modelConfig.MaxTokens = &maxTokens1
-		modelConfig.Temperature = 0
+		zeroTemperature := 0.0
+		modelConfig.Temperature = &zeroTemperature
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

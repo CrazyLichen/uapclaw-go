@@ -331,8 +331,8 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 
 	// 3. 合并参数（优先级：params > model_config）
 	if e.ModelConfig != nil {
-		if params.Temperature == nil && e.ModelConfig.Temperature != 0 {
-			reqParams["temperature"] = e.ModelConfig.Temperature
+		if params.Temperature == nil && e.ModelConfig.Temperature != nil {
+			reqParams["temperature"] = *e.ModelConfig.Temperature
 		}
 		if params.TopP == nil && e.ModelConfig.TopP != nil {
 			reqParams["top_p"] = *e.ModelConfig.TopP

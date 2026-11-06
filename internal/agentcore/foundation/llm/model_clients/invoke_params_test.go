@@ -487,7 +487,7 @@ func TestBuildRequestParams_模型配置默认参数(t *testing.T) {
 	// 测试 model_config 中的默认参数
 	mc := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName("gpt-4"),
-		llmschema.WithTemperature(0.5),
+		llmschema.WithTemperatureValue(0.5),
 		llmschema.WithTopP(0.9),
 	)
 	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
@@ -520,7 +520,7 @@ func TestBuildRequestParams_参数覆盖模型配置(t *testing.T) {
 	// 测试方法参数覆盖 model_config 默认参数
 	mc := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName("gpt-4"),
-		llmschema.WithTemperature(0.5),
+		llmschema.WithTemperatureValue(0.5),
 	)
 	cc, err := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),

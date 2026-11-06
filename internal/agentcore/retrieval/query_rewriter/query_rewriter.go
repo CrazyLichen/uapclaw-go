@@ -167,7 +167,7 @@ func NewQueryRewriter(cfg *llmschema.ModelConfig, ctx ceinterface.ModelContext, 
 	}
 	requestCfg := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName(mi.ModelName),
-		llmschema.WithTemperature(0.0),
+		llmschema.WithTemperatureValue(0.0),
 		llmschema.WithTopP(mi.TopP),
 	)
 	model, err := llm.NewModel(clientCfg, requestCfg)

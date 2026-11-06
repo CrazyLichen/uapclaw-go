@@ -285,7 +285,7 @@ func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
 	}
 	requestConfig := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName(modelName),
-		llmschema.WithTemperature(temperature),
+		llmschema.WithTemperatureValue(temperature),
 	)
 
 	provider := mapStrField(mcc, "client_provider")

@@ -507,11 +507,12 @@ func TestNewModelRequestConfig(t *testing.T) {
 	if cfg.ModelName != "" {
 		t.Errorf("ModelName = %q, want 空", cfg.ModelName)
 	}
-	if cfg.Temperature != 0.95 {
-		t.Errorf("Temperature = %f, want 0.95", cfg.Temperature)
+	// 采样参数默认 nil（C-D3）：Python schema/config.py:262-266 temperature/top_p = None
+	if cfg.Temperature != nil {
+		t.Errorf("Temperature 默认应为 nil，实际 %v", *cfg.Temperature)
 	}
-	if cfg.TopP == nil || *cfg.TopP != 0.1 {
-		t.Errorf("TopP = %v, want 0.1（默认）", cfg.TopP)
+	if cfg.TopP != nil {
+		t.Errorf("TopP 默认应为 nil，实际 %v", *cfg.TopP)
 	}
 	if cfg.MaxTokens != nil {
 		t.Error("MaxTokens 默认应为 nil")
@@ -528,7 +529,7 @@ func TestNewModelRequestConfig(t *testing.T) {
 func TestNewModelRequestConfig_WithOptions(t *testing.T) {
 	cfg := NewModelRequestConfig(
 		WithModelName("gpt-4"),
-		WithTemperature(0.5),
+		WithTemperatureValue(0.5),
 		WithTopP(0.9),
 		WithMaxTokens(1000),
 		WithStop("END"),
@@ -537,8 +538,8 @@ func TestNewModelRequestConfig_WithOptions(t *testing.T) {
 	if cfg.ModelName != "gpt-4" {
 		t.Errorf("ModelName = %q, want %q", cfg.ModelName, "gpt-4")
 	}
-	if cfg.Temperature != 0.5 {
-		t.Errorf("Temperature = %f, want 0.5", cfg.Temperature)
+	if cfg.Temperature == nil || *cfg.Temperature != 0.5 {
+		t.Errorf("Temperature = %v, want 0.5", cfg.Temperature)
 	}
 	if cfg.TopP == nil || *cfg.TopP != 0.9 {
 		t.Errorf("TopP = %v, want 0.9", cfg.TopP)
@@ -586,8 +587,8 @@ func TestModelRequestConfig_UnmarshalJSON_ModelAlias(t *testing.T) {
 	if cfg.ModelName != "gpt-4" {
 		t.Errorf("ModelName = %q, want %q", cfg.ModelName, "gpt-4")
 	}
-	if cfg.Temperature != 0.7 {
-		t.Errorf("Temperature = %f, want 0.7", cfg.Temperature)
+	if cfg.Temperature == nil || *cfg.Temperature != 0.7 {
+		t.Errorf("Temperature = %v, want 0.7", cfg.Temperature)
 	}
 	if cfg.TopP == nil || *cfg.TopP != 0.5 {
 		t.Errorf("TopP = %v, want 0.5", cfg.TopP)

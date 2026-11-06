@@ -416,7 +416,7 @@ func (p *IMOutboundPipeline) ensureLLM() bool {
 	}
 	modelCfg := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName(modelName),
-		llmschema.WithTemperature(0.1),
+		llmschema.WithTemperatureValue(0.1),
 		llmschema.WithTopP(0.1),
 	)
 	model, err := llm.NewModel(clientCfg, modelCfg)

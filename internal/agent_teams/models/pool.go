@@ -357,7 +357,7 @@ func buildModelRequestConfig(requestExtra map[string]any, modelName string) *llm
 	// 合并 metadata.request 中的字段
 	if v, ok := requestExtra["temperature"]; ok {
 		if f, ok := toFloat64(v); ok {
-			cfg.Temperature = f
+			cfg.Temperature = &f
 		}
 	}
 	if v, ok := requestExtra["top_p"]; ok {

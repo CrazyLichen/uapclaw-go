@@ -2189,7 +2189,7 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 	// Python: 只在配置中有 top_p 时才设置，不设默认值
 	mConfigOpts := []llmschema.ModelRequestConfigOption{
 		llmschema.WithModelName(name),
-		llmschema.WithTemperature(temperature),
+		llmschema.WithTemperatureValue(temperature),
 	}
 	if f, ok := config.Float(mco, "top_p"); ok {
 		mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))

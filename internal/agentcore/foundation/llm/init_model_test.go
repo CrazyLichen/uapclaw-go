@@ -163,8 +163,8 @@ func TestInitModel_WithOptions(t *testing.T) {
 	}
 
 	// 验证选项是否生效
-	if model.ModelConfig.Temperature != 0.5 {
-		t.Errorf("Temperature 期望 0.5，实际 %f", model.ModelConfig.Temperature)
+	if model.ModelConfig.Temperature == nil || *model.ModelConfig.Temperature != 0.5 {
+		t.Errorf("Temperature 期望 0.5，实际 %v", model.ModelConfig.Temperature)
 	}
 	if model.ModelConfig.TopP == nil || *model.ModelConfig.TopP != 0.9 {
 		t.Errorf("TopP 期望 0.9，实际 %v", model.ModelConfig.TopP)

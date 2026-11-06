@@ -138,8 +138,8 @@ func TestModelPoolEntry_ToTeamModelConfig_MetadataMerge(t *testing.T) {
 		t.Fatal("ModelRequestConfig 不应为 nil")
 	}
 	reqCfg := cfg.ModelRequestConfig
-	if reqCfg.Temperature != 0.5 {
-		t.Errorf("Temperature = %f, want 0.5", reqCfg.Temperature)
+	if reqCfg.Temperature == nil || *reqCfg.Temperature != 0.5 {
+		t.Errorf("Temperature = %v, want 0.5", reqCfg.Temperature)
 	}
 	if reqCfg.TopP == nil || *reqCfg.TopP != 0.9 {
 		t.Errorf("TopP = %v, want 0.9", reqCfg.TopP)
@@ -209,11 +209,12 @@ func TestModelPoolEntry_ToTeamModelConfig_空Metadata(t *testing.T) {
 	if cfg.ModelRequestConfig == nil {
 		t.Fatal("ModelRequestConfig 不应为 nil")
 	}
-	if cfg.ModelRequestConfig.Temperature != 0.95 {
-		t.Errorf("Temperature = %f, want 0.95（默认）", cfg.ModelRequestConfig.Temperature)
+	// C-D3 后采样参数无默认值（nil = 未设置，不下发；Python schema/config.py:262-266）
+	if cfg.ModelRequestConfig.Temperature != nil {
+		t.Errorf("Temperature 默认应为 nil，实际 %v", *cfg.ModelRequestConfig.Temperature)
 	}
-	if cfg.ModelRequestConfig.TopP == nil || *cfg.ModelRequestConfig.TopP != 0.1 {
-		t.Errorf("TopP = %v, want 0.1（默认）", cfg.ModelRequestConfig.TopP)
+	if cfg.ModelRequestConfig.TopP != nil {
+		t.Errorf("TopP 默认应为 nil，实际 %v", *cfg.ModelRequestConfig.TopP)
 	}
 }
 

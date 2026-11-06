@@ -628,9 +628,9 @@ func getDefaultWikiModel() (*llm.Model, error) {
 	if v, ok := reqConfig["temperature"]; ok {
 		switch n := v.(type) {
 		case float64:
-			reqOpts = append(reqOpts, llmschema.WithTemperature(n))
+			reqOpts = append(reqOpts, llmschema.WithTemperatureValue(n))
 		case int:
-			reqOpts = append(reqOpts, llmschema.WithTemperature(float64(n)))
+			reqOpts = append(reqOpts, llmschema.WithTemperatureValue(float64(n)))
 		}
 	}
 	if v, ok := reqConfig["top_p"]; ok {

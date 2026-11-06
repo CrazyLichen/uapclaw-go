@@ -828,7 +828,7 @@ func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSum
 	// Python: ModelRequestConfig(model=model_name, temperature=0.3)
 	modelConfig := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName(modelName),
-		llmschema.WithTemperature(0.3),
+		llmschema.WithTemperatureValue(0.3),
 	)
 
 	model, err := llm.NewModel(&clientConfig, modelConfig)

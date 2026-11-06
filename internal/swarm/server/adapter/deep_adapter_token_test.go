@@ -82,7 +82,7 @@ func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
 	if m.ClientConfig.Timeout != 1800 {
 		t.Errorf("整数 timeout 应生效为 1800, 实际 %v", m.ClientConfig.Timeout)
 	}
-	if m.ModelConfig.Temperature != 1 {
+	if m.ModelConfig.Temperature == nil || *m.ModelConfig.Temperature != 1 {
 		t.Errorf("整数 temperature 应生效为 1, 实际 %v", m.ModelConfig.Temperature)
 	}
 	if m.ModelConfig.TopP == nil || *m.ModelConfig.TopP != 1 {

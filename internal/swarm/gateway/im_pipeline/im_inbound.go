@@ -821,7 +821,7 @@ func (proc *IMConversationProcessor) ensureLLM() *llm.Model {
 	}
 	modelCfg := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName(proc.modelName),
-		llmschema.WithTemperature(0.2),
+		llmschema.WithTemperatureValue(0.2),
 		llmschema.WithTopP(0.7),
 	)
 	mcc := proc.modelClientRaw

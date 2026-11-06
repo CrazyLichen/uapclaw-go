@@ -85,7 +85,7 @@ func NewOpenAILLMWrapper(modelName string, apiKey string, baseURL string, temper
 	// 构建 ModelRequestConfig（对齐 Python ModelRequestConfig）
 	modelConfig := &llmschema.ModelRequestConfig{
 		ModelName:   modelName,
-		Temperature: temperature,
+		Temperature: &temperature,
 	}
 
 	// 对齐 Python：self.client = OpenAIModelClient(model_config, model_client_config)

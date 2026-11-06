@@ -259,7 +259,7 @@ func TestGetDefaultWikiModel_全字段透传(t *testing.T) {
 
 	// req 侧断言
 	mc := m.ModelConfig
-	if mc.Temperature != 0.33 {
+	if mc.Temperature == nil || *mc.Temperature != 0.33 {
 		t.Errorf("temperature 应透传 0.33: %v", mc.Temperature)
 	}
 	if mc.TopP == nil || *mc.TopP != 0.77 {

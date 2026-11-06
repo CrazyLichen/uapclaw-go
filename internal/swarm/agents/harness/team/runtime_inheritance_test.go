@@ -227,7 +227,7 @@ func TestBuildEvolutionLLM_合法配置(t *testing.T) {
 	if name != "test-model" {
 		t.Fatalf("name = %q", name)
 	}
-	if model.ModelConfig.Temperature != 0.5 {
+	if model.ModelConfig.Temperature == nil || *model.ModelConfig.Temperature != 0.5 {
 		t.Fatalf("temperature = %v, want 0.5", model.ModelConfig.Temperature)
 	}
 }
@@ -246,7 +246,7 @@ func TestBuildEvolutionLLM_默认temperature095(t *testing.T) {
 	if model == nil {
 		t.Fatalf("model should be created")
 	}
-	if model.ModelConfig.Temperature != 0.95 {
+	if model.ModelConfig.Temperature == nil || *model.ModelConfig.Temperature != 0.95 {
 		t.Fatalf("default temperature = %v, want 0.95", model.ModelConfig.Temperature)
 	}
 }
