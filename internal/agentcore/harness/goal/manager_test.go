@@ -101,8 +101,7 @@ func TestGoalManager_GetStore(t *testing.T) {
 func TestGoalManager_Peek与Get(t *testing.T) {
 	harness := newManagerHarness(true)
 	assert.Nil(t, harness.manager.Peek())
-	got, err := harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	got := harness.manager.Get()
 	assert.Nil(t, got)
 
 	harness.store.Save(CreateGoalRecord("session-1", "write a report", nil, nil))
@@ -157,8 +156,7 @@ func TestGoalManager_Set_空目标被拒(t *testing.T) {
 	require.ErrorAs(t, err, &operationErr)
 	assert.Equal(t, "invalid_objective", operationErr.Code)
 
-	got, getErr := harness.manager.Get(context.Background())
-	require.NoError(t, getErr)
+	got := harness.manager.Get()
 	assert.Nil(t, got, "校验失败不得写库")
 
 	zero := 0
@@ -295,8 +293,7 @@ func TestGoalManager_二次Pause仍可加载(t *testing.T) {
 	require.NotNil(t, second)
 	assert.Equal(t, GoalStatusPaused, second.Status)
 
-	got, err := harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	got := harness.manager.Get()
 	assert.NotNil(t, got, "二次暂停不得把记录清空")
 }
 
@@ -502,8 +499,7 @@ func TestGoalManager_Clear_清work取消并发快照(t *testing.T) {
 	assert.Equal(t, hschema.InteractionEventTypeGoalUpdated, harness.emitted[0].Type)
 	assert.Nil(t, harness.emitted[0].Payload["goal"], "清除事件载荷为 nil")
 
-	got, err := harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	got := harness.manager.Get()
 	assert.Nil(t, got, "记录必须被移除")
 }
 
@@ -538,33 +534,33 @@ func TestGoalManager_Clear_无输出流不发事件(t *testing.T) {
 func TestGoalManager_EnsureActiveGoalWorkLocked(t *testing.T) {
 	// 无记录
 	empty := newManagerHarness(true)
-	assert.False(t, empty.manager.EnsureActiveGoalWorkLocked())
+	assert.False(t, ensureActive(t, empty.manager))
 
 	// PAUSED 不补排
 	pausedHarness := newManagerHarness(true)
 	pausedRecord := CreateGoalRecord("session-1", "write a report", nil, nil)
 	pausedRecord.Status = GoalStatusPaused
 	pausedHarness.store.Save(pausedRecord)
-	assert.False(t, pausedHarness.manager.EnsureActiveGoalWorkLocked())
+	assert.False(t, ensureActive(t, pausedHarness.manager))
 
 	// ACTIVE 但无输出流不补排
 	detached := newManagerHarness(false)
 	detached.store.Save(CreateGoalRecord("session-1", "write a report", nil, nil))
-	assert.False(t, detached.manager.EnsureActiveGoalWorkLocked())
+	assert.False(t, ensureActive(t, detached.manager))
 	assert.Nil(t, detached.events.NextWork())
 
 	// ACTIVE 且有输出流补排一次
 	attached := newManagerHarness(true)
 	active := CreateGoalRecord("session-1", "write a report", nil, nil)
 	attached.store.Save(active)
-	assert.True(t, attached.manager.EnsureActiveGoalWorkLocked())
+	assert.True(t, ensureActive(t, attached.manager))
 	queued := attached.events.NextWork()
 	require.NotNil(t, queued)
 	assert.Equal(t, active.GoalID, queued.Context.GoalID)
 	assert.Equal(t, 1, attached.notifies)
 
 	// 同代际已在队列 → 不重复排队
-	assert.False(t, attached.manager.EnsureActiveGoalWorkLocked(), "同 (goal_id, revision) 去重")
+	assert.False(t, ensureActive(t, attached.manager), "同 (goal_id, revision) 去重")
 }
 
 // TestGoalManager_TaskView 校验记录到视图的转换
@@ -665,8 +661,7 @@ func TestGoalManager_ActiveUsage_冲刷已流逝时间(t *testing.T) {
 
 	*clock = 1012
 	require.NoError(t, harness.manager.AccumulateUsage(record.GoalID, record.Revision, 5, 0, 0))
-	got, err := harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	got := harness.manager.Get()
 	require.NotNil(t, got)
 	assert.Equal(t, 12, got.TimeUsedSeconds)
 	require.NotNil(t, got.ActiveStartedAt)
@@ -674,16 +669,14 @@ func TestGoalManager_ActiveUsage_冲刷已流逝时间(t *testing.T) {
 
 	*clock = 1020
 	require.NoError(t, harness.manager.AccumulateUsage(record.GoalID, record.Revision, 0, 7, 0))
-	got, err = harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	got = harness.manager.Get()
 	require.NotNil(t, got)
 	assert.Equal(t, 20, got.TimeUsedSeconds)
 	assert.Equal(t, 12, got.TokenUsage.TotalTokens)
 
 	// 异代际不计账
 	require.NoError(t, harness.manager.AccumulateUsage(record.GoalID, record.Revision+9, 100, 100, 0))
-	got, err = harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	got = harness.manager.Get()
 	require.NotNil(t, got)
 	assert.Equal(t, 12, got.TokenUsage.TotalTokens)
 }
@@ -709,8 +702,7 @@ func TestGoalManager_UsageDuringPause(t *testing.T) {
 
 	*clock = 1020
 	require.NoError(t, harness.manager.AccumulateUsage(record.GoalID, record.Revision, 3, 0, 0))
-	mid, err := harness.manager.Get(context.Background())
-	require.NoError(t, err)
+	mid := harness.manager.Get()
 	require.NotNil(t, mid)
 	assert.Equal(t, 20, mid.TimeUsedSeconds)
 	require.NotNil(t, mid.ActiveStartedAt)
@@ -867,7 +859,9 @@ func TestGoalManager_实现Coordinator接口(t *testing.T) {
 		EventManager: task_loop.NewEventManager(),
 	})
 	assert.False(t, coordinator.HasActiveRecord())
-	assert.False(t, coordinator.EnsureActiveGoalWorkLocked())
+	ensured, ensureErr := coordinator.EnsureActiveGoalWorkLocked()
+	require.NoError(t, ensureErr)
+	assert.False(t, ensured)
 
 	record, err := coordinator.BeginAttempt(context.Background(), "missing", 0)
 	require.NoError(t, err)
@@ -910,7 +904,7 @@ func TestGoalManager_并发写持同一把锁(t *testing.T) {
 				_, _ = manager.Resume(context.Background())
 				_ = manager.Peek()
 				manager.HasActiveRecord()
-				_, _ = manager.Get(context.Background())
+				_ = manager.Get()
 			}
 		}()
 	}
@@ -918,4 +912,12 @@ func TestGoalManager_并发写持同一把锁(t *testing.T) {
 
 	assert.Greater(t, emitted.Load(), int64(0))
 	assert.Greater(t, notifies.Load(), int64(0))
+}
+
+// ensureActive 断言补排无错误并返回是否真的排队
+func ensureActive(t *testing.T, manager *GoalManager) bool {
+	t.Helper()
+	queued, err := manager.EnsureActiveGoalWorkLocked()
+	require.NoError(t, err)
+	return queued
 }

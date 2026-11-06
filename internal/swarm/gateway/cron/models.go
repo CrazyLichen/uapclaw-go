@@ -1,10 +1,10 @@
 package cron
 
 import (
-	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -202,7 +202,7 @@ func FromCronJobDict(data map[string]any) (*CronJob, error) {
 	// 缺失时默认 300；显式 null 时 int(None) 同样报错（null 与缺失语义不同）。
 	wos := 300
 	if raw, ok := data["wake_offset_seconds"]; ok {
-		n, err := intAny(raw)
+		n, err := utils.PyInt(raw)
 		if err != nil {
 			return nil, fmt.Errorf("wake_offset_seconds must be int")
 		}
@@ -393,35 +393,6 @@ func boolAny(v any) bool {
 	default:
 		return true
 	}
-}
-
-// intAny 按 Python int() 语义取整数（支持 int/int64/float64/bool/json.Number/数字字符串，float 截断）。
-func intAny(v any) (int, error) {
-	switch n := v.(type) {
-	case int:
-		return n, nil
-	case int64:
-		return int(n), nil
-	case float64:
-		return int(n), nil
-	case bool:
-		if n {
-			return 1, nil
-		}
-		return 0, nil
-	case json.Number:
-		i, err := n.Int64()
-		if err != nil {
-			return 0, fmt.Errorf("not an int")
-		}
-		return int(i), nil
-	case string:
-		// 对齐 Python int("300") → 300（容忍首尾空白与正负号）
-		if i, err := strconv.Atoi(strings.TrimSpace(n)); err == nil {
-			return i, nil
-		}
-	}
-	return 0, fmt.Errorf("not an int")
 }
 
 // floatAny 安全取浮点（对齐 Python float(x) if isinstance(x,(int,float)) else None）。

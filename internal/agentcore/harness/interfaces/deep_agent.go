@@ -120,7 +120,7 @@ type DeepAgentInterface interface {
 	HasOutputStream() bool
 	// AttachOutput 抢占唯一输出租约（失败返回 nil）
 	// Python: DeepAgent.attach_output
-	AttachOutput(ctx context.Context) *hschema.InteractionOutputStream
+	AttachOutput(ctx context.Context) (*hschema.InteractionOutputStream, error)
 	// DetachOutput 释放指定票号的租约
 	// Python: DeepAgent.detach_output
 	DetachOutput(ctx context.Context, token string, abortActiveRound bool)
@@ -156,9 +156,9 @@ func (UnimplementedDeepAgentInteraction) InteractionStarted() bool { return fals
 // HasOutputStream 空实现，恒返回 false
 func (UnimplementedDeepAgentInteraction) HasOutputStream() bool { return false }
 
-// AttachOutput 空实现，恒返回 nil
-func (UnimplementedDeepAgentInteraction) AttachOutput(context.Context) *hschema.InteractionOutputStream {
-	return nil
+// AttachOutput 空实现，恒返回 (nil, nil)
+func (UnimplementedDeepAgentInteraction) AttachOutput(context.Context) (*hschema.InteractionOutputStream, error) {
+	return nil, nil
 }
 
 // DetachOutput 空实现

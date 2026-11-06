@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // TestGoalStatus_枚举取值 校验目标状态与上游字符串一致
@@ -81,12 +83,13 @@ func TestPyInt_全类型表(t *testing.T) {
 		{name: "字符串带空白", input: " 7 ", want: 7, ok: true},
 		{name: "nil", input: nil, ok: false},
 		{name: "非数字字符串", input: "abc", ok: false},
-		{name: "布尔", input: true, ok: false},
+		{name: "布尔", input: true, want: 1, ok: true},
 		{name: "map", input: map[string]any{}, ok: false},
+		{name: "小数字符串", input: "3.0", ok: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := pyInt(tc.input)
+			got, err := utils.PyInt(tc.input)
 			if !tc.ok {
 				assert.Error(t, err)
 				return
@@ -233,7 +236,7 @@ func TestGoalRecord_时间字段往返(t *testing.T) {
 	assert.Equal(t, "1970-01-01T00:16:40+00:00", record.UpdatedAt)
 
 	utcNow = func() time.Time { return time.Unix(1065, 0).UTC() }
-	record.SettleActiveTime(false)
+	require.NoError(t, record.SettleActiveTime(false))
 	record.Status = GoalStatusPaused
 
 	restored, err := FromGoalRecordDict(record.ToDict())

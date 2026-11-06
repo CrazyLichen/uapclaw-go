@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -120,7 +121,7 @@ func parseAssessmentJSON(text string) *GoalAssessment {
 
 	return &GoalAssessment{
 		Status:          status,
-		Evidence:        pyStr(payload["evidence"]),
+		Evidence:        utils.PyStr(payload["evidence"]),
 		RemainingWork:   pyOptionalStr(payload["remaining_work"]),
 		NextInstruction: pyOptionalStr(payload["next_instruction"]),
 	}

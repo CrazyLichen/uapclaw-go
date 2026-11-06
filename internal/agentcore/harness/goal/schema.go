@@ -5,11 +5,12 @@ package goal
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -180,7 +181,7 @@ func (a *GoalAssessment) ToDict() map[string]any {
 func FromGoalAssessmentDict(data map[string]any) *GoalAssessment {
 	status := GoalAssessmentStatusContinue
 	if raw, exists := data["status"]; exists {
-		candidate := GoalAssessmentStatus(pyStr(raw))
+		candidate := GoalAssessmentStatus(utils.PyStr(raw))
 		switch candidate {
 		case GoalAssessmentStatusContinue,
 			GoalAssessmentStatusComplete,
@@ -190,7 +191,7 @@ func FromGoalAssessmentDict(data map[string]any) *GoalAssessment {
 	}
 	var evidence string
 	if raw, exists := data["evidence"]; exists && pyTruthy(raw) {
-		evidence = pyStr(raw)
+		evidence = utils.PyStr(raw)
 	}
 	return &GoalAssessment{
 		Status:          status,
@@ -238,7 +239,7 @@ func TokenUsageFromDict(data map[string]any) (TokenUsage, error) {
 		if !exists || raw == nil {
 			continue
 		}
-		parsed, err := pyInt(raw)
+		parsed, err := utils.PyInt(raw)
 		if err != nil {
 			return TokenUsage{}, fmt.Errorf("invalid persisted GoalRecord token_usage.%s", field.key)
 		}
@@ -266,17 +267,15 @@ func (r *GoalRecord) StartTiming() {
 	r.UpdatedAt = now
 }
 
-// SettleActiveTime 结算当前计时段的秒数。
+// SettleActiveTime 结算当前计时段的秒数；时间戳非法时返回错误（上游抛 ValueError）。
 // Python: GoalRecord.settle_active_time (schema.py L195)
-func (r *GoalRecord) SettleActiveTime(keepActive bool) {
+func (r *GoalRecord) SettleActiveTime(keepActive bool) error {
 	now := utcNow()
 	nowISO := now.Format(goalTimestampLayout)
 	if r.ActiveStartedAt != nil {
 		startedAt, err := parseGoalTimestamp(*r.ActiveStartedAt, "active_started_at")
 		if err != nil {
-			// 上游会抛 ValueError；进入内存的记录已过 FromDict 校验，
-			// 这里按"零耗时"兜底，避免一次脏时间戳打断整轮。
-			startedAt = now
+			return err
 		}
 		elapsed := int(now.Sub(startedAt).Seconds())
 		if elapsed < 0 {
@@ -292,6 +291,7 @@ func (r *GoalRecord) SettleActiveTime(keepActive bool) {
 		r.ActiveStartedAt = &nowISO
 	}
 	r.UpdatedAt = nowISO
+	return nil
 }
 
 // Clone 返回深拷贝，供响应与错误对象隔离使用。
@@ -390,7 +390,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 	if raw, exists := data["status"]; exists {
 		statusRaw = raw
 	}
-	status := GoalStatus(pyStr(statusRaw))
+	status := GoalStatus(utils.PyStr(statusRaw))
 	switch status {
 	case GoalStatusActive, GoalStatusPaused, GoalStatusCompleted, GoalStatusBlocked:
 	default:
@@ -399,7 +399,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 
 	revision := 0
 	if raw, exists := data["revision"]; exists {
-		parsed, err := pyInt(raw)
+		parsed, err := utils.PyInt(raw)
 		if err != nil {
 			return nil, errors.New("invalid persisted GoalRecord revision")
 		}
@@ -407,7 +407,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 	}
 	attemptCount := 0
 	if raw, exists := data["attempt_count"]; exists {
-		parsed, err := pyInt(raw)
+		parsed, err := utils.PyInt(raw)
 		if err != nil {
 			return nil, errors.New("invalid persisted GoalRecord attempt_count")
 		}
@@ -552,59 +552,13 @@ func requiredTimestamp(value any, fieldName string) (string, error) {
 	return value.(string), nil
 }
 
-// pyInt 复刻 Python int()：接受整数、浮点（向零截断）与数字字符串。
-//
-// Python 侧值来自内存 int 或 checkpoint JSON 还原的 float64；
-// 只认 int 会在会话恢复后翻译失败。
-func pyInt(value any) (int, error) {
-	switch v := value.(type) {
-	case int:
-		return v, nil
-	case int8:
-		return int(v), nil
-	case int16:
-		return int(v), nil
-	case int32:
-		return int(v), nil
-	case int64:
-		return int(v), nil
-	case uint:
-		return int(v), nil
-	case uint8:
-		return int(v), nil
-	case uint16:
-		return int(v), nil
-	case uint32:
-		return int(v), nil
-	case uint64:
-		return int(v), nil
-	case float32:
-		return int(v), nil
-	case float64:
-		return int(v), nil
-	case string:
-		trimmed := strings.TrimSpace(v)
-		parsed, err := strconv.ParseInt(trimmed, 10, 64)
-		if err != nil {
-			asFloat, floatErr := strconv.ParseFloat(trimmed, 64)
-			if floatErr != nil {
-				return 0, err
-			}
-			return int(asFloat), nil
-		}
-		return int(parsed), nil
-	default:
-		return 0, fmt.Errorf("cannot convert %T to int", value)
-	}
-}
-
 // optionalPositiveInt 解析可选的正整数持久化字段。
 // Python: _optional_positive_int (schema.py L33)
 func optionalPositiveInt(value any, fieldName string) (*int, error) {
 	if value == nil {
 		return nil, nil
 	}
-	parsed, err := pyInt(value)
+	parsed, err := utils.PyInt(value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid persisted GoalRecord %s", fieldName)
 	}
@@ -617,7 +571,7 @@ func optionalPositiveInt(value any, fieldName string) (*int, error) {
 // nonNegativeInt 解析非负整数持久化字段。
 // Python: _non_negative_int (schema.py L46)
 func nonNegativeInt(value any, fieldName string) (int, error) {
-	parsed, err := pyInt(value)
+	parsed, err := utils.PyInt(value)
 	if err != nil {
 		return 0, fmt.Errorf("invalid persisted GoalRecord %s", fieldName)
 	}
@@ -651,23 +605,12 @@ func pyTruthy(value any) bool {
 	}
 }
 
-// pyStr 复刻 str(value) 的可观测部分（上游只对字符串做有意义的渲染）。
-func pyStr(value any) string {
-	if text, ok := value.(string); ok {
-		return text
-	}
-	if value == nil {
-		return "None"
-	}
-	return fmt.Sprint(value)
-}
-
 // pyOptionalStr 复刻 `data.get(x) or None`：falsy → nil。
 func pyOptionalStr(value any) *string {
 	if !pyTruthy(value) {
 		return nil
 	}
-	text := pyStr(value)
+	text := utils.PyStr(value)
 	return &text
 }
 

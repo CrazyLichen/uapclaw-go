@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -40,7 +41,7 @@ type Coordinator interface {
 	// HasActiveRecord 当前会话是否存在 ACTIVE 记录
 	HasActiveRecord() bool
 	// EnsureActiveGoalWorkLocked 在 ACTIVE 目标缺少待办时补排（调用方持控制锁）
-	EnsureActiveGoalWorkLocked() bool
+	EnsureActiveGoalWorkLocked() (bool, error)
 	// BeginAttempt 开始一次尝试；返回 nil 表示该代际不应开始
 	BeginAttempt(ctx context.Context, goalID string, revision int) (*GoalRecord, error)
 }
@@ -99,8 +100,8 @@ type GoalManager struct {
 	emitEvent func(event hschema.InteractionEvent)
 	// notifyWork 唤醒监督器
 	notifyWork func()
-	// language 提示词语言
-	language string
+	// language 提示词语言；原子指针以支持运行期热更新（Python 靠单线程）
+	language atomic.Pointer[string]
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -114,7 +115,7 @@ var ErrSessionMismatch = errors.New("goal manager is bound to a different sessio
 // NewGoalManager 构造目标管理器。
 // Python: GoalManager.__init__ (manager.py L54)
 func NewGoalManager(config GoalManagerConfig) *GoalManager {
-	return &GoalManager{
+	manager := &GoalManager{
 		store:             config.Store,
 		eventManager:      config.EventManager,
 		controlMu:         config.ControlLock,
@@ -122,17 +123,29 @@ func NewGoalManager(config GoalManagerConfig) *GoalManager {
 		cancelActiveRound: config.CancelActiveRound,
 		emitEvent:         config.EmitEvent,
 		notifyWork:        config.NotifyWork,
-		language:          prompts.ResolveLanguage(config.Language),
 	}
+	manager.SetLanguage(config.Language)
+	return manager
 }
 
 // Language 返回提示词语言。
 // Python: GoalManager.language (manager.py L75)
-func (m *GoalManager) Language() string { return m.language }
+func (m *GoalManager) Language() string {
+	if value := m.language.Load(); value != nil {
+		return *value
+	}
+	return ""
+}
 
 // SetLanguage 设置提示词语言（经 resolve_language 归一）。
+//
+// 原子写入：DeepAgent 的系统提示词热更新路径会在 goal 轮运行期间调用它
+// （deep_agent.py L831-833），加锁会与持锁调用方互相自锁。
 // Python: language.setter (manager.py L79)
-func (m *GoalManager) SetLanguage(value string) { m.language = prompts.ResolveLanguage(value) }
+func (m *GoalManager) SetLanguage(value string) {
+	resolved := prompts.ResolveLanguage(value)
+	m.language.Store(&resolved)
+}
 
 // GetStore 暴露会话存储供只读工具与 rail 使用。
 // Python: GoalManager.get_store (manager.py L83)
@@ -151,11 +164,10 @@ func (m *GoalManager) Peek() *GoalRecord {
 
 // Get 在控制锁内返回深拷贝记录。
 // Python: GoalManager.get (manager.py L99)
-func (m *GoalManager) Get(ctx context.Context) (*GoalRecord, error) {
-	_ = ctx
+func (m *GoalManager) Get() *GoalRecord {
 	m.lock()
 	defer m.unlock()
-	return m.store.Load().Clone(), nil
+	return m.store.Load().Clone()
 }
 
 // HasActiveRecord 返回当前是否存在 ACTIVE 记录（不加锁，供监督器持锁调用）。
@@ -208,7 +220,9 @@ func (m *GoalManager) Set(ctx context.Context, objective string, opts SetOptions
 
 	// 既有输出流仍是唯一消费者：先排替代轮再中止旧轮，流会自然续到新目标。
 	if m.hasOutputStream() {
-		m.ensureGoalWorkLocked(record)
+		if _, err := m.ensureGoalWorkLocked(record); err != nil {
+			return nil, err
+		}
 		m.emitGoalUpdatedLocked(record)
 	}
 
@@ -235,7 +249,9 @@ func (m *GoalManager) Pause(ctx context.Context) (*GoalRecord, error) {
 			m.eventManager.DiscardGoalWork(record.SessionID, record.GoalID)
 		}
 		// 先结算，保证只显示 time_used 的宿主在暂停时不会跳到 0。
-		record.SettleActiveTime(false)
+		if err := record.SettleActiveTime(false); err != nil {
+			return nil, err
+		}
 		// 在飞轮仍在跑：重开时钟以便后端继续计时。
 		if m.hasInFlightGoalAttempt(record) {
 			record.StartTiming()
@@ -266,7 +282,9 @@ func (m *GoalManager) Resume(ctx context.Context) (*GoalRecord, error) {
 	if record.Status == GoalStatusPaused || record.Status == GoalStatusBlocked {
 		inFlight := m.hasInFlightGoalAttempt(record)
 		// 暂停期若尝试仍在跑，先把这段时间折入 time_used。
-		record.SettleActiveTime(false)
+		if err := record.SettleActiveTime(false); err != nil {
+			return nil, err
+		}
 		record.Status = GoalStatusActive
 		record.StartTiming()
 		// 空闲/阻塞恢复提升代际；同一尝试仍在飞则不提升、也不重复排队。
@@ -277,7 +295,9 @@ func (m *GoalManager) Resume(ctx context.Context) (*GoalRecord, error) {
 		}
 		if m.hasOutputStream() {
 			if !inFlight {
-				m.ensureGoalWorkLocked(record)
+				if _, err := m.ensureGoalWorkLocked(record); err != nil {
+					return nil, err
+				}
 			}
 			m.emitGoalUpdatedLocked(record)
 		}
@@ -295,7 +315,9 @@ func (m *GoalManager) Clear(ctx context.Context) (*GoalRecord, error) {
 	if record == nil {
 		return nil, nil
 	}
-	record.SettleActiveTime(false)
+	if err := record.SettleActiveTime(false); err != nil {
+		return nil, err
+	}
 	m.store.Clear()
 	if err := m.commitStoreLocked(ctx); err != nil {
 		return nil, err
@@ -314,10 +336,10 @@ func (m *GoalManager) Clear(ctx context.Context) (*GoalRecord, error) {
 //
 // ⚠️ 调用方必须已持交互控制锁，且已持有输出流。
 // Python: GoalManager.ensure_active_goal_work_locked (manager.py L251)
-func (m *GoalManager) EnsureActiveGoalWorkLocked() bool {
+func (m *GoalManager) EnsureActiveGoalWorkLocked() (bool, error) {
 	record := m.store.Load()
 	if record == nil || record.Status != GoalStatusActive {
-		return false
+		return false, nil
 	}
 	return m.ensureGoalWorkLocked(record)
 }
@@ -369,7 +391,9 @@ func (m *GoalManager) AccumulateUsage(
 	// PAUSED 的在飞轮仍持有 active_started_at，同样要结算。
 	if record.ActiveStartedAt != nil &&
 		(record.Status == GoalStatusActive || record.Status == GoalStatusPaused) {
-		record.SettleActiveTime(true)
+		if err := record.SettleActiveTime(true); err != nil {
+			return err
+		}
 	}
 	record.TokenUsage.Accumulate(inputTokens, outputTokens, cachedInputTokens)
 	record.Touch(false)
@@ -397,19 +421,28 @@ func (m *GoalManager) ApplyAssessment(
 	record.LastAssessment = &assessment
 	switch assessment.Status {
 	case GoalAssessmentStatusComplete:
-		record.SettleActiveTime(false)
+		if err := record.SettleActiveTime(false); err != nil {
+			return nil, err
+		}
 		record.Status = GoalStatusCompleted
 		record.LastStopReason = strPtr("completed")
 	case GoalAssessmentStatusBlocked:
-		record.SettleActiveTime(false)
+		if err := record.SettleActiveTime(false); err != nil {
+			return nil, err
+		}
 		record.Status = GoalStatusBlocked
 		record.LastStopReason = strPtr("blocked")
 	default:
-		if record.Status == GoalStatusActive {
-			record.SettleActiveTime(true)
-		} else if record.Status == GoalStatusPaused {
+		switch record.Status {
+		case GoalStatusActive:
+			if err := record.SettleActiveTime(true); err != nil {
+				return nil, err
+			}
+		case GoalStatusPaused:
 			// PAUSED 下收尾：关时钟，恢复时另开新段，空闲暂停不计费。
-			record.SettleActiveTime(false)
+			if err := record.SettleActiveTime(false); err != nil {
+				return nil, err
+			}
 		}
 	}
 	record.Touch(false)
@@ -419,7 +452,9 @@ func (m *GoalManager) ApplyAssessment(
 	}
 
 	if record.Status == GoalStatusActive && m.hasOutputStream() {
-		m.ensureGoalWorkLocked(record)
+		if _, err := m.ensureGoalWorkLocked(record); err != nil {
+			return nil, err
+		}
 	}
 	if m.hasOutputStream() {
 		m.emitGoalUpdatedLocked(record)
@@ -429,8 +464,10 @@ func (m *GoalManager) ApplyAssessment(
 
 // TaskView 转换 <goal_task> 渲染所需的只读视图。
 //
-// Python 侧 build_goal_task_query 直接吃 GoalRecord；Go 用视图类型打断
-// sections ↔ goal 的循环依赖（spec D4），渲染逻辑不变。
+// ⚠️ 归属 manager.go 而非 schema.go：schema.go 目前只依赖 stdlib + uuid，
+// 把 sections.GoalTaskView 引进去会让领域模型反向绑定提示词层，
+// 并被 9.89 的 sections 侧改动立刻拖成循环依赖（spec D4）。
+// Python 侧 build_goal_task_query 直接吃 GoalRecord，靠函数内 lazy import 规避同一问题。
 func (r *GoalRecord) TaskView() sections.GoalTaskView {
 	if r == nil {
 		return sections.GoalTaskView{}
@@ -510,15 +547,17 @@ func (m *GoalManager) cancelRound(
 }
 
 // ensureGoalWorkLocked 为 ACTIVE 记录排一个 goal work（调用方持锁）。
+//
+// PushGoal 的错误向上抛出（上游 push_goal 抛 ValueError，会炸掉整个 set/resume/apply）。
 // Python: GoalManager._ensure_goal_work_locked (manager.py L345)
-func (m *GoalManager) ensureGoalWorkLocked(record *GoalRecord) bool {
+func (m *GoalManager) ensureGoalWorkLocked(record *GoalRecord) (bool, error) {
 	if record == nil || record.Status != GoalStatusActive || !m.hasOutputStream() {
-		return false
+		return false, nil
 	}
 	if m.eventManager == nil {
-		return false
+		return false, nil
 	}
-	query := sections.BuildGoalTaskQuery(record.TaskView(), m.language)
+	query := sections.BuildGoalTaskQuery(record.TaskView(), m.Language())
 	work := hschema.NewGoalWorkItem(
 		map[string]any{"query": query},
 		record.GoalID,
@@ -532,12 +571,12 @@ func (m *GoalManager) ensureGoalWorkLocked(record *GoalRecord) bool {
 			Str("event_type", "GOAL_PUSH_WORK_ERROR").
 			Str("goal_id", record.GoalID).
 			Msg("push goal work failed")
-		return false
+		return false, err
 	}
 	if queued && m.notifyWork != nil {
 		m.notifyWork()
 	}
-	return queued
+	return queued, nil
 }
 
 // matchesActive 判定记录是否为指定代际的 ACTIVE。

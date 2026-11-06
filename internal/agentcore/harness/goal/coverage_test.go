@@ -2,12 +2,14 @@ package goal
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 空值与非理想分支 ────────────────────────────
@@ -63,11 +65,12 @@ func TestGoalManager_可选依赖缺失不崩溃(t *testing.T) {
 	manager := NewGoalManager(GoalManagerConfig{Store: store})
 
 	assert.Nil(t, manager.Peek())
-	got, err := manager.Get(context.Background())
-	require.NoError(t, err)
+	got := manager.Get()
 	assert.Nil(t, got)
 	assert.False(t, manager.HasActiveRecord())
-	assert.False(t, manager.EnsureActiveGoalWorkLocked())
+	ensured, err := manager.EnsureActiveGoalWorkLocked()
+	require.NoError(t, err)
+	assert.False(t, ensured)
 
 	_, err = manager.GetStore("")
 	require.NoError(t, err, "空串不校验会话")
@@ -76,7 +79,9 @@ func TestGoalManager_可选依赖缺失不崩溃(t *testing.T) {
 	record, err := manager.Set(context.Background(), "objective", SetOptions{})
 	require.NoError(t, err)
 	require.NotNil(t, record)
-	assert.False(t, manager.EnsureActiveGoalWorkLocked())
+	ensured, err = manager.EnsureActiveGoalWorkLocked()
+	require.NoError(t, err)
+	assert.False(t, ensured)
 
 	paused, err := manager.Pause(context.Background())
 	require.NoError(t, err)
@@ -133,9 +138,9 @@ func TestPyTruthy与PyStr_边界(t *testing.T) {
 	assert.False(t, pyTruthy(map[string]any{}))
 	assert.True(t, pyTruthy(struct{}{}))
 
-	assert.Equal(t, "None", pyStr(nil))
-	assert.Equal(t, "x", pyStr("x"))
-	assert.Equal(t, "7", pyStr(7))
+	assert.Equal(t, "None", utils.PyStr(nil))
+	assert.Equal(t, "x", utils.PyStr("x"))
+	assert.Equal(t, "7", utils.PyStr(7))
 }
 
 // TestPyInt_更多数值类型 校验其余整数宽度
@@ -143,7 +148,7 @@ func TestPyInt_更多数值类型(t *testing.T) {
 	for _, value := range []any{
 		int8(1), int16(1), int32(1), uint(1), uint8(1), uint16(1), uint64(1), float32(1),
 	} {
-		got, err := pyInt(value)
+		got, err := utils.PyInt(value)
 		require.NoError(t, err)
 		assert.Equal(t, 1, got)
 	}
@@ -220,8 +225,13 @@ func TestGoalManager_EnsureGoalWork_同代际去重(t *testing.T) {
 	record := CreateGoalRecord("session-1", "objective", nil, nil)
 	harness.store.Save(record)
 
-	require.True(t, harness.manager.EnsureActiveGoalWorkLocked())
-	assert.False(t, harness.manager.EnsureActiveGoalWorkLocked(), "同代际去重")
+	first, firstErr := harness.manager.EnsureActiveGoalWorkLocked()
+	require.NoError(t, firstErr)
+	require.True(t, first)
+
+	second, secondErr := harness.manager.EnsureActiveGoalWorkLocked()
+	require.NoError(t, secondErr)
+	assert.False(t, second, "同代际去重")
 }
 
 // TestCoordinator_接口断言 编译期保证 *GoalManager 满足 Coordinator
@@ -242,4 +252,96 @@ func TestNewGoalManager_默认语言(t *testing.T) {
 		EventManager: task_loop.NewEventManager(),
 	})
 	assert.Equal(t, "cn", manager.Language())
+}
+
+// TestGoalRecord_SettleActiveTime_坏时间戳报错 校验不再静默记 0 秒
+// Python: settle_active_time → _parse_timestamp 抛 ValueError (schema.py L199)
+func TestGoalRecord_SettleActiveTime_坏时间戳报错(t *testing.T) {
+	bad := "not-a-timestamp"
+	record := CreateGoalRecord("s1", "objective", nil, nil)
+	record.ActiveStartedAt = &bad
+	record.TimeUsedSeconds = 5
+
+	err := record.SettleActiveTime(false)
+	require.Error(t, err)
+	assert.Equal(t, 5, record.TimeUsedSeconds, "失败时不得改动工时")
+	assert.NotNil(t, record.ActiveStartedAt, "失败时不得清空时钟")
+}
+
+// corruptGoalStore 直接持有记录的内存 store，用于注入绕过 FromDict 校验的脏数据
+type corruptGoalStore struct {
+	record    *GoalRecord
+	sessionID string
+}
+
+// SessionID 返回会话标识
+func (s *corruptGoalStore) SessionID() string { return s.sessionID }
+
+// Load 返回原始记录（不做校验）
+func (s *corruptGoalStore) Load() *GoalRecord { return s.record }
+
+// Save 覆盖记录
+func (s *corruptGoalStore) Save(record *GoalRecord) { s.record = record }
+
+// Clear 清空记录
+func (s *corruptGoalStore) Clear() { s.record = nil }
+
+// Commit 空提交
+func (s *corruptGoalStore) Commit(context.Context) error { return nil }
+
+// TestGoalManager_坏时间戳使写操作失败 校验错误向上冒泡
+// Python: pause/clear/apply_assessment 内的 settle_active_time 抛 ValueError
+func TestGoalManager_坏时间戳使写操作失败(t *testing.T) {
+	bad := "not-a-timestamp"
+	broken := CreateGoalRecord("session-1", "write a report", nil, nil)
+	broken.ActiveStartedAt = &bad
+	store := &corruptGoalStore{record: broken, sessionID: "session-1"}
+	manager := NewGoalManager(GoalManagerConfig{Store: store, ControlLock: &sync.Mutex{}})
+
+	_, err := manager.Pause(context.Background())
+	assert.Error(t, err, "pause 必须把结算错误抛给调用方")
+
+	_, err = manager.Clear(context.Background())
+	assert.Error(t, err, "clear 同样必须报错")
+
+	_, err = manager.ApplyAssessment(
+		context.Background(), broken.GoalID, broken.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusComplete, Evidence: "x"},
+	)
+	assert.Error(t, err, "apply_assessment 同样必须报错")
+
+	_, err = manager.Resume(context.Background())
+	assert.NoError(t, err, "ACTIVE 记录不触发 resume 结算")
+}
+
+// TestGoalManager_Language并发读写 校验原子指针（-race 下暴露竞争）
+func TestGoalManager_Language并发读写(t *testing.T) {
+	t.Setenv("AGENT_PROMPT_LANGUAGE", "")
+	harness := newManagerHarness(true)
+	record, err := harness.manager.Set(context.Background(), "write a report", SetOptions{})
+	require.NoError(t, err)
+
+	var waitGroup sync.WaitGroup
+	for worker := 0; worker < 4; worker++ {
+		waitGroup.Add(2)
+		go func() {
+			defer waitGroup.Done()
+			for i := 0; i < 50; i++ {
+				harness.manager.SetLanguage("en")
+				harness.manager.SetLanguage("cn")
+			}
+		}()
+		go func() {
+			defer waitGroup.Done()
+			for i := 0; i < 50; i++ {
+				_ = harness.manager.Language()
+				_, _ = harness.manager.EnsureActiveGoalWorkLocked()
+				_ = harness.manager.Get()
+			}
+		}()
+	}
+	waitGroup.Wait()
+
+	assert.NotEmpty(t, harness.manager.Language())
+	assert.NotNil(t, record)
 }

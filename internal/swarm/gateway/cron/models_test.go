@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // TestCronJobToDict 可选字段空值时省略
@@ -361,12 +363,12 @@ func TestIntAny(t *testing.T) {
 		{[]any{}, 0, false},
 	}
 	for _, c := range cases {
-		got, err := intAny(c.in)
+		got, err := utils.PyInt(c.in)
 		if c.ok && (err != nil || got != c.want) {
-			t.Errorf("intAny(%v) = %d, err=%v; want %d", c.in, got, err, c.want)
+			t.Errorf("utils.PyInt(%v) = %d, err=%v; want %d", c.in, got, err, c.want)
 		}
 		if !c.ok && err == nil {
-			t.Errorf("intAny(%v) should error", c.in)
+			t.Errorf("utils.PyInt(%v) should error", c.in)
 		}
 	}
 }

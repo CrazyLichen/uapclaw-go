@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -111,7 +113,7 @@ func (c *CronController) CreateJob(params map[string]any) (map[string]any, error
 
 	var wos *int
 	if raw, ok := params["wake_offset_seconds"]; ok && raw != nil {
-		n, err := intAny(raw)
+		n, err := utils.PyInt(raw)
 		if err != nil {
 			return nil, fmt.Errorf("wake_offset_seconds must be int")
 		}

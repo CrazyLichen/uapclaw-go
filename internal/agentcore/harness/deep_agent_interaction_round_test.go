@@ -110,7 +110,8 @@ func TestRunOneRound_端到端一轮(t *testing.T) {
 	require.NoError(t, agent.Start(ctx, sess), "Start 失败")
 	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
 
-	out := agent.AttachOutput(ctx)
+	out, attachErr := agent.AttachOutput(ctx)
+	require.NoError(t, attachErr)
 	require.NotNil(t, out, "应拿到唯一输出租约")
 
 	require.NoError(t, agent.SendInput(ctx, hschema.SendInputRequest{
@@ -152,7 +153,8 @@ func TestRunOneRound_goal轮注入run上下文(t *testing.T) {
 	require.NoError(t, agent.Start(ctx, sess))
 	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
 
-	out := agent.AttachOutput(ctx)
+	out, attachErr := agent.AttachOutput(ctx)
+	require.NoError(t, attachErr)
 	require.NotNil(t, out)
 
 	work := hschema.NewGoalWorkItem(map[string]any{"query": "目标轮"},
@@ -177,7 +179,8 @@ func TestRunOneRound_打断恢复走单轮invoke(t *testing.T) {
 	require.NoError(t, agent.Start(ctx, sess))
 	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
 
-	out := agent.AttachOutput(ctx)
+	out, attachErr := agent.AttachOutput(ctx)
+	require.NoError(t, attachErr)
 	require.NotNil(t, out)
 
 	interactive, err := interaction.NewInteractiveInput("继续")

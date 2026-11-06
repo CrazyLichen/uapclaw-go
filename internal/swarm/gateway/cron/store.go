@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
@@ -207,7 +208,7 @@ func (s *CronJobStore) UpdateJob(jobID string, patch map[string]any) (*CronJob, 
 		existing.Timezone = strings.TrimSpace(strAny(patch["timezone"]))
 	}
 	if raw, ok := patch["wake_offset_seconds"]; ok {
-		n, err := intAny(raw)
+		n, err := utils.PyInt(raw)
 		if err != nil {
 			return nil, fmt.Errorf("wake_offset_seconds must be int")
 		}
@@ -323,7 +324,7 @@ func (s *CronJobStore) readJSONUnlocked() *cronStoreFile {
 		return &cronStoreFile{Version: 1}
 	}
 	if v, ok := top["version"]; ok {
-		if n, err := intAny(v); err == nil {
+		if n, err := utils.PyInt(v); err == nil {
 			data.Version = n
 		}
 	}

@@ -92,7 +92,7 @@ func TestSessionGoalStore_零值删键往返(t *testing.T) {
 
 	loaded := store.Load()
 	require.NotNil(t, loaded)
-	loaded.SettleActiveTime(false)
+	require.NoError(t, loaded.SettleActiveTime(false))
 	loaded.Status = GoalStatusPaused
 	store.Save(loaded)
 

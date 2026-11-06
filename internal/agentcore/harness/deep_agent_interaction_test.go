@@ -29,15 +29,20 @@ type fakeGoalAccessor struct {
 	started bool
 	// ensureCalls 补排次数（原子读，避免与 supervisor 协程竞争）
 	ensureCalls atomic.Int64
+	// ensureErr 补排返回的错误（用于验证 AttachOutput 的错误传播）
+	ensureErr error
 }
 
 // HasActiveRecord 返回预置标记
 func (f *fakeGoalAccessor) HasActiveRecord() bool { return f.active }
 
 // EnsureActiveGoalWorkLocked 记录补排次数
-func (f *fakeGoalAccessor) EnsureActiveGoalWorkLocked() bool {
+func (f *fakeGoalAccessor) EnsureActiveGoalWorkLocked() (bool, error) {
 	f.ensureCalls.Add(1)
-	return true
+	if f.ensureErr != nil {
+		return false, f.ensureErr
+	}
+	return true, nil
 }
 
 // BeginAttempt 返回预置结果；started 为 false 时返回 nil（代际过期）
@@ -225,7 +230,9 @@ func TestAttachOutput_未启动返回nil(t *testing.T) {
 	d := newTestDeepAgent()
 	d.ensureInteractionState()
 
-	assert.Nil(t, d.AttachOutput(context.Background()))
+	out, attachErr := d.AttachOutput(context.Background())
+	require.NoError(t, attachErr)
+	assert.Nil(t, out)
 	assert.False(t, d.HasOutputStream())
 }
 
@@ -504,7 +511,7 @@ func TestIsResumeInput_InteractiveInput(t *testing.T) {
 // Python: _execute_round (L4497)
 func TestExecuteRound_标记状态与收尾(t *testing.T) {
 	d := startTestInteraction(t)
-	out := d.AttachOutput(context.Background())
+	out := attachOutputForTest(t, d)
 	require.NotNil(t, out)
 
 	called := make(chan struct{})
@@ -525,7 +532,7 @@ func TestExecuteRound_标记状态与收尾(t *testing.T) {
 // Python: L4513-4521
 func TestExecuteRound_goal轮未开始则跳过(t *testing.T) {
 	d := startTestInteraction(t)
-	_ = d.AttachOutput(context.Background())
+	_ = attachOutputForTest(t, d)
 
 	ran := false
 	d.setRoundOverrideForTest(func(context.Context, *hschema.RoundWorkItem) hschema.RoundOutcome {
@@ -552,7 +559,7 @@ func TestCancelRound_无活跃轮返回false(t *testing.T) {
 // Python: detach_output (L4220)
 func TestDetachOutput_清待办(t *testing.T) {
 	d := startInteractionForInput(t)
-	out := d.AttachOutput(context.Background())
+	out := attachOutputForTest(t, d)
 	require.NotNil(t, out)
 
 	require.NoError(t, d.SendInput(context.Background(), hschema.SendInputRequest{
@@ -569,7 +576,7 @@ func TestDetachOutput_清待办(t *testing.T) {
 // Python: _cancel_active_round (L4287)
 func TestCancelActiveRound_有界不阻塞(t *testing.T) {
 	d := startTestInteraction(t)
-	_ = d.AttachOutput(context.Background())
+	_ = attachOutputForTest(t, d)
 
 	gate := make(chan struct{})
 	d.setRoundOverrideForTest(func(ctx context.Context, _ *hschema.RoundWorkItem) hschema.RoundOutcome {
@@ -597,7 +604,7 @@ func TestCancelActiveRound_有界不阻塞(t *testing.T) {
 // Python: _cancel_active_round 的 expected_* 参数 (L4312-4317)
 func TestCancelActiveRound_代际不匹配不取消(t *testing.T) {
 	d := startTestInteraction(t)
-	_ = d.AttachOutput(context.Background())
+	_ = attachOutputForTest(t, d)
 
 	aborted := make(chan struct{})
 	gate := make(chan struct{})
@@ -711,7 +718,7 @@ func TestStop_未启动时幂等(t *testing.T) {
 // TestDetachOutput_陈旧票noop 验证票号不匹配时不清场
 func TestDetachOutput_陈旧票noop(t *testing.T) {
 	d := startTestInteraction(t)
-	out := d.AttachOutput(context.Background())
+	out := attachOutputForTest(t, d)
 	require.NotNil(t, out)
 
 	d.DetachOutput(context.Background(), "stale-token", true)
@@ -722,7 +729,7 @@ func TestDetachOutput_陈旧票noop(t *testing.T) {
 // Python: _execute_round 的 error_code → execution.error（L4545-4550）
 func TestExecuteRound_错误码转execution_error(t *testing.T) {
 	d := startTestInteraction(t)
-	out := d.AttachOutput(context.Background())
+	out := attachOutputForTest(t, d)
 	require.NotNil(t, out)
 
 	d.setRoundOverrideForTest(func(context.Context, *hschema.RoundWorkItem) hschema.RoundOutcome {
@@ -742,7 +749,7 @@ func TestExecuteRound_错误码转execution_error(t *testing.T) {
 // Python: detach_output(token, abort_active_round=True)（L4220）
 func TestDetachOutput_带abort取消在飞轮(t *testing.T) {
 	d := startTestInteraction(t)
-	out := d.AttachOutput(context.Background())
+	out := attachOutputForTest(t, d)
 	require.NotNil(t, out)
 
 	gate := make(chan struct{})
@@ -777,7 +784,7 @@ func TestEmitRoundBoundary_无发射器返回false(t *testing.T) {
 // Python: _supervisor_loop 的 work 分支 (L4387-4411)
 func TestSupervisor_消费待办work(t *testing.T) {
 	d := startTestInteraction(t)
-	_ = d.AttachOutput(context.Background())
+	_ = attachOutputForTest(t, d)
 
 	executed := make(chan *hschema.RoundWorkItem, 1)
 	d.setRoundOverrideForTest(func(_ context.Context, work *hschema.RoundWorkItem) hschema.RoundOutcome {
@@ -801,7 +808,7 @@ func TestSupervisor_消费待办work(t *testing.T) {
 // Python: _close_idle_output_if_finished (L4433)
 func TestCloseIdle_无待办时发哨兵(t *testing.T) {
 	d := startTestInteraction(t)
-	out := d.AttachOutput(context.Background())
+	out := attachOutputForTest(t, d)
 	require.NotNil(t, out)
 
 	assert.True(t, d.closeIdleOutputIfFinished(context.Background()))
@@ -817,9 +824,10 @@ func TestShouldKeepInteractionOpen_ACTIVE目标保持流开(t *testing.T) {
 
 	d.interactionControlMu.Lock()
 	d.goalCoordinator = fakeGoal
-	keep := d.shouldKeepInteractionOpenLocked()
+	keep, keepErr := d.shouldKeepInteractionOpenLocked()
 	d.interactionControlMu.Unlock()
 
+	require.NoError(t, keepErr)
 	assert.True(t, keep, "ACTIVE goal 必须保持流开")
 	assert.GreaterOrEqual(t, fakeGoal.ensureCalls.Load(), int64(1), "并顺带补排 goal work")
 }
@@ -830,7 +838,25 @@ func TestSetGoalCoordinator_goal分支生效(t *testing.T) {
 	fakeGoal := &fakeGoalAccessor{active: true}
 	d.SetGoalCoordinator(fakeGoal)
 
-	_ = d.AttachOutput(context.Background())
+	_ = attachOutputForTest(t, d)
 	// supervisor 的 close_idle 判定同样会补排，故断言 >=1 而非精确相等
 	assert.GreaterOrEqual(t, fakeGoal.ensureCalls.Load(), int64(1), "ACTIVE goal 时 attach 必须补排 goal work")
+}
+
+// attachOutputForTest 调用 AttachOutput 并断言无错误（9.88 起返回 error）
+func attachOutputForTest(t *testing.T, d *DeepAgent) *hschema.InteractionOutputStream {
+	t.Helper()
+	out, err := d.AttachOutput(context.Background())
+	require.NoError(t, err)
+	return out
+}
+
+// TestAttachOutput_补排失败向上抛 验证 9.88 的 error 级联（goal → AttachOutput）
+func TestAttachOutput_补排失败向上抛(t *testing.T) {
+	d := startTestInteraction(t)
+	d.setGoalCoordinatorForTest(&fakeGoalAccessor{active: true, ensureErr: assert.AnError})
+
+	out, err := d.AttachOutput(context.Background())
+	require.ErrorIs(t, err, assert.AnError)
+	assert.Nil(t, out, "补排失败不得把半成品流交出去")
 }

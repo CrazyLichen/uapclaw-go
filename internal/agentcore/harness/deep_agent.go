@@ -1596,28 +1596,30 @@ func (d *DeepAgent) HasOutputStream() bool {
 // 已有消费者时返回 nil。若存在 ACTIVE goal，即使本次没抢到租约也要补排
 // 缺失的 goal work，让已连接的读者继续收到目标进展（切会话/并发 attach_goal）。
 // Python: DeepAgent.attach_output (L4048)
-func (d *DeepAgent) AttachOutput(_ context.Context) *hschema.InteractionOutputStream {
+func (d *DeepAgent) AttachOutput(_ context.Context) (*hschema.InteractionOutputStream, error) {
 	d.ensureInteractionState()
 
 	d.interactionSendMu.Lock()
 	defer d.interactionSendMu.Unlock()
 
 	if d.ensureInteractionRunning() != nil {
-		return nil
+		return nil, nil
 	}
 
 	d.interactionControlMu.Lock()
 	defer d.interactionControlMu.Unlock()
 	if !d.isInteractionRunningLocked() {
-		return nil
+		return nil, nil
 	}
 
 	stream := d.attachOutputLocked()
 	if d.goalCoordinator != nil && d.goalCoordinator.HasActiveRecord() {
-		d.goalCoordinator.EnsureActiveGoalWorkLocked()
+		if _, err := d.goalCoordinator.EnsureActiveGoalWorkLocked(); err != nil {
+			return nil, err
+		}
 		d.notifyWork()
 	}
-	return stream
+	return stream, nil
 }
 
 // NextOutput 实现 hschema.InteractionOutputDriver。
@@ -4362,7 +4364,11 @@ func (d *DeepAgent) closeIdleOutputIfFinished(_ context.Context) bool {
 	if !d.isInteractionRunningLocked() {
 		return false
 	}
-	if d.shouldKeepInteractionOpenLocked() {
+	keep, err := d.shouldKeepInteractionOpenLocked()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("ensure goal work failed while closing idle output")
+	}
+	if keep {
 		return true
 	}
 	d.interactionOutput.FinishCurrent()
@@ -4374,15 +4380,17 @@ func (d *DeepAgent) closeIdleOutputIfFinished(_ context.Context) bool {
 // 副作用（刻意）：GoalRecord 为 ACTIVE 时顺带 ensureActiveGoalWorkLocked，
 // 让下一次尝试在宿主观察到空闲完成之前就排好队。
 // Python: _should_keep_interaction_open_locked (L4442)
-func (d *DeepAgent) shouldKeepInteractionOpenLocked() bool {
+func (d *DeepAgent) shouldKeepInteractionOpenLocked() (bool, error) {
 	if d.interactionEvents.HasPendingWork() || d.activeInteractionRound != nil {
-		return true
+		return true, nil
 	}
 	if d.goalCoordinator != nil && d.goalCoordinator.HasActiveRecord() {
-		d.goalCoordinator.EnsureActiveGoalWorkLocked()
-		return true
+		if _, err := d.goalCoordinator.EnsureActiveGoalWorkLocked(); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 // sendUser 输入分发实现（调用方持 sendMu）。
@@ -4436,7 +4444,11 @@ func (d *DeepAgent) sendUser(_ context.Context, req hschema.SendInputRequest) er
 	}
 
 	// ③ 保持流开：作为 follow-up 入队
-	if d.shouldKeepInteractionOpenLocked() {
+	keepOpen, keepErr := d.shouldKeepInteractionOpenLocked()
+	if keepErr != nil {
+		return keepErr
+	}
+	if keepOpen {
 		if err := d.interactionEvents.PushUser(
 			hschema.NewUserWorkItem(req.RequestID, req.Inputs, true, false)); err != nil {
 			return err
