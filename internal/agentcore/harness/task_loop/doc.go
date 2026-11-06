@@ -11,6 +11,7 @@
 // LoopCoordinator 是"刹车"——追踪迭代/token/耗时/中止，通过评估器链决定是否继续。
 // LoopQueues 提供双队列缓冲（steering + follow_up），桥接 EventHandler 与 Executor/Loop。
 // TaskLoopEventHandler 实现 modules.EventHandler 接口，将事件转换为轮次提交/完成/中止语义。
+// EventManager 是交互监督器的调度域：user 队列优先于 goal 队列，goal 按 (goal_id, revision) 去重。
 //
 // 文件目录：
 //
@@ -22,7 +23,8 @@
 //	├── handler.go                    # TaskLoopEventHandler（实现 EventHandler 接口的事件处理器）
 //	├── loop_queues.go                # LoopQueues 双队列缓冲
 //	├── stop_condition.go             # StopConditionEvaluator 接口 + 5 个评估器实现
-//	└── loop_coordinator.go           # LoopCoordinator + LoopCoordinatorState
+//	├── loop_coordinator.go           # LoopCoordinator + LoopCoordinatorState
+//	└── event_manager.go              # EventManager（user/goal 双队列调度，供交互监督器使用）
 //
 // 对应 Python 代码：openjiuwen/harness/task_loop/ + openjiuwen/harness/schema/stop_condition.py
 package task_loop
