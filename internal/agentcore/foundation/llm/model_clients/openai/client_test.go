@@ -1116,3 +1116,74 @@ func TestHandleHTTPError_非标准体也保留头部(t *testing.T) {
 		t.Fatalf("retry_after_ms 期望 \"1500\"，实际 %v", got)
 	}
 }
+
+// ──────────────────────────── 流式超时语义回归（C-A3）────────────────────────────
+
+// TestStream_持续输出超过总超时不被切断 C-01 核心回归。
+//
+// 12 块 × 100ms = 1.2s 的持续吐字流，配置 timeout=0.8s：
+// 流式无总超时 → 全部 12 块正常收完（旧实现会在 0.8s 处硬切断）。
+func TestStream_持续输出超过总超时不被切断(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("应支持 Flush")
+			return
+		}
+		for i := 0; i < 12; i++ {
+			_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n")
+			flusher.Flush()
+			time.Sleep(100 * time.Millisecond)
+		}
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "OpenAI", APIKey: "k", APIBase: srv.URL,
+		Timeout: 0.8, VerifySSL: false,
+	}
+	c, err := NewOpenAIModelClient(llmschema.NewModelRequestConfig(llmschema.WithModelName("m")), cc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, err := c.Stream(context.Background(), model_clients.NewMessagesParam(llmschema.NewUserMessage("hi")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunks := 0
+	for chunk := range ch {
+		if chunk.StreamError != nil {
+			t.Fatalf("流内错误: %v", chunk.StreamError)
+		}
+		if chunk.Content.Text() != "" {
+			chunks++
+		}
+	}
+	if chunks != 12 {
+		t.Errorf("应收满 12 块（1.2s > 0.8s 总超时），实际 %d", chunks)
+	}
+}
+
+// TestInvoke_超过总超时被切断 非流式对照：总超时仍生效（Client.Timeout）。
+func TestInvoke_超过总超时被切断(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(1500 * time.Millisecond) // 超过 0.8s
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"x"},"finish_reason":"stop"}]}`)
+	}))
+	defer srv.Close()
+
+	cc := &llmschema.ModelClientConfig{
+		ClientProvider: "OpenAI", APIKey: "k", APIBase: srv.URL,
+		Timeout: 0.8, VerifySSL: false,
+	}
+	c, err := NewOpenAIModelClient(llmschema.NewModelRequestConfig(llmschema.WithModelName("m")), cc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Invoke(context.Background(), model_clients.NewMessagesParam(llmschema.NewUserMessage("hi")))
+	if err == nil {
+		t.Fatal("超过总超时应返回错误")
+	}
+}
