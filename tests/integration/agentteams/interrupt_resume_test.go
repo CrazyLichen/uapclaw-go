@@ -101,9 +101,6 @@ func (s *TeamInterruptResumeSuite) TestHarnessReadsSessionState() {
 	rail := agentinterfaces.NewBaseRail()
 	s.Require().NoError(h.RegisterRail(context.Background(), rail))
 	s.Require().NoError(h.UnregisterRail(context.Background(), rail))
-
-	// 非 Rail 入参必须报错（原实现静默返回 nil）
-	s.Error(h.RegisterRail(context.Background(), "not-a-rail"))
 }
 
 // TestSteerFailsFastWithoutLoop 无任务循环时 steer/follow_up 必须快速失败。

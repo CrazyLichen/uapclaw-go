@@ -704,29 +704,27 @@ func (h *TeamHarness) FindRails(railType reflect.Type) []any {
 // Python: TeamHarness.register_rail(rail) → await self._deep_agent.register_rail(rail)
 //
 // DeepAgentInterface 已声明 AddRail，原 TODO(#9.57) 的"类型升级"前置条件已满足。
-func (h *TeamHarness) RegisterRail(_ context.Context, rail any) error {
-	r, ok := rail.(agentinterfaces.AgentRail)
-	if !ok || r == nil {
-		return fmt.Errorf("TeamHarness.RegisterRail: 不支持的 Rail 类型 %T", rail)
+func (h *TeamHarness) RegisterRail(_ context.Context, rail agentinterfaces.AgentRail) error {
+	if rail == nil {
+		return fmt.Errorf("TeamHarness.RegisterRail: rail 为 nil")
 	}
 	if h.deepAgent == nil {
 		return errIncompatibleAgent
 	}
-	h.deepAgent.AddRail(r)
+	h.deepAgent.AddRail(rail)
 	return nil
 }
 
 // UnregisterRail 注销先前注册的 Rail。
 // Python: TeamHarness.unregister_rail(rail) → await self._deep_agent.unregister_rail(rail)
-func (h *TeamHarness) UnregisterRail(ctx context.Context, rail any) error {
-	r, ok := rail.(agentinterfaces.AgentRail)
-	if !ok || r == nil {
-		return fmt.Errorf("TeamHarness.UnregisterRail: 不支持的 Rail 类型 %T", rail)
+func (h *TeamHarness) UnregisterRail(ctx context.Context, rail agentinterfaces.AgentRail) error {
+	if rail == nil {
+		return fmt.Errorf("TeamHarness.UnregisterRail: rail 为 nil")
 	}
 	if h.deepAgent == nil {
 		return errIncompatibleAgent
 	}
-	return h.deepAgent.UnregisterRail(ctx, r)
+	return h.deepAgent.UnregisterRail(ctx, rail)
 }
 
 // RegisterMemberTools 在底层 Agent 上注册团队记忆工具集。
