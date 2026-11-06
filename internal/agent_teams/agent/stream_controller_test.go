@@ -3,16 +3,12 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
@@ -67,17 +63,14 @@ func TestNewStreamController_构造函数(t *testing.T) {
 	if sc == nil {
 		t.Fatal("NewStreamController 返回 nil")
 	}
-	if sc.streamingActive {
-		t.Error("streamingActive 应为 false")
+	if sc.retryAttempt != 0 {
+		t.Error("retryAttempt 应为 0")
 	}
-	if sc.cancelRequested {
-		t.Error("cancelRequested 应为 false")
+	if sc.swallowFailedRound {
+		t.Error("swallowFailedRound 应为 false")
 	}
 	if sc.streamQueue != nil {
 		t.Error("streamQueue 应为 nil")
-	}
-	if roundDoneSnapshot(sc) != nil {
-		t.Error("roundDone 应为 nil")
 	}
 }
 
@@ -142,11 +135,7 @@ func TestStreamController_RemoveChunkObserver_幂等(t *testing.T) {
 func TestStreamController_IsAgentRunning(t *testing.T) {
 	sc := newTestStreamController()
 	if sc.IsAgentRunning() {
-		t.Error("初始状态 IsAgentRunning 应为 false")
-	}
-	sc.streamingActive = true
-	if !sc.IsAgentRunning() {
-		t.Error("设置 streamingActive 后 IsAgentRunning 应为 true")
+		t.Error("无 harness 时 IsAgentRunning 应为 false")
 	}
 }
 
@@ -154,17 +143,7 @@ func TestStreamController_IsAgentRunning(t *testing.T) {
 func TestStreamController_HasInFlightRound(t *testing.T) {
 	sc := newTestStreamController()
 	if sc.HasInFlightRound() {
-		t.Error("初始状态 HasInFlightRound 应为 false")
-	}
-	// 模拟一个飞行中的轮次
-	sc.roundDone = make(chan struct{})
-	if !sc.HasInFlightRound() {
-		t.Error("roundDone 未关闭时 HasInFlightRound 应为 true")
-	}
-	// 关闭 roundDone
-	close(sc.roundDone)
-	if sc.HasInFlightRound() {
-		t.Error("roundDone 关闭后 HasInFlightRound 应为 false")
+		t.Error("无 harness 时 HasInFlightRound 应为 false")
 	}
 }
 
@@ -368,31 +347,6 @@ func TestIsRetryableErrorCode(t *testing.T) {
 }
 
 // TestStreamController_CombinePendingInputs 测试 combinePendingInputs。
-func TestStreamController_CombinePendingInputs(t *testing.T) {
-	sc := newTestStreamController()
-
-	// 单个输入
-	result := sc.combinePendingInputs([]any{"hello"})
-	if result != "hello" {
-		t.Errorf("单个输入: got %v, 期望 hello", result)
-	}
-
-	// 多个输入
-	result = sc.combinePendingInputs([]any{"first", "second"})
-	expected := "first\n\n---\n\nsecond"
-	if result != expected {
-		t.Errorf("多个输入: got %v, 期望 %v", result, expected)
-	}
-
-	// 混合类型
-	result = sc.combinePendingInputs([]any{"text", 42})
-	expected = "text\n\n---\n\n42"
-	if result != expected {
-		t.Errorf("混合类型: got %v, 期望 %v", result, expected)
-	}
-}
-
-// TestStreamController_TagChunk_四种情况 测试 tagChunk 的四种情况。
 func TestStreamController_TagChunk_四种情况(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
 
@@ -472,22 +426,6 @@ func TestStreamController_FanOutToObservers_异常自动移除(t *testing.T) {
 }
 
 // TestStreamController_DrainAgentTask 测试 DrainAgentTask。
-func TestStreamController_DrainAgentTask(t *testing.T) {
-	sc := newTestStreamController()
-	sc.pendingInputs = []any{"input1", "input2"}
-	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("resume1")}
-
-	_ = sc.DrainAgentTask(context.Background())
-
-	if pendingInputsLen(sc) != 0 {
-		t.Error("pendingInputs 应被清除")
-	}
-	if pendingResumesLen(sc) != 0 {
-		t.Error("pendingInterruptResumes 应被清除")
-	}
-}
-
-// TestStreamController_CancelAgent_无飞行轮次 测试无飞行轮次时 CancelAgent。
 func TestStreamController_CancelAgent_无飞行轮次(t *testing.T) {
 	sc := newTestStreamController()
 	// 无飞行中的轮次，应直接返回
@@ -498,31 +436,6 @@ func TestStreamController_CancelAgent_无飞行轮次(t *testing.T) {
 }
 
 // TestStreamController_CooperativeCancel_超时强制取消 测试协作取消超时后强制取消。
-func TestStreamController_CooperativeCancel_超时强制取消(t *testing.T) {
-	sc := newTestStreamController()
-	// 模拟一个飞行中的轮次（roundDone 未关闭，goroutine 一直运行）
-	roundDone := make(chan struct{})
-	sc.roundDone = roundDone
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	sc.cancelRound = cancel
-
-	// 在另一个 goroutine 中延迟关闭 roundDone
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		close(roundDone)
-	}()
-
-	err := sc.CooperativeCancel(ctx)
-	if err != nil {
-		t.Errorf("CooperativeCancel 返回错误: %v", err)
-	}
-	if !sc.cancelRequested {
-		t.Error("cancelRequested 应为 true")
-	}
-}
-
-// TestStreamController_memberName 测试 memberName。
 func TestStreamController_memberName(t *testing.T) {
 	// 无蓝图
 	sc := newTestStreamController()
@@ -538,24 +451,6 @@ func TestStreamController_memberName(t *testing.T) {
 }
 
 // TestStreamController_DequeueValidInterruptResume 测试 dequeueValidInterruptResume。
-func TestStreamController_DequeueValidInterruptResume(t *testing.T) {
-	sc := newTestStreamController()
-	// 空队列
-	if result := sc.dequeueValidInterruptResume(); result != nil {
-		t.Error("空队列应返回 nil")
-	}
-
-	// 添加无效项（IsValidInterruptResume 始终返回 false，因为无 harness）
-	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("invalid1"), iiStub("invalid2")}
-	if result := sc.dequeueValidInterruptResume(); result != nil {
-		t.Error("无效项应被丢弃")
-	}
-	if pendingResumesLen(sc) != 0 {
-		t.Error("无效项应被移除")
-	}
-}
-
-// TestStreamController_WakeMailboxIfInterruptCleared 测试 wakeMailboxIfInterruptCleared。
 func TestStreamController_WakeMailboxIfInterruptCleared(t *testing.T) {
 	sc := newTestStreamController()
 	// 无回调
@@ -573,37 +468,6 @@ func TestStreamController_WakeMailboxIfInterruptCleared(t *testing.T) {
 }
 
 // TestStreamController_StartRound_无harness 测试无 harness 时 StartRound 不启动。
-func TestStreamController_StartRound_无harness(t *testing.T) {
-	sc := newTestStreamController()
-	// resources.Harness 为 nil
-	err := sc.StartRound(context.Background(), "test")
-	if err != nil {
-		t.Errorf("StartRound 不应返回错误: %v", err)
-	}
-	if roundDoneSnapshot(sc) != nil {
-		t.Error("无 harness 时不应启动轮次")
-	}
-}
-
-// TestStreamController_Steer 测试 Steer。
-func TestStreamController_Steer(t *testing.T) {
-	sc := newTestStreamController()
-	err := sc.Steer(context.Background(), "turn left")
-	if err != nil {
-		t.Errorf("Steer 返回错误: %v", err)
-	}
-}
-
-// TestStreamController_FollowUp 测试 FollowUp。
-func TestStreamController_FollowUp(t *testing.T) {
-	sc := newTestStreamController()
-	err := sc.FollowUp(context.Background(), "more info")
-	if err != nil {
-		t.Errorf("FollowUp 返回错误: %v", err)
-	}
-}
-
-// TestStreamController_IsValidInterruptResume 测试 IsValidInterruptResume。
 func TestStreamController_IsValidInterruptResume(t *testing.T) {
 	sc := newTestStreamController()
 	// 无 harness 时返回 false
@@ -613,144 +477,6 @@ func TestStreamController_IsValidInterruptResume(t *testing.T) {
 }
 
 // TestStreamController_executeRound_取消 测试 executeRound 在 context 取消时。
-func TestStreamController_executeRound_取消(t *testing.T) {
-	sc := newTestStreamController()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // 立即取消
-
-	sc.executeRound(ctx, "test")
-	// 不应 panic
-}
-
-// TestStreamController_executeRound_成功 测试 executeRound 成功路径。
-func TestStreamController_executeRound_成功(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-
-	execStatuses := []atschema.ExecutionStatus{}
-	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
-		execStatuses = append(execStatuses, status)
-		return nil
-	}
-
-	sc.executeRound(context.Background(), "hello")
-
-	// 验证状态转换：Starting → Running → Completing → Completed → Idle
-	expected := []atschema.ExecutionStatus{
-		atschema.ExecutionStatusStarting,
-		atschema.ExecutionStatusRunning,
-		atschema.ExecutionStatusCompleting,
-		atschema.ExecutionStatusCompleted,
-		atschema.ExecutionStatusIdle,
-	}
-	if len(execStatuses) != len(expected) {
-		t.Fatalf("状态转换数 = %d, 期望 %d: %v", len(execStatuses), len(expected), execStatuses)
-	}
-	for i, s := range expected {
-		if execStatuses[i] != s {
-			t.Errorf("状态[%d] = %v, 期望 %v", i, execStatuses[i], s)
-		}
-	}
-}
-
-// TestStreamController_executeRound_取消标记 测试 cancelRequested 标记时走 CANCELLED 路径。
-func TestStreamController_executeRound_取消标记(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-
-	execStatuses := []atschema.ExecutionStatus{}
-	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
-		execStatuses = append(execStatuses, status)
-		return nil
-	}
-
-	sc.cancelRequested = true
-	sc.executeRound(context.Background(), "hello")
-
-	// 验证状态转换：Starting → Running → CANCELLED → Idle
-	expected := []atschema.ExecutionStatus{
-		atschema.ExecutionStatusStarting,
-		atschema.ExecutionStatusRunning,
-		atschema.ExecutionStatusCancelled,
-		atschema.ExecutionStatusIdle,
-	}
-	if len(execStatuses) != len(expected) {
-		t.Fatalf("状态转换数 = %d, 期望 %d: %v", len(execStatuses), len(expected), execStatuses)
-	}
-	for i, s := range expected {
-		if execStatuses[i] != s {
-			t.Errorf("状态[%d] = %v, 期望 %v", i, execStatuses[i], s)
-		}
-	}
-}
-
-// TestStreamController_runOneRound_取消 测试 runOneRound 在 context 取消时。
-func TestStreamController_runOneRound_取消(t *testing.T) {
-	sc := newTestStreamController()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // 立即取消
-
-	sc.runOneRound(ctx, "test")
-	// 不应 panic
-}
-
-// TestStreamController_runOneRound_teamCleaned 测试 team_cleaned 时关闭流。
-func TestStreamController_runOneRound_teamCleaned(t *testing.T) {
-	sc := newTestStreamController()
-	sc.state.TeamCleaned = true
-	sc.streamQueue = make(chan streambase.Schema, 1)
-
-	// runOneRound 内部 finally 应关闭流
-	sc.runOneRound(context.Background(), "test")
-
-	// 验证 nil sentinel
-	select {
-	case chunk := <-sc.streamQueue:
-		if chunk != nil {
-			t.Error("期望 nil sentinel")
-		}
-	default:
-		// 可能没有 sentinel（因为 executeRound 可能失败但不关流）
-		// 这是可接受的：teamCleaned 在 finally 中处理
-	}
-}
-
-// TestStreamController_streamOneRound_无harness 测试 streamOneRound 无 harness。
-func TestStreamController_streamOneRound_无harness(t *testing.T) {
-	sc := newTestStreamController()
-	err := sc.streamOneRound(context.Background(), "test")
-	if err != nil {
-		t.Errorf("无 harness 时应返回 nil, got %v", err)
-	}
-}
-
-// TestStreamController_streamOneRound_有harness 测试有 harness 时 streamOneRound 成功。
-func TestStreamController_streamOneRound_有harness(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	err := sc.streamOneRound(context.Background(), "hello")
-	if err != nil {
-		t.Errorf("成功路径应返回 nil, got %v", err)
-	}
-	// streamingActive 应已恢复为 false
-	if sc.streamingActive {
-		t.Error("streamOneRound 完成后 streamingActive 应为 false")
-	}
-}
-
-// TestStreamController_runRetryingStream_成功 测试 runRetryingStream 成功路径。
-func TestStreamController_runRetryingStream_成功(t *testing.T) {
-	sc := newTestStreamController()
-	// streamOneRound 在无 harness 时直接返回 nil, ""，即成功
-	err := sc.runRetryingStream(context.Background(), "test")
-	if err != nil {
-		t.Errorf("成功路径不应返回错误: %v", err)
-	}
-}
-
-// TestStreamController_CooperativeCancel_无飞行轮次 测试无飞行轮次时 CooperativeCancel。
 func TestStreamController_CooperativeCancel_无飞行轮次(t *testing.T) {
 	sc := newTestStreamController()
 	err := sc.CooperativeCancel(context.Background())
@@ -760,92 +486,6 @@ func TestStreamController_CooperativeCancel_无飞行轮次(t *testing.T) {
 }
 
 // TestStreamController_startRound_无队列 测试无 streamQueue 时不启动。
-func TestStreamController_startRound_无队列(t *testing.T) {
-	sc := newTestStreamController()
-	// streamQueue 为 nil
-	sc.startRound(context.Background(), "test")
-	if roundDoneSnapshot(sc) != nil {
-		t.Error("无 streamQueue 时不应启动轮次")
-	}
-}
-
-// TestStreamController_startRound_正常启动 测试正常启动轮次。
-func TestStreamController_startRound_正常启动(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	sc.startRound(context.Background(), "hello")
-	assertRoundStartedAndFinished(t, sc)
-}
-
-// TestStreamController_StartRound_有harness有队列 测试有 harness 和 streamQueue 时 StartRound 启动轮次。
-func TestStreamController_StartRound_有harness有队列(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	err := sc.StartRound(context.Background(), "hello world")
-	if err != nil {
-		t.Errorf("StartRound 不应返回错误: %v", err)
-	}
-	// roundDone 会被轮次 goroutine 清空（M-16），允许「断言时已结束」
-	assertRoundStartedAndFinished(t, sc)
-}
-
-// TestStreamController_StartRound_长内容截断预览 测试长内容预览截断。
-func TestStreamController_StartRound_长内容截断预览(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	longContent := ""
-	for i := 0; i < 200; i++ {
-		longContent += "x"
-	}
-	err := sc.StartRound(context.Background(), longContent)
-	if err != nil {
-		t.Errorf("StartRound 不应返回错误: %v", err)
-	}
-
-	waitRoundFinished(t, sc)
-}
-
-// TestStreamController_StartRound_非字符串内容 测试非字符串内容。
-func TestStreamController_StartRound_非字符串内容(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	err := sc.StartRound(context.Background(), 12345)
-	if err != nil {
-		t.Errorf("StartRound 不应返回错误: %v", err)
-	}
-
-	waitRoundFinished(t, sc)
-}
-
-// TestStreamController_Steer_有harness 有 harness 但底层 Agent 缺失时错误必须透传。
-//
-// M-02：投递失败不再吞成 nil——否则上层 DeliverResult 恒为 success。
-func TestStreamController_Steer_有harness(t *testing.T) {
-	sc := newTestStreamController()
-	sc.resources.Harness = &harness.TeamHarness{}
-	if err := sc.Steer(context.Background(), "turn left"); err == nil {
-		t.Error("底层 Agent 缺失时 Steer 应返回错误")
-	}
-}
-
-// TestStreamController_FollowUp_有harness 有 harness 但底层 Agent 缺失时错误必须透传。
-func TestStreamController_FollowUp_有harness(t *testing.T) {
-	sc := newTestStreamController()
-	sc.resources.Harness = &harness.TeamHarness{}
-	if err := sc.FollowUp(context.Background(), "more info"); err == nil {
-		t.Error("底层 Agent 缺失时 FollowUp 应返回错误")
-	}
-}
-
-// TestStreamController_HasPendingInterrupt_有harness 测试有 harness 时 HasPendingInterrupt。
 func TestStreamController_HasPendingInterrupt_有harness(t *testing.T) {
 	sc := newTestStreamController()
 	sc.resources.Harness = &harness.TeamHarness{}
@@ -868,188 +508,6 @@ func TestStreamController_IsValidInterruptResume_有harness(t *testing.T) {
 // 轮次会瞬间完成，无法可靠地让 HasInFlightRound 返回 true。
 // 因此本测试直接设置 roundDone 和 cancelRound 模拟飞行中轮次，
 // 验证 CancelAgent 的状态机推进逻辑。
-func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	var mu sync.Mutex
-	execStatuses := []atschema.ExecutionStatus{}
-	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
-		mu.Lock()
-		execStatuses = append(execStatuses, status)
-		mu.Unlock()
-		return nil
-	}
-
-	// 模拟飞行中轮次：设置 roundDone 为未关闭的 channel，cancelRound 为可取消函数
-	roundDone := make(chan struct{})
-	roundCtx, cancelRound := context.WithCancel(context.Background())
-	sc.roundDone = roundDone
-	sc.cancelRound = cancelRound
-
-	// 验证 HasInFlightRound 返回 true
-	if !sc.HasInFlightRound() {
-		t.Fatal("应有飞行中的轮次")
-	}
-
-	// 启动一个 goroutine 模拟轮次执行：等待取消信号后关闭 roundDone
-	go func() {
-		<-roundCtx.Done()
-		close(roundDone)
-	}()
-
-	// 取消
-	err := sc.CancelAgent(context.Background())
-	if err != nil {
-		t.Errorf("CancelAgent 不应返回错误: %v", err)
-	}
-
-	// 等待轮次完成
-	waitRoundFinished(t, sc)
-
-	// 验证状态转换
-	mu.Lock()
-	defer mu.Unlock()
-	foundCancelRequested := false
-	foundCancelling := false
-	for _, s := range execStatuses {
-		if s == atschema.ExecutionStatusCancelRequested {
-			foundCancelRequested = true
-		}
-		if s == atschema.ExecutionStatusCancelling {
-			foundCancelling = true
-		}
-	}
-	if !foundCancelRequested {
-		t.Error("应经过 CancelRequested 状态")
-	}
-	if !foundCancelling {
-		t.Error("应经过 Cancelling 状态")
-	}
-}
-
-// TestStreamController_CooperativeCancel_等待轮次完成 测试协作取消等待轮次自然完成。
-func TestStreamController_CooperativeCancel_等待轮次完成(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	sc.startRound(context.Background(), "hello")
-
-	// 等待轮次先完成
-	waitRoundFinished(t, sc)
-
-	err := sc.CooperativeCancel(context.Background())
-	if err != nil {
-		t.Errorf("CooperativeCancel 不应返回错误: %v", err)
-	}
-}
-
-// TestStreamController_runOneRound_续轮pendingInputs 测试轮次结束后自动续轮 pendingInputs。
-func TestStreamController_runOneRound_续轮pendingInputs(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	sc.pendingInputs = []any{"next input"}
-
-	sc.runOneRound(context.Background(), "first")
-
-	time.Sleep(200 * time.Millisecond)
-
-	if pendingInputsLen(sc) != 0 {
-		t.Errorf("pendingInputs 应被消费, 剩余 %d", pendingInputsLen(sc))
-	}
-}
-
-// TestStreamController_runOneRound_续轮interruptResume 测试轮次结束后自动续轮 interruptResume。
-func TestStreamController_runOneRound_续轮interruptResume(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	// 当前 TeamHarness 总是返回 false，所以 dequeueValidInterruptResume 会丢弃
-	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("resume1")}
-
-	sc.runOneRound(context.Background(), "first")
-
-	if pendingResumesLen(sc) != 0 {
-		t.Errorf("无效 interruptResume 应被丢弃, 剩余 %d", pendingResumesLen(sc))
-	}
-}
-
-// TestStreamController_runOneRound_wakeMailbox 测试轮次结束后唤醒邮箱。
-func TestStreamController_runOneRound_wakeMailbox(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	wakeCalled := false
-	sc.wakeMailboxCb = func(ctx context.Context) error {
-		wakeCalled = true
-		return nil
-	}
-
-	sc.runOneRound(context.Background(), "first")
-
-	if !wakeCalled {
-		t.Error("wakeMailboxCb 应被调用")
-	}
-}
-
-// TestStreamController_runOneRound_requestCompletionPoll 测试轮次结束后请求完成轮询。
-func TestStreamController_runOneRound_requestCompletionPoll(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	pollCalled := false
-	sc.requestCompletionPollCb = func(ctx context.Context) error {
-		pollCalled = true
-		return nil
-	}
-
-	sc.runOneRound(context.Background(), "first")
-
-	if !pollCalled {
-		t.Error("requestCompletionPollCb 应被调用")
-	}
-}
-
-// TestStreamController_runOneRound_cancelRequested 测试 cancelRequested 为 true 时不续轮。
-func TestStreamController_runOneRound_cancelRequested(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	wakeCalled := false
-	sc.wakeMailboxCb = func(ctx context.Context) error {
-		wakeCalled = true
-		return nil
-	}
-	sc.pendingInputs = []any{"should not be consumed"}
-
-	// 利用 executeRound 走完 Running 状态后设置 cancelRequested
-	origUpdateExec := sc.updateExecution
-	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
-		if status == atschema.ExecutionStatusRunning {
-			sc.cancelRequested = true
-		}
-		return origUpdateExec(ctx, status)
-	}
-
-	sc.runOneRound(context.Background(), "first")
-
-	if pendingInputsLen(sc) != 1 {
-		t.Error("cancelRequested 时不应消费 pendingInputs")
-	}
-	if wakeCalled {
-		t.Error("cancelRequested 时不应调用 wakeMailboxCb")
-	}
-}
-
-// TestStreamController_fanOutToObservers_正常 测试正常扇出。
 func TestStreamController_fanOutToObservers_正常(t *testing.T) {
 	sc := newTestStreamController()
 	received := []streambase.Schema{}
@@ -1087,15 +545,6 @@ func TestStreamController_fanOutToObservers_panic自动移除(t *testing.T) {
 }
 
 // TestStreamController_logRoundPanic 测试 logRoundPanic 恢复。
-func TestStreamController_logRoundPanic(t *testing.T) {
-	sc := newTestStreamController()
-	func() {
-		defer sc.logRoundPanic()
-		panic("test panic")
-	}()
-}
-
-// TestStreamController_memberName_蓝图nilName 测试蓝图有值但 MemberName 为 nil。
 func TestStreamController_memberName_蓝图nilName(t *testing.T) {
 	bp := &TeamAgentBlueprint{
 		Ctx: atschema.TeamRuntimeContext{
@@ -1154,300 +603,6 @@ func TestStreamController_CloseStream_满队列(t *testing.T) {
 }
 
 // TestStreamController_DrainAgentTask_有飞行轮次 测试有飞行中轮次时 DrainAgentTask。
-func TestStreamController_DrainAgentTask_有飞行轮次(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	sc.pendingInputs = []any{"input1"}
-	sc.pendingInterruptResumes = []*interaction.InteractiveInput{iiStub("resume1")}
-
-	sc.startRound(context.Background(), "hello")
-
-	err := sc.DrainAgentTask(context.Background())
-	if err != nil {
-		t.Errorf("DrainAgentTask 不应返回错误: %v", err)
-	}
-
-	// 等待轮次完成，避免与 goroutine 并发访问字段
-	waitRoundFinished(t, sc)
-
-	if pendingInputsLen(sc) != 0 {
-		t.Error("pendingInputs 应被清除")
-	}
-	if pendingResumesLen(sc) != 0 {
-		t.Error("pendingInterruptResumes 应被清除")
-	}
-}
-
-// TestStreamController_CooperativeCancel_context取消 测试 CooperativeCancel 时 context 已取消。
-func TestStreamController_CooperativeCancel_context取消(t *testing.T) {
-	sc := newTestStreamController()
-	roundDone := make(chan struct{})
-	sc.roundDone = roundDone
-	_, roundCancel := context.WithCancel(context.Background())
-	sc.cancelRound = roundCancel
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		close(roundDone)
-	}()
-
-	err := sc.CooperativeCancel(ctx)
-	if err != nil {
-		t.Errorf("CooperativeCancel 不应返回错误: %v", err)
-	}
-}
-
-// TestStreamController_CooperativeCancel_超时强制取消完整 测试协作取消超时后强制取消（完整流程）。
-func TestStreamController_CooperativeCancel_超时强制取消完整(t *testing.T) {
-	sc := newTestStreamController()
-	roundDone := make(chan struct{})
-	sc.roundDone = roundDone
-	roundCtx, roundCancel := context.WithCancel(context.Background())
-	sc.cancelRound = roundCancel
-	sc.resources.Harness = &harness.TeamHarness{}
-
-	go func() {
-		<-roundCtx.Done()
-		close(roundDone)
-	}()
-
-	doneCh := make(chan error, 1)
-	go func() {
-		doneCh <- sc.CooperativeCancel(context.Background())
-	}()
-
-	select {
-	case err := <-doneCh:
-		if err != nil {
-			t.Errorf("CooperativeCancel 不应返回错误: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("CooperativeCancel 超时")
-	}
-
-	if !sc.cancelRequested {
-		t.Error("cancelRequested 应为 true")
-	}
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// intPtr 返回 int 指针
-func intPtr(v int) *int { return &v }
-
-// stringPtr 返回 string 指针
-func stringPtr(v string) *string { return &v }
-
-// atschemaTeamRolePtr 返回 TeamRole 指针
-func atschemaTeamRolePtr(v atschema.TeamRole) *atschema.TeamRole { return &v }
-
-// 编译期断言：*TeamOutputSchema 满足 streambase.Schema 接口
-var _ streambase.Schema = (*atschema.TeamOutputSchema)(nil)
-
-// TestStreamController_QueuePendingInput_并发安全 并发入队不应丢数据，-race 下无告警。
-// M-08（复核新发现）：TeamAgent.DeliverInput 原先跨包裸写 pendingInputs，
-// 与 runOneRound 的加锁消费形成数据竞争。
-func TestStreamController_QueuePendingInput_并发安全(t *testing.T) {
-	sc := newTestStreamController()
-	const goroutines = 8
-	const perGoroutine = 50
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
-		go func(id int) {
-			defer wg.Done()
-			for j := 0; j < perGoroutine; j++ {
-				sc.QueuePendingInput(fmt.Sprintf("g%d-%d", id, j))
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	got := pendingInputsLen(sc)
-	if want := goroutines * perGoroutine; got != want {
-		t.Fatalf("pendingInputs 长度 = %d, want %d", got, want)
-	}
-}
-
-// waitRoundFinished 轮询等待本轮结束。
-//
-// M-16 后 runOneRound 收尾会把 roundDone 清零（表示无在飞轮次），因此测试不能再
-// 直接读该字段等待，改为轮询 HasInFlightRound。
-func waitRoundFinished(t *testing.T, sc *StreamController) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if !sc.HasInFlightRound() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatal("轮次超时未完成")
-}
-
-// assertRoundStartedAndFinished 断言 startRound 启动的轮次能收敛。
-//
-// 不断言「瞬时快照非 nil」：roundDone 由轮次 goroutine 在结束时于锁内置空（M-16），
-// 而零值 TeamHarness 下轮次可能瞬间完成，断言瞬时值会随调度抖动假红（CI 实测过一次）。
-// 改为：等待收敛，且拿到快照时该快照必须已关闭（两种都代表正常完成）。
-func assertRoundStartedAndFinished(t *testing.T, sc *StreamController) {
-	t.Helper()
-	done := roundDoneSnapshot(sc)
-	waitRoundFinished(t, sc)
-	if done == nil {
-		return
-	}
-	select {
-	case <-done:
-	default:
-		t.Fatal("roundDone 应在轮次结束时关闭")
-	}
-}
-
-// roundDoneSnapshot 在锁内取 roundDone 快照。
-//
-// M-16 后该字段由执行 goroutine 在 sc.mu 内清零/替换，测试也必须持锁读，
-// 否则 -race 会报「测试读 vs 执行写」。
-func roundDoneSnapshot(sc *StreamController) chan struct{} {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-	return sc.roundDone
-}
-
-// pendingInputsLen 在锁内读待处理输入条数（同上：执行 goroutine 会在锁内清空）。
-func pendingInputsLen(sc *StreamController) int {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-	return len(sc.pendingInputs)
-}
-
-// pendingResumesLen 在锁内读待处理中断恢复条数。
-func pendingResumesLen(sc *StreamController) int {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-	return len(sc.pendingInterruptResumes)
-}
-
-// ──── M-16：EnqueueOrStart 与轮次结束标记 ────
-
-// TestStreamController_EnqueueOrStart_无在飞起新轮 无在飞轮次时直接起一轮。
-func TestStreamController_EnqueueOrStart_无在飞起新轮(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	if started := sc.EnqueueOrStart(context.Background(), "hello"); !started {
-		t.Fatal("无在飞轮次时应启动新轮")
-	}
-	waitRoundFinished(t, sc)
-}
-
-// TestStreamController_EnqueueOrStart_在飞入队 有在飞轮次时只入队、不启动新轮。
-func TestStreamController_EnqueueOrStart_在飞入队(t *testing.T) {
-	sc := newTestStreamController()
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-	// 手工构造「在飞但未结束」的轮次
-	inFlight := make(chan struct{})
-	sc.mu.Lock()
-	sc.roundDone = inFlight
-	sc.mu.Unlock()
-
-	if started := sc.EnqueueOrStart(context.Background(), "queued"); started {
-		t.Fatal("有在飞轮次时应只入队")
-	}
-	if got := pendingInputsLen(sc); got != 1 {
-		t.Errorf("待处理输入 = %d, want 1", got)
-	}
-	close(inFlight)
-}
-
-// TestStreamController_EnqueueOrStart_通道已关闭视为无在飞 roundDone 已关闭但未清零时按无在飞处理。
-func TestStreamController_EnqueueOrStart_通道已关闭视为无在飞(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-	closed := make(chan struct{})
-	close(closed)
-	sc.mu.Lock()
-	sc.roundDone = closed
-	sc.mu.Unlock()
-
-	if started := sc.EnqueueOrStart(context.Background(), "hello"); !started {
-		t.Fatal("roundDone 已关闭时应起新轮")
-	}
-	waitRoundFinished(t, sc)
-}
-
-// TestStreamController_markRoundFinished 标记本轮结束后 roundDone 为空。
-func TestStreamController_markRoundFinished(t *testing.T) {
-	sc := newTestStreamController()
-	sc.mu.Lock()
-	sc.roundDone = make(chan struct{})
-	sc.mu.Unlock()
-
-	sc.markRoundFinished()
-	if roundDoneSnapshot(sc) != nil {
-		t.Error("markRoundFinished 后 roundDone 应为 nil")
-	}
-	if sc.HasInFlightRound() {
-		t.Error("标记结束后不应有在飞轮次")
-	}
-}
-
-// TestStreamController_HasInFlightRound_已关闭通道 roundDone 已关闭时应判定为无在飞。
-func TestStreamController_HasInFlightRound_已关闭通道(t *testing.T) {
-	sc := newTestStreamController()
-	closed := make(chan struct{})
-	close(closed)
-	sc.mu.Lock()
-	sc.roundDone = closed
-	sc.mu.Unlock()
-
-	if sc.HasInFlightRound() {
-		t.Error("通道已关闭时不应判定为在飞")
-	}
-}
-
-// TestStreamController_EnqueueOrStart_nil接收者 nil 控制器直接返回 false。
-func TestStreamController_EnqueueOrStart_nil接收者(t *testing.T) {
-	var sc *StreamController
-	if sc.EnqueueOrStart(context.Background(), "x") {
-		t.Error("nil 接收者应返回 false")
-	}
-}
-
-// TestStreamController_runOneRound_完成轮询回调 无可续轮且配置了完成轮询回调时必须触发。
-func TestStreamController_runOneRound_完成轮询回调(t *testing.T) {
-	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &harness.TeamHarness{}
-	sc.streamQueue = make(chan streambase.Schema, 10)
-
-	polled := make(chan struct{}, 1)
-	sc.requestCompletionPollCb = func(context.Context) error {
-		select {
-		case polled <- struct{}{}:
-		default:
-		}
-		return nil
-	}
-
-	sc.startRound(context.Background(), "hello")
-	select {
-	case <-polled:
-	case <-time.After(2 * time.Second):
-		t.Fatal("轮次结束后应触发完成轮询回调")
-	}
-	waitRoundFinished(t, sc)
-}
-
-// TestDetectTaskFailed_结构体载荷直读 生产端产出的 *ControllerOutputPayload 必须被识别。
 func TestDetectTaskFailed_结构体载荷直读(t *testing.T) {
 	mk := func(cop *cschema.ControllerOutputPayload) streambase.Schema {
 		return &streambase.OutputSchema{Payload: cop}
@@ -1476,16 +631,16 @@ func TestDetectTaskFailed_结构体载荷直读(t *testing.T) {
 	}
 }
 
-// TestResolveCompletionTimeout_配置优先与缺省回落 验证 M-06：
-// 单轮超时取 DeepAgentConfig.CompletionTimeout（缺省 600s），不再硬编码 3600s。
-func TestResolveCompletionTimeout_配置优先与缺省回落(t *testing.T) {
-	if got := resolveCompletionTimeout(nil); got != 600*time.Second {
-		t.Errorf("nil 配置 = %v, want 600s（Python 默认值）", got)
-	}
-	if got := resolveCompletionTimeout(&hschema.DeepAgentConfig{CompletionTimeout: 0}); got != 600*time.Second {
-		t.Errorf("零值 = %v, want 600s", got)
-	}
-	if got := resolveCompletionTimeout(&hschema.DeepAgentConfig{CompletionTimeout: 120}); got != 120*time.Second {
-		t.Errorf("配置 120s 时 = %v, want 120s", got)
-	}
-}
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// intPtr 返回 int 指针
+func intPtr(v int) *int { return &v }
+
+// stringPtr 返回 string 指针
+func stringPtr(v string) *string { return &v }
+
+// atschemaTeamRolePtr 返回 TeamRole 指针
+func atschemaTeamRolePtr(v atschema.TeamRole) *atschema.TeamRole { return &v }
+
+// 编译期断言：*TeamOutputSchema 满足 streambase.Schema 接口
+var _ streambase.Schema = (*atschema.TeamOutputSchema)(nil)

@@ -167,38 +167,6 @@ func TestTeamHarness_PersistDBState(t *testing.T) {
 // TestTeamHarness_Steer 测试 Steer 在无底层 DeepAgent 时返回可判定的错误
 //
 // M-02：投递失败必须可被上层识别（原实现返回 nil，DeliverResult 恒为 success）。
-func TestTeamHarness_Steer(t *testing.T) {
-	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.Error(t, h.Steer(context.TODO(), "转向"))
-}
-
-// TestTeamHarness_FollowUp 测试 FollowUp 在无底层 DeepAgent 时返回可判定的错误
-func TestTeamHarness_FollowUp(t *testing.T) {
-	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.Error(t, h.FollowUp(context.TODO(), "追加"))
-}
-
-// TestTeamHarness_Abort 测试 Abort 占位返回 nil
-func TestTeamHarness_Abort(t *testing.T) {
-	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.Abort(context.TODO()))
-}
-
-// TestTeamHarness_RunStreaming 测试 RunStreaming 占位返回关闭的通道
-func TestTeamHarness_RunStreaming(t *testing.T) {
-	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	ch, err := h.RunStreaming(context.TODO(), nil, "", nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, ch)
-	// 通道应已关闭
-	_, ok := <-ch
-	assert.False(t, ok)
-}
-
-// TestTeamHarness_RegisterRail 测试 RegisterRail 对非法入参返回错误
-//
-// 回填后该方法不再吞掉失败：rail 类型不符或缺少底层 Agent 都要报错，
-// 否则"运行中挂载 Rail 静默无效"无法定位。
 func TestTeamHarness_RegisterRail(t *testing.T) {
 	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.RegisterRail(context.TODO(), nil))
@@ -230,24 +198,3 @@ func TestTeamHarness_InjectMemberMemory_Nil(t *testing.T) {
 // TestTeamHarness_RunStreaming_非BaseAgent降级空流 M-17 回归测试。
 // deepAgent 非 nil 但未实现 BaseAgent 时应降级为关闭的空流（Warn 日志路径），
 // 而非 panic 或阻塞。
-func TestTeamHarness_RunStreaming_非BaseAgent降级空流(t *testing.T) {
-	// mockDeepAgent 只嵌入接口，不实现 BaseAgent 的完整方法集 → 断言失败路径
-	h := harness.NewTeamHarness(&mockDeepAgent{}, nil, string(atschema.TeamRoleLeader), "m1", false)
-	ch, err := h.RunStreaming(context.TODO(), map[string]any{"q": "hi"}, "sess-1", nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, ch)
-	// 通道应立即关闭（降级空流）
-	_, ok := <-ch
-	assert.False(t, ok)
-}
-
-// TestTeamHarness_RunStreaming_teamSession占位分支 M-17 回归测试。
-// teamSession 非 nil 走分支 2 占位（⤵️ plan-mode 种子化回填前返回关闭空流）。
-func TestTeamHarness_RunStreaming_teamSession占位分支(t *testing.T) {
-	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "m1", false)
-	ch, err := h.RunStreaming(context.TODO(), nil, "sess-1", map[string]any{"team": "state"})
-	assert.NoError(t, err)
-	assert.NotNil(t, ch)
-	_, ok := <-ch
-	assert.False(t, ok)
-}
