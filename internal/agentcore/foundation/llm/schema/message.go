@@ -62,6 +62,12 @@ type ContentPart struct {
 	InputAudio *InputAudio `json:"input_audio,omitempty"`
 	// VideoURL 视频 URL 信息（Type=="video_url" 时使用）
 	VideoURL *VideoURL `json:"video_url,omitempty"`
+	// Width 图像宽度（像素），生产方缩图后标注，供 token 计费免嗅探
+	Width *int `json:"width,omitempty"`
+	// Height 图像高度（像素）
+	Height *int `json:"height,omitempty"`
+	// Dimensions 图像尺寸 "WxH"，与 Width/Height 二选一
+	Dimensions string `json:"dimensions,omitempty"`
 }
 
 // MessageContent 消息内容容器：纯文本走 text，多模态走 parts，两者互斥。

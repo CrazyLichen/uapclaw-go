@@ -349,9 +349,11 @@ func TestCountMessages_多模态消息(t *testing.T) {
 	multiCount, err := tc.CountMessages(multiMsg, "gpt-4")
 	assert.NoError(t, err)
 
-	// 多模态消息只计算 text 部分，不含 image_url 的 JSON 结构
-	assert.LessOrEqual(t, multiCount, textCount+3,
-		"多模态消息的 token 数不应超过纯文本消息太多（忽略 image_url 部分）")
+	// 图像块按占位计费（远程 URL 读不到尺寸 → 1445 兜底），但绝不把 URL/载荷当文本逐字符计
+	assert.GreaterOrEqual(t, multiCount, textCount+DefaultImagePlaceholderTokens-3,
+		"多模态消息应包含图像占位计费（B-05）")
+	assert.Less(t, multiCount, textCount+DefaultImagePlaceholderTokens+100,
+		"图像计费不应超出占位量级")
 }
 
 // TestFallbackCount_CountMessages 验证 enc 为 nil 时 CountMessages 返回 error

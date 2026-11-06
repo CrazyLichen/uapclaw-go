@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/tiktoken-go/tokenizer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/sanitize"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -153,13 +154,14 @@ func (tc *TiktokenCounter) CountMessages(messages []llm_schema.BaseMessage, mode
 	total := 0
 	for _, msg := range messages {
 		// 格式: <|start|>{role}\n{content}<|end|>
-		content := contentToString(msg.GetContent())
+		// 多模态消息：文本块走 tokenizer，图像块按尺寸计费（不把 base64 当文本）
+		content, imageTokens := contentForCounting(msg.GetContent())
 		piece := fmt.Sprintf("<|start|>%s\n%s<|end|>", msg.GetRole(), content)
 		count, err := tc.Count(piece, model)
 		if err != nil {
 			return 0, fmt.Errorf("计算消息 token 失败: %w", err)
 		}
-		total += count
+		total += count + imageTokens
 
 		// AssistantMessage 特殊处理：额外计算 ToolCalls token
 		if asst, ok := msg.(*llm_schema.AssistantMessage); ok && len(asst.ToolCalls) > 0 {
@@ -210,6 +212,31 @@ func (tc *TiktokenCounter) CountTools(tools []common_schema.ToolInfoInterface, m
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// contentForCounting 把消息内容拆成「用于 tokenizer 的文本」与「图像 token 数」。
+//
+// 图像块不进入文本：base64 载荷被当文本计数会让单张图算出几万 token，
+// 触发过早压缩（B-05 的根因）。
+func contentForCounting(content llm_schema.MessageContent) (string, int) {
+	parts := content.Parts()
+	if len(parts) == 0 {
+		return content.Text(), 0
+	}
+	texts := make([]string, 0, len(parts))
+	imageTokens := 0
+	for _, part := range parts {
+		switch {
+		case IsImagePart(part):
+			imageTokens += ImageBlockTokens(part)
+		case part.Type == "text" || part.Type == "":
+			texts = append(texts, part.Text)
+		default:
+			// 未知块（音频/视频/自定义）：净化后按文本计，避免原始载荷进入计数
+			texts = append(texts, sanitize.SanitizeContentForText(part))
+		}
+	}
+	return strings.Join(texts, "\n"), imageTokens
+}
 
 // fallbackCount 降级 token 计算：len(text)//3。
 //

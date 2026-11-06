@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/sanitize"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -240,14 +241,16 @@ func RoundContainsSkillRead(messages []llm_schema.BaseMessage) bool {
 //
 // Python: ContextUtils.estimate_tokens()
 func EstimateContentTokens(content any) int {
+	// 先净化图片载荷：data URL/base64 若按字符数计入会把一张图算成几万 token
+	// （对齐上游 content_sanitize.sanitize_content_for_text 的使用点）。
 	if str, ok := content.(string); ok {
-		result := len(str) / 3
+		result := len(sanitize.SanitizeContentForText(str)) / 3
 		if result < 1 {
 			return 1
 		}
 		return result
 	}
-	data, err := json.Marshal(content)
+	data, err := json.Marshal(sanitize.SanitizeValueForText(content))
 	if err != nil {
 		result := len(fmt.Sprintf("%v", content)) / 3
 		if result < 1 {
@@ -274,14 +277,30 @@ func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
 	}
 	content := msg.GetContent()
 	if content.IsText() {
-		text := content.Text()
+		text := sanitize.SanitizeContentForText(content.Text())
 		result := len(text) / 3
 		if result < 1 {
 			return 1
 		}
 		return result
 	}
-	return EstimateContentTokens(content)
+	// 多模态：文本块按字符估算，图像块用占位符长度（避免 base64 载荷参与估算）
+	parts := content.Parts()
+	total := 0
+	for _, part := range parts {
+		switch {
+		case token.IsImagePart(part):
+			total += len(sanitize.ImageDataURLPlaceholder) / 3
+		case part.Type == "text" || part.Type == "":
+			total += EstimateContentTokens(part.Text)
+		default:
+			total += EstimateContentTokens(part)
+		}
+	}
+	if total < 1 {
+		return 1
+	}
+	return total
 }
 
 // IsSummaryMessage 判断消息是否为指定标记的摘要消息。
