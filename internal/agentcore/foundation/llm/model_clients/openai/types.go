@@ -45,6 +45,12 @@ type ResponseMessage struct {
 	Content *string `json:"content"`
 	// ReasoningContent 推理内容（思维链，如 DeepSeek-R1）
 	ReasoningContent *string `json:"reasoning_content,omitempty"`
+	// Reasoning OpenRouter 风格推理内容字段（reasoning_content 的别名形态）
+	Reasoning *string `json:"reasoning,omitempty"`
+	// ReasoningTokenText 部分网关的推理 token 文本字段
+	ReasoningTokenText *string `json:"reasoning_token_text,omitempty"`
+	// ReasoningDetails 结构化推理明细（[{text: ...}] 形态）
+	ReasoningDetails []map[string]any `json:"reasoning_details,omitempty"`
 	// ToolCalls 工具调用列表（可选）
 	ToolCalls []ResponseToolCall `json:"tool_calls,omitempty"`
 }
@@ -137,6 +143,12 @@ type ChunkDelta struct {
 	Content *string `json:"content"`
 	// ReasoningContent 增量推理内容（可选）
 	ReasoningContent *string `json:"reasoning_content,omitempty"`
+	// Reasoning OpenRouter 风格增量推理内容（reasoning_content 的别名形态）
+	Reasoning *string `json:"reasoning,omitempty"`
+	// ReasoningTokenText 部分网关的增量推理 token 文本
+	ReasoningTokenText *string `json:"reasoning_token_text,omitempty"`
+	// ReasoningDetails 结构化增量推理明细（[{text: ...}] 形态）
+	ReasoningDetails []map[string]any `json:"reasoning_details,omitempty"`
 	// ToolCalls 增量工具调用列表（可选）
 	ToolCalls []ChunkToolCall `json:"tool_calls,omitempty"`
 	// TokenIDs vLLM 扩展：增量 token ID 列表

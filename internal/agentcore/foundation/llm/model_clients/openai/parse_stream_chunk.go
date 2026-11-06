@@ -1,6 +1,9 @@
 package openai
 
 import (
+	"encoding/json"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -65,11 +68,10 @@ func ParseStreamChunk(
 		content = *delta.Content
 	}
 
-	// 提取 reasoning_content
-	var reasoningContent string
-	if delta != nil && delta.ReasoningContent != nil {
-		reasoningContent = *delta.ReasoningContent
-	}
+	// 提取推理内容（四级回退：reasoning_details[0].text → reasoning_content
+	// → reasoning（OpenRouter）→ reasoning_token_text）
+	// Python: openai_model_client.py:2751-2763 _extract_reasoning_content
+	reasoningContent := extractReasoningFromDelta(delta)
 
 	// 解析 tool_calls delta
 	var toolCalls []*llmschema.ToolCall
@@ -128,4 +130,20 @@ func ParseStreamChunk(
 	}
 
 	return llmschema.NewAssistantMessageChunk(content, opts...)
+}
+
+// extractReasoningFromDelta 将 delta 转 map 后走统一四级回退抽取。
+func extractReasoningFromDelta(delta *ChunkDelta) string {
+	if delta == nil {
+		return ""
+	}
+	data, err := json.Marshal(delta)
+	if err != nil {
+		return ""
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return ""
+	}
+	return model_clients.ExtractReasoningContent(fields)
 }

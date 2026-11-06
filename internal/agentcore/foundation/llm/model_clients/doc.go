@@ -46,6 +46,7 @@
 //	├── messages_param.go   # MessagesParam 输入侧三态消息参数
 //	├── invoke_params.go    # InvokeParams/StreamParams/Generate*Params + Functional Options
 //	├── usage_extract.go    # provider usage 抽取四函数 + BuildUsageMetadata 统一入口（C-B）
+//	├── reasoning_extract.go # 推理内容四级回退抽取（C-C）
 //	└── transport_pool.go   # 共享 Transport 池（按安全形态分桶，C-A）
 //
 // 对应 Python 代码：

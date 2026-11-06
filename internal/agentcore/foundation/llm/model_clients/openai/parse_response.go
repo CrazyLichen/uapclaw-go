@@ -67,11 +67,9 @@ func ParseResponse(
 		}
 	}
 
-	// 提取 reasoning_content
-	reasoningContent := ""
-	if message != nil && message.ReasoningContent != nil {
-		reasoningContent = *message.ReasoningContent
-	}
+	// 提取推理内容（四级回退，见 ExtractReasoningContent）
+	// Python: openai_model_client.py:2751-2763（_parse_response 内 L2804 调用）
+	reasoningContent := extractReasoningFromMessage(message)
 
 	// 构建 UsageMetadata
 	var usageMetadata *llmschema.UsageMetadata
@@ -228,4 +226,20 @@ func normalizeLogprobs(logprobs any) any {
 		return nil
 	}
 	return result
+}
+
+// extractReasoningFromMessage 将响应消息转 map 后走统一四级回退抽取。
+func extractReasoningFromMessage(message *ResponseMessage) string {
+	if message == nil {
+		return ""
+	}
+	data, err := json.Marshal(message)
+	if err != nil {
+		return ""
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return ""
+	}
+	return model_clients.ExtractReasoningContent(fields)
 }

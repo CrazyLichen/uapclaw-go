@@ -275,3 +275,33 @@ func TestParseStreamChunk_NilDelta(t *testing.T) {
 		t.Errorf("FinishReason = %q, want %q", result.FinishReason, "stop")
 	}
 }
+
+// TestParseStreamChunk_Reasoning四种字段形态 四级回退在各字段形态下生效。
+//
+// Python: openai_model_client.py:2751-2763（_parse_stream_chunk 内 L2979 调用）
+func TestParseStreamChunk_Reasoning四种字段形态(t *testing.T) {
+	mk := func(delta *ChunkDelta) *ChatCompletionChunkResponse {
+		return &ChatCompletionChunkResponse{Choices: []ChunkChoice{{Delta: delta}}}
+	}
+	cfg := llmschema.NewModelRequestConfig(llmschema.WithModelName("m"))
+
+	// reasoning_content
+	if got := ParseStreamChunk(mk(&ChunkDelta{ReasoningContent: ptrOf("a")}), cfg); got.ReasoningContent != "a" {
+		t.Errorf("reasoning_content: %q", got.ReasoningContent)
+	}
+	// reasoning（OpenRouter）
+	if got := ParseStreamChunk(mk(&ChunkDelta{Reasoning: ptrOf("b")}), cfg); got.ReasoningContent != "b" {
+		t.Errorf("reasoning: %q", got.ReasoningContent)
+	}
+	// reasoning_token_text
+	if got := ParseStreamChunk(mk(&ChunkDelta{ReasoningTokenText: ptrOf("c")}), cfg); got.ReasoningContent != "c" {
+		t.Errorf("token_text: %q", got.ReasoningContent)
+	}
+	// reasoning_details[0].text
+	if got := ParseStreamChunk(mk(&ChunkDelta{
+		ReasoningDetails: []map[string]any{{"text": "d"}}}), cfg); got.ReasoningContent != "d" {
+		t.Errorf("details: %q", got.ReasoningContent)
+	}
+}
+
+func ptrOf(v string) *string { return &v }
