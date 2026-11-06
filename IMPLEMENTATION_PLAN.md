@@ -1156,7 +1156,29 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | 24.13 | ✅ | mode 缺省语义对齐（0.2.5 + 规则 9） | 缺省/兜底 mode 一律不指向 plan（`getChannelDefaultState`/`channelModeFromStr`/`web._parse_mode`/ACP `msg.Mode`/网关回填）；`ChannelMode` 改字符串枚举 18 成员、`ParseChannelMode`→`channelModeFromStr`（补 debug/warn 日志）；`schema.ParseMode`→`ModeFromRaw(any, Mode)` + 9 个 legacy 成员 + `ToRuntimeMode` 折叠表；按 9.3 拆出 `handleModeSwitch`、`/switch` 内联回 `handleChannelControl`；`/mode` 白名单 25 项；未知 `team.*` chat.send 守卫（`UNKNOWN_TEAM_MODE`）；D1 渠道会话分配（`_allocate_channel_session`/`_remember_alloc_state_key`/`_ensure_inbound_session` + `_apply_channel_state` 两分支）；D2 notice 签名归位 + `Message.AppID/BotID`；✅ 2026-11-05 回填 `_resolve_external_channel_session`（a2a 协议会话→本地会话别名，`message_handler/channel_state.go`）；⤵️ 「非流式 team 拒绝」（`feishu_connect.py:3003-3013` 拦截 `/mode team` 与 `/join`，回卡片提示）属**飞书通道**内部逻辑，本仓无 `im_platforms/feishu`，随 26.1 IM 平台移植，不在 24.13。设计：docs/superpowers/specs/2026-11-04-mode-default-alignment-design.md | `internal/swarm/schema/mode.go` · `internal/swarm/gateway/message_handler/{channel_state,slash_cmd,forward_loop}.go` · `internal/swarm/gateway/{gateway_server,acp_bridge}.go` · `internal/swarm/gateway/normalize.go` ← `jiuwenswarm/gateway/message_handler/message_handler.py` · `jiuwenswarm/common/schema/message.py` · `jiuwenswarm/gateway/app_gateway.py` · `jiuwenswarm/gateway/channel_manager/{web,protocol/acp}/*.py` |
 
+| 24.14 | ☐ | 上下文用量分析子系统（B-06 + B-10） | `context_engine/usage/` 整体迁移：`models`（`context-usage.v1` 快照 + category/part/KV cache 模型）、`provider_usage`、`analyzer`（parts 拆分 / provider 权威总量 / 差额按比例归因 / `pre_call`·`post_call`·`post_compact`）、`session_aggregator`；消息级 `usage_metadata` 基线 + 五处失效点 + 纯 append 前缀保留；`stream_event_emit` 自拼的 `{rate,context_max,tokens_used}` 载荷改发完整快照（前端 `contextUsageModel.ts:36-80` 已按 v1 校验，现载荷被判非法丢弃 → 用量指示器失效）。设计：`docs/superpowers/specs/2026-11-06-context-engine-b-group-alignment-design.md` §9 | `internal/agentcore/context_engine/usage/` ← `openjiuwen/core/context_engine/usage/`（5 文件 / 1,193 行） |
+| 24.15 | ☐ | forked 压缩栈迁移（B-11 + B-15） | 上游产品路径使用的 `processor/forked/` 整体迁移（41 文件 / 9,173 行：forked base、dialogue/current_round/round_level/session_memory 压缩器、prompts、recall{archive,retriever}、reinjection、offloader/rule_compression、support）+ `harness/tools/compression_recall.py` 工具；收口 B-11（按路径读过的源文件排除规则压缩）与 B-15（压缩召回 query 从结构化 user content 抽取文本），并删除 base 压缩器（回收 24-A 的 D-1 偏差） | `internal/agentcore/context_engine/processor/forked/` · `internal/agentcore/harness/tools/compression_recall/` ← `openjiuwen/core/context_engine/processor/forked/` · `openjiuwen/harness/tools/compression_recall.py` |
+| 24.16 | ☐ | browser 子代理上下文栈（B-01） | `BrowserRuntimeRail` + `BrowserStateContextProcessor` + `BrowserWorkingContextProcessor` + `BrowserOffloadRecallTool` 与 runtime projection 装配；随后接入 `ToolResultWindowProcessor`（`tool_names=browser_probe_interactives/browser_probe_cards/browser_snapshot/browser_find/browser_evaluate`，`keep_last_k=2`、`trim_size=1000`）。上游该处理器无配置键、只由 browser agent 装配，故须与浏览器上下文栈同批落地（避免死代码） | `internal/agentcore/harness/tools/browser_move/` · `internal/agentcore/harness/subagents/browser_agent.go` ← `openjiuwen/harness/subagents/browser_agent.py` · `openjiuwen/harness/tools/browser_move/` |
+
 **验证点**：外部记忆服务可用/不可用两种形态下对话均可正常进行，且记忆可检索、可注入、可审计。
+
+### 24-A 上下文引擎 B 组缺陷修复批次（2026-11-06 制定，按规则 8/9 执行）
+
+> 上表是**功能维度**清单；本节是 `docs/sync/defect-plan-2026-11-04.md` §3.B 的**处置维度**批次划分，两者交叉引用。
+> 核验结论：B-08 已对齐、B-17 已落地；B-01/B-11/B-15 需先补上游子系统（转 24.16 / 24.15）；其余 8 组本轮修复。
+> 完整设计（逐项方案、Python↔Go 映射、偏差登记 D-1~D-4、测试策略）见 `docs/superpowers/specs/2026-11-06-context-engine-b-group-alignment-design.md`；
+> 任务级实施计划（32 个 task，逐 task 的失败用例 → 实现 → 验证 → 提交）见 `docs/superpowers/plans/2026-11-06-context-engine-b-group-fixes.md`。
+
+| 批次 | 状态 | 覆盖缺陷 | 内容摘要 |
+|------|------|---------|---------|
+| C1 | ☐ | B-03、B-04 | 新增 `saveContextsDetached`（`context.WithoutCancel`，等价 `asyncio.shield`）供 `handleContextAbort` 与 `finally` 共用；取消后清洗结果仍能写库，不再被取消态 ctx 吞掉 |
+| C2 | ☐ | B-02、B-14 | 删 `max_input_tokens`/`max_output_tokens`、`compression_trigger_ratio`/`compression_target_ratio`、`applyCompressionRatios`/`shrinkThreshold`；新增 `ModelRequestConfig.context_window`（厂商请求侧排除）+ `ModelContextWindowTokensOverride` + OpenRouter 窗口表（默认关、1h TTL）+ `UpdateModelContext` 热切换；内置窗口表按上游重写；dialogue/current_round/round_level 改 `trigger_context_ratio` + `min_target_context_ratio`（full_compact 保持绝对值）；新增 `processor/budget_guard.go` 并接入 round-level 三处预算与卸载占位预览截断 |
+| C3 | ☐ | B-12、B-05 | 6 处 token 降级 `/4`→`/3`；新增 `content_sanitize.go` + 图像按尺寸计费（PNG/GIF/JPEG/WebP 头嗅探 + 显式尺寸 + `detail=low` + env 覆盖 + 1445 兜底）；`ContentPart` 增 `Width/Height/Dimensions`；`read_file` 工具级预算改用尺寸公式并标注缩放后真实尺寸 |
+| C4 | ☐ | B-07、B-09 | 引擎层 `IsContextOverflowError`（9 短语 + 异常字段/因果链扫描）+ `RecoverFromModelContextOverflow`（压缩一次、流式无输出才允许）；ReAct / DeepAgent 接入；卸载器删私有关键词表改复用引擎判定 |
+| C5 | ☐ | B-13、B-16 | 摘要卸载删 4 个兼容字段 + `Validate` 变 no-op + assistant/tool_calls 守卫 + config.yaml 4 键删除；压缩状态新增 `modified_messages`（id 比对 + 新卸载句柄）并透传到流载荷（前端轨迹面板 `compaction.ts:100` 已在读） |
+| C6 | ☐ | B-06、B-10 | 见 24.14（用量子系统整体迁移 + `context.usage` 载荷切 `context-usage.v1` 快照），依赖 C2 的窗口来源与预算口径先稳定 |
+
+**执行顺序**：C1 → C2 → C3 → C4 → C5 → C6；每批单独提交、单独 CI 四 job 全绿。
 
 ---
 

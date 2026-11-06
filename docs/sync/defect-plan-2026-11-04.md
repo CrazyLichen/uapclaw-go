@@ -9,10 +9,10 @@
 
 ## 0. 摘要
 
-1. **不能逐条照搬**：2713 条修复里，259 条带 `web`/`tui`/`designer` scope，另有 606 条无 scope 提交中约半数为前端修复；这些属于 Go 未迁移的前端产物，不构成本项目缺陷。真正落在 Go 已迁移包上的，聚合后为 **14 组、181 个缺陷行**。
+1. **不能逐条照搬**：2713 条修复里，259 条带 `web`/`tui`/`designer` scope，另有 606 条无 scope 提交中约半数为前端修复；这些属于 Go 未迁移的前端产物，不构成本项目缺陷。真正落在 Go 已迁移包上的，聚合后为 **14 组、185 个缺陷行**。
 2. **不是"上游修了 Go 就一定有"**：Go 迁移时基线早于这批修复，但部分防护在迁移时就已按当时的 Python 行为实现（例：技能包解压 zip-slip 防护 Go 已有 `filepath.Rel` 校验）。因此每个缺陷族必须先在 Go 侧核验再动手。
 3. **优先看 P0**：数据丢失 / 崩溃 / 安全边界三类共 **30 行**（见 §4 批次一），其余为行为偏差与可观测性偏差。
-4. **核验进度**：181 行中已确认 1 行（D-01）、已对齐 2 行（D-07、C-15）、归新功能 2 行（H-16、L-09），其余 176 行为待核验。
+4. **核验进度**：185 行中已核验 38 行（✅ 25 + ➖ 7 + ⤵️ 6），剩余 147 行为 🔍。本轮完成 **B 组 17 行**核验：✅ 存在 12 行、➖ 已对齐 1 行（B-08）、⤵️ 归新功能 3 行（B-01、B-11、B-15）、已落地 1 行（B-17）。
 5. **高价值系统性缺陷**集中在四处：① ReAct 循环终止语义（force_finish / 无进展 / 迭代上限）② 上下文压缩的取消与预算守卫 ③ AgentTeams 任务与 worktree 生命周期 ④ Gateway 会话路由与资源释放。
 
 ### 状态图例
@@ -66,9 +66,9 @@ rg -n "<Python 符号>" internal/
 | 组 | 主题 | 行数 | P0 | P1 | P2 | Go 主要落点 |
 | --- | --- | --- | --- | --- | --- | --- |
 | A | 核心 ReAct 循环与中断恢复 | 12 | 2 | 8 | 2 | `internal/agentcore/single_agent/agents` |
-| B | 上下文引擎与压缩 | 16 | 3 | 9 | 4 | `internal/agentcore/context_engine` |
+| B | 上下文引擎与压缩 | 17 | 3 | 10 | 4 | `internal/agentcore/context_engine` |
 | C | LLM 客户端与流式 | 15 | 0 | 10 | 5 | `internal/agentcore/foundation/llm` |
-| D | 工具系统 / MCP / 提示词模板 | 17 | 5 | 11 | 1 | `agentcore/sys_operation`、`foundation/tool`、`foundation/prompt` |
+| D | 工具系统 / MCP / 提示词模板 | 18 | 5 | 11 | 2 | `agentcore/sys_operation`、`foundation/tool`、`foundation/prompt` |
 | E | 记忆 | 13 | 2 | 8 | 3 | `internal/agentcore/memory`、`internal/agent_teams/memory` |
 | F | 会话 / 状态 / 检查点 / VCS | 9 | 2 | 7 | 0 | `internal/agentcore/session` |
 | G | 工作流与图引擎 | 7 | 0 | 5 | 2 | `internal/agentcore/workflow`、`agentcore/graph` |
@@ -77,11 +77,12 @@ rg -n "<Python 符号>" internal/
 | J | AgentServer / Gateway / 渠道 | 21 | 3 | 14 | 4 | `internal/swarm/{server,gateway,channels}` |
 | K | 轨迹与可观测性 | 10 | 0 | 4 | 6 | `internal/evolving/trajectory`、`agent_teams/observability` |
 | L | 权限与安全 | 10 | 4 | 6 | 0 | `internal/agentcore/harness/rails/security`、`common/security` |
-| M | 工程性 / 资源 / 性能 | 6 | 1 | 3 | 2 | 跨包 |
+| M | 工程性 / 资源 / 性能 | 8 | 1 | 3 | 4 | 跨包 |
 | N | 定时任务与心跳 | 9 | 2 | 7 | 0 | `internal/swarm/gateway/{cron,heartbeat}` |
-| **合计** | | **181** | **30** | **118** | **33** | |
+| **合计** | | **185** | **30** | **119** | **36** | |
 
 > 本表数字由脚本按行统计（`^\\| ([A-N])-\\d+ \\|`）生成，修改明细后需重新核对。
+> 2026-11-06 重新核对：原表 B(16)/D(17)/M(6)/合计(181) 与明细行数不符，已按明细订正为 B(17)/D(18)/M(8)/合计(185)，P1 118→119、P2 33→36。
 
 ---
 
@@ -106,25 +107,36 @@ rg -n "<Python 符号>" internal/
 
 ### B. 上下文引擎与压缩
 
-| 编号 | 缺陷（Go 语义） | 上游证据 | Go 落点 | 级别 | 状态 |
+| 编号 | 缺陷（Go 语义） | 上游证据 | Go 落点 | 级别 | 状态（2026-11-06 核验） |
 | --- | --- | --- | --- | --- | --- |
-| B-01 | 工具结果窗口化（`ToolResultWindowProcessor`）未接入处理器预设，长工具结果直接进上下文 | `ecb7e5ce` | `context_engine/processor/` | P0 | 🔍 |
-| B-02 | 压缩预算缺 guard：预算 ≤0 / 极小时仍执行压缩导致死循环或空压缩 | `d0adebac` | 压缩器预算校验 | P1 | 🔍 |
-| B-03 | **取消时未保存消息历史**：用户中断后本轮消息丢失 | `1b28ec45` | 取消路径的状态提交 | P0 | 🔍 |
-| B-04 | 取消时应保存"清洗后"的上下文（而非原始），否则恢复后重复压缩 | `4ba66bf1` | 同上 | P0 | 🔍 |
-| B-05 | base64 图片载荷被当作文本计入 token，导致过早压缩 | `660e9c57` | token 计数 | P1 | 🔍 |
-| B-06 | usage token 基线在 append-only 消息增长后失效 / 未跨轮保留 | `cad85ec`、`c6659f10` | usage 统计 | P2 | 🔍 |
-| B-07 | 流式过程中不允许上下文恢复（应允许），否则溢出后无法自救 | `1254a180` | 溢出恢复 | P1 | 🔍 |
-| B-08 | 连续调用同一工具会触发压缩并抛异常 | `31c5733b` | 压缩触发条件 | P1 | 🔍 |
-| B-09 | 百炼 `Range of input length` 错误应识别为上下文溢出并触发压缩 | `384d1466` | 溢出错误分类 | P1 | 🔍 |
-| B-10 | 手动 compact 后 usage 上报不准确（应发布压缩后的用量） | `be7dadd2` | usage 发布 | P2 | 🔍 |
-| B-11 | 被按路径读取过的源文件不应参与"规则压缩"（会破坏后续 edit） | `82748f69` | 规则压缩排除集 | P1 | 🔍 |
-| B-12 | token 估算降级按「3 字符 ≈ 1 token」而非按字节 | `7215321b` | token 估算 | P2 | 🔍 |
-| B-13 | `message_summary_offload` 参数冗余清理；**带 tool_calls 的 assistant 消息不得卸载** | `85c1e6f5` | offloader | P1 | 🔍 |
-| B-14 | 模型上下文窗口取最大值算法错误 / 需可显式配置（含 `context_window` 配置项） | `df67c97f`、`bb799210` | `common/config`、`llm/schema` | P1 | 🔍 |
-| B-15 | 压缩召回 query 需从**结构化 user content** 中抽取文本（多模态消息取不到） | `bbf5a80c` | 压缩召回 | P1 | 🔍 |
-| B-16 | 压缩状态需上报 modified messages 与 offload handle（前端/轨迹消费） | `feat(context)` 系列 | 压缩状态结构 | P2 | 🔍 |
+| B-01 | 工具结果窗口化（`ToolResultWindowProcessor`）未接入处理器预设，长工具结果直接进上下文 | `ecb7e5ce` | `context_engine/processor/` | P0 | ⤵️ 24.16（上游仅在 browser 子代理装配，Go 缺浏览器上下文栈） |
+| B-02 | 压缩预算缺 guard：预算 ≤0 / 极小时仍执行压缩导致死循环或空压缩 | `d0adebac` | 压缩器预算校验 | P1 | ✅ 存在（绝对阈值 + `>`，无 `budget_guard`）→ 24-A C2 |
+| B-03 | **取消时未保存消息历史**：用户中断后本轮消息丢失 | `1b28ec45` | 取消路径的状态提交 | P0 | ✅ 主体已对齐，残留：落盘用已取消 ctx → 24-A C1 |
+| B-04 | 取消时应保存"清洗后"的上下文（而非原始），否则恢复后重复压缩 | `4ba66bf1` | 同上 | P0 | ✅ 同 B-03（同一函数）→ 24-A C1 |
+| B-05 | base64 图片载荷被当作文本计入 token，导致过早压缩 | `660e9c57` | token 计数 | P1 | ✅ 存在（方向相反：图像计 0 token，且无 `content_sanitize`）→ 24-A C3 |
+| B-06 | usage token 基线在 append-only 消息增长后失效 / 未跨轮保留 | `cad85ec`、`c6659f10` | usage 统计 | P2 | ✅ 整体缺失（无 `context_engine/usage/`）→ 24-A C6 |
+| B-07 | 流式过程中不允许上下文恢复（应允许），否则溢出后无法自救 | `1254a180` | 溢出恢复 | P1 | ✅ 存在（无引擎级恢复入口，溢出即整轮失败）→ 24-A C4 |
+| B-08 | 连续调用同一工具会触发压缩并抛异常 | `31c5733b` | 压缩触发条件 | P1 | ➖ 已对齐（上游 HEAD 为「工具名+入参」单规则，Go 同构） |
+| B-09 | 百炼 `Range of input length` 错误应识别为上下文溢出并触发压缩 | `384d1466` | 溢出错误分类 | P1 | ✅ 存在（缺 `context limit`/`range of input length`）→ 并入 24-A C4 |
+| B-10 | 手动 compact 后 usage 上报不准确（应发布压缩后的用量） | `be7dadd2` | usage 发布 | P2 | ✅ 存在（无 `ContextUsageAnalyzer`/`post_compact`）→ 24-A C6 |
+| B-11 | 被按路径读取过的源文件不应参与"规则压缩"（会破坏后续 edit） | `82748f69` | 规则压缩排除集 | P1 | ⤵️ 24.15（`forked/offloader/rule_compression/` 未迁移） |
+| B-12 | token 估算降级按「3 字符 ≈ 1 token」而非按字节 | `7215321b` | token 估算 | P2 | ✅ 存在（6 处 `/4`）→ 24-A C3 |
+| B-13 | `message_summary_offload` 参数冗余清理；**带 tool_calls 的 assistant 消息不得卸载** | `85c1e6f5` | offloader | P1 | ✅ 存在（4 个兼容字段 + `Validate` 误报 + 缺守卫）→ 24-A C5 |
+| B-14 | 模型上下文窗口取最大值算法错误 / 需可显式配置（含 `context_window` 配置项） | `df67c97f`、`bb799210` | `common/config`、`llm/schema` | P1 | ✅ 部分存在（算法已同构，缺 override/热切换，内置表陈旧）→ 24-A C2 |
+| B-15 | 压缩召回 query 需从**结构化 user content** 中抽取文本（多模态消息取不到） | `bbf5a80c` | 压缩召回 | P1 | ⤵️ 24.15（forked recall 与 `compression_recall` 工具未迁移） |
+| B-16 | 压缩状态需上报 modified messages 与 offload handle（前端/轨迹消费） | `feat(context)` 系列 | 压缩状态结构 | P2 | ✅ 存在（缺 `modified_messages`；前端 `compaction.ts:100` 已在读）→ 24-A C5 |
 | B-17 | 动态提示词仍靠 system prompt 改写，无附件投递层（上游已迁移为历史消息 + 哈希增量） | `958fd614`、`c6852696`、`ee92d08b` | `harness/prompts/attachment_*.go`（S1 已落地） | P1 | ✅ |
+
+#### B 组处置决定（2026-11-06）
+
+核验方法：本地 `agent-core` 树已更新至 `5a35c39f`，逐条比对 `git show <sha>` 原始 diff 与 Go 生产代码；缺席子系统（浏览器栈 / forked 栈）用目录级核对确认。
+
+- **本轮修复 8 组**（批次 C1~C6，见 `IMPLEMENTATION_PLAN.md` 领域二十四「24-A」）：
+  C1 = B-03 + B-04；C2 = B-02 + B-14；C3 = B-12 + B-05；C4 = B-07 + B-09；C5 = B-13 + B-16；C6 = B-06 + B-10。
+  设计：`docs/superpowers/specs/2026-11-06-context-engine-b-group-alignment-design.md`。
+- **延期 3 条**（需先补上游子系统，否则做出来是死代码）：B-01 → 24.16（browser 子代理上下文栈）；B-11、B-15 → 24.15（forked 压缩栈迁移，41 文件 / 9,173 行）。
+- **不改 1 条**：B-08 已对齐——上游 HEAD `model_anomaly_detection_rail.py:816` 明确「Match on tool name + args only」，与 Go `findToolLoopCompactRange` 一致。
+- **关键结构结论**：上游 rail 生产路径使用 `processor/forked/` 压缩栈（全比例阈值），Go 移植的是 `processor/compressor/` base 版（绝对阈值）+ rail 层自研 `applyCompressionRatios` 收缩。C2 按「上游产品契约」把 base 版比例化并删除该自研分支；forked 栈迁移（24.15）完成后删除 base 版（偏差 D-1 回收条件）。
 
 ### C. LLM 客户端与流式
 
