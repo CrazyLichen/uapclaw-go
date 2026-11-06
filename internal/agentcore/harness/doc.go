@@ -9,7 +9,7 @@
 //
 //	harness/
 //	├── doc.go                       # 包文档
-//	├── deep_agent.go                # DeepAgent 结构体及全部方法实现
+//	├── deep_agent.go                # DeepAgent 结构体及全部方法实现（含会话级交互监督器：相位机/单输出租约/双队列调度）
 //	├── factory.go                   # CreateDeepAgent 工厂函数及辅助函数
 //	├── research_agent_factory.go    # CreateResearchAgent 工厂函数（9.25）
 //	├── browser_agent_factory.go     # CreateBrowserAgent 工厂函数（9.26）

@@ -14,5 +14,6 @@
 //	├── force_finish_test.go # ForceFinish 机制集成测试
 //	├── outer_loop_test.go   # 外层循环（TaskLoop）集成测试
 //	├── steer_test.go        # Steering 内循环集成测试
+//	├── interaction_supervisor_test.go # 交互监督器（租约/转发/断线/待办）集成测试
 //	└── rails/               # Rail 子系统测试
 package harness

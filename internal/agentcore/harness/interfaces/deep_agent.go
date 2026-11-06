@@ -102,7 +102,14 @@ type DeepAgentInterface interface {
 	// 在 TaskLoop 模式下，executor 调用此函数优先于 reactAgent.Invoke。
 	// Python: 测试中通过 agent.set_react_agent(fake_react) 替换内层 Agent。
 	InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
-	// ── 交互监督器（9.87）──
+}
+
+// InteractionSupervisorInterface 会话级交互监督器能力（9.87）。
+//
+// 刻意独立于 DeepAgentInterface：交互方法只有服务面（10.3.27）使用，
+// 单独成接口可避免所有既有 DeepAgentInterface 测试替身被迫补 10 个方法。
+// Python: DeepAgent 的交互方法集（deep_agent.py L3728-4567）
+type InteractionSupervisorInterface interface {
 	// Start 绑定会话并启动会话级交互循环
 	// Python: DeepAgent.start
 	Start(ctx context.Context, sess *session.Session) error
