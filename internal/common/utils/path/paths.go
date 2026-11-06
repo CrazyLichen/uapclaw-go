@@ -53,18 +53,35 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// userHomeOnce 保证 UserHomeDir 只解析一次。
-	userHomeOnce sync.Once
-	userHomeVal  string
+	// cacheMu 保护下面三个缓存槽的「指针」与「值」。
+	//
+	// 为什么需要：SetUserHome/ResetCache 会在测试 cleanup 里重置缓存，
+	// 而测试进程仍可能有后台 goroutine 在读路径（曾触发 DATA RACE）。
+	//
+	// 设计要点：Once 用指针 + 原子置换，绝不在持有 cacheMu 时调 one.Do
+	// （重置会换掉指针，而 one.Do 的执行体会再取 cacheMu 写值 —— 自锁）。
+	cacheMu sync.Mutex
 
-	// workspaceOnce 保证 WorkspaceDir 只解析一次。
-	workspaceOnce sync.Once
-	workspaceVal  string
-
-	// resolveOnce 保证 resolvePaths 只执行一次。
-	resolveOnce   sync.Once
-	resolvedPaths *ResolvedPaths
+	// userHomeSlot 主目录缓存槽（指针由 cacheMu 保护：置空/换取都是写操作，
+	// 用 atomic.Pointer 会让读取看到瞬时 nil）
+	userHomeSlot = &pathCacheSlot{}
+	// workspaceSlot 数据根目录缓存槽（指针由 cacheMu 保护，理由同 userHomeSlot）
+	workspaceSlot = &pathCacheSlot{}
+	// resolvedSlot 解析结果缓存槽（指针由 cacheMu 保护，理由同 userHomeSlot）
+	resolvedSlot = &pathCacheSlot{}
 )
+
+// pathCacheSlot 一个可整体置换的缓存槽：Once 保证只算一次，value 存结果。
+//
+// 注意：once 必须是**值**而非指针 —— 若为指针，重置会把 resolveSlot 换成
+// 新槽，而仍在旧 once.Do 里的调用方会继续持有旧指针，
+// 导致「已判定的新 once + 旧槽的 value」混杂。
+type pathCacheSlot struct {
+	// once 保证只解析一次（重置时整体换新）
+	once sync.Once
+	// value 缓存结果
+	value any
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -75,20 +92,21 @@ var (
 //  2. UAPCLAW_HOME 环境变量
 //  3. 标准库 os.UserHomeDir()
 func UserHomeDir() string {
-	userHomeOnce.Do(func() {
+	slot := loadSlot(&userHomeSlot)
+	slot.once.Do(func() {
+		value := ""
 		if env := os.Getenv(EnvHome); env != "" {
-			userHomeVal = env
-			return
-		}
-		home, err := os.UserHomeDir()
-		if err != nil {
+			value = env
+		} else if home, err := os.UserHomeDir(); err == nil {
+			value = home
+		} else {
 			// 降级到当前目录
-			userHomeVal = "."
-			return
+			value = "."
 		}
-		userHomeVal = home
+		slot.setValue(value)
 	})
-	return userHomeVal
+	value, _ := slot.value.(string)
+	return value
 }
 
 // ExpandHome 将路径中的 ~ 展开为用户主目录。
@@ -163,27 +181,17 @@ func IsPathWithin(root, p string) bool {
 // 调用后 WorkspaceDir()、ConfigDir()、AgentWorkspaceDir() 都会重新解析。
 // Python: set_user_home(path)
 func SetUserHome(p string) {
-	userHomeVal = p
-	// 重置所有缓存
-	userHomeOnce = sync.Once{}
-	workspaceOnce = sync.Once{}
-	resolveOnce = sync.Once{}
-	resolvedPaths = nil
+	resetPathCache(p)
 }
 
 // ResetCache 重置所有路径缓存（供测试使用）。
 //
-// 注意：此函数不是并发安全的。调用前必须确保没有后台 goroutine
-// 在并发读取 path 包的全局缓存变量（如 WorkspaceDir() 等）。
-// 在测试 cleanup 中，应先 FlushMetadataQueue/FlushHistoryQueue
-// 等待后台 goroutine 完成后再调用 ResetCache。
+// 并发安全：写入与本包的读取共用 cacheMu，因此测试 cleanup 里调用它
+// 不会再与后台 goroutine 的 WorkspaceDir()/UserHomeDir() 形成数据竞争。
+// 语义上仍建议先 FlushMetadataQueue/FlushHistoryQueue，让后台任务跑完，
+// 否则重置后它可能读到新目录并继续写盘（这是逻辑问题，不是竞争）。
 func ResetCache() {
-	userHomeOnce = sync.Once{}
-	userHomeVal = ""
-	workspaceOnce = sync.Once{}
-	workspaceVal = ""
-	resolveOnce = sync.Once{}
-	resolvedPaths = nil
+	resetPathCache("")
 }
 
 // WorkspaceDir 获取数据根目录（~/.uapclaw/）。
@@ -196,14 +204,16 @@ func ResetCache() {
 //  2. UAPCLAW_DATA_DIR 环境变量（用于多实例隔离）
 //  3. UserHomeDir() 拼接 ".uapclaw" 子目录
 func WorkspaceDir() string {
-	workspaceOnce.Do(func() {
-		if env := os.Getenv(EnvDataDir); env != "" {
-			workspaceVal = env
-			return
+	slot := loadSlot(&workspaceSlot)
+	slot.once.Do(func() {
+		value := os.Getenv(EnvDataDir)
+		if value == "" {
+			value = filepath.Join(UserHomeDir(), DefaultDir)
 		}
-		workspaceVal = filepath.Join(UserHomeDir(), DefaultDir)
+		slot.setValue(value)
 	})
-	return workspaceVal
+	value, _ := slot.value.(string)
+	return value
 }
 
 // ConfigDir 获取配置目录。
@@ -387,8 +397,53 @@ func AgentTeamsHomeDir() string {
 //   - 不存在 → 未初始化模式，回退到 resources 目录
 //
 // 纯计算，不含日志调用。workspace 在调用后根据 Fallback 字段补日志。
+// resetPathCache 原子地重置三个缓存槽；userHome 非空时同时设置主目录。
+//
+// 一起清空 Once 与值：只清值不清 Once 会让下一次调用复用旧值。
+func resetPathCache(userHome string) {
+	homeSlot := &pathCacheSlot{}
+	if userHome != "" {
+		// 设置主目录等价于"已算好"：直接填值并标记 once 已执行
+		homeSlot.value = userHome
+		homeSlot.once.Do(func() {})
+	}
+	cacheMu.Lock()
+	userHomeSlot = homeSlot
+	workspaceSlot = &pathCacheSlot{}
+	resolvedSlot = &pathCacheSlot{}
+	cacheMu.Unlock()
+}
+
+// loadSlot 在 cacheMu 保护下取当前缓存槽（避免读到半更新指针）。
+func loadSlot(slot **pathCacheSlot) *pathCacheSlot {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	return *slot
+}
+
+// setValue 在 cacheMu 保护下写入缓存结果。
+//
+// 读取侧不加锁（一次值读取，配合 once 的执行语义已足以保证 happens-before），
+// 因此这里也绝不能在持锁时调用 once.Do —— 否则与 resetPathCache 构成自锁。
+func (s *pathCacheSlot) setValue(value any) {
+	cacheMu.Lock()
+	s.value = value
+	cacheMu.Unlock()
+}
+
 func getResolvedPaths() *ResolvedPaths {
-	resolveOnce.Do(func() {
+	slot := loadSlot(&resolvedSlot)
+	slot.once.Do(func() {
+		slot.setValue(resolvePathsOnce())
+	})
+	paths, _ := slot.value.(*ResolvedPaths)
+	return paths
+}
+
+// resolvePathsOnce 真正计算一次解析结果（不碰缓存槽）。
+func resolvePathsOnce() *ResolvedPaths {
+	resolvedPaths := &ResolvedPaths{}
+	{
 		workspaceDir := WorkspaceDir()
 		userConfigDir := filepath.Join(workspaceDir, "config")
 		userWorkspaceDir := filepath.Join(workspaceDir, "agent", "workspace")
@@ -410,7 +465,7 @@ func getResolvedPaths() *ResolvedPaths {
 					WorkspaceDir: userWorkspaceDir,
 					Fallback:     true,
 				}
-				return
+				return resolvedPaths
 			}
 			resolvedPaths = &ResolvedPaths{
 				ConfigDir:    resDir,
@@ -418,7 +473,7 @@ func getResolvedPaths() *ResolvedPaths {
 				Fallback:     true,
 			}
 		}
-	})
+	}
 	return resolvedPaths
 }
 

@@ -317,13 +317,17 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "context.usage":
-		// Python: L5137-5145: 透传 rate/context_max/tokens_used
-		return map[string]any{
-			"event_type":  "context.usage",
-			"rate":        ExtractFloatFromPayload(payload, "rate"),
-			"context_max": ExtractIntFromPayload(payload, "context_max"),
-			"tokens_used": ExtractIntFromPayload(payload, "tokens_used"),
+		// 载荷是 context-usage.v1 快照（usage.BuildSnapshot），必须整份展开：
+		// 前端 parseContextUsageSnapshot 会校验 schema_version/phase/request_id/
+		// product_session_id/context_window/parts，缺一项整条丢弃。
+		// 旧实现只透传 {rate, context_max, tokens_used}，快照切换后三个键恒为 0，
+		// 上下文指示器因此彻底失效（2026-11-06 修）。
+		result := map[string]any{"event_type": "context.usage"}
+		for k, v := range payload {
+			result[k] = SerializeValue(v)
 		}
+		result["event_type"] = "context.usage" // 确保 event_type 正确
+		return result
 
 	case "context.compression_state":
 		// M-01: 对齐 Python — payload 所有键展开到顶层（不再只提取 5 个固定字段）

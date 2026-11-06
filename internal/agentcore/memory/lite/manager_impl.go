@@ -63,8 +63,9 @@ type memoryIndexManager struct {
 	providerKey string
 
 	// 状态
-	mu              sync.Mutex
-	dirty           bool
+	mu sync.Mutex
+	// dirty 是否需要重新同步（文件监听协程写、搜索路径读，用原子避免数据竞争）
+	dirty           atomic.Bool
 	closed          bool
 	ftsAvailable    bool
 	ftsError        string
@@ -203,11 +204,11 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 
 	logger.Debug(logComponent).Str("reason", reason).Msg("incremental sync")
 
-	if containsSource(m.settings.Sources, "memory") && m.dirty {
+	if containsSource(m.settings.Sources, "memory") && m.dirty.Load() {
 		if err := m.syncMemoryFiles(ctx); err != nil {
 			return err
 		}
-		m.dirty = false
+		m.dirty.Store(false)
 	}
 
 	if containsSource(m.settings.Sources, "sessions") {
@@ -223,7 +224,7 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 func (m *memoryIndexManager) Search(ctx context.Context, query string, opts SearchOpts) ([]SearchResult, error) {
 	// 搜索前同步
 	onSearch := m.settings.Sync.OnSearch
-	if onSearch && m.dirty {
+	if onSearch && m.dirty.Load() {
 		if err := m.Sync(ctx, "search", false); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("pre-search sync failed")
 		}
@@ -457,7 +458,7 @@ func (m *memoryIndexManager) Status() *StatusResult {
 		Files:        fileCount,
 		Chunks:       chunkCount,
 		SourceCounts: sourceCounts,
-		Dirty:        m.dirty,
+		Dirty:        m.dirty.Load(),
 		FTS: FTSStatus{
 			Enabled:   ftsEnabled,
 			Available: m.ftsAvailable,
@@ -599,7 +600,6 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 		nodeName:            params.NodeName,
 		memoryDir:           memoryDir,
 		settings:            settings,
-		dirty:               true,
 		watchDebounce:       2 * time.Second,
 		sessionsDirtyFiles:  make(map[string]struct{}),
 		sessionWarm:         make(map[string]struct{}),
@@ -609,6 +609,8 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 		sysOperation:        params.SysOperation,
 		llm:                 params.LLM,
 	}
+	// 新建实例需要首次全量同步（等价原 dirty: true）
+	mgr.dirty.Store(true)
 
 	// 用调用方 ctx 初始化：首次全量索引要读文件，沙箱根来自 ctx 的 CwdState
 	initCtx := params.Ctx
@@ -830,7 +832,7 @@ func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) erro
 		if err := m.syncMemoryFiles(ctx); err != nil {
 			return err
 		}
-		m.dirty = false
+		m.dirty.Store(false)
 	}
 	if containsSource(m.settings.Sources, "sessions") {
 		if err := m.syncSessionFiles(ctx); err != nil {
@@ -1583,7 +1585,7 @@ func (m *memoryIndexManager) watchLoop() {
 
 // scheduleWatchSync 防抖同步。对齐 Python schedule_watch_sync
 func (m *memoryIndexManager) scheduleWatchSync() {
-	m.dirty = true
+	m.dirty.Store(true)
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
 

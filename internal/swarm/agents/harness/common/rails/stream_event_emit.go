@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -180,9 +181,11 @@ func emitTodoUpdated(ctx context.Context, session sessioninterfaces.SessionFacad
 	}
 }
 
-// EmitContextUsage 发送 context.usage 事件，对齐 Python: _emit_context_usage
+// EmitContextUsage 发送 context.usage 事件（context-usage.v1 快照）。
 //
-// 报告当前上下文窗口使用率（context_max、tokens_used、rate）。
+// 载荷必须是完整快照：前端 parseContextUsageSnapshot 校验不过会整条丢弃，
+// 旧扁平 {rate, context_max, tokens_used} 板会让上下文指示器彻底失效。
+// Python: react_agent._emit_context_usage → OutputSchema(payload=snapshot.model_dump())
 func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackContext) {
 	session := cbCtx.Session()
 	if session == nil {
@@ -253,10 +256,17 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 		Usage:              usage,
 	})
 
+	// Payload 用 map 形态：ParseStreamChunk 只认 map[string]any（结构体会被断言丢弃），
+	// 且前端按 v1 字段逐项校验。
+	payload, err := contextUsageSnapshotPayload(snapshot)
+	if err != nil {
+		logger.Debug(logComponent).Err(err).Msg("context_usage payload marshal failed")
+		return
+	}
 	if err := session.WriteStream(ctx, &stream.OutputSchema{
 		Type:    usage_snapshot.EventTypeContextUsage,
 		Index:   0,
-		Payload: snapshot,
+		Payload: payload,
 	}); err != nil {
 		logger.Debug(logComponent).Err(err).Msg("context_usage emit failed")
 	}
@@ -292,14 +302,19 @@ func FormatTodosForFrontend(todosData []hschema.TodoItem) []map[string]any {
 	return result
 }
 
-// contextUsageTokensUsed 计算 context.usage 的分子：usage_metadata.total_tokens。
+// contextUsageSnapshotPayload 把快照转成 map 形态的流载荷。
 //
-// 取 total_tokens（输入 + 输出）而非仅输入侧：本轮输出会在下一轮作为历史重新
-// 发给模型，所以「下一轮真实占用」应把输出算进去（2026-11-03 决策，取代原
-// 设计 D6 的输入侧口径，与 Python usage_metadata.total_tokens 一致）。
-func contextUsageTokensUsed(usage *llmschema.UsageMetadata) int {
-	if usage == nil {
-		return 0
+// 两步必要性：①ParseStreamChunk 对 context.usage 只做 map 断言，结构体会被
+// 兜成空载荷；②前端校验 v1 必填字段（schema_version/phase/request_id/
+// product_session_id/context_window/parts），字段名必须是 json tag。
+func contextUsageSnapshotPayload(snapshot usage_snapshot.ContextUsageSnapshot) (map[string]any, error) {
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		return nil, err
 	}
-	return usage.TotalTokens
+	payload := make(map[string]any)
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }

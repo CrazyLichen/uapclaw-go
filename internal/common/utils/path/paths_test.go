@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -372,5 +373,44 @@ func assertResolvedSamePath(t *testing.T, want, got string) {
 	}
 	if got != realWant {
 		t.Errorf("解析结果 = %q, 期望 %q", got, realWant)
+	}
+}
+
+// TestCacheReset_与并发读无竞争 重置缓存不得与路径读取形成数据竞争
+//
+// 复现场景：测试 cleanup 里 ResetCache，而测试进程仍有后台 goroutine 在读
+// WorkspaceDir/ConfigDir（2026-11-06 在 adapter 集成套件里真实触发 DATA RACE）。
+// 本用例需带 -race 才有意义。
+func TestCacheReset_与并发读无竞争(t *testing.T) {
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					_ = WorkspaceDir()
+					_ = UserHomeDir()
+					_ = ConfigDir()
+					_ = AgentSessionsDir()
+				}
+			}
+		}()
+	}
+
+	for i := 0; i < 50; i++ {
+		ResetCache()
+	}
+	close(stop)
+	wg.Wait()
+
+	// 重置后缓存必须重新生效（值可用且非空）
+	if WorkspaceDir() == "" {
+		t.Fatal("重置后 WorkspaceDir 不应为空")
 	}
 }

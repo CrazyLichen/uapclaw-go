@@ -390,23 +390,40 @@ func TestParseStreamChunk_todoUpdated_非法形态(t *testing.T) {
 
 func TestParseStreamChunk_contextUsage(t *testing.T) {
 	usage := &UsageAccumulator{}
+	// 载荷是 context-usage.v1 快照：必须整份展开，不能只挑 3 个旧键
 	output := makeOutput("context.usage", map[string]any{
-		"rate":        0.5,
-		"context_max": 128000,
-		"tokens_used": 64000,
+		"event_type":                "context.usage",
+		"schema_version":            "context-usage.v1",
+		"phase":                     "post_call",
+		"request_id":                "sess-1-123",
+		"product_session_id":        "sess-1",
+		"context_window":            map[string]any{"limit_tokens": 128000, "input_tokens": 64000},
+		"parts":                     map[string]any{"messages": map[string]any{"tokens": 64000}},
+		"session_kv_cache_hit_rate": nil,
 	})
 	result := ParseStreamChunk(output, usage, nil, nil, false)
 	if result["event_type"] != "context.usage" {
 		t.Errorf("期望 context.usage, 实际 %v", result["event_type"])
 	}
-	if result["rate"] != 0.5 {
-		t.Errorf("期望 rate=0.5, 实际 %v", result["rate"])
+	// 前端校验的三要素必须透传
+	if result["schema_version"] != "context-usage.v1" {
+		t.Errorf("期望透传 schema_version, 实际 %v", result["schema_version"])
 	}
-	if result["context_max"] != 128000 {
-		t.Errorf("期望 context_max=128000, 实际 %v", result["context_max"])
+	if result["phase"] != "post_call" {
+		t.Errorf("期望透传 phase, 实际 %v", result["phase"])
 	}
-	if result["tokens_used"] != 64000 {
-		t.Errorf("期望 tokens_used=64000, 实际 %v", result["tokens_used"])
+	if result["request_id"] != "sess-1-123" {
+		t.Errorf("期望透传 request_id, 实际 %v", result["request_id"])
+	}
+	window, ok := result["context_window"].(map[string]any)
+	if !ok {
+		t.Fatalf("期望 context_window 为对象, 实际 %T", result["context_window"])
+	}
+	if window["input_tokens"] != 64000 {
+		t.Errorf("期望 context_window.input_tokens=64000, 实际 %v", window["input_tokens"])
+	}
+	if _, ok := result["parts"].(map[string]any); !ok {
+		t.Fatalf("期望 parts 为对象, 实际 %T", result["parts"])
 	}
 }
 

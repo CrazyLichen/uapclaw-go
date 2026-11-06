@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,8 +71,11 @@ func TestEmitContextUsage_分母取ceConfig分子取总量(t *testing.T) {
 	out, ok := sess.written[0].(*stream.OutputSchema)
 	require.True(t, ok, "写入类型应为 *stream.OutputSchema，实际 %T", sess.written[0])
 	assert.Equal(t, "context.usage", out.Type)
-	snapshot, ok := out.Payload.(usage_snapshot.ContextUsageSnapshot)
-	require.True(t, ok, "载荷应为 context-usage.v1 快照，实际 %T", out.Payload)
+	// 载荷是 map 形态：结构体会被 ParseStreamChunk 的 map 断言兜成空载荷
+	payload, ok := out.Payload.(map[string]any)
+	require.True(t, ok, "载荷应为 map 形态的 v1 快照，实际 %T", out.Payload)
+	snapshot, err := contextUsageSnapshotFromPayload(payload)
+	require.NoError(t, err, "载荷应能还原成快照")
 	assert.Equal(t, usage_snapshot.EventTypeContextUsage, snapshot.EventType)
 	assert.Equal(t, usage_snapshot.SchemaVersion, snapshot.SchemaVersion)
 	assert.Equal(t, usage_snapshot.PhasePostCall, snapshot.Phase)
@@ -86,4 +90,14 @@ func TestEmitContextUsage_分母取ceConfig分子取总量(t *testing.T) {
 	assert.Len(t, snapshot.Parts, 4, "四类用量都应出现")
 	assert.Positive(t, snapshot.Parts["system_prompt"].Tokens, "系统提示词分类应有非零值")
 	assert.Positive(t, snapshot.Parts["messages"].Tokens, "消息分类应有非零值")
+}
+
+// contextUsageSnapshotFromPayload 把 map 载荷还原成快照，便于逐字段断言。
+func contextUsageSnapshotFromPayload(payload map[string]any) (usage_snapshot.ContextUsageSnapshot, error) {
+	var snapshot usage_snapshot.ContextUsageSnapshot
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return snapshot, err
+	}
+	return snapshot, json.Unmarshal(raw, &snapshot)
 }
