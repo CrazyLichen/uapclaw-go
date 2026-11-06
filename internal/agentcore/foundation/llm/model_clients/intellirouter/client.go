@@ -52,7 +52,7 @@ type IntelliRouterModelClient struct {
 //  2. 校验至少有一个 deployment
 //  3. 获取或创建路由器（缓存共享）
 //  4. 构造 BaseClientEmbed（intelli_router 不在 api_key/api_base 白名单，
-	//     凭据在 deployment 级别配置，故 ValidateConfig 不强制——见偏差 D-3）
+//     凭据在 deployment 级别配置，故 ValidateConfig 不强制——见偏差 D-3）
 //  5. 构造 OpenAI 客户端（placeholder 配置，实际调用时动态替换）
 //
 // Python: IntelliRouterModelClient.__init__(model_config, model_client_config)

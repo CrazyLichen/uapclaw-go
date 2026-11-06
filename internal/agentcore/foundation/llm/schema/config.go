@@ -159,7 +159,6 @@ var defaultAPIBaseByEndpointProfile = map[string]string{
 	"lmstudio": "http://localhost:1234/v1",
 }
 
-
 // providerTypeStrings 服务商类型名称数组，按枚举值索引。
 var providerTypeStrings = [...]string{
 	"OpenAI",
