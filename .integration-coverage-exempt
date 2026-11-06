@@ -291,3 +291,9 @@ internal/agentcore/foundation/llm/model_clients/openai/client.go#L554-L604
 # 正常装配路径（BeforeModelCall 自己写入 *anomalyState）永远不会进入；
 # 该分支由单测 TestAnomalyState_类型不符重建 覆盖（改动行单测 100%）。
 internal/agentcore/harness/rails/model_anomaly.go#L455-L460
+
+# harness/interfaces/deep_agent.go：DeepAgentInterface 的交互方法（10 个）是纯接口声明，
+# 集成测试同样无法覆盖（接口签名无语句、go tool cover 不插桩），改动行恒 0%。
+# 实现侧由 tests/integration/agentcore/harness/interaction_supervisor_test.go 覆盖；
+# 同文件的 UnimplementedDeepAgentInteraction 只被单测 fake 嵌入，集成层无调用方。
+internal/agentcore/harness/interfaces/deep_agent.go
