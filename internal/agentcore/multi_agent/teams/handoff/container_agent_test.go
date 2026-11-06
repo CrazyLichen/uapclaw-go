@@ -1312,6 +1312,9 @@ func (m *mockContextEngine) SaveContexts(_ context.Context, _ sessioninterfaces.
 	return m.saveResult, m.saveErr
 }
 
+// UpdateModelContext 热切换模型元数据（测试桩空实现）。
+func (m *mockContextEngine) UpdateModelContext(_ string, _ int) {}
+
 // 确保 mockBaseAgentNoAbility 满足 BaseAgent 接口
 var _ agentinterfaces.BaseAgent = (*mockBaseAgentNoAbility)(nil)
 

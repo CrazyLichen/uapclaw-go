@@ -107,6 +107,10 @@ type ContextEngine interface {
 	ClearContext(ctx context.Context, opts ...ClearContextOption) error
 	// SaveContexts 批量持久化上下文状态，返回 contextID → state 映射
 	SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error)
+	// UpdateModelContext 热切换选中模型与其上下文窗口（不重建上下文）
+	//
+	// Python: ContextEngine.update_model_context()
+	UpdateModelContext(modelName string, contextWindowTokens int)
 }
 
 // ProcessorSpec 处理器规格，指定类型和配置。

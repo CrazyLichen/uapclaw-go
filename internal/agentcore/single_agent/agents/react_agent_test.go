@@ -1274,6 +1274,8 @@ func (f *fakeContextEngine) SaveContexts(_ context.Context, _ sessioninterfaces.
 	return nil, nil
 }
 
+func (f *fakeContextEngine) UpdateModelContext(_ string, _ int) {}
+
 // fakeModelContext 方法实现
 
 func (f *fakeModelContext) Len() int { return len(f.messages) }

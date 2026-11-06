@@ -113,13 +113,8 @@ func (a *ReActAgent) UpdateModelContext(modelName string, contextWindowTokens in
 			a.config.ContextEngineConfig.ModelContextWindowTokensOverride = 0
 		}
 	}
-	// 可选能力：只有 SessionModelContext 的引擎实现具备（对齐 Python 同名方法）。
-	// 用类型断言而非拓宽 ContextEngine 接口，避免每个测试桩都被迫实现空方法
-	// （同 runtimeConfigApplier 的既有做法）。
-	if updater, ok := a.contextEngine.(interface {
-		UpdateModelContext(string, int)
-	}); ok {
-		updater.UpdateModelContext(modelName, contextWindowTokens)
+	if a.contextEngine != nil {
+		a.contextEngine.UpdateModelContext(modelName, contextWindowTokens)
 	}
 }
 

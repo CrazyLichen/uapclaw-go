@@ -83,6 +83,9 @@ func (m *mockContextEngine) SaveContexts(_ context.Context, _ sessioninterfaces.
 	return nil, nil
 }
 
+// UpdateModelContext 热切换模型元数据（测试桩空实现）。
+func (m *mockContextEngine) UpdateModelContext(_ string, _ int) {}
+
 // mockModelContext 模拟模型上下文
 type mockModelContext struct {
 	messages []llmschema.BaseMessage
