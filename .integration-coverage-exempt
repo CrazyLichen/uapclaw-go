@@ -285,3 +285,9 @@ internal/agentcore/retrieval/vector_store/milvus.go
 # 没有任何集成用例能触发 provider 的非 200 响应；该段由 openai 包单测
 # TestHandleHTTPError_* 全覆盖（改动行单测覆盖率 100%），集成层无独立入口。
 internal/agentcore/foundation/llm/model_clients/openai/client.go#L554-L604
+
+# model_anomaly.go#L455-L460：尾窗状态类型不符的告警分支。
+# 只在 extra["_model_anomaly_detection_state"] 被外部写成别的类型时触发，
+# 正常装配路径（BeforeModelCall 自己写入 *anomalyState）永远不会进入；
+# 该分支由单测 TestAnomalyState_类型不符重建 覆盖（改动行单测 100%）。
+internal/agentcore/harness/rails/model_anomaly.go#L455-L460
