@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
@@ -25,10 +26,15 @@ type usageStubAgent struct {
 // Config 返回被注入的 AgentConfig。
 func (a *usageStubAgent) Config() sainterfaces.AgentConfig { return a.cfg }
 
-// usageStubModelContext ModelContext 桩：emitContextUsage 只做 nil 判断。
+// usageStubModelContext ModelContext 桩：emitContextUsage 需要 Statistic 做分类拆分。
 type usageStubModelContext struct {
 	ceiface.ModelContext
+	// stats 返回的上下文统计
+	stats ceiface.ContextStats
 }
+
+// Statistic 返回注入的统计快照。
+func (m *usageStubModelContext) Statistic() *ceiface.ContextStats { return &m.stats }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -53,9 +59,18 @@ func TestEmitContextUsage_分母取ceConfig分子取总量(t *testing.T) {
 	out, ok := sess.written[0].(*stream.OutputSchema)
 	require.True(t, ok, "写入类型应为 *stream.OutputSchema，实际 %T", sess.written[0])
 	assert.Equal(t, "context.usage", out.Type)
-	payload, ok := out.Payload.(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, 32000, payload["context_max"], "分母应取模型窗口映射")
-	assert.Equal(t, 8200, payload["tokens_used"], "分子应取 total_tokens（输入+输出）")
-	assert.InDelta(t, 25.625, payload["rate"], 1e-6)
+	snapshot, ok := out.Payload.(usage_snapshot.ContextUsageSnapshot)
+	require.True(t, ok, "载荷应为 context-usage.v1 快照，实际 %T", out.Payload)
+	assert.Equal(t, usage_snapshot.EventTypeContextUsage, snapshot.EventType)
+	assert.Equal(t, usage_snapshot.SchemaVersion, snapshot.SchemaVersion)
+	assert.Equal(t, usage_snapshot.PhasePostCall, snapshot.Phase)
+	require.NotEmpty(t, snapshot.RequestID, "request_id 必填（前端空值会丢弃整条快照）")
+	require.NotEmpty(t, snapshot.ProductSessionID, "product_session_id 必填")
+	require.NotNil(t, snapshot.ContextWindow.LimitTokens)
+	assert.Equal(t, 32000, *snapshot.ContextWindow.LimitTokens, "窗口应取模型映射")
+	require.NotNil(t, snapshot.ContextWindow.InputTokens)
+	assert.Equal(t, 8000, *snapshot.ContextWindow.InputTokens, "输入量应取 provider 上报的 input_tokens")
+	require.NotNil(t, snapshot.ContextWindow.OccupancyRate)
+	assert.InDelta(t, 0.25, *snapshot.ContextWindow.OccupancyRate, 1e-6)
+	assert.Len(t, snapshot.Parts, 4, "四类用量都应出现")
 }

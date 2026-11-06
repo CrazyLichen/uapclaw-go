@@ -2,10 +2,13 @@ package rails
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"time"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -208,31 +211,53 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 	// 计算上下文窗口上限：优先级 fallback > 模型映射 > 内置表 > 200000。
 	// 对齐 Python: ContextUtils.resolve_context_max(model_name=model_name,
 	//                fallback_context_window_tokens=..., model_context_window_tokens=...)
-	rawTotalTokens := cecontext.ResolveContextMax(
-		modelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)
+	fallbackWindow := ceConfig.ContextWindowTokens
+	if fallbackWindow == 0 {
+		fallbackWindow = ceConfig.ModelContextWindowTokensOverride
+	}
+	limitTokens := cecontext.ResolveContextMax(
+		modelName, fallbackWindow, ceConfig.ModelContextWindowTokens)
 
-	// 获取当前 token 用量：usage_metadata.total_tokens（输入+输出，代表下一轮真实占用）
-	var currentContextTokens int
+	// 分类用量：系统提示词 / 工具 / 消息（技能提示词计入系统消息，单列 0）
+	stats := modelCtx.Statistic()
+	systemTokens := 0
+	toolsTokens := 0
+	totalTokens := 0
+	if stats != nil {
+		systemTokens = stats.SystemMessageTokens
+		toolsTokens = stats.ToolTokens
+		totalTokens = stats.TotalTokens
+	}
+	messageTokens := totalTokens - systemTokens - toolsTokens
+	if messageTokens < 0 {
+		messageTokens = 0
+	}
+
+	// provider 上报的用量（权威总量）
+	var usage *llmschema.UsageMetadata
 	if inputs := cbCtx.Inputs(); inputs != nil {
 		if mcInputs, ok := inputs.(*sainterfaces.ModelCallInputs); ok && mcInputs.Response != nil {
-			currentContextTokens = contextUsageTokensUsed(mcInputs.Response.UsageMetadata)
+			usage = mcInputs.Response.UsageMetadata
 		}
 	}
 
-	var rate float64
-	if rawTotalTokens != 0 {
-		rate = float64(currentContextTokens) / float64(rawTotalTokens) * 100
-	}
+	snapshot := usage_snapshot.BuildSnapshot(usage_snapshot.SnapshotInput{
+		Phase: usage_snapshot.PhasePostCall,
+		// 前端只要求非空字符串；用"会话 id + 纳秒"保证同会话内可区分轮次
+		RequestID:          session.GetSessionID() + "-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		SessionID:          session.GetSessionID(),
+		ProductSessionID:   session.GetSessionID(),
+		LimitTokens:        limitTokens,
+		SystemPromptTokens: systemTokens,
+		ToolsTokens:        toolsTokens,
+		MessagesTokens:     messageTokens,
+		Usage:              usage,
+	})
 
-	payload := map[string]any{
-		"rate":        rate,
-		"context_max": rawTotalTokens,
-		"tokens_used": currentContextTokens,
-	}
 	if err := session.WriteStream(ctx, &stream.OutputSchema{
-		Type:    "context.usage",
+		Type:    usage_snapshot.EventTypeContextUsage,
 		Index:   0,
-		Payload: payload,
+		Payload: snapshot,
 	}); err != nil {
 		logger.Debug(logComponent).Err(err).Msg("context_usage emit failed")
 	}

@@ -3,14 +3,19 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
@@ -103,6 +108,9 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 					response["compact_summary"] = compactResult.CompactSummary
 				}
 			}
+			// 压缩后用量快照（post_compact）：前端据此刷新用量指示器，
+			// 否则手动 compact 后指示器仍停在压缩前的数字（B-10）。
+			d.emitPostCompactUsage(ctx, session, sessionID, reactAgent, newModelCtx)
 		}
 	}
 
@@ -112,6 +120,64 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 		Msg("CompressContext completed")
 
 	return response, nil
+}
+
+// emitPostCompactUsage 手动压缩成功后推送 post_compact 用量快照。
+//
+// 只在压缩真的发生（result=compressed）时调用；窗口来源与 rail 侧一致：
+// 全局 context_window_tokens 优先，其次模型条目 override，再按模型名解析。
+func (d *DeepAdapter) emitPostCompactUsage(
+	ctx context.Context,
+	session sessioninterfaces.SessionFacade,
+	sessionID string,
+	reactAgent sainterfaces.BaseAgent,
+	modelCtx ceinterface.ModelContext,
+) {
+	if session == nil || modelCtx == nil || reactAgent == nil {
+		return
+	}
+	var modelName string
+	var ceConfig ceschema.ContextEngineConfig
+	if cfg := reactAgent.Config(); cfg != nil {
+		modelName = cfg.ModelName()
+		ceConfig = cfg.GetContextEngineConfig()
+	}
+	fallbackWindow := ceConfig.ContextWindowTokens
+	if fallbackWindow == 0 {
+		fallbackWindow = ceConfig.ModelContextWindowTokensOverride
+	}
+	limitTokens := cecontext.ResolveContextMax(modelName, fallbackWindow, ceConfig.ModelContextWindowTokens)
+
+	stats := modelCtx.Statistic()
+	systemTokens, toolsTokens, totalTokens := 0, 0, 0
+	if stats != nil {
+		systemTokens = stats.SystemMessageTokens
+		toolsTokens = stats.ToolTokens
+		totalTokens = stats.TotalTokens
+	}
+	messageTokens := totalTokens - systemTokens - toolsTokens
+	if messageTokens < 0 {
+		messageTokens = 0
+	}
+
+	snapshot := usage_snapshot.BuildSnapshot(usage_snapshot.SnapshotInput{
+		Phase:              usage_snapshot.PhasePostCompact,
+		RequestID:          sessionID + "-compact-" + strconv.FormatInt(time.Now().UnixNano(), 10),
+		SessionID:          sessionID,
+		ProductSessionID:   sessionID,
+		LimitTokens:        limitTokens,
+		SystemPromptTokens: systemTokens,
+		ToolsTokens:        toolsTokens,
+		MessagesTokens:     messageTokens,
+	})
+	if err := session.WriteStream(ctx, &stream.OutputSchema{
+		Type:    usage_snapshot.EventTypeContextUsage,
+		Index:   0,
+		Payload: snapshot,
+	}); err != nil {
+		logger.Debug(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("post_compact context usage emit failed")
+	}
 }
 
 // GetContextUsage 获取上下文窗口占用率。
