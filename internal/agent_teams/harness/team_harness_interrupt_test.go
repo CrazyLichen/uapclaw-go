@@ -1,4 +1,4 @@
-package agent_teams
+package harness
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	harnessworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -121,7 +121,7 @@ func TestTeamHarness_IsPendingInterruptResumeValid_无待处理请求(t *testing
 //
 // S-01：原实现是空桩（return nil），Rail 挂载静默无效。
 func TestTeamHarness_RegisterRail_真实DeepAgent(t *testing.T) {
-	d := harness.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("agent-1")))
+	d := agentcore.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("agent-1")))
 	require.NotNil(t, d)
 	h := NewTeamHarness(d, nil, string(atschema.TeamRoleLeader), "leader_1", false)
 
@@ -132,7 +132,7 @@ func TestTeamHarness_RegisterRail_真实DeepAgent(t *testing.T) {
 
 // TestTeamHarness_interruptSession_优先LoopSession 有 loop_session 时优先用它。
 func TestTeamHarness_interruptSession_优先LoopSession(t *testing.T) {
-	d := harness.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("agent-1")))
+	d := agentcore.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("agent-1")))
 	require.NotNil(t, d)
 	h, activeSess := newHarnessWithInterruptSession(t, nil)
 	h.deepAgent = d
@@ -183,7 +183,7 @@ func TestTeamHarness_会话字段并发读写(t *testing.T) {
 // Go 侧若只返回不改 ctx，工具会继续读上一轮被 cd 改过的状态。
 func TestTeamHarness_InitCwdForRound_每轮重置(t *testing.T) {
 	root := t.TempDir()
-	d := harness.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-cwd"), agentschema.WithAgentName("agent-cwd")))
+	d := agentcore.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-cwd"), agentschema.WithAgentName("agent-cwd")))
 	require.NotNil(t, d)
 	cfg := hschema.NewDeepAgentConfig()
 	cfg.Workspace = &harnessworkspace.Workspace{RootPath: root}

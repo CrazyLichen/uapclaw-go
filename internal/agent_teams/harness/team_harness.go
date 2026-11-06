@@ -1,4 +1,4 @@
-package agent_teams
+package harness
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -111,8 +111,8 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// errIncompatibleAgent 底层 deepAgent 不是 *harness.DeepAgent，无法投递运行中输入。
-	errIncompatibleAgent = errors.New("team harness: deepAgent 不是 *harness.DeepAgent")
+	// errIncompatibleAgent 底层 deepAgent 不是 *agentcore.DeepAgent，无法投递运行中输入。
+	errIncompatibleAgent = errors.New("team harness: deepAgent 不是 *agentcore.DeepAgent")
 	// errNoActiveSession 没有可用于投递的 Agent 会话。
 	errNoActiveSession = errors.New("team harness: 无活跃 Agent 会话")
 )
@@ -489,12 +489,12 @@ func (h *TeamHarness) streamWithSessionRef(ctx context.Context, inputs map[strin
 // DeepAgentInterface 未声明 steer/follow_up（只有 RequestAbort），故此处按具体类型收窄。
 // 失败分支返回具名 error（投递失败必须让上层可回退，见 M-02），日志保留供定位。
 func (h *TeamHarness) interactLoop(ctx context.Context, content string, steer bool) error {
-	d, ok := h.deepAgent.(*harness.DeepAgent)
+	d, ok := h.deepAgent.(*agentcore.DeepAgent)
 	if !ok || d == nil {
 		logger.Warn(logComponent).
 			Str("member_name", h.memberName).
 			Bool("steer", steer).
-			Msg("TeamHarness: deepAgent 不是 *harness.DeepAgent，输入无法投递")
+			Msg("TeamHarness: deepAgent 不是 *agentcore.DeepAgent，输入无法投递")
 		return errIncompatibleAgent
 	}
 	sess := h.getActiveSession()
@@ -669,7 +669,7 @@ func (h *TeamHarness) setActiveSession(sess *session.Session) {
 // 而 HITL 应答恰好发生在"轮次已结束、等待用户输入"的时刻，所以必须回退到
 // 最近一次轮次的 Agent 会话，否则 HasPendingInterrupt 在真正需要的时刻恒为 false。
 func (h *TeamHarness) interruptSession() *session.Session {
-	if d, ok := h.deepAgent.(*harness.DeepAgent); ok && d != nil {
+	if d, ok := h.deepAgent.(*agentcore.DeepAgent); ok && d != nil {
 		if loopSess := d.LoopSession(); loopSess != nil {
 			return loopSess
 		}
@@ -783,7 +783,7 @@ func buildDeepAgentFromSpec(spec atschema.DeepAgentSpec) hinterfaces.DeepAgentIn
 		}
 	}
 
-	agent, err := harness.CreateDeepAgent(context.Background(), params)
+	agent, err := agentcore.CreateDeepAgent(context.Background(), params)
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Msg("buildDeepAgentFromSpec: CreateDeepAgent failed")

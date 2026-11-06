@@ -49,6 +49,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	ateaminteraction "github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
@@ -113,7 +114,7 @@ type TeamAgent struct {
 var (
 	_ types.SessionController   = (*SessionManager)(nil)
 	_ types.TeamBackendAccessor = (*tools.TeamBackend)(nil)
-	_ types.HarnessAccessor     = (*agentteams.TeamHarness)(nil)
+	_ types.HarnessAccessor     = (*harness.TeamHarness)(nil)
 	_ types.KernelHost          = (*TeamAgent)(nil)
 )
 
@@ -195,7 +196,7 @@ func (a *TeamAgent) Resources() *PrivateAgentResources {
 //
 // 所有对 DeepAgent 运行时的访问（config、model、workspace、
 // rails、streaming）必须通过此对象。
-func (a *TeamAgent) Harness() *agentteams.TeamHarness {
+func (a *TeamAgent) Harness() *harness.TeamHarness {
 	if a.configurator != nil {
 		return a.configurator.Harness()
 	}
@@ -1475,7 +1476,7 @@ func (a *TeamAgent) MemoryManager() *memory.TeamMemoryManager {
 
 // HarnessAccessor 返回 Harness 访问器。
 // 满足 types.ResourceAccessor 接口。
-// *agentteams.TeamHarness 直接满足 types.HarnessAccessor（编译期检查）。
+// *harness.TeamHarness 直接满足 types.HarnessAccessor（编译期检查）。
 func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
 	return a.Harness()
 }

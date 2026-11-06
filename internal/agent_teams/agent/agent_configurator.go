@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
@@ -160,7 +161,7 @@ func WithBackendLeaderAllocation(a *models.Allocation) SetupTeamBackendOption {
 
 // Configure 主入口：配置基础设施并构建 Harness。
 // Python: AgentConfigurator.configure(spec, ctx)
-func (c *AgentConfigurator) Configure(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*agentteams.TeamHarness, error) {
+func (c *AgentConfigurator) Configure(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*harness.TeamHarness, error) {
 	if err := c.SetupInfra(spec, ctx); err != nil {
 		return nil, err
 	}
@@ -259,7 +260,7 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。
 // Python: AgentConfigurator.setup_agent(spec, ctx)
-func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*agentteams.TeamHarness, error) {
+func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*harness.TeamHarness, error) {
 	// 1. 解析 AgentSpec
 	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
@@ -452,7 +453,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	if c.WorkspaceManager() != nil {
 		wsRail = team_workspace.NewTeamWorkspaceRail(c.WorkspaceManager(), c.MemberName())
 	}
-	harness := agentteams.BuildTeamHarness(
+	harness := harness.BuildTeamHarness(
 		agentSpec,
 		string(ctx.Role),
 		ctx.MemberName,
@@ -850,12 +851,12 @@ func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) {
 
 // Harness 返回 TeamHarness。
 // Python: AgentConfigurator.harness property
-func (c *AgentConfigurator) Harness() *agentteams.TeamHarness {
+func (c *AgentConfigurator) Harness() *harness.TeamHarness {
 	return c.resources.Harness
 }
 
 // SetHarness 设置 TeamHarness。
-func (c *AgentConfigurator) SetHarness(v *agentteams.TeamHarness) { c.resources.Harness = v }
+func (c *AgentConfigurator) SetHarness(v *harness.TeamHarness) { c.resources.Harness = v }
 
 // WorktreeManager 返回工作树管理器。
 // Python: AgentConfigurator.worktree_manager property

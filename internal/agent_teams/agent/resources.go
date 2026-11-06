@@ -1,7 +1,7 @@
 package agent
 
 import (
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
@@ -16,7 +16,7 @@ import (
 // Python: PrivateAgentResources (openjiuwen/agent_teams/agent/resources.py)
 type PrivateAgentResources struct {
 	// Harness 底层 DeepAgent 运行时的 Harness
-	Harness *agentteams.TeamHarness
+	Harness *harness.TeamHarness
 	// WorktreeManager Worktree 管理器。⤴️ 9.66a 回填完成
 	WorktreeManager *worktree.WorktreeManager
 	// MemoryManager 团队记忆管理器。⤴️ 9.64 回填完成

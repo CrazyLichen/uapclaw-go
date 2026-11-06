@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -625,7 +625,7 @@ func TestStreamController_executeRound_取消(t *testing.T) {
 // TestStreamController_executeRound_成功 测试 executeRound 成功路径。
 func TestStreamController_executeRound_成功(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 
 	execStatuses := []atschema.ExecutionStatus{}
 	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
@@ -656,7 +656,7 @@ func TestStreamController_executeRound_成功(t *testing.T) {
 // TestStreamController_executeRound_取消标记 测试 cancelRequested 标记时走 CANCELLED 路径。
 func TestStreamController_executeRound_取消标记(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 
 	execStatuses := []atschema.ExecutionStatus{}
 	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
@@ -727,7 +727,7 @@ func TestStreamController_streamOneRound_无harness(t *testing.T) {
 // TestStreamController_streamOneRound_有harness 测试有 harness 时 streamOneRound 成功。
 func TestStreamController_streamOneRound_有harness(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	err := sc.streamOneRound(context.Background(), "hello")
@@ -772,7 +772,7 @@ func TestStreamController_startRound_无队列(t *testing.T) {
 // TestStreamController_startRound_正常启动 测试正常启动轮次。
 func TestStreamController_startRound_正常启动(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.startRound(context.Background(), "hello")
@@ -782,7 +782,7 @@ func TestStreamController_startRound_正常启动(t *testing.T) {
 // TestStreamController_StartRound_有harness有队列 测试有 harness 和 streamQueue 时 StartRound 启动轮次。
 func TestStreamController_StartRound_有harness有队列(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	err := sc.StartRound(context.Background(), "hello world")
@@ -796,7 +796,7 @@ func TestStreamController_StartRound_有harness有队列(t *testing.T) {
 // TestStreamController_StartRound_长内容截断预览 测试长内容预览截断。
 func TestStreamController_StartRound_长内容截断预览(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	longContent := ""
@@ -814,7 +814,7 @@ func TestStreamController_StartRound_长内容截断预览(t *testing.T) {
 // TestStreamController_StartRound_非字符串内容 测试非字符串内容。
 func TestStreamController_StartRound_非字符串内容(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	err := sc.StartRound(context.Background(), 12345)
@@ -830,7 +830,7 @@ func TestStreamController_StartRound_非字符串内容(t *testing.T) {
 // M-02：投递失败不再吞成 nil——否则上层 DeliverResult 恒为 success。
 func TestStreamController_Steer_有harness(t *testing.T) {
 	sc := newTestStreamController()
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	if err := sc.Steer(context.Background(), "turn left"); err == nil {
 		t.Error("底层 Agent 缺失时 Steer 应返回错误")
 	}
@@ -839,7 +839,7 @@ func TestStreamController_Steer_有harness(t *testing.T) {
 // TestStreamController_FollowUp_有harness 有 harness 但底层 Agent 缺失时错误必须透传。
 func TestStreamController_FollowUp_有harness(t *testing.T) {
 	sc := newTestStreamController()
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	if err := sc.FollowUp(context.Background(), "more info"); err == nil {
 		t.Error("底层 Agent 缺失时 FollowUp 应返回错误")
 	}
@@ -848,7 +848,7 @@ func TestStreamController_FollowUp_有harness(t *testing.T) {
 // TestStreamController_HasPendingInterrupt_有harness 测试有 harness 时 HasPendingInterrupt。
 func TestStreamController_HasPendingInterrupt_有harness(t *testing.T) {
 	sc := newTestStreamController()
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	if sc.HasPendingInterrupt() {
 		t.Error("当前 TeamHarness.HasPendingInterrupt 返回 false")
 	}
@@ -857,7 +857,7 @@ func TestStreamController_HasPendingInterrupt_有harness(t *testing.T) {
 // TestStreamController_IsValidInterruptResume_有harness 测试有 harness 时 IsValidInterruptResume。
 func TestStreamController_IsValidInterruptResume_有harness(t *testing.T) {
 	sc := newTestStreamController()
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	if sc.IsValidInterruptResume(iiStub("test")) {
 		t.Error("当前 TeamHarness.IsPendingInterruptResumeValid 返回 false")
 	}
@@ -870,7 +870,7 @@ func TestStreamController_IsValidInterruptResume_有harness(t *testing.T) {
 // 验证 CancelAgent 的状态机推进逻辑。
 func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	var mu sync.Mutex
@@ -932,7 +932,7 @@ func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 // TestStreamController_CooperativeCancel_等待轮次完成 测试协作取消等待轮次自然完成。
 func TestStreamController_CooperativeCancel_等待轮次完成(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.startRound(context.Background(), "hello")
@@ -949,7 +949,7 @@ func TestStreamController_CooperativeCancel_等待轮次完成(t *testing.T) {
 // TestStreamController_runOneRound_续轮pendingInputs 测试轮次结束后自动续轮 pendingInputs。
 func TestStreamController_runOneRound_续轮pendingInputs(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.pendingInputs = []any{"next input"}
@@ -966,7 +966,7 @@ func TestStreamController_runOneRound_续轮pendingInputs(t *testing.T) {
 // TestStreamController_runOneRound_续轮interruptResume 测试轮次结束后自动续轮 interruptResume。
 func TestStreamController_runOneRound_续轮interruptResume(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	// 当前 TeamHarness 总是返回 false，所以 dequeueValidInterruptResume 会丢弃
@@ -982,7 +982,7 @@ func TestStreamController_runOneRound_续轮interruptResume(t *testing.T) {
 // TestStreamController_runOneRound_wakeMailbox 测试轮次结束后唤醒邮箱。
 func TestStreamController_runOneRound_wakeMailbox(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	wakeCalled := false
@@ -1001,7 +1001,7 @@ func TestStreamController_runOneRound_wakeMailbox(t *testing.T) {
 // TestStreamController_runOneRound_requestCompletionPoll 测试轮次结束后请求完成轮询。
 func TestStreamController_runOneRound_requestCompletionPoll(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	pollCalled := false
@@ -1020,7 +1020,7 @@ func TestStreamController_runOneRound_requestCompletionPoll(t *testing.T) {
 // TestStreamController_runOneRound_cancelRequested 测试 cancelRequested 为 true 时不续轮。
 func TestStreamController_runOneRound_cancelRequested(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	wakeCalled := false
@@ -1156,7 +1156,7 @@ func TestStreamController_CloseStream_满队列(t *testing.T) {
 // TestStreamController_DrainAgentTask_有飞行轮次 测试有飞行中轮次时 DrainAgentTask。
 func TestStreamController_DrainAgentTask_有飞行轮次(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.pendingInputs = []any{"input1"}
@@ -1209,7 +1209,7 @@ func TestStreamController_CooperativeCancel_超时强制取消完整(t *testing.
 	sc.roundDone = roundDone
 	roundCtx, roundCancel := context.WithCancel(context.Background())
 	sc.cancelRound = roundCancel
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 
 	go func() {
 		<-roundCtx.Done()
@@ -1339,7 +1339,7 @@ func pendingResumesLen(sc *StreamController) int {
 // TestStreamController_EnqueueOrStart_无在飞起新轮 无在飞轮次时直接起一轮。
 func TestStreamController_EnqueueOrStart_无在飞起新轮(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	if started := sc.EnqueueOrStart(context.Background(), "hello"); !started {
@@ -1351,7 +1351,7 @@ func TestStreamController_EnqueueOrStart_无在飞起新轮(t *testing.T) {
 // TestStreamController_EnqueueOrStart_在飞入队 有在飞轮次时只入队、不启动新轮。
 func TestStreamController_EnqueueOrStart_在飞入队(t *testing.T) {
 	sc := newTestStreamController()
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 	// 手工构造「在飞但未结束」的轮次
 	inFlight := make(chan struct{})
@@ -1371,7 +1371,7 @@ func TestStreamController_EnqueueOrStart_在飞入队(t *testing.T) {
 // TestStreamController_EnqueueOrStart_通道已关闭视为无在飞 roundDone 已关闭但未清零时按无在飞处理。
 func TestStreamController_EnqueueOrStart_通道已关闭视为无在飞(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 	closed := make(chan struct{})
 	close(closed)
@@ -1426,7 +1426,7 @@ func TestStreamController_EnqueueOrStart_nil接收者(t *testing.T) {
 // TestStreamController_runOneRound_完成轮询回调 无可续轮且配置了完成轮询回调时必须触发。
 func TestStreamController_runOneRound_完成轮询回调(t *testing.T) {
 	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
-	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.resources.Harness = &harness.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	polled := make(chan struct{}, 1)

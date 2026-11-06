@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -303,7 +303,7 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 	})
 
 	t.Run("Harness设置后获取", func(t *testing.T) {
-		harness := agentteams.BuildTeamHarness(atschema.DeepAgentSpec{}, "leader", "l1", nil, nil, nil, nil, nil, nil, false)
+		harness := harness.BuildTeamHarness(atschema.DeepAgentSpec{}, "leader", "l1", nil, nil, nil, nil, nil, nil, false)
 		c.SetHarness(harness)
 		assert.Equal(t, harness, c.Harness())
 	})

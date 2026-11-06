@@ -1,4 +1,4 @@
-package agent_teams_test
+package harness_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -19,12 +19,12 @@ type mockDeepAgent struct {
 
 // TestNewTeamHarness 测试 TeamHarness 构造函数
 func TestNewTeamHarness(t *testing.T) {
-	rails := &agent_teams.MountedRails{
+	rails := &harness.MountedRails{
 		TeamTool:   nil, // ⤴️ 9.68 回填后 TeamTool 类型为 *rails.TeamToolRail
 		TeamPolicy: nil, // ⤴️ 9.68 回填后 TeamPolicy 类型为 *rails.TeamPolicyRail
 	}
 	var agent hinterfaces.DeepAgentInterface // nil 接口
-	h := agent_teams.NewTeamHarness(
+	h := harness.NewTeamHarness(
 		agent,
 		rails,
 		string(atschema.TeamRoleLeader),
@@ -40,15 +40,15 @@ func TestNewTeamHarness(t *testing.T) {
 
 // TestNewTeamHarness_NilRails 测试 Rails 为 nil 时不 panic
 func TestNewTeamHarness_NilRails(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleTeammate), "t1", true)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleTeammate), "t1", true)
 	assert.NotNil(t, h)
 	assert.Nil(t, h.Rails())
 }
 
 // TestTeamHarness_Rails 返回 Rails 句柄
 func TestTeamHarness_Rails(t *testing.T) {
-	rails := &agent_teams.MountedRails{TeamTool: nil}
-	h := agent_teams.NewTeamHarness(nil, rails, string(atschema.TeamRoleLeader), "", false)
+	rails := &harness.MountedRails{TeamTool: nil}
+	h := harness.NewTeamHarness(nil, rails, string(atschema.TeamRoleLeader), "", false)
 	assert.Equal(t, rails, h.Rails())
 }
 
@@ -69,7 +69,7 @@ func TestTeamHarness_RunAgentCustomizer(t *testing.T) {
 	}
 
 	agent := &mockDeepAgent{}
-	h := agent_teams.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := harness.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	h.RunAgentCustomizer(context.Background(), customizer)
 
 	assert.True(t, called)
@@ -85,7 +85,7 @@ func TestTeamHarness_RunAgentCustomizer_NilAgent(t *testing.T) {
 		called = true
 		return nil
 	}
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	h.RunAgentCustomizer(context.Background(), customizer)
 	assert.False(t, called) // nil agent → 跳过
 }
@@ -96,7 +96,7 @@ func TestTeamHarness_RunAgentCustomizer_Error吞掉(t *testing.T) {
 		return errors.New("customizer failed")
 	}
 	agent := &mockDeepAgent{}
-	h := agent_teams.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := harness.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	assert.NotPanics(t, func() {
 		h.RunAgentCustomizer(context.Background(), customizer)
 	})
@@ -104,7 +104,7 @@ func TestTeamHarness_RunAgentCustomizer_Error吞掉(t *testing.T) {
 
 // TestTeamHarness_RunAgentCustomizer_Nil 测试 nil 自定义器不 panic
 func TestTeamHarness_RunAgentCustomizer_Nil(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NotPanics(t, func() {
 		h.RunAgentCustomizer(context.Background(), nil)
 	})
@@ -112,7 +112,7 @@ func TestTeamHarness_RunAgentCustomizer_Nil(t *testing.T) {
 
 // TestBuildTeamHarness 测试 Build 函数
 func TestBuildTeamHarness(t *testing.T) {
-	h := agent_teams.BuildTeamHarness(
+	h := harness.BuildTeamHarness(
 		atschema.DeepAgentSpec{}, // agentSpec
 		string(atschema.TeamRoleTeammate),
 		"teammate_1",
@@ -135,7 +135,7 @@ func TestBuildTeamHarness(t *testing.T) {
 
 // TestTeamHarness_StubMethods 测试 TODO 占位方法返回零值
 func TestTeamHarness_StubMethods(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Nil(t, h.DeepConfig())
 	assert.Nil(t, h.Workspace())
 	assert.Nil(t, h.SysOperation())
@@ -146,14 +146,14 @@ func TestTeamHarness_StubMethods(t *testing.T) {
 
 // TestTeamHarness_IsPendingInterruptResumeValid 测试中断恢复验证占位返回 false
 func TestTeamHarness_IsPendingInterruptResumeValid(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.False(t, h.IsPendingInterruptResumeValid(nil))
 	assert.False(t, h.IsPendingInterruptResumeValid("some input"))
 }
 
 // TestTeamHarness_PersistDBState 测试持久化占位方法不 panic
 func TestTeamHarness_PersistDBState(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NotPanics(t, func() {
 		h.PersistTeamDBState()
 		h.MarkTeamCleaned()
@@ -168,25 +168,25 @@ func TestTeamHarness_PersistDBState(t *testing.T) {
 //
 // M-02：投递失败必须可被上层识别（原实现返回 nil，DeliverResult 恒为 success）。
 func TestTeamHarness_Steer(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.Steer(context.TODO(), "转向"))
 }
 
 // TestTeamHarness_FollowUp 测试 FollowUp 在无底层 DeepAgent 时返回可判定的错误
 func TestTeamHarness_FollowUp(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.FollowUp(context.TODO(), "追加"))
 }
 
 // TestTeamHarness_Abort 测试 Abort 占位返回 nil
 func TestTeamHarness_Abort(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.Abort(context.TODO()))
 }
 
 // TestTeamHarness_RunStreaming 测试 RunStreaming 占位返回关闭的通道
 func TestTeamHarness_RunStreaming(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	ch, err := h.RunStreaming(context.TODO(), nil, "", nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
@@ -200,7 +200,7 @@ func TestTeamHarness_RunStreaming(t *testing.T) {
 // 回填后该方法不再吞掉失败：rail 类型不符或缺少底层 Agent 都要报错，
 // 否则"运行中挂载 Rail 静默无效"无法定位。
 func TestTeamHarness_RegisterRail(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.RegisterRail(context.TODO(), nil))
 	// 类型正确但底层 Agent 缺失 → 同样报错
 	assert.Error(t, h.RegisterRail(context.TODO(), agentinterfaces.NewBaseRail()))
@@ -208,14 +208,14 @@ func TestTeamHarness_RegisterRail(t *testing.T) {
 
 // TestTeamHarness_UnregisterRail 测试 UnregisterRail 对非法入参返回错误
 func TestTeamHarness_UnregisterRail(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.UnregisterRail(context.TODO(), nil))
 	assert.Error(t, h.UnregisterRail(context.TODO(), agentinterfaces.NewBaseRail()))
 }
 
 // TestTeamHarness_RegisterMemberTools_Nil 测试 nil memoryManager 不 panic
 func TestTeamHarness_RegisterMemberTools_Nil(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NotPanics(t, func() {
 		h.RegisterMemberTools(nil)
 	})
@@ -223,7 +223,7 @@ func TestTeamHarness_RegisterMemberTools_Nil(t *testing.T) {
 
 // TestTeamHarness_InjectMemberMemory_Nil 测试 nil memoryManager 返回 nil
 func TestTeamHarness_InjectMemberMemory_Nil(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.InjectMemberMemory(context.TODO(), nil, ""))
 }
 
@@ -232,7 +232,7 @@ func TestTeamHarness_InjectMemberMemory_Nil(t *testing.T) {
 // 而非 panic 或阻塞。
 func TestTeamHarness_RunStreaming_非BaseAgent降级空流(t *testing.T) {
 	// mockDeepAgent 只嵌入接口，不实现 BaseAgent 的完整方法集 → 断言失败路径
-	h := agent_teams.NewTeamHarness(&mockDeepAgent{}, nil, string(atschema.TeamRoleLeader), "m1", false)
+	h := harness.NewTeamHarness(&mockDeepAgent{}, nil, string(atschema.TeamRoleLeader), "m1", false)
 	ch, err := h.RunStreaming(context.TODO(), map[string]any{"q": "hi"}, "sess-1", nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
@@ -244,7 +244,7 @@ func TestTeamHarness_RunStreaming_非BaseAgent降级空流(t *testing.T) {
 // TestTeamHarness_RunStreaming_teamSession占位分支 M-17 回归测试。
 // teamSession 非 nil 走分支 2 占位（⤵️ plan-mode 种子化回填前返回关闭空流）。
 func TestTeamHarness_RunStreaming_teamSession占位分支(t *testing.T) {
-	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "m1", false)
+	h := harness.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "m1", false)
 	ch, err := h.RunStreaming(context.TODO(), nil, "sess-1", map[string]any{"team": "state"})
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
