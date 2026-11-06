@@ -37,6 +37,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -188,6 +189,9 @@ type DeepAgent struct {
 	interactionSendMu sync.Mutex
 	// interactionControlMu 交互控制锁（相位、EventManager、租约、轮句柄）
 	interactionControlMu sync.Mutex
+	// worktreeSessionState 交互循环的 worktree 会话态 holder（每次 Start 新建）
+	// Python: init_session_state() 的 ContextVar holder（worktree/session.py）
+	worktreeSessionState *worktree.WorktreeSessionState
 	// activeAgentTemplate 当前热加载的 AgentTemplate（⤵️ #9.3 由 load_agent_template 赋值，今天恒 nil）
 	activeAgentTemplate *AgentTemplateRef
 	// roundOverride 交互轮执行覆写（仅测试使用）
@@ -1676,6 +1680,16 @@ func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
 	d.interactionSession = sess
 	d.interactionSessionID = sid
 
+	// 对齐 Python start() L3953-3962：先建可变 worktree holder，再启动任务循环内核，
+	// 使 scheduler/supervisor/round/工具任务共享同一对象。Go 的 context.Value 不跨
+	// 调用传播，故在 attachRunContexts 里逐入口重新挂载（等价 contextvar 全局可见）。
+	//
+	// 幂等语义对齐 init_session_state()：Python 的 _get_state() 是「已有则复用、没有才建」
+	// （session.py L40-45），不是每次 start 都换新 holder。
+	if d.worktreeSessionState == nil {
+		d.worktreeSessionState = worktree.InitWorktreeSessionState()
+	}
+
 	if _, _, err := d.prepareInteractionTaskLoop(ctx, sess); err != nil {
 		return err
 	}
@@ -2315,6 +2329,17 @@ func (d *DeepAgent) attachRunContexts(ctx context.Context) context.Context {
 		d.configMu.RUnlock()
 		if state != nil {
 			ctx = observability.WithSpanState(ctx, state)
+		}
+	}
+	// worktree 会话态：Python 用 ContextVar（init_session_state() 设置一次即全局可见），
+	// Go 必须逐入口挂载。交互循环在 Start 里新建 holder，其余路径（Invoke/Stream）
+	// 若已由 Start 建立则同样继承。
+	if worktree.WorktreeSessionStateFromCtx(ctx) == nil {
+		d.interactionControlMu.Lock()
+		state := d.worktreeSessionState
+		d.interactionControlMu.Unlock()
+		if state != nil {
+			ctx = worktree.WithWorktreeSessionState(ctx, state)
 		}
 	}
 	return ctx

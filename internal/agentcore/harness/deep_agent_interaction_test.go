@@ -11,6 +11,7 @@ import (
 
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -653,6 +654,39 @@ func TestStart_会话为nil时自建会话(t *testing.T) {
 	t.Cleanup(func() { _ = d.Stop(context.Background()) })
 	require.NotNil(t, d.interactionSession)
 	assert.Equal(t, "default", d.interactionSessionID)
+}
+
+// TestStart_初始化worktree会话态 验证 init_session_state() 对齐
+// Python: start() L3959 init_session_state() → _get_state() 幂等创建 holder
+func TestStart_初始化worktree会话态(t *testing.T) {
+	d := newTestDeepAgent()
+	sess := session.NewSession()
+	require.NoError(t, d.Start(context.Background(), sess))
+	t.Cleanup(func() { _ = d.Stop(context.Background()) })
+
+	first := d.worktreeSessionState
+	require.NotNil(t, first, "Start 后必须已有 worktree holder")
+
+	// 幂等：重复 Start 复用同一 holder（对齐 _get_state 的 if s is None）
+	require.NoError(t, d.Start(context.Background(), sess))
+	assert.Same(t, first, d.worktreeSessionState, "重复 Start 不得换新 holder")
+
+	// 入口挂载：等价 contextvar 全局可见
+	ctx := d.attachRunContexts(context.Background())
+	assert.Same(t, first, worktree.WorktreeSessionStateFromCtx(ctx),
+		"每入口必须把 holder 挂到 ctx 上")
+}
+
+// TestAttachRunContexts_不覆盖调用方已有状态 验证子 agent 隔离
+func TestAttachRunContexts_不覆盖调用方已有状态(t *testing.T) {
+	d := newTestDeepAgent()
+	require.NoError(t, d.Start(context.Background(), session.NewSession()))
+	t.Cleanup(func() { _ = d.Stop(context.Background()) })
+
+	own := worktree.InitWorktreeSessionState()
+	ctx := worktree.WithWorktreeSessionState(context.Background(), own)
+	assert.Same(t, own, worktree.WorktreeSessionStateFromCtx(d.attachRunContexts(ctx)),
+		"调用方已注入时不得覆盖（子 agent 用自己的 holder）")
 }
 
 // TestStop_未启动时幂等 验证未 Start 的 Stop 直接返回
