@@ -4092,6 +4092,16 @@ func (d *DeepAgent) prepareInteractionTaskLoop(ctx context.Context, sess *sessio
 	return coord, ctrl, nil
 }
 
+// PrepareInteractionTaskLoop 供宿主自建任务循环内核。
+//
+// Python: NativeHarness.start → self._setup_task_loop(session)
+// Python 靠继承直接调用私有方法；Go 跨包无法访问，故开这一扇窄门
+// （25.1a 唯一的私有缝）。语义与 prepareInteractionTaskLoop 完全一致：
+// 创建或复用 Controller 基础设施，并把会话绑定到内核。
+func (d *DeepAgent) PrepareInteractionTaskLoop(ctx context.Context, sess *session.Session) (*task_loop.LoopCoordinator, *task_loop.TaskLoopController, error) {
+	return d.prepareInteractionTaskLoop(ctx, sess)
+}
+
 // boundSessionIDValue 返回已绑定会话标识（与字段 boundSessionID 区分命名）。
 func (d *DeepAgent) boundSessionIDValue() string {
 	d.configMu.RLock()
