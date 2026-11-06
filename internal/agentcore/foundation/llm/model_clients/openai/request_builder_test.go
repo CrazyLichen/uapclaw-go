@@ -175,3 +175,26 @@ func TestBuildHTTPRequest_默认超时360(t *testing.T) {
 		t.Errorf("默认 Client.Timeout = %v want 360s", client.Timeout)
 	}
 }
+
+// ──────────────────────────── NormalizeAPIBase 测试（C-E1）────────────────────────────
+
+// TestNormalizeAPIBase_矩阵 对齐 openai_model_client.py:307-321 _normalize_openai_base_url。
+//
+// 不推断 /v1；剥空白、去尾斜杠、剥掉已带的 /chat/completions（只剥一层）→ 避免双段 404。
+func TestNormalizeAPIBase_矩阵(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"https://host/v1/chat/completions", "https://host/v1"},
+		{"https://host/v1/chat/completions/", "https://host/v1"},
+		{"https://host/v1/", "https://host/v1"},
+		{"https://host/v1", "https://host/v1"},
+		{"  https://host/v1  ", "https://host/v1"},
+		{"https://host/v1/chat/completions/chat/completions", "https://host/v1/chat/completions"},
+		{"", ""},
+		{"https://host", "https://host"},
+	}
+	for _, tc := range cases {
+		if got := NormalizeAPIBase(tc.in); got != tc.want {
+			t.Errorf("NormalizeAPIBase(%q) = %q want %q", tc.in, got, tc.want)
+		}
+	}
+}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -337,7 +336,8 @@ func (c *InferenceAffinityModelClient) Release(
 	}
 
 	// 2. 构建 HTTP 请求
-	apiURL := strings.TrimRight(c.ClientConfig.APIBase, "/") + releaseKVCachePath
+	// api_base 归一（C-E1）：剥离已带的 /chat/completions，避免双段
+	apiURL := openai.NormalizeAPIBase(c.ClientConfig.APIBase) + releaseKVCachePath
 	bodyBytes, err := json.Marshal(releaseBody)
 	if err != nil {
 		return false, fmt.Errorf("序列化 release 请求体失败: %w", err)

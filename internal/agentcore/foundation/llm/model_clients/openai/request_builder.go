@@ -54,6 +54,22 @@ func AdjustParamsForOpenAI(params map[string]any, apiBase string) {
 	}
 }
 
+// NormalizeAPIBase 归一 api_base：strip 空白 → 去尾斜杠 → 剥掉已带的 /chat/completions。
+//
+// 不推断 /v1（上游同样不注入）。用户在 api_base 里粘贴完整端点 URL 时，
+// 若不剥离会拼成 ".../chat/completions/chat/completions" 导致 404。
+//
+// Python: openai_model_client.py:307-321 _normalize_openai_base_url
+func NormalizeAPIBase(apiBase string) string {
+	base := strings.TrimSpace(apiBase)
+	base = strings.TrimRight(base, "/")
+	if strings.HasSuffix(base, chatCompletionsPath) {
+		base = strings.TrimSuffix(base, chatCompletionsPath)
+		base = strings.TrimRight(base, "/")
+	}
+	return base
+}
+
 // BuildHTTPRequest 构建发送给 OpenAI API 的 HTTP 请求。
 //
 // 超时语义（设计文档批次 C-A，对齐上游 httpx 分阶段超时）：
@@ -80,8 +96,8 @@ func BuildHTTPRequest(
 		return nil, nil, err
 	}
 
-	// 构建 API URL
-	apiURL := strings.TrimRight(apiBase, "/") + chatCompletionsPath
+	// 构建 API URL（api_base 归一：C-E1）
+	apiURL := NormalizeAPIBase(apiBase) + chatCompletionsPath
 
 	// 超时预算：默认 360（对齐 Python schema/config.py:145）
 	effectiveTimeout := defaultRequestTimeoutSeconds

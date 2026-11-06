@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -42,6 +43,9 @@ import (
 //
 // Python: dashscope.base_http_api_url = self.model_client_config.api_base
 func ResolveDashScopeBaseURL(apiBase string) string {
+	// 先归一（strip 空白/尾斜杠/已带 /chat/completions）——偏差 D-4：上游原生路径原样透传，
+	// Go 多做一步，使本函数也能接受用户粘贴的完整端点 URL。
+	apiBase = openai.NormalizeAPIBase(apiBase)
 	idx := strings.Index(apiBase, compatibleModeMarker)
 	if idx == -1 {
 		return strings.TrimRight(apiBase, "/")

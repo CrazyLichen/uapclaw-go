@@ -25,6 +25,7 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
@@ -1288,9 +1289,9 @@ func modelsValidate(wc *WebChannel) methodHandler {
 			return
 		}
 
-		// 清理 api_base（去掉末尾 /chat/completions 和 /）
-		apiBase = strings.TrimSuffix(apiBase, "/chat/completions")
-		apiBase = strings.TrimRight(apiBase, "/")
+		// api_base 归一（C-E1）：与请求构建侧共用 openai.NormalizeAPIBase
+		// （strip 空白 / 尾斜杠 / 已带 /chat/completions）
+		apiBase = openai.NormalizeAPIBase(apiBase)
 
 		// verify_ssl（对齐 Python: bool(item.get("verify_ssl", False))，默认 false）
 		verifySSL := false
