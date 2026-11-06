@@ -99,7 +99,7 @@ rg -n "<Python 符号>" internal/
 | A-06 | 输出上限在"还没有任何答案"时命中，应判定失败而非静默空回包 | `5f017e34` | 循环终止判定 | P1 | ✅ |
 | A-07 | 一轮既无答案也无工具调用 → 重试一次，仍无则失败（防静默空轮） | `ad668f63` | 同上 | P1 | ✅ |
 | A-08 | 无进展停止 + 外层轮次上限 + 视觉降级（防 agent 挂死） | `fee4e34c` | 循环守卫 | P0 | ✅ |
-| A-09 | 只有**连续相同**的工具调用（工具集+参数）才计为 loop，不能跨轮累计 | `589da12a`（`1c4f5603` 无效已删除） | ⤵️ 领域九 9.30 ModelAnomalyDetectionRail | P1 | ⤵️ |
+| A-09 | 只有**连续相同**的工具调用（工具集+参数）才计为 loop，不能跨轮累计 | `589da12a`（`1c4f5603` 无效已删除） | ✅ 领域九 9.86 ModelAnomalyDetectionRail（实现 `internal/agentcore/harness/rails/model_anomaly.go` `findToolLoopCompactRange`：`end != 下一轮 start` 即 break，回归用例 `TestToolLoopCompact_用户输入隔开不折叠`） | P1 | ✅ |
 | A-10 | 中断后的 ReAct context 需持久化，否则恢复丢上下文 | `bf0a3eb2` | 会话状态提交点 | P1 | ✅ |
 | A-11 | system prompt 为空时仍要保留 skills section | `051ae9c8` | `react_prompt.go` | P2 | ✅ |
 | A-12 | Agent 工具（agent-as-tool）HTTP 请求需超时与响应状态校验 | `b8ceb049` | 技能远程下载已具备超时+状态校验；wikipedia 工具未迁移 | P2 | ➖ |
