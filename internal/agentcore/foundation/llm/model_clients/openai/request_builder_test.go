@@ -2,8 +2,12 @@ package openai
 
 import (
 	"context"
+	"errors"
+	"math"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── AdjustParamsForOpenAI 测试 ────────────────────────────
@@ -196,5 +200,58 @@ func TestNormalizeAPIBase_矩阵(t *testing.T) {
 		if got := NormalizeAPIBase(tc.in); got != tc.want {
 			t.Errorf("NormalizeAPIBase(%q) = %q want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// ──────────────────────────── 编码错误分类测试（C-E2）────────────────────────────
+
+// isRequestEncodingError 判 181004 且 details.stage == "request_encoding"。
+func isRequestEncodingError(t *testing.T, err error) bool {
+	t.Helper()
+	var base *exception.BaseError
+	if !errors.As(err, &base) {
+		return false
+	}
+	if base.Code() != 181004 {
+		return false
+	}
+	details, _ := base.Details().(map[string]any)
+	return details["stage"] == "request_encoding"
+}
+
+// TestBuildHTTPRequest_编码错误分类 NaN/不可序列化/非 UTF-8 → 181004 + stage=request_encoding。
+//
+// Python: utils/request_encoding.py:27-35（SDK _build_request 边界）
+// + openai_model_client.py:2011/2228 的 details=={"stage":"request_encoding"} 放行。
+func TestBuildHTTPRequest_编码错误分类(t *testing.T) {
+	cases := []struct {
+		name   string
+		params map[string]any
+	}{
+		{"NaN", map[string]any{"model": "m", "temperature": math.NaN(), "messages": []any{}}},
+		{"Inf", map[string]any{"model": "m", "top_p": math.Inf(1), "messages": []any{}}},
+		{"不可序列化类型", map[string]any{"model": "m", "bad": make(chan int), "messages": []any{}}},
+		{"非UTF8", map[string]any{"model": "m", "messages": []any{
+			map[string]any{"role": "user", "content": "ab\xff\xfe"}}}},
+	}
+	for _, tc := range cases {
+		_, _, err := BuildHTTPRequest(context.Background(), "http://x", "k", tc.params, nil, nil, false, "", false)
+		if err == nil {
+			t.Errorf("%s: 应返回错误", tc.name)
+			continue
+		}
+		if !isRequestEncodingError(t, err) {
+			t.Errorf("%s: 应分类为 181004+request_encoding，实际 %v", tc.name, err)
+		}
+	}
+}
+
+// TestBuildHTTPRequest_正常请求不误判 合法参数不应被判为编码错误。
+func TestBuildHTTPRequest_正常请求不误判(t *testing.T) {
+	_, _, err := BuildHTTPRequest(context.Background(), "http://x", "k",
+		map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": "中文 ok"}}},
+		nil, nil, false, "", false)
+	if err != nil {
+		t.Fatalf("合法请求不应报错: %v", err)
 	}
 }

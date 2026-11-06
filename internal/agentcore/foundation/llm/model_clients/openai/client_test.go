@@ -1187,3 +1187,31 @@ func TestInvoke_超过总超时被切断(t *testing.T) {
 		t.Fatal("超过总超时应返回错误")
 	}
 }
+
+// TestInvoke_编码错误原样上抛 编码失败不应被包成 MODEL_CALL_FAILED（避免误重试）。
+//
+// Python: openai_model_client.py:2011 details=={"stage":"request_encoding"} 时 re-raise。
+func TestInvoke_编码错误原样上抛(t *testing.T) {
+	cc := &llmschema.ModelClientConfig{ClientProvider: "OpenAI", APIKey: "k",
+		APIBase: "http://127.0.0.1:1", Timeout: 1, VerifySSL: false}
+	c, err := NewOpenAIModelClient(llmschema.NewModelRequestConfig(llmschema.WithModelName("m")), cc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 用 NaN 触发编码失败（经由 WithInvokeMaxTokens 之外的 Extra 通道不可行，
+	// 直接构造含非法 UTF-8 的 dict 消息）
+	msgs := model_clients.NewDictsMessagesParam([]map[string]any{
+		{"role": "user", "content": "bad\xff"},
+	})
+	_, err = c.Invoke(context.Background(), msgs)
+	if err == nil {
+		t.Fatal("应返回错误")
+	}
+	if !IsRequestEncodingErr(err) {
+		t.Fatalf("应保留 request_encoding 分类，实际 %v", err)
+	}
+	var base *exception.BaseError
+	if !errors.As(err, &base) || base.Code() != 181004 {
+		t.Fatalf("错误码应为 181004，实际 %v", err)
+	}
+}

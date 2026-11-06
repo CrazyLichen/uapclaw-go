@@ -165,6 +165,10 @@ func (c *SiliconFlowModelClient) Stream(
 		true, // Stream 路径：无总超时（C-A2 超时语义）
 	)
 	if err != nil {
+		// 请求编码错误原样上抛（Python: details=={"stage":"request_encoding"} 时 raise）
+		if openai.IsRequestEncodingErr(err) {
+			return nil, err
+		}
 		return nil, c.WrapError("stream", err)
 	}
 

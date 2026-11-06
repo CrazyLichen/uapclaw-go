@@ -132,6 +132,11 @@ func (c *OpenAIModelClient) Invoke(
 		false,
 	)
 	if err != nil {
+		// 请求编码错误原样上抛（不包 MODEL_CALL_FAILED，跳过瞬时失败重试）
+		// Python: openai_model_client.py:2011/2228 details=={"stage":"request_encoding"} 时 raise
+		if IsRequestEncodingErr(err) {
+			return nil, err
+		}
 		return nil, c.WrapError("invoke", err)
 	}
 
@@ -277,6 +282,11 @@ func (c *OpenAIModelClient) Stream(
 		true,
 	)
 	if err != nil {
+		// 请求编码错误原样上抛（不包 MODEL_CALL_FAILED，跳过瞬时失败重试）
+		// Python: openai_model_client.py:2011/2228 details=={"stage":"request_encoding"} 时 raise
+		if IsRequestEncodingErr(err) {
+			return nil, err
+		}
 		return nil, c.WrapError("stream", err)
 	}
 

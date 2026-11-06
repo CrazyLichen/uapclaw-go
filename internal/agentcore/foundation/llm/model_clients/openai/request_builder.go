@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -20,6 +23,11 @@ import (
 
 // chatCompletionsPath Chat Completion API 路径
 const chatCompletionsPath = "/chat/completions"
+
+// requestEncodingStage 请求编码阶段的 details.stage 标记。
+//
+// Python: request_encoding.py 的 details={"stage": "request_encoding"}
+const requestEncodingStage = "request_encoding"
 
 // defaultRequestTimeoutSeconds 默认请求超时（秒）。
 //
@@ -90,8 +98,8 @@ func BuildHTTPRequest(
 	sslCert string,
 	streaming bool,
 ) (*http.Request, *http.Client, error) {
-	// 序列化请求体（编码失败/非法 UTF-8 → 181004，C-E2 批次接入分类）
-	body, err := encodeJSON(params)
+	// 序列化请求体（编码失败/非法 UTF-8 → 181004 + stage=request_encoding，C-E2）
+	body, err := encodeJSONChecked(params)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -153,6 +161,96 @@ func HandleExtraBody(params map[string]any) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// encodeJSONChecked 序列化请求体并校验 UTF-8，失败抛 181004 MODEL_INVOKE_PARAM_ERROR。
+//
+// 覆盖四类本地请求构建失败（重试无意义的错误，不应被当成瞬时故障重试）：
+//   - json 不支持的值：NaN / ±Inf / chan / func 等不可序列化类型
+//   - 非 UTF-8 字节：Python 侧是 UnicodeEncodeError（ValueError 子类），
+//     Go 的 encoding/json 会静默替换为 U+FFFD——按上游严格性改为报错
+//
+// Python: utils/request_encoding.py:27-35 create_encoding_aware_openai_client 的
+// _build_request 包装（catch TypeError/ValueError → MODEL_INVOKE_PARAM_ERROR +
+// details={"stage": "request_encoding"}）
+func encodeJSONChecked(params map[string]any) ([]byte, error) {
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, exception.NewBaseError(
+			exception.StatusModelInvokeParamError,
+			exception.WithMsg(fmt.Sprintf("Cannot encode model request: %v", err)),
+			exception.WithDetails(map[string]any{"stage": requestEncodingStage}),
+			exception.WithCause(err),
+		)
+	}
+	// 输入侧 UTF-8 校验：json.Marshal 会把非法字节静默替换为 U+FFFD（编码后的 body 恒合法），
+	// 故必须在编码前逐字符串检查，才能对齐 Python 的 UnicodeEncodeError 语义。
+	if badPath := findInvalidUTF8(params, ""); badPath != "" {
+		return nil, exception.NewBaseError(
+			exception.StatusModelInvokeParamError,
+			exception.WithMsg(fmt.Sprintf("Cannot encode model request: invalid UTF-8 at %s", badPath)),
+			exception.WithDetails(map[string]any{"stage": requestEncodingStage}),
+		)
+	}
+	return body, nil
+}
+
+// findInvalidUTF8 递归查找参数树中第一个非法 UTF-8 字符串，返回其路径（"" 表示全部合法）。
+//
+// Python 对照：UnicodeEncodeError 在 SDK 构建请求体时抛出（lone surrogate 等），
+// Go 的 encoding/json 不报错而是替换字符，故需显式前置检查。
+func findInvalidUTF8(value any, path string) string {
+	switch v := value.(type) {
+	case string:
+		if !utf8.ValidString(v) {
+			return path
+		}
+	case map[string]any:
+		for key, item := range v {
+			child := path + "." + key
+			if !utf8.ValidString(key) {
+				return child
+			}
+			if bad := findInvalidUTF8(item, child); bad != "" {
+				return bad
+			}
+		}
+	case []any:
+		for i, item := range v {
+			if bad := findInvalidUTF8(item, fmt.Sprintf("%s[%d]", path, i)); bad != "" {
+				return bad
+			}
+		}
+	case []map[string]any:
+		// BuildRequestParams 产出的消息列表是该具体类型，不是 []any
+		for i, item := range v {
+			if bad := findInvalidUTF8(item, fmt.Sprintf("%s[%d]", path, i)); bad != "" {
+				return bad
+			}
+		}
+	}
+	return ""
+}
+
+// IsRequestEncodingErr 判是否为请求编码阶段错误（181004 + stage=request_encoding）。
+//
+// 调用方据此原样上抛，不再包装成 MODEL_CALL_FAILED，从而跳过瞬时失败重试。
+//
+// Python: openai_model_client.py:2011/2228
+//
+//	if isinstance(e, ValidationError) and getattr(e, "details", None) == {"stage": "request_encoding"}:
+//	    raise
+func IsRequestEncodingErr(err error) bool {
+	var base *exception.BaseError
+	if !errors.As(err, &base) {
+		return false
+	}
+	if base.Code() != exception.StatusModelInvokeParamError.Code() {
+		return false
+	}
+	details, _ := base.Details().(map[string]any)
+	stage, _ := details["stage"].(string)
+	return stage == requestEncodingStage
+}
 
 // encodeJSON 将 map 编码为 JSON 字节。
 func encodeJSON(params map[string]any) ([]byte, error) {
