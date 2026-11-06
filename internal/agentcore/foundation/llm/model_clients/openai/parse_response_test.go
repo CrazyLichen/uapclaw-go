@@ -161,9 +161,11 @@ func TestParseResponse_ToolCalls(t *testing.T) {
 		t.Errorf("ToolCall[1].Index = %d, want 1", tc2.Index)
 	}
 
-	// 有 tool_calls 时 finish_reason 应被修正为 "tool_calls"
-	if result.FinishReason != "tool_calls" {
-		t.Errorf("FinishReason = %q, want %q（有 tool_calls 时应被修正）", result.FinishReason, "tool_calls")
+	// provider 有值时 finish_reason 原样保留（C-03 对齐）：
+	// 上游 docstring 明确 "If the provider returns a value, it is preserved as-is"，
+	// 不再把 "stop" 改写成 "tool_calls"；工具判定由 tool_calls 字段本身表达。
+	if result.FinishReason != "stop" {
+		t.Errorf("FinishReason = %q, want %q（provider 原值应保留）", result.FinishReason, "stop")
 	}
 }
 
@@ -528,4 +530,48 @@ func (p *errorOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.
 	out := make(chan model_clients.StreamParsedResult)
 	go func() { close(out) }()
 	return out
+}
+
+// TestParseResponse_FinishReason_对齐 provider 有值原样保留；空值按 tool_calls/stop 兜底。
+//
+// Python: openai_model_client.py:2877-2879（docstring 2779-2786）
+//
+//	finish_reason = getattr(choice, 'finish_reason', None) or None
+//	if not finish_reason:
+//	    finish_reason = "tool_calls" if tool_calls else "stop"
+func TestParseResponse_FinishReason_对齐(t *testing.T) {
+	strPtr := func(s string) *string { return &s }
+	mkResp := func(finish string, withTools bool) *ChatCompletionResponse {
+		msg := &ResponseMessage{Content: strPtr("hi")}
+		if withTools {
+			msg.ToolCalls = []ResponseToolCall{{
+				Type: "function", Function: ResponseFunction{Name: "f", Arguments: "{}"}}}
+		}
+		return &ChatCompletionResponse{Choices: []ResponseChoice{{Message: msg, FinishReason: finish}}}
+	}
+	cfg := llmschema.NewModelRequestConfig(llmschema.WithModelName("m"))
+
+	cases := []struct {
+		name   string
+		finish string
+		tools  bool
+		want   string
+	}{
+		{"stop+有工具：原样保留 stop（不改写）", "stop", true, "stop"},
+		{"stop 无工具", "stop", false, "stop"},
+		{"tool_calls 原样", "tool_calls", true, "tool_calls"},
+		{"length 原样", "length", false, "length"},
+		{"content_filter 原样", "content_filter", false, "content_filter"},
+		{"空+有工具 → tool_calls", "", true, "tool_calls"},
+		{"空无工具 → stop", "", false, "stop"},
+	}
+	for _, tc := range cases {
+		got, err := ParseResponse(mkResp(tc.finish, tc.tools), cfg, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got.FinishReason != tc.want {
+			t.Errorf("%s: FinishReason = %q want %q", tc.name, got.FinishReason, tc.want)
+		}
+	}
 }

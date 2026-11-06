@@ -117,10 +117,21 @@ func ParseResponse(
 		}
 	}
 
-	// 处理 finish_reason
+	// 处理 finish_reason：provider 有值原样保留；空值按 tool_calls/stop 兜底
+	//
+	// Python: openai_model_client.py:2877-2879
+	//   finish_reason = getattr(choice, 'finish_reason', None) or None
+	//   if not finish_reason:
+	//       finish_reason = "tool_calls" if tool_calls else "stop"
+	// 注意：不得把 "stop" 改写成 "tool_calls"——上游 docstring(2779-2786) 明确
+	// "If the provider returns a value, it is preserved as-is"。
 	finishReason := choice.FinishReason
-	if len(toolCalls) > 0 && finishReason == "stop" {
-		finishReason = "tool_calls"
+	if finishReason == "" {
+		if len(toolCalls) > 0 {
+			finishReason = "tool_calls"
+		} else {
+			finishReason = "stop"
+		}
 	}
 
 	// 提取 prompt_token_ids
