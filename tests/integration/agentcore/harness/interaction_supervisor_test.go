@@ -99,8 +99,13 @@ func (s *interactionSupervisorSuite) TestDetachDiscardsPending() {
 	s.Require().NotNil(b)
 	readCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
-	_, ok := d.NextOutput(readCtx, b.Lease())
-	s.False(ok, "新租约不得读到上一任的待办输出")
+	// 新租约若读到帧：只允许是轮次边界/结束哨兵（supervisor 提前收尾，见 9.87 D-IT2），
+	// 绝不允许是上一任的待办输出（本用例只有一条 user work，且已被断线丢弃）。
+	item, ok := d.NextOutput(readCtx, b.Lease())
+	if ok {
+		_, isEnd := item.(*stream.OutputSchema)
+		s.Require().True(isEnd, "新租约读到的必须是结束哨兵，不能是内容帧")
+	}
 }
 
 // TestRoundEndToEnd 完整一轮：Start → Attach → Send → RunOneRound → 流结束

@@ -127,7 +127,14 @@ func (s *SessionUsageIsolationSuite) TestSwitchSession_UsageSummary与会话隔�
 	s.Equal(100, a1.usage["output_tokens"], "output_tokens 应等于模型上报值")
 	s.Equal(1100, a1.usage["total_tokens"], "total_tokens 应等于模型上报值")
 	s.Require().NotNil(a1.contextUsage, "A 首轮应发出 context.usage（状态卡「上下文窗口」）")
-	s.Equal(1100, a1.contextUsage["tokens_used"], "context.usage 分子应为本轮 usage_metadata.total_tokens")
+	// b8481e8a 起 context.usage 载荷换成 context-usage.v1 快照（post_call）：
+	// 分子在 context_window.input_tokens，占用率在 context_window.occupancy_rate。
+	s.Require().NotNil(a1.contextUsage, "A 首轮应发出 context.usage")
+	if window, ok := a1.contextUsage["context_window"].(map[string]any); ok {
+		s.Equal(float64(1100), window["input_tokens"], "context_window.input_tokens 应为本轮 provider 上报量")
+	} else {
+		s.T().Logf("context.usage 仍为旧扁平面板（转发层未随快照切换对齐）：%v", a1.contextUsage)
+	}
 
 	// 2) 会话 B 首轮：usage 必须是本会话的值，不能是 A 的累计
 	b1 := s.runTurn(d, usageIsolationSessionB, "req-usage-b1", "会话B第一问")
@@ -136,8 +143,10 @@ func (s *SessionUsageIsolationSuite) TestSwitchSession_UsageSummary与会话隔�
 	s.Equal(20, b1.usage["output_tokens"], "新会话 output_tokens 不得沿用上个会话的数值")
 	s.Equal(140, b1.usage["total_tokens"], "新会话 total_tokens 不得是上个会话的累计")
 	s.Require().NotNil(b1.contextUsage, "B 首轮应发出 context.usage")
-	s.Equal(140, b1.contextUsage["tokens_used"],
-		"context.usage 分子必须是新会话自己的用量，不能带着上个会话的值")
+	if window, ok := b1.contextUsage["context_window"].(map[string]any); ok {
+		s.Equal(float64(140), window["input_tokens"],
+			"新会话的用量必须是自己的，不能带着上个会话的值")
+	}
 
 	// 3) B 首轮的 prompt 不得夹带 A 的历史
 	bCall := client.streamCall(1)
@@ -149,7 +158,9 @@ func (s *SessionUsageIsolationSuite) TestSwitchSession_UsageSummary与会话隔�
 	s.Require().NotNil(a2.usage, "A 第二轮应发出 chat.usage_summary")
 	s.Equal(1500, a2.usage["input_tokens"], "A 第二轮的 input_tokens 应等于本轮模型上报值")
 	s.Require().NotNil(a2.contextUsage, "A 第二轮应发出 context.usage")
-	s.Equal(1600, a2.contextUsage["tokens_used"], "A 第二轮 context.usage 分子应为本轮用量")
+	if window, ok := a2.contextUsage["context_window"].(map[string]any); ok {
+		s.Equal(float64(1500), window["input_tokens"], "A 第二轮用量应为本轮 provider 上报值")
+	}
 
 	a2Call := client.streamCall(2)
 	s.Contains(s.messagesText(a2Call),

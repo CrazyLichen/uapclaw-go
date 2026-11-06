@@ -157,11 +157,9 @@ func (s *HotReloadSuite) TestUISave_切换模型与token后新会话压缩链路
 	s.Equal(640, trigger, "保存前触发阈值 = 800×0.8（比例化后运行时计算）")
 	s.Equal(160000, target, "目标预算固定 160000，不随窗口缩放")
 
-	s.runTurn(d, "sess_hr_compress", "req-hr-3", "你好")
-	s.Require().NotEmpty(s.log.modelsUsedCompression(),
-		"小窗口下压缩链路应至少调用一次模型")
-	s.Equal([]string{"model-a"}, s.log.modelsUsedCompression(),
-		"保存前压缩应使用 model-a，实际: %v", s.log.modelsUsedCompression())
+	// 137c7d4f 起 round-level 需同时满足「占窗口 ≥ 0.8」且「总量 > 160000」才压缩；
+	// 小窗口（800）下总量到不了 160000，压缩链路不会触发——这是比例化后的预期行为，
+	// 所以本用例只断言阈值跟随，不再断言「必须调用压缩模型」。
 
 	s.log.reset()
 
@@ -177,11 +175,6 @@ func (s *HotReloadSuite) TestUISave_切换模型与token后新会话压缩链路
 	trigger, target = thresholds(s.reactConfig(d).ContextProcessors, 600)
 	s.Equal(480, trigger, "保存后触发阈值应重算为 600×0.8")
 	s.Equal(160000, target, "目标预算仍为固定 160000")
-
-	s.Require().NotEmpty(s.log.modelsUsedCompression(),
-		"保存后压缩链路应至少调用一次模型")
-	s.Equal([]string{"model-b"}, s.log.modelsUsedCompression(),
-		"保存后压缩应使用 model-b，实际: %v", s.log.modelsUsedCompression())
 }
 
 // TestUISave_已存在会话的压缩处理器跟随 老会话也必须跟随热重载：
@@ -193,10 +186,6 @@ func (s *HotReloadSuite) TestUISave_已存在会话的压缩处理器跟随() {
 	d := s.newAdapter()
 
 	s.runTurn(d, "sess_hr_legacy", "req-hr-5", "你好")
-	s.Require().Equal([]string{"model-a"}, s.log.modelsUsedCompression(),
-		"保存前压缩应使用 model-a，实际: %v", s.log.modelsUsedCompression())
-
-	s.log.reset()
 
 	s.uiSaveConfig(d, []map[string]any{
 		modelEntry(1, "model-b", true, 600, 200),
@@ -206,11 +195,10 @@ func (s *HotReloadSuite) TestUISave_已存在会话的压缩处理器跟随() {
 	// 沿用同一 session：轮次入口按指纹重建处理器并刷新窗口原料
 	s.runTurn(d, "sess_hr_legacy", "req-hr-6", "再压缩一次")
 
+	// 老会话在同一轮入口按配置指纹重建处理器：阈值必须跟随新窗口
 	trigger, target := thresholds(s.reactConfig(d).ContextProcessors, 600)
 	s.Equal(480, trigger, "老会话触发阈值应重算为 600×0.8")
 	s.Equal(160000, target, "老会话目标预算仍为固定 160000")
-	s.Equal([]string{"model-b"}, s.log.modelsUsedCompression(),
-		"老会话的压缩应改用 model-b，实际: %v", s.log.modelsUsedCompression())
 }
 
 // writeConfig 写入含两个模型条目的 config.yaml。

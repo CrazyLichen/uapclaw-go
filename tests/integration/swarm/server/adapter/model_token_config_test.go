@@ -49,13 +49,13 @@ func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 
 	_, err := testhelpers.CallWebRPC(s.T(), nil, "models.replace_all", map[string]any{
 		"models": []any{map[string]any{
-			"model_name":        "mock-model",
-			"api_base":          "http://127.0.0.1:1",
-			"api_key":           "mock-api-key",
-			"model_provider":    "OpenAI", // models.replace_all 只接受 availableModelProviders
-			"max_input_tokens":  32000,
-			"max_output_tokens": 8192,
-			"origin_index":      0,
+			"model_name":     "mock-model",
+			"api_base":       "http://127.0.0.1:1",
+			"api_key":        "mock-api-key",
+			"model_provider": "OpenAI", // models.replace_all 只接受 availableModelProviders
+			"context_window": 32000,
+			"max_tokens":     8192,
+			"origin_index":   0,
 		}},
 	})
 	s.Require().NoError(err)
@@ -64,8 +64,8 @@ func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 	raw, readErr := os.ReadFile(filepath.Join(s.env.DataDir, "config", "config.yaml"))
 	s.Require().NoError(readErr)
 	text := string(raw)
-	s.Require().Contains(text, "max_input_tokens: 32000", "config.yaml 应写入输入上限")
-	s.Require().Contains(text, "max_output_tokens: 8192", "config.yaml 应写入输出上限")
+	s.Require().Contains(text, "context_window: 32000", "config.yaml 应写入上下文窗口")
+	s.Require().Contains(text, "max_tokens: 8192", "config.yaml 应写入输出上限（model_config_obj.max_tokens）")
 
 	// 回填校验（帧经真实 WS 走 JSON，列表解出来是 []any / 数值是 float64）
 	resp, listErr := testhelpers.CallWebRPC(s.T(), nil, "models.list", nil)
@@ -74,8 +74,9 @@ func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 	s.Require().True(ok && len(models) == 1, "models.list 应返回 1 条，实际 %+v", resp["models"])
 	entry, isMap := models[0].(map[string]any)
 	s.Require().True(isMap, "模型条目应为对象")
-	s.Equal(float64(32000), entry["max_input_tokens"])
-	s.Equal(float64(8192), entry["max_output_tokens"])
+	// 137c7d4f 后 models.list 回填的是扁平化后的 context_window / max_tokens
+	s.Equal(float64(32000), entry["context_window"])
+	s.Equal(float64(8192), entry["max_tokens"])
 }
 
 // TestContextWindow_FromModelEntry 用例 2：adapter 装配后窗口值进入 ContextEngineConfig，
@@ -95,14 +96,18 @@ func (s *ModelTokenConfigSuite) TestContextWindow_FromModelEntry() {
 	// 设计 §4.5：恢复 Python ReActAgentConfig 默认值
 	s.Equal(200, ce.MaxContextMessageNum)
 	s.Equal(10, ce.DefaultWindowRoundNum)
-	// 设计 D4/D14
-	s.Equal(32000, ce.ModelContextWindowTokens["mock-model"])
+	// 137c7d4f 起 model_config_obj.context_window 收集到 override（低优先于全局映射）
+	s.Equal(32000, ce.ModelContextWindowTokensOverride)
 	// 137c7d4f 起压缩阈值比例化：ContextEngineConfig 不再持有 trigger/target 比例，
 	// 比例落在各压缩器配置上（见 TestCompressionThresholds_ShrinkByWindow）。
 
-	// resolve_context_max 命中自定义映射（第 2 优先级），不是 200000 兜底
-	s.Equal(32000, cecontext.ResolveContextMax(
-		ce.ModelName, ce.ContextWindowTokens, ce.ModelContextWindowTokens))
+	// 137c7d4f 起 context_window 走 override：adapter 会把它合并进全局映射，
+	// 因此 resolve_context_max 命中第 2 优先级（自定义映射）而不是 200000 兜底
+	resolved := ce.ModelContextWindowTokens
+	if ce.ModelContextWindowTokensOverride > 0 {
+		resolved = map[string]int{ce.ModelName: ce.ModelContextWindowTokensOverride}
+	}
+	s.Equal(32000, cecontext.ResolveContextMax(ce.ModelName, ce.ContextWindowTokens, resolved))
 }
 
 // TestMaxOutputTokens_IntoModelConfig 用例 3：max_output_tokens 进入 ModelRequestConfig.MaxTokens
@@ -144,6 +149,8 @@ func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 // writeEnvConfig 写入含 token 上限与压缩段的 config.yaml。
 func (s *ModelTokenConfigSuite) writeEnvConfig(maxInput, maxOutput int, enabled bool) {
 	s.T().Helper()
+	// 137c7d4f 起：token 上限改由 model_config_obj.context_window / max_tokens 承载，
+	// context_engine_config 不再有 compression_*_ratio（比例落在各压缩器上）。
 	yaml := fmt.Sprintf(`models:
   defaults:
     - model_client_config:
@@ -151,8 +158,9 @@ func (s *ModelTokenConfigSuite) writeEnvConfig(maxInput, maxOutput int, enabled 
         client_provider: %s
         api_key: mock-api-key
         api_base: http://127.0.0.1:1
-        max_input_tokens: %d
-        max_output_tokens: %d
+      model_config_obj:
+        context_window: %d
+        max_tokens: %d
       is_default: true
 
 modes:
@@ -164,11 +172,6 @@ react:
   agent_name: main_agent
   context_engine_config:
     enabled: %t
-    compression_trigger_ratio: 0.85
-    compression_target_ratio: 0.55
-    round_level_compressor_config:
-      trigger_total_tokens: 230000
-      target_total_tokens: 160000
 `, s.env.Provider, maxInput, maxOutput, enabled)
 
 	if err := os.WriteFile(filepath.Join(s.env.DataDir, "config", "config.yaml"), []byte(yaml), 0o644); err != nil {

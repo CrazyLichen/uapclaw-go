@@ -126,15 +126,9 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	s.Equal(int64(1), started.beforeMessages, "before 只统计窗口内对话消息（1 条用户消息）")
 	s.Greater(started.beforeTokens, int64(0), "before.tokens 应为正数")
 
-	var completed *compressionState
-	for i := range states {
-		if states[i].status == "completed" {
-			completed = &states[i]
-		}
-	}
-	s.Require().NotNil(completed, "小窗口下压缩应执行完成（completed 事件）")
-	s.Contains(completed.compactSummary, "[ROUND_LEVEL_MEMORY_BLOCK]",
-		"压缩产物应为轮级记忆块标记")
+	// 137c7d4f 起 round-level 多了一道「总量 > TargetTotalTokens(160000)」的预算门：
+	// 窗口 262 的小上下文永远到不了该预算，故只会 started 不 completed。
+	// 这是比例化 + 预算 guard 的预期行为，不再断言 completed。
 
 	// system prompt 未被压缩改写：模型仍收到一条很长的 system 消息
 	calls := s.client.calls()
@@ -199,6 +193,8 @@ func (s *CompressionTriggerSuite) setScript(steps ...scriptStep) {
 // writeConfig 写入配置；extraEngine 为 context_engine_config 下追加的缩进行。
 func (s *CompressionTriggerSuite) writeConfig(maxInput int, extraEngine string) {
 	s.T().Helper()
+	// 137c7d4f 起：窗口由 model_config_obj.context_window 承载，
+	// context_engine_config 不再有 compression_*_ratio（比例落在各压缩器配置上）。
 	yaml := fmt.Sprintf(`models:
   defaults:
     - model_client_config:
@@ -206,15 +202,14 @@ func (s *CompressionTriggerSuite) writeConfig(maxInput int, extraEngine string) 
         client_provider: %s
         api_key: mock-api-key
         api_base: http://127.0.0.1:1
-        max_input_tokens: %d
+      model_config_obj:
+        context_window: %d
       is_default: true
 
 react:
   agent_name: main_agent
   context_engine_config:
     enabled: true
-    compression_trigger_ratio: 0.85
-    compression_target_ratio: 0.55
 %s`, s.env.Provider, maxInput, extraEngine)
 	s.Require().NoError(os.WriteFile(
 		filepath.Join(s.env.DataDir, "config", "config.yaml"), []byte(yaml), 0o644))
