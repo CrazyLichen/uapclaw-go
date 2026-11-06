@@ -41,7 +41,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -59,7 +58,6 @@ import (
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
-	harnesspkg "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -69,7 +67,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -754,59 +751,36 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 	return result, nil
 }
 
-// DeliverInput 投递输入到 Agent。
-// Python: TeamAgent.deliver_input(content, use_steer=True)
+// DeliverInput 投递输入到成员脑。
+// Python: TeamAgent.deliver_input(content, use_steer=True)（team_agent.py:550-570）
+// 运行时的单 supervisor 串行化所有输入：idle 开轮，running 转向或排队。
+// 因为没有状态转换窗口的竞态，这里不需要手写分支，也不需要 pending 队列。
 func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
-	if a.streamController == nil {
+	h := a.Harness()
+	if h == nil {
 		return nil
 	}
-	// Python: 运行中→steer/follow-up; 飞行中→入队; 否则→启动Agent
-	if a.streamController.IsAgentRunning() {
-		var deliveryErr error
-		if useSteer {
-			deliveryErr = a.streamController.Steer(ctx, fmt.Sprintf("%v", content))
-		} else {
-			deliveryErr = a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
-		}
-		if deliveryErr != nil {
-			return a.degradeAtRoundBoundary(content, deliveryErr)
-		}
-		return nil
-	}
-	// M-16：判断与动作合并为一次持锁（EnqueueOrStart），对齐 Python 单线程下
-	// 「has_in_flight_round() + pending_inputs.append()」之间无 await 的原子性。
-	// 原实现先判断再入队，若轮次恰在两步之间收尾并 drain 完，这条输入会滞留到下次起轮。
-	if !a.streamController.EnqueueOrStart(ctx, content) {
-		// Python: preview = content if isinstance(content, str) else type(content).__name__
-		// Python: team_logger.info("[{}] queueing input for next round (transition window): {:.60}", ...)
-		preview, ok := content.(string)
-		if !ok {
-			preview = fmt.Sprintf("%T", content)
-		}
-		logger.Info(logComponent).
-			Str("member_name", a.MemberName()).
-			Str("content_preview", utils.TruncateRunes(preview, 60)).
-			Msg("queueing input for next round (transition window)")
-	}
-	return nil
+	return h.Send(ctx, content, useSteer)
 }
 
-// StartAgent 启动 Agent。
-// Python: TeamAgent.start_agent(content)
+// StartAgent 启动成员首轮。
+// Python: TeamAgent.start_agent(content) → _start_agent → harness.send(initial_message)
 func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
-	if a.streamController != nil {
-		return a.streamController.StartRound(ctx, content)
+	h := a.Harness()
+	if h == nil {
+		return nil
 	}
-	return nil
+	return h.Send(ctx, content, false)
 }
 
-// FollowUp 追加输入。
-// Python: TeamAgent.follow_up(content)
+// FollowUp 追加输入，等本轮结束后再跑。
+// Python: TeamAgent.follow_up(content)（team_agent.py:604）
 func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
-	if a.streamController != nil {
-		return a.streamController.FollowUp(ctx, content)
+	h := a.Harness()
+	if h == nil {
+		return nil
 	}
-	return nil
+	return h.Send(ctx, content, false)
 }
 
 // CancelAgent 取消 Agent。
@@ -820,30 +794,28 @@ func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 	return nil
 }
 
-// Steer 转向输入。
-// Python: TeamAgent.steer(content)
+// Steer 转向当前轮。
+// Python: TeamAgent.steer(content)（team_agent.py:676）
 func (a *TeamAgent) Steer(ctx context.Context, content string) error {
-	if a.streamController != nil {
-		return a.streamController.Steer(ctx, content)
+	h := a.Harness()
+	if h == nil {
+		return nil
 	}
-	return nil
+	return h.Send(ctx, content, true)
 }
 
-// ResumeInterrupt 恢复中断。
-// Python: TeamAgent.resume_interrupt(user_input)
+// ResumeInterrupt 用用户输入恢复挂起的中断。
+// Python: TeamAgent.resume_interrupt(user_input)（team_agent.py:688-700）
+// 校验有效后直接 send：排队与否由 supervisor 决定，不再手写 pendingInterruptResumes。
 func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput *interaction.InteractiveInput) error {
-	if a.streamController == nil {
+	h := a.Harness()
+	if h == nil {
 		return nil
 	}
-	// Python: 验证中断 → 飞行中则排队 → 否则 start_agent
-	if !a.streamController.IsValidInterruptResume(userInput) {
+	if !h.IsPendingInterruptResumeValid(userInput) {
 		return nil
 	}
-	if a.streamController.HasInFlightRound() {
-		a.streamController.pendingInterruptResumes = append(a.streamController.pendingInterruptResumes, userInput)
-		return nil
-	}
-	return a.streamController.StartRound(ctx, userInput)
+	return h.Send(ctx, userInput, false)
 }
 
 // ShutdownSelf 请求自身关闭。
@@ -1299,20 +1271,6 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 // 的轮次切换窗口里——属正常竞态而非故障。Python 在同一窗口静默丢弃输入，
 // 这里改为降级投递到下一轮队列：消息不丢，也不给用户一个假错误。
 // 其余错误（会话缺失、发布失败）原样上抛，由调用方决定是否 failure。
-func (a *TeamAgent) degradeAtRoundBoundary(content any, deliveryErr error) error {
-	if !errors.Is(deliveryErr, harnesspkg.ErrNoActiveLoop) {
-		return deliveryErr
-	}
-	if a.streamController != nil {
-		a.streamController.QueuePendingInput(content)
-	}
-	logger.Info(logComponent).
-		Str("member_name", a.MemberName()).
-		Err(deliveryErr).
-		Msg("steer target loop already cleared; input queued for next round")
-	return nil
-}
-
 // sessionIDFromOptsOrCtx 解析本轮应绑定的 sessionID。
 //
 // M-19: 对齐 Python invoke(inputs, session=None) / stream(inputs, session=None) 的
