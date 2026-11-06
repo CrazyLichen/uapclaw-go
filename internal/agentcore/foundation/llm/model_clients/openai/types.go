@@ -85,6 +85,9 @@ type ResponseUsage struct {
 	TotalTokens int `json:"total_tokens"`
 	// PromptTokensDetails 输入 token 明细（含缓存信息）
 	PromptTokensDetails *ResponsePromptTokensDetails `json:"prompt_tokens_details,omitempty"`
+	// CompletionTokensDetails 输出 token 明细（含推理 token 数）
+	// Python: usage.completion_tokens_details.reasoning_tokens（_extract_reasoning_tokens）
+	CompletionTokensDetails *ResponseCompletionTokensDetails `json:"completion_tokens_details,omitempty"`
 	// Cost 费用信息（部分 provider 返回，可能是数值或对象）
 	Cost any `json:"cost,omitempty"`
 	// UsageCost 费用信息（部分 provider 返回，可能是数值或对象）
@@ -97,6 +100,14 @@ type ResponseUsage struct {
 type ResponsePromptTokensDetails struct {
 	// CachedTokens 缓存命中 token 数
 	CachedTokens int `json:"cached_tokens"`
+	// CacheCreationTokens 缓存创建（写）token 数（Anthropic 风格 provider 上报）
+	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
+}
+
+// ResponseCompletionTokensDetails 输出 token 明细。
+type ResponseCompletionTokensDetails struct {
+	// ReasoningTokens 推理/思考 token 数（output_tokens 的子集）
+	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
 }
 
 // ChatCompletionChunkResponse OpenAI Chat Completion API 流式响应块。
