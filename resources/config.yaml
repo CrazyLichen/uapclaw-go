@@ -44,6 +44,36 @@ gateway:
   # 代码默认：per_chat_bot（swarm/gateway/routing/session_map.go:74-80）
   session_map_scope: per_chat_bot
 
+# 执行护栏：模型异常检测
+#
+# 代码默认：enabled=true、max_retries=2、repeat_min_pattern_chars=2、repeat_max_pattern_chars=64、
+# repeat_min_count=6、repeat_min_total_chars=160、repeat_window_chars=1024、
+# single_char_repeat_count=100（adapter 侧按同名字段读取，缺省即用这些值）
+# tool_loop_compact 代码默认 enabled=false；下表与上游产品配置一致置 true。
+# 对齐上游 jiuwenswarm/resources/config.yaml:1028-1048
+execution_guard:
+  model_anomaly_detection_rail:
+    # 总开关。关闭后不注册 ModelAnomalyDetectionRail
+    enabled: true
+    # 单次 invoke 内同一类异常最多重试次数
+    max_retries: 2
+    # 重复片段检测的最短/最长长度（字符）
+    repeat_min_pattern_chars: 2
+    repeat_max_pattern_chars: 64
+    # 同一片段至少连续重复多少次才判为死循环
+    repeat_min_count: 6
+    # 多字符重复的最小总长度，避免正常短文本误触发
+    repeat_min_total_chars: 160
+    # 滑动检测窗口大小（字符）
+    repeat_window_chars: 1024
+    # 单字符连续重复阈值
+    single_char_repeat_count: 90
+    # 连续相同工具名+入参时折叠重复轮次；第 N 次命中兜底中止
+    tool_loop_compact:
+      enabled: true
+      consecutive_threshold: 4
+      bailout_threshold: 3
+
 # 心跳配置
 heartbeat:
   # 心跳间隔（秒）。环境变量：无。代码默认：60（swarm/gateway/app_gateway.go:216-222）

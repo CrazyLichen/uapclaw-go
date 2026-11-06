@@ -248,8 +248,36 @@ func (c *AssistantMessageChunk) ToAssistantMessage() *AssistantMessage {
 	return &result
 }
 
-// Merge 将另一个 ToolMessageChunk 增量合并到当前 chunk，返回合并后的新 chunk。
+// CarriesOutputToken 判断该分片是否携带模型输出（而非流式框架帧）。
 //
+// 携带：content 或 reasoning_content 非空（空白也算，它是生成的 token），
+// 或任一 tool_call 的 name/arguments 非空。
+// 不携带：role-only、heartbeat、usage-only、finish-only。
+// 首 token 延迟与空闲超时共用此定义，保证量的是同一件事。
+//
+// Python: message_chunk.py L242-256 carries_output_token()
+func (c *AssistantMessageChunk) CarriesOutputToken() bool {
+	if c == nil {
+		return false
+	}
+	if c.Content.Text() != "" {
+		return true
+	}
+	if c.ReasoningContent != "" {
+		return true
+	}
+	for _, call := range c.ToolCalls {
+		if call == nil {
+			continue
+		}
+		if call.Name != "" || call.Arguments != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// Merge 将另一个 ToolMessageChunk 增量合并到当前 chunk，返回合并后的新 chunk。//
 // 各字段合并策略：
 //   - content: 字符串拼接
 //   - tool_call_id: 取非空值，优先右侧

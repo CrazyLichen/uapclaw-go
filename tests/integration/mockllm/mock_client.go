@@ -7,12 +7,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// StreamChunkScript 一次 Stream 调用的脚本化输出。
+type StreamChunkScript struct {
+	// Chunks 依次发出的分片
+	Chunks []*llmschema.AssistantMessageChunk
+	// StallBefore 发出第一个分片前的等待（模拟首帧卡死）；0 表示不等待
+	StallBefore time.Duration
+	// GapBetween 相邻分片之间的等待（模拟空闲卡死）；0 表示不等待
+	GapBetween time.Duration
+}
 
 // MockResponse 预设响应，支持纯文本、工具调用、错误三种模式。
 // 对齐 Python MockLLMModel 的 create_text_response / create_tool_call_response。
@@ -71,6 +82,9 @@ type MockModelClient struct {
 	invokeCalls []InvokeRecord
 	streamCalls []StreamRecord
 	streamCount int
+	// streamScripts 脚本化流队列（FIFO）：非空时 Stream 优先消费脚本，
+	// 用于构造"重复吐同一片段"与"首帧卡死"两类异常场景。
+	streamScripts []StreamChunkScript
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -224,8 +238,17 @@ func (m *MockModelClient) Invoke(_ context.Context, messages model_clients.Messa
 // 对齐 Python: MockLLMModel.stream(messages, ...) — 单次 yield 整个 chunk
 //
 // 入参 messages 会记录到 streamCalls，供用例断言「模型实际收到的提示词」。
-func (m *MockModelClient) Stream(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+func (m *MockModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	m.mu.Lock()
+	if len(m.streamScripts) > 0 {
+		script := m.streamScripts[0]
+		m.streamScripts = m.streamScripts[1:]
+		m.callCount++
+		m.streamCount++
+		m.streamCalls = append(m.streamCalls, StreamRecord{CallCount: m.streamCount, Messages: messages})
+		m.mu.Unlock()
+		return runStreamScript(ctx, script), nil
+	}
 	resp := m.getNextResponseLocked()
 	m.callCount++
 	m.streamCount++
@@ -246,6 +269,23 @@ func (m *MockModelClient) Stream(_ context.Context, messages model_clients.Messa
 	close(ch)
 
 	return ch, nil
+}
+
+// WithStreamScripts 追加脚本化流响应（按调用顺序消费）。
+func (m *MockModelClient) WithStreamScripts(scripts ...StreamChunkScript) *MockModelClient {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.streamScripts = append(m.streamScripts, scripts...)
+	return m
+}
+
+// CreateRepeatStreamScript 构造"重复同一片段 times 次"的脚本，用于重复输出检测。
+func CreateRepeatStreamScript(unit string, times int) StreamChunkScript {
+	chunks := make([]*llmschema.AssistantMessageChunk, 0, times)
+	for i := 0; i < times; i++ {
+		chunks = append(chunks, llmschema.NewAssistantMessageChunk(unit))
+	}
+	return StreamChunkScript{Chunks: chunks}
 }
 
 // GenerateImage 实现 BaseModelClient.GenerateImage。
@@ -450,4 +490,31 @@ func (m *MockModelClient) buildAssistantMessage(resp MockResponse) *llmschema.As
 		opts = append(opts, llmschema.WithFinishReason("tool_calls"))
 	}
 	return llmschema.NewAssistantMessage(resp.Text, opts...)
+}
+
+// runStreamScript 按脚本节奏发送分片；ctx 取消即停，避免 goroutine 泄漏。
+func runStreamScript(ctx context.Context, script StreamChunkScript) <-chan *llmschema.AssistantMessageChunk {
+	ch := make(chan *llmschema.AssistantMessageChunk, len(script.Chunks))
+	go func() {
+		defer close(ch)
+		for i, chunk := range script.Chunks {
+			delay := script.GapBetween
+			if i == 0 {
+				delay = script.StallBefore
+			}
+			if delay > 0 {
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					return
+				}
+			}
+			select {
+			case ch <- chunk:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch
 }

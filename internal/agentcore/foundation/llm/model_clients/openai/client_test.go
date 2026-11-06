@@ -1050,3 +1050,69 @@ func TestOpenAIModelClient_Stream_中断上抛(t *testing.T) {
 		t.Errorf("已收到的内容应保留, 实际 %q", content)
 	}
 }
+
+// ──────────────────────────── 重试相关头部 ────────────────────────────
+
+// TestHandleHTTPError_保留重试相关头部 验证 429 时 retry-after / x-should-retry 落入 params。
+func TestHandleHTTPError_保留重试相关头部(t *testing.T) {
+	client, err := NewOpenAIModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("OpenAI", "test-key", "https://api.openai.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	resp := &http.Response{
+		StatusCode: 429,
+		Header: http.Header{
+			"Retry-After":    []string{"3"},
+			"X-Should-Retry": []string{"false"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"error":{"message":"rate limited","code":"rate_limit","type":"rate_limit_error"}}`)),
+	}
+	result := client.HandleHTTPError(resp)
+	baseErr, ok := result.(*exception.BaseError)
+	if !ok {
+		t.Fatalf("应返回 BaseError，实际 %T", result)
+	}
+	params := baseErr.Params()
+	if got := params["http_status"]; got != 429 {
+		t.Fatalf("http_status 期望 429，实际 %v", got)
+	}
+	if got := params["retry_after"]; got != "3" {
+		t.Fatalf("retry_after 期望 \"3\"，实际 %v", got)
+	}
+	if got := params["x_should_retry"]; got != "false" {
+		t.Fatalf("x_should_retry 期望 \"false\"，实际 %v", got)
+	}
+}
+
+// TestHandleHTTPError_非标准体也保留头部 验证非 OpenAI 错误体时同样带状态码与头部。
+func TestHandleHTTPError_非标准体也保留头部(t *testing.T) {
+	client, err := NewOpenAIModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("OpenAI", "test-key", "https://api.openai.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	resp := &http.Response{
+		StatusCode: 503,
+		Header:     http.Header{"Retry-After-Ms": []string{"1500"}},
+		Body:       io.NopCloser(strings.NewReader("upstream unavailable")),
+	}
+	result := client.HandleHTTPError(resp)
+	baseErr, ok := result.(*exception.BaseError)
+	if !ok {
+		t.Fatalf("应返回 BaseError，实际 %T", result)
+	}
+	params := baseErr.Params()
+	if got := params["http_status"]; got != 503 {
+		t.Fatalf("http_status 期望 503，实际 %v", got)
+	}
+	if got := params["retry_after_ms"]; got != "1500" {
+		t.Fatalf("retry_after_ms 期望 \"1500\"，实际 %v", got)
+	}
+}

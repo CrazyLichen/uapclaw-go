@@ -142,7 +142,8 @@ func (s *ModelBackupReActLoopSuite) TestModelBackupReActLoop_Failover后工具�
 		Rails: []agentinterfaces.AgentRail{
 			rail.NewModelBackupRail([]*llm.Model{backupModel}),
 		},
-		MaxIterations: 5,
+		EnableModelAnomalyDetectionRail: anomalyRailDisabled(),
+		MaxIterations:                   5,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 
@@ -208,7 +209,8 @@ func (s *ModelBackupReActLoopSuite) TestModelBackupReActLoop_备用模型二轮�
 		Rails: []agentinterfaces.AgentRail{
 			rail.NewModelBackupRail([]*llm.Model{backupModel}),
 		},
-		MaxIterations: 5,
+		EnableModelAnomalyDetectionRail: anomalyRailDisabled(),
+		MaxIterations:                   5,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 

@@ -1857,7 +1857,8 @@ git commit -m "feat(harness): 技能提示词支持数量与字符预算"
 - [ ] **Step 2: 更新实现计划**
 
 - `IMPLEMENTATION_PLAN.md` 6.4 条目「10 种事件」改为「12 种事件（含 on_user_message / after_react_iteration）」
-- 领域九「9.x 功能 Rails」新增一行：`| 9.30 | ☐ | ModelAnomalyDetectionRail | 瞬时失败分类 + 退避重试 + 退化重复检测 + 流超时识别 + 工具循环压缩（须背靠背相邻性判定，589da12a）+ bailout | openjiuwen/harness/rails/model_anomaly_detection_rail.py |`
+- 领域九「9.x 功能 Rails」新增一行：`| 9.86 | ☐ | ModelAnomalyDetectionRail | 瞬时失败分类 + 退避重试 + 退化重复检测 + 流超时识别 + 工具循环压缩（须背靠背相邻性判定，589da12a）+ bailout | openjiuwen/harness/rails/model_anomaly_detection_rail.py |`
+  - 勘误（2026-11-06）：原文此处写作 9.30，但 9.30 已被 ExploreAgent 占用，实际落位 **9.86**。
 - 领域二十三追加 A-04 对应条目（application 层 LLMController 工作流恢复）
 
 - [ ] **Step 3: 提交**

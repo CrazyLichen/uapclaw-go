@@ -72,6 +72,10 @@ type CreateDeepAgentParams struct {
 	EnableReadImageMultimodal bool
 	// EnableTaskPlanning 启用任务规划
 	EnableTaskPlanning bool
+	// EnableModelAnomalyDetectionRail 是否注册默认的模型异常检测 Rail。
+	// nil 表示跟随上游默认（true）。用指针是为了区分"未设置"与"显式关闭"。
+	// Python: factory.py create_deep_agent(enable_model_anomaly_detection_rail: bool = True)
+	EnableModelAnomalyDetectionRail *bool
 	// ProgressiveToolEnabled 启用渐进式工具暴露（deferred 工具目录）
 	ProgressiveToolEnabled bool
 	// ToolSearchLimit tool_search 默认结果条数（0 用默认 5）

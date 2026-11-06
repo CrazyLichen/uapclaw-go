@@ -3,6 +3,7 @@
 // 在 single_agent/rail 基础上增加：
 //   - DeepAgentRail 基类：扩展 AgentRail，增加 workspace/sys_operation 和 task-iteration hooks
 //   - ProgressiveToolRail：渐进式工具权限 Rail
+//   - ModelAnomalyDetectionRail：模型异常检测 Rail（退化重复输出/流帧超时/瞬时失败重试 + 连续相同工具调用压缩与 bailout）
 //   - TaskCompletionRail：任务完成检测 Rail（注入完成信号提示、检测 promise 标签、通知 LoopCoordinator 停止循环）
 //   - TaskPlanningRail：任务规划 Rail（注册 todo 工具、按 inject_prompt 决定是否注入规划节、模型切换、进度提醒、token 统计、Todo↔TaskPlan 同步）
 //   - AgentModeRail：三层防御式 plan 模式约束 Rail（模式切换工具注册、plan 指引走历史附件、白名单+路径校验拦截、task_tool 动态注册）
@@ -22,6 +23,7 @@
 //	├── sys_operation.go    # SysOperationRail 系统操作工具注册（Init/Uninit + 幂等注册）
 //	├── progressive.go      # ProgressiveToolRail 延迟工具目录（exposure 策略 + BM25 检索 + tool_search/tool_call + 目录附件）
 //	├── task_completion.go  # TaskCompletionRail 任务完成检测
+//	├── model_anomaly.go    # ModelAnomalyDetectionRail 模型异常检测（重复输出/瞬时失败/工具循环压缩，priority 70）
 //	├── task_planning.go    # TaskPlanningRail 任务规划（7个钩子）
 //	├── agent_mode.go       # AgentModeRail plan 模式约束（3个钩子）
 //	├── heartbeat.go        # HeartbeatRail 心跳护栏（3个钩子）

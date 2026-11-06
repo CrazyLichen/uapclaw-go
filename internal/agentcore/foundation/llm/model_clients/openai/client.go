@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -550,33 +551,56 @@ func (c *OpenAIModelClient) FailStream(
 //
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
 func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
+	params := httpErrorParams(resp)
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d (无法读取响应体)", resp.StatusCode)),
+			exception.WithParams(params),
 		)
 	}
 
 	// 尝试解析 OpenAI 错误格式
 	var errResp ErrorResponse
 	if json.Unmarshal(body, &errResp) == nil && errResp.Error.Message != "" {
+		// 保留 provider 的结构化错误码：供上层做精确分类（如拒图识别、瞬时失败重试）
+		params["provider_code"] = errResp.Error.Code
+		params["provider_type"] = errResp.Error.Type
 		return exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s", resp.StatusCode, errResp.Error.Message)),
-			// 保留 provider 的结构化错误码：供上层做精确分类（如拒图识别）
-			exception.WithParams(map[string]any{
-				"http_status":   resp.StatusCode,
-				"provider_code": errResp.Error.Code,
-				"provider_type": errResp.Error.Type,
-			}),
+			exception.WithParams(params),
 		)
 	}
 
 	return exception.NewBaseError(
 		exception.StatusModelCallFailed,
 		exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s", resp.StatusCode, string(body))),
+		exception.WithParams(params),
 	)
+}
+
+// httpErrorParams 汇总 HTTP 错误的结构化上下文，供上层做瞬时失败分类。
+//
+// 除状态码与 provider 错误码外，还保留重试决策相关头部：
+// retry_after / retry_after_ms（服务端建议的退避时长）、x_should_retry。
+// Python: 异常对象的 headers/response.headers 由 rail 侧读取；Go 侧扁平进 params。
+func httpErrorParams(resp *http.Response) map[string]any {
+	params := map[string]any{"http_status": resp.StatusCode}
+	if resp.Header == nil {
+		return params
+	}
+	add := func(key, header string) {
+		if v := strings.TrimSpace(resp.Header.Get(header)); v != "" {
+			params[key] = v
+		}
+	}
+	add("retry_after", "Retry-After")
+	add("retry_after_ms", "Retry-After-Ms")
+	add("x_should_retry", "X-Should-Retry")
+	return params
 }
 
 // ExtractHTTPHeaders 从 effective headers 提取用于 HTTP 请求的头部。

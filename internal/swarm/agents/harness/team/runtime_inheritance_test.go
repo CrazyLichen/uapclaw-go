@@ -566,3 +566,24 @@ func railTypeNames(rails []agentinterfaces.AgentRail) []string {
 	}
 	return names
 }
+
+// TestBuildModelAnomalyDetectionRail_团队成员 未开启返回 nil，开启后构造成功。
+func TestBuildModelAnomalyDetectionRail_团队成员(t *testing.T) {
+	on := map[string]any{"execution_guard": map[string]any{
+		"model_anomaly_detection_rail": map[string]any{"enabled": true},
+	}}
+	rail := BuildModelAnomalyDetectionRail(on)
+	if rail == nil {
+		t.Fatal("enabled=true 时应构建")
+	}
+	if rail.Priority() != 70 {
+		t.Fatalf("priority 期望 70，实际 %d", rail.Priority())
+	}
+
+	if rail := BuildModelAnomalyDetectionRail(map[string]any{}); rail != nil {
+		t.Fatal("缺省时不应构建")
+	}
+	if rail := BuildModelAnomalyDetectionRail(nil); rail != nil {
+		t.Fatal("config 为 nil 时不应构建")
+	}
+}

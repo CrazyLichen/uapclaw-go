@@ -302,6 +302,15 @@ type RunKind string
 // HeartbeatReason 心跳触发原因枚举。
 type HeartbeatReason string
 
+// StreamChunkInspectorFunc 流式分片检查器。
+//
+// Python 把 bound method 存进 ctx.extra["_stream_chunk_inspectors"] 列表；
+// Go 用函数值等价（method value 即绑定 receiver 的函数值）。去重由调用方
+// （rail）按代码指针判断，对齐 Python 的 __self__ 身份比较。
+//
+// Python: model_anomaly_detection_rail.ModelAnomalyDetectionRail.inspect_stream_chunk
+type StreamChunkInspectorFunc func(ctx context.Context, cbc *AgentCallbackContext, chunk *llmschema.AssistantMessageChunk) error
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -353,6 +362,16 @@ const (
 	logComponent = logger.ComponentAgentCore
 	// steeringQueueSize steering 队列缓冲区大小
 	steeringQueueSize = 4096
+)
+
+const (
+	// ExtraKeyStreamChunkInspectors 流式分片检查器列表的 extra 键。
+	// 字符串与上游一致，便于与 Python 侧对拍。
+	// Python: model_anomaly_detection_rail._STREAM_CHUNK_INSPECTORS_KEY
+	ExtraKeyStreamChunkInspectors = "_stream_chunk_inspectors"
+	// ExtraKeyModelVisibleOutputEmitted 本次模型调用是否已向用户输出可见内容。
+	// Python: rail/base.py MODEL_VISIBLE_OUTPUT_EMITTED_KEY
+	ExtraKeyModelVisibleOutputEmitted = "_model_visible_output_emitted"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -471,10 +490,53 @@ func (c *AgentCallbackContext) DeleteExtra(key string) (any, bool) {
 	return v, ok
 }
 
-// Exception 返回异常对象
-func (c *AgentCallbackContext) Exception() error { return c.exception }
+// StreamChunkInspectors 返回当前已注册的流式分片检查器（副本）。
+//
+// Python: react_agent.py L1897 — ctx.extra.get("_stream_chunk_inspectors") or []
+func (c *AgentCallbackContext) StreamChunkInspectors() []StreamChunkInspectorFunc {
+	v, ok := c.GetExtra(ExtraKeyStreamChunkInspectors)
+	if !ok {
+		return nil
+	}
+	list, ok := v.([]StreamChunkInspectorFunc)
+	if !ok {
+		return nil
+	}
+	out := make([]StreamChunkInspectorFunc, len(list))
+	copy(out, list)
+	return out
+}
 
-// SetException 设置异常对象
+// SetStreamChunkInspectors 覆盖流式分片检查器列表；空列表等价于清除。
+func (c *AgentCallbackContext) SetStreamChunkInspectors(list []StreamChunkInspectorFunc) {
+	if len(list) == 0 {
+		c.DeleteExtra(ExtraKeyStreamChunkInspectors)
+		return
+	}
+	cp := make([]StreamChunkInspectorFunc, len(list))
+	copy(cp, list)
+	c.SetExtra(ExtraKeyStreamChunkInspectors, cp)
+}
+
+// SetModelVisibleOutputEmitted 标记本次模型调用是否已输出可见内容。
+//
+// Python: react_agent.py L1908/L1918 — ctx.extra[MODEL_VISIBLE_OUTPUT_EMITTED_KEY] = True
+func (c *AgentCallbackContext) SetModelVisibleOutputEmitted(emitted bool) {
+	c.SetExtra(ExtraKeyModelVisibleOutputEmitted, emitted)
+}
+
+// ModelVisibleOutputEmitted 返回本次模型调用是否已输出可见内容。
+func (c *AgentCallbackContext) ModelVisibleOutputEmitted() bool {
+	v, ok := c.GetExtra(ExtraKeyModelVisibleOutputEmitted)
+	if !ok {
+		return false
+	}
+	b, _ := v.(bool)
+	return b
+}
+
+// Exception 返回异常对象
+func (c *AgentCallbackContext) Exception() error       { return c.exception } // SetException 设置异常对象
 func (c *AgentCallbackContext) SetException(err error) { c.exception = err }
 
 // RetryAttempt 返回当前重试索引号

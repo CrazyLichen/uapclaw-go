@@ -12,6 +12,7 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 
 	"github.com/stretchr/testify/assert"
 
@@ -26,6 +27,8 @@ import (
 type fakeStreamClient struct {
 	// chunks 预置输出片段
 	chunks []*llmschema.AssistantMessageChunk
+	// chanOverride 若非 nil，则直接返回该通道（用于断言"报错后是否排空"）
+	chanOverride chan *llmschema.AssistantMessageChunk
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -49,7 +52,7 @@ func TestCallLLMStream_CanceledMidStream(t *testing.T) {
 
 	// 先取消，再走一次完整流：模拟"取消发生在流进行中"
 	cancel()
-	msg, err := a.callLLMStream(ctx, model, "mock-model", nil, nil, nil, nil)
+	msg, err := a.callLLMStream(ctx, nil, model, "mock-model", nil, nil, nil, nil)
 	if err == nil {
 		t.Fatalf("取消态下应返回 error，实际返回消息: %+v", msg)
 	}
@@ -62,7 +65,7 @@ func TestCallLLMStream_NotCanceledReturnsMessage(t *testing.T) {
 		llmschema.NewAssistantMessageChunk("完整"),
 	}})
 
-	msg, err := a.callLLMStream(context.Background(), model, "mock-model", nil, nil, nil, nil)
+	msg, err := a.callLLMStream(context.Background(), nil, model, "mock-model", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("未取消不应报错: %v", err)
 	}
@@ -82,7 +85,7 @@ func TestCallLLMStream_流中断上抛(t *testing.T) {
 		llmschema.NewAssistantMessageChunk("", llmschema.WithChunkStreamError(cause)),
 	}})
 
-	msg, err := (&ReActAgent{}).callLLMStream(context.Background(), model, "mock-model", nil, nil, nil, nil)
+	msg, err := (&ReActAgent{}).callLLMStream(context.Background(), nil, model, "mock-model", nil, nil, nil, nil)
 	if err == nil {
 		t.Fatalf("流中断应返回错误，实际 msg=%+v", msg)
 	}
@@ -123,6 +126,9 @@ func (f *fakeStreamClient) Invoke(_ context.Context, _ model_clients.MessagesPar
 
 // Stream 返回预置 chunk 后关闭通道。
 func (f *fakeStreamClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	if f.chanOverride != nil {
+		return f.chanOverride, nil
+	}
 	ch := make(chan *llmschema.AssistantMessageChunk, len(f.chunks))
 	for _, c := range f.chunks {
 		ch <- c
@@ -477,5 +483,93 @@ func TestExtractExceptionErrorValues_Params与错误链(t *testing.T) {
 	}
 	if !isImageInputUnsupportedError(withParams) {
 		t.Fatal("Params 里的结构化 code 应被识别为拒图")
+	}
+}
+
+// ──────────────────────────── 流式分片检查器 ────────────────────────────
+
+// TestCallLLMStream_检查器逐chunk调用 验证检查器按分片逐个触发。
+func TestCallLLMStream_检查器逐chunk调用(t *testing.T) {
+	a := &ReActAgent{}
+	client := &fakeStreamClient{chunks: []*llmschema.AssistantMessageChunk{
+		llmschema.NewAssistantMessageChunk("a"),
+		llmschema.NewAssistantMessageChunk("b"),
+	}}
+	model := newFakeLLMModel(t, client)
+	cbc := interfaces.NewAgentCallbackContext(nil, nil, nil)
+
+	seen := 0
+	cbc.SetStreamChunkInspectors([]interfaces.StreamChunkInspectorFunc{
+		func(_ context.Context, _ *interfaces.AgentCallbackContext, chunk *llmschema.AssistantMessageChunk) error {
+			seen++
+			if chunk.Content.Text() == "" {
+				t.Errorf("检查器收到的 chunk 内容为空")
+			}
+			return nil
+		},
+	})
+
+	if _, err := a.callLLMStream(context.Background(), cbc, model, "mock-model", nil, nil, nil, nil); err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if seen != 2 {
+		t.Fatalf("检查器应被调用 2 次，实际 %d", seen)
+	}
+}
+
+// TestCallLLMStream_检查器报错先排空再返回 验证检查器命中后必须排空 channel，
+// 否则客户端 goroutine 会卡在 send 上、HTTP 连接不关。
+func TestCallLLMStream_检查器报错先排空再返回(t *testing.T) {
+	a := &ReActAgent{}
+	ch := make(chan *llmschema.AssistantMessageChunk, 3)
+	ch <- llmschema.NewAssistantMessageChunk("a")
+	ch <- llmschema.NewAssistantMessageChunk("b")
+	ch <- llmschema.NewAssistantMessageChunk("c")
+	close(ch)
+	client := &fakeStreamClient{chanOverride: ch}
+	model := newFakeLLMModel(t, client)
+
+	cbc := interfaces.NewAgentCallbackContext(nil, nil, nil)
+	boom := errors.New("repeat detected")
+	cbc.SetStreamChunkInspectors([]interfaces.StreamChunkInspectorFunc{
+		func(_ context.Context, _ *interfaces.AgentCallbackContext, _ *llmschema.AssistantMessageChunk) error {
+			return boom
+		},
+	})
+
+	_, err := a.callLLMStream(context.Background(), cbc, model, "mock-model", nil, nil, nil, nil)
+	if !errors.Is(err, boom) {
+		t.Fatalf("应透传检查器错误，实际 %v", err)
+	}
+	if rest := len(ch); rest != 0 {
+		t.Fatalf("报错后必须排空 channel，剩余 %d 个 chunk", rest)
+	}
+}
+
+// TestCallLLMStream_流式输出置可见标志 验证每次流式调用复位、写出内容后置位。
+func TestCallLLMStream_流式输出置可见标志(t *testing.T) {
+	a := &ReActAgent{}
+	model := newFakeLLMModel(t, &fakeStreamClient{chunks: []*llmschema.AssistantMessageChunk{
+		llmschema.NewAssistantMessageChunk("hello"),
+	}})
+	cbc := interfaces.NewAgentCallbackContext(nil, nil, nil)
+	cbc.SetModelVisibleOutputEmitted(true) // 模拟上一轮的残留
+
+	atChunk := false
+	cbc.SetStreamChunkInspectors([]interfaces.StreamChunkInspectorFunc{
+		func(_ context.Context, c *interfaces.AgentCallbackContext, _ *llmschema.AssistantMessageChunk) error {
+			atChunk = c.ModelVisibleOutputEmitted()
+			return nil
+		},
+	})
+
+	if _, err := a.callLLMStream(context.Background(), cbc, model, "mock-model", nil, nil, nil, nil); err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if atChunk {
+		t.Fatal("每次流式调用开始时必须把可见输出标志复位为 false")
+	}
+	if !cbc.ModelVisibleOutputEmitted() {
+		t.Fatal("写出可见内容后标志应为 true")
 	}
 }
