@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -369,6 +370,24 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 		reqParams["stop"] = *params.Stop
 	}
 
+	// 3.5 DeepSeek 兼容：模型名含 deepseek 时为 assistant 消息补 reasoning_content
+	//（有工具调用的多轮对话缺该字段会 400）。
+	//
+	// Python: utils/endpoint_profiles.py:33-41 —— model_requires_reasoning_content(model)
+	// 判模型名，_deepseek_reasoning_content 对 assistant 消息 setdefault("")
+	// 注意：上游按「模型名」而非「客户端类型」判定，故聚合网关（provider=OpenAI
+	// + model=deepseek-*）同样生效。
+	if modelRequiresReasoningContent(model) {
+		for _, msg := range messagesDict {
+			if role, _ := msg["role"].(string); role == "assistant" {
+				if _, exists := msg["reasoning_content"]; !exists {
+					msg["reasoning_content"] = ""
+				}
+			}
+		}
+		reqParams["messages"] = messagesDict
+	}
+
 	// 4. 转换 tools
 	if len(params.Tools) > 0 {
 		reqParams["tools"] = e.ConvertToolsToDict(params.Tools)
@@ -591,4 +610,13 @@ func floatVal(m map[string]any, keys ...string) float64 {
 		}
 	}
 	return 0
+}
+
+// modelRequiresReasoningContent 判模型名是否含 deepseek（小写包含）。
+//
+// Python: utils/endpoint_profiles.py:33-34
+//
+//	return "deepseek" in str(model or "").strip().lower()
+func modelRequiresReasoningContent(model string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "deepseek")
 }

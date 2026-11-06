@@ -14,7 +14,6 @@ package llm
 
 import (
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/dashscope"
-	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/deepseek"
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/inference_affinity"
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/intellirouter"
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"

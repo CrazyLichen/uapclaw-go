@@ -648,4 +648,8 @@ func init() {
 
 	registry.Register("OpenAI", "llm", openAIFactory)
 	registry.Register("OpenRouter", "llm", openAIFactory)
+	// DeepSeek 与上游一致：无独立客户端，走 OpenAI 客户端 + endpoint profile
+	// （reasoning_content 补齐在 BuildRequestParams 按模型名处理）。
+	// Python: openai_model_client.py + utils/endpoint_profiles.py（deepseek profile）
+	registry.Register("DeepSeek", "llm", openAIFactory)
 }

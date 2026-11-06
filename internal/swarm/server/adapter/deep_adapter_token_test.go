@@ -100,12 +100,13 @@ func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
 		t.Errorf("浮点 timeout 应生效为 900.5, 实际 %v", m2.ClientConfig.Timeout)
 	}
 
-	// 未配置 → 保持 ModelClientConfig 默认 60s
+	// 未配置 → 保持 ModelClientConfig 默认 360s
+	// （Python: schema/config.py:145 默认 360，且须 >= stream_first_chunk_timeout=300）
 	m3, err := d.buildModelFromEntry(base(), map[string]any{})
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}
-	if m3.ClientConfig.Timeout != 60 {
-		t.Errorf("未配置时应为默认 60s, 实际 %v", m3.ClientConfig.Timeout)
+	if m3.ClientConfig.Timeout != 360 {
+		t.Errorf("未配置时应为默认 360s, 实际 %v", m3.ClientConfig.Timeout)
 	}
 }

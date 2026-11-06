@@ -594,3 +594,51 @@ func TestRequestTimeout_未配置走SDK默认(t *testing.T) {
 		t.Fatalf("ClientConfig 缺失时应返回 nil, 实际 %v", *got)
 	}
 }
+
+// TestBuildRequestParams_DeepSeek模型补reasoning 模型名含 deepseek 时 assistant 消息补空 reasoning_content。
+//
+// Python: utils/endpoint_profiles.py:33-41（model_requires_reasoning_content 判模型名 +
+// _deepseek_reasoning_content 对 assistant 消息 setdefault）
+func TestBuildRequestParams_DeepSeek模型补reasoning(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("deepseek-chat"))
+	cc := &llmschema.ModelClientConfig{ClientProvider: "OpenAI", APIKey: "k", APIBase: "http://x", Timeout: 60, VerifySSL: false}
+	e := &BaseClientEmbed{ModelConfig: mc, ClientConfig: cc, clientName: "t"}
+	dict := []map[string]any{{"role": "assistant", "content": "hi"}}
+
+	params, err := e.BuildRequestParams(context.Background(), dict, &InvokeParams{Model: "deepseek-chat"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqMsgs := params["messages"].([]map[string]any)
+	if _, ok := reqMsgs[0]["reasoning_content"]; !ok {
+		t.Error("deepseek 模型的 assistant 消息应补 reasoning_content")
+	}
+
+	// 聚合网关场景：provider=OpenAI + 模型名含 deepseek，同样要补
+	dict2 := []map[string]any{{"role": "assistant", "content": "hi"}}
+	params2, _ := e.BuildRequestParams(context.Background(), dict2, &InvokeParams{Model: "openai/deepseek-v3"}, false)
+	if _, ok := params2["messages"].([]map[string]any)[0]["reasoning_content"]; !ok {
+		t.Error("模型名含 deepseek 即补（不限客户端类型）")
+	}
+
+	// 非 deepseek 模型不补
+	dict3 := []map[string]any{{"role": "assistant", "content": "hi"}}
+	params3, _ := e.BuildRequestParams(context.Background(), dict3, &InvokeParams{Model: "qwen-max"}, false)
+	if _, ok := params3["messages"].([]map[string]any)[0]["reasoning_content"]; ok {
+		t.Error("非 deepseek 模型不应补 reasoning_content")
+	}
+
+	// 已有 reasoning_content 不覆盖（setdefault 语义）
+	dict4 := []map[string]any{{"role": "assistant", "content": "hi", "reasoning_content": "keep"}}
+	params4, _ := e.BuildRequestParams(context.Background(), dict4, &InvokeParams{Model: "deepseek-chat"}, false)
+	if got := params4["messages"].([]map[string]any)[0]["reasoning_content"]; got != "keep" {
+		t.Errorf("已有值不应被覆盖，实际 %v", got)
+	}
+
+	// user 消息不补
+	dict5 := []map[string]any{{"role": "user", "content": "hi"}}
+	params5, _ := e.BuildRequestParams(context.Background(), dict5, &InvokeParams{Model: "deepseek-chat"}, false)
+	if _, ok := params5["messages"].([]map[string]any)[0]["reasoning_content"]; ok {
+		t.Error("user 消息不应补 reasoning_content")
+	}
+}

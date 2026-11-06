@@ -62,7 +62,7 @@
 //
 //	2.7  OpenAIModelClient      → Register("OpenAI", "llm", ...) + Register("OpenRouter", "llm", ...)
 //	2.8  DashScopeModelClient   → Register("DashScope", "llm", ...)
-//	2.9  DeepSeekModelClient    → Register("DeepSeek", "llm", ...)
+//	     DeepSeekModelClient    → 已并入 OpenAI 客户端（Register("DeepSeek", "llm", openAIFactory)）
 //	2.10 SiliconFlowModelClient → Register("SiliconFlow", "llm", ...)
 //	2.11 InferenceAffinity      → Register("InferenceAffinity", "llm", ...)
 //	2.12 IntelliRouter          → Register("intelli_router", "llm", ...)
