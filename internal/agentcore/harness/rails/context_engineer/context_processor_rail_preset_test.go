@@ -64,22 +64,21 @@ func buildFactoryUserProcessors(ctxCfg map[string]any) []ceiface.ProcessorSpec {
 // TestMergeConfigWithOverrides_NilValueSkipped 锁定 S-01：
 // 出厂模板里的 `messages_threshold: null` 不得再触发 reflect panic。
 func TestMergeConfigWithOverrides_NilValueSkipped(t *testing.T) {
-	base := &offloader.MessageSummaryOffloaderConfig{TokensThreshold: 60000}
+	base := &offloader.MessageSummaryOffloaderConfig{LargeMessageThreshold: 60000}
 	merged := MergeConfigWithOverrides(base, map[string]any{
-		"messages_threshold":        nil,
-		"messages_to_keep":          nil,
+		"protected_tool_names":      nil,
 		"customized_summary_prompt": nil,
-		"tokens_threshold":          12345,
+		"large_message_threshold":   12345,
 	})
 	cfg, ok := merged.(*offloader.MessageSummaryOffloaderConfig)
 	if !ok {
 		t.Fatalf("返回类型 = %T, want *MessageSummaryOffloaderConfig", merged)
 	}
-	if cfg.MessagesThreshold != nil || cfg.MessagesToKeep != nil {
-		t.Error("nil 覆盖应保持指针字段为 nil")
+	if cfg.ProtectedToolNames != nil {
+		t.Error("nil 覆盖应保持字段为原值/nil")
 	}
-	if cfg.TokensThreshold != 12345 {
-		t.Errorf("TokensThreshold = %d, want 12345（非 nil 覆盖必须生效）", cfg.TokensThreshold)
+	if cfg.LargeMessageThreshold != 12345 {
+		t.Errorf("LargeMessageThreshold = %d, want 12345（非 nil 覆盖必须生效）", cfg.LargeMessageThreshold)
 	}
 }
 
