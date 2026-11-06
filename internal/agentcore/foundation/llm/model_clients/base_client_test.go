@@ -59,6 +59,10 @@ func TestValidateConfig_APIBase缺失(t *testing.T) {
 }
 
 // TestValidateConfig_验证SSL无证书 测试 verify_ssl=true 但无 ssl_cert。
+// TestValidateConfig_验证SSL无证书 语义已变更（C-D1 + L-07 同源）：
+// verify_ssl=true 且无自定义证书时走系统信任库，不再强制 ssl_cert。
+//
+// Python: ssl_utils.create_strict_ssl_context（公共 CA 开箱即用）
 func TestValidateConfig_验证SSL无证书(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
 	cc, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
@@ -67,9 +71,8 @@ func TestValidateConfig_验证SSL无证书(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = NewBaseClientEmbed(mc, cc)
-	if err == nil {
-		t.Error("verify_ssl=true 但无 ssl_cert 应报错")
+	if _, err = NewBaseClientEmbed(mc, cc); err != nil {
+		t.Errorf("verify_ssl=true 无 ssl_cert 不应报错（系统信任库兜底）: %v", err)
 	}
 }
 
@@ -442,62 +445,64 @@ func TestExtractCostInfo_无费用(t *testing.T) {
 	}
 }
 
-// ──── WithSkipValidate 测试 ────
+// ──── provider 白名单校验（C-D1，偏差 D-3）────
 
-// TestWithSkipValidate_跳过校验 测试 WithSkipValidate 跳过校验。
-func TestWithSkipValidate_跳过校验(t *testing.T) {
+// TestValidateConfig_IntelliRouter白名单 intelli_router 不在 api_key/api_base 白名单，
+// 空 key/base 应通过；白名单内 provider 仍按 auth_mode 要求。
+//
+// Python: base_model_client.py:428-445 + schema/config.py:111-131（IntelliRouterModelClient
+// 靠子类覆写 _validate_config 为空绕过；Go 无虚方法派发，改用白名单判定）
+func TestValidateConfig_IntelliRouter白名单(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
-	// api_key 和 api_base 均为空，直接构造 ModelClientConfig 绕过构造函数校验
-	cc := &llmschema.ModelClientConfig{
-		ClientProvider: "intelli_router",
-		APIKey:         "",
-		APIBase:        "",
-		VerifySSL:      false,
-	}
 
-	// 不使用 WithSkipValidate 应报错
-	_, err := NewBaseClientEmbed(mc, cc)
-	if err == nil {
-		t.Error("缺少 api_key/api_base 应报错")
-	}
-
-	// 使用 WithSkipValidate 应跳过校验
-	e, err := NewBaseClientEmbed(mc, cc, WithSkipValidate())
-	if err != nil {
-		t.Errorf("WithSkipValidate 应跳过校验，但报错: %v", err)
-	}
-	if !e.skipValidate {
-		t.Error("skipValidate 应为 true")
-	}
-}
-
-// TestWithSkipValidate_直接校验配置 测试 ValidateConfig 在 skipValidate 下的行为。
-func TestWithSkipValidate_直接校验配置(t *testing.T) {
-	mc := llmschema.NewModelRequestConfig()
-	// api_key 和 api_base 均为空，直接构造 ModelClientConfig 绕过构造函数校验
-	cc := &llmschema.ModelClientConfig{
-		ClientProvider: "intelli_router",
-		APIKey:         "",
-		APIBase:        "",
-		VerifySSL:      false,
-	}
-
+	// intelli_router：两个白名单都不在 → 空 key/base 通过
 	e := &BaseClientEmbed{
-		ModelConfig:  mc,
-		ClientConfig: cc,
-		clientName:   "TestSkipValidate",
-		skipValidate: true,
+		ModelConfig: mc,
+		ClientConfig: &llmschema.ModelClientConfig{
+			ClientProvider: "intelli_router", Timeout: 60,
+		},
+		clientName: "IntelliRouter client",
 	}
-
-	// skipValidate=true 时 ValidateConfig 应返回 nil
 	if err := e.ValidateConfig(); err != nil {
-		t.Errorf("skipValidate=true 时 ValidateConfig 不应报错: %v", err)
+		t.Errorf("intelli_router 空 key/base 应通过: %v", err)
 	}
 
-	// skipValidate=false 时 ValidateConfig 应报错
-	e.skipValidate = false
-	if err := e.ValidateConfig(); err == nil {
-		t.Error("skipValidate=false 且 api_key/api_base 为空时应报错")
+	// OpenAI（在白名单）：api_key 模式缺 key → 报错
+	e2 := &BaseClientEmbed{
+		ModelConfig: mc,
+		ClientConfig: &llmschema.ModelClientConfig{
+			ClientProvider: "OpenAI", APIBase: "https://x", Timeout: 60,
+		},
+		clientName: "OpenAI client",
+	}
+	if err := e2.ValidateConfig(); err == nil {
+		t.Error("OpenAI 缺 key 应报错")
+	}
+
+	// OpenAI + auth_mode=none：缺 key 通过
+	e3 := &BaseClientEmbed{
+		ModelConfig: mc,
+		ClientConfig: &llmschema.ModelClientConfig{
+			ClientProvider: "OpenAI", APIBase: "https://x", Timeout: 60,
+			AuthMode: llmschema.AuthModeNone,
+		},
+		clientName: "OpenAI client",
+	}
+	if err := e3.ValidateConfig(); err != nil {
+		t.Errorf("auth_mode=none 不应要求 key: %v", err)
+	}
+
+	// verify_ssl=true 无证书：不再报错（L-07 同源）
+	e4 := &BaseClientEmbed{
+		ModelConfig: mc,
+		ClientConfig: &llmschema.ModelClientConfig{
+			ClientProvider: "OpenAI", APIKey: "k", APIBase: "https://x",
+			Timeout: 60, VerifySSL: true,
+		},
+		clientName: "OpenAI client",
+	}
+	if err := e4.ValidateConfig(); err != nil {
+		t.Errorf("verify_ssl=true 无证书不应报错: %v", err)
 	}
 }
 

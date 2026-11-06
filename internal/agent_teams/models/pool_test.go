@@ -195,8 +195,8 @@ func TestModelPoolEntry_ToTeamModelConfig_空Metadata(t *testing.T) {
 	cfg := entry.ToTeamModelConfig()
 
 	// 默认值应来自 NewModelClientConfig
-	if cfg.ModelClientConfig.Timeout != 60.0 {
-		t.Errorf("Timeout = %f, want 60.0（默认）", cfg.ModelClientConfig.Timeout)
+	if cfg.ModelClientConfig.Timeout != 360.0 {
+		t.Errorf("Timeout = %f, want 360.0（默认，Python: schema/config.py:145）", cfg.ModelClientConfig.Timeout)
 	}
 	if cfg.ModelClientConfig.MaxRetries != 3 {
 		t.Errorf("MaxRetries = %d, want 3（默认）", cfg.ModelClientConfig.MaxRetries)

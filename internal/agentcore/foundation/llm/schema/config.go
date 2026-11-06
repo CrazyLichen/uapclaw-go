@@ -29,8 +29,14 @@ type ModelClientConfig struct {
 	APIKey string `json:"api_key"`
 	// APIBase API 基础 URL
 	APIBase string `json:"api_base"`
-	// Timeout 请求超时时间（秒），必须 > 0，默认 60
+	// Timeout 请求超时时间（秒），必须 > 0，默认 360
 	Timeout float64 `json:"timeout"`
+	// AuthMode 鉴权模式，默认 api_key；none/custom_headers 时不强制 api_key
+	// Python: schema/config.py:186 auth_mode: LLMAuthMode = ApiKey
+	AuthMode AuthMode `json:"auth_mode,omitempty"`
+	// EndpointProfile 端点配置档名（ollama/lmstudio 等），缺 base 时回填默认地址
+	// Python: schema/config.py endpoint_profile
+	EndpointProfile string `json:"endpoint_profile,omitempty"`
 	// StreamFirstChunkTimeout 首个携带模型输出的流式分片的最长等待（秒）。
 	// nil 表示禁用；默认 300。只有携带输出（content/reasoning/tool_call）的分片
 	// 才算首帧，role-only/heartbeat/usage-only 帧不算。
@@ -105,7 +111,54 @@ const (
 // timeout >= stream_first_chunk_timeout(300)，传输层永不先于应用层流超时触发。
 const defaultClientTimeoutSeconds = 360.0
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 枚举（鉴权模式）────────────────────────────
+
+// AuthMode LLM 鉴权模式。
+//
+// Python: schema/config.py:40-44 LLMAuthMode
+// （openai_account_oauth 分支暂不生效——openai_account_model_client.py 未迁移 ⤵️）
+type AuthMode string
+
+const (
+	// AuthModeAPIKey Bearer API key 鉴权（默认）
+	AuthModeAPIKey AuthMode = "api_key"
+	// AuthModeNone 无鉴权（自建网关 / auth_mode: none）
+	AuthModeNone AuthMode = "none"
+	// AuthModeCustomHeaders 靠自定义请求头携带凭据
+	AuthModeCustomHeaders AuthMode = "custom_headers"
+	// AuthModeOpenAIAccountOAuth OpenAI 账号 OAuth（未迁移，占位）
+	AuthModeOpenAIAccountOAuth AuthMode = "openai_account_oauth"
+)
+
+// topLevelAPIKeyProviders 要求顶层 api_key 的 provider 白名单。
+//
+// Python: schema/config.py:111-126 _TOP_LEVEL_API_KEY_PROVIDERS
+var topLevelAPIKeyProviders = map[string]struct{}{
+	"OpenAI": {}, "OpenRouter": {}, "Anthropic": {}, "SiliconFlow": {},
+	"DashScope": {}, "DeepSeek": {}, "Moonshot": {}, "MiniMax": {},
+	"ModelArts": {}, "VolcEngine": {}, "Qianfan": {}, "Zhipu": {},
+	"MiMo": {}, "InferenceAffinity": {},
+}
+
+// topLevelAPIBaseProviders 要求顶层 api_base 的 provider 白名单。
+//
+// Python: schema/config.py:127 _TOP_LEVEL_API_BASE_PROVIDERS
+// （= key 白名单 ∪ {OpenAIAccount}；OpenAIAccount 客户端未迁移，白名单先对齐）
+var topLevelAPIBaseProviders = map[string]struct{}{
+	"OpenAI": {}, "OpenRouter": {}, "Anthropic": {}, "SiliconFlow": {},
+	"DashScope": {}, "DeepSeek": {}, "Moonshot": {}, "MiniMax": {},
+	"ModelArts": {}, "VolcEngine": {}, "Qianfan": {}, "Zhipu": {},
+	"MiMo": {}, "InferenceAffinity": {}, "OpenAIAccount": {},
+}
+
+// defaultAPIBaseByEndpointProfile endpoint_profile 缺省 base 回填表。
+//
+// Python: schema/config.py:128-131 _DEFAULT_API_BASE_BY_ENDPOINT_PROFILE
+var defaultAPIBaseByEndpointProfile = map[string]string{
+	"ollama":   "http://localhost:11434/v1",
+	"lmstudio": "http://localhost:1234/v1",
+}
+
 
 // providerTypeStrings 服务商类型名称数组，按枚举值索引。
 var providerTypeStrings = [...]string{
@@ -205,6 +258,22 @@ func ValidateAndNormalizeProvider(provider string) (string, error) {
 	)
 }
 
+// ProviderRequiresAPIKey 判 provider 是否要求顶层 api_key（白名单）。
+//
+// Python: schema/config.py:111-126 _TOP_LEVEL_API_KEY_PROVIDERS
+func ProviderRequiresAPIKey(provider string) bool {
+	_, ok := topLevelAPIKeyProviders[provider]
+	return ok
+}
+
+// ProviderRequiresAPIBase 判 provider 是否要求顶层 api_base（白名单）。
+//
+// Python: schema/config.py:127 _TOP_LEVEL_API_BASE_PROVIDERS
+func ProviderRequiresAPIBase(provider string) bool {
+	_, ok := topLevelAPIBaseProviders[provider]
+	return ok
+}
+
 // SetProviderValidator 设置全局服务商验证器。
 func SetProviderValidator(v ProviderValidator) {
 	globalProviderValidator = v
@@ -213,6 +282,16 @@ func SetProviderValidator(v ProviderValidator) {
 // WithClientID 设置客户端唯一标识。
 func WithClientID(id string) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.ClientID = id }
+}
+
+// WithAuthMode 设置鉴权模式。
+func WithAuthMode(mode AuthMode) ModelClientConfigOption {
+	return func(c *ModelClientConfig) { c.AuthMode = mode }
+}
+
+// WithEndpointProfile 设置端点配置档名（ollama/lmstudio 等）。
+func WithEndpointProfile(profile string) ModelClientConfigOption {
+	return func(c *ModelClientConfig) { c.EndpointProfile = profile }
 }
 
 // WithTimeout 设置请求超时时间（秒）。
@@ -293,12 +372,34 @@ func (c *ModelClientConfig) Validate() error {
 	if c.ClientProvider == "" {
 		return fmt.Errorf("client_provider 不能为空")
 	}
-	if c.APIKey == "" {
-		return fmt.Errorf("api_key 不能为空")
+
+	// auth_mode 归一（Go string 零值是 ""，Python 默认 ApiKey）
+	if c.AuthMode == "" {
+		c.AuthMode = AuthModeAPIKey
 	}
-	if c.APIBase == "" {
-		return fmt.Errorf("api_base 不能为空")
+
+	// endpoint_profile 缺省 base 回填
+	// Python: schema/config.py:236-242 _validate_top_level_provider_config
+	if strings.TrimSpace(c.APIBase) == "" && c.EndpointProfile != "" {
+		if def, ok := defaultAPIBaseByEndpointProfile[strings.ToLower(strings.TrimSpace(c.EndpointProfile))]; ok {
+			c.APIBase = def
+		}
 	}
+
+	// 凭据必填判定（对齐 Python:225-256）
+	// Python 语义：auth_mode != api_key → 不要求 key；否则 provider 在 key 白名单才要求
+	requiresAPIKey := false
+	if c.AuthMode == AuthModeAPIKey {
+		_, requiresAPIKey = topLevelAPIKeyProviders[c.ClientProvider]
+	}
+	if requiresAPIKey && strings.TrimSpace(c.APIKey) == "" {
+		return fmt.Errorf("api_key is required for provider %s", c.ClientProvider)
+	}
+	// base 白名单：provider 在白名单内才要求 api_base
+	if _, requiresBase := topLevelAPIBaseProviders[c.ClientProvider]; requiresBase && strings.TrimSpace(c.APIBase) == "" {
+		return fmt.Errorf("api_base is required for provider %s", c.ClientProvider)
+	}
+
 	if c.Timeout <= 0 {
 		return fmt.Errorf("timeout 必须 > 0，当前值: %f", c.Timeout)
 	}

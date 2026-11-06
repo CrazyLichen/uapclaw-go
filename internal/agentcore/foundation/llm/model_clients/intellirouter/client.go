@@ -51,7 +51,8 @@ type IntelliRouterModelClient struct {
 //  1. 从 ModelClientConfig.Extra 提取 IntelliRouter 配置
 //  2. 校验至少有一个 deployment
 //  3. 获取或创建路由器（缓存共享）
-//  4. 构造 BaseClientEmbed（WithSkipValidate 跳过 api_key/api_base 校验）
+//  4. 构造 BaseClientEmbed（intelli_router 不在 api_key/api_base 白名单，
+	//     凭据在 deployment 级别配置，故 ValidateConfig 不强制——见偏差 D-3）
 //  5. 构造 OpenAI 客户端（placeholder 配置，实际调用时动态替换）
 //
 // Python: IntelliRouterModelClient.__init__(model_config, model_client_config)
@@ -73,12 +74,11 @@ func NewIntelliRouterModelClient(
 	// 3. 获取或创建路由器（缓存共享）
 	router := GetOrCreateRouter(irConfig)
 
-	// 4. 构造 BaseClientEmbed（跳过 api_key/api_base 校验）
+	// 4. 构造 BaseClientEmbed（intelli_router 不在白名单，不要求 api_key/api_base）
 	embed, err := model_clients.NewBaseClientEmbed(
 		modelConfig,
 		clientConfig,
 		model_clients.WithClientName("IntelliRouter client"),
-		model_clients.WithSkipValidate(),
 	)
 	if err != nil {
 		return nil, err

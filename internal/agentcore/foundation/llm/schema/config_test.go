@@ -652,3 +652,72 @@ func TestModelClientConfig_流超时默认值与三态(t *testing.T) {
 		t.Fatalf("自定义空闲超时应为 5.5，实际 %v", over.StreamIdleTimeout)
 	}
 }
+
+// ──────────────────────────── AuthMode / 白名单矩阵（C-D1）────────────────────────────
+
+// TestValidate_白名单矩阵 对齐 config.py:225-256（key/base 两白名单 + auth_mode 门控）。
+func TestValidate_白名单矩阵(t *testing.T) {
+	// intelli_router：key/base 都不要求
+	if _, err := NewModelClientConfig("intelli_router", "", ""); err != nil {
+		t.Errorf("intelli_router 无 key/base 应通过: %v", err)
+	}
+	// OpenAI + auth_mode=none：不要求 key，但 base 必填
+	if _, err := NewModelClientConfig("OpenAI", "", "https://x", WithAuthMode(AuthModeNone)); err != nil {
+		t.Errorf("auth_mode=none 不应要求 key: %v", err)
+	}
+	// OpenAI + 默认 api_key 模式：key 必填
+	if _, err := NewModelClientConfig("OpenAI", "", "https://x"); err == nil {
+		t.Error("OpenAI 默认模式缺 key 应报错")
+	}
+	// OpenAI + auth_mode=none 但缺 base：base 必填
+	if _, err := NewModelClientConfig("OpenAI", "k", "", WithAuthMode(AuthModeNone)); err == nil {
+		t.Error("OpenAI 缺 base 应报错（base 白名单含 OpenAI）")
+	}
+	// custom_headers + 空 key：不要求 key
+	if _, err := NewModelClientConfig("OpenAI", "", "https://x", WithAuthMode(AuthModeCustomHeaders)); err != nil {
+		t.Errorf("custom_headers 空 key 应通过: %v", err)
+	}
+	// verify_ssl=true 无 ssl_cert 不再报错
+	if _, err := NewModelClientConfig("OpenAI", "k", "https://x", WithVerifySSL(true)); err != nil {
+		t.Errorf("verify_ssl=true 无证书不应报错: %v", err)
+	}
+}
+
+// TestValidate_endpointProfile默认base ollama/lmstudio 缺 base 时回填默认地址。
+//
+// Python: schema/config.py:128-131 _DEFAULT_API_BASE_BY_ENDPOINT_PROFILE
+func TestValidate_endpointProfile默认base(t *testing.T) {
+	cfg, err := NewModelClientConfig("intelli_router", "", "", WithEndpointProfile("ollama"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APIBase != "http://localhost:11434/v1" {
+		t.Errorf("ollama 默认 base = %q", cfg.APIBase)
+	}
+	cfg2, err := NewModelClientConfig("intelli_router", "", "", WithEndpointProfile("lmstudio"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg2.APIBase != "http://localhost:1234/v1" {
+		t.Errorf("lmstudio 默认 base = %q", cfg2.APIBase)
+	}
+	// 显式 base 不被覆盖
+	cfg3, err := NewModelClientConfig("intelli_router", "", "https://custom", WithEndpointProfile("ollama"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg3.APIBase != "https://custom" {
+		t.Errorf("显式 base 不应被覆盖: %q", cfg3.APIBase)
+	}
+}
+
+// TestValidate_AuthMode默认归一 未设置时归一为 api_key。
+func TestValidate_AuthMode默认归一(t *testing.T) {
+	cfg, err := NewModelClientConfig("OpenAI", "k", "https://x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AuthMode != AuthModeAPIKey {
+		t.Errorf("AuthMode = %q want %q", cfg.AuthMode, AuthModeAPIKey)
+	}
+}
