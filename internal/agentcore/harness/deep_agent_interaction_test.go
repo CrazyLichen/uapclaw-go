@@ -99,6 +99,7 @@ func startTestInteraction(t *testing.T) *DeepAgent {
 func startInteractionForInput(t *testing.T) *DeepAgent {
 	t.Helper()
 	d := newTestDeepAgent()
+	d.ensureInteractionState()
 	sess := session.NewSession()
 	if _, _, err := d.prepareInteractionTaskLoop(context.Background(), sess); err != nil {
 		t.Fatalf("prepareInteractionTaskLoop 失败: %v", err)
@@ -575,6 +576,21 @@ func TestCancelActiveRound_代际不匹配不取消(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("代际匹配时必须取消在飞轮")
 	}
+}
+
+// TestPromoteLoopFollowUps 验证 follow-up 提升为 user work
+// Python: _promote_loop_follow_ups (L4418)
+func TestPromoteLoopFollowUps(t *testing.T) {
+	d := startInteractionForInput(t)
+	ctrl := d.currentLoopController()
+	require.NotNil(t, ctrl)
+	ctrl.EnqueueFollowUp("追一句")
+
+	d.promoteLoopFollowUps()
+
+	work := d.takeWork(t)
+	assert.True(t, work.IsFollowUp)
+	assert.Equal(t, "追一句", work.Query())
 }
 
 // ──────────────────────────── supervisor 调度 ────────────────────────────
