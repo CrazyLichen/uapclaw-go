@@ -27,6 +27,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -153,8 +154,8 @@ type DeepAgent struct {
 	activeInteractionRound *hschema.ActiveInteractionRound
 	// interactionEvents user/goal 双队列调度器（无内部锁，调用方持 controlMu）
 	interactionEvents *task_loop.EventManager
-	// goalCoordinator Goal 能力窄接口（⤵️ #9.89 注入 *goal.GoalManager）
-	goalCoordinator hschema.GoalCoordinator
+	// goalCoordinator Goal 能力面（⤵️ #9.89 注入 *goal.GoalManager）
+	goalCoordinator goal.Coordinator
 	// interactionOutput 输出租约管理器
 	interactionOutput *hschema.OutputLeaseManager
 	// interactionWakeup supervisor 唤醒通道（cap=1）
@@ -1863,9 +1864,9 @@ func (d *DeepAgent) ClearActiveAgentTemplate() {
 	d.activeAgentTemplate = nil
 }
 
-// SetGoalCoordinator 注入 Goal 能力窄接口（⤵️ #9.89 在 Start 内构造 GoalManager 后调用）。
+// SetGoalCoordinator 注入 Goal 能力面（⤵️ #9.89 在 Start 内构造 GoalManager 后调用）。
 // Python: self.goal_manager = GoalManager(...) (L3970-3981)
-func (d *DeepAgent) SetGoalCoordinator(coordinator hschema.GoalCoordinator) {
+func (d *DeepAgent) SetGoalCoordinator(coordinator goal.Coordinator) {
 	d.ensureInteractionState()
 	d.interactionControlMu.Lock()
 	defer d.interactionControlMu.Unlock()
@@ -4584,8 +4585,9 @@ func (d *DeepAgent) executeRound(ctx context.Context, work *hschema.RoundWorkIte
 		if d.goalCoordinator == nil {
 			return
 		}
-		started, err := d.goalCoordinator.BeginAttempt(ctx, work.Context.GoalID, work.Context.Revision)
-		if err != nil || !started {
+		record, err := d.goalCoordinator.BeginAttempt(ctx, work.Context.GoalID, work.Context.Revision)
+		if err != nil || record == nil {
+			// 代际已过期（覆盖/清除/换代）：丢弃这个 work，不执行本轮。
 			return
 		}
 	}

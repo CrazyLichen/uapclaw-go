@@ -130,9 +130,6 @@ type DeepAgentInterface interface {
 	// CancelRound 取消当前活跃轮
 	// Python: DeepAgent.cancel_round
 	CancelRound(ctx context.Context, reason string) (bool, error)
-	// SetGoalCoordinator 注入 Goal 能力（⤵️ #9.89 接线）
-	// Python: DeepAgent.goal_manager 赋值
-	SetGoalCoordinator(coordinator hschema.GoalCoordinator)
 }
 
 // UnimplementedDeepAgentInteraction DeepAgentInterface 交互方法的空实现，供测试替身嵌入。
@@ -176,9 +173,6 @@ func (UnimplementedDeepAgentInteraction) SendInput(context.Context, hschema.Send
 func (UnimplementedDeepAgentInteraction) CancelRound(context.Context, string) (bool, error) {
 	return false, nil
 }
-
-// SetGoalCoordinator 空实现
-func (UnimplementedDeepAgentInteraction) SetGoalCoordinator(hschema.GoalCoordinator) {}
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。
 // 仅包含 DeepAgentInterface 消费者实际调用的方法。

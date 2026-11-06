@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	hgoal "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
@@ -20,8 +21,8 @@ import (
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
-// fakeGoalCoordinator 测试用 goal 协调器
-type fakeGoalCoordinator struct {
+// fakeGoalAccessor 测试用 goal 协调器
+type fakeGoalAccessor struct {
 	// active 是否有 ACTIVE 记录
 	active bool
 	// started BeginAttempt 返回值
@@ -31,14 +32,25 @@ type fakeGoalCoordinator struct {
 }
 
 // HasActiveRecord 返回预置标记
-func (f *fakeGoalCoordinator) HasActiveRecord() bool { return f.active }
+func (f *fakeGoalAccessor) HasActiveRecord() bool { return f.active }
 
 // EnsureActiveGoalWorkLocked 记录补排次数
-func (f *fakeGoalCoordinator) EnsureActiveGoalWorkLocked() { f.ensureCalls.Add(1) }
+func (f *fakeGoalAccessor) EnsureActiveGoalWorkLocked() bool {
+	f.ensureCalls.Add(1)
+	return true
+}
 
-// BeginAttempt 返回预置结果
-func (f *fakeGoalCoordinator) BeginAttempt(context.Context, string, int) (bool, error) {
-	return f.started, nil
+// BeginAttempt 返回预置结果；started 为 false 时返回 nil（代际过期）
+func (f *fakeGoalAccessor) BeginAttempt(context.Context, string, int) (*hgoal.GoalRecord, error) {
+	if !f.started {
+		return nil, nil
+	}
+	return &hgoal.GoalRecord{
+		GoalID:    "g1",
+		SessionID: "s1",
+		Objective: "obj",
+		Status:    hgoal.GoalStatusActive,
+	}, nil
 }
 
 // newInteractionWork 构造一个占位 work item
@@ -67,7 +79,7 @@ func (d *DeepAgent) setRoundOverrideForTest(
 }
 
 // setGoalCoordinatorForTest 设置 goal 协调器（持 controlMu）
-func (d *DeepAgent) setGoalCoordinatorForTest(coordinator hschema.GoalCoordinator) {
+func (d *DeepAgent) setGoalCoordinatorForTest(coordinator hgoal.Coordinator) {
 	d.interactionControlMu.Lock()
 	defer d.interactionControlMu.Unlock()
 	d.goalCoordinator = coordinator
@@ -520,7 +532,7 @@ func TestExecuteRound_goal轮未开始则跳过(t *testing.T) {
 		ran = true
 		return hschema.RoundOutcome{}
 	})
-	d.setGoalCoordinatorForTest(&fakeGoalCoordinator{started: false})
+	d.setGoalCoordinatorForTest(&fakeGoalAccessor{started: false})
 
 	work := hschema.NewGoalWorkItem(map[string]any{"query": "g"}, "g1", 1, d.interactionSessionID)
 	d.executeRoundAndWait(context.Background(), work)
@@ -600,7 +612,7 @@ func TestCancelActiveRound_代际不匹配不取消(t *testing.T) {
 	t.Cleanup(func() { close(gate) })
 
 	// goal 轮必须先通过 begin_attempt 门卫，否则会立即返回、观察不到活跃轮
-	d.setGoalCoordinatorForTest(&fakeGoalCoordinator{started: true})
+	d.setGoalCoordinatorForTest(&fakeGoalAccessor{started: true})
 
 	work := hschema.NewGoalWorkItem(map[string]any{"query": "g"}, "goal-1", 1, d.interactionSessionID)
 	go d.executeRoundAndWait(context.Background(), work)
@@ -801,7 +813,7 @@ func TestCloseIdle_无待办时发哨兵(t *testing.T) {
 // Python: _should_keep_interaction_open_locked (L4442)
 func TestShouldKeepInteractionOpen_ACTIVE目标保持流开(t *testing.T) {
 	d := startTestInteraction(t)
-	fakeGoal := &fakeGoalCoordinator{active: true}
+	fakeGoal := &fakeGoalAccessor{active: true}
 
 	d.interactionControlMu.Lock()
 	d.goalCoordinator = fakeGoal
@@ -815,7 +827,7 @@ func TestShouldKeepInteractionOpen_ACTIVE目标保持流开(t *testing.T) {
 // TestSetGoalCoordinator_goal分支生效 验证 9.89 注入点
 func TestSetGoalCoordinator_goal分支生效(t *testing.T) {
 	d := startTestInteraction(t)
-	fakeGoal := &fakeGoalCoordinator{active: true}
+	fakeGoal := &fakeGoalAccessor{active: true}
 	d.SetGoalCoordinator(fakeGoal)
 
 	_ = d.AttachOutput(context.Background())

@@ -34,22 +34,6 @@ type InteractionOutputDriver interface {
 	DetachOutput(ctx context.Context, token string, abortActiveRound bool)
 }
 
-// GoalCoordinator 交互监督器所需的 Goal 能力子集，由 9.88 的 GoalManager 实现。
-//
-// Python 直接持有具体类 GoalManager；Go 收窄为接口以便 S2/S3 阶段用 fake
-// 覆盖 goal 分支（spec K8 / D9），9.89 注入 *goal.GoalManager。
-type GoalCoordinator interface {
-	// HasActiveRecord 返回当前会话是否存在 ACTIVE 目标记录
-	// Python: record.status is GoalStatus.ACTIVE（deep_agent.py L4067、L4456）
-	HasActiveRecord() bool
-	// EnsureActiveGoalWorkLocked 在 ACTIVE 目标缺少待办 work 时补排
-	// Python: GoalManager.ensure_active_goal_work_locked
-	EnsureActiveGoalWorkLocked()
-	// BeginAttempt 开始一次目标尝试；false 表示该代际不应开始
-	// Python: GoalManager.begin_attempt (manager.py)
-	BeginAttempt(ctx context.Context, goalID string, revision int) (bool, error)
-}
-
 // InteractionPhase 会话级交互循环的内部生命周期相位。
 // Python: InteractionPhase (interaction.py L28)
 type InteractionPhase string

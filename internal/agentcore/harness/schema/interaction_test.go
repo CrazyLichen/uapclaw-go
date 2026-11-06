@@ -39,26 +39,6 @@ func (f *fakeOutputDriver) DetachOutput(_ context.Context, token string, abortAc
 	f.abortValues = append(f.abortValues, abortActiveRound)
 }
 
-// fakeGoalCoordinator 测试用 goal 协调器（S2/S3 复用）
-type fakeGoalCoordinator struct {
-	active       bool
-	ensureCalls  int
-	beginCalls   int
-	beginStarted bool
-}
-
-// HasActiveRecord 返回预置的 ACTIVE 标记
-func (f *fakeGoalCoordinator) HasActiveRecord() bool { return f.active }
-
-// EnsureActiveGoalWorkLocked 记录补排调用
-func (f *fakeGoalCoordinator) EnsureActiveGoalWorkLocked() { f.ensureCalls++ }
-
-// BeginAttempt 记录尝试调用
-func (f *fakeGoalCoordinator) BeginAttempt(_ context.Context, _ string, _ int) (bool, error) {
-	f.beginCalls++
-	return f.beginStarted, nil
-}
-
 // ──────────────────────────── 相位与 work item ────────────────────────────
 
 // TestInteractionPhase_值对齐Python 验证相位枚举取值
@@ -530,19 +510,6 @@ func TestOutputLeaseManager_NextItem后Detach为noop(t *testing.T) {
 	require.False(t, ok)
 
 	assert.False(t, m.Detach(lease.Token, true), "租约已因哨兵清空，detach 应为 noop")
-}
-
-// ──────────────────────────── GoalCoordinator ────────────────────────────
-
-// TestGoalCoordinator_接口形状 验证窄接口可被 fake 实现
-// spec K8/D9：9.87 只依赖这三个方法，不依赖 9.88 的具体类型
-func TestGoalCoordinator_接口形状(t *testing.T) {
-	var coordinator GoalCoordinator = &fakeGoalCoordinator{active: true}
-	assert.True(t, coordinator.HasActiveRecord())
-	coordinator.EnsureActiveGoalWorkLocked()
-	started, err := coordinator.BeginAttempt(context.Background(), "g1", 1)
-	require.NoError(t, err)
-	assert.False(t, started)
 }
 
 // ──────────────────────────── 边界与空值 ────────────────────────────

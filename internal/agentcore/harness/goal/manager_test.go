@@ -62,7 +62,7 @@ func newManagerHarness(outputAttached bool) *managerHarness {
 		CancelActiveRound: func(_ context.Context, kind hschema.RoundWorkKind, goalID, reason string) {
 			harness.cancels = append(harness.cancels, cancelCall{RunKind: kind, GoalID: goalID, Reason: reason})
 		},
-		EmitEvent: func(event hschema.InteractionEvent) { harness.emitted = append(harness.emitted, event) },
+		EmitEvent:  func(event hschema.InteractionEvent) { harness.emitted = append(harness.emitted, event) },
 		NotifyWork: func() { harness.notifies++ },
 	})
 	return harness
@@ -859,8 +859,8 @@ func TestGoalManager_CONTINUE在PAUSED不续跑(t *testing.T) {
 	assert.Nil(t, harness.events.NextWork(), "PAUSED 下 CONTINUE 不得重排")
 }
 
-// TestGoalCoordinator_接口满足性 编译期与运行期双重校验
-func TestGoalCoordinator_接口满足性(t *testing.T) {
+// TestGoalManager_实现Coordinator接口 编译期与运行期双重校验
+func TestGoalManager_实现Coordinator接口(t *testing.T) {
 	var coordinator Coordinator = NewGoalManager(GoalManagerConfig{
 		Store:        NewSessionGoalStore(newFakeGoalSession("s1")),
 		ControlLock:  &sync.Mutex{},
