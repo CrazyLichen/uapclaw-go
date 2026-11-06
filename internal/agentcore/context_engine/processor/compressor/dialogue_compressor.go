@@ -24,8 +24,10 @@ import (
 type DialogueCompressorConfig struct {
 	// MessagesThreshold 消息数触发阈值，0 表示不启用
 	MessagesThreshold int
-	// TokensThreshold Token 数触发阈值
-	TokensThreshold int
+	// TriggerContextRatio 触发压缩的上下文占用比例（相对上下文窗口，0.8 即 80%）
+	TriggerContextRatio float64
+	// MinTargetContextRatio 待压缩内容的占比下限，低于该比例不做压缩（避免碎片压缩）
+	MinTargetContextRatio float64
 	// MessagesToKeep 保留最近 N 条不压缩，0 表示不保留
 	MessagesToKeep int
 	// KeepLastRound 保留最后一轮完整对话
@@ -78,8 +80,10 @@ type DialogueCompressor struct {
 	*processor.BaseProcessor
 	// model 压缩用 LLM 实例
 	model *llm.Model
-	// tokenThreshold Token 触发阈值
-	tokenThreshold int
+	// triggerContextRatio 触发压缩的上下文占用比例
+	triggerContextRatio float64
+	// minTargetContextRatio 待压缩内容占比下限
+	minTargetContextRatio float64
 	// messageNumThreshold 消息数触发阈值（0 表示不启用）
 	messageNumThreshold int
 	// messagesToKeep 保留最近 N 条不压缩（0 表示不保留）
@@ -190,7 +194,8 @@ func NewDialogueCompressor(config *DialogueCompressorConfig, opts ...DialogueCom
 
 	dc := &DialogueCompressor{
 		BaseProcessor:           bp,
-		tokenThreshold:          config.TokensThreshold,
+		triggerContextRatio:     config.TriggerContextRatio,
+		minTargetContextRatio:   config.MinTargetContextRatio,
 		messageNumThreshold:     config.MessagesThreshold,
 		messagesToKeep:          config.MessagesToKeep,
 		keepLastRound:           config.KeepLastRound,
@@ -222,8 +227,12 @@ func WithCompressorModel(model *llm.Model) DialogueCompressorOption {
 
 // Validate 校验对话压缩器配置。
 func (c *DialogueCompressorConfig) Validate() error {
-	if c.TokensThreshold <= 0 {
-		return fmt.Errorf("DialogueCompressorConfig.TokensThreshold 必须大于 0，当前值: %d", c.TokensThreshold)
+	if c.TriggerContextRatio <= 0 || c.TriggerContextRatio > 1 {
+		return fmt.Errorf("DialogueCompressorConfig.TriggerContextRatio 必须在 (0, 1] 区间，当前值: %v", c.TriggerContextRatio)
+	}
+	if c.MinTargetContextRatio < 0 || c.MinTargetContextRatio >= 1 {
+		return fmt.Errorf("DialogueCompressorConfig.MinTargetContextRatio 必须在 [0, 1) 区间，当前值: %v",
+			c.MinTargetContextRatio)
 	}
 	if c.MessagesThreshold < 0 {
 		return fmt.Errorf("DialogueCompressorConfig.MessagesThreshold 不能为负数，当前值: %d", c.MessagesThreshold)
@@ -290,13 +299,14 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 
 	allMsgs, _ := mc.GetMessages(0, true)
 	tokens := dc.countMessagesTokens(mc, allMsgs)
-	if tokens > dc.tokenThreshold {
+	threshold := triggerThresholdByRatio(mc, dc.triggerContextRatio)
+	if tokens >= threshold {
 		logger.Info(logComponent).
 			Str("event_type", "DialogueCompressor_triggered").
 			Str("path", "add_messages").
 			Int("messages", len(allMsgs)).
 			Int("tokens", tokens).
-			Int("threshold", dc.tokenThreshold).
+			Int("threshold", threshold).
 			Msg("context tokens exceeded threshold")
 		return true, nil
 	}
@@ -319,6 +329,15 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 
 	targets := dc.BuildCompressTargets(allMessages[:compressUntilIdx])
 	if len(targets) == 0 {
+		return nil, messagesToAdd, nil
+	}
+	// 待压缩内容过少时跳过：碎片压缩只会消耗模型调用而不降总量
+	// （对齐上游 forked base 的 min_target_context_ratio 判定）。
+	targetMessages := make([]llm_schema.BaseMessage, 0, len(targets))
+	for _, target := range targets {
+		targetMessages = append(targetMessages, target.messages...)
+	}
+	if !targetAboveMinRatio(mc, targetMessages, dc.minTargetContextRatio) {
 		return nil, messagesToAdd, nil
 	}
 

@@ -20,7 +20,10 @@ import (
 // validCurrentRoundCompressorConfig 创建合法的 CurrentRoundCompressorConfig
 func validCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 	return &CurrentRoundCompressorConfig{
-		TokensThreshold:                 100,
+		TriggerContextRatio:             0.8,
+		// 行为用例不启用比例下限守卫（守卫由 TestCurrentRoundCompressor_最小目标比例 单独覆盖），
+		// 否则测试消息量（几十 token）永远压不过下限，压缩路径不会被走到。
+		MinTargetContextRatio:           0,
 		MessagesToKeep:                  3,
 		MinSelectedTokensForCompression: 10,
 		CompressionTargetTokens:         4000,
@@ -121,8 +124,11 @@ func newCRCWithModel(cfg *CurrentRoundCompressorConfig, fakeClient *crcFakeBaseM
 // TestNewCurrentRoundCompressorConfig_默认值 验证默认配置值与 Python 对齐
 func TestNewCurrentRoundCompressorConfig_默认值(t *testing.T) {
 	cfg := NewCurrentRoundCompressorConfig()
-	if cfg.TokensThreshold != 100000 {
-		t.Errorf("TokensThreshold 期望 100000，实际: %d", cfg.TokensThreshold)
+	if cfg.TriggerContextRatio != DefaultTriggerContextRatio {
+		t.Errorf("TriggerContextRatio 期望 %v，实际: %v", DefaultTriggerContextRatio, cfg.TriggerContextRatio)
+	}
+	if cfg.MinTargetContextRatio != DefaultMinTargetContextRatio {
+		t.Errorf("MinTargetContextRatio 期望 %v，实际: %v", DefaultMinTargetContextRatio, cfg.MinTargetContextRatio)
 	}
 	if cfg.MessagesToKeep != 3 {
 		t.Errorf("MessagesToKeep 期望 3，实际: %d", cfg.MessagesToKeep)
@@ -155,17 +161,24 @@ func TestCurrentRoundCompressorConfig_Validate_正常(t *testing.T) {
 	}
 }
 
-// TestCurrentRoundCompressorConfig_Validate_TokensThreshold零 验证 TokensThreshold <= 0 报错
-func TestCurrentRoundCompressorConfig_Validate_TokensThreshold零(t *testing.T) {
+// TestCurrentRoundCompressorConfig_Validate_比例区间 验证触发比例与目标下限的区间校验
+func TestCurrentRoundCompressorConfig_Validate_比例区间(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 0
+	cfg.TriggerContextRatio = -0.1
 	if err := cfg.Validate(); err == nil {
-		t.Error("TokensThreshold = 0 应返回错误")
+		t.Error("TriggerContextRatio < 0 应返回错误")
 	}
 
-	cfg.TokensThreshold = -1
+	cfg = validCurrentRoundCompressorConfig()
+	cfg.TriggerContextRatio = 1.5
 	if err := cfg.Validate(); err == nil {
-		t.Error("TokensThreshold = -1 应返回错误")
+		t.Error("TriggerContextRatio > 1 应返回错误")
+	}
+
+	cfg = validCurrentRoundCompressorConfig()
+	cfg.MinTargetContextRatio = 1
+	if err := cfg.Validate(); err == nil {
+		t.Error("MinTargetContextRatio >= 1 应返回错误")
 	}
 }
 
@@ -255,7 +268,7 @@ func TestCurrentRoundCompressor_ProcessorType(t *testing.T) {
 // TestCurrentRoundCompressor_TriggerAddMessages_超过阈值 验证 Token 数超过阈值时触发
 func TestCurrentRoundCompressor_TriggerAddMessages_超过阈值(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 10 // 低阈值便于测试
+	cfg.TriggerContextRatio = 10.0 / 200000 // 低阈值便于测试
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
 
@@ -283,7 +296,7 @@ func TestCurrentRoundCompressor_TriggerAddMessages_超过阈值(t *testing.T) {
 // TestCurrentRoundCompressor_TriggerAddMessages_低于阈值 验证 Token 数低于阈值时不触发
 func TestCurrentRoundCompressor_TriggerAddMessages_低于阈值(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 100000 // 高阈值
+	cfg.TriggerContextRatio = 100000.0 / 200000 // 高阈值
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
 
@@ -305,7 +318,7 @@ func TestCurrentRoundCompressor_TriggerAddMessages_低于阈值(t *testing.T) {
 func TestCurrentRoundCompressor_TriggerAddMessages_消息数少于MessagesToKeep(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
 	cfg.MessagesToKeep = 10
-	cfg.TokensThreshold = 50
+	cfg.TriggerContextRatio = 50.0 / 200000
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
 
@@ -326,7 +339,7 @@ func TestCurrentRoundCompressor_TriggerAddMessages_消息数少于MessagesToKeep
 // TestCurrentRoundCompressor_OnAddMessages_触发压缩 验证压缩触发后输出包含 CURRENT_ROUND_MEMORY_BLOCK
 func TestCurrentRoundCompressor_OnAddMessages_触发压缩(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 10                // 低阈值确保触发
+	cfg.TriggerContextRatio = 10.0 / 200000 // 低阈值确保触发
 	cfg.MessagesToKeep = 1                  // 仅保留 1 条
 	cfg.MinSelectedTokensForCompression = 1 // 低阈值确保进入压缩
 	fakeClient := &crcFakeBaseModelClient{
@@ -390,7 +403,7 @@ func TestCurrentRoundCompressor_OnAddMessages_触发压缩(t *testing.T) {
 // TestCurrentRoundCompressor_OnAddMessages_不压缩 验证 Token 低于阈值时透传
 func TestCurrentRoundCompressor_OnAddMessages_不压缩(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 100000 // 高阈值，不触发
+	cfg.TriggerContextRatio = 100000.0 / 200000 // 高阈值，不触发
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
 
@@ -919,7 +932,7 @@ func TestCurrentRoundCompressor_工厂非法配置(t *testing.T) {
 		t.Fatal("CurrentRoundCompressor 应已注册")
 	}
 
-	result, err := factory(&CurrentRoundCompressorConfig{TokensThreshold: 0})
+	result, err := factory(&CurrentRoundCompressorConfig{TriggerContextRatio: 0})
 	if err == nil {
 		t.Error("非法配置应返回 error")
 	}
@@ -930,7 +943,7 @@ func TestCurrentRoundCompressor_工厂非法配置(t *testing.T) {
 
 // TestNewCurrentRoundCompressor_校验失败 验证非法配置创建失败
 func TestNewCurrentRoundCompressor_校验失败(t *testing.T) {
-	cfg := &CurrentRoundCompressorConfig{TokensThreshold: 0}
+	cfg := &CurrentRoundCompressorConfig{TriggerContextRatio: 0}
 	_, err := NewCurrentRoundCompressor(cfg)
 	if err == nil {
 		t.Error("非法配置创建应返回错误")
@@ -1709,7 +1722,7 @@ func TestBuildPrompt_仅部分空值(t *testing.T) {
 // TestCurrentRoundCompressor_OnAddMessages_CompressionUsage 验证压缩成功时记录用量
 func TestCurrentRoundCompressor_OnAddMessages_CompressionUsage(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 10
+	cfg.TriggerContextRatio = 10.0 / 200000
 	cfg.MessagesToKeep = 1
 	cfg.MinSelectedTokensForCompression = 1
 	fakeClient := &crcFakeBaseModelClient{
@@ -1749,10 +1762,10 @@ func TestCurrentRoundCompressor_OnAddMessages_CompressionUsage(t *testing.T) {
 	}
 }
 
-// TestCurrentRoundCompressor_TriggerAddMessages_等于阈值 验证 Token 数等于阈值时不触发
+// TestCurrentRoundCompressor_TriggerAddMessages_等于阈值 验证达到阈值即触发（改 >= 后含等于） 验证 Token 数等于阈值时不触发
 func TestCurrentRoundCompressor_TriggerAddMessages_等于阈值(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 200
+	cfg.TriggerContextRatio = 200.0 / 200000
 	cfg.MessagesToKeep = 1
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
@@ -1766,15 +1779,25 @@ func TestCurrentRoundCompressor_TriggerAddMessages_等于阈值(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TriggerAddMessages 失败: %v", err)
 	}
+	if !triggered {
+		t.Error("Token 数等于阈值时应触发（对齐上游 >= 判定）")
+	}
+
+	// 略低于阈值时不触发
+	mc.tokenCounter = &fakeTokenCounter{count: 199}
+	triggered, err = crc.TriggerAddMessages(context.Background(), mc, nil)
+	if err != nil {
+		t.Fatalf("TriggerAddMessages 失败: %v", err)
+	}
 	if triggered {
-		t.Error("Token 数等于阈值时不应触发（需严格大于）")
+		t.Error("Token 数低于阈值时不应触发")
 	}
 }
 
 // TestCurrentRoundCompressor_TriggerAddMessages_刚超阈值 验证 Token 数刚超阈值时触发
 func TestCurrentRoundCompressor_TriggerAddMessages_刚超阈值(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 199
+	cfg.TriggerContextRatio = 199.0 / 200000
 	cfg.MessagesToKeep = 1
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
@@ -1796,7 +1819,7 @@ func TestCurrentRoundCompressor_TriggerAddMessages_刚超阈值(t *testing.T) {
 // TestCurrentRoundCompressor_OnAddMessages_无UserMessage不压缩 验证全部为 AssistantMessage 时 GetCompressIdx 返回 -1
 func TestCurrentRoundCompressor_OnAddMessages_无UserMessage不压缩(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 10
+	cfg.TriggerContextRatio = 10.0 / 200000
 	fakeClient := &crcFakeBaseModelClient{}
 	crc := newCRCWithModel(cfg, fakeClient)
 

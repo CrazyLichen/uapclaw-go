@@ -94,7 +94,9 @@ func rlcNewFakeLLMModel(fakeClient *rlcFakeBaseModelClient) *llm.Model {
 // validRoundLevelCompressorConfig 创建合法的 RoundLevelCompressorConfig
 func validRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 	return &RoundLevelCompressorConfig{
-		TriggerTotalTokens:                230000,
+		TriggerContextRatio:               0.9,
+		// 行为用例不启用比例下限守卫（单独由守卫用例覆盖）
+		MinTargetContextRatio:             0,
 		TargetTotalTokens:                 160000,
 		KeepRecentMessages:                0,
 		CompressionCallMaxTokens:          250000,
@@ -184,8 +186,11 @@ func (c *trackingTokenCounter) CountTools(_ []schema.ToolInfoInterface, _ string
 // TestNewRoundLevelCompressorConfig_默认值 验证15个字段默认值
 func TestNewRoundLevelCompressorConfig_默认值(t *testing.T) {
 	cfg := NewRoundLevelCompressorConfig()
-	if cfg.TriggerTotalTokens != 230000 {
-		t.Errorf("TriggerTotalTokens 期望 230000，实际: %d", cfg.TriggerTotalTokens)
+	if cfg.TriggerContextRatio != 0.9 {
+		t.Errorf("TriggerContextRatio 期望 0.9，实际: %v", cfg.TriggerContextRatio)
+	}
+	if cfg.MinTargetContextRatio != DefaultMinTargetContextRatio {
+		t.Errorf("MinTargetContextRatio 期望 %v，实际: %v", DefaultMinTargetContextRatio, cfg.MinTargetContextRatio)
 	}
 	if cfg.TargetTotalTokens != 160000 {
 		t.Errorf("TargetTotalTokens 期望 160000，实际: %d", cfg.TargetTotalTokens)
@@ -236,16 +241,16 @@ func TestRoundLevelCompressorConfig_Validate_正常(t *testing.T) {
 	}
 }
 
-// TestRoundLevelCompressorConfig_Validate_TriggerTotalTokens零 验证字段 <= 0 报错
-func TestRoundLevelCompressorConfig_Validate_TriggerTotalTokens零(t *testing.T) {
+// TestRoundLevelCompressorConfig_Validate_比例区间 验证比例越界时报错
+func TestRoundLevelCompressorConfig_Validate_比例区间(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 0
+	cfg.TriggerContextRatio = -0.1
 	if err := cfg.Validate(); err == nil {
-		t.Error("TriggerTotalTokens = 0 应返回错误")
+		t.Error("TriggerContextRatio = 0 应返回错误")
 	}
-	cfg.TriggerTotalTokens = -1
+	cfg.TriggerContextRatio = 1.5
 	if err := cfg.Validate(); err == nil {
-		t.Error("TriggerTotalTokens = -1 应返回错误")
+		t.Error("TriggerContextRatio > 1 应返回错误")
 	}
 }
 
@@ -302,7 +307,7 @@ func TestRoundLevelCompressor_ProcessorType(t *testing.T) {
 // TestRoundLevelCompressor_TriggerAddMessages_超过阈值 验证 Token 数超过阈值时触发
 func TestRoundLevelCompressor_TriggerAddMessages_超过阈值(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 100 // 低阈值便于测试
+	cfg.TriggerContextRatio = 100.0 / 200000 // 低阈值便于测试
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
 
@@ -329,7 +334,7 @@ func TestRoundLevelCompressor_TriggerAddMessages_超过阈值(t *testing.T) {
 // TestRoundLevelCompressor_TriggerAddMessages_低于阈值 验证 Token 数低于阈值时不触发
 func TestRoundLevelCompressor_TriggerAddMessages_低于阈值(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 100000 // 高阈值
+	cfg.TriggerContextRatio = 100000.0 / 200000 // 高阈值
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
 
@@ -350,7 +355,7 @@ func TestRoundLevelCompressor_TriggerAddMessages_低于阈值(t *testing.T) {
 // TestRoundLevelCompressor_TriggerGetContextWindow_超过阈值 验证 Token 数超过阈值时触发
 func TestRoundLevelCompressor_TriggerGetContextWindow_超过阈值(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 100 // 低阈值
+	cfg.TriggerContextRatio = 100.0 / 200000 // 低阈值
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
 
@@ -375,7 +380,7 @@ func TestRoundLevelCompressor_TriggerGetContextWindow_超过阈值(t *testing.T)
 // TestRoundLevelCompressor_TriggerGetContextWindow_低于阈值 验证 Token 数低于阈值时不触发
 func TestRoundLevelCompressor_TriggerGetContextWindow_低于阈值(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 100000 // 高阈值
+	cfg.TriggerContextRatio = 100000.0 / 200000 // 高阈值
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
 
@@ -1022,7 +1027,7 @@ func TestRoundLevelCompressor_工厂配置类型不匹配(t *testing.T) {
 // TestRoundLevelCompressor_OnAddMessages_不压缩 验证设置极高阈值时不压缩
 func TestRoundLevelCompressor_OnAddMessages_不压缩(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 999999999 // 极高阈值
+	cfg.TriggerContextRatio = 0.9 // 极高阈值
 	cfg.TargetTotalTokens = 999999999
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
@@ -1050,7 +1055,7 @@ func TestRoundLevelCompressor_OnAddMessages_不压缩(t *testing.T) {
 // TestRoundLevelCompressor_OnGetContextWindow_不超预算 验证 Token 不超预算时直接返回
 func TestRoundLevelCompressor_OnGetContextWindow_不超预算(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 100000 // 高阈值
+	cfg.TriggerContextRatio = 100000.0 / 200000 // 高阈值
 	cfg.TargetTotalTokens = 100000
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
@@ -1080,7 +1085,7 @@ func TestRoundLevelCompressor_OnGetContextWindow_不超预算(t *testing.T) {
 
 // TestNewRoundLevelCompressor_校验失败 验证非法配置创建失败
 func TestNewRoundLevelCompressor_校验失败(t *testing.T) {
-	cfg := &RoundLevelCompressorConfig{TriggerTotalTokens: 0}
+	cfg := &RoundLevelCompressorConfig{TriggerContextRatio: 0}
 	_, err := NewRoundLevelCompressor(cfg)
 	if err == nil {
 		t.Error("非法配置创建应返回错误")
@@ -1146,7 +1151,7 @@ func TestWithRoundLevelModel(t *testing.T) {
 // TestRoundLevelCompressor_OnAddMessages_ModelCallFailed降级 验证 LLM 调用失败时降级透传
 func TestRoundLevelCompressor_OnAddMessages_ModelCallFailed降级(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10 // 低阈值确保触发
+	cfg.TriggerContextRatio = 10.0 / 200000 // 低阈值确保触发
 	cfg.TargetTotalTokens = 5
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeErr: exception.NewBaseError(
@@ -1180,8 +1185,8 @@ func TestRoundLevelCompressor_OnAddMessages_ModelCallFailed降级(t *testing.T) 
 // TestRoundLevelCompressor_OnAddMessages_压缩成功 验证压缩成功场景
 func TestRoundLevelCompressor_OnAddMessages_压缩成功(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10 // 低阈值确保触发
-	cfg.TargetTotalTokens = 100 // 压缩目标 - 假计数器初始返回500>100
+	cfg.TriggerContextRatio = 10.0 / 200000 // 低阈值确保触发
+	cfg.TargetTotalTokens = 100             // 压缩目标 - 假计数器初始返回500>100
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage(`{"blocks": [{"block_id": "block_1", "summary": "压缩摘要"}]}`),
 	}
@@ -1545,8 +1550,8 @@ func TestRoundLevelCompressor_buildModifyIndices(t *testing.T) {
 // TestRoundLevelCompressor_OnGetContextWindow_超预算压缩成功 验证超预算时触发压缩
 func TestRoundLevelCompressor_OnGetContextWindow_超预算压缩成功(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10 // 低阈值确保触发
-	cfg.TargetTotalTokens = 100 // 压缩目标
+	cfg.TriggerContextRatio = 10.0 / 200000 // 低阈值确保触发
+	cfg.TargetTotalTokens = 100             // 压缩目标
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage(`{"blocks": [{"block_id": "block_1", "summary": "压缩摘要"}]}`),
 	}
@@ -1585,7 +1590,7 @@ func TestRoundLevelCompressor_OnGetContextWindow_超预算压缩成功(t *testin
 // TestRoundLevelCompressor_OnGetContextWindow_模型调用失败返回错误 验证 LLM 调用失败时返回错误（兜底压缩不允许降级）
 func TestRoundLevelCompressor_OnGetContextWindow_模型调用失败返回错误(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10
+	cfg.TriggerContextRatio = 10.0 / 200000
 	cfg.TargetTotalTokens = 5
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeErr: exception.NewBaseError(
@@ -1645,7 +1650,7 @@ func TestRoundLevelCompressor_compressUntilTarget_已在预算内(t *testing.T) 
 // TestRoundLevelCompressor_compressUntilTarget_force强制 验证 force=true 时即使不超预算也压缩
 func TestRoundLevelCompressor_compressUntilTarget_force强制(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10
+	cfg.TriggerContextRatio = 10.0 / 200000
 	cfg.TargetTotalTokens = 100
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage(`{"blocks": [{"block_id": "block_1", "summary": "摘要"}]}`),
@@ -1676,7 +1681,7 @@ func TestRoundLevelCompressor_compressUntilTarget_force强制(t *testing.T) {
 // TestRoundLevelCompressor_runAggressivePhase_有目标 验证激进压缩阶段有目标时执行
 func TestRoundLevelCompressor_runAggressivePhase_有目标(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10
+	cfg.TriggerContextRatio = 10.0 / 200000
 	cfg.TargetTotalTokens = 100
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage(`{"blocks": [{"block_id": "block_1", "summary": "激进摘要"}]}`),

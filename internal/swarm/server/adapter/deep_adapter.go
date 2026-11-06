@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2015,10 +2014,10 @@ func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string
 //     因此 max_context_message_num=200 / default_window_round_num=10 始终保留；
 //   - 仅切换 enable_kv_cache_release，其余字段取默认值。
 //
-// 本实现额外（设计 D4/D14）：
-//   - 把 models.defaults[].model_client_config.max_input_tokens 收集成
-//     model_context_window_tokens，供 ContextUtils.resolve_context_max 第 2 优先级命中；
-//   - 读取 compression_trigger_ratio / compression_target_ratio 供压缩阈值收口。
+// 本实现额外（对齐上游 model_config_obj.context_window）：
+//   - 把 models.defaults[].model_config_obj.context_window 收集成当前模型的
+//     model_context_window_tokens_override（低优先于全局 context_window_tokens）；
+//   - 阈值比例由各压缩器自身的 trigger_context_ratio 提供，本层不再收口。
 func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[string]any) *ceschema.ContextEngineConfig {
 	if reactCfg == nil {
 		return nil
@@ -2043,16 +2042,13 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 			result.EnableKVCacheRelease = b
 		}
 	}
-	if f, ok := toRatio(cecMap["compression_trigger_ratio"]); ok {
-		result.CompressionTriggerRatio = f
-	}
-	if f, ok := toRatio(cecMap["compression_target_ratio"]); ok {
-		result.CompressionTargetRatio = f
-	}
 
-	// 收集各模型条目的输入上限（同模型多条目冲突时默认条目优先，设计 D10）
+	// 收集各模型条目声明的上下文窗口（同模型多条目冲突时默认条目优先）
 	defaultModelName := ""
 	firstModelName := ""
+	defaultWindow := 0
+	firstWindow := 0
+	windowsByModel := make(map[string]int)
 	for _, entry := range config.GetDefaultModels(configBase) {
 		mcc, _ := entry["model_client_config"].(map[string]any)
 		if mcc == nil {
@@ -2069,29 +2065,27 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 		if isDefault && defaultModelName == "" {
 			defaultModelName = modelName
 		}
-		tokens, ok := toPositiveInt(mcc["max_input_tokens"])
+		mco, _ := entry["model_config_obj"].(map[string]any)
+		window, ok := config.ParsePositiveTokens(mco["context_window"])
 		if !ok {
 			continue
 		}
-		if prev, exists := result.ModelContextWindowTokens[modelName]; exists && prev != tokens {
-			if isDefault {
-				// 默认条目覆盖同名模型：先记录旧值再写回，否则 kept/ignored 会打成同一数字
-				result.ModelContextWindowTokens[modelName] = tokens
+		if firstWindow == 0 {
+			firstWindow = window
+		}
+		if isDefault && defaultWindow == 0 {
+			defaultWindow = window
+		}
+		if prev, exists := windowsByModel[modelName]; !exists || (isDefault && prev != window) {
+			if exists && prev != window {
 				logger.Warn(logComponent).
 					Str("model_name", modelName).
 					Int("previous", prev).
-					Int("applied", tokens).
-					Msg("max_input_tokens 在同名模型条目间不一致，默认条目覆盖了先前取值")
-				continue
+					Int("applied", window).
+					Msg("context_window 在同名模型条目间不一致，默认条目覆盖了先前取值")
 			}
-			logger.Warn(logComponent).
-				Str("model_name", modelName).
-				Int("kept", prev).
-				Int("ignored", tokens).
-				Msg("max_input_tokens 在同名模型条目间不一致，非默认条目被忽略")
-			continue
+			windowsByModel[modelName] = window
 		}
-		result.ModelContextWindowTokens[modelName] = tokens
 	}
 
 	// 当前生效模型名：react.model_name 优先，其次默认条目，最后首个条目
@@ -2101,6 +2095,15 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 		result.ModelName = defaultModelName
 	} else {
 		result.ModelName = firstModelName
+	}
+
+	// 当前模型的窗口写入 override：按模型名命中优先，其次默认条目，最后首个条目
+	if window, ok := windowsByModel[result.ModelName]; ok {
+		result.ModelContextWindowTokensOverride = window
+	} else if defaultWindow > 0 {
+		result.ModelContextWindowTokensOverride = defaultWindow
+	} else if firstWindow > 0 {
+		result.ModelContextWindowTokensOverride = firstWindow
 	}
 
 	return &result
@@ -2191,10 +2194,14 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 	if f, ok := config.Float(mco, "top_p"); ok {
 		mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
 	}
-	// max_output_tokens → 生成上限默认值。请求级显式传值时优先（base_client.go:320-342），
+	// model_config_obj.max_tokens → 生成上限默认值。请求级显式传值时优先（base_client.go:320-342），
 	// 因此这里只作为"模型级默认值"，不覆盖调用方的 WithInvokeMaxTokens。
-	if n, ok := toPositiveInt(mcc["max_output_tokens"]); ok {
+	if n, ok := toPositiveInt(mco["max_tokens"]); ok {
 		mConfigOpts = append(mConfigOpts, llmschema.WithMaxTokens(n))
+	}
+	// model_config_obj.context_window → 模型上下文窗口元数据（内部用，不外发）
+	if n, ok := config.ParsePositiveTokens(mco["context_window"]); ok {
+		mConfigOpts = append(mConfigOpts, llmschema.WithContextWindow(n))
 	}
 	mConfig := llmschema.NewModelRequestConfig(mConfigOpts...)
 
@@ -3186,25 +3193,4 @@ func toPositiveInt(v any) (int, bool) {
 		return 0, false
 	}
 	return n, true
-}
-
-// toRatio 将任意数值或字符串解析为 (0,1] 区间的比例；不可解析或越界返回 (0,false)。
-//
-// 0 是合法语义（表示"不按比例缩放"），因此解析失败与 0 都返回 false，由调用方保持 0 值。
-func toRatio(v any) (float64, bool) {
-	switch n := v.(type) {
-	case float64:
-		return n, n > 0 && n <= 1
-	case int:
-		f := float64(n)
-		return f, f > 0 && f <= 1
-	case string:
-		f, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
-		if err != nil {
-			return 0, false
-		}
-		return f, f > 0 && f <= 1
-	default:
-		return 0, false
-	}
 }

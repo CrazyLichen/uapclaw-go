@@ -6,14 +6,12 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestDeepAgentContextEngineConfig_窗口映射 验证 max_input_tokens 收集成窗口映射并恢复 200/10 默认值
+// TestDeepAgentContextEngineConfig_窗口override 验证 model_config_obj.context_window 收集成 override 并恢复 200/10 默认值
 func TestDeepAgentContextEngineConfig_窗口映射(t *testing.T) {
 	d := &DeepAdapter{}
 	reactCfg := map[string]any{
 		"context_engine_config": map[string]any{
-			"enable_kv_cache_release":   true,
-			"compression_trigger_ratio": 0.85,
-			"compression_target_ratio":  0.55,
+			"enable_kv_cache_release": true,
 		},
 	}
 	configBase := map[string]any{
@@ -21,12 +19,14 @@ func TestDeepAgentContextEngineConfig_窗口映射(t *testing.T) {
 			"defaults": []any{
 				map[string]any{
 					"model_client_config": map[string]any{
-						"model_name":        "qwen3-coder",
-						"api_base":          "https://example.com/v1",
-						"api_key":           "sk-test",
-						"client_provider":   "OpenAI",
-						"max_input_tokens":  32000,
-						"max_output_tokens": 8192,
+						"model_name":      "qwen3-coder",
+						"api_base":        "https://example.com/v1",
+						"api_key":         "sk-test",
+						"client_provider": "OpenAI",
+					},
+					"model_config_obj": map[string]any{
+						"context_window": "32k",
+						"max_tokens":     8192,
 					},
 					"is_default": true,
 				},
@@ -38,14 +38,14 @@ func TestDeepAgentContextEngineConfig_窗口映射(t *testing.T) {
 	if got == nil {
 		t.Fatal("不应返回 nil")
 	}
-	if got.ModelContextWindowTokens["qwen3-coder"] != 32000 {
-		t.Errorf("窗口应为 32000，实际 %d", got.ModelContextWindowTokens["qwen3-coder"])
+	if got.ModelContextWindowTokensOverride != 32768 {
+		t.Errorf("override 应为 32768（32k），实际 %d", got.ModelContextWindowTokensOverride)
 	}
 	if got.ModelName != "qwen3-coder" {
 		t.Errorf("ModelName 应为 qwen3-coder，实际 %q", got.ModelName)
 	}
-	if got.CompressionTriggerRatio != 0.85 || got.CompressionTargetRatio != 0.55 {
-		t.Errorf("比例应为 0.85/0.55，实际 %v/%v", got.CompressionTriggerRatio, got.CompressionTargetRatio)
+	if len(got.ModelContextWindowTokens) != 0 {
+		t.Errorf("不再从模型条目填 name→tokens 映射，实际 %v", got.ModelContextWindowTokens)
 	}
 	// §4.5：恢复 Python ReActAgentConfig 默认值
 	if got.MaxContextMessageNum != 200 {
@@ -80,16 +80,18 @@ func TestDeepAgentContextEngineConfig_同名模型冲突(t *testing.T) {
 				map[string]any{
 					"model_client_config": map[string]any{
 						"model_name": "m1", "api_base": "https://a/v1",
-						"api_key": "k1", "client_provider": "OpenAI", "max_input_tokens": 8000,
+						"api_key": "k1", "client_provider": "OpenAI",
 					},
-					"is_default": false,
+					"model_config_obj": map[string]any{"context_window": 8000},
+					"is_default":       false,
 				},
 				map[string]any{
 					"model_client_config": map[string]any{
 						"model_name": "m1", "api_base": "https://b/v1",
-						"api_key": "k2", "client_provider": "OpenAI", "max_input_tokens": 32000,
+						"api_key": "k2", "client_provider": "OpenAI",
 					},
-					"is_default": true,
+					"model_config_obj": map[string]any{"context_window": 32000},
+					"is_default":       true,
 				},
 			},
 		},
@@ -98,8 +100,8 @@ func TestDeepAgentContextEngineConfig_同名模型冲突(t *testing.T) {
 	if got == nil {
 		t.Fatal("不应返回 nil")
 	}
-	if got.ModelContextWindowTokens["m1"] != 32000 {
-		t.Errorf("默认条目优先应取 32000，实际 %d", got.ModelContextWindowTokens["m1"])
+	if got.ModelContextWindowTokensOverride != 32000 {
+		t.Errorf("默认条目优先应取 32000，实际 %d", got.ModelContextWindowTokensOverride)
 	}
 }
 
@@ -114,16 +116,18 @@ func TestDeepAgentContextEngineConfig_非默认条目被忽略(t *testing.T) {
 				map[string]any{
 					"model_client_config": map[string]any{
 						"model_name": "m2", "api_base": "https://a/v1",
-						"api_key": "k1", "client_provider": "OpenAI", "max_input_tokens": 32000,
+						"api_key": "k1", "client_provider": "OpenAI",
 					},
-					"is_default": true,
+					"model_config_obj": map[string]any{"context_window": 32000},
+					"is_default":       true,
 				},
 				map[string]any{
 					"model_client_config": map[string]any{
 						"model_name": "m2", "api_base": "https://b/v1",
-						"api_key": "k2", "client_provider": "OpenAI", "max_input_tokens": 8000,
+						"api_key": "k2", "client_provider": "OpenAI",
 					},
-					"is_default": false,
+					"model_config_obj": map[string]any{"context_window": 8000},
+					"is_default":       false,
 				},
 			},
 		},
@@ -132,8 +136,8 @@ func TestDeepAgentContextEngineConfig_非默认条目被忽略(t *testing.T) {
 	if got == nil {
 		t.Fatal("不应返回 nil")
 	}
-	if got.ModelContextWindowTokens["m2"] != 32000 {
-		t.Errorf("非默认条目应被忽略，窗口应保持 32000，实际 %d", got.ModelContextWindowTokens["m2"])
+	if got.ModelContextWindowTokensOverride != 32000 {
+		t.Errorf("非默认条目应被忽略，窗口应保持 32000，实际 %d", got.ModelContextWindowTokensOverride)
 	}
 }
 
@@ -161,32 +165,6 @@ func TestToPositiveInt_各类型分支(t *testing.T) {
 			got, ok := toPositiveInt(tc.in)
 			if got != tc.want || ok != tc.wantOK {
 				t.Errorf("toPositiveInt(%v) = (%d,%v)，期望 (%d,%v)", tc.in, got, ok, tc.want, tc.wantOK)
-			}
-		})
-	}
-}
-
-// TestToRatio_各类型分支 覆盖 float64/int/string/越界/非法值
-func TestToRatio_各类型分支(t *testing.T) {
-	cases := []struct {
-		name   string
-		in     any
-		want   float64
-		wantOK bool
-	}{
-		{"float64", 0.85, 0.85, true},
-		{"int", 1, 1, true},
-		{"string", "0.55", 0.55, true},
-		{"零", 0.0, 0, false},
-		{"超过1", 1.5, 0, false},
-		{"字符串非法", "abc", 0, false},
-		{"nil", nil, 0, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := toRatio(tc.in)
-			if ok != tc.wantOK || (ok && got != tc.want) {
-				t.Errorf("toRatio(%v) = (%v,%v)，期望 (%v,%v)", tc.in, got, ok, tc.want, tc.wantOK)
 			}
 		})
 	}

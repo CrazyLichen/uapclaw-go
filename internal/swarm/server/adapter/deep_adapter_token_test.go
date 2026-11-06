@@ -15,11 +15,9 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 		"api_base":          "https://example.com/v1",
 		"api_key":           "sk-test",
 		"client_provider":   "OpenAI",
-		"verify_ssl":        false,
-		"max_input_tokens":  32000,
-		"max_output_tokens": 8192,
+		"verify_ssl":      false,
 	}
-	mco := map[string]any{"temperature": 0.95}
+	mco := map[string]any{"temperature": 0.95, "context_window": "32k", "max_tokens": 8192}
 
 	m, err := d.buildModelFromEntry(mcc, mco)
 	if err != nil {
@@ -33,11 +31,11 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 	}
 	// 白名单生效：两个键都不应进 client Extra
 	if m.ClientConfig != nil {
-		if _, ok := m.ClientConfig.Extra["max_output_tokens"]; ok {
-			t.Error("max_output_tokens 不应进入 ModelClientConfig.Extra")
+		if _, ok := m.ClientConfig.Extra["max_tokens"]; ok {
+			t.Error("max_tokens 不应进入 ModelClientConfig.Extra")
 		}
-		if _, ok := m.ClientConfig.Extra["max_input_tokens"]; ok {
-			t.Error("max_input_tokens 不应进入 ModelClientConfig.Extra")
+		if _, ok := m.ClientConfig.Extra["context_window"]; ok {
+			t.Error("context_window 不应进入 ModelClientConfig.Extra")
 		}
 	}
 
@@ -46,7 +44,7 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 		"model_name": "qwen3-coder", "api_base": "https://example.com/v1",
 		"api_key": "sk-test", "client_provider": "OpenAI", "verify_ssl": false,
 	}
-	m2, err := d.buildModelFromEntry(mcc2, mco)
+	m2, err := d.buildModelFromEntry(mcc2, map[string]any{"temperature": 0.95})
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}

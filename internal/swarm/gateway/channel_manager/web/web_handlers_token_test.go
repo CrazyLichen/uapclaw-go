@@ -22,10 +22,10 @@ func TestHandleModelsList_Token字段回填(t *testing.T) {
         api_base: https://example.com/v1
         api_key: sk-test
         client_provider: OpenAI
-        max_input_tokens: 32000
-        max_output_tokens: 8192
       model_config_obj:
         temperature: 0.95
+        context_window: "32k"
+        max_tokens: 8192
       is_default: true
 `
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(fixture), 0o600); err != nil {
@@ -41,11 +41,11 @@ func TestHandleModelsList_Token字段回填(t *testing.T) {
 	if len(models) != 1 {
 		t.Fatalf("应返回 1 条，实际 %d", len(models))
 	}
-	if models[0]["max_input_tokens"] != 32000 {
-		t.Errorf("max_input_tokens 应为 32000，实际 %v", models[0]["max_input_tokens"])
+	if models[0]["context_window"] != 32768 {
+		t.Errorf("context_window 应为 32768（32k 归一），实际 %v", models[0]["context_window"])
 	}
-	if models[0]["max_output_tokens"] != 8192 {
-		t.Errorf("max_output_tokens 应为 8192，实际 %v", models[0]["max_output_tokens"])
+	if models[0]["max_tokens"] != 8192 {
+		t.Errorf("max_tokens 应为 8192，实际 %v", models[0]["max_tokens"])
 	}
 }
 

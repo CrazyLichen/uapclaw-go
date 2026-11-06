@@ -16,10 +16,10 @@ func TestResourcesConfigTemplate_Token与压缩段(t *testing.T) {
 	}
 	text := string(raw)
 	required := []string{
-		"max_input_tokens",
-		"max_output_tokens",
-		"compression_trigger_ratio: 0.85",
-		"compression_target_ratio: 0.55",
+		"context_window: 0",
+		"max_tokens: 0",
+		"trigger_context_ratio: 0.8",
+		"min_target_context_ratio: 0.1",
 		"enabled: true",
 		"enable_reload: true",
 		"message_summary_offloader_config",
@@ -54,11 +54,15 @@ func TestResourcesConfigTemplate_可解析(t *testing.T) {
 	if enabled, _ := cec["enabled"].(bool); !enabled {
 		t.Errorf("enabled 应为 true，实际 %v", cec["enabled"])
 	}
-	if ratio, ok := cec["compression_trigger_ratio"].(float64); !ok || ratio != 0.85 {
-		t.Errorf("compression_trigger_ratio 应为 0.85，实际 %v", cec["compression_trigger_ratio"])
+	if _, ok := cec["compression_trigger_ratio"]; ok {
+		t.Error("compression_trigger_ratio 已删除（由各压缩器 trigger_context_ratio 取代）")
 	}
-	if ratio, ok := cec["compression_target_ratio"].(float64); !ok || ratio != 0.55 {
-		t.Errorf("compression_target_ratio 应为 0.55，实际 %v", cec["compression_target_ratio"])
+	roundLevel, _ := cec["round_level_compressor_config"].(map[string]any)
+	if ratio, ok := roundLevel["trigger_context_ratio"].(float64); !ok || ratio != 0.8 {
+		t.Errorf("round_level trigger_context_ratio 应为 0.8，实际 %v", roundLevel["trigger_context_ratio"])
+	}
+	if ratio, ok := roundLevel["min_target_context_ratio"].(float64); !ok || ratio != 0.1 {
+		t.Errorf("round_level min_target_context_ratio 应为 0.1，实际 %v", roundLevel["min_target_context_ratio"])
 	}
 	models, _ := data["models"].(map[string]any)
 	defaults, _ := models["defaults"].([]any)
@@ -66,11 +70,15 @@ func TestResourcesConfigTemplate_可解析(t *testing.T) {
 		t.Fatal("models.defaults 为空")
 	}
 	first, _ := defaults[0].(map[string]any)
-	mcc, _ := first["model_client_config"].(map[string]any)
-	if _, ok := mcc["max_input_tokens"]; !ok {
-		t.Error("model_client_config 缺少 max_input_tokens")
+	mco, _ := first["model_config_obj"].(map[string]any)
+	if _, ok := mco["context_window"]; !ok {
+		t.Error("model_config_obj 缺少 context_window")
 	}
-	if _, ok := mcc["max_output_tokens"]; !ok {
-		t.Error("model_client_config 缺少 max_output_tokens")
+	if _, ok := mco["max_tokens"]; !ok {
+		t.Error("model_config_obj 缺少 max_tokens")
+	}
+	mcc, _ := first["model_client_config"].(map[string]any)
+	if _, ok := mcc["max_input_tokens"]; ok {
+		t.Error("model_client_config 不应再有 max_input_tokens")
 	}
 }

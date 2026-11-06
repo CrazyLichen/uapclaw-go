@@ -22,6 +22,8 @@ type contextWindowProvider interface {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// defaultContextBudget 上下文窗口未知时的兜底预算（对齐 schema 侧 resolve_context_max 的默认值）
+	defaultContextBudget = 200000
 	// TruncatedByBudgetMarker 预算截断标记
 	TruncatedByBudgetMarker = "... placeholder truncated; original content is preserved in offload storage ..."
 	// TruncatedSideMaxChars 截断时首尾各自保留的最大字符数
@@ -49,7 +51,9 @@ func EffectiveContextBudget(mc iface.ModelContext, callBudget int) int {
 		candidates = append(candidates, callBudget)
 	}
 	if len(candidates) == 0 {
-		return 0
+		// 两者都未知（如测试桩）：回落 resolve_context_max 的默认值，
+		// 保持"阈值永远可算"的不变量（上游 effective_context_budget 同样总会返回数值）。
+		return defaultContextBudget
 	}
 	budget := candidates[0]
 	for _, candidate := range candidates[1:] {
@@ -58,6 +62,21 @@ func EffectiveContextBudget(mc iface.ModelContext, callBudget int) int {
 		}
 	}
 	return budget
+}
+
+// TriggerThresholdByRatio 按上下文预算与比例算触发阈值（至少 1）。
+//
+// 上游压缩器用 context_max * trigger_context_ratio 判定是否触发，
+// 本函数是 Go 侧唯一入口，避免各处理器各自换算。
+func TriggerThresholdByRatio(mc iface.ModelContext, ratio float64) int {
+	if ratio <= 0 {
+		return 1
+	}
+	threshold := int(float64(EffectiveContextBudget(mc, 0)) * ratio)
+	if threshold < 1 {
+		threshold = 1
+	}
+	return threshold
 }
 
 // TruncateMessageContentToFixedHeadTailIfOverTokenLimit 超限时截成固定首尾预览并保留后缀。

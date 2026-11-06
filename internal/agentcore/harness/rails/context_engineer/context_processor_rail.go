@@ -2,7 +2,6 @@ package context_engineer
 
 import (
 	"context"
-	"math"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -151,14 +150,6 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 	if r.preset {
 		allProcessors = r.filterActiveProcessors(allProcessors)
 	}
-
-	// 阈值收口：必须在 MergeProcessors 之后，否则 yaml 里的绝对值会绕开 min（spec §6.6）。
-	// Python 侧无对应实现（设计与 Python 的差异点，见 spec §6.1）。
-	// 复用上面已取到的 config（已在函数入口判非 nil），避免二次类型断言。
-	ce := config.ContextEngineConfig
-	window := cecontext.ResolveContextMax(ce.ModelName, ce.ContextWindowTokens, ce.ModelContextWindowTokens)
-	allProcessors = applyCompressionRatios(
-		allProcessors, window, ce.CompressionTriggerRatio, ce.CompressionTargetRatio)
 
 	config.ContextProcessors = allProcessors
 	r.allProcessors = allProcessors
@@ -393,7 +384,6 @@ func defaultPresetProcessors(
 				LargeMessageThreshold: 10000, // Python: large_message_threshold=10000 (覆盖默认1000)
 				OffloadMessageTypes:   []string{"tool"},
 				ProtectedToolNames:    []string{"read_file:*SKILL.md", "reload_original_context_messages"},
-				KeepLastRound:         false, // Python: keep_last_round=False (覆盖默认True)
 				Model:                 modelConfig,
 				ModelClient:           modelClientConfig,
 			},
@@ -401,9 +391,10 @@ func defaultPresetProcessors(
 		{
 			Type: defaultProcessorDialogue,
 			Config: &compressor.DialogueCompressorConfig{
-				TokensThreshold:         100000, // Python: tokens_threshold=100000 (覆盖默认10000)
-				MessagesToKeep:          10,     // Python: messages_to_keep=10
-				KeepLastRound:           false,  // Python: keep_last_round=False (覆盖默认True)
+				TriggerContextRatio:     compressor.DefaultTriggerContextRatio,
+				MinTargetContextRatio:   compressor.DefaultMinTargetContextRatio,
+				MessagesToKeep:          10,    // Python: messages_to_keep=10
+				KeepLastRound:           false, // Python: keep_last_round=False
 				CompressionTargetTokens: 1800,
 				Model:                   modelConfig,
 				ModelClient:             modelClientConfig,
@@ -417,7 +408,6 @@ func defaultPresetProcessors(
 			// Validate 失败），再按 preset 覆盖指定字段
 			Config: func() *compressor.CurrentRoundCompressorConfig {
 				cfg := compressor.NewCurrentRoundCompressorConfig()
-				cfg.TokensThreshold = 100000
 				cfg.MessagesToKeep = 3
 				cfg.Model = modelConfig
 				cfg.ModelClient = modelClientConfig
@@ -431,7 +421,7 @@ func defaultPresetProcessors(
 			// 字段漏设导致 Validate 失败），再按 preset 覆盖指定字段
 			Config: func() *compressor.RoundLevelCompressorConfig {
 				cfg := compressor.NewRoundLevelCompressorConfig()
-				cfg.TriggerTotalTokens = 230000
+				cfg.TriggerContextRatio = compressor.DefaultTriggerContextRatio
 				cfg.TargetTotalTokens = 160000
 				cfg.KeepRecentMessages = 6 // Python: keep_recent_messages=6 (覆盖默认0)
 				cfg.Model = modelConfig
@@ -620,57 +610,4 @@ func (r *ContextProcessorRail) UserProcessorTypes() []string {
 // SessionMemoryEnabled 返回是否启用 session memory 预设（只读，供测试与诊断）。
 func (r *ContextProcessorRail) SessionMemoryEnabled() bool {
 	return r.sessionMemoryEnabled
-}
-
-// applyCompressionRatios 按上下文窗口与比例收口各处理器的总量阈值。
-//
-// 规则：阈值 = min(绝对阈值, round(ratio × window))，即只下调不放大。
-// 只处理与「整个上下文总量」同量纲的字段；per-message 与单次输出长度类字段不缩放。
-// Python 侧无对应实现（本设计新增，见 spec §6.1）。
-func applyCompressionRatios(specs []ceiface.ProcessorSpec, window int, triggerRatio, targetRatio float64) []ceiface.ProcessorSpec {
-	if window <= 0 || (triggerRatio <= 0 && targetRatio <= 0) {
-		return specs
-	}
-	for i := range specs {
-		switch cfg := specs[i].Config.(type) {
-		case *compressor.DialogueCompressorConfig:
-			cfg.TokensThreshold = shrinkThreshold(cfg.TokensThreshold, window, triggerRatio)
-		case *compressor.CurrentRoundCompressorConfig:
-			cfg.TokensThreshold = shrinkThreshold(cfg.TokensThreshold, window, triggerRatio)
-		case *compressor.RoundLevelCompressorConfig:
-			cfg.TriggerTotalTokens = shrinkThreshold(cfg.TriggerTotalTokens, window, triggerRatio)
-			cfg.TargetTotalTokens = shrinkThreshold(cfg.TargetTotalTokens, window, targetRatio)
-			if cfg.TargetTotalTokens >= cfg.TriggerTotalTokens {
-				fallback := int(math.Round(float64(cfg.TriggerTotalTokens) * 0.7))
-				if fallback < 1 {
-					fallback = 1
-				}
-				logger.Warn(logComponent).
-					Str("processor", specs[i].Type).
-					Int("trigger", cfg.TriggerTotalTokens).
-					Int("target", cfg.TargetTotalTokens).
-					Int("fallback_target", fallback).
-					Msg("压缩目标阈值不小于触发阈值，已回退为触发的 70%")
-				cfg.TargetTotalTokens = fallback
-			}
-		case *compressor.FullCompactProcessorConfig:
-			cfg.TriggerTotalTokens = shrinkThreshold(cfg.TriggerTotalTokens, window, triggerRatio)
-		}
-	}
-	return specs
-}
-
-// shrinkThreshold 返回 min(absolute, round(ratio×window))；ratio<=0、window<=0 或 absolute<=0 时保持不变。
-func shrinkThreshold(absolute, window int, ratio float64) int {
-	if ratio <= 0 || window <= 0 || absolute <= 0 {
-		return absolute
-	}
-	scaled := int(math.Round(ratio * float64(window)))
-	if scaled <= 0 {
-		return absolute
-	}
-	if scaled < absolute {
-		return scaled
-	}
-	return absolute
 }

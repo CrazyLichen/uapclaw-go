@@ -37,10 +37,6 @@ type ContextEngineConfig struct {
 	EnableOpenRouterModelContextWindowTokens bool `json:"enable_openrouter_model_context_window_tokens"`
 	// OpenRouterRequestTimeout OpenRouter 拉取超时（秒），<=0 使用默认 3 秒
 	OpenRouterRequestTimeout float64 `json:"openrouter_request_timeout"`
-	// CompressionTriggerRatio 压缩触发水位比例（相对上下文窗口大小），0 表示不按比例缩放
-	CompressionTriggerRatio float64 `json:"compression_trigger_ratio"`
-	// CompressionTargetRatio 压缩目标水位比例（相对上下文窗口大小），0 表示不按比例缩放
-	CompressionTargetRatio float64 `json:"compression_target_ratio"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -85,17 +81,6 @@ func (c ContextEngineConfig) Validate() error {
 		if tokens <= 0 {
 			return fmt.Errorf("model_context_window_tokens[%q] 必须 > 0，当前值: %d", model, tokens)
 		}
-	}
-	if c.CompressionTriggerRatio < 0 || c.CompressionTriggerRatio > 1 {
-		return fmt.Errorf("compression_trigger_ratio 必须在 [0, 1] 区间，当前值: %v", c.CompressionTriggerRatio)
-	}
-	if c.CompressionTargetRatio < 0 || c.CompressionTargetRatio > 1 {
-		return fmt.Errorf("compression_target_ratio 必须在 [0, 1] 区间，当前值: %v", c.CompressionTargetRatio)
-	}
-	if c.CompressionTriggerRatio > 0 && c.CompressionTargetRatio > 0 &&
-		c.CompressionTargetRatio >= c.CompressionTriggerRatio {
-		return fmt.Errorf("compression_target_ratio(%v) 必须小于 compression_trigger_ratio(%v)",
-			c.CompressionTargetRatio, c.CompressionTriggerRatio)
 	}
 	return nil
 }

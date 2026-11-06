@@ -109,7 +109,7 @@ func (c *testConfig) GetModel() *llm_schema.ModelRequestConfig { return nil }
 // validDialogueCompressorConfig 创建合法的 DialogueCompressorConfig
 func validDialogueCompressorConfig() *DialogueCompressorConfig {
 	return &DialogueCompressorConfig{
-		TokensThreshold:         1000,
+		TriggerContextRatio:     1000.0 / 200000,
 		MessagesThreshold:       10,
 		MessagesToKeep:          2,
 		KeepLastRound:           true,
@@ -133,7 +133,7 @@ func newTestDialogueCompressor(cfg *DialogueCompressorConfig) *DialogueCompresso
 	return &DialogueCompressor{
 		BaseProcessor:           bp,
 		model:                   nil, // 测试不需要实际模型
-		tokenThreshold:          cfg.TokensThreshold,
+		triggerContextRatio:     cfg.TriggerContextRatio,
 		messageNumThreshold:     cfg.MessagesThreshold,
 		messagesToKeep:          cfg.MessagesToKeep,
 		keepLastRound:           cfg.KeepLastRound,
@@ -152,17 +152,17 @@ func TestDialogueCompressorConfig_Validate_合法配置(t *testing.T) {
 	}
 }
 
-// TestDialogueCompressorConfig_Validate_TokensThreshold非法 验证 TokensThreshold <= 0
-func TestDialogueCompressorConfig_Validate_TokensThreshold非法(t *testing.T) {
+// TestDialogueCompressorConfig_Validate_比例区间非法 验证触发比例越界时报错
+func TestDialogueCompressorConfig_Validate_比例区间非法(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
-	cfg.TokensThreshold = 0
+	cfg.TriggerContextRatio = -0.1
 	if err := cfg.Validate(); err == nil {
-		t.Error("TokensThreshold = 0 应返回错误")
+		t.Error("TriggerContextRatio 非法应返回错误")
 	}
 
-	cfg.TokensThreshold = -1
+	cfg.TriggerContextRatio = 1.5
 	if err := cfg.Validate(); err == nil {
-		t.Error("TokensThreshold = -1 应返回错误")
+		t.Error("TriggerContextRatio > 1 应返回错误")
 	}
 }
 
@@ -978,7 +978,7 @@ func TestDialogueCompressor_默认提示词(t *testing.T) {
 func TestTriggerAddMessages_消息数超阈值(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
 	cfg.MessagesThreshold = 5
-	cfg.TokensThreshold = 10000
+	cfg.TriggerContextRatio = 10000.0 / 200000
 	dc := newTestDialogueCompressor(cfg)
 
 	mc := &fakeModelContext{
@@ -1006,7 +1006,7 @@ func TestTriggerAddMessages_Token数超阈值(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
 	cfg.MessagesThreshold = 0
 	cfg.MessagesToKeep = 0
-	cfg.TokensThreshold = 500
+	cfg.TriggerContextRatio = 500.0 / 200000
 	dc := newTestDialogueCompressor(cfg)
 
 	mc := &fakeModelContext{
@@ -1027,7 +1027,7 @@ func TestTriggerAddMessages_Token数超阈值(t *testing.T) {
 func TestTriggerAddMessages_未达阈值(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
 	cfg.MessagesThreshold = 0
-	cfg.TokensThreshold = 10000
+	cfg.TriggerContextRatio = 10000.0 / 200000
 	dc := newTestDialogueCompressor(cfg)
 
 	mc := &fakeModelContext{
@@ -1048,7 +1048,7 @@ func TestTriggerAddMessages_未达阈值(t *testing.T) {
 func TestTriggerAddMessages_MessagesToKeep保护(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
 	cfg.MessagesThreshold = 100
-	cfg.TokensThreshold = 10000
+	cfg.TriggerContextRatio = 10000.0 / 200000
 	cfg.MessagesToKeep = 10
 	dc := newTestDialogueCompressor(cfg)
 
@@ -1084,7 +1084,7 @@ func TestInitRegistration(t *testing.T) {
 	}
 
 	// 传入非法 DialogueCompressorConfig 应返回 error（校验失败）
-	result, err = factory(&DialogueCompressorConfig{TokensThreshold: 0})
+	result, err = factory(&DialogueCompressorConfig{TriggerContextRatio: 0})
 	if err == nil {
 		t.Error("非法配置应返回 error")
 	}

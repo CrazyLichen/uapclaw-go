@@ -28,8 +28,10 @@ import (
 //
 // Python: RoundLevelCompressorConfig (pydantic.BaseModel)
 type RoundLevelCompressorConfig struct {
-	// TriggerTotalTokens 触发压缩的全量上下文 Token 阈值
-	TriggerTotalTokens int
+	// TriggerContextRatio 触发压缩的上下文占用比例（相对上下文窗口）
+	TriggerContextRatio float64
+	// MinTargetContextRatio 待压缩内容占比下限（低于该比例跳过本轮）
+	MinTargetContextRatio float64
 	// TargetTotalTokens 压缩目标全量上下文 Token 数
 	TargetTotalTokens int
 	// KeepRecentMessages 压缩时保留最近 N 条消息不压缩
@@ -93,8 +95,10 @@ type RoundLevelCompressor struct {
 	model *llm.Model
 	// targetTotalTokens 压缩目标全量上下文 Token 数
 	targetTotalTokens int
-	// triggerTotalTokens 触发压缩的全量上下文 Token 阈值
-	triggerTotalTokens int
+	// triggerContextRatio 触发压缩的上下文占用比例
+	triggerContextRatio float64
+	// minTargetContextRatio 待压缩内容占比下限
+	minTargetContextRatio float64
 	// compressionCallMaxTokens 单次压缩 LLM 调用 Token 上限
 	compressionCallMaxTokens int
 	// keepRecentMessages 压缩时保留最近 N 条消息不压缩
@@ -181,14 +185,15 @@ Rules:
 // NewRoundLevelCompressorConfig 创建轮级压缩器默认配置。
 //
 // 默认值与 Python 对齐：
-//   - TriggerTotalTokens=230000（触发总令牌数），TargetTotalTokens=160000（目标总令牌数）
+//   - TriggerContextRatio=0.9（触发占窗口比例），TargetTotalTokens=160000（目标总令牌数）
 //   - KeepRecentMessages=0（保留最近消息数），CompressionCallMaxTokens=250000（压缩调用最大令牌数）
 //   - FirstPassTargetTokens=30000（第一遍目标令牌数），SecondPassTargetTokens=20000（第二遍），ThirdPassTargetTokens=10000（第三遍）
 //   - TruncateHeadRatio=0.2（头部截断比例），TruncatedMarker="...[TRUNCATED]..."（截断标记）
 //   - CompressionMarker="[ROUND_LEVEL_MEMORY_BLOCK]"（压缩标记）
 func NewRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 	return &RoundLevelCompressorConfig{
-		TriggerTotalTokens:                230000,
+		TriggerContextRatio:               0.9,
+		MinTargetContextRatio:             DefaultMinTargetContextRatio,
 		TargetTotalTokens:                 160000,
 		KeepRecentMessages:                0,
 		CompressionCallMaxTokens:          250000,
@@ -205,8 +210,12 @@ func NewRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 
 // Validate 校验轮级压缩器配置。
 func (c *RoundLevelCompressorConfig) Validate() error {
-	if c.TriggerTotalTokens <= 0 {
-		return fmt.Errorf("RoundLevelCompressorConfig.TriggerTotalTokens 必须大于 0，当前值: %d", c.TriggerTotalTokens)
+	if c.TriggerContextRatio <= 0 || c.TriggerContextRatio > 1 {
+		return fmt.Errorf("RoundLevelCompressorConfig.TriggerContextRatio 必须在 (0, 1] 区间，当前值: %v", c.TriggerContextRatio)
+	}
+	if c.MinTargetContextRatio < 0 || c.MinTargetContextRatio >= 1 {
+		return fmt.Errorf("RoundLevelCompressorConfig.MinTargetContextRatio 必须在 [0, 1) 区间，当前值: %v",
+			c.MinTargetContextRatio)
 	}
 	if c.TargetTotalTokens <= 0 {
 		return fmt.Errorf("RoundLevelCompressorConfig.TargetTotalTokens 必须大于 0，当前值: %d", c.TargetTotalTokens)
@@ -275,7 +284,8 @@ func NewRoundLevelCompressor(config *RoundLevelCompressorConfig, opts ...RoundLe
 	rlc := &RoundLevelCompressor{
 		BaseProcessor:            bp,
 		targetTotalTokens:        config.TargetTotalTokens,
-		triggerTotalTokens:       config.TriggerTotalTokens,
+		triggerContextRatio:      config.TriggerContextRatio,
+		minTargetContextRatio:    config.MinTargetContextRatio,
 		compressionCallMaxTokens: config.CompressionCallMaxTokens,
 		keepRecentMessages:       config.KeepRecentMessages,
 		firstPrompt:              firstPrompt,
@@ -322,7 +332,8 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 	allMsgs, _ := mc.GetMessages(0, true)
 	allMessages := append(allMsgs, messagesToAdd...)
 	totalTokens := rlc.countContextWindowTokens(nil, allMessages, nil, mc)
-	if totalTokens > rlc.triggerTotalTokens {
+	threshold := triggerThresholdByRatio(mc, rlc.triggerContextRatio)
+	if totalTokens >= threshold {
 		// 该判据只统计「缓冲区已有消息 + 本次待加入消息」，不含 system/tools；
 		// buffer/adding/roles 是区分它与 get_context_window 判据的唯一线索。
 		logger.Info(logComponent).
@@ -332,8 +343,8 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 			Int("adding", len(messagesToAdd)).
 			Strs("roles", messageRoles(allMessages)).
 			Int("total_tokens", totalTokens).
-			Int("trigger_total_tokens", rlc.triggerTotalTokens).
-			Msg("context tokens exceeded trigger threshold")
+			Int("trigger_threshold", threshold).
+			Msg("context tokens reached trigger threshold")
 		return true, nil
 	}
 	return false, nil
@@ -347,6 +358,9 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 	allMessages := append(allMsgs, messagesToAdd...)
 	rlc.ResetCompressionUsage()
 
+	if !rlc.compressibleAboveMinRatio(mc, allMessages) {
+		return nil, messagesToAdd, nil
+	}
 	compressedMessages, err := rlc.compressUntilTarget(ctx, allMessages, mc, nil, nil, rlc.keepRecentMessages, false)
 	if err != nil {
 		// MODEL_CALL_FAILED 时降级跳过
@@ -380,12 +394,13 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 
 // TriggerGetContextWindow 判断是否需要介入上下文窗口获取。
 //
-// 触发条件：全量上下文 Token 数 > TriggerTotalTokens。
+// 触发条件：全量上下文 Token 数 >= 窗口 × TriggerContextRatio。
 //
 // Python: RoundLevelCompressor.trigger_get_context_window()
 func (rlc *RoundLevelCompressor) TriggerGetContextWindow(ctx context.Context, mc iface.ModelContext, cw iface.ContextWindow, _ ...iface.Option) (bool, error) {
 	totalTokens := rlc.countContextWindowTokens(cw.SystemMessages, cw.ContextMessages, cw.Tools, mc)
-	if totalTokens > rlc.triggerTotalTokens {
+	threshold := triggerThresholdByRatio(mc, rlc.triggerContextRatio)
+	if totalTokens >= threshold {
 		// 与 add_messages 判据同款日志：口径含 system + tools + 对话，
 		// 分项相加恒等于 total_tokens，避免「before 只有 70 为何触发」的误读。
 		systemTokens, contextTokens, toolTokens := rlc.contextWindowTokenBreakdown(
@@ -400,9 +415,9 @@ func (rlc *RoundLevelCompressor) TriggerGetContextWindow(ctx context.Context, mc
 			Int("context_tokens", contextTokens).
 			Int("tool_tokens", toolTokens).
 			Int("total_tokens", totalTokens).
-			Int("trigger_total_tokens", rlc.triggerTotalTokens).
+			Int("trigger_threshold", threshold).
 			Int("target_total_tokens", rlc.targetTotalTokens).
-			Msg("context tokens exceeded trigger threshold")
+			Msg("context tokens reached trigger threshold")
 		return true, nil
 	}
 	return false, nil
@@ -793,7 +808,7 @@ func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 		fmt.Sprintf("- keep_recent_messages: %d", keepRecentMessages),
 		fmt.Sprintf("- selected_blocks: %d", len(targets)),
 		fmt.Sprintf("- current_context_window_tokens: %d", currentWindowTokens),
-		fmt.Sprintf("- compression_call_budget_limit: %d", rlc.compressionCallMaxTokens),
+		fmt.Sprintf("- compression_call_budget_limit: %d", rlc.compressionCallBudget(mc)),
 		fmt.Sprintf("- selected_range: [%d, %d]", firstTargetIdx, lastTargetIdx),
 		"",
 		"[Reference Context]",
@@ -1261,6 +1276,9 @@ func (rlc *RoundLevelCompressor) buildJSONReplacements(targets []roundCompressTa
 		}
 		replacementMessage := rlc.buildMemoryMessage(summary, t.scope, t.nextLevel)
 		replacementMessages := []llm_schema.BaseMessage{replacementMessage}
+		if !rlc.isReplacementUnderBudget(mc, replacementMessages) {
+			continue // 超预算的替换写回后仍会超限，跳过
+		}
 		if !rlc.hasCompressionBenefit(t.messages, replacementMessages, mc) {
 			continue
 		}
@@ -1308,6 +1326,9 @@ func (rlc *RoundLevelCompressor) buildRawFallbackReplacement(targets []roundComp
 	replacementMessage := rlc.buildMemoryMessage(summary, "mixed_context", maxNextLevel)
 	replacementMessages := []llm_schema.BaseMessage{replacementMessage}
 
+	if !rlc.isReplacementUnderBudget(mc, replacementMessages) {
+		return nil
+	}
 	if !rlc.hasCompressionBenefit(originalMessages, replacementMessages, mc) {
 		return nil
 	}
@@ -1696,7 +1717,40 @@ func (rlc *RoundLevelCompressor) isUnderContextWindowBudget(
 // Python: RoundLevelCompressor._is_under_compression_call_budget()
 func (rlc *RoundLevelCompressor) isUnderCompressionCallBudget(systemPrompt string, promptText string, mc iface.ModelContext) bool {
 	totalTokens := rlc.countCompressionCallTokens(systemPrompt, promptText, mc)
-	return totalTokens <= rlc.compressionCallMaxTokens
+	return totalTokens <= rlc.compressionCallBudget(mc)
+}
+
+// compressibleAboveMinRatio 判断"可压缩部分"是否达到占比下限。
+//
+// 可压缩部分 = 全部消息去掉尾部保留量；低于下限时本轮不压缩（避免碎片摘要）。
+//
+// Python: forked/compressor/base.py 的 min_target_context_ratio 判定
+func (rlc *RoundLevelCompressor) compressibleAboveMinRatio(mc iface.ModelContext, messages []llm_schema.BaseMessage) bool {
+	candidates := messages
+	if keep := rlc.keepRecentMessages; keep > 0 && len(candidates) > keep {
+		candidates = candidates[:len(candidates)-keep]
+	}
+	if len(candidates) == 0 {
+		return false
+	}
+	return targetAboveMinRatio(mc, candidates, rlc.minTargetContextRatio)
+}
+
+// compressionCallBudget 返回生效的单次压缩调用预算（窗口与配置上限取较小值）。
+//
+// Python: budget_guard.effective_context_budget(context, call_budget=compression_call_max_tokens)
+func (rlc *RoundLevelCompressor) compressionCallBudget(mc iface.ModelContext) int {
+	return processor.EffectiveContextBudget(mc, rlc.compressionCallMaxTokens)
+}
+
+// isReplacementUnderBudget 判断替换消息本身是否在预算内。
+//
+// 超预算的替换写回后仍会超限，导致下一轮再触发压缩（"压缩完还是满"的反复压缩）。
+//
+// Python: RoundLevelCompressor._is_replacement_under_budget()
+func (rlc *RoundLevelCompressor) isReplacementUnderBudget(mc iface.ModelContext, replacement []llm_schema.BaseMessage) bool {
+	return processor.CountMessagesTokens(mc.TokenCounter(), replacement, rlc.getModelName(), rlc.ProcessorType()) <=
+		rlc.compressionCallBudget(mc)
 }
 
 // hasCompressionBenefit 判断压缩是否有收益（压缩后 Token 少于原始 Token）。

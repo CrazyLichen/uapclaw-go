@@ -24,8 +24,10 @@ import (
 //
 // Python: CurrentRoundCompressorConfig (pydantic.BaseModel)
 type CurrentRoundCompressorConfig struct {
-	// TokensThreshold Token 数触发阈值
-	TokensThreshold int
+	// TriggerContextRatio 触发压缩的上下文占用比例（相对上下文窗口）
+	TriggerContextRatio float64
+	// MinTargetContextRatio 待压缩内容占比下限（与 MinSelectedTokensForCompression 取较大者生效）
+	MinTargetContextRatio float64
 	// MessagesToKeep 保留最近 N 条不压缩
 	MessagesToKeep int
 	// Model 压缩模型请求配置
@@ -62,8 +64,10 @@ type CurrentRoundCompressor struct {
 	*processor.BaseProcessor
 	// model 压缩用 LLM 实例
 	model *llm.Model
-	// tokenThreshold Token 触发阈值
-	tokenThreshold int
+	// triggerContextRatio 触发压缩的上下文占用比例
+	triggerContextRatio float64
+	// minTargetContextRatio 待压缩内容占比下限
+	minTargetContextRatio float64
 	// messagesToKeep 保留最近 N 条不压缩
 	messagesToKeep int
 	// minSelectedTokens 压缩跨度最小 Token 数
@@ -485,7 +489,8 @@ const logComponent = logger.ComponentAgentCore
 //   - SummaryMergeMinBlocks=3（摘要合并最小块数），PriorContextWindowSize=10（前文窗口大小）
 func NewCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 	return &CurrentRoundCompressorConfig{
-		TokensThreshold:                 100000,
+		TriggerContextRatio:             DefaultTriggerContextRatio,
+		MinTargetContextRatio:           DefaultMinTargetContextRatio,
 		MessagesToKeep:                  3,
 		MinSelectedTokensForCompression: 20000,
 		CompressionTargetTokens:         4000,
@@ -498,8 +503,12 @@ func NewCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 
 // Validate 校验当轮增量压缩器配置。
 func (c *CurrentRoundCompressorConfig) Validate() error {
-	if c.TokensThreshold <= 0 {
-		return fmt.Errorf("CurrentRoundCompressorConfig.TokensThreshold 必须大于 0，当前值: %d", c.TokensThreshold)
+	if c.TriggerContextRatio <= 0 || c.TriggerContextRatio > 1 {
+		return fmt.Errorf("CurrentRoundCompressorConfig.TriggerContextRatio 必须在 (0, 1] 区间，当前值: %v", c.TriggerContextRatio)
+	}
+	if c.MinTargetContextRatio < 0 || c.MinTargetContextRatio >= 1 {
+		return fmt.Errorf("CurrentRoundCompressorConfig.MinTargetContextRatio 必须在 [0, 1) 区间，当前值: %v",
+			c.MinTargetContextRatio)
 	}
 	if c.MessagesToKeep <= 0 {
 		return fmt.Errorf("CurrentRoundCompressorConfig.MessagesToKeep 必须大于 0，当前值: %d", c.MessagesToKeep)
@@ -557,7 +566,8 @@ func NewCurrentRoundCompressor(config *CurrentRoundCompressorConfig, opts ...Cur
 
 	crc := &CurrentRoundCompressor{
 		BaseProcessor:                bp,
-		tokenThreshold:               config.TokensThreshold,
+		triggerContextRatio:          config.TriggerContextRatio,
+		minTargetContextRatio:        config.MinTargetContextRatio,
 		messagesToKeep:               config.MessagesToKeep,
 		minSelectedTokens:            config.MinSelectedTokensForCompression,
 		compressionTargetTokens:      config.CompressionTargetTokens,
@@ -594,6 +604,22 @@ func WithCurrentRoundModel(model *llm.Model) CurrentRoundCompressorOption {
 // ProcessorType 返回处理器类型标识。
 func (crc *CurrentRoundCompressor) ProcessorType() string { return "CurrentRoundCompressor" }
 
+// effectiveMinSelectedTokens 返回生效的"选中跨度最小 Token 数"。
+//
+// 取「绝对下限」与「窗口×min_target_context_ratio」的较大者：
+// 绝对下限来自 base 语义（MinSelectedTokensForCompression），比例下限来自上游产品配置，
+// 两者同时约束时以更严格者为准。
+func (crc *CurrentRoundCompressor) effectiveMinSelectedTokens(mc iface.ModelContext) int {
+	bound := crc.minSelectedTokens
+	if crc.minTargetContextRatio > 0 {
+		ratioBound := int(float64(processor.EffectiveContextBudget(mc, 0)) * crc.minTargetContextRatio)
+		if ratioBound > bound {
+			bound = ratioBound
+		}
+	}
+	return bound
+}
+
 // TriggerAddMessages 判断是否需要介入消息添加。
 //
 // 触发条件：合并后的上下文 Token 数 > TokensThreshold。
@@ -612,14 +638,15 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 	modelName := crc.getModelName()
 	allMsgs, _ := mc.GetMessages(0, true)
 	tokens := processor.CountMessagesTokens(mc.TokenCounter(), append(allMsgs, messagesToAdd...), modelName, crc.ProcessorType())
-	if tokens > crc.tokenThreshold {
+	threshold := triggerThresholdByRatio(mc, crc.triggerContextRatio)
+	if tokens >= threshold {
 		logger.Info(logComponent).
 			Str("event_type", "CurrentRoundCompressor_triggered").
 			Str("path", "add_messages").
 			Int("buffer", mc.Len()).
 			Int("adding", len(messagesToAdd)).
 			Int("tokens", tokens).
-			Int("threshold", crc.tokenThreshold).
+			Int("threshold", threshold).
 			Msg("context tokens exceeded threshold")
 		return true, nil
 	}
@@ -782,11 +809,11 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelContext, messagesToCompress []llm_schema.BaseMessage, allContextMessages []llm_schema.BaseMessage, compressEndIdx int, currentQueryIdx int) (*llm_schema.UserMessage, error) {
 	modelName := crc.getModelName()
 	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
-	if inputTokens < crc.minSelectedTokens {
+	if inputTokens < crc.effectiveMinSelectedTokens(mc) {
 		logger.Info(logComponent).
 			Str("event_type", "compress_skipped").
 			Int("input_tokens", inputTokens).
-			Int("min_selected_tokens", crc.minSelectedTokens).
+			Int("min_selected_tokens", crc.effectiveMinSelectedTokens(mc)).
 			Msg("selected span tokens below minimum threshold, skipping compression")
 		return nil, nil
 	}

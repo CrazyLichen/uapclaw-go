@@ -962,17 +962,17 @@ func modelsList(wc *WebChannel) methodHandler {
 				if v, ok := mcc["client_provider"].(string); ok {
 					flat["model_provider"] = v
 				}
-				// 输入/输出上限：0 表示未配置，不回填（前端显示为空）
-				if n, perr := parseInt(mcc["max_input_tokens"]); perr == nil && n > 0 {
-					flat["max_input_tokens"] = n
-				}
-				if n, perr := parseInt(mcc["max_output_tokens"]); perr == nil && n > 0 {
-					flat["max_output_tokens"] = n
-				}
 			}
 
-			// 从 model_config_obj 提取
+			// 从 model_config_obj 提取（上下文窗口与输出上限都归这里，对齐上游）
 			if mco, ok := entry["model_config_obj"].(map[string]any); ok {
+				// 上下文窗口：支持 256k/1m 字符串形态，0 表示未配置不回填
+				if n, perr := config.ParsePositiveTokens(mco["context_window"]); perr {
+					flat["context_window"] = n
+				}
+				if n, perr := parseInt(mco["max_tokens"]); perr == nil && n > 0 {
+					flat["max_tokens"] = n
+				}
 				// Python: mco.get("temperature", 0.95)
 				temperature := 0.95
 				if v, ok := mco["temperature"]; ok && v != nil {
@@ -2929,28 +2929,28 @@ func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoP
 			verifySSL = v
 		}
 
-		// max_input_tokens / max_output_tokens：0 表示未配置，可覆盖旧值。
-		// 与 Python 不同（Python 侧暂无此字段），本实现按设计 D2/D3 落位 model_client_config。
-		maxInputTokens := 0
-		if v, ok := itemMap["max_input_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
-			n, perr := parseInt(v)
-			if perr != nil || n < 0 {
+		// context_window / max_tokens：归 model_config_obj（对齐上游模型条目结构）。
+		// context_window 接受 256k/1m 等字符串形态；0 表示未配置，可覆盖旧值。
+		contextWindow := 0
+		if v, ok := itemMap["context_window"]; ok && v != nil && fmt.Sprint(v) != "" {
+			n, perr := config.ParsePositiveTokens(v)
+			if !perr {
 				return nil, &ConfigBadRequest{
-					Message: fmt.Sprintf("models[%d].max_input_tokens 必须是非负整数", idx),
+					Message: fmt.Sprintf("models[%d].context_window 必须是正整数或 256k/1m 形式", idx),
 				}
 			}
-			maxInputTokens = n
+			contextWindow = n
 		}
 
-		maxOutputTokens := 0
-		if v, ok := itemMap["max_output_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
+		maxTokens := 0
+		if v, ok := itemMap["max_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
 			n, perr := parseInt(v)
 			if perr != nil || n < 0 {
 				return nil, &ConfigBadRequest{
-					Message: fmt.Sprintf("models[%d].max_output_tokens 必须是非负整数", idx),
+					Message: fmt.Sprintf("models[%d].max_tokens 必须是非负整数", idx),
 				}
 			}
-			maxOutputTokens = n
+			maxTokens = n
 		}
 
 		entry := map[string]any{
@@ -2961,13 +2961,13 @@ func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoP
 				"client_provider": modelProvider,
 				"timeout":         timeout,
 				"verify_ssl":      verifySSL,
-				// 输入上限（token）：上下文窗口分母来源；0 = 未配置
-				"max_input_tokens": maxInputTokens,
-				// 输出上限（token）：请求 max_tokens 默认值；0 = 不限制
-				"max_output_tokens": maxOutputTokens,
 			},
 			"model_config_obj": map[string]any{
 				"temperature": temperature,
+				// 上下文窗口（token）；0 = 未配置，回退内置表
+				"context_window": contextWindow,
+				// 输出上限（token）：请求 max_tokens 默认值；0 = 不限制
+				"max_tokens": maxTokens,
 			},
 			"is_default": isDefault,
 			"alias":      alias,

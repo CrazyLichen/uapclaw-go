@@ -35,14 +35,25 @@ func TestEffectiveContextBudget_取最小正值(t *testing.T) {
 	}
 }
 
-// TestEffectiveContextBudget_无窗口返回零 验证两者都未知时返回 0（调用方据此跳过守卫）。
-func TestEffectiveContextBudget_无窗口返回零(t *testing.T) {
+// TestEffectiveContextBudget_无窗口用默认预算 验证窗口未知时回落默认预算（阈值永远可算）。
+func TestEffectiveContextBudget_无窗口用默认预算(t *testing.T) {
 	mc := &budgetNoWindowContext{}
-	if got := EffectiveContextBudget(mc, 0); got != 0 {
-		t.Fatalf("两者都未知应返回 0，got %d", got)
+	if got := EffectiveContextBudget(mc, 0); got != defaultContextBudget {
+		t.Fatalf("窗口未知应回落默认预算 %d，got %d", defaultContextBudget, got)
 	}
 	if got := EffectiveContextBudget(mc, 1234); got != 1234 {
-		t.Fatalf("有调用预算时返回调用预算，got %d", got)
+		t.Fatalf("有调用预算时取较小值，got %d", got)
+	}
+}
+
+// TestTriggerThresholdByRatio 验证阈值换算与下限保护。
+func TestTriggerThresholdByRatio(t *testing.T) {
+	mc := &budgetWindowContext{window: 100000}
+	if got := TriggerThresholdByRatio(mc, 0.8); got != 80000 {
+		t.Fatalf("100000*0.8 = 80000，got %d", got)
+	}
+	if got := TriggerThresholdByRatio(mc, 0); got != 1 {
+		t.Fatalf("比例非正应回落 1，got %d", got)
 	}
 }
 

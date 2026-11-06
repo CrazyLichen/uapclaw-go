@@ -11,7 +11,7 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// tokenFixtureYAML 带 max_input_tokens 的 models.defaults 测试配置
+// tokenFixtureYAML 带 context_window 的 models.defaults 测试配置（对齐上游模型条目结构）
 const tokenFixtureYAML = `models:
   defaults:
     - model_client_config:
@@ -19,9 +19,9 @@ const tokenFixtureYAML = `models:
         api_base: https://example.com/v1
         api_key: sk-test
         client_provider: OpenAI
-        max_input_tokens: 32000
       model_config_obj:
         temperature: 0.95
+        context_window: 32000
       is_default: true
 `
 
@@ -38,21 +38,21 @@ func TestBuildModelsDefaultsFromFrontend_Token字段(t *testing.T) {
 			"model_name":        "qwen3-coder",
 			"api_base":          "https://example.com/v1",
 			"api_key":           "sk-test",
-			"model_provider":    "OpenAI",
-			"max_input_tokens":  32000,
-			"max_output_tokens": 8192,
+			"model_provider":   "OpenAI",
+			"context_window":   "32k",
+			"max_tokens":       8192,
 		},
 	}
 	got, err := buildModelsDefaultsFromFrontend(ctx, models, nil)
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
-	mcc, _ := got[0]["model_client_config"].(map[string]any)
-	if mcc["max_input_tokens"] != 32000 {
-		t.Errorf("max_input_tokens 应为 32000，实际 %v", mcc["max_input_tokens"])
+	mco, _ := got[0]["model_config_obj"].(map[string]any)
+	if mco["context_window"] != 32768 {
+		t.Errorf("context_window 应为 32768（32k），实际 %v", mco["context_window"])
 	}
-	if mcc["max_output_tokens"] != 8192 {
-		t.Errorf("max_output_tokens 应为 8192，实际 %v", mcc["max_output_tokens"])
+	if mco["max_tokens"] != 8192 {
+		t.Errorf("max_tokens 应为 8192，实际 %v", mco["max_tokens"])
 	}
 
 	// 未填 → 写 0（0 表示未配置，可覆盖旧值）
@@ -64,16 +64,16 @@ func TestBuildModelsDefaultsFromFrontend_Token字段(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
-	mcc, _ = got[0]["model_client_config"].(map[string]any)
-	if mcc["max_input_tokens"] != 0 || mcc["max_output_tokens"] != 0 {
-		t.Errorf("未配置时应写 0，实际 input=%v output=%v", mcc["max_input_tokens"], mcc["max_output_tokens"])
+	mco, _ = got[0]["model_config_obj"].(map[string]any)
+	if mco["context_window"] != 0 || mco["max_tokens"] != 0 {
+		t.Errorf("未配置时应写 0，实际 window=%v tokens=%v", mco["context_window"], mco["max_tokens"])
 	}
 
 	// 负数 / 非整数 → ConfigBadRequest
 	bad := []any{map[string]any{
 		"model_name": "qwen3-coder", "api_base": "https://example.com/v1",
 		"api_key": "sk-test", "model_provider": "OpenAI",
-		"max_input_tokens": -1,
+		"context_window": -1,
 	}}
 	if _, err := buildModelsDefaultsFromFrontend(ctx, bad, nil); err == nil {
 		t.Error("负数应返回错误")
@@ -81,9 +81,9 @@ func TestBuildModelsDefaultsFromFrontend_Token字段(t *testing.T) {
 		t.Errorf("应为 *ConfigBadRequest，实际 %T", err)
 	}
 
-	bad[0].(map[string]any)["max_input_tokens"] = "abc"
+	bad[0].(map[string]any)["context_window"] = 0
 	if _, err := buildModelsDefaultsFromFrontend(ctx, bad, nil); err == nil {
-		t.Error("非整数应返回错误")
+		t.Error("0 应视为未配置并返回错误（此处为 -1 残留值）")
 	}
 }
 
@@ -99,22 +99,22 @@ func TestBuildModelsDefaultsFromFrontend_Token字段覆盖与保留(t *testing.T
 			"origin_index": 0,
 		}
 		if tokens != nil {
-			item["max_input_tokens"] = tokens
+			item["context_window"] = tokens
 		}
 		got, err := buildModelsDefaultsFromFrontend(ctx, []any{item}, nil)
 		if err != nil {
 			t.Fatalf("不应报错: %v", err)
 		}
-		return got[0]["model_client_config"].(map[string]any)
+		return got[0]["model_config_obj"].(map[string]any)
 	}
 
-	if v := build(32000)["max_input_tokens"]; v != 32000 {
+	if v := build(32000)["context_window"]; v != 32000 {
 		t.Errorf("未改动应保留 32000，实际 %v", v)
 	}
-	if v := build(64000)["max_input_tokens"]; v != 64000 {
+	if v := build(64000)["context_window"]; v != 64000 {
 		t.Errorf("改动应覆盖为 64000，实际 %v", v)
 	}
-	if v := build(nil)["max_input_tokens"]; v != 0 {
+	if v := build(nil)["context_window"]; v != 0 {
 		t.Errorf("清空应写 0，实际 %v", v)
 	}
 }
@@ -160,23 +160,23 @@ func TestBuildModelsDefaultsFromFrontend_Token字段边界(t *testing.T) {
 
 	// 空串视为未配置
 	item := base()
-	item["max_input_tokens"] = ""
-	item["max_output_tokens"] = ""
+	item["context_window"] = ""
+	item["max_tokens"] = ""
 	got, err := buildModelsDefaultsFromFrontend(ctx, []any{item}, nil)
 	if err != nil {
 		t.Fatalf("空串不应报错: %v", err)
 	}
-	mcc, _ := got[0]["model_client_config"].(map[string]any)
-	if mcc["max_input_tokens"] != 0 || mcc["max_output_tokens"] != 0 {
-		t.Errorf("空串应写 0，实际 %v/%v", mcc["max_input_tokens"], mcc["max_output_tokens"])
+	mco, _ := got[0]["model_config_obj"].(map[string]any)
+	if mco["context_window"] != 0 || mco["max_tokens"] != 0 {
+		t.Errorf("空串应写 0，实际 %v/%v", mco["context_window"], mco["max_tokens"])
 	}
 
 	// 输出上限非法值
 	for _, badVal := range []any{-5, "abc"} {
 		bad := base()
-		bad["max_output_tokens"] = badVal
+		bad["max_tokens"] = badVal
 		if _, err := buildModelsDefaultsFromFrontend(ctx, []any{bad}, nil); err == nil {
-			t.Errorf("max_output_tokens=%v 应返回错误", badVal)
+			t.Errorf("max_tokens=%v 应返回错误", badVal)
 		} else if _, ok := err.(*ConfigBadRequest); !ok {
 			t.Errorf("应为 *ConfigBadRequest，实际 %T", err)
 		}
