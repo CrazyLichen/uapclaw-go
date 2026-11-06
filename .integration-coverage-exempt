@@ -307,3 +307,48 @@ internal/agentcore/harness/interfaces/deep_agent.go
 # 由 *TeamHarness.Start、*StreamController.Start 实现侧测试覆盖）。
 internal/agent_teams/agent/coordination/kernel.go
 internal/agent_teams/agent/coordination/types/lifecycle_accessors.go
+
+# ── 2026-11-06 C 组 LLM 客户端对齐（C-A~C-G）──
+# 下列文件的改动行均为「声明/装配」性质，集成层无独立入口；改动行由包内单测覆盖
+# （包覆盖率见下），集成套件已覆盖全部可驱动的 HTTP 链路（见
+# tests/integration/agentcore/foundation/llm_client，7 用例 / 跨度 3）。
+
+# types.go — 纯结构体字段声明（ResponseUsage.completion_tokens_details、
+# ResponseCompletionTokensDetails、ChunkDelta/ResponseMessage 的 reasoning 三字段）。
+# 声明行不可"被执行"；解析行为由 parse_response/parse_stream_chunk 的集成+单测覆盖。
+internal/agentcore/foundation/llm/model_clients/openai/types.go
+
+# usage_metadata.go — UsageMetadata 新增 8 个字段的结构体声明 + NewUsageMetadata()。
+# 整文件单测覆盖 100%（含序列化/omitempty 语义）；集成层只需消费产物，不需构造。
+internal/agentcore/foundation/llm/schema/usage_metadata.go
+
+# init_model.go — 工厂装配（WithTemperature 改值便捷形）。仅 1 行调用变更，
+# 集成套件不提供 InitModel 入口；包内单测覆盖 InitModel 全选项（95.9%）。
+internal/agentcore/foundation/llm/init_model.go
+
+# llm_wrapper.go — context_evolver 的 LLM 客户端装配（Temperature 取址）。
+# 仅 1 行结构体字面量变更；集成层无 context_evolver 的 LLM 装配链路。
+# 包覆盖率 82.8%。
+internal/agentcore/context_evolver/service/llm_wrapper.go
+
+# pool.go — 团队模型池（Temperature 取址 + 默认断言）。仅 1 行赋值变更；
+# 池条目装配无集成入口，包覆盖率 93.5%。
+internal/agent_teams/models/pool.go
+
+# query_rewriter.go — 检索查询改写器的 LLM 装配（WithTemperatureValue）。
+# 仅 1 行调用变更；集成层无改写器装配链路，改动行由包内单测覆盖。
+internal/agentcore/retrieval/query_rewriter/query_rewriter.go
+
+# app_web_handlers.go — Web 端模型保存/校验 handler（api_base 归一 + Temperature 取址）。
+# 整文件集成覆盖 27.4%，本次改动 2 处均在 WebSocket 模型校验分支，需前端链路驱动；
+# 改动行由 openai.NormalizeAPIBase 单测 + 本文件既有 handler 测试覆盖。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go
+
+# im_inbound.go / im_outbound.go — IM 管道的 LLM 装配（WithTemperatureValue）。
+# 各仅 1 行调用变更；IM 管道需外部 IM 服务，无集成入口。
+internal/swarm/gateway/im_pipeline/im_inbound.go
+internal/swarm/gateway/im_pipeline/im_outbound.go
+
+# wiki_tools.go — 维基工具的参数解析装配（WithTemperatureValue）。
+# 仅 2 行调用变更；外部 HTTP 依赖，包内单测覆盖，集成无入口。
+internal/swarm/agents/harness/common/tools/wiki_tools.go
