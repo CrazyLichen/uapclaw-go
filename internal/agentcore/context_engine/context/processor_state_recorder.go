@@ -192,6 +192,12 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 	// c. 构建 saved 指标
 	saved := r.buildSaved(before, after)
 
+	// c2. 构建被就地改写的消息清单（仅当有 after 时计算）
+	var modified []schema.ContextCompressionModifiedMessage
+	if input.AfterMessages != nil {
+		modified = r.buildModifiedMessages(input.BeforeMessages, input.AfterMessages)
+	}
+
 	// d. 构建 ContextCompressionState
 	state := &schema.ContextCompressionState{
 		Type:             schema.ContextCompressionStateType,
@@ -201,6 +207,7 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 		Before:           before,
 		After:            after,
 		Saved:            saved,
+		ModifiedMessages: modified,
 		CompressionUsage: input.CompressionUsage,
 		ContextMax:       input.ContextMax,
 		CompactSummary:   input.CompactSummary,
@@ -241,6 +248,71 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildModifiedMessages 找出处理器就地改写的消息。
+//
+// 判定靠 context_message_id 配对：压缩器索引入参、卸载器索引出参、GET 走全量，
+// 只有"同一 id 但内容变了 / 新变成卸载占位"才是改写；新增、删除、无 id 都不算。
+//
+// Python: ContextProcessorStateRecorder._build_modified_messages()
+func (r *ProcessorStateRecorder) buildModifiedMessages(
+	before []llm_schema.BaseMessage,
+	after []llm_schema.BaseMessage,
+) []schema.ContextCompressionModifiedMessage {
+	index := make(map[string]llm_schema.BaseMessage, len(before))
+	for _, message := range before {
+		id := GetContextMessageID(message)
+		if id == "" {
+			continue
+		}
+		if _, exists := index[id]; !exists {
+			index[id] = message
+		}
+	}
+
+	modified := make([]schema.ContextCompressionModifiedMessage, 0)
+	for _, message := range after {
+		id := GetContextMessageID(message)
+		if id == "" {
+			continue
+		}
+		original, ok := index[id]
+		if !ok || original == message {
+			continue
+		}
+
+		newlyOffloaded := false
+		handle, offloadType := "", ""
+		if current, ok := message.(schema.Offloadable); ok {
+			info := current.GetOffloadInfo()
+			previous, hadOffload := original.(schema.Offloadable)
+			if !hadOffload || previous.GetOffloadInfo().OffloadHandle != info.OffloadHandle {
+				newlyOffloaded = true
+				handle, offloadType = info.OffloadHandle, info.OffloadType
+			}
+		}
+		if !newlyOffloaded && original.GetContent().Text() == message.GetContent().Text() {
+			continue
+		}
+
+		entry := schema.ContextCompressionModifiedMessage{
+			MessageID:     id,
+			Role:          message.GetRole().String(),
+			OffloadHandle: handle,
+			OffloadType:   offloadType,
+		}
+		// 工具结果可能被卸载包装（OffloadToolMessage 内嵌 ToolMessage），
+		// 两种形态都要取到 tool_call_id（Python 侧用 getattr 天然覆盖）。
+		switch tool := message.(type) {
+		case *llm_schema.ToolMessage:
+			entry.ToolCallID = tool.ToolCallID
+		case *schema.OffloadToolMessage:
+			entry.ToolCallID = tool.ToolCallID
+		}
+		modified = append(modified, entry)
+	}
+	return modified
+}
 
 // durationMillis 计算处理器耗时（毫秒）。
 //
@@ -555,6 +627,30 @@ func (r *ProcessorStateRecorder) stateToMap(state *schema.ContextCompressionStat
 		"assistant_message_tokens": state.Statistic.AssistantMessageTokens,
 		"tool_message_tokens":      state.Statistic.ToolMessageTokens,
 		"tool_tokens":              state.Statistic.ToolTokens,
+	}
+
+	// ModifiedMessages（可能为空）
+	if len(state.ModifiedMessages) > 0 {
+		modified := make([]map[string]any, 0, len(state.ModifiedMessages))
+		for _, item := range state.ModifiedMessages {
+			entry := map[string]any{
+				"message_id": item.MessageID,
+				"role":       item.Role,
+			}
+			if item.ToolCallID != "" {
+				entry["tool_call_id"] = item.ToolCallID
+			}
+			if item.OffloadHandle != "" {
+				entry["offload_handle"] = item.OffloadHandle
+			}
+			if item.OffloadType != "" {
+				entry["offload_type"] = item.OffloadType
+			}
+			modified = append(modified, entry)
+		}
+		m["modified_messages"] = modified
+	} else {
+		m["modified_messages"] = []map[string]any{}
 	}
 
 	// CompressionUsage（可能为 nil）

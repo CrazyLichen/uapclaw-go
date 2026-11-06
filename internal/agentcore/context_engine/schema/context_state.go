@@ -64,6 +64,24 @@ type ContextCompressionUsage struct {
 // 通过回调框架和 session stream 发射，供外部系统观测上下文引擎行为。
 //
 // Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionState)
+// ContextCompressionModifiedMessage 压缩过程中被就地改写的消息条目。
+//
+// 前端轨迹面板据此标出"哪条消息被压了、原文还能不能取回"（offload_handle 可达时）。
+//
+// Python: ContextCompressionModifiedMessage
+type ContextCompressionModifiedMessage struct {
+	// MessageID context_message_id（改写前后不变，靠它配对）
+	MessageID string `json:"message_id"`
+	// Role 消息角色
+	Role string `json:"role,omitempty"`
+	// ToolCallID 工具结果消息的调用 id（非工具消息为空）
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	// OffloadHandle 新卸载时的取回句柄
+	OffloadHandle string `json:"offload_handle,omitempty"`
+	// OffloadType 存储后端类型（in_memory / filesystem）
+	OffloadType string `json:"offload_type,omitempty"`
+}
+
 type ContextCompressionState struct {
 	// Type 事件类型标识，固定为 ContextCompressionStateType
 	Type string `json:"type"`
@@ -85,6 +103,8 @@ type ContextCompressionState struct {
 	Statistic iface.ContextStats `json:"statistic"`
 	// Saved 压缩节省量，nil 表示无节省（操作未完成）
 	Saved *ContextCompressionSaved `json:"saved,omitempty"`
+	// ModifiedMessages 被就地改写的消息列表（按输出顺序）
+	ModifiedMessages []ContextCompressionModifiedMessage `json:"modified_messages"`
 	// CompressionUsage LLM 调用用量，nil 表示未调用 LLM
 	CompressionUsage *ContextCompressionUsage `json:"compression_usage,omitempty"`
 	// DurationMs 操作耗时（毫秒），0 且 omitempty 省略表示未完成

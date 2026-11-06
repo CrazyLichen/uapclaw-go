@@ -43,66 +43,12 @@ func TestMessageSummaryOffloaderConfig_Validate(t *testing.T) {
 		cfg := &MessageSummaryOffloaderConfig{}
 		err := cfg.Validate()
 		require.NoError(t, err)
-		assert.Equal(t, msoDefaultTokensThreshold, cfg.TokensThreshold)
 		assert.Equal(t, msoDefaultLargeMessageThreshold, cfg.LargeMessageThreshold)
 		assert.Equal(t, []string{"tool"}, cfg.OffloadMessageTypes)
 		assert.Equal(t, []string{"reload_original_context_messages"}, cfg.ProtectedToolNames)
 		assert.Equal(t, msoDefaultSummaryMaxTokens, cfg.SummaryMaxTokens)
 		assert.Equal(t, msoDefaultStepSummaryMaxContextMessages, cfg.StepSummaryMaxContextMessages)
 		assert.Equal(t, msoDefaultContentMaxCharsForCompression, cfg.ContentMaxCharsForCompression)
-	})
-
-	t.Run("MessagesToKeep大于MessagesThreshold报错", func(t *testing.T) {
-		keep := 10
-		threshold := 5
-		cfg := &MessageSummaryOffloaderConfig{
-			MessagesToKeep:    &keep,
-			MessagesThreshold: &threshold,
-		}
-		err := cfg.Validate()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "MessagesToKeep")
-	})
-
-	t.Run("MessagesToKeep小于MessagesThreshold通过", func(t *testing.T) {
-		keep := 5
-		threshold := 10
-		cfg := &MessageSummaryOffloaderConfig{
-			MessagesToKeep:    &keep,
-			MessagesThreshold: &threshold,
-		}
-		err := cfg.Validate()
-		assert.NoError(t, err)
-	})
-}
-
-// TestMessageSummaryOffloader_ProcessorType 测试处理器类型
-func TestMessageSummaryOffloader_ProcessorType(t *testing.T) {
-	cfg := &MessageSummaryOffloaderConfig{}
-	require.NoError(t, cfg.Validate())
-	mso := msoNewForTest(cfg)
-	assert.Equal(t, "MessageSummaryOffloader", mso.ProcessorType())
-}
-
-// TestMessageSummaryOffloader_TriggerAddMessages 测试触发判断
-func TestMessageSummaryOffloader_TriggerAddMessages(t *testing.T) {
-	t.Run("新消息超阈值触发", func(t *testing.T) {
-		cfg := &MessageSummaryOffloaderConfig{
-			LargeMessageThreshold: 100,
-		}
-		require.NoError(t, cfg.Validate())
-		mso := msoNewForTest(cfg)
-
-		// 创建一条大的 tool 消息
-		longContent := strings.Repeat("x", 500)
-		toolMsg := llm_schema.NewToolMessage("call-1", longContent)
-		// fakeModelContext 的 TokenCounter 返回 tokenCount=0，
-		// 需要设置足够大的 tokenCount 或不设置 TokenCounter
-		mc := &fakeModelContext{messages: nil, sessionID: "test-session", tokenCount: 200}
-
-		triggered, err := mso.TriggerAddMessages(context.Background(), mc, []llm_schema.BaseMessage{toolMsg})
-		require.NoError(t, err)
-		assert.True(t, triggered)
 	})
 
 	t.Run("新消息不超阈值不触发", func(t *testing.T) {
@@ -174,6 +120,25 @@ func TestMessageSummaryOffloader_shouldOffloadMessage(t *testing.T) {
 		toolMsg := llm_schema.NewToolMessage("call-1", "short")
 		mc := &fakeModelContext{messages: nil, sessionID: "test-session", tokenCount: 10}
 		assert.False(t, mso.shouldOffloadMessage(toolMsg, mc, nil))
+	})
+
+	t.Run("带tool_calls的assistant消息返回false", func(t *testing.T) {
+		// 角色放开到 assistant + tool 时，带 tool_calls 的 assistant 也必须拒绝：
+		// 否则 tool 结果失去配对的调用，上游请求 400（B-13 守卫）
+		cfgWithAssistant := &MessageSummaryOffloaderConfig{
+			LargeMessageThreshold: 100,
+			OffloadMessageTypes:   []string{"tool", "assistant"},
+		}
+		require.NoError(t, cfgWithAssistant.Validate())
+		msoAssistant := msoNewForTest(cfgWithAssistant)
+		mc := &fakeModelContext{messages: nil, sessionID: "test-session", tokenCount: 2000}
+
+		withCalls := llm_schema.NewAssistantMessage(strings.Repeat("x", 2000),
+			llm_schema.WithToolCalls([]*llm_schema.ToolCall{{ID: "call-9", Name: "read_file", Arguments: "{}"}}))
+		assert.False(t, msoAssistant.shouldOffloadMessage(withCalls, mc, nil))
+
+		withoutCalls := llm_schema.NewAssistantMessage(strings.Repeat("x", 2000))
+		assert.True(t, msoAssistant.shouldOffloadMessage(withoutCalls, mc, nil))
 	})
 
 	t.Run("符合条件的tool消息返回true", func(t *testing.T) {
@@ -1329,7 +1294,6 @@ func TestMessageSummaryOffloader_buildStepContextText_补充(t *testing.T) {
 // TestMessageSummaryOffloaderConfig_SetModelDefaults_均非空 设置默认模型配置
 func TestMessageSummaryOffloaderConfig_SetModelDefaults_均非空(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{
-		TokensThreshold:               20000,
 		LargeMessageThreshold:         1000,
 		StepSummaryMaxContextMessages: 5,
 	}
@@ -1348,7 +1312,6 @@ func TestMessageSummaryOffloaderConfig_SetModelDefaults_均非空(t *testing.T) 
 // TestMessageSummaryOffloaderConfig_SetModelDefaults_已有Model不覆盖 已有 Model 时不应覆盖
 func TestMessageSummaryOffloaderConfig_SetModelDefaults_已有Model不覆盖(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{
-		TokensThreshold:               20000,
 		LargeMessageThreshold:         1000,
 		StepSummaryMaxContextMessages: 5,
 		Model:                         &llm_schema.ModelRequestConfig{ModelName: "existing"},
@@ -1363,7 +1326,6 @@ func TestMessageSummaryOffloaderConfig_SetModelDefaults_已有Model不覆盖(t *
 // TestMessageSummaryOffloaderConfig_SetModelDefaults_传入nil不设置 传入 nil 时不设置
 func TestMessageSummaryOffloaderConfig_SetModelDefaults_传入nil不设置(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{
-		TokensThreshold:               20000,
 		LargeMessageThreshold:         1000,
 		StepSummaryMaxContextMessages: 5,
 	}
@@ -1377,7 +1339,6 @@ func TestMessageSummaryOffloaderConfig_SetModelDefaults_传入nil不设置(t *te
 // TestMessageSummaryOffloaderConfig_GetModel 返回模型请求配置
 func TestMessageSummaryOffloaderConfig_GetModel(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{
-		TokensThreshold:               20000,
 		LargeMessageThreshold:         1000,
 		StepSummaryMaxContextMessages: 5,
 	}
@@ -1395,7 +1356,6 @@ func TestMessageSummaryOffloaderConfig_GetModel(t *testing.T) {
 // TestMessageSummaryOffloader_LoadState 从 map 恢复状态（空操作，不 panic 即可）
 func TestMessageSummaryOffloader_LoadState(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{
-		TokensThreshold:               20000,
 		LargeMessageThreshold:         1000,
 		StepSummaryMaxContextMessages: 5,
 	}

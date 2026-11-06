@@ -28,25 +28,17 @@ import (
 // 始终使用自适应压缩生成上下文感知摘要。
 // 触发基于新添加消息的角色和大小是否超过 largeMessageThreshold。
 //
-// 消息阈值、令牌阈值、保留消息数、保留最后轮次
-// 为兼容字段，自适应压缩不使用这些参数进行触发或候选选择。
+// 触发与候选选择只看单条消息大小（LargeMessageThreshold），不使用
+// 消息数阈值 / 令牌阈值 / 保留条数——这些参数在上游已被删除。
 //
 // Python: MessageSummaryOffloaderConfig (pydantic.BaseModel)
 type MessageSummaryOffloaderConfig struct {
-	// MessagesThreshold 兼容字段；自适应压缩不用于触发
-	MessagesThreshold *int
-	// TokensThreshold 兼容字段；自适应压缩用 per-message 检查（默认 20000）
-	TokensThreshold int
 	// LargeMessageThreshold 自适应压缩候选消息的最小大小（默认 1000）
 	LargeMessageThreshold int
 	// OffloadMessageTypes 可摘要卸载的消息角色列表（默认 ["tool"]）
 	OffloadMessageTypes []string
 	// ProtectedToolNames 受保护的工具名称列表（默认 ["reload_original_context_messages"]）
 	ProtectedToolNames []string
-	// MessagesToKeep 兼容字段
-	MessagesToKeep *int
-	// KeepLastRound 兼容字段（默认 true）
-	KeepLastRound bool
 	// Model 摘要模型请求配置
 	Model *llm_schema.ModelRequestConfig
 	// ModelClient 摘要模型客户端配置
@@ -83,8 +75,6 @@ type MessageSummaryOffloaderOption func(*MessageSummaryOffloader)
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (
-	// msoDefaultTokensThreshold 默认 Token 触发阈值
-	msoDefaultTokensThreshold = 20000
 	// msoDefaultLargeMessageThreshold 默认大消息判定阈值
 	msoDefaultLargeMessageThreshold = 1000
 	// msoDefaultSummaryMaxTokens 默认摘要最大 token 数
@@ -250,13 +240,9 @@ func WithMessageSummaryModel(model *llm.Model) MessageSummaryOffloaderOption {
 //
 // Python: MessageSummaryOffloader._validate_config()
 func (c *MessageSummaryOffloaderConfig) Validate() error {
+	// 只填默认，不做截断类校验：自适应压缩没有"保留条数 < 阈值"的语义。
+	// Python: MessageSummaryOffloader._validate_config() → return
 	c.applyMSODefaults()
-	if c.MessagesThreshold != nil && c.MessagesToKeep != nil {
-		if *c.MessagesToKeep >= *c.MessagesThreshold {
-			return fmt.Errorf("MessageSummaryOffloaderConfig.MessagesToKeep(%d) 不能大于等于 MessagesThreshold(%d)",
-				*c.MessagesToKeep, *c.MessagesThreshold)
-		}
-	}
 	return nil
 }
 
@@ -365,9 +351,6 @@ func (mso *MessageSummaryOffloader) LoadState(_ map[string]any) {}
 
 // applyMSODefaults 应用默认值
 func (c *MessageSummaryOffloaderConfig) applyMSODefaults() {
-	if c.TokensThreshold == 0 {
-		c.TokensThreshold = msoDefaultTokensThreshold
-	}
 	if c.LargeMessageThreshold == 0 {
 		c.LargeMessageThreshold = msoDefaultLargeMessageThreshold
 	}
@@ -415,6 +398,13 @@ func (mso *MessageSummaryOffloader) shouldOffloadMessage(message llm_schema.Base
 
 	// 规则 2：已卸载消息不重复处理
 	if schema.IsOffloaded(message) {
+		return false
+	}
+
+	// 规则 2.5：带 tool_calls 的 assistant 消息不得卸载。
+	// 替换成占位后，紧随其后的 tool 结果就失去了配对的调用，上游请求直接判 400
+	// （对齐上游 _should_offload_message 的同名守卫）。
+	if assistant, ok := message.(*llm_schema.AssistantMessage); ok && len(assistant.ToolCalls) > 0 {
 		return false
 	}
 
