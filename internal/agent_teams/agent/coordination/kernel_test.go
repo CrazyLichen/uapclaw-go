@@ -42,7 +42,7 @@ type fakeStreamControllerAccessor struct {
 	startCalled bool
 }
 
-func (f *fakeStreamControllerAccessor) ResetStreamQueue()            {}
+func (f *fakeStreamControllerAccessor) ResetStreamQueue()       {}
 func (f *fakeStreamControllerAccessor) Start(_ context.Context) { f.startCalled = true }
 
 // fakeDispatcherInfra S-32: 测试用 DispatcherInfra 实现（对齐 *TeamInfra 具体类型签名）
@@ -112,7 +112,9 @@ func (f *fakeKernelHost) CancelRecoveryTasks()                                  
 func (f *fakeKernelHost) ShutdownAllHandles(_ context.Context)                      {}
 func (f *fakeKernelHost) SpawnedHandleNames() []string                              { return nil }
 func (f *fakeKernelHost) FirstIterGate() types.FirstIterGateAccessor                { return nil }
-func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor          { return f.streamControllerAccessor }
+func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor {
+	return f.streamControllerAccessor
+}
 func (f *fakeKernelHost) PublishTeamEvent(_ context.Context, _ string, _ map[string]any) error {
 	return nil
 }
@@ -253,10 +255,10 @@ func TestCoordinationKernel_Start启动成员运行时(t *testing.T) {
 	ha := &fakeHarnessAccessor{}
 	sca := &fakeStreamControllerAccessor{}
 	host := &fakeKernelHost{
-		role:                    schema.TeamRoleLeader,
-		memberName:              "leader1",
-		agentReady:              true,
-		harnessAccessor:         ha,
+		role:                     schema.TeamRoleLeader,
+		memberName:               "leader1",
+		agentReady:               true,
+		harnessAccessor:          ha,
 		streamControllerAccessor: sca,
 	}
 	k := NewCoordinationKernel(host)
@@ -279,10 +281,10 @@ func TestCoordinationKernel_StartharnessStart失败不挂Controller(t *testing.T
 	ha := &fakeHarnessAccessor{startErr: fmt.Errorf("harness start failed")}
 	sca := &fakeStreamControllerAccessor{}
 	host := &fakeKernelHost{
-		role:                    schema.TeamRoleLeader,
-		memberName:              "leader1",
-		agentReady:              true,
-		harnessAccessor:         ha,
+		role:                     schema.TeamRoleLeader,
+		memberName:               "leader1",
+		agentReady:               true,
+		harnessAccessor:          ha,
 		streamControllerAccessor: sca,
 	}
 	k := NewCoordinationKernel(host)
