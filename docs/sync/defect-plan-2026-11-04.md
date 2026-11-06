@@ -12,7 +12,7 @@
 1. **不能逐条照搬**：2713 条修复里，259 条带 `web`/`tui`/`designer` scope，另有 606 条无 scope 提交中约半数为前端修复；这些属于 Go 未迁移的前端产物，不构成本项目缺陷。真正落在 Go 已迁移包上的，聚合后为 **14 组、185 个缺陷行**。
 2. **不是"上游修了 Go 就一定有"**：Go 迁移时基线早于这批修复，但部分防护在迁移时就已按当时的 Python 行为实现（例：技能包解压 zip-slip 防护 Go 已有 `filepath.Rel` 校验）。因此每个缺陷族必须先在 Go 侧核验再动手。
 3. **优先看 P0**：数据丢失 / 崩溃 / 安全边界三类共 **30 行**（见 §4 批次一），其余为行为偏差与可观测性偏差。
-4. **核验进度**：185 行中已核验 38 行（✅ 25 + ➖ 7 + ⤵️ 6），剩余 147 行为 🔍。本轮完成 **B 组 17 行**核验：✅ 存在 12 行、➖ 已对齐 1 行（B-08）、⤵️ 归新功能 3 行（B-01、B-11、B-15）、已落地 1 行（B-17）。
+4. **核验进度**：185 行中已核验 **53 行**（✅ 36 + ➖ 11 + ⤵️ 6），剩余 132 行为 🔍。**B 组 17 行**已核验并处置（修复 8 组 C1~C6、延期 3 条、对齐 1 条；实施完成见 §3.B 处置决定）。**C 组 15 行**本轮完成核验与修复：✅ 修复 11 行（C-01/03/04/05/06/07/08/09/10/13/14），➖ 已对齐 3 行（C-02 阻塞 channel 无丢弃、C-11 rail 层状态码分类、C-12 transient retry），另有 C-15 早已 ➖；设计见 `docs/superpowers/specs/2026-11-06-llm-client-c-group-alignment-design.md`，计划见 `docs/superpowers/plans/2026-11-06-llm-client-c-group-alignment.md`。
 5. **高价值系统性缺陷**集中在四处：① ReAct 循环终止语义（force_finish / 无进展 / 迭代上限）② 上下文压缩的取消与预算守卫 ③ AgentTeams 任务与 worktree 生命周期 ④ Gateway 会话路由与资源释放。
 
 ### 状态图例
@@ -160,20 +160,20 @@ rg -n "<Python 符号>" internal/
 
 | 编号 | 缺陷（Go 语义） | 上游证据 | Go 落点 | 级别 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| C-01 | 流式 chunk 卡住（长时间无数据）无处理：应超时退出并保留已产出内容 | `55116d61` | `model_clients/openai` SSE | P1 | 🔍 |
-| C-02 | chunk 入队重试耗尽后必须报错，不能静默丢 chunk | `65dc4b13` | 流式管道 | P1 | 🔍 |
-| C-03 | `finish_reason` 被覆盖/丢失：应保留真实值（含流式增量） | `687be26c`、`ec26a306` | chunk 解析 | P1 | 🔍 |
-| C-04 | `cache_tokens` / cache 读写用量字段未解析，成本统计偏低 | `ce761415`、`df7c717` | usage 解析 | P2 | 🔍 |
-| C-05 | `reasoning_content` 抽取：OpenRouter `reasoning` 字段、DeepSeek 按模型名补字段 | `3585aaf1`、`01a08c13` | reasoning 抽取 | P2 | 🔍 |
-| C-06 | Responses API 的 `reasoning_tokens` 未从 usage 读取 | `92eb535b` | usage 解析 | P2 | 🔍 |
-| C-07 | 不同 provider 的凭据必填项差异未区分（缺 key 时才报错/该报错时未报） | `f38e0d96` | 客户端校验 | P1 | 🔍 |
-| C-08 | `api_base` 被硬编码补 `/v1`，对已带版本段的网关产生双段 | `38975d79` | base URL 归一 | P1 | 🔍 |
-| C-09 | `top_p`/`temperature` 不应有默认值（未设置就不下发），Anthropic 设了 temperature 要丢 top_p | `a586d48a`、`69ce2182`、`fc9f9f9a` | 请求参数构建 | P1 | 🔍 |
-| C-10 | 请求编码错误需分类并保留错误日志（当前被吞成通用错误） | `6fe3c353` | 错误映射 | P2 | 🔍 |
-| C-11 | 模型异常需按状态码规范抛（401/429/5xx 语义不同） | `f9cb58e7` | `WrapError`/`HandleHTTPError` | P1 | 🔍 |
-| C-12 | 可见输出前的瞬时失败应重试（当前一次失败即整轮失败） | `73e8255d` | 重试策略 | P1 | 🔍 |
-| C-13 | IntelliRouter 路由缓存需在 event-loop/运行时变化后重建（Go：配置热更新后重建） | `e3e19a95`、`fe4eb216` | `intelli_router` | P2 | 🔍 |
-| C-14 | HTTP client 复用：每请求新建 transport 导致连接泄漏 | `115583b0`、`4cc900ca` | 客户端构造 | P1 | 🔍 |
+| C-01 | 流式 chunk 卡住（长时间无数据）无处理：应超时退出并保留已产出内容 | `55116d61` | ✅ `llm/model.go` 帧超时（首帧 300s/空闲 60s）+ `openai/request_builder.go` 流式不设总超时 | P1 | ✅ 已修（C-A，`3e844d84`） |
+| C-02 | chunk 入队重试耗尽后必须报错，不能静默丢 chunk | `65dc4b13` | 流式管道 | P1 | ➖ 已对齐（Go 全链路阻塞 channel + `select ctx.Done()`，无丢弃分支：`base_client.go:406-417`） |
+| C-03 | `finish_reason` 被覆盖/丢失：应保留真实值（含流式增量） | `687be26c`、`ec26a306` | chunk 解析 | P1 | ✅ 已修（C-F，`5a532487`：删 stop→tool_calls 改写 + 空值兜底） |
+| C-04 | `cache_tokens` / cache 读写用量字段未解析，成本统计偏低 | `ce761415`、`df7c717` | usage 解析 | P2 | ✅ 已修（C-B，`14a426c6`/`14a2fc7d`/`884bedf9`/`c0b5435b`：四抽取函数 + 8 字段 + 4 份副本收敛） |
+| C-05 | `reasoning_content` 抽取：OpenRouter `reasoning` 字段、DeepSeek 按模型名补字段 | `3585aaf1`、`01a08c13` | reasoning 抽取 | P2 | ✅ 已修（C-C，`62220c7c`/`e6b1b580`：四级回退 + 门卫改模型名 + 删 deepseek 幽灵包） |
+| C-06 | Responses API 的 `reasoning_tokens` 未从 usage 读取 | `92eb535b` | usage 解析 | P2 | ✅ 已修（并入 C-04：`ExtractReasoningTokens` + `completion_tokens_details` 字段补齐；Responses API 传输层未迁移 ⤵️） |
+| C-07 | 不同 provider 的凭据必填项差异未区分（缺 key 时才报错/该报错时未报） | `f38e0d96` | 客户端校验 | P1 | ✅ 已修（C-D，`96da1e1d`/`7513d664`：AuthMode + 双白名单 + 鉴权头 + 删 WithSkipValidate） |
+| C-08 | `api_base` 未剥离已带的 `/chat/completions`（**非**硬编码补 `/v1`，Go 从不注入 /v1），粘贴完整端点会拼成双段 404 | `38975d79` | base URL 归一 | P1 | ✅ 已修（C-E，`f421d973`：`NormalizeAPIBase` + 四处接线） |
+| C-09 | `top_p`/`temperature` 不应有默认值（未设置就不下发），Anthropic 设了 temperature 要丢 top_p | `a586d48a`、`69ce2182`、`fc9f9f9a` | 请求参数构建 | P1 | ✅ 已修（C-D，`e755763b`：指针化 + nil 不下发；Anthropic 互斥 ⤵️ 随其迁移） |
+| C-10 | 请求编码错误需分类并保留错误日志（当前被吞成通用错误） | `6fe3c353` | 错误映射 | P2 | ✅ 已修（C-E，`492dd34f`：181004 + UTF-8 严格校验 + 放行不参与重试） |
+| C-11 | 模型异常需按状态码规范抛（401/429/5xx 语义不同） | `f9cb58e7` | `WrapError`/`HandleHTTPError` | P1 | ➖ 已对齐（状态码语义落在 rail 层：`model_anomaly.go:860-1010` 三级判定；`HandleHTTPError` 写 `http_status`/`provider_code`/`Retry-After`） |
+| C-12 | 可见输出前的瞬时失败应重试（当前一次失败即整轮失败） | `73e8255d` | 重试策略 | P1 | ➖ 已对齐（`model_anomaly.go:552/584/313` transient retry + backoff，9.86 落地） |
+| C-13 | IntelliRouter 路由缓存需在 event-loop/运行时变化后重建（Go：配置热更新后重建） | `e3e19a95`、`fe4eb216` | `intelli_router` | P2 | ✅ 已修（C-G，`6b1c1993`：`ReliableRouter.Close` + `ResetRouterCache`；loop 自动驱逐登记偏差 D-5） |
+| C-14 | HTTP client 复用：每请求新建 transport 导致连接泄漏 | `115583b0`、`4cc900ca` | 客户端构造 | P1 | ✅ 已修（C-A，`9f62540d`/`3e844d84`：共享 Transport 池，4 处构造收敛） |
 | C-15 | 流式 tool_call 被拆成两条（`type` 空串覆盖）导致后续请求 400 | `streaming-toolcall`（11-02 已修） | `mergeToolCalls` | P1 | ➖ |
 
 ### D. 工具系统 / MCP / 提示词模板

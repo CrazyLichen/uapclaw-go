@@ -1182,6 +1182,35 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 **执行顺序**：C1 → C2 → C3 → C4 → C5 → C6；每批单独提交、单独 CI 四 job 全绿。
 
+### 24-B LLM 客户端 C 组缺陷修复批次（2026-11-06 制定，按规则 8/9 执行）
+
+> 处置维度批次划分，对应 `docs/sync/defect-plan-2026-11-04.md` §3.C（15 行）。
+> 核验结论：C 组 15 行 = **修复 11**（C-01/03/04/05/06/07/08/09/10/13/14）+ **已对齐 4**（C-02 阻塞 channel 无丢弃、C-11 rail 层状态码分类、C-12 transient retry、C-15 早已 ➖）。
+> 完整设计（逐项方案、Python↔Go 映射、偏差 D-1~D-5、测试计划）见 `docs/superpowers/specs/2026-11-06-llm-client-c-group-alignment-design.md`；
+> 任务级计划（16 任务，逐任务失败用例 → 实现 → 验证 → 提交）见 `docs/superpowers/plans/2026-11-06-llm-client-c-group-alignment.md`。
+
+| 批次 | 状态 | 覆盖缺陷 | 内容摘要 | 提交 |
+|------|------|---------|---------|------|
+| C-A1 | ✅ | C-14 前半 | 共享 Transport 池（按 `(verify_ssl, ssl_cert)` 分桶，Limits 100/20/60s + ResponseHeaderTimeout 360s + Dial 30s，`CloseIdleTransports` 对齐 `aclose()`） | `9f62540d` |
+| C-A2 | ✅ | C-01、C-14 后半 | `BuildHTTPRequest` 增 streaming 语义：流式 `Client.Timeout=0`（读 body 由帧超时兜）、非流式 Client 级总超时；4 处 transport 构造收敛进池；默认 timeout 60→360（恢复 `timeout ≥ first_chunk=300` 不变量） | `3e844d84`+`a62e4222` |
+| C-A3 | ✅ | C-01 回归 | 流式 1.2s 持续输出 vs timeout 0.8s → 12 块全收；非流式对照 1.5s 慢响应被切断 | `86d8be80` |
+| C-B1 | ✅ | C-04 | `ExtractCacheTokens`/`CacheUsageMetadata`/`ExtractCacheCreationTokens`/`ExtractReasoningTokens` 一比一映射上游四静态方法（7+11 路径矩阵、legacy 不可信语义） | `14a426c6` |
+| C-B2 | ✅ | C-04、C-06 | `UsageMetadata` 补 8 字段（cache_read/miss/write、cache_creation、reasoning_tokens、status/source/authoritative）+ `BuildUsageMetadata` 统一入口 | `14a2fc7d` |
+| C-B3 | ✅ | C-04 | openai/siliconflow/inference_affinity 三处副本收敛；`session_aggregator` 归一字段优先、legacy 回落；顺带补 `ResponseUsage.completion_tokens_details`（集成用例暴露的硬缺口） | `884bedf9`+`c0b5435b` |
+| C-C1 | ✅ | C-05 前半 | `ExtractReasoningContent` 四级回退（reasoning_details[0].text → reasoning_content → reasoning → reasoning_token_text）；ChunkDelta/ResponseMessage 补 3 字段 | `62220c7c` |
+| C-C2 | ✅ | C-05 后半 | 补 reasoning_content 移入 `BuildRequestParams`、门卫改「模型名含 deepseek」（修聚合网关 400）；**删 deepseek 幽灵包**（上游 HEAD 已无该文件），注册表 DeepSeek → openAIFactory | `e6b1b580` |
+| C-D1 | ✅ | C-07 | `AuthMode` 四枚举 + key/base 双白名单（对齐 `_TOP_LEVEL_*_PROVIDERS`）+ `EndpointProfile` 默认 base 回填；`verify_ssl` 不再强制 `ssl_cert`（L-07 同源）；**删 `WithSkipValidate` 兼容壳** | `96da1e1d`+`56307069` |
+| C-D2 | ✅ | C-07 后半 | 鉴权头按 auth_mode：none/oauth 省略、custom_headers 空 key 省略、空 key 用 `EMPTY` 占位 | `7513d664` |
+| C-D3 | ✅ | C-09 | `Temperature` 改 `*float64`、删构造默认 0.95/0.1、`nil 不下发`（修显式 0 被吞后反弹 0.95）；应用层默认保留不动 | `e755763b` |
+| C-E1 | ✅ | C-08 | `NormalizeAPIBase`（strip 空白/尾斜杠/已带 `/chat/completions`，不推断 /v1）+ BuildHTTPRequest/affinity release/web 保存/dashscope 原生四处接线 | `f421d973` |
+| C-E2 | ✅ | C-10 | 编码错误分类 181004 + `details.stage=request_encoding`；输入侧 `findInvalidUTF8` 严格校验（json.Marshal 会静默替换 U+FFFD）；Invoke/Stream 放行不参与重试 | `492dd34f` |
+| C-F | ✅ | C-03 | finish_reason 非流式双向对齐：删 `stop→tool_calls` 改写、空值兜底 | `5a532487` |
+| C-G | ✅ | C-13 | `ReliableRouter.Close`（停 health checker）+ `ResetRouterCache` 显式驱逐；loop 自动驱逐登记偏差 D-5 | `6b1c1993` |
+| C-IT | ✅ | C-01/C-04/C-10/C-14 | 集成用例 `tests/integration/agentcore/foundation/llm_client`（跨度 3，审计通过）：流式长输出 + usage 归一 + callback 事件序 + 聚合统计；编码错误不发网络请求；多客户端共享 Transport | `c0b5435b` |
+
+**已知偏差（D-1~D-5）**：D-1 分桶粒度按安全形态（Go Transport 跨 host）；D-2 ResponseHeaderTimeout 为 Transport 级统一值；D-3 IntelliRouter 无法子类覆写 → 白名单跳过；D-4 dashscope 原生侧超上游一步做归一；D-5 loop 自动驱逐不迁移（Go 无事件循环）。详见 spec §1.3/§4.1/§5.1/§7。
+**执行顺序**：C-A1 → C-A2 → C-A3 → C-B1 → C-B2 → C-B3 → C-E1 → C-E2 → C-C1 → C-C2 → C-D1 → C-D2 → C-D3 → C-F → C-G → C-IT；每批单独提交、单独 CI 四 job 全绿。
+
 ---
 
 ## 领域二十五：Team / Swarm 调度与协作
