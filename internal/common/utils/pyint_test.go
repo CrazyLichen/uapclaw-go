@@ -17,6 +17,12 @@ func TestPyInt_对齐PythonInt(t *testing.T) {
 	}{
 		{name: "int", input: 7, want: 7},
 		{name: "int8", input: int8(7), want: 7},
+		{name: "int16", input: int16(7), want: 7},
+		{name: "int32", input: int32(7), want: 7},
+		{name: "uint", input: uint(7), want: 7},
+		{name: "uint8", input: uint8(7), want: 7},
+		{name: "uint16", input: uint16(7), want: 7},
+		{name: "uint64", input: uint64(7), want: 7},
 		{name: "int64", input: int64(7), want: 7},
 		{name: "uint32", input: uint32(7), want: 7},
 		{name: "float64整数", input: float64(7), want: 7},
@@ -57,6 +63,8 @@ func TestPyInt_拒绝非整数输入(t *testing.T) {
 		// 超界整数：Go 装不下，不退化成 float
 		{name: "超界json整数", input: json.Number("12345678901234567890")},
 		{name: "超界uint64", input: uint64(maxIntValue) + 1},
+		// 非法 JSON 数字字面量：Float64 也失败
+		{name: "非法json数字", input: json.Number("abc")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

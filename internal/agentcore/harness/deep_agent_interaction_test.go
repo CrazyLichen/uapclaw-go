@@ -860,3 +860,50 @@ func TestAttachOutput_补排失败向上抛(t *testing.T) {
 	require.ErrorIs(t, err, assert.AnError)
 	assert.Nil(t, out, "补排失败不得把半成品流交出去")
 }
+
+// TestCloseIdle_有待办保持流开 覆盖 keep=true 分支
+func TestCloseIdle_有待办保持流开(t *testing.T) {
+	d := startTestInteraction(t)
+	out := attachOutputForTest(t, d)
+	require.NotNil(t, out)
+	require.NoError(t, d.interactionEvents.PushUser(newInteractionWork()))
+
+	assert.True(t, d.closeIdleOutputIfFinished(context.Background()))
+}
+
+// TestCloseIdle_补排失败仍收尾 覆盖补排错误的告警分支
+func TestCloseIdle_补排失败仍收尾(t *testing.T) {
+	d := startTestInteraction(t)
+	out := attachOutputForTest(t, d)
+	require.NotNil(t, out)
+	d.setGoalCoordinatorForTest(&fakeGoalAccessor{active: true, ensureErr: assert.AnError})
+
+	assert.True(t, d.closeIdleOutputIfFinished(context.Background()))
+}
+
+// TestShouldKeep_补排失败返回错误 覆盖 shouldKeep 的错误分支
+func TestShouldKeep_补排失败返回错误(t *testing.T) {
+	d := startTestInteraction(t)
+	d.setGoalCoordinatorForTest(&fakeGoalAccessor{active: true, ensureErr: assert.AnError})
+
+	d.interactionControlMu.Lock()
+	keep, err := d.shouldKeepInteractionOpenLocked()
+	d.interactionControlMu.Unlock()
+
+	require.ErrorIs(t, err, assert.AnError)
+	assert.False(t, keep)
+}
+
+// TestSendInput_补排失败向上抛 覆盖 sendUser 的错误传播
+func TestSendInput_补排失败向上抛(t *testing.T) {
+	d := startInteractionForInput(t)
+	out := attachOutputForTest(t, d)
+	require.NotNil(t, out)
+	d.setGoalCoordinatorForTest(&fakeGoalAccessor{active: true, ensureErr: assert.AnError})
+
+	err := d.SendInput(context.Background(), hschema.SendInputRequest{
+		RequestID: "req-err",
+		Inputs:    map[string]any{"query": "hi"},
+	})
+	require.ErrorIs(t, err, assert.AnError)
+}

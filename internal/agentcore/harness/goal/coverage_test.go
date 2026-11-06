@@ -345,3 +345,204 @@ func TestGoalManager_Language并发读写(t *testing.T) {
 	assert.NotEmpty(t, harness.manager.Language())
 	assert.NotNil(t, record)
 }
+
+// failingCommitStore 提交必失败的 store，用于覆盖 commit 错误分支
+type failingCommitStore struct {
+	record *GoalRecord
+}
+
+// SessionID 返回会话标识
+func (s *failingCommitStore) SessionID() string { return "session-1" }
+
+// Load 返回记录
+func (s *failingCommitStore) Load() *GoalRecord { return s.record }
+
+// Save 覆盖记录
+func (s *failingCommitStore) Save(record *GoalRecord) { s.record = record }
+
+// Clear 清空记录
+func (s *failingCommitStore) Clear() { s.record = nil }
+
+// Commit 恒失败
+func (s *failingCommitStore) Commit(context.Context) error { return assert.AnError }
+
+// TestGoalManager_提交失败向上抛 覆盖各写方法的 commit 错误分支
+func TestGoalManager_提交失败向上抛(t *testing.T) {
+	store := &failingCommitStore{}
+	manager := NewGoalManager(GoalManagerConfig{
+		Store:           store,
+		EventManager:    task_loop.NewEventManager(),
+		ControlLock:     &sync.Mutex{},
+		HasOutputStream: func() bool { return true },
+	})
+
+	_, err := manager.Set(context.Background(), "write a report", SetOptions{})
+	require.ErrorIs(t, err, assert.AnError)
+
+	// 有了记录后逐个写方法都会在 commit 处失败
+	store.record = CreateGoalRecord("session-1", "write a report", nil, nil)
+	_, err = manager.Pause(context.Background())
+	require.ErrorIs(t, err, assert.AnError)
+
+	_, err = manager.Resume(context.Background())
+	require.ErrorIs(t, err, assert.AnError)
+
+	_, err = manager.BeginAttempt(context.Background(), store.record.GoalID, store.record.Revision)
+	require.ErrorIs(t, err, assert.AnError)
+
+	_, err = manager.ApplyAssessment(
+		context.Background(), store.record.GoalID, store.record.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusContinue, Evidence: "x"},
+	)
+	require.ErrorIs(t, err, assert.AnError)
+
+	_, err = manager.Clear(context.Background())
+	require.ErrorIs(t, err, assert.AnError)
+}
+
+// TestGoalRecord_TaskView_nil接收者 覆盖 nil 分支
+func TestGoalRecord_TaskView_nil接收者(t *testing.T) {
+	var record *GoalRecord
+	view := record.TaskView()
+	assert.Empty(t, view.Objective)
+	assert.Nil(t, view.Previous)
+}
+
+// TestGoalManager_无eventManager时补排不崩 覆盖 nil eventManager 分支
+func TestGoalManager_无eventManager时补排不崩(t *testing.T) {
+	harness := newManagerHarness(true)
+	record := CreateGoalRecord("session-1", "objective", nil, nil)
+	harness.store.Save(record)
+
+	manager := NewGoalManager(GoalManagerConfig{
+		Store:           harness.store,
+		ControlLock:     &sync.Mutex{},
+		HasOutputStream: func() bool { return true },
+	})
+	queued, err := manager.EnsureActiveGoalWorkLocked()
+	require.NoError(t, err)
+	assert.False(t, queued, "无 eventManager 时不得排队")
+}
+
+// TestGoalManager_Language_零值 覆盖 nil 指针分支
+func TestGoalManager_Language_零值(t *testing.T) {
+	assert.Equal(t, "", (&GoalManager{}).Language())
+}
+
+// TestGoalManager_脏时间戳的更多路径 覆盖 resume/accumulate/blocked 分支
+func TestGoalManager_脏时间戳的更多路径(t *testing.T) {
+	bad := "not-a-timestamp"
+
+	// Resume：PAUSED + 坏时钟
+	pausedBroken := CreateGoalRecord("session-1", "objective", nil, nil)
+	pausedBroken.Status = GoalStatusPaused
+	pausedBroken.ActiveStartedAt = &bad
+	pausedManager := NewGoalManager(GoalManagerConfig{
+		Store:       &corruptGoalStore{record: pausedBroken, sessionID: "session-1"},
+		ControlLock: &sync.Mutex{},
+	})
+	_, err := pausedManager.Resume(context.Background())
+	assert.Error(t, err, "resume 必须把结算错误抛给调用方")
+
+	// AccumulateUsage：ACTIVE + 坏时钟
+	activeBroken := CreateGoalRecord("session-1", "objective", nil, nil)
+	activeBroken.ActiveStartedAt = &bad
+	usageManager := NewGoalManager(GoalManagerConfig{
+		Store:       &corruptGoalStore{record: activeBroken, sessionID: "session-1"},
+		ControlLock: &sync.Mutex{},
+	})
+	err = usageManager.AccumulateUsage(activeBroken.GoalID, activeBroken.Revision, 1, 1, 0)
+	assert.Error(t, err, "accumulate_usage 必须把结算错误抛给调用方")
+
+	// ApplyAssessment：BLOCKED 分支
+	blockedBroken := CreateGoalRecord("session-1", "objective", nil, nil)
+	blockedBroken.ActiveStartedAt = &bad
+	blockedManager := NewGoalManager(GoalManagerConfig{
+		Store:       &corruptGoalStore{record: blockedBroken, sessionID: "session-1"},
+		ControlLock: &sync.Mutex{},
+	})
+	_, err = blockedManager.ApplyAssessment(
+		context.Background(), blockedBroken.GoalID, blockedBroken.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusBlocked, Evidence: "x"},
+	)
+	assert.Error(t, err)
+}
+
+// TestGoalManager_评估三分支正常结算 覆盖 BLOCKED 与 CONTINUE 的正常收尾
+func TestGoalManager_评估三分支正常结算(t *testing.T) {
+	// BLOCKED：正常时钟 → 走完状态赋值
+	blockedHarness := newManagerHarness(true)
+	blockedRecord, err := blockedHarness.manager.Set(context.Background(), "objective", SetOptions{})
+	require.NoError(t, err)
+	blocked, err := blockedHarness.manager.ApplyAssessment(
+		context.Background(), blockedRecord.GoalID, blockedRecord.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusBlocked, Evidence: "x"},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, blocked)
+	assert.Equal(t, GoalStatusBlocked, blocked.Status)
+	require.NotNil(t, blocked.LastStopReason)
+	assert.Equal(t, "blocked", *blocked.LastStopReason)
+
+	// CONTINUE + ACTIVE：keep_active 结算
+	activeHarness := newManagerHarness(true)
+	activeRecord, err := activeHarness.manager.Set(context.Background(), "objective", SetOptions{})
+	require.NoError(t, err)
+	continued, err := activeHarness.manager.ApplyAssessment(
+		context.Background(), activeRecord.GoalID, activeRecord.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusContinue, Evidence: "still going"},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, continued)
+	assert.Equal(t, GoalStatusActive, continued.Status)
+	assert.NotNil(t, continued.ActiveStartedAt, "CONTINUE 保持计时")
+}
+
+// TestGoalManager_CONTINUE结算失败 覆盖 ACTIVE/PAUSED 下的 settle 错误返回
+func TestGoalManager_CONTINUE结算失败(t *testing.T) {
+	bad := "not-a-timestamp"
+
+	activeBroken := CreateGoalRecord("session-1", "objective", nil, nil)
+	activeBroken.ActiveStartedAt = &bad
+	activeManager := NewGoalManager(GoalManagerConfig{
+		Store:       &corruptGoalStore{record: activeBroken, sessionID: "session-1"},
+		ControlLock: &sync.Mutex{},
+	})
+	_, err := activeManager.ApplyAssessment(
+		context.Background(), activeBroken.GoalID, activeBroken.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusContinue, Evidence: "x"},
+	)
+	assert.Error(t, err, "ACTIVE + CONTINUE 的结算失败必须上抛")
+
+	pausedBroken := CreateGoalRecord("session-1", "objective", nil, nil)
+	pausedBroken.Status = GoalStatusPaused
+	pausedBroken.ActiveStartedAt = &bad
+	pausedManager := NewGoalManager(GoalManagerConfig{
+		Store:       &corruptGoalStore{record: pausedBroken, sessionID: "session-1"},
+		ControlLock: &sync.Mutex{},
+	})
+	_, err = pausedManager.ApplyAssessment(
+		context.Background(), pausedBroken.GoalID, pausedBroken.Revision,
+		GoalAssessment{Status: GoalAssessmentStatusContinue, Evidence: "x"},
+	)
+	assert.Error(t, err, "PAUSED + CONTINUE 的结算失败必须上抛")
+}
+
+// TestGoalManager_无事件出口时不发事件 覆盖 emitEvent nil 分支
+func TestGoalManager_无事件出口时不发事件(t *testing.T) {
+	session := newFakeGoalSession("session-1")
+	store := NewSessionGoalStore(session)
+	manager := NewGoalManager(GoalManagerConfig{
+		Store:           store,
+		EventManager:    task_loop.NewEventManager(),
+		ControlLock:     &sync.Mutex{},
+		HasOutputStream: func() bool { return true },
+	})
+	record, err := manager.Set(context.Background(), "objective", SetOptions{})
+	require.NoError(t, err)
+	// EmitEvent 为 nil：Pause 不得 panic
+	paused, err := manager.Pause(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, paused)
+	assert.Equal(t, record.GoalID, paused.GoalID)
+}

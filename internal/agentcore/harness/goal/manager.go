@@ -517,16 +517,13 @@ func (m *GoalManager) hasOutputStream() bool {
 // commitStoreLocked 显式落盘（调用方持锁）。
 // Python: GoalManager._commit_store_locked (manager.py L364)
 func (m *GoalManager) commitStoreLocked(ctx context.Context) error {
-	if m.store == nil {
-		return nil
-	}
 	return m.store.Commit(ctx)
 }
 
 // emitGoalUpdatedLocked 发出 goal.updated 事件（调用方持锁）。
 // Python: GoalManager._emit_goal_updated_locked (manager.py L361)
 func (m *GoalManager) emitGoalUpdatedLocked(record *GoalRecord) {
-	if m.emitEvent == nil || record == nil {
+	if m.emitEvent == nil {
 		return
 	}
 	m.emitEvent(hschema.NewGoalUpdatedEvent(record.ToDict()))

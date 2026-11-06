@@ -46,9 +46,12 @@ func (s *interactionSupervisorSuite) TestLeaseForwardAndReconnect() {
 	ctx := context.Background()
 	d, sess := s.newPlainAgent()
 
-	first := d.AttachOutput(ctx)
+	first, attachErr := d.AttachOutput(ctx)
+	s.Require().NoError(attachErr)
 	s.Require().NotNil(first, "首个宿主应拿到租约")
-	s.Nil(d.AttachOutput(ctx), "第二个宿主不得拿到租约")
+	secondTry, secondErr := d.AttachOutput(ctx)
+	s.Require().NoError(secondErr)
+	s.Nil(secondTry, "第二个宿主不得拿到租约")
 	s.True(d.HasOutputStream())
 
 	// 会话流 → 转发器 → 租约队列
@@ -64,7 +67,8 @@ func (s *interactionSupervisorSuite) TestLeaseForwardAndReconnect() {
 	s.False(d.HasOutputStream())
 
 	// 重连后仍可收新帧
-	second := d.AttachOutput(ctx)
+	second, secondAttachErr := d.AttachOutput(ctx)
+	s.Require().NoError(secondAttachErr)
 	s.Require().NotNil(second)
 	s.Require().NoError(sess.StreamEmitter().Emit(ctx,
 		&stream.OutputSchema{Type: "after-reconnect"}))
@@ -79,7 +83,8 @@ func (s *interactionSupervisorSuite) TestDetachDiscardsPending() {
 	ctx := context.Background()
 	d, _ := s.newPlainAgent()
 
-	a := d.AttachOutput(ctx)
+	a, aErr := d.AttachOutput(ctx)
+	s.Require().NoError(aErr)
 	s.Require().NotNil(a)
 	s.Require().NoError(d.SendInput(ctx, hschema.SendInputRequest{
 		RequestID: "r1", Inputs: map[string]any{"query": "残留"},
@@ -89,7 +94,8 @@ func (s *interactionSupervisorSuite) TestDetachDiscardsPending() {
 	a.Close(ctx, true)
 	s.False(d.EventManager().HasPendingWork(), "断线必须丢弃待办")
 
-	b := d.AttachOutput(ctx)
+	b, bErr := d.AttachOutput(ctx)
+	s.Require().NoError(bErr)
 	s.Require().NotNil(b)
 	readCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
@@ -114,7 +120,8 @@ func (s *interactionSupervisorSuite) TestRoundEndToEnd() {
 	s.Require().NoError(agent.Start(ctx, sess), "Start 失败")
 	s.T().Cleanup(func() { _ = agent.Stop(context.Background()) })
 
-	out := agent.AttachOutput(ctx)
+	out, outErr := agent.AttachOutput(ctx)
+	s.Require().NoError(outErr)
 	s.Require().NotNil(out, "应拿到唯一输出租约")
 
 	s.Require().NoError(agent.SendInput(ctx, hschema.SendInputRequest{

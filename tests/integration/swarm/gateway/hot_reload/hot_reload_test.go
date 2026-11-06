@@ -152,10 +152,10 @@ func (s *HotReloadSuite) TestUISave_切换模型与token后新会话压缩链路
 	s.writeConfig("model-a", 800, 200, 800, 200)
 	d := s.newAdapter()
 
-	// 保存前：窗口 800 → 触发 680 / 目标 440，压缩走 model-a
-	trigger, target := thresholds(s.reactConfig(d).ContextProcessors)
-	s.Equal(680, trigger, "保存前触发阈值 = 800×0.85")
-	s.Equal(440, target, "保存前目标阈值 = 800×0.55")
+	// 保存前：窗口 800 → 触发 640（800×0.8），目标为固定预算 160000，压缩走 model-a
+	trigger, target := thresholds(s.reactConfig(d).ContextProcessors, 800)
+	s.Equal(640, trigger, "保存前触发阈值 = 800×0.8（比例化后运行时计算）")
+	s.Equal(160000, target, "目标预算固定 160000，不随窗口缩放")
 
 	s.runTurn(d, "sess_hr_compress", "req-hr-3", "你好")
 	s.Require().NotEmpty(s.log.modelsUsedCompression(),
@@ -174,9 +174,9 @@ func (s *HotReloadSuite) TestUISave_切换模型与token后新会话压缩链路
 	// 阈值在下一轮 ensureInitialized 重建 rail 时重算，因此断言放在轮次之后
 	s.runTurn(d, "sess_hr_compress_new", "req-hr-4", "再压缩一次")
 
-	trigger, target = thresholds(s.reactConfig(d).ContextProcessors)
-	s.Equal(510, trigger, "保存后触发阈值应重算为 600×0.85")
-	s.Equal(330, target, "保存后目标阈值应重算为 600×0.55")
+	trigger, target = thresholds(s.reactConfig(d).ContextProcessors, 600)
+	s.Equal(480, trigger, "保存后触发阈值应重算为 600×0.8")
+	s.Equal(160000, target, "目标预算仍为固定 160000")
 
 	s.Require().NotEmpty(s.log.modelsUsedCompression(),
 		"保存后压缩链路应至少调用一次模型")
@@ -206,9 +206,9 @@ func (s *HotReloadSuite) TestUISave_已存在会话的压缩处理器跟随() {
 	// 沿用同一 session：轮次入口按指纹重建处理器并刷新窗口原料
 	s.runTurn(d, "sess_hr_legacy", "req-hr-6", "再压缩一次")
 
-	trigger, target := thresholds(s.reactConfig(d).ContextProcessors)
-	s.Equal(510, trigger, "老会话触发阈值应重算为 600×0.85")
-	s.Equal(330, target, "老会话目标阈值应重算为 600×0.55")
+	trigger, target := thresholds(s.reactConfig(d).ContextProcessors, 600)
+	s.Equal(480, trigger, "老会话触发阈值应重算为 600×0.8")
+	s.Equal(160000, target, "老会话目标预算仍为固定 160000")
 	s.Equal([]string{"model-b"}, s.log.modelsUsedCompression(),
 		"老会话的压缩应改用 model-b，实际: %v", s.log.modelsUsedCompression())
 }
@@ -364,10 +364,13 @@ func modelEntry(originIndex int, modelName string, isDefault bool, maxInput, max
 }
 
 // thresholds 从处理器列表取 RoundLevelCompressor 的触发/目标阈值。
-func thresholds(specs []ceiface.ProcessorSpec) (int, int) {
+//
+// 137c7d4f 起触发阈值比例化：配置只留 TriggerContextRatio，
+// 生效阈值 = 窗口 × 比例（运行时计算）；目标仍是固定预算 TargetTotalTokens。
+func thresholds(specs []ceiface.ProcessorSpec, window int) (int, int) {
 	for _, spec := range specs {
 		if cfg, ok := spec.Config.(*compressor.RoundLevelCompressorConfig); ok {
-			return cfg.TriggerTotalTokens, cfg.TargetTotalTokens
+			return int(float64(window) * cfg.TriggerContextRatio), cfg.TargetTotalTokens
 		}
 	}
 	return 0, 0

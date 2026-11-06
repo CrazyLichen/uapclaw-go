@@ -97,8 +97,8 @@ func (s *ModelTokenConfigSuite) TestContextWindow_FromModelEntry() {
 	s.Equal(10, ce.DefaultWindowRoundNum)
 	// 设计 D4/D14
 	s.Equal(32000, ce.ModelContextWindowTokens["mock-model"])
-	s.InDelta(0.85, ce.CompressionTriggerRatio, 1e-9)
-	s.InDelta(0.55, ce.CompressionTargetRatio, 1e-9)
+	// 137c7d4f 起压缩阈值比例化：ContextEngineConfig 不再持有 trigger/target 比例，
+	// 比例落在各压缩器配置上（见 TestCompressionThresholds_ShrinkByWindow）。
 
 	// resolve_context_max 命中自定义映射（第 2 优先级），不是 200000 兜底
 	s.Equal(32000, cecontext.ResolveContextMax(
@@ -133,10 +133,10 @@ func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 	reactCfg, ok := reactAgent.Config().(*saconfig.ReActAgentConfig)
 	s.Require().True(ok, "应为 *ReActAgentConfig，实际 %T", reactAgent.Config())
 
-	trigger, target := compressionThresholds(reactCfg.ContextProcessors)
-	// 32K × 0.85 = 27200，0.85 比例值小于绝对阈值 230000 → 下调
-	s.Equal(27200, trigger, "RoundLevel 触发阈值应按窗口收口")
-	s.Equal(17600, target, "RoundLevel 目标阈值应按窗口收口")
+	trigger, target := compressionThresholds(reactCfg.ContextProcessors, 32000)
+	// 32K × 0.8 = 25600：比例化后生效阈值由"窗口 × TriggerContextRatio"在运行时算出
+	s.Equal(25600, trigger, "RoundLevel 触发阈值应按窗口收口")
+	s.Equal(160000, target, "RoundLevel 目标预算为固定值")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -177,10 +177,13 @@ react:
 }
 
 // compressionThresholds 从处理器列表取出 RoundLevelCompressor 的触发/目标阈值。
-func compressionThresholds(specs []ceiface.ProcessorSpec) (int, int) {
+//
+// 137c7d4f 起触发阈值比例化：配置只留 TriggerContextRatio，
+// 生效阈值 = 窗口 × 比例；目标仍是固定预算 TargetTotalTokens。
+func compressionThresholds(specs []ceiface.ProcessorSpec, window int) (int, int) {
 	for _, spec := range specs {
 		if cfg, ok := spec.Config.(*compressor.RoundLevelCompressorConfig); ok {
-			return cfg.TriggerTotalTokens, cfg.TargetTotalTokens
+			return int(float64(window) * cfg.TriggerContextRatio), cfg.TargetTotalTokens
 		}
 	}
 	return 0, 0
