@@ -72,8 +72,14 @@ type AgentCustomizer = atschema.AgentCustomizer
 // 必须通过此对象。替换 DeepAgent 只需重新实现此模块；
 // agent_teams 中的业务代码保持相同的调用面。
 type TeamHarness struct {
-	// deepAgent 内层 DeepAgent 实例
+	// deepAgent 内层 DeepAgent 实例（= native.DeepAgent()，同一对象）
 	deepAgent hinterfaces.DeepAgentInterface
+	// native NativeHarness（协议面载体；组合 deepAgent 的那台 DeepAgent）
+	//
+	// ⤴️ 25.1a：团队成员脑的统一交互面。deepAgent 保留为 MemberRuntime 面
+	// 方法（HasPendingInterrupt/FindRails/RegisterMemberTools 等）与既有
+	// 调用方（InnerAgent）的向后访问；协议面方法（Start/Stop/Send/...）转 native。
+	native *NativeHarness
 	// rails 已挂载的 Rails 句柄
 	rails *MountedRails
 	// role 团队角色（对齐 Python TeamRole，底层为 string）
@@ -137,6 +143,25 @@ func NewTeamHarness(
 	}
 }
 
+// newTeamHarnessWithNative 由 NativeHarness 构造（协议面已就位）。
+func newTeamHarnessWithNative(
+	native *NativeHarness,
+	deepAgent hinterfaces.DeepAgentInterface,
+	rails *MountedRails,
+	role string,
+	memberName string,
+	initialPlanMode bool,
+) *TeamHarness {
+	return &TeamHarness{
+		deepAgent:       deepAgent,
+		native:          native,
+		rails:           rails,
+		role:            role,
+		memberName:      memberName,
+		initialPlanMode: initialPlanMode,
+	}
+}
+
 // BuildTeamHarness 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
 // Python: TeamHarness.build(...)
 //
@@ -160,7 +185,7 @@ func BuildTeamHarness(
 	initialPlanMode bool,
 ) *TeamHarness {
 	// S-06: 对齐 Python deep_agent = agent_spec.build()——物化 DeepAgent
-	deepAgent := buildDeepAgentFromSpec(agentSpec)
+	agent := buildDeepAgentFromSpec(agentSpec)
 
 	// S-06: 对齐 Python build() 的 Rail 挂载顺序（L118-140）：
 	// deep_agent.add_rail(team_tool_rail) + 急切初始化（set_sys_operation/
@@ -168,37 +193,35 @@ func BuildTeamHarness(
 	// tool_approval、team_plan_mode 依次挂载。
 	// 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并急切初始化，
 	// 以便 LLM 看到的能力快照与测试观察到的一致（Init 幂等，延迟注册变为 no-op）。
-	if deepAgent != nil {
+	if agent != nil {
 		if teamToolRail != nil {
-			deepAgent.AddRail(teamToolRail)
+			agent.AddRail(teamToolRail)
 			// 急切初始化：rail 的延迟 init 在首次 invoke 时运行，
 			// 但在那之前获取的工具快照会遗漏团队工具
-			if dc := deepAgent.DeepConfig(); dc != nil {
+			if dc := agent.DeepConfig(); dc != nil {
 				teamToolRail.SetSysOperation(dc.SysOperation)
 				teamToolRail.SetWorkspace(dc.Workspace)
 			}
-			if baseAgent, ok := deepAgent.(agentinterfaces.BaseAgent); ok {
-				if err := teamToolRail.Init(context.Background(), baseAgent); err != nil {
-					logger.Warn(logComponent).Err(err).
-						Str("member_name", memberName).
-						Msg("BuildTeamHarness: TeamToolRail eager init failed")
-				}
+			if err := teamToolRail.Init(context.Background(), agent); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("member_name", memberName).
+					Msg("BuildTeamHarness: TeamToolRail eager init failed")
 			}
 		}
 		if teamPolicyRail != nil {
-			deepAgent.AddRail(teamPolicyRail)
+			agent.AddRail(teamPolicyRail)
 		}
 		if firstIterGate != nil {
-			deepAgent.AddRail(firstIterGate)
+			agent.AddRail(firstIterGate)
 		}
 		if teamWorkspaceRail != nil {
-			deepAgent.AddRail(teamWorkspaceRail)
+			agent.AddRail(teamWorkspaceRail)
 		}
 		if toolApprovalRail != nil {
-			deepAgent.AddRail(toolApprovalRail)
+			agent.AddRail(toolApprovalRail)
 		}
 		if teamPlanModeRail != nil {
-			deepAgent.AddRail(teamPlanModeRail)
+			agent.AddRail(teamPlanModeRail)
 		}
 	}
 
@@ -210,7 +233,12 @@ func BuildTeamHarness(
 		ToolApproval:  toolApprovalRail,
 		TeamPlanMode:  teamPlanModeRail,
 	}
-	return NewTeamHarness(deepAgent, rails, role, memberName, initialPlanMode)
+	if agent == nil {
+		return NewTeamHarness(nil, rails, role, memberName, initialPlanMode)
+	}
+	// ⤴️ 25.1a：把 DeepAgent 包成 NativeHarness，作为团队成员的协议面载体
+	native := NewNativeHarness(agent, agentSpec)
+	return newTeamHarnessWithNative(native, agent, rails, role, memberName, initialPlanMode)
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
@@ -707,7 +735,7 @@ func interruptionStateOf(val any) *agentschema.ToolInterruptionState {
 // subagents/sys_operation 等字段由 CreateDeepAgent 内部处理。
 // 构建失败时记日志并返回 nil（对齐 Python 异常向上传播由调用方兜底的容错语义，
 // 避免团队启动因单个成员物化失败而中断）。
-func buildDeepAgentFromSpec(spec atschema.DeepAgentSpec) hinterfaces.DeepAgentInterface {
+func buildDeepAgentFromSpec(spec atschema.DeepAgentSpec) *agentcore.DeepAgent {
 	// Python: llm_model = self.model.build() if self.model else None
 	var llmModel *llm.Model
 	if spec.Model != nil {
