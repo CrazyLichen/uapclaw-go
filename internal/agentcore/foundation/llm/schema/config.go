@@ -99,7 +99,6 @@ const (
 	ProviderTypeIntelliRouter
 )
 
-
 // defaultClientTimeoutSeconds 默认请求超时（秒）。
 //
 // Python: schema/config.py:145 timeout default=360.0, gt=0——注释明文约定
