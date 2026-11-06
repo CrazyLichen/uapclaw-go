@@ -145,3 +145,41 @@ func TestAggregateSessionCache(t *testing.T) {
 		t.Fatalf("数据完整度应为 partial，got %s", aggregated.DataQuality)
 	}
 }
+
+// TestRequestCacheFromUsage_新字段优先 CacheReadTokens 非空时直接采用，
+// 不再由 CacheTokens 旧算法推导；新字段缺失时回落旧算法。
+//
+// 对齐设计文档批次 C-B3（session_aggregator 切新字段）。
+func TestRequestCacheFromUsage_新字段优先(t *testing.T) {
+	read, miss := 60, 40
+	meta := &schema.UsageMetadata{InputTokens: 100, CacheTokens: 60,
+		CacheReadTokens: &read, CacheMissTokens: &miss, CacheStatus: "observed", CacheSource: "provider_usage"}
+	out := RequestCacheFromUsage(meta)
+	if out.CacheReadTokens == nil || *out.CacheReadTokens != 60 {
+		t.Fatalf("read: %+v", out)
+	}
+	// miss 用 provider 上报值 40（旧算法会算 input-read=40 恰好同值，改用区分值）
+	read2, miss2 := 60, 25
+	out2 := RequestCacheFromUsage(&schema.UsageMetadata{InputTokens: 100,
+		CacheReadTokens: &read2, CacheMissTokens: &miss2, CacheStatus: "observed", CacheSource: "provider_usage"})
+	if out2.CacheMissTokens == nil || *out2.CacheMissTokens != 25 {
+		t.Fatalf("miss 应取 provider 上报 25 而非推导 40: %+v", out2)
+	}
+	if out.Status != "reported" || out.Source != "provider_usage" {
+		t.Fatalf("status: %+v", out)
+	}
+
+	// 新字段有 read 无 miss：miss 由 input-read 推导
+	read3 := 30
+	out3 := RequestCacheFromUsage(&schema.UsageMetadata{InputTokens: 100,
+		CacheReadTokens: &read3, CacheStatus: "observed"})
+	if out3.CacheMissTokens == nil || *out3.CacheMissTokens != 70 {
+		t.Fatalf("推导 miss: %+v", out3)
+	}
+
+	// 旧字段回落：无新字段但 CacheTokens>0 时维持现有算法
+	legacy := RequestCacheFromUsage(&schema.UsageMetadata{InputTokens: 100, CacheTokens: 50})
+	if legacy.CacheReadTokens == nil || *legacy.CacheReadTokens != 50 || legacy.Status != "reported" {
+		t.Fatalf("legacy: %+v", legacy)
+	}
+}

@@ -153,20 +153,33 @@ func ParseResponse(
 	), nil
 }
 
+// UsageToMap 将强类型 ResponseUsage 转为 map 形态供抽取函数消费。
+//
+// 导出以供 SiliconFlow / InferenceAffinity 复用（它们持有同一 ResponseUsage 类型）。
+func UsageToMap(usage *ResponseUsage) map[string]any {
+	if usage == nil {
+		return nil
+	}
+	data, err := json.Marshal(usage)
+	if err != nil {
+		return nil
+	}
+	var usageMap map[string]any
+	if err := json.Unmarshal(data, &usageMap); err != nil {
+		return nil
+	}
+	return usageMap
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildUsageMetadata 从 OpenAI 响应的 Usage 构建 UsageMetadata。
+//
+// 统一委托 model_clients.BuildUsageMetadata（cache/reasoning 族字段一比一复刻
+// openai_model_client.py:2817-2829 / 2940-2946 组装点），cost 仍在客户端侧追加
+// （Python 同样在组装点单列 _extract_cost_info）。
 func buildUsageMetadata(usage *ResponseUsage, modelName string) *llmschema.UsageMetadata {
-	meta := llmschema.NewUsageMetadata()
-	meta.ModelName = modelName
-	meta.InputTokens = usage.PromptTokens
-	meta.OutputTokens = usage.CompletionTokens
-	meta.TotalTokens = usage.TotalTokens
-
-	// 提取 cache_tokens
-	if usage.PromptTokensDetails != nil {
-		meta.CacheTokens = usage.PromptTokensDetails.CachedTokens
-	}
+	meta := model_clients.BuildUsageMetadata(UsageToMap(usage), modelName)
 
 	// 提取费用信息
 	inputCost, outputCost, totalCost := extractCostFromUsage(usage)

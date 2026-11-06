@@ -563,18 +563,13 @@ func (c *InferenceAffinityModelClient) parseStreamChunk(
 
 // buildInferenceAffinityUsageMetadata 构建 InferenceAffinity 的 usage 元数据。
 //
-// Python: InferenceAffinityModelClient: 仅包含 token 数，不包含费用信息，
-// 不包含 cache_tokens（对齐 Python InferenceAffinity._parse_stream_chunk 中的 usage 构建）。
+// 统一委托 model_clients.BuildUsageMetadata（对齐 openai_model_client.py:2940-2946
+// 组装点字段集；cost 与 Python InferenceAffinity 一致不在此提取）。
 func buildInferenceAffinityUsageMetadata(
 	usage *openai.ResponseUsage,
 	modelName string,
 ) *llmschema.UsageMetadata {
-	meta := llmschema.NewUsageMetadata()
-	meta.ModelName = modelName
-	meta.InputTokens = usage.PromptTokens
-	meta.OutputTokens = usage.CompletionTokens
-	meta.TotalTokens = usage.TotalTokens
-	return meta
+	return model_clients.BuildUsageMetadata(openai.UsageToMap(usage), modelName)
 }
 
 // sanitizeMessages 对消息做预处理：先调用基类转换，再清洗 tool_calls。

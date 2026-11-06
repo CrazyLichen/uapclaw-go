@@ -14,8 +14,9 @@ import "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 
 // RequestCacheFromUsage 把 provider 上报的用量转成请求级 KV cache 用量。
 //
-// Go 的 UsageMetadata 只有 CacheTokens（= 缓存读 token），缓存写字段缺失属 C 组缺陷，
-// 这里按未上报处理，不臆造数据。miss = 输入 − 命中，负数钳制为 0。
+// provider 归一字段（CacheReadTokens/CacheMissTokens，C-B3 批次接线）优先直接采用；
+// 归一字段缺失（如只带 legacy CacheTokens 的旧 provider）时回落旧算法：
+// miss = 输入 − 命中，负数钳制为 0。
 //
 // Python: provider_usage.request_kv_cache_usage()
 func RequestCacheFromUsage(meta *schema.UsageMetadata) RequestKVCacheUsage {
@@ -28,6 +29,25 @@ func RequestCacheFromUsage(meta *schema.UsageMetadata) RequestKVCacheUsage {
 		out.InputTokens = input
 		out.Source = "provider_usage"
 		out.Status = "reported"
+	}
+	// 归一字段优先：provider 明确区分读/miss 时直接采用
+	if meta.CacheReadTokens != nil {
+		read := *meta.CacheReadTokens
+		out.CacheReadTokens = &read
+		if meta.CacheMissTokens != nil {
+			miss := *meta.CacheMissTokens
+			out.CacheMissTokens = &miss
+		} else if out.InputTokens != nil && *out.InputTokens > read {
+			miss := *out.InputTokens - read
+			out.CacheMissTokens = &miss
+		}
+		if out.Status == notReported {
+			out.Status = "reported"
+		}
+		if meta.CacheSource != "" {
+			out.Source = meta.CacheSource
+		}
+		return out
 	}
 	if meta.CacheTokens > 0 {
 		read := meta.CacheTokens

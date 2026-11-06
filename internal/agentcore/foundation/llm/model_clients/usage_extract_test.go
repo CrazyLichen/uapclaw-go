@@ -64,8 +64,8 @@ func TestExtractCacheTokens_全路径矩阵(t *testing.T) {
 // Python: base_model_client.py:152-252 _cache_usage_metadata
 func TestCacheUsageMetadata_归一(t *testing.T) {
 	m := CacheUsageMetadata(map[string]any{
-		"prompt_tokens_details":    map[string]any{"cached_tokens": 30},
-		"prompt_cache_miss_tokens": 10,
+		"prompt_tokens_details":       map[string]any{"cached_tokens": 30},
+		"prompt_cache_miss_tokens":    10,
 		"cache_creation_input_tokens": 4,
 	})
 	if m["cache_read_tokens"] == nil || m["cache_read_tokens"].(*int) == nil || *m["cache_read_tokens"].(*int) != 30 {
@@ -152,5 +152,42 @@ func TestExtractReasoningTokens_矩阵(t *testing.T) {
 	// 非法值 → 0
 	if got := ExtractReasoningTokens(map[string]any{"reasoning_tokens": "abc"}); got != 0 {
 		t.Errorf("invalid: %d", got)
+	}
+}
+
+// TestBuildUsageMetadata_同构契约 三客户端共用一个构建函数：同输入同输出。
+//
+// Python: openai/siliconflow(=openai profile)/inference_affinity 三处组装点字段集一致
+func TestBuildUsageMetadata_同构契约(t *testing.T) {
+	usage := map[string]any{
+		"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300,
+		"prompt_tokens_details":     map[string]any{"cached_tokens": 60},
+		"completion_tokens_details": map[string]any{"reasoning_tokens": 150},
+	}
+	meta := BuildUsageMetadata(usage, "m1")
+	if meta.InputTokens != 100 || meta.OutputTokens != 200 || meta.TotalTokens != 300 {
+		t.Errorf("basic: %+v", meta)
+	}
+	if meta.CacheTokens != 60 || meta.CacheReadTokens == nil || *meta.CacheReadTokens != 60 {
+		t.Errorf("cache: %+v", meta)
+	}
+	if meta.ReasoningTokens == nil || *meta.ReasoningTokens != 150 {
+		t.Errorf("reasoning: %+v", meta)
+	}
+	if meta.CacheStatus != "observed" || !meta.CacheAuthoritative {
+		t.Errorf("status: %+v", meta)
+	}
+}
+
+// TestBuildUsageMetadata_未暴露不臆造 reasoning_tokens/cache_creation 未暴露时保持 nil。
+//
+// Python: None 字段不进 UsageMetadata（_extract_* 返回 None）
+func TestBuildUsageMetadata_未暴露不臆造(t *testing.T) {
+	meta := BuildUsageMetadata(map[string]any{"prompt_tokens": 5}, "m")
+	if meta.ReasoningTokens != nil || meta.CacheCreationTokens != nil {
+		t.Errorf("未暴露应 nil: %+v", meta)
+	}
+	if meta.CacheReadTokens != nil || meta.CacheStatus != "" {
+		t.Errorf("无缓存信号应零值: %+v", meta)
 	}
 }
