@@ -26,6 +26,8 @@ import (
 
 // fakeDeepAgentProvider 用于测试的模拟深层 Agent 提供者
 type fakeDeepAgentProvider struct {
+	// interfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	interfaces.UnimplementedDeepAgentInteraction
 	// reactAgent 预设的 ReActAgent
 	reactAgent *agents.ReActAgent
 	// coordinator 预设的循环协调器

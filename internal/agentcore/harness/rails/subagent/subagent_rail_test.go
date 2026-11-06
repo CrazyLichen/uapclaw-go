@@ -79,6 +79,8 @@ func (f *fakeBaseAgentForTest) UnregisterRail(_ context.Context, _ agentinterfac
 
 // fakeDeepAgentForTest 实现 hinterfaces.DeepAgentInterface 的 mock
 type fakeDeepAgentForTest struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	fakeBaseAgentForTest
 	deepConfig *hschema.DeepAgentConfig
 	// am AbilityManager 返回值（M-06 extractAgentTools 测试注入用；nil 与内嵌默认行为一致）

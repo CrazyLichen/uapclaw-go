@@ -540,6 +540,8 @@ func waitForTaskStatus(toolkit *hsubagent.SessionToolkit, taskID, wantStatus str
 // SessionSpawnExecutor 的后台 goroutine ctx 被取消，子代理 Invoke 应返回
 // ctx.Err()（对齐 Python asyncio.sleep 被 cancel 打断的语义）。
 type fakeSubAgent struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	// delay 模拟执行延迟（0 表示立即完成）
 	delay time.Duration
 	// output 完成时的输出

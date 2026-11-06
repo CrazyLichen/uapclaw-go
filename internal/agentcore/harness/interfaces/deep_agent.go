@@ -102,14 +102,7 @@ type DeepAgentInterface interface {
 	// 在 TaskLoop 模式下，executor 调用此函数优先于 reactAgent.Invoke。
 	// Python: 测试中通过 agent.set_react_agent(fake_react) 替换内层 Agent。
 	InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
-}
-
-// InteractionSupervisorInterface 会话级交互监督器能力（9.87）。
-//
-// 刻意独立于 DeepAgentInterface：交互方法只有服务面（10.3.27）使用，
-// 单独成接口可避免所有既有 DeepAgentInterface 测试替身被迫补 10 个方法。
-// Python: DeepAgent 的交互方法集（deep_agent.py L3728-4567）
-type InteractionSupervisorInterface interface {
+	// ── 交互监督器（9.87）──
 	// Start 绑定会话并启动会话级交互循环
 	// Python: DeepAgent.start
 	Start(ctx context.Context, sess *session.Session) error
@@ -141,6 +134,51 @@ type InteractionSupervisorInterface interface {
 	// Python: DeepAgent.goal_manager 赋值
 	SetGoalCoordinator(coordinator hschema.GoalCoordinator)
 }
+
+// UnimplementedDeepAgentInteraction DeepAgentInterface 交互方法的空实现，供测试替身嵌入。
+//
+// 生产实现（*DeepAgent）必须自己实现这 10 个方法；测试替身若与交互无关，
+// 嵌入本结构即可满足接口，不必逐个空写。gRPC 的 UnimplementedXxxServer 同款用法。
+// Python: 无对应物（Python 用 unittest.mock 的动态属性）
+type UnimplementedDeepAgentInteraction struct{}
+
+// Start 空实现，返回未启动
+func (UnimplementedDeepAgentInteraction) Start(context.Context, *session.Session) error { return nil }
+
+// Stop 空实现
+func (UnimplementedDeepAgentInteraction) Stop(context.Context) error { return nil }
+
+// Phase 空实现，恒返回 idle
+func (UnimplementedDeepAgentInteraction) Phase() hschema.InteractionPhase {
+	return hschema.InteractionPhaseIdle
+}
+
+// InteractionStarted 空实现，恒返回 false
+func (UnimplementedDeepAgentInteraction) InteractionStarted() bool { return false }
+
+// HasOutputStream 空实现，恒返回 false
+func (UnimplementedDeepAgentInteraction) HasOutputStream() bool { return false }
+
+// AttachOutput 空实现，恒返回 nil
+func (UnimplementedDeepAgentInteraction) AttachOutput(context.Context) *hschema.InteractionOutputStream {
+	return nil
+}
+
+// DetachOutput 空实现
+func (UnimplementedDeepAgentInteraction) DetachOutput(context.Context, string, bool) {}
+
+// SendInput 空实现
+func (UnimplementedDeepAgentInteraction) SendInput(context.Context, hschema.SendInputRequest) error {
+	return nil
+}
+
+// CancelRound 空实现，恒返回未取消
+func (UnimplementedDeepAgentInteraction) CancelRound(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+// SetGoalCoordinator 空实现
+func (UnimplementedDeepAgentInteraction) SetGoalCoordinator(hschema.GoalCoordinator) {}
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。
 // 仅包含 DeepAgentInterface 消费者实际调用的方法。

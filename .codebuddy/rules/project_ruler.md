@@ -249,3 +249,31 @@ cmd 包的文件组织方式：
 3. 不得在代码注释里"自行宣布"偏差了事（注释只记录，不替代确认）
 
 **原因：** 结构漂移是行为漂移的前兆。历史上多次出现"行为看起来一样"但步骤归属已变的对齐：plan 状态机同时留在 adapter 与 runtime、mode 解析三份并存、`_mode_change_cancel_and_notice` 与 `/switch` 分支被合进同一函数后语义各自漂移。结构一旦不可逐行对照，后续上游每次变更都无法判断"该改哪一处"，对齐成本从"看 diff"退化为"重读两份源码"。
+
+## 规则 10：agent 能力一律进 `DeepAgentInterface`，不得为测试替身拆接口
+
+`internal/agentcore/harness/interfaces.DeepAgentInterface` 是 DeepAgent 能力的**唯一接口面**。DeepAgent 新增或变更的任何能力（方法、访问器、注入点），都必须直接加进这个接口。
+
+### 10.1 强制要求
+
+1. **不拆接口**：不得因为"某个能力只有少数调用方用"、"加进主接口会让测试替身多写 N 个方法"而另立接口。
+2. **测试替身自己补齐**：既有 fake 因接口扩张而编译失败时，改 fake，不改接口。与交互无关的 fake 直接嵌入 `interfaces.UnimplementedDeepAgentInteraction`（gRPC `UnimplementedXxxServer` 同款），不要逐个空写、也不要另建基类。
+3. **接口扩张必须同改动内改完所有实现者**：`grep 'DeepAgentInterface = ('` 全仓命中即为清单，改完再提交；不得靠构建标签、`_ = x` 或跳过某个包糊过去。
+4. **生产实现不得依赖空实现**：`UnimplementedDeepAgentInteraction` 只允许出现在 `_test.go`；`*DeepAgent` 必须自己实现全部方法（`var _ DeepAgentInterface = (*DeepAgent)(nil)` 编译期兜住）。
+
+### 10.2 唯一允许单独定义接口的场景
+
+**依赖倒置方向相反**：DeepAgent 作为**使用方**去依赖别人时，才能定义窄接口，且该接口描述的是"协作方能力"而不是"DeepAgent 自己的能力"。既有正例：
+
+- `hinterfaces.GoalCoordinator`——DeepAgent 依赖 Goal 域（9.88/9.89 注入 `*goal.GoalManager`）
+- `LoopCoordinatorInterface` / `interactionQueuesProvider`——DeepAgent 依赖 task_loop 的协作面
+
+判定口径一句话：**"这个接口是别人用来调用 DeepAgent 的吗？"是 → 进 `DeepAgentInterface`；"这个接口是 DeepAgent 用来调用别人的吗？"是 → 可以窄接口。**
+
+### 10.3 禁止的做法
+
+- ❌ 用"接口隔离原则（ISP）"为由拆出 `XxxSupervisorInterface` / `XxxInteractionInterface` 这类 DeepAgent 自身能力的子接口
+- ❌ 把新能力挂在一个只被单个包使用的"私房接口"上，靠类型断言从 `DeepAgentInterface` 转过去
+- ❌ 为避免改测试替身，把方法定义成包级函数 + `getattr` 式反射调用
+
+**原因：** 2026-11-06 的 9.87 实施中，交互监督器的 10 个方法因为"会让 10 个既有 fake 编译失败"被拆成了独立的 `InteractionSupervisorInterface`。后果是：①DeepAgent 的能力面被切成两半，`*DeepAgent` 满足两个接口、调用方要先判断"我拿到的是哪个接口"；②服务面（10.3.27）将来要么同时依赖两个接口，要么在两者间做类型断言；③拆分省下的只是 10 个 fake 各 1 行（嵌入空实现即可解决），换来的却是能力面永久分裂。接口的边界应由**语义归属**决定，不能由**测试改造成本**决定。

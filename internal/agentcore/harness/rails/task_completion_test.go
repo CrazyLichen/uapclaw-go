@@ -567,6 +567,8 @@ func TestNotifyEvaluator_完整链路(t *testing.T) {
 
 // fakeDeepAgentForNotify 实现 DeepAgentInterface 的测试 mock
 type fakeDeepAgentForNotify struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	fakeBaseAgent
 	coord *task_loop.LoopCoordinator
 }

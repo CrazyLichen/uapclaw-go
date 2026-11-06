@@ -26,6 +26,8 @@ import (
 
 // fakeDeepAgentForHeartbeat 实现 DeepAgentInterface 的 mock
 type fakeDeepAgentForHeartbeat struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	fakeBaseAgent
 	deepConfig *hschema.DeepAgentConfig
 }

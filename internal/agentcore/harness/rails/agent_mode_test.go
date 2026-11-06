@@ -27,6 +27,8 @@ import (
 
 // fakeDeepAgentForAgentMode 实现 DeepAgentInterface 的 mock（供 AgentModeRail 测试）
 type fakeDeepAgentForAgentMode struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	fakeBaseAgent
 	// deepState LoadState 返回值
 	deepState *hschema.DeepAgentState

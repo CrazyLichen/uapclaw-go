@@ -205,6 +205,8 @@ func (f *fakeAbilityMgrForCustomizer) has(name string) bool {
 // fakeDeepAgentForCustomizer customizer 测试用 DeepAgentInterface fake。
 // 记录 AddRail 的 rail 列表 + 可配置 DeepConfig.Workspace / Card / AdapterMode。
 type fakeDeepAgentForCustomizer struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	abilityMgr      *fakeAbilityMgrForCustomizer
 	rails           []agentinterfaces.AgentRail
 	deepConfig      *hschema.DeepAgentConfig

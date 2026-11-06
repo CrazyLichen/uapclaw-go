@@ -32,6 +32,8 @@ import (
 
 // fakeBaseAgentTeam 测试用 BaseAgent mock
 type fakeBaseAgentTeam struct {
+	// harnessinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	harnessinterfaces.UnimplementedDeepAgentInteraction
 	cbMgr   *agentinterfaces.AgentCallbackManager
 	builder *saprompt.SystemPromptBuilder
 	am      agentinterfaces.AbilityManagerInterface

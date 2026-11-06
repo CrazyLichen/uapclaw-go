@@ -362,8 +362,10 @@ internal/agentcore/harness/prompts/tools/skill_tool.go#L15-L24
 internal/swarm/server/adapter/code_adapter.go#L954
 
 # ── 9.87 交互监督器（2026-11-06）──
-# interfaces/deep_agent.go — InteractionSupervisorInterface 是**纯接口声明**（L112-143），
+# interfaces/deep_agent.go — DeepAgentInterface 的交互方法（10 个）是**纯接口声明**，
 # 接口方法签名没有可执行语句，go tool cover 不会为它们插桩，改动行恒为 0%。
+# 同文件的 UnimplementedDeepAgentInteraction 是仅供测试替身嵌入的空实现，
+# 其方法只有 fake 调用，单测覆盖不可控（覆盖它是替身的职责，不是接口文件的职责）。
 # 该接口的实现侧（*DeepAgent）由 internal/agentcore/harness/deep_agent_interaction_test.go
 # 的 30+ 用例覆盖，此处豁免仅为消除「声明行不可插桩」造成的假红。
 internal/agentcore/harness/interfaces/deep_agent.go

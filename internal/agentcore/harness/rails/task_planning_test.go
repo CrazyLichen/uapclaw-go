@@ -74,6 +74,8 @@ var _ deepStateLoader = (*fakeModelSwitcherAgent)(nil)
 
 // fakeDeepAgentForTaskPlanning 实现 DeepAgentInterface 的 mock（供 Init 测试）
 type fakeDeepAgentForTaskPlanning struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	fakeBaseAgent
 	deepConfig *hschema.DeepAgentConfig
 }
@@ -1594,6 +1596,8 @@ func (f *fakeAbilityManager) ReorderTools(_ []string)                      {}
 
 // fakeDeepAgentWithAm 有 AbilityManager 的 fakeBaseAgent
 type fakeDeepAgentWithAm struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	fakeBaseAgent
 	am *fakeAbilityManager
 }

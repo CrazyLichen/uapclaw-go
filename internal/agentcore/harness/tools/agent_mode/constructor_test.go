@@ -19,7 +19,10 @@ import (
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
 // fakeDeepAgentForConstructor 测试用 DeepAgentInterface 空实现，仅用于构造函数测试
-type fakeDeepAgentForConstructor struct{}
+type fakeDeepAgentForConstructor struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
+}
 
 func (f *fakeDeepAgentForConstructor) ReactAgent() *agents.ReActAgent {
 	return nil

@@ -31,6 +31,8 @@ import (
 
 // fakeDeepAgentProvider 测试用 DeepAgentInterface mock
 type fakeDeepAgentProvider struct {
+	// interfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	interfaces.UnimplementedDeepAgentInteraction
 	// reactAgent 预设的 ReActAgent
 	reactAgent *agents.ReActAgent
 	// loopController 预设的 LoopController

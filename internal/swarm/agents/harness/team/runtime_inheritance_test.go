@@ -328,6 +328,8 @@ func (f *fakeAbilityMgrForFilter) ReorderTools(orderedNames []string)           
 
 // fakeDeepAgentForInheritance 最小 DeepAgentInterface（仅 AbilityManager 路径真实，其余空桩）。
 type fakeDeepAgentForInheritance struct {
+	// hinterfaces.UnimplementedDeepAgentInteraction 交互方法空实现（9.87）
+	hinterfaces.UnimplementedDeepAgentInteraction
 	abilityMgr *fakeAbilityMgrForFilter
 }
 

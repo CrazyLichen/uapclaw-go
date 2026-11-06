@@ -120,8 +120,8 @@ func startInteractionForInput(t *testing.T) *DeepAgent {
 	return d
 }
 
-// 编译期断言：*DeepAgent 满足交互监督器接口
-var _ hinterfaces.InteractionSupervisorInterface = (*DeepAgent)(nil)
+// 编译期断言：*DeepAgent 实现交互方法（接口已并入 DeepAgentInterface）
+var _ hinterfaces.DeepAgentInterface = (*DeepAgent)(nil)
 
 // ──────────────────────────── 相位机与状态工厂 ────────────────────────────
 
