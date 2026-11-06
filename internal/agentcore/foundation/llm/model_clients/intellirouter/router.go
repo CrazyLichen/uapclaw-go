@@ -540,6 +540,17 @@ func (r *ReliableRouter) StopHealthChecker() {
 	}
 }
 
+// Close 关闭 router 持有的后台资源（health checker goroutine）。
+//
+// 幂等；锁外 best-effort（对齐上游 `await entry.router.close()` 在锁外执行的语义）。
+// 连接池是进程级共享 Transport，不属于单个 router——关闭它会波及在途的其他客户端，
+// 故此处只回收本 router 独占的 goroutine。设计文档偏差 D-5 记录该差异。
+//
+// Python: intelli_router_model_client.py:691 await entry.router.close()
+func (r *ReliableRouter) Close() {
+	r.StopHealthChecker()
+}
+
 // GetOrCreateRouter 获取或创建全局缓存的可靠路由器（按 APIKey 索引）。
 func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	key := makeRouterKey(config)
@@ -564,6 +575,25 @@ func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	router := NewReliableRouter(config)
 	routerCache[key] = router
 	return router
+}
+
+// ResetRouterCache 显式驱逐并关闭缓存中的 router（配置换绑时调用）。
+//
+// 锁外 best-effort Close + 失败仅告警（对齐上游 L687-698 的驱逐段）。
+// 上游按「事件循环变化」自动驱逐（_ensure_router_for_current_loop）；Go 无事件循环，
+// net 池为进程级共享、goroutine 退出≠资源退役，该机制防护的失败模式不存在，
+// 故改为显式触发——见设计文档偏差 D-5。
+func ResetRouterCache(key string) {
+	routerCacheLock.Lock()
+	old, exists := routerCache[key]
+	if exists {
+		delete(routerCache, key)
+	}
+	routerCacheLock.Unlock()
+	if !exists {
+		return
+	}
+	old.Close()
 }
 
 func (s *SimpleShuffleStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {

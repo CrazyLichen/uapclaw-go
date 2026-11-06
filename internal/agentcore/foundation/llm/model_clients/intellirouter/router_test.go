@@ -936,3 +936,59 @@ func TestReliableRouter_WithoutHealthCheck(t *testing.T) {
 		t.Error("EnableHealthCheck=false 时不应创建 HealthChecker")
 	}
 }
+
+// ──────────────────────────── Close / 显式驱逐（C-G）────────────────────────────
+
+// TestResetRouterCache_停旧健康检查 显式驱逐后旧 health checker 停止、条目删除。
+//
+// Python: intelli_router_model_client.py:675-700 _ensure_router_for_current_loop 的驱逐段
+//
+//	del _router_cache[key] → _stop_web_server → await entry.router.close()
+func TestResetRouterCache_停旧健康检查(t *testing.T) {
+	routerCache = make(map[string]*ReliableRouter)
+	cfg := &IntelliRouterClientConfig{
+		Strategy: "round-robin", NumRetries: 1,
+		EnableHealthCheck: true, HealthCheckInterval: 0.05,
+		Deployments: []DeploymentConfig{{ID: "d1", ModelName: "m", APIBase: "http://127.0.0.1:1"}},
+	}
+	r := GetOrCreateRouter(cfg)
+	if r == nil {
+		t.Fatal("router 不应为 nil")
+	}
+	key := makeRouterKey(cfg)
+	if routerCache[key] == nil {
+		t.Fatal("应已入缓存")
+	}
+
+	ResetRouterCache(key)
+
+	if _, exists := routerCache[key]; exists {
+		t.Error("驱逐后条目应删除")
+	}
+	if r.healthChecker != nil && r.healthChecker.running.Load() {
+		t.Error("驱逐后 health checker 应停止")
+	}
+	// 再次获取应生成新实例（不是被驱逐的那个）
+	r2 := GetOrCreateRouter(cfg)
+	if r2 == r {
+		t.Error("驱逐后应重建新 router 实例")
+	}
+}
+
+// TestResetRouterCache_不存在键noOp 对不存在键调用不应 panic。
+func TestResetRouterCache_不存在键noOp(t *testing.T) {
+	routerCache = make(map[string]*ReliableRouter)
+	ResetRouterCache("no-such-key") // 不应 panic
+}
+
+// TestReliableRouter_Close 不 panic 且可重复调用。
+func TestReliableRouter_Close(t *testing.T) {
+	routerCache = make(map[string]*ReliableRouter)
+	cfg := &IntelliRouterClientConfig{
+		Strategy: "round-robin", NumRetries: 1,
+		Deployments: []DeploymentConfig{{ID: "d1", ModelName: "m", APIBase: "http://127.0.0.1:1"}},
+	}
+	r := GetOrCreateRouter(cfg)
+	r.Close()
+	r.Close() // 幂等
+}
