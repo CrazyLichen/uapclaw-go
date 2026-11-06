@@ -309,7 +309,11 @@ func (h *NativeHarness) RunOnce(ctx context.Context, content any, sess *session.
 		defer func() { _ = sess.PostRun(ctx) }()
 	}
 
-	return h.agent.Invoke(ctx, map[string]any{"query": content})
+	// 必须传 WithSession：DeepAgent.Invoke 走任务循环（EnableTaskLoop=true）时
+	// 需要 *session.Session 会话；不传则 sess=nil，runTaskLoopInvoke 报
+	// "任务循环模式需要 *session.Session 类型会话"。
+	return h.agent.Invoke(ctx, map[string]any{"query": content},
+		agentinterfaces.WithSession(sess))
 }
 
 // Dispose 永久收尾：停机。

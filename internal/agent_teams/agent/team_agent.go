@@ -1644,13 +1644,16 @@ func (a *TeamAgent) MarkLiveTeammates(ctx context.Context, status string) error 
 	return nil
 }
 
-// CloseStream 关闭流。
+// CloseStream 关闭流（向 streamQueue 写 nil sentinel 结束读取循环）。
 // 满足 types.LifecycleAccessor 接口。
-// 对齐 Python: close_stream()
+// 对齐 Python: _close_stream → coordination.close_stream → stream_controller.close_stream
+// （put_nowait(None)，非阻塞写 nil sentinel）。
+//
+// 注意：不得 close(channel)——forwardOutputs 可能仍在该 channel 上 send，
+// close 与 send 并发会 panic/race；正确语义是写 nil sentinel 让读取方退出。
 func (a *TeamAgent) CloseStream() {
-	if a.streamController != nil && a.streamController.streamQueue != nil {
-		close(a.streamController.streamQueue)
-		a.streamController.streamQueue = nil
+	if a.streamController != nil {
+		a.streamController.CloseStream()
 	}
 }
 

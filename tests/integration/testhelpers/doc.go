@@ -18,6 +18,7 @@
 //	├── plan_env.go               # PlanEnv 计划模式环境（AgentServer 入口驱动 + 计划模式/计划文件读取）
 //	├── server_env.go             # ServerEnv 进程内 AgentServer 环境（按 E2A 信封投递 + 出站帧收集）
 //	├── web_rpc.go                # CallWebRPC 经真实 WebSocket 链路调用 web RPC 方法
+//	├── mock_member.go            # BuildMockMember 构造已装配 MockLLM 的真 TeamAgent（团队端到端）
 //	├── pty_linux.go              # Linux PTY 终端模拟（覆盖 isatty 交互分支）
 //	└── pty_stub.go               # 非 Linux 同签名占位（OpenPTY 返回 ErrPTYUnsupported）
 package testhelpers
