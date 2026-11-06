@@ -1171,7 +1171,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | 批次 | 状态 | 覆盖缺陷 | 内容摘要 |
 |------|------|---------|---------|
-| C1 | ☐ | B-03、B-04 | 新增 `saveContextsDetached`（`context.WithoutCancel`，等价 `asyncio.shield`）供 `handleContextAbort` 与 `finally` 共用；取消后清洗结果仍能写库，不再被取消态 ctx 吞掉 |
+| C1 | ✅ | B-03、B-04 | 新增 `saveContextsDetached`（`context.WithoutCancel`，等价 `asyncio.shield`）供 `handleContextAbort` 与 `finally` 共用；取消后清洗结果仍能写库，不再被取消态 ctx 吞掉 |
 | C2 | ☐ | B-02、B-14 | 删 `max_input_tokens`/`max_output_tokens`、`compression_trigger_ratio`/`compression_target_ratio`、`applyCompressionRatios`/`shrinkThreshold`；新增 `ModelRequestConfig.context_window`（厂商请求侧排除）+ `ModelContextWindowTokensOverride` + OpenRouter 窗口表（默认关、1h TTL）+ `UpdateModelContext` 热切换；内置窗口表按上游重写；dialogue/current_round/round_level 改 `trigger_context_ratio` + `min_target_context_ratio`（full_compact 保持绝对值）；新增 `processor/budget_guard.go` 并接入 round-level 三处预算与卸载占位预览截断 |
 | C3 | ☐ | B-12、B-05 | 6 处 token 降级 `/4`→`/3`；新增 `content_sanitize.go` + 图像按尺寸计费（PNG/GIF/JPEG/WebP 头嗅探 + 显式尺寸 + `detail=low` + env 覆盖 + 1445 兜底）；`ContentPart` 增 `Width/Height/Dimensions`；`read_file` 工具级预算改用尺寸公式并标注缩放后真实尺寸 |
 | C4 | ☐ | B-07、B-09 | 引擎层 `IsContextOverflowError`（9 短语 + 异常字段/因果链扫描）+ `RecoverFromModelContextOverflow`（压缩一次、流式无输出才允许）；ReAct / DeepAgent 接入；卸载器删私有关键词表改复用引擎判定 |
