@@ -138,6 +138,15 @@ func providerErrorDetails(err error) map[string]any {
 }
 
 // newAgent 创建指向 mock provider 的 DeepAgent（单轮，无工具）。
+// anomalyRailDisabled 关闭默认注册的模型异常检测 Rail。
+//
+// 本套用例验证"provider 错误必须上抛"：若保留默认 rail，瞬态重试会用 mock 的
+// 下一条默认响应把错误吞掉（与上游测试显式传 enable_model_anomaly_detection_rail=False 同理）。
+func anomalyRailDisabled() *bool {
+	disabled := false
+	return &disabled
+}
+
 func (s *ProviderErrorSuite) newAgent() *harness.DeepAgent {
 	model, err := llm.NewModel(
 		&llmschema.ModelClientConfig{
@@ -150,8 +159,9 @@ func (s *ProviderErrorSuite) newAgent() *harness.DeepAgent {
 	s.Require().NoError(err, "创建 Model 失败")
 
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Model:         model,
-		MaxIterations: 3,
+		Model:                           model,
+		EnableModelAnomalyDetectionRail: anomalyRailDisabled(),
+		MaxIterations:                   3,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 	return agent

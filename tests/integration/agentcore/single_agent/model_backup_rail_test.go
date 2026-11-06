@@ -150,7 +150,8 @@ func (s *ModelBackupRailSuite) TestModelBackupRail_备用耗尽异常上抛() {
 		Rails: []agentinterfaces.AgentRail{
 			rail.NewModelBackupRail(nil),
 		},
-		MaxIterations: 3,
+		EnableModelAnomalyDetectionRail: anomalyRailDisabled(),
+		MaxIterations:                   3,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 
