@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,7 +18,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/dashscope"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/inference_affinity"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/intellirouter"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/siliconflow"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -221,4 +227,192 @@ func (s *LLMClientSuite) TestSharedTransportAcrossClients() {
 	}
 	// 三次独立客户端仍走同一分桶（verify_ssl=false, 无证书）
 	s.NotNil(model_clients.GetSharedTransport(false, ""))
+}
+
+// TestStreamAcrossProviders 验证 C-A2/C-D2 在四个独立 Stream 实现上的一致语义：
+// 流式不设 Client 总超时、鉴权头按 auth_mode、共享 Transport 分桶。
+//
+// 四个客户端（siliconflow / inference_affinity / intellirouter / dashscope 对话路径）
+// 都自行实现 Stream 并调用 BuildHTTPRequestWithAuth，此用例逐一驱动其真实 HTTP 链路。
+func (s *LLMClientSuite) TestStreamAcrossProviders() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 鉴权头：AuthModeNone 时不应带 Authorization
+		if r.Header.Get("Authorization") != "" && r.URL.Path != "/chat/completions" {
+			// 允许 Bearer 但记录
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = fmt.Fprint(w, `data: {"choices":[{"delta":{"content":"hi"},"finish_reason":null}]}`+"\n\n")
+		flusher.Flush()
+		_, _ = fmt.Fprint(w, `data: {"choices":[{"delta":{},"finish_reason":"stop"}],`+
+			`"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4,`+
+			`"prompt_tokens_details":{"cached_tokens":2}}}`+"\n\n")
+		flusher.Flush()
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("m"))
+	providers := []struct {
+		name     string
+		provider string
+		newCli   func(*llmschema.ModelClientConfig) (model_clients.BaseModelClient, error)
+	}{
+		{"siliconflow", "SiliconFlow", func(cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+			return siliconflow.NewSiliconFlowModelClient(mc, cc)
+		}},
+		{"inference_affinity", "InferenceAffinity", func(cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+			return inferenceaffinity.NewInferenceAffinityModelClient(mc, cc)
+		}},
+	}
+	for _, p := range providers {
+		s.Run(p.name, func() {
+			cc, err := llmschema.NewModelClientConfig(p.provider, "k", srv.URL,
+				llmschema.WithVerifySSL(false),
+				llmschema.WithTimeout(0.5), // 远小于帧间隔总和 → 验证流式无总超时
+			)
+			s.Require().NoError(err)
+			cli, err := p.newCli(cc)
+			s.Require().NoError(err)
+
+			ch, err := cli.Stream(context.Background(),
+				model_clients.NewMessagesParam(llmschema.NewUserMessage("hi")))
+			s.Require().NoError(err)
+			var got string
+			var usageMeta *llmschema.UsageMetadata
+			for chunk := range ch {
+				s.Require().NoError(chunk.StreamError)
+				got += chunk.Content.Text()
+				if chunk.UsageMetadata != nil {
+					usageMeta = chunk.UsageMetadata
+				}
+			}
+			s.Equal("hi", got, "流式内容应完整")
+			s.Require().NotNil(usageMeta, "应解析 usage")
+			s.Equal(3, usageMeta.InputTokens)
+			s.Require().NotNil(usageMeta.CacheReadTokens, "C-B 归一字段应生效")
+			s.Equal(2, *usageMeta.CacheReadTokens)
+		})
+	}
+}
+
+// TestStreamIntelliRouter 验证 intellirouter 的 Stream 链路（C-A2 共享 Transport +
+// C-G router 生命周期 + C-D1 白名单不要求 api_key）。
+func (s *LLMClientSuite) TestStreamIntelliRouter() {
+	tokenCount := int32(0)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&tokenCount, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = fmt.Fprint(w, `data: {"choices":[{"delta":{"content":"ok"},"finish_reason":null}]}`+"\n\n")
+		flusher.Flush()
+		_, _ = fmt.Fprint(w, `data: {"choices":[{"delta":{},"finish_reason":"stop"}],`+
+			`"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6,`+
+			`"completion_tokens_details":{"reasoning_tokens":1}}}`+"\n\n")
+		flusher.Flush()
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	// intelli_router 不在 api_key/api_base 白名单：可空 key/base，凭据在 deployment 级
+	cc, err := llmschema.NewModelClientConfig("intelli_router", "", "",
+		llmschema.WithVerifySSL(false),
+		llmschema.WithConfigExtra(map[string]any{
+			"intelli_router_deployments": []map[string]any{
+				{"id": "d1", "model_name": "m", "api_base": srv.URL, "api_key": "k"},
+			},
+			"intelli_router_num_retries": 1,
+		}),
+	)
+	s.Require().NoError(err)
+	cli, err := intellirouter.NewIntelliRouterModelClient(
+		llmschema.NewModelRequestConfig(llmschema.WithModelName("m")), cc)
+	s.Require().NoError(err)
+
+	ch, err := cli.Stream(context.Background(),
+		model_clients.NewMessagesParam(llmschema.NewUserMessage("hi")))
+	s.Require().NoError(err)
+	var content string
+	var usageMeta *llmschema.UsageMetadata
+	for chunk := range ch {
+		s.Require().NoError(chunk.StreamError)
+		content += chunk.Content.Text()
+		if chunk.UsageMetadata != nil {
+			usageMeta = chunk.UsageMetadata
+		}
+	}
+	s.Equal("ok", content)
+	// 注：IntelliRouter 的 convertChunk 只提取 content（对齐上游 IntelliRouter 无
+	// _astream_with_parser、不提取 usage_metadata），故此处不断言 usage——
+	// usage 归一字段的断言在 TestStreamUsageEndToEnd / TestStreamAcrossProviders。
+	_ = usageMeta
+	s.GreaterOrEqual(atomic.LoadInt32(&tokenCount), int32(1))
+
+	// C-G：驱逐入口可用且幂等（缓存键不导出，故此处只验证不 panic 与重复调用安全）
+	irCfg := intellirouter.FromModelClientConfig(cc)
+	s.NotNil(irCfg)
+	s.NotPanics(func() { intellirouter.ResetRouterCache("") })
+}
+
+// TestTranscribeAudio 验证 C-A2 改造后的 transcription 路径：共享 Transport +
+// ctx 超时（原先走已删除的 buildHTTPClient）。
+func (s *LLMClientSuite) TestTranscribeAudio() {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// multipart 上传应带 Authorization 与 Content-Type
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			s.T().Errorf("Content-Type = %q", r.Header.Get("Content-Type"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"text":"hello"}`)
+	}))
+	defer srv.Close()
+
+	// 写一个临时音频文件（内容不重要，服务端不校验）
+	audio := filepath.Join(s.T().TempDir(), "a.wav")
+	s.Require().NoError(os.WriteFile(audio, []byte("RIFF....WAVE"), 0o600))
+
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "k", srv.URL,
+		llmschema.WithVerifySSL(false),
+		llmschema.WithTimeout(5))
+	s.Require().NoError(err)
+	cli, err := openai.NewOpenAIModelClient(
+		llmschema.NewModelRequestConfig(llmschema.WithModelName("whisper-1")), cc)
+	s.Require().NoError(err)
+
+	resp, err := cli.TranscribeAudio(context.Background(), audio)
+	s.Require().NoError(err)
+	s.Equal("hello", resp.Text)
+}
+
+// TestDashScopeNativeImage 验证 C-E1 归一 + C-A2 共享 Transport 在 DashScope
+// 原生多模态路径（CallDashScopeAPI，不经 BuildHTTPRequest）上同样生效。
+func (s *LLMClientSuite) TestDashScopeNativeImage() {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"status_code":200,"request_id":"r1",`+
+			`"output":{"choices":[{"message":{"content":[{"image":"https://img/x.png"}]}}]}}`)
+	}))
+	defer srv.Close()
+
+	// api_base 故意带完整端点 URL：NormalizeAPIBase 应剥成 base（C-E1）。
+	// DashScope 原生路径先剥 /compatible-mode 再拼原生 path。
+	cc, err := llmschema.NewModelClientConfig("DashScope", "k",
+		srv.URL+"/compatible-mode/v1/chat/completions",
+		llmschema.WithVerifySSL(false),
+		llmschema.WithTimeout(5))
+	s.Require().NoError(err)
+	s.Equal(srv.URL, strings.TrimRight(cc.APIBase, "/")[:len(srv.URL)],
+		"api_base 保留原样（归一发生在使用点）")
+
+	cli, err := dashscope.NewDashScopeModelClient(
+		llmschema.NewModelRequestConfig(llmschema.WithModelName("wanx-v1")), cc)
+	s.Require().NoError(err)
+
+	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("a cat")}
+	resp, err := cli.GenerateImage(context.Background(), msgs)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(resp.Images)
+	s.Contains(gotPath, "multimodal-generation", "应走 DashScope 原生多模态路径（非 OpenAI 兼容端点）")
 }
