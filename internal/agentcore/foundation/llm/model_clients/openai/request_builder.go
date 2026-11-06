@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -23,6 +24,11 @@ import (
 
 // chatCompletionsPath Chat Completion API 路径
 const chatCompletionsPath = "/chat/completions"
+
+// emptyAPIKeyPlaceholder 非 api_key 模式下 provider 要求的占位密钥。
+//
+// Python: openai_model_client.py:326-330 _resolved_api_key_for_config → "EMPTY"
+const emptyAPIKeyPlaceholder = "EMPTY"
 
 // requestEncodingStage 请求编码阶段的 details.stage 标记。
 //
@@ -98,6 +104,28 @@ func BuildHTTPRequest(
 	sslCert string,
 	streaming bool,
 ) (*http.Request, *http.Client, error) {
+	// 旧签名等价于 api_key 模式（默认）
+	return BuildHTTPRequestWithAuth(ctx, apiBase, apiKey, params, headers, timeout,
+		verifySSL, sslCert, streaming, llmschema.AuthModeAPIKey)
+}
+
+// BuildHTTPRequestWithAuth 构建 HTTP 请求并按 auth_mode 决定是否设置 Authorization。
+//
+// 鉴权头规则（Python: openai_model_client.py:298-305 / 326-330）：
+//   - auth_mode=none / openai_account_oauth → 省略
+//   - auth_mode=custom_headers 且 api_key 为空 → 省略（靠自定义头携带凭据）
+//   - 其余情况设置 Bearer；api_key 为空时用 "EMPTY" 占位（上游 _resolved_api_key_for_config）
+func BuildHTTPRequestWithAuth(
+	ctx context.Context,
+	apiBase, apiKey string,
+	params map[string]any,
+	headers map[string]string,
+	timeout *float64,
+	verifySSL bool,
+	sslCert string,
+	streaming bool,
+	authMode llmschema.AuthMode,
+) (*http.Request, *http.Client, error) {
 	// 序列化请求体（编码失败/非法 UTF-8 → 181004 + stage=request_encoding，C-E2）
 	body, err := encodeJSONChecked(params)
 	if err != nil {
@@ -121,7 +149,14 @@ func BuildHTTPRequest(
 
 	// 设置必要请求头
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if !shouldOmitAuthorization(authMode, apiKey) {
+		// api_key 为空时用占位符（provider 仍要求 Authorization 头存在）
+		resolvedKey := apiKey
+		if strings.TrimSpace(resolvedKey) == "" {
+			resolvedKey = emptyAPIKeyPlaceholder
+		}
+		req.Header.Set("Authorization", "Bearer "+resolvedKey)
+	}
 
 	// 合并自定义请求头
 	for k, v := range headers {
@@ -255,4 +290,18 @@ func IsRequestEncodingErr(err error) bool {
 // encodeJSON 将 map 编码为 JSON 字节。
 func encodeJSON(params map[string]any) ([]byte, error) {
 	return json.Marshal(params)
+}
+
+// shouldOmitAuthorization 判是否省略 Authorization 头。
+//
+// Python: openai_model_client.py:298-305 _should_omit_authorization
+func shouldOmitAuthorization(authMode llmschema.AuthMode, apiKey string) bool {
+	switch authMode {
+	case llmschema.AuthModeNone, llmschema.AuthModeOpenAIAccountOAuth:
+		return true
+	case llmschema.AuthModeCustomHeaders:
+		return strings.TrimSpace(apiKey) == ""
+	default:
+		return false
+	}
 }

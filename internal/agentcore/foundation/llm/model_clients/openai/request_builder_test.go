@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -253,5 +254,51 @@ func TestBuildHTTPRequest_正常请求不误判(t *testing.T) {
 		nil, nil, false, "", false)
 	if err != nil {
 		t.Fatalf("合法请求不应报错: %v", err)
+	}
+}
+
+// ──────────────────────────── 鉴权头按 auth_mode（C-D2）────────────────────────────
+
+// TestBuildHTTPRequest_鉴权头按AuthMode none/custom_headers(空key) → 省略；
+// api_key 缺 key → EMPTY 占位；custom_headers 有 key → 正常 Bearer。
+//
+// Python: openai_model_client.py:298-305 _should_omit_authorization
+// + :326-330 _resolved_api_key_for_config
+func TestBuildHTTPRequest_鉴权头按AuthMode(t *testing.T) {
+	cases := []struct {
+		name     string
+		authMode llmschema.AuthMode
+		apiKey   string
+		wantAuth string // "" 表示不设
+	}{
+		{"none 省略", llmschema.AuthModeNone, "", ""},
+		{"none 有key也省略", llmschema.AuthModeNone, "k", ""},
+		{"custom_headers 空key省略", llmschema.AuthModeCustomHeaders, "", ""},
+		{"custom_headers 有key正常", llmschema.AuthModeCustomHeaders, "k", "Bearer k"},
+		{"api_key 正常", llmschema.AuthModeAPIKey, "k", "Bearer k"},
+		{"api_key 空key用EMPTY占位", llmschema.AuthModeAPIKey, "", "Bearer EMPTY"},
+		{"oauth 省略", llmschema.AuthModeOpenAIAccountOAuth, "k", ""},
+	}
+	for _, tc := range cases {
+		req, _, err := BuildHTTPRequestWithAuth(context.Background(), "http://x", tc.apiKey,
+			map[string]any{"model": "m", "messages": []any{}}, nil, nil, false, "", false, tc.authMode)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got := req.Header.Get("Authorization"); got != tc.wantAuth {
+			t.Errorf("%s: Authorization = %q want %q", tc.name, got, tc.wantAuth)
+		}
+	}
+}
+
+// TestBuildHTTPRequest_默认走APIKey模式 旧签名（无 auth_mode）行为不变。
+func TestBuildHTTPRequest_默认走APIKey模式(t *testing.T) {
+	req, _, err := BuildHTTPRequest(context.Background(), "http://x", "k",
+		map[string]any{"model": "m", "messages": []any{}}, nil, nil, false, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer k" {
+		t.Errorf("Authorization = %q want %q", got, "Bearer k")
 	}
 }

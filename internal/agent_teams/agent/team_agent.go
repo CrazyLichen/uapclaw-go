@@ -1414,7 +1414,13 @@ func (a *TeamAgent) WorkspaceManager() types.WorkspaceAccessor {
 	if a.configurator == nil {
 		return nil
 	}
-	return a.configurator.WorkspaceManager()
+	// 防御 typed-nil：configurator.WorkspaceManager() 返回 *TeamWorkspaceManager
+	// 具体类型，nil 时赋值给 WorkspaceAccessor 接口会得到非 nil 接口值，
+	// 下游 kernel.Start 的 `wsMgr != nil` 判真后调用 Initialize 会 nil receiver panic。
+	if m := a.configurator.WorkspaceManager(); m != nil {
+		return m
+	}
+	return nil
 }
 
 // SetWorkspaceInitialized 标记工作空间已初始化。
@@ -1449,7 +1455,12 @@ func (a *TeamAgent) MemoryManager() *memory.TeamMemoryManager {
 // 满足 types.ResourceAccessor 接口。
 // *harness.TeamHarness 直接满足 types.HarnessAccessor（编译期检查）。
 func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
-	return a.Harness()
+	// 防御 typed-nil：a.Harness() 返回 *harness.TeamHarness 具体类型，
+	// nil 时赋值给 HarnessAccessor 接口会得到非 nil 接口值。
+	if h := a.Harness(); h != nil {
+		return h
+	}
+	return nil
 }
 
 // FirstIterGate 返回首轮迭代门控。

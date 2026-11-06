@@ -120,7 +120,7 @@ func (c *OpenAIModelClient) Invoke(
 
 	// 6. 构建 HTTP 请求
 	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
-	req, client, err := BuildHTTPRequest(
+	req, client, err := BuildHTTPRequestWithAuth(
 		ctx,
 		c.ClientConfig.APIBase,
 		c.ClientConfig.APIKey,
@@ -130,6 +130,7 @@ func (c *OpenAIModelClient) Invoke(
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 		false,
+		c.ClientConfig.AuthMode,
 	)
 	if err != nil {
 		// 请求编码错误原样上抛（不包 MODEL_CALL_FAILED，跳过瞬时失败重试）
@@ -270,7 +271,7 @@ func (c *OpenAIModelClient) Stream(
 
 	// 7. 构建 HTTP 请求
 	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
-	req, client, err := BuildHTTPRequest(
+	req, client, err := BuildHTTPRequestWithAuth(
 		ctx,
 		c.ClientConfig.APIBase,
 		c.ClientConfig.APIKey,
@@ -280,6 +281,7 @@ func (c *OpenAIModelClient) Stream(
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 		true,
+		c.ClientConfig.AuthMode,
 	)
 	if err != nil {
 		// 请求编码错误原样上抛（不包 MODEL_CALL_FAILED，跳过瞬时失败重试）

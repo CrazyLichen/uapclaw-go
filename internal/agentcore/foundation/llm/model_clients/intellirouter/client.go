@@ -261,7 +261,7 @@ func (c *IntelliRouterModelClient) Stream(
 
 	// 8. 构建 HTTP 请求
 	httpHeaders := openai.ExtractHTTPHeaders(effectiveHeaders)
-	req, client, err := openai.BuildHTTPRequest(
+	req, client, err := openai.BuildHTTPRequestWithAuth(
 		ctx,
 		c.ClientConfig.APIBase,
 		c.ClientConfig.APIKey,
@@ -271,6 +271,7 @@ func (c *IntelliRouterModelClient) Stream(
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 		true, // Stream 路径：无总超时（C-A2 超时语义）
+		c.ClientConfig.AuthMode,
 	)
 	if err != nil {
 		return nil, c.WrapError("stream", err)
