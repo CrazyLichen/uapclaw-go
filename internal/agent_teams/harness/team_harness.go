@@ -17,12 +17,10 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -103,6 +101,9 @@ type TeamHarness struct {
 	// 会把 loop_session 置 nil，而 HITL 应答恰好发生在轮次结束之后，
 	// 只能靠这里保留的引用读到中断状态（Python 的 _active_agent_session）。
 	activeAgentSession *session.Session
+	// nativeSessionID 当前 run cycle 对应的团队会话标识。
+	// Python: _native_session_id（start 时记录、stop 时清空）
+	nativeSessionID string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -450,128 +451,209 @@ func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
 	return cwd.WithCwdState(ctx, state)
 }
 
-// Steer 转向指令到底层 Agent。
-// Python: TeamHarness.steer(content) → await self._deep_agent.steer(content)
-// 已回填（#9.57）：转调 interactLoop，投递失败返回具名 error
-func (h *TeamHarness) Steer(ctx context.Context, content string) error {
-	return h.interactLoop(ctx, content, true)
+// Start 绑定子会话并启动 native 的 supervisor（一个 run cycle 一次）。
+//
+// Python: TeamHarness.start(team_session)（team_harness.py:135-169）
+// 步骤对齐上游 9 步；25.1a 阶段 native 由 BuildTeamHarness 物化且 fresh，
+// 故"重建 native / _remount_dynamic_tools / background_task_controller / kv_cache hook"
+// 四步在本阶段为 no-op（⤵️ 25.1b spec 驱动 + ⤵️ 25.1d 异步工具 + ⤵️ 25.6 会话钩子）。
+func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
+	if h.native == nil {
+		return fmt.Errorf("team harness: 未构建 native（须经 BuildTeamHarness）")
+	}
+
+	// 步骤 3：建子会话（对齐 _make_child_session）
+	child := h.makeChildSession(teamSession)
+	if child == nil {
+		return fmt.Errorf("team harness: 建子会话失败")
+	}
+	// 步骤 5：子会话 pre_run
+	if err := child.PreRun(ctx); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("member_name", h.memberName).
+			Msg("TeamHarness.Start: agent session pre_run failed")
+		return err
+	}
+	// 步骤 6：启动 native supervisor
+	if err := h.native.Start(ctx, child); err != nil {
+		return err
+	}
+	// 步骤 7：记录 native 会话标识
+	h.nativeSessionID = sessionIDOf(teamSession)
+	// 步骤 8：记录活跃会话
+	h.setActiveSession(child)
+	// 步骤 9：种子化初始 plan 模式
+	h.ensureInitialPlanMode(child)
+	return nil
 }
 
-// FollowUp 追加消息到底层 Agent。
-// Python: TeamHarness.follow_up(content) → await self._deep_agent.follow_up(content)
-func (h *TeamHarness) FollowUp(ctx context.Context, content string) error {
-	return h.interactLoop(ctx, content, false)
+// Stop 停止 native supervisor；保留（已终止的）native 供配置读取。
+//
+// Python: TeamHarness.stop()（team_harness.py:171-199）
+func (h *TeamHarness) Stop(ctx context.Context) error {
+	if h.native != nil && h.native.State() != HarnessStateTerminated {
+		if err := h.native.Stop(ctx); err != nil {
+			return err
+		}
+	}
+	h.nativeSessionID = ""
+	h.setActiveSession(nil)
+	return nil
 }
 
-// Abort 协作中止底层任务循环。
-// Python: TeamHarness.abort() → await self._deep_agent.abort()
-func (h *TeamHarness) Abort(_ context.Context) error {
-	// DeepAgentInterface 未声明 RequestAbort（属 LoopCoordinatorInterface），按能力收窄
-	if aborter, ok := h.deepAgent.(interface{ RequestAbort() }); ok {
-		aborter.RequestAbort()
+// RunOnce 执行一次非流式调用（绕过 supervisor）。
+//
+// Python: TeamHarness.run_once(content, team_session)（team_harness.py:201-250）
+func (h *TeamHarness) RunOnce(ctx context.Context, content any, teamSession any) (map[string]any, error) {
+	if h.native == nil {
+		return nil, fmt.Errorf("team harness: 未构建 native（须经 BuildTeamHarness）")
+	}
+	child := h.makeChildSession(teamSession)
+	if child == nil {
+		return nil, fmt.Errorf("team harness: 建子会话失败")
+	}
+	if err := child.PreRun(ctx); err != nil {
+		return nil, err
+	}
+	h.setActiveSession(child)
+	defer func() {
+		_ = child.PostRun(ctx)
+		h.setActiveSession(nil)
+	}()
+	return h.native.RunOnce(ctx, content, child)
+}
+
+// Dispose 永久销毁 native 并释放进程级资源。
+//
+// Python: TeamHarness.dispose()（team_harness.py:252-264）
+func (h *TeamHarness) Dispose(ctx context.Context) error {
+	if h.native != nil {
+		return h.native.Dispose(ctx)
 	}
 	return nil
 }
 
-// RunStreaming 从底层 Agent 流式输出 chunk。
-// Python: TeamHarness.run_streaming(inputs, session_id, team_session)
+// Outputs 返回 native 的输出迭代器。
 //
-// 分支 1（teamSession 为 nil 且非 initialPlanMode）：直接以 session_id 调
-// runner.RunAgentStreaming。
-// 分支 2（有 teamSession，或 initialPlanMode）：先显式准备子 AgentSession
-// （team.plan 需要把 Leader DeepAgent 种子化进 plan 模式），再以该会话
-// 调 runner.RunAgentStreaming。
-func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) (<-chan stream.Schema, error) {
-	if teamSession == nil && !h.initialPlanMode {
-		return h.streamWithSessionRef(ctx, inputs, runner.BySessionID(sessionID))
+// Python: TeamHarness.outputs()（team_harness.py:342-349）
+func (h *TeamHarness) Outputs() *OutputIterator {
+	if h.native == nil {
+		return nil
 	}
-
-	agentSess := h.prepareAgentSession(ctx, inputs, sessionID, teamSession)
-	if agentSess == nil {
-		return closedChunkChan(), nil
-	}
-	return h.streamWithSessionRef(ctx, inputs, runner.BySession(agentSess))
+	return h.native.Outputs()
 }
 
-// streamWithSessionRef 以给定会话引用调用 Runner 的流式执行。
-func (h *TeamHarness) streamWithSessionRef(ctx context.Context, inputs map[string]any, sessionRef runner.SessionRef) (<-chan stream.Schema, error) {
-	if h.deepAgent == nil {
-		return closedChunkChan(), nil
+// Send 投递输入；immediate 转向当前轮。
+//
+// Python: TeamHarness.send(content, immediate=...)（team_harness.py:351-368）
+func (h *TeamHarness) Send(ctx context.Context, content any, immediate bool) error {
+	if h.native == nil {
+		return fmt.Errorf("team harness: send() before start()")
 	}
-	// DeepAgent 实现 BaseAgent（编译期断言），断言失败理论不可能
-	baseAgent, ok := h.deepAgent.(agentinterfaces.BaseAgent)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("member_name", h.memberName).
-			Msg("TeamHarness.RunStreaming: deepAgent does not implement BaseAgent, returning empty stream")
-		return closedChunkChan(), nil
-	}
-	return runner.RunAgentStreaming(ctx, runner.ByAgent(baseAgent), inputs, sessionRef, nil, nil, nil)
+	return h.native.Send(ctx, content, immediate)
 }
 
-// interactLoop 把运行中的输入投递给底层 DeepAgent 的任务循环。
-// Python: TeamHarness.steer / follow_up —— 直接 await self._deep_agent.steer(...)
+// Abort 中断当前轮（优雅或立即）。
 //
-// 原实现是 TODO(#9.57) 空桩，导致运行中到达的第二条 chat.send 被静默丢弃
-// （adapter → Interact → DeliverInput → StreamController.Steer → 这里 return nil）。
-// DeepAgentInterface 未声明 steer/follow_up（只有 RequestAbort），故此处按具体类型收窄。
-// 失败分支返回具名 error（投递失败必须让上层可回退，见 M-02），日志保留供定位。
-func (h *TeamHarness) interactLoop(ctx context.Context, content string, steer bool) error {
-	d, ok := h.deepAgent.(*agentcore.DeepAgent)
-	if !ok || d == nil {
-		logger.Warn(logComponent).
-			Str("member_name", h.memberName).
-			Bool("steer", steer).
-			Msg("TeamHarness: deepAgent 不是 *agentcore.DeepAgent，输入无法投递")
-		return errIncompatibleAgent
+// Python: TeamHarness.abort(immediate=...)（team_harness.py:370-381）
+func (h *TeamHarness) Abort(ctx context.Context, immediate bool) error {
+	if h.native == nil || h.getActiveSession() == nil {
+		// 无活跃 run cycle：no-op（对齐 Python _is_cycle_active 守卫）
+		return nil
 	}
-	sess := h.getActiveSession()
-	if sess == nil {
-		logger.Warn(logComponent).
-			Str("member_name", h.memberName).
-			Bool("steer", steer).
-			Msg("TeamHarness: 无活跃 Agent 会话，输入无法投递")
-		return errNoActiveSession
-	}
-	if steer {
-		return d.Steer(ctx, content, sess)
-	}
-	return d.FollowUp(ctx, content, "", sess)
+	return h.native.Abort(ctx, immediate)
 }
 
-// prepareAgentSession 为底层 Agent 准备本轮使用的会话。
-// Python: TeamHarness._prepare_agent_session(inputs, session_id, team_session)（harness.py L303-330）
+// Pause 暂停当前轮（25.1c 前返回哨兵错误）。
 //
-// 顺序：取 card → 优先从团队会话派生（不共享流写入器）→ PreRun(inputs)
-// → 记录活跃会话 → 种子化初始 plan 模式。任一环节失败返回 nil，由调用方
-// 退化为空流（对齐 Python 异常向上抛出前的空转语义，不吞 panic）。
-func (h *TeamHarness) prepareAgentSession(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) *session.Session {
-	var card *agentschema.AgentCard
-	if h.deepAgent != nil {
-		card = h.deepAgent.Card()
+// Python: TeamHarness.pause()（team_harness.py:383-390）
+func (h *TeamHarness) Pause(ctx context.Context) error {
+	if h.native == nil || h.getActiveSession() == nil {
+		return nil
 	}
+	return h.native.Pause(ctx)
+}
 
-	var agentSess *session.Session
+// Resume 继续暂停的轮（25.1c 前返回哨兵错误）。
+//
+// Python: TeamHarness.resume(query=...)（team_harness.py:392-400）
+func (h *TeamHarness) Resume(ctx context.Context, query any) error {
+	if h.native == nil || h.getActiveSession() == nil {
+		return nil
+	}
+	return h.native.Resume(ctx, query)
+}
+
+// State 返回 native 生命周期相位；无 native 时返回 idle。
+//
+// Python: TeamHarness.state property（team_harness.py:327-331）
+func (h *TeamHarness) State() HarnessState {
+	if h.native == nil {
+		return HarnessStateIdle
+	}
+	return h.native.State()
+}
+
+// SessionID 返回 native 的会话标识；无 native 时返回空串。
+//
+// Python: TeamHarness.session_id property（team_harness.py:333-340）
+func (h *TeamHarness) SessionID() string {
+	if h.native == nil {
+		return ""
+	}
+	return h.native.SessionID()
+}
+
+// Subscribe 在 native 上注册相位/轮次回调。
+//
+// Python: TeamHarness.subscribe(on_state=..., on_round=...)（team_harness.py:402-412）
+func (h *TeamHarness) Subscribe(ctx context.Context, onState StateHandler, onRound RoundHandler) error {
+	if h.native == nil {
+		return nil
+	}
+	return h.native.Subscribe(ctx, onState, onRound)
+}
+
+// Native 返回底层 NativeHarness（生产代码勿用，仅测试与迁移助手）。
+//
+// Python: TeamHarness.inner_agent property
+func (h *TeamHarness) Native() *NativeHarness { return h.native }
+
+// sessionIDOf 从团队会话提取会话标识。
+//
+// Python: TeamHarness._session_id_of(team_session)
+func sessionIDOf(teamSession any) string {
+	if teamSession == nil {
+		return ""
+	}
+	if s, ok := teamSession.(interface{ GetSessionID() string }); ok {
+		return s.GetSessionID()
+	}
+	return ""
+}
+
+// makeChildSession 创建 native 本轮运行的子会话。
+//
+// Python: TeamHarness._make_child_session(team_session)（team_harness.py:285-302）
+func (h *TeamHarness) makeChildSession(teamSession any) *session.Session {
+	card := h.card()
 	if ts, ok := teamSession.(*session.AgentTeamSession); ok && ts != nil {
 		// Python: team_session.create_agent_session(card=card, share_stream_writer=False)
-		agentSess = ts.CreateAgentSession(card, "", false)
-	} else {
-		// Python: create_agent_session(session_id=session_id, card=card)
-		agentSess = session.CreateAgentSession(sessionID, card, nil)
+		return ts.CreateAgentSession(card, "", false)
 	}
-	if agentSess == nil {
-		return nil
-	}
+	// Python: create_agent_session(card=card)
+	return session.CreateAgentSession("", card, nil)
+}
 
-	if err := agentSess.PreRun(ctx, inputs); err != nil {
-		logger.Error(logComponent).Err(err).
-			Str("member_name", h.memberName).
-			Msg("TeamHarness.prepareAgentSession: agent session pre_run failed")
-		return nil
+// card 返回底层 native 的 card（无 native 时返回 nil）。
+func (h *TeamHarness) card() *agentschema.AgentCard {
+	if h.native != nil {
+		return h.native.DeepAgent().Card()
 	}
-	h.setActiveSession(agentSess)
-	h.ensureInitialPlanMode(agentSess)
-	return agentSess
+	if h.deepAgent != nil {
+		return h.deepAgent.Card()
+	}
+	return nil
 }
 
 // ensureInitialPlanMode 首次以 team.plan Leader 身份运行时把 Agent 切入 plan 模式。
@@ -602,13 +684,6 @@ func (h *TeamHarness) ensureInitialPlanMode(agentSess sessioninterfaces.SessionF
 // Python: TeamHarness._is_initial_team_plan_leader()
 func (h *TeamHarness) isInitialTeamPlanLeader() bool {
 	return h.initialPlanMode && h.role == string(atschema.TeamRoleLeader)
-}
-
-// closedChunkChan 返回已关闭的空 chunk 通道。
-func closedChunkChan() <-chan stream.Schema {
-	ch := make(chan stream.Schema)
-	close(ch)
-	return ch
 }
 
 // FindRails 返回挂载在底层 Agent 上的指定类型 Rails。
