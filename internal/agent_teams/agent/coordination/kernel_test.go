@@ -13,12 +13,37 @@ import (
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
+
+// fakeHarnessAccessor 测试用 HarnessAccessor 实现（覆盖 kernel.Start 步骤 6.5 的 harness.Start 接线）。
+type fakeHarnessAccessor struct {
+	startCalled bool
+	startErr    error
+}
+
+func (f *fakeHarnessAccessor) RegisterMemberTools(_ *memory.TeamMemoryManager) {}
+func (f *fakeHarnessAccessor) InjectMemberMemory(_ context.Context, _ *memory.TeamMemoryManager, _ string) error {
+	return nil
+}
+func (f *fakeHarnessAccessor) Model() *llm.Model { return nil }
+func (f *fakeHarnessAccessor) Start(_ context.Context, _ any) error {
+	f.startCalled = true
+	return f.startErr
+}
+
+// fakeStreamControllerAccessor 测试用 StreamControllerAccessor 实现。
+type fakeStreamControllerAccessor struct {
+	startCalled bool
+}
+
+func (f *fakeStreamControllerAccessor) ResetStreamQueue()            {}
+func (f *fakeStreamControllerAccessor) Start(_ context.Context) { f.startCalled = true }
 
 // fakeDispatcherInfra S-32: 测试用 DispatcherInfra 实现（对齐 *TeamInfra 具体类型签名）
 type fakeDispatcherInfra struct{}
@@ -39,6 +64,10 @@ type fakeKernelHost struct {
 	// bp/inf M-02: Setup 从 host 取依赖；为 nil 时按 role/memberName 惰性构造默认值
 	bp  types.DispatcherBlueprint
 	inf types.DispatcherInfra
+	// harnessAccessor 非 nil 时返回（覆盖 kernel.Start 步骤 6.5 的 harness.Start 接线）
+	harnessAccessor types.HarnessAccessor
+	// streamControllerAccessor 非 nil 时返回
+	streamControllerAccessor types.StreamControllerAccessor
 }
 
 func (f *fakeKernelHost) IsAgentReady() bool                                  { return f.agentReady }
@@ -69,7 +98,7 @@ func (f *fakeKernelHost) WorkspaceManager() types.WorkspaceAccessor             
 func (f *fakeKernelHost) SetWorkspaceInitialized()                                  {}
 func (f *fakeKernelHost) IsWorkspaceInitialized() bool                              { return false }
 func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager                  { return nil }
-func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor                    { return nil }
+func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor                    { return f.harnessAccessor }
 func (f *fakeKernelHost) SpecAny() any                                              { return nil }
 func (f *fakeKernelHost) SubscribeTransport(_ context.Context, _ string) error      { return nil }
 func (f *fakeKernelHost) UnsubscribeTransport(_ context.Context) error              { return nil }
@@ -83,7 +112,7 @@ func (f *fakeKernelHost) CancelRecoveryTasks()                                  
 func (f *fakeKernelHost) ShutdownAllHandles(_ context.Context)                      {}
 func (f *fakeKernelHost) SpawnedHandleNames() []string                              { return nil }
 func (f *fakeKernelHost) FirstIterGate() types.FirstIterGateAccessor                { return nil }
-func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor          { return nil }
+func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor          { return f.streamControllerAccessor }
 func (f *fakeKernelHost) PublishTeamEvent(_ context.Context, _ string, _ map[string]any) error {
 	return nil
 }
@@ -215,6 +244,57 @@ func TestCoordinationKernel_Start无Setup(t *testing.T) {
 	k.Start(context.Background(), "")
 	if k.IsRunning() {
 		t.Error("无 setup 时 start 不应运行")
+	}
+}
+
+// TestCoordinationKernel_Start启动成员运行时 验证步骤 6.5 对齐 Python kernel.py L167-168：
+// 会话绑定后调 harness.Start + streamController.Start（先 runtime 后 controller）。
+func TestCoordinationKernel_Start启动成员运行时(t *testing.T) {
+	ha := &fakeHarnessAccessor{}
+	sca := &fakeStreamControllerAccessor{}
+	host := &fakeKernelHost{
+		role:                    schema.TeamRoleLeader,
+		memberName:              "leader1",
+		agentReady:              true,
+		harnessAccessor:         ha,
+		streamControllerAccessor: sca,
+	}
+	k := NewCoordinationKernel(host)
+	k.Setup(schema.TeamRoleLeader)
+
+	// 传非 nil 会话触发 harness.Start 接线
+	k.Start(context.Background(), session.CreateAgentSession("s1", nil, nil))
+
+	if !ha.startCalled {
+		t.Error("步骤 6.5：harness.Start 应被调用")
+	}
+	if !sca.startCalled {
+		t.Error("步骤 6.5：streamController.Start 应在 harness.Start 之后被调用")
+	}
+}
+
+// TestCoordinationKernel_StartharnessStart失败不挂Controller 验证 harness.Start 返回 error 时
+// 不继续调 streamController.Start（else if 语义）。
+func TestCoordinationKernel_StartharnessStart失败不挂Controller(t *testing.T) {
+	ha := &fakeHarnessAccessor{startErr: fmt.Errorf("harness start failed")}
+	sca := &fakeStreamControllerAccessor{}
+	host := &fakeKernelHost{
+		role:                    schema.TeamRoleLeader,
+		memberName:              "leader1",
+		agentReady:              true,
+		harnessAccessor:         ha,
+		streamControllerAccessor: sca,
+	}
+	k := NewCoordinationKernel(host)
+	k.Setup(schema.TeamRoleLeader)
+
+	k.Start(context.Background(), session.CreateAgentSession("s1", nil, nil))
+
+	if !ha.startCalled {
+		t.Error("harness.Start 应被调用")
+	}
+	if sca.startCalled {
+		t.Error("harness.Start 失败时 streamController.Start 不应被调用")
 	}
 }
 

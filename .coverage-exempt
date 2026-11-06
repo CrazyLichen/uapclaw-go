@@ -129,6 +129,15 @@ internal/swarm/server/adapter/deep_adapter.go#L2513-L2534
 # applyWebAddrFlags 本身的行为由 TestApplyWebAddrFlags 覆盖（含覆盖/不覆盖两条分支）。
 cmd/uapclaw/cmd.go#L263-L263
 
+# ── 2026-11-06 25.1a 团队流程接线（接口方法声明扩展） ──
+# lifecycle_accessors.go — 整文件只有 type interface 声明（无 func/var/const），
+# go tool cover 不产生任何覆盖块，改动行永远判「未被执行」（门禁在 in_total==0
+# 分支不认行级豁免，同 lite/types.go 先例）。本次改动只是给 HarnessAccessor /
+# StreamControllerAccessor 各加一个 Start 方法签名；方法的行为由实现方
+# （*TeamHarness.Start / *StreamController.Start）的测试覆盖（team_harness_protocol_test.go、
+# native_harness_start_test.go / stream_controller_subscribe_test.go）。
+internal/agent_teams/agent/coordination/types/lifecycle_accessors.go
+
 # ── 2026-11-02 记忆工具结果键名对齐 Python（json tag） ──
 # lite/types.go — 整文件只有 type 声明（无 func/var/const），go tool cover 不产生
 # 任何覆盖块，改动行永远判「未被执行」（门禁在 in_total==0 分支不认行级豁免）。
