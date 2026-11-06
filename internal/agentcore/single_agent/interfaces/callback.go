@@ -536,7 +536,7 @@ func (c *AgentCallbackContext) ModelVisibleOutputEmitted() bool {
 }
 
 // Exception 返回异常对象
-func (c *AgentCallbackContext) Exception() error { return c.exception }// SetException 设置异常对象
+func (c *AgentCallbackContext) Exception() error       { return c.exception } // SetException 设置异常对象
 func (c *AgentCallbackContext) SetException(err error) { c.exception = err }
 
 // RetryAttempt 返回当前重试索引号
