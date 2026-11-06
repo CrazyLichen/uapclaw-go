@@ -556,7 +556,8 @@ func (s *TaskScheduler) schedule(ctx context.Context) {
 
 		// 2. 并发启动（受 maxConcurrentTasks 限制）
 		for _, task := range tasks {
-			sess := s.sessions[task.SessionID]
+			// 走 GetSession 加锁读，避免与 RemoveSession 的 map delete 并发（race）
+			sess, _ := s.GetSession(task.SessionID)
 			if sess == nil {
 				logger.Warn(logComponent).
 					Str("task_id", task.TaskID).

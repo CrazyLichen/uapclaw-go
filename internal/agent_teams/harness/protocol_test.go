@@ -43,3 +43,28 @@ func TestHarnessProtocol_哨兵错误可判定(t *testing.T) {
 	assert.True(t, errors.Is(ErrPauseUnsupported, ErrPauseUnsupported))
 	assert.EqualError(t, ErrPauseUnsupported, "harness: pause/resume 尚未实现（25.1c）")
 }
+
+// TestProtocol_类型转换边界 覆盖 toHarnessState/toString/toInt/toMap 各分支。
+func TestProtocol_类型转换边界(t *testing.T) {
+	// toHarnessState
+	assert.Equal(t, HarnessStateRunning, toHarnessState("running"))
+	assert.Equal(t, HarnessStatePaused, toHarnessState(HarnessStatePaused)) // HarnessState 类型
+	assert.Equal(t, HarnessStateIdle, toHarnessState(123))                  // 非法类型兜底
+	assert.Equal(t, HarnessStateIdle, toHarnessState(nil))
+
+	// toString
+	assert.Equal(t, "x", toString("x"))
+	assert.Equal(t, "", toString(123))
+	assert.Equal(t, "", toString(nil))
+
+	// toInt
+	assert.Equal(t, 3, toInt(3))
+	assert.Equal(t, 3, toInt(int64(3)))
+	assert.Equal(t, 3, toInt(float64(3)))
+	assert.Equal(t, 0, toInt("nope"))
+
+	// toMap
+	assert.Equal(t, map[string]any{"k": 1}, toMap(map[string]any{"k": 1}))
+	assert.Nil(t, toMap("not-a-map"))
+	assert.Nil(t, toMap(nil))
+}

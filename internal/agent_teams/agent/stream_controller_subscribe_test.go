@@ -4,10 +4,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // TestStreamController_mapState_RUNNING转BUSY 验证相位 RUNNING → 成员 BUSY。
@@ -263,5 +265,132 @@ func TestStreamController_handleRetry_超预算透传(t *testing.T) {
 	}
 	if sc.retryAttempt != maxRetryAttempts {
 		t.Errorf("预算耗尽后计数不应再增，实际 %d", sc.retryAttempt)
+	}
+}
+
+// TestStreamController_start转发订阅 验证 start 复位 retry + 挂订阅 + 起泵。
+func TestStreamController_start转发订阅(t *testing.T) {
+	sc := newTestStreamController()
+	// native=nil 的 TeamHarness：Subscribe/Outputs 均 no-op/nil
+	sc.resources.Harness = &harness.TeamHarness{}
+	sc.retryAttempt = 3
+	sc.swallowFailedRound = true
+
+	sc.start(context.Background())
+
+	if sc.retryAttempt != 0 {
+		t.Errorf("start 应复位 retryAttempt，实际 %d", sc.retryAttempt)
+	}
+	if sc.swallowFailedRound {
+		t.Error("start 应复位 swallowFailedRound")
+	}
+}
+
+// TestStreamController_forwardOutputs无输出泵 验证 Outputs=nil 时 forwardOutputs 立即返回。
+func TestStreamController_forwardOutputs无输出泵(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &harness.TeamHarness{} // native=nil → Outputs 返回 nil
+
+	done := make(chan struct{})
+	go func() {
+		sc.forwardOutputs(context.Background())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("forwardOutputs 应因 Outputs=nil 立即返回")
+	}
+}
+
+// TestStreamController_CancelAgent转发abort 验证 CancelAgent → harness.Abort(immediate=true)。
+func TestStreamController_CancelAgent转发abort(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &harness.TeamHarness{} // native=nil → Abort no-op
+	// 无活跃轮时 CancelAgent 直接返回
+	if err := sc.CancelAgent(context.Background()); err != nil {
+		t.Errorf("无活跃轮 CancelAgent 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestStreamController_CooperativeCancel无活跃轮 验证无轮时直接返回。
+func TestStreamController_CooperativeCancel无活跃轮(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &harness.TeamHarness{}
+	if err := sc.CooperativeCancel(context.Background()); err != nil {
+		t.Errorf("无活跃轮 CooperativeCancel 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestStreamController_DrainAgentTask无活跃轮 验证无轮时 DrainAgentTask 直接返回。
+func TestStreamController_DrainAgentTask无活跃轮(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &harness.TeamHarness{}
+	if err := sc.DrainAgentTask(context.Background()); err != nil {
+		t.Errorf("无活跃轮 DrainAgentTask 应返回 nil，实际 %v", err)
+	}
+}
+
+// newStreamControllerWithTeamHarness 构造一个带真 TeamHarness（native 非 nil）的 StreamController。
+func newStreamControllerWithTeamHarness() *StreamController {
+	sc := newTestStreamController()
+	spec := atschema.DeepAgentSpec{
+		Card: agentschema.NewAgentCard(agentschema.WithAgentName("sc-itest")),
+	}
+	sc.resources.Harness = harness.BuildTeamHarness(spec, "leader", "m1", nil, nil, nil, nil, nil, nil, false)
+	return sc
+}
+
+// TestStreamController_IsAgentRunning_idle状态 覆盖 IsAgentRunning 的 harness 非 nil + idle 分支。
+func TestStreamController_IsAgentRunning_idle状态(t *testing.T) {
+	sc := newStreamControllerWithTeamHarness()
+	if sc.IsAgentRunning() {
+		t.Error("idle 状态 IsAgentRunning 应为 false")
+	}
+	if sc.HasInFlightRound() {
+		t.Error("idle 状态 HasInFlightRound 应为 false")
+	}
+}
+
+// TestStreamController_CancelAgent_idle状态 覆盖 CancelAgent 的 HasInFlightRound==false 分支。
+func TestStreamController_CancelAgent_idle状态(t *testing.T) {
+	sc := newStreamControllerWithTeamHarness()
+	if err := sc.CancelAgent(context.Background()); err != nil {
+		t.Errorf("idle 状态 CancelAgent 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestStreamController_CooperativeCancel_idle状态 覆盖 CooperativeCancel 的 HasInFlightRound==false 分支。
+func TestStreamController_CooperativeCancel_idle状态(t *testing.T) {
+	sc := newStreamControllerWithTeamHarness()
+	if err := sc.CooperativeCancel(context.Background()); err != nil {
+		t.Errorf("idle 状态 CooperativeCancel 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestStreamController_DrainAgentTask_idle状态 覆盖 DrainAgentTask 的 idle 分支。
+func TestStreamController_DrainAgentTask_idle状态(t *testing.T) {
+	sc := newStreamControllerWithTeamHarness()
+	if err := sc.DrainAgentTask(context.Background()); err != nil {
+		t.Errorf("idle 状态 DrainAgentTask 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestStreamController_forwardOutputs_空输出 覆盖 forwardOutputs 的 Outputs 非 nil 但立即结束。
+func TestStreamController_forwardOutputs_空输出(t *testing.T) {
+	sc := newStreamControllerWithTeamHarness()
+	// Outputs 非 nil，但 queue 无数据（未 Start 未 Send），Next 会阻塞
+	// 用短 ctx 让 Next 因 ctx.Done 返回 false → forwardOutputs 退出
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		sc.forwardOutputs(ctx)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("forwardOutputs 应因 ctx 取消退出")
 	}
 }

@@ -369,3 +369,21 @@ internal/swarm/server/adapter/code_adapter.go#L954
 # 该接口的实现侧（*DeepAgent）由 internal/agentcore/harness/deep_agent_interaction_test.go
 # 的 30+ 用例覆盖，此处豁免仅为消除「声明行不可插桩」造成的假红。
 internal/agentcore/harness/interfaces/deep_agent.go
+
+# ── 25.1a StreamController 订阅驱动 ──
+# stream_controller.go forwardOutputs 核心循环：读 TeamHarness.Outputs() 的
+# OutputIterator（native.queue 由 native.forwardOutputs 从 session 流泵入），
+# 只有真 TeamHarness + 真模型驱动（Send 一轮产 chunk）才能让 it.Next 返回非空
+# chunk。agent 包单测无法构造 native 运行态 + session 流，属「依赖外部运行环境」
+# 类豁免，由 tests/integration/agentteams/harness 集成测试覆盖。
+internal/agent_teams/agent/stream_controller.go#L446-L469
+# stream_controller.go CancelAgent/CooperativeCancel 的 Abort 转发分支：
+# 前置 HasInFlightRound()==true 需要 TeamHarness.State()==RUNNING（真模型驱动一轮），
+# agent 包单测无法构造 running 运行态，由集成测试覆盖。
+internal/agent_teams/agent/stream_controller.go#L214
+internal/agent_teams/agent/stream_controller.go#L278-L280
+
+# ── 25.1a TeamHarness 迁包 ──
+# resources.go 仅改 import 行 + 字段类型引用（TeamHarness 父包→harness 子包），
+# 纯类型声明改动，无可执行语句、无覆盖块。行级豁免对声明行无效，须整文件豁免。
+internal/agent_teams/agent/resources.go
