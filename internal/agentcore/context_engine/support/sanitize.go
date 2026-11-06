@@ -1,4 +1,4 @@
-package sanitize
+package support
 
 import (
 	"encoding/json"

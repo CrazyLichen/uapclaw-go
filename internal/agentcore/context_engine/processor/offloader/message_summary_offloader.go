@@ -14,6 +14,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -948,7 +949,7 @@ func (mso *MessageSummaryOffloader) parseCompressionResult(responseContent strin
 //
 // Python: MessageSummaryOffloader._is_context_overflow_error()
 func (mso *MessageSummaryOffloader) isContextOverflowError(err error) bool {
-	return iface.IsContextOverflowError(err)
+	return support.IsContextOverflowError(err)
 }
 
 // truncateStr 截断字符串到指定长度

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -36,6 +37,9 @@ type usageStubModelContext struct {
 // Statistic 返回注入的统计快照。
 func (m *usageStubModelContext) Statistic() *ceiface.ContextStats { return &m.stats }
 
+// TokenCounter 返回 nil：分类计数走字符估算，避免测试依赖 tiktoken 资源。
+func (m *usageStubModelContext) TokenCounter() token.TokenCounter { return nil }
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestEmitContextUsage_分母取ceConfig分子取总量 验证 context.usage 的口径：
@@ -47,7 +51,14 @@ func TestEmitContextUsage_分母取ceConfig分子取总量(t *testing.T) {
 
 	response := llmschema.NewAssistantMessage("ok")
 	response.UsageMetadata = &llmschema.UsageMetadata{InputTokens: 8000, OutputTokens: 200, TotalTokens: 8200}
-	inputs := &sainterfaces.ModelCallInputs{Response: response}
+	inputs := &sainterfaces.ModelCallInputs{
+		Response: response,
+		Messages: []llmschema.BaseMessage{
+			llmschema.NewSystemMessage("你是助手"),
+			llmschema.NewUserMessage("问题"),
+			llmschema.NewAssistantMessage("答复"),
+		},
+	}
 
 	sess := &fakeSession{}
 	cbCtx := sainterfaces.NewAgentCallbackContext(&usageStubAgent{cfg: reactCfg}, inputs, sess)
@@ -73,4 +84,6 @@ func TestEmitContextUsage_分母取ceConfig分子取总量(t *testing.T) {
 	require.NotNil(t, snapshot.ContextWindow.OccupancyRate)
 	assert.InDelta(t, 0.25, *snapshot.ContextWindow.OccupancyRate, 1e-6)
 	assert.Len(t, snapshot.Parts, 4, "四类用量都应出现")
+	assert.Positive(t, snapshot.Parts["system_prompt"].Tokens, "系统提示词分类应有非零值")
+	assert.Positive(t, snapshot.Parts["messages"].Tokens, "消息分类应有非零值")
 }

@@ -448,12 +448,13 @@ func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter 
 //
 // 返回 0 表示未找到有效的 usage_metadata（调用方回退到逐条计数）。
 func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
+	// 只认"仍描述当前前缀"的记录：被改写过（压缩/替换/弹出/换模型/恢复）的
+	// assistant 已打过期标记，必须跳过并回落到逐条计数。
 	for i := len(messages) - 1; i >= 0; i-- {
-		am, ok := messages[i].(*llm_schema.AssistantMessage)
-		if !ok || am.UsageMetadata == nil {
+		if !HasValidUsageMetadata(messages[i]) {
 			continue
 		}
-		if am.UsageMetadata.TotalTokens > 0 {
+		if am, ok := messages[i].(*llm_schema.AssistantMessage); ok {
 			return am.UsageMetadata.TotalTokens
 		}
 	}

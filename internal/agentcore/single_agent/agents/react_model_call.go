@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -223,7 +224,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		// 上下文溢出：压缩一次再重试本轮（只重试一次；流式已吐字则不允许，
 		// 否则会把已发送的前缀重发一遍）。Python: recover_from_model_context_overflow。
 		if !overflowRecovered && modelCtx != nil && a.contextEngine != nil &&
-			ceinterface.IsContextOverflowError(err) {
+			support.IsContextOverflowError(err) {
 			emitted := 0
 			if isStreaming && cbc.ModelVisibleOutputEmitted() {
 				emitted = 1

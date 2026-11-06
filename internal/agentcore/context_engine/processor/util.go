@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/sanitize"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -244,13 +244,13 @@ func EstimateContentTokens(content any) int {
 	// 先净化图片载荷：data URL/base64 若按字符数计入会把一张图算成几万 token
 	// （对齐上游 content_sanitize.sanitize_content_for_text 的使用点）。
 	if str, ok := content.(string); ok {
-		result := len(sanitize.SanitizeContentForText(str)) / 3
+		result := len(support.SanitizeContentForText(str)) / 3
 		if result < 1 {
 			return 1
 		}
 		return result
 	}
-	data, err := json.Marshal(sanitize.SanitizeValueForText(content))
+	data, err := json.Marshal(support.SanitizeValueForText(content))
 	if err != nil {
 		result := len(fmt.Sprintf("%v", content)) / 3
 		if result < 1 {
@@ -277,7 +277,7 @@ func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
 	}
 	content := msg.GetContent()
 	if content.IsText() {
-		text := sanitize.SanitizeContentForText(content.Text())
+		text := support.SanitizeContentForText(content.Text())
 		result := len(text) / 3
 		if result < 1 {
 			return 1
@@ -290,7 +290,7 @@ func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
 	for _, part := range parts {
 		switch {
 		case token.IsImagePart(part):
-			total += len(sanitize.ImageDataURLPlaceholder) / 3
+			total += len(support.ImageDataURLPlaceholder) / 3
 		case part.Type == "text" || part.Type == "":
 			total += EstimateContentTokens(part.Text)
 		default:

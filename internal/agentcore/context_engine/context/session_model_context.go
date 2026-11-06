@@ -253,6 +253,8 @@ func (mc *SessionModelContext) UpdateModelContext(modelName string, contextWindo
 		mc.modelWindowOverride = contextWindowTokens
 	}
 	mc.contextWindowTokens = mc.effectiveGlobalWindow()
+	// 换模型后所有历史用量都是在旧绑定下测的（对齐 context.py:260）
+	iface.InvalidateUsageMetadata(mc.messageBuffer.GetBack(0, true))
 	logger.Info(logComponent).
 		Str("event_type", "CONTEXT_MODEL_UPDATED").
 		Str("context_id", mc.contextID).
@@ -302,6 +304,8 @@ func (mc *SessionModelContext) SetMessages(messages []llm_schema.BaseMessage, wi
 	}
 	EnsureContextMessageIDs(messages)
 	mc.messageBuffer.SetMessages(messages, withHistory)
+	// 改写后旧 usage 基线不再描述当前前缀（对齐 context.py:540 set_messages）
+	iface.InvalidateUsageMetadata(mc.messageBuffer.GetBack(0, true))
 }
 
 // PopMessages 从尾部弹出消息。
@@ -317,7 +321,12 @@ func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_sch
 			Msg("PopMessages size cannot be negative")
 		return nil
 	}
-	return mc.messageBuffer.PopBack(size, withHistory)
+	popped := mc.messageBuffer.PopBack(size, withHistory)
+	if len(popped) > 0 {
+		// 弹出后前缀变短，旧 usage 基线作废（对齐 context.py:524 pop_messages）
+		iface.InvalidateUsageMetadata(mc.messageBuffer.GetBack(0, true))
+	}
+	return popped
 }
 
 // ClearMessages 清空消息，重置卸载缓冲区，触发 ContextCleared 事件。
@@ -376,7 +385,9 @@ func (mc *SessionModelContext) AddMessages(ctx context.Context, messages []llm_s
 	if mc.activeCompressionInProgress.Load() {
 		if !mc.processorLock.TryLock() {
 			// 无法获取锁，仅入队不执行处理器
+			retained := mc.messageBuffer.GetBack(0, true)
 			mc.messageBuffer.AddBack(messages)
+			mc.invalidateUsageIfAppendChangedPrefix(retained)
 			logger.Info(logComponent).
 				Str("event_type", "CONTEXT_ADD_MESSAGES_FAST_PATH").
 				Str("context_id", mc.contextID).
@@ -399,9 +410,11 @@ func (mc *SessionModelContext) AddMessages(ctx context.Context, messages []llm_s
 			}
 		}
 		// 执行处理器，对齐 Python: trigger="passive"
+		retained := mc.messageBuffer.GetBack(0, true)
 		_, messages, _ = mc.runAddProcessors(ctx, messages, false, nil, false, ceschema.PhaseAddMessages, "passive", opts...)
 		// 入队
 		mc.messageBuffer.AddBack(messages)
+		mc.invalidateUsageIfAppendChangedPrefix(retained)
 		mc.processorLock.Unlock()
 	}
 
@@ -763,6 +776,9 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 			}
 			EnsureContextMessageIDs(messages)
 			mc.messageBuffer.Rebuild(messages)
+			// 恢复的上下文开启新的统计生命周期：旧 usage 基线来自另一段会话状态
+			// （对齐 context.py:1571 load_state）
+			iface.InvalidateUsageMetadata(mc.messageBuffer.GetBack(0, true))
 		} else if messagesVal != nil {
 			// 形态无法识别时显式告警，避免"恢复成功但上下文为空"的静默丢数据
 			logger.Warn(logComponent).
@@ -1167,19 +1183,47 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 	// Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
 	// Python: 如果usage_tokens不为空则直接设置总Token数
 	for i := len(messages) - 1; i >= 0; i-- {
+		if !iface.HasValidUsageMetadata(messages[i]) {
+			continue
+		}
 		if am, ok := messages[i].(*llm_schema.AssistantMessage); ok {
-			if am.UsageMetadata == nil {
-				continue
-			}
-			if tokens := am.UsageMetadata.TotalTokens; tokens > 0 {
-				stat.TotalTokens = tokens
-				return
-			}
+			stat.TotalTokens = am.UsageMetadata.TotalTokens
+			return
 		}
 	}
 
 	// 无 usage_metadata，逐条计算 token 并按角色累加
 	mc.countMessagesTokensByRole(stat, messages)
+}
+
+// invalidateUsageIfAppendChangedPrefix 仅当追加同时改写了旧上下文时才作废用量基线。
+//
+// 纯追加是安全的：provider 基线描述的是那条 assistant 之前的累计输入，
+// 其后的消息由 tokenizer 作为"尾部增量"另外计入。但上下文处理器可能重写已有缓冲区、
+// 或 max_context_message_num 会把窗口整体前移，这两种情况下旧基线失效，必须打过期标记。
+//
+// Python: SessionModelContext._invalidate_usage_if_append_changed_retained_prefix()
+func (mc *SessionModelContext) invalidateUsageIfAppendChangedPrefix(retained []llm_schema.BaseMessage) {
+	current := mc.messageBuffer.GetBack(0, true)
+	if retainedMessagePrefixPreserved(retained, current) {
+		return
+	}
+	iface.InvalidateUsageMetadata(current)
+}
+
+// retainedMessagePrefixPreserved 判断旧消息是否仍是新列表的未改动前缀。
+//
+// 按 context_message_id 序列比较（Go 的接口值不保证可比，不能用指针同一性）。
+func retainedMessagePrefixPreserved(previous, current []llm_schema.BaseMessage) bool {
+	if len(current) < len(previous) {
+		return false
+	}
+	for index := range previous {
+		if GetContextMessageID(current[index]) != GetContextMessageID(previous[index]) {
+			return false
+		}
+	}
+	return true
 }
 
 // countMessagesByRole 按角色计数消息数量。

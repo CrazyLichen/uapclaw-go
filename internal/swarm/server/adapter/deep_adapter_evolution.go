@@ -148,17 +148,12 @@ func (d *DeepAdapter) emitPostCompactUsage(
 	}
 	limitTokens := cecontext.ResolveContextMax(modelName, fallbackWindow, ceConfig.ModelContextWindowTokens)
 
-	stats := modelCtx.Statistic()
-	systemTokens, toolsTokens, totalTokens := 0, 0, 0
-	if stats != nil {
-		systemTokens = stats.SystemMessageTokens
-		toolsTokens = stats.ToolTokens
-		totalTokens = stats.TotalTokens
-	}
-	messageTokens := totalTokens - systemTokens - toolsTokens
-	if messageTokens < 0 {
-		messageTokens = 0
-	}
+	// 分类独立计数：Statistic 在有 usage 基线时早退，分类字段恒为 0，
+	// 直接拿它会让快照显示"消息占 100%"。
+	messages, _ := modelCtx.GetMessages(0, true)
+	// 压缩路径拿不到本轮工具清单（工具定义不含在消息里），工具类别留 0 并在文档说明
+	systemTokens, toolsTokens, messageTokens := ceinterface.CountCategoryTokens(
+		messages, nil, modelCtx.TokenCounter())
 
 	snapshot := usage_snapshot.BuildSnapshot(usage_snapshot.SnapshotInput{
 		Phase:              usage_snapshot.PhasePostCompact,

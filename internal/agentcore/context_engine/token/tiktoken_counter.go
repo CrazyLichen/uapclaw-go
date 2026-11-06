@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/tiktoken-go/tokenizer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/sanitize"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -232,7 +232,7 @@ func contentForCounting(content llm_schema.MessageContent) (string, int) {
 			texts = append(texts, part.Text)
 		default:
 			// 未知块（音频/视频/自定义）：净化后按文本计，避免原始载荷进入计数
-			texts = append(texts, sanitize.SanitizeContentForText(part))
+			texts = append(texts, support.SanitizeContentForText(part))
 		}
 	}
 	return strings.Join(texts, "\n"), imageTokens

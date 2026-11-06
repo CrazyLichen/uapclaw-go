@@ -7,6 +7,7 @@ import (
 	"time"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	usage_snapshot "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -15,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
@@ -218,20 +220,17 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 	limitTokens := cecontext.ResolveContextMax(
 		modelName, fallbackWindow, ceConfig.ModelContextWindowTokens)
 
-	// 分类用量：系统提示词 / 工具 / 消息（技能提示词计入系统消息，单列 0）
-	stats := modelCtx.Statistic()
-	systemTokens := 0
-	toolsTokens := 0
-	totalTokens := 0
-	if stats != nil {
-		systemTokens = stats.SystemMessageTokens
-		toolsTokens = stats.ToolTokens
-		totalTokens = stats.TotalTokens
+	// 分类用量：独立计数，不读 usage 基线的早退结果（有基线时 Statistic 的分类字段恒为 0）
+	var contextMessages []llmschema.BaseMessage
+	var contextTools []cschema.ToolInfoInterface
+	if inputs := cbCtx.Inputs(); inputs != nil {
+		if mcInputs, ok := inputs.(*sainterfaces.ModelCallInputs); ok {
+			contextMessages = mcInputs.Messages
+			contextTools = mcInputs.Tools
+		}
 	}
-	messageTokens := totalTokens - systemTokens - toolsTokens
-	if messageTokens < 0 {
-		messageTokens = 0
-	}
+	systemTokens, toolsTokens, messageTokens := ceiface.CountCategoryTokens(
+		contextMessages, contextTools, modelCtx.TokenCounter())
 
 	// provider 上报的用量（权威总量）
 	var usage *llmschema.UsageMetadata

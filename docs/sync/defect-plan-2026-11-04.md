@@ -143,10 +143,18 @@ rg -n "<Python 符号>" internal/
   C3 `cce6e5ad`+`b2fd1c6f`+`286f95bf`（token 口径、内容净化与图像计费、read_file 预算）、
   C4 `780d9ab3`（溢出识别与压缩自救）、C5 `a20abd8b`（摘要卸载字段 + modified_messages）、
   C6 `b8481e8a`（usage 子系统与 v1 快照）；另 `ea980ead` 补齐可压缩跨度与工具边界保护。
-- **B-06 的偏差登记**：上游用"消息级 usage_metadata 基线 + 五处失效点"避免每轮重算；
-  Go 的 `Statistic()` 本就逐轮现算（tokenizer，无缓存基线），不存在"基线失效"问题，
-  故未移植失效点，provider 权威量改由快照 `request_kv_cache` 承载。回收条件：若后续为性能引入
-  token 计数缓存，须同时移植五处失效点。
+- **共享工具的落点偏差（D-6）**：`content_sanitize.py` 与 `ContextEngine.is_context_overflow_error`
+  在上游都位于 context_engine 根模块；Go 的导入方向为「根包 → processor / token / context」，
+  下沉到根包会成环。二者统一放到叶包 `context_engine/support`（一个包、一处偏差），
+  契约包 `interface` 保持只有契约。回收条件：若上游把这两件事拆到独立模块，按新模块名改名即可。
+- **B-06 更正（2026-11-06，原判断有误）**：初版结论写作"Go 逐轮现算、无缓存基线，失效点不适用"，
+  实测不成立 —— `ContextStats.StatMessages` 在命中 usage 基线时**早退**，且
+  `getLastAssistantUsageTokens` 没有任何"基线是否仍描述当前前缀"的判断。已按上游移植：
+  `CONTEXT_USAGE_STALE_KEY` + `InvalidateUsageMetadata` + `HasValidUsageMetadata`，
+  并在六处打标（SetMessages / PopMessages / AddMessages 两条路径 / UpdateModelContext / LoadState），
+  对齐 `context_utils.py:363-388` 与 `context.py:260/354/368/524/540/1571`。
+  快照分类改为 `CountCategoryTokens` 独立计数（不再用 `total - system - tools` 反推），
+  否则有基线时分类恒为 0、界面显示"消息占 100%"。
 
 ### C. LLM 客户端与流式
 
