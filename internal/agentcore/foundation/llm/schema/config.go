@@ -99,6 +99,13 @@ const (
 	ProviderTypeIntelliRouter
 )
 
+
+// defaultClientTimeoutSeconds 默认请求超时（秒）。
+//
+// Python: schema/config.py:145 timeout default=360.0, gt=0——注释明文约定
+// timeout >= stream_first_chunk_timeout(300)，传输层永不先于应用层流超时触发。
+const defaultClientTimeoutSeconds = 360.0
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // providerTypeStrings 服务商类型名称数组，按枚举值索引。
@@ -260,7 +267,7 @@ func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientC
 		ClientProvider:          provider,
 		APIKey:                  apiKey,
 		APIBase:                 apiBase,
-		Timeout:                 60.0,
+		Timeout:                 defaultClientTimeoutSeconds,
 		StreamFirstChunkTimeout: &defaultFirstChunk,
 		StreamIdleTimeout:       &defaultIdle,
 		MaxRetries:              3,

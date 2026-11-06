@@ -7,10 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
@@ -1142,136 +1140,6 @@ func TestBuildReleaseRequestBody_无Messages(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── buildReleaseHTTPClient 测试 ────────────────────────────
-
-func TestBuildReleaseHTTPClient_VerifySSL无效证书(t *testing.T) {
-	// VerifySSL=true 且 SSLCert 指向不存在的文件，应返回错误
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
-			llmschema.WithVerifySSL(true),
-			llmschema.WithSSLCert("/nonexistent/cert.pem"),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = client.buildReleaseHTTPClient(nil)
-	if err == nil {
-		t.Error("不存在的 SSL 证书文件应返回错误")
-	}
-	if !strings.Contains(err.Error(), "读取 SSL 证书失败") {
-		t.Errorf("错误信息 = %q, 应包含 '读取 SSL 证书失败'", err.Error())
-	}
-}
-
-func TestBuildReleaseHTTPClient_VerifySSL无效证书内容(t *testing.T) {
-	// VerifySSL=true 且 SSLCert 指向无效证书内容，应返回解析错误
-	// 创建临时文件写入无效 PEM 内容
-	tmpFile, err := os.CreateTemp("", "cert-*.pem")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
-	_, _ = tmpFile.WriteString("not a valid pem certificate")
-	_ = tmpFile.Close()
-
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
-			llmschema.WithVerifySSL(true),
-			llmschema.WithSSLCert(tmpFile.Name()),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = client.buildReleaseHTTPClient(nil)
-	if err == nil {
-		t.Error("无效的 SSL 证书内容应返回错误")
-	}
-	if !strings.Contains(err.Error(), "解析 SSL 证书失败") {
-		t.Errorf("错误信息 = %q, 应包含 '解析 SSL 证书失败'", err.Error())
-	}
-}
-
-func TestBuildReleaseHTTPClient_配置超时(t *testing.T) {
-	// ClientConfig.Timeout > 0 时应使用配置的超时时间
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
-			llmschema.WithVerifySSL(false),
-			llmschema.WithTimeout(30.0),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	httpClient, err := client.buildReleaseHTTPClient(nil)
-	if err != nil {
-		t.Fatalf("buildReleaseHTTPClient 返回错误: %v", err)
-	}
-	// 超时时间应为 30 秒
-	expectedTimeout := time.Duration(30.0 * float64(time.Second))
-	if httpClient.Timeout != expectedTimeout {
-		t.Errorf("Timeout = %v, 期望 %v", httpClient.Timeout, expectedTimeout)
-	}
-}
-
-func TestBuildReleaseHTTPClient_自定义超时(t *testing.T) {
-	// 传入自定义 timeout 时应覆盖配置的超时时间
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
-			llmschema.WithVerifySSL(false),
-			llmschema.WithTimeout(30.0),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	customTimeout := 120.0
-	httpClient, err := client.buildReleaseHTTPClient(&customTimeout)
-	if err != nil {
-		t.Fatalf("buildReleaseHTTPClient 返回错误: %v", err)
-	}
-	expectedTimeout := time.Duration(120.0 * float64(time.Second))
-	if httpClient.Timeout != expectedTimeout {
-		t.Errorf("Timeout = %v, 期望 %v", httpClient.Timeout, expectedTimeout)
-	}
-}
-
-func TestBuildReleaseHTTPClient_VerifySSLTrue无证书(t *testing.T) {
-	// VerifySSL=true 且无 SSLCert 时，构造函数会要求 ssl_cert
-	// 无法创建 VerifySSL=true 且无 SSLCert 的客户端（构造函数会报错）
-	// 所以直接测试 buildReleaseHTTPClient 内部 VerifySSL=true + SSLCert="" 的路径
-	// 需要手动构造 ClientConfig 绕过构造函数校验
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 手动设置 VerifySSL=true 但 SSLCert 为空，模拟"验证但无证书文件"路径
-	// 这种情况下 buildReleaseHTTPClient 走到 else if SSLCert != "" 的 else 分支，
-	// 即使用默认 TLS 配置（transport 无 TLSClientConfig）
-	client.ClientConfig.VerifySSL = true
-	client.ClientConfig.SSLCert = ""
-
-	httpClient, err := client.buildReleaseHTTPClient(nil)
-	if err != nil {
-		t.Fatalf("buildReleaseHTTPClient 返回错误: %v", err)
-	}
-	if httpClient == nil {
-		t.Error("httpClient 不应为 nil")
-	}
-}
-
 // ──────────────────────────── sanitizeMessages 错误路径测试 ────────────────────────────
 
 func TestSanitizeMessages_空消息错误(t *testing.T) {
@@ -1314,11 +1182,12 @@ func TestRelease_构建请求体错误(t *testing.T) {
 	}
 }
 
-func TestRelease_SSL证书错误(t *testing.T) {
-	// buildReleaseHTTPClient 返回错误时，Release 应返回错误
+func TestRelease_证书不可读不阻断请求(t *testing.T) {
+	// 共享 Transport 池对不可读证书退化为系统信任库（C-A1 语义）；
+	// 连接失败属网络错误而非构建错误——断言「不再报构建 HTTP 客户端失败」。
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
-		mustNewClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+		mustNewClientConfig("InferenceAffinity", "test-key", "https://127.0.0.1:1/v1",
 			llmschema.WithVerifySSL(true),
 			llmschema.WithSSLCert("/nonexistent/cert.pem"),
 		),
@@ -1333,10 +1202,10 @@ func TestRelease_SSL证书错误(t *testing.T) {
 		model_clients.WithReleaseMessagesIndex(0),
 	)
 	if err == nil {
-		t.Error("SSL 证书错误时 Release 应返回错误")
+		t.Fatal("不可达地址应返回错误")
 	}
-	if !strings.Contains(err.Error(), "构建 HTTP 客户端失败") {
-		t.Errorf("错误信息 = %q, 应包含 '构建 HTTP 客户端失败'", err.Error())
+	if strings.Contains(err.Error(), "构建 HTTP 客户端失败") {
+		t.Errorf("不应再报构建失败（证书已退化）：%q", err.Error())
 	}
 }
 

@@ -580,12 +580,13 @@ func TestRequestTimeout_未配置走SDK默认(t *testing.T) {
 	}
 	e, _ := NewBaseClientEmbed(mc, cc)
 
-	if got := e.RequestTimeout(nil); got == nil || *got != 60.0 {
-		t.Fatalf("未显式配置时应取默认 60s, 实际 %v", got)
+	// 默认值 360（Python: schema/config.py:145），已由 NewModelClientConfig 填入 Timeout
+	if got := e.RequestTimeout(nil); got == nil || *got != 360.0 {
+		t.Fatalf("未显式配置时应取默认 360s, 实际 %v", got)
 	}
 	zero := 0.0
-	if got := e.RequestTimeout(&zero); got == nil || *got != 60.0 {
-		t.Fatalf("方法级 0 应视为未配置并回落到 60s, 实际 %v", got)
+	if got := e.RequestTimeout(&zero); got == nil || *got != 360.0 {
+		t.Fatalf("方法级 0 应视为未配置并回落到 360s, 实际 %v", got)
 	}
 
 	bare := &BaseClientEmbed{}

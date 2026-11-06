@@ -162,6 +162,7 @@ func (c *SiliconFlowModelClient) Stream(
 		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
+		true, // Stream 路径：无总超时（C-A2 超时语义）
 	)
 	if err != nil {
 		return nil, c.WrapError("stream", err)

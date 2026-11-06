@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -131,14 +133,13 @@ func (c *OpenAIModelClient) TranscribeAudio(
 		req.Header.Set(k, v)
 	}
 
-	// 6. 构建 HTTP 客户端
-	client, err := buildHTTPClient(nil, c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)
-	if err != nil {
-		return nil, exception.NewBaseError(
-			exception.StatusModelCallFailed,
-			exception.WithMsg(fmt.Sprintf("构建 HTTP 客户端失败: %s", err.Error())),
-		)
+	// 6. 共享 Transport（C-A/C-14 收敛）；总超时挂 ctx（非流式语义）
+	if t := c.RequestTimeout(nil); t != nil && *t > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(*t*float64(time.Second)))
+		defer cancel()
 	}
+	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
 
 	// 7. 日志记录（对齐 Python: llm_logger.info 事件记录）
 	logger.Info(logComponent).

@@ -256,8 +256,8 @@ func TestNewModelClientConfig(t *testing.T) {
 	if cfg.APIBase != "https://api.openai.com" {
 		t.Errorf("APIBase = %q, want %q", cfg.APIBase, "https://api.openai.com")
 	}
-	if cfg.Timeout != 60.0 {
-		t.Errorf("Timeout = %f, want 60.0", cfg.Timeout)
+	if cfg.Timeout != 360.0 {
+		t.Errorf("Timeout = %f, want 360.0（Python: schema/config.py:145 默认，>= first_chunk 300）", cfg.Timeout)
 	}
 	if cfg.MaxRetries != 3 {
 		t.Errorf("MaxRetries = %d, want 3", cfg.MaxRetries)

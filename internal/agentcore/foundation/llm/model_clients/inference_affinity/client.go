@@ -3,13 +3,10 @@ package inferenceaffinity
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -185,6 +182,7 @@ func (c *InferenceAffinityModelClient) Stream(
 		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
+		true, // Stream 路径：无总超时（C-A2 超时语义）
 	)
 	if err != nil {
 		return nil, c.WrapError("stream", err)
@@ -352,11 +350,16 @@ func (c *InferenceAffinityModelClient) Release(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.ClientConfig.APIKey)
 
-	// 3. 构建 HTTP 客户端
-	client, err := c.buildReleaseHTTPClient(nil)
-	if err != nil {
-		return false, fmt.Errorf("构建 HTTP 客户端失败: %w", err)
+	// 3. 共享 Transport（C-A/C-14 收敛）；总超时挂 ctx（非流式语义，方法级>配置级）
+	releaseTimeout := c.RequestTimeout(nil)
+	if releaseTimeout == nil {
+		// Python: schema/config.py:145 默认 360
+		def := 360.0
+		releaseTimeout = &def
 	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(*releaseTimeout*float64(time.Second)))
+	defer cancel()
+	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
 
 	// 4. 发送请求（对齐 Python: release 使用 llm_logger，非回调）
 	logger.Info(logComponent).
@@ -700,51 +703,6 @@ func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 	}
 
 	return releaseBody, nil
-}
-
-// buildReleaseHTTPClient 构建 Release 请求用的 HTTP 客户端。
-//
-// 复用与 OpenAI 客户端一致的 SSL/代理/超时配置。
-func (c *InferenceAffinityModelClient) buildReleaseHTTPClient(
-	timeout *float64,
-) (*http.Client, error) {
-	transport := &http.Transport{}
-
-	// SSL 配置
-	if !c.ClientConfig.VerifySSL {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-	} else if c.ClientConfig.SSLCert != "" {
-		caCert, err := os.ReadFile(c.ClientConfig.SSLCert)
-		if err != nil {
-			return nil, fmt.Errorf("读取 SSL 证书失败: %w", err)
-		}
-		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("解析 SSL 证书失败: %s", c.ClientConfig.SSLCert)
-		}
-		transport.TLSClientConfig = &tls.Config{
-			RootCAs: caCertPool,
-		}
-	}
-
-	// 代理配置：优先环境变量
-	transport.Proxy = http.ProxyFromEnvironment
-
-	// 构建超时时间
-	clientTimeout := 60.0 // 默认 60 秒
-	if c.ClientConfig.Timeout > 0 {
-		clientTimeout = c.ClientConfig.Timeout
-	}
-	if timeout != nil && *timeout > 0 {
-		clientTimeout = *timeout
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   time.Duration(clientTimeout * float64(time.Second)),
-	}, nil
 }
 
 // sanitizeToolCalls 清洗消息中的 tool_calls，只保留 OpenAI 标准字段。

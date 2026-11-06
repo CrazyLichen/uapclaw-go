@@ -700,7 +700,7 @@ func TestBuildHTTPRequest_带自定义请求头(t *testing.T) {
 	params := map[string]any{"model": "gpt-4", "messages": []any{}, "stream": false}
 	headers := map[string]string{"X-Custom": "value"}
 
-	req, _, err := BuildHTTPRequest(ctx, "https://api.openai.com/v1", "test-key", params, headers, nil, false, "")
+	req, _, err := BuildHTTPRequest(ctx, "https://api.openai.com/v1", "test-key", params, headers, nil, false, "", false)
 	if err != nil {
 		t.Fatalf("BuildHTTPRequest 报错: %v", err)
 	}
@@ -714,7 +714,7 @@ func TestBuildHTTPRequest_带超时(t *testing.T) {
 	params := map[string]any{"model": "gpt-4", "messages": []any{}, "stream": false}
 	timeout := 30.0
 
-	_, client, err := BuildHTTPRequest(ctx, "https://api.openai.com/v1", "test-key", params, nil, &timeout, false, "")
+	_, client, err := BuildHTTPRequest(ctx, "https://api.openai.com/v1", "test-key", params, nil, &timeout, false, "", false)
 	if err != nil {
 		t.Fatalf("BuildHTTPRequest 报错: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestBuildHTTPRequest_序列化失败(t *testing.T) {
 		"invalid":  make(chan int),
 	}
 
-	_, _, err := BuildHTTPRequest(ctx, "https://api.openai.com/v1", "test-key", params, nil, nil, false, "")
+	_, _, err := BuildHTTPRequest(ctx, "https://api.openai.com/v1", "test-key", params, nil, nil, false, "", false)
 	if err == nil {
 		t.Error("序列化失败应返回错误")
 	}

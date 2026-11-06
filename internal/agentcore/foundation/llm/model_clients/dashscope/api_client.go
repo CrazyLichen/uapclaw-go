@@ -3,16 +3,14 @@ package dashscope
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -94,14 +92,14 @@ func CallDashScopeAPI(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	// 6. 构建 HTTP 客户端
-	client, err := buildDashScopeHTTPClient(timeout, verifySSL, sslCert)
-	if err != nil {
-		return nil, exception.NewBaseError(
-			exception.StatusModelCallFailed,
-			exception.WithMsg(fmt.Sprintf("DashScope API 构建 HTTP 客户端失败: %s", err)),
-		)
+	// 6. 共享 Transport（C-A/C-14 收敛）；总超时挂 ctx（非流式语义）
+	dashScopeTimeout := 120.0 // 多模态 API 默认 120 秒（比文本生成更长）
+	if timeout != nil && *timeout > 0 {
+		dashScopeTimeout = *timeout
 	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(dashScopeTimeout*float64(time.Second)))
+	defer cancel()
+	client := &http.Client{Transport: model_clients.GetSharedTransport(verifySSL, sslCert)}
 
 	// 7. 发送请求（对齐 Python: DashScope 多模态 API 使用 logger，非回调）
 	logger.Info(logComponent).
@@ -164,42 +162,3 @@ func CallDashScopeAPI(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildDashScopeHTTPClient 构建配置了 SSL/代理/超时的 HTTP 客户端。
-//
-// 逻辑与 openai 包的 buildHTTPClient 一致，但独立维护以避免跨包依赖内部函数。
-func buildDashScopeHTTPClient(timeout *float64, verifySSL bool, sslCert string) (*http.Client, error) {
-	transport := &http.Transport{}
-
-	// SSL 配置
-	if !verifySSL {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-	} else if sslCert != "" {
-		caCert, err := os.ReadFile(sslCert)
-		if err != nil {
-			return nil, fmt.Errorf("读取 SSL 证书失败: %w", err)
-		}
-		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("解析 SSL 证书失败: %s", sslCert)
-		}
-		transport.TLSClientConfig = &tls.Config{
-			RootCAs: caCertPool,
-		}
-	}
-
-	// 代理配置：优先环境变量
-	transport.Proxy = http.ProxyFromEnvironment
-
-	// 构建超时时间
-	clientTimeout := 120.0 // 多模态 API 默认 120 秒（比文本生成更长）
-	if timeout != nil && *timeout > 0 {
-		clientTimeout = *timeout
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   time.Duration(clientTimeout * float64(time.Second)),
-	}, nil
-}

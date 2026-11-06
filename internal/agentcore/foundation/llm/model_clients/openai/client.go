@@ -63,7 +63,8 @@ func NewOpenAIModelClient(
 	// Python: 创建客户端前记录配置参数（Python 使用 llm_logger.info，非回调）
 	finalTimeout := clientConfig.Timeout
 	if finalTimeout <= 0 {
-		finalTimeout = 60.0
+		// Python: schema/config.py:145 默认 360（>= first_chunk 300 不变量）
+		finalTimeout = defaultRequestTimeoutSeconds
 	}
 	logger.Info(logComponent).
 		Str("model_provider", clientConfig.ClientProvider).
@@ -128,6 +129,7 @@ func (c *OpenAIModelClient) Invoke(
 		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
+		false,
 	)
 	if err != nil {
 		return nil, c.WrapError("invoke", err)
@@ -272,6 +274,7 @@ func (c *OpenAIModelClient) Stream(
 		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
+		true,
 	)
 	if err != nil {
 		return nil, c.WrapError("stream", err)

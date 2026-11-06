@@ -1,7 +1,9 @@
 package openai
 
 import (
+	"context"
 	"testing"
+	"time"
 )
 
 // ──────────────────────────── AdjustParamsForOpenAI 测试 ────────────────────────────
@@ -110,5 +112,66 @@ func TestHandleExtraBody_ExistingExtraBody(t *testing.T) {
 	}
 	if extraBody["return_token_ids"] != true {
 		t.Errorf("extra_body.return_token_ids = %v, want true", extraBody["return_token_ids"])
+	}
+}
+
+// ──────────────────────────── 超时语义测试（C-A2）────────────────────────────
+
+// TestBuildHTTPRequest_流式无总超时 流式：Client.Timeout==0（读 body 由帧超时兜底）。
+//
+// 对齐设计文档批次 C-A：总时长语义会切断持续吐字的健康流（c6cd13aa 的残留根因）。
+func TestBuildHTTPRequest_流式无总超时(t *testing.T) {
+	timeout := 1800.0
+	req, client, err := BuildHTTPRequest(context.Background(), "http://x", "k",
+		map[string]any{"model": "m", "messages": []any{}, "stream": true},
+		nil, &timeout, false, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Timeout != 0 {
+		t.Errorf("流式 Client.Timeout = %v want 0", client.Timeout)
+	}
+	if client.Transport == nil {
+		t.Error("应挂共享 Transport")
+	}
+	_ = req
+}
+
+// TestBuildHTTPRequest_Invoke走ctxDeadline 非流式：总超时通过 ctx 生效，Client.Timeout 恒 0。
+func TestBuildHTTPRequest_Invoke走ctxDeadline(t *testing.T) {
+	timeout := 0.5
+	req, client, err := BuildHTTPRequest(context.Background(), "http://x", "k",
+		map[string]any{"model": "m", "messages": []any{}},
+		nil, &timeout, false, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Timeout != 500*time.Millisecond {
+		t.Errorf("Invoke Client.Timeout = %v want 500ms（Client 每请求新建，不污染共享 Transport）", client.Timeout)
+	}
+	// 流式语义对照：同一配置下流式不设总超时
+	_, streamClient, err := BuildHTTPRequest(context.Background(), "http://x", "k",
+		map[string]any{"model": "m", "messages": []any{}, "stream": true},
+		nil, &timeout, false, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if streamClient.Timeout != 0 {
+		t.Errorf("流式 Client.Timeout = %v want 0", streamClient.Timeout)
+	}
+	_ = req
+}
+
+// TestBuildHTTPRequest_默认超时360 未配置 timeout 时取默认 360。
+//
+// Python: schema/config.py:145 timeout 默认 360（>= stream_first_chunk_timeout=300 不变量）
+func TestBuildHTTPRequest_默认超时360(t *testing.T) {
+	_, client, err := BuildHTTPRequest(context.Background(), "http://x", "k",
+		map[string]any{"model": "m", "messages": []any{}}, nil, nil, false, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Timeout != 360*time.Second {
+		t.Errorf("默认 Client.Timeout = %v want 360s", client.Timeout)
 	}
 }

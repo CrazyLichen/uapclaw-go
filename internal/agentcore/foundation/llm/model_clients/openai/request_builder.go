@@ -3,14 +3,13 @@ package openai
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -21,6 +20,12 @@ import (
 
 // chatCompletionsPath Chat Completion API 路径
 const chatCompletionsPath = "/chat/completions"
+
+// defaultRequestTimeoutSeconds 默认请求超时（秒）。
+//
+// Python: schema/config.py:145 timeout 默认 360（gt=0；注释明文约定
+// timeout >= stream_first_chunk_timeout=300，传输层永不先于应用层流超时触发）
+const defaultRequestTimeoutSeconds = 360.0
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -51,8 +56,14 @@ func AdjustParamsForOpenAI(params map[string]any, apiBase string) {
 
 // BuildHTTPRequest 构建发送给 OpenAI API 的 HTTP 请求。
 //
-// 将请求参数序列化为 JSON，设置 Authorization 和 Content-Type 头，
-// 处理 SSL 证书验证和代理配置。
+// 超时语义（设计文档批次 C-A，对齐上游 httpx 分阶段超时）：
+//   - 非流式：`http.Client.Timeout` 承载总超时（Client 对象每请求新建、仅共享 Transport，
+//     不会污染其他请求）；流式下与 Python read 语义不符，故置 0
+//   - 流式：无总超时。等头由共享 Transport 的 ResponseHeaderTimeout 兜；
+//     读 body 由 model.go 帧超时（首帧 300s/空闲 60s）+ cancelStream 兜
+//   - timeout 为 nil 时取默认 360（满足 timeout >= first_chunk=300 不变量）
+//
+// Python: openai_model_client.py:1477-1490（final_timeout → SDK/httpx read 语义）
 func BuildHTTPRequest(
 	ctx context.Context,
 	apiBase, apiKey string,
@@ -61,15 +72,22 @@ func BuildHTTPRequest(
 	timeout *float64,
 	verifySSL bool,
 	sslCert string,
+	streaming bool,
 ) (*http.Request, *http.Client, error) {
-	// 序列化请求体
+	// 序列化请求体（编码失败/非法 UTF-8 → 181004，C-E2 批次接入分类）
 	body, err := encodeJSON(params)
 	if err != nil {
-		return nil, nil, fmt.Errorf("序列化请求参数失败: %w", err)
+		return nil, nil, err
 	}
 
 	// 构建 API URL
 	apiURL := strings.TrimRight(apiBase, "/") + chatCompletionsPath
+
+	// 超时预算：默认 360（对齐 Python schema/config.py:145）
+	effectiveTimeout := defaultRequestTimeoutSeconds
+	if timeout != nil && *timeout > 0 {
+		effectiveTimeout = *timeout
+	}
 
 	// 创建 HTTP 请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
@@ -86,10 +104,11 @@ func BuildHTTPRequest(
 		req.Header.Set(k, v)
 	}
 
-	// 构建 HTTP 客户端
-	client, err := buildHTTPClient(timeout, verifySSL, sslCert)
-	if err != nil {
-		return nil, nil, fmt.Errorf("构建 HTTP 客户端失败: %w", err)
+	// 共享 Transport 池（C-14）：按安全形态分桶复用连接。
+	// Client 是每请求新建的轻对象——共享的是 Transport，因此 Client.Timeout 只作用于本请求。
+	client := &http.Client{Transport: model_clients.GetSharedTransport(verifySSL, sslCert)}
+	if !streaming {
+		client.Timeout = time.Duration(effectiveTimeout * float64(time.Second))
 	}
 
 	return req, client, nil
@@ -118,45 +137,6 @@ func HandleExtraBody(params map[string]any) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// buildHTTPClient 构建配置了 SSL/代理/超时的 HTTP 客户端。
-func buildHTTPClient(timeout *float64, verifySSL bool, sslCert string) (*http.Client, error) {
-	transport := &http.Transport{}
-
-	// SSL 配置
-	if !verifySSL {
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-	} else if sslCert != "" {
-		// 加载自定义 CA 证书
-		caCert, err := os.ReadFile(sslCert)
-		if err != nil {
-			return nil, fmt.Errorf("读取 SSL 证书失败: %w", err)
-		}
-		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("解析 SSL 证书失败: %s", sslCert)
-		}
-		transport.TLSClientConfig = &tls.Config{
-			RootCAs: caCertPool,
-		}
-	}
-
-	// 代理配置：优先环境变量
-	transport.Proxy = http.ProxyFromEnvironment
-
-	// 构建超时时间
-	clientTimeout := 60.0 // 默认 60 秒
-	if timeout != nil && *timeout > 0 {
-		clientTimeout = *timeout
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   time.Duration(clientTimeout * float64(time.Second)),
-	}, nil
-}
 
 // encodeJSON 将 map 编码为 JSON 字节。
 func encodeJSON(params map[string]any) ([]byte, error) {
