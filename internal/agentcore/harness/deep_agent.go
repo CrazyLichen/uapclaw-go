@@ -4245,13 +4245,9 @@ func (d *DeepAgent) supervisorLoop(ctx context.Context, ready chan struct{}) {
 			return
 		}
 		signaled = true
-		if ready == nil {
-			return
-		}
-		select {
-		case ready <- struct{}{}:
-		default:
-		}
+		// ready 恒非 nil（仅 ensureSupervisorRunning 现造通道时传入），容量 1 且只送一次，
+		// 不会阻塞；无人等待时（notifyWork 路径）信号留在缓冲里。
+		ready <- struct{}{}
 	}
 	// 兜底：无论从哪条路径退出，都不能让 Start 卡在等待上
 	defer signalReady()

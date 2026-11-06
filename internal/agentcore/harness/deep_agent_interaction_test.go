@@ -161,6 +161,19 @@ func TestSyncExpertRoleAttachment_空实现占位(t *testing.T) {
 	assert.Nil(t, d.activeAgentTemplate)
 }
 
+// TestWaitSupervisorReady_边界 验证 nil 通道与超时都不阻塞调用方
+func TestWaitSupervisorReady_边界(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// supervisor 已在运行 → ensureSupervisorRunning 返回 nil，Start 不得等待
+	d.waitSupervisorReady(nil, time.Millisecond)
+
+	// supervisor 迟迟未就绪 → 有界等待后返回，不卡住 Start
+	start := time.Now()
+	d.waitSupervisorReady(make(chan struct{}), 20*time.Millisecond)
+	assert.Less(t, time.Since(start), time.Second)
+}
+
 // TestInteractionState_幂等工厂 验证零件只建一次
 func TestInteractionState_幂等工厂(t *testing.T) {
 	d := newTestDeepAgent()
