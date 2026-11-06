@@ -3051,6 +3051,17 @@ func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[str
 	}
 }
 
+// WriteRoundResultToStream 将任务循环轮次结果写入会话流（跨包窄入口）。
+//
+// Python: DeepAgent._write_round_result_to_stream 是私有方法，NativeHarness 靠继承直取；
+// Go 无继承（25.1a 偏差 D-3 组合），NativeHarness（agent_teams/harness）跨包需要窄入口，
+// 与 D-7 PrepareInteractionTaskLoop 同类。NativeHarness.runRound 在 wait_round_completion
+// 拿到 result 后调此方法，把 answer 写成 answer chunk 写流（否则 task_completion 被
+// 消费端丢弃，chat.final 缺失）。
+func (d *DeepAgent) WriteRoundResultToStream(ctx context.Context, result map[string]any, sess *session.Session) {
+	d.writeRoundResultToStream(ctx, result, sess)
+}
+
 // runTaskLoopStream 流式执行外层任务循环。
 // Python: DeepAgent._run_task_loop_stream(ctx, session, stream_modes) (line 2146-2212)
 //

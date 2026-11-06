@@ -99,6 +99,10 @@ type StreamControllerAccessor interface {
 	// ResetStreamQueue 释放 streamQueue 引用（设为 nil）
 	// 对齐 Python: host.stream_controller.stream_queue = None
 	ResetStreamQueue()
+	// Start 挂载输出泵与状态/轮次映射器（一个 run cycle 一次）。
+	// 对齐 Python: StreamController.start()（stream_controller.py:305-321）——
+	// kernel.start 在 harness.start 之后调用，controller 消费 runtime 输出。
+	Start(ctx context.Context)
 }
 
 // HarnessAccessor Harness 窄接口。
@@ -110,6 +114,10 @@ type HarnessAccessor interface {
 	InjectMemberMemory(ctx context.Context, memMgr *memory.TeamMemoryManager, query string) error
 	// Model 返回当前模型
 	Model() *llm.Model
+	// Start 启动成员运行时（native supervisor + 子会话）并绑定团队会话。
+	// 对齐 Python: TeamHarness.start(team_session=session)（team_harness.py:135-169）——
+	// kernel.start 在 bind_session 之后调用，先起 runtime 再让 controller 消费输出。
+	Start(ctx context.Context, teamSession any) error
 }
 
 // BlueprintAccessor 蓝图扩展接口。

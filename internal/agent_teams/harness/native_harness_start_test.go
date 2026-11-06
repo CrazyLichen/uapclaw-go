@@ -56,3 +56,17 @@ func TestNativeHarness_InitialPhaseIsIdle(t *testing.T) {
 	assert.Equal(t, HarnessStateIdle, h.State())
 	assert.Empty(t, h.SessionID())
 }
+
+// TestIsControlResult 验证控制信号判定（对齐 Python _is_control_result）。
+func TestIsControlResult(t *testing.T) {
+	// nil / 空 result → 非控制信号
+	assert.False(t, isControlResult(nil))
+	assert.False(t, isControlResult(map[string]any{}))
+	// error 非空 → 控制信号（不写流）
+	assert.True(t, isControlResult(map[string]any{"error": "cancelled"}))
+	// error 空串 / 非 string → 非控制信号
+	assert.False(t, isControlResult(map[string]any{"error": ""}))
+	assert.False(t, isControlResult(map[string]any{"error": 123}))
+	// 正常 answer → 非控制信号
+	assert.False(t, isControlResult(map[string]any{"output": "text", "result_type": "answer"}))
+}

@@ -131,6 +131,11 @@ func NewTeamAgent(ctx context.Context, card *agentschema.AgentCard) *TeamAgent {
 	a.spawnManager = NewSpawnManager(ctx, a.state, a.configurator, func() *TeamAgent { return a })
 	a.recoveryManager = NewRecoveryManager(a.configurator, a.spawnManager)
 	a.sessionManager = NewSessionManager(a.state, a.configurator, a.recoveryManager)
+	// 9.55: 构建 CoordinationKernel(self)，TeamAgent 通过适配器实现 KernelHost。
+	// 注意顺序：必须先于 StreamController——后者通过 WithWakeMailbox 注入
+	// a.coordination.WakeMailboxIfInterruptCleared 方法值，若 coordination 仍为 nil，
+	// 会绑定 nil receiver，等到订阅驱动的 onIdleSettled 触发该回调时 panic。
+	a.coordination = coordination.NewCoordinationKernel(a)
 	a.streamController = NewStreamController(
 		a.configurator.Blueprint,
 		a.state,
@@ -141,8 +146,6 @@ func NewTeamAgent(ctx context.Context, card *agentschema.AgentCard) *TeamAgent {
 		WithWakeMailbox(a.coordination.WakeMailboxIfInterruptCleared),
 		WithRequestCompletionPoll(a.requestCompletionPoll),
 	)
-	// 9.55: 构建 CoordinationKernel(self)，TeamAgent 通过适配器实现 KernelHost
-	a.coordination = coordination.NewCoordinationKernel(a)
 	return a
 }
 
@@ -576,7 +579,8 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	// Python: await self._coordination.start(session)
 	// M-19: session 优先取 opts 传入（对齐 Python invoke(inputs, session) 显式参数）；
 	// opts 未传时回退 ctx 中的 SessionState（对齐 Python contextvar 全局可见语义）。
-	a.coordination.Start(ctx, a.sessionIDFromOptsOrCtx(ctx, opts...))
+	// 25.1a：改传会话对象（sessionFromOptsOrCtx），kernel 需对象启动 harness native supervisor。
+	a.coordination.Start(ctx, a.sessionFromOptsOrCtx(ctx, opts...))
 
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
@@ -639,7 +643,8 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	// Python: await self._coordination.start(session)
 	// M-19: session 优先取 opts 传入（对齐 Python stream(inputs, session) 显式参数）；
 	// opts 未传时回退 ctx 中的 SessionState（对齐 Python contextvar 全局可见语义）。
-	a.coordination.Start(ctx, a.sessionIDFromOptsOrCtx(ctx, opts...))
+	// 25.1a：改传会话对象（sessionFromOptsOrCtx），kernel 需对象启动 harness native supervisor。
+	a.coordination.Start(ctx, a.sessionFromOptsOrCtx(ctx, opts...))
 
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
@@ -873,9 +878,9 @@ func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
 
 // StartCoordination 启动协调。
 // Python: TeamAgent._start_coordination(session)
-func (a *TeamAgent) StartCoordination(ctx context.Context, sessionID string) error {
+func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
 	if a.coordination != nil {
-		a.coordination.Start(ctx, sessionID)
+		a.coordination.Start(ctx, session)
 	}
 	return nil
 }
@@ -1276,14 +1281,22 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 // M-19: 对齐 Python invoke(inputs, session=None) / stream(inputs, session=None) 的
 // 显式 session 参数语义——优先取 opts 传入的 SessionFacade；
 // opts 未传时回退 ctx 中 SessionState 的 sessionID（对齐 Python contextvar 兜底）。
-func (a *TeamAgent) sessionIDFromOptsOrCtx(ctx context.Context, opts ...interfaces.AgentOption) string {
+// sessionFromOptsOrCtx 返回本轮应绑定的会话对象（any，nil 表示无会话）。
+//
+// 25.1a 接线：CoordinationKernel.Start 需要 AgentTeamSession 对象来启动
+// harness 的 native supervisor（harness.Start(team_session=session) 会拿它建子会话）。
+// 旧实现 sessionIDFromOptsOrCtx 只提取 sessionID，把对象丢了——TeamSession 存 nil，
+// harness.Start 退化成"无团队会话"路径。此处保留对象（SessionFacade）透传。
+func (a *TeamAgent) sessionFromOptsOrCtx(ctx context.Context, opts ...interfaces.AgentOption) any {
 	if len(opts) > 0 {
 		agentOpts := interfaces.NewAgentOptions(opts...)
 		if agentOpts.Session != nil {
-			return agentOpts.Session.GetSessionID()
+			return agentOpts.Session
 		}
 	}
-	return agentteams.GetSessionID(ctx)
+	// ctx 里只有 sessionID（SessionState），没有会话对象；返回 nil 让 kernel 走解绑路径。
+	// 有会话对象的调用方（team_runner 经 WithSession 传入）都会命中上方分支。
+	return nil
 }
 
 // finalizeRoundDetached 执行轮次收尾清理，不受调用方 ctx 取消影响。

@@ -172,7 +172,11 @@ func (k *CoordinationKernel) LifecycleState() string {
 
 // Start 启动协调子系统，编排完整初始化链。
 // 对齐 Python: CoordinationKernel.start(session)
-func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
+//
+// session 接收 any（对齐 Python 联合类型 str | AgentTeamSession）：harness.start
+// 需要 AgentTeamSession 对象来建子会话（继承团队会话 ID），故这里不能像旧实现
+// 那样只传 sessionID（会把 TeamSession 存成 nil，导致 harness.Start 拿不到团队会话）。
+func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 	if k.eventBus == nil {
 		return
 	}
@@ -196,12 +200,11 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 	// （Python 端 set_session_id 写 contextvar 后天然全局可见；Go 端 ctx 是值传递，
 	// 丢弃 newCtx 会导致步骤 4-10 拿不到 SessionState，DB 表/恢复/记忆注入全部失联）。
 	sessCtrl := k.host.SessionController()
-	if sessionID != "" && sessCtrl != nil {
-		newCtx, err := sessCtrl.BindSession(ctx, sessionID)
+	if session != nil && sessCtrl != nil {
+		newCtx, err := sessCtrl.BindSession(ctx, session)
 		if err != nil {
 			logger.Error(logComponent).
 				Err(err).
-				Str("session_id", sessionID).
 				Str("member_name", memberName).
 				Msg("kernel start: bind session failed")
 		} else {
@@ -265,6 +268,25 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 					Str("member_name", k.host.MemberName()).
 					Msg("kernel start: inject member memory failed")
 			}
+		}
+	}
+
+	// 步骤 6.5: 启动成员运行时（native supervisor + 子会话），再挂 controller 的输出泵。
+	// 对齐 Python kernel.py L167-168：bind_session 之后
+	//   if resources.harness is not None:
+	//       await resources.harness.start(team_session=session)
+	//       await host.stream_controller.start()
+	// 顺序有语义：controller 消费 runtime 的输出（outputs()），故 runtime 必须先启动。
+	// 仅在有会话（session 非 nil）时启动——无会话的调用（如 DestroyTeam 前的解绑路径）
+	// 不建子会话、不跑 supervisor。
+	if session != nil && harnessAccessor != nil {
+		if err := harnessAccessor.Start(ctx, session); err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("member_name", memberName).
+				Msg("kernel start: harness.start failed")
+		} else if sc := k.host.StreamController(); sc != nil {
+			sc.Start(ctx)
 		}
 	}
 

@@ -408,10 +408,12 @@ func (sc *StreamController) wakeMailboxIfInterruptCleared(ctx context.Context) e
 
 // ──────────────────────────── 订阅驱动（对齐上游 stream_controller.py）────────────────────────────
 
-// start 挂载输出泵与状态/轮次映射器（一个 run cycle 一次）。
+// Start 挂载输出泵与状态/轮次映射器（一个 run cycle 一次）。
 //
 // Python: StreamController.start()（stream_controller.py:305-321）
-func (sc *StreamController) start(ctx context.Context) {
+// 由 CoordinationKernel.Start 在 harness.Start 之后调用（对齐 kernel.py:168）：
+// controller 消费 runtime 的输出，故 runtime 必须先启动。
+func (sc *StreamController) Start(ctx context.Context) {
 	h := sc.resources.Harness
 	if h == nil {
 		return

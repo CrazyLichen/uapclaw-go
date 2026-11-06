@@ -523,11 +523,22 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 	defer close(active.Done)
 
 	query, _ := active.Query.(string)
-	err := h.controller.SubmitRound(ctx, h.sess, query, false, false,
+	// isStreaming 必须为 true：对齐 Python submit_round 后 executor 硬编码 _streaming=True。
+	// 传 false 会走 callLLMInvoke（非流式），Leader 一轮的输出（tool_call/tool_result/answer）
+	// 批量到齐，首条流在成员 spawn 的 tool_result 被观测前就 final，团队时序契约
+	// （第二条消息在首条流未结束时被受理）失稳。
+	err := h.controller.SubmitRound(ctx, h.sess, query, false, true,
 		agentinterfaces.RunKindNormal, nil, task_loop.WithTaskID(active.TaskID))
 	var result map[string]any
 	if err == nil {
 		result = h.controller.WaitRoundCompletion(ctx, nil)
+		// 写轮次结果到流（对齐 Python _persist_and_write_round_result → _write_round_result_to_stream）。
+		// task_loop 的 result 走 controller_output(task_completion)，被 team 消费端丢弃；
+		// 必须把 answer 写成 answer chunk 写流，否则 chat.final 缺失、首条流永不结束。
+		// control result（error / cooperative-stop）不写流（对齐 _is_control_result）。
+		if !isControlResult(result) {
+			h.agent.WriteRoundResultToStream(ctx, result, h.sess)
+		}
 	}
 
 	reply := make(chan error, 1)
@@ -691,6 +702,24 @@ func (h *NativeHarness) abortActiveRound() {
 		case <-time.After(5 * time.Second):
 		}
 	}
+}
+
+// isControlResult 判断轮次结果是否为控制信号而非真实答案。
+//
+// Python: NativeHarness._is_control_result（native_harness.py）——
+// {"error": ...}（取消的 wait）与 cooperative-stop 载荷不得写流。
+// 25.1a 阶段无 pause/graceful-abort（⤵️ 25.1c），cooperative-stop 分支不可达，
+// 仅判断 error 非空。
+func isControlResult(result map[string]any) bool {
+	if result == nil {
+		return false
+	}
+	if e, ok := result["error"]; ok {
+		if s, isStr := e.(string); isStr && s != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // failRemainingCommands supervisor 退出时把队列中剩余命令统一回错误，

@@ -268,15 +268,15 @@ func TestStreamController_handleRetry_超预算透传(t *testing.T) {
 	}
 }
 
-// TestStreamController_start转发订阅 验证 start 复位 retry + 挂订阅 + 起泵。
-func TestStreamController_start转发订阅(t *testing.T) {
+// TestStreamController_Start转发订阅 验证 Start 复位 retry + 挂订阅 + 起泵。
+func TestStreamController_Start转发订阅(t *testing.T) {
 	sc := newTestStreamController()
 	// native=nil 的 TeamHarness：Subscribe/Outputs 均 no-op/nil
 	sc.resources.Harness = &harness.TeamHarness{}
 	sc.retryAttempt = 3
 	sc.swallowFailedRound = true
 
-	sc.start(context.Background())
+	sc.Start(context.Background())
 
 	if sc.retryAttempt != 0 {
 		t.Errorf("start 应复位 retryAttempt，实际 %d", sc.retryAttempt)
