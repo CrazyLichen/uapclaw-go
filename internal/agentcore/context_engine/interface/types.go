@@ -111,6 +111,14 @@ type ContextEngine interface {
 	//
 	// Python: ContextEngine.update_model_context()
 	UpdateModelContext(modelName string, contextWindowTokens int)
+	// RecoverFromModelContextOverflow 模型报上下文溢出后压缩一次，返回是否值得重试
+	//
+	// streaming 为真且已吐字（streamChunksEmitted > 0）时不允许恢复：
+	// 重试会把已经发给用户的前缀再发一遍。
+	//
+	// Python: ContextEngine.recover_from_model_context_overflow()
+	RecoverFromModelContextOverflow(ctx context.Context, sess sessioninterfaces.SessionFacade,
+		contextID string, streaming bool, streamChunksEmitted int) bool
 }
 
 // ProcessorSpec 处理器规格，指定类型和配置。

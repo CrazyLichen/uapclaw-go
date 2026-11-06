@@ -206,16 +206,6 @@ const defaultOffloadSummaryPrompt = `
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
-var contextOverflowKeywords = []string{
-	"context length",
-	"token limit",
-	"too long",
-	"exceeds",
-	"maximum context",
-	"context window",
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageSummaryOffloader 创建消息摘要卸载器实例。
@@ -963,20 +953,12 @@ func (mso *MessageSummaryOffloader) parseCompressionResult(responseContent strin
 
 // isContextOverflowError 检测异常是否由 LLM 上下文溢出引起。
 //
-// 不同模型服务商的错误报告格式不同，使用关键词匹配进行检测。
+// 复用引擎层判定（含百炼 "Range of input length" 等厂商原文），
+// 避免处理器各自维护一份关键词表导致口径漂移。
 //
 // Python: MessageSummaryOffloader._is_context_overflow_error()
 func (mso *MessageSummaryOffloader) isContextOverflowError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := strings.ToLower(err.Error())
-	for _, keyword := range contextOverflowKeywords {
-		if strings.Contains(errMsg, keyword) {
-			return true
-		}
-	}
-	return false
+	return iface.IsContextOverflowError(err)
 }
 
 // truncateStr 截断字符串到指定长度

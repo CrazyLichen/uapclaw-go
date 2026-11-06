@@ -1276,6 +1276,13 @@ func (f *fakeContextEngine) SaveContexts(_ context.Context, _ sessioninterfaces.
 
 func (f *fakeContextEngine) UpdateModelContext(_ string, _ int) {}
 
+// RecoverFromModelContextOverflow 上下文溢出自愈（桩：不支持恢复）。
+func (f *fakeContextEngine) RecoverFromModelContextOverflow(
+	_ context.Context, _ sessioninterfaces.SessionFacade, _ string, _ bool, _ int,
+) bool {
+	return false
+}
+
 // fakeModelContext 方法实现
 
 func (f *fakeModelContext) Len() int { return len(f.messages) }

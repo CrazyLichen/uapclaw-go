@@ -30,6 +30,10 @@ type cancelAwareContextEngine struct {
 	saveCalls int
 	// modelUpdates 记录 UpdateModelContext 调用参数
 	modelUpdates [][2]any
+	// recoveryCalls RecoverFromModelContextOverflow 调用次数
+	recoveryCalls int
+	// recoveryResult RecoverFromModelContextOverflow 返回值
+	recoveryResult bool
 	// sawCanceledCtx SaveContexts 是否收到了已取消的 ctx
 	sawCanceledCtx bool
 }
@@ -101,6 +105,14 @@ func (e *cancelAwareContextEngine) SaveContexts(
 		return nil, err
 	}
 	return map[string]any{"saved": true}, nil
+}
+
+// RecoverFromModelContextOverflow 记录溢出自愈调用（B-07 用例断言用）。
+func (e *cancelAwareContextEngine) RecoverFromModelContextOverflow(
+	_ context.Context, _ sessioninterfaces.SessionFacade, _ string, _ bool, _ int,
+) bool {
+	e.recoveryCalls++
+	return e.recoveryResult
 }
 
 // UpdateModelContext 记录热切换调用（可选能力，对齐引擎同名方法）。

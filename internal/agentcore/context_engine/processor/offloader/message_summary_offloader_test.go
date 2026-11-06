@@ -196,11 +196,14 @@ func TestMessageSummaryOffloader_isContextOverflowError(t *testing.T) {
 		overflow bool
 	}{
 		{"context length", "maximum context length exceeded", true},
-		{"token limit", "token limit reached", true},
+		{"context limit", "context limit reached", true},
 		{"too long", "prompt is too long", true},
-		{"exceeds", "input exceeds maximum", true},
+		{"百炼 range of input length", "Range of input length should be [1, 129024]", true},
 		{"maximum context", "maximum context window", true},
 		{"context window", "context window exceeded", true},
+		// Go 私有关键词表已删除（改为复用引擎判定），这两个词不再命中
+		{"非溢出 token limit", "token limit reached", false},
+		{"非溢出 exceeds", "input exceeds maximum", false},
 		{"normal error", "connection timeout", false},
 		{"nil error", "", false},
 	}

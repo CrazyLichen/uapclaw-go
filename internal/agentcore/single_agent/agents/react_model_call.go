@@ -129,7 +129,17 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	var messages []llmschema.BaseMessage
 	var contextTools []cschema.ToolInfoInterface
 
-	if modelCtx != nil {
+	// buildWindow 拉取本轮上下文窗口；压缩后重试时也用它重建（消息已变）。
+	buildWindow := func() error {
+		if modelCtx == nil {
+			messages = systemMsgs
+			// modelCtx 为 nil 时直接沿用 callModel 预置的 tools（对齐
+			// Python：ctx.inputs.tools 仍会传给 LLM 调用）
+			if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
+				contextTools = inputs.Tools
+			}
+			return nil
+		}
 		// Python: tools=ctx.inputs.tools if ctx.inputs.tools else None
 		// （_railed_model_call L715-717）——从 ModelCallInputs 读取
 		// callModel 预置的 tools，而非硬编码 nil（此前 Go 传 nil 导致
@@ -142,17 +152,14 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
 		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, inputTools, 0, 0, contextWindowOpts...)
 		if err != nil {
-			return nil, fmt.Errorf("获取上下文窗口失败: %w", err)
+			return fmt.Errorf("获取上下文窗口失败: %w", err)
 		}
 		messages = contextWindow.GetMessages()
 		contextTools = contextWindow.GetTools()
-	} else {
-		messages = systemMsgs
-		// modelCtx 为 nil 时直接沿用 callModel 预置的 tools（对齐
-		// Python：ctx.inputs.tools 仍会传给 LLM 调用）
-		if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
-			contextTools = inputs.Tools
-		}
+		return nil
+	}
+	if err := buildWindow(); err != nil {
+		return nil, err
 	}
 
 	// 写回 cbc.Inputs()（对齐 Python L727-728: ctx.inputs.messages = ...; ctx.inputs.tools = ...）
@@ -188,13 +195,17 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	}
 
 	var aiMsg *llmschema.AssistantMessage
-	var err error
-	if isStreaming {
-		aiMsg, err = a.callLLMStream(ctx, cbc, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
-	} else {
-		aiMsg, err = a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
-	}
-	if err != nil {
+	overflowRecovered := false
+	for {
+		var err error
+		if isStreaming {
+			aiMsg, err = a.callLLMStream(ctx, cbc, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
+		} else {
+			aiMsg, err = a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
+		}
+		if err == nil {
+			break
+		}
 		// 拒图降级：请求里带了图、且错误属于「模型/端点不支持图片输入」时，
 		// 不抛错，而是造一条双语提示当 assistant 消息塞进上下文，让模型下一轮换方案。
 		// Python: react_agent.py L1850-1859（invoke）与 L1928-1936（stream）
@@ -208,6 +219,35 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 				Str("event_type", "image_input_unsupported").
 				Msg("model rejected image input, degrading to text guidance")
 			return degraded, nil
+		}
+		// 上下文溢出：压缩一次再重试本轮（只重试一次；流式已吐字则不允许，
+		// 否则会把已发送的前缀重发一遍）。Python: recover_from_model_context_overflow。
+		if !overflowRecovered && modelCtx != nil && a.contextEngine != nil &&
+			ceinterface.IsContextOverflowError(err) {
+			emitted := 0
+			if isStreaming && cbc.ModelVisibleOutputEmitted() {
+				emitted = 1
+			}
+			recovered := a.contextEngine.RecoverFromModelContextOverflow(
+				ctx, sess, modelCtx.ContextID(), isStreaming, emitted)
+			logger.Warn(logComponent).
+				Str("event_type", "context_overflow_recovery").
+				Bool("recovered", recovered).
+				Bool("streaming", isStreaming).
+				Int("stream_chunks_emitted", emitted).
+				Err(err).
+				Msg("model reported context overflow")
+			if recovered {
+				overflowRecovered = true
+				if buildErr := buildWindow(); buildErr != nil {
+					return nil, buildErr
+				}
+				if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
+					inputs.Messages = messages
+					inputs.Tools = contextTools
+				}
+				continue
+			}
 		}
 		return nil, err
 	}

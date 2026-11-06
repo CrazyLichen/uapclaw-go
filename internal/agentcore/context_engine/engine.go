@@ -424,6 +424,46 @@ func (ce *contextEngine) UpdateModelContext(modelName string, contextWindowToken
 	}
 }
 
+// RecoverFromModelContextOverflow 模型报上下文溢出后压缩一次，返回是否值得重试。
+//
+// 只有压缩真的发生（结果标识为 compressed）才允许重试，否则重试必然再次溢出。
+// 流式场景已向用户吐字时直接拒绝：重试会把已发送前缀重复输出。
+//
+// Python: ContextEngine.recover_from_model_context_overflow()
+func (ce *contextEngine) RecoverFromModelContextOverflow(
+	ctx context.Context,
+	sess sessioninterfaces.SessionFacade,
+	contextID string,
+	streaming bool,
+	streamChunksEmitted int,
+) bool {
+	if streaming && streamChunksEmitted > 0 {
+		logger.Warn(logComponent).
+			Str("event_type", "context_recovery_skipped").
+			Int("stream_chunks_emitted", streamChunksEmitted).
+			Msg("skip model context recovery: streaming output already emitted")
+		return false
+	}
+	result, err := ce.CompressContext(ctx, contextID, sess)
+	if err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Str("event_type", "context_recovery_failed").
+			Str("context_id", contextID).
+			Msg("compress context for overflow recovery failed")
+		return false
+	}
+	if result == nil {
+		return false
+	}
+	logger.Info(logComponent).
+		Str("event_type", "context_recovery_compressed").
+		Str("context_id", contextID).
+		Str("result", result.Result).
+		Msg("compressed context after model overflow")
+	return result.Result == "compressed"
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyPendingLocked 把暂存的热重载配置落地到引擎与池内全部上下文。
