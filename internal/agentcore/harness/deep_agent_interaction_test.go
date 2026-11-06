@@ -626,6 +626,63 @@ func TestPromoteLoopFollowUps(t *testing.T) {
 	assert.Equal(t, "追一句", work.Query())
 }
 
+// ──────────────────────────── 错误与防御分支 ────────────────────────────
+
+// TestStart_会话为nil时自建会话 验证 nil session 分支
+// Python: start() 的 create_agent_session(session_id="default")（L3941-3951）
+func TestStart_会话为nil时自建会话(t *testing.T) {
+	d := newTestDeepAgent()
+	require.NoError(t, d.Start(context.Background(), nil))
+	t.Cleanup(func() { _ = d.Stop(context.Background()) })
+	require.NotNil(t, d.interactionSession)
+	assert.Equal(t, "default", d.interactionSessionID)
+}
+
+// TestStop_未启动时幂等 验证未 Start 的 Stop 直接返回
+func TestStop_未启动时幂等(t *testing.T) {
+	d := newTestDeepAgent()
+	d.ensureInteractionState()
+	assert.NoError(t, d.Stop(context.Background()))
+}
+
+// TestDetachOutput_陈旧票noop 验证票号不匹配时不清场
+func TestDetachOutput_陈旧票noop(t *testing.T) {
+	d := startTestInteraction(t)
+	out := d.AttachOutput(context.Background())
+	require.NotNil(t, out)
+
+	d.DetachOutput(context.Background(), "stale-token", true)
+	assert.True(t, d.HasOutputStream(), "陈旧票不得撤销当前租约")
+}
+
+// TestExecuteRound_错误码转execution_error 验证失败轮的事件投递
+// Python: _execute_round 的 error_code → execution.error（L4545-4550）
+func TestExecuteRound_错误码转execution_error(t *testing.T) {
+	d := startTestInteraction(t)
+	out := d.AttachOutput(context.Background())
+	require.NotNil(t, out)
+
+	d.setRoundOverrideForTest(func(context.Context, *hschema.RoundWorkItem) hschema.RoundOutcome {
+		return hschema.RoundOutcome{ErrorCode: "round_execution_error", ErrorMessage: "boom"}
+	})
+
+	work := hschema.NewUserWorkItem("r1", map[string]any{"query": "q"}, false, true)
+	d.executeRoundAndWait(context.Background(), work)
+
+	// 错误事件应进入租约队列（先到的是它，因为 override 不产帧）
+	item, ok := d.NextOutput(context.Background(), out.Lease())
+	require.True(t, ok)
+	assert.Equal(t, "execution.error", item.(*stream.OutputSchema).Type)
+}
+
+// TestEmitRoundBoundary_无发射器返回false 验证边界帧失败兜底
+func TestEmitRoundBoundary_无发射器返回false(t *testing.T) {
+	d := newTestDeepAgent()
+	d.ensureInteractionState()
+	assert.False(t, d.emitRoundBoundary(nil), "nil 会话应返回 false")
+	assert.False(t, d.emitRoundBoundary(&session.Session{}), "无发射器应返回 false")
+}
+
 // ──────────────────────────── supervisor 调度 ────────────────────────────
 
 // TestSupervisor_消费待办work 验证调度闭环

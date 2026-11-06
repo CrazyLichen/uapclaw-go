@@ -15,6 +15,7 @@ import (
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -133,4 +134,57 @@ func TestRunOneRound_端到端一轮(t *testing.T) {
 
 	assert.Greater(t, frames, 0, "一轮执行必须至少产出一帧")
 	assert.Equal(t, hschema.InteractionPhaseIdle, agent.Phase(), "轮次结束后应回到 idle")
+}
+
+// TestRunOneRound_goal轮注入run上下文 验证 goal 轮的 inputs["run"] 组装
+// Python: run_one_round 的 kind == "goal" 分支（L3773-3777）
+func TestRunOneRound_goal轮注入run上下文(t *testing.T) {
+	ctx := context.Background()
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("round-goal-agent"))
+	agent, err := CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Card:  card,
+		Model: newRoundModel(t),
+	})
+	require.NoError(t, err)
+
+	sess := session.NewSession()
+	require.NoError(t, sess.PreRun(ctx))
+	require.NoError(t, agent.Start(ctx, sess))
+	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
+
+	out := agent.AttachOutput(ctx)
+	require.NotNil(t, out)
+
+	work := hschema.NewGoalWorkItem(map[string]any{"query": "目标轮"},
+		"goal-1", 2, sess.GetSessionID())
+	outcome := agent.RunOneRound(ctx, work, "task-goal", sess)
+	assert.Equal(t, "", outcome.ErrorCode, "goal 轮不应返回错误码")
+}
+
+// TestRunOneRound_打断恢复走单轮invoke 验证 resume 分支
+// Python: run_one_round 的 is_resume_input 分支（L3788-3794）
+func TestRunOneRound_打断恢复走单轮invoke(t *testing.T) {
+	ctx := context.Background()
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("round-resume-agent"))
+	agent, err := CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Card:  card,
+		Model: newRoundModel(t),
+	})
+	require.NoError(t, err)
+
+	sess := session.NewSession()
+	require.NoError(t, sess.PreRun(ctx))
+	require.NoError(t, agent.Start(ctx, sess))
+	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
+
+	out := agent.AttachOutput(ctx)
+	require.NotNil(t, out)
+
+	interactive, err := interaction.NewInteractiveInput("继续")
+	require.NoError(t, err)
+
+	work := hschema.NewUserWorkItem("req-resume",
+		map[string]any{"query": interactive}, false, false)
+	outcome := agent.RunOneRound(ctx, work, "task-resume", sess)
+	assert.Equal(t, "", outcome.ErrorCode, "打断恢复不应返回错误码")
 }

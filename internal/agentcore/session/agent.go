@@ -315,6 +315,9 @@ func (s *Session) CloseStream() error {
 // session._inner.stream_writer_manager().stream_emitter()（deep_agent.py L4490）。
 // ⤴️ 9.87 回填
 func (s *Session) StreamEmitter() *stream.StreamEmitter {
+	if s.inner == nil {
+		return nil
+	}
 	mgr := s.inner.StreamWriterManager()
 	if mgr == nil {
 		return nil

@@ -757,3 +757,12 @@ func TestSession_StreamEmitter_无管理器返回nil(t *testing.T) {
 		t.Error("StreamWriterManager 为 nil 时应返回 nil，避免调用方空指针")
 	}
 }
+
+// TestSession_StreamEmitter_无inner返回nil 验证未初始化会话的 nil 安全分支
+// ⤴️ 9.87 回填
+func TestSession_StreamEmitter_无inner返回nil(t *testing.T) {
+	s := &Session{}
+	if s.StreamEmitter() != nil {
+		t.Error("inner 为 nil 时应返回 nil")
+	}
+}

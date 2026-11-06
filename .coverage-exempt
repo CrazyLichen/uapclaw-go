@@ -360,3 +360,10 @@ internal/agentcore/harness/prompts/tools/skill_tool.go#L15-L24
 # 所在分支要求完整 CodeAdapter 装配（agent card/configBase/沙箱路径齐全），
 # 与 deep 侧同一接线已由 TestGetToolCards_SkillToolkit接线 覆盖。
 internal/swarm/server/adapter/code_adapter.go#L954
+
+# ── 9.87 交互监督器（2026-11-06）──
+# interfaces/deep_agent.go — InteractionSupervisorInterface 是**纯接口声明**（L112-143），
+# 接口方法签名没有可执行语句，go tool cover 不会为它们插桩，改动行恒为 0%。
+# 该接口的实现侧（*DeepAgent）由 internal/agentcore/harness/deep_agent_interaction_test.go
+# 的 30+ 用例覆盖，此处豁免仅为消除「声明行不可插桩」造成的假红。
+internal/agentcore/harness/interfaces/deep_agent.go

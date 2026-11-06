@@ -3759,6 +3759,9 @@ func logInnerReactMaxIterations(configured, resolved int) {
 }
 
 // ──────────────────────────── 交互监督器内部实现（9.87）────────────────────────────
+//
+// 注意：上游 _detach_current_output_locked（L4230）在全仓**无调用方**（纯遗留死方法），
+// 按规则 8「禁止保留无调用方的实现」未移植（spec D13）。
 
 // SchemaType 返回帧类型标识
 func (roundBoundaryFrame) SchemaType() string { return "round_boundary" }
@@ -3840,22 +3843,6 @@ func (d *DeepAgent) attachOutputLocked() *hschema.InteractionOutputStream {
 		return nil
 	}
 	return hschema.NewInteractionOutputStream(d, lease)
-}
-
-// detachCurrentOutputLocked 摘下当前租约（调用方持 controlMu）。
-// Python: _detach_current_output_locked (L4230)
-func (d *DeepAgent) detachCurrentOutputLocked(ctx context.Context, abortActiveRound bool) {
-	lease := d.interactionOutput.CurrentLease()
-	if lease == nil {
-		return
-	}
-	if !d.interactionOutput.Detach(lease.Token, true) {
-		return
-	}
-	d.interactionEvents.DiscardAllWork()
-	if abortActiveRound {
-		d.cancelActiveRoundLocked(ctx, "output_replaced", nil)
-	}
 }
 
 // emitInteractionEvent 异步投递一条交互事件。
