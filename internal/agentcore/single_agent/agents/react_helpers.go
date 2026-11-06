@@ -157,3 +157,18 @@ func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.Se
 		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("savecontext failed")
 	}
 }
+
+// saveContextsDetached 以脱离取消信号的 ctx 持久化上下文。
+//
+// 取消/异常路径必须写完：调用方 ctx 已取消时，KV/SQL 写入会因
+// ExecContext(canceled) 立刻失败，导致本轮清洗结果丢失，下一轮从旧 checkpoint 重建。
+// 等价 Python 的 asyncio.shield(self._save_contexts_on_cancel(session))。
+func (a *ReActAgent) saveContextsDetached(ctx context.Context, sess sessioninterfaces.SessionFacade) {
+	if a.contextEngine == nil || sess == nil {
+		return
+	}
+	detached := context.WithoutCancel(ctx)
+	if _, err := a.contextEngine.SaveContexts(detached, sess, nil); err != nil {
+		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("savecontext failed")
+	}
+}

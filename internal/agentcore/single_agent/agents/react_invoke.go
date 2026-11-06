@@ -378,13 +378,14 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	if needCleanup && !streamLifecycleOwner {
 		defer func() {
 			if !abortPersisted {
-				a.saveContexts(ctx, sess)
+				// 取消/异常路径同样走脱离取消的 ctx，否则写库失败、本轮上下文丢失
+				a.saveContextsDetached(ctx, sess)
 			}
 			// Python: session.close_stream() + session.commit()
 			if as, ok := sess.(*session.Session); ok {
 				_ = as.CloseStream()
 				if !abortPersisted {
-					_ = as.Commit(ctx)
+					_ = as.Commit(context.WithoutCancel(ctx))
 				}
 			}
 		}()
@@ -603,13 +604,14 @@ func (a *ReActAgent) innerStream(
 		defer func() {
 			// finally: 清理（对齐 Python L1555-1560）
 			if needCleanup && !abortPersisted {
-				a.saveContexts(ctx, sess)
+				// 消费者中途断开时 ctx 已取消，必须脱离取消才能写库
+				a.saveContextsDetached(ctx, sess)
 			}
 			// Python: if self.is_agent_session: session.close_stream() + session.commit()
 			if isAgentSess {
 				_ = agentSess.CloseStream()
 				if !abortPersisted {
-					_ = agentSess.Commit(ctx)
+					_ = agentSess.Commit(context.WithoutCancel(ctx))
 				}
 			}
 		}()
@@ -1156,9 +1158,11 @@ func (a *ReActAgent) handleContextAbort(
 			mc.SetMessages(sanitizeAbortedTurnMessages(current, marker), false)
 		}
 	}
-	a.saveContexts(ctx, sess)
+	// 落盘用脱离取消的 ctx：调用方取消后仍需把清洗结果写进 session，
+	// 否则下一轮 create_context 会用取消前的旧快照重建（对齐 Python asyncio.shield）。
+	a.saveContextsDetached(ctx, sess)
 	if as, ok := sess.(*session.Session); ok {
-		if commitErr := as.Commit(ctx); commitErr != nil {
+		if commitErr := as.Commit(context.WithoutCancel(ctx)); commitErr != nil {
 			logger.Warn(logComponent).
 				Str("event_type", "context_abort_commit_failed").
 				Err(commitErr).
