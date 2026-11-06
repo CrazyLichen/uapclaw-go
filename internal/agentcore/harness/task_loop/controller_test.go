@@ -2,7 +2,9 @@ package task_loop
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	controllerschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -62,6 +65,50 @@ func (m *mockEventHandlerWithQueues) HandleTaskFailed(_ context.Context, _ *modu
 }
 func (m *mockEventHandlerWithQueues) InteractionQueues() *LoopQueues {
 	return m.queues
+}
+
+// capturingEventHandler 记录最近一次输入事件，用于断言元数据注入
+type capturingEventHandler struct {
+	modules.EventHandlerBase
+	// queues 交互队列
+	queues *LoopQueues
+	// mu 保护 last
+	mu sync.Mutex
+	// last 最近一次输入事件
+	last controllerschema.Event
+}
+
+// HandleInput 捕获输入事件
+func (h *capturingEventHandler) HandleInput(_ context.Context, in *modules.EventHandlerInput) (map[string]any, error) {
+	h.mu.Lock()
+	h.last = in.Event
+	h.mu.Unlock()
+	return nil, nil
+}
+
+// HandleTaskInteraction 空实现
+func (h *capturingEventHandler) HandleTaskInteraction(context.Context, *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// HandleTaskCompletion 空实现
+func (h *capturingEventHandler) HandleTaskCompletion(context.Context, *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// HandleTaskFailed 空实现
+func (h *capturingEventHandler) HandleTaskFailed(context.Context, *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// InteractionQueues 返回交互队列
+func (h *capturingEventHandler) InteractionQueues() *LoopQueues { return h.queues }
+
+// Last 返回最近一次捕获的事件
+func (h *capturingEventHandler) Last() controllerschema.Event {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.last
 }
 
 // newTestCard 创建测试用 AgentCard
@@ -374,4 +421,52 @@ func TestTaskLoopController_WaitRoundCompletion_无Handler(t *testing.T) {
 	tc := NewTaskLoopController()
 	result := tc.WaitRoundCompletion(context.Background(), nil)
 	assert.Nil(t, result)
+}
+
+// TestWithTaskID 验证 keyword-only 的 task_id 选项
+// Python: submit_round(..., *, task_id=...)（task_loop_controller.py L47-63）
+func TestWithTaskID(t *testing.T) {
+	opts := roundOptions{}
+	WithTaskID("task-abc")(&opts)
+	assert.Equal(t, "task-abc", opts.taskID)
+
+	empty := roundOptions{}
+	WithTaskID("")(&empty)
+	assert.Equal(t, "", empty.taskID, "空串表示不注入 metadata")
+}
+
+// TestSubmitRound_WithTaskID 验证 task_id 注入到事件元数据（供 cancel_task 定向取消）
+func TestSubmitRound_WithTaskID(t *testing.T) {
+	tc := NewTaskLoopController()
+	tc.Init(newTestCard(), config.DefaultControllerConfig(), &mockAbilityMgr{}, nil)
+
+	handler := &capturingEventHandler{queues: NewLoopQueues(16)}
+	tc.SetEventHandler(handler)
+
+	require.NoError(t, tc.Start(context.Background()))
+	sess := session.NewSession()
+	require.NoError(t, tc.BindSession(context.Background(), sess))
+
+	require.NoError(t, tc.SubmitRound(context.Background(), sess, "q", false, false,
+		agentinterfaces.RunKindGoal, nil, WithTaskID("task-abc")))
+
+	require.Eventually(t, func() bool { return handler.Last() != nil }, time.Second, 5*time.Millisecond)
+	assert.Equal(t, "task-abc", handler.Last().GetMetadata()["task_id"])
+}
+
+// TestTaskLoopController_EnqueueSteer 验证 steer 入队与无队列时的丢弃分支
+// Python: TaskLoopController.enqueue_steer
+func TestTaskLoopController_EnqueueSteer(t *testing.T) {
+	tc := NewTaskLoopController()
+	tc.Init(newTestCard(), config.DefaultControllerConfig(), &mockAbilityMgr{}, nil)
+	tc.SetEventHandler(&mockEventHandlerWithQueues{queues: NewLoopQueues(16)})
+
+	tc.EnqueueSteer("转向指令")
+	assert.Equal(t, 1, tc.SteerLen())
+
+	// 无 InteractionQueues：只告警不 panic
+	bare := NewTaskLoopController()
+	bare.Init(newTestCard(), config.DefaultControllerConfig(), &mockAbilityMgr{}, nil)
+	bare.EnqueueSteer("丢弃")
+	assert.Equal(t, 0, bare.SteerLen())
 }

@@ -748,3 +748,12 @@ func TestSession_StreamEmitter(t *testing.T) {
 		t.Error("StreamEmitter 应返回非 nil 发射器（默认 StreamWriterManager 自动创建）")
 	}
 }
+
+// TestSession_StreamEmitter_无管理器返回nil 验证管理器缺失时的 nil 安全分支
+// ⤴️ 9.87 回填
+func TestSession_StreamEmitter_无管理器返回nil(t *testing.T) {
+	s := &Session{inner: &internal.AgentSession{}}
+	if s.StreamEmitter() != nil {
+		t.Error("StreamWriterManager 为 nil 时应返回 nil，避免调用方空指针")
+	}
+}
