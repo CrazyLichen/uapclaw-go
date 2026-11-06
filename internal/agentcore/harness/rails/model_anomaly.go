@@ -451,6 +451,13 @@ func (r *ModelAnomalyDetectionRail) anomalyState(cbc *agentinterfaces.AgentCallb
 		if state, ok := v.(*anomalyState); ok && state != nil {
 			return state
 		}
+		// 尾窗状态被别的组件写成了别的类型：明确告警，避免重复检测静默失效。
+		logger.Warn(logComponent).
+			Str("event_type", "extra_type_mismatch").
+			Str("key", modelAnomalyStateKey).
+			Str("want", "*anomalyState").
+			Str("got", fmt.Sprintf("%T", v)).
+			Msg("extra value has unexpected type, recreated")
 	}
 	state := &anomalyState{}
 	cbc.SetExtra(modelAnomalyStateKey, state)

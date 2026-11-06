@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -28,6 +29,9 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// streamDrainTimeout 流异常路径排空内层通道的最长等待（同 llm 包，兜底用）。
+var streamDrainTimeout = 2 * time.Second
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -361,9 +365,12 @@ func (a *ReActAgent) callLLMStream(
 		if chunk != nil && chunk.StreamError != nil {
 			// 对齐 Python: async for _chunk in stream_iter —— 异常路径也必须把剩余流消费完，
 			// 否则包装层/客户端 goroutine 与 HTTP 连接会被挂住。
-			drained := 0
-			for range chunkCh {
-				drained++
+			drained, completed := utils.DrainWithTimeout(chunkCh, streamDrainTimeout)
+			if !completed {
+				logger.Warn(logComponent).
+					Str("event_type", "llm_stream_drain_timeout").
+					Str("layer", "agent").
+					Msg("drain after stream error did not finish; client may ignore ctx")
 			}
 			logger.Debug(logComponent).
 				Str("event_type", "llm_stream_error_drained").
@@ -389,9 +396,12 @@ func (a *ReActAgent) callLLMStream(
 					continue
 				}
 				if inspectErr := inspector(ctx, cbc, chunk); inspectErr != nil {
-					drained := 0
-					for range chunkCh {
-						drained++
+					drained, completed := utils.DrainWithTimeout(chunkCh, streamDrainTimeout)
+					if !completed {
+						logger.Warn(logComponent).
+							Str("event_type", "llm_stream_drain_timeout").
+							Str("layer", "agent").
+							Msg("drain after inspector abort did not finish; client may ignore ctx")
 					}
 					logger.Debug(logComponent).
 						Str("event_type", "stream_chunk_inspector_aborted").

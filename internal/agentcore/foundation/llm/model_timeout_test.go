@@ -163,3 +163,91 @@ func TestModel_Stream_禁用超时不报错(t *testing.T) {
 		t.Fatalf("禁用后不应超时: %v", streamErr)
 	}
 }
+
+// TestModel_Stream_排空超时兜底 客户端忽略 ctx 且不关通道时，排空必须超时返回而不是挂住。
+func TestModel_Stream_排空超时兜底(t *testing.T) {
+	originalDrain := streamDrainTimeout
+	streamDrainTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { streamDrainTimeout = originalDrain })
+
+	// 通道永不关闭：模拟"客户端忽略 ctx 也不退出"的最坏情况
+	neverClosed := make(chan *llmschema.AssistantMessageChunk)
+	m := newTimeoutModel(&stubbornStreamClient{ch: neverClosed}, floatPtr(0.02), floatPtr(0.02))
+
+	done := make(chan error, 1)
+	go func() {
+		ch, err := m.Stream(context.Background(), model_clients.NewTextMessagesParam("hi"))
+		if err != nil {
+			done <- err
+			return
+		}
+		var streamErr error
+		for chunk := range ch {
+			if chunk != nil && chunk.StreamError != nil {
+				streamErr = chunk.StreamError
+			}
+		}
+		done <- streamErr
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("应产出超时错误")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("排空未超时返回，说明仍会永久挂住")
+	}
+}
+
+// stubbornStreamClient 返回一个永不关闭的通道，且不响应 ctx 取消。
+//
+// 内嵌 *mockModelClient 补齐 BaseModelClient 的其余方法（不会被调用）。
+type stubbornStreamClient struct {
+	*mockModelClient
+	// ch 永不关闭的分片通道
+	ch chan *llmschema.AssistantMessageChunk
+}
+
+// Invoke 空实现。
+func (s *stubbornStreamClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return nil, nil
+}
+
+// Stream 直接返回永不关闭的通道。
+func (s *stubbornStreamClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return s.ch, nil
+}
+
+// TestModel_Stream_取消后排空超时兜底 父 ctx 取消且客户端不关通道时，排空同样必须超时返回。
+func TestModel_Stream_取消后排空超时兜底(t *testing.T) {
+	originalDrain := streamDrainTimeout
+	streamDrainTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { streamDrainTimeout = originalDrain })
+
+	neverClosed := make(chan *llmschema.AssistantMessageChunk)
+	m := newTimeoutModel(&stubbornStreamClient{ch: neverClosed}, floatPtr(0.02), floatPtr(0.02))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		cancel()
+	}()
+
+	ch, err := m.Stream(ctx, model_clients.NewTextMessagesParam("hi"))
+	if err != nil {
+		return // 取消态下直接返回错误也是允许的收尾
+	}
+	done := make(chan struct{})
+	go func() {
+		for range ch {
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("取消后排空未超时返回，说明仍会永久挂住")
+	}
+}

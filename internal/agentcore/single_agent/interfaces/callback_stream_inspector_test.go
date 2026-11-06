@@ -59,3 +59,21 @@ func TestModelVisibleOutputEmitted_默认false(t *testing.T) {
 		t.Fatal("复位后应为 false")
 	}
 }
+
+// TestStreamChunkInspectors_类型不符返回空 防"检查器无声消失"：类型不符时返回空并告警。
+func TestStreamChunkInspectors_类型不符返回空(t *testing.T) {
+	cbc := NewAgentCallbackContext(nil, nil, nil)
+	cbc.SetExtra(ExtraKeyStreamChunkInspectors, "not-a-list")
+	if got := cbc.StreamChunkInspectors(); len(got) != 0 {
+		t.Fatalf("类型不符应返回空，实际 %d 条", len(got))
+	}
+}
+
+// TestModelVisibleOutputEmitted_类型不符按false 非 bool 值一律视为未输出。
+func TestModelVisibleOutputEmitted_类型不符按false(t *testing.T) {
+	cbc := NewAgentCallbackContext(nil, nil, nil)
+	cbc.SetExtra(ExtraKeyModelVisibleOutputEmitted, "true")
+	if cbc.ModelVisibleOutputEmitted() {
+		t.Fatal("非 bool 值应视为 false")
+	}
+}

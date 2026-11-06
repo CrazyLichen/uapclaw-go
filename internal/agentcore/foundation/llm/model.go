@@ -60,6 +60,12 @@ const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// streamDrainTimeout 流异常路径排空内层通道的最长等待。
+//
+// 正常客户端收到 cancel 后即关闭通道，排空是毫秒级；这里是兜底：
+// 若某客户端忽略 ctx 又不停发，裸排空会永久挂住消费方。
+var streamDrainTimeout = 2 * time.Second
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewModel 创建 Model 实例。
@@ -339,7 +345,11 @@ func (m *Model) Stream(
 				case <-timer.C:
 					if ctx.Err() != nil {
 						// 父 ctx 取消优先：不构造超时错误，交给取消语义收尾
-						for range chunkChan {
+						if _, drained := utils.DrainWithTimeout(chunkChan, streamDrainTimeout); !drained {
+							logger.Warn(logComponent).
+								Str("event_type", "llm_stream_drain_timeout").
+								Str("layer", "model").
+								Msg("drain after cancel did not finish; client may ignore ctx")
 						}
 						return
 					}
@@ -347,7 +357,12 @@ func (m *Model) Stream(
 					totalElapsed := now.Sub(startedAt).Seconds()
 					waitElapsed := waitedSinceProgress + now.Sub(waitStartedAt).Seconds()
 					cancelStream()
-					for range chunkChan {
+					if _, drained := utils.DrainWithTimeout(chunkChan, streamDrainTimeout); !drained {
+						logger.Warn(logComponent).
+							Str("event_type", "llm_stream_drain_timeout").
+							Str("layer", "model").
+							Str("stage", stage).
+							Msg("drain after timeout did not finish; client may ignore ctx")
 					}
 					timeoutErr := exception.BuildError(exception.StatusModelCallFailed,
 						exception.WithMsg(fmt.Sprintf(
@@ -428,14 +443,12 @@ func (m *Model) Stream(
 			case <-ctx.Done():
 				// 消费方放弃读取：必须排空内层，让客户端 goroutine 走到自己的
 				// defer 收尾（关闭 resp.Body），否则连接与 goroutine 一起泄漏。
-				drained := 0
-				for range chunkChan {
-					drained++
-				}
+				drained, completed := utils.DrainWithTimeout(chunkChan, streamDrainTimeout)
 				logger.Info(logComponent).
 					Str("event_type", "llm_stream_consumer_abandoned").
 					Str("layer", "model").
 					Int("drained", drained).
+					Bool("completed", completed).
 					Msg("consumer abandoned stream, drained remaining chunks")
 				return
 			}

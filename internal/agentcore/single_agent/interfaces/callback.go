@@ -509,6 +509,13 @@ func (c *AgentCallbackContext) StreamChunkInspectors() []StreamChunkInspectorFun
 	}
 	list, ok := v.([]StreamChunkInspectorFunc)
 	if !ok {
+		// 静默返回 nil 会让检查器无声消失，排查成本极高：明确记录类型不符。
+		logger.Warn(logComponent).
+			Str("event_type", "extra_type_mismatch").
+			Str("key", ExtraKeyStreamChunkInspectors).
+			Str("want", "[]StreamChunkInspectorFunc").
+			Str("got", fmt.Sprintf("%T", v)).
+			Msg("extra value has unexpected type, ignored")
 		return nil
 	}
 	out := make([]StreamChunkInspectorFunc, len(list))
@@ -540,7 +547,15 @@ func (c *AgentCallbackContext) ModelVisibleOutputEmitted() bool {
 	if !ok {
 		return false
 	}
-	b, _ := v.(bool)
+	b, ok := v.(bool)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "extra_type_mismatch").
+			Str("key", ExtraKeyModelVisibleOutputEmitted).
+			Str("want", "bool").
+			Str("got", fmt.Sprintf("%T", v)).
+			Msg("extra value has unexpected type, treated as false")
+	}
 	return b
 }
 

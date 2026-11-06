@@ -21,6 +21,7 @@
 //	├── truncate.go       # 字符级截断：TruncateRunes（CJK 安全）
 //	├── ctxutil.go        # 上下文判定：Canceled（只认 context.Canceled）
 //	├── pyjson.go         # Python json.dumps 语义对齐序列化：MarshalNoEscape + MarshalIndentNoEscape
+//	├── channel.go        # 通道工具：DrainWithTimeout（流异常路径排空 + 超时兜底）
 //	└── pystr.go          # 文本化：PyText（展示用紧凑 JSON）+ PyStr/PyFloatStr（Python str() 标量语义）
 //
 // 对应 Python 代码：

@@ -573,3 +573,64 @@ func TestCallLLMStream_流式输出置可见标志(t *testing.T) {
 		t.Fatal("写出可见内容后标志应为 true")
 	}
 }
+
+// TestCallLLMStream_检查器报错排空超时兜底 客户端不关通道时排空必须超时返回，不能挂住。
+func TestCallLLMStream_检查器报错排空超时兜底(t *testing.T) {
+	original := streamDrainTimeout
+	streamDrainTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { streamDrainTimeout = original })
+
+	ch := make(chan *llmschema.AssistantMessageChunk, 1)
+	ch <- llmschema.NewAssistantMessageChunk("a") // 永远不关闭
+	model := newFakeLLMModel(t, &fakeStreamClient{chanOverride: ch})
+
+	cbc := interfaces.NewAgentCallbackContext(nil, nil, nil)
+	boom := errors.New("repeat detected")
+	cbc.SetStreamChunkInspectors([]interfaces.StreamChunkInspectorFunc{
+		func(_ context.Context, _ *interfaces.AgentCallbackContext, _ *llmschema.AssistantMessageChunk) error {
+			return boom
+		},
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := (&ReActAgent{}).callLLMStream(context.Background(), cbc, model, "mock-model", nil, nil, nil, nil)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, boom) {
+			t.Fatalf("应透传检查器错误，实际 %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("排空未超时返回，说明仍会永久挂住")
+	}
+}
+
+// TestCallLLMStream_流错误后排空超时兜底 客户端投递 StreamError 后不关通道时，排空必须超时返回。
+func TestCallLLMStream_流错误后排空超时兜底(t *testing.T) {
+	original := streamDrainTimeout
+	streamDrainTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { streamDrainTimeout = original })
+
+	ch := make(chan *llmschema.AssistantMessageChunk, 1)
+	ch <- llmschema.NewAssistantMessageChunk("", llmschema.WithChunkStreamError(errors.New("sse broken")))
+	model := newFakeLLMModel(t, &fakeStreamClient{chanOverride: ch})
+	cbc := interfaces.NewAgentCallbackContext(nil, nil, nil)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := (&ReActAgent{}).callLLMStream(context.Background(), cbc, model, "mock-model", nil, nil, nil, nil)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("应透传流错误")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("排空未超时返回，说明仍会永久挂住")
+	}
+}

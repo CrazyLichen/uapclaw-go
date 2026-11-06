@@ -841,3 +841,22 @@ func TestWithRepeatMaxPatternChars_生效(t *testing.T) {
 		t.Fatalf("上限应为 16，实际 %d", r.repeatMaxPatternChars)
 	}
 }
+
+// TestAnomalyState_类型不符重建 尾窗状态被写成别的类型时应告警并重建，而不是静默失效。
+func TestAnomalyState_类型不符重建(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+	cbc.SetExtra(modelAnomalyStateKey, "not-a-state")
+
+	if err := feedChunk(r, cbc, "", "hello"); err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	raw, _ := cbc.GetExtra(modelAnomalyStateKey)
+	state, ok := raw.(*anomalyState)
+	if !ok || state == nil {
+		t.Fatalf("应重建为 *anomalyState，实际 %T", raw)
+	}
+	if state.content != "hello" {
+		t.Fatalf("重建后应正常累计，实际 %q", state.content)
+	}
+}
