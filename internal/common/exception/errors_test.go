@@ -387,3 +387,38 @@ func TestBaseError_SetCategory(t *testing.T) {
 		t.Error("Execution 类别应 recoverable")
 	}
 }
+
+// TestIsControlFlowAbort 覆盖未标记 / 标记 / 嵌套标记 / 非 BaseError 四类形态。
+func TestIsControlFlowAbort(t *testing.T) {
+	if IsControlFlowAbort(nil) {
+		t.Fatal("nil 不应判为控制流中止")
+	}
+	plain := errors.New("boom")
+	if IsControlFlowAbort(plain) {
+		t.Fatal("普通错误不应判为控制流中止")
+	}
+
+	unmarked := BuildError(StatusModelCallFailed, WithMsg("provider failed"))
+	if IsControlFlowAbort(unmarked) {
+		t.Fatal("未打标记的 BaseError 不应判为控制流中止")
+	}
+
+	marked := BuildError(StatusContextExecutionError,
+		WithMsg("aborted"),
+		WithDetails(map[string]any{DetailsKeyControlFlowAbort: true}))
+	if !IsControlFlowAbort(marked) {
+		t.Fatal("打了标记的 BaseError 应判为控制流中止")
+	}
+
+	outer := BuildError(StatusModelCallFailed, WithMsg("outer"), WithCause(marked))
+	if !IsControlFlowAbort(outer) {
+		t.Fatal("异常链上带标记也应识别（沿 Unwrap）")
+	}
+
+	falseMark := BuildError(StatusModelCallFailed,
+		WithMsg("not aborted"),
+		WithDetails(map[string]any{DetailsKeyControlFlowAbort: false}))
+	if IsControlFlowAbort(falseMark) {
+		t.Fatal("标记值为 false 不应判为控制流中止")
+	}
+}

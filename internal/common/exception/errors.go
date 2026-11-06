@@ -2,6 +2,7 @@ package exception
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -65,6 +66,13 @@ const (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// DetailsKeyControlFlowAbort 标记「控制流中止」（非故障）的结构化键。
+//
+// 用于区分两类异常：一类是 provider/网络故障（可重试），另一类是 rail 主动
+// 终止本轮（bailout、安全拦截等，重试只会放大问题）。抛出方在 cause 上打此标记，
+// 消费方（重试记账、备用模型切换）据此跳过处理。
+const DetailsKeyControlFlowAbort = "control_flow_abort"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -270,6 +278,27 @@ func (e *BaseError) ToJSON() string {
 // Python: build_error()
 func BuildError(status StatusCode, opts ...ErrorOption) *BaseError {
 	return NewBaseError(status, opts...)
+}
+
+// IsControlFlowAbort 判断异常链上是否带「控制流中止」标记。
+//
+// 沿 Unwrap 展开（BaseError.Unwrap 返回 cause），命中任一层的
+// details[DetailsKeyControlFlowAbort] == true 即视为控制流中止。
+func IsControlFlowAbort(err error) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		baseErr, ok := current.(*BaseError)
+		if !ok {
+			continue
+		}
+		details, _ := baseErr.Details().(map[string]any)
+		if details == nil {
+			continue
+		}
+		if marked, ok := details[DetailsKeyControlFlowAbort].(bool); ok && marked {
+			return true
+		}
+	}
+	return false
 }
 
 // RaiseError 返回异常实例，供调用方 return 或 panic。

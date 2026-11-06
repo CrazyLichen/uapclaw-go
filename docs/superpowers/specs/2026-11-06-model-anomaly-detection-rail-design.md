@@ -137,7 +137,8 @@ priority = 70（`sys_operation 100 > mcp 95 > progressive/task_planning 90 > age
 2. **计数器按会话分桶**（上游实例属性）：正常"一会话一轮"语义等价；并发会话时不再互相偷预算。
 3. **超时以 `StreamError` 哨兵承载**（Go channel 不能抛异常），消费方 `callLLMStream` 已等价处理。
 4. **默认值只在 `NewModelClientConfig` 生效**：字面量构造的 `ModelClientConfig`（如 `react_helpers.go:110`）拿不到 300/60，等于关闭；上游 pydantic 处处补默认。记录但不在本批扩散修改。
-5. **`_stream_chunks_emitted` 不移植**：上游仅供 `browser_move` 运行时统计（`react_agent.py:1125`），随 9.38-49 回填。
+5. **控制流中止标记（Go 新增，上游无）**：bailout 的 cause 打 `details.control_flow_abort=true`，`ModelAnomalyDetectionRail` 与 `ModelBackupRail` 的 `OnModelException` 据此跳过重试/切模型。上游 `ModelBackupRail` 只有 17 行、无任何守卫，任何异常都会切模型并重试 —— 与 rail 的中止决策方向相反（一个要停、一个要跑），单槽 `request_retry` 覆盖后"跑"会赢，中止被无视；且 bailout 错误无 HTTP 状态码，会被瞬态分类判为可重试（2/4/8s 退避，实测 14.1s、18 次模型调用）。收紧后同场景 0.03s、6 次调用。同向场景（真故障）不受影响：anomaly 请求退避、backup 切模型并覆盖为立即重试，保持上游语义。
+6. **`_stream_chunks_emitted` 不移植**：上游仅供 `browser_move` 运行时统计（`react_agent.py:1125`），随 9.38-49 回填。
 
 ---
 
@@ -234,7 +235,11 @@ priority = 70（`sys_operation 100 > mcp 95 > progressive/task_planning 90 > age
 
 1. 重复输出重试闭环：`StreamCallCount()==2` + 最终正常
 2. 流帧超时重试闭环：`StreamIdleTimeout=0.05` + stall 0.2s → 错误含 `stream frame timeout` → 重试成功
-3. 工具循环压缩端到端：5 轮相同 tool_calls → 警告 `UserMessage` 存在、消息条数下降、第 3 次 bailout 冒泡
+3. 工具循环压缩（折叠注入）：mock 的 `GetStreamCall(i).Messages` 里出现含「请跳出重复工具调用」的 UserMessage
+4. 工具循环压缩（bailout 冒泡）：错误帧 `result_type=error` 的 `output` 含 `automatically aborted`，且调用次数远小于迭代预算
+5. 压缩配置透传：`ToolLoopCompactConfig` 经工厂挂载后正常收尾（不误伤）
+
+另：`ModelAnomalyDetectionRail` 与 `ModelBackupRail` 的共存交互（同向切模型 / 反向不切）由 `harness/rails` 的单测覆盖。
 
 跨度：`harness/rails` + `harness/deep_agent` + `single_agent/agents` + `single_agent/interfaces` + `foundation/llm` + `session`（≥3 子系统，过规则 7 两层门禁）。
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -61,6 +62,11 @@ func NewModelBackupRail(backupModels []*llm.Model) *ModelBackupRail {
 // OnModelException LLM 调用异常时切换到下一个备用模型并请求重试。
 // Python: on_model_exception (L15-18)
 func (r *ModelBackupRail) OnModelException(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	// 控制流中止（rail 主动终止本轮）不是模型故障：不切模型、不请求重试。
+	// 上游此 rail 无任何守卫；Go 侧新增，理由见 exception.IsControlFlowAbort。
+	if exception.IsControlFlowAbort(cbc.Exception()) {
+		return nil
+	}
 	// Python L16: if hasattr(ctx.agent, "set_llm") and self.index < len(self.backup_models)
 	switcher, ok := cbc.Agent().(modelSwitcher)
 	if !ok || r.index >= len(r.backupModels) {

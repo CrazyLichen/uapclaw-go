@@ -602,6 +602,9 @@ func TestToolLoopCompact_第三次命中bailout(t *testing.T) {
 		if abortErr.Cause == nil || !strings.Contains(abortErr.Cause.Error(), "automatically aborted") {
 			t.Fatalf("cause 应为兜底错误，实际 %v", abortErr.Cause)
 		}
+		if !exception.IsControlFlowAbort(abortErr.Cause) {
+			t.Fatal("bailout 的 cause 必须带控制流中止标记（重试/切模型据此跳过）")
+		}
 	}
 }
 

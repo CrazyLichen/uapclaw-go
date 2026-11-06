@@ -412,6 +412,10 @@ func (r *ModelAnomalyDetectionRail) BeforeModelCall(_ context.Context, cbc *agen
 // Python: on_model_exception (L454-481)
 func (r *ModelAnomalyDetectionRail) OnModelException(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	err := cbc.Exception()
+	// 控制流中止（如本 rail 的 bailout）：不是故障，重试只会放大问题
+	if exception.IsControlFlowAbort(err) {
+		return nil
+	}
 	if isRepeatException(err) {
 		r.requestRetryOrReset(cbc, "repeat")
 		return nil
@@ -1141,9 +1145,12 @@ func (r *ModelAnomalyDetectionRail) maybeCompactOrBailoutToolLoop(cbc *agentinte
 			Int("next_compaction", next).
 			Int("threshold", config.BailoutThreshold).
 			Msg("tool-loop bailout")
+		// 打「控制流中止」标记：本 rail 与 ModelBackupRail 都会据此跳过重试/切换，
+		// 否则一次中止会被当成模型故障继续跑（详见 IsControlFlowAbort 注释）。
 		return cb.NewAbortError(toolLoopBailoutMessage,
 			exception.BuildError(exception.StatusContextExecutionError,
-				exception.WithMsg(toolLoopBailoutMessage)))
+				exception.WithMsg(toolLoopBailoutMessage),
+				exception.WithDetails(map[string]any{exception.DetailsKeyControlFlowAbort: true})))
 	}
 
 	latest := rounds[len(rounds)-1]
