@@ -151,7 +151,8 @@ func (h *NativeHarness) Start(ctx context.Context, sess *session.Session) error 
 	h.forwarderDone = make(chan struct{})
 	h.ready = make(chan struct{}, 1)
 	h.started = true
-	h.transition(ctx, HarnessStateRunning)
+	// 注意：Start 后相位保持 IDLE（newInternalState 初始值），
+	// 对齐上游 Python start 不设 RUNNING——第一条 send 走 IDLE 分支才开轮。
 
 	go h.supervisorLoop(ctx)
 	go h.forwardOutputs(ctx)
