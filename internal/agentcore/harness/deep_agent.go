@@ -2210,6 +2210,19 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 				if extra, ok := contextData["extra"].(map[string]any); ok {
 					runContext.Extra = extra
 				}
+				// ⤴️ 9.87 回填：goal 代际字段（Python: RunContext(**context_data) L1069）
+				if goalID, ok := contextData["goal_id"].(string); ok {
+					runContext.GoalID = goalID
+				}
+				// revision 在 Go 内部为 int，经 JSON 解码后为 float64
+				switch rv := contextData["revision"].(type) {
+				case int:
+					runContext.Revision = rv
+				case int64:
+					runContext.Revision = int(rv)
+				case float64:
+					runContext.Revision = int(rv)
+				}
 			}
 		}
 		// 保留以 "_" 开头的额外 key 到 Extra（如 _steering_queue、_streaming）

@@ -738,3 +738,13 @@ func TestSession_Stream回调_PerSession隔离(t *testing.T) {
 		t.Error("s1 CloseStream 后 s2 回调应仍有效")
 	}
 }
+
+// TestSession_StreamEmitter 验证窄访问器返回非 nil 发射器
+// Python: session._inner.stream_writer_manager().stream_emitter() (deep_agent.py L4490)
+// ⤴️ 9.87 回填
+func TestSession_StreamEmitter(t *testing.T) {
+	s := NewSession()
+	if s.StreamEmitter() == nil {
+		t.Error("StreamEmitter 应返回非 nil 发射器（默认 StreamWriterManager 自动创建）")
+	}
+}

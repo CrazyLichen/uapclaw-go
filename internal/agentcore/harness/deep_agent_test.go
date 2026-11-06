@@ -4234,3 +4234,59 @@ func TestDeepAgent_buildTaskLoopEvaluators_零值阈值回退(t *testing.T) {
 		t.Fatal("第 3 轮短答案应触发停止（max_consecutive_empty_answers 回退 3）")
 	}
 }
+
+// ──────────────────────────── 9.87 回填：goal 运行上下文解析 ────────────────────────────
+
+// TestNormalizeInputs_解析goal运行上下文 验证 run.kind/run.context 回填
+// Python: _normalize_inputs → InvokeInputs.run_kind/run_context (deep_agent.py L3773-3777)
+func TestNormalizeInputs_解析goal运行上下文(t *testing.T) {
+	d := &DeepAgent{}
+	inputs, err := d.normalizeInputs(map[string]any{
+		"query": "goal round",
+		"run": map[string]any{
+			"kind": "goal",
+			"context": map[string]any{
+				"goal_id":    "goal-7",
+				"revision":   3,
+				"session_id": "sess-1",
+				"reset_loop": true,
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, agentinterfaces.RunKindGoal, inputs.RunKind)
+	require.NotNil(t, inputs.RunContext)
+	assert.Equal(t, "goal-7", inputs.RunContext.GoalID)
+	assert.Equal(t, 3, inputs.RunContext.Revision)
+	assert.Equal(t, "sess-1", inputs.RunContext.SessionID)
+}
+
+// TestNormalizeInputs_revision经JSON解码为float64 验证类型不匹配不 panic
+func TestNormalizeInputs_revision经JSON解码为float64(t *testing.T) {
+	d := &DeepAgent{}
+	inputs, err := d.normalizeInputs(map[string]any{
+		"query": "q",
+		"run": map[string]any{
+			"kind":    "goal",
+			"context": map[string]any{"goal_id": "g", "revision": float64(5)},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, inputs.RunContext)
+	assert.Equal(t, 5, inputs.RunContext.Revision)
+}
+
+// TestNormalizeInputs_revision类型非法时保持零值 验证不 panic
+func TestNormalizeInputs_revision类型非法时保持零值(t *testing.T) {
+	d := &DeepAgent{}
+	inputs, err := d.normalizeInputs(map[string]any{
+		"query": "q",
+		"run": map[string]any{
+			"kind":    "goal",
+			"context": map[string]any{"goal_id": "g", "revision": "abc"},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, inputs.RunContext)
+	assert.Equal(t, 0, inputs.RunContext.Revision)
+}

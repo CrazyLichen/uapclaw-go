@@ -165,6 +165,12 @@ type RunContext struct {
 	SessionID string
 	// ContextMode 上下文模式（如 "lightweight"）
 	ContextMode string
+	// GoalID 目标标识（仅 run_kind=goal 时有效）
+	// Python: RunContext.goal_id（deep_agent.py L3773-3777）
+	GoalID string
+	// Revision 目标修订号（上游默认 0，0 是合法值）
+	// Python: RunContext.revision
+	Revision int
 	// Extra 额外上下文信息
 	Extra map[string]any
 }
@@ -348,6 +354,9 @@ const (
 	RunKindHeartbeat RunKind = "heartbeat"
 	// RunKindCron 定时任务运行
 	RunKindCron RunKind = "cron"
+	// RunKindGoal 持续目标运行
+	// Python: RunKind.GOAL (openjiuwen/core/single_agent/rail/base.py L242)
+	RunKindGoal RunKind = "goal"
 )
 
 const (
@@ -1013,6 +1022,12 @@ func (i *InvokeInputs) IsLightweightContext() bool {
 // IsCron 检查是否为定时任务运行。
 func (i *InvokeInputs) IsCron() bool {
 	return i.RunKind == RunKindCron
+}
+
+// IsGoal 检查是否为持续目标运行。
+// Python: RunKind.GOAL 判定（rail/base.py L242）
+func (i *InvokeInputs) IsGoal() bool {
+	return i.RunKind == RunKindGoal
 }
 
 // EventKind 实现 EventInputs 接口

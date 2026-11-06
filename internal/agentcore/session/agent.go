@@ -308,6 +308,20 @@ func (s *Session) CloseStream() error {
 	return nil
 }
 
+// StreamEmitter 返回会话流发射器（窄访问器）。
+//
+// 供交互监督器写入不进 writer 回调链、不经类型白名单的控制帧
+// （如 round boundary 哨兵）。Python 通过 session._inner 直达同一对象：
+// session._inner.stream_writer_manager().stream_emitter()（deep_agent.py L4490）。
+// ⤴️ 9.87 回填
+func (s *Session) StreamEmitter() *stream.StreamEmitter {
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	return mgr.StreamEmitter()
+}
+
 // PreRun 会话预运行：触发 AGENT_SESSION_CREATED 回调 + 检查点预执行。
 //
 // 幂等：多次调用只执行一次。

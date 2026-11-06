@@ -431,3 +431,26 @@ func TestNewMapInputs(t *testing.T) {
 	assert.NotNil(t, inputs.Data)
 	assert.Empty(t, inputs.Data)
 }
+
+// ──────────────────────────── 9.87 回填 ────────────────────────────
+
+// TestRunKindGoal_值对齐Python 验证 goal 运行类型枚举
+// Python: RunKind.GOAL (openjiuwen/core/single_agent/rail/base.py L242)
+func TestRunKindGoal_值对齐Python(t *testing.T) {
+	assert.Equal(t, RunKind("goal"), RunKindGoal)
+}
+
+// TestInvokeInputs_IsGoal 验证 goal 运行判定
+func TestInvokeInputs_IsGoal(t *testing.T) {
+	assert.True(t, (&InvokeInputs{RunKind: RunKindGoal}).IsGoal())
+	assert.False(t, (&InvokeInputs{RunKind: RunKindNormal}).IsGoal())
+	assert.False(t, (&InvokeInputs{RunKind: RunKindHeartbeat}).IsGoal())
+}
+
+// TestRunContext_Goal字段 验证 goal 代际字段
+// Python: RunContext(goal_id=..., revision=...) (deep_agent.py L3773-3777)
+func TestRunContext_Goal字段(t *testing.T) {
+	ctx := &RunContext{GoalID: "g1", Revision: 7}
+	assert.Equal(t, "g1", ctx.GoalID)
+	assert.Equal(t, 7, ctx.Revision)
+}
