@@ -332,12 +332,9 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 		return nil, messagesToAdd, nil
 	}
 	// 待压缩内容过少时跳过：碎片压缩只会消耗模型调用而不降总量
-	// （对齐上游 forked base 的 min_target_context_ratio 判定）。
-	targetMessages := make([]llm_schema.BaseMessage, 0, len(targets))
-	for _, target := range targets {
-		targetMessages = append(targetMessages, target.messages...)
-	}
-	if !targetAboveMinRatio(mc, targetMessages, dc.minTargetContextRatio) {
+	// （对齐上游 forked base 的 min_target_context_ratio 判定，判定对象是可压缩跨度中段）。
+	span := buildDialogueSpan(allMessages, compressUntilIdx)
+	if !targetAboveMinRatio(mc, span.messagesToCompress, dc.minTargetContextRatio) {
 		return nil, messagesToAdd, nil
 	}
 
@@ -393,18 +390,19 @@ func (dc *DialogueCompressor) GetCompressIdx(messages []llm_schema.BaseMessage) 
 	if dc.messagesToKeep > 0 {
 		keepIndex = len(messages) - dc.messagesToKeep
 	}
-	if !dc.keepLastRound {
-		return keepIndex
+	if dc.keepLastRound {
+		if lastFinalAssistantIdx := processor.FindLastFinalAssistantIdx(messages); lastFinalAssistantIdx != -1 &&
+			lastFinalAssistantIdx < keepIndex {
+			keepIndex = lastFinalAssistantIdx
+		}
 	}
-
-	lastFinalAssistantIdx := processor.FindLastFinalAssistantIdx(messages)
-	if lastFinalAssistantIdx == -1 {
-		return keepIndex
+	if keepIndex < 0 {
+		keepIndex = 0
 	}
-	if lastFinalAssistantIdx < keepIndex {
-		return lastFinalAssistantIdx
-	}
-	return keepIndex
+	// 切点不得落在 assistant(tool_calls) 与其 tool 结果之间：否则压掉前半、留下后半，
+	// 工具调用失去配对，上游请求直接 400（对齐 adjust_keep_recent_for_tool_boundaries）。
+	keepRecent := adjustKeepRecentForToolBoundaries(messages, len(messages)-keepIndex)
+	return len(messages) - keepRecent
 }
 
 // GetCompressPairs 识别消息列表中的对话轮次配对。

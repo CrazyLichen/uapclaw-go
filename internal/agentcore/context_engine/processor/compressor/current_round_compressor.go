@@ -671,7 +671,9 @@ func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.M
 		return nil, messagesToAdd, nil
 	}
 
-	keepStartIdx := len(contextMessages) - crc.messagesToKeep
+	// 保留尾部起点不得落在 assistant(tool_calls) 与 tool 结果之间（否则工具配对断裂）
+	keepRecent := adjustKeepRecentForToolBoundaries(contextMessages, crc.messagesToKeep)
+	keepStartIdx := len(contextMessages) - keepRecent
 	if keepStartIdx < 0 {
 		keepStartIdx = 0
 	}
@@ -720,7 +722,7 @@ func (crc *CurrentRoundCompressor) GetCompressIdx(messages []llm_schema.BaseMess
 	if compressedIdx < 0 {
 		return -1
 	}
-	keepIndex := len(messages) - crc.messagesToKeep
+	keepIndex := len(messages) - adjustKeepRecentForToolBoundaries(messages, crc.messagesToKeep)
 	if compressedIdx >= keepIndex {
 		return -1
 	}
@@ -808,7 +810,12 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 // Python: CurrentRoundCompressor.compress()
 func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelContext, messagesToCompress []llm_schema.BaseMessage, allContextMessages []llm_schema.BaseMessage, compressEndIdx int, currentQueryIdx int) (*llm_schema.UserMessage, error) {
 	modelName := crc.getModelName()
-	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
+	span := buildCurrentRoundSpan(allContextMessages, compressEndIdx)
+	toCompress := span.messagesToCompress
+	if len(toCompress) == 0 {
+		toCompress = messagesToCompress
+	}
+	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), toCompress, modelName, crc.ProcessorType())
 	if inputTokens < crc.effectiveMinSelectedTokens(mc) {
 		logger.Info(logComponent).
 			Str("event_type", "compress_skipped").
