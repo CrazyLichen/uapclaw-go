@@ -28,6 +28,16 @@ type TaskLoopController struct {
 	*controller.Controller
 }
 
+// RoundOption SubmitRound 的 keyword-only 参数。
+// Python: submit_round 的 `*` 之后参数（task_id / turn_number / resume_continuation）
+type RoundOption func(*roundOptions)
+
+// roundOptions 选项收集结果
+type roundOptions struct {
+	// taskID 调用方指定的调度任务标识
+	taskID string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -64,6 +74,7 @@ func (tc *TaskLoopController) SubmitRound(
 	isStreaming bool,
 	runKind agentinterfaces.RunKind,
 	runContext *agentinterfaces.RunContext,
+	opts ...RoundOption,
 ) error {
 	handler := tc.EventHandler()
 	if handler == nil {
@@ -96,6 +107,14 @@ func (tc *TaskLoopController) SubmitRound(
 	}
 	if runContext != nil {
 		meta["run_context"] = runContext
+	}
+	ro := roundOptions{}
+	for _, opt := range opts {
+		opt(&ro)
+	}
+	if ro.taskID != "" {
+		// Python: if task_id is not None: event.metadata["task_id"] = task_id
+		meta["task_id"] = ro.taskID
 	}
 	event.SetMetadata(meta)
 
@@ -146,6 +165,23 @@ func (tc *TaskLoopController) EnqueueFollowUp(msg string) {
 		return
 	}
 	logger.Warn(logComponent).Str("msg", msg).Msg("EnqueueFollowUp: no InteractionQueues, message discarded")
+}
+
+// WithTaskID 指定本轮调度任务标识，供 task_scheduler.cancel_task 定向取消。
+// Python: submit_round(..., task_id=task_id) → event.metadata["task_id"]
+func WithTaskID(id string) RoundOption {
+	return func(o *roundOptions) { o.taskID = id }
+}
+
+// EnqueueSteer 入队 steering 指令（交互层 STEER 分支使用）。
+// Python: TaskLoopController.enqueue_steer
+func (tc *TaskLoopController) EnqueueSteer(msg string) {
+	queues := tc.getInteractionQueues()
+	if queues != nil {
+		queues.PushSteer(msg)
+		return
+	}
+	logger.Warn(logComponent).Str("msg", msg).Msg("EnqueueSteer: no InteractionQueues, message discarded")
 }
 
 // HasFollowUp 检查是否有待处理的 follow-up 消息。

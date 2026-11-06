@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -101,6 +102,37 @@ type DeepAgentInterface interface {
 	// 在 TaskLoop 模式下，executor 调用此函数优先于 reactAgent.Invoke。
 	// Python: 测试中通过 agent.set_react_agent(fake_react) 替换内层 Agent。
 	InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
+	// ── 交互监督器（9.87）──
+	// Start 绑定会话并启动会话级交互循环
+	// Python: DeepAgent.start
+	Start(ctx context.Context, sess *session.Session) error
+	// Stop 终止交互循环
+	// Python: DeepAgent.stop
+	Stop(ctx context.Context) error
+	// Phase 返回交互相位
+	// Python: DeepAgent.phase
+	Phase() hschema.InteractionPhase
+	// InteractionStarted 返回交互循环是否已启动
+	// Python: DeepAgent.interaction_started
+	InteractionStarted() bool
+	// HasOutputStream 返回是否已有输出消费者
+	// Python: DeepAgent.has_output_stream
+	HasOutputStream() bool
+	// AttachOutput 抢占唯一输出租约（失败返回 nil）
+	// Python: DeepAgent.attach_output
+	AttachOutput(ctx context.Context) *hschema.InteractionOutputStream
+	// DetachOutput 释放指定票号的租约
+	// Python: DeepAgent.detach_output
+	DetachOutput(ctx context.Context, token string, abortActiveRound bool)
+	// SendInput 投递用户输入
+	// Python: DeepAgent.send_input
+	SendInput(ctx context.Context, req hschema.SendInputRequest) error
+	// CancelRound 取消当前活跃轮
+	// Python: DeepAgent.cancel_round
+	CancelRound(ctx context.Context, reason string) (bool, error)
+	// SetGoalCoordinator 注入 Goal 能力（⤵️ #9.89 接线）
+	// Python: DeepAgent.goal_manager 赋值
+	SetGoalCoordinator(coordinator hschema.GoalCoordinator)
 }
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。

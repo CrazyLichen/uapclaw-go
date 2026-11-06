@@ -139,6 +139,58 @@ type DeepAgent struct {
 	// streamCancel 流取消函数
 	streamCancel context.CancelFunc
 
+	// ── 交互监督器运行时（9.87）──
+	// interactionSession 绑定的会话
+	interactionSession *session.Session
+	// interactionSessionID 绑定的会话标识（读它不加锁）
+	interactionSessionID string
+	// interactionPhase 相位机状态
+	interactionPhase hschema.InteractionPhase
+	// interactionStarted 是否已 Start
+	interactionStarted bool
+	// activeInteractionRound 当前执行中的轮次
+	activeInteractionRound *hschema.ActiveInteractionRound
+	// interactionEvents user/goal 双队列调度器（无内部锁，调用方持 controlMu）
+	interactionEvents *task_loop.EventManager
+	// goalCoordinator Goal 能力窄接口（⤵️ #9.89 注入 *goal.GoalManager）
+	goalCoordinator hschema.GoalCoordinator
+	// interactionOutput 输出租约管理器
+	interactionOutput *hschema.OutputLeaseManager
+	// interactionWakeup supervisor 唤醒通道（cap=1）
+	interactionWakeup chan struct{}
+	// interactionStateOnce 零件初始化只做一次
+	interactionStateOnce sync.Once
+	// interactionSupervisorMu 保护启停标记与 emit WaitGroup 的 Add
+	interactionSupervisorMu sync.Mutex
+	// interactionSupervisorRunning supervisor goroutine 是否在跑
+	interactionSupervisorRunning bool
+	// interactionStopping 正在停机（拒绝新的 emit goroutine）
+	interactionStopping bool
+	// interactionSupervisorCancel supervisor 取消函数
+	interactionSupervisorCancel context.CancelFunc
+	// interactionSupervisorDone supervisor 退出信号
+	interactionSupervisorDone chan struct{}
+	// interactionForwarderCancel 转发器取消函数
+	interactionForwarderCancel context.CancelFunc
+	// interactionForwarderDone 转发器退出信号
+	interactionForwarderDone chan struct{}
+	// interactionRoundCancel 当前轮取消函数（持 controlMu 读写）
+	interactionRoundCancel context.CancelFunc
+	// interactionRoundDone 当前轮退出信号（持 controlMu 读写）
+	interactionRoundDone chan struct{}
+	// interactionRoundForwarded 当前轮转发屏障（关闭=本轮 chunk 已全部入队）
+	interactionRoundForwarded chan struct{}
+	// interactionEmitWG 事件投递 goroutine 计数
+	interactionEmitWG sync.WaitGroup
+	// interactionStartMu Start/Stop 串行锁
+	interactionStartMu sync.Mutex
+	// interactionSendMu 输入/输出入口串行锁（先 send 后 control）
+	interactionSendMu sync.Mutex
+	// interactionControlMu 交互控制锁（相位、EventManager、租约、轮句柄）
+	interactionControlMu sync.Mutex
+	// roundOverride 交互轮执行覆写（仅测试使用）
+	roundOverride func(ctx context.Context, work *hschema.RoundWorkItem) hschema.RoundOutcome
+
 	// sessionToolkit 会话工具包
 	sessionToolkit *subagent.SessionToolkit
 
@@ -156,6 +208,26 @@ type DeepAgent struct {
 
 	// configMu 配置读写锁
 	configMu sync.RWMutex
+}
+
+// roundBoundaryFrame 内部轮边界哨兵帧。
+//
+// Python: _ROUND_BOUNDARY = object()（deep_agent.py L245）
+// 只由 forwarder 识别，绝不转发给宿主；必须与普通 chunk 走同一条 session 流，
+// 否则无法保证"本轮 chunk 已全部入队"的顺序性。
+type roundBoundaryFrame struct{}
+
+// RoundExpectation 取消时的代际校验条件（nil 字段表示不校验）。
+//
+// Python: _cancel_active_round 的 expected_run_kind / expected_goal_id / expected_revision
+// ⚠️ Revision 用指针：上游 revision 默认 0 且 0 是合法值，不能用 0 表示"不校验"。
+type RoundExpectation struct {
+	// RunKind 期望的运行类型
+	RunKind *hschema.RoundWorkKind
+	// GoalID 期望的目标标识（空串表示不校验）
+	GoalID string
+	// Revision 期望的修订号
+	Revision *int
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -217,6 +289,10 @@ var (
 	ErrNoActiveLoop = errors.New("deep agent: 任务循环控制器未激活")
 	// ErrNoSession steer/follow_up 既无显式会话也无 loop 会话。
 	ErrNoSession = errors.New("deep agent: 无可用会话")
+
+	// ErrInteractionNotRunning 交互监督器未启动或已终止。
+	// Python: RuntimeError("interaction_terminated")
+	ErrInteractionNotRunning = errors.New("interaction_terminated")
 )
 
 // defaultDirectToolNames 渐进模式下保持直接可调用的工具名集合。
@@ -1454,6 +1530,299 @@ func (d *DeepAgent) resolveContextWindowTokens() int {
 	}
 
 	return cecontext.ResolveContextMax(modelName, fallbackTokens, modelContextWindowTokens)
+}
+
+// ──────────────────────────── 交互监督器导出方法（9.87）────────────────────────────
+
+// Phase 返回当前交互相位。
+// Python: DeepAgent.phase (L3892)
+func (d *DeepAgent) Phase() hschema.InteractionPhase {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	return d.interactionPhase
+}
+
+// InteractionStarted 返回交互循环是否已启动。
+// Python: DeepAgent.interaction_started (L3896)
+func (d *DeepAgent) InteractionStarted() bool {
+	d.ensureInteractionState()
+	d.interactionSupervisorMu.Lock()
+	defer d.interactionSupervisorMu.Unlock()
+	return d.interactionStarted
+}
+
+// ActiveRound 返回当前执行中的轮次（无则 nil）。
+// Python: DeepAgent.active_round (L3901)
+func (d *DeepAgent) ActiveRound() *hschema.ActiveInteractionRound {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	return d.activeInteractionRound
+}
+
+// EventManager 返回交互调度器。
+// Python: DeepAgent.event_manager (L3905)
+func (d *DeepAgent) EventManager() *task_loop.EventManager {
+	d.ensureInteractionState()
+	return d.interactionEvents
+}
+
+// HasOutputStream 返回是否已有输出消费者。
+// Python: DeepAgent.has_output_stream (L3909)
+func (d *DeepAgent) HasOutputStream() bool {
+	d.ensureInteractionState()
+	return d.interactionOutput.HasConsumer()
+}
+
+// AttachOutput 抢占本交互唯一的输出读者。
+//
+// 已有消费者时返回 nil。若存在 ACTIVE goal，即使本次没抢到租约也要补排
+// 缺失的 goal work，让已连接的读者继续收到目标进展（切会话/并发 attach_goal）。
+// Python: DeepAgent.attach_output (L4048)
+func (d *DeepAgent) AttachOutput(_ context.Context) *hschema.InteractionOutputStream {
+	d.ensureInteractionState()
+
+	d.interactionSendMu.Lock()
+	defer d.interactionSendMu.Unlock()
+
+	if d.ensureInteractionRunning() != nil {
+		return nil
+	}
+
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	if !d.isInteractionRunningLocked() {
+		return nil
+	}
+
+	stream := d.attachOutputLocked()
+	if d.goalCoordinator != nil && d.goalCoordinator.HasActiveRecord() {
+		d.goalCoordinator.EnsureActiveGoalWorkLocked()
+		d.notifyWork()
+	}
+	return stream
+}
+
+// NextOutput 实现 hschema.InteractionOutputDriver。
+// Python: next_output (L4217)
+func (d *DeepAgent) NextOutput(ctx context.Context, lease *hschema.OutputLease) (stream.Schema, bool) {
+	d.ensureInteractionState()
+	return d.interactionOutput.NextItem(ctx, lease)
+}
+
+// DetachOutput 释放指定票号的租约并清场。
+// Python: detach_output (L4220)
+func (d *DeepAgent) DetachOutput(ctx context.Context, token string, abortActiveRound bool) {
+	d.ensureInteractionState()
+
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+
+	if !d.interactionOutput.Detach(token, true) {
+		return
+	}
+	d.interactionEvents.DiscardAllWork()
+	if abortActiveRound {
+		d.cancelActiveRoundLocked(ctx, "output_detached", nil)
+	}
+}
+
+// Start 绑定任务循环内核并启动被动输出转发器。
+//
+// 持 start 锁期间被 await 的生命周期回调不得重入 Start/Stop。
+// Python: DeepAgent.start (L3912)
+func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
+	d.ensureInteractionState()
+
+	d.interactionStartMu.Lock()
+	defer d.interactionStartMu.Unlock()
+
+	if d.InteractionStarted() {
+		if err := d.ensureInteractionRunning(); err != nil {
+			return err
+		}
+	} else if !d.tryTransitionInteractionPhase(hschema.InteractionPhaseIdle) {
+		return ErrInteractionNotRunning
+	}
+
+	if sess == nil {
+		sess = session.CreateAgentSession("default", d.Card(), nil)
+		if err := sess.PreRun(ctx, map[string]any{}); err != nil {
+			return err
+		}
+	}
+	sid := sess.GetSessionID()
+
+	if d.InteractionStarted() {
+		if d.interactionSessionID == sid {
+			return nil
+		}
+		return fmt.Errorf("interaction loop already bound to session %s; cannot bind %s",
+			d.interactionSessionID, sid)
+	}
+
+	d.interactionSession = sess
+	d.interactionSessionID = sid
+
+	if _, _, err := d.prepareInteractionTaskLoop(ctx, sess); err != nil {
+		return err
+	}
+	// ⤵️ #9.89 回填：goalPromptLanguage / TaskCompletionRail 注册 / GoalManager 构造 /
+	// bindLiveGoalManager + initRail（Python L3964-3994）
+
+	d.interactionSupervisorMu.Lock()
+	d.interactionStarted = true
+	d.interactionStopping = false
+	d.interactionSupervisorMu.Unlock()
+
+	d.startForwarder(ctx)
+	d.ensureSupervisorRunning(ctx)
+	return nil
+}
+
+// Stop 与 Start 串行，终止本交互运行时。
+// Python: DeepAgent.stop (L3998)
+func (d *DeepAgent) Stop(ctx context.Context) error {
+	d.ensureInteractionState()
+	d.interactionStartMu.Lock()
+	defer d.interactionStartMu.Unlock()
+	return d.stopInteractionLocked(ctx)
+}
+
+// SendInput 分发用户文本或打断恢复输入。
+//
+// 需要读输出的宿主必须先 AttachOutput；STEER / follow-up 通常跳过 attach，
+// 让既有消费者继续接收输出。分发模式对 InteractiveInput 恢复请求不生效。
+// Python: DeepAgent.send_input (L4072)
+func (d *DeepAgent) SendInput(ctx context.Context, req hschema.SendInputRequest) error {
+	d.ensureInteractionState()
+
+	d.interactionSendMu.Lock()
+	defer d.interactionSendMu.Unlock()
+
+	if err := d.ensureInteractionRunning(); err != nil {
+		return err
+	}
+	return d.sendUser(ctx, req)
+}
+
+// RunOneRound 执行一个交互 work item，并可选地提出下一轮工作。
+// Python: run_one_round (L3744)
+func (d *DeepAgent) RunOneRound(ctx context.Context, work *hschema.RoundWorkItem, taskID string, sess *session.Session) hschema.RoundOutcome {
+	initCtx, err := d.ensureInitialized(ctx)
+	if err != nil {
+		return hschema.RoundOutcome{ErrorCode: "round_execution_error", ErrorMessage: err.Error()}
+	}
+	ctx = initCtx
+	// ⤵️ #9.89 回填：MoA proposal_owner begin_work/activate（spec D1 整段跳过）
+
+	d.invokeActive.Store(true)
+	defer d.invokeActive.Store(false)
+
+	coord, ctrl, err := d.prepareInteractionTaskLoop(ctx, sess)
+	if err != nil {
+		return hschema.RoundOutcome{ErrorCode: "round_execution_error", ErrorMessage: err.Error()}
+	}
+	if work.ResetLoop() {
+		coord.Reset()
+		state := d.LoadState(sess)
+		state.StopConditionState = nil
+		d.saveState(sess, state)
+	}
+
+	inputs := utils.DeepCopyMap(work.Inputs)
+	if inputs == nil {
+		inputs = make(map[string]any)
+	}
+	if work.Kind == hschema.RoundWorkKindGoal {
+		// Python: inputs["run"] = {"kind": "goal", "context": {...}} (L3773-3777)
+		inputs["run"] = map[string]any{
+			"kind": string(agentinterfaces.RunKindGoal),
+			"context": map[string]any{
+				"goal_id":    work.Context.GoalID,
+				"revision":   work.Context.Revision,
+				"session_id": work.Context.SessionID,
+				"reset_loop": true,
+			},
+		}
+	}
+	invokeInputs, normErr := d.normalizeInputs(inputs)
+	if normErr != nil {
+		return hschema.RoundOutcome{ErrorCode: "round_execution_error", ErrorMessage: normErr.Error()}
+	}
+
+	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
+	var result map[string]any
+	var nextWork *hschema.RoundWorkItem
+
+	lifecycleErr := cbc.FireLifecycle(ctx,
+		agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke,
+		func() error {
+			if isResumeInput(invokeInputs) {
+				res, runErr := d.runSingleRoundInvoke(ctx, cbc, sess)
+				if runErr != nil {
+					return runErr
+				}
+				result = res
+			} else {
+				timeout := hschema.DefaultCompletionTimeout
+				d.configMu.RLock()
+				if d.deepConfig != nil && d.deepConfig.CompletionTimeout > 0 {
+					timeout = d.deepConfig.CompletionTimeout
+				}
+				d.configMu.RUnlock()
+
+				if submitErr := ctrl.SubmitRound(ctx, sess, fmt.Sprintf("%v", work.Query()),
+					work.IsFollowUp, true,
+					invokeInputs.RunKind, invokeInputs.RunContext,
+					task_loop.WithTaskID(taskID)); submitErr != nil {
+					return submitErr
+				}
+				result = ctrl.WaitRoundCompletion(ctx, &timeout)
+			}
+			d.writeRoundResultToStream(ctx, result, sess)
+			invokeInputs.Result = result
+			if !isResumeInput(invokeInputs) {
+				nextWork = d.buildInteractionNextWork(ctx, work, result, sess, coord, ctrl)
+			}
+			return nil
+		})
+	if lifecycleErr != nil {
+		logger.Error(logComponent).Err(lifecycleErr).Msg("interaction round execution failed")
+		return hschema.RoundOutcome{
+			ErrorCode:    "round_execution_error",
+			ErrorMessage: "interaction round execution failed",
+		}
+	}
+
+	// Python: self.save_state(session); self.clear_state(session)
+	// Go 侧运行态直接落在 session state（LoadState/saveState），无需额外的
+	// session 属性缓存清理，保留此注释标记对应关系。
+	d.saveState(sess, d.LoadState(sess))
+	return hschema.RoundOutcome{NextWork: nextWork}
+}
+
+// CancelRound 取消当前活跃轮但不停止交互循环。
+// Python: cancel_round (L4268)
+func (d *DeepAgent) CancelRound(ctx context.Context, reason string) (bool, error) {
+	d.ensureInteractionState()
+	if d.ActiveRound() == nil {
+		return false, nil
+	}
+	d.interactionControlMu.Lock()
+	d.cancelActiveRoundLocked(ctx, reason, nil)
+	d.interactionControlMu.Unlock()
+	return true, nil
+}
+
+// SetGoalCoordinator 注入 Goal 能力窄接口（⤵️ #9.89 在 Start 内构造 GoalManager 后调用）。
+// Python: self.goal_manager = GoalManager(...) (L3970-3981)
+func (d *DeepAgent) SetGoalCoordinator(coordinator hschema.GoalCoordinator) {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	d.goalCoordinator = coordinator
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -3354,4 +3723,808 @@ func logInnerReactMaxIterations(configured, resolved int) {
 		return
 	}
 	logger.Info(logComponent).Msgf("[DeepAgent] inner ReAct max_iterations=%d (configured)", resolved)
+}
+
+// ──────────────────────────── 交互监督器内部实现（9.87）────────────────────────────
+
+// SchemaType 返回帧类型标识
+func (roundBoundaryFrame) SchemaType() string { return "round_boundary" }
+
+// Validate 边界帧无字段，恒通过
+func (roundBoundaryFrame) Validate() error { return nil }
+
+// ToMap 边界帧不参与序列化
+func (roundBoundaryFrame) ToMap() map[string]any { return nil }
+
+// ensureInteractionState 惰性创建交互零件（幂等）。
+// Python: __init__ 里直接构造（单线程无竞态），Go 用 sync.Once 保证只建一次。
+func (d *DeepAgent) ensureInteractionState() {
+	d.interactionStateOnce.Do(func() {
+		d.interactionEvents = task_loop.NewEventManager()
+		d.interactionOutput = hschema.NewOutputLeaseManager()
+		d.interactionWakeup = make(chan struct{}, 1)
+		d.interactionPhase = hschema.InteractionPhaseIdle
+	})
+}
+
+// tryTransitionInteractionPhase 迁移相位；从 terminated 迁出被拒绝。
+// Python: _try_transition_interaction_phase (L4093)
+func (d *DeepAgent) tryTransitionInteractionPhase(target hschema.InteractionPhase) bool {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	if d.interactionPhase == hschema.InteractionPhaseTerminated &&
+		target != hschema.InteractionPhaseTerminated {
+		return false
+	}
+	d.interactionPhase = target
+	return true
+}
+
+// isInteractionRunning 返回交互循环是否在运行。
+// Python: _is_interaction_running (L4090)
+func (d *DeepAgent) isInteractionRunning() bool {
+	d.ensureInteractionState()
+
+	d.interactionControlMu.Lock()
+	phase := d.interactionPhase
+	d.interactionControlMu.Unlock()
+
+	d.interactionSupervisorMu.Lock()
+	started := d.interactionStarted
+	d.interactionSupervisorMu.Unlock()
+
+	return started && phase != hschema.InteractionPhaseTerminated
+}
+
+// isInteractionRunningLocked 同 isInteractionRunning，但要求调用方已持 controlMu。
+//
+// Go 的 sync.Mutex 不可重入：持锁路径必须用本变体，否则自锁。
+func (d *DeepAgent) isInteractionRunningLocked() bool {
+	phase := d.interactionPhase
+
+	d.interactionSupervisorMu.Lock()
+	started := d.interactionStarted
+	d.interactionSupervisorMu.Unlock()
+
+	return started && phase != hschema.InteractionPhaseTerminated
+}
+
+// ensureInteractionRunning 未运行时返回 ErrInteractionNotRunning。
+// Python: _ensure_interaction_running (L4086)
+func (d *DeepAgent) ensureInteractionRunning() error {
+	if !d.isInteractionRunning() {
+		return ErrInteractionNotRunning
+	}
+	return nil
+}
+
+// attachOutputLocked 领取租约并包成输出句柄（调用方持 controlMu）。
+// Python: _attach_output_locked (L4213)
+func (d *DeepAgent) attachOutputLocked() *hschema.InteractionOutputStream {
+	lease := d.interactionOutput.Attach()
+	if lease == nil {
+		return nil
+	}
+	return hschema.NewInteractionOutputStream(d, lease)
+}
+
+// detachCurrentOutputLocked 摘下当前租约（调用方持 controlMu）。
+// Python: _detach_current_output_locked (L4230)
+func (d *DeepAgent) detachCurrentOutputLocked(ctx context.Context, abortActiveRound bool) {
+	lease := d.interactionOutput.CurrentLease()
+	if lease == nil {
+		return
+	}
+	if !d.interactionOutput.Detach(lease.Token, true) {
+		return
+	}
+	d.interactionEvents.DiscardAllWork()
+	if abortActiveRound {
+		d.cancelActiveRoundLocked(ctx, "output_replaced", nil)
+	}
+}
+
+// emitInteractionEvent 异步投递一条交互事件。
+//
+// 回调是同步的（rail 可从多个钩子调用），只能 fire-and-forget；
+// 必须在同步上下文里先抓票号，避免延迟任务把旧事件投进新租约的流。
+// Python: _emit_interaction_event (L4254)
+func (d *DeepAgent) emitInteractionEvent(event hschema.InteractionEvent) {
+	d.ensureInteractionState()
+
+	token := d.interactionOutput.CurrentToken()
+	if token == "" {
+		return
+	}
+
+	d.interactionSupervisorMu.Lock()
+	if d.interactionStopping {
+		d.interactionSupervisorMu.Unlock()
+		return
+	}
+	d.interactionEmitWG.Add(1)
+	d.interactionSupervisorMu.Unlock()
+
+	go func() {
+		defer d.interactionEmitWG.Done()
+		d.interactionOutput.Emit(event.ToOutputSchema(), token)
+	}()
+}
+
+// waitInteractionEmits 有界等待事件投递 goroutine 收尾。
+func (d *DeepAgent) waitInteractionEmits(timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		d.interactionEmitWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		logger.Warn(logComponent).Msg("interaction emit tasks did not finish within timeout")
+	}
+}
+
+// cancelActiveRoundLocked 取消在飞轮（调用方持 controlMu）。
+//
+// 顺序：① abort() ② 取消 round goroutine（**不等它退出**：其 defer 需要 controlMu，
+// 等待会自锁）③ scheduler.CancelTask 有界等待 1.5s。
+// Python: _cancel_active_round (L4287)
+func (d *DeepAgent) cancelActiveRoundLocked(ctx context.Context, reason string, expected *RoundExpectation) {
+	active := d.activeInteractionRound
+	if active == nil {
+		return
+	}
+	if expected != nil {
+		if expected.RunKind != nil && active.RunKind() != *expected.RunKind {
+			return
+		}
+		if expected.GoalID != "" && active.GoalID() != expected.GoalID {
+			return
+		}
+		if expected.Revision != nil && active.Revision() != *expected.Revision {
+			return
+		}
+	}
+
+	logger.Info(logComponent).Str("run_kind", string(active.RunKind())).Str("reason", reason).
+		Msg("cancelling interaction round")
+
+	taskID := active.TaskID
+	cancel := d.interactionRoundCancel
+
+	// 1) 先发中止信号
+	d.Abort(ctx)
+
+	// 2) 取消 round goroutine —— 不等待其退出（见上）
+	if cancel != nil {
+		cancel()
+	}
+
+	// 3) 有界等待调度任务取消
+	ctrl := d.currentLoopController()
+	if taskID == "" || ctrl == nil {
+		return
+	}
+	scheduler := ctrl.TaskScheduler()
+	if scheduler == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := scheduler.CancelTask(ctx, taskID); err != nil {
+			logger.Debug(logComponent).Err(err).Str("task_id", taskID).
+				Msg("cancel_task raised during round cancel")
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(1500 * time.Millisecond):
+		logger.Warn(logComponent).Str("task_id", taskID).Str("reason", reason).
+			Msg("cancel_task timed out after 1.5s; continuing without waiting for LLM")
+	}
+}
+
+// currentLoopController 返回任务循环控制器（nil 安全）。
+// Python: DeepAgent.loop_controller
+func (d *DeepAgent) currentLoopController() *task_loop.TaskLoopController {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.loopController
+}
+
+// notifyWork 唤醒 supervisor（启动职责见 startInteractionSupervisor）。
+//
+// ⚠️ 不得取 interactionControlMu：本方法会在持 controlMu 的 sendUser 内被调用。
+// Python: _notify_work (L4369)
+func (d *DeepAgent) notifyWork() {
+	d.ensureInteractionState()
+	select {
+	case d.interactionWakeup <- struct{}{}:
+	default:
+	}
+	d.ensureSupervisorRunning(context.Background())
+}
+
+// forwardSessionStream 把会话流转发到输出租约队列（唯一消费者）。
+//
+// 边界帧不转发，只置位本轮屏障；其余帧原样 Emit（无票即丢）。
+// 转发器崩溃必须转成 execution.error(forwarder_crashed)，否则交互会静默卡死。
+// Python: _forward_session_stream (L4462)
+func (d *DeepAgent) forwardSessionStream(ctx context.Context) {
+	sess := d.interactionSession
+	if sess == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Interface("panic", r).Msg("output forwarder crashed")
+			d.emitInteractionEvent(hschema.NewExecutionErrorEvent(
+				"forwarder_crashed", "output forwarder crashed", nil))
+		}
+	}()
+	// 迭代器只取一次：Session.StreamIterator() 每次调用都会新起一个队列消费者，
+	// 在循环条件里反复调用会让多个消费者互相抢帧（Python 侧是 async for 单次获取）。
+	iter := sess.StreamIterator()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case chunk, ok := <-iter:
+			if !ok {
+				return
+			}
+			if _, isBoundary := chunk.(roundBoundaryFrame); isBoundary {
+				d.signalRoundForwarded()
+				continue
+			}
+			d.interactionOutput.Emit(chunk, "")
+		}
+	}
+}
+
+// signalRoundForwarded 置位本轮转发屏障（关闭通道，幂等）。
+func (d *DeepAgent) signalRoundForwarded() {
+	d.interactionControlMu.Lock()
+	forwarded := d.interactionRoundForwarded
+	d.interactionControlMu.Unlock()
+	closeChanSafely(forwarded)
+}
+
+// emitRoundBoundary 向会话流注入内部轮边界哨兵。
+//
+// 必须与普通 chunk 走同一条队列才能保证顺序；绕过 writer 回调与类型白名单
+// （对齐 Python 的 session._inner.stream_writer_manager().stream_emitter().emit）。
+// Python: _emit_round_boundary (L4481)
+func (d *DeepAgent) emitRoundBoundary(sess *session.Session) bool {
+	if sess == nil {
+		return false
+	}
+	emitter := sess.StreamEmitter()
+	if emitter == nil {
+		return false
+	}
+	if err := emitter.Emit(context.Background(), roundBoundaryFrame{}); err != nil {
+		logger.Debug(logComponent).Err(err).Msg("unable to emit ordered round boundary")
+		return false
+	}
+	return true
+}
+
+// closeChanSafely 幂等关闭通道。
+func closeChanSafely(ch chan struct{}) {
+	if ch == nil {
+		return
+	}
+	select {
+	case <-ch:
+	default:
+		close(ch)
+	}
+}
+
+// prepareInteractionTaskLoop 准备并绑定常驻交互循环的任务循环内核。
+// Python: prepare_interaction_task_loop (L3731)
+func (d *DeepAgent) prepareInteractionTaskLoop(ctx context.Context, sess *session.Session) (*task_loop.LoopCoordinator, *task_loop.TaskLoopController, error) {
+	coord, ctrl, err := d.setupTaskLoop(ctx, sess)
+	if err != nil {
+		return nil, nil, err
+	}
+	if d.boundSessionIDValue() != sess.GetSessionID() {
+		if bindErr := ctrl.BindSession(ctx, sess); bindErr != nil {
+			logger.Warn(logComponent).Err(bindErr).Msg("bind interaction session failed")
+		}
+	}
+	d.configMu.Lock()
+	d.loopSession = sess
+	d.boundSessionID = sess.GetSessionID()
+	d.configMu.Unlock()
+	return coord, ctrl, nil
+}
+
+// boundSessionIDValue 返回已绑定会话标识（与字段 boundSessionID 区分命名）。
+func (d *DeepAgent) boundSessionIDValue() string {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.boundSessionID
+}
+
+// stopInteractionLocked 停机实现。
+// Python: _stop_interaction_locked (L4003)
+func (d *DeepAgent) stopInteractionLocked(ctx context.Context) error {
+	d.tryTransitionInteractionPhase(hschema.InteractionPhaseTerminated)
+
+	d.interactionSupervisorMu.Lock()
+	started := d.interactionStarted
+	d.interactionStopping = true
+	d.interactionSupervisorMu.Unlock()
+	if !started {
+		return nil
+	}
+
+	d.interactionEvents.DiscardAllWork()
+	d.interactionOutput.Shutdown()
+
+	d.interactionControlMu.Lock()
+	d.cancelActiveRoundLocked(ctx, "stop", nil)
+	d.interactionControlMu.Unlock()
+
+	d.stopSupervisor()
+	d.stopForwarder()
+	d.waitInteractionEmits(2 * time.Second)
+
+	if d.interactionSession != nil {
+		_ = d.interactionSession.CloseStream()
+	}
+	if ctrl := d.currentLoopController(); ctrl != nil && d.interactionSession != nil {
+		_ = ctrl.UnbindSession(ctx, d.interactionSession)
+		_ = ctrl.Stop(ctx)
+	}
+
+	d.interactionSupervisorMu.Lock()
+	d.interactionStarted = false
+	d.interactionSupervisorMu.Unlock()
+
+	d.interactionEvents.DiscardAllWork()
+	d.tryTransitionInteractionPhase(hschema.InteractionPhaseTerminated)
+
+	d.interactionControlMu.Lock()
+	d.activeInteractionRound = nil
+	d.interactionRoundCancel = nil
+	d.interactionRoundDone = nil
+	d.interactionRoundForwarded = nil
+	d.interactionControlMu.Unlock()
+	return nil
+}
+
+// startForwarder 启动常驻输出转发器。
+func (d *DeepAgent) startForwarder(ctx context.Context) {
+	d.interactionSupervisorMu.Lock()
+	defer d.interactionSupervisorMu.Unlock()
+	if d.interactionForwarderDone != nil {
+		return
+	}
+	fctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	d.interactionForwarderCancel = cancel
+	d.interactionForwarderDone = done
+	go func() {
+		defer close(done)
+		d.forwardSessionStream(fctx)
+	}()
+}
+
+// stopForwarder 取消转发器并等待退出（有界）。
+func (d *DeepAgent) stopForwarder() {
+	d.interactionSupervisorMu.Lock()
+	cancel, done := d.interactionForwarderCancel, d.interactionForwarderDone
+	d.interactionForwarderDone = nil
+	d.interactionForwarderCancel = nil
+	d.interactionSupervisorMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			logger.Warn(logComponent).Msg("interaction forwarder did not stop within 2s")
+		}
+	}
+}
+
+// ensureSupervisorRunning 若 supervisor 未运行则启动。
+//
+// ⚠️ 只碰 supervisor 锁与缓存的 started/stopping 标记，不取 controlMu。
+// Python: _ensure_supervisor_running (L4373)
+func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) {
+	d.interactionSupervisorMu.Lock()
+	defer d.interactionSupervisorMu.Unlock()
+	if d.interactionSupervisorRunning || !d.interactionStarted || d.interactionStopping {
+		return
+	}
+	sctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	d.interactionSupervisorCancel = cancel
+	d.interactionSupervisorDone = done
+	d.interactionSupervisorRunning = true
+	go func() {
+		defer close(done)
+		defer func() {
+			d.interactionSupervisorMu.Lock()
+			d.interactionSupervisorRunning = false
+			d.interactionSupervisorMu.Unlock()
+		}()
+		d.supervisorLoop(sctx)
+	}()
+}
+
+// stopSupervisor 取消 supervisor 并等待退出（有界）。
+func (d *DeepAgent) stopSupervisor() {
+	d.interactionSupervisorMu.Lock()
+	cancel, done := d.interactionSupervisorCancel, d.interactionSupervisorDone
+	d.interactionSupervisorCancel = nil
+	d.interactionSupervisorDone = nil
+	d.interactionSupervisorMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			logger.Warn(logComponent).Msg("interaction supervisor did not stop within 2s")
+		}
+	}
+}
+
+// supervisorLoop 交互监督器主循环（唯一消费者）。
+// Python: _supervisor_loop (L4377)
+func (d *DeepAgent) supervisorLoop(ctx context.Context) {
+	for d.isInteractionRunning() {
+		if !d.interactionOutput.HasConsumer() {
+			if !d.tryTransitionInteractionPhase(hschema.InteractionPhaseIdle) {
+				return
+			}
+			if !d.waitForWork(ctx) {
+				return
+			}
+			continue
+		}
+
+		work := d.nextWorkLocked()
+		if work == nil {
+			d.promoteLoopFollowUps()
+			work = d.nextWorkLocked()
+		}
+		if work == nil {
+			d.closeIdleOutputIfFinished(ctx)
+			if !d.isInteractionRunning() {
+				return
+			}
+			if !d.tryTransitionInteractionPhase(hschema.InteractionPhaseIdle) {
+				return
+			}
+			if d.hasPendingWorkLocked() {
+				continue
+			}
+			if !d.waitForWork(ctx) {
+				return
+			}
+			continue
+		}
+
+		d.executeRoundAndWait(ctx, work)
+	}
+}
+
+// waitForWork 阻塞等待唤醒或上下文取消；返回 false 表示应退出。
+func (d *DeepAgent) waitForWork(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-d.interactionWakeup:
+		return true
+	}
+}
+
+// nextWorkLocked 在 controlMu 内取下一个 work。
+// Python: event_manager.next_work（supervisor 侧调用点）
+func (d *DeepAgent) nextWorkLocked() *hschema.RoundWorkItem {
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	return d.interactionEvents.NextWork()
+}
+
+// hasPendingWorkLocked 在 controlMu 内判断是否有待办。
+func (d *DeepAgent) hasPendingWorkLocked() bool {
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	return d.interactionEvents.HasPendingWork()
+}
+
+// promoteLoopFollowUps 把控制器 follow-up 队列提升为 user work。
+// Python: _promote_loop_follow_ups (L4418)
+func (d *DeepAgent) promoteLoopFollowUps() {
+	ctrl := d.currentLoopController()
+	if ctrl == nil || !ctrl.HasFollowUp() {
+		return
+	}
+	for _, query := range ctrl.DrainFollowUp() {
+		work := hschema.NewUserWorkItem("", map[string]any{"query": query}, true, false)
+		d.interactionControlMu.Lock()
+		err := d.interactionEvents.PushUser(work)
+		d.interactionControlMu.Unlock()
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("promote follow-up failed")
+		}
+	}
+}
+
+// closeIdleOutputIfFinished 在最后一批排队轮次结束后结束普通响应流。
+// Python: _close_idle_output_if_finished (L4433)
+func (d *DeepAgent) closeIdleOutputIfFinished(_ context.Context) bool {
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	if !d.isInteractionRunningLocked() {
+		return false
+	}
+	if d.shouldKeepInteractionOpenLocked() {
+		return true
+	}
+	d.interactionOutput.FinishCurrent()
+	return true
+}
+
+// shouldKeepInteractionOpenLocked 返回当前输出流是否仍持有活的工作（调用方持 controlMu）。
+//
+// 副作用（刻意）：GoalRecord 为 ACTIVE 时顺带 ensureActiveGoalWorkLocked，
+// 让下一次尝试在宿主观察到空闲完成之前就排好队。
+// Python: _should_keep_interaction_open_locked (L4442)
+func (d *DeepAgent) shouldKeepInteractionOpenLocked() bool {
+	if d.interactionEvents.HasPendingWork() || d.activeInteractionRound != nil {
+		return true
+	}
+	if d.goalCoordinator != nil && d.goalCoordinator.HasActiveRecord() {
+		d.goalCoordinator.EnsureActiveGoalWorkLocked()
+		return true
+	}
+	return false
+}
+
+// sendUser 输入分发实现（调用方持 sendMu）。
+// Python: _send_user (L4104)
+func (d *DeepAgent) sendUser(_ context.Context, req hschema.SendInputRequest) error {
+	if req.Inputs == nil {
+		return fmt.Errorf("send_input requires inputs['query'] to be a non-empty string or InteractiveInput")
+	}
+	query := req.Inputs["query"]
+	_, isResume := query.(*interaction.InteractiveInput)
+	if !isResume {
+		text, ok := query.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return fmt.Errorf("send_input requires inputs['query'] to be a non-empty string or InteractiveInput")
+		}
+	}
+
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+
+	if !d.isInteractionRunningLocked() {
+		return ErrInteractionNotRunning
+	}
+
+	// ① 打断恢复输入：直接入队，不重置循环
+	if isResume {
+		if err := d.interactionEvents.PushUser(
+			hschema.NewUserWorkItem(req.RequestID, req.Inputs, false, false)); err != nil {
+			return err
+		}
+		d.notifyWork()
+		return nil
+	}
+
+	// ② STEER：直塞活跃轮的转向队列
+	mode := req.Mode
+	if mode == "" {
+		mode = hschema.InputDispatchModeFollowUp
+	}
+	if mode != hschema.InputDispatchModeFollowUp && mode != hschema.InputDispatchModeSteer {
+		return fmt.Errorf("unsupported input dispatch mode: %s", req.Mode)
+	}
+	if mode == hschema.InputDispatchModeSteer && d.activeInteractionRound != nil {
+		ctrl := d.currentLoopController()
+		if ctrl == nil {
+			return fmt.Errorf("active interaction round cannot accept steer without loop controller")
+		}
+		ctrl.EnqueueSteer(fmt.Sprintf("%v", query))
+		d.notifyWork()
+		return nil
+	}
+
+	// ③ 保持流开：作为 follow-up 入队
+	if d.shouldKeepInteractionOpenLocked() {
+		if err := d.interactionEvents.PushUser(
+			hschema.NewUserWorkItem(req.RequestID, req.Inputs, true, false)); err != nil {
+			return err
+		}
+		d.notifyWork()
+		return nil
+	}
+
+	// ④ 新的一轮：重置循环
+	// 输出租约始终由宿主经 AttachOutput 持有；send_input 不抢也不建流。
+	if err := d.interactionEvents.PushUser(
+		hschema.NewUserWorkItem(req.RequestID, req.Inputs, false, true)); err != nil {
+		return err
+	}
+	d.notifyWork()
+	return nil
+}
+
+// buildInteractionNextWork 决定本轮之后是否还要排一个 user work。
+// Python: _build_interaction_next_work (L3844)
+func (d *DeepAgent) buildInteractionNextWork(
+	_ context.Context,
+	work *hschema.RoundWorkItem,
+	result map[string]any,
+	sess *session.Session,
+	coord *task_loop.LoopCoordinator,
+	ctrl *task_loop.TaskLoopController,
+) *hschema.RoundWorkItem {
+	coord.IncrementIteration()
+	coord.SetLastResult(result)
+
+	state := d.LoadState(sess)
+	exported := coord.ExportState()
+	state.StopConditionState = map[string]any{
+		"iteration":        exported.Iteration,
+		"token_usage":      exported.TokenUsage,
+		"stop_reason":      exported.StopReason,
+		"evaluator_states": exported.EvaluatorStates,
+	}
+	if ctrl != nil {
+		state.PendingFollowUps = append(state.PendingFollowUps, ctrl.DrainFollowUp()...)
+	}
+	d.saveState(sess, state)
+
+	if resultType, _ := result["result_type"].(string); resultType == "interrupt" || coord.IsAborted() {
+		return nil
+	}
+	if !coord.ShouldContinue() || work.Kind == hschema.RoundWorkKindGoal {
+		return nil
+	}
+
+	state = d.LoadState(sess)
+	if len(state.PendingFollowUps) > 0 {
+		query := state.PendingFollowUps[0]
+		state.PendingFollowUps = state.PendingFollowUps[1:]
+		d.saveState(sess, state)
+
+		inputs := utils.DeepCopyMap(work.Inputs)
+		if inputs == nil {
+			inputs = make(map[string]any)
+		}
+		inputs["query"] = query
+		return hschema.NewUserWorkItem(work.RequestID, inputs, true, false)
+	}
+	if d.hasRemainingTasks(sess) {
+		return hschema.NewUserWorkItem(work.RequestID, work.Inputs, false, false)
+	}
+	return nil
+}
+
+// executeRoundAndWait 在独立 goroutine 执行一轮并等待其结束与转发屏障。
+// Python: supervisor 的 create_task(_execute_round) + asyncio.wait + wait_for(forwarded, 2s)
+func (d *DeepAgent) executeRoundAndWait(ctx context.Context, work *hschema.RoundWorkItem) {
+	roundCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	forwarded := make(chan struct{})
+
+	d.interactionControlMu.Lock()
+	d.interactionRoundCancel = cancel
+	d.interactionRoundDone = done
+	d.interactionRoundForwarded = forwarded
+	d.interactionControlMu.Unlock()
+
+	go func() {
+		defer close(done)
+		d.executeRound(roundCtx, work)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		cancel()
+		<-done
+	}
+
+	select {
+	case <-forwarded:
+	case <-time.After(2 * time.Second):
+		logger.Warn(logComponent).Msg("round boundary not forwarded within 2s")
+	}
+
+	d.interactionControlMu.Lock()
+	d.interactionRoundCancel = nil
+	d.interactionRoundDone = nil
+	d.interactionRoundForwarded = nil
+	d.interactionControlMu.Unlock()
+	cancel()
+}
+
+// executeRound 执行一轮：相位迁移、goal 尝试、调度下一轮、边界帧。
+// Python: _execute_round (L4497)
+func (d *DeepAgent) executeRound(ctx context.Context, work *hschema.RoundWorkItem) {
+	if !d.isInteractionRunning() {
+		return
+	}
+	if !d.tryTransitionInteractionPhase(hschema.InteractionPhaseRunning) {
+		return
+	}
+	sess := d.interactionSession
+	taskID := strings.ReplaceAll(uuid.NewString(), "-", "")
+
+	d.interactionControlMu.Lock()
+	d.activeInteractionRound = &hschema.ActiveInteractionRound{Work: work, TaskID: taskID}
+	d.interactionEvents.MarkStarted(work)
+	d.interactionControlMu.Unlock()
+
+	defer func() {
+		d.interactionControlMu.Lock()
+		d.interactionEvents.MarkFinished(work)
+		d.activeInteractionRound = nil
+		forwarded := d.interactionRoundForwarded
+		d.interactionControlMu.Unlock()
+
+		if sess != nil && !d.emitRoundBoundary(sess) {
+			// 无法注入有序边界帧 → 直接置位屏障兜底（Python 同）
+			closeChanSafely(forwarded)
+		}
+		d.tryTransitionInteractionPhase(hschema.InteractionPhaseIdle)
+	}()
+
+	if sess == nil || !d.interactionOutput.HasConsumer() {
+		return
+	}
+
+	if work.Kind == hschema.RoundWorkKindGoal {
+		if d.goalCoordinator == nil {
+			return
+		}
+		started, err := d.goalCoordinator.BeginAttempt(ctx, work.Context.GoalID, work.Context.Revision)
+		if err != nil || !started {
+			return
+		}
+	}
+
+	d.interactionControlMu.Lock()
+	override := d.roundOverride
+	d.interactionControlMu.Unlock()
+
+	var outcome hschema.RoundOutcome
+	if override != nil {
+		outcome = override(ctx, work)
+	} else {
+		outcome = d.RunOneRound(ctx, work, taskID, sess)
+	}
+
+	if !d.isInteractionRunning() {
+		return
+	}
+	if outcome.NextWork != nil {
+		d.interactionControlMu.Lock()
+		if err := d.interactionEvents.PushUser(outcome.NextWork); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("enqueue next work failed")
+		}
+		d.interactionControlMu.Unlock()
+		d.notifyWork()
+	}
+	if outcome.ErrorCode != "" {
+		d.emitInteractionEvent(hschema.NewExecutionErrorEvent(outcome.ErrorCode, outcome.ErrorMessage, nil))
+	}
 }
