@@ -188,6 +188,8 @@ type DeepAgent struct {
 	interactionSendMu sync.Mutex
 	// interactionControlMu 交互控制锁（相位、EventManager、租约、轮句柄）
 	interactionControlMu sync.Mutex
+	// activeAgentTemplate 当前热加载的 AgentTemplate（⤵️ #9.3 由 load_agent_template 赋值，今天恒 nil）
+	activeAgentTemplate *AgentTemplateRef
 	// roundOverride 交互轮执行覆写（仅测试使用）
 	roundOverride func(ctx context.Context, work *hschema.RoundWorkItem) hschema.RoundOutcome
 
@@ -216,6 +218,15 @@ type DeepAgent struct {
 // 只由 forwarder 识别，绝不转发给宿主；必须与普通 chunk 走同一条 session 流，
 // 否则无法保证"本轮 chunk 已全部入队"的顺序性。
 type roundBoundaryFrame struct{}
+
+// AgentTemplateRef 当前热加载的 AgentTemplate 引用。
+// Python: self._active_agent_template: tuple[str, str] | None（deep_agent.py L333）
+type AgentTemplateRef struct {
+	// LoadID 加载记录标识
+	LoadID string
+	// RoleName 模板声明的角色名（expert_role 附件文案用）
+	RoleName string
+}
 
 // RoundExpectation 取消时的代际校验条件（nil 字段表示不校验）。
 //
@@ -1677,7 +1688,7 @@ func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
 	d.interactionSupervisorMu.Unlock()
 
 	d.startForwarder(ctx)
-	d.ensureSupervisorRunning(ctx)
+	d.waitSupervisorReady(d.ensureSupervisorRunning(ctx), 2*time.Second)
 	return nil
 }
 
@@ -1759,6 +1770,8 @@ func (d *DeepAgent) RunOneRound(ctx context.Context, work *hschema.RoundWorkItem
 	lifecycleErr := cbc.FireLifecycle(ctx,
 		agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke,
 		func() error {
+			// Python: 生命周期内第一件事就是把专家角色物化成本轮附件（L3787）
+			d.syncExpertRoleAttachment(invokeInputs, sess)
 			if isResumeInput(invokeInputs) {
 				res, runErr := d.runSingleRoundInvoke(ctx, cbc, sess)
 				if runErr != nil {
@@ -1814,6 +1827,26 @@ func (d *DeepAgent) CancelRound(ctx context.Context, reason string) (bool, error
 	d.cancelActiveRoundLocked(ctx, reason, nil)
 	d.interactionControlMu.Unlock()
 	return true, nil
+}
+
+// SetActiveAgentTemplate 记录热加载的 AgentTemplate。
+// ⤵️ #9.3 回填：等待 AgentTemplate 热加载能力落地后由 load_agent_template 调用。
+// Python: self._active_agent_template = (record.load_id, spec.agent_card.name)（L2301/L2328）
+func (d *DeepAgent) SetActiveAgentTemplate(loadID string, roleName string) {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	d.activeAgentTemplate = &AgentTemplateRef{LoadID: loadID, RoleName: roleName}
+}
+
+// ClearActiveAgentTemplate 卸载 AgentTemplate 时清空引用。
+// ⤵️ #9.3 回填：等待 AgentTemplate 热加载能力落地后由 unload 路径调用。
+// Python: self._active_agent_template = None（L2386）
+func (d *DeepAgent) ClearActiveAgentTemplate() {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	d.activeAgentTemplate = nil
 }
 
 // SetGoalCoordinator 注入 Goal 能力窄接口（⤵️ #9.89 在 Start 内构造 GoalManager 后调用）。
@@ -3945,7 +3978,7 @@ func (d *DeepAgent) notifyWork() {
 	case d.interactionWakeup <- struct{}{}:
 	default:
 	}
-	d.ensureSupervisorRunning(context.Background())
+	_ = d.ensureSupervisorRunning(context.Background())
 }
 
 // forwardSessionStream 把会话流转发到输出租约队列（唯一消费者）。
@@ -4140,14 +4173,16 @@ func (d *DeepAgent) stopForwarder() {
 //
 // ⚠️ 只碰 supervisor 锁与缓存的 started/stopping 标记，不取 controlMu。
 // Python: _ensure_supervisor_running (L4373)
-func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) {
+// 返回值为"supervisor 已进入首个等待点"的信号通道；若已在运行则返回 nil。
+func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) <-chan struct{} {
 	d.interactionSupervisorMu.Lock()
 	defer d.interactionSupervisorMu.Unlock()
 	if d.interactionSupervisorRunning || !d.interactionStarted || d.interactionStopping {
-		return
+		return nil
 	}
 	sctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
+	ready := make(chan struct{}, 1)
 	d.interactionSupervisorCancel = cancel
 	d.interactionSupervisorDone = done
 	d.interactionSupervisorRunning = true
@@ -4158,8 +4193,27 @@ func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) {
 			d.interactionSupervisorRunning = false
 			d.interactionSupervisorMu.Unlock()
 		}()
-		d.supervisorLoop(sctx)
+		d.supervisorLoop(sctx, ready)
 	}()
+	return ready
+}
+
+// waitSupervisorReady 等待 supervisor 停在首个等待点（有界）。
+//
+// 必要性（Go 特有）：Python 的 start() 里 create_task 之后同一协程继续，
+// 宿主拿到 start 的返回值时 supervisor 尚未运行；它首次运行必然看到
+// "无消费者 → 睡下"。Go 的 goroutine 是异步的，若首次迭代被推迟到宿主
+// attach 之后，就会立刻走 close_idle 收尾，把刚建立的流结束掉。
+// 因此 Start 必须等 supervisor 真正睡下再返回，复刻 Python 的时序。
+func (d *DeepAgent) waitSupervisorReady(ready <-chan struct{}, timeout time.Duration) {
+	if ready == nil {
+		return
+	}
+	select {
+	case <-ready:
+	case <-time.After(timeout):
+		logger.Warn(logComponent).Msg("interaction supervisor did not reach idle wait in time")
+	}
 }
 
 // stopSupervisor 取消 supervisor 并等待退出（有界）。
@@ -4184,12 +4238,30 @@ func (d *DeepAgent) stopSupervisor() {
 
 // supervisorLoop 交互监督器主循环（唯一消费者）。
 // Python: _supervisor_loop (L4377)
-func (d *DeepAgent) supervisorLoop(ctx context.Context) {
+func (d *DeepAgent) supervisorLoop(ctx context.Context, ready chan struct{}) {
+	signaled := false
+	signalReady := func() {
+		if signaled {
+			return
+		}
+		signaled = true
+		if ready == nil {
+			return
+		}
+		select {
+		case ready <- struct{}{}:
+		default:
+		}
+	}
+	// 兜底：无论从哪条路径退出，都不能让 Start 卡在等待上
+	defer signalReady()
+
 	for d.isInteractionRunning() {
 		if !d.interactionOutput.HasConsumer() {
 			if !d.tryTransitionInteractionPhase(hschema.InteractionPhaseIdle) {
 				return
 			}
+			signalReady()
 			if !d.waitForWork(ctx) {
 				return
 			}
@@ -4212,6 +4284,7 @@ func (d *DeepAgent) supervisorLoop(ctx context.Context) {
 			if d.hasPendingWorkLocked() {
 				continue
 			}
+			signalReady()
 			if !d.waitForWork(ctx) {
 				return
 			}
@@ -4527,4 +4600,36 @@ func (d *DeepAgent) executeRound(ctx context.Context, work *hschema.RoundWorkIte
 	if outcome.ErrorCode != "" {
 		d.emitInteractionEvent(hschema.NewExecutionErrorEvent(outcome.ErrorCode, outcome.ErrorMessage, nil))
 	}
+}
+
+// syncExpertRoleAttachment 物化专家角色提示词附件。
+//
+// ⤵️ #9.3 回填：等待 AgentTemplate 热加载能力落地后补完。
+// Python: _sync_expert_role_attachment (L3267)，由 run_one_round (L3787) 在
+// BEFORE_INVOKE 生命周期内、resume/submit 分支之前调用。
+//
+// 今天的等价性：activeAgentTemplate 恒为 nil（Go 无 load_agent_template），
+// 而 expert_role 附件节也永远不会被创建，故直接返回与上游"会话里不存在
+// expert_role → 清理分支直接 return"完全等价。
+//
+// ⚠️ 回填时必须**同时**补两条分支，只补①不补②会让模型在用户切走专家后
+// 仍以为自己是该专家：
+//  1. template 非 nil → add_section(expert_role, _expert_role_load_content(role, lang))
+//  2. template 为 nil 但会话里已存在 expert_role 节 →
+//     改写为 _expert_role_unload_content(role, lang)（降权提示）
+//
+// 上游对该方法整体 try/except 并只 warning，不阻塞主流程（尽力而为语义）。
+func (d *DeepAgent) syncExpertRoleAttachment(_ *agentinterfaces.InvokeInputs, _ *session.Session) {
+	d.interactionControlMu.Lock()
+	active := d.activeAgentTemplate
+	d.interactionControlMu.Unlock()
+	if active == nil {
+		return
+	}
+	// 非 nil 在今天是不可达状态；一旦可达说明 9.3 已接线但本方法尚未补完，
+	// 必须显式告警而不是静默丢提示词。
+	logger.Warn(logComponent).
+		Str("load_id", active.LoadID).
+		Str("role_name", active.RoleName).
+		Msg("expert_role attachment sync not ported yet, waiting for AgentTemplate hot-load (⤵️ #9.3)")
 }

@@ -121,6 +121,13 @@ type ActiveInteractionRound struct {
 }
 
 // InteractionEvent 由交互输出生产者发出的结构化事件。
+//
+// Payload 保持 map[string]any（与上游 Dict[str, Any] 逐字对应），键契约固定为：
+//   - goal.updated    → {"goal": map[string]any | nil}
+//   - execution.error → {"code": string, "message": string, "goal": map[string]any（可选，仅非 nil 时写入）}
+//
+// ⚠️ 下游（服务面/前端补发）读取时必须做具体类型断言且检查 ok，
+// 断言失败会静默得到 nil（本项目历史缺陷类型），不要用裸断言。
 // Python: InteractionEvent (interaction.py L150)
 type InteractionEvent struct {
 	// Type 事件类型

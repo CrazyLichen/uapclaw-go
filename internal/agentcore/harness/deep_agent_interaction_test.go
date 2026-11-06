@@ -141,6 +141,26 @@ func TestInteractionPhase机_终止不可逆(t *testing.T) {
 	assert.Equal(t, hschema.InteractionPhaseTerminated, d.Phase())
 }
 
+// TestSyncExpertRoleAttachment_空实现占位 验证 ⤵️ #9.3 未移植分支的两条路径
+// Python: _sync_expert_role_attachment (L3267)
+func TestSyncExpertRoleAttachment_空实现占位(t *testing.T) {
+	d := newTestDeepAgent()
+	d.ensureInteractionState()
+
+	// activeAgentTemplate 为 nil：与上游"会话无 expert_role 节"的清理分支等价
+	d.syncExpertRoleAttachment(nil, nil)
+
+	// 非 nil：今天不可达，只告警不 panic（等待 9.3 回填）
+	d.SetActiveAgentTemplate("load-1", "专家A")
+	d.syncExpertRoleAttachment(nil, nil)
+	require.NotNil(t, d.activeAgentTemplate)
+	assert.Equal(t, "load-1", d.activeAgentTemplate.LoadID)
+	assert.Equal(t, "专家A", d.activeAgentTemplate.RoleName)
+
+	d.ClearActiveAgentTemplate()
+	assert.Nil(t, d.activeAgentTemplate)
+}
+
 // TestInteractionState_幂等工厂 验证零件只建一次
 func TestInteractionState_幂等工厂(t *testing.T) {
 	d := newTestDeepAgent()
