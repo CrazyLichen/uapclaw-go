@@ -1,4 +1,4 @@
-# 领域九 9.86 · ModelAnomalyDetectionRail 设计（含前置 2.17 流帧超时）
+# 领域九 9.86 · ModelAnomalyDetectionRail 设计（含前置 2.18 流帧超时）
 
 > 来源：`IMPLEMENTATION_PLAN.md` 9.86；缺陷台账 `docs/sync/defect-plan-2026-11-04.md` A-09（`589da12a`）
 > 上游基线：agent-core `5a35c39f`（`openjiuwen/harness/rails/model_anomaly_detection_rail.py` 917 行）；jiuwenswarm 0.2.5.beta1
@@ -14,7 +14,7 @@
 | 层 | 产出 | 为什么必须一起 |
 | --- | --- | --- |
 | A. 地基 | 流式分片检查器通道 + 可见输出标志 | 没有它，"退化重复检测"永远不触发 |
-| B. LLM（新行 2.17） | `Model.Stream` 首帧/空闲超时 | 没有它，"流超时识别"永远不触发 |
+| B. LLM（新行 2.18） | `Model.Stream` 首帧/空闲超时 | 没有它，"流超时识别"永远不触发 |
 | C. rail（9.86） | `ModelAnomalyDetectionRail` + 三处接线 | 本体 |
 
 范围已确认为**全接线**：agent-core factory 开关 + 单 agent adapter（`execution_guard`） + 团队成员 rail + `resources/config.yaml`。
@@ -124,7 +124,7 @@ priority = 70（`sys_operation 100 > mcp 95 > progressive/task_planning 90 > age
 
 | 编号 | 决策 | 理由 |
 | --- | --- | --- |
-| 范围 | A + C 同批：分层交付 + 流帧超时作为新行 2.17 先落 | 9.86 若等 2.17，就留一个 ⤴️ 不可达分支；先落 2.17 可让 9.86 一次到位 |
+| 范围 | A + C 同批：分层交付 + 流帧超时作为新行 2.18 先落 | 9.86 若等 2.18，就留一个 ⤴️ 不可达分支；先落 2.18 可让 9.86 一次到位 |
 | 范围 | 全接线（factory + adapter + 团队 + config.yaml） | 配置与行为必须成对，否则"关不掉/开不了" |
 | D1 | `[]StreamChunkInspectorFunc`（裸函数值）+ 代码指针去重 + rail 包内私有 `funcPtrEqual` | 先例：`agentbuilder/utils/progress.go:737`、`sys_operation/registry.go:73-80`；上游去重也在 rail 自己里 |
 | D2 | 三类计数器按 session id 分桶 + `RWMutex`；只存正计数，归零即删 | 产品中 agent 按 `mode:subMode:projectDir` 缓存（`agent_manager.go:722`），一会话一 rail 不成立 → rail 必然跨会话共享 |
@@ -250,8 +250,8 @@ priority = 70（`sys_operation 100 > mcp 95 > progressive/task_planning 90 > age
 
 | 位置 | 动作 |
 | --- | --- |
-| `IMPLEMENTATION_PLAN.md` 9.86 | 改 ✅ + 分项（重复检测 / 瞬时分类 / 流超时←2.17 / 工具循环压缩·背靠背 / bailout / 三处接线），保留 `589da12a` 原文 |
-| 新增 `2.17` | `Model 门面流帧超时` → ✅，写 ⤴️ 已回填 9.86 与 2.14 |
+| `IMPLEMENTATION_PLAN.md` 9.86 | 改 ✅ + 分项（重复检测 / 瞬时分类 / 流超时←2.18 / 工具循环压缩·背靠背 / bailout / 三处接线），保留 `589da12a` 原文 |
+| 新增 `2.18` | `Model 门面流帧超时` → ✅，写 ⤴️ 已回填 9.86 与 2.14 |
 | `9.3 DeepAgent Factory` | 追加 ⤴️ 9.86 |
 | adapter 行（10.6.x） | 追加 ⤴️ 9.86 `execution_guard` |
 | `25.x 团队成员` | 追加 ⤴️ 9.86 |

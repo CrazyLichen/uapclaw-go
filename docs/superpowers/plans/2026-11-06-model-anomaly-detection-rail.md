@@ -1,4 +1,4 @@
-# ModelAnomalyDetectionRail（9.86 + 2.17）Implementation Plan
+# ModelAnomalyDetectionRail（9.86 + 2.18）Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -412,7 +412,7 @@ git commit -m "feat(agentcore): 流循环逐 chunk 调用检查器并维护可�
 
 ---
 
-## Task 3: 两个流超时配置字段（2.17 地基）
+## Task 3: 两个流超时配置字段（2.18 地基）
 
 **Files:**
 - Modify: `internal/agentcore/foundation/llm/schema/config.go:23-44`（结构体）、`:200-260`（选项与构造）
@@ -912,7 +912,7 @@ Expected: PASS（含既有 `TestModel_Stream_回调事件`；若既有用例因�
 
 ```bash
 git add internal/agentcore/foundation/llm/model.go internal/agentcore/foundation/llm/model_timeout_test.go
-git commit -m "feat(llm): Model.Stream 首帧与空闲帧超时（2.17）"
+git commit -m "feat(llm): Model.Stream 首帧与空闲帧超时（2.18）"
 ```
 
 ---
@@ -3630,7 +3630,7 @@ git commit -m "test(integration): 重复输出/流超时/工具循环压缩三�
 ## Task 16: 文档回填 + 全量验收
 
 **Files:**
-- Modify: `IMPLEMENTATION_PLAN.md`（9.86、新增 2.17、9.3、adapter 行、25.x 行）
+- Modify: `IMPLEMENTATION_PLAN.md`（9.86、新增 2.18、9.3、adapter 行、25.x 行）
 - Modify: `docs/sync/defect-plan-2026-11-04.md`（A-09）
 - Modify: `docs/superpowers/plans/2026-11-04-upstream-defect-group-a.md:1860`（勘误）
 
@@ -3639,15 +3639,15 @@ git commit -m "test(integration): 重复输出/流超时/工具循环压缩三�
 把 `IMPLEMENTATION_PLAN.md:584` 改为（保留原文关键约束与 SHA，只加结果）：
 
 ```markdown
-| 9.86 | ✅ | ModelAnomalyDetectionRail | 瞬时失败分类 + 退避重试 + 退化重复检测（尾窗 1024 / 单字符 90 / 多字符 6 次·160 字符，`pyReprString` 对齐错误文案）+ 流超时识别（←2.17）+ 工具循环压缩（**按背靠背相邻性判定**，`589da12a`，`end != 下一轮 start` 即断）+ bailout（第 3 次命中 `AbortError`，cause=CONTEXT_EXECUTION_ERROR）；接线：factory 默认开关（`*bool`，nil→true）+ adapter `execution_guard.model_anomaly_detection_rail` + 团队成员 rail + `resources/config.yaml`；偏差：检查器去重靠代码指针、计数器按 session 分桶、超时走 `StreamError` 哨兵、默认值仅在 `NewModelClientConfig` 生效 | `openjiuwen/harness/rails/model_anomaly_detection_rail.py` |
+| 9.86 | ✅ | ModelAnomalyDetectionRail | 瞬时失败分类 + 退避重试 + 退化重复检测（尾窗 1024 / 单字符 90 / 多字符 6 次·160 字符，`pyReprString` 对齐错误文案）+ 流超时识别（←2.18）+ 工具循环压缩（**按背靠背相邻性判定**，`589da12a`，`end != 下一轮 start` 即断）+ bailout（第 3 次命中 `AbortError`，cause=CONTEXT_EXECUTION_ERROR）；接线：factory 默认开关（`*bool`，nil→true）+ adapter `execution_guard.model_anomaly_detection_rail` + 团队成员 rail + `resources/config.yaml`；偏差：检查器去重靠代码指针、计数器按 session 分桶、超时走 `StreamError` 哨兵、默认值仅在 `NewModelClientConfig` 生效 | `openjiuwen/harness/rails/model_anomaly_detection_rail.py` |
 ```
 
-- [ ] **Step 2: 新增 2.17 行**
+- [ ] **Step 2: 新增 2.18 行**
 
 在 `IMPLEMENTATION_PLAN.md` 领域二（`2.16` 行之后）插入：
 
 ```markdown
-| 2.17 | ✅ | Model 门面流帧超时 | `ModelClientConfig.StreamFirstChunkTimeout/StreamIdleTimeout`（`*float64`，nil=禁用，默认 300/60）+ `AssistantMessageChunk.CarriesOutputToken` + `Model.Stream` select 接收超时（`waited_since_progress` 只累计等待耗时，框架帧不重置预算，超时 cancel 派生 ctx 并排空）+ `LLM_CALL_ERROR` 回调与`LLM stream timeout: stream frame timeout: stage=...` 文案逐字对齐；⤴️ 2026-11-06 已回填 9.86 流超时识别与 2.14 门面 | `openjiuwen/core/foundation/llm/model.py` · `schema/config.py` · `schema/message_chunk.py` |
+| 2.18 | ✅ | Model 门面流帧超时 | `ModelClientConfig.StreamFirstChunkTimeout/StreamIdleTimeout`（`*float64`，nil=禁用，默认 300/60）+ `AssistantMessageChunk.CarriesOutputToken` + `Model.Stream` select 接收超时（`waited_since_progress` 只累计等待耗时，框架帧不重置预算，超时 cancel 派生 ctx 并排空）+ `LLM_CALL_ERROR` 回调与`LLM stream timeout: stream frame timeout: stage=...` 文案逐字对齐；⤴️ 2026-11-06 已回填 9.86 流超时识别与 2.14 门面 | `openjiuwen/core/foundation/llm/model.py` · `schema/config.py` · `schema/message_chunk.py` |
 ```
 
 - [ ] **Step 3: 级联标记**
@@ -3676,7 +3676,7 @@ Expected: 全部通过；`gofmt -l` 无输出
 
 ```bash
 git add IMPLEMENTATION_PLAN.md docs/sync/defect-plan-2026-11-04.md docs/superpowers/plans/2026-11-04-upstream-defect-group-a.md
-git commit -m "docs: 回填 9.86 与 2.17（含 A-09 台账与 9.30 勘误）"
+git commit -m "docs: 回填 9.86 与 2.18（含 A-09 台账与 9.30 勘误）"
 git push
 gh run list --limit 3
 ```
