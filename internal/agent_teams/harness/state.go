@@ -126,3 +126,29 @@ func (s *HarnessInternalState) NextRoundID() int {
 	s.roundSeq++
 	return s.roundSeq
 }
+
+// roundSeqSnapshot 返回当前轮次序号（测试/诊断用）。
+func (s *HarnessInternalState) roundSeqSnapshot() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.roundSeq
+}
+
+// dequeueInbox 判断待驱动队列是否非空。
+func (s *HarnessInternalState) dequeueInbox() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.queue) > 0
+}
+
+// popInboxContent 弹出队首输入内容（调用方须先用 dequeueInbox 判非空）。
+func (s *HarnessInternalState) popInboxContent() any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.queue) == 0 {
+		return nil
+	}
+	content := s.queue[0].Content
+	s.queue = s.queue[1:]
+	return content
+}
