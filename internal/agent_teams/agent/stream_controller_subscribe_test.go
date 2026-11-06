@@ -190,3 +190,78 @@ func TestStreamController_emitRetryOutput_可见提示(t *testing.T) {
 		t.Error("emitRetryOutput 应写入 streamQueue")
 	}
 }
+
+// TestStreamController_handleRetry_可重试码吞轮并计数 验证 181001 在预算内消费 + 计数。
+func TestStreamController_handleRetry_可重试码吞轮并计数(t *testing.T) {
+	sc := newTestStreamController()
+	// 需要非 nil harness 才能走重试分支（Send 返回错误被忽略）
+	sc.resources.Harness = &harness.TeamHarness{}
+	sc.streamQueue = make(chan streambase.Schema, 4)
+
+	chunk := &streambase.OutputSchema{
+		Type: taskFailedPayloadType,
+		Payload: map[string]any{
+			"type": taskFailedPayloadType,
+			"data": []any{map[string]any{"text": "[181001] 服务端抖动"}},
+		},
+	}
+	consumed := sc.handleRetry(context.Background(), chunk)
+	if !consumed {
+		t.Fatal("181001 可重试错误应被 handleRetry 消费")
+	}
+	if !sc.swallowFailedRound {
+		t.Error("可重试失败应吞掉本轮剩余 chunk")
+	}
+	if sc.retryAttempt != 1 {
+		t.Errorf("重试计数 = %d，期望 1", sc.retryAttempt)
+	}
+	// 应产出 [Retry 1/10] 可见提示
+	select {
+	case retryChunk := <-sc.streamQueue:
+		os, ok := retryChunk.(*streambase.OutputSchema)
+		if !ok || os.Type != "llm_output" {
+			t.Errorf("应产出 llm_output，实际 %v", retryChunk)
+		}
+	default:
+		t.Error("重试应产出可见提示 chunk")
+	}
+}
+
+// TestStreamController_handleRetry_非可重试码透传 验证非 181001 返回 false。
+func TestStreamController_handleRetry_非可重试码透传(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &harness.TeamHarness{}
+	chunk := &streambase.OutputSchema{
+		Type: taskFailedPayloadType,
+		Payload: map[string]any{
+			"type": taskFailedPayloadType,
+			"data": []any{map[string]any{"text": "[199999] 不可恢复"}},
+		},
+	}
+	if sc.handleRetry(context.Background(), chunk) {
+		t.Error("非可重试错误不应被消费")
+	}
+	if sc.retryAttempt != 0 {
+		t.Errorf("非可重试错误不应计数，实际 %d", sc.retryAttempt)
+	}
+}
+
+// TestStreamController_handleRetry_超预算透传 验证重试次数耗尽后透传。
+func TestStreamController_handleRetry_超预算透传(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &harness.TeamHarness{}
+	sc.retryAttempt = maxRetryAttempts
+	chunk := &streambase.OutputSchema{
+		Type: taskFailedPayloadType,
+		Payload: map[string]any{
+			"type": taskFailedPayloadType,
+			"data": []any{map[string]any{"text": "[181001] 抖动"}},
+		},
+	}
+	if sc.handleRetry(context.Background(), chunk) {
+		t.Error("重试预算耗尽后不应再消费")
+	}
+	if sc.retryAttempt != maxRetryAttempts {
+		t.Errorf("预算耗尽后计数不应再增，实际 %d", sc.retryAttempt)
+	}
+}

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	ateamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -90,7 +90,7 @@ func (s *TeamInterruptResumeSuite) TestHarnessReadsSessionState() {
 	deepAgent := harness.NewDeepAgent(card)
 	s.Require().NotNil(deepAgent)
 
-	h := agentteams.NewTeamHarness(deepAgent, nil, string(atschema.TeamRoleLeader), "leader-1", false)
+	h := ateamharness.NewTeamHarness(deepAgent, nil, string(atschema.TeamRoleLeader), "leader-1", false)
 	s.Require().NotNil(h)
 
 	// 无活跃/循环会话 → 判定为"无待处理中断"（不能 panic、不能误判）
@@ -104,10 +104,6 @@ func (s *TeamInterruptResumeSuite) TestHarnessReadsSessionState() {
 
 	// 非 Rail 入参必须报错（原实现静默返回 nil）
 	s.Error(h.RegisterRail(context.Background(), "not-a-rail"))
-
-	// 运行中投递失败必须可识别（M-02）：无活跃会话 → 具名 error 而非 nil
-	s.Error(h.Steer(context.Background(), "转向"))
-	s.Error(h.FollowUp(context.Background(), "追加"))
 }
 
 // TestSteerFailsFastWithoutLoop 无任务循环时 steer/follow_up 必须快速失败。

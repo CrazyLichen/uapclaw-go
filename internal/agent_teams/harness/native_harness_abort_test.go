@@ -21,7 +21,7 @@ func TestNativeHarness_PauseResume返回哨兵错误(t *testing.T) {
 
 	assert.True(t, errors.Is(h.Pause(context.Background()), ErrPauseUnsupported))
 	assert.True(t, errors.Is(h.Resume(context.Background(), "x"), ErrPauseUnsupported))
-	assert.Equal(t, HarnessStateRunning, h.State(), "哨兵错误不得改相位")
+	assert.Equal(t, HarnessStateIdle, h.State(), "哨兵错误不得改相位")
 }
 
 // TestNativeHarness_Pause未启动报错 验证未 Start 时入队被拒（不会空等 supervisor）。

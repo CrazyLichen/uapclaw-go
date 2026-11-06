@@ -30,7 +30,7 @@ func TestNativeHarness_Start幂等(t *testing.T) {
 	require.NoError(t, h.Start(context.Background(), sess))
 	require.NoError(t, h.Start(context.Background(), sess))
 
-	assert.Equal(t, HarnessStateRunning, h.State())
+	assert.Equal(t, HarnessStateIdle, h.State(), "Start 后保持 idle，首条 send 才进入 running")
 	assert.Equal(t, sess.GetSessionID(), h.SessionID())
 
 	require.NoError(t, h.Stop(context.Background()))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
@@ -670,9 +671,25 @@ func (h *NativeHarness) hasRemainingTasks() bool {
 }
 
 // abortActiveRound 取消当前活动轮次。
+// abortActiveRound 取消当前活动轮次并等待其 goroutine 退出。
+//
+// Python: NativeHarness._abort_round（取消调度任务 + await 轮次任务）。
+// 等待 active.Done 是必要的：Stop 的 UnbindSession 会 RemoveSession，
+// 若 runRound goroutine 还在 SubmitRound 会与 scheduler 并发读写 session map（race）。
 func (h *NativeHarness) abortActiveRound() {
-	if active := h.st.Active(); active != nil && active.Cancel != nil {
+	active := h.st.Active()
+	if active == nil {
+		return
+	}
+	if active.Cancel != nil {
 		active.Cancel()
+	}
+	if active.Done != nil {
+		// 有界等待：runRound 的 RunOneRound 在 cancel 后应尽快返回
+		select {
+		case <-active.Done:
+		case <-time.After(5 * time.Second):
+		}
 	}
 }
 
