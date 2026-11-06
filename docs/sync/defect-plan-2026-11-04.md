@@ -138,6 +138,16 @@ rg -n "<Python 符号>" internal/
 - **不改 1 条**：B-08 已对齐——上游 HEAD `model_anomaly_detection_rail.py:816` 明确「Match on tool name + args only」，与 Go `findToolLoopCompactRange` 一致。
 - **关键结构结论**：上游 rail 生产路径使用 `processor/forked/` 压缩栈（全比例阈值），Go 移植的是 `processor/compressor/` base 版（绝对阈值）+ rail 层自研 `applyCompressionRatios` 收缩。C2 按「上游产品契约」把 base 版比例化并删除该自研分支；forked 栈迁移（24.15）完成后删除 base 版（偏差 D-1 回收条件）。
 
+- **实施完成（2026-11-06）**：C1~C6 六个批次全部落地并各自提交 ——
+  C1 `5e12dce3`（取消态落盘）、C2 `137c7d4f`（阈值比例化 + 模型条目键迁移 + 预算 guard）、
+  C3 `cce6e5ad`+`b2fd1c6f`+`286f95bf`（token 口径、内容净化与图像计费、read_file 预算）、
+  C4 `780d9ab3`（溢出识别与压缩自救）、C5 `a20abd8b`（摘要卸载字段 + modified_messages）、
+  C6 `b8481e8a`（usage 子系统与 v1 快照）；另 `ea980ead` 补齐可压缩跨度与工具边界保护。
+- **B-06 的偏差登记**：上游用"消息级 usage_metadata 基线 + 五处失效点"避免每轮重算；
+  Go 的 `Statistic()` 本就逐轮现算（tokenizer，无缓存基线），不存在"基线失效"问题，
+  故未移植失效点，provider 权威量改由快照 `request_kv_cache` 承载。回收条件：若后续为性能引入
+  token 计数缓存，须同时移植五处失效点。
+
 ### C. LLM 客户端与流式
 
 | 编号 | 缺陷（Go 语义） | 上游证据 | Go 落点 | 级别 | 状态 |
