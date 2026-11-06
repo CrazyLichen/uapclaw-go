@@ -161,6 +161,23 @@ func TestSyncExpertRoleAttachment_空实现占位(t *testing.T) {
 	assert.Nil(t, d.activeAgentTemplate)
 }
 
+// TestRoundBoundaryFrame_流契约 验证边界帧实现 stream.Schema 的三个方法
+// Python: _ROUND_BOUNDARY 只作哨兵，序列化方法不会被调用，但必须满足接口
+func TestRoundBoundaryFrame_流契约(t *testing.T) {
+	var f stream.Schema = roundBoundaryFrame{}
+	assert.Equal(t, "round_boundary", f.SchemaType())
+	assert.NoError(t, f.Validate())
+	assert.Nil(t, f.ToMap())
+}
+
+// TestCloseChanSafely_幂等与nil 验证屏障通道关闭的幂等性
+func TestCloseChanSafely_幂等与nil(t *testing.T) {
+	closeChanSafely(nil)
+	ch := make(chan struct{})
+	closeChanSafely(ch)
+	closeChanSafely(ch)
+}
+
 // TestWaitSupervisorReady_边界 验证 nil 通道与超时都不阻塞调用方
 func TestWaitSupervisorReady_边界(t *testing.T) {
 	d := newTestDeepAgent()
@@ -673,6 +690,31 @@ func TestExecuteRound_错误码转execution_error(t *testing.T) {
 	item, ok := d.NextOutput(context.Background(), out.Lease())
 	require.True(t, ok)
 	assert.Equal(t, "execution.error", item.(*stream.OutputSchema).Type)
+}
+
+// TestDetachOutput_带abort取消在飞轮 验证断线取消分支
+// Python: detach_output(token, abort_active_round=True)（L4220）
+func TestDetachOutput_带abort取消在飞轮(t *testing.T) {
+	d := startTestInteraction(t)
+	out := d.AttachOutput(context.Background())
+	require.NotNil(t, out)
+
+	gate := make(chan struct{})
+	d.setRoundOverrideForTest(func(ctx context.Context, _ *hschema.RoundWorkItem) hschema.RoundOutcome {
+		select {
+		case <-ctx.Done():
+		case <-gate:
+		}
+		return hschema.RoundOutcome{}
+	})
+	t.Cleanup(func() { close(gate) })
+
+	work := hschema.NewUserWorkItem("r1", map[string]any{"query": "q"}, false, true)
+	go d.executeRoundAndWait(context.Background(), work)
+	require.Eventually(t, func() bool { return d.ActiveRound() != nil }, time.Second, 10*time.Millisecond)
+
+	d.DetachOutput(context.Background(), out.Lease().Token, true)
+	assert.False(t, d.HasOutputStream())
 }
 
 // TestEmitRoundBoundary_无发射器返回false 验证边界帧失败兜底
