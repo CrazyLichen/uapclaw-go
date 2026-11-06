@@ -775,7 +775,7 @@ func TestShouldKeepInteractionOpen_ACTIVE目标保持流开(t *testing.T) {
 	d.interactionControlMu.Unlock()
 
 	assert.True(t, keep, "ACTIVE goal 必须保持流开")
-	assert.Equal(t, int64(1), fakeGoal.ensureCalls.Load(), "并顺带补排 goal work")
+	assert.GreaterOrEqual(t, fakeGoal.ensureCalls.Load(), int64(1), "并顺带补排 goal work")
 }
 
 // TestSetGoalCoordinator_goal分支生效 验证 9.89 注入点
@@ -785,5 +785,6 @@ func TestSetGoalCoordinator_goal分支生效(t *testing.T) {
 	d.SetGoalCoordinator(fakeGoal)
 
 	_ = d.AttachOutput(context.Background())
-	assert.Equal(t, int64(1), fakeGoal.ensureCalls.Load(), "ACTIVE goal 时 attach 必须补排 goal work")
+	// supervisor 的 close_idle 判定同样会补排，故断言 >=1 而非精确相等
+	assert.GreaterOrEqual(t, fakeGoal.ensureCalls.Load(), int64(1), "ACTIVE goal 时 attach 必须补排 goal work")
 }

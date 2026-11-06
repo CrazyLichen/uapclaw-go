@@ -4084,7 +4084,12 @@ func (d *DeepAgent) stopInteractionLocked(ctx context.Context) error {
 		return nil
 	}
 
+	// EventManager 无内部锁（K3）：所有访问必须在 controlMu 内，
+	// 否则会与 supervisor 的 nextWorkLocked / markStarted 竞争。
+	d.interactionControlMu.Lock()
 	d.interactionEvents.DiscardAllWork()
+	d.interactionControlMu.Unlock()
+
 	d.interactionOutput.Shutdown()
 
 	d.interactionControlMu.Lock()
@@ -4107,7 +4112,9 @@ func (d *DeepAgent) stopInteractionLocked(ctx context.Context) error {
 	d.interactionStarted = false
 	d.interactionSupervisorMu.Unlock()
 
+	d.interactionControlMu.Lock()
 	d.interactionEvents.DiscardAllWork()
+	d.interactionControlMu.Unlock()
 	d.tryTransitionInteractionPhase(hschema.InteractionPhaseTerminated)
 
 	d.interactionControlMu.Lock()
