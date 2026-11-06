@@ -24,8 +24,7 @@ func TestCreateDeepAgent_透传ContextEngineConfig(t *testing.T) {
 	ce.DefaultWindowRoundNum = 10
 	ce.ModelName = "mock-model"
 	ce.ModelContextWindowTokens["mock-model"] = 32000
-	ce.CompressionTriggerRatio = 0.85
-	ce.CompressionTargetRatio = 0.55
+	ce.ModelContextWindowTokensOverride = 64000
 
 	agent, err := CreateDeepAgent(context.Background(), hconfig.CreateDeepAgentParams{
 		ContextEngineConfig: &ce,
@@ -39,6 +38,5 @@ func TestCreateDeepAgent_透传ContextEngineConfig(t *testing.T) {
 	require.NotNil(t, deepCfg.ContextEngineConfig, "ContextEngineConfig 不应被丢弃")
 	assert.Equal(t, 32000, deepCfg.ContextEngineConfig.ModelContextWindowTokens["mock-model"])
 	assert.Equal(t, "mock-model", deepCfg.ContextEngineConfig.ModelName)
-	assert.InDelta(t, 0.85, deepCfg.ContextEngineConfig.CompressionTriggerRatio, 1e-9)
-	assert.InDelta(t, 0.55, deepCfg.ContextEngineConfig.CompressionTargetRatio, 1e-9)
+	assert.Equal(t, 64000, deepCfg.ContextEngineConfig.ModelContextWindowTokensOverride)
 }
