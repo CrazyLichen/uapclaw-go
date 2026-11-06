@@ -3,6 +3,8 @@ package model_clients
 import (
 	"strconv"
 	"strings"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -157,6 +159,44 @@ func ExtractReasoningTokens(obj map[string]any) int {
 		}
 	}
 	return toIntNonNegative(obj["reasoning_tokens"])
+}
+
+// BuildUsageMetadata 从 provider 响应的 usage map 构建完整 UsageMetadata。
+//
+// Python: openai_model_client.py:2817-2829（invoke 组装点）/ 2940-2946（stream 组装点）——
+// 字段集 = 基础 token 计数 + _extract_cache_tokens + **_cache_usage_metadata +
+// _extract_cache_creation_tokens + _extract_reasoning_tokens + cost（cost 由调用方追加）。
+func BuildUsageMetadata(usage map[string]any, modelName string) *llmschema.UsageMetadata {
+	meta := llmschema.NewUsageMetadata()
+	meta.ModelName = modelName
+	meta.InputTokens = toIntNonNegative(usage["prompt_tokens"])
+	meta.OutputTokens = toIntNonNegative(usage["completion_tokens"])
+	meta.TotalTokens = toIntNonNegative(usage["total_tokens"])
+	meta.CacheTokens = ExtractCacheTokens(usage)
+
+	norm := CacheUsageMetadata(usage)
+	if v, ok := norm["cache_read_tokens"].(*int); ok {
+		meta.CacheReadTokens = v
+	}
+	if v, ok := norm["cache_miss_tokens"].(*int); ok {
+		meta.CacheMissTokens = v
+	}
+	if v, ok := norm["cache_write_tokens"].(*int); ok {
+		meta.CacheWriteTokens = v
+	}
+	if v, ok := norm["cache_status"].(string); ok {
+		meta.CacheStatus = v
+	}
+	if v, ok := norm["cache_source"].(string); ok {
+		meta.CacheSource = v
+	}
+	meta.CacheAuthoritative = norm["cache_authoritative"].(bool)
+	meta.CacheCreationTokens = ExtractCacheCreationTokens(usage)
+	// 推理 token：未暴露时不设（对齐 Python None 语义），>0 才取指针
+	if n := ExtractReasoningTokens(usage); n > 0 {
+		meta.ReasoningTokens = &n
+	}
+	return meta
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

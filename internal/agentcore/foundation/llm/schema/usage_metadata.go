@@ -32,6 +32,22 @@ type UsageMetadata struct {
 	TotalTokens int `json:"total_tokens"`
 	// CacheTokens 缓存 token 数
 	CacheTokens int `json:"cache_tokens"`
+	// CacheReadTokens 缓存读 token 数（nil=provider 未上报；与 CacheWriteTokens 分离的归一形态）
+	CacheReadTokens *int `json:"cache_read_tokens,omitempty"`
+	// CacheMissTokens 缓存 miss token 数（nil=未上报）
+	CacheMissTokens *int `json:"cache_miss_tokens,omitempty"`
+	// CacheWriteTokens 缓存写 token 数（nil=未上报）
+	CacheWriteTokens *int `json:"cache_write_tokens,omitempty"`
+	// CacheCreationTokens 缓存创建（写）token 数，独立提取形态（nil=未暴露）
+	CacheCreationTokens *int `json:"cache_creation_tokens,omitempty"`
+	// ReasoningTokens 推理/思考 token 数（output_tokens 的子集；nil=未上报）
+	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
+	// CacheStatus 缓存用量观测状态（"observed"=已观测到缓存用量）
+	CacheStatus string `json:"cache_status,omitempty"`
+	// CacheSource 缓存用量来源（"provider_usage"）
+	CacheSource string `json:"cache_source,omitempty"`
+	// CacheAuthoritative 缓存读值是否权威（legacy cache_tokens 不具权威性）
+	CacheAuthoritative bool `json:"cache_authoritative,omitempty"`
 	// InputCost 输入费用
 	InputCost float64 `json:"input_cost"`
 	// OutputCost 输出费用
