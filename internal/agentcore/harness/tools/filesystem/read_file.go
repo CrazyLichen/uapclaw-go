@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	pdf "github.com/ledongthuc/pdf"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -540,7 +541,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 		}
 	}
 
-	// 步骤 2：token 预算检查 — base64 byte count × 0.125 ≈ tokens
+	// 步骤 2：token 预算检查 — 按图像尺寸估算（与上下文计费同口径）
 	// Python: L640-654
 	estimatedTokens := estimateImageTokens(resized)
 	if estimatedTokens > maxTokens {
@@ -568,6 +569,14 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}
 	if dimensions != "" {
 		parts = append(parts, fmt.Sprintf("dimensions: %s", dimensions))
+	}
+	// 传输尺寸：缩放/压缩后的真实宽高，供上下文计费与前端预览使用（对齐 ContentPart.Width/Height）
+	transmittedWidth, transmittedHeight := imageDisplayDimensions(resized)
+	if transmittedWidth > 0 && transmittedHeight > 0 {
+		transmitted := fmt.Sprintf("%dx%d", transmittedWidth, transmittedHeight)
+		if transmitted != dimensions {
+			parts = append(parts, fmt.Sprintf("transmitted_dimensions: %s", transmitted))
+		}
 	}
 
 	if !enableImageMultimodal {
@@ -602,6 +611,8 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 				"source_path": filePath,
 				"mime_type":   mimeType,
 				"data_url":    dataURL,
+				"width":       transmittedWidth,
+				"height":      transmittedHeight,
 			},
 		},
 	}, nil
@@ -796,13 +807,32 @@ func extractOutputText(out map[string]json.RawMessage) string {
 	return ""
 }
 
+// estimateImageTokens 按图像尺寸估算 token（与上下文计费同一套公式）。
+//
+// 旧的 base64 字节数/8 是纯启发式，一张 200KB 的图会被估成 27k token，
+// 与上下文侧（尺寸公式，约 1.5k）差一个数量级，导致工具侧过早压缩。
+// 解码不出尺寸时仍回落旧启发式。
+//
+// Python: read_file 侧无对应实现（上游只把原始尺寸写进文本，见设计 D-3）。
 func estimateImageTokens(data []byte) int {
+	if cfg, format, err := image.DecodeConfig(bytes.NewReader(data)); err == nil && format != "" {
+		return token.EstimateImageTokens(cfg.Width, cfg.Height)
+	}
 	encodedLen := base64.StdEncoding.EncodedLen(len(data))
 	tokens := encodedLen / 8
 	if tokens < 1 {
 		tokens = 1
 	}
 	return tokens
+}
+
+// imageDisplayDimensions 解码图像的显示宽高（失败返回 0,0）。
+func imageDisplayDimensions(data []byte) (int, int) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0
+	}
+	return cfg.Width, cfg.Height
 }
 
 func thumbnailImage(img image.Image, maxW, maxH int) image.Image {
