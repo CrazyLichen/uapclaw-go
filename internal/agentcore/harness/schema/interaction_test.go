@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -276,3 +277,304 @@ func TestInteractionOutputStream_All遍历(t *testing.T) {
 
 // 编译期断言：iter.Seq 出口形状
 var _ func(context.Context) iter.Seq[stream.Schema] = (*InteractionOutputStream)(nil).All
+
+// ──────────────────────────── 租约管理器 ────────────────────────────
+
+// TestOutputLeaseManager_单消费者 验证同一时刻只有一张票
+// Python: OutputLeaseManager.attach (L259)
+func TestOutputLeaseManager_单消费者(t *testing.T) {
+	m := NewOutputLeaseManager()
+
+	first := m.Attach()
+	require.NotNil(t, first)
+	assert.True(t, m.HasConsumer())
+	assert.Equal(t, first.Token, m.CurrentToken())
+	assert.Len(t, first.Token, 32, "票号对齐 uuid4().hex 的 32 位")
+
+	second := m.Attach()
+	assert.Nil(t, second, "已有消费者时不得再发第二张票")
+	assert.Equal(t, first.Token, m.CurrentToken())
+}
+
+// TestOutputLeaseManager_陈旧票无法撤销新租约 验证代沟保护
+// Python: OutputLeaseManager.detach (L267)
+func TestOutputLeaseManager_陈旧票无法撤销新租约(t *testing.T) {
+	m := NewOutputLeaseManager()
+
+	old := m.Attach()
+	require.NotNil(t, old)
+	assert.True(t, m.Detach(old.Token, true))
+	assert.Nil(t, m.CurrentLease())
+
+	fresh := m.Attach()
+	require.NotNil(t, fresh)
+
+	assert.False(t, m.Detach(old.Token, true), "旧票号不得撤销新租约")
+	assert.Equal(t, fresh.Token, m.CurrentToken())
+	assert.False(t, fresh.IsClosed())
+}
+
+// TestOutputLeaseManager_Shutdown 验证关闭语义
+// Python: OutputLeaseManager.shutdown (L340)
+func TestOutputLeaseManager_Shutdown(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	m.Shutdown()
+	assert.True(t, lease.IsClosed())
+	assert.Nil(t, m.CurrentLease())
+	assert.False(t, m.HasConsumer())
+	assert.Nil(t, m.Attach(), "关闭后不得再发票")
+}
+
+// TestOutputLeaseManager_Detach后读不到 验证幽灵读者不会偷下一条
+// Python: next_item 的 closed 分支 (L297-338)：脱离的 queue.get 任务不得
+// 存活并偷走下一个租约的第一条输出
+func TestOutputLeaseManager_Detach后读不到(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	done := make(chan struct{})
+	var got bool
+	go func() {
+		defer close(done)
+		_, got = m.NextItem(context.Background(), lease)
+	}()
+
+	assert.True(t, m.Detach(lease.Token, false))
+	<-done
+	assert.False(t, got, "租约作废后挂起的读取必须返回 false")
+}
+
+// TestOutputLeaseManager_幽灵读者不偷新租约首帧 验证代际隔离
+func TestOutputLeaseManager_幽灵读者不偷新租约首帧(t *testing.T) {
+	m := NewOutputLeaseManager()
+	dead := m.Attach()
+	require.NotNil(t, dead)
+
+	halt := make(chan struct{})
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		<-halt
+		_, _ = m.NextItem(context.Background(), dead)
+	}()
+
+	assert.True(t, m.Detach(dead.Token, true))
+	close(halt)
+	<-readerDone
+
+	fresh := m.Attach()
+	require.NotNil(t, fresh)
+	m.Emit(&stream.OutputSchema{Type: "first"}, "")
+
+	item, ok := m.NextItem(context.Background(), fresh)
+	require.True(t, ok)
+	assert.Equal(t, "first", item.(*stream.OutputSchema).Type)
+}
+
+// TestOutputLeaseManager_无票Emit丢弃 验证无消费者时不入队
+// Python: emit 的 not has_consumer 分支 (L289)
+func TestOutputLeaseManager_无票Emit丢弃(t *testing.T) {
+	m := NewOutputLeaseManager()
+	m.Emit(&stream.OutputSchema{Type: "chunk"}, "")
+
+	lease := m.Attach()
+	require.NotNil(t, lease)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, ok := m.NextItem(ctx, lease)
+	assert.False(t, ok, "无消费者期间 emit 的帧不得被新租约读到")
+}
+
+// TestOutputLeaseManager_ExpectedToken不匹配则丢弃 验证延迟事件防错发
+// Python: emit 的 expected_token 分支 (L291)
+func TestOutputLeaseManager_ExpectedToken不匹配则丢弃(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	m.Emit(&stream.OutputSchema{Type: "stale"}, "other-token")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, ok := m.NextItem(ctx, lease)
+	assert.False(t, ok)
+}
+
+// TestOutputLeaseManager_Finishing后Emit丢弃 验证收尾后不再收新数据
+// Python: emit 的 finishing 分支 (L293)
+func TestOutputLeaseManager_Finishing后Emit丢弃(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	m.FinishCurrent()
+	m.Emit(&stream.OutputSchema{Type: "late"}, "")
+
+	item, ok := m.NextItem(context.Background(), lease)
+	assert.False(t, ok)
+	assert.Nil(t, item)
+}
+
+// TestOutputLeaseManager_FinishCurrent顺序 验证哨兵排在已入队帧之后
+// Python: finish_current 的 put_nowait(_OUTPUT_END) (L285)
+func TestOutputLeaseManager_FinishCurrent顺序(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	for _, typ := range []string{"a", "b", "c"} {
+		m.Emit(&stream.OutputSchema{Type: typ}, "")
+	}
+	m.FinishCurrent()
+
+	var got []string
+	for {
+		item, ok := m.NextItem(context.Background(), lease)
+		if !ok {
+			break
+		}
+		got = append(got, item.(*stream.OutputSchema).Type)
+	}
+	assert.Equal(t, []string{"a", "b", "c"}, got)
+	assert.Nil(t, m.CurrentLease(), "读到哨兵后租约应被清空")
+	assert.True(t, lease.IsClosed())
+}
+
+// TestOutputLeaseManager_FinishCurrent队列满不丢哨兵 验证结束信号优先
+func TestOutputLeaseManager_FinishCurrent队列满不丢哨兵(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	for i := 0; i < outputQueueSize; i++ {
+		m.Emit(&stream.OutputSchema{Type: "chunk"}, "")
+	}
+	m.FinishCurrent()
+
+	count := 0
+	for {
+		_, ok := m.NextItem(context.Background(), lease)
+		if !ok {
+			break
+		}
+		count++
+	}
+	assert.Equal(t, outputQueueSize-1, count, "队首一帧被丢弃，其余保留，哨兵最终生效")
+}
+
+// TestOutputLeaseManager_队列满丢新帧 验证有界丢弃策略
+func TestOutputLeaseManager_队列满丢新帧(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	for i := 0; i < outputQueueSize; i++ {
+		m.Emit(&stream.OutputSchema{Type: "chunk", Index: i}, "")
+	}
+	m.Emit(&stream.OutputSchema{Type: "overflow"}, "")
+
+	assert.Equal(t, int64(1), m.DroppedCount())
+	assert.Equal(t, outputQueueSize, len(m.queue))
+
+	item, ok := m.NextItem(context.Background(), lease)
+	require.True(t, ok)
+	assert.Equal(t, 0, item.(*stream.OutputSchema).Index, "丢的是新帧，队首仍是 index=0")
+}
+
+// TestOutputLeaseManager_丢帧日志限流 验证 1000 次丢弃只写 1 条日志
+func TestOutputLeaseManager_丢帧日志限流(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+	m.dropLogInterval = time.Hour
+
+	for i := 0; i < outputQueueSize; i++ {
+		m.Emit(&stream.OutputSchema{Type: "chunk"}, "")
+	}
+	for i := 0; i < 1000; i++ {
+		m.Emit(&stream.OutputSchema{Type: "overflow"}, "")
+	}
+
+	assert.Equal(t, int64(1000), m.dropped.Load())
+	assert.Equal(t, int64(1), m.dropLogCount.Load(), "限流窗口内只写一条日志")
+}
+
+// TestOutputLeaseManager_透传非OutputSchema帧 验证队列类型是 stream.Schema
+// spec U49：收成 *OutputSchema 会静默丢 trace 帧
+func TestOutputLeaseManager_透传非OutputSchema帧(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	trace := &stream.TraceSchema{}
+	m.Emit(trace, "")
+
+	item, ok := m.NextItem(context.Background(), lease)
+	require.True(t, ok)
+	assert.Same(t, trace, item)
+}
+
+// TestOutputLeaseManager_NextItem后Detach为noop 验证读到哨兵后 close 无害
+// Python: detach 在 lease 为 None 时返回 False (L270)
+func TestOutputLeaseManager_NextItem后Detach为noop(t *testing.T) {
+	m := NewOutputLeaseManager()
+	lease := m.Attach()
+	require.NotNil(t, lease)
+
+	m.FinishCurrent()
+	_, ok := m.NextItem(context.Background(), lease)
+	require.False(t, ok)
+
+	assert.False(t, m.Detach(lease.Token, true), "租约已因哨兵清空，detach 应为 noop")
+}
+
+// ──────────────────────────── GoalCoordinator ────────────────────────────
+
+// TestGoalCoordinator_接口形状 验证窄接口可被 fake 实现
+// spec K8/D9：9.87 只依赖这三个方法，不依赖 9.88 的具体类型
+func TestGoalCoordinator_接口形状(t *testing.T) {
+	var coordinator GoalCoordinator = &fakeGoalCoordinator{active: true}
+	assert.True(t, coordinator.HasActiveRecord())
+	coordinator.EnsureActiveGoalWorkLocked()
+	started, err := coordinator.BeginAttempt(context.Background(), "g1", 1)
+	require.NoError(t, err)
+	assert.False(t, started)
+}
+
+// ──────────────────────────── 边界与空值 ────────────────────────────
+
+// TestInteractionOutputStream_Lease与提前退出 验证访问器与 All 提前中断
+func TestInteractionOutputStream_Lease与提前退出(t *testing.T) {
+	driver := &fakeOutputDriver{items: []stream.Schema{
+		&stream.OutputSchema{Type: "a"},
+		&stream.OutputSchema{Type: "b"},
+	}}
+	lease := NewOutputLease("tok")
+	handle := NewInteractionOutputStream(driver, lease)
+	assert.Same(t, lease, handle.Lease())
+
+	count := 0
+	for range handle.All(context.Background()) {
+		count++
+		break
+	}
+	assert.Equal(t, 1, count, "yield 返回 false 时提前结束")
+}
+
+// TestWorkItem_空接收者语义 验证 nil 安全
+// Python: reset_loop 的 get("reset_loop", True) 默认值
+func TestWorkItem_空接收者语义(t *testing.T) {
+	var work *RoundWorkItem
+	assert.Nil(t, work.Query())
+	assert.True(t, work.ResetLoop(), "nil 接收者按 Python 默认 reset_loop=True")
+}
+
+// TestOutputLeaseManager_CurrentToken无租约 验证空票号
+func TestOutputLeaseManager_CurrentToken无租约(t *testing.T) {
+	m := NewOutputLeaseManager()
+	assert.Equal(t, "", m.CurrentToken())
+}

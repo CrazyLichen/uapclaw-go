@@ -9,10 +9,15 @@ package schema
 import (
 	"context"
 	"iter"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
@@ -27,6 +32,22 @@ type InteractionOutputDriver interface {
 	NextOutput(ctx context.Context, lease *OutputLease) (stream.Schema, bool)
 	// DetachOutput 释放指定票号的租约
 	DetachOutput(ctx context.Context, token string, abortActiveRound bool)
+}
+
+// GoalCoordinator 交互监督器所需的 Goal 能力子集，由 9.88 的 GoalManager 实现。
+//
+// Python 直接持有具体类 GoalManager；Go 收窄为接口以便 S2/S3 阶段用 fake
+// 覆盖 goal 分支（spec K8 / D9），9.89 注入 *goal.GoalManager。
+type GoalCoordinator interface {
+	// HasActiveRecord 返回当前会话是否存在 ACTIVE 目标记录
+	// Python: record.status is GoalStatus.ACTIVE（deep_agent.py L4067、L4456）
+	HasActiveRecord() bool
+	// EnsureActiveGoalWorkLocked 在 ACTIVE 目标缺少待办 work 时补排
+	// Python: GoalManager.ensure_active_goal_work_locked
+	EnsureActiveGoalWorkLocked()
+	// BeginAttempt 开始一次目标尝试；false 表示该代际不应开始
+	// Python: GoalManager.begin_attempt (manager.py)
+	BeginAttempt(ctx context.Context, goalID string, revision int) (bool, error)
 }
 
 // InteractionPhase 会话级交互循环的内部生命周期相位。
@@ -145,6 +166,39 @@ type InteractionOutputStream struct {
 	closed atomic.Bool
 }
 
+// leaseFrame 输出队列元素：流帧 + 结束哨兵标记。
+// Python: asyncio.Queue[Any] 中的 _OUTPUT_END = object() (L25)
+type leaseFrame struct {
+	// schema 流帧（end 为 false 时有效）
+	schema stream.Schema
+	// end 是否为结束哨兵
+	end bool
+}
+
+// OutputLeaseManager 持有输出队列并原子地挂接/拆除唯一消费者。
+//
+// 与 Python 的差异：Python 队列无界（asyncio.Queue()），Go 用容量 128 的
+// 有界 channel，满则丢弃新帧并限流告警（spec D3）。
+// Python: OutputLeaseManager (interaction.py L237)
+type OutputLeaseManager struct {
+	// mu 保护 lease 与 closed；投递也在锁内非阻塞完成，对齐 put_nowait
+	mu sync.Mutex
+	// queue 输出队列
+	queue chan leaseFrame
+	// lease 当前租约
+	lease *OutputLease
+	// closed 管理器是否已关闭
+	closed bool
+	// dropped 累计丢帧数
+	dropped atomic.Int64
+	// dropLogCount 实际写出的丢帧日志条数（限流观测用）
+	dropLogCount atomic.Int64
+	// lastDropLogUnixNano 上次丢帧日志时间
+	lastDropLogUnixNano atomic.Int64
+	// dropLogInterval 丢帧日志限流窗口
+	dropLogInterval time.Duration
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -175,6 +229,13 @@ const (
 	InteractionEventTypeGoalUpdated InteractionEventType = "goal.updated"
 	// InteractionEventTypeExecutionError 轮次执行失败
 	InteractionEventTypeExecutionError InteractionEventType = "execution.error"
+)
+
+const (
+	// outputQueueSize 输出队列容量（Python 无界，Go 取 128，满则丢新帧）
+	outputQueueSize = 128
+	// defaultDropLogInterval 丢帧日志限流窗口
+	defaultDropLogInterval = time.Second
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -338,4 +399,216 @@ func (s *InteractionOutputStream) Close(ctx context.Context, abortActiveRound bo
 		return
 	}
 	s.driver.DetachOutput(ctx, s.lease.Token, abortActiveRound)
+}
+
+// NewOutputLeaseManager 创建输出租约管理器。
+// Python: OutputLeaseManager() (interaction.py L240)
+func NewOutputLeaseManager() *OutputLeaseManager {
+	return &OutputLeaseManager{
+		queue:           make(chan leaseFrame, outputQueueSize),
+		dropLogInterval: defaultDropLogInterval,
+	}
+}
+
+// HasConsumer 返回当前是否有有效消费者。
+// Python: OutputLeaseManager.has_consumer (interaction.py L246)
+func (m *OutputLeaseManager) HasConsumer() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lease != nil && !m.lease.IsClosed()
+}
+
+// CurrentLease 返回当前有效租约（无则 nil）。
+// Python: OutputLeaseManager.current_lease (interaction.py L249)
+func (m *OutputLeaseManager) CurrentLease() *OutputLease {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.lease == nil || m.lease.IsClosed() {
+		return nil
+	}
+	return m.lease
+}
+
+// CurrentToken 返回当前票号（无则空串）。
+// Python: OutputLeaseManager.current_token (interaction.py L255)
+func (m *OutputLeaseManager) CurrentToken() string {
+	if lease := m.CurrentLease(); lease != nil {
+		return lease.Token
+	}
+	return ""
+}
+
+// Attach 原子地签发唯一租约；已有消费者或已关闭时返回 nil。
+// Python: OutputLeaseManager.attach (interaction.py L259)
+func (m *OutputLeaseManager) Attach() *OutputLease {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || (m.lease != nil && !m.lease.IsClosed()) {
+		return nil
+	}
+	// Python: token=uuid.uuid4().hex（32 位无连字符）
+	// 注意：UUID 实现了 String()，fmt 的 %x 会先取字符串再转十六进制，故这里手工去连字符
+	lease := NewOutputLease(strings.ReplaceAll(uuid.NewString(), "-", ""))
+	m.lease = lease
+	return lease
+}
+
+// Detach 撤销指定票号的租约；票号不匹配返回 false。
+// Python: OutputLeaseManager.detach (interaction.py L267)
+func (m *OutputLeaseManager) Detach(token string, discardBuffer bool) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	lease := m.lease
+	if lease == nil || lease.Token != token {
+		return false
+	}
+	m.lease = nil
+	lease.Close()
+	if discardBuffer {
+		m.drainQueueLocked()
+	}
+	return true
+}
+
+// FinishCurrent 在已转发分片排空后结束当前流。
+// Python: OutputLeaseManager.finish_current (interaction.py L278)
+func (m *OutputLeaseManager) FinishCurrent() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	lease := m.lease
+	if lease == nil || lease.IsClosed() || lease.Finishing.Load() {
+		return
+	}
+	lease.Finishing.Store(true)
+	m.enqueueEndLocked()
+}
+
+// Emit 非阻塞投递一帧；无消费者、已收尾、票号不匹配或队列满时丢弃。
+// Python: OutputLeaseManager.emit (interaction.py L287)
+func (m *OutputLeaseManager) Emit(item stream.Schema, expectedToken string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	lease := m.lease
+	if m.closed || lease == nil || lease.IsClosed() || lease.Finishing.Load() {
+		return
+	}
+	if expectedToken != "" && lease.Token != expectedToken {
+		return
+	}
+
+	select {
+	case m.queue <- leaseFrame{schema: item}:
+	default:
+		m.dropped.Add(1)
+		m.logDropThrottled(lease.Token)
+	}
+}
+
+// NextItem 取一条输出；租约作废、上下文取消或读到结束哨兵时返回 false。
+// Python: OutputLeaseManager.next_item (interaction.py L297)
+func (m *OutputLeaseManager) NextItem(ctx context.Context, lease *OutputLease) (stream.Schema, bool) {
+	if lease == nil {
+		return nil, false
+	}
+
+	m.mu.Lock()
+	current := m.lease
+	if current != lease || lease.IsClosed() {
+		m.mu.Unlock()
+		return nil, false
+	}
+	m.mu.Unlock()
+
+	for {
+		select {
+		case <-lease.closed:
+			return nil, false
+		case <-ctx.Done():
+			return nil, false
+		case frame := <-m.queue:
+			if !frame.end {
+				return frame.schema, true
+			}
+			m.mu.Lock()
+			if m.lease == lease {
+				m.lease = nil
+				lease.Close()
+			}
+			m.mu.Unlock()
+			return nil, false
+		}
+	}
+}
+
+// Shutdown 关闭管理器：作废租约并清空队列。
+// Python: OutputLeaseManager.shutdown (interaction.py L340)
+func (m *OutputLeaseManager) Shutdown() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	if m.lease != nil {
+		m.lease.Close()
+		m.lease = nil
+	}
+	m.drainQueueLocked()
+}
+
+// DroppedCount 返回累计丢帧数（可观测用）。
+func (m *OutputLeaseManager) DroppedCount() int64 { return m.dropped.Load() }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// drainQueueLocked 清空队列（调用方须持锁）。
+// Python: OutputLeaseManager._drain_queue (interaction.py L348)
+func (m *OutputLeaseManager) drainQueueLocked() {
+	for {
+		select {
+		case <-m.queue:
+		default:
+			return
+		}
+	}
+}
+
+// enqueueEndLocked 入队结束哨兵；队列满时先丢队首帧给它腾位置。
+//
+// 结束信号优先于尾部数据：若因队列满而丢失哨兵，读者将永远等不到结束。
+// 每轮迭代要么成功入队（返回），要么少一帧，故必然终止。
+func (m *OutputLeaseManager) enqueueEndLocked() {
+	for {
+		select {
+		case m.queue <- leaseFrame{end: true}:
+			return
+		default:
+		}
+		select {
+		case <-m.queue:
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event_type", "INTERACTION_OUTPUT_QUEUE_FULL").
+				Msg("output queue full, dropped oldest frame to enqueue end sentinel")
+		default:
+			return
+		}
+	}
+}
+
+// logDropThrottled 限流记录丢帧日志。
+func (m *OutputLeaseManager) logDropThrottled(token string) {
+	now := time.Now().UnixNano()
+	last := m.lastDropLogUnixNano.Load()
+	if now-last < int64(m.dropLogInterval) {
+		return
+	}
+	if !m.lastDropLogUnixNano.CompareAndSwap(last, now) {
+		return
+	}
+	m.dropLogCount.Add(1)
+	logger.Warn(logger.ComponentAgentCore).
+		Str("event_type", "INTERACTION_OUTPUT_DROPPED").
+		Str("lease_token", token).
+		Int64("dropped_total", m.dropped.Load()).
+		Int("queue_size", cap(m.queue)).
+		Msg("interaction output queue full, dropping new frame")
 }
