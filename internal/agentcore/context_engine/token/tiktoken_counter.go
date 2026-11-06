@@ -17,7 +17,7 @@ import (
 // TiktokenCounter 基于 tiktoken-go/tokenizer 的 Token 计数器。
 //
 // 提供文本、消息列表和工具定义的 Token 计数能力。
-// 初始化时按模型名称选定 encoding，初始化失败时降级为 len(text)//4。
+// 初始化时按模型名称选定 encoding，初始化失败时降级为 len(text)//3。
 //
 // Python: openjiuwen/core/context_engine/token/tiktoken_counter.py (TiktokenCounter)
 type TiktokenCounter struct {
@@ -64,7 +64,7 @@ var model2enc = map[string]tokenizer.Encoding{
 // NewTiktokenCounter 创建 TiktokenCounter 实例。
 //
 // model 为模型名称，用于选择对应的 encoding；空字符串默认使用 "gpt-4"。
-// 初始化失败时 enc 为 nil，后续计数降级为 len(text)//4。
+// 初始化失败时 enc 为 nil，后续计数降级为 len(text)//3。
 //
 // Python: TiktokenCounter(model="gpt-4")
 func NewTiktokenCounter(model string) *TiktokenCounter {
@@ -86,7 +86,7 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 		logger.Warn(logComponent).Str("model", model).
 			Str("encoding", string(encName)).
 			Err(err).
-			Msg("Tiktoken encoder init failed (by mapping table), falling back to len(text)//4 counting")
+			Msg("Tiktoken encoder init failed (by mapping table), falling back to len(text)//3 counting")
 		return tc
 	}
 
@@ -107,16 +107,16 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 		return tc
 	}
 
-	// 全部失败，enc 为 nil，后续使用 len(text)//4
+	// 全部失败，enc 为 nil，后续使用 len(text)//3
 	logger.Warn(logComponent).Str("model", model).
 		Err(fallbackErr).
-		Msg("Tiktoken init completely failed, falling back to len(text)//4 counting")
+		Msg("Tiktoken init completely failed, falling back to len(text)//3 counting")
 	return tc
 }
 
 // Count 计算文本的 Token 数量。
 //
-// 优先使用 tiktoken 编码器精确计算，失败时降级为 len(text)//4。
+// 优先使用 tiktoken 编码器精确计算，失败时降级为 len(text)//3。
 // 返回 (count, error)：计数成功时 error 为 nil，count 为 token 数；
 // 编码器不可用（enc 为 nil）时返回 (0, error)，由调用方决定是否降级。
 //
@@ -133,7 +133,7 @@ func (tc *TiktokenCounter) Count(text string, model string) (int, error) {
 			Int("text_len", len(text)).
 			Int("fallback_count", fallback).
 			Err(err).
-			Msg("Tiktoken encoding failed, falling back to len//4 counting")
+			Msg("Tiktoken encoding failed, falling back to len//3 counting")
 		return fallback, nil
 	}
 	return count, nil
@@ -211,7 +211,7 @@ func (tc *TiktokenCounter) CountTools(tools []common_schema.ToolInfoInterface, m
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// fallbackCount 降级 token 计算：len(text)//4。
+// fallbackCount 降级 token 计算：len(text)//3。
 //
 // 只在首次调用时输出警告日志（通过 fallbackWarned 标志控制），
 // Python: TiktokenCounter.count() 中的 fallback 逻辑。
@@ -220,10 +220,10 @@ func (tc *TiktokenCounter) fallbackCount(text string) int {
 	if !tc.fallbackWarned {
 		tc.fallbackWarned = true
 		logger.Warn(logComponent).Str("model", tc.model).
-			Msg("Tiktoken init failed, falling back to len(text)//4 counting")
+			Msg("Tiktoken init failed, falling back to len(text)//3 counting")
 	}
 	tc.mu.Unlock()
-	return len(text) / 4
+	return len(text) / 3
 }
 
 // contentToString 将 MessageContent 转换为字符串用于 token 计数。

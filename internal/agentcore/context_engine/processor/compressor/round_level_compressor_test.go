@@ -94,7 +94,7 @@ func rlcNewFakeLLMModel(fakeClient *rlcFakeBaseModelClient) *llm.Model {
 // validRoundLevelCompressorConfig 创建合法的 RoundLevelCompressorConfig
 func validRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 	return &RoundLevelCompressorConfig{
-		TriggerContextRatio:               0.9,
+		TriggerContextRatio: 0.9,
 		// 行为用例不启用比例下限守卫（单独由守卫用例覆盖）
 		MinTargetContextRatio:             0,
 		TargetTotalTokens:                 160000,

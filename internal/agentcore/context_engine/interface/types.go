@@ -382,7 +382,7 @@ func NewContextWindow() *ContextWindow {
 // 统计逻辑：
 //   - 按角色计数消息数（system/user/assistant/tool）
 //   - 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens 作为 total_tokens
-//   - 若无 usage_metadata，则逐条计算 token（TiktokenCounter 或 fallback 字符串长度/4）
+//   - 若无 usage_metadata，则逐条计算 token（TiktokenCounter 或 fallback 字符串长度/3）
 //
 // 口径取 total_tokens（输入 + 输出）：本轮输出会在下一轮作为历史重新发给模型，
 // 因此「下一轮真实上下文占用」应把输出也算进去（2026-11-03 决策，对齐 Python
@@ -453,7 +453,7 @@ func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
 }
 
 // countSingleMessageTokens 计算单条消息的 token 数。
-// 优先使用 tokenCounter.CountMessages，失败时 fallback 到 len(content)/4 向下取整。
+// 优先使用 tokenCounter.CountMessages，失败时 fallback 到 len(content)/3 向下取整。
 // Python: SessionModelContext._count_single_message_tokens()
 func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
@@ -462,12 +462,12 @@ func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.Tok
 			return count
 		}
 	}
-	// fallback：字符串长度 / 4 向下取整，对齐 Python len//4
-	return len(msg.GetContent().Text()) / 4
+	// fallback：字符串长度 / 3 向下取整，对齐 Python len//3
+	return len(msg.GetContent().Text()) / 3
 }
 
 // countToolTokens 计算单个工具定义的 token 数。
-// 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/4 向下取整。
+// 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/3 向下取整。
 // Python: SessionModelContext._count_tool_tokens()
 func countToolTokens(toolInfo schema.ToolInfoInterface, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
@@ -476,7 +476,7 @@ func countToolTokens(toolInfo schema.ToolInfoInterface, tokenCounter token.Token
 			return count
 		}
 	}
-	// fallback：拼接 name + description + parameters JSON，长度 / 4 向下取整，对齐 Python len//4
+	// fallback：拼接 name + description + parameters JSON，长度 / 3 向下取整，对齐 Python len//3
 	text := toolInfo.GetName()
 	if toolInfo.GetDescription() != "" {
 		text += toolInfo.GetDescription()
@@ -486,5 +486,5 @@ func countToolTokens(toolInfo schema.ToolInfoInterface, tokenCounter token.Token
 			text += string(data)
 		}
 	}
-	return len(text) / 4
+	return len(text) / 3
 }

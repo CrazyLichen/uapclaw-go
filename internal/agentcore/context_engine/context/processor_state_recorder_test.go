@@ -498,7 +498,7 @@ func TestBuildMetric_tokenCounter失败降级(t *testing.T) {
 		OperationID:    "op-fallback",
 		Status:         schema.CompressionStarted,
 		BeforeMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello world!!!")},
-		// 字符数推导："hello world!!!" = 14 chars → ceil(14/4) = 4
+		// 字符数推导："hello world!!!" = 14 chars → ceil(14/3) = 5
 		StartedAt:  now,
 		EndedAt:    now,
 		ContextMax: 100,
@@ -506,8 +506,8 @@ func TestBuildMetric_tokenCounter失败降级(t *testing.T) {
 
 	state := recorder.BuildState(input)
 
-	if state.Before.Tokens != 4 {
-		t.Errorf("Before.Tokens = %d, 期望 4（降级为 ceil(14/4)）", state.Before.Tokens)
+	if state.Before.Tokens != 5 {
+		t.Errorf("Before.Tokens = %d, 期望 5（降级为 ceil(14/3)）", state.Before.Tokens)
 	}
 }
 
@@ -518,7 +518,7 @@ func TestMeasureMessages_无TokenCounter(t *testing.T) {
 	recorder := newTestRecorder(nil, 10)
 
 	now := time.Now()
-	// 字符数推导："abcdefgh" = 8 chars → ceil(8/4) = 2
+	// 字符数推导："abcdefgh" = 8 chars → ceil(8/3) = 3
 	input := ProcessorStateInput{
 		OperationID:    "op-nocounter",
 		Status:         schema.CompressionStarted,
@@ -529,8 +529,8 @@ func TestMeasureMessages_无TokenCounter(t *testing.T) {
 
 	state := recorder.BuildState(input)
 
-	if state.Before.Tokens != 2 {
-		t.Errorf("Before.Tokens = %d, 期望 2（ceil(8/4)）", state.Before.Tokens)
+	if state.Before.Tokens != 3 {
+		t.Errorf("Before.Tokens = %d, 期望 3（ceil(8/3)）", state.Before.Tokens)
 	}
 }
 

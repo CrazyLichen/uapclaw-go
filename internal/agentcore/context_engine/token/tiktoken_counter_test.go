@@ -393,9 +393,9 @@ func TestFallbackCount_编码失败时降级(t *testing.T) {
 
 	text := "hello world test text"
 	count, err := tc.Count(text, "")
-	// 编码失败时应走 fallbackCount，返回 len(text)//4 且 error 为 nil
+	// 编码失败时应走 fallbackCount，返回 len(text)//3 且 error 为 nil
 	assert.NoError(t, err, "编码失败走降级路径，不应返回 error")
-	assert.Equal(t, len(text)/4, count, "降级值应为 len(text)//4")
+	assert.Equal(t, len(text)/3, count, "降级值应为 len(text)//3")
 }
 
 // TestFallbackCount_警告只输出一次 验证 fallbackCount 的 fallbackWarned 标志只警告一次
@@ -409,13 +409,13 @@ func TestFallbackCount_警告只输出一次(t *testing.T) {
 	count1, err1 := tc.Count("first", "")
 	assert.NoError(t, err1)
 	assert.True(t, tc.fallbackWarned, "首次调用 fallbackCount 后 fallbackWarned 应为 true")
-	assert.Equal(t, len("first")/4, count1)
+	assert.Equal(t, len("first")/3, count1)
 
 	// 第二次调用，fallbackWarned 仍为 true（不再重复警告）
 	count2, err2 := tc.Count("second", "")
 	assert.NoError(t, err2)
 	assert.True(t, tc.fallbackWarned)
-	assert.Equal(t, len("second")/4, count2)
+	assert.Equal(t, len("second")/3, count2)
 }
 
 // TestFallbackCount_空文本降级 验证编码失败时空文本的降级计算
@@ -482,5 +482,5 @@ func TestCount_编码失败时返回降级值(t *testing.T) {
 	// 编码失败走降级路径
 	count, err := tc.Count("hello world", "")
 	assert.NoError(t, err, "编码失败应走降级路径，不返回 error")
-	assert.Equal(t, len("hello world")/4, count)
+	assert.Equal(t, len("hello world")/3, count)
 }

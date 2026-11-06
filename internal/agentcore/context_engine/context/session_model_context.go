@@ -1238,7 +1238,7 @@ func (mc *SessionModelContext) statTools(stat *iface.ContextStats, tools []schem
 //
 // Python: SessionModelContext._count_single_message_tokens()
 // 优先使用 CountMessages 计算单条消息 token，对齐 Python token_counter.count_messages。
-// fallback 使用 len/4 向下取整，对齐 Python len//4。
+// fallback 使用 len/3 向下取整，对齐 Python len//3。
 func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessage) int {
 	if mc.tokenCounter != nil {
 		count, err := mc.tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, mc.resolveContextModelName())
@@ -1247,15 +1247,15 @@ func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessa
 		}
 	}
 
-	// 降级：字符数/4 向下取整，对齐 Python len//4
+	// 降级：字符数/3 向下取整，对齐 Python len//3
 	content := msg.GetContent().Text()
-	return len(content) / 4
+	return len(content) / 3
 }
 
 // countToolTokens 计算单工具的 token 数。
 //
 // Python: SessionModelContext._count_tool_tokens()
-// fallback 使用 json.Marshal 序列化整个 parameters dict + len/4 向下取整，对齐 Python json.dumps + len//4。
+// fallback 使用 json.Marshal 序列化整个 parameters dict + len/3 向下取整，对齐 Python json.dumps + len//3。
 func (mc *SessionModelContext) countToolTokens(toolInfo schema.ToolInfoInterface) int {
 	if mc.tokenCounter != nil {
 		count, err := mc.tokenCounter.CountTools([]schema.ToolInfoInterface{toolInfo}, mc.resolveContextModelName())
@@ -1274,7 +1274,7 @@ func (mc *SessionModelContext) countToolTokens(toolInfo schema.ToolInfoInterface
 			textContent += string(data)
 		}
 	}
-	return len(textContent) / 4
+	return len(textContent) / 3
 }
 
 // countDialogueRounds 统计对话轮次数。

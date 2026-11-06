@@ -275,7 +275,7 @@ func (r *ProcessorStateRecorder) buildMetric(messages []llm_schema.BaseMessage, 
 
 // measureMessages 测量消息列表的 Token 数量。
 //
-// 优先使用 tokenCounter，失败时降级为字符数/4 向上取整。
+// 优先使用 tokenCounter，失败时降级为字符数/3 向上取整。
 //
 // Python: ContextProcessorStateRecorder._measure_messages()
 func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessage) int {
@@ -285,7 +285,7 @@ func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessa
 			return count
 		}
 	}
-	// 降级：字符数/4 向上取整
+	// 降级：字符数/3 向上取整
 	totalChars := 0
 	for _, msg := range messages {
 		totalChars += len(msg.GetContent().Text())
@@ -293,7 +293,7 @@ func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessa
 	if totalChars == 0 {
 		return 0
 	}
-	return int(math.Ceil(float64(totalChars) / 4))
+	return int(math.Ceil(float64(totalChars) / 3))
 }
 
 // buildStatistic 构建上下文统计快照。

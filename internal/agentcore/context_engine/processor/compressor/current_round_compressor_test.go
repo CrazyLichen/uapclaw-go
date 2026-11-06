@@ -20,7 +20,7 @@ import (
 // validCurrentRoundCompressorConfig 创建合法的 CurrentRoundCompressorConfig
 func validCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 	return &CurrentRoundCompressorConfig{
-		TriggerContextRatio:             0.8,
+		TriggerContextRatio: 0.8,
 		// 行为用例不启用比例下限守卫（守卫由 TestCurrentRoundCompressor_最小目标比例 单独覆盖），
 		// 否则测试消息量（几十 token）永远压不过下限，压缩路径不会被走到。
 		MinTargetContextRatio:           0,
