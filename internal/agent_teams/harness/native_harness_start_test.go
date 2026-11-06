@@ -9,8 +9,8 @@ import (
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // newTestNativeHarness 构造一个不含模型的最小 NativeHarness。
