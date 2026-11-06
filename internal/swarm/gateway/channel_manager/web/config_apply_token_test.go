@@ -35,12 +35,12 @@ func TestBuildModelsDefaultsFromFrontend_Token字段(t *testing.T) {
 	// 正常值写入 mcc
 	models := []any{
 		map[string]any{
-			"model_name":        "qwen3-coder",
-			"api_base":          "https://example.com/v1",
-			"api_key":           "sk-test",
-			"model_provider":   "OpenAI",
-			"context_window":   "32k",
-			"max_tokens":       8192,
+			"model_name":     "qwen3-coder",
+			"api_base":       "https://example.com/v1",
+			"api_key":        "sk-test",
+			"model_provider": "OpenAI",
+			"context_window": "32k",
+			"max_tokens":     8192,
 		},
 	}
 	got, err := buildModelsDefaultsFromFrontend(ctx, models, nil)

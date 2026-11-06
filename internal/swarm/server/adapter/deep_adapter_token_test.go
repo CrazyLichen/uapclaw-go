@@ -11,10 +11,10 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 	d := &DeepAdapter{}
 
 	mcc := map[string]any{
-		"model_name":        "qwen3-coder",
-		"api_base":          "https://example.com/v1",
-		"api_key":           "sk-test",
-		"client_provider":   "OpenAI",
+		"model_name":      "qwen3-coder",
+		"api_base":        "https://example.com/v1",
+		"api_key":         "sk-test",
+		"client_provider": "OpenAI",
 		"verify_ssl":      false,
 	}
 	mco := map[string]any{"temperature": 0.95, "context_window": "32k", "max_tokens": 8192}
