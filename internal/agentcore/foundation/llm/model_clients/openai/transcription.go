@@ -114,6 +114,13 @@ func (c *OpenAIModelClient) TranscribeAudio(
 	// 4. 构建 API URL
 	apiURL := strings.TrimRight(c.ClientConfig.APIBase, "/") + audioTranscriptionsPath
 
+	// 4.5 总超时挂 ctx（非流式语义）；须在建请求前派生，让 req 携带带超时的 ctx
+	if to := c.RequestTimeout(nil); to != nil && *to > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(*to*float64(time.Second)))
+		defer cancel()
+	}
+
 	// 5. 创建 HTTP 请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, &requestBody)
 	if err != nil {
@@ -133,12 +140,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 		req.Header.Set(k, v)
 	}
 
-	// 6. 共享 Transport（C-A/C-14 收敛）；总超时挂 ctx（非流式语义）
-	if t := c.RequestTimeout(nil); t != nil && *t > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(*t*float64(time.Second)))
-		defer cancel()
-	}
+	// 6. 共享 Transport（C-A/C-14 收敛）
 	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
 
 	// 7. 日志记录（对齐 Python: llm_logger.info 事件记录）

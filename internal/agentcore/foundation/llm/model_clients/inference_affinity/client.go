@@ -344,14 +344,7 @@ func (c *InferenceAffinityModelClient) Release(
 		return false, fmt.Errorf("序列化 release 请求体失败: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return false, fmt.Errorf("创建 release HTTP 请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.ClientConfig.APIKey)
-
-	// 3. 共享 Transport（C-A/C-14 收敛）；总超时挂 ctx（非流式语义，方法级>配置级）
+	// 总超时挂 ctx（非流式语义，方法级>配置级）；须在建请求前派生
 	releaseTimeout := c.RequestTimeout(nil)
 	if releaseTimeout == nil {
 		// Python: schema/config.py:145 默认 360
@@ -360,6 +353,15 @@ func (c *InferenceAffinityModelClient) Release(
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(*releaseTimeout*float64(time.Second)))
 	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return false, fmt.Errorf("创建 release HTTP 请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.ClientConfig.APIKey)
+
+	// 3. 共享 Transport（C-A/C-14 收敛）
 	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
 
 	// 4. 发送请求（对齐 Python: release 使用 llm_logger，非回调）

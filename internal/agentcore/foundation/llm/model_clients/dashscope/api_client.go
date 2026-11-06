@@ -83,6 +83,14 @@ func CallDashScopeAPI(
 		)
 	}
 
+	// 3.5 总超时挂 ctx（非流式语义）；必须在建请求之前派生，让 req 携带带超时的 ctx
+	dashScopeTimeout := 120.0 // 多模态 API 默认 120 秒（比文本生成更长）
+	if timeout != nil && *timeout > 0 {
+		dashScopeTimeout = *timeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(dashScopeTimeout*float64(time.Second)))
+	defer cancel()
+
 	// 4. 创建 HTTP 请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
 	if err != nil {
@@ -96,13 +104,7 @@ func CallDashScopeAPI(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	// 6. 共享 Transport（C-A/C-14 收敛）；总超时挂 ctx（非流式语义）
-	dashScopeTimeout := 120.0 // 多模态 API 默认 120 秒（比文本生成更长）
-	if timeout != nil && *timeout > 0 {
-		dashScopeTimeout = *timeout
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(dashScopeTimeout*float64(time.Second)))
-	defer cancel()
+	// 6. 共享 Transport（C-A/C-14 收敛）
 	client := &http.Client{Transport: model_clients.GetSharedTransport(verifySSL, sslCert)}
 
 	// 7. 发送请求（对齐 Python: DashScope 多模态 API 使用 logger，非回调）
