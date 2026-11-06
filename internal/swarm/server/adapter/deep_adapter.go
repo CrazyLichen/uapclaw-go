@@ -583,12 +583,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
 	// Python: L13239-13241 enable_model_anomaly_detection_rail=(execution_guard...).get("enabled", False)
-	anomalyEnabled := false
-	if guard, ok := configBase["execution_guard"].(map[string]any); ok {
-		if guardCfg, ok := guard["model_anomaly_detection_rail"].(map[string]any); ok {
-			anomalyEnabled, _ = guardCfg["enabled"].(bool)
-		}
-	}
+	anomalyEnabled := resolveEnableModelAnomalyDetectionRail(configBase)
 	// Python: self._instance = create_deep_agent(**common_kwargs, ...)
 	resolvedLanguage := d.resolveRuntimeLanguage()
 	systemPrompt := commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage())
@@ -2940,6 +2935,23 @@ func paramsInt(params map[string]any, key string, defaultVal int) int {
 	default:
 		return defaultVal
 	}
+}
+
+// resolveEnableModelAnomalyDetectionRail 读取 execution_guard 下的模型异常检测开关。
+//
+// 缺省为 false（对齐上游 retry_cfg.get("enabled", False)）；开关与
+// buildModelAnomalyDetectionRail 必须读同一段配置，否则会出现"配置关不掉/开不了"。
+func resolveEnableModelAnomalyDetectionRail(configBase map[string]any) bool {
+	guard, ok := configBase["execution_guard"].(map[string]any)
+	if !ok {
+		return false
+	}
+	guardCfg, ok := guard["model_anomaly_detection_rail"].(map[string]any)
+	if !ok {
+		return false
+	}
+	enabled, _ := guardCfg["enabled"].(bool)
+	return enabled
 }
 
 // paramsFloat 从配置映射中获取浮点数值，不存在时返回默认值

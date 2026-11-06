@@ -59,3 +59,30 @@ func TestBuildModelAnomalyDetectionRail_非法参数不阻断(t *testing.T) {
 		t.Fatal("参数非法时应返回 nil（对齐上游 try/except 返回 None）")
 	}
 }
+
+// TestResolveEnableModelAnomalyDetectionRail 开关读取覆盖缺省 / 无 guard / 显式开关四态。
+func TestResolveEnableModelAnomalyDetectionRail(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  map[string]any
+		want bool
+	}{
+		{"nil 配置", nil, false},
+		{"无 execution_guard", map[string]any{}, false},
+		{"无 rail 段", map[string]any{"execution_guard": map[string]any{}}, false},
+		{"显式开启", map[string]any{"execution_guard": map[string]any{
+			"model_anomaly_detection_rail": map[string]any{"enabled": true},
+		}}, true},
+		{"显式关闭", map[string]any{"execution_guard": map[string]any{
+			"model_anomaly_detection_rail": map[string]any{"enabled": false},
+		}}, false},
+		{"非布尔值按关闭", map[string]any{"execution_guard": map[string]any{
+			"model_anomaly_detection_rail": map[string]any{"enabled": "yes"},
+		}}, false},
+	}
+	for _, c := range cases {
+		if got := resolveEnableModelAnomalyDetectionRail(c.cfg); got != c.want {
+			t.Errorf("%s: 期望 %v，实际 %v", c.name, c.want, got)
+		}
+	}
+}

@@ -586,4 +586,29 @@ func TestBuildModelAnomalyDetectionRail_团队成员(t *testing.T) {
 	if rail := BuildModelAnomalyDetectionRail(nil); rail != nil {
 		t.Fatal("config 为 nil 时不应构建")
 	}
+
+	// tool_loop_compact 分支 + YAML/JSON 两类数值形态（int / int64 / float64）
+	withCompact := map[string]any{"execution_guard": map[string]any{
+		"model_anomaly_detection_rail": map[string]any{
+			"enabled":             true,
+			"max_retries":         int64(1),
+			"repeat_window_chars": 2048.0,
+			"tool_loop_compact": map[string]any{
+				"enabled":               true,
+				"consecutive_threshold": 5,
+				"bailout_threshold":     2,
+			},
+		},
+	}}
+	if rail := BuildModelAnomalyDetectionRail(withCompact); rail == nil {
+		t.Fatal("含 tool_loop_compact 配置时应构建")
+	}
+
+	// 参数非法（max_retries 为负）→ 构造失败返回 nil，不阻断团队装配
+	bad := map[string]any{"execution_guard": map[string]any{
+		"model_anomaly_detection_rail": map[string]any{"enabled": true, "max_retries": -1},
+	}}
+	if rail := BuildModelAnomalyDetectionRail(bad); rail != nil {
+		t.Fatal("参数非法时应返回 nil")
+	}
 }

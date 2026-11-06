@@ -1064,6 +1064,8 @@ func TestAssistantMessageChunk_CarriesOutputToken(t *testing.T) {
 		{"空 chunk", &AssistantMessageChunk{}, false},
 		{"仅 role", &AssistantMessageChunk{AssistantMessage: AssistantMessage{DefaultMessage: DefaultMessage{Role: RoleTypeAssistant}}}, false},
 		{"仅 usage", &AssistantMessageChunk{AssistantMessage: AssistantMessage{UsageMetadata: &UsageMetadata{}}}, false},
+		{"nil chunk", nil, false},
+		{"工具列表含 nil 元素", &AssistantMessageChunk{AssistantMessage: AssistantMessage{ToolCalls: []*ToolCall{nil, {Name: "x"}}}}, true},
 	}
 	for _, c := range cases {
 		if got := c.chunk.CarriesOutputToken(); got != c.want {

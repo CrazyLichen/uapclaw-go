@@ -279,3 +279,9 @@ internal/swarm/server/runtime/skill/skill_manager.go#L459-459
 # 理由整文件豁免（.coverage-exempt 中同名条目）。
 internal/agentcore/retrieval/vector_store/chroma.go
 internal/agentcore/retrieval/vector_store/milvus.go
+
+# openai/client.go#L554-L604：HTTP 错误映射（httpErrorParams + HandleHTTPError 三处 WithParams）。
+# 集成测试的模型调用经 ClientRegistry 注入 MockModelClient，不经过 HTTP 传输层，
+# 没有任何集成用例能触发 provider 的非 200 响应；该段由 openai 包单测
+# TestHandleHTTPError_* 全覆盖（改动行单测覆盖率 100%），集成层无独立入口。
+internal/agentcore/foundation/llm/model_clients/openai/client.go#L554-L604
