@@ -92,6 +92,14 @@ func NewGatewayServer(config *GatewayServerConfig) *GatewayServer {
 	}
 }
 
+// ListenErr 返回启动期监听错误通道（只读）。
+//
+// 端口被占用等绑定失败会上报到这里：Start 是非阻塞的（goroutine 内
+// ListenAndServe），只看 Start 返回值无法判断是否真的监听成功。
+func (s *GatewayServer) ListenErr() <-chan error {
+	return s.listenErr
+}
+
 // Start 启动监听（19001）。
 //
 // Python: GatewayServer.start()（L371-393）——已运行或未启用则直接返回。

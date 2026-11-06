@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -41,6 +42,8 @@ type TeamDialogSuite struct {
 	providerName string
 	// wsPort Web 通道监听端口
 	wsPort int
+	// gatewayPort 多路由 WS 服务器端口（默认 19001，必须隔离，否则并行包互撞）
+	gatewayPort int
 	// dataDir 隔离的数据目录
 	dataDir string
 	// agentServer 进程内 AgentServer
@@ -104,28 +107,55 @@ models:
 	s.Require().NoError(err)
 	s.saveAndSetenv("UAPCLAW_RESOURCES_DIR", filepath.Join(repoRoot, "resources"))
 
-	s.wsPort = s.pickFreePort()
 	s.saveAndSetenv("UAPCLAW_DATA_DIR", s.dataDir)
-	s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
 	pathutil.ResetCache()
 
 	_, err = workspace.Init(workspace.InitOption{Language: "zh"})
 	s.Require().NoError(err)
 
-	cfg, err := config.New("")
-	s.Require().NoError(err)
-	_, err = cfg.Load()
-	s.Require().NoError(err)
-
 	// 三子系统构造（integration-audit 调用跨度来源，勿移到 helper 包）
 	tr := transport.NewChannelTransport()
-	s.agentServer = server.NewAgentServer(cfg, tr)
 	agentClient := routing.NewAgentClient(tr)
-	s.gwServer, err = gateway.NewAppGatewayServer(cfg, agentClient)
-	s.Require().NoError(err)
 
-	s.Require().NoError(s.agentServer.Start(s.Ctx))
-	s.Require().NoError(s.gwServer.Start(s.Ctx))
+	// 端口绑定重试：pickFreePort 是"listen :0 → 取号 → 关闭"，
+	// 到网关真正 bind 之间有空窗，CI 并行时可能被别的进程抢占。
+	// Start 非阻塞且端口被占时仍返回 nil，故必须探活 + 读 ListenErr 才能判定。
+	for attempt := 1; attempt <= 3; attempt++ {
+		s.wsPort = s.pickFreePort()
+		s.gatewayPort = s.pickFreePort()
+		if attempt == 1 {
+			s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
+			s.saveAndSetenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", s.gatewayPort))
+		} else {
+			_ = os.Setenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
+			_ = os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", s.gatewayPort))
+		}
+		pathutil.ResetCache()
+
+		cfg, cfgErr := config.New("")
+		s.Require().NoError(cfgErr)
+		_, loadErr := cfg.Load()
+		s.Require().NoError(loadErr)
+
+		if attempt == 1 {
+			s.agentServer = server.NewAgentServer(cfg, tr)
+			s.Require().NoError(s.agentServer.Start(s.Ctx))
+		}
+		gwServer, gwErr := gateway.NewAppGatewayServer(cfg, agentClient)
+		s.Require().NoError(gwErr)
+		s.Require().NoError(gwServer.Start(s.Ctx))
+
+		if readyErr := waitTCPReady(gwServer, s.wsPort, 3*time.Second); readyErr == nil {
+			s.gwServer = gwServer
+			break
+		} else {
+			s.T().Logf("第 %d 次绑定端口 %d 失败（疑似并发抢占）：%v，换号重试", attempt, s.wsPort, readyErr)
+			_ = gwServer.Stop()
+			if attempt == 3 {
+				s.FailNow("连续 3 次无法绑定 Web WS 端口")
+			}
+		}
+	}
 }
 
 // TearDownSuite 逆序停机 + 清理注册。
@@ -211,18 +241,27 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 	)
 
 	deadline := time.Now().Add(120 * time.Second)
+	var connErr error
 	idle := 0
 	for time.Now().Before(deadline) {
 		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			// 空闲不是结束：团队流事件之间有静默期（对齐 Python
-			// _recv_messages 的 except TimeoutError: continue）
-			idle++
-			if idle >= 12 {
-				break
+			// 只有读超时才算"空闲"：团队流事件之间有静默期
+			// （对齐 Python _recv_messages 的 except TimeoutError: continue）。
+			// 连接被断等其他错误必须立即记录并退出，否则会被 12 次空读
+			// 掩盖成一堆 "Should be true"，看不出真实原因（CI 42135386234 实证）。
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				idle++
+				if idle >= 12 {
+					break
+				}
+				continue
 			}
-			continue
+			connErr = err
+			s.T().Logf("WS 连接异常终止: %v", err)
+			break
 		}
 		idle = 0
 
@@ -289,6 +328,7 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 		}
 	}
 
+	s.Require().NoError(connErr, "WS 连接异常终止（非空闲超时），后续断言不可信")
 	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinalAfter=%v llmCalls=%d",
 		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinalAfter, s.MockLLM.InvokeCallCount())
 	s.True(sawMember, "应收到 team.member（成员启动事件）")

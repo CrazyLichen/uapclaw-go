@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -962,4 +963,40 @@ func TestSend_stale定向连接静默丢弃(t *testing.T) {
 	payload := frame["payload"].(map[string]any)
 	assert.Equal(t, "true-miss-broadcast", payload["content"],
 		"S-03：stale 定向命中须静默丢弃——B 的第一帧应是对照组广播帧而非 stale-drop")
+}
+
+// TestGatewayServer_ListenErr上报端口占用 端口被占时必须通过 ListenErr 上报，
+// 而不是静默失败（Start 非阻塞，返回值恒为 nil）。
+func TestGatewayServer_ListenErr上报端口占用(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("占用端口失败: %v", err)
+	}
+	defer func() { _ = occupied.Close() }()
+	port := occupied.Addr().(*net.TCPAddr).Port
+
+	cfg := NewGatewayServerConfig()
+	cfg.Port = port
+	server := NewGatewayServer(cfg)
+	defer func() { _ = server.Stop() }()
+	if err := server.Start(context.Background()); err != nil {
+		t.Fatalf("Start 不应返回错误（错误走 ListenErr）: %v", err)
+	}
+
+	select {
+	case listenErr := <-server.ListenErr():
+		if listenErr == nil {
+			t.Fatal("应上报非 nil 的监听错误")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("端口已占用时应在 ListenErr 上报错误")
+	}
+}
+
+// TestAppGatewayServer_ListenErr未启动返回nil 未调用 Start 时通道为 nil。
+func TestAppGatewayServer_ListenErr未启动返回nil(t *testing.T) {
+	server := &AppGatewayServer{}
+	if server.ListenErr() != nil {
+		t.Fatal("未装配 gwServer 时应返回 nil 通道")
+	}
 }

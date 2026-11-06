@@ -56,6 +56,8 @@ type SupplementInterruptSuite struct {
 	origWd string
 	// wsPort Web 通道监听端口
 	wsPort int
+	// gatewayPort 多路由 WS 服务器端口（默认 19001，必须隔离，否则并行包互撞）
+	gatewayPort int
 	// agentServer 进程内 AgentServer
 	agentServer *server.AgentServer
 	// gwServer 进程内 AppGatewayServer
@@ -272,28 +274,55 @@ models:
 	s.Require().NoError(err)
 	s.saveAndSetenv("UAPCLAW_RESOURCES_DIR", filepath.Join(repoRoot, "resources"))
 
-	s.wsPort = s.pickFreePort()
 	s.saveAndSetenv("UAPCLAW_DATA_DIR", s.dataDir)
-	s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
 	pathutil.ResetCache()
 
 	_, err = workspace.Init(workspace.InitOption{Language: "zh"})
 	s.Require().NoError(err)
 
-	cfg, err := config.New("")
-	s.Require().NoError(err)
-	_, err = cfg.Load()
-	s.Require().NoError(err)
-
 	// 三子系统构造（integration-audit 调用跨度来源，勿移到 helper 包）
 	tr := transport.NewChannelTransport()
-	s.agentServer = server.NewAgentServer(cfg, tr)
 	agentClient := routing.NewAgentClient(tr)
-	s.gwServer, err = gateway.NewAppGatewayServer(cfg, agentClient)
-	s.Require().NoError(err)
 
-	s.Require().NoError(s.agentServer.Start(s.Ctx))
-	s.Require().NoError(s.gwServer.Start(s.Ctx))
+	// 端口绑定重试：pickFreePort 是"listen :0 → 取号 → 关闭"，
+	// 到网关真正 bind 之间有空窗，CI 并行时可能被别的进程抢占。
+	// Start 非阻塞且端口被占时仍返回 nil，故必须探活 + 读 ListenErr 才能判定。
+	for attempt := 1; attempt <= 3; attempt++ {
+		s.wsPort = s.pickFreePort()
+		s.gatewayPort = s.pickFreePort()
+		if attempt == 1 {
+			s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
+			s.saveAndSetenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", s.gatewayPort))
+		} else {
+			_ = os.Setenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
+			_ = os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", s.gatewayPort))
+		}
+		pathutil.ResetCache()
+
+		cfg, cfgErr := config.New("")
+		s.Require().NoError(cfgErr)
+		_, loadErr := cfg.Load()
+		s.Require().NoError(loadErr)
+
+		if attempt == 1 {
+			s.agentServer = server.NewAgentServer(cfg, tr)
+			s.Require().NoError(s.agentServer.Start(s.Ctx))
+		}
+		gwServer, gwErr := gateway.NewAppGatewayServer(cfg, agentClient)
+		s.Require().NoError(gwErr)
+		s.Require().NoError(gwServer.Start(s.Ctx))
+
+		if readyErr := waitTCPReady(gwServer, s.wsPort, 3*time.Second); readyErr == nil {
+			s.gwServer = gwServer
+			break
+		} else {
+			s.T().Logf("第 %d 次绑定端口 %d 失败（疑似并发抢占）：%v，换号重试", attempt, s.wsPort, readyErr)
+			_ = gwServer.Stop()
+			if attempt == 3 {
+				s.FailNow("连续 3 次无法绑定 Web WS 端口")
+			}
+		}
+	}
 }
 
 // TearDownSuite 逆序停机 + 清理注册与环境。
@@ -398,4 +427,34 @@ func suppFrameEvent(frame map[string]any) (string, map[string]any) {
 	}
 	name, _ := payload["event_type"].(string)
 	return name, payload
+}
+
+// waitTCPReady 等待指定端口真正可连接，失败时附带网关监听错误作诊断。
+//
+// Start 是非阻塞的（ListenAndServe 在 goroutine 内），端口被并发抢占时
+// Start 仍返回 nil，必须靠探活判定；ListenErr 只用于把真实原因带出来。
+func waitTCPReady(gw *gateway.AppGatewayServer, port int, timeout time.Duration) error {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	var listenErr <-chan error
+	if gw != nil {
+		listenErr = gw.ListenErr()
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond); err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if listenErr != nil {
+		select {
+		case err := <-listenErr:
+			if err != nil {
+				return fmt.Errorf("端口 %d 未就绪；网关监听错误: %w", port, err)
+			}
+		default:
+		}
+	}
+	return fmt.Errorf("端口 %d 在 %s 内未就绪", port, timeout)
 }

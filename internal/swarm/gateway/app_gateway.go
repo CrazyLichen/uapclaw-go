@@ -360,6 +360,19 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	return s, nil
 }
 
+// ListenErr 返回 Web WS 服务器的监听错误通道（未启动时返回 nil）。
+//
+// 供集成测试判断 Start 是否真的绑定成功：Start 非阻塞，端口被占用时
+// 它仍返回 nil，错误只会走 gwServer 的 listenErr 通道。
+func (s *AppGatewayServer) ListenErr() <-chan error {
+	s.gwServerMu.RLock()
+	defer s.gwServerMu.RUnlock()
+	if s.gwServer == nil {
+		return nil
+	}
+	return s.gwServer.ListenErr()
+}
+
 // Start 启动 Gateway 服务器。
 //
 // 注册 WebChannel、启动 MessageHandler 转发循环、启动 HTTP 服务器。
