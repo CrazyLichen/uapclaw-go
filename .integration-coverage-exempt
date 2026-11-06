@@ -297,3 +297,13 @@ internal/agentcore/harness/rails/model_anomaly.go#L455-L460
 # 实现侧由 tests/integration/agentcore/harness/interaction_supervisor_test.go 覆盖；
 # 同文件的 UnimplementedDeepAgentInteraction 只被单测 fake 嵌入，集成层无调用方。
 internal/agentcore/harness/interfaces/deep_agent.go
+
+# ── 2026-11-06 25.1a 团队流程接线（coordination 包不在集成 -coverpkg 追踪范围） ──
+# agent_teams/agent/coordination 包没有任何集成测试直接 import（tests/integration 下
+# 0 命中），CI 集成 job 的 -coverpkg 只追踪集成测试 import 的 internal 包，故该包
+# 在集成剖面里恒为 0 覆盖块。kernel.go 的 harness.Start 接线（步骤 6.5）与
+# lifecycle_accessors.go 的接口方法声明均无法被集成覆盖率统计；语义由单测覆盖
+# （kernel_test.go TestCoordinationKernel_Start启动成员运行时 91.6% / 接口方法签名
+# 由 *TeamHarness.Start、*StreamController.Start 实现侧测试覆盖）。
+internal/agent_teams/agent/coordination/kernel.go
+internal/agent_teams/agent/coordination/types/lifecycle_accessors.go
