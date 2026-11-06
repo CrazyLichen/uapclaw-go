@@ -3,7 +3,10 @@ package context
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -28,34 +32,172 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ModelDefaultContextWindowTokens 各模型的默认上下文窗口大小（单位 token），键为模型名前缀。
+// ModelDefaultContextWindowTokens 各模型的默认上下文窗口大小（单位 token），键为模型名。
+//
+// 逐条对齐上游 MODEL_DEFAULT_CONTEXT_WINDOW_TOKENS（context_utils.py）。
 var ModelDefaultContextWindowTokens = map[string]int{
-	"glm-5":             200000,
-	"glm-4-long":        200000,
-	"glm-4":             128000,
-	"glm-4-9b-chat-1m":  1048576,
-	"gpt-5.4":           1100000,
+	// GLM
+	"glm-5.2":          1048576,
+	"glm-5.1":          204800,
+	"glm-5":            204800,
+	"glm-5-turbo":      202752,
+	"glm-4.7":          204800,
+	"glm-4.7-flash":    202752,
+	"glm-4.7-flashx":   200000,
+	"glm-4.6":          204800,
+	"glm-4.5":          131072,
+	"glm-4.5-air":      131072,
+	"glm-4-long":       1000000,
+	"glm-4":            128000,
+	"glm-4-9b-chat-1m": 1048576,
+	// OpenAI GPT
+	"gpt-5.6-luna":      1050000,
+	"gpt-5.6-luna-pro":  1050000,
+	"gpt-5.6-sol":       1050000,
+	"gpt-5.6-sol-pro":   1050000,
+	"gpt-5.6-terra":     1050000,
+	"gpt-5.6-terra-pro": 1050000,
+	"gpt-5.5":           1050000,
+	"gpt-5.5-pro":       1050000,
+	"gpt-5.4":           1050000,
+	"gpt-5.4-pro":       1050000,
+	"gpt-5.4-mini":      400000,
+	"gpt-5.4-nano":      400000,
+	"gpt-5.2":           400000,
+	"gpt-5.1":           400000,
+	"gpt-5":             400000,
+	"gpt-5-pro":         400000,
+	"gpt-5-mini":        400000,
+	"gpt-5-nano":        400000,
+	"gpt-4.1":           1047576,
+	"gpt-4.1-mini":      1047576,
+	"gpt-4.1-nano":      1047576,
 	"gpt-4o":            128000,
 	"gpt-4o-mini":       128000,
 	"gpt-4-turbo":       128000,
-	"gpt-3.5-turbo":     16384,
-	"deepseek-v3":       128000,
-	"deepseek-chat":     65536,
+	"gpt-3.5-turbo":     16385,
+	// OpenAI o-series
+	"o1":      200000,
+	"o3":      200000,
+	"o3-mini": 200000,
+	"o3-pro":  200000,
+	"o4-mini": 200000,
+	// DeepSeek
+	"deepseek-v4-pro":        1048576,
+	"deepseek-v4-flash":      1048576,
+	"deepseek-v3.2":          163840,
+	"deepseek-v3.1-terminus": 163840,
+	"deepseek-r1":            163840,
+	"deepseek-v3":            128000,
+	"deepseek-chat":          163840,
+	// Anthropic Claude
+	"claude-opus-5":     1000000,
+	"claude-opus-4-8":   1000000,
+	"claude-opus-4.8":   1000000,
+	"claude-opus-4-7":   1000000,
+	"claude-opus-4.7":   1000000,
+	"claude-opus-4-6":   1000000,
 	"claude-opus-4.6":   1000000,
+	"claude-opus-4-5":   200000,
+	"claude-opus-4.5":   200000,
+	"claude-sonnet-5":   1000000,
+	"claude-sonnet-4-6": 1000000,
 	"claude-sonnet-4.6": 1000000,
-	"claude-haiku-4.6":  200000,
-	"gemini-3.1-pro":    2000000,
-	"gemini-2.5-pro":    1000000,
-	"gemini-2.5-flash":  1000000,
-	"llama-4-maverick":  1000000,
-	"llama-4-scout":     10000000,
-	"qwen-max":          32000,
-	"qwen-plus":         131072,
-	"qwen-turbo":        8192,
-	"qwen-long":         1000000,
+	"claude-sonnet-4-5": 1000000,
+	"claude-sonnet-4.5": 1000000,
+	"claude-haiku-4-5":  200000,
+	"claude-haiku-4.5":  200000,
+	// Google Gemini
+	"gemini-3.6-flash":       1048576,
+	"gemini-3.5-flash":       1048576,
+	"gemini-3.5-flash-lite":  1048576,
+	"gemini-3.1-pro-preview": 1048576,
+	"gemini-3.1-flash-lite":  1048576,
+	"gemini-3-pro-preview":   1048576,
+	"gemini-3-flash-preview": 1048576,
+	"gemini-2.5-pro":         1048576,
+	"gemini-2.5-flash":       1048576,
+	"gemini-2.5-flash-lite":  1048576,
+	// Meta Llama
+	"llama-4-maverick": 1048576,
+	"llama-4-scout":    10000000,
+	// Qwen
+	"qwen3.7-max":         1000000,
+	"qwen3.7-plus":        1000000,
+	"qwen3.7-flash":       1000000,
+	"qwen3.6-max-preview": 262144,
+	"qwen3.6-plus":        1000000,
+	"qwen3.6-flash":       1000000,
+	"qwen3.5-plus":        1000000,
+	"qwen3.5-flash":       1000000,
+	"qwen3-max":           262144,
+	"qwen3-max-thinking":  262144,
+	"qwen3-coder-plus":    1000000,
+	"qwen3-coder-flash":   1000000,
+	"qwen3-coder-next":    262144,
+	"qwen-max":            262144,
+	"qwen-plus":           1000000,
+	"qwen-flash":          1000000,
+	"qwen-turbo":          8192,
+	"qwen-long":           1000000,
+	// Moonshot Kimi
+	"kimi-k3":          1048576,
+	"kimi-k2.7-code":   262144,
+	"kimi-k2.6":        262144,
+	"kimi-k2.5":        262144,
+	"kimi-k2-thinking": 262144,
+	"kimi-k2-0905":     262144,
+	"kimi-k2":          131072,
+	// MiniMax
+	"MiniMax-M3":             1048576,
+	"MiniMax-M2.7":           204800,
+	"MiniMax-M2.7-highspeed": 204800,
+	"MiniMax-M2.5":           204800,
+	"MiniMax-M2.5-highspeed": 204800,
+	"MiniMax-M2.1":           204800,
+	"MiniMax-M2":             204800,
+	"MiniMax-M1":             1000000,
+	// xAI Grok
+	"grok-4.20":             2000000,
+	"grok-4.20-multi-agent": 2000000,
+	"grok-4.5":              500000,
+	"grok-4.3":              1000000,
+	"grok-4.3-latest":       1000000,
+	"grok-latest":           500000,
 }
 
+var (
+	// openRouterModelsURL OpenRouter 模型列表地址（测试可覆写）
+	openRouterModelsURL = "https://openrouter.ai/api/v1/models"
+	// openRouterCacheTTL 拉取结果进程级缓存时长
+	openRouterCacheTTL = time.Hour
+	// openRouterTokensMu 保护下方缓存字段
+	openRouterTokensMu sync.Mutex
+	// openRouterTokens 最近一次成功拉取的窗口表
+	openRouterTokens map[string]int
+	// openRouterTokensFetched 最近一次拉取时间（失败也推进，避免打爆对端）
+	openRouterTokensFetched time.Time
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// BuildModelContextWindowTokens 合并 OpenRouter 拉取表与用户显式表（用户值优先）。
+//
+// Python: ContextUtils.build_model_context_window_tokens()
+func BuildModelContextWindowTokens(user map[string]int, enableOpenRouter bool, timeoutSeconds float64) map[string]int {
+	resolved := make(map[string]int)
+	if enableOpenRouter {
+		for name, tokens := range fetchOpenRouterContextWindows(timeoutSeconds) {
+			resolved[name] = tokens
+		}
+	}
+	for name, tokens := range user {
+		if tokens > 0 {
+			resolved[name] = tokens
+		}
+	}
+	return resolved
+}
 
 // ValidateMessages 校验消息列表中是否存在 nil 元素。
 func ValidateMessages(messages []llm_schema.BaseMessage) error {
@@ -218,6 +360,116 @@ func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id st
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// fetchOpenRouterContextWindows 拉取 OpenRouter 模型窗口表，进程级 TTL 缓存，失败沿用旧值。
+//
+// 解析 {"data":[{"id","context_length"}]}；带 "/" 的 id 额外产出无前缀别名，
+// 同名别名冲突时丢弃该别名（避免把两家厂商的同名模型混为一谈）。
+//
+// Python: ContextUtils.fetch_openrouter_model_context_window_tokens()
+func fetchOpenRouterContextWindows(timeoutSeconds float64) map[string]int {
+	openRouterTokensMu.Lock()
+	if !openRouterTokensFetched.IsZero() && time.Since(openRouterTokensFetched) < openRouterCacheTTL {
+		cached := copyIntMap(openRouterTokens)
+		openRouterTokensMu.Unlock()
+		return cached
+	}
+	openRouterTokensFetched = time.Now()
+	openRouterTokensMu.Unlock()
+
+	timeout := timeoutSeconds
+	if timeout <= 0 {
+		timeout = 3
+	}
+	client := &http.Client{Timeout: time.Duration(timeout * float64(time.Second))}
+	resp, err := client.Get(openRouterModelsURL)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("failed to fetch openrouter model context windows, use cached or built-in values")
+		return copyIntMap(openRouterTokens)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		logger.Warn(logComponent).Int("status_code", resp.StatusCode).
+			Msg("failed to fetch openrouter model context windows, use cached or built-in values")
+		return copyIntMap(openRouterTokens)
+	}
+
+	var payload struct {
+		Data []struct {
+			ID            string `json:"id"`
+			ContextLength int    `json:"context_length"`
+		} `json:"data"`
+	}
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&payload); decodeErr != nil {
+		logger.Warn(logComponent).Err(decodeErr).
+			Msg("failed to parse openrouter models payload, use cached or built-in values")
+		return copyIntMap(openRouterTokens)
+	}
+
+	parsed := make(map[string]int, len(payload.Data))
+	aliases := make(map[string]int, len(payload.Data))
+	ambiguous := make(map[string]struct{})
+	for _, m := range payload.Data {
+		if m.ID == "" || m.ContextLength <= 0 {
+			continue
+		}
+		parsed[m.ID] = m.ContextLength
+		idx := strings.Index(m.ID, "/")
+		if idx < 0 {
+			continue
+		}
+		alias := m.ID[idx+1:]
+		if _, exists := aliases[alias]; exists {
+			ambiguous[alias] = struct{}{}
+			continue
+		}
+		aliases[alias] = m.ContextLength
+	}
+	for alias, tokens := range aliases {
+		if _, dup := ambiguous[alias]; dup {
+			continue
+		}
+		parsed[alias] = tokens
+	}
+
+	openRouterTokensMu.Lock()
+	openRouterTokens = parsed
+	openRouterTokensMu.Unlock()
+	return copyIntMap(parsed)
+}
+
+// copyIntMap 复制一份 int map，避免调用方改写缓存。
+func copyIntMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]int, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// resetOpenRouterCache 清空 OpenRouter 缓存（测试用）。
+func resetOpenRouterCache() {
+	openRouterTokensMu.Lock()
+	openRouterTokens = nil
+	openRouterTokensFetched = time.Time{}
+	openRouterTokensMu.Unlock()
+}
+
+// expireOpenRouterCacheTTL 只让缓存过期但保留内容（测试用，验证失败沿用缓存）。
+func expireOpenRouterCacheTTL() {
+	openRouterTokensMu.Lock()
+	openRouterTokensFetched = time.Now().Add(-2 * openRouterCacheTTL)
+	openRouterTokensMu.Unlock()
+}
+
+// overrideOpenRouterURL 覆写拉取地址（测试用）。
+func overrideOpenRouterURL(url string) {
+	openRouterModelsURL = url
+}
 
 // messageToMap 将 BaseMessage 转换为 map 结构，用于序列化和日志输出。
 func messageToMap(msg llm_schema.BaseMessage) map[string]any {

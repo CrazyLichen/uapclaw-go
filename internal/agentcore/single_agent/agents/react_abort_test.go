@@ -28,6 +28,8 @@ type cancelAwareContextEngine struct {
 	fakeContextEngine
 	// saveCalls SaveContexts 调用次数
 	saveCalls int
+	// modelUpdates 记录 UpdateModelContext 调用参数
+	modelUpdates [][2]any
 	// sawCanceledCtx SaveContexts 是否收到了已取消的 ctx
 	sawCanceledCtx bool
 }
@@ -99,6 +101,11 @@ func (e *cancelAwareContextEngine) SaveContexts(
 		return nil, err
 	}
 	return map[string]any{"saved": true}, nil
+}
+
+// UpdateModelContext 记录热切换调用（可选能力，对齐引擎同名方法）。
+func (e *cancelAwareContextEngine) UpdateModelContext(modelName string, tokens int) {
+	e.modelUpdates = append(e.modelUpdates, [2]any{modelName, tokens})
 }
 
 // GetSessionID 获取会话标识。

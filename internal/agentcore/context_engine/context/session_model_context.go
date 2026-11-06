@@ -42,8 +42,12 @@ type SessionModelContext struct {
 	defaultWindowSize int
 	// enableReload 是否启用 offload 重载功能
 	enableReload bool
-	// contextWindowTokens 上下文窗口 token 数
+	// contextWindowTokens 上下文窗口 token 数（由 global 与 override 推导，见 effectiveGlobalWindow）
 	contextWindowTokens int
+	// globalContextWindowTokens 全局上下文窗口覆盖值（最高优先，0 表示未设置）
+	globalContextWindowTokens int
+	// modelWindowOverride 当前选中模型配置声明的窗口（低优先于 global）
+	modelWindowOverride int
 	// modelName 模型名称
 	modelName string
 	// modelContextWindowTokens 各模型上下文窗口 token 映射
@@ -140,21 +144,23 @@ func NewSessionModelContext(
 
 	// 4. 从配置读取窗口参数
 	mc := &SessionModelContext{
-		contextID:                contextID,
-		sessionID:                sessionID,
-		messageBuffer:            messageBuffer,
-		defaultWindowSize:        config.DefaultWindowMessageNum,
-		defaultDialogueRound:     config.DefaultWindowRoundNum,
-		enableReload:             config.EnableReload,
-		contextWindowTokens:      config.ContextWindowTokens,
-		modelName:                config.ModelName,
-		modelContextWindowTokens: config.ModelContextWindowTokens,
-		workspace:                workspace,
-		sysOperation:             sysOperation,
-		sessionRef:               sessionRef,
-		tokenCounter:             tokenCounter,
-		processors:               processors,
+		contextID:                 contextID,
+		sessionID:                 sessionID,
+		messageBuffer:             messageBuffer,
+		defaultWindowSize:         config.DefaultWindowMessageNum,
+		defaultDialogueRound:      config.DefaultWindowRoundNum,
+		enableReload:              config.EnableReload,
+		globalContextWindowTokens: config.ContextWindowTokens,
+		modelWindowOverride:       config.ModelContextWindowTokensOverride,
+		modelName:                 config.ModelName,
+		modelContextWindowTokens:  config.ModelContextWindowTokens,
+		workspace:                 workspace,
+		sysOperation:              sysOperation,
+		sessionRef:                sessionRef,
+		tokenCounter:              tokenCounter,
+		processors:                processors,
 	}
+	mc.contextWindowTokens = mc.effectiveGlobalWindow()
 
 	// 5. 创建状态记录器
 	mc.stateRecorder = NewProcessorStateRecorder(
@@ -203,7 +209,9 @@ func NewSessionModelContext(
 // 处理器实例由调用方（ContextEngine）按新 specs 构造后传入，本方法不负责创建。
 func (mc *SessionModelContext) ApplyRuntimeConfig(config ceschema.ContextEngineConfig, processors []iface.ContextProcessor) {
 	mc.modelName = config.ModelName
-	mc.contextWindowTokens = config.ContextWindowTokens
+	mc.globalContextWindowTokens = config.ContextWindowTokens
+	mc.modelWindowOverride = config.ModelContextWindowTokensOverride
+	mc.contextWindowTokens = mc.effectiveGlobalWindow()
 	mc.modelContextWindowTokens = config.ModelContextWindowTokens
 	mc.enableReload = config.EnableReload
 	mc.defaultWindowSize = config.DefaultWindowMessageNum
@@ -232,6 +240,34 @@ func (mc *SessionModelContext) Processors() []iface.ContextProcessor {
 // 热重载刷新上述原料后本方法立即反映新窗口。
 func (mc *SessionModelContext) ContextMaxTokens() int {
 	return mc.resolveContextMax()
+}
+
+// UpdateModelContext 刷新选中模型的上下文元数据（全局窗口仍最高优先）。
+//
+// 对齐 Python SessionModelContext.update_model_context()：全局 context_window_tokens
+// 不被改动，因此继续保持最高优先；模型侧值 <=0 时清除 override，使模型名解析恢复。
+func (mc *SessionModelContext) UpdateModelContext(modelName string, contextWindowTokens int) {
+	mc.modelName = modelName
+	mc.modelWindowOverride = 0
+	if contextWindowTokens > 0 {
+		mc.modelWindowOverride = contextWindowTokens
+	}
+	mc.contextWindowTokens = mc.effectiveGlobalWindow()
+	logger.Info(logComponent).
+		Str("event_type", "CONTEXT_MODEL_UPDATED").
+		Str("context_id", mc.contextID).
+		Str("session_id", mc.sessionID).
+		Str("model_name", mc.modelName).
+		Int("context_max", mc.resolveContextMax()).
+		Msg("context model metadata updated")
+}
+
+// effectiveGlobalWindow 返回 resolve_context_max 的 fallback 原料：全局值优先，其次模型 override。
+func (mc *SessionModelContext) effectiveGlobalWindow() int {
+	if mc.globalContextWindowTokens > 0 {
+		return mc.globalContextWindowTokens
+	}
+	return mc.modelWindowOverride
 }
 
 // Len 返回上下文消息数量。

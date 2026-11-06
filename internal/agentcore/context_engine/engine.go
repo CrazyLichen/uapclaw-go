@@ -397,6 +397,33 @@ func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterface
 	return states, nil
 }
 
+// UpdateModelContext 把选中模型元数据推给引擎配置与池内全部上下文（不重建上下文）。
+//
+// 对齐 Python ContextEngine.update_model_context()：全局 context_window_tokens 不动
+// （保持最高优先），只刷新 model_name 与模型级窗口 override；已建上下文同步生效，
+// 避免换模型后仍沿用旧窗口。
+func (ce *contextEngine) UpdateModelContext(modelName string, contextWindowTokens int) {
+	ce.mu.Lock()
+	ce.config.ModelName = modelName
+	ce.config.ModelContextWindowTokensOverride = 0
+	if contextWindowTokens > 0 {
+		ce.config.ModelContextWindowTokensOverride = contextWindowTokens
+	}
+	targets := make([]iface.ModelContext, 0, len(ce.contextPool))
+	for _, mc := range ce.contextPool {
+		targets = append(targets, mc)
+	}
+	ce.mu.Unlock()
+
+	for _, mc := range targets {
+		if updater, ok := mc.(interface {
+			UpdateModelContext(string, int)
+		}); ok {
+			updater.UpdateModelContext(modelName, contextWindowTokens)
+		}
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyPendingLocked 把暂存的热重载配置落地到引擎与池内全部上下文。

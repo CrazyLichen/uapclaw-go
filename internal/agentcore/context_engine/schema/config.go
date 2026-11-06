@@ -31,6 +31,12 @@ type ContextEngineConfig struct {
 	// ModelContextWindowTokens 模型名称到上下文窗口 Token 数的映射表（最佳努力 fallback），
 	// 显式运行时值和 ContextWindowTokens 优先
 	ModelContextWindowTokens map[string]int `json:"model_context_window_tokens"`
+	// ModelContextWindowTokensOverride 当前选中模型配置声明的上下文窗口（低优先于 ContextWindowTokens）
+	ModelContextWindowTokensOverride int `json:"model_context_window_tokens_override"`
+	// EnableOpenRouterModelContextWindowTokens 是否从 OpenRouter 拉取模型窗口表（默认关闭）
+	EnableOpenRouterModelContextWindowTokens bool `json:"enable_openrouter_model_context_window_tokens"`
+	// OpenRouterRequestTimeout OpenRouter 拉取超时（秒），<=0 使用默认 3 秒
+	OpenRouterRequestTimeout float64 `json:"openrouter_request_timeout"`
 	// CompressionTriggerRatio 压缩触发水位比例（相对上下文窗口大小），0 表示不按比例缩放
 	CompressionTriggerRatio float64 `json:"compression_trigger_ratio"`
 	// CompressionTargetRatio 压缩目标水位比例（相对上下文窗口大小），0 表示不按比例缩放
@@ -68,6 +74,12 @@ func (c ContextEngineConfig) Validate() error {
 	}
 	if c.ContextWindowTokens < 0 {
 		return fmt.Errorf("context_window_tokens 不能为负数，当前值: %d", c.ContextWindowTokens)
+	}
+	if c.ModelContextWindowTokensOverride < 0 {
+		return fmt.Errorf("model_context_window_tokens_override 不能为负数，当前值: %d", c.ModelContextWindowTokensOverride)
+	}
+	if c.OpenRouterRequestTimeout < 0 {
+		return fmt.Errorf("openrouter_request_timeout 不能为负数，当前值: %v", c.OpenRouterRequestTimeout)
 	}
 	for model, tokens := range c.ModelContextWindowTokens {
 		if tokens <= 0 {

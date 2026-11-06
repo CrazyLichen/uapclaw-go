@@ -59,6 +59,9 @@ func (a *ReActAgent) Configure(ctx context.Context, config interfaces.AgentConfi
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("config 校验失败: %w", err)
 	}
+	// 模型上下文元数据装配（对齐 Python configure 里的两个 _with_context_engine_model_* 步骤）
+	withContextEngineModelName(cfg)
+	withContextEngineModelWindow(cfg)
 	a.config = cfg
 	a.promptBuilder = prompts.NewSystemPromptBuilder()
 	if cfg.PromptTemplateName != "" {
@@ -92,6 +95,31 @@ func (a *ReActAgent) SetContextEngine(ce ceinterface.ContextEngine) {
 	a.contextEngine = ce
 	if a.abilityManager != nil {
 		a.abilityManager.SetContextEngine(ce)
+	}
+}
+
+// UpdateModelContext 热切换当前模型与其上下文窗口（不重建上下文）。
+//
+// 引擎侧把新元数据推给池内全部已建上下文；Agent 侧同步自身配置，
+// 使后续 Configure/诊断读到同一份口径（对齐 Python ReActAgent.update_model_context）。
+func (a *ReActAgent) UpdateModelContext(modelName string, contextWindowTokens int) {
+	if a.config != nil {
+		if modelName != "" {
+			a.config.ContextEngineConfig.ModelName = modelName
+		}
+		if contextWindowTokens > 0 {
+			a.config.ContextEngineConfig.ModelContextWindowTokensOverride = contextWindowTokens
+		} else {
+			a.config.ContextEngineConfig.ModelContextWindowTokensOverride = 0
+		}
+	}
+	// 可选能力：只有 SessionModelContext 的引擎实现具备（对齐 Python 同名方法）。
+	// 用类型断言而非拓宽 ContextEngine 接口，避免每个测试桩都被迫实现空方法
+	// （同 runtimeConfigApplier 的既有做法）。
+	if updater, ok := a.contextEngine.(interface {
+		UpdateModelContext(string, int)
+	}); ok {
+		updater.UpdateModelContext(modelName, contextWindowTokens)
 	}
 }
 
@@ -243,4 +271,39 @@ func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
 		Str("event_type", "skill_missing_read_file_tool").
 		Str("existing_tools", fmt.Sprintf("%v", existingToolNames)).
 		Msg(buildErr.Error())
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// withContextEngineModelName 在未显式配置时用当前模型名补齐引擎 model_name。
+//
+// Python: ReActAgent._with_context_engine_model_name()
+func withContextEngineModelName(cfg *saconfig.ReActAgentConfig) {
+	if strings.TrimSpace(cfg.ContextEngineConfig.ModelName) != "" {
+		return
+	}
+	name := cfg.ModelNameVal
+	if cfg.ModelRequestConfig != nil && cfg.ModelRequestConfig.ModelName != "" {
+		name = cfg.ModelRequestConfig.ModelName
+	}
+	if name == "" {
+		return
+	}
+	cfg.ContextEngineConfig.ModelName = name
+}
+
+// withContextEngineModelWindow 把模型条目声明的 context_window 写入引擎 override。
+//
+// 不清空已有显式值：上游语义是"没有模型元数据时保留显式 override"。
+//
+// Python: ReActAgent._with_context_engine_model_window()
+func withContextEngineModelWindow(cfg *saconfig.ReActAgentConfig) {
+	if cfg.ModelRequestConfig == nil || cfg.ModelRequestConfig.ContextWindow == nil {
+		return
+	}
+	window := *cfg.ModelRequestConfig.ContextWindow
+	if window <= 0 || cfg.ContextEngineConfig.ModelContextWindowTokensOverride == window {
+		return
+	}
+	cfg.ContextEngineConfig.ModelContextWindowTokensOverride = window
 }

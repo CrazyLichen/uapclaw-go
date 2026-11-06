@@ -63,6 +63,8 @@ type ModelRequestConfig struct {
 	MaxTokens *int `json:"max_tokens,omitempty"`
 	// Stop 停止序列（可选）
 	Stop *string `json:"stop,omitempty"`
+	// ContextWindow 模型支持的上下文窗口总长（token），内部元数据，不参与厂商请求
+	ContextWindow *int `json:"context_window,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
 	Extra map[string]any `json:"-"`
 }
@@ -383,6 +385,19 @@ func WithTopP(topP float64) ModelRequestConfigOption {
 // WithMaxTokens 设置最大生成 token 数。
 func WithMaxTokens(maxTokens int) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.MaxTokens = &maxTokens }
+}
+
+// WithContextWindow 设置模型上下文窗口（内部元数据，不随请求下发）。
+//
+// 对齐上游 ModelRequestConfig.context_window：请求参数组装时显式排除。
+// 本仓请求参数由 base_client 以 map 拼装且只合并 Extra，该字段不进 Extra 即天然不外发
+// （由 config_window_test.go 固化）。
+func WithContextWindow(tokens int) ModelRequestConfigOption {
+	return func(c *ModelRequestConfig) {
+		if tokens > 0 {
+			c.ContextWindow = &tokens
+		}
+	}
 }
 
 // WithStop 设置停止序列。
