@@ -154,7 +154,7 @@ type DeepAgent struct {
 	activeInteractionRound *hschema.ActiveInteractionRound
 	// interactionEvents user/goal 双队列调度器（无内部锁，调用方持 controlMu）
 	interactionEvents *task_loop.EventManager
-	// goalCoordinator Goal 能力面（⤵️ #9.89 注入 *goal.GoalManager）
+	// goalCoordinator Goal 能力面（9.89 由 Start 注入 *goal.GoalManager）
 	goalCoordinator goal.Coordinator
 	// interactionOutput 输出租约管理器
 	interactionOutput *hschema.OutputLeaseManager
@@ -1696,7 +1696,7 @@ func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
 	if _, _, err := d.prepareInteractionTaskLoop(ctx, sess); err != nil {
 		return err
 	}
-	// ⤵️ #9.89：goal 语言 / TaskCompletionRail 注册 / GoalManager 构造 / 绑定（Python L3964-3994）
+	// 9.89 已回填：goal 语言 / TaskCompletionRail 注册 / GoalManager 构造 / 绑定（Python L3964-3994）
 	goalLanguage := d.goalPromptLanguage()
 	d.railsMu.Lock()
 	tcRail := d.taskCompletionRail
@@ -1770,7 +1770,7 @@ func (d *DeepAgent) RunOneRound(ctx context.Context, work *hschema.RoundWorkItem
 		return hschema.RoundOutcome{ErrorCode: "round_execution_error", ErrorMessage: err.Error()}
 	}
 	ctx = initCtx
-	// ⤵️ #9.89 回填：MoA proposal_owner begin_work/activate（spec D1 整段跳过）
+	// ⤵️ MoA 偏差（9.89 spec D1 整段跳过）：proposal_owner begin_work/activate
 
 	d.invokeActive.Store(true)
 	defer d.invokeActive.Store(false)
@@ -1893,7 +1893,7 @@ func (d *DeepAgent) ClearActiveAgentTemplate() {
 	d.activeAgentTemplate = nil
 }
 
-// SetGoalCoordinator 注入 Goal 能力面（⤵️ #9.89 在 Start 内构造 GoalManager 后调用）。
+// SetGoalCoordinator 注入 Goal 能力面（9.89 已在 Start 内构造 GoalManager 后调用）。
 // Python: self.goal_manager = GoalManager(...) (L3970-3981)
 func (d *DeepAgent) SetGoalCoordinator(coordinator goal.Coordinator) {
 	d.ensureInteractionState()
