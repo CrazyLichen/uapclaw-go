@@ -13,6 +13,7 @@
 //	agent_teams/
 //	├── doc.go              # 包文档
 //	├── constants.go        # 保留名常量
+//	├── timefmt.go          # 时间渲染（绝对时间 + 相对分桶）
 //	├── context.go          # SessionState 委托（定义已迁移至 sessionctx 包）
 //	├── i18n.go             # 多语言 i18n 支持
 //	├── paths.go            # 团队路径工具
