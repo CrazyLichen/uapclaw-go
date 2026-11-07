@@ -719,8 +719,8 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		paused := false
 		// Python: paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
 		_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
-		RequestID: &sessionID,
-	})
+			RequestID: &sessionID,
+		})
 		message := "团队已暂停"
 		if !paused {
 			message = "当前没有可暂停的团队任务"
@@ -741,8 +741,8 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		cancelled := false
 		// Python: cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
 		_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
-		RequestID: &sessionID,
-	})
+			RequestID: &sessionID,
+		})
 		message := "团队当前执行已结束"
 		if !cancelled {
 			message = "当前没有可取消的团队任务"
