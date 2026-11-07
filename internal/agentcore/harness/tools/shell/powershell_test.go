@@ -67,30 +67,59 @@ func TestResolvePSTimeout_环境变量非法(t *testing.T) {
 	}
 }
 
-// TestResolvePSMaxOutputChars_零值 测试零输出字符数表示无限制
+// TestResolvePSMaxOutputChars_零值 测试显式 0 表示无限制
 func TestResolvePSMaxOutputChars_零值(t *testing.T) {
-	if got := resolvePSMaxOutputChars(0); got != 0 {
-		t.Errorf("0 表示无限制，应保持 0，got %d", got)
+	zero := 0
+	if got := resolvePSMaxOutputChars(&zero); got != 0 {
+		t.Errorf("显式 0 表示无限制，应保持 0，got %d", got)
 	}
 }
 
 // TestResolvePSMaxOutputChars_正常值 测试正常输出字符数
 func TestResolvePSMaxOutputChars_正常值(t *testing.T) {
-	if got := resolvePSMaxOutputChars(5000); got != 5000 {
+	v := 5000
+	if got := resolvePSMaxOutputChars(&v); got != 5000 {
 		t.Errorf("5000 应保持 5000，got %d", got)
 	}
 }
 
 // TestResolvePSMaxOutputChars_过小值 测试过小输出字符数钳制为 200
 func TestResolvePSMaxOutputChars_过小值(t *testing.T) {
-	if got := resolvePSMaxOutputChars(50); got != 200 {
+	v := 50
+	if got := resolvePSMaxOutputChars(&v); got != 200 {
 		t.Errorf("过小值应钳制为 200，got %d", got)
+	}
+}
+
+// TestResolvePSMaxOutputChars_指针语义 验证 nil/0/正数三分支
+func TestResolvePSMaxOutputChars_指针语义(t *testing.T) {
+	zero := 0
+	small := 100
+	normal := 5000
+
+	cases := []struct {
+		name string
+		raw  *int
+		want int
+	}{
+		{"未传取默认 20000", nil, 20000},
+		{"显式 0 表示不限制", &zero, 0},
+		{"小于 200 钳到 200", &small, 200},
+		{"正常值原样", &normal, 5000},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolvePSMaxOutputChars(tc.raw); got != tc.want {
+				t.Fatalf("resolvePSMaxOutputChars = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 
 // TestResolvePSMaxOutputChars_超大值 测试超大输出字符数钳制为 20000
 func TestResolvePSMaxOutputChars_超大值(t *testing.T) {
-	if got := resolvePSMaxOutputChars(50000); got != 20000 {
+	v := 50000
+	if got := resolvePSMaxOutputChars(&v); got != 20000 {
 		t.Errorf("超过最大值应钳制为 20000，got %d", got)
 	}
 }
@@ -98,7 +127,8 @@ func TestResolvePSMaxOutputChars_超大值(t *testing.T) {
 // TestResolvePSMaxOutputChars_环境变量上限 测试环境变量覆盖最大输出字符数
 func TestResolvePSMaxOutputChars_环境变量上限(t *testing.T) {
 	t.Setenv("POWER_SHELL_TOOL_MAX_OUTPUT_CHARS", "500")
-	if got := resolvePSMaxOutputChars(5000); got != 500 {
+	v := 5000
+	if got := resolvePSMaxOutputChars(&v); got != 500 {
 		t.Errorf("环境变量上限 500 应生效，got %d", got)
 	}
 }

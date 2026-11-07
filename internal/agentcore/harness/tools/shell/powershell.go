@@ -27,8 +27,8 @@ type PowerShellInput struct {
 	Workdir string `json:"workdir"`
 	// Background 后台运行
 	Background bool `json:"background"`
-	// MaxOutputChars 最大输出字符数，0=无限制
-	MaxOutputChars int `json:"max_output_chars"`
+	// MaxOutputChars 最大输出字符数；nil 表示未传（取默认 20000），显式 0 表示不限制
+	MaxOutputChars *int `json:"max_output_chars"`
 	// Description 命令描述
 	Description string `json:"description"`
 }
@@ -42,9 +42,9 @@ const (
 	// Python: PowerShellTool._parse_inputs inputs.get("timeout", 300)
 	psDefaultTimeout = 300
 
-	// psDefaultMaxOutputChars 默认最大输出字符数，0=无限制。
-	// Python: PowerShellTool._resolve_max_output_chars default=0
-	psDefaultMaxOutputChars = 0
+	// psDefaultMaxOutputChars 未传 max_output_chars 时的默认最大输出字符数。
+	// Python: PowerShellTool._resolve_max_output_chars default=20000
+	psDefaultMaxOutputChars = 20000
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -291,15 +291,14 @@ func resolvePSTimeout(rawValue int) int {
 	return timeout
 }
 
-// resolvePSMaxOutputChars 解析并钳制 PowerShell 最大输出字符数。0 表示无限制。
-// Python: PowerShellTool._resolve_max_output_chars (powershell/_tool.py L95-108)
+// resolvePSMaxOutputChars 解析并钳制 PowerShell 最大输出字符数。
+// Python: PowerShellTool._resolve_max_output_chars (powershell/_tool.py L94-108)
 // 环境变量名: POWER_SHELL_TOOL_MAX_OUTPUT_CHARS
-func resolvePSMaxOutputChars(rawValue int) int {
-	value := rawValue
-	if value == 0 {
-		return 0
-	}
-	maxChars := 20000
+//
+// rawValue 为 nil 表示调用方未传，取默认值（同样受环境变量钳制）；
+// 显式 0 表示不限制；正数取 [200, maxChars]。
+func resolvePSMaxOutputChars(rawValue *int) int {
+	maxChars := psDefaultMaxOutputChars
 	if v := os.Getenv("POWER_SHELL_TOOL_MAX_OUTPUT_CHARS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			maxChars = parsed
@@ -307,6 +306,14 @@ func resolvePSMaxOutputChars(rawValue int) int {
 	}
 	if maxChars < 200 {
 		maxChars = 200
+	}
+
+	value := psDefaultMaxOutputChars
+	if rawValue != nil {
+		value = *rawValue
+		if value == 0 {
+			return 0
+		}
 	}
 	if value < 200 {
 		value = 200

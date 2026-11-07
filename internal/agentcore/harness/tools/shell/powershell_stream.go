@@ -25,8 +25,8 @@ type PowerShellStreamInput struct {
 	Timeout int `json:"timeout"`
 	// Workdir 工作目录
 	Workdir string `json:"workdir"`
-	// MaxOutputChars 最大输出字符数，0=无限制
-	MaxOutputChars int `json:"max_output_chars"`
+	// MaxOutputChars 最大输出字符数；nil 表示未传（取默认 20000），显式 0 表示不限制
+	MaxOutputChars *int `json:"max_output_chars"`
 	// Description 命令描述
 	Description string `json:"description"`
 }

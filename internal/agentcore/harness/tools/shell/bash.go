@@ -31,8 +31,8 @@ type BashInput struct {
 	RunInBackground bool `json:"run_in_background"`
 	// Workdir 工作目录
 	Workdir string `json:"workdir"`
-	// MaxOutputChars 最大输出字符数，0=无限制
-	MaxOutputChars int `json:"max_output_chars"`
+	// MaxOutputChars 最大输出字符数；nil 表示未传（取默认 20000），显式 0 表示不限制
+	MaxOutputChars *int `json:"max_output_chars"`
 	// ShellType shell 类型: auto/cmd/powershell/bash/sh
 	ShellType string `json:"shell_type"`
 }
@@ -49,9 +49,12 @@ const (
 	// Python: BashTool._parse_inputs inputs.get("timeout", 300)
 	bashDefaultTimeout = 300
 
-	// bashDefaultMaxOutputChars 默认最大输出字符数，0=无限制。
-	// Python: BashTool._resolve_max_output_chars default=0
-	bashDefaultMaxOutputChars = 0
+	// bashDefaultMaxOutputChars 未传 max_output_chars 时的默认最大输出字符数。
+	// Python: BashTool._resolve_max_output_chars default=20000
+	//
+	// 上游 b4a5a967：默认从 0（无限制）改为 20000。LLM 从不传该参数，
+	// 单条命令数十万 token 的输出会把上下文撑到无法压缩。
+	bashDefaultMaxOutputChars = 20000
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -331,12 +334,11 @@ func resolveBashTimeout(rawValue int) int {
 
 // resolveBashMaxOutputChars 解析并钳制最大输出字符数。0 表示无限制。
 // Python: BashTool._resolve_max_output_chars (bash/_tool.py L113-126)
-func resolveBashMaxOutputChars(rawValue int) int {
-	value := rawValue
-	if value == 0 {
-		return 0
-	}
-	maxChars := 20000
+//
+// rawValue 为 nil 表示调用方未传该参数，取默认值（默认值同样受环境变量钳制）；
+// 显式传 0 表示不限制（调用方主动 opt-out）；正数取 [200, maxChars]。
+func resolveBashMaxOutputChars(rawValue *int) int {
+	maxChars := bashDefaultMaxOutputChars
 	if v := os.Getenv("BASH_TOOL_MAX_OUTPUT_CHARS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			maxChars = parsed
@@ -344,6 +346,15 @@ func resolveBashMaxOutputChars(rawValue int) int {
 	}
 	if maxChars < 200 {
 		maxChars = 200
+	}
+
+	value := bashDefaultMaxOutputChars
+	if rawValue != nil {
+		value = *rawValue
+		// 显式 0：调用方主动放弃上限
+		if value == 0 {
+			return 0
+		}
 	}
 	if value < 200 {
 		value = 200
