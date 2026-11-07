@@ -593,6 +593,8 @@ type fakeSessionOps struct {
 	initCalled bool
 	// initParams 最近一次初始化参数
 	initParams InitMetadataParams
+	// initErr 初始化元数据注入错误
+	initErr error
 }
 
 // ForkSession 记录参数并返回。
@@ -638,11 +640,11 @@ func (f *fakeSessionOps) SessionDirHasMetadata(sessionID string) bool {
 	return f.metadata != nil && f.metadata[sessionID] != nil
 }
 
-// InitSessionMetadata 记录参数。
+// InitSessionMetadata 记录参数（可注入失败）。
 func (f *fakeSessionOps) InitSessionMetadata(params InitMetadataParams) error {
 	f.initCalled = true
 	f.initParams = params
-	return nil
+	return f.initErr
 }
 
 // SetSessionModelSelection 无操作。
@@ -983,5 +985,364 @@ func TestFork_结果无hook可提交(t *testing.T) {
 	}
 	if lease.State() != SessionProvisionStateCommitted {
 		t.Fatalf("应为 COMMITTED，实际 %s", lease.State())
+	}
+}
+
+// ──────────────────────────── create ────────────────────────────
+
+// TestCreate_非TUI显式ID报错 校验 session_id 不再被接受。
+func TestCreate_非TUI显式ID报错(t *testing.T) {
+	p := newTestProvisioner()
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", RequestedSessionID: "ext",
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) {
+		t.Fatalf("应返回 SessionProvisionError，实际 %v", err)
+	}
+	want := "session.create no longer accepts session_id; use session.switch to restore"
+	if pe.Message != want {
+		t.Fatalf("文案 = %q, want %q", pe.Message, want)
+	}
+}
+
+// TestCreate_缺createToken报错 校验非 TUI 路径必须带令牌。
+func TestCreate_缺createToken报错(t *testing.T) {
+	p := newTestProvisioner()
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{ChannelID: "web"})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Message != "create_token is required" {
+		t.Fatalf("应报 create_token is required，实际 %v", err)
+	}
+}
+
+// TestCreate_提交时机为AFTER_RESULT_DELIVERY 校验租约声明。
+func TestCreate_提交时机为AFTER_RESULT_DELIVERY(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if lease.CommitTiming() != SessionProvisionCommitTimingAfterResultDelivery {
+		t.Fatalf("timing 错误: %s", lease.CommitTiming())
+	}
+}
+
+// TestCreate_认领预热池 校验 claim 调用与令牌透传。
+func TestCreate_认领预热池(t *testing.T) {
+	manager := &recordingAgentManager{}
+	p := newTestProvisioner()
+	p.AgentManager = manager
+	p.SetSessionOps(&fakeSessionOps{})
+	if _, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if !manager.claimCalled {
+		t.Fatal("应调用 ClaimPrewarmedSession")
+	}
+	if manager.claimReq.CreateToken != "tok" {
+		t.Fatalf("令牌未透传: %+v", manager.claimReq)
+	}
+}
+
+// TestCreate_写入metadata 校验 InitSessionMetadata 调用。
+func TestCreate_写入metadata(t *testing.T) {
+	ops := &fakeSessionOps{}
+	p := newTestProvisioner()
+	p.SetSessionOps(ops)
+	if _, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok", Title: "T", UserID: "u1",
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if !ops.initCalled {
+		t.Fatal("应调用 InitSessionMetadata")
+	}
+	if ops.initParams.Title != "T" || ops.initParams.UserID != "u1" {
+		t.Fatalf("metadata 参数错误: %+v", ops.initParams)
+	}
+}
+
+// TestCreate_metadata已存在时created为false 校验复用路径。
+func TestCreate_metadata已存在时created为false(t *testing.T) {
+	ops := &fakeSessionOps{metadata: map[string]map[string]any{
+		"created-session": {"persist_session": true},
+	}}
+	p := newTestProvisioner()
+	p.SetSessionOps(ops)
+	lease, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	res := lease.Result().(SessionCreateResult)
+	if res.Created {
+		t.Fatal("metadata 已存在时 Created 应为 false")
+	}
+	if ops.initCalled {
+		t.Fatal("metadata 已存在时不应重写")
+	}
+}
+
+// TestCreate_TUI显式ID跳过预热 校验 prewarm_status=bypassed。
+func TestCreate_TUI显式ID跳过预热(t *testing.T) {
+	p := newTestProvisioner()
+	p.extra.IsValidSessionID = func(string) bool { return true }
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "tui", RequestedSessionID: "ext-id",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	res := lease.Result().(SessionCreateResult)
+	if res.PrewarmStatus != "bypassed" || res.SessionID != "ext-id" {
+		t.Fatalf("TUI 显式 ID 结果错误: %+v", res)
+	}
+	if !res.ExplicitIDCompatibility {
+		t.Fatal("应标记走显式 ID 兼容路径")
+	}
+}
+
+// TestCreate_TUI非法ID报错 校验 is_valid_session_id。
+func TestCreate_TUI非法ID报错(t *testing.T) {
+	p := newTestProvisioner()
+	p.extra.IsValidSessionID = func(string) bool { return false }
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "tui", RequestedSessionID: "bad/id",
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Message != "invalid session_id" {
+		t.Fatalf("应报 invalid session_id，实际 %v", err)
+	}
+}
+
+// TestCreate_团队会话触发归属准备 校验 team manager。
+func TestCreate_团队会话触发归属准备(t *testing.T) {
+	fake := &fakeTeamManager{}
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	p.SetTeamManagerProvider(func(string) TeamSwitchPreparer { return fake })
+	if _, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok", TeamHint: true,
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if len(fake.prepared) != 1 {
+		t.Fatal("团队会话应触发归属准备")
+	}
+	if fake.reasons[0] != "session.create switch: " {
+		t.Fatalf("缘由应为 session.create switch: ，实际 %q", fake.reasons[0])
+	}
+}
+
+// TestCreate_失败补偿释放认领 校验异常路径。
+func TestCreate_失败补偿释放认领(t *testing.T) {
+	manager := &recordingAgentManager{}
+	p := newTestProvisioner()
+	p.AgentManager = manager
+	ops := &fakeSessionOps{initErr: errors.New("init failed")}
+	p.SetSessionOps(ops)
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	})
+	if err == nil {
+		t.Fatal("应失败")
+	}
+	if !manager.releaseCalled {
+		t.Fatal("失败后应释放预热认领")
+	}
+}
+
+// TestCreate_commit后释放外锁 校验 TUI 锁回收。
+func TestCreate_commit后释放外锁(t *testing.T) {
+	p := newTestProvisioner()
+	p.extra.IsValidSessionID = func(string) bool { return true }
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "tui", RequestedSessionID: "ext-id",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	ctx := NewEmptyCommitContext()
+	if _, err := p.CommitSessionProvision(lease, SessionProvisionCommitTimingAfterResultDelivery, &ctx); err != nil {
+		t.Fatalf("commit 失败: %v", err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+			ChannelID: "tui", RequestedSessionID: "ext-id",
+		})
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("commit 应已释放外锁，否则同 ID 创建会永久阻塞")
+	}
+}
+
+// TestCreate_并发同ID创建串行 校验外锁互斥。
+func TestCreate_并发同ID创建串行(t *testing.T) {
+	p := newTestProvisioner()
+	p.extra.IsValidSessionID = func(string) bool { return true }
+	p.SetSessionOps(&fakeSessionOps{})
+	first, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "tui", RequestedSessionID: "same-id",
+	})
+	if err != nil {
+		t.Fatalf("首次失败: %v", err)
+	}
+	second := make(chan error, 1)
+	go func() {
+		_, e := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+			ChannelID: "tui", RequestedSessionID: "same-id",
+		})
+		second <- e
+	}()
+	select {
+	case <-second:
+		t.Fatal("首个租约未提交/中止前，同 ID 创建应被阻塞")
+	case <-time.After(200 * time.Millisecond):
+	}
+	ctx := NewEmptyCommitContext()
+	_, _ = p.CommitSessionProvision(first, SessionProvisionCommitTimingAfterResultDelivery, &ctx)
+	select {
+	case <-second:
+	case <-time.After(2 * time.Second):
+		t.Fatal("提交后第二个创建应被放行")
+	}
+}
+
+// TestCreate_persistSession不可变 校验 CONFLICT。
+func TestCreate_persistSession不可变(t *testing.T) {
+	ops := &fakeSessionOps{metadata: map[string]map[string]any{
+		"created-session": {"persist_session": true, "channel_id": "tui"},
+	}}
+	p := newTestProvisioner()
+	p.SetSessionOps(ops)
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "tui", RequestedSessionID: "created-session",
+		PersistSession: false, PersistSessionSupplied: true,
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Code != "CONFLICT" {
+		t.Fatalf("应报 CONFLICT，实际 %v", err)
+	}
+}
+
+// TestCreate_渠道归属冲突报错 校验 channel 校验。
+func TestCreate_渠道归属冲突报错(t *testing.T) {
+	ops := &fakeSessionOps{metadata: map[string]map[string]any{
+		"created-session": {"channel_id": "web"},
+	}}
+	p := newTestProvisioner()
+	p.SetSessionOps(ops)
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "tui", RequestedSessionID: "created-session",
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Message != "session_id is already owned by another channel" {
+		t.Fatalf("应报渠道归属冲突，实际 %v", err)
+	}
+}
+
+// TestCreate_projectNotFound报错 校验 NOT_FOUND。
+func TestCreate_projectNotFound报错(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	p.extra.ResolveWorkMode = func(map[string]any, string) projectBinding {
+		return projectBinding{Error: "project not found: p1", Code: "NOT_FOUND"}
+	}
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Code != "NOT_FOUND" {
+		t.Fatalf("应透传 NOT_FOUND，实际 %v", err)
+	}
+}
+
+// TestCreate_workModeMismatch报BAD_REQUEST 校验 37 空格分隔符。
+func TestCreate_workModeMismatch报BAD_REQUEST(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	p.extra.ResolveWorkMode = func(map[string]any, string) projectBinding {
+		return projectBinding{
+			ProjectID: "p1", WorkMode: "code", ProjectWorkMode: "work",
+			HasExplicitWorkMode: true,
+		}
+	}
+	_, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Code != "BAD_REQUEST" {
+		t.Fatalf("应报 BAD_REQUEST，实际 %v", err)
+	}
+	want := "work_mode mismatch: project is 'work'" +
+		"                                     " + "but request specified 'code'"
+	if pe.Message != want {
+		t.Fatalf("文案 = %q\n want  = %q", pe.Message, want)
+	}
+}
+
+// TestCreate_默认项目不校验workMode 校验 is_default_project_id。
+func TestCreate_默认项目不校验workMode(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	p.extra.ResolveWorkMode = func(map[string]any, string) projectBinding {
+		return projectBinding{
+			ProjectID: "default", WorkMode: "code", ProjectWorkMode: "work",
+			HasExplicitWorkMode: true,
+		}
+	}
+	if _, err := p.PrepareSessionCreate(context.Background(), SessionCreateInput{
+		ChannelID: "web", CreateToken: "tok",
+	}); err != nil {
+		t.Fatalf("默认项目不应校验 work_mode 一致性，实际 %v", err)
+	}
+}
+
+// TestCreate_预热资格判据 校验 swarm/cron+web/moa 三条排除。
+func TestCreate_预热资格判据(t *testing.T) {
+	cases := []struct {
+		// name 用例名
+		name string
+		// input 输入
+		input SessionCreateInput
+		// canonical 归一化模式
+		canonical string
+		// isTeam 是否团队
+		isTeam bool
+		// want 期望 prewarm_eligible
+		want bool
+	}{
+		{"swarm 排除", SessionCreateInput{ChannelID: "web", CreateToken: "t"}, "agent", true, false},
+		{"cron+web 排除", SessionCreateInput{ChannelID: "web", CreateToken: "t", CronID: "c1"}, "agent", false, false},
+		{"非预热模式排除", SessionCreateInput{ChannelID: "web", CreateToken: "t"}, "team", false, false},
+		{"正常放行", SessionCreateInput{ChannelID: "web", CreateToken: "t"}, "agent", false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := newTestProvisioner()
+			manager := &recordingAgentManager{}
+			p.AgentManager = manager
+			p.SetSessionOps(&fakeSessionOps{})
+			p.extra.ResolveCanonicalMode = func(map[string]any, string) (string, bool) {
+				return c.canonical, c.isTeam
+			}
+			_, _ = p.PrepareSessionCreate(context.Background(), c.input)
+			if manager.claimReq.PrewarmEligible != c.want {
+				t.Fatalf("prewarm_eligible = %v, want %v", manager.claimReq.PrewarmEligible, c.want)
+			}
+		})
 	}
 }

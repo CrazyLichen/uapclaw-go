@@ -1259,3 +1259,502 @@ func (p *RuntimeSessionProvisioner) historyExists(sessionID string) bool {
 	}
 	return p.extra.SessionOps.HistoryExists(sessionID)
 }
+
+// ──────────────────────────── 导出函数（create） ────────────────────────────
+
+// PrepareSessionCreate 准备一次会话创建。
+//
+// Python: RuntimeSessionProvisioner.prepare_session_create（L595-1010）
+// 21 步见 spec §5.3；每一步的顺序与短路位置不得调整（规则 9.3）。
+func (p *RuntimeSessionProvisioner) PrepareSessionCreate(
+	ctx context.Context,
+	input SessionCreateInput,
+) (lease *PreparedSessionProvision, err error) {
+	// 1. channel_id 归一
+	channelID := input.ChannelID
+	if channelID == "" {
+		channelID = "default"
+	}
+
+	// 2-3. TUI 显式 ID 判定与拒绝
+	requestedSessionID := input.RequestedSessionID
+	explicitTUI := requestedSessionID != "" && equalFold(channelID, "tui")
+	if requestedSessionID != "" && !explicitTUI {
+		return nil, &SessionProvisionError{
+			Message: "session.create no longer accepts session_id; use session.switch to restore",
+		}
+	}
+
+	var (
+		externalLock *sync.Mutex
+		lockAcquired bool
+		claimedID    string
+	)
+	// 异常补偿（defer 顺序与上游 finally 一致）
+	defer func() {
+		if err != nil {
+			p.compensateCreateFailure(ctx, claimedID, externalLock, lockAcquired)
+		}
+	}()
+
+	// 4. TUI 显式 ID：校验 + 取外锁
+	if explicitTUI {
+		if p.extra.IsValidSessionID != nil && !p.extra.IsValidSessionID(requestedSessionID) {
+			return nil, &SessionProvisionError{Message: "invalid session_id"}
+		}
+		actual, _ := p.externalCreateLocks.LoadOrStore(requestedSessionID, &sync.Mutex{})
+		externalLock = actual.(*sync.Mutex)
+		externalLock.Lock()
+		lockAcquired = true
+	}
+
+	// 5. 组装 params（11 个键）
+	params := map[string]any{
+		"mode":          input.Mode,
+		"project_id":    input.ProjectID,
+		"project_dir":   input.ProjectDir,
+		"cwd":           input.Cwd,
+		"work_mode":     input.WorkMode,
+		"title":         input.Title,
+		"user_id":       input.UserID,
+		"model_name":    input.ModelName,
+		"cron_id":       input.CronID,
+		"is_swarm":      input.IsSwarm,
+		"team":          input.TeamHint,
+		"previous_mode": input.PreviousMode,
+	}
+
+	// 6. 已有 metadata 分支
+	var existing map[string]any
+	if explicitTUI && p.extra.SessionOps != nil {
+		existing = p.extra.SessionOps.GetSessionMetadata(requestedSessionID)
+	}
+	persistSession := input.PersistSession
+	if len(existing) > 0 {
+		existingChannel, _ := existing["channel_id"].(string)
+		if existingChannel != "" && !equalFold(existingChannel, "tui") {
+			return nil, &SessionProvisionError{Message: "session_id is already owned by another channel"}
+		}
+		storedPersist, _ := existing["persist_session"].(bool)
+		if input.PersistSessionSupplied && persistSession != storedPersist {
+			return nil, &SessionProvisionError{
+				Message: "persist_session is immutable after session creation",
+				Code:    "CONFLICT",
+			}
+		}
+		persistSession = storedPersist
+		for _, field := range []string{"project_id", "project_dir", "work_mode", "mode"} {
+			if v, ok := existing[field].(string); ok && v != "" {
+				params[field] = v
+			}
+		}
+	} else if explicitTUI && !p.usesProjectlessWorkspace(params, channelID) {
+		// 7. TUI 项目查找或创建
+		if p.extra.FindOrCreateProject != nil {
+			if binding, ok := p.extra.FindOrCreateProject(params); ok {
+				params["project_id"] = binding.ProjectID
+				params["project_dir"] = binding.ProjectDir
+				params["work_mode"] = binding.WorkMode
+			}
+		}
+	}
+
+	// 8-10. work_mode 与项目绑定解析
+	binding := projectBinding{}
+	if p.extra.ResolveWorkMode != nil {
+		binding = p.extra.ResolveWorkMode(params, channelID)
+		if binding.Error != "" {
+			return nil, &SessionProvisionError{Message: binding.Error, Code: binding.Code}
+		}
+	}
+	hasExplicitWorkMode := binding.HasExplicitWorkMode
+	if input.WorkModeExplicit != nil {
+		hasExplicitWorkMode = *input.WorkModeExplicit
+	}
+	if !isDefaultProjectID(binding.ProjectID) && hasExplicitWorkMode &&
+		binding.WorkMode != "" && binding.ProjectWorkMode != "" &&
+		binding.WorkMode != binding.ProjectWorkMode {
+		return nil, &SessionProvisionError{
+			Message: fmt.Sprintf("work_mode mismatch: project is '%s'%sbut request specified '%s'",
+				binding.ProjectWorkMode, legacyWorkModeMismatchSeparator, binding.WorkMode),
+			Code: "BAD_REQUEST",
+		}
+	}
+	finalWorkMode := binding.WorkMode
+	if finalWorkMode == "" {
+		finalWorkMode = input.WorkMode
+	}
+	params["project_id"] = binding.ProjectID
+	params["project_dir"] = binding.ProjectDir
+	params["work_mode"] = finalWorkMode
+
+	// 11. 归一化模式
+	canonicalMode := input.Mode
+	// 上游 is_swarm = input.is_swarm or resolved.is_team；resolved.is_team 由
+	// resolve_request_mode 综合 params["team"] 与 mode 得出。Go 的 provider 契约
+	// 只回 mode 层面的判定，故此处显式并入 TeamHint（等价 upstream params["team"]）。
+	isSwarm := input.IsSwarm || input.TeamHint
+	if p.extra.ResolveCanonicalMode != nil {
+		var resolvedTeam bool
+		canonicalMode, resolvedTeam = p.extra.ResolveCanonicalMode(params, finalWorkMode)
+		isSwarm = isSwarm || resolvedTeam
+	}
+
+	// 12-13. MOA 解析
+	moaEnabled := false
+	if input.MoaEnabled != nil {
+		moaEnabled = *input.MoaEnabled
+	}
+	if p.extra.ResolveMoa != nil {
+		enabled, moaErr := p.extra.ResolveMoa(params, canonicalMode, input.CronID != "")
+		if moaErr != nil {
+			return nil, &SessionProvisionError{Message: moaErr.Error(), Code: "BAD_REQUEST"}
+		}
+		moaEnabled = moaEnabled || enabled
+	}
+
+	// 14. 预热资格
+	prewarmEligible := p.prewarmEligible(input, channelID, isSwarm, moaEnabled, canonicalMode)
+
+	// 15. 认领会话
+	var sessionID, prewarmStatus string
+	prewarmHit := false
+	if explicitTUI {
+		sessionID = requestedSessionID
+		prewarmStatus = "bypassed"
+	} else {
+		if trimSpaces(input.CreateToken) == "" {
+			return nil, &SessionProvisionError{Message: "create_token is required"}
+		}
+		if p.AgentManager == nil {
+			return nil, &SessionProvisionError{Message: errAgentManagerUnavailable.Error()}
+		}
+		claim, claimErr := p.AgentManager.ClaimPrewarmedSession(ctx, PrewarmClaimRequest{
+			ChannelID:       channelID,
+			ProjectID:       binding.ProjectID,
+			ProjectDir:      binding.ProjectDir,
+			WorkMode:        finalWorkMode,
+			IsSwarm:         isSwarm,
+			PersistSession:  persistSession,
+			PrewarmEligible: prewarmEligible,
+			CreateToken:     input.CreateToken,
+			MoaEnabled:      moaEnabled,
+		})
+		if claimErr != nil {
+			return nil, &SessionProvisionError{Message: claimErr.Error()}
+		}
+		sessionID = claim.SessionID
+		claimedID = sessionID
+		prewarmHit = claim.PrewarmHit
+		prewarmStatus = claim.PrewarmStatus
+	}
+
+	// 16. metadata 已存在且非 TUI：激活预热并返回 created=false
+	metadataExists := false
+	if p.extra.SessionOps != nil && !explicitTUI {
+		metadataExists = p.extra.SessionOps.SessionDirHasMetadata(sessionID)
+	}
+	if metadataExists && !explicitTUI {
+		if p.AgentManager != nil {
+			p.AgentManager.ActivateSessionPrewarm(sessionID)
+		}
+		stored := p.extra.SessionOps.GetSessionMetadata(sessionID)
+		storedPersist, _ := stored["persist_session"].(bool)
+		storedMoa, _ := stored["moa_enabled"].(bool)
+		result := SessionCreateResult{
+			ChannelID: channelID, SessionID: sessionID,
+			ProjectID: binding.ProjectID, ProjectDir: binding.ProjectDir,
+			WorkMode: finalWorkMode, PersistSession: storedPersist,
+			PrewarmHit: prewarmHit, PrewarmStatus: prewarmStatus,
+			Created: false, CanonicalMode: canonicalMode, MoaEnabled: storedMoa,
+		}
+		return p.stageCreateResult(ctx, result, claimedID, externalLock, nil, nil), nil
+	}
+
+	// 17. 新建 metadata
+	sessionCreated := !metadataExists
+	if sessionCreated && p.extra.SessionOps != nil {
+		var channelMetadata map[string]any
+		if equalFold(channelID, "tui") {
+			workspace := firstNonEmpty(input.Cwd, binding.ProjectDir)
+			if workspace != "" && (!p.usesProjectlessWorkspace(params, channelID) || binding.ProjectDir != "") {
+				channelMetadata = map[string]any{
+					"cwd":         workspace,
+					"project_dir": firstNonEmpty(binding.ProjectDir, workspace),
+				}
+			}
+		}
+		if initErr := p.extra.SessionOps.InitSessionMetadata(InitMetadataParams{
+			SessionID: sessionID, ChannelID: channelID,
+			UserID: trimSpaces(input.UserID), Title: input.Title,
+			Mode: canonicalMode, ProjectDir: binding.ProjectDir, ProjectID: binding.ProjectID,
+			PersistSession: persistSession, WorkMode: finalWorkMode,
+			Model: trimSpaces(input.ModelName), MoaEnabled: moaEnabled,
+			CronID: trimSpaces(input.CronID), ChannelMetadata: channelMetadata,
+		}); initErr != nil {
+			return nil, &SessionProvisionError{Message: initErr.Error()}
+		}
+		if !explicitTUI && p.AgentManager != nil {
+			p.AgentManager.ActivateSessionPrewarm(sessionID)
+		}
+	}
+
+	// 18. 模型选择
+	if input.ModelSelection != nil && p.extra.SessionOps != nil {
+		_ = p.extra.SessionOps.SetSessionModelSelection(sessionID, input.ModelSelection)
+	}
+
+	// 19. 归属准备
+	ownerParams := make(map[string]any, len(params)+4)
+	for k, v := range params {
+		ownerParams[k] = v
+	}
+	ownerParams["mode"] = canonicalMode
+	ownerParams["project_dir"] = binding.ProjectDir
+	ownerParams["work_mode"] = finalWorkMode
+	ownerParams["project_id"] = binding.ProjectID
+	ownerParams["user_id"] = input.UserID
+	target, previousTarget := p.prepareCreateOwner(ctx, channelID, sessionID,
+		input.PreviousSessionID, ownerParams, isSwarm)
+
+	// 20. 结果
+	result := SessionCreateResult{
+		ChannelID: channelID, SessionID: sessionID,
+		ProjectID: binding.ProjectID, ProjectDir: binding.ProjectDir,
+		WorkMode: finalWorkMode, PersistSession: persistSession,
+		PrewarmHit: prewarmHit, PrewarmStatus: prewarmStatus,
+		Created: sessionCreated, CanonicalMode: canonicalMode,
+		ExplicitIDCompatibility: explicitTUI, MoaEnabled: moaEnabled,
+	}
+	return p.stageCreateResult(ctx, result, claimedID, externalLock, &target, previousTarget), nil
+}
+
+// ──────────────────────────── 非导出函数（create 辅助） ────────────────────────────
+
+// compensateCreateFailure create 失败的补偿（释放认领 + 释放外锁）。
+//
+// Python: prepare_session_create 的 except BaseException 分支
+// 补偿自身失败只告警，保留原始错误。
+func (p *RuntimeSessionProvisioner) compensateCreateFailure(
+	ctx context.Context,
+	claimedID string,
+	externalLock *sync.Mutex,
+	lockAcquired bool,
+) {
+	if claimedID != "" && p.AgentManager != nil {
+		if releaseErr := p.AgentManager.ReleaseSessionPrewarmClaim(ctx, claimedID); releaseErr != nil {
+			logger.Warn(logComponent).Err(releaseErr).Str("session_id", claimedID).
+				Msg("session create prepare compensation failed")
+		}
+	}
+	if lockAcquired && externalLock != nil {
+		externalLock.Unlock()
+	}
+}
+
+// prewarmEligible 判定是否可走预热池（上游 6 条判据）。
+//
+// Python: prepare_session_create 的 prewarm_eligible 表达式
+func (p *RuntimeSessionProvisioner) prewarmEligible(
+	input SessionCreateInput,
+	channelID string,
+	isSwarm, moaEnabled bool,
+	canonicalMode string,
+) bool {
+	if isSwarm {
+		return false
+	}
+	if input.CronID != "" && equalFold(channelID, "web") {
+		return false
+	}
+	if moaEnabled {
+		return false
+	}
+	switch canonicalMode {
+	case "agent", "code", "code.normal", "agent.work.normal", "agent.code.normal":
+	default:
+		return false
+	}
+	if p.extra.PrewarmModelEligible != nil {
+		return p.extra.PrewarmModelEligible(input.ModelName)
+	}
+	return true
+}
+
+// usesProjectlessWorkspace 判定是否为无项目工作区。
+//
+// Python: RuntimeSessionProvisioner._uses_projectless_workspace
+func (p *RuntimeSessionProvisioner) usesProjectlessWorkspace(params map[string]any, channelID string) bool {
+	for _, key := range []string{"project_dir", "cwd"} {
+		if v, ok := params[key].(string); ok && v != "" {
+			return false
+		}
+	}
+	workMode, _ := params["work_mode"].(string)
+	workMode = toLowerSpaces(workMode)
+	if workMode != "code" && workMode != "work" {
+		workMode = defaultWorkModeForChannel(channelID)
+	}
+	mode, _ := params["mode"].(string)
+	resolved, _ := p.resolveSwitchMode(mode, false)
+	return resolved == "agent" || resolved == "code"
+}
+
+// prepareCreateOwner 准备 create 的归属与前置 target。
+//
+// Python: RuntimeSessionProvisioner._prepare_create_owner
+func (p *RuntimeSessionProvisioner) prepareCreateOwner(
+	ctx context.Context,
+	channelID, sessionID, previousSessionID string,
+	params map[string]any,
+	isSwarm bool,
+) (sessionpkg.SessionLifecycleTarget, *sessionpkg.SessionLifecycleTarget) {
+	mode, _ := params["mode"].(string)
+	if mode == "" {
+		mode = "agent.plan"
+	}
+	target := sessionpkg.SessionLifecycleTarget{
+		Descriptor: sessionpkg.SessionDescriptor{
+			SessionID:  sessionID,
+			ChannelID:  channelID,
+			Mode:       mode,
+			WorkMode:   stringOr(params["work_mode"], "work"),
+			ProjectID:  stringOr(params["project_id"], ""),
+			ProjectDir: firstNonEmpty(stringOr(params["project_dir"], ""), stringOr(params["cwd"], "")),
+			UserID:     stringOr(params["user_id"], ""),
+		},
+		Kind:     sessionKindOf(isSwarm),
+		TeamName: stringOr(params["team_name"], ""),
+	}
+	previousTarget := p.participants.Target(previousSessionID)
+	previousIsTeam := previousTarget != nil && previousTarget.Kind == sessionpkg.SessionKindTeam
+	if isSwarm || previousIsTeam {
+		_ = p.prepareTeamOwnerSwitch(ctx, channelID, sessionID, previousIsTeam, previousSessionID,
+			"session.create switch: ")
+	}
+	return target, previousTarget
+}
+
+// stageCreateResult 组装 create 的租约（AFTER_RESULT_DELIVERY，提交尝试不可回滚）。
+//
+// Python: RuntimeSessionProvisioner._stage_create_result
+func (p *RuntimeSessionProvisioner) stageCreateResult(
+	ctx context.Context,
+	result SessionCreateResult,
+	claimedID string,
+	externalLock *sync.Mutex,
+	switchTarget *sessionpkg.SessionLifecycleTarget,
+	dispatchSignals *sessionpkg.SessionLifecycleTarget,
+) *PreparedSessionProvision {
+	finalized := false
+	releaseResources := func() error {
+		if finalized {
+			return nil
+		}
+		if claimedID != "" && p.AgentManager != nil {
+			if releaseErr := p.AgentManager.ReleaseSessionPrewarmClaim(
+				context.Background(), claimedID); releaseErr != nil {
+				logger.Warn(logComponent).Err(releaseErr).Str("session_id", claimedID).
+					Msg("session create abort compensation failed")
+			}
+		}
+		if externalLock != nil {
+			externalLock.Unlock()
+		}
+		finalized = true
+		return nil
+	}
+	commitCreate := func(commitCtx SessionProvisionCommitContext) error {
+		defer func() {
+			if externalLock != nil {
+				externalLock.Unlock()
+			}
+		}()
+		p.completedDeletes.remove(result.SessionID)
+		if switchTarget != nil {
+			viewID := commitCtx.ForegroundScopeID
+			if viewID == "" {
+				viewID = "default-view"
+			}
+			p.backgroundTasks.Add(1)
+			go func() {
+				defer p.backgroundTasks.Done()
+				// KVC 前台切换为后台终结器（上游 create_task + done_callback）
+				p.dispatchForegroundTransition(context.Background(),
+					*switchTarget, dispatchSignals, viewID)
+			}()
+		}
+		return nil
+	}
+	return p.stageSessionProvision(result, SessionCreateCommitTiming, commitCreate, releaseResources, true)
+}
+
+// stringOr 取字符串值或默认值。
+func stringOr(v any, fallback string) string {
+	if s, ok := v.(string); ok && s != "" {
+		return s
+	}
+	return fallback
+}
+
+// isDefaultProjectID 判定是否为默认项目标识。
+//
+// Python: gateway/common/work_mode.is_default_project_id
+func isDefaultProjectID(projectID string) bool {
+	switch projectID {
+	case "", "default", "none":
+		return true
+	}
+	return false
+}
+
+// equalFold 大小写不敏感相等（仅 ASCII，避免引入 strings 仅为大小写）。
+func equalFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		ca, cb := a[i], b[i]
+		if ca >= 'A' && ca <= 'Z' {
+			ca += 'a' - 'A'
+		}
+		if cb >= 'A' && cb <= 'Z' {
+			cb += 'a' - 'A'
+		}
+		if ca != cb {
+			return false
+		}
+	}
+	return true
+}
+
+// trimSpaces 去首尾空白。
+func trimSpaces(s string) string {
+	start, end := 0, len(s)
+	for start < end && isSpaceByte(s[start]) {
+		start++
+	}
+	for end > start && isSpaceByte(s[end-1]) {
+		end--
+	}
+	return s[start:end]
+}
+
+// toLowerSpaces 去首尾空白并转小写。
+func toLowerSpaces(s string) string {
+	s = trimSpaces(s)
+	out := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		out[i] = c
+	}
+	return string(out)
+}
+
+// isSpaceByte 是否空白字节。
+func isSpaceByte(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
