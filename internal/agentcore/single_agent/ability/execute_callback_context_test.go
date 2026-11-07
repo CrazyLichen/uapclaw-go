@@ -24,6 +24,11 @@ type callbackSpyTool struct {
 // Card 返回工具卡片。
 func (c *callbackSpyTool) Card() *tool.ToolCard { return c.card }
 
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (c *callbackSpyTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // AcceptsToolCallbackContext 声明是否需要回调上下文。
 func (c *callbackSpyTool) AcceptsToolCallbackContext() bool { return c.accepts }
 

@@ -32,6 +32,11 @@ type fakeTool struct {
 }
 
 func (f *fakeTool) Card() *tool.ToolCard { return f.card }
+
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 func (f *fakeTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return f.result, f.err
 }
@@ -48,6 +53,11 @@ type panicTool struct {
 }
 
 func (p *panicTool) Card() *tool.ToolCard { return p.card }
+
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (p *panicTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 func (p *panicTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	panic(p.value)
 }
