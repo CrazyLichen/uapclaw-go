@@ -142,7 +142,11 @@ func (s *AgentServer) handleSessionSwitch(ctx context.Context, request *schema.A
 		_ = s.provisioner.AbortSessionProvision(lease)
 		return sessionProvisionErrorResponse(request, commitErr), nil
 	}
-	switched, _ := committed.(swruntime.SessionSwitchResult)
+	switched, ok := committed.(swruntime.SessionSwitchResult)
+	if !ok {
+		return sessionProvisionErrorResponse(request, fmt.Errorf(
+			"session.switch commit returned %T, want SessionSwitchResult", committed)), nil
+	}
 	logger.Info(logComponent).
 		Str("session_id", switched.SessionID).
 		Str("mode", switched.Mode).
@@ -433,7 +437,10 @@ func (s *AgentServer) handleSessionCreate(ctx context.Context, request *schema.A
 	if err != nil {
 		return sessionProvisionErrorResponse(request, err), nil
 	}
-	created, _ := lease.Result().(swruntime.SessionCreateResult)
+	created, createdErr := swruntime.CreateResultOf(lease)
+	if createdErr != nil {
+		return sessionProvisionErrorResponse(request, createdErr), nil
+	}
 
 	// 结果投递边界之后提交（AFTER_RESULT_DELIVERY，KVC 派发在响应之后）
 	commitCtx := swruntime.SessionProvisionCommitContext{
@@ -489,7 +496,10 @@ func (s *AgentServer) handleSessionFork(ctx context.Context, request *schema.Age
 		_ = s.provisioner.AbortSessionProvision(lease)
 		return nil, commitErr
 	}
-	forked, _ := committed.(swruntime.SessionForkResult)
+	forked, ok := committed.(swruntime.SessionForkResult)
+	if !ok {
+		return nil, fmt.Errorf("session.fork commit returned %T, want SessionForkResult", committed)
+	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
 			"session_id":        forked.SessionID,

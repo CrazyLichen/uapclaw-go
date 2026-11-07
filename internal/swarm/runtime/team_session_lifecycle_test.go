@@ -14,11 +14,25 @@ import (
 type fakeTeamLifecycleManager struct {
 	// events 调用序列
 	events []string
+	// reporter 由 SetRoundStateReporter 注册的观察者
+	reporter func(sessionID string, generation int, active bool)
+	// lastEventType 最近一次 BroadcastEvent 的事件类型
+	lastEventType string
+	// lastPayload 最近一次 BroadcastEvent 的载荷
+	lastPayload map[string]any
 }
 
-// SetRoundStateReporter 桩：记录调用（spec §10 R-7）。
-func (f *fakeTeamLifecycleManager) SetRoundStateReporter(func(sessionID string, generation int, active bool)) {
+// reportRoundState 触发已注册的轮状态观察者（模拟团队运行时回调）。
+func (f *fakeTeamLifecycleManager) reportRoundState(sessionID string, generation int, active bool) {
+	if f.reporter != nil {
+		f.reporter(sessionID, generation, active)
+	}
+}
+
+// SetRoundStateReporter 记录注册的观察者，供 reportRoundState 回调。
+func (f *fakeTeamLifecycleManager) SetRoundStateReporter(reporter func(sessionID string, generation int, active bool)) {
 	f.events = append(f.events, "set_reporter")
+	f.reporter = reporter
 }
 
 // RemoveWaiter 桩。
@@ -38,9 +52,11 @@ func (f *fakeTeamLifecycleManager) StopSessionRuntime(_ context.Context, session
 	return true, nil
 }
 
-// BroadcastEvent 桩。
+// BroadcastEvent 记录事件类型与载荷。
 func (f *fakeTeamLifecycleManager) BroadcastEvent(sessionID, event string, payload map[string]any) {
 	f.events = append(f.events, "broadcast")
+	f.lastEventType = event
+	f.lastPayload = payload
 }
 
 // IsGenerationRunning 桩。
@@ -55,14 +71,37 @@ type fakeRoundStateCoordinator struct {
 	events []string
 }
 
-// ResumeWaitingForInput 记录。
+// ResumeWaitingForInput 记录带参数的调用。
 func (f *fakeRoundStateCoordinator) ResumeWaitingForInput(sessionID string, generation int) {
-	f.events = append(f.events, "resume")
+	f.events = append(f.events, "resume:"+sessionID+":"+itoa(generation))
 }
 
-// MarkSessionWaitingForInput 记录。
+// MarkSessionWaitingForInput 记录带参数的调用。
 func (f *fakeRoundStateCoordinator) MarkSessionWaitingForInput(sessionID string, generation int) {
-	f.events = append(f.events, "mark_waiting")
+	f.events = append(f.events, "mark_waiting:"+sessionID+":"+itoa(generation))
+}
+
+// itoa 整数转字符串（避免为一处格式化引入 strconv）。
+func itoa(v int) string {
+	if v == 0 {
+		return "0"
+	}
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	var buf [20]byte
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte('0' + v%10)
+		v /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 
 // TestTeamLifecycle_RemoveResponseWaiter 校验移除等待者。
@@ -76,7 +115,7 @@ func TestTeamLifecycle_RemoveResponseWaiter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("失败: %v", err)
 	}
-	if len(manager.events) == 0 || manager.events[0] != "remove_waiter" {
+	if !containsString(manager.events, "remove_waiter") {
 		t.Fatalf("应调用 RemoveWaiter，实际 %v", manager.events)
 	}
 }
@@ -90,7 +129,7 @@ func TestTeamLifecycle_PauseSession(t *testing.T) {
 	if err != nil || !paused {
 		t.Fatalf("PauseSession = (%v, %v), want (true, nil)", paused, err)
 	}
-	if manager.events[0] != "pause" {
+	if !containsString(manager.events, "pause") {
 		t.Fatalf("应调用 PauseSessionRuntime，实际 %v", manager.events)
 	}
 }
@@ -103,7 +142,7 @@ func TestTeamLifecycle_StopSession(t *testing.T) {
 		session.SessionLifecycleContext{SessionID: "s1", Generation: 1}, "reason"); err != nil {
 		t.Fatalf("失败: %v", err)
 	}
-	if manager.events[0] != "stop" {
+	if !containsString(manager.events, "stop") {
 		t.Fatalf("应调用 StopSessionRuntime，实际 %v", manager.events)
 	}
 }
@@ -115,7 +154,7 @@ func TestTeamLifecycle_PublishPauseCompleted(t *testing.T) {
 	if err := adapter.PublishPauseCompleted(context.Background(), "s1", nil, "web"); err != nil {
 		t.Fatalf("失败: %v", err)
 	}
-	if manager.events[0] != "broadcast" {
+	if !containsString(manager.events, "broadcast") {
 		t.Fatalf("应广播事件，实际 %v", manager.events)
 	}
 }
@@ -127,7 +166,7 @@ func TestTeamLifecycle_IsRunning(t *testing.T) {
 	if adapter.IsRunning(session.SessionLifecycleContext{SessionID: "s1", Generation: 1}) {
 		t.Fatal("桩实现应返回 false")
 	}
-	if manager.events[0] != "is_running" {
+	if !containsString(manager.events, "is_running") {
 		t.Fatalf("应调用 IsGenerationRunning，实际 %v", manager.events)
 	}
 }
@@ -606,4 +645,115 @@ func TestDeleteTeam_会话逐个释放后Runner一次(t *testing.T) {
 	if got := recorder.count("rmtree"); got != 2 {
 		t.Fatalf("每个会话应删一次目录，实际 %d", got)
 	}
+}
+
+// ──────────────────────────── 10.3.28c 补齐（对齐上游 197 行版本） ────────────────────────────
+
+// TestTeamLifecycle_构造时注册轮状态观察者 校验 __init__ 末尾的
+// set_round_state_reporter(self._report_round_state)。
+//
+// 上游：team_session_lifecycle.py L100-105
+func TestTeamLifecycle_构造时注册轮状态观察者(t *testing.T) {
+	manager := &fakeTeamLifecycleManager{}
+	NewTeamSessionLifecycleAdapter(manager, &fakeRoundStateCoordinator{})
+	if !containsString(manager.events, "set_reporter") {
+		t.Fatalf("构造时必须注册轮状态观察者，实际调用序列 %v", manager.events)
+	}
+}
+
+// TestTeamLifecycle_轮状态运行中恢复等待输入 校验 _report_round_state(running=true)。
+//
+// 上游：L107-120，running 为真 → coordinator.resume_waiting_for_input
+func TestTeamLifecycle_轮状态运行中恢复等待输入(t *testing.T) {
+	manager := &fakeTeamLifecycleManager{}
+	coordinator := &fakeRoundStateCoordinator{}
+	NewTeamSessionLifecycleAdapter(manager, coordinator)
+	manager.reportRoundState("s1", 3, true)
+	if len(coordinator.events) != 1 || coordinator.events[0] != "resume:s1:3" {
+		t.Fatalf("running=true 应调用 resume_waiting_for_input(s1,3)，实际 %v", coordinator.events)
+	}
+}
+
+// TestTeamLifecycle_轮状态空闲标记等待输入 校验 _report_round_state(running=false)。
+//
+// 上游：L107-120，running 为假 → coordinator.mark_session_waiting_for_input
+func TestTeamLifecycle_轮状态空闲标记等待输入(t *testing.T) {
+	manager := &fakeTeamLifecycleManager{}
+	coordinator := &fakeRoundStateCoordinator{}
+	NewTeamSessionLifecycleAdapter(manager, coordinator)
+	manager.reportRoundState("s2", 5, false)
+	if len(coordinator.events) != 1 || coordinator.events[0] != "mark_waiting:s2:5" {
+		t.Fatalf("running=false 应调用 mark_session_waiting_for_input(s2,5)，实际 %v", coordinator.events)
+	}
+}
+
+// TestTeamLifecycle_发布暂停完成的事件契约 校验 event_type 与 payload 字段。
+//
+// 上游：L165-186 —— event_type 必须是 chat.processing_status，
+// 且带 is_processing=False / is_complete=True。
+// 前端按 event_type 分支，字符串不得改动。
+func TestTeamLifecycle_发布暂停完成的事件契约(t *testing.T) {
+	manager := &fakeTeamLifecycleManager{}
+	coordinator := &fakeRoundStateCoordinator{}
+	adapter := NewTeamSessionLifecycleAdapter(manager, coordinator)
+	generation := 4
+	if err := adapter.PublishPauseCompleted(context.Background(),
+		"s3", &generation, "web"); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+
+	if manager.lastEventType != "chat.processing_status" {
+		t.Fatalf("event_type = %q, want chat.processing_status", manager.lastEventType)
+	}
+	if got, ok := manager.lastPayload["is_processing"].(bool); !ok || got {
+		t.Fatalf("is_processing 应为 false，实际 %v", manager.lastPayload["is_processing"])
+	}
+	if got, ok := manager.lastPayload["is_complete"].(bool); !ok || !got {
+		t.Fatalf("is_complete 应为 true，实际 %v", manager.lastPayload["is_complete"])
+	}
+	if manager.lastPayload["session_id"] != "s3" {
+		t.Fatalf("session_id = %v, want s3", manager.lastPayload["session_id"])
+	}
+}
+
+// TestTeamLifecycle_发布暂停完成时刷新轮状态 校验 generation 非空时
+// 先 mark_session_waiting_for_input。
+//
+// 上游：L170-175 —— `if generation is not None: mark_session_waiting_for_input(...)`
+func TestTeamLifecycle_发布暂停完成时刷新轮状态(t *testing.T) {
+	manager := &fakeTeamLifecycleManager{}
+	coordinator := &fakeRoundStateCoordinator{}
+	adapter := NewTeamSessionLifecycleAdapter(manager, coordinator)
+	generation := 7
+	if err := adapter.PublishPauseCompleted(context.Background(),
+		"s4", &generation, "web"); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if len(coordinator.events) != 1 || coordinator.events[0] != "mark_waiting:s4:7" {
+		t.Fatalf("generation 非空时应先标记等待输入，实际 %v", coordinator.events)
+	}
+}
+
+// TestTeamLifecycle_发布暂停完成时generation为空不刷新轮状态 校验反向。
+func TestTeamLifecycle_发布暂停完成时generation为空不刷新轮状态(t *testing.T) {
+	manager := &fakeTeamLifecycleManager{}
+	coordinator := &fakeRoundStateCoordinator{}
+	adapter := NewTeamSessionLifecycleAdapter(manager, coordinator)
+	if err := adapter.PublishPauseCompleted(context.Background(),
+		"s5", nil, "web"); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if len(coordinator.events) != 0 {
+		t.Fatalf("generation 为空时不应刷新轮状态，实际 %v", coordinator.events)
+	}
+}
+
+// containsString 判断切片是否含目标字符串。
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
 }

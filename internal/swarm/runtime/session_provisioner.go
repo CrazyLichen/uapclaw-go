@@ -440,6 +440,24 @@ type PreparedSessionProvision struct {
 	state SessionProvisionState
 }
 
+// CreateResultOf 替代 `lease.Result().(SessionCreateResult)` 的直接断言：
+// 断言失败时返回 error 而不是零值结构体（handler 里的 `x, _ :=` 会静默拿到
+// 空 SessionID，排查成本极高）。switch/fork 在提交后直接用值断言并显式处理
+// 失败，故不再需要独立访问器。
+
+// CreateResultOf 从 create 租约取结果，类型不符返回错误。
+func CreateResultOf(lease *PreparedSessionProvision) (SessionCreateResult, error) {
+	if lease == nil {
+		return SessionCreateResult{}, errors.New("session provision lease is nil")
+	}
+	typed, ok := lease.Result().(SessionCreateResult)
+	if !ok {
+		return SessionCreateResult{}, fmt.Errorf(
+			"session provision result is %T, want SessionCreateResult", lease.Result())
+	}
+	return typed, nil
+}
+
 // ProvisionerDeps provisioner 构造依赖。
 //
 // spec §3 D4/D5/D6：全部依赖以字段注入，接口与上游调用点一一对应。
