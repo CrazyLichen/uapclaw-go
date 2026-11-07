@@ -46,6 +46,15 @@ func FormatAbsoluteTime(timestampMs int64) string {
 	return formatAbsolute(time.Local, timestampMs)
 }
 
+// FormatAbsoluteTimeIn 用指定时区渲染绝对时间；location 为 nil 时回落到本地时区。
+// 仅供需要固定时区的调用方（测试）使用，生产一律走 FormatAbsoluteTime。
+func FormatAbsoluteTimeIn(location *time.Location, timestampMs int64) string {
+	if location == nil {
+		location = time.Local
+	}
+	return formatAbsolute(location, timestampMs)
+}
+
 // FormatTimeContext 把时间戳渲染为「绝对本地时间 (相对差)」。
 // timestampMs 为 nil 时（源字段未设置，例如从未流转过的任务）返回 time.unknown 文案。
 // nowMs 永远由调用方传入，保持本函数纯函数可测。

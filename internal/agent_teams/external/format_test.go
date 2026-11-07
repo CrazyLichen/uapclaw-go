@@ -4,10 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // ts20260528 2026-05-28 14:30:05 +08:00 的毫秒 epoch（与 gen_golden.py 一致）
 const ts20260528 int64 = 1779949805000
+
+// goldenZone golden 生成时所处的时区。
+// gen_golden.py 固定 TZ=Asia/Shanghai，而渲染默认取运行环境本地时区；
+// CI runner 是 UTC，不固定时区就会把 +08:00 渲染成 +00:00 导致比对失败。
+var goldenZone = time.FixedZone("CST", 8*3600)
 
 // goldenPath 返回 golden 绝对路径（与 inbound_render 共用目录）。
 func goldenPath(t *testing.T, name string) string {
@@ -46,7 +52,7 @@ func (f fakeMessage) TimestampMs() int64     { return f.timestampMs }
 func TestRenderMessage_直发普通成员(t *testing.T) {
 	got, err := RenderMessage(fakeMessage{
 		messageID: "m1", fromMember: "dev-1", content: "你帮我看看", timestampMs: ts20260528,
-	}, RenderMessageOptions{})
+	}, RenderMessageOptions{Location: goldenZone})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +63,7 @@ func TestRenderMessage_直发普通成员(t *testing.T) {
 func TestRenderMessage_人类成员(t *testing.T) {
 	got, err := RenderMessage(fakeMessage{
 		messageID: "m1", fromMember: "dev-1", content: "你帮我看看", timestampMs: ts20260528,
-	}, RenderMessageOptions{IsHumanAgent: true})
+	}, RenderMessageOptions{IsHumanAgent: true, Location: goldenZone})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +75,7 @@ func TestRenderMessage_带body模板(t *testing.T) {
 	body := "[框架模板] 请提交计划"
 	got, err := RenderMessage(fakeMessage{
 		messageID: "m1", fromMember: "dev-1", content: "原始内容", timestampMs: ts20260528,
-	}, RenderMessageOptions{Body: &body})
+	}, RenderMessageOptions{Body: &body, Location: goldenZone})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +86,7 @@ func TestRenderMessage_带body模板(t *testing.T) {
 func TestRenderMessage_user发来(t *testing.T) {
 	got, err := RenderMessage(fakeMessage{
 		messageID: "m3", fromMember: "user", content: "你帮我看看", timestampMs: ts20260528,
-	}, RenderMessageOptions{})
+	}, RenderMessageOptions{Location: goldenZone})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +97,7 @@ func TestRenderMessage_user发来(t *testing.T) {
 func TestRenderMessage_广播(t *testing.T) {
 	got, err := RenderMessage(fakeMessage{
 		messageID: "m4", fromMember: "dev-9", content: "全体注意", broadcast: true, timestampMs: ts20260528,
-	}, RenderMessageOptions{})
+	}, RenderMessageOptions{Location: goldenZone})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +111,7 @@ func TestRenderMessages_批量(t *testing.T) {
 	got, err := RenderMessages([]MessageLike{
 		fakeMessage{messageID: "m1", fromMember: "dev-1", content: "你帮我看看", timestampMs: ts20260528},
 		fakeMessage{messageID: "m3", fromMember: "user", content: "你帮我看看", timestampMs: ts20260528},
-	}, RenderMessagesOptions{})
+	}, RenderMessagesOptions{Location: goldenZone})
 	if err != nil {
 		t.Fatal(err)
 	}

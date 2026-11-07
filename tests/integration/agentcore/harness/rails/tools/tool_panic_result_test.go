@@ -107,6 +107,11 @@ func (p *panicInvokeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.
 	return nil, tool.ErrStreamNotSupported
 }
 
+// GetCallTimeout 沿用卡片级超时策略（本桩不自定义外层预算）。
+func (p *panicInvokeTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}
+
 // TestToolPanic_仍触发AfterToolCall 回归：工具 panic 被转成 error 后，
 // AFTER_TOOL_CALL 必须照常触发（否则前端卡片永远「执行中」）。
 func (s *ToolPanicResultSuite) TestToolPanic_仍触发AfterToolCall() {
@@ -160,9 +165,11 @@ func (s *ToolPanicResultSuite) TestAbilityManagerExecute_工具panic返回错误
 	am := ability.NewAbilityManager(rm)
 	am.Add(card)
 
+	// parallelToolCalls=false：本用例只验证「panic 被转成 error 结果」，
+	// 走顺序路径让错误归属清晰（并行路径由既有 panic 回归用例覆盖）。
 	results := am.Execute(s.Ctx, nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("itest-panic-call", toolName, `{}`),
-	}, nil, "")
+	}, nil, "", false)
 	s.Require().Len(results, 1)
 
 	err, ok := results[0].Result.(error)

@@ -535,7 +535,16 @@ func (f *fakeAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...st
 	return nil, nil
 }
 
-func (f *fakeAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+// Execute 本假实现不真正跑工具：交互流程用例只关心 Rail 编排，
+// 因此统一返回 nil（parallelToolCalls 入参一并忽略）。
+func (f *fakeAbilityManager) Execute(
+	_ context.Context,
+	_ *agentinterfaces.AgentCallbackContext,
+	_ []*llmschema.ToolCall,
+	_ sessioninterfaces.SessionFacade,
+	_ string,
+	_ bool,
+) []agentschema.ExecuteResult {
 	return nil
 }
 

@@ -2,6 +2,7 @@ package external
 
 import (
 	"fmt"
+	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -42,6 +43,10 @@ type RenderMessageOptions struct {
 	// 传值同时会**去掉** reply-hint：框架指令用工具调用答复，而不是回复。
 	// nil 表示普通消息——渲染它自己的 content 并保留提示。
 	Body *string
+	// Location 渲染发送时间用的时区；nil 表示运行环境的本地时区。
+	// 生产不走这个字段（保持上游「取运行时本地时区」的语义），
+	// 只给测试固定时区用——否则 golden 会随跑测试的机器时区漂移。
+	Location *time.Location
 }
 
 // RenderMessagesOptions RenderMessages 的可选参数。
@@ -51,6 +56,8 @@ type RenderMessagesOptions struct {
 	// Bodies 批次中框架模板消息的投递时正文，按 message_id 索引。
 	// 普通消息不在映射里，渲染自己的 content。
 	Bodies map[string]string
+	// Location 渲染发送时间用的时区，语义同 RenderMessageOptions.Location。
+	Location *time.Location
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -70,7 +77,7 @@ func RenderMessage(message MessageLike, opts RenderMessageOptions) (string, erro
 	if message.Broadcast() {
 		msgType = agentteams.InboundTypeBroadcast
 	}
-	timeInfo := agentteams.FormatAbsoluteTime(message.TimestampMs())
+	timeInfo := formatAbsoluteTimeIn(opts.Location, message.TimestampMs())
 
 	if opts.IsHumanAgent {
 		silence, err := atschema.T("hitt.silence_note")
@@ -122,7 +129,7 @@ func RenderMessage(message MessageLike, opts RenderMessageOptions) (string, erro
 func RenderMessages(messages []MessageLike, opts RenderMessagesOptions) (string, error) {
 	rendered := make([]string, 0, len(messages))
 	for _, m := range messages {
-		one := RenderMessageOptions{IsHumanAgent: opts.IsHumanAgent}
+		one := RenderMessageOptions{IsHumanAgent: opts.IsHumanAgent, Location: opts.Location}
 		if opts.Bodies != nil {
 			if body, ok := opts.Bodies[m.MessageID()]; ok {
 				b := body
@@ -139,6 +146,20 @@ func RenderMessages(messages []MessageLike, opts RenderMessagesOptions) (string,
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// formatAbsoluteTimeIn 按指定时区渲染绝对发送时间；location 为 nil 时用运行环境本地时区。
+//
+// 时区可注入只为测试确定性：golden 由上游按 Asia/Shanghai 生成，
+// 若直接取 time.Local，在 UTC 机器（CI runner）上会渲染成 +00:00 而比对失败。
+// 生产调用不传 location，行为与上游 astimezone() 一致。
+//
+// Python: _format_absolute (timefmt.py)
+func formatAbsoluteTimeIn(location *time.Location, timestampMs int64) string {
+	if location == nil {
+		return agentteams.FormatAbsoluteTime(timestampMs)
+	}
+	return agentteams.FormatAbsoluteTimeIn(location, timestampMs)
+}
 
 // stringsJoin 避免为一次 Join 引入 strings 导入面（本包其余部分不需要 strings）。
 func stringsJoin(parts []string, sep string) string {
