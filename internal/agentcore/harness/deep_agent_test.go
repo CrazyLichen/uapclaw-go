@@ -4290,3 +4290,32 @@ func TestNormalizeInputs_revision类型非法时保持零值(t *testing.T) {
 	require.NotNil(t, inputs.RunContext)
 	assert.Equal(t, 0, inputs.RunContext.Revision)
 }
+
+// TestDeepAgent_BridgeEvents含SteeringDrain 验证新事件桥接到内层 ReActAgent。
+//
+// spec C8：before_steering_drain 由**内层** ReActAgent 在取 steering 批之前触发；
+// 注册到外层则 rail 永远收不到（上游 _BRIDGE_EVENTS 第三条，deep_agent.py L176）。
+func TestDeepAgent_BridgeEvents含SteeringDrain(t *testing.T) {
+	d := newTestDeepAgent()
+
+	cfg := schema.NewDeepAgentConfig()
+	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
+		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
+	}
+
+	fr := &fakeAgentRailWithCallbacks{
+		events: []agentinterfaces.AgentCallbackEvent{
+			agentinterfaces.CallbackBeforeSteeringDrain,
+		},
+	}
+	if err := d.RegisterRail(context.Background(), fr); err != nil {
+		t.Fatalf("RegisterRail 返回错误: %v", err)
+	}
+
+	if !d.reactAgent.CallbackManager().HasHooks(agentinterfaces.CallbackBeforeSteeringDrain) {
+		t.Fatal("before_steering_drain 应桥接到内层 ReActAgent（否则 rail 收不到）")
+	}
+	if d.callbackManager.HasHooks(agentinterfaces.CallbackBeforeSteeringDrain) {
+		t.Fatal("before_steering_drain 不应注册到外层 DeepAgent")
+	}
+}
