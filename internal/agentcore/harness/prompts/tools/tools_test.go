@@ -442,3 +442,48 @@ func TestGetCurrentGoalProvider(t *testing.T) {
 		t.Fatalf("metadata 校验失败: %v", err)
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// maxOutputCharsSchema 取指定工具的 max_output_chars 属性 schema
+func maxOutputCharsSchema(t *testing.T, provider ToolMetadataProvider) map[string]any {
+	t.Helper()
+	params := provider.GetInputParams("cn")
+	props, _ := params["properties"].(map[string]any)
+	field, ok := props["max_output_chars"].(map[string]any)
+	if !ok {
+		t.Fatal("max_output_chars 属性缺失")
+	}
+	return field
+}
+
+// TestBashInputParams_MaxOutputCharsSchema 验证 bash 的 max_output_chars 文案与 minimum 约束
+func TestBashInputParams_MaxOutputCharsSchema(t *testing.T) {
+	field := maxOutputCharsSchema(t, &BashMetadataProvider{})
+
+	// minimum 必须存在且为 0：负数在 schema 层拒绝，
+	// 否则会被解析函数 min(200, v) 悄悄放大成 200
+	if min, ok := field["minimum"].(int); !ok || min != 0 {
+		t.Fatalf("minimum 应为 0，实际 %v", field["minimum"])
+	}
+	desc, _ := field["description"].(string)
+	if !strings.Contains(desc, "默认 20000") {
+		t.Fatalf("描述应说明默认 20000，实际 %q", desc)
+	}
+	if !strings.Contains(desc, "显式传 0 表示不限制") {
+		t.Fatalf("描述应说明显式 0 不限制，实际 %q", desc)
+	}
+}
+
+// TestPowerShellInputParams_MaxOutputCharsSchema 验证 powershell 的同构约束
+func TestPowerShellInputParams_MaxOutputCharsSchema(t *testing.T) {
+	field := maxOutputCharsSchema(t, &PowerShellMetadataProvider{})
+
+	if min, ok := field["minimum"].(int); !ok || min != 0 {
+		t.Fatalf("minimum 应为 0，实际 %v", field["minimum"])
+	}
+	desc, _ := field["description"].(string)
+	if !strings.Contains(desc, "默认 20000") {
+		t.Fatalf("描述应说明默认 20000，实际 %q", desc)
+	}
+}

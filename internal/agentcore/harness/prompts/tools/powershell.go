@@ -217,7 +217,7 @@ func GetPowerShellMetadataProviderInputParams(language string) map[string]any {
 		"timeout":          {"cn": "可选超时时间（秒），默认 300，上限 3600。对于长时间运行的任务，建议适当增大该值以避免任务被提前中断", "en": "Optional timeout in seconds, default 300, max 3600. For long-running tasks, it is recommended to increase this value to avoid premature termination"},
 		"workdir":          {"cn": "执行目录（相对或绝对路径），默认工作区根目录；不能越出沙箱", "en": "Working directory (relative or absolute path), defaults to workspace root; cannot escape sandbox"},
 		"background":       {"cn": "是否后台运行，默认 false；设为 true 时立即返回 PID", "en": "Run in background (default false); returns PID immediately when true"},
-		"max_output_chars": {"cn": "最大输出字符数，0 表示不限制（默认）；非零时上限 20000", "en": "Max output characters; 0 (default) means no limit; non-zero values are capped at 20000"},
+		"max_output_chars": {"cn": "最大输出字符数，默认 20000：超出部分会被截断并写入临时文件（结果中会给出文件路径，可按需读取），防止超大输出撑爆上下文；显式传 0 表示不限制（谨慎使用）", "en": "Max output characters; defaults to 20000: output beyond this is truncated and the full content is written to a temp file (its path is returned in the result for on-demand reading), preventing oversized output from flooding context. Pass 0 explicitly to disable the limit (use with care)"},
 		"description":      {"cn": "命令描述（可选），用于日志和审计", "en": "Optional command description for logging and audit trail"},
 	}
 	d := func(key string) string {
@@ -233,7 +233,7 @@ func GetPowerShellMetadataProviderInputParams(language string) map[string]any {
 			"timeout":          map[string]any{"type": "integer", "description": d("timeout")},
 			"workdir":          map[string]any{"type": "string", "description": d("workdir")},
 			"background":       map[string]any{"type": "boolean", "description": d("background")},
-			"max_output_chars": map[string]any{"type": "integer", "description": d("max_output_chars")},
+			"max_output_chars": map[string]any{"type": "integer", "minimum": 0, "description": d("max_output_chars")},
 			"description":      map[string]any{"type": "string", "description": d("description")},
 		},
 		"required": []any{"command"},

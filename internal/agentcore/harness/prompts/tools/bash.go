@@ -107,7 +107,7 @@ func GetBashInputParams(language string) map[string]any {
 		"description":       {"cn": "用简洁的主动语态描述该命令的作用。不要在描述中使用 \"复杂\" 或 \"风险\" 等词——直接描述它做什么。\n\n对于简单命令（git、npm、常用 CLI 工具），保持简短（5-10 个字）：\n- ls → \"列出当前目录文件\"\n- git status → \"显示工作区状态\"\n- npm install → \"安装项目依赖\"\n\n对于不易一眼看懂的命令（管道命令、冷门参数等），补充足够上下文说明其用途：\n- find . -name \"*.tmp\" -exec rm {} \\; → \"递归查找并删除所有 .tmp 文件\"\n- git reset --hard origin/main → \"丢弃所有本地更改，与远程 main 对齐\"\n- curl -s url | jq '.data[]' → \"从 URL 获取 JSON 并提取 data 数组元素\"", "en": "Clear, concise description of what this command does in active voice. Never use words like \"complex\" or \"risk\" in the description - just describe what it does.\n\nFor simple commands (git, npm, standard CLI tools), keep it brief (5-10 words):\n- ls -> \"List files in current directory\"\n- git status -> \"Show working tree status\"\n- npm install -> \"Install package dependencies\"\n\nFor commands that are harder to parse at a glance (piped commands, obscure flags, etc.), add enough context to clarify what it does:\n- find . -name \"*.tmp\" -exec rm {} \\; -> \"Find and delete all .tmp files recursively\"\n- git reset --hard origin/main -> \"Discard all local changes and match remote main\"\n- curl -s url | jq '.data[]' -> \"Fetch JSON from URL and extract data array elements\""},
 		"run_in_background": {"cn": "设为 true 以后台运行命令。仅在不需要立即获取结果时使用，命令完成后会收到通知", "en": "Set to true to run this command in the background. Only use this if you don't need the result immediately and are OK being notified when the command completes later"},
 		"workdir":           {"cn": "执行目录（相对或绝对路径），默认为工作区根目录；不能越出工作区沙箱", "en": "Working directory (relative or absolute path), defaults to workspace root; cannot escape workspace sandbox"},
-		"max_output_chars":  {"cn": "最大输出字符数，0 表示不限制（默认）；非零时上限 20000，防止超大输出撑爆上下文", "en": "Max output characters; 0 (default) means no limit; non-zero values are capped at 20000 to prevent oversized output from flooding context"},
+		"max_output_chars":  {"cn": "最大输出字符数，默认 20000：超出部分会被截断并写入临时文件（结果中会给出文件路径，可按需读取），防止超大输出撑爆上下文；显式传 0 表示不限制（谨慎使用）", "en": "Max output characters; defaults to 20000: output beyond this is truncated and the full content is written to a temp file (its path is returned in the result for on-demand reading), preventing oversized output from flooding context. Pass 0 explicitly to disable the limit (use with care)"},
 		"shell_type":        {"cn": "指定 Shell 类型，可选值：auto/cmd/powershell/bash/sh，默认 auto。cmd/PowerShell 不支持 `mkdir -p`；需要该语法时保持 auto/bash/sh。", "en": "Shell to use: auto/cmd/powershell/bash/sh, default auto. cmd/PowerShell do not support `mkdir -p`; keep auto/bash/sh when you need that syntax."},
 	}
 
@@ -126,7 +126,7 @@ func GetBashInputParams(language string) map[string]any {
 			"description":       map[string]any{"type": "string", "description": desc("description")},
 			"run_in_background": map[string]any{"type": "boolean", "description": desc("run_in_background")},
 			"workdir":           map[string]any{"type": "string", "description": desc("workdir")},
-			"max_output_chars":  map[string]any{"type": "integer", "description": desc("max_output_chars")},
+			"max_output_chars":  map[string]any{"type": "integer", "minimum": 0, "description": desc("max_output_chars")},
 			"shell_type":        map[string]any{"type": "string", "enum": []any{"auto", "cmd", "powershell", "bash", "sh"}, "description": desc("shell_type")},
 		},
 		"required": []any{"command"},
