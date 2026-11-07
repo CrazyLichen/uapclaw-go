@@ -91,6 +91,24 @@ type McpServerConfigOption func(*McpServerConfig)
 // McpToolCardOption MCP 工具卡片选项函数。
 type McpToolCardOption func(*McpToolCard)
 
+// MCPToolResult 携带多模态数据或失败状态的 MCP 工具结果。
+//
+// 放在 types 包而非 mcp 实现包：调度层（ability）与 agent 层（agents）都要
+// 消费它，依赖纯类型包可避免两个上层直接依赖 mcp 实现包（层次渗透）。
+//
+// 与 harness 的 ToolOutput 形状（success/data/error）鸭子类型兼容，
+// 使 react agent 的多模态管线无需 core 反向导入 harness。
+//
+// Python: McpToolResult (mcp/base.py:148-165)
+type MCPToolResult struct {
+	// Success 是否成功
+	Success bool
+	// Data 结果数据；多模态时含 content 与 multimodal
+	Data map[string]any
+	// Err 失败原因
+	Err string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────

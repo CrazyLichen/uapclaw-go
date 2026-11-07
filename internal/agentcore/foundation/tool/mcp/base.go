@@ -24,26 +24,19 @@ type MCPTool struct {
 	includeImageContent bool
 }
 
-// MCPToolResult 携带多模态数据或失败状态的 MCP 工具结果。
-//
-// 与 harness 的 ToolOutput 形状（success/data/error）鸭子类型兼容，
-// 使 react agent 的多模态管线无需 core 反向导入 harness。
-//
-// Python: McpToolResult (mcp/base.py:148-165)
-type MCPToolResult struct {
-	// Success 是否成功
-	Success bool
-	// Data 结果数据；多模态时含 content 与 multimodal
-	Data map[string]any
-	// Err 失败原因
-	Err string
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// MCPToolResult 携带多模态数据或失败状态的 MCP 工具结果（types 包类型的别名）。
+//
+// 定义放在 types 包：调度层与 agent 层都要消费它，依赖纯类型包可避免
+// 两个上层直接依赖 mcp 实现包。这里保留别名，使既有调用点无需改动。
+//
+// Python: McpToolResult (mcp/base.py:148-165)
+type MCPToolResult = types.MCPToolResult
 
 // 重导出变量和函数
 var (

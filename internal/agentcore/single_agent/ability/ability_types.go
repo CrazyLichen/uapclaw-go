@@ -30,6 +30,14 @@ type AbilityExecutionError struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// emptySuccessText 工具成功但无可渲染文本时的兜底文案。
+	//
+	// 模型收到空字符串会当成"工具什么都没做"，给一句明确的占位更利于继续推理。
+	// Python: EMPTY_SUCCESS_TEXT (foundation/tool/base.py:23)
+	emptySuccessText = "Tool succeeded with empty output."
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // InterruptAutoConfirmKey 中断自动确认状态键。
@@ -102,12 +110,20 @@ func BuildToolMessageContent(result any) string {
 	}
 
 	// 路径 2：反射提取（对齐 Python getattr(result, "data", None)）
+	//
+	// MCP 工具结果以结构体形态透传（success / data / error 三字段），
+	// 走到这里时按字段名取值，避免把 "&{true map[] }" 这种 Go 字形交给模型。
 	v := reflect.ValueOf(result)
 	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return emptySuccessText
+		}
 		v = v.Elem()
 	}
 	if v.Kind() == reflect.Struct {
+		hasData := false
 		if f := v.FieldByName("Data"); f.IsValid() {
+			hasData = true
 			if dataMap, ok := f.Interface().(map[string]any); ok {
 				if content, ok := dataMap["content"]; ok {
 					if s := fmt.Sprintf("%v", content); s != "" {
@@ -117,9 +133,19 @@ func BuildToolMessageContent(result any) string {
 			}
 		}
 		if f := v.FieldByName("Success"); f.IsValid() && f.Kind() == reflect.Bool && !f.Bool() {
-			if ef := v.FieldByName("Error"); ef.IsValid() {
-				return fmt.Sprintf("%v", ef.Interface())
+			// 字段名两种写法都要认：MCPToolResult 用 Err，早期实现用 Error
+			for _, name := range []string{"Err", "Error"} {
+				if ef := v.FieldByName(name); ef.IsValid() {
+					if s := fmt.Sprintf("%v", ef.Interface()); s != "" {
+						return s
+					}
+				}
 			}
+		}
+		if hasData {
+			// 是带 Data 的结果结构体但没取到文本：给兜底文案，
+			// 不落到路径 3 打印结构体字形
+			return emptySuccessText
 		}
 	}
 

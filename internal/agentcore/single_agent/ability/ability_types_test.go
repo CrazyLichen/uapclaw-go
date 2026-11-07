@@ -2,6 +2,8 @@ package ability
 
 import (
 	"errors"
+	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -211,5 +213,52 @@ func TestBuildToolMessageContent_nilResult(t *testing.T) {
 	content := BuildToolMessageContent(nil)
 	if content != "<nil>" {
 		t.Errorf("content = %q, want <nil>", content)
+	}
+}
+
+// ──────────────────────────── MCP 结构体渲染（D-15 收口） ────────────────────────────
+
+// TestBuildToolMessageContent_MCP结构体成功 验证结构体结果取 Data.content
+func TestBuildToolMessageContent_MCP结构体成功(t *testing.T) {
+	r := &mcptool.MCPToolResult{Success: true, Data: map[string]any{"content": "shot"}}
+	if got := BuildToolMessageContent(r); got != "shot" {
+		t.Fatalf("应渲染 content，实际 %q", got)
+	}
+}
+
+// TestBuildToolMessageContent_MCP结构体失败 验证 Err 字段被取到。
+//
+// 回归：反射分支查 FieldByName("Error")，而结构体字段名是 Err，
+// 永远匹配不到，失败时模型会收到 "&{false map[] Permission denied}"。
+func TestBuildToolMessageContent_MCP结构体失败(t *testing.T) {
+	r := &mcptool.MCPToolResult{Success: false, Err: "Permission denied"}
+	if got := BuildToolMessageContent(r); got != "Permission denied" {
+		t.Fatalf("应渲染 Err，实际 %q", got)
+	}
+}
+
+// TestBuildToolMessageContent_MCP结构体空内容 验证空 Data 不打印 Go 结构体字形
+func TestBuildToolMessageContent_MCP结构体空内容(t *testing.T) {
+	r := &mcptool.MCPToolResult{Success: true, Data: map[string]any{}}
+	got := BuildToolMessageContent(r)
+	if strings.Contains(got, "&{") || strings.Contains(got, "map[]") {
+		t.Fatalf("空内容不应打印结构体字形，实际 %q", got)
+	}
+	if got != emptySuccessText {
+		t.Fatalf("空内容应给兜底文案，实际 %q", got)
+	}
+}
+
+// TestBuildToolMessageContent_Error字段名兼容 验证返回 Error 字段名的结构体也能取到
+func TestBuildToolMessageContent_Error字段名兼容(t *testing.T) {
+	type otherResult struct {
+		// Success 是否成功
+		Success bool
+		// Error 失败原因（与 MCPToolResult.Err 不同名的既有实现）
+		Error string
+	}
+	got := BuildToolMessageContent(&otherResult{Success: false, Error: "boom"})
+	if got != "boom" {
+		t.Fatalf("Error 字段名也应被识别，实际 %q", got)
 	}
 }
