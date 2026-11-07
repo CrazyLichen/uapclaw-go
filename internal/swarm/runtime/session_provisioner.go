@@ -2,10 +2,12 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 )
 
@@ -733,7 +735,21 @@ func (p *RuntimeSessionProvisioner) AbortSessionProvision(lease *PreparedSession
 	return lease.abortForOwner(p.provisionOwnerToken)
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// errAgentManagerUnavailable agent 管理器缺失
+	errAgentManagerUnavailable = errors.New("agent manager unavailable")
+	// errSessionOpsUnavailable 会话复制能力缺失
+	errSessionOpsUnavailable = errors.New("session ops unavailable")
+)
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// logProvisionWarn 记一条告警日志。
+func logProvisionWarn(msg string, err error) {
+	logger.Warn(logComponent).Err(err).Msg(msg)
+}
 
 // stageSessionProvision 构造归属本 provisioner 的租约。
 //
@@ -939,4 +955,307 @@ func (r *recentDeleteResults[T]) remove(key string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.entries, key)
+}
+
+// ──────────────────────────── 导出函数（switch / fork） ────────────────────────────
+
+// PrepareSessionSwitch 准备一次会话切换。
+//
+// Python: RuntimeSessionProvisioner.prepare_session_switch（L1167-1263）
+// 步骤见 spec §5.4（8 步），顺序与短路位置不得调整（规则 9.3）。
+func (p *RuntimeSessionProvisioner) PrepareSessionSwitch(
+	ctx context.Context,
+	input SessionSwitchInput,
+) (*PreparedSessionProvision, error) {
+	channelID := input.ChannelID
+	if channelID == "" {
+		channelID = "default"
+	}
+	targetSessionID := input.TargetSessionID
+	previousSessionID := input.PreviousSessionID
+	if targetSessionID == "" {
+		return nil, &SessionProvisionError{Message: "session_id is required", Code: "BAD_REQUEST"}
+	}
+
+	// 2. 解析请求模式
+	resolvedMode, targetIsTeam := p.resolveSwitchMode(input.Mode, input.TeamHint)
+
+	// 3. 目标 metadata 优先
+	var targetMeta map[string]any
+	if p.extra.SessionOps != nil {
+		targetMeta = p.extra.SessionOps.GetSessionMetadata(targetSessionID)
+	}
+	if storedMode, _ := targetMeta["mode"].(string); storedMode != "" {
+		resolvedMode, targetIsTeam = p.resolveSwitchMode(storedMode, input.TeamHint)
+	}
+
+	// 4-5. previous target 解析与团队归属准备
+	previous := p.participants.Target(previousSessionID)
+	previousIsTeam := previous != nil && previous.Kind == sessionpkg.SessionKindTeam
+	if previous == nil && previousSessionID != "" {
+		var prevMeta map[string]any
+		if p.extra.SessionOps != nil {
+			prevMeta = p.extra.SessionOps.GetSessionMetadata(previousSessionID)
+		}
+		prevMode, _ := prevMeta["mode"].(string)
+		if prevMode == "" {
+			prevMode = input.PreviousMode
+		}
+		if prevMode != "" {
+			prevChannel, _ := prevMeta["channel_id"].(string)
+			if prevChannel == "" {
+				prevChannel = channelID
+			}
+			prevWorkMode, _ := prevMeta["work_mode"].(string)
+			if prevWorkMode == "" {
+				prevWorkMode = "work"
+			}
+			prevTeamName, _ := prevMeta["team_name"].(string)
+			_, prevIsTeamMode := p.resolveSwitchMode(prevMode, false)
+			kind := sessionpkg.SessionKindAgent
+			if prevIsTeamMode {
+				kind = sessionpkg.SessionKindTeam
+			}
+			built := sessionpkg.SessionLifecycleTarget{
+				Descriptor: sessionpkg.SessionDescriptor{
+					SessionID: previousSessionID, ChannelID: prevChannel,
+					Mode: prevMode, WorkMode: prevWorkMode,
+				},
+				Kind:     kind,
+				TeamName: prevTeamName,
+			}
+			previous = &built
+			previousIsTeam = kind == sessionpkg.SessionKindTeam
+		}
+	}
+	if targetIsTeam || previousIsTeam {
+		if err := p.prepareTeamOwnerSwitch(ctx, channelID, targetSessionID,
+			previousIsTeam, previousSessionID, "session.switch: "); err != nil {
+			return nil, err
+		}
+	}
+
+	target := sessionpkg.SessionLifecycleTarget{
+		Descriptor: sessionpkg.SessionDescriptor{
+			SessionID: targetSessionID, ChannelID: channelID,
+			Mode: resolvedMode, WorkMode: "work",
+		},
+		Kind: sessionKindOf(targetIsTeam),
+	}
+
+	moaEnabled, _ := targetMeta["moa_enabled"].(bool)
+	result := SessionSwitchResult{
+		ChannelID:  channelID,
+		SessionID:  targetSessionID,
+		Mode:       resolvedMode,
+		Switched:   true,
+		MoaEnabled: moaEnabled,
+	}
+	commitHook := func(commitCtx SessionProvisionCommitContext) error {
+		viewID := commitCtx.ForegroundScopeID
+		if viewID == "" {
+			viewID = "default-view"
+		}
+		p.dispatchForegroundTransition(ctx, target, previous, viewID)
+		return nil
+	}
+	return p.stageSessionProvision(result, SessionSwitchCommitTiming, commitHook, nil, true), nil
+}
+
+// PrepareSessionFork 准备一次会话复制。
+//
+// Python: RuntimeSessionProvisioner.prepare_session_fork（L1265-1385）
+// 步骤见 spec §5.5（8 步）。
+func (p *RuntimeSessionProvisioner) PrepareSessionFork(
+	ctx context.Context,
+	input SessionForkInput,
+) (*PreparedSessionProvision, error) {
+	sourceSessionID := input.SourceSessionID
+	targetSessionID := input.TargetSessionID
+	channelID := input.ChannelID
+	if channelID == "" {
+		channelID = "default"
+	}
+	if sourceSessionID == "" {
+		return nil, &SessionProvisionError{Message: "source_session_id is required", Code: "BAD_REQUEST"}
+	}
+	hasCutoff := input.CutoffMessageID != "" || input.CutoffRole != "" ||
+		input.CutoffContent != "" || input.CutoffTimestamp != nil
+
+	var forkResult ForkSessionResult
+	err := func() error {
+		if targetSessionID == "" {
+			if p.AgentManager == nil {
+				return errAgentManagerUnavailable
+			}
+			generated, genErr := p.AgentManager.CreateSession(ctx, channelID, "")
+			if genErr != nil {
+				return genErr
+			}
+			targetSessionID = generated
+		}
+		if p.extra.SessionOps == nil {
+			return errSessionOpsUnavailable
+		}
+		params := ForkSessionParams{
+			SourceSessionID: sourceSessionID, TargetSessionID: targetSessionID,
+			Title: input.Title, ChannelID: channelID,
+		}
+		if hasCutoff {
+			params.CutoffMessageID = input.CutoffMessageID
+			params.CutoffRole = input.CutoffRole
+			params.CutoffContent = input.CutoffContent
+			params.CutoffTimestamp = input.CutoffTimestamp
+		}
+		if input.SessionEquipmentOverride != nil {
+			params.SessionEquipmentOverride = input.SessionEquipmentOverride
+		}
+		var forkErr error
+		forkResult, forkErr = p.extra.SessionOps.ForkSession(params)
+		if forkErr != nil {
+			return forkErr
+		}
+
+		var agent SessionAgent
+		if p.AgentManager != nil {
+			agent = p.AgentManager.GetAgentNoWait(channelID)
+		}
+		if agent != nil {
+			if _, ensureErr := agent.EnsureInstance(ctx); ensureErr != nil {
+				return ensureErr
+			}
+			if copyErr := p.extra.SessionOps.CopySessionContext(ctx, agent,
+				sourceSessionID, targetSessionID, hasCutoff); copyErr != nil {
+				return copyErr
+			}
+		}
+		if !hasCutoff {
+			var card any
+			if agent != nil {
+				card = agent.Card()
+			}
+			if stateErr := p.extra.SessionOps.CopySessionState(ctx,
+				sourceSessionID, targetSessionID, card, agent); stateErr != nil {
+				return stateErr
+			}
+		}
+		return nil
+	}()
+	if err != nil {
+		return nil, &SessionProvisionError{Message: err.Error(), Code: sessionForkErrorCode(err)}
+	}
+
+	result := SessionForkResult{
+		ChannelID:       channelID,
+		SourceSessionID: firstNonEmpty(forkResult.SourceSessionID, sourceSessionID),
+		SessionID:       firstNonEmpty(forkResult.SessionID, targetSessionID),
+		Title:           forkResult.Title,
+		MoaEnabled:      forkResult.MoaEnabled,
+	}
+	return p.stageSessionProvision(result, SessionForkCommitTiming, nil, nil, false), nil
+}
+
+// ──────────────────────────── 非导出函数（switch / fork 辅助） ────────────────────────────
+
+// resolveSwitchMode 解析模式并判定是否团队。
+//
+// Python: resolve_agent_request_mode + is_team_mode
+func (p *RuntimeSessionProvisioner) resolveSwitchMode(mode string, teamHint bool) (string, bool) {
+	if p.extra.ResolveCanonicalMode != nil {
+		canonical, isTeam := p.extra.ResolveCanonicalMode(map[string]any{"mode": mode}, "")
+		return canonical, isTeam || teamHint
+	}
+	return mode, teamHint
+}
+
+// sessionKindOf 布尔转 SessionKind。
+func sessionKindOf(isTeam bool) sessionpkg.SessionKind {
+	if isTeam {
+		return sessionpkg.SessionKindTeam
+	}
+	return sessionpkg.SessionKindAgent
+}
+
+// firstNonEmpty 取首个非空字符串。
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// prepareTeamOwnerSwitch 准备团队会话归属切换。
+//
+// Python: _prepare_create_owner / prepare_session_switch 内的
+// get_team_manager(...).prepare_session_switch
+func (p *RuntimeSessionProvisioner) prepareTeamOwnerSwitch(
+	ctx context.Context,
+	channelID, targetSessionID string,
+	previousIsTeam bool,
+	previousSessionID, reason string,
+) error {
+	if p.extra.teamManagerProvider == nil {
+		return nil
+	}
+	manager := p.extra.teamManagerProvider(channelID)
+	if manager == nil {
+		return nil
+	}
+	previous := ""
+	if previousIsTeam {
+		previous = previousSessionID
+	}
+	return manager.PrepareSessionSwitch(ctx, targetSessionID, previous, reason)
+}
+
+// dispatchForegroundTransition 派发前台可见性切换。
+//
+// Python: RuntimeSessionProvisioner._dispatch_foreground_transition
+// 参与者为空时只记住 target（对齐上游）。
+func (p *RuntimeSessionProvisioner) dispatchForegroundTransition(
+	ctx context.Context,
+	target sessionpkg.SessionLifecycleTarget,
+	previous *sessionpkg.SessionLifecycleTarget,
+	viewID string,
+) {
+	participants := p.participants.SnapshotActivity()
+	if len(participants) == 0 {
+		p.participants.RememberTarget(target)
+		return
+	}
+	if previous != nil && previous.Descriptor.SessionID != target.Descriptor.SessionID {
+		event := sessionpkg.SessionForegroundEvent{
+			Target:     *previous,
+			ViewID:     viewID,
+			Visible:    false,
+			HasHistory: p.historyExists(previous.Descriptor.SessionID),
+		}
+		for _, participant := range participants {
+			if err := participant.ForegroundChanged(ctx, event); err != nil {
+				logProvisionWarn("Runtime foreground participant failed", err)
+			}
+		}
+	}
+	p.participants.RememberTarget(target)
+	event := sessionpkg.SessionForegroundEvent{
+		Target:     target,
+		ViewID:     viewID,
+		Visible:    true,
+		HasHistory: p.historyExists(target.Descriptor.SessionID),
+	}
+	for _, participant := range participants {
+		if err := participant.ForegroundChanged(ctx, event); err != nil {
+			logProvisionWarn("Runtime foreground participant failed", err)
+		}
+	}
+}
+
+// historyExists 会话是否有历史。
+func (p *RuntimeSessionProvisioner) historyExists(sessionID string) bool {
+	if p.extra.SessionOps == nil {
+		return false
+	}
+	return p.extra.SessionOps.HistoryExists(sessionID)
 }

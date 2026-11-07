@@ -126,7 +126,11 @@ func newTestProvisioner() *RuntimeSessionProvisioner {
 	p.extra.RemoveSessionDir = func(string) error { return nil }
 	p.extra.IsValidSessionID = func(string) bool { return true }
 	p.extra.ResolveWorkMode = func(map[string]any, string) projectBinding { return projectBinding{} }
-	p.extra.ResolveCanonicalMode = func(map[string]any, string) (string, bool) { return "agent", false }
+	// 透传请求模式，并按 "team" 前缀判定是否团队（与上游 is_team_mode 同构的最小替身）
+	p.extra.ResolveCanonicalMode = func(params map[string]any, _ string) (string, bool) {
+		mode, _ := params["mode"].(string)
+		return mode, mode == "team" || (len(mode) > 5 && mode[:5] == "team.")
+	}
 	p.extra.PrewarmModelEligible = func(string) bool { return true }
 	p.extra.DeletePending = func(string) bool { return false }
 	return p
@@ -506,5 +510,478 @@ func TestRecentDeleteResults_remove(t *testing.T) {
 	r.remove("a")
 	if _, ok := r.get("a"); ok {
 		t.Fatal("移除后不应命中")
+	}
+}
+
+// ──────────────────────────── fake 团队与参与者 ────────────────────────────
+
+// fakeTeamManager 记录 prepare 调用。
+type fakeTeamManager struct {
+	// prepared 已准备的目标会话
+	prepared []string
+	// previous 传参的上一会话
+	previous []string
+	// reasons 传参的缘由
+	reasons []string
+}
+
+// PrepareSessionSwitch 记录调用。
+func (f *fakeTeamManager) PrepareSessionSwitch(_ context.Context, target, previous, reason string) error {
+	f.prepared = append(f.prepared, target)
+	f.previous = append(f.previous, previous)
+	f.reasons = append(f.reasons, reason)
+	return nil
+}
+
+// fakeActivityParticipant 记录前台事件。
+type fakeActivityParticipant struct {
+	// events 事件序列
+	events []string
+}
+
+// SessionInputIntent 无操作。
+func (f *fakeActivityParticipant) SessionInputIntent(context.Context, session.SessionInputIntentEvent) (session.SessionInputIntentDisposition, error) {
+	return session.SessionInputIntentDispositionNotNeeded, nil
+}
+
+// ForegroundChanged 记录事件。
+func (f *fakeActivityParticipant) ForegroundChanged(_ context.Context, e session.SessionForegroundEvent) error {
+	if e.Visible {
+		f.events = append(f.events, "visible:"+e.Target.Descriptor.SessionID)
+	} else {
+		f.events = append(f.events, "hidden:"+e.Target.Descriptor.SessionID)
+	}
+	return nil
+}
+
+// ExecutionStarted 无操作。
+func (f *fakeActivityParticipant) ExecutionStarted(context.Context, session.SessionExecutionEvent) error {
+	return nil
+}
+
+// ExecutionFinished 无操作。
+func (f *fakeActivityParticipant) ExecutionFinished(session.SessionExecutionFinishedEvent) {}
+
+// SessionInactive 无操作。
+func (f *fakeActivityParticipant) SessionInactive(context.Context, session.SessionInactiveEvent) error {
+	return nil
+}
+
+// fakeSessionOps 记录会话复制调用。
+type fakeSessionOps struct {
+	// forkErr fork 注入错误
+	forkErr error
+	// forceHistory 最近一次 force_history 参数
+	forceHistory bool
+	// copyContextCalled 是否调用过复制上下文
+	copyContextCalled bool
+	// copyStateCalled 是否调用过复制 state
+	copyStateCalled bool
+	// equipmentOverride 最近一次设备覆盖
+	equipmentOverride map[string]any
+	// cutoffMessageID 最近一次截断消息标识
+	cutoffMessageID string
+	// cutoffRole 最近一次截断角色
+	cutoffRole string
+	// cutoffContent 最近一次截断内容
+	cutoffContent string
+	// cutoffTimestamp 最近一次截断时间戳
+	cutoffTimestamp any
+	// metadata 预置元数据
+	metadata map[string]map[string]any
+	// initCalled 是否调用过初始化元数据
+	initCalled bool
+	// initParams 最近一次初始化参数
+	initParams InitMetadataParams
+}
+
+// ForkSession 记录参数并返回。
+func (f *fakeSessionOps) ForkSession(params ForkSessionParams) (ForkSessionResult, error) {
+	if f.forkErr != nil {
+		return ForkSessionResult{}, f.forkErr
+	}
+	f.equipmentOverride = params.SessionEquipmentOverride
+	f.cutoffMessageID = params.CutoffMessageID
+	f.cutoffRole = params.CutoffRole
+	f.cutoffContent = params.CutoffContent
+	f.cutoffTimestamp = params.CutoffTimestamp
+	return ForkSessionResult{
+		SourceSessionID: params.SourceSessionID,
+		SessionID:       params.TargetSessionID,
+		Title:           params.Title,
+	}, nil
+}
+
+// CopySessionContext 记录调用。
+func (f *fakeSessionOps) CopySessionContext(_ context.Context, _ SessionAgent, _, _ string, forceHistory bool) error {
+	f.copyContextCalled = true
+	f.forceHistory = forceHistory
+	return nil
+}
+
+// CopySessionState 记录调用。
+func (f *fakeSessionOps) CopySessionState(context.Context, string, string, any, SessionAgent) error {
+	f.copyStateCalled = true
+	return nil
+}
+
+// GetSessionMetadata 返回预置 metadata。
+func (f *fakeSessionOps) GetSessionMetadata(sessionID string) map[string]any {
+	if f.metadata == nil {
+		return nil
+	}
+	return f.metadata[sessionID]
+}
+
+// SessionDirHasMetadata 依据预置 metadata 判定。
+func (f *fakeSessionOps) SessionDirHasMetadata(sessionID string) bool {
+	return f.metadata != nil && f.metadata[sessionID] != nil
+}
+
+// InitSessionMetadata 记录参数。
+func (f *fakeSessionOps) InitSessionMetadata(params InitMetadataParams) error {
+	f.initCalled = true
+	f.initParams = params
+	return nil
+}
+
+// SetSessionModelSelection 无操作。
+func (f *fakeSessionOps) SetSessionModelSelection(string, map[string]any) error { return nil }
+
+// HistoryExists 恒 false。
+func (f *fakeSessionOps) HistoryExists(string) bool { return false }
+
+// newTestProvisionerWithMetadata 构造带 metadata 的 provisioner。
+func newTestProvisionerWithMetadata(metadata map[string]map[string]any) *RuntimeSessionProvisioner {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{metadata: metadata})
+	return p
+}
+
+// ──────────────────────────── switch ────────────────────────────
+
+// TestSwitch_空目标报BAD_REQUEST 校验参数校验。
+func TestSwitch_空目标报BAD_REQUEST(t *testing.T) {
+	p := newTestProvisioner()
+	_, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{ChannelID: "web"})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Code != "BAD_REQUEST" || pe.Message != "session_id is required" {
+		t.Fatalf("应是 BAD_REQUEST/session_id is required，实际 %v", err)
+	}
+}
+
+// TestSwitch_提交时机为BEFORE_RESULT_DELIVERY 校验租约声明。
+func TestSwitch_提交时机为BEFORE_RESULT_DELIVERY(t *testing.T) {
+	p := newTestProvisionerWithMetadata(map[string]map[string]any{"t1": {"mode": "agent.plan"}})
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1",
+	})
+	if err != nil {
+		t.Fatalf("PrepareSessionSwitch 失败: %v", err)
+	}
+	if lease.CommitTiming() != SessionProvisionCommitTimingBeforeResultDelivery {
+		t.Fatalf("timing 错误: %s", lease.CommitTiming())
+	}
+	res := lease.Result().(SessionSwitchResult)
+	if res.SessionID != "t1" || !res.Switched {
+		t.Fatalf("结果错误: %+v", res)
+	}
+}
+
+// TestSwitch_存储模式优先于请求模式 校验 stored mode 覆盖。
+func TestSwitch_存储模式优先于请求模式(t *testing.T) {
+	p := newTestProvisionerWithMetadata(map[string]map[string]any{"t1": {"mode": "team"}})
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1", Mode: "agent.plan",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if got := lease.Result().(SessionSwitchResult).Mode; got != "team" {
+		t.Fatalf("应以存储模式 team 为准，实际 %q", got)
+	}
+}
+
+// TestSwitch_无metadata时用请求模式 校验回退。
+func TestSwitch_无metadata时用请求模式(t *testing.T) {
+	p := newTestProvisionerWithMetadata(nil)
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1", Mode: "code.normal",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if got := lease.Result().(SessionSwitchResult).Mode; got != "code.normal" {
+		t.Fatalf("应用请求模式，实际 %q", got)
+	}
+}
+
+// TestSwitch_团队会话触发prepare 校验团队归属准备。
+func TestSwitch_团队会话触发prepare(t *testing.T) {
+	fake := &fakeTeamManager{}
+	p := newTestProvisioner()
+	p.SetTeamManagerProvider(func(string) TeamSwitchPreparer { return fake })
+	if _, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1", TeamHint: true,
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if len(fake.prepared) != 1 {
+		t.Fatal("团队会话应触发 team manager 的 prepare_session_switch")
+	}
+	if fake.reasons[0] != "session.switch: " {
+		t.Fatalf("缘由应为 session.switch: ，实际 %q", fake.reasons[0])
+	}
+}
+
+// TestSwitch_MoaEnabled透传 校验 metadata 字段。
+func TestSwitch_MoaEnabled透传(t *testing.T) {
+	p := newTestProvisionerWithMetadata(map[string]map[string]any{
+		"t1": {"mode": "agent.plan", "moa_enabled": true},
+	})
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if !lease.Result().(SessionSwitchResult).MoaEnabled {
+		t.Fatal("MoaEnabled 应透传")
+	}
+}
+
+// TestSwitch_commit调用前台切换 校验 commit hook。
+func TestSwitch_commit调用前台切换(t *testing.T) {
+	participant := &fakeActivityParticipant{}
+	p := newTestProvisioner()
+	p.participants.ReplaceSessionParticipants([]session.SessionActivityParticipant{participant}, nil)
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	ctx := SessionProvisionCommitContext{ForegroundScopeID: "view-1"}
+	if _, err := p.CommitSessionProvision(lease, SessionProvisionCommitTimingBeforeResultDelivery, &ctx); err != nil {
+		t.Fatalf("commit 失败: %v", err)
+	}
+	if len(participant.events) == 0 {
+		t.Fatal("commit 应派发前台切换事件")
+	}
+	if participant.events[len(participant.events)-1] != "visible:t1" {
+		t.Fatalf("最后事件应为 visible:t1，实际 %v", participant.events)
+	}
+}
+
+// TestSwitch_已准备租约状态为PREPARED 校验租约起点。
+func TestSwitch_已准备租约状态为PREPARED(t *testing.T) {
+	p := newTestProvisionerWithMetadata(nil)
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if lease.State() != SessionProvisionStatePrepared {
+		t.Fatalf("应为 PREPARED，实际 %s", lease.State())
+	}
+}
+
+// TestSwitch_前后会话都传participant 校验前台切换双事件。
+func TestSwitch_前后会话都传participant(t *testing.T) {
+	participant := &fakeActivityParticipant{}
+	p := newTestProvisionerWithMetadata(map[string]map[string]any{
+		"prev": {"mode": "agent.plan"},
+		"t1":   {"mode": "agent.plan"},
+	})
+	p.participants.ReplaceSessionParticipants([]session.SessionActivityParticipant{participant}, nil)
+	lease, err := p.PrepareSessionSwitch(context.Background(), SessionSwitchInput{
+		ChannelID: "web", TargetSessionID: "t1", PreviousSessionID: "prev",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	ctx := SessionProvisionCommitContext{ForegroundScopeID: "v"}
+	if _, err := p.CommitSessionProvision(lease, SessionProvisionCommitTimingBeforeResultDelivery, &ctx); err != nil {
+		t.Fatalf("commit 失败: %v", err)
+	}
+	if len(participant.events) != 2 {
+		t.Fatalf("应有 hidden:prev + visible:t1 两个事件，实际 %v", participant.events)
+	}
+	if participant.events[0] != "hidden:prev" || participant.events[1] != "visible:t1" {
+		t.Fatalf("事件顺序错误: %v", participant.events)
+	}
+}
+
+// ──────────────────────────── fork ────────────────────────────
+
+// TestFork_空源报BAD_REQUEST 校验参数校验。
+func TestFork_空源报BAD_REQUEST(t *testing.T) {
+	p := newTestProvisioner()
+	_, err := p.PrepareSessionFork(context.Background(), SessionForkInput{ChannelID: "tui"})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Code != "BAD_REQUEST" || pe.Message != "source_session_id is required" {
+		t.Fatalf("应是 BAD_REQUEST/source_session_id is required，实际 %v", err)
+	}
+}
+
+// TestFork_空目标由AgentManager生成 校验自动分配。
+func TestFork_空目标由AgentManager生成(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if got := lease.Result().(SessionForkResult).SessionID; got != "fork-target" {
+		t.Fatalf("应使用 AgentManager.CreateSession 的返回值，实际 %q", got)
+	}
+}
+
+// TestFork_提交时机为BEFORE_RESULT_DELIVERY 校验租约声明。
+func TestFork_提交时机为BEFORE_RESULT_DELIVERY(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, _ := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+	})
+	if lease.CommitTiming() != SessionProvisionCommitTimingBeforeResultDelivery {
+		t.Fatalf("timing 错误: %s", lease.CommitTiming())
+	}
+}
+
+// TestFork_有cutoff时强制copyHistory 校验 cutoff 分支。
+func TestFork_有cutoff时强制copyHistory(t *testing.T) {
+	fake := &fakeSessionOps{}
+	p := newTestProvisioner()
+	p.SetSessionOps(fake)
+	if _, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+		CutoffMessageID: "m1",
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if !fake.forceHistory {
+		t.Fatal("有 cutoff 时应以 force_history=true 复制上下文")
+	}
+	if fake.copyStateCalled {
+		t.Fatal("有 cutoff 时不应复制 checkpoint state（上游语义）")
+	}
+}
+
+// TestFork_无cutoff时复制state 校验正常分支。
+func TestFork_无cutoff时复制state(t *testing.T) {
+	fake := &fakeSessionOps{}
+	p := newTestProvisioner()
+	p.SetSessionOps(fake)
+	if _, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if fake.forceHistory {
+		t.Fatal("无 cutoff 时不应 force_history")
+	}
+	if !fake.copyStateCalled {
+		t.Fatal("无 cutoff 时应复制 checkpoint state")
+	}
+}
+
+// TestFork_ValueError映射错误码 校验 not found / already exists。
+func TestFork_ValueError映射错误码(t *testing.T) {
+	fake := &fakeSessionOps{forkErr: errors.New("session not found")}
+	p := newTestProvisioner()
+	p.SetSessionOps(fake)
+	_, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+	})
+	var pe *SessionProvisionError
+	if !errors.As(err, &pe) || pe.Code != "NOT_FOUND" {
+		t.Fatalf("应映射为 NOT_FOUND，实际 %v", err)
+	}
+}
+
+// TestFork_无agent时跳过上下文复制 校验降级路径。
+func TestFork_无agent时跳过上下文复制(t *testing.T) {
+	fake := &fakeSessionOps{}
+	p := newTestProvisioner()
+	p.SetSessionOps(fake)
+	p.AgentManager = &fakeSessionAgentManager{noAgent: true}
+	if _, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+	}); err != nil {
+		t.Fatalf("无 agent 不应报错: %v", err)
+	}
+	if fake.copyContextCalled {
+		t.Fatal("无 agent 时应跳过内存上下文复制")
+	}
+}
+
+// TestFork_结果字段回填 校验 SourceSessionID/Title。
+func TestFork_结果字段回填(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2", Title: "Branch",
+	})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	res := lease.Result().(SessionForkResult)
+	if res.SourceSessionID != "s1" || res.SessionID != "t2" || res.Title != "Branch" {
+		t.Fatalf("结果字段错误: %+v", res)
+	}
+}
+
+// TestFork_SessionEquipmentOverride透传 校验设备覆盖。
+func TestFork_SessionEquipmentOverride透传(t *testing.T) {
+	fake := &fakeSessionOps{}
+	p := newTestProvisioner()
+	p.SetSessionOps(fake)
+	override := map[string]any{"model": "m2"}
+	if _, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+		SessionEquipmentOverride: override,
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if fake.equipmentOverride["model"] != "m2" {
+		t.Fatalf("设备覆盖未透传，实际 %v", fake.equipmentOverride)
+	}
+}
+
+// TestFork_四个cutoff字段全透传 校验 params 组装。
+func TestFork_四个cutoff字段全透传(t *testing.T) {
+	fake := &fakeSessionOps{}
+	p := newTestProvisioner()
+	p.SetSessionOps(fake)
+	if _, err := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+		CutoffMessageID: "m1", CutoffRole: "assistant",
+		CutoffContent: "hello", CutoffTimestamp: 1.5,
+	}); err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if fake.cutoffMessageID != "m1" || fake.cutoffRole != "assistant" ||
+		fake.cutoffContent != "hello" || fake.cutoffTimestamp != 1.5 {
+		t.Fatalf("cutoff 字段未全透传: %+v", fake)
+	}
+}
+
+// TestFork_结果无hook可提交 校验 fork 租约无 commit hook。
+func TestFork_结果无hook可提交(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetSessionOps(&fakeSessionOps{})
+	lease, _ := p.PrepareSessionFork(context.Background(), SessionForkInput{
+		ChannelID: "tui", SourceSessionID: "s1", TargetSessionID: "t2",
+	})
+	ctx := NewEmptyCommitContext()
+	if _, err := p.CommitSessionProvision(lease, SessionProvisionCommitTimingBeforeResultDelivery, &ctx); err != nil {
+		t.Fatalf("fork 提交应成功（无 hook）: %v", err)
+	}
+	if lease.State() != SessionProvisionStateCommitted {
+		t.Fatalf("应为 COMMITTED，实际 %s", lease.State())
 	}
 }
