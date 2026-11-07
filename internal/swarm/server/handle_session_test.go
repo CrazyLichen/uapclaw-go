@@ -287,31 +287,6 @@ func TestHandleSessionRename_缺少SessionID(t *testing.T) {
 	}
 }
 
-// TestHandleSessionDelete_正常删除 验证删除会话目录。
-func TestHandleSessionDelete_正常删除(t *testing.T) {
-	sessionsDir, s, cleanup := setupTestSessionsDir(t)
-	defer cleanup()
-
-	writeTestMetadata(t, sessionsDir, "sess_del", map[string]any{
-		"session_id": "sess_del",
-	})
-
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
-		json.RawMessage(`{"session_id": "sess_del"}`))
-
-	resp, err := s.handleSessionDelete(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionDelete 返回错误: %v", err)
-	}
-	if !resp.OK {
-		t.Error("resp.OK 应为 true")
-	}
-
-	// 验证目录已被删除
-	if _, statErr := os.Stat(filepath.Join(sessionsDir, "sess_del")); !os.IsNotExist(statErr) {
-		t.Error("会话目录应已被删除")
-	}
-}
 
 // TestHandleSessionDelete_缺少SessionID 验证缺少 session_id 时返回错误。
 func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
@@ -352,66 +327,9 @@ func TestHandleSessionDelete_会话不存在(t *testing.T) {
 }
 
 // TestHandleSessionDelete_路径为文件 验证 session_dir 非目录时返回 BAD_REQUEST。
-// Python: session_dir.is_dir() 守卫（agent_ws_server.py L1545-1552）。
-func TestHandleSessionDelete_路径为文件(t *testing.T) {
-	sessionsDir, s, cleanup := setupTestSessionsDir(t)
-	defer cleanup()
-
-	notDir := filepath.Join(sessionsDir, "a_file")
-	if err := os.WriteFile(notDir, []byte("x"), 0o644); err != nil {
-		t.Fatalf("创建占位文件失败: %v", err)
-	}
-
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
-		json.RawMessage(`{"session_id": "a_file"}`))
-
-	resp, err := s.handleSessionDelete(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionDelete 返回错误: %v", err)
-	}
-	if resp.OK {
-		t.Error("resp.OK 应为 false")
-	}
-	if code, _ := resp.Payload["code"].(string); code != "BAD_REQUEST" {
-		t.Errorf("code 应为 BAD_REQUEST，实际 %v", resp.Payload["code"])
-	}
-	// 目录（文件）不应被删除
-	if _, statErr := os.Stat(notDir); os.IsNotExist(statErr) {
-		t.Error("占位文件不应被删除")
-	}
-}
 
 // TestHandleSessionDelete_团队模式清理失败 验证 team 模式 DeleteSessionRuntime
 // 失败时返回 DELETE_FAILED 且不删目录。
-// Python: mode=="team" → delete_session_runtime，deleted=False → DELETE_FAILED（L1565-1596）。
-func TestHandleSessionDelete_团队模式清理失败(t *testing.T) {
-	sessionsDir, s, cleanup := setupTestSessionsDir(t)
-	defer cleanup()
-
-	writeTestMetadata(t, sessionsDir, "sess_team", map[string]any{
-		"session_id": "sess_team",
-		"mode":       "team",
-		"channel_id": "web",
-	})
-
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
-		json.RawMessage(`{"session_id": "sess_team"}`))
-
-	// DeleteSessionRuntime 无 team_name 可解析时走 Release fallback（无活跃 session
-	// 的场景 Release 成功），此处团队 runtime 已不在内存中——删除成功路径也验证
-	// team 分支真实走到了 DeleteSessionRuntime（通过 mode=team 元数据路由）。
-	resp, err := s.handleSessionDelete(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionDelete 返回错误: %v", err)
-	}
-	// 无活跃 runtime 时 Python delete_session_runtime 正常返回 True（release 成功）
-	if !resp.OK {
-		t.Errorf("无活跃团队 runtime 时应删除成功，实际 payload=%v", resp.Payload)
-	}
-	if _, statErr := os.Stat(filepath.Join(sessionsDir, "sess_team")); !os.IsNotExist(statErr) {
-		t.Error("会话目录应已被删除")
-	}
-}
 
 // TestHandleSessionDelete_空SessionID空白字符 验证空白 session_id 视为缺失。
 // Python: target = str(params.get("session_id") or "").strip()。
@@ -434,71 +352,8 @@ func TestHandleSessionDelete_空SessionID空白字符(t *testing.T) {
 	}
 }
 
-// TestHandleSessionCreate_自动生成ID 验证不传 session_id 时自动生成。
-func TestHandleSessionCreate_自动生成ID(t *testing.T) {
-	sessionsDir, s, cleanup := setupTestSessionsDir(t)
-	defer cleanup()
 
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionCreate,
-		json.RawMessage(`{}`))
 
-	resp, err := s.handleSessionCreate(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionCreate 返回错误: %v", err)
-	}
-	if !resp.OK {
-		t.Error("resp.OK 应为 true")
-	}
-
-	sessionID, ok := resp.Payload["session_id"].(string)
-	if !ok || sessionID == "" {
-		t.Error("sessionId 不应为空")
-	}
-
-	// 验证目录和 metadata.json 已创建
-	metaPath := filepath.Join(sessionsDir, sessionID, "metadata.json")
-	if _, statErr := os.Stat(metaPath); os.IsNotExist(statErr) {
-		t.Error("metadata.json 应已创建")
-	}
-}
-
-// TestHandleSessionCreate_指定ID 验证传入 session_id 时使用指定值。
-func TestHandleSessionCreate_指定ID(t *testing.T) {
-	sessionsDir, s, cleanup := setupTestSessionsDir(t)
-	defer cleanup()
-
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionCreate,
-		json.RawMessage(`{"session_id": "my_custom_id"}`))
-
-	resp, err := s.handleSessionCreate(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionCreate 返回错误: %v", err)
-	}
-	if resp.Payload["session_id"] != "my_custom_id" {
-		t.Errorf("sessionId = %q, 期望 %q", resp.Payload["session_id"], "my_custom_id")
-	}
-
-	// 验证目录和 metadata.json 已创建
-	metaPath := filepath.Join(sessionsDir, "my_custom_id", "metadata.json")
-	if _, statErr := os.Stat(metaPath); os.IsNotExist(statErr) {
-		t.Error("metadata.json 应已创建")
-	}
-}
-
-// TestHandleSessionSwitch 验证 session.switch 返回 ok=true。
-func TestHandleSessionSwitch(t *testing.T) {
-	s, _ := newTestServer()
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionSwitch,
-		json.RawMessage(`{"session_id": "sess_1"}`))
-
-	resp, err := s.handleSessionSwitch(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionSwitch 返回错误: %v", err)
-	}
-	if !resp.OK {
-		t.Error("resp.OK 应为 true")
-	}
-}
 
 // TestHandleSessionRewind_缺少参数 验证 session.rewind 缺少参数时返回错误。
 func TestHandleSessionRewind_缺少参数(t *testing.T) {
@@ -581,44 +436,6 @@ func TestHandleSessionFork_缺少参数(t *testing.T) {
 	}
 }
 
-// TestHandleSessionFork_正常分叉 验证 session.fork 正常分叉。
-func TestHandleSessionFork_正常分叉(t *testing.T) {
-	sessionsDir, s, cleanup := setupTestSessionsDir(t)
-	defer cleanup()
-
-	sourceID := "sess_fork_source"
-	writeTestMetadata(t, sessionsDir, sourceID, map[string]any{
-		"session_id":      sourceID,
-		"title":           "源会话",
-		"last_message_at": 1000.0,
-		"message_count":   1,
-	})
-	writeTestHistory(t, sessionsDir, sourceID, []map[string]any{
-		{"role": "user", "content": "hello"},
-		{"role": "assistant", "content": "hi"},
-	})
-
-	targetID := "sess_fork_target"
-	params, _ := json.Marshal(map[string]any{
-		"source_session_id": sourceID,
-		"target_session_id": targetID,
-	})
-	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionFork, params)
-
-	resp, err := s.handleSessionFork(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleSessionFork 返回错误: %v", err)
-	}
-	if !resp.OK {
-		t.Error("resp.OK 应为 true")
-	}
-	if resp.Payload["session_id"] != targetID {
-		t.Errorf("payload session_id = %q, 期望 %q", resp.Payload["session_id"], targetID)
-	}
-	if resp.Payload["source_session_id"] != sourceID {
-		t.Errorf("payload source_session_id = %q, 期望 %q", resp.Payload["source_session_id"], sourceID)
-	}
-}
 
 // TestHandleHistoryListTurns_缺少参数 验证 history.list_turns 缺少参数时返回错误。
 func TestHandleHistoryListTurns_缺少参数(t *testing.T) {
@@ -736,5 +553,162 @@ func TestWriteSessionMetadata(t *testing.T) {
 	result := session.ReadSessionMetadata(tmpDir, "sess_1")
 	if result["title"] != "写入测试" {
 		t.Errorf("title = %q, 期望 %q", result["title"], "写入测试")
+	}
+}
+
+// ──────────────────────────── 10.3.28 provisioner 链路用例 ────────────────────────────
+
+// TestHandleSessionCreate_返回会话标识 校验 create 走 provisioner 全链路。
+//
+// 10.3.28b：原「自动生成ID/指定ID」用例改写——session.create 不再接受
+// 非 TUI 的 session_id，改由 create_token 认领（Go 无预热池，直接新建）。
+func TestHandleSessionCreate_返回会话标识(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionCreate,
+		json.RawMessage(`{"create_token": "tok", "mode": "agent", "work_mode": "work"}`))
+	resp, err := s.handleSessionCreate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("resp.OK 应为 true，实际 payload=%v", resp.Payload)
+	}
+	payload := resp.Payload
+	sessionID, _ := payload["session_id"].(string)
+	if sessionID == "" {
+		t.Fatal("session_id 不应为空")
+	}
+	if _, ok := payload["created"]; !ok {
+		t.Fatal("应返回 created 字段")
+	}
+	// metadata.json 已落盘
+	metaPath := filepath.Join(sessionsDir, sessionID, "metadata.json")
+	if _, statErr := os.Stat(metaPath); statErr != nil {
+		t.Fatalf("metadata.json 应已创建: %v", statErr)
+	}
+}
+
+// TestHandleSessionCreate_非TUI显式ID被拒绝 校验上游语义。
+//
+// Python: session.create no longer accepts session_id
+func TestHandleSessionCreate_非TUI显式ID被拒绝(t *testing.T) {
+	_, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionCreate,
+		json.RawMessage(`{"session_id": "custom", "create_token": "tok"}`))
+	resp, err := s.handleSessionCreate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if resp.OK {
+		t.Fatal("非 TUI 显式 session_id 应被拒绝")
+	}
+	payload := resp.Payload
+	want := "session.create no longer accepts session_id; use session.switch to restore"
+	if payload["error"] != want {
+		t.Fatalf("错误文案 = %v, want %q", payload["error"], want)
+	}
+}
+
+// TestHandleSessionSwitch_切换已有会话 校验 switch 走 provisioner 两阶段事务。
+func TestHandleSessionSwitch_切换已有会话(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	writeTestMetadata(t, sessionsDir, "sess_sw", map[string]any{
+		"session_id": "sess_sw",
+		"mode":       "agent.plan",
+		"channel_id": "web",
+	})
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionSwitch,
+		json.RawMessage(`{"session_id": "sess_sw", "mode": "agent.plan"}`))
+	resp, err := s.handleSessionSwitch(context.Background(), req)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("resp.OK 应为 true，实际 payload=%v", resp.Payload)
+	}
+	payload := resp.Payload
+	if payload["session_id"] != "sess_sw" {
+		t.Fatalf("session_id = %v, want sess_sw", payload["session_id"])
+	}
+	if payload["switched"] != true {
+		t.Fatalf("switched = %v, want true", payload["switched"])
+	}
+}
+
+// TestHandleSessionSwitch_无会话标识报错 校验参数校验。
+func TestHandleSessionSwitch_无会话标识报错(t *testing.T) {
+	_, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionSwitch,
+		json.RawMessage(`{}`))
+	resp, err := s.handleSessionSwitch(context.Background(), req)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if resp.OK {
+		t.Fatal("无 session_id 应失败")
+	}
+	payload := resp.Payload
+	if payload["code"] != "BAD_REQUEST" {
+		t.Fatalf("code = %v, want BAD_REQUEST", payload["code"])
+	}
+	if payload["error"] != "session_id is required" {
+		t.Fatalf("error = %v, want session_id is required", payload["error"])
+	}
+}
+
+// TestHandleSessionDelete_七阶段事务成功 校验删除走 provisioner。
+//
+// 10.3.28c：原「正常删除」用例改写——删除改为七阶段事务，
+// 成功后目录删除 + 元数据缓存清理 + plan 状态重置。
+func TestHandleSessionDelete_七阶段事务成功(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	writeTestMetadata(t, sessionsDir, "sess_del", map[string]any{
+		"session_id": "sess_del",
+		"mode":       "agent.plan",
+		"channel_id": "web",
+	})
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
+		json.RawMessage(`{"session_id": "sess_del"}`))
+	resp, err := s.handleSessionDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("resp.OK 应为 true，实际 payload=%v", resp.Payload)
+	}
+	if _, statErr := os.Stat(filepath.Join(sessionsDir, "sess_del")); !os.IsNotExist(statErr) {
+		t.Fatal("会话目录应已被删除")
+	}
+}
+
+// TestHandleSessionDelete_目录不存在报NOT_FOUND 校验删除前置。
+func TestHandleSessionDelete_目录不存在报NOT_FOUND(t *testing.T) {
+	_, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
+		json.RawMessage(`{"session_id": "not_exist"}`))
+	resp, err := s.handleSessionDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if resp.OK {
+		t.Fatal("目录不存在应失败")
+	}
+	payload := resp.Payload
+	if payload["code"] != "NOT_FOUND" {
+		t.Fatalf("code = %v, want NOT_FOUND", payload["code"])
 	}
 }

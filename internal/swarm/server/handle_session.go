@@ -4,19 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	swarmsession "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -62,7 +59,7 @@ type sessionSwitchParams struct {
 // 扫描 ~/.uapclaw/agent/sessions/ 目录，读取每个子目录的 metadata.json，
 // 按 last_message_at 降序排列，返回会话列表。
 func (s *AgentServer) handleSessionList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	sessions, _ := session.GetAllSessionsMetadata(10000, 0)
+	sessions, _ := swarmsession.GetAllSessionsMetadata(10000, 0)
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{"sessions": sessions}),
@@ -103,7 +100,7 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 	}
 
 	// 委托 session 子包处理三种语义
-	result, err := session.ApplySessionRename(target, params.Title, request.ChannelID)
+	result, err := swarmsession.ApplySessionRename(target, params.Title, request.ChannelID)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -117,159 +114,144 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 	), nil
 }
 
-// handleSessionSwitch 处理 session.switch 请求。stub：返回 ok=true。
-func (s *AgentServer) handleSessionSwitch(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// handleSessionSwitch 处理 session.switch 请求。
+//
+// 10.3.28b：改为两阶段事务（prepare → commit → 失败 abort）。
+// Python: agent_ws_server.py _handle_session_switch
+func (s *AgentServer) handleSessionSwitch(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	params := parseSessionParams(request)
+	input := swruntime.SessionSwitchInput{
+		ChannelID:         request.ChannelID,
+		TargetSessionID:   paramString(params, "session_id"),
+		PreviousSessionID: paramString(params, "previous_session_id"),
+		Mode:              firstNonEmptyString(paramString(params, "mode"), "agent.plan"),
+		PreviousMode:      paramString(params, "previous_mode"),
+		TeamHint:          paramBool(params, "team"),
+	}
+	lease, err := s.provisioner.PrepareSessionSwitch(ctx, input)
+	if err != nil {
+		return sessionProvisionErrorResponse(request, err), nil
+	}
+	commitCtx := swruntime.SessionProvisionCommitContext{
+		ForegroundScopeID: firstNonEmptyString(paramString(params, "view_id"),
+			"ws:"+request.RequestID),
+	}
+	committed, commitErr := s.provisioner.CommitSessionProvision(
+		lease, swruntime.SessionProvisionCommitTimingBeforeResultDelivery, &commitCtx)
+	if commitErr != nil {
+		_ = s.provisioner.AbortSessionProvision(lease)
+		return sessionProvisionErrorResponse(request, commitErr), nil
+	}
+	switched, _ := committed.(swruntime.SessionSwitchResult)
+	logger.Info(logComponent).
+		Str("session_id", switched.SessionID).
+		Str("mode", switched.Mode).
+		Msg("session switched")
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{"ok": true}),
+		schema.WithPayload(map[string]any{
+			"session_id":  switched.SessionID,
+			"mode":        switched.Mode,
+			"switched":    switched.Switched,
+			"moa_enabled": switched.MoaEnabled,
+		}),
 	), nil
 }
 
-// handleSessionDelete 处理 session.delete 请求，对齐 Python _handle_session_delete。
+// handleSessionDelete 处理 session.delete 请求。
 //
-// Python 步骤（agent_ws_server.py L1525-1613）：
-//
-//	Python: 1. params.session_id 为空 → BAD_REQUEST
-//	Python: 2. session_dir 不存在 → NOT_FOUND
-//	Python: 3. session_dir 非目录 → BAD_REQUEST
-//	Python: 4. ensure_persistent_checkpointer 失败 → 错误响应
-//	Python: 5. 读 session metadata：mode/channel_id
-//	Python: 6. mode=="team" → team_manager.delete_session_runtime（失败 deleted=False）
-//	          否则 → Runner.release（异常 deleted=False）
-//	Python: 7. deleted=False → DELETE_FAILED 错误响应（不删目录）
-//	Python: 8. deleted=True → rmtree + remove_session_metadata_cache + 成功响应
+// 10.3.28c：改为 provisioner 的七阶段事务（原 147 行行内实现已删除）。
+// 阶段顺序与回滚分界见设计文档 §6.1；本函数只做参数解析与结果映射。
+// Python: agent_ws_server.py _handle_session_delete
 func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	var params sessionDeleteParams
-	if request.Params != nil {
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Msg("session.delete failed to parse params")
-			return nil, fmt.Errorf("解析参数失败: %w", err)
-		}
-	}
-
-	target := strings.TrimSpace(params.SessionID)
+	params := parseSessionParams(request)
+	target := strings.TrimSpace(paramString(params, "session_id"))
 	if target == "" {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "session_id 不能为空",
+				"error": "session_id is required",
 				"code":  "BAD_REQUEST",
 			}),
 		), nil
 	}
-
-	sessionsDir := session.GetSessionsDir()
-	sessionDir := filepath.Join(sessionsDir, target)
-
-	// Python: session_dir.exists()/is_dir() 守卫
-	dirInfo, statErr := os.Stat(sessionDir)
-	if os.IsNotExist(statErr) {
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithResponseOK(false),
-			schema.WithPayload(map[string]any{
-				"error": "session not found",
-				"code":  "NOT_FOUND",
-			}),
-		), nil
+	result, err := s.provisioner.DeleteSession(ctx, swruntime.DeleteSessionOptions{
+		ChannelID:      request.ChannelID,
+		SessionID:      target,
+		QuiesceSession: s.quiesceSessionForDelete,
+		DisposeSession: s.disposeSessionAfterResourceRelease,
+	})
+	if err != nil {
+		return nil, err
 	}
-	if statErr != nil || !dirInfo.IsDir() {
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithResponseOK(false),
-			schema.WithPayload(map[string]any{
-				"error": "session is not a directory",
-				"code":  "BAD_REQUEST",
-			}),
-		), nil
-	}
-
-	// Python: ensure_persistent_checkpointer（团队模式删除前确保持久化检查点器可用）
-	if cpErr := adapter.EnsurePersistentCheckpointer(ctx); cpErr != nil {
-		logger.Error(logComponent).
-			Err(cpErr).
-			Str("request_id", request.RequestID).
-			Msg("persistent checkpointer unavailable")
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithResponseOK(false),
-			schema.WithPayload(map[string]any{
-				"error": "persistent checkpointer is unavailable",
-				"code":  "CHECKPOINT_UNAVAILABLE",
-			}),
-		), nil
-	}
-
-	// Python: mode = metadata.get("mode"); channel_id = metadata.get("channel_id") or request.channel_id
-	metadata := session.GetSessionMetadata(target)
-	mode := ""
-	if metadata != nil {
-		if m, ok := metadata["mode"].(string); ok {
-			mode = strings.ToLower(strings.TrimSpace(m))
-		}
-	}
-	channelID := ""
-	if metadata != nil {
-		if c, ok := metadata["channel_id"].(string); ok && strings.TrimSpace(c) != "" {
-			channelID = strings.TrimSpace(c)
-		}
-	}
-	if channelID == "" {
-		channelID = request.ChannelID
-	}
-
-	// Python: try: team 模式走 delete_session_runtime；否则 Runner.release；except → deleted=False
-	deleted := true
-	if mode == "team" {
-		teamManager := team.GetTeamManager(channelID)
-		d, err := teamManager.DeleteSessionRuntime(ctx, target, "session.delete: ")
-		if err != nil || !d {
-			// Python: except → logger.warning + deleted=False
-			logger.Warn(logComponent).
-				Str("session_id", target).Err(err).
-				Msg("session.delete runtime cleanup failed")
-			deleted = false
-		}
-	} else {
-		if err := runner.Release(ctx, target, false); err != nil {
-			logger.Warn(logComponent).
-				Str("session_id", target).Err(err).
-				Msg("session.delete runtime cleanup failed")
-			deleted = false
-		}
-	}
-
-	if !deleted {
-		// Python: deleted=False → DELETE_FAILED，不删目录
-		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-			schema.WithResponseOK(false),
-			schema.WithPayload(map[string]any{
-				"error": "session runtime cleanup failed",
-				"code":  "DELETE_FAILED",
-			}),
-		), nil
-	}
-
-	if err := os.RemoveAll(sessionDir); err != nil {
-		logger.Error(logComponent).
-			Err(err).
+	if !result.OK {
+		logger.Warn(logComponent).
 			Str("session_id", target).
-			Msg("failed to delete session directory")
-		return nil, fmt.Errorf("删除会话目录失败: %w", err)
+			Str("code", result.ErrorCode).
+			Bool("recovery_required", result.RecoveryRequired).
+			Msg("session.delete failed")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error":             result.ErrorMessage,
+				"code":              result.ErrorCode,
+				"deleted":           result.Deleted,
+				"recovery_required": result.RecoveryRequired,
+			}),
+		), nil
 	}
-
-	// 清理内存缓存，对齐 Python remove_session_metadata_cache()
-	session.RemoveSessionMetadataCache(target)
-
-	// 清理计划模式会话记忆（退出记忆 / 会话锁），对齐 Python service.reset_session
 	s.planController.ResetSession(target)
-
 	logger.Info(logComponent).
 		Str("session_id", target).
 		Msg("session deleted")
-
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{"session_id": target}),
 	), nil
 }
+
+// quiesceSessionForDelete 关闭准入并等执行停下。
+//
+// spec §6.1：QuiesceSession 置 QUIESCING → CloseSession(带 generation) 逐条取消并等 Done。
+// 超时返回 SessionCloseTimeoutError，使删除事务判定为 DELETE_FAILED。
+func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, sessionID string) error {
+	if s.coordinator == nil {
+		return nil
+	}
+	lifecycleCtx, err := s.coordinator.QuiesceSession(sessionID, nil)
+	if err != nil {
+		return err
+	}
+	if lifecycleCtx == nil {
+		// 该会话不在协调器账本内：无需清场
+		return nil
+	}
+	timeout := 10 * time.Second
+	res, closeErr := s.coordinator.CloseSession(sessionID, &lifecycleCtx.Generation, &timeout)
+	if closeErr != nil {
+		return closeErr
+	}
+	if len(res.TimedOut) > 0 {
+		return &session.SessionCloseTimeoutError{
+			SessionID:    sessionID,
+			ExecutionIDs: res.TimedOut,
+		}
+	}
+	return nil
+}
+
+// disposeSessionAfterResourceRelease 释放会话内存运行时。
+//
+// spec §10 R-2/R-3：三个依赖（prompt_suggestion.forks.session_deleted /
+// stop_subagent_runtimes / cleanup_session_runtime）Go 侧尚未落地，此处仅
+// 记告警。Runner.release 由 provisioner 在其后调用，语义不丢失。
+func (s *AgentServer) disposeSessionAfterResourceRelease(_ context.Context, channelID, sessionID string) error {
+	logger.Debug(logComponent).
+		Str("channel_id", channelID).
+		Str("session_id", sessionID).
+		Msg("dispose: prompt_suggestion/subagent/cleanup_session_runtime pending (10.3.28 spec R-2/R-3)")
+	return nil
+}
+
+
 
 // handleSessionRewind 处理 session.rewind 请求，对齐 Python _handle_session_rewind_full(restore_files=False)。
 func (s *AgentServer) handleSessionRewind(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -426,82 +408,95 @@ func (s *AgentServer) handleSessionRewindContext(ctx context.Context, request *s
 //
 // 从 request.Params 读取 session_id（可选，没有则生成），
 // 创建会话目录和 metadata.json，返回 session_id。
-func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	var params sessionCreateParams
-	if request.Params != nil {
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Msg("session.create failed to parse params")
-			return nil, fmt.Errorf("解析参数失败: %w", err)
-		}
+func (s *AgentServer) handleSessionCreate(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	params := parseSessionParams(request)
+	explicit := paramString(params, "persist_session")
+	input := swruntime.SessionCreateInput{
+		ChannelID:              request.ChannelID,
+		RequestedSessionID:     paramString(params, "session_id"),
+		PreviousSessionID:      paramString(params, "previous_session_id"),
+		CreateToken:            paramString(params, "create_token"),
+		PersistSession:         paramBool(params, "persist_session"),
+		PersistSessionSupplied: explicit != "",
+		Mode:                   firstNonEmptyString(paramString(params, "mode"), "agent"),
+		PreviousMode:           paramString(params, "previous_mode"),
+		IsSwarm:                paramBool(params, "is_swarm"),
+		TeamHint:               paramBool(params, "team"),
+		ProjectID:              paramString(params, "project_id"),
+		ProjectDir:             paramString(params, "project_dir"),
+		Cwd:                    paramString(params, "cwd"),
+		WorkMode:               paramString(params, "work_mode"),
+		Title:                  paramString(params, "title"),
+		UserID:                 requestUserID(request),
+		ModelName:              paramString(params, "model_name"),
+		CronID:                 paramString(params, "cron_id"),
 	}
-
-	sessionID := params.SessionID
-	if sessionID == "" {
-		sessionID = session.MakeSessionID()
+	lease, err := s.provisioner.PrepareSessionCreate(ctx, input)
+	if err != nil {
+		return sessionProvisionErrorResponse(request, err), nil
 	}
+	created, _ := lease.Result().(swruntime.SessionCreateResult)
 
-	// 委托 session 子包初始化元数据（同步写，确保创建后立即可读）
-	session.InitSessionMetadata(sessionID, request.ChannelID, "", "", "unknown", "")
-
+	// 结果投递边界之后提交（AFTER_RESULT_DELIVERY，KVC 派发在响应之后）
+	commitCtx := swruntime.SessionProvisionCommitContext{
+		ForegroundScopeID: firstNonEmptyString(paramString(params, "view_id"),
+			"ws:"+request.RequestID),
+	}
+	if _, commitErr := s.provisioner.CommitSessionProvision(
+		lease, swruntime.SessionProvisionCommitTimingAfterResultDelivery, &commitCtx); commitErr != nil {
+		// KVC 派发失败不撤销已返回的成功响应（commitAttemptIsTerminal=true）
+		logger.Warn(logComponent).Err(commitErr).Str("session_id", created.SessionID).
+			Msg("session.create post-delivery commit failed")
+	}
 	logger.Info(logComponent).
-		Str("session_id", sessionID).
+		Str("session_id", created.SessionID).
+		Bool("created", created.Created).
 		Msg("session created")
-
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{"session_id": sessionID}),
+		schema.WithPayload(map[string]any{
+			"session_id":  created.SessionID,
+			"project_id":  created.ProjectID,
+			"project_dir": created.ProjectDir,
+			"work_mode":   created.WorkMode,
+			"created":     created.Created,
+			"prewarm_hit": created.PrewarmHit,
+			"moa_enabled": created.MoaEnabled,
+		}),
 	), nil
 }
 
-// handleSessionFork 处理 session.fork 请求，对齐 Python _handle_session_fork。
+// handleSessionFork 处理 session.fork 请求。
+//
+// 10.3.28b：改为两阶段事务（BEFORE_RESULT_DELIVERY，无后置副作用）。
+// Python: agent_ws_server.py _handle_session_fork
 func (s *AgentServer) handleSessionFork(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	var params struct {
-		SourceSessionID string `json:"source_session_id"`
-		TargetSessionID string `json:"target_session_id"`
-		Title           string `json:"title"`
+	params := parseSessionParams(request)
+	input := swruntime.SessionForkInput{
+		ChannelID:       request.ChannelID,
+		SourceSessionID: paramString(params, "source_session_id"),
+		TargetSessionID: paramString(params, "target_session_id"),
+		Title:           paramString(params, "title"),
 	}
-	if request.Params != nil {
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, fmt.Errorf("解析参数失败: %w", err)
-		}
-	}
-	if params.SourceSessionID == "" {
+	if input.SourceSessionID == "" {
 		return nil, fmt.Errorf("source_session_id required")
 	}
-	if params.TargetSessionID == "" {
-		return nil, fmt.Errorf("target_session_id required")
-	}
-
-	// Python: 1. fork_session
-	forkResult, err := sessionops.ForkSession(sessionops.ForkSessionParams{
-		SourceSessionID: params.SourceSessionID,
-		TargetSessionID: params.TargetSessionID,
-		Title:           params.Title,
-		ChannelID:       request.ChannelID,
-	})
+	lease, err := s.provisioner.PrepareSessionFork(ctx, input)
 	if err != nil {
 		return nil, err
 	}
-
-	// Python: 2. resolve_rewind_agent → copy_session_context
-	deepAgent := s.resolveRewindAgent(request.ChannelID)
-	if deepAgent != nil {
-		sessionops.CopySessionContext(ctx, deepAgent, params.SourceSessionID, params.TargetSessionID)
+	commitCtx := swruntime.NewEmptyCommitContext()
+	committed, commitErr := s.provisioner.CommitSessionProvision(
+		lease, swruntime.SessionProvisionCommitTimingBeforeResultDelivery, &commitCtx)
+	if commitErr != nil {
+		_ = s.provisioner.AbortSessionProvision(lease)
+		return nil, commitErr
 	}
-
-	// Python: 3. copy_session_state
-	var card *singleagentschema.AgentCard
-	if deepAgent != nil {
-		card = deepAgent.Card()
-	}
-	sessionops.CopySessionState(ctx, params.SourceSessionID, params.TargetSessionID, card, deepAgent)
-
+	forked, _ := committed.(swruntime.SessionForkResult)
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"session_id":        forkResult.SessionID,
-			"source_session_id": forkResult.SourceSessionID,
-			"title":             forkResult.Title,
+			"session_id":        forked.SessionID,
+			"source_session_id": forked.SourceSessionID,
+			"title":             forked.Title,
 		}),
 	), nil
 }

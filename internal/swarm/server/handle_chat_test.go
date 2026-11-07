@@ -244,7 +244,9 @@ func TestHandleUnaryImpl_特殊方法错误写错误帧(t *testing.T) {
 		params  string
 		wantErr string
 	}{
-		{"session.create 参数非法", schema.ReqMethodSessionCreate, `{bad json`, "SESSION_CREATE_ERROR"},
+		// 10.3.28b：session.create 改走 provisioner —— 参数解析失败得到空 map，
+		// 随后因缺 create_token 走业务错误响应（code=BAD_REQUEST），不再是错误帧
+		{"session.create 参数非法", schema.ReqMethodSessionCreate, `{bad json`, "BAD_REQUEST"},
 		{"session.fork 缺源会话", schema.ReqMethodSessionFork, `{}`, "SESSION_FORK_ERROR"},
 	}
 	for _, tc := range cases {
@@ -259,8 +261,14 @@ func TestHandleUnaryImpl_特殊方法错误写错误帧(t *testing.T) {
 			resp, err := parseUnaryFrame(readFrame(t, tr))
 			require.NoError(t, err)
 			require.False(t, resp.OK)
-			errPayload, _ := resp.Payload["error"].(map[string]any)
-			require.Equal(t, tc.wantErr, errPayload["code"])
+			// 错误帧：payload["error"] 是对象且 code 为 xxx_ERROR；
+			// 业务失败：payload["code"] 直接在顶层
+			errPayload, isFrame := resp.Payload["error"].(map[string]any)
+			if isFrame {
+				require.Equal(t, tc.wantErr, errPayload["code"])
+				return
+			}
+			require.Equal(t, tc.wantErr, resp.Payload["code"])
 		})
 	}
 }
@@ -427,14 +435,15 @@ func TestHandleUnaryImpl_会话方法正常分流(t *testing.T) {
 		s, tr := newTestServer()
 		req := &schema.AgentRequest{
 			RequestID: "req-create-ok", ChannelID: "web", ReqMethod: schema.ReqMethodSessionCreate,
-			Params: json.RawMessage(`{"session_id":"sess-created"}`),
+			Params: json.RawMessage(`{"create_token":"tok","mode":"agent","work_mode":"work"}`),
 		}
 		s.handleUnaryImpl(context.Background(), req)
 
 		resp, err := parseUnaryFrame(readFrame(t, tr))
 		require.NoError(t, err)
 		require.True(t, resp.OK)
-		require.Equal(t, "sess-created", resp.Payload["session_id"])
+		// 10.3.28b：session.create 不再接受非 TUI 的 session_id，会话标识由认领生成
+		require.NotEmpty(t, resp.Payload["session_id"])
 	})
 
 	t.Run("session.fork", func(t *testing.T) {

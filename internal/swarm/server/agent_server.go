@@ -16,6 +16,7 @@ import (
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -53,6 +54,12 @@ type AgentServer struct {
 	agentRuntime *swruntime.AgentRuntime
 	// planController 计划模式控制器（进程内唯一，对齐 Python _SERVER_PLAN_CONTROLLER）
 	planController *swruntime.PlanModeController
+	// provisioner 会话供给事务编排器（10.3.28b/c）
+	// Python: AgentRuntime._session_provisioner
+	provisioner *swruntime.RuntimeSessionProvisioner
+	// coordinator 会话执行协调器（10.3.28d）
+	// Python: AgentRuntime._session_coordinator
+	coordinator *swsession.RuntimeSessionCoordinator
 	// agentConfigService Agent 配置 CRUD 服务
 	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
@@ -114,6 +121,8 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	}
 	// 控制事件走 push 通道（对齐 Python _send_runtime_event 的 plan_mode_exited 分支）
 	server.planController = swruntime.NewPlanModeController()
+	server.provisioner = newSessionProvisioner(server.planController, server.agentManager)
+	server.coordinator = swsession.NewRuntimeSessionCoordinator(swsession.DefaultCoordinatorOptions())
 	server.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
 		Manager:        agentManager,
 		PlanController: server.planController,

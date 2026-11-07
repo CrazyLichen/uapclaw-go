@@ -707,6 +707,16 @@ func NewRuntimeSessionProvisioner(deps ProvisionerDeps) *RuntimeSessionProvision
 // SetSessionOps 注入会话复制能力（测试与装配用）。
 func (p *RuntimeSessionProvisioner) SetSessionOps(ops SessionOps) { p.extra.SessionOps = ops }
 
+// SetResolveSessionDir 注入会话目录解析函数。
+func (p *RuntimeSessionProvisioner) SetResolveSessionDir(fn func(sessionID string) (string, bool)) {
+	p.extra.ResolveSessionDir = fn
+}
+
+// SetRemoveSessionDir 注入会话目录删除函数。
+func (p *RuntimeSessionProvisioner) SetRemoveSessionDir(fn func(sessionDir string) error) {
+	p.extra.RemoveSessionDir = fn
+}
+
 // SetTeamManagerProvider 注入团队管理器获取函数。
 func (p *RuntimeSessionProvisioner) SetTeamManagerProvider(fn func(channelID string) TeamSwitchPreparer) {
 	p.extra.teamManagerProvider = fn
