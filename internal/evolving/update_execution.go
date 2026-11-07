@@ -18,11 +18,9 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExecuteUpdates 归一化并执行一批更新，不包含持久化或审批。
-//
 // 1. 过滤 nil 值更新，为 nil 值生成错误结果
 // 2. 归一化后逐一应用到对应 operator
 // 3. operator 不存在时生成完整 ApplyResult（含 ChangeType 和 Metadata）
-//
 // Python: openjiuwen/agent_evolving/update_execution.py execute_updates
 func ExecuteUpdates(
 	operators map[string]operator.Operator,
@@ -79,7 +77,6 @@ func ExecuteUpdates(
 }
 
 // ApplyUpdates ExecuteUpdates 的兼容别名。
-//
 // Python: openjiuwen/agent_evolving/update_execution.py apply_updates
 func ApplyUpdates(
 	operators map[string]operator.Operator,
@@ -89,7 +86,6 @@ func ApplyUpdates(
 }
 
 // SummarizeApplyResults 返回更新执行的聚合统计。
-//
 // Python: openjiuwen/agent_evolving/update_execution.py summarize_apply_results
 func SummarizeApplyResults(results []schema.ApplyResult) map[string]int {
 	applied := 0

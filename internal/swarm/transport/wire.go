@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildServerPushWire 将 send_push 入参编码为 E2A 响应线 dict。
-//
 // Python: jiuwenswarm/server/gateway_push/wire.py (build_server_push_wire)。
 // 编码后的 dict 带有 metadata[E2A_WIRE_SERVER_PUSH_KEY] = True 标记，
 // 使 AgentClient 的 receiverLoop 能识别此帧为 server_push 并调回调投递。
@@ -38,7 +37,6 @@ func BuildServerPushWire(msg map[string]any) map[string]any {
 }
 
 // BuildConnectionAckFrame 构建 connection.ack 事件帧 dict。
-//
 // Python: jiuwenswarm/server/agent_ws_server.py (_connection_handler 首帧)。
 // 此帧通过 RecvCh 发送到 AgentClient，在 receiverLoop 中被识别为事件帧。
 func BuildConnectionAckFrame() map[string]any {
@@ -50,7 +48,6 @@ func BuildConnectionAckFrame() map[string]any {
 }
 
 // WireRequestIDKey 统一 request_id 为字符串。
-//
 // Python: jiuwenswarm/gateway/routing/agent_client.py (_wire_request_id_key)。
 // 将任意 request_id 值转为字符串，避免 JSON 数字/字符串导致队列键不一致。
 func WireRequestIDKey(v any) string {
@@ -67,7 +64,6 @@ func WireRequestIDKey(v any) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildServerPushWireWithResponseKind 有 response_kind 的 server_push 编码。
-//
 // Python: wire.py build_server_push_wire 中 response_kind 非空分支。
 func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string) map[string]any {
 	requestID := WireRequestIDKey(msg["request_id"])
@@ -123,7 +119,6 @@ func buildServerPushWireWithResponseKind(msg map[string]any, responseKind string
 }
 
 // buildServerPushWireChunk 无 response_kind 的 server_push 编码（chunk 形）。
-//
 // Python: wire.py build_server_push_wire 中 response_kind 为空分支。
 func buildServerPushWireChunk(msg map[string]any) map[string]any {
 	requestID := WireRequestIDKey(msg["request_id"])

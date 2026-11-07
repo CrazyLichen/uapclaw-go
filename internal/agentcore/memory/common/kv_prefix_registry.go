@@ -10,10 +10,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // KvPrefixRegistry KV 前缀注册表，管理记忆模块使用的 KV 存储键前缀。
-//
 // 允许记忆模块注册当前和旧版前缀，使 KV 迁移器能动态发现正在使用的前缀，
 // 而无需硬编码。当模块在版本演进中添加或移除前缀时，迁移器能自动适应。
-//
 // Python: openjiuwen/core/memory/common/kv_prefix_registry.py (KvPrefixRegistry)
 type KvPrefixRegistry struct {
 	// mu 保护并发访问
@@ -47,9 +45,7 @@ func NewKvPrefixRegistry() *KvPrefixRegistry {
 }
 
 // RegisterCurrent 注册一个当前（活跃）键前缀。
-//
 // 如果前缀为空或纯空白字符，返回 error。已存在的前缀不会重复添加。
-//
 // Python: KvPrefixRegistry.register_current
 func (r *KvPrefixRegistry) RegisterCurrent(prefix string) error {
 	if prefix == "" || strings.TrimSpace(prefix) == "" {
@@ -63,9 +59,7 @@ func (r *KvPrefixRegistry) RegisterCurrent(prefix string) error {
 }
 
 // RegisterLegacy 注册一个旧版（已弃用）键前缀，用于迁移检测。
-//
 // 如果前缀为空或纯空白字符，返回 error。已存在的前缀不会重复添加。
-//
 // Python: KvPrefixRegistry.register_legacy
 func (r *KvPrefixRegistry) RegisterLegacy(prefix string) error {
 	if prefix == "" || strings.TrimSpace(prefix) == "" {
@@ -78,9 +72,7 @@ func (r *KvPrefixRegistry) RegisterLegacy(prefix string) error {
 }
 
 // GetAllPrefixes 获取所有已注册的前缀（current + legacy）。
-//
 // 返回前缀切片的副本，调用方可以安全修改。
-//
 // Python: KvPrefixRegistry.get_all_prefixes
 func (r *KvPrefixRegistry) GetAllPrefixes() []string {
 	r.mu.RLock()
@@ -95,7 +87,6 @@ func (r *KvPrefixRegistry) GetAllPrefixes() []string {
 }
 
 // Unregister 从 current 和 all 集合中移除指定前缀。
-//
 // Python: KvPrefixRegistry.unregister
 func (r *KvPrefixRegistry) Unregister(prefix string) {
 	r.mu.Lock()

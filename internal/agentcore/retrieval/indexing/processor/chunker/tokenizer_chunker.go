@@ -8,10 +8,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TokenizerChunker token 预算分块器。
-//
 // 嵌入 BaseChunker 获得默认 ChunkDocuments/Process；ChunkText 委托
 // IndexSentenceSplitter 做句级切分 + token 预算打包。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/chunker/tokenizer_chunker.py (TokenizerChunker)
 type TokenizerChunker struct {
 	// BaseChunker 默认适配器（ChunkSize/ChunkOverlap + 默认 ChunkDocuments/Process）
@@ -30,11 +28,9 @@ var _ Chunker = (*TokenizerChunker)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTokenizerChunker 构造 TokenizerChunker。
-//
 // 构造链（对齐 Python __init__ 的 super().__init__ + splitter 构造）：
 // NewBaseChunker（155100/155101 校验）→ NewIndexSentenceSplitter
 // （tokenizer 三态解析 + chunkSize 决策）→ SetSelf 注入。
-//
 // Python: tokenizer_chunker.py TokenizerChunker.__init__
 func NewTokenizerChunker(chunkSize, chunkOverlap int, tokenizer Tokenizer, language string, splitterConfig map[string]any) (*TokenizerChunker, error) {
 	bc, err := NewBaseChunker(chunkSize, chunkOverlap)
@@ -51,10 +47,8 @@ func NewTokenizerChunker(chunkSize, chunkOverlap int, tokenizer Tokenizer, langu
 }
 
 // ChunkText token 预算分块。
-//
 // 对齐 Python：空文本→[]；Document(text, metadata={}) 包装 →
 // splitter.split → 收集 node.text；完成日志 chunk_count。
-//
 // Python: tokenizer_chunker.py TokenizerChunker.chunk_text
 func (c *TokenizerChunker) ChunkText(text string) ([]string, error) {
 	if text == "" {

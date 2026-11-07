@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StreamableHttpClient Streamable HTTP 传输的 MCP 客户端。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/client/streamable_http_client.py (StreamableHttpClient)
 type StreamableHttpClient struct {
 	// config MCP 服务器配置
@@ -439,7 +438,6 @@ func (c *StreamableHttpClient) Close() error {
 }
 
 // connected 返回当前连接状态（并发安全）。
-//
 // 重连会在调用进行中改写 isConnected，直接读字段会与写入构成数据竞争。
 func (c *StreamableHttpClient) connected() bool {
 	c.mu.RLock()
@@ -448,7 +446,6 @@ func (c *StreamableHttpClient) connected() bool {
 }
 
 // currentClient 返回当前传输客户端（并发安全）。
-//
 // 重连期间 client 可能被置空再重建，直接读字段会与写入构成数据竞争。
 func (c *StreamableHttpClient) currentClient() *mcpclient.Client {
 	c.mu.RLock()
@@ -457,7 +454,6 @@ func (c *StreamableHttpClient) currentClient() *mcpclient.Client {
 }
 
 // ListTools 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 listtools
 func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
 	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "ListTools", func() ([]*types.McpToolCard, error) {
@@ -466,7 +462,6 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 }
 
 // CallTool 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 calltool
 func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
 	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "CallTool", func() (any, error) {
@@ -475,7 +470,6 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 }
 
 // GetToolInfo 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 gettoolinfo
 func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
 	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "GetToolInfo", func() (*types.McpToolCard, error) {
@@ -484,7 +478,6 @@ func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string)
 }
 
 // ListResources 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 listresources
 func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]any, error) {
 	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "ListResources", func() ([]map[string]any, error) {
@@ -493,7 +486,6 @@ func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]
 }
 
 // ReadResource 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 readresource
 func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "ReadResource", func() ([]map[string]any, error) {

@@ -770,7 +770,6 @@ func mergeDetails(dst, src map[string]any) {
 }
 
 // cloneStageDetails 克隆细节字典。
-//
 // 审查修复 M-03（注释修正+归档）：Python "details or {}" 非空 dict 时
 // step.details 与调用方共享引用（后续 update 写穿调用方 dict）；Go 对
 // 非空 map 深位克隆为语言驱动防御（并发下调用方再改 map 有 data race

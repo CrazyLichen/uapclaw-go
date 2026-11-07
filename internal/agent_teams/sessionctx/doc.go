@@ -1,5 +1,4 @@
 // Package sessionctx 提供会话上下文状态管理。
-//
 // Python: openjiuwen/agent_teams/context.py
 // 提供 SessionState（对齐 Python contextvars.ContextVar）和基于 context.Context 的传播机制。
 // 作为独立子包存在，避免 schema↔database 循环依赖：

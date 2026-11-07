@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemInfo 记忆信息。
-//
 // Python: MemInfo
 type MemInfo struct {
 	// MemID 记忆唯一标识
@@ -23,7 +22,6 @@ type MemInfo struct {
 }
 
 // MemResult 记忆搜索结果。
-//
 // Python: MemResult
 type MemResult struct {
 	// MemInfo 记忆信息
@@ -33,7 +31,6 @@ type MemResult struct {
 }
 
 // AddMemResult 添加记忆操作结果。
-//
 // Python: AddMemResult
 type AddMemResult struct {
 	// Variables 变量记忆结果

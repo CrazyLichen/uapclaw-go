@@ -22,11 +22,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InstructionOptimizer 通过 LLM 文本梯度优化改写 system_prompt 和 user_prompt。
-//
 // Backward 阶段：从失败信号提取 bad cases → 调用 LLM 生成文本梯度
 // （分析为什么 prompt 失败）→ 预计算优化后的 system_prompt 和 user_prompt。
 // Step 阶段：返回预计算的优化后 prompt，由 Trainer 统一 apply 到 LLMCallOperator。
-//
 // Python: openjiuwen/agent_evolving/optimizer/llm_call/instruction_optimizer.py InstructionOptimizer
 type InstructionOptimizer struct {
 	LLMCallOptimizerBase
@@ -48,7 +46,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInstructionOptimizer 创建 InstructionOptimizer 实例。
-//
 // Python: InstructionOptimizer(model_config, model_client_config)
 func NewInstructionOptimizer(model *llm.Model) *InstructionOptimizer {
 	return &InstructionOptimizer{
@@ -57,7 +54,6 @@ func NewInstructionOptimizer(model *llm.Model) *InstructionOptimizer {
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量。
-//
 // Python: BaseOptimizer.bind(operators, targets, **config)
 //
 //	self._targets = list(targets or self.default_targets())
@@ -90,7 +86,6 @@ func (o *InstructionOptimizer) Parameters() map[string]*optimizer.TextualParamet
 }
 
 // SelectSignals 仅保留失败驱动信号用于 prompt 优化。
-//
 // Python: InstructionOptimizer._select_signals(signals)
 //
 // 过滤规则：
@@ -123,7 +118,6 @@ func (o *InstructionOptimizer) SelectSignals(signals []*signal.EvolutionSignal) 
 }
 
 // Backward 反向传播：从信号计算梯度并预计算优化后 prompt。
-//
 // Python: BaseOptimizer.backward(signals)
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
@@ -132,7 +126,6 @@ func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.E
 }
 
 // Step 生成更新映射，由 Trainer.apply_updates 统一应用。
-//
 // Python: BaseOptimizer.step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
@@ -141,7 +134,6 @@ func (o *InstructionOptimizer) Step() (map[schema.UpdateKey]any, error) {
 }
 
 // backward 反向传播主逻辑。
-//
 // Python: InstructionOptimizer._backward(signals)
 //
 // 逻辑：
@@ -255,7 +247,6 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 }
 
 // step 返回预计算的优化后 prompt 映射。
-//
 // Python: InstructionOptimizer._step()
 //
 //	Python: updates = {}
@@ -316,7 +307,6 @@ func (o *InstructionOptimizer) generateTextualGradient(ctx context.Context, op o
 }
 
 // invokeLLM 调用 LLM 并返回字符串内容。
-//
 // Python: InstructionOptimizer._invoke_llm(messages)
 //
 //	Python: raw = (await self._model.invoke(messages)).content
@@ -331,7 +321,6 @@ func (o *InstructionOptimizer) invokeLLM(ctx context.Context, messages []llmsche
 }
 
 // optimizeBoth 联合优化 system 和 user prompt。
-//
 // Python: InstructionOptimizer._optimize_both(op, param)
 //
 //	Python: system_tpl = self._get_prompt_template(op, "system_prompt")
@@ -409,7 +398,6 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 }
 
 // optimizeSingle 单独优化一个 prompt。
-//
 // Python: InstructionOptimizer._optimize_single(op, param, prompt_type)
 //
 //	Python: target_tpl = self._get_prompt_template(op, prompt_type)
@@ -472,7 +460,6 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 }
 
 // formatBadCases 格式化选中的失败信号为 LLM 提示词文本。
-//
 // Python: InstructionOptimizer._format_bad_cases()
 //
 //	   Python: 初始化 parts 为空列表
@@ -520,7 +507,6 @@ func (o *InstructionOptimizer) formatBadCases() string {
 }
 
 // restorePlaceholders 确保优化后 prompt 保留与原始 prompt 相同的占位符。
-//
 // Python: InstructionOptimizer._restore_placeholders(original_prompt, optimized_prompt)
 //
 // 逻辑：
@@ -627,7 +613,6 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractTag 提取 XML 标签内容。
-//
 // Python: InstructionOptimizer._extract_tag(response, tag)
 //
 //	Python: pattern = rf"<{tag}>(.*?)</{tag}>"
@@ -648,7 +633,6 @@ func extractTag(response, tag string) string {
 }
 
 // appendMissingPlaceholders 手动追加缺失的占位符。
-//
 // Python:
 //
 //	Python: placeholder_text = "\n".join(f"{{{{{ph}}}}}" for ph in still_missing)

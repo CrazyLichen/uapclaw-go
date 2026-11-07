@@ -6,7 +6,6 @@ import "fmt"
 
 // PGVectorField PostgreSQL + pgvector 索引配置。
 // 支持 HNSW 和 IVFFlat 两种索引类型。
-//
 // Python: vector_fields/pg_fields.py (PGVectorField)
 type PGVectorField struct {
 	VectorField

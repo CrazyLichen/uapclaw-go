@@ -110,7 +110,6 @@ func TestBindSession_重复绑定(t *testing.T) {
 }
 
 // TestBindSession_ctx带其他会话的state 已存在但会话不同的 SessionState 必须被覆盖。
-//
 // M-07：只判"ctx 里有没有 state"不够——若带的是另一个会话（团队内多会话、
 // 成员上下文复用），沿用旧 ctx 会让 CreateCurSessionTables 用错 sessionID 拼表名。
 func TestBindSession_ctx带其他会话的state(t *testing.T) {

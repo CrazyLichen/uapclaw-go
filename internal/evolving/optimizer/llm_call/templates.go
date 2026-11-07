@@ -14,7 +14,6 @@ import (
 
 var (
 	// PromptInstructionOptimizeTemplate 单 prompt 优化模板。
-	//
 	// Python: PROMPT_INSTRUCTION_OPTIMIZE_TEMPLATE
 	PromptInstructionOptimizeTemplate = prompt.NewPromptTemplate("instruction_optimize", `
 You are a prompt optimization expert. Your task is to optimize the prompt
@@ -67,7 +66,6 @@ Please ensure that the optimized content can effectively avoid the previously oc
 `)
 
 	// PromptInstructionOptimizeBothTemplate system+user 联合优化模板。
-	//
 	// Python: PROMPT_INSTRUCTION_OPTIMIZE_BOTH_TEMPLATE
 	PromptInstructionOptimizeBothTemplate = prompt.NewPromptTemplate("instruction_optimize_both", `
 You are a prompt optimization expert. Your task is to optimize the prompt
@@ -127,7 +125,6 @@ Please ensure that the optimized content can effectively avoid the previously oc
 `)
 
 	// CreatePromptTextualGradientTemplate 文本梯度生成模板。
-	//
 	// Python: CREATE_PROMPT_TEXTUAL_GRADIENT_TEMPLATE
 	CreatePromptTextualGradientTemplate = prompt.NewPromptTemplate("textual_gradient", `
 As a prompt optimization expert, my goal is to help the agent complete tasks efficiently and successfully.
@@ -159,7 +156,6 @@ Please wrap each piece of feedback with <INS> and </INS>.
 `)
 
 	// CreateBadCaseTemplate bad case 格式化模板。
-	//
 	// Python: CREATE_BAD_CASE_TEMPLATE
 	CreateBadCaseTemplate = prompt.NewPromptTemplate("bad_case", `
 [question]: {{question}}
@@ -170,7 +166,6 @@ Please wrap each piece of feedback with <INS> and </INS>.
 `)
 
 	// PlaceholderRestoreTemplate 占位符恢复模板。
-	//
 	// Python: PLACEHOLDER_RESTORE_TEMPLATE
 	PlaceholderRestoreTemplate = prompt.NewPromptTemplate("placeholder_restore", `
 As a prompt optimization expert, your task is to complete the placeholders in the prompt based on the given information.

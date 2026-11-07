@@ -15,7 +15,6 @@ const maxIntValue = int(^uint(0) >> 1)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PyInt 对齐 Python int() 的数值转换，用于解析持久化状态与外部参数里的任意值。
-//
 // 规则（逐条对应 CPython 行为）：
 //   - 整数族与 float → 向零截断（int(-3.9) == -3）
 //   - bool → 1 / 0（Python bool 是 int 子类，int(True) == 1）

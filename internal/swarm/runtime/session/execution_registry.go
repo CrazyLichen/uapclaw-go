@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SelectOptions 执行查询条件。
-//
 // Python: SessionExecutionRegistry.select 的关键字参数
 type SelectOptions struct {
 	// SessionID 会话标识（必填）
@@ -25,7 +24,6 @@ type SelectOptions struct {
 }
 
 // SessionExecutionRegistry 执行索引，不承担持久化会话仓储职责。
-//
 // Python: runtime/session/execution_registry.py SessionExecutionRegistry
 //
 // MarkTerminal 是唯一关闭 handle.Terminal 的地方（spec §2.1），
@@ -50,7 +48,6 @@ type SessionExecutionRegistry struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionExecutionRegistry 创建执行注册表。
-//
 // Python: SessionExecutionRegistry.__init__(terminal_capacity=512, terminal_ttl=900.0)
 // terminalCapacity 为负时 panic（对齐上游 raise ValueError）；terminalTTL 取下界 0。
 func NewSessionExecutionRegistry(terminalCapacity int, terminalTTL float64) *SessionExecutionRegistry {
@@ -70,7 +67,6 @@ func NewSessionExecutionRegistry(terminalCapacity int, terminalTTL float64) *Ses
 }
 
 // Register 登记一个新执行，重复标识 panic。
-//
 // Python: SessionExecutionRegistry.register
 func (r *SessionExecutionRegistry) Register(h *SessionExecutionHandle) {
 	r.mu.Lock()
@@ -85,7 +81,6 @@ func (r *SessionExecutionRegistry) Register(h *SessionExecutionHandle) {
 }
 
 // MarkRunning 把 QUEUED 置为 RUNNING 并记录 StartedAt。
-//
 // Python: SessionExecutionRegistry.mark_running（仅 QUEUED 生效）
 func (r *SessionExecutionRegistry) MarkRunning(h *SessionExecutionHandle) {
 	r.mu.Lock()
@@ -94,7 +89,6 @@ func (r *SessionExecutionRegistry) MarkRunning(h *SessionExecutionHandle) {
 }
 
 // MarkAwaitingControl 把交互标识并入执行的等待集合（非终态才生效）。
-//
 // Python: SessionExecutionRegistry.mark_awaiting_control
 func (r *SessionExecutionRegistry) MarkAwaitingControl(h *SessionExecutionHandle, controlIDs map[string]struct{}) {
 	r.mu.Lock()
@@ -103,7 +97,6 @@ func (r *SessionExecutionRegistry) MarkAwaitingControl(h *SessionExecutionHandle
 }
 
 // MarkWaiting 置为 WAITING_FOR_CONTROL（非终态才生效）。
-//
 // Python: SessionExecutionRegistry.mark_waiting
 func (r *SessionExecutionRegistry) MarkWaiting(h *SessionExecutionHandle) {
 	r.mu.Lock()
@@ -112,7 +105,6 @@ func (r *SessionExecutionRegistry) MarkWaiting(h *SessionExecutionHandle) {
 }
 
 // ResumeWaiting 把 WAITING_FOR_CONTROL 恢复为 RUNNING。
-//
 // Python: SessionExecutionRegistry.resume_waiting
 func (r *SessionExecutionRegistry) ResumeWaiting(h *SessionExecutionHandle) {
 	r.mu.Lock()
@@ -121,7 +113,6 @@ func (r *SessionExecutionRegistry) ResumeWaiting(h *SessionExecutionHandle) {
 }
 
 // MarkTerminal 置终态。这是**唯一**关闭 h.Terminal 的地方。
-//
 // Python: SessionExecutionRegistry.mark_terminal
 // 已终态时幂等早返回（仍确保 Terminal 已关闭），不再改写其余字段。
 func (r *SessionExecutionRegistry) MarkTerminal(h *SessionExecutionHandle, state SessionExecutionState, errText string) {
@@ -131,7 +122,6 @@ func (r *SessionExecutionRegistry) MarkTerminal(h *SessionExecutionHandle, state
 }
 
 // ReleaseOwnerTask 终态后把执行移入历史队列。
-//
 // Python: SessionExecutionRegistry.release_owner_task
 func (r *SessionExecutionRegistry) ReleaseOwnerTask(h *SessionExecutionHandle) {
 	r.mu.Lock()
@@ -140,7 +130,6 @@ func (r *SessionExecutionRegistry) ReleaseOwnerTask(h *SessionExecutionHandle) {
 }
 
 // SupersedeWaiting 取消同代次中工作种类属于 kinds 且处于 WAITING_FOR_CONTROL 的执行。
-//
 // Python: _new_execution 内的 superseded_kinds 分支
 // 整段在 registry 锁内完成（读写 handle.State 与 CancellationRequested），
 // 避免与并发的 MarkTerminal 竞争。
@@ -163,7 +152,6 @@ func (r *SessionExecutionRegistry) SupersedeWaiting(sessionID string, generation
 }
 
 // StateOf 原子读取执行状态。
-//
 // 锁外直接读 handle.State 会与并发 MarkTerminal 竞争（-race 实测），
 // 因此对外一律经此方法。
 func (r *SessionExecutionRegistry) StateOf(executionID string) SessionExecutionState {
@@ -205,7 +193,6 @@ func (r *SessionExecutionRegistry) MarkCancellationRequested(executionID string)
 }
 
 // MarkTerminalIfActive 非终态时置终态，返回是否真的置了。
-//
 // 与 MarkTerminal 的区别：已终态时不重复登记终态队列。
 func (r *SessionExecutionRegistry) MarkTerminalIfActive(executionID string, state SessionExecutionState) bool {
 	r.mu.Lock()
@@ -228,7 +215,6 @@ func (r *SessionExecutionRegistry) SnapshotOf(executionID string) *SessionExecut
 }
 
 // SnapshotValue 原子取单条执行快照值（不存在返回零值，ExecutionID 为空）。
-//
 // 与 SnapshotOf 的区别：返回值而非指针，避免调用方误以为可空。
 func (r *SessionExecutionRegistry) SnapshotValue(executionID string) SessionExecutionSnapshot {
 	r.mu.Lock()
@@ -314,7 +300,6 @@ func (r *SessionExecutionRegistry) StartedAtOf(executionID string) float64 {
 }
 
 // Get 按执行标识取句柄。
-//
 // Python: SessionExecutionRegistry.get
 func (r *SessionExecutionRegistry) Get(executionID string) *SessionExecutionHandle {
 	r.mu.Lock()
@@ -324,7 +309,6 @@ func (r *SessionExecutionRegistry) Get(executionID string) *SessionExecutionHand
 }
 
 // Select 按条件查询执行，结果按 CreatedAt 升序。
-//
 // Python: SessionExecutionRegistry.select
 func (r *SessionExecutionRegistry) Select(opts SelectOptions) []*SessionExecutionHandle {
 	r.mu.Lock()
@@ -334,7 +318,6 @@ func (r *SessionExecutionRegistry) Select(opts SelectOptions) []*SessionExecutio
 }
 
 // SnapshotsForSession 取某会话（可选代次）的全部执行快照。
-//
 // Python: SessionExecutionRegistry.snapshots_for_session
 // 全流程持锁：Snapshot() 读 handle 的可变字段，锁外调用会与 MarkRunning /
 // MarkTerminal 竞争（-race 实测）。
@@ -351,7 +334,6 @@ func (r *SessionExecutionRegistry) SnapshotsForSession(sessionID string, generat
 }
 
 // Active 返回全部非终态执行。
-//
 // Python: SessionExecutionRegistry.active
 func (r *SessionExecutionRegistry) Active() []*SessionExecutionHandle {
 	r.mu.Lock()
@@ -455,7 +437,6 @@ func resumeWaitingLocked(h *SessionExecutionHandle) {
 }
 
 // markTerminalLocked 加锁版 MarkTerminal 逻辑。
-//
 // 幂等语义：已终态时只确保 Terminal 已发出，不改写其余字段。
 // 不清 h.Done（Go 侧 Done 由执行方 defer 关闭，置 nil 会让 <-h.Done 永久阻塞）。
 func markTerminalLocked(r *SessionExecutionRegistry, h *SessionExecutionHandle, state SessionExecutionState, errText string) {
@@ -504,7 +485,6 @@ func isDoneClosed(done chan struct{}) bool {
 }
 
 // evictTerminalLocked 按容量与 TTL 淘汰终态执行。
-//
 // Python: SessionExecutionRegistry._evict_terminal
 // 只有执行方已退出（Done 已关）时才真正从账本移除，与上游
 // `handle.task is None or handle.task.done()` 语义一致。
@@ -531,7 +511,6 @@ func (r *SessionExecutionRegistry) evictTerminalLocked() {
 }
 
 // removeLocked 从三个索引移除执行。
-//
 // Python: SessionExecutionRegistry._remove
 func (r *SessionExecutionRegistry) removeLocked(h *SessionExecutionHandle) {
 	delete(r.executions, h.ExecutionID)

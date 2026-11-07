@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChunkEmbedOptions ComputeChunkEmbeddings 的选项结构。
-//
 // 对齐 Python compute_chunk_embeddings 的关键字参数：
 //   - doc_index_callback=None → DocIndexCallback
 //   - use_caption_for_images=False → UseCaptionForImages
@@ -73,7 +72,6 @@ func WithEmbedOpts(opts ...storeEmbedding.EmbedOption) ChunkEmbedOption {
 }
 
 // ComputeChunkEmbeddings 计算分块嵌入向量，原地修改 chunks 的 Embedding 字段。
-//
 // 三条路径：
 //   - 纯文本路径：模型不支持 MultimodalEmbedder 或 UseCaptionForImages=true，
 //     所有 chunks 批量 EmbedDocuments
@@ -249,7 +247,6 @@ func ComputeChunkEmbeddings(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isImageChunk 判断 TextChunk 是否为有效图片分块。
-//
 // 三级防御对齐 Python os.path.isfile(img_path)：
 //  1. metadata 中无 image_path 键 → false
 //  2. image_path 类型不是 string 或为空串 → false

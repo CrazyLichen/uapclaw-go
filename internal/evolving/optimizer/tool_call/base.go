@@ -21,7 +21,6 @@ import (
 // ToolOptimizerBase 工具维度优化器基类。
 // 固定 domain="tool"，默认优化目标为 ["tool_description"]。
 // 核心入口是 OptimizeTool()，Backward/Step 对齐 Python 空实现。
-//
 // Python: ToolOptimizerBase
 type ToolOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
@@ -53,7 +52,6 @@ type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewToolOptimizerBase 创建 ToolOptimizerBase 实例。
-//
 // Python: ToolOptimizerBase.__init__(self, **kwargs)
 //
 //	self.max_turns = kwargs.get("max_turns", 5) — 最大迭代轮数
@@ -103,14 +101,12 @@ func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *To
 }
 
 // Domain 返回优化器域 "tool"。
-//
 // Python: ToolOptimizerBase.domain = "tool"
 func (b *ToolOptimizerBase) Domain() string {
 	return "tool"
 }
 
 // DefaultTargets 返回默认优化目标列表。
-//
 // Python: ToolOptimizerBase.default_targets() → ["tool_description"]
 func (b *ToolOptimizerBase) DefaultTargets() []string {
 	return []string{"tool_description"}
@@ -123,7 +119,6 @@ func (b *ToolOptimizerBase) RequiresForwardData() bool {
 }
 
 // OptimizeTool 核心入口：两阶段迭代优化工具描述。
-//
 // Python: ToolOptimizerBase.optimize_tool(tool, tool_callable)
 //
 // Python 执行步骤：
@@ -259,7 +254,6 @@ func (b *ToolOptimizerBase) OptimizeTool(
 }
 
 // Backward 反向传播：从信号计算梯度。
-//
 // Python: BaseOptimizer.backward() 模板方法流程：
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
@@ -274,7 +268,6 @@ func (b *ToolOptimizerBase) Backward(ctx context.Context, signals []*signal.Evol
 }
 
 // Step 生成更新映射。
-//
 // Python: BaseOptimizer.step() 模板方法流程：
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
@@ -286,9 +279,7 @@ func (b *ToolOptimizerBase) Step() (map[cschema.UpdateKey]any, error) {
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
-//
 // ✅ 9.70 已回填：Operator 接口已实现，委托 BaseOptimizerMixin.Bind()。
-//
 // Python:
 //
 //	self._targets = list(targets or self.default_targets()) — 目标列表取传入值或默认值
@@ -361,14 +352,12 @@ func WithToolName(name string) ToolOptimizerBaseOption {
 
 // step 子类逻辑，对齐 Python _step()。
 // ToolOptimizer 为空实现，返回空映射。
-//
 // Python: def _step(self): updates = {}; return
 func (b *ToolOptimizerBase) step() (map[cschema.UpdateKey]any, error) {
 	return map[cschema.UpdateKey]any{}, nil
 }
 
 // extractLastDescription 从 resultDescs 中提取最终描述字符串。
-//
 // Python: output_desc = result_descs[-1][-1][-1]["description"]
 // 最终输出取 [len-1]（末轮结果），与循环更新时取 [0]（首轮结果）用途不同
 func extractLastDescription(resultDescs [][][]map[string]any) string {

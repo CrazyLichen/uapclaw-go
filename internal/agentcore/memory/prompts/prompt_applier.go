@@ -14,10 +14,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PromptApplier 提示词模板加载器，运行时读取 .md 文件并缓存。
-//
 // 单例模式（对齐 Python: PromptApplier(metaclass=Singleton)），
 // 缓存已加载的 PromptTemplate 实例，避免重复 I/O。
-//
 // 支持两种模板源：
 //   - embed.FS（默认）：编译时嵌入 .md 文件，部署后无需源码路径
 //   - 文件系统目录（测试用）：NewPromptApplier(dir) 从指定目录读取
@@ -71,7 +69,6 @@ func NewPromptApplier(dir string) *PromptApplier {
 }
 
 // Apply 加载模板并替换变量，返回填充后的字符串。
-//
 // Python: PromptApplier.apply(file_prefix, variables)
 //
 // 流程：
@@ -96,7 +93,6 @@ func (a *PromptApplier) Apply(filePrefix string, variables map[string]any) (stri
 }
 
 // GetTemplate 获取已缓存的 PromptTemplate，未缓存则加载。
-//
 // Python: PromptApplier.get_template(file_prefix)
 func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, error) {
 	if cached, ok := a.cache.Load(filePrefix); ok {
@@ -130,7 +126,6 @@ func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, 
 }
 
 // ClearCache 清除缓存。
-//
 // Python: PromptApplier.clear_cache(file_prefix=None)
 // 无参数时清除所有缓存；指定 filePrefix 时只清除该条目。
 func (a *PromptApplier) ClearCache(filePrefix ...string) {

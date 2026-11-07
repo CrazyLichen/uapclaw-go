@@ -13,7 +13,6 @@ import (
 //
 // 定义对象存储的核心操作：文件上传/下载、对象删除、桶的创建/删除、对象列表查询。
 // 所有方法均接收 context.Context 以支持超时和取消。
-//
 // Python: openjiuwen/core/foundation/store/object/base_storage_client.py
 type BaseObjectStorage interface {
 	// UploadFile 上传本地文件到对象存储桶

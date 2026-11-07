@@ -1,12 +1,9 @@
 // Package dashscope 提供阿里云百炼 DashScope 模型客户端实现。
-//
 // 本包实现 BaseModelClient 接口，支持 DashScope（通义千问）的文本聊天和多模态生成能力。
-//
 // # 核心设计
 //
 // 嵌入 OpenAIModelClient 复用 Invoke/Stream（通义千问兼容 OpenAI Chat Completion 协议），
 // 仅覆写 GenerateImage/GenerateSpeech/GenerateVideo 三个多模态方法。
-//
 // 不依赖 dashscope-go SDK，自行实现 DashScope 原生 API 的 HTTP 调用
 // （与 OpenAI 客户端不依赖 openai-go SDK 的设计一致）：
 //   - 使用 DashScope 原生协议格式（input.messages + parameters 分层）

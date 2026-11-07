@@ -17,12 +17,10 @@ import (
 
 var (
 	// regexFindJSONStart 匹配 JSON 起始字符（{ 或 [）
-	//
 	// Python: REGEX_FIND_JSON_START = re.compile(r"[\[\{]")
 	regexFindJSONStart = regexp.MustCompile(`[\[\{]`)
 
 	// regexFindCodeBlock 匹配 Markdown 代码块（含语言标识）
-	//
 	// Python: REGEX_FIND_CODE_BLOCK = re.compile(r"(?s)```([A-Za-z]*)\s*\n(.*?)```")
 	regexFindCodeBlock = regexp.MustCompile("(?s)```([A-Za-z]*)\\s*\\n(.*?)```")
 
@@ -41,7 +39,6 @@ var (
 //  2. 从原始文本中 raw decode JSON（支持截断修复）
 //
 // 如果 outputSchema 提供了 required 字段，则对 dict 结果做模糊 key 匹配过滤。
-//
 // Python: parse_json(resp, output_schema)
 func ParseJSON(resp string, outputSchema map[string]any) JSONLike {
 	var mustContainKey []string
@@ -94,7 +91,6 @@ func ParseJSON(resp string, outputSchema map[string]any) JSONLike {
 //
 // 先对 key 和 src 中的键做规范化（去除非单词字符、小写），
 // 再用字符串相似度找到最接近的键。
-//
 // Python: try_get_key(key, src, pattern)
 func TryGetKey(key string, src map[string]any) string {
 	// 规范化目标 key
@@ -129,7 +125,6 @@ func TryGetKey(key string, src map[string]any) string {
 //
 // 如果 obj 是列表则直接返回；如果 obj 是单元素字典则返回其唯一的值（若为列表）；
 // 否则将 obj 包装为单元素列表返回。
-//
 // Python: ensure_list(obj)
 func EnsureList(obj any) []any {
 	if list, ok := obj.([]any); ok {
@@ -148,9 +143,7 @@ func EnsureList(obj any) []any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // rawDecodeJSON 尝试从容错解析 JSON（支持截断修复）
-//
 // 构建候选文本列表（原始 + 截断修复），然后从每个 JSON 起始位置尝试解析。
-//
 // Python: _raw_decode_json(resp, must_contain_key)
 func rawDecodeJSON(resp string, mustContainKey []string) JSONLike {
 	// 构建候选文本列表
@@ -194,7 +187,6 @@ func rawDecodeJSON(resp string, mustContainKey []string) JSONLike {
 //
 // 对齐 Python json.JSONDecoder.raw_decode(candidate, idx) 的行为：
 // 从指定位置开始解析一个完整的 JSON 值。
-//
 // Go 的 encoding/json.Decoder 无法直接指定起始偏移，
 // 因此先截取子串再用 Decoder 解析。
 func rawDecodeAt(candidate string, startIdx int, result *any) error {

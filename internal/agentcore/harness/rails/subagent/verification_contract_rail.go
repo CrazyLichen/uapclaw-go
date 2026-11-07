@@ -15,7 +15,6 @@ import (
 
 // VerificationContractRail 向父 Agent 注入验证门控契约。
 // 挂载在父 Agent（实现代理）上，而非验证代理自身。
-//
 // "非平凡"定义：
 //   - 单轮内编辑了 3 个或更多文件
 //   - 后端、API 或服务变更
@@ -23,7 +22,6 @@ import (
 //
 // 父代理拥有门控——它不能自行指定判决，
 // 必须循环（修复→重验）直到验证代理发出 VERDICT: PASS。
-//
 // Python: VerificationContractRail (openjiuwen/harness/rails/subagent/verification_contract_rail.py)
 type VerificationContractRail struct {
 	rails.DeepAgentRail
@@ -119,7 +117,6 @@ var _ agentinterfaces.AgentRail = (*VerificationContractRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVerificationContractRail 创建 VerificationContractRail 实例。
-//
 // Python: VerificationContractRail()
 func NewVerificationContractRail() *VerificationContractRail {
 	r := &VerificationContractRail{
@@ -130,7 +127,6 @@ func NewVerificationContractRail() *VerificationContractRail {
 }
 
 // Init 初始化钩子：捕获 system_prompt_builder，预构建契约 section。
-//
 // Python: VerificationContractRail.init(agent)
 // Python: L140-153
 func (r *VerificationContractRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
@@ -155,9 +151,7 @@ func (r *VerificationContractRail) Init(_ context.Context, agent agentinterfaces
 }
 
 // BeforeModelCall 每轮注入验证门控契约 section。
-//
 // 先移除再添加，避免跨轮次累积重复。
-//
 // Python: VerificationContractRail.before_model_call(ctx)
 // Python: L155-169
 func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
@@ -176,7 +170,6 @@ func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *age
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall。
-//
 // Python: VerificationContractRail 隐式覆盖 before_model_call
 func (r *VerificationContractRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()

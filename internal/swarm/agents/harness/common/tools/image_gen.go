@@ -68,12 +68,10 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ApplyImageGenModelConfigFromYAML 从 config.yaml 读取文生图模型配置并设置环境变量。
-//
 // 配置优先级:
 //  1. models.image_gen.model_config（或 model_client_config 双层 fallback）
 //
 // 四字段非空才 Setenv（不覆盖已有 env 的空值以外的语义——直接以 YAML 值覆盖）。
-//
 // Python: apply_image_gen_model_config_from_yaml (multimodal_config.py L256-285)
 //
 // 注意：与 audio/vision/video 的 apply_* 不同，Python image_gen 版本

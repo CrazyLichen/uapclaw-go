@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // E2AEnvelope E2A 统一信封：单结构兼容多协议入口，由网关或适配层解析后调用 Agent。
-//
 // 基础字段：
 //   - ProtocolVersion：E2A 载荷版本。
 //   - Provenance：出处（原生 e2a 或由 acp / a2a 等转换）。
@@ -227,14 +226,12 @@ func EnvelopeFromMap(data map[string]any) *E2AEnvelope {
 }
 
 // MergeParamsToACPPrompt 当 Method == "session/prompt" 时，从 Params 补全 ACP 所需 prompt，返回新参数字典。
-//
 // 优先级：
 //  1. 已有 params.prompt 则不修改。
 //  2. 否则若有 params.content_blocks（非空 list），用作 prompt。
 //  3. 否则用 params.text、params.content、params.query 中第一个非空字符串生成单条 text ContentBlock。
 //
 // 随后按需补 session_id、params._meta（来自 ACPMeta）。
-//
 // Python: merge_params_to_acp_prompt(envelope)
 func MergeParamsToACPPrompt(env *E2AEnvelope) map[string]any {
 	p := make(map[string]any)

@@ -23,11 +23,9 @@ type IndexOption func(*IndexOptions)
 // ──────────────────────────── 接口 ────────────────────────────
 
 // Indexer 文档索引抽象接口。
-//
 // 负责将 TextChunk 写入向量数据库，支持六种操作：
 // BuildIndex（新建）、UpdateIndex（更新）、DeleteIndex（删除）、
 // IndexExists（存在性检查）、GetIndexInfo（元信息查询）、Close（资源释放）。
-//
 // Python: openjiuwen/core/retrieval/indexing/indexer/base.py (Indexer)
 type Indexer interface {
 	// BuildIndex 构建索引。将 chunks 去重→嵌入→写入向量库。
@@ -47,7 +45,6 @@ type Indexer interface {
 	GetIndexInfo(ctx context.Context, indexName string) (map[string]any, error)
 
 	// Close 关闭索引管理器。
-	//
 	// 显式声明而非依赖调用方类型断言：KnowledgeBase.Close 需统一关闭
 	// vectorStore + indexManager，接口缺该方法时调用方只能传 any 再断言，
 	// 断言失败会静默跳过关闭（组件泄漏）。

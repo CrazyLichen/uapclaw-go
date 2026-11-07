@@ -8,7 +8,6 @@ import (
 )
 
 // canonicalJSON 输出键排序、无空白、不转义 HTML 的 JSON。
-//
 // 关键：Go 的 json.Marshal 会把 < > & 转成 \u003c 等，
 // 与上游 json.dumps(ensure_ascii=False, sort_keys=True, separators=(",", ":")) 不一致，
 // 会导致同一内容算出不同哈希（每轮多发 delta）。
@@ -23,7 +22,6 @@ func canonicalJSON(v any) ([]byte, error) {
 }
 
 // HashPromptAttachment 计算模型可见内容的稳定哈希。
-//
 // Python: hash_prompt_attachment（只覆盖 section/kind/content/content_kind，
 // 时间戳、priority、source、metadata 均不参与）。
 func HashPromptAttachment(a *Attachment) string {

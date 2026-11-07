@@ -62,7 +62,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // LoadSessionMapScope 读 config gateway.session_map_scope（构造时读一次，不热重载）。
-//
 // Python: load_session_map_scope (L21-33)：
 // 全局读通道（getGlobalConfig → cfg.Load() 重读盘，等价 Python get_config()）；
 // 未知值 / 未注册 / 读失败 → Warn + 默认 PerChatBot。
@@ -105,7 +104,6 @@ func LoadSessionMapScope() SessionMapScope {
 }
 
 // NewSessionMap 创建会话映射。
-//
 // scope 为 nil 时走 LoadSessionMapScope() 读 config。
 // Python: SessionMap(scope=None) (L65-69)
 func NewSessionMap(scope *SessionMapScope) *SessionMap {
@@ -130,7 +128,6 @@ func NewSessionMapAtForTest(storePath string, scope SessionMapScope) *SessionMap
 }
 
 // GetSessionID 获取（或生成）身份键对应的 agent session_id。
-//
 // rotate=false 且已有映射 → 返回既有值；否则生成新值写盘。
 // Python: get_session_id (L90-109)。
 func (m *SessionMap) GetSessionID(provider, chatID, botID, userID string, rotate bool) string {
@@ -154,7 +151,6 @@ func (m *SessionMap) GetSessionID(provider, chatID, botID, userID string, rotate
 }
 
 // SetSessionID 写入身份键对应的 agent session_id。
-//
 // Python: set_session_id (L157-175)：strip 后不允许空值；相同值幂等不写盘。
 func (m *SessionMap) SetSessionID(provider, chatID, botID, userID, sessionID string) error {
 	sid := strings.TrimSpace(sessionID)
@@ -187,7 +183,6 @@ func newSessionMapAt(storePath string, scope SessionMapScope) *SessionMap {
 }
 
 // makeKey 生成身份键。
-//
 // Python: _make_key (L36-45)：
 // PerChatBot: "provider::chatID::botID"；PerChatBotUser 追加 "::userID"
 func makeKey(scope SessionMapScope, provider, chatID, botID, userID string) string {
@@ -198,7 +193,6 @@ func makeKey(scope SessionMapScope, provider, chatID, botID, userID string) stri
 }
 
 // makeSessionID 生成新的 agent session_id。
-//
 // Python: _make_session_id (L48-59)：key 结构 + "::" + hex(ms时间戳) + "::" + 6位随机hex
 func makeSessionID(scope SessionMapScope, provider, chatID, botID, userID string) string {
 	ts := fmt.Sprintf("%x", time.Now().UnixMilli())
@@ -210,7 +204,6 @@ func makeSessionID(scope SessionMapScope, provider, chatID, botID, userID string
 }
 
 // load 从盘加载映射（防御式，失败仅 Warn）。
-//
 // Python: _load (L71-80)：文件不存在静默；非 dict 跳过；
 // 值必须为非空 string（Python isinstance(v, str) and v）
 func (m *SessionMap) load() {
@@ -241,7 +234,6 @@ func (m *SessionMap) load() {
 }
 
 // save 将映射写盘（防御式，失败仅 Warn）。
-//
 // Python: _save (L82-88)：mkdir parents + json.dump(indent=2, ensure_ascii=False)
 func (m *SessionMap) save() {
 	if err := os.MkdirAll(filepath.Dir(m.storePath), 0o755); err != nil {

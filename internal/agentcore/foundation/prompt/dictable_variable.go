@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DictableVariable 字典/列表模板变量，递归处理多模态内容中的占位符。
-//
 // Python: openjiuwen/core/foundation/prompt/assemble/variables/dictable.py (DictableVariable)
 //
 // 与 TextableVariable 共享占位符语法和嵌套解析逻辑，区别在于：
@@ -50,7 +49,6 @@ func WithDictableSuffix(suffix string) DictableOption {
 }
 
 // NewDictableVariable 创建字典/列表模板变量。
-//
 // 参数：
 //   - data: 字典或列表数据，如 map[string]any{"text": "Hello {{name}}"} 或 []any{...}
 //   - name: 变量名
@@ -116,7 +114,6 @@ func (dv *DictableVariable) Eval(kwargs map[string]any) any {
 }
 
 // Update 递归替换占位符，更新 value。
-//
 // Python: DictableVariable.update()
 //
 // 逻辑：

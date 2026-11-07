@@ -87,7 +87,6 @@ var chatTurnMethods = map[string]struct{}{
 }
 
 // chatTurnRequestMethods 真实 chat 轮次的方法集合（决定 metadata 是否刷新时间戳）。
-//
 // Python: request.py CHAT_TURN_METHODS
 var chatTurnRequestMethods = map[string]struct{}{
 	"chat.send":   {},
@@ -104,7 +103,6 @@ var planEntrySources = map[string]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveRequestRuntimeMode 把请求 mode/subMode 解析为权威模式。
-//
 // Python: jiuwenswarm/runtime/request.py resolve_request_runtime_mode。
 // 三段 canonical 直接按串语义解析（见 schema.ResolveNewCanonicalMode）；
 // 其余走归一并按后缀判定 plan/team。
@@ -129,7 +127,6 @@ func ResolveRequestRuntimeMode(mode, subMode string) ResolvedMode {
 }
 
 // baseModeWithoutPlan 返回退出 plan 后应回到的普通模式。
-//
 // Python: mode_matrix.base_mode_without_plan / _PLAN_EXIT_MODES
 // 新三段命名下 `x.y.plan` → `x.y.normal`；非 plan 串原样返回。
 func baseModeWithoutPlan(canonical string) string {
@@ -140,7 +137,6 @@ func baseModeWithoutPlan(canonical string) string {
 }
 
 // ShouldSync 判断请求是否参与 plan 状态同步。
-//
 // Python: PlanModeController.should_sync（只认 chat 类方法）。
 func ShouldSync(reqMethod string) bool {
 	_, ok := chatTurnMethods[strings.TrimSpace(reqMethod)]
@@ -148,7 +144,6 @@ func ShouldSync(reqMethod string) bool {
 }
 
 // IsPlanEntrySource 判断进入来源是否属于显式进入。
-//
 // Python: PlanModeController.is_explicit_entry
 func IsPlanEntrySource(source string) bool {
 	_, ok := planEntrySources[strings.TrimSpace(source)]
@@ -156,7 +151,6 @@ func IsPlanEntrySource(source string) bool {
 }
 
 // ResolveAgentRequestMode 解析 mode 为 manager mode、sub-mode 与 canonical mode。
-//
 // Python: jiuwenswarm/runtime/request.py resolve_agent_request_mode（L266-328）。
 // 只做 legacy 解析：Web 的 mode+work_mode 组合由 resolveRequestMode 先行处理。
 // 与上游一致：裸 "agent"/"plan"/"fast" 不下沉 plan；只有显式 plan 串才带 plan 状态。
@@ -234,7 +228,6 @@ func ResolveAgentRequestMode(rawMode any, workMode string) (mode, subMode, canon
 }
 
 // ApplyResolvedModeToRequest 解析并把 canonical mode 写回 request.Params。
-//
 // Python: jiuwenswarm/runtime/request.py apply_resolved_mode_to_request（L345-358）。
 // 上游走 resolve_request_runtime_mode（含 Web 组合分支），Go 同步走 resolveRequestMode。
 func ApplyResolvedModeToRequest(req *schema.AgentRequest, workMode string) (mode, subMode string) {
@@ -246,7 +239,6 @@ func ApplyResolvedModeToRequest(req *schema.AgentRequest, workMode string) (mode
 }
 
 // ResolveRequestRuntimeModeFromRequest 从请求解析权威运行时模式。
-//
 // Python: jiuwenswarm/runtime/request.py resolve_request_runtime_mode（L331-342）。
 func ResolveRequestRuntimeModeFromRequest(req *schema.AgentRequest) ResolvedMode {
 	params := parseRequestParams(req)
@@ -279,7 +271,6 @@ func writeRequestParams(req *schema.AgentRequest, params map[string]any) {
 }
 
 // ResolveAgentRequestModeFromRequest 纯读取请求的 mode（不修改 request）。
-//
 // Python: _handle_cancel / AgentManager 用 resolve_agent_request_mode 的只读形态。
 func ResolveAgentRequestModeFromRequest(req *schema.AgentRequest) (mode, subMode string) {
 	resolved := ResolveRequestRuntimeModeFromRequest(req)
@@ -287,7 +278,6 @@ func ResolveAgentRequestModeFromRequest(req *schema.AgentRequest) (mode, subMode
 }
 
 // ResolveRequestProjectDir 解析用于构造 agent 的稳定工程身份。
-//
 // Python: jiuwenswarm/runtime/request.py resolve_request_project_dir（L44-82）。
 // includeLegacyFallbacks=false 时（agent/code 的 projectless 轮次）不回落到
 // cwd/trusted_dirs，保持 cwd 动态以便 adapter 分配会话任务工作区。
@@ -321,7 +311,6 @@ func ResolveRequestProjectDir(req *schema.AgentRequest, includeLegacyFallbacks b
 }
 
 // ResolveCancelProjectDir 解析传输无关的取消请求所需工程缓存键。
-//
 // Python: jiuwenswarm/runtime/request.py _resolve_cancel_project_dir（L84-149）。
 // 偏差：Go 尚无 project_id → project_dir 注册表（上游 project_store.get_project_dir_by_id），
 // 该分支记 ⤵️，其余分支（直接解析 + 会话 metadata）已对齐。
@@ -344,7 +333,6 @@ func ResolveCancelProjectDir(req *schema.AgentRequest) string {
 }
 
 // PrepareChatTurn 解析会话语义、同步会话元数据并选出一个 agent。
-//
 // Python: jiuwenswarm/runtime/request.py prepare_chat_turn（L361-575）。
 // 偏差（⤵️）：get_agent_for_request 原子准入、wait_for_session_prewarm、
 // _repair_session_project_dir 与 bound project_id 绑定未移植（Go 无预热池 /
@@ -474,7 +462,6 @@ func PrepareChatTurn(
 }
 
 // SyncChatRequestMetadata 持久化 chat 请求元数据并返回锁定的工程目录。
-//
 // Python: jiuwenswarm/runtime/request.py sync_chat_request_metadata（L152-263）。
 // attach-only 订阅是被动观察者：不提交输入，因此只读解析锁定目录、不写元数据。
 func SyncChatRequestMetadata(
@@ -541,7 +528,6 @@ func SyncChatRequestMetadata(
 }
 
 // CancelRequest 通过既有 Runtime agent 取消一次请求/会话。
-//
 // Python: jiuwenswarm/runtime/request.py cancel_request（L578-639）。
 // 偏差（⤵️）：上游首步用 get_agent_for_session_nowait 按 session→agent 注册表查，
 // Go 的 AgentManager 以 (channel, mode, subMode, projectDir) 为键、无会话注册表，
@@ -607,7 +593,6 @@ func CancelRequest(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 // resolveRequestMode 解析请求 mode：先 Web 组合，再 legacy 解析。
-//
 // Python: resolve_request_mode（gateway/common/mode_matrix.py）——只有 work_mode
 // 合法且 mode 属于 Web 组合集合时才走组合表，其余一律交给 legacy 解析器。
 func resolveRequestMode(rawMode any, workMode string) ResolvedMode {
@@ -640,7 +625,6 @@ func rawModeText(rawMode any) string {
 }
 
 // normalizeWorkMode 把 work_mode 归一为 code / work，非法时返回空串。
-//
 // Python: mode_matrix.normalize_work_mode
 func normalizeWorkMode(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
@@ -654,7 +638,6 @@ func normalizeWorkMode(raw string) string {
 }
 
 // defaultWorkModeForChannel 按渠道推断默认 work_mode（tui → code，其余 work）。
-//
 // Python: jiuwenswarm/server/runtime/session/work_mode.default_work_mode_for_channel
 func defaultWorkModeForChannel(channelID string) string {
 	if strings.EqualFold(strings.TrimSpace(channelID), "tui") {
@@ -686,7 +669,6 @@ func requestUserID(req *schema.AgentRequest) string {
 }
 
 // legacyPersistSession 解析旧式 eternal_conversation_enabled 取值。
-//
 // Python: sync_chat_request_metadata 的 bool / 字符串归一分支
 func legacyPersistSession(raw any) *bool {
 	if b, ok := raw.(bool); ok {

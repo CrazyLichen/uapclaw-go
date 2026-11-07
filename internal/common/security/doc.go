@@ -1,8 +1,6 @@
 // Package security 提供安全相关的工具函数，包括 SSL/TLS 配置和证书安全加载。
-//
 // 本包对齐 Python openjiuwen/core/common/security/ 的能力，
 // 为工具认证（ToolAuth）和其他需要 SSL 配置的组件提供基础设施。
-//
 // 文件目录：
 //
 //	security/

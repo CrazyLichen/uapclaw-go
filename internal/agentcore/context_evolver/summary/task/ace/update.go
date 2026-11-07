@@ -20,7 +20,6 @@ import (
 
 // LoadPlaybookOp 从 vector store 加载已有 playbook。
 // 对齐 Python LoadPlaybookOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type LoadPlaybookOp struct {
 	op.OpBase
@@ -28,7 +27,6 @@ type LoadPlaybookOp struct {
 
 // ReflectOp 单轨迹反思操作（matts="none"/"sequential"）。
 // 对齐 Python ReflectOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type ReflectOp struct {
 	op.OpBase
@@ -38,7 +36,6 @@ type ReflectOp struct {
 
 // ParallelReflectOp 多轨迹反思操作（matts="parallel"/"combined"）。
 // 对齐 Python ParallelReflectOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type ParallelReflectOp struct {
 	op.OpBase
@@ -48,7 +45,6 @@ type ParallelReflectOp struct {
 
 // CurateOp 单轨迹策展操作（matts="none"/"sequential"）。
 // 对齐 Python CurateOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type CurateOp struct {
 	op.OpBase
@@ -56,7 +52,6 @@ type CurateOp struct {
 
 // ParallelCurateOp 多轨迹策展操作（matts="parallel"/"combined"）。
 // 对齐 Python ParallelCurateOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type ParallelCurateOp struct {
 	op.OpBase
@@ -64,7 +59,6 @@ type ParallelCurateOp struct {
 
 // ApplyDeltaOp 应用 playbook 变更并持久化到 vector store。
 // 对齐 Python ApplyDeltaOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type ApplyDeltaOp struct {
 	op.OpBase
@@ -74,7 +68,6 @@ type ApplyDeltaOp struct {
 
 // PersistMemoryOp 持久化 ACE 记忆到 JSON 或 Milvus。
 // 对齐 Python PersistMemoryOp。
-//
 // Python: openjiuwen/extensions/context_evolver/summary/task/ace/update.py
 type PersistMemoryOp struct {
 	op.OpBase

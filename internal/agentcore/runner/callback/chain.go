@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CallbackChain 顺序回调执行链，支持回滚、重试和错误处理。
-//
 // Python: openjiuwen/core/runner/callback/chain.py (CallbackChain)
 type CallbackChain struct {
 	// Name 链标识
@@ -27,17 +26,14 @@ type CallbackChain struct {
 }
 
 // ChainCallbackFunc 链回调函数类型。
-//
 // Python: Callable (chain 中使用的 async callback)
 type ChainCallbackFunc func(ctx context.Context, cctx *ChainContext) (any, error)
 
 // ChainRollbackHandler 回滚处理器类型。
-//
 // Python: Callable (rollback handler)
 type ChainRollbackHandler func(ctx context.Context, cctx *ChainContext) error
 
 // ChainErrorHandler 错误处理器类型。
-//
 // Python: Callable (error handler)，返回 ChainAction 决定后续动作
 type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) (ChainAction, error)
 
@@ -53,7 +49,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCallbackChain 创建回调执行链。
-//
 // Python: CallbackChain.__init__(name)
 func NewCallbackChain(name string) *CallbackChain {
 	return &CallbackChain{
@@ -65,7 +60,6 @@ func NewCallbackChain(name string) *CallbackChain {
 }
 
 // Add 添加回调到链中，维护优先级排序。
-//
 // Python: CallbackChain.add(callback_info, rollback_handler, error_handler)
 func (c *CallbackChain) Add(
 	info *CallbackInfo[ChainCallbackFunc],
@@ -87,7 +81,6 @@ func (c *CallbackChain) Add(
 }
 
 // Remove 移除回调及关联的 handler。
-//
 // Python: CallbackChain.remove(callback)
 // 参数 info 为要移除的 CallbackInfo 指针。
 func (c *CallbackChain) Remove(info *CallbackInfo[ChainCallbackFunc]) {
@@ -107,7 +100,6 @@ func (c *CallbackChain) Remove(info *CallbackInfo[ChainCallbackFunc]) {
 }
 
 // Execute 核心执行方法：按优先级顺序执行回调链。
-//
 // Python: CallbackChain.execute(context)
 //
 // 执行流程：
@@ -277,7 +269,6 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 }
 
 // Rollback 逆序执行已执行回调的 rollbackHandlers。
-//
 // Python: CallbackChain._rollback(executed_callbacks, context)
 func (c *CallbackChain) Rollback(ctx context.Context, cctx *ChainContext, executedInfos []*CallbackInfo[ChainCallbackFunc]) {
 	c.rollback(ctx, cctx, executedInfos)
@@ -286,7 +277,6 @@ func (c *CallbackChain) Rollback(ctx context.Context, cctx *ChainContext, execut
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // rollback 逆序执行已执行回调的回滚处理器。
-//
 // Python: CallbackChain._rollback(executed_callbacks, context)
 func (c *CallbackChain) rollback(ctx context.Context, cctx *ChainContext, executedInfos []*CallbackInfo[ChainCallbackFunc]) {
 	cctx.IsRolledBack = true

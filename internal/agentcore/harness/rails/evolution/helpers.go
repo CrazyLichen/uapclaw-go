@@ -24,10 +24,8 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // splitResponseTokenFields 从 LLM 响应中分离 token 级字段。
-//
 // 返回 (response_for_detail, prompt_token_ids, completion_token_ids, logprobs)。
 // 返回的 response_for_detail 已移除这三个字段，避免在轨迹中重复存储。
-//
 // Python: _split_response_token_fields(response)
 //
 // Python 实现：
@@ -73,9 +71,7 @@ func splitResponseTokenFields(response *llmschema.AssistantMessage) (map[string]
 }
 
 // normalizeSkillNames 将技能名称切片规范化为集合。
-//
 // 前后空格会被裁剪，空项会被跳过。
-//
 // Python: _normalize_skill_names(raw)
 // Python 中 raw 可以是 str 或 list，Go 版本统一接受 []string（单个 string 包裹为 []string{s}）。
 func normalizeSkillNames(names []string) map[string]bool {
@@ -90,12 +86,10 @@ func normalizeSkillNames(names []string) map[string]bool {
 }
 
 // normalizeMemberRole 将成员角色规范化为稳定字符串值。
-//
 // Python: _normalize_member_role(role)
 //
 // Python 实现：role 为 None 返回 None；getattr(role, "value", role) 获取枚举值；
 // str(role_value) 转字符串；空字符串返回 None。
-//
 // Go 版本统一接受 string（枚举类型调用方自行 String() 转换后传入）。
 func normalizeMemberRole(role string) *string {
 	if role == "" {
@@ -105,10 +99,8 @@ func normalizeMemberRole(role string) *string {
 }
 
 // collectMessagesFromTrajectory 从轨迹中提取消息列表。
-//
 // 调用 ConversationSignalDetector.ConvertTrajectoryToMessages 获取消息列表，
 // 然后通过 normalizeCallbackMessages 规范化，最后去重。
-//
 // Python: _collect_messages_from_trajectory(trajectory)
 //
 // Python 实现：
@@ -137,7 +129,6 @@ func collectMessagesFromTrajectory(traj *trajectory.Trajectory) []map[string]any
 }
 
 // normalizeCallbackMessages 将回调可见的消息规范化为 JSON 安全的字典列表。
-//
 // Python: _normalize_callback_messages(messages)
 //
 // Python 实现：
@@ -158,7 +149,6 @@ func normalizeCallbackMessages(messages []map[string]any) []map[string]any {
 }
 
 // containsMessage 检查消息列表中是否已存在相同消息。
-//
 // Python: message not in deduped（dict 的 __eq__ 比较）
 func containsMessage(list []map[string]any, msg map[string]any) bool {
 	msgJSON, err := json.Marshal(msg)
@@ -194,7 +184,6 @@ func ensureNonNilMap(m map[string]any) map[string]any {
 }
 
 // baseMessageToMap 将 BaseMessage 转换为 map[string]any 表示。
-//
 // BaseMessage 接口没有 ToMap/ToDict 方法，需要从接口字段手动构建。
 // Python: BaseMessage.model_dump() 或 OpenAI dict 格式。
 func baseMessageToMap(msg llmschema.BaseMessage) map[string]any {
@@ -215,7 +204,6 @@ func baseMessageToMap(msg llmschema.BaseMessage) map[string]any {
 }
 
 // toolInfoToMap 将 ToolInfoInterface 转换为 map[string]any 表示。
-//
 // ToolInfoInterface 接口没有 ToMap 方法，需要从接口字段手动构建。
 // Python: ToolInfo.model_dump() 或 OpenAI tool dict 格式。
 func toolInfoToMap(tool cschema.ToolInfoInterface) map[string]any {

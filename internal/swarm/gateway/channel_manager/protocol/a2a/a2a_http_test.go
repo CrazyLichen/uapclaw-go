@@ -169,7 +169,6 @@ func TestHTTP_ExtendedCard(t *testing.T) {
 }
 
 // TestHTTP_流式SSE 逐帧校验 SSE 契约（T-08）。
-//
 // 原实现用 io.ReadAll 整体读完再比子串先后：ReadAll 必须等连接关闭才返回，
 // 因此「是否逐帧 flush」完全测不到；spec §7 承诺的「首帧 append=false、
 // 末帧 lastChunk=true、Content-Type: text/event-stream」一条都没断言。

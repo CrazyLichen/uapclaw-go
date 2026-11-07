@@ -1,5 +1,4 @@
 // Package state 提供会话状态管理的双层抽象接口和内存实现。
-//
 // 本包定义了双层接口体系，完全对齐 Python 的 StateLike/State 分离设计：
 //
 // 底层体系（StateLike 系列，面向存储实现）：

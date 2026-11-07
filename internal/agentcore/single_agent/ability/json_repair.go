@@ -19,7 +19,6 @@ import (
 
 // RepairToolArgumentsJSON 尝试修复畸形的 JSON 字符串，通过补全缺失的闭合括号。
 // 返回修复后的字符串指针；无法修复时返回 nil。
-//
 // Python: AbilityManager._repair_tool_arguments_json
 func RepairToolArgumentsJSON(arguments string) *string {
 	text := arguments
@@ -98,7 +97,6 @@ func RepairToolArgumentsJSON(arguments string) *string {
 // ParseToolArguments 将工具调用参数解析为 map[string]any。
 // 先尝试 json.Unmarshal；失败后尝试 Repair + 再次 Unmarshal；
 // 仍失败则返回错误，包含 json 语法诊断、原始 JSON 和错误信息。
-//
 // Python: AbilityManager._parse_tool_arguments
 //
 // 语法诊断（如 "unexpected end of JSON input"、"invalid character 'U' in

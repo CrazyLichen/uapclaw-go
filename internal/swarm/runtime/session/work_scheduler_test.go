@@ -106,7 +106,6 @@ func TestScheduler_不同会话并行(t *testing.T) {
 }
 
 // TestScheduler_两级优先级 校验 latest_first 类先执行、普通类 FIFO。
-//
 // spec §8 D-5：这是相对旧 SessionManager（一律 LIFO）的行为变化。
 func TestScheduler_两级优先级(t *testing.T) {
 	s := newTestScheduler()
@@ -370,7 +369,6 @@ func TestScheduler_提交方ctx取消时放弃等待(t *testing.T) {
 }
 
 // TestScheduler_旧LIFO到两级规则的行为变化 固化 spec §8 D-5。
-//
 // 旧 SessionManager 对所有任务一律 LIFO（后到先跑）；改为上游两级规则后：
 // CHAT_UNARY / CHAT_STREAM 走 group=0 且 priority 递减（仍是后到先跑），
 // 其余走 group=1、priority=0、按 sequence FIFO（**变先进先跑**）。

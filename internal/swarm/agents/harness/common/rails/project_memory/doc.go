@@ -1,8 +1,6 @@
 // Package project_memory 提供项目记忆文件发现、加载、缓存和合并功能。
-//
 // 本包对齐 Python jiuwenswarm/agents/harness/common/rails/project_memory/，
 // 在 ProjectMemoryRail 的 before_model_call 钩子中使用。
-//
 // 功能包括：
 //   - 多层级发现：managed → user → project (root → cwd) → local
 //   - 固定文件名 + glob 扫描（+ 可选额外目录）

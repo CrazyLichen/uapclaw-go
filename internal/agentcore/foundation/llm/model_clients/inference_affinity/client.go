@@ -20,12 +20,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InferenceAffinityModelClient InferenceAffinity (vLLM) 模型客户端。
-//
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
 // 覆写 Invoke/Stream，在调用前对消息中的 tool_calls 做清洗（sanitize），
 // 并注入 cache_sharing/cache_salt 参数以支持 vLLM KV Cache 共享。
 // Stream 独立实现（不委托 OpenAI.Stream），对齐 Python InferenceAffinityModelClient._astream_with_parser。
-//
 // InferenceAffinity API 兼容 OpenAI Chat Completion 协议，但有以下特殊要求：
 //   - tool_calls 中的 type 必须为 "function"，其他值会报错
 //   - tool_calls 中不能包含非标准扩展字段，否则 API 报错
@@ -53,7 +51,6 @@ const releaseKVCachePath = "/release_kv_cache"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInferenceAffinityModelClient 创建 InferenceAffinity 客户端。
-//
 // 构造流程与 SiliconFlow/DeepSeek 客户端一致：
 //  1. 先构造 OpenAI 客户端（复用 baseHeaders 初始化等）
 //  2. 覆盖 clientName 为 "InferenceAffinity client"
@@ -86,10 +83,8 @@ func NewInferenceAffinityModelClient(
 }
 
 // Invoke 非流式调用 InferenceAffinity API。
-//
 // 覆写 OpenAI 客户端的 Invoke，在委托前对消息中的 tool_calls 做清洗，
 // 并注入 cache_sharing/cache_salt 参数。
-//
 // Python: InferenceAffinityModelClient.invoke()
 func (c *InferenceAffinityModelClient) Invoke(
 	ctx context.Context,
@@ -112,11 +107,9 @@ func (c *InferenceAffinityModelClient) Invoke(
 }
 
 // Stream 流式调用 InferenceAffinity API。
-//
 // 独立实现 Stream，不委托给 OpenAI 客户端。
 // Python: InferenceAffinityModelClient._astream_with_parser：
 // 使用自己的 parseStreamChunk 解析流式块。
-//
 // 与 OpenAI 的行为差异（对齐 Python）：
 //   - 不设置 stream_options.include_usage（InferenceAffinity API 无此参数）
 //   - 不保留无 choices 的 usage-only chunk（InferenceAffinity _parse_stream_chunk 会丢弃）
@@ -319,10 +312,8 @@ func (c *InferenceAffinityModelClient) Stream(
 }
 
 // Release 释放 vLLM KV Cache。
-//
 // 调用 {api_base}/release_kv_cache 接口，释放指定会话的 KV Cache。
 // Python: 200 响应即使非 JSON 也返回 true；非 200 返回 false；异常返回 error。
-//
 // Python: InferenceAffinityModelClient.release()
 func (c *InferenceAffinityModelClient) Release(
 	ctx context.Context,
@@ -411,7 +402,6 @@ func (c *InferenceAffinityModelClient) Release(
 }
 
 // GenerateImage 生成图片（当前不支持）。
-//
 // InferenceAffinity Chat Completion API 不支持图片生成。
 func (c *InferenceAffinityModelClient) GenerateImage(
 	_ context.Context,
@@ -484,7 +474,6 @@ func init() {
 }
 
 // parseStreamChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
-//
 // Python: InferenceAffinityModelClient._parse_stream_chunk()，
 // 与 OpenAI 的 ParseStreamChunk 有以下差异：
 //   - 不保留无 choices 的 usage-only chunk（返回 nil，丢弃）
@@ -568,7 +557,6 @@ func (c *InferenceAffinityModelClient) parseStreamChunk(
 }
 
 // buildInferenceAffinityUsageMetadata 构建 InferenceAffinity 的 usage 元数据。
-//
 // 统一委托 model_clients.BuildUsageMetadata（对齐 openai_model_client.py:2940-2946
 // 组装点字段集；cost 与 Python InferenceAffinity 一致不在此提取）。
 func buildInferenceAffinityUsageMetadata(
@@ -579,7 +567,6 @@ func buildInferenceAffinityUsageMetadata(
 }
 
 // sanitizeMessages 对消息做预处理：先调用基类转换，再清洗 tool_calls。
-//
 // 处理流程：
 //  1. 先调用 OpenAI 基类的 ConvertMessagesToDict 做标准转换
 //  2. 对转换后的消息做 sanitizeToolCalls（只保留标准字段，强制 type="function"）
@@ -603,10 +590,8 @@ func (c *InferenceAffinityModelClient) sanitizeMessages(
 }
 
 // injectCacheOptions 注入 cache_sharing/cache_salt 参数到 Invoke 选项。
-//
 // 从 Extra 中读取 session_id 和 enable_cache_sharing，
 // 满足条件时注入 cache_sharing=true 和 cache_salt=session_id。
-//
 // Python: InferenceAffinityModelClient._build_and_sanitize_params() 中的 cache 逻辑
 func (c *InferenceAffinityModelClient) injectCacheOptions(
 	extra map[string]any,
@@ -635,7 +620,6 @@ func (c *InferenceAffinityModelClient) injectCacheOptions(
 }
 
 // injectCacheStreamOptions 注入 cache_sharing/cache_salt 参数到 Stream 选项。
-//
 // 逻辑与 injectCacheOptions 一致，但操作 StreamOption。
 func (c *InferenceAffinityModelClient) injectCacheStreamOptions(
 	extra map[string]any,
@@ -664,7 +648,6 @@ func (c *InferenceAffinityModelClient) injectCacheStreamOptions(
 }
 
 // buildReleaseRequestBody 构建 Release 请求体。
-//
 // Python: InferenceAffinityModelClient.release() 中的 release_params 构建
 func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 	params *model_clients.ReleaseParams,
@@ -709,7 +692,6 @@ func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 }
 
 // sanitizeToolCalls 清洗消息中的 tool_calls，只保留 OpenAI 标准字段。
-//
 // InferenceAffinity (vLLM) API 对请求中的非标准字段严格，遇到不认识的字段会报错。
 // 本函数对每个 assistant 消息的 tool_calls 做清洗：
 //   - 只保留标准字段：id、type、index、function.name、function.arguments
@@ -717,7 +699,6 @@ func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 //   - 移除非标准扩展字段（LLM 返回的原始 tool_calls 可能包含额外字段）
 //
 // 原地修改 messages 中的 tool_calls 字段。
-//
 // Python: InferenceAffinityModelClient._sanitize_tool_calls()
 func (c *InferenceAffinityModelClient) sanitizeToolCalls(messages []map[string]any) {
 	for _, msg := range messages {

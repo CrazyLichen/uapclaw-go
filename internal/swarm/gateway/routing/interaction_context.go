@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PendingInteraction 统一的追问上下文，支持群聊追问和 DM 追问两种模式。
-//
 // 存储路径: {workspace_dir}/agent/workspace/interactions/{interaction_id}.json
 // 文件名前缀: gpq_* 群聊追问, iact_* DM 追问
 // TTL: 24 小时
@@ -122,7 +121,6 @@ var sensitiveKeys = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 将交互上下文落盘（防御式，失败仅 Warn）。
-//
 // Python: save (L59-82)：updated_at 刷新为当前时间 → 过滤敏感键 →
 // json.dumps(ensure_ascii=False, indent=2) 写文件；异常仅 warning。
 // Go 对齐差异：CreatedAt 零值补当前时间（对齐 dataclass default_factory 语义）。
@@ -182,7 +180,6 @@ func (pi *PendingInteraction) Save() {
 }
 
 // Remove 删除交互文件（防御式，失败仅 Warn）。
-//
 // Python: remove (L84-91)：存在才删；异常仅 warning。
 func (pi *PendingInteraction) Remove() {
 	fp := pi.path()
@@ -209,7 +206,6 @@ func (pi *PendingInteraction) Remove() {
 }
 
 // LoadPendingInteraction 按 ID 加载交互上下文；文件不存在/解析失败/必填字段缺失返回 nil。
-//
 // Python: load (L94-103)：文件不存在 → None；cls(**fields) 重建（必填缺失
 // TypeError → except → None）；解析失败 warning + None。
 func LoadPendingInteraction(interactionID string) *PendingInteraction {
@@ -236,14 +232,12 @@ func LoadPendingInteraction(interactionID string) *PendingInteraction {
 }
 
 // FindGroupPending 查群聊追问（直达加载 gpq_{session}_{user}，不过滤 status/TTL）。
-//
 // Python: find_group_pending (L149-151)
 func FindGroupPending(sessionID, userID string) *PendingInteraction {
 	return LoadPendingInteraction(fmt.Sprintf("gpq_%s_%s", sessionID, userID))
 }
 
 // FindAllGroupPending 收集全部 pending 且未过期的群聊追问。
-//
 // Python: find_all_group_pending (L133-146)：gpq_* glob → 重建 dataclass →
 // status=="pending" 且未过期才收集；解析失败 debug 跳过。
 // 注：Python 全仓零消费方，对齐原则照实实现（spec §1）。
@@ -264,7 +258,6 @@ func FindAllGroupPending() []*PendingInteraction {
 }
 
 // FindPendingInteraction 扫描 iact_{channel}_* 与 gpq_* 两前缀，按五层过滤取最旧。
-//
 // Python: find_pending (L106-130)，过滤顺序不可调换（执行顺序纪律）：
 //  1. 解析失败 → debug 跳过
 //  2. status != pending → 跳过
@@ -308,7 +301,6 @@ func FindPendingInteraction(channelID, principalID string) *PendingInteraction {
 }
 
 // CleanupExpired 清理过期交互文件（宽松解析：字符串时间戳容忍），返回删除数。
-//
 // Python: cleanup_expired (L154-170)：*.json glob → 裸 dict 取 created_at：
 //   - 缺失 → 0 → 恒过期 → 删除（data.get("created_at", 0)）
 //   - 字符串数字 → float() 转换成功 → 用
@@ -351,7 +343,6 @@ func CleanupExpired(ttl float64) int {
 }
 
 // BuildResumeContent 构建任务恢复提示词（dm/group 两套模板，逐字对齐 Python）。
-//
 // Python: build_resume_content (L172-189)。中文提示词一比一复制，禁止改写。
 func (pi *PendingInteraction) BuildResumeContent(answer string) string {
 	if pi.Mode == ModeDM {
@@ -494,7 +485,6 @@ func unmarshalPendingInteraction(raw []byte) (*PendingInteraction, error) {
 }
 
 // parseInteractionFile 读文件并解析（失败 Debug 日志 + nil）。
-//
 // Python: find_pending/find_all_group_pending 内层 try 块的共享语义
 // （读文件 → json.loads → cls(**fields)；except → logger.debug + continue）。
 // 注意：与 load() 的 warning 级别不同——Python 扫描场景用 debug。

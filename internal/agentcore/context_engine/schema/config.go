@@ -6,10 +6,8 @@ import "fmt"
 
 // ContextEngineConfig 上下文引擎全局配置，控制消息上限、窗口策略、KV 缓存释放、
 // 卸载重载、Token 预算等核心行为。
-//
 // 配置在 ContextEngine 构造时传入，并在每次 CreateContext 创建 SessionModelContext 时被消费。
 // int 字段使用 0 表示"不限"（与 Python None 语义对齐），设置时必须 > 0。
-//
 // Python: openjiuwen/core/context_engine/schema/config.py (ContextEngineConfig)
 type ContextEngineConfig struct {
 	// MaxContextMessageNum 上下文消息数硬上限，0 表示不限

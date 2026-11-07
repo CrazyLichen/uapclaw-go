@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PermissionEngine 权限引擎 — 负责加载配置、评估权限。
-//
 // Python: PermissionEngine (core.py L33-52)
 //
 // 并发说明：Python 依赖 GIL 保证属性读写的原子性；Go 端多工具并行执行时
@@ -49,7 +48,6 @@ type PermissionEngine struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionEngine 创建权限引擎。
-//
 // Python: PermissionEngine.__init__(config, llm, model_name, workspace_root) (core.py L36-52)
 func NewPermissionEngine(config map[string]any, llmModel *llm.Model, modelName string, workspaceRoot string) *PermissionEngine {
 	if config == nil {
@@ -72,7 +70,6 @@ func NewPermissionEngine(config map[string]any, llmModel *llm.Model, modelName s
 }
 
 // UpdateConfig 热更新配置。
-//
 // Python: PermissionEngine.update_config(config) (core.py L56-62)
 func (e *PermissionEngine) UpdateConfig(config map[string]any) {
 	if config == nil {
@@ -108,7 +105,6 @@ func (e *PermissionEngine) Enabled() bool {
 }
 
 // SetPermissionChecksActive 设置权限校验活跃检查函数。
-//
 // Python: PermissionEngine.set_permission_checks_active(fn) (core.py L73-75)
 func (e *PermissionEngine) SetPermissionChecksActive(fn func() bool) {
 	e.mu.Lock()
@@ -125,7 +121,6 @@ func (e *PermissionEngine) SetWorkspaceRoot(root string) {
 }
 
 // SetSceneHook 设置宿主场景钩子。
-//
 // Python: PermissionEngine.set_scene_hook(fn)
 func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
 	e.mu.Lock()
@@ -134,7 +129,6 @@ func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
 }
 
 // CheckPermission 检查工具调用权限。
-//
 // Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
 func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string, toolArgs map[string]any) *PermissionResult {
 	// 并发说明：先快照可变字段（RWMutex 读锁），评估全程使用快照，
@@ -288,14 +282,12 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 }
 
 // CheckToolPermissionDirectly 直接检查工具权限，不受 enabled 开关与宿主「是否校验」短路影响。
-//
 // Python: PermissionEngine.check_tool_permission_directly(tool_name, tool_args) (core.py L77-89)
 func (e *PermissionEngine) CheckToolPermissionDirectly(toolName string, toolArgs map[string]any) (PermissionLevel, string, error) {
 	return e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, true)
 }
 
 // EvaluateGlobalPolicyDirectly 直接评估全局权限，不受 enabled 与宿主「是否校验」短路影响。
-//
 // Python: PermissionEngine.evaluate_global_policy_directly(tool_name, tool_args, include_external_directory) (core.py L91-124)
 func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArgs map[string]any, includeExternalDirectory bool) (PermissionLevel, string, error) {
 	if toolArgs == nil {

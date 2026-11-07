@@ -19,10 +19,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ConversationSignalDetector 从 Trajectory 或消息列表中提取演化信号。
-//
 // 统一在线/离线信号检测接口，支持执行失败、脚本产物、协作信号和
 // LLM 辅助用户反馈检测。
-//
 // Python: openjiuwen/agent_evolving/signal/from_conv.py ConversationSignalDetector
 type ConversationSignalDetector struct {
 	// existingSkills 已有技能名称集合，用于 skill_name 解析
@@ -47,7 +45,6 @@ type ConvDetectorOption func(*ConversationSignalDetector)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // SignalDetector 向后兼容别名。
-//
 // Python: SignalDetector = ConversationSignalDetector
 type SignalDetector = ConversationSignalDetector
 
@@ -57,7 +54,6 @@ type SignalDetector = ConversationSignalDetector
 const logComponent = logger.ComponentAgentCore
 
 // userFeedbackPromptCN 中文用户反馈检测提示词。
-//
 // Python: _USER_FEEDBACK_PROMPT_CN（原文复刻，不翻译）
 const userFeedbackPromptCN = "判断以下用户消息是否包含对当前 skill 的被动纠正或可沉淀的改进反馈。\n" +
 	"只有当用户消息明确指出 agent 的理解、步骤、顺序或工具使用需要调整时，" +
@@ -67,7 +63,6 @@ const userFeedbackPromptCN = "判断以下用户消息是否包含对当前 skil
 	`输出 JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
 
 // userFeedbackPromptEN 英文用户反馈检测提示词。
-//
 // Python: _USER_FEEDBACK_PROMPT_EN（原文复刻，不翻译）
 const userFeedbackPromptEN = "Determine whether the following user messages contain passive corrective feedback " +
 	"or reusable improvement guidance for the current skill.\n" +
@@ -80,7 +75,6 @@ const userFeedbackPromptEN = "Determine whether the following user messages cont
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // failureKeywords 匹配执行失败关键词（中英文）。
-//
 // Python: _FAILURE_KEYWORDS
 // 注意：Python 使用 (?!...) 负向前瞻排除 "error = None"，
 // Go 正则不支持该语法，改为匹配 error 后在 matchFailureKeyword 中过滤。
@@ -98,7 +92,6 @@ var failureKeywords = regexp.MustCompile(
 var errorEqualsNonePattern = regexp.MustCompile(`(?i)error\s*=\s*None`)
 
 // correctionPatterns 用户纠正模式列表（中英文）。
-//
 // Python: _CORRECTION_PATTERNS
 var correctionPatterns = []string{
 	`不对[，,。!]?`,
@@ -121,24 +114,20 @@ var correctionPatterns = []string{
 }
 
 // correctionPattern 合并后的用户纠正正则。
-//
 // Python: _CORRECTION_PATTERN
 var correctionPattern = regexp.MustCompile(
 	strings.Join(correctionPatterns, "|"),
 )
 
 // skillMDPattern 匹配 SKILL.md 路径。
-//
 // Python: _SKILL_MD_PATTERN
 var skillMDPattern = regexp.MustCompile(`[/\\]+([^/\\]+)[/\\]+SKILL\.md`)
 
 // toolSchemaPattern 匹配工具 schema 输出。
-//
 // Python: _TOOL_SCHEMA_PATTERN
 var toolSchemaPattern = regexp.MustCompile(`\{'content': '---\\nname: [^\n]+\\ndescription:`)
 
 // dataFetchTools 数据获取工具集合。
-//
 // Python: _DATA_FETCH_TOOLS
 var dataFetchTools = map[string]bool{
 	"mcp_fetch_webpage": true, "fetch_webpage": true, "web_fetch": true,
@@ -148,7 +137,6 @@ var dataFetchTools = map[string]bool{
 }
 
 // codeExecTools 代码执行工具集合。
-//
 // Python: _CODE_EXEC_TOOLS
 var codeExecTools = map[string]bool{
 	"code": true, "bash": true, "execute_python_code": true, "run_python": true,
@@ -156,7 +144,6 @@ var codeExecTools = map[string]bool{
 }
 
 // execContentKeys 可执行内容参数键。
-//
 // Python: _EXEC_CONTENT_KEYS
 var execContentKeys = []string{
 	"code", "code_block", "script", "source", "python_code",
@@ -164,7 +151,6 @@ var execContentKeys = []string{
 }
 
 // collaborationSignalTypes 协作信号类型集合。
-//
 // Python: _COLLABORATION_SIGNAL_TYPES
 var collaborationSignalTypes = map[string]bool{
 	"collaboration_send": true, "collaboration_claim": true,
@@ -173,7 +159,6 @@ var collaborationSignalTypes = map[string]bool{
 }
 
 // collaborationFailurePattern 协作失败匹配正则。
-//
 // Python: _COLLABORATION_FAILURE_PATTERN
 var collaborationFailurePattern = regexp.MustCompile(
 	`member.*failed|member.*error|member.*timeout` +
@@ -190,7 +175,6 @@ var errorEqualsNoneOnlyStart = regexp.MustCompile(`(?i)^\s*=\s*None`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewConversationSignalDetector 创建 ConversationSignalDetector 实例。
-//
 // Python: ConversationSignalDetector(existing_skills)
 func NewConversationSignalDetector(opts ...ConvDetectorOption) *ConversationSignalDetector {
 	d := &ConversationSignalDetector{
@@ -214,7 +198,6 @@ func WithExistingSkills(skills map[string]bool) ConvDetectorOption {
 
 // BindLLM 绑定可选 LLM 上下文，用于被动用户消息检测。
 // 返回自身以支持链式调用。
-//
 // Python: ConversationSignalDetector.bind_llm(llm, model, language)
 func (d *ConversationSignalDetector) BindLLM(llm *llm.Model, model, language string) *ConversationSignalDetector {
 	d.llm = llm
@@ -226,7 +209,6 @@ func (d *ConversationSignalDetector) BindLLM(llm *llm.Model, model, language str
 }
 
 // Detect 从消息列表中检测演化信号，返回去重后的 EvolutionSignal 列表。
-//
 // Python: ConversationSignalDetector.detect(trajectory_or_messages)
 func (d *ConversationSignalDetector) Detect(msgs []map[string]any) []*EvolutionSignal {
 	signals := d.detectFromMessages(msgs)
@@ -234,7 +216,6 @@ func (d *ConversationSignalDetector) Detect(msgs []map[string]any) []*EvolutionS
 }
 
 // ParseMessages 将 BaseMessage 列表归一化为 map 列表（含 tool_calls）。
-//
 // 对齐 Python: SkillEvolutionRail._parse_messages(messages)
 // （agent_evolving 基础设施层等价实现——openjiuwen 的 slash 层
 // _collect_messages_for_evolve 收集会话消息后经此转换供 detect 使用）。
@@ -248,7 +229,6 @@ func ParseMessages(messages []llmschema.BaseMessage) []map[string]any {
 }
 
 // DetectTrajectorySignals 使用常规对话规则检测被动轨迹信号。
-//
 // Python: ConversationSignalDetector.detect_trajectory_signals(trajectory, messages)
 func (d *ConversationSignalDetector) DetectTrajectorySignals(
 	traj *trajectory.Trajectory,
@@ -272,7 +252,6 @@ func (d *ConversationSignalDetector) DetectTrajectorySignals(
 }
 
 // DetectUserMessageFeedback 使用 LLM 判断用户消息是否为被动纠正，返回 user_correction 信号。
-//
 // Python: ConversationSignalDetector.detect_user_message_feedback(trajectory_or_messages)
 func (d *ConversationSignalDetector) DetectUserMessageFeedback(
 	ctx context.Context,
@@ -293,7 +272,6 @@ func (d *ConversationSignalDetector) DetectUserMessageFeedback(
 }
 
 // DetectUserIntent 使用 LLM 判断被动用户消息，转换为标准信号。
-//
 // Python: ConversationSignalDetector.detect_user_intent(trajectory_or_messages)
 func (d *ConversationSignalDetector) DetectUserIntent(
 	ctx context.Context,
@@ -379,7 +357,6 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 }
 
 // ConvertTrajectoryToMessages 将 Trajectory.steps 转换为消息列表格式。
-//
 // 消息格式与 Detect() 期望的格式匹配：
 //   - LLM 步骤：从 LLMCallDetail 提取 messages（含 tool_calls）
 //   - Tool 步骤：从 ToolCallDetail.call_result 提取工具结果
@@ -449,10 +426,8 @@ func (d *ConversationSignalDetector) ConvertTrajectoryToMessages(traj *trajector
 }
 
 // MatchFailureKeywords 检查 content 是否包含失败关键词。
-//
 // 导出此函数供 sharing 包的 ShareStager 使用，
 // 因为 Go 无法跨包访问非导出变量 failureKeywords。
-//
 // Python: openjiuwen/agent_evolving/signal/from_conv._FAILURE_KEYWORDS.search(content)
 func MatchFailureKeywords(content string) bool {
 	return failureKeywords.MatchString(content)
@@ -489,7 +464,6 @@ func findFailureKeywordIndex(content string) []int {
 
 // getField 泛型字典字段读取，从 map[string]any 中读取指定键的值。
 // 如果键不存在或值为 nil，返回 defaultVal。
-//
 // Python: _get_field(obj, key, default)
 func getField[T any](m map[string]any, key string, defaultVal T) T {
 	if m == nil {
@@ -548,7 +522,6 @@ func argsToJSON(args map[string]any) string {
 }
 
 // responseToText 将 LLM 响应转换为纯文本。
-//
 // Python: _response_to_text(response)
 func responseToText(resp *llmschema.AssistantMessage) string {
 	if resp == nil {
@@ -558,7 +531,6 @@ func responseToText(resp *llmschema.AssistantMessage) string {
 }
 
 // extractAroundMatch 返回匹配位置前后的摘录。
-//
 // Python: _extract_around_match(content, match, before, after)
 func extractAroundMatch(content string, matchStart, matchEnd, before, after int) string {
 	start := matchStart - before
@@ -573,7 +545,6 @@ func extractAroundMatch(content string, matchStart, matchEnd, before, after int)
 }
 
 // detectFromMessages 扫描消息列表，返回检测到的信号。
-//
 // Python: ConversationSignalDetector._detect_from_messages(messages)
 func (d *ConversationSignalDetector) detectFromMessages(messages []map[string]any) []*EvolutionSignal {
 	var signals []*EvolutionSignal
@@ -674,7 +645,6 @@ func (d *ConversationSignalDetector) detectFromMessages(messages []map[string]an
 }
 
 // resolveActiveSkill 返回 msgIdx 处或之前最近读取的技能名称。
-//
 // Python: ConversationSignalDetector._resolve_active_skill(msg_idx, skill_read_history)
 func (d *ConversationSignalDetector) resolveActiveSkill(msgIdx int, history []skillReadEntry) string {
 	for i := len(history) - 1; i >= 0; i-- {
@@ -686,7 +656,6 @@ func (d *ConversationSignalDetector) resolveActiveSkill(msgIdx int, history []sk
 }
 
 // detectSkillFromToolCalls 从工具调用中检测 SKILL.md 读取的技能名称。
-//
 // Python: ConversationSignalDetector._detect_skill_from_tool_calls(tool_calls)
 func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[string]any) string {
 	for _, tc := range toolCalls {
@@ -727,7 +696,6 @@ func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[st
 }
 
 // isExistingSkill 检查技能名称是否在已有技能集合中。
-//
 // Python: ConversationSignalDetector._is_existing_skill(skill_name)
 func (d *ConversationSignalDetector) isExistingSkill(skillName string) bool {
 	if len(d.existingSkills) == 0 {
@@ -737,7 +705,6 @@ func (d *ConversationSignalDetector) isExistingSkill(skillName string) bool {
 }
 
 // isSkillMDReadTool 判断工具是否为文件读取类工具。
-//
 // Python: ConversationSignalDetector._is_skill_md_read_tool(name)
 func (d *ConversationSignalDetector) isSkillMDReadTool(name string) bool {
 	if name == "" {
@@ -747,7 +714,6 @@ func (d *ConversationSignalDetector) isSkillMDReadTool(name string) bool {
 }
 
 // inferSkillFromMessages 从消息列表推断当前活跃技能。
-//
 // Python: ConversationSignalDetector._infer_skill_from_messages(messages)
 func (d *ConversationSignalDetector) inferSkillFromMessages(messages []map[string]any) string {
 	var skillReadHistory []skillReadEntry
@@ -765,7 +731,6 @@ func (d *ConversationSignalDetector) inferSkillFromMessages(messages []map[strin
 }
 
 // extractCodeFromArgs 从代码执行工具调用中提取内联代码或命令内容。
-//
 // Python: ConversationSignalDetector._extract_code_from_args(tool_call)
 func (d *ConversationSignalDetector) extractCodeFromArgs(toolCall map[string]any) string {
 	rawArgs := toolCall["arguments"]
@@ -799,7 +764,6 @@ func (d *ConversationSignalDetector) extractCodeFromArgs(toolCall map[string]any
 }
 
 // fallbackUserFeedbackSignals 正则 fallback 检测用户纠正。
-//
 // Python: ConversationSignalDetector._fallback_user_feedback_signals(user_messages, skill_name)
 func (d *ConversationSignalDetector) fallbackUserFeedbackSignals(userMessages []string, skillName string) []*EvolutionSignal {
 	for i := len(userMessages) - 1; i >= 0; i-- {
@@ -811,7 +775,6 @@ func (d *ConversationSignalDetector) fallbackUserFeedbackSignals(userMessages []
 }
 
 // makeUserFeedbackSignal 构建用户反馈信号。
-//
 // Python: ConversationSignalDetector._make_user_feedback_signal(excerpt, skill_name)
 func (d *ConversationSignalDetector) makeUserFeedbackSignal(excerpt, skillName string) *EvolutionSignal {
 	return MakeEvolutionSignal(
@@ -825,7 +788,6 @@ func (d *ConversationSignalDetector) makeUserFeedbackSignal(excerpt, skillName s
 
 // detectCollaborationSignals 检测团队协作信号。
 // 仅在 TeamSkill 成员执行上下文中触发。
-//
 // Python: ConversationSignalDetector._detect_collaboration_signals(trajectory)
 func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory.Trajectory) []*EvolutionSignal {
 	if !d.isTeamMemberContext(traj) {
@@ -958,7 +920,6 @@ func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory
 }
 
 // isTeamMemberContext 判断轨迹是否处于团队协作成员上下文。
-//
 // Python: ConversationSignalDetector._is_team_member_context(trajectory)
 func (d *ConversationSignalDetector) isTeamMemberContext(traj *trajectory.Trajectory) bool {
 	meta := traj.Meta
@@ -979,7 +940,6 @@ func (d *ConversationSignalDetector) isTeamMemberContext(traj *trajectory.Trajec
 }
 
 // resolveActiveSkillForStep 为轨迹步骤解析活跃技能。
-//
 // Python: ConversationSignalDetector._resolve_active_skill_for_step(step, all_steps, skill_read_history)
 func (d *ConversationSignalDetector) resolveActiveSkillForStep(
 	step *trajectory.TrajectoryStep,
@@ -1005,7 +965,6 @@ func (d *ConversationSignalDetector) resolveActiveSkillForStep(
 }
 
 // extractToMember 从 send_message 参数中提取目标成员。
-//
 // Python: ConversationSignalDetector._extract_to_member(call_args)
 func (d *ConversationSignalDetector) extractToMember(callArgs string) string {
 	var argsDict map[string]any
@@ -1032,7 +991,6 @@ func (d *ConversationSignalDetector) extractToMember(callArgs string) string {
 }
 
 // extractTaskID 从 claim_task 参数中提取任务 ID。
-//
 // Python: ConversationSignalDetector._extract_task_id(call_args)
 func (d *ConversationSignalDetector) extractTaskID(callArgs string) string {
 	var argsDict map[string]any
@@ -1049,7 +1007,6 @@ func (d *ConversationSignalDetector) extractTaskID(callArgs string) string {
 }
 
 // deduplicate 基于 fingerprint 去重信号列表。
-//
 // Python: ConversationSignalDetector._deduplicate(signals)
 func (d *ConversationSignalDetector) deduplicate(signals []*EvolutionSignal) []*EvolutionSignal {
 	seen := map[[4]string]bool{}

@@ -27,7 +27,6 @@ func TestNativeHarness_Send在Idle时开轮(t *testing.T) {
 }
 
 // TestNativeHarness_Send在Running时排队 验证 running 下非立即输入进队列而非新开一轮（C13）。
-//
 // 直接驱动 onSend 分支而非走完整异步 supervisor：无模型环境下 SubmitRound 会
 // 立刻结束轮次，无法稳定构造"running 中"的时序窗口。
 func TestNativeHarness_Send在Running时排队(t *testing.T) {

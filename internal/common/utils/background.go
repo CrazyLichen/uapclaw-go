@@ -1,11 +1,9 @@
 // utils 包提供通用工具函数。
-//
 // background.go 实现后台任务和任务管理器。
 // Python:
 //   - openjiuwen/core/common/background_tasks.py（轻量后台任务句柄）
 //   - openjiuwen/core/common/task_manager/task.py（Task 数据模型 + 状态机）
 //   - openjiuwen/core/common/task_manager/manager.py（TaskManager 单例）
-//
 // Go 版本使用 goroutine + context 替代 Python 的 asyncio + anyio，
 // 使用 sync 替代 asyncio.Lock，使用 channel 替代 asyncio.Event。
 
@@ -703,6 +701,7 @@ func (m *TaskManager) executeTask(ctx context.Context, task *Task, fn func(ctx c
 	close(task.done)
 }
 
+// buildTreeRecursive 深度优先展开父子任务，把树形文本逐行追加到 lines。
 func (m *TaskManager) buildTreeRecursive(taskID string, lines *[]string, indent int) {
 	m.mu.RLock()
 	task, ok := m.registry[taskID]

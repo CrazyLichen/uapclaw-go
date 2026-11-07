@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Task 任务实体，Controller 领域的核心执行单元。
-//
 // Python: openjiuwen/core/controller/schema/task.py (Task)
 type Task struct {
 	// SessionID 会话ID
@@ -87,7 +86,6 @@ type taskJSON struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTask 创建新的 Task 实例，自动生成 TaskID。
-//
 // Python: Task.task_id = Field(default_factory=lambda: str(uuid.uuid4()))
 func NewTask(sessionID, taskType string) *Task {
 	return &Task{
@@ -101,7 +99,6 @@ func NewTask(sessionID, taskType string) *Task {
 }
 
 // ValidateTask 校验 Task 字段合法性，对齐 Python @field_validator + @model_validator。
-//
 // 校验规则：
 //   - task_id 非空
 //   - session_id 非空

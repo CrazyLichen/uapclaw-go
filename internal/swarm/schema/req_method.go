@@ -7,11 +7,9 @@ import "fmt"
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ReqMethod E2A 协议 RPC 方法名枚举。
-//
 // 定义 Gateway↔AgentServer 通信链路中所有合法的 RPC 方法标识，
 // 用于 E2AEnvelope.method 字段和 AgentServer 方法路由分发。
 // 值为点分字符串格式（如 "chat.send"），与 Python ReqMethod 枚举值一一对应。
-//
 // Python: jiuwenswarm/common/schema/message.py (ReqMethod)
 type ReqMethod string
 

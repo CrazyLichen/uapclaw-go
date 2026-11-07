@@ -43,7 +43,6 @@ type modelCommandParams struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseModelCommandParams 解析 command.model 参数。
-//
 // Python: params = request.params or {}；str(params.get(...) or "").strip()
 // 偏差 D7：Python str(None) == "None"，Go 的 JSON null 解到 string 为空串，
 // 该边界不复刻（无实际调用方会传 null）。
@@ -73,7 +72,6 @@ func parseModelCommandParams(raw json.RawMessage) (modelCommandParams, error) {
 }
 
 // modelErrorResponse 构造 ok=false 的 command.model 响应并记录错误日志。
-//
 // Python: except Exception → logger.exception + ok=False, {"error": str(e)}
 func modelErrorResponse(request *schema.AgentRequest, msg string) *schema.AgentResponse {
 	logger.Error(logComponent).
@@ -87,7 +85,6 @@ func modelErrorResponse(request *schema.AgentRequest, msg string) *schema.AgentR
 }
 
 // maskModelEnvForLog 返回掩码 API_KEY 后的副本。
-//
 // Python: {k: (v if k != "API_KEY" else "***") for k, v in env_updates.items()}
 func maskModelEnvForLog(env map[string]any) map[string]any {
 	masked := make(map[string]any, len(env))
@@ -340,7 +337,6 @@ func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.Agent
 }
 
 // handleCommandModel 处理 command.model 请求。
-//
 // Python: _handle_command_model (L2277-2352) 三分支：
 //
 //	add_model    → {"type":"model_added","name":target}
@@ -473,7 +469,6 @@ func (s *AgentServer) handleCommandSession(_ context.Context, request *schema.Ag
 }
 
 // handleCommandStatus 处理 command.status 请求。返回版本、配置路径、模型信息等诊断信息。
-//
 // Python: _handle_command_status。
 func (s *AgentServer) handleCommandStatus(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	status := map[string]any{

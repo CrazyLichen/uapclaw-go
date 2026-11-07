@@ -37,17 +37,14 @@ type planControllerAdapter struct {
 type sessionOpsAdapter struct{}
 
 // noopTrajectoryHook 轨迹删除钩子桩。
-//
 // spec §10 R-3：等领域二十二 trajectory 落地后回填。
 type noopTrajectoryHook struct{}
 
 // noopTeamBindingUnbinder 团队绑定解绑桩。
-//
 // spec §10 R-1：等 team_binding_store 落地后回填。
 type noopTeamBindingUnbinder struct{}
 
 // noopLifecycleJournal 生命周期日志桩。
-//
 // spec §10 R-4：等 session/lifecycle.py 迁移后回填。
 type noopLifecycleJournal struct{}
 
@@ -61,7 +58,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // newSessionProvisioner 装配 provisioner（10.3.28b/c）。
-//
 // 5 个依赖中 TrajectoryHook / TeamBinding / LifecycleJournal 为桩，
 // 回填点见设计文档 §10（R-1/R-3/R-4）。
 func newSessionProvisioner(
@@ -140,7 +136,6 @@ func (a *sessionAgentManagerAdapter) CreateSession(_ context.Context, channelID,
 }
 
 // GetAgentNoWait 委托 AgentManager。
-//
 // UapClawSwarm 不实现 provisioner 的 SessionAgent 能力面（无 EnsureInstance/Card），
 // 返回 nil 使 fork 走「跳过内存上下文复制」降级路径（spec §10 R-5）。
 func (a *sessionAgentManagerAdapter) GetAgentNoWait(string) swruntime.SessionAgent {
@@ -173,7 +168,6 @@ func (*sessionOpsAdapter) ForkSession(params swruntime.ForkSessionParams) (swrun
 }
 
 // CopySessionContext 复制内存上下文。
-//
 // spec §10 R-5：需要 DeepAgent 实例，当前 provisioner 拿不到（AgentManager
 // 返回 UapClawSwarm 不等于 SessionAgent），此桩为空实现，fork 只复制持久
 // 历史与 metadata，不复制内存上下文。
@@ -182,7 +176,6 @@ func (*sessionOpsAdapter) CopySessionContext(context.Context, swruntime.SessionA
 }
 
 // CopySessionState 复制 checkpoint state。
-//
 // spec §10 R-5：同 CopySessionContext，当前为空实现。
 func (*sessionOpsAdapter) CopySessionState(context.Context, string, string, any, swruntime.SessionAgent) error {
 	return nil
@@ -201,7 +194,6 @@ func (*sessionOpsAdapter) SessionDirHasMetadata(sessionID string) bool {
 }
 
 // InitSessionMetadata 初始化会话元数据。
-//
 // 走读-改-写：session 包的 InitSessionMetadata 只接受 6 个位置参数，
 // 无法写入 project/work_mode/model 等字段，故直接组装完整 map 落盘。
 func (*sessionOpsAdapter) InitSessionMetadata(params swruntime.InitMetadataParams) error {
@@ -240,7 +232,6 @@ func (*sessionOpsAdapter) InitSessionMetadata(params swruntime.InitMetadataParam
 }
 
 // SetSessionModelSelection 写会话模型选择。
-//
 // spec §10 R-5：当前无对应持久化接口，空实现（模型选择存储未迁移）。
 func (*sessionOpsAdapter) SetSessionModelSelection(string, map[string]any) error { return nil }
 
@@ -272,7 +263,6 @@ func (noopTeamBindingUnbinder) UnbindSession(teamName, sessionID string) error {
 }
 
 // RecoveringDelete 桩：恒 false。
-//
 // spec §10 R-4：会话生命周期日志未迁移，恢复中的删除无从判定。
 func (noopLifecycleJournal) RecoveringDelete(string) bool { return false }
 
@@ -282,7 +272,6 @@ func (noopLifecycleJournal) MarkCleanup(string) error { return nil }
 // ──────────────────────────── 参数解析辅助（10.3.28b/c） ────────────────────────────
 
 // parseSessionParams 解析请求参数为可写 map（nil/非法返回空 map）。
-//
 // 与 server/runtime 的同名函数语义一致，但本包需要独立实现以避开跨包依赖。
 func parseSessionParams(request *schema.AgentRequest) map[string]any {
 	if request == nil || len(request.Params) == 0 {
@@ -302,7 +291,6 @@ func paramString(params map[string]any, key string) string {
 }
 
 // requestUserID 取请求的 principal 用户标识（缺省空串）。
-//
 // Python 侧 user_id 由鉴权层透传；Go 放在 PermissionContext.PrincipalUserID。
 func requestUserID(request *schema.AgentRequest) string {
 	if request == nil || request.PermissionContext == nil {
@@ -328,7 +316,6 @@ func firstNonEmptyString(values ...string) string {
 }
 
 // sessionProvisionErrorResponse 把 provisioner 业务错误映射为响应。
-//
 // SessionProvisionError 带可选 Code（缺省 BAD_REQUEST），其余错误按 BAD_REQUEST 处理。
 func sessionProvisionErrorResponse(
 	request *schema.AgentRequest,

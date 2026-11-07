@@ -1,13 +1,10 @@
 // Package events 提供团队事件类型定义。
-//
 // 本包从 schema 包提取而来，包含所有团队事件的类型、接口、常量和 Topic 路由。
 // 提取目的是打断 schema ←→ team_workspace 的循环依赖：
 // schema/blueprint.go 导入 team_workspace.TeamWorkspaceConfig，
 // 而 team_workspace 需要导入事件类型（TypedEvent、WorkspaceArtifactEvent 等）。
 // 将事件类型独立为子包后，team_workspace 可安全导入 schema/events 而不形成循环。
-//
 // 本包零外部导入（仅使用 map[string]any 内建类型），不依赖 schema 父包。
-//
 // 文件目录：
 //
 //	events/

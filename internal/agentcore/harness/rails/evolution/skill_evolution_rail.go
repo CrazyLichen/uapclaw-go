@@ -33,10 +33,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillEvolutionRail 单 Agent 技能演进护栏，在 after_invoke 后自动触发演进。
-//
 // 嵌入 EvolutionRail 基类获得自动轨迹收集和异步触发能力，
 // 通过实现 EvolutionExtension 接口的 10 个方法完成子类多态分派。
-//
 // 核心流程：信号检测 → 技能归属 → 经验生成 → 评分 → 暂存审批 → 应用更新
 // Slash 命令入口：/evolve /evolve_list /evolve_simplify /evolve_rebuild /evolve_rollback
 //
@@ -168,10 +166,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillEvolutionRail 创建 SkillEvolutionRail 实例。
-//
 // 必选参数：skillsDir（技能目录）、llmModel（LLM 客户端）、model（模型名称）、language（语言）。
 // 可选参数通过 Functional Options 覆盖默认配置。
-//
 // 对齐 Python: SkillEvolutionRail.__init__(
 //
 //	skills_dir, llm, model, auto_scan, auto_save, language,
@@ -473,10 +469,8 @@ func (r *SkillEvolutionRail) OnAfterModelCall(ctx context.Context, cbc *agentint
 }
 
 // OnAfterToolCall 检测经验详情读取，追踪 presented records。
-//
 // SKILL.md 读取仅用于索引发现。BODY 经验只有在 evolution/*.md 详情文件被读取
 // 且返回内容包含具体记录标题时才计入 presented。
-//
 // 对齐 Python: SkillEvolutionRail._on_after_tool_call(ctx)
 func (r *SkillEvolutionRail) OnAfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -524,14 +518,12 @@ func (r *SkillEvolutionRail) OnAfterEvolutionTriggered(ctx context.Context, traj
 }
 
 // AllowEvolutionTrigger 返回 autoScan 控制是否允许触发演化。
-//
 // 对齐 Python: SkillEvolutionRail._allow_evolution_trigger(trigger_point, ctx)
 func (r *SkillEvolutionRail) AllowEvolutionTrigger(trigger EvolutionTriggerPoint, cbc *agentinterfaces.AgentCallbackContext) bool {
 	return r.autoScan
 }
 
 // SnapshotForEvolution 同步捕获快照（cbc 仍活跃），供后台演化任务使用。
-//
 // Phase 1: 收集 messages + session_id + presented_entries + incremental_messages
 //
 // 对齐 Python: SkillEvolutionRail._snapshot_for_evolution(trajectory, ctx)
@@ -572,9 +564,7 @@ func (r *SkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj *tra
 }
 
 // RunEvolution 执行技能演进，基于收集到的轨迹。
-//
 // 异步模式：ctx=nil，snapshot 包含捕获的数据；同步模式：ctx 活跃，snapshot=nil。
-//
 // 对齐 Python: SkillEvolutionRail.run_evolution(trajectory, ctx, *, snapshot)
 func (r *SkillEvolutionRail) RunEvolution(ctx context.Context, traj *trajectory.Trajectory, snapshot *EvolutionSnapshot) error {
 	defer func() {
@@ -730,7 +720,6 @@ func (r *SkillEvolutionRail) GetEvolutionTotalTimeoutSecs() float64 {
 // ─── Slash 命令 API 方法 ───
 
 // RequestUserEvolution 用户主动触发的演进入口。
-//
 // 对齐 Python: SkillEvolutionRail.request_user_evolution(skill_name, user_intent, *, auto_approve=False)
 func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName string, userIntent string, autoApprove bool) (*EvolutionRequestResult, error) {
 	traj := r.buildTrajectory()
@@ -790,7 +779,6 @@ func (r *SkillEvolutionRail) RequestUserEvolution(ctx context.Context, skillName
 }
 
 // RequestSimplify 请求精简技能经验。
-//
 // 对齐 Python: SkillEvolutionRail.request_simplify(skill_name, user_intent=None)
 func (r *SkillEvolutionRail) RequestSimplify(ctx context.Context, skillName string, userIntent *string) (*SimplifyRequestResult, error) {
 	// Python: request_id = await self._manager.request_simplify(skill_name, user_intent=user_intent)
@@ -825,7 +813,6 @@ func (r *SkillEvolutionRail) RequestSimplify(ctx context.Context, skillName stri
 }
 
 // OnApproveSimplify 执行已暂存的精简提案。
-//
 // 对齐 Python: SkillEvolutionRail.on_approve_simplify(request_id)
 func (r *SkillEvolutionRail) OnApproveSimplify(ctx context.Context, requestID string) (map[string]int, error) {
 	result, err := r.manager.ApproveSimplify(ctx, requestID)
@@ -839,7 +826,6 @@ func (r *SkillEvolutionRail) OnApproveSimplify(ctx context.Context, requestID st
 }
 
 // OnRejectSimplify 拒绝已暂存的精简提案。
-//
 // 对齐 Python: SkillEvolutionRail.on_reject_simplify(request_id)
 func (r *SkillEvolutionRail) OnRejectSimplify(requestID string) {
 	gov, ok := r.pendingGovernance[requestID]
@@ -850,9 +836,7 @@ func (r *SkillEvolutionRail) OnRejectSimplify(requestID string) {
 }
 
 // RequestRebuild 构建技能重建提示。
-//
 // 返回 followup_prompt 文本，调用方注入 agent loop 执行 skill-creator 生成新 SKILL.md。
-//
 // 对齐 Python: SkillEvolutionRail.request_rebuild(skill_name, user_intent=None, min_score=0.5)
 func (r *SkillEvolutionRail) RequestRebuild(ctx context.Context, skillName string, userIntent *string, minScore float64) (string, error) {
 	// Python: followup_text = await self._manager.request_rebuild(skill_name, user_intent=user_intent, min_score=min_score)
@@ -868,7 +852,6 @@ func (r *SkillEvolutionRail) RequestRebuild(ctx context.Context, skillName strin
 }
 
 // RollbackSkill 回滚技能到归档版本（无需审批）。
-//
 // 对齐 Python: SkillEvolutionRail.rollback_skill(skill_name, version=None)
 func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string, version *string) (bool, error) {
 	store := r.evolutionStore
@@ -955,7 +938,6 @@ func (r *SkillEvolutionRail) RollbackSkill(ctx context.Context, skillName string
 }
 
 // ApproveRecord 批准暂存的演进记录。
-//
 // 对齐 Python: SkillEvolutionRail.approve_record(request_id)
 func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string) error {
 	// Python: snapshot_pending = self._pending_approval_snapshots.get(request_id)
@@ -1006,7 +988,6 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 }
 
 // RejectRecord 拒绝暂存的演进记录。
-//
 // 对齐 Python: SkillEvolutionRail.reject_record(request_id)
 func (r *SkillEvolutionRail) RejectRecord(ctx context.Context, requestID string) error {
 	// Python: pending, result = await self.approval_runtime.reject_pending_request(request_id, ...)
@@ -1040,7 +1021,6 @@ func (r *SkillEvolutionRail) OnReject(ctx context.Context, requestID string) err
 }
 
 // ShouldHintSimplifyOrRebuild 检查技能是否有足够经验来建议精简/重建。
-//
 // 对齐 Python: SkillEvolutionRail.should_hint_simplify_or_rebuild(skill_name)
 func (r *SkillEvolutionRail) ShouldHintSimplifyOrRebuild(skillName string) bool {
 	evoLog, err := r.evolutionStore.LoadFullEvolutionLog(context.Background(), skillName)
@@ -1052,7 +1032,6 @@ func (r *SkillEvolutionRail) ShouldHintSimplifyOrRebuild(skillName string) bool 
 }
 
 // UpdateLLM 热更新 LLM 客户端和模型。
-//
 // 对齐 Python: SkillEvolutionRail.update_llm(llm, model)
 func (r *SkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
 	r.modelName = model
@@ -1064,7 +1043,6 @@ func (r *SkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
 }
 
 // SetSysOperation 设置系统操作，同时传递给 EvolutionRail 基类和 EvolutionStore。
-//
 // 对齐 Python: SkillEvolutionRail.set_sys_operation(sys_operation)
 func (r *SkillEvolutionRail) SetSysOperation(op sys_operation.SysOperation) {
 	// Python: super().set_sys_operation(sys_operation)
@@ -1074,7 +1052,6 @@ func (r *SkillEvolutionRail) SetSysOperation(op sys_operation.SysOperation) {
 }
 
 // RecordPresentedExperiences 记录由非 rail 路径呈现的经验。
-//
 // 对齐 Python: SkillEvolutionRail.record_presented_experiences(skill_name, presentation_snippet, *, session=None, record_ids=None)
 func (r *SkillEvolutionRail) RecordPresentedExperiences(ctx context.Context, skillName string, presentationSnippet string, sessionID string, recordIDs []string) {
 	if len(recordIDs) > 0 {

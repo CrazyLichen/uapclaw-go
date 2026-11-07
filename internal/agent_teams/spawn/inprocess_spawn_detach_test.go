@@ -22,7 +22,6 @@ func (f *fakeSpawnable) AgentCard() *agentschema.AgentCard {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestInProcessSpawn_父ctx取消后成员ctx不被取消 覆盖 S-46 的 detached 语义。
-//
 // Python 的 asyncio.create_task 不随调用方取消；Go 若用 WithCancel(ctx) 派生
 // 成员 runCtx，成员会继承调用方取消（实测工具 ctx 进入 spawn 时已 canceled，
 // 导致成员 Invoke 直接返回、轮次产出被丢弃）。这里断言父 ctx 取消后，

@@ -11,7 +11,6 @@ import "context"
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // globalCallbackFramework 全局回调框架单例。
-//
 // Python: Runner.callback_framework（Runner 初始化时创建的全局单例）
 var globalCallbackFramework = NewCallbackFramework()
 
@@ -23,7 +22,6 @@ func GetCallbackFramework() *CallbackFramework {
 }
 
 // Trigger 便捷触发函数，触发自定义事件。
-//
 // Python: openjiuwen/core/runner/callback/utils.py trigger(event, **kwargs)
 func Trigger(ctx context.Context, event string, data map[string]any) []any {
 	return globalCallbackFramework.TriggerCustom(ctx, event, data)

@@ -25,7 +25,6 @@ import (
 
 // MakeSyncMCPCaller 创建同步 MCP 调用函数。
 // 返回的 APIWrapperFunc 内部会：创建 MCP 客户端 → 连接 → 调用工具 → 断开连接。
-//
 // Python: openjiuwen/agent_evolving/optimizer/tool_call/callable_fortest.py (make_sync_mcp_caller)
 //
 //	Python 使用 SSETransport + Client + asyncio.run，Go 使用已有 MCP 客户端体系

@@ -22,13 +22,11 @@ type excelSheet struct {
 }
 
 // cellValue Excel 单元格值的密封 sum type。
-//
 // 对齐 openpyxl iter_rows(values_only=True) 的类型空间
 // [None|str|int|float|bool|datetime]，每个 Python 类型一个变体。
 // 密封机制：非导出标记方法 isCellValue()，包外无法新增变体，
 // 类型分支穷尽性由 cellStr 的 default 兜底（新变体漏写 case 时
 // 落入 default 而非静默错误）。
-//
 // 取代 [][]any：异构 cell 值的 Go 等价表达收敛为编译期可枚举的
 // 6 变体密封接口，下游（rowsToDocuments/cellStr）不再做发散的
 // any 类型断言。
@@ -91,7 +89,6 @@ func (cellBool) isCellValue() {}
 func (cellTime) isCellValue() {}
 
 // cellStr 对齐 Python _cell_str：None→""，str(value).strip()。
-//
 // 逐变体模拟 Python str()：
 //   - cellInt → 十进制
 //   - cellFloat → utils.PyFloatStr
@@ -128,7 +125,6 @@ func cellStr(v cellValue) string {
 }
 
 // excelSheetRows excelize adapter：读 xlsx 产 sheet 列表（名称 + [][]cellValue）。
-//
 // 对齐 openpyxl load_workbook(read_only=True, data_only=True) +
 // iter_rows(values_only=True)：
 //   - 逐 sheet 顺序（excelize GetSheetList 同序）
@@ -159,7 +155,6 @@ func excelSheetRows(filePath string) ([]excelSheet, error) {
 }
 
 // readSheetRows 读单 sheet 为类型化行（满宽 pad）。
-//
 // 两遍扫描：第一遍收原始字面量行并记最大列宽；第二遍按轴还原类型。
 func readSheetRows(f *excelize.File, sheet string) ([][]cellValue, error) {
 	it, err := f.Rows(sheet)
@@ -196,7 +191,6 @@ func readSheetRows(f *excelize.File, sheet string) ([][]cellValue, error) {
 }
 
 // excelCellValue 还原单 cell 的 openpyxl 类型语义。
-//
 // excelize GetCellType 返回枚举：Bool/Number/String/InlineString/Error。
 // 原始字面量经 Options{RawCellValue: true} 取（GetCellValue 默认按
 // numFmt 显示格式化，如 1000000000000000 → "1E+15"）。
@@ -258,7 +252,6 @@ func excelCellValue(f *excelize.File, sheet, axis string) cellValue {
 }
 
 // isDateCell 判定 cell 是否日期样式（对齐 openpyxl is_date_format）。
-//
 // openpyxl 判定：numFmtId 为内置日期类（14..22/45..47）或自定义
 // code 含 [dmhys] token。excelize GetStyle 返回 Style{NumFmt, CustomNumFmt}，
 // 内置 code 表与 openpyxl BUILTIN_FORMATS 同源（OOXML 规范内置）。
@@ -286,7 +279,6 @@ func isDateCell(f *excelize.File, sheet, axis string) bool {
 }
 
 // dateTokensInCode 扫描 numFmt code 是否含未被转义的日期 token。
-//
 // 对齐 openpyxl is_date_format：仅看第一段（";" 前），剥引号串后
 // 找 [dmhysDMHYS] 字符（前缀 _ 或 \ 转义的跳过）。
 func dateTokensInCode(code string) bool {

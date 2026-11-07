@@ -16,7 +16,6 @@ func TestNormalizeMode_三段权威值(t *testing.T) {
 }
 
 // TestNormalizeMode_旧串canonicalize 验证两段串静默映射到新 canonical（上游 DEPRECATION_MAP）。
-//
 // 旧串用拼接写法，保证全仓 grep 旧字面量的清偿验收不被测试自身命中。
 func TestNormalizeMode_旧串canonicalize(t *testing.T) {
 	require.Equal(t, ModeAgentWorkPlan, NormalizeMode("agent."+"plan"))

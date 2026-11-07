@@ -19,7 +19,6 @@ import (
 )
 
 // newHarnessWithInterruptSession 构造一个持有中断状态的 TeamHarness。
-//
 // 直接写 activeAgentSession（同包可见），跳过 prepareAgentSession 的
 // PreRun 依赖；被测语义是"从会话里读中断状态"，与会话怎么建出来无关。
 func newHarnessWithInterruptSession(t *testing.T, entry *agentschema.ToolInterruptEntry) (*TeamHarness, *session.Session) {
@@ -51,7 +50,6 @@ func TestTeamHarness_HasPendingInterrupt_会话无中断状态(t *testing.T) {
 }
 
 // TestTeamHarness_HasPendingInterrupt_会话带中断状态 → true。
-//
 // S-01：原实现恒返回 false，导致 team 模式 HITL 恢复整条死链。
 func TestTeamHarness_HasPendingInterrupt_会话带中断状态(t *testing.T) {
 	h, _ := newHarnessWithInterruptSession(t, &agentschema.ToolInterruptEntry{
@@ -118,7 +116,6 @@ func TestTeamHarness_IsPendingInterruptResumeValid_无待处理请求(t *testing
 }
 
 // TestTeamHarness_RegisterRail_真实DeepAgent Rail 能挂到底层 Agent 上且可注销。
-//
 // S-01：原实现是空桩（return nil），Rail 挂载静默无效。
 func TestTeamHarness_RegisterRail_真实DeepAgent(t *testing.T) {
 	d := agentcore.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("agent-1")))
@@ -142,7 +139,6 @@ func TestTeamHarness_interruptSession_优先LoopSession(t *testing.T) {
 }
 
 // TestTeamHarness_会话字段并发读写 轮次 goroutine 写、消息 goroutine 读必须无数据竞争。
-//
 // S-02：字段原来是 any 且无锁，接口值的两字写入可能被读到撕裂值。
 // 本用例在 -race 下运行；不加 -race 时至少验证不会 panic。
 func TestTeamHarness_会话字段并发读写(t *testing.T) {
@@ -178,7 +174,6 @@ func TestTeamHarness_会话字段并发读写(t *testing.T) {
 }
 
 // TestTeamHarness_InitCwdForRound_每轮重置 上一轮的 cd 不得跨轮残留。
-//
 // Python: init_cwd_for_round() 每轮用 workspace 根重建 CwdState；
 // Go 侧若只返回不改 ctx，工具会继续读上一轮被 cd 改过的状态。
 func TestTeamHarness_InitCwdForRound_每轮重置(t *testing.T) {

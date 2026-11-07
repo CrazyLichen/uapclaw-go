@@ -114,7 +114,6 @@ func (h *ImproveStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillD
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runImproveAgent 调用阶段 Agent 根据反馈改写 SKILL.md。
-//
 // 对齐 Python: ImproveStageHandler._run_improve_agent(ctx, feedback, report)
 // 上游该方法仍是占位（直接跳过改进），这里按注释伪代码接入 Agent：
 // 拼接 ImproveSystemPrompt（iteration/feedback/report/skill_content）→ 调模型 →
@@ -170,7 +169,6 @@ func (h *ImproveStageHandler) runImproveAgent(
 }
 
 // ensureImprovedSkillMD 保证改进结果带 frontmatter。
-//
 // 模型只输出正文时，沿用原 SKILL.md 的 frontmatter，避免校验失败又把流程打回 GENERATE。
 func ensureImprovedSkillMD(existing, improved string) string {
 	if strings.HasPrefix(strings.TrimSpace(improved), "---") {

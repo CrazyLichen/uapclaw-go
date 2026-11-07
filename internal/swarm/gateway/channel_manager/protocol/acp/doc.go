@@ -1,16 +1,13 @@
 // Package acp 提供 ACP（Agent Client Protocol）stdio 通道（11.25）。
-//
 // AcpChannel 是 IDE 进程侧对端：stdin 逐行 JSON（E2A envelope 或 ACP
 // JSON-RPC 请求/响应三路由），stdout 逐行 JSON-RPC；作为 WS 客户端连
 // GatewayServer /acp 路由（模式一默认经本地回环 ws://127.0.0.1:19001/acp
 // 自举，模式二 --gateway-url 指向远端）。双 response_mode（e2a/jsonrpc）、
 // per-request ctx、pending RPC 表、stdin EOF 5s 宽限、idle finalize 3s timer
 // （timer 槽引用比对防 superseded）。
-//
 // 与 gateway 包 AcpGatewayBridge 的分工：桥挂在 GatewayServer /acp 路由上
 // 服务 WS IDE（网关侧）；本通道是 IDE/CLI 进程侧对端（stdio + WS 客户端）。
 // 二者经 WS 互传 E2A wire 帧与裸 JSON-RPC 帧。
-//
 // 文件目录：
 //
 //	acp/

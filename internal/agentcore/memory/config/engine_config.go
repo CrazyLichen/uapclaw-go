@@ -10,9 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryEngineConfig 记忆引擎配置。
-//
 // 包含默认模型配置、禁用变量、加密密钥等引擎级参数。
-//
 // Python: openjiuwen/core/memory/config/config.py (MemoryEngineConfig)
 type MemoryEngineConfig struct {
 	// DefaultModelCfg 默认模型请求配置
@@ -48,7 +46,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultMemoryEngineConfig 返回默认记忆引擎配置。
-//
 // 对齐 Python MemoryEngineConfig 的字段默认值。
 func DefaultMemoryEngineConfig() *MemoryEngineConfig {
 	return &MemoryEngineConfig{
@@ -60,7 +57,6 @@ func DefaultMemoryEngineConfig() *MemoryEngineConfig {
 }
 
 // Validate 校验记忆引擎配置。
-//
 // 规则：
 //   - CryptoKey：空 or 长度 == AESKeyLength(32)，否则返回错误
 //   - SingleTurnHistorySummaryMaxToken：必须 > 0

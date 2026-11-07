@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // Mode Agent 运行模式枚举。
-//
 // 定义 AgentServer 通信链路中的运行模式，用于适配器选择和消息路由。
 // 值为点分字符串格式（如 "agent.work.plan"），与 Python Mode 枚举值一一对应。
 // 6 个模式分为三族：
@@ -87,7 +86,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // newCanonicalModeSegments 新三段 canonical 模式 → (role, environment, state)。
-//
 // Python: gateway/common/mode_matrix.py NEW_CANONICAL_MODE_RESOLUTION
 var newCanonicalModeSegments = map[string][3]string{
 	"agent.work.normal": {"agent", "work", "normal"},
@@ -102,7 +100,6 @@ var newCanonicalModeSegments = map[string][3]string{
 }
 
 // runtimeModeLegacyCollapse legacy 成员 → 运行时串的折叠表。
-//
 // 契约来自上游单测 tests/unit_tests/evolution/test_message.py:136-158：
 // `agent.plan`/`agent.fast` 的运行时串都是 "agent"（0.2.5 起 plan/fast 与 agent 合并），
 // 其余 legacy 成员原样返回，新三段 canonical 原样返回。
@@ -122,7 +119,6 @@ var modeLookup map[string]Mode
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // teamCanonicalModes 所有表示"集群"的 canonical 模式。
-//
 // Python: gateway/common/mode_matrix.py TEAM_CANONICAL_MODES
 var teamCanonicalModes = map[string]struct{}{
 	"team": {}, "team.plan.normal": {}, "code.team": {}, "team.plan.code": {},
@@ -131,7 +127,6 @@ var teamCanonicalModes = map[string]struct{}{
 }
 
 // planCanonicalModes 所有表示"正处于 plan"的 canonical 模式。
-//
 // Python: gateway/common/mode_matrix.py PLAN_CANONICAL_MODES
 var planCanonicalModes = map[string]struct{}{
 	"agent.plan": {}, "code.plan": {},
@@ -141,7 +136,6 @@ var planCanonicalModes = map[string]struct{}{
 }
 
 // singleAgentCanonicalModes 单 agent 流程允许的 canonical 模式。
-//
 // Python: gateway/common/mode_matrix.py SINGLE_AGENT_CANONICAL_MODES（code 族经
 // canonicalize 后落到 agent.code.*，本项目暂保留 code.* 形式，见 IsSingleAgentMode）。
 var singleAgentCanonicalModes = map[string]struct{}{
@@ -150,7 +144,6 @@ var singleAgentCanonicalModes = map[string]struct{}{
 }
 
 // IsPlanMode 判断 canonical 模式是否处于 plan。
-//
 // Python: mode_matrix.is_plan_mode
 func IsPlanMode(mode string) bool {
 	_, ok := planCanonicalModes[CanonicalizeMode(mode)]
@@ -158,7 +151,6 @@ func IsPlanMode(mode string) bool {
 }
 
 // IsTeamMode 判断 canonical 模式是否为集群。
-//
 // Python: mode_matrix.is_team_mode
 func IsTeamMode(mode string) bool {
 	_, ok := teamCanonicalModes[CanonicalizeMode(mode)]
@@ -166,7 +158,6 @@ func IsTeamMode(mode string) bool {
 }
 
 // IsSingleAgentMode 判断模式是否走单 agent 流程。
-//
 // Python: mode_matrix.is_single_agent_mode。偏差：上游先 canonicalize（code.normal →
 // agent.code.normal）再查表；本项目 code 族暂保留 code.* 形式（见 spec §5.1 偏差说明），
 // 因此额外接受 code profile 族的模式。
@@ -176,7 +167,6 @@ func IsSingleAgentMode(mode string) bool {
 }
 
 // IsCodeProfileMode 判断是否 code profile 族（旧 code.* 与新 agent.code.* / team.code.*）。
-//
 // Python: gateway/common/mode_matrix.py is_code_profile_mode
 func IsCodeProfileMode(mode string) bool {
 	switch CanonicalizeMode(mode) {
@@ -188,7 +178,6 @@ func IsCodeProfileMode(mode string) bool {
 }
 
 // IsAgentMode 判断是否 agent 工作族（含历史 agent.plan/agent.fast/plan/fast 与新 agent.work.*）。
-//
 // Python: gateway/common/mode_matrix.py is_agent_mode
 func IsAgentMode(mode string) bool {
 	// Python: memory/config.py is_agent_mode（字面集合，含历史 bare plan/fast）
@@ -202,7 +191,6 @@ func IsAgentMode(mode string) bool {
 }
 
 // ResolveNewCanonicalModeText 同 ResolveNewCanonicalMode，但只按原文查新三段表。
-//
 // Python: resolve_new_canonical_mode 用 canonicalize_mode_text（只解析别名，不套
 // DEPRECATION_MAP）；legacy 串（agent/code/team.plan.normal…）必须交给调用方自己的
 // 分支处理，不能被提前折叠成新 canonical。
@@ -225,7 +213,6 @@ func ResolveNewCanonicalModeText(text string) (managerMode, subMode, canonical s
 }
 
 // CanonicalizeModeText 归一 mode 文本：小写去空白 → 空值回落 agent → 只解析 MODE_ALIASES。
-//
 // Python: gateway/common/mode_matrix.py canonicalize_mode_text（不套 DEPRECATION_MAP，
 // 保留 agent / code / team.plan.normal 等 legacy 串原文）。
 func CanonicalizeModeText(raw string) string {
@@ -240,7 +227,6 @@ func CanonicalizeModeText(raw string) string {
 }
 
 // IsWebComposableMode 判断 mode 是否参与 Web 的 mode + work_mode 组合。
-//
 // Python: gateway/common/mode_matrix.py WEB_COMPOSABLE_MODES
 func IsWebComposableMode(modeText string) bool {
 	_, ok := webComposableModes[modeText]
@@ -248,7 +234,6 @@ func IsWebComposableMode(modeText string) bool {
 }
 
 // ComposeWebMode 把 Web 的 mode + work_mode 组合成后端三元组。
-//
 // Python: gateway/common/mode_matrix.py compose_web_mode（_WEB_MODE_TABLE）
 func ComposeWebMode(modeText, workMode string) (managerMode, subMode, canonical string, ok bool) {
 	entry, found := webComposeTable[[2]string{modeText, workMode}]
@@ -259,7 +244,6 @@ func ComposeWebMode(modeText, workMode string) (managerMode, subMode, canonical 
 }
 
 // ResolveNewCanonicalMode 把新三段 canonical 模式解析为 (managerMode, subMode, canonical)。
-//
 // Python: gateway/common/mode_matrix.py resolve_new_canonical_mode。
 // environment/state 已内嵌在串里，不能按第一个点拆：
 //   - team.code.*  → ("code", "team")
@@ -285,7 +269,6 @@ func ResolveNewCanonicalMode(raw string) (managerMode, subMode, canonical string
 }
 
 // modeAliases 历史简写 → 完整 canonical。
-//
 // Python: gateway/common/mode_matrix.py MODE_ALIASES
 var modeAliases = map[string]string{
 	"team.plan":   "team.plan.normal",
@@ -297,7 +280,6 @@ var modeAliases = map[string]string{
 }
 
 // deprecatedModes 旧 canonical → 新 canonical 的静默映射。
-//
 // Python: gateway/common/mode_matrix.py DEPRECATION_MAP
 var deprecatedModes = map[string]string{
 	"agent":            "agent.work.normal",
@@ -313,7 +295,6 @@ var deprecatedModes = map[string]string{
 }
 
 // webComposableModes Web 的 mode + work_mode 组合支持的 mode 取值。
-//
 // Python: gateway/common/mode_matrix.py WEB_COMPOSABLE_MODES
 var webComposableModes = map[string]struct{}{
 	"agent":             {},
@@ -324,7 +305,6 @@ var webComposableModes = map[string]struct{}{
 }
 
 // webComposeTable (mode, work_mode) → (managerMode, subMode, canonicalMode)。
-//
 // Python: gateway/common/mode_matrix.py _WEB_MODE_TABLE。
 // code profile 的单 agent 组合只在 legacy mode 上提供；新三段 agent.work.* 自带
 // work profile，不再参与 code 组合。
@@ -339,7 +319,7 @@ var webComposeTable = map[[2]string][3]string{
 	{"agent.work.plan", "work"}:   {"agent", "plan", "agent.work.plan"},
 }
 
-// CanonicalizeMode 把任意入站模式串 canonicalize 到新三段命名。//
+// CanonicalizeMode 把任意入站模式串 canonicalize 到新三段命名。
 // Python: gateway/common/mode_matrix.py canonicalize_mode_text（别名 → 弃用映射 →
 // 未命中原样返回）。与 NormalizeMode 的区别：本函数不做"未知串回落默认"，
 // 只做确定的迁移映射。
@@ -355,7 +335,6 @@ func CanonicalizeMode(raw string) string {
 }
 
 // NormalizeMode 把入站 mode 串归一到权威值，未知串回落 agent.work.normal。
-//
 // 上游以三段串为唯一权威值（2826a9d23 模式合并），两段串（agent.plan/agent.fast）
 // 全量切换后不再识别。合法集合 = 新三段 canonical + code 族 + 裸 team。
 func NormalizeMode(raw string) Mode {
@@ -405,7 +384,6 @@ func AllModes() []Mode {
 }
 
 // ModeFromRaw 从原始入参解析 Mode，非法/非字符串/空值回退到 default。
-//
 // Python: openjiuwen_protocol.message.Mode.from_raw(raw_mode, default=None)。
 // 与 Python 逐条对应：
 //  1. 已是 Mode → 原样返回（Go 的 Mode 是 string 类型，同值即同枚举）
@@ -431,7 +409,6 @@ func ModeFromRaw(rawMode any, defaultVal Mode) Mode {
 }
 
 // IsNewCanonicalMode 判断模式串是否属于新三段命名 canonical 集合。
-//
 // Python: gateway/common/mode_matrix.py NEW_CANONICAL_MODES（9 个，含 team.design）。
 // 只按原文查表，不做别名/弃用映射。
 func IsNewCanonicalMode(mode string) bool {
@@ -456,7 +433,6 @@ func (m Mode) GoString() string {
 }
 
 // ToRuntimeMode 返回模式的运行时字符串值。
-//
 // Python: Mode.to_runtime_mode()——legacy 成员先折叠（`agent.*` → "agent"），
 // 新三段 canonical 原样返回；下游 `acp_connect.py:1596` 用它注入 params["mode"]。
 func (m Mode) ToRuntimeMode() string {

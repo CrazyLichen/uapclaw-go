@@ -1,5 +1,4 @@
 // Package modules 提供 Controller 领域的核心逻辑组件。
-//
 // 本包包含 Controller 事件驱动系统的核心组件：
 //   - TaskManager (6.20)：任务 CRUD、状态管理、优先级/层级索引
 //   - EventQueue (6.20)：基于 MessageQueueInMemory 的事件发布订阅

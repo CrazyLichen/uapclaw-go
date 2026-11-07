@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakeSearchManager 只实现搜索路径的最小记忆索引管理器。
-//
 // 用于验证「Manager 返回 nil 结果」被规整成空切片（Python 的 results 恒为 list）。
 type fakeSearchManager struct {
 	// results Search 返回值（刻意允许为 nil 切片）

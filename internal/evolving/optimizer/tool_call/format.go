@@ -17,7 +17,6 @@ import (
 
 // ParseJSON 从 LLM 输出中提取 JSON。
 // 支持带 header 查找和兜底 eval 解析。
-//
 // Python: parse_json(output, header=None)
 //
 //  1. 如果指定 header，先尝试查找 '{"<header>":' 或 '{\n"<header>":'
@@ -79,7 +78,6 @@ func ParseJSON(output string, header ...string) map[string]any {
 
 // FormatPromptLlama 格式化 Llama 风格提示词。
 // 当前实现为直接拼接 system + user prompt（对齐 Python）。
-//
 // Python: format_prompt_llama(system_prompt, user_prompt)
 //
 //	return system_prompt + user_prompt

@@ -1,8 +1,6 @@
 // Package form_handler 提供表单数据处理器的策略模式实现，用于构建 multipart/form-data 请求体。
-//
 // 当 RESTful API 工具的参数 location 标记为 form 时，参数需要通过 FormHandler 处理后
 // 写入 multipart 请求体，而非作为 JSON body 发送。
-//
 // 核心组件：
 //   - FormHandler：表单数据处理器接口，自定义处理器需实现此接口
 //   - DefaultFormHandler：默认处理器，将值转为字符串写入 multipart Writer

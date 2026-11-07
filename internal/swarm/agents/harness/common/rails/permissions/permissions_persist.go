@@ -26,7 +26,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PersistPermissionAllowRule 用户选择「总是允许」时，将 allow 规则写入 config.yaml 的 permissions 段。
-//
 // Python: persist_permission_allow_rule(tool_name, tool_args) (permissions_persist.py L132-150)
 func PersistPermissionAllowRule(toolName string, toolArgs map[string]any) bool {
 	toolArgs = normalizeToolArgs(toolArgs)
@@ -53,7 +52,6 @@ func PersistPermissionAllowRule(toolName string, toolArgs map[string]any) bool {
 }
 
 // PersistExternalDirectoryAllow 用户选择「总是允许」外部路径时，写入 external_directory 配置。
-//
 // Python: persist_external_directory_allow(paths) (permissions_persist.py L153-166)
 func PersistExternalDirectoryAllow(paths []string) bool {
 	if len(paths) == 0 {
@@ -79,7 +77,6 @@ func PersistExternalDirectoryAllow(paths []string) bool {
 
 // PersistCliTrustedDirectoryWithOverrides CLI command.add_dir：全局信任目录子树（包含覆盖规则）。
 // 写入 permissions.external_directory 和 permissions.approval_overrides。
-//
 // Python: persist_cli_trusted_directory_with_overrides(raw_path) (permissions_persist.py L201-277)
 func PersistCliTrustedDirectoryWithOverrides(rawPath string) map[string]any {
 	if strings.TrimSpace(rawPath) == "" {
@@ -145,7 +142,6 @@ func PersistCliTrustedDirectoryWithOverrides(rawPath string) map[string]any {
 
 // normalizeToolArgs 将工具入参规范化为 map[string]any。
 // dict 原样返回，string/bytes 尝试 JSON 解析，其它返回空 map。
-//
 // Python: _normalize_tool_args(tool_args) (permissions_persist.py L106-129)
 func normalizeToolArgs(toolArgs any) map[string]any {
 	if toolArgs == nil {
@@ -176,7 +172,6 @@ func normalizeToolArgs(toolArgs any) map[string]any {
 }
 
 // ensurePermissionsDict 确保 data["permissions"] 存在且为 map[string]any。
-//
 // Python: _ensure_permissions_dict(data) (permissions_persist.py L43-53)
 func ensurePermissionsDict(data map[string]any) map[string]any {
 	if data == nil {
@@ -191,7 +186,6 @@ func ensurePermissionsDict(data map[string]any) map[string]any {
 }
 
 // ensureExternalDirectoryDict 确保 permissions["external_directory"] 存在且为 map[string]any。
-//
 // Python: _ensure_external_directory_dict(permissions) (permissions_persist.py L56-61)
 func ensureExternalDirectoryDict(permissions map[string]any) map[string]any {
 	extCfg, _ := permissions["external_directory"].(map[string]any)
@@ -203,7 +197,6 @@ func ensureExternalDirectoryDict(permissions map[string]any) map[string]any {
 }
 
 // ensureApprovalOverridesList 确保 permissions["approval_overrides"] 存在且为 []map[string]any。
-//
 // Python: _ensure_approval_overrides_list(permissions) (permissions_persist.py L64-70)
 func ensureApprovalOverridesList(permissions map[string]any) []map[string]any {
 	raw, _ := permissions["approval_overrides"].([]any)
@@ -222,7 +215,6 @@ func ensureApprovalOverridesList(permissions map[string]any) []map[string]any {
 }
 
 // hasOverrideID 检查 overrides 中是否已存在指定 ID。
-//
 // Python: _has_override_id(overrides, oid) (permissions_persist.py L73-74)
 func hasOverrideID(overrides []map[string]any, oid string) bool {
 	for _, item := range overrides {
@@ -234,7 +226,6 @@ func hasOverrideID(overrides []map[string]any, oid string) bool {
 }
 
 // appendOverrideIfMissing 若 overrides 中不存在指定 ID，则追加一条 override 到 permissions["approval_overrides"]。
-//
 // Python: _append_override_if_missing(overrides, ...) (permissions_persist.py L77-98)
 func appendOverrideIfMissing(permissions map[string]any, overrides []map[string]any, oid string, tools []string, matchType string, pattern string, action string, source string) {
 	if hasOverrideID(overrides, oid) {
@@ -258,7 +249,6 @@ func appendOverrideIfMissing(permissions map[string]any, overrides []map[string]
 }
 
 // expandAndResolvePath 展开路径（expanduser + resolve），返回 POSIX 格式且去除尾部斜杠。
-//
 // 对应 Python: Path(raw_path.strip()).expanduser().resolve(strict=False).as_posix().rstrip("/")
 func expandAndResolvePath(rawPath string) string {
 	cleaned := strings.TrimSpace(rawPath)

@@ -15,11 +15,9 @@ import (
 type SkillCreateRailOption func(*SkillCreateRail)
 
 // SkillCreateRail 单 Agent 技能创建护栏。
-//
 // 在任务循环每次迭代后统计本轮轨迹的工具调用总数与种类数，达阈值时通过
 // TaskLoopController 注入一条 follow-up，请模型调用 skill-creator 创建新技能。
 // 与 TeamSkillCreateRail 的区别：不依赖团队完成信号，纯阈值驱动。
-//
 // 对齐 Python: openjiuwen/harness/rails/skills/skill_create_rail.py::SkillCreateRail
 type SkillCreateRail struct {
 	*EvolutionRail

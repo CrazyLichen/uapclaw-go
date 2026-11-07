@@ -1,10 +1,8 @@
 // Package adapter 提供 Agent 适配器接口与工厂。
-//
 // 定义 AgentAdapter 接口——Agent SDK 后端的最小能力集，
 // 以及 CreateAdapter 工厂函数按 SDK+Mode 创建适配器实例。
 // 额外定义 3 个可选接口（ContextCompressor/DreamingController/GatewayDisconnectHandler），
 // DeepAdapter 和 CodeAdapter 均实现，JiuWenClaw 门面通过类型断言调用。
-//
 // 三种模式适配器：
 //   - DeepAdapter：Deep SDK 适配器，agent/plan/fast/team 模式均使用
 //   - CodeAdapter：Code 模式适配器，组合委托 DeepAdapter，仅覆盖 CreateInstance

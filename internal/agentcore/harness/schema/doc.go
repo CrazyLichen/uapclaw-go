@@ -1,9 +1,7 @@
 // Package schema 提供 harness 模式的类型定义，包括 AgentMode、PromptMode、
 // DeepAgentConfig、TaskPlan 及交互监督器领域对象。
-//
 // 这些类型用于控制 Agent 的执行模式（普通/规划）、提示词注入模式（完整/精简/无）、
 // 任务计划管理及循环事件处理，对应 Python 中 openjiuwen/harness/schema/ 目录下的枚举和配置定义。
-//
 // 文件目录：
 //
 //	schema/

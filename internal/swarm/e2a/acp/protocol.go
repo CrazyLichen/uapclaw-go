@@ -79,12 +79,10 @@ func BuildAcpPromptResult(stopReason string, userMessageID string) map[string]an
 }
 
 // NormalizeJSONRPCID 归一化 JSON-RPC id 为 trim 后的字符串。
-//
 // Python: 全链一律 `str(data.get("id") or "").strip()`（acp_connect.py L159/L212 /
 // app_gateway.py L607）——联合类型 string|number 经 str() 收敛到字符串，再用于
 // pending 表键与日志字段。Go 若只做 `v.(string)`，IDE 把 id 归一成 number 时会得到
 // 空串，导致 pending 查不到、tool response 被丢弃。
-//
 // 支持的输入形态：string / float64（encoding/json 默认数字） / json.Number（UseNumber）
 // / int / int64 / nil。其余类型返回空串（与 Python str(x or "") 对 None 的语义一致）。
 // 数字一律按最短往返格式化（float64(777) → "777"，与 Python str(int) 对齐）。
@@ -130,11 +128,9 @@ func NormalizeJSONRPCID(id any) string {
 }
 
 // ScalarString 对标量与 nil 做 str(x or "").strip() 归一化。
-//
 // 专供 sessionId / messageId 等「Python 侧用 str() 收敛」的字段使用：IDE 把
 // sessionId 传成数字时，Python 得到 "123"，Go 若只做 v.(string) 会得到空串，
 // 进而丢失会话归属或 userMessageId 回填。
-//
 // 注意（T-15）：与 NormalizeJSONRPCID 同实现，双名增加漂移面——新代码请直接用
 // NormalizeJSONRPCID；此处不加 Deprecated 标记，避免既有调用点被 staticcheck 大面积
 // 告警牵连（迁移时机由后续重构统一安排）。
@@ -143,7 +139,6 @@ func ScalarString(v any) string {
 }
 
 // ShouldWaitForFinalText 收尾前是否还需等待最终文本。
-//
 // Python: _should_wait_for_final_text_before_end_turn (acp_connect.py L111-118)。
 // 未见过 chat.final 且已有助手文本/消息 id 时，说明 end_turn 会早于 final 文本
 // 发出，应延后到 idle 收尾。gateway 桥与 stdio 通道两套实现共用本判定，

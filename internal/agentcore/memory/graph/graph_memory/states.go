@@ -1,8 +1,6 @@
 // Package graph_memory 提供图记忆的核心输入校验和辅助函数。
-//
 // 包含添加记忆和搜索记忆的输入校验，以及消息转换、实体更新、
 // LLM 调用参数组装和图记忆状态结构等工具函数。
-//
 // 文件目录：
 //
 //	graph_memory/
@@ -111,7 +109,6 @@ type GraphMemPrompting struct {
 }
 
 // deferredRelationUpdate 关系延迟更新条目：待写入的关系、字段与新值。
-//
 // Python: relation_deferred_updates: dict[str, list[tuple[Relation, str, str]]]
 type deferredRelationUpdate struct {
 	// Relation 待更新的关系
@@ -393,7 +390,6 @@ func NewGraphMemUpdate() *GraphMemUpdate {
 }
 
 // NewGraphMemState 创建图记忆状态（对齐 Python __init__ 所有字段默认值）
-//
 // Python: GraphMemState()
 func NewGraphMemState() *GraphMemState {
 	return &GraphMemState{
@@ -477,7 +473,6 @@ func (s *GraphMemState) ClearReferences() {
 
 // BatchEmbed 批量嵌入图对象列表。
 // 成功时返回 nil；嵌入失败时返回失败的对象列表。
-//
 // Python: batch_embed(data, embedding_service, config)
 func BatchEmbed(ctx context.Context, objects []embeddable, embedder embedding.BaseEmbedding, cfg *graph.GraphConfig) []embeddable {
 	if len(objects) == 0 {
@@ -628,7 +623,6 @@ func PersistToDB(ctx context.Context, database graph.BaseGraphStore, state *Grap
 }
 
 // ClassifyRelationsExtracted 对提取的关系进行分类（实体合并导致的关系去重）
-//
 // Python: classify_relations_extracted(relations, state)
 func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemState) {
 	// 分类需要保留和移除的关系
@@ -676,7 +670,6 @@ func ClassifyRelationsExtracted(relations []*graph.Relation, state *GraphMemStat
 
 // BlockKeyboardInterrupt 阻断键盘中断信号，确保关键数据库操作完成。
 // 返回的 CancelFunc 恢复原始信号处理；如期间收到 SIGINT，恢复后重新发送。
-//
 // Python: block_keyboard_interrupt()
 func BlockKeyboardInterrupt(ctx context.Context) context.CancelFunc {
 	received := false

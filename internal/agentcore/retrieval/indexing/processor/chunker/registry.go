@@ -40,7 +40,6 @@ const (
 
 // ChunkerFactory 分块器工厂签名。返回 error 承载构造校验失败
 // （对齐 Python 工厂内构造抛 ValueError）。
-//
 // 错误风格说明：Python registry 系错误（ValueError/KeyError/TypeError）
 // 是原生异常非 StatusCode，Go 侧按项目先例（retrieval/embedding/utils.go 等）
 // 统一用 fmt.Errorf。
@@ -101,9 +100,7 @@ func WithExtra(key string, value any) ChunkerOption {
 }
 
 // RegisterChunker 按名注册分块器工厂。
-//
 // 对齐 Python register_chunker：空名/重名（overwrite=false）报错。
-//
 // Python: chunker/__init__.py register_chunker
 func RegisterChunker(name string, factory ChunkerFactory, overwrite bool) error {
 	if strings.TrimSpace(name) == "" {
@@ -119,10 +116,8 @@ func RegisterChunker(name string, factory ChunkerFactory, overwrite bool) error 
 }
 
 // GetChunker 按名获取分块器实例。
-//
 // 对齐 Python get_chunker：未知名报错且错误信息含已注册名列表；
 // 工厂返回 nil 视为类型错误（对齐 Python TypeError 断言）。
-//
 // Python: chunker/__init__.py get_chunker
 func GetChunker(name string, opts ...ChunkerOption) (Chunker, error) {
 	registryMu.Lock()
@@ -163,7 +158,6 @@ func init() {
 }
 
 // tokenizerFactory "tokenizer" 注册项工厂（主动增强，Python 无此注册）。
-//
 // Extra 约定：tokenizer（Tokenizer 接口，缺省 nil→tiktoken fallback）、
 // language（string，缺省 "auto"）、splitter_config（map[string]any，缺省 nil）。
 func tokenizerFactory(opts ...ChunkerOption) (Chunker, error) {
@@ -196,7 +190,6 @@ func tokenizerFactory(opts ...ChunkerOption) (Chunker, error) {
 }
 
 // hybridFactory hybrid 分块器工厂。
-//
 // 对齐 Python _hybrid_factory：
 //   - inner 缺省：由 chunk_size/chunk_overlap 构造默认 CharChunker（13.8
 //     起构造并保留，设计决策 4），参数经其构造校验（155100/155101），Extra

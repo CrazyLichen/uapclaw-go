@@ -18,11 +18,9 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseStreamChunk 将 OpenAI ChatCompletionChunkResponse 转换为 AssistantMessageChunk。
-//
 // Python: OpenAIModelClient._parse_stream_chunk()
 //
 // 返回 nil 表示该 chunk 应被跳过（无 choices 且无 usage 的空块）。
-//
 // 处理逻辑：
 //  1. 先检查 usage（即使无 choices 也要提取 usage）
 //  2. 提取 prompt_token_ids（vLLM 扩展，可能出现在任何 chunk）

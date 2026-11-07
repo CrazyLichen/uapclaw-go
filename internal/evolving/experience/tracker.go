@@ -35,7 +35,6 @@ type ExperienceTracker struct {
 }
 
 // RecordScoreUpdate 单条记录的评分更新数据。
-//
 // Python: update_record_scores 中内层 dict {"score": ..., "usage_stats": ...}
 type RecordScoreUpdate struct {
 	// Score 新评分

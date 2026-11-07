@@ -48,7 +48,6 @@ var historyMu sync.Mutex
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildHistoryPath 构建 .agent_history/file_ops_<agentID>_<sessionID>.json 文件路径。
-//
 // Python: _build_history_path(session) — 合并 4 处 Python 重复实现：
 //   - filesystem.py WriteFileTool._build_history_path (line 846)
 //   - filesystem.py EditFileTool._build_history_path (line 1016)
@@ -68,7 +67,6 @@ func BuildHistoryPath(baseDir, agentID, sessionID string) string {
 }
 
 // AppendOpHistory 将一次写/编辑/删除操作追加到历史 JSON 文件。
-//
 // Python: _append_op_history(history_path, file_path, action, old_content, new_content)
 // (filesystem.py line 73-103)
 //
@@ -133,7 +131,6 @@ func AppendOpHistory(historyPath, filePath, action string, oldContent, newConten
 }
 
 // DetectAndRecordDeletions 在 bash 执行后，扫描历史文件检测并记录已删除的文件。
-//
 // Python: _detect_and_record_deletions(history_path)
 // (filesystem.py line 205-239)
 //

@@ -5,7 +5,6 @@ import "fmt"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Message 超步之间传递的调度信号。
-//
 // Python 用三层继承表达（Message → TriggerMessage / BarrierMessage），三者均
 // 零行为纯数据、仅靠 isinstance 判别，故 Go 侧合并为单结构体 + 判别式，
 // 由 NewTriggerMessage / NewBarrierMessage 收口构造。
@@ -25,9 +24,7 @@ type Message struct {
 
 // Interrupt 图中断信号，值对象：随检查点持久化后由 Pregel.Run 返回给上层
 // （顶层返回 {"__interrupt__": value}）。
-//
 // 与 GraphInterrupt（控制流跳转手段，定义于本文件）职责不同：本类型只承载中断值。
-//
 // 分层纪律：Value 的具体类型由 session 层决定（当前唯一来源是
 // session/stream.OutputSchema，其 Payload 装 interaction.InteractionOutput），
 // 本包只做装箱透传、从不拆箱。
@@ -47,7 +44,6 @@ type Interrupt struct {
 }
 
 // GraphInterrupt 图级中断，控制流跳转手段（Python 侧是 Exception）。
-//
 // 生命周期与 Interrupt 不同：Interrupt 是随检查点持久化的值对象，
 // 本类型是一次执行内的控制流跳转——由交互层 panic 抛出，被节点任务恢复成
 // 返回值，最终在引擎顶层转成 {"__interrupt__": Interrupts} 交给上层。
@@ -62,7 +58,6 @@ type GraphInterrupt struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MessageKind 消息种类判别式。
-//
 // 零值（空串）表示未设置种类：此时任何通道都拒绝接收，等价于 Python 基类
 // Message 实例不被任一 isinstance 命中。Python 无此概念（靠 isinstance 判别）。
 type MessageKind string
@@ -101,7 +96,6 @@ func PanicGraphInterrupt(interrupts ...Interrupt) {
 }
 
 // Error 实现 error 接口，对齐 Python Exception.__init__(str(value))（base.py:20）。
-//
 // 纪律：本方法**仅供日志与格式化**。任何层禁止用 r.(error) 判定中断——
 // Python 的 except 顺序（GraphInterrupt 先于 BaseError/Exception）在 Go 侧
 // 只能靠具体类型断言还原，一旦按 error 兜底就会把中断误判成普通错误并吞掉。

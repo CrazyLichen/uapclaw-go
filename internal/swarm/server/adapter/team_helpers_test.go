@@ -508,7 +508,6 @@ func TestGroupTeamEvolutionApprovals(t *testing.T) {
 // ──────────────────────────── Used 列条件拼接（M-32）测试 ────────────────────────────
 
 // TestHandleTeamEvolveListCommand_Used列零展示时强制00 测试 M-32 条件拼接。
-//
 // times_presented==0 但 times_used>0（数据异常防御）→ Used 列强制 "0/0"
 // 而非 "3/0"（对齐 Python: used_str = f"{used}/{presented}" if stats.times_presented else "0/0"）。
 func TestHandleTeamEvolveListCommand_Used列零展示时强制00(t *testing.T) {
@@ -603,7 +602,6 @@ func TestHandleTeamEvolveListCommand_Used列正常拼接(t *testing.T) {
 // ──────────────────────────── resolveEvolutionEventTimeoutSec（M-35）测试 ────────────────────────────
 
 // TestResolveEvolutionEventTimeoutSec_rail有效值 测试 M-35 实装。
-//
 // rail 带 SDK 超时 720s → 返回 720+5（宽限 grace）= 725，
 // 不再走原空壳的 fallback。
 func TestResolveEvolutionEventTimeoutSec_rail有效值(t *testing.T) {
@@ -698,7 +696,6 @@ func TestSplitMaxN_表驱动(t *testing.T) {
 }
 
 // TestSplitMaxN_对照Python 验证关键语义差异点。
-//
 // Python: "a  b".split(maxsplit=1) → ['a', 'b']（消耗连续空白）
 // strings.SplitN("a  b", " ", 1) → ["a  b"]（只切第一处）→ 错误
 // strings.SplitN("a  b", " ", 2) → ["a", " b"]（保留空元素/前导空格）→ 错误

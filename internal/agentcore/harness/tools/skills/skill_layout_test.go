@@ -12,7 +12,6 @@ import (
 )
 
 // buildSkillFixture 构造技能目录夹具。
-//
 // 结构：root/{SKILL.md, designer/SKILL.md, assets/logo.png, output/x.txt}
 func buildSkillFixture(t *testing.T) string {
 	t.Helper()

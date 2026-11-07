@@ -1,5 +1,4 @@
 // Package extensions 提供扩展系统基础设施，对齐 Python jiuwenswarm/extensions/。
-//
 // 本包定义扩展注册中心（ExtensionRegistry）、数据类型（ExtensionMetadata/ExtensionConfig）、
 // 钩子事件常量与钩子上下文（含 ToMap/FromMap 双向转换）、扩展加载器与生命周期管理器
 // （ExtensionLoader/ExtensionManager，方案 D：hashicorp go-plugin 子进程），
@@ -8,7 +7,6 @@
 // 回调机制复用 agentcore/runner/callback.CallbackFramework。
 // 延后部分：无。CallbackCompat 不需要（10.5.9 ⤴️）。CryptoUtility 已完成（10.5.10 ✅：
 // 宿主密钥文件 + 插件 provides_crypto 双路径）。
-//
 // 文件目录：
 //
 //	extensions/

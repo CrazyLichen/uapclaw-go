@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildPermissionInterruptRail 若 permissions.enabled 为真则创建护栏，否则返回 nil。
-//
 // Python: build_permission_interrupt_rail(permissions, llm, model_name, engine, host, workspace_root) -> PermissionInterruptRail | None (factory.py)
 // 通过 PermissionRailConstructor 回调解耦 security 与 rails/security 的循环依赖。
 func BuildPermissionInterruptRail(

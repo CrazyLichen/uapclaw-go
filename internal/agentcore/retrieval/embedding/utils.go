@@ -22,10 +22,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseBase64Embedding 将 base64 编码的嵌入向量解码为 []float64。
-//
 // Python 用 numpy.frombuffer(decoded, dtype=np.float32).tolist()，
 // Go 用 encoding/base64 解码 + float32 字节序解析为 float64。
-//
 // Python: parse_base64_embedding()
 func ParseBase64Embedding(b64Str string) ([]float64, error) {
 	decoded, err := base64.StdEncoding.DecodeString(b64Str)

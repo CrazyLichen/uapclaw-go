@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageOffloaderConfig 消息卸载器配置。
-//
 // 规则评估顺序：
 //  1. messages_to_keep：最近 N 条消息始终保留
 //  2. messages_threshold：总消息数超此值时触发卸载
@@ -29,7 +28,6 @@ import (
 //
 // 仅角色在 offload_message_type 中且 Token 长度大于 large_message_threshold 的消息
 // 才符合卸载条件。设置 keep_last_round=True 可独立保留最后一轮对话。
-//
 // Python: MessageOffloaderConfig (pydantic.BaseModel)
 type MessageOffloaderConfig struct {
 	// MessagesThreshold 消息数触发阈值，nil 表示不启用
@@ -52,10 +50,8 @@ type MessageOffloaderConfig struct {
 }
 
 // MessageOffloader 消息卸载器，基于消息数/Token 数阈值触发卸载。
-//
 // 当对话上下文超过安全限制时，对大消息执行裁剪并卸载到外部存储，
 // 生成轻量占位符以减少 Token 消耗。
-//
 // Python: openjiuwen/core/context_engine/processor/offloader/message_offloader.py (MessageOffloader)
 type MessageOffloader struct {
 	*processor.BaseProcessor
@@ -84,7 +80,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageOffloader 创建消息卸载器实例。
-//
 // Python: MessageOffloader.__init__(config)
 func NewMessageOffloader(config *MessageOffloaderConfig) (*MessageOffloader, error) {
 	if err := config.Validate(); err != nil {
@@ -98,7 +93,6 @@ func NewMessageOffloader(config *MessageOffloaderConfig) (*MessageOffloader, err
 }
 
 // Validate 校验消息卸载器配置。
-//
 // 交叉校验：
 //   - TrimSize < LargeMessageThreshold（裁剪尺寸小于大消息阈值）
 //   - MessagesToKeep < MessagesThreshold（两者均非 nil 时，保留消息数小于消息阈值）
@@ -134,7 +128,6 @@ func (c *MessageOffloaderConfig) GetModel() *llm_schema.ModelRequestConfig {
 func (mo *MessageOffloader) ProcessorType() string { return "MessageOffloader" }
 
 // TriggerAddMessages 判断是否需要介入消息添加。
-//
 // 触发条件（按顺序评估）：
 //  1. MessagesToKeep != nil && 总消息数 <= MessagesToKeep → false
 //  2. MessagesThreshold != nil && 总消息数 > MessagesThreshold → 检查候选 → true/false
@@ -142,7 +135,6 @@ func (mo *MessageOffloader) ProcessorType() string { return "MessageOffloader" }
 //
 // 统计口径：条数/token 均只算「缓冲区消息 + 本次新增」，不含 system prompt 与工具 schema；
 // 只有存在可卸载候选（角色匹配且未被保护）时才算触发。日志字段 path=add_messages 用于区分口径。
-//
 // Python: MessageOffloader.trigger_add_messages()
 func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	cfg := mo.config
@@ -197,7 +189,6 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 }
 
 // OnAddMessages 执行消息卸载。
-//
 // Python: MessageOffloader.on_add_messages()
 func (mo *MessageOffloader) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, opts ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	contextMessages, _ := mc.GetMessages(0, true)
@@ -251,7 +242,6 @@ func (c *MessageOffloaderConfig) applyDefaults() {
 }
 
 // offloadLargeMessages 遍历卸载范围，逐条卸载大消息。
-//
 // Python: MessageOffloader._offload_large_messages()
 func (mo *MessageOffloader) offloadLargeMessages(ctx context.Context, messages []llm_schema.BaseMessage, mc iface.ModelContext, opts ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	processedMessages := make([]llm_schema.BaseMessage, len(messages))
@@ -292,7 +282,6 @@ func (mo *MessageOffloader) offloadLargeMessages(ctx context.Context, messages [
 }
 
 // offloadMessage 卸载单条消息：裁剪内容 + 调用 BaseProcessor.OffloadMessages。
-//
 // Python: MessageOffloader._offload_message()
 func (mo *MessageOffloader) offloadMessage(ctx context.Context, message llm_schema.BaseMessage, mc iface.ModelContext, opts ...iface.Option) (llm_schema.BaseMessage, error) {
 	content := message.GetContent().Text()
@@ -323,7 +312,6 @@ func (mo *MessageOffloader) offloadMessage(ctx context.Context, message llm_sche
 }
 
 // newOffloadHandleAndPath 生成卸载句柄和文件路径。
-//
 // Python: MessageOffloader._new_offload_handle_and_path()
 //
 // ⤵️ 5.31 回填：mc.WorkspaceDir() 方法
@@ -343,7 +331,6 @@ func (mo *MessageOffloader) newOffloadHandleAndPath(mc iface.ModelContext) (stri
 }
 
 // getOffloadRange 计算卸载范围（不在此范围内的消息不会被卸载）。
-//
 // Python: MessageOffloader._get_offload_range()
 func (mo *MessageOffloader) getOffloadRange(messages []llm_schema.BaseMessage) int {
 	keepIndex := len(messages)
@@ -361,7 +348,6 @@ func (mo *MessageOffloader) getOffloadRange(messages []llm_schema.BaseMessage) i
 }
 
 // hasOffloadCandidate 检查卸载范围内是否存在可卸载的候选消息。
-//
 // Python: MessageOffloader._has_offload_candidate()
 func (mo *MessageOffloader) hasOffloadCandidate(messages []llm_schema.BaseMessage, mc iface.ModelContext) bool {
 	offloadRange := mo.getOffloadRange(messages)
@@ -374,7 +360,6 @@ func (mo *MessageOffloader) hasOffloadCandidate(messages []llm_schema.BaseMessag
 }
 
 // shouldOffloadMessage 判断消息是否符合卸载条件。
-//
 // 5 条规则（全部通过才卸载）：
 //  1. 角色在 OffloadMessageTypes 中
 //  2. content 是字符串
@@ -425,10 +410,8 @@ func (mo *MessageOffloader) shouldOffloadMessage(message llm_schema.BaseMessage,
 }
 
 // isProtectedToolMessage 检查消息是否为受保护工具的结果。
-//
 // 支持 "tool_name" 和 "tool_name:pattern" 两种格式。
 // 后者使用 filepath.Match 对工具参数值做通配符匹配。
-//
 // Python: MessageOffloader._is_protected_tool_message()
 func (mo *MessageOffloader) isProtectedToolMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage) bool {
 	// 只检查 ToolMessage
@@ -462,9 +445,7 @@ func (mo *MessageOffloader) isProtectedToolMessage(message llm_schema.BaseMessag
 }
 
 // extractToolArgs 从 ToolCall 提取参数字典。
-//
 // 支持多种格式：JSON string、map 结构。
-//
 // Python: MessageOffloader._extract_tool_args()
 func extractToolArgs(toolCall *llm_schema.ToolCall) map[string]any {
 	if toolCall == nil {
@@ -481,10 +462,8 @@ func extractToolArgs(toolCall *llm_schema.ToolCall) map[string]any {
 }
 
 // matchPattern 检查参数值是否匹配通配符模式。
-//
 // 使用 fnmatch 库实现与 Python fnmatch 一致的通配符匹配，
 // 支持 *、?、[...] 等模式，且 * 匹配任意字符包括 /。
-//
 // Python: MessageOffloader._match_pattern()
 func matchPattern(args map[string]any, pattern string) bool {
 	for _, value := range args {

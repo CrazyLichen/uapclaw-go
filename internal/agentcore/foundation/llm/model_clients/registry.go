@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ClientRegistry 模型客户端注册表，管理客户端类型的注册和创建。
-//
 // Python: openjiuwen/core/common/clients/client_registry.py (ClientRegistry)
 // 线程安全，使用 RWMutex 保护内部 map。
 type ClientRegistry struct {
@@ -22,12 +21,10 @@ type ClientRegistry struct {
 }
 
 // registryProviderValidator 实现 llmschema.ProviderValidator 接口。
-//
 // 将 ClientRegistry 中已注册的 LLM 客户端作为 Provider 验证来源。
 type registryProviderValidator struct{}
 
 // ClientFactory 客户端工厂函数类型。
-//
 // 工厂函数接收 ModelRequestConfig 和 ModelClientConfig，返回 BaseModelClient 实例。
 // Python: factory 可以抛异常，Go 通过 error 返回值表达创建失败。
 type ClientFactory func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (BaseModelClient, error)
@@ -59,7 +56,6 @@ func GetClientRegistry() *ClientRegistry {
 }
 
 // Register 注册客户端工厂。
-//
 // name 为客户端名称（如 "OpenAI"），clientType 为类型标识（如 "llm"）。
 // 重复注册时打印警告日志但不报错（与 Python 行为一致）。
 func (r *ClientRegistry) Register(name, clientType string, factory ClientFactory) {
@@ -79,7 +75,6 @@ func (r *ClientRegistry) Register(name, clientType string, factory ClientFactory
 }
 
 // GetClient 根据名称和类型获取客户端实例。
-//
 // 先尝试 "{clientType}_{name}" 格式精确查找，再尝试直接用 name 查找。
 // 未找到时返回 MODEL_PROVIDER_INVALID 错误。
 func (r *ClientRegistry) GetClient(name, clientType string, modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (BaseModelClient, error) {
@@ -145,7 +140,6 @@ func (r *ClientRegistry) ListClients() []string {
 }
 
 // CreateModelClient 根据配置创建对应的模型客户端实例。
-//
 // Python: openjiuwen/core/foundation/llm/model_clients/__init__.py (create_model_client)
 //
 // ⚠️ 后续注册点（2.7-2.12 节实现时修改）：
@@ -174,7 +168,6 @@ func CreateModelClient(clientConfig *llmschema.ModelClientConfig, modelConfig *l
 }
 
 // ValidateProvider 验证 provider 是否已在注册表中注册。
-//
 // Python: ModelClientConfig.validate_client_provider() 通过 ClientRegistry 查询。
 func (v *registryProviderValidator) ValidateProvider(provider string) string {
 	names := GetClientRegistry().ListClients()

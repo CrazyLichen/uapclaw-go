@@ -1,5 +1,4 @@
 // 基于 Core sparse resume 的 root-only 逐卡权限队列。
-//
 // 队列负责三件事：
 //  1. 串行化：一批并行工具调用产生的多个权限中断，只把队首一张卡暴露给前端；
 //  2. 身份校验：用户答案必须精确对应队首卡，否则报错，绝不猜测；
@@ -22,9 +21,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RootPermissionQueueError 权限队列的 fail-closed 错误。
-//
 // Code 为错误码（对齐 Python 的 RootPermissionQueueError("xxx") 文本）。
-//
 // Python: class RootPermissionQueueError(ValueError)
 type RootPermissionQueueError struct {
 	// Code 错误码
@@ -32,7 +29,6 @@ type RootPermissionQueueError struct {
 }
 
 // RootPermissionCard 一次 root 工具调用的不可变身份与中断请求。
-//
 // Python: @dataclass(frozen=True, slots=True) RootPermissionCard
 type RootPermissionCard struct {
 	// Key 本次调用的号码牌
@@ -50,7 +46,6 @@ type RootPermissionCard struct {
 }
 
 // RootPermissionSnapshot Core 的一次中断快照，按可见的 FIFO 顺序排列。
-//
 // Python: @dataclass(frozen=True, slots=True) RootPermissionSnapshot
 type RootPermissionSnapshot struct {
 	// Cards 队首起的卡片序列
@@ -60,7 +55,6 @@ type RootPermissionSnapshot struct {
 }
 
 // RootPermissionAnswer 为立即稀疏派发预留的一张队首卡答案。
-//
 // Python: @dataclass(frozen=True, slots=True) RootPermissionAnswer
 type RootPermissionAnswer struct {
 	// Card 被预留的卡片（状态 resuming）
@@ -72,7 +66,6 @@ type RootPermissionAnswer struct {
 }
 
 // RootPermissionClaim 一次已准入的稀疏恢复回调的唯一 CAS 赢家。
-//
 // Python: @dataclass(frozen=True, slots=True) RootPermissionClaim
 type RootPermissionClaim struct {
 	// Card 认领成功的卡片（状态 active）
@@ -82,7 +75,6 @@ type RootPermissionClaim struct {
 }
 
 // InterruptRequestSnapshot 中断请求的深拷贝快照。
-//
 // Python 用 copy.deepcopy(request) 冻结；Go 无内建 deepcopy，用独立结构承载
 // 需要冻结的字段，保证 mark_pending 之后外部修改不影响已冻结的卡。
 type InterruptRequestSnapshot struct {
@@ -105,7 +97,6 @@ type InterruptRequestSnapshot struct {
 }
 
 // RootPermissionQueue 持有待决卡顺序与每个 root 会话唯一在途的队首答案。
-//
 // Python: class RootPermissionQueue
 type RootPermissionQueue struct {
 	// idFactory 号码牌生成器，nil 时用默认实现
@@ -142,7 +133,6 @@ type pendingCallKey struct {
 }
 
 // InteractionItem 表示一个 Core 中断项，可给出身份与请求值。
-//
 // 该接口用于解耦：permissions 包需要读取中断项，但不希望依赖具体的中断项类型。
 // 宿主把 schema 层的中断项适配成该接口即可。
 type InteractionItem interface {
@@ -153,7 +143,6 @@ type InteractionItem interface {
 }
 
 // InteractionRequestProvider 表示一个中断请求，可给出类型与元数据。
-//
 // 实现方通常是 *saschema.InterruptRequest（或其适配器）。队列只用它读取
 // interrupt_kind 与 metadata，不解析别的字段。
 type InteractionRequestProvider interface {
@@ -166,7 +155,6 @@ type InteractionRequestProvider interface {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // RootPermissionCardState 卡片状态取值。
-//
 // Python: RootPermissionCardState = Literal["active", "pending", "resuming"]
 const (
 	// RootPermissionCardStateActive 工具正在执行，尚未卡住
@@ -208,9 +196,7 @@ func (e *RootPermissionQueueError) Error() string {
 }
 
 // NewRootPermissionQueue 创建权限队列。
-//
 // idFactory 为 nil 时使用默认的随机号码牌生成器（对齐 Python secrets.token_urlsafe(18)）。
-//
 // Python: RootPermissionQueue.__init__(*, id_factory=None)
 func NewRootPermissionQueue(idFactory func() string) *RootPermissionQueue {
 	if idFactory == nil {
@@ -227,7 +213,6 @@ func NewRootPermissionQueue(idFactory func() string) *RootPermissionQueue {
 }
 
 // Begin 绑定一次新调用；若 Core 恢复时命中同一调用则返回其待决卡。
-//
 // Python: RootPermissionQueue.begin(*, root_session_id, request_id,
 // execution_session_id, tool_call_id, tool_name)
 func (q *RootPermissionQueue) Begin(
@@ -308,7 +293,6 @@ func (q *RootPermissionQueue) Begin(
 }
 
 // MarkPending 冻结一次活跃调用发出的中断请求，把卡片转为 pending。
-//
 // Python: RootPermissionQueue.mark_pending(key, *, request, auto_manual, root_context)
 func (q *RootPermissionQueue) MarkPending(
 	key *ToolInvocationKeyV1,
@@ -357,7 +341,6 @@ func (q *RootPermissionQueue) MarkPending(
 }
 
 // PendingForCall 返回精确匹配的待决兄弟卡，不改变队列顺序。
-//
 // Python: RootPermissionQueue.pending_for_call(*, root_session_id,
 // execution_session_id, tool_call_id)
 func (q *RootPermissionQueue) PendingForCall(
@@ -382,7 +365,6 @@ func (q *RootPermissionQueue) PendingForCall(
 }
 
 // ReserveAnswer 校验并预留唯一一张队首卡的答案。
-//
 // Python: RootPermissionQueue.reserve_answer(root_session_id, incoming)
 func (q *RootPermissionQueue) ReserveAnswer(
 	rootSessionID string,
@@ -452,7 +434,6 @@ func (q *RootPermissionQueue) ReserveAnswer(
 }
 
 // ReleaseAnswer 把未派发的队首预留退回 pending。
-//
 // Python: RootPermissionQueue.release_answer(answer)
 func (q *RootPermissionQueue) ReleaseAnswer(answer RootPermissionAnswer) {
 	q.mu.Lock()
@@ -469,7 +450,6 @@ func (q *RootPermissionQueue) ReleaseAnswer(answer RootPermissionAnswer) {
 }
 
 // ClaimAnswerForCall 把一个已准入的答案由 resuming CAS 到回调持有的 active。
-//
 // Python: RootPermissionQueue.claim_answer_for_call(*, root_session_id,
 // execution_session_id, tool_call_id, tool_name)
 func (q *RootPermissionQueue) ClaimAnswerForCall(
@@ -525,7 +505,6 @@ func (q *RootPermissionQueue) ClaimAnswerForCall(
 }
 
 // ConsumeAcceptedAnswerIfQuarantined 让请求清理消费一个未被回调认领的已准入答案。
-//
 // Python: RootPermissionQueue.consume_accepted_answer_if_quarantined(answer)
 func (q *RootPermissionQueue) ConsumeAcceptedAnswerIfQuarantined(answer RootPermissionAnswer) bool {
 	q.mu.Lock()
@@ -546,10 +525,8 @@ func (q *RootPermissionQueue) ConsumeAcceptedAnswerIfQuarantined(answer RootPerm
 }
 
 // Reconcile 对齐 Core 返回的中断集合，只暴露其队首。
-//
 // 任何对不齐的情况（快照非法、数量不符、身份不符、混入其它中断、
 // 重复调用、卡状态不对、兄弟卡缺失）都隔离会话并报错。
-//
 // Python: RootPermissionQueue.reconcile(result, *, root_session_id)
 func (q *RootPermissionQueue) Reconcile(
 	resultType string,
@@ -687,7 +664,6 @@ func (q *RootPermissionQueue) Reconcile(
 }
 
 // Get 按 key 精确取卡，key 不完全一致时返回 nil。
-//
 // Python: RootPermissionQueue.get(key)
 func (q *RootPermissionQueue) Get(key *ToolInvocationKeyV1) (RootPermissionCard, bool) {
 	q.mu.Lock()
@@ -701,7 +677,6 @@ func (q *RootPermissionQueue) Get(key *ToolInvocationKeyV1) (RootPermissionCard,
 }
 
 // Finish 删除精确匹配的卡，返回是否删除。
-//
 // Python: RootPermissionQueue.finish(key)
 func (q *RootPermissionQueue) Finish(key *ToolInvocationKeyV1) bool {
 	q.mu.Lock()
@@ -716,7 +691,6 @@ func (q *RootPermissionQueue) Finish(key *ToolInvocationKeyV1) bool {
 }
 
 // FinishActive 只删除仍由回调持有的精确权限评估卡（必须处于 active）。
-//
 // Python: RootPermissionQueue.finish_active(key)
 func (q *RootPermissionQueue) FinishActive(key *ToolInvocationKeyV1) bool {
 	q.mu.Lock()
@@ -731,7 +705,6 @@ func (q *RootPermissionQueue) FinishActive(key *ToolInvocationKeyV1) bool {
 }
 
 // HasLive 返回队列是否仍持有任何权限准入状态；rootSessionID 为空表示不限会话。
-//
 // Python: RootPermissionQueue.has_live(*, root_session_id=None)
 func (q *RootPermissionQueue) HasLive(rootSessionID string) bool {
 	q.mu.Lock()
@@ -746,7 +719,6 @@ func (q *RootPermissionQueue) HasLive(rootSessionID string) bool {
 }
 
 // SnapshotScope 返回指定会话（可再限定请求）下的全部卡片 key。
-//
 // Python: RootPermissionQueue.snapshot_scope(*, root_session_id, request_id=None)
 func (q *RootPermissionQueue) SnapshotScope(rootSessionID string, requestID *string) []*ToolInvocationKeyV1 {
 	q.mu.Lock()
@@ -766,7 +738,6 @@ func (q *RootPermissionQueue) SnapshotScope(rootSessionID string, requestID *str
 }
 
 // BeginCutover 在 Core 取消之前隔离一个非空的 root scope。
-//
 // Python: RootPermissionQueue.begin_cutover(*, root_session_id)
 func (q *RootPermissionQueue) BeginCutover(rootSessionID string) bool {
 	q.mu.Lock()
@@ -790,7 +761,6 @@ func (q *RootPermissionQueue) BeginCutover(rootSessionID string) bool {
 }
 
 // CutoverContinuationScope 在活跃回调清理后冻结 Core 续接卡。
-//
 // Python: RootPermissionQueue.cutover_continuation_scope(*, root_session_id)
 func (q *RootPermissionQueue) CutoverContinuationScope(rootSessionID string) ([]*ToolInvocationKeyV1, error) {
 	q.mu.Lock()
@@ -825,7 +795,6 @@ func (q *RootPermissionQueue) CutoverContinuationScope(rootSessionID string) ([]
 }
 
 // CancelSnapshot 取消一批快照卡，返回实际删除数。
-//
 // Python: RootPermissionQueue.cancel_snapshot(keys)
 func (q *RootPermissionQueue) CancelSnapshot(keys []*ToolInvocationKeyV1) int {
 	q.mu.Lock()
@@ -843,7 +812,6 @@ func (q *RootPermissionQueue) CancelSnapshot(keys []*ToolInvocationKeyV1) int {
 }
 
 // DiscardContinuation 删除一批已确认丢弃的 Core 续接卡并恢复队列。
-//
 // Python: RootPermissionQueue.discard_continuation(keys, *, root_session_id)
 func (q *RootPermissionQueue) DiscardContinuation(
 	keys []*ToolInvocationKeyV1,
@@ -888,7 +856,6 @@ func (q *RootPermissionQueue) DiscardContinuation(
 }
 
 // Quarantine 隔离指定 root 会话。
-//
 // Python: RootPermissionQueue.quarantine(root_session_id)
 func (q *RootPermissionQueue) Quarantine(rootSessionID string) {
 	q.mu.Lock()
@@ -897,7 +864,6 @@ func (q *RootPermissionQueue) Quarantine(rootSessionID string) {
 }
 
 // RaiseIfQuarantined 会话已隔离时报错。
-//
 // Python: RootPermissionQueue.raise_if_quarantined(root_session_id)
 func (q *RootPermissionQueue) RaiseIfQuarantined(rootSessionID string) error {
 	q.mu.Lock()
@@ -977,10 +943,8 @@ func rootQueueText(name string, value any, maximum int) (string, error) {
 }
 
 // normalizeRootPermissionAnswer 归一化用户答案。
-//
 // 只允许 approved/auto_confirm/persist_allow/feedback 四个键；
 // persist_allow 为真时必须 approved 且 auto_confirm 都为真。
-//
 // Python: _normalize_answer(value)
 func normalizeRootPermissionAnswer(value map[string]any) (map[string]any, error) {
 	for key := range value {
@@ -1032,7 +996,6 @@ func normalizeRootPermissionAnswer(value map[string]any) (map[string]any, error)
 }
 
 // interactionOf 从 Core 的中断项里取出 {id, value} 形态。
-//
 // 接受三种输入形态（对齐 Python 的 getattr(item, "payload", item) 与 Mapping 分支）：
 //  1. 实现 InteractionItem 接口的对象；
 //  2. {"id":..., "value":...} 映射；
@@ -1066,7 +1029,6 @@ func interactionOf(item any) map[string]any {
 }
 
 // toInteractionRequest 把中断请求值转成 reconcile 用的视图。
-//
 // 优先使用实现了 InteractionRequestProvider 的具体类型（例如
 // *saschema.InterruptRequest），否则回退到 map 形态读取 kind/metadata/value。
 func toInteractionRequest(value any) (*interactionRequest, bool) {
@@ -1095,9 +1057,7 @@ func toInteractionRequest(value any) (*interactionRequest, bool) {
 }
 
 // requestKeyOf 从中断请求里取出 tool_invocation_key。
-//
 // 优先读 metadata，回退读 value（对齐 Python 两处查找）。
-//
 // Python: _request_key(request)
 func requestKeyOf(request *interactionRequest) map[string]any {
 	if request.Metadata != nil {

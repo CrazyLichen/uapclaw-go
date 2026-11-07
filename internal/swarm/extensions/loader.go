@@ -28,7 +28,6 @@ type LoadedExtension struct {
 }
 
 // ExtensionLoader 扩展加载器，对齐 Python ExtensionLoader。
-//
 // 发现 extension_dirs 下的扩展根（extension.yaml 或 ext-plugin 存在），
 // 通过 PluginHostFace 启动插件子进程，Register 声明后代为注册进 Registry：
 //   - 事件订阅 → registry.Register（事件桥闭包）
@@ -120,6 +119,7 @@ func (l *ExtensionLoader) AddSearchPath(path string) {
 // DiscoverExtensionRoots 发现扩展目录，对齐 Python discover_extension_roots：
 // 遍历搜索路径一级子目录，extension.yaml 或 ext-plugin 存在即为扩展根。
 func (l *ExtensionLoader) DiscoverExtensionRoots() []string {
+	// 汇总所有搜索路径下的一级子目录，凡带清单或入口的都是扩展根
 	roots := make([]string, 0)
 	logger.Info(logComponent).
 		Str("event_type", "extension_loader_discover").
@@ -130,6 +130,7 @@ func (l *ExtensionLoader) DiscoverExtensionRoots() []string {
 		if err != nil {
 			continue
 		}
+		// 只看一级子目录：扩展不会嵌套在更深的层级里
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
@@ -147,14 +148,17 @@ func (l *ExtensionLoader) DiscoverExtensionRoots() []string {
 // manifest 解析（缺省空）→ 启动插件 → Register 声明 → 逐声明注册（SetExtensionDir + 事件 + transport）。
 // 单个声明失败不影响其他声明（对齐 Python 异常仅日志）。
 func (l *ExtensionLoader) LoadExtension(ctx context.Context, root string) ([]LoadedExtension, error) {
+	// 1. 读清单。Go 侧是静态编译，不再按清单装依赖，清单只用于发现与元数据参考
 	manifest := loadManifestDict(root)
 	_ = manifest // 依赖安装已删除（Go 静态编译），manifest 仅作发现与元数据参考
 
+	// 2. 启动插件子进程
 	pc, err := l.pluginHost.Load(root)
 	if err != nil {
 		return nil, fmt.Errorf("加载扩展失败 %s: %w", root, err)
 	}
 
+	// 3. 取插件声明；拿不到声明就杀掉子进程，避免留下孤儿进程
 	// Register 声明（PluginClientFace 不含 Register——由 RegisterCapable 具体类型提供）
 	decls, err := l.registerDecls(pc, root)
 	if err != nil {
@@ -164,6 +168,7 @@ func (l *ExtensionLoader) LoadExtension(ctx context.Context, root string) ([]Loa
 		return nil, err
 	}
 
+	// 4. 逐条声明注册进注册中心
 	return l.loadAndRegister(ctx, root, pc, decls)
 }
 
@@ -219,6 +224,7 @@ func (l *ExtensionLoader) registerDecls(pc PluginClientFace, root string) ([]plu
 
 // loadAndRegister 编排注册：SetExtensionDir + 事件桥 + transport 注册
 func (l *ExtensionLoader) loadAndRegister(ctx context.Context, root string, pc PluginClientFace, decls []plugin.Declaration) ([]LoadedExtension, error) {
+	// 逐条声明处理：设置目录 → 注册事件订阅 → 需要时注册 transport / crypto
 	loaded := make([]LoadedExtension, 0, len(decls))
 	for _, decl := range decls {
 		if err := pc.SetExtensionDir(ctx, root); err != nil {
@@ -229,15 +235,18 @@ func (l *ExtensionLoader) loadAndRegister(ctx context.Context, root string, pc P
 				Msg("[ExtensionLoader] SetExtensionDir 失败")
 			continue
 		}
+		// 事件订阅：每条订阅登记一个事件桥闭包，事件发生时转发给插件
 		for _, sub := range decl.EventSubs {
 			l.registry.Register(sub.Event, l.makeEventBridge(pc, sub.Event), int(sub.Priority))
 		}
+		// transport 声明：注册插件代理，宿主发请求时由它转给子进程
 		if decl.ProvidesTransport {
 			t := pc.Transport()
 			if t != nil {
 				l.registry.RegisterAgentServerClient(&pluginTransportExtension{client: pc, metadata: decl.Metadata})
 			}
 		}
+		// crypto 声明：注册加解密代理，并接管全局提供者
 		if decl.ProvidesCrypto {
 			ext := &pluginCryptoExtension{client: pc, metadata: decl.Metadata}
 			// RegisterCryptoUtility 内部双写全局（registry 与 common/crypto 两源一致）；

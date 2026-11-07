@@ -1,5 +1,4 @@
 // Package tool_discovery 提供渐进式工具发现的元工具集与 BM25 检索适配层。
-//
 // 两个元工具通过回调函数与 ProgressiveToolRail 协作：
 //   - ToolSearchTool（tool_search）在 deferred 工具目录里做 BM25 检索，
 //     返回匹配工具的完整 parameters schema，并把命中结果授权给当前会话

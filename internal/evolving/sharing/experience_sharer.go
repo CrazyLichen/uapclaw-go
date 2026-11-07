@@ -18,14 +18,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillSharingContextProvider 技能共享上下文提供者函数类型。
-//
 // 根据技能名称返回 skill_id、技能包字节、解析后名称和描述。
-//
 // Python: SkillSharingContextProvider = Callable[[str], Awaitable[Tuple[str, bytes, str, str]]]
 type SkillSharingContextProvider func(ctx context.Context, skillName string) (skillID string, packageBytes []byte, resolvedName string, description string, err error)
 
 // ExperienceSharer 基于 SharingBackend 的上传/下载门面。
-//
 // 职责：
 //   - 维护每个技能的内存待上传经验队列
 //   - flush 时确保 skill_id，上传初始技能包（仅一次），然后上传经验 bundle
@@ -75,10 +72,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExperienceSharer 创建 ExperienceSharer 实例。
-//
 // maxUploadRetries 最小为 1，backoffBaseSecs 最小为 0。
 // localCacheDir 为空则不镜像；含 ~ 会展开为主目录。
-//
 // Python: ExperienceSharer.__init__()
 func NewExperienceSharer(
 	bk SharingBackend,
@@ -116,30 +111,25 @@ func NewExperienceSharer(
 }
 
 // SetSkillSharingContextProvider 后置绑定技能共享上下文提供者。
-//
 // Python: ExperienceSharer.set_skill_sharing_context_provider()
 func (es *ExperienceSharer) SetSkillSharingContextProvider(provider SkillSharingContextProvider) {
 	es.skillSharingContextProvider = provider
 }
 
 // Backend 返回共享后端。
-//
 // Python: ExperienceSharer.backend (property)
 func (es *ExperienceSharer) Backend() SharingBackend {
 	return es.backend
 }
 
 // LocalCacheDir 返回本地缓存目录路径（可能为 nil）。
-//
 // Python: ExperienceSharer.local_cache_dir (property)
 func (es *ExperienceSharer) LocalCacheDir() *string {
 	return es.localCacheDir
 }
 
 // ResolveSkillID 通过 provider 获取 skill_id。
-//
 // provider 为空或 skillName 为空时返回空字符串。
-//
 // Python: ExperienceSharer.resolve_skill_id()
 func (es *ExperienceSharer) ResolveSkillID(ctx context.Context, skillName string) (string, error) {
 	provider := es.skillSharingContextProvider
@@ -159,7 +149,6 @@ func (es *ExperienceSharer) ResolveSkillID(ctx context.Context, skillName string
 }
 
 // HasPending 是否有待上传的经验。
-//
 // Python: ExperienceSharer.has_pending()
 func (es *ExperienceSharer) HasPending(skillName string) bool {
 	es.mu.RLock()
@@ -168,9 +157,7 @@ func (es *ExperienceSharer) HasPending(skillName string) bool {
 }
 
 // StageForUpload 将经验入队，按 (skill_name, record_id) 去重。
-//
 // skillName 为空时或 exp 为 nil 指针时不入队。
-//
 // Python: ExperienceSharer.stage_for_upload()
 func (es *ExperienceSharer) StageForUpload(skillName string, exp *SharedExperience) {
 	if skillName == "" || exp == nil {
@@ -203,7 +190,6 @@ func (es *ExperienceSharer) StageForUpload(skillName string, exp *SharedExperien
 }
 
 // DiscardPendingUploads 丢弃指定技能的待上传队列，返回丢弃数量。
-//
 // Python: ExperienceSharer.discard_pending_uploads()
 func (es *ExperienceSharer) DiscardPendingUploads(skillName string) int {
 	es.mu.Lock()
@@ -222,9 +208,7 @@ func (es *ExperienceSharer) DiscardPendingUploads(skillName string) int {
 }
 
 // FlushPendingUploads 打包并上传指定技能的所有待上传经验。
-//
 // 加写锁取走队列 → MakeSharedSkillBundle → syncSkillPackage → 重试循环 → 成功后 mirrorBundle。
-//
 // Python: ExperienceSharer.flush_pending_uploads()
 func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName string) (UploadResult, error) {
 	// 先加锁把该技能的待上传队列整个取走并清空，避免上传期间又有新经验挤进同一批。
@@ -334,7 +318,6 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 }
 
 // DownloadRelevant 下载并镜像最多 topK 个相关 bundle。
-//
 // Python: ExperienceSharer.download_relevant()
 func (es *ExperienceSharer) DownloadRelevant(
 	ctx context.Context,
@@ -379,7 +362,6 @@ func (es *ExperienceSharer) DownloadRelevant(
 }
 
 // SearchSkills 全局搜索技能。
-//
 // Python: ExperienceSharer.search_skills()
 func (es *ExperienceSharer) SearchSkills(ctx context.Context, query QueryKeywords, topK int) []SkillSearchResult {
 	results, err := es.backend.SearchSkills(ctx, query, topK)
@@ -393,7 +375,6 @@ func (es *ExperienceSharer) SearchSkills(ctx context.Context, query QueryKeyword
 }
 
 // DownloadSkillPackage 下载技能包字节。
-//
 // Python: ExperienceSharer.download_skill_package()
 func (es *ExperienceSharer) DownloadSkillPackage(ctx context.Context, skillID string) []byte {
 	resolvedID := strings.TrimSpace(skillID)
@@ -412,7 +393,6 @@ func (es *ExperienceSharer) DownloadSkillPackage(ctx context.Context, skillID st
 }
 
 // GetSkillPackageMeta 获取技能包元数据。
-//
 // Python: ExperienceSharer.get_skill_package_meta()
 func (es *ExperienceSharer) GetSkillPackageMeta(ctx context.Context, skillID string) *SkillPackageMeta {
 	meta, err := es.backend.GetSkillPackageMeta(ctx, strings.TrimSpace(skillID))
@@ -427,7 +407,6 @@ func (es *ExperienceSharer) GetSkillPackageMeta(ctx context.Context, skillID str
 }
 
 // ListCachedBundles 列出本地下载缓存中的 bundle。
-//
 // Python: ExperienceSharer.list_cached_bundles()
 func (es *ExperienceSharer) ListCachedBundles(skillID string) []SharedSkillBundle {
 	resolvedID := strings.TrimSpace(skillID)
@@ -481,7 +460,6 @@ func (es *ExperienceSharer) ListCachedBundles(skillID string) []SharedSkillBundl
 }
 
 // syncSkillPackage 通过 provider 确保 skill_id 并上传初始技能包。
-//
 // Python: ExperienceSharer._sync_skill_package()
 func (es *ExperienceSharer) syncSkillPackage(ctx context.Context, bundle *SharedSkillBundle, skillName string) {
 	provider := es.skillSharingContextProvider
@@ -554,7 +532,6 @@ func (es *ExperienceSharer) syncSkillPackage(ctx context.Context, bundle *Shared
 }
 
 // mirrorBundle 将 bundle 写入本地缓存目录。
-//
 // kind 只允许 "uploaded" 或 "downloaded"，否则返回 error。
 // 路径: local_cache_dir/{kind}/{skill_id}/{bundle_id}.json
 //

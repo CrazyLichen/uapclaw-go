@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventBase 事件基类，提供 scope 支持。
-//
 // Python: openjiuwen/core/runner/callback/events.py (EventBase)
 type EventBase struct {
 	// Scope 作用域
@@ -20,7 +19,6 @@ type EventBase struct {
 }
 
 // LLMCallEventData LLM 调用事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: AsyncCallbackFramework.trigger() 中的 kwargs 参数集合
 type LLMCallEventData struct {
 	// Event 事件类型
@@ -52,7 +50,6 @@ type LLMCallEventData struct {
 }
 
 // ToolCallEventData 工具调用事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: _ToolMeta.__call__ 中 trigger 调用时的 kwargs 参数集合
 type ToolCallEventData struct {
 	// Event 事件类型
@@ -72,7 +69,6 @@ type ToolCallEventData struct {
 }
 
 // SessionCallEventData Session 调用事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/session/agent.py 中 trigger(SessionEvents.AGENT_SESSION_CREATED, ...) 的 kwargs
 type SessionCallEventData struct {
 	// Event 事件类型
@@ -88,7 +84,6 @@ type SessionCallEventData struct {
 }
 
 // ContextCallEventData 上下文调用事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/runner/callback/events.py (ContextEvents) +
 //
 //	openjiuwen/core/runner/callback/framework.py (trigger kwargs)
@@ -108,7 +103,6 @@ type ContextCallEventData struct {
 }
 
 // WorkflowEventData Workflow 事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
 type WorkflowEventData struct {
 	// Event 事件类型
@@ -128,7 +122,6 @@ type WorkflowEventData struct {
 }
 
 // AgentTeamEventData Agent 协作事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
 type AgentTeamEventData struct {
 	// Event 事件类型
@@ -142,7 +135,6 @@ type AgentTeamEventData struct {
 }
 
 // RetrievalEventData 检索事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
 type RetrievalEventData struct {
 	// Event 事件类型
@@ -156,7 +148,6 @@ type RetrievalEventData struct {
 }
 
 // MemoryEventData 记忆事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
 type MemoryEventData struct {
 	// Event 事件类型
@@ -190,7 +181,6 @@ type MemoryEventData struct {
 }
 
 // TaskManagerEventData 任务管理事件数据，回调函数接收此结构获取上下文信息。
-//
 // Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
 type TaskManagerEventData struct {
 	// Event 事件类型
@@ -260,7 +250,6 @@ type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventDat
 
 // PerAgentCallbackFunc 实例级 PerAgent 回调函数类型。
 // agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext，回调内需类型断言。
-//
 // TODO: 收紧为 *AgentCallbackContext 具体类型。当前因循环依赖
 // (callback → agentinterfaces → callback) 无法直接引用。
 // 可能的解决方案：(A) 定义回调上下文接口于底层包 (B) 抽取共享类型包
@@ -286,32 +275,25 @@ type TaskManagerCallbackFunc func(ctx context.Context, data *TaskManagerEventDat
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LLMCallEventType LLM 调用事件类型。
-//
 // 事件名格式 "_framework:{event_name}"，与 Python EventBase.get_event() 构建规则一致。
 // 默认作用域为 "_framework"。
-//
 // Python: openjiuwen/core/runner/callback/events.py (LLMCallEvents)
 type LLMCallEventType string
 
 // ToolCallEventType 工具调用事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (ToolCallEvents)
 type ToolCallEventType string
 
 // SessionCallEventType Session 调用事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (SessionEvents)
 type SessionCallEventType string
 
 // ContextCallEventType 上下文调用事件类型。
-//
 // 事件名格式 "_framework:{event_name}"，与 Python EventBase.get_event() 构建规则一致。
-//
 // Python: openjiuwen/core/runner/callback/events.py (ContextEvents)
 type ContextCallEventType string
 
 // GlobalAgentEventType Agent 调用全局事件类型。
-//
 // 与 Rail 层 AgentCallbackEvent（per-Agent 实例级事件）区分：
 //   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
 //   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
@@ -320,27 +302,22 @@ type ContextCallEventType string
 type GlobalAgentEventType string
 
 // WorkflowEventType Workflow 事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
 type WorkflowEventType string
 
 // AgentTeamEventType Agent 协作事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
 type AgentTeamEventType string
 
 // RetrievalEventType 检索事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
 type RetrievalEventType string
 
 // MemoryEventType 记忆事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
 type MemoryEventType string
 
 // TaskManagerEventType 任务管理事件类型。
-//
 // Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
 type TaskManagerEventType string
 
@@ -507,14 +484,12 @@ const DefaultScope = "_framework"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildEventName 构建带 scope 的事件名。
-//
 // Python: openjiuwen/core/runner/callback/events.py build_event_name(scope, event_name)
 func BuildEventName(scope, eventName string) string {
 	return scope + ":" + eventName
 }
 
 // ParseEventName 解析带 scope 的事件名，返回 (scope, eventName)。
-//
 // Python: openjiuwen/core/runner/callback/events.py parse_event_name(scoped_event)
 func ParseEventName(scopedEvent string) (scope, eventName string) {
 	for i := 0; i < len(scopedEvent); i++ {
@@ -526,7 +501,6 @@ func ParseEventName(scopedEvent string) (scope, eventName string) {
 }
 
 // GetEvent 获取带 scope 的完整事件名。
-//
 // Python: EventBase.get_event(event_name)
 func (e *EventBase) GetEvent(eventName string) string {
 	return BuildEventName(e.Scope, eventName)

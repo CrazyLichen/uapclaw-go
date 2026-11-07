@@ -1,9 +1,7 @@
 // Package handlers 提供场景级协调事件处理器。
-//
 // 每个 handler 类拥有一个业务域：agent 生命周期、成员事件、消息、
 // 任务板、过期任务清扫、团队完成。它们共享 DispatcherHost 契约，
 // 通过 BaseCoordinationHandler.GetCallbacks 注册到 EventDispatcher。
-//
 // 文件目录：
 //
 //	handlers/

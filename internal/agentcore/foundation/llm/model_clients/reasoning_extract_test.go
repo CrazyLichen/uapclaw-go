@@ -3,7 +3,6 @@ package model_clients
 import "testing"
 
 // TestExtractReasoningContent_四级回退 对齐 openai_model_client.py:2751-2763 _extract_reasoning_content。
-//
 // 顺序：reasoning_details[0].text → reasoning_content → reasoning（OpenRouter）→ reasoning_token_text
 func TestExtractReasoningContent_四级回退(t *testing.T) {
 	cases := []struct {

@@ -1,8 +1,6 @@
 // Package subagents 提供子代理配置构建器。
-//
 // 各 builder 函数根据运行时配置和主模型构建 SubAgentConfig，
 // 供 DeepAdapter._build_configured_subagents 调用。
-//
 // 文件目录：
 //
 //	subagents/

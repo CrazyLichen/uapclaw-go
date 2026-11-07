@@ -41,9 +41,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EstimateImageTokens 按尺寸估算图像 token：取 OpenAI 分块与 Anthropic patch 两种计费的较大者。
-//
 // 不嗅探模型名（路由别名下不可靠），宁可估高不估低。
-//
 // Python: tiktoken_counter._estimate_image_tokens()
 func EstimateImageTokens(width, height int) int {
 	if width <= 0 || height <= 0 {
@@ -58,10 +56,8 @@ func EstimateImageTokens(width, height int) int {
 }
 
 // ImageBlockTokens 返回图像内容块的计费 token。
-//
 // 优先级：环境变量覆盖 → detail=low 固定 85 → 尺寸（显式标注优先，其次解 base64 头）
 // → DefaultImagePlaceholderTokens。
-//
 // Python: tiktoken_counter._image_block_tokens()
 func ImageBlockTokens(part llm_schema.ContentPart) int {
 	if override, ok := imagePlaceholderOverride(); ok {

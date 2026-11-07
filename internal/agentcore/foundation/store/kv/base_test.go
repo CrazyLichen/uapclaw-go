@@ -154,7 +154,6 @@ func TestPipelineResult_错误结果(t *testing.T) {
 
 // TestBaseKVStore_CompareAndDelete_契约 验证各后端的原子比较删除语义一致。
 // 覆盖：值匹配删除 / 值不匹配保留 / key 不存在返回 false。
-//
 // S-03：契约表补齐 db_based（SQLite 内存库）与 redis（miniredis）——原先只挂
 // in_memory / file，最易写错的 SQL 后端零覆盖，导致「按 key 删除而非按 value 删除」
 // 的缺陷漏网。

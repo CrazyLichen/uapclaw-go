@@ -1374,7 +1374,6 @@ func TestProvisionError_Error(t *testing.T) {
 }
 
 // TestProvision_WarnOnParticipantError 校验参与者报错走告警分支。
-//
 // 覆盖 logProvisionWarn 与 dispatchForegroundTransition 的错误吞掉语义。
 func TestProvision_WarnOnParticipantError(t *testing.T) {
 	p := newTestProvisioner()

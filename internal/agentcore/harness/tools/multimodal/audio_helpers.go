@@ -54,7 +54,6 @@ var osStat = os.Stat
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveAudioPath 解析音频路径，URL 下载到临时文件。
-//
 // Python: _resolve_audio_path(audio_path_or_url, config)
 // 返回 (localPath, shouldDelete, error)
 func ResolveAudioPath(
@@ -90,7 +89,6 @@ func ResolveAudioPath(
 }
 
 // GetAudioDuration 获取音频时长（秒）。
-//
 // Python: _get_audio_duration(audio_path)
 // WAV → Go 标准库解析 header；非 WAV → ffprobe（如果可用）；
 // 全部失败 → 返回 0（Go 降级策略比 Python ValueError 更友好）
@@ -114,7 +112,6 @@ func GetAudioDuration(audioPath string) (float64, error) {
 }
 
 // EncodeAudioFile 将音频文件 base64 编码，推断格式。
-//
 // Python: _encode_audio_file(audio_path)
 // 返回 (encodedString, format)
 func EncodeAudioFile(audioPath string) (string, string, error) {
@@ -132,7 +129,6 @@ func EncodeAudioFile(audioPath string) (string, string, error) {
 }
 
 // InvokeACRMetadata 调用 ACRCloud 识别音频元数据。
-//
 // Python: _invoke_audio_metadata(config, audio_path)
 // HMAC-SHA1 签名 + multipart POST
 func InvokeACRMetadata(
@@ -300,7 +296,6 @@ func InvokeACRMetadata(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // downloadAudioToTemp 从 URL 下载音频到临时文件。
-//
 // Python: requests.get(stream=True) → tempfile.NamedTemporaryFile
 func downloadAudioToTemp(
 	ctx context.Context,
@@ -410,7 +405,6 @@ func downloadAudioToTemp(
 }
 
 // parseWAVDuration 解析 WAV 文件获取时长。
-//
 // Python: wave.open → frames/rate = duration
 func parseWAVDuration(audioPath string) (float64, error) {
 	ext := strings.ToLower(filepath.Ext(audioPath))
@@ -478,7 +472,6 @@ func parseWAVDuration(audioPath string) (float64, error) {
 }
 
 // ffprobeDuration 使用 ffprobe 获取音频时长。
-//
 // Python: 使用 mutagen 降级（Go 用 ffprobe 替代 mutagen）
 func ffprobeDuration(audioPath string) (float64, error) {
 	// 检查 ffprobe 是否可用

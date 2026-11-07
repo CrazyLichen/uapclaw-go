@@ -8,10 +8,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryCallOperator 记忆参数句柄。
-//
 // 管理 enabled 和 maxRetries 参数。
 // 参数变更通过 onParameterUpdated 回调推送给消费者。
-//
 // 更新入口：
 //   - SetParameter(): 演化更新
 //   - LoadState(): 检查点恢复
@@ -55,7 +53,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemoryCallOperator 创建 MemoryCallOperator 实例。
-//
 // Python: MemoryCallOperator.__init__(operator_id, on_parameter_updated)
 func NewMemoryCallOperator(opts ...MemoryCallOperatorOption) *MemoryCallOperator {
 	op := &MemoryCallOperator{
@@ -72,14 +69,12 @@ func NewMemoryCallOperator(opts ...MemoryCallOperatorOption) *MemoryCallOperator
 }
 
 // OperatorID 返回操作器标识。
-//
 // Python: MemoryCallOperator.operator_id (property)
 func (op *MemoryCallOperator) OperatorID() string {
 	return op.operatorID
 }
 
 // GetTunables 获取可调参数。
-//
 // Python: MemoryCallOperator.get_tunables()
 func (op *MemoryCallOperator) GetTunables() map[string]operator.TunableSpec {
 	return map[string]operator.TunableSpec{
@@ -100,7 +95,6 @@ func (op *MemoryCallOperator) GetTunables() map[string]operator.TunableSpec {
 
 // SetParameter 设置可调参数值。
 // 触发 onParameterUpdated 回调。
-//
 // Python: MemoryCallOperator.set_parameter(target, value)
 func (op *MemoryCallOperator) SetParameter(target string, value any) {
 	switch target {
@@ -118,7 +112,6 @@ func (op *MemoryCallOperator) SetParameter(target string, value any) {
 }
 
 // GetState 获取当前状态，用于检查点。
-//
 // Python: MemoryCallOperator.get_state()
 func (op *MemoryCallOperator) GetState() map[string]any {
 	return map[string]any{
@@ -129,7 +122,6 @@ func (op *MemoryCallOperator) GetState() map[string]any {
 
 // LoadState 从检查点恢复状态。
 // 触发 onParameterUpdated 回调。
-//
 // Python: MemoryCallOperator.load_state(state)
 func (op *MemoryCallOperator) LoadState(state map[string]any) {
 	if e, ok := state[TargetEnabled]; ok {
@@ -148,7 +140,6 @@ func (op *MemoryCallOperator) LoadState(state map[string]any) {
 
 // ApplyUpdate 应用结构化演化更新。
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
-//
 // Python: Operator.apply_update 默认实现
 func (op *MemoryCallOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)

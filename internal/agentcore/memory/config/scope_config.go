@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryScopeConfig 记忆作用域配置，定义各类型记忆的提取规则。
-//
 // Python: openjiuwen/core/memory/config/config.py (MemoryScopeConfig)
 // JSON tag 使用 snake_case 对齐 Python 字段名（model_dump_json(by_alias=True)）
 type MemoryScopeConfig struct {
@@ -41,7 +40,6 @@ type MemoryScopeConfig struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultMemoryScopeConfig 返回默认记忆作用域配置。
-//
 // 默认值对齐 Python MemoryScopeConfig 的字段默认值。
 // Python: MemoryScopeConfig(user_profile_definition="...", semantic_memory_definition="...", episodic_memory_definition="...")
 func DefaultMemoryScopeConfig() *MemoryScopeConfig {

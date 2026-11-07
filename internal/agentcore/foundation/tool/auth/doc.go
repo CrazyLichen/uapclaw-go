@@ -1,9 +1,7 @@
 // Package auth 提供工具认证配置与结果，以及基于策略模式的认证执行框架。
-//
 // 工具（RestfulApi、MCP 客户端）在发起请求前，通过回调框架触发 TOOL_AUTH 事件，
 // 由注册的认证策略（SSL、HeaderQuery）完成认证并返回结果，
 // 调用方从中提取 TLS 配置或认证头注入实际请求。
-//
 // 认证策略：
 //
 //	AuthStrategy 接口 — 统一抽象

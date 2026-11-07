@@ -505,7 +505,6 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 //
 // 注意：此方法只负责非 SysOperation 工具（wiki/web_search/vision/audio/video/image_gen/xiaoyi/skill/acp_chat）。
 // fs/shell/code 工具由 SysOperationRail 在 CreateDeepAgent 内部自动注册。
-//
 // Python 步骤对照：
 //  1. wiki 工具 (wiki_ingest, wiki_query, wiki_lint)
 //  2. 付费搜索工具 (WebPaidSearchTool)
@@ -740,7 +739,6 @@ func (d *DeepAdapter) getAbilityManager() sainterfaces.AbilityManagerInterface {
 
 // syncToolsToManager 将工具同步到 AbilityManager 和 ResourceMgr。
 // 内部辅助方法，供 syncToolGroup 和 removeRegisteredTools 使用。
-//
 // toolCards 用于 AbilityManager.Add（需要 schema.Ability），
 // toolInstances 用于 ResourceMgr.AddTool（需要 tool.Tool）。
 func (d *DeepAdapter) syncToolsToManager(ctx context.Context, toolCards []*tool.ToolCard, toolInstances []tool.Tool, toRemove []string, tag string) {

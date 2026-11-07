@@ -1,5 +1,4 @@
 // Package config 提供会话配置的具体实现。
-//
 // 核心类型：
 //   - MetadataLike         — 回调元数据结构体
 //   - BuiltinConfigLoader  — 内置配置加载钩子接口

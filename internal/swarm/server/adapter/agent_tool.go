@@ -70,7 +70,6 @@ func (t *AgentTool) Card() *tool.ToolCard {
 }
 
 // GetCallTimeout 返回外层调用预算，沿用卡片级策略。
-//
 // Agent 类工具的实际执行由内层 ReAct 循环自行约束。
 func (t *AgentTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
 	return tool.BaseCallTimeout(inputs, defaultTimeout)

@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // graphSearcher 图存储搜索器，负责混合搜索、BFS 扩展和重排序。
-//
 // Python: MilvusGraphStore.search / search_all / _search_single / _raw_hybrid_search
 type graphSearcher struct {
 	// client Milvus 客户端
@@ -69,7 +68,6 @@ func newGraphSearcher(client milvusClient, embedder embedding.BaseEmbedding, ind
 // search 混合搜索入口。根据 collection 选项决定搜索模式：
 // - "all"：并发搜索三集合 + combinedRerank
 // - 单集合名：searchSingle（可选 BFS）
-//
 // Python: MilvusGraphStore.search
 func (s *graphSearcher) search(ctx context.Context, query string, opts ...graph.Option) (map[string][]map[string]any, error) {
 	o := applyGraphOptions(opts...)
@@ -87,7 +85,6 @@ func (s *graphSearcher) search(ctx context.Context, query string, opts ...graph.
 // searchAll 并发搜索三集合，然后合并结果。
 // Python: asyncio.create_task + as_completed 并发搜索三集合。
 // 搜索失败的集合仍会在 results 中初始化空切片，与 Python 对齐。
-//
 // Python: MilvusGraphStore._search_all
 func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Options) (map[string][]map[string]any, error) {
 	collections := []string{CollectionEntity, CollectionRelation, CollectionEpisode}
@@ -136,7 +133,6 @@ func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Opt
 }
 
 // searchSingle 搜索单个集合，可选 BFS 扩展。
-//
 // Python: MilvusGraphStore._search_single
 func (s *graphSearcher) searchSingle(ctx context.Context, query, collection string, o graph.Options) ([]map[string]any, error) {
 	k := o.K
@@ -291,7 +287,6 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 }
 
 // rawHybridSearch 原始混合搜索（3通道：name_embedding + content_embedding + content_bm25）。
-//
 // Python: MilvusGraphStore._raw_hybrid_search
 func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection string, k int, o graph.Options) ([]map[string]any, error) {
 	// 获取查询向量

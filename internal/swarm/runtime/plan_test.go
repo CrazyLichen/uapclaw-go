@@ -41,7 +41,6 @@ func (f *fakeStore) SwitchPlanMode(_ context.Context, sid, mode string) error {
 func (f *fakeStore) CommitSession(_ context.Context, _ string) error { f.commits++; return nil }
 
 // testController 把 fakeStore 绑定为运行期 accessor，保持用例只传 (ctx, req)。
-//
 // 生产路径由 AgentRuntime 传入真实 accessor（对齐上游 ensure_state(..., agent)）。
 type testController struct {
 	*PlanModeController
@@ -64,7 +63,6 @@ func (t *testController) CheckPostProcessExit(ctx context.Context, req PlanReque
 }
 
 // TestEnsureState_显式进入并改写query 验证 plan_toggle 进入、清记忆、前置提醒。
-//
 // Python: ensure_state 的进入分支 + inject_activation_reminder
 func TestEnsureState_显式进入并改写query(t *testing.T) {
 	store := newFakeStore()
@@ -85,7 +83,6 @@ func TestEnsureState_显式进入并改写query(t *testing.T) {
 }
 
 // TestEnsureState_非显式进入被阻断 验证退出记忆阻断、消费记忆并保持 normal。
-//
 // Python: ensure_state 的 blocked 分支（退出记忆命中即 discard）
 func TestEnsureState_非显式进入被阻断(t *testing.T) {
 	store := newFakeStore()
@@ -159,7 +156,6 @@ func TestEnsureState_跳过矩阵(t *testing.T) {
 }
 
 // TestEnsureState_同模式幂等 验证重复请求不重复提交、不重复注入提醒。
-//
 // Python: ensure_state 中 previous == target 时直接返回
 func TestEnsureState_同模式幂等(t *testing.T) {
 	store := newFakeStore()
@@ -177,7 +173,6 @@ func TestEnsureState_同模式幂等(t *testing.T) {
 }
 
 // TestEnsureState_正常轮次无状态时跳过 验证 may_hold_state 守卫。
-//
 // Python: target==normal 且非 code-single 且 may_hold_state()==false → 直接返回
 func TestEnsureState_正常轮次无状态时跳过(t *testing.T) {
 	store := newFakeStore()
@@ -207,7 +202,6 @@ func TestEnsureState_previousSessionMode允许持有状态(t *testing.T) {
 }
 
 // TestCheckPostProcessExit 验证工具退出后发事件并记记忆。
-//
 // Python: check_post_process_exit
 func TestCheckPostProcessExit(t *testing.T) {
 	store := newFakeStore()

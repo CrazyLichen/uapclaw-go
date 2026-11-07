@@ -458,12 +458,10 @@ func TestMakeDeepAgentConfig_Rails赋值(t *testing.T) {
 // TestMakeDeepAgentConfig_带齐热重载必需字段 回归：热重载配置必须与
 // CreateInstance 的 CreateDeepAgentParams 同源，带上 workspace / sys_operation /
 // tools / subagents / vision / audio / completion_timeout。
-//
 // 回归背景：漏传 workspace + sys_operation 时，`agent.reload_config` 之后
 // deepConfig 这两个字段变 nil，下一轮 ensureInitialized 把它们注入所有 pending
 // rail —— SysOperationRail 重建出的 fs 工具持有 nil op，read_file 执行即
 // nil 解引用 panic，前端工具卡永久停在「执行中」。
-//
 // Python: _make_deep_agent_config（interface_deep.py L2245-2283）
 func TestMakeDeepAgentConfig_带齐热重载必需字段(t *testing.T) {
 	d := NewDeepAdapter()
@@ -655,7 +653,6 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 }
 
 // TestAccumulateUsage 测试 usage 累加。
-//
 // 累加口径已改为只读嵌套 usage_metadata（对齐 llm_usage 事件形状），
 // 扁平 token 键不再参与累加。
 func TestAccumulateUsage(t *testing.T) {

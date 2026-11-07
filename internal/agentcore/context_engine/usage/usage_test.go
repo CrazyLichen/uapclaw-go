@@ -148,7 +148,6 @@ func TestAggregateSessionCache(t *testing.T) {
 
 // TestRequestCacheFromUsage_新字段优先 CacheReadTokens 非空时直接采用，
 // 不再由 CacheTokens 旧算法推导；新字段缺失时回落旧算法。
-//
 // 对齐设计文档批次 C-B3（session_aggregator 切新字段）。
 func TestRequestCacheFromUsage_新字段优先(t *testing.T) {
 	read, miss := 60, 40

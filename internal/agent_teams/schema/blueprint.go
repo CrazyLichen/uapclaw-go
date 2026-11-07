@@ -100,7 +100,6 @@ type TeamAgentSpec struct {
 // AgentCustomizer 用户自定义 Agent 配置钩子（全项目唯一类型定义）。
 // 对齐 Python: build_agent_customizer 返回的 customizer(agent, member_name, role) 闭包
 // （team_manager.py L727-731: async def customizer(agent, member_name=None, role=None)）。
-//
 // Go 惯例：memberName/role 空字符串等价 Python None（触发 fallback）；
 // ctx 传播取消信号；error 对应 Python 闭包内 await 调用的异常上抛。
 type AgentCustomizer func(ctx context.Context, agent hinterfaces.DeepAgentInterface, memberName string, role string) error

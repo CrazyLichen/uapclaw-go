@@ -1,8 +1,6 @@
 // Package tool_call 提供工具描述参数句柄。
-//
 // ToolCallOperator 管理工具描述参数，不执行工具调用。
 // 参数变更通过 onParameterUpdated 回调推送给消费者。
-//
 // 文件目录：
 //
 //	tool_call/          # 工具调用操作器

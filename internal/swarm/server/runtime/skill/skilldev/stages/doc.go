@@ -1,9 +1,7 @@
 // Package stages 提供 SkillDev Pipeline 各阶段的处理器实现。
-//
 // 每个阶段实现 skilldev.StageHandler 接口，通过 Execute() 与 Pipeline 交互。
 // Pipeline 读取 Execute() 返回的 skilldev.StageResult 驱动状态跳转。
 // 处理器不应持有跨请求的状态——所有状态均通过 SkillDevContext 传入。
-//
 // 阶段列表：
 //
 //	INIT        — 解析请求参数、准备工作区

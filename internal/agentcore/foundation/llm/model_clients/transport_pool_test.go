@@ -3,7 +3,6 @@ package model_clients
 import "testing"
 
 // TestGetSharedTransport_按SSL形态分桶 同 (verify_ssl, ssl_cert) 复用同一实例；不同形态分桶。
-//
 // 对齐设计文档批次 C-A（上游 _client_cache 分桶语义的 Go 等价物，偏差 D-1）。
 func TestGetSharedTransport_按SSL形态分桶(t *testing.T) {
 	ResetSharedTransports()
@@ -24,7 +23,6 @@ func TestGetSharedTransport_按SSL形态分桶(t *testing.T) {
 }
 
 // TestGetSharedTransport_池参数 参数照抄上游 httpx Limits。
-//
 // Python: openai_model_client.py:1460-1464 httpx.Limits(max_connections=100,
 // max_keepalive_connections=20, keepalive_expiry=60.0)
 func TestGetSharedTransport_池参数(t *testing.T) {
@@ -66,7 +64,6 @@ func TestGetSharedTransport_证书形态分桶(t *testing.T) {
 }
 
 // TestCloseIdleTransports 关闭入口不 panic 且池条目保留（连接关闭、桶可继续取用）。
-//
 // Python: openai_model_client.py:1500 aclose（teardown 专用）
 func TestCloseIdleTransports(t *testing.T) {
 	ResetSharedTransports()

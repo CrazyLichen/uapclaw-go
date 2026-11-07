@@ -1,10 +1,8 @@
 // Package evolution 提供技能演化轨道（Evolution Rail）的共享契约类型、
 // 审批事件构建函数、审批运行时以及 EvolutionRail 基类和 TrajectoryRail。
-//
 // 本包实现了 9.24 的 P1 契约层、P2（EvolutionRail 基类 + TrajectoryRail）
 // P3（SkillEvolutionRail 单 Agent 技能演进护栏）和 P4（TeamSkillEvolutionRail 团队技能演进护栏），
 // P5（DeepAdapter 集成）和 P6（ContextEvolutionRail 上下文演化轨道：记忆检索注入 + 自动轨迹总结）已完成。
-//
 // 核心功能：
 //   - 契约类型：EvolutionHostEventMeta / EvolutionSnapshot / EvolutionRequestResult / SimplifyRequestResult
 //   - 审批接口：ApprovalManager 窄接口（ExperienceManager 隐式满足）

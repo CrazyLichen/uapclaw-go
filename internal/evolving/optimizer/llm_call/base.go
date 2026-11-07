@@ -10,10 +10,8 @@ import (
 
 // LLMCallOptimizerBase LLM 维度优化器基类，固定 domain="llm"，
 // 默认优化目标为 system_prompt 和 user_prompt。
-//
 // 子优化器嵌入此结构体，获得 LLM 维度的公共字段和辅助方法，
 // 然后自己实现 optimizer.BaseOptimizer 接口的全部方法。
-//
 // Python: openjiuwen/agent_evolving/optimizer/llm_call/base.py LLMCallOptimizerBase
 type LLMCallOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
@@ -28,21 +26,18 @@ type LLMCallOptimizerBase struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Domain 返回优化器域 "llm"。
-//
 // Python: LLMCallOptimizerBase.domain = "llm"
 func (b *LLMCallOptimizerBase) Domain() string {
 	return "llm"
 }
 
 // DefaultTargets 返回默认优化目标列表。
-//
 // Python: LLMCallOptimizerBase.default_targets() → ["system_prompt", "user_prompt"]
 func (b *LLMCallOptimizerBase) DefaultTargets() []string {
 	return []string{"system_prompt", "user_prompt"}
 }
 
 // RequiresForwardData 返回 true，LLM 优化器需要框架执行前向推理。
-//
 // Python: BaseOptimizer.requires_forward_data() → True
 func (b *LLMCallOptimizerBase) RequiresForwardData() bool {
 	return true
@@ -52,7 +47,6 @@ func (b *LLMCallOptimizerBase) RequiresForwardData() bool {
 
 // isTargetFrozen 检查 target 是否在 op.GetTunables() 中。
 // 不在 tunables 中即视为冻结（operator 未暴露该参数）。
-//
 // Python: LLMCallOptimizerBase._is_target_frozen(op, target)
 //
 //	return target not in op.get_tunables()
@@ -63,7 +57,6 @@ func (b *LLMCallOptimizerBase) isTargetFrozen(op operator.Operator, target strin
 }
 
 // getPromptTemplate 从 op.GetState() 获取 target 内容，构建 PromptTemplate。
-//
 // Python: LLMCallOptimizerBase._get_prompt_template(op, target)
 //
 //	Python: state = op.get_state()

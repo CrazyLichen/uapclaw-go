@@ -298,7 +298,6 @@ func applyNumericConstraints(p *commonschema.Param, propMap map[string]any) {
 }
 
 // mergeQueryParams 将 queryParams 合并到 baseURL 中。
-//
 // 对照 Python: AuthHeaderAndQueryProvider.async_auth_flow 中 copy_merge_params
 // 如果 baseURL 已有查询参数，追加而非覆盖（同名键覆盖）。
 func mergeQueryParams(baseURL string, queryParams map[string]string) (string, error) {

@@ -12,11 +12,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RedisStore 基于 go-redis 的 Redis KV 存储实现。
-//
 // 支持 Standalone 和 Cluster 两种模式，通过构造函数传入的客户端类型自动检测。
 // 当传入 *redis.ClusterClient 时，自动启用 Cluster 模式，
 // GetByPrefix/DeleteByPrefix 会使用 ForEachMaster 遍历所有 master 节点。
-//
 // Python: openjiuwen/extensions/store/kv/redis_store.py
 type RedisStore struct {
 	// client Redis 命令接口（Standalone 和 Cluster 均满足）
@@ -77,10 +75,8 @@ var _ BaseKVStore = (*RedisStore)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRedisStore 创建基于 Redis 的 KV 存储实例。
-//
 // client: Redis 客户端，支持 *redis.Client（Standalone）和 *redis.ClusterClient（Cluster）。
 // 构造函数自动通过类型断言检测 Cluster 模式，无需手动配置。
-//
 // Python: RedisStore(redis: Redis | RedisCluster)
 func NewRedisStore(client redis.Cmdable, opts ...Option) *RedisStore {
 	s := &RedisStore{client: client}
@@ -347,7 +343,6 @@ func (s *RedisStore) Pipeline(_ context.Context) KVPipeline {
 // 这是 RedisStore 独有的方法，不在 BaseKVStore 接口中。
 // ttlSeconds <= 0 或 keys 为空时直接返回 nil。
 // 失败时静默忽略（仅记录 Warn 日志），对齐 Python 行为。
-//
 // Python: RedisStore.refresh_ttl(keys, ttl_seconds)
 // RefreshTTL 批量刷新键的 TTL。
 // 注意：与 GetByPrefix/DeleteByPrefix 不同，此方法不使用 ForEachMaster，

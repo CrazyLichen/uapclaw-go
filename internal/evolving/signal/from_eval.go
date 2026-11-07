@@ -17,10 +17,8 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // FromEvaluatedCase 将离线评估结果转换为演化信号。
-//
 // 当 scoreThreshold 非空且 case.GetScore() >= threshold 时返回 nil（不产生信号）；
 // 否则根据分数判断 signal_type：score==0 → "low_score"，其他 → "evaluated"。
-//
 // Python: openjiuwen/agent_evolving/signal/from_eval.py from_evaluated_case
 func FromEvaluatedCase(case_ *dataset.EvaluatedCase, operatorID string, scoreThreshold *float64) *EvolutionSignal {
 	if scoreThreshold != nil && case_.GetScore() >= *scoreThreshold {
@@ -61,7 +59,6 @@ func FromEvaluatedCase(case_ *dataset.EvaluatedCase, operatorID string, scoreThr
 }
 
 // FromEvaluatedCases 批量将 EvaluatedCase 列表转换为 EvolutionSignal 列表。
-//
 // Python: openjiuwen/agent_evolving/signal/from_eval.py from_evaluated_cases
 func FromEvaluatedCases(cases []*dataset.EvaluatedCase, operatorID string, scoreThreshold *float64) []*EvolutionSignal {
 	signals := make([]*EvolutionSignal, 0, len(cases))

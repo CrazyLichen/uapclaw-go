@@ -1,9 +1,7 @@
 // Package vector 提供向量存储的抽象接口和具体实现。
-//
 // 本文件包含 Milvus SDK 客户端适配器，将 milvusclient.Client 适配到
 // milvusClient 接口。由于适配器方法直接委托给真实 SDK Client，
 // 无法在单元测试中 mock，这些代码仅在集成测试中覆盖。
-//
 // Python: vector/milvus_vector_store.py (MilvusVectorStore)
 package vector
 
@@ -17,10 +15,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // milvusClientAdapter 适配器，将 milvusclient.Client 适配到 milvusClient 接口。
-//
 // 新 SDK 的 Client 方法签名使用具体 Option 类型而非接口，
 // 需要适配层来桥接测试和生产的接口统一。
-//
 // 注意：适配器方法直接委托给真实 SDK Client，无法在单元测试中覆盖，
 // 需通过集成测试（go test -tags=integration）验证。
 type milvusClientAdapter struct {
@@ -136,7 +132,6 @@ func (a *milvusClientAdapter) QueryIterator(ctx context.Context, option milvuscl
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultCreateClient 默认的客户端创建函数，使用新 SDK milvusclient.New。
-//
 // 注意：此函数依赖真实 Milvus 服务，无法在单元测试中覆盖，
 // 需通过集成测试（go test -tags=integration）验证。
 func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {

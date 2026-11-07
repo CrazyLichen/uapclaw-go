@@ -16,10 +16,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventDispatcher 将协调事件路由到场景 Handler。
-//
 // 持有触发规则 + 私有 CallbackFramework 实例。
 // 每团队注册隔离：framework 是本 dispatcher 私有的，协调事件不进入全局 Runner.callback_framework。
-//
 // Python: EventDispatcher
 type EventDispatcher struct {
 	// dispatchMu 保护 Dispatch 串行化，避免 EventBus goroutine 与外部调用并发访问 CallbackFramework

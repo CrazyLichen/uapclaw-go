@@ -73,7 +73,6 @@ func GetConfig(configID string) *HarnessConfigInfo {
 
 // LoadConfig 便捷方法：按 ID 加载、构建并创建 DeepAgent。
 // 调用链：Get → Loader.Load → Builder.Build → CreateDeepAgent。
-//
 // Python: HarnessConfigRegistry.load() → DeepAgent
 func LoadConfig(ctx context.Context, configID string, model *llm.Model, params map[string]any, workspaceRoot ...string) (*DeepAgent, error) {
 	return getGlobalRegistry().Load(ctx, configID, model, params, workspaceRoot...)

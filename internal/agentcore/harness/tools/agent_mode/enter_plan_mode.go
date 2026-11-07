@@ -36,7 +36,6 @@ var (
 )
 
 // NewEnterPlanModeTool 创建 enter_plan_mode 工具实例。
-//
 // Python: EnterPlanModeTool.__init__() L262-286 + invoke() L288-320
 // ──────────────────────────── 导出函数 ────────────────────────────
 

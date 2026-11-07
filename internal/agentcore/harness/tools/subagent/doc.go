@@ -2,7 +2,6 @@
 // 任务状态跟踪（SessionToolkit）和任务列表/取消操作。
 // 工具通过 interfaces.DeepAgentInterface 访问 LoopController 获取 TaskManager/TaskScheduler，
 // Python: loop_controller.task_manager / loop_controller.task_scheduler。
-//
 // Python: openjiuwen/harness/tools/subagent/
 //
 // 文件目录：

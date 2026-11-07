@@ -55,7 +55,6 @@ type sessionSwitchParams struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleSessionList 处理 session.list 请求，对齐 Python _handle_session_list。
-//
 // 扫描 ~/.uapclaw/agent/sessions/ 目录，读取每个子目录的 metadata.json，
 // 按 last_message_at 降序排列，返回会话列表。
 func (s *AgentServer) handleSessionList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -67,7 +66,6 @@ func (s *AgentServer) handleSessionList(_ context.Context, request *schema.Agent
 }
 
 // handleSessionRename 处理 session.rename 请求，对齐 Python apply_session_rename。
-//
 // 支持三种语义：
 //   - title 为 nil：查询当前标题
 //   - title 为空串（strip 后）：清除标题
@@ -115,7 +113,6 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 }
 
 // handleSessionSwitch 处理 session.switch 请求。
-//
 // 10.3.28b：改为两阶段事务（prepare → commit → 失败 abort）。
 // Python: agent_ws_server.py _handle_session_switch
 func (s *AgentServer) handleSessionSwitch(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -162,7 +159,6 @@ func (s *AgentServer) handleSessionSwitch(ctx context.Context, request *schema.A
 }
 
 // handleSessionDelete 处理 session.delete 请求。
-//
 // 10.3.28c：改为 provisioner 的七阶段事务（原 147 行行内实现已删除）。
 // 阶段顺序与回滚分界见设计文档 §6.1；本函数只做参数解析与结果映射。
 // Python: agent_ws_server.py _handle_session_delete
@@ -213,7 +209,6 @@ func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.A
 }
 
 // quiesceSessionForDelete 关闭准入并等执行停下。
-//
 // spec §6.1：QuiesceSession 置 QUIESCING → CloseSession(带 generation) 逐条取消并等 Done。
 // 超时返回 SessionCloseTimeoutError，使删除事务判定为 DELETE_FAILED。
 func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, sessionID string) error {
@@ -243,7 +238,6 @@ func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, se
 }
 
 // disposeSessionAfterResourceRelease 释放会话内存运行时。
-//
 // spec §10 R-2/R-3：三个依赖（prompt_suggestion.forks.session_deleted /
 // stop_subagent_runtimes / cleanup_session_runtime）Go 侧尚未落地，此处仅
 // 记告警。Runner.release 由 provisioner 在其后调用，语义不丢失。
@@ -407,7 +401,6 @@ func (s *AgentServer) handleSessionRewindContext(ctx context.Context, request *s
 }
 
 // handleSessionCreate 处理 session.create 请求，对齐 Python _handle_session_create。
-//
 // 从 request.Params 读取 session_id（可选，没有则生成），
 // 创建会话目录和 metadata.json，返回 session_id。
 func (s *AgentServer) handleSessionCreate(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -471,7 +464,6 @@ func (s *AgentServer) handleSessionCreate(ctx context.Context, request *schema.A
 }
 
 // handleSessionFork 处理 session.fork 请求。
-//
 // 10.3.28b：改为两阶段事务（BEFORE_RESULT_DELIVERY，无后置副作用）。
 // Python: agent_ws_server.py _handle_session_fork
 func (s *AgentServer) handleSessionFork(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {

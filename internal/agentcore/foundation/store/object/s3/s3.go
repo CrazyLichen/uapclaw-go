@@ -36,7 +36,6 @@ type S3ClientConfig struct {
 // 支持华为云 OBS 以及任何 S3 兼容的对象存储服务。
 // 客户端为长生命周期，并发安全，底层连接池自动管理。
 // 使用分段上传（Multipart Upload）支持大文件上传。
-//
 // Python: openjiuwen/core/foundation/store/object/aioboto_storage_client.py
 type S3Client struct {
 	// client S3 服务客户端
@@ -204,7 +203,6 @@ func (c *S3Client) DeleteBucket(ctx context.Context, bucketName string) error {
 // UploadFile 上传本地文件到对象存储桶
 //
 // 使用分段上传（Multipart Upload），大文件自动分片，对应 Python upload_fileobj。
-//
 // Python: AioBotoClient.upload_file
 func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName string, filePath string) error {
 	file, err := os.Open(filePath)

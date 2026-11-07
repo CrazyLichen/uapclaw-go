@@ -15,7 +15,6 @@ import (
 )
 
 // newLocalSysOpForTest 构造基于 t.TempDir 的真实 LocalSysOperation。
-//
 // 对齐 Python conftest 的 sys_op fixture：OperationMode.LOCAL +
 // 默认 LocalWorkConfig（restrict_to_sandbox=False，Fs 走真实文件系统，
 // 绝对路径直接操作）。

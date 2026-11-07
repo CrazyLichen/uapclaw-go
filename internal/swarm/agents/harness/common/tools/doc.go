@@ -12,10 +12,8 @@
 // goroutine 并发 + chat.session_result 推送 + sync.Once 汇总 chat.final，
 // push/agentProvider 经包级注入函数）与 user_todos 用户待办（code 模式，
 // 10.6.24c：六 action + 按 channel 隔离 markdown 持久化，channel 经 ctx 读取）。
-//
 // 全部工具对齐 Python jiuwenswarm/agents/harness/common/tools/ 同名文件，
 // 包级 var 单例对齐 Python 模块级 @tool 实例。
-//
 // 文件目录：
 //
 //	tools/

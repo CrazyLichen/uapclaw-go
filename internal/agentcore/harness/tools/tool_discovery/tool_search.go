@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolSearchInput tool_search 工具的输入参数。
-//
 // Python: tool_search.py (ToolSearchInput)
 type ToolSearchInput struct {
 	// Query 搜索查询文本
@@ -25,7 +24,6 @@ type ToolSearchInput struct {
 }
 
 // ToolSearchTool 模型可见的延迟工具搜索元工具。
-//
 // Python: harness/tools/tool_discovery/tool_search.py (ToolSearchTool)
 type ToolSearchTool struct {
 	// card 工具卡片
@@ -54,7 +52,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeToolSearchLimit 把请求条数夹到 1..20。
-//
 // Python: _normalize_tool_search_limit
 func NormalizeToolSearchLimit(value int) int {
 	if value < 1 {
@@ -67,7 +64,6 @@ func NormalizeToolSearchLimit(value int) int {
 }
 
 // NewToolSearchTool 创建搜索元工具。
-//
 // Python: ToolSearchTool.__init__
 func NewToolSearchTool(
 	search func(ctx context.Context, query string, limit int, sess sessioninterfaces.SessionFacade) ([]map[string]any, error),
@@ -98,7 +94,6 @@ func (t *ToolSearchTool) GetCallTimeout(inputs map[string]any, defaultTimeout fl
 }
 
 // Invoke 执行搜索。
-//
 // Python: ToolSearchTool.invoke
 func (t *ToolSearchTool) Invoke(ctx context.Context, inputs map[string]any, options ...tool.ToolOption) (map[string]any, error) {
 	opts := &tool.ToolCallOptions{}
@@ -146,16 +141,13 @@ func (t *ToolSearchTool) Invoke(ctx context.Context, inputs map[string]any, opti
 }
 
 // Stream 不支持流式。
-//
 // Python: ToolSearchTool.stream（空实现）
 func (t *ToolSearchTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
 // RenderToolSearchForLLM 渲染匹配结果的模型可见文本。
-//
 // 每个结果给出名称、描述与精确 JSON parameters schema。
-//
 // Python: ToolSearchTool.render_for_llm
 func RenderToolSearchForLLM(query string, results []map[string]any) string {
 	if len(results) == 0 {

@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Variable 模板变量接口，定义占位符变量的求值协议。
-//
 // Python: openjiuwen/core/foundation/prompt/assemble/variables/variable.py (Variable)
 //
 // 实现类型：
@@ -66,7 +65,6 @@ func (b *baseVariable) Value() any {
 }
 
 // Eval 实现 Variable.Eval：模板方法，先过滤无关参数，再调 Update，最后返回 Value。
-//
 // Python: Variable.eval()
 //
 // 注意：由于 Go 嵌入结构体不支持多态调用子类方法，
@@ -145,7 +143,6 @@ func findDotIndex(s string) int {
 
 // resolveNestedValue 解析 "user.profile.name" 形式的嵌套路径。
 // 第一段从 root map 取值，后续段逐层 map 查找或 reflect struct field 访问。
-//
 // Python: TextableVariable.update() / DictableVariable._recursive_format() 中的嵌套属性解析逻辑。
 func resolveNestedValue(path string, root map[string]any) (any, error) {
 	nodes := splitDotPath(path)

@@ -15,12 +15,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Chunker 文本分块抽象接口。
-//
 // 三方法对齐 Python Chunker：chunk_text（子类必覆写）、
 // chunk_documents（基类默认实现，子类可选覆写）、process（Processor 契约入口）。
-//
 // 知识库入库时调用 ChunkDocuments；ChunkText 是子类唯一必须实现的分块算法。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/chunker/base.py (Chunker)
 type Chunker interface {
 	// ChunkText 对单段文本分块，返回分块文本列表。空文本返回空切片。
@@ -32,7 +29,6 @@ type Chunker interface {
 }
 
 // DimsProvider 可选尺寸提供者。
-//
 // 嵌入 BaseChunker 的分块器自动满足本接口（方法提升），未嵌入的纯接口
 // 实现不满足——对齐 Python getattr(inner, "chunk_size", 512) 取不到属性
 // 时走默认值的语义（hybrid 构造时断言探测，13.8）。
@@ -42,11 +38,9 @@ type DimsProvider interface {
 }
 
 // BaseChunker 分块器默认适配器。
-//
 // 对齐 Python Chunker 基类的可复用部分：chunk_size/chunk_overlap 构造校验与
 // length_function。具体分块器嵌入本结构体，仅覆写 ChunkText，自动获得
 // ChunkDocuments/Process 默认实现。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/chunker/base.py (Chunker)
 type BaseChunker struct {
 	// ChunkSize 分块大小，必须大于 0
@@ -66,14 +60,12 @@ type BaseChunker struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseChunker 构造 BaseChunker 并执行参数校验。
-//
 // 校验规则（一比一对齐 Python Chunker.__init__）：
 //   - chunkSize <= 0 时返回 155100 RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID
 //   - chunkOverlap < 0 时返回 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
 //   - chunkOverlap >= chunkSize 时返回 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
 //
 // lengthFn 可选，默认按字符计数。
-//
 // Python: base.py Chunker.__init__
 func NewBaseChunker(chunkSize, chunkOverlap int, lengthFn ...func(string) int) (*BaseChunker, error) {
 	if chunkSize <= 0 {
@@ -105,11 +97,9 @@ func NewBaseChunker(chunkSize, chunkOverlap int, lengthFn ...func(string) int) (
 }
 
 // ChunkDocuments 分块文档列表（默认实现，可被嵌入方继承）。
-//
 // 对每个文档调用子类覆写的 ChunkText，为每块生成 uuid 并合并溯源元数据，
 // 等价 Python 表达式 {**doc.Metadata, "chunk_index": i, "total_chunks": len(texts), "chunk_id": uid}。
 // 任何文档分块失败即中断返回。
-//
 // Python: base.py Chunker.chunk_documents
 func (b *BaseChunker) ChunkDocuments(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
 	_ = ctx // 对齐 Python 同步签名，当前无 ctx 消费
@@ -134,7 +124,6 @@ func (b *BaseChunker) ChunkDocuments(ctx context.Context, docs []reranker.Docume
 }
 
 // Process 处理文档（Processor 契约入口），等价于 ChunkDocuments 的 ctx 透传包装。
-//
 // Python: base.py Chunker.process
 func (b *BaseChunker) Process(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
 	return b.ChunkDocuments(ctx, docs)
@@ -156,7 +145,6 @@ func (b *BaseChunker) Length(text string) int {
 }
 
 // ChunkDims 返回 (ChunkSize, ChunkOverlap)，使嵌入方满足 DimsProvider。
-//
 // Python: base.py Chunker 的 chunk_size/chunk_overlap 属性（getattr 读取点）
 func (b *BaseChunker) ChunkDims() (int, int) {
 	return b.ChunkSize, b.ChunkOverlap
@@ -176,7 +164,6 @@ func (b *BaseChunker) chunkTextOf(text string) ([]string, error) {
 
 // mergeChunkMetadata 合并溯源元数据：复制 doc.Metadata 后叠加
 // chunk_index/total_chunks/chunk_id 三键。
-//
 // Python: base.py chunk_documents 与 hybrid_chunker.py chunk_documents
 // 两处同型的 {**doc.metadata, ...} 字典展开
 func mergeChunkMetadata(docMeta map[string]any, chunkIndex, totalChunks int, chunkID string) map[string]any {

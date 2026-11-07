@@ -24,7 +24,6 @@ type EntityOrDeclaration struct {
 }
 
 // MergePair 实体合并对（目标实体 + 待合并的源实体列表）
-//
 // Python: tuple[Entity, list[Entity]] (resolve_entities 返回值)
 type MergePair struct {
 	// Target 合并目标实体
@@ -65,7 +64,6 @@ func (e EntityOrDeclaration) Name() string {
 }
 
 // EntityTypeID 获取实体类型 ID。
-//
 // M-10: 仅 EntityDeclaration 携带 entity_type_id（Python 的 Entity 没有该字段），
 // 因此持有 Entity 时返回 0 表示"不适用"而非"类型 0"。当前调用链
 // （ParseAllRelations → DeclareEntities）对 Entity 项直接沿用其已有 UUID，
@@ -80,9 +78,7 @@ func (e EntityOrDeclaration) EntityTypeID() int {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseISO 将 ISO 8601 日期时间字符串解析为 UNIX 时间戳和时区偏移（15分钟为单位）
-//
 // 解析失败返回 (-1, 0)。
-//
 // Python: parse_iso(time_str) -> tuple[int, int]
 func ParseISO(timeStr string) (int64, int8) {
 	if timeStr != "" {
@@ -144,7 +140,6 @@ func ParseISO(timeStr string) (int64, int8) {
 //
 // 如果 response 只有 1 个 key 且其值为 dict，则展开为内层 dict。
 // source_id/target_id 为 1-based 实体索引，解析失败返回 nil。
-//
 // Python: dict2relation(response, entities, **kwargs)
 func Dict2Relation(response map[string]any, entities []*graph.Entity, createdAt int64, userID string) *graph.Relation {
 	// 如果 response 只有 1 个 key，尝试展开其值
@@ -217,7 +212,6 @@ func Dict2Relation(response map[string]any, entities []*graph.Entity, createdAt 
 //
 // 先将 EntityDeclaration 转为 Entity，再对关系内容去重（短内容被长内容覆盖），
 // 最后解析为 Relation 对象并去重实体。
-//
 // Python: parse_all_relations(relations, entities, entity_types, **kwargs)
 // ParseAllRelations 解析所有关系抽取结果。
 // entityList 对齐 Python extracted_declarations：混合类型列表 list[Union[EntityDeclaration, Entity]]，
@@ -301,7 +295,6 @@ func DeclareEntities(entityDecls []extraction.EntityDeclaration, entityTypes []r
 // 返回 (已解析的实体列表, 合并对列表, 待删除的UUID集合)。
 // 已解析的实体列表包含 EntityDeclaration 和 Entity 两种类型（对齐 Python: list[Union[EntityDeclaration, Entity]]）。
 // 合并对列表中每项包含目标实体和待合并的源实体列表。
-//
 // Python: resolve_entities(candidates, existing, duplication)
 func ResolveEntities(candidates []extraction.EntityDeclaration, existing []*graph.Entity, duplication []map[string]any) ([]EntityOrDeclaration, []MergePair, map[string]struct{}) {
 	// 复制候选列表（结果列表可能混合 EntityDeclaration 和 Entity）
@@ -374,7 +367,6 @@ func ResolveEntities(candidates []extraction.EntityDeclaration, existing []*grap
 // ParseRelationMerging 解析关系合并 LLM 响应
 //
 // 如果 need_merging 为真且有合并内容，更新 relation 并返回待删除的 UUID 集合。
-//
 // Python: parse_relation_merging(response, relation, existing_relations)
 func ParseRelationMerging(response map[string]any, relation *graph.Relation, existingRelations []map[string]any) map[string]struct{} {
 	toRemove := make(map[string]struct{})
@@ -583,7 +575,6 @@ func findToRemove(mergeDict map[string][]*graph.Entity) map[string]struct{} {
 }
 
 // dedupEntitiesByUUID 按 UUID 去重实体（保留最后一个）
-//
 // Python: list({entity.uuid: entity for entity in entities}.values())
 func dedupEntitiesByUUID(entities []*graph.Entity) []*graph.Entity {
 	seen := make(map[string]*graph.Entity)

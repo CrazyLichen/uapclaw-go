@@ -9,10 +9,8 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // DialogueRound 对话轮次，[0]=userIdx, [1]=assistantIdx（nil 表示不完整轮次）。
-//
 // 一轮对话定义为：user 消息 → 下一条不含 tool_calls 的 assistant 消息。
 // 不完整轮次（有 user 无 assistant）的 assistantIdx 为 nil。
-//
 // Python: ContextUtils.find_all_dialogue_round() 返回的单个 [user_idx, assistant_idx]
 type DialogueRound [2]*int
 
@@ -23,7 +21,6 @@ type DialogueRound [2]*int
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetToolCallID 从消息中提取 tool_call_id。
-//
 // 仅 ToolMessage 类型有此字段，其他类型返回空字符串。
 func GetToolCallID(msg llm_schema.BaseMessage) string {
 	return getToolCallID(msg)
@@ -31,7 +28,6 @@ func GetToolCallID(msg llm_schema.BaseMessage) string {
 
 // GroupCompletedAPIRounds 将消息列表按已完成的 API 轮次分组，
 // 返回每个轮次的 [start, end) 半开区间列表。
-//
 // 核心逻辑：
 //   - 遇到 AssistantMessage 不含 tool_calls → 一轮完成
 //   - 遇到 AssistantMessage 含 tool_calls → 收集 ID，等待 ToolMessage 回复
@@ -95,10 +91,8 @@ func GroupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][2]int {
 }
 
 // FindAllDialogueRound 查找所有对话轮次边界。
-//
 // 从后往前扫描消息列表，识别 user → assistant(无 tool_calls) 的轮次。
 // 返回从新到旧排列的轮次列表。连续的 user 消息被视为同组的起始。
-//
 // Python: ContextUtils.find_all_dialogue_round()
 func FindAllDialogueRound(messages []llm_schema.BaseMessage) []DialogueRound {
 	var rounds []DialogueRound

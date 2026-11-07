@@ -11,7 +11,6 @@ import (
 
 // CwdState 每个-Agent 的可变 CWD 状态容器。
 // Python: CwdState dataclass (cwd.py:48-59)。
-//
 // 通过 context.Value 传播 *CwdState 指针：
 //   - 同一 Agent 内的 goroutine 共享同一 CwdState 引用，SetCwd 后立即可见
 //   - 子 Agent 调用 InitCwd 创建新 CwdState + WithCwdState 派生新 ctx，父不受影响

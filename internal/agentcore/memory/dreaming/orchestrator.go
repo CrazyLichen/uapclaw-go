@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DreamingOrchestrator 空闲感知的定时记忆整理编排器。
-//
 // 生命周期：
 //
 //	Start(ctx) → 启动后台 goroutine
@@ -24,7 +23,6 @@ import (
 //  2. 定时执行: 间隔 interval 执行 sweepFn
 //
 // 幂等：重复 Start()/Stop() 安全。
-//
 // Python: openjiuwen/core/memory/dreaming/orchestrator.py (DreamingOrchestrator)
 type DreamingOrchestrator struct {
 	// sweepFn 每轮执行的 sweep 函数
@@ -77,10 +75,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDreamingOrchestrator 创建编排器实例。
-//
 // interval 小于 60s 时钳位到 60s（对齐 Python: self._interval = max(60.0, interval_seconds)）。
 // name 默认 "dreaming"（对齐 Python: name: str = "dreaming"）。
-//
 // Python: DreamingOrchestrator.__init__(sweep_fn, interval_seconds, busy_checker, name)
 func NewDreamingOrchestrator(
 	sweepFn func(ctx context.Context) error,

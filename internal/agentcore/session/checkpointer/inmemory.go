@@ -1079,7 +1079,6 @@ func isInteractiveInput(inputs any) bool {
 }
 
 // isWorkflowInterrupted 检查工作流结果是否为中断状态。
-//
 // result 由接口签名保证为 map 形状（nil map 亦安全，取值为零值）。
 // 判据与 Python 完全一致：result.get(TASK_STATUS_INTERRUPT) is None 为「未中断」，
 // 即键存在且值非 nil 才算中断。

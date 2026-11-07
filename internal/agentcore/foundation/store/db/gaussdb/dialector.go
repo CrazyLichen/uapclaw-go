@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GaussDialector GaussDB 数据库方言，基于 PostgreSQL 方言扩展。
-//
 // Python: openjiuwen/extensions/store/db/gauss_dialect.py (GaussDialectAsyncpg)
 //
 // GaussDB 与 PostgreSQL 的主要差异：
@@ -24,7 +23,6 @@ import (
 //
 // 注意：postgres.Dialector 的所有方法均使用值接收者，
 // 因此 GaussDialector 的覆写方法也必须使用值接收者。
-//
 // Python 独有概念（GORM 无对应，已跳过）：
 //   - driver = 'async_gaussdb'：Python 显式声明驱动名，Go 使用 pgx 驱动替代，
 //     通过 Name() 返回 "gaussdb" 标识方言

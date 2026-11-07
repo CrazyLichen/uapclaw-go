@@ -381,7 +381,6 @@ func usableTestModel() *llm.Model {
 }
 
 // TestHasValidModelConfig_未配置模型返回false 验证「什么都没配」时判定无效。
-//
 // 旧实现空字符串恒返回 true，导致首次安装（config.yaml 自带占位 api_base）被放行，
 // 心跳真的向 example.com 发请求并报底层网络错误。对齐 Python _has_valid_model_config：
 // 空模型名只表示「用默认模型」，仍需默认模型凭据可用。
@@ -416,7 +415,6 @@ func TestHasValidModelConfig_缓存中存在(t *testing.T) {
 }
 
 // TestHasValidModelConfig_占位或空凭据返回false 验证占位 api_base 与空凭据被判无效。
-//
 // Python: _mcc_looks_usable —— api_key 非空 && api_base 非空 &&
 // api_base 不在 _PLACEHOLDER_API_BASES（含 https://example.com/compatible-mode/v1）。
 func TestHasValidModelConfig_占位或空凭据返回false(t *testing.T) {
@@ -461,7 +459,6 @@ func TestHasValidModelConfig_回退到缓存中任意可用模型(t *testing.T) 
 }
 
 // TestHasValidModelConfig_config兜底 验证第 4 步：内存里判定不出时读 config.yaml 兜底。
-//
 // Python 原文：
 //
 //	mcc = get_config().get("models", {}).get("default", {}).get("model_client_config", {})
@@ -512,7 +509,6 @@ func TestHasValidModelConfig_config兜底(t *testing.T) {
 }
 
 // TestAnyToConfigString_Python真值语义 验证 str(v or "") 的假值收敛。
-//
 // Python `mcc.get("api_key", "") or ""`：None / "" / 0 / False 都当「空」，
 // 所以 api_key: 0 在 Python 侧等于未配置；非零数值则 str() 成字符串。
 func TestAnyToConfigString_Python真值语义(t *testing.T) {

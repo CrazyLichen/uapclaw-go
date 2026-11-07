@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SimpleEval 评估包装器，生成函数调用并评估准确性和输出有效性。
-//
 // Python: SimpleEval
 type SimpleEval struct {
 	// apiWrapper API 调用封装
@@ -35,7 +34,6 @@ type SimpleEval struct {
 }
 
 // EvalResult 评估结果。
-//
 // Python: SimpleEval.__call__ 返回值
 type EvalResult struct {
 	// ScoreAvg 平均分
@@ -51,7 +49,6 @@ type EvalResult struct {
 }
 
 // EvalItemResult 单个示例评估结果。
-//
 // Python: SimpleEval._evaluate_single_example 返回值
 type EvalItemResult struct {
 	// Instruction 指令
@@ -87,7 +84,6 @@ type EvalError struct {
 }
 
 // ExampleTuple 示例元组 (instruction, fn_call, fn_output, answer)。
-//
 // Python: examples: List[Tuple[str, Any, str, str]]
 type ExampleTuple struct {
 	// Instruction 指令
@@ -109,7 +105,6 @@ type ExampleTuple struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSimpleEval 创建 SimpleEval 实例。
-//
 // Python: SimpleEval.__init__(api_wrapper, config, fn_call_weight, output_effectiveness_weight)
 func NewSimpleEval(
 	apiWrapper APIWrapperFunc,
@@ -133,7 +128,6 @@ func NewSimpleEval(
 }
 
 // Eval 评估工具描述。
-//
 // Python: SimpleEval.__call__(tool, description, examples, runs)
 //
 //	for run in range(runs):
@@ -204,7 +198,6 @@ func (e *SimpleEval) Eval(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // evaluateFunctionCallAccuracy 评估函数调用准确性。
-//
 // Python: SimpleEval._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
 //
 //   - 函数名匹配权重 0.3
@@ -250,7 +243,6 @@ func (e *SimpleEval) evaluateFunctionCallAccuracy(generatedFnCall, expectedFnCal
 }
 
 // compareParameterValues 比较参数值，支持类型容忍。
-//
 // Python: SimpleEval._compare_parameter_values(actual, expected)
 func (e *SimpleEval) compareParameterValues(actual, expected any) bool {
 	// Python: if actual == expected: return True
@@ -274,7 +266,6 @@ func (e *SimpleEval) compareParameterValues(actual, expected any) bool {
 }
 
 // simpleOutputComparison 简单输出比较（兜底）。
-//
 // Python: SimpleEval._simple_output_comparison(execution_result, expected_answer)
 func (e *SimpleEval) simpleOutputComparison(executionResult any, expectedAnswer string) float64 {
 	if executionResult == nil {
@@ -306,7 +297,6 @@ func (e *SimpleEval) simpleOutputComparison(executionResult any, expectedAnswer 
 }
 
 // evaluateSingleExample 评估单个示例。
-//
 // Python: SimpleEval._evaluate_single_example(example)
 func (e *SimpleEval) evaluateSingleExample(
 	ctx context.Context,
@@ -388,7 +378,6 @@ func (e *SimpleEval) evaluateSingleExample(
 }
 
 // generateFunctionCall 使用 LLM Function Calling 模式生成函数调用。
-//
 // Python: SimpleEval._generate_function_call(tool, description, instruction)
 func (e *SimpleEval) generateFunctionCall(
 	ctx context.Context,
@@ -466,7 +455,6 @@ func (e *SimpleEval) generateFunctionCall(
 }
 
 // evaluateOutputEffectiveness 评估输出有效性。
-//
 // Python: SimpleEval._evaluate_output_effectiveness(instruction, execution_result, execution_error, expected_answer)
 func (e *SimpleEval) evaluateOutputEffectiveness(
 	ctx context.Context,

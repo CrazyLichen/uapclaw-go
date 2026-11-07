@@ -162,7 +162,6 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 //	Python: 9. if distributed: attach distributed hooks
 //
 // 10. finally: 重置 session_id 上下文（reset_session_id(token)）
-//
 // Go 差异：Python 的 _ensure_postgresql、distributed hooks 等在 Go 中尚未完全实现，
 // 方法签名保留参数但部分步骤暂时跳过，待后续回填。
 func (m *TeamManager) CreateTeam(

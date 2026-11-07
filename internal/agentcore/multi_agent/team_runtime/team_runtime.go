@@ -29,7 +29,6 @@ type RuntimeConfig struct {
 }
 
 // TeamRuntime 团队运行时，管理 Agent 注册、消息总线、会话绑定等。
-//
 // Python: TeamRuntime (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
 type TeamRuntime struct {
 	// config 运行时配置
@@ -107,10 +106,8 @@ func WithRuntimeP2PTimeout(timeout float64) RuntimeConfigOption {
 }
 
 // NewTeamRuntime 创建团队运行时实例。
-//
 // 自动从 config 创建 MessageBus，对齐 Python TeamRuntime.__init__ 中
 // Python: self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)。
-//
 // Python: TeamRuntime.__init__(config)
 func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 	tr := &TeamRuntime{
@@ -200,7 +197,6 @@ func (tr *TeamRuntime) CleanupSession(ctx context.Context, sessionID string) err
 }
 
 // RegisterAgent 注册 Agent 到团队运行时。
-//
 // Python: TeamRuntime.register_agent(card, provider)
 func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.AgentCard, provider resources_manager.AgentProvider) error {
 	agentID := card.ID
@@ -311,7 +307,6 @@ func (tr *TeamRuntime) GetAgentCount() int {
 }
 
 // Send P2P 发送消息到指定接收者，等待响应。
-//
 // Python: TeamRuntime.send(message, recipient, sender, **kwargs)
 func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
 	// Python: await self._ensure_started()
@@ -349,7 +344,6 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 }
 
 // Publish Pub-Sub 发布消息到指定主题。
-//
 // Python: TeamRuntime.publish(message, topic_id, sender, **kwargs)
 func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	// Python: await self._ensure_started()
@@ -498,7 +492,6 @@ func (tr *TeamRuntime) ensureStarted(ctx context.Context) error {
 }
 
 // isResourceAlreadyExistsError 判断是否为"资源已存在"类错误。
-//
 // Python: add_agent 的 result.is_err() 表示 agent 已存在，
 // 此时仅 debug log 不抛异常。
 func isResourceAlreadyExistsError(err error) bool {

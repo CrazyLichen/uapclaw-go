@@ -1,9 +1,7 @@
 // Package operation 提供存储层迁移操作的类型定义和注册表。
-//
 // 本包定义了迁移操作的基础类型（OperationMetadata/BaseOperation）、
 // 操作多态接口（Operation）、操作注册表（OperationRegistry）
 // 和 13 种具体操作类型（SQL/Vector/KV/Message/Index）。
-//
 // 文件目录：
 //
 //	operation/

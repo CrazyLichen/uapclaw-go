@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // KeywordExtractor 关键词提取器，桥接优化器输出和共享检索路径。
-//
 // 两条职责：
 //  1. 上传路径 – 从优化器输出（EvolutionPatch 或原始 dict）中解析
 //     keywords/summary，无需额外网络调用。
@@ -43,7 +42,6 @@ type KeywordExtractor struct {
 // logComponent 声明在 interface.go 中，包内共享
 
 // queryKeywordsPromptCN 中文检索关键词提取提示词。
-//
 // 一比一复刻 Python: _QUERY_KEYWORDS_PROMPT_CN
 const queryKeywordsPromptCN = `你是一个检索关键词抽取器。下面是从对话中提取的关键信息片段，包含用户查询、工具执行结果（特别是出错的）等，请提取用于"跨用户经验检索"的关键词。
 
@@ -65,7 +63,6 @@ const queryKeywordsPromptCN = `你是一个检索关键词抽取器。下面是�
 }}`
 
 // queryKeywordsPromptEN 英文检索关键词提取提示词。
-//
 // 一比一复刻 Python: _QUERY_KEYWORDS_PROMPT_EN
 const queryKeywordsPromptEN = `You are a retrieval keyword extractor. The text below is an excerpt from a conversation,
 containing user queries, tool execution results (especially failed ones), etc.
@@ -91,7 +88,6 @@ Extract keywords useful for *cross-user experience retrieval*.
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // QUERY_KEYWORDS_LLM_POLICY 关键词提取 LLM 调用策略。
-//
 // Python: QUERY_KEYWORDS_LLM_POLICY = LLMInvokePolicy(
 //
 //	attempt_timeout_secs=1500,
@@ -106,7 +102,6 @@ var QUERY_KEYWORDS_LLM_POLICY = llm_resilience.LLMInvokePolicy{
 }
 
 // prompts 语言→提示词模板映射。
-//
 // Python: _PROMPTS = {"cn": ..., "en": ...}
 var prompts = map[string]string{
 	"cn": queryKeywordsPromptCN,
@@ -119,10 +114,8 @@ var extractQueryJSONRe = regexp.MustCompile(`\{[\s\S]*\}`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewKeywordExtractor 创建 KeywordExtractor 实例。
-//
 // language 仅接受 "cn" 或 "en"，其他值默认为 "cn"。
 // policy 为零值时使用 QUERY_KEYWORDS_LLM_POLICY。
-//
 // Python: KeywordExtractor.__init__()
 func NewKeywordExtractor(llm *llm.Model, model string, language string, policy llm_resilience.LLMInvokePolicy) *KeywordExtractor {
 	lang := language
@@ -142,10 +135,8 @@ func NewKeywordExtractor(llm *llm.Model, model string, language string, policy l
 }
 
 // ParseFromOptimizerOutput 从优化器输出中读取 keywords 和 summary。
-//
 // 接受 EvolutionPatch（已解析）或 map[string]any（LLM 原始 JSON dict），
 // 提取 keywords 列表和 summary 字符串。
-//
 // Python: KeywordExtractor.parse_from_optimizer_output()
 func ParseFromOptimizerOutput(rawPatch any) ([]string, string) {
 	keywords := []string{}
@@ -199,10 +190,8 @@ func ParseFromOptimizerOutput(rawPatch any) ([]string, string) {
 }
 
 // ExtractQueryKeywords 从对话摘录中提取检索关键词。
-//
 // 摘录通常包含用户查询、工具执行结果（特别是失败的）等关键信息。
 // 优先使用小型 LLM 调用；失败时返回空关键词和 error，确保调用方可以区分降级和成功。
-//
 // Python: KeywordExtractor.extract_query_keywords()
 func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExcerpt string, skillHint ...string) (QueryKeywords, error) {
 	excerpt := strings.TrimSpace(feedbackExcerpt)
@@ -303,7 +292,6 @@ func (e *KeywordExtractor) ExtractQueryKeywords(ctx context.Context, feedbackExc
 }
 
 // UpdateLLM 后置绑定 LLM 模型实例和名称。
-//
 // Python: KeywordExtractor.update_llm()
 func (e *KeywordExtractor) UpdateLLM(llm *llm.Model, model string) {
 	e.llm = llm
@@ -313,9 +301,7 @@ func (e *KeywordExtractor) UpdateLLM(llm *llm.Model, model string) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractQueryJSON 从 LLM 原始响应中提取 JSON 对象。
-//
 // 先尝试 json.Unmarshal；失败则用正则匹配 {…} 后再解析。
-//
 // Python: _extract_query_json()
 func extractQueryJSON(raw string) map[string]any {
 	if raw == "" {

@@ -17,7 +17,6 @@ import (
 // RecallMemoryOp 向量检索操作。
 // 对齐 Python RecallMemoryOp：
 // 从 RuntimeContext 获取 query + user_id → Embed → Search → 转为 []ReMeRetrievedMemory。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reme/run.py
 type RecallMemoryOp struct {
 	op.OpBase
@@ -28,7 +27,6 @@ type RecallMemoryOp struct {
 // RerankMemoryOp LLM 重排序操作。
 // 对齐 Python RerankMemoryOp：
 // llmRerank=false 时跳过，否则用 LLM 重排候选项。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reme/run.py
 type RerankMemoryOp struct {
 	op.OpBase
@@ -43,7 +41,6 @@ type RerankMemoryOp struct {
 // RewriteMemoryOp LLM 改写操作。
 // 对齐 Python RewriteMemoryOp：
 // llmRewrite=false 时用格式化原文，否则用 LLM 改写。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reme/run.py
 type RewriteMemoryOp struct {
 	op.OpBase

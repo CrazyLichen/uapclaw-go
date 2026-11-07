@@ -93,7 +93,6 @@ func TestAgentCallbackEvent_事件值即方法名(t *testing.T) {
 }
 
 // TestAllCallbackEvents_含BeforeSteeringDrain 验证新事件已进全集。
-//
 // spec C15：漏加会让 Clear() 清不掉该事件的回调，留下悬挂钩子。
 func TestAllCallbackEvents_含BeforeSteeringDrain(t *testing.T) {
 	events := AllCallbackEvents()

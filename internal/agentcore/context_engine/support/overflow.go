@@ -32,10 +32,8 @@ var contextOverflowPhrases = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsContextOverflowError 判断错误是否为「输入超出模型上下文窗口」。
-//
 // 扫描整条错误链（含 BaseError 的 Params/Details），再兜底看格式化输出，
 // 因为不同厂商把原因塞在不同位置：message、body、error.error、response.text 等。
-//
 // Python: ContextEngine.is_context_overflow_error()
 func IsContextOverflowError(err error) bool {
 	if err == nil {

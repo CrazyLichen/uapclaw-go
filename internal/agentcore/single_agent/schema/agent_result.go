@@ -11,10 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Part 多态内容载体，表示文本、二进制、URL 或任意数据。
-//
 // Raw 字段使用自定义 JSON marshal：序列化时做 UTF-8 decode 转字符串（对齐 Python Pydantic v2
 // 对 bytes 的默认序列化行为），非 UTF-8 数据将返回错误。
-//
 // Python: openjiuwen/core/single_agent/schema/agent_result.py (Part)
 type Part struct {
 	// Text 文本内容
@@ -34,7 +32,6 @@ type Part struct {
 }
 
 // Artifact 内容组，聚合多个 Part 并附带语义名称和元数据。
-//
 // Python: openjiuwen/core/single_agent/schema/agent_result.py (Artifact)
 type Artifact struct {
 	// ArtifactID 产物标识（camelCase，对齐 A2A 协议）
@@ -50,7 +47,6 @@ type Artifact struct {
 }
 
 // AgentResult Agent 执行结果，是 Agent.Invoke 的标准返回类型。
-//
 // Python: openjiuwen/core/single_agent/schema/agent_result.py (AgentResult)
 type AgentResult struct {
 	// TaskID 任务标识（snake_case，对齐 Python）
@@ -66,7 +62,6 @@ type AgentResult struct {
 }
 
 // RawBytes 自定义 []byte 类型，JSON 序列化时做 UTF-8 decode 对齐 Python Pydantic v2 行为。
-//
 // Python Pydantic v2 对 bytes 字段默认使用 UTF-8 decode 转字符串，
 // 而非 Go 标准库的 base64 编码。此类型确保 Go 侧序列化输出与 Python 一致。
 type RawBytes []byte

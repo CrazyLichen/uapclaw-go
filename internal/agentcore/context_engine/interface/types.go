@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ModelContext 上下文引擎的核心抽象接口，管理对话消息和上下文窗口。
-//
 // 职责：
 //   - 消息生命周期管理（增删改查）
 //   - 上下文窗口构建（供 LLM 推理使用）
@@ -91,10 +90,8 @@ type ModelContext interface {
 }
 
 // ContextEngine 上下文引擎门面接口。
-//
 // 管理上下文池、处理器注册、会话状态持久化。
 // 属于 Agent 级别组件（不在 Session 中），通过 agent.contextEngine 访问。
-//
 // Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type ContextEngine interface {
 	// CreateContext 创建或获取上下文
@@ -108,21 +105,18 @@ type ContextEngine interface {
 	// SaveContexts 批量持久化上下文状态，返回 contextID → state 映射
 	SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error)
 	// UpdateModelContext 热切换选中模型与其上下文窗口（不重建上下文）
-	//
 	// Python: ContextEngine.update_model_context()
 	UpdateModelContext(modelName string, contextWindowTokens int)
 	// RecoverFromModelContextOverflow 模型报上下文溢出后压缩一次，返回是否值得重试
 	//
 	// streaming 为真且已吐字（streamChunksEmitted > 0）时不允许恢复：
 	// 重试会把已经发给用户的前缀再发一遍。
-	//
 	// Python: ContextEngine.recover_from_model_context_overflow()
 	RecoverFromModelContextOverflow(ctx context.Context, sess sessioninterfaces.SessionFacade,
 		contextID string, streaming bool, streamChunksEmitted int) bool
 }
 
 // ProcessorSpec 处理器规格，指定类型和配置。
-//
 // Python: (processor_type, processor_config) 元组。
 // ConfigOverrides 支持 dict 级别的部分覆盖（对齐 Python 中 (key, dict) 形式的 override），
 // 合并时将 dict 中的字段覆盖到 preset config 的对应字段上。
@@ -169,7 +163,6 @@ type CompressContextOptions struct {
 }
 
 // CompressContextResult CompressContext 返回值，对齐 Python compress_context(return_state=True) 的返回结构。
-//
 // Python: {"result": result, "state": state, "compact_summary": compact_summary}
 type CompressContextResult struct {
 	// Result 压缩结果标识："busy"/"compressed"/"noop"
@@ -189,7 +182,6 @@ type ClearContextOptions struct {
 }
 
 // ContextStats 上下文统计快照，记录消息数量、Token 数量和对话轮次。
-//
 // Python: openjiuwen/core/context_engine/base.py (ContextStats)
 type ContextStats struct {
 	// TotalMessages 消息总数
@@ -221,7 +213,6 @@ type ContextStats struct {
 }
 
 // ContextWindow LLM 推理上下文窗口快照，包含系统消息、上下文消息和工具定义。
-//
 // Python: openjiuwen/core/context_engine/base.py (ContextWindow)
 type ContextWindow struct {
 	// SystemMessages 系统消息
@@ -354,7 +345,6 @@ func NewClearContextOptions(opts ...ClearContextOption) *ClearContextOptions {
 }
 
 // GetMessages 合并系统消息和上下文消息，返回完整消息列表。
-//
 // Python: ContextWindow.get_messages()
 func (w *ContextWindow) GetMessages() []llm_schema.BaseMessage {
 	result := make([]llm_schema.BaseMessage, 0, len(w.SystemMessages)+len(w.ContextMessages))
@@ -364,17 +354,14 @@ func (w *ContextWindow) GetMessages() []llm_schema.BaseMessage {
 }
 
 // GetTools 返回工具列表。
-//
 // Python: ContextWindow.get_tools()
 func (w *ContextWindow) GetTools() []schema.ToolInfoInterface {
 	return w.Tools
 }
 
 // NewContextWindow 创建上下文窗口实例，所有字段初始化为零值。
-//
 // Statistic 字段初始化为 ContextStats 零值（与 Python ContextStats() 默认实例对齐），
 // 消息和工具切片初始化为空切片（避免 JSON 序列化为 null）。
-//
 // Python: ContextWindow() 默认构造
 func NewContextWindow() *ContextWindow {
 	return &ContextWindow{
@@ -386,7 +373,6 @@ func NewContextWindow() *ContextWindow {
 }
 
 // StatMessages 统计消息数量和 token 数，填充 ContextStats 各字段。
-//
 // 统计逻辑：
 //   - 按角色计数消息数（system/user/assistant/tool）
 //   - 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens 作为 total_tokens
@@ -397,9 +383,7 @@ func NewContextWindow() *ContextWindow {
 // _stat_messages 的 total_tokens）。
 // 该口径**不参与压缩判定**——各 processor 通过 mc.TokenCounter() 自行计数
 // （见 compressor/*.go 的 CountMessagesTokens），这里只服务 context.usage 展示。
-//
 // 口径与 SessionModelContext.statMessages 保持一致（两处必须同改）。
-//
 // Python: Context._stat_messages(stat, messages)
 func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
 	s.TotalMessages = len(messages)
@@ -432,7 +416,6 @@ func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCoun
 }
 
 // StatTools 统计工具数量和 token 数，填充 ContextStats 的 Tools/ToolTokens 字段。
-//
 // Python: Context._stat_tools(stat, tools)
 func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter token.TokenCounter) {
 	s.Tools = len(tools)
@@ -445,7 +428,6 @@ func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getLastAssistantUsageTokens 获取最后一条 AssistantMessage 的 usage_metadata.total_tokens。
-//
 // 返回 0 表示未找到有效的 usage_metadata（调用方回退到逐条计数）。
 func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
 	// 只认"仍描述当前前缀"的记录：被改写过（压缩/替换/弹出/换模型/恢复）的

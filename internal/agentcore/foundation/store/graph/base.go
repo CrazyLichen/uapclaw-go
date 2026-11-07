@@ -49,7 +49,6 @@ type BaseGraphStore interface {
 	AttachEmbedder(embedder embedding.BaseEmbedding) error
 
 	// ReturnSimilarityScore 返回的分数是否为相似度（越大越相似）而非距离（越小越相似）
-	//
 	// Python: @property return_similarity_score
 	// Milvus 使用 IP/COSINE 度量时返回 true；使用 L2/EUCLIDEAN 度量时返回 false
 	ReturnSimilarityScore() bool

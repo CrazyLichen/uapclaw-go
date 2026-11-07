@@ -739,7 +739,6 @@ func scanMDFiles(dir, kind, workspace string, projectDir string) []map[string]an
 }
 
 // isCodeMode 判断是否 code 模式（status 特判用）。
-//
 // Python: _is_code_mode（memory_rpc.py:247-250）：code 族前缀 + 新 canonical agent.code.* / team.code.*
 func isCodeMode(mode string) bool {
 	return schema.IsCodeProfileMode(mode) || strings.HasPrefix(mode, "code")
@@ -762,7 +761,6 @@ func loadConfigMap() map[string]any {
 }
 
 // updateModeMemoryConfig 更新 modes.<agent|code>.memory.{field} 并写回。
-//
 // Python: _update_mode_memory_config（memory_rpc.py:580-603）。plan/fast 合并后
 // agent 族统一写 modes.agent，code 族写 modes.code；其它模式无独立节点，仅告警不写。
 // T-11: config.yaml 不存在时 Go 自动创建写入（Python ruamel 抛 FileNotFoundError

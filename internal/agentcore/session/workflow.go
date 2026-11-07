@@ -10,10 +10,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowSession 工作流会话门面，提供用户面向的 API。
-//
 // 组合内部层 WorkflowSession，实现状态读写、环境变量管理、工作流卡片等业务功能。
 // 生命周期比 Agent Session 更简单：仅 Close（无 PreRun/PostRun）。
-//
 // Python: openjiuwen/core/session/workflow.py (Session)
 type WorkflowSession struct {
 	// inner 内部 WorkflowSession 实例
@@ -36,7 +34,6 @@ type WorkflowSessionOption func(*WorkflowSession)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowSession 创建公开层 WorkflowSession 实例。
-//
 // Python: openjiuwen/core/session/workflow.py create_workflow_session()
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 	logger.Info(logComponent).

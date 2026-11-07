@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseEvaluator 抽象评估器接口。
-//
 // Python: openjiuwen/agent_evolving/evaluator/evaluator.py BaseEvaluator
 type BaseEvaluator interface {
 	// Evaluate 评估单个样本
@@ -31,10 +30,8 @@ type BaseEvaluator interface {
 }
 
 // DefaultEvaluator 使用 LLM-as-Judge 评估模型输出一致性。
-//
 // 判定模型输出与期望答案的语义一致性，映射为 0/1 分数。
 // 解析失败时使用重试模板再调一次 LLM。
-//
 // Python: openjiuwen/agent_evolving/evaluator/evaluator.py DefaultEvaluator
 type DefaultEvaluator struct {
 	// model LLM 模型实例
@@ -46,9 +43,7 @@ type DefaultEvaluator struct {
 }
 
 // MetricEvaluator 多指标聚合评估器。
-//
 // 遍历所有 Metric 计算 score，支持 per-metric 分解和可配置聚合方式。
-//
 // Python: openjiuwen/agent_evolving/evaluator/evaluator.py MetricEvaluator
 type MetricEvaluator struct {
 	// metrics 指标列表
@@ -71,10 +66,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDefaultEvaluator 创建 DefaultEvaluator 实例。
-//
 // 传入 ModelClientConfig + ModelRequestConfig，内部创建 llm.Model。
 // metric 为自定义验证规则字符串，会注入到评估模板中。
-//
 // Python: DefaultEvaluator(model_config, model_client_config, metric)
 func NewDefaultEvaluator(
 	clientConfig llmschema.ModelClientConfig,
@@ -103,9 +96,7 @@ func NewDefaultEvaluator(
 }
 
 // NewMetricEvaluator 创建 MetricEvaluator 实例。
-//
 // metrics 为指标列表，aggregate 为聚合方式（"mean" 或 "first"）。
-//
 // Python: MetricEvaluator(metrics, aggregate)
 func NewMetricEvaluator(ms []metrics.Metric, aggregate string) *MetricEvaluator {
 	if aggregate == "" {
@@ -115,7 +106,6 @@ func NewMetricEvaluator(ms []metrics.Metric, aggregate string) *MetricEvaluator 
 }
 
 // Evaluate 使用 LLM-as-Judge 评估单个样本。
-//
 // Python: DefaultEvaluator.evaluate(case, predict)
 func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error) {
 	ec := dataset.NewEvaluatedCase(case_, predict)
@@ -169,9 +159,7 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 }
 
 // BatchEvaluate 并行批量评估。
-//
 // 使用 errgroup.Group + SetLimit(numParallel) 控制并发。
-//
 // Python: BaseEvaluator.batch_evaluate(cases, predicts, num_parallel)
 func (d *DefaultEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Case, predicts []map[string]any, numParallel int) ([]*dataset.EvaluatedCase, error) {
 	numParallel, err := validateBatchArgs(len(cases), len(predicts), numParallel)
@@ -202,7 +190,6 @@ func (d *DefaultEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Ca
 }
 
 // Evaluate 使用多指标聚合评估单个样本。
-//
 // Python: MetricEvaluator.evaluate(case, predict)
 func (m *MetricEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error) {
 	ec := dataset.NewEvaluatedCase(case_, predict)
@@ -264,7 +251,6 @@ func (m *MetricEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Cas
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractEvaluateResult 解析 LLM 评估响应，解析失败时用重试模板再调一次 LLM。
-//
 // Python: DefaultEvaluator._extract_evaluate_result(response, case, predict)
 func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response string, case_ dataset.Case, predict map[string]any) map[string]any {
 	// 第一次解析
@@ -326,7 +312,6 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 }
 
 // mapBoolToScore 将 result 字段映射为 0.0 或 1.0。
-//
 // Python: DefaultEvaluator._is_pass_result(result)
 func mapBoolToScore(result any) float64 {
 	if metrics.IsPassResult(result) {
@@ -336,7 +321,6 @@ func mapBoolToScore(result any) float64 {
 }
 
 // aggScore 聚合分数。
-//
 // Python: _agg_score(results, aggregate)
 func aggScore(results []float64, aggregate string) float64 {
 	if len(results) == 0 {
@@ -357,7 +341,6 @@ func aggScore(results []float64, aggregate string) float64 {
 }
 
 // safeConvert 安全转换 metric 值为 float64。
-//
 // Python: MetricEvaluator._safe_convert(num)
 func safeConvert(num float64) float64 {
 	if math.IsNaN(num) || math.IsInf(num, 0) {

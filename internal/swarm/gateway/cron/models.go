@@ -10,29 +10,24 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // cronJobDefaultMode 创建/更新未指定 mode 时的默认值。
-//
 // Python: CRON_JOB_DEFAULT_MODE = "agent" (runtime/cron/models.py:110)。
 const cronJobDefaultMode = "agent"
 
 // cronDefaultTimeoutSeconds 默认执行超时（秒）。
-//
 // Python: CRON_DEFAULT_TIMEOUT_SECONDS = 60 * 60 (models.py:183)。
 const cronDefaultTimeoutSeconds = 60 * 60
 
 // cronTeamDefaultTimeoutSeconds team 模式默认执行超时（秒）。
-//
 // Python: CRON_TEAM_DEFAULT_TIMEOUT_SECONDS = 60 * 60 (models.py:184)。
 const cronTeamDefaultTimeoutSeconds = 60 * 60
 
 // cronMaxTimeoutSeconds 单任务超时上限（秒，72 小时）。
-//
 // Python: CRON_MAX_TIMEOUT_SECONDS = 72 * 60 * 60 (models.py:185)。
 const cronMaxTimeoutSeconds = 72 * 60 * 60
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // cronJobModes 客户端可选的执行模式集合（已排序，供 cron.job.meta 原样下发）。
-//
 // Python: CRON_JOB_MODES frozenset (models.py:78-106) —— 21 个字面量 + 两个
 // mode_matrix 常量 TEAM_PLAN_NORMAL_MODE("team.plan.normal") 与
 // TEAM_PLAN_CODE_MODE("team.plan.code")，按 Python sorted() 字典序排列。
@@ -425,7 +420,6 @@ func modeAny(v any) string {
 }
 
 // CronJobMetadata 返回 cron 任务 schema 元数据（供 TUI / Web 编辑器渲染）。
-//
 // Python: cron_job_metadata() (runtime/cron/models.py:172-180)。
 func CronJobMetadata() map[string]any {
 	return map[string]any{

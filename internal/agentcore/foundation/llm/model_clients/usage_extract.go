@@ -18,9 +18,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractCacheTokens 从 provider usage 元数据提取提示词缓存命中 token 数。
-//
 // 各 provider 字段形态不一致：只统计缓存命中/读 token；缓存写/创建与 miss 有意忽略。
-//
 // Python: base_model_client.py:86-151 _extract_cache_tokens
 // （7 条嵌套路径：prompt_tokens_details.cached_tokens 等；11 个平铺字段：prompt_cache_hit_tokens 等；
 // 嵌套路径优先于平铺字段；_to_int 对 bool/非数字/负数返回 0）
@@ -55,11 +53,9 @@ func ExtractCacheTokens(obj map[string]any) int {
 }
 
 // CacheUsageMetadata 归一缓存 read/miss/write 字段，保留零值语义。
-//
 // legacy cache_tokens 仅作兼容读取值，不具权威性——provider 对它表示命中还是写定义不一致。
 // 返回 map 的键：cache_read_tokens/cache_miss_tokens/cache_write_tokens（*int，nil=未上报）、
 // cache_status/cache_source（"observed"/"provider_usage" 或 nil）、cache_authoritative（bool）。
-//
 // Python: base_model_client.py:152-252 _cache_usage_metadata
 func CacheUsageMetadata(obj map[string]any) map[string]any {
 	readTokens := firstInt(obj,
@@ -114,7 +110,6 @@ func CacheUsageMetadata(obj map[string]any) map[string]any {
 }
 
 // ExtractCacheCreationTokens 仅在 provider 暴露缓存写 token 时提取（nil=未暴露）。
-//
 // Python: base_model_client.py:253-292 _extract_cache_creation_tokens
 // （3 条嵌套路径 + 4 个平铺字段；bool 与不可转换值跳过；负数取 max(0, v)）
 func ExtractCacheCreationTokens(obj map[string]any) *int {
@@ -143,7 +138,6 @@ func ExtractCacheCreationTokens(obj map[string]any) *int {
 }
 
 // ExtractReasoningTokens 从 provider usage 元数据提取推理/思考 token 数。
-//
 // Python: base_model_client.py:293-330 _extract_reasoning_tokens
 // （completion_tokens_details.reasoning_tokens 嵌套 + completionTokensDetails.reasoningTokens
 // camel 形态 + 顶层 reasoning_tokens 平铺；_to_int 对非法值返回 0）
@@ -162,7 +156,6 @@ func ExtractReasoningTokens(obj map[string]any) int {
 }
 
 // BuildUsageMetadata 从 provider 响应的 usage map 构建完整 UsageMetadata。
-//
 // Python: openai_model_client.py:2817-2829（invoke 组装点）/ 2940-2946（stream 组装点）——
 // 字段集 = 基础 token 计数 + _extract_cache_tokens + **_cache_usage_metadata +
 // _extract_cache_creation_tokens + _extract_reasoning_tokens + cost（cost 由调用方追加）。
@@ -202,7 +195,6 @@ func BuildUsageMetadata(usage map[string]any, modelName string) *llmschema.Usage
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // toIntNonNegative 数值/数字字符串 → 非负 int；bool/非数字/负数 → 0。
-//
 // Python: _extract_cache_tokens 内 _to_int（max(int(float(value)), 0) 形态）
 func toIntNonNegative(v any) int {
 	n, ok := coerceInt(v)
@@ -213,7 +205,6 @@ func toIntNonNegative(v any) int {
 }
 
 // coerceInt 数值形态转换：int 族/float64/float32/数字字符串 → int；bool/nil/非数字 → 未命中。
-//
 // Python: _cache_usage_metadata 内 _to_int 的可空版本（None/bool 返回 None）
 func coerceInt(v any) (int, bool) {
 	switch val := v.(type) {
@@ -234,7 +225,6 @@ func coerceInt(v any) (int, bool) {
 }
 
 // firstInt 按 path 序取第一个可转换 int（path[0] 为空 = 平铺字段，否则嵌套 map 单键）。
-//
 // Python: _cache_usage_metadata 内 _first（_get_path 逐段取值）
 func firstInt(obj map[string]any, paths ...[2]string) *int {
 	for _, path := range paths {

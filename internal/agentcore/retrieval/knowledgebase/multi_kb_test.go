@@ -146,7 +146,6 @@ func TestRetrieveMultiKBWithSource_空列表(t *testing.T) {
 }
 
 // TestRetrieveMultiKBWithSource_RawScore语义 首见 meta 固定 + 后续非 nil 才 max。
-//
 // 对齐 Python 逐条推演：
 //
 //	kb1: raw_score=0.1（meta 显式）、scaled 回落 score=0.9
@@ -249,7 +248,6 @@ func TestRetrieveMultiKBWithSource_负Limit(t *testing.T) {
 
 // TestRetrieveMultiKB_失败日志区分链路 两个聚合函数的 Warn 文案各自带
 // 自己的函数名（对齐 Python `retrieve_multi_kb:` / `retrieve_multi_kb_with_source:`）。
-//
 // 日志经 logger.Setup(WithOutputDir(临时目录)) 落盘后读取断言；测试结束
 // 调 logger.Close() 重置全局单例，避免污染同包其它用例。
 func TestRetrieveMultiKB_失败日志区分链路(t *testing.T) {

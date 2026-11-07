@@ -39,7 +39,6 @@ type registerStoreParams struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterStore 注册存储实例。
-//
 // 完整流程对齐 Python register_store：
 // 1. kv_store 必填校验
 // 2. 赋值各存储
@@ -173,7 +172,6 @@ func WithMessageStore(store db.BaseMessageStore) RegisterStoreOption {
 }
 
 // RegisterPlugin 注册 BaseMemoryIndex 插件。
-//
 // Python: LongTermMemory.register_plugin(name, cls, params)
 //
 // Go 差异：Python 使用 (name, cls, params) 三元组做动态实例化，
@@ -191,7 +189,6 @@ func (m *LongTermMemory) RegisterPlugin(name string, memoryIndex storeindex.Base
 }
 
 // MigrateBetweenIndices 跨索引迁移，将源索引的所有数据复制到目标索引。
-//
 // Python: LongTermMemory.migrate_between_indices(source_index, target_index)
 func MigrateBetweenIndices(ctx context.Context, sourceIndex, targetIndex storeindex.BaseMemoryIndex) error {
 	scopes, err := sourceIndex.ListUserScopes(ctx)

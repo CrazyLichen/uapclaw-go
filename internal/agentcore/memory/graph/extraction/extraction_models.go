@@ -3,7 +3,6 @@ package extraction
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Datetime 日期时间（未使用）
-//
 // Python: Datetime (MultilingualBaseModel)
 type Datetime struct {
 	// Year 年

@@ -1,9 +1,7 @@
 // Package channel_manager 提供渠道注册、管理和消息分发功能。
-//
 // 渠道是 Gateway 与外部客户端之间的通信通道，如 Web（WebSocket）、
 // 飞书、钉钉等。ChannelManager 负责渠道的生命周期管理、入站消息中转
 // （存活检查+转发到 MessageHandler）和出站消息派发（按 channel_id 定向投递）。
-//
 // 核心接口：
 //   - MessageHandlerInterface — 消息处理器接口（合并入站+出站），由 MessageHandler 实现
 //   - ExternalChannel — 仅出站能力的窄渠道接口（11.9，对齐 Python register_external_channel）

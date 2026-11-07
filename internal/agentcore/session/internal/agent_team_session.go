@@ -13,10 +13,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentTeamSession AgentTeam 内部会话，实现 InnerSession 和 TeamIDProvider 接口。
-//
 // 持有 AgentTeam 会话运行所需的基础设施组件（配置、状态、追踪器、流写入管理器、检查点器），
 // 是纯粹的组件容器，不包含业务逻辑。业务逻辑由公开层 Session 负责。
-//
 // Python: openjiuwen/core/session/internal/agent_team.py (AgentTeamSession)
 type AgentTeamSession struct {
 	// sessionID 会话唯一标识
@@ -57,7 +55,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentTeamSession 创建内部 AgentTeamSession 实例。
-//
 // 默认行为（对齐 Python AgentTeamSession.__init__）：
 //   - state: 自动创建 AgentStateCollection（Python: StateCollection()）
 //   - config: 不自动创建，由外层 Session 传入（Python: 外层总创建 Config()）
@@ -194,7 +191,6 @@ func (s *AgentTeamSession) Close() error {
 }
 
 // TeamID 获取团队唯一标识，满足 TeamIDProvider 接口。
-//
 // Python: AgentTeamSession.team_id()
 func (s *AgentTeamSession) TeamID() string {
 	return s.teamID

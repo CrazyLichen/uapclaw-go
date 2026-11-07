@@ -27,11 +27,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RestfulApiCard RESTful API 工具配置卡片，扩展 ToolCard 增加 HTTP 请求相关配置。
-//
 // 与 Python 对齐：input_params 使用原始 JSON Schema map（InputSchema），
 // 因为 properties 中的每个参数可带 location 扩展属性（path/query/header/body/form），
 // 这在 Go 的 []*Param 结构化列表中无法表达。
-//
 // Python: openjiuwen/core/foundation/tool/service_api/restful_api.py (RestfulApiCard)
 type RestfulApiCard struct {
 	tool.ToolCard
@@ -55,7 +53,6 @@ type RestfulApiCard struct {
 }
 
 // RestfulApi HTTP REST 工具，将参数映射到 HTTP 请求的各位置并发送请求。
-//
 // Python: openjiuwen/core/foundation/tool/service_api/restful_api.py (RestfulApi)
 type RestfulApi struct {
 	card           *RestfulApiCard
@@ -120,7 +117,6 @@ func WithRestfulApiCardMaxResponseByteSize(size int) RestfulApiCardOption {
 }
 
 // NewRestfulApiCard 创建 RestfulApiCard 实例。
-//
 // 校验逻辑：
 //   - method 必须在支持的方法集合中
 //   - URL 有效性校验（简化版，SSRF 防护 ⤵️ 预留回填点）
@@ -179,7 +175,6 @@ func NewRestfulApiCard(
 }
 
 // ToolInfo 覆写 ToolCard.ToolInfo()，用 InputSchema 作为 parameters。
-//
 // 与 Python 对齐：RestfulApiCard 的 input_params 是原始 JSON Schema map，
 // 直接作为 ToolInfo.parameters 传给 LLM（location 等扩展属性也包含在内）。
 func (c *RestfulApiCard) ToolInfo() schema.ToolInfoInterface {
@@ -187,7 +182,6 @@ func (c *RestfulApiCard) ToolInfo() schema.ToolInfoInterface {
 }
 
 // NewRestfulApi 创建 RestfulApi 工具实例。
-//
 // Python: RestfulApi(card)
 func NewRestfulApi(card *RestfulApiCard) (*RestfulApi, error) {
 	if err := tool.ValidateToolCard(&card.ToolCard); err != nil {
@@ -210,7 +204,6 @@ func (r *RestfulApi) Card() *tool.ToolCard {
 }
 
 // Invoke 一次性执行 RESTful API 请求，返回完整结果。
-//
 // 流程（严格对齐 Python RestfulApi.invoke）：
 //  1. 如果 card.InputSchema 不为 nil，用 FormatWithSchemaMap 格式化输入
 //  2. APIParamMapper.Map 映射参数到各位置
@@ -262,14 +255,12 @@ func (r *RestfulApi) Invoke(ctx context.Context, inputs map[string]any, opts ...
 }
 
 // Stream RestfulApi 不支持流式调用，返回 ErrStreamNotSupported。
-//
 // Python: RestfulApi.stream() → raise TOOL_STREAM_NOT_SUPPORTED
 func (r *RestfulApi) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(r.card.String())
 }
 
 // GetParametersByLocation 按 location 分组展示参数，供 GUI 使用。
-//
 // Python: RestfulApi.get_parameters_by_location()
 func GetParametersByLocation(card *RestfulApiCard) map[string][]map[string]any {
 	result := map[string][]map[string]any{
@@ -326,7 +317,6 @@ func GetParametersByLocation(card *RestfulApiCard) map[string][]map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // doRequest 构建并发送 HTTP 请求。
-//
 // Python: RestfulApi._async_request()
 func (r *RestfulApi) doRequest(
 	ctx context.Context,
@@ -516,7 +506,6 @@ func (r *RestfulApi) doRequest(
 }
 
 // formatResponse 格式化 HTTP 响应。
-//
 // Python: RestfulApi._format_response()
 func (r *RestfulApi) formatResponse(resp *http.Response, maxResponseBytes int) (map[string]any, error) {
 	// 读取响应体（限制大小）
@@ -579,10 +568,8 @@ func (r *RestfulApi) formatResponse(resp *http.Response, maxResponseBytes int) (
 }
 
 // validateURL 校验 URL 有效性。
-//
 // 简化版：使用 net/url 解析。SSRF 防护等安全特性 ⤵️ 预留回填点
 // （等 common/security/url_utils.go 迁移后回填）。
-//
 // TODO(#通用): 后续需添加 SSRF 防护，包括：私有 IP 过滤（127.0.0.0/8、10.0.0.0/8、
 // 172.16.0.0/12、192.168.0.0/16）、域名白名单、DNS 重绑定防护等。
 // Python: UrlUtils.check_url_is_valid() 中的 SSRF 检查逻辑。
@@ -611,7 +598,6 @@ func validateURL(rawURL string) error {
 }
 
 // validatePathParams 校验 URL 中的路径参数占位符与 InputSchema 中 location:path 定义的匹配。
-//
 // 双向校验：
 //  1. URL 中的 {param} 占位符必须在 InputSchema 中有 location:path 定义
 //  2. InputSchema 中标记为 location:path 的参数必须在 URL 中有对应占位符
@@ -693,7 +679,6 @@ func validatePathParams(apiURL string, inputSchema map[string]any) error {
 }
 
 // processFormData 使用 FormHandlerManager 处理表单参数，构建 multipart/form-data 请求体。
-//
 // 流程（对齐 Python RestfulApi._process_form_data）：
 //  1. 创建 bytes.Buffer + multipart.Writer
 //  2. 遍历 formParams，每个参数根据 form_handler_type 获取对应处理器
@@ -762,10 +747,8 @@ func (r *RestfulApi) processFormData(
 }
 
 // prepareHeadersForFormData 为 multipart/form-data 请求准备请求头。
-//
 // 移除手动设置的 Content-Type，因为 multipart.Writer 会自动生成
 // 包含 boundary 的正确 Content-Type。手动设置会导致请求失败。
-//
 // Python: RestfulApi._prepare_headers_for_form_data()
 func prepareHeadersForFormData(headers map[string]string) map[string]string {
 	if len(headers) == 0 {

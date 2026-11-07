@@ -9,11 +9,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExactMatchMetric 精确匹配或归一化匹配指标。
-//
 // 匹配返回 {"exact_match": 1.0}，不匹配返回 {"exact_match": 0.0}。
 // normalize=true 时先归一化（小写+去空格+合并连续空格）再比较。
 // 字符串类型走 normalize 后 == 比较，非字符串类型走 reflect.DeepEqual 深度比较。
-//
 // Python: openjiuwen/agent_evolving/evaluator/metrics/exact_match.py ExactMatchMetric
 type ExactMatchMetric struct {
 	// normalize 是否归一化后比较
@@ -47,10 +45,8 @@ func (m *ExactMatchMetric) Name() string { return "exact_match" }
 func (m *ExactMatchMetric) HigherIsBetter() bool { return true }
 
 // Compute 计算精确匹配分数。
-//
 // 字符串类型：normalize=true 时归一化后比较，normalize=false 时原值比较。
 // 非字符串类型（map/dict/number 等）：使用 reflect.DeepEqual 深度比较。
-//
 // Python: ExactMatchMetric.compute(prediction, label)
 func (m *ExactMatchMetric) Compute(ctx context.Context, prediction, label any, opts ...MetricOption) (MetricResult, error) {
 	_ = applyMetricOptions(opts...) // ExactMatch 不需要上下文
@@ -86,7 +82,6 @@ func WithNormalize(n bool) ExactMatchOption {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeExactMatch 归一化字符串：小写 + strip + 合并连续空格。
-//
 // Python: ExactMatchMetric._normalize(input_data)
 func normalizeExactMatch(input string) string {
 	result := strings.TrimSpace(strings.ToLower(input))

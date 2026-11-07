@@ -20,9 +20,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SanitizePath 清洗用户可控的路径字符串。
-//
 // 移除可能用于提示词注入的特殊字符，保留正常路径分隔符。
-//
 // Python: sanitize_path(path)
 
 // SanitizePath 清除路径中的注入模式，防止路径遍历攻击。
@@ -31,7 +29,6 @@ func SanitizePath(path string) string {
 }
 
 // SanitizeUserContent 移除用户内容中的注入危险字符并截断长度。
-//
 // Python: sanitize_user_content(content, max_len)
 func SanitizeUserContent(content string, maxLen int) string {
 	safeText := injectionPattern.ReplaceAllString(content, "")

@@ -19,12 +19,10 @@ type planStateStore struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PlanStateAccessor 返回 plan 状态读写入口（由 AgentRuntime 调用控制器时传入）。
-//
 // Python: PlanModeController.open_state_session(agent, session_id) 的 Go 侧适配。
 func (d *DeepAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return &planStateStore{d: d} }
 
 // openPlanSession 打开（或复用）会话，供状态读写使用。
-//
 // Python: PlanModeController.open_state_session
 func (s *planStateStore) openPlanSession(ctx context.Context, sessionID string) (*session.Session, error) {
 	if s.d.instance == nil {
@@ -64,7 +62,6 @@ func (s *planStateStore) SavePlanState(ctx context.Context, sessionID string, ps
 }
 
 // SwitchPlanMode 切换 plan 模式。
-//
 // Python: DeepAgent.switch_mode —— 调用点位于 update_runtime_config 之后，
 // 此时 agent 已 Configure，可安全执行完整 session 生命周期。
 func (s *planStateStore) SwitchPlanMode(ctx context.Context, sessionID, mode string) error {

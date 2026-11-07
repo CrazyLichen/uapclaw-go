@@ -1,9 +1,7 @@
 // Package harness 提供团队成员的 NativeHarness（L2）与 HarnessProtocol。
-//
 // 它是团队成员"像被调度那样运行"的交互层：把 DeepAgent 的自驱任务循环
 // 换成"单协程 supervisor + 命令队列"，从而实现并发安全的 send/abort，
 // 并向团队侧发出 state/round 生命周期事件。
-//
 // 文件目录：
 //
 //	harness/

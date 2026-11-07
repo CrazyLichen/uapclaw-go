@@ -1,5 +1,4 @@
 // Package parser html_file_parser.go：本地 .htm/.html 文件解析器（13.14）。
-//
 // 本文件对齐 Python html_file_parser.py 的模块级共享工具
 // （_parse_html/_extract_title/_find_main_content/_text_length/_get_text_from_soup）
 // 与 HTMLFileParser 本体（Task 4 追加解析器结构体）。
@@ -19,12 +18,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HTMLFileParser 本地 .htm/.html 文件解析器（对齐 Python HTMLFileParser(TxtMdParser)）。
-//
 // 嵌入 TxtMdParser 复用编码容错读文件（super()._parse 对应物：
 // p.TxtMdParser.ParseContent 显式穿透）。覆写整体 Parse（非 ParseContent）
 // 产出带 title/source_type metadata 的单 Document。
 // 硬错误范式：读不到文件/找不到主内容/正文过短 → 155110。
-//
 // Python: html_file_parser.py HTMLFileParser
 type HTMLFileParser struct {
 	// TxtMdParser 父级（编码检测读文件）
@@ -69,7 +66,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHTMLFileParser 构造 HTMLFileParser。
-//
 // 零参数（对齐 Python __init__(**kwargs): super().__init__(**kwargs)）。
 // 多级嵌入链构造：TxtMdParser 层的 BaseParser.self 注入最终实例——
 // BaseParser 模板方法（LazyParse/Process/Supports）经 self 派发到
@@ -93,7 +89,6 @@ func NewHTMLFileParser() (*HTMLFileParser, error) {
 }
 
 // Parse 解析本地 HTML 文件（覆写整体，对齐 Python HTMLFileParser.parse）。
-//
 //  1. super()._parse 读文件（TxtMdParser 编码检测，软失败返回空串）
 //     空串 → 155110 "Could not read HTML file or file is empty (source=%s)"
 //  2. parseHTMLToDocs：title/findMainContent/getTextFromSoup/门槛校验
@@ -129,7 +124,6 @@ func init() {
 }
 
 // parseHTML 解析 HTML 字符串（对齐 _parse_html）。
-//
 // goquery 对应 BeautifulSoup（lxml 优先/HTMLParser 回落的 Go 等价物：
 // goquery 统一 x/net/html 解析器）。解析失败返回空文档（web_tools 先例降级）。
 // Python: html_file_parser.py _parse_html
@@ -143,7 +137,6 @@ func parseHTML(html string) *goquery.Document {
 }
 
 // extractTitle 提取标题（对齐 _extract_title）。
-//
 // og:title meta content 优先（TrimSpace；空串/缺属性回落——对齐 Python
 // meta.get("content") falsy 判断），title 标签文本兜底（对齐 title_tag.string）。
 // Python: html_file_parser.py _extract_title
@@ -162,7 +155,6 @@ func extractTitle(soup *goquery.Document) string {
 }
 
 // findMainContent 查找主内容节点（对齐 _find_main_content 两段式）。
-//
 // ①选择器列表逐一命中且 textLength > 100 即返；②fallback：body 内
 // article/main/div/section 树序第一个 textLength > 200；③body 兜底返回
 // （goquery 解析自动补全 body，Python 侧 body None 场景在 Go 不达）。
@@ -188,7 +180,6 @@ func findMainContent(soup *goquery.Document) *goquery.Selection {
 }
 
 // textLength 近似主文本长度（对齐 _text_length：排除 script/style，不改树）。
-//
 // 遍历选区内全部文本节点（含选区自身直接文本），跳过 script/style
 // 子树，累加 TrimSpace 后长度——"without mutating the tree"字面对齐。
 // Python: html_file_parser.py _text_length
@@ -199,7 +190,6 @@ func textLength(sel *goquery.Selection) int {
 }
 
 // getTextFromSoup 从选区提取文本（对齐 _get_text_from_soup）。
-//
 // ①移除选区内 script/style（对齐 decompose——直接 Remove 修改树，
 // 与 textLength 的不改树相反，Python 语义即如此）；②文本节点按文档序
 // 收集 TrimSpace 后 "\n" 拼接（对齐 get_text(separator="\n", strip=True)）；
@@ -222,7 +212,6 @@ func getTextFromSoup(sel *goquery.Selection) string {
 }
 
 // collectTextLength 递归收集文本节点长度（textLength 辅助）。
-//
 // 文本节点 TrimSpace 后计入；script/style 标签整体跳过（子树不递归）。
 func collectTextLength(sel *goquery.Selection, total *int) {
 	sel.Contents().Each(func(i int, s *goquery.Selection) {
@@ -239,7 +228,6 @@ func collectTextLength(sel *goquery.Selection, total *int) {
 }
 
 // appendTextNodes 递归收集文本节点（getTextFromSoup 辅助）。
-//
 // 文本节点 TrimSpace 后非空才收集（对齐 get_text strip=True）；
 // script/style 已被 getTextFromSoup 前置移除，此处无跳过逻辑。
 func appendTextNodes(sel *goquery.Selection, parts *[]string) {
@@ -255,7 +243,6 @@ func appendTextNodes(sel *goquery.Selection, parts *[]string) {
 }
 
 // parseHTMLToDocs 解析 HTML 字符串产出 Document（对齐 Python _parse_html classmethod）。
-//
 // title 提取 → findMainContent → getTextFromSoup → 门槛校验 → 单 Document。
 // 门槛 htmlMinArticleLength=50（对齐 Python len(text) < 50；text 已 TrimSpace，
 // not text 与 len<50 前者包含后者，两条件字面保留）。

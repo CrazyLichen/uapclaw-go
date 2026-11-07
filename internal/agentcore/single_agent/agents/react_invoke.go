@@ -205,7 +205,6 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 }
 
 // AfterExecuteToolCallForHITL 执行工具后检测 HITL 中断。
-//
 // Python: ReActAgent._after_execute_tool_call_for_hitl()
 func (a *ReActAgent) AfterExecuteToolCallForHITL(
 	results []agentschema.ExecuteResult,
@@ -227,7 +226,6 @@ func (a *ReActAgent) AfterExecuteToolCallForHITL(
 }
 
 // CommitInterrupt 提交中断状态。
-//
 // Python: ReActAgent._commit_interrupt() 的 HITL 分支
 func (a *ReActAgent) CommitInterrupt(
 	ctx context.Context,
@@ -244,7 +242,6 @@ func (a *ReActAgent) CommitInterrupt(
 }
 
 // ClearContextMessages 清除当前上下文消息（保留历史）。
-//
 // Python: ReActAgent.clear_context_messages(with_history=False)
 func (a *ReActAgent) ClearContextMessages(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil {
@@ -260,7 +257,6 @@ func (a *ReActAgent) ClearContextMessages(ctx context.Context, sess sessioninter
 }
 
 // WriteInvokeResultToStream 将 invoke 结果写入会话流。
-//
 // Python: ReActAgent._write_invoke_result_to_stream()
 func (a *ReActAgent) WriteInvokeResultToStream(
 	ctx context.Context,
@@ -307,10 +303,8 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyInputPartsExtra 把未 join 的输入列表落到 cbc.extra。
-//
 // 只认 []string（内部路径直接传 Go 值，不经 JSON）；类型不符或空列表都忽略，
 // 下游 extractUserParts 会回退到 query 单元素。
-//
 // Python: react_agent.py L2981-2982
 func applyInputPartsExtra(cbc *interfaces.AgentCallbackContext, inputs map[string]any) {
 	if cbc == nil || inputs == nil {
@@ -328,10 +322,8 @@ func applyInputPartsExtra(cbc *interfaces.AgentCallbackContext, inputs map[strin
 }
 
 // extractUserParts 把本轮 query 归一成 ON_USER_MESSAGE 看到的输入列表。
-//
 // 一轮可能由多条排队输入共同驱动，调用方把它们不 join 地交下来，rails
 // 才能看到接缝；其余情况下就是 query 本身这一个输入。
-//
 // Python: ReActAgent._extract_user_parts (react_agent.py L1002-1012)
 func extractUserParts(cbc *interfaces.AgentCallbackContext, query interfaces.InvokeQuery) []string {
 	if cbc != nil {
@@ -348,13 +340,11 @@ func extractUserParts(cbc *interfaces.AgentCallbackContext, query interfaces.Inv
 }
 
 // admitUserMessage 把一批已消费的输入 join 成一条 UserMessage 写入历史。
-//
 // Agent 消费的每个输入——新一轮 query、忙碌时排队的 follow-up、一批
 // steering、恢复的工作流中断——都从这里进入历史。ON_USER_MESSAGE 在
 // join **之前**对列表触发，rails 因此仍能看到单条输入，把被后续条目取代的
 // 整条丢掉。这是 rails 唯一能把它们当作**输入**处理的时刻：join 写入后
 // 就是普通历史，受 compaction 影响，不能再按位置定位。
-//
 // Python: ReActAgent._admit_user_message (react_agent.py L917-955)
 func (a *ReActAgent) admitUserMessage(
 	ctx context.Context,
@@ -391,14 +381,11 @@ func (a *ReActAgent) admitUserMessage(
 }
 
 // drainSteeringBatch 取本次模型调用可以吸收的那部分 steering 积压。
-//
 // 全部一次塞进同一轮对"两三条叮嘱"是对的，对"忙碌一段后回来看到十几条"
 // 是灾难：模型被迫在一轮里同时处理所有事项。批大小因此是策略问题，由 rails
 // 在**队列被取走之前**表态——事后再限制意味着先全取再把多余塞回去，而塞回去的
 // 会排在期间新到的消息之后。
-//
 // 无队列或无积压时直接返回，不触发事件。
-//
 // Python: ReActAgent._drain_steering_batch (react_agent.py L964-1000)
 func drainSteeringBatch(ctx context.Context, cbc *interfaces.AgentCallbackContext) ([]string, error) {
 	if cbc == nil || cbc.SteeringQueue() == nil || !cbc.HasPendingSteering() {
@@ -416,7 +403,6 @@ func drainSteeringBatch(ctx context.Context, cbc *interfaces.AgentCallbackContex
 }
 
 // shouldReportStreamError 判断 streamProcess 是否应把错误写入流。
-//
 // ctx 取消不是错误：对齐 Python react_agent.py:1549-1554 —— `except Exception`
 // 抓不到 asyncio.CancelledError，因此取消时不会产生 chat.error 帧、也不会落 history。
 func shouldReportStreamError(ctx context.Context, err error) bool {
@@ -424,7 +410,6 @@ func shouldReportStreamError(ctx context.Context, err error) bool {
 }
 
 // invokeImpl 非流式调用的真实逻辑。
-//
 // Python: ReActAgent.invoke()
 func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
@@ -546,7 +531,6 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 
 		// Python: L1317-1326: 在 invoke 入口构建 system prompt
 		// 用渲染后的 prompt 更新 identity section（替换 Configure 时的模板名）。
-		//
 		// 渲染源必须是 config.prompt_template（固定模板），不能是 promptBuilder：
 		// Python 用 _build_rendered_system_prompt(self._config.prompt_template)
 		// （react_agent.py L582-601）；若从 builder 渲染，上一轮写回 identity 的
@@ -608,7 +592,6 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 
 	// 中断/异常路径：清洗本轮上下文（保留用户提问与完整 tool 对、丢弃半截 tool 块、
 	// 结尾补 marker）后持久化，使下一轮同 session 能从本轮继续而不是回退到旧检查点。
-	//
 	// Python: react_agent.py L3263-3281 —— CancelledError 与 Exception 各用一个 marker。
 	if err != nil {
 		if streamLifecycleOwner {
@@ -641,7 +624,6 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 }
 
 // streamImpl 流式调用的真实逻辑。
-//
 // Python: ReActAgent.stream()
 func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
@@ -693,7 +675,6 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 }
 
 // innerStream 内部流式执行。
-//
 // Python: ReActAgent._inner_stream()
 func (a *ReActAgent) innerStream(
 	ctx context.Context,
@@ -791,7 +772,6 @@ func (a *ReActAgent) innerStream(
 }
 
 // reactLoop ReAct 循环核心。
-//
 // Python: ReActAgent._inner_invoke() 中的主循环
 // 注意：initContext 和 UserMessage 已在 invokeImpl 中完成，此处不再重复。
 func (a *ReActAgent) reactLoop(
@@ -979,19 +959,16 @@ func (a *ReActAgent) reactLoop(
 		// ⤵️ 6.11: Workflow 中断检测
 
 		// 单轮完全成功（模型响应 + 全部工具结果 + ToolMessage 均已写入）后触发。
-		//
 		// 触发范围与上游严格一致：只有完整工具轮触发一次（一个迭代内 N 个
 		// tool_call 也只 fire 一次），任何 break path（答案轮、force-finish、
 		// HITL、workflow 中断）都不触发。上游 rail/base.py 事件枚举 docstring
 		// 明确写 "Only fires on fully successful iterations, not on any break
 		// path"；react_agent.py L3239-3241 的触发行也落在 tool_calls 分支内，
 		// 无工具调用的答案分支在其之前就 break 了。
-		//
 		// 语义理由：消费者（如 SnapshotRail）要的是「可回滚的安全状态」——上下文
 		// 尾部是完整的 assistant(tool_calls) + ToolMessage 对，快照不会出现
 		// tool_calls 悬空；答案轮结束即整次 invoke 结束，由 after_invoke 覆盖。
 		// 该钩子同时是 boundary force_finish 的来源，故放在轮末而非轮首。
-		//
 		// Python: react_agent.py L3239-3241
 		if fireErr := cbc.Fire(ctx, interfaces.CallbackAfterReactIteration); fireErr != nil {
 			logger.Warn(logComponent).
@@ -1105,7 +1082,6 @@ func (a *ReActAgent) executeToolCalls(
 
 // buildMultimodalToolResultsMessage 从工具结果中提取多模态图片数据，
 // 构建包含 image_url content blocks 的 UserMessage。
-//
 // Python: ReActAgent._build_multimodal_tool_results_message()
 func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.ExecuteResult) llmschema.BaseMessage {
 	var parts []llmschema.ContentPart
@@ -1161,7 +1137,6 @@ func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.Exe
 }
 
 // iterMultimodalImageItems 从工具结果中迭代多模态图片项。
-//
 // Python: ReActAgent._iter_multimodal_image_items()
 func iterMultimodalImageItems(toolResult any) []map[string]any {
 	// MCP 结果以结构体形态透传（含 success/data/error 三字段），普通工具
@@ -1208,11 +1183,9 @@ func hasImagePrefix(dataURL string) bool {
 }
 
 // sanitizeAbortedTurnMessages 返回被中断轮次的 LLM 安全前缀。
-//
 // 规则：保留用户消息与完整的 assistant/tool 对；丢弃未完成的 tool_call 块（assistant +
 // 半截 tool 消息一起丢）与孤立 ToolMessage；结尾若为 UserMessage 则补一条 marker 形式的
 // AssistantMessage，避免出现「只有提问没有回复」的非法尾。
-//
 // Python: ReActAgent._sanitize_cancelled_turn_messages() (react_agent.py L3721-3788)
 func sanitizeAbortedTurnMessages(messages []llmschema.BaseMessage, marker string) []llmschema.BaseMessage {
 	kept := make([]llmschema.BaseMessage, 0, len(messages))
@@ -1269,10 +1242,8 @@ func sanitizeAbortedTurnMessages(messages []llmschema.BaseMessage, marker string
 }
 
 // handleContextAbort 取消/异常后清洗并持久化本轮上下文。
-//
 // 返回 true 表示已持久化（调用方据此抑制 finally 里的重复 save/commit）。
 // 外部传入的 agent session 也要 commit：正常路径由调用方 commit，但异常路径走不到。
-//
 // Python: ReActAgent._handle_context_abort() (react_agent.py L3593-3624)
 func (a *ReActAgent) handleContextAbort(
 	ctx context.Context,

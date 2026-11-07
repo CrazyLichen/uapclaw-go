@@ -1120,7 +1120,6 @@ func TestHandleHTTPError_非标准体也保留头部(t *testing.T) {
 // ──────────────────────────── 流式超时语义回归（C-A3）────────────────────────────
 
 // TestStream_持续输出超过总超时不被切断 C-01 核心回归。
-//
 // 12 块 × 100ms = 1.2s 的持续吐字流，配置 timeout=0.8s：
 // 流式无总超时 → 全部 12 块正常收完（旧实现会在 0.8s 处硬切断）。
 func TestStream_持续输出超过总超时不被切断(t *testing.T) {
@@ -1189,7 +1188,6 @@ func TestInvoke_超过总超时被切断(t *testing.T) {
 }
 
 // TestInvoke_编码错误原样上抛 编码失败不应被包成 MODEL_CALL_FAILED（避免误重试）。
-//
 // Python: openai_model_client.py:2011 details=={"stage":"request_encoding"} 时 re-raise。
 func TestInvoke_编码错误原样上抛(t *testing.T) {
 	cc := &llmschema.ModelClientConfig{ClientProvider: "OpenAI", APIKey: "k",

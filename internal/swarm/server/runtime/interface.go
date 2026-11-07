@@ -29,10 +29,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UapClawSwarm Agent 统一门面。
-//
 // 提供：SDK 适配器路由、统一对外 API、公共编排
 // （session 队列、Skills 路由、heartbeat、流式包装）。
-//
 // Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
 type UapClawSwarm struct {
 	// adapter SDK 适配器（延迟初始化，ensureAdapter 时创建）。
@@ -108,7 +106,6 @@ func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 }
 
 // NewUapClaw 创建 UapClawSwarm 实例。
-//
 // Python: JiuWenClaw.__init__()
 func NewUapClaw() *UapClawSwarm {
 	appCtx, appCancel := context.WithCancel(context.Background())
@@ -122,7 +119,6 @@ func NewUapClaw() *UapClawSwarm {
 }
 
 // ProcessMessage 处理非流式 Agent 请求。
-//
 // Python: JiuWenClaw.process_message(request)
 func (uc *UapClawSwarm) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// Python: logger.info：请求日志
@@ -247,7 +243,6 @@ func (uc *UapClawSwarm) ProcessMessage(ctx context.Context, request *schema.Agen
 }
 
 // ProcessMessageStream 处理流式 Agent 请求。
-//
 // Python: JiuWenClaw.process_message_stream(request)
 func (uc *UapClawSwarm) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// Python: logger.info：流式请求日志
@@ -448,7 +443,6 @@ func (uc *UapClawSwarm) ProcessMessageStream(ctx context.Context, request *schem
 }
 
 // ProcessInterrupt 处理中断请求。
-//
 // Python: JiuWenClaw._process_interrupt(request)
 func (uc *UapClawSwarm) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	intent := uc.extractIntent(request)
@@ -546,7 +540,6 @@ func (uc *UapClawSwarm) SwitchMode(ctx context.Context, sessionID, subMode strin
 }
 
 // CreateInstance 创建 Agent 实例。
-//
 // Python: JiuWenClaw.create_instance(config=None, *, mode="agent", sub_mode=None)
 func (uc *UapClawSwarm) CreateInstance(opts ...CreateInstanceOption) error {
 	cfg := defaultCreateInstanceConfig()
@@ -578,7 +571,6 @@ func (uc *UapClawSwarm) CreateInstance(opts ...CreateInstanceOption) error {
 }
 
 // ReloadAgentConfig 重载 Agent 配置。
-//
 // Python: JiuWenClaw.reload_agent_config(config_base, env_overrides)
 func (uc *UapClawSwarm) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
 	uc.adapterMu.Lock()
@@ -606,7 +598,6 @@ func (uc *UapClawSwarm) ReloadAgentConfig(configBase map[string]any, envOverride
 }
 
 // CancelInflightWork 取消在途任务。
-//
 // Python: JiuWenClaw.cancel_inflight_work(log_prefix)
 func (uc *UapClawSwarm) CancelInflightWork(reason string) error {
 	_ = uc.coordinator.Close(nil, nil)
@@ -630,7 +621,6 @@ func (uc *UapClawSwarm) CancelInflightWork(reason string) error {
 }
 
 // Cleanup 清理资源。
-//
 // Python: JiuWenClaw.cleanup()
 func (uc *UapClawSwarm) Cleanup() error {
 	uc.adapterMu.Lock()
@@ -644,7 +634,6 @@ func (uc *UapClawSwarm) Cleanup() error {
 }
 
 // GetInstance 获取底层 DeepAgent 实例。
-//
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
 func (uc *UapClawSwarm) GetInstance() *harness.DeepAgent {
 	if uc == nil || uc.adapter == nil {
@@ -818,12 +807,10 @@ func (uc *UapClawSwarm) ensureAdapter(mode string) (adapter.AgentAdapter, error)
 }
 
 // ensureSkillDevService 确保 SkillDevService 已初始化，幂等。
-//
 // SkillDevService 是无状态的，单实例即可服务所有请求。
 // 首次调用时构造完整依赖：stateStore/workspaceProvider 基于 workspace 下
 // skilldev 目录，模型配置从 config models.default 提取，
 // MCP 工具工厂注入 swarmtools.GetMcpTools。
-//
 // Python: JiuWenClaw._get_skilldev_service (interface.py:247-279)
 func (uc *UapClawSwarm) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	uc.skilldevMu.Lock()
@@ -936,7 +923,6 @@ func (uc *UapClawSwarm) extractIntent(request *schema.AgentRequest) string {
 }
 
 // payloadExtras 构造 history 记录的附加字段。
-//
 // 对齐 Python: interface.py:1063/1102 —— 取 payload 中除 event_type/content 外的全部字段。
 // 注意保留 team.message 的嵌套 event（前端 extractTeamEventRecord 一级回退依赖它）。
 func payloadExtras(payload map[string]any) map[string]any {
@@ -951,7 +937,6 @@ func payloadExtras(payload map[string]any) map[string]any {
 }
 
 // mergeTeamEventExtras 把 team.message 的 event 子字段展平到 extra 顶层。
-//
 // 对齐 Python: interface.py:1064-1070 —— event 里的 type/timestamp/content 不展平
 // （它们属于事件元信息，且嵌套 event 已整体保留）。
 func mergeTeamEventExtras(extra, payload map[string]any) map[string]any {
@@ -976,7 +961,6 @@ func mergeTeamEventExtras(extra, payload map[string]any) map[string]any {
 }
 
 // extractChunkContent 从 chunk payload 中提取 history 记录的 content。
-//
 // Python: interface.py:1085 —— payload.get("content") or payload.get("error") or ""
 func extractChunkContent(payload map[string]any) string {
 	if content, ok := payload["content"].(string); ok && content != "" {
@@ -1044,7 +1028,6 @@ func (uc *UapClawSwarm) handleSkillsRequest(ctx context.Context, request *schema
 }
 
 // handleSkillDevRequest 处理 skilldev.* 请求（非流式）。
-//
 // 消费 chunk channel，收集所有 payload 后打包为 AgentResponse。
 func (uc *UapClawSwarm) handleSkillDevRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	if !skill.IsSkillDevMethod(request.ReqMethod) {
@@ -1100,7 +1083,6 @@ func (uc *UapClawSwarm) handlePluginsRequest(ctx context.Context, request *schem
 }
 
 // handleSkillDevStreamRequest 处理 skilldev.* 流式请求。
-//
 // Handle 现在直接返回 chunk channel，此处只需追加终止哨兵。
 func (uc *UapClawSwarm) handleSkillDevStreamRequest(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	svc, err := uc.ensureSkillDevService()
@@ -1156,7 +1138,6 @@ func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
 }
 
 // PlanModeSnapshot 只读当前会话 plan 模式（不做任何状态写入）。
-//
 // Python: DeepAgentState.plan_mode（session.plan_status 用）
 func (uc *UapClawSwarm) PlanModeSnapshot(ctx context.Context, sessionID string) (string, bool) {
 	acc := uc.PlanStateAccessor()
@@ -1171,7 +1152,6 @@ func (uc *UapClawSwarm) PlanModeSnapshot(ctx context.Context, sessionID string) 
 }
 
 // hasActiveExecutions 是否有任何非终态执行。
-//
 // 取代 SessionManager.HasActiveTasks()（10.3.28d）。
 func hasActiveExecutions(c *swsession.RuntimeSessionCoordinator) bool {
 	for _, snap := range c.SnapshotSessions() {

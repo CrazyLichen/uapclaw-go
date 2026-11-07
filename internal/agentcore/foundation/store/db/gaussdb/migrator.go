@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GaussMigrator GaussDB 迁移器，基于 PostgreSQL 迁移器扩展。
-//
 // Python: GaussDialectAsyncpg._domain_query / _enum_query / _patch_gaussdb_reflection_sql
 //
 // Python 的 GaussDB 方言需要覆写以下 SQLAlchemy 特有的内省行为：
@@ -23,7 +22,6 @@ import (
 // 如果未来 GORM 版本的 postgres Migrator 引入了 GaussDB 不兼容的 SQL
 // （如查询 pg_type.typcollation 或 pg_enum），应在此处覆写
 // ColumnTypes() 方法进行改写。
-//
 // TODO(#通用): 当 GORM postgres Migrator 引入 GaussDB 不兼容的 SQL 时，在此处覆写相关方法
 type GaussMigrator struct {
 	postgres.Migrator

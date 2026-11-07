@@ -33,7 +33,6 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleMessage 处理单个 E2A 请求信封，对齐 Python AgentWebSocketServer._handle_message。
-//
 // 流程：E2AEnvelope → AgentRequest → switch 分发 → writeResponse 写入 RecvCh。
 func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelope) {
 	// 1. 转为 AgentRequest
@@ -91,7 +90,10 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		}
 	}
 
-	// 4. 按 request.ReqMethod switch 分发
+	// 4. 按 request.ReqMethod switch 分发。
+	// 绝大多数方法统一由具体 handler 返回 (resp, err)，最后一段再统一写回响应；
+	// 少数 handler（取消、流式、非流式聊天）自己负责写回，走完即 return，
+	// 因此那一组 case 不做赋值。下面每个内容分组前的注释标出该组的功能归类。
 	var resp *schema.AgentResponse
 	switch request.ReqMethod {
 	// Session 管理
@@ -251,7 +253,8 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		return // handleUnary/handleStream 自己写响应
 	}
 
-	// 5. handler 返回 resp → writeResponse 写入 RecvCh
+	// 5. handler 返回 resp → writeResponse 写入 RecvCh。
+	// 出错时统一转成错误响应，让前端能拿到明确的 code 与 message。
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -267,7 +270,6 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 }
 
 // writeResponse 构造 E2AResponse wire 通过 sendToGateway 发送。
-//
 // 返回 false 表示编码失败或 transport 已关闭/缓冲满（对齐 Python
 // _send_runtime_event 的 "发送失败即停止流" 语义）。
 func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.AgentResponse) bool {
@@ -317,7 +319,6 @@ func (s *AgentServer) writeErrorResponse(requestID, channelID, errMsg, code stri
 
 // injectACPCapabilities 为 ACP 通道注入客户端能力到 metadata。
 // 使用 setdefault 语义：不覆盖已有 acp_client_capabilities 值。
-//
 // Python: jiuwenswarm/server/agent_ws_server.py:803-810
 // Python: metadata.setdefault("acp_client_capabilities",
 //

@@ -33,7 +33,6 @@ const (
 // 当 preserveMeta 为 true 时，保留 BaseMessage 的全部字段（role/content/name/metadata）；
 // 当 preserveMeta 为 false 时，仅保留 role 和 content。
 // 如果输入元素已经是 dict，则原样返回。
-//
 // Python: msg2dict(messages, preserve_meta, **kwargs)
 func Msg2Dict(messages any, preserveMeta bool) ([]map[string]any, error) {
 	// 校验输入为 []BaseMessage 或 []map[string]any
@@ -112,7 +111,6 @@ func UpdateEntity(entity *graph.Entity, response string, extractionSchema map[st
 // AssembleInvokeParams 组装 LLM 调用参数
 //
 // 将模板格式化后的消息列表转为 dict 列表，并可选附加 response_format。
-//
 // Python: assemble_invoke_params(kwargs, template, output_model)
 func AssembleInvokeParams(kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any) (map[string]any, error) {
 	// 格式化模板

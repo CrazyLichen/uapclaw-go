@@ -57,7 +57,6 @@ func WithCard(card *ToolCard) LocalFuncOption {
 }
 
 // WithCallTimeout 为工具注册外层调用预算钩子。
-//
 // inputs 是调用方的原始参数 map；钩子返回本次调用应使用的预算（秒）。
 // 有内部执行期限的工具（bash/powershell）用它把执行预算加上清理宽限，
 // 使外层超时晚于内层超时。
@@ -125,6 +124,7 @@ func (f *InvokeFunction[I, O]) Card() *ToolCard {
 	return f.card
 }
 
+// Invoke 执行工具：先把入参转成强类型结构，再调用业务函数，最后把结果转回 map。
 func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error) {
 	o := NewToolCallOptions(opts...)
 
@@ -203,7 +203,6 @@ func (f *InvokeFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 }
 
 // GetCallTimeout 返回外层调用预算。
-//
 // 注册了钩子时委托给它（bash/powershell 用它在执行预算上再加清理宽限），
 // 否则沿用卡片级策略。
 func (f *InvokeFunction[I, O]) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {

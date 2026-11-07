@@ -1,7 +1,6 @@
 // Package schema 提供多 Agent 团队的类型定义，包括 TeamCard、EventDrivenTeamCard、
 // TeamCardInterface 接口，以及 BaseTeam、AgentTeamProvider、TeamAgentProvider、
 // TeamOption、TeamOptions、TeamConfig 等核心契约类型。
-//
 // 本包是 multi_agent 的子包，对应 Python 的 openjiuwen/core/multi_agent/schema/ 目录。
 // TeamCard 定义团队的不可变元数据（身份、成员列表、主题、版本、标签）。
 // EventDrivenTeamCard 扩展 TeamCard，增加订阅映射用于事件驱动消息路由。
@@ -11,11 +10,9 @@
 // AgentTeamProvider 和 TeamAgentProvider 是团队/Agent 资源提供者函数类型。
 // TeamOption/TeamOptions 是团队调用选项，TeamConfig 是团队运行时配置。
 // Communicable 接口定义在 team_runtime 包中，包含 Send/Publish/Subscribe/Unsubscribe/Runtime 方法。
-//
 // 依赖约束：本包只依赖 common/schema/（BaseCard、CardInterface）、single_agent/schema/（AgentCard）、
 // single_agent/interfaces/（BaseAgent）以及 session/stream/（StreamMode、Schema），
 // 不引用 multi_agent 包层的其他文件，避免循环依赖。
-//
 // 文件目录：
 //
 //	schema/

@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ScopeUserMappingManager 作用域用户映射管理器，管理 scope_user_mapping 表的 CRUD。
-//
 // Python: openjiuwen/core/memory/manage/mem_model/scope_user_mapping_manager.py (ScopeUserMappingManager)
 type ScopeUserMappingManager struct {
 	// sqlDb 通用 SQL CRUD 层
@@ -26,7 +25,6 @@ type ScopeUserMappingManager struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewScopeUserMappingManager 创建 ScopeUserMappingManager 实例。
-//
 // Python: ScopeUserMappingManager.__init__(sql_db_store)
 func NewScopeUserMappingManager(sqlDb *SqlDbStore) *ScopeUserMappingManager {
 	return &ScopeUserMappingManager{
@@ -36,7 +34,6 @@ func NewScopeUserMappingManager(sqlDb *SqlDbStore) *ScopeUserMappingManager {
 }
 
 // Add 添加作用域用户映射。已存在时跳过（幂等）。
-//
 // Python: ScopeUserMappingManager.add(user_id, scope_id, **kwargs)
 func (m *ScopeUserMappingManager) Add(ctx context.Context, userID string, scopeID string) error {
 	data := map[string]any{
@@ -55,7 +52,6 @@ func (m *ScopeUserMappingManager) Add(ctx context.Context, userID string, scopeI
 }
 
 // DeleteByScopeID 按 scope_id 删除映射记录。
-//
 // Python: ScopeUserMappingManager.delete_by_scope_id(scope_id)
 func (m *ScopeUserMappingManager) DeleteByScopeID(ctx context.Context, scopeID string) error {
 	return m.sqlDb.Delete(ctx, m.metaTable,
@@ -63,7 +59,6 @@ func (m *ScopeUserMappingManager) DeleteByScopeID(ctx context.Context, scopeID s
 }
 
 // GetByScopeID 按 scope_id 查询映射记录。
-//
 // Python: ScopeUserMappingManager.get_by_scope_id(scope_id)
 func (m *ScopeUserMappingManager) GetByScopeID(ctx context.Context, scopeID string) ([]map[string]any, error) {
 	results, err := m.sqlDb.ConditionGet(ctx, m.metaTable,

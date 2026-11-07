@@ -1,5 +1,4 @@
 // Package logger 提供基于 zerolog 的结构化分级日志系统。
-//
 // 支持以下能力：
 //   - 多级别日志输出（debug/info/warn/error/fatal）
 //   - 分组件文件输出（common.log/gateway.log/channel.log/agent_server.log/permissions.log/agent_core.log）
@@ -15,7 +14,6 @@
 // 通过组件级日志函数（Info/Warn/Error/Debug/Fatal）传入 Component 参数使用。
 // 每个 Logger 实例的 writer 同时写入组件日志文件、full.log 和控制台。
 // Permissions 组件额外写入 agent_server.log。
-//
 // 使用方式：
 //
 //	包级定义组件常量：

@@ -24,7 +24,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // A2AChannelConfig A2A 入站通道配置。
-//
 // Python: a2a_connect.py A2AChannelConfig (L23-35)，11 字段一一对应；
 // ChannelID 在 Python 为固定默认值 "a2a"（无 env），Go 同。
 type A2AChannelConfig struct {
@@ -53,13 +52,11 @@ type A2AChannelConfig struct {
 }
 
 // pendingRequest 在途 A2A 请求的应答队列。
-//
 // Python: a2a_connect.py _PendingA2ARequest (L38-40)
 type pendingRequest struct {
 	// ch 内部消息回包队列（有界，满则丢弃告警，偏差 D11）
 	ch chan *schema.Message
 	// terminal 终态保底槽（容量 1）。
-	//
 	// M-01：主队列满时终态消息若被丢弃，executor 永远收不到收尾事件，任务会
 	// 永久停在 WORKING、SSE 连接常驻。终态改投本槽（容量 1 即可，单请求只有一个
 	// 终态），既不阻塞出站派发（dispatchRobotMessages 为全渠道单 goroutine），
@@ -86,7 +83,6 @@ func (p *pendingRequest) deliverTerminal(msg *schema.Message) {
 }
 
 // A2AChannel A2A 入站通道。
-//
 // 协议栈交给 a2asrv，本类型只做网关桥：pending 配对、内部 Message 构造、HTTP 生命周期。
 // Python: a2a_connect.py A2AChannel (L179-500)
 type A2AChannel struct {
@@ -105,7 +101,6 @@ type A2AChannel struct {
 	// state 启停状态机（T-07）：Start 与 Stop 互斥，消除「Stop 先到、Start 随后照常监听」
 	state a2aChannelState
 	// stopCh 通道级停止信号：Stop 时 close，executor 的 select 直接退出。
-	//
 	// S-04：SDK 用 context.WithoutCancel 派生执行 ctx（a2a-go 的
 	// internal/taskexec/local_manager.go），ctx.Done() 永不触发，只能靠自有信号；
 	// 该信号不受应答队列容量影响，避免队列满时唤醒被丢弃而吃满停机超时。
@@ -156,7 +151,6 @@ var _ cm.BaseChannel = (*A2AChannel)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ConfigFromEnv 从环境变量构造通道配置。
-//
 // getenv 可注入（生产传 os.Getenv），便于测试；所有字符串值 TrimSpace 后
 // 为空则回落默认（对齐 Python str(...).strip() or 默认）。
 // Python: app_gateway.py L1071-1107
@@ -203,12 +197,10 @@ func NewA2AChannel(cfg A2AChannelConfig) *A2AChannel {
 }
 
 // Stopped 返回通道级停止信号（executor 的 select 分支用）。
-//
 // S-04：Stop 关闭该 channel，所有在途 Execute 立即退出，不依赖应答队列投递。
 func (ch *A2AChannel) Stopped() <-chan struct{} { return ch.stopCh }
 
 // ChannelID 返回通道标识（去空回落 "a2a"）。
-//
 // Python: a2a_connect.py channel_id property (L190-192)
 func (ch *A2AChannel) ChannelID() string {
 	if id := strings.TrimSpace(ch.cfg.ChannelID); id != "" {
@@ -227,7 +219,6 @@ func (ch *A2AChannel) Config() any { return ch.cfg }
 func (ch *A2AChannel) IsRunning() bool { return ch.running.Load() }
 
 // OnMessage 注册入站回调。
-//
 // Python: a2a_connect.py on_message (L194-195)
 func (ch *A2AChannel) OnMessage(callback func(*schema.Message) bool) {
 	ch.mu.Lock()
@@ -236,7 +227,6 @@ func (ch *A2AChannel) OnMessage(callback func(*schema.Message) bool) {
 }
 
 // Send 把内部回包投递给对应的在途请求；未命中静默丢弃。
-//
 // Python: a2a_connect.py send (L305-309)
 func (ch *A2AChannel) Send(_ context.Context, msg *schema.Message) error {
 	if msg == nil {
@@ -265,7 +255,6 @@ func (ch *A2AChannel) Send(_ context.Context, msg *schema.Message) error {
 }
 
 // DispatchA2ARequest 构造内部 chat.send 请求并交给入站回调，返回应答队列。
-//
 // Python: a2a_connect.py dispatch_a2a_request (L311-343)
 func (ch *A2AChannel) DispatchA2ARequest(
 	_ context.Context,
@@ -316,7 +305,6 @@ func (ch *A2AChannel) DispatchA2ARequest(
 }
 
 // ClearPendingRequest 移除在途请求（不关闭队列，避免 Send 与关闭竞态）。
-//
 // Python: a2a_connect.py clear_pending_request (L345-346)
 func (ch *A2AChannel) ClearPendingRequest(requestID string) {
 	ch.mu.Lock()
@@ -325,7 +313,6 @@ func (ch *A2AChannel) ClearPendingRequest(requestID string) {
 }
 
 // Stop 停止通道：先投递唤醒/关闭停止信号，再关闭 HTTP 服务。
-//
 // Python: a2a_connect.py stop (L276-303)
 //
 // S-04：顺序必须是「唤醒 → Shutdown」。SSE handler（executor）只有收到终态、
@@ -410,7 +397,6 @@ func (p *pendingRequest) C() <-chan *schema.Message { return p.ch }
 func (p *pendingRequest) Terminal() <-chan *schema.Message { return p.terminal }
 
 // deliverCanceled 向指定请求投递一条取消终态，唤醒仍阻塞在 pending 上的 Execute。
-//
 // M-02：客户端 tasks/cancel 时 SDK 只把执行标记为 CANCELED 并结束订阅，原 Execute
 // 仍阻塞在应答队列上（执行 ctx 被 SDK 以 WithoutCancel 派生，不会随取消结束）。
 // 投一条 event_type=chat.interrupt_result 的终态后，terminalState 直接映射为
@@ -434,10 +420,8 @@ func (ch *A2AChannel) deliverCanceled(requestID string) {
 }
 
 // Start 启动 A2A HTTP 服务（未启用则直接返回）。
-//
 // 对齐 Python start (L197-274)：绑定失败或服务提前退出都向调用方返错。
 // ctx 不参与（生命周期由 Stop 控制），形参保持接口一致。
-//
 // T-07：状态机（idle → starting → running）与 Stop 互斥。原实现只靠
 // running 快速判断，Stop 若在 Listen 之前到达会看到 srv==nil 直接返回，
 // 而 Start 随后照常监听且把 running 置真，服务再也无法关闭；并发两次 Start
@@ -544,7 +528,6 @@ func (ch *A2AChannel) resetStateAfterStartFailure() {
 }
 
 // validateA2ARoutes 校验三条路由路径的合法性。
-//
 // T-07：ServeMux 对缺前导 "/" 的 pattern 会当 host pattern 静默失效，对非法通配符
 // 直接 panic。这里在监听前返回可读错误，避免「路由 404 查不出原因」或「启动即崩进程」。
 func validateA2ARoutes(cfg A2AChannelConfig) error {
@@ -579,7 +562,6 @@ func validateA2ARoutes(cfg A2AChannelConfig) error {
 }
 
 // watchServe 常驻读取 Serve 返回值，运行期异常时降级运行态并记 Error。
-//
 // 正常关闭（Stop → Shutdown 使 Serve 返回 http.ErrServerClosed）保持静默。
 func (ch *A2AChannel) watchServe(errCh <-chan error) {
 	err, ok := <-errCh
@@ -600,7 +582,6 @@ func (ch *A2AChannel) watchServe(errCh <-chan error) {
 }
 
 // newMux 组装三条路由：JSON-RPC / Agent Card / Extended Agent Card。
-//
 // Python: A2AFastAPIApplication.build(rpc_url, agent_card_url, extended_agent_card_url) (L244-252)
 func (ch *A2AChannel) newMux() *http.ServeMux {
 	card := BuildAgentCard(&ch.cfg)
@@ -650,7 +631,6 @@ func orDefault(v, fallback string) string {
 }
 
 // a2aEnvBool 解析布尔型 env（1/true/yes/on 为真）。
-//
 // Python: app_gateway.py L1071-1075 的集合判断
 func a2aEnvBool(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {

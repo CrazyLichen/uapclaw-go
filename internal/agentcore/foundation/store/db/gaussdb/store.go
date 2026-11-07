@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GaussDbStore GaussDB 数据库存储，实现 db.BaseDbStore 接口。
-//
 // Python: openjiuwen/extensions/store/db/gauss_db_store.py
 //
 // 本实现通过 GaussDialector 创建 *gorm.DB 实例，

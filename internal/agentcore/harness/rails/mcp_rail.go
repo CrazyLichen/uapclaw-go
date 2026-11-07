@@ -14,14 +14,12 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // McpRail MCP 资源浏览工具注册 Rail。
-//
 // 职责：
 //   - Init:    创建 ListMcpResourcesTool + ReadMcpResourceTool，注册到 ResourceMgr + AbilityManager
 //   - Uninit:  从 AbilityManager + ResourceMgr 注销两个工具
 //
 // MCP 服务器本身的注册由 DeepAgentConfig.mcps 处理（_register_pending_mcps），
 // McpRail 只负责挂载资源浏览工具，使 LLM 能发现和读取已注册 MCP 服务器上的资源。
-//
 // Python: openjiuwen/harness/rails/mcp_rail.py McpRail
 type McpRail struct {
 	DeepAgentRail
@@ -50,7 +48,6 @@ var _ hinterfaces.DeepAgentInterface
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMcpRail 创建 MCP 资源浏览 Rail 实例。
-//
 // Python: McpRail.__init__()
 func NewMcpRail() *McpRail {
 	r := &McpRail{
@@ -61,7 +58,6 @@ func NewMcpRail() *McpRail {
 }
 
 // Init 注册 ListMcpResourcesTool + ReadMcpResourceTool 到 ResourceMgr + AbilityManager。
-//
 // Python: McpRail.init() L25-38
 func (r *McpRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// Python: L26: 获取 language 和 agent_id
@@ -106,7 +102,6 @@ func (r *McpRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error
 }
 
 // Uninit 从 AbilityManager + ResourceMgr 注销两个资源浏览工具。
-//
 // Python: McpRail.uninit() L40-49
 func (r *McpRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if len(r.tools) == 0 {

@@ -1,5 +1,4 @@
 // Package registry 提供团队运行时池的访问接口，打破 agent ↔ runtime 循环依赖。
-//
 // 本包定义 PoolAccessor 和 PoolReader 最小接口：
 //   - PoolAccessor(PoolReader() PoolReader)：runner 存储此类型，agent 通过 runner 获取
 //   - PoolReader(GetSessionIDForTeam/RemoveTeam)：agent 只需这两个操作

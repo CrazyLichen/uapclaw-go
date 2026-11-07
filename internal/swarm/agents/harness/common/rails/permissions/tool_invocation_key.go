@@ -8,10 +8,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolInvocationKeyV1 一次逻辑工具调用的宿主侧身份标识。
-//
 // 该标识为增量字段，同一次调用的所有事件共享同一份，用于把前端卡片、
 // 用户答案、后端重放三者精确对应起来，避免多卡并发时串台。
-//
 // Python: @dataclass(frozen=True) ToolInvocationKeyV1
 type ToolInvocationKeyV1 struct {
 	// InvocationID 本次调用的全局唯一标识
@@ -33,7 +31,6 @@ type ToolInvocationKeyV1 struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ExecutorKind 执行器类型取值。
-//
 // Python: ExecutorKind: TypeAlias = Literal["agent"]
 const (
 	// ExecutorKindAgent Agent 执行器
@@ -61,10 +58,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeToolInvocationText 归一化单个身份字段，非法时返回错误。
-//
 // non-string 一律视为空串后判空，与 Python 的 isinstance 判定一致；
 // 前后空白被 trim，超长或空串直接报错（fail-closed）。
-//
 // Python: normalize_tool_invocation_text(name, value, *, maximum=512)
 func NormalizeToolInvocationText(name string, value any, maximum int) (string, error) {
 	normalized := ""
@@ -78,10 +73,8 @@ func NormalizeToolInvocationText(name string, value any, maximum int) (string, e
 }
 
 // NewToolInvocationKeyV1 构造并校验 ToolInvocationKeyV1。
-//
 // 校验顺序与 Python __post_init__ 一致：先 version，再 executor_kind，
 // 然后 invocation_id（带专属长度上限），最后其余四个身份字段。
-//
 // Python: ToolInvocationKeyV1(...)
 func NewToolInvocationKeyV1(
 	invocationID string,
@@ -135,7 +128,6 @@ func NewToolInvocationKeyV1(
 }
 
 // ToWire 序列化为带版本号的 wire 表示。
-//
 // Python: ToolInvocationKeyV1.to_wire()
 func (k *ToolInvocationKeyV1) ToWire() map[string]any {
 	return map[string]any{
@@ -150,7 +142,6 @@ func (k *ToolInvocationKeyV1) ToWire() map[string]any {
 }
 
 // FromWire 从 wire 映射还原，字段集合必须完全一致（不接受部分身份）。
-//
 // Python: ToolInvocationKeyV1.from_wire(value)
 func ToolInvocationKeyV1FromWire(value map[string]any) (*ToolInvocationKeyV1, error) {
 	if value == nil {
@@ -195,7 +186,6 @@ func ToolInvocationKeyV1FromWire(value map[string]any) (*ToolInvocationKeyV1, er
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // strField 取映射中的字符串字段，非字符串返回空串。
-//
 // Python 侧由 dataclass 注解做类型校验，Go 侧用空串让后续 normalize 报错，
 // 等价于"非 str 视为非法"。
 func strField(value map[string]any, field string) string {
@@ -206,7 +196,6 @@ func strField(value map[string]any, field string) string {
 }
 
 // trimSpace 按 Python str.strip() 语义去除首尾空白。
-//
 // 单独抽出便于测试覆盖，避免直接依赖 strings.TrimSpace 的 Unicode 集合差异。
 func trimSpace(s string) string {
 	return strings.TrimSpace(s)

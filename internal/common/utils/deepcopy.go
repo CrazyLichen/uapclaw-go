@@ -1,5 +1,4 @@
 // Package utils 提供通用工具函数。
-//
 // deepcopy.go 实现 map[string]any 的深拷贝，替代各包中重复的 deepCopyMap 实现。
 package utils
 

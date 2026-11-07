@@ -18,10 +18,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EvolutionRail 所有演化轨道的基类。
-//
 // 嵌入 DeepAgentRail，4 个 final 回调自动完成轨迹收集，
 // 通过 ext EvolutionExtension 接口实现子类多态分派。
-//
 // 核心设计（对齐 Python EvolutionRail）：
 //   - 轨迹收集是自动的（由基类 4 个 final 回调处理）
 //   - 扩展点：OnBeforeInvoke / OnAfterModelCall / OnAfterToolCall /
@@ -77,9 +75,7 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEvolutionRail 创建演化轨道基类实例。
-//
 // ext 参数为扩展点接口，不能为 nil；opts 可选覆盖默认配置。
-//
 // Python: EvolutionRail.__init__(
 //
 //	trajectory_store=None, team_trajectory_store=None(已废弃),
@@ -164,7 +160,6 @@ func (r *EvolutionRail) Builder() *trajectory.TrajectoryBuilder {
 }
 
 // SetTrajectorySink 绑定轨迹写入端点。
-//
 // Python: EvolutionRail.set_trajectory_sink(sink, *, team_id, member_role)
 // Python 在 sink 非 nil 且 team_id 为空时抛出 ValueError。
 // Python 在 member_role=None 时回退：role = self._DEFAULT_MEMBER_ROLE if member_role is None else member_role
@@ -197,10 +192,8 @@ func (r *EvolutionRail) EmitHostEvent(event *stream.OutputSchema) {
 }
 
 // DrainPendingHostEvents 返回并清空主机事件缓冲。
-//
 // 如果 wait=true，先等待所有未完成的后台任务；timeout 控制最大等待时间。
 // timeout=nil 时自动回退到 GetEvolutionTotalTimeoutSecs；timeout > 0 时精确超时，超时后返回已收集的事件。
-//
 // Python: EvolutionRail.drain_pending_host_events(wait, timeout)
 // Python 在 timeout=None 时回退：timeout = self._get_evolution_total_timeout_secs()
 func (r *EvolutionRail) DrainPendingHostEvents(wait bool, timeout *time.Duration) []*stream.OutputSchema {
@@ -290,7 +283,6 @@ func (r *EvolutionRail) CleanupBackgroundTasks() error {
 }
 
 // GetCallbacks 合并 DeepAgent 基础事件 + Evolution 扩展事件的回调映射。
-//
 // 注册 5 个事件：BeforeInvoke / AfterModelCall / AfterToolCall / AfterInvoke / AfterTaskIteration。
 // Python: EvolutionRail 注册 before_invoke / after_model_call / after_tool_call / after_invoke / after_task_iteration
 func (r *EvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
@@ -316,9 +308,7 @@ func (r *EvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 }
 
 // BeforeInvoke 在每次 invoke 开始时初始化轨迹收集。
-//
 // Final 回调——子类不应覆写，通过 ext.OnBeforeInvoke 扩展。
-//
 // Python: EvolutionRail.before_invoke(ctx)
 func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
@@ -370,9 +360,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 }
 
 // AfterModelCall 在每次模型调用后记录 LLM 步骤并触发演化扩展点。
-//
 // Final 回调——子类不应覆写，通过 ext.OnAfterModelCall 扩展。
-//
 // Python: EvolutionRail.after_model_call(ctx)
 func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
@@ -466,9 +454,7 @@ func (r *EvolutionRail) AfterModelCall(ctx context.Context, cbc *agentinterfaces
 }
 
 // AfterToolCall 在每次工具调用后记录 Tool 步骤并触发演化扩展点。
-//
 // Final 回调——子类不应覆写，通过 ext.OnAfterToolCall 扩展。
-//
 // Python: EvolutionRail.after_tool_call(ctx)
 func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
@@ -538,7 +524,6 @@ func (r *EvolutionRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.
 }
 
 // AfterTaskIteration 在每次任务循环迭代后触发扩展点。
-//
 // Python: EvolutionRail.after_task_iteration(ctx)
 func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: await self._on_after_task_iteration(ctx)
@@ -559,9 +544,7 @@ func (r *EvolutionRail) AfterTaskIteration(ctx context.Context, cbc *agentinterf
 }
 
 // AfterInvoke 在每次 invoke 结束后保存轨迹并触发演化。
-//
 // Final 回调——子类不应覆写，通过 ext.OnAfterInvoke 扩展。
-//
 // Python: EvolutionRail.after_invoke(ctx)
 func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.builder == nil {
@@ -604,7 +587,6 @@ func (r *EvolutionRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Ag
 }
 
 // resolveSessionID 解析运行时 session ID。
-//
 // Python: _resolve_trajectory_session_id(ctx, inputs)
 // Python 实现：从 ctx.session 获取 session_id，回退到 inputs.conversation_id
 func (r *EvolutionRail) resolveSessionID(cbc *agentinterfaces.AgentCallbackContext, inputs *agentinterfaces.InvokeInputs) string {
@@ -621,7 +603,6 @@ func (r *EvolutionRail) resolveSessionID(cbc *agentinterfaces.AgentCallbackConte
 }
 
 // buildTrajectory 从 builder 构建轨迹并 snapshot steps。
-//
 // Python: _build_trajectory()
 // Python 实现：trajectory = self._builder.build(); trajectory.steps = list(trajectory.steps)
 func (r *EvolutionRail) buildTrajectory() *trajectory.Trajectory {
@@ -650,7 +631,6 @@ func (r *EvolutionRail) saveTrajectory(_ context.Context, traj *trajectory.Traje
 }
 
 // publishTrajectorySnapshot 通过 Sink 发布成员轨迹快照。
-//
 // Python: _publish_trajectory_snapshot(trajectory)
 // Python 实现：if sink and team_id → sink.publish_member_trajectory(snapshot)
 func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
@@ -690,7 +670,6 @@ func (r *EvolutionRail) publishTrajectorySnapshot(traj *trajectory.Trajectory) {
 }
 
 // triggerEvolution 根据配置异步或同步触发演化。
-//
 // Python: _trigger_evolution(trajectory, ctx)
 // Python 实现：
 //   - 异步模式：快照 → 创建后台任务 → _safe_run_evolution
@@ -741,7 +720,6 @@ func (r *EvolutionRail) triggerEvolution(ctx context.Context, traj *trajectory.T
 }
 
 // safeRunEvolution 后台安全执行演化（信号量 + 异常捕获）。
-//
 // Python: _safe_run_evolution(snapshot)
 // Python 实现：
 //   - 获取 evolution_sem 信号量
@@ -791,7 +769,6 @@ func (r *EvolutionRail) safeRunEvolution(ctx context.Context, snapshot *Evolutio
 }
 
 // emitBackgroundOutcomeEvent 将后台执行结果写入主机事件缓冲。
-//
 // Python: _emit_background_outcome_event(outcome)
 // Python 实现：构建 EvolutionHostEventMeta + OutputSchema → emit_host_event
 func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
@@ -827,7 +804,6 @@ func (r *EvolutionRail) emitBackgroundOutcomeEvent(outcome map[string]string) {
 }
 
 // collectPendingHostEvents 返回并清空主机事件缓冲。
-//
 // Python: _collect_pending_host_events()
 func (r *EvolutionRail) collectPendingHostEvents() []*stream.OutputSchema {
 	events := r.pendingHostEvents
@@ -836,7 +812,6 @@ func (r *EvolutionRail) collectPendingHostEvents() []*stream.OutputSchema {
 }
 
 // resetTrajectoryBuilder 重置当前轨迹构造器。
-//
 // Python: _reset_trajectory_builder()
 // Python 注释：子类在自身生命周期边界使用此方法，例如上传 RL episode 后。
 func (r *EvolutionRail) resetTrajectoryBuilder() {

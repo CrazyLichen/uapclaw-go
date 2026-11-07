@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestPayloadExtras_ToolCall 防 D5 回归：工具调用记录必须携带 tool_call 嵌套对象。
-//
 // 对齐 Python interface.py:1063（extra = payload 去掉 event_type/content）。
 func TestPayloadExtras_ToolCall(t *testing.T) {
 	payload := map[string]any{
@@ -94,7 +93,6 @@ func TestPayloadExtras_TeamMessageKeepsEvent(t *testing.T) {
 }
 
 // TestExtractChunkContent_ErrorFallback 防 D6 回归：content 为空时取 error。
-//
 // 对齐 Python interface.py:1085（content or error or ""）。
 func TestExtractChunkContent_ErrorFallback(t *testing.T) {
 	if got := extractChunkContent(map[string]any{"error": "模型调用失败"}); got != "模型调用失败" {
@@ -112,7 +110,6 @@ func TestExtractChunkContent_ErrorFallback(t *testing.T) {
 
 // TestAppendHistoryRecord_ChannelMetadata 防 D7 回归：user 记录必须把
 // channel_metadata 落到会话元数据（Python interface.py:920 传 request.metadata）。
-//
 // 说明：本用例锁定 AppendHistoryRecord 的落盘/元数据联动；调用点是否传参见
 // ProcessMessageStream 的 user 记录（本次改为 request.Metadata）。
 func TestAppendHistoryRecord_ChannelMetadata(t *testing.T) {

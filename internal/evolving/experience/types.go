@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EvolutionContext 在线/离线演进输入上下文。
-//
 // Python: EvolutionContext / OnlineEvolutionContext
 type EvolutionContext struct {
 	// SkillName 技能名称
@@ -36,7 +35,6 @@ type EvolutionContext struct {
 }
 
 // ExperienceProposal 经验提案（审批前）。
-//
 // Python: ExperienceProposal
 type ExperienceProposal struct {
 	// SkillName 技能名称
@@ -56,7 +54,6 @@ type ExperienceProposal struct {
 }
 
 // ExperienceApprovalRequest 审批面向视图。
-//
 // Python: ExperienceApprovalRequest
 type ExperienceApprovalRequest struct {
 	// SkillName 技能名称
@@ -72,7 +69,6 @@ type ExperienceApprovalRequest struct {
 }
 
 // OnlineEvolutionResult 在线演进编排器返回的结构化结果。
-//
 // Python: OnlineEvolutionResult
 type OnlineEvolutionResult struct {
 	// SkillName 技能名称
@@ -86,7 +82,6 @@ type OnlineEvolutionResult struct {
 }
 
 // ExperienceApplyResult 经验变更应用结果。
-//
 // Python: ExperienceApplyResult
 type ExperienceApplyResult struct {
 	// SkillName 技能名称
@@ -114,12 +109,10 @@ type OnlineEvolutionContext = EvolutionContext
 type OnlineEvolutionStatus = string
 
 // PendingChange 等待审批的暂存演进记录快照。
-//
 // 类型别名，指向 checkpointing.PendingChange。
 // Go 不允许 checkpointing ↔ experience 循环引用，
 // 因此 PendingChange 的实际定义在 checkpointing 包中，
 // experience 包通过类型别名提供等效访问。
-//
 // Python: openjiuwen/agent_evolving/experience/types.py PendingChange
 type PendingChange = checkpointing.PendingChange
 

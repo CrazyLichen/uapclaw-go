@@ -35,7 +35,6 @@ type taskReminderState struct {
 }
 
 // CodeTaskPlanningRail code 模式 todo rail。
-//
 // 与 TaskPlanningRail 的差异（对齐上游 CodeTaskPlanningRail）：
 //   - todo 工具卡片改用 CC 对齐文案（code/tools.CodeTodoCardBuilder）
 //   - 不注入静态 todo 系统提示词节
@@ -97,7 +96,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodeTaskPlanningRail 创建 code 模式 todo rail。
-//
 // language 决定 todo 工具注册语言；opts 透传给父类（已内置 CC 卡片与
 // inject_prompt=false，调用方可再覆盖）。
 func NewCodeTaskPlanningRail(language string, opts ...harnessrails.TaskPlanningOption) *CodeTaskPlanningRail {
@@ -118,7 +116,6 @@ func NewCodeTaskPlanningRail(language string, opts ...harnessrails.TaskPlanningO
 }
 
 // OnUserMessage 在附件历史同步之前恢复提醒状态。
-//
 // Python: CodeTaskPlanningRail.on_user_message
 func (r *CodeTaskPlanningRail) OnUserMessage(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	_ = ctx
@@ -127,9 +124,7 @@ func (r *CodeTaskPlanningRail) OnUserMessage(ctx context.Context, cbc *agentinte
 }
 
 // BeforeModelCall 先按最新待办切换模型，再按节奏追加提醒附件。
-//
 // 不调用父类 BeforeModelCall：code 模式跳过静态 todo 节，模型切换用磁盘重读。
-//
 // Python: CodeTaskPlanningRail.before_model_call
 func (r *CodeTaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if cbc == nil || cbc.Agent() == nil {
@@ -192,7 +187,6 @@ func (r *CodeTaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentin
 }
 
 // AfterToolCall 转发父类处理后，重置「未管理 todo」计数。
-//
 // Python: CodeTaskPlanningRail.after_tool_call
 func (r *CodeTaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if err := r.TaskPlanningRail.AfterToolCall(ctx, cbc); err != nil {
@@ -248,7 +242,6 @@ func (r *CodeTaskPlanningRail) restoreTaskReminderAttachment(cbc *agentinterface
 }
 
 // restoreLocked 让管理器状态与会话状态一致（调用方持有会话锁）。
-//
 // Python: CodeTaskPlanningRail._restore_task_reminder_attachment_locked
 func (r *CodeTaskPlanningRail) restoreLocked(
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -306,7 +299,6 @@ func (r *CodeTaskPlanningRail) restoreLocked(
 }
 
 // addTaskReminderAttachment 把状态里的提醒内容写回附件。
-//
 // Python: CodeTaskPlanningRail._add_task_reminder_attachment
 func (r *CodeTaskPlanningRail) addTaskReminderAttachment(
 	manager *prompts.Manager,
@@ -330,7 +322,6 @@ func (r *CodeTaskPlanningRail) addTaskReminderAttachment(
 }
 
 // recoverTaskReminderFromHistory 从附件历史里恢复仍生效的提醒内容。
-//
 // Python: CodeTaskPlanningRail._recover_task_reminder_from_history
 func (r *CodeTaskPlanningRail) recoverTaskReminderFromHistory(
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -433,7 +424,6 @@ func (r *CodeTaskPlanningRail) lockFor(sessionID string) *sync.Mutex {
 }
 
 // markIterationCounted 同一 ReAct 迭代只计数一次（模型重试不重复累加）。
-//
 // Python: CodeTaskPlanningRail._mark_task_reminder_iteration_counted
 func (r *CodeTaskPlanningRail) markIterationCounted(cbc *agentinterfaces.AgentCallbackContext) bool {
 	iteration := 0
@@ -487,7 +477,6 @@ func historyMessages(cbc *agentinterfaces.AgentCallbackContext) []llmschema.Base
 }
 
 // isAttachmentHistoryMessage 判断消息是否为附件历史消息（且属本会话）。
-//
 // Python: CodeTaskPlanningRail._is_attachment_history_message
 func isAttachmentHistoryMessage(message llmschema.BaseMessage, sessionID string) bool {
 	if message == nil {
@@ -502,7 +491,6 @@ func isAttachmentHistoryMessage(message llmschema.BaseMessage, sessionID string)
 }
 
 // latestTaskReminderHistoryState 取最后一次提醒交付账本哈希与其变更位置。
-//
 // Python: CodeTaskPlanningRail._latest_task_reminder_history_state
 func latestTaskReminderHistoryState(messages []llmschema.BaseMessage, sessionID string) (string, int) {
 	currentHash := ""
@@ -528,7 +516,6 @@ func latestTaskReminderHistoryState(messages []llmschema.BaseMessage, sessionID 
 }
 
 // taskReminderPayloadIndex 定位承载指定哈希的提醒消息下标（找不到回落截断消息）。
-//
 // Python: CodeTaskPlanningRail._task_reminder_payload_index
 func taskReminderPayloadIndex(messages []llmschema.BaseMessage, sessionID, targetHash string) int {
 	truncatedIndex := -1
@@ -552,7 +539,6 @@ func taskReminderPayloadIndex(messages []llmschema.BaseMessage, sessionID, targe
 }
 
 // stateFromHistory 从历史推导提醒计数状态。
-//
 // Python: CodeTaskPlanningRail._task_reminder_state_from_history
 func stateFromHistory(cbc *agentinterfaces.AgentCallbackContext, sessionID string) *taskReminderState {
 	messages := historyMessages(cbc)
@@ -601,7 +587,6 @@ func stateFromHistory(cbc *agentinterfaces.AgentCallbackContext, sessionID strin
 }
 
 // lastTodoResultIndex 取最后一条 todo_* 工具结果消息下标（无则 -1）。
-//
 // Python: CodeTaskPlanningRail._last_todo_result_index
 func lastTodoResultIndex(messages []llmschema.BaseMessage) int {
 	toolNameByID := map[string]string{}
@@ -631,7 +616,6 @@ func lastTodoResultIndex(messages []llmschema.BaseMessage) int {
 }
 
 // taskReminderContentCandidates 从渲染文本里切出可能的提醒内容候选。
-//
 // Python: CodeTaskPlanningRail._task_reminder_content_candidates
 func taskReminderContentCandidates(rendered string) []string {
 	candidates := []string{}
@@ -674,7 +658,6 @@ func taskReminderContentCandidates(rendered string) []string {
 }
 
 // deliverySequenceFromContent 从内容里的投递标记解析序号（无标记返回 0）。
-//
 // Python: CodeTaskPlanningRail._delivery_sequence_from_content
 func deliverySequenceFromContent(content string) int {
 	index := strings.LastIndex(content, taskReminderDeliveryMarker)
@@ -694,7 +677,6 @@ func deliverySequenceFromContent(content string) int {
 }
 
 // taskReminderHash 计算提醒内容的附件哈希（与投递账本同口径）。
-//
 // Python: CodeTaskPlanningRail._task_reminder_hash
 func taskReminderHash(content, sessionID string) string {
 	return prompts.HashPromptAttachment(&prompts.Attachment{
@@ -708,7 +690,6 @@ func taskReminderHash(content, sessionID string) string {
 }
 
 // buildTaskReminderContent 构造提醒正文（逐字对齐上游）。
-//
 // Python: CodeTaskPlanningRail._build_task_reminder_content
 func buildTaskReminderContent() string {
 	return "Use the task tools when the current work would benefit from tracking " +
@@ -721,7 +702,6 @@ func buildTaskReminderContent() string {
 }
 
 // buildLegacyTaskReminderContent 重建旧版提醒内容（内嵌待办列表）。
-//
 // Python: CodeTaskPlanningRail._build_legacy_task_reminder_content
 func buildLegacyTaskReminderContent(todos []hschema.TodoItem) string {
 	message := "The task tools haven't been used recently. If you're working on " +

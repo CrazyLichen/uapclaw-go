@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // StatContextWindow 统计 ContextWindow 的完整统计信息。
-//
 // 内部调用 StatMessages + StatTools + 计算对话轮次，填充 window.Statistic 各字段。
 // Python: Context._stat_context_window(window)
 func StatContextWindow(window *iface.ContextWindow, tokenCounter token.TokenCounter) {

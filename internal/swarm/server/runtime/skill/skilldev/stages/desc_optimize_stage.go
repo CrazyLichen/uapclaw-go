@@ -194,7 +194,6 @@ func filepathJoin(parts ...string) string {
 }
 
 // generateTriggerQueries 调用 Agent 生成触发测试查询集（约 20 条，正负各半）。
-//
 // 对齐 Python: DescOptimizeStageHandler._generate_trigger_queries(ctx, skill_name, description)
 // 上游仍为占位（返回 2 条固定查询），这里接入 Agent；解析失败时退回确定性查询集，
 // 保证优化循环仍可推进。
@@ -327,7 +326,6 @@ func (h *DescOptimizeStageHandler) optimizationLoop(ctx context.Context, sctx *s
 }
 
 // evalDescription 对每个 query，调用模型判断当前 description 是否会触发。
-//
 // 待实现: 接入 create_stage_agent 实际评估
 func (h *DescOptimizeStageHandler) evalDescription(
 	ctx context.Context,
@@ -398,7 +396,6 @@ func parseBoolArray(text string) []bool {
 }
 
 // improveDescription 调用模型基于失败案例改进 description。
-//
 // 对齐 Python: DescOptimizeStageHandler._improve_description(ctx, input)
 // 上游仍为占位（原样返回），这里接入 Agent；解析不到 <new_description> 或模型失败时
 // 保留当前描述，保证循环可继续。

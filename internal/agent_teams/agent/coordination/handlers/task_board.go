@@ -16,7 +16,6 @@ import (
 
 // TaskBoardHandler 处理任务板事件：CLAIMED、CREATED、PLAN_REQUEST、
 // PLAN_RESPONSE、UPDATED、COMPLETED、CANCELLED、UNBLOCKED。
-//
 // EVENT_METHOD_MAP 事件到方法的映射（箭头右侧为 Go 侧处理方法）：
 //   - task_claimed       映射 onTaskClaimed
 //   - task_created       映射 onTaskBoardEvent

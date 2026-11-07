@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PendingGovernance 暂存治理操作条目。
-//
 // Python: ExperienceManager._pending_governance 内层的 dict
 type PendingGovernance struct {
 	// Kind 操作类型（当前仅 "simplify"）
@@ -31,7 +30,6 @@ type PendingGovernance struct {
 }
 
 // ExperienceManager 编排技能/团队技能的在线演进生命周期。
-//
 // Python: openjiuwen/agent_evolving/experience/skill_experience_manager.py ExperienceManager
 type ExperienceManager struct {
 	// store 所属的 EvolutionStore
@@ -70,10 +68,8 @@ var supportedKinds = map[string]bool{
 }
 
 // rebuildPromptTemplates 重建提示词模板（双语，一比一复刻 Python 原文）。
-//
 // Python 中的 {evolution_records}、{user_intent}、{min_score} 占位符
 // 在 Go 中通过 fmt.Sprintf 替换（使用 %s/%s/%g）。
-//
 // Python: ExperienceManager._REBUILD_PROMPT_TEMPLATES
 var rebuildPromptTemplates = map[string]map[string]string{
 	supportedKindSkill: {
@@ -124,7 +120,6 @@ var rebuildPromptTemplates = map[string]map[string]string{
 }
 
 // defaultRebuildIntents 默认重建意图（双语，一比一复刻 Python 原文）。
-//
 // Python: ExperienceManager._DEFAULT_REBUILD_INTENTS
 var defaultRebuildIntents = map[string]map[string]string{
 	supportedKindSkill: {
@@ -150,7 +145,6 @@ func SetApplyUpdatesFn(fn func(map[string]operator.Operator, map[schema.UpdateKe
 }
 
 // NewExperienceManager 创建 ExperienceManager 实例。
-//
 // Python: ExperienceManager.__init__(store, scorer, kind, language, skill_ops, pending_approval_snapshots, pending_governance)
 func NewExperienceManager(
 	store *checkpointing.EvolutionStore,
@@ -204,7 +198,6 @@ func (m *ExperienceManager) SkillOps() map[string]*skill_call.SkillExperienceOpe
 }
 
 // BindPendingApprovalSnapshots 绑定调用方拥有的暂存快照存储。
-//
 // Python: ExperienceManager.bind_pending_approval_snapshots()
 func (m *ExperienceManager) BindPendingApprovalSnapshots(pendingApprovalSnapshots map[string]*PendingChange) {
 	if pendingApprovalSnapshots != nil {
@@ -215,7 +208,6 @@ func (m *ExperienceManager) BindPendingApprovalSnapshots(pendingApprovalSnapshot
 }
 
 // StageRecords 将一批演进记录暂存到审批状态。
-//
 // Python: ExperienceManager.stage_records()
 func (m *ExperienceManager) StageRecords(
 	ctx context.Context,
@@ -254,7 +246,6 @@ func (m *ExperienceManager) StageRecords(
 }
 
 // StageApplyResults 将已生成的在线应用结果通过共享生命周期暂存。
-//
 // Python: ExperienceManager.stage_apply_results()
 func (m *ExperienceManager) StageApplyResults(
 	ctx context.Context,
@@ -293,28 +284,24 @@ func (m *ExperienceManager) StageApplyResults(
 }
 
 // ApproveRequest 应用暂存审批批次到持久化存储。
-//
 // Python: ExperienceManager.approve_request()
 func (m *ExperienceManager) ApproveRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) {
 	return m.applyRequest(ctx, requestID, schema.ApproveAction)
 }
 
 // RejectRequest 拒绝并丢弃暂存审批批次。
-//
 // Python: ExperienceManager.reject_request()
 func (m *ExperienceManager) RejectRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) {
 	return m.applyRequest(ctx, requestID, schema.RejectAction)
 }
 
 // RetryRequest 重试部分应用的暂存审批批次。
-//
 // Python: ExperienceManager.retry_request()
 func (m *ExperienceManager) RetryRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) {
 	return m.applyRequest(ctx, requestID, schema.RetryAction)
 }
 
 // CommitProposal 通过共享暂存生命周期持久化一个已生成的提案。
-//
 // Python: ExperienceManager.commit_proposal()
 func (m *ExperienceManager) CommitProposal(
 	ctx context.Context,
@@ -342,7 +329,6 @@ func (m *ExperienceManager) CommitProposal(
 }
 
 // RequestSimplify 为技能暂存整理治理操作。
-//
 // Python: ExperienceManager.request_simplify()
 func (m *ExperienceManager) RequestSimplify(
 	ctx context.Context,
@@ -422,7 +408,6 @@ func (m *ExperienceManager) RequestSimplify(
 }
 
 // ApproveSimplify 执行暂存的整理治理操作。
-//
 // Python: ExperienceManager.approve_simplify()
 func (m *ExperienceManager) ApproveSimplify(ctx context.Context, requestID string) (map[string]int, error) {
 	gov := m.pendingGovernance[requestID]
@@ -435,14 +420,12 @@ func (m *ExperienceManager) ApproveSimplify(ctx context.Context, requestID strin
 }
 
 // RejectSimplify 丢弃暂存的整理治理操作。
-//
 // Python: ExperienceManager.reject_simplify()
 func (m *ExperienceManager) RejectSimplify(requestID string) {
 	delete(m.pendingGovernance, requestID)
 }
 
 // RequestRebuild 为技能准备重建提示词。
-//
 // Python: ExperienceManager.request_rebuild()
 func (m *ExperienceManager) RequestRebuild(
 	ctx context.Context,
@@ -479,7 +462,6 @@ func (m *ExperienceManager) RequestRebuild(
 }
 
 // BuildLocalApplyPreview 从应用结果构建稳定的本地应用预览合约。
-//
 // 静态导出方法，对应 Python: ExperienceManager.build_local_apply_preview()
 func BuildLocalApplyPreview(
 	skillName string,
@@ -515,7 +497,6 @@ func BuildLocalApplyPreview(
 }
 
 // FormatEvolutionRecords 格式化演进记录列表为文本。
-//
 // 静态导出方法，对应 Python: ExperienceManager.format_evolution_records()
 func FormatEvolutionRecords(records []checkpointing.EvolutionRecord, language string) string {
 	var header, contentLabel, empty string
@@ -563,7 +544,6 @@ func FormatEvolutionRecords(records []checkpointing.EvolutionRecord, language st
 }
 
 // ApplyUpdatesFromManager 兼容钩子，执行在线预览更新。
-//
 // Python: ExperienceManager.apply_updates() (staticmethod)
 func ApplyUpdatesFromManager(
 	operators map[string]operator.Operator,
@@ -584,7 +564,6 @@ func updatesToAnyMap(updates map[schema.UpdateKey]schema.UpdateValue) map[schema
 }
 
 // stageRecordsInternal 共享暂存流程（技能/团队技能审批批次）。
-//
 // Python: ExperienceManager._stage_records()
 func (m *ExperienceManager) stageRecordsInternal(
 	ctx context.Context,
@@ -625,7 +604,6 @@ func (m *ExperienceManager) stageRecordsInternal(
 }
 
 // stagePendingRequest 从预览应用结果暂存一个待审批请求。
-//
 // Python: ExperienceManager._stage_pending_request()
 func (m *ExperienceManager) stagePendingRequest(
 	proposal ExperienceProposal,
@@ -661,7 +639,6 @@ func (m *ExperienceManager) stagePendingRequest(
 }
 
 // applyRequest 共享请求生命周期（approve/reject/retry）。
-//
 // Python: ExperienceManager._apply_request()
 func (m *ExperienceManager) applyRequest(
 	ctx context.Context,
@@ -699,7 +676,6 @@ func (m *ExperienceManager) applyRequest(
 }
 
 // commitStagedRequest 通过共享暂存生命周期提交一个暂存请求。
-//
 // Python: ExperienceManager._commit_staged_request()
 func (m *ExperienceManager) commitStagedRequest(
 	ctx context.Context,
@@ -724,7 +700,6 @@ func (m *ExperienceManager) commitStagedRequest(
 }
 
 // previewApplyResults 预览在线应用结果，不进入暂存或持久化。
-//
 // Python: ExperienceManager._preview_apply_results()
 func (m *ExperienceManager) previewApplyResults(
 	ctx context.Context,
@@ -759,7 +734,6 @@ func evolvingExecuteUpdates(
 }
 
 // makePendingChangeFromPreview 从预览结果构建暂存变更。
-//
 // 静态导出方法，对应 Python: ExperienceManager._make_pending_change_from_preview()
 func makePendingChangeFromPreview(
 	preview LocalApplyPreview,
@@ -782,7 +756,6 @@ func makePendingChangeFromPreview(
 }
 
 // stagePendingChange 在调用方拥有的快照存储中注册一个暂存变更。
-//
 // Python: ExperienceManager._stage_pending_change()
 func (m *ExperienceManager) stagePendingChange(pending *PendingChange) *PendingChange {
 	m.pendingApprovalSnapshots[pending.ChangeID] = pending
@@ -790,7 +763,6 @@ func (m *ExperienceManager) stagePendingChange(pending *PendingChange) *PendingC
 }
 
 // rejectPendingChange 从快照存储中移除一个暂存变更，不持久化。
-//
 // Python: ExperienceManager._reject_pending_change()
 // Python 中 pop(change_id, None) 静默忽略不存在的 key，Go 中返回 error 对齐 Go 惯用法。
 func (m *ExperienceManager) rejectPendingChange(changeID string) (*PendingChange, error) {
@@ -803,7 +775,6 @@ func (m *ExperienceManager) rejectPendingChange(changeID string) (*PendingChange
 }
 
 // commitPendingChange 持久化暂存变更，部分失败时保留未写入尾部。
-//
 // Python: ExperienceManager._commit_pending_change()
 func (m *ExperienceManager) commitPendingChange(
 	ctx context.Context,
@@ -813,7 +784,6 @@ func (m *ExperienceManager) commitPendingChange(
 }
 
 // getRebuildTemplate 获取重建提示词模板。
-//
 // Python: ExperienceManager._get_rebuild_template()
 func (m *ExperienceManager) getRebuildTemplate() string {
 	templates, ok := rebuildPromptTemplates[m.kind]
@@ -828,7 +798,6 @@ func (m *ExperienceManager) getRebuildTemplate() string {
 }
 
 // getDefaultRebuildIntent 获取默认重建意图。
-//
 // Python: ExperienceManager._get_default_rebuild_intent()
 func (m *ExperienceManager) getDefaultRebuildIntent() string {
 	intents, ok := defaultRebuildIntents[m.kind]
@@ -843,7 +812,6 @@ func (m *ExperienceManager) getDefaultRebuildIntent() string {
 }
 
 // toApplyResult 将 PendingCommitResult 转为 ExperienceApplyResult。
-//
 // 静态方法，对应 Python: ExperienceManager._to_apply_result()
 func toApplyResult(skillName string, result PendingCommitResult) ExperienceApplyResult {
 	return ExperienceApplyResult{

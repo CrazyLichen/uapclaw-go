@@ -10,9 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkspaceProvider SkillDev 工作区管理（本地文件系统实现）。
-//
 // 职责：提供每个 task_id 的隔离工作区目录，并维护标准目录结构。
-//
 // 工作空间目录结构:
 //
 //	~/.jiuwenswarm/agent/workspace/skilldev/{task_id}/
@@ -29,7 +27,6 @@ import (
 //
 // base_dir 由调用方传入，约定为 getWorkspaceDir() / "skilldev"，
 // 与整个 jiuwenswarm 的目录体系保持一致，不另起顶级目录。
-//
 // 扩展点：替换为支持远程对象存储的实现（接口不变），
 // sync_to_remote 届时将文件同步到 S3/OBS。
 type WorkspaceProvider struct {
@@ -49,7 +46,6 @@ var workspaceSubDirs = []string{"resources", "skill", "evals", "output"}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkspaceProvider 创建新的 WorkspaceProvider 实例。
-//
 // baseDir 约定为 getWorkspaceDir() / "skilldev"，即 ~/.jiuwenswarm/agent/workspace/skilldev/
 func NewWorkspaceProvider(baseDir string) *WorkspaceProvider {
 	return &WorkspaceProvider{baseDir: baseDir}
@@ -79,7 +75,6 @@ func (w *WorkspaceProvider) EnsureLocal(taskID string) (string, error) {
 }
 
 // SyncToRemote 将本地工作区同步到远程存储（本地实现为空操作）。
-//
 // 扩展点：多实例部署时，此处将文件同步到共享存储（S3/OBS/NFS），
 // 以支持不同实例间的工作区共享。当前单机部署无需实现。
 func (w *WorkspaceProvider) SyncToRemote(_ string) error {

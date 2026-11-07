@@ -12,12 +12,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CryptoProvider 加密提供者接口，密钥由实现内部持有。
-//
 // Python: jiuwenswarm/common/security/base_crypto.py CryptoProvider
 //
 // 适用场景：上层业务调用，调用方无需关心密钥管理。
 // 例如：配置文件中的 api_key 解密、Web/TUI 通道敏感参数加解密。
-//
 // ctx 设计说明：Python encrypt/decrypt 为同进程函数调用无 ctx 概念；
 // Go 侧 GRPCPluginCryptoProvider 等实现跨进程往返（有挂起风险），故接口
 // 透传 ctx 供实现施加超时。进程内实现（AesGcmProvider 等）可忽略 ctx。
@@ -29,7 +27,6 @@ type CryptoProvider interface {
 }
 
 // AesGcmProvider 基于 AES-256-GCM 的 CryptoProvider 实现。
-//
 // 持有密钥，将 BaseCrypt（key 外传）封装为 CryptoProvider（key 内持）。
 // Python: 通过 ExtensionRegistry.get_crypto_provider() 获取的 CryptoProvider 实例。
 type AesGcmProvider struct {
@@ -52,7 +49,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAesGcmProvider 创建基于 AES-256-GCM 的加密提供者。
-//
 // key 必须为 32 字节（AES-256），否则返回错误。
 // 创建后可设置为全局提供者，供 config.DecryptFunc 等上层场景使用。
 func NewAesGcmProvider(key []byte) (*AesGcmProvider, error) {
@@ -91,7 +87,6 @@ func (p *AesGcmProvider) Decrypt(_ context.Context, ciphertext string) (string, 
 }
 
 // SetCryptoProvider 设置全局加密提供者。
-//
 // Python: set_crypto_provider(provider)
 func SetCryptoProvider(p CryptoProvider) {
 	providerMu.Lock()
@@ -101,7 +96,6 @@ func SetCryptoProvider(p CryptoProvider) {
 
 // GetCryptoProvider 获取全局加密提供者。
 // 若未设置，返回 nil。
-//
 // Python: get_crypto_provider()
 func GetCryptoProvider() CryptoProvider {
 	providerMu.RLock()
@@ -110,7 +104,6 @@ func GetCryptoProvider() CryptoProvider {
 }
 
 // NewDecryptFunc 创建适配 config.DecryptFunc 的解密函数。
-//
 // 将 CryptoProvider 的 Decrypt 方法桥接为 config 包需要的签名：
 //   - 当变量名包含 api_key 或 token 时，调用 CryptoProvider.Decrypt 解密
 //   - 当变量名不包含敏感关键词时，返回 (value, false) 表示不解密

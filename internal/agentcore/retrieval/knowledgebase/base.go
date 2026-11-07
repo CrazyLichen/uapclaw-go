@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // KnowledgeBase 知识库抽象接口（Python ABC：5 抽象 + 4 模板 + Config 访问器）。
-//
 // 5 抽象方法由 SimpleKnowledgeBase（13.27）/GraphKnowledgeBase（13.28）
 // 实现；4 模板方法由 BaseKnowledgeBase 提供默认实现。
 type KnowledgeBase interface {
@@ -62,11 +61,9 @@ var _ interface {
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseKnowledgeBase 子类嵌入的共享基座（13.10 BaseParser 先例）。
-//
 // 持有知识库的 7 大组件与配置；模板方法（ParseFiles/ParseURLs/
 // DeleteCollection/Close）与配置一致性防线由基座提供，5 抽象方法
 // 由 SimpleKnowledgeBase（13.27）/GraphKnowledgeBase（13.28）实现。
-//
 // Python: knowledge_base.py (KnowledgeBase 的 __init__ 部分)
 // closeable 可关闭组件的最小契约（Python close 鸭子类型的静态化替代）。
 type closeable interface {
@@ -75,12 +72,10 @@ type closeable interface {
 
 type BaseKnowledgeBase struct {
 	// mu 保护 SetVectorStore / SetIndexManager 的写入与 getter 读取。
-	//
 	// S-05 契约（与实现一致）：Set* **仅允许在构造期或发布给其他 goroutine 之前调用**。
 	// 发布之后业务方法（Retrieve/AddDocuments/GetStatistics 等）直接裸读
 	// vectorStore/indexManager 以求零锁开销，运行期替换会与这些裸读构成 data race。
 	// 若将来确需运行期替换，必须先把业务方法改为「方法开头快照 getter」再放开限制。
-	//
 	// Python 侧靠 GIL 让 `kb.vector_store = vs` 原子生效，没有该前提，故 Go 在此
 	// 显式收窄调用时机（全仓生产代码当前零 Set* 调用，仅测试覆盖）。
 	mu sync.RWMutex
@@ -128,7 +123,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseKnowledgeBase 构造知识库基座。
-//
 // 构造尾部：vectorStore 与 indexManager 双非空时触发 postAssignValidation
 // （对齐 Python __init__ 赋值序：index_manager 赋值时刻两者配齐触发）。
 func NewBaseKnowledgeBase(config common.KnowledgeBaseConfig, opts ...KnowledgeBaseOption) (*BaseKnowledgeBase, error) {
@@ -200,7 +194,6 @@ func (b *BaseKnowledgeBase) VectorStore() vector_store.VectorStore { return b.ve
 func (b *BaseKnowledgeBase) IndexManager() indexer.Indexer { return b.indexManagerRef() }
 
 // SetVectorStore 构造后替换读侧组件（Python kb.vector_store = vs 显式对应物）。
-//
 // S-05：**仅限构造期/发布前调用**——业务方法对 vectorStore 是裸读，发布后再替换
 // 会构成 data race（详见 BaseKnowledgeBase.mu 的契约说明）。
 // 赋值后双组件非空时触发 postAssignValidation（对齐 Python __setattr__）。
@@ -216,7 +209,6 @@ func (b *BaseKnowledgeBase) SetVectorStore(vs vector_store.VectorStore) error {
 }
 
 // SetIndexManager 构造后替换写侧组件（Python kb.index_manager = im 显式对应物）。
-//
 // S-05：与 SetVectorStore 同一契约——仅限构造期/发布前调用。
 func (b *BaseKnowledgeBase) SetIndexManager(im indexer.Indexer) error {
 	b.mu.Lock()
@@ -254,10 +246,8 @@ func WithKBExtra(key string, value any) KBOption {
 }
 
 // ParseFiles 解析文件列表为 Document 列表（模板方法）。
-//
 // 单文件解析失败 Error 日志后继续（Python 字面）。
 // 只透传 file_name（Python parse 只收 file_name/file_id——与 ParseURLs 不对称）。
-//
 // Python: knowledge_base.py parse_files
 func (b *BaseKnowledgeBase) ParseFiles(ctx context.Context, filePaths []string, opts ...KBOption) ([]reranker.Document, error) {
 	if b.parser == nil {
@@ -288,10 +278,8 @@ func (b *BaseKnowledgeBase) ParseFiles(ctx context.Context, filePaths []string, 
 }
 
 // ParseURLs 解析 URL 列表为 Document 列表（模板方法）。
-//
 // supports 不过 → Warn 跳过；单 URL 失败 Error 继续；
 // KBOptions.Extra 全量透传 parser（Python **kwargs 直通）。
-//
 // Python: knowledge_base.py parse_urls
 func (b *BaseKnowledgeBase) ParseURLs(ctx context.Context, urls []string, opts ...KBOption) ([]reranker.Document, error) {
 	if b.parser == nil {
@@ -323,7 +311,6 @@ func (b *BaseKnowledgeBase) ParseURLs(ctx context.Context, urls []string, opts .
 }
 
 // DeleteCollection 删除当前数据库中的一个集合（模板方法）。
-//
 // Python: knowledge_base.py delete_collection
 func (b *BaseKnowledgeBase) DeleteCollection(ctx context.Context, collection string) error {
 	vs := b.vectorStoreRef()
@@ -337,14 +324,11 @@ func (b *BaseKnowledgeBase) DeleteCollection(ctx context.Context, collection str
 }
 
 // Close 关闭知识库并释放资源（模板方法）。
-//
 // 逐组件关闭（vectorStore → indexManager 顺序字面）；组件 Close 返回错误时
 // Warn 记录并聚合首个错误返回。
-//
 // **不置空字段、不做幂等短路**：与 Python knowledge_base.close（L195-211）一致——
 // Python 同样只 _maybe_await 两个组件、不置 None，重复 close 由组件自身幂等
 // （Chroma close 为 pass）兜住。此处刻意保持 1:1，不引入 Python 没有的状态机。
-//
 // Python: knowledge_base.py close
 func (b *BaseKnowledgeBase) Close() error {
 	// 快照后关闭：避免关闭期间 Set* 替换字段导致「关旧不关新」或反之。
@@ -374,7 +358,6 @@ func (b *BaseKnowledgeBase) indexManagerRef() indexer.Indexer {
 }
 
 // maybeClose 关闭单个组件并返回错误（Warn 记录后仍上抛，供 Close 聚合）。
-//
 // 参数类型用 closeable 而非 any：VectorStore / Indexer / Retriever 三个接口都已
 // 声明 Close() error，编译期即可保证「可关闭」，无需运行时类型断言——原先的
 // any + 断言在组件未实现 Close 时会静默跳过关闭（组件泄漏）且不可见。

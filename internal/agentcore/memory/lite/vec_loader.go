@@ -23,10 +23,8 @@ const vec0InitFuncName = "sqlite3_vec_init"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveVec0Path 解析 vec0 扩展文件路径。
-//
 // 目录布局：third_party/sqlite-vec/<GOOS>-<GOARCH>/vec0.<ext>
 // Linux: vec0.so；macOS: vec0.dylib；Windows: vec0.dll。
-//
 // 查找顺序（与 path.ResourcesDir 一致，保证解压即用、可从任意目录启动）：
 //  1. 当前工作目录
 //  2. 可执行文件所在目录

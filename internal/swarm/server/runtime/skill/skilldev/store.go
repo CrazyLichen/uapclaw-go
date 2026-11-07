@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StateStore SkillDev 任务状态存储（本地文件实现）。
-//
 // 线程/协程安全注意：当前本地文件实现不加锁，
 // 因为路由层保证同一 task_id 的请求始终路由到同一实例，不存在并发写入。
 type StateStore struct {
@@ -35,7 +34,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStateStore 创建新的 StateStore 实例。
-//
 // baseDir 约定为 getWorkspaceDir() / "skilldev"，即 ~/.jiuwenswarm/agent/workspace/skilldev/
 func NewStateStore(baseDir string) *StateStore {
 	return &StateStore{baseDir: baseDir}

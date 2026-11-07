@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RetryConfig 重试配置。
-//
 // Python: sync_request_with_retry / async_request_with_retry 的参数
 type RetryConfig struct {
 	// MaxRetries 最大重试次数，默认 3
@@ -31,7 +30,6 @@ type RetryConfig struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TaskName 任务类型，决定错误码前缀。
-//
 // Python: Literal["Reranker", "Embedding"]
 type TaskName string
 
@@ -64,7 +62,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RequestWithRetry 发送带重试的 HTTP POST 请求。
-//
 // Python: async_request_with_retry。
 // httpClient 由调用方创建和管理，cfg 控制重试行为。
 // 返回响应的 JSON 解析结果 map[string]any。
@@ -80,7 +77,6 @@ func RequestWithRetry(
 }
 
 // RequestWithRetrySync 发送带重试的同步 HTTP POST 请求。
-//
 // Python: sync_request_with_retry。
 // 参数和返回值与 RequestWithRetry 一致。
 func RequestWithRetrySync(

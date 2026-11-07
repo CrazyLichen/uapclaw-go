@@ -20,7 +20,6 @@ import (
 // TeamWorkspaceRail 团队工作空间 Rail。
 // 拦截 .team/ 路径下的标准文件工具调用，透明施加锁检查和版本控制。
 // Agent 使用标准 read_file/write_file — 本 Rail 添加行为。
-//
 // Python: TeamWorkspaceRail (team_workspace/rails.py)
 type TeamWorkspaceRail struct {
 	rails.DeepAgentRail

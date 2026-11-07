@@ -33,7 +33,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fileEntry list-files 返回的目录条目。
-//
 // 对齐 Python: app_web.py _handle_file_api_get list-files 分支的字段集合
 // （name / path / isMarkdown / isDirectory）。
 type fileEntry struct {
@@ -48,7 +47,6 @@ type fileEntry struct {
 }
 
 // markdownEntry list-markdown 返回的条目。
-//
 // 对齐 Python: 该分支只返回 name 与 path 两个字段。
 type markdownEntry struct {
 	// Name 文件名
@@ -58,7 +56,6 @@ type markdownEntry struct {
 }
 
 // fileContentPostBody POST /file-api/file-content 请求体。
-//
 // 使用指针以区分「字段缺失」与「字段为空串」，对齐 Python
 // `isinstance(request_path, str)` / `isinstance(request_content, str)` 的判断。
 type fileContentPostBody struct {
@@ -96,7 +93,6 @@ const (
 
 var (
 	// allowedRoots 返回 file-api 允许访问的根目录列表。
-	//
 	// 对齐 Python app_web.py `_is_path_under_allowed_root`：
 	//   - workspace_root    = <data>/agent
 	//   - agent_teams_root  = <data>/.agent_teams
@@ -117,7 +113,6 @@ var (
 	wsDisableCompress atomic.Bool
 
 	// encodingByName 编码名到 x/text 编码器的映射。
-	//
 	// 覆盖前端 FileViewer 下拉框的全部取值。gb2312 是 GBK 的子集，
 	// x/text 无独立实现，统一用 GBK 解码器（可解 gb2312 编码的字节流）。
 	encodingByName = map[string]encoding.Encoding{
@@ -141,10 +136,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HandleFileContentGet 处理 GET /file-api/file-content 请求。
-//
 // 读取指定文件内容，以 text/plain 原样返回，并通过 X-Original-Encoding
 // 告知前端实际使用的编码。
-//
 // 对齐 Python: app_web.py L604-659（返回裸文本而非 JSON 包装）。
 func HandleFileContentGet(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
@@ -203,9 +196,7 @@ func HandleFileContentGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleFileContentPost 处理 POST /file-api/file-content 请求。
-//
 // 保存 markdown 文件。目标文件必须已存在，且扩展名必须是 .md / .mdx。
-//
 // 对齐 Python: app_web.py L745-780。
 func HandleFileContentPost(w http.ResponseWriter, r *http.Request) {
 	var body fileContentPostBody
@@ -249,9 +240,7 @@ func HandleFileContentPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleListFiles 处理 GET /file-api/list-files 请求。
-//
 // 列出指定目录下一层条目，目录在前，返回 isMarkdown / isDirectory 布尔字段。
-//
 // 对齐 Python: app_web.py L575-602。
 func HandleListFiles(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")
@@ -300,9 +289,7 @@ func HandleListFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleListMarkdown 处理 GET /file-api/list-markdown 请求。
-//
 // 列出指定目录下一层的 markdown 文件（非递归）。
-//
 // 对齐 Python: app_web.py L550-573。
 func HandleListMarkdown(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")
@@ -348,14 +335,12 @@ func HandleListMarkdown(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleWsDebugConfigGet 处理 GET /file-api/ws-debug-config 请求。
-//
 // 对齐 Python: app_web.py L665-672 —— 只返回 wsDisableCompress。
 func HandleWsDebugConfigGet(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"wsDisableCompress": wsDisableCompress.Load()})
 }
 
 // HandleWsDebugConfigPost 处理 POST /file-api/ws-debug-config 请求。
-//
 // 对齐 Python: app_web.py L782-802 —— 先解析 JSON（失败 invalid_json），
 // 再校验 wsDisableCompress 必须是 bool（否则 invalid_ws_disable_compress）。
 func HandleWsDebugConfigPost(w http.ResponseWriter, r *http.Request) {
@@ -379,9 +364,7 @@ func HandleWsDebugConfigPost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleRebuildAgentData 处理 POST /file-api/rebuild-agent-data 请求。
-//
 // 重建 agent 工作区的 agent-data.json 文件树索引。
-//
 // 对齐 Python: app_web.py L735-743。
 func HandleRebuildAgentData(w http.ResponseWriter, _ *http.Request) {
 	workspaceDir := workspace.AgentWorkspaceDir()
@@ -395,9 +378,7 @@ func HandleRebuildAgentData(w http.ResponseWriter, _ *http.Request) {
 }
 
 // HandleFileDownload 处理 GET/HEAD /file-api/download 请求。
-//
 // HMAC 令牌验签 + 过期检查 + 流式返回。不做沙箱检查——令牌本身即授权。
-//
 // 对齐 Python: app_web.py L676-732 _handle_file_download。
 func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
@@ -473,9 +454,7 @@ func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveFilePath 把用户提供的相对路径解析为绝对路径，并校验落在白名单根下。
-//
 // 基准目录固定为数据根 WorkspaceDir()；任何越界路径返回 errPathForbidden。
-//
 // 对齐 Python: app_web.py L610/L763 的 (project_root / arg).resolve()
 // 配合 _is_path_under_allowed_root。
 func resolveFilePath(userPath string) (string, error) {
@@ -496,7 +475,6 @@ func resolveFilePath(userPath string) (string, error) {
 // resolveExistingPrefix 逐段解析符号链接：对"已存在的前缀"做 EvalSymlinks，
 // 不存在的尾部按字面拼接。对齐 Python Path.resolve(strict=False)——
 // 它只解析存在的前缀，缺的尾巴原样保留。
-//
 // 原实现"EvalSymlinks 失败就整体退化为 Clean"是错的：祖先是指向别处的符号链接、
 // 叶子还不存在时（"已存在链接祖先 + 新文件"），路径不会被解析到链接目标，
 // 白名单校验因此作用在字面路径上。当前 GET/POST 都要求文件已存在，暂不可利用，
@@ -519,7 +497,6 @@ func resolveExistingPrefix(full string) string {
 }
 
 // isUnderAllowedRoot 判断绝对路径是否落在 file-api 白名单根内。
-//
 // 对齐 Python: _is_path_under_allowed_root 的 os.path.commonpath 比较
 // （用 filepath.Rel 判定，避免 "/data/agent" 前缀误命中 "/data/agent2"）。
 func isUnderAllowedRoot(absPath string) bool {
@@ -549,7 +526,6 @@ func allowedRoots() []string {
 }
 
 // relToDataRoot 返回绝对路径相对数据根的斜杠形式路径。
-//
 // 对齐 Python: str(entry.relative_to(self.project_root))。
 func relToDataRoot(absPath string) string {
 	rel, err := filepath.Rel(workspace.WorkspaceDir(), absPath)
@@ -560,7 +536,6 @@ func relToDataRoot(absPath string) string {
 }
 
 // isAgentDataRelPath 判断请求路径是否指向标准 agent-data.json。
-//
 // 对齐 Python: file_arg.replace("\\", "/") == "agent/workspace/agent-data.json"。
 func isAgentDataRelPath(userPath string) bool {
 	normalized := strings.ReplaceAll(userPath, "\\", "/")
@@ -569,7 +544,6 @@ func isAgentDataRelPath(userPath string) bool {
 }
 
 // isMarkdownName 判断文件名是否 markdown（.md / .mdx，大小写不敏感）。
-//
 // 对齐 Python: _is_markdown 的 suffix in {".md", ".mdx"}。
 func isMarkdownName(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
@@ -598,7 +572,6 @@ func isRegularFile(p string) bool {
 }
 
 // readFileWithEncoding 按指定编码读取文件，返回内容与实际使用的编码。
-//
 // encoding 取值：
 //   - "auto"：先判 UTF-8 合法性，再按 gbk → big5 → shift_jis → euc_kr 顺序探测
 //   - 其他：按 encodingByName 查表严格解码
@@ -634,7 +607,6 @@ func readFileWithEncoding(filePath, encodingName string) (string, string, error)
 }
 
 // detectAndDecode 探测编码并解码（auto 模式）。
-//
 // 对齐 Python: auto 分支解码失败后依次尝试 gb2312/big5/shift_jis/euc_kr。
 func detectAndDecode(raw []byte) (string, string, error) {
 	if utf8.Valid(raw) {
@@ -658,7 +630,6 @@ func detectAndDecode(raw []byte) (string, string, error) {
 }
 
 // decodeStrict 用指定编码严格解码。
-//
 // x/text 的字符集解码器遇到非法字节会静默替换为 U+FFFD，这里把 U+FFFD 视为解码失败，
 // 以对齐 Python UnicodeDecodeError 的语义。
 func decodeStrict(raw []byte, enc encoding.Encoding) (string, bool) {
@@ -682,7 +653,6 @@ func writeJSON(w http.ResponseWriter, statusCode int, data any) {
 }
 
 // writeJSONError 写入带错误码的 JSON 响应。
-//
 // 错误码沿用 Python 契约（missing_file_path / forbidden_path / not_found 等），
 // 前端按 HTTP 状态码判断成功与否，不解析文案。
 func writeJSONError(w http.ResponseWriter, statusCode int, code string) {
@@ -695,7 +665,6 @@ func writeJSONDetail(w http.ResponseWriter, statusCode int, code, detail string)
 }
 
 // quoteAll 百分号编码全部非 unreserved 字符（对齐 Python urllib.parse.quote(safe="")）。
-//
 // Go url.PathEscape 不转义 "/"，须手写逐字节编码；十六进制大写与 Python %XX 输出一致。
 func quoteAll(s string) string {
 	const hexDigits = "0123456789ABCDEF"

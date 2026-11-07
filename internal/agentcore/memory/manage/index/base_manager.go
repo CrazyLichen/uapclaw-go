@@ -15,11 +15,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseMemoryManager 记忆管理器抽象接口。
-//
 // 定义了记忆管理器的 6 个核心操作：AddMemories、Update、Search、Get、Delete、DeleteByUserID。
 // 所有记忆管理器实现（FragmentMemoryManager、SummaryManager、VariableManager）必须实现此接口。
 // opts ...MemoryOption 对齐 Python 的 **kwargs 扩展机制，llm 参数通过 WithLLMModel(opts) 传入。
-//
 // Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager)
 type BaseMemoryManager interface {
 	// AddMemories 批量添加记忆（含冲突检查和冗余消除）。
@@ -45,10 +43,8 @@ type BaseMemoryManager interface {
 }
 
 // memoryManagerBase 记忆管理器公共基类。
-//
 // 嵌入此结构体后，实现类只需实现 BaseMemoryManager 接口即可。
 // 提供 validateParams / wrapException / encryptMemoryIfNeeded / decryptMemoryIfNeeded 公共方法。
-//
 // Python: openjiuwen/core/memory/manage/index/base_memory_manager.py (BaseMemoryManager 非抽象方法)
 type memoryManagerBase struct {
 	// memoryIndex 记忆索引（KV + 向量库）

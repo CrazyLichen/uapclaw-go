@@ -3,7 +3,6 @@ package tools
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolSearchMetadataProvider tool_search 工具元数据提供者。
-//
 // Python: openjiuwen/harness/prompts/tools/tool_search.py (ToolSearchMetadataProvider)
 type ToolSearchMetadataProvider struct{}
 
@@ -63,7 +62,6 @@ var toolSearchParams = map[string]map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetToolSearchInputParams 构建 tool_search 工具的参数 Schema。
-//
 // Python: get_tool_search_input_params
 func GetToolSearchInputParams(language string) map[string]any {
 	lang := language
@@ -92,12 +90,10 @@ func GetToolSearchInputParams(language string) map[string]any {
 }
 
 // GetName 返回工具注册名称。
-//
 // Python: ToolSearchMetadataProvider.get_name
 func (p *ToolSearchMetadataProvider) GetName() string { return "tool_search" }
 
 // GetDescription 返回指定语言的工具描述。
-//
 // Python: ToolSearchMetadataProvider.get_description
 func (p *ToolSearchMetadataProvider) GetDescription(language string) string {
 	if description, ok := toolSearchDescription[language]; ok {
@@ -107,7 +103,6 @@ func (p *ToolSearchMetadataProvider) GetDescription(language string) string {
 }
 
 // GetInputParams 返回指定语言的参数 JSON Schema。
-//
 // Python: ToolSearchMetadataProvider.get_input_params
 func (p *ToolSearchMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetToolSearchInputParams(language)

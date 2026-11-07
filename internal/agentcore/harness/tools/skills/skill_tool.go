@@ -17,15 +17,12 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // skillGetter 返回会话可见技能视图；session 为 nil 时由 rail 退化为当前加载集合。
-//
 // Python: get_skills=lambda session=None: rail.get_skills_for_session(session)
 type skillGetter func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill
 
 // SkillTool 查看特定技能内容的工具。
-//
 // 通过 SysOperation.Fs().ReadFile() 读取技能目录下的指定文件（默认 SKILL.md），
 // 通过 getSkills 回调查找技能。
-//
 // Python: SkillTool (openjiuwen/harness/tools/skills/skill_tool.py)
 type SkillTool struct {
 	// card 工具配置卡片
@@ -76,7 +73,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillTool 创建 SkillTool 实例。
-//
 // Python: SkillTool.__init__(operation, get_skills, language, agent_id,
 // multimodal_skill_mode, enable_read_image_multimodal) (skill_tool.py:337-361)
 func NewSkillTool(
@@ -98,7 +94,6 @@ func NewSkillTool(
 }
 
 // Invoke 执行 skill_tool 工具，查看特定技能内容。
-//
 // 一比一复刻 Python SkillTool.invoke()：
 //  1. 按 skill_name 查找技能，未找到返回 success=false 与 "Skill not found: {name}"
 //  2. 构建文件路径（skill.Directory + relative_file_path），默认 SKILL.md
@@ -257,7 +252,6 @@ func stripSkillToolInjectedHints(body string) string {
 }
 
 // Stream SkillTool 不支持流式调用。
-//
 // Python: SkillTool.stream(inputs, **kwargs) — if False: yield None
 func (t *SkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.ID)
@@ -274,7 +268,6 @@ func (t *SkillTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getSkillByName 按名称在会话视图中查找技能。
-//
 // Python: SkillTool._get_skill_by_name (skill_tool.py:456-465)
 func (t *SkillTool) getSkillByName(name string, sess sessioninterfaces.SessionFacade) *skillpkg.Skill {
 	if name == "" || t.getSkills == nil {

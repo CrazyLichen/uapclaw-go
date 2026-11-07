@@ -34,7 +34,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildCompletionSignalSection 构建完成信号节（Priority 85）
-//
 // promise 为完成信号令牌。
 func BuildCompletionSignalSection(promise string, lang string) saprompt.PromptSection {
 	var template string

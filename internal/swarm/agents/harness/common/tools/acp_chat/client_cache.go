@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ClientSpec 子进程启动规格（Python: _get_or_create_client 内局部解析结果）。
-//
 // 导出给 cmd 层 acp-chat 冒烟入口（10.4.6）复用严格解析逻辑。
 type ClientSpec struct {
 	// Command 启动命令（trim 后非空）
@@ -220,7 +219,6 @@ func strOfAcpChat(v any) string {
 }
 
 // NormalizeProfileSpecForCLI 按 Python acp/cli.py 的宽松语义归一化 profile 规格。
-//
 // Python 两个入口对畸形 profile 的处理不同：
 //   - cli.py（命令行冒烟）：args 非 list → []；env 非 dict → None（静默放宽）
 //   - tool.py（acp_chat 工具）：args/env 类型不符 → 报错

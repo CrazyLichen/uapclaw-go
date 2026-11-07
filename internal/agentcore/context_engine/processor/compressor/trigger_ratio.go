@@ -24,7 +24,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // triggerThresholdByRatio 返回按上下文预算与比例算出的触发阈值（至少 1）。
-//
 // Python: forked/compressor/base.py 里 threshold = context_max * trigger_context_ratio
 func triggerThresholdByRatio(mc iface.ModelContext, ratio float64) int {
 	budget := processor.EffectiveContextBudget(mc, 0)
@@ -36,7 +35,6 @@ func triggerThresholdByRatio(mc iface.ModelContext, ratio float64) int {
 }
 
 // targetAboveMinRatio 判断待压缩内容是否达到占比下限。
-//
 // 低于下限说明这次能压的太少：继续压缩只会白花一次模型调用，
 // 总量几乎不降，还会把碎片摘要塞进上下文（对齐上游 forked base 的
 // min_target_context_ratio 判定）。

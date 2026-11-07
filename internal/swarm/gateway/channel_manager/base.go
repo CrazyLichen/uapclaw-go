@@ -11,10 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseChannel Channel 实现的抽象接口。
-//
 // 每个 Channel 都应实现此接口以集成到 Gateway 消息总线中。
 // 方法对齐 Python BaseChannel ABC：Config/Start/Stop/Send/OnMessage/IsRunning。
-//
 // Python: jiuwenswarm/gateway/channel_manager/base.py (BaseChannel)
 type BaseChannel interface {
 	// Config 返回当前 Channel 配置（任意类型，具体由各实现定义）
@@ -26,7 +24,6 @@ type BaseChannel interface {
 	// Send 通过 Channel 发送消息到外部平台
 	Send(ctx context.Context, msg *schema.Message) error
 	// OnMessage 注册入站消息回调，返回 true 表示已处理（短路后续 method handler）。
-	//
 	// Python: BaseChannel.on_message + _handle_raw_message 中 handled_by_callback 逻辑。
 	OnMessage(callback func(*schema.Message) bool)
 	// IsRunning 返回 Channel 是否正在运行
@@ -38,7 +35,6 @@ type BaseChannel interface {
 }
 
 // ChannelMetadata Channel 元数据，标识一条通道实例的来源与归属。
-//
 // Python: jiuwenswarm/gateway/channel_manager/base.py (ChannelMetadata)
 type ChannelMetadata struct {
 	// ChannelID 渠道实例唯一标识
@@ -54,7 +50,6 @@ type ChannelMetadata struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ChannelType Channel 类型枚举，标识不同的 IM 平台渠道。
-//
 // Python: jiuwenswarm/gateway/channel_manager/base.py (ChannelType)
 type ChannelType string
 
@@ -137,9 +132,7 @@ func (ct ChannelType) GoString() string {
 }
 
 // IsAllowed 检查发送者是否被允许使用此 Channel。
-//
 // allowFrom 为空时允许所有人；senderID 中含 "|" 时按分隔符逐段匹配。
-//
 // Python: BaseChannel.is_allowed()
 func IsAllowed(senderID string, allowFrom []string) bool {
 	if len(allowFrom) == 0 {

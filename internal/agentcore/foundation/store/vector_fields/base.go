@@ -152,6 +152,7 @@ func parseVFTag(tag string) (stage string, keepZero bool, name string) {
 	return stage, keepZero, name
 }
 
+// collectFields 递归遍历结构体字段，按阶段收集需要写入向量库的字段值。
 func collectFields(v reflect.Value, stage string, result map[string]any) {
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {

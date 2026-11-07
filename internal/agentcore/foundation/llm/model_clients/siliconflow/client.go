@@ -18,11 +18,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SiliconFlowModelClient SiliconFlow 模型客户端。
-//
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
 // 覆写 Invoke/Stream，在调用前对消息中的 tool_calls 做清洗（sanitize）。
 // Stream 独立实现（不委托 OpenAI.Stream），对齐 Python SiliconFlowModelClient._astream_with_parser。
-//
 // SiliconFlow API 兼容 OpenAI Chat Completion 协议，但对请求中的非标准字段严格：
 //   - tool_calls 中的 type 必须为 "function"，其他值会报错
 //   - tool_calls 中不能包含非标准扩展字段，否则 API 报错
@@ -45,7 +43,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSiliconFlowModelClient 创建 SiliconFlow 客户端。
-//
 // 构造流程与 DeepSeek 客户端一致：
 //  1. 先构造 OpenAI 客户端（复用 baseHeaders 初始化等）
 //  2. 覆盖 clientName 为 "SiliconFlow client"
@@ -78,10 +75,8 @@ func NewSiliconFlowModelClient(
 }
 
 // Invoke 非流式调用 SiliconFlow API。
-//
 // 覆写 OpenAI 客户端的 Invoke，在委托前对消息中的 tool_calls 做清洗。
 // SiliconFlow API 对非标准字段严格，需要只保留标准字段并强制 type="function"。
-//
 // Python: SiliconFlowModelClient.invoke()
 func (c *SiliconFlowModelClient) Invoke(
 	ctx context.Context,
@@ -99,10 +94,8 @@ func (c *SiliconFlowModelClient) Invoke(
 }
 
 // Stream 流式调用 SiliconFlow API。
-//
 // 独立实现 Stream，不委托给 OpenAI 客户端。
 // Python: SiliconFlowModelClient：使用自己的 parseStreamChunk 解析流式块。
-//
 // 与 OpenAI 的行为差异（对齐 Python）：
 //   - 不设置 stream_options.include_usage（SiliconFlow API 无此参数）
 //   - 不保留无 choices 的 usage-only chunk（SiliconFlow _parse_stream_chunk 会丢弃）
@@ -304,7 +297,6 @@ func (c *SiliconFlowModelClient) Stream(
 }
 
 // GenerateImage 生成图片（当前不支持）。
-//
 // SiliconFlow Chat Completion API 不支持图片生成。
 func (c *SiliconFlowModelClient) GenerateImage(
 	_ context.Context,
@@ -342,7 +334,6 @@ func (c *SiliconFlowModelClient) GenerateVideo(
 }
 
 // Release 释放模型缓存（当前不支持）。
-//
 // SiliconFlow API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
 func (c *SiliconFlowModelClient) Release(
 	_ context.Context,
@@ -390,7 +381,6 @@ func init() {
 }
 
 // parseStreamChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
-//
 // Python: SiliconFlowModelClient._parse_stream_chunk()，
 // 与 OpenAI 的 ParseStreamChunk 有以下差异：
 //   - 不保留无 choices 的 usage-only chunk（返回 nil，丢弃）
@@ -474,7 +464,6 @@ func (c *SiliconFlowModelClient) parseStreamChunk(
 }
 
 // buildSiliconFlowUsageMetadata 构建 SiliconFlow 的 usage 元数据。
-//
 // 统一委托 model_clients.BuildUsageMetadata——上游 SiliconFlow 无独立客户端（走
 // OpenAI 客户端 + endpoint profile "siliconflow"），usage 组装点即
 // openai_model_client.py:2940-2946（含 cache_tokens 与归一字段族），cost 在本侧追加。
@@ -494,7 +483,6 @@ func buildSiliconFlowUsageMetadata(
 }
 
 // extractCostFromUsage 从 ResponseUsage 提取费用信息。
-//
 // 复用 openai 包的 extractCostFromUsage。
 func extractCostFromUsage(usage *openai.ResponseUsage) (inputCost, outputCost, totalCost float64) {
 	// 将 Usage 转为 map 以复用 ExtractCostInfo
@@ -510,7 +498,6 @@ func extractCostFromUsage(usage *openai.ResponseUsage) (inputCost, outputCost, t
 }
 
 // sanitizeMessages 对消息做预处理：先调用基类转换，再清洗 tool_calls。
-//
 // 处理流程：
 //  1. 先调用 OpenAI 基类的 ConvertMessagesToDict 做标准转换
 //  2. 对转换后的消息做 sanitizeToolCalls（只保留标准字段，强制 type="function"）
@@ -534,7 +521,6 @@ func (c *SiliconFlowModelClient) sanitizeMessages(
 }
 
 // sanitizeToolCalls 清洗消息中的 tool_calls，只保留 OpenAI 标准字段。
-//
 // SiliconFlow API 对请求中的非标准字段严格，遇到不认识的字段会报错。
 // 本函数对每个 assistant 消息的 tool_calls 做清洗：
 //   - 只保留标准字段：id、type、index、function.name、function.arguments
@@ -542,7 +528,6 @@ func (c *SiliconFlowModelClient) sanitizeMessages(
 //   - 移除非标准扩展字段（LLM 返回的原始 tool_calls 可能包含额外字段）
 //
 // 原地修改 messages 中的 tool_calls 字段。
-//
 // Python: SiliconFlowModelClient._sanitize_tool_calls()
 func (c *SiliconFlowModelClient) sanitizeToolCalls(messages []map[string]any) {
 	for _, msg := range messages {

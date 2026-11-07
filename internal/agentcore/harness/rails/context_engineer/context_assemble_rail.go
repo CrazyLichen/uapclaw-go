@@ -15,10 +15,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextAssembleRail 上下文组装护栏，注入工作空间目录结构和上下文文件到系统提示词。
-//
 // 在 Init 中捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
 // 在 BeforeModelCall 中构建并注入 workspace/context/tools 节到系统提示词构建器。
-//
 // Python: ContextAssembleRail (openjiuwen/harness/rails/context_engineer/context_assemble_rail.py)
 type ContextAssembleRail struct {
 	rails.DeepAgentRail
@@ -46,7 +44,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextAssembleRail 创建 ContextAssembleRail 实例。
-//
 // Python: ContextAssembleRail()
 func NewContextAssembleRail() *ContextAssembleRail {
 	r := &ContextAssembleRail{}
@@ -55,7 +52,6 @@ func NewContextAssembleRail() *ContextAssembleRail {
 }
 
 // Init Rail 初始化钩子：捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
-//
 // Python: ContextAssembleRail.init(agent)
 func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
@@ -81,7 +77,6 @@ func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAge
 }
 
 // Uninit Rail 注销钩子：移除 workspace、context 节。
-//
 // Python: ContextAssembleRail.uninit(agent)——只移除 workspace/context 两节
 // （context_assemble_rail.py L36-40 实际代码；其 docstring 提及 tools 节是
 // Python 自身文档笔误，以代码实际行为为准）。M-17: 删除多移的 SectionTools。
@@ -99,7 +94,6 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 }
 
 // BeforeModelCall LLM 调用前：注入工作空间目录结构和上下文文件到系统提示词。
-//
 // Python: ContextAssembleRail.before_model_call(ctx)
 func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {

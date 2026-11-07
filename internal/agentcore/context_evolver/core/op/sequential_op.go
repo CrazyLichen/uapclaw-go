@@ -10,10 +10,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SequentialOp 顺序组合。
-//
 // 按 ops 顺序依次执行，任一失败立即返回 error。
 // Then 支持扁平化嵌套的 SequentialOp（对齐 Python SequentialOp.__rshift__）。
-//
 // Python: openjiuwen/extensions/context_evolver/core/op/sequential_op.py
 type SequentialOp struct {
 	ops []BaseOp
@@ -23,7 +21,6 @@ type SequentialOp struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Then 追加操作，返回扩展后的 SequentialOp。
-//
 // 对齐 Python SequentialOp.__rshift__(other)。
 // 如果 other 是 *SequentialOp，则扁平化追加其所有操作（对齐 Python 的 __rshift__ 扁平化）。
 func (s *SequentialOp) Then(other BaseOp) *SequentialOp {

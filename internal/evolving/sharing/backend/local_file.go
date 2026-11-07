@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LocalFileBackend 基于本地文件系统的经验共享后端。
-//
 // Hub 目录布局（hubPath 下）：
 //
 //	packages/<skill_id>/skill.tar.gz   - 不可变技能包
@@ -66,10 +65,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLocalFileBackend 创建 LocalFileBackend 实例。
-//
 // hubPath 为空时使用默认路径 ~/.openjiuwen/experience_hub。
 // dedupJaccardThreshold 默认 0.85。
-//
 // Python: LocalFileBackend.__init__()
 func NewLocalFileBackend(hubPath string, dedupJaccardThreshold float64) *LocalFileBackend {
 	resolved := hubPath
@@ -95,24 +92,20 @@ func NewLocalFileBackend(hubPath string, dedupJaccardThreshold float64) *LocalFi
 }
 
 // HubPath 返回 Hub 根路径。
-//
 // Python: LocalFileBackend.hub_path (property)
 func (b *LocalFileBackend) HubPath() string {
 	return b.hubPath
 }
 
 // OutboxDir 返回 outbox 目录路径。
-//
 // Python: LocalFileBackend.outbox_dir (property)
 func (b *LocalFileBackend) OutboxDir() string {
 	return b.outboxDir
 }
 
 // UploadBundle 上传经验 bundle，返回上传结果。
-//
 // 写操作，加写锁。重复 bundle（高 Jaccard 相似度）被拒绝。
 // 写入失败时将 bundle 暂存到 outbox。
-//
 // Python: LocalFileBackend.upload_bundle()
 func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.SharedSkillBundle) (sharing.UploadResult, error) {
 	skillID := strings.TrimSpace(bundle.SkillID)
@@ -218,9 +211,7 @@ func (b *LocalFileBackend) UploadBundle(ctx context.Context, bundle sharing.Shar
 }
 
 // DownloadBundles 按 skill_id 和关键词检索，返回最多 topK 个 bundle。
-//
 // 读操作，不加锁。
-//
 // Python: LocalFileBackend.download_bundles()
 func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, query sharing.QueryKeywords, topK int) ([]sharing.SharedSkillBundle, error) {
 	resolvedID := strings.TrimSpace(skillID)
@@ -277,9 +268,7 @@ func (b *LocalFileBackend) DownloadBundles(ctx context.Context, skillID string, 
 }
 
 // HasSkillPackage Hub 是否已有该技能包。
-//
 // 读操作，不加锁。
-//
 // Python: LocalFileBackend.has_skill_package()
 func (b *LocalFileBackend) HasSkillPackage(ctx context.Context, skillID string) (bool, error) {
 	resolvedID := strings.TrimSpace(skillID)
@@ -297,9 +286,7 @@ func (b *LocalFileBackend) HasSkillPackage(ctx context.Context, skillID string) 
 }
 
 // UploadSkillPackage 上传初始技能包（不可变，重复上传为 no-op）。
-//
 // 写操作，加写锁。
-//
 // Python: LocalFileBackend.upload_skill_package()
 func (b *LocalFileBackend) UploadSkillPackage(ctx context.Context, skillID string, packageBytes []byte, meta sharing.SkillPackageMeta) error {
 	resolvedID := strings.TrimSpace(skillID)
@@ -370,9 +357,7 @@ func (b *LocalFileBackend) UploadSkillPackage(ctx context.Context, skillID strin
 }
 
 // DownloadSkillPackage 下载技能包字节。
-//
 // 读操作，不加锁。
-//
 // Python: LocalFileBackend.download_skill_package()
 func (b *LocalFileBackend) DownloadSkillPackage(ctx context.Context, skillID string) ([]byte, error) {
 	resolvedID := strings.TrimSpace(skillID)
@@ -391,18 +376,14 @@ func (b *LocalFileBackend) DownloadSkillPackage(ctx context.Context, skillID str
 }
 
 // GetSkillPackageMeta 获取技能包元数据。
-//
 // 读操作，不加锁。
-//
 // Python: LocalFileBackend.get_skill_package_meta()
 func (b *LocalFileBackend) GetSkillPackageMeta(ctx context.Context, skillID string) (*sharing.SkillPackageMeta, error) {
 	return b.readPackageMeta(strings.TrimSpace(skillID)), nil
 }
 
 // SearchSkills 全局关键词搜索技能。
-//
 // 读操作，不加锁。
-//
 // Python: LocalFileBackend.search_skills()
 func (b *LocalFileBackend) SearchSkills(ctx context.Context, query sharing.QueryKeywords, topK int) ([]sharing.SkillSearchResult, error) {
 	entries := b.readGlobalIndex()
@@ -462,7 +443,6 @@ func (b *LocalFileBackend) SearchSkills(ctx context.Context, query sharing.Query
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // jaccard 计算两组关键词的 Jaccard 相似度，含子串降级逻辑。
-//
 // 1. 精确匹配：大小写不敏感，空集返回 0.0
 // 2. 子串降级：若无精确交集，任一对存在子串关系则返回 0.5/max(len(union),1)
 //
@@ -510,58 +490,49 @@ func jaccard(a, b []string) float64 {
 }
 
 // packageDir 返回技能包目录路径。
-//
 // Python: LocalFileBackend._package_dir()
 func (b *LocalFileBackend) packageDir(skillID string) string {
 	return filepath.Join(b.packagesDir, skillID)
 }
 
 // packageArchive 返回技能包归档文件路径。
-//
 // Python: LocalFileBackend._package_archive()
 func (b *LocalFileBackend) packageArchive(skillID string) string {
 	return filepath.Join(b.packageDir(skillID), "skill.tar.gz")
 }
 
 // packageMetaPath 返回技能包元数据文件路径。
-//
 // Python: LocalFileBackend._package_meta_path()
 func (b *LocalFileBackend) packageMetaPath(skillID string) string {
 	return filepath.Join(b.packageDir(skillID), "meta.json")
 }
 
 // bundleDir 返回 bundle 目录路径。
-//
 // Python: LocalFileBackend._bundle_dir()
 func (b *LocalFileBackend) bundleDir(skillID string) string {
 	return filepath.Join(b.bundlesDir, skillID)
 }
 
 // indexPath 返回按 skill_id 的索引文件路径。
-//
 // Python: LocalFileBackend._index_path()
 func (b *LocalFileBackend) indexPath(skillID string) string {
 	return filepath.Join(b.indexDir, skillID+".jsonl")
 }
 
 // globalIndexPath 返回全局索引文件路径。
-//
 // Python: LocalFileBackend._global_index_path()
 func (b *LocalFileBackend) globalIndexPath() string {
 	return filepath.Join(b.indexDir, globalIndexFileName)
 }
 
 // outboxSkillDir 返回 outbox 中 skill 的目录路径。
-//
 // Python: LocalFileBackend._outbox_skill_dir()
 func (b *LocalFileBackend) outboxSkillDir(skillID string) string {
 	return filepath.Join(b.outboxDir, skillID)
 }
 
 // duplicateRejectionReason 检查 bundle 是否与已有索引条目重复。
-//
 // 返回空字符串表示无重复，否则返回拒绝原因。
-//
 // Python: LocalFileBackend._duplicate_rejection_reason()
 func (b *LocalFileBackend) duplicateRejectionReason(skillID string, keywords []string) string {
 	if len(keywords) == 0 {
@@ -583,9 +554,7 @@ func (b *LocalFileBackend) duplicateRejectionReason(skillID string, keywords []s
 }
 
 // upsertGlobalIndex 更新或插入全局索引条目。
-//
 // 合并关键词、递增经验数、优先使用 meta.json 中的名称和描述。
-//
 // Python: LocalFileBackend._upsert_global_index()
 func (b *LocalFileBackend) upsertGlobalIndex(skillID string, bundle sharing.SharedSkillBundle) {
 	entries := b.readGlobalIndex()
@@ -640,7 +609,6 @@ func (b *LocalFileBackend) upsertGlobalIndex(skillID string, bundle sharing.Shar
 }
 
 // spoolToOutbox 将 bundle 暂存到 outbox 目录。
-//
 // Python: LocalFileBackend._spool_to_outbox()
 func (b *LocalFileBackend) spoolToOutbox(bundle sharing.SharedSkillBundle) {
 	skillID := strings.TrimSpace(bundle.SkillID)
@@ -668,9 +636,7 @@ func (b *LocalFileBackend) spoolToOutbox(bundle sharing.SharedSkillBundle) {
 }
 
 // ensureGlobalIndexEntry 确保全局索引中存在 skill_id 条目。
-//
 // 已存在则更新名称和描述，不存在则创建新条目。
-//
 // Python: LocalFileBackend._ensure_global_index_entry()
 func (b *LocalFileBackend) ensureGlobalIndexEntry(skillID string, meta sharing.SkillPackageMeta) {
 	entries := b.readGlobalIndex()
@@ -703,7 +669,6 @@ func (b *LocalFileBackend) ensureGlobalIndexEntry(skillID string, meta sharing.S
 }
 
 // readPackageMeta 读取技能包元数据。
-//
 // Python: LocalFileBackend._read_package_meta()
 func (b *LocalFileBackend) readPackageMeta(skillID string) *sharing.SkillPackageMeta {
 	if skillID == "" {
@@ -733,7 +698,6 @@ func (b *LocalFileBackend) readPackageMeta(skillID string) *sharing.SkillPackage
 }
 
 // readIndex 读取按 skill_id 的索引文件。
-//
 // Python: LocalFileBackend._read_index()
 func (b *LocalFileBackend) readIndex(skillID string) []map[string]any {
 	indexFile := b.indexPath(skillID)
@@ -769,7 +733,6 @@ func (b *LocalFileBackend) readIndex(skillID string) []map[string]any {
 }
 
 // readGlobalIndex 读取全局索引文件。
-//
 // Python: LocalFileBackend._read_global_index()
 func (b *LocalFileBackend) readGlobalIndex() []map[string]any {
 	path := b.globalIndexPath()
@@ -799,7 +762,6 @@ func (b *LocalFileBackend) readGlobalIndex() []map[string]any {
 }
 
 // writeGlobalIndex 写入全局索引文件。
-//
 // Python: LocalFileBackend._write_global_index()
 func (b *LocalFileBackend) writeGlobalIndex(entries []map[string]any) {
 	if err := os.MkdirAll(b.indexDir, 0o755); err != nil {
@@ -827,7 +789,6 @@ func (b *LocalFileBackend) writeGlobalIndex(entries []map[string]any) {
 }
 
 // loadBundle 从文件加载 bundle。
-//
 // Python: LocalFileBackend._load_bundle()
 func (b *LocalFileBackend) loadBundle(skillID, bundleID string) *sharing.SharedSkillBundle {
 	if bundleID == "" {

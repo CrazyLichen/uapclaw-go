@@ -13,15 +13,12 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WordParser DOCX 文件解析器。
-//
 // 仅覆写 ParseContent（对齐 Python WordParser 仅覆写 _parse）；
 // Supports 继承 BaseParser 默认 false（Python word_parser.py 无 supports
 // 覆写——路由靠 registry init 注册 .docx/.DOCX）。LazyParse/Process 经
 // self 动态派发继承。
-//
 // 软失败语义（对齐 Python 整体 except → return None）：任何内部错误 →
 // Error 日志 + 空串返回 → BaseParser.Parse 包装为空切片。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/parser/word_parser.py (WordParser)
 type WordParser struct {
 	// BaseParser 默认适配器
@@ -38,7 +35,6 @@ var _ Parser = (*WordParser)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWordParser 构造 WordParser。
-//
 // 零参数（对齐 Python __init__(**kwargs): pass）。
 func NewWordParser() (*WordParser, error) {
 	p := &WordParser{}
@@ -51,13 +47,10 @@ func NewWordParser() (*WordParser, error) {
 }
 
 // ParseContent 对齐 Python _parse：解析 DOCX 为 markdown 文本。
-//
 // 链路：构造 captioner → loadDocxModel → parseBlocks 保序遍历 →
 // 逐块 parseWordBlock（段落 markdown/图片 caption + 表格 markdown）→
 // "\n".join(strip 过滤行) → 空串对齐 None。
-//
 // 整体软失败：内部 error → Error 日志 + 空串（对齐 except → return None）。
-//
 // Python: word_parser.py WordParser._parse
 func (p *WordParser) ParseContent(ctx context.Context, filePath string, llmClient *llm.Model) (string, error) {
 	captioner := NewImageCaptioner(llmClient)
@@ -77,7 +70,6 @@ func (p *WordParser) ParseContent(ctx context.Context, filePath string, llmClien
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseWordDocx DOCX 解析主体（非导出，便于单测直接驱动）。
-//
 // Python: word_parser.py WordParser._parse 的 try 块主体（不含软失败包装）。
 func parseWordDocx(ctx context.Context, filePath, filename string, captioner *ImageCaptioner) (string, error) {
 	dm, err := loadDocxModel(filePath)
@@ -105,7 +97,6 @@ func parseWordDocx(ctx context.Context, filePath, filename string, captioner *Im
 }
 
 // parseWordBlock 对齐 Python _parse_block：段落 → markdown + 图片 caption；表格 → markdown。
-//
 // Python: word_parser.py WordParser._parse_block
 func parseWordBlock(ctx context.Context, dm *docxModel, blk docxBlock, paragraphNum int, filename string, captioner *ImageCaptioner) ([]string, error) {
 	if blk.kind == "para" {
@@ -138,10 +129,8 @@ func parseWordBlock(ctx context.Context, dm *docxModel, blk docxBlock, paragraph
 }
 
 // paragraphToMarkdown 对齐 Python _paragraph_to_markdown。
-//
 // Title → "#"、Heading N → N+1 个 "#"（1≤N≤9）；解析失败 Error 日志回落原文
 // （对齐 except (IndexError, ValueError) 分支）。
-//
 // Python: word_parser.py _paragraph_to_markdown
 func paragraphToMarkdown(text, styleName string) string {
 	text = strings.TrimSpace(text)
@@ -171,9 +160,7 @@ func paragraphToMarkdown(text, styleName string) string {
 }
 
 // tableToMarkdown 对齐 Python _table_to_markdown。
-//
 // 首行表头 + "---" 分隔 + cell strip + "\|" 转义 + 尾空行。
-//
 // Python: word_parser.py _table_to_markdown
 func tableToMarkdown(rows [][]string) string {
 	if len(rows) == 0 {

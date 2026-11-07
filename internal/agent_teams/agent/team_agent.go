@@ -1,10 +1,8 @@
 // Package agent 提供生产级团队 Agent（TeamAgent）实现。
-//
 // TeamAgent 是整个多 Agent 协作系统的核心编排节点，既可充当 Leader
 // （分发任务、协调成员），也可充当 Teammate（执行具体任务）。
 // 采用组合式架构：内部包裹 DeepAgent 实例（而非继承），
 // 委托给专职 Manager 管理配置/生成/恢复/会话/流式/协调。
-//
 // 四象限分解：
 //   - 静态蓝图（TeamAgentBlueprint）：构造时确定、不可变
 //   - 可变状态（TeamAgentState）：运行时可变值，跨 Manager 共享
@@ -975,7 +973,6 @@ func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) run
 
 // FromSpawnPayload 从生成载荷重构 TeamAgent。
 // Python: TeamAgent.from_spawn_payload(payload)（team_agent.py L721-746）
-//
 // payload 的 spec/context 由 BuildSpawnConfig 写入（model_dump 等价的
 // map[string]any），经跨进程 JSON 线路传输后子进程拿到的是 map 而非 struct——
 // S-26/S-27 关联修复：原直接类型断言 map→struct 恒失败（跨进程 payload 必然
@@ -1270,19 +1267,16 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // degradeAtRoundBoundary 把"轮次刚结束、controller 已回收"的投递失败降级为排队。
-//
 // M-02：`d.Steer/FollowUp` 现在会返回 ErrNoActiveLoop。这个错误出现在
 // "IsAgentRunning() 仍为真，但任务循环控制器已被 forceCleanupController 回收"
 // 的轮次切换窗口里——属正常竞态而非故障。Python 在同一窗口静默丢弃输入，
 // 这里改为降级投递到下一轮队列：消息不丢，也不给用户一个假错误。
 // 其余错误（会话缺失、发布失败）原样上抛，由调用方决定是否 failure。
 // sessionIDFromOptsOrCtx 解析本轮应绑定的 sessionID。
-//
 // M-19: 对齐 Python invoke(inputs, session=None) / stream(inputs, session=None) 的
 // 显式 session 参数语义——优先取 opts 传入的 SessionFacade；
 // opts 未传时回退 ctx 中 SessionState 的 sessionID（对齐 Python contextvar 兜底）。
 // sessionFromOptsOrCtx 返回本轮应绑定的会话对象（any，nil 表示无会话）。
-//
 // 25.1a 接线：CoordinationKernel.Start 需要 AgentTeamSession 对象来启动
 // harness 的 native supervisor（harness.Start(team_session=session) 会拿它建子会话）。
 // 旧实现 sessionIDFromOptsOrCtx 只提取 sessionID，把对象丢了——TeamSession 存 nil，
@@ -1395,7 +1389,6 @@ func (a *TeamAgent) SessionController() types.SessionController {
 // TeamBackendAccessor 返回 TeamBackend 访问器。
 // 满足 types.InfraAccessor 接口。
 // *tools.TeamBackend 直接满足 types.TeamBackendAccessor（编译期检查）。
-//
 // 显式判空后再返回：直接 return a.TeamBackend() 会把 nil *TeamBackend 装进
 // 接口，调用方 backendAccessor != nil 判定为真，随后解引用 nil 接收者 panic
 // （typed-nil 陷阱）。Python 侧属性为 None 时判空天然成立。
@@ -1648,7 +1641,6 @@ func (a *TeamAgent) MarkLiveTeammates(ctx context.Context, status string) error 
 // 满足 types.LifecycleAccessor 接口。
 // 对齐 Python: _close_stream → coordination.close_stream → stream_controller.close_stream
 // （put_nowait(None)，非阻塞写 nil sentinel）。
-//
 // 注意：不得 close(channel)——forwardOutputs 可能仍在该 channel 上 send，
 // close 与 send 并发会 panic/race；正确语义是写 nil sentinel 让读取方退出。
 func (a *TeamAgent) CloseStream() {

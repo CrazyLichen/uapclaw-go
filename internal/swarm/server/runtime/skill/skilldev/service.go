@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillDevService SkillDev 模式的服务入口（无状态）。
-//
 // 设计要点：
 //   - 无状态：不持有 Pipeline 对象，不做 Pipeline 生命周期管理
 //   - 每次请求：StateStore 加载状态 → 创建 Pipeline → 执行 → checkpoint → 释放
@@ -36,7 +35,6 @@ type SkillDevService struct {
 	// skilldevDeps 懒初始化的依赖（可为 nil，首次使用时通过 GetSkillDevDeps 初始化）
 	skilldevDeps *SkillDevDeps
 	// methodDispatch method → handler 映射，避免 if/elif 链。
-	//
 	// Python: _METHOD_DISPATCH
 	methodDispatch map[schema.ReqMethod]methodHandler
 }
@@ -44,7 +42,6 @@ type SkillDevService struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // methodHandler 方法处理函数签名。
-//
 // 返回 chunk channel，调用方逐个读取，channel 关闭表示结束。
 type methodHandler func(ctx context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error)
 
@@ -73,7 +70,6 @@ func NewSkillDevService(deps *SkillDevDeps) *SkillDevService {
 }
 
 // GetSkillDevDeps 懒初始化 SkillDevDeps。
-//
 // 如果 SkillDevDeps 尚未初始化，使用 deps 字段作为默认值。
 func (s *SkillDevService) GetSkillDevDeps() *SkillDevDeps {
 	s.mu.Lock()
@@ -92,9 +88,7 @@ func (s *SkillDevService) SetSkillDevDeps(deps *SkillDevDeps) {
 }
 
 // Handle 统一入口，根据 ReqMethod 分发到具体处理函数。
-//
 // 返回 chunk channel，调用方逐个读取，channel 关闭表示结束。
-//
 // Python: SkillDevService.handle(request) → AsyncIterator[AgentResponseChunk]
 func (s *SkillDevService) Handle(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	handler, ok := s.methodDispatch[request.ReqMethod]
@@ -127,7 +121,6 @@ func (s *SkillDevService) Handle(ctx context.Context, request *schema.AgentReque
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleStart 发起新任务。
-//
 // Python: SkillDevService._handle_start()
 func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
@@ -189,9 +182,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 }
 
 // handleRespond 统一确认入口。
-//
 // 前端只管发 {task_id, action, ...}，后端根据当前阶段自动路由。
-//
 // Python: SkillDevService._handle_respond()
 func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
@@ -259,9 +250,7 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 }
 
 // handleStatus 查状态 / 列任务。
-//
 // 传 task_id → 返回单个任务状态；不传 → 返回任务列表。
-//
 // Python: SkillDevService._handle_status()
 func (s *SkillDevService) handleStatus(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
@@ -305,7 +294,6 @@ func (s *SkillDevService) handleStatus(_ context.Context, params map[string]any,
 }
 
 // handleDownload 下载产物。
-//
 // Python: SkillDevService._handle_download()
 func (s *SkillDevService) handleDownload(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
@@ -357,7 +345,6 @@ func (s *SkillDevService) handleDownload(_ context.Context, params map[string]an
 }
 
 // handleCancel 取消任务。
-//
 // Python: SkillDevService._handle_cancel()
 func (s *SkillDevService) handleCancel(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	taskID, _ := params["task_id"].(string)
@@ -372,7 +359,6 @@ func (s *SkillDevService) handleCancel(_ context.Context, params map[string]any,
 }
 
 // handleFileList 获取工作区文件树（供产物弹窗浏览）。
-//
 // Python: SkillDevService._handle_file_list()
 func (s *SkillDevService) handleFileList(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
@@ -402,7 +388,6 @@ func (s *SkillDevService) handleFileList(_ context.Context, params map[string]an
 }
 
 // handleFileRead 读取工作区文件内容。
-//
 // Python: SkillDevService._handle_file_read()
 func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]any, requestID string, channelID string) (<-chan *schema.AgentResponseChunk, error) {
 	deps := s.GetSkillDevDeps()
@@ -471,7 +456,6 @@ func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]an
 }
 
 // eventToChunk 将 SkillDevEvent 转换为 AgentResponseChunk。
-//
 // Python: SkillDevService._event_to_chunk()
 func eventToChunk(evt SkillDevEvent, requestID, channelID string) *schema.AgentResponseChunk {
 	payload := map[string]any{"event_type": string(evt.EventType)}
@@ -482,7 +466,6 @@ func eventToChunk(evt SkillDevEvent, requestID, channelID string) *schema.AgentR
 }
 
 // errorChunk 构造错误 AgentResponseChunk。
-//
 // Python: SkillDevService._error_chunk()
 func errorChunk(requestID, channelID, message string) *schema.AgentResponseChunk {
 	return schema.NewAgentResponseChunk(requestID, channelID, map[string]any{
@@ -492,7 +475,6 @@ func errorChunk(requestID, channelID, message string) *schema.AgentResponseChunk
 }
 
 // singleChunkChannel 创建包含单个 chunk 的 channel 并关闭。
-//
 // 用于简单同步 handler（handleStatus/handleDownload/handleCancel/handleFileList/handleFileRead）。
 func singleChunkChannel(chunk *schema.AgentResponseChunk) <-chan *schema.AgentResponseChunk {
 	ch := make(chan *schema.AgentResponseChunk, 1)
@@ -502,7 +484,6 @@ func singleChunkChannel(chunk *schema.AgentResponseChunk) <-chan *schema.AgentRe
 }
 
 // buildFileTree 递归构建文件树。
-//
 // Python: SkillDevService._build_file_tree()
 func buildFileTree(directory string, root string) []map[string]any {
 	result := make([]map[string]any, 0)

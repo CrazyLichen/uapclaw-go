@@ -39,7 +39,6 @@ type ManagerOption func(*managerConfig)
 // 处理团队共享工作空间的锁定、版本控制、同步和冲突检测。
 // 文件 I/O 由 SysOperation 工具通过 .team/ 符号链接挂载处理，
 // 本管理器仅管理元数据和版本控制。
-//
 // 两种操作模式：
 //   - LOCAL：单 _team_workspace/ 目录、符号链接挂载、内存锁
 //   - DISTRIBUTED：每节点克隆、git push/pull 同步、Leader 协调锁（Phase 3）
@@ -109,7 +108,6 @@ func NewTeamWorkspaceManager(config TeamWorkspaceConfig, workspacePath, teamName
 //
 // 当 config.VersionControl 为 false 时，仅创建工作空间和产物目录，
 // 不初始化 git 仓库，工作空间作为普通共享目录使用。
-//
 // 当 config.VersionControl 为 true 时：
 //   - LOCAL 模式：git init 创建新仓库并提交空初始提交
 //   - DISTRIBUTED 模式 Leader：git init + 添加 remote origin（如提供 remoteURL）

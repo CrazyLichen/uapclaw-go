@@ -18,10 +18,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HierarchicalTeam 消息总线驱动的层级多 Agent 团队。
-//
 // 通过 SupervisorAgent 驱动 LLM 决策，自动将子 Agent 任务派发给团队中的其他 Agent。
 // 适用于"一个智能调度者 + 多个专业执行者"的场景。
-//
 // Python: HierarchicalTeam (hierarchical_msgbus/hierarchical_team.py)
 type HierarchicalTeam struct {
 	// card 团队身份卡片
@@ -51,7 +49,6 @@ var _ maschema.BaseTeam = (*HierarchicalTeam)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHierarchicalTeam 创建 HierarchicalTeam 实例。
-//
 // 参数：
 //   - card：团队身份卡片
 //   - config：完整配置
@@ -106,7 +103,6 @@ func NewHierarchicalTeam(card maschema.TeamCardInterface, config *HierarchicalTe
 }
 
 // Invoke 非流式调用团队，通过 supervisor 运行并返回最终结果。
-//
 // Python: HierarchicalTeam.invoke(message, session, timeout)
 func (t *HierarchicalTeam) Invoke(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (any, error) {
 	if err := t.assertReady(); err != nil {
@@ -158,7 +154,6 @@ func (t *HierarchicalTeam) Invoke(ctx context.Context, inputs map[string]any, op
 }
 
 // Stream 流式调用团队，运行 supervisor 并流式输出结果。
-//
 // Python: HierarchicalTeam.stream(message, session, timeout)
 func (t *HierarchicalTeam) Stream(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (<-chan stream.Schema, error) {
 	if err := t.assertReady(); err != nil {
@@ -214,10 +209,8 @@ func (t *HierarchicalTeam) Stream(ctx context.Context, inputs map[string]any, op
 }
 
 // AddAgent 向团队注册 Agent。
-//
 // 如果 Agent 已存在则跳过，否则注册到运行时。
 // 如果 card.ID == supervisorID，设置 P2P timeout。
-//
 // Python: HierarchicalTeam.add_agent(card, provider)
 func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
@@ -272,7 +265,6 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 }
 
 // RemoveAgent 从团队注销 Agent。
-//
 // Python: BaseTeam.remove_agent(agent)
 func (t *HierarchicalTeam) RemoveAgent(ctx context.Context, agentID string) error {
 	_, err := t.runtime.UnregisterAgent(ctx, agentID)
@@ -298,35 +290,30 @@ func (t *HierarchicalTeam) RemoveAgent(ctx context.Context, agentID string) erro
 }
 
 // Send P2P 发送消息，委托运行时。
-//
 // Python: BaseTeam.send(message, recipient, sender, session_id, timeout)
 func (t *HierarchicalTeam) Send(ctx context.Context, message map[string]any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
 	return t.runtime.Send(ctx, message, recipient, sender, opts...)
 }
 
 // Publish Pub-Sub 发布消息，委托运行时。
-//
 // Python: BaseTeam.publish(message, topic_id, sender, session_id)
 func (t *HierarchicalTeam) Publish(ctx context.Context, message map[string]any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	return t.runtime.Publish(ctx, message, topicID, sender, opts...)
 }
 
 // Subscribe 订阅主题，委托运行时。
-//
 // Python: BaseTeam.subscribe(agent_id, topic)
 func (t *HierarchicalTeam) Subscribe(ctx context.Context, agentID string, topic string) error {
 	return t.runtime.Subscribe(ctx, agentID, topic)
 }
 
 // Unsubscribe 取消订阅，委托运行时。
-//
 // Python: BaseTeam.unsubscribe(agent_id, topic)
 func (t *HierarchicalTeam) Unsubscribe(ctx context.Context, agentID string, topic string) error {
 	return t.runtime.Unsubscribe(ctx, agentID, topic)
 }
 
 // Configure 配置团队。
-//
 // Python: BaseTeam.configure(config) -> self
 func (t *HierarchicalTeam) Configure(_ context.Context, config maschema.TeamConfig) error {
 	t.config.TeamConfig = config
@@ -338,35 +325,30 @@ func (t *HierarchicalTeam) Configure(_ context.Context, config maschema.TeamConf
 }
 
 // GetAgentCard 获取 Agent 卡片，委托运行时。
-//
 // Python: BaseTeam.get_agent_card(agent_id)
 func (t *HierarchicalTeam) GetAgentCard(agentID string) (*agentschema.AgentCard, error) {
 	return t.runtime.GetAgentCard(agentID)
 }
 
 // GetAgentCount 获取 Agent 数量，委托运行时。
-//
 // Python: BaseTeam.get_agent_count()
 func (t *HierarchicalTeam) GetAgentCount() int {
 	return t.runtime.GetAgentCount()
 }
 
 // ListAgents 列出所有 Agent ID，委托运行时。
-//
 // Python: BaseTeam.list_agents()
 func (t *HierarchicalTeam) ListAgents() []string {
 	return t.runtime.ListAgents()
 }
 
 // Card 返回团队身份卡片。
-//
 // Python: BaseTeam.card 属性
 func (t *HierarchicalTeam) Card() maschema.TeamCardInterface {
 	return t.card
 }
 
 // Config 返回团队配置。
-//
 // Python: BaseTeam.config 属性
 func (t *HierarchicalTeam) Config() *maschema.TeamConfig {
 	return &t.config.TeamConfig
@@ -375,9 +357,7 @@ func (t *HierarchicalTeam) Config() *maschema.TeamConfig {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // assertReady 校验团队就绪状态。
-//
 // 校验 supervisorID 非空且 runtime.HasAgent(supervisorID)。
-//
 // Python: HierarchicalTeam._assert_ready()
 func (t *HierarchicalTeam) assertReady() error {
 	if t.supervisorID == "" {

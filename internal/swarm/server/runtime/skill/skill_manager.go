@@ -137,7 +137,6 @@ func (sm *SkillManager) SetSkillnetInstallCompleteHook(hook func(ctx context.Con
 }
 
 // HasPendingSkillnetInstall 检查是否有 pending 的 SkillNet 安装任务。
-//
 // Python: SkillManager 中检查 _skillnet_install_jobs 是否有 pending 状态的任务
 func (sm *SkillManager) HasPendingSkillnetInstall() bool {
 	sm.mu.RLock()
@@ -3235,7 +3234,6 @@ func (sm *SkillManager) teamSkillsHubHTTPGet(ctx context.Context, path string, p
 }
 
 // installFailedResult 构造 TeamSkillsHub 安装失败响应（detail + detail_key）。
-//
 // 对齐 Python: except Exception as exc → {"success": False, "detail": str(exc)[:500],
 // "detail_key": "skills.teamskillshub.errors.installFailed"}
 func installFailedResult(detail string) map[string]any {
@@ -3247,7 +3245,6 @@ func installFailedResult(detail string) map[string]any {
 }
 
 // truncateDetailRunes 按 rune 截断 detail，避免 CJK 被字节切断。
-//
 // 对齐 Python: str(exc)[:500]
 func truncateDetailRunes(s string, maxRunes int) string {
 	if maxRunes <= 0 {
@@ -3376,7 +3373,6 @@ func (sm *SkillManager) downloadZipAndVerify(ctx context.Context, downloadURL, c
 // ──────────────────────────── teamskillshub 助手 ────────────────────────────
 
 // buildSkillScaffold 生成 SKILL.md 骨架。
-//
 // teamskills 类型需要 kind 与 roles 两段：下游 validate 按 kind 判定技能类别，
 // 按 roles 生成团队成员；缺了任一项，建出来的目录通不过校验。
 func buildSkillScaffold(name, skillType string) string {
@@ -3397,7 +3393,6 @@ func buildSkillScaffold(name, skillType string) string {
 }
 
 // isWindowsAbsPath 判断是否 Windows 绝对路径（含盘符或 UNC）。
-//
 // 跨平台判定：Linux 上 filepath.IsAbs 不认 "C:\\"，但配置可能来自
 // Windows 客户端，仍需拦下。
 func isWindowsAbsPath(p string) bool {
@@ -3408,11 +3403,9 @@ func isWindowsAbsPath(p string) bool {
 }
 
 // lookupSkillSlugByName 按原始 name 从 local_skills 记录里取目录 slug。
-//
 // 历史安装可能写入含 / 的 name，而目录名用的是扁平化 slug（origin 形如
 // "teamskillshub:<slug>"）。卸载时按 name 定位不到目录，需要靠它兜底。
 // 找不到时返回空串，由调用方按原错误拒绝。
-//
 // 调用方必须已持有 sm.mu。
 func (sm *SkillManager) lookupSkillSlugByName(name string) string {
 	local, ok := sm.state["local_skills"].([]map[string]any)

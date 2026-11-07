@@ -182,7 +182,6 @@ func emitTodoUpdated(ctx context.Context, session sessioninterfaces.SessionFacad
 }
 
 // EmitContextUsage 发送 context.usage 事件（context-usage.v1 快照）。
-//
 // 载荷必须是完整快照：前端 parseContextUsageSnapshot 校验不过会整条丢弃，
 // 旧扁平 {rate, context_max, tokens_used} 板会让上下文指示器彻底失效。
 // Python: react_agent._emit_context_usage → OutputSchema(payload=snapshot.model_dump())
@@ -303,7 +302,6 @@ func FormatTodosForFrontend(todosData []hschema.TodoItem) []map[string]any {
 }
 
 // contextUsageSnapshotPayload 把快照转成 map 形态的流载荷。
-//
 // 两步必要性：①ParseStreamChunk 对 context.usage 只做 map 断言，结构体会被
 // 兜成空载荷；②前端校验 v1 必填字段（schema_version/phase/request_id/
 // product_session_id/context_window/parts），字段名必须是 json tag。

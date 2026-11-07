@@ -13,11 +13,9 @@ import "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RequestCacheFromUsage 把 provider 上报的用量转成请求级 KV cache 用量。
-//
 // provider 归一字段（CacheReadTokens/CacheMissTokens，C-B3 批次接线）优先直接采用；
 // 归一字段缺失（如只带 legacy CacheTokens 的旧 provider）时回落旧算法：
 // miss = 输入 − 命中，负数钳制为 0。
-//
 // Python: provider_usage.request_kv_cache_usage()
 func RequestCacheFromUsage(meta *schema.UsageMetadata) RequestKVCacheUsage {
 	const notReported = "not_reported"
@@ -71,10 +69,8 @@ func RequestCacheFromUsage(meta *schema.UsageMetadata) RequestKVCacheUsage {
 }
 
 // AggregateSessionCache 汇总一次会话内的请求级 KV cache 用量（token 加权）。
-//
 // 命中率 = Σ命中 / Σ输入，只统计已上报输入的调用；未上报的调用单独计数，
 // 让前端能区分"没有缓存"与"没上报"。
-//
 // Python: session_aggregator.aggregate()
 func AggregateSessionCache(requests []RequestKVCacheUsage) SessionKVCacheUsage {
 	out := SessionKVCacheUsage{

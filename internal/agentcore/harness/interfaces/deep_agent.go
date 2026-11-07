@@ -133,7 +133,6 @@ type DeepAgentInterface interface {
 }
 
 // UnimplementedDeepAgentInteraction DeepAgentInterface 交互方法的空实现，供测试替身嵌入。
-//
 // 生产实现（*DeepAgent）必须自己实现这 10 个方法；测试替身若与交互无关，
 // 嵌入本结构即可满足接口，不必逐个空写。gRPC 的 UnimplementedXxxServer 同款用法。
 // Python: 无对应物（Python 用 unittest.mock 的动态属性）

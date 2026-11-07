@@ -48,7 +48,6 @@ func (s *stubAgenticLLM) Release(_ context.Context, _ ...model_clients.ReleaseOp
 func (s *stubAgenticLLM) SupportsKVCacheRelease() bool { return false }
 
 // agenticLLMDispatch 按 prompt 内容分派的可编程 LLM 桩。
-//
 // 分派规则（13.17 dispatchTripleClient 先例——与调度序解耦）：
 //   - prompt 含 "knowledge triples, which are structured"（readPrompt 特征）
 //     → readFn
@@ -95,7 +94,6 @@ func (d *agenticLLMDispatch) Invoke(_ context.Context, messages model_clients.Me
 }
 
 // agenticFakeRetriever 可编程检索器桩（不动 13.23 现有桩）。
-//
 // retrieveFn/rsrFn 闭包注入；调用记录 mu 保护（_link gather 并发）；
 // indexType 实现 IndexTypeCarrier（defaultMode 三态测试）。
 type agenticFakeRetriever struct {
@@ -400,7 +398,6 @@ func TestBatchRetrieve(t *testing.T) {
 // ──────────────────────────── 图路径测试 ────────────────────────────
 
 // newGraphSetup 图路径脚手架：真 GraphRetriever + 双桩（chunk/triple）+ LLM。
-//
 // 链路可控性（spec §6.1/Q6 拍板）：GetRetrieverForMode 固定优先返回桩；
 // GraphExpansion 真方法在「proximal 空 → linked 空 → fetchTriples 空 →
 // 返回原 chunks」路径行为确定（beam search 深路径归 13.23 的 48 测试，

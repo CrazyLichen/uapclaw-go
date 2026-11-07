@@ -1,10 +1,8 @@
 // Package transport 提供 Gateway ↔ AgentServer 的传输抽象、Wire 编码工具与进程内传输实现。
-//
 // 本包定义 AgentTransport 接口（Send/Recv/Close），对齐 Python WebSocket 单连接模型，
 // E2A Wire 编码工具函数（WireRequestIDKey、BuildConnectionAckFrame、BuildServerPushWire），
 // 以及进程内传输实现 ChannelTransport（基于 Go channel）。
 // 将来跨进程传输实现 WebSocketTransport 也在本包中。
-//
 // 文件目录：
 //
 //	transport/

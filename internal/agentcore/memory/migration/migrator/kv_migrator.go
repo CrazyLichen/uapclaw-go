@@ -27,7 +27,6 @@ type Migrator interface {
 // KVMigrator KV 存储迁移执行器。
 // 版本跟踪通过 KV_STORE 自身的 key MEMORY_MIGRATION_KV_SCHEMA_VERSION。
 // 迁移前创建备份，失败时从备份恢复。
-//
 // Python: openjiuwen/core/memory/migration/migrator/kv_migrator.py (KVMigrator)
 type KVMigrator struct {
 	// kvStore KV 存储实例
@@ -60,7 +59,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewKVMigrator 创建 KVMigrator 实例。
-//
 // Python: KVMigrator(kv_store)
 func NewKVMigrator(kvStore kv.BaseKVStore, kvRegistry *operation.OperationRegistry) *KVMigrator {
 	return &KVMigrator{kvStore: kvStore, kvRegistry: kvRegistry}
@@ -68,7 +66,6 @@ func NewKVMigrator(kvStore kv.BaseKVStore, kvRegistry *operation.OperationRegist
 
 // TryMigrate 尝试执行 KV 迁移。
 // 校验 entityKey、校验操作顺序、比较版本、创建备份后逐个执行操作，失败时从备份恢复。
-//
 // Python: KVMigrator.try_migrate(entity_key, operations)
 func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
 	// 只认固定的全局实体 key，传进来别的值说明调用方用错了，直接报错退出。
@@ -163,7 +160,6 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getCurrentVersion 获取当前 KV schema 版本。
-//
 // Python: KVMigrator._get_current_version
 func (m *KVMigrator) getCurrentVersion(ctx context.Context) (*int, error) {
 	versionBytes, err := m.kvStore.Get(ctx, KVSchemaVersionKey)
@@ -208,7 +204,6 @@ func (m *KVMigrator) getCurrentVersion(ctx context.Context) (*int, error) {
 }
 
 // hasMemoryModuleData 检查 KV store 是否包含记忆模块数据。
-//
 // Python: KVMigrator._has_memory_module_data
 func (m *KVMigrator) hasMemoryModuleData(ctx context.Context) (bool, error) {
 	prefixes := common.KVPrefixRegistry.GetAllPrefixes()
@@ -225,7 +220,6 @@ func (m *KVMigrator) hasMemoryModuleData(ctx context.Context) (bool, error) {
 }
 
 // updateVersion 更新 KV schema 版本。
-//
 // Python: KVMigrator._update_version
 func (m *KVMigrator) updateVersion(ctx context.Context, version int) error {
 	if err := m.kvStore.Set(ctx, KVSchemaVersionKey, []byte(strconv.Itoa(version))); err != nil {
@@ -236,7 +230,6 @@ func (m *KVMigrator) updateVersion(ctx context.Context, version int) error {
 }
 
 // executeOperation 执行单个迁移操作。
-//
 // Python: KVMigrator._execute_operation
 func (m *KVMigrator) executeOperation(ctx context.Context, op operation.Operation) error {
 	switch o := op.(type) {
@@ -251,7 +244,6 @@ func (m *KVMigrator) executeOperation(ctx context.Context, op operation.Operatio
 }
 
 // createBackup 创建 KV 数据备份。
-//
 // Python: KVMigrator._create_backup
 func (m *KVMigrator) createBackup(ctx context.Context, currentVersion *int) (string, error) {
 	backupKey := fmt.Sprintf("%s_BACKUP_%d", KVSchemaVersionKey, time.Now().UnixMilli())
@@ -293,7 +285,6 @@ func (m *KVMigrator) createBackup(ctx context.Context, currentVersion *int) (str
 }
 
 // restoreFromBackup 从备份恢复 KV 数据。
-//
 // Python: KVMigrator._restore_from_backup
 func (m *KVMigrator) restoreFromBackup(ctx context.Context, backupKey string) error {
 	backupJSON, err := m.kvStore.Get(ctx, backupKey)
@@ -329,7 +320,6 @@ func (m *KVMigrator) restoreFromBackup(ctx context.Context, backupKey string) er
 }
 
 // cleanupBackup 清理备份数据。
-//
 // Python: KVMigrator._cleanup_backup
 func (m *KVMigrator) cleanupBackup(ctx context.Context, backupKey string) {
 	if err := m.kvStore.Delete(ctx, backupKey); err != nil {
@@ -340,7 +330,6 @@ func (m *KVMigrator) cleanupBackup(ctx context.Context, backupKey string) {
 }
 
 // validateOperationsOrder 校验操作列表的 schema_version 严格升序。
-//
 // Python: KVMigrator._validate_operations_order
 func validateOperationsOrder(operations []operation.Operation) bool {
 	for i := 0; i < len(operations)-1; i++ {
@@ -352,7 +341,6 @@ func validateOperationsOrder(operations []operation.Operation) bool {
 }
 
 // filterPendingOperations 过滤出 schema_version > currentVersion 的操作。
-//
 // 对齐 Python: [op for op in operations if current_version is None or op.schema_version > current_version]
 func filterPendingOperations(operations []operation.Operation, currentVersion *int) []operation.Operation {
 	if currentVersion == nil {

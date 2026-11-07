@@ -28,7 +28,6 @@ import (
 // ──────────────────────────── Mock 测试桩 ────────────────────────────
 
 // railFsOperation 测试用文件操作桩（路径→内容）
-//
 // 对齐 Python _make_sys_operation + sys_operation.fs().write_file 的
 // 文件准备方式，但以内存 map 模拟 ReadFile。
 type railFsOperation struct {
@@ -197,7 +196,6 @@ func (a *railAgent) UnregisterRail(ctx context.Context, rail sainterfaces.AgentR
 var _ sainterfaces.BaseAgent = (*railAgent)(nil)
 
 // newRailTestEnv 构造 rail 集成层测试环境。
-//
 // 对齐 Python 测试的 _make_sys_operation + _make_agent + register_rail：
 //   - root：t.TempDir 工作空间根
 //   - builder：真实 SystemPromptBuilder（验证节注入/移除）

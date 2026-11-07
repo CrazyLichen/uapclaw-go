@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // SessionActivityParticipant 会话活动事件参与者。
-//
 // Python: runtime/session_lifecycle.py SessionActivityParticipant
 type SessionActivityParticipant interface {
 	// SessionInputIntent 用户意图继续会话
@@ -24,7 +23,6 @@ type SessionActivityParticipant interface {
 }
 
 // SessionDeleteParticipant 会话永久删除参与者。
-//
 // Python: runtime/session_lifecycle.py SessionDeleteParticipant
 type SessionDeleteParticipant interface {
 	// Name 参与者名称（日志用）
@@ -40,7 +38,6 @@ type SessionDeleteParticipant interface {
 }
 
 // RuntimeResourceLease Runtime 持有的资源租约。
-//
 // Python: runtime/session_lifecycle.py RuntimeResourceLease
 type RuntimeResourceLease interface {
 	// Release 释放资源
@@ -48,7 +45,6 @@ type RuntimeResourceLease interface {
 }
 
 // SessionRuntimeLifecyclePort 由 AgentRuntime 编排的团队域生命周期动作。
-//
 // Python: runtime/session_lifecycle.py SessionRuntimeLifecyclePort
 type SessionRuntimeLifecyclePort interface {
 	// RemoveResponseWaiter 移除当前请求拥有的响应等待者
@@ -66,7 +62,6 @@ type SessionRuntimeLifecyclePort interface {
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionDescriptor 传输无关的持久会话身份与路由元数据。
-//
 // Python: runtime/session_lifecycle.py SessionDescriptor
 type SessionDescriptor struct {
 	// SessionID 会话标识
@@ -86,7 +81,6 @@ type SessionDescriptor struct {
 }
 
 // SessionLifecycleTarget 活动事件与永久删除事件共享的已解析身份。
-//
 // Python: runtime/session_lifecycle.py SessionLifecycleTarget
 type SessionLifecycleTarget struct {
 	// Descriptor 会话描述符
@@ -98,7 +92,6 @@ type SessionLifecycleTarget struct {
 }
 
 // SessionInputIntentEvent 用户意图继续会话，与消费者无关。
-//
 // Python: runtime/session_lifecycle.py SessionInputIntentEvent
 type SessionInputIntentEvent struct {
 	// Target 会话身份
@@ -112,7 +105,6 @@ type SessionInputIntentEvent struct {
 }
 
 // SessionForegroundEvent 会话前台可见性变更。
-//
 // Python: runtime/session_lifecycle.py SessionForegroundEvent
 type SessionForegroundEvent struct {
 	// Target 会话身份
@@ -126,7 +118,6 @@ type SessionForegroundEvent struct {
 }
 
 // SessionExecutionEvent 会话内一次执行开始。
-//
 // Python: runtime/session_lifecycle.py SessionExecutionEvent
 type SessionExecutionEvent struct {
 	// Target 会话身份
@@ -138,7 +129,6 @@ type SessionExecutionEvent struct {
 }
 
 // SessionExecutionFinishedEvent 会话内一次执行结束。
-//
 // Python: runtime/session_lifecycle.py SessionExecutionFinishedEvent
 type SessionExecutionFinishedEvent struct {
 	// Target 会话身份
@@ -150,7 +140,6 @@ type SessionExecutionFinishedEvent struct {
 }
 
 // SessionInactiveEvent 会话已无活跃工作。
-//
 // Python: runtime/session_lifecycle.py SessionInactiveEvent
 type SessionInactiveEvent struct {
 	// Target 会话身份
@@ -158,7 +147,6 @@ type SessionInactiveEvent struct {
 }
 
 // RuntimeParticipantRegistry 单个 AgentRuntime 内的参与者登记表。
-//
 // Python: runtime/session_lifecycle.py RuntimeParticipantRegistry
 //
 // 上游是单线程 asyncio 故无锁；Go 有并发 goroutine，用 RWMutex 保护
@@ -177,7 +165,6 @@ type RuntimeParticipantRegistry struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // SessionKind 生命周期参与者使用的稳定业务种类。
-//
 // Python: runtime/session_lifecycle.py SessionKind
 type SessionKind string
 
@@ -189,7 +176,6 @@ const (
 )
 
 // SessionInputIntentDisposition 输入意图的处置结果。
-//
 // Python: runtime/session_lifecycle.py SessionInputIntentDisposition
 type SessionInputIntentDisposition string
 
@@ -203,7 +189,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRuntimeParticipantRegistry 创建空的参与者登记表。
-//
 // Python: RuntimeParticipantRegistry.__init__
 func NewRuntimeParticipantRegistry() *RuntimeParticipantRegistry {
 	return &RuntimeParticipantRegistry{
@@ -212,7 +197,6 @@ func NewRuntimeParticipantRegistry() *RuntimeParticipantRegistry {
 }
 
 // ReplaceSessionParticipants 整体替换活动与删除参与者。
-//
 // Python: RuntimeParticipantRegistry.replace_session_participants
 func (r *RuntimeParticipantRegistry) ReplaceSessionParticipants(
 	activity []SessionActivityParticipant,
@@ -225,7 +209,6 @@ func (r *RuntimeParticipantRegistry) ReplaceSessionParticipants(
 }
 
 // SnapshotActivity 返回活动参与者快照（副本）。
-//
 // Python: RuntimeParticipantRegistry.snapshot_activity
 func (r *RuntimeParticipantRegistry) SnapshotActivity() []SessionActivityParticipant {
 	r.mu.RLock()
@@ -234,7 +217,6 @@ func (r *RuntimeParticipantRegistry) SnapshotActivity() []SessionActivityPartici
 }
 
 // SnapshotDelete 返回删除参与者快照（副本）。
-//
 // Python: RuntimeParticipantRegistry.snapshot_delete
 func (r *RuntimeParticipantRegistry) SnapshotDelete() []SessionDeleteParticipant {
 	r.mu.RLock()
@@ -243,7 +225,6 @@ func (r *RuntimeParticipantRegistry) SnapshotDelete() []SessionDeleteParticipant
 }
 
 // RememberTarget 记住已解析的会话身份。
-//
 // Python: RuntimeParticipantRegistry.remember_target
 func (r *RuntimeParticipantRegistry) RememberTarget(target SessionLifecycleTarget) {
 	r.mu.Lock()
@@ -252,7 +233,6 @@ func (r *RuntimeParticipantRegistry) RememberTarget(target SessionLifecycleTarge
 }
 
 // Target 取已记住的会话身份（返回副本，nil 表示未记住）。
-//
 // Python: RuntimeParticipantRegistry.target
 func (r *RuntimeParticipantRegistry) Target(sessionID string) *SessionLifecycleTarget {
 	r.mu.RLock()
@@ -265,7 +245,6 @@ func (r *RuntimeParticipantRegistry) Target(sessionID string) *SessionLifecycleT
 }
 
 // ForgetTarget 遗忘某个会话身份。
-//
 // Python: RuntimeParticipantRegistry.forget_target
 func (r *RuntimeParticipantRegistry) ForgetTarget(sessionID string) {
 	r.mu.Lock()
@@ -274,7 +253,6 @@ func (r *RuntimeParticipantRegistry) ForgetTarget(sessionID string) {
 }
 
 // ClearTargets 清空全部已记住身份。
-//
 // Python: RuntimeParticipantRegistry.clear_targets
 func (r *RuntimeParticipantRegistry) ClearTargets() {
 	r.mu.Lock()

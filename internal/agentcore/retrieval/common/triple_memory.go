@@ -8,11 +8,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TripleMemory 多跳检索的事实记忆（AgenticRetriever 消费）。
-//
 // includedTriples 以小写化 join 字符串为键跨轮去重；memory 保序累积；
 // TriplesStr 渲染为提示词注入串。单 goroutine 使用（Python 无锁，
 // 13.25 消费同为单协程迭代循环），不加 mutex（spec 决策 7）。
-//
 // Python: openjiuwen/core/retrieval/common/triple_memory.py
 type TripleMemory struct {
 	// includedTriples 去重键集合（tuple2str：逐项 lower 后空格 join）
@@ -24,7 +22,6 @@ type TripleMemory struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TripleFact 读取侧三元组事实（定长 3 元：主语/谓语/宾语）。
-//
 // Python 对应物是 tuple[str, ...] 变长元组——_read LLM 输出经
 // len(triple) == 3 过滤后恒为 3 元，Go 定长数组编译期收窄（偏差
 // 归档 spec §8-2）。写入侧结构化模型见 Triple（13.17，带 Metadata），

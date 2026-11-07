@@ -12,7 +12,6 @@ import (
 
 // TestResolvePathSandbox_使用Ctx中的工作区 回归：沙箱根必须从调用方 ctx 的
 // CwdState 读取（对齐 Python get_workspace()/get_project_root() 的 contextvar 语义）。
-//
 // 历史缺陷：resolvePath 用 context.Background() 读 CwdState，恒为空 →
 // sandboxRoots 为空 → RestrictToSandbox=true（生产默认）下所有绝对路径被拒，
 // 表现为记忆工具「写入报成功但没落盘」。
@@ -70,7 +69,6 @@ func TestResolvePathSandbox_相对路径基准取自Ctx(t *testing.T) {
 }
 
 // TestResolvePathSandbox_前缀相似目录越界 回归（S-02）：/ws 不得包含 /ws-evil。
-//
 // 历史缺陷：用 strings.HasPrefix 做包含判定，路径段边界未对齐，
 // 同级前缀目录（root=/ws，target=/ws-evil/x）被误判为沙箱内。
 func TestResolvePathSandbox_前缀相似目录越界(t *testing.T) {

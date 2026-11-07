@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GorillaCheckOrigin 返回适用于 gorilla/websocket Upgrader.CheckOrigin 的函数。
-//
 // 使用示例：
 //
 //	upgrader := websocket.Upgrader{

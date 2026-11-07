@@ -3,7 +3,6 @@ package config
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MessageQueueType 消息队列类型枚举。
-//
 // Python: MessageQueueType(str, Enum)
 type MessageQueueType string
 

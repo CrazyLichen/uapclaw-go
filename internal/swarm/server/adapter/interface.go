@@ -11,10 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentAdapter Agent 适配器接口（swarm 侧定义）。
-//
 // 最小能力集，UapClawSwarm 门面仅依赖此接口驱动任意 SDK 后端，
 // 不耦合其内部结构。
-//
 // Python: jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py (AgentAdapter)
 type AgentAdapter interface {
 	// CreateInstance 初始化底层 SDK Agent。
@@ -62,7 +60,6 @@ type AgentAdapter interface {
 
 // ContextCompressor 上下文压缩可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
-//
 // Python: JiuWenClawDeepAdapter.compress_context / get_context_usage / generate_recap
 type ContextCompressor interface {
 	// CompressContext 触发上下文压缩。
@@ -78,7 +75,6 @@ type ContextCompressor interface {
 
 // DreamingController Dreaming 启停可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
-//
 // Python: JiuWenClawDeepAdapter.try_start_dreaming / try_stop_dreaming
 type DreamingController interface {
 	// TryStartDreaming 尝试启动 dreaming 进程。
@@ -91,7 +87,6 @@ type DreamingController interface {
 
 // GatewayDisconnectHandler Gateway 断连处理可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
-//
 // Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect
 type GatewayDisconnectHandler interface {
 	// AbortOnGatewayDisconnect Gateway 断连时全局中止。

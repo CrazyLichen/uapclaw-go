@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Manager 会话级动态提示词片段存储。
-//
 // Python: PromptAttachmentManager（in-memory，per-session bucket）
 type Manager struct {
 	// mu 保护 items
@@ -30,7 +29,6 @@ type Manager struct {
 }
 
 // AttachmentUpdate 允许修改的字段，nil 表示不改。
-//
 // Python: PromptAttachmentUpdate（exclude_unset 语义）
 type AttachmentUpdate struct {
 	// Kind 片段类型
@@ -64,7 +62,6 @@ func NewManager() *Manager {
 }
 
 // AddSection 新增或覆盖一个 section。
-//
 // Python: add_section + _add + _normalize_for_write
 func (m *Manager) AddSection(sessionID, section, content string, kind AttachmentKind, source string, opts ...AttachmentOption) (*Attachment, error) {
 	a := &Attachment{
@@ -118,7 +115,6 @@ func (m *Manager) AddSection(sessionID, section, content string, kind Attachment
 }
 
 // ClearSection 删除一个 section，返回删除条数。
-//
 // Python: clear_section
 func (m *Manager) ClearSection(sessionID, section string) (int, error) {
 	m.mu.Lock()
@@ -138,14 +134,12 @@ func (m *Manager) ClearSection(sessionID, section string) (int, error) {
 }
 
 // ClearSource 清空某来源（可限定会话）。
-//
 // Python: clear_source
 func (m *Manager) ClearSource(source, sessionID string) (int, error) {
 	return m.RemoveByFilter(AttachmentFilter{Source: source, SessionID: sessionID})
 }
 
 // RemoveByFilter 按过滤器删除；无过滤器且未 AllowAll 时拒绝（破坏性守卫）。
-//
 // Python: remove_by_filter + _validate_destructive_filter
 func (m *Manager) RemoveByFilter(f AttachmentFilter) (int, error) {
 	if f.SessionID == "" && f.Section == "" && f.Kind == "" && f.Source == "" && !f.AllowAll {
@@ -182,7 +176,6 @@ func (m *Manager) RemoveByFilter(f AttachmentFilter) (int, error) {
 }
 
 // Collect 返回会话可见（未过期）的附件，按 (priority, source, section) 稳定排序。
-//
 // Python: collect_for_session
 func (m *Manager) Collect(sessionID string) ([]*Attachment, error) {
 	m.mu.Lock()
@@ -214,7 +207,6 @@ func (m *Manager) Collect(sessionID string) ([]*Attachment, error) {
 }
 
 // GetByID 按 id 查询。
-//
 // Python: get_by_id
 func (m *Manager) GetByID(id, sessionID string) (*Attachment, error) {
 	m.mu.RLock()
@@ -234,7 +226,6 @@ func (m *Manager) GetByID(id, sessionID string) (*Attachment, error) {
 }
 
 // ListByFilter 按过滤器查询；SessionID 为空时跨全部会话（对齐上游 session_id=None）。
-//
 // Python: list_by_filter
 func (m *Manager) ListByFilter(f AttachmentFilter) ([]*Attachment, error) {
 	m.mu.RLock()
@@ -271,7 +262,6 @@ func (m *Manager) ListByFilter(f AttachmentFilter) ([]*Attachment, error) {
 }
 
 // Find 查询指定会话内某个来源的 section，返回首条（无则 nil）。
-//
 // 供运行时 rail 恢复"上次已物化的 section"，避免重复推送同一差异。
 func (m *Manager) Find(sessionID, section, source string) *Attachment {
 	items, err := m.ListByFilter(AttachmentFilter{
@@ -286,7 +276,6 @@ func (m *Manager) Find(sessionID, section, source string) *Attachment {
 }
 
 // ClearSession 清空一个会话。
-//
 // Python: clear_session
 func (m *Manager) ClearSession(sessionID string) (int, error) {
 	m.mu.Lock()
@@ -297,7 +286,6 @@ func (m *Manager) ClearSession(sessionID string) (int, error) {
 }
 
 // ClearAll 清空全部会话。
-//
 // Python: clear_all
 func (m *Manager) ClearAll() (int, error) {
 	m.mu.Lock()
@@ -311,7 +299,6 @@ func (m *Manager) ClearAll() (int, error) {
 }
 
 // UpdateByID 按 id 更新；id/section/session/created_at 不可变。
-//
 // Python: update_by_id（不存在抛 KeyError → Go 返回 error）
 func (m *Manager) UpdateByID(id string, u AttachmentUpdate) (*Attachment, error) {
 	m.mu.Lock()
@@ -363,7 +350,6 @@ func (m *Manager) UpdateByID(id string, u AttachmentUpdate) (*Attachment, error)
 }
 
 // RemoveByID 按 id 删除，sessionID 非空时校验归属。
-//
 // Python: remove_by_id
 func (m *Manager) RemoveByID(id, sessionID string) (bool, error) {
 	m.mu.Lock()
@@ -383,7 +369,6 @@ func (m *Manager) RemoveByID(id, sessionID string) (bool, error) {
 }
 
 // UpdateContentByID 只改内容（可带 content_kind）。
-//
 // Python: update_content_by_id
 func (m *Manager) UpdateContentByID(id, content, sessionID string, contentKind *string) (*Attachment, error) {
 	current, err := m.GetByID(id, sessionID)
@@ -397,7 +382,6 @@ func (m *Manager) UpdateContentByID(id, content, sessionID string, contentKind *
 }
 
 // UpdateMetadataByID 更新 metadata；merge=false 时整体替换。
-//
 // Python: update_metadata_by_id
 func (m *Manager) UpdateMetadataByID(id string, metadata map[string]any, sessionID string, merge bool) (*Attachment, error) {
 	current, err := m.GetByID(id, sessionID)
@@ -420,7 +404,6 @@ func (m *Manager) UpdateMetadataByID(id string, metadata map[string]any, session
 }
 
 // ReplaceSource 先删同来源再整体重写。
-//
 // Python: replace_source
 func (m *Manager) ReplaceSource(source string, items []*Attachment, sessionID string) ([]*Attachment, error) {
 	if _, err := m.RemoveByFilter(AttachmentFilter{Source: source, SessionID: sessionID}); err != nil {
@@ -453,7 +436,6 @@ func (m *Manager) ReplaceSource(source string, items []*Attachment, sessionID st
 }
 
 // AddFileReference 以文件引用形式新增一段（content 为摘要或路径）。
-//
 // Python: add_file_reference
 func (m *Manager) AddFileReference(sessionID, filePath, summary, section, source string) (*Attachment, error) {
 	meta := map[string]any{"file_path": filePath}
@@ -472,7 +454,6 @@ func (m *Manager) AddFileReference(sessionID, filePath, summary, section, source
 }
 
 // AddFromPromptSection 从 PromptSection 迁移一段（S2 rail 改造入口）。
-//
 // Python: PromptAttachmentContextWriter.add_from_prompt_section
 func (m *Manager) AddFromPromptSection(sessionID string, section *saprompt.PromptSection, kind AttachmentKind, source, language string, opts ...AttachmentOption) (*Attachment, error) {
 	if section == nil {
@@ -500,7 +481,6 @@ func (m *Manager) AddFromPromptSection(sessionID string, section *saprompt.Promp
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // safeIDPart 归一化 id 片段。
-//
 // Python: _safe_id_part
 func safeIDPart(raw, fallback string) string {
 	s := strings.TrimSpace(raw)
@@ -520,7 +500,6 @@ func safeIDPart(raw, fallback string) string {
 }
 
 // makeSectionID 生成 section id。
-//
 // Python: _make_section_id
 func makeSectionID(sessionID, section string) string {
 	return "session." + safeIDPart(sessionID, "session") + "." + safeIDPart(section, "section")
@@ -530,7 +509,6 @@ func makeSectionID(sessionID, section string) string {
 func utcNow() string { return time.Now().UTC().Format(time.RFC3339) }
 
 // sortAttachments 按 (priority, source, section) 稳定排序。
-//
 // Python: _stable_sort
 func sortAttachments(items []*Attachment) {
 	sort.SliceStable(items, func(i, j int) bool {

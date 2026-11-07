@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // docxModel DOCX 解析中间模型（stdlib 自研，非导出）。
-//
 // 持有 zip 解包后的部件字节与三张解析表，为 WordParser 提供四保真点数据：
 //  1. 保序块遍历（parseBlocks）
 //  2. 样式名（styleName + babelFishInternal2UI）
@@ -42,7 +41,6 @@ type docxModel struct {
 }
 
 // docxBlock 文档块（段落或表格）。
-//
 // 对齐 python-docx iter_inner_content 的保序产出（Paragraph|Table 交替）。
 type docxBlock struct {
 	// kind 块类型："para" | "table"
@@ -79,7 +77,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // babelFishUI python-docx BabelFish 内部名 → UI 名转换表。
-//
 // Python: docx/styles/__init__.py BabelFish.ui_style_names（style_aliases
 // 12 对反转，逐字复制：Caption/Footer/Header/Heading 1..9）
 var babelFishUI = map[string]string{
@@ -101,7 +98,6 @@ var babelFishUI = map[string]string{
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadDocxModel 打开 DOCX zip 并解析三部件。
-//
 // 部件缺失容忍度对齐 python-docx：document.xml 缺失 → error（打开即失败，
 // 外层软失败）；styles.xml/rels 缺失 → 空表（python-docx 容忍无样式文档）。
 func loadDocxModel(filePath string) (*docxModel, error) {
@@ -160,7 +156,6 @@ func loadDocxModel(filePath string) (*docxModel, error) {
 }
 
 // parseRels 解析关系表。
-//
 // Python: docx.opc.package 惰性解析；Go 直接全量建表。
 func (dm *docxModel) parseRels(data []byte) error {
 	dec := xml.NewDecoder(bytes.NewReader(data))
@@ -282,7 +277,6 @@ func joinDocPath(dir, target string) string {
 }
 
 // parseBlocks 保序块遍历（对齐 python-docx iter_inner_content）。
-//
 // w:body 直接子元素中的 w:p/w:tbl 按文档序交替产出；嵌套在其他元素内
 // 的段落/表格（如 textbox）不产出（python-docx 同款只遍历 body 直下块）。
 func (dm *docxModel) parseBlocks() []docxBlock {
@@ -317,7 +311,6 @@ func (dm *docxModel) parseBlocks() []docxBlock {
 }
 
 // parseParagraphBlock 消费一个 w:p 元素到结束，产出段落块。
-//
 // 同遍历完成三件事：text 拼装（w:t/w:tab/w:br/hyperlink 子 runs——
 // 对齐 python-docx paragraph.text：hyperlink 内 w:t 同样计入）、
 // styleID 提取（w:pStyle）、paraXML 重建（EncodeToken 重建原始字节，
@@ -379,7 +372,6 @@ func (dm *docxModel) parseParagraphBlock(dec *xml.Decoder, start xml.StartElemen
 }
 
 // styleUI styleId → w:name → BabelFish UI 名（空 styleID 返回空串）。
-//
 // 对齐 python-docx paragraph.style.name：styles.xml 的内部名经
 // BabelFish.internal2ui 转换（"heading 1" → "Heading 1"）。
 func (dm *docxModel) styleUI(styleID string) string {
@@ -397,7 +389,6 @@ func (dm *docxModel) styleUI(styleID string) string {
 }
 
 // parseTableBlock 消费一个 w:tbl 元素到结束，产出网格展开的表格块。
-//
 // 对齐 python-docx Table.rows → row.cells 语义：
 //   - gridSpan：cell 横向重复 N 次（同内容）
 //   - vMerge restart：本格是纵向合并 master 起点
@@ -528,7 +519,6 @@ func (dm *docxModel) parseTableBlock(dec *xml.Decoder, start xml.StartElement) d
 }
 
 // extractImages 从段落 XML 提取图片并落盘。
-//
 // 对齐 Python _extract_images_from_paragraph 逐字语义：
 //  1. 段落元素内 findall(".//a:blip")——Go token 流扫描（blip 无嵌套 blip，等效）
 //  2. r:embed 空 → continue
@@ -596,7 +586,6 @@ func (dm *docxModel) extractImages(paraXML []byte, filename string, paragraphNum
 }
 
 // toRGBImage 转 RGBA 画布（≈ PIL RGBA/P convert("RGB")）。
-//
 // PIL convert("RGB") 是去 alpha；Go 解码已得具体 image 类型，统一
 // draw.Draw 到 RGBA 画布（PNG 编码接受，语义等效"去模式标签"）。
 func toRGBImage(img image.Image) *image.RGBA {

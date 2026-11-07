@@ -1,5 +1,4 @@
 // Package compressor 提供上下文引擎的压缩处理器实现。
-//
 // 包含多种压缩策略，从轻量级到重量级渐进式介入：
 //   - MicroCompactProcessor：清除旧工具结果内容（不调用 LLM）
 //   - DialogueCompressor：对话轮次级压缩（调用 LLM）

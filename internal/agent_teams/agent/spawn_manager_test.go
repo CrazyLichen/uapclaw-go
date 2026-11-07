@@ -242,7 +242,6 @@ func TestSpawnManager_BuildContextFromDB_占位(t *testing.T) {
 }
 
 // TestSpawnManager_PublishRestartEvent_完整发布 测试 M-31 完整实现。
-//
 // configurator 注入 InProcessMessager + TeamBackend → Subscribe 捕获事件，
 // 断言 topicID/eventType/member_name/restart_count。
 func TestSpawnManager_PublishRestartEvent_完整发布(t *testing.T) {

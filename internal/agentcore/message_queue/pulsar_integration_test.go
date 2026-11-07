@@ -16,7 +16,6 @@ import (
 )
 
 // TestPulsarMessageQueue_真实收发 测试真实 Pulsar 端的完整链路。
-//
 // 运行方式: PULSAR_URL=pulsar://localhost:6650 go test -tags=integration ./internal/agentcore/message_queue/...
 func TestPulsarMessageQueue_真实收发(t *testing.T) {
 	url := os.Getenv("PULSAR_URL")

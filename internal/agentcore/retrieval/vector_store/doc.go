@@ -1,9 +1,7 @@
 // Package vector_store 提供检索层向量存储抽象接口及各后端实现。
-//
 // 本包定义面向检索场景的 VectorStore 接口，提供向量搜索、稀疏搜索、
 // 混合搜索（RRF 融合）等能力。与 foundation 层 BaseVectorStore（CRUD+迁移）
 // 不同，本接口面向检索场景。
-//
 // 文件目录：
 //
 //	vector_store/

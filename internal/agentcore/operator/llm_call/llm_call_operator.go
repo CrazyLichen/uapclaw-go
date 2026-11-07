@@ -13,10 +13,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LLMCallOperator LLM 提示词参数句柄。
-//
 // 管理 system_prompt 和 user_prompt 参数。
 // 参数变更通过 onParameterUpdated 回调推送给消费者。
-//
 // 更新入口：
 //   - SetParameter(): 演化更新（检查冻结标记）
 //   - LoadState(): 检查点恢复（不检查冻结标记）
@@ -63,7 +61,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLLMCallOperator 创建 LLMCallOperator 实例。
-//
 // systemPrompt 和 userPrompt 为消息列表，支持多消息格式 prompt。
 // Python: LLMCallOperator.__init__(system_prompt: str | List[Dict], user_prompt: str | List[Dict], ...)
 func NewLLMCallOperator(systemPrompt, userPrompt []llmschema.BaseMessage, opts ...LLMCallOperatorOption) *LLMCallOperator {
@@ -90,7 +87,6 @@ func NewLLMCallOperator(systemPrompt, userPrompt []llmschema.BaseMessage, opts .
 }
 
 // OperatorID 返回操作器标识。
-//
 // Python: LLMCallOperator.operator_id (property)
 func (op *LLMCallOperator) OperatorID() string {
 	return op.operatorID
@@ -98,7 +94,6 @@ func (op *LLMCallOperator) OperatorID() string {
 
 // GetTunables 获取可调参数。
 // 冻结的参数不会包含在返回结果中。
-//
 // Python: LLMCallOperator.get_tunables()
 func (op *LLMCallOperator) GetTunables() map[string]operator.TunableSpec {
 	tunables := make(map[string]operator.TunableSpec)
@@ -121,7 +116,6 @@ func (op *LLMCallOperator) GetTunables() map[string]operator.TunableSpec {
 
 // SetParameter 设置可调参数值（演化更新）。
 // 仅更新未冻结的参数，并触发 onParameterUpdated 回调。
-//
 // Python: LLMCallOperator.set_parameter(target, value)
 func (op *LLMCallOperator) SetParameter(target string, value any) {
 	content := promptContent(value)
@@ -139,7 +133,6 @@ func (op *LLMCallOperator) SetParameter(target string, value any) {
 }
 
 // GetState 获取当前 prompt 状态，用于检查点。
-//
 // Python: LLMCallOperator.get_state()
 func (op *LLMCallOperator) GetState() map[string]any {
 	return map[string]any{
@@ -151,7 +144,6 @@ func (op *LLMCallOperator) GetState() map[string]any {
 // LoadState 从检查点恢复 prompt 状态。
 // 不检查冻结标记（检查点恢复必须恢复完整状态）。
 // 逐字段更新并触发回调。
-//
 // Python: LLMCallOperator.load_state(state)
 func (op *LLMCallOperator) LoadState(state map[string]any) {
 	if sp, ok := state[TargetSystemPrompt]; ok {
@@ -172,35 +164,30 @@ func (op *LLMCallOperator) LoadState(state map[string]any) {
 
 // ApplyUpdate 应用结构化演化更新。
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
-//
 // Python: Operator.apply_update 默认实现
 func (op *LLMCallOperator) ApplyUpdate(target string, update evolvingschema.UpdateValue) evolvingschema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)
 }
 
 // SetFreezeSystemPrompt 设置系统 prompt 冻结状态。
-//
 // Python: LLMCallOperator.set_freeze_system_prompt(switch)
 func (op *LLMCallOperator) SetFreezeSystemPrompt(freeze bool) {
 	op.freezeSystemPrompt = freeze
 }
 
 // GetFreezeSystemPrompt 获取系统 prompt 冻结状态。
-//
 // Python: LLMCallOperator.get_freeze_system_prompt()
 func (op *LLMCallOperator) GetFreezeSystemPrompt() bool {
 	return op.freezeSystemPrompt
 }
 
 // SetFreezeUserPrompt 设置用户 prompt 冻结状态。
-//
 // Python: LLMCallOperator.set_freeze_user_prompt(switch)
 func (op *LLMCallOperator) SetFreezeUserPrompt(freeze bool) {
 	op.freezeUserPrompt = freeze
 }
 
 // GetFreezeUserPrompt 获取用户 prompt 冻结状态。
-//
 // Python: LLMCallOperator.get_freeze_user_prompt()
 func (op *LLMCallOperator) GetFreezeUserPrompt() bool {
 	return op.freezeUserPrompt

@@ -60,10 +60,8 @@ type collMeta struct {
 }
 
 // MilvusVectorStore 基于 Milvus 的向量存储实现。
-//
 // 实现 BaseVectorStore 接口，使用 milvus/client/v2 作为客户端。
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
-//
 // Python: vector/milvus_vector_store.py (MilvusVectorStore)
 type MilvusVectorStore struct {
 	// client Milvus 客户端实例
@@ -104,7 +102,6 @@ const (
 
 // NewMilvusVectorStore 创建 MilvusVectorStore 实例。
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
-//
 // Python: MilvusVectorStore.__init__(milvus_uri, milvus_token, database_name)
 func NewMilvusVectorStore(milvusURI, milvusToken, dbName string) *MilvusVectorStore {
 	if dbName == "" {
@@ -121,7 +118,6 @@ func NewMilvusVectorStore(milvusURI, milvusToken, dbName string) *MilvusVectorSt
 }
 
 // Close 关闭 Milvus 客户端连接。
-//
 // Python: MilvusVectorStore.close()
 func (s *MilvusVectorStore) Close() {
 	s.mu.Lock()
@@ -135,7 +131,6 @@ func (s *MilvusVectorStore) Close() {
 
 // CreateCollection 创建集合。
 // 如果集合已存在则跳过创建。schema 定义字段结构，opts 可指定 DistanceMetric 和 VectorField 索引配置。
-//
 // Python: MilvusVectorStore.create_collection(collection_name, schema, **kwargs)
 func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error {
 	o := newOptions(opts...)
@@ -277,7 +272,6 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 }
 
 // DeleteCollection 删除集合。
-//
 // Python: MilvusVectorStore.delete_collection(collection_name)
 func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error {
 	c, err := s.getClient(ctx)
@@ -310,7 +304,6 @@ func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName
 }
 
 // CollectionExists 检查集合是否存在。
-//
 // Python: MilvusVectorStore.collection_exists(collection_name)
 func (s *MilvusVectorStore) CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error) {
 	c, err := s.getClient(ctx)
@@ -321,7 +314,6 @@ func (s *MilvusVectorStore) CollectionExists(ctx context.Context, collectionName
 }
 
 // GetSchema 获取集合的 Schema。
-//
 // Python: MilvusVectorStore.get_schema(collection_name)
 func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error) {
 	c, err := s.getClient(ctx)
@@ -388,7 +380,6 @@ func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string
 }
 
 // AddDocs 添加文档到集合。支持批量插入，通过 BatchSize 控制批次大小。
-//
 // Python: MilvusVectorStore.add_docs(collection_name, docs, **kwargs)
 func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error {
 	if len(docs) == 0 {
@@ -450,7 +441,6 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 }
 
 // Search 向量相似度搜索。
-//
 // Python: MilvusVectorStore.search(collection_name, query_vector, vector_field, top_k, filters, **kwargs)
 func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error) {
 	o := newOptions(opts...)
@@ -555,7 +545,6 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 }
 
 // DeleteDocsByIDs 按 ID 删除文档。
-//
 // Python: MilvusVectorStore.delete_docs_by_ids(collection_name, ids)
 func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
@@ -605,7 +594,6 @@ func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 }
 
 // DeleteDocsByFilters 按标量字段过滤条件删除文档。
-//
 // Python: MilvusVectorStore.delete_docs_by_filters(collection_name, filters)
 func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
@@ -644,7 +632,6 @@ func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionN
 }
 
 // ListCollectionNames 列出所有集合名称。
-//
 // Python: MilvusVectorStore.list_collection_names()
 func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
 	c, err := s.getClient(ctx)
@@ -701,7 +688,6 @@ func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName str
 
 // RenameCollection 重命名集合。
 // 使用 Milvus SDK 的 RenameCollection API。
-//
 // Python: MilvusVectorStore.rename_collection(old_name, new_name)
 func (s *MilvusVectorStore) RenameCollection(ctx context.Context, oldName string, newName string, _ ...Option) error {
 	c, err := s.getClient(ctx)
@@ -713,7 +699,6 @@ func (s *MilvusVectorStore) RenameCollection(ctx context.Context, oldName string
 
 // UpdateCollectionMetadata 更新集合元数据。
 // 同时更新 Milvus 集合属性和本地缓存。
-//
 // Python: MilvusVectorStore.update_collection_metadata(collection_name, metadata)
 func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error {
 	if len(metadata) == 0 {
@@ -792,7 +777,6 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 
 // GetCollectionMetadata 获取集合元数据。
 // 优先从缓存获取，缓存未命中则从 Milvus 获取。
-//
 // Python: MilvusVectorStore.get_collection_metadata(collection_name)
 func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error) {
 	s.mu.RLock()
@@ -1133,7 +1117,6 @@ func (s *MilvusVectorStore) getClient(ctx context.Context) (milvusClient, error)
 }
 
 // ensureLoaded 确保集合已加载到内存，使用缓存避免重复加载。
-//
 // Python: MilvusVectorStore._ensure_loaded(collection)
 func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName string) error {
 	s.mu.RLock()
@@ -1171,7 +1154,6 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName str
 }
 
 // buildFilterExpr 从过滤条件字典构建 Milvus 过滤表达式（仅支持等值过滤）。
-//
 // Python: MilvusVectorStore._build_filter_expr(filters)
 func buildFilterExpr(filters map[string]any) string {
 	if len(filters) == 0 {
@@ -1242,7 +1224,6 @@ func (s *MilvusVectorStore) getOutputFields(collectionName string) []string {
 }
 
 // mapFieldType 将 VectorDataType 映射为 Milvus DataType。
-//
 // Python: MilvusVectorStore._map_field_type(field_type)
 func mapFieldType(dt VectorDataType) (entity.FieldType, error) {
 	mapping := map[VectorDataType]entity.FieldType{
@@ -1265,7 +1246,6 @@ func mapFieldType(dt VectorDataType) (entity.FieldType, error) {
 }
 
 // mapMilvusTypeToOurType 将 Milvus DataType 映射回 VectorDataType。
-//
 // Python: MilvusVectorStore._map_milvus_type_to_our_type(milvus_type)
 func mapMilvusTypeToOurType(milvusType entity.FieldType) VectorDataType {
 	mapping := map[entity.FieldType]VectorDataType{

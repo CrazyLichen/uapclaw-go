@@ -26,7 +26,6 @@ import (
 // Python: CompatibleTodoModifyTool（继承 SDK TodoModifyTool 覆盖 _update_todos）
 // Go 机制差异：不继承，用 NewTodoModifyToolWithUpdateFn 注入 compatibleUpdateTodos。
 // 卡名保持 todo_modify（对齐 Python 子类不换名）。
-//
 // Python: install_todo_modify_compat_patch() 通过模块级 monkey-patch 替换
 // TodoModifyTool 导出；Go 通过 DeepAdapter params.TodoModifyFactory 显式注入。
 func NewCompatibleTodoModifyTool(todoTool todo.TodoTool, language, agentID string) tool.Tool {

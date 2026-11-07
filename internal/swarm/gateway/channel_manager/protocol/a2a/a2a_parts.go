@@ -22,7 +22,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsCompletionSentinelText 判断文本是否为"完成哨兵"（应被过滤，不发给 A2A 客户端）。
-//
 // 去掉全部空白后小写比较，等价 Python "".join(text.split()).lower()。
 // Python: a2a_connect.py is_completion_sentinel_text (L425-428)
 func IsCompletionSentinelText(text string) bool {
@@ -31,7 +30,6 @@ func IsCompletionSentinelText(text string) bool {
 }
 
 // IsTerminalMessage 判断内部消息是否为一次 A2A 任务的终态消息。
-//
 // Python: a2a_connect.py is_terminal_message (L430-444)
 func IsTerminalMessage(msg *schema.Message) bool {
 	if msg == nil {
@@ -54,7 +52,6 @@ func IsTerminalMessage(msg *schema.Message) bool {
 }
 
 // MessageToText 把内部消息压成纯文本（A2A fallback 用）。
-//
 // Python: a2a_connect.py message_to_text (L348-357)
 func MessageToText(msg *schema.Message) string {
 	if msg == nil {
@@ -80,7 +77,6 @@ func MessageToText(msg *schema.Message) string {
 }
 
 // MapA2APartsToParams 把 A2A 消息的 parts 映射为内部 query 与 files 参数。
-//
 // 文本段按 "\n" 合并为 query；含 url/data/raw 的 Part 转成 files 条目，
 // 键与 web 通道保持兼容（name/filename、media_type/type、url/uri、encoding=base64）。
 // Python: a2a_connect.py map_a2a_parts_to_params (L457-500)
@@ -144,7 +140,6 @@ func MapA2APartsToParams(m *sdka2a.Message) (string, []map[string]any) {
 }
 
 // MessageToA2AParts 把内部消息 payload 映射为 A2A 响应 parts。
-//
 // CHAT_ERROR 直接转错误文本；content/result 转文本（过滤哨兵）；
 // 工具事件文本化为 [tool_call]/[tool_result]；payload.files 转 url/data/raw 三类 Part。
 // fallbackToText 为真且无任何 part 时回退 MessageToText。
@@ -219,7 +214,6 @@ func MessageToA2AParts(msg *schema.Message, fallbackToText bool) []*sdka2a.Part 
 }
 
 // BuildRequestParams 构造内部 chat.send 的 params。
-//
 // Python: a2a_connect.py _build_request_params (L446-455)
 func BuildRequestParams(query string, files []map[string]any) map[string]any {
 	params := map[string]any{"query": query}
@@ -254,7 +248,6 @@ func firstNonEmptyStr(vals ...any) string {
 }
 
 // joinTextParts 把 A2A 消息的文本段按换行拼接。
-//
 // 对应 Python context.get_user_input() 兜底：当 parts 里没有可识别的 query 时再取一次文本。
 // Python: a2a_connect.py execute (L65-67)
 func joinTextParts(m *sdka2a.Message) string {
@@ -274,7 +267,6 @@ func joinTextParts(m *sdka2a.Message) string {
 }
 
 // filesToParts 把 payload.files 转成 A2A 文件 Part（url/data/raw 三类）。
-//
 // Python: a2a_connect.py L396-417
 func filesToParts(raw any) []*sdka2a.Part {
 	list, ok := raw.([]any)

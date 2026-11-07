@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // FileAPIRouter 返回 /file-api 子路由处理器。
-//
 // 子路由不带 "/file-api" 前缀（由调用方 Mount 时剥离），
 // 未匹配的路径返回 404 {"error":"not_found"} 以对齐 Python 行为。
 func FileAPIRouter() http.Handler {

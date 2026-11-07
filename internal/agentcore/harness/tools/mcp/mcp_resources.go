@@ -39,7 +39,6 @@ var logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewListMcpResourcesTool 创建列出 MCP 服务器资源工具。
-//
 // Python: ListMcpResourcesTool (openjiuwen/harness/tools/mcp_tools.py L18-39)
 func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("list_mcp_resources", "ListMcpResourcesTool", language, nil, agentID)
@@ -82,7 +81,6 @@ func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 }
 
 // NewReadMcpResourceTool 创建读取 MCP 服务器资源工具。
-//
 // Python: ReadMcpResourceTool (openjiuwen/harness/tools/mcp_tools.py L42-67)
 func NewReadMcpResourceTool(language string, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("read_mcp_resource", "ReadMcpResourceTool", language, nil, agentID)

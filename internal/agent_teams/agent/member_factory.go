@@ -20,7 +20,6 @@ import (
 // 纯构造函数：仅需已绑定的 team_backend（setup_infra 为所有角色提供了它），
 // 从不触碰数据库。因此在 configure() 期间每个 Agent 调用一次——
 // _setup_agent 中——Leader/Teammate/HumanAgent 一视同仁。
-//
 // Leader 自己的 DB 行在 BuildTeamTool 运行后才物化，
 // 所以新构建的 Leader 持有的句柄对应的行还不存在。
 // TeamMember 容忍缺失的行（status 读返回 None，写静默返回 False），

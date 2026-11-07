@@ -77,7 +77,6 @@ type sdkMessage struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newSDKClient 创建真实 Pulsar 客户端。
-//
 // Python: pulsar.Client(self._url)
 // Go SDK 的 NewClient 返回 error，调用方需处理（Start 无返回值，只能记日志）。
 func newSDKClient(url string) (pulsarClientAPI, error) {
@@ -135,7 +134,6 @@ func (c *sdkConsumer) Ack(msg pulsarMessageAPI) error {
 func (c *sdkConsumer) Close() { c.consumer.Close() }
 
 // Send 发送消息，partitionKey 写入 ProducerMessage.Key。
-//
 // Python: producer.send(content, partition_key=message.message_id)
 func (p *sdkProducer) Send(ctx context.Context, payload []byte, partitionKey string) error {
 	_, err := p.producer.Send(ctx, &pulsar.ProducerMessage{

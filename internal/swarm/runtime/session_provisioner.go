@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // SessionAgentManager provisioner 依赖的 agent 管理器能力。
-//
 // Python: jiuwenswarm/server/runtime/agent_manager.py 的 5 个方法
 type SessionAgentManager interface {
 	// ClaimPrewarmedSession 认领预热会话
@@ -30,7 +29,6 @@ type SessionAgentManager interface {
 }
 
 // SessionPlanController provisioner 依赖的计划模式控制能力。
-//
 // Python: PlanModeController.reset_session
 type SessionPlanController interface {
 	// ResetSession 清空会话计划状态
@@ -38,7 +36,6 @@ type SessionPlanController interface {
 }
 
 // TrajectoryDeleteHook 轨迹库删除钩子。
-//
 // Python: jiuwenswarm/observability/session_delete.py 三个函数
 // spec §10 R-3：Go 侧为桩实现，等领域二十二 trajectory 落地后回填。
 type TrajectoryDeleteHook interface {
@@ -51,7 +48,6 @@ type TrajectoryDeleteHook interface {
 }
 
 // TeamBindingUnbinder 团队会话绑定解绑器。
-//
 // Python: server/runtime/team_binding_store.get_team_binding_store().unbind_session
 // spec §10 R-1：Go 侧为桩实现。
 type TeamBindingUnbinder interface {
@@ -60,7 +56,6 @@ type TeamBindingUnbinder interface {
 }
 
 // SessionLifecycleJournal 会话生命周期操作日志（删除可恢复性）。
-//
 // Python: server/runtime/session/lifecycle.py 的 state / update
 // spec §10 R-4：Go 侧为桩实现，recovering 恒 false。
 type SessionLifecycleJournal interface {
@@ -71,7 +66,6 @@ type SessionLifecycleJournal interface {
 }
 
 // SessionDeleteLifecycle 参与会话删除的可选 Runtime 能力。
-//
 // Python: runtime/session_provisioner.py SessionDeleteLifecycle
 type SessionDeleteLifecycle interface {
 	// BeginSessionDelete 破坏性删除前静默依赖工作
@@ -83,7 +77,6 @@ type SessionDeleteLifecycle interface {
 }
 
 // SessionAgent provisioner 需要的 agent 能力面。
-//
 // Python: AgentManager.get_agent_nowait 返回的 agent（仅用 ensure_instance / card）
 type SessionAgent interface {
 	// EnsureInstance 确保实例就绪
@@ -93,7 +86,6 @@ type SessionAgent interface {
 }
 
 // TeamSwitchPreparer 团队会话归属准备能力。
-//
 // Python: TeamManager.prepare_session_switch
 type TeamSwitchPreparer interface {
 	// PrepareSessionSwitch 准备目标会话的团队归属切换
@@ -101,7 +93,6 @@ type TeamSwitchPreparer interface {
 }
 
 // SessionOps 会话复制与元数据访问能力。
-//
 // Python: agents/harness/common/session_ops_service.py 的三个函数
 type SessionOps interface {
 	// ForkSession 复制持久历史与 metadata
@@ -125,7 +116,6 @@ type SessionOps interface {
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // provisionOwnerToken 租约归属凭据。
-//
 // 用带字段的结构体而非 struct{}：Go 对零大小对象会复用地址，
 // 两个 provisioner 的 &struct{}{} 可能相等，无法区分归属。
 type provisionOwnerToken struct {
@@ -134,7 +124,6 @@ type provisionOwnerToken struct {
 }
 
 // PrewarmClaimRequest 预热池认领请求。
-//
 // Python: AgentManager.claim_prewarmed_session 关键字参数
 type PrewarmClaimRequest struct {
 	// ChannelID 渠道标识
@@ -168,7 +157,6 @@ type PrewarmClaim struct {
 }
 
 // ForkSessionParams fork 参数。
-//
 // Python: session_ops_service.fork_session 关键字参数
 type ForkSessionParams struct {
 	// SourceSessionID 源会话标识
@@ -204,7 +192,6 @@ type ForkSessionResult struct {
 }
 
 // InitMetadataParams 会话元数据初始化参数。
-//
 // Python: session_metadata.init_session_metadata 关键字参数
 type InitMetadataParams struct {
 	// SessionID 会话标识
@@ -236,7 +223,6 @@ type InitMetadataParams struct {
 }
 
 // SessionCreateInput create 的归一化业务输入，不含任何传输对象。
-//
 // Python: runtime/session_provisioner.py SessionCreateInput
 type SessionCreateInput struct {
 	// ChannelID 渠道标识
@@ -284,7 +270,6 @@ type SessionCreateInput struct {
 }
 
 // SessionSwitchInput 恢复或切换会话的归一化业务输入。
-//
 // Python: runtime/session_provisioner.py SessionSwitchInput
 type SessionSwitchInput struct {
 	// ChannelID 渠道标识
@@ -302,7 +287,6 @@ type SessionSwitchInput struct {
 }
 
 // SessionForkInput 复制一个持久会话的归一化业务输入。
-//
 // Python: runtime/session_provisioner.py SessionForkInput
 type SessionForkInput struct {
 	// ChannelID 渠道标识
@@ -326,7 +310,6 @@ type SessionForkInput struct {
 }
 
 // SessionCreateResult 成功 create 的结果（未经 Server 线协议映射）。
-//
 // Python: runtime/session_provisioner.py SessionCreateResult
 type SessionCreateResult struct {
 	// ChannelID 渠道标识
@@ -356,7 +339,6 @@ type SessionCreateResult struct {
 }
 
 // SessionSwitchResult 成功 switch 的结果。
-//
 // Python: runtime/session_provisioner.py SessionSwitchResult
 type SessionSwitchResult struct {
 	// ChannelID 渠道标识
@@ -372,7 +354,6 @@ type SessionSwitchResult struct {
 }
 
 // SessionForkResult 成功 fork 的结果。
-//
 // Python: runtime/session_provisioner.py SessionForkResult
 type SessionForkResult struct {
 	// ChannelID 渠道标识
@@ -388,7 +369,6 @@ type SessionForkResult struct {
 }
 
 // SessionProvisionCommitContext 提交期由调用方提供的不透明上下文。
-//
 // Python: runtime/session_provisioner.py SessionProvisionCommitContext
 // 唯一字段是前台作用域标识；它**不是**会话身份。
 type SessionProvisionCommitContext struct {
@@ -397,7 +377,6 @@ type SessionProvisionCommitContext struct {
 }
 
 // SessionProvisionError 传输无关的业务失败。
-//
 // Python: runtime/session_provisioner.py SessionProvisionError
 type SessionProvisionError struct {
 	// Message 错误说明
@@ -407,7 +386,6 @@ type SessionProvisionError struct {
 }
 
 // SessionProvisionStateError 租约被错误的拥有者或顺序终结。
-//
 // Python: runtime/session_provisioner.py SessionProvisionStateError
 type SessionProvisionStateError struct {
 	// Message 错误说明
@@ -415,7 +393,6 @@ type SessionProvisionStateError struct {
 }
 
 // PreparedSessionProvision 一次成功 prepare 返回的不透明结果租约。
-//
 // Python: runtime/session_provisioner.py PreparedSessionProvision
 // 调用方只能看 Result / State / CommitTiming；commit/abort 由持有 ownerToken 的
 // provisioner 串行执行（互斥锁保证）。
@@ -459,7 +436,6 @@ func CreateResultOf(lease *PreparedSessionProvision) (SessionCreateResult, error
 }
 
 // ProvisionerDeps provisioner 构造依赖。
-//
 // spec §3 D4/D5/D6：全部依赖以字段注入，接口与上游调用点一一对应。
 type ProvisionerDeps struct {
 	// AgentManager agent 管理器
@@ -483,7 +459,6 @@ type ProvisionerDeps struct {
 }
 
 // RuntimeSessionProvisioner 单个 Runtime 的会话供给事务编排器。
-//
 // Python: runtime/session_provisioner.py RuntimeSessionProvisioner
 type RuntimeSessionProvisioner struct {
 	// AgentManager agent 管理器
@@ -536,7 +511,6 @@ type RuntimeSessionProvisioner struct {
 }
 
 // provisionerExtra provisioner 的可选扩展字段。
-//
 // 用独立结构体承载，避免主结构体字段过多；装配方通过 Set* 方法注入。
 type provisionerExtra struct {
 	// teamManagerProvider 团队管理器获取
@@ -589,7 +563,6 @@ type projectBinding struct {
 }
 
 // recentDeleteResults 有界重试缓存（60 秒 TTL / 256 条上限）。
-//
 // Python: runtime/session_provisioner.py _RecentDeleteResults
 // 不是已删除身份的持久记录，仅用于重试窗口内幂等。
 type recentDeleteResults[T any] struct {
@@ -618,7 +591,6 @@ type recentDeleteEntry[T any] struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // SessionProvisionState 已准备操作的可观测状态。
-//
 // Python: runtime/session_provisioner.py SessionProvisionState
 type SessionProvisionState string
 
@@ -636,7 +608,6 @@ const (
 )
 
 // SessionProvisionCommitTiming 相对"结果投递"的提交位置。
-//
 // Python: runtime/session_provisioner.py SessionProvisionCommitTiming
 type SessionProvisionCommitTiming string
 
@@ -667,12 +638,10 @@ func (e *SessionProvisionError) Error() string { return e.Message }
 func (e *SessionProvisionStateError) Error() string { return e.Message }
 
 // Result 返回 prepare 期间生成的不可变领域结果。
-//
 // Python: PreparedSessionProvision.result
 func (p *PreparedSessionProvision) Result() any { return p.result }
 
 // State 返回当前两阶段状态。
-//
 // Python: PreparedSessionProvision.state
 func (p *PreparedSessionProvision) State() SessionProvisionState {
 	p.mu.Lock()
@@ -681,7 +650,6 @@ func (p *PreparedSessionProvision) State() SessionProvisionState {
 }
 
 // CommitTiming 返回调用方必须使用的提交时机。
-//
 // Python: PreparedSessionProvision.commit_timing
 func (p *PreparedSessionProvision) CommitTiming() SessionProvisionCommitTiming {
 	return p.commitTiming
@@ -693,7 +661,6 @@ func NewEmptyCommitContext() SessionProvisionCommitContext {
 }
 
 // NewRuntimeSessionProvisioner 创建 provisioner。
-//
 // Python: RuntimeSessionProvisioner.__init__
 func NewRuntimeSessionProvisioner(deps ProvisionerDeps) *RuntimeSessionProvisioner {
 	nowFunc := deps.NowFunc
@@ -741,7 +708,6 @@ func (p *RuntimeSessionProvisioner) SetTeamManagerProvider(fn func(channelID str
 }
 
 // CommitSessionProvision 在声明的投递边界提交一次已准备操作。
-//
 // Python: RuntimeSessionProvisioner.commit_session_provision
 // commitContext 为 nil 时按零值处理（对齐上游 `context or CommitContext()`）。
 func (p *RuntimeSessionProvisioner) CommitSessionProvision(
@@ -757,7 +723,6 @@ func (p *RuntimeSessionProvisioner) CommitSessionProvision(
 }
 
 // AbortSessionProvision 中止一次已准备操作（幂等）。
-//
 // Python: RuntimeSessionProvisioner.abort_session_provision
 func (p *RuntimeSessionProvisioner) AbortSessionProvision(lease *PreparedSessionProvision) error {
 	return lease.abortForOwner(p.provisionOwnerToken)
@@ -780,7 +745,6 @@ func logProvisionWarn(msg string, err error) {
 }
 
 // stageSessionProvision 构造归属本 provisioner 的租约。
-//
 // Python: RuntimeSessionProvisioner._stage_session_provision
 // 工厂方法故意私有：调用方只能拿到不透明租约，无法注入可执行回调。
 func (p *RuntimeSessionProvisioner) stageSessionProvision(
@@ -802,7 +766,6 @@ func (p *RuntimeSessionProvisioner) stageSessionProvision(
 }
 
 // assertOwner 校验租约归属。
-//
 // Python: PreparedSessionProvision._assert_owner
 func (p *PreparedSessionProvision) assertOwner(ownerToken *provisionOwnerToken) error {
 	if ownerToken != p.ownerToken {
@@ -814,7 +777,6 @@ func (p *PreparedSessionProvision) assertOwner(ownerToken *provisionOwnerToken) 
 }
 
 // commitForOwner 由持有 ownerToken 的 provisioner 调用提交。
-//
 // Python: PreparedSessionProvision.commit_for_owner
 func (p *PreparedSessionProvision) commitForOwner(
 	ownerToken *provisionOwnerToken,
@@ -870,7 +832,6 @@ func (p *PreparedSessionProvision) commitForOwner(
 }
 
 // abortForOwner 由持有 ownerToken 的 provisioner 调用中止。
-//
 // Python: PreparedSessionProvision.abort_for_owner
 func (p *PreparedSessionProvision) abortForOwner(ownerToken *provisionOwnerToken) error {
 	if err := p.assertOwner(ownerToken); err != nil {
@@ -902,7 +863,6 @@ func (p *PreparedSessionProvision) abortForOwner(ownerToken *provisionOwnerToken
 }
 
 // sessionForkErrorCode 把 fork 的 ValueError 文本映射为错误码。
-//
 // Python: runtime/session_provisioner.py _session_fork_error_code
 func sessionForkErrorCode(err error) string {
 	msg := err.Error()
@@ -940,7 +900,6 @@ func newRecentDeleteResults[T any](capacity int, ttl time.Duration, now func() t
 }
 
 // get 取未过期条目。
-//
 // Python: _RecentDeleteResults.get
 func (r *recentDeleteResults[T]) get(key string) (T, bool) {
 	r.mu.Lock()
@@ -959,7 +918,6 @@ func (r *recentDeleteResults[T]) get(key string) (T, bool) {
 }
 
 // put 写入条目并按容量淘汰。
-//
 // Python: _RecentDeleteResults.__setitem__
 func (r *recentDeleteResults[T]) put(key string, value T) {
 	r.mu.Lock()
@@ -967,17 +925,16 @@ func (r *recentDeleteResults[T]) put(key string, value T) {
 	delete(r.entries, key)
 	r.entries[key] = recentDeleteEntry[T]{expiresAt: r.now().Add(r.ttl), value: value}
 	r.order = append(r.order, key)
+	// 超出容量时按写入顺序淘汰最老的键。
+	// 队列里的键可能已被覆盖或过期删除，delete 对不存在的键是空操作，无需先判断存在。
 	for len(r.entries) > r.capacity && len(r.order) > 0 {
 		oldest := r.order[0]
 		r.order = r.order[1:]
-		if _, exists := r.entries[oldest]; exists {
-			delete(r.entries, oldest)
-		}
+		delete(r.entries, oldest)
 	}
 }
 
 // remove 删除条目。
-//
 // Python: _RecentDeleteResults.pop
 func (r *recentDeleteResults[T]) remove(key string) {
 	r.mu.Lock()
@@ -988,7 +945,6 @@ func (r *recentDeleteResults[T]) remove(key string) {
 // ──────────────────────────── 导出函数（switch / fork） ────────────────────────────
 
 // PrepareSessionSwitch 准备一次会话切换。
-//
 // Python: RuntimeSessionProvisioner.prepare_session_switch（L1167-1263）
 // 步骤见 spec §5.4（8 步），顺序与短路位置不得调整（规则 9.3）。
 func (p *RuntimeSessionProvisioner) PrepareSessionSwitch(
@@ -1091,7 +1047,6 @@ func (p *RuntimeSessionProvisioner) PrepareSessionSwitch(
 }
 
 // PrepareSessionFork 准备一次会话复制。
-//
 // Python: RuntimeSessionProvisioner.prepare_session_fork（L1265-1385）
 // 步骤见 spec §5.5（8 步）。
 func (p *RuntimeSessionProvisioner) PrepareSessionFork(
@@ -1186,7 +1141,6 @@ func (p *RuntimeSessionProvisioner) PrepareSessionFork(
 // ──────────────────────────── 非导出函数（switch / fork 辅助） ────────────────────────────
 
 // resolveSwitchMode 解析模式并判定是否团队。
-//
 // Python: resolve_agent_request_mode + is_team_mode
 func (p *RuntimeSessionProvisioner) resolveSwitchMode(mode string, teamHint bool) (string, bool) {
 	if p.extra.ResolveCanonicalMode != nil {
@@ -1215,7 +1169,6 @@ func firstNonEmpty(values ...string) string {
 }
 
 // prepareTeamOwnerSwitch 准备团队会话归属切换。
-//
 // Python: _prepare_create_owner / prepare_session_switch 内的
 // get_team_manager(...).prepare_session_switch
 func (p *RuntimeSessionProvisioner) prepareTeamOwnerSwitch(
@@ -1239,7 +1192,6 @@ func (p *RuntimeSessionProvisioner) prepareTeamOwnerSwitch(
 }
 
 // dispatchForegroundTransition 派发前台可见性切换。
-//
 // Python: RuntimeSessionProvisioner._dispatch_foreground_transition
 // 参与者为空时只记住 target（对齐上游）。
 func (p *RuntimeSessionProvisioner) dispatchForegroundTransition(
@@ -1291,7 +1243,6 @@ func (p *RuntimeSessionProvisioner) historyExists(sessionID string) bool {
 // ──────────────────────────── 导出函数（create） ────────────────────────────
 
 // PrepareSessionCreate 准备一次会话创建。
-//
 // Python: RuntimeSessionProvisioner.prepare_session_create（L595-1010）
 // 21 步见 spec §5.3；每一步的顺序与短路位置不得调整（规则 9.3）。
 func (p *RuntimeSessionProvisioner) PrepareSessionCreate(
@@ -1560,7 +1511,6 @@ func (p *RuntimeSessionProvisioner) PrepareSessionCreate(
 // ──────────────────────────── 非导出函数（create 辅助） ────────────────────────────
 
 // compensateCreateFailure create 失败的补偿（释放认领 + 释放外锁）。
-//
 // Python: prepare_session_create 的 except BaseException 分支
 // 补偿自身失败只告警，保留原始错误。
 func (p *RuntimeSessionProvisioner) compensateCreateFailure(
@@ -1581,7 +1531,6 @@ func (p *RuntimeSessionProvisioner) compensateCreateFailure(
 }
 
 // prewarmEligible 判定是否可走预热池（上游 6 条判据）。
-//
 // Python: prepare_session_create 的 prewarm_eligible 表达式
 func (p *RuntimeSessionProvisioner) prewarmEligible(
 	input SessionCreateInput,
@@ -1610,7 +1559,6 @@ func (p *RuntimeSessionProvisioner) prewarmEligible(
 }
 
 // usesProjectlessWorkspace 判定是否为无项目工作区。
-//
 // Python: RuntimeSessionProvisioner._uses_projectless_workspace
 func (p *RuntimeSessionProvisioner) usesProjectlessWorkspace(params map[string]any, channelID string) bool {
 	for _, key := range []string{"project_dir", "cwd"} {
@@ -1618,6 +1566,11 @@ func (p *RuntimeSessionProvisioner) usesProjectlessWorkspace(params map[string]a
 			return false
 		}
 	}
+	// 取出并归一化 work_mode；缺省或非法时按渠道回落到默认工作模式。
+	// 注意：上游把 work_mode 传给模式解析作为「补齐维度」（plan/code 等旧别名
+	// 要靠它折叠成 code.normal / code.plan）。Go 侧 resolveSwitchMode 只做规范化、
+	// 不接收补齐维度，故此处解析只看 mode 本身——对 agent/code 两个判定结果等价，
+	// 差异仅在依赖 work_mode 才能折叠的旧别名上。
 	workMode, _ := params["work_mode"].(string)
 	workMode = toLowerSpaces(workMode)
 	if workMode != "code" && workMode != "work" {
@@ -1625,11 +1578,11 @@ func (p *RuntimeSessionProvisioner) usesProjectlessWorkspace(params map[string]a
 	}
 	mode, _ := params["mode"].(string)
 	resolved, _ := p.resolveSwitchMode(mode, false)
+	_ = workMode
 	return resolved == "agent" || resolved == "code"
 }
 
 // prepareCreateOwner 准备 create 的归属与前置 target。
-//
 // Python: RuntimeSessionProvisioner._prepare_create_owner
 func (p *RuntimeSessionProvisioner) prepareCreateOwner(
 	ctx context.Context,
@@ -1664,7 +1617,6 @@ func (p *RuntimeSessionProvisioner) prepareCreateOwner(
 }
 
 // stageCreateResult 组装 create 的租约（AFTER_RESULT_DELIVERY，提交尝试不可回滚）。
-//
 // Python: RuntimeSessionProvisioner._stage_create_result
 func (p *RuntimeSessionProvisioner) stageCreateResult(
 	ctx context.Context,
@@ -1726,7 +1678,6 @@ func stringOr(v any, fallback string) string {
 }
 
 // isDefaultProjectID 判定是否为默认项目标识。
-//
 // Python: gateway/common/work_mode.is_default_project_id
 func isDefaultProjectID(projectID string) bool {
 	switch projectID {
@@ -1790,7 +1741,6 @@ func isSpaceByte(c byte) bool {
 // ──────────────────────────── 结构体（删除） ────────────────────────────
 
 // DeleteSessionOptions 删除会话的调用参数。
-//
 // Python: RuntimeSessionProvisioner.delete_session 关键字参数
 // QuiesceSession / DisposeSession 由 AgentRuntime 传入（Go 用闭包，等价上游 Callable）。
 type DeleteSessionOptions struct {
@@ -1807,7 +1757,6 @@ type DeleteSessionOptions struct {
 // ──────────────────────────── 导出函数（删除） ────────────────────────────
 
 // DeleteSession 通过共享 Runtime 边界删除一个持久会话。
-//
 // Python: RuntimeSessionProvisioner.delete_session（L1444-1465）
 // 七阶段事务见 spec §6；destructive_started 是回滚的唯一分界。
 func (p *RuntimeSessionProvisioner) DeleteSession(
@@ -1826,7 +1775,6 @@ func (p *RuntimeSessionProvisioner) DeleteSession(
 }
 
 // DeleteTeam 排他地通过 Runtime 业务边界删除一个团队。
-//
 // Python: RuntimeSessionProvisioner.delete_team（L1775-1878）
 func (p *RuntimeSessionProvisioner) DeleteTeam(
 	ctx context.Context,
@@ -1846,9 +1794,7 @@ func (p *RuntimeSessionProvisioner) DeleteTeam(
 // ──────────────────────────── 非导出函数（删除事务） ────────────────────────────
 
 // deleteSessionLocked 持锁执行删除事务（七阶段）。
-//
 // Python: RuntimeSessionProvisioner._delete_session_locked（L1467-1773）
-//
 // 阶段顺序（spec §6.1）：
 //
 //	① participant.BeforeDelete
@@ -2039,7 +1985,6 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 }
 
 // deleteAgentSessionPhase 单 agent 会话的 ④⑤⑥ 阶段。
-//
 // Python: _delete_session_locked 中 `else` 分支（quiesce → release → dispose → Runner.release）
 // 返回 (结果, 是否继续)；ok=false 表示已失败应回滚。
 func (p *RuntimeSessionProvisioner) deleteAgentSessionPhase(
@@ -2083,7 +2028,6 @@ func (p *RuntimeSessionProvisioner) deleteAgentSessionPhase(
 }
 
 // deleteTeamSessionPhase 团队会话的 ④⑤⑥ 阶段。
-//
 // Python: _delete_session_locked 中 `elif is_team_session` 分支
 // （QuiesceForDelete → release → DisposeAfterResourceRelease → _delete_team_runner）
 func (p *RuntimeSessionProvisioner) deleteTeamSessionPhase(
@@ -2120,7 +2064,6 @@ func (p *RuntimeSessionProvisioner) deleteTeamSessionPhase(
 }
 
 // pickDeleteLifecycle 取本次事务使用的删除生命周期参与者。
-//
 // Python: _delete_session_locked 里的
 // _prepared_session_deletes.get(target, self._delete_lifecycle)
 func (p *RuntimeSessionProvisioner) pickDeleteLifecycle(target string) SessionDeleteLifecycle {
@@ -2133,7 +2076,6 @@ func (p *RuntimeSessionProvisioner) pickDeleteLifecycle(target string) SessionDe
 }
 
 // prepareDeleteLifecycle 准备删除生命周期（幂等）。
-//
 // Python: RuntimeSessionProvisioner._prepare_delete_lifecycle
 func (p *RuntimeSessionProvisioner) prepareDeleteLifecycle(target string, lifecycle SessionDeleteLifecycle) error {
 	if lifecycle == nil {
@@ -2157,7 +2099,6 @@ func (p *RuntimeSessionProvisioner) prepareDeleteLifecycle(target string, lifecy
 }
 
 // releaseParticipants 逐个释放参与者资源（单条失败只告警）。
-//
 // Python: RuntimeSessionProvisioner._release_participants
 func (p *RuntimeSessionProvisioner) releaseParticipants(
 	ctx context.Context,
@@ -2175,7 +2116,6 @@ func (p *RuntimeSessionProvisioner) releaseParticipants(
 }
 
 // notifyDeleteFailed 逆序通知参与者删除失败。
-//
 // Python: RuntimeSessionProvisioner._notify_delete_failed（逆序遍历）
 func (p *RuntimeSessionProvisioner) notifyDeleteFailed(
 	ctx context.Context,
@@ -2194,7 +2134,6 @@ func (p *RuntimeSessionProvisioner) notifyDeleteFailed(
 }
 
 // notifyDeleteCommitted 顺序通知参与者删除已提交。
-//
 // Python: RuntimeSessionProvisioner._notify_delete_committed
 func (p *RuntimeSessionProvisioner) notifyDeleteCommitted(
 	ctx context.Context,
@@ -2211,7 +2150,6 @@ func (p *RuntimeSessionProvisioner) notifyDeleteCommitted(
 }
 
 // abortDelete 回滚（destructiveStarted 之后直接返回）。
-//
 // Python: RuntimeSessionProvisioner._abort_delete
 func (p *RuntimeSessionProvisioner) abortDelete(
 	ctx context.Context,
@@ -2248,7 +2186,6 @@ func (p *RuntimeSessionProvisioner) abortDelete(
 }
 
 // commitDeleteObservers 提交轨迹与生命周期观察者。
-//
 // Python: RuntimeSessionProvisioner._commit_delete_observers
 func (p *RuntimeSessionProvisioner) commitDeleteObservers(
 	ctx context.Context,
@@ -2278,7 +2215,6 @@ func (p *RuntimeSessionProvisioner) commitDeleteObservers(
 }
 
 // commitSessionDelete 提交 Runtime 侧的 Plan/缓存/绑定状态。
-//
 // Python: RuntimeSessionProvisioner.commit_session_delete（L2133-2164）
 // 团队会话解绑失败时上游 raise（删除已提交，但绑定未解）。
 func (p *RuntimeSessionProvisioner) commitSessionDelete(result sessionpkg.SessionDeleteResult) {
@@ -2303,7 +2239,6 @@ func (p *RuntimeSessionProvisioner) commitSessionDelete(result sessionpkg.Sessio
 }
 
 // deleteTeamRunner 删除团队会话的 Runner 侧资源。
-//
 // Python: RuntimeSessionProvisioner._delete_team_runner
 func (p *RuntimeSessionProvisioner) deleteTeamRunner(
 	ctx context.Context,
@@ -2328,7 +2263,6 @@ func (p *RuntimeSessionProvisioner) deleteTeamRunner(
 }
 
 // cleanupFailedResult 构造 DELETE_FAILED 结果。
-//
 // Python: RuntimeSessionProvisioner._cleanup_failed
 func cleanupFailedResult(
 	result sessionpkg.SessionDeleteResult,
@@ -2344,7 +2278,6 @@ func cleanupFailedResult(
 }
 
 // deleteTeamLocked 持锁删除团队。
-//
 // Python: RuntimeSessionProvisioner._delete_team_locked（L1910-2131）
 func (p *RuntimeSessionProvisioner) deleteTeamLocked(
 	ctx context.Context,

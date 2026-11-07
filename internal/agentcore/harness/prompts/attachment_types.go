@@ -5,7 +5,6 @@ import "fmt"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Attachment 会话级动态提示词片段。
-//
 // Python: PromptAttachment (prompt_attachment_manager.py:36-53)
 type Attachment struct {
 	// ID 片段标识，由 session 与 section 派生
@@ -56,7 +55,6 @@ type AttachmentFilter struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AttachmentKind 动态提示词片段类型。
-//
 // Python: PromptAttachmentKind
 type AttachmentKind string
 

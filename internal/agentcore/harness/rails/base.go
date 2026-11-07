@@ -21,7 +21,6 @@ type DeepAgentRailProvider interface {
 }
 
 // DeepAgentRail DeepAgent 扩展 Rail 基类。
-//
 // 在核心层 AgentRail（10 个钩子）基础上增加：
 //   - workspace：工作空间引用（供子类访问工作空间信息）
 //   - sysOperation：系统操作引用（供子类执行系统级操作）
@@ -29,7 +28,6 @@ type DeepAgentRailProvider interface {
 //
 // 子类嵌入 DeepAgentRail 后覆盖关心的钩子方法，
 // 并在 GetCallbacks() 中通过 CallbackFrom + BuildCallbacks 声明映射。
-//
 // Python: DeepAgentRail (openjiuwen/harness/rails/base.py L28-107)
 type DeepAgentRail struct {
 	agentinterfaces.BaseRail
@@ -48,7 +46,6 @@ type DeepAgentRail struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDeepAgentRail 创建 DeepAgentRail 实例（默认优先级 50）。
-//
 // Python: DeepAgentRail.__init__()
 func NewDeepAgentRail() *DeepAgentRail {
 	return &DeepAgentRail{
@@ -57,7 +54,6 @@ func NewDeepAgentRail() *DeepAgentRail {
 }
 
 // SetWorkspace 设置工作空间引用。
-//
 // Python: DeepAgentRail.set_workspace(workspace)
 func (d *DeepAgentRail) SetWorkspace(w *workspace.Workspace) {
 	d.workspace = w
@@ -69,7 +65,6 @@ func (d *DeepAgentRail) Workspace() *workspace.Workspace {
 }
 
 // SetSysOperation 设置系统操作引用。
-//
 // Python: DeepAgentRail.set_sys_operation(sys_operation)
 func (d *DeepAgentRail) SetSysOperation(op sys_operation.SysOperation) {
 	d.sysOperation = op
@@ -81,7 +76,6 @@ func (d *DeepAgentRail) SysOperation() sys_operation.SysOperation {
 }
 
 // GetCallbacks 合并基础事件 + DeepAgent 扩展事件的回调映射。
-//
 // 先获取 BaseRail 的基础回调（8 个核心事件），
 // 再遍历 DeepEventMethodMap 检查子类是否覆盖了 task-iteration 钩子。
 // Python: DeepAgentRail.get_callbacks() = super().get_callbacks() + DEEP_EVENT_METHOD_MAP
@@ -101,7 +95,6 @@ func (d *DeepAgentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getDeepCallback 获取 DeepAgent 扩展事件的回调函数。
-//
 // 将 BeforeTaskIteration/AfterTaskIteration 包装为 PerAgentCallbackFunc。
 func (d *DeepAgentRail) getDeepCallback(event agentinterfaces.AgentCallbackEvent) (cb.PerAgentCallbackFunc, bool) {
 	switch event {

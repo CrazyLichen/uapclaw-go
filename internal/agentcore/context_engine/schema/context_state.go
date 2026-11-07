@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextCompressionMetric 上下文压缩前后指标快照。
-//
 // Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionMetric)
 type ContextCompressionMetric struct {
 	// Time 观测时间（ISO 8601 毫秒精度），空串表示未记录
@@ -21,7 +20,6 @@ type ContextCompressionMetric struct {
 }
 
 // ContextCompressionSaved 上下文压缩节省量。
-//
 // Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionSaved)
 type ContextCompressionSaved struct {
 	// Messages 节省的消息数
@@ -33,7 +31,6 @@ type ContextCompressionSaved struct {
 }
 
 // ContextCompressionUsage 上下文压缩 LLM 调用用量。
-//
 // Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionUsage)
 type ContextCompressionUsage struct {
 	// Calls LLM 调用次数
@@ -59,15 +56,11 @@ type ContextCompressionUsage struct {
 }
 
 // ContextCompressionState 上下文压缩状态完整快照。
-//
 // 由 ProcessorStateRecorder.BuildState() 构建，记录一次压缩操作的完整生命周期。
 // 通过回调框架和 session stream 发射，供外部系统观测上下文引擎行为。
-//
 // Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionState)
 // ContextCompressionModifiedMessage 压缩过程中被就地改写的消息条目。
-//
 // 前端轨迹面板据此标出"哪条消息被压了、原文还能不能取回"（offload_handle 可达时）。
-//
 // Python: ContextCompressionModifiedMessage
 type ContextCompressionModifiedMessage struct {
 	// MessageID context_message_id（改写前后不变，靠它配对）
@@ -125,7 +118,6 @@ type ContextCompressionState struct {
 type CompressionStatus string
 
 // CompressionPhase 压缩操作阶段字面量类型。
-//
 // Python: Literal["add_messages", "get_context_window", "active_compress"]
 type CompressionPhase string
 
@@ -155,6 +147,5 @@ const (
 
 // ContextCompressionStateType 压缩状态事件类型标识。
 // 用于回调事件名和 session stream 的 OutputSchema.Type 字段。
-//
 // Python: CONTEXT_COMPRESSION_STATE_TYPE = "context.compression_state"
 const ContextCompressionStateType = "context.compression_state"

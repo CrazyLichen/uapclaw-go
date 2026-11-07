@@ -20,10 +20,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PDFParser PDF 文档解析器。
-//
 // 嵌入 BaseParser 仅覆写 ParseContent（对齐 Python PDFParser 仅覆写 _parse）；
 // Parse/LazyParse/Process/Supports 继承 13.10 模板默认。
-//
 // 双通道（对齐 Python pdfplumber 语义的 Go 工程等价，偏差归档 spec §8）：
 //   - 文本：ledongthuc/pdf 逐页 GetPlainText（extract_text 对应物）
 //   - 图片：pdfcpu ExtractImages 抽嵌入对象原生字节（page.images +
@@ -46,10 +44,8 @@ var _ Parser = (*PDFParser)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPDFParser 构造 PDFParser。
-//
 // 零参数（对齐 Python __init__(**kwargs): pass）；NewBaseParser(self)
 // 注入使模板方法动态派发到本类覆写。
-//
 // Python: pdf_parser.py PDFParser.__init__
 func NewPDFParser() (*PDFParser, error) {
 	p := &PDFParser{}
@@ -62,7 +58,6 @@ func NewPDFParser() (*PDFParser, error) {
 }
 
 // ParseContent 解析 PDF：双通道（对齐 Python _parse(file_path, llm_client)）。
-//
 // 流程（对齐 Python _async_parse_pdf 主循环）：
 //  1. 读入字节（双通道共享——图片通道 io.ReadSeeker / 文本通道 ReaderAt）
 //  2. extractImagesByPage 一次性提图分桶（独立软失败）
@@ -74,7 +69,6 @@ func NewPDFParser() (*PDFParser, error) {
 //
 // 整体软失败：任一通道 err → Error 日志 + 返回 ("", nil)
 // （对齐 Python except → logger.error → return None）。
-//
 // Python: pdf_parser.py PDFParser._parse
 func (p *PDFParser) ParseContent(ctx context.Context, doc string, llmClient *llm.Model) (string, error) {
 	pdfBytes, err := os.ReadFile(doc)
@@ -118,7 +112,6 @@ func init() {
 }
 
 // extractImagesByPage 用 pdfcpu 提取全部嵌入图片并按页分桶落盘。
-//
 // 对齐 Python _extract_images_from_pdf_page 的产出面（图片文件路径列表），
 // 重组为一次性批量 + img.PageNr 分桶（pdfcpu 回调天然按页序遍历，
 // 页内对象号升序——偏差归档 spec §8-5）：
@@ -166,7 +159,6 @@ func extractImagesByPage(ctx context.Context, pdfBytes []byte, outputDir, filena
 }
 
 // parsePages 文本通道逐页循环 + caption 并入。
-//
 // Python: pdf_parser.py _async_parse_pdf 循环体
 func (p *PDFParser) parsePages(ctx context.Context, pdfBytes []byte, imgByPage map[int][]string, llmClient *llm.Model) ([]string, error) {
 	r, err := pdf.NewReader(bytes.NewReader(pdfBytes), int64(len(pdfBytes)))

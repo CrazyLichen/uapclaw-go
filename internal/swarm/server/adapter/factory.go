@@ -28,7 +28,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveSDKChoice 从环境变量resolved SDK choice。
-//
 // Python: resolve_sdk_choice()
 //
 // 行为：
@@ -54,7 +53,6 @@ func ResolveSDKChoice() string {
 }
 
 // CreateAdapter 工厂函数，创建 SDK 适配器实例。
-//
 // Python: create_adapter(sdk, *, mode)
 //
 // 参数：

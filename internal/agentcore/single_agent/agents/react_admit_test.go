@@ -83,7 +83,6 @@ func (m *recordingModelContext) JustAdded() []llmschema.BaseMessage { return m.a
 func (m *recordingModelContext) SessionID() string { return "s1" }
 
 // TestAdmitUserMessage_多part用换行join 验证 join 用换行。
-//
 // Python: body = "\n".join(parts) (react_agent.py L953)
 func TestAdmitUserMessage_多part用换行join(t *testing.T) {
 	ag := &recordingRail{}
@@ -97,7 +96,6 @@ func TestAdmitUserMessage_多part用换行join(t *testing.T) {
 }
 
 // TestAdmitUserMessage_前缀在join之前 验证前缀拼在整段 body 前面。
-//
 // Python: content=f"{prefix}{body}"
 func TestAdmitUserMessage_前缀在join之前(t *testing.T) {
 	ag := &recordingRail{}
@@ -119,7 +117,6 @@ func TestAdmitUserMessage_前插与丢弃(t *testing.T) {
 }
 
 // TestAdmitUserMessage_全丢不写历史 验证 rails 丢空后什么都不做。
-//
 // Python: if not parts: return（react_agent.py L948）
 func TestAdmitUserMessage_全丢不写历史(t *testing.T) {
 	ag := &recordingRail{mutate: func([]string) []string { return nil }}
@@ -130,7 +127,6 @@ func TestAdmitUserMessage_全丢不写历史(t *testing.T) {
 }
 
 // TestAdmitUserMessage_Inputs还原 验证事件后 inputs 复原。
-//
 // Python: try/finally 还原 previous_inputs（react_agent.py L940-956）
 func TestAdmitUserMessage_Inputs还原(t *testing.T) {
 	ag := &recordingRail{}
@@ -143,7 +139,6 @@ func TestAdmitUserMessage_Inputs还原(t *testing.T) {
 }
 
 // TestAdmitUserMessage_panic也还原 验证 fire 内 panic 时 inputs 仍复原。
-//
 // Go 特有：Python 的 finally 保证等价语义；Go 必须在 defer 里做。
 func TestAdmitUserMessage_panic也还原(t *testing.T) {
 	a, cbc, mc := newAgentWithRecordingRail(t, &panicRail{})
@@ -156,7 +151,6 @@ func TestAdmitUserMessage_panic也还原(t *testing.T) {
 }
 
 // TestReActAgent_无parts时单元素兜底 验证缺省时 parts 为 query 单元素。
-//
 // Python: _extract_user_parts 无 _input_parts → [query 文本]
 func TestReActAgent_无parts时单元素兜底(t *testing.T) {
 	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
@@ -201,7 +195,6 @@ func newAgentWithRecordingRail(
 }
 
 // TestReActAgent_输入parts经DeepAgent传递 验证跨层透传闭环。
-//
 // Python: inputs["_input_parts"] → ctx.extra["_input_parts"] → parts
 // (react_agent.py L2981-2982, L1002-1012)
 func TestReActAgent_输入parts经DeepAgent传递(t *testing.T) {

@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentLifecycleHandler 处理 agent 生命周期事件：用户输入、待机、清理、工具审批、计划审批。
-//
 // EVENT_METHOD_MAP 事件到方法映射：
 //   - user_input          → onUserInput
 //   - team_standby        → onStandby

@@ -22,11 +22,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GatewayServer 通用多路由 WebSocket Gateway Server。
-//
 // 对齐 Python app_gateway.py GatewayServer 类（L240-720）：
 // 支持多个路径（如 /acp、/tui），每条路径有独立 channel_id 和本地 handler；
 // 本地 handler 优先处理请求，未处理或无匹配则 forward 到 MessageHandler。
-//
 // ACP 桥接（11.25 已落地）：acpBridge 由 SetAcpBridge 注入（装配分离，偏差 §9-10），
 // 拦截器由 InstallDefaultAcpHooks 后装，Send / handleRawMessage 各有 acp 分支。
 type GatewayServer struct {
@@ -71,7 +69,6 @@ const gwReadLimit = 8 * 1024 * 1024
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGatewayServer 创建多路由 WS 服务器实例。
-//
 // Python: GatewayServer.__init__（L240-262）——router 在 Python 侧仅作占位传递
 // （_DummyBus），Go 侧以 bus 字段 struct{} 零尺寸占位，不消费。
 func NewGatewayServer(config *GatewayServerConfig) *GatewayServer {
@@ -93,7 +90,6 @@ func NewGatewayServer(config *GatewayServerConfig) *GatewayServer {
 }
 
 // ListenErr 返回启动期监听错误通道（只读）。
-//
 // 端口被占用等绑定失败会上报到这里：Start 是非阻塞的（goroutine 内
 // ListenAndServe），只看 Start 返回值无法判断是否真的监听成功。
 func (s *GatewayServer) ListenErr() <-chan error {
@@ -101,7 +97,6 @@ func (s *GatewayServer) ListenErr() <-chan error {
 }
 
 // Start 启动监听（19001）。
-//
 // Python: GatewayServer.start()（L371-393）——已运行或未启用则直接返回。
 func (s *GatewayServer) Start(ctx context.Context) error {
 	if s.running.Load() || !s.config.Enabled {
@@ -140,7 +135,6 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 }
 
 // Stop 停机：关连接 → 清表 → 关监听。
-//
 // Python: GatewayServer.stop()（L395-410）。
 func (s *GatewayServer) Stop() error {
 	s.running.Store(false)
@@ -173,7 +167,6 @@ func (s *GatewayServer) Stop() error {
 }
 
 // OnMessage 设置入站消息回调。
-//
 // Python: GatewayServer.on_message()（L280-283）。
 func (s *GatewayServer) OnMessage(cb func(ctx context.Context, msg *schema.Message) error) {
 	s.onMessageCb = cb
@@ -200,7 +193,6 @@ func (s *GatewayServer) BindAcpSessionClientForTest(sessionID string, ws *websoc
 // Python: app_gateway.py L296-302——route.inbound_interceptor = route.inbound_interceptor or bridge.inbound_intercept
 // 等三行（已装的不覆盖）。Go 同语义：仅装 nil 槽位。
 // 另含 cleanup 装填（Python L302 第三行 cleanup_handler）。
-//
 // 归档偏差 B6：Python L298-299 有「两个拦截器都非空则整条 route 跳过」的
 // 短路（`if inbound is not None and outbound is not None: continue`），该分支
 // 还连带跳过 cleanup 赋值。生产路径上 acp 路由创建时三槽恒为 nil，不可达；
@@ -228,11 +220,9 @@ func (s *GatewayServer) InstallDefaultAcpHooks() {
 }
 
 // RegisterLocalHandler 为指定路径注册本地 method handler。
-//
 // Python: register_local_handler（app_gateway.py L324-330）——路由不存在则按
 // channel_id=path.strip("/") 新建一条。Go 侧路由已由 BuildRouteConfigMap 建好，
 // 故仅做「取已有路由 → 写 LocalHandlers」；路由缺失时兜底新建（与 Python 同语义）。
-//
 // 消费方：RouteBinding.Install 回调（TUI 的 5 个 chat/history handler）。
 func (s *GatewayServer) RegisterLocalHandler(path, method string, handler LocalHandlerFunc) {
 	s.clientsMu.Lock()
@@ -255,7 +245,6 @@ func (s *GatewayServer) RegisterLocalHandler(path, method string, handler LocalH
 }
 
 // HandleConnection HTTP 处理入口：路由分流 → 升级 WS → 读循环。
-//
 // Python: GatewayServer._connection_handler()（L501-559）。
 func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	route, matchedPath := s.resolveRoute(r.URL.Path)
@@ -351,7 +340,6 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 }
 
 // Send 出站消息派发（实现 ExternalChannel 接口）。
-//
 // Python: GatewayServer.send()（L412-499）——四段路由：
 // request 定向 → session 定向 → 广播 fallback → 帧发送。
 // acp 分支见下方 channel_id=="acp" 段（对齐 L453-457）。
@@ -521,7 +509,6 @@ func r2s(route *RouteConfig) string {
 }
 
 // resolveRoute 按路径解析路由，支持尾斜杠变体。
-//
 // Python: _resolve_route（L304-316）四分支严格对齐：
 // 空串 → (nil, 原值)；精确命中；尾斜杠剥除命中；尾斜杠补全命中；未命中 → (nil, p)。
 func (s *GatewayServer) resolveRoute(requestPath string) (*RouteConfig, string) {
@@ -548,7 +535,6 @@ func (s *GatewayServer) resolveRoute(requestPath string) (*RouteConfig, string) 
 }
 
 // clientRouteKey 构造 (channel, scopedID) 路由键。
-//
 // Python: _client_route_key（L265-271）——任一空值返回不可用。
 func clientRouteKey(channelID, scopedID string) ([2]string, bool) {
 	channel := strings.TrimSpace(channelID)
@@ -560,7 +546,6 @@ func clientRouteKey(channelID, scopedID string) ([2]string, bool) {
 }
 
 // findChannelClients 找到指定渠道的全部在线客户端。
-//
 // Python: _find_channel_clients（L273-278）。
 // ⚠️ 有意偏差（spec §7-3）：不判 closed，直接返回，发送失败由调用方忽略
 // （Python 广播 gather(return_exceptions=True) 本就逐 client 容错，行为等价）。
@@ -577,7 +562,6 @@ func (s *GatewayServer) findChannelClients(channelID string) []*websocket.Conn {
 }
 
 // handleRawMessage 单帧入站处理。
-//
 // Python: _handle_raw_message（L561-720）三层处理：
 // 拦截器 → forward 集合 → 本地 handler。
 // acp 分支见下方 route.ChannelID=="acp" 两段（对齐 L575-581 的桥分派 +
@@ -784,7 +768,6 @@ func (s *GatewayServer) probeWritable(ws *websocket.Conn) bool {
 }
 
 // sendResponse 发送 res 帧。
-//
 // Python: send_response（L332-356）——发送失败仅 Debug。
 // handler 错误路径帧形状带 payload（payload or {}）。
 func (s *GatewayServer) sendResponse(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
@@ -792,7 +775,6 @@ func (s *GatewayServer) sendResponse(ws *websocket.Conn, reqID string, ok bool, 
 }
 
 // sendInlineError 发送内联错误帧（invalid json/invalid request/unknown method）。
-//
 // M-01 修复：Python 内联错误帧（L569/L601/L613/L632/L717）只有
 // type/id/ok/error 四键、无 payload——与 send_response（本地 handler
 // 错误帧带 payload or {}）是两套帧形状，Go 此前统一带 "payload": {}。
@@ -801,7 +783,6 @@ func (s *GatewayServer) sendInlineError(ws *websocket.Conn, reqID string, errMsg
 }
 
 // writeResponseFrame 构造并写入 res 帧（包级，供本地 handler 复用）。
-//
 // 零行为变更：帧构造与写入逻辑自 sendResponse 提取（11.15 最小装配）。
 // M-01：includePayload 控制是否带 payload 键——内联错误帧传 false
 // 对齐 Python 内联四键形状；sendResponse/handler 错误路径传 true。
@@ -838,7 +819,6 @@ func writeResponseFrame(ws *websocket.Conn, reqID string, ok bool, payload map[s
 }
 
 // sendEvent 发送 event 帧（供本地 handler 使用，11.15 TUI 消费）。
-//
 // Python: send_event（L358-369）——发送失败仅 Debug。
 func (s *GatewayServer) sendEvent(ws *websocket.Conn, event string, payload map[string]any) {
 	if payload == nil {
@@ -861,7 +841,6 @@ func (s *GatewayServer) sendEvent(ws *websocket.Conn, event string, payload map[
 }
 
 // buildConnectionAckFrame 构建 connection.ack 首帧。
-//
 // ⚠️ 与 transport.BuildConnectionAckFrame（AgentServer 侧 {status:ready}）格式不同，
 // 不可复用（spec §7-8 有意偏差）。
 // Python: _connection_handler L513-521 内联 json.dumps。
@@ -879,7 +858,6 @@ func buildConnectionAckFrame(channelID string) []byte {
 }
 
 // buildEventFrame 构建出站 event 帧（广播 fallback 与定向共用）。
-//
 // Python: send() 尾段（L478-499）+ 广播 fallback 的 _build_event_frame。
 // payload 为 nil 时只带 session_id（Python str(payload or "") 分支在 Go 侧
 // msg.Payload 为 map 类型，nil 时 str("") 无意义，简化省略 content 字段）。
@@ -908,7 +886,6 @@ func buildEventFrame(msg *schema.Message) map[string]any {
 }
 
 // buildOutboundFrame 构建定向出站帧（res 或 event）。
-//
 // Python: send() L468-499 尾段。
 func buildOutboundFrame(msg *schema.Message) map[string]any {
 	if msg.Type == schema.MessageTypeRes {

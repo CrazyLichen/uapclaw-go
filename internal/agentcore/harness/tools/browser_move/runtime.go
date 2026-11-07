@@ -12,12 +12,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CodeExecutorFunc JavaScript 代码执行函数类型。
-//
 // ⤵️ 9.38-49 回填：实际由 Playwright MCP 工具提供
 type CodeExecutorFunc func(ctx context.Context, jsCode string) (any, error)
 
 // BrowserAgentRuntime 浏览器运行时内核，管理浏览器生命周期和确定性辅助动作。
-//
 // Python: openjiuwen/harness/tools/browser_move/playwright_runtime/runtime.py (BrowserAgentRuntime L56-537)
 type BrowserAgentRuntime struct {
 	// service 浏览器后端服务
@@ -50,7 +48,6 @@ const ()
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserAgentRuntime 创建新的浏览器运行时内核。
-//
 // Python: BrowserAgentRuntime.__init__
 func NewBrowserAgentRuntime(
 	provider, apiKey, apiBase, modelName string,
@@ -73,7 +70,6 @@ func NewBrowserAgentRuntime(
 }
 
 // Service 返回浏览器后端服务实例。
-//
 // Python: BrowserAgentRuntime.service 属性
 func (r *BrowserAgentRuntime) Service() *BrowserService {
 	return r.service
@@ -115,7 +111,6 @@ func (r *BrowserAgentRuntime) SetCodeExecutor(fn CodeExecutorFunc) {
 }
 
 // CancelRun 请求取消指定会话/请求的浏览器执行。
-//
 // Python: BrowserAgentRuntime.cancel_run
 func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestID string) map[string]any {
 	if err := r.service.RequestCancel(ctx, sessionID, requestID); err != nil {
@@ -135,7 +130,6 @@ func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestI
 }
 
 // ClearCancel 清除指定会话/请求的取消标记。
-//
 // Python: BrowserAgentRuntime.clear_cancel
 func (r *BrowserAgentRuntime) ClearCancel(ctx context.Context, sessionID, requestID string) map[string]any {
 	if err := r.service.ClearCancel(ctx, sessionID, requestID); err != nil {
@@ -155,7 +149,6 @@ func (r *BrowserAgentRuntime) ClearCancel(ctx context.Context, sessionID, reques
 }
 
 // EnsureRuntimeReady 确保浏览器运行时已就绪。
-//
 // Python: BrowserAgentRuntime.ensure_runtime_ready
 // ⤵️ 9.38-49 回填：ensureBrowserRuntimeClientPatch + code executor 初始化
 func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
@@ -182,7 +175,6 @@ func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 }
 
 // EnsureStarted 确保浏览器服务已启动（运行时就绪 + 运行时工具已注册）。
-//
 // Python: BrowserAgentRuntime.ensure_started
 // ⤵️ 9.38-49 回填：runtime tools 注册
 func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
@@ -230,7 +222,6 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 }
 
 // RunBrowserTask 执行浏览器任务。
-//
 // Python: BrowserAgentRuntime.run_browser_task
 func (r *BrowserAgentRuntime) RunBrowserTask(
 	ctx context.Context,
@@ -244,7 +235,6 @@ func (r *BrowserAgentRuntime) RunBrowserTask(
 }
 
 // RunCustomAction 运行自定义浏览器动作。
-//
 // Python: BrowserAgentRuntime.run_custom_action
 // ⤵️ 9.38-49 回填：controller 实际调用
 func (r *BrowserAgentRuntime) RunCustomAction(
@@ -276,7 +266,6 @@ func (r *BrowserAgentRuntime) RunCustomAction(
 }
 
 // ProbeInteractives 返回当前页面上可见/高价值交互元素的紧凑信息。
-//
 // Python: BrowserAgentRuntime.probe_interactives
 func (r *BrowserAgentRuntime) ProbeInteractives(
 	ctx context.Context,
@@ -340,7 +329,6 @@ func (r *BrowserAgentRuntime) ProbeInteractives(
 }
 
 // ProbeCards 返回当前页面上紧凑的重复卡片/列表结构信息。
-//
 // Python: BrowserAgentRuntime.probe_cards
 func (r *BrowserAgentRuntime) ProbeCards(
 	ctx context.Context,
@@ -416,7 +404,6 @@ func (r *BrowserAgentRuntime) ProbeCards(
 }
 
 // ListActions 列出所有可用的自定义浏览器动作。
-//
 // Python: BrowserAgentRuntime.list_actions
 func (r *BrowserAgentRuntime) ListActions() map[string]any {
 	if r.controller != nil {
@@ -434,7 +421,6 @@ func (r *BrowserAgentRuntime) ListActions() map[string]any {
 }
 
 // RuntimeHealth 返回浏览器运行时健康状态。
-//
 // Python: BrowserAgentRuntime.runtime_health
 func (r *BrowserAgentRuntime) RuntimeHealth() map[string]any {
 	return map[string]any{
@@ -448,14 +434,12 @@ func (r *BrowserAgentRuntime) RuntimeHealth() map[string]any {
 }
 
 // Shutdown 关闭浏览器运行时。
-//
 // Python: BrowserAgentRuntime.shutdown
 func (r *BrowserAgentRuntime) Shutdown(ctx context.Context) error {
 	return r.service.Shutdown(ctx)
 }
 
 // PlaywrightClientLookupKeys 返回 Playwright MCP 客户端的候选查找键。
-//
 // Python: BrowserAgentRuntime._playwright_client_lookup_keys
 func (r *BrowserAgentRuntime) PlaywrightClientLookupKeys() []string {
 	serverID := strings.TrimSpace(fmt.Sprintf("%v", r.service.MCPCfg.ServerID))
@@ -488,7 +472,6 @@ func (r *BrowserAgentRuntime) PlaywrightClientLookupKeys() []string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // unwrapMCPTextResult 从 MCP 工具结果中提取文本负载。
-//
 // Python: BrowserAgentRuntime._unwrap_mcp_text_result
 func unwrapMCPTextResult(raw any) any {
 	if raw == nil {

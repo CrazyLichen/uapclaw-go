@@ -60,7 +60,6 @@ func (h *TestRunStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runAllEvals 并行执行所有测试用例。
-//
 // 待实现: 接入 SkillDevTestRunner，为每个用例创建 with_skill + baseline 子 Agent
 func (h *TestRunStageHandler) runAllEvals(sctx *skilldev.SkillDevContext, evalCases []any, iterDir string) []map[string]any {
 	// 待实现:

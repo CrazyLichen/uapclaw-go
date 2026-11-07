@@ -1,9 +1,7 @@
 // Package workspace_content 提供工作空间文件的双语（中文/英文）模板常量。
-//
 // 本包存储了智能体工作空间中各类文件（IDENTITY.md、AGENT.md、SOUL.md、
 // HEARTBEAT.md、session_memory.md、MEMORY.md）的中文和英文模板内容，
 // 以及工作空间头部信息、上下文文件标题、目录描述等常量定义。
-//
 // 文件目录：
 //
 //	workspace_content/

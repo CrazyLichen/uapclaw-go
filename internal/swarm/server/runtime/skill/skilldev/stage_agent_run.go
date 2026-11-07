@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RunStageAgent 创建阶段 Agent 并执行一次对话，返回模型输出文本。
-//
 // 参数：
 //   - stageName:     阶段标识（决定 Agent 名称与日志）
 //   - systemPrompt:  阶段专属 system prompt
@@ -57,10 +56,8 @@ func (c *SkillDevContext) InvokeStageAgent(
 }
 
 // stageResultText 解析阶段 Agent 的返回值。
-//
 // result_type=error 时必须上抛：ReAct 循环在「空回答 / 迭代耗尽」等场景会返回
 // result_type=error 且 output 携带说明文案，直接取 output 会把失败当成功。
-//
 // Python: 阶段 Agent 的返回同样带 result_type，调用方按类型判定失败。
 func stageResultText(result map[string]any, stageName string) (string, error) {
 	if resultType, ok := result["result_type"].(string); ok && strings.EqualFold(resultType, "error") {
@@ -76,7 +73,6 @@ func stageResultText(result map[string]any, stageName string) (string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractStageOutput 从 Agent 返回结构中取文本输出。
-//
 // ReActAgent.Invoke 的返回是 map（键随实现而定），这里按 output/response/content
 // 优先级取字符串，取不到时退化为整体格式化。
 func extractStageOutput(result map[string]any) string {
@@ -99,7 +95,6 @@ func extractStageOutput(result map[string]any) string {
 }
 
 // StripCodeFences 去掉模型输出里包裹的 Markdown 代码围栏。
-//
 // 模型经常把文件内容包在 ```lang ... ``` 里，写入磁盘前需剥离。
 func StripCodeFences(text string) string {
 	trimmed := strings.TrimSpace(text)

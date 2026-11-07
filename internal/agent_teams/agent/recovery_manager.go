@@ -24,7 +24,6 @@ type LiveTeammate struct {
 
 // RecoveryManager 团队恢复管理器。
 // 负责：团队恢复、成员状态转换、Leader 配置持久化、Allocator 状态持久化。
-//
 // Python: openjiuwen/agent_teams/agent/recovery_manager.py
 type RecoveryManager struct {
 	// configurator Agent 配置器
@@ -161,7 +160,6 @@ func (m *RecoveryManager) PersistLeaderConfig(sess interfaces.SessionFacade) {
 
 // MarkTeammateRestartingForSessionSwitch 将活跃队友的状态转为 RESTARTING。
 // READY/BUSY/SHUTDOWN_REQUESTED/UNSTARTED 需先经 ERROR 中转。
-//
 // Python: _mark_teammate_restarting_for_session_switch(self, member_name, current_status) -> bool
 // Go 中导出以便同包测试（agent_test 包）访问。
 func (m *RecoveryManager) MarkTeammateRestartingForSessionSwitch(

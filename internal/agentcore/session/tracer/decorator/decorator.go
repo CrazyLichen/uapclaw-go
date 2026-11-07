@@ -26,7 +26,6 @@ type ModelConfigProvider interface {
 }
 
 // TracerSession 追踪装饰所需的会话最小接口。
-//
 // 从 tracer 父包抽出至 decorator 子包，避免 tracer → single_agent/interfaces 循环依赖。
 // internal.AgentSession 天然满足此接口。
 type TracerSession interface {
@@ -38,7 +37,6 @@ type TracerSession interface {
 
 // TracedModelClient 追踪装饰的模型客户端，包装 BaseModelClient 并在 Invoke/Stream 调用时触发追踪事件。
 // 实现 model_clients.BaseModelClient 接口。
-//
 // Python: TracedModelClient (openjiuwen/core/session/tracer/decorator.py)
 type TracedModelClient struct {
 	// inner 被装饰的原始模型客户端
@@ -53,7 +51,6 @@ type TracedModelClient struct {
 
 // TracedTool 追踪装饰的工具，包装 tool.Tool 并在 Invoke 调用时触发追踪事件。
 // 实现 tool.Tool 接口。
-//
 // Python: TracedTool (openjiuwen/core/session/tracer/decorator.py)
 type TracedTool struct {
 	// inner 被装饰的原始工具
@@ -68,7 +65,6 @@ type TracedTool struct {
 
 // TracedWorkflow 追踪装饰的工作流，包装 Workflow 并在 Invoke/Stream 调用时触发追踪事件。
 // 实现 sainterfaces.Workflow 接口。
-//
 // Python: decorate_workflow_with_trace 返回的 _TraceProxy (openjiuwen/core/session/tracer/decorator.py)
 // Python 同时包装 invoke 和 stream，Go 当前包装 Invoke，Stream 在领域八扩展时回填。
 type TracedWorkflow struct {
@@ -280,7 +276,6 @@ func (t *TracedTool) Card() *tool.ToolCard {
 }
 
 // GetCallTimeout 透传被装饰工具的外层预算钩子。
-//
 // 装饰器不能吞掉 inner 的预算：BashTool 靠它把执行预算加 30s 清理宽限，
 // 一旦在这里返回默认值，被追踪的工具会在清理阶段被外层超时砍断。
 func (t *TracedTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
@@ -322,7 +317,6 @@ func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts
 }
 
 // Card 返回工作流配置卡片，直接委托 inner。
-//
 // Python: workflow.card 属性
 func (w *TracedWorkflow) Card() *schema.WorkflowCard {
 	return w.inner.Card()

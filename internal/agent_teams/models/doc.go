@@ -1,5 +1,4 @@
 // Package models 提供团队模型池、路由和分配相关类型。
-//
 // 核心概念：
 //   - ModelPoolEntry：单个 LLM 端点的完整描述（模型名、凭证、Provider、元数据），
 //     可物化为 TeamModelConfig 供 Allocator 分配给团队成员

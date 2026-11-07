@@ -61,7 +61,6 @@ func TestValidateConfig_APIBase缺失(t *testing.T) {
 // TestValidateConfig_验证SSL无证书 测试 verify_ssl=true 但无 ssl_cert。
 // TestValidateConfig_验证SSL无证书 语义已变更（C-D1 + L-07 同源）：
 // verify_ssl=true 且无自定义证书时走系统信任库，不再强制 ssl_cert。
-//
 // Python: ssl_utils.create_strict_ssl_context（公共 CA 开箱即用）
 func TestValidateConfig_验证SSL无证书(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
@@ -449,7 +448,6 @@ func TestExtractCostInfo_无费用(t *testing.T) {
 
 // TestValidateConfig_IntelliRouter白名单 intelli_router 不在 api_key/api_base 白名单，
 // 空 key/base 应通过；白名单内 provider 仍按 auth_mode 要求。
-//
 // Python: base_model_client.py:428-445 + schema/config.py:111-131（IntelliRouterModelClient
 // 靠子类覆写 _validate_config 为空绕过；Go 无虚方法派发，改用白名单判定）
 func TestValidateConfig_IntelliRouter白名单(t *testing.T) {
@@ -601,7 +599,6 @@ func TestRequestTimeout_未配置走SDK默认(t *testing.T) {
 }
 
 // TestBuildRequestParams_DeepSeek模型补reasoning 模型名含 deepseek 时 assistant 消息补空 reasoning_content。
-//
 // Python: utils/endpoint_profiles.py:33-41（model_requires_reasoning_content 判模型名 +
 // _deepseek_reasoning_content 对 assistant 消息 setdefault）
 func TestBuildRequestParams_DeepSeek模型补reasoning(t *testing.T) {

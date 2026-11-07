@@ -1,8 +1,6 @@
 // Package session 提供会话管理的核心功能，包括历史持久化、元数据管理、任务队列和重命名。
-//
 // 本包对齐 Python jiuwenswarm/server/runtime/session/ 包的同包结构，
 // 使 session_history 和 session_metadata 可以互引，消除跨包依赖。
-//
 // 文件目录：
 //
 //	session/

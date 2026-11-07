@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // FixIncompleteToolContext 验证并修复上下文中不完整的 tool_call/ToolMessage 配对。
-//
 // 当用户中断导致 tool_call 没有对应的 ToolMessage 时，该函数会：
 //  1. 弹出所有消息
 //  2. 重新配对 tool_call 和 ToolMessage
@@ -146,7 +145,6 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 }
 
 // EnsureJSONArguments 确保 tool call arguments 是合法 JSON 字符串。
-//
 // Python: ContextProcessorRail._ensure_json_arguments(arguments)
 func EnsureJSONArguments(arguments string) string {
 	if arguments == "" {

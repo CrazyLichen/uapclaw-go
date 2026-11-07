@@ -133,7 +133,6 @@ func TestChannelConf_feishu_get_扁平转apps(t *testing.T) {
 
 // TestChannelConf_feishu_set_按app_id合并保留运行时字段 同一 app_id 的既有字段被保留、
 // 新值覆盖同名键。
-//
 // 注意（与上游同构）：归一化会先用 _FEISHU_APP_DEFAULTS 填满缺省键，而合并是
 // `{**existing, **normalized}`，所以**缺省表里有的键**以归一化结果为准（含空串），
 // 只有缺省表里没有的运行时字段（last_chat_id / bot_open_id 等）才真正被保留。

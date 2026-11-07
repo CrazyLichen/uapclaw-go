@@ -45,7 +45,6 @@ type AudioMetadataInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAudioTranscriptionTool 创建音频转写工具。
-//
 // Python: AudioTranscriptionTool.__init__ + AudioTranscriptionTool.invoke
 // 使用 TranscribeAudio 接口调用 /audio/transcriptions
 func NewAudioTranscriptionTool(
@@ -118,7 +117,6 @@ func NewAudioTranscriptionTool(
 }
 
 // NewAudioQATool 创建音频问答工具。
-//
 // Python: AudioQuestionAnsweringTool.__init__ + AudioQuestionAnsweringTool.invoke
 // 使用 input_audio content block + chat.completions
 func NewAudioQATool(
@@ -214,7 +212,6 @@ func NewAudioQATool(
 }
 
 // NewAudioMetadataTool 创建音频元数据工具。
-//
 // Python: AudioMetadataTool.__init__ + AudioMetadataTool.invoke
 // 获取时长 + ACRCloud 识别
 func NewAudioMetadataTool(
@@ -312,7 +309,6 @@ func NewAudioMetadataTool(
 }
 
 // CreateAudioTools 创建音频工具集。
-//
 // Python: create_audio_tools(language, audio_model_config, agent_id) -> list[Tool]
 func CreateAudioTools(
 	client modelclients.BaseModelClient,

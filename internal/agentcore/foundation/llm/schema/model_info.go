@@ -8,11 +8,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseModelInfo 模型基础信息，将 provider 配置和请求参数合并为单一结构体。
-//
 // 用于 BaseModelClient 的初始化，包含 API 连接信息和模型参数。
 // ModelName 字段在 JSON 中使用 "model" 键名（对应 Python 的 alias="model"）。
 // Streaming 字段在 JSON 中使用 "stream" 键名（对应 Python 的 alias="stream"）。
-//
 // Extra 字段实现 Python Pydantic model_config extra="allow" 的等价语义：
 //   - 序列化时：标准字段与 Extra 合并输出为平级 JSON 对象
 //   - 反序列化时：已知 key 映射到标准字段，未知 key 存入 Extra
@@ -40,7 +38,6 @@ type BaseModelInfo struct {
 }
 
 // ModelConfig 模型配置，组合 provider 名称和模型信息。
-//
 // Python: openjiuwen/core/foundation/llm/schema/mode_info.py (ModelConfig)
 type ModelConfig struct {
 	// ModelProvider 模型服务提供商标识
@@ -104,7 +101,6 @@ func WithInfoExtra(extra map[string]any) BaseModelInfoOption {
 }
 
 // NewBaseModelInfo 创建 BaseModelInfo 实例，apiBase 为必填参数。
-//
 // 默认值：
 //   - APIKey 默认为空字符串
 //   - ModelName 默认为空字符串
@@ -128,7 +124,6 @@ func NewBaseModelInfo(apiBase string, opts ...BaseModelInfoOption) *BaseModelInf
 }
 
 // Validate 校验 BaseModelInfo 的参数有效性。
-//
 // 校验规则：
 //   - APIBase: 必填（非空）
 //   - Timeout: 必须 > 0
@@ -205,7 +200,6 @@ func (info *BaseModelInfo) UnmarshalJSON(data []byte) error {
 }
 
 // NewModelConfig 创建 ModelConfig 实例。
-//
 // Python: ModelConfig(model_provider=..., model_info=...)
 func NewModelConfig(provider string, info BaseModelInfo) *ModelConfig {
 	return &ModelConfig{

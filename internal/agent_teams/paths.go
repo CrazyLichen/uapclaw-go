@@ -39,7 +39,6 @@ func ResetHome() {
 }
 
 // GetHome 返回 openjiuwen 本地状态的根目录。
-//
 // 默认值为数据根 WorkspaceDir()（约定 ~/.uapclaw）：对齐 Python 侧
 // jiuwenswarm/agents/harness/team/bootstrap.py 在启动时调用
 // configure_openjiuwen_home(get_user_workspace_dir()) 的效果。

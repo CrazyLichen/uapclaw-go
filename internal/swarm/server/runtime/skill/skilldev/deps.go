@@ -8,13 +8,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillDevDeps SkillDevService 的全部外部依赖（由 UapClawSwarm 构造并注入）。
-//
 // 设计原则：SkillDevService 不依赖 UapClawSwarm 实例，
 // 只接收以下最小依赖集，由 UapClawSwarm 在初始化时注入。
-//
 // UapClawSwarm 内部的 SkillManager、EvolutionService、对话历史等
 // 对 SkillDev 完全不可见，确保模块边界清晰。
-//
 // Python: jiuwenswarm/server/runtime/skill/skilldev/deps.py
 type SkillDevDeps struct {
 	// ModelName 模型名称

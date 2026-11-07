@@ -1,8 +1,6 @@
 // Package rails 提供 code 模式的 harness rail 实现。
-//
 // 目前仅含 CodeTaskPlanningRail：在 agent-core 的 TaskPlanningRail 基础上
 // 改写 todo 工具文案（CC 对齐）并追加周期性的 task_reminder 附件。
-//
 // 文件目录：
 //
 //	rails/

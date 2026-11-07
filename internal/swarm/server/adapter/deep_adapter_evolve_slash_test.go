@@ -242,7 +242,6 @@ func setupEvolveTestWorkspace(t *testing.T) func() {
 // ──────────── handleEvolveCommand 测试 ────────────
 
 // TestHandleEvolveCommand_裸命令列表分支 测试 M-10 链 A。
-//
 // /evolve（无参数）→ 走 list_pending_summary 摘要分支（原先错误
 // fallback 到 handleEvolveListCommand 导致 "请指定 Skill 名称" 错误）。
 func TestHandleEvolveCommand_裸命令列表分支(t *testing.T) {
@@ -354,7 +353,6 @@ func TestHandleEvolveCommand_无信号无意图(t *testing.T) {
 }
 
 // TestHandleEvolveCommand_成功路径审批块形状 测试 M-14 修复的完整成功链。
-//
 // skill 存在 + user_query 非空 → RequestUserEvolution（user_intent 信号）→
 // mock LLM 返回合法 JSON 草稿 → 生成 records + 审批事件 →
 // 返回 approval_chunks: []map[string]any（非 []any{result.ApprovalEvent} 原指针形状）。
@@ -425,7 +423,6 @@ func TestHandleEvolveCommand_成功路径审批块形状(t *testing.T) {
 }
 
 // TestHandleEvolveCommand_信号指纹去重 测试 S-11 决策点 A 的统一去重。
-//
 // slash 处理过的信号写入 rail.ProcessedSignalKeys()——同一指纹
 // 第二次 slash 调用时被跳过。对话消息中 execution_failure 信号
 // 归属目标 skill；去重键在信号检测后立即回写。
@@ -580,7 +577,6 @@ func TestHandleEvolveListCommand_空记录(t *testing.T) {
 }
 
 // TestHandleEvolveListCommand_表格输出 测试 M-10 链 B 的文本表格格式。
-//
 // 有记录时返回 buildEvolveListSummary 表格（非旧的
 // {"action": "evolve_list", "skills": [...]} 结构化 map）。
 func TestHandleEvolveListCommand_表格输出(t *testing.T) {
@@ -623,7 +619,6 @@ func TestHandleEvolveListCommand_表格输出(t *testing.T) {
 }
 
 // TestHandleEvolveListCommand_禁用技能过滤 测试 FilterVisibleSkillNames 接线。
-//
 // skills_state.json 中 enabled=false 的技能在"可用列表"中被过滤。
 func TestHandleEvolveListCommand_禁用技能过滤(t *testing.T) {
 	// workspace 隔离（skills_state.json 写入 AgentSkillsDir）
@@ -807,7 +802,6 @@ func TestApplyModelToReactAgent_nil与正常路径(t *testing.T) {
 // ──────────── 流式消费者双形状回归测试（M-14 扩展） ────────────
 
 // TestStreamApprovalChunksEmission_双形状 直接测试流式发射逻辑。
-//
 // 复刻 ProcessMessageStreamImpl 审批块发射序列（M-14 双形状兼容块），
 // 验证两种切片形状均产生 ask_user_question chunk + chat.done 终止 chunk。
 // 使用与生产相同的 NewAgentResponseChunk 封装。
@@ -911,11 +905,9 @@ func TestProcessMessageStreamImpl_非流式审批块透传(t *testing.T) {
 // ──────────── S-07 team 分支 6 步测试 ────────────
 
 // TestProcessMessageStreamImpl_team分支6步 测试 S-07。
-//
 // team 模式请求进入 processTeamMessageStream 前完成 6 步运行时设置：
 // 1-2 模型解析与应用（reactAgent.SetLLM）；3 语言解析；4 频道解析；
 // 5 RuntimePromptRail SetModelName/SetMode；6 runtime_state.yaml 写入。
-//
 // 实现方式：预注册 stream task 使 HasStreamTask=true → 走后续请求分支
 // （Interact 对无 active session 返回 false → chat.error 快速返回），
 // 避免 first-request 分支的完整 TeamAgent 创建。

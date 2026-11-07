@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HandoffSignal 交接信号，携带目标 Agent、上下文消息和交接原因。
-//
 // Python: HandoffSignal(target=str, message=Optional[str], reason=Optional[str])
 // Python 中 HandoffSignal 是 frozen dataclass，Go 中为值结构体。
 type HandoffSignal struct {
@@ -46,7 +45,6 @@ var stateKeyContext = state.StringKey("context")
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractHandoffSignal 从 Agent 执行结果中提取交接信号。
-//
 // 两层提取策略：
 //  1. 第一层：从 result map 中查找 handoff payload（findHandoffPayload）
 //  2. 第二层：若第一层未找到且 agentSession 非 nil，从 session 消息历史查找（findHandoffFromSession）
@@ -97,7 +95,6 @@ func ExtractHandoffSignal(result map[string]any, agentSession sessioninterfaces.
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // findHandoffPayload 从 result map 中查找 handoff payload。
-//
 // 查找策略：
 //  1. result 顶层包含 HandoffTargetKey → 直接返回 result
 //  2. 遍历 output/result/content 子键，若子值为 map 且包含 HandoffTargetKey → 返回子 map
@@ -132,7 +129,6 @@ func findHandoffPayload(result map[string]any) map[string]any {
 }
 
 // findHandoffFromSession 从 session 消息历史中查找 handoff payload。
-//
 // 查找策略：
 //  1. 从 session state 获取 "context" 状态
 //  2. 从 context 中获取 defaultContextID 对应的默认上下文

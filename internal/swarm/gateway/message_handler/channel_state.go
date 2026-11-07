@@ -28,7 +28,6 @@ type ChannelControlState struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ChannelMode 渠道模式枚举。
-//
 // 对齐 Python `gateway/message_handler/message_handler.py:205-225`
 // `class ChannelMode(str, Enum)`（18 个成员，旧成员保留以兼容历史持久化反解析）。
 // Go 侧用字符串枚举而非 int：一是成员值与 Python `.value` 完全一致（无需映射表），
@@ -111,7 +110,6 @@ var channelModeMembers = map[ChannelMode]bool{
 }
 
 // agentWorkModes `/switch` 判据：agent 族（plan 与 fast 已合并）。
-//
 // Python: _SWITCH_AGENT_WORK_MODES（message_handler.py:272-274）
 var agentWorkModes = map[string]bool{
 	string(ChannelModeAgentWorkNormal): true,
@@ -119,7 +117,6 @@ var agentWorkModes = map[string]bool{
 }
 
 // codeModes `/switch` 判据：code 族三种模式。
-//
 // Python: _SWITCH_CODE_MODES（message_handler.py:275-277）
 var codeModes = map[string]bool{
 	string(ChannelModeAgentCodePlan):   true,
@@ -151,7 +148,6 @@ const unknownTeamModeNotice = "不支持的模式 '%s'：以 team 开头的 mode
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ApplyChannelState 把渠道控制状态（session_id / mode）应用到入站消息。
-//
 // Python: _apply_channel_state (L2654-2694)。步骤顺序逐条对齐：
 //  1. 非受控渠道直接返回
 //  2. team 成员消息守卫（metadata.member_name 存在时强制 mode=team 并返回）
@@ -202,7 +198,6 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 }
 
 // GetOrCreateChannelState 获取或创建消息对应 channel 状态。
-//
 // Python: _get_or_create_channel_state (L921-938)：
 // 使用复合键 channelID:sessionID（对齐 Python _get_channel_state_key）。
 // 首建时若企业通道身份齐备，SessionMap 覆盖 config 默认 session_id（Python L933-935）。
@@ -239,7 +234,6 @@ func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelC
 }
 
 // EnsureInboundSession 受控通道入站无 session 时为其分配真实会话并写回状态。
-//
 // Python: _ensure_inbound_session (L1012-1026)。在 _apply_channel_state 之后调用
 // （Python: L4966-4967），返回 error 时调用方停止本轮转发（Python 抛 RuntimeError）。
 func (mh *MessageHandler) EnsureInboundSession(ctx context.Context, msg *schema.Message) error {
@@ -277,13 +271,11 @@ func (mh *MessageHandler) EnsureInboundSession(ctx context.Context, msg *schema.
 }
 
 // resolveExternalChannelSession 把 A2A 协议会话 ID 映射到 AgentServer 会话。
-//
 // Python: _resolve_external_channel_session (message_handler.py:1028-1061)。
 // 仅处理 a2a 通道（ssh 是 AgentOS 纯中继，不分配本地会话）：以 (channel_id, 外部
 // session_id) 为键查进程级别名表，未命中时按外部消息 params.mode（缺省 agent）分配
 // 本地会话并记录。随后把外部原始 ID 留在 metadata.external_session_id，并把
 // msg.session_id 换成本地会话 ID，保证同一段外部对话始终落在同一个本地会话。
-//
 // 锁语义对齐上游：分配在锁内完成（上游是全局 asyncio.Lock 内 await 分配），并发首轮
 // 只会创建一个会话；a2a 首轮分配本身罕见，串行化的代价可接受。
 func (mh *MessageHandler) resolveExternalChannelSession(ctx context.Context, msg *schema.Message) {
@@ -330,7 +322,6 @@ func (mh *MessageHandler) resolveExternalChannelSession(ctx context.Context, msg
 }
 
 // IsUnknownTeamModeSend 判断是否为"mode 以 team 开头但不是已知 Team 模式"的 chat.send。
-//
 // Python: _is_unknown_team_mode_send (L742-753)——只收紧 team.*，其余未知 mode 保持宽松路径。
 func (mh *MessageHandler) IsUnknownTeamModeSend(msg *schema.Message) bool {
 	if msg.ReqMethod != schema.ReqMethodChatSend {
@@ -345,7 +336,6 @@ func (mh *MessageHandler) IsUnknownTeamModeSend(msg *schema.Message) bool {
 }
 
 // RejectUnknownTeamModeSend 拒绝未知 team.* 模式并回 chat.error。
-//
 // Python: _reject_unknown_team_mode_send (L755-785)——避免网关按普通 chat 转发、
 // AgentServer 按 team 执行导致客户端永久等待。
 func (mh *MessageHandler) RejectUnknownTeamModeSend(msg *schema.Message) {
@@ -379,7 +369,6 @@ func (mh *MessageHandler) RejectUnknownTeamModeSend(msg *schema.Message) {
 }
 
 // GenerateChannelSessionID 生成渠道会话标识。
-//
 // 注意：0.2.5 起网关不再自造会话 id（改由 AgentServer 的 session.create 分配），
 // 本函数仅保留给历史调用方（如无 AgentServer 的本地场景）。
 func GenerateChannelSessionID(channelID string) string {
@@ -391,7 +380,6 @@ func GenerateChannelSessionID(channelID string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // channelModeFromStr 把任意 mode 字符串归一到 ChannelMode。
-//
 // Python: channel_mode_from_str (L233-263)：
 //  1. deprecate_mode 先把旧 canonical 静默映射到新 canonical（Go 等价物 CanonicalizeMode）
 //  2. 命中 NEW_CANONICAL_MODES → 直接构造
@@ -431,7 +419,6 @@ func channelModeFromStr(modeStr string) ChannelMode {
 }
 
 // resolveControlChannelType 解析消息对应的受控渠道类型。
-//
 // Python: _resolve_control_channel_type — 优先 msg.provider，fallback msg.channel_id。
 // Python 不查 ChannelManager，直接从消息字段推断。
 func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel_manager.ChannelType {
@@ -447,7 +434,6 @@ func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel
 }
 
 // getChannelDefaultState 从 config 读取渠道默认会话与模式。
-//
 // Python: _get_channel_default_state (L889-907)，步骤逐条对齐：
 // cfg → channels → ch_cfg → default_session_id → default_mode（缺省 "agent"）→
 // channel_mode_from_str。**不在此处生成 session_id**：0.2.5 起由
@@ -475,7 +461,6 @@ func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelContr
 }
 
 // allocateChannelSession 为渠道分配并持久化一个 AgentServer 侧真实会话。
-//
 // Python: _allocate_channel_session (L951-994)：经 E2A `session.create` 建会话，
 // 回包 session_id 写入 state 与企业通道 SessionMap。
 func (mh *MessageHandler) allocateChannelSession(ctx context.Context, msg *schema.Message, state *ChannelControlState, persistSession bool) (string, error) {
@@ -531,7 +516,6 @@ func (mh *MessageHandler) allocateChannelSession(ctx context.Context, msg *schem
 }
 
 // rememberAllocStateKey 受控通道无正式会话时记录本次状态键，供分配后写回。
-//
 // Python: _remember_alloc_state_key (L996-1010)——小艺入站 session_id 是手机侧
 // 逻辑会话 id，分配真实会话后若键退化成 channel 级，下次入站永远命中不到 →
 // 每条 query 都新建 session、丢上下文。
@@ -554,7 +538,6 @@ func getChannelStateKey(channelID, sessionID string) string {
 }
 
 // saveChannelStateToConfig 保存渠道状态到 config。
-//
 // Python: _save_channel_state_to_config (L940-950)：
 // 调用 updateChannelInConfig 注入 default_session_id 和 default_mode。
 func (mh *MessageHandler) saveChannelStateToConfig(channelID string) {
@@ -604,7 +587,6 @@ func encodeMessageParams(msg *schema.Message, params map[string]any) {
 }
 
 // extractIdentityTuple 提取消息身份四元组。
-//
 // Python: _extract_identity_tuple (L321-329)：
 // 四字段 TrimSpace 后任一为空返回 ok=false（对齐 Python all(identity_parts)）
 func extractIdentityTuple(msg *schema.Message) (provider, chatID, botID, userID string, ok bool) {
@@ -619,7 +601,6 @@ func extractIdentityTuple(msg *schema.Message) (provider, chatID, botID, userID 
 }
 
 // channelIDMatchesSessionMapTypes channel_id 是否属于 SessionMap 通道族。
-//
 // Python: _channel_id_matches_session_map_types (L331-337)：
 // 精确匹配或 "base:" 前缀
 func channelIDMatchesSessionMapTypes(channelID string) bool {

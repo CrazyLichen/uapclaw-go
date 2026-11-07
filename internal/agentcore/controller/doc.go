@@ -1,5 +1,4 @@
 // Package controller 提供事件驱动任务编排控制器，是 ControllerAgent 的核心组件。
-//
 // Controller 负责：
 //   - 处理事件（通过 EventQueue + EventHandler）
 //   - 管理任务生命周期（通过 TaskManager + TaskScheduler）

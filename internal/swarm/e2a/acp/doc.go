@@ -1,5 +1,4 @@
 // Package acp 提供 E2A 与 ACP 协议互转的工具级纯函数（10.6.24d）。
-//
 // 本包对齐 Python jiuwenswarm/common/e2a/acp/：构造 ACP toolCall descriptor
 // （toolCallId/title/kind/status/rawInput/locations/rawOutput）与 session/update
 // 工具事件。BuildAcpToolDescriptor 由权限确认桥消费；protocol.go 四函数由
@@ -7,7 +6,6 @@
 // session_updates.go 提供会话更新构造（agent/thought chunk 增量三态、
 // usage、plan/todo/tool 派发、processing/idle 状态、final text 三态），
 // 由 AcpGatewayBridge（gateway 包）与 AcpChannel（protocol/acp 包）消费。
-//
 // 文件目录：
 //
 //	acp/

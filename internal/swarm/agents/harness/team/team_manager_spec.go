@@ -859,7 +859,6 @@ func copyMemberConfiguredSkills(memberSkillsDir string, selectedSkills []string,
 }
 
 // buildMemberSkillState 构建成员技能状态（对齐 Python build_member_skill_state L640-716）。
-//
 // 读全局 skills_state.json → NormalizeMarketplaces → installed_plugins/local_skills
 // 按 member 目录实际 SKILL.md 过滤 + 补全（project source 条目）。
 func buildMemberSkillState(memberSkillsDir, globalSkillsStatePath string) map[string]any {

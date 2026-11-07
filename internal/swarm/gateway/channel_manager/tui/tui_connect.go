@@ -21,7 +21,6 @@ const (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RouteParams /tui 路由装配参数。
-//
 // 对齐 Python CliRouteBindParams（tui_connect.py L344-353）裁剪：仅保留
 // DisconnectHandler 所需的 message_handler。res 帧发送能力不在此注入——Python 的
 // channel（gateway_server）是 install 阶段才传进来的，Go 侧同样在 Install 里从
@@ -42,7 +41,6 @@ type ResponseSender interface {
 
 // RouteServer Install 阶段注入的通道对象，与 Python register_cli_handlers(channel=...)
 // 的 channel 同构：既能注册本地 handler，也能替 handler 发 res 帧。
-//
 // 实现方为 gateway.GatewayServer；以接口而非具体类型表达，避免 gateway ↔ tui 成环。
 // 不满足本接口时 Install 直接跳过（与 Python 传入无 send_response 的对象等价于不可用）。
 type RouteServer interface {
@@ -55,7 +53,6 @@ type RouteServer interface {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ForwardReqMethods /tui 路由转发到 Agent 的 method 集合。
-//
 // Python: CLI_FORWARD_REQ_METHODS（tui_connect.py L101-197），80 项。
 var ForwardReqMethods = map[string]bool{
 	"agents.create":                  true,
@@ -141,7 +138,6 @@ var ForwardReqMethods = map[string]bool{
 }
 
 // ForwardNoLocalHandlerMethods /tui 路由仅转发、无本地 handler 的集合。
-//
 // Python: CLI_FORWARD_NO_LOCAL_HANDLER_METHODS（L199-329），75 项。
 // 差集（forward − no_local）恰为 5 个 chat 类方法。
 var ForwardNoLocalHandlerMethods = map[string]bool{
@@ -225,7 +221,6 @@ var ForwardNoLocalHandlerMethods = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildRouteBinding 构建 /tui CLI 路由 binding。
-//
 // 对齐 Python build_cli_route_binding（tui_connect.py L2093-2119）：
 // forward 集合 80 项、no-local 集合 75 项（差集=5 个 chat 类方法，
 // 计数已机器核对 2026-10-28，见 spec 附录 A）；
@@ -233,7 +228,6 @@ var ForwardNoLocalHandlerMethods = map[string]bool{
 // （对应 Python register_cli_handlers 的 channel 注入：handler 用的 channel 与
 // 注册用的 channel 是同一个对象，故此处由 Install 的 server 统一提供）；
 // disconnect_handler 桥接 CancelAgentSessionsOnDisconnect。
-//
 // 目录对齐：Python 该实现位于 jiuwenswarm/gateway/channel_manager/tui/tui_connect.py，
 // 2026-11-01 由 gateway 包迁入本包（原 gateway/tui_route.go 注释里"tui 装配放
 // gateway 包"的偏差已消除）。
@@ -274,7 +268,6 @@ func BuildRouteBinding(params RouteParams) *routing.RouteBinding {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // chatSendHandler chat.send 本地 ack。
-//
 // Python: _chat_send（tui_connect.py L1402-1405）——仅返回 ack，
 // 消息转发由 ForwardMethods 集合路径完成。
 func chatSendHandler(send ResponseSender) routing.LocalHandlerFunc {
@@ -288,7 +281,6 @@ func chatSendHandler(send ResponseSender) routing.LocalHandlerFunc {
 }
 
 // chatResumeHandler chat.resume 本地 ack。
-//
 // Python: _chat_resume（L1407-1410）。
 func chatResumeHandler(send ResponseSender) routing.LocalHandlerFunc {
 	return func(ws *websocket.Conn, reqID string, _ map[string]any, sessionID string) error {
@@ -301,7 +293,6 @@ func chatResumeHandler(send ResponseSender) routing.LocalHandlerFunc {
 }
 
 // chatInterruptHandler chat.interrupt 本地 ack（intent 可选透传）。
-//
 // Python: _chat_interrupt（L1412-1417）。
 func chatInterruptHandler(send ResponseSender) routing.LocalHandlerFunc {
 	return func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
@@ -318,7 +309,6 @@ func chatInterruptHandler(send ResponseSender) routing.LocalHandlerFunc {
 }
 
 // chatUserAnswerHandler chat.user_answer 本地 ack（request_id 可选透传）。
-//
 // Python: _chat_user_answer（L1419-1424）。
 func chatUserAnswerHandler(send ResponseSender) routing.LocalHandlerFunc {
 	return func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
@@ -335,7 +325,6 @@ func chatUserAnswerHandler(send ResponseSender) routing.LocalHandlerFunc {
 }
 
 // historyGetHandler history.get 本地 ack（session_id 覆写 + page_idx 透传）。
-//
 // Python: _history_get（L1426-1433）。
 func historyGetHandler(send ResponseSender) routing.LocalHandlerFunc {
 	return func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
@@ -355,7 +344,6 @@ func historyGetHandler(send ResponseSender) routing.LocalHandlerFunc {
 }
 
 // disconnectHandler 构造断连回调：桥接 CancelAgentSessionsOnDisconnect。
-//
 // Python: _tui_disconnect（tui_connect.py L2106-2110）——
 // mh 为 None 或无 stale keys 时直接返回。
 func disconnectHandler(mh *messagehandler.MessageHandler) routing.DisconnectFunc {

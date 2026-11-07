@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GRPCPluginTransport 扩展插件 transport 的宿主侧代理，实现 transport.AgentTransport。
-//
 // 将 AgentTransport 的 Send/Recv/Close 映射到插件 gRPC 的
 // TransportSend/TransportRecv（server-streaming）/TransportClose 三个 RPC。
 // AgentClient 通过本代理与扩展提供的 transport 通信，E2A 语义仍留在
@@ -126,13 +125,11 @@ func (t *GRPCPluginTransport) Close() error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // pumpRecvLoop 消费 TransportRecv 流并写入 recvCh。
-//
 // 通道收口唯一路径：pump 退出时 defer close(recvCh)。任何退出分支
 // （流断开/出错/Close 取消 context）都经过 defer，保证 close 恒发生在
 // 该 goroutine 内部——Close 与 pump 分属两个 goroutine，若 Close 侧
 // 直接 close(recvCh)，则与本处发送存在 send-on-closed-channel panic
 // 竞态（pump 检查 closed 与发送之间无法原子）。
-//
 // 写入用 select 防护：ctx 取消立即退出；通道长期满（消费方停摆）时
 // 丢弃帧并 warn，避免阻塞拖住收口。
 func (t *GRPCPluginTransport) pumpRecvLoop(ctx context.Context) {

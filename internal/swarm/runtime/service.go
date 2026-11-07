@@ -31,7 +31,6 @@ type AgentRuntimeDeps struct {
 }
 
 // AgentRuntime 运行时编排：选 agent、同步 plan 状态、执行、下发控制事件。
-//
 // Python: jiuwenswarm/runtime/service.py AgentRuntime
 type AgentRuntime struct {
 	// mu 保护生命周期字段
@@ -53,7 +52,6 @@ type AgentRuntime struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentRuntime 创建运行时。
-//
 // Python: AgentRuntime.__init__
 func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 	controller := deps.PlanController
@@ -69,12 +67,10 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 }
 
 // PlanController 返回运行时持有的计划模式控制器。
-//
 // Python: AgentRuntime.plan_controller
 func (r *AgentRuntime) PlanController() *PlanModeController { return r.planController }
 
 // Start 幂等启动（不接管 Runner/checkpointer 生命周期）。
-//
 // Python: AgentRuntime.start（service.py:655）
 func (r *AgentRuntime) Start() error {
 	r.mu.Lock()
@@ -91,7 +87,6 @@ func (r *AgentRuntime) Start() error {
 }
 
 // Close 幂等关闭。
-//
 // Python: AgentRuntime.close
 func (r *AgentRuntime) Close() error {
 	r.mu.Lock()
@@ -102,7 +97,6 @@ func (r *AgentRuntime) Close() error {
 }
 
 // NormalizeRequest 归一化请求（保证 Params 是合法 JSON map）。
-//
 // Python: AgentRuntime.normalize_request（service.py:3790）
 func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
 	if req == nil {
@@ -113,7 +107,6 @@ func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
 }
 
 // UsesSessionRuntime 判断请求是否走 session runtime 路径（team 与 stateless 不占用会话流槽）。
-//
 // Python: AgentRuntime.uses_session_runtime（service.py:3842）
 func UsesSessionRuntime(req *schema.AgentRequest) bool {
 	params := parseRequestParams(req)
@@ -127,7 +120,6 @@ func UsesSessionRuntime(req *schema.AgentRequest) bool {
 }
 
 // Invoke 执行非流式 chat turn。
-//
 // Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
 func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {
 	req = NormalizeRequest(req)
@@ -153,7 +145,6 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]
 }
 
 // Stream 执行流式 chat turn；onEvent 返回 false 时停止消费。
-//
 // Python: AgentRuntime.stream → _stream_started（service.py:2183/2482）
 func (r *AgentRuntime) Stream(
 	ctx context.Context,
@@ -206,7 +197,6 @@ func (r *AgentRuntime) prepareTurn(
 }
 
 // planEnabled 判定本轮是否参与 plan 状态同步。
-//
 // Python: service.py:1859 `if not readonly_goal_get` + PlanModeController.should_sync
 func (r *AgentRuntime) planEnabled(req *schema.AgentRequest) bool {
 	if req == nil || r.planController == nil {
@@ -224,7 +214,6 @@ func (r *AgentRuntime) planEnabled(req *schema.AgentRequest) bool {
 }
 
 // ensurePlanState 同步本轮 plan 状态，回写 query/mode 并下发进入事件。
-//
 // Python: PlanModeController.ensure_state（service.py:1861）——上游直接改写
 // request.params，Go 由控制器返回结果后在此回写，保证 BuildInputs 之前生效。
 func (r *AgentRuntime) ensurePlanState(ctx context.Context, req *schema.AgentRequest, subMode string, agent ChatAgentPort) {
@@ -238,7 +227,6 @@ func (r *AgentRuntime) ensurePlanState(ctx context.Context, req *schema.AgentReq
 }
 
 // checkPlanExit 检测工具触发的 plan 退出并下发事件。
-//
 // Python: PlanModeController.check_post_process_exit（service.py:1911）——
 // 首步把 canonical mode 回写 params，再判定是否退出。
 func (r *AgentRuntime) checkPlanExit(ctx context.Context, req *schema.AgentRequest, subMode string, agent ChatAgentPort) {
@@ -252,7 +240,6 @@ func (r *AgentRuntime) checkPlanExit(ctx context.Context, req *schema.AgentReque
 }
 
 // emitControlEvents 把控制事件交给回调；无回调时记 Debug。
-//
 // Python: AgentRuntime._emit_control_events（service.py:4405，handler=None 分支）
 func (r *AgentRuntime) emitControlEvents(req *schema.AgentRequest, events []ControlEvent) {
 	for _, ce := range events {

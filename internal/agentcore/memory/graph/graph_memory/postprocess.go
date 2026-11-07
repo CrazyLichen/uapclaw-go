@@ -98,7 +98,6 @@ func ValidateEntitiesEpisodes(entities []*graph.Entity, currentEpisode *graph.Ep
 //
 // 根据状态中的时间戳、语言、片段类型等信息创建新的 Episode，
 // 并通过 EnsureUniqueUUIDs 保证 UUID 唯一性。
-//
 // Python: create_episode(database, user_id, content, state)
 func CreateEpisode(ctx context.Context, database graph.BaseGraphStore, userID string, content string, state *GraphMemState) (*graph.Episode, error) {
 	currentEpisode := graph.NewEpisode()
@@ -121,7 +120,6 @@ func CreateEpisode(ctx context.Context, database graph.BaseGraphStore, userID st
 }
 
 // ProcessRelations 处理关系（删除废弃 + 更新关联 + UUID 去重）
-//
 // 1. 移除废弃关系对实体的影响：从实体的 relations 列表中删除已废弃关系的 UUID
 // 2. 更新关系的关联实体：调用 UpdateConnectedEntities 将自身 UUID 加入 lhs/rhs 实体
 // 3. 对新增关系的 UUID 进行去重
@@ -172,7 +170,6 @@ func ProcessRelations(ctx context.Context, database graph.BaseGraphStore, entiti
 }
 
 // ProcessEntities 处理实体（合并完成 + 关联 Episode + UUID 去重）
-//
 // 1. 等待所有合并任务完成，更新实体内容
 // 2. 清理实体内容前缀换行、移除已废弃关系的引用
 // 3. 关联当前 Episode、设置语言、分类为新增/更新
@@ -257,7 +254,6 @@ func ProcessEntities(ctx context.Context, database graph.BaseGraphStore, entitie
 //
 // 遍历关系去重任务列表，解析 LLM 响应中指定的重复关系 UUID，
 // 将结果追加到 state.ToRemove。
-//
 // Python: parse_relation_uuids_to_remove(dedupe_relation_tasks, state)
 func ParseRelationUUIDsToRemove(dedupeRelationTasks []DedupeRelationTask, state *GraphMemState) {
 	for _, task := range dedupeRelationTasks {

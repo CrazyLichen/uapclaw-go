@@ -13,7 +13,6 @@ import (
 
 // MemoryInterface 记忆类型的通用接口。
 // 所有 Memory 类型（ACEMemory/ReasoningBankMemory/ReMeMemory）均实现此接口。
-//
 // 注意：FromVectorNode 不在接口中，因为它是构造函数语义（Python classmethod），
 // Go 中使用包级函数 NewXxxFromVectorNode 代替。
 type MemoryInterface interface {
@@ -25,7 +24,6 @@ type MemoryInterface interface {
 
 // BaseMemory 记忆类型的公共基类。
 // 对齐 Python io_schema.BaseMemory(BaseModel)，各 Memory 类型嵌入此结构体。
-//
 // Python 中 BaseMemory 含 workspace_id 字段（默认 "default"），
 // 以及 to_vector_node/from_vector_node 抽象方法。
 // Go 中抽象方法由 MemoryInterface 接口定义，FromVectorNode 由包级函数实现。
@@ -36,7 +34,6 @@ type BaseMemory struct {
 
 // ACEMemory ACE 算法的记忆类型。
 // 对齐 Python ACEMemory(BaseMemory)。
-//
 // ACE 记忆以 Playbook 条目形式组织，每条记忆属于一个 section，
 // 包含内容文本和 helpful/harmful/neutral 反馈计数。
 type ACEMemory struct {
@@ -61,7 +58,6 @@ type ACEMemory struct {
 
 // ReasoningBankMemoryItem ReasoningBank 记忆条目。
 // 对齐 Python ReasoningBankMemoryItem(BaseModel) + memory.py ReasoningBankMemory 的字段。
-//
 // 非独立 Memory 类型，是 ReasoningBankMemory.Memory 列表中的元素。
 type ReasoningBankMemoryItem struct {
 	// Title 核心策略标识
@@ -80,7 +76,6 @@ type ReasoningBankMemoryItem struct {
 
 // ReasoningBankMemory ReasoningBank 算法的记忆类型。
 // 对齐 Python ReasoningBankMemory(BaseMemory)。
-//
 // RB 记忆以 query 为索引，挂载多个 MemoryItem。
 // 注意：没有顶层 content 字段，content 嵌套在 Memory 列表项中。
 type ReasoningBankMemory struct {
@@ -112,7 +107,6 @@ type ReMeMemoryMetadata struct {
 
 // ReMeMemory ReMe 算法的记忆类型。
 // 对齐 Python ReMeMemory(BaseMemory)。
-//
 // ReMe 记忆包含使用条件（when_to_use）、内容、分数和结构化元数据。
 type ReMeMemory struct {
 	BaseMemory // 嵌入基类

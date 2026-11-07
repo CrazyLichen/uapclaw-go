@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NativeHarness 团队成员的多轮交互层，组合一台 DeepAgent。
-//
 // Python: NativeHarness(DeepAgent) (agent_teams/harness/native_harness.py)。
 // 差异（spec D-3）：Python 用继承，Go 用组合——因为嵌入会与
 // DeepAgent.Abort 同名冲突，且跨包拿不到私有成员。
@@ -73,7 +72,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewNativeHarness 由已构建的 DeepAgent 构造 NativeHarness。
-//
 // 25.1a 阶段接收外部已建好的 agent（因为 rail 仍由 BuildTeamHarness 手工挂载）；
 // 25.1b 改为接收 spec 并内部自建（对齐 Python 的 spec 前向构造）。
 func NewNativeHarness(agent *agentcore.DeepAgent, spec atschema.DeepAgentSpec) *NativeHarness {
@@ -94,7 +92,6 @@ func NewNativeHarness(agent *agentcore.DeepAgent, spec atschema.DeepAgentSpec) *
 func (h *NativeHarness) State() HarnessState { return h.st.Phase() }
 
 // SessionID 返回绑定会话标识。
-//
 // 注意：不加锁——sess 指针的读写都发生在持有 startMu 的 Start/Stop 内，
 // 这里直接读指针（Go 的指针读取是原子的），避免 Start 持锁时经 transition
 // 再取锁造成自死锁。
@@ -112,7 +109,6 @@ func (h *NativeHarness) DeepAgent() *agentcore.DeepAgent { return h.agent }
 func (h *NativeHarness) Outputs() *OutputIterator { return h.out }
 
 // Start 初始化内核并启动 supervisor 与 forwarder。
-//
 // Python: NativeHarness.start (native_harness.py:348)
 func (h *NativeHarness) Start(ctx context.Context, sess *session.Session) error {
 	h.startMu.Lock()
@@ -168,7 +164,6 @@ func (h *NativeHarness) Start(ctx context.Context, sess *session.Session) error 
 }
 
 // Stop 取消在飞轮次、停 supervisor、关闭输出。
-//
 // Python: NativeHarness.stop (native_harness.py:393)
 func (h *NativeHarness) Stop(ctx context.Context) error {
 	h.startMu.Lock()
@@ -237,7 +232,6 @@ func (h *NativeHarness) Stop(ctx context.Context) error {
 }
 
 // Send 投递输入。
-//
 // Python: NativeHarness.send (native_harness.py:562)
 // 返回消息序号（本阶段暂不暴露，接口只要求 error）。
 func (h *NativeHarness) Send(ctx context.Context, content any, immediate bool) error {
@@ -250,7 +244,6 @@ func (h *NativeHarness) Send(ctx context.Context, content any, immediate bool) e
 }
 
 // Abort 中断当前轮。
-//
 // Python: NativeHarness.abort (native_harness.py:605)。
 // 本阶段 immediate=true 只取消调度任务，不回滚上下文（spec D-2，⤵️ 25.1c 补回滚）。
 func (h *NativeHarness) Abort(ctx context.Context, immediate bool) error {
@@ -280,14 +273,12 @@ func (h *NativeHarness) Resume(ctx context.Context, query any) error {
 }
 
 // Subscribe 订阅生命周期事件。
-//
 // Python: NativeHarness.subscribe (native_harness.py:532)
 func (h *NativeHarness) Subscribe(ctx context.Context, onState StateHandler, onRound RoundHandler) error {
 	return h.events.subscribe(ctx, onState, onRound)
 }
 
 // RunOnce 执行一次非流式调用，绕过 supervisor。
-//
 // Python: NativeHarness.run_once (native_harness.py:301)
 func (h *NativeHarness) RunOnce(ctx context.Context, content any, sess *session.Session) (map[string]any, error) {
 	h.startMu.Lock()
@@ -317,7 +308,6 @@ func (h *NativeHarness) RunOnce(ctx context.Context, content any, sess *session.
 }
 
 // Dispose 永久收尾：停机。
-//
 // Python: NativeHarness.dispose / _close_memory_managers (native_harness.py:464/499)
 func (h *NativeHarness) Dispose(ctx context.Context) error {
 	return h.Stop(ctx)
@@ -340,7 +330,6 @@ func (h *NativeHarness) transition(ctx context.Context, next HarnessState) {
 }
 
 // supervisorLoop 控制命令唯一消费者与状态唯一写者。
-//
 // Python: NativeHarness._supervisor (native_harness.py:777)
 func (h *NativeHarness) supervisorLoop(ctx context.Context) {
 	defer close(h.supervisorDone)
@@ -372,7 +361,6 @@ func (h *NativeHarness) supervisorLoop(ctx context.Context) {
 }
 
 // forwardOutputs 把会话流泵入输出队列，结束时投 END。
-//
 // Python: NativeHarness._forward_outputs (native_harness.py:1658)
 func (h *NativeHarness) forwardOutputs(ctx context.Context) {
 	defer close(h.forwarderDone)
@@ -458,7 +446,6 @@ func waitAck(ctx context.Context, reply chan error) error {
 }
 
 // onSend 按当前相位路由一条投递。
-//
 // Python: NativeHarness._on_send (native_harness.py:867)
 func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 	phase := h.st.Phase()
@@ -486,7 +473,6 @@ func (h *NativeHarness) enqueueInbox(m InboxMessage) {
 }
 
 // steerActive 把转向输入交给当前轮的内核 steering 队列。
-//
 // Python: NativeHarness._push_steer
 func (h *NativeHarness) steerActive(_ context.Context, content any) error {
 	text, ok := content.(string)
@@ -501,7 +487,6 @@ func (h *NativeHarness) steerActive(_ context.Context, content any) error {
 }
 
 // startRound 起一轮执行并返回活动轮次。
-//
 // Python: NativeHarness._start_round (native_harness.py:1287)
 // 本阶段不含快照（pre_round_snapshot）与 turn 解析（⤵️ 25.1c / 25.1e）。
 func (h *NativeHarness) startRound(ctx context.Context, query any) *ActiveRound {
@@ -521,7 +506,6 @@ func (h *NativeHarness) startRound(ctx context.Context, query any) *ActiveRound 
 }
 
 // runRound 驱动一轮并回报结果。
-//
 // Python: NativeHarness._run_round（提交轮次 + 等待完成）
 func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 	defer close(active.Done)
@@ -554,7 +538,6 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 }
 
 // onAbort 处理中断。
-//
 // Python: NativeHarness._on_abort (native_harness.py:928)
 // 本阶段两种模式都不回滚（spec D-2）；差异只在是否立刻取消调度任务。
 func (h *NativeHarness) onAbort(cmd *cmdAbort) error {
@@ -574,7 +557,6 @@ func (h *NativeHarness) onAbort(cmd *cmdAbort) error {
 }
 
 // settleRoundDone 结算一轮：发事件、清活动轮、按决策优先级决定下一轮。
-//
 // Python: NativeHarness._settle_round_done (native_harness.py:1098)
 // 完整对齐上游决策优先级：错误分类 → 推进 coordinator + 持久化停止条件 →
 // 优雅中止 → 崩溃重试 → interrupt/abort → follow-up 队列 → 内部 follow-up →
@@ -687,7 +669,6 @@ func (h *NativeHarness) hasRemainingTasks() bool {
 
 // abortActiveRound 取消当前活动轮次。
 // abortActiveRound 取消当前活动轮次并等待其 goroutine 退出。
-//
 // Python: NativeHarness._abort_round（取消调度任务 + await 轮次任务）。
 // 等待 active.Done 是必要的：Stop 的 UnbindSession 会 RemoveSession，
 // 若 runRound goroutine 还在 SubmitRound 会与 scheduler 并发读写 session map（race）。
@@ -709,7 +690,6 @@ func (h *NativeHarness) abortActiveRound() {
 }
 
 // isControlResult 判断轮次结果是否为控制信号而非真实答案。
-//
 // Python: NativeHarness._is_control_result（native_harness.py）——
 // {"error": ...}（取消的 wait）与 cooperative-stop 载荷不得写流。
 // 25.1a 阶段无 pause/graceful-abort（⤵️ 25.1c），cooperative-stop 分支不可达，

@@ -1,10 +1,8 @@
 // Package core 提供上下文记忆演化系统的核心运行时基础设施。
-//
 // 包含操作执行上下文（RuntimeContext/ServiceContext）、
 // 可组合操作管线（BaseOp/SequentialOp/ParallelOp）、
 // 向量存储格式（VectorNode）、内存向量库（MemoryVectorStore）、
 // 文件持久化（JSONFileConnector）和持久化助手（MemoryPersistenceHelper）。
-//
 // 文件目录：
 //
 //	core/

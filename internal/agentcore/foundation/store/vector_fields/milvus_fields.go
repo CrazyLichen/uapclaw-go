@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // MilvusVectorFieldConfig Milvus 向量字段统一接口。
-//
 // 对齐 Python MilvusVectorField（Union[MilvusAUTO, MilvusFLAT, MilvusHNSW, MilvusIVF, MilvusSCANN] 类型的接口面），
 // MilvusAUTO/MilvusFLAT/MilvusHNSW/MilvusIVF/MilvusSCANN 均实现此接口。
 // retrieval 层 MilvusVectorStore/MilvusIndexer 通过此接口访问向量字段配置。
@@ -29,7 +28,6 @@ type MilvusVectorFieldConfig interface {
 // MilvusAUTO Milvus AUTOINDEX 配置。
 // AUTOINDEX 是 Milvus 默认索引类型，在 milvus.yaml 中可配置。
 // 默认参数：M=18, efConstruction=240, index_type=HNSW, metric_type=COSINE。
-//
 // Python: vector_fields/milvus_fields.py (MilvusAUTO)
 type MilvusAUTO struct {
 	VectorField
@@ -38,7 +36,6 @@ type MilvusAUTO struct {
 // MilvusFLAT Milvus FLAT 索引配置。
 // FLAT 执行精确最近邻搜索，无近似。精度最高但内存占用大、搜索速度慢。
 // 适用于中小规模数据集。
-//
 // Python: vector_fields/milvus_fields.py (MilvusFLAT)
 type MilvusFLAT struct {
 	VectorField
@@ -49,7 +46,6 @@ type MilvusFLAT struct {
 // 支持可选量化变体（SQ/PQ/PRQ）以降低内存占用。
 // TODO(#通用): 补充 variant（SQ/PQ/PRQ）、extra_construct、extra_search 字段，
 // 以及 validate_extra_args 量化参数校验逻辑，对齐 Python MilvusHNSW。
-//
 // Python: vector_fields/milvus_fields.py (MilvusHNSW)
 type MilvusHNSW struct {
 	VectorField
@@ -66,7 +62,6 @@ type MilvusHNSW struct {
 // 支持多种量化变体：FLAT、SQ8、PQ、RABITQ。
 // TODO(#通用): 补充 variant（FLAT/SQ8/PQ/RABITQ）、extra_construct、extra_search 字段，
 // 以及 validate_extra_args 量化参数校验逻辑，对齐 Python MilvusIVF。
-//
 // Python: vector_fields/milvus_fields.py (MilvusIVF)
 type MilvusIVF struct {
 	baseIVF
@@ -75,7 +70,6 @@ type MilvusIVF struct {
 // MilvusSCANN Milvus SCANN 索引配置。
 // SCANN 是基于 IVF 的索引，使用乘积量化进行压缩。
 // 继承 IVF 的簇参数（Nlist、Nprobe）。
-//
 // Python: vector_fields/milvus_fields.py (MilvusSCANN)
 type MilvusSCANN struct {
 	baseIVF
@@ -87,7 +81,6 @@ type MilvusSCANN struct {
 
 // baseIVF IVF 系列索引的公共基类（非导出）。
 // IVF 使用 k-means 将向量空间划分为簇，搜索时只查最相关的簇。
-//
 // Python: vector_fields/milvus_fields.py (_BaseIVF)
 type baseIVF struct {
 	VectorField

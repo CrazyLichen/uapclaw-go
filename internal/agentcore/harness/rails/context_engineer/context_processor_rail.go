@@ -22,16 +22,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextProcessorRail 上下文处理器护栏，配置和注入上下文引擎处理器。
-//
 // 在 Init 中读取 agent.react_agent._config 的 context_processors 列表，
 // 将 preset 默认处理器与用户处理器合并后写入配置。
-//
 // 在 BeforeInvoke 和 OnModelException 中修复不完整的 tool_call/ToolMessage 配对。
-//
 // 在 BeforeModelCall 中刷新任务状态并注入 offload 提示节。
-//
 // 在 AfterModelCall 中刷新任务状态并调度会话记忆更新。
-//
 // Python: ContextProcessorRail (openjiuwen/harness/rails/context_engineer/context_processor_rail.py)
 type ContextProcessorRail struct {
 	rails.DeepAgentRail
@@ -95,7 +90,6 @@ var allPresetProcessorTypes = map[string]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextProcessorRail 创建 ContextProcessorRail 实例。
-//
 // Python: ContextProcessorRail(processors=..., preset=True, session_memory=...)
 func NewContextProcessorRail(opts ...ContextProcessorRailOption) *ContextProcessorRail {
 	r := &ContextProcessorRail{
@@ -109,7 +103,6 @@ func NewContextProcessorRail(opts ...ContextProcessorRailOption) *ContextProcess
 }
 
 // Init Rail 初始化钩子：注入/合并处理器到 agent.react_agent._config.context_processors。
-//
 // Python: ContextProcessorRail.init(agent)
 func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	config := getReactAgentConfig(agent)
@@ -173,7 +166,6 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 }
 
 // Uninit Rail 注销钩子：关闭会话记忆管理器，清除处理器和 offload 节。
-//
 // Python: ContextProcessorRail.uninit(agent)
 func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 	// 关闭会话记忆管理器（对齐 Python: if self._session_memory_mgr is not None: self._session_memory_mgr.shutdown()）
@@ -199,7 +191,6 @@ func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 }
 
 // BeforeInvoke invoke 开始前：修复不完整的工具上下文。
-//
 // Python: ContextProcessorRail.before_invoke(ctx)
 func (r *ContextProcessorRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	FixIncompleteToolContext(ctx, cbc)
@@ -207,7 +198,6 @@ func (r *ContextProcessorRail) BeforeInvoke(ctx context.Context, cbc *sainterfac
 }
 
 // BeforeModelCall LLM 调用前：刷新任务状态 + 注入 offload 节。
-//
 // Python: ContextProcessorRail.before_model_call(ctx)
 func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
@@ -216,7 +206,6 @@ func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainter
 }
 
 // AfterModelCall LLM 响应后：刷新任务状态 + 调度会话记忆更新。
-//
 // Python: ContextProcessorRail.after_model_call(ctx)
 func (r *ContextProcessorRail) AfterModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
@@ -237,7 +226,6 @@ func (r *ContextProcessorRail) AfterModelCall(ctx context.Context, cbc *sainterf
 }
 
 // AfterToolCall 工具执行后：刷新任务状态。
-//
 // Python: ContextProcessorRail.after_tool_call(ctx)
 func (r *ContextProcessorRail) AfterToolCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
@@ -245,7 +233,6 @@ func (r *ContextProcessorRail) AfterToolCall(ctx context.Context, cbc *sainterfa
 }
 
 // OnModelException LLM 调用异常：刷新任务状态 + 修复工具上下文。
-//
 // Python: ContextProcessorRail.on_model_exception(ctx)
 func (r *ContextProcessorRail) OnModelException(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
@@ -309,7 +296,6 @@ func WithSessionMemoryConfig(cfg *cecontext.SessionMemoryConfig) ContextProcesso
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildPresetProcessors 构建"全量已知处理器的默认配置"（两条 preset 分支的并集）。
-//
 // Python: ContextProcessorRail._build_preset_processors(model_config, model_client_config)
 // 根据 session_memory 是否启用选择不同的预设路径。Go 把两条分支都构造成 base，
 // 目的是让 yaml 里任何已知 processor 段都能在 MergeProcessors 中命中类型并做字段覆盖；
@@ -325,7 +311,6 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 }
 
 // filterActiveProcessors 按 session_memory 开关过滤激活集。
-//
 // 规则（对齐 Python 两条 preset 分支互斥）：
 //   - session_memory 关闭 → 只保留默认 4 个处理器；
 //   - session_memory 开启 → 只保留 ToolResultBudget/MicroCompact/FullCompact；
@@ -371,7 +356,6 @@ func (r *ContextProcessorRail) filterActiveProcessors(specs []ceiface.ProcessorS
 }
 
 // defaultPresetProcessors 构造默认（非 session_memory）preset。
-//
 // 显式覆盖值严格对齐 Python _build_preset_processors 中的参数。
 func defaultPresetProcessors(
 	modelConfig *llmschema.ModelRequestConfig,
@@ -433,7 +417,6 @@ func defaultPresetProcessors(
 }
 
 // sessionMemoryPresetProcessors 构造 session_memory 启用时的 preset。
-//
 // Python: ContextProcessorRail._build_preset_processors (session_memory=True)
 // 三个处理器均无参构造（Python L157-172），pydantic 自动填默认值。
 // Go 端等价性说明：
@@ -471,7 +454,6 @@ func sessionMemoryPresetProcessors(
 }
 
 // maybeInjectOffloadSection 如果配置了处理器，注入 offload 提示节。
-//
 // Python: ContextProcessorRail._maybe_inject_offload_section()
 func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 	if len(r.allProcessors) == 0 {
@@ -494,7 +476,6 @@ func (r *ContextProcessorRail) maybeInjectOffloadSection() {
 }
 
 // maybeScheduleSessionMemoryUpdate 调度会话记忆更新。
-//
 // 对齐 Python: ContextProcessorRail._maybe_schedule_session_memory_update(ctx)
 // 仅在 session_memory 启用且 mgr 存在时调用 MaybeScheduleUpdate。
 func (r *ContextProcessorRail) maybeScheduleSessionMemoryUpdate(
@@ -533,7 +514,6 @@ func (r *ContextProcessorRail) maybeScheduleSessionMemoryUpdate(
 }
 
 // pushRuntimeConfig 把热重载后的引擎配置与处理器规格推给上下文引擎。
-//
 // 引擎不可用（非 ReActAgent 形态 / 引擎未实现可选能力）时静默跳过并打 Debug，
 // 不影响 rail 初始化本身。
 func pushRuntimeConfig(agent sainterfaces.BaseAgent, config ceschema.ContextEngineConfig, specs []ceiface.ProcessorSpec) {
@@ -573,7 +553,6 @@ type runtimeConfigApplier interface {
 }
 
 // getReactAgentConfig 从 BaseAgent 获取 ReActAgentConfig。
-//
 // Python: config = getattr(getattr(agent, "react_agent", None), "_config", None)
 // ——先解引用内层 react_agent 再取 _config。Init 的 agent 是 DeepAgent
 // （DeepAgent.Config() 返回 nil），必须走 ReactAgent().Config() 内层配置。

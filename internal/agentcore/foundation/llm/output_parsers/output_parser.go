@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractText 从 BaseOutputParser.Parse 的输入中提取文本和模型名称。
-//
 // Python: BaseOutputParser.parse() 中 isinstance(llm_output, (str, AssistantMessage)) 的处理。
 // 输入可以是 string 或 *AssistantMessage：
 //   - string → 直接返回文本，modelName 为空

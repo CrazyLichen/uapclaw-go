@@ -38,7 +38,6 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // templateKV 模板占位符替换的有序键值对。
-//
 // T-03：用切片而非 map（对齐 Python **kwargs 按声明序迭代——
 // history 先替换、query 后替换，后值可包含已被前值引入的 {key} 占位符；
 // map 迭代序随机会 50% 概率破坏该替换顺序语义）。
@@ -73,7 +72,6 @@ func extractJSON(modelOutput string) string {
 // parseLLMJSON 解析 LLM 输出 JSON 字符串：先 json.Unmarshal，
 // 失败再经 json-repair 修复重试；返回 dict 与是否成功，不返回 error
 // （Python _parse_llm_json 的 None 语义）。
-//
 // 对齐要点：loads 成功但根非 dict（数组/null 字面量）时 Python 直接
 // return None 不再尝试 repair；Go null 进 map Unmarshal 成功但 out 为
 // nil，nil 守卫即该语义（"null" 测试用例锁定）。
@@ -143,7 +141,6 @@ func forceJSON(key string, raw any) map[string]any {
 
 // schemaRepair 按 schema 校验修复 LLM 输出：类型不匹配时强制转换。
 // 返回只含 schema 字段且类型匹配的 dict（Python _schema_repair）。
-//
 // Python 中非 dict 入参与未知类型两分支抛 155604；Go 入参已是
 // map[string]any（Python 非 dict 分支编译期消解，spec §8-3），
 // schemaFieldType 仅三态（"其他类型"分支同样编译期消解），error

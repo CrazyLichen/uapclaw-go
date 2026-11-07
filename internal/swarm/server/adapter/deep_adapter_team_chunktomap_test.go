@@ -619,7 +619,6 @@ func TestChunkToMap_NilControllerOutputPayload(t *testing.T) {
 }
 
 // TestParseTypedChunkMap_TodoUpdated_点号前缀透传 锁定 todo.updated 的实际分派路径。
-//
 // chunkType 含点号 → 走 dotted 前缀分支原样透传（不归一化、不做类型断言），
 // 删除其下不可达的 case "todo.updated" 后行为必须保持不变。
 func TestParseTypedChunkMap_TodoUpdated_点号前缀透传(t *testing.T) {

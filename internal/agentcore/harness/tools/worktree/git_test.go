@@ -130,7 +130,6 @@ func TestGetCurrentBranch(t *testing.T) {
 // ──────────────────────────── gitdir/commondir 校验 ────────────────────────────
 
 // TestReadWorktreeHeadSHA_拒绝gitdir越界 验证 .git 指向缺少 HEAD/commondir 的目录时返回错误。
-//
 // 真实 worktree 的 gitdir 通常是绝对路径（主仓库 .git/worktrees/x），
 // 因此不能限定"必须落在 wtPath 内"；判据改为：目标必须是目录且含 HEAD 与 commondir
 // 两个文件——这是真实 git 工作树的必然特征，被篡改成 /etc 之类的路径不会满足。
@@ -152,7 +151,6 @@ func TestReadWorktreeHeadSHA_拒绝gitdir越界(t *testing.T) {
 }
 
 // TestReadWorktreeHeadSHA_绝对gitdir合法 验证绝对路径 gitdir（真实布局）正常工作。
-//
 // 回归：旧代码无条件 filepath.Join(wtPath, gitdir)，遇到绝对路径会拼成
 // wtPath+"/abs/path"，导致真实 worktree 永远读不到 HEAD SHA。
 func TestReadWorktreeHeadSHA_绝对gitdir合法(t *testing.T) {

@@ -25,7 +25,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DeepMerge 递归合并模板配置与用户配置。
-//
 // 规则：
 //   - 模板有用户无 → 添加（新配置项）
 //   - 双方都有 → 保留用户值
@@ -40,7 +39,6 @@ func DeepMerge(tmpl, user map[string]any, maxDepth int) map[string]any {
 }
 
 // MigrateFromTemplate 同步用户配置与模板结构。
-//
 // 读取模板文件和用户文件，执行 DeepMerge，将合并结果写回用户文件。
 // 返回 (是否发生了变更, error)。
 // 如果用户文件不存在，则从模板创建。
@@ -168,12 +166,10 @@ func mapsEqual(a, b map[string]any) bool {
 }
 
 // toFloat64 把配置中的数值字面量转成 float64。
-//
 // 覆盖 YAML 与 JSON 两条解码链的所有整数/浮点形态：yaml.v3 把整数字面量解成
 // int（超界的为 int64/uint64），encoding/json 恒为 float64，带 UseNumber 时是
 // json.Number。只认 float64 的旧实现会让 `timeout: 1800` 这类整数写法被静默
 // 丢弃（见 values.go 中 Float 的说明）。
-//
 // 只做数值形态转换，不吞字符串：quoted "1800" 是否算数字由调用方决定，
 // 避免把类型写错（字符串 vs 数字）悄悄抹平。
 func toFloat64(v any) (float64, bool) {

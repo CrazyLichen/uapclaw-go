@@ -65,7 +65,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildHeartbeatSection 构建心跳节（Priority 80）
-//
 // heartbeatContent 为 HEARTBEAT.md 文件的原始内容（可为空）。
 func BuildHeartbeatSection(heartbeatContent string, lang string) saprompt.PromptSection {
 	var template string

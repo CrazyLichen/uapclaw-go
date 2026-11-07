@@ -27,7 +27,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveDashScopeBaseURL 从 api_base 推导 DashScope 原生 API 的 base URL。
-//
 // 推导规则：
 //   - 如果 api_base 包含 "/compatible-mode/"，说明是 OpenAI 兼容模式 URL，
 //     需要去掉兼容模式部分，得到原生 base URL
@@ -55,10 +54,8 @@ func ResolveDashScopeBaseURL(apiBase string) string {
 }
 
 // CallDashScopeAPI 通用 DashScope 原生 API 调用。
-//
 // 统一封装认证、请求构建、响应解析、错误处理逻辑。
 // 不依赖 DashScope Go SDK，自行实现 HTTP 调用（与 OpenAI 客户端风格一致）。
-//
 // Python: dashscope.MultiModalConversation.call() / dashscope.VideoSynthesis.call()
 func CallDashScopeAPI(
 	ctx context.Context,

@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // gaussLockingClauseBuilder GaussDB LOCKING 子句构建器。
-//
 // Python: GaussCompiler.for_update_clause()
 //
 // GaussDB 不支持 NOWAIT / SKIP LOCKED 锁选项和 OF table 语法，

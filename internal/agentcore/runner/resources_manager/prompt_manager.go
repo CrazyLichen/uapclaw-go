@@ -10,7 +10,6 @@ import (
 
 // PromptMgr Prompt 资源管理器，使用 ThreadSafeDict 存储 PromptTemplate。
 // 不继承 AbstractManager，因为 PromptTemplate 不需要 provider 延迟加载模式。
-//
 // Python: PromptMgr (openjiuwen/core/runner/resources_manager/prompt_manager.py)
 type PromptMgr struct {
 	// repo Prompt 模板存储
@@ -34,7 +33,6 @@ func NewPromptMgr() *PromptMgr {
 
 // AddPrompt 添加 Prompt 模板。
 // 验证 templateID 和 template 非空后存入 repo。
-//
 // Python: PromptMgr.add_prompt(template_id, template)
 func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate) error {
 	if templateID == "" {
@@ -60,7 +58,6 @@ func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate
 }
 
 // AddPrompts 批量添加 Prompt 模板。
-//
 // Python: PromptMgr.add_prompts(templates)
 func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 	for _, entry := range templates {
@@ -81,7 +78,6 @@ func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 
 // RemovePrompt 移除 Prompt 模板，返回被移除的模板。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 remove_prompt 返回 None 行为。
-//
 // Python: PromptMgr.remove_prompt(template_id)
 func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, error) {
 	if templateID == "" {
@@ -106,7 +102,6 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 // GetPrompt 获取 Prompt 模板。
 // 验证 templateID 非空后从 repo 读取。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 get_prompt 返回 None 行为。
-//
 // Python: PromptMgr.get_prompt(template_id)
 func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error) {
 	if templateID == "" {

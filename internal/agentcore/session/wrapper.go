@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RouterSessionFacade 路由会话门面，安全壳实现。
-//
 // Python: openjiuwen/core/session/internal/wrapper.py (RouterSession)
 // 在路由函数（add_conditional_edges）中使用，禁止写入状态/流/交互，
 // 只保留追踪和读取能力，防止路由函数产生副作用。

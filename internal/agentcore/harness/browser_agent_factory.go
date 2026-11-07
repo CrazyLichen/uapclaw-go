@@ -24,7 +24,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateBrowserAgent 创建并配置 BrowserAgent DeepAgent 实例。
-//
 // Python: create_browser_agent(model, card=..., system_prompt=..., ...)
 // Python: openjiuwen/harness/subagents/browser_agent.py (L195-262)
 //

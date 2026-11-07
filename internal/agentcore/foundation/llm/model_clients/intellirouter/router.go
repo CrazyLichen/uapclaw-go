@@ -208,6 +208,7 @@ func (d *Deployment) GetAvgLatency() float64 {
 	return d.avgLatency
 }
 
+// GetStats 返回该部署的调用量、错误数与平均延迟快照。
 func (d *Deployment) GetStats() map[string]any {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -312,6 +313,7 @@ func (h *HealthChecker) Stop() {
 	}
 }
 
+// CheckAll 逐个探测所有部署的健康状态，返回以部署名为键的结果表。
 func (h *HealthChecker) CheckAll() map[string]HealthCheckResult {
 	results := make(map[string]HealthCheckResult)
 	var wg sync.WaitGroup
@@ -408,6 +410,7 @@ func (r *ReliableRouter) SelectDeployment(modelName string) (*Deployment, error)
 	return r.SelectDeploymentWithContext(modelName, nil)
 }
 
+// SelectDeploymentWithContext 按当前策略为请求挑一个可用部署；候选全不可用时返回错误。
 func (r *ReliableRouter) SelectDeploymentWithContext(modelName string, ctx *RoutingContext) (*Deployment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -495,6 +498,7 @@ func (r *ReliableRouter) UpdateDeployments(newDeployments []*Deployment) {
 		Msg("ReliableRouter deployments updated.")
 }
 
+// GetStats 汇总路由器的运行统计（各部署指标、策略名、会话亲和表大小等）。
 func (r *ReliableRouter) GetStats() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -541,11 +545,9 @@ func (r *ReliableRouter) StopHealthChecker() {
 }
 
 // Close 关闭 router 持有的后台资源（health checker goroutine）。
-//
 // 幂等；锁外 best-effort（对齐上游 `await entry.router.close()` 在锁外执行的语义）。
 // 连接池是进程级共享 Transport，不属于单个 router——关闭它会波及在途的其他客户端，
 // 故此处只回收本 router 独占的 goroutine。设计文档偏差 D-5 记录该差异。
-//
 // Python: intelli_router_model_client.py:691 await entry.router.close()
 func (r *ReliableRouter) Close() {
 	r.StopHealthChecker()
@@ -578,7 +580,6 @@ func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 }
 
 // ResetRouterCache 显式驱逐并关闭缓存中的 router（配置换绑时调用）。
-//
 // 锁外 best-effort Close + 失败仅告警（对齐上游 L687-698 的驱逐段）。
 // 上游按「事件循环变化」自动驱逐（_ensure_router_for_current_loop）；Go 无事件循环，
 // net 池为进程级共享、goroutine 退出≠资源退役，该机制防护的失败模式不存在，
@@ -627,6 +628,7 @@ func (s *RoundRobinStrategy) Select(deployments []*Deployment, _ string, _ *Rout
 	return deployments[idx%uint64(len(deployments))], nil
 }
 
+// Select 选平均延迟最低的部署。
 func (s *LowestLatencyStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -703,6 +705,7 @@ func NewAdaptiveStrategy(kwargs map[string]any) *AdaptiveStrategy {
 	return s
 }
 
+// Select 按综合评分选出最优部署（延迟、错误率、健康度加权）。
 func (s *AdaptiveStrategy) Select(deployments []*Deployment, _ string, ctx *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -765,6 +768,7 @@ func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
 	return &bytesReaderImpl{data: data}
 }
 
+// checkDeployment 对单个部署做一次健康探测并记录结果。
 func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
 	result := HealthCheckResult{
 		DeploymentID: dep.ID,
@@ -845,6 +849,7 @@ func (r *ReliableRouter) buildModelIndices() {
 	}
 }
 
+// getSessionAffinityDeployment 取该会话此前绑定的部署；绑定已不可用时返回 nil。
 func (r *ReliableRouter) getSessionAffinityDeployment(sessionID string, available []*Deployment) *Deployment {
 	if sessionID == "" {
 		return nil
@@ -913,6 +918,7 @@ func (r *ReliableRouter) cleanupExpiredSessions() {
 	}
 }
 
+// calculateScore 按延迟与错误率算出一个综合分数，分数越低越优先。
 func (s *AdaptiveStrategy) calculateScore(dep *Deployment) float64 {
 	dep.mu.RLock()
 	defer dep.mu.RUnlock()

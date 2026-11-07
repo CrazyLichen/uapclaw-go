@@ -54,7 +54,6 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 }
 
 // TestBuildModelFromEntry_超时与采样参数 锁定 YAML 整数形态的数值字段不被丢弃。
-//
 // 回归背景：配置由 yaml.v3 解码进 map[string]any，`timeout: 1800` 解出的是 int，
 // 而历史实现只做 `v.(float64)` 断言 → 整数值被静默丢弃，ModelClientConfig 回落到
 // 默认 60s，长流式生成（写整页 HTML 之类）会被 http.Client.Timeout 硬切断，

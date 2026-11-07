@@ -39,7 +39,6 @@ var streamDrainTimeout = 2 * time.Second
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callModel 调用 LLM 模型（经 Rail 钩子包装）。
-//
 // Python: ReActAgent._call_model()
 func (a *ReActAgent) callModel(
 	ctx context.Context,
@@ -268,14 +267,12 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 }
 
 // raiseForModelResponseError 把 provider 错误响应与"输出上限命中且无答案"转成异常。
-//
 // 两段判定（顺序不可颠倒；命中第一段即返回）：
 //  1. finish_reason ∈ {length, max_tokens} 且既无正文也无 tool_calls —— 推理模型把
 //     输出预算花在思维链上，把空响应当最终答案会让本轮以空 "answer" 结束。
 //  2. finish_reason ∈ {error, failed} 或 usage.code != 0 —— provider 返回了错误响应。
 //
 // 刻意不处理：length 且有正文（返回部分文本）、length 且有 tool_calls（照常执行工具）。
-//
 // Python: ReActAgent._raise_for_model_response_error() (react_agent.py L2021-2057)
 func raiseForModelResponseError(msg *llmschema.AssistantMessage) error {
 	if msg == nil {
@@ -365,7 +362,6 @@ func (a *ReActAgent) callLLMInvoke(
 }
 
 // callLLMStream 流式 LLM 调用。
-//
 // cbc 用于流式分片检查器与可见输出标志（对齐 Python: _railed_model_call 的 ctx）。
 // cbc 为 nil 时跳过这两项（仅测试会传 nil）。
 func (a *ReActAgent) callLLMStream(
@@ -522,7 +518,6 @@ func (a *ReActAgent) callLLMStream(
 }
 
 // logLLMRequest 记录 LLM 请求诊断日志。
-//
 // Python: log_llm_request()
 func logLLMRequest(messages []llmschema.BaseMessage, tools []cschema.ToolInfoInterface) {
 	msgCount := len(messages)
@@ -549,7 +544,6 @@ func logLLMRequest(messages []llmschema.BaseMessage, tools []cschema.ToolInfoInt
 }
 
 // logLLMResponse 记录 LLM 响应诊断日志。
-//
 // Python: log_llm_response()
 func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 	if aiMsg == nil {
@@ -560,7 +554,6 @@ func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 
 	// finish_reason 必须记录：工具参数 JSON 非法时，它是区分"输出被上限
 	// 截断"（length）与"模型自己拼错 JSON"（stop/tool_calls）的唯一线索。
-	//
 	// reasoning_len 必须记录：思考内容不进正文，界面「有没有思考」只取决于端点
 	// 是否回 delta.reasoning_content。为 0 说明模型/端点没吐思维链；大于 0 而
 	// 界面没有思考块，则缺口在流式写入、适配层或前端渲染。
@@ -604,7 +597,6 @@ const (
 )
 
 // imageInputUnsupportedCodes provider 拒图的结构化错误码（与上游逐一对应）。
-//
 // Python: _IMAGE_INPUT_UNSUPPORTED_ERROR_CODES (react_agent.py L131-138)
 var imageInputUnsupportedCodes = []string{
 	"invalid_image_input",
@@ -616,7 +608,6 @@ var imageInputUnsupportedCodes = []string{
 }
 
 // imageInputUnsupportedPatterns provider 拒图的文案片段（与上游逐一对应）。
-//
 // Python: _IMAGE_INPUT_UNSUPPORTED_ERROR_PATTERNS (react_agent.py L139-153)
 var imageInputUnsupportedPatterns = []string{
 	"no endpoints found that support image input",
@@ -636,7 +627,6 @@ var imageInputUnsupportedPatterns = []string{
 }
 
 // iterExceptionErrorValues 递归展开一个值，产出所有可参与匹配的字符串。
-//
 // Python: ReActAgent._iter_exception_error_values() (react_agent.py L2100-2119)
 // 深度上限与上游一致（_IMAGE_INPUT_SCAN_MAX_DEPTH=8）。
 func iterExceptionErrorValues(value any, depth int) []string {
@@ -680,7 +670,6 @@ func iterExceptionErrorValues(value any, depth int) []string {
 }
 
 // extractExceptionErrorValues 收集错误对象上所有可匹配文本。
-//
 // Python: ReActAgent._extract_exception_error_values() (react_agent.py L2121-2144)。
 // 上游还抽 exc.response.status_code / response.json() / response.text——Go 侧异常
 // 没有 response 对象，等价载体是 BaseError 的 Params 与 Details，故在此展开，
@@ -702,7 +691,6 @@ func extractExceptionErrorValues(err error) []string {
 }
 
 // isImageInputUnsupportedError 判断错误是否属于「模型/端点不支持图片输入」。
-//
 // Python: ReActAgent._is_image_input_unsupported_error() (react_agent.py L2147-2164)
 func isImageInputUnsupportedError(err error) bool {
 	if err == nil {
@@ -732,7 +720,6 @@ func isImageInputUnsupportedError(err error) bool {
 }
 
 // messagesContainImageInput 判断请求消息里是否含图片内容块。
-//
 // Python: ReActAgent._messages_contain_image_input()
 func messagesContainImageInput(messages []llmschema.BaseMessage) bool {
 	// 上游是 JSON 形状递归扫描（dict 里 type in (image, image_url) 或出现 image_url/
@@ -751,7 +738,6 @@ func messagesContainImageInput(messages []llmschema.BaseMessage) bool {
 }
 
 // buildImageInputUnsupportedMessage 构造拒图降级提示消息（双语，文案照抄上游）。
-//
 // Python: ReActAgent._build_image_input_unsupported_message() (react_agent.py L2166-2186)
 func buildImageInputUnsupportedMessage() *llmschema.AssistantMessage {
 	return llmschema.NewAssistantMessage("[Vision Input Unsupported] The current model or endpoint does not support image input.\n" +

@@ -9,12 +9,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StatusCode 统一状态码，每个实例携带整数编码和消息模板。
-//
 // StatusCode 是全局错误码的单一真相源。Message 是带 {placeholder} 占位符的
 // 消息模板，实例化 BaseError 时才渲染。
-//
 // 字段不导出，保证创建后不可修改，与 Python Enum 不可变语义一致。
-//
 // Python: openjiuwen/core/common/exception/codes.py (StatusCode)
 type StatusCode struct {
 	// code 整数错误码
@@ -37,31 +34,26 @@ const missingKeyPlaceholder = "<missing:%s>"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStatusCode 创建 StatusCode 实例。
-//
 // name 为枚举名称（如 "WORKFLOW_EXECUTION_ERROR"），
 // code 为整数编码，msg 为消息模板。
-//
 // Python: StatusCode.NAME = (code, msg)
 func NewStatusCode(name string, code int, msg string) StatusCode {
 	return StatusCode{code: code, message: msg, name: name}
 }
 
 // Code 返回整数错误码。
-//
 // Python: StatusCode.XXX.code
 func (s StatusCode) Code() int {
 	return s.code
 }
 
 // Message 返回消息模板（未渲染）。
-//
 // Python: StatusCode.XXX.errmsg
 func (s StatusCode) Message() string {
 	return s.message
 }
 
 // Name 返回枚举名称。
-//
 // Python: StatusCode.XXX.name
 func (s StatusCode) Name() string {
 	return s.name
@@ -103,10 +95,8 @@ func (s *StatusCode) UnmarshalJSON(data []byte) error {
 }
 
 // RenderMessage 渲染消息模板，使用 params 填充占位符。
-//
 // 缺失的 key 不报错，显示为 <missing:key>。
 // 渲染过程不会产生异常，保证错误路径安全。
-//
 // Python: _format_template(status.errmsg, params)
 func (s StatusCode) RenderMessage(params map[string]any) string {
 	return renderTemplate(s.message, params)
@@ -115,7 +105,6 @@ func (s StatusCode) RenderMessage(params map[string]any) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // renderTemplate 安全渲染消息模板，缺失 key 显示 <missing:key>。
-//
 // Python: _format_template() + _SafeDict
 func renderTemplate(template string, params map[string]any) string {
 	if template == "" {
@@ -142,7 +131,6 @@ func renderTemplate(template string, params map[string]any) string {
 }
 
 // replaceMissingPlaceholders 将模板中未替换的 {xxx} 替换为 <missing:xxx>。
-//
 // 仅处理合法的占位符名（字母/数字/下划线），其他形式（如 JSON 对象）原样保留。
 func replaceMissingPlaceholders(s string) string {
 	var result strings.Builder

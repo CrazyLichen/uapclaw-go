@@ -7,7 +7,6 @@ import (
 )
 
 // Test四实现MaxBatchSizeGetter 构造默认 8 + 选项覆写回读。
-//
 // Python: TripleBeamSearch 经 hasattr/embed_model.max_batch_size 消费
 // （graph_retriever.py L91）；Python 四实现 __init__ 默认 8（VLLM 继承
 // OpenAIEmbedding，Go 委托同构）。

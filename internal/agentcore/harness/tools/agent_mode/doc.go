@@ -1,5 +1,4 @@
 // Package agent_mode 提供 Agent 模式切换工具的实现。
-//
 // 包含三个工具：
 //   - SwitchModeTool: 在 normal/plan 模式间切换
 //   - EnterPlanModeTool: 初始化 plan 文件并返回路径

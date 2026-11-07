@@ -1,10 +1,8 @@
 // 在 OpenJiuwen 回调内绑定紧凑的 root 权限上下文。
-//
 // 该 rail 是"把背景摆到桌上给引擎看"的那一层：每次工具调用前，从回调 extra
 // 里还原 RootDecisionContext 与 PermissionContext，绑定到各自的 context key；
 // 工具调用结束后成对清理。恢复时优先采用卡里冻结的上下文（那才是用户看到
 // 卡片时的背景），而不是重新推导。
-//
 // 同时它也是 ask_user 反问续接的接线点：
 //   - 工具卡住时，把续接快照写进中断请求的 metadata（after_tool_call）；
 //   - 用户答案回来后，把问答对还原成澄清并追加到意图窗口（before_tool_call）。
@@ -28,10 +26,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RootContextRail 绑定/重置一个 root 上下文；续接身份由 Core 持有。
-//
 // 优先级 99（在 queue rail 之后、权限 rail 之前）：上下文必须先就位，
 // 权限判定才有背景可读。
-//
 // Python: class RootContextRail(DeepAgentRail)
 type RootContextRail struct {
 	// rootPermissionQueue 关联的权限队列
@@ -45,9 +41,7 @@ type RootContextRail struct {
 }
 
 // rootContextTokens 一次绑定产生的全部 token，用于成对清理。
-//
 // Go 的 context 不可变，token 用派生 context 承载，清理即丢弃。
-//
 // Python: @dataclass(frozen=True, slots=True) _Tokens
 type rootContextTokens struct {
 	// context 外层 context
@@ -136,11 +130,9 @@ var rootPermissionOwnerKeys = map[string]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRootContextRail 创建上下文 rail。
-//
 // sysOperation 与 sandboxed 对应 Python 的构造注入参数：
 // sysOperation 可为 nil（回退到 commandSysOperation）；sandboxed 为 nil 时
 // 按 sys operation 的 mode 是否为沙箱推导。
-//
 // Python: RootContextRail(*, root_permission_queue, sys_operation, sandboxed)
 func NewRootContextRail(
 	rootPermissionQueue *RootPermissionQueue,
@@ -160,9 +152,7 @@ func NewRootContextRail(
 }
 
 // PutPermissionOwnerInInputs 把权限 owner 写入 inputs 的 run.context.extra。
-//
 // owner 为 nil 时只移除旧值。
-//
 // Python: put_permission_owner_in_inputs(inputs, owner)
 func PutPermissionOwnerInInputs(
 	inputs map[string]any,
@@ -192,7 +182,6 @@ func PutPermissionOwnerInInputs(
 }
 
 // RootContextFailureFromContext 取上下文失败原因，非合法值返回空串。
-//
 // Python: root_context_failure_from_context(ctx)
 func RootContextFailureFromContext(cbc *agentinterfaces.AgentCallbackContext) string {
 	if cbc == nil {
@@ -215,9 +204,7 @@ func RootContextFailureFromContext(cbc *agentinterfaces.AgentCallbackContext) st
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // fromCallback 从回调 extra 里还原上下文与 owner。
-//
 // 返回 (上下文, owner, 失败原因)。失败原因非空时前两项均为 nil。
-//
 // Python: RootContextRail._from_callback(ctx)
 func (r *RootContextRail) fromCallback(
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -257,7 +244,6 @@ func (r *RootContextRail) resolvedSysOperation() any {
 }
 
 // bind 绑定全部 context key，返回 token 集合。
-//
 // Python: RootContextRail._bind(context, owner, *, reason)
 func (r *RootContextRail) bind(
 	ctx context.Context,
@@ -320,7 +306,6 @@ func (r *RootContextRail) bind(
 }
 
 // replace 只更新 context key，不产生 token（供 before_tool_call 的中途替换）。
-//
 // Python: RootContextRail._replace(context, owner, *, reason=None)
 func (r *RootContextRail) replace(
 	ctx context.Context,
@@ -351,9 +336,7 @@ func (r *RootContextRail) replace(
 }
 
 // resolveSandboxed 决定 sandboxed 标志。
-//
 // 构造期显式给出时以其为准；否则看 sys operation 的 mode 是否为沙箱。
-//
 // Python: self._sandboxed if self._sandboxed is not None else getattr(operation, "mode", None) == OperationMode.SANDBOX
 //
 // Go 侧 sys operation 的 mode 在 Card().Mode 上（OperationMode 是 int 枚举），
@@ -377,7 +360,6 @@ func (r *RootContextRail) resolveSandboxed(operation any) bool {
 }
 
 // popAskResume 从回调 extra 取出并删除反问续接 DTO。
-//
 // Python: RootContextRail._pop_ask_resume(ctx)
 func popAskResume(cbc *agentinterfaces.AgentCallbackContext) *RootAskUserResume {
 	extra := callbackExtra(cbc)
@@ -397,7 +379,6 @@ func popAskResume(cbc *agentinterfaces.AgentCallbackContext) *RootAskUserResume 
 }
 
 // discardAskResume 丢弃回调 extra 里的反问续接 DTO。
-//
 // Python: RootContextRail._discard_ask_resume(ctx)
 func discardAskResume(cbc *agentinterfaces.AgentCallbackContext) {
 	extra := callbackExtra(cbc)
@@ -408,9 +389,7 @@ func discardAskResume(cbc *agentinterfaces.AgentCallbackContext) {
 }
 
 // ownerFromExtra 从 extra 还原权限上下文。
-//
 // 键集合必须完全一致，布尔与文本字段类型必须正确，否则视为非法。
-//
 // Python: _owner_from_extra(extra, channel_id)
 func ownerFromExtra(extra map[string]any, channelID string) (*sschema.PermissionContext, error) {
 	if extra == nil {
@@ -453,7 +432,6 @@ func ownerFromExtra(extra map[string]any, channelID string) (*sschema.Permission
 }
 
 // ownerFromCallback 从回调 extra 还原权限上下文（渠道取当前上下文）。
-//
 // Python: _owner_from_callback(ctx)
 func ownerFromCallback(
 	ctx context.Context,
@@ -468,14 +446,12 @@ func ownerFromCallback(
 }
 
 // callbackExtra 取回调的 run extra 映射。
-//
 // Python: _callback_extra(ctx)
 func callbackExtra(cbc *agentinterfaces.AgentCallbackContext) map[string]any {
 	return runExtraOf(cbc)
 }
 
 // callbackSessionID 取回调的会话 ID。
-//
 // Python: _session_id(ctx)
 func callbackSessionID(cbc *agentinterfaces.AgentCallbackContext) string {
 	if cbc == nil || cbc.Session() == nil {
@@ -485,7 +461,6 @@ func callbackSessionID(cbc *agentinterfaces.AgentCallbackContext) string {
 }
 
 // skipTool 把工具标记为跳过并写入失败结果。
-//
 // Python: _skip_tool(ctx, reason)
 func skipTool(cbc *agentinterfaces.AgentCallbackContext, reason string) {
 	if cbc == nil {
@@ -561,14 +536,12 @@ func (r *RootContextRail) AfterTaskIteration(
 }
 
 // BeforeToolCall 工具调用前绑定/校正上下文。
-//
 // 三分支（对齐 Python）：
 //  1. 有权限续接 → 采用卡里冻结的上下文（用户看到卡片时的背景）；
 //  2. 是 ask_user 且有反问续接 DTO → 还原澄清并追加意图窗口；
 //  3. 其余 → 从回调 extra 还原上下文。
 //
 // 任一分支失败都置失败原因并跳过该工具（fail-closed，不放行）。
-//
 // Python: RootContextRail.before_tool_call(ctx)
 func (r *RootContextRail) BeforeToolCall(
 	ctx context.Context,
@@ -613,18 +586,19 @@ func (r *RootContextRail) BeforeToolCall(
 		discardAskResume(cbc)
 	}
 
+	// 走到这里说明本次调用不放行：重写失败原因并跳过工具，让模型看到明确的拒绝原因。
+	// 此处 replace 的返回值有意丢弃——调用方随后直接返回 nil，新的 ctx 不会被继续传递。
 	if reason != "" || decisionContext == nil {
 		if reason == "" {
 			reason = rootContextFailureMissing
 		}
-		ctx = r.replace(ctx, nil, nil, reason)
+		_ = r.replace(ctx, nil, nil, reason)
 		skipTool(cbc, reason)
 	}
 	return nil
 }
 
 // AfterToolCall 工具调用后：ask_user 卡住时把续接快照写进中断请求 metadata。
-//
 // Python: RootContextRail.after_tool_call(ctx)
 func (r *RootContextRail) AfterToolCall(
 	ctx context.Context,
@@ -665,7 +639,6 @@ func (r *RootContextRail) AfterToolCall(
 // ──────────────────────────── 非导出函数（钩子辅助） ────────────────────────────
 
 // bindLifecycle 幂等绑定生命周期上下文（已有 token 时不重复绑定）。
-//
 // Python: RootContextRail._bind_lifecycle(ctx)
 func (r *RootContextRail) bindLifecycle(
 	ctx context.Context,
@@ -685,9 +658,7 @@ func (r *RootContextRail) bindLifecycle(
 }
 
 // resetLifecycle 成对清理生命周期上下文。
-//
 // Go 的 context 不可变，此处只需清除回调上的 token 记录与失败原因。
-//
 // Python: RootContextRail._reset_lifecycle(ctx)
 func (r *RootContextRail) resetLifecycle(cbc *agentinterfaces.AgentCallbackContext) {
 	if cbc == nil {

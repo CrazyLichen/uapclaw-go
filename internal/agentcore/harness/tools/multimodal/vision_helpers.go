@@ -58,7 +58,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildImageContent 构建图片内容块。
-//
 // Python: _build_image_content(image_path_or_url)
 // HTTP URL → image_url block；本地文件 → base64 → data:URI → image_url block；
 // sandbox 路径 → 返回错误
@@ -135,7 +134,6 @@ func BuildImageContent(imagePathOrURL string) (llmschema.ContentPart, error) {
 }
 
 // CallVisionModel 调用视觉模型，带指数退避重试。
-//
 // Python: _call_vision_model(config, image_content, prompt)
 // 返回 (text, model, error)
 func CallVisionModel(
@@ -224,7 +222,6 @@ func isHTTPURL(value string) bool {
 }
 
 // extractResponseText 从 AssistantMessage 提取文本内容。
-//
 // Python: _extract_response_text(response)
 // 支持纯文本和多模态 content parts
 func extractResponseText(msg *llmschema.AssistantMessage) string {

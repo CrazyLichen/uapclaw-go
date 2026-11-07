@@ -13,10 +13,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ResponsePromptRail 响应提示词护栏 — 在 before_model_call 中注入消息格式说明节。
-//
 // 告知 LLM 如何区分用户消息与系统消息（cron/heartbeat/notify），
 // 使 LLM 能按消息来源和类型采取不同处理策略。
-//
 // 生命周期：
 //   - Init：从 Agent 获取 system_prompt_builder 引用
 //   - BeforeModelCall：调 BuildResponseSection(language) 构建节，注入 builder

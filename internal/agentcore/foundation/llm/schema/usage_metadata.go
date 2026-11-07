@@ -3,9 +3,7 @@ package schema
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UsageMetadata 模型调用用量元数据，记录 token 消耗、延迟和费用信息。
-//
 // 所有数值字段默认为零值，保证实例化时无需提供任何参数。
-//
 // Python: openjiuwen/core/foundation/llm/schema/message.py (UsageMetadata)
 type UsageMetadata struct {
 	// Code 状态码，0 表示成功
@@ -65,7 +63,6 @@ type UsageMetadata struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewUsageMetadata 创建 UsageMetadata 实例，所有数值字段默认为零值。
-//
 // Python: UsageMetadata() — Pydantic BaseModel 默认值即零值
 func NewUsageMetadata() *UsageMetadata {
 	return &UsageMetadata{}

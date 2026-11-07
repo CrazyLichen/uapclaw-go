@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserRuntimeRail 浏览器运行时进度追踪 Rail。
-//
 // 使直接浏览器会话可恢复和完成感知，在 ReAct 循环中：
 //   - BeforeInvoke: 确保运行时就绪 + 注入 MCP 能力 + 恢复进度 + 记录任务文本
 //   - BeforeModelCall: 注入进度格式指南和续行上下文 PromptSection
@@ -53,7 +52,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // browserProgressTagRE 浏览器进度标签正则。
-//
 // Python: _BROWSER_PROGRESS_TAG_RE
 var browserProgressTagRE = regexp.MustCompile(
 	`<browser_progress>\s*(\{.*?\})\s*</browser_progress>`,
@@ -75,7 +73,6 @@ var browserProgressFormatGuidance = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserRuntimeRail 创建浏览器运行时进度追踪 Rail。
-//
 // Python: BrowserRuntimeRail(runtime)
 func NewBrowserRuntimeRail(runtime *BrowserAgentRuntime) *BrowserRuntimeRail {
 	return &BrowserRuntimeRail{
@@ -90,7 +87,6 @@ func (r *BrowserRuntimeRail) Runtime() *BrowserAgentRuntime {
 }
 
 // BeforeInvoke invoke 开始前：确保运行时就绪 + 注入 MCP 能力 + 恢复进度 + 记录任务文本。
-//
 // Python: BrowserRuntimeRail.before_invoke
 func (r *BrowserRuntimeRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if err := r.runtime.EnsureRuntimeReady(ctx); err != nil {
@@ -122,7 +118,6 @@ func (r *BrowserRuntimeRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces
 }
 
 // BeforeModelCall LLM 调用前：注入进度格式指南和续行上下文 PromptSection。
-//
 // Python: BrowserRuntimeRail.before_model_call
 func (r *BrowserRuntimeRail) BeforeModelCall(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
@@ -171,7 +166,6 @@ func (r *BrowserRuntimeRail) BeforeModelCall(_ context.Context, cbc *sainterface
 }
 
 // AfterToolCall 工具执行后：对 browser_ 前缀工具记录进度。
-//
 // Python: BrowserRuntimeRail.after_tool_call
 func (r *BrowserRuntimeRail) AfterToolCall(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
@@ -200,7 +194,6 @@ func (r *BrowserRuntimeRail) AfterToolCall(_ context.Context, cbc *sainterfaces.
 }
 
 // AfterInvoke invoke 完成后：提取 <browser_progress> payload；判断完成/失败；持久化进度。
-//
 // Python: BrowserRuntimeRail.after_invoke
 func (r *BrowserRuntimeRail) AfterInvoke(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	sess := cbc.Session()
@@ -368,7 +361,6 @@ func (r *BrowserRuntimeRail) wrapAfterInvoke(ctx context.Context, agentCallbackC
 }
 
 // ensureBrowserMCPAbility 确保 Agent 能力管理器中包含 MCP 配置。
-//
 // Python: BrowserRuntimeRail._ensure_browser_mcp_ability
 func (r *BrowserRuntimeRail) ensureBrowserMCPAbility(cbc *sainterfaces.AgentCallbackContext) {
 	agent := cbc.Agent()
@@ -385,7 +377,6 @@ func (r *BrowserRuntimeRail) ensureBrowserMCPAbility(cbc *sainterfaces.AgentCall
 }
 
 // hydrateServiceProgressFromSession 从会话状态恢复进度到 service。
-//
 // Python: BrowserRuntimeRail._hydrate_service_progress_from_session
 func (r *BrowserRuntimeRail) hydrateServiceProgressFromSession(sess sessioninterfaces.SessionFacade) *BrowserTaskProgressState {
 	sessionID := sess.GetSessionID()
@@ -399,7 +390,6 @@ func (r *BrowserRuntimeRail) hydrateServiceProgressFromSession(sess sessioninter
 }
 
 // persistServiceProgressToSession 将 service 进度持久化到会话状态。
-//
 // Python: BrowserRuntimeRail._persist_service_progress_to_session
 func (r *BrowserRuntimeRail) persistServiceProgressToSession(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
@@ -423,7 +413,6 @@ func (r *BrowserRuntimeRail) persistServiceProgressToSession(sess sessioninterfa
 }
 
 // clearProgressState 清除会话中的进度状态。
-//
 // Python: BrowserRuntimeRail._clear_progress_state
 func (r *BrowserRuntimeRail) clearProgressState(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
@@ -438,7 +427,6 @@ func (r *BrowserRuntimeRail) clearProgressState(sess sessioninterfaces.SessionFa
 }
 
 // loadProgressState 从会话状态加载进度状态。
-//
 // Python: BrowserRuntimeRail._load_progress_state
 func (r *BrowserRuntimeRail) loadProgressState(sess sessioninterfaces.SessionFacade) *BrowserTaskProgressState {
 	if sess == nil {
@@ -455,7 +443,6 @@ func (r *BrowserRuntimeRail) loadProgressState(sess sessioninterfaces.SessionFac
 }
 
 // loadTaskText 从会话状态加载任务文本。
-//
 // Python: BrowserRuntimeRail._load_task_text
 func (r *BrowserRuntimeRail) loadTaskText(sess sessioninterfaces.SessionFacade) string {
 	if sess == nil {
@@ -469,7 +456,6 @@ func (r *BrowserRuntimeRail) loadTaskText(sess sessioninterfaces.SessionFacade) 
 }
 
 // extractProgressPayload 从输出文本中提取 <browser_progress> payload。
-//
 // Python: BrowserRuntimeRail._extract_progress_payload
 func extractProgressPayload(text string) (string, map[string]any) {
 	raw := text
@@ -490,7 +476,6 @@ func extractProgressPayload(text string) (string, map[string]any) {
 }
 
 // buildProgressResult 从 progress payload 构建进度结果。
-//
 // Python: BrowserRuntimeRail._build_progress_result
 func buildProgressResult(progressPayload map[string]any, cleanOutput string) map[string]any {
 	statusRaw := progressPayload["status"]
@@ -515,7 +500,6 @@ func buildProgressResult(progressPayload map[string]any, cleanOutput string) map
 }
 
 // isBrowserProgressTool 判断工具名是否为浏览器进度工具。
-//
 // Python: BrowserRuntimeRail._is_browser_progress_tool
 func isBrowserProgressTool(toolName string) bool {
 	name := strings.TrimSpace(strings.ToLower(toolName))
@@ -536,7 +520,6 @@ func isBrowserProgressTool(toolName string) bool {
 }
 
 // normalizeToolResult 规范化工具结果。
-//
 // Python: BrowserRuntimeRail._normalize_tool_result
 func normalizeToolResult(toolResult any) any {
 	if toolResult == nil {
@@ -562,7 +545,6 @@ func normalizeToolResult(toolResult any) any {
 }
 
 // isMaxIterationResultFromMap 判断结果是否为最大迭代次数结果。
-//
 // Python: BrowserRuntimeRail._is_max_iteration_result
 func isMaxIterationResultFromMap(result map[string]any) bool {
 	output := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", result["output"])))

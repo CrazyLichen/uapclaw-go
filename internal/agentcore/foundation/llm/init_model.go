@@ -41,7 +41,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitModel 便捷创建 Model 实例的工厂函数。
-//
 // Python: openjiuwen/core/foundation/llm/model.py (init_model)
 //
 // 扁平参数 → ModelClientConfig + ModelRequestConfig → NewModel
@@ -145,7 +144,6 @@ func WithInitCustomHeaders(h map[string]string) InitModelOption {
 }
 
 // WithInitSSLCert 设置 SSL 证书文件路径。
-//
 // Python: ModelClientConfig.ssl_cert 字段。
 // Python init_model() 本身未暴露 ssl_cert 参数，但 ModelClientConfig 支持此字段。
 // Go 侧补充此选项以保持配置完整性。

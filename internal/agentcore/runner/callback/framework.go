@@ -1030,6 +1030,8 @@ func (fw *CallbackFramework) TriggerChain(ctx context.Context, event string, dat
 	return chain.Execute(ctx, cctx)
 }
 
+// TriggerParallel 并行触发自定义事件的回调，等全部结束后一次性返回结果集合。
+// 单个回调出错或熔断只跳过它自己，不影响其他回调；结果顺序取决于谁先完成。
 func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, data map[string]any) []any {
 	fw.mu.RLock()
 	callbacks := fw.customCallbacks[event]
@@ -1046,6 +1048,7 @@ func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, 
 	var resultsMu sync.Mutex
 	var results []any
 
+	// 每个回调起一个 goroutine 并行执行；结果用互斥锁追加，保证顺序无关但不丢数据。
 	for _, info := range callbacks {
 		if !info.Enabled || info.CallbackType == "transform" {
 			continue
@@ -1109,7 +1112,11 @@ func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, 
 	return results
 }
 
+// TriggerUntil 依次触发自定义事件的回调，直到某个回调的返回值满足条件为止。
+// 与 TriggerCustom 的区别：这里一旦命中条件就立即返回该结果，不再执行后续回调；
+// 标记为 once-only 的回调无论是否命中条件，执行过一次后就自动停用。
 func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, condition func(any) bool, data map[string]any) any {
+	// 先拷出回调列表并放锁，避免执行回调期间长时间持有读锁
 	fw.mu.RLock()
 	callbacks := fw.customCallbacks[event]
 	fw.mu.RUnlock()
@@ -1141,21 +1148,21 @@ func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, con
 		result, err := info.Callback(ctx, data), error(nil)
 
 		if err != nil {
-			// ERROR 钩子执行
+			// 回调内部已把错误转成结果（见上方赋值的 error(nil)），此分支保持与上游一致的
+			// 错误钩子调用形态；出错时跳过该回调继续下一个。
 			fw.executeHooks(ctx, event, HookTypeError, err)
 			continue // 异常时继续下一个回调
 		}
 
-		// 检查条件
+		// 命中条件即返回结果；once-only 回调在此处停用
 		if condition(result) {
-			// 处理 once-only 回调
 			if info.Once {
 				info.Enabled = false
 			}
 			return result
 		}
 
-		// 条件不满足，处理 once-only 回调
+		// 条件不满足时，once-only 回调同样要停用，避免后续重复执行
 		if info.Once {
 			info.Enabled = false
 		}
@@ -1242,6 +1249,7 @@ func (fw *CallbackFramework) ReplayEvents(ctx context.Context, since time.Time) 
 	}
 }
 
+// GetStatistics 汇总回调注册数量与指标开关状态，供诊断接口返回。
 func (fw *CallbackFramework) GetStatistics() map[string]any {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1278,6 +1286,7 @@ func (fw *CallbackFramework) TriggerDelayed(ctx context.Context, event string, d
 	}()
 }
 
+// UnregisterNamespace 按命名空间前缀批量注销回调（键形如 "namespace:event"）。
 func (fw *CallbackFramework) UnregisterNamespace(namespace string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1419,6 +1428,7 @@ func (fw *CallbackFramework) UnregisterNamespace(namespace string) {
 	}
 }
 
+// UnregisterByTags 注销某事件下带指定标签的全部回调。
 func (fw *CallbackFramework) UnregisterByTags(event string, tags []string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1709,6 +1719,7 @@ func (fw *CallbackFramework) executeHooks(ctx context.Context, event string, hoo
 	}
 }
 
+// applyFilters 依次跑全局过滤器、事件级过滤器与回调级过滤器，返回第一个生效的动作。
 func (fw *CallbackFramework) applyFilters(ctx context.Context, event string, info any, data any) FilterResult {
 	callbackName := getCallbackNameFromAny(info)
 

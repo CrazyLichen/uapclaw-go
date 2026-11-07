@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MCPTool MCP 协议工具，通过 McpClient 调用远程 MCP 服务器工具。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/base.py (MCPTool)
 type MCPTool struct {
 	card      *types.McpToolCard
@@ -31,10 +30,8 @@ type MCPTool struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // MCPToolResult 携带多模态数据或失败状态的 MCP 工具结果（types 包类型的别名）。
-//
 // 定义放在 types 包：调度层与 agent 层都要消费它，依赖纯类型包可避免
 // 两个上层直接依赖 mcp 实现包。这里保留别名，使既有调用点无需改动。
-//
 // Python: McpToolResult (mcp/base.py:148-165)
 type MCPToolResult = types.MCPToolResult
 
@@ -55,10 +52,8 @@ var (
 )
 
 // preserveMCPToolResultStatus 按 MCP 的 isError 给抽取结果打成功/失败标。
-//
 // isError 不为真时原样返回 content（成功值一个字节都不改）；
 // isError 为真时收集全部文本块作为错误信息，包成 Success=false 的结构体。
-//
 // Python: preserve_mcp_tool_result_status (mcp/base.py:36-53)
 func preserveMCPToolResultStatus(toolResult any, content any) any {
 	resultMap, _ := toolResult.(map[string]any)
@@ -92,15 +87,11 @@ func preserveMCPToolResultStatus(toolResult any, content any) any {
 }
 
 // ExtractMCPToolResultContent 从 MCP CallToolResult 抽取紧凑结果。
-//
 // 保留全部内容块：文本块与图片占位符按顺序拼接，多块结果不再只剩最后一块
 // （"动作确认文本 + 截图"这类结果的文本部分不再丢失）。
-//
 // 图片块默认转文本占位符；includeImageContent 为真时产出 *MCPToolResult，
 // 其 Data.multimodal 交给 react agent 的多模态管线。
-//
 // 四个返回点都经 preserveMCPToolResultStatus，isError 不会被吞掉。
-//
 // Python: extract_mcp_tool_result_content (mcp/base.py:56-134)
 func ExtractMCPToolResultContent(toolResult any, includeImageContent bool, toolName string) any {
 	resultMap, ok := toolResult.(map[string]any)
@@ -203,7 +194,6 @@ func ExtractMCPToolResultContent(toolResult any, includeImageContent bool, toolN
 
 // NewMCPTool 创建 MCP 工具实例。
 // mcpClient 为 nil 时返回 StatusToolMcpClientNotSupported 错误。
-//
 // Python: MCPTool.__init__(mcp_client, tool_info)
 func NewMCPTool(mcpClient types.McpClient, card *types.McpToolCard, includeImageContent bool) (*MCPTool, error) {
 	if mcpClient == nil {
@@ -221,7 +211,6 @@ func (t *MCPTool) Card() *tool.ToolCard {
 }
 
 // GetCallTimeout 返回外层调用预算，沿用卡片级策略。
-//
 // MCP 远程调用的超时由 transport 与卡片声明共同决定，
 // 这里不需要像 bash 那样额外留清理宽限。
 func (t *MCPTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
@@ -234,7 +223,6 @@ func (t *MCPTool) McpCard() *types.McpToolCard {
 }
 
 // Invoke 调用 MCP 远程工具。
-//
 // 流程：
 //  1. 如果 card.InputParams 不为 nil，用 SchemaUtils 格式化参数
 //  2. mcpClient.CallTool 调用远程工具
@@ -300,7 +288,6 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 }
 
 // Stream MCP 工具不支持流式调用，返回 ErrStreamNotSupported。
-//
 // Python: MCPTool.stream() → raise TOOL_STREAM_NOT_SUPPORTED
 func (t *MCPTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.String())

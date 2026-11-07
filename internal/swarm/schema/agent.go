@@ -9,10 +9,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentRequest Agent 请求（Gateway → AgentServer）。
-//
 // 作为 Gateway 向 AgentServer 发起的标准化请求模型，承载 RPC 方法名、
 // 请求参数、流式标识、权限上下文等。E2A 协议解码后交由 AgentServer 处理。
-//
 // Python: jiuwenswarm/common/schema/agent.py (AgentRequest)
 type AgentRequest struct {
 	// ─── 必填字段 ───
@@ -48,10 +46,8 @@ type AgentRequest struct {
 }
 
 // AgentResponse Agent 响应（AgentServer → Gateway，非流式完整响应）。
-//
 // 作为 AgentServer 向 Gateway 返回的完整响应模型，承载执行结果、
 // 响应负载、元数据等。
-//
 // Python: jiuwenswarm/common/schema/agent.py (AgentResponse)
 type AgentResponse struct {
 	// RequestID 对应请求的唯一标识
@@ -67,18 +63,15 @@ type AgentResponse struct {
 }
 
 // AgentResponseChunk Agent 响应片段（AgentServer → Gateway，流式）。
-//
 // 作为 AgentServer 向 Gateway 返回的流式响应块，承载增量负载和完成标识。
 // payload 为 map[string]any，业务语义（event_type 等）由使用侧负责构造，
 // 不在 Schema 层定义 payload 内部结构（对齐 Python AgentResponseChunk.payload: dict | None）。
-//
 // 流式协议约定：
 //   - is_complete=false：流中间的业务 chunk
 //   - is_complete=true 且 payload 含 event_type/content/error 等业务字段：携带业务的结束 chunk
 //   - is_complete=true 且 payload 为空/仅含 {"is_complete":true}：终止哨兵，流结束标记
 //
 // 终止哨兵推荐使用 NewTerminalChunk() 工厂创建，避免手动构造出错。
-//
 // Python: jiuwenswarm/common/schema/agent.py (AgentResponseChunk)
 type AgentResponseChunk struct {
 	// RequestID 对应请求的唯一标识
@@ -109,7 +102,6 @@ type AgentResponseChunkOption func(*AgentResponseChunk)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentRequest 创建 Agent 请求实例。
-//
 // 自动生成 Timestamp（当前时间），设置 RequestID 和 ChannelID。
 // 工厂函数保证：IsStream=false（零值），EnableMemory=nil（未设置）。
 func NewAgentRequest(requestID, channelID string, reqMethod ReqMethod, params json.RawMessage, opts ...AgentRequestOption) *AgentRequest {
@@ -127,7 +119,6 @@ func NewAgentRequest(requestID, channelID string, reqMethod ReqMethod, params js
 }
 
 // NewAgentResponse 创建 Agent 响应实例。
-//
 // 默认 OK=true（对齐 Python AgentResponse.ok=True）。
 func NewAgentResponse(requestID, channelID string, opts ...AgentResponseOption) *AgentResponse {
 	resp := &AgentResponse{
@@ -142,7 +133,6 @@ func NewAgentResponse(requestID, channelID string, opts ...AgentResponseOption) 
 }
 
 // NewAgentResponseChunk 创建 Agent 响应片段实例。
-//
 // 工厂函数保证：IsComplete=false（零值，流中间 chunk）。
 // 如需创建终止哨兵 chunk，请使用 NewTerminalChunk()。
 func NewAgentResponseChunk(requestID, channelID string, payload map[string]any, opts ...AgentResponseChunkOption) *AgentResponseChunk {
@@ -159,10 +149,8 @@ func NewAgentResponseChunk(requestID, channelID string, payload map[string]any, 
 }
 
 // NewTerminalChunk 创建终止哨兵 chunk。
-//
 // 终止哨兵是流结束标记：is_complete=true，payload 为 {"is_complete":true}。
 // 消费侧通过 IsTerminal() 识别终止哨兵，不再下发业务事件。
-//
 // Python: 中两处终止哨兵形态：
 //   - payload=None, is_complete=True（接口深度 / 团队辅助 / 自动编配）
 //   - payload={"is_complete": True}, is_complete=True（网关标准化 / 接口）
@@ -239,7 +227,6 @@ func WithChunkPayload(p map[string]any) AgentResponseChunkOption {
 }
 
 // Validate 校验 AgentRequest 必填字段。
-//
 // 校验规则（对齐 Python 实际使用）：
 //   - request_id 非空
 //   - channel_id 非空
@@ -258,7 +245,6 @@ func (r *AgentRequest) Validate() error {
 }
 
 // Validate 校验 AgentResponse 必填字段。
-//
 // 校验规则：
 //   - request_id 非空
 //   - channel_id 非空
@@ -273,7 +259,6 @@ func (r *AgentResponse) Validate() error {
 }
 
 // Validate 校验 AgentResponseChunk 必填字段。
-//
 // 校验规则（对齐 Python AgentResponseChunk 必填）：
 //   - request_id 非空
 //   - channel_id 非空
@@ -288,9 +273,7 @@ func (c *AgentResponseChunk) Validate() error {
 }
 
 // IsTerminal 判断是否为终止哨兵 chunk。
-//
 // 终止哨兵是流结束标记，消费侧不应将其作为业务事件下发。
-//
 // 判断逻辑（对齐 Python _is_terminal_stream_chunk）：
 //   - is_complete 必须为 true
 //   - payload 为空，或仅含 {"is_complete":true} 且无 event_type/content/error 等业务字段

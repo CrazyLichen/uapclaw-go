@@ -23,7 +23,6 @@ import (
 //
 // 协调 worktree 创建/删除、session 状态、post-creation setup、事件分发和 rail 调度。
 // 这是唯一的业务逻辑入口 — tools 和 spawn 代码委托到这里。
-//
 // Manager 是 owner-agnostic 的：调用方提供可选的 event_handler 接收
 // WorktreeCreatedEvent / WorktreeRemovedEvent 载荷并转换为各自系统的传输协议。
 type WorktreeManager struct {

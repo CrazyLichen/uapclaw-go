@@ -1,8 +1,6 @@
 // Package result 提供系统操作的结果类型定义。
-//
 // 所有子操作（fs/shell/code）的返回值都使用本包的 Result + Data 类型，
 // 遵循 BaseResult{Code, Message} + 具体 Data 的统一模式。
-//
 // 文件目录：
 //
 //	result/

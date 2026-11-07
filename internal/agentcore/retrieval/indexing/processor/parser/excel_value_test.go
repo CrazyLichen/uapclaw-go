@@ -9,7 +9,6 @@ import (
 )
 
 // TestPyFloatStr 测试 Python str(float) 记法还原。
-//
 // 实测锚点（spec §3.4）：1e15→"1000000000000000.0"、0.1+0.2 全精度、
 // 1e-05 两位指数、1e+16 出 e 记法。
 func TestPyFloatStr(t *testing.T) {

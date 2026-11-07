@@ -9,7 +9,6 @@ import (
 )
 
 // TestDocxLoadStyles 测试 docx zip 解包与 styles.xml 解析。
-//
 // 用真实 fixture（python-docx 产出）验证 styleId → w:name 映射表。
 func TestDocxLoadStyles(t *testing.T) {
 	dm, err := loadDocxModel("testdata/fixture_word.docx")
@@ -58,7 +57,6 @@ func TestDocxLoadModel_坏文件(t *testing.T) {
 }
 
 // TestDocxParseBlocks 测试保序块遍历 + paragraph.text 语义 + 样式名查询。
-//
 // 用 fixture_word.docx（含 Title/Heading/tab/br/hyperlink/图片/表格）对拍 python-docx 输出。
 func TestDocxParseBlocks(t *testing.T) {
 	dm, err := loadDocxModel("testdata/fixture_word.docx")
@@ -124,7 +122,6 @@ func summarizeBlocks(blocks []docxBlock) []string {
 }
 
 // TestDocxTableMerge 测试合并单元格展开：vMerge 纵向回填 + gridSpan 横向重复。
-//
 // 黄金基准（python-docx row.cells 实测，fixture_word.golden.json 表格行）：
 // vMerge 表 r1c0 输出 "master"（续格回填）；gridSpan 表第二行输出
 // ["span2","span2","c2"]（横向重复）。
@@ -160,7 +157,6 @@ func TestDocxTableMerge(t *testing.T) {
 }
 
 // TestDocxExtractImages 测试图片提取链：a:blip → r:embed → media 字节 → RGBA → PNG 落盘。
-//
 // 对齐 Python _extract_images_from_paragraph：命名 images/{filename}__para_{n}__img_{i}.png；
 // 坏图（无法解码）炸整篇（error 向上传播，非局部吞掉）。
 func TestDocxExtractImages(t *testing.T) {
@@ -211,7 +207,6 @@ func TestDocxExtractImages(t *testing.T) {
 }
 
 // TestDocxExtractImages_坏图炸整篇 测试坏图错误传播（无局部 try 语义）。
-//
 // 两分支对齐 Python：
 //   - r:embed 指向不存在的 part → related_parts.get 返回 None → if image_part
 //     跳过（不炸、不产出）

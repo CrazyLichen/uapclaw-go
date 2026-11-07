@@ -8,7 +8,6 @@ import (
 )
 
 // TestRenderSnapshot_结构 锁定外壳、免责声明与快照引导语。
-//
 // Python: _render_history_payload(snapshot=True)
 func TestRenderSnapshot_结构(t *testing.T) {
 	m := NewManager()
@@ -23,7 +22,6 @@ func TestRenderSnapshot_结构(t *testing.T) {
 }
 
 // TestRenderDelta_只含变化与移除 锁定增量引导语与移除列表格式。
-//
 // Python: render_delta
 func TestRenderDelta_只含变化与移除(t *testing.T) {
 	m := NewManager()

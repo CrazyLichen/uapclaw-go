@@ -376,7 +376,6 @@ func RewindSession(params RewindSessionParams) (*RewindSessionResult, error) {
 // T-12: Turns 序列化语义对齐 Python 空列表 []——所有返回点返回非 nil 空切片，
 // 避免 JSON null（消费方遍历时 nil slice 与空 slice 行为一致，但跨语言
 // 消费方拿到 null 需额外判空）。
-//
 // T-10: Total 与 Turns 口径差异（对齐 Python 有意行为）——
 // Total 统计所有 user 角色消息（含不可选的系统注入类消息），
 // Turns 只含 _is_selectable_user_message 通过的可选消息，两者可以不等。

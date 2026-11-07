@@ -34,14 +34,12 @@ type UsageAccumulator struct {
 // InteractionConverterFunc 交互转换函数，用于自定义 __interaction__ 类型 chunk 的解析逻辑。
 // Python: 不同 adapter 对 interaction payload 的转换方式不同，
 // 通过此函数参数实现多态，避免 utils 包依赖具体 adapter。
-//
 // 入参固定为已桥接的 interactions 列表（元素已由 PayloadToMap 收敛为 map），
 // 对齐 Python `convert_interactions_to_ask_user_question(state_outputs: list)`；
 // 用具体类型而不是 any，把「传单个对象/非列表」从运行时静默失败变成编译期错误。
 type InteractionConverterFunc func(interactions []map[string]any) map[string]any
 
 // payloadSeenKey 递归遍历的循环检测键。
-//
 // T-04：只用指针地址会让「同一底层数组的两个不同子切片」撞键（slice 的 Pointer()
 // 返回首元素地址），加长度后二者可区分；map/pointer 的长度位固定为 0。
 type payloadSeenKey struct {
@@ -92,7 +90,6 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 	chunkType := output.Type
 	// 桥接结构体 payload（ControllerOutputPayload）为 map，对齐 Python dict 语义；
 	// 只断言 map 会让 task_loop 产出的 task_failed/task_completion 被整块丢弃。
-	//
 	// T-03：结构体桥接失败时丢弃该 chunk 并记 Error。原实现把 nil 兜成空 map，
 	// default 分支会输出 content="map[]" 的伪帧；Python 侧空 dict 走 **payload 展开，
 	// 不会产出 content。
@@ -198,7 +195,6 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 		// 原样透传，对齐 Python interface_deep._parse_stream_chunk 的 tool_call 分支
 		// （只取 payload["tool_call"]，不做任何字段过滤）。
-		//
 		// 历史：S-47/S-48 曾在此丢弃"增量碎片"（name/id 双空、arguments 不是合法 JSON）。
 		// 根因其实是模型客户端的增量帧没有被合并（17b55eb8 用 ToolCallDeltaOptions 修复），
 		// 合并修好后碎片到不了事件层，而"arguments 非合法 JSON"这条守卫会把
@@ -297,7 +293,6 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 
 	case "todo.updated":
 		// Python: L5133-5135: 提取 todos 列表。
-		//
 		// Python 的 list 不携带元素类型，payload["todos"] 直接可用；Go 里同一字段
 		// 可能是 []any（JSON 反序列化）或 []map[string]any（formatTodosForFrontend
 		// 直接构造），只断言 []any 会让后者被兜成空列表——前端任务栏因此永远
@@ -522,13 +517,11 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 }
 
 // ParseActivateConfirm 识别并转换 activate_confirm 交互载荷。
-//
 // M-04：仓库原有三份近乎相同的实现（本文件 ParseInteractionPayload、
 // parseControllerOutputInteractions，以及 adapter 包的 parseInteractionPayloadUtils），
 // 其中 parseControllerOutputInteractions 那份键名与事件名双错（查 m["__interaction__"]、
 // 返回 interaction.activate_confirm），导致真实信封永不命中、即便命中也没有消费端。
 // 此处收口为唯一实现，三处调用点共用。
-//
 // Python: stream_utils.py:356-372 / interface_deep.py:5166-5183
 // 返回 (事件 map, 是否命中)。
 func ParseActivateConfirm(m map[string]any) (map[string]any, bool) {
@@ -668,7 +661,6 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 }
 
 // ExtractAnySliceFromPayload 从 payload 提取列表字段，收敛为 []any。
-//
 // payload 里的 list 在进程内有两种形态：
 //   - []any：JSON 反序列化产物（跨进程 chunk、落盘重放、测试夹具）；
 //   - []map[string]any：业务代码直接构造（todo.updated 的 todos 由
@@ -676,7 +668,6 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 //
 // 只断言 []any 会把后者整块吞成空列表（前端右侧任务栏「永远暂无任务」）；
 // 只断言 []map[string]any 又会让前者塌陷。两条路径都真实存在，故两者都接受。
-//
 // 返回 ok=false 表示键存在、值非 nil，但不是上述两种形态——调用方据此记
 // Warn，避免再次静默降级为空列表。
 func ExtractAnySliceFromPayload(payload map[string]any, key string) ([]any, bool) {
@@ -721,7 +712,6 @@ func SerializeValue(value any) any {
 // 在写独立 `__interaction__` chunk 之后，又把同一个 chunk 放进
 // `WorkflowOutput.result`，随 `ControllerOutputPayload.data=[JsonDataFrame(...)]`
 // 一起作为 task_interaction 事件携带；适配器因此需要从信封里把它挖出来。
-//
 // Go 现状：`application/workflow_agent` 层尚未移植（internal/agentcore/workflow 仅
 // base.go），故当前没有生产者会产出信封形态；本函数保留为移植后的对齐点，
 // 届时无需再改消费端。不要当作死代码删除。
@@ -790,7 +780,6 @@ func findInteractionPayloadsRecursive(obj any, depth, maxDepth int, seen map[pay
 		return nil
 	}
 	// 循环检测：map/slice/ptr 取地址作 seen 标记。
-	//
 	// T-04：键必须带长度——slice 的 Pointer() 返回「底层数组首元素地址」，同一数组的
 	// 两个不同子切片会撞键、被误判成已访问而漏检（Python 用 id(obj)，不会撞）。
 	rv := reflect.ValueOf(obj)

@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildInputs 构建 adapter 所需的 inputs 字典。
-//
 // Python: JiuWenClaw._build_inputs(request) -> (inputs, memoryMode, rawQuery)
 //
 // 返回: inputs 字典、memoryMode 字符串、原始 query。

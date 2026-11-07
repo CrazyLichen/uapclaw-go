@@ -329,7 +329,6 @@ func isConsoleExporter(config *ObservabilityConfig) bool {
 }
 
 // parseOTLPEndpoint 将 endpoint 拆为 host:port / URL 路径 / 是否明文。
-//
 // 背景：默认配置是 "http://localhost:4317"（完整 URL，对齐 Python），
 // 而 Go 的 otlp exporter（v1.20）WithEndpoint 只接受 host:port。
 // 无 scheme 时按明文处理（对齐 Python grpc 分支的 insecure=True 默认）。

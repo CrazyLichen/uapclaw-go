@@ -22,10 +22,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HandoffTeam 事件驱动单活跃 Agent 交接多 Agent 团队。
-//
 // 交接编排模式下，Agent 按照预定义的路由规则依次交接任务，
 // 每个 Agent 处理完毕后决定下一步交接给哪个 Agent，直到满足终止条件。
-//
 // 职责：
 //   - 管理 Agent 注册和配置
 //   - 懒初始化内部 ContainerAgent 端点
@@ -73,7 +71,6 @@ var _ maschema.BaseTeam = (*HandoffTeam)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHandoffTeam 创建 HandoffTeam 实例。
-//
 // 参数：
 //   - card：团队身份卡片
 //   - config：完整配置，nil 时使用默认值
@@ -124,10 +121,8 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 }
 
 // Invoke 非流式调用团队，执行交接链路。
-//
 // 使用 StandaloneInvokeContext 管理会话生命周期（创建/PreRun/Bind/Unbind/Cleanup/Close/Commit），
 // 在上下文内执行 runChain 完成交接编排。
-//
 // Python: HandoffTeam.invoke(message, session=None)
 func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (any, error) {
 	teamOpts := maschema.NewTeamOptions(opts...)
@@ -147,7 +142,6 @@ func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ..
 
 // Stream 流式调用团队，通过 standalone_stream_context 实现。
 // 后台 goroutine 运行 runChain，前台从 session.StreamIterator() 消费流式输出。
-//
 // Python: HandoffTeam.stream(message, session=None)
 // Python 使用 standalone_stream_context，Go 使用 StandaloneStreamContext 对齐。
 func (t *HandoffTeam) Stream(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (<-chan stream.Schema, error) {
@@ -163,9 +157,7 @@ func (t *HandoffTeam) Stream(ctx context.Context, inputs map[string]any, opts ..
 }
 
 // AddAgent 向团队注册 Agent。
-//
 // 如果 Agent 已存在则跳过，否则注册到运行时并标记内部 Agent 需要重新初始化。
-//
 // Python: HandoffTeam.add_agent(card, provider) -> self
 func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
@@ -218,7 +210,6 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 }
 
 // RemoveAgent 从团队注销 Agent。
-//
 // Python: BaseTeam.remove_agent(agent)
 func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 	_, err := t.runtime.UnregisterAgent(ctx, agentID)
@@ -252,35 +243,30 @@ func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 }
 
 // Send P2P 发送消息，委托运行时。
-//
 // Python: BaseTeam.send(message, recipient, sender, session_id, timeout)
 func (t *HandoffTeam) Send(ctx context.Context, message map[string]any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
 	return t.runtime.Send(ctx, message, recipient, sender, opts...)
 }
 
 // Publish Pub-Sub 发布消息，委托运行时。
-//
 // Python: BaseTeam.publish(message, topic_id, sender, session_id)
 func (t *HandoffTeam) Publish(ctx context.Context, message map[string]any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	return t.runtime.Publish(ctx, message, topicID, sender, opts...)
 }
 
 // Subscribe 订阅主题，委托运行时。
-//
 // Python: BaseTeam.subscribe(agent_id, topic)
 func (t *HandoffTeam) Subscribe(ctx context.Context, agentID string, topic string) error {
 	return t.runtime.Subscribe(ctx, agentID, topic)
 }
 
 // Unsubscribe 取消订阅，委托运行时。
-//
 // Python: BaseTeam.unsubscribe(agent_id, topic)
 func (t *HandoffTeam) Unsubscribe(ctx context.Context, agentID string, topic string) error {
 	return t.runtime.Unsubscribe(ctx, agentID, topic)
 }
 
 // Configure 配置团队。
-//
 // Python: BaseTeam.configure(config) -> self
 func (t *HandoffTeam) Configure(_ context.Context, config maschema.TeamConfig) error {
 	t.config.TeamConfig = config
@@ -292,35 +278,30 @@ func (t *HandoffTeam) Configure(_ context.Context, config maschema.TeamConfig) e
 }
 
 // GetAgentCard 获取 Agent 卡片，委托运行时。
-//
 // Python: BaseTeam.get_agent_card(agent_id)
 func (t *HandoffTeam) GetAgentCard(agentID string) (*agentschema.AgentCard, error) {
 	return t.runtime.GetAgentCard(agentID)
 }
 
 // GetAgentCount 获取 Agent 数量，委托运行时。
-//
 // Python: BaseTeam.get_agent_count()
 func (t *HandoffTeam) GetAgentCount() int {
 	return t.runtime.GetAgentCount()
 }
 
 // ListAgents 列出所有 Agent ID，委托运行时。
-//
 // Python: BaseTeam.list_agents()
 func (t *HandoffTeam) ListAgents() []string {
 	return t.runtime.ListAgents()
 }
 
 // Card 返回团队身份卡片。
-//
 // Python: BaseTeam.card 属性
 func (t *HandoffTeam) Card() maschema.TeamCardInterface {
 	return t.card
 }
 
 // Config 返回团队配置。
-//
 // Python: BaseTeam.config 属性
 func (t *HandoffTeam) Config() *maschema.TeamConfig {
 	return &t.config.TeamConfig
@@ -329,7 +310,6 @@ func (t *HandoffTeam) Config() *maschema.TeamConfig {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // lookupCoordinator 查找会话协调器。
-//
 // Python: HandoffTeam._lookup_coordinator(session_id)
 func (t *HandoffTeam) lookupCoordinator(sessionID string) *HandoffOrchestrator {
 	t.registryMu.RLock()
@@ -338,9 +318,7 @@ func (t *HandoffTeam) lookupCoordinator(sessionID string) *HandoffOrchestrator {
 }
 
 // getStartAgentID 获取起始 Agent ID。
-//
 // 配置了 StartAgent 时返回其 ID，否则返回第一个 Agent 的 ID。
-//
 // Python: HandoffTeam._get_start_agent_id()
 func (t *HandoffTeam) getStartAgentID() string {
 	cfg := t.config.Handoff
@@ -357,7 +335,6 @@ func (t *HandoffTeam) getStartAgentID() string {
 // ensureInternalAgents 确保内部 Agent 端点已初始化。
 // 使用 initLock + internalAgentsReady bool 控制初始化，
 // 保证与 AddAgent/RemoveAgent 的 resetInternalAgents 互斥。
-//
 // 流程：
 //  1. sync.Once 保证初始化逻辑只执行一次（并发安全）
 //  2. 构建 routeGraph = BuildRouteGraph(agentIDs, routes)
@@ -387,7 +364,6 @@ func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
 }
 
 // initInternalAgents 执行内部 Agent 端点的实际初始化逻辑。
-//
 // 包含构建路由图、创建端点卡片、注册到运行时、订阅容器主题等步骤。
 func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 	cfg := t.config.Handoff
@@ -462,7 +438,6 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 }
 
 // resetInternalAgents 重置内部 Agent 初始化状态。
-//
 // 在 AddAgent 或 RemoveAgent 后调用，使后续 ensureInternalAgents 调用重新执行初始化。
 // 必须在 initLock 保护下调用，确保与 ensureInternalAgents 互斥。
 func (t *HandoffTeam) resetInternalAgents() {
@@ -471,10 +446,8 @@ func (t *HandoffTeam) resetInternalAgents() {
 }
 
 // makeContainerProvider 创建 ContainerAgent provider 闭包。
-//
 // 返回的 provider 每次调用时创建新的 ContainerAgent 实例，
 // 注入目标 Agent 的卡片、provider、允许目标和协调器查找函数。
-//
 // Python: HandoffTeam._make_container_provider(card, agent_id, allowed_targets)
 func (t *HandoffTeam) makeContainerProvider(
 	card *agentschema.AgentCard,
@@ -495,7 +468,6 @@ func (t *HandoffTeam) makeContainerProvider(
 }
 
 // runChain 执行交接链路。
-//
 // 流程：
 //  1. 调用 ensureInternalAgents() 构建内部端点
 //  2. 从 session 恢复 coordinator（RestoreFromSession）
@@ -670,7 +642,6 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 }
 
 // wrapTeamAgentProvider 将 TeamAgentProvider 包装为 resources_manager.AgentProvider。
-//
 // TeamAgentProvider 签名：func(ctx, *AgentCard) (BaseAgent, error)
 // AgentProvider 签名：func(ctx, *AgentCard) (BaseAgent, error)
 // 两者签名完全一致，直接类型转换。
@@ -679,7 +650,6 @@ func (t *HandoffTeam) wrapTeamAgentProvider(provider maschema.TeamAgentProvider)
 }
 
 // filterInterruptHistory 过滤交接历史中的中断项。
-//
 // Python: filtered = [h for h in history if not (isinstance(h.get("output"), dict) and h.get("output", {}).get("result_type") == "interrupt")]
 func filterInterruptHistory(history []HandoffHistoryEntry) []HandoffHistoryEntry {
 	var filtered []HandoffHistoryEntry

@@ -26,7 +26,6 @@ const DefaultLeaderMemberName string = "team_leader"
 // ReservedMemberNames 保留的成员名集合，用户声明成员不得使用。
 // Python: RESERVED_MEMBER_NAMES
 // 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
-//
 // human_agent 仅在 enable_hitt=True 时由运行时注入，手动声明保留名会被拒绝。
 var ReservedMemberNames = map[string]bool{
 	HumanAgentMemberName:    true,

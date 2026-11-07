@@ -117,7 +117,6 @@ func countingCancel() (context.CancelFunc, *int32) {
 
 // TestRegisterStreamTask_OverwritesWithoutCancel 锁定单槽语义（对齐 Python
 // agent_ws_server.py:1172）：同 session 后注册覆盖先注册，覆盖时不触发任何 cancel。
-//
 // 已知限制：被覆盖的旧流此后无法被 cancelStreamTask 选中（注册处会打 warn）。
 // 本用例防止将来有人把 map 改成追加却忘了同步改 cancel 语义。
 func TestRegisterStreamTask_OverwritesWithoutCancel(t *testing.T) {

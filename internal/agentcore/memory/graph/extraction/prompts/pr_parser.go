@@ -23,7 +23,6 @@ var prPattern = regexp.MustCompile("`#((?:user)|(?:system)|(?:assistant)|(?:tool
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParsePRContent 解析 .pr.md 格式的提示词模板内容，返回消息列表。
-//
 // Python: ThreadSafePromptManager.load_pr_content(content)
 //
 // 解析规则（对齐 Python PR_PATTERN.split 行为）：

@@ -3,7 +3,6 @@ package output_parsers
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MarkdownElement 单个 Markdown 元素。
-//
 // Python: MarkdownElement (dataclass)
 type MarkdownElement struct {
 	// Type 元素类型
@@ -19,7 +18,6 @@ type MarkdownElement struct {
 }
 
 // MarkdownContent 结构化的 Markdown 内容表示。
-//
 // Python: MarkdownContent (dataclass)
 type MarkdownContent struct {
 	// RawContent 原始文本内容
@@ -43,7 +41,6 @@ type MarkdownContent struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MarkdownElementType Markdown 元素类型常量。
-//
 // Python: MarkdownElementType
 type MarkdownElementType string
 

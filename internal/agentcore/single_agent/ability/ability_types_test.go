@@ -227,7 +227,6 @@ func TestBuildToolMessageContent_MCP结构体成功(t *testing.T) {
 }
 
 // TestBuildToolMessageContent_MCP结构体失败 验证 Err 字段被取到。
-//
 // 回归：反射分支查 FieldByName("Error")，而结构体字段名是 Err，
 // 永远匹配不到，失败时模型会收到 "&{false map[] Permission denied}"。
 func TestBuildToolMessageContent_MCP结构体失败(t *testing.T) {

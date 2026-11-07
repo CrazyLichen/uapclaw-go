@@ -16,19 +16,15 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseOutputParser LLM 输出解析器接口。
-//
 // 2.6 节定义最小接口，2.16 节扩展完整方法（StreamParse + Parse 签名改为 any）。
-//
 // Python: openjiuwen/core/foundation/llm/output_parsers/output_parser.py (BaseOutputParser)
 type BaseOutputParser interface {
 	// Parse 解析 LLM 输出，返回结构化结果。
-	//
 	// 输入可以是 string 或 *AssistantMessage（对齐 Python Union[str, AssistantMessage]），
 	// 实现时应通过类型断言处理。
 	Parse(input any) (any, error)
 
 	// StreamParse 流式解析 LLM 输出。
-	//
 	// Python: BaseOutputParser.stream_parse()。
 	// chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 	// 注意：当前 model client 的 _astream_with_parser 路径不调用此方法，
@@ -37,7 +33,6 @@ type BaseOutputParser interface {
 }
 
 // BaseModelClient LLM 模型客户端接口，所有模型客户端实现必须满足此接口。
-//
 // Python: openjiuwen/core/foundation/llm/model_clients/base_model_client.py (BaseModelClient)
 type BaseModelClient interface {
 	// Invoke 非流式调用 LLM，返回完整的助手消息。
@@ -59,13 +54,11 @@ type BaseModelClient interface {
 	TranscribeAudio(ctx context.Context, audioPath string, opts ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error)
 
 	// Release 释放模型缓存或资源（如 vLLM KV Cache）。
-	//
 	// Python: InferenceAffinityModelClient.release()
 	// 仅 InferenceAffinity 客户端有实际实现，其他客户端返回不支持错误。
 	Release(ctx context.Context, opts ...ReleaseOption) (bool, error)
 
 	// SupportsKVCacheRelease 检查客户端是否支持 KV Cache 释放。
-	//
 	// 零副作用判断：仅 InferenceAffinity 返回 true，其他客户端返回 false。
 	// Python: Model.supports_kv_cache_release() 中 isinstance(self._client, InferenceAffinityModelClient)
 	SupportsKVCacheRelease() bool
@@ -80,9 +73,7 @@ type StreamParsedResult struct {
 }
 
 // BaseClientEmbed BaseModelClient 的共享实现，具体客户端嵌入此结构体复用通用逻辑。
-//
 // Python: BaseModelClient 中的具体方法（非抽象方法）
-//
 // 使用方式：
 //
 //	type OpenAIModelClient struct {
@@ -118,7 +109,6 @@ func WithClientName(name string) BaseClientEmbedOption {
 }
 
 // NewBaseClientEmbed 创建 BaseClientEmbed 实例，并校验配置。
-//
 // Python: BaseModelClient.__init__(model_config, model_client_config)
 func NewBaseClientEmbed(
 	modelConfig *llmschema.ModelRequestConfig,
@@ -140,9 +130,7 @@ func NewBaseClientEmbed(
 }
 
 // RequestTimeout 解析本次请求生效的超时秒数（方法级 > 模型客户端配置）。
-//
 // 返回 nil 表示两级都没配，由 http 客户端兜底默认值（60s）。
-//
 // Python: OpenAIModelClient._create_async_openai_client()
 //
 //	final_timeout = timeout if timeout is not None else self.model_client_config.timeout
@@ -164,7 +152,6 @@ func (e *BaseClientEmbed) RequestTimeout(override *float64) *float64 {
 }
 
 // ValidateConfig 校验模型客户端配置参数。
-//
 // 校验规则：
 //   - skipValidate 为 true 时跳过所有校验
 //   - api_key: 必填
@@ -210,7 +197,6 @@ func (e *BaseClientEmbed) ValidateConfig() error {
 }
 
 // GetClientName 返回客户端名称（用于错误消息和日志）。
-//
 // Python: BaseModelClient._get_client_name()
 func (e *BaseClientEmbed) GetClientName() string {
 	return e.clientName
@@ -229,7 +215,6 @@ func (e *BaseClientEmbed) GetModelName() string {
 }
 
 // ConvertMessagesToDict 将消息参数转换为 OpenAI API 格式的 dict 列表。
-//
 // Python: BaseModelClient._convert_messages_to_dict()
 //
 // 转换规则：
@@ -273,11 +258,9 @@ func (e *BaseClientEmbed) ConvertMessagesToDict(messages MessagesParam) ([]map[s
 }
 
 // ConvertToolsToDict 将工具信息列表转换为 OpenAI API 格式。
-//
 // Python: BaseModelClient._convert_tools_to_dict()
 // 与 Python 一致：只提取 ToolInfo 公共字段（type/name/description/parameters），
 // McpToolInfo 的 ServerName 字段不发送给 LLM。
-//
 // 输出格式：[{"type": "function", "function": {"name": "...", "description": "...", "parameters": {...}}}]
 func (e *BaseClientEmbed) ConvertToolsToDict(tools []commonschema.ToolInfoInterface) []map[string]any {
 	if len(tools) == 0 {
@@ -304,7 +287,6 @@ func (e *BaseClientEmbed) ConvertToolsToDict(tools []commonschema.ToolInfoInterf
 }
 
 // BuildRequestParams 构建完整的 OpenAI 兼容请求参数。
-//
 // Python: BaseModelClient._build_request_params()
 //
 // 优先级：方法参数 > model_config 默认值
@@ -367,7 +349,6 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 
 	// 3.5 DeepSeek 兼容：模型名含 deepseek 时为 assistant 消息补 reasoning_content
 	//（有工具调用的多轮对话缺该字段会 400）。
-	//
 	// Python: utils/endpoint_profiles.py:33-41 —— model_requires_reasoning_content(model)
 	// 判模型名，_deepseek_reasoning_content 对 assistant 消息 setdefault("")
 	// 注意：上游按「模型名」而非「客户端类型」判定，故聚合网关（provider=OpenAI
@@ -405,7 +386,6 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 	}
 
 	// 6. 处理 ResponseFormat（结构化输出）
-	//
 	// Python: **kwargs 中的 response_format 参数透传给 API。
 	// 支持 structured output 的后端会使用此参数，不支持的后端静默忽略（对齐 Python 透传模式）。
 	if params.ResponseFormat != nil {
@@ -498,7 +478,6 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 }
 
 // ExtractCostInfo 从响应对象提取费用信息。
-//
 // Python: BaseModelClient._extract_cost_info()
 //
 // 支持三种格式：
@@ -551,7 +530,6 @@ func ExtractCostInfo(obj map[string]any) (inputCost, outputCost, totalCost float
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // convertOneMessage 将单条消息转换为 OpenAI API 格式的 dict。
-//
 // 通过类型断言处理不同消息类型的特有字段：
 //   - *AssistantMessage → 追加 tool_calls（OpenAI 嵌套格式）+ reasoning_content
 //   - *ToolMessage → 追加 tool_call_id
@@ -608,7 +586,6 @@ func floatVal(m map[string]any, keys ...string) float64 {
 }
 
 // modelRequiresReasoningContent 判模型名是否含 deepseek（小写包含）。
-//
 // Python: utils/endpoint_profiles.py:33-34
 //
 //	return "deepseek" in str(model or "").strip().lower()

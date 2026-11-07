@@ -18,9 +18,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LLMInvokePolicy 演化层 LLM 调用策略。
-//
 // 控制单次尝试超时、总预算、最大尝试次数和指数退避参数。
-//
 // Python: LLMInvokePolicy dataclass
 type LLMInvokePolicy struct {
 	// AttemptTimeoutSecs 单次尝试超时（秒）
@@ -68,9 +66,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InvokeTextWithRetry 带重试的 LLM 文本调用，返回响应文本。
-//
 // 包装 InvokeTextWithRetryAndPrompt，丢弃使用的 prompt。
-//
 // Python: invoke_text_with_retry()
 func InvokeTextWithRetry(
 	ctx context.Context,
@@ -85,7 +81,6 @@ func InvokeTextWithRetry(
 }
 
 // InvokeTextWithRetryAndPrompt 带重试的 LLM 文本调用，返回响应文本和使用的 prompt。
-//
 // 处理三种失败模式：
 //  1. 调用异常：超时类异常可能触发 retry_prompt 回退，其他异常直接报错
 //  2. 空响应：policy.RetryEmptyResponse 为 true 时重试
@@ -360,21 +355,18 @@ func InvokeTextWithRetryAndPrompt(
 }
 
 // WithRetryPrompt 设置超时后切换的短提示词。
-//
 // Python: invoke_text_with_retry_and_prompt(retry_prompt=...)
 func WithRetryPrompt(prompt string) InvokeRetryOption {
 	return func(cfg *invokeRetryConfig) { cfg.retryPrompt = prompt }
 }
 
 // WithTemperature 设置温度参数。
-//
 // Python: invoke_text_with_retry_and_prompt(temperature=...)
 func WithTemperature(t float64) InvokeRetryOption {
 	return func(cfg *invokeRetryConfig) { cfg.temperature = &t }
 }
 
 // WithIsResultUsable 设置结果可用性检查函数。
-//
 // Python: invoke_text_with_retry_and_prompt(is_result_usable=...)
 func WithIsResultUsable(fn func(string) bool) InvokeRetryOption {
 	return func(cfg *invokeRetryConfig) { cfg.isResultUsable = fn }
@@ -383,7 +375,6 @@ func WithIsResultUsable(fn func(string) bool) InvokeRetryOption {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isTimeoutLike 判断错误是否为超时类型。
-//
 // 检测规则（对齐 Python _is_timeout_like）：
 //  1. context.DeadlineExceeded（上下文超时）
 //  2. 错误类型名包含 "timeout"
@@ -409,7 +400,6 @@ func isTimeoutLike(err error) bool {
 }
 
 // sleepBeforeRetry 指数退避等待。
-//
 // Python: _sleep_before_retry()
 //   - 退避时间 = backoff_base * 2^(attempt-1)
 //   - 取 min(backoff, remaining_budget)
@@ -445,7 +435,6 @@ func sleepBeforeRetry(ctx context.Context, policy LLMInvokePolicy, startedAt tim
 }
 
 // raiseLLMResilienceError 构建 LLM 弹性错误并返回。
-//
 // Python: _raise_llm_resilience_error()
 // 使用 exception.NewBaseError + WithMsg + WithDetails + WithCause 构建错误。
 func raiseLLMResilienceError(
@@ -478,7 +467,6 @@ func raiseLLMResilienceError(
 }
 
 // responseToTextFromAssistantMessage 从 AssistantMessage 提取文本内容。
-//
 // Python: _response_to_text(response)
 // Python 版本检查 hasattr(response, "content")，Go 版本直接使用 GetContent。
 func responseToTextFromAssistantMessage(response *llmschema.AssistantMessage) string {

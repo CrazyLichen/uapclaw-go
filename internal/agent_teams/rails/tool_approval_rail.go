@@ -21,7 +21,6 @@ import (
 //
 // 当 teammate 调用工具时，向 leader 发送审批请求消息，
 // leader 收到消息后使用 approve_tool 工具进行回复。
-//
 // 审批流程：
 //  1. Teammate 调用工具 → Rail 拦截
 //  2. 检查 auto_confirm_config，若已配置则直接批准

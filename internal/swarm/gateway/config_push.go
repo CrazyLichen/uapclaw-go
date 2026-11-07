@@ -37,7 +37,6 @@ func (s *AppGatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 
 // onConfigSavedImpl 配置保存回调实现。
 // Python: _on_config_saved (app_gateway.py L919-989)。
-//
 // 执行步骤：
 //  1. 本地缓存更新（当前空操作，接口预留）
 //  2. 构造 agent.reload_config E2A 请求
@@ -135,7 +134,6 @@ func isValidationError(errStr string) bool {
 }
 
 // scheduleRestart 调度进程重启，对齐 Python _schedule_restart。
-//
 // 当配置重载发送失败或 AgentServer 拒绝（非 ValidationError）时，
 // 记录原因并退出进程，由外部 supervisor（systemd/docker）重启。
 func scheduleRestart(reason string) {

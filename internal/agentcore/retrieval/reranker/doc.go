@@ -1,11 +1,9 @@
 // Package reranker 提供重排序模型的具体实现。
-//
 // 本包实现了 BaseReranker 接口的多种提供者：
 // StandardReranker（vLLM 风格 /rerank API）、
 // ChatReranker（Chat Completion + logit_bias 实验性方案）和
 // DashScopeReranker（阿里云 DashScope 云服务重排序）。
 // 同时提供 RerankerBase 默认实现基类。
-//
 // 文件目录：
 //
 //	reranker/

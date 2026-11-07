@@ -68,7 +68,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // FlushHistoryQueue 等待 history 异步写入队列刷盘（供测试使用）。
-//
 // 发送哨兵项到队列，等待 worker 确认所有之前的写入已完成。
 func FlushHistoryQueue() {
 	// 如果 worker 还没启动，无需等待
@@ -87,7 +86,6 @@ func FlushHistoryQueue() {
 }
 
 // ResetHistoryWorker 关闭并重置 history worker（供测试使用）。
-//
 // 调用前应先调用 FlushHistoryQueue 确保所有写入已完成。
 // 重置后下一个 AppendHistoryRecord 调用会重新启动 worker。
 func ResetHistoryWorker() {
@@ -101,7 +99,6 @@ func ResetHistoryWorker() {
 }
 
 // AppendHistoryRecord 向指定 session 的 history.json 异步追加一条记录。
-//
 // Python: append_history_record(session_id, request_id, channel_id, role, content, timestamp, event_type, extra, channel_metadata, mode)
 // 入队成功后联动更新元数据（UpdateSessionMetadata + SetSessionDeliveryContext），联动失败仅 Warn。
 func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
@@ -183,7 +180,6 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 }
 
 // AppendCompactHistoryRecords 写入 context compact 的 boundary + summary 记录。
-//
 // Python: append_compact_history_records(session_id, request_id, channel_id, summary, timestamp, trigger, stats, mode)
 func AppendCompactHistoryRecords(sessionID, requestID, channelID, summary string,
 	timestamp float64, trigger string, stats map[string]any, mode string) {
@@ -220,7 +216,6 @@ func AppendCompactHistoryRecords(sessionID, requestID, channelID, summary string
 }
 
 // AppendCompactHistoryFromPayload 从 payload 中提取 compact 信息并写入 history。
-//
 // Python: _append_compact_history_from_payload(payload, session_id, request_id, channel_id, mode)
 func AppendCompactHistoryFromPayload(payload map[string]any, sessionID, requestID, channelID, mode string) {
 	summaryText := ""
@@ -236,7 +231,6 @@ func AppendCompactHistoryFromPayload(payload map[string]any, sessionID, requestI
 }
 
 // ReadHistoryRecords 读取指定 session 的全部 history 记录。
-//
 // Python: read_history_records(session_id)
 func ReadHistoryRecords(sessionID string) ([]map[string]any, error) {
 	sid := NormalizeSessionID(sessionID)
@@ -249,7 +243,6 @@ func ReadHistoryRecords(sessionID string) ([]map[string]any, error) {
 }
 
 // TruncateHistoryRecords 截断 history 到指定位置索引（rewind 使用）。
-//
 // Python: truncate_history_records(session_id, cut_index: int) → dict
 // 先等异步队列刷盘（FlushHistoryQueue 哨兵机制等价 Python _WRITE_QUEUE.join()），再截断到 cutIndex。
 func TruncateHistoryRecords(sessionID string, cutIndex int) (TruncateResult, error) {
@@ -289,7 +282,6 @@ func TruncateHistoryRecords(sessionID string, cutIndex int) (TruncateResult, err
 }
 
 // IsTeamRelevant 判断记录是否为 team 相关事件。
-//
 // Python: _is_team_relevant(item)
 func IsTeamRelevant(item map[string]any) bool {
 	et, ok := item["event_type"].(string)
@@ -311,7 +303,6 @@ func IsTeamRelevant(item map[string]any) bool {
 }
 
 // ReadTeamHistoryRecords 读取指定会话的 team 相关历史记录。
-//
 // Python: read_team_history_records(session_id)
 // 带 5 次递增间隔重试（0.2s × attempt），防止读到截断窗口空文件。
 func ReadTeamHistoryRecords(sessionID string) ([]map[string]any, error) {
@@ -432,7 +423,6 @@ func readHistoryFile(fpath string) ([]map[string]any, error) {
 }
 
 // writeHistoryFile 写入 history.json 全量记录。
-//
 // 序列化对齐 Python json.dumps(history, ensure_ascii=False, indent=2)
 // （session_history.py:103-105）：不转义 < > &（Go json.MarshalIndent 默认会把
 // 它们写成 \u003c/\u003e/\u0026，导致 `</heartbeat_user_task>` 这类文案在文件里
@@ -446,7 +436,6 @@ func writeHistoryFile(fpath string, records []map[string]any) error {
 }
 
 // isSuccessfulCompactionPayload 判断 payload 是否表示成功的压缩。
-//
 // Python: _is_successful_compaction_payload(payload)
 func isSuccessfulCompactionPayload(payload map[string]any) bool {
 	if v, ok := payload["error"]; ok && v != nil {
@@ -460,7 +449,6 @@ func isSuccessfulCompactionPayload(payload map[string]any) bool {
 }
 
 // compactStatsFromPayload 从 payload 中提取压缩统计字段。
-//
 // Python: _compact_stats_from_payload(payload)
 func compactStatsFromPayload(payload map[string]any) map[string]any {
 	stats := make(map[string]any)

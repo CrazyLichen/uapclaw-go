@@ -1,10 +1,8 @@
 // Package skill_call 提供技能经验维度优化器。
-//
 // SkillExperienceOptimizerBase 固定 domain="skill_experience"，默认优化目标为 experiences，
 // 对齐 Python SkillExperienceOptimizer 的共享基类行为。
 // SkillExperienceOptimizer 通过 LLM 三通道分析生成经验草稿，
 // TeamSkillExperienceOptimizer 在此基础上增加双路径生成逻辑和团队专属功能。
-//
 // 文件目录：
 //
 //	skill_call/

@@ -11,11 +11,9 @@ import (
 )
 
 // syncPromptAttachments 把动态提示词同步进历史，并返回同步是否成功。
-//
 // 返回值是提交回调的执行前提：附件车道是「当前状态」通道，边界时比对
 // 注册区与历史哈希，只有真正写进历史，才能把下游基线推进到"已送达"。
 // 失败只告警：附件投递不得阻断模型调用。
-//
 // Python: ReActAgent._sync_prompt_attachments（react_agent.py:1148-1182）。
 func syncPromptAttachments(ctx context.Context, m *prompts.Manager, hc prompts.HistoryContext) bool {
 	if m == nil || hc == nil {
@@ -32,10 +30,8 @@ func syncPromptAttachments(ctx context.Context, m *prompts.Manager, hc prompts.H
 }
 
 // runCommitCallbacks 执行并清空投递成功回调。
-//
 // 只在 Sync 成功之后调用：失败时调用方不会走到这里，回调留在 ctx.extra
 // 等下一次边界重试（上游在 pop 之前就 return，回调列表不被动过）。
-//
 // Python: ReActAgent._sync_prompt_attachments 尾段（react_agent.py:1169-1182）。
 func runCommitCallbacks(cbc *interfaces.AgentCallbackContext) {
 	if cbc == nil {
@@ -56,7 +52,6 @@ func runCommitCallbacks(cbc *interfaces.AgentCallbackContext) {
 }
 
 // runOneCommitCallback 执行单条提交回调，失败或 panic 只告警。
-//
 // Python 捕 Exception 继续下一条；Go 的 panic 不 recover 会掀掉整个 invoke，
 // 故显式兜住（spec D-2）。
 func runOneCommitCallback(fn func() error) {
@@ -91,7 +86,6 @@ func extraString(extra map[string]any, key string) string {
 }
 
 // attachmentWindowOptions 构建附件窗口投影选项；未注入 manager 或缺少客户端配置时返回空。
-//
 // Python: _build_model_context_window 中按 provider 选择 use_system_role 后注册 mutator。
 func attachmentWindowOptions(m *prompts.Manager, model *llm.Model, sessionID string) []ceiface.Option {
 	if m == nil || model == nil || model.ClientConfig == nil {

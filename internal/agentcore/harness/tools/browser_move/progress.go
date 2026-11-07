@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserTaskProgressState 浏览器任务进度状态，记录任务执行过程中的状态信息。
-//
 // Python: openjiuwen/harness/tools/browser_move/playwright_runtime/service.py:44-116 (BrowserTaskProgressState)
 type BrowserTaskProgressState struct {
 	// RequestID 请求标识
@@ -47,7 +46,6 @@ type BrowserTaskProgressState struct {
 
 // NewBrowserTaskProgressStateFromDict 从字典构造 BrowserTaskProgressState。
 // data 为 nil 或非字典类型时返回零值状态。
-//
 // Python: BrowserTaskProgressState.from_dict
 func NewBrowserTaskProgressStateFromDict(data map[string]any) *BrowserTaskProgressState {
 	if data == nil {
@@ -86,7 +84,6 @@ func NewBrowserTaskProgressStateFromDict(data map[string]any) *BrowserTaskProgre
 }
 
 // IsEmpty 判断进度状态是否为空（初始/未更新状态）。
-//
 // Python: BrowserTaskProgressState.is_empty
 func (s *BrowserTaskProgressState) IsEmpty() bool {
 	return s.Status == "unknown" &&
@@ -103,7 +100,6 @@ func (s *BrowserTaskProgressState) IsEmpty() bool {
 }
 
 // ToDict 将进度状态转换为字典，next_step/last_worker_final/request_id 为空时输出 nil。
-//
 // Python: BrowserTaskProgressState.to_dict
 func (s *BrowserTaskProgressState) ToDict() map[string]any {
 	result := map[string]any{

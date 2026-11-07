@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeConfig 配置后处理，将需要结构化的字段解析为原生类型。
-//
 // Python: _normalize_config(config)
 //  1. models.*.model_client_config.custom_headers — JSON 字符串 → map
 //  2. react.model_client_config.custom_headers — JSON 字符串 → map
@@ -76,7 +75,6 @@ func NormalizeConfig(data map[string]any) {
 }
 
 // ParseCustomHeaders 解析 custom_headers 配置，支持 JSON 字符串格式。
-//
 // 如果输入已经是 map 类型则原样返回；如果是 JSON 字符串则解析为 map；
 // 其他类型或解析失败返回 nil。
 // Python: _parse_custom_headers(value)

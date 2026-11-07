@@ -10,10 +10,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CheckpointManager 检查点管理器接口。
-//
 // 定义检查点保存时机判断、构建和恢复的核心协议。
 // DefaultCheckpointManager 是默认实现。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/manager.py CheckpointManager(Protocol)
 type CheckpointManager interface {
 	// ShouldSave 判断是否应保存检查点。
@@ -27,11 +25,9 @@ type CheckpointManager interface {
 }
 
 // DefaultCheckpointManager 默认检查点管理器实现。
-//
 // 保存时机：分数提升或每 N 个 epoch。
 // 恢复内容：operators_state + progress best/epoch。
 // 待定变更管理：内存中的 pending map。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/manager.py DefaultCheckpointManager
 type DefaultCheckpointManager struct {
 	runID            string
@@ -50,7 +46,6 @@ type DefaultCheckpointManager struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDefaultCheckpointManager 创建默认检查点管理器。
-//
 // Python: DefaultCheckpointManager.__init__(run_id, checkpoint_version, save_every_n_epochs, save_on_improve)
 func NewDefaultCheckpointManager(
 	runID string,
@@ -80,7 +75,6 @@ func (m *DefaultCheckpointManager) RunID() string {
 }
 
 // ShouldSave 判断是否应保存检查点。
-//
 // 逻辑：saveOnImprove && improved → true 或 epoch % saveEveryNEpochs == 0 → true
 // Python: DefaultCheckpointManager.should_save(epoch, improved)
 func (m *DefaultCheckpointManager) ShouldSave(epoch int, improved bool) bool {
@@ -91,7 +85,6 @@ func (m *DefaultCheckpointManager) ShouldSave(epoch int, improved bool) bool {
 }
 
 // BuildCheckpoint 从 agent 和 progress 构建检查点数据。
-//
 // progress 参数使用 evolving.CheckpointProgress 接口方法提取字段，
 // 避免了 any + reflect 方案，获得编译时类型安全。
 // Python: DefaultCheckpointManager.build_checkpoint(agent, progress, updater_state)
@@ -124,7 +117,6 @@ func (m *DefaultCheckpointManager) BuildCheckpoint(
 }
 
 // Restore 从检查点恢复 agent 状态，返回 progress 恢复信息。
-//
 // 恢复所有 Operator 状态，返回 {"start_epoch", "best_score", "run_id"}。
 // Python: DefaultCheckpointManager.restore(agent, checkpoint)
 func (m *DefaultCheckpointManager) Restore(
@@ -155,7 +147,6 @@ func (m *DefaultCheckpointManager) GetPending(operatorID string) []*PendingChang
 }
 
 // CommitPending 清空并返回 pending payload 中的 EvolutionRecord 总数。
-//
 // 只清空内存中的待定状态并返回记录计数，不负责写磁盘。
 // store 参数当前未使用，预留对齐 Python commit_pending(operator_id, store) 签名。
 // Python: DefaultCheckpointManager.commit_pending(operator_id, store)

@@ -12,9 +12,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Tool 工具接口，所有工具类型（LocalFunction/MCPTool/RestfulApi）的统一抽象。
-//
 // Tool 接口只定义纯业务方法，生命周期回调由 LifecycleTool 包装器处理。
-//
 // Python: openjiuwen/core/foundation/tool/base.py (Tool)
 type Tool interface {
 	// Card 返回工具的配置卡片
@@ -26,17 +24,14 @@ type Tool interface {
 	// 不支持 Stream 的工具返回 ErrStreamNotSupported 错误。
 	Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
 	// GetCallTimeout 返回本次调用的外层预算（秒）。
-	//
 	// 内部已有执行期限的工具可覆盖此方法，让外层调用预算等于执行预算加上
 	// 有界的清理时间（例如 bash 需要多留时间 kill 进程树并排空管道）。
 	// 默认实现原样返回 defaultTimeout，即沿用卡片级超时策略。
-	//
 	// Python: Tool.get_call_timeout (foundation/tool/base.py:255-276)
 	GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64
 }
 
 // ToolCard 工具配置卡片，嵌入 BaseCard，增加输入参数定义和扩展属性。
-//
 // Python: openjiuwen/core/foundation/tool/base.py (ToolCard)
 type ToolCard struct {
 	schema.BaseCard
@@ -53,7 +48,6 @@ type ToolCard struct {
 }
 
 // ToolCallOptions 工具调用的扩展选项。
-//
 // Python: Tool.invoke/Stream 中的 **kwargs 参数集合
 type ToolCallOptions struct {
 	// SkipNoneValue 是否跳过 None 值（LocalFunction 使用）
@@ -75,7 +69,6 @@ type ToolCallOptions struct {
 }
 
 // StreamChunk 流式执行的返回块。
-//
 // 消费者通过读取 channel 中的 StreamChunk 获取流式数据：
 //   - Data 非 nil 且 Done=false：正常数据块
 //   - Done=true：流正常结束
@@ -116,10 +109,8 @@ var ErrInvokeNotSupported = exception.BuildError(
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BaseCallTimeout 是 GetCallTimeout 的默认实现，供不覆盖该钩子的工具委托调用。
-//
 // 显式实现 Tool 接口的工具应在 GetCallTimeout 中委托到本函数；
 // 有内部执行期限的工具（如 BashTool）改为返回自己的预算。
-//
 // Python: Tool.get_call_timeout 的基类实现（返回入参 default_timeout）
 func BaseCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
 	return defaultTimeout
@@ -171,7 +162,6 @@ func NewToolCallOptions(opts ...ToolOption) *ToolCallOptions {
 }
 
 // NewToolCard 创建 ToolCard 实例，自动生成 BaseCard。
-//
 // Python: ToolCard(input_params=..., properties=...)
 func NewToolCard(name, description string, inputParams []*schema.Param, properties map[string]any) *ToolCard {
 	card := &ToolCard{
@@ -186,7 +176,6 @@ func NewToolCard(name, description string, inputParams []*schema.Param, properti
 }
 
 // NewToolCardWithID 创建 ToolCard 实例，使用指定 ID。
-//
 // Python: build_tool_card 中的 tool_id 生成逻辑。
 func NewToolCardWithID(id, name, description string, inputParams []*schema.Param, properties map[string]any) *ToolCard {
 	card := &ToolCard{
@@ -217,7 +206,6 @@ func NewErrInvokeNotSupported(card string) *exception.BaseError {
 }
 
 // ValidateToolCard 校验 ToolCard 的合法性。
-//
 // 规则：
 //   - card 不能为 nil
 //   - card.ID 不能为空
@@ -247,10 +235,8 @@ func (c *ToolCard) String() string {
 }
 
 // ToolInfo 从 ToolCard 生成工具描述信息，供 LLM function calling 消费。
-//
 // 将 InputParams ([]*Param) 转换为 JSON Schema map，构造 ToolInfo 返回。
 // 返回 ToolInfoInterface 接口，统一 ToolInfo 和 McpToolInfo 的访问方式。
-//
 // Python: ToolCard.tool_info() -> ToolInfo(name=..., description=..., parameters=...)
 func (c *ToolCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)

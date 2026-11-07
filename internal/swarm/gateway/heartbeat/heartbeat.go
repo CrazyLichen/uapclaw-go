@@ -138,7 +138,6 @@ func NewGatewayHeartbeatService(
 
 // NormalizeActiveHours 将 active_hours 的 start/end 规范为 "HH:MM" 字符串。
 // 对齐 Python: normalize_active_hours (heartbeat.py L29-46)。
-//
 // YAML 中未加引号的 22:00 在 PyYAML 会解析为 1320（60 进制）；
 // yaml.v3 解析为字符串（偏差②，实测验证）。本函数数字回转逻辑仍保留：
 // web set_conf 传数字等路径语义完整。
@@ -341,7 +340,6 @@ func (s *GatewayHeartbeatService) SetHeartbeatConf(every *float64, target *strin
 // time.After 每轮进入 select 前从 mu 保护下快照最新 IntervalSeconds——
 // 对齐 Python 每轮 sleep 读最新值（set_conf 改间隔下轮生效）。
 // tick 内部自行 recover；循环层不因 tick 异常退出（对齐 Python except 仅日志）。
-//
 // 审查修复 M-05：defer 复位 running——父 ctx 被外部取消而未走 Stop() 时，
 // 心跳静默死亡但 IsRunning()=true、再次 Start() 因 CAS 基于 stale true
 // 被拒（假幂等僵尸态）。正常 Stop() 已置 false，重复 Store 无害

@@ -1,11 +1,9 @@
 // Package embedding 提供向量嵌入模型的具体实现。
-//
 // 本包实现了 BaseEmbedding 接口的多种提供者：
 // APIEmbedding（通用 HTTP）、OpenAIEmbedding（OpenAI SDK）、
 // DashscopeEmbedding（DashScope SDK）、VLLMEmbedding（vLLM 多模态）。
 // 同时提供 MultimodalEmbedder 接口。
 // MultimodalDocument 多模态文档模型已提升到 retrieval/common 包。
-//
 // 文件目录：
 //
 //	embedding/

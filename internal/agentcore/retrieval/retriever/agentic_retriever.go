@@ -1,8 +1,6 @@
 // 多跳 agentic 检索器：任意 Retriever 之上的 LLM 查询改写与多轮融合。
-//
 // 底层为 GraphRetriever 时自动启用图扩展与三元组链接；其他 Retriever
 // 走迭代改写 + 结果融合（GeAR 策略，arXiv:2507.17399）。
-//
 // Python: openjiuwen/core/retrieval/retriever/agentic_retriever.py (AgenticRetriever)
 package retriever
 
@@ -28,7 +26,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgenticRetriever 多跳 agentic 检索器。
-//
 // 构造期类型断言 *GraphRetriever 判定图路径（isinstance 同构）；
 // IndexTypeCarrier 探测推导默认模式（getattr 链同构）；TripleMemory
 // 跨轮累积事实；LLM 三件套（读/改写/链接）软失败降级不中断循环。
@@ -146,7 +143,6 @@ Response (JSON only, no additional text):
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgenticRetriever 创建多跳 agentic 检索器。
-//
 // 对齐 Python __init__（L129-161）：retriever/llm_client 必填（None→
 // 155208/155209，error_msg 逐字符）；max_iter 非法（非正整数）Warn
 // 回落 2；isinstance 判图路径；getattr(retriever,"index_type",None)
@@ -196,7 +192,6 @@ func NewAgenticRetriever(retriever Retriever, llm model_clients.BaseModelClient,
 }
 
 // WithAgenticMaxIter 设置最大迭代轮数。
-//
 // 对齐 Python L148-154：isinstance(max_iter, int) and max_iter > 0 才
 // 生效，否则 Warn 回落默认 2（不报错）。Go int 天然是 int，非 int 场景
 // 编译期消解（偏差归档 spec §8-3）。
@@ -231,7 +226,6 @@ func (a *AgenticRetriever) IsGraphRetriever() bool { return a.isGraph }
 func (a *AgenticRetriever) DefaultMode() RetrievalMode { return a.defaultMode }
 
 // Retrieve 多跳检索主链。
-//
 // 对齐 Python retrieve（L173-194）：top_k 非正整数 → 155210（None 场景
 // 编译期消解，偏差 §8-3）；mode 零值回落 defaultMode（13.19 偏差延续）；
 // 图/通用路径分派。
@@ -253,7 +247,6 @@ func (a *AgenticRetriever) Retrieve(ctx context.Context, query string, topK int,
 }
 
 // BatchRetrieve 批量并发检索。
-//
 // 对齐 Python batch_retrieve（L530-537）：裸 gather 全启动。Go 裸
 // errgroup（不派生 ctx 不 cancel——13.19/13.23 先例，WithContext 会在
 // 首错时取消兄弟协程，偏离 Python gather 语义）。Python 只透传 top_k
@@ -296,7 +289,6 @@ func (a *AgenticRetriever) Close() error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // retrieveWithGraph 图路径：图扩展 + 三元组链接 + 多轮融合。
-//
 // 对齐 Python _retrieve_with_graph（L196-251）：graph_expansion 默认
 // true（kwargs.pop）；proximal _read 传当前轮 q、主 _read 传原始 query
 // （Python L237 字面行为，偏差 §8-2）；末轮后 _linkPassages 把 memory
@@ -365,7 +357,6 @@ func (a *AgenticRetriever) retrieveWithGraph(ctx context.Context, query string, 
 }
 
 // assertGraphRetriever 防御断言。
-//
 // 对齐 Python _assert_graph_retriever（L318-324）：非 GraphRetriever 调
 // 图路径方法 → 155211。Go 类型系统保证仅 isGraph 分支可达（偏差 §8-10，
 // 保留防御检查）。
@@ -380,7 +371,6 @@ func (a *AgenticRetriever) assertGraphRetriever() error {
 }
 
 // linkTriples 邻近三元组链接到 KB 三元组。
-//
 // 对齐 Python _link_triples（L415-479）：每 triple 一个
 // retrieve_search_results（top_k=1）裸 gather（return_exceptions=True
 // 全跑完语义，13.17 方案 A 无信号量版）；三分类聚合（error→failed 计数/
@@ -463,7 +453,6 @@ func (a *AgenticRetriever) linkTriples(ctx context.Context, triples []common.Tri
 }
 
 // linkPassages memory 三元组链接回 passages。
-//
 // 对齐 Python _link_passages（L481-528）：每 triple 一个 Retrieve
 // （top_k=5）裸 gather 三分类聚合；成功项整列表保留（不取 [0]）；
 // 返回 [][]RetrievalResult。
@@ -521,7 +510,6 @@ func (a *AgenticRetriever) linkPassages(ctx context.Context, triples []common.Tr
 }
 
 // retrieveGeneric 通用路径：迭代查询改写 + RRF 融合。
-//
 // 对齐 Python _retrieve_generic（L253-296）：每轮底层 retrieve → _read
 // 抽三元组入 TripleMemory → _rewrite 判充分性（空=break）；融合
 // history_results 截 top_k。注意：主 _read 传当前轮 q（Python L278
@@ -561,7 +549,6 @@ func (a *AgenticRetriever) retrieveGeneric(ctx context.Context, query string, to
 }
 
 // llmCall 单次 LLM 调用（软失败）。
-//
 // 对齐 Python _llm_call_async（L298-316）：Invoke 失败 Warn 返回 None
 // （Go (空串, false)）；resp.content 的 hasattr 分支编译期消解
 // （偏差 §8-4），Go AssistantMessage.Content.Text()。
@@ -580,7 +567,6 @@ func (a *AgenticRetriever) llmCall(ctx context.Context, prompt string) (string, 
 }
 
 // read 读步骤：从 passages 抽知识三元组（软失败 → 空切片）。
-//
 // 对齐 Python _read（L374-413）：docs 跳过空文本截前 5 + "\n\n" join；
 // facts 串 Python tuple repr（('s', 'p', 'o')）逗号空格 join，空兜底
 // "None"（[3]string 零值不过滤——Python 非空 tuple 恒 True，偏差 §8-8）；
@@ -641,7 +627,6 @@ func (a *AgenticRetriever) read(ctx context.Context, query string, passages []co
 }
 
 // rewrite 改写步骤：判充分性，不足则生成下一问（软失败 → 空串=break）。
-//
 // 对齐 Python _rewrite（L326-372）：历史行 "Rewritten Question {i}: {q}"
 // 逐行 join（history[1:] 起），单元素历史兜底 "(No rewriting steps yet)"；
 // jsonrepair 根非 dict Warn；sufficient 缺省 False；next_question 非空
@@ -723,7 +708,6 @@ func tripleFactStr(triple common.TripleFact) string {
 }
 
 // metaString 取元数据中的字符串值（nil → ""；string 原值；其他标量 fmt.Sprint）。
-//
 // 对齐 Python metadata.get("doc_id") 的透传语义：自定义 store 写入 int 时 Python
 // 保留为 123，而 Go 的 .(string) 断言会静默置空，导致 doc_id/chunk_id 丢失。
 func metaString(meta map[string]any, key string) string {

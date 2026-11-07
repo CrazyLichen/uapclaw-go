@@ -35,7 +35,6 @@ type EmbeddingService interface {
 // Go 改为返回本地接口以提供编译期类型安全。
 // 此接口在 context 包定义，避免 context → vector_store 单向依赖，
 // MemoryVectorStore 隐式实现此接口（duck typing）。
-//
 // Python: openjiuwen/extensions/context_evolver/core/context/service_context.py
 type VectorStoreService interface {
 	// Upsert 插入或更新向量节点
@@ -100,11 +99,9 @@ type GenerateConfig struct {
 type GenerateOption func(*GenerateConfig)
 
 // ServiceContext 管理共享服务（LLM/Embedding/VectorStore/AgentFlow）的上下文。
-//
 // 非并发安全：需在初始化阶段完成所有 RegisterService 调用后，才能并发读取。
 // Python 用 __new__ 单例模式（初始化后只读），Go 改为依赖注入——
 // 由调用方构造并传入。如果 P6 的 reconfigure 需要运行时修改，届时需加锁。
-//
 // Python: openjiuwen/extensions/context_evolver/core/context/service_context.py
 type ServiceContext struct {
 	services map[string]any

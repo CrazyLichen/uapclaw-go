@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HybridRetriever 混合检索器实现（向量+稀疏，RRF 融合在 store 层完成）。
-//
 // KB 编排层的兜底检索器：SimpleKnowledgeBase 按 index_type 路由的 else
 // 分支（含 "hybrid"）、GraphRetriever 动态创建的 else 分支。
 // Python: openjiuwen/core/retrieval/retriever/hybrid_retriever.py
@@ -46,7 +45,6 @@ func WithHybridAlpha(v float64) HybridRetrieverOption {
 }
 
 // NewHybridRetriever 创建混合检索器。
-//
 // 对齐 Python HybridRetriever.__init__(vector_store, embed_model=None,
 // alpha=0.5, **kwargs)：默认 alpha=0.5；kwargs 构造死参数不引入
 // （13.19 决策 5 先例，spec §8-2）。构造零校验（embedModel nil 合法）。
@@ -63,7 +61,6 @@ func NewHybridRetriever(vectorStore vector_store.VectorStore, embedModel embeddi
 }
 
 // Retrieve 混合检索（vector/sparse/hybrid 三模式路由 + 归一化）。
-//
 // 对齐 Python HybridRetriever.retrieve（L41-130）：
 //   - alpha 解析：opts.Alpha 非 nil 覆写，否则回落构造字段
 //   - 155201 前置校验先于 mode 分支（顺序不可调换——hybrid+threshold
@@ -166,7 +163,6 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, query string, topK int, 
 }
 
 // BatchRetrieve 批量并发检索。
-//
 // 对齐 Python HybridRetriever.batch_retrieve（L132-144）裸 asyncio.gather：
 // 全启动、其余不取消跑完结果丢弃、错误负载与传播序一致（裸 errgroup
 // 不派生 ctx 不 cancel，13.20 两兄弟同构）。审查修复 M-11（表述修正）：
@@ -194,7 +190,6 @@ func (r *HybridRetriever) BatchRetrieve(ctx context.Context, queries []string, t
 }
 
 // RetrieveSearchResults 检索原始 SearchResult（不归一化、不阈值过滤）。
-//
 // 对齐 Python retrieve_search_results（L146-209）：三分支树与 Retrieve
 // 完全相同，差异两处——无 155201 threshold 前置校验（Python rsr 没有
 // 这段，同文件不对称字面复刻 spec §8-5）、无归一化循环（直接返回）。
@@ -258,7 +253,6 @@ func (r *HybridRetriever) RetrieveSearchResults(ctx context.Context, query strin
 }
 
 // Close 关闭检索器。
-//
 // 对齐 Python close()（L211-221）：if self.vector_store 判空后关底层。
 // Python 的 getattr+iscoroutinefunction 鸭子探测消解为接口静态
 // Close() 直调（spec §8-7，同 13.20 两兄弟）。

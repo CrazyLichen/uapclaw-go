@@ -27,7 +27,6 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleInitialize 处理 initialize 请求。
-//
 // Python: AgentWsServer._handle_initialize(ws, request, send_lock)
 //
 // 步骤：

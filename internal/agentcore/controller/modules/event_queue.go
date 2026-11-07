@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventQueue 事件队列，基于 MessageQueueInMemory 实现事件发布订阅。
-//
 // Python: openjiuwen/core/controller/modules/event_queue.py (EventQueue)
 // 为每个 agentID+sessionID 组合的 5 种 EventType 创建独立 topic，
 // 订阅时绑定对应 EventHandler 方法，发布时按 EventType 路由到正确 handler。
@@ -38,7 +37,6 @@ type EventQueue struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEventQueue 创建事件队列实例。
-//
 // Python: EventQueue.__init__(config)
 func NewEventQueue(cfg *config.ControllerConfig) *EventQueue {
 	timeout := time.Duration(cfg.EventTimeout * float64(time.Second))
@@ -50,14 +48,12 @@ func NewEventQueue(cfg *config.ControllerConfig) *EventQueue {
 }
 
 // SetConfig 更新配置。
-//
 // Python: EventQueue.set_config(config)
 func (eq *EventQueue) SetConfig(cfg *config.ControllerConfig) {
 	eq.config = cfg
 }
 
 // SetEventHandler 设置事件处理器。
-//
 // Python: EventQueue.set_event_handler(event_handler)
 func (eq *EventQueue) SetEventHandler(handler EventHandler) {
 	eq.eventHandler = handler
@@ -69,7 +65,6 @@ func (eq *EventQueue) EventHandler() EventHandler {
 }
 
 // Start 启动事件队列。
-//
 // Python: EventQueue.start()
 func (eq *EventQueue) Start() {
 	eq.queue.Start()
@@ -79,7 +74,6 @@ func (eq *EventQueue) Start() {
 }
 
 // Stop 停止事件队列。
-//
 // Python: EventQueue.stop()
 func (eq *EventQueue) Stop(ctx context.Context) error {
 	err := eq.queue.Stop(ctx)
@@ -99,7 +93,6 @@ func (eq *EventQueue) Stop(ctx context.Context) error {
 }
 
 // Subscribe 为指定 agentID+sessionID 的所有事件类型创建订阅。
-//
 // Python: EventQueue.subscribe(agent_id, session_id)
 // 为 5 种 EventType 创建 topic，每个订阅绑定对应 EventHandler 方法并激活。
 func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) error {
@@ -156,7 +149,6 @@ func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) 
 }
 
 // Unsubscribe 取消指定 agentID+sessionID 的所有事件订阅。
-//
 // Python: EventQueue.unsubscribe(agent_id, session_id)
 func (eq *EventQueue) Unsubscribe(ctx context.Context, agentID, sessionID string) error {
 	eventTypes := []schema.EventType{
@@ -194,7 +186,6 @@ func (eq *EventQueue) Unsubscribe(ctx context.Context, agentID, sessionID string
 }
 
 // PublishEvent 同步发布事件，等待处理完成。
-//
 // Python: EventQueue.publish_event(agent_id, session, event)
 func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess sessioninterfaces.SessionFacade, event schema.Event) error {
 	eventType := event.GetEventType()
@@ -248,7 +239,6 @@ func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess ses
 }
 
 // PublishEventAsync 火忘发布事件，不等待处理完成。
-//
 // Python: EventQueue.publish_event_async(agent_id, session, event)
 func (eq *EventQueue) PublishEventAsync(ctx context.Context, agentID string, sess sessioninterfaces.SessionFacade, event schema.Event) error {
 	eventType := event.GetEventType()
@@ -288,14 +278,12 @@ func (eq *EventQueue) PublishEventAsync(ctx context.Context, agentID string, ses
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildTopic 构建 topic 名称，格式为 "{agentID}_{sessionID}_{eventType}"。
-//
 // Python: EventQueue._build_topic(agent_id, session_id, event_type)
 func (eq *EventQueue) buildTopic(agentID, sessionID string, eventType schema.EventType) string {
 	return fmt.Sprintf("%s_%s_%s", agentID, sessionID, string(eventType))
 }
 
 // makeEventHandler 根据事件类型创建对应的消息处理回调。
-//
 // Python: EventQueue._subscribe_event 中的 event_handle_wrapper
 func (eq *EventQueue) makeEventHandler(eventType schema.EventType) func(ctx context.Context, payload map[string]any) (any, error) {
 	handler := eq.eventHandler

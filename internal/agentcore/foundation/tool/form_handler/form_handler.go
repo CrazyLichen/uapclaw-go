@@ -12,14 +12,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // FormHandler 表单数据处理器接口。
-//
 // 实现此接口可自定义不同类型表单字段的处理方式（如文件上传、二进制数据等）。
 // 默认实现为 DefaultFormHandler，将值转为字符串写入 multipart Writer。
-//
 // Python: openjiuwen/core/foundation/tool/form_handler/form_handler_manager.py (FormHandler)
 type FormHandler interface {
 	// Handle 处理表单数据，将 formName=value 写入 multipart Writer。
-	//
 	// 参数：
 	//   - ctx: 上下文，预留取消和超时传播
 	//   - writer: multipart Writer，由调用方创建和管理生命周期
@@ -29,18 +26,14 @@ type FormHandler interface {
 }
 
 // DefaultFormHandler 默认表单处理器，将值转为字符串写入 multipart Writer。
-//
 // 跳过 nil 值，将其余值通过 fmt.Sprintf 转为字符串后
 // 调用 writer.WriteField 写入。
-//
 // Python: DefaultFormHandler
 type DefaultFormHandler struct{}
 
 // FormHandlerManager 表单处理器注册表，单例模式。
-//
 // 维护 handlerType → FormHandler 的映射，支持注册自定义处理器和默认处理器。
 // 获取处理器时，若指定类型未注册则返回默认处理器。
-//
 // Python: FormHandlerManager（Singleton 元类）
 type FormHandlerManager struct {
 	mu             sync.RWMutex
@@ -64,7 +57,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetFormHandlerManager 获取全局 FormHandlerManager 单例。
-//
 // 首次调用时初始化注册表，注册 DefaultFormHandler 作为默认处理器，
 // 同时将 "default" 类型也映射到 DefaultFormHandler。
 func GetFormHandlerManager() *FormHandlerManager {
@@ -79,10 +71,8 @@ func GetFormHandlerManager() *FormHandlerManager {
 }
 
 // Register 注册表单处理器。
-//
 // handlerType 为处理器类型标识（对应 schema 中的 form_handler_type 字段），
 // handler 为处理器实例。若 handlerType 无效或 handler 为 nil，记录错误日志并忽略。
-//
 // Python: FormHandlerManager.register()
 func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 	if handlerType == "" {
@@ -107,9 +97,7 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 }
 
 // RegisterDefaultHandler 注册默认表单处理器。
-//
 // 若 handler 为 nil，记录错误日志并忽略。
-//
 // Python: FormHandlerManager.register_default_handler()
 func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 	if handler == nil {
@@ -126,9 +114,7 @@ func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 }
 
 // GetHandler 获取表单处理器。
-//
 // 若 handlerType 未注册，返回默认处理器。
-//
 // Python: FormHandlerManager.get_handler()
 func (m *FormHandlerManager) GetHandler(handlerType string) FormHandler {
 	m.mu.RLock()
@@ -140,9 +126,7 @@ func (m *FormHandlerManager) GetHandler(handlerType string) FormHandler {
 }
 
 // Handle 默认表单处理器实现，将值转为字符串写入 multipart Writer。
-//
 // 跳过 nil 值，将其余值通过 fmt.Sprintf 转为字符串后写入。
-//
 // Python: DefaultFormHandler.handle()
 func (DefaultFormHandler) Handle(_ context.Context, writer *multipart.Writer, formName string, value any) error {
 	if value == nil {

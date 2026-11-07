@@ -26,10 +26,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OpenApiClient 基于 OpenAPI 规格的 MCP 客户端。
-//
 // 不使用 mcp-go ClientSession，而是基于 kin-openapi 自行实现 OpenAPI→MCP 转换。
 // 读取 OpenAPI/YAML 文件，将每个 Operation 转换为 MCP 工具，通过 HTTP 调用。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/client/openapi_client.py (OpenApiClient)
 type OpenApiClient struct {
 	config      *types.McpServerConfig
@@ -489,7 +487,6 @@ func (c *OpenApiClient) getUniqueName(name string) string {
 }
 
 // extractOutputSchema 从 OpenAPI Operation 的响应中提取输出 JSON Schema。
-//
 // 对照 Python: fastmcp.utilities.openapi.extract_output_schema_from_responses
 // 逻辑：按 200→201→202→204→任意2xx 优先级查找成功响应，
 // 从中选择 JSON 兼容的 Content-Type，用 oapiSchemaToMap 转换。
@@ -625,7 +622,6 @@ func extractOutputSchema(op *openapi3.Operation, schemaDefinitions map[string]ma
 }
 
 // collectReferencedDefs 递归收集 schema 中所有被 $ref 引用的定义名称。
-//
 // 扫描 map 中所有 "$ref" 字段，提取 "#/$defs/Xxx" 格式的定义名称，
 // 并递归处理嵌套的 map 和 slice 中的引用。
 func collectReferencedDefs(m map[string]any, collected map[string]bool) {
@@ -648,7 +644,6 @@ func collectReferencedDefs(m map[string]any, collected map[string]bool) {
 }
 
 // replaceSchemaRefs 递归替换 map 中的 $ref 引用。
-//
 // 将 #/components/schemas/Xxx 替换为 #/$defs/Xxx（JSON Schema 格式）。
 // 处理 properties、items、anyOf/allOf/oneOf、additionalProperties 中的嵌套 $ref。
 // additionalProperties 为 map[string]any 时由通用 map 递归分支处理；
@@ -672,7 +667,6 @@ func replaceSchemaRefs(m map[string]any) {
 }
 
 // formatSimpleDescription 为 OpenAPI 工具生成增强描述。
-//
 // 对照 Python: fastmcp.utilities.openapi.format_simple_description
 // 极简化策略：只追加有 description 的 path 参数信息。
 // query/body 信息已包含在 inputSchema 中，description 不需要重复。
@@ -697,7 +691,6 @@ func formatSimpleDescription(baseDesc string, params []openapiParameterInfo, _ *
 }
 
 // buildRequestFromSchema 根据 OpenAPI Schema 构建 HTTP 请求。
-//
 // 对照 Python: fastmcp.utilities.openapi.director.RequestDirector.build
 // 支持 allOf 合并、oneOf/anyOf 取首项、嵌套对象构建、数组查询参数展开。
 func buildRequestFromSchema(
@@ -812,7 +805,6 @@ func buildRequestFromSchema(
 }
 
 // resolveRequestBody 根据请求体 Schema 解析并构建请求体对象。
-//
 // 支持 allOf 合并、oneOf/anyOf 取首项、嵌套对象递归构建。
 func resolveRequestBody(bodyArgs map[string]any, schemaMap map[string]any) map[string]any {
 	if schemaMap == nil {
@@ -889,7 +881,6 @@ func resolveRequestBody(bodyArgs map[string]any, schemaMap map[string]any) map[s
 }
 
 // buildInputParams 根据 OpenAPI 参数和请求体构造输入参数列表。
-//
 // 对照 Python: fastmcp._combine_schemas_and_map_params
 // 当 path/query/header 参数与 body 属性同名时，加 __location 后缀消除歧义。
 // 使用 oapiMapToParam 递归转换，保留完整的 JSON Schema 信息（nullable/约束/嵌套/anyOf/allOf/oneOf）。
@@ -984,7 +975,6 @@ func schemaTypeFromTypeStr(typeStr string) schema.ParamType {
 }
 
 // oapiMapToParam 递归地将 OpenAPI schema map 转换为 *schema.Param。
-//
 // 保留所有 JSON Schema 标准字段（nullable/enum/约束/嵌套/anyOf/allOf/oneOf），
 // 丢弃 OpenAPI 特有字段（discriminator/readOnly/writeOnly/xml/externalDocs/deprecated）。
 func oapiMapToParam(name string, schemaMap map[string]any, required bool) *schema.Param {
@@ -1127,7 +1117,6 @@ func oapiMapToParam(name string, schemaMap map[string]any, required bool) *schem
 }
 
 // oapiSchemaToMap 将 openapi3.Schema 转换为 map[string]any。
-//
 // 支持组合 Schema（allOf/oneOf/anyOf）和 Nullable 字段转换。
 func oapiSchemaToMap(s *openapi3.Schema) map[string]any {
 	if s == nil {
@@ -1312,7 +1301,6 @@ func loadOpenAPISpec(filePath string) (*openapi3.T, error) {
 }
 
 // convertOpenAPISchemaToJSONSchema 将 OpenAPI Schema 转换为 JSON Schema 格式。
-//
 // Python: fastmcp.utilities.openapi.json_schema_converter.convert_openapi_schema_to_json_schema
 //
 // 主要转换：
@@ -1403,7 +1391,6 @@ func convertOpenAPISchemaToJSONSchema(schema map[string]any, openAPIVersion stri
 }
 
 // formatDeepObjectParameter 将 deepObject 风格的参数序列化为 param[key]=value 格式。
-//
 // Python: fastmcp.utilities.openapi.formatters.format_deep_object_parameter
 //
 // OpenAPI 3.0 deepObject 样式 + explode=true：

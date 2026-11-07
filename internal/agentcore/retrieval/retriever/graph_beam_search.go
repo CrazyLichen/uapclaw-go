@@ -1,5 +1,4 @@
 // 三元组 beam search（GraphRetriever 的图扩展核心算法）。
-//
 // Python: graph_retriever.py (TripleBeamSearch L24-225)
 //
 // 文件目录：
@@ -27,7 +26,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TripleBeamSearch 三元组 beam search。
-//
 // 构造默认：numBeams=10 / numCandidatesPerBeam=100 / maxLength=2 /
 // encoderBatchSize=256（死参数存而不读，spec §8-5）/ retrieveMode=""
 // （= Python None）。embedModel 从 retriever 经 EmbedModelProvider 断言提取
@@ -93,7 +91,6 @@ func WithTripleRetrieveMode(mode string) TripleBeamSearchOption {
 }
 
 // NewTripleBeamSearch 创建 beam search。
-//
 // 对齐 Python __init__（L27-50）：max_length<1 报 155204（文案对齐
 // Python f"expect max_length >= 1; got {max_length=}" 展开形态）；
 // embedModel 经 EmbedModelProvider 断言提取（hasattr 同构）。
@@ -121,7 +118,6 @@ func NewTripleBeamSearch(retriever Retriever, opts ...TripleBeamSearchOption) (*
 }
 
 // BeamSearch 执行 beam search。
-//
 // 对齐 Python beam_search（L78-108）：空输入 warn 返回空；无 embed 155202；
 // triples+query 合批嵌入（批大小经 MaxBatchSizeProvider 断言，断言失败
 // 显式 155202——拍板 c）；余弦 topk 初始 beams；maxLength-1 轮扩展。
@@ -188,7 +184,6 @@ func (s *TripleBeamSearch) BeamSearch(ctx context.Context, query string, triples
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // embedBatch 批量嵌入（Python embed_documents(batch_size=max_batch_size)）。
-//
 // max_batch_size 经 MaxBatchSizeProvider 断言：断言失败显式报 155202
 // （Python AttributeError 炸点的业务化形态，spec §8-7——炸点保留使
 // graph_expansion 降级路径可达）。
@@ -204,7 +199,6 @@ func (s *TripleBeamSearch) embedBatch(ctx context.Context, texts []string) ([][]
 }
 
 // expandBeams 扩展 beams。
-//
 // 对齐 Python _expand_beams（L110-170）：existTriples 全 beam 文本判重；
 // 候选路径 (beam, triple|nil)（nil=保原 beam）；路径文本重嵌入打分 topk；
 // seenBeamTexts 按 "; ".join 格式去重；texts 空→原 beams。
@@ -280,7 +274,6 @@ func (s *TripleBeamSearch) expandBeams(ctx context.Context, beams []*common.Trip
 }
 
 // searchCandidates 检索单 beam 的候选三元组。
-//
 // 对齐 Python _search_candidates（L172-225）：空 beam RuntimeError 防御
 // （Python L173-174，构造保证不可达但防御保留——T-02）；beam 尾 triple
 // 元数据防御解析（缺失/非字符串/解析失败 warn 返回空，Python L176-185）；
@@ -359,7 +352,6 @@ func (s *TripleBeamSearch) searchCandidates(ctx context.Context, beam *common.Tr
 }
 
 // resolveCandidateMode 候选检索 mode 三级解析。
-//
 // 对齐 Python L193-199：retriever.index_type > retrieveMode > "hybrid"；
 // bm25 → sparse 映射。
 func (s *TripleBeamSearch) resolveCandidateMode() RetrievalMode {

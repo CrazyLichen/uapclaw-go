@@ -33,7 +33,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ModelDefaultContextWindowTokens 各模型的默认上下文窗口大小（单位 token），键为模型名。
-//
 // 逐条对齐上游 MODEL_DEFAULT_CONTEXT_WINDOW_TOKENS（context_utils.py）。
 var ModelDefaultContextWindowTokens = map[string]int{
 	// GLM
@@ -182,7 +181,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildModelContextWindowTokens 合并 OpenRouter 拉取表与用户显式表（用户值优先）。
-//
 // Python: ContextUtils.build_model_context_window_tokens()
 func BuildModelContextWindowTokens(user map[string]int, enableOpenRouter bool, timeoutSeconds float64) map[string]int {
 	resolved := make(map[string]int)
@@ -302,7 +300,6 @@ func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMess
 }
 
 // FindLastNDialogueRound 找到倒数第 n 轮对话的起始消息索引。
-//
 // Python: ContextUtils.find_last_n_dialogue_round()
 func FindLastNDialogueRound(messages []llm_schema.BaseMessage, n int) int {
 	rounds := processor.FindAllDialogueRound(messages)
@@ -326,7 +323,6 @@ func FindLastNDialogueRound(messages []llm_schema.BaseMessage, n int) int {
 }
 
 // FindLastAIAbsentToolCall 从后往前查找最后一条不含 ToolCalls 的 AssistantMessage 索引。
-//
 // Python: ContextUtils.find_last_ai_message_without_tool_call()
 func FindLastAIAbsentToolCall(messages []llm_schema.BaseMessage) int {
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -342,9 +338,7 @@ func FindLastAIAbsentToolCall(messages []llm_schema.BaseMessage) int {
 }
 
 // FindMessageIndexByContextMessageID 根据消息元数据中的 context_message_id 查找消息索引。
-//
 // 返回第一条匹配的消息索引，未找到返回 -1。
-//
 // Python: ContextUtils.find_message_index_by_context_message_id()
 func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id string) int {
 	for i, msg := range messages {
@@ -362,10 +356,8 @@ func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id st
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // fetchOpenRouterContextWindows 拉取 OpenRouter 模型窗口表，进程级 TTL 缓存，失败沿用旧值。
-//
 // 解析 {"data":[{"id","context_length"}]}；带 "/" 的 id 额外产出无前缀别名，
 // 同名别名冲突时丢弃该别名（避免把两家厂商的同名模型混为一谈）。
-//
 // Python: ContextUtils.fetch_openrouter_model_context_window_tokens()
 func fetchOpenRouterContextWindows(timeoutSeconds float64) map[string]int {
 	openRouterTokensMu.Lock()
@@ -534,7 +526,6 @@ func messageToMap(msg llm_schema.BaseMessage) map[string]any {
 // ──────────────────────────── 状态还原 ────────────────────────────
 
 // decodeMessageValue 将状态中的单条消息还原为 BaseMessage。
-//
 // 兼容两种形态：
 //   - 具体消息类型（同进程内上下文状态直传，Python: Message 对象）
 //   - map[string]any（经 checkpointer 落盘后 JSON 反序列化的形态，进程重启场景）

@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestNewDmqRequestMessage_默认值 测试请求消息默认 type 为 INPUT。
-//
 // Python: DmqRequestMessage(type=DMessageType.INPUT)
 func TestNewDmqRequestMessage_默认值(t *testing.T) {
 	msg := NewDmqRequestMessage(map[string]any{"q": "hi"})
@@ -24,7 +23,6 @@ func TestNewDmqRequestMessage_默认值(t *testing.T) {
 }
 
 // TestNewDmqResponseMessage_默认值 测试响应消息默认 type/result_type。
-//
 // Python: DmqResponseMessage(type=DMessageType.OUTPUT, result_type=ResultType.MESSAGE)
 func TestNewDmqResponseMessage_默认值(t *testing.T) {
 	msg := NewDmqResponseMessage(map[string]any{"a": 1})

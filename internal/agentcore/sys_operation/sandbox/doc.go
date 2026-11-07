@@ -1,8 +1,6 @@
 // Package sandbox 提供沙箱执行模式的实现，对应 OperationMode.Sandbox。
-//
 // 当前为占位包，沙箱执行的具体实现随 9.34 (SandboxSysOperation) 和 9.36/9.37
 // (JiuwenBoxProvider / AioProvider) 逐步补齐。
-//
 // 对应 Python 代码：openjiuwen/core/sys_operation/sandbox/
 //
 // 文件目录：

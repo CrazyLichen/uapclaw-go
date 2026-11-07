@@ -5,7 +5,6 @@ import "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextPartUsage 单个类别的用量。
-//
 // Python: ContextPartUsage
 type ContextPartUsage struct {
 	// Category 类别标识（与 map 键一致）
@@ -21,7 +20,6 @@ type ContextPartUsage struct {
 }
 
 // ContextWindowUsage 上下文窗口用量。
-//
 // Python: ContextWindowUsage
 type ContextWindowUsage struct {
 	// LimitTokens 窗口上限，nil 表示未知
@@ -35,7 +33,6 @@ type ContextWindowUsage struct {
 }
 
 // RequestKVCacheUsage 单次请求的 KV cache 用量。
-//
 // Python: RequestKVCacheUsage
 type RequestKVCacheUsage struct {
 	// InputTokens provider 上报的输入 token
@@ -53,7 +50,6 @@ type RequestKVCacheUsage struct {
 }
 
 // SessionKVCacheUsage 会话级 KV cache 聚合。
-//
 // Python: SessionKVCacheUsage
 type SessionKVCacheUsage struct {
 	// CallsTotal 调用总次数
@@ -77,10 +73,8 @@ type SessionKVCacheUsage struct {
 }
 
 // ContextUsageSnapshot 上下文用量快照（context-usage.v1）。
-//
 // 字段名与前端校验一一对应：缺 event_type / schema_version / phase /
 // request_id / product_session_id / context_window / parts 中任一项，前端整条丢弃。
-//
 // Python: ContextUsageSnapshot
 type ContextUsageSnapshot struct {
 	// EventType 事件类型，固定 context.usage

@@ -73,7 +73,6 @@ type TeamHarness struct {
 	// deepAgent 内层 DeepAgent 实例（= native.DeepAgent()，同一对象）
 	deepAgent hinterfaces.DeepAgentInterface
 	// native NativeHarness（协议面载体；组合 deepAgent 的那台 DeepAgent）
-	//
 	// ⤴️ 25.1a：团队成员脑的统一交互面。deepAgent 保留为 MemberRuntime 面
 	// 方法（HasPendingInterrupt/FindRails/RegisterMemberTools 等）与既有
 	// 调用方（InnerAgent）的向后访问；协议面方法（Start/Stop/Send/...）转 native。
@@ -87,7 +86,6 @@ type TeamHarness struct {
 	// initialPlanMode 初始计划模式
 	initialPlanMode bool
 	// mu 保护 activeAgentSession 与 initialPlanModeSeeded。
-	//
 	// 写点在轮次 goroutine（prepareAgentSession），读点在消息处理 goroutine
 	// （interactLoop ← StreamController.Steer）与协调内核的邮箱轮询
 	// （HasPendingInterrupt），两者之间没有任何队列或同步边，必须显式加锁。
@@ -96,7 +94,6 @@ type TeamHarness struct {
 	// initialPlanModeSeeded 初始计划模式是否已种子化
 	initialPlanModeSeeded bool
 	// activeAgentSession 最近一次轮次使用的 Agent 会话。
-	//
 	// 语义是"最近一次"而非"活跃"：轮次结束后 DeepAgent.forceCleanupController
 	// 会把 loop_session 置 nil，而 HITL 应答恰好发生在轮次结束之后，
 	// 只能靠这里保留的引用读到中断状态（Python 的 _active_agent_session）。
@@ -168,10 +165,8 @@ func newTeamHarnessWithNative(
 //
 // S-06: 对齐 Python deep_agent = agent_spec.build()——从 spec 构建 DeepAgent
 // 实例传入 harness，RunAgentCustomizer 不再面对 nil agent。
-//
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
-//
 // ⤴️ 9.68 回填完成：Rails 挂载逻辑已实现
 func BuildTeamHarness(
 	agentSpec atschema.DeepAgentSpec,
@@ -452,7 +447,6 @@ func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
 }
 
 // Start 绑定子会话并启动 native 的 supervisor（一个 run cycle 一次）。
-//
 // Python: TeamHarness.start(team_session)（team_harness.py:135-169）
 // 步骤对齐上游 9 步；25.1a 阶段 native 由 BuildTeamHarness 物化且 fresh，
 // 故"重建 native / _remount_dynamic_tools / background_task_controller / kv_cache hook"
@@ -488,7 +482,6 @@ func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
 }
 
 // Stop 停止 native supervisor；保留（已终止的）native 供配置读取。
-//
 // Python: TeamHarness.stop()（team_harness.py:171-199）
 func (h *TeamHarness) Stop(ctx context.Context) error {
 	if h.native != nil && h.native.State() != HarnessStateTerminated {
@@ -502,7 +495,6 @@ func (h *TeamHarness) Stop(ctx context.Context) error {
 }
 
 // RunOnce 执行一次非流式调用（绕过 supervisor）。
-//
 // Python: TeamHarness.run_once(content, team_session)（team_harness.py:201-250）
 func (h *TeamHarness) RunOnce(ctx context.Context, content any, teamSession any) (map[string]any, error) {
 	if h.native == nil {
@@ -524,7 +516,6 @@ func (h *TeamHarness) RunOnce(ctx context.Context, content any, teamSession any)
 }
 
 // Dispose 永久销毁 native 并释放进程级资源。
-//
 // Python: TeamHarness.dispose()（team_harness.py:252-264）
 func (h *TeamHarness) Dispose(ctx context.Context) error {
 	if h.native != nil {
@@ -534,7 +525,6 @@ func (h *TeamHarness) Dispose(ctx context.Context) error {
 }
 
 // Outputs 返回 native 的输出迭代器。
-//
 // Python: TeamHarness.outputs()（team_harness.py:342-349）
 func (h *TeamHarness) Outputs() *OutputIterator {
 	if h.native == nil {
@@ -544,7 +534,6 @@ func (h *TeamHarness) Outputs() *OutputIterator {
 }
 
 // Send 投递输入；immediate 转向当前轮。
-//
 // Python: TeamHarness.send(content, immediate=...)（team_harness.py:351-368）
 func (h *TeamHarness) Send(ctx context.Context, content any, immediate bool) error {
 	if h.native == nil {
@@ -554,7 +543,6 @@ func (h *TeamHarness) Send(ctx context.Context, content any, immediate bool) err
 }
 
 // Abort 中断当前轮（优雅或立即）。
-//
 // Python: TeamHarness.abort(immediate=...)（team_harness.py:370-381）
 func (h *TeamHarness) Abort(ctx context.Context, immediate bool) error {
 	if h.native == nil || h.getActiveSession() == nil {
@@ -565,7 +553,6 @@ func (h *TeamHarness) Abort(ctx context.Context, immediate bool) error {
 }
 
 // Pause 暂停当前轮（25.1c 前返回哨兵错误）。
-//
 // Python: TeamHarness.pause()（team_harness.py:383-390）
 func (h *TeamHarness) Pause(ctx context.Context) error {
 	if h.native == nil || h.getActiveSession() == nil {
@@ -575,7 +562,6 @@ func (h *TeamHarness) Pause(ctx context.Context) error {
 }
 
 // Resume 继续暂停的轮（25.1c 前返回哨兵错误）。
-//
 // Python: TeamHarness.resume(query=...)（team_harness.py:392-400）
 func (h *TeamHarness) Resume(ctx context.Context, query any) error {
 	if h.native == nil || h.getActiveSession() == nil {
@@ -585,7 +571,6 @@ func (h *TeamHarness) Resume(ctx context.Context, query any) error {
 }
 
 // State 返回 native 生命周期相位；无 native 时返回 idle。
-//
 // Python: TeamHarness.state property（team_harness.py:327-331）
 func (h *TeamHarness) State() HarnessState {
 	if h.native == nil {
@@ -595,7 +580,6 @@ func (h *TeamHarness) State() HarnessState {
 }
 
 // SessionID 返回 native 的会话标识；无 native 时返回空串。
-//
 // Python: TeamHarness.session_id property（team_harness.py:333-340）
 func (h *TeamHarness) SessionID() string {
 	if h.native == nil {
@@ -605,7 +589,6 @@ func (h *TeamHarness) SessionID() string {
 }
 
 // Subscribe 在 native 上注册相位/轮次回调。
-//
 // Python: TeamHarness.subscribe(on_state=..., on_round=...)（team_harness.py:402-412）
 func (h *TeamHarness) Subscribe(ctx context.Context, onState StateHandler, onRound RoundHandler) error {
 	if h.native == nil {
@@ -615,12 +598,10 @@ func (h *TeamHarness) Subscribe(ctx context.Context, onState StateHandler, onRou
 }
 
 // Native 返回底层 NativeHarness（生产代码勿用，仅测试与迁移助手）。
-//
 // Python: TeamHarness.inner_agent property
 func (h *TeamHarness) Native() *NativeHarness { return h.native }
 
 // sessionIDOf 从团队会话提取会话标识。
-//
 // Python: TeamHarness._session_id_of(team_session)
 func sessionIDOf(teamSession any) string {
 	if teamSession == nil {
@@ -633,7 +614,6 @@ func sessionIDOf(teamSession any) string {
 }
 
 // makeChildSession 创建 native 本轮运行的子会话。
-//
 // Python: TeamHarness._make_child_session(team_session)（team_harness.py:285-302）
 func (h *TeamHarness) makeChildSession(teamSession any) *session.Session {
 	card := h.card()
@@ -779,7 +759,6 @@ func (h *TeamHarness) interruptSession() *session.Session {
 }
 
 // interruptionStateOf 把 GetState 的返回值收窄为中断状态。
-//
 // 返回 nil 表示"没有中断状态"，同时处理接口里存 typed-nil 的情况
 // （Python 的 `is not None` 对 None 与未设置是同一判定）。
 func interruptionStateOf(val any) *agentschema.ToolInterruptionState {

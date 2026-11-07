@@ -81,11 +81,9 @@ func WithConfig(cfg *config.Config) Option {
 }
 
 // WithConfigFile 从 config.yaml 文件自动加载 logging 段。
-//
 // 不依赖 config.Config 对象，自己读取和解析 YAML 文件。
 // 日志可以在 config.New()/config.Load() 之前初始化，和 Python 的
 // configure_log() / setup_logger() 行为一致。
-//
 // Python: _load_logging_config_from_yaml() + _resolve_logging_levels()
 func WithConfigFile() Option {
 	return func(l *Logger) {
@@ -350,7 +348,6 @@ func GetLogConfigSnapshot() map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadLoggingConfigFromYAML 读取 config.yaml 中的 logging 段。
-//
 // 不做 ${VAR:-default} 解析，仅取字面量值。
 // 通过 utils/path 包获取配置文件路径，对齐 Python: get_config_file()。
 // Python: _load_logging_config_from_yaml()

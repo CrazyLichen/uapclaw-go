@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ThreadSafeDict 泛型线程安全字典，使用 sync.RWMutex 保护 map 并发访问。
-//
 // Python: ThreadSafeDict (openjiuwen/core/runner/resources_manager/thread_safe_dict.py)
 // Python 使用 threading.RLock（可重入锁），Go 使用 sync.RWMutex（读写分离锁）。
 type ThreadSafeDict[K comparable, V any] struct {
@@ -26,7 +25,6 @@ type ThreadSafeDict[K comparable, V any] struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewThreadSafeDict 创建线程安全字典。
-//
 // Python: ThreadSafeDict(initial_data=None)
 func NewThreadSafeDict[K comparable, V any]() *ThreadSafeDict[K, V] {
 	return &ThreadSafeDict[K, V]{
@@ -45,7 +43,6 @@ func NewThreadSafeDictWithInitial[K comparable, V any](initial map[K]V) *ThreadS
 }
 
 // Get 获取值，不存在返回零值。
-//
 // Python: ThreadSafeDict.get(key, default=None)
 func (d *ThreadSafeDict[K, V]) Get(key K) V {
 	d.mu.RLock()
@@ -54,7 +51,6 @@ func (d *ThreadSafeDict[K, V]) Get(key K) V {
 }
 
 // Set 设置键值对。
-//
 // Python: ThreadSafeDict.__setitem__(key, value)
 func (d *ThreadSafeDict[K, V]) Set(key K, value V) {
 	d.mu.Lock()
@@ -63,7 +59,6 @@ func (d *ThreadSafeDict[K, V]) Set(key K, value V) {
 }
 
 // Delete 删除键值对，不存在时 panic。
-//
 // Python: ThreadSafeDict.__delitem__(key)
 func (d *ThreadSafeDict[K, V]) Delete(key K) {
 	d.mu.Lock()
@@ -72,7 +67,6 @@ func (d *ThreadSafeDict[K, V]) Delete(key K) {
 }
 
 // Len 返回元素数量。
-//
 // Python: ThreadSafeDict.__len__()
 func (d *ThreadSafeDict[K, V]) Len() int {
 	d.mu.RLock()
@@ -81,7 +75,6 @@ func (d *ThreadSafeDict[K, V]) Len() int {
 }
 
 // Contains 检查键是否存在。
-//
 // Python: ThreadSafeDict.__contains__(key)
 func (d *ThreadSafeDict[K, V]) Contains(key K) bool {
 	d.mu.RLock()
@@ -91,7 +84,6 @@ func (d *ThreadSafeDict[K, V]) Contains(key K) bool {
 }
 
 // GetOrSet 获取值，不存在则设置默认值并返回。
-//
 // Python: ThreadSafeDict.get_or_set(key, default=None)
 func (d *ThreadSafeDict[K, V]) GetOrSet(key K, defaultValue V) V {
 	d.mu.Lock()
@@ -104,7 +96,6 @@ func (d *ThreadSafeDict[K, V]) GetOrSet(key K, defaultValue V) V {
 }
 
 // GetOrCreate 获取值，不存在则调用 creator 创建并存储。
-//
 // Python: ThreadSafeDict.get_or_create(key, creator, *args, **kwargs)
 func (d *ThreadSafeDict[K, V]) GetOrCreate(key K, creator func() V) V {
 	d.mu.Lock()
@@ -118,7 +109,6 @@ func (d *ThreadSafeDict[K, V]) GetOrCreate(key K, creator func() V) V {
 }
 
 // Pop 移除并返回值，不存在返回零值。
-//
 // Python: ThreadSafeDict.pop(key, default=None)
 func (d *ThreadSafeDict[K, V]) Pop(key K) V {
 	d.mu.Lock()
@@ -129,7 +119,6 @@ func (d *ThreadSafeDict[K, V]) Pop(key K) V {
 }
 
 // SetDefault 如果键不存在则设置默认值，返回实际值。
-//
 // Python: ThreadSafeDict.setdefault(key, default=None)
 func (d *ThreadSafeDict[K, V]) SetDefault(key K, defaultValue V) V {
 	d.mu.Lock()
@@ -142,7 +131,6 @@ func (d *ThreadSafeDict[K, V]) SetDefault(key K, defaultValue V) V {
 }
 
 // Update 批量更新键值对。
-//
 // Python: ThreadSafeDict.update(m, /, **kwargs)
 func (d *ThreadSafeDict[K, V]) Update(m map[K]V) {
 	d.mu.Lock()
@@ -153,7 +141,6 @@ func (d *ThreadSafeDict[K, V]) Update(m map[K]V) {
 }
 
 // Clear 清空字典。
-//
 // Python: ThreadSafeDict.clear()
 func (d *ThreadSafeDict[K, V]) Clear() {
 	d.mu.Lock()
@@ -162,7 +149,6 @@ func (d *ThreadSafeDict[K, V]) Clear() {
 }
 
 // Keys 返回所有键的切片。
-//
 // Python: ThreadSafeDict.keys()
 func (d *ThreadSafeDict[K, V]) Keys() []K {
 	d.mu.RLock()
@@ -175,7 +161,6 @@ func (d *ThreadSafeDict[K, V]) Keys() []K {
 }
 
 // Values 返回所有值的切片。
-//
 // Python: ThreadSafeDict.values()
 func (d *ThreadSafeDict[K, V]) Values() []V {
 	d.mu.RLock()
@@ -188,7 +173,6 @@ func (d *ThreadSafeDict[K, V]) Values() []V {
 }
 
 // Items 返回所有键值对的切片。
-//
 // Python: ThreadSafeDict.items()
 func (d *ThreadSafeDict[K, V]) Items() []struct {
 	Key   K

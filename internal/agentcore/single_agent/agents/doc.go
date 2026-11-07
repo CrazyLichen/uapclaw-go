@@ -1,11 +1,8 @@
 // Package agents 提供 Agent 的具体实现。
-//
 // 本包包含各种 Agent 模式的实现，如 ReActAgent（Reasoning + Acting）等。
 // 每个 Agent 实现 single_agent/interfaces 包中定义的 Agent 接口，
 // 由 BaseAgent 提供配置/管理能力，子类自行实现 Invoke/Stream。
-//
 // PromptSection 和 SystemPromptBuilder 类型已迁移至 single_agent/prompts 包。
-//
 // 文件目录：
 //
 //	agents/

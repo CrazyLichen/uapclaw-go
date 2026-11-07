@@ -127,7 +127,6 @@ func TestSyncPromptAttachments_成功返回true(t *testing.T) {
 }
 
 // TestSyncPromptAttachments_失败返回false且不取回调 验证同步失败时不消费回调。
-//
 // Python: _sync_prompt_attachments 在 sync_to_context 抛异常时直接 return，
 // 回调留在 ctx.extra 里等下一次边界（react_agent.py L1160-1170）。
 func TestSyncPromptAttachments_失败返回false且不取回调(t *testing.T) {
@@ -200,7 +199,6 @@ func testCallbackContext(sessionID string) *agentinterfaces.AgentCallbackContext
 }
 
 // TestRunCommitCallbacks_单条失败不影响其余 验证单条 error 只告警。
-//
 // Python: for callback in callbacks: try: ... except Exception: logger.warning
 func TestRunCommitCallbacks_单条失败不影响其余(t *testing.T) {
 	cbc := testCallbackContext("s1")
@@ -214,7 +212,6 @@ func TestRunCommitCallbacks_单条失败不影响其余(t *testing.T) {
 }
 
 // TestRunCommitCallbacks_panic不掀翻调用方 验证 panic 被隔离。
-//
 // Go 特有：Python 只捕 Exception，panic 等价物是进程级崩溃（spec D-2）。
 func TestRunCommitCallbacks_panic不掀翻调用方(t *testing.T) {
 	cbc := testCallbackContext("s1")
@@ -228,7 +225,6 @@ func TestRunCommitCallbacks_panic不掀翻调用方(t *testing.T) {
 }
 
 // TestRunCommitCallbacks_类型不符直接丢弃 验证非 []func() error 被忽略。
-//
 // Python: if not isinstance(callbacks, list): return
 func TestRunCommitCallbacks_类型不符直接丢弃(t *testing.T) {
 	cbc := testCallbackContext("s1")

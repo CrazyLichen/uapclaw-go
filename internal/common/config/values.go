@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // FloatValue 把配置中的单个值转成浮点数。
-//
 // 认三类形态，缺一不可：
 //   - 整数：yaml.v3 把 `timeout: 1800` 解成 int（超界为 int64/uint64）
 //   - 浮点：encoding/json 恒为 float64，带 UseNumber 时为 json.Number

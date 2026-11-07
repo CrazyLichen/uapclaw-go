@@ -65,7 +65,6 @@ func ResponseFormat(name string, schemaMap map[string]any) map[string]any {
 }
 
 // ReadableSchema 从输出模型生成 LLM 可读的类型定义字符串。
-//
 // 对齐 Python MultilingualBaseModel.readable_schema()：按 model_fields 声明顺序输出
 // `name: type` 与可选 `  # description`，并返回嵌套模型的属性表（$defs 语义）。
 func ReadableSchema(modelType reflect.Type, language string) (string, map[string]any) {

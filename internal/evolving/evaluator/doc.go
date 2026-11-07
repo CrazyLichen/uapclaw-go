@@ -1,10 +1,8 @@
 // Package evaluator 提供自演化系统的评估器。
-//
 // 包含 BaseEvaluator 抽象接口、DefaultEvaluator（LLM-as-Judge 评估器）、
 // MetricEvaluator（多指标聚合评估器）和评估提示词模板。
 // BaseEvaluator 定义 Evaluate/BatchEvaluate 两个核心方法，
 // BatchEvaluate 使用 errgroup 实现并行评估。
-//
 // 文件目录：
 //
 //	evaluator/

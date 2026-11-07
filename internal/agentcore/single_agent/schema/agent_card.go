@@ -10,12 +10,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentCard Agent 配置卡片，嵌入 BaseCard，增加输入/输出参数和接口 URL。
-//
 // InputParams/OutputParams 使用 []*schema.Param 定义，与 ToolCard 一致，
 // ToolInfo() 时通过 ToJSONSchemaMap 转为 JSON Schema dict 供 LLM 消费。
 // 可通过 WithInputParams[I]() / WithOutputParams[O]() 泛型 Option
 // 从 Go struct 自动反射提取参数定义（对齐 Python 的 Type[BaseModel] 路径）。
-//
 // Python: openjiuwen/core/single_agent/schema/agent_card.py (AgentCard)
 type AgentCard struct {
 	schema.BaseCard
@@ -43,7 +41,6 @@ var _ schema.CardInterface = (*AgentCard)(nil)
 
 // WithInputParams 从 Go struct 类型自动反射提取输入参数定义。
 // Python: AgentCard(input_params=Type[BaseModel]) 的 model_json_schema() 路径。
-//
 // 用法：
 //
 //	type MyInput struct {
@@ -105,7 +102,6 @@ func WithOutputParamsDirect(params []*schema.Param) AgentCardOption {
 
 // NewAgentCard 创建 AgentCard 实例，编译时类型安全。
 // 所有选项均为 AgentCardOption 类型，消除运行时类型断言。
-//
 // Python: AgentCard(name=..., description=..., input_params=..., output_params=..., interface_url=...)
 func NewAgentCard(opts ...AgentCardOption) *AgentCard {
 	card := &AgentCard{
@@ -119,7 +115,6 @@ func NewAgentCard(opts ...AgentCardOption) *AgentCard {
 
 // ToolInfo 返回工具描述信息，供 LLM function calling 消费。
 // 将 InputParams ([]*Param) 转换为 JSON Schema map，与 ToolCard.ToolInfo() 一致。
-//
 // Python: AgentCard.tool_info() / AbilityManager.list_tool_info() 中 AgentCard 分支
 func (c *AgentCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)

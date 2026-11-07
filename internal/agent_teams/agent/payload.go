@@ -20,10 +20,8 @@ import (
 // 集中管理 spawn teammate 时的跨进程 wire 格式。
 // 输出键是 TeamAgent.FromSpawnPayload 的公共契约——
 // 改这里的字段要同步改子进程入口。
-//
 // 状态仅在 memberPortMap 和 teammatePortCounter，
 // 共同充当增量端口分配器：每个成员名获得稳定的端口分配。
-//
 // 并发纪律：mu 保护上面两个可变字段。
 // Python 侧是单线程 asyncio，串行调用天然安全；Go 侧 SpawnManager.OnTeammateUnhealthy
 // 为每个不健康成员起一条重启 goroutine，两条同时走到 BuildMemberMessagerConfig 就是
@@ -130,7 +128,6 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberS
 
 // BuildMemberMessagerConfig 为指定成员分配稳定的传输配置。
 // Python: SpawnPayloadBuilder.build_member_messager_config(member_name)（payload.py L88-114）
-//
 // 语义：
 //   - leader 传输配置缺失（ctx.MessagerConfig == nil）时返回 nil：无基准就无从派生
 //   - 端口从 spec.metadata["teammate_base_port"]（默认 16000）起，
@@ -179,7 +176,6 @@ func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) *atsc
 // Runner.spawn_agent(build_spawn_config(ctx), build_spawn_payload(...)) 双参数分离）。
 // 原实现误用 BuildSpawnPayload 覆盖 payload，导致子进程
 // from_spawn_payload 读不到 spec/context。
-//
 // M-18: 补 RunnerConfig=serialize_runner_config(Runner.get_config())
 // （Python L121）——子进程 child.go 以非 nil 判定应用配置，
 // 原实现恒空导致子进程 Runner 永远用默认配置而非父进程快照。
@@ -225,7 +221,6 @@ func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // assignPort 为成员分配稳定的直连端口（并发安全）。
-//
 // 同名成员返回首次分配的端口——重启必须复用同一端口，否则 peers 表里
 // 写死的 direct_addr 失效；新成员按首次出现顺序递增一个步长。
 // 查表与分配必须在同一把锁内完成，否则两次并发分配会拿到同一个 counter 值。
@@ -242,7 +237,6 @@ func (b *SpawnPayloadBuilder) assignPort(memberName string, basePort, portOffset
 }
 
 // messagerIntField 把 metadata 中的数值字段转成 int。
-//
 // YAML/JSON 反序列化后数值可能是 int / int64 / float64 / json.Number / string，
 // Python 侧靠动态类型直接参与算术再格式化，Go 需显式归一。
 // 无法转换时返回 false，调用方保留默认值。

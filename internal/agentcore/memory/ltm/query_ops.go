@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetRecentMessages 获取最近消息。
-//
 // 对齐 Python: LongTermMemory.get_recent_messages(user_id, scope_id, session_id, num)
 func (m *LongTermMemory) GetRecentMessages(
 	ctx context.Context,
@@ -59,7 +58,6 @@ func (m *LongTermMemory) GetRecentMessages(
 }
 
 // GetMessageByID 按 ID 获取消息。
-//
 // 对齐 Python: LongTermMemory.get_message_by_id(msg_id)
 func (m *LongTermMemory) GetMessageByID(ctx context.Context, msgID string) (*llmschema.BaseMessage, *time.Time, error) {
 	if m.messageManager == nil {
@@ -90,7 +88,6 @@ func (m *LongTermMemory) GetMessageByID(ctx context.Context, msgID string) (*llm
 }
 
 // UserMemTotalNum 返回用户记忆总数。
-//
 // 对齐 Python: LongTermMemory.user_mem_total_num(user_id, scope_id)
 func (m *LongTermMemory) UserMemTotalNum(
 	ctx context.Context,
@@ -123,7 +120,6 @@ func (m *LongTermMemory) UserMemTotalNum(
 }
 
 // GetUserMemByPage 分页获取用户记忆。
-//
 // 对齐 Python: LongTermMemory.get_user_mem_by_page(user_id, scope_id, page_size, page_idx, memory_type)
 func (m *LongTermMemory) GetUserMemByPage(
 	ctx context.Context,

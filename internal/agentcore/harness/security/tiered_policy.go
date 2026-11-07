@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // tieredInvocationContext 分层调用上下文。
-//
 // Python: _TieredInvocationContext (tiered_policy.py L53-61)
 type tieredInvocationContext struct {
 	// mode 权限模式（normal 或 strict）
@@ -118,7 +117,6 @@ var builtinRulesCacheMu sync.Mutex
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EvaluateTieredPolicy 返回 (最终权限, matched_rule 摘要)。
-//
 // 优先级链：
 // 1. 整工具 deny 优先于参数级放行
 // 2. Shell 工具: ParseShellForPermission → shellAstFloor
@@ -184,7 +182,6 @@ func EvaluateTieredPolicy(permissionConfig map[string]any, toolName string, tool
 }
 
 // Strictest 返回最严格的权限级别。
-//
 // Python: strictest(*levels) (tiered_policy.py L118-121)
 func Strictest(levels ...PermissionLevel) PermissionLevel {
 	if len(levels) == 0 {
@@ -200,7 +197,6 @@ func Strictest(levels ...PermissionLevel) PermissionLevel {
 }
 
 // SeverityToDecision 将严重级别映射为权限决策。
-//
 // Python: severity_to_decision(severity, permission_mode) (tiered_policy.py L124-138)
 func SeverityToDecision(severity, permissionMode string) PermissionLevel {
 	sev := strings.ToUpper(strings.TrimSpace(severity))
@@ -234,7 +230,6 @@ func SeverityToDecision(severity, permissionMode string) PermissionLevel {
 
 // MaybeEscalateShellOperators 命令含链式/注入元字符时 ALLOW→ASK。
 // approval_overrides 豁免。
-//
 // Python: maybe_escalate_shell_operators(tool_name, tool_args, permission) (tiered_policy.py L584-599)
 func MaybeEscalateShellOperators(toolName string, toolArgs map[string]any, permission PermissionLevel, matchedRule string) PermissionLevel {
 	if !shellTools[toolName] {
@@ -255,14 +250,12 @@ func MaybeEscalateShellOperators(toolName string, toolArgs map[string]any, permi
 }
 
 // MatchedRuleUsesApprovalOverride 当前结果是否来自 approval_overrides。
-//
 // Python: matched_rule_uses_approval_override(matched_rule) (tiered_policy.py L602-606)
 func MatchedRuleUsesApprovalOverride(matchedRule string) bool {
 	return strings.HasPrefix(matchedRule, approvalOverridesPrefix)
 }
 
 // RuleToolsCategoryConsistent 检查规则中 tools 是否同类。
-//
 // Python: rule_tools_category_consistent(tools) (tiered_policy.py L151-160)
 func RuleToolsCategoryConsistent(tools []string) bool {
 	cats := make(map[string]bool)
@@ -280,9 +273,7 @@ func RuleToolsCategoryConsistent(tools []string) bool {
 }
 
 // GetBuiltinSecurityRules 获取内置安全规则列表（进程内按路径+mtime 缓存）。
-//
 // 优先从文件系统读取（支持 mtime 自动重载），回退到嵌入资源。
-//
 // Python: get_builtin_security_rules() (tiered_policy.py L64-90)
 func GetBuiltinSecurityRules() []map[string]any {
 	builtinRulesCacheMu.Lock()
@@ -335,7 +326,6 @@ func GetBuiltinSecurityRules() []map[string]any {
 }
 
 // TieredPolicyRuleMatches 单条 rule 是否对本次调用匹配。
-//
 // Python: tiered_policy_rule_matches(tool_name, pattern, tool_args, rule_tools) (tiered_policy.py L325-345)
 func TieredPolicyRuleMatches(toolName string, pattern string, toolArgs map[string]any, ruleTools []string) bool {
 	if len(ruleTools) == 0 {

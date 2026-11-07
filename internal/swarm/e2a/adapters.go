@@ -1,5 +1,4 @@
 // adapters.go 提供 E2A 与 ACP/A2A 外协议形状互转的纯函数层。
-//
 // 对应 Python jiuwenswarm/common/e2a/adapters.py：入站写 provenance 溯源
 // （source_protocol=acp/a2a + converter + converted_at + details）；出站把
 // E2AResponse 投影为外协议 JSON（不适用时返回 nil）；回流把客户端 JSON-RPC
@@ -209,7 +208,6 @@ func EnvelopeToACPJsonrpcCall(env *E2AEnvelope) map[string]any {
 
 // E2AResponseToACPJsonrpcResponse 将 E2AResponse 转为单条 JSON-RPC 2.0 响应对象
 // （仅 result 或 error，无 method）。不适用时返回 nil。
-//
 // 优先使用 projections.acp：若为已组装的完整响应（含 jsonrpc 与 result/error），原样返回副本。
 // 否则按 response_kind 从 body 构造：
 //   - acp.prompt_result → result = body
@@ -424,7 +422,6 @@ func copyMapAny(src map[string]any) map[string]any {
 }
 
 // applyEnvelopeDefaults 补齐 E2A 互操作默认字段：协议版本 + 三个扩展槽空 map。
-//
 // Python E2AEnvelope 是 dataclass，默认 protocol_version="1.0"、
 // channel_context/a2a_metadata/acp_meta 均为 field(default_factory=dict)；
 // Go 结构体零值是 ""/nil，序列化后成为 "" 与 null，与 Python 产物不一致。

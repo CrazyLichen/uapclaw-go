@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HeartbeatRail 心跳护栏，在心跳运行时注入 HEARTBEAT.md 内容到系统提示词。
-//
 // 职责：
 //   - Init:               获取 sysOperation、workspace、heartbeatDir
 //   - BeforeModelCall:    若 run_kind=heartbeat，读取 HEARTBEAT.md 并注入心跳提示词节
@@ -23,10 +22,8 @@ import (
 // 心跳调度器（11.11）周期性触发 RunKind=HEARTBEAT 的 Agent 调用，
 // HeartbeatRail 在 BeforeModelCall 中将 HEARTBEAT.md 的内容注入系统提示词，
 // 使 LLM 根据内容是否为空决定输出 HEARTBEAT_OK（存活确认）还是执行具体任务指令。
-//
 // systemPromptBuilder 不作为字段存储，而是在使用时从 agent/cbc.Agent() 实时获取，
 // 与 TaskPlanningRail 模式一致。
-//
 // Python: openjiuwen/harness/rails/heartbeat_rail.py HeartbeatRail
 type HeartbeatRail struct {
 	DeepAgentRail
@@ -55,7 +52,6 @@ var _ agentinterfaces.AgentRail = (*HeartbeatRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHeartbeatRail 创建心跳护栏实例。
-//
 // Python: HeartbeatRail.__init__()
 func NewHeartbeatRail() *HeartbeatRail {
 	r := &HeartbeatRail{
@@ -66,7 +62,6 @@ func NewHeartbeatRail() *HeartbeatRail {
 }
 
 // Init 初始化 HeartbeatRail。
-//
 // 获取 sysOperation、workspace、heartbeatDir。
 // Python: HeartbeatRail.init() L25-38
 func (r *HeartbeatRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
@@ -103,7 +98,6 @@ func (r *HeartbeatRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 }
 
 // Uninit 移除心跳提示词节。
-//
 // Python: HeartbeatRail.uninit() L40-42
 func (r *HeartbeatRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// Python: L41-42: if system_prompt_builder → remove_section("heartbeat")
@@ -114,7 +108,6 @@ func (r *HeartbeatRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // BeforeModelCall 心跳运行时注入心跳提示词节。
-//
 // Python: HeartbeatRail.before_model_call() L44-63
 func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L45-46: if system_prompt_builder is None or run_kind != HEARTBEAT → return
@@ -176,7 +169,6 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall。
-//
 // Python: HeartbeatRail 隐式覆盖 before_model_call
 func (r *HeartbeatRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()

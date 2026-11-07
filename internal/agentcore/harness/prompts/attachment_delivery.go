@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HistoryContext 同步所需的最小上下文能力。
-//
 // *context.SessionModelContext 天然满足；单测可用极简 fake 实现。
 type HistoryContext interface {
 	// SessionID 返回会话 id
@@ -26,7 +25,6 @@ type HistoryContext interface {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Sync 把当前附件状态同步进会话历史（首次快照 / 之后增量）。
-//
 // Python: PromptAttachmentManager.sync_to_context + ReActAgent._sync_prompt_attachments
 // 失败由调用方决定是否告警；本方法不 panic。
 func (m *Manager) Sync(ctx context.Context, hc HistoryContext) error {
@@ -78,9 +76,7 @@ func (m *Manager) Sync(ctx context.Context, hc HistoryContext) error {
 }
 
 // HasHistorySnapshot 判断会话历史里是否已有完整快照。
-//
 // 运行时 rail 用它决定"上下文压缩/重建后必须改发全量快照"，避免孤立 delta。
-//
 // Python: PromptAttachmentManager.has_history_snapshot
 func (m *Manager) HasHistorySnapshot(hc HistoryContext, sessionID string) bool {
 	if hc == nil {
@@ -93,7 +89,6 @@ func (m *Manager) HasHistorySnapshot(hc HistoryContext, sessionID string) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // readHistoryState 从历史消息里读最后一次交付账本。
-//
 // Python: _read_history_state。state 兼容 string 与 JSON 反序列化后的 any 两种形态。
 func readHistoryState(hc HistoryContext, sessionID string) (map[string]string, bool) {
 	msgs, err := hc.GetMessages(0, true)
@@ -189,7 +184,6 @@ func pickSections(items []*Attachment, sections []string) []*Attachment {
 // ──────────────────────────── 附件消息识别 ────────────────────────────
 
 // IsPromptAttachmentUser 判断消息是否为附件投递产生的伪用户消息。
-//
 // Python: agent_evolving/trajectory/messages.py:104-119 `_is_prompt_attachment_user`
 // 判定顺序：metadata 标记优先；其次内容含 "<system-reminder>"（兼容丢失 metadata 的形态）。
 func IsPromptAttachmentUser(msg llmschema.BaseMessage) bool {
@@ -205,7 +199,6 @@ func IsPromptAttachmentUser(msg llmschema.BaseMessage) bool {
 }
 
 // IsPromptAttachmentHistory 判断是否为附件历史消息（marker + 合法 mode 双重判定）。
-//
 // 用于观测层区分「稳定系统提示」与「附件投影后的 system」。
 func IsPromptAttachmentHistory(msg llmschema.BaseMessage) bool {
 	if msg == nil {

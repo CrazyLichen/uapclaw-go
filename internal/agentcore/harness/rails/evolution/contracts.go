@@ -10,7 +10,6 @@ import (
 ) // ──────────────────────────── 结构体 ────────────────────────────
 
 // ApprovalManager 审批管理器窄接口。
-//
 // ExperienceManager 隐式满足此接口：
 //   - ApproveRequest(ctx, requestID) → (ExperienceApplyResult, error) ✅
 //   - RejectRequest(ctx, requestID) → (ExperienceApplyResult, error) ✅

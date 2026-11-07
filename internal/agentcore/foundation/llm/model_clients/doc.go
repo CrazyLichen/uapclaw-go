@@ -1,8 +1,6 @@
 // Package model_clients 提供 LLM 模型客户端的接口定义、共享实现和注册机制。
-//
 // 本包是领域二（LLM 基础层）的核心，定义了所有模型客户端必须满足的 BaseModelClient 接口，
 // 以及各客户端共享的 BaseClientEmbed 基础实现。
-//
 // # 类型体系
 //
 // 接口与基础实现：
@@ -57,7 +55,6 @@
 //	openjiuwen/core/foundation/llm/output_parsers/output_parser.py    — BaseOutputParser (2.16 节)
 //
 // # 后续注册点（2.7-2.12 节实现时修改）
-//
 // ⚠️ 以下位置需要在各节实现时添加 init() 注册调用：
 //
 //	2.7  OpenAIModelClient      → Register("OpenAI", "llm", ...) + Register("OpenRouter", "llm", ...)

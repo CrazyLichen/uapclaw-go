@@ -72,7 +72,6 @@ func TestCoordinator_Register渠道归一(t *testing.T) {
 }
 
 // TestCoordinator_Close后注册报错 校验关闭后拒绝。
-//
 // Close 在 Task 10 落地；此处用 accepting 字段直接验证语义。
 func TestCoordinator_Close后注册报错(t *testing.T) {
 	c := newTestCoordinator()
@@ -136,7 +135,6 @@ func TestCoordinator_RunUnary失败置FAILED(t *testing.T) {
 }
 
 // TestCoordinator_RunUnarypanic置FAILED并重抛 校验 panic 兜底。
-//
 // 用非 scheduled 种类（HEARTBEAT），使执行发生在调用方 goroutine，
 // 测试才能 recover 到重抛的 panic；scheduled 类会在 lane goroutine 里跑。
 func TestCoordinator_RunUnarypanic置FAILED并重抛(t *testing.T) {
@@ -301,7 +299,6 @@ func TestCoordinator_newExecution团队详情必须配对(t *testing.T) {
 }
 
 // TestCoordinator_supersede取消同类等待执行 校验取代语义。
-//
 // Python: _new_execution 内 superseded_kinds 分支
 func TestCoordinator_supersede取消同类等待执行(t *testing.T) {
 	c := newTestCoordinator()
@@ -468,7 +465,6 @@ func TestCoordinator_RunStream按序产出(t *testing.T) {
 }
 
 // TestCoordinator_RunStream终态不丢 校验终态标记在有界缓冲满时仍送达。
-//
 // 对应上游 finally 的 "A terminal marker must not be dropped when the
 // bounded buffer is full" 注释。
 func TestCoordinator_RunStream终态不丢(t *testing.T) {
@@ -688,7 +684,6 @@ func TestCancelExecution_精确取消单个(t *testing.T) {
 }
 
 // TestCancelExecution_已请求取消的不重复取消 校验两批语义。
-//
 // 对应上游 _request_direct_cancel 的 fresh/pending 分流。
 func TestCancelExecution_已请求取消的不重复取消(t *testing.T) {
 	c := newTestCoordinator()
@@ -798,9 +793,9 @@ func TestCancelExecution_展开后代执行(t *testing.T) {
 			}, UnaryOptions{})
 	}()
 	<-started
-	child, err := c.NewExecutionForTest("s1", "child", SessionWorkKindHeartbeat,
-		ChildOptions{ParentRequestID: "parent"})
-	if err != nil {
+	// 先建一条挂在 parent 下的子执行，取消父时应当连带展开到它。
+	if _, err := c.NewExecutionForTest("s1", "child", SessionWorkKindHeartbeat,
+		ChildOptions{ParentRequestID: "parent"}); err != nil {
 		t.Fatalf("创建子执行失败: %v", err)
 	}
 	snap := c.SnapshotSession("s1")
@@ -817,9 +812,7 @@ func TestCancelExecution_展开后代执行(t *testing.T) {
 	if res.Matched < 2 {
 		t.Fatalf("应展开父+子共 2 条，实际 %+v", res)
 	}
-	if c.GetExecution(child.ExecutionID) == nil {
-		// 允许已被回收
-	}
+	// 子执行是否仍在登记表里不做断言：取消流程允许它已被回收。
 	close(release)
 	<-done
 }
@@ -920,7 +913,6 @@ func TestCloseSession_代次不符返回不存在(t *testing.T) {
 }
 
 // TestCloseSession_超时后不置CLOSED 校验超时保状态供重试。
-//
 // spec §2.2 最后一行 + D25：超时只是"不再等"，不是"对方不停"。
 func TestCloseSession_超时后不置CLOSED(t *testing.T) {
 	c := newTestCoordinator()

@@ -1,15 +1,12 @@
 // Package utils 提供 devtools agent_builder 共享工具函数与常量。
-//
 // 本包是 devtools 工具面（agent_builder NL→DSL 生成器）的最底层地基：
 // 所有 LLM 调用（Clarifier/Generator/DLGenerator/ResourceRetriever）的输出
 // 都经过本包的"剥围栏→安全解析→格式化上下文"管线。
-//
 // 流程位置：开发者/前端 → AgentBuilder(14.9) → Executor(14.5) →
 // BaseAgentBuilder 状态机(14.6) → Clarifier/Generator(14.7) 与
 // DLGenerator/Reflector(14.8) → 本包函数（LLM 输出解析咽喉，13 处消费）。
 // ProgressReporter 进度上报（14.3）由 14.5 executor 创建、14.6 模板方法埋
 // 5 个上报点、14.7/14.8 细粒度调用、14.9 门面查询。
-//
 // 文件目录：
 //
 //	utils/

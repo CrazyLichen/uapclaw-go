@@ -7,7 +7,6 @@ import (
 )
 
 // TestResolveNewCanonicalModeText 只按原文查新三段表，legacy 串不折叠。
-//
 // Python: gateway/common/mode_matrix.py resolve_new_canonical_mode + canonicalize_mode_text
 func TestResolveNewCanonicalModeText(t *testing.T) {
 	cases := []struct {
@@ -38,7 +37,6 @@ func TestResolveNewCanonicalModeText(t *testing.T) {
 }
 
 // TestCanonicalizeModeText 只解析别名、不套 DEPRECATION_MAP。
-//
 // Python: gateway/common/mode_matrix.py canonicalize_mode_text
 func TestCanonicalizeModeText(t *testing.T) {
 	cases := []struct {
@@ -61,7 +59,6 @@ func TestCanonicalizeModeText(t *testing.T) {
 }
 
 // TestIsWebComposableMode 只有 Web 组合表覆盖的 mode 才参与 mode+work_mode 组合。
-//
 // Python: gateway/common/mode_matrix.py WEB_COMPOSABLE_MODES
 func TestIsWebComposableMode(t *testing.T) {
 	require.True(t, IsWebComposableMode("agent"))
@@ -73,7 +70,6 @@ func TestIsWebComposableMode(t *testing.T) {
 }
 
 // TestComposeWebMode 组合 mode + work_mode 为后端三元组。
-//
 // Python: gateway/common/mode_matrix.py compose_web_mode（_WEB_MODE_TABLE）
 func TestComposeWebMode(t *testing.T) {
 	mode, sub, canonical, ok := ComposeWebMode("agent", "code")

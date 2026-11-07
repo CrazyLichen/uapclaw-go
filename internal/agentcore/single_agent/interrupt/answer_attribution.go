@@ -1,5 +1,4 @@
 // 中断答案归属：把恢复输入翻译成按 interrupt_id 索引、带 owner 的答案。
-//
 // 这三者是 Python ToolInterruptHandler 的 _attribute_answers / _call_answers /
 // _unanswered_interrupts 的直接对应物，也是"答案按 interrupt_owner 路由"的
 // 实现核心：
@@ -24,7 +23,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PendingInterrupt 一个待决中断的宿主视图。
-//
 // Python: state.PendingInterrupt(request.interrupt_id, call_id, kind)
 type PendingInterrupt struct {
 	// InterruptID 中断唯一标识
@@ -36,7 +34,6 @@ type PendingInterrupt struct {
 }
 
 // MatchedAnswers 一次恢复输入回答了哪些待决中断。
-//
 // Python: state.MatchedAnswers(answers, unmatched)
 type MatchedAnswers struct {
 	// Answers {interrupt_id: value}，只含被答到的中断
@@ -46,7 +43,6 @@ type MatchedAnswers struct {
 }
 
 // CallAnswers 按 call_id → owner 组织的答案表。
-//
 // Python: _CallAnswers = Dict[str, Dict[str, InterruptAnswer]]
 type CallAnswers map[string]map[string]*saschema.InterruptAnswer
 
@@ -55,10 +51,8 @@ type CallAnswers map[string]map[string]*saschema.InterruptAnswer
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // approvedAnswerKinds 只有这几种中断类型的答案形如 {"approved": ...}。
-//
 // 用 kind 白名单挡住"宿主把 approval 形状的答案发给别的类型"（例如技能演化
 // 审批期望的是 {"action": ...}），避免误开 auto_confirm。
-//
 // Python: APPROVED_ANSWER_KINDS
 var approvedAnswerKinds = map[string]struct{}{
 	saschema.InterruptKindPermission:       {},
@@ -69,9 +63,7 @@ var approvedAnswerKinds = map[string]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PendingInterrupts 列出会话中断状态里全部待决中断（含子 Agent 内部的）。
-//
 // 非 ToolInterruptionState 一律视为无待决中断。
-//
 // Python: state.pending_interrupts(state)
 func PendingInterrupts(interruptState *saschema.ToolInterruptionState) []PendingInterrupt {
 	if interruptState == nil {
@@ -95,10 +87,8 @@ func PendingInterrupts(interruptState *saschema.ToolInterruptionState) []Pending
 }
 
 // MatchAnswers 把一次恢复输入翻译成按 interrupt_id 索引的答案。
-//
 // 取值优先按 interrupt_id（InterruptAnswers），其次按 tool_call_id（UserInputs）。
 // 两个映射里对不上任何待决中断的键会被记入 Unmatched，供调用方记日志。
-//
 // Python: state.match_answers(user_input, pending)
 func MatchAnswers(userInput *interaction.InteractiveInput, pending []PendingInterrupt) MatchedAnswers {
 	answers := make(map[string]any, len(pending))
@@ -140,10 +130,8 @@ func MatchAnswers(userInput *interaction.InteractiveInput, pending []PendingInte
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // attributeAnswers 把本次恢复输入翻译成按 interrupt_id 索引、带 owner 的答案。
-//
 // 这是 rail 收到的答案的**唯一翻译点**（rail 侧用 FindOwnAnswer 读取）；
 // 原始输入仍留在 resume user input 键下，供宿主自己的 rail 使用。
-//
 // 三种输入形态（对齐 Python 注释）：
 //  1. InteractiveInput：按 match_answers 翻译（answer(interrupt_id, v)，
 //     或 update(tool_call_id, v) 答该调用上挂起的中断）；
@@ -225,10 +213,8 @@ func attributeAnswers(
 }
 
 // callAnswers 整理重放期间 rail 该读到的答案：上一轮的铺底，本轮覆盖。
-//
 // 子 Agent 调用只暴露挂在自己（outer）id 下的答案，用于门控该子 Agent 调用
 // 本身的 rail；子 Agent 会自己归属它自己的恢复输入。
-//
 // Python: _call_answers(state, fresh_answers)
 func callAnswers(
 	interruptState *saschema.ToolInterruptionState,
@@ -268,9 +254,7 @@ func callAnswers(
 }
 
 // unansweredInterrupts 返回本次恢复没答到的中断，用于保留其 id。
-//
 // 子 Agent 条目不参与：子 Agent 自己发号。
-//
 // Python: _unanswered_interrupts(state, fresh_answers)
 func unansweredInterrupts(
 	interruptState *saschema.ToolInterruptionState,
@@ -296,10 +280,8 @@ func unansweredInterrupts(
 }
 
 // carryAnswers 把本轮又暂停的调用的答案保留到下一轮。
-//
 // 若同一 rail 在同一调用上又重新提问，说明上轮答案没被接受，该答案被丢弃。
 // 现在暂停进子 Agent 的调用，保留给其自己（outer）id 的答案。
-//
 // Python: _carry_answers(interrupted_tools, call_answers)
 func carryAnswers(
 	interruptedTools map[string]*saschema.ToolInterruptEntry,
@@ -346,11 +328,9 @@ func carryAnswers(
 }
 
 // saveAutoConfirm 记住以 auto_confirm 作答的批准。
-//
 // 只有 kind 在 approvedAnswerKinds 里的中断才可能带 auto_confirm 形状，
 // 借此挡住"宿主把 approval 形状的答案发给别的类型"（如技能演化审批期望
 // {"action": ...}），避免误开自动确认。
-//
 // Python: _save_auto_confirm(answers, session)
 func saveAutoConfirm(
 	answers map[string]*saschema.InterruptAnswer,
@@ -397,7 +377,6 @@ func requestIDOf(request saschema.InterruptRequester) string {
 }
 
 // requestOwnerOf 取中断请求的 interrupt_owner。
-//
 // 走 InterruptRequester 的 GetInterruptOwner，子类（如 AskUserRequest）通过
 // 嵌入的 InterruptRequest 自动继承，无需各自实现。
 func requestOwnerOf(request saschema.InterruptRequester) string {
@@ -408,7 +387,6 @@ func requestOwnerOf(request saschema.InterruptRequester) string {
 }
 
 // requestKindOf 取中断类型，兼容 kind 只存在 metadata 里的历史形态。
-//
 // 走 InterruptRequester 的 GetInterruptKind，子类与包装类型都能取到；
 // 历史数据把 kind 只存在 metadata 里的情况由 InterruptKindOf 兜住。
 func requestKindOf(request saschema.InterruptRequester) string {

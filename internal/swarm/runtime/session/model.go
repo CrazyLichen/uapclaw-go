@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NoControlTargetError 会话没有可接收控制的活跃执行。
-//
 // Python: runtime/session/model.py NoControlTargetError
 type NoControlTargetError struct {
 	// Message 错误说明
@@ -18,7 +17,6 @@ type NoControlTargetError struct {
 }
 
 // AnswerInFlightError 同一交互的应答正在投递中。
-//
 // Python: runtime/session/model.py AnswerInFlightError(NoControlTargetError)
 type AnswerInFlightError struct {
 	// NoControlTargetError 嵌入父错误，保持 errors.As 语义与上游继承一致
@@ -26,7 +24,6 @@ type AnswerInFlightError struct {
 }
 
 // SessionExecutionEndedError 控制输入到达时会话执行已结束。
-//
 // Python: runtime/session/model.py SessionExecutionEndedError
 type SessionExecutionEndedError struct {
 	// Message 错误说明
@@ -34,7 +31,6 @@ type SessionExecutionEndedError struct {
 }
 
 // SessionCloseTimeoutError 关闭会话时仍有执行未停止。
-//
 // Python: runtime/session/model.py SessionCloseTimeoutError
 type SessionCloseTimeoutError struct {
 	// SessionID 会话标识
@@ -52,7 +48,6 @@ type terminalSignal struct {
 }
 
 // SessionExecutionHandle 一次执行的运行时句柄。
-//
 // 与上游差异（spec §8 D-2 / D-3）：
 //   - Python 用单个 asyncio.Task 同时承载"可取消"与"可等待"；Go 拆为
 //     Cancel（发出取消）与 Done（执行方退出）两个成员。
@@ -64,7 +59,6 @@ type terminalSignal struct {
 //   - Done：执行方收尾完成、协程即将退出（执行方 defer 触发）
 //
 // "清场"等 Done，"收结果"等 Terminal。
-//
 // Python: runtime/session/model.py SessionExecutionHandle
 type SessionExecutionHandle struct {
 	// ExecutionID 执行标识
@@ -136,7 +130,6 @@ func (e *AnswerInFlightError) Error() string {
 }
 
 // Unwrap 暴露嵌入的父错误，使 errors.As/Is 能穿透到 NoControlTargetError。
-//
 // Go 的 struct 嵌入不等于 Python 继承：errors.As 靠 Unwrap 链而非字段提升。
 func (e *AnswerInFlightError) Unwrap() error {
 	if e.NoControlTargetError == nil {
@@ -155,7 +148,6 @@ func (e *SessionCloseTimeoutError) Error() string {
 }
 
 // Set 发出信号（幂等）。
-//
 // Python: asyncio.Event.set()
 func (s *terminalSignal) Set() { s.once.Do(func() { close(s.ch) }) }
 
@@ -173,7 +165,6 @@ func (s *terminalSignal) IsTerminalClosed() bool {
 }
 
 // NewSessionExecutionHandle 构造一个处于 QUEUED 的执行句柄。
-//
 // Python: RuntimeSessionCoordinator._new_execution 内构造
 func NewSessionExecutionHandle(
 	executionID, sessionID, requestID string,
@@ -197,19 +188,16 @@ func NewSessionExecutionHandle(
 }
 
 // MarkDone 由执行方在 defer 的最后一行调用，等价"协程即将退出"。
-//
 // 与 Terminal 的分工见 SessionExecutionHandle 注释：Done 表示收尾完成，
 // Terminal 表示业务终态。
 func (h *SessionExecutionHandle) MarkDone() { h.doneOnce.Do(func() { close(h.Done) }) }
 
 // Snapshot 生成只读快照。
-//
 // ⚠️ 并发契约：本方法读取 handle 的可变字段（State/StartedAt/FinishedAt/
 // WaitingControlIDs 等），**必须在 registry 锁内调用**。锁外调用会与
 // MarkRunning / MarkTerminal 竞争（-race 实测：StartedAt 指针写 vs 读）。
 // 对外暴露的快照入口一律走 SessionExecutionRegistry.SnapshotOf /
 // SnapshotValue / SnapshotsForSession，它们自带锁。
-//
 // Python: SessionExecutionHandle.snapshot()
 func (h *SessionExecutionHandle) Snapshot() SessionExecutionSnapshot {
 	var team *TeamExecutionDetails
@@ -250,7 +238,6 @@ func newTerminalSignal() terminalSignal {
 }
 
 // monotonicSeconds 单调时钟秒值，等价 Python time.monotonic()。
-//
 // Go 的 time.Since(time.Time{}) 不单调，用进程启动时刻作基准。
 func monotonicSeconds() float64 {
 	return float64(time.Since(processStart).Nanoseconds()) / float64(time.Second)
@@ -259,7 +246,6 @@ func monotonicSeconds() float64 {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // SessionLifecycleContext 标识一个进程内产品会话的代次。
-//
 // Python: runtime/session/model.py SessionLifecycleContext
 type SessionLifecycleContext struct {
 	// SessionID 会话标识
@@ -269,7 +255,6 @@ type SessionLifecycleContext struct {
 }
 
 // ExecutionLifecycleContext 承载一次 Runtime 执行的传输无关身份。
-//
 // Python: runtime/session/model.py ExecutionLifecycleContext
 type ExecutionLifecycleContext struct {
 	// Session 所属会话与代次
@@ -285,7 +270,6 @@ type ExecutionLifecycleContext struct {
 }
 
 // TeamExecutionDetails 描述一次执行附带的团队所有权。
-//
 // Python: runtime/session/model.py TeamExecutionDetails
 type TeamExecutionDetails struct {
 	// ControlID 团队控制标识
@@ -301,7 +285,6 @@ type TeamExecutionDetails struct {
 }
 
 // TeamExecutionContext 承载团队请求所有权，不耦合协调器。
-//
 // Python: runtime/session/model.py TeamExecutionContext
 type TeamExecutionContext struct {
 	// ExecutionLifecycleContext 执行身份
@@ -311,7 +294,6 @@ type TeamExecutionContext struct {
 }
 
 // SessionExecutionSnapshot 单次执行的只读快照。
-//
 // Python: runtime/session/model.py SessionExecutionSnapshot
 type SessionExecutionSnapshot struct {
 	// ExecutionID 执行标识
@@ -351,7 +333,6 @@ type SessionExecutionSnapshot struct {
 }
 
 // RuntimeSessionSnapshot 会话级只读快照。
-//
 // Python: runtime/session/model.py RuntimeSessionSnapshot
 type RuntimeSessionSnapshot struct {
 	// SessionID 会话标识
@@ -369,7 +350,6 @@ type RuntimeSessionSnapshot struct {
 }
 
 // CancelExecutionResult 一次取消操作的结果。
-//
 // Python: runtime/session/model.py CancelExecutionResult
 type CancelExecutionResult struct {
 	// Matched 命中的执行数
@@ -381,7 +361,6 @@ type CancelExecutionResult struct {
 }
 
 // CloseSessionResult 一次关闭会话操作的结果。
-//
 // Python: runtime/session/model.py CloseSessionResult
 type CloseSessionResult struct {
 	// SessionID 会话标识
@@ -397,7 +376,6 @@ type CloseSessionResult struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // RuntimeSessionState 会话在 Runtime 内部的临时状态。
-//
 // Python: runtime/session/model.py RuntimeSessionState
 type RuntimeSessionState string
 
@@ -413,7 +391,6 @@ const (
 )
 
 // SessionPersistencePolicy 会话持久化策略。
-//
 // Python: runtime/session/model.py SessionPersistencePolicy（仅一个成员）
 type SessionPersistencePolicy string
 
@@ -423,7 +400,6 @@ const (
 )
 
 // SessionWorkKind 一次执行的业务种类。
-//
 // Python: runtime/session/model.py SessionWorkKind
 type SessionWorkKind string
 
@@ -455,7 +431,6 @@ const (
 )
 
 // SessionExecutionState 单次执行的状态。
-//
 // Python: runtime/session/model.py SessionExecutionState
 type SessionExecutionState string
 
@@ -477,7 +452,6 @@ const (
 )
 
 // ExecutionCancelCause 描述一次执行或会话生命周期为何结束。
-//
 // Python: runtime/session/model.py ExecutionCancelCause
 type ExecutionCancelCause string
 
@@ -497,7 +471,6 @@ const (
 )
 
 // TeamWaiterKind 团队执行持有的响应等待者种类。
-//
 // Python: runtime/session/model.py TeamWaiterKind
 type TeamWaiterKind string
 
@@ -515,7 +488,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Scheduled 该种类是否走调度 lane。
-//
 // Python: SessionWorkKind.scheduled —— CHAT_UNARY / CHAT_STREAM / SESSION_MESSAGE
 func (k SessionWorkKind) Scheduled() bool {
 	switch k {
@@ -526,7 +498,6 @@ func (k SessionWorkKind) Scheduled() bool {
 }
 
 // LatestFirst 该种类是否后到先跑。
-//
 // Python: SessionWorkKind.latest_first —— 仅 CHAT_UNARY / CHAT_STREAM
 func (k SessionWorkKind) LatestFirst() bool {
 	switch k {
@@ -537,7 +508,6 @@ func (k SessionWorkKind) LatestFirst() bool {
 }
 
 // Terminal 该状态是否为终态。
-//
 // Python: SessionExecutionState.terminal —— SUCCEEDED / FAILED / CANCELLED
 func (s SessionExecutionState) Terminal() bool {
 	switch s {

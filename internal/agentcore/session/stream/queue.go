@@ -141,7 +141,6 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 
 // Receive 带超时的接收，对齐 Python AsyncStreamQueue.receive()。
 // timeout <= 0 表示无限等待。
-//
 // 与 Python 的关键差异：Python receive 在 _closed=True 时直接抛 RuntimeError，
 // 但 Python 的 close() 先 queue.join() 等消费端排空才设 _closed。
 // Go 的 close(ch) 不会等消费端排空，所以 Receive 必须支持从已关闭 channel 读取残留数据：
@@ -177,12 +176,10 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (Sc
 }
 
 // Close 关闭队列，对齐 Python AsyncStreamQueue.close()。
-//
 // 流程：设 closed=true → close(ch)
 //
 // 使用 sync.Once 保证 close(ch) 只执行一次，天然幂等。
 // 关闭后消费端仍可读取残留数据直到 ok=false（Go channel 语义保证）。
-//
 // sendMu 写锁：等待在途 Send 完成后才 close(ch)，
 // 排除 chansend 与 closechan 的并发（race detector 视角的未同步访问）。
 func (q *StreamQueue) Close(ctx context.Context, timeout ...time.Duration) error {

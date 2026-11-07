@@ -33,7 +33,6 @@ func (f *fakeHistory) AddMessages(_ context.Context, msgs []llmschema.BaseMessag
 }
 
 // TestSync_首次快照之后增量 全链路：快照 → 无变化 → 增量 → 移除。
-//
 // Python: sync_to_context（snapshot → delta → removed）
 func TestSync_首次快照之后增量(t *testing.T) {
 	m := NewManager()

@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Offloadable 卸载消息接口，等价 Python isinstance(msg, OffloadMixin)。
-//
 // 4 个 Offload 子类型均实现此接口，用于防重复卸载检查：
 //
 // 示例: _, ok := msg.(Offloadable)
@@ -23,10 +22,8 @@ type Offloadable interface {
 }
 
 // OffloadInfo 卸载元数据，等价 Python OffloadMixin。
-//
 // 当对话消息被卸载到外部存储时，OffloadInfo 携带检索句柄和存储后端类型，
 // 使 LLM 可以通过 reloader_tool 按需取回原始内容。
-//
 // Python: openjiuwen/core/context_engine/schema/messages.py (OffloadMixin)
 type OffloadInfo struct {
 	// OffloadType 存储后端类型："in_memory" 或 "filesystem"
@@ -38,7 +35,6 @@ type OffloadInfo struct {
 }
 
 // OffloadUserMessage 卸载的用户消息占位符。
-//
 // Python: OffloadUserMessage(UserMessage, OffloadMixin)
 type OffloadUserMessage struct {
 	llm_schema.UserMessage
@@ -46,7 +42,6 @@ type OffloadUserMessage struct {
 }
 
 // OffloadAssistantMessage 卸载的助手消息占位符。
-//
 // Python: OffloadAssistantMessage(AssistantMessage, OffloadMixin)
 type OffloadAssistantMessage struct {
 	llm_schema.AssistantMessage
@@ -54,7 +49,6 @@ type OffloadAssistantMessage struct {
 }
 
 // OffloadSystemMessage 卸载的系统消息占位符。
-//
 // Python: OffloadSystemMessage(SystemMessage, OffloadMixin)
 type OffloadSystemMessage struct {
 	llm_schema.SystemMessage
@@ -62,7 +56,6 @@ type OffloadSystemMessage struct {
 }
 
 // OffloadToolMessage 卸载的工具消息占位符。
-//
 // Python: OffloadToolMessage(ToolMessage, OffloadMixin)
 type OffloadToolMessage struct {
 	llm_schema.ToolMessage

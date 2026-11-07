@@ -32,7 +32,6 @@ var sensitiveKeywords = []string{"api_key", "token"}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveEnvVars 递归解析配置中的环境变量替换语法 ${VAR:-default}。
-//
 // 规则：
 //   - ${VAR:-default} → VAR 为空或不存在时使用 default
 //   - ${VAR}          → VAR 不存在时返回空字符串

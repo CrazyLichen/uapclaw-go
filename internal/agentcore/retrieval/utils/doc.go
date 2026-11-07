@@ -1,5 +1,4 @@
 // Package utils 提供 retrieval 层的公共工具函数。
-//
 // 本包提供 HTTP 重试请求工具、RRF 融合算法、Milvus 连接别名生成等，供 Reranker、Embedding、VectorStore、Indexer 等组件共享。
 // Python: openjiuwen/core/retrieval/utils/
 //

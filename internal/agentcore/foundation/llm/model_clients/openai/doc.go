@@ -1,8 +1,6 @@
 // Package openai 提供 OpenAI 兼容协议的 LLM 模型客户端实现。
-//
 // 本包实现 BaseModelClient 接口，支持所有兼容 OpenAI Chat Completion API 的服务提供商，
 // 包括 OpenAI 官方 API 和 OpenRouter 等第三方代理。
-//
 // # 核心设计
 //
 // 不依赖 openai-go SDK，自行实现 HTTP + SSE 解析：

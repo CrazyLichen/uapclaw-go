@@ -21,7 +21,6 @@ type QueryExpr interface {
 }
 
 // ComparisonExpr 比较表达式（==, !=, >, <, >=, <=）
-//
 // Python: ComparisonExpr
 type ComparisonExpr struct {
 	// Field 字段名
@@ -33,7 +32,6 @@ type ComparisonExpr struct {
 }
 
 // RangeExpr 范围表达式（in, like）
-//
 // Python: RangeExpr
 type RangeExpr struct {
 	// Field 字段名
@@ -45,7 +43,6 @@ type RangeExpr struct {
 }
 
 // ArithmeticExpr 算术表达式（字段 + - * / % ** 比较值）
-//
 // Python: ArithmeticExpr
 type ArithmeticExpr struct {
 	// Field 字段名
@@ -61,7 +58,6 @@ type ArithmeticExpr struct {
 }
 
 // NullExpr 空值检查表达式（is null / is not null）
-//
 // Python: NullExpr
 type NullExpr struct {
 	// Field 字段名
@@ -99,7 +95,6 @@ type ArrayExpr struct {
 }
 
 // LogicalExpr 逻辑组合表达式（and, or, not, xor）
-//
 // Python: LogicalExpr
 type LogicalExpr struct {
 	// Operator 逻辑运算符（and, or, not, xor）
@@ -111,7 +106,6 @@ type LogicalExpr struct {
 }
 
 // MatchExpr 文本匹配表达式（prefix, suffix, infix, exact）
-//
 // Python: MatchExpr
 type MatchExpr struct {
 	// Field 字段名

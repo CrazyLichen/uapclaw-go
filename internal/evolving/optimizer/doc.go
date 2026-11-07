@@ -1,9 +1,7 @@
 // Package optimizer 提供自演化系统的维度优化器。
-//
 // BaseOptimizer 定义优化器的公共接口和 Mixin 辅助结构体，
 // 子优化器嵌入 Mixin 获得公共字段和方法，自己实现 Backward/Step 等核心方法。
 // TextualParameter 是梯度容器，存储 target→梯度值和可选描述。
-//
 // 文件目录：
 //
 //	optimizer/

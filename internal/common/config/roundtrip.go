@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetRoundTrip 更新指定路径的值并 round-trip 写回文件（保留注释与格式）。
-//
 // 对齐 Python ruamel round-trip（common/config.py L126-143）：
 //   - _load_yaml_round_trip → 定位嵌套节点 → 修改 value → _dump_yaml_round_trip
 //   - preserve_quotes=True：保留原引号风格
@@ -25,7 +24,6 @@ import (
 //
 // 与 Set 的区别：Set 走 yaml.Marshal 全量重写，丢注释与格式；SetRoundTrip
 // 走 yaml.v3 Node 模式原样写回。
-//
 // key 支持点分隔路径，如 "modes.agent.code.memory.enabled"。
 func (c *Config) SetRoundTrip(key string, value any) error {
 	c.mu.Lock()
@@ -208,7 +206,6 @@ func valueToNode(value any) (*yaml.Node, error) {
 }
 
 // MigrateLegacyHeartbeatProbeConfig 把旧 probe 键从 heartbeat 段迁到 health_check 段。
-//
 // Python: migrate_legacy_heartbeat_probe_config (gateway/common/config.py:466-493)：
 // 只搬 every / target / active_hours 三个探活键，**不动 heartbeat.jobs**；目标段已有同名键时
 // 保留目标段的现值（setdefault）；heartbeat 段搬空后整段删除。返回是否发生了迁移。

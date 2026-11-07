@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // TeamExecutionController 团队执行控制面（由 TeamManager 实现）。
-//
 // Python: runtime/session_delete.py TeamExecutionController
 type TeamExecutionController interface {
 	// QuiesceForDelete 删除前静默团队执行
@@ -24,7 +23,6 @@ type TeamExecutionController interface {
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionDeleteResult 一次永久会话删除的传输无关结果。
-//
 // Python: runtime/session_delete.py SessionDeleteResult
 type SessionDeleteResult struct {
 	// OK 操作是否成功
@@ -48,7 +46,6 @@ type SessionDeleteResult struct {
 }
 
 // TeamDeleteResult 一次团队永久删除的传输无关结果。
-//
 // Python: runtime/session_delete.py TeamDeleteResult
 type TeamDeleteResult struct {
 	// OK 操作是否成功
@@ -70,7 +67,6 @@ type TeamDeleteResult struct {
 }
 
 // TeamDeletionInProgress 团队变更与进程内永久删除竞争。
-//
 // Python: runtime/session_delete.py TeamDeletionInProgress
 type TeamDeletionInProgress struct {
 	// TeamName 团队名
@@ -78,7 +74,6 @@ type TeamDeletionInProgress struct {
 }
 
 // TeamDeletionGate 团队删除/创建/绑定路径共享的进程级变更围栏。
-//
 // Python: runtime/session_delete.py TeamDeletionGate
 type TeamDeletionGate struct {
 	// mu 保护以下字段
@@ -90,7 +85,6 @@ type TeamDeletionGate struct {
 }
 
 // lockTable 带互斥保护的锁表（替代上游 WeakValueDictionary）。
-//
 // Go 无弱引用，条目需由调用方显式回收（spec §8 D-6）。
 type lockTable struct {
 	// mu 保护 m
@@ -121,7 +115,6 @@ func (e *TeamDeletionInProgress) Error() string {
 func (e *TeamDeletionInProgress) Code() string { return "TEAM_DELETING" }
 
 // SessionDeleteResultFailure 构造失败结果。
-//
 // Python: SessionDeleteResult.failure
 func SessionDeleteResultFailure(sessionID, code, message string) SessionDeleteResult {
 	return SessionDeleteResult{
@@ -133,7 +126,6 @@ func SessionDeleteResultFailure(sessionID, code, message string) SessionDeleteRe
 }
 
 // NewTeamDeletionGate 创建删除围栏。
-//
 // Python: TeamDeletionGate.__init__
 func NewTeamDeletionGate() *TeamDeletionGate {
 	return &TeamDeletionGate{
@@ -143,7 +135,6 @@ func NewTeamDeletionGate() *TeamDeletionGate {
 }
 
 // MutationLock 取团队的变更锁。
-//
 // Python: TeamDeletionGate.mutation_lock
 func (g *TeamDeletionGate) MutationLock(teamName string) *sync.Mutex {
 	g.mu.Lock()
@@ -157,7 +148,6 @@ func (g *TeamDeletionGate) MutationLock(teamName string) *sync.Mutex {
 }
 
 // BeginDeleteLocked 标记团队开始删除，返回是否首次标记。
-//
 // Python: TeamDeletionGate.begin_delete_locked
 func (g *TeamDeletionGate) BeginDeleteLocked(teamName string) bool {
 	g.mu.Lock()
@@ -168,7 +158,6 @@ func (g *TeamDeletionGate) BeginDeleteLocked(teamName string) bool {
 }
 
 // AssertNotDeletingLocked 团队正在删除时返回错误。
-//
 // Python: TeamDeletionGate.assert_not_deleting_locked
 func (g *TeamDeletionGate) AssertNotDeletingLocked(teamName string) error {
 	g.mu.Lock()
@@ -180,7 +169,6 @@ func (g *TeamDeletionGate) AssertNotDeletingLocked(teamName string) error {
 }
 
 // FinishDeleteLocked 清除删除标记。
-//
 // Python: TeamDeletionGate.finish_delete_locked
 func (g *TeamDeletionGate) FinishDeleteLocked(teamName string) {
 	g.mu.Lock()
@@ -189,33 +177,28 @@ func (g *TeamDeletionGate) FinishDeleteLocked(teamName string) {
 }
 
 // GlobalTeamDeletionGate 返回进程级团队删除围栏。
-//
 // Python: runtime/session_delete.py TEAM_DELETION_GATE
 func GlobalTeamDeletionGate() *TeamDeletionGate { return globalTeamDeletionGate }
 
 // SessionDeleteLock 取会话删除锁（同一标识返回同一把）。
-//
 // Python: runtime/session_delete.py session_delete_lock
 func SessionDeleteLock(sessionID string) *sync.Mutex {
 	return sessionDeleteLocks.lockFor(sessionID)
 }
 
 // TeamDeleteLock 取团队删除锁（同一名称返回同一把）。
-//
 // Python: runtime/session_delete.py team_delete_lock
 func TeamDeleteLock(teamName string) *sync.Mutex {
 	return teamDeleteLocks.lockFor(teamLockKey(teamName))
 }
 
 // ReleaseSessionDeleteLock 移除会话删除锁条目（删除提交后调用，避免无限增长）。
-//
 // Go 无弱引用，需显式回收（spec §8 D-6）。
 func ReleaseSessionDeleteLock(sessionID string) {
 	sessionDeleteLocks.release(sessionID)
 }
 
 // ReleaseTeamDeleteLock 移除团队删除锁条目。
-//
 // Go 无弱引用，需显式回收（spec §8 D-6）。
 func ReleaseTeamDeleteLock(teamName string) {
 	teamDeleteLocks.release(teamLockKey(teamName))

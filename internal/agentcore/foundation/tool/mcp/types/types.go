@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // McpClient MCP 客户端接口，定义与 MCP 服务器交互的标准方法。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/client/mcp_client.py (McpClient)
 type McpClient interface {
 	// Connect 建立 MCP 服务器连接
@@ -42,7 +41,6 @@ type ConnectOptions struct {
 }
 
 // McpServerConfig MCP 服务器配置。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/base.py (McpServerConfig)
 type McpServerConfig struct {
 	// ServerID 服务器唯一标识，默认自动生成 UUID
@@ -64,7 +62,6 @@ type McpServerConfig struct {
 	// AuthQueryParams 认证查询参数（预留，3.11 回填动态认证）
 	AuthQueryParams map[string]string
 	// IncludeImageContent 是否把 MCP 返回的图片块桥接为多模态工具结果数据。
-	//
 	// 默认 false：图片退化为文本占位符（[image content: image/png, N base64 chars]）。
 	// 仅对模型必须看到图片的服务端开启（如 cua-driver 截图）。
 	// Python: McpServerConfig.include_image_content (mcp/base.py:139-146)
@@ -72,7 +69,6 @@ type McpServerConfig struct {
 }
 
 // McpToolCard MCP 工具配置卡片，扩展 ToolCard 增加服务器标识。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/base.py (McpToolCard)
 type McpToolCard struct {
 	tool.ToolCard
@@ -92,13 +88,10 @@ type McpServerConfigOption func(*McpServerConfig)
 type McpToolCardOption func(*McpToolCard)
 
 // MCPToolResult 携带多模态数据或失败状态的 MCP 工具结果。
-//
 // 放在 types 包而非 mcp 实现包：调度层（ability）与 agent 层（agents）都要
 // 消费它，依赖纯类型包可避免两个上层直接依赖 mcp 实现包（层次渗透）。
-//
 // 与 harness 的 ToolOutput 形状（success/data/error）鸭子类型兼容，
 // 使 react agent 的多模态管线无需 core 反向导入 harness。
-//
 // Python: McpToolResult (mcp/base.py:148-165)
 type MCPToolResult struct {
 	// Success 是否成功
@@ -170,7 +163,6 @@ func WithIncludeImageContent(include bool) McpServerConfigOption {
 }
 
 // NewMcpServerConfig 创建 MCP 服务器配置。
-//
 // Python: McpServerConfig(server_name=..., server_path=..., client_type=...)
 func NewMcpServerConfig(name, serverPath, clientType string, opts ...McpServerConfigOption) *McpServerConfig {
 	if clientType == "" {
@@ -194,7 +186,6 @@ func WithMcpToolCardServerID(id string) McpToolCardOption {
 }
 
 // NewMcpToolCard 创建 MCP 工具卡片。
-//
 // Python: McpToolCard(name=..., server_name=..., description=..., input_params=...)
 func NewMcpToolCard(name, description, serverName string, inputParams []*schema.Param, opts ...McpToolCardOption) *McpToolCard {
 	card := &McpToolCard{
@@ -208,11 +199,9 @@ func NewMcpToolCard(name, description, serverName string, inputParams []*schema.
 }
 
 // ToolInfo 返回 MCP 工具描述信息，覆写 ToolCard.ToolInfo() 返回 McpToolInfo。
-//
 // McpToolInfo 嵌入 ToolInfo 并扩展 ServerName，标识此工具为 MCP 工具。
 // AbilityManager 路由时可根据 ServerName 非空判断为 MCP 工具，
 // 也可根据 tool_call.Name 在注册表中查找 Tool 实例。
-//
 // Python: McpToolCard.tool_info() -> McpToolInfo
 func (c *McpToolCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)

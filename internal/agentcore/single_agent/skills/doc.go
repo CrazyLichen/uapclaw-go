@@ -1,9 +1,7 @@
 // Package skills 提供 Agent 技能注册、管理与提示词生成能力。
-//
 // 本包实现 Agent 的 Skill 机制：通过将技能元数据（名称/描述/目录路径）注入
 // 系统 prompt 的 skills section，告知 LLM 当前可用的技能，LLM 可使用 read_file
 // 工具读取 SKILL.md 获取具体工作流，然后按工作流执行任务。
-//
 // 文件目录：
 //
 //	skills/

@@ -10,14 +10,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamCardInterface 团队卡片只读接口。
-//
 // TeamCard 和 EventDrivenTeamCard 均实现此接口。
 // BaseTeam.Card() 返回此接口类型，支持多态访问。
 // 需要 Subscriptions 时，直接调用 GetSubscriptions()，
 // 非 EventDrivenTeamCard 返回 nil。
-//
 // 嵌入 schema.CardInterface 提供 GetID/GetName/GetDescription/String 只读方法。
-//
 // Python: BaseTeam.card 属性的类型声明 TeamCard（Python 运行时允许 TeamCard 子类实例）。
 // Go 中用接口实现多态，Python 中用继承实现。
 type TeamCardInterface interface {
@@ -29,11 +26,9 @@ type TeamCardInterface interface {
 	// GetAgentCards 返回成员 Agent 卡片列表
 	GetAgentCards() []*agentschema.AgentCard
 	// AddAgentCard 追加成员 Agent 卡片。
-	//
 	// Python: self.card.agent_cards.append(card)
 	AddAgentCard(card *agentschema.AgentCard)
 	// RemoveAgentCard 按 agentID 移除成员 Agent 卡片。
-	//
 	// Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
 	RemoveAgentCard(agentID string)
 	// GetTopic 返回团队主题/领域
@@ -51,16 +46,13 @@ type TeamCardInterface interface {
 }
 
 // TeamCard 团队身份卡片，嵌入 BaseCard 提供统一身份标识。
-//
 // 不可变元数据，描述团队的"身份"和"组成"。
 // AgentCards 仅存储成员 Agent 的卡片（元数据），不是 Agent 实例。
-//
 // Python: openjiuwen/core/multi_agent/schema/team_card.py (TeamCard)
 // Python 继承 BaseCard: id/name/description + agent_cards/topic/version/tags
 type TeamCard struct {
 	schema.BaseCard
 	// AgentCards 成员 Agent 的卡片列表（仅元数据，非实例）
-	//
 	// Python: TeamCard.agent_cards: List[AgentCard] = Field(default_factory=list)
 	AgentCards []*agentschema.AgentCard `json:"agent_cards,omitempty"`
 	// Topic 团队主题/领域
@@ -78,12 +70,9 @@ type TeamCard struct {
 }
 
 // EventDrivenTeamCard 事件驱动团队卡片，嵌入 TeamCard 并增加订阅映射。
-//
 // 不可变元数据 + 声明式订阅关系，描述"团队是什么"和"谁关心什么事件"。
 // AgentCards 仅存储成员 Agent 的卡片（元数据），不是 Agent 实例。
-//
 // 满足 TeamCardInterface 接口。
-//
 // Python: openjiuwen/core/multi_agent/schema/team_card.py (EventDrivenTeamCard)
 // Python 继承 TeamCard + subscriptions: Dict[str, List[str]]
 type EventDrivenTeamCard struct {
@@ -95,7 +84,6 @@ type EventDrivenTeamCard struct {
 }
 
 // TeamCardOption TeamCard 构造选项函数，统一设置 BaseCard 字段和 TeamCard 字段。
-//
 // 采用方案C：去掉 CardOption 混合，所有选项均通过 TeamCardOption 设置，
 // 编译时类型安全，避免 opts ...any 的运行时 switch。
 type TeamCardOption func(*TeamCard)
@@ -124,7 +112,6 @@ var _ schema.CardInterface = (*EventDrivenTeamCard)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamCard 创建 TeamCard 实例，默认 Version="1.0.0"。
-//
 // Python: TeamCard(id=uuid4().hex, name="", description="", agent_cards=[], topic="", version="1.0.0", tags=[])
 // 所有选项（含 BaseCard 字段）均通过 TeamCardOption 设置，编译时类型安全。
 func NewTeamCard(opts ...TeamCardOption) *TeamCard {
@@ -139,56 +126,48 @@ func NewTeamCard(opts ...TeamCardOption) *TeamCard {
 }
 
 // WithTeamCardID 设置团队卡片 ID（覆盖自动生成的 UUID）。
-//
 // Python: TeamCard(id=...)
 func WithTeamCardID(id string) TeamCardOption {
 	return func(c *TeamCard) { c.ID = id }
 }
 
 // WithTeamCardName 设置团队名称。
-//
 // Python: TeamCard(name=...)
 func WithTeamCardName(name string) TeamCardOption {
 	return func(c *TeamCard) { c.Name = name }
 }
 
 // WithTeamCardDescription 设置团队描述。
-//
 // Python: TeamCard(description=...)
 func WithTeamCardDescription(desc string) TeamCardOption {
 	return func(c *TeamCard) { c.Description = desc }
 }
 
 // WithAgentCards 设置成员 Agent 卡片列表。
-//
 // Python: TeamCard(agent_cards=[...])
 func WithAgentCards(cards []*agentschema.AgentCard) TeamCardOption {
 	return func(c *TeamCard) { c.AgentCards = cards }
 }
 
 // WithTopic 设置团队主题。
-//
 // Python: TeamCard(topic="...")
 func WithTopic(topic string) TeamCardOption {
 	return func(c *TeamCard) { c.Topic = topic }
 }
 
 // WithTeamVersion 设置团队版本号。
-//
 // Python: TeamCard(version="...")
 func WithTeamVersion(version string) TeamCardOption {
 	return func(c *TeamCard) { c.Version = version }
 }
 
 // WithTags 设置分类标签。
-//
 // Python: TeamCard(tags=[...])
 func WithTags(tags []string) TeamCardOption {
 	return func(c *TeamCard) { c.Tags = tags }
 }
 
 // String 实现 fmt.Stringer 接口，返回简洁的身份描述。
-//
 // Python: BaseCard.to_str() 扩展，增加 topic 和 version 字段
 func (c *TeamCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s", c.ID, c.Name, c.Topic, c.Version)
@@ -198,14 +177,12 @@ func (c *TeamCard) String() string {
 func (c *TeamCard) GetAgentCards() []*agentschema.AgentCard { return c.AgentCards }
 
 // AddAgentCard 追加成员 Agent 卡片。
-//
 // Python: self.card.agent_cards.append(card)
 func (c *TeamCard) AddAgentCard(card *agentschema.AgentCard) {
 	c.AgentCards = append(c.AgentCards, card)
 }
 
 // RemoveAgentCard 按 agentID 移除成员 Agent 卡片。
-//
 // Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
 func (c *TeamCard) RemoveAgentCard(agentID string) {
 	filtered := make([]*agentschema.AgentCard, 0, len(c.AgentCards))
@@ -230,7 +207,6 @@ func (c *TeamCard) GetTags() []string { return c.Tags }
 func (c *TeamCard) GetSubscriptions() map[string][]string { return nil }
 
 // NewEventDrivenTeamCard 创建 EventDrivenTeamCard 实例，默认 Version="1.0.0"。
-//
 // Python: EventDrivenTeamCard(id=uuid4().hex, name="", description="",
 //
 //	agent_cards=[], topic="", version="1.0.0", tags=[], subscriptions={})（默认空值）
@@ -296,7 +272,6 @@ func (c *EventDrivenTeamCard) GetSubscriptions() map[string][]string {
 }
 
 // String 实现 fmt.Stringer 接口，覆盖 TeamCard.String()。
-//
 // Python: BaseCard.to_str() 扩展，增加 subscriptions 数量字段
 func (c *EventDrivenTeamCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s,subscriptions=%d",

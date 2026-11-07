@@ -145,7 +145,6 @@ func TestWeChatParserParse_继承链dispatch(t *testing.T) {
 // TestWeChatParserParse_继承链dispatch解析覆写 parseHTMLToDocs 覆写经
 // dispatch 生效：本地 URL + 注入自定义 dispatch stub 验证 ParseURL 调的是
 // WeChat 版解析（js_content 路径）而非 HTMLFile 版（findMainContent 路径）。
-//
 // 构造页面同时含 article（HTMLFile 路径会命中）与 js_content（WeChat 路径
 // 命中）：直调 WeChat.parseHTMLToDocs 断言正文来自 js_content。
 func TestWeChatParserParse_继承链dispatch解析覆写(t *testing.T) {

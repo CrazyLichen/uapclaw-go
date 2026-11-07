@@ -96,7 +96,6 @@ var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithInjectPrompt 设置是否注入常驻 todo 提示节。
-//
 // 默认 true，对齐上游构造器签名 `TaskPlanningRail(inject_prompt=True)`
 // （task_planning_rail.py:49）；jiuwenswarm 的 DeepAdapter 显式传 False
 // （interface_deep.py:10756），由 adapter 装配点负责关闭。
@@ -173,6 +172,8 @@ func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	return r
 }
 
+// Init 绑定 Agent 的待办工具与模型列表，并初始化 rail 运行态。
+// Agent 不是 DeepAgent 或缺少能力管理器时直接跳过（不参与规划增强）。
 func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// Python: L87-92: 检查 agent 是 DeepAgent 且有 ability_manager
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
@@ -279,6 +280,7 @@ func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	return nil
 }
 
+// Uninit 解绑 Agent 上的规划增强，把注入过的待办段落从提示词里移除。
 func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// Python: L138-139: 移除 todo 提示词节
 	if sb := agent.SystemPromptBuilder(); sb != nil {
@@ -320,6 +322,7 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
+// BeforeModelCall 模型调用前注入待办清单段落，并按进行中的任务决定是否切换模型。
 func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L155-156: system_prompt_builder 为 nil 时整体 return
 	sb := cbc.Agent().SystemPromptBuilder()
@@ -348,6 +351,7 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	return nil
 }
 
+// AfterToolCall 工具调用后刷新待办缓存，让下一轮提示词看到最新的任务状态。
 func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.todoTool == nil {
 		return nil
@@ -423,6 +427,7 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	return nil
 }
 
+// AfterModelCall 模型返回后把计划同步进待办列表（模型可能在回复里改了计划）。
 func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L246-249: 获取当前模型
 	switcher, ok := cbc.Agent().(modelSwitcher)
@@ -471,6 +476,7 @@ func (r *TaskPlanningRail) AfterTaskIteration(ctx context.Context, cbc *agentint
 	return nil
 }
 
+// AfterInvoke 本轮结束时汇总各模型的 token 用量并记日志。
 func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L266-269: 日志汇总 token 使用量
 	for modelID, record := range r.usageRecords {
@@ -506,6 +512,8 @@ func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.A
 	return nil
 }
 
+// GetCallbacks 返回本 rail 关心的事件到回调函数的映射，供框架注册。
+// Init/Uninit 由注册框架直接调用，不在映射里。
 func (r *TaskPlanningRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -531,10 +539,8 @@ func (r *TaskPlanningRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 }
 
 // SwitchModelIfNeeded 按 in_progress 待办的 selected_model_id 切换模型。
-//
 // freshLoad=true 时每次都从存储重读待办（code rail 行为，对齐
 // CodeTaskPlanningRail._get_fresh_in_progress_model_id），否则读缓存。
-//
 // Python: TaskPlanningRail.before_model_call L167-185
 func (r *TaskPlanningRail) SwitchModelIfNeeded(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, freshLoad bool) {
 	if len(r.modelSelection) == 0 || cbc == nil || cbc.Agent() == nil {
@@ -590,7 +596,6 @@ func (r *TaskPlanningRail) InjectPromptEnabled() bool { return r.injectPrompt }
 func (r *TaskPlanningRail) BindTodoTool(t *todo.TodoTool) { r.todoTool = t }
 
 // LoadTodosFresh 从存储重读会话待办并刷新缓存。
-//
 // Python: CodeTaskPlanningRail._load_fresh_todos
 func (r *TaskPlanningRail) LoadTodosFresh(ctx context.Context, sessionID string) []hschema.TodoItem {
 	if r.todoTool == nil || sessionID == "" {
@@ -613,7 +618,6 @@ func (r *TaskPlanningRail) LoadTodosFresh(ctx context.Context, sessionID string)
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getFreshInProgressModelID 从存储重读待办后取 in_progress 任务的 selected_model_id。
-//
 // Python: CodeTaskPlanningRail._get_fresh_in_progress_model_id
 func (r *TaskPlanningRail) getFreshInProgressModelID(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) string {
 	sess := cbc.Session()
@@ -628,6 +632,7 @@ func (r *TaskPlanningRail) getFreshInProgressModelID(ctx context.Context, cbc *a
 	return ""
 }
 
+// getInProgressModelID 取当前进行中任务指定的模型 ID；没有待办工具或没有进行中任务时返回空串。
 func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) string {
 	sess := cbc.Session()
 	if sess == nil {
@@ -662,6 +667,7 @@ func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agenti
 	return ""
 }
 
+// formatTaskContent 把待办列表格式化成提示词里的逐行文本，并顺带取出进行中任务的内容。
 func (r *TaskPlanningRail) formatTaskContent(todos []hschema.TodoItem) (string, string) {
 	var lines []string
 	inProgressStr := ""
@@ -675,6 +681,7 @@ func (r *TaskPlanningRail) formatTaskContent(todos []hschema.TodoItem) (string, 
 	return strings.Join(lines, "\n"), inProgressStr
 }
 
+// syncTodosFromPlan 把模型回复里的计划项同步进待办列表，保持两边一致。
 func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) {
 	sess := cbc.Session()
 	if sess == nil {

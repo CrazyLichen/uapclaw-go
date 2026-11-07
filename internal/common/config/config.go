@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Config 管理 YAML 配置文件的读写与环境变量解析。
-//
 // 支持以下能力：
 //   - 读写 config.yaml
 //   - 环境变量解析（${VAR:-default} 语法）
@@ -55,9 +54,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // New 创建配置管理器。
-//
 // path: 配置文件路径，为空时使用 path.ConfigFile() 解析（对齐 Python get_config_file()）。
-//
 // opts: 可选配置，如 WithDecrypt、WithNormalize。
 func New(path string, opts ...Option) (*Config, error) {
 	cfg := &Config{}
@@ -171,7 +168,6 @@ func (c *Config) Save(data map[string]any) error {
 }
 
 // Get 从已解析配置中获取值，支持点分隔路径。
-//
 // 示例：
 //
 //	cfg.Get("server.agentserver.host")  // 对应 YAML: server: agentserver: host:

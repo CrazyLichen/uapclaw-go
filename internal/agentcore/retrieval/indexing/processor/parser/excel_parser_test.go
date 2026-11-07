@@ -273,7 +273,6 @@ func TestExcelCellValue_类型还原(t *testing.T) {
 }
 
 // TestRowsToDocuments_includeHeaderFalse 测试 include_header=false 分支（Python 基准锁定）。
-//
 // Python 直跑基准：行文档仅非空值、无表头前缀；全空行 continue；
 // 列文档无 "Column name:" 前缀，纯 values join；空列空串。
 func TestRowsToDocuments_includeHeaderFalse(t *testing.T) {
@@ -313,7 +312,6 @@ func TestRowsToDocuments_includeHeaderFalse(t *testing.T) {
 }
 
 // TestRowsToDocuments_空表头行 测试表头边界（Python 基准锁定）。
-//
 // 全空串表头行（[”,”]）：headers 为非空列表不触发 Column N 补齐，
 // 空表头格在列文档循环回落 Column N。
 // 空 rows[0]（[]）：headers=[] → range(0) 空 → 0 docs。

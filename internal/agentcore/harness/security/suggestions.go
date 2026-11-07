@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PermissionSuggestion 权限建议，用于「始终允许」规则持久化。
-//
 // Python: PermissionSuggestion (suggestions.py L34-41)
 type PermissionSuggestion struct {
 	// Tools 适用的工具列表
@@ -58,7 +57,6 @@ var pathSuggestionKeys = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildPermissionSuggestions 构建权限建议列表。
-//
 // Python: build_permission_suggestions(tool_name, tool_args, shell_ast_result) (suggestions.py L44-61)
 func BuildPermissionSuggestions(toolName string, toolArgs map[string]any, shellAstResult *ShellAstParseResult) []PermissionSuggestion {
 	if shellSuggestionTools[toolName] {
@@ -79,7 +77,6 @@ func BuildPermissionSuggestions(toolName string, toolArgs map[string]any, shellA
 }
 
 // BuildShellPermissionSuggestions 构建 Shell 权限建议列表。
-//
 // Python: build_shell_permission_suggestions(tool_name, command, shell_ast_result) (suggestions.py L64-102)
 func BuildShellPermissionSuggestions(toolName string, command string, shellAstResult *ShellAstParseResult) []PermissionSuggestion {
 	if shellAstResult == nil {
@@ -137,7 +134,6 @@ func BuildShellPermissionSuggestions(toolName string, command string, shellAstRe
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildSingleShellSuggestion 构建单条 Shell 命令建议。
-//
 // Python: _build_single_shell_suggestion(tool_name, command) (suggestions.py L105-143)
 func buildSingleShellSuggestion(toolName, command string) *PermissionSuggestion {
 	text := strings.TrimSpace(command)
@@ -189,7 +185,6 @@ func buildSingleShellSuggestion(toolName, command string) *PermissionSuggestion 
 }
 
 // extractPrefixBeforeHeredoc 提取 heredoc 前缀。
-//
 // Python: _extract_prefix_before_heredoc(command) (suggestions.py L146-152)
 func extractPrefixBeforeHeredoc(command string) string {
 	if !strings.Contains(command, "<<") {
@@ -207,7 +202,6 @@ func extractPrefixBeforeHeredoc(command string) string {
 }
 
 // extractSimpleCommandPrefix 提取简单命令前缀（取前两个 argv）。
-//
 // Python: _extract_simple_command_prefix(command) (suggestions.py L155-162)
 func extractSimpleCommandPrefix(command string) string {
 	argv, _ := shlex.Split(command, true)
@@ -221,14 +215,12 @@ func extractSimpleCommandPrefix(command string) string {
 }
 
 // buildPrefixPattern 构建前缀模式。
-//
 // Python: _build_prefix_pattern(prefix) (suggestions.py L165-166)
 func buildPrefixPattern(prefix string) string {
 	return strings.TrimSpace(prefix) + " *"
 }
 
 // buildPathPermissionSuggestion 构建路径权限建议。
-//
 // Python: _build_path_permission_suggestion(tool_name, tool_args) (suggestions.py L169-197)
 func buildPathPermissionSuggestion(toolName string, toolArgs map[string]any) *PermissionSuggestion {
 	// 已知路径参数键
@@ -273,7 +265,6 @@ func buildPathPermissionSuggestion(toolName string, toolArgs map[string]any) *Pe
 }
 
 // valueLooksLikePath 判断值是否形似路径。
-//
 // Python: _value_looks_like_path(key, text) (suggestions.py L200-205)
 func valueLooksLikePath(key, text string) bool {
 	// 已知路径键
@@ -294,7 +285,6 @@ func valueLooksLikePath(key, text string) bool {
 }
 
 // dedupeSuggestions 去重建议列表。
-//
 // Python: _dedupe_suggestions(suggestions) (suggestions.py L208-224)
 func dedupeSuggestions(suggestions []PermissionSuggestion) []PermissionSuggestion {
 	type sig struct {

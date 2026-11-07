@@ -20,11 +20,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // P2PAbilityManager 层级团队的 P2P 能力管理器。
-//
 // 拦截 AgentCard 类型的 tool_call，通过 supervisor.Send() 做 P2P 派发，
 // 其他能力类型转发给嵌入的 AbilityManager 执行。
 // AgentCard 派发受 maxParallel 限流。
-//
 // Python: P2PAbilityManager(AbilityManager)
 type P2PAbilityManager struct {
 	// AbilityManager 嵌入：Add/Remove/Get/List/ListToolInfo 等
@@ -71,7 +69,6 @@ func NewP2PAbilityManager(supervisor team_runtime.Communicable, maxParallel int,
 }
 
 // Execute 覆写：AgentCard 类型的 tool_call 通过 P2P 派发，其他委托基类执行。
-//
 // Python: P2PAbilityManager.execute()
 func (m *P2PAbilityManager) Execute(
 	ctx context.Context,
@@ -157,7 +154,6 @@ func (m *P2PAbilityManager) Execute(
 }
 
 // IsAgent 判断指定名称的能力是否为 Agent 类型。
-//
 // 通过 AbilityKind() 判断，不依赖 AbilityManager 的私有 agents map。
 func (m *P2PAbilityManager) IsAgent(name string) bool {
 	a := m.Get(name)
@@ -168,7 +164,6 @@ func (m *P2PAbilityManager) IsAgent(name string) bool {
 }
 
 // executeSingleP2P 单个 P2P 派发。
-//
 // 流程：
 //  1. 若非 Agent 调用，委托基类（fallback 路径）
 //  2. 解析 toolCall.Arguments 为 map[string]any
@@ -264,7 +259,6 @@ func (m *P2PAbilityManager) executeSingleP2P(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // errorToP2PResult 将 error 转换为 ExecuteResult（P2P 派发失败）。
-//
 // 使用 AbilityExecutionError 包装，与 AbilityManager 的错误路径保持一致。
 func errorToP2PResult(err error, toolCallID string) agentschema.ExecuteResult {
 	execErr := ability.NewAbilityExecutionError(

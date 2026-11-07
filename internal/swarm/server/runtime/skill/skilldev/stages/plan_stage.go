@@ -108,7 +108,6 @@ func (h *PlanStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillDevC
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // generatePlan 调用阶段 Agent 生成 plan JSON。
-//
 // 对齐 Python: PlanStageHandler._generate_plan(ctx)
 // 上游 _generate_plan 仍是占位（返回 placeholder plan），这里按注释伪代码接入 Agent：
 // 构造 PLAN 消息 → 调模型 → 容错解析 JSON → 有既有 SKILL.md 时补差量分析。
@@ -146,7 +145,6 @@ func (h *PlanStageHandler) generatePlan(ctx context.Context, sctx *skilldev.Skil
 }
 
 // buildDiffAnalysis 生成「已有技能 → 新计划」的差量说明。
-//
 // Python: plan["diff_analysis"]（上游标为待实现，此处给出可读的字段级对比）
 func buildDiffAnalysis(plan map[string]any, existingSkillMD string) string {
 	newName, _ := plan["skill_name"].(string)
@@ -212,7 +210,6 @@ func (h *PlanStageHandler) buildMessages(sctx *skilldev.SkillDevContext) []map[s
 }
 
 // parsePlanJSON 从 Agent 输出中提取 JSON plan。
-//
 // 待实现: 加入容错解析（Agent 可能在 JSON 前后输出额外文本）
 func parsePlanJSON(text string) (map[string]any, error) {
 	// 简单实现：找到第一个 { 到最后一个 }

@@ -1,9 +1,7 @@
 // Package gateway 提供 Gateway 服务器，负责接收外部请求并路由到 AgentServer。
-//
 // Gateway 是 uapclaw 的统一入口，提供 WebSocket RPC 端点、静态文件服务和文件操作
 // HTTP API。通过 Transport 抽象与 AgentServer 通信。静态文件与 /file-api/* 的实现
 // 位于 channels/web（对齐 Python channels/web/app_web.py），本包只做挂载。
-//
 // 配置热重载机制：
 //   - API 触发：WebHandler config.set/config.save_all → NotifyConfigSavedOnce → onConfigSavedImpl
 //   - fsnotify 触发：reloader 监听 config.yaml 变更 → onConfigSavedImpl

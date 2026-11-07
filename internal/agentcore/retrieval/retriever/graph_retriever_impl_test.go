@@ -541,7 +541,6 @@ func newGraphChromaStore(t *testing.T, client chromav2.Client, collectionName st
 }
 
 // graphEmbedRetriever 双能力桩：EmbedModelProvider + VectorStoreAccessor。
-//
 // Python 测试桩同时挂 embed_model 与 vector_store 属性（_RetrieverStub
 // 家族）；beam search 挖 embed_model，fetch 链挖 vector_store——一桩两用。
 type graphEmbedRetriever struct {

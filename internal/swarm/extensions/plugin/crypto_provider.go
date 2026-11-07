@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GRPCPluginCryptoProvider 扩展插件 crypto 的宿主侧代理，实现 crypto.CryptoProvider。
-//
 // 将 Encrypt/Decrypt 映射到插件 gRPC 的两个 RPC（10.5.10）。
 // 对齐 Python get_crypto() 返回的 CryptoProvider 生态位；每次调用一次 gRPC 往返
 // （设计偏差 #2：子进程架构固有代价，config 面板低频路径可接受）。
@@ -44,7 +43,6 @@ func NewGRPCPluginCryptoProvider(pc *PluginClient) *GRPCPluginCryptoProvider {
 }
 
 // Encrypt 加密明文（代理到插件 Encrypt RPC）。
-//
 // 透传调用方 ctx；入参无 deadline 时施加 cryptoRPCTimeout 兜底
 // （Background 调用点同样受超时保护）。
 func (p *GRPCPluginCryptoProvider) Encrypt(ctx context.Context, plaintext string) (string, error) {
@@ -54,7 +52,6 @@ func (p *GRPCPluginCryptoProvider) Encrypt(ctx context.Context, plaintext string
 }
 
 // Decrypt 解密密文（代理到插件 Decrypt RPC）。
-//
 // 透传调用方 ctx；入参无 deadline 时施加 cryptoRPCTimeout 兜底（同 Encrypt）。
 func (p *GRPCPluginCryptoProvider) Decrypt(ctx context.Context, ciphertext string) (string, error) {
 	ctx, cancel := withCryptoTimeout(ctx)

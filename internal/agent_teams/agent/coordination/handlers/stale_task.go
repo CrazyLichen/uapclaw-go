@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StaleTaskHandler 周期轮询过期任务：CLAIMED 过期提醒 + PENDING 过期提醒（leader only）。
-//
 // EVENT_METHOD_MAP 事件到方法映射：
 //   - coordination_poll_task → onPollTask
 //

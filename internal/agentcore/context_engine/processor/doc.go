@@ -1,16 +1,13 @@
 // Package processor 提供上下文处理器插件体系。
-//
 // 处理器在两个生命周期点介入上下文管理：
 //  1. OnAddMessages     — 消息即将被添加时
 //  2. OnGetContextWindow — 上下文窗口即将返回时
 //
 // 每个处理器通过 Trigger* 方法判断是否介入，仅在返回 true 时
 // 才调用对应的 On* 方法执行实际处理。
-//
 // 核心接口（ProcessorConfig/ContextProcessor）和数据结构（ContextEvent/ProcessorOption）
 // 定义在 context_engine/interface 包中，外部包应直接导入
 // context_engine/interface 并使用 iface.Xxx 形式引用类型。
-//
 // 文件目录：
 //
 //	processor/

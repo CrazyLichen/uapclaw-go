@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakeStreamClient 立即返回一个已关闭的 chunk 通道，模拟"流结束"。
-//
 // 必须实现完整 BaseModelClient 接口，才能注册进 ClientRegistry。
 type fakeStreamClient struct {
 	// chunks 预置输出片段
@@ -41,7 +40,6 @@ type fakeStreamClient struct {
 
 // TestCallLLMStream_CanceledMidStream 防 D2b 回归：
 // 流已结束但 ctx 处于取消态时，必须返回 error，不能把半截内容当正常回答。
-//
 // 对齐 Python：取消发生在 await 点时抛 CancelledError，不会产出 answer。
 func TestCallLLMStream_CanceledMidStream(t *testing.T) {
 	a := &ReActAgent{}
@@ -76,7 +74,6 @@ func TestCallLLMStream_NotCanceledReturnsMessage(t *testing.T) {
 
 // TestCallLLMStream_流中断上抛 验证中断哨兵 chunk 会终止本轮并返回错误：
 // 否则半截内容（尤其是半截 tool_call）会被当成完整回答继续执行。
-//
 // 对齐 Python：异步生成器在流读取异常时 raise MODEL_CALL_FAILED。
 func TestCallLLMStream_流中断上抛(t *testing.T) {
 	cause := errors.New("unexpected EOF")
@@ -253,7 +250,6 @@ func TestRaiseForModelResponseError_错误文案(t *testing.T) {
 }
 
 // TestRaiseForModelResponseError_结构化详情 验证结构化字段落在 details 而非 params。
-//
 // Python: raise_error(..., details={...}) (react_agent.py L2039/L2052) —— details 是
 // rail 与前端可见的结构化详情容器，params 只参与模板消息占位符渲染，两者语义不同。
 func TestRaiseForModelResponseError_结构化详情(t *testing.T) {
@@ -291,7 +287,6 @@ func TestRaiseForModelResponseError_结构化详情(t *testing.T) {
 }
 
 // TestRaiseForModelResponseError_中文错误文案按字符截断 验证 500 上限按字符计数。
-//
 // 上游 error_message[:500] 切的是字符；Go 按字节切会切断多字节字符产出乱码。
 func TestRaiseForModelResponseError_中文错误文案按字符截断(t *testing.T) {
 	// "模型调用超限" 是 6 个字符，重复 100 次 = 600 个字符，超过 500 上限

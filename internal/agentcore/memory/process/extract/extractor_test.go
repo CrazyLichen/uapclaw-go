@@ -356,7 +356,6 @@ type mockLLMClient struct {
 }
 
 // Invoke 实现 BaseModelClient.Invoke，执行 invokeFn 并处理 OutputParser。
-//
 // 重要：必须手动调用 OutputParser.Parse() 并设置 resp.ParserContent，
 // 对齐真实 client 的行为（真实 client 在 Invoke 内部会调用 OutputParser
 // 并将解析结果填入 ParserContent）。如果不模拟此步骤，ExtractLongTermMemory
@@ -416,7 +415,6 @@ func (m *mockLLMClient) SupportsKVCacheRelease() bool {
 }
 
 // newFakeModelWithResponse 构造返回预设 JSON 字符串的 fake *llm.Model。
-//
 // 通过 NewModel + 合法 provider（"openai" + 虚假凭据 + WithVerifySSL(false)）
 // + WithClient 覆盖底层客户端实现 mock。
 // 注意：不能用 NewModelClientConfig("mock", ...)，因为 "mock" 不是合法 provider 会被校验拒绝。

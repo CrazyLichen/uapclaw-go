@@ -40,7 +40,6 @@ var (
 
 // CustomizedPipeline 运行优化流水线。
 // 根据阶段（example/description）选择对应方法，创建 BeamSearch 执行搜索。
-//
 // Python: customized_pipeline(stage, tool, config, tool_callable=None)
 //
 //  1. 创建 SimpleAPIWrapperFromCallable

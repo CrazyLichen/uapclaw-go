@@ -1,9 +1,7 @@
 // Package schema 提供 Controller 领域的公共类型定义，包括事件类型、数据帧、任务状态枚举、
 // 意图类型、输出载荷及任务实体等。
-//
 // 本包是 Controller 领域（6.19-6.22）的基础类型包，供 single_agent、session 等上层包引用，
 // 不依赖任何 agentcore 子包（除 session/stream 用于 Schema 接口），避免循环依赖。
-//
 // 文件目录：
 //
 //	schema/

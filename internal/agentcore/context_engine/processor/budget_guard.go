@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // contextWindowProvider 可选能力：上下文自带窗口上限。
-//
 // SessionModelContext 实现它（内部即 Python 的 context.context_window_tokens()，
 // 已完成 resolve_context_max 解析）；测试桩可不实现，此时预算退化为只按调用预算收口。
 type contextWindowProvider interface {
@@ -35,7 +34,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EffectiveContextBudget 返回最严格的可用上下文预算（窗口与单次调用预算取最小正值）。
-//
 // 候选与上游 budget_guard.effective_context_budget() 一致：上下文窗口、单次调用预算。
 // 上游还有「resolve_context_max(model)」候选，本仓已由 ModelContext.ContextMaxTokens()
 // 内部完成解析，故不重复。
@@ -65,7 +63,6 @@ func EffectiveContextBudget(mc iface.ModelContext, callBudget int) int {
 }
 
 // TriggerThresholdByRatio 按上下文预算与比例算触发阈值（至少 1）。
-//
 // 上游压缩器用 context_max * trigger_context_ratio 判定是否触发，
 // 本函数是 Go 侧唯一入口，避免各处理器各自换算。
 func TriggerThresholdByRatio(mc iface.ModelContext, ratio float64) int {
@@ -80,10 +77,8 @@ func TriggerThresholdByRatio(mc iface.ModelContext, ratio float64) int {
 }
 
 // TruncateMessageContentToFixedHeadTailIfOverTokenLimit 超限时截成固定首尾预览并保留后缀。
-//
 // triggerTokenLimit 只决定是否触发；触发后保留固定大小的首尾，不保证回到限内。
 // 返回内容不保证小于 triggerTokenLimit（与上游同语义：宁可留摘要也不留空洞）。
-//
 // Python: budget_guard.truncate_message_content_to_fixed_head_tail_if_over_token_limit()
 func TruncateMessageContentToFixedHeadTailIfOverTokenLimit(
 	content string,

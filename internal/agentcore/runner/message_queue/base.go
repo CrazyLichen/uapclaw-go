@@ -5,7 +5,6 @@ import "context"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // QueueMessageBase 消息基础接口，统一 Produce 参数类型。
-//
 // Python: QueueMessage 继承体系：
 // Python 中 InvokeQueueMessage/StreamQueueMessage 继承 QueueMessage，
 // produce_message(topic, message: QueueMessage) 通过 isinstance 判断子类型。
@@ -28,7 +27,6 @@ type QueueMessageBase interface {
 }
 
 // SubscriptionBase 订阅基础接口。
-//
 // Python: SubscriptionBase(ABC)
 type SubscriptionBase interface {
 	// SetMessageHandler 设置消息处理回调
@@ -42,7 +40,6 @@ type SubscriptionBase interface {
 }
 
 // MessageQueueBase 消息队列基础接口。
-//
 // Python: MessageQueueBase(ABC)
 // Produce 接收 QueueMessageBase 接口，内部通过类型断言判断同步/火忘/流式，
 // Python: produce_message(topic, message) + isinstance 判断模式。
@@ -67,7 +64,6 @@ type MessageQueueBase interface {
 
 // QueueMessage 火忘消息，发布后不等待处理完成。
 // 实现 QueueMessageBase 接口。
-//
 // Python: openjiuwen/core/runner/message_queue_base.py (QueueMessage)
 type QueueMessage struct {
 	// MessageID 消息唯一标识
@@ -82,7 +78,6 @@ type QueueMessage struct {
 
 // InvokeQueueMessage 同步消息，发布后等待处理完成。
 // 实现 QueueMessageBase 接口。
-//
 // Python: openjiuwen/core/runner/message_queue_base.py (InvokeQueueMessage)
 // Python 中 InvokeQueueMessage 继承 QueueMessage 并增加 response Future。
 // Go 中使用 channel 实现等价的同步等待语义。
@@ -101,7 +96,6 @@ type InvokeQueueMessage struct {
 
 // StreamQueueMessage 流式消息，发布后等待流式处理结果。
 // 实现 QueueMessageBase 接口。
-//
 // Python: openjiuwen/core/runner/message_queue_base.py (StreamQueueMessage)
 type StreamQueueMessage struct {
 	// MessageID 消息唯一标识
@@ -196,7 +190,6 @@ func (m *InvokeQueueMessage) GetErrorMsg() string { return m.ErrorMsg }
 func (m *InvokeQueueMessage) SetErrorMsg(msg string) { m.ErrorMsg = msg }
 
 // WaitResponse 阻塞等待 handler 处理完成。
-//
 // Python: await queue_message.response
 func (m *InvokeQueueMessage) WaitResponse(ctx context.Context) (any, error) {
 	select {
@@ -208,7 +201,6 @@ func (m *InvokeQueueMessage) WaitResponse(ctx context.Context) (any, error) {
 }
 
 // CompleteResponse handler 调用此方法通知处理完成。
-//
 // Python: queue_message.response.set_result(result) /
 //
 //	Python: queue_message.response.set_exception(err)
@@ -242,7 +234,6 @@ func (m *StreamQueueMessage) GetErrorMsg() string { return m.ErrorMsg }
 func (m *StreamQueueMessage) SetErrorMsg(msg string) { m.ErrorMsg = msg }
 
 // WaitResponse 阻塞等待 handler 流式处理完成。
-//
 // Python: await queue_message.response
 func (m *StreamQueueMessage) WaitResponse(ctx context.Context) (any, error) {
 	select {

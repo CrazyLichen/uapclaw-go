@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Workflow 工作流执行接口（最小定义，领域八扩展）。
-//
 // Python: openjiuwen/core/workflow/workflow.py (Workflow)
 // Python 的 Workflow 有 invoke/stream/card 三个能力，
 // Go 当前定义 Invoke/Stream/Card 三个方法，对齐 Python。

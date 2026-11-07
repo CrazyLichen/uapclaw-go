@@ -1,5 +1,4 @@
 // utils 包提供通用工具函数。
-//
 // net.go 实现网络相关工具：本机 IP 获取、URL 密码脱敏。
 // Python:
 //   - openjiuwen/core/common/utils/ip_utils.py
@@ -51,11 +50,9 @@ func GetLocalIP() string {
 }
 
 // RedactURLPassword 对 URL 中的密码进行脱敏，用于安全日志。
-//
 // Python: redact_url_password()
 // 将 URL 中的密码替换为 "***"，不包含密码的 URL 原样返回。
 // 解析失败时返回原始字符串。
-//
 // 示例（密码脱敏效果）：
 //
 //	RedactURLPassword("redis://:secret@host:6379/0") → "redis://:***@host:6379/0"
@@ -119,7 +116,6 @@ func RedactURLPassword(rawURL string) string {
 }
 
 // RedactURLInValue 递归脱敏值中的 URL 密码，用于安全日志输出。
-//
 // Python: _redact_url_in_value(value)
 // 递归遍历 map[string]any、[]any 和 string 类型：
 //   - string: 若匹配 URL 模式则脱敏密码

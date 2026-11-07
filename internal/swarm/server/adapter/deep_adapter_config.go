@@ -843,10 +843,8 @@ func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configB
 }
 
 // browserRuntimeEnabled 判断 browser runtime 是否启用。
-//
 // 对齐 Python _browser_runtime_enabled()：PLAYWRIGHT_RUNTIME_MCP_ENABLED 优先，
 // 回退 BROWSER_RUNTIME_MCP_ENABLED；值 strip+lower 后 ∈ {1,true,yes,on} 才启用。
-//
 // Python: interface_deep.py _browser_runtime_enabled
 func (d *DeepAdapter) browserRuntimeEnabled() bool {
 	value := strings.ToLower(strings.TrimSpace(
@@ -863,7 +861,6 @@ func (d *DeepAdapter) browserRuntimeEnabled() bool {
 }
 
 // resolveManagedBrowserBinaryFromConfig 从配置解析 managed browser 二进制路径。
-//
 // 对齐 Python _resolve_managed_browser_binary_from_config()：
 //   - browser.chrome_path 为字符串 → strip 后直接返回
 //   - 为 dict → 按 runtime.GOOS 映射平台键（darwin→macos 等），
@@ -910,10 +907,8 @@ func (d *DeepAdapter) resolveManagedBrowserBinaryFromConfig(configBase map[strin
 }
 
 // buildBrowserSubagentParams 从配置构建 browser 子代理的 SubagentCreateParams。
-//
 // 对齐 Python _build_configured_subagents 中对 build_browser_agent_config 的调用：
 // max_iterations=parse_int(browser_agent_cfg.get("max_iterations"), react_cfg.get("max_iterations", 15))。
-//
 // Python: interface_deep.py _build_configured_subagents
 func (d *DeepAdapter) buildBrowserSubagentParams(config map[string]any, browserAgentCfg map[string]any) *hschema.SubagentCreateParams {
 	resolvedLanguage := d.resolveRuntimeLanguage()

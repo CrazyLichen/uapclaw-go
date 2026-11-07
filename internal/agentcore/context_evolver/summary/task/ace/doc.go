@@ -1,5 +1,4 @@
 // Package ace 提供 ACE（Adaptive Context Evolution）算法的总结操作。
-//
 // ACE 总结管线通过 反思→策展→增量更新 的循环持续优化 Playbook：
 //
 //	LoadPlaybookOp >> (ReflectOp | ParallelReflectOp) >> (CurateOp | ParallelCurateOp) >> ApplyDeltaOp >> PersistMemoryOp

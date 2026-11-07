@@ -30,7 +30,6 @@ type streamFinalState struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PublishRobotMessages 将 Agent 响应写入出站 channel。
-//
 // 非阻塞写入，channel 满时丢弃并记录警告。
 // Outbound Pipeline（数字分身出站路由）在入队前运行；异常/错误降级 Warn
 // 照常入队（11.12 回填）。
@@ -206,7 +205,6 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 }
 
 // forwardLoopStep3UserPromptSubmit 步骤3：触发 UserPromptSubmit hooks。
-//
 // Python: _forward_loop 内 L2188-2197：
 // params 解析非 map 时空 map；prompt 取 params["query"] 或 params["content"]；
 // handler 为 nil 跳过；异常仅 Debug 日志。
@@ -236,7 +234,6 @@ func (mh *MessageHandler) forwardLoopStep3UserPromptSubmit(ctx context.Context, 
 }
 
 // handleChatSend 处理 chat.send 请求的 stream/non-stream 分发。
-//
 // Python: _forward_loop 步骤10 (L2496-2558)：
 // 记住用户查询上下文已在 HandleMessage 入队前调过（对齐 Python handle_message），
 // 此处仅做 AgentClient 连接检查 + stream/non-stream 分发。
@@ -328,7 +325,6 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 }
 
 // handleChatUserAnswer 处理 chat.user_answer 请求。
-//
 // Python: _forward_loop 步骤4 (L2200-2239)：
 // 非流式处理 + evolution 审批判断。
 // **不调 forwardToAgent**，方法内完整处理。
@@ -423,7 +419,6 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 }
 
 // handleChatCancel 处理 chat.cancel/interrupt 请求。
-//
 // Python: _forward_loop 步骤5 (L2241-2437)：
 // supplement / pause / resume / cancel 三个子分支。
 func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Message) {
@@ -485,7 +480,6 @@ func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Mess
 }
 
 // handleSupplement 处理 supplement 分支（有新输入的 CHAT_CANCEL）。
-//
 // Python: _forward_loop L2254-2403。
 func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Message, newInput string, attachments []map[string]any, paramsMap map[string]any) {
 	sessionID := msg.SessionID
@@ -592,7 +586,6 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 }
 
 // handlePauseResume 处理 pause/resume 分支。
-//
 // Python: _forward_loop L2408-2435。
 func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Message, intent string) {
 	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
@@ -622,7 +615,6 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 }
 
 // resolveInboundReferences 解析入站消息中的 @file/@agent 引用。
-//
 // Python: _forward_loop 步骤7 (L2450-2495)：
 // 仅对 CHAT_SEND 生效。
 func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
@@ -736,7 +728,6 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 }
 
 // processStreamCore 流式处理：发送请求并持续读取响应 chunk。
-//
 // Python: process_stream (L2559-2648)：
 // 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
 // 演化块处理、cancelled final、processing_status=false 通知。
@@ -815,7 +806,6 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 }
 
 // streamFinalCleanup 流式任务结束后执行 finally 清理逻辑。
-//
 // Python: process_stream finally 块 (L2618-2648)。
 // channelID 对齐 Python channel_id = env.channel or ""——
 // processing_status(false) 必须携带渠道标识，否则出站派发按空渠道
@@ -861,7 +851,6 @@ func (mh *MessageHandler) streamFinalCleanup(requestID, channelID, sessionID str
 }
 
 // processNonStreamRequest 非流式处理：发送请求并等待完整响应。
-//
 // Python: _process_non_stream_request (L2134-2159)：
 // 返回值改为 (*schema.AgentResponse, error)，供 handleChatUserAnswer 使用。
 func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope) (*schema.AgentResponse, error) {
@@ -971,7 +960,6 @@ func (mh *MessageHandler) hasActiveEmitProcessingStatusTaskForSession(sessionID 
 }
 
 // extractRuntimeParams 从消息中提取运行时参数（cwd, trusted_dirs, mode）。
-//
 // 供 supplement 分支构造 supplementParams 使用。
 func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap map[string]any) map[string]any {
 	runtimeParams := make(map[string]any)
@@ -1001,7 +989,6 @@ func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap ma
 }
 
 // pythonOrStr 模拟 Python 的 `str(a or b or "")` 语义。
-//
 // M-09: 取第一个 truthy 值（非零/非空/非 nil）并转字符串表示；
 // 全部 falsy 时返回空串。对齐 Python str() 的显示语义：
 // float64(123.0)→"123"（%.0f 系数整除时无小数）、bool→"True"/"False"、

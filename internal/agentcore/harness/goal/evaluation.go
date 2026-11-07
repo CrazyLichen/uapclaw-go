@@ -1,6 +1,5 @@
 // 本文件对应 Python openjiuwen/harness/goal/evaluation.py，
 // 提供可配置策略的完成度评估。
-//
 // 评估器不写 GoalRecord：它只产出 GoalAssessment，由 GoalManager.ApplyAssessment 落状态。
 package goal
 
@@ -61,7 +60,6 @@ func (e *GoalEvaluator) ShouldSpotCheck(record *GoalRecord) bool {
 }
 
 // Assess 按配置策略产出评估结论。
-//
 // transcriptResponse 为 nil 表示监理未被调用；空串表示调用了但返回空。
 // Python: GoalEvaluator.assess (evaluation.py L88)
 func (e *GoalEvaluator) Assess(

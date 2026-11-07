@@ -130,7 +130,6 @@ func TestHandleHistoryGet_不存在的Session(t *testing.T) {
 }
 
 // setupHistoryTest 设置历史测试环境：创建临时目录、会话目录、写入 history.json，重置路径缓存。
-//
 // race 防护：前序测试（如 TestAgentServer_ConsumeEnvelope）可能已启动包级
 // historyWorker 协程在后台消费队列，其 writeHistoryItem → historyFilePath →
 // AgentSessionsDir 会读 path 包全局缓存。ResetCache 写同一缓存前必须先
@@ -273,7 +272,6 @@ func TestHandleHistoryGetStream_基本(t *testing.T) {
 }
 
 // TestHandleHistoryGetStream_错误文案是英文协议串 锁定 chat.error 的 error 文案。
-//
 // 前端 useWebSocket.ts:1566 用 includes('invalid page_idx or session history not found')
 // 把「新会话尚无历史」当正常态静默吞掉；文案一旦被本地化（历史事故：曾译成
 // "获取历史记录失败：参数无效或会话不存在"），白名单失配，界面就会把正常态

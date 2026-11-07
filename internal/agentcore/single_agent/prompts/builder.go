@@ -10,11 +10,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SystemPromptBuilderInterface 系统提示词构建器最小接口。
-//
 // 供 Rail 等消费者通过 RailAgent 接口访问 SystemPromptBuilder，
 // 避免依赖具体类型。saprompt.SystemPromptBuilder 和
 // hprompts.SystemPromptBuilder（嵌入 base）均隐式满足此接口。
-//
 // Python: agent.system_prompt_builder 属性的类型约束
 type SystemPromptBuilderInterface interface {
 	// AddSection 添加或替换节
@@ -32,7 +30,6 @@ type SystemPromptBuilderInterface interface {
 }
 
 // PromptSection 系统提示词的单一节，支持多语言内容。
-//
 // Python: PromptSection (openjiuwen/core/single_agent/prompts/builder.py)
 type PromptSection struct {
 	// Name 节名称（同名称覆盖）
@@ -44,11 +41,9 @@ type PromptSection struct {
 }
 
 // SystemPromptBuilder 基于节的系统提示词构建器。
-//
 // 本类仅提供通用的节注册和渲染功能。
 // Agent 簇特定的提示词策略（如模式切换或提示词诊断）
 // 应通过 sectionsFilter 函数字段在外部实现。
-//
 // Python: SystemPromptBuilder (openjiuwen/core/single_agent/prompts/builder.py)
 type SystemPromptBuilder struct {
 	// language 当前语言（默认 "cn"）
@@ -85,7 +80,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSystemPromptBuilder 创建系统提示词构建器（默认语言 "cn"，无过滤）。
-//
 // Python: SystemPromptBuilder(language=DEFAULT_LANGUAGE)
 func NewSystemPromptBuilder() *SystemPromptBuilder {
 	return &SystemPromptBuilder{
@@ -95,7 +89,6 @@ func NewSystemPromptBuilder() *SystemPromptBuilder {
 }
 
 // NewSystemPromptBuilderWithFilter 创建带自定义语言和过滤函数的构建器。
-//
 // Python: harness/prompts/builder.py SystemPromptBuilder(language, mode) 子类构造
 func NewSystemPromptBuilderWithFilter(lang string, filter func([]PromptSection) []PromptSection) *SystemPromptBuilder {
 	return &SystemPromptBuilder{
@@ -106,7 +99,6 @@ func NewSystemPromptBuilderWithFilter(lang string, filter func([]PromptSection) 
 }
 
 // NewPromptSection 创建提示节。
-//
 // Python: PromptSection(name, content, priority)
 func NewPromptSection(name string, content map[string]string, priority int) PromptSection {
 	return PromptSection{
@@ -117,7 +109,6 @@ func NewPromptSection(name string, content map[string]string, priority int) Prom
 }
 
 // AddSection 添加或替换节（链式调用）。
-//
 // Python: SystemPromptBuilder.add_section(section)
 func (b *SystemPromptBuilder) AddSection(section PromptSection) *SystemPromptBuilder {
 	b.sections[section.Name] = section
@@ -125,7 +116,6 @@ func (b *SystemPromptBuilder) AddSection(section PromptSection) *SystemPromptBui
 }
 
 // RemoveSection 移除指定名称的节（链式调用）。
-//
 // Python: SystemPromptBuilder.remove_section(name)
 func (b *SystemPromptBuilder) RemoveSection(name string) *SystemPromptBuilder {
 	delete(b.sections, name)
@@ -133,14 +123,12 @@ func (b *SystemPromptBuilder) RemoveSection(name string) *SystemPromptBuilder {
 }
 
 // GetAllSections 返回所有注册节的副本。
-//
 // Python: SystemPromptBuilder.get_all_sections()
 func (b *SystemPromptBuilder) GetAllSections() map[string]PromptSection {
 	return maps.Clone(b.sections)
 }
 
 // HasSection 检查节是否存在。
-//
 // Python: SystemPromptBuilder.has_section(name)
 func (b *SystemPromptBuilder) HasSection(name string) bool {
 	_, ok := b.sections[name]
@@ -148,7 +136,6 @@ func (b *SystemPromptBuilder) HasSection(name string) bool {
 }
 
 // GetSection 按名称获取单个节，不存在返回 nil。
-//
 // Python: SystemPromptBuilder.get_section(name)
 func (b *SystemPromptBuilder) GetSection(name string) *PromptSection {
 	if s, ok := b.sections[name]; ok {
@@ -168,9 +155,7 @@ func (b *SystemPromptBuilder) SetLanguage(lang string) {
 }
 
 // Build 按优先级排序并拼接为完整系统提示词。
-//
 // 安全多次调用，每次从当前所有注册节生成完整提示词。
-//
 // Python: SystemPromptBuilder.build()
 func (b *SystemPromptBuilder) Build() string {
 	sections := b.getSectionsForBuild()
@@ -189,9 +174,7 @@ func (b *SystemPromptBuilder) Build() string {
 }
 
 // Render 渲染指定语言的内容。
-//
 // 回退顺序：精确匹配 → DefaultLanguage → map 中首个值 → 空字符串。
-//
 // Python: PromptSection.render(language)
 func (s *PromptSection) Render(language string) string {
 	if content, ok := s.Content[language]; ok {
@@ -207,7 +190,6 @@ func (s *PromptSection) Render(language string) string {
 }
 
 // CharCount 返回指定语言渲染后的字符数（Unicode 字符数，对齐 Python len()）。
-//
 // Python: PromptSection.char_count(language)
 func (s *PromptSection) CharCount(language string) int {
 	return utf8.RuneCountInString(s.Render(language))
@@ -216,7 +198,6 @@ func (s *PromptSection) CharCount(language string) int {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getSectionsForBuild 返回参与 Build 的节列表，应用 sectionsFilter 过滤。
-//
 // Python: SystemPromptBuilder._get_sections_for_build()
 func (b *SystemPromptBuilder) getSectionsForBuild() []PromptSection {
 	all := make([]PromptSection, 0, len(b.sections))

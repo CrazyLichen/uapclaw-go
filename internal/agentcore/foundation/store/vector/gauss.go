@@ -41,11 +41,9 @@ type gaussCollMeta struct {
 }
 
 // GaussVectorStore 基于 GaussDB 的向量存储实现。
-//
 // 使用 pgx/v5 pgxpool 连接池与 GaussDB 通信，支持 DiskANN 向量索引。
 // 客户端惰性创建，初始化时不需要数据库可用。
 // 元数据仅存内存缓存，进程重启后从 information_schema 回查。
-//
 // Python: vector/gauss_vector_store.py (GaussVectorStore)
 type GaussVectorStore struct {
 	// pool 数据库连接池
@@ -108,7 +106,6 @@ func (s *GaussVectorStore) Close() {
 
 // CreateCollection 创建向量集合。
 // 从 schema 构建建表 SQL，在向量字段上创建 DiskANN 索引。
-//
 // Python: GaussVectorStore.create_collection()
 func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error {
 	o := newOptions(opts...)
@@ -201,7 +198,6 @@ func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName 
 }
 
 // DeleteCollection 删除向量集合。
-//
 // Python: GaussVectorStore.delete_collection()
 func (s *GaussVectorStore) DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error {
 	pool, err := s.getClient(ctx)
@@ -233,7 +229,6 @@ func (s *GaussVectorStore) DeleteCollection(ctx context.Context, collectionName 
 }
 
 // CollectionExists 检查集合是否存在。
-//
 // Python: GaussVectorStore.collection_exists()
 func (s *GaussVectorStore) CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error) {
 	pool, err := s.getClient(ctx)
@@ -253,7 +248,6 @@ func (s *GaussVectorStore) CollectionExists(ctx context.Context, collectionName 
 }
 
 // GetSchema 获取集合的 Schema。
-//
 // Python: GaussVectorStore.get_schema()
 func (s *GaussVectorStore) GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error) {
 	pool, err := s.getClient(ctx)
@@ -330,7 +324,6 @@ func (s *GaussVectorStore) GetSchema(ctx context.Context, collectionName string,
 
 // AddDocs 添加文档到集合。
 // 按 BatchSize 分批参数化插入。
-//
 // Python: GaussVectorStore.add_docs()
 func (s *GaussVectorStore) AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error {
 	if len(docs) == 0 {
@@ -379,7 +372,6 @@ func (s *GaussVectorStore) AddDocs(ctx context.Context, collectionName string, d
 
 // Search 向量相似度搜索。
 // 使用 GaussDB 的 <-> 距离操作符 + ORDER BY + LIMIT。
-//
 // Python: GaussVectorStore.search()
 func (s *GaussVectorStore) Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error) {
 	if topK <= 0 {
@@ -484,7 +476,6 @@ func (s *GaussVectorStore) Search(ctx context.Context, collectionName string, qu
 
 // DeleteDocsByIDs 按 ID 删除文档。
 // 使用 = ANY($1) 参数化删除。
-//
 // Python: GaussVectorStore.delete_docs_by_ids()
 func (s *GaussVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
@@ -517,7 +508,6 @@ func (s *GaussVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName s
 }
 
 // DeleteDocsByFilters 按标量字段过滤条件删除文档。
-//
 // Python: GaussVectorStore.delete_docs_by_filters()
 func (s *GaussVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
@@ -550,7 +540,6 @@ func (s *GaussVectorStore) DeleteDocsByFilters(ctx context.Context, collectionNa
 }
 
 // ListCollectionNames 列出所有集合名称。
-//
 // Python: GaussVectorStore.list_collection_names()
 func (s *GaussVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
 	pool, err := s.getClient(ctx)
@@ -620,7 +609,6 @@ func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName stri
 }
 
 // RenameCollection 使用 ALTER TABLE RENAME 重命名集合（PostgreSQL 兼容）。
-//
 // Python: GaussVectorStore.rename_collection(old_name, new_name)
 func (s *GaussVectorStore) RenameCollection(ctx context.Context, oldName string, newName string, _ ...Option) error {
 	_, err := s.pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", oldName, newName))
@@ -633,7 +621,6 @@ func (s *GaussVectorStore) RenameCollection(ctx context.Context, oldName string,
 }
 
 // UpdateCollectionMetadata 更新集合元数据。
-//
 // Python: GaussVectorStore.update_collection_metadata()
 func (s *GaussVectorStore) UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error {
 	s.mu.Lock()
@@ -663,7 +650,6 @@ func (s *GaussVectorStore) UpdateCollectionMetadata(ctx context.Context, collect
 
 // GetCollectionMetadata 获取集合元数据。
 // 优先缓存，未命中则从 information_schema 回查。
-//
 // Python: GaussVectorStore.get_collection_metadata()
 func (s *GaussVectorStore) GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error) {
 	s.mu.RLock()

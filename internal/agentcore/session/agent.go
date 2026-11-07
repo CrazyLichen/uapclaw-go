@@ -21,10 +21,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Session Agent 公开会话，提供用户面向的 API。
-//
 // 组合内部层 AgentSession，实现 PreRun→Invoke/Stream→PostRun 完整生命周期。
 // 负责：状态读写、流写入、交互、回调触发、检查点持久化。
-//
 // Python: openjiuwen/core/session/agent.py (Session)
 type Session struct {
 	// sessionID 会话唯一标识，Session 自身持有，不依赖 inner
@@ -72,7 +70,6 @@ var _ interfaces.SessionFacade = (*Session)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSession 创建公开层 Session 实例。
-//
 // 默认行为（对齐 Python Session.__init__）：
 //   - sessionID: 若未指定，自动生成 UUID
 //   - config: 创建默认 Config 并设置 envs，传入 inner
@@ -261,7 +258,6 @@ func (s *Session) DumpState() map[string]any {
 }
 
 // WriteStream 写入标准输出流。
-//
 // SessionFacade 接口实现。
 // Python: Session.write_stream(data)
 func (s *Session) WriteStream(ctx context.Context, data any) error {
@@ -269,7 +265,6 @@ func (s *Session) WriteStream(ctx context.Context, data any) error {
 }
 
 // WriteCustomStream 写入自定义流。
-//
 // SessionFacade 接口实现。
 // Python: Session.write_custom_stream(data)
 func (s *Session) WriteCustomStream(ctx context.Context, data any) error {
@@ -309,7 +304,6 @@ func (s *Session) CloseStream() error {
 }
 
 // StreamEmitter 返回会话流发射器（窄访问器）。
-//
 // 供交互监督器写入不进 writer 回调链、不经类型白名单的控制帧
 // （如 round boundary 哨兵）。Python 通过 session._inner 直达同一对象：
 // session._inner.stream_writer_manager().stream_emitter()（deep_agent.py L4490）。
@@ -326,9 +320,7 @@ func (s *Session) StreamEmitter() *stream.StreamEmitter {
 }
 
 // PreRun 会话预运行：触发 AGENT_SESSION_CREATED 回调 + 检查点预执行。
-//
 // 幂等：多次调用只执行一次。
-//
 // Python: Session.pre_run()
 func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	if s.preRunDone {
@@ -368,9 +360,7 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 }
 
 // PostRun 会话后运行：关闭流 + 提交检查点。
-//
 // 幂等：多次调用只执行一次。
-//
 // Python: Session.post_run()
 // Python 中 commit() 内部 post_agent_execute 抛异常时会向上传播，Go 同样返回 Commit 错误。
 func (s *Session) PostRun(ctx context.Context) error {
@@ -411,7 +401,6 @@ func (s *Session) Commit(ctx context.Context) error {
 }
 
 // ClearSession 清空所有会话状态并重置生命周期标志。
-//
 // 对齐 Python session.clear_session()：
 //   - 清除 globalState / agentState / traceState
 //   - 释放 checkpointer 资源
@@ -456,11 +445,9 @@ func (s *Session) Interact(ctx context.Context, value any) error {
 }
 
 // CreateWorkflowSession 创建子 WorkflowSession。
-//
 // 从 AgentSession 的 AgentStateCollection 获取 globalState，
 // 包装为 WorkflowCommitState 与 AgentSession 共享全局状态。
 // WorkflowSession 的 globalState 更新 commit 后 AgentSession 也能读到。
-//
 // Python: Session.create_workflow_session()
 func (s *Session) CreateWorkflowSession() *WorkflowSession {
 	// 取出 AgentStateCollection 的 globalState（*InMemoryStateLike 实例）

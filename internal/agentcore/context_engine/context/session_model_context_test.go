@@ -1540,7 +1540,6 @@ func TestCountDialogueRounds_单轮对话(t *testing.T) {
 
 // TestClearMessages_OnlyClearsCurrentRound 行为锁定：
 // withHistory=false 只清本轮新增消息，历史前缀必须保留。
-//
 // 对齐 Python message_buffer.py:44-53（pop_back 内部把 size 夹到"本轮长度"）。
 // 说明：曾误判此处"会清掉历史"，实测 Go 的 getBackInternal 已按 withHistory 夹取，
 // 与 Python 等价；本用例转为防止将来把该语义改坏。

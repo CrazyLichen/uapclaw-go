@@ -70,7 +70,6 @@ func TestTripleBeam_Contains不存在(t *testing.T) {
 }
 
 // TestTripleBeam_Triples密封 跨对象写穿防护（B8，C2 决策钉死）
-//
 // 真实写穿场景（13.23 展开形态）：NewTripleBeam(append(b1.Triples(), t), s)
 // 若 Triples 返回内部引用且 backing 有空闲容量，两 beam 共享数组——
 // b1 二次展开的 append 写穿 b2 的第三节点。C2 每次返回独立分配，

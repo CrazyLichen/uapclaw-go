@@ -1,10 +1,8 @@
 // Package worktree 提供 Git Worktree 隔离能力，让每个 Agent 在独立的工作树中执行任务，
 // 避免并发操作对主仓库的干扰。
-//
 // 本包实现完整的 Worktree 生命周期管理：创建/恢复、进入/退出、变更检测、批量清理、
 // session 状态持久化、事件分发和 lifecycle hook 体系。
 // 对齐 Python openjiuwen/harness/tools/worktree/。
-//
 // 文件目录：
 //
 //	worktree/

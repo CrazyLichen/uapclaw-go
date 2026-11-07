@@ -15,10 +15,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NodeSessionFacade 工作流节点会话门面，提供组件开发者面向的 API。
-//
 // 包装内部层 NodeSession，为工作流组件（ComponentExecutable）提供
 // 身份查询、状态读写、追踪、交互、流写入、环境变量等能力。
-//
 // Python: openjiuwen/core/session/node.py (Session)
 type NodeSessionFacade struct {
 	// inner 内部节点会话
@@ -45,7 +43,6 @@ var _ interfaces.SessionFacade = (*NodeSessionFacade)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewNodeSessionFacade 创建工作流节点会话门面实例。
-//
 // streamMode 为 true 时，Interact() 将返回错误（流式模式不支持交互）。
 // Python: Session(session, stream_mode)
 func NewNodeSessionFacade(inner *internal.NodeSession, streamMode bool) *NodeSessionFacade {
@@ -166,13 +163,10 @@ func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 }
 
 // Interact 请求用户输入。
-//
 // SessionFacade 接口实现，仅返回 error。
 // 需要返回值时使用 InteractWithResult。
-//
 // 流式模式下（streamMode=true）返回错误，因为 GraphInterrupt 无法在
 // async generator 中恢复执行。这是工作流引擎的硬限制，不是设计偏好。
-//
 // ✅ 5.7 已回填：WorkflowInteraction 实现后填充真实逻辑
 // Python: Session.interact(value)
 func (f *NodeSessionFacade) Interact(ctx context.Context, value any) error {
@@ -181,10 +175,8 @@ func (f *NodeSessionFacade) Interact(ctx context.Context, value any) error {
 }
 
 // InteractWithResult 请求用户输入并返回结果。
-//
 // 流式模式下（streamMode=true）返回错误，因为 GraphInterrupt 无法在
 // async generator 中恢复执行。这是工作流引擎的硬限制，不是设计偏好。
-//
 // ✅ 5.7 已回填：WorkflowInteraction 实现后填充真实逻辑
 // Python: Session.interact(value)
 func (f *NodeSessionFacade) InteractWithResult(ctx context.Context, value any) (any, error) {

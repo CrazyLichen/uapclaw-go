@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // JSONSafe 递归转换常见消息/工具调用对象为可 JSON 序列化的值。
-//
 // 处理规则：
 //   - nil → nil
 //   - string/int/float64/bool → 原值
@@ -76,7 +75,6 @@ func JSONSafe(value any) any {
 }
 
 // MessageToDict 将运行时消息对象标准化为消息类字典。
-//
 // 处理规则：
 //  1. 已经是 map[string]any → 直接 JSONSafe
 //  2. 尝试 json.Marshal→json.Unmarshal 到 map[string]any → JSONSafe
@@ -122,7 +120,6 @@ func MessageToDict(msg any) map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // responseToText 从 LLM 响应中提取文本内容。
-//
 // 处理规则：
 //  1. 有 Content 字段（断言为有 Content 方法的接口）→ 返回 Content
 //  2. map[string]any → 取 "content" 或 "text" 键

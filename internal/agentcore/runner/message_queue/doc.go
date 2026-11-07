@@ -1,8 +1,6 @@
 // Package message_queue 提供消息队列接口及内存/本地实现。
-//
 // 本包对齐 Python 的 MessageQueueBase + MessageQueueInMemory + LocalMessageQueue，
 // 支持按 topic 路由、同步/火忘发布、订阅生命周期管理。
-//
 // 核心概念：
 //
 //	QueueMessageBase   — 消息基础接口（GetMessageID/GetPayload 等），统一 Produce 参数类型

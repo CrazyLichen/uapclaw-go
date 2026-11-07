@@ -51,7 +51,6 @@ var ruleMutableKeys = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DispatchPermissionsConfigRequest 执行一条权限配置 RPC。
-//
 // Python: dispatch_permissions_config_request(request) (permissions_config_rpc.py L57-156)
 //
 // 入参 params 为已解析的请求参数字典（从 json.RawMessage 解析而来）。
@@ -213,7 +212,6 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 }
 
 // GetPermissionsTools 返回 permissions.tools 配置。
-//
 // Python: get_permissions_tools() (config.py L351-358)
 func GetPermissionsTools() map[string]any {
 	cfg := loadLiveConfig()
@@ -225,7 +223,6 @@ func GetPermissionsTools() map[string]any {
 }
 
 // ReplacePermissionsToolsInConfig 整表替换 permissions.tools 并写回 YAML。
-//
 // Python: replace_permissions_tools_in_config(tools) (config.py L360-368)
 func ReplacePermissionsToolsInConfig(tools any) error {
 	persistLock.Lock()
@@ -245,7 +242,6 @@ func ReplacePermissionsToolsInConfig(tools any) error {
 }
 
 // UpdatePermissionsToolInConfig 合并单条工具级别到 permissions.tools 并写回 YAML。
-//
 // Python: update_permissions_tool_in_config(tool_name, level) (config.py L370-395)
 func UpdatePermissionsToolInConfig(toolName string, level any) (map[string]any, error) {
 	persistLock.Lock()
@@ -277,7 +273,6 @@ func UpdatePermissionsToolInConfig(toolName string, level any) (map[string]any, 
 }
 
 // DeletePermissionsToolInConfig 从 permissions.tools 中删除一个键。
-//
 // Python: delete_permissions_tool_in_config(tool_name) (config.py L397-439)
 func DeletePermissionsToolInConfig(toolName string) (bool, error) {
 	persistLock.Lock()
@@ -313,7 +308,6 @@ func DeletePermissionsToolInConfig(toolName string) (bool, error) {
 }
 
 // GetPermissionsRules 返回 permissions.rules 列表。
-//
 // Python: get_permissions_rules() (config.py L441-448)
 func GetPermissionsRules() map[string]any {
 	cfg := loadLiveConfig()
@@ -332,7 +326,6 @@ func GetPermissionsRules() map[string]any {
 }
 
 // GetPermissionsApprovalOverrides 返回 permissions.approval_overrides 列表。
-//
 // Python: get_permissions_approval_overrides() (config.py L450-457)
 func GetPermissionsApprovalOverrides() map[string]any {
 	cfg := loadLiveConfig()
@@ -350,7 +343,6 @@ func GetPermissionsApprovalOverrides() map[string]any {
 }
 
 // GetPermissionsOwnerScopes 返回 permissions.owner_scopes 和 deny_guidance_message。
-//
 // Python: get_permissions_owner_scopes() (config.py)
 func GetPermissionsOwnerScopes() map[string]any {
 	cfg := loadLiveConfig()
@@ -369,7 +361,6 @@ func GetPermissionsOwnerScopes() map[string]any {
 }
 
 // UpdatePermissionsOwnerScopesInConfig 更新 permissions.owner_scopes 和可选的 deny_guidance_message。
-//
 // Python: update_permissions_owner_scopes_in_config(owner_scopes, deny_guidance_message=None) (config.py)
 func UpdatePermissionsOwnerScopesInConfig(params map[string]any) (bool, error) {
 	persistLock.Lock()
@@ -393,7 +384,6 @@ func UpdatePermissionsOwnerScopesInConfig(params map[string]any) (bool, error) {
 }
 
 // CreatePermissionsRuleInConfig 追加一条 permissions.rules 项。
-//
 // Python: create_permissions_rule_in_config(rule) (config.py L459-490)
 func CreatePermissionsRuleInConfig(rule map[string]any) (map[string]any, error) {
 	persistLock.Lock()
@@ -458,7 +448,6 @@ func CreatePermissionsRuleInConfig(rule map[string]any) (map[string]any, error) 
 }
 
 // UpdatePermissionsRuleInConfig 按 ID 合并更新一条 rule。
-//
 // Python: update_permissions_rule_in_config(rule_id, patch) (config.py L492-538)
 func UpdatePermissionsRuleInConfig(ruleID string, patch map[string]any) (map[string]any, error) {
 	persistLock.Lock()
@@ -542,7 +531,6 @@ func UpdatePermissionsRuleInConfig(ruleID string, patch map[string]any) (map[str
 }
 
 // DeletePermissionsRuleInConfig 删除 permissions.rules 中指定 ID 的规则。
-//
 // Python: delete_permissions_rule_in_config(rule_id) (config.py L540-557)
 func DeletePermissionsRuleInConfig(ruleID string) (bool, error) {
 	persistLock.Lock()
@@ -580,7 +568,6 @@ func DeletePermissionsRuleInConfig(ruleID string) (bool, error) {
 }
 
 // DeletePermissionsApprovalOverrideInConfig 按 ID 删除 approval_overrides 中一项。
-//
 // Python: delete_permissions_approval_override_in_config(override_id) (config.py L559-575)
 func DeletePermissionsApprovalOverrideInConfig(overrideID string) (bool, error) {
 	persistLock.Lock()

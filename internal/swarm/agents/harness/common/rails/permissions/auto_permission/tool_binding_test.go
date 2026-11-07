@@ -81,7 +81,6 @@ func TestMatchesBoundMethod_非指针接收者(t *testing.T) {
 // ──────────────────────────── fake 设施 ────────────────────────────
 
 // fakeAbilityManager 只实现 Get，其余方法返回零值。
-//
 // AbilityManagerInterface 共 10 个方法，按规则 10.1-2「测试替身自己补齐」
 // 逐个空写。
 type fakeAbilityManager struct {

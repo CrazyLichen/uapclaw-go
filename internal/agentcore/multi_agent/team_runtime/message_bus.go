@@ -42,7 +42,6 @@ type MessageBusInterface interface {
 }
 
 // MessageBusConfig 消息总线配置。
-//
 // Python: MessageBusConfig (openjiuwen/core/multi_agent/team_runtime/message_bus.py)
 type MessageBusConfig struct {
 	// MaxQueueSize 单个 topic 的 channel 缓冲大小，默认 1000
@@ -54,13 +53,11 @@ type MessageBusConfig struct {
 }
 
 // MessageBus 消息总线，基于 MessageQueueInMemory 实现 P2P 和 Pub-Sub 消息收发。
-//
 // 每个会话（sessionID）对应一对 topic：
 //   - P2P topic:  {teamID}_{sessionID}__p2p__（无 sessionID 时为 {teamID}__p2p__）
 //   - Pub-Sub topic: {teamID}_{sessionID}__pubsub__（无 sessionID 时为 {teamID}__pubsub__）
 //
 // 通过 SubscriptionManager 维护订阅关系，通过 MessageRouter 路由消息到目标 Agent。
-//
 // Python: MessageBus (openjiuwen/core/multi_agent/team_runtime/message_bus.py)
 type MessageBus struct {
 	// config 消息总线配置
@@ -137,7 +134,6 @@ func WithTeamID(teamID string) MessageBusConfigOption {
 }
 
 // NewMessageBus 创建消息总线实例。
-//
 // Python: MessageBus.__init__(config, runtime, message_router)
 // Python 在初始化失败时 raise build_error(StatusCode.MESSAGE_QUEUE_INITIATION_ERROR, ...)，
 // Go 通过返回 error 对齐此语义。当前 MessageQueueInMemory 构造不返回 error，
@@ -157,7 +153,6 @@ func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime) (*MessageBus, 
 }
 
 // Start 启动消息总线。
-//
 // Python: MessageBus.start()
 func (mb *MessageBus) Start(ctx context.Context) error {
 	if mb.running.Load() {
@@ -180,7 +175,6 @@ func (mb *MessageBus) Start(ctx context.Context) error {
 }
 
 // Stop 停止消息总线。
-//
 // Python: MessageBus.stop()
 // Python: 先标记 running=False 阻止新请求进入，再清理订阅和停止队列。
 func (mb *MessageBus) Stop(ctx context.Context) error {
@@ -222,7 +216,6 @@ func (mb *MessageBus) Stop(ctx context.Context) error {
 }
 
 // CleanupSession 清理会话相关的订阅。
-//
 // Python: MessageBus.cleanup_session(session_id)
 func (mb *MessageBus) CleanupSession(ctx context.Context, sessionID string) error {
 	p2pTopic := mb.getP2PTopic(sessionID)
@@ -254,9 +247,7 @@ func (mb *MessageBus) CleanupSession(ctx context.Context, sessionID string) erro
 }
 
 // Send P2P 发送消息到指定接收者，等待响应。
-//
 // 流程：构建信封 → 确保 P2P topic 订阅 → 发布 InvokeQueueMessage → 等待响应。
-//
 // Python: MessageBus.send(message, recipient, sender, session_id, timeout)
 func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, sender string, sessionID string, timeout float64) (any, error) {
 	if !mb.running.Load() {
@@ -338,9 +329,7 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 }
 
 // Publish Pub-Sub 发布消息到指定主题，发后即忘。
-//
 // 流程：构建信封 → 确保 Pub-Sub topic 订阅 → 发布 QueueMessage（火忘）。
-//
 // Python: MessageBus.publish(message, topic_id, sender, session_id)
 func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, sender string, sessionID string) error {
 	if !mb.running.Load() {
@@ -400,35 +389,30 @@ func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, 
 }
 
 // AddSubscription 添加订阅关系。
-//
 // Python: MessageBus.add_subscription(agent_id, topic)
 func (mb *MessageBus) AddSubscription(agentID, topic string) {
 	mb.subscriptionManager.Subscribe(agentID, topic)
 }
 
 // RemoveSubscription 移除订阅关系。
-//
 // Python: MessageBus.remove_subscription(agent_id, topic)
 func (mb *MessageBus) RemoveSubscription(agentID, topic string) {
 	mb.subscriptionManager.Unsubscribe(agentID, topic)
 }
 
 // RemoveAllSubscriptions 移除 Agent 的所有订阅。
-//
 // Python: MessageBus.remove_all_subscriptions(agent_id)
 func (mb *MessageBus) RemoveAllSubscriptions(agentID string) {
 	mb.subscriptionManager.UnsubscribeAll(agentID)
 }
 
 // ListSubscriptions 列出订阅信息。
-//
 // Python: MessageBus.list_subscriptions(agent_id)
 func (mb *MessageBus) ListSubscriptions(agentID string) any {
 	return mb.subscriptionManager.ListSubscriptions(agentID)
 }
 
 // GetSubscriptionCount 获取总订阅数。
-//
 // Python: MessageBus.get_subscription_count()
 func (mb *MessageBus) GetSubscriptionCount() int {
 	return mb.subscriptionManager.GetSubscriptionCount()
@@ -437,7 +421,6 @@ func (mb *MessageBus) GetSubscriptionCount() int {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getP2PTopic 获取 P2P topic 名称。
-//
 // 格式对齐 Python：
 //   - 有 sessionID: {teamID}_{sessionID}__p2p__
 //   - 无 sessionID: {teamID}__p2p__
@@ -449,7 +432,6 @@ func (mb *MessageBus) getP2PTopic(sessionID string) string {
 }
 
 // getPubsubTopic 获取 Pub-Sub topic 名称。
-//
 // 格式对齐 Python：
 //   - 有 sessionID: {teamID}_{sessionID}__pubsub__
 //   - 无 sessionID: {teamID}__pubsub__
@@ -461,10 +443,8 @@ func (mb *MessageBus) getPubsubTopic(sessionID string) string {
 }
 
 // ensureSubscription 确保指定 topic 的订阅已激活（双检锁）。
-//
 // 快速路径：RLock 检查是否已订阅，避免大多数情况下的写锁竞争。
 // 慢速路径：Lock 创建订阅，再次检查防止重复创建。
-//
 // Python: MessageBus._ensure_subscription(topic)
 func (mb *MessageBus) ensureSubscription(ctx context.Context, topic string) error {
 	// 快速路径：读锁检查是否已订阅
@@ -518,7 +498,6 @@ func (mb *MessageBus) ensureSubscription(ctx context.Context, topic string) erro
 }
 
 // handleP2PMessage 处理 P2P 消息，提取信封并路由。
-//
 // Python: MessageBus._handle_p2p_message(payload)
 // Python 在 ValueError/Exception 时 raise build_error(StatusCode.MESSAGE_QUEUE_MESSAGE_PROCESS_EXECUTION_ERROR, ...)，
 // Go 通过返回 BuildError 对齐此语义。
@@ -539,7 +518,6 @@ func (mb *MessageBus) handleP2PMessage(ctx context.Context, payload map[string]a
 }
 
 // handlePubsubMessage 处理 Pub-Sub 消息，提取信封并路由。
-//
 // Python: MessageBus._handle_pubsub_message(payload)
 // Python 中所有异常仅记录日志不抛出（火忘语义），Go 对齐此行为：
 // 即使信封提取失败或路由失败，也仅记录日志，返回 (nil, nil)。
@@ -566,7 +544,6 @@ func (mb *MessageBus) handlePubsubMessage(ctx context.Context, payload map[strin
 }
 
 // extractEnvelopeFromPayload 从 payload 中提取消息信封。
-//
 // Python: MessageBus._extract_envelope(payload)
 func (mb *MessageBus) extractEnvelopeFromPayload(payload map[string]any) (*MessageEnvelope, error) {
 	envelopeAny, ok := payload["envelope"]

@@ -22,7 +22,6 @@ import (
 //	Fully-bound — sessionID="X" teamSession=ses 活跃会话，可读写
 //
 // 禁止状态：sessionID="" + teamSession!=nil（悬空状态）
-//
 // Python: SessionManager 的关键差异：
 //   - Python 使用 contextvars.Token 机制管理 session_id 的设置/重置
 //   - Go 使用 SessionState 可变容器 + context.Value 传播指针（同 CwdState 模式）

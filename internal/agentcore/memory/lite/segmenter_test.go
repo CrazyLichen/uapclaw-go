@@ -8,7 +8,6 @@ import (
 )
 
 // TestSegmentForFTS_过滤规则 用真实词典验证：空格/标点被过滤、英文小写化、停用词被过滤。
-//
 // 实测锚点（gse v1.3.1 + LoadDictEmbed("zh_s")）：
 // "VDS15800 组网" → gse 原始输出 ["vds15800", " ", "组网"]，过滤后 ["vds15800", "组网"]
 func TestSegmentForFTS_过滤规则(t *testing.T) {

@@ -75,7 +75,6 @@ type PlanStateAccessor interface {
 }
 
 // PlanModeController 计划模式状态机守门人。
-//
 // Python: jiuwenswarm/runtime/plan.py PlanModeController
 type PlanModeController struct {
 	// mu 保护记忆与锁表
@@ -117,7 +116,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPlanModeController 创建控制器（不绑定状态存储）。
-//
 // Python: PlanModeController.__init__（无参）
 func NewPlanModeController() *PlanModeController {
 	return &PlanModeController{
@@ -128,7 +126,6 @@ func NewPlanModeController() *PlanModeController {
 }
 
 // EnsureState 每轮执行前同步 plan 状态。
-//
 // Python: PlanModeController.ensure_state（runtime/plan.py:176-259）。
 // 返回的 Query 是可能被前置提醒改写后的文本，调用方需回写请求。
 func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest, acc PlanStateAccessor) (PlanStateResult, error) {
@@ -210,7 +207,6 @@ func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest, a
 }
 
 // MayHoldState 判断会话是否可能仍持有 plan 状态。
-//
 // Python: PlanModeController.may_hold_state
 func (c *PlanModeController) MayHoldState(sessionID, previousSessionMode string) bool {
 	if c.IsActive(sessionID) {
@@ -223,7 +219,6 @@ func (c *PlanModeController) MayHoldState(sessionID, previousSessionMode string)
 func (c *PlanModeController) IsExited(sessionID string) bool { return c.isExited(sessionID) }
 
 // CheckPostProcessExit 执行后检测工具触发的退出。
-//
 // Python: PlanModeController.check_post_process_exit
 func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanRequest, acc PlanStateAccessor) ([]ControlEvent, error) {
 	resolved := ResolveRequestRuntimeMode(req.Mode, req.SubMode)
@@ -243,7 +238,6 @@ func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanR
 }
 
 // ResetSession 删除会话时清理记忆。
-//
 // Python: PlanModeController.reset_session
 func (c *PlanModeController) ResetSession(sessionID string) {
 	c.mu.Lock()
@@ -254,7 +248,6 @@ func (c *PlanModeController) ResetSession(sessionID string) {
 }
 
 // LockFor 返回会话级锁。
-//
 // Python: PlanModeController.lock_for
 func (c *PlanModeController) LockFor(sessionID string) *sync.Mutex {
 	c.mu.Lock()
@@ -276,7 +269,6 @@ func (c *PlanModeController) IsActive(sessionID string) bool {
 }
 
 // ActiveSessions 返回当前处于 plan 的会话集合快照。
-//
 // Python: jiuwenswarm/server/agent_ws_server.py get_plan_active_sessions()
 func (c *PlanModeController) ActiveSessions() map[string]struct{} {
 	c.mu.Lock()
@@ -289,7 +281,6 @@ func (c *PlanModeController) ActiveSessions() map[string]struct{} {
 }
 
 // SessionMessageRequiresQueue 判断会话是否要求跨会话消息排队。
-//
 // 上游 runtime/plan.py:252-261 的步骤（Go 侧尚无 cross-session 消息链路，暂不实现）：
 //  1. 读取该会话 plan 状态：state.plan_mode.mode == "plan" → is_plan = true
 //  2. 读取该会话 goal 状态：goal 活跃 → is_goal_active = true
@@ -306,14 +297,12 @@ func (c *PlanModeController) SessionMessageRequiresQueue(sessionID string) bool 
 }
 
 // InjectActivationReminder 给本轮 query 前置 plan 约束提醒。
-//
 // Python: PlanModeController.inject_activation_reminder
 func InjectActivationReminder(query string) string {
 	return planActivationReminder + query
 }
 
 // ApplyPlanResult 把状态同步结果回写到请求参数（query 提醒与 mode 阻断）。
-//
 // Python: ensure_state 直接改写 request.params["query"]/["mode"]；Go 用返回值
 // 传递，由调用方在此统一回写，保证 BuildInputs 之前 params 已是最终值。
 func ApplyPlanResult(req *schema.AgentRequest, res PlanStateResult) {
@@ -338,7 +327,6 @@ func ApplyPlanResult(req *schema.AgentRequest, res PlanStateResult) {
 }
 
 // ApplyCanonicalMode 把请求的权威 mode 串写回 params["mode"]。
-//
 // Python: check_post_process_exit 首步 `request.params["mode"] = resolved.canonical_mode`
 func ApplyCanonicalMode(req *schema.AgentRequest) {
 	if req == nil {
@@ -357,7 +345,6 @@ func isSingleAgentMode(canonical string) bool {
 }
 
 // blockEntry 阻断进入：清 slug、发退出事件。
-//
 // Python: ensure_state 的 blocked 分支——此时状态已是 normal，只需清 slug、
 // 回写 params.mode 为退出模式并下发退出事件。
 func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved ResolvedMode, res PlanStateResult, acc PlanStateAccessor) (PlanStateResult, error) {
@@ -380,7 +367,6 @@ func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, r
 }
 
 // isCodeSingleMode 判断是否 code 单 agent 模式（不含 team）。
-//
 // Python: is_code_single = mode == "code" and sub_mode != "team"
 func isCodeSingleMode(canonical, subMode string) bool {
 	if strings.TrimSpace(subMode) == "team" {

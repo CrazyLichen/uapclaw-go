@@ -1,5 +1,4 @@
 // Package retriever 提供检索查询管线的统一门面。
-//
 // Retriever 接口把 VectorStore 的向量/稀疏/混合搜索能力包装为带
 // mode 校验、结果归一化、BM25 兜底的可编排检索器，供 KB 编排层
 // （SimpleKnowledgeBase/GraphKnowledgeBase，13.27/13.28）按 index_type
@@ -10,7 +9,6 @@
 // LLM 多跳外壳（GeAR 策略）——每轮检索后 _read 抽知识三元组入
 // TripleMemory，_rewrite 判事实充分性驱动下一问，末轮 RRF 融合；
 // 底层为 GraphRetriever 时自动启用图扩展与三元组链接。
-//
 // 文件目录：
 //
 //	retriever/

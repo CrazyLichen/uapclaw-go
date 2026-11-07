@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ConfirmPayload 用户确认载荷。
-//
 // Python: ConfirmPayload
 type ConfirmPayload struct {
 	// Approved 是否批准
@@ -24,7 +23,6 @@ type ConfirmPayload struct {
 }
 
 // ConfirmRequest 确认请求配置。
-//
 // Python: ConfirmRequest
 type ConfirmRequest struct {
 	// Message 向用户展示的确认消息
@@ -36,7 +34,6 @@ type ConfirmRequest struct {
 // AutoConfirmKeyFn 自动确认键生成函数。
 // 接收 ToolCall，返回用于 session auto_confirm 配置查找的 key。
 // 默认使用 toolCall.Name。
-//
 // Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
 type AutoConfirmKeyFn func(toolCall *llmschema.ToolCall) string
 
@@ -46,7 +43,6 @@ type ConfirmInterruptRailOption func(*ConfirmInterruptRail)
 // ConfirmInterruptRail 确认中断 Rail。
 // 仅当 ConfirmPayload.Approved 为 true 时放行工具执行。
 // 支持 auto_confirm 机制：当 session 状态中对应 key 为 true 时自动放行。
-//
 // Python: ConfirmInterruptRail(BaseInterruptRail) — openjiuwen/harness/rails/interrupt/confirm_rail.py
 type ConfirmInterruptRail struct {
 	BaseInterruptRail
@@ -57,7 +53,6 @@ type ConfirmInterruptRail struct {
 }
 
 // InterruptKind 本 rail 抛出的中断类型为 confirm。
-//
 // Python: ConfirmInterruptRail.interrupt_kind = InterruptKind.CONFIRM
 func (r *ConfirmInterruptRail) InterruptKind() string {
 	return saschema.InterruptKindConfirm
@@ -75,7 +70,6 @@ var _ agentinterfaces.AgentRail = (*ConfirmInterruptRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewConfirmInterruptRail 创建 ConfirmInterruptRail 实例。
-//
 // 通过选项函数配置，例如：
 //
 //	interrupt.NewConfirmInterruptRail(
@@ -113,7 +107,6 @@ func WithConfirmToolNames(names ...string) ConfirmInterruptRailOption {
 // WithAutoConfirmKeyFn 设置自动确认键生成函数。
 // 默认使用 toolCall.Name 作为 key；通过此选项可实现细粒度 auto_confirm，
 // 例如基于工具参数生成 key（如 "read_a" 对应读取 a.txt）。
-//
 // Python: 子类覆写 ConfirmInterruptRail._get_auto_confirm_key(tool_call)
 func WithAutoConfirmKeyFn(fn AutoConfirmKeyFn) ConfirmInterruptRailOption {
 	return func(r *ConfirmInterruptRail) {
@@ -159,10 +152,8 @@ func IsTruthyValue(val any) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveConfirmInterrupt ConfirmInterruptRail 的中断解析逻辑。
-//
 // auto_confirm → Approve（自动批准）；无输入 → Interrupt（中断）；
 // approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）。
-//
 // Python: ConfirmInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
 func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 	_ context.Context,
@@ -209,7 +200,6 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 
 // getAutoConfirmKey 返回 auto_confirm 配置键。
 // 优先使用 autoConfirmKeyFn（细粒度），否则默认使用 toolCall.Name。
-//
 // Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
 func (r *ConfirmInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
 	if r.autoConfirmKeyFn != nil {

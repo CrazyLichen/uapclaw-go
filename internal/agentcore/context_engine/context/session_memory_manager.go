@@ -37,7 +37,6 @@ type SessionMemoryUpdater interface {
 }
 
 // SessionMemoryConfig 会话记忆配置。
-//
 // Python: openjiuwen/core/context_engine/context/session_memory_manager.py (SessionMemoryConfig)
 type SessionMemoryConfig struct {
 	// TriggerTokens 首次触发更新的 token 阈值
@@ -68,7 +67,6 @@ type SessionMemoryUpdateOptions struct {
 
 // SessionMemoryDirectUpdater direct_replace 模式的会话记忆更新器。
 // 通过直接调用 LLM 生成完整笔记内容并写入文件。
-//
 // Python: SessionMemoryUpdateAgent._invoke_direct_replace()
 type SessionMemoryDirectUpdater struct {
 	// config 会话记忆配置
@@ -81,11 +79,9 @@ type SessionMemoryDirectUpdater struct {
 
 // SessionMemoryAgentUpdater agent_edit 模式的会话记忆更新器。
 // 通过创建专用 ReActAgent（含 edit_file 工具）编辑笔记文件。
-//
 // agent_edit 模式需要延迟创建 ReActAgent（避免循环依赖），
 // 由 SetAgent 方法在首次调用前注入 agent 实例。
 // PrimeNotesFn 回调用于预填充文件读取状态（由外部 filesystem 包实现）。
-//
 // Python: SessionMemoryUpdateAgent (openjiuwen/core/context_engine/context/session_memory_manager.py L214-466)
 type SessionMemoryAgentUpdater struct {
 	// config 会话记忆配置
@@ -105,7 +101,6 @@ type SessionMemoryAgentUpdater struct {
 
 // SessionMemoryAgent agent_edit 模式专用 Agent 接口。
 // 由外部创建的 ReActAgent 实现，避免 context 包直接依赖 agents 包。
-//
 // Python: self._agent (ReActAgent)
 type SessionMemoryAgent interface {
 	// Invoke 执行 agent 调用
@@ -122,7 +117,6 @@ type SessionMemoryAgentOption any
 type SessionMemoryTaskCallback func(sessionID string, err error)
 
 // SessionMemoryManager 会话记忆管理器，协调何时触发更新、后台任务调度和文件管理。
-//
 // Python: openjiuwen/core/context_engine/context/session_memory_manager.py (SessionMemoryManager)
 type SessionMemoryManager struct {
 	// config 会话记忆配置
@@ -154,7 +148,6 @@ const (
 )
 
 // defaultSessionMemoryTemplate 默认会话记忆 Markdown 模板。
-//
 // Python: DEFAULT_SESSION_MEMORY_TEMPLATE
 const defaultSessionMemoryTemplate = `# Session Title
 _A short and distinctive 5-10 word descriptive title for the session. Super info dense, no filler_
@@ -191,7 +184,6 @@ _Step by step, what was attempted, done? Very terse summary for each step_
 
 // defaultSessionMemoryPrompt agent_edit 模式提示词模板。
 // 占位符 {{notesPath}} 和 {{currentNotes}} 在运行时替换。
-//
 // Python: DEFAULT_SESSION_MEMORY_PROMPT
 const defaultSessionMemoryPrompt = `IMPORTANT: This message and these instructions are NOT part of the actual user conversation. Do NOT include any references to "note-taking", "session notes extraction", or these update instructions in the notes content.
 
@@ -258,7 +250,6 @@ section headers or italic _section descriptions_.
 
 // directSessionMemoryPrompt direct_replace 模式提示词模板。
 // 占位符 {{notesPath}} 和 {{currentNotes}} 在运行时替换。
-//
 // Python: DIRECT_SESSION_MEMORY_PROMPT
 const directSessionMemoryPrompt = `IMPORTANT: This message and these instructions are NOT part of the actual user conversation. Do NOT include any references to "note-taking", "session notes extraction", or these update instructions in the notes content.
 
@@ -322,7 +313,6 @@ the template structure, NOT content to be edited or removed.
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionMemoryConfig 创建默认会话记忆配置。
-//
 // 默认值：TriggerTokens=10000, TriggerAddTokens=5000, ToolMin=3,
 // 更新模式="agent_edit", 直接替换最大重试次数=2
 // 对齐 Python: SessionMemoryConfig (session_memory_manager.py:204-211)。
@@ -337,10 +327,8 @@ func NewSessionMemoryConfig() SessionMemoryConfig {
 }
 
 // SessionMemoryConfigFromMap 从 yaml 配置字典构造 SessionMemoryConfig。
-//
 // Python: ContextProcessorRail.__init__ → SessionMemoryConfig(**session_memory)
 // 键名对齐 pydantic 字段名（注意 Python 字段是 tool_min_，带尾下划线）。
-//
 // model / model_client 是嵌套结构，从 YAML dict 构造需要额外的 schema 解析，
 // 当前不支持：解析时忽略，实际使用时由 Rail.Init 的 SetModelDefaults 绑定
 // agent 当前模型（Python 在 model is None 时同样这么做）。
@@ -419,7 +407,6 @@ func sessionMemoryInt(v any, key string) (int, error) {
 }
 
 // Validate 校验会话记忆配置。
-//
 // TriggerTokens/TriggerAddTokens/ToolMin 必须 > 0，
 // UpdateMode 必须是 "agent_edit" 或 "direct_replace"。
 func (c SessionMemoryConfig) Validate() error {
@@ -479,7 +466,6 @@ func (u *SessionMemoryDirectUpdater) SetInheritedSystemPrompt(prompt string) {
 }
 
 // Invoke 执行记忆更新：构建提示消息 → 调用 LLM → 规范化输出 → 写入文件。
-//
 // Python: SessionMemoryUpdateAgent._invoke_direct_replace()
 func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMemoryUpdateOptions) error {
 	// Python: if self._config.model is None or self._config.model_client is None: raise RuntimeError(...)
@@ -617,7 +603,6 @@ func (u *SessionMemoryAgentUpdater) SetAgent(agent SessionMemoryAgent) {
 }
 
 // Invoke 执行记忆更新：通过 agent_edit 模式调用 agent 编辑笔记文件。
-//
 // 对齐 Python: SessionMemoryUpdateAgent.invoke() → _ensure_agent → _prime_notes_file_as_read → invoke
 func (u *SessionMemoryAgentUpdater) Invoke(ctx context.Context, opts SessionMemoryUpdateOptions) error {
 	if u.config.Model == nil || u.config.ModelClient == nil {
@@ -657,7 +642,6 @@ func (u *SessionMemoryAgentUpdater) Invoke(ctx context.Context, opts SessionMemo
 
 // NewSessionMemoryManager 创建会话记忆管理器。
 // 根据 UpdateMode 创建 DirectUpdater 或 AgentUpdater。
-//
 // Python: SessionMemoryManager.__init__()
 func NewSessionMemoryManager(config SessionMemoryConfig) *SessionMemoryManager {
 	var updater SessionMemoryUpdater
@@ -684,7 +668,6 @@ func (m *SessionMemoryManager) BindModelDefaults(
 }
 
 // MaybeScheduleUpdate 判断是否需要触发更新，如果需要则创建后台任务。
-//
 // Python: SessionMemoryManager.maybe_schedule_update()
 func (m *SessionMemoryManager) MaybeScheduleUpdate(
 	ctx context.Context,
@@ -783,7 +766,6 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 }
 
 // ShouldUpdate 基于阈值判断是否需要更新会话记忆。
-//
 // Python: SessionMemoryManager.should_update()
 func (m *SessionMemoryManager) ShouldUpdate(
 	sess sessioninterfaces.SessionFacade,
@@ -877,7 +859,6 @@ func (m *SessionMemoryManager) ShouldUpdate(
 }
 
 // CollectContextWindow 从 ModelContext 获取消息构建 ContextWindow。
-//
 // Python: SessionMemoryManager.collect_context_window()
 func (m *SessionMemoryManager) CollectContextWindow(mc iface.ModelContext) *iface.ContextWindow {
 	if mc == nil {
@@ -890,7 +871,6 @@ func (m *SessionMemoryManager) CollectContextWindow(mc iface.ModelContext) *ifac
 }
 
 // UpdateInheritedSystemPrompt 从消息列表提取系统提示词，设置到 updater。
-//
 // Python: SessionMemoryManager.update_inherited_system_prompt()
 func (m *SessionMemoryManager) UpdateInheritedSystemPrompt(messages []llm_schema.BaseMessage) {
 	inheritedSystemPrompt := buildSystemPromptText(messages)
@@ -907,7 +887,6 @@ func (m *SessionMemoryManager) SetOnTaskDone(cb SessionMemoryTaskCallback) {
 }
 
 // Shutdown 取消所有后台任务。
-//
 // Python: SessionMemoryManager.shutdown()
 func (m *SessionMemoryManager) Shutdown() {
 	m.mu.Lock()
@@ -919,7 +898,6 @@ func (m *SessionMemoryManager) Shutdown() {
 }
 
 // GetSessionMemoryRuntime 从 session state 获取 "__session_memory__" 键的值。
-//
 // Python: get_session_memory_runtime()
 func GetSessionMemoryRuntime(sess sessioninterfaces.SessionFacade) map[string]any {
 	if sess == nil {
@@ -943,7 +921,6 @@ func GetSessionMemoryRuntime(sess sessioninterfaces.SessionFacade) map[string]an
 }
 
 // InvalidateSessionMemoryAnchor 重置基线。
-//
 // Python: invalidate_session_memory_anchor()
 func InvalidateSessionMemoryAnchor(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
@@ -965,7 +942,6 @@ func GetSessionMemoryPath(workspaceDir, sessionID string) string {
 }
 
 // GetContextMessageID 从消息 metadata 获取 context_message_id。
-//
 // Python: get_context_message_id()
 func GetContextMessageID(msg llm_schema.BaseMessage) string {
 	metadata := msg.GetMetadata()
@@ -986,7 +962,6 @@ func GetContextMessageID(msg llm_schema.BaseMessage) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateSessionMemoryRuntime 更新运行时状态。
-//
 // Python: update_session_memory_runtime()
 func updateSessionMemoryRuntime(sess sessioninterfaces.SessionFacade, st map[string]any) {
 	if sess == nil {
@@ -1020,7 +995,6 @@ func updateSessionMemoryRuntime(sess sessioninterfaces.SessionFacade, st map[str
 
 // getPendingSessionMemoryPath 返回待提交路径。
 // 格式：{stem}.pending{ext}（如 session_context.pending.md）
-//
 // Python: SessionMemoryManager._get_pending_session_memory_path()
 func getPendingSessionMemoryPath(path string) string {
 	ext := filepath.Ext(path)
@@ -1029,7 +1003,6 @@ func getPendingSessionMemoryPath(path string) string {
 }
 
 // readOrInitSessionMemory 读取文件或初始化默认模板。
-//
 // Python: SessionMemoryManager._read_or_init_session_memory()
 func readOrInitSessionMemory(path string) string {
 	data, err := os.ReadFile(path)
@@ -1065,7 +1038,6 @@ func readOrInitSessionMemory(path string) string {
 }
 
 // buildSessionMemoryPrompt 替换 agent_edit 提示词模板中的占位符。
-//
 // Python: build_session_memory_prompt()
 func buildSessionMemoryPrompt(notesPath, currentNotes string) string {
 	return strings.ReplaceAll(
@@ -1075,7 +1047,6 @@ func buildSessionMemoryPrompt(notesPath, currentNotes string) string {
 }
 
 // buildDirectSessionMemoryPrompt 替换 direct_replace 提示词模板中的占位符。
-//
 // Python: build_direct_session_memory_prompt()
 func buildDirectSessionMemoryPrompt(notesPath, currentNotes string) string {
 	return strings.ReplaceAll(
@@ -1085,7 +1056,6 @@ func buildDirectSessionMemoryPrompt(notesPath, currentNotes string) string {
 }
 
 // buildSystemPromptText 提取第一条 SystemMessage 的 content。
-//
 // Python: build_system_prompt_text()
 func buildSystemPromptText(messages []llm_schema.BaseMessage) string {
 	if len(messages) == 0 {
@@ -1099,14 +1069,12 @@ func buildSystemPromptText(messages []llm_schema.BaseMessage) string {
 }
 
 // groupCompletedAPIRounds 委托给 processor.GroupCompletedAPIRounds。
-//
 // Python: group_completed_api_rounds()
 func groupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][2]int {
 	return processor.GroupCompletedAPIRounds(messages)
 }
 
 // findLastCompletedAPIRoundEnd 找到最后完成轮次结束索引。
-//
 // Python: find_last_completed_api_round_end()
 func findLastCompletedAPIRoundEnd(messages []llm_schema.BaseMessage) int {
 	rounds := groupCompletedAPIRounds(messages)
@@ -1131,7 +1099,6 @@ func buildSessionMemoryRuntime() map[string]any {
 }
 
 // normalizeDirectResponseContent 规范化 direct_replace 模式返回内容，去掉 markdown 代码块包裹。
-//
 // Python: SessionMemoryUpdateAgent._normalize_direct_response_content()
 func normalizeDirectResponseContent(content string) string {
 	normalized := strings.TrimSpace(content)
@@ -1145,7 +1112,6 @@ func normalizeDirectResponseContent(content string) string {
 }
 
 // getRuntimeState 获取运行时状态（带默认值填充）。
-//
 // Python: SessionMemoryManager._get_runtime_state()
 func getRuntimeState(sess sessioninterfaces.SessionFacade) map[string]any {
 	st := GetSessionMemoryRuntime(sess)
@@ -1167,7 +1133,6 @@ func setRuntimeState(sess sessioninterfaces.SessionFacade, st map[string]any) {
 }
 
 // countTokens 统计上下文窗口的 token 数。
-//
 // Python: SessionMemoryManager._count_tokens()
 func countTokens(mc iface.ModelContext, window *iface.ContextWindow) int {
 	tokenCounter := mc.TokenCounter()
@@ -1199,7 +1164,6 @@ func countTokens(mc iface.ModelContext, window *iface.ContextWindow) int {
 }
 
 // countToolCalls 统计消息列表中 AssistantMessage 的 tool_calls 总数。
-//
 // Python: SessionMemoryManager._count_tool_calls()
 func countToolCalls(messages []llm_schema.BaseMessage) int {
 	total := 0
@@ -1213,7 +1177,6 @@ func countToolCalls(messages []llm_schema.BaseMessage) int {
 }
 
 // truncateContextWindowToCompletedAPIRound 截断上下文窗口至最后一个完成的 API 轮次。
-//
 // Python: SessionMemoryManager._truncate_context_window_to_completed_api_round()
 func truncateContextWindowToCompletedAPIRound(window *iface.ContextWindow) *iface.ContextWindow {
 	completedEnd := findLastCompletedAPIRoundEnd(window.ContextMessages)
@@ -1231,7 +1194,6 @@ func truncateContextWindowToCompletedAPIRound(window *iface.ContextWindow) *ifac
 }
 
 // updateBackground 后台更新会话记忆。
-//
 // Python: SessionMemoryManager._update_background()
 func (m *SessionMemoryManager) updateBackground(
 	ctx context.Context,
@@ -1314,7 +1276,6 @@ func (m *SessionMemoryManager) updateBackground(
 }
 
 // preparePendingSessionMemory 准备 pending 文件。
-//
 // Python: SessionMemoryManager._prepare_pending_session_memory()
 func preparePendingSessionMemory(activePath, pendingPath, currentNotes string) {
 	dir := filepath.Dir(pendingPath)
@@ -1342,7 +1303,6 @@ func preparePendingSessionMemory(activePath, pendingPath, currentNotes string) {
 }
 
 // commitPendingSessionMemory 提交 pending 文件为正式文件。
-//
 // Python: SessionMemoryManager._commit_pending_session_memory()
 func commitPendingSessionMemory(pendingPath, activePath string) error {
 	if _, err := os.Stat(pendingPath); os.IsNotExist(err) {

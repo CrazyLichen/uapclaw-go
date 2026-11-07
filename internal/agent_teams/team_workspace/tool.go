@@ -18,7 +18,6 @@ import (
 // 因 team_workspace 包不能导入 tools/locales 包（循环依赖：
 // team_workspace → tools/locales → schema → team_workspace），
 // 在此定义等价类型，调用者负责将 locales.Translator 转换为此类型。
-//
 // 调用方式与 locales.Translator 完全一致:
 //   - t("workspace_meta")           → 加载 descs/{lang}/workspace_meta.md 作为描述
 //   - t("workspace_meta", "action") → 查 STRINGS["workspace_meta.action"]
@@ -29,7 +28,6 @@ type ToolTranslator func(tool string, key ...string) string
 //
 // 文件 I/O 通过标准 read_file/write_file/glob 工具经 .team/ 挂载点完成。
 // 本工具仅处理没有文件系统等价物的锁管理和版本历史查询。
-//
 // 支持 4 种操作：
 //   - lock:   获取文件锁
 //   - unlock: 释放文件锁

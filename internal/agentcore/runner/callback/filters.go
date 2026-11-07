@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventFilter 事件过滤器接口，在回调执行前拦截并控制执行行为。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (EventFilter)
 type EventFilter interface {
 	// Name 返回过滤器名称
@@ -23,7 +22,6 @@ type EventFilter interface {
 
 // RateLimitFilter 滑动窗口限流过滤器。
 // 在 timeWindow 秒内最多允许 maxCalls 次调用，超限返回 SKIP。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (RateLimitFilter)
 type RateLimitFilter struct {
 	// name 过滤器名称
@@ -40,7 +38,6 @@ type RateLimitFilter struct {
 
 // CircuitBreakerFilter 断路器过滤器。
 // 失败次数达到阈值后断开电路（返回 SKIP），超时后尝试重置。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (CircuitBreakerFilter)
 type CircuitBreakerFilter struct {
 	// name 过滤器名称
@@ -61,7 +58,6 @@ type CircuitBreakerFilter struct {
 
 // ValidationFilter 校验过滤器。
 // 使用 Validator 函数校验数据，校验失败返回 SKIP。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (ValidationFilter)
 type ValidationFilter struct {
 	// name 过滤器名称
@@ -72,7 +68,6 @@ type ValidationFilter struct {
 
 // LoggingFilter 日志过滤器。
 // 记录事件/回调/参数信息，始终返回 CONTINUE。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (LoggingFilter)
 type LoggingFilter struct {
 	// name 过滤器名称
@@ -81,7 +76,6 @@ type LoggingFilter struct {
 
 // AuthFilter 鉴权过滤器。
 // 从 data（map[string]any）中取 "user_role"，与 RequiredRole 比对，不匹配返回 SKIP。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (AuthFilter)
 type AuthFilter struct {
 	// name 过滤器名称
@@ -92,7 +86,6 @@ type AuthFilter struct {
 
 // ParamModifyFilter 参数修改过滤器。
 // 使用 Modifier 函数转换数据，返回 MODIFY 动作及修改后数据。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (ParamModifyFilter)
 type ParamModifyFilter struct {
 	// name 过滤器名称
@@ -103,7 +96,6 @@ type ParamModifyFilter struct {
 
 // ConditionalFilter 条件过滤器。
 // 条件为假时返回 ActionOnFalse 动作，为真时返回 CONTINUE。
-//
 // Python: openjiuwen/core/runner/callback/filters.py (ConditionalFilter)
 type ConditionalFilter struct {
 	// name 过滤器名称
@@ -127,7 +119,6 @@ func (f *RateLimitFilter) Name() string { return f.name }
 
 // Filter 执行滑动窗口限流检查。
 // 超限返回 FilterResult{Action: FilterActionSkip}，否则返回 FilterActionContinue。
-//
 // Python: RateLimitFilter.filter()
 func (f *RateLimitFilter) Filter(_ context.Context, event string, callbackName string, _ any) FilterResult {
 	now := time.Now()
@@ -183,7 +174,6 @@ func (f *CircuitBreakerFilter) Name() string { return f.name }
 
 // Filter 执行断路器检查。
 // 断路打开时返回 SKIP，超时后尝试重置并返回 CONTINUE。
-//
 // Python: CircuitBreakerFilter.filter()
 func (f *CircuitBreakerFilter) Filter(_ context.Context, event string, callbackName string, _ any) FilterResult {
 	key := event + ":" + callbackName
@@ -210,7 +200,6 @@ func (f *CircuitBreakerFilter) Filter(_ context.Context, event string, callbackN
 }
 
 // IsOpen 检查断路器是否打开。
-//
 // Python: CircuitBreakerFilter.is_open()
 func (f *CircuitBreakerFilter) IsOpen(key string) bool {
 	f.mu.Lock()
@@ -228,7 +217,6 @@ func (f *CircuitBreakerFilter) IsOpen(key string) bool {
 }
 
 // RecordSuccess 记录成功执行，重置失败计数。
-//
 // Python: CircuitBreakerFilter.record_success()
 func (f *CircuitBreakerFilter) RecordSuccess(event string, callbackName string) {
 	key := event + ":" + callbackName
@@ -238,7 +226,6 @@ func (f *CircuitBreakerFilter) RecordSuccess(event string, callbackName string) 
 }
 
 // RecordFailure 记录失败执行，达到阈值后打开断路器。
-//
 // Python: CircuitBreakerFilter.record_failure()
 func (f *CircuitBreakerFilter) RecordFailure(event string, callbackName string) {
 	key := event + ":" + callbackName
@@ -281,7 +268,6 @@ func NewCircuitBreakerFilter(failureThreshold int, timeout float64, name string)
 func (f *ValidationFilter) Name() string { return f.name }
 
 // Filter 执行数据校验，校验失败返回 SKIP。
-//
 // Python: ValidationFilter.filter()
 func (f *ValidationFilter) Filter(_ context.Context, _ string, _ string, data any) FilterResult {
 	if !f.Validator(data) {
@@ -310,7 +296,6 @@ func NewValidationFilter(validator func(any) bool, name string) *ValidationFilte
 func (f *LoggingFilter) Name() string { return f.name }
 
 // Filter 记录事件/回调/参数信息，始终返回 CONTINUE。
-//
 // Python: LoggingFilter.filter()
 func (f *LoggingFilter) Filter(_ context.Context, event string, callbackName string, data any) FilterResult {
 	logger.Info(logComponent).
@@ -336,7 +321,6 @@ func (f *AuthFilter) Name() string { return f.name }
 
 // Filter 执行角色鉴权，从 data（map[string]any）中取 "user_role" 进行比对。
 // 不匹配返回 SKIP，匹配返回 CONTINUE。
-//
 // Python: AuthFilter.filter()
 func (f *AuthFilter) Filter(_ context.Context, _ string, _ string, data any) FilterResult {
 	userRole := "guest"
@@ -375,7 +359,6 @@ func NewAuthFilter(requiredRole string, name string) *AuthFilter {
 func (f *ParamModifyFilter) Name() string { return f.name }
 
 // Filter 使用 Modifier 修改数据，返回 MODIFY 动作及修改后数据。
-//
 // Python: ParamModifyFilter.filter()
 func (f *ParamModifyFilter) Filter(_ context.Context, _ string, _ string, data any) FilterResult {
 	modified := f.Modifier(data)
@@ -402,7 +385,6 @@ func NewParamModifyFilter(modifier func(any) any, name string) *ParamModifyFilte
 func (f *ConditionalFilter) Name() string { return f.name }
 
 // Filter 评估条件，为真返回 CONTINUE，为假返回 ActionOnFalse。
-//
 // Python: ConditionalFilter.filter()
 func (f *ConditionalFilter) Filter(ctx context.Context, event string, callbackName string, data any) FilterResult {
 	if f.Condition(ctx, event, callbackName, data) {

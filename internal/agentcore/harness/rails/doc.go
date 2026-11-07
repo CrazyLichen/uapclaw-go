@@ -1,5 +1,4 @@
 // Package rails 提供 DeepAgent 扩展 Rail 实现。
-//
 // 在 single_agent/rail 基础上增加：
 //   - DeepAgentRail 基类：扩展 AgentRail，增加 workspace/sys_operation 和 task-iteration hooks
 //   - ProgressiveToolRail：渐进式工具权限 Rail

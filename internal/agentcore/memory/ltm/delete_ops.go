@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DeleteMemByID 按 ID 删除记忆。
-//
 // ① emit_before MEMORY_DELETED → ② 分布式锁 → writeManager.DeleteMemByID
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_DELETED) + delete_mem_by_id
 func (m *LongTermMemory) DeleteMemByID(
@@ -42,7 +41,6 @@ func (m *LongTermMemory) DeleteMemByID(
 }
 
 // DeleteMemByUserID 按用户 ID 删除记忆。
-//
 // ① emit_before MEMORY_DELETED → ② 分布式锁 → writeManager.DeleteMemByUserID
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_DELETED) + delete_mem_by_user_id
 func (m *LongTermMemory) DeleteMemByUserID(
@@ -64,7 +62,6 @@ func (m *LongTermMemory) DeleteMemByUserID(
 
 // DeleteMemByScope 按 scope 删除所有记忆。
 // 遍历 scope_user_mapping → 逐用户分布式锁 → writeManager.DeleteMemByUserID → 删除 mapping。
-//
 // 对齐 Python: LongTermMemory.delete_mem_by_scope(scope_id)
 func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) error {
 	if !validateID("MEMORY_DELETE", scopeID) {
@@ -119,7 +116,6 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 }
 
 // DeleteMessagesByUserAndScope 按用户和 scope 删除消息。
-//
 // 对齐 Python: LongTermMemory.delete_messages_by_user_and_scope(user_id, scope_id)
 func (m *LongTermMemory) DeleteMessagesByUserAndScope(
 	ctx context.Context,
@@ -146,7 +142,6 @@ func (m *LongTermMemory) DeleteMessagesByUserAndScope(
 }
 
 // DeleteVariables 删除用户变量。
-//
 // 对齐 Python: LongTermMemory.delete_variables(names, user_id, scope_id)
 func (m *LongTermMemory) DeleteVariables(
 	ctx context.Context,

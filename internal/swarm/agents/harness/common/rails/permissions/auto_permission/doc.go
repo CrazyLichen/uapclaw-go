@@ -1,9 +1,7 @@
 // Package auto_permission 提供自动权限审查层（Auto Permission）的共享契约与身份原语。
-//
 // 本包对齐 Python jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/
 // 与同级 tool_binding.py。目录名去掉 Python 的下划线前缀——下划线在 Python 表示
 // "内部子包"，Go 无此约定且导出包名不应以下划线开头。
-//
 // # 在权限链路中的位置
 //
 // 本包是 9.90a（基础类型层）的最后一块，位于 PermissionEngine 规则判定返回 ASK
@@ -38,13 +36,11 @@
 //   - DeterministicReadonlyPublicWebFetchSourceKinds
 //
 // 保留理由：规则 9.2-4 要求 Enum/常量成员集合完整映射，不得因"Go 侧用不到"裁剪。
-//
 // ⤵️ 其余常量的消费方同样在 9.90d：ReviewerUITextMaxLength 与
 // ReviewerUIShortTextMaxLength 用于 reviewer_metadata；ReviewerDenialGuidance
 // 用于 deny_response；ProhibitedFileDeliveryReason 用于 before_tool；
 // DeterministicBoundedScopeDecisionSource 与 DeterministicReadonlyPublicWebReason
 // 用于 deterministic。
-//
 // 文件目录：
 //
 //	auto_permission/

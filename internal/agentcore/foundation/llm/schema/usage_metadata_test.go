@@ -141,7 +141,6 @@ func TestUsageMetadata_EmptyJSON(t *testing.T) {
 }
 
 // TestUsageMetadata_缓存与推理字段序列化 新增字段的 JSON 键名与 nil 语义（对齐 Python 字段名）。
-//
 // Python: schema/message.py UsageMetadata 的 cache_read_tokens 等字段族
 func TestUsageMetadata_缓存与推理字段序列化(t *testing.T) {
 	meta := NewUsageMetadata()

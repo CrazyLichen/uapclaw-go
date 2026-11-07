@@ -36,12 +36,10 @@ var agentMentionQuotedPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@"(
 var agentMentionPlainPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@(?<name>agent-[\w:.@-]+)`, 0)
 
 // ResolveAtFileReferences 解析 content 中的 @path 引用并内联文件文本。
-//
 // 支持形式：
 //   - @relative/path / @/absolute/path — 基于 cwd 解析
 //   - @"path with spaces" — 引号路径
 //   - @path#L10-20 — 行范围后缀（当前忽略，读取整个文件）
-//
 // Python: resolve_at_file_references
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -136,9 +134,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 }
 
 // ExtractAgentMentions 解析 content 中的 @agent-xxx 和 @"xxx (agent)" 提及。
-//
 // 返回智能体类型名称列表（不含 "agent-" 前缀），去重保序。
-//
 // Python: extract_agent_mentions
 func ExtractAgentMentions(content string) []string {
 	if content == "" {
@@ -179,7 +175,6 @@ func ExtractAgentMentions(content string) []string {
 }
 
 // ResolveStructuredAttachments 解析结构化附件并内联文件内容。
-//
 // Python: _resolve_structured_attachments (L1513-1526)：
 //  1. 归一化结构化附件
 //  2. 构建文件引用前缀
@@ -214,7 +209,6 @@ func ResolveStructuredAttachments(content string, attachments []map[string]any, 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveReferencePath 解析引用路径（相对/绝对/~/）
-//
 // Python: _resolve_reference_path (L1438-1444)。
 func resolveReferencePath(rawPath, cwd string) string {
 	if strings.HasPrefix(rawPath, "~/") {
@@ -228,7 +222,6 @@ func resolveReferencePath(rawPath, cwd string) string {
 }
 
 // normalizeStructuredAttachments 规范化结构化附件列表（非导出版本）。
-//
 // Python: _normalize_structured_attachments (L1447-1474)：
 // 去重（按 resolved path），填充默认 type/filename。
 // 逻辑与原 NormalizeStructuredAttachments 完全相同，但改为非导出。
@@ -284,7 +277,6 @@ func normalizeStructuredAttachments(attachments []map[string]any, cwd string) []
 }
 
 // stripAttachedMentions 从 content 中移除已被 attachments 覆盖的 @ 引用。
-//
 // Python: strip_attached_mentions (L1477-1510)：
 // 对于 content 中匹配到 attachments 已包含路径的 @path 引用，
 // 将 @path 替换为 path（去掉 @ 前缀），保留 prefix（行首/空格）。

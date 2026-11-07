@@ -54,7 +54,6 @@ var nouns = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GenerateWordSlug 生成随机的 adjective-verb-noun 格式 slug。
-//
 // 使用 crypto/rand 作为随机源，对齐 Python generate_word_slug() L51-68。
 func GenerateWordSlug() string {
 	adj := adjectives[cryptoRandInt(len(adjectives))]
@@ -64,7 +63,6 @@ func GenerateWordSlug() string {
 }
 
 // ResolvePlanFilePath 根据工作区根路径和 slug 推导 plan 文件绝对路径。
-//
 // 若 .plans 目录不存在则创建。对齐 Python resolve_plan_file_path() L71-92。
 func ResolvePlanFilePath(workspaceRoot, slug string) string {
 	plansDir := filepath.Join(workspaceRoot, ".plans")
@@ -73,7 +71,6 @@ func ResolvePlanFilePath(workspaceRoot, slug string) string {
 }
 
 // GetOrCreatePlanSlug 生成不与已有 plan 文件冲突的 slug。
-//
 // 最多尝试 20 次。对齐 Python get_or_create_plan_slug() L95-111。
 func GetOrCreatePlanSlug(workspaceRoot string) string {
 	plansDir := filepath.Join(workspaceRoot, ".plans")

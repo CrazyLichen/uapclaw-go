@@ -18,11 +18,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SimpleKnowledgeBase 简单知识库（13.27）。
-//
 // 实现 KnowledgeBase 的 5 个抽象方法；4 个模板方法（ParseFiles/ParseURLs/
 // DeleteCollection/Close）与配置一致性防线全部继承 BaseKnowledgeBase。
 // retriever 为 nil 时首次 Retrieve 按 index_type 懒创建（并发安全）。
-//
 // Python: openjiuwen/core/retrieval/simple_knowledge_base.py (SimpleKnowledgeBase)
 type SimpleKnowledgeBase struct {
 	// BaseKnowledgeBase 共享基座（13.26；指针嵌入，13.8 HybridChunker 先例）
@@ -40,11 +38,9 @@ var _ KnowledgeBase = (*SimpleKnowledgeBase)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSimpleKnowledgeBase 构造简单知识库。
-//
 // r 为显式参数（Python 签名不对称的直译：基类不收 retriever，子类特有）；
 // 其余组件经 KnowledgeBaseOption 透传基座，构造期的配置一致性校验
 // （postAssignValidation）随之继承。
-//
 // Python: SimpleKnowledgeBase.__init__
 func NewSimpleKnowledgeBase(config common.KnowledgeBaseConfig,
 	r retriever.Retriever, opts ...KnowledgeBaseOption) (*SimpleKnowledgeBase, error) {
@@ -56,11 +52,9 @@ func NewSimpleKnowledgeBase(config common.KnowledgeBaseConfig,
 }
 
 // AddDocuments 添加文档到知识库，返回文档 ID 列表。
-//
 // 空白 id（含纯空格）才补 uuid → 分块 → 建索引。IndexConfig **带**
 // UseCaptionForImages（与 UpdateDocuments 不对称，Python 真实行为）。
 // database_name 经 WithIndexExtra 传入（对齐 Python build_index 关键字参数）。
-//
 // Python: add_documents
 func (s *SimpleKnowledgeBase) AddDocuments(ctx context.Context, documents []reranker.Document, opts ...KBOption) ([]string, error) {
 	_ = opts
@@ -124,12 +118,10 @@ func (s *SimpleKnowledgeBase) AddDocuments(ctx context.Context, documents []rera
 }
 
 // Retrieve 检索相关文档。
-//
 // retriever 为 nil 时按 index_type 懒创建（vector→VectorRetriever /
 // bm25→SparseRetriever / 其他→HybridRetriever），加锁双检保证只建一次；
 // config.Agentic 为真时外包 AgenticRetriever。filters 写入 RetrieveOptions
 // 但四个 retriever 实现均不消费（Python 死参数字面复刻）。
-//
 // Python: retrieve
 func (s *SimpleKnowledgeBase) Retrieve(ctx context.Context, query string, config *common.RetrievalConfig, opts ...KBOption) ([]common.RetrievalResult, error) {
 	r, err := s.ensureRetriever()
@@ -158,9 +150,7 @@ func (s *SimpleKnowledgeBase) Retrieve(ctx context.Context, query string, config
 }
 
 // DeleteDocuments 删除文档。
-//
 // 逐 doc_id 删除，循环不中断；任一返回 false → 总结果为 false。
-//
 // Python: delete_documents
 func (s *SimpleKnowledgeBase) DeleteDocuments(ctx context.Context, docIDs []string, opts ...KBOption) (bool, error) {
 	_ = opts
@@ -191,11 +181,9 @@ func (s *SimpleKnowledgeBase) DeleteDocuments(ctx context.Context, docIDs []stri
 }
 
 // UpdateDocuments 更新文档，返回更新成功的文档 ID 列表。
-//
 // 与 AddDocuments 不对称（Python 真实行为）：不做 uuid 填充；
 // IndexConfig **不带** UseCaptionForImages。按 DocID 过滤 chunks 后
 // 逐文档 UpdateIndex，成功才收集 doc_id。
-//
 // Python: update_documents
 func (s *SimpleKnowledgeBase) UpdateDocuments(ctx context.Context, documents []reranker.Document, opts ...KBOption) ([]string, error) {
 	_ = opts
@@ -251,10 +239,8 @@ func (s *SimpleKnowledgeBase) UpdateDocuments(ctx context.Context, documents []r
 }
 
 // GetStatistics 获取知识库统计信息。
-//
 // index_manager 缺失时返回 2 键短路（kb_id + index_exists=false）；
 // 存在时 GetIndexInfo 的错误直接冒泡（Python 无 try 包裹）。
-//
 // Python: get_statistics
 func (s *SimpleKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any, error) {
 	indexName := "kb_" + s.config.KBID + "_chunks"
@@ -286,10 +272,8 @@ func (s *SimpleKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureRetriever 返回可用 retriever，nil 时持锁懒创建。
-//
 // Python 侧在 retrieve 内按 index_type 三分支延迟 import 并构造；Go 为
 // 包级 import，分支逻辑保持一致。
-//
 // 并发说明：Go 内存模型下"锁外读 + 锁内写"的经典双重检查属于数据竞争，
 // 故读路径也持锁（13.27 实施期 -race 捕获）。锁粒度仅覆盖字段读取与
 // 一次性构造，实际检索在锁外执行，无吞吐影响。

@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseResponse 将 OpenAI ChatCompletionResponse 转换为 schema.AssistantMessage。
-//
 // Python: OpenAIModelClient._parse_response()
 //
 // 处理逻辑：
@@ -163,7 +162,6 @@ func ParseResponse(
 }
 
 // UsageToMap 将强类型 ResponseUsage 转为 map 形态供抽取函数消费。
-//
 // 导出以供 SiliconFlow / InferenceAffinity 复用（它们持有同一 ResponseUsage 类型）。
 func UsageToMap(usage *ResponseUsage) map[string]any {
 	if usage == nil {
@@ -183,7 +181,6 @@ func UsageToMap(usage *ResponseUsage) map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildUsageMetadata 从 OpenAI 响应的 Usage 构建 UsageMetadata。
-//
 // 统一委托 model_clients.BuildUsageMetadata（cache/reasoning 族字段一比一复刻
 // openai_model_client.py:2817-2829 / 2940-2946 组装点），cost 仍在客户端侧追加
 // （Python 同样在组装点单列 _extract_cost_info）。
@@ -200,7 +197,6 @@ func buildUsageMetadata(usage *ResponseUsage, modelName string) *llmschema.Usage
 }
 
 // extractCostFromUsage 从 OpenAI Usage 对象提取费用信息。
-//
 // 复用 model_clients.ExtractCostInfo 逻辑，将 ResponseUsage 转为 map 后调用。
 func extractCostFromUsage(usage *ResponseUsage) (inputCost, outputCost, totalCost float64) {
 	// 将 Usage 转为 map 以复用 ExtractCostInfo
@@ -216,7 +212,6 @@ func extractCostFromUsage(usage *ResponseUsage) (inputCost, outputCost, totalCos
 }
 
 // normalizeLogprobs 将 provider 的 logprobs 对象转为可 JSON 序列化的形式。
-//
 // Python: OpenAIModelClient._normalize_logprobs()
 func normalizeLogprobs(logprobs any) any {
 	if logprobs == nil {

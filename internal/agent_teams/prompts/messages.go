@@ -9,22 +9,17 @@ import (
 )
 
 // 本文件提供投递到成员对话历史的团队状态消息正文。
-//
 // 与 sections.go 相对：那个文件为 system prompt 组装 PromptSection，本文件渲染
 // 成员**被随时间告知**的团队状态——自己的身份、团队元数据、成员名册。
-//
 // 这些正文不属于 system prompt（它们要么成员间不同，要么团队存在后才出现），
 // 也不再走每轮提示词附件：附件在每次模型调用时重新编码、永远无法命中 KV 缓存。
 // 在数据首次出现的时刻一次性写进对话历史，同样的 token 只编码一次、之后一直被缓存。
-//
 // 投递、探针与持久化基线在 25.0c 的 TeamContextTracker；本文件只做纯渲染 + 名册 diff。
-//
 // Python: openjiuwen/agent_teams/prompts/messages.py (500 行)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RosterMember 名册行，本文件所有渲染函数的输入。
-//
 // Python: _list_roster() 产出的扁平 dict (team_context.py L598-624)
 type RosterMember struct {
 	// MemberName 语义成员标识，diff 的 key，不作为追踪字段
@@ -42,7 +37,6 @@ type RosterMember struct {
 }
 
 // RosterDelta 同一成员两次同伴名册快照之间的变化。
-//
 // Python: RosterDelta (messages.py L143-153)
 type RosterDelta struct {
 	// Joined 新加入的成员
@@ -61,10 +55,8 @@ type RosterDelta struct {
 
 var (
 	// messageLabels 消息正文用的双语标签表。
-	//
 	// **与 sections.go 的 labels 是两张表，不可合并**：sections.go 的是
 	// system prompt 段的标题，本表是会话消息里的字段名与说明，上游也分两处。
-	//
 	// Python: _LABELS (messages.py L35-130)
 	messageLabels = map[string]map[string]string{
 		"cn": {
@@ -140,11 +132,9 @@ var (
 	}
 
 	// trackedMemberFields 变化值得公告的字段。
-	//
 	// member_name 是身份，所以它是 diff 的 key 而不是被追踪字段；运行时状态
 	// 刻意排除——它一直在变且不属于名册成员关系。models_used 只出现在
 	// model-group leader 的名册里，仅当该组把成员路由到不同模型时才变。
-	//
 	// Python: _TRACKED_MEMBER_FIELDS (messages.py L161)
 	trackedMemberFields = []string{"display_name", "desc", "role", "models_used"}
 )
@@ -152,10 +142,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DiffRoster 以 member_name 为键 diff 两份同伴名册。
-//
 // 用 orderedmap 对齐 Python dict 的两条语义：迭代保首个插入位置、重复键后写覆盖。
 // 若用 map[string]RosterMember 迭代顺序会被随机化，字节级对拍必失败。
-//
 // Python: diff_roster (messages.py L164-189)
 func DiffRoster(old, new []RosterMember) RosterDelta {
 	oldByName := orderedmap.New[string, RosterMember]()
@@ -191,17 +179,14 @@ func DiffRoster(old, new []RosterMember) RosterDelta {
 }
 
 // IsEmpty 无任何变化、无可公告内容时返回 true。
-//
 // Python: RosterDelta.is_empty (messages.py L151-153)
 func (d RosterDelta) IsEmpty() bool {
 	return len(d.Joined) == 0 && len(d.Left) == 0 && len(d.Changed) == 0
 }
 
 // FormatMemberLine 渲染一行名册。
-//
 // markHumans 为真时给人类成员（human_agent 或 passive_human）追加 [human]。
 // prefix 是放在字段前的方括号标记，名册增量正文用它说明该成员是加入/退出/更新。
-//
 // Python: format_member_line (messages.py L197-237)
 func FormatMemberLine(member RosterMember, markHumans bool, prefix string) string {
 	displayName := member.DisplayName
@@ -232,20 +217,15 @@ func FormatMemberLine(member RosterMember, markHumans bool, prefix string) strin
 }
 
 // BuildIdentityText 渲染成员自己的身份正文，无可用字段时返回 nil。
-//
 // 携带这个成员特有的一切：它被两个名字知晓，以及它的私有工作约定（公开 desc
 // 的成员私有对应物，从不进入任何同伴的名册）。这些都在 spawn 时固定、之后不变，
 // 所以本正文只投递一次。
-//
 // displayName 在这里，是因为同伴的名册用**两个**名字列出成员：没有自己的标签，
 // 成员就分不清名册里哪一行是自己，也无法像团队其他人那样称呼自己。
-//
 // memberWorkspacePath 是成员自己的产物目录，逐成员且恒定，因此与名字同处一个正文。
-//
 // fork 处理（仅 enable_fork=True 的团队）：forkCapable 为真时前置一段恒定的能力
 // 声明，让成员知道自己的身份可能被 fork 转换通知重新指派。转换通知本身由
 // BuildIdentityConversion 渲染，作为嵌套 <identity-conversion> 元素投递。
-//
 // Python: build_identity_text (messages.py L247-315)
 func BuildIdentityText(memberName, displayName, memberWorkspacePath, memberPrompt, language string, forkCapable bool) *string {
 	privatePrompt := strings.TrimSpace(memberPrompt)
@@ -278,14 +258,11 @@ func BuildIdentityText(memberName, displayName, memberWorkspacePath, memberPromp
 }
 
 // BuildIdentityPromptDelta 只渲染身份正文里的私有工作约定小节。
-//
 // 恒定的身份字段由 BuildIdentityText 一次性投递、从不变化，所以每次编辑后
 // 重新公告它们是噪音。但私有工作约定（member_prompt.md）**可以**在会话中途
 // 手工演进，而它在模型侧的唯一通道就是身份正文——那是一次性的。
 // 本 delta 只渲染该小节，让身份正文能在不重述恒定字段的前提下重新公告演进后的约定。
-//
 // 空白 memberPrompt 返回 nil（无可重新公告的内容）。
-//
 // Python: build_identity_prompt_delta (messages.py L318-347)
 func BuildIdentityPromptDelta(memberPrompt, language string) *string {
 	privatePrompt := strings.TrimSpace(memberPrompt)
@@ -298,13 +275,10 @@ func BuildIdentityPromptDelta(memberPrompt, language string) *string {
 }
 
 // BuildIdentityConversion 渲染 fork 转换通知。
-//
 // 声明当前身份，并明确指出继承来的、更早的身份块里记录的私有工作约定与
 // 私有工作区不再适用。作为成员自己 <team-context> 里嵌套 <identity-conversion>
 // 元素的正文投递（见 RenderTeamContextWithIdentity）。
-//
 // memberName 为空时填 "?"（对齐上游 `member_name or "?"`）。
-//
 // Python: build_identity_conversion (messages.py L350-376)
 func BuildIdentityConversion(source, memberName, language string) string {
 	lbl := messagesLabelsFor(language)
@@ -318,13 +292,11 @@ func BuildIdentityConversion(source, memberName, language string) string {
 }
 
 // BuildTeamInfoText 渲染团队元数据正文，无可用字段时返回 nil。
-//
 // teamInfo 取 team_name / display_name / desc 三键（TeamBackend.GetTeamInfo 的形状）。
 // teamWorkspacePath 渲染为共享工作空间条目下的绝对路径行，外加一条「这是团队
 // 配置与内部数据目录，按绝对路径访问、不要新建 .team 子目录」的说明。
 // teamOutputsDir 只对无项目目录的成员渲染为独立条目——绑定了项目的成员把
 // 交付物留在项目里，传空串。
-//
 // Python: build_team_info_text (messages.py L379-428)
 func BuildTeamInfoText(teamInfo map[string]string, teamWorkspacePath, teamOutputsDir, language string) *string {
 	lbl := messagesLabelsFor(language)
@@ -361,13 +333,10 @@ func BuildTeamInfoText(teamInfo map[string]string, teamWorkspacePath, teamOutput
 }
 
 // BuildRosterSnapshotText 渲染同伴名册全量正文，无同伴时返回 nil。
-//
 // 在成员第一次有同伴需要被告知时投递一次；此后每次变化都用增量公告
 // （见 BuildRosterDeltaText）。
-//
 // markHumans 为真时给人类成员标 [human]。调用方按「查看者角色 +
 // expose_human_agents_to_teammates」决定是否开启，好让同伴的同伴默认保持角色匿名。
-//
 // Python: build_roster_snapshot_text (messages.py L431-458)
 func BuildRosterSnapshotText(members []RosterMember, markHumans bool, language string) *string {
 	if len(members) == 0 {
@@ -383,7 +352,6 @@ func BuildRosterSnapshotText(members []RosterMember, markHumans bool, language s
 }
 
 // BuildRosterDeltaText 渲染只列出变动项的名册变更正文，无变更时返回 nil。
-//
 // Python: build_roster_delta_text (messages.py L461-487)
 func BuildRosterDeltaText(delta RosterDelta, markHumans bool, language string) *string {
 	if delta.IsEmpty() {
@@ -405,12 +373,10 @@ func BuildRosterDeltaText(delta RosterDelta, markHumans bool, language string) *
 }
 
 // messagesLabelsFor 返回某语言的标签表，缺失时回退 cn。
-//
 // 加 messages 前缀是因为 Go 侧本包内还有 sections.go 的同名函数：上游
 // messages.py 的 labels_for 与 sections.py 的 _labels_for 分属两个模块、
 // 名字本就不同，落到同一个 Go 包后两个函数的导出名会撞成 labelsFor。
 // 两张表必须独立（同名字段取值不同），故按来源加前缀区分。
-//
 // Python: labels_for (messages.py L133-135)
 func messagesLabelsFor(language string) map[string]string {
 	if tbl, ok := messageLabels[language]; ok {
@@ -422,7 +388,6 @@ func messagesLabelsFor(language string) map[string]string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parenthesized 用该语言实际使用的括号包裹一个尾随说明。
-//
 // Python: _parenthesized (messages.py L240-244) —— cn 用全角，en 用半角且带前导空格。
 func parenthesized(text, language string) string {
 	if language == "cn" {
@@ -432,7 +397,6 @@ func parenthesized(text, language string) string {
 }
 
 // memberFieldChanged 判断两个同名成员在任一追踪字段上是否不同。
-//
 // Python: any(member.get(f,"") != previous.get(f,"") for f in _TRACKED_MEMBER_FIELDS)
 func memberFieldChanged(prev, cur RosterMember) bool {
 	if cur.DisplayName != prev.DisplayName {

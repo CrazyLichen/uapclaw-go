@@ -25,7 +25,6 @@ import (
 // Rail 的 Init 构建角色相关的团队工具（协调、消息、任务、可选工作空间
 // 和工作树扩展），并将它们的 ToolCard 注册到 Agent 的 ability_manager。
 // Uninit 清理时从 ability_manager 移除。
-//
 // 当 team 运行在 inprocess spawn 模式时，qualify_ids 将每个 ToolCard.id
 // 后缀加上 {team_name}.{member_name}，避免多个 in-process 成员在共享
 // Runner.resource_mgr 上的 ID 冲突。

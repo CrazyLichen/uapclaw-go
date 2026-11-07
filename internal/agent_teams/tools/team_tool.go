@@ -57,7 +57,6 @@ func (t *TeamTool) Card() *tool.ToolCard {
 }
 
 // GetCallTimeout 返回外层调用预算，沿用卡片级策略。
-//
 // 团队工具（建队、派成员、任务流转）没有内部执行期限，
 // 长耗时操作由各自的子流程自行约束。
 func (t *TeamTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {

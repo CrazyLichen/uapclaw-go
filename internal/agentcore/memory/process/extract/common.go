@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExtractMemoryParams 长期记忆提取参数。
-//
 // Python: openjiuwen/core/memory/process/extract/common.py (ExtractMemoryParams)
 type ExtractMemoryParams struct {
 	// UserID 用户标识
@@ -24,10 +23,8 @@ type ExtractMemoryParams struct {
 }
 
 // MemoryOperationParams 记忆操作参数（UPDATE/DELETE 语义验证时使用）。
-//
 // 本参数在 7.18 中不被直接使用，但属于 Python common.py 的一部分，
 // 后续 7.19+ Generator 的 _handle_memory_with_instruct 需要此参数。
-//
 // Python: openjiuwen/core/memory/process/extract/common.py (MemoryOperationParams)
 type MemoryOperationParams struct {
 	// UserID 用户标识

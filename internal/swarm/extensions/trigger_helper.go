@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TriggerMemoryBeforeChat 触发记忆对话前钩子并写回，拼接 memory_block 注入 inputs。
-//
 // 对齐 Python interface.py:834-845 / 951-963：
 //   - 构造 MemoryHookContext → Trigger → FromMap 写回
 //   - join 时过滤空块（对齐 Python `join(b for b in mem_ctx.memory_blocks if b)`）
@@ -41,7 +40,6 @@ func TriggerMemoryBeforeChat(ctx context.Context, request *schema.AgentRequest, 
 }
 
 // TriggerMemoryAfterChat 触发记忆对话后钩子并写回（当前宿主无消费，保持对称闭环）。
-//
 // 对齐 Python interface.py:866-877 / 1134-1146。
 func TriggerMemoryAfterChat(ctx context.Context, request *schema.AgentRequest, assistantMessage string, workspaceDir string, extra map[string]any) {
 	extReg, extErr := GetInstanceErr()

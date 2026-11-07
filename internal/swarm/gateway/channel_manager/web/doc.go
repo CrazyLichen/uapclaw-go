@@ -1,8 +1,6 @@
 // Package web 提供 Web 渠道的 WebSocket 服务端实现。
-//
 // WebChannel 通过 WebSocket 协议与前端浏览器通信，帧以 map 直接编解码
 // （对齐上游全程 dict、无帧结构体），实现了全量 RPC 方法注册与分发。
-//
 // 两层消息架构（对齐 Python _handle_raw_message）：
 //   - 第一层：normAndForward（NormalizeGatewayMessage → DeliverToMessageHandler），返回 false 不短路
 //   - 第二层：本地 method handler（返回 ack 响应给客户端）

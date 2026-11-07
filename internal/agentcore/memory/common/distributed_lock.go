@@ -16,11 +16,9 @@ import (
 // DistributedLock 基于 KV Store 的分布式锁。
 // 通过 ExclusiveSet 原子操作实现跨进程互斥，
 // UUID 防误删，CompareAndDelete 原子释放，TTL 防死锁。
-//
 // 并发约束：一个实例只代表一个逻辑持有者。lockValue 是实例级可变状态，
 // 同一实例不可跨 goroutine 共享（Acquire 已加重入守卫直接报错），
 // 每次使用应当新建实例（对齐 Python 每次 `async with DistributedLock(...)` 的用法）。
-//
 // Python: openjiuwen/core/memory/common/distributed_lock.py (DistributedLock)
 type DistributedLock struct {
 	// store KV 存储后端（Redis/InMemory 等）
@@ -70,7 +68,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDistributedLock 创建分布式锁实例。
-//
 // Python: DistributedLock(store, lock_name)
 func NewDistributedLock(store kv.BaseKVStore, lockName string) *DistributedLock {
 	return &DistributedLock{
@@ -83,14 +80,11 @@ func NewDistributedLock(store kv.BaseKVStore, lockName string) *DistributedLock 
 }
 
 // Acquire 获取分布式锁。自旋调用 ExclusiveSet 直到成功或 ctx 被取消。
-//
 // 生成 UUID 作为 lockValue，通过 ExclusiveSet 原子写入。
 // 成功时 lockValue 被保存，用于 Release 时校验身份。
 // 失败时等待 retryDelay 后重试。
-//
 // 一个实例只代表一个逻辑持有者：已持有时重复调用返回 ErrLockAlreadyAcquired，
 // 否则 lockValue 会被覆盖，导致后续 Release 匹配失败、锁泄漏到 TTL 到期。
-//
 // Python: DistributedLock.acquire()
 func (l *DistributedLock) Acquire(ctx context.Context) error {
 	l.mu.Lock()
@@ -121,10 +115,8 @@ func (l *DistributedLock) Acquire(ctx context.Context) error {
 }
 
 // Release 释放分布式锁。通过 CompareAndDelete 原子校验并删除，防止误删他人持有的锁。
-//
 // 返回 nil 不代表锁一定已被释放：key 已过期（临界区超过 TTL）或被他人持有时会跳过删除，
 // 并记录 Warn 日志。这与 Python 的 try/except 静默处理一致（返回值语义不变）。
-//
 // Python: DistributedLock.release()
 func (l *DistributedLock) Release(ctx context.Context) error {
 	// 先取快照：下面无论成功与否都会清空 lockValue
@@ -161,7 +153,6 @@ func (l *DistributedLock) Release(ctx context.Context) error {
 
 // WithLock 获取锁后执行 fn，执行完毕自动释放锁。
 // 对齐 Python 的 `async with DistributedLock(store, name):` 用法。
-//
 // 用法:
 //
 //	err := lock.WithLock(ctx, func(ctx context.Context) error {

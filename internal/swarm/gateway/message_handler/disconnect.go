@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CancelAgentSessionsOnDisconnect 断连时取消指定会话的所有 Agent 任务。
-//
 // Python: _cancel_agent_sessions_on_disconnect (L530-573)：
 // 遍历 sessionKeys（每项为 [channelID, sessionID]），
 // 构造 cancel 消息并调 CancelAgentWorkForSession。

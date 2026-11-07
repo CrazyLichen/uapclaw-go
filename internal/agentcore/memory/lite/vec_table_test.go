@@ -3,7 +3,6 @@ package lite
 import "testing"
 
 // TestParseVecTableDims 验证从 vec0 建表语句解析维度。
-//
 // 为什么要解析 sql：vec0 的维度写在 CREATE 语句里，没有系统表可查；
 // 新进程的 vectorDims 是空的，读到旧维度表时无法发现不匹配。
 func TestParseVecTableDims(t *testing.T) {

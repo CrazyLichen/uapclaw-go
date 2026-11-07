@@ -25,7 +25,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentModeRail 三层防御式 plan 模式约束 Rail。
-//
 // 职责：
 //  1. Init：注册 switch_mode / enter_plan_mode / exit_plan_mode 工具
 //  2. BeforeModelCall：注入 MODE_INSTRUCTIONS 提示词节 + 过滤隐藏工具
@@ -34,7 +33,6 @@ import (
 //
 // 优先级 85 确保 TaskPlanningRail(90)/SubagentRail(95) 先运行，
 // 本 Rail 后运行可以移除它们注入的节。
-//
 // Python: AgentModeRail (openjiuwen/harness/rails/agent_mode_rail.py)
 type AgentModeRail struct {
 	DeepAgentRail
@@ -123,7 +121,6 @@ var defaultPlanModeAllowedTools = map[string]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentModeRail 创建 AgentModeRail 实例。
-//
 // allowedTools 为 nil 时使用 defaultPlanModeAllowedTools。
 // Python: AgentModeRail.__init__(allowed_tools)
 func NewAgentModeRail(allowedTools []string) *AgentModeRail {
@@ -149,7 +146,6 @@ func NewAgentModeRail(allowedTools []string) *AgentModeRail {
 }
 
 // Init 注册 switch_mode / enter_plan_mode / exit_plan_mode 工具。
-//
 // Python: AgentModeRail.init() L105-124
 func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// Python: L111: self._agent = agent
@@ -204,7 +200,6 @@ func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 }
 
 // Uninit 移除本 Rail 注册的所有工具。
-//
 // Python: AgentModeRail.uninit() L132-150
 func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	am := agent.AbilityManager()
@@ -244,7 +239,6 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // attachmentManager 返回会话级动态提示词管理器（未注入时为 nil）。
-//
 // Python: self.attachment_manager（DeepAgent 共享给内层 ReActAgent 与各 rail）
 func (r *AgentModeRail) attachmentManager() *hprompts.Manager {
 	if provider, ok := r.agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
@@ -254,7 +248,6 @@ func (r *AgentModeRail) attachmentManager() *hprompts.Manager {
 }
 
 // BeforeModelCall 注入 MODE_INSTRUCTIONS 并在 plan 模式下过滤隐藏工具。
-//
 // Python: AgentModeRail.before_model_call() L151-196
 func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	agent := r.agent
@@ -323,7 +316,6 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 }
 
 // BeforeToolCall 三段式工具调用拦截，执行 plan 模式约束。
-//
 // 三段：
 //  1. enter/exit_plan_mode → 验证模式后放行
 //  2. 非 plan 模式 → 无条件放行
@@ -443,7 +435,6 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 }
 
 // AfterToolCall enter_plan_mode 成功时注册 task_tool，exit_plan_mode 成功时注销。
-//
 // Python: AgentModeRail.after_tool_call() L331-344
 func (r *AgentModeRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -470,7 +461,6 @@ func (r *AgentModeRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.Ag
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall + BeforeToolCall + AfterToolCall。
-//
 // Python: AgentModeRail 隐式覆盖 before_model_call/before_tool_call/after_tool_call
 func (r *AgentModeRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
@@ -504,7 +494,6 @@ func init() {
 }
 
 // rejectTool 轻量级工具拒绝——设置 _skip_tool 并注入错误结果。
-//
 // Python: AgentModeRail._reject_tool() L476-488
 func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, errorMsg string) {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -531,7 +520,6 @@ func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, er
 }
 
 // handleEnter 验证 enter_plan_mode 的模式前提。
-//
 // Python: AgentModeRail._handle_enter() L434-457
 func (r *AgentModeRail) handleEnter(cbc *agentinterfaces.AgentCallbackContext) {
 	agent := r.agent
@@ -554,7 +542,6 @@ func (r *AgentModeRail) handleEnter(cbc *agentinterfaces.AgentCallbackContext) {
 }
 
 // handleExit 验证 exit_plan_mode 的模式前提。
-//
 // Python: AgentModeRail._handle_exit() L459-474
 func (r *AgentModeRail) handleExit(cbc *agentinterfaces.AgentCallbackContext) {
 	agent := r.agent
@@ -574,7 +561,6 @@ func (r *AgentModeRail) handleExit(cbc *agentinterfaces.AgentCallbackContext) {
 }
 
 // isPlanFile 检查给定文件路径是否解析到 plan 文件。
-//
 // Python: AgentModeRail._is_plan_file() L490-506
 func (r *AgentModeRail) isPlanFile(filePath, planPath string) bool {
 	if planPath == "" || filePath == "" {
@@ -586,7 +572,6 @@ func (r *AgentModeRail) isPlanFile(filePath, planPath string) bool {
 }
 
 // extractFilePath 从 ToolCallInputs.ToolArgs 中提取 file_path 参数。
-//
 // Python: AgentModeRail._extract_file_path() L508-523
 func (r *AgentModeRail) extractFilePath(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -602,7 +587,6 @@ func (r *AgentModeRail) extractFilePath(cbc *agentinterfaces.AgentCallbackContex
 }
 
 // extractBashCommand 从 ToolCallInputs.ToolArgs 中提取 command 参数。
-//
 // Python: AgentModeRail._extract_bash_command() L525-548
 func (r *AgentModeRail) extractBashCommand(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -618,7 +602,6 @@ func (r *AgentModeRail) extractBashCommand(cbc *agentinterfaces.AgentCallbackCon
 }
 
 // registerTaskTool 在 enter_plan_mode 成功后注册 task_tool。
-//
 // Python: AgentModeRail._register_task_tool() L358-387
 func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 	if r.ownsTaskTool {
@@ -674,7 +657,6 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 }
 
 // unregisterTaskTool 注销本 Rail 持有的 task_tool。
-//
 // Python: AgentModeRail._unregister_task_tool() L389-408
 func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 	if !r.ownsTaskTool || len(r.taskTools) == 0 {
@@ -715,7 +697,6 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 }
 
 // isTaskToolRegistered 检查 task_tool 是否已在 AbilityManager 中注册。
-//
 // Python: AgentModeRail._is_task_tool_registered() L346-356
 func (r *AgentModeRail) isTaskToolRegistered() bool {
 	// Python: L348-356: Runner.resource_mgr.get_tool() → 查找 "task_tool"
@@ -736,7 +717,6 @@ func (r *AgentModeRail) isTaskToolRegistered() bool {
 }
 
 // syncTaskToolForModelToolInputs 同步 task_tool 在 model 可见工具列表中的可见性。
-//
 // 在 react-agent 流程中 ctx.inputs.tools 可能跨 turn 复用，
 // 此方法保持 task_tool 与当前注册状态一致：
 //   - 持有+已注册 → 确保存在
@@ -784,7 +764,6 @@ func (r *AgentModeRail) syncTaskToolForModelToolInputs(cbc *agentinterfaces.Agen
 }
 
 // buildAvailableAgents 构建格式化的子 Agent 描述。
-//
 // Python: AgentModeRail._build_available_agents() L410-432
 func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) string {
 	var lines []string
@@ -837,7 +816,6 @@ func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) s
 }
 
 // languageIsCN 检查当前语言是否为中文。
-//
 // Python: AgentModeRail._language_is_cn() L126-130
 func (r *AgentModeRail) languageIsCN() bool {
 	if r.systemPromptBuilder == nil {

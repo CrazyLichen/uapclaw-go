@@ -9,13 +9,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseOp 操作接口。
-//
 // 操作是可组合的计算原子，通过 Then（顺序）和 With（并行）组合成流水线。
 // Python 用 __rshift__ (>>) 和 __or__ (|) 运算符，Go 用方法链。
-//
 // Python BaseOp.__call__ 返回同一个 context 对象（原地变异），
 // Go 改为 Execute 返回 error，通过 RuntimeContext 传递中间结果。
-//
 // Python: openjiuwen/extensions/context_evolver/core/op/base_op.py
 type BaseOp interface {
 	// Execute 执行操作，读写 RuntimeContext
@@ -23,10 +20,8 @@ type BaseOp interface {
 }
 
 // OpBase 操作基类，提供对 ServiceContext 中服务的统一访问。
-//
 // 对齐 Python BaseOp._service_context 属性及其 llm/embedding_model/vector_store 属性。
 // 具体 Op 嵌入此结构体以复用服务访问逻辑，避免每个 Op 重复写字段和方法。
-//
 // Python: openjiuwen/extensions/context_evolver/core/op/base_op.py
 type OpBase struct {
 	// sc 服务上下文引用，构造时注入

@@ -1,12 +1,10 @@
 // Package vector_fields 提供向量索引配置的通用框架和各数据库索引子类型。
-//
 // 本包定义了 VectorField 基类及其配套的枚举类型（DatabaseType、IndexType），
 // 通过 vf 结构体标签实现 stage 过滤机制，支持子类扩展。
 // 提供 Milvus 特有的索引子类型（AUTO/FLAT/HNSW/IVF/SCANN），
 // 以及 Chroma 和 PGVector 的索引子类型，以及 GaussDB 的 DiskANN 索引子类型，
 // 以及 Elasticsearch 的 k-NN 索引子类型，
 // 各子类型通过 vf 标签区分 construct 和 search 阶段的参数。
-//
 // 核心设计：
 //   - 子类通过嵌入 VectorField 并在字段上添加 `vf:"construct"` 或 `vf:"search"` 标签
 //     来标记字段所属阶段

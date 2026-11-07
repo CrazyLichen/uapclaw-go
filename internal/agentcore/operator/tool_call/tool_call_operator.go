@@ -11,10 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolCallOperator 工具描述参数句柄。
-//
 // 管理 tool_description 参数（map[tool_name]description）。
 // 参数变更通过 onParameterUpdated 回调推送给消费者。
-//
 // 更新入口：
 //   - SetParameter(): 演化更新
 //   - LoadState(): 检查点恢复
@@ -47,7 +45,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewToolCallOperator 创建 ToolCallOperator 实例。
-//
 // Python: ToolCallOperator.__init__(operator_id, descriptions, on_parameter_updated)
 func NewToolCallOperator(operatorID string, opts ...ToolCallOperatorOption) *ToolCallOperator {
 	op := &ToolCallOperator{
@@ -63,7 +60,6 @@ func NewToolCallOperator(operatorID string, opts ...ToolCallOperatorOption) *Too
 }
 
 // OperatorID 返回操作器标识。
-//
 // Python: ToolCallOperator.operator_id (property)
 func (op *ToolCallOperator) OperatorID() string {
 	return op.operatorID
@@ -71,7 +67,6 @@ func (op *ToolCallOperator) OperatorID() string {
 
 // GetTunables 获取可调参数。
 // 仅当 descriptions 非空时暴露 tool_description。
-//
 // Python: ToolCallOperator.get_tunables()
 func (op *ToolCallOperator) GetTunables() map[string]operator.TunableSpec {
 	if len(op.descriptions) == 0 {
@@ -91,7 +86,6 @@ func (op *ToolCallOperator) GetTunables() map[string]operator.TunableSpec {
 // SetParameter 设置可调参数值（工具描述）。
 // 仅接受 target="tool_description" 且 value 为 map[string]string 或 map[string]any 类型。
 // 不合法类型静默忽略（对齐 Python 行为），不更新内部状态。
-//
 // Python: ToolCallOperator.set_parameter(target, value)
 func (op *ToolCallOperator) SetParameter(target string, value any) {
 	if target != TargetToolDescription {
@@ -109,7 +103,6 @@ func (op *ToolCallOperator) SetParameter(target string, value any) {
 }
 
 // GetState 获取当前状态，用于检查点。
-//
 // Python: ToolCallOperator.get_state()
 func (op *ToolCallOperator) GetState() map[string]any {
 	return map[string]any{
@@ -120,7 +113,6 @@ func (op *ToolCallOperator) GetState() map[string]any {
 // LoadState 从检查点恢复状态。
 // 触发 onParameterUpdated 回调。
 // 直接赋值，对齐 Python state["tool_description"].copy() 行为。
-//
 // Python: ToolCallOperator.load_state(state)
 func (op *ToolCallOperator) LoadState(state map[string]any) {
 	if td, ok := state[TargetToolDescription]; ok {
@@ -137,7 +129,6 @@ func (op *ToolCallOperator) LoadState(state map[string]any) {
 
 // ApplyUpdate 应用结构化演化更新。
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
-//
 // Python: Operator.apply_update 默认实现
 func (op *ToolCallOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)

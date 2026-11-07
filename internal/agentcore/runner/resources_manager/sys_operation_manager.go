@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SysOperationMgr 系统操作资源管理器。
-//
 // Python: SysOperationMgr (openjiuwen/core/runner/resources_manager/sys_operation_manager.py)
 type SysOperationMgr struct {
 	// sysOperations 系统操作实例注册表
@@ -39,7 +38,6 @@ func NewSysOperationMgr() *SysOperationMgr {
 }
 
 // AddSysOperation 注册系统操作。
-//
 // 校验流程：
 //  1. 校验 sysOperationID 非空且不重复
 //  2. 校验 instance 非空
@@ -76,7 +74,6 @@ func (m *SysOperationMgr) AddSysOperation(sysOperationID string, instance sysop.
 }
 
 // RemoveSysOperation 注销系统操作。
-//
 // 校验流程：
 //  1. 校验 sysOperationID 非空
 //  2. 从 sysOperations 弹出实例
@@ -105,7 +102,6 @@ func (m *SysOperationMgr) RemoveSysOperation(sysOperationID string) (sysop.SysOp
 }
 
 // GetSysOperation 获取系统操作。
-//
 // 校验流程：
 //  1. 校验 sysOperationID 非空
 //  2. 从 sysOperations 查询并返回

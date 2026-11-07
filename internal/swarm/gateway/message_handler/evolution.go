@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsEvolutionApprovalRequestID 判断 requestID 是否为 evolution 审批请求 ID。
-//
 // Python: _is_evolution_approval_request_id (L1891-1898)：
 // 支持 skill evolution (skill_evolve_*) 和 team skill evolution (team_skill_evolve_*)。
 func IsEvolutionApprovalRequestID(requestID string) bool {
@@ -29,7 +28,6 @@ func IsEvolutionApprovalRequestID(requestID string) bool {
 }
 
 // BuildSupplementContinuationQuery 构造补充续接查询文本。
-//
 // Python: _build_supplement_continuation_query (L2076-2098)：
 // 将用户补充输入和原始任务请求组合为续接提示词。
 func BuildSupplementContinuationQuery(newInput, originalRequest string) string {
@@ -64,7 +62,6 @@ func BuildSupplementContinuationQuery(newInput, originalRequest string) string {
 }
 
 // BuildQueuedChatSendMessage 构造排队的 chat.send 消息。
-//
 // Python: _build_queued_chat_send_message (L2101-2132)：
 // 构造 supplement 续接的 chat.send 请求消息。
 func BuildQueuedChatSendMessage(msg *schema.Message, newInput string, attachments []map[string]any, originalRequest string) *schema.Message {
@@ -105,7 +102,6 @@ func BuildQueuedChatSendMessage(msg *schema.Message, newInput string, attachment
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // queueSupplementInput 排队补充输入。
-//
 // Python: _queue_supplement_input (L1900-1911)：
 // 将用户的补充输入存入队列，等待 evolution 审批完成后重新发送。
 func (mh *MessageHandler) queueSupplementInput(sessionID, newInput string, attachments []map[string]any) {
@@ -122,7 +118,6 @@ func (mh *MessageHandler) queueSupplementInput(sessionID, newInput string, attac
 }
 
 // popQueuedSupplementInput 取出并删除排队的补充输入。
-//
 // Python: _pop_queued_supplement_input (L1913-1916)。
 func (mh *MessageHandler) popQueuedSupplementInput(sessionID string) map[string]any {
 	if sessionID == "" {
@@ -138,7 +133,6 @@ func (mh *MessageHandler) popQueuedSupplementInput(sessionID string) map[string]
 }
 
 // markPendingEvolutionApproval 标记待审批的 evolution 请求。
-//
 // Python: _mark_pending_evolution_approval (L1918-1922)。
 func (mh *MessageHandler) markPendingEvolutionApproval(sessionID, requestID string) {
 	if sessionID == "" {
@@ -152,7 +146,6 @@ func (mh *MessageHandler) markPendingEvolutionApproval(sessionID, requestID stri
 }
 
 // clearPendingEvolutionApproval 清除待审批的 evolution 请求。
-//
 // Python: _clear_pending_evolution_approval (L1980-1983)。
 func (mh *MessageHandler) clearPendingEvolutionApproval(sessionID string) {
 	if sessionID == "" {
@@ -164,7 +157,6 @@ func (mh *MessageHandler) clearPendingEvolutionApproval(sessionID string) {
 }
 
 // finishEvolutionApprovalIfCurrent 完成当前 evolution 审批并返回排队输入。
-//
 // Python: _finish_evolution_approval_if_current (L1998-2019)：
 // 如果 answered_request_id 与当前 pending 的 request_id 一致，
 // 则清除 pending + in_progress 状态，返回排队的补充输入。
@@ -193,7 +185,6 @@ func (mh *MessageHandler) finishEvolutionApprovalIfCurrent(sessionID, answeredRe
 }
 
 // markSessionEvolutionInProgress 标记 session 正在进行 evolution 审批。
-//
 // Python: _mark_session_evolution_in_progress (L1985-1988)。
 func (mh *MessageHandler) markSessionEvolutionInProgress(sessionID string) {
 	if sessionID == "" {
@@ -205,7 +196,6 @@ func (mh *MessageHandler) markSessionEvolutionInProgress(sessionID string) {
 }
 
 // clearSessionEvolutionInProgress 清除 session 的 evolution 进行中标记。
-//
 // Python: _clear_session_evolution_in_progress (L1990-1993)。
 func (mh *MessageHandler) clearSessionEvolutionInProgress(sessionID string) {
 	if sessionID == "" {
@@ -217,7 +207,6 @@ func (mh *MessageHandler) clearSessionEvolutionInProgress(sessionID string) {
 }
 
 // isSessionEvolutionInProgress 判断 session 是否正在进行 evolution。
-//
 // Python: _is_session_evolution_in_progress (L1995-1996)。
 func (mh *MessageHandler) isSessionEvolutionInProgress(sessionID string) bool {
 	if sessionID == "" {
@@ -229,7 +218,6 @@ func (mh *MessageHandler) isSessionEvolutionInProgress(sessionID string) bool {
 }
 
 // clearSessionEvolutionStates 清除 session 的所有 evolution 状态。
-//
 // Python: _clear_session_evolution_states (L2070-2073)。
 func (mh *MessageHandler) clearSessionEvolutionStates(sessionID string) {
 	mh.clearSessionEvolutionInProgress(sessionID)
@@ -238,7 +226,6 @@ func (mh *MessageHandler) clearSessionEvolutionStates(sessionID string) {
 }
 
 // handleEvolutionChunk 处理 chunk 中的演进状态和审批事件，更新 Gateway 状态机。
-//
 // Python: _handle_evolution_chunk (L2021-2068)：
 // 在 process_stream 和 handleAgentServerPush 两条路径中复用。
 func (mh *MessageHandler) handleEvolutionChunk(chunk *schema.AgentResponseChunk, sessionID string, requestMetadata map[string]any) {
@@ -284,7 +271,6 @@ func (mh *MessageHandler) handleEvolutionChunk(chunk *schema.AgentResponseChunk,
 }
 
 // buildAutoAcceptEvolutionAnswer 构造自动接受 evolution 审批的回答消息。
-//
 // Python: _build_auto_accept_evolution_answer (L1924-1949)。
 func (mh *MessageHandler) buildAutoAcceptEvolutionAnswer(channelID, sessionID, requestID string, metadata map[string]any) *schema.Message {
 	id := fmt.Sprintf("auto_evolve_answer_%x_%s", time.Now().UnixMilli(), generateRandomHex(3))
@@ -310,7 +296,6 @@ func (mh *MessageHandler) buildAutoAcceptEvolutionAnswer(channelID, sessionID, r
 }
 
 // maybeAutoAcceptReplacedEvolutionApproval 如果新的 evolution 审批替换了旧的，自动接受旧的。
-//
 // Python: _maybe_auto_accept_replaced_evolution_approval (L1951-1978)：
 // 当同一 session 有新的 evolution 审批进来时，自动接受之前 pending 的旧审批。
 func (mh *MessageHandler) maybeAutoAcceptReplacedEvolutionApproval(sessionID, incomingRequestID, channelID string, metadata map[string]any) {

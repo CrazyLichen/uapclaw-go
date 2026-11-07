@@ -11,10 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ProcessorConfig 处理器配置接口，所有处理器配置必须实现。
-//
 // 各具体处理器定义自己的 Config 结构体并实现此接口，
 // 基类通过接口持有配置，子类通过类型断言获取具体配置。
-//
 // Python: pydantic.BaseModel（作为处理器配置基类）
 type ProcessorConfig interface {
 	// Validate 校验配置参数
@@ -31,7 +29,6 @@ type ProcessorConfig interface {
 }
 
 // ContextProcessor 上下文处理器接口，所有处理器插件必须实现。
-//
 // 处理器在两个生命周期点介入上下文管理：
 //  1. OnAddMessages      — 消息即将被添加时
 //  2. OnGetContextWindow  — 上下文窗口即将返回时
@@ -39,7 +36,6 @@ type ProcessorConfig interface {
 // 每个处理器通过 Trigger* 方法判断是否介入，仅在返回 true 时
 // 才调用对应的 On* 方法执行实际处理。实现必须是无状态的，
 // 或通过 SaveState/LoadState 支持跨会话恢复。
-//
 // Python: openjiuwen/core/context_engine/processor/base.py (ContextProcessor)
 type ContextProcessor interface {
 	// OnAddMessages 处理即将添加的消息，返回 ContextEvent 和变换后的消息列表。
@@ -67,11 +63,9 @@ type ContextProcessor interface {
 }
 
 // ContextEvent 上下文处理器执行结果，由各 Processor 的 OnAddMessages / OnGetContextWindow 返回。
-//
 // 当处理器实际执行了操作时返回非 nil 的 ContextEvent，携带修改了哪些消息索引、
 // 压缩摘要和压缩用量信息。Context 实例读取这些字段构建 ContextCompressionState。
 // 处理器未触发（noop）时返回 nil。
-//
 // Python: openjiuwen/core/context_engine/processor/base.py (ContextEvent)
 type ContextEvent struct {
 	// EventType 处理器类型标识（如 "DialogueCompressor"、"MessageOffloader"）
@@ -85,7 +79,6 @@ type ContextEvent struct {
 }
 
 // ProcessorOption 处理器可选参数，替代 Python **kwargs。
-//
 // Python: ContextProcessor.offload_messages(**kwargs) 中的关键字参数
 type ProcessorOption struct {
 	// SysOperation 系统操作接口

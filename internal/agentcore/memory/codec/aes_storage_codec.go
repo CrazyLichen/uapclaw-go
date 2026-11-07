@@ -12,12 +12,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AesStorageCodec AES-256-GCM 存储编解码器。
-//
 // 容错模式：key 为空时 passthrough 不加解密，key 非空时解密失败返回原文并记录 Warn 日志。
 // Python: openjiuwen/core/memory/codec/aes_storage_codec.py (AesStorageCodec)
 // Python: 容错行为：Python 解密失败时返回原文，Go 也应返回原文而非 error，
 // 确保 Go/Python 数据互操作性。
-//
 // 通过 crypto 全局注册表获取加密算法（对齐 Python CryptUtils.get_crypt），
 // 注册表中找不到时 passthrough 降级（对齐 Python 行为）。
 type AesStorageCodec struct {
@@ -48,7 +46,6 @@ const (
 
 // NewAesStorageCodec 创建存储编解码器。
 // key 为 nil/空 → passthrough 模式；key 非空 → 必须为 32 字节，否则返回 error。
-//
 // 注意：Python 不校验 key 长度，Go 校验 key 必须 32 字节。Go 更安全——
 // AES-256 本身要求 32 字节密钥，Python 不校验是缺陷。
 // 此处保持 Go 严格校验。

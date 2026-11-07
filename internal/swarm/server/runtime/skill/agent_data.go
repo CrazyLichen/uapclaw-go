@@ -45,15 +45,12 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GenerateAgentDataForWorkspace 为指定 agent workspace 目录重建 agent-data.json。
-//
 // workspaceDir 是 agent 工作区目录（即 skills 目录的父目录，形如 <data>/agent/workspace），
 // 输出文件写在 workspaceDir 下；展示路径以 agent 根（workspaceDir 的父目录）为基准，
 // 因此顶层文件的 key 为 "workspace"。
-//
 // 对齐 Python: app_web.py::_generate_agent_data（模板契约版本）；
 // 注意不要对齐 skill_manager.py 的同名实现，后者以 agent_root.parent 为基准会拼出
 // "agent/agent/workspace/..." 的双前缀。
-//
 // 返回 error 仅用于目录不存在的场景（对齐 Python: FileNotFoundError / NotADirectoryError）。
 func GenerateAgentDataForWorkspace(workspaceDir string) error {
 	absWorkspace, err := filepath.Abs(workspaceDir)
@@ -174,7 +171,6 @@ func GenerateAgentDataForWorkspace(workspaceDir string) error {
 
 // refreshAgentDataIndexes 生成 agent-data.json 索引文件。
 // 遍历 skillsDir 的 parent 目录 + getMirrorSkillsDirs() 的 parent 目录，逐个重建索引。
-//
 // Python: SkillManager._refresh_agent_data_indexes
 func (sm *SkillManager) refreshAgentDataIndexes() {
 	// 收集需要生成索引的目录
@@ -192,7 +188,6 @@ func (sm *SkillManager) refreshAgentDataIndexes() {
 }
 
 // normalizeLangSuffix 将 xxx_zh.MD / xxx_en.MD 归一为 xxx.MD。
-//
 // Python: SkillManager._normalize_lang_suffix
 func normalizeLangSuffix(name string) string {
 	dotIdx := strings.LastIndex(name, ".")
@@ -213,7 +208,6 @@ func normalizeLangSuffix(name string) string {
 }
 
 // isMarkdownFileName 判断文件名是否为 Markdown 文档。
-//
 // Python: entry.suffix.lower() in {".md", ".mdx"}
 func isMarkdownFileName(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))

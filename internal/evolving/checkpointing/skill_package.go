@@ -40,14 +40,12 @@ var excludeFileNames = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillID 生成全局唯一技能标识。
-//
 // Python: new_skill_id() → "sk_{uuid12}"
 func NewSkillID() string {
 	return fmt.Sprintf("sk_%012x", time.Now().UnixNano()&0xFFFFFFFFFFFF)
 }
 
 // ReadSkillIDFromContent 从 SKILL.md frontmatter 读取 skill_id。
-//
 // Python: read_skill_id_from_content(content)
 func ReadSkillIDFromContent(content string) string {
 	frontmatter := parseTopLevelFrontmatter(content)
@@ -58,7 +56,6 @@ func ReadSkillIDFromContent(content string) string {
 }
 
 // EnsureSkillIDInContent 确保 SKILL.md frontmatter 包含 skill_id。
-//
 // 返回 (updatedContent, skillID)。
 // Python: ensure_skill_id_in_content(content)
 func EnsureSkillIDInContent(content string) (string, string) {
@@ -93,7 +90,6 @@ func EnsureSkillIDInContent(content string) (string, string) {
 }
 
 // PackSkillDirectory 将技能目录打包为 tar.gz。
-//
 // 排除演进本地产物（evolution/archive/.git 等）。
 // 当 skillMDRelpath 和 skillMDContent 提供时，
 // tarball 使用提供的 SKILL.md 内容而非磁盘文件。
@@ -175,7 +171,6 @@ func PackSkillDirectory(skillDir string, skillMDRelpath string, skillMDContent s
 }
 
 // UnpackSkillPackage 将技能包 tar.gz 解压到目标目录。
-//
 // 使用安全路径检查（防路径遍历），对应 Python tarfile.data_filter。
 // Python: unpack_skill_package(package_bytes, dest_dir)
 func UnpackSkillPackage(packageBytes []byte, destDir string) error {
@@ -230,7 +225,6 @@ func UnpackSkillPackage(packageBytes []byte, destDir string) error {
 }
 
 // ListPackableFiles 列出技能目录中可打包的文件路径。
-//
 // Python: list_packable_files(skill_dir)
 func ListPackableFiles(skillDir string) ([]string, error) {
 	root, err := filepath.Abs(skillDir)

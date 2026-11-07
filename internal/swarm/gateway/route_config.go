@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RouteConfig 单条路由的配置（/acp、/tui 等）。
-//
 // Python: app_gateway.py RouteConfig dataclass（L208-219）。
 // 回调字段一律直接引用 routing 包的函数类型（与 GatewayRouteBinding 同源），
 // 不在本包重复声明同签名类型——避免两处定义漂移。
@@ -36,7 +35,6 @@ type RouteConfig struct {
 }
 
 // GatewayServerConfig GatewayServer 配置。
-//
 // Python: app_gateway.py GatewayServerConfig dataclass（L223-238）。
 type GatewayServerConfig struct {
 	// Enabled 是否启用（默认 true）
@@ -54,9 +52,7 @@ type GatewayServerConfig struct {
 }
 
 // LocalHandlerFunc 本地 handler（类型别名，定义在 routing 包）。
-//
 // 对齐 Python Callable[..., Awaitable[None]]，Python 签名 (ws, req_id, params, session_id)。
-//
 // 2026-11-01 迁移：原为本包命名类型（"仅 gateway 包内使用"），tui 路由装配迁往
 // channel_manager/tui 后，tui 需声明「接收本 handler 的注册接口」并在 Install 里
 // 断言 *GatewayServer 满足它——两个包各自定义命名类型会因类型不同而断言失败，
@@ -72,7 +68,6 @@ type LocalHandlerFunc = routing.LocalHandlerFunc
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGatewayServerConfig 创建默认配置。
-//
 // 默认值对齐 Python GatewayServerConfig：enabled=true, host="127.0.0.1", port=19001。
 func NewGatewayServerConfig() *GatewayServerConfig {
 	return &GatewayServerConfig{
@@ -84,7 +79,6 @@ func NewGatewayServerConfig() *GatewayServerConfig {
 }
 
 // BuildACPRouteBinding 构造 ACP 路由 binding。
-//
 // Python: _build_acp_route_binding（L723-736）——binding 只带
 // path/channel_id/两个 forward 集合；拦截器不在此装填（Python 侧 binding 的
 // inbound/outbound 为 None），由 InstallDefaultAcpHooks 在装配后按 `or` 语义补齐
@@ -99,7 +93,6 @@ func BuildACPRouteBinding(path, channelID string) *routing.RouteBinding {
 }
 
 // BuildRouteConfigMap 将 RouteBinding 列表转为 path 索引的 RouteConfig map。
-//
 // Python: _build_route_config_map（L739-752）——8 字段透传，唯独 install 不搬
 // （install 需 GatewayServer 实例，由装配循环单独执行）。
 func BuildRouteConfigMap(bindings []*routing.RouteBinding) map[string]*RouteConfig {
@@ -123,7 +116,6 @@ func BuildRouteConfigMap(bindings []*routing.RouteBinding) map[string]*RouteConf
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyConfigFallback 兜底构造单路由（对齐 Python __post_init__，L236-238）。
-//
 // 无 routes 且 Path+ChannelID 齐全时自动造一条 RouteConfig 塞入 Routes。
 func applyConfigFallback(cfg *GatewayServerConfig) {
 	if len(cfg.Routes) > 0 {
@@ -150,7 +142,6 @@ func strVal(v any) string {
 }
 
 // strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
-//
 // sessionId / messageId 等字段在 Python 侧一律经 str() 收敛，数字也能落成
 // "123"；strVal 只认 string，会让数字形态静默变空串。
 func strScalar(v any) string {

@@ -12,11 +12,9 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RefreshSkillRails 技能环境变化后重载技能 rail 并清会话基线。
-//
 // 触发点：技能安装/卸载（SkillToolkit）、MCP 服务增删（syncMcpServersForRuntime）。
 // 配置热更新**不**触发——Python `_update_runtime_config`（interface_deep.py:14671）
 // 整段不碰技能 rail；禁用开关对存量会话的即时生效等 27 章 visibility 写 handler 落地后补。
-//
 // Python: JiuWenSwarmDeepAdapter.refresh_skill_rails (interface_deep.py:11154-11260)
 func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 	rail, ok := d.skillRail.(*skillrails.SkillUseRail)

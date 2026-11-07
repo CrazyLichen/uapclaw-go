@@ -177,7 +177,6 @@ func (h *GenerateStageHandler) resolveGenerationOrder(plan map[string]any) []gen
 }
 
 // generateAllFiles 逐文件调用 Agent 生成内容。
-//
 // 对齐 Python: GenerateStageHandler._generate_all_files(ctx, skill_dir, generation_order)
 // 上游该方法仍是占位（直接写「待实现」文件），这里按注释伪代码接入 Agent：
 // 单个 Agent 复用，逐文件构造 prompt → 调模型 → 剥离代码围栏 → 落盘。
@@ -247,7 +246,6 @@ func buildFilePrompt(planJSON string, item generationItem, generated []string) s
 }
 
 // ensureFileFrontmatter 保证 SKILL.md 带可校验的 frontmatter。
-//
 // VALIDATE 阶段要求 name + description，模型偶发漏写时按计划补齐，避免
 // GENERATE ↔ VALIDATE 反复回退到迭代上限。
 func ensureFileFrontmatter(plan map[string]any, filePath, content string) string {
@@ -272,7 +270,6 @@ func ensureFileFrontmatter(plan map[string]any, filePath, content string) string
 }
 
 // validateScripts 验证生成的 Python 脚本语法正确性。
-//
 // 待实现: 使用 py_compile 或 ast.parse 检查语法
 func validateScripts(_ string) {
 	// 待实现

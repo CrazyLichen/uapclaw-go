@@ -14,13 +14,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TextSplitter 文本分割器抽象接口。
-//
 // 对齐 Python TextSplitter ABC（仅 split 一个抽象方法）。
 // Python split 入参为 TextChunk | Document 联合类型，Go 侧收窄为
 // *reranker.Document（生产调用方 CharChunker/TokenizerChunker 只传
 // Document；13.7 IndexSentenceSplitter 的 TextChunk→Document 转换留在
 // 实现内部）。error 返回为 13.7 预留，CharSplitter 恒返回 nil。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/chunker/text_splitter.py (TextSplitter)
 type TextSplitter interface {
 	// Split 将文档分割为文本块列表。
@@ -28,12 +26,10 @@ type TextSplitter interface {
 }
 
 // CharSplitter 基于字符长度的分割器，不依赖 tokenizer。
-//
 // 构造为钳制语义（不报错）：chunkSize==0→默认 200、overlap→clamp
 // [0, size-1]、size<1→1。与 BaseChunker 的"越界报错"相反是有意为之：
 // 真实路径 CharChunker 已过基类校验，此处钳制是防御层（对齐 Python
 // CharSplitter 原样行为）。
-//
 // Python: text_splitter.py (CharSplitter)
 type CharSplitter struct {
 	// ChunkSize 分块大小（字符数），构造后恒 ≥ 1
@@ -43,10 +39,8 @@ type CharSplitter struct {
 }
 
 // Tokenizer token 编码器最小接口（Encode 必选能力）。
-//
 // 对齐 Python _resolve_tokenizer 分支②③（tokenize-only / callable）——
 // Go 接口本身就是 callable 语义，两类分支天然合并。
-//
 // Python: text_splitter.py IndexSentenceSplitter._resolve_tokenizer（分支②③）
 type Tokenizer interface {
 	// Encode 编码文本为 token id 列表。失败上抛（决策 2b）。
@@ -54,10 +48,8 @@ type Tokenizer interface {
 }
 
 // DecodeTokenizer 带 Decode 的完整 token 化器。
-//
 // 对齐 Python 分支①（HF encode+decode）：实现者使 SentenceSplitter
 // 获得长句子切分能力（子窗口需 decode 回文本）。
-//
 // Python: text_splitter.py IndexSentenceSplitter._resolve_tokenizer（分支①）
 type DecodeTokenizer interface {
 	Tokenizer
@@ -66,11 +58,9 @@ type DecodeTokenizer interface {
 }
 
 // MaxLengthProvider 可选长度上限提供者。
-//
 // 对齐 Python _max_length 的 4 属性 hasattr 探测（model_max_length/
 // max_len_single_sentence/max_position_embeddings/max_seq_length），
 // 简化为单方法——由实现者决定返回哪个语义的值（0 视为未提供）。
-//
 // Python: text_splitter.py IndexSentenceSplitter._max_length
 type MaxLengthProvider interface {
 	// MaxLength 返回模型最大序列长度；0 表示未提供。
@@ -78,11 +68,9 @@ type MaxLengthProvider interface {
 }
 
 // TiktokenTokenizer tiktoken-go Codec 适配器。
-//
 // 对齐 Python 分支④（nil → lazy import tiktoken cl100k_base）。
 // 不实现 MaxLengthProvider：Python 把词表大小 max_token_value 当
 // max_length 是无意识行为，Go Codec 无该属性（设计文档偏差 1）。
-//
 // Python: text_splitter.py IndexSentenceSplitter._resolve_tokenizer（分支④）
 type TiktokenTokenizer struct {
 	// codec tiktoken 编解码器
@@ -90,10 +78,8 @@ type TiktokenTokenizer struct {
 }
 
 // IndexSentenceSplitter 句子级分割器，SentenceSplitter 的包装层。
-//
 // 负责策略解析：Tokenizer 接口三态 → enc/dec 函数对 → 构造
 // splitter.SentenceSplitter（chunker → splitter 单向依赖）。
-//
 // Python: text_splitter.py (IndexSentenceSplitter)
 type IndexSentenceSplitter struct {
 	// splitter 内部句级分割器
@@ -115,7 +101,6 @@ const (
 	// defaultChunkSize=512 是两套语义——后者是 ChunkerOptions 工厂默认）
 	defaultSentenceChunkSize = 200
 	// defaultSafeEncodeMaxLength HF encode truncation 上限的文档锚点。
-	//
 	// Python: DEFAULT_SAFE_ENCODE_MAX_LENGTH = 65536（HF encode(max_length=...)
 	// 的截断保护，防 tokenizer 不报 model_max_length 时的无界分配）。Go 接口
 	// 无 truncation 参数概念，此常量仅作文档锚点保留，无运行时消费者
@@ -140,7 +125,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCharSplitter 构造并钳制参数（不报错，对齐 Python CharSplitter.__init__）。
-//
 // 钳制规则（执行顺序对齐 Python 源码）：
 //  1. chunkSize==0 时取默认 200（对齐 `chunk_size or DEFAULT` 的 0 值语义；负数保持原值）
 //  2. overlap 钳制到 [0, size-1]（size 为步骤 1 后的值）
@@ -166,7 +150,6 @@ func NewCharSplitter(chunkSize, chunkOverlap int) *CharSplitter {
 }
 
 // NewTiktokenTokenizer 构造 cl100k_base 适配器。
-//
 // Python: _resolve_tokenizer 分支④ tiktoken.get_encoding("cl100k_base")
 func NewTiktokenTokenizer() (*TiktokenTokenizer, error) {
 	codec, err := tokenizer.Get(tokenizer.Cl100kBase)
@@ -177,7 +160,6 @@ func NewTiktokenTokenizer() (*TiktokenTokenizer, error) {
 }
 
 // NewIndexSentenceSplitter 构造句子级分割器。
-//
 // 执行顺序严格对齐 Python IndexSentenceSplitter.__init__：
 //  1. splitterConfig 非 map 归一化 {"paragraph_separator": "\n"} 后丢弃
 //     （偏差 3a：Python 死参数，归一化结果无消费者，签名保留）
@@ -232,21 +214,17 @@ func (t *TiktokenTokenizer) Decode(ids []int) (string, error) {
 }
 
 // Split 实现 TextSplitter 接口：委托 GetNodesFromDocuments。
-//
 // Python 的 TextChunk|Document 联合入参在 Go 侧收窄为 *Document
 // （13.6 决策），isinstance 转换分支消失——Go 入参恒为 Document。
-//
 // Python: text_splitter.py IndexSentenceSplitter.split
 func (s *IndexSentenceSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error) {
 	return s.splitter.GetNodesFromDocuments([]reranker.Document{*doc})
 }
 
 // Split 按滑窗切分文档。
-//
 // step = size-overlap（size≤overlap 时退化 step=size——钳制后不可达，
 // 保留对齐 Python 源码）；每块生成 uuid，携带 doc_id 与 metadata
 // （共享引用，对齐 Python）；rune 切片保证多字节字符（中文）不被截断。
-//
 // Python: text_splitter.py CharSplitter.split
 func (s *CharSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error) {
 	if doc == nil {
@@ -280,7 +258,6 @@ func (s *CharSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error)
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveTokenizers 解析 Tokenizer 接口三态为函数对。
-//
 // 执行顺序严格对齐 Python _resolve_tokenizer：
 //  1. MaxLengthProvider 断言（对齐 _max_length hasattr 探测）
 //  2. DecodeTokenizer 断言（对齐 encode+decode 分支①）
@@ -324,7 +301,6 @@ func resolveTokenizers(t Tokenizer) (func(string) ([]int, error), func([]int) (s
 }
 
 // wrapSafeEncode 包装 Encode：空白文本返回空切片。
-//
 // 对齐 Python safe_encode 的 `if not (text and text.strip()): return []`；
 // 其余直调（失败上抛，决策 2b——Go 无 truncation 参数，裸重试场景不存在）。
 func wrapSafeEncode(enc func(string) ([]int, error)) func(string) ([]int, error) {
@@ -337,10 +313,8 @@ func wrapSafeEncode(enc func(string) ([]int, error)) func(string) ([]int, error)
 }
 
 // resolveChunkSize 决定最终 chunk_size。
-//
 // 对齐 Python _resolve_chunk_size：未设(0)+有max→max；都设→min；
 // 否则 chunkSize（0 则 DEFAULT_CHUNK_SIZE）。Go 无 None，0 表示未设。
-//
 // Python: text_splitter.py IndexSentenceSplitter._resolve_chunk_size
 func resolveChunkSize(chunkSize, maxTokenLength int) int {
 	if chunkSize == 0 && maxTokenLength > 0 {

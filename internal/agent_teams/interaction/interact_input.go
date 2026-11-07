@@ -4,10 +4,8 @@ package interaction
 
 // InteractInput 交互输入，统一 TeamManager.Interact 的参数类型。
 // 对齐 Python: TeamManager.interact(session_id, user_input) 中的 user_input 参数。
-//
 // Python 端 user_input 类型为 Any，实际运行时可以是 string / dict / InteractPayload / InteractiveInput。
 // Go 端将多种输入统一包装为 InteractInput，外层调用者负责将其他类型自行包装。
-//
 // TeamRuntimeManager.Interact 内部根据 Raw 的具体类型分发：
 //   - *sessioninteraction.InteractiveInput → 恢复中断
 //   - string → ParseInteractStr → payloads

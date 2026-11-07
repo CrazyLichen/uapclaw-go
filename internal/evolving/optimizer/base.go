@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseOptimizer 维度优化器的公共接口。
-//
 // 定义优化器的生命周期：
 //  1. Bind() — 过滤并绑定可优化的 Operator，返回匹配数量
 //  2. AddTrajectory() — 缓存 Trajectory 供 backward 查询
@@ -63,7 +62,6 @@ type BaseOptimizer interface {
 
 // TextualParameter operator_id 的梯度容器，存储 target→梯度值和可选描述。
 // 不再持有 Operator 引用。
-//
 // Python: TextualParameter
 type TextualParameter struct {
 	// OperatorID 所属 Operator 标识
@@ -76,10 +74,8 @@ type TextualParameter struct {
 }
 
 // BaseOptimizerMixin 优化器公共逻辑嵌入结构体。
-//
 // 子优化器嵌入此结构体，获得公共字段和辅助方法（Bind/AddTrajectory/ValidateParameters 等），
 // 然后自己实现 BaseOptimizer 接口的全部方法。
-//
 // 典型子优化器实现模式：
 //   - Domain()/RequiresForwardData()/DefaultTargets() — 返回维度常量
 //   - Bind() — 委托 o.BaseOptimizerMixin.Bind()
@@ -115,7 +111,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTextualParameter 创建 TextualParameter 实例。
-//
 // Python: TextualParameter(operator_id=op_id)
 func NewTextualParameter(operatorID string) *TextualParameter {
 	return &TextualParameter{
@@ -125,35 +120,30 @@ func NewTextualParameter(operatorID string) *TextualParameter {
 }
 
 // SetGradient 设置目标梯度值。nil 表示未设置/已清除（对齐 Python None）。
-//
 // Python: TextualParameter.set_gradient(name, gradient)
 func (p *TextualParameter) SetGradient(name string, gradient any) {
 	p.Gradients[name] = gradient
 }
 
 // GetGradient 获取目标梯度值。返回 nil 表示未设置。
-//
 // Python: TextualParameter.get_gradient(name)
 func (p *TextualParameter) GetGradient(name string) any {
 	return p.Gradients[name]
 }
 
 // SetDescription 设置描述。
-//
 // Python: TextualParameter.set_description(description)
 func (p *TextualParameter) SetDescription(description string) {
 	p.Description = description
 }
 
 // GetDescription 获取描述。
-//
 // Python: TextualParameter.get_description()
 func (p *TextualParameter) GetDescription() string {
 	return p.Description
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
-//
 // Python:
 //
 //	if operators is None: operators = {}
@@ -191,7 +181,6 @@ func (m *BaseOptimizerMixin) Bind(operators map[string]operator.Operator, target
 }
 
 // AddTrajectory 缓存 Trajectory 供 backward 阶段查询。
-//
 // Python: BaseOptimizer.add_trajectory(trajectory)
 func (m *BaseOptimizerMixin) AddTrajectory(traj *trajectory.Trajectory) {
 	m.trajectories = append(m.trajectories, traj)
@@ -204,7 +193,6 @@ func (m *BaseOptimizerMixin) SetDefaultTargets(targets []string) {
 }
 
 // GetTrajectories 返回当前缓存的轨迹列表（副本）。
-//
 // Python: BaseOptimizer.get_trajectories()
 func (m *BaseOptimizerMixin) GetTrajectories() []*trajectory.Trajectory {
 	result := make([]*trajectory.Trajectory, len(m.trajectories))
@@ -213,14 +201,12 @@ func (m *BaseOptimizerMixin) GetTrajectories() []*trajectory.Trajectory {
 }
 
 // ClearTrajectories 清空轨迹缓存。
-//
 // Python: BaseOptimizer.clear_trajectories()
 func (m *BaseOptimizerMixin) ClearTrajectories() {
 	m.trajectories = nil
 }
 
 // Parameters 返回梯度容器的副本。
-//
 // Python: BaseOptimizer.parameters()
 func (m *BaseOptimizerMixin) Parameters() map[string]*TextualParameter {
 	if m.parameters == nil {
@@ -257,7 +243,6 @@ func (m *BaseOptimizerMixin) SetSelectedSignals(signals []*signal.EvolutionSigna
 }
 
 // SelectSignals 选择此优化器可消费的信号。默认保留全部信号。
-//
 // Python:
 //
 //	return list(signals)
@@ -270,7 +255,6 @@ func (m *BaseOptimizerMixin) SelectSignals(signals []*signal.EvolutionSignal) []
 }
 
 // ValidateParameters 空参数校验，参数为空时抛异常。
-//
 // Python:
 //
 //	if not self._parameters:
@@ -287,7 +271,6 @@ func (m *BaseOptimizerMixin) ValidateParameters() {
 }
 
 // BackwardTemplate 模板方法，统一 ValidateParameters + SelectSignals + _backward + 错误包装。
-//
 // Python: BaseOptimizer.backward(signals)
 //
 //	self._validate_parameters()
@@ -312,7 +295,6 @@ func (m *BaseOptimizerMixin) BackwardTemplate(
 }
 
 // StepTemplate 模板方法，统一 ValidateParameters + _step + ClearTrajectories + 错误包装。
-//
 // Python: BaseOptimizer.step()
 //
 //	self._validate_parameters()
@@ -340,7 +322,6 @@ func (m *BaseOptimizerMixin) StepTemplate(
 }
 
 // FilterOperators 过滤暴露任何 target 的 Operator。对不匹配的记录警告，不中断。
-//
 // Python:
 //
 //	for op_id, op in (operators or {}).items():

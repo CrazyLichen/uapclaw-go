@@ -14,7 +14,6 @@ import (
 
 // BaseMethod Beam Search 方法基类。
 // 提供公共配置和 ProduceAnswerFromAPICall 方法。
-//
 // Python: BaseMethod
 type BaseMethod struct {
 	// config 配置字典
@@ -37,7 +36,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseMethod 创建 BaseMethod 实例。
-//
 // Python: BaseMethod.__init__(self, config)
 func NewBaseMethod(config map[string]any, model *llm.Model) *BaseMethod {
 	verbose := false
@@ -57,7 +55,6 @@ func NewBaseMethod(config map[string]any, model *llm.Model) *BaseMethod {
 }
 
 // ProduceAnswerFromAPICall 根据 API 调用结果生成自然语言回答。
-//
 // Python: BaseMethod.produce_answer_from_api_call(instruction, doc_str, api_response)
 //
 //  1. 构建提示词（一比一复刻 Python 原文）

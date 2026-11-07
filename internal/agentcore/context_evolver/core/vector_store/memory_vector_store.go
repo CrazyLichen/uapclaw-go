@@ -13,11 +13,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryVectorStore 内存向量库，使用余弦相似度搜索。
-//
 // Python 用 numpy 计算余弦相似度，Go 手写（点积 / 范数乘积），纯 math 包。
 // Python 中 async_upsert/async_search/async_delete 是异步方法，
 // Go 全部同步，通过 context.Context 传递取消信号。
-//
 // Python: openjiuwen/extensions/context_evolver/core/vector_store/memory_vector_store.py
 type MemoryVectorStore struct {
 	mu      sync.RWMutex

@@ -22,7 +22,6 @@ import (
 //
 // 暂停/终止状态由本 Rail 持有（而非 DeepAgent），使得 interface_deep
 // 可以直接调用 rail.Pause() / rail.Resume() / rail.Abort() 而无需修改 DeepAgent。
-//
 // 流程位置：
 //
 //	DeepAgent.ReActLoop
@@ -75,7 +74,6 @@ type inflightToolCallInfo struct {
 }
 
 // deepConfigProvider 暴露 harness DeepAgent 的 deep_config（Python: da.deep_config）。
-//
 // 由 *harness.DeepAgent 实现（deep_agent.go 的 DeepConfig()）；ReActAgent 等不实现，
 // 类型断言失败时返回 nil——与 Python 侧 rail 只在 DeepAgent 路径生效一致。
 type deepConfigProvider interface {
@@ -252,7 +250,6 @@ func (r *JiuClawStreamEventRail) SetTodoTool(loader todoToolLoader) {
 }
 
 // getTodoTool 返回主 Agent 的 TodoTool，首次调用时构造并缓存。
-//
 // 对齐 Python: _get_todo_tool()——刻意不复用 AbilityManager / ResourceMgr：
 //  1. 资源管理器是共享的，子 agent 会把自己的 todo 工具注册进去覆盖主 agent 条目，
 //     导致 load_todos 读到错误的 workspace 路径（Python docstring 原话）；

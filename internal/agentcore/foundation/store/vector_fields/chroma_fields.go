@@ -10,7 +10,6 @@ import (
 
 // ChromaVectorField ChromaDB HNSW 索引配置。
 // ChromaDB 仅支持 HNSW 索引，database_type 和 index_type 自动设为 chroma/hnsw。
-//
 // Python: vector_fields/chroma_fields.py (ChromaVectorField)
 type ChromaVectorField struct {
 	VectorField
@@ -94,7 +93,6 @@ func (c *ChromaVectorField) ToSearchDict() map[string]any {
 }
 
 // ValidateExtraSearch 校验 ExtraSearch 字段类型。
-//
 // 对齐 Python ChromaVectorField.validate_kwargs。
 //   - resize_factor 必须为 int 或 float
 //   - num_threads/batch_size/sync_threshold 必须为 int

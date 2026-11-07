@@ -640,7 +640,6 @@ func CreateTodosToolWithModifyFactory(workspace string, fs sys_operation.FsOpera
 
 // CreateTodosToolWithCardBuilder 创建全部待办事项工具集，卡片可整体定制。
 // cardBuilder 为 nil 时走注册表默认文案；modifyFactory 为 nil 时走原生 update 分派。
-//
 // 对应 Python：CodeTodo*Tool 子类通过 _build_code_todo_card 覆盖卡片。
 func CreateTodosToolWithCardBuilder(
 	workspace string,

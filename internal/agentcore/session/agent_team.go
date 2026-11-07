@@ -19,12 +19,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentTeamSession Agent 团队公开会话，实现 SessionFacade 接口。
-//
 // 组合内部层 AgentTeamSession，提供 PreRun→Execute→PostRun 完整生命周期。
 // 负责：状态读写、流写入、检查点持久化。
 // 与 Agent Session 不同：Interact 返回错误（team session 不支持交互），
 // 不注册到 controller（无需从磁盘恢复）。
-//
 // Python: openjiuwen/core/session/agent_team.py (Session)
 type AgentTeamSession struct {
 	// sessionID 会话唯一标识
@@ -60,7 +58,6 @@ var _ interfaces.SessionFacade = (*AgentTeamSession)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentTeamSession 创建公开层 AgentTeamSession 实例。
-//
 // 默认行为（对齐 Python Session.__init__）：
 //   - sessionID: 若未指定，自动生成 UUID
 //   - teamID: 默认 "agent_team"
@@ -147,7 +144,6 @@ func WithAgentTeamStreamWriterManager(mgr *stream.StreamWriterManager) AgentTeam
 }
 
 // CreateAgentTeamSession 通过指定参数创建 AgentTeamSession 的工厂函数。
-//
 // Python: Session(session_id, envs, team_id)
 func CreateAgentTeamSession(sessionID string, envs map[string]any, teamID string) *AgentTeamSession {
 	opts := []AgentTeamSessionOption{WithAgentTeamSessionID(sessionID)}
@@ -186,7 +182,6 @@ func (s *AgentTeamSession) DumpState() map[string]any {
 }
 
 // WriteStream 写入标准输出流。
-//
 // SessionFacade 接口实现。
 // Python: Session.write_stream(data)
 func (s *AgentTeamSession) WriteStream(ctx context.Context, data any) error {
@@ -194,7 +189,6 @@ func (s *AgentTeamSession) WriteStream(ctx context.Context, data any) error {
 }
 
 // WriteCustomStream 写入自定义流。
-//
 // SessionFacade 接口实现。
 // Python: Session.write_custom_stream(data)
 func (s *AgentTeamSession) WriteCustomStream(ctx context.Context, data any) error {
@@ -222,7 +216,6 @@ func (s *AgentTeamSession) GetEnvs() map[string]any {
 }
 
 // ClearSession 清空所有会话状态并重置生命周期标志。
-//
 // 对齐 Python session.clear_session()：
 //   - 清除 globalState / agentState / traceState
 //   - 释放 checkpointer 资源
@@ -258,9 +251,7 @@ func (s *AgentTeamSession) Interact(ctx context.Context, value any) error {
 }
 
 // PreRun 会话预运行：检查点 PreAgentTeamExecute。
-//
 // 幂等：多次调用只执行一次。
-//
 // Python: Session.pre_run()
 func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	if s.preRunDone {
@@ -294,9 +285,7 @@ func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any)
 }
 
 // PostRun 会话后运行：关闭流 + 提交检查点。
-//
 // 幂等：多次调用只执行一次。
-//
 // Python: Session.post_run()
 func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 	if s.postRunDone {
@@ -359,7 +348,6 @@ func (s *AgentTeamSession) CloseStream() error {
 }
 
 // CreateAgentSession 创建子 AgentSession。
-//
 // 从当前 AgentTeamSession 创建子 Agent 会话，对齐 Python:
 //
 //	Python: Session.create_agent_session(card, agent_id, share_stream_writer=True)
@@ -417,7 +405,6 @@ func (s *AgentTeamSession) Inner() *internal.AgentTeamSession {
 }
 
 // StreamIterator 返回流迭代 channel。
-//
 // Python: Session.stream_iterator() → stream_writer_manager().stream_output()
 func (s *AgentTeamSession) StreamIterator() <-chan stream.Schema {
 	mgr := s.inner.StreamWriterManager()

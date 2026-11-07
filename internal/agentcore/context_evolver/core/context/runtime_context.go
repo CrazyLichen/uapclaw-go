@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RuntimeContext 操作间传递中间结果的上下文。
-//
 // Python 用 __getattr__/__setattr__ 动态属性访问，Go 改为 map + 方法对。
 // Python: context.user_id = "alice" → Go: context.Set("user_id", "alice")
 // Python: context.get("user_id") → Go: context.Get("user_id")

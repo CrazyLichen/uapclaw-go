@@ -712,7 +712,6 @@ func TestDiscoverAndLoadMemoryFiles_子目录向上走查(t *testing.T) {
 
 // TestMergeMemoryContent_四类优先级排序 验证 merge 按输入顺序产出（priority 由发现阶段排序）。
 // 对齐 Python: test_merge_orders_by_priority（PRIORITY managed=10/user=20/project=30/local=40）
-//
 // 语义说明（与 Python 完全一致）：merge_memory_content 自身**不排序**，排序发生在
 // discover_and_load_memory_files 末尾的 `files.sort(key=lambda f: f.priority)`；
 // 因此本用例按优先级升序传参，断言输出保持该顺序。

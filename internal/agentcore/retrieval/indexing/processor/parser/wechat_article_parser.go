@@ -1,5 +1,4 @@
 // Package parser wechat_article_parser.go：微信公众号文章解析器（13.14）。
-//
 // 本文件对齐 Python wechat_article_parser.py：WeChatArticleParser 继承
 // WebPageParser，覆写 _parse_html（js_content 提取）与 _validate_url
 // （微信正则），经 dispatch 注入生效；不覆写 parse（继承 WebPage 链）。
@@ -18,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WeChatArticleParser 微信公众号文章解析器（对齐 Python WeChatArticleParser(WebPageParser)）。
-//
 // 覆写 parseHTMLToDocs（js_content 提取）与 validateURLFor（微信正则），
 // 经 WebPageParser.dispatch 注入生效。不覆写 Parse——继承 WebPage 的
 // Parse→ParseURL 链。无 50 字符门槛只判空（Python L79-83 字面，
@@ -35,7 +33,6 @@ type WeChatArticleParser struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWeChatArticleParser 构造 WeChatArticleParser。
-//
 // 默认参数复用 WebPage 默认（timeout=30s/UA=DEFAULT/verify=default，
 // 对齐 Python 无自定义 __init__）。dispatch 注入自身——覆写版本生效；
 // self 链指向最终实例。
@@ -57,7 +54,6 @@ func NewWeChatArticleParser() (*WeChatArticleParser, error) {
 }
 
 // ParseWeChatArticleURL 包级别名（对齐 parse_wechat_article_url = WeChatArticleParser.parse_url）。
-//
 // 默认参数全链；覆盖参数经 ParseOption 传入（kwargs 对应物）。
 // Python: wechat_article_parser.py 模块尾别名赋值
 func ParseWeChatArticleURL(ctx context.Context, url string, docID string, opts ...ParseOption) ([]reranker.Document, error) {
@@ -84,7 +80,6 @@ func ParseWeChatArticleURL(ctx context.Context, url string, docID string, opts .
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseHTMLToDocs 解析微信文章页面（覆写，对齐 Python _parse_html classmethod）。
-//
 // title → extractJSContent 提取 js_content → 缺失 → 155110（注意冒号后
 // 空格，与前四处 source= 不同——Python 字面）；→ getTextFromSoup →
 // 空 → 155110（无 50 字符门槛只判空）→ 单 Document（source_type=
@@ -122,7 +117,6 @@ func (p *WeChatArticleParser) parseHTMLToDocs(html string, docID string, source 
 }
 
 // validateURLFor 校验微信文章 URL（覆写，对齐 Python _validate_url 静态方法覆写）。
-//
 // 非微信 URL → 155110 "Not a WeChat article URL: %q"（%q 对齐 Python repr）。
 // Python: wechat_article_parser.py WeChatArticleParser._validate_url
 func (p *WeChatArticleParser) validateURLFor(url string) error {
@@ -137,14 +131,12 @@ func (p *WeChatArticleParser) validateURLFor(url string) error {
 }
 
 // Supports 覆写：微信文章 URL 才支持（对齐 Python supports 覆写）。
-//
 // Python: wechat_article_parser.py WeChatArticleParser.supports
 func (p *WeChatArticleParser) Supports(doc string) bool {
 	return isWeChatArticleURL(doc)
 }
 
 // extractJSContent 提取 js_content 节点（对齐 _extract_js_content）。
-//
 // div#js_content 微信文章正文容器；缺失返回空选区（调用方判 nil 语义：
 // Length()==0 等价 Python find 返回 None）。
 // Python: wechat_article_parser.py _extract_js_content

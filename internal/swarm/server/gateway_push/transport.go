@@ -11,12 +11,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GatewayPushTransport AgentServer → Gateway 的推送传输协议。
-//
 // Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
 // 所有 server_push 场景统一通过此接口推送，不直接操作底层 Transport。
 type GatewayPushTransport interface {
 	// SendPush 向 Gateway 发送一条 server_push 语义的消息。
-	//
 	// msg 格式与 Python AgentWebSocketServer.send_push 入参一致：
 	//   {request_id, channel_id, session_id, payload, metadata（可选）, response_kind（可选）}
 	// 内部自动调 BuildServerPushWire 编码为 E2A wire 格式。
@@ -24,10 +22,8 @@ type GatewayPushTransport interface {
 }
 
 // ChannelPushTransport 进程内推送实现，通过 AgentServer 单例发送。
-//
 // Python: jiuwenswarm/server/gateway_push/transport.py
 // （WebSocket 网关推送传输）
-//
 // Python 通过 AgentWebSocketServer.get_instance().send_push(msg) 推送，
 // Go 侧同样通过 server.GetInstance().SendPush(msg) 推送。
 type ChannelPushTransport struct{}

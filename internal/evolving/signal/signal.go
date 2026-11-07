@@ -5,10 +5,8 @@ import "fmt"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EvolutionSignal 演化信号，标识 Agent 执行过程中的问题和诊断信息。
-//
 // 信号由评估结果（离线）或对话监控（在线）产生，
 // 驱动优化器决定优化方向和内容。
-//
 // Python: openjiuwen/agent_evolving/signal/base.py EvolutionSignal
 type EvolutionSignal struct {
 	// SignalType 信号类型（如 "low_score"、"execution_failure"、"user_correction"）
@@ -39,12 +37,10 @@ type evolutionSignalConfig struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // EvolutionCategory 演化类别枚举，保留向后兼容。
-//
 // Python: openjiuwen/agent_evolving/signal/base.py EvolutionCategory(str, Enum)
 type EvolutionCategory string
 
 // EvolutionTarget 演化目标层枚举，标识技能经验作用的目标层。
-//
 // Python: openjiuwen/agent_evolving/signal/base.py EvolutionTarget(str, Enum)
 type EvolutionTarget string
 
@@ -71,7 +67,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseEvolutionTarget 从字符串解析 EvolutionTarget 枚举值。
-//
 // Python: EvolutionTarget(value)
 func ParseEvolutionTarget(value string) (EvolutionTarget, error) {
 	switch EvolutionTarget(value) {
@@ -113,7 +108,6 @@ func WithContext(context map[string]any) SignalOption {
 }
 
 // MakeEvolutionSignal 创建演化信号，合并 source/tool_name 到 context。
-//
 // Python: make_evolution_signal(signal_type, section, excerpt, tool_name, skill_name, source, context)
 func MakeEvolutionSignal(signalType, section, excerpt string, opts ...SignalOption) *EvolutionSignal {
 	cfg := &evolutionSignalConfig{section: section, excerpt: excerpt}
@@ -156,7 +150,6 @@ func MakeEvolutionSignal(signalType, section, excerpt string, opts ...SignalOpti
 }
 
 // GetSignalSource 从信号 context 中读取 source 元数据，向后兼容。
-//
 // Python: get_signal_source(signal)
 func GetSignalSource(sig *EvolutionSignal) *string {
 	if sig.Context == nil {
@@ -171,7 +164,6 @@ func GetSignalSource(sig *EvolutionSignal) *string {
 }
 
 // MakeSignalFingerprint 构建信号去重指纹。
-//
 // Python: make_signal_fingerprint(signal)
 // 返回 [4]string{signal_type, context.tool_name, skill_name, excerpt[:200]}
 func MakeSignalFingerprint(sig *EvolutionSignal) [4]string {
@@ -195,7 +187,6 @@ func MakeSignalFingerprint(sig *EvolutionSignal) [4]string {
 }
 
 // ToDict 将信号转换为字典形式。
-//
 // Python: EvolutionSignal.to_dict()
 func (s *EvolutionSignal) ToDict() map[string]any {
 	d := map[string]any{

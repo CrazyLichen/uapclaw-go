@@ -940,7 +940,6 @@ func TestReliableRouter_WithoutHealthCheck(t *testing.T) {
 // ──────────────────────────── Close / 显式驱逐（C-G）────────────────────────────
 
 // TestResetRouterCache_停旧健康检查 显式驱逐后旧 health checker 停止、条目删除。
-//
 // Python: intelli_router_model_client.py:675-700 _ensure_router_for_current_loop 的驱逐段
 //
 //	del _router_cache[key] → _stop_web_server → await entry.router.close()

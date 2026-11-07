@@ -29,7 +29,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AutoTitle 从首条用户消息自动生成会话标题。
-//
 // Python: _auto_title(content): 截取前 50 字符，换行替换为空格
 // 注意：Python len() 计算字符数，Go len() 计算字节数，需用 utf8.RuneCountInString 对齐
 func AutoTitle(content string) string {
@@ -42,7 +41,6 @@ func AutoTitle(content string) string {
 }
 
 // SerializeValue 递归序列化值，确保 JSON 可序列化。
-//
 // Python: _serialize_value(obj): time.Time→ISO string, map/slice 递归
 func SerializeValue(obj any) any {
 	switch v := obj.(type) {
@@ -96,7 +94,6 @@ func PtrStr(s string) *string {
 }
 
 // MakeSessionID 生成会话标识，对齐 Python _make_session_id。
-//
 // 格式：sess_{hex_timestamp}_{6_random_hex}
 func MakeSessionID() string {
 	ts := fmt.Sprintf("%x", time.Now().UnixMilli())

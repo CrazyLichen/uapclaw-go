@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StoreArchiveHelper 归档、清空和创建技能辅助。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/store_archive.py StoreArchiveHelper
 type StoreArchiveHelper struct {
 	// store 所属的 EvolutionStore 实例

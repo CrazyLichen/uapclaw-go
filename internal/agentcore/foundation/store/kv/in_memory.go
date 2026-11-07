@@ -32,7 +32,6 @@ type operation struct {
 }
 
 // InMemoryKVStore 基于内存的键值存储实现。
-//
 // Python: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 type InMemoryKVStore struct {
 	// mu 读写锁，保证并发安全

@@ -45,7 +45,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageHandler 消息处理器接口。
-//
 // 用于 connection.ack 等消息的推送，对齐 Python MessageHandler.publish_robot_messages。
 type MessageHandler interface {
 	// PublishRobotMessages 通过消息管道推送机器人消息
@@ -53,7 +52,6 @@ type MessageHandler interface {
 }
 
 // WebHandlersBindParams WebHandlers 绑定参数。
-//
 // Python: WebHandlersBindParams (app_web_handlers.py L512-522)，
 // 将 channel、agent_client、message_handler、channel_manager、回调等统一注入。
 type WebHandlersBindParams struct {
@@ -88,7 +86,6 @@ type WebHandlersBindParams struct {
 
 // HeartbeatConfService web 端点所需心跳服务接口。
 // gateway/heartbeat.GatewayHeartbeatService 隐式实现（对齐 CronJobController 先例）。
-//
 // spec 接口签名细化（相对 spec §三/§六的 map[string]string → map[string]any）：
 // Python set_heartbeat_conf 不做值类型转换原样存（数值 1320 存 int，
 // 由 normalize_active_hours 回转 "22:00"）；若 Go 侧在 web 层字符串化会
@@ -129,7 +126,6 @@ type EventSender func(event string, payload map[string]any)
 
 // OnConfigSavedFunc 配置保存回调函数类型。
 // Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
-//
 // 参数说明：
 //   - updatedKeys: 变更的环境变量键集合
 //   - envUpdates: 增量环境变量更新
@@ -175,7 +171,6 @@ const maxTeamsConfigPanel = 10
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // configEnvMap 前端配置键名 → 环境变量名映射。
-//
 // Python: _CONFIG_SET_ENV_MAP，共 47 个条目。
 // config.get 通过此映射读取环境变量值返回给前端，
 // config.set 通过反向映射将前端参数写入环境变量。
@@ -240,7 +235,6 @@ var configEnvMap = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterWebHandlers 把全部 RPC 方法注册到 WebChannel 上。
-//
 // Python: app_web_handlers.py 中 _register_web_handlers(bind)；
 // 注册表就是 WebChannel._method_handlers（web_connect.py:227/371-387），
 // 不存在独立的 dispatcher 类型。bind.Channel 为空时（测试场景）新建一个裸通道。
@@ -555,7 +549,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 }
 
 // MakeSessionID 生成会话标识。
-//
 // 格式：sess_{hex_timestamp}_{6_random_hex}
 // Python: _make_session_id() 和前端 generateSessionId。
 func MakeSessionID() string {
@@ -585,7 +578,6 @@ func strOrEmpty(val any) string {
 }
 
 // memoryForbiddenGet 处理 memory.forbidden.get 请求。
-//
 // 从 config.yaml 读取 memory.forbidden_memory_definition 并返回。
 // Python: _memory_forbidden_get (app_web_handlers.py:6381)。
 func memoryForbiddenGet(wc *WebChannel) methodHandler {
@@ -607,7 +599,6 @@ func memoryForbiddenGet(wc *WebChannel) methodHandler {
 }
 
 // memoryForbiddenSet 处理 memory.forbidden.set 请求。
-//
 // 接收 params，调用 updateMemoryForbiddenInConfig 写回。
 // Python: _memory_forbidden_set (app_web_handlers.py:6403) + update_memory_forbidden_in_config (config.py)。
 func memoryForbiddenSet(wc *WebChannel) methodHandler {
@@ -626,7 +617,6 @@ func memoryForbiddenSet(wc *WebChannel) methodHandler {
 }
 
 // stubHandler 返回固定 stub 响应的处理函数。
-//
 // 用于尚未实现转发的 RPC 方法，返回占位数据使前端不报错。
 func stubHandler(wc *WebChannel, payload map[string]any) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
@@ -635,7 +625,6 @@ func stubHandler(wc *WebChannel, payload map[string]any) methodHandler {
 }
 
 // configGet 处理 config.get 请求。
-//
 // 全量实现：读取 configEnvMap 中 47 个环境变量 + config.yaml 补充字段 + app_version。
 // Python: config_get_handler 中 ~65 字段的返回。
 // cryptoProv 用于解密 api_key/token 等敏感字段。
@@ -750,7 +739,6 @@ func resolveCrypto(injected crypto.CryptoProvider) crypto.CryptoProvider {
 }
 
 // isSensitiveKey 判断配置键是否为敏感字段（需要解密）。
-//
 // Python: "api_key" in key.lower() or "token" in key.lower()（app_web_handlers.py L612）。
 // 先 ToLower 再匹配，与 config_apply.go 的加密路径对称——否则大写键
 // （如 OPENAI_API_KEY）会"set 时加密、get 时不解密"，产生永远解不开的密文。
@@ -770,7 +758,6 @@ func normalizeTruthy(val string) string {
 }
 
 // configSet 处理 config.set 请求。
-//
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
 // Python: _config_set (app_web_handlers.py L870-895)。
 func configSet(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
@@ -817,10 +804,8 @@ func configSet(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSave
 }
 
 // configSaveAll 处理 config.save_all 请求。
-//
 // 批量保存配置面板变更并触发热重载。
 // Python: _config_save_all (app_web_handlers.py L1086-1151)。
-//
 // 支持子载荷：config、models、agents、team。
 func configSaveAll(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) methodHandler {
 	return func(ws wsSender, reqID string, params map[string]any, _ string) {
@@ -926,7 +911,6 @@ func configSaveAll(wc *WebChannel, sendEvent EventSender, onConfigSaved OnConfig
 }
 
 // modelsList 处理 models.list 请求。
-//
 // Python: _models_list (app_web_handlers.py L1023-1055)。
 // 数据流对齐 Python：get_config() → get_default_models(config) → _decrypt_model_entries
 // ——解密发生在 config 层（GetDefaultModels 内部经 decryptModelEntries 查全局 provider），
@@ -1008,7 +992,6 @@ func modelsList(wc *WebChannel) methodHandler {
 }
 
 // channelGet 处理 channel.get 请求。
-//
 // 从 ChannelManager 动态读取已启用的渠道列表。
 // Python: channel_get_handler，返回数组 [{channel_id: cid}]。
 func channelGet(wc *WebChannel, channelMgr *cm.ChannelManager) methodHandler {
@@ -1024,7 +1007,6 @@ func channelGet(wc *WebChannel, channelMgr *cm.ChannelManager) methodHandler {
 }
 
 // sessionList 处理 session.list 请求。
-//
 // 遍历会话目录，读取每个 session 的 metadata.json 返回列表。
 // 支持分页：limit 和 offset 参数，对齐 Python (L1264-1293)。
 func sessionList(wc *WebChannel) methodHandler {
@@ -1153,7 +1135,6 @@ func sessionLastMessageAt(session map[string]any) float64 {
 }
 
 // sessionCreate 处理 session.create 请求。
-//
 // 创建会话目录和 metadata.json。
 // Python: session_create_handler，要求 session_id 非空，已存在则 ALREADY_EXISTS。
 func sessionCreate(wc *WebChannel) methodHandler {
@@ -1250,7 +1231,6 @@ func modelsReplaceAll(wc *WebChannel, onConfigSaved OnConfigSavedFunc, cryptoPro
 }
 
 // modelsValidate 处理 models.validate 请求。
-//
 // Python: _config_validate_model (app_web_handlers.py L897-1019)。
 // 调用 LLM 验证 api_key 和 api_base 是否有效。
 func modelsValidate(wc *WebChannel) methodHandler {
@@ -1356,7 +1336,6 @@ func modelsValidate(wc *WebChannel) methodHandler {
 }
 
 // historyGet 处理 history.get 本地请求。
-//
 // 返回 ack 响应，实际历史数据由 AgentServer 转发路径提供。
 // Python: (L1459-1466)。
 func historyGet(wc *WebChannel) methodHandler {
@@ -1382,7 +1361,6 @@ func historyGet(wc *WebChannel) methodHandler {
 }
 
 // chatSend 处理 chat.send 请求。
-//
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
 // Python: chat.send handler 仅返回 ack。
 func chatSend(wc *WebChannel) methodHandler {
@@ -1392,7 +1370,6 @@ func chatSend(wc *WebChannel) methodHandler {
 }
 
 // chatResume 处理 chat.resume 请求。
-//
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
 func chatResume(wc *WebChannel) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
@@ -1401,7 +1378,6 @@ func chatResume(wc *WebChannel) methodHandler {
 }
 
 // chatInterrupt 处理 chat.interrupt 请求。
-//
 // 返回即时 ack 响应，从 params 中提取 intent。
 // Python: chat.interrupt handler，intent 默认 "interrupt"，可从 params 覆写。
 // 消息转发由两层架构第一层（normAndForward）处理。
@@ -1418,7 +1394,6 @@ func chatInterrupt(wc *WebChannel) methodHandler {
 }
 
 // chatUserAnswer 处理 chat.user_answer 请求。
-//
 // 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
 func chatUserAnswer(wc *WebChannel) methodHandler {
 	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
@@ -1432,7 +1407,6 @@ func chatUserAnswer(wc *WebChannel) methodHandler {
 }
 
 // loadAppConfig 加载 config.yaml 配置。
-//
 // 封装 config.New + Load 流程，失败时返回空 map 而非 error，
 // 调用方用默认值兜底。
 // 对齐 Python get_config()（含 _normalize_config——2026-10-28 审查接线）。
@@ -1486,11 +1460,9 @@ func getConfigAny(cfg map[string]any, key string, defaultVal any) any {
 }
 
 // flattenTeamConfig 展平 modes.team 配置到结果 map。
-//
 // Python: _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)。
 // 遍历最多 10 个 team，提取 team_{idx}_* 前缀字段和 agent 详情。
 // flattenTeamConfig 展平 modes.team 配置为前端 config panel 格式。
-//
 // Python: _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)：
 //   - teams_raw 为 dict（key=team_name, value=team_spec），最多 10 个 team
 //   - 每个 team 展平 team_0_name/lifecycle/teammate_mode/spawn_mode 等字段
@@ -2230,7 +2202,6 @@ func heartbeatAnyToFloat(v any) (float64, error) {
 }
 
 // feishuHasPushTarget 判断飞书通道是否已配置推送目标。
-//
 // Python: _health_check_set_conf 的 target=="feishu" 检测（app_web_handlers.py:4290-4325）：
 // 多应用模式要求每个 app 都有 last_chat_id 或 chat_id；旧平铺格式看顶层同名字段。
 func feishuHasPushTarget() (bool, error) {
@@ -2331,7 +2302,6 @@ var availableModelProviders = []string{
 }
 
 // channelConfPlatforms IM 平台配置族覆盖的平台清单（注册处逐条字面量、见 registerChannelConfFamily）。
-//
 // Python: app_web_handlers.py:5844-5863 的 9 组 channel.<p>.get_conf / set_conf 注册。
 var channelConfPlatforms = []string{
 	"feishu", "xiaoyi", "telegram", "dingtalk", "whatsapp",
@@ -2339,7 +2309,6 @@ var channelConfPlatforms = []string{
 }
 
 // feishuAppDefaults 飞书应用条目缺省值。
-//
 // Python: _FEISHU_APP_DEFAULTS (app_web_handlers.py:1586-1600)。
 var feishuAppDefaults = map[string]any{
 	"name":                 "默认应用",
@@ -2358,7 +2327,6 @@ var feishuAppDefaults = map[string]any{
 }
 
 // xiaoyiAppDefaults 小艺应用条目缺省值。
-//
 // Python: _XIAOYI_APP_DEFAULTS (app_web_handlers.py:1687-1704)。
 var xiaoyiAppDefaults = map[string]any{
 	"name":                "默认应用",
@@ -2391,7 +2359,6 @@ func (e *ConfigInternalError) Error() string { return e.Message }
 
 // ApplyConfigPayload 将 config.set 风格的参数应用到 .env 和 config.yaml，不触发重载。
 // Python: _apply_config_payload (app_web_handlers.py L701-761)。
-//
 // 返回值：
 //   - envUpdates: 本次变更的环境变量增量
 //   - yamlUpdated: 本次变更的 YAML 键列表
@@ -2552,7 +2519,6 @@ func NotifyConfigSavedOnce(
 }
 
 // ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
-//
 // Python: _process_files (web_connect.py L189-221)。
 func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
 	files, ok := params["files"]
@@ -2758,7 +2724,6 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 }
 
 // updateHealthCheckInConfig 只更新 health_check 段的 every/target/active_hours 并写回。
-//
 // Python: update_health_check_in_config (gateway/common/config.py:451-463)。
 // Python: update_heartbeat_in_config (common/config.py L152-164)。
 // 逐键条件写回（if "every" in payload ...），SetRoundTrip 保注释（M-05 先例）。
@@ -3078,7 +3043,6 @@ func parseInt(val any) (int, error) {
 }
 
 // processFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
-//
 // Python: _process_files (web_connect.py L189-221)。
 // 供 HandleWebSocket 内部调用，外部请使用 ProcessFiles。
 func processFiles(ctx context.Context, params map[string]any) map[string]any {
@@ -3157,7 +3121,6 @@ func encryptAPIKey(ctx context.Context, mcc map[string]any, cryptoProv crypto.Cr
 
 // mergeModelsForReplaceAll 用 origin_index 匹配原始 YAML 条目，保留占位符和未暴露字段，仅覆写变化字段。
 // Python: _merge_models_for_replace_all (app_web_handlers.py L82-156)。
-//
 // 对每个前端条目：
 //   - 有 origin_index 指向已有原始条目：深拷贝原始条目，仅覆写与解析快照不同的字段
 //   - 比较时用 resolvedDefaults[oi] 与前端值比较，匹配时保留 rawDefaults[oi] 的值
@@ -3345,7 +3308,6 @@ func loadRawModelsDefaults() []map[string]any {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // collectMemory 采集本进程与系统内存，返回字节数及系统内存使用百分比。
-//
 // 以包级变量暴露供测试注入：gopsutil 的错误分支无法由真实环境稳定触发。
 var collectMemory = defaultCollectMemory
 
@@ -3363,7 +3325,6 @@ var systemVirtualMemory = mem.VirtualMemory
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // memoryCompute 处理 memory.compute 请求，返回进程与系统内存占用。
-//
 // Python: _memory_compute (app_web_handlers.py L1414-1427)
 // 偏差：Python 计算了 mem.percent 却未放进 payload，此处补 used_percent 为超集
 // （Go 前端 ToolPanel 读取该键，见 spec D1）。
@@ -3388,7 +3349,6 @@ func memoryCompute(wc *WebChannel) methodHandler {
 }
 
 // defaultCollectMemory 组合进程 RSS 与系统内存采集（psutil 等价物）。
-//
 // Python: process = psutil.Process(); process.memory_info().rss; psutil.virtual_memory()
 // 错误原样透传，对齐 Python「psutil 异常直接冒到 register_method 包装层」语义。
 func defaultCollectMemory() (rssBytes, totalBytes, availableBytes uint64, usedPercent float64, err error) {
@@ -3424,7 +3384,6 @@ func bytesToMB(b uint64) float64 {
 // ──────────────────────────── IM 平台配置族（B1b-2） ────────────────────────────
 
 // registerChannelConfFamily 注册 9 个 IM 平台的 get_conf / set_conf。
-//
 // Python: app_web_handlers.py:5844-5863（9 组 channel.<p>.{get,set}_conf 注册）。
 func registerChannelConfFamily(wc *WebChannel, channelMgr *cm.ChannelManager, agentClient *routing.AgentClient) {
 	// 逐条显式注册（与上游 5844-5863 的 18 条 register_method 一一对应，
@@ -3450,7 +3409,6 @@ func registerChannelConfFamily(wc *WebChannel, channelMgr *cm.ChannelManager, ag
 }
 
 // channelConfGet 返回平台通道当前配置。
-//
 // Python: _channel_<p>_get_conf（app_web_handlers.py:4365 起，9 组同构）：
 // cm 缺失 → SERVICE_UNAVAILABLE；否则回 {"config": conf}（feishu/xiaoyi 先归一化）。
 func channelConfGet(wc *WebChannel, channelMgr *cm.ChannelManager, platform string) methodHandler {
@@ -3469,7 +3427,6 @@ func channelConfGet(wc *WebChannel, channelMgr *cm.ChannelManager, platform stri
 }
 
 // channelConfSet 更新平台通道配置并写回 config.yaml。
-//
 // Python: _channel_<p>_set_conf（app_web_handlers.py:4392 起）：
 // feishu/xiaoyi 走多应用分支（必须含 apps，归一化后按 app_id 合并保留未发送的敏感字段，
 // 整体替换 channels.<p>.apps 并清理旧平铺键）；其余平台整体写入后回读落盘。
@@ -3549,7 +3506,6 @@ func channelConfSet(wc *WebChannel, channelMgr *cm.ChannelManager, agentClient *
 }
 
 // normalizeChannelConf 归一化平台配置：feishu/xiaoyi 补 apps 缺省字段，其余平台原样返回。
-//
 // Python: _normalize_feishu_conf / _normalize_xiaoyi_conf（其余平台直接透传 cm.get_conf）。
 func normalizeChannelConf(platform string, raw map[string]any) map[string]any {
 	switch platform {
@@ -3566,7 +3522,6 @@ func normalizeChannelConf(platform string, raw map[string]any) map[string]any {
 }
 
 // normalizeFeishuConf 把 channels.feishu 统一为 apps 格式并为每个 app 补缺省字段。
-//
 // Python: _normalize_feishu_conf (app_web_handlers.py:1646-1672)。
 // 输入可以是旧平铺格式（{"app_id": ...}）或新多应用格式（{"apps": [...]}）；
 // 返回结果始终带 apps 列表。
@@ -3575,14 +3530,12 @@ func normalizeFeishuConf(raw map[string]any) map[string]any {
 }
 
 // normalizeXiaoyiConf 把 channels.xiaoyi 统一为 apps 格式并为每个 app 补缺省字段。
-//
 // Python: _normalize_xiaoyi_conf (app_web_handlers.py:1711-1737)。
 func normalizeXiaoyiConf(raw map[string]any) map[string]any {
 	return normalizeAppsConf(raw, xiaoyiAppDefaults, singleXiaoyiApp)
 }
 
 // normalizeAppsConf 多应用平台归一化的公共实现（feishu / xiaoyi 同构）。
-//
 // 非 dict 输入 → {"apps": []}；含 apps → 逐项补默认值；无 apps → 旧平铺格式转单 app。
 func normalizeAppsConf(raw map[string]any, defaults map[string]any, single func(map[string]any) map[string]any) map[string]any {
 	if raw == nil {
@@ -3608,7 +3561,6 @@ func normalizeAppsConf(raw map[string]any, defaults map[string]any, single func(
 }
 
 // singleFeishuApp 把单个平铺飞书配置转成 apps 列表项。
-//
 // Python: _normalize_single_feishu_to_app (app_web_handlers.py:1675-1693)：
 // 默认值 → is_default=True → 各字段取值 → `**raw` 覆盖，等价 默认值 ⊕ {is_default:true} ⊕ raw。
 func singleFeishuApp(raw map[string]any) map[string]any {
@@ -3620,7 +3572,6 @@ func singleFeishuApp(raw map[string]any) map[string]any {
 }
 
 // singleXiaoyiApp 把单个平铺小艺配置转成 apps 列表项。
-//
 // Python: _normalize_single_xiaoyi_to_app (app_web_handlers.py:1740-1776)，语义同上。
 func singleXiaoyiApp(raw map[string]any) map[string]any {
 	app := mergeMaps(xiaoyiAppDefaults, raw)
@@ -3631,7 +3582,6 @@ func singleXiaoyiApp(raw map[string]any) map[string]any {
 }
 
 // mergeAppsByID 按 app_id 把新 apps 与已有 apps 合并，保留前端未发送的字段。
-//
 // Python: _merge_apps_by_id (app_web_handlers.py:1603-1643)：
 // 各平台归一化会用默认空值填充前端未发的字段，合并时以已有值为基座、新值覆盖，
 // 避免已配置的敏感字段（app_secret / sk）被空值覆盖丢失。
@@ -3682,7 +3632,6 @@ func mergeMaps(base, override map[string]any) map[string]any {
 }
 
 // updateChannelInConfig 只更新 channels[<platform>] 并写回 config.yaml。
-//
 // Python: update_channel_in_config (gateway/common/config.py:495-506)：
 // 逐键合并进既有 section，round-trip 写回。
 func updateChannelInConfig(platform string, conf map[string]any) error {
@@ -3700,7 +3649,6 @@ func updateChannelInConfig(platform string, conf map[string]any) error {
 }
 
 // replaceChannelSubsectionWithCleanup 整体替换 channels[<platform>][<subsection>] 并清理旧字段。
-//
 // Python: replace_channel_subsection_with_cleanup (gateway/common/config.py:600-622)：
 // 写入 subsection 后删除 section 下不在 keepKeys 中的键（多应用模式替换 apps、清掉旧平铺字段）。
 func replaceChannelSubsectionWithCleanup(platform, subsection string, value any, keepKeys []string) error {
@@ -3737,7 +3685,6 @@ func mapSection(root map[string]any, keys ...string) map[string]any {
 }
 
 // defaultUpdaterRuntimeConfig 返回升级服务的默认运行时配置。
-//
 // ⤵️ 升级子系统（gateway/common/updater.py，578 行）本期未移植：updater.* 一律回
 // 上游 UpdaterService.get_runtime_config() 的默认形态（updater.py:137-155 / 515-570），
 // 前端 UpdatePanel 可正常渲染，但"检查更新/下载/升级"不会真正执行。
@@ -3763,7 +3710,6 @@ func defaultUpdaterRuntimeConfig() map[string]any {
 // ──────────────────────────── 杂项本地方法（B1b-4） ────────────────────────────
 
 // connectionStatus 返回 Gateway / AgentServer 就绪状态，供 Web 客户端探测后端链路。
-//
 // Python: _connection_status (app_web_handlers.py:5676-5684)。
 func connectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
@@ -3776,7 +3722,6 @@ func connectionStatus(wc *WebChannel, agentClient *routing.AgentClient) methodHa
 }
 
 // commandsList 下发快捷面板命令清单（静态元数据，本地返回不转发）。
-//
 // Python: _commands_list (app_web_handlers.py:4010-4019) → list_builtin_commands；
 // 异常回 INTERNAL_ERROR。
 func commandsList(wc *WebChannel) methodHandler {
@@ -3786,11 +3731,9 @@ func commandsList(wc *WebChannel) methodHandler {
 }
 
 // configMoaStatus 返回 MoA（多模型聚合）就绪状态。
-//
 // Python: config.moa_status 走 E2A 到 AgentServer 的 moa_status()
 // （jiuwenswarm/server/runtime/moa_runtime.py:106-119），后者在选中的 model group
 // 缺失/不可解析时固定回 {"configured": false}。
-//
 // ⤵️ 模型目录子系统本期未移植（见计划 Task 8），因此这里固定返回"未配置"的默认 DTO；
 // 面板据此显示 MoA 未启用，不会误报可用。
 func configMoaStatus(wc *WebChannel) methodHandler {
@@ -3801,7 +3744,6 @@ func configMoaStatus(wc *WebChannel) methodHandler {
 
 // chatSwarmflowReply 空 ack：三层路由把 reply 转发给 agent adapter（由其构造
 // HumanAgentMessage 交给 team_manager），HTTP 层只需应答。
-//
 // Python: _chat_swarmflow_reply (app_web_handlers.py:4158-4163)。
 func chatSwarmflowReply(wc *WebChannel) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, sessionID string) {
@@ -3818,7 +3760,6 @@ func chatSwarmflowReply(wc *WebChannel) methodHandler {
 var externalCLIAgentKinds = []string{"claude", "codex"}
 
 // externalCLIReferenceVersions 各内置 CLI 的参考版本（"期望版本"）。
-//
 // Python: external_cli_reference_version (config_set_handlers.py:330-342) 读安装包元数据
 // （claude_agent_sdk._cli_version / openai-codex dist）；Go 侧无这些 Python 依赖，改用常量表，
 // 取上游 uv.lock 的锁定版本。**上游升版时需同步这里**，否则会把正常版本误报为"偏旧"。
@@ -3831,12 +3772,10 @@ var externalCLIReferenceVersions = map[string]string{
 const externalCLIPruneMaxPaths = 50
 
 // externalCLIPathHistoriesKey 路径历史在 config.yaml 中的位置。
-//
 // Python: EXTERNAL_CLI_PATH_HISTORIES_CONFIG_PATH (common/config.py:43)。
 const externalCLIPathHistoriesKey = "modes.team.jiuwen_team.external_cli_path_histories"
 
 // externalCLIDetect 探测外部 CLI 的可执行路径与版本。
-//
 // Python: _external_cli_detect (app_web_handlers.py:2268-2277) →
 // detect_external_cli_agent (common/config_panel/config_set_handlers.py:464-563)。
 func externalCLIDetect(wc *WebChannel) methodHandler {
@@ -3861,7 +3800,6 @@ func externalCLIDetect(wc *WebChannel) methodHandler {
 }
 
 // externalCLIValidatePaths 批量探测路径是否为存在的文件（三值：true/false/null）。
-//
 // Python: _external_cli_validate_paths (app_web_handlers.py:2280-2303)：
 // 单次最多 50 条；null 表示"无法判定"（锁定/无权限/离线盘），调用方只应据 false 清理历史。
 func externalCLIValidatePaths(wc *WebChannel) methodHandler {
@@ -3901,7 +3839,6 @@ func externalCLIValidatePaths(wc *WebChannel) methodHandler {
 }
 
 // externalCLIPrunePathHistories 从指定种类的持久化路径历史里删除已确认缺失的路径。
-//
 // Python: _external_cli_prune_path_histories (app_web_handlers.py:2304-2326) →
 // prune_external_cli_path_histories_in_config (common/config.py:1495-1550)。
 func externalCLIPrunePathHistories(wc *WebChannel) methodHandler {
@@ -3941,10 +3878,8 @@ func externalCLIPrunePathHistories(wc *WebChannel) methodHandler {
 }
 
 // externalCLIInstallStatus 返回外部 CLI 依赖安装状态。
-//
 // Python: _external_cli_install_status (app_web_handlers.py:2330-2340)：未知种类 → BAD_REQUEST；
 // 否则回安装状态快照（冻结运行时再叠加 managed runtime 状态）。
-//
 // ⤵️ 安装器子系统（gateway/common/external_cli_runtime.py，1,121 行）本期未移植，
 // 这里只做参数校验 + 默认快照（未安装/未在跑）。
 func externalCLIInstallStatus(wc *WebChannel) methodHandler {
@@ -3982,7 +3917,6 @@ func isKnownExternalCLIAgent(agent string) bool {
 }
 
 // detectExternalCLIAgent 探测外部 CLI 的路径/版本，返回上游同形状的 DTO。
-//
 // Python: detect_external_cli_agent / _detect_cli_at
 // (config_set_handlers.py:464-563)。本仓差异：
 //   - 无自定义 agent 注册表，未知种类直接回 status=unavailable；
@@ -4057,12 +3991,10 @@ func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[strin
 }
 
 // externalCLIVersionRe 从 --version 输出里提取语义版本号。
-//
 // Python: re.search(r"(\d+\.\d+\.\d+)", version_output) (config_set_handlers.py:537)。
 var externalCLIVersionRe = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
 
 // resolveExternalCLIPath 解析外部 CLI 可执行文件路径。
-//
 // 显式路径：必须是存在的文件且不是目录（Python resolve_external_cli_path 的
 // directory / windows_script 两个 reason 在此覆盖）；空路径回退 PATH 搜索。
 func resolveExternalCLIPath(cliAgent, cliPath string) (resolved, reason, message string) {
@@ -4103,7 +4035,6 @@ func isWindowsScriptPath(path string) bool {
 }
 
 // runExternalCLIVersionCommand 执行 `<cli> --version` 并返回合并输出。
-//
 // 失败时返回的错误信息会作为 message 透传给前端（对齐上游 version_error）。
 func runExternalCLIVersionCommand(resolved string) (string, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -4119,11 +4050,11 @@ func runExternalCLIVersionCommand(resolved string) (string, string) {
 }
 
 // pruneExternalCLIPathHistories 从 config.yaml 的路径历史里删除已确认缺失的项。
-//
 // Python: prune_external_cli_path_histories_in_config (common/config.py:1495-1550)：
 // 只删除「既有历史 ∩ removePaths」，去重保序；删完为空则移除该 key，整段为空则移除父键；
 // 无变化时不写盘。
 func pruneExternalCLIPathHistories(cliAgent string, removePaths []string) ([]string, error) {
+	// 入参先归一化：agent 名去空白；待删路径去空白、去空串后收成集合
 	name := strings.TrimSpace(cliAgent)
 	removeSet := make(map[string]struct{}, len(removePaths))
 	for _, raw := range removePaths {
@@ -4131,10 +4062,12 @@ func pruneExternalCLIPathHistories(cliAgent string, removePaths []string) ([]str
 			removeSet[v] = struct{}{}
 		}
 	}
+	// 没有 agent 名或没有要删的路径，直接返回空结果，不必读配置
 	if name == "" || len(removeSet) == 0 {
 		return []string{}, nil
 	}
 
+	// 读取配置，取出该 agent 当前的路径历史
 	cfg, err := config.New("")
 	if err != nil {
 		return nil, fmt.Errorf("创建配置管理器失败: %w", err)
@@ -4148,6 +4081,7 @@ func pruneExternalCLIPathHistories(cliAgent string, removePaths []string) ([]str
 		return []string{}, nil
 	}
 
+	// 遍历历史：去重保序后，凡不在删除集合里的才保留
 	surviving := make([]string, 0, len(current))
 	seen := make(map[string]struct{}, len(current))
 	original := make([]string, 0, len(current))
@@ -4165,6 +4099,7 @@ func pruneExternalCLIPathHistories(cliAgent string, removePaths []string) ([]str
 			surviving = append(surviving, value)
 		}
 	}
+	// 条数没变说明一条都没删，此时不写盘，避免无意义的配置文件改动
 	if len(surviving) == len(original) {
 		return surviving, nil
 	}
@@ -4213,7 +4148,6 @@ func firstNonEmpty(values ...string) string {
 // ──────────────────────────── 原生文件选择（B1b-6） ────────────────────────────
 
 // pathSelectFile 弹出原生文件选择框，返回选中的文件路径。
-//
 // Python: _path_select_file (app_web_handlers.py:3948-3990)：
 // 参数类型校验（initial_dir / initial_path / title 必须为字符串）→ 解析起始目录 →
 // select_file_native 打开原生对话框；选择器不可用回 UNSUPPORTED；取消回
@@ -4270,7 +4204,6 @@ func pathSelectFile(wc *WebChannel) methodHandler {
 var selectFileNativeFn = selectFileNative
 
 // selectFileNative 调用平台原生文件选择器，返回选中路径（空串=用户取消）。
-//
 // Python: directory_picker.select_file_native（tkinter/zenity 等）。
 // Go 侧按平台可用的对话框程序依次尝试：zenity → kdialog（Linux）；osascript（macOS）。
 // 都不可用时返回错误，调用方回 UNSUPPORTED（与上游 headless 下 picker 抛异常一致）。
@@ -4342,7 +4275,6 @@ func escapeAppleScript(text string) string {
 // ──────────────────────────── session 薄代理（B1b-7） ────────────────────────────
 
 // sessionProxyForward 把会话类请求经 E2A 原样转发给 AgentServer。
-//
 // Python: _session_rename / _session_plan_status (app_web_handlers.py:5692-5693) →
 // proxy_unary_request (gateway/routing/e2a_proxy.py:99-175)：
 // 客户端不可达 → SERVICE_UNAVAILABLE「AgentServer is unavailable」；失败回包的 code 缺省
@@ -4394,7 +4326,6 @@ func sessionProxyForward(wc *WebChannel, ac *routing.AgentClient, method string)
 }
 
 // parseVersionTuple 把 "x.y.z" 解析成三段整数元组；缺段按 0 补，非数字段视为不可解析。
-//
 // Python: parse_version_tuple (config_set_handlers.py 内部助手)：解析失败返回 None，
 // 上游据此跳过"版本偏旧"比较。
 func parseVersionTuple(version string) ([3]int, bool) {

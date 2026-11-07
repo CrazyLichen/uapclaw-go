@@ -1,9 +1,7 @@
 // Package registry 提供图记忆抽取模块的多语言注册表和实体/关系类型定义。
-//
 // 包含全局字典变量（由 cn/en 子包的 init() 填充）以及 EntityDef/RelationDef
 // 类型定义和预定义实例。EntityDef/RelationDef 从 extraction 包下移到此包，
 // 以便 prompts/entity_extraction/ 子包可以引用这些类型而不会形成循环依赖。
-//
 // 文件目录：
 //
 //	registry/

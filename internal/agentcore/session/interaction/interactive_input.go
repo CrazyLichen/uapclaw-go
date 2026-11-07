@@ -9,7 +9,6 @@ import (
 // InteractiveInput 用户交互输入容器。
 // 支持两种输入模式：RawInputs（未绑定节点 ID，首次交互）和 UserInputs（按节点 ID 绑定）。
 // 两者互斥：RawInputs 已设置时不能调用 Update。
-//
 // Python: openjiuwen/core/session/interaction/interactive_input.py (InteractiveInput)
 type InteractiveInput struct {
 	// UserInputs 按节点 ID 绑定的输入映射
@@ -17,11 +16,9 @@ type InteractiveInput struct {
 	// RawInputs 未绑定节点 ID 的原始输入（首次交互使用）
 	RawInputs any
 	// InterruptAnswers 按中断 ID 绑定的答案映射。
-	//
 	// key 为暂停中的工具调用中断的 interrupt_id，value 为它的答案。
 	// 与 UserInputs（按 tool_call_id / 节点 ID 答）互补：两者都答同一个中断时，
 	// 按 interrupt_id 的答案优先（对齐 Python match_answers 的取值顺序）。
-	//
 	// Python: InteractiveInput.interrupt_answers
 	InterruptAnswers map[string]any
 }
@@ -58,13 +55,11 @@ func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 }
 
 // IsInteractiveInput 实现 interfaces.InvokeQuery 接口，交互式输入始终返回 true。
-//
 // Python: isinstance(query, InteractiveInput)
 // 当 InvokeInputs.Query 为 *InteractiveInput 时，表示这是一次中断恢复操作。
 func (i *InteractiveInput) IsInteractiveInput() bool { return true }
 
 // PlainText 实现 interfaces.InvokeQuery 接口，从 RawInputs 提取纯文本。
-//
 // Python: _extract_plain_text(user_input)
 // - RawInputs 为 string → 返回该字符串
 // - RawInputs 为其他类型或 nil → 返回空串

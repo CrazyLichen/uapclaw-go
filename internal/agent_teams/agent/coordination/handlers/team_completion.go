@@ -14,10 +14,8 @@ import (
 
 // TeamCompletionHandler 处理团队完成事件：POLL_TASK 中的完成评估、
 // TASK_LIST_DRAINED 和 TEAM_COMPLETED。
-//
 // 维护上升沿保护（teamCompletedEmitted）防止重复发出 TEAM_COMPLETED。
 // TASK_LIST_DRAINED 时触发所有注册的完成回调。
-//
 // EVENT_METHOD_MAP 事件到方法映射：
 //   - coordination_poll_task → onPollTask
 //   - task_list_drained      → onTaskListDrained

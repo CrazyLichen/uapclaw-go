@@ -31,7 +31,6 @@ var numericPattern = regexp.MustCompile(`\d+`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsPrereleaseVersion 判断版本号是否为预发布版本。
-//
 // 支持的预发布标记：alpha、beta、rc、dev、pre、a、b。
 // 判定结果示例：
 //   - 0.2.0-beta1  判定为 true
@@ -45,7 +44,6 @@ func IsPrereleaseVersion(version string) bool {
 }
 
 // StripPrereleaseSuffix 去除版本号中的预发布后缀。
-//
 // 去除结果示例：
 //   - 0.2.0-beta1  去除后为 0.2.0
 //   - 0.2.0.alpha.1 去除后为 0.2.0
@@ -61,7 +59,6 @@ func StripPrereleaseSuffix(version string) string {
 }
 
 // IsNewerVersion 判断 candidate 是否比 current 版本更新。
-//
 // 比较规则：
 //  1. 先比较基础版本号（去除预发布后缀后的数字部分）
 //  2. 基础版本号相同时，稳定版 > 预发布版（如 0.2.0 > 0.2.0-beta1）

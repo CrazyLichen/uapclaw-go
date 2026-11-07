@@ -1,9 +1,7 @@
 // Package trajectory 提供自演化系统的执行轨迹数据类型、提取、存储、聚合和注册。
-//
 // Trajectory 是 Agent 执行过程的完整记录，包含有序的 TrajectoryStep 列表。
 // 每个 Step 通过 StepDetail 接口区分 LLM 调用（LLMCallDetail）和工具调用（ToolCallDetail）。
 // Trajectory 是优化器 backward 阶段的单源真相（single source of truth）。
-//
 // 核心模块：
 //   - TrajectoryBuilder：从零构建 Trajectory（record_step + cost 累积 + maxSteps 滑窗）
 //   - TracerTrajectoryExtractor：从 Session.tracer() 的 AgentSpanManager 提取轨迹

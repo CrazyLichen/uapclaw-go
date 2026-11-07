@@ -31,14 +31,12 @@ var powershellTokens = []string{
 }
 
 // psVariablePattern PowerShell 裸变量模式（`$name`）。
-//
 // 裸 `$var` 在 bash 与 PowerShell 中都合法，不能单独作为判定依据：
 // 只在 POSIX 判定未命中时作为 auto 分支的兜底。
 // Python: _PS_VARIABLE_PATTERN (shell_operation.py:42)
 var psVariablePattern = regexp.MustCompile(`(^|[\s;(])\$[A-Za-z_][A-Za-z0-9_]*`)
 
 // psAssignmentPattern PowerShell 赋值模式（`$name = ...`）。
-//
 // `$name = value` 带赋值是 PowerShell 独有写法；bash 赋值不带 `$` 前缀。
 // Python 原文用负向前瞻 `(?!=)` 排除 `==` 比较，Go 的 RE2 不支持前瞻，
 // 改为"等号后紧跟非等号字符或行尾"的等价表达。
@@ -46,7 +44,6 @@ var psVariablePattern = regexp.MustCompile(`(^|[\s;(])\$[A-Za-z_][A-Za-z0-9_]*`)
 var psAssignmentPattern = regexp.MustCompile(`(^|[\s;(])\$[A-Za-z_][A-Za-z0-9_]*\s*[-+*/]?=([^=]|$)`)
 
 // bashControlFlowPatterns bash 控制流结构模式（for/while/until/if）。
-//
 // 这些结构是 bash 独有的，出现在命令里即可判定为 POSIX：
 // for/while 的 `do...done`、if 的 `then...fi` 都不是 cmd/PowerShell 语法。
 // Python: _BASH_CONTROL_FLOW_PATTERNS (shell_operation.py:53-66)

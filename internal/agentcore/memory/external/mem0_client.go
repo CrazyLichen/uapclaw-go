@@ -15,7 +15,6 @@ import (
 
 // mem0HTTPClient Mem0 REST API 的 HTTP 客户端封装。
 // 对齐 Python: _get_client() + _client_call() 调用的底层 HTTP 请求。
-//
 // Python 使用 mem0ai SDK（AsyncMemoryClient），Go 侧无官方 SDK，
 // 因此自封装 HTTP 客户端直接调 REST API。
 type mem0HTTPClient struct {

@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Router 路由接口：节点执行完成后，据此产出下一超步的调度消息。
-//
 // 实现方约定：纯函数式——只读 sourceNode，不访问图、通道或检查点。
 // Python: pregel/base.py:23-26 IRouter（唯一方法 dispatch）
 type Router interface {
@@ -16,7 +15,6 @@ type Router interface {
 }
 
 // Selector 条件路由的选择器：返回目标节点名列表。
-//
 // state 恒传 nil：Python 侧该形参的唯一取值就是字面量 None（router.py:37），
 // 且全链无人读取（唯一带该形参的 selector 是 _workflow.py:275 的包装器，
 // 它收下即丢）。保留形参只为对齐数据形状，将来若接通图状态也只能是 any
@@ -29,7 +27,6 @@ type Selector interface {
 type SelectorFunc func(ctx context.Context, state any) ([]string, error)
 
 // StaticRouter 静态扇出（1→N）。
-//
 // targets 为空时产出零条消息，等价「边终止」（Python 测试用 StaticRouter([])
 // 表示 END 节点）。构造时复制入参切片，调用方后续改切片不影响本实例。
 // Python: pregel/router.py:11-18
@@ -39,7 +36,6 @@ type StaticRouter struct {
 }
 
 // BarrierRouter 汇聚路由（N→1），产出 BarrierMessage。
-//
 // target 不是节点名，而是 barrier 通道的合成路由键 "barrier:a&b->c"
 // （channels.py:155-164）；sender 由 BarrierChannel 收下作为 OR 组判据。
 // Python: pregel/router.py:49-56
@@ -91,7 +87,6 @@ func NewConditionalRouter(selector Selector) *ConditionalRouter {
 }
 
 // Select 实现 Selector：调用被适配的函数。
-//
 // nil 函数值自守：`NewConditionalRouter(SelectorFunc(nil))` 会造出非 nil 的接口值，
 // 绕过 Dispatch 里的 `r.selector == nil` 判断，直接调用会 panic。
 func (f SelectorFunc) Select(ctx context.Context, state any) ([]string, error) {
@@ -118,10 +113,8 @@ func (r *BarrierRouter) Dispatch(_ context.Context, sourceNode string) ([]Messag
 }
 
 // Dispatch 由 selector 决定目标并产出触发消息。
-//
 // 纪律：state 恒传 nil（spec §1.3）；selector 的 error 原样上抛，不包装——
 // 8.3b 需要区分 GraphInterrupt 与普通 error，包装会破坏 errors.As。
-//
 // 空目标语义分两态（对齐 Python router.py:44-46）：
 //   - nil：selector 没有返回值 → 判为构图错误并返回 error。Python 侧
 //     `for to in None` 直接 TypeError，是 fail-closed；Go 若把 nil 当成
@@ -146,7 +139,6 @@ func (r *ConditionalRouter) Dispatch(ctx context.Context, sourceNode string) ([]
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildTriggerMessages 按目标顺序构造触发消息。
-//
 // 目标为空时返回非 nil 空切片（对齐 Python 的 []），便于 8.3b 直接 extend
 // 且 len 判断语义一致。
 func buildTriggerMessages(sourceNode string, targets []string) []Message {

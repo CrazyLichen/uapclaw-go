@@ -20,7 +20,6 @@ type abortTestSession struct {
 }
 
 // cancelAwareContextEngine 记录 SaveContexts 收到 ctx 的取消状态。
-//
 // 复用 react_agent_test.go 的 fakeContextEngine 提供其余接口方法，
 // 只覆写 SaveContexts：真实 PersistenceCheckpointer 在 ctx 已取消时写库必失败，
 // 这里用 sawCanceledCtx 复现同一行为。

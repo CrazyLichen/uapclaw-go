@@ -3,12 +3,10 @@ package checkpointing
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EvolveCheckpoint 训练检查点，用于断点续训。
-//
 // 保存训练过程中的完整状态快照，包括运行标识、步数进度、
 // 最佳指标、各 Operator 状态、更新器和搜索器状态等。
 // Trainer 通过 FileCheckpointStore 持久化此数据，
 // 并在 ResumeIfNeeded 时恢复。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/state.py EvolveCheckpoint
 type EvolveCheckpoint struct {
 	// Version 检查点版本标签，默认 "v1"

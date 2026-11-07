@@ -21,10 +21,8 @@ import (
 
 // QueryRewriter 查询重写器：把多轮对话中的省略/指代 query 改写成
 // 独立可检索的 standalone_query；历史达阈值时用 LLM 压缩历史。
-//
 // 只消费 sessionCtx 的 GetMessages/SetMessages；当前轮消息的追加
 // 由调用方负责（rewrite → 检索 → add_messages 顺序）。
-//
 // Python: query_rewriter.py QueryRewriter
 type QueryRewriter struct {
 	// modelConfig LLM 配置（model_provider + model_info）
@@ -86,14 +84,12 @@ func WithModelClientOption(m *llm.Model) QueryRewriterOption {
 }
 
 // NewQueryRewriter 构造查询重写器：绑定 LLM 配置与会话上下文。
-//
 // 从 cfg.ModelInfo 读取连接信息建 Model：ssl_cert/verify_ssl 走 Extra
 // 防御读取（Python getattr + pydantic extra="allow" 同构，spec §4.2）；
 // custom_headers 为声明字段直读（Python mode_info.py L19 声明字段，
 // S-04：不再走 Extra 兜底——声明字段读取语义上优先于 extra 通道）；
 // verify_ssl=true 且无证书时强制 false（Python 注释规则：
 // BaseModelClient 要求 verify_ssl=true 时必须配证书）。
-//
 // Python: query_rewriter.py QueryRewriter.__init__
 func NewQueryRewriter(cfg *llmschema.ModelConfig, ctx ceinterface.ModelContext, opts ...QueryRewriterOption) (*QueryRewriter, error) {
 	q := &QueryRewriter{
@@ -179,7 +175,6 @@ func NewQueryRewriter(cfg *llmschema.ModelConfig, ctx ceinterface.ModelContext, 
 }
 
 // LoadTemplate 加载提示词模板（语言后缀路由 + 缓存）。
-//
 // Python: query_rewriter.py QueryRewriter.load_template
 // （OSError 读失败分支在 go:embed 下编译期消解，spec §8-2）
 func (q *QueryRewriter) LoadTemplate(promptBase string) (string, error) {
@@ -202,10 +197,8 @@ func (q *QueryRewriter) LoadTemplate(promptBase string) (string, error) {
 }
 
 // Msg2Text 格式化消息列表为 "role: content" 纯文本。
-//
 // messages 为 nil 时读全量上下文历史；多模态 content 走 JSON 序列化
 // （Python json.dumps ensure_ascii=False）。
-//
 // Python: query_rewriter.py QueryRewriter.msg_2_text
 func (q *QueryRewriter) Msg2Text(messages []llmschema.BaseMessage) (string, error) {
 	if messages == nil {
@@ -239,11 +232,9 @@ func (q *QueryRewriter) Msg2Text(messages []llmschema.BaseMessage) (string, erro
 }
 
 // Compress 用 LLM 把一段历史消息压缩成结构化摘要（theme + summary）。
-//
 // 解析链：extractJSON → parseLLMJSON → 兜底 jsonOutputParser →
 // schemaRepair；解析失败统一 155604，invoke 失败 155605
 // （Python 三层 except 在 Go 统一消解为两条 155604 路径，spec §8-3）。
-//
 // Python: query_rewriter.py QueryRewriter.compress
 func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessage) (map[string]any, error) {
 	// Python L366: raw_text = self.msg_2_text(raw)
@@ -318,7 +309,6 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 // Rewrite 在当前会话上下文里把用户 query 改写为独立可检索的
 // standalone_query；历史达 compressRange 时先触发一次压缩（失败降级
 // 为原文写回），rewrite 提示词只携带最近 compressRange 条历史。
-//
 // Python: query_rewriter.py QueryRewriter.rewrite
 func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]any, error) {
 	// Python L439-443: 非 str 或空白 → 155606（Go 入参已 string，

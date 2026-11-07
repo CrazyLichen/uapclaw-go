@@ -15,7 +15,6 @@ import (
 // ACERecallMemoryOp ACE 记忆检索操作。
 // 从 vector store 全量加载 ACE 记忆（playbook bullets），不做语义搜索/排序。
 // 对齐 Python RecallMemoryOp。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/ace/run.py
 type ACERecallMemoryOp struct {
 	op.OpBase

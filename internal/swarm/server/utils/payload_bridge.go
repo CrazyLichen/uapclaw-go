@@ -1,12 +1,10 @@
 package utils
 
 // payload_bridge.go 流式 payload 的 map 桥接（对齐 Python `payload.model_dump(mode="json")`）。
-//
 // 背景：Python 的 `OutputSchema.payload` 声明为 `Any`（openjiuwen/core/session/stream/base.py:33），
 // 生产端既可能是 dict，也可能是 pydantic 模型（如 ControllerOutputChunk.payload 是
 // ControllerOutputPayload 模型、workflow 交互是 InteractionOutput 对象）；消费者靠
 // duck typing（`getattr` / `isinstance(payload, dict)`）兜底。
-//
 // Go 没有 duck typing，消费端的等价落点就是本函数：**把任意结构化 payload 收敛成 map**，
 // 下游只按键读取。这比"逐类型枚举 case"更彻底——新增 payload 结构体无需再改消费端。
 
@@ -20,7 +18,6 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // defaultInteractionMaxDepth 交互载荷递归的默认最大深度。
-//
 // Python 在 _find_interaction_payloads 内硬编码 `_depth > 8`；Go 把同一常量复用到
 // 桥接摊平递归（T-04），避免两处深度上限各自漂移。
 const defaultInteractionMaxDepth = 8
@@ -28,7 +25,6 @@ const defaultInteractionMaxDepth = 8
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PayloadToMap 把流 payload 统一桥接为 map[string]any。
-//
 // 处理顺序：
 //  1. nil → nil
 //  2. map[string]any → 原样返回（主流形态，零开销）
@@ -92,7 +88,6 @@ func PayloadToMapChecked(payload any) (map[string]any, error) {
 }
 
 // PayloadsToMaps 批量桥接 payload 切片，nil 元素会被跳过。
-//
 // 用于「interactions 列表」这类「元素形态可能是 map 也可能是结构体」的场景，
 // 同时承担 Python `_iter_interactions` 的嵌套列表展开职责（interrupt_helpers.py L342-348）：
 // 嵌套的 []any / []map[string]any 会被递归摊平，下游拿到的恒为平坦 []map[string]any。
@@ -101,7 +96,6 @@ func PayloadsToMaps(items []any) []map[string]any {
 }
 
 // payloadsToMapsDepth 带深度上限的摊平实现。
-//
 // T-04：Python 的 _iter_interactions 同样无条件递归，但上游 _find_interaction_payloads
 // 有 `_depth > 8` 兜底；Go 若不加限制，畸形自引用切片会直接栈溢出（fatal，不可 recover，
 // Python 只是 RecursionError）。深度上限复用 defaultInteractionMaxDepth，与

@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // milvusClient Milvus 客户端操作接口（用于解耦和测试）。
-//
 // 生产代码使用真实 milvusclient.Client，测试代码注入 fakeMilvusClient。
 type milvusClient interface {
 	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption) error
@@ -36,7 +35,6 @@ type milvusClient interface {
 }
 
 // persistenceClientAdapter 将 milvusclient.Client 适配到 milvusClient 接口。
-//
 // 桥接真实 SDK 的 Client 方法签名到内部 milvusClient 接口。
 // 对齐 foundation/store/vector/milvus_adapter.go 的 milvusClientAdapter。
 type persistenceClientAdapter struct {
@@ -44,13 +42,10 @@ type persistenceClientAdapter struct {
 }
 
 // MilvusConnectorImpl Milvus 向量数据库连接器实现。
-//
 // 独立实现（对齐 Python milvus_connector.py），不复用 foundation/store/vector/MilvusVectorStore。
 // 固定 5 字段 schema：id(VARCHAR) / namespace(VARCHAR) / content(VARCHAR) / embedding(FLOAT_VECTOR) / metadata(JSON)。
 // 命名空间分区：通过 namespace 字段过滤实现逻辑分区。
-//
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
-//
 // Python: openjiuwen/extensions/context_evolver/core/db_connector/milvus_connector.py
 type MilvusConnectorImpl struct {
 	// host Milvus 服务主机
@@ -120,7 +115,6 @@ var namespaceRe = regexp.MustCompile(namespacePattern)
 
 // NewMilvusConnectorImpl 创建 Milvus 连接器实例。
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
-//
 // 对齐 Python: MilvusConnector(host, port, collection_name, dim, alias, metric_type)
 func NewMilvusConnectorImpl(opts ...MilvusConnectorOption) *MilvusConnectorImpl {
 	m := &MilvusConnectorImpl{
@@ -140,10 +134,8 @@ func NewMilvusConnectorImpl(opts ...MilvusConnectorOption) *MilvusConnectorImpl 
 }
 
 // SaveToDB 保存数据到 Milvus 命名空间。实现 persistence.MilvusConnector 接口。
-//
 // Upsert 语义：delete 已有 PK → insert → flush。
 // 无 embedding 的节点被跳过（Milvus 要求非 null 向量）。
-//
 // 对齐 Python: MilvusConnector.save_to_db(namespace, data)
 func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, data map[string]any) error {
 	if err := validateNamespace(namespace); err != nil {
@@ -267,7 +259,6 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 }
 
 // LoadFromDB 从 Milvus 命名空间加载所有节点。实现 persistence.MilvusConnector 接口。
-//
 // 对齐 Python: MilvusConnector.load_from_db(namespace)
 func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) (map[string]any, error) {
 	if err := validateNamespace(namespace); err != nil {
@@ -311,7 +302,6 @@ func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) 
 }
 
 // Exists 检查命名空间是否有数据。实现 persistence.MilvusConnector 接口。
-//
 // 对齐 Python: MilvusConnector.exists(namespace)
 func (m *MilvusConnectorImpl) Exists(ctx context.Context, namespace string) bool {
 	if err := validateNamespace(namespace); err != nil {
@@ -336,7 +326,6 @@ func (m *MilvusConnectorImpl) Exists(ctx context.Context, namespace string) bool
 }
 
 // Delete 删除命名空间的所有数据。实现 persistence.MilvusConnector 接口。
-//
 // 对齐 Python: MilvusConnector.delete(namespace)
 func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool {
 	if err := validateNamespace(namespace); err != nil {
@@ -402,7 +391,6 @@ func (m *MilvusConnectorImpl) Ping(ctx context.Context) bool {
 }
 
 // Search 在命名空间内执行 ANN 搜索。
-//
 // 对齐 Python: MilvusConnector.search(namespace, embedding, top_k, metric)
 func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embedding []float32, topK int, metric string) ([]map[string]any, error) {
 	if err := validateNamespace(namespace); err != nil {
@@ -486,7 +474,6 @@ func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embe
 }
 
 // DeleteNodes 按 ID 删除指定节点。
-//
 // 对齐 Python: MilvusConnector.delete_nodes(namespace, node_ids)
 func (m *MilvusConnectorImpl) DeleteNodes(ctx context.Context, namespace string, nodeIDs []string) bool {
 	if len(nodeIDs) == 0 {
@@ -513,7 +500,6 @@ func (m *MilvusConnectorImpl) DeleteNodes(ctx context.Context, namespace string,
 }
 
 // ListNamespaces 列出所有命名空间。
-//
 // 对齐 Python: MilvusConnector.list_namespaces()
 func (m *MilvusConnectorImpl) ListNamespaces(ctx context.Context) []string {
 	c, err := m.getClient(ctx, 0)
@@ -545,7 +531,6 @@ func (m *MilvusConnectorImpl) ListNamespaces(ctx context.Context) []string {
 }
 
 // Count 统计节点数量（collection 总行数 / 指定 namespace 内的行数）。
-//
 // 对齐 Python: MilvusConnector.count(namespace)
 //
 // M-25（归档）：Python 全局分支用 collection.num_entities（服务端缓存统计，O(1)），
@@ -583,7 +568,6 @@ func (m *MilvusConnectorImpl) Count(ctx context.Context, namespace string) int {
 }
 
 // Flush 刷写缓冲区。
-//
 // 对齐 Python: MilvusConnector.flush()
 func (m *MilvusConnectorImpl) Flush(ctx context.Context) {
 	m.mu.RLock()
@@ -597,7 +581,6 @@ func (m *MilvusConnectorImpl) Flush(ctx context.Context) {
 }
 
 // Close 关闭连接。
-//
 // 对齐 Python: MilvusConnector.close()
 func (m *MilvusConnectorImpl) Close(ctx context.Context) {
 	m.mu.Lock()
@@ -613,7 +596,6 @@ func (m *MilvusConnectorImpl) Close(ctx context.Context) {
 }
 
 // SetClient 注入客户端（用于单元测试）。
-//
 // 对齐 Python: MilvusConnector.set_collection(collection)
 func (m *MilvusConnectorImpl) SetClient(client milvusClient) {
 	m.mu.Lock()

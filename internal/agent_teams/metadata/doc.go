@@ -1,10 +1,8 @@
 // Package metadata 提供团队命名空间（Team Namespace）的持久化读写函数。
-//
 // 在 session state 的 "teams" 顶层 key 下，按 team_name 分桶存储每个团队的
 // spec、context、allocator_state、db_state、lifecycle 等数据。
 // 所有函数通过 SessionFacade.UpdateState / GetState 操作分桶数据，
 // 遵循 read → mutate → write back 模式（对齐 Python session.update_state 浅合并）。
-//
 // 核心数据结构：
 //
 //	state["teams"][team_name] = {

@@ -53,7 +53,6 @@ func WithToolCard(card *ToolCard) ToolFuncOption {
 }
 
 // WithToolCallTimeout 为工具注册外层调用预算钩子。
-//
 // 与 WithCallTimeout 同名语义，区别在所属选项体系：NewTool/NewStreamTool
 // 走 ToolFuncOption，NewInvokeFunction/NewStreamFunction 走 LocalFuncOption。
 // 有内部执行期限的工具用它把执行预算加上清理宽限。
@@ -62,9 +61,7 @@ func WithToolCallTimeout(fn func(inputs map[string]any, defaultTimeout float64) 
 }
 
 // NewTool 便捷注册函数（Invoke 模式），对标 Python @tool 装饰器。
-//
 // Go 编译器从 fn 参数自动推断 I 和 O，用户无需显式指定泛型参数。
-//
 // 使用示例：
 //
 //	最简写法：自动推断 I/O，自动提取 schema
@@ -128,7 +125,6 @@ func NewTool[I any, O any](fn func(context.Context, I, ...ToolOption) (O, error)
 }
 
 // NewStreamTool 便捷注册函数（Stream 模式），对标 Python @tool 装饰器。
-//
 // 使用示例：
 //
 //	创建流式搜索工具：

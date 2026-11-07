@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
 // startDispatchTestServer 启动装配好 handler 的测试 WS 服务并返回已连接的客户端。
-//
 // 对齐 TestWebChannel_WebSocket连接生命周期 的脚手架，供分发顺序用例复用。
 func startDispatchTestServer(t *testing.T, wc *WebChannel) *websocket.Conn {
 	t.Helper()
@@ -104,7 +103,6 @@ func TestSendResponse_失败帧透传code(t *testing.T) {
 // ──────────────────────────── handler 异常兜底 ────────────────────────────
 
 // TestInvokeMethodHandler_panic转INTERNAL_ERROR 对齐上游 _invoke_method_handler 异常分支。
-//
 // handler panic 不能打断读循环：必须转成 INTERNAL_ERROR 帧并返回 false。
 func TestInvokeMethodHandler_panic转INTERNAL_ERROR(t *testing.T) {
 	wc := newTestChannel()
@@ -160,7 +158,6 @@ func (r *trailRecorder) snapshot() []string {
 }
 
 // wrapWithTrail 用包装器替换已注册方法，记录 handler 实际执行时刻。
-//
 // 包装器与被包装 handler 同在读循环 goroutine 上执行，因此记录顺序即真实分发顺序。
 func wrapWithTrail(wc *WebChannel, method string, recorder *trailRecorder, tag string) {
 	orig := wc.methodHandlers[method]
@@ -171,7 +168,6 @@ func wrapWithTrail(wc *WebChannel, method string, recorder *trailRecorder, tag s
 }
 
 // TestDispatch_chatSend_先handler后回调 chat.send 属 _HANDLER_BEFORE_CALLBACK_METHODS。
-//
 // 上游顺序：本地 handler（写 ack）→ 回调转发；且 handler 已应答时不再补帧。
 func TestDispatch_chatSend_先handler后回调(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil, nil)
@@ -197,7 +193,6 @@ func TestDispatch_chatSend_先handler后回调(t *testing.T) {
 }
 
 // TestDispatch_普通转发方法_先回调后handler chat.interrupt 不在 handler-before-callback 集合。
-//
 // 上游顺序：回调转发 → 回调未处理 → 本地 handler 回 ack。
 func TestDispatch_普通转发方法_先回调后handler(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil, nil)

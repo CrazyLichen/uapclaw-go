@@ -14,7 +14,6 @@ import (
 )
 
 // setupSkillTestEnv 隔离 workspace 根与 agent_teams home（测试辅助）。
-//
 // UAPCLAW_DATA_DIR 控制 workspace.AgentSkillsDir()，
 // agentteams.ConfigureHome 控制 TeamHome(teamName)。
 // 返回 (workspaceDir, agentTeamsHome)，并注册 cleanup 恢复缓存。

@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InitOption 工作区初始化选项。
-//
 // Python: init_user_workspace(overwrite, workspace_dir) + prepare_workspace(overwrite, preferred_language, workspace_dir)
 type InitOption struct {
 	Overwrite    bool   // 是否强制清理重建（-f 标志）
@@ -23,7 +22,6 @@ type InitOption struct {
 }
 
 // InitResult 工作区初始化结果。
-//
 // Python: init_user_workspace 返回值
 type InitResult struct {
 	WorkspaceDir string         // 实际使用的工作区路径
@@ -63,7 +61,6 @@ var memoryMultilangFiles = []struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Init 初始化工作区。
-//
 // Python: init_user_workspace(overwrite, workspace_dir)
 //
 // 完整流程：
@@ -189,7 +186,6 @@ func Init(opt InitOption) (*InitResult, error) {
 }
 
 // Prepare 复制模板文件到工作区。
-//
 // Python: prepare_workspace(overwrite, preferred_language, workspace_dir)
 //
 // 流程：
@@ -347,7 +343,6 @@ func promptYesNo(prompt string) bool {
 }
 
 // promptPreferredLanguage 交互询问语言偏好。
-//
 // Python: prompt_preferred_language()
 // 非交互环境默认返回 "zh"。
 func promptPreferredLanguage() string {
@@ -389,7 +384,6 @@ func promptPreferredLanguage() string {
 }
 
 // resolvePreferredLanguage 确定初始化使用的语言。
-//
 // 优先级：显式参数 > 已有 config.yaml 中的 preferred_language > 默认 "zh"
 // Python: _resolve_preferred_language()
 func resolvePreferredLanguage(explicit string, workspaceDir string) string {
@@ -424,7 +418,6 @@ func resolvePreferredLanguage(explicit string, workspaceDir string) string {
 }
 
 // setPreferredLanguage 将语言偏好写入 config.yaml。
-//
 // Python: set_preferred_language_in_config_file()
 func setPreferredLanguage(configPath string, lang string) {
 	// 读取现有内容

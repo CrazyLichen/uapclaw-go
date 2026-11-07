@@ -1,5 +1,4 @@
 // Package tracer 提供会话追踪的 Span 定义、SpanManager 管理和追踪处理器。
-//
 // 本包实现了追踪跨度（Span）的核心数据结构、管理器和处理器，
 // 完全对齐 Python 的 Span/TraceAgentSpan/TraceWorkflowSpan/SpanManager/TraceBaseHandler 设计：
 //
@@ -10,7 +9,6 @@
 // TraceAgentHandler 处理 Agent 层追踪事件（链式/LLM/提示词/插件/检索/评估/工作流调用）；
 // TraceWorkflowHandler 处理工作流层追踪事件（组件调用/预调用/流式/交互等）；
 // Tracer 管理追踪器生命周期，维护 Agent/Workflow 事件分发表，将 TraceEvent 映射到对应 handler 方法。
-//
 // 文件目录：
 //
 //	tracer/

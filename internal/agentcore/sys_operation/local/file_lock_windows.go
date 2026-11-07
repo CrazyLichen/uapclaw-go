@@ -15,7 +15,6 @@ import (
 // 本文件为 Windows 平台文件锁实现。
 // 平台绑定代码：按项目规范 3.2 第 3 条（硬件/OS 绑定）用 build tag 隔离，
 // 不纳入非 Windows 平台的覆盖率计算基线。
-//
 // 注意：Go 标准库 syscall 包在 Windows 下已不提供 LockFileEx/UnlockFile，
 // 统一改用 golang.org/x/sys/windows（与 syscall 同源，API 等价）。
 

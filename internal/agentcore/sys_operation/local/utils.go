@@ -74,7 +74,6 @@ type lockedBuffer struct {
 }
 
 // chunkDecoder 流式分块解码器：跨块的半个多字节字符留到下一块再解码。
-//
 // Python: AsyncProcessHandler._reader 用 codecs.getincrementaldecoder 达到同样效果。
 type chunkDecoder struct {
 	// encoding 目标编码
@@ -110,11 +109,9 @@ const (
 	// defaultEncoding 默认编码
 	defaultEncoding = "utf-8"
 	// backgroundStderrRetainLimit 后台进程保留的 stderr 字节上限。
-	//
 	// Python: _drain_background_stderr(limit=8192) 默认值
 	backgroundStderrRetainLimit = 8192
 	// backgroundStderrWait 早退时等待 stderr 排空的最长时间。
-	//
 	// 后代进程可能继承 stderr 写端并长期持有，管道 EOF 迟迟不到；
 	// 只等一小段就把已有内容当诊断，任务本身继续留在后台排空。
 	// Python: background() 里 remaining = deadline - loop.time() 的等待窗
@@ -482,7 +479,6 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 	}
 
 	// 后台模式：stdout 丢弃，stderr 保留管道。
-	//
 	// 保留 stderr 有两个目的：早退时能拿到诊断；持续排空避免子进程写满管道后
 	// 阻塞（历史实现设为 nil，进程初期的报错信息完全丢失）。
 	// Python: shell_operation.py:393-398 stderr = asyncio.subprocess.PIPE
@@ -601,7 +597,6 @@ func (OperationUtils) DeleteTmpFile(path string) error {
 }
 
 // ResolveCwd 解析当前工作目录路径（无 ctx 版本，保留兼容）。
-//
 // 优先使用 resolveCwd(ctx, ...)：agent 的 CwdState（cwd/project_root/
 // workspace）经 ctx 注入，用 context.Background() 读取恒为空，
 // 会让沙箱根为空、相对路径基准退化为进程 CWD。
@@ -612,7 +607,6 @@ func ResolveCwd(cwdPath string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // drainStderr 排空 stderr 管道并保留前 limit 字节，超限追加截断标记。
-//
 // 必须读到 EOF：提前 return 会让管道写满，子进程在 stderr 上阻塞。
 // Python: _drain_background_stderr (utils.py:322-343)
 func drainStderr(r io.Reader, limit int) string {
@@ -649,7 +643,6 @@ func drainStderr(r io.Reader, limit int) string {
 }
 
 // collectBackgroundStderr 在限定时间内取排空协程的结果。
-//
 // 后代进程可能继承 stderr 写端，管道 EOF 迟迟不到；超时返回空串，
 // 协程继续排空（不阻塞调用方，也不让管道写满）。
 // Python: background() 里 asyncio.wait({stderr_task}, timeout=remaining)
@@ -696,7 +689,6 @@ func (h *AsyncProcessHandler) killProcessTree() {
 }
 
 // decodeComplete 解码整块字节，末尾不完整的多字节序列作为 rest 返回。
-//
 // Python 用 codecs 的增量解码器保留半个字符；Go 侧显式算「末尾不完整字节数」：
 // 单字节系（UTF-8）看起始字节，双字节系（GBK/Big5 等）按字节对扫描。
 func decodeComplete(raw []byte, encName string) (string, []byte) {

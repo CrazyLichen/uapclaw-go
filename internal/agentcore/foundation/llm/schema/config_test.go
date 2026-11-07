@@ -685,7 +685,6 @@ func TestValidate_白名单矩阵(t *testing.T) {
 }
 
 // TestValidate_endpointProfile默认base ollama/lmstudio 缺 base 时回填默认地址。
-//
 // Python: schema/config.py:128-131 _DEFAULT_API_BASE_BY_ENDPOINT_PROFILE
 func TestValidate_endpointProfile默认base(t *testing.T) {
 	cfg, err := NewModelClientConfig("intelli_router", "", "", WithEndpointProfile("ollama"))

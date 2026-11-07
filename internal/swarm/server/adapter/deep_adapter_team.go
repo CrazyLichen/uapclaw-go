@@ -59,7 +59,6 @@ func (d *DeepAdapter) findTeamSkillRail(requestID, channelID string) *coreevolut
 }
 
 // handleTeamSkillEvolveApproval 处理 team skill 演进审批。
-//
 // 对齐 Python: handle_team_skill_evolve_approval(request_id, answers, session_id, channel_id)
 //
 //	(1) 查找 TeamSkillEvolutionRail
@@ -1320,12 +1319,10 @@ func chunkToMap(chunk any) map[string]any {
 }
 
 // payloadToMap 将 OutputSchema.Payload 转为 map[string]any。
-//
 // S-03: 生产端（task_loop/executor.go、session_spawn_executor.go、
 // task_scheduler.go）产出 *cschema.ControllerOutputPayload 结构体指针而非 map——
 // 原三个 typed 分支只断言 map[string]any，结构体 payload 全部返回 nil，
 // 导致 task_failed/task_completion 事件在消费循环被整块丢弃（前端静默失败）。
-//
 // 桥接实现已上提到 utils.PayloadToMap（deep 主循环与 ParseStreamChunk 共用），
 // 此处保留函数名作为包内薄封装，避免改动既有调用点。
 func payloadToMap(payload any) map[string]any {
@@ -1409,7 +1406,6 @@ func evolutionOutputSchemasToMaps(events any) []map[string]any {
 // —— utils 层版本，与 interface_deep._parse_stream_chunk（Go: utils.ParseStreamChunk）是
 // 两个不同的 Python 函数：utils 层无 harness.* 分支（message 走兜底 team. 直传），
 // interface_deep 层有 harness.message/stage_result 等专属分支。团队消费链 import 的是 utils 层版本。
-//
 // Go 差异：Python 接收 SDK chunk 对象（hasattr 鸭子类型）；Go 端 chunk 已被 chunkToMap
 // 转为 map[string]any，语义映射为 Python 的两个入口分支：
 //   - map 含 "payload" 键（chunkToMap 对 OutputSchema/TeamOutputSchema 的产出）→ _parse_typed_chunk
@@ -1594,7 +1590,6 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 		}
 		// 原样透传，与 stream_utils.ParseStreamChunk 的同名分支、以及 Python
 		// interface_deep._parse_stream_chunk 保持一致。
-		//
 		// 历史上这里（及通用路径）各有一份"丢弃增量碎片"的守卫，根因是模型客户端
 		// 的增量帧没有被合并（17b55eb8 用 ToolCallDeltaOptions 修复）；合并修好后
 		// 碎片到不了事件层，而"arguments 非合法 JSON 就不下发"会把模型输出的

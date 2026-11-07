@@ -25,7 +25,6 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // setupTestSessionsDir 设置测试用的 sessions 目录，返回（sessionsDir, AgentServer, cleanup）。
-//
 // Python: 测试隔离模式：设置 UAPCLAW_DATA_DIR 环境变量 + ResetCache，
 // 确保全局函数 GetSessionsDir() 指向测试临时目录（Python 用 set_user_workspace_dir()）。
 func setupTestSessionsDir(t *testing.T) (sessionsDir string, s *AgentServer, cleanup func()) {
@@ -554,7 +553,6 @@ func TestWriteSessionMetadata(t *testing.T) {
 // ──────────────────────────── 10.3.28 provisioner 链路用例 ────────────────────────────
 
 // TestHandleSessionCreate_返回会话标识 校验 create 走 provisioner 全链路。
-//
 // 10.3.28b：原「自动生成ID/指定ID」用例改写——session.create 不再接受
 // 非 TUI 的 session_id，改由 create_token 认领（Go 无预热池，直接新建）。
 func TestHandleSessionCreate_返回会话标识(t *testing.T) {
@@ -586,7 +584,6 @@ func TestHandleSessionCreate_返回会话标识(t *testing.T) {
 }
 
 // TestHandleSessionCreate_非TUI显式ID被拒绝 校验上游语义。
-//
 // Python: session.create no longer accepts session_id
 func TestHandleSessionCreate_非TUI显式ID被拒绝(t *testing.T) {
 	_, s, cleanup := setupTestSessionsDir(t)
@@ -661,7 +658,6 @@ func TestHandleSessionSwitch_无会话标识报错(t *testing.T) {
 }
 
 // TestHandleSessionDelete_七阶段事务成功 校验删除走 provisioner。
-//
 // 10.3.28c：原「正常删除」用例改写——删除改为七阶段事务，
 // 成功后目录删除 + 元数据缓存清理 + plan 状态重置。
 func TestHandleSessionDelete_七阶段事务成功(t *testing.T) {

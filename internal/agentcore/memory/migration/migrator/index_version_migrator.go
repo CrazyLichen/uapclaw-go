@@ -15,7 +15,6 @@ import (
 // IndexVersionMigrator 记忆索引版本迁移执行器。
 // 在同一 BaseMemoryIndex 实例内做 MemoryDoc 字段变换。
 // 迁移前创建备份，失败时恢复。
-//
 // Python: openjiuwen/core/memory/migration/migrator/index_version_migrator.py (IndexVersionMigrator)
 type IndexVersionMigrator struct{}
 
@@ -40,7 +39,6 @@ func NewIndexVersionMigrator() *IndexVersionMigrator {
 
 // TryMigrate 尝试执行索引版本迁移。
 // 注意：此方法签名与其他 Migrator 不同，不接受 entityKey，直接接收 index 实例。
-//
 // Python: IndexVersionMigrator.try_migrate(index, operations)
 func (m *IndexVersionMigrator) TryMigrate(ctx context.Context, idx index.BaseMemoryIndex, operations []operation.Operation) error {
 	currentVersion := idx.GetSchemaVersion()
@@ -96,7 +94,6 @@ func (m *IndexVersionMigrator) TryMigrate(ctx context.Context, idx index.BaseMem
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyOperation 应用单个迁移操作。
-//
 // Python: IndexVersionMigrator._apply_operation
 func (m *IndexVersionMigrator) applyOperation(ctx context.Context, idx index.BaseMemoryIndex, op operation.Operation) error {
 	switch o := op.(type) {
@@ -117,7 +114,6 @@ func (m *IndexVersionMigrator) applyOperation(ctx context.Context, idx index.Bas
 }
 
 // applyRenameField 应用字段重命名操作。
-//
 // Python: IndexVersionMigrator._apply_rename_field
 func (m *IndexVersionMigrator) applyRenameField(ctx context.Context, idx index.BaseMemoryIndex, op *operation.RenameMemoryDocFieldOperation) error {
 	scopes, err := idx.ListUserScopes(ctx)
@@ -160,7 +156,6 @@ func (m *IndexVersionMigrator) applyRenameField(ctx context.Context, idx index.B
 }
 
 // applyTransformField 应用字段值变换操作。
-//
 // Python: IndexVersionMigrator._apply_transform_field
 func (m *IndexVersionMigrator) applyTransformField(ctx context.Context, idx index.BaseMemoryIndex, op *operation.TransformMemoryDocFieldOperation) error {
 	scopes, err := idx.ListUserScopes(ctx)
@@ -204,7 +199,6 @@ func (m *IndexVersionMigrator) applyTransformField(ctx context.Context, idx inde
 }
 
 // applyAddField 应用添加字段操作。
-//
 // Python: IndexVersionMigrator._apply_add_field
 func (m *IndexVersionMigrator) applyAddField(ctx context.Context, idx index.BaseMemoryIndex, op *operation.AddMemoryDocFieldOperation) error {
 	scopes, err := idx.ListUserScopes(ctx)
@@ -253,7 +247,6 @@ func (m *IndexVersionMigrator) applyAddField(ctx context.Context, idx index.Base
 }
 
 // applyRemoveField 应用删除字段操作。
-//
 // Python: IndexVersionMigrator._apply_remove_field
 func (m *IndexVersionMigrator) applyRemoveField(ctx context.Context, idx index.BaseMemoryIndex, op *operation.RemoveMemoryDocFieldOperation) error {
 	scopes, err := idx.ListUserScopes(ctx)

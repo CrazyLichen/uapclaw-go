@@ -22,7 +22,6 @@ import (
 // 在 AgentModeRail（priority=85）之后运行，
 // 以 team 专属的 MODE_INSTRUCTIONS Section 替换通用 plan 提示，
 // 同时保留所有通用 plan 工具和安全检查。
-//
 // Init 时特化默认的 plan subagent（将 plan_agent 的 system prompt
 // 替换为 team.plan 版本）。BeforeModelCall 在 plan 模式下
 // 注入团队计划指令。

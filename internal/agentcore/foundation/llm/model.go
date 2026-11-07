@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionLike 会话最小接口，用于 BuildKVCacheInvokeKwargs 获取 session_id。
-//
 // Python: Model.build_kv_cache_invoke_kwargs() 中 session.get_session_id()
 type SessionLike interface {
 	// GetSessionID 返回会话唯一标识。
@@ -25,7 +24,6 @@ type SessionLike interface {
 }
 
 // Model 统一 LLM 调用入口（门面模式）。
-//
 // 职责：
 //  1. 根据 ModelClientConfig 创建 BaseModelClient 实例
 //  2. 在 Invoke/Stream 前后触发 CallbackFramework 回调事件
@@ -61,7 +59,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // streamDrainTimeout 流异常路径排空内层通道的最长等待。
-//
 // 正常客户端收到 cancel 后即关闭通道，排空是毫秒级；这里是兜底：
 // 若某客户端忽略 ctx 又不停发，裸排空会永久挂住消费方。
 var streamDrainTimeout = 2 * time.Second
@@ -69,7 +66,6 @@ var streamDrainTimeout = 2 * time.Second
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewModel 创建 Model 实例。
-//
 // Python: Model.__init__(model_client_config, model_config)
 //
 // 创建流程：
@@ -120,7 +116,6 @@ func WithClient(client model_clients.BaseModelClient) ModelOption {
 }
 
 // Invoke 非流式调用 LLM。
-//
 // Python: Model.invoke()
 // 执行顺序：① transform_io input → ② emit_before → client.Invoke → ③ transform_io output → ④ emit_after
 func (m *Model) Invoke(
@@ -212,7 +207,6 @@ func (m *Model) Invoke(
 }
 
 // Stream 流式调用 LLM。
-//
 // Python: Model.stream()
 // 执行顺序：① transform_io input → ② emit_before → client.Stream → per-item { ③ transform_io output → ④ emit_after }
 //
@@ -459,19 +453,15 @@ func (m *Model) Stream(
 }
 
 // Release 释放模型缓存/资源。
-//
 // 仅 InferenceAffinity 客户端支持 KV Cache 释放，其他客户端返回不支持错误。
-//
 // Python: Model.release()
 func (m *Model) Release(ctx context.Context, opts ...model_clients.ReleaseOption) (bool, error) {
 	return m.client.Release(ctx, opts...)
 }
 
 // SupportsKVCacheRelease 检查底层客户端是否支持 KV cache release。
-//
 // 零副作用判断：委托给底层 client 的 SupportsKVCacheRelease 方法，
 // 仅 InferenceAffinity 返回 true，其他客户端返回 false。
-//
 // Python: Model.supports_kv_cache_release()
 //
 //	Python 使用 isinstance(self._client, InferenceAffinityModelClient) 判断，
@@ -481,10 +471,8 @@ func (m *Model) SupportsKVCacheRelease() bool {
 }
 
 // BuildKVCacheInvokeKwargs 为 InferenceAffinity 客户端构建额外参数。
-//
 // 仅当底层客户端支持 KV Cache 释放时才构建 kwargs，
 // 其他客户端直接返回空 map，避免向 API 请求注入无意义参数。
-//
 // 当底层客户端为 InferenceAffinity 时：
 //   - session_id: 使用 session.GetSessionID()
 //   - enable_cache_sharing: 跟随 enableKVCacheRelease 参数
@@ -509,7 +497,6 @@ func (m *Model) BuildKVCacheInvokeKwargs(session SessionLike, enableKVCacheRelea
 }
 
 // GenerateImage 生成图片。
-//
 // Python: Model.generate_image()
 func (m *Model) GenerateImage(
 	ctx context.Context,
@@ -520,7 +507,6 @@ func (m *Model) GenerateImage(
 }
 
 // GenerateSpeech 生成语音。
-//
 // Python: Model.generate_speech()
 func (m *Model) GenerateSpeech(
 	ctx context.Context,
@@ -531,7 +517,6 @@ func (m *Model) GenerateSpeech(
 }
 
 // GenerateVideo 生成视频。
-//
 // Python: Model.generate_video()
 func (m *Model) GenerateVideo(
 	ctx context.Context,
@@ -542,7 +527,6 @@ func (m *Model) GenerateVideo(
 }
 
 // GetClient 获取底层客户端实例。
-//
 // 用于类型断言（如判断是否为 InferenceAffinity 客户端），
 // 大多数场景不需要直接访问底层客户端。
 func (m *Model) GetClient() model_clients.BaseModelClient {
@@ -560,7 +544,6 @@ func (m *Model) Format(f fmt.State, _ rune) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveModelName 解析非流式调用的模型名称。
-//
 // 优先使用参数中指定的模型名称，其次使用 ModelConfig 中的默认值。
 func (m *Model) resolveModelName(paramModel string) string {
 	if paramModel != "" {

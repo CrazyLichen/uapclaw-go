@@ -25,15 +25,12 @@ type loopController interface {
 
 // TeamSkillCreateRail 团队技能创建护栏，在检测到多 Agent 协作模式后
 // 提议用户创建团队技能。
-//
 // 嵌入 EvolutionRail 基类（evolution_trigger=NONE），不自动触发演化，
 // 而是在 after_task_iteration / after_invoke 中检测 spawn_member 调用次数，
 // 达到阈值后通过 LoopController enqueue follow_up 请求用户确认。
-//
 // 与 TeamSkillEvolutionRail 为兄弟关系：
 // TeamSkillEvolutionRail 负责已有团队技能的演进优化，
 // TeamSkillCreateRail 负责检测是否应创建新的团队技能。
-//
 // 对齐 Python: openjiuwen/harness/rails/skills/team_skill_create_rail.py
 type TeamSkillCreateRail struct {
 	*EvolutionRail
@@ -98,7 +95,6 @@ var _ EvolutionExtension = (*TeamSkillCreateRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamSkillCreateRail 创建团队技能创建护栏实例。
-//
 // 对齐 Python: TeamSkillCreateRail(skills_dir, language="cn", auto_trigger=True, min_team_members_for_create=2)
 func NewTeamSkillCreateRail(
 	skillsDir string,
@@ -129,7 +125,6 @@ func NewTeamSkillCreateRail(
 func (r *TeamSkillCreateRail) Priority() int { return teamSkillCreatePriority }
 
 // NotifyTeamCompleted 标记当前 invoke 可在后续生命周期边界提议团队技能创建。
-//
 // 对齐 Python: TeamSkillCreateRail.notify_team_completed()
 func (r *TeamSkillCreateRail) NotifyTeamCompleted(cbc *agentinterfaces.AgentCallbackContext) bool {
 	if !r.autoTrigger {
@@ -404,7 +399,6 @@ func containsTeamSkillKind(content string) bool {
 }
 
 // getLoopController 从 Agent 获取 LoopController。
-//
 // 对齐 Python: controller = getattr(agent, "_loop_controller", None)
 //
 // 修复说明：DeepAgent.LoopController() 的返回类型是 controller.ControllerInterface，

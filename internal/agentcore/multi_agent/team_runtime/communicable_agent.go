@@ -11,10 +11,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CommunicableAgent 可通信 Agent 实现，嵌入 Agent 结构体获得 P2P/Pub-Sub 通信能力。
-//
 // Agent 通过组合此结构体，在 BindRuntime 被调用后即可使用 Send/Publish/Subscribe/Unsubscribe。
 // 外部通过类型断言 agent.(Communicable) 获取通信接口。
-//
 // Python: CommunicableAgent (openjiuwen/core/multi_agent/team_runtime/communicable_agent.py)
 type CommunicableAgent struct {
 	// runtime 团队运行时引用，BindRuntime 注入
@@ -48,7 +46,6 @@ func NewCommunicableAgent() *CommunicableAgent {
 }
 
 // IsBound 判断是否已绑定运行时。
-//
 // Python: CommunicableAgent.is_bound 属性
 func (c *CommunicableAgent) IsBound() bool {
 	return c.runtime != nil && c.agentID != ""
@@ -56,13 +53,10 @@ func (c *CommunicableAgent) IsBound() bool {
 
 // BindRuntime 绑定团队运行时，注入运行时引用和 Agent 标识。
 // 实现 RuntimeBindable 接口。
-//
 // 幂等性：相同 runtime 和 agentID 时静默跳过。
 // 重绑定：已绑定到不同 runtime 或 agentID 时记录 warning 日志。
-//
 // 注意：此方法假设在 Agent 创建时单次调用，无并发场景。
 // 若未来需要并发绑定，应添加 sync.RWMutex 保护 runtime/agentID 字段。
-//
 // Python: CommunicableAgent.bind_runtime(runtime, agent_id)
 func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
 	if agentID == "" {
@@ -86,7 +80,6 @@ func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
 
 // Send P2P 发送消息到指定接收者，等待响应。
 // 实现 Communicable 接口。
-//
 // Python: CommunicableAgent.send(message, recipient, opts)
 func (c *CommunicableAgent) Send(ctx context.Context, message map[string]any, recipient string, opts ...maschema.TeamOption) (any, error) {
 	if c.runtime == nil {
@@ -97,7 +90,6 @@ func (c *CommunicableAgent) Send(ctx context.Context, message map[string]any, re
 
 // Publish Pub-Sub 发布消息到指定主题，发后即忘。
 // 实现 Communicable 接口。
-//
 // Python: CommunicableAgent.publish(message, topic_id, opts)
 func (c *CommunicableAgent) Publish(ctx context.Context, message map[string]any, topicID string, opts ...maschema.TeamOption) error {
 	if c.runtime == nil {
@@ -108,7 +100,6 @@ func (c *CommunicableAgent) Publish(ctx context.Context, message map[string]any,
 
 // Subscribe 订阅主题。
 // 实现 Communicable 接口。
-//
 // Python: CommunicableAgent.subscribe(topic)
 func (c *CommunicableAgent) Subscribe(ctx context.Context, topic string) error {
 	if c.runtime == nil {
@@ -119,7 +110,6 @@ func (c *CommunicableAgent) Subscribe(ctx context.Context, topic string) error {
 
 // Unsubscribe 取消订阅主题。
 // 实现 Communicable 接口。
-//
 // Python: CommunicableAgent.unsubscribe(topic)
 func (c *CommunicableAgent) Unsubscribe(ctx context.Context, topic string) error {
 	if c.runtime == nil {

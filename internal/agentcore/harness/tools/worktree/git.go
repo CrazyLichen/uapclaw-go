@@ -387,14 +387,11 @@ func resolveGitDir(ctx context.Context, cwd string) (string, error) {
 // ──────────────────────────── gitdir/commondir 解析 ────────────────────────────
 
 // resolveGitDirFile 解析 .git 文件里的 gitdir 内容，并校验它确实是 git 工作树目录。
-//
 // gitdir 可以是相对路径（旧版 git 或手工创建）也可以是绝对路径——实测
 // git 2.x 的 `git worktree add` 写入的是绝对路径。因此不能限定"必须落在
 // worktree 目录内"：那会让所有真实 worktree 读取失败。
-//
 // 判据改为工作树的必然特征：目标必须是目录，且同时存在 HEAD 与 commondir。
 // 被篡改成 /etc 之类路径时这两个文件不会同时出现，读不到伪 SHA。
-//
 // Python: read_worktree_head_sha 直接 open(join(path))，无此防御
 func resolveGitDirFile(wtPath, raw string) (string, error) {
 	if raw == "" {
@@ -419,7 +416,6 @@ func resolveGitDirFile(wtPath, raw string) (string, error) {
 }
 
 // resolveCommonDir 解析 commondir 内容。
-//
 // commondir 相对 gitDir 解析，真实值形如 "../.."（指向主仓库 .git），
 // 向上跳是合法且必要的；只要求解析结果是一个目录。
 func resolveCommonDir(gitDir, raw string) (string, error) {

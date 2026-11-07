@@ -91,7 +91,6 @@ func (w *customWriter) Write(ctx context.Context, schema Schema) error {
 }
 
 // WriteInteraction 实现 InteractionOutputWriter 接口，供交互层写入输出。
-//
 // T-11：ctx 由调用方（交互层）传入，取代原先写死的 context.Background()——
 // 上游取消后写流能立即中断，不再与节点执行生命周期脱钩。
 func (w *outputWriter) WriteInteraction(ctx context.Context, outputType string, index int, payload any) error {

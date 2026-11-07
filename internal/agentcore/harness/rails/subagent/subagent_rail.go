@@ -23,7 +23,6 @@ import (
 // SubagentRail 子代理委派 Rail。
 // 注册 TaskTool（同步）或 SessionTools（异步）到 Agent，
 // 并在每轮模型调用前注入对应的 prompt section。
-//
 // Python: SubagentRail (openjiuwen/harness/rails/subagent/subagent_rail.py)
 type SubagentRail struct {
 	rails.DeepAgentRail
@@ -87,7 +86,6 @@ var _ agentinterfaces.AgentRail = (*SubagentRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSubagentRail 创建 SubagentRail 实例。
-//
 // Python: SubagentRail(enable_async_subagent=False)
 func NewSubagentRail(opts ...SubagentRailOption) *SubagentRail {
 	r := &SubagentRail{
@@ -107,7 +105,6 @@ func WithEnableAsyncSubagent(enabled bool) SubagentRailOption {
 }
 
 // Init 初始化钩子：捕获 system_prompt_builder，注册 TaskTool。
-//
 // Python: SubagentRail.init(agent)
 func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 捕获 system_prompt_builder
@@ -192,7 +189,6 @@ func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 }
 
 // BeforeModelCall 模型调用前注入 prompt section。
-//
 // Python: SubagentRail.before_model_call(ctx)
 func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if len(r.tools) == 0 || r.promptBuilder == nil {
@@ -219,7 +215,6 @@ func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces
 }
 
 // Uninit 注销 Rail：移除已注册工具，异步模式清空 session toolkit。
-//
 // Python: SubagentRail.uninit(agent)
 func (r *SubagentRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// Python: if self.tools and hasattr(agent, "ability_manager")
@@ -275,7 +270,6 @@ func (r *SubagentRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall。
-//
 // Python: SubagentRail 隐式覆盖 before_model_call
 func (r *SubagentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
@@ -290,7 +284,6 @@ func (r *SubagentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildAvailableAgentsDescription 构建可用子代理描述字符串。
-//
 // Python: SubagentRail._build_available_agents_description(subagents)
 func (r *SubagentRail) buildAvailableAgentsDescription(subagents []hschema.SubagentSpec) string {
 	if len(subagents) == 0 {
@@ -307,7 +300,6 @@ func (r *SubagentRail) buildAvailableAgentsDescription(subagents []hschema.Subag
 }
 
 // extractAgentMeta 提取代理名称和描述。
-//
 // Python: SubagentRail._extract_agent_meta(spec)
 func (r *SubagentRail) extractAgentMeta(spec hschema.SubagentSpec) (string, string) {
 	if cfg, ok := spec.(*hschema.SubAgentConfig); ok && cfg.AgentCard != nil {

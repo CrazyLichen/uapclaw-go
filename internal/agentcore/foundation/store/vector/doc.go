@@ -1,10 +1,8 @@
 // Package vector 提供向量存储的抽象接口定义、配套 Schema 类型、Milvus、ChromaDB、GaussDB 和 Elasticsearch 后端实现。
-//
 // 本包定义了所有向量存储后端必须满足的 BaseVectorStore 接口，
 // 以及用于描述集合结构的 CollectionSchema、FieldSchema 等数据模型。
 // 同时提供基于 Milvus、ChromaDB、GaussDB 和 Elasticsearch 的完整向量存储实现，
 // 支持集合 CRUD、向量搜索、批量插入和距离转换等功能。
-//
 // 文件目录：
 //
 //	vector/

@@ -25,11 +25,9 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // LoadOrCreateKeyFile 读取密钥文件，不存在时生成 32 字节密钥并写入。
-//
 // 文件格式：64 字符 hex 文本（32 字节 AES-256 密钥）+ 换行，权限 0600。
 // 首次生成使用 crypto/rand；删除文件即重新生成（旧密文自然失效，
 // 解密失败由消费方逐字段跳过，对齐 Python except: pass）。
-//
 // 接收路径参数保持本包叶子地位（不 import workspace/config；
 // 本包亦禁止导入 common/logger——logger→config→crypto 会成环），
 // 路径由调用方（cmd 层）组装，日志用 stdlib log 以 [crypto] 前缀区分。

@@ -5,11 +5,9 @@ import "fmt"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // E2AProvenance 记录 E2A 信封的出处。
-//
 // E2A 为统一载体：ACP、A2A 等消息经转换后均应落在此结构中。
 // SourceProtocol 标明进入 E2A 之前所依据的主要协议或「原生 E2A」。
 // Converter / ConvertedAt / Details 标明由谁、何时、从何种具体调用转换而来。
-//
 // Python: jiuwenswarm/common/e2a/models.py (E2AProvenance)
 type E2AProvenance struct {
 	// SourceProtocol 来源协议（默认 "e2a"）
@@ -23,7 +21,6 @@ type E2AProvenance struct {
 }
 
 // E2AFileRef 文件引用（用于 params.files / params.attachments 等元素，对齐 MCP/A2A 常见形态）。
-//
 // Python: jiuwenswarm/common/e2a/models.py (E2AFileRef)
 type E2AFileRef struct {
 	// URI 文件地址
@@ -39,9 +36,7 @@ type E2AFileRef struct {
 }
 
 // E2AAuth 身份鉴权信息（按需填充）。
-//
 // 建议：生产环境用 CredentialRef / oauth 等间接引用，由网关在受控环境换票。
-//
 // Python: jiuwenswarm/common/e2a/models.py (E2AAuth)
 type E2AAuth struct {
 	// MethodID 方法标识
@@ -61,7 +56,6 @@ type E2AAuth struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // IdentityOrigin 身份来源：谁触发了本次对 Agent 的请求。
-//
 // Python: jiuwenswarm/common/e2a/models.py (IdentityOrigin)
 type IdentityOrigin string
 

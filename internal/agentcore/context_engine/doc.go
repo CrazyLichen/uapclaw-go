@@ -1,15 +1,12 @@
 // Package context_engine 提供上下文引擎的核心抽象和数据结构。
-//
 // 上下文引擎负责管理 Agent 会话中的对话消息生命周期、
 // 构建 LLM 推理所需的上下文窗口、以及消息压缩和卸载等处理。
 // 它是 Session 和 LLM 之间的桥梁：Session 管理会话状态，
 // ModelContext 管理 LLM 看到的"上下文视图"。
-//
 // 核心接口和数据结构定义在 interface 子包中，外部包应直接导入
 // context_engine/interface 包并使用 iface.Xxx 形式引用类型。
 // 本包提供处理器工厂注册表（RegisterProcessorFactory/GetProcessorFactory/ListProcessorFactories）、
 // ContextEngine 门面（NewContextEngine）和预留函数 StatContextWindow。
-//
 // 文件目录：
 //
 //	context_engine/

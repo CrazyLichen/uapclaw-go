@@ -80,6 +80,7 @@ func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPro
 	}
 }
 
+// Build 按当前模式把各提示词段落拼成完整的系统提示词。
 func (b *SystemPromptBuilder) Build() string {
 	switch b.mode {
 	case hschema.PromptModeNone:
@@ -116,7 +117,6 @@ func ResolveLanguage(configLanguage string) string {
 }
 
 // ResolveMode 从配置字符串解析 PromptMode，空串默认为 PromptModeFull。
-//
 // Python: resolve_mode()
 func ResolveMode(configMode string) hschema.PromptMode {
 	if configMode == "" {
@@ -132,7 +132,6 @@ func ResolveMode(configMode string) hschema.PromptMode {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isSupportedLanguage 检查语言是否在支持列表中。
-//
 // Python: config_language in SUPPORTED_LANGUAGES
 func isSupportedLanguage(lang string) bool {
 	for _, supported := range SupportedLanguages {

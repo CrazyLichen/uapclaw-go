@@ -22,7 +22,6 @@ import (
 
 // TestMemoryTools_沙箱拒绝不得假成功 回归：Fs 失败以 BaseResult.Code 表达
 // （err 恒为 nil），记忆工具必须显式检查，否则会向模型返回 success=true。
-//
 // 历史缺陷（CI 40987848552）：沙箱根为空导致写入被拒 → 工具仍报成功 →
 // 模型「写入成功→读取为空→编辑读失败」反复排查直到 max_iterations 打满。
 func TestMemoryTools_沙箱拒绝不得假成功(t *testing.T) {

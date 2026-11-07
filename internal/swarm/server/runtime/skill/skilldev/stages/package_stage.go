@@ -137,7 +137,6 @@ func (h *PackageStageHandler) zipSkillDir(skillDir, zipPath string) error {
 }
 
 // shouldExclude 判断文件是否应被排除出 zip 包。
-//
 // 排除规则：目录级排除 + 文件级排除 + glob 匹配。
 func shouldExclude(filePath, skillDir string) bool {
 	relPath, err := filepath.Rel(skillDir, filePath)

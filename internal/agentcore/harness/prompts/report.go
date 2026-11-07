@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SectionInfo 单个节的轻量快照，用于诊断报告。
-//
 // Python: SectionInfo (openjiuwen/harness/prompts/report.py)
 type SectionInfo struct {
 	// Name 节名称
@@ -22,7 +21,6 @@ type SectionInfo struct {
 }
 
 // PromptReport 系统提示词诊断报告，统计节信息和 token 估算。
-//
 // Python: PromptReport (openjiuwen/harness/prompts/report.py)
 type PromptReport struct {
 	// TotalChars 总字符数
@@ -57,7 +55,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPromptReport 从构建器当前状态创建诊断报告。
-//
 // Python: PromptReport.from_builder(builder)
 func NewPromptReport(builder *SystemPromptBuilder) *PromptReport {
 	language := builder.Language()
@@ -107,7 +104,6 @@ func NewPromptReport(builder *SystemPromptBuilder) *PromptReport {
 }
 
 // ToDict 将报告序列化为字典。
-//
 // Python: PromptReport.to_dict()
 func (r *PromptReport) ToDict() map[string]any {
 	sections := make([]map[string]any, 0, len(r.Sections))
@@ -129,7 +125,6 @@ func (r *PromptReport) ToDict() map[string]any {
 }
 
 // Summary 返回人类可读的单行摘要。
-//
 // Python: PromptReport.summary()
 func (r *PromptReport) Summary() string {
 	return "[PromptReport] mode=" + r.Mode + " lang=" + r.Language +

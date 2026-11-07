@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OnlineEvolutionOrchestrator 在线演进流水线协调器。
-//
 // Python: OnlineEvolutionOrchestrator
 //
 // Manager 仍然是生命周期状态的所有者；此类仅编排
@@ -46,7 +45,6 @@ type OnlineEvolutionOrchestrator struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOnlineEvolutionOrchestrator 创建在线演进编排器。
-//
 // Python: OnlineEvolutionOrchestrator.__init__()
 func NewOnlineEvolutionOrchestrator(
 	store *checkpointing.EvolutionStore,
@@ -67,7 +65,6 @@ func NewOnlineEvolutionOrchestrator(
 }
 
 // Evolve 执行在线演进并返回结构化结果。
-//
 // Python: OnlineEvolutionOrchestrator.evolve()
 func (o *OnlineEvolutionOrchestrator) Evolve(
 	ctx context.Context,

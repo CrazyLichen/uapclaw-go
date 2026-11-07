@@ -63,7 +63,6 @@ func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 }
 
 // EmbedQuery 返回基于文本 hash 的 128 维确定性随机向量。
-//
 // Python: MockEmbeddingProvider.embed_query — random.seed(md5(text).hexdigest()), [random.uniform(-1,1) for _ in range(128)]
 func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]float64, error) {
 	h := md5.Sum([]byte(text))
@@ -79,7 +78,6 @@ func (m *MockEmbeddingProvider) EmbedQuery(_ context.Context, text string) ([]fl
 }
 
 // EmbedDocuments 批量嵌入文档。
-//
 // Python: MockEmbeddingProvider.embed_documents
 func (m *MockEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error) {
 	result := make([][]float64, len(texts))

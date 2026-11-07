@@ -24,7 +24,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentManager Agent 实例管理器（10.3.12）。
-//
 // 管理 UapClawSwarm 实例的创建、获取和配置重载。
 // 使用两层嵌套 map：channel_key → cache_key → agentEntry。
 // Python: jiuwenswarm/server/runtime/agent_manager.py
@@ -794,7 +793,6 @@ func resolveWorkspaceDirFromRequest(request *schema.AgentRequest) string {
 }
 
 // GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（runtime.AgentManagerPort 实现）。
-//
 // Python: runtime/request.py prepare_chat_turn 中的 get_agent_for_request（简化版，无原子准入）。
 // GetChatAgent 返回按 mode/subMode/projectDir 选中（必要时创建）的聊天 agent。
 func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (swruntime.ChatAgentPort, error) {
@@ -806,7 +804,6 @@ func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMo
 }
 
 // GetChatAgentNoWait 非阻塞返回符合条件的既有 agent（不存在时返回 nil）。
-//
 // Python: AgentManager.get_agent_nowait
 func (am *AgentManager) GetChatAgentNoWait(channelID, mode, projectDir, subMode string) swruntime.ChatAgentPort {
 	agent := am.GetAgentNoWait(channelID, mode, projectDir, subMode)

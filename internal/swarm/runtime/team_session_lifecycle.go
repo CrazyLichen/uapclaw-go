@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // TeamLifecycleManager 生命周期适配器需要的团队运行时操作。
-//
 // Python: runtime/team_session_lifecycle.py _TeamLifecycleManager（Protocol，6 方法）
 // Go 侧 2 个可用现有能力实现（PauseSessionRuntime / StopSessionRuntime），
 // 其余 4 个为桩，spec §10 R-7。
@@ -30,7 +29,6 @@ type TeamLifecycleManager interface {
 }
 
 // RoundStateCoordinator 轮状态协调器。
-//
 // Python: runtime/team_session_lifecycle.py _RoundStateCoordinator（Protocol）
 type RoundStateCoordinator interface {
 	// ResumeWaitingForInput 恢复等待输入的持久 owner
@@ -42,7 +40,6 @@ type RoundStateCoordinator interface {
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamSessionLifecycleAdapter 团队实现 Runtime 会话生命周期端口。
-//
 // Python: runtime/team_session_lifecycle.py TeamSessionLifecycleAdapter
 // 构造时把 reportRoundState 注册为团队运行时的轮状态观察者，
 // 使团队轮的 active/idle 变化回写到协调器的持久执行上。
@@ -56,7 +53,6 @@ type TeamSessionLifecycleAdapter struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamSessionLifecycleAdapter 创建适配器。
-//
 // Python: TeamSessionLifecycleAdapter.__init__（L94-105）
 // 末尾必须注册轮状态观察者，否则团队轮的 active/idle 变化不会回写协调器。
 func NewTeamSessionLifecycleAdapter(manager TeamLifecycleManager, rounds RoundStateCoordinator) *TeamSessionLifecycleAdapter {
@@ -68,7 +64,6 @@ func NewTeamSessionLifecycleAdapter(manager TeamLifecycleManager, rounds RoundSt
 }
 
 // RemoveResponseWaiter 移除当前请求拥有的响应等待者。
-//
 // Python: TeamSessionLifecycleAdapter.remove_response_waiter（L122-134）
 // reason 仅用于日志，上游 `del reason` 后未使用。
 func (a *TeamSessionLifecycleAdapter) RemoveResponseWaiter(
@@ -82,7 +77,6 @@ func (a *TeamSessionLifecycleAdapter) RemoveResponseWaiter(
 }
 
 // PauseSession 暂停一个团队会话代次。
-//
 // Python: TeamSessionLifecycleAdapter.pause_session（L136-151）
 // 返回匹配代次是否被暂停或排空；channelID 上游未使用。
 func (a *TeamSessionLifecycleAdapter) PauseSession(
@@ -95,7 +89,6 @@ func (a *TeamSessionLifecycleAdapter) PauseSession(
 }
 
 // StopSession 停止一个团队会话代次。
-//
 // Python: TeamSessionLifecycleAdapter.stop_session（L153-163）
 func (a *TeamSessionLifecycleAdapter) StopSession(
 	ctx context.Context,
@@ -108,9 +101,7 @@ func (a *TeamSessionLifecycleAdapter) StopSession(
 }
 
 // PublishPauseCompleted 通过存活的会话观察者发布暂停完成。
-//
 // Python: TeamSessionLifecycleAdapter.publish_pause_completed（L165-186）
-//
 // 两步且顺序不得调整：
 //  1. generation 非空时先 mark_session_waiting_for_input（停泊存活观察者）
 //  2. 广播 chat.processing_status 事件（is_processing=false / is_complete=true）
@@ -140,7 +131,6 @@ func (a *TeamSessionLifecycleAdapter) PublishPauseCompleted(
 }
 
 // IsRunning 一个团队代次是否拥有活跃工作。
-//
 // Python: TeamSessionLifecycleAdapter.is_running（L189-196）
 func (a *TeamSessionLifecycleAdapter) IsRunning(sess session.SessionLifecycleContext) bool {
 	return a.manager.IsGenerationRunning(sess.SessionID, sess.Generation)
@@ -149,7 +139,6 @@ func (a *TeamSessionLifecycleAdapter) IsRunning(sess session.SessionLifecycleCon
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // reportRoundState 把团队轮活动回写到持久 Runtime 执行。
-//
 // Python: TeamSessionLifecycleAdapter._report_round_state（L107-120）
 //
 //	running 为真 → 恢复等待输入的持久 owner

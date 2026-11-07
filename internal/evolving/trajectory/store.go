@@ -13,9 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TrajectoryStore 轨迹持久化接口。
-//
 // 提供 save/load/query 三个核心操作，支持可选的 version 隔离。
-//
 // Python: TrajectoryStore(Protocol)
 type TrajectoryStore interface {
 	// Save 保存轨迹。version 用于实验隔离。
@@ -27,7 +25,6 @@ type TrajectoryStore interface {
 }
 
 // InMemoryTrajectoryStore 内存轨迹存储，用于测试和开发。
-//
 // Python: InMemoryTrajectoryStore
 type InMemoryTrajectoryStore struct {
 	// data 版本 → executionID → Trajectory
@@ -35,7 +32,6 @@ type InMemoryTrajectoryStore struct {
 }
 
 // FileTrajectoryStore 基于 JSONL 文件的轨迹存储。
-//
 // Python: FileTrajectoryStore
 type FileTrajectoryStore struct {
 	// baseDir 存储目录
@@ -56,7 +52,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryTrajectoryStore 创建内存轨迹存储。
-//
 // Python: InMemoryTrajectoryStore()
 func NewInMemoryTrajectoryStore() *InMemoryTrajectoryStore {
 	return &InMemoryTrajectoryStore{
@@ -65,7 +60,6 @@ func NewInMemoryTrajectoryStore() *InMemoryTrajectoryStore {
 }
 
 // Save 保存轨迹到内存。
-//
 // Python: InMemoryTrajectoryStore.save()
 func (s *InMemoryTrajectoryStore) Save(trajectory *Trajectory, version string) {
 	ver := version
@@ -79,7 +73,6 @@ func (s *InMemoryTrajectoryStore) Save(trajectory *Trajectory, version string) {
 }
 
 // Load 从内存加载轨迹。
-//
 // Python: InMemoryTrajectoryStore.load()
 func (s *InMemoryTrajectoryStore) Load(executionID string, version string) *Trajectory {
 	ver := version
@@ -93,7 +86,6 @@ func (s *InMemoryTrajectoryStore) Load(executionID string, version string) *Traj
 }
 
 // Query 从内存查询轨迹列表。
-//
 // Python: InMemoryTrajectoryStore.query()
 func (s *InMemoryTrajectoryStore) Query(version string, filters map[string]any) []*Trajectory {
 	ver := version
@@ -124,7 +116,6 @@ func (s *InMemoryTrajectoryStore) Query(version string, filters map[string]any) 
 }
 
 // NewFileTrajectoryStore 创建文件轨迹存储。
-//
 // Python: FileTrajectoryStore(base_dir)
 func NewFileTrajectoryStore(baseDir string) *FileTrajectoryStore {
 	// Python: self._base_dir.mkdir(parents=True, exist_ok=True)
@@ -133,7 +124,6 @@ func NewFileTrajectoryStore(baseDir string) *FileTrajectoryStore {
 }
 
 // Save 追加轨迹到 JSONL 文件。
-//
 // Python: FileTrajectoryStore.save()
 func (s *FileTrajectoryStore) Save(trajectory *Trajectory, version string) {
 	filePath := s.getFilePath(version)
@@ -153,7 +143,6 @@ func (s *FileTrajectoryStore) Save(trajectory *Trajectory, version string) {
 }
 
 // Load 按 execution_id 从 JSONL 文件加载轨迹。
-//
 // Python: FileTrajectoryStore.load()
 func (s *FileTrajectoryStore) Load(executionID string, version string) *Trajectory {
 	filePath := s.getFilePath(version)
@@ -181,7 +170,6 @@ func (s *FileTrajectoryStore) Load(executionID string, version string) *Trajecto
 }
 
 // Query 从 JSONL 文件查询匹配的轨迹列表。
-//
 // Python: FileTrajectoryStore.query()
 func (s *FileTrajectoryStore) Query(version string, filters map[string]any) []*Trajectory {
 	filePath := s.getFilePath(version)
@@ -223,7 +211,6 @@ func (s *FileTrajectoryStore) Query(version string, filters map[string]any) []*T
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getFilePath 获取版本对应的 JSONL 文件路径。
-//
 // Python: FileTrajectoryStore._get_file_path()
 func (s *FileTrajectoryStore) getFilePath(version string) string {
 	ver := version
@@ -235,7 +222,6 @@ func (s *FileTrajectoryStore) getFilePath(version string) string {
 }
 
 // trajectoryToDict 将 Trajectory 转换为可 JSON 序列化的字典。
-//
 // Python: FileTrajectoryStore._trajectory_to_dict()
 func trajectoryToDict(trajectory *Trajectory) map[string]any {
 	result := toJSONCompatible(trajectory)
@@ -246,7 +232,6 @@ func trajectoryToDict(trajectory *Trajectory) map[string]any {
 }
 
 // toJSONCompatible 递归转换值到 JSON 兼容数据。
-//
 // Python:
 //
 //	Python: if hasattr(obj, "model_dump") and callable(obj.model_dump):
@@ -302,7 +287,6 @@ func jsonSafeRecursive(v any) any {
 }
 
 // dictToTrajectory 将字典转换为 Trajectory。
-//
 // Python:
 //
 //	Python: steps_data = data.get("steps", [])
@@ -646,7 +630,6 @@ func readLines(path string) ([]string, error) {
 }
 
 // matchTrajectoryField 按 key 匹配 Trajectory 字段值。
-//
 // Python: getattr(t, key, None) == value
 func matchTrajectoryField(t *Trajectory, key string, value any) bool {
 	switch key {

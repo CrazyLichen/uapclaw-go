@@ -23,7 +23,6 @@ const logComponent = logger.ComponentCommon
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Parse 解析 .env 文件内容为 key-value 映射。
-//
 // 支持的格式：
 //   - KEY=VALUE（键值对格式）
 //   - KEY="VALUE" / KEY='VALUE'（引号内的 # 不会被当作注释）
@@ -62,7 +61,6 @@ func Parse(content string) map[string]string {
 }
 
 // Load 加载 .env 文件并将变量写入环境变量（override 模式）。
-//
 // 读取指定路径的 .env 文件，解析后以 override 方式写入 os.Setenv，
 // 即 .env 中的值会覆盖已有环境变量。
 // Python: dotenv.load_dotenv(path, override=True)
@@ -84,7 +82,6 @@ func Load(path string) error {
 }
 
 // LoadNonOverride 加载 .env 文件但**不覆盖**已存在的环境变量。
-//
 // 语义严格对齐 python-dotenv 的 override=False：**按键存在性**跳过，不区分值是否
 // 为空（`export K=` 也算已设置，不会被文件值覆盖）。
 // Python: dotenv.load_dotenv(path, override=False) → `if key in os.environ: continue`
@@ -173,7 +170,6 @@ func parseQuotedValue(value string, quote byte) string {
 }
 
 // findInlineComment 在无引号的值中查找行尾注释的位置。
-//
 // 仅当 # 前有空格时才视为注释分隔符，
 // 避免 http://example.com#anchor 这样的 URL 被误切。
 func findInlineComment(value string) int {

@@ -1,11 +1,9 @@
 // Package index 提供记忆索引的抽象接口和数据模型。
-//
 // 本包定义了所有记忆索引实现必须满足的 BaseMemoryIndex 接口，
 // 以及 MemoryDoc 数据模型、StorageCodec 编解码器接口、
 // MemorySearchResult 搜索结果类型和 MemoryIndexBase 默认实现基类。
 // 具体实现类（如 SimpleMemoryIndex）嵌入 MemoryIndexBase 后
 // 只需实现核心抽象方法即可满足 BaseMemoryIndex 接口。
-//
 // 文件目录：
 //
 //	index/

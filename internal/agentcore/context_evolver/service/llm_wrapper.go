@@ -18,7 +18,6 @@ import (
 
 // OpenAILLMWrapper 包装 BaseModelClient 提供 LLMService 接口。
 // 对齐 Python OpenAILLMWrapper。
-//
 // 设计决策：
 //   - 直接调 BaseModelClient.Invoke()，不走 Model 门面回调（对齐 Python 绕过 Model facade）
 //   - 内部用 Go 已有的 model_clients.NewOpenAIModelClient() 创建 client

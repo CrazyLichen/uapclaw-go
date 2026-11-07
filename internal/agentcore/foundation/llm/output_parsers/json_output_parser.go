@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // JsonOutputParser JSON 输出解析器，从 LLM 输出中提取 JSON 数据。
-//
 // 解析策略（优先级）：
 //  1. 先尝试从 markdown 代码块（```json ... ```）中提取
 //  2. 未找到代码块则直接解析文本
@@ -43,11 +42,9 @@ func NewJsonOutputParser() *JsonOutputParser {
 }
 
 // Parse 解析 LLM 输出中的 JSON。
-//
 // 输入可以是 string 或 *AssistantMessage（对齐 Python Union[str, AssistantMessage]）。
 // 解析成功返回 map/slice/基础类型，解析失败返回 nil, error。
 // 空输入返回 nil, nil（语义：无内容可解析，不是错误）。
-//
 // Python: JsonOutputParser.parse()
 func (p *JsonOutputParser) Parse(input any) (any, error) {
 	text, modelName := ExtractText(input)
@@ -79,7 +76,6 @@ func (p *JsonOutputParser) Parse(input any) (any, error) {
 }
 
 // StreamParse 流式解析 LLM 输出中的 JSON。
-//
 // Python: JsonOutputParser.stream_parse()。
 // chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 // 策略：

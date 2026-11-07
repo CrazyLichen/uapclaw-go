@@ -15,10 +15,8 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MergeAgentMetadata 合并 Agent 响应 metadata 与网关请求 metadata。
-//
 // send_push / 工具链返回的响应常不带 metadata，通道（如钉钉 batchSend）需要
 // 请求侧的 dingtalk_sender_id、conversation_type 等；响应中有同名字段时优先响应。
-//
 // Python: _merge_agent_metadata
 func MergeAgentMetadata(requestMetadata, responseMetadata map[string]any) map[string]any {
 	if requestMetadata == nil && responseMetadata == nil {
@@ -46,7 +44,6 @@ func MergeAgentMetadata(requestMetadata, responseMetadata map[string]any) map[st
 }
 
 // ResponseToMessage 将 AgentResponse 转换为 Message（用于非流式处理）。
-//
 // Python: _response_to_message：
 //  1. 合并 metadata
 //  2. 提取 group_digital_avatar / enable_memory
@@ -111,9 +108,7 @@ func ResponseToMessage(resp *schema.AgentResponse, sessionID string, requestMeta
 }
 
 // ChunkToMessage 将 AgentResponseChunk 转换为 Message（用于流式处理）。
-//
 // metadata 传入 request 的 metadata，供 Feishu/Xiaoyi 等通道回发时使用平台身份。
-//
 // Python: _chunk_to_message
 func ChunkToMessage(chunk *schema.AgentResponseChunk, sessionID string, metadata map[string]any) *schema.Message {
 	// 从 metadata 中提取 group_digital_avatar 和 enable_memory 字段
@@ -158,7 +153,6 @@ func ChunkToMessage(chunk *schema.AgentResponseChunk, sessionID string, metadata
 }
 
 // IsTerminalStreamChunk 识别仅用于结束流的哨兵 chunk，避免被当作业务事件继续下发。
-//
 // Python: _is_terminal_stream_chunk
 func IsTerminalStreamChunk(chunk *schema.AgentResponseChunk) bool {
 	return chunk.IsTerminal()

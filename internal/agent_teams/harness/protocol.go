@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HarnessProtocol 并发安全的多轮交互契约。
-//
 // Python: HarnessProtocol (agent_teams/harness/protocol.py，10 方法 + 2 属性)。
 // 契约（写进接口而非实现）：
 //  1. 所有方法可从任意 goroutine 调用，调用方无需外部加锁；
@@ -41,7 +40,6 @@ type HarnessProtocol interface {
 }
 
 // HarnessStateEvent 相位变化事件。
-//
 // Python: harness.state 事件载荷（kwargs old/new/session_id）
 type HarnessStateEvent struct {
 	// Old 变化前相位
@@ -53,7 +51,6 @@ type HarnessStateEvent struct {
 }
 
 // HarnessRoundEvent 轮次变化事件。
-//
 // Python: harness.round 事件载荷（kwargs kind/round_id/result）
 type HarnessRoundEvent struct {
 	// Kind 取值 started/finished/aborted/paused/failed
@@ -71,7 +68,6 @@ type StateHandler func(ctx context.Context, ev HarnessStateEvent)
 type RoundHandler func(ctx context.Context, ev HarnessRoundEvent)
 
 // eventBus 生命周期事件总线。
-//
 // Python: self._events = AsyncCallbackFramework(enable_metrics=False, enable_logging=False)
 // Go 复用 agentcore/runner/callback.CallbackFramework 的自定义事件通道
 // （OnCustom/TriggerCustom），事件名用 "harness.state"/"harness.round"，

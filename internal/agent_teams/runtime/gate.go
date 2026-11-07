@@ -26,7 +26,6 @@ type AdmissionTicket struct {
 // 当 run_agent_team_streaming 调用进行中时，interact_team 可通过
 // 门控准入新载荷。Run 即将退出时关闭门控（拒绝后续 interact），
 // 并等待飞行中载荷消费完毕后 stream 才真正结束。
-//
 // 状态转换：
 //
 //	状态转换: OPEN    --Admit()-------->      OPEN, inflight++

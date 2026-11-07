@@ -10,7 +10,6 @@ import (
 )
 
 // TestSafeIDPart_边界 验证 id 归一化。
-//
 // Python: _safe_id_part
 func TestSafeIDPart_边界(t *testing.T) {
 	require.Equal(t, "session_1", safeIDPart("session 1", "x"))

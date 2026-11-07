@@ -16,11 +16,9 @@ import (
 // InteractionOutput 交互输出数据，标识一次交互的节点和值。
 // 中断值经 stream.OutputSchema{Type: "__interaction__", Index, Payload: 本类型} 承载
 // （Python 复用同一个 OutputSchema，Go 侧 8.7 起同构）。
-//
 // Payload 统一为本类型：Python 中 wait_user_inputs 的 payload 是 InteractionOutput，
 // 而 user_latest_input 传的是 tuple（node_id, value）；Go 侧统一为 InteractionOutput
 // 更一致且类型安全（该统一是 8.7 删除 InteractionOutputSchema 时保留的既有决策）。
-//
 // json tag 必须小写：Python 侧是 dataclass/pydantic，序列化后键名为字段名 id/value；
 // 消费端（interrupt.ConvertInteractionsToAskUserQuestion → extractInteractionParts）
 // 读的是 m["id"]/m["value"]，缺 tag 时 JSON 往返得到 "ID"/"Value" 会导致交互事件丢失。
@@ -31,7 +29,6 @@ type InteractionOutput struct {
 	// Value 交互携带的值
 	Value any `json:"value"`
 	// Kind 交互种类判别式（M-11）。
-	//
 	// "latest_input" 表示「等待用户最近一次输入」占位交互：Python 侧用裸元组
 	// (node_id, value) 表达，前端解析器认不出元组因而不会弹任何框。Go 若沿用统一
 	// 结构体且不带判别式，前端会把 {id, value} 当成权限审批兜底，凭空弹一个
@@ -66,7 +63,6 @@ type AgentInteraction struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // InteractionKindLatestInput user_latest_input 占位交互的种类判别式（M-11）。
-//
 // 该交互只是「图挂起等用户输入」的信号，不是需要用户点击的卡片；前端转换器
 // 见到它就跳过（对齐 Python 用元组表达、转换器认不出的效果）。
 const InteractionKindLatestInput = "latest_input"

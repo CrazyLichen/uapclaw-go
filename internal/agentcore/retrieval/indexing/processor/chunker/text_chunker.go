@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TokenizerProvider 可选 tokenizer 提供者。
-//
 // 对齐 Python getattr(embed_model, "tokenizer", None) 的鸭子探测：
 // embed_model 收窄为 embedding.BaseEmbedding（审查决策 4——Python 侧
 // 标注 Any 但生态内实际只传 Embedding；Embedding 基类与全部实现类
@@ -27,11 +26,9 @@ type TokenizerProvider interface {
 }
 
 // TextChunker 分块工具门面：预处理管线 + 单位路由组合的一站式分块器。
-//
 // 嵌入 BaseChunker 获得尺寸字段与校验；ChunkText 不被本类型支持
 // （返回显式错误，A1 决策）；ChunkDocuments 完全覆写（预处理内嵌）；
 // Process 局部覆写转发（13.8 决策 3 同款）。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/chunker/chunking.py (TextChunker)
 type TextChunker struct {
 	// BaseChunker 默认适配器（ChunkSize/ChunkOverlap）
@@ -43,7 +40,6 @@ type TextChunker struct {
 }
 
 // PreprocessOptions 预处理开关。
-//
 // 对齐 Python preprocess_options dict 的 2 个已知键
 // （normalize_whitespace/remove_url_email）；未知键 Python 静默忽略，
 // 结构体天然收窄（偏差 2）。
@@ -82,7 +78,6 @@ func WithChunkUnit(unit string) TextChunkerOption {
 }
 
 // WithEmbedModel 设置嵌入模型（对齐 Python embed_model 参数）。
-//
 // token 路径经 TokenizerProvider 断言提取 tokenizer（接口到接口断言，
 // 语义对齐 Python getattr 鸭子探测）。
 func WithEmbedModel(model embedding.BaseEmbedding) TextChunkerOption {
@@ -95,7 +90,6 @@ func WithPreprocessOptions(opts PreprocessOptions) TextChunkerOption {
 }
 
 // NewTextChunker 构造 TextChunker。
-//
 // 构造链严格对齐 Python __init__ 执行序：
 //  1. super().__init__（NewBaseChunker 校验 155100/155101）
 //  2. preprocessors 组装：normalize_whitespace → WhitespaceNormalizer、
@@ -136,23 +130,19 @@ func NewTextChunker(chunkSize, chunkOverlap int, opts ...TextChunkerOption) (*Te
 }
 
 // ChunkText 返回显式错误。
-//
 // Python 继承基类 chunk_text 返回 None（事实不可用——调用者迭代即崩），
 // Go 无 None 语义，显式错误是最贴近表达（A1 决策；对齐 base.go
 // chunkTextOf 的 standalone 错误先例）。
-//
 // Python: chunking.py TextChunker（未覆写 chunk_text，继承 base.py L79 return None）
 func (c *TextChunker) ChunkText(text string) ([]string, error) {
 	return nil, fmt.Errorf("TextChunker does not support ChunkText; use ChunkDocuments instead")
 }
 
 // ChunkDocuments 分块文档列表（完全覆写：预处理内嵌在循环）。
-//
 // 对齐 Python chunk_documents L97-125 执行序：每文档
 // doc_text = pipeline(doc.text) → self.chunker.chunk_text(doc_text)（注意
 // 调 inner 的 ChunkText，非本类型覆写版）→ 组块（uuid + 溯源三键，
 // mergeChunkMetadata 复用 13.8 提取的 base.go 函数）。
-//
 // Python: chunking.py TextChunker.chunk_documents
 func (c *TextChunker) ChunkDocuments(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
 	_ = ctx // 对齐 Python 同步签名，当前无 ctx 消费
@@ -181,10 +171,8 @@ func (c *TextChunker) ChunkDocuments(ctx context.Context, docs []reranker.Docume
 }
 
 // Process 处理文档（Processor 契约入口），局部覆写转发到自身 ChunkDocuments。
-//
 // BaseChunker.Process 静态解析无法路由子类覆写的 ChunkDocuments（Go 嵌入
 // 是组合非继承），与 HybridChunker 同款局部覆写（13.8 决策 3 预警的惯例）。
-//
 // Python: chunking.py（继承 base.py process → 动态分发到覆写版 chunk_documents）
 func (c *TextChunker) Process(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
 	return c.ChunkDocuments(ctx, docs)
@@ -193,7 +181,6 @@ func (c *TextChunker) Process(ctx context.Context, docs []reranker.Document) ([]
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getChunker 单位路由（对齐 Python get_chunker 方法）。
-//
 // 执行序严格对齐 Python chunking.py L56-95：
 //
 //  1. chunk_unit == "char" → CharChunker

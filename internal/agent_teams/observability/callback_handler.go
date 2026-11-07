@@ -460,7 +460,6 @@ func recoverCallback(methodName string) {
 }
 
 // attachmentMarkOf 返回附件消息的观测标注；非附件消息返回空。
-//
 // 上游在新版 semconv 下区分 gen_ai.system_instructions 与 chat history
 // （callback_handler.py:1718-1733 / 1915-1930）；本项目使用 OpenLLMetry 的
 // gen_ai.prompt.<i>.* 扁平属性，等价做法是在消息条目上加 kind/mode 标注。

@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PyText 工具结果的展示文本（前端卡片 / 日志 / 会话历史 / ACP）。
-//
 // 只用于「看」，不参与任何机器解析：想判断成功与否请读 raw_output 结构化字段，
 // 模型侧走的是 BuildToolMessageContent 的 JSON 通道，与本函数无关。因此这里
 // 选最省事且前端友好的形态，而不是复刻 Python 的字面量风格：
@@ -44,7 +43,6 @@ func PyText(v any) string {
 }
 
 // PyStr 对齐 Python str() 的**标量**形态（检索串、提示词等参与语义的文本）。
-//
 //   - None（nil）→ "None"
 //   - str → 原样；bool → "True"/"False"
 //   - 数字 → Python 记法（整数值浮点补 ".0"；json.Number 走字面量还原）
@@ -95,7 +93,6 @@ func PyFloatStr(f float64) string {
 }
 
 // IsPureIntegerLiteral 判断是否为纯整数字面量（可选符号 + 全数字，无小数点/指数）。
-//
 // 用于 json.Number 的超界整数还原：ParseInt 溢出后不能落到 Float64（会把
 // 12345678901234567890 变成 1.2345678901234567e+19），必须原样透传。
 func IsPureIntegerLiteral(s string) bool {
@@ -160,7 +157,6 @@ func pyNumberStr(v any) (string, bool) {
 }
 
 // pyJSONNumberStr 还原 json.Number 的 Python str() 形态。
-//
 // 整数字面原样输出（Python int 无界，含超出 int64 的超界字面），
 // 仅小数/指数字面走 PyFloatStr。
 func pyJSONNumberStr(n json.Number) string {

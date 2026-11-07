@@ -1,6 +1,5 @@
 // 本文件对应 Python openjiuwen/harness/goal/store.py，
 // 用 Session state 作为 GoalRecord 的唯一持久化真源。
-//
 // 禁止 sidecar JSON / SQLite / history 作为替代状态源（上游约束）。
 package goal
 

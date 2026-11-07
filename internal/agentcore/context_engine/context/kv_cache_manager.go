@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // KVCacheManager 管理 KV 缓存的释放逻辑，通过比较前后两次 ContextWindow 的差异来决定是否释放缓存。
-//
 // Python: openjiuwen/core/context_engine/context/kv_cache_manager.py (KVCacheManager)
 type KVCacheManager struct {
 	// sessionID 会话标识
@@ -34,7 +33,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewKVCacheManager 创建 KVCacheManager 实例。
-//
 // Python: KVCacheManager.__init__(session_id)
 func NewKVCacheManager(sessionID string) *KVCacheManager {
 	return &KVCacheManager{
@@ -44,7 +42,6 @@ func NewKVCacheManager(sessionID string) *KVCacheManager {
 }
 
 // Release 检查前后两次 ContextWindow 差异并释放 KV 缓存。
-//
 // 流程：
 //  1. 从 Option 中提取 model，为 nil 或不支持 KV Cache Release → 直接返回
 //  2. 首次调用（lastContextWindow 为 nil）→ 保存快照，不释放
@@ -132,11 +129,9 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // checkReleaseNeeded 前缀对比，检测前后两次 ContextWindow 的消息和工具差异。
-//
 // 消息比较：逐位对比 lastContextWindow.GetMessages() 和 contextWindow.GetMessages()，
 // 使用 GetRole() + GetContent().Text() 作为判断是否一致的依据。
 // 工具比较：同理对比 GetTools()，使用 ToolInfo.Name 作为判断依据。
-//
 // 返回 (shouldRelease, msgIdx, toolIdx)：
 //   - shouldRelease: 是否需要释放（找到差异时为 true）
 //   - msgIdx: 消息首个差异位置（-1 表示消息无差异）

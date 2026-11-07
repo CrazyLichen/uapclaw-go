@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Metric 评估指标抽象接口。
-//
 // Python: openjiuwen/agent_evolving/evaluator/metrics/base.py Metric
 type Metric interface {
 	// Name 指标标识名
@@ -58,7 +57,6 @@ func WithCase(c dataset.Case) MetricOption {
 }
 
 // DefaultComputeBatch 默认批量计算实现：逐个调用 Compute。
-//
 // Python: Metric.compute_batch() 默认实现
 func DefaultComputeBatch(m Metric, ctx context.Context, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
 	results := make([]MetricResult, len(predictions))

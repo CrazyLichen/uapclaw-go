@@ -49,7 +49,6 @@ func NewPluginClientFromConn(conn *grpc.ClientConn) *PluginClient {
 }
 
 // LoadPluginClient 启动 root 目录下的插件子进程并完成 gRPC 握手（生产入口）。
-//
 // go-plugin 流程：NewClient(Cmd=ext-plugin) → Client() 握手 → Dispense("extension")
 // → ExtensionGRPCPlugin.GRPCClient 返回 connDialer → 取原始 *grpc.ClientConn 直连。
 func LoadPluginClient(root string) (*PluginClient, error) {

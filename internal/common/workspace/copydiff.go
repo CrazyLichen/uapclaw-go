@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CopyDiffResult 记录文件复制操作的变更差异。
-//
 // Python: jiuwenswarm/common/utils.py CopyDiffResult
 //
 // 追踪三类变更：
@@ -33,7 +32,6 @@ type CopyDiffResult struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Merge 将另一个 CopyDiffResult 的内容合并到当前实例。
-//
 // 用于多次复制操作后汇总差异，对应 Python 中 TrackCopyDiff 的 cumulative 参数。
 func (r *CopyDiffResult) Merge(other CopyDiffResult) {
 	r.AddedDirs = append(r.AddedDirs, other.AddedDirs...)
@@ -42,7 +40,6 @@ func (r *CopyDiffResult) Merge(other CopyDiffResult) {
 }
 
 // PrintSummary 打印文件变更统计摘要。
-//
 // overwrite 为 true 时不打印（强制覆盖模式下差异无意义），
 // Python: jiuwenswarm/common/utils.py _print_diff_summary()
 func (r *CopyDiffResult) PrintSummary(overwrite bool) {
@@ -82,7 +79,6 @@ func (r *CopyDiffResult) PrintSummary(overwrite bool) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // copyFileWithDiff 复制单个文件并记录差异到 diff。
-//
 // 如果目标文件已存在，记录到 OverwrittenFiles；否则记录到 AddedFiles。
 // 复制前会确保目标目录存在。
 func copyFileWithDiff(src, dst string, diff *CopyDiffResult) error {
@@ -127,7 +123,6 @@ func copyFileWithDiff(src, dst string, diff *CopyDiffResult) error {
 }
 
 // copyDirWithDiff 递归复制目录并记录差异到 diff。
-//
 // 跳过 _ZH.md 和 _EN.md 后缀的文件（多语言文件由单独逻辑处理）。
 // Python: jiuwenswarm/common/utils.py _copy_dir()
 func copyDirWithDiff(src, dst string, diff *CopyDiffResult, ignorePatterns []string) error {
@@ -168,7 +163,6 @@ func copyDirWithDiff(src, dst string, diff *CopyDiffResult, ignorePatterns []str
 }
 
 // copyDirWithDiffIncremental 增量复制目录：目标已存在的文件跳过，只复制缺失文件。
-//
 // Python: jiuwenswarm/common/utils.py _copy_dir() 的 copy_if_missing 模式
 func copyDirWithDiffIncremental(src, dst string, diff *CopyDiffResult, ignorePatterns []string) error {
 	// 确保目标目录存在
@@ -209,7 +203,6 @@ func copyDirWithDiffIncremental(src, dst string, diff *CopyDiffResult, ignorePat
 }
 
 // shouldIgnore 检查文件名是否匹配忽略模式。
-//
 // 支持简单的通配符匹配（仅 * 后缀模式，如 "*_ZH.md"）。
 func shouldIgnore(name string, patterns []string) bool {
 	for _, pattern := range patterns {
@@ -221,7 +214,6 @@ func shouldIgnore(name string, patterns []string) bool {
 }
 
 // matchIgnorePattern 简单的忽略模式匹配。
-//
 // 支持两种模式：
 //   - "*后缀"：匹配以指定后缀结尾的文件名（如 "*_ZH.md" 匹配 "AGENT_ZH.md"）
 //   - "前缀*"：匹配以指定前缀开头的文件名

@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NoOpDocIndexCallback 空操作回调，默认使用。
-//
 // 对齐 Python BaseCallback 的空操作语义（仅计数器+1，无进度条）。
 // 实现 embedding.Callback 接口。
 type NoOpDocIndexCallback struct {
@@ -21,11 +20,9 @@ type NoOpDocIndexCallback struct {
 }
 
 // LoggingDocIndexCallback 日志进度回调。
-//
 // 对齐 Python TqdmCallback 的进度追踪语义。
 // 每 100 批或最后一批打 Info 日志，对齐 Python ChromaVectorStore.add 中
 // `if processed % 100 == 0: logger.info("Written %d/%d records")` 的逻辑。
-//
 // M-18: total/processed 统一为文档数口径（对齐 Python chroma_store.py L150
 // `total = len(data)` 与 L155 `processed += len(nodes)`）——
 // processed 用 endIdx（全局累计文档索引，顺序批处理下与 Python 累计数等值），
@@ -42,11 +39,9 @@ type LoggingDocIndexCallback struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // DocIndexCallback 文档索引进度回调接口。
-//
 // 用于追踪嵌入批次的处理进度。对齐 Python BaseCallback。
 // 类型别名指向 foundation 层 embedding.Callback，保持编译期类型安全。
 // 按规范"类型别名归类到枚举区块"，置于枚举区块。
-//
 // Python: retrieval/common/callbacks.py (BaseCallback)
 type DocIndexCallback = embedding.Callback
 

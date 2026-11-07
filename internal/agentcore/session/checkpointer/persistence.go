@@ -35,7 +35,6 @@ type EntityHooks interface {
 // 持有 BaseKVStore + Serializer + EntityHooks，
 // 通过 EntityHooks 注入实现 Python 模板方法模式。
 // Save/Recover/Clear/Exists 为固定骨架，通过 hooks 调用子类逻辑。
-//
 // Python: persistence.py (BaseSingleStateStorage)
 type basePersistenceStorage struct {
 	// kvStore KV 存储后端

@@ -138,7 +138,6 @@ func WithIdleFinalizeSeconds(fn func() float64) AcpBridgeOption {
 // HandleJsonrpcRequest 处理 IDE JSON-RPC 请求（六方法分派）。
 // Python: handle_jsonrpc_request (L241-333)。
 // 返回 true = 已处理；false = 非 JSON-RPC 请求（交回调用方）。
-//
 // 异常兜底对齐 Python L327-331 的 `except Exception → -32603`：panic 转 JSON-RPC
 // 错误帧而非拖垮连接（通道版 handleJsonrpcRequest 有同构 recover）。
 func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websocket.Conn, data map[string]any) (handled bool) {

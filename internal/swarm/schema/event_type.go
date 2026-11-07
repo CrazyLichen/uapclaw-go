@@ -7,11 +7,9 @@ import "fmt"
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // EventType E2A 协议事件类型枚举。
-//
 // 定义 AgentServer→Gateway 通信链路中所有合法的事件类型标识，
 // 用于 AgentResponse/AgentResponseChunk 的 event_type 字段和 Gateway 消息路由。
 // 值为点分字符串格式（如 "chat.delta"），与 Python EventType 枚举值一一对应。
-//
 // Python: jiuwenswarm/common/schema/message.py (EventType)
 type EventType string
 

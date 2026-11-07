@@ -16,10 +16,8 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Canceled 判定 ctx 是否被外部取消。
-//
 // 只认 context.Canceled：DeadlineExceeded 仍须按错误上报
 // （Python 的 TimeoutError 是 Exception 会被上报，CancelledError 不会）。
-//
 // 语义边界：
 //   - 这是"本次上下文是否被取消"的判定，不是"任意 error 是否由取消引起"。
 //     不要传入 LLM 客户端包装后的 error 来调用本函数——那种场景请用

@@ -45,7 +45,6 @@ func TestTokenBudget_语义(t *testing.T) {
 // ──────────────────────────── notebook 预算 ────────────────────────────
 
 // TestReadNotebook_超预算截断 验证超预算时截断并给出提示，而不是整体报错。
-//
 // 回归：旧实现先算全文 token，超 maxTokens 直接返回 error，
 // 模型对大 notebook 拿不到任何内容。
 func TestReadNotebook_超预算截断(t *testing.T) {
@@ -147,7 +146,6 @@ func TestReadNotebook_超字节上限仍报错(t *testing.T) {
 // ──────────────────────────── PDF 预算 ────────────────────────────
 
 // buildMinimalPDF 生成 n 页的最小合法 PDF（每页含一行文本）。
-//
 // 手写而非依赖第三方生成器：只需能被 ledongthuc/pdf 解析出页数与文本，
 // 用于验证按页预算的截断与拼接行为。
 func buildMinimalPDF(t *testing.T, pages int) []byte {

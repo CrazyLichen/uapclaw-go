@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserCancelTool 取消正在进行的浏览器任务。
-//
 // Python: BrowserCancelTool
 type BrowserCancelTool struct {
 	card    *tool.ToolCard
@@ -20,7 +19,6 @@ type BrowserCancelTool struct {
 }
 
 // BrowserClearCancelTool 清除浏览器任务的取消标记。
-//
 // Python: BrowserClearCancelTool
 type BrowserClearCancelTool struct {
 	card    *tool.ToolCard
@@ -28,7 +26,6 @@ type BrowserClearCancelTool struct {
 }
 
 // BrowserCustomActionTool 运行已注册的自定义浏览器动作。
-//
 // Python: BrowserCustomActionTool
 type BrowserCustomActionTool struct {
 	card    *tool.ToolCard
@@ -36,7 +33,6 @@ type BrowserCustomActionTool struct {
 }
 
 // BrowserListActionsTool 列出可用的自定义浏览器动作。
-//
 // Python: BrowserListActionsTool
 type BrowserListActionsTool struct {
 	card    *tool.ToolCard
@@ -44,7 +40,6 @@ type BrowserListActionsTool struct {
 }
 
 // BrowserProbeInteractivesTool 紧凑可见交互元素探测。
-//
 // Python: BrowserProbeInteractivesTool
 type BrowserProbeInteractivesTool struct {
 	card    *tool.ToolCard
@@ -52,7 +47,6 @@ type BrowserProbeInteractivesTool struct {
 }
 
 // BrowserProbeCardsTool 紧凑重复卡片/列表结构探测。
-//
 // Python: BrowserProbeCardsTool
 type BrowserProbeCardsTool struct {
 	card    *tool.ToolCard
@@ -60,7 +54,6 @@ type BrowserProbeCardsTool struct {
 }
 
 // BrowserRuntimeHealthTool 返回运行时健康状态。
-//
 // Python: BrowserRuntimeHealthTool
 type BrowserRuntimeHealthTool struct {
 	card    *tool.ToolCard
@@ -182,7 +175,6 @@ func NewBrowserRuntimeHealthTool(runtime *BrowserAgentRuntime) *BrowserRuntimeHe
 }
 
 // BuildBrowserRuntimeTools 构建所有浏览器运行时辅助工具。
-//
 // Python: build_browser_runtime_tools
 func BuildBrowserRuntimeTools(runtime *BrowserAgentRuntime) []tool.Tool {
 	return []tool.Tool{

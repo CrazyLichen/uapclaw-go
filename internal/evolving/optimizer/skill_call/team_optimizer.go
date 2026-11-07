@@ -26,7 +26,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamSkillExperienceOptimizer 团队技能经验优化器。
-//
 // Python: TeamSkillExperienceOptimizer
 type TeamSkillExperienceOptimizer struct {
 	SkillExperienceOptimizerBase
@@ -51,7 +50,6 @@ type TeamSkillOptimizer = TeamSkillExperienceOptimizer
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamSkillExperienceOptimizer 创建 TeamSkillExperienceOptimizer 实例。
-//
 // Python:
 //
 //	创建 TeamSkillExperienceOptimizer（参数: llm, model, language, debug_dir, record_llm_policy, evolution_store）
@@ -73,7 +71,6 @@ func NewTeamSkillExperienceOptimizer(llmModel *llm.Model, model string, language
 // 基类已实现 online_contexts 提取 + BaseOptimizerMixin.Bind 调用。
 
 // Backward 反向传播：使用 Trajectory 和信号。
-//
 // Python: TeamSkillExperienceOptimizer._backward(signals)
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
@@ -82,7 +79,6 @@ func (o *TeamSkillExperienceOptimizer) Backward(ctx context.Context, signals []*
 }
 
 // Step 生成更新映射。
-//
 // Python: TeamSkillExperienceOptimizer._step()
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
@@ -98,7 +94,6 @@ func (o *TeamSkillExperienceOptimizer) SelectSignals(signals []*signal.Evolution
 }
 
 // GenerateRecords 双路径生成演进记录。
-//
 // Python: TeamSkillExperienceOptimizer.generate_records(ctx)
 func (o *TeamSkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *experience.EvolutionContext) ([]checkpointing.EvolutionRecord, error) {
 	if len(evoCtx.Signals) == 0 {
@@ -259,7 +254,6 @@ func (o *TeamSkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoC
 }
 
 // GenerateUserPatch 生成用户意图 patch。
-//
 // Python: TeamSkillExperienceOptimizer.generate_user_patch(trajectory, skill_name, user_intent)
 func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, traj *trajectory.Trajectory, skillName string, userIntent string) (*checkpointing.EvolutionRecord, error) {
 	// 先给描述、角色和工作流摘要一个占位值，后面能从轨迹里解析出来再覆盖。
@@ -384,7 +378,6 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 }
 
 // GenerateTrajectoryPatch 生成轨迹 patch。
-//
 // Python: TeamSkillExperienceOptimizer.generate_trajectory_patch(...)
 func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Context, traj *trajectory.Trajectory, skillName string, currentSkillContent string, trajectoryIssues []map[string]string) (*checkpointing.EvolutionRecord, error) {
 	// 把团队轨迹压成摘要，并把待改进问题列表转成 JSON 文本；没有问题就写 N/A。
@@ -489,7 +482,6 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 }
 
 // RegenerateBody 重写 SKILL.md body。
-//
 // Python: TeamSkillExperienceOptimizer.regenerate_body(...)
 func (o *TeamSkillExperienceOptimizer) RegenerateBody(ctx context.Context, skillName string, currentBody string, evolutionRecords []checkpointing.EvolutionRecord, userIntent string) (string, error) {
 	var evoLines []string
@@ -538,7 +530,6 @@ func (o *TeamSkillExperienceOptimizer) RegenerateBody(ctx context.Context, skill
 }
 
 // RetryParseDrafts 重试解析：截断→重新生成 / 格式错误→TEAM_JSON_FIX / attempt≥3→TEAM_JSON_FIX_STRICT。
-//
 // Python: TeamSkillExperienceOptimizer.retry_parse_drafts(...)
 func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, brokenRaw string, originalPrompt string, attemptNumber int, parseError string) ([]ParsedExperienceDraft, string, error) {
 	truncated := LooksTruncated(brokenRaw)
@@ -621,7 +612,6 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // backward 反向传播子类逻辑。
-//
 // Python: TeamSkillExperienceOptimizer._backward(signals)
 func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	selected := o.SelectedSignals()
@@ -693,7 +683,6 @@ func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*
 }
 
 // step 子类逻辑，返回预计算的更新映射。
-//
 // Python: TeamSkillExperienceOptimizer._step()
 func (o *TeamSkillExperienceOptimizer) step() (map[schema.UpdateKey]any, error) {
 	updates := make(map[schema.UpdateKey]any)
@@ -755,7 +744,6 @@ func (o *TeamSkillExperienceOptimizer) loadExistingEvolutionsSummary(
 }
 
 // callLLM 调用 LLM，有 policy 时走 InvokeTextWithRetry，无 policy 时直接 invoke。
-//
 // Python: TeamSkillExperienceOptimizer._call_llm(prompt, retry_prompt, policy, is_result_usable)
 func (o *TeamSkillExperienceOptimizer) callLLM(ctx context.Context, prompt string, retryPrompt string, policy *llm_resilience.LLMInvokePolicy, isResultUsable func(string) bool) (string, error) {
 	logger.Info(logComponent).
@@ -804,7 +792,6 @@ func (o *TeamSkillExperienceOptimizer) callLLM(ctx context.Context, prompt strin
 }
 
 // buildEvolutionContext 从 onlineContexts 查找，trajectory 为 nil 时填充 default_trajectory。
-//
 // Python: TeamSkillExperienceOptimizer._build_evolution_context(skill_name, operator, skill_signals, default_trajectory)
 func (o *TeamSkillExperienceOptimizer) buildEvolutionContext(skillName string, op operator.Operator, skillSignals []*signal.EvolutionSignal, defaultTrajectory *trajectory.Trajectory) (*experience.EvolutionContext, error) {
 	onlineCtx := o.onlineContexts[skillName]
@@ -837,7 +824,6 @@ func (o *TeamSkillExperienceOptimizer) buildEvolutionContext(skillName string, o
 }
 
 // generateDraftsWithRetries 调用 LLM + 解析草稿 + 重试循环。
-//
 // Python: TeamSkillExperienceOptimizer._generate_drafts_with_retries(prompt, retry_prompt)
 func (o *TeamSkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Context, prompt string, retryPrompt string) ([]ParsedExperienceDraft, error) {
 	raw, promptUsed, err := llm_resilience.InvokeTextWithRetryAndPrompt(
@@ -883,7 +869,6 @@ func (o *TeamSkillExperienceOptimizer) generateDraftsWithRetries(ctx context.Con
 }
 
 // parsePatchResponse 解析 patch 响应为 dict。
-//
 // Python: _parse_patch_response(raw)
 func parsePatchResponse(raw string) (map[string]any, string) {
 	parsed := signal.ParseTeamModelJSON(raw)
@@ -897,7 +882,6 @@ func parsePatchResponse(raw string) (map[string]any, string) {
 }
 
 // teamExtractJSONWithError 团队专用的 JSON 提取 + 错误返回。
-//
 // 复用通用版 ExtractJSONWithError（已包含 FixJSONText 修复步骤），
 // Python: TeamSkillExperienceOptimizer._extract_json_with_error(raw)
 func teamExtractJSONWithError(raw string) (any, string) {
@@ -905,7 +889,6 @@ func teamExtractJSONWithError(raw string) (any, string) {
 }
 
 // summarizeSkillContentTeam 团队优化器技能内容截断。
-//
 // Python: TeamSkillExperienceOptimizer._summarize_skill_content(raw, max_chars)
 func summarizeSkillContentTeam(raw string) string {
 	return summarizeSkillContentTeamWithMax(raw, TeamSkillContentMaxChars)
@@ -923,7 +906,6 @@ func summarizeSkillContentTeamWithMax(raw string, maxChars int) string {
 }
 
 // shortenExistingEvolutionsSummary 缩短已有演进摘要。
-//
 // Python: TeamSkillExperienceOptimizer._shorten_existing_evolutions_summary(summary, max_records)
 func shortenExistingEvolutionsSummary(summary string, maxRecords int) string {
 	if summary == "" {
@@ -949,7 +931,6 @@ func shortenExistingEvolutionsSummary(summary string, maxRecords int) string {
 }
 
 // summarizeExistingEvolutions 从已有记录构建演进摘要。
-//
 // Python: TeamSkillExperienceOptimizer._summarize_existing_evolutions(records, language, max_records, preview_chars)
 func summarizeExistingEvolutions(records []checkpointing.EvolutionRecord, language string) string {
 	var activeRecords []checkpointing.EvolutionRecord
@@ -984,7 +965,6 @@ func summarizeExistingEvolutions(records []checkpointing.EvolutionRecord, langua
 }
 
 // dumpRaw 调试输出原始响应到 debugDir。
-//
 // Python: TeamSkillExperienceOptimizer._dump_raw(tag, raw)
 func (o *TeamSkillExperienceOptimizer) dumpRaw(tag string, raw string) {
 	if o.debugDir == "" || raw == "" {

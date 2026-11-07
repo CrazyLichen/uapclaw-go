@@ -533,7 +533,6 @@ func (p *errorOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.
 }
 
 // TestParseResponse_FinishReason_对齐 provider 有值原样保留；空值按 tool_calls/stop 兜底。
-//
 // Python: openai_model_client.py:2877-2879（docstring 2779-2786）
 //
 //	finish_reason = getattr(choice, 'finish_reason', None) or None

@@ -1,9 +1,7 @@
 // Package utils 提供会话系统的通用工具函数，包括嵌套路径操作、引用路径解析、
 // 字典操作和容器深拷贝等。
-//
 // 本包从 state/utils.go 中迁出，作为独立子包供 state、store、tracer、graph 等
 // 多个包共享使用，避免循环依赖。
-//
 // 文件目录：
 //
 //	utils/

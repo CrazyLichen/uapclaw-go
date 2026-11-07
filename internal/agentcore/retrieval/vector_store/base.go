@@ -15,10 +15,8 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // VectorStore 检索层向量存储抽象接口。
-//
 // 提供向量搜索、稀疏搜索、混合搜索等检索能力。
 // 与 foundation 层 BaseVectorStore（CRUD+迁移）不同，本接口面向检索场景。
-//
 // Python: retrieval/vector_store/base.py (VectorStore)
 type VectorStore interface {
 	// CheckVectorField 校验向量字段配置是否和实际数据库一致
@@ -92,7 +90,6 @@ func WithStoreBatchSize(n int) StoreOption {
 }
 
 // CheckConfigsMatching 校验配置字典是否和实际配置一致。
-//
 // 对齐 Python VectorStore._check_configs_matching。
 //   - 忽略 efSearchFactor 键
 //   - 字符串比较不区分大小写

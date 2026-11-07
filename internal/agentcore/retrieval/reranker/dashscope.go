@@ -17,11 +17,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DashScopeReranker 阿里云 DashScope 重排序客户端。
-//
 // 继承 RerankerBase，使用 DashScope 专用的 /services/rerank/text-rerank/text-rerank API，
 // 支持纯文本和多模态文档输入。instruct 作为 parameters.instruct 字段传递，
 // 而非像 StandardReranker 那样拼入 query 模板。
-//
 // Python: openjiuwen/core/retrieval/reranker/dashscope_reranker.py
 type DashScopeReranker struct {
 	// RerankerBase 嵌入基类
@@ -79,7 +77,6 @@ func WithDashScopeExtraHeaders(headers map[string]string) DashScopeRerankerOptio
 }
 
 // NewDashScopeReranker 创建 DashScope 重排序客户端。
-//
 // APIBase 尾部去除 DashScope 端点后缀（对齐 Python removesuffix）。
 func NewDashScopeReranker(config reranker.RerankerConfig, opts ...DashScopeRerankerOption) (*DashScopeReranker, error) {
 	if err := reranker.ValidateConfig(&config); err != nil {

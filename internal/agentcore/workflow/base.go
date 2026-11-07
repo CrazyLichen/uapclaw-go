@@ -3,7 +3,6 @@ package workflow
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowOutput 工作流执行结果。
-//
 // Python: openjiuwen/core/workflow/base.py WorkflowOutput(BaseModel)
 type WorkflowOutput struct {
 	// Result 输出数据
@@ -15,7 +14,6 @@ type WorkflowOutput struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // WorkflowExecutionState 工作流执行状态。
-//
 // Python: openjiuwen/core/workflow/base.py WorkflowExecutionState(str, Enum)
 type WorkflowExecutionState string
 

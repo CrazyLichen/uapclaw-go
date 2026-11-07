@@ -139,7 +139,6 @@ func (f *fakeAgentServer) serve() {
 }
 
 // sendFrame 在锁内写 recvCh，与 closeTransport 互斥，避免 send on closed channel。
-//
 // 返回 false 表示传输已关闭，调用方应退出循环。
 func (f *fakeAgentServer) sendFrame(out []byte) bool {
 	f.mu.Lock()

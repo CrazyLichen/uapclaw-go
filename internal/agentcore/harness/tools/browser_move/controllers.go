@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserRuntime 浏览器运行时接口，提供 RunBrowserTask 方法。
-//
 // Python: ActionController.bind_runtime 中隐含的运行时协议
 type BrowserRuntime interface {
 	// RunBrowserTask 执行浏览器任务
@@ -24,7 +23,6 @@ type BrowserRuntime interface {
 }
 
 // BaseController 基础控制器接口，定义动作调度器的抽象契约。
-//
 // Python: BaseController (controllers/base.py L11-69)
 type BaseController interface {
 	// BindRuntime 绑定运行时对象，供运行时支持的动作使用。
@@ -69,7 +67,6 @@ type BaseController interface {
 }
 
 // ActionController 实例级动作注册和调度器。
-//
 // Python: ActionController (controllers/action.py L70-268)
 type ActionController struct {
 	// actions 动作处理器映射
@@ -93,7 +90,6 @@ type ActionHandler func(ctx context.Context, sessionID string, requestID string,
 type RuntimeRunner func(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult
 
 // ActionSpec 动作元数据。
-//
 // Python: register_action_spec 参数
 type ActionSpec struct {
 	// Summary 动作摘要
@@ -127,7 +123,6 @@ var recursiveBrowserActions = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewActionController 创建动作控制器实例。
-//
 // Python: ActionController.__init__
 func NewActionController() *ActionController {
 	return &ActionController{
@@ -147,7 +142,6 @@ func (c *ActionController) CodeExecutor() CodeExecutorFunc {
 }
 
 // BindRuntime 绑定运行时对象。
-//
 // Python: ActionController.bind_runtime
 func (c *ActionController) BindRuntime(runtime BrowserRuntime) error {
 	runner := func(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult {
@@ -168,35 +162,30 @@ func (c *ActionController) BindRuntime(runtime BrowserRuntime) error {
 }
 
 // BindRuntimeRunner 绑定运行时运行器。
-//
 // Python: ActionController.bind_runtime_runner
 func (c *ActionController) BindRuntimeRunner(runner RuntimeRunner) {
 	c.runtimeRunner = runner
 }
 
 // ClearRuntimeRunner 清除运行时运行器。
-//
 // Python: ActionController.clear_runtime_runner
 func (c *ActionController) ClearRuntimeRunner() {
 	c.BindRuntimeRunner(nil)
 }
 
 // BindCodeExecutor 绑定代码执行器。
-//
 // Python: ActionController.bind_code_executor
 func (c *ActionController) BindCodeExecutor(executor CodeExecutorFunc) {
 	c.codeExecutor = executor
 }
 
 // ClearCodeExecutor 清除代码执行器。
-//
 // Python: ActionController.clear_code_executor
 func (c *ActionController) ClearCodeExecutor() {
 	c.codeExecutor = nil
 }
 
 // RegisterAction 注册动作处理器。
-//
 // Python: ActionController.register_action
 func (c *ActionController) RegisterAction(name string, handler ActionHandler, overwrite bool) error {
 	actionName := normalizeActionName(name)
@@ -218,7 +207,6 @@ func (c *ActionController) RegisterAction(name string, handler ActionHandler, ov
 }
 
 // RegisterActionSpec 注册动作元数据。
-//
 // Python: ActionController.register_action_spec
 func (c *ActionController) RegisterActionSpec(name string, spec ActionSpec) {
 	actionName := normalizeActionName(name)
@@ -236,7 +224,6 @@ func (c *ActionController) RegisterActionSpec(name string, spec ActionSpec) {
 }
 
 // ListActions 列出已注册的动作名称。
-//
 // Python: ActionController.list_actions
 func (c *ActionController) ListActions() []string {
 	c.mu.Lock()
@@ -250,7 +237,6 @@ func (c *ActionController) ListActions() []string {
 }
 
 // DescribeActions 返回已注册动作的元数据。
-//
 // Python: ActionController.describe_actions
 func (c *ActionController) DescribeActions() map[string]ActionSpec {
 	c.mu.Lock()
@@ -268,7 +254,6 @@ func (c *ActionController) DescribeActions() map[string]ActionSpec {
 }
 
 // RunAction 执行已注册的动作。
-//
 // Python: ActionController.run_action
 func (c *ActionController) RunAction(ctx context.Context, action string, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 	actionName := normalizeActionName(action)
@@ -445,7 +430,6 @@ func (c *ActionController) Restore(snapshot map[string]any) {
 }
 
 // RegisterBuiltinActions 注册所有内置动作。
-//
 // Python: register_builtin_actions (controllers/action.py L691-1237)
 func (c *ActionController) RegisterBuiltinActions() {
 	c.registerPingAction()

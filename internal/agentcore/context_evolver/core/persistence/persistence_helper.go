@@ -14,9 +14,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MilvusConnector Milvus 后端接口（P7 实现）。
-//
 // P1 只定义接口，实现在 P7 和 ContextEvolutionRail 一起完成。
-//
 // Python: openjiuwen/extensions/context_evolver/core/db_connector/milvus_connector.py
 type MilvusConnector interface {
 	// SaveToDB 保存数据到 Milvus 命名空间
@@ -32,10 +30,8 @@ type MilvusConnector interface {
 }
 
 // MemoryPersistenceHelper 记忆持久化助手。
-//
 // 支持 JSON 文件和 Milvus 双后端。"auto" 模式探测 Milvus 可达性后回退 JSON。
 // P1 阶段只实现 JSON 后端，Milvus 在 P7 启用。
-//
 // Python: openjiuwen/extensions/context_evolver/core/persistence.py
 type MemoryPersistenceHelper struct {
 	persistType      string

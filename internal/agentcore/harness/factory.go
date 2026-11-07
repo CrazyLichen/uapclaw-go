@@ -62,7 +62,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateDeepAgent 创建并配置 DeepAgent 实例。
-//
 // 按以下 10 步流程组装，对齐 Python create_deep_agent()：
 //  1. 默认 AgentCard
 //  2. 工具规范化 (normalizeTools)
@@ -228,7 +227,6 @@ func IsPaidSearchEnabled() bool {
 }
 
 // ResetFreeSearchRuntimeFlags 重置免费搜索运行时标志为禁用。
-//
 // 每次启动时调用，确保进程以禁用状态开始，后续 .env 加载或 UI 操作会覆盖。
 // Python: reset_free_search_runtime_flags()
 func ResetFreeSearchRuntimeFlags() {
@@ -287,7 +285,6 @@ func envFlag(name string, defaultVal bool) bool {
 
 // registerToolInstances 将 Tool 实例注册到全局资源管理器，
 // 使 ToolCard 变为可执行。同 ID 已存在时仅追加 tag。
-//
 // Python: _register_tool_instances(tool_instances, tag=tag)
 // 注意：Python 用 Runner.resource_mgr.get_tool(tool.card.id) 返回单个，
 // Go 用 GetTool([]string{toolID}) 返回切片。
@@ -333,7 +330,6 @@ func registerToolInstances(toolInstances []tool.Tool, tag string) error {
 // injectGeneralPurposeSubagent 当 addGeneralPurposeAgent=True 时注入通用子 Agent。
 // 已存在名为 general-purpose 的子 Agent 时不重复注入。
 // 从调用方的 agentRails 中过滤掉 SubagentRail，确保有 SysOperationRail。
-//
 // Python: _inject_general_purpose_subagent()
 func injectGeneralPurposeSubagent(
 	subagents []hschema.SubagentSpec,
@@ -416,7 +412,6 @@ func injectGeneralPurposeSubagent(
 
 // buildWorkspace 构建 Workspace 实例。
 // 传入 nil 时创建默认 Workspace(root_path="./")，传入已有实例时直接返回。
-//
 // Python: factory.py L260-265 workspace 构建
 func buildWorkspace(ws *workspace.Workspace, language string) *workspace.Workspace {
 	if ws != nil {
@@ -428,7 +423,6 @@ func buildWorkspace(ws *workspace.Workspace, language string) *workspace.Workspa
 
 // buildSysOperation 构建 SysOperation 实例。
 // 调用方未提供时，自动创建默认 SysOperationCard（LocalWorkConfig 模式）并注册到 resource_mgr。
-//
 // Python: factory.py L267-281 sys_operation 构建
 func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, restrictToWorkDir *bool) (sysop.SysOperation, error) {
 	if sysOp != nil {
@@ -490,7 +484,6 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 
 // alreadyProvided 检查调用方是否已显式提供了指定类型的 Rail。
 // 使用 reflect.TypeOf 精确类型匹配，不匹配子类。
-//
 // Python: _already_provided(rail_cls) — Python 使用 issubclass 支持子类匹配，
 // Go 端当前使用精确匹配，后续需要可升级为接口断言。
 func alreadyProvided(rails []agentinterfaces.AgentRail, target agentinterfaces.AgentRail) bool {
@@ -508,7 +501,6 @@ func alreadyProvided(rails []agentinterfaces.AgentRail, target agentinterfaces.A
 
 // collectDisabledSkillsFromState 从每个 skills_dir 读取 skills_state.json，
 // 收集 enabled=false 的技能名称。结果按字母排序。
-//
 // Python: _collect_disabled_skills_from_state(skills_dirs)
 func collectDisabledSkillsFromState(skillsDirs []string) []string {
 	disabled := make(map[string]struct{})
@@ -546,7 +538,6 @@ func collectDisabledSkillsFromState(skillsDirs []string) []string {
 }
 
 // addDefaultRails 自动添加调用方未显式提供的默认 Rail。
-//
 // Python: factory.py L358-367 default_rails 自动添加
 // ⤵️ 9.8-9.24 回填：SecurityRail/SkillUseRail/SubagentRail/TaskPlanningRail 具体实例化
 func addDefaultRails(
@@ -614,7 +605,6 @@ func addDefaultRails(
 	}
 
 	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加。
-	//
 	// 2026-11-03 修复：此前传 nil（alreadyProvidedByType 对 nil 恒返回 false），
 	// 即便调用方（DeepAdapter.buildRails）已通过 params.Rails 提供了
 	// TaskPlanningRail，这里仍会再追加一个——形成双实例：adapter 持有的
@@ -640,7 +630,6 @@ func addDefaultRails(
 	}
 
 	// SkillUseRail — 仅当有 skills 或启用了 skill_discovery 时添加。
-	//
 	// Python: factory.py L358-389 default_rails 的 SkillUseRail 分支（_make_skill_rail）。
 	// 判定必须用真实类型：早前传 nil 时恒为 false，导致调用方已提供真实 rail 时仍追加
 	// 一个空 BaseRail（与 TaskPlanningRail 双实例同类问题）。
@@ -683,7 +672,6 @@ func alreadyProvidedByType(typeMap map[reflect.Type]bool, target reflect.Type) b
 }
 
 // embeddedRailTypes 递归返回结构体（含指针）里的匿名嵌入字段类型。
-//
 // 用于把「内嵌基类」的覆盖式 Rail 视作已提供基类类型，
 // 等价 Python 子类 isinstance 判定。
 func embeddedRailTypes(t reflect.Type) []reflect.Type {
@@ -731,7 +719,6 @@ func hasVerificationAgent(subagents []hschema.SubagentSpec) bool {
 
 // buildCreateParamsFromSubagentKwargs 将 SubagentCreateParams 转换为 hconfig.CreateDeepAgentParams。
 // 用于 CreateSubagent 的 default 工厂分支调用 CreateDeepAgent。
-//
 // Python: DeepAgent.create_subagent() 中 create_deep_agent(**create_kwargs)
 func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) hconfig.CreateDeepAgentParams {
 	if kwargs == nil {
@@ -761,12 +748,10 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 }
 
 // buildDefaultSkillUseRail 构造工厂默认的 SkillUseRail（上游 _make_skill_rail 的等价实现）。
-//
 // skills 目录 = 工作空间 skills 节点 + 各 team link 下的 skills（team link 是指向共享
 // 工作空间根的符号链接，故 {link}/skills 即团队共享技能）；禁用列表从各根目录的
 // skills_state.json 读取；include_tools 取决于调用方是否已提供 SysOperationRail
 // （它自己会注册 read_file/code/bash，重复注册会产生 refresh 与重复能力告警）。
-//
 // Python: factory.py _make_skill_rail() L355-389
 func buildDefaultSkillUseRail(
 	config *hschema.DeepAgentConfig,

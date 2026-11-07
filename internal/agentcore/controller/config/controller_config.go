@@ -3,7 +3,6 @@ package config
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DefaultResponse 默认响应配置。
-//
 // Python: openjiuwen/core/controller/config.py (DefaultResponse)
 type DefaultResponse struct {
 	// Type 响应类型："text" 或 "workflow"
@@ -13,7 +12,6 @@ type DefaultResponse struct {
 }
 
 // ControllerConfig Controller 配置。
-//
 // 定义 Controller 及其子组件的运行参数，分为以下几组：
 //   - 任务调度：max_concurrent_tasks、schedule_interval、task_timeout
 //   - 任务管理：default_task_priority、enable_task_persistence
@@ -84,7 +82,6 @@ type ControllerConfig struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultControllerConfig 返回默认 Controller 配置。
-//
 // 默认值对齐 Python ControllerConfig。
 func DefaultControllerConfig() *ControllerConfig {
 	return &ControllerConfig{

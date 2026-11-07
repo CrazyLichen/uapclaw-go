@@ -25,7 +25,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // MilvusClient retrieval 层 Milvus 客户端接口。
-//
 // 对齐 Python 直接使用 pymilvus.MilvusClient 的方法子集，
 // 与 foundation 层的 milvusClient 接口独立（Python 两层也各自独立用 SDK）。
 // 通过依赖注入支持单元测试 mock。
@@ -78,7 +77,6 @@ type milvusClientAdapter struct {
 }
 
 // MilvusVectorStore retrieval 层 Milvus 向量存储实现。
-//
 // 支持向量搜索、BM25 稀疏搜索和混合搜索（原生 HybridSearch + RRF）。
 // 对齐 Python retrieval/vector_store/milvus_store.py (MilvusVectorStore)。
 type MilvusVectorStore struct {
@@ -142,7 +140,6 @@ var _ VectorStore = (*MilvusVectorStore)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultMilvusCreateClient 默认客户端创建函数。
-//
 // 对齐 Python MilvusVectorStore.create_client：
 // 创建 client → database_name 非空且非 default 时检查库是否存在，不存在则创建。
 // 切库语义由 ClientConfig.DBName 等价覆盖（SDK 通过 grpc metadata header
@@ -184,7 +181,6 @@ func DefaultMilvusCreateClient(ctx context.Context, databaseName, uri, token str
 }
 
 // NewMilvusVectorStore 创建 retrieval 层 MilvusVectorStore。
-//
 // 对齐 Python MilvusVectorStore.__init__。
 // vectorField 为 vector_fields.MilvusVectorFieldConfig 完整配置（含 MilvusAUTO 等变体），
 // 对齐 Python vector_field 参数（str 自动转 MilvusAUTO / MilvusVectorField 实例）。
@@ -294,7 +290,6 @@ func (s *MilvusVectorStore) DocIDField() string { return s.docIDField }
 func (s *MilvusVectorStore) EnsureLoaded(ctx context.Context) error { return s.ensureLoaded(ctx) }
 
 // Search 向量搜索。
-//
 // 对齐 Python MilvusVectorStore.search：
 //   - _ensure_loaded
 //   - 构建 filter 表达式（M-27: QueryExpr → to_expr("milvus")）
@@ -363,7 +358,6 @@ func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, t
 }
 
 // SparseSearch 稀疏搜索（BM25）。
-//
 // 对齐 Python MilvusVectorStore.sparse_search：
 // 传递查询文本（BM25 Function 自动分词），失败时 warning + 返回空。
 // M-27: filters 对齐 Python dict | QueryExpr，nil 表示无过滤。
@@ -421,7 +415,6 @@ func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, 
 }
 
 // HybridSearch 混合搜索（原生 HybridSearch + RRF）。
-//
 // 对齐 Python MilvusVectorStore.hybrid_search：
 //   - query_vector 非 nil 时构建 dense AnnRequest
 //   - 始终构建 sparse BM25 AnnRequest
@@ -510,7 +503,6 @@ func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, 
 }
 
 // Add 添加向量数据。
-//
 // 对齐 Python MilvusVectorStore.add：
 //   - _ensure_loaded 确保集合已加载
 //   - 按 batch_size（默认128）分批 insert
@@ -582,7 +574,6 @@ func (s *MilvusVectorStore) Add(ctx context.Context, data []map[string]any, opts
 }
 
 // Delete 删除向量。
-//
 // 对齐 Python MilvusVectorStore.delete：按 ids 或 filter_expr 删除 + flush。
 // 异常时 logger.error 并返回 False（不抛错，对齐 Python except 分支）。
 // M-27: filterExpr 对齐 Python str | QueryExpr——QueryExpr 走 to_expr("milvus")，
@@ -672,7 +663,6 @@ func (s *MilvusVectorStore) Close() error {
 }
 
 // CloseWithRelease 关闭存储，可选释放集合。
-//
 // 对齐 Python MilvusVectorStore.close(release_collection=False)：
 // release 时检查集合存在 + load state == Loaded 后 release，然后关闭 client。
 func (s *MilvusVectorStore) CloseWithRelease(releaseCollection bool) {
@@ -733,7 +723,6 @@ func (s *MilvusVectorStore) SetCollectionName(name string) {
 }
 
 // CheckVectorField 校验向量字段配置是否与实际数据库一致。
-//
 // 对齐 Python MilvusVectorStore.check_vector_field：
 //   - 集合不存在时直接返回
 //   - describe_index 为空时：列出集合中的向量字段并抛 KB_DATABASE_CONFIG_INVALID
@@ -945,7 +934,6 @@ func (s *MilvusVectorStore) getClient(ctx context.Context) (MilvusClient, error)
 }
 
 // ensureLoaded 确保集合已加载。
-//
 // 对齐 Python MilvusVectorStore._ensure_loaded：
 // 首次调用时 has_collection → load_collection，之后缓存跳过。
 func (s *MilvusVectorStore) ensureLoaded(ctx context.Context) error {
@@ -985,7 +973,6 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context) error {
 }
 
 // insertBatch 将一批 map 数据转为 Milvus 列并插入。
-//
 // 对齐 Python asyncio.to_thread(self._client.insert, collection_name=..., data=nodes)。
 // 列类型推断：[]float64 → FloatVector、string → VarChar、map[string]any → JSON。
 func (s *MilvusVectorStore) insertBatch(ctx context.Context, c MilvusClient, nodes []map[string]any) error {
@@ -1086,7 +1073,6 @@ func dataToColumns(nodes []map[string]any) ([]column.Column, error) {
 }
 
 // buildMilvusFilterExpr M-27: 将 QueryExpr 转换为 Milvus 过滤表达式字符串。
-//
 // 对齐 Python MilvusVectorStore.search 的 filter 构建逻辑：
 //   - QueryExpr 走 filters.to_expr("milvus") 输出过滤字符串
 //   - dict 等值语义由调用方经 query.EqMap 折叠（And(Eq...) 链，
@@ -1114,7 +1100,6 @@ func buildMilvusFilterExpr(filters query.QueryExpr) (string, error) {
 }
 
 // hybridSearchFallback 降级混合搜索：分别执行向量搜索和 BM25 搜索后 RRF 融合。
-//
 // 对齐 Python MilvusVectorStore._hybrid_search_fallback：
 // 并发两路搜索（vector + text）→ rrf_fusion([results_vector, results_text], k=60) → 截断 top_k。
 // M-27: filters 对齐 Python dict | QueryExpr（fallback 内部两路搜索均传 nil，
@@ -1224,7 +1209,6 @@ func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText 
 }
 
 // milvusResultToSearchResults 将 Milvus 搜索结果转为 SearchResult 列表。
-//
 // 对齐 Python MilvusVectorStore._milvus_result_to_search_results：
 //   - 提取 text/metadata/doc_id/chunk_id
 //   - doc_id 回填到 metadata（避免重复）
@@ -1361,7 +1345,6 @@ func (s *MilvusVectorStore) milvusResultToSearchResults(rs milvusclient.ResultSe
 }
 
 // getSearchParams 获取搜索参数。
-//
 // 对齐 Python MilvusVectorStore.get_search_params：
 // efSearchFactor 存在时转为 ef = round(top_k * efSearchFactor)。
 // S-47: vf tag name= 修复后 searchConfig 键名为 efSearchFactor（与 Python 一致）。

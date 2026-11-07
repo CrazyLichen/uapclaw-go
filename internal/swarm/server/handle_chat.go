@@ -28,14 +28,12 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleUnary 处理非流式请求，对齐 Python _handle_unary。
-//
 // Python: agent_ws_server.py:3913 `_handle_unary` → `_handle_unary_impl`
 func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequest) {
 	s.handleUnaryImpl(ctx, request)
 }
 
 // handleUnaryImpl 非流式处理：特殊方法分流 → runtime.Invoke → 逐事件发帧。
-//
 // Python: agent_ws_server.py:3941 _handle_unary_impl
 func (s *AgentServer) handleUnaryImpl(ctx context.Context, request *schema.AgentRequest) {
 	// 1. 特殊方法分流（对齐上游 _handle_initialize / _handle_session_create /
@@ -102,14 +100,12 @@ func (s *AgentServer) handleUnaryImpl(ctx context.Context, request *schema.Agent
 }
 
 // handleStream 处理流式请求，对齐 Python _handle_stream。
-//
 // Python: agent_ws_server.py:4627 `_handle_stream` → `_handle_stream_impl`
 func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentRequest) {
 	s.handleStreamImpl(ctx, request)
 }
 
 // handleStreamImpl 流式处理：登记流任务 → 心跳 → runtime.Stream → 逐 chunk 发帧。
-//
 // Python: agent_ws_server.py:4654 _handle_stream_impl
 func (s *AgentServer) handleStreamImpl(ctx context.Context, request *schema.AgentRequest) {
 	// 1. 会话键
@@ -180,7 +176,6 @@ func (s *AgentServer) handleStreamImpl(ctx context.Context, request *schema.Agen
 }
 
 // handleCancel 处理取消/中断请求，对齐 Python _handle_cancel。
-//
 // 流式任务取消留在 server 层（对齐上游 _handle_message 的 intent 判定），
 // agent 选取与 process_message 交给 runtime.CancelRequest。
 func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentRequest) {
@@ -217,7 +212,6 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 }
 
 // sendRuntimeEvent 按事件类型选择 push 帧或响应/流帧。
-//
 // Python: agent_ws_server.py:5024 _send_runtime_event
 func (s *AgentServer) sendRuntimeEvent(ev *swruntime.RuntimeEvent, streaming bool, sequence int) bool {
 	if ev.EventType() == swruntime.PlanModeExitedEvent {

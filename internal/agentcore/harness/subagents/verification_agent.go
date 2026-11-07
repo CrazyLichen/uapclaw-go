@@ -221,7 +221,6 @@ var (
 //
 // 参数通过 SubagentCreateParams 传入，对齐 Python 的具名参数风格。
 // adapter 层负责从 map[string]any 解析出 SubagentCreateParams。
-//
 // 注意：不设 cfg.FactoryName（对齐 Python：verification_agent 不设 factory_name，走通用 create_deep_agent 路径）
 func BuildVerificationAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams) *hschema.SubAgentConfig {
 	language := hprompts.ResolveLanguage(params.Language)

@@ -76,7 +76,6 @@ type TaskCompletionRail struct {
 }
 
 // goalManagerProvider 提供 Goal 能力面的 Agent 能力。
-//
 // 由 harness.DeepAgent 实现（GoalManager 访问器）。
 // Python: init() 里 getattr(agent, "goal_manager", None) 的继承兜底（task_completion_rail.py L238-241）
 type goalManagerProvider interface {
@@ -817,8 +816,10 @@ func (r *TaskCompletionRail) getRunKind(cbc *agentinterfaces.AgentCallbackContex
 	if inv, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok && inv.RunKind != "" {
 		return string(inv.RunKind)
 	}
-	if v, ok := cbc.Extra()["run_kind"].(string); ok {
-		return v
+	if raw, ok := cbc.GetExtra("run_kind"); ok {
+		if v, ok2 := raw.(string); ok2 {
+			return v
+		}
 	}
 	return ""
 }
@@ -834,8 +835,8 @@ func (r *TaskCompletionRail) getRunContext(cbc *agentinterfaces.AgentCallbackCon
 		rc := inv.RunContext
 		return rc.GoalID, rc.Revision, rc.SessionID
 	}
-	if extra, ok := cbc.Extra()["run_context"]; ok {
-		if rc, ok2 := extra.(*agentinterfaces.RunContext); ok2 {
+	if raw, ok := cbc.GetExtra("run_context"); ok {
+		if rc, ok2 := raw.(*agentinterfaces.RunContext); ok2 {
 			return rc.GoalID, rc.Revision, rc.SessionID
 		}
 	}
@@ -886,7 +887,6 @@ func (r *TaskCompletionRail) resolveGoalLanguage(builder saprompt.SystemPromptBu
 // 对齐 Python Optional 语义：goal_id/revision 同源（要么都来自 run_context，
 // 要么都为 None）。goalID 非空才比较 goal_id 与 revision；goalID 为空等价
 // Python 的 expected_goal_id=None / expected_revision=None（只查 status）。
-//
 // 偏差说明（spec §5）：Python 用 `expected_revision is not None` 独立判断 revision，
 // Go 的 int 无法表达 None，故以 goalID 是否为空作为「两者都有值」的开关。当前调用链
 // 中 goal_id 与 revision 恒同源于 RunContext（9.87 定义），不会出现「一个有一个无」。

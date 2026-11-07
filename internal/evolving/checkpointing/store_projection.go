@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StoreProjectionHelper Markdown 投影和待定记录格式化辅助。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/store_projection.py StoreProjectionHelper
 type StoreProjectionHelper struct {
 	// store 所属的 EvolutionStore 实例

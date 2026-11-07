@@ -1,8 +1,6 @@
 // Package operator 提供自演化的参数句柄抽象。
-//
 // Operator 是自演化框架的参数句柄，不是执行单元。执行由消费者（Agent/Rail）
 // 使用 Operator 管理的参数来完成。
-//
 // Operator 提供统一接口让演化框架能够：
 //   - 通过 operator_id 标识参数（用于轨迹归因）
 //   - 通过 GetTunables 描述可调参数
@@ -11,7 +9,6 @@
 //   - 通过 LoadState 从检查点恢复（不检查冻结标记）
 //
 // 参数变更通过 onParameterUpdated 回调推送给消费者，确保即时同步。
-//
 // 文件目录：
 //
 //	operator/           # 操作器实现

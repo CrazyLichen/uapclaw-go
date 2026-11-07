@@ -1,9 +1,7 @@
 // Package local 提供系统操作的本地执行实现。
-//
 // 本包实现 sys_operation 根包中定义的 FsOperation、ShellOperation、CodeOperation 接口，
 // 在本地进程中直接执行文件系统和 Shell 命令操作。本地实现类型分别为 LocalFsOperation、
 // LocalShellOperation、LocalCodeOperation。
-//
 // 文件目录：
 //
 //	local/

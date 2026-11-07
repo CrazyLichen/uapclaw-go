@@ -23,12 +23,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MilvusIndexer Milvus 文档索引管理器。
-//
 // 实现 Indexer 接口，负责将 TextChunk 写入 Milvus 向量库：
 // ensureCollection（含 BM25 Function/dense 索引/INVERTED 标量索引）、
 // BuildIndex（查重→嵌入→写入）、UpdateIndex（先删后建）、
 // DeleteIndex（filter 删除）、IndexExists、GetIndexInfo。
-//
 // Python: retrieval/indexing/indexer/milvus_indexer.py (MilvusIndexer)
 type MilvusIndexer struct {
 	// milvusURI Milvus 服务地址
@@ -83,7 +81,6 @@ var _ Indexer = (*MilvusIndexer)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMilvusIndexer 创建 MilvusIndexer 实例。
-//
 // 对齐 Python MilvusIndexer.__init__：
 //   - vectorField 字符串自动转 MilvusAUTO（Go 用构造函数显式转换，默认值即 MilvusAUTO）
 //   - 距离度量归一化 dot→ip / euclidean→l2 / 大写
@@ -228,7 +225,6 @@ func (mi *MilvusIndexer) MetadataField() string { return mi.metadataField }
 func (mi *MilvusIndexer) DocIDField() string { return mi.docIDField }
 
 // IndexExists 检查索引是否存在。
-//
 // 对齐 Python MilvusIndexer.index_exists：has_collection，异常时返回 False。
 func (mi *MilvusIndexer) IndexExists(ctx context.Context, indexName string) (bool, error) {
 	ok, err := mi.client.HasCollection(ctx, milvusclient.NewHasCollectionOption(indexName))
@@ -244,7 +240,6 @@ func (mi *MilvusIndexer) IndexExists(ctx context.Context, indexName string) (boo
 }
 
 // DeleteIndex 删除索引。
-//
 // 对齐 Python MilvusIndexer.delete_index：
 // filter_expr = 'document_id == "xxx"'，delete 后按 delete_count 判断。
 func (mi *MilvusIndexer) DeleteIndex(ctx context.Context, docID string, indexName string) (bool, error) {
@@ -273,7 +268,6 @@ func (mi *MilvusIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 }
 
 // GetIndexInfo 获取索引信息。
-//
 // 对齐 Python MilvusIndexer.get_index_info：
 //   - 不存在返回 {"exists": False}
 //   - get_collection_stats 获取 row_count（避免 query 分页错误）
@@ -320,7 +314,6 @@ func (mi *MilvusIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 }
 
 // Close 关闭索引管理器。
-//
 // 对齐 Python MilvusIndexer.close。关闭失败已在此 Warn 记录，故返回 nil。
 func (mi *MilvusIndexer) Close() error {
 	if mi.client == nil {
@@ -334,7 +327,6 @@ func (mi *MilvusIndexer) Close() error {
 }
 
 // BuildIndex 构建索引。ensureCollection → 查重 → 嵌入 → 转换 → 写入。
-//
 // 对齐 Python MilvusIndexer.build_index。
 // 5 步流程：
 //  1. _ensure_collection 确保集合存在（自动建表）
@@ -492,7 +484,6 @@ func (mi *MilvusIndexer) BuildIndex(
 }
 
 // UpdateIndex 更新索引。先删后 flush 后重建。
-//
 // 对齐 Python MilvusIndexer.update_index：
 // delete_index → flush（Milvus 最终一致性，使删除可见）→ build_index。
 // 异常时 logger.error 后返回 False（对齐 Python except 分支）。
@@ -533,7 +524,6 @@ func (mi *MilvusIndexer) UpdateIndex(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureCollection 确保集合存在，不存在则创建。
-//
 // 对齐 Python MilvusIndexer._ensure_collection：
 //   - 已存在直接返回
 //   - schema：document_id(VARCHAR 256+INVERTED) + pk(INT64 PK auto_id) + chunk_id(VARCHAR 256+INVERTED)
@@ -673,7 +663,6 @@ func (mi *MilvusIndexer) ensureCollection(ctx context.Context, collectionName st
 }
 
 // buildDenseIndex 根据 constructConfig 构建 dense 索引（S-01/S-02 字典透传方案）。
-//
 // 对齐 Python _ensure_collection：
 //
 //	index_params.add_index(field_name=..., index_type=index_type, **self._construct_config)

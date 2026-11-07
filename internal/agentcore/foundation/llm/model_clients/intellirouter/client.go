@@ -18,16 +18,13 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // IntelliRouterModelClient IntelliRouter 智能路由模型客户端。
-//
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
 // 覆写 Invoke/Stream，在调用时通过路由器选择部署端点，
 // 动态替换 api_key/api_base 为选中端点的配置。
 // Stream 独立实现（不委托 OpenAI.Stream），对齐 Python IntelliRouter 无 _astream_with_parser
 // （OutputParser 传 nil，不支持 parser）。
-//
 // Invoke 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
 // Stream 不做重试（流一旦开始无法重试）。
-//
 // Python: IntelliRouterModelClient（intelli_router_model_client.py）
 type IntelliRouterModelClient struct {
 	openai.OpenAIModelClient
@@ -46,7 +43,6 @@ type IntelliRouterModelClient struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntelliRouterModelClient 创建 IntelliRouter 智能路由客户端。
-//
 // 构造流程：
 //  1. 从 ModelClientConfig.Extra 提取 IntelliRouter 配置
 //  2. 校验至少有一个 deployment
@@ -118,11 +114,9 @@ func NewIntelliRouterModelClient(
 }
 
 // Invoke 非流式调用 IntelliRouter API。
-//
 // 覆写 OpenAI 客户端的 Invoke，通过路由器选择部署端点，
 // 动态替换 api_key/api_base 后委托给 OpenAI.Invoke()。
 // 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
-//
 // Python: IntelliRouterModelClient.invoke()
 func (c *IntelliRouterModelClient) Invoke(
 	ctx context.Context,
@@ -188,17 +182,14 @@ func (c *IntelliRouterModelClient) Invoke(
 }
 
 // Stream 流式调用 IntelliRouter API。
-//
 // 独立实现 Stream，不委托给 OpenAI 客户端。
 // Python: IntelliRouterModelClient：IntelliRouter 没有 _astream_with_parser，
 // 因此不支持 OutputParser。使用自己的 convertChunk 只提取 content。
-//
 // 与 OpenAI 的行为差异（对齐 Python）：
 //   - convertChunk 只提取 content（不提取 reasoning_content / tool_calls / usage_metadata / finish_reason）
 //   - 不使用 OutputParser（对齐 Python IntelliRouter 无 _astream_with_parser）
 //
 // Stream 不做重试（流一旦开始无法重试）。
-//
 // Python: IntelliRouterModelClient.stream()
 func (c *IntelliRouterModelClient) Stream(
 	ctx context.Context,
@@ -355,7 +346,6 @@ func (c *IntelliRouterModelClient) Stream(
 }
 
 // GenerateImage 生成图片（当前不支持）。
-//
 // IntelliRouter 仅支持 Chat Completion，不支持图片生成。
 func (c *IntelliRouterModelClient) GenerateImage(
 	_ context.Context,
@@ -393,7 +383,6 @@ func (c *IntelliRouterModelClient) GenerateVideo(
 }
 
 // Release 释放模型缓存（当前不支持）。
-//
 // IntelliRouter 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
 func (c *IntelliRouterModelClient) Release(
 	_ context.Context,
@@ -423,7 +412,6 @@ func (c *IntelliRouterModelClient) TranscribeAudio(
 }
 
 // GetRouterStats 获取路由器统计信息。
-//
 // 便捷方法，暴露内部路由器的统计信息供监控和调试使用。
 func (c *IntelliRouterModelClient) GetRouterStats() map[string]any {
 	return c.router.GetStats()
@@ -432,7 +420,6 @@ func (c *IntelliRouterModelClient) GetRouterStats() map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // convertChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
-//
 // Python: IntelliRouterModelClient._convert_chunk()：
 // 只提取 content，不提取 reasoning_content / tool_calls / usage_metadata / finish_reason。
 // IntelliRouter 不使用 OutputParser（无 _astream_with_parser）。

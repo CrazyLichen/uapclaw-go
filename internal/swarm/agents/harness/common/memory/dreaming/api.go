@@ -36,7 +36,6 @@ func GetDreamingOrchestrator(mode string) *dreaming.DreamingOrchestrator {
 
 // StartDreaming 启动 dreaming 服务。
 // 幂等：同一 mode 重复调用返回已有实例。
-//
 // Python: start_dreaming(sessions_dir, output_dir, mode, busy_checker)
 func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language string, busyChecker func() bool) (*dreaming.DreamingOrchestrator, error) {
 	// M-04: 使用单个 Lock 覆盖检查-创建-存储全过程，消除 TOCTOU 竞态
@@ -97,7 +96,6 @@ func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language s
 // StopDreaming 停止 dreaming 服务。
 // 幂等：同一 mode 重复调用不做任何操作。
 // mode 为空时停止所有模式。
-//
 // Python: stop_dreaming(mode)
 func StopDreaming(ctx context.Context, mode string) {
 	if mode != "" {

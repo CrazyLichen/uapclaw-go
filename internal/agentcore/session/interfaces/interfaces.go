@@ -16,11 +16,9 @@ import (
 //
 // AgentSession、WorkflowSession、NodeSession、SubWorkflowSession 均实现此接口。
 // ProxySession 通过委托模式实现此接口。
-//
 // Python 中 Checkpointer/Storage 方法签名直接接受 BaseSession，
 // Go 同样使用 InnerSession 作为 Checkpointer/Storage 方法的 session 参数类型，
 // 不再需要独立的 CheckpointerSession 子集接口（循环依赖已通过 interfaces 包解决）。
-//
 // 子类型独有的方法通过 *Provider 接口 + 类型断言获取，
 // Python: hasattr/isinstance 运行时探测模式：
 //

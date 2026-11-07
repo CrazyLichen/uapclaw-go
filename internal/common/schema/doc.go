@@ -1,8 +1,6 @@
 // Package schema 提供两个项目共享的基础数据模型。
-//
 // 本包定义了 Agent 系统和 LLM function calling 所需的核心元信息类型，
 // 作为 agentcore 和 swarm 共用的类型基础层。
-//
 // 文件目录：
 //
 //	schema/
@@ -21,6 +19,5 @@
 //   - ToolInfo / McpToolInfo：工具描述信息；McpToolInfo 嵌入 ToolInfo 并扩展 ServerName
 //
 // 注：AgentCard 已迁移至 single_agent/schema/ 包，与 Python 路径对齐。
-//
 // 对应 Python 代码：openjiuwen/core/common/schema/
 package schema

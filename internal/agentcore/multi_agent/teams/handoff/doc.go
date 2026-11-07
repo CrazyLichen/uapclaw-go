@@ -1,8 +1,6 @@
 // Package handoff 提供 HandoffTeam 交接编排模式实现。
-//
 // 交接编排模式下，Agent 按照预定义的路由规则依次交接任务，
 // 每个 Agent 处理完毕后决定下一步交接给哪个 Agent，直到满足终止条件。
-//
 // 文件目录：
 //
 //	handoff/

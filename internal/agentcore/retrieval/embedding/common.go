@@ -29,7 +29,6 @@ type MultimodalEmbedder interface {
 }
 
 // EmbeddingConfig 嵌入模型配置。
-//
 // Python: EmbeddingConfig
 type EmbeddingConfig struct {
 	// ModelName 模型名称
@@ -76,7 +75,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ValidateEmbedDocs 校验输入文本列表，返回非空文档。
-//
 // Python: APIEmbedding.validate_embed_docs
 func ValidateEmbedDocs(texts []string) ([]string, error) {
 	if len(texts) == 0 {
@@ -129,7 +127,6 @@ func BatchTexts(texts []string, batchSize int) [][]string {
 }
 
 // ExecuteWithConcurrency 通用并发执行框架。
-//
 // limiter 为并发信号量（buffered channel），nil 表示不限制并发。
 func ExecuteWithConcurrency(
 	ctx context.Context,
@@ -185,7 +182,6 @@ func ExecuteWithConcurrency(
 }
 
 // ParseEmbeddingResponse 通用 HTTP 响应解析。
-//
 // 支持三种格式：
 //   - {"embedding": [...]} / {"embedding": [[...], [...]]}（单/多向量）
 //   - {"embeddings": [[...], [...]]}（多向量）
@@ -296,7 +292,6 @@ func ParseEmbeddingResponse(body []byte) ([][]float64, error) {
 }
 
 // RetryWithBackoff 通用重试 + 指数退避。
-//
 // fn 参数 attempt 从 0 开始。maxRetries 为最大重试次数（即最多调用 fn maxRetries 次）。
 // 如果 fn 返回的 error 是 *exception.BaseError 且 IsRecoverable() == false，则立即退出不重试。
 // Python: 行为：只重试可恢复错误（网络错误/5xx），不重试客户端错误（4xx/输入错误）。
@@ -309,7 +304,6 @@ func RetryWithBackoff(
 }
 
 // NewEmbeddingHTTPClient 创建嵌入客户端的 HTTP Client。
-//
 // 根据 EMBEDDING_SSL_VERIFY / EMBEDDING_SSL_CERT 环境变量配置 TLS。
 // timeout 为 0 时使用默认超时 defaultTimeout。
 func NewEmbeddingHTTPClient(apiURL string, timeout ...time.Duration) *http.Client {

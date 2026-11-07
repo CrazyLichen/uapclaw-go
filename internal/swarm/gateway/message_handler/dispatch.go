@@ -96,7 +96,6 @@ func isKnownJiuwenswarmSessionID(sessionID string) bool {
 }
 
 // shouldEmitProcessingStatusForStream 判断是否需要为流式请求发送 processing_status 事件。
-//
 // Python: _should_emit_processing_status_for_stream (L1866-1890)：
 // 仅 chat.send 请求发送 processing_status，其他请求不发送。
 func (mh *MessageHandler) shouldEmitProcessingStatusForStream(msg *schema.Message) bool {
@@ -104,7 +103,6 @@ func (mh *MessageHandler) shouldEmitProcessingStatusForStream(msg *schema.Messag
 }
 
 // nonStreamRPCMayRunParallel 判断非流式 RPC 是否可以并行执行，避免慢 RPC 阻塞队列。
-//
 // Python: _non_stream_rpc_may_run_parallel (L1837-1865)：
 // chat.send / chat.cancel / chat.resume / chat.user_answer 必须串行，其他非流式 RPC 可并行。
 func (mh *MessageHandler) nonStreamRPCMayRunParallel(env *e2a.E2AEnvelope) bool {
@@ -119,7 +117,6 @@ func (mh *MessageHandler) nonStreamRPCMayRunParallel(env *e2a.E2AEnvelope) bool 
 }
 
 // extractModeFromParams 从消息 params 中提取 mode 字段。
-//
 // 供 forwardLoop 中注册 streamModes 使用。
 func (mh *MessageHandler) extractModeFromParams(msg *schema.Message) string {
 	if len(msg.Params) == 0 {
@@ -138,7 +135,6 @@ func (mh *MessageHandler) extractModeFromParams(msg *schema.Message) string {
 }
 
 // shouldTriggerBeforeChatRequestHook 判断是否触发聊天前钩子。
-//
 // Python: _should_trigger_before_chat_request_hook (L1856-1863)：
 // 仅 CHAT_SEND / CHAT_RESUME / CHAT_ANSWER。
 func (mh *MessageHandler) shouldTriggerBeforeChatRequestHook(msg *schema.Message) bool {
@@ -148,7 +144,6 @@ func (mh *MessageHandler) shouldTriggerBeforeChatRequestHook(msg *schema.Message
 }
 
 // triggerBeforeChatRequestHook 触发 Gateway 聊天前钩子。
-//
 // Python: _trigger_before_chat_request_hook (L1871-1888)：
 // 构建 GatewayChatHookContext → trigger(BEFORE_CHAT_REQUEST) → 扩展原地改 params →
 // 从同一对象读回（Go：FromMap 写回后重新序列化进 agentMsg.Params）。

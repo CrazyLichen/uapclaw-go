@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OutputIterator 输出块迭代器。
-//
 // Python: _OutputIterator (agent_teams/harness/outputs.py)，44 行。
 // 契约：单消费者——END 哨兵只会被第一个迭代器读到，之后所有读取返回 false。
 // Go 用"consumed 原子标志"表达 asyncio 的 StopAsyncIteration 终止语义。
@@ -24,7 +23,6 @@ type OutputIterator struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // endSentinel 输出终止哨兵。
-//
 // Python: _END = object()（用对象身份判定，outputs.py:15）
 // Go 用指针身份判定：forwarder 投递的是同一个指针实例，因此
 // `chunk == endSentinel` 是接口值比较（同指针即相等）。

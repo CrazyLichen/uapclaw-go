@@ -1,10 +1,8 @@
 // Package schema 提供 E2A 协议和 Gateway/AgentServer 通信所需的全部类型定义。
-//
 // 本包定义了 E2A 协议的核心数据模型，包括 RPC 方法名枚举（ReqMethod）、
 // 事件类型枚举（EventType）、运行模式枚举（Mode）、消息方向类型枚举（MessageType）、
 // 消息模型（Message）、Agent 请求/响应模型（AgentRequest/AgentResponse/AgentResponseChunk）、
 // 钩子事件基类（HookEventBase）、权限上下文（PermissionContext）等，作为 swarm 层的类型基础。
-//
 // 文件目录：
 //
 //	schema/

@@ -351,7 +351,6 @@ func BuildToolsContent(tools map[string]string, lang string) string {
 }
 
 // BuildToolsSection 构建工具节（Priority 30）
-//
 // tools 为工具名称→描述的映射；lang 为语言标识。
 func BuildToolsSection(tools map[string]string, lang string) *saprompt.PromptSection {
 	content := BuildToolsContent(tools, lang)
@@ -367,7 +366,6 @@ func BuildToolsSection(tools map[string]string, lang string) *saprompt.PromptSec
 }
 
 // BuildContextSection 构建上下文节（Priority 80）
-//
 // files 为文件名→内容的映射；dailyContent 为每日记忆内容（可为空）。
 func BuildContextSection(files map[string]string, lang string) saprompt.PromptSection {
 	var header string
@@ -433,11 +431,9 @@ func BuildContextSection(files map[string]string, lang string) saprompt.PromptSe
 }
 
 // ReadContextFiles 从工作空间读取上下文配置文件内容。
-//
 // 遍历 wscontent.ContextFiles 列表，通过 fsOp.ReadFile 读取每个文件。
 // 对 MEMORY.md 特殊处理：从 WorkspaceNodeMemory 目录下读取。
 // 过滤掉空模板文件（IsUnfilledTemplate）。
-//
 // Python: _read_context_file(sys_operation, workspace, file_key)
 func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspace.Workspace) map[string]string {
 	if fsOp == nil || ws == nil {
@@ -476,9 +472,7 @@ func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspac
 }
 
 // ReadDailyMemory 读取当日每日记忆文件内容。
-//
 // 返回 (content, dateStr)，如果当日文件不存在则返回 ("", "")。
-//
 // Python: _read_daily_memory(sys_operation, workspace, timezone)
 func ReadDailyMemory(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspace.Workspace, timezone string) (string, string) {
 	if fsOp == nil || ws == nil {

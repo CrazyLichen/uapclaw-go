@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MergeConfigWithOverrides 将 map[string]any 的部分覆盖合并到 baseConfig 的深拷贝上。
-//
 // 逻辑对齐 Python: ContextProcessorRail._merge_config_with_overrides(base_config, overrides)。
 // Python 使用 pydantic model_dump + dict merge + type(**merged) 方式；
 // Go 使用 reflect 实现等价逻辑：
@@ -81,7 +80,6 @@ func MergeConfigWithOverrides(baseConfig iface.ProcessorConfig, overrides map[st
 }
 
 // MergeProcessors 合并 preset 和 user processor 列表。
-//
 // 逻辑对齐 Python: ContextProcessorRail._merge_processors(base, overrides, model_config, model_client_config)。
 // 1. 将 overrides 列表转为 map（key=processor type）
 // 2. 遍历 base 列表：
@@ -154,7 +152,6 @@ func MergeProcessors(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildMergedConfig 构建单个 processor 的合并配置。
-//
 // Python: _build_merged_cfg(key, override_cfg, base_cfg, model_config, model_client_config)
 func buildMergedConfig(
 	key string,
@@ -197,7 +194,6 @@ func buildMergedConfig(
 }
 
 // fillModelDefaults 对合并后的 Config 回填 Model/ModelClient 字段。
-//
 // Python:
 //
 //	Python: if hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None:
@@ -209,7 +205,6 @@ func fillModelDefaults(cfg iface.ProcessorConfig, modelConfig *llmschema.ModelRe
 }
 
 // deepCopyConfig 对 ProcessorConfig 做深拷贝。
-//
 // ProcessorConfig 是 interface，实际值可能是 *XxxConfig 指针。
 // 通过 reflect 创建新的零值指针，再逐字段拷贝。
 func deepCopyConfig(cfg iface.ProcessorConfig) iface.ProcessorConfig {
@@ -241,7 +236,6 @@ func deepCopyConfig(cfg iface.ProcessorConfig) iface.ProcessorConfig {
 }
 
 // snakeToPascal 将 snake_case 字符串转换为 PascalCase。
-//
 // 示例: "tokens_threshold" → "TokensThreshold", "model_client" → "ModelClient"
 func snakeToPascal(s string) string {
 	parts := strings.Split(s, "_")
@@ -263,7 +257,6 @@ func setFieldValue(field reflect.Value, val any) {
 	// pydantic（Optional 字段合法），Go 用反射搬运时必须先拦住：
 	// reflect.ValueOf(nil) 是零值 Value，调用 .Type() 会直接 panic
 	// （出厂模板 message_summary_offloader_config 的 messages_threshold: null 即触发）。
-	//
 	// 语义选择：跳过而非置零——Go 标量无法区分"未设置"与"显式清零"，
 	// 置零会把 preset 的默认阈值一并抹掉；跳过则保持 preset 默认值。
 	if val == nil {

@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReActAgentConfig ReAct Agent 配置，聚合模型、上下文、提示词等子配置。
-//
 // Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
 type ReActAgentConfig struct {
 	// MemScopeIDVal 内存作用域标识
@@ -53,7 +52,6 @@ type ReActAgentConfig struct {
 	// Workspace 工作区实例
 	Workspace *hworkspace.Workspace `json:"-"`
 	// ParallelToolCalls 是否并行执行同一批工具调用；nil 表示未配置，按默认 true 处理。
-	//
 	// 有状态工具（浏览器动作序列、worktree 切换）被并行调用会打乱动作顺序，
 	// 子代理可通过 SubAgentConfig 单独关闭。
 	// Python: ReActAgentConfig.parallel_tool_calls (react_agent.py:332)
@@ -87,7 +85,6 @@ var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewReActAgentConfig 创建 ReActAgentConfig 实例，所有字段使用默认值。
-//
 // 默认值：
 //   - ModelProvider: "openai"（模型提供者）
 //   - MaxIterations: 5（最大迭代次数）
@@ -315,7 +312,6 @@ func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
 }
 
 // Validate 校验 ReActAgentConfig 的字段合法性。
-//
 // 校验规则：
 //   - ModelNameVal 非空
 //   - MaxIterations > 0（最大迭代次数须大于 0）
@@ -344,10 +340,8 @@ func (c *ReActAgentConfig) Validate() error {
 }
 
 // ParallelToolCallsOrDefault 返回是否并行执行工具调用，未配置时为 true。
-//
 // 用指针而非 bool 是为了区分"未配置"与"显式 false"：
 // bool 零值是 false，直接使用会让未配置的配置项变成串行，与上游默认相反。
-//
 // Python: ReActAgentConfig.parallel_tool_calls default=True
 func (c *ReActAgentConfig) ParallelToolCallsOrDefault() bool {
 	if c == nil || c.ParallelToolCalls == nil {

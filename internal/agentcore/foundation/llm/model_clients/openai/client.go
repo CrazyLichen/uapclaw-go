@@ -19,10 +19,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OpenAIModelClient OpenAI 兼容协议的 LLM 模型客户端。
-//
 // 支持所有兼容 OpenAI Chat Completion API 的服务提供商，
 // 包括 OpenAI 官方 API 和 OpenRouter 等第三方代理。
-//
 // Python: openjiuwen/core/foundation/llm/model_clients/openai_model_client.py (OpenAIModelClient)
 type OpenAIModelClient struct {
 	model_clients.BaseClientEmbed
@@ -42,7 +40,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOpenAIModelClient 创建 OpenAI 兼容客户端。
-//
 // Python: OpenAIModelClient.__init__(model_config, model_client_config)
 func NewOpenAIModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
@@ -79,7 +76,6 @@ func NewOpenAIModelClient(
 }
 
 // Invoke 非流式调用 LLM，返回完整的助手消息。
-//
 // Python: OpenAIModelClient.invoke()
 func (c *OpenAIModelClient) Invoke(
 	ctx context.Context,
@@ -218,11 +214,9 @@ func (c *OpenAIModelClient) Invoke(
 }
 
 // Stream 流式调用 LLM，返回纯 chunk channel。
-//
 // 调用方通过 `range chunkChan` 消费流式 chunk；
 // goroutine 内部累积 final_message，流结束时通过
 // tracer_record_data(llm_response=finalMessage) 传出。
-//
 // Python: OpenAIModelClient.stream()
 func (c *OpenAIModelClient) Stream(
 	ctx context.Context,
@@ -437,7 +431,6 @@ func (c *OpenAIModelClient) Stream(
 }
 
 // GenerateImage 生成图片（当前不支持）。
-//
 // OpenAI Chat Completion API 不支持图片生成，图片生成走独立的 API 接口。
 // 后续由 2.8 DashScope 等客户端各自实现。
 func (c *OpenAIModelClient) GenerateImage(
@@ -476,7 +469,6 @@ func (c *OpenAIModelClient) GenerateVideo(
 }
 
 // Release 释放模型缓存（当前不支持）。
-//
 // OpenAI API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
 func (c *OpenAIModelClient) Release(
 	_ context.Context,
@@ -497,14 +489,12 @@ func (c *OpenAIModelClient) SupportsKVCacheRelease() bool {
 // 参见 OpenAIModelClient.TranscribeAudio 方法。
 
 // BuildEffectiveHeaders 合并配置级和请求级 headers。
-//
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
 func (c *OpenAIModelClient) BuildEffectiveHeaders(requestHeaders map[string]string) map[string]string {
 	return headers_helper.MergeRequestHeaders(c.baseHeaders, requestHeaders)
 }
 
 // WrapError 包装错误为 MODEL_CALL_FAILED 异常。
-//
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
 func (c *OpenAIModelClient) WrapError(method string, err error) error {
 	errDetail := fmt.Sprintf("%T: %v", err, err)
@@ -520,13 +510,10 @@ func (c *OpenAIModelClient) WrapError(method string, err error) error {
 }
 
 // FailStream 上报流读取中断：Error 日志 + LLM_CALL_ERROR 回调 + 向通道投递哨兵 chunk。
-//
 // 调用后由调用方 return，defer 里的 close(chunkChan) 让消费方读到哨兵再结束。
-//
 // Python: openai_model_client._stream 的 except 分支——先 trigger(LLM_CALL_ERROR)，
 // 再 llm_logger.error("... async stream error.", event_type=LLM_CALL_ERROR, ...)，
 // 最后 raise build_error(StatusCode.MODEL_CALL_FAILED, ...)。
-//
 // 两个容易漏的点：
 //  1. 必须自行打日志。Go 的 TriggerLLM 只是把事件派发给注册的观察者（默认只有
 //     agent_teams 的 OTel handler，且仅在开启 tracing 的团队模式注册），单 agent
@@ -563,7 +550,6 @@ func (c *OpenAIModelClient) FailStream(
 }
 
 // HandleHTTPError 处理非 200 HTTP 响应。
-//
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
 func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 	params := httpErrorParams(resp)
@@ -598,7 +584,6 @@ func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 }
 
 // httpErrorParams 汇总 HTTP 错误的结构化上下文，供上层做瞬时失败分类。
-//
 // 除状态码与 provider 错误码外，还保留重试决策相关头部：
 // retry_after / retry_after_ms（服务端建议的退避时长）、x_should_retry。
 // Python: 异常对象的 headers/response.headers 由 rail 侧读取；Go 侧扁平进 params。
@@ -619,7 +604,6 @@ func httpErrorParams(resp *http.Response) map[string]any {
 }
 
 // ExtractHTTPHeaders 从 effective headers 提取用于 HTTP 请求的头部。
-//
 // extra_headers 是 OpenAI SDK 的概念，我们的 HTTP 请求直接设置头部。
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
 func ExtractHTTPHeaders(effectiveHeaders map[string]string) map[string]string {
@@ -632,7 +616,6 @@ func ExtractHTTPHeaders(effectiveHeaders map[string]string) map[string]string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 OpenAI 和 OpenRouter 客户端到全局注册表。
-//
 // Python: OpenAIModelClient.__client_name__ = ["OpenAI", "OpenRouter"]
 // 通过 __init_subclass__ 自动注册。
 func init() {

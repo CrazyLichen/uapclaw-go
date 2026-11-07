@@ -12,10 +12,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // JSONFileConnector 通用 JSON 文件 I/O 连接器。
-//
 // 处理文件读写操作，对数据结构无关——调用方负责序列化/反序列化。
 // 自动创建父目录，UTF-8 编码。
-//
 // Python: openjiuwen/extensions/context_evolver/core/file_connector/json_file_connector.py
 type JSONFileConnector struct {
 	indent      int

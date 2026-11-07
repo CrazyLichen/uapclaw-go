@@ -1,8 +1,6 @@
 // Package runtime 提供 host 侧运行时编排能力（运行时事件、chat turn 编排、请求解析、plan 状态机）。
-//
 // 该包对齐 Python `jiuwenswarm/runtime/`：把"选 agent、每轮该处于什么运行模式、
 // 计划状态该不该变、控制事件怎么下发"从 adapter 与 server 里抽出来，由运行时统一裁决。
-//
 // 文件目录：
 //
 //	runtime/

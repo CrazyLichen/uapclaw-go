@@ -1,5 +1,4 @@
 // Package context_engineer 提供 DeepAgent 上下文引擎护栏实现。
-//
 // 包含两个核心 Rail：
 //   - ContextProcessorRail：配置和注入上下文引擎处理器，修复不完整的 tool_call/ToolMessage 配对，
 //     刷新任务状态，注入 offload 提示节

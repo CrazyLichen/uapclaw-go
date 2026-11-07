@@ -22,7 +22,6 @@ type ExtractOption struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Extractor 抽取器抽象接口，用于三元组等信息抽取。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/extractor/base.py (Extractor)
 // 注意：不建 Processor 基接口（13.5/13.10 既定决策），Process 作为
 // Processor 契约兼容入口直接挂在接口上（对齐 Chunker/Parser 风格）。

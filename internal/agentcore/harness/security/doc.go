@@ -1,6 +1,5 @@
 // Package security 提供 harness 权限安全基础设施，包括权限模型、分层策略评估、
 // 模式匹配、Shell AST 解析、外部目录检查、权限建议构建和权限引擎。
-//
 // 核心组件：
 //   - PermissionEngine：权限引擎，组合 TieredPolicy + ExternalDirectoryChecker 评估工具权限
 //   - EvaluateTieredPolicy：分层策略评估（优先级从高到低依次为 tool-deny、builtin-param、
@@ -12,7 +11,6 @@
 //
 // 运行时代码仍以 map[string]any 承载 YAML/JSON 中的 permissions，
 // 本包的结构体用于静态类型检查与文档。
-//
 // 文件目录：
 //
 //	security/

@@ -1,9 +1,7 @@
 // Package rb 提供 ReasoningBank 算法的检索管线和 MaTTS 操作。
-//
 // ReasoningBank 通过向量搜索检索推理策略记忆，检索路径比 ReMe 更简单
 // （无重排/改写步骤）。MaTTS（Memory-aware Test-Time Scaling）提供
 // 并行/串行多轨迹缩放和自对比记忆提取能力。
-//
 // 文件目录：
 //
 //	rb/

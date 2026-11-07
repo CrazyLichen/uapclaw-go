@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentMgr Agent 资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
-//
 // Python: AgentMgr (openjiuwen/core/runner/resources_manager/agent_manager.py)
 type AgentMgr struct {
 	AbstractManager[interfaces.BaseAgent]
@@ -38,7 +37,6 @@ func NewAgentMgr() AgentMgr {
 
 // AddAgent 注册 Agent 提供者。
 // 调用 AbstractManager.RegisterProvider 将 provider 包装后存入注册表。
-//
 // Python: AgentMgr.add_agent(agent_id, provider)
 //
 // ⤵️ 预留：9.84 DistRunner + 10.3.3 AgentAdapter 实现后回填分布式逻辑。
@@ -91,7 +89,6 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 }
 
 // RemoveAgent 注销 Agent 提供者，返回被注销的 provider。
-//
 // Python: AgentMgr.remove_agent(agent_id)
 //
 // ⤵️ 预留：9.84 + 10.3.3 实现后回填：RemoteAgent 的清理逻辑（stop AgentAdapter、pop _remote_agents）
@@ -125,7 +122,6 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 // GetAgent 获取 Agent 实例。
 // 调用 AbstractManager.GetResource 获取 provider 并执行。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 get_agent 返回 None 行为。
-//
 // Python: AgentMgr.get_agent(agent_id)
 //
 // ⤵️ 预留：9.84 + 10.3.3 实现后回填：_remote_agents.get() 优先查找逻辑

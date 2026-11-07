@@ -477,7 +477,6 @@ func (d *DeepAdapter) buildSkillCreateRail() *evolution.SkillCreateRail {
 
 // getSkillsDir 获取技能目录路径。
 // 对齐 Python: get_agent_skills_dir() → agent workspace 下的 skills 子目录。
-//
 // 原实现优先读 react.skills_dir，但该键在出厂模板与 Python 侧均不存在
 // （Python 直接调用 get_agent_skills_dir()），属无人消费的死分支，已删除。
 func (d *DeepAdapter) getSkillsDir() string {
@@ -495,7 +494,6 @@ func (d *DeepAdapter) getLanguage() string {
 }
 
 // getSkillCreateEnabled 获取是否启用技能创建。
-//
 // Python: _get_skill_create_enabled(config) (interface_deep.py:268-280)
 // 顺序：环境变量 SKILL_CREATE 优先 → react.evolution.skill_create → 默认 false。
 // 原实现读的是 skill_create_enabled 且默认 true，与 Python 不一致：
@@ -535,7 +533,6 @@ func (d *DeepAdapter) buildSubagentRail() *subagent.SubagentRail {
 
 // buildSecurityRail 构建安全护栏。
 // ✅ 已回填：SafetyPromptRail（对齐 Python: _build_security_rail() — SecurityRail()）
-//
 // Python: _build_security_rail() (line 2033-2042)
 // Python: try/except 包裹创建过程，失败时 warning 并返回 nil
 func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.AgentRail {
@@ -557,7 +554,6 @@ func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.
 
 // buildMemoryRail 构建记忆护栏。
 // ✅ 已回填：MemoryRail（对齐 Python: _build_memory_rail() — MemoryRail）
-//
 // Python: _build_memory_rail(mode) (line 2044-2072)
 func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 	// Python: try/except 包裹创建过程
@@ -614,7 +610,6 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 // buildExternalMemoryRail 构建外接记忆护栏。
 // 对齐 Python: _build_external_memory_rail() — 委托 swarm memory 包 builder
 // （user_id/scope_id 默认 __default__ 由 builder 处理，偏差 #4 修正后不再回退 agentName）
-//
 // S-11: 必须传 d.configBase（完整配置）而非 d.configCache（react 段快照）——
 // memory.engine / memory.external 是 config.yaml 顶级段键，Python 侧用的是
 // get_config()（interface_deep.py:5328-5331）；传 react 段会使
@@ -625,7 +620,6 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 
 // handleMemoryRailByConfig 按配置注册/注销 MemoryRail。
 // ✅ 已回填：handleMemoryRailByConfig（对齐 Python: _handle_memory_rail_by_config()）
-//
 // Python: _handle_memory_rail_by_config(mode) (line 5296-5320)
 //
 // 注意：memory.mode / modes.agent.<mode>.memory / memory.engine 均为
@@ -779,7 +773,6 @@ func (d *DeepAdapter) buildAvatarRail() sainterfaces.AgentRail {
 
 // buildRuntimePromptRail 构建运行时提示词护栏。
 // ✅ 已回填：RuntimePromptRail（对齐 Python: _build_runtime_prompt_rail() — RuntimePromptRail(language, channel)）
-//
 // Python: _build_runtime_prompt_rail() (line 2156-2170)
 func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
 	// Python: default_channel = "acp" if self._is_acp_tool_profile(self._instance_overrides) else self._resolve_prompt_channel()
@@ -799,7 +792,6 @@ func (d *DeepAdapter) buildRuntimePromptRail() *commrails.RuntimePromptRail {
 
 // buildResponsePromptRail 构建响应提示词护栏。
 // ✅ 已回填：ResponsePromptRail（对齐 Python: _build_response_prompt_rail() — ResponsePromptRail()）
-//
 // Python: _build_response_prompt_rail() (line 2171-2180)
 func (d *DeepAdapter) buildResponsePromptRail() sainterfaces.AgentRail {
 	rail := commrails.NewResponsePromptRail()
@@ -815,7 +807,6 @@ func (d *DeepAdapter) buildContextAssembleRail(mode string) sainterfaces.AgentRa
 }
 
 // buildContextProcessorRail 构建上下文处理护栏，并把 yaml 里的 processor 配置透传进去。
-//
 // Python: _build_context_processor_rail(config) (interface_deep.py L346-395)
 //
 // 覆盖机制走 ProcessorSpec.ConfigOverrides（字段级部分覆盖），因此 yaml 里的绝对阈值会先
@@ -857,7 +848,6 @@ func (d *DeepAdapter) buildContextProcessorRail(reactCfg map[string]any) sainter
 }
 
 // resolveSessionMemoryConfig 解析 context_engine_config 里的 session memory 配置。
-//
 // Python: _resolve_session_memory_config (interface_deep.py:334-343)
 //
 //	raw = cfg.get("session_memory_config") or cfg.get("session_memory")
@@ -936,7 +926,6 @@ func firstTruthyValue(values ...any) any {
 
 // buildPermissionRail 构建权限护栏。
 // ✅ 已回填：PermissionInterruptRail（对齐 Python: _build_permission_rail() — build_permission_rail()）
-//
 // Python: build_permission_rail(config, llm, model_name) (interrupt_helpers.py L16-281)
 // Python: _build_permission_rail() (interface_deep.py L2213-2250)
 func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterfaces.AgentRail {
@@ -1007,7 +996,6 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 }
 
 // UpdateAgentRails 幂等补挂 agent 模式 rail（plan/fast 已合并为单一 agent 模式）。
-//
 // Python: _update_agent_rails（interface_deep.py:13981-14075）。合并后不再按子模式分叉：
 // 任务规划/子代理/演进 rail 恒在，记忆固定读 modes.agent，上下文 rail 统一 agent 实例。
 func (d *DeepAdapter) UpdateAgentRails(ctx context.Context, sessionID, mode string) {
@@ -1028,7 +1016,6 @@ func (d *DeepAdapter) UpdateAgentRails(ctx context.Context, sessionID, mode stri
 }
 
 // ensureTaskPlanningRail 确保 todo rail 常驻（plan/fast 合并后两种模式都需要）。
-//
 // Python: TaskPlanningRail 属默认 rail 集合，inject_prompt=False（由 rail 自身控制）。
 func (d *DeepAdapter) ensureTaskPlanningRail(ctx context.Context) {
 	if d.taskPlanningRail != nil || d.instance == nil {
@@ -1047,7 +1034,6 @@ func (d *DeepAdapter) ensureTaskPlanningRail(ctx context.Context) {
 }
 
 // ensureSubagentRail 确保 SubagentRail 已注册。
-//
 // 上游把 SubagentRail 放进冷启动 rail 集合（interface_deep.py:11545），因此这里做
 // 「缺失则补挂」，不再随 plan/normal 切换注册或卸载。
 func (d *DeepAdapter) ensureSubagentRail(ctx context.Context) {
@@ -1067,7 +1053,6 @@ func (d *DeepAdapter) ensureSubagentRail(ctx context.Context) {
 }
 
 // syncMultiSessionTools 按模式同步 multi-session 工具可见性。
-//
 // Python: _update_tools_for_mode（interface_deep.py:14138-14150）只清理临时协程工具；
 // Go 侧保留「plan 模式卸载 session_*、normal 由 updateToolsForMode 重新注册」的既有装配，
 // 保证两种模式的工具集合与原实现一致。
@@ -1095,7 +1080,6 @@ func (d *DeepAdapter) syncMultiSessionTools(isPlan bool) {
 }
 
 // ensureContextAssembleRail 确保 ContextAssembleRail 是 agent 实例（幂等）。
-//
 // Python: _update_agent_rails 中 `if self._context_assemble_rail is None or
 // self._context_assemble_mode != "agent"` 才重建。
 func (d *DeepAdapter) ensureContextAssembleRail(ctx context.Context) {
@@ -1578,7 +1562,6 @@ func extractModelName(configBase map[string]any) string {
 // resolveModeMemory/getMemoryMode/isMemoryEnabled/isProactiveMemory 四函数
 // 已迁移至 swarm 侧记忆包导出版：commmem.ResolveModeMemory/GetMemoryMode/IsMemoryEnabled/IsProactiveMemory
 // （对齐 Python：这些函数定义在 jiuwenswarm/agents/harness/common/memory/config.py）
-//
 // isBuiltinMemoryAllowed、getMemoryEngine、isExternalMemoryEnabled、getExternalMemoryConfig、
 // buildOpenJiuwenProviderConfig、BuildExternalMemoryRail 六函数亦已迁移至 commmem 包
 // （对齐 Python：external_memory_config.py / external_memory_builder.py）
@@ -1636,7 +1619,6 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 }
 
 // buildModelAnomalyDetectionRail 按 execution_guard 配置构建模型异常检测 Rail。
-//
 // 配置缺省或 enabled 非 true 时返回 nil（对齐上游 retry_cfg.get("enabled", False)）；
 // 构造失败只告警不阻断冷启动（对齐上游 try/except 返回 None）。
 // Python: interface_deep.py L11036-11078 _build_model_anomaly_detection_rail

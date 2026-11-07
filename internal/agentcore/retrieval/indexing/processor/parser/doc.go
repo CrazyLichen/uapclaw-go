@@ -1,29 +1,23 @@
 // Package parser 提供文档解析抽象与具体解析器基座：把外部文档源
 // （文件路径/URL）解析为统一 reranker.Document，供 Chunker 分块。
-//
 // 知识检索入库管线：本包解析 → chunker 分块 → ComputeChunkEmbeddings
 // 嵌入 → VectorStore 入库。Parser 是管线第一站，与 Chunker 层
 // （13.5-13.9）呈前后手关系——Parser 产 Document，Chunker 吃 Document。
-//
 // 图片文件经 ImageParser 解析：归档到 images/ 目录并经 ImageCaptioner
 // 生成 caption，产出 metadata["image_path"] 供 13.4 多模态嵌入消费。
-//
 // PDF 文档经 PDFParser 双通道解析：ledongthuc 逐页文本 + pdfcpu 抽取嵌入
 // 图片（落盘 images/）经 ImageCaptioner 生成 caption，文本与 caption 按页
 // 拼接为单一 Document 文本。
-//
 // HTML/网页经三层链解析（13.14）：TxtMdParser ← HTMLFileParser（本地 .html
 // 文件，主内容选择器定位+文本净化）← WebPageParser（URL 抓取下载，verify
 // 密封 sum type 四变体配置 TLS）← WeChatArticleParser（微信公众号文章，
 // div#js_content 正文抽取）。Python classmethod 覆写语义经非导出
 // htmlParseDispatcher 接口注入实现（构造时指向最终实例）。
-//
 // 组合路由三件套（13.11）收口 Parser 层：AutoFileParser（扩展名 registry
 // 路由 + metadata 四键增强）+ AutoLinkParser（docMatcher 双形态 URL 路由，
 // 微信/网页先匹配先赢）+ AutoParser（顶层 URL/文件二选一，单入口
 // parse(path_or_url)）。llm_client 经 AutoLinkParser 转发时字面剔除
 // （对齐 Python 关键字调用天然不含）。
-//
 // 使用方式（对齐 Python Parser 继承体系）：
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
 //     构造时 NewBaseParser(self) 注入自身

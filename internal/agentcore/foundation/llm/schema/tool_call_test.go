@@ -40,7 +40,6 @@ func TestNewToolCall_WithOptions(t *testing.T) {
 }
 
 // TestToolCallDeltaOptions 验证增量帧 type 缺省时保留 "function" 默认值。
-//
 // 真实 SSE 只在首帧带 type，后续帧缺省；若把空串透传给 WithToolCallType，
 // mergeToolCalls 的同调用判定（两侧 type == "function"）失效，参数碎片会被
 // 拆成多个 ToolCall 逐个执行（真 LLM 团队模式下 leader 不建队的真因）。

@@ -1,5 +1,4 @@
 // Package agent_teams 提供生产级团队 Agent 系统。
-//
 // agent_teams 是多 Agent 协作的完整应用层，包含：
 //   - TeamAgent：可充当 Leader 或 Teammate 的核心编排节点
 //   - CoordinationKernel：协调内核（事件总线 + 调度器 + 生命周期）

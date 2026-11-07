@@ -126,7 +126,6 @@ type taskMemoryServiceConfig struct {
 
 // TaskMemoryService 任务记忆服务，提供记忆检索/总结/管理的统一入口。
 // 对齐 Python TaskMemoryService。
-//
 // Python: openjiuwen/extensions/context_evolver/service/task_memory_service.py
 type TaskMemoryService struct {
 	// serviceContext 共享服务上下文

@@ -14,11 +14,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ModelPoolEntry 模型池中的单个 LLM 端点条目。
-//
 // 描述一个可用的模型端点及其凭证和 Provider 信息。
 // ModelAllocator 从池中提取条目并转换为 TeamModelConfig，
 // 使每个团队成员可以与不同的端点通信，避免单端点速率限制争用。
-//
 // 两个标识符各有不同角色：
 //   - model_id（自动 UUID）：运行时客户端身份，透传到 ModelClientConfig.client_id，
 //     供 foundation 层资源管理器去重/缓存底层 HTTP 客户端。不持久化到 DB。
@@ -43,17 +41,14 @@ type ModelPoolEntry struct {
 	// 两个保留子键供 ToTeamModelConfig 使用：
 	//   - client: 合并到 ModelClientConfig（如 timeout、verify_ssl、ssl_cert、max_retries、custom_headers）
 	//   - request: 合并到 ModelRequestConfig（如 temperature、top_p、max_tokens、stop）
-	//
 	// 池条目的显式字段（api_key、api_base_url、api_provider、model_name）
 	// 始终覆盖 metadata 中同名键。
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // ModelRouterConfig 单端点路由器配置，多个模型名共享一组凭证。
-//
 // 当路由式后端（OpenRouter、LiteLLM proxy 等）通过一个 URL 和一个 API Key
 // 服务多个模型名时使用。在 TeamAgentSpec.build() 时展平为 ModelPoolEntry 列表。
-//
 // Python: ModelRouterConfig (openjiuwen/agent_teams/models/pool.py)
 type ModelRouterConfig struct {
 	// APIBaseURL API 基础 URL
@@ -80,9 +75,7 @@ type ModelPoolEntryOption func(*ModelPoolEntry)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewModelPoolEntry 创建 ModelPoolEntry 实例。
-//
 // ModelID 自动生成 UUID。可通过选项函数设置 Description、Metadata 等可选字段。
-//
 // Python: ModelPoolEntry(model_name=..., api_key=..., api_base_url=..., api_provider=...)
 func NewModelPoolEntry(modelName, apiKey, apiBaseURL, apiProvider string, opts ...ModelPoolEntryOption) *ModelPoolEntry {
 	entry := &ModelPoolEntry{
@@ -114,11 +107,9 @@ func WithMetadata(metadata map[string]any) ModelPoolEntryOption {
 }
 
 // ToTeamModelConfig 从池条目物化 TeamModelConfig。
-//
 // 保留的 metadata.client 和 metadata.request 子字典分别合并到
 // ModelClientConfig 和 ModelRequestConfig。池条目的显式字段
 // 始终覆盖 metadata 中同名键。
-//
 // Python: ModelPoolEntry.to_team_model_config()
 func (e *ModelPoolEntry) ToTeamModelConfig() TeamModelConfig {
 	// 提取 metadata 子字典
@@ -198,10 +189,8 @@ func (r *ModelRouterConfig) Validate() error {
 }
 
 // ToPoolEntries 将路由器展开为每个模型名一个 ModelPoolEntry。
-//
 // 每个展开条目共享 api_key/api_base_url/api_provider，
 // metadata 深拷贝以避免调用者意外交叉污染。
-//
 // Python: ModelRouterConfig.to_pool_entries()
 func (r *ModelRouterConfig) ToPoolEntries() []ModelPoolEntry {
 	entries := make([]ModelPoolEntry, 0, len(r.ModelNames))
@@ -220,15 +209,12 @@ func (r *ModelRouterConfig) ToPoolEntries() []ModelPoolEntry {
 }
 
 // InheritPoolIDs 从 current_pool 中继承 model_id 到 new_pool 的 bit-exact 匹配条目。
-//
 // ModelPoolEntry.model_id 透传为 ModelClientConfig.client_id，
 // foundation 客户端缓存可能使用它来去重 HTTP 客户端。仅在新旧条目的
 // 完整配置（除 model_id 外的所有字段）完全相同时才安全继承——
 // 否则使用旧 api_key 构建的缓存客户端可能静默服务本应使用新凭证的请求。
-//
 // 按位精确签名匹配：除 model_id 外的每个字段必须相同。
 // 多个同签名条目按池顺序一对一配对。无匹配的新条目保留自己的 model_id。
-//
 // Python: inherit_pool_ids()
 func InheritPoolIDs(currentPool, newPool []ModelPoolEntry) []ModelPoolEntry {
 	// 构建旧池签名→条目桶
@@ -260,10 +246,8 @@ func InheritPoolIDs(currentPool, newPool []ModelPoolEntry) []ModelPoolEntry {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // entrySignature 计算条目的规范签名（排除 model_id）。
-//
 // 两个具有相同签名的条目描述相同的逻辑端点、相同的认证和请求参数。
 // 任何差异（包括 api_key 轮换）产生不同签名，强制生成新的 model_id。
-//
 // Python: _entry_signature()
 func entrySignature(entry ModelPoolEntry) string {
 	// 构建排除 model_id 的 map

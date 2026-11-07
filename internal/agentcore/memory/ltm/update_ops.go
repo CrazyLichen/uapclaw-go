@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // UpdateMemByID 按 ID 更新记忆内容。
-//
 // ① emit_before MEMORY_UPDATED → ② 分布式锁 → applyScopeEmbedding → writeManager.UpdateMemByID
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_UPDATED) + update_mem_by_id
 func (m *LongTermMemory) UpdateMemByID(
@@ -42,7 +41,6 @@ func (m *LongTermMemory) UpdateMemByID(
 }
 
 // UpdateVariables 更新用户变量。
-//
 // 对齐 Python: LongTermMemory.update_variables(variables, user_id, scope_id)
 func (m *LongTermMemory) UpdateVariables(
 	ctx context.Context,

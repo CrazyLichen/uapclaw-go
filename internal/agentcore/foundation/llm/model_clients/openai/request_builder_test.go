@@ -123,7 +123,6 @@ func TestHandleExtraBody_ExistingExtraBody(t *testing.T) {
 // ──────────────────────────── 超时语义测试（C-A2）────────────────────────────
 
 // TestBuildHTTPRequest_流式无总超时 流式：Client.Timeout==0（读 body 由帧超时兜底）。
-//
 // 对齐设计文档批次 C-A：总时长语义会切断持续吐字的健康流（c6cd13aa 的残留根因）。
 func TestBuildHTTPRequest_流式无总超时(t *testing.T) {
 	timeout := 1800.0
@@ -168,7 +167,6 @@ func TestBuildHTTPRequest_Invoke走ctxDeadline(t *testing.T) {
 }
 
 // TestBuildHTTPRequest_默认超时360 未配置 timeout 时取默认 360。
-//
 // Python: schema/config.py:145 timeout 默认 360（>= stream_first_chunk_timeout=300 不变量）
 func TestBuildHTTPRequest_默认超时360(t *testing.T) {
 	_, client, err := BuildHTTPRequest(context.Background(), "http://x", "k",
@@ -184,7 +182,6 @@ func TestBuildHTTPRequest_默认超时360(t *testing.T) {
 // ──────────────────────────── NormalizeAPIBase 测试（C-E1）────────────────────────────
 
 // TestNormalizeAPIBase_矩阵 对齐 openai_model_client.py:307-321 _normalize_openai_base_url。
-//
 // 不推断 /v1；剥空白、去尾斜杠、剥掉已带的 /chat/completions（只剥一层）→ 避免双段 404。
 func TestNormalizeAPIBase_矩阵(t *testing.T) {
 	cases := []struct{ in, want string }{
@@ -221,7 +218,6 @@ func isRequestEncodingError(t *testing.T, err error) bool {
 }
 
 // TestBuildHTTPRequest_编码错误分类 NaN/不可序列化/非 UTF-8 → 181004 + stage=request_encoding。
-//
 // Python: utils/request_encoding.py:27-35（SDK _build_request 边界）
 // + openai_model_client.py:2011/2228 的 details=={"stage":"request_encoding"} 放行。
 func TestBuildHTTPRequest_编码错误分类(t *testing.T) {
@@ -261,7 +257,6 @@ func TestBuildHTTPRequest_正常请求不误判(t *testing.T) {
 
 // TestBuildHTTPRequest_鉴权头按AuthMode none/custom_headers(空key) → 省略；
 // api_key 缺 key → EMPTY 占位；custom_headers 有 key → 正常 Bearer。
-//
 // Python: openai_model_client.py:298-305 _should_omit_authorization
 // + :326-330 _resolved_api_key_for_config
 func TestBuildHTTPRequest_鉴权头按AuthMode(t *testing.T) {

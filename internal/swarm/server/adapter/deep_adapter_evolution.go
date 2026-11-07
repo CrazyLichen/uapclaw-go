@@ -123,7 +123,6 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 }
 
 // emitPostCompactUsage 手动压缩成功后推送 post_compact 用量快照。
-//
 // 只在压缩真的发生（result=compressed）时调用；窗口来源与 rail 侧一致：
 // 全局 context_window_tokens 优先，其次模型条目 override，再按模型名解析。
 func (d *DeepAdapter) emitPostCompactUsage(
@@ -222,10 +221,8 @@ func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[
 
 // watchEvolutionAndPush 后台轮询 SkillEvolutionRail 的被动演进事件并推送。
 // ✅ 已回填（对齐 Python: _watch_evolution_and_push() interface_deep.py L5725-5912）
-//
 // S-03: 对齐 Python 轮询语义——wait=false 非阻塞 drain + 1s 空闲休眠 + 事件超时检测；
 // M-05: 每个退出路径调用 cleanupEvolutionRail 清理后台任务（对齐 Python _cleanup_evolution_rail）。
-//
 // 主循环结构（对齐 Python）：
 //  1. auto_scan 检查（入口 + 每次循环）
 //  2. 首个可见 progress 时推送 "start" status
@@ -489,7 +486,6 @@ func buildRecapPrompt(memory string) string {
 
 // handleEvolutionApproval 处理演进审批。
 // ✅ 已回填（对齐 Python: _handle_evolution_approval()）
-//
 // 根据 request_id 前缀路由到 SkillEvolutionRail.ApproveRecord / RejectRecord
 func (d *DeepAdapter) handleEvolutionApproval(ctx context.Context, requestID string, answers []ApprovalAnswer) bool {
 	if d.skillEvolutionRail == nil {

@@ -27,7 +27,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // providerTool 将 MemoryProvider 的 ToolSchema 桥接为 tool.Tool 接口。
-//
 // 每个 providerTool 实例对应 Provider 提供的一个工具，Invoke 委托给
 // provider.HandleToolCall()，Stream 不支持。
 // 对齐 Python: LocalFunction(card=tool_card, func=_tool_func) 注册模式。
@@ -41,7 +40,6 @@ type providerTool struct {
 }
 
 // ExternalMemoryRail 外部记忆护栏，桥接 MemoryProvider 到 Agent 生命周期。
-//
 // 生命周期:
 //  1. Init: 注册 Provider 工具 + 注入 system_prompt_block
 //  2. BeforeInvoke: 调 provider.Initialize()
@@ -489,7 +487,6 @@ func (r *ExternalMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEve
 func (pt *providerTool) Card() *tool.ToolCard { return pt.card }
 
 // GetCallTimeout 返回外层调用预算，沿用卡片级策略。
-//
 // 外部记忆 provider 自带网络超时，不需要额外清理宽限。
 func (pt *providerTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
 	return tool.BaseCallTimeout(inputs, defaultTimeout)

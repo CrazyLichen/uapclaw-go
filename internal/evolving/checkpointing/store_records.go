@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StoreRecordsHelper 演进记录 CRUD 和持久化辅助。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/store_records.py StoreRecordsHelper
 type StoreRecordsHelper struct {
 	// store 所属的 EvolutionStore 实例

@@ -27,7 +27,6 @@ type producerEntry struct {
 }
 
 // MessageQueuePulsar Pulsar 消息队列封装。
-//
 // Python: MessageQueuePulsar(MessageQueueBase)
 type MessageQueuePulsar struct {
 	// url Pulsar 服务地址
@@ -53,7 +52,6 @@ type MessageQueuePulsar struct {
 }
 
 // PulsarSubscription Pulsar topic 订阅。
-//
 // Python: PulsarSubscription(SubscriptionBase)
 type PulsarSubscription struct {
 	// topic 订阅的 topic 名
@@ -79,12 +77,10 @@ type PulsarSubscription struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MaxProducers producer LRU 容量上限。
-//
 // Python: MessageQueuePulsar.MAX_PRODUCERS = 10000
 const MaxProducers = 10000
 
 // DefaultSubscriptionName 默认订阅名。
-//
 // Python: MessageQueuePulsar.DEFAULT_SUBSCRIPTION_NAME = "default"
 const DefaultSubscriptionName = "default"
 
@@ -92,7 +88,6 @@ const DefaultSubscriptionName = "default"
 const logComponent = logger.ComponentAgentCore
 
 // receiveTimeout 单次 Receive 的超时时间。
-//
 // Python: consumer.receive(timeout_millis=1000)
 const receiveTimeout = time.Second
 
@@ -104,7 +99,6 @@ var errQueueNotRunning = errors.New("pulsar message queue is not running")
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageQueuePulsar 创建 Pulsar 消息队列，不建立连接。
-//
 // Python: MessageQueuePulsar.__init__(pulsar_config)
 func NewMessageQueuePulsar(cfg *config.PulsarConfig) *MessageQueuePulsar {
 	url := ""
@@ -127,7 +121,6 @@ func NewMessageQueuePulsar(cfg *config.PulsarConfig) *MessageQueuePulsar {
 }
 
 // Start 启动消息队列。
-//
 // Python: MessageQueuePulsar.start() L101-107
 // Go 侧 start 无返回值（接口约束），建客户端失败时记 Error 日志并保持未运行。
 func (q *MessageQueuePulsar) Start() {
@@ -154,7 +147,6 @@ func (q *MessageQueuePulsar) Start() {
 }
 
 // Stop 停止消息队列，关闭全部订阅与 producer。
-//
 // Python: MessageQueuePulsar.stop() L109-124
 func (q *MessageQueuePulsar) Stop(ctx context.Context) error {
 	if !q.running.Load() {
@@ -210,7 +202,6 @@ func (q *MessageQueuePulsar) Stop(ctx context.Context) error {
 }
 
 // Subscribe 创建 topic 订阅。
-//
 // Python: MessageQueuePulsar.subscribe(topic) L126-139
 // Python 用 try/except 包住全部步骤（含 _validate_running），统一转成订阅错误。
 func (q *MessageQueuePulsar) Subscribe(topic string) (message_queue.SubscriptionBase, error) {
@@ -253,7 +244,6 @@ func (q *MessageQueuePulsar) Subscribe(topic string) (message_queue.Subscription
 }
 
 // Unsubscribe 取消 topic 订阅。
-//
 // Python: MessageQueuePulsar.unsubscribe(topic) L141-145
 // 不存在的 topic 返回 nil（对齐 Python pop(topic, None) 后空判）。
 func (q *MessageQueuePulsar) Unsubscribe(ctx context.Context, topic string) error {
@@ -277,7 +267,6 @@ func (q *MessageQueuePulsar) Unsubscribe(ctx context.Context, topic string) erro
 }
 
 // Produce 发布消息到指定 topic。
-//
 // Python: MessageQueuePulsar.produce_message(topic, message) L151-177
 // Python 用 try/except 包住全部步骤（含 _validate_running），统一转成生产错误。
 func (q *MessageQueuePulsar) Produce(ctx context.Context, topic string, msg message_queue.QueueMessageBase) error {
@@ -304,7 +293,6 @@ func (s *PulsarSubscription) SetMessageHandler(handler func(ctx context.Context,
 }
 
 // Activate 激活订阅，启动消费 goroutine（幂等）。
-//
 // Python: PulsarSubscription.activate() L35-39
 func (s *PulsarSubscription) Activate() {
 	s.stateMu.Lock()
@@ -328,7 +316,6 @@ func (s *PulsarSubscription) Activate() {
 }
 
 // Deactivate 停用订阅，同步等待消费 goroutine 退出（幂等）。
-//
 // Python: PulsarSubscription.deactivate() L41-59
 // Go 接口无 ctx/error 返回（偏差 D3），改为同步阻塞，最长等待一个 receive 超时周期。
 func (s *PulsarSubscription) Deactivate() {
@@ -372,7 +359,6 @@ func newPulsarSubscription(topic string, consumer pulsarConsumerAPI) *PulsarSubs
 }
 
 // consumeLoop 消费循环主逻辑。
-//
 // Python: PulsarSubscription._consume_loop() L64-83
 func (s *PulsarSubscription) consumeLoop(ctx context.Context) {
 	defer close(s.done)
@@ -447,7 +433,6 @@ func (s *PulsarSubscription) consumeLoop(ctx context.Context) {
 }
 
 // callHandler 调用已注册的处理器；未注册时返回 nil。
-//
 // Python: if self._handler: await self._handler(payload)
 func (s *PulsarSubscription) callHandler(ctx context.Context, payload map[string]any) error {
 	s.handlerMu.RLock()
@@ -496,7 +481,6 @@ func (q *MessageQueuePulsar) produceMessage(ctx context.Context, topic string, m
 }
 
 // getOrCreateProducer 获取或创建 topic 对应的 producer，带 LRU 淘汰。
-//
 // Python: MessageQueuePulsar._get_or_create_producer(topic) L179-208
 // 单锁内完成全部判断与创建（偏差 D2：取消 Python 的双检快路径，
 // 因其无锁读 map 在 Go 属数据竞争）。

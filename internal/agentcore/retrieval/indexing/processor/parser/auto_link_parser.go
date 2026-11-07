@@ -13,10 +13,8 @@ import (
 
 // docMatcher 路由匹配器（Python Union[re.Pattern, Callable[[str], bool]]
 // 对应物，非导出接口）。
-//
 // 两实现：regexpMatcher（正则形态）/ funcMatcher（可调用形态）。
 // 经 NewRegexpMatcher/NewFuncMatcher 导出包装供外部注入自定义路由。
-//
 // Python: auto_link_parser.py Union[re.Pattern, Callable[[str], bool]]
 type docMatcher interface {
 	// MatchDoc 匹配文档源。
@@ -24,7 +22,6 @@ type docMatcher interface {
 }
 
 // regexpMatcher 正则形态匹配器。
-//
 // MatchDoc 对齐 Python pattern_or_callable.match(doc.strip())。
 type regexpMatcher struct {
 	// re 编译后正则（复用 13.14 httpURLPattern/wechatMPURLPattern 同款 *regexp.Regexp）
@@ -32,7 +29,6 @@ type regexpMatcher struct {
 }
 
 // funcMatcher 可调用形态匹配器。
-//
 // MatchDoc 对齐 Python callable(pattern_or_callable(doc))——原样传入不 strip。
 type funcMatcher struct {
 	// fn 匹配函数
@@ -48,11 +44,9 @@ type linkRoute struct {
 }
 
 // AutoLinkParser URL 模式路由解析器（先匹配先赢）。
-//
 // 组合解析器（13.10 spec 预告模式）：嵌入 BaseParser + 构造注入 self +
 // 覆写整体 Parse/Supports。默认路由：微信文章 → WeChatArticleParser、
 // 通用 http(s) → WebPageParser（13.14 产出，每次构造新实例）。
-//
 // Python: auto_link_parser.py AutoLinkParser
 type AutoLinkParser struct {
 	// BaseParser 模板适配器
@@ -77,7 +71,6 @@ func NewFuncMatcher(fn func(string) bool) docMatcher {
 }
 
 // NewLinkRoute 构造单条路由（审查修复 S-01：导出构造打通包外注入链路）。
-//
 // linkRoute 字段非导出，包外无法编写复合字面量——此前 NewAutoLinkParser 的
 // 导出参数 routes 不可构造（注入链路断裂）；经本构造 + NewRegexpMatcher/
 // NewFuncMatcher 组合，外部可完整注入自定义路由表（对齐 Python routes
@@ -87,11 +80,9 @@ func NewLinkRoute(m docMatcher, p Parser) linkRoute {
 }
 
 // NewAutoLinkParser 构造 AutoLinkParser（切片参数二分，决策 7）。
-//
 // routes == nil → defaultRoutes() 两条默认路由（微信优先）；
 // routes == 非nil空切片 → 字面空表（Parse 恒返回空切片，对齐 Python routes=[]）；
 // routes 非空 → 字面使用调用方路由表。
-//
 // Python: auto_link_parser.py AutoLinkParser.__init__
 // （routes if routes is not None else _default_routes()——None/[]/非空三态）
 func NewAutoLinkParser(routes []linkRoute) (*AutoLinkParser, error) {
@@ -112,12 +103,10 @@ func NewAutoLinkParser(routes []linkRoute) (*AutoLinkParser, error) {
 }
 
 // Parse 解析 URL：遍历路由表首个命中即委托。
-//
 // 命中 → Debug 日志 → 底层 parser.Parse（决策 3：转发前剔除 LLMClient——
 // Python parser.parse(doc, doc_id=doc_id, **kwargs) 关键字调用天然不含
 // llm_client，Go opts 整体转发无法天然丢弃，显式剔除字面对齐）。
 // 无命中 → 空切片。
-//
 // Python: auto_link_parser.py AutoLinkParser.parse
 func (p *AutoLinkParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
 	for _, route := range p.routes {
@@ -133,7 +122,6 @@ func (p *AutoLinkParser) Parse(ctx context.Context, doc string, opts ...ParseOpt
 }
 
 // Supports 检查是否支持该文档源：非空 http(s) URL 且任一路由命中。
-//
 // Python: auto_link_parser.py AutoLinkParser.supports
 func (p *AutoLinkParser) Supports(doc string) bool {
 	if doc == "" {
@@ -154,11 +142,9 @@ func (p *AutoLinkParser) Supports(doc string) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultRoutes 构造默认路由表（每次新解析器实例，对齐 Python _default_routes()）。
-//
 // 微信优先：WECHAT_MP_URL_PATTERN → WeChatArticleParser；
 // 兜底：HTTP_URL_PATTERN → WebPageParser。两构造 error 直接上抛
 // （Python 侧构造无异常面，Go 构造含 error 为语言差异）。
-//
 // Python: auto_link_parser.py _default_routes
 func defaultRoutes() ([]linkRoute, error) {
 	wechatParser, err := NewWeChatArticleParser()
@@ -176,14 +162,11 @@ func defaultRoutes() ([]linkRoute, error) {
 }
 
 // matchDoc 双形态匹配 dispatch（Python _match_doc 对应物）。
-//
 // nil 防御（审查修复 S-01）：nil 路由视作不命中并 Warn（对齐决策 6
 // "nil 防御优先"——Python 传垃圾路由抛 AttributeError 可被上层捕获，
 // Go panic 不可恢复，防御为不命中更安全）。
-//
 // regexpMatcher 内部 strip（对齐 pattern.match(doc.strip())）；
 // funcMatcher 原样传入（对齐 callable(doc)）。
-//
 // Python: auto_link_parser.py _match_doc
 func matchDoc(m docMatcher, doc string) bool {
 	if m == nil {
@@ -195,7 +178,6 @@ func matchDoc(m docMatcher, doc string) bool {
 }
 
 // MatchDoc 正则形态：strip 后头部锚定匹配（对齐 Python pattern.match(doc.strip())）。
-//
 // 审查修复 M-01：Python re.match 要求从串首匹配；Go MatchString 是
 // search 语义（任意位置命中）。改用 FindStringIndex 判 loc[0]==0 精确
 // 复刻 match 头部锚定——默认路由正则自带 ^ 锚定零差异，自定义注入
@@ -211,7 +193,6 @@ func (m *funcMatcher) MatchDoc(doc string) bool {
 }
 
 // withoutLLMClient 剔除 LLMClient 后重建 opts（决策 3）。
-//
 // Python parser.parse(doc, doc_id=doc_id, **kwargs) 关键字调用天然不含
 // llm_client；Go opts 整体转发无法天然丢弃，显式重建字面对齐。
 // 保留 DocID/Extra/Timeout/UserAgent/Verify/HTTPClient，仅置空 LLMClient。

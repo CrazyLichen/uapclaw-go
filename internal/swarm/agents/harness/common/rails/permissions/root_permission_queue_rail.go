@@ -1,5 +1,4 @@
 // Root 工具身份 rail 与缺失兄弟卡的权限闩锁。
-//
 // 该 rail 站在工具执行入口，负责：
 //  1. 给本次工具调用发号码牌（ToolInvocationKeyV1）并绑定到回调上下文；
 //  2. 首次执行时把卡置为 active；若引擎随后抛权限中断，则冻结成 pending；
@@ -24,7 +23,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RootPermissionRequestBinding 由 Host 适配器边界选定的可信 root 身份。
-//
 // Python: @dataclass(frozen=True, slots=True) RootPermissionRequestBinding
 type RootPermissionRequestBinding struct {
 	// RootSessionID 根会话标识
@@ -36,7 +34,6 @@ type RootPermissionRequestBinding struct {
 }
 
 // RootPermissionResume 在 Auto/Base 权限消费输入之前绑定的精确待决卡状态。
-//
 // Python: @dataclass(frozen=True, slots=True) RootPermissionResume
 type RootPermissionResume struct {
 	// Card 待决卡
@@ -46,7 +43,6 @@ type RootPermissionResume struct {
 }
 
 // RootNonPermissionResume 在权限生命周期之外被准入的精确 Core 续接。
-//
 // Python: @dataclass(frozen=True, slots=True) RootNonPermissionResume
 type RootNonPermissionResume struct {
 	// RootSessionID 根会话标识
@@ -58,7 +54,6 @@ type RootNonPermissionResume struct {
 }
 
 // RootPermissionWrapperResume 指向真实 Core 中断项的请求级一次性引用。
-//
 // Python: @dataclass(slots=True) RootPermissionWrapperResume
 type RootPermissionWrapperResume struct {
 	// ToolCall 对应的工具调用
@@ -70,7 +65,6 @@ type RootPermissionWrapperResume struct {
 }
 
 // rootPermissionRequestBindingHolder 承载绑定三态。
-//
 // Python 用单个哨兵 _UNBOUND 表示"从未绑定"，与"绑定 None"区分。
 // Go 无单值多态，用 bound 标志 + value 双字段表达同一语义。
 type rootPermissionRequestBindingHolder struct {
@@ -134,10 +128,8 @@ type rootPermissionBindingKey struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BindRootPermissionRequest 绑定一个 root 权限请求，返回派生 context 与清理函数。
-//
 // enabled 为 false 时绑定"明确禁用"（value 为 nil 但 bound 为 true），
 // 与"从未绑定"区分开（对齐 Python 的 set(None) vs _UNBOUND）。
-//
 // Python: bind_root_permission_request(*, root_session_id, request_id, enabled, queue=None)
 func BindRootPermissionRequest(
 	ctx context.Context,
@@ -170,16 +162,12 @@ func BindRootPermissionRequest(
 }
 
 // ResetRootPermissionRequest 恢复绑定前的状态。
-//
 // Go 的 context 不可变，丢弃派生 ctx 即等价于 Python 的 reset(token)。
-//
 // Python: reset_root_permission_request(token)
 func ResetRootPermissionRequest(context.Context) {}
 
 // CurrentRootPermissionQueue 返回当前绑定的队列。
-//
 // 未绑定时报错 root_permission_request_unbound；绑定明确禁用时返回 nil。
-//
 // Python: current_root_permission_queue()
 func CurrentRootPermissionQueue(ctx context.Context) (*RootPermissionQueue, error) {
 	holder, ok := ctx.Value(rootPermissionBindingKey{}).(*rootPermissionRequestBindingHolder)
@@ -193,7 +181,6 @@ func CurrentRootPermissionQueue(ctx context.Context) (*RootPermissionQueue, erro
 }
 
 // OptionalRootPermissionQueue 只在当前请求安装了队列时返回它，否则返回 nil。
-//
 // Python: optional_root_permission_queue()
 func OptionalRootPermissionQueue(ctx context.Context) *RootPermissionQueue {
 	holder, ok := ctx.Value(rootPermissionBindingKey{}).(*rootPermissionRequestBindingHolder)
@@ -204,7 +191,6 @@ func OptionalRootPermissionQueue(ctx context.Context) *RootPermissionQueue {
 }
 
 // ToolInvocationKeyFromContext 从回调上下文取得本次调用的号码牌。
-//
 // Python: tool_invocation_key_from_context(ctx)
 func ToolInvocationKeyFromContext(cbc *agentinterfaces.AgentCallbackContext) *ToolInvocationKeyV1 {
 	if cbc == nil {
@@ -222,7 +208,6 @@ func ToolInvocationKeyFromContext(cbc *agentinterfaces.AgentCallbackContext) *To
 }
 
 // RootPermissionResumeFromContext 从回调上下文取得权限续接状态。
-//
 // Python: root_permission_resume_from_context(ctx)
 func RootPermissionResumeFromContext(cbc *agentinterfaces.AgentCallbackContext) *RootPermissionResume {
 	if cbc == nil {
@@ -240,7 +225,6 @@ func RootPermissionResumeFromContext(cbc *agentinterfaces.AgentCallbackContext) 
 }
 
 // RootNonPermissionResumeFromContext 从回调上下文取得非权限续接状态。
-//
 // Python: root_nonpermission_resume_from_context(ctx)
 func RootNonPermissionResumeFromContext(cbc *agentinterfaces.AgentCallbackContext) *RootNonPermissionResume {
 	if cbc == nil {
@@ -258,9 +242,7 @@ func RootNonPermissionResumeFromContext(cbc *agentinterfaces.AgentCallbackContex
 }
 
 // PutRootNonPermissionResumeInInputs 把一个 Host 校验过的回调标记写入共享 RunContext 状态。
-//
 // 路径与 Python 一致：inputs["run"]["context"]["extra"]。
-//
 // Python: put_root_nonpermission_resume_in_inputs(inputs, prepared, *, wrappers=())
 func PutRootNonPermissionResumeInInputs(
 	inputs map[string]any,
@@ -288,7 +270,6 @@ func PutRootNonPermissionResumeInInputs(
 }
 
 // ConsumePermissionWrapperResume 只消费本次回调上的标记，不消费继承来的 extra 标志。
-//
 // Python: consume_permission_wrapper_resume(ctx)
 func ConsumePermissionWrapperResume(cbc *agentinterfaces.AgentCallbackContext) bool {
 	if cbc == nil {
@@ -308,9 +289,7 @@ func ConsumePermissionWrapperResume(cbc *agentinterfaces.AgentCallbackContext) b
 }
 
 // MarkPermissionInterruptRequest 在回调上下文上标记本次权限中断请求。
-//
 // 已标记过不同的请求时报错（一个回调只能对应一个权限中断）。
-//
 // Python: mark_permission_interrupt_request(ctx, request)
 func MarkPermissionInterruptRequest(
 	cbc *agentinterfaces.AgentCallbackContext,
@@ -329,7 +308,6 @@ func MarkPermissionInterruptRequest(
 }
 
 // IsMarkedPermissionInterrupt 判断异常携带的中断是否就是本回调标记过的权限中断。
-//
 // Python: is_marked_permission_interrupt(ctx, exc)
 func IsMarkedPermissionInterrupt(cbc *agentinterfaces.AgentCallbackContext, exc error) bool {
 	interrupt := toolInterruptOf(exc)
@@ -350,9 +328,7 @@ func IsMarkedPermissionInterrupt(cbc *agentinterfaces.AgentCallbackContext, exc 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // toolInterruptOf 从异常链里取出 ToolInterruptException。
-//
 // 直接是 ToolInterruptException 时返回它；AbortError 时看 cause。
-//
 // Python: _tool_interrupt(exc)
 func toolInterruptOf(exc error) *saschema.ToolInterruptException {
 	if exc == nil {
@@ -366,7 +342,6 @@ func toolInterruptOf(exc error) *saschema.ToolInterruptException {
 }
 
 // attachKey 把号码牌写进中断请求的 metadata。
-//
 // Python: _attach_key(request, key)
 func attachKey(request *saschema.InterruptRequest, key *ToolInvocationKeyV1) error {
 	if request == nil || key == nil {
@@ -380,7 +355,6 @@ func attachKey(request *saschema.InterruptRequest, key *ToolInvocationKeyV1) err
 }
 
 // sessionIDOf 取回调上下文里的执行会话 ID。
-//
 // Python: _session_id(ctx)
 func sessionIDOf(cbc *agentinterfaces.AgentCallbackContext) (string, error) {
 	if cbc == nil || cbc.Session() == nil {
@@ -392,7 +366,6 @@ func sessionIDOf(cbc *agentinterfaces.AgentCallbackContext) (string, error) {
 }
 
 // toolCallIDOf 取工具调用 ID。
-//
 // Python: _tool_call_id(inputs)
 func toolCallIDOf(inputs *agentinterfaces.ToolCallInputs) (string, error) {
 	if inputs == nil || inputs.ToolCall == nil {
@@ -404,7 +377,6 @@ func toolCallIDOf(inputs *agentinterfaces.ToolCallInputs) (string, error) {
 }
 
 // toolNameOf 取工具名，优先 inputs.ToolName，回退 ToolCall.Name。
-//
 // Python: _tool_name(inputs)
 func toolNameOf(inputs *agentinterfaces.ToolCallInputs) (string, error) {
 	if inputs == nil {
@@ -418,10 +390,8 @@ func toolNameOf(inputs *agentinterfaces.ToolCallInputs) (string, error) {
 }
 
 // resumeInputOf 返回本次恢复给该调用的答案。
-//
 // 优先取本次新鲜归属的答案（跳过 carried），其次读原始恢复输入的两种键。
 // 未找到时返回 (nil, false)。
-//
 // Python: _resume_input(ctx, tool_call_id)
 func resumeInputOf(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) (any, bool) {
 	if cbc == nil {
@@ -456,9 +426,7 @@ func resumeInputOf(cbc *agentinterfaces.AgentCallbackContext, toolCallID string)
 }
 
 // userInputValueOf 从恢复输入里按 tool_call_id 取值。
-//
 // 两种形态：InteractiveInput（按 tool_call_id 取 UserInputs）与普通映射。
-//
 // Python: isinstance(user_inputs, Mapping) / isinstance(value, Mapping) 分支
 func userInputValueOf(raw any, toolCallID string) (any, bool) {
 	if interactive, ok := raw.(*sessioninteraction.InteractiveInput); ok {
@@ -473,9 +441,7 @@ func userInputValueOf(raw any, toolCallID string) (any, bool) {
 }
 
 // runExtraOf 取 RunContext 的 extra 映射。
-//
 // 优先从 inputs.RunContext 读，回退 ctx.extra["run_context"]。
-//
 // Python: _run_extra(ctx)
 func runExtraOf(cbc *agentinterfaces.AgentCallbackContext) map[string]any {
 	if cbc == nil {
@@ -492,7 +458,6 @@ func runExtraOf(cbc *agentinterfaces.AgentCallbackContext) map[string]any {
 }
 
 // popNonPermissionResume 从 run extra 里取出并删除非权限续接标记。
-//
 // Python: _pop_nonpermission_resume(ctx)
 func popNonPermissionResume(cbc *agentinterfaces.AgentCallbackContext) (bool, any) {
 	extra := runExtraOf(cbc)
@@ -509,7 +474,6 @@ func popNonPermissionResume(cbc *agentinterfaces.AgentCallbackContext) (bool, an
 
 // abortWithInterrupt 构造中断错误，语义等价 Python 的
 // raise AbortError(reason=..., cause=ToolInterruptException(...))。
-//
 // Go 侧用 callback.AbortError 承载，由工具执行层识别为非错误的中止。
 func abortWithInterrupt(
 	toolName string,
@@ -528,10 +492,8 @@ func abortWithInterrupt(
 // ──────────────────────────── 结构体（rail） ────────────────────────────
 
 // RootPermissionQueueRail 绑定一次 root 调用，并在路由前闩锁缺失的待决兄弟卡。
-//
 // 优先级 100（在权限 rail 之前执行）：先发号码牌、认领答案，权限 rail 才能
 // 带着正确的上下文做判定。
-//
 // Python: class RootPermissionQueueRail(AgentRail)
 type RootPermissionQueueRail struct {
 	// queue 本 rail 服务的队列
@@ -541,10 +503,8 @@ type RootPermissionQueueRail struct {
 }
 
 // RootPermissionCompletionRail 在权限边界放行后立即结束队列所有权。
-//
 // 优先级 89（紧跟在权限 rail 之后）：权限判定一旦放行，卡就该从队列移除，
 // 不应继续占用待决状态。
-//
 // Python: class RootPermissionCompletionRail(AgentRail)
 type RootPermissionCompletionRail struct {
 	// queue 本 rail 服务的队列
@@ -554,9 +514,7 @@ type RootPermissionCompletionRail struct {
 // ──────────────────────────── 导出函数（rail） ────────────────────────────
 
 // NewRootPermissionQueueRail 创建权限队列 rail。
-//
 // answerClaimed 可为 nil（对齐 Python 的 answer_claimed=None）。
-//
 // Python: RootPermissionQueueRail.__init__(queue, *, answer_claimed=None)
 func NewRootPermissionQueueRail(
 	queue *RootPermissionQueue,
@@ -566,7 +524,6 @@ func NewRootPermissionQueueRail(
 }
 
 // NewRootPermissionCompletionRail 创建权限完成 rail。
-//
 // Python: RootPermissionCompletionRail.__init__(queue)
 func NewRootPermissionCompletionRail(queue *RootPermissionQueue) *RootPermissionCompletionRail {
 	return &RootPermissionCompletionRail{queue: queue}
@@ -575,7 +532,6 @@ func NewRootPermissionCompletionRail(queue *RootPermissionQueue) *RootPermission
 // ──────────────────────────── 非导出函数（rail 辅助） ────────────────────────────
 
 // finishOnToolException 工具异常时结束该卡的队列所有权。
-//
 // Python: RootPermissionQueueRail.on_tool_exception(ctx)
 func finishOnToolException(r *RootPermissionQueueRail, cbc *agentinterfaces.AgentCallbackContext) {
 	key := ToolInvocationKeyFromContext(cbc)
@@ -585,7 +541,6 @@ func finishOnToolException(r *RootPermissionQueueRail, cbc *agentinterfaces.Agen
 }
 
 // finishOnCompletion 权限边界放行后结束该卡的队列所有权。
-//
 // Python: RootPermissionCompletionRail.before_tool_call(ctx)
 func finishOnCompletion(r *RootPermissionCompletionRail, cbc *agentinterfaces.AgentCallbackContext) {
 	key := ToolInvocationKeyFromContext(cbc)

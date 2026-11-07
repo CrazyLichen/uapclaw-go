@@ -22,7 +22,6 @@ const (
 	// historyPageSize 历史记录每页大小，对齐 Python _HISTORY_PAGE_SIZE
 	historyPageSize = 20
 	// historyNotFoundError 历史不可用时的错误文案。
-	//
 	// 这是**协议约定串**，不是给人看的说明文字：Web 前端按它做白名单过滤
 	// （frontend/src/hooks/useWebSocket.ts:1566 用 includes 判定后静默吞掉，
 	// 因为「新会话尚无 history.json」是正常态）。一旦翻译成中文，白名单失配，
@@ -52,7 +51,6 @@ var (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isRestorableHistoryRecord 判断历史记录是否可恢复，对齐 Python _is_restorable_history_record。
-//
 // 规则：
 //   - record 非 dict → false
 //   - role=="user" → content 非空字符串
@@ -80,7 +78,6 @@ func isRestorableHistoryRecord(record map[string]any) bool {
 }
 
 // getConversationHistory 获取会话历史记录，对齐 Python get_conversation_history。
-//
 // 流程：校验参数 → 读取 history.json → 过滤可恢复记录 → 倒序 → 按 page_idx(1-indexed) 和 historyPageSize 分页。
 // 返回 nil 表示参数无效或文件不存在。
 func getConversationHistory(sessionID string, pageIdx int) map[string]any {
@@ -148,7 +145,6 @@ func getConversationHistory(sessionID string, pageIdx int) map[string]any {
 }
 
 // handleHistoryGet 处理 history.get 非流式请求，对齐 Python _handle_history_get。
-//
 // 从 request.Params 读取 session_id 和 page_idx，调用 getConversationHistory 分页返回。
 func (s *AgentServer) handleHistoryGet(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 1. 解析 params
@@ -189,7 +185,6 @@ func (s *AgentServer) handleHistoryGet(_ context.Context, request *schema.AgentR
 }
 
 // handleHistoryGetStream 处理 history.get 流式请求，对齐 Python _handle_history_get_stream。
-//
 // 调用 getConversationHistory 获取数据，逐条发送 AgentResponseChunk（event_type=history.message），
 // 最后发送 done chunk。
 func (s *AgentServer) handleHistoryGetStream(_ context.Context, request *schema.AgentRequest) ([]*schema.AgentResponseChunk, error) {

@@ -33,7 +33,6 @@ const audioTranscriptionsPath = "/audio/transcriptions"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TranscribeAudio 调用 OpenAI 音频转写 API，将音频文件转换为文本。
-//
 // Python: _invoke_audio_transcription(config, audio_path)
 // 使用 multipart/form-data POST /audio/transcriptions endpoint
 func (c *OpenAIModelClient) TranscribeAudio(

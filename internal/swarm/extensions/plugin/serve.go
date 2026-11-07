@@ -152,7 +152,6 @@ var ErrNoCrypto = errors.New("扩展未提供 crypto 能力")
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ServeExtension 启动插件服务（插件 main.go 的唯一入口）。
-//
 // 用法：
 //
 //	func main() {
@@ -276,7 +275,6 @@ func (s *extensionServer) SetExtensionDir(ctx context.Context, req *extproto.Set
 }
 
 // GetMetadata 处理元数据查询 RPC。
-//
 // T-06：对齐 Python sdk/base.py metadata property 的缓存语义——
 // Register 有副作用（声明注册）时，每次 RPC 重执行会被重复触发；
 // 结果缓存后仅首次执行，SetExtensionDir 时失效重算。

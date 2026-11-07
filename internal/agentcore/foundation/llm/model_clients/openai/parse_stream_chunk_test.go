@@ -140,7 +140,6 @@ func TestParseStreamChunk_ToolCallsDelta(t *testing.T) {
 }
 
 // TestParseStreamChunk_缺省type的增量帧可聚合 验证真实 SSE 缺省 type 的增量帧仍能聚合。
-//
 // 真实 OpenAI 兼容 SSE 只在首个 delta 携带 type/id/name，后续帧只有 arguments
 // （types.go:149 的 omitempty 决定缺省时不出现该字段）。Python 在流式解析里把
 // type 硬编码为 "function"（openai_model_client.py:745-751），Go 若把空串透传，
@@ -277,7 +276,6 @@ func TestParseStreamChunk_NilDelta(t *testing.T) {
 }
 
 // TestParseStreamChunk_Reasoning四种字段形态 四级回退在各字段形态下生效。
-//
 // Python: openai_model_client.py:2751-2763（_parse_stream_chunk 内 L2979 调用）
 func TestParseStreamChunk_Reasoning四种字段形态(t *testing.T) {
 	mk := func(delta *ChunkDelta) *ChatCompletionChunkResponse {

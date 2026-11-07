@@ -3,7 +3,6 @@ package schema
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AssistantMessageChunk 助手流式消息块，用于 SSE 流式场景中增量合并 LLM 响应片段。
-//
 // 设计要点：
 //   - 嵌入 AssistantMessage，复用其全部字段（BaseMessage + 扩展字段）
 //   - 提供 Merge 方法替代 Python 的 __add__ 运算符，实现流式增量合并
@@ -14,18 +13,15 @@ package schema
 type AssistantMessageChunk struct {
 	AssistantMessage
 	// StreamError 流读取阶段的错误（非 EOF 的中断）。
-	//
 	// 只做内存传递，不进 JSON、不参与内容合并：消费方（ReAct 的 callLLMStream）
 	// 一旦看到非 nil，就把本轮视为失败。没有它，连接被切断与"模型正常说完"在
 	// 调用方看来完全一样，半截 tool_call 会被当成完整调用去执行。
-	//
 	// Python 对应：异步生成器在 except 分支 raise MODEL_CALL_FAILED（生成器可直接
 	// 抛异常，Go 的 channel 装不下 error，故用哨兵 chunk 承载）。
 	StreamError error `json:"-"`
 }
 
 // ToolMessageChunk 工具返回流式消息块，用于 SSE 流式场景中增量合并工具响应片段。
-//
 // Python: openjiuwen/core/foundation/llm/schema/message_chunk.py (ToolMessageChunk)
 type ToolMessageChunk struct {
 	ToolMessage
@@ -86,7 +82,6 @@ func WithChunkLogprobs(logprobs any) AssistantMessageChunkOption {
 }
 
 // WithChunkStreamError 标记该 chunk 承载流中断错误（不再承载内容）。
-//
 // 模型客户端在 SSE 读取失败时发出这样一个哨兵 chunk 再关闭通道，
 // 使"连接被切断"与"正常结束"在消费方可以区分。
 func WithChunkStreamError(err error) AssistantMessageChunkOption {
@@ -94,7 +89,6 @@ func WithChunkStreamError(err error) AssistantMessageChunkOption {
 }
 
 // NewAssistantMessageChunk 创建助手流式消息块。
-//
 // 默认值：
 //   - role: RoleTypeAssistant（角色类型为助手）
 //   - finish_reason: "null"（结束原因为空）
@@ -118,7 +112,6 @@ func NewAssistantMessageChunk(content string, opts ...AssistantMessageChunkOptio
 }
 
 // NewToolMessageChunk 创建工具返回流式消息块。
-//
 // Python: ToolMessageChunk(role="tool", content=..., tool_call_id=...)
 func NewToolMessageChunk(toolCallID, content string, opts ...ToolMessageChunkOption) *ToolMessageChunk {
 	chunk := &ToolMessageChunk{
@@ -137,10 +130,8 @@ func NewToolMessageChunk(toolCallID, content string, opts ...ToolMessageChunkOpt
 }
 
 // Merge 将另一个 AssistantMessageChunk 增量合并到当前 chunk，返回合并后的新 chunk。
-//
 // 该方法不修改接收者（不可变语义），而是返回新创建的 AssistantMessageChunk。
 // 这与 Python 中 __add__ 返回新对象的语义一致。
-//
 // 各字段合并策略：
 //   - content: 纯文本拼接 / 多模态拼接 / 类型不同取右侧
 //   - tool_calls: 增量拼接同一调用的片段（最核心逻辑）
@@ -237,7 +228,6 @@ func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMe
 }
 
 // ToAssistantMessage 将流式消息块转换为完整的助手消息。
-//
 // 流式合并完成后，调用此方法获取最终的 AssistantMessage。
 // 转换为值拷贝，后续对 chunk 的修改不影响返回的 AssistantMessage。
 func (c *AssistantMessageChunk) ToAssistantMessage() *AssistantMessage {
@@ -249,12 +239,10 @@ func (c *AssistantMessageChunk) ToAssistantMessage() *AssistantMessage {
 }
 
 // CarriesOutputToken 判断该分片是否携带模型输出（而非流式框架帧）。
-//
 // 携带：content 或 reasoning_content 非空（空白也算，它是生成的 token），
 // 或任一 tool_call 的 name/arguments 非空。
 // 不携带：role-only、heartbeat、usage-only、finish-only。
 // 首 token 延迟与空闲超时共用此定义，保证量的是同一件事。
-//
 // Python: message_chunk.py L242-256 carries_output_token()
 func (c *AssistantMessageChunk) CarriesOutputToken() bool {
 	if c == nil {
@@ -277,7 +265,7 @@ func (c *AssistantMessageChunk) CarriesOutputToken() bool {
 	return false
 }
 
-// Merge 将另一个 ToolMessageChunk 增量合并到当前 chunk，返回合并后的新 chunk。//
+// Merge 将另一个 ToolMessageChunk 增量合并到当前 chunk，返回合并后的新 chunk。
 // 各字段合并策略：
 //   - content: 字符串拼接
 //   - tool_call_id: 取非空值，优先右侧
@@ -314,7 +302,6 @@ func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // mergeToolCalls 合并两个 ToolCall 切片，增量拼接同一调用的片段。
-//
 // 判断"同一调用"的条件（满足以下全部）：
 //  1. left 的最后一个 ToolCall 与 incoming 的 ToolCall 的 id 相同，
 //     或者某一方 id 为空（流式中间 chunk 可能不携带 id）
@@ -328,7 +315,6 @@ func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 //   - index: 取左侧值
 //
 // 不同调用：作为新元素追加到列表末尾。
-//
 // Python: AssistantMessageChunk.__add__ 中 tool_calls 合并逻辑
 func mergeToolCalls(left, right []*ToolCall) []*ToolCall {
 	if len(left) == 0 && len(right) == 0 {
@@ -387,7 +373,6 @@ func mergeToolCalls(left, right []*ToolCall) []*ToolCall {
 }
 
 // mergeContent 合并两个 MessageContent。
-//
 // 合并策略：
 //   - 两者均为纯文本 → 字符串拼接，结果仍为纯文本
 //   - 两者均为多模态 → Parts 列表拼接，结果仍为多模态
@@ -411,7 +396,6 @@ func mergeContent(left, right MessageContent) MessageContent {
 }
 
 // mergeParserContent 智能合并 parser_content 字段。
-//
 // 合并策略：
 //   - right 为 nil → 返回 left
 //   - left 为 nil → 返回 right
@@ -424,7 +408,6 @@ func mergeContent(left, right MessageContent) MessageContent {
 // 因此省略了 Python 中对自定义对象和 Pydantic Model 的处理分支。
 // 这比 Python 实际使用的 `other.parser_content or self.parser_content` 更正确，
 // 能正确处理流式场景中多次解析成功的情况（如 dict 递归合并、列表拼接）。
-//
 // Python: merge_parser_content()
 func mergeParserContent(left, right any) any {
 	if right == nil {
@@ -463,7 +446,6 @@ func mergeParserContent(left, right any) any {
 }
 
 // mergeDicts 递归合并两个 map[string]any。
-//
 // 对每个键：
 //   - 两侧均为 string → 字符串拼接
 //   - 两侧均为 []any → 列表拼接
@@ -521,7 +503,6 @@ func mergeDicts(left, right map[string]any) map[string]any {
 }
 
 // concatTokenIDs 拼接流式 completion_token_ids 增量。
-//
 // 两者均为 []int → 列表拼接
 // 一方为空 → 取非空侧
 //
@@ -540,7 +521,6 @@ func concatTokenIDs(left, right []int) []int {
 }
 
 // mergeLogprobs 合并流式 logprobs 增量。
-//
 // 合并策略：
 //   - left 为 nil → 返回 right
 //   - right 为 nil → 返回 left

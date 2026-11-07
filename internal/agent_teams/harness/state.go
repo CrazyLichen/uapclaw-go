@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ActiveRound 一次外圈执行（一轮）。
-//
 // Python: ActiveRound (agent_teams/harness/state.py)
 // 本阶段只含"驱动一轮"所需字段；快照（pre_round_snapshot/last_safe_snapshot/
 // last_iter_snapshot）、相位跟踪（iter_phase/model_call_in_flight/tool_started）、
@@ -27,7 +26,6 @@ type ActiveRound struct {
 }
 
 // InboxMessage 排队等待驱动的输入。
-//
 // Python: InboxMessage (state.py)
 type InboxMessage struct {
 	// Seq 单调递增序号，定义全局 FIFO
@@ -39,7 +37,6 @@ type InboxMessage struct {
 }
 
 // HarnessInternalState 全部可变状态容器；supervisor 是唯一写者。
-//
 // Python: HarnessInternalState (state.py)。
 // 相位用原子量保存，因为 State() 会被外部协程并发读取
 // （Python 靠单线程 asyncio 串行，Go 必须显式同步）。
@@ -62,7 +59,6 @@ type HarnessInternalState struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // HarnessState 生命周期相位。
-//
 // Python: HarnessState (harness_protocol/state.py)，5 态。
 // 注意：DeepAgent 内部的 InteractionPhase 只有 idle/running/terminated 三态，
 // 暂停是 L2 独有的概念。
@@ -118,7 +114,6 @@ func (s *HarnessInternalState) SetActive(r *ActiveRound) {
 }
 
 // NextRoundID 分配下一个轮次序号。
-//
 // Python: HarnessInternalState.next_round_id
 func (s *HarnessInternalState) NextRoundID() int {
 	s.mu.Lock()

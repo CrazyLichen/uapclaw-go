@@ -13,35 +13,28 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseVectorStore 向量存储后端的抽象接口。
-//
 // 所有向量存储后端（Chroma、Milvus、Gauss 等）必须实现此接口。
 // 方法全部为同步风格，调用者可按需通过 goroutine 实现并发。
-//
 // Python: openjiuwen/core/foundation/store/base_vector_store.py (BaseVectorStore)
 type BaseVectorStore interface {
 	// CreateCollection 创建集合，schema 定义字段结构。
-	//
 	// Python: BaseVectorStore.create_collection(collection_name, schema, **kwargs)
 	CreateCollection(ctx context.Context, collectionName string, schema *CollectionSchema, opts ...Option) error
 
 	// DeleteCollection 删除集合。
-	//
 	// Python: BaseVectorStore.delete_collection(collection_name, **kwargs)
 	DeleteCollection(ctx context.Context, collectionName string, opts ...Option) error
 
 	// CollectionExists 检查集合是否存在。
-	//
 	// Python: BaseVectorStore.collection_exists(collection_name, **kwargs)
 	CollectionExists(ctx context.Context, collectionName string, opts ...Option) (bool, error)
 
 	// GetSchema 获取集合的 Schema。
-	//
 	// Python: BaseVectorStore.get_schema(collection_name, **kwargs)
 	GetSchema(ctx context.Context, collectionName string, opts ...Option) (*CollectionSchema, error)
 
 	// AddDocs 添加文档到集合。
 	// 每个文档是包含 id/embedding/text/metadata 等字段的 map。
-	//
 	// Python: BaseVectorStore.add_docs(collection_name, docs, **kwargs)
 	AddDocs(ctx context.Context, collectionName string, docs []map[string]any, opts ...Option) error
 
@@ -55,47 +48,38 @@ type BaseVectorStore interface {
 	Search(ctx context.Context, collectionName string, queryVector []float64, vectorField string, topK int, filters map[string]any, opts ...Option) ([]VectorSearchResult, error)
 
 	// DeleteDocsByIDs 按 ID 删除文档。
-	//
 	// Python: BaseVectorStore.delete_docs_by_ids(collection_name, ids, **kwargs)
 	DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error
 
 	// DeleteDocsByFilters 按标量字段过滤条件删除文档。
-	//
 	// Python: BaseVectorStore.delete_docs_by_filters(collection_name, filters, **kwargs)
 	DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error
 
 	// ListCollectionNames 列出所有集合名称。
-	//
 	// Python: BaseVectorStore.list_collection_names()
 	ListCollectionNames(ctx context.Context) ([]string, error)
 
 	// UpdateSchema 执行 schema 迁移操作。
-	//
 	// Python: BaseVectorStore.update_schema(collection_name, operations)
 	UpdateSchema(ctx context.Context, collectionName string, operations []operation.Operation, opts ...Option) error
 
 	// UpdateCollectionMetadata 更新集合元数据。
-	//
 	// Python: BaseVectorStore.update_collection_metadata(collection_name, metadata)
 	UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error
 
 	// GetCollectionMetadata 获取集合元数据。
-	//
 	// Python: BaseVectorStore.get_collection_metadata(collection_name)
 	GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error)
 
 	// RenameCollection 重命名集合。
 	// 不支持的后端返回 StatusStoreVectorNotSupported 错误。
-	//
 	// Python: BaseVectorStore.rename_collection(old_name, new_name)
 	RenameCollection(ctx context.Context, oldName string, newName string, opts ...Option) error
 }
 
 // FieldSchema 集合中单个字段的 Schema 定义。
-//
 // 类似 Milvus FieldSchema，支持各种数据类型和字段属性。
 // 通过 NewFieldSchema 构造，构造时自动校验字段合法性。
-//
 // Python: openjiuwen/core/foundation/store/base_vector_store.py (FieldSchema)
 type FieldSchema struct {
 	// Name 字段名
@@ -121,10 +105,8 @@ type FieldSchema struct {
 }
 
 // CollectionSchema 向量集合的 Schema 定义。
-//
 // 类似 Milvus CollectionSchema，支持动态字段。
 // fields 为未导出切片，通过方法访问和修改，保证校验逻辑不被绕过。
-//
 // Python: openjiuwen/core/foundation/store/base_vector_store.py (CollectionSchema)
 type CollectionSchema struct {
 	// fields 字段定义列表（未导出，通过方法访问）
@@ -136,7 +118,6 @@ type CollectionSchema struct {
 }
 
 // VectorSearchResult 向量搜索结果。
-//
 // Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorSearchResult)
 type VectorSearchResult struct {
 	// Score 相关度分数（越高越相关）
@@ -173,7 +154,6 @@ type Option func(*Options)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // VectorDataType 向量存储支持的字段数据类型。
-//
 // Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorDataType)
 type VectorDataType int
 
@@ -317,7 +297,6 @@ func WithNumCandidates(n int) Option {
 }
 
 // NewFieldSchema 创建并校验 FieldSchema。
-//
 // 校验规则：
 //   - 名字不能为空
 //   - DType 为 FloatVector 时 Dim 必须大于 0
@@ -353,10 +332,8 @@ func NewFieldSchema(name string, dtype VectorDataType, opts ...FieldOption) (*Fi
 }
 
 // ToDict 将字段 Schema 转为字典格式。
-//
 // 只包含非零值字段。VARCHAR 类型的 MaxLength 未显式设置时输出默认值 65535（对齐 Python 序列化行为）。
 // 字段 type 使用 Python 兼容的字符串值（如 "VARCHAR"、"FLOAT_VECTOR"）。
-//
 // Python: FieldSchema.to_dict()
 func (f *FieldSchema) ToDict() map[string]any {
 	result := map[string]any{
@@ -398,10 +375,8 @@ func (f *FieldSchema) ToDict() map[string]any {
 }
 
 // FieldFromDict 从字典创建 FieldSchema。
-//
 // 字典中字段类型键名支持 "type" 或 "dtype"（兼容 Python 两种写法）。
 // 枚举值不区分大小写，如 "varchar" 和 "VARCHAR" 均可。
-//
 // Python: FieldSchema.from_dict()
 func FieldFromDict(data map[string]any) (*FieldSchema, error) {
 	name, _ := data["name"].(string)
@@ -466,9 +441,7 @@ func FieldFromDict(data map[string]any) (*FieldSchema, error) {
 }
 
 // NewCollectionSchema 创建并校验 CollectionSchema。
-//
 // 校验规则：最多只能有一个主键字段。
-//
 // Python: CollectionSchema(fields=[], ...)
 func NewCollectionSchema(opts ...CollectionOption) (*CollectionSchema, error) {
 	s := &CollectionSchema{}
@@ -479,9 +452,7 @@ func NewCollectionSchema(opts ...CollectionOption) (*CollectionSchema, error) {
 }
 
 // NewCollectionSchemaFromFields 从字段列表创建 Schema。
-//
 // 逐个添加字段并校验，任一字段冲突则返回错误。
-//
 // Python: CollectionSchema.from_fields(fields, **kwargs)
 func NewCollectionSchemaFromFields(fields []*FieldSchema, opts ...CollectionOption) (*CollectionSchema, error) {
 	schema, err := NewCollectionSchema(opts...)
@@ -497,7 +468,6 @@ func NewCollectionSchemaFromFields(fields []*FieldSchema, opts ...CollectionOpti
 }
 
 // AddField 添加字段到 Schema（原地修改，返回自身以支持链式调用）。
-//
 // 校验规则：
 //   - 字段名不能重复
 //   - 不能添加第二个主键字段
@@ -529,7 +499,6 @@ func (s *CollectionSchema) AddField(field *FieldSchema) (*CollectionSchema, erro
 }
 
 // RemoveField 按名称移除字段（原地修改，返回自身以支持链式调用）。
-//
 // Python: CollectionSchema.remove_field(field_name)
 func (s *CollectionSchema) RemoveField(fieldName string) *CollectionSchema {
 	filtered := make([]*FieldSchema, 0, len(s.fields))
@@ -543,7 +512,6 @@ func (s *CollectionSchema) RemoveField(fieldName string) *CollectionSchema {
 }
 
 // GetField 按名称获取字段，不存在返回 nil。
-//
 // Python: CollectionSchema.get_field(field_name)
 func (s *CollectionSchema) GetField(fieldName string) *FieldSchema {
 	for _, f := range s.fields {
@@ -555,14 +523,12 @@ func (s *CollectionSchema) GetField(fieldName string) *FieldSchema {
 }
 
 // HasField 检查字段是否存在。
-//
 // Python: CollectionSchema.has_field(field_name)
 func (s *CollectionSchema) HasField(fieldName string) bool {
 	return s.GetField(fieldName) != nil
 }
 
 // GetPrimaryKeyField 获取主键字段，不存在返回 nil。
-//
 // Python: CollectionSchema.get_primary_key_field()
 func (s *CollectionSchema) GetPrimaryKeyField() *FieldSchema {
 	for _, f := range s.fields {
@@ -574,7 +540,6 @@ func (s *CollectionSchema) GetPrimaryKeyField() *FieldSchema {
 }
 
 // GetVectorFields 获取所有 FLOAT_VECTOR 类型的字段。
-//
 // Python: CollectionSchema.get_vector_fields()
 func (s *CollectionSchema) GetVectorFields() []*FieldSchema {
 	var result []*FieldSchema
@@ -594,7 +559,6 @@ func (s *CollectionSchema) Fields() []*FieldSchema {
 }
 
 // ToDict 将 Schema 转为字典格式（序列化用）。
-//
 // Python: CollectionSchema.to_dict()
 func (s *CollectionSchema) ToDict() map[string]any {
 	fields := make([]map[string]any, len(s.fields))
@@ -609,7 +573,6 @@ func (s *CollectionSchema) ToDict() map[string]any {
 }
 
 // CollectionFromDict 从字典创建 CollectionSchema。
-//
 // Python: CollectionSchema.from_dict(data)
 func CollectionFromDict(data map[string]any) (*CollectionSchema, error) {
 	opts := make([]CollectionOption, 0)

@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestResolveFilePath_基准为数据根 验证四类白名单根均可解析。
-//
 // 对齐 Python: (project_root / arg).resolve() + _is_path_under_allowed_root。
 func TestResolveFilePath_基准为数据根(t *testing.T) {
 	dataDir := setupDataDir(t)
@@ -73,7 +72,6 @@ func TestResolveFilePath_符号链接逃逸(t *testing.T) {
 }
 
 // TestResolveFilePath_链接前缀加不存在叶子 已存在的链接祖先必须被解析，即使叶子不存在。
-//
 // 对齐 Python Path.resolve(strict=False)：只解析存在的前缀。原实现"EvalSymlinks 失败
 // 就整体退化为 Clean"，会把 agent/linkdir/new.md 当成字面路径，链接目标没被解析。
 func TestResolveFilePath_链接前缀加不存在叶子(t *testing.T) {
@@ -104,7 +102,6 @@ func TestResolveFilePath_链接前缀指向白名单外(t *testing.T) {
 }
 
 // TestHandleFileContentGet_返回原文 验证 text/plain 原文 + X-Original-Encoding。
-//
 // 对齐 Python: app_web.py L646-659（不是 JSON 包装）。
 func TestHandleFileContentGet_返回原文(t *testing.T) {
 	dataDir := setupDataDir(t)
@@ -177,7 +174,6 @@ func TestHandleFileContentGet_编码(t *testing.T) {
 }
 
 // TestHandleFileContentGet_agentData缺失时自动生成 验证索引缺失时先重建再读。
-//
 // 对齐 Python: app_web.py L615。
 func TestHandleFileContentGet_agentData缺失时自动生成(t *testing.T) {
 	dataDir := setupDataDir(t)
@@ -258,7 +254,6 @@ func TestHandleFileContentPost_允许mdx(t *testing.T) {
 }
 
 // TestHandleListFiles 验证字段契约、目录优先排序与相对数据根路径。
-//
 // 对齐 Python: app_web.py L575-602。
 func TestHandleListFiles(t *testing.T) {
 	dataDir := setupDataDir(t)
@@ -323,7 +318,6 @@ func TestHandleListFiles_错误分支(t *testing.T) {
 }
 
 // TestHandleListMarkdown 验证非递归、只取 markdown、只返回 name/path。
-//
 // 对齐 Python: app_web.py L550-573。
 func TestHandleListMarkdown(t *testing.T) {
 	dataDir := setupDataDir(t)
@@ -374,7 +368,6 @@ func TestHandleListMarkdown_错误分支(t *testing.T) {
 }
 
 // TestHandleWsDebugConfig 验证 GET/POST 契约 wsDisableCompress。
-//
 // 对齐 Python: app_web.py L665-672 / L782-802。
 func TestHandleWsDebugConfig(t *testing.T) {
 	origValue := wsDisableCompress.Load()

@@ -1,8 +1,6 @@
 // Package internal 提供会话的内部实现，不对外暴露。
-//
 // 本包包含 interfaces.InnerSession 的具体实现（AgentSession、AgentTeamSession、WorkflowSession、NodeSession、SubWorkflowSession），
 // 由公开层 Session/WorkflowSession 组合使用，不应被外部包直接引用。
-//
 // 文件目录：
 //
 //	internal/

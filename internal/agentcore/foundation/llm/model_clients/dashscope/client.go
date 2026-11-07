@@ -16,13 +16,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DashScopeModelClient 阿里云百炼 DashScope 模型客户端。
-//
 // 嵌入 OpenAIModelClient 复用 Invoke/Stream（通义千问兼容 OpenAI Chat Completion 协议），
 // 仅覆写 GenerateImage/GenerateSpeech/GenerateVideo 三个多模态方法。
-//
 // 不依赖 dashscope-go SDK，自行实现 DashScope 原生 API 的 HTTP 调用
 // （与 OpenAI 客户端不依赖 openai-go SDK 的设计一致）。
-//
 // Python: openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py (DashScopeModelClient)
 type DashScopeModelClient struct {
 	openai.OpenAIModelClient
@@ -40,10 +37,8 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDashScopeModelClient 创建 DashScope 客户端。
-//
 // 构造流程与 OpenAI 客户端一致，仅覆盖 clientName 为 "DashScope client"。
 // 使用 NewOpenAIModelClient 构造嵌入实例，确保 baseHeaders 等私有字段正确初始化。
-//
 // Python: DashScopeModelClient.__init__(model_config, model_client_config)
 func NewDashScopeModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
@@ -71,9 +66,7 @@ func NewDashScopeModelClient(
 }
 
 // GenerateImage 实现 DashScope 万相文生图。
-//
 // 调用 DashScope 多模态 API（MultiModalConversation），支持文生图和图生图。
-//
 // 参数验证规则（与 Python 端一致）：
 //   - 恰好 1 条 UserMessage
 //   - content 中 text_count ≥ 1
@@ -162,9 +155,7 @@ func (c *DashScopeModelClient) GenerateImage(
 }
 
 // GenerateSpeech 实现 DashScope Cosyvoice 语音合成。
-//
 // 调用 DashScope 多模态 API（MultiModalConversation），支持文字转语音。
-//
 // 参数验证规则（与 Python 端一致）：
 //   - 恰好 1 条 UserMessage
 //   - content 非空
@@ -273,9 +264,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 }
 
 // GenerateVideo 实现 DashScope 视频生成。
-//
 // 调用 DashScope 视频生成 API（VideoSynthesis），支持文生视频和图生视频。
-//
 // 参数验证规则（与 Python 端一致）：
 //   - 恰好 1 条 UserMessage
 //   - content 非空
@@ -440,7 +429,6 @@ func (c *DashScopeModelClient) GenerateVideo(
 }
 
 // Release 释放模型缓存（当前不支持）。
-//
 // DashScope API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
 func (c *DashScopeModelClient) Release(
 	_ context.Context,
@@ -458,7 +446,6 @@ func (c *DashScopeModelClient) SupportsKVCacheRelease() bool {
 }
 
 // TranscribeAudio 音频转写（当前不支持）。
-//
 // 后续由 Task 5 添加 DashScope 音频转写的真实实现。
 func (c *DashScopeModelClient) TranscribeAudio(
 	_ context.Context,
@@ -489,7 +476,6 @@ func init() {
 }
 
 // validateImageMessages 验证图片生成的消息参数。
-//
 // 验证规则（与 Python 端一致）：
 //   - 恰好 1 条 UserMessage
 //   - content 中 text_count ≥ 1
@@ -553,7 +539,6 @@ func validateImageMessages(messages []*llmschema.UserMessage) ([]map[string]any,
 }
 
 // validateSpeechMessages 验证语音生成的消息参数。
-//
 // 验证规则：恰好 1 条 UserMessage，content 非空。
 func validateSpeechMessages(messages []*llmschema.UserMessage) (string, error) {
 	if len(messages) != 1 {
@@ -586,7 +571,6 @@ func validateSpeechMessages(messages []*llmschema.UserMessage) (string, error) {
 }
 
 // validateVideoMessages 验证视频生成的消息参数。
-//
 // 验证规则：恰好 1 条 UserMessage，content 非空。
 func validateVideoMessages(messages []*llmschema.UserMessage) (string, error) {
 	if len(messages) != 1 {

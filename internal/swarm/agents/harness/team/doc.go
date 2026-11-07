@@ -1,5 +1,4 @@
 // Package team 提供应用层 TeamManager，管理每个 channel 下的 TeamAgent 运行时。
-//
 // 对齐 Python: jiuwenswarm/agents/harness/team/team_manager.py
 //
 // TeamManager 是应用层封装，负责：
@@ -12,7 +11,6 @@
 //
 // 核心层 TeamRuntimeManager（agent_teams/runtime）负责 Pool/interact/activate，
 // TeamManager 通过间接调用来完成实际操作。
-//
 // Go 与 Python 的差异：
 //   - 全局索引：Python 用 _team_managers dict，Go 用 sync.RWMutex 保护
 //   - 流任务：Python 用 asyncio.Task，Go 用 context.CancelFunc

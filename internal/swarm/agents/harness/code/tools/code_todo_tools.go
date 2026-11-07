@@ -111,10 +111,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CodeTodoCardBuilder 构建 code 模式的 todo 工具卡片。
-//
 // name 取 todo_create/todo_list/todo_get/todo_modify；未知 name 返回 nil，
 // 调用方回落注册表默认文案。
-//
 // Python: _build_code_todo_card(name, tool_id_prefix, agent_id)
 func CodeTodoCardBuilder(name, toolID, language, agentID string) *tool.ToolCard {
 	_ = language // code 模式只用英文文案（上游 CODE_TODO_TOOL_PROMPTS 仅 EN）
@@ -136,7 +134,6 @@ func CodeTodoCardBuilder(name, toolID, language, agentID string) *tool.ToolCard 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // codeTodoPrompt 返回指定工具的 code 模式描述与 JSON schema。
-//
 // Python: CODE_TODO_TOOL_PROMPTS[name]
 func codeTodoPrompt(name string) (string, map[string]any) {
 	// 本函数就是一张查表：按工具名返回它的中文描述和对应的参数结构。

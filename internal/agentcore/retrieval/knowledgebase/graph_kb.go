@@ -21,11 +21,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GraphKnowledgeBase 图增强知识库（13.28）。
-//
 // 在 SimpleKnowledgeBase 的双索引能力之上加图检索：写侧 use_graph 时抽取
 // 三元组建 kb_{id}_triples 索引，读侧懒创建 GraphRetriever 走 beam search
 // 图检索。对外仍是 KnowledgeBase 接口，上层按 use_graph 二选一。
-//
 // Python: openjiuwen/core/retrieval/graph_knowledge_base.py (GraphKnowledgeBase)
 type GraphKnowledgeBase struct {
 	// BaseKnowledgeBase 共享基座（指针嵌入，13.27 先例）
@@ -46,10 +44,8 @@ var _ KnowledgeBase = (*GraphKnowledgeBase)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGraphKnowledgeBase 构造图增强知识库。
-//
 // chunk/triple 检索器为显式参数（Python 子类特有字段的直译），其余组件经
 // KnowledgeBaseOption 透传基座，构造期配置一致性校验随之继承。
-//
 // Python: GraphKnowledgeBase.__init__
 func NewGraphKnowledgeBase(config common.KnowledgeBaseConfig,
 	chunkRetriever, tripleRetriever retriever.Retriever,
@@ -66,7 +62,6 @@ func NewGraphKnowledgeBase(config common.KnowledgeBaseConfig,
 }
 
 // SetGraphRetriever 注入图检索器（Python kb.graph_retriever = r 的显式对应物）。
-//
 // 传 nil 表示复位：下次 Retrieve 重新懒创建（Python 赋 None 同义）。
 func (g *GraphKnowledgeBase) SetGraphRetriever(r retriever.Retriever) {
 	g.graphMu.Lock()
@@ -75,7 +70,6 @@ func (g *GraphKnowledgeBase) SetGraphRetriever(r retriever.Retriever) {
 }
 
 // AddDocuments 添加文档（写 chunk 索引；use_graph 时另写 triple 索引）。
-//
 // Python: graph_knowledge_base.py add_documents
 func (g *GraphKnowledgeBase) AddDocuments(ctx context.Context, documents []reranker.Document,
 	opts ...KBOption) ([]string, error) {
@@ -171,10 +165,8 @@ func (g *GraphKnowledgeBase) AddDocuments(ctx context.Context, documents []reran
 }
 
 // Retrieve 检索相关文档（use_graph 时走图检索，否则回落 SimpleKB）。
-//
 // use_graph 三层判定：retrieval_config.use_graph 为 true → 图；为 nil 时随
 // config.use_graph；为 false 显式压过配置 → 回落。
-//
 // Python: graph_knowledge_base.py retrieve
 func (g *GraphKnowledgeBase) Retrieve(ctx context.Context, query string,
 	config *common.RetrievalConfig, opts ...KBOption) ([]common.RetrievalResult, error) {
@@ -209,10 +201,8 @@ func (g *GraphKnowledgeBase) Retrieve(ctx context.Context, query string,
 }
 
 // DeleteDocuments 删除文档（chunk 索引必删；use_graph 时另删 triple 索引）。
-//
 // triple 删除返回值 false 只 Warn 不影响总结果（Python 真实行为）；
 // DeleteIndex 返回 error 仍冒泡（Python 无 try/except）。
-//
 // Python: graph_knowledge_base.py delete_documents
 func (g *GraphKnowledgeBase) DeleteDocuments(ctx context.Context, docIDs []string,
 	opts ...KBOption) (bool, error) {
@@ -258,7 +248,6 @@ func (g *GraphKnowledgeBase) DeleteDocuments(ctx context.Context, docIDs []strin
 }
 
 // UpdateDocuments 更新文档（先删后加）。
-//
 // Python: graph_knowledge_base.py update_documents
 func (g *GraphKnowledgeBase) UpdateDocuments(ctx context.Context, documents []reranker.Document,
 	opts ...KBOption) ([]string, error) {
@@ -278,7 +267,6 @@ func (g *GraphKnowledgeBase) UpdateDocuments(ctx context.Context, documents []re
 }
 
 // GetStatistics 获取知识库统计信息（11 键，triple_index_info 恒存在）。
-//
 // Python: graph_knowledge_base.py get_statistics
 func (g *GraphKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any, error) {
 	chunkIndexName := "kb_" + g.config.KBID + "_chunks"
@@ -319,11 +307,9 @@ func (g *GraphKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any,
 }
 
 // Close 关闭知识库（基座组件 + 三个检索器，顺序字面）。
-//
 // 注意：GraphRetriever.Close 内部已关闭固定 chunk/triple 检索器，这里再关
 // 一遍是 Python 真实行为（重复关闭照复刻，spec §6.1）；主链路两字段恒 nil，
 // 仅显式注入固定检索器时才会重复关闭底层 store。
-//
 // Python: graph_knowledge_base.py close
 func (g *GraphKnowledgeBase) Close() error {
 	firstErr := g.BaseKnowledgeBase.Close()
@@ -341,9 +327,7 @@ func (g *GraphKnowledgeBase) Close() error {
 }
 
 // RetrieveMultiGraphKB 跨图知识库检索，返回去重排序后的文本列表。
-//
 // 纯委托 13.27 聚合函数（Python L353-360 同样两行）。
-//
 // Python: graph_knowledge_base.py retrieve_multi_graph_kb
 func RetrieveMultiGraphKB(ctx context.Context, kbs []KnowledgeBase,
 	query string, config *common.RetrievalConfig, topK *int) []string {
@@ -351,7 +335,6 @@ func RetrieveMultiGraphKB(ctx context.Context, kbs []KnowledgeBase,
 }
 
 // RetrieveMultiGraphKBWithSource 跨图知识库检索，返回带来源信息的结果。
-//
 // Python: graph_knowledge_base.py retrieve_multi_graph_kb_with_source
 func RetrieveMultiGraphKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 	query string, config *common.RetrievalConfig, topK *int) ([]common.MultiKBRetrievalResult, error) {
@@ -368,7 +351,6 @@ func (g *GraphKnowledgeBase) hasGraphRetriever() bool {
 }
 
 // ensureGraphRetriever 取图检索器，nil 时持锁懒创建。
-//
 // 六个 WithGraph* 选项与 SetIndexType 注入此前零生产调用，13.28 首次接线。
 // 读路径同样持锁（Go 内存模型下锁外读属数据竞争，13.27 §13-1 先例）。
 func (g *GraphKnowledgeBase) ensureGraphRetriever() (retriever.Retriever, error) {
@@ -393,7 +375,6 @@ func (g *GraphKnowledgeBase) ensureGraphRetriever() (retriever.Retriever, error)
 	)
 	// 注入 index_type：GraphRetriever 的 mode 校验与 AgenticRetriever 的
 	// defaultMode 推导都读它。
-	//
 	// 直接调用而非 IndexTypeCarrier 断言：gret 的静态类型就是
 	// *retriever.GraphRetriever，必然实现该方法，断言恒真属死分支。
 	// Python 侧 self.graph_retriever.index_type = ... 是动态属性赋值，
@@ -404,7 +385,6 @@ func (g *GraphKnowledgeBase) ensureGraphRetriever() (retriever.Retriever, error)
 }
 
 // retrieveViaSimpleKB 回落路径：现构造 SimpleKB 委托（Python 每次新建、不缓存）。
-//
 // 两处保真：不传 extractor（GraphKB 独有字段）；不传 strict_validation
 // （Python 不传 → SimpleKB 恒为 true）。传原始 config（可能为 nil），由
 // SimpleKB 自己做 nil→默认回落。
@@ -425,13 +405,11 @@ func (g *GraphKnowledgeBase) retrieveViaSimpleKB(ctx context.Context, query stri
 }
 
 // triplesToTextChunks 三元组转 TextChunk（图索引的写入形态）。
-//
 // metadata 先展开 triple.metadata 再覆写 triple / chunk_index / chunk_id：
 // 后两键是 13.23 graph_fetch 读侧回链原始分块（metadata["doc_id"] /
 // metadata["chunk_id"]）的契约，缺一个键图扩展就断链。
 // triple 用 json.Marshal（紧凑）而非 Python json.dumps 的 ", " 形态，
 // 语义等价、字节不同（spec §8-2）。
-//
 // Python: add_documents L144-158
 func triplesToTextChunks(triples []common.Triple) []common.TextChunk {
 	chunks := make([]common.TextChunk, 0, len(triples))
@@ -456,7 +434,6 @@ func triplesToTextChunks(triples []common.Triple) []common.TextChunk {
 }
 
 // metaString 从元数据取字符串值，缺失或非 string 收窄空串。
-//
 // Python 侧 pydantic 对非 str 会抛 ValidationError；Go 收窄（偏差 §8-3，
 // 13.25 §8-7 先例）。
 func metaString(meta map[string]any, key string) string {

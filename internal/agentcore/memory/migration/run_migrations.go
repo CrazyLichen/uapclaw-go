@@ -34,7 +34,6 @@ var DefaultSupportMemoryTypes func() []string
 // RunVectorMigrations 执行所有已注册的向量迁移。
 // supportedTypes 为支持的记忆类型列表（如 []string{"user_profile", "summary"}）。
 // 当 supportedTypes 为 nil 或空时，从 DefaultSupportMemoryTypes 获取默认值。
-//
 // Python: run_vector_migrations(vector_store)
 func RunVectorMigrations(ctx context.Context, vectorStore vector.BaseVectorStore, supportedTypes []string) error {
 	// S-14: 对齐 Python，nil 时从 SupportMemoryType 枚举默认获取
@@ -50,7 +49,6 @@ func RunVectorMigrations(ctx context.Context, vectorStore vector.BaseVectorStore
 }
 
 // RunKVMigrations 执行所有已注册的 KV 迁移。
-//
 // Python: run_kv_migrations(kv_store)
 func RunKVMigrations(ctx context.Context, kvStore kv.BaseKVStore) error {
 	return runMigrationsWithRegistry(ctx, KVRegistry,
@@ -62,7 +60,6 @@ func RunKVMigrations(ctx context.Context, kvStore kv.BaseKVStore) error {
 }
 
 // RunSQLMigrations 执行所有已注册的 SQL 迁移。
-//
 // Python: run_sql_migrations(sql_db_store)
 func RunSQLMigrations(ctx context.Context, sqlDbStore migrator.SqlDbStoreForMigrator) error {
 	db := sqlDbStore.GetDB()
@@ -76,7 +73,6 @@ func RunSQLMigrations(ctx context.Context, sqlDbStore migrator.SqlDbStoreForMigr
 }
 
 // RunMessageMigrations 执行所有已注册的消息迁移。
-//
 // Python: run_message_migrations(message_store)
 func RunMessageMigrations(ctx context.Context, messageStore db.BaseMessageStore) error {
 	return runMigrationsWithRegistry(ctx, MessageRegistry,
@@ -89,7 +85,6 @@ func RunMessageMigrations(ctx context.Context, messageStore db.BaseMessageStore)
 
 // RunIndexVersionMigrations 执行所有已注册的索引版本迁移。
 // 注意：此函数不使用 runMigrationsWithRegistry，因为 IndexVersionMigrator.TryMigrate 签名不同。
-//
 // Python: run_index_version_migrations(index)
 func RunIndexVersionMigrations(ctx context.Context, idx index.BaseMemoryIndex) error {
 	registryMap := IndexRegistry.GetAllOperations()
@@ -122,7 +117,6 @@ func RunIndexVersionMigrations(ctx context.Context, idx index.BaseMemoryIndex) e
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runMigrationsWithRegistry 通用迁移运行器，处理日志和错误处理。
-//
 // Python: _run_migrations_with_registry(registry, migrator_factory, store_name)
 func runMigrationsWithRegistry(
 	ctx context.Context,

@@ -15,10 +15,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MilvusGraphStore Milvus 图存储实现。
-//
 // 通过嵌入 graphWriter 和 graphSearcher 拆分读写/搜索职责，
 // 实现 graph.BaseGraphStore 接口。
-//
 // Python: MilvusGraphStore
 type MilvusGraphStore struct {
 	*graphWriter
@@ -63,7 +61,6 @@ func (s *MilvusGraphStore) Config() *graph.GraphConfig {
 
 // Rebuild 重建所有集合和索引。
 // Python: 先尝试 LoadCollection，加载成功则直接返回；加载失败则删数据库再重建。
-//
 // 注意（T-20）：此操作先删除旧数据再重建，如果重建失败旧数据已丢失。
 // Milvus 不支持集合原子重命名，无法实现"备份旧集合 → 建新集合 → 删备份"的事务性回滚。
 // 重建前会记录即将删除的集合信息，以便手动恢复参考。
@@ -302,7 +299,6 @@ func (s *MilvusGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) erro
 }
 
 // ReturnSimilarityScore Milvus 返回的分数为相似度（越大越相似），而非距离。
-//
 // Python: @property return_similarity_score -> Literal[True]
 // Milvus 使用 IP/COSINE 度量，返回值越大表示越相似
 func (s *MilvusGraphStore) ReturnSimilarityScore() bool {

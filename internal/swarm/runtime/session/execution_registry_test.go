@@ -59,7 +59,6 @@ func TestRegistry_MarkRunning记录StartedAt(t *testing.T) {
 }
 
 // TestRegistry_MarkTerminal关闭Terminal且不关闭Done 校验双信号职责分离。
-//
 // spec §2.1：MarkTerminal 是唯一关闭 Terminal 的点；Done 由执行方 defer 关闭。
 func TestRegistry_MarkTerminal关闭Terminal且不关闭Done(t *testing.T) {
 	r := newTestRegistry()
@@ -123,7 +122,6 @@ func TestRegistry_MarkTerminal清空等待交互与Agent(t *testing.T) {
 }
 
 // TestRegistry_MarkTerminal保留Done不被置nil 校验 close_session 不会阻塞。
-//
 // spec §4.4：Go 不能把 Done 置 nil，否则 <-h.Done 会永远阻塞。
 func TestRegistry_MarkTerminal保留Done不被置nil(t *testing.T) {
 	r := newTestRegistry()
@@ -248,7 +246,6 @@ func TestRegistry_终态TTL淘汰(t *testing.T) {
 }
 
 // TestRegistry_未MarkDone的终态不被淘汰 校验 Done 未关时不回收。
-//
 // 对应上游 `handle.task is None or handle.task.done()`：执行方还在跑时
 // 不能把执行从账本里移除。
 func TestRegistry_未MarkDone的终态不被淘汰(t *testing.T) {

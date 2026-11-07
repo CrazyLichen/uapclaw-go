@@ -3,7 +3,6 @@ package openai
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChatCompletionResponse OpenAI Chat Completion API 非流式响应结构体。
-//
 // 对应 OpenAI API 文档: https://platform.openai.com/docs/api-reference/chat/object
 // 包含 vLLM 等兼容服务的扩展字段。
 type ChatCompletionResponse struct {
@@ -111,7 +110,6 @@ type ResponseCompletionTokensDetails struct {
 }
 
 // ChatCompletionChunkResponse OpenAI Chat Completion API 流式响应块。
-//
 // 对应 OpenAI API 文档: https://platform.openai.com/docs/api-reference/chat/streaming
 type ChatCompletionChunkResponse struct {
 	// ID 响应唯一标识

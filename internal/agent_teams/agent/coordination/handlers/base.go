@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseCoordinationHandler 场景级协调事件处理器基类。
-//
 // 子类声明 EVENT_METHOD_MAP（event_key → 方法名），通过 GetCallbacks() 输出
 // event_key → bound method 注册给 CallbackFramework。
 // Python: BaseCoordinationHandler

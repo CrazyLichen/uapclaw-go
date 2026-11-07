@@ -1,8 +1,6 @@
 // Package reme 提供 ReMe 算法的记忆检索操作。
-//
 // ReMe 检索管线：RecallMemoryOp（向量检索）→ RerankMemoryOp（LLM 重排序）→ RewriteMemoryOp（LLM 改写）。
 // 三个操作通过 SequentialOp 顺序组合，结果写入 RuntimeContext 供 Agent 使用。
-//
 // 文件目录：
 //
 //	task/reme/

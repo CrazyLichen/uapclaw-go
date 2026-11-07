@@ -22,7 +22,6 @@ func TestEnsureMonitor_已有运行中handler直接返回(t *testing.T) {
 }
 
 // TestEnsureMonitor_运行时池无条目返回nil 验证 pool 未命中分支。
-//
 // 未激活的 (team, session) 在 runtime 池中查不到条目，GetAgentTeamMonitor
 // 返回 (nil, nil)。T-10 之后 EnsureMonitor 返回哨兵 errNoActiveRuntime，
 // 由调用方决定是否只是接受（两个生产调用方都只记 Warn 不中断）。

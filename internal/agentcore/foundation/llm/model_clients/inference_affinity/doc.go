@@ -1,10 +1,8 @@
 // Package inferenceaffinity 实现 InferenceAffinity (vLLM) 模型客户端。
-//
 // InferenceAffinity API 兼容 OpenAI Chat Completion 协议，客户端嵌入
 // openai.OpenAIModelClient 复用 HTTP 请求/响应/SSE 解析等基础能力，
 // 覆写 Invoke/Stream，在委托前对消息中的 tool_calls 做清洗（sanitize），
 // 并注入 cache_sharing/cache_salt 参数以支持 vLLM KV Cache 共享。
-//
 // # 独有能力
 //
 //   - Release() 方法：释放 vLLM KV Cache，调用 {api_base}/release_kv_cache

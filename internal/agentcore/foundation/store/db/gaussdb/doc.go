@@ -1,5 +1,4 @@
 // Package gaussdb 提供 GaussDB 数据库的方言适配和存储实现。
-//
 // 本包完整对标 Python 的 openjiuwen/extensions/store/db/gauss_dialect.py，
 // 通过自定义 GORM Dialector 处理 GaussDB 与 PostgreSQL 的不兼容点：
 //   - 不支持 NOWAIT / SKIP LOCKED 锁选项
@@ -8,7 +7,6 @@
 //
 // GaussDbStore 实现 db.BaseDbStore 接口，通过 GaussDialector 创建
 // *gorm.DB 实例，供上层组件（SqlDbStore、SqlMessageStore 等）使用。
-//
 // 文件目录：
 //
 //	gaussdb/

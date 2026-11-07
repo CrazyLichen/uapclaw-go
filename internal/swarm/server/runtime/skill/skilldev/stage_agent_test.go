@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // stageAgentMockClient 阶段 Agent 测试用模型客户端。
-//
 // 不嵌入 BaseModelClient（嵌入 nil 接口会在虚方法调用时空指针崩溃），全部方法显式实现。
 type stageAgentMockClient struct {
 	// reply 固定回复内容

@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // UsesSystemAttachmentRole 判断当前路由是否把附件投递为 SystemMessage。
-//
 // Python: _uses_system_attachment_role。仅百炼/DashScope 需要，
 // Anthropic 客户端会把 System 提到顶层 system 字段，故保持 UserMessage。
 func UsesSystemAttachmentRole(provider, legacyProvider, endpointProfile, apiMode string) bool {
@@ -38,7 +37,6 @@ func UsesSystemAttachmentRole(provider, legacyProvider, endpointProfile, apiMode
 }
 
 // BuildWindowMutator 构造附件消息的窗口投影（session 隔离 + role 替换）。
-//
 // Python: build_model_window_mutator。useSystemRole=false 时原样返回，便于调用方统一装配。
 func BuildWindowMutator(sessionID string, useSystemRole bool) ceiface.WindowMutator {
 	return func(w *ceiface.ContextWindow) *ceiface.ContextWindow {

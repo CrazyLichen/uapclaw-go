@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TrajectorySink 成员轨迹快照写入端点。
-//
 // Python: TrajectorySink(Protocol)
 type TrajectorySink interface {
 	// PublishMemberTrajectory 发布成员最新轨迹快照。
@@ -16,7 +15,6 @@ type TrajectorySink interface {
 }
 
 // TrajectorySource 聚合轨迹证据读取端点。
-//
 // Python: TrajectorySource(Protocol)
 type TrajectorySource interface {
 	// GetTrajectory 返回指定会话的聚合团队轨迹。
@@ -24,7 +22,6 @@ type TrajectorySource interface {
 }
 
 // MemberTrajectorySnapshot 团队成员在单个会话中的最新有界轨迹视图。
-//
 // Python: MemberTrajectorySnapshot dataclass
 type MemberTrajectorySnapshot struct {
 	// TeamID 团队标识
@@ -42,7 +39,6 @@ type MemberTrajectorySnapshot struct {
 }
 
 // InMemoryTrajectoryRegistry 内存轨迹注册表，同时实现 TrajectorySink 和 TrajectorySource。
-//
 // Python: InMemoryTrajectoryRegistry
 type InMemoryTrajectoryRegistry struct {
 	// snapshots 快照表，(teamID, sessionID) → memberID → snapshotEntry
@@ -60,7 +56,6 @@ type registryKey struct {
 }
 
 // snapshotEntry 注册表内部快照条目，包含排序元数据。
-//
 // Python: _SnapshotEntry dataclass
 type snapshotEntry struct {
 	snapshot *MemberTrajectorySnapshot
@@ -82,7 +77,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemberTrajectorySnapshot 创建成员轨迹快照，填充运行时默认值。
-//
 // Python: MemberTrajectorySnapshot.make()
 func NewMemberTrajectorySnapshot(
 	teamID, memberID string,
@@ -110,7 +104,6 @@ func NewMemberTrajectorySnapshot(
 }
 
 // NewInMemoryTrajectoryRegistry 创建内存轨迹注册表。
-//
 // Python: InMemoryTrajectoryRegistry()
 func NewInMemoryTrajectoryRegistry() *InMemoryTrajectoryRegistry {
 	return &InMemoryTrajectoryRegistry{
@@ -119,7 +112,6 @@ func NewInMemoryTrajectoryRegistry() *InMemoryTrajectoryRegistry {
 }
 
 // PublishMemberTrajectory 发布成员最新轨迹快照。
-//
 // Python:
 //
 //	Python: key = (snapshot.team_id, snapshot.session_id)
@@ -150,7 +142,6 @@ func (r *InMemoryTrajectoryRegistry) PublishMemberTrajectory(snapshot *MemberTra
 }
 
 // GetTrajectory 返回指定会话的聚合团队轨迹。
-//
 // Python:
 //
 //	Python: key = (team_id, session_id)
@@ -189,7 +180,6 @@ func (r *InMemoryTrajectoryRegistry) GetTrajectory(teamID, sessionID string, fil
 }
 
 // ClearSession 清除指定会话的快照。
-//
 // Python: InMemoryTrajectoryRegistry.clear_session()
 func (r *InMemoryTrajectoryRegistry) ClearSession(teamID, sessionID string) {
 	key := registryKey{teamID: teamID, sessionID: sessionID}
@@ -199,7 +189,6 @@ func (r *InMemoryTrajectoryRegistry) ClearSession(teamID, sessionID string) {
 }
 
 // NowMs 返回当前墙钟时间（毫秒时间戳）。
-//
 // Python: now_ms()
 func NowMs() int {
 	return int(time.Now().UnixMilli())
@@ -208,7 +197,6 @@ func NowMs() int {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // trajectoryForSnapshot 从快照构造轨迹，注入 member_id 和 member_role。
-//
 // Python:
 //
 //	Python: meta = dict(snapshot.trajectory.meta)
@@ -237,7 +225,6 @@ func trajectoryForSnapshot(snapshot *MemberTrajectorySnapshot) *Trajectory {
 }
 
 // shouldKeepCurrent 判断是否应保留当前快照（而非替换为传入快照）。
-//
 // Python:
 //
 //	Python: if incoming.snapshot.recorded_at_ms != current.snapshot.recorded_at_ms:

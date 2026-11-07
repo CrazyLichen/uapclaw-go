@@ -8,11 +8,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TokenCounter Token 计数器抽象接口。
-//
 // 提供文本、消息列表和工具定义的 Token 计数能力，
 // 供 ContextStats 统计和 ContextWindow 构建时使用。
 // 所有方法返回 (int, error)，调用方应检查 error 决定是否降级。
-//
 // Python: openjiuwen/core/context_engine/token/base.py (TokenCounter)
 type TokenCounter interface {
 	// Count 计算文本的 Token 数量

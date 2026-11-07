@@ -3,7 +3,6 @@ package common
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Triple 三元组数据模型，OpenIE 抽取的最小知识单元。
-//
 // Python: openjiuwen/core/retrieval/common/triple.py (Triple)
 // pydantic 必填校验（ValidationError）无 Go 显式对应物——
 // str(x).strip() 构造点保证字段非空天然满足（偏差归档 spec §8-4）。

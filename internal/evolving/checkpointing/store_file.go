@@ -10,11 +10,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // FileCheckpointStore 基于 JSON 文件的检查点存储。
-//
 // 本地 JSON 检查点存储，用于保存和加载 EvolveCheckpoint。
 // 不依赖核心检查点模块（避免污染核心生命周期语义），
 // 可以在任何环境运行，方便调试和审计。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/store_file.py FileCheckpointStore
 type FileCheckpointStore struct {
 	// baseDir 检查点文件存储目录
@@ -30,7 +28,6 @@ type FileCheckpointStore struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewFileCheckpointStore 创建本地 JSON 检查点存储。
-//
 // 构造并确保目录存在。
 // Python: FileCheckpointStore.__init__(base_dir)
 func NewFileCheckpointStore(baseDir string) *FileCheckpointStore {
@@ -39,7 +36,6 @@ func NewFileCheckpointStore(baseDir string) *FileCheckpointStore {
 }
 
 // SaveCheckpoint 保存检查点到 JSON 文件。
-//
 // Python: FileCheckpointStore.save_checkpoint(ckpt, filename="latest.json")
 func (s *FileCheckpointStore) SaveCheckpoint(ckpt *EvolveCheckpoint, filename string) (string, error) {
 	if s.baseDir == "" {
@@ -61,7 +57,6 @@ func (s *FileCheckpointStore) SaveCheckpoint(ckpt *EvolveCheckpoint, filename st
 }
 
 // LoadCheckpoint 从 JSON 文件加载检查点。
-//
 // Python: FileCheckpointStore.load_checkpoint(path)
 func (s *FileCheckpointStore) LoadCheckpoint(path string) (*EvolveCheckpoint, error) {
 	if s.baseDir == "" {
@@ -99,7 +94,6 @@ func (s *FileCheckpointStore) LoadCheckpoint(path string) (*EvolveCheckpoint, er
 }
 
 // LoadStateDict 从检查点文件读取 operators_state。
-//
 // 深度学习风格推理加载器，从检查点 JSON 读取 operators_state：
 //
 //		Python: state = store.load_state_dict(path)
@@ -141,7 +135,6 @@ func ensureDir(dir string) {
 }
 
 // toJSONCompatible 递归将对象转换为 JSON 兼容类型。
-//
 // Python: _to_json_compatible(obj)
 func toJSONCompatible(obj any) any {
 	if obj == nil {

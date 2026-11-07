@@ -113,7 +113,6 @@ func (h *TestDesignStageHandler) readSkillFiles(skillDir string) string {
 }
 
 // designEvals 调用 Agent 设计测试用例。
-//
 // 待实现: 接入 create_stage_agent + Runner.run_agent，解析输出 JSON
 func (h *TestDesignStageHandler) designEvals(sctx *skilldev.SkillDevContext, _ string) map[string]any {
 	// 待实现:

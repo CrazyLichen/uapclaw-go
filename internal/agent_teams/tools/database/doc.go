@@ -1,5 +1,4 @@
 // Package database 提供数据库工具配置、接口定义和 InMemory/SQL 双后端实现。
-//
 // 本包定义数据库连接配置结构体、TeamDatabase 门面接口、DAO 接口（TeamDao/MemberDao/TaskDao/MessageDao）、
 // FSM 状态转换表和校验函数，以及 InMemoryTeamDatabase 和 SqlTeamDatabase 两种后端实现。
 // 对齐 Python 端 openjiuwen/agent_teams/tools/database/ + tools/memory_database.py 的实现。
@@ -7,7 +6,6 @@
 // 通过 NewTeamDatabase 工厂函数按 db_type 自动选择实现。
 // SQL DAO 操作动态表（team_task_{suffix}/team_message_{suffix}），表名由 ctx 中 session_id 决定，
 // session_id 通过 sessionctx.GetSessionID(ctx) 获取（对齐 Python contextvars.ContextVar）。
-//
 // 文件目录：
 //
 //	database/

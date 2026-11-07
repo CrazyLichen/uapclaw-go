@@ -71,7 +71,6 @@ var (
 //
 // 仅在 activationKind 属于 teamCreateKinds 时执行。
 // 已有 team_name 不匹配时保留现有元数据并 warn。
-//
 // T-04: 与 Python 的顺序差异为有意优化——Python 先无条件读 session
 // metadata 再判 kind；Go 先判 kind 再读（非 team-create 场景省一次
 // metadata 读取）。两者对 team-create 场景行为完全一致。
@@ -810,7 +809,6 @@ func onTeamWatcherDone(channelID, sessionID string) {
 }
 
 // splitMaxN 模拟 Python str.split(maxsplit=n) 语义。
-//
 // Python "a  b".split(maxsplit=1) → ["a", "b"]——按任意空白分割且
 // 消耗连续空白（区别于 strings.SplitN(s, " ", n) 会产生空元素）。
 // 前 n 段逐段切割（消耗前导空白），第 n+1 段保留原文（含内部空白）。

@@ -48,7 +48,6 @@ type streamTaskEntry struct {
 // 入站：Channel → MessageHandler → AgentClient → AgentServer
 // 出站：AgentServer → AgentClient → MessageHandler → ChannelManager → Channel
 // externalSessionAliasKey 外部会话别名的键：(channel_id, 外部 session_id)。
-//
 // Python: _external_session_aliases 的 tuple 键 (message_handler.py:394)。
 type externalSessionAliasKey struct {
 	// channelID 来源渠道（目前仅 a2a）
@@ -205,7 +204,6 @@ var knownJiuwenswarmSessionPrefixes = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageHandler 创建消息处理器。
-//
 // Python: MessageHandler(agent_client) — 只需 1 个参数。
 func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 	m := &MessageHandler{
@@ -240,10 +238,8 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 }
 
 // HandleMessage 处理入站消息（用户→Agent）。
-//
 // 将消息写入 userMessages channel，由 forwardLoop 异步消费。
 // Python: handle_message：非阻塞写入，channel 满时丢弃并记录警告。
-//
 // Python: MessageHandler.handle_message()
 func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	if msg == nil {
@@ -268,7 +264,6 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 }
 
 // ConsumeRobotMessages 从出站队列消费一条消息，超时返回 nil。
-//
 // 供 ChannelManager 的出站派发循环调用。
 // Python: MessageHandler.consume_robot_messages()
 func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Message {
@@ -281,7 +276,6 @@ func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Me
 }
 
 // ConsumeUserMessages 从入站队列消费一条消息，超时返回 nil。
-//
 // Python: MessageHandler.consume_user_messages()
 func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Message {
 	select {
@@ -293,7 +287,6 @@ func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Mes
 }
 
 // PublishUserMessagesNowait 将消息同步写入入站队列，满时丢弃。
-//
 // Python: MessageHandler.publish_user_messages_nowait()
 func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 	if msg == nil {
@@ -310,7 +303,6 @@ func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 }
 
 // TriggerSessionStartHook 供 Channel 层调用，触发 SessionStart hook。
-//
 // Python: trigger_session_start_hook (L172-177)：asyncio.create_task fire-and-forget。
 func (mh *MessageHandler) TriggerSessionStartHook(sessionID, source string) {
 	if mh.gatewayHookHandler == nil {
@@ -325,7 +317,6 @@ func (mh *MessageHandler) GetGatewayHookHandlerForTest() *hooksgw.GatewayHookHan
 }
 
 // StartForwarding 启动入站转发循环。
-//
 // Python: start_forwarding：启动 forwardLoop，
 // 并通过 SetServerPushHandler 注册 push 回调（对齐 Python set_server_push_handler）。
 // 出站派发循环由 ChannelManager.StartDispatch 启动。
@@ -423,7 +414,6 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 }
 
 // rememberUserQueryContext 记录用户查询上下文。
-//
 // Python: _remember_user_query_context (L223-235)：
 // 记录 chat.send 的 query 上下文，供 supplement 构造 continuation query 使用。
 // 仅记录 chat.send 消息，跳过 is_supplement=True 的消息，query 截断到 8000 字符。
@@ -476,7 +466,6 @@ func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 }
 
 // getSessionLastUserQuery 获取指定 session 的最近一次用户查询。
-//
 // Python: _get_session_last_user_query (L236-237)。
 func (mh *MessageHandler) getSessionLastUserQuery(sessionID string) string {
 	mh.queryMu.RLock()
@@ -485,7 +474,6 @@ func (mh *MessageHandler) getSessionLastUserQuery(sessionID string) string {
 }
 
 // initGatewayHookHandler 装配 Gateway hooks handler。
-//
 // Python: L163-170 try/except——LoadHooksConfig 失败时 Warn + 返回 nil。
 func (mh *MessageHandler) initGatewayHookHandler() *hooksgw.GatewayHookHandler {
 	defer func() {

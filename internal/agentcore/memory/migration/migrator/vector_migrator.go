@@ -15,7 +15,6 @@ import (
 
 // VectorMigrator 向量集合迁移执行器。
 // 按 entity_key 发现目标集合，调用 VectorStore.UpdateSchema 执行迁移。
-//
 // Python: openjiuwen/core/memory/migration/migrator/vector_migrator.py (VectorMigrator)
 type VectorMigrator struct {
 	// vectorStore 向量存储实例
@@ -34,7 +33,6 @@ type VectorMigrator struct {
 
 // NewVectorMigrator 创建 VectorMigrator 实例。
 // supportedTypes 为支持的记忆类型列表（如 []string{"user_profile", "summary"}）。
-//
 // Python: VectorMigrator(vector_store)
 func NewVectorMigrator(vectorStore vector.BaseVectorStore, supportedTypes []string) *VectorMigrator {
 	return &VectorMigrator{vectorStore: vectorStore, supportedTypes: supportedTypes}
@@ -42,7 +40,6 @@ func NewVectorMigrator(vectorStore vector.BaseVectorStore, supportedTypes []stri
 
 // TryMigrate 尝试执行向量集合迁移。
 // 发现目标集合→过滤待执行操作→调用 UpdateSchema→更新 metadata。
-//
 // Python: VectorMigrator.try_migrate(entity_key, operations)
 func (m *VectorMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
 	collectionNames, err := m.findCollections(ctx, entityKey)
@@ -56,7 +53,6 @@ func (m *VectorMigrator) TryMigrate(ctx context.Context, entityKey string, opera
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // migrateCollections 对集合列表应用版本过滤后的 schema 迁移。
-//
 // Python: VectorMigrator._migrate_collections
 func (m *VectorMigrator) migrateCollections(ctx context.Context, collectionNames []string, operations []operation.Operation) error {
 	for _, collectionName := range collectionNames {
@@ -119,7 +115,6 @@ func (m *VectorMigrator) migrateCollections(ctx context.Context, collectionNames
 
 // findCollections 发现所有匹配 entity_key 的向量集合。
 // 去掉 'vector_' 前缀→校验 SupportMemoryType→ListCollectionNames 过滤后缀。
-//
 // Python: VectorMigrator._find_collections
 func (m *VectorMigrator) findCollections(ctx context.Context, memTypeStr string) ([]string, error) {
 	// 去掉 'vector_' 前缀

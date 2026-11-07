@@ -651,7 +651,6 @@ func TestDeleteTeam_会话逐个释放后Runner一次(t *testing.T) {
 
 // TestTeamLifecycle_构造时注册轮状态观察者 校验 __init__ 末尾的
 // set_round_state_reporter(self._report_round_state)。
-//
 // 上游：team_session_lifecycle.py L100-105
 func TestTeamLifecycle_构造时注册轮状态观察者(t *testing.T) {
 	manager := &fakeTeamLifecycleManager{}
@@ -662,7 +661,6 @@ func TestTeamLifecycle_构造时注册轮状态观察者(t *testing.T) {
 }
 
 // TestTeamLifecycle_轮状态运行中恢复等待输入 校验 _report_round_state(running=true)。
-//
 // 上游：L107-120，running 为真 → coordinator.resume_waiting_for_input
 func TestTeamLifecycle_轮状态运行中恢复等待输入(t *testing.T) {
 	manager := &fakeTeamLifecycleManager{}
@@ -675,7 +673,6 @@ func TestTeamLifecycle_轮状态运行中恢复等待输入(t *testing.T) {
 }
 
 // TestTeamLifecycle_轮状态空闲标记等待输入 校验 _report_round_state(running=false)。
-//
 // 上游：L107-120，running 为假 → coordinator.mark_session_waiting_for_input
 func TestTeamLifecycle_轮状态空闲标记等待输入(t *testing.T) {
 	manager := &fakeTeamLifecycleManager{}
@@ -688,7 +685,6 @@ func TestTeamLifecycle_轮状态空闲标记等待输入(t *testing.T) {
 }
 
 // TestTeamLifecycle_发布暂停完成的事件契约 校验 event_type 与 payload 字段。
-//
 // 上游：L165-186 —— event_type 必须是 chat.processing_status，
 // 且带 is_processing=False / is_complete=True。
 // 前端按 event_type 分支，字符串不得改动。
@@ -718,7 +714,6 @@ func TestTeamLifecycle_发布暂停完成的事件契约(t *testing.T) {
 
 // TestTeamLifecycle_发布暂停完成时刷新轮状态 校验 generation 非空时
 // 先 mark_session_waiting_for_input。
-//
 // 上游：L170-175 —— `if generation is not None: mark_session_waiting_for_input(...)`
 func TestTeamLifecycle_发布暂停完成时刷新轮状态(t *testing.T) {
 	manager := &fakeTeamLifecycleManager{}

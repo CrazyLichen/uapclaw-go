@@ -13,10 +13,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Splitter 文本分割器抽象接口。
-//
 // 对齐 Python Splitter ABC 的 __call__ 抽象方法（Go 侧改名 SplitDoc
 // 避免与接口自身语义混淆）。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/splitter/base.py (Splitter.__call__)
 type Splitter interface {
 	// SplitDoc 分割文档文本，返回分句片段列表（文本 + 原文坐标）。
@@ -24,7 +22,6 @@ type Splitter interface {
 }
 
 // ChunkSpan 分句片段（文本 + 原文字节坐标）。
-//
 // 对齐 Python __call__ 返回的 List[Tuple[str, int, int]]。
 type ChunkSpan struct {
 	// Text 句子文本
@@ -36,11 +33,9 @@ type ChunkSpan struct {
 }
 
 // BaseSplitter 分割器基类适配器。
-//
 // 对齐 Python Splitter 基类的可复用部分：构造校验（155100/155101）+
 // tokenizer 函数保存 + GetNodesFromDocuments/SplitText/GetTokenCount。
 // 具体 Splitter 嵌入本结构体，覆写 SplitDoc。
-//
 // Python: splitter/base.py (Splitter)
 type BaseSplitter struct {
 	// ChunkSize 分块大小（token 数）
@@ -69,14 +64,12 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseSplitter 构造并校验参数。
-//
 // 校验规则一比一对齐 Python Splitter.__init__：
 //   - chunkSize <= 0 时返回 155100 RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID
 //   - chunkOverlap < 0 或 >= chunkSize 时返回 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
 //
 // Python 的 155102 tokenizer 校验（无 encode 且不可 callable）在 Go 侧
 // 不可达省略：enc/dec 是函数类型，静态保证（设计文档偏差 6）。
-//
 // Python: splitter/base.py Splitter.__init__
 func NewBaseSplitter(chunkSize, chunkOverlap int, enc func(string) ([]int, error), dec func([]int) (string, error)) (*BaseSplitter, error) {
 	if chunkSize <= 0 {
@@ -106,10 +99,8 @@ func NewBaseSplitter(chunkSize, chunkOverlap int, enc func(string) ([]int, error
 }
 
 // GetNodesFromDocuments 对文档列表分块，产出 TextChunk 列表。
-//
 // 空文档（Text 为空）记 Warn 跳过；每个 span 经 NewTextChunkFromDocument
 // 生成 TextChunk；尾部汇总日志。
-//
 // Python: splitter/base.py Splitter.get_nodes_from_documents
 func (b *BaseSplitter) GetNodesFromDocuments(docs []reranker.Document) ([]common.TextChunk, error) {
 	returnedNodes := make([]common.TextChunk, 0)
@@ -138,7 +129,6 @@ func (b *BaseSplitter) GetNodesFromDocuments(docs []reranker.Document) ([]common
 }
 
 // SplitText 分割文本，仅返回文本列表（不含坐标）。
-//
 // Python: splitter/base.py Splitter.split_text
 func (b *BaseSplitter) SplitText(text string) ([]string, error) {
 	chunks, err := b.splitDocOf(text)
@@ -153,9 +143,7 @@ func (b *BaseSplitter) SplitText(text string) ([]string, error) {
 }
 
 // GetTokenCount 计算文本 token 数。
-//
 // enc 未设置时按 rune 字符计数（对齐 Python len(text)）。
-//
 // Python: splitter/base.py Splitter._get_token_count
 func (b *BaseSplitter) GetTokenCount(text string) int {
 	if b.tokenizerEnc != nil {

@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TrimPromptToLastUser 只保留最后一条真实用户消息起的片段。
-//
 // Python: agent_evolving/trajectory/messages.py `_trim_prompt_to_last_user`
 // 附件消息（prompts.IsPromptAttachmentUser）不算真实用户消息，不得作为切片起点；
 // 真实用户之后的附件仍保留在返回片段里。

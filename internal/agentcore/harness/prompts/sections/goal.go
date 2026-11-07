@@ -1,5 +1,4 @@
 // 本文件对应 Python openjiuwen/harness/prompts/sections/goal.py。
-//
 // 本批（9.88）只落 <goal_task> 动态 query 的四个函数与三个双语常量；
 // goal_protocol 附件、transcript assessor 提示词由 9.89 补在同一文件。
 package sections
@@ -14,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GoalTaskView <goal_task> 渲染所需的只读目标视图。
-//
 // Python 侧 build_goal_task_query 直接吃 GoalRecord（TYPE_CHECKING 前向引用）；
 // Go 用视图类型打断 sections ↔ goal 的循环依赖（spec D4）。
 type GoalTaskView struct {

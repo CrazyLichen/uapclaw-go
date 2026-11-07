@@ -1,9 +1,7 @@
 // Package interfaces 定义 session 模块各子包共用的接口类型。
-//
 // 本包是 session 模块的接口层，消除各子包之间的接口重复定义和循环依赖。
 // 所有子包（checkpointer、internal、interaction、session 根包）通过导入本包
 // 获取统一的接口定义，避免各自重复声明或产生循环导入。
-//
 // 接口与 Python 的对应关系：
 //   - SessionFacade      → Python agent.Session 和 node.Session 的共有方法集
 //   - InnerSession      → Python BaseSession(ABC)，所有会话类型的基类

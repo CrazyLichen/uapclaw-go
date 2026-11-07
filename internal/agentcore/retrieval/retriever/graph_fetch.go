@@ -1,5 +1,4 @@
 // 图检索 fetch 层：按 chunk_id 反查三元组/正查 chunk。
-//
 // Python: graph_retriever.py (_query_by_filter_milvus L537-552 /
 // _query_by_filter_chroma L554-596 / 归一化 L654-672、L749-768)
 //
@@ -41,7 +40,6 @@ type fetchItem struct {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // queryByFilterMilvus 按过滤表达式查询 Milvus 集合。
-//
 // 对齐 Python _query_by_filter_milvus（L537-552）：filter 字符串 + 全字段
 // 输出 + limit。asyncio.to_thread 异步包装在 Go 无对应物（同步调用）。
 func queryByFilterMilvus(ctx context.Context, client vector_store.MilvusClient, collectionName, filterExpr string, limit int) ([]fetchItem, error) {
@@ -112,7 +110,6 @@ func milvusResultSetToFetchItems(rs milvusclient.ResultSet) []fetchItem {
 }
 
 // queryByFilterChroma 按 where 过滤查询 Chroma 集合。
-//
 // 对齐 Python _query_by_filter_chroma（L554-596）：get_collection +
 // get(where, limit)；结果无分数（score 恒 0.0 字面复刻 Python L589）。
 // Python 整体 try/except 吞错返回 []，Go 侧错误由调用方
@@ -167,7 +164,6 @@ func chromaMetaKeysForFetch(meta chromav2.DocumentMetadata) []string {
 }
 
 // fetchItemsToRetrievalResults fetchItem → RetrievalResult 归一化。
-//
 // 对齐 Python L663-671/L758-767：doc_id 双源（docIDTop 空串回落
 // metadata，Python or 语义）；chunk_id metadata 回落 fallback（_fetch_
 // triples 传 ""，_fetch_chunks 传查询 chunk_id——Python 两处

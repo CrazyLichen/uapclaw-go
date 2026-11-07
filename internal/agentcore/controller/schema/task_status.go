@@ -5,7 +5,6 @@ package schema
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TaskStatus 任务状态枚举，定义任务的所有可能状态。
-//
 // 状态流转：submitted → working → (completed | failed | paused | canceled | input-required | waiting)
 //
 // Python: openjiuwen/core/controller/schema/task.py (TaskStatus)
@@ -37,7 +36,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsTerminal 判断是否为终态（completed/failed/canceled）。
-//
 // 终态任务不会再发生状态转换，A2A 协议据此决定是否关闭流。
 func (s TaskStatus) IsTerminal() bool {
 	return s == TaskCompleted || s == TaskFailed || s == TaskCanceled

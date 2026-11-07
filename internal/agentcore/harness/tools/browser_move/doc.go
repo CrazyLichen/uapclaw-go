@@ -1,8 +1,6 @@
 // Package browser_move 提供浏览器运行时工具集，支持 Playwright MCP 浏览器自动化。
-//
 // 本包实现 BrowserAgent 的运行时内核、进度追踪 Rail、
 // 紧凑探测工具、自定义动作控制器和 Worker Agent 构建器。
-//
 // 文件目录：
 //
 //	browser_move/

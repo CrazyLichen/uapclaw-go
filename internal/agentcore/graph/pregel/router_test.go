@@ -206,7 +206,6 @@ func TestConditionalRouter_零目标(t *testing.T) {
 }
 
 // TestConditionalRouter_selector返回nil报错 nil 目标视为构图错误（fail-closed）。
-//
 // 对齐 Python：`for to in None` 抛 TypeError；Go 若把 nil 当作 END，
 // selector 漏 return 会静默让图提前结束。
 func TestConditionalRouter_selector返回nil报错(t *testing.T) {

@@ -11,11 +11,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillExperienceOperator 技能经验预览参数句柄。
-//
 // 仅预览的参数句柄，管理技能经验记录。
 // 仅拥有 "updates_generated → local_apply_completed" 阶段；
 // 暂存审批由 ExperienceManager 负责，持久化由 EvolutionStore 负责。
-//
 // Python: openjiuwen/core/operator/skill_call/base.py SkillExperienceOperator
 type SkillExperienceOperator struct {
 	// skillName 技能名称
@@ -36,7 +34,6 @@ type SkillExperienceOperatorOption func(*SkillExperienceOperator)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillExperienceOperator 创建 SkillExperienceOperator 实例。
-//
 // Python: SkillExperienceOperator.__init__(skill_name, on_parameter_updated)
 func NewSkillExperienceOperator(skillName string, opts ...SkillExperienceOperatorOption) *SkillExperienceOperator {
 	op := &SkillExperienceOperator{
@@ -59,7 +56,6 @@ func (op *SkillExperienceOperator) OperatorID() string {
 }
 
 // GetTunables 获取可调参数。
-//
 // Python: SkillExperienceOperator.get_tunables()
 func (op *SkillExperienceOperator) GetTunables() map[string]operator.TunableSpec {
 	return map[string]operator.TunableSpec{
@@ -74,7 +70,6 @@ func (op *SkillExperienceOperator) GetTunables() map[string]operator.TunableSpec
 
 // SetParameter 设置参数值。
 // 仅接受 target="experiences" 且 value 非 nil，通知消费者。
-//
 // Python: SkillExperienceOperator.set_parameter(target, value)
 func (op *SkillExperienceOperator) SetParameter(target string, value any) {
 	if target != schema.ExperiencesTarget || value == nil {
@@ -87,10 +82,8 @@ func (op *SkillExperienceOperator) SetParameter(target string, value any) {
 }
 
 // PreviewUpdate 应用本地预览更新，不进入暂存或持久化。
-//
 // 仅支持 target="experiences" + effect=pending_change + mode 为 append 或 merge。
 // 其他组合返回 applied=False。
-//
 // Python: SkillExperienceOperator.preview_update(target, update)
 func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	if target != schema.ExperiencesTarget {
@@ -138,14 +131,12 @@ func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.Up
 }
 
 // GetState 获取当前状态（空操作）。
-//
 // Python: SkillExperienceOperator.get_state() → {}
 func (op *SkillExperienceOperator) GetState() map[string]any {
 	return map[string]any{}
 }
 
 // LoadState 从检查点恢复状态（空操作）。
-//
 // Python: SkillExperienceOperator.load_state(state) → None
 func (op *SkillExperienceOperator) LoadState(_ map[string]any) {
 	// 空操作
@@ -153,7 +144,6 @@ func (op *SkillExperienceOperator) LoadState(_ map[string]any) {
 
 // ApplyUpdate 应用结构化演化更新。
 // 重写默认行为，路由到 PreviewUpdate。
-//
 // Python: PreviewableOperator.apply_update → self.preview_update
 func (op *SkillExperienceOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return op.PreviewUpdate(target, update)

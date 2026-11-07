@@ -1,5 +1,4 @@
 // Package kv 提供键值存储的抽象接口定义和多种后端实现。
-//
 // 本包定义了所有 KV 存储后端必须满足的 BaseKVStore 接口，
 // 以及用于批量操作的 KVPipeline 接口和 PipelineResult 结果类型。
 // InMemoryKVStore 提供基于内存的并发安全实现，支持惰性过期检查。
@@ -9,7 +8,6 @@
 // 对应 Python DbBasedKVStore。
 // RedisStore 提供基于 go-redis 的 Redis 实现，支持 Standalone 和 Cluster 两种模式，
 // 对应 Python RedisStore。
-//
 // 文件目录：
 //
 //	kv/

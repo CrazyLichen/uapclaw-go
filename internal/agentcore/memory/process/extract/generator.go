@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // semanticValidationMatch 语义校验匹配结果，记录 ID 和内容。
-//
 // 对齐 Python: _semantic_validation 返回的 list[tuple[str, str]] 中的每个元组
 type semanticValidationMatch struct {
 	// ID 匹配的记忆 ID
@@ -30,7 +29,6 @@ type semanticValidationMatch struct {
 }
 
 // Generator 记忆生成编排器，串联 MemoryAnalyzer → LongTermMemoryExtractor → 语义校验 → 记忆单元输出。
-//
 // Python: openjiuwen/core/memory/process/extract/generation.py (Generator)
 type Generator struct {
 	// dataIdGenerator 记忆 ID 生成器
@@ -40,10 +38,8 @@ type Generator struct {
 }
 
 // GenAllMemoryParams 记忆生成编排器的全部参数。
-//
 // Python 的 gen_all_memory 使用 **kwargs 接收参数，
 // Go 无法用 **kwargs，将所有参数收进此结构体，方法签名更清晰。
-//
 // Python: Generator.gen_all_memory(**kwargs)
 type GenAllMemoryParams struct {
 	// Messages 当前轮次消息列表
@@ -101,7 +97,6 @@ var operationStrToEnum = map[string]mem_model.OperationType{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGenerator 创建记忆生成编排器。
-//
 // Python: Generator.__init__(data_id_generator, search_manager)
 func NewGenerator(dataIdGenerator *mem_model.DataIdManager, searchManager *search.SearchManager) *Generator {
 	return &Generator{
@@ -111,7 +106,6 @@ func NewGenerator(dataIdGenerator *mem_model.DataIdManager, searchManager *searc
 }
 
 // GenAllMemory 编排全部记忆生成流程。
-//
 // 流程：
 //  1. 验证必填参数（messages, memoryConfig, userID, scopeID, baseModel）
 //  2. 构建 ExtractMemoryParams
@@ -246,7 +240,6 @@ func (g *Generator) GenAllMemory(
 }
 
 // categoriesToMemoryUnit 调用长期记忆提取器，分离指令式记忆和碎片记忆。
-//
 // Python: Generator._categories_to_memory_unit
 func (g *Generator) categoriesToMemoryUnit(
 	ctx context.Context,
@@ -296,7 +289,6 @@ func (g *Generator) categoriesToMemoryUnit(
 }
 
 // processExtractedData 将 VariableResult 列表转换为 VariableUnit 列表。
-//
 // 对齐 Python: Generator._process_extracted_data（@staticmethod）
 // 注意：Python VariableUnit 无 mem_id 字段，但 Go 的 VariableUnit 嵌入了 BaseMemoryUnit（有 MemID），
 // 下游写入依赖 MemID，因此需要为每个 VariableUnit 生成唯一 ID。
@@ -321,7 +313,6 @@ func (g *Generator) processExtractedData(userID string, variableResults []Variab
 }
 
 // processSummaryData 生成摘要记忆单元。
-//
 // 对齐 Python: Generator._process_summary_data
 func (g *Generator) processSummaryData(userID, messageMemID, summary, timestamp string) *mem_model.SummaryUnit {
 	memID := g.dataIdGenerator.GenerateNextID(userID)
@@ -337,7 +328,6 @@ func (g *Generator) processSummaryData(userID, messageMemID, summary, timestamp 
 }
 
 // getFragmentMemoryUnit 从提取的记忆字典中生成碎片记忆单元。
-//
 // 对齐 Python: Generator._get_fragment_memory_unit
 func (g *Generator) getFragmentMemoryUnit(
 	userID string,
@@ -395,7 +385,6 @@ func (g *Generator) getFragmentMemoryUnit(
 }
 
 // processProactiveMemoryData 从主动记忆列表中生成碎片记忆单元（仅处理 ADD 操作）。
-//
 // 对齐 Python: Generator._process_proactive_memory_data
 func (g *Generator) processProactiveMemoryData(
 	userID string,
@@ -470,7 +459,6 @@ func (g *Generator) processProactiveMemoryData(
 }
 
 // semanticValidation 对每条候选记忆逐条串行 LLM 调用，验证与旧记忆的语义一致性。
-//
 // 对齐 Python: Generator._semantic_validation
 // 返回语义匹配的 (ID, Mem) 对列表。
 func (g *Generator) semanticValidation(
@@ -545,7 +533,6 @@ func (g *Generator) semanticValidation(
 }
 
 // handleMemoryWithInstruct 处理指令式记忆，分离 UPDATE 和 DELETE 操作。
-//
 // 对齐 Python: Generator._handle_memory_with_instruct
 func (g *Generator) handleMemoryWithInstruct(
 	ctx context.Context,
@@ -588,7 +575,6 @@ func (g *Generator) handleMemoryWithInstruct(
 }
 
 // processMemoryOperations 处理记忆更新或删除操作（含语义校验）。
-//
 // 对齐 Python: Generator._process_memory_operations
 func (g *Generator) processMemoryOperations(
 	ctx context.Context,

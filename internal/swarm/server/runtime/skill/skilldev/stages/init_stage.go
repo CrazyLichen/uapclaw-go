@@ -67,7 +67,6 @@ func (h *InitStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevCon
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractResources 解析资源文件列表，提取纯文本内容。
-//
 // 支持格式：.zip（解压）/ .docx / .pdf / .txt / .md
 // 待实现: 实现各格式的文本提取逻辑
 func (h *InitStageHandler) extractResources(resources []any, destDir string) []string {
@@ -114,7 +113,6 @@ func (h *InitStageHandler) extractResources(resources []any, destDir string) []s
 }
 
 // extractExistingSkill 解压已有 skill.zip，提取 SKILL.md 内容。
-//
 // 待实现: 实现 zip 解压逻辑
 func (h *InitStageHandler) extractExistingSkill(_ map[string]any, _ string) *string {
 	// 待实现：
@@ -126,7 +124,6 @@ func (h *InitStageHandler) extractExistingSkill(_ map[string]any, _ string) *str
 }
 
 // parseFileToText 将文件解析为纯文本。
-//
 // 待实现: 实现各格式的解析逻辑：
 //   - .docx → docx 解析
 //   - .pdf  → pdf 解析

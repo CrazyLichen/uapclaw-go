@@ -24,7 +24,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SearchUserMem 搜索用户记忆。
-//
 // 流程：① emit_before MEMORY_SEARCH_STARTED → ② searchUserMemImpl → ③ trigger SEARCH_FINISHED
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_SEARCH_STARTED) + search_user_mem
 func (m *LongTermMemory) SearchUserMem(
@@ -63,7 +62,6 @@ func (m *LongTermMemory) SearchUserMem(
 }
 
 // SearchUserHistorySummary 搜索用户历史摘要。
-//
 // 流程：① emit_before MEMORY_SEARCH_STARTED → ② searchUserMemImpl → ③ trigger SEARCH_FINISHED
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_SEARCH_STARTED) + search_user_history_summary
 func (m *LongTermMemory) SearchUserHistorySummary(
@@ -102,14 +100,12 @@ func (m *LongTermMemory) SearchUserHistorySummary(
 }
 
 // GetVariables 获取用户变量。
-//
 // names 为变量名列表：
 //   - nil / 空切片: 返回所有变量
 //   - 单元素: 返回单个变量
 //   - 多元素: 返回多个变量
 //
 // 返回值为 map[变量名]变量值。
-//
 // Python: LongTermMemory.get_variables(names, user_id, scope_id)
 // Python names 类型为 Union[str, list[str], None]，Go 用 []string 统一表达三种语义。
 func (m *LongTermMemory) GetVariables(

@@ -10,11 +10,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EvolutionExtension 演化轨道扩展点接口。
-//
 // EvolutionRail 的 4 个 final 回调内部完成轨迹收集后，
 // 通过此接口将控制权交给子类实现的自定义逻辑。
 // Go 嵌入无虚方法分派，必须通过接口实现多态。
-//
 // Python: EvolutionRail._on_xxx + run_evolution 系列扩展点。
 type EvolutionExtension interface {
 	// OnBeforeInvoke 在每次 invoke 开始时调用（轨迹 builder 已初始化或复用）。

@@ -12,10 +12,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UsageStats 演进经验的使用统计。
-//
 // 记录演进记录被展示、使用、正/负反馈的次数，
 // 用于经验评分和经验淘汰决策。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/types.py UsageStats
 type UsageStats struct {
 	// TimesPresented 展示次数
@@ -33,7 +31,6 @@ type UsageStats struct {
 }
 
 // EvolutionPatch 单次生成的演进变更。
-//
 // 由优化器（Optimizer）生成，描述对 SKILL.md 的一个具体变更，
 // 包括目标 section、动作类型和变更内容。
 // action 属于合法补丁动作集合（append/merge/replace/skip）
@@ -66,10 +63,8 @@ type EvolutionPatch struct {
 }
 
 // EvolutionRecord 单条持久化的演进记录。
-//
 // 由 EvolutionPatch 封装为完整记录，包含来源、时间戳、
 // 评分和使用统计，持久化于技能目录的 evolutions.json。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/types.py EvolutionRecord
 type EvolutionRecord struct {
 	// ID 记录标识，格式: ev_{uuid8}
@@ -95,10 +90,8 @@ type EvolutionRecord struct {
 }
 
 // EvolutionLog 单个技能的所有演进记录容器。
-//
 // 持久化于技能目录的 evolutions.json，包含技能标识、
 // 版本号、更新时间和记录列表。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/types.py EvolutionLog
 type EvolutionLog struct {
 	// SkillID 技能标识
@@ -112,16 +105,13 @@ type EvolutionLog struct {
 }
 
 // PendingChange 等待审批的暂存演进记录快照。
-//
 // 当优化器生成 EvolutionPatch 并经 Operator 预览后，
 // 变更以 PendingChange 形式暂存于 DefaultCheckpointManager._pending 中，
 // 等待 ExperienceManager 审批后 commit 到 EvolutionStore。
-//
 // 此类型在 checkpointing 包中定义（而非 experience 包），
 // 因为 Payload 依赖 EvolutionRecord（同包类型），
 // Go 不允许 checkpointing ↔ experience 循环引用。
 // experience 包将通过类型别名提供等效访问。
-//
 // Python: openjiuwen/agent_evolving/experience/types.py PendingChange
 type PendingChange struct {
 	// OperatorID Operator 标识符，格式: skill_experience_{skill_name}
@@ -160,7 +150,6 @@ var evolutionPatchOptionalFields = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEvolutionPatch 创建 EvolutionPatch 并验证。
-//
 // 验证 action ∈ VALID_PATCH_ACTIONS, target 为合法 EvolutionTarget,
 // action != "skip" 时 section ∈ VALID_SECTIONS。
 // Python: EvolutionPatch.__post_init__
@@ -185,7 +174,6 @@ func NewEvolutionPatch(section, action, content string, target signal.EvolutionT
 }
 
 // MakeEvolutionRecord 创建 EvolutionRecord 的工厂方法。
-//
 // 自动生成 ID (ev_{uuid8}) 和 timestamp (UTC ISO)，
 // 初始化 UsageStats 为零值实例。
 // Python: EvolutionRecord.make(source, context, change, *, score, skill_version, summary)
@@ -214,7 +202,6 @@ func MakeEvolutionRecord(
 }
 
 // EmptyEvolutionLog 创建空的 EvolutionLog。
-//
 // Python: EvolutionLog.empty(skill_id)
 func EmptyEvolutionLog(skillID string) *EvolutionLog {
 	return &EvolutionLog{
@@ -226,7 +213,6 @@ func EmptyEvolutionLog(skillID string) *EvolutionLog {
 }
 
 // NewPendingChange 创建 PendingChange 的工厂方法。
-//
 // Python: PendingChange.make(skill_name, records, *, trajectory, messages)
 func NewPendingChange(
 	skillName string,
@@ -253,7 +239,6 @@ func NewPendingChange(
 }
 
 // NewPendingChangeForSharedRecords 创建共享记录的 PendingChange。
-//
 // Python: PendingChange.make_for_shared_records(skill_name, records, *, trajectory, messages)
 func NewPendingChangeForSharedRecords(
 	skillName string,
@@ -342,14 +327,12 @@ func (r *EvolutionRecord) Clone() *EvolutionRecord {
 }
 
 // IsPending 判断 EvolutionRecord 是否为待定状态。
-//
 // Python: EvolutionRecord.is_pending (property)
 func (r *EvolutionRecord) IsPending() bool {
 	return !r.Applied
 }
 
 // PendingEntries 返回 EvolutionLog 中所有待定记录。
-//
 // Python: EvolutionLog.pending_entries (property)
 func (l *EvolutionLog) PendingEntries() []EvolutionRecord {
 	var result []EvolutionRecord
@@ -362,7 +345,6 @@ func (l *EvolutionLog) PendingEntries() []EvolutionRecord {
 }
 
 // ToDict 将 UsageStats 转换为字典形式。
-//
 // Python: UsageStats.to_dict()
 func (u *UsageStats) ToDict() map[string]any {
 	payload := map[string]any{
@@ -382,7 +364,6 @@ func (u *UsageStats) ToDict() map[string]any {
 }
 
 // FromDictUsageStats 从字典创建 UsageStats。
-//
 // Python: UsageStats.from_dict(data)
 func FromDictUsageStats(data map[string]any) *UsageStats {
 	if data == nil {
@@ -406,7 +387,6 @@ func FromDictUsageStats(data map[string]any) *UsageStats {
 }
 
 // ToDict 将 EvolutionPatch 转换为字典形式。
-//
 // Python: EvolutionPatch.to_dict()
 func (p *EvolutionPatch) ToDict() map[string]any {
 	payload := map[string]any{
@@ -426,7 +406,6 @@ func (p *EvolutionPatch) ToDict() map[string]any {
 }
 
 // FromDictEvolutionPatch 从字典创建 EvolutionPatch。
-//
 // Python: EvolutionPatch.from_dict(data)
 func FromDictEvolutionPatch(data map[string]any) (*EvolutionPatch, error) {
 	if data == nil {
@@ -468,7 +447,6 @@ func FromDictEvolutionPatch(data map[string]any) (*EvolutionPatch, error) {
 }
 
 // ToDict 将 EvolutionRecord 转换为字典形式。
-//
 // Python: EvolutionRecord.to_dict()
 func (r *EvolutionRecord) ToDict() map[string]any {
 	payload := map[string]any{
@@ -495,7 +473,6 @@ func (r *EvolutionRecord) ToDict() map[string]any {
 }
 
 // FromDictEvolutionRecord 从字典创建 EvolutionRecord。
-//
 // Python: EvolutionRecord.from_dict(data)
 func FromDictEvolutionRecord(data map[string]any) (*EvolutionRecord, error) {
 	if data == nil {
@@ -543,7 +520,6 @@ func FromDictEvolutionRecord(data map[string]any) (*EvolutionRecord, error) {
 }
 
 // ToDict 将 EvolutionLog 转换为字典形式。
-//
 // Python: EvolutionLog.to_dict()
 func (l *EvolutionLog) ToDict() map[string]any {
 	entries := make([]map[string]any, len(l.Entries))
@@ -559,7 +535,6 @@ func (l *EvolutionLog) ToDict() map[string]any {
 }
 
 // FromDictEvolutionLog 从字典创建 EvolutionLog。
-//
 // Python: EvolutionLog.from_dict(data)
 func FromDictEvolutionLog(data map[string]any) (*EvolutionLog, error) {
 	if data == nil {

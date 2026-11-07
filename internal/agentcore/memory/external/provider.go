@@ -5,7 +5,6 @@ import "context"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolSchema 工具 Schema 定义，对应 Python get_tool_schemas() 返回的 dict。
-//
 // Python: provider.get_tool_schemas() -> list[dict[str, Any]]
 type ToolSchema struct {
 	// Name 工具名称
@@ -20,7 +19,6 @@ type ToolSchema struct {
 type ProviderOption func(*ProviderOptions)
 
 // ProviderOptions Provider 可选参数集合。
-//
 // 对齐 Python initialize(**kwargs)/prefetch(query, **kwargs)/
 // sync_turn(user_msg, assistant_msg, **kwargs) 中的 kwargs。
 type ProviderOptions struct {

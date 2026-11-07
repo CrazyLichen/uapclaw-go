@@ -20,10 +20,8 @@ import (
 
 // ProjectMemoryRail 项目记忆护栏 — 在 before_model_call 中从缓存发现结果重建
 // project_memory 提示节。
-//
 // 缓存失效发生在写操作工具调用、模式/工作空间切换时，
 // 同时退回到轻量级文件系统快照检查以保证正确性。
-//
 // 本 Rail 位于 uapclawswarm（非 agent-core），以便：
 //   - agent-core 保持不变
 //   - uapclawswarm 无需上游 PR 即可演进 memory-loading 语义
@@ -81,7 +79,6 @@ var _ agentinterfaces.AgentRail = (*ProjectMemoryRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProjectMemoryRail 创建 ProjectMemoryRail 实例。
-//
 // Python: ProjectMemoryRail.__init__(workspace, language="cn", max_chars=60000, additional_directories=None)
 func NewProjectMemoryRail(workspace string, language string, maxChars int, additionalDirectories []string) *ProjectMemoryRail {
 	if language == "" {
@@ -164,11 +161,9 @@ func (r *ProjectMemoryRail) GetLanguage() string {
 }
 
 // SetAdditionalDirectories per-request 热更新额外扫描目录。
-//
 // 由 adapter 在 trusted_dirs 到达时调用，
 // 确保 rail 始终搜索 /init 写 UAPCLAWSWARM.md 的目录
 // （通常是 CLI 进程的 cwd，与 AgentServer 进程 cwd 不同）。
-//
 // Python: ProjectMemoryRail.set_additional_directories(dirs)
 func (r *ProjectMemoryRail) SetAdditionalDirectories(dirs []string) {
 	extra := dirs
@@ -294,7 +289,6 @@ func (r *ProjectMemoryRail) AfterToolCall(_ context.Context, cbc *agentinterface
 }
 
 // ResolveWorkspacePath 解析工作空间根路径为字符串。
-//
 // 优先级：
 //  1. self.Workspace().RootPath — DeepAgent.register_rail 通过
 //     DeepAgentRail.SetWorkspace(Workspace(...)) 注入。最新。

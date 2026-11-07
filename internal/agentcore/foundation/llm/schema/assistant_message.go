@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AssistantMessage 助手消息，LLM 响应的核心载体。
-//
 // 设计要点：
 //   - ToolCalls 内部使用扁平格式（ToolCall 结构体）
 //   - 反序列化时自动将 OpenAI 嵌套格式转为扁平格式（UnmarshalJSON）
@@ -45,7 +44,6 @@ type AssistantMessageOption func(*AssistantMessage)
 // ──────────────────────────── 常量 ────────────────────────────
 
 // FinishReasonNull 流式场景中表示尚未收到终止信号的标记值。
-//
 // Python 端使用字符串 "null"（不是 None）作为默认值，流式合并时通过
 // finish_reason != "null" 判断是否收到终止信号。Go 端保持相同语义。
 const FinishReasonNull = "null"
@@ -95,7 +93,6 @@ func WithLogprobs(logprobs any) AssistantMessageOption {
 }
 
 // NewAssistantMessage 创建助手消息，finish_reason 默认 "null"。
-//
 // Python: AssistantMessage(content=..., tool_calls=..., ...)
 func NewAssistantMessage(content string, opts ...AssistantMessageOption) *AssistantMessage {
 	msg := &AssistantMessage{
@@ -112,7 +109,6 @@ func NewAssistantMessage(content string, opts ...AssistantMessageOption) *Assist
 }
 
 // IsFinished 判断是否已收到终止信号。
-//
 // finish_reason != "null" 表示已收到终止信号。
 // Python: finish_reason != "null"
 func (m *AssistantMessage) IsFinished() bool {
@@ -120,7 +116,6 @@ func (m *AssistantMessage) IsFinished() bool {
 }
 
 // ToOpenAIDict 转换为 OpenAI API 格式的 dict，供 LLM 请求使用。
-//
 // 核心转换逻辑：
 //   - ToolCalls 从扁平格式转为 OpenAI 嵌套格式
 //   - 仅输出非空字段
@@ -169,7 +164,6 @@ func (m *AssistantMessage) ToOpenAIDict() map[string]any {
 }
 
 // MarshalJSON 实现 json.Marshaler 接口，输出内部扁平格式。
-//
 // 内部格式中 tool_calls 的每个元素为扁平 ToolCall（name/arguments 直属）。
 // 如需 OpenAI API 嵌套格式，请使用 ToOpenAIDict() + json.Marshal()。
 func (m *AssistantMessage) MarshalJSON() ([]byte, error) {
@@ -183,7 +177,6 @@ func (m *AssistantMessage) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON 实现 json.Unmarshaler 接口，自动将 OpenAI 嵌套 tool_calls 转为扁平格式。
-//
 // Python: AssistantMessage.convert_openai_tool_calls_format() (model_validator)
 func (m *AssistantMessage) UnmarshalJSON(data []byte) error {
 	// 使用临时结构体解析，避免无限递归

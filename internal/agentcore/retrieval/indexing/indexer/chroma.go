@@ -19,11 +19,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChromaIndexer ChromaDB 文档索引管理器。
-//
 // 实现 Indexer 接口，负责将 TextChunk 写入 ChromaDB 向量库，
 // 支持五种操作：BuildIndex（新建）、UpdateIndex（更新）、
 // DeleteIndex（删除）、IndexExists（存在性检查）、GetIndexInfo（元信息查询）。
-//
 // Python: retrieval/indexing/indexer/chroma_indexer.py (ChromaIndexer)
 type ChromaIndexer struct {
 	// chromaPath ChromaDB 持久化路径
@@ -66,7 +64,6 @@ type ChromaIndexerOption func(*ChromaIndexer)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewChromaIndexer 创建 ChromaIndexer 实例。
-//
 // 对齐 Python ChromaIndexer.__init__。
 func NewChromaIndexer(
 	config common.VectorStoreConfig,
@@ -179,12 +176,10 @@ func (ci *ChromaIndexer) MetadataField() string { return ci.metadataField }
 func (ci *ChromaIndexer) DocIDField() string { return ci.docIDField }
 
 // Client 返回 ChromaDB 持久客户端。
-//
 // M-44: 对齐 Python @property client -> self._client。
 func (ci *ChromaIndexer) Client() chromav2.Client { return ci.client }
 
 // Close 关闭索引管理器（空操作，对齐 Python）。
-//
 // Python: chroma_indexer.py close() 同样是 pass —— 持久客户端为进程级共享资源，
 // 由单个索引器关闭会让其他持有者失效，生命周期交给进程退出。
 func (ci *ChromaIndexer) Close() error {
@@ -192,7 +187,6 @@ func (ci *ChromaIndexer) Close() error {
 }
 
 // BuildIndex 构建索引。将 chunks 去重→嵌入→写入向量库。
-//
 // 对齐 Python ChromaIndexer.build_index。
 // 4 步流程：
 //  1. 查重 doc_id（collection.get 检查已有文档）
@@ -375,7 +369,6 @@ func (ci *ChromaIndexer) BuildIndex(
 }
 
 // UpdateIndex 更新索引。先删后建。
-//
 // 对齐 Python ChromaIndexer.update_index（chroma_indexer.py L198-215）。
 // S-11: 对齐 Python 整体 try/except 吞错语义——delete 或 build 任一失败均
 // 记录 Error 日志后返回 (false, nil)，不让异常传播阻断调用方
@@ -423,7 +416,6 @@ func (ci *ChromaIndexer) UpdateIndex(
 }
 
 // DeleteIndex 删除索引。ChromaDB 不支持复杂过滤删除，需先查后删。
-//
 // 对齐 Python ChromaIndexer.delete_index。
 // M-44: 复用构造时创建的持久 client（对齐 Python self._client.get_collection）。
 func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexName string) (bool, error) {
@@ -494,7 +486,6 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 }
 
 // IndexExists 检查索引是否存在。
-//
 // 对齐 Python ChromaIndexer.index_exists。
 // M-44: 复用持久 client + 真实 get_collection 语义。
 // 原实现 NewChromaVectorStore 内部 GetOrCreateCollection 永不失败，
@@ -509,7 +500,6 @@ func (ci *ChromaIndexer) IndexExists(ctx context.Context, indexName string) (boo
 }
 
 // GetIndexInfo 获取索引元信息。
-//
 // 对齐 Python ChromaIndexer.get_index_info。
 // M-44: 复用构造时创建的持久 client（对齐 Python self._client.get_collection）。
 func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (map[string]any, error) {

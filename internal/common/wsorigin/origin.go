@@ -9,12 +9,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OriginChecker WebSocket Origin 安全校验器。
-//
 // Python: jiuwenswarm/common/security/ws_origin.py 全部函数
 //
 // 在 WebSocket 握手阶段校验浏览器 Origin 头，防止跨站 WebSocket 劫持（CSWSH）。
 // 每次调用 IsEnabled/GetAllowedHosts/IsAllowed 时重新读取环境变量，支持热生效。
-//
 // 使用方式：
 //
 //		checker := wsorigin.NewOriginChecker()
@@ -68,7 +66,6 @@ func NewOriginCheckerWithEnv(enableCheckEnv, allowedHostsEnv string) *OriginChec
 }
 
 // IsEnabled 返回是否启用了 Origin 校验。
-//
 // Python: is_origin_check_enabled()
 // 环境变量值为 "1" 时启用，未设置或其他值时禁用。
 func (c *OriginChecker) IsEnabled() bool {
@@ -76,7 +73,6 @@ func (c *OriginChecker) IsEnabled() bool {
 }
 
 // GetAllowedHosts 返回当前白名单主机名集合（小写）。
-//
 // Python: get_allowed_origin_hosts()
 // 每次调用重新读取环境变量，支持热生效。
 // 环境变量为逗号分隔的主机名，空项和前后空格会被忽略。
@@ -96,7 +92,6 @@ func (c *OriginChecker) GetAllowedHosts() map[string]bool {
 }
 
 // IsAllowed 校验 Origin 是否允许。
-//
 // Python: is_allowed_browser_origin(origin)
 //   - origin 为空字符串 → 白名单含 "none" 才放行（允许非浏览器客户端）
 //   - URL 解析失败 → 拒绝
@@ -126,7 +121,6 @@ func (c *OriginChecker) IsAllowed(origin string) bool {
 }
 
 // ForbiddenResponse 返回校验失败时的 HTTP 响应信息。
-//
 // Python: forbidden_origin_response()
 // 返回值：HTTP 状态码 403、响应头、响应体。
 // 调用方可根据返回值自行构造 http.ResponseWriter 响应。

@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateBootstrapEnv 为实例创建 bootstrap .env 文件。
-//
 // 生成的 .env 文件包含：
 //   - UAPCLAW_DATA_DIR: 实例工作区路径
 //   - UAPCLAW_INSTANCE: 实例名称
@@ -65,7 +64,6 @@ func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 }
 
 // CreateBootstrapEnvForName 按名称创建 bootstrap .env 文件。
-//
 // 便捷方法：从 instances.yaml 加载配置后调用 CreateBootstrapEnv。
 // Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env_for_name(name, workspace)
 func CreateBootstrapEnvForName(name string, workspace string) (string, error) {

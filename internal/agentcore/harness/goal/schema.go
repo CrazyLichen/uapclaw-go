@@ -379,6 +379,7 @@ func CreateGoalRecord(sessionID, objective string, maxAttempts, tokenBudget *int
 // FromGoalRecordDict 严格还原持久化记录；任何字段非法都返回错误（由 store 清空）。
 // Python: GoalRecord.from_dict (schema.py L229)
 func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
+	// 三个身份字段缺一不可：目标描述、会话号、目标号
 	objective, objectiveOK := nonEmptyString(data["objective"])
 	sessionID, sessionOK := nonEmptyString(data["session_id"])
 	goalID, goalOK := nonEmptyString(data["goal_id"])
@@ -386,6 +387,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 		return nil, errors.New("invalid persisted GoalRecord identity")
 	}
 
+	// 状态：缺省为 active，出现非法取值直接报错（不猜测用户意图）
 	statusRaw := any(string(GoalStatusActive))
 	if raw, exists := data["status"]; exists {
 		statusRaw = raw
@@ -397,6 +399,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 		return nil, errors.New("invalid persisted GoalRecord status")
 	}
 
+	// 版本号与尝试次数都是非负整数，缺省为 0
 	revision := 0
 	if raw, exists := data["revision"]; exists {
 		parsed, err := utils.PyInt(raw)
@@ -414,6 +417,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 		attemptCount = parsed
 	}
 
+	// 已用时长，缺省 0，出现负数视为非法
 	timeUsedRaw := any(0)
 	if raw, exists := data["time_used_seconds"]; exists {
 		timeUsedRaw = raw
@@ -423,6 +427,7 @@ func FromGoalRecordDict(data map[string]any) (*GoalRecord, error) {
 		return nil, err
 	}
 
+	// token 用量是嵌套结构，缺省或类型不符时保持零值
 	usage := TokenUsage{}
 	if raw, ok := data["token_usage"].(map[string]any); ok {
 		usage, err = TokenUsageFromDict(raw)

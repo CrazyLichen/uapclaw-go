@@ -10,13 +10,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowNodeSession 工作流节点会话接口，TracerWorkflowUtils 方法的 session 参数类型。
-//
 // Python: TracerWorkflowUtils 中 session 参数的隐式接口（duck typing），
 // Python 不定义接口，Go 必须显式定义。
-//
 // 仅 *internal.NodeSession（及嵌入它的 *SubWorkflowSession）满足此接口，
 // WorkflowSession 不满足（缺少 ExecutableID/ParentID/NodeID/NodeType）。
-//
 // 与 interfaces.InnerSession + Provider 的映射关系：
 //
 //	委托调用：Tracer()       → InnerSession.Tracer()

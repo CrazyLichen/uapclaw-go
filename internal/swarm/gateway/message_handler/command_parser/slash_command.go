@@ -165,7 +165,6 @@ var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 }
 
 // modeSubcommandStrings /mode 子命令词表（19 项）。
-//
 // Python: ModeSubcommand（slash_command.py:39-61）——旧成员保留 + 8 个新三段
 // canonical 成员，`_VALID_MODE_LINES` 由整表派生。Go 逐项对齐，避免
 // `/mode team.work.normal` 之类被误判「非法指令」。
@@ -212,7 +211,6 @@ var ValidSwitchSubcommands = buildSwitchSubcommandValues()
 
 // ControlMessageTexts 控制消息文本映射
 // builtinCommandsMeta 快捷面板展示的内置命令元数据（静态，无 IO）。
-//
 // Python: BUILTIN_COMMANDS_META (gateway/message_handler/command_parser/slash_command.py:483-572)。
 // description 由 description_i18n["zh"] 派生（对齐 list_builtin_commands 的旧客户端兼容）。
 var builtinCommandsMeta = []map[string]any{
@@ -326,7 +324,6 @@ var parsedControlActionStrings = map[ParsedControlAction]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParsedControlActionString 返回 ParsedControlAction 的 Python 枚举值字符串。
-//
 // Python: ParsedControlAction.value（"new_session_ok" 等），用于日志字段对齐。
 func ParsedControlActionString(a ParsedControlAction) string {
 	if s, ok := parsedControlActionStrings[a]; ok {
@@ -615,6 +612,7 @@ func buildControlMessageTexts() map[string]bool {
 	return result
 }
 
+// buildFirstBatchRegistry 构建首批内置斜杠命令的登记表。
 func buildFirstBatchRegistry() []SlashCommandEntry {
 	return []SlashCommandEntry{
 		{
@@ -707,7 +705,6 @@ func allSwitchSubcommands() []string {
 }
 
 // ListBuiltinCommands 返回快捷面板要展示的命令清单（静态元数据，无 IO）。
-//
 // Python: list_builtin_commands (slash_command.py:574-592)。params.work_mode 用于按
 // available_modes 过滤；description 保留中文供旧客户端，description_i18n 供新客户端选语言。
 func ListBuiltinCommands(params map[string]any) map[string]any {

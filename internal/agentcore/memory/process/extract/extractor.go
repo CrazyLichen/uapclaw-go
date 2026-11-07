@@ -28,7 +28,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractLongTermMemory 从对话消息中提取长期记忆碎片。
-//
 // 流程：
 //  1. 拼接 history_messages + messages 为 reference_str
 //  2. 拼接 user 角色消息为 input_msg_str
@@ -153,10 +152,8 @@ func ExtractLongTermMemory(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildTimeContext 将 ISO 时间戳转换为中文周范围字符串。
-//
 // 输出格式: "{年}年{月}月{日}日(周一)～{年}年{月}月{日}日(周日)（即{MM.DD}～{MM.DD}）"
 // 解析失败时原样返回 timestamp（对齐 Python: except (ValueError, TypeError): return timestamp）。
-//
 // Python: LongTermMemoryExtractor._build_time_context
 func buildTimeContext(timestamp string) string {
 	// 尝试多种格式解析（对齐 Python: datetime.fromisoformat）

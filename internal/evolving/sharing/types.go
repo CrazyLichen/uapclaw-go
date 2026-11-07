@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SharingMeta 每条经验的共享侧元数据。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py SharingMeta
 type SharingMeta struct {
 	// SkillName 技能名称
@@ -36,10 +35,8 @@ type SharingMeta struct {
 }
 
 // SharedExperience EvolutionRecord 的共享包装。
-//
 // 所有共享专属元数据（keywords/summary/SharingMeta）在此类型上，
 // 不侵入 EvolutionRecord 本身。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py SharedExperience
 type SharedExperience struct {
 	// Record 底层演进记录
@@ -53,7 +50,6 @@ type SharedExperience struct {
 }
 
 // SharedSkillBundle 后端存储最小单元：一个 skill_id 下的经验集合。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py SharedSkillBundle
 type SharedSkillBundle struct {
 	// BundleID Bundle 标识，格式: sb_{uuid10hex}
@@ -75,7 +71,6 @@ type SharedSkillBundle struct {
 }
 
 // SkillPackageMeta Hub 上技能包的元数据。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py SkillPackageMeta
 type SkillPackageMeta struct {
 	// SkillID 技能 ID
@@ -89,7 +84,6 @@ type SkillPackageMeta struct {
 }
 
 // SkillSearchResult 搜索结果行。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py SkillSearchResult
 type SkillSearchResult struct {
 	// SkillID 技能 ID
@@ -107,7 +101,6 @@ type SkillSearchResult struct {
 }
 
 // QueryKeywords 下载路径检索关键词集。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py QueryKeywords
 type QueryKeywords struct {
 	// Keywords 检索关键词
@@ -119,7 +112,6 @@ type QueryKeywords struct {
 }
 
 // UploadResult 上传结果。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py UploadResult
 type UploadResult struct {
 	// OK 是否成功
@@ -133,7 +125,6 @@ type UploadResult struct {
 }
 
 // DroppedRecord 被 QC 丢弃的记录及原因。
-//
 // Python: StagingResult.dropped_for_share 类型 List[Tuple[EvolutionRecord, str]]
 type DroppedRecord struct {
 	// Record 被丢弃的演进记录
@@ -143,7 +134,6 @@ type DroppedRecord struct {
 }
 
 // StagingResult ShareStager 筛选结果。
-//
 // Python: openjiuwen/agent_evolving/sharing/types.py StagingResult
 type StagingResult struct {
 	// StagedForShare 通过 QC 的经验
@@ -171,7 +161,6 @@ func NewSharingMeta(skillName string) *SharingMeta {
 }
 
 // MakeSharedSkillBundle 创建 SharedSkillBundle，聚合关键词并去重。
-//
 // Python: SharedSkillBundle.make()
 func MakeSharedSkillBundle(
 	skillName string,
@@ -211,7 +200,6 @@ func MakeSharedSkillBundle(
 }
 
 // EmptyStagingResult 创建空的 StagingResult。
-//
 // Python: StagingResult.empty()
 func EmptyStagingResult() *StagingResult {
 	return &StagingResult{
@@ -221,14 +209,12 @@ func EmptyStagingResult() *StagingResult {
 }
 
 // HasShareable StagingResult 是否有可共享的经验。
-//
 // Python: StagingResult.has_shareable
 func (s *StagingResult) HasShareable() bool {
 	return len(s.StagedForShare) > 0
 }
 
 // ToDict 将 SharingMeta 转换为字典形式。
-//
 // Python: SharingMeta.to_dict()
 func (m *SharingMeta) ToDict() map[string]any {
 	payload := map[string]any{
@@ -251,7 +237,6 @@ func (m *SharingMeta) ToDict() map[string]any {
 }
 
 // FromDictSharingMeta 从字典创建 SharingMeta。
-//
 // Python: SharingMeta.from_dict()
 func FromDictSharingMeta(data map[string]any) *SharingMeta {
 	if data == nil {
@@ -280,7 +265,6 @@ func FromDictSharingMeta(data map[string]any) *SharingMeta {
 }
 
 // ToDict 将 SharedExperience 转换为字典形式。
-//
 // Python: SharedExperience.to_dict()
 func (e *SharedExperience) ToDict() map[string]any {
 	keywords := e.Keywords
@@ -301,7 +285,6 @@ func (e *SharedExperience) ToDict() map[string]any {
 }
 
 // FromDictSharedExperience 从字典创建 SharedExperience。
-//
 // Python: SharedExperience.from_dict()
 func FromDictSharedExperience(data map[string]any) (*SharedExperience, error) {
 	if data == nil {
@@ -327,7 +310,6 @@ func FromDictSharedExperience(data map[string]any) (*SharedExperience, error) {
 }
 
 // ToDict 将 SharedSkillBundle 转换为字典形式。
-//
 // Python: SharedSkillBundle.to_dict()
 func (b *SharedSkillBundle) ToDict() map[string]any {
 	experiences := make([]map[string]any, len(b.Experiences))
@@ -351,7 +333,6 @@ func (b *SharedSkillBundle) ToDict() map[string]any {
 }
 
 // FromDictSharedSkillBundle 从字典创建 SharedSkillBundle。
-//
 // Python: SharedSkillBundle.from_dict()
 func FromDictSharedSkillBundle(data map[string]any) (*SharedSkillBundle, error) {
 	if data == nil {
@@ -389,7 +370,6 @@ func FromDictSharedSkillBundle(data map[string]any) (*SharedSkillBundle, error) 
 }
 
 // ToDict 将 SkillPackageMeta 转换为字典形式。
-//
 // Python: SkillPackageMeta.to_dict()
 func (m *SkillPackageMeta) ToDict() map[string]any {
 	return map[string]any{
@@ -401,7 +381,6 @@ func (m *SkillPackageMeta) ToDict() map[string]any {
 }
 
 // FromDictSkillPackageMeta 从字典创建 SkillPackageMeta。
-//
 // Python: SkillPackageMeta.from_dict()
 func FromDictSkillPackageMeta(data map[string]any) *SkillPackageMeta {
 	if data == nil {
@@ -416,7 +395,6 @@ func FromDictSkillPackageMeta(data map[string]any) *SkillPackageMeta {
 }
 
 // ToDict 将 SkillSearchResult 转换为字典形式。
-//
 // Python: SkillSearchResult.to_dict()
 func (r *SkillSearchResult) ToDict() map[string]any {
 	return map[string]any{
@@ -430,7 +408,6 @@ func (r *SkillSearchResult) ToDict() map[string]any {
 }
 
 // FromDictSkillSearchResult 从字典创建 SkillSearchResult。
-//
 // Python: SkillSearchResult.from_dict()
 func FromDictSkillSearchResult(data map[string]any) *SkillSearchResult {
 	if data == nil {
@@ -447,7 +424,6 @@ func FromDictSkillSearchResult(data map[string]any) *SkillSearchResult {
 }
 
 // ToDict 将 QueryKeywords 转换为字典形式。
-//
 // Python: QueryKeywords.to_dict()
 func (q *QueryKeywords) ToDict() map[string]any {
 	return map[string]any{
@@ -458,7 +434,6 @@ func (q *QueryKeywords) ToDict() map[string]any {
 }
 
 // FromDictQueryKeywords 从字典创建 QueryKeywords。
-//
 // Python: QueryKeywords.from_dict()
 func FromDictQueryKeywords(data map[string]any) *QueryKeywords {
 	if data == nil {

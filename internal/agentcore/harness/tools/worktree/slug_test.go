@@ -93,7 +93,6 @@ func makeLongString(c rune, n int) string {
 }
 
 // TestWorktreePathFor_嵌套slug扁平化 验证 user/feature 落盘为 user+feature。
-//
 // 理由（上游 _flatten_slug docstring）：嵌套目录在删除父 worktree 时
 // 会连带删掉其下所有子 worktree。
 func TestWorktreePathFor_嵌套slug扁平化(t *testing.T) {
@@ -129,7 +128,6 @@ func TestWorktreeBranchName_拒绝穿越(t *testing.T) {
 }
 
 // TestValidateSlug_Windows路径 验证反斜杠与盘符被拒绝。
-//
 // Python: test_path_traversal_windows_separator / test_windows_drive_path_rejected
 func TestValidateSlug_Windows路径(t *testing.T) {
 	for _, bad := range []string{`..\evil`, `C:\evil`, `a\..\..\b`, `..\\..\\x`, `a/..\b`} {

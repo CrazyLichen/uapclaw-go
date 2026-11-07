@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GoalReportSink 会话内当前 goal 尝试的报告暂存（last-write-wins）。
-//
 // 只写 sink 不写 GoalRecord，由 TaskCompletionRail 轮末 consume。
 // Python: GoalReportSink (tools/goal.py L25)
 type GoalReportSink struct {

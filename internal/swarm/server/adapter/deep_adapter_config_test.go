@@ -1110,7 +1110,6 @@ func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
 }
 
 // TestPlanControllerEnsureState 验证控制器接入后的状态写入（替换已删除的 switchModeForState）。
-//
 // S3：控制器归 AgentRuntime 持有，adapter 只提供状态存储（PlanStateAccessor）。
 func TestPlanControllerEnsureState(t *testing.T) {
 	d := NewDeepAdapter()

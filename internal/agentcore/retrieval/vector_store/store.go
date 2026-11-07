@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StoreCreateOptions 向量存储构造选项（收纳 Python 构造 **kwargs）。
-//
 // Python create_vector_store(config, **kwargs) 的 kwargs 透传各构造器；
 // 其中 vector_field 为 str | ChromaVectorField / str | MilvusVectorField
 // 联合类型——str 侧由 VectorFieldName 承载（工厂转强类型），定义侧由
@@ -120,13 +119,11 @@ func WithStoreDocIDField(name string) StoreCreateOption {
 }
 
 // CreateVectorStore 根据配置动态创建向量存储实例。
-//
 // Python: openjiuwen/core/retrieval/vector_store/store.py (create_vector_store)。
 // milvus/chroma 分支组装既有构造器（含 str→强类型转换，对齐 Python
 // isinstance 分支）；pgvector 分支返回 155402 not-implemented（⤵️ PGVectorStore
 // 依赖 pgvector-go 拆后交付，届时只改本分支内部）；default 分支 155402
 // 错误文案逐字符对齐 Python（",and" 无空格——相邻 f-string 隐式拼接）。
-//
 // 审查修复 T-14（归档）：kwargs→options 翻译边界——Python 显式传
 // vector_field=None 触发 155109 在 options 模式下不可达（"未设置"与
 // "显式 nil"不可区分，一律兜底默认值）；typed-nil（(*MilvusAUTO)(nil)）

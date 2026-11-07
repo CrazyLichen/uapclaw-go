@@ -31,7 +31,6 @@ type SqlDbStoreForMigrator interface {
 }
 
 // MemoryMetaManager 内存元数据管理器，基于 SqlDbQuerier 操作 memory_meta 表。
-//
 // Python: openjiuwen/core/memory/migration/migrator/memory_meta_manager.py (MemoryMetaManager)
 type MemoryMetaManager struct {
 	// db 数据库查询接口
@@ -59,7 +58,6 @@ func NewMemoryMetaManager(db SqlDbQuerier) *MemoryMetaManager {
 // Add 添加 schema 版本记录。
 // tableName 或 schemaVersion 为空时静默返回 nil。
 // 若记录已存在则跳过（幂等）。
-//
 // Python: MemoryMetaManager.add(table_name, schema_version)
 // 注意：Python 支持 **kwargs，Go 不支持。但 Python 实际也未使用 kwargs，因此无需映射。
 func (m *MemoryMetaManager) Add(ctx context.Context, tableName string, schemaVersion string) error {
@@ -83,7 +81,6 @@ func (m *MemoryMetaManager) Add(ctx context.Context, tableName string, schemaVer
 
 // GetByTableName 按 table_name 查询 schema 版本记录。
 // 无结果时统一返回 (nil, nil)，对齐 Python 返回 None 的语义。
-//
 // Python: MemoryMetaManager.get_by_table_name(table_name)
 func (m *MemoryMetaManager) GetByTableName(ctx context.Context, tableName string) ([]map[string]any, error) {
 	results, err := m.db.ConditionGet(ctx, m.metaTable,
@@ -99,7 +96,6 @@ func (m *MemoryMetaManager) GetByTableName(ctx context.Context, tableName string
 
 // DeleteByTableName 按 table_name 删除 schema 版本记录。
 // 补齐 Python 中存在但 Go 之前缺失的方法。
-//
 // Python: MemoryMetaManager.delete_by_table_name(table_name)
 func (m *MemoryMetaManager) DeleteByTableName(ctx context.Context, tableName string) error {
 	return m.db.Delete(ctx, m.metaTable,

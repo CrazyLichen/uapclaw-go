@@ -41,7 +41,6 @@ type MemoryAgentConfigInput struct {
 // ContextEvolvingReActAgent 带记忆检索能力的 ReActAgent。
 // 嵌入 *ReActAgent 获得所有父类方法，重写 Invoke 添加记忆检索。
 // 对齐 Python ContextEvolvingReActAgent(ReActAgent)。
-//
 // 两层 Invoke 设计：
 //   - 外层 Invoke()：路由（matts_mode → RunTrials，否则 → invokeWithMemory）
 //   - 内层 invokeWithMemory()：检索记忆 → 增强输入 → 调父类 ReActAgent.Invoke()
@@ -85,7 +84,6 @@ const defaultContextEvolvingSystemPrompt = "You are a helpful assistant with acc
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextEvolvingReActAgent 创建带记忆检索能力的 ReActAgent。
-//
 // 对齐 Python ContextEvolvingReActAgent.__init__(card, user_id, memory_service, ...)：
 // 构造签名不含 config，父类使用默认 ReActAgentConfig（等价 Python super().__init__(card)），
 // 构造末尾调用 AutoConfigure 从环境配置模型客户端。
@@ -268,7 +266,6 @@ func parseMattsK(inputs map[string]any) int {
 }
 
 // extractTrajectory 从会话上下文提取并格式化轨迹。
-//
 // 对齐 Python run_trials:
 // context = agent.context_engine.get_context(session_id=..., context_id="default_context_id")
 // trajectory = format_trajectory(context.get_messages())
@@ -330,7 +327,6 @@ func (a *ContextEvolvingReActAgent) GetMemoryService() *service.TaskMemoryServic
 }
 
 // AutoConfigure 从配置自动配置 Agent 的模型客户端。
-//
 // 对齐 Python ContextEvolvingReActAgent._auto_configure()：
 // 新建 ReActAgentConfig → configure_model_client → configure_prompt_template →
 // configure_max_iterations(5) → self.configure(config)。
@@ -469,7 +465,6 @@ func copyMap(m map[string]any) map[string]any {
 }
 
 // trajectorySuccess 判断内层 invoke 结果是否应记为成功轨迹。
-//
 // ReAct 循环在「空回答 / 迭代耗尽 / provider 错误」时会返回 result_type=error
 // 且 output 携带说明文案；若一律置 Success=true，失败轨迹会被当作成功样本
 // 喂进演进数据。

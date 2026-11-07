@@ -99,10 +99,8 @@ type CustomPredicateEvaluator struct {
 }
 
 // NoProgressAnswerEvaluator 连续多轮"有 answer 但内容过短"时判定无进展。
-//
 // 计数是"最近连续轮"：result_type=answer 且内容长度 < minAnswerChars 才累加，
 // 其他情况立即清零；达到阈值即停。stop_reason 直接用类型名。
-//
 // Python: NoProgressAnswerEvaluator (harness/schema/stop_condition.py)
 type NoProgressAnswerEvaluator struct {
 	// maxConsecutiveEmptyAnswers 连续短答案轮次阈值
@@ -380,7 +378,6 @@ func toInt(v any) int {
 }
 
 // NewNoProgressAnswerEvaluator 创建无进展停止评估器。
-//
 // Python: NoProgressAnswerEvaluator.__init__
 func NewNoProgressAnswerEvaluator(maxConsecutiveEmptyAnswers, minAnswerChars int) *NoProgressAnswerEvaluator {
 	if maxConsecutiveEmptyAnswers < 1 {

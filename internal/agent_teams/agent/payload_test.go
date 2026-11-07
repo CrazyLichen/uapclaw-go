@@ -158,7 +158,6 @@ func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_端口分配(t *testing.T
 }
 
 // TestSpawnPayloadBuilder_BuildMemberMessagerConfig_并发成员分配 并发分配不 panic 且端口互不重复。
-//
 // S-03：memberPortMap 无锁时，SpawnManager 为每个不健康成员各起一条重启 goroutine，
 // 两条同时进入这里就是 concurrent map writes（runtime fatal error，不可 recover）。
 // 用 -race 运行时该用例会报撕裂读写；不带 -race 时至少验证端口唯一性与稳定性。

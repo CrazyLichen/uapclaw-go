@@ -15,7 +15,6 @@ import (
 
 // TestCreateDeepAgent_透传ContextEngineConfig 验证 CreateDeepAgent 把
 // CreateDeepAgentParams.ContextEngineConfig 落到 DeepAgentConfig。
-//
 // Python: factory.py L305-310「Forward extra kwargs to config fields」——
 // create_deep_agent(context_engine_config=...) 通过 kwargs 转发到 DeepAgentConfig。
 func TestCreateDeepAgent_透传ContextEngineConfig(t *testing.T) {

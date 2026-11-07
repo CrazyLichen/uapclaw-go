@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakePlainChunker 不嵌入 BaseChunker 的纯接口实现。
-//
 // 用于验证 DimsProvider 断言失败分支（对齐 Python getattr 取不到
 // chunk_size 属性时 fallback 512/50）。
 type fakePlainChunker struct{}

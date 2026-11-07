@@ -18,7 +18,6 @@ import (
 // MessageMigrator 消息存储迁移执行器。
 // 版本跟踪通过 BaseMessageStore.GetSchemaVersion/SetSchemaVersion。
 // 迁移前创建备份，失败时从备份恢复。
-//
 // Python: openjiuwen/core/memory/migration/migrator/message_migrator.py (MessageMigrator)
 type MessageMigrator struct {
 	// messageStore 消息存储实例
@@ -59,7 +58,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageMigrator 创建 MessageMigrator 实例。
-//
 // Python: MessageMigrator(message_store)
 func NewMessageMigrator(messageStore db.BaseMessageStore) *MessageMigrator {
 	return &MessageMigrator{messageStore: messageStore}
@@ -67,7 +65,6 @@ func NewMessageMigrator(messageStore db.BaseMessageStore) *MessageMigrator {
 
 // TryMigrate 尝试执行消息存储迁移。
 // 校验 entityKey + 版本比较 + 备份+执行+恢复。
-//
 // Python: MessageMigrator.try_migrate(entity_key, operations)
 func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
 	if entityKey != MessageEntityKey {
@@ -164,7 +161,6 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // executeOperation 执行单个迁移操作。
-//
 // Python: MessageMigrator._execute_operation
 func (m *MessageMigrator) executeOperation(ctx context.Context, op operation.Operation) error {
 	switch o := op.(type) {
@@ -182,7 +178,6 @@ func (m *MessageMigrator) executeOperation(ctx context.Context, op operation.Ope
 // S-03: 实现基于游标的分页循环，对齐 Python 遍历所有消息而非只取前 backupPageSize 条。
 // GetMessages 接口不支持 offset 参数，使用 StartTime 游标分页：每页取完后用最后一条消息的
 // timestamp 作为下一页的 StartTime，避免重复取同一页数据。
-//
 // Python: MessageMigrator._create_backup
 func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupRecord, error) {
 	var backupData []messageBackupRecord
@@ -242,7 +237,6 @@ func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupReco
 }
 
 // restoreFromBackup 从备份恢复消息。
-//
 // Python: MessageMigrator._restore_from_backup
 func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []messageBackupRecord, preMigrationVersion *int) error {
 	// 删除所有消息

@@ -6,7 +6,6 @@ import (
 )
 
 // TestMergeToolCalls_真实流式增量序列 用真 LLM 抓到的增量帧验证聚合语义。
-//
 // 真实模型 SSE 会把一次调用拆成：多个 name/id 为空、arguments 为 JSON 片段的帧，
 // 最后才出现完整帧。对齐 Python message_chunk.py:164-200 的 __add__：同一调用
 // （id 相同或任一方为空）应拼接 arguments、name 取非空侧，而不是追加新元素。

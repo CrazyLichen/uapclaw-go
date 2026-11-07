@@ -28,14 +28,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamSkillEvolutionRail 团队技能演进护栏，在团队任务完成后自动触发演进。
-//
 // 嵌入 EvolutionRail 基类获得自动轨迹收集和异步触发能力，
 // 通过实现 EvolutionExtension 接口的 10 个方法完成子类多态分派。
-//
 // 与 SkillEvolutionRail 为兄弟关系（都嵌入 EvolutionRail），零共享。
 // SkillEvolutionRail 处理单 Agent 常规技能（kind=skill），
 // TeamSkillEvolutionRail 处理团队技能（kind=team-skill/swarm-skill）。
-//
 // 核心流程：团队任务完成 → 聚合团队轨迹 → TeamSignalDetector → 暂存审批 → 应用更新
 // Slash 命令入口：/evolve /evolve_simplify /evolve_rebuild
 //
@@ -177,10 +174,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamSkillEvolutionRail 创建 TeamSkillEvolutionRail 实例。
-//
 // 必选参数：skillsDir（技能目录）、llmModel（LLM 客户端）、model（模型名称）、language（语言）。
 // 可选参数通过 Functional Options 覆盖默认配置。
-//
 // 对齐 Python: TeamSkillEvolutionRail.__init__(
 //
 //	skills_dir, llm, model, language, trajectory_store, team_trajectory_store,
@@ -447,7 +442,6 @@ func (r *TeamSkillEvolutionRail) OnAfterModelCall(_ context.Context, _ *agentint
 }
 
 // OnAfterToolCall 在每次工具调用后检测经验详情读取和团队任务完成。
-//
 // 对齐 Python: TeamSkillEvolutionRail._on_after_tool_call(ctx)
 //
 //	(1) record_presented_experience_detail: 检测经验详情读取
@@ -538,7 +532,6 @@ func (r *TeamSkillEvolutionRail) AllowEvolutionTrigger(_ EvolutionTriggerPoint, 
 }
 
 // SnapshotForEvolution 同步捕获快照，供后台演化任务使用。
-//
 // Python: TeamSkillEvolutionRail._snapshot_for_evolution(trajectory, ctx)
 //
 //	捕获轨迹 + 消息 + skill_name="team-skill" + presentedEntries
@@ -570,7 +563,6 @@ func (r *TeamSkillEvolutionRail) SnapshotForEvolution(ctx context.Context, traj 
 }
 
 // RunEvolution 执行团队技能演化。
-//
 // 对齐 Python: TeamSkillEvolutionRail.run_evolution(trajectory, ctx=None, *, snapshot=None)
 //
 //	核心流程：
@@ -714,7 +706,6 @@ func (r *TeamSkillEvolutionRail) GetEvolutionTotalTimeoutSecs() float64 {
 // ─── 公开 API ───
 
 // NotifyTeamCompleted 标记当前 invoke 在下一个 after_invoke 边界触发被动演化。
-//
 // 对齐 Python: TeamSkillEvolutionRail.notify_team_completed(ctx)
 //
 //	检查 autoScan、builder 可用性，设置 hostCompletionPendingSessionID
@@ -738,7 +729,6 @@ func (r *TeamSkillEvolutionRail) NotifyTeamCompleted(_ context.Context) (bool, e
 }
 
 // RequestUserEvolution 用户主动触发演化入口。
-//
 // 对齐 Python: TeamSkillEvolutionRail.request_user_evolution(skill_name, user_intent, *, auto_approve=False)
 //
 //	允许用户显式提供团队技能改进建议，是唯一的用户驱动团队技能演化路径
@@ -1053,7 +1043,6 @@ func (r *TeamSkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
 }
 
 // SetSysOperation 设置系统操作，同时传递给 EvolutionRail 基类和 EvolutionStore。
-//
 // 对齐 Python: SkillEvolutionRail.set_sys_operation(sys_operation)
 // TeamSkillEvolutionRail 同理
 func (r *TeamSkillEvolutionRail) SetSysOperation(op sys_operation.SysOperation) {
@@ -1257,7 +1246,6 @@ func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(ctx context.Context,
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractToolContentFromInputs 从工具调用结果中提取内容文本。
-//
 // 两条演进 rail（SkillEvolutionRail / TeamSkillEvolutionRail）共用同一套提取顺序：
 // result["data"] 子字段 → result 顶层 → ToolMsg 内容 → result 字符串。
 func extractToolContentFromInputs(inputs *agentinterfaces.ToolCallInputs) string {
@@ -1454,7 +1442,6 @@ func (r *TeamSkillEvolutionRail) emitRecordApprovalEvent(skillName string, reque
 }
 
 // handleEvolutionFromSignals 共享下游处理器——暂存 + 路由审批。
-//
 // 对齐 Python: TeamSkillEvolutionRail._handle_evolution_from_signals(
 //
 //	skill_name, trajectory, signals, auto_approve, user_query, messages, emit_host_events

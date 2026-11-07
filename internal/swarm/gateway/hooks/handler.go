@@ -54,7 +54,6 @@ func NewGatewayHookHandler(hooksConfig *hookscfg.HooksConfig) *GatewayHookHandle
 }
 
 // OnSessionStart 会话开始时触发 SessionStart hooks。
-//
 // Python: on_session_start (L31-57)：activeSessions 去重；
 // match(query=source)；失败仅 Warn 不传播。
 func (h *GatewayHookHandler) OnSessionStart(ctx context.Context, sessionID, source string) {
@@ -86,7 +85,6 @@ func (h *GatewayHookHandler) OnSessionStart(ctx context.Context, sessionID, sour
 }
 
 // OnUserPromptSubmit 用户提交消息时触发 UserPromptSubmit hooks。
-//
 // Python: on_user_prompt_submit (L59-78)：match 无 query（默认空串）。
 func (h *GatewayHookHandler) OnUserPromptSubmit(ctx context.Context, sessionID, prompt string) {
 	// S-02 治标：defer recover 前移到方法第一行
@@ -106,7 +104,6 @@ func (h *GatewayHookHandler) OnUserPromptSubmit(ctx context.Context, sessionID, 
 }
 
 // OnSessionEnd 会话结束时触发 SessionEnd hooks。
-//
 // Python: on_session_end (L80-103)：先 discard activeSessions，match(query=reason)。
 func (h *GatewayHookHandler) OnSessionEnd(ctx context.Context, sessionID, reason string) {
 	// S-02 治标：defer recover 前移到方法第一行
@@ -130,7 +127,6 @@ func (h *GatewayHookHandler) OnSessionEnd(ctx context.Context, sessionID, reason
 }
 
 // OnNotification 通知发送时触发 Notification hooks。
-//
 // Python: on_notification (L105-127)：match(query=notification_type)。
 func (h *GatewayHookHandler) OnNotification(ctx context.Context, notificationType, message, sessionID string) {
 	// S-02 治标：defer recover 前移到方法第一行
@@ -153,7 +149,6 @@ func (h *GatewayHookHandler) OnNotification(ctx context.Context, notificationTyp
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyGatewayTimeout 逐项补默认超时（Python cfg.setdefault("timeout", 10)）。
-//
 // S-02 治本：Match 返回的是 config 中共享的 map 引用，Python 单线程就地改
 // 无碍，Go 并发调用 On* 时多 goroutine 写同一 map 是数据竞争。此处构造
 // 新 slice+浅拷贝 map 后再补 timeout，不污染共享配置（timeout 每次调用

@@ -25,10 +25,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterProcessorFactory 注册处理器工厂函数。
-//
 // 各处理器在 init() 函数中调用此函数将自己注册到全局注册表，
 // 5.30 ContextEngine 门面实现时通过 GetProcessorFactory 获取工厂创建实例。
-//
 // Python: @ContextEngine.register_processor() 装饰器
 func RegisterProcessorFactory(processorType string, factory iface.ProcessorFactory) {
 	processorFactoriesMu.Lock()
@@ -37,9 +35,7 @@ func RegisterProcessorFactory(processorType string, factory iface.ProcessorFacto
 }
 
 // GetProcessorFactory 获取处理器工厂函数。
-//
 // 返回工厂函数和是否找到的标志。5.30 ContextEngine._create_processor 对应使用。
-//
 // Python: ContextEngine._PROCESSOR_MAP.get(processor_type)
 func GetProcessorFactory(processorType string) (iface.ProcessorFactory, bool) {
 	processorFactoriesMu.RLock()
@@ -49,7 +45,6 @@ func GetProcessorFactory(processorType string) (iface.ProcessorFactory, bool) {
 }
 
 // ListProcessorFactories 列出所有已注册的处理器类型名称。
-//
 // 返回排序后的类型名称列表，便于调试和诊断。
 func ListProcessorFactories() []string {
 	processorFactoriesMu.RLock()

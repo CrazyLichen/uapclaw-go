@@ -10,9 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SentenceSplitter 句级分割器：sentencizer 分句 + token 预算打包。
-//
 // 非并发安全（seg 每文档覆盖，对齐 Python self.seg），按文档使用。
-//
 // Python: splitter/splitter.py (SentenceSplitter)
 type SentenceSplitter struct {
 	// BaseSplitter 基类（ChunkSize/ChunkOverlap/enc/dec + 共享方法）
@@ -24,7 +22,6 @@ type SentenceSplitter struct {
 }
 
 // sentenceSpan 内部四元组：句子 + 坐标 + token 长度。
-//
 // 对齐 Python cur_sents 的 (text, start, end, token_len) 四元组；
 // tokenLen 不外泄到 ChunkSpan。
 type sentenceSpan struct {
@@ -44,7 +41,6 @@ type sentenceSpan struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSentenceSplitter 构造句级分割器。
-//
 // 对齐 Python SentenceSplitter.__init__：
 //   - lan == "auto" → defaultLan 置空（SplitDoc 时逐文档检测），否则原样保留
 //   - dec 为 nil 时长句整句保留（不子切分）
@@ -61,7 +57,6 @@ func NewSentenceSplitter(bs *BaseSplitter, lan string) *SentenceSplitter {
 }
 
 // SplitDoc 分割文档：分句 → token 预算打包 → (text, start, end) 列表。
-//
 // 严格对齐 Python SentenceSplitter.__call__：
 //   - 空文本 → []
 //   - lan 路由（defaultLan 或 detectChinese）
@@ -132,14 +127,11 @@ func (s *SentenceSplitter) SplitDoc(doc string) ([]ChunkSpan, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // detectChinese 检测文本主要为中文还是英文（基于字符分布）。
-//
 // 中文字符（CJK 统一表意 0x4E00-0x9FFF）占比 >= threshold 判 zh；
 // 未达标时用标点启发（？> ? 且 ！> ! 判 zh）。
-//
 // Python 的 numpy UTF-32 向量化与 5000 万字符分块统计在 Go 侧省略
 // （numpy 特有内存优化，rune 单循环足够快）；计满阈值即早退为语义
 // 等价增强（Python 分块路径的早退行为，统一路径最终判定结果一致）。
-//
 // Python: splitter/splitter.py SentenceSplitter._detect_chinese
 func detectChinese(text string, threshold float64) string {
 	if text == "" {
@@ -171,11 +163,9 @@ func detectChinese(text string, threshold float64) string {
 }
 
 // sentencesWithSpans 分句并附加 token 长度。
-//
 // sentencizer TextSpans 原生产出 (start, end, sentence)——Python 的
 // find-span 恢复 + used_spans 去重 + 失败 warning 不可达省略（偏差 2）。
 // 空白句子过滤 + enc 编码求 tokenLen；enc 失败返回错误（决策 2b 上抛）。
-//
 // Python: splitter/splitter.py SentenceSplitter._sentences_with_spans
 func (s *SentenceSplitter) sentencesWithSpans(text string) ([]sentenceSpan, error) {
 	spans := s.seg.TextSpans(text)
@@ -199,10 +189,8 @@ func (s *SentenceSplitter) sentencesWithSpans(text string) ([]sentenceSpan, erro
 }
 
 // flush 输出当前缓冲为一块，并计算 overlap 尾缀作为下块开头。
-//
 // 对齐 Python _flush：无分隔符拼接；span 取首尾句坐标；overlap>0 且
 // 多于一句时，倒序累加 token 和 <= overlap 的句子前缀、正序放回。
-//
 // Python: splitter/splitter.py SentenceSplitter._flush
 func (s *SentenceSplitter) flush(chunks []ChunkSpan, curSents []sentenceSpan) ([]ChunkSpan, []sentenceSpan) {
 	if len(curSents) == 0 {
@@ -244,11 +232,9 @@ func (s *SentenceSplitter) flush(chunks []ChunkSpan, curSents []sentenceSpan) ([
 }
 
 // splitLongSegment 把一个长句切成重叠的 token 窗口，保证内容不丢失。
-//
 // 对齐 Python _split_long_segment：整句 encode 一次 → step=max(1, size-overlap)
 // 滑窗 → 每窗口 decode（失败或空白跳过，对齐 safe_decode→""→continue）→
 // span 沿用父句坐标；全部窗口为空时整句 fallback。
-//
 // Python: splitter/splitter.py SentenceSplitter._split_long_segment
 func (s *SentenceSplitter) splitLongSegment(sentText string, sentStart, sentEnd int) ([]ChunkSpan, error) {
 	// 整句 encode 一次；切片 id 窗口后 decode（需要 tokenizerDec）

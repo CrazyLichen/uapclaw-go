@@ -16,7 +16,6 @@ import (
 
 // APICallToExampleMethod Example Stage 方法。
 // 生成 API 调用示例，形成正负例集。实现 BeamSearchMethod 接口。
-//
 // Python: APICallToExampleMethod
 type APICallToExampleMethod struct {
 	BaseMethod
@@ -39,7 +38,6 @@ type APICallToExampleMethod struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAPICallToExampleMethod 创建 APICallToExampleMethod 实例。
-//
 // Python: APICallToExampleMethod(config, api_call_fn, eval_fn, api_keys=None, non_opt_params=[])
 //
 // 参数顺序对齐 pipeline.go 调用: NewAPICallToExampleMethod(config, model, callAPIFn, evalFn, nil, nil)
@@ -64,7 +62,6 @@ func NewAPICallToExampleMethod(
 }
 
 // Step 执行单步扩展，返回 output/data/score。
-//
 // Python: APICallToExampleMethod.step(tool, prev_outputs, it)
 //
 //  1. 获取原始描述
@@ -292,14 +289,12 @@ func (m *APICallToExampleMethod) Step(
 
 // GetExamples BeamSearchMethod 接口实现。
 // APICallToExampleMethod 不需要预加载示例，返回 nil。
-//
 // Python: APICallToExampleMethod.get_examples(tool)
 func (m *APICallToExampleMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	return nil
 }
 
 // GenerateAPICallFromDescription 根据工具描述生成 API 调用。
-//
 // Python: APICallToExampleMethod.generate_api_call_from_description(tool, example_calls, num_gen, prev_output)
 func (m *APICallToExampleMethod) GenerateAPICallFromDescription(
 	ctx context.Context,
@@ -460,7 +455,6 @@ You must strictly follow the output format, including "name", "arguments", and p
 }
 
 // CritiqueAPICall 批判 API 调用结果。
-//
 // Python: APICallToExampleMethod.critique_api_call(tool, fn_call, fn_response)
 func (m *APICallToExampleMethod) CritiqueAPICall(
 	ctx context.Context,
@@ -556,7 +550,6 @@ You can begin your task now.`
 }
 
 // GenerateInstructionFromAPICall 根据 API 调用结果生成指令。
-//
 // Python: APICallToExampleMethod.generate_instruction_from_api_call(tool, fn_call, fn_response, prev_output)
 func (m *APICallToExampleMethod) GenerateInstructionFromAPICall(
 	ctx context.Context,
@@ -662,7 +655,6 @@ instructions for this function call, which were rated and analyzed:
 }
 
 // CritiqueInstruction 批判生成的指令。
-//
 // Python: APICallToExampleMethod.critique_instruction(tool, instruction, fn_call, fn_response, answer)
 func (m *APICallToExampleMethod) CritiqueInstruction(
 	ctx context.Context,
@@ -775,7 +767,6 @@ be a number between 1 and 3. You can begin your task now.`
 }
 
 // BatchReflectionWithScores 批量反思，分析指令与分数的关系并给出改进建议。
-//
 // Python: APICallToExampleMethod.batch_reflection_with_scores(tool, fn_call, instructions, scores, analyses)
 func (m *APICallToExampleMethod) BatchReflectionWithScores(
 	ctx context.Context,
@@ -864,7 +855,6 @@ than 500 characters. You can now start your task.`,
 
 // GetOriginalDescription 获取工具的原始描述。
 // 从 ToolBench 格式的 description 中提取原始描述文本。
-//
 // Python: APICallToExampleMethod.get_original_description(tool)
 func (m *APICallToExampleMethod) GetOriginalDescription(tool map[string]any) string {
 	description, _ := tool["description"].(string)

@@ -1,5 +1,4 @@
 // Package interaction 提供会话交互管理，支持工作流和 Agent 的用户输入中断-恢复机制。
-//
 // 本包实现三种交互模式：
 //   - WorkflowInteraction：工作流节点交互，通过 pregel.GraphInterrupt 暂停图执行
 //   - SimpleAgentInteraction：简单 Agent 交互，无输入队列管理

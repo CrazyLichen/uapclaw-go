@@ -280,7 +280,6 @@ func TestPermissionsForwardToAgent_本地dispatch失败(t *testing.T) {
 // ──────────────────────────── 写回失败分支 ────────────────────────────
 
 // breakConfigFile 把 config.yaml 的位置占成目录，让所有 yaml 写回必然失败。
-//
 // 用目录而不是只读文件：测试以 root 运行，chmod 无法阻止写入。
 func breakConfigFile(t *testing.T) {
 	t.Helper()

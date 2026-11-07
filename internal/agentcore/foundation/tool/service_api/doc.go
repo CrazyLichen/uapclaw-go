@@ -1,6 +1,5 @@
 // Package service_api 提供 RESTful API 工具实现，将输入参数映射到 HTTP 请求的
 // path/query/header/body/form 位置，发送 HTTP 请求并解析响应。
-//
 // 核心组件：
 //   - RestfulApiCard：RESTful API 工具配置卡片，扩展 ToolCard，使用原始 JSON Schema map
 //     （InputSchema）替代 []*Param，以支持 location 扩展属性
@@ -14,7 +13,6 @@
 //	因为 Python 中 input_params 是原始 JSON Schema map，properties 中每个参数可带
 //	location 扩展属性（path/query/header/body/form），这在 Go 的 []*Param 结构化列表中无法表达。
 //	RestfulApiCard 覆写 ToolInfo() 方法，直接将 InputSchema 作为 parameters 传给 LLM。
-//
 //	Form 参数处理使用 form_handler 子包的策略模式：
 //	location=form 的参数通过 FormHandlerManager 获取对应处理器，
 //	由处理器将字段写入 multipart.Writer 构建 multipart/form-data 请求体。

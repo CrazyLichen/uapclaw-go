@@ -31,13 +31,11 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // OffloadMessages 将消息卸载到文件系统或内存。
-//
 // 根据选项中的 OffloadType 决定卸载目标：
 //   - "in_memory"：卸载到内存（通过 ModelContext.OffloadMessages 存入）
 //   - "filesystem"（默认）：卸载到文件系统，失败时 fallback 到内存
 //
 // 选项中可传递 ToolCallID/Name/Metadata，在创建 OffloadMessage 时携带原始消息的关联信息。
-//
 // Python: ContextProcessor.offload_messages()
 func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelContext, role string, content string, messages []llm_schema.BaseMessage, opts ...iface.Option) (llm_schema.BaseMessage, error) {
 	if len(messages) == 0 {
@@ -92,10 +90,8 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 }
 
 // GenerateOffloadPath 生成 offload 文件路径。
-//
 // 目录结构: {workspaceDir}/context/{sessionID}_context/offload/{handle}.json
 // 若 workspaceDir 为空，使用 memory/offloads/{sessionID}/{handle}.json。
-//
 // Python: ContextProcessor._generate_offload_path()
 func (p *BaseProcessor) GenerateOffloadPath(workspaceDir, sessionID, offloadHandle string) string {
 	fileName := offloadHandle + ".json"
@@ -140,7 +136,6 @@ func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string,
 }
 
 // writeOffloadToFile 写入卸载内容到文件系统。
-//
 // 当 sysOperation 不为 nil 且其 Fs() 不为 nil 时，优先使用 SysOperation 的 Fs().WriteFile 写入；
 // 失败时 fallback 到 os 直接写文件。
 // S-56: 加 ctx 首参，WriteFile 随调用方 ctx 取消而中断。

@@ -16,7 +16,6 @@ import (
 
 // SQLMigrator SQL 表迁移执行器。
 // 使用 GORM Migrator 接口执行 DDL 变更，版本跟踪通过 MemoryMetaManager。
-//
 // Python: openjiuwen/core/memory/migration/migrator/sql_migrator.py (SQLMigrator)
 type SQLMigrator struct {
 	// db GORM 数据库实例
@@ -57,7 +56,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSQLMigrator 创建 SQLMigrator 实例。
-//
 // Python: SQLMigrator(sql_db_store)
 func NewSQLMigrator(db *gorm.DB, metaManager *MemoryMetaManager) *SQLMigrator {
 	return &SQLMigrator{
@@ -78,7 +76,6 @@ func (m *SQLMigrator) SetAllowedTables(tables map[string]bool) {
 //
 // 参数 migrations 中每项包含 table_name 和 operations，
 // 返回每个表的迁移结果（true=成功, false=失败）。
-//
 // Python: SQLMigrator.batch_migrate(migrations: List[Dict[str, Any]]) -> Dict[str, bool]
 func (m *SQLMigrator) BatchMigrate(ctx context.Context, migrations []BatchMigrationItem) map[string]bool {
 	results := make(map[string]bool, len(migrations))
@@ -95,7 +92,6 @@ func (m *SQLMigrator) BatchMigrate(ctx context.Context, migrations []BatchMigrat
 
 // TryMigrate 尝试执行 SQL 表迁移。
 // 获取当前版本→过滤待执行操作→事务内执行 DDL→更新版本。
-//
 // Python: SQLMigrator.try_migrate(entity_key, operations)
 func (m *SQLMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
 	if len(operations) == 0 {
@@ -160,7 +156,6 @@ func (m *SQLMigrator) TryMigrate(ctx context.Context, entityKey string, operatio
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getCurrentVersion 获取当前表的 schema 版本。
-//
 // Python: SQLMigrator.try_migrate 中获取 current_meta
 func (m *SQLMigrator) getCurrentVersion(ctx context.Context, tableName string) (*int, error) {
 	currentMeta, err := m.metaManager.GetByTableName(ctx, tableName)
@@ -183,7 +178,6 @@ func (m *SQLMigrator) getCurrentVersion(ctx context.Context, tableName string) (
 }
 
 // updateVersion 更新表的 schema 版本。
-//
 // Python: SQLMigrator.try_migrate 中 update/insert memory_meta
 func (m *SQLMigrator) updateVersion(ctx context.Context, tableName string, version int) error {
 	versionStr := strconv.Itoa(version)
@@ -210,7 +204,6 @@ func (m *SQLMigrator) updateVersion(ctx context.Context, tableName string, versi
 }
 
 // executeOperation 执行单个 SQL 迁移操作。
-//
 // Python: SQLMigrator._migrate_add_column / _migrate_rename_column / _migrate_update_column_type
 func (m *SQLMigrator) executeOperation(tx *gorm.DB, tableName string, op operation.Operation) error {
 	switch o := op.(type) {
@@ -229,7 +222,6 @@ func (m *SQLMigrator) executeOperation(tx *gorm.DB, tableName string, op operati
 }
 
 // migrateAddColumn 执行添加列操作。
-//
 // Python: SQLMigrator._migrate_add_column
 func (m *SQLMigrator) migrateAddColumn(tx *gorm.DB, op *operation.AddColumnOperation) error {
 	tableName := op.Table
@@ -273,7 +265,6 @@ func (m *SQLMigrator) migrateAddColumn(tx *gorm.DB, op *operation.AddColumnOpera
 }
 
 // migrateRenameColumn 执行重命名列操作。
-//
 // Python: SQLMigrator._migrate_rename_column
 func (m *SQLMigrator) migrateRenameColumn(tx *gorm.DB, op *operation.RenameColumnOperation) error {
 	tableName := op.Table
@@ -292,7 +283,6 @@ func (m *SQLMigrator) migrateRenameColumn(tx *gorm.DB, op *operation.RenameColum
 }
 
 // migrateUpdateColumnType 执行修改列类型操作。
-//
 // Python: SQLMigrator._migrate_update_column_type
 func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateColumnTypeOperation) error {
 	tableName := op.Table
@@ -345,7 +335,6 @@ func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateC
 }
 
 // getGORMColumnType 将字符串类型映射为 SQL 类型字符串。
-//
 // Python: SQLMigrator.get_sqlalchemy_type
 func getGORMColumnType(typeString string) string {
 	typeString = strings.TrimSpace(typeString)

@@ -528,7 +528,6 @@ func TestSearchFiles_排除模式(t *testing.T) {
 }
 
 // TestExecuteCmd_不截断显式超时 验证 sh 层不再用 JW_EXECUTE_CMD_MAX_TIMEOUT 砍小显式预算。
-//
 // 回归：tool 层（3600s）放行 timeout=30，到 sh 层被 JW_EXECUTE_CMD_MAX_TIMEOUT
 // 默认 600s 砍成 600s；本条把环境变量设成 2s，若仍截断则 6s 的命令会被
 // 2s 掐断，耗时判定即可暴露。
@@ -553,7 +552,6 @@ func TestExecuteCmd_不截断显式超时(t *testing.T) {
 // ──────────────────────────── 后台 stderr 保留与排空（D-12） ────────────────────────────
 
 // TestBackground_EarlyExit含stderr诊断 验证后台进程早退时错误信息带 stderr。
-//
 // 回归：历史实现把 cmd.Stderr 设为 nil（直接丢弃），早退只报退出码，
 // 调用方无从判断是依赖缺失还是命令写错。
 func TestBackground_EarlyExit含stderr诊断(t *testing.T) {

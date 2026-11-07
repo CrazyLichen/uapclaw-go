@@ -53,7 +53,6 @@ func ValidateSlug(slug string) error {
 //
 // 形如 "user/feature" 的嵌套 slug 对用户友好，但映射到嵌套目录时，
 // 删除父 worktree 会连带删掉其下所有子 worktree。
-//
 // 上游在此处调用 validate_slug；Go 版返回 (string, bool)，非法时由调用方
 // 决定降级方式（空串），避免改变既有函数签名。
 func flattenSlug(slug string) (string, bool) {

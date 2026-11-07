@@ -20,7 +20,6 @@ import (
 )
 
 // roundModelClient 单轮固定文本的假模型客户端。
-//
 // 只实现 LLM 对话两方法，其余能力返回不支持错误（与真实非多模态客户端一致）。
 // 注册进 ClientRegistry 后由 llm.NewModel 取用，使 RunOneRound 能在**单测**里
 // 走完 SubmitRound → executor → WaitRoundCompletion → 写流 → 边界帧的全链路。
@@ -92,7 +91,6 @@ func newRoundModel(t *testing.T) *llm.Model {
 }
 
 // TestRunOneRound_端到端一轮 用假模型跑完整一轮，覆盖 RunOneRound 的真实分支。
-//
 // 与 tests/integration 的 TestRoundEndToEnd 互补：那条走 MockLLM 的集成链路，
 // 这条在单测口径下把 RunOneRound / executeRound 真分支计入改动行覆盖率。
 func TestRunOneRound_端到端一轮(t *testing.T) {

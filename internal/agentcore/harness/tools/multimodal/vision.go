@@ -45,7 +45,6 @@ type VQAInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewImageOCRTool 创建图片 OCR 工具。
-//
 // Python: ImageOCRTool.__init__ + ImageOCRTool.invoke
 // 使用 tool.NewTool[ImageOCRInput, map[string]any] 模式
 func NewImageOCRTool(
@@ -95,7 +94,6 @@ func NewImageOCRTool(
 }
 
 // NewVisualQuestionAnsweringTool 创建图片问答工具。
-//
 // Python: VisualQuestionAnsweringTool.__init__ + VisualQuestionAnsweringTool.invoke
 // 可选先 OCR 再 VQA（对齐 Python: include_ocr=True 默认）
 func NewVisualQuestionAnsweringTool(
@@ -173,7 +171,6 @@ func NewVisualQuestionAnsweringTool(
 }
 
 // CreateVisionTools 创建视觉工具集。
-//
 // Python: create_vision_tools(language, vision_model_config, agent_id) -> list[Tool]
 func CreateVisionTools(
 	client modelclients.BaseModelClient,

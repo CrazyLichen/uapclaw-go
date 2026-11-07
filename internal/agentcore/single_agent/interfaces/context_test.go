@@ -616,7 +616,6 @@ func TestDrainSteering_无Limit排空全部(t *testing.T) {
 }
 
 // TestDrainSteering_Limit生效 验证只取 N 条且剩余保持原序。
-//
 // spec C4：剩余留在队列原位（Go channel 天然 FIFO 保留）。
 func TestDrainSteering_Limit生效(t *testing.T) {
 	cbc := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
@@ -631,7 +630,6 @@ func TestDrainSteering_Limit生效(t *testing.T) {
 }
 
 // TestDrainSteering_Limit非正至少取一条 验证 0/负数不会让循环空转。
-//
 // spec C6：Python take = max(1, limit)；不取任何一条会让 has_pending_steering
 // 永远为真，ReAct 循环空转不前进。
 func TestDrainSteering_Limit非正至少取一条(t *testing.T) {
@@ -648,7 +646,6 @@ func TestDrainSteering_Limit非正至少取一条(t *testing.T) {
 }
 
 // TestSteeringPendingCount_含未取积压 验证计数与队列一致。
-//
 // spec C7。
 func TestSteeringPendingCount_含未取积压(t *testing.T) {
 	cbc := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
@@ -673,7 +670,6 @@ func TestAgentRail_BeforeSteeringDrain默认空实现(t *testing.T) {
 }
 
 // TestClear_清得掉BeforeSteeringDrain 验证 Clear() 能清掉新事件的钩子。
-//
 // spec C15：Clear() 依赖 AllCallbackEvents() 枚举；漏加该事件会让钩子
 // 永远清不掉，留下悬挂回调。
 func TestClear_清得掉BeforeSteeringDrain(t *testing.T) {

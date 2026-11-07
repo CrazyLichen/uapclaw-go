@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CoordinatorOptions 协调器构造参数。
-//
 // Python: RuntimeSessionCoordinator.__init__
 type CoordinatorOptions struct {
 	// Registry 执行注册表（nil 时自建）
@@ -29,7 +28,6 @@ type CoordinatorOptions struct {
 }
 
 // UnaryOptions RunUnary / SubmitUnary 的可选参数。
-//
 // Python: RuntimeSessionCoordinator.run_unary 关键字参数
 type UnaryOptions struct {
 	// InteractionIDs 从结果提取交互标识
@@ -55,7 +53,6 @@ type ChildOptions struct {
 }
 
 // StreamOptions RunStream / RunTeamStream 的可选参数。
-//
 // Python: run_stream / run_team_stream 关键字参数
 type StreamOptions struct {
 	// InteractionIDs 从元素提取交互标识
@@ -71,7 +68,6 @@ type StreamOptions struct {
 }
 
 // streamItem 流式队列元素。
-//
 // Python: coordinator.py _StreamItem
 type streamItem struct {
 	// value 数据元素
@@ -83,7 +79,6 @@ type streamItem struct {
 }
 
 // delivery 一次控制投递的在飞状态。
-//
 // Python: coordinator.py _Delivery
 type delivery struct {
 	// answered 本次投递声明的交互标识
@@ -95,7 +90,6 @@ type delivery struct {
 }
 
 // sessionRecord 会话账本记录。
-//
 // Python: coordinator.py _SessionRecord
 type sessionRecord struct {
 	// sessionID 会话标识
@@ -125,7 +119,6 @@ type flagSignal struct {
 }
 
 // RuntimeSessionCoordinator 单个 Runtime 的会话执行账本。
-//
 // Python: coordinator.py RuntimeSessionCoordinator
 //
 // 与上游差异（spec §8 D-1）：operation 闭包接收 ctx，因为 Go 的取消
@@ -152,7 +145,6 @@ type RuntimeSessionCoordinator struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // teamWorkKinds 团队工作种类集合。
-//
 // Python: coordinator.py _TEAM_WORK_KINDS
 var teamWorkKinds = map[SessionWorkKind]struct{}{
 	SessionWorkKindTeamRequest:    {},
@@ -163,12 +155,10 @@ var teamWorkKinds = map[SessionWorkKind]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // close 发出 settled 信号（幂等）。
-//
 // Python: _Delivery.settled.set()
 func (d *delivery) close() { d.once.Do(func() { close(d.settled) }) }
 
 // Set 置位（幂等）。
-//
 // Python: asyncio.Event.set()
 func (f *flagSignal) Set() {
 	f.mu.Lock()
@@ -180,7 +170,6 @@ func (f *flagSignal) Set() {
 }
 
 // Clear 清空（下次 Set 会重建通道）。
-//
 // Python: asyncio.Event.clear()
 func (f *flagSignal) Clear() {
 	f.mu.Lock()
@@ -192,7 +181,6 @@ func (f *flagSignal) Clear() {
 }
 
 // Wait 返回等待通道（已置位时立即可读）。
-//
 // Python: asyncio.Event.wait()
 func (f *flagSignal) Wait() <-chan struct{} {
 	f.mu.Lock()
@@ -201,7 +189,6 @@ func (f *flagSignal) Wait() <-chan struct{} {
 }
 
 // DefaultCoordinatorOptions 默认构造参数。
-//
 // Python: RuntimeSessionCoordinator.__init__ 默认值（cancel_timeout=5.0、buffer=64）
 // spec §3 D21：cancel_timeout 固定 5 秒，不提供外部配置。
 func DefaultCoordinatorOptions() CoordinatorOptions {
@@ -212,7 +199,6 @@ func DefaultCoordinatorOptions() CoordinatorOptions {
 }
 
 // NewRuntimeSessionCoordinator 创建协调器。
-//
 // Python: RuntimeSessionCoordinator.__init__（stream_buffer_size 取 max(1,n)）
 func NewRuntimeSessionCoordinator(opts CoordinatorOptions) *RuntimeSessionCoordinator {
 	registry := opts.Registry
@@ -239,7 +225,6 @@ func NewRuntimeSessionCoordinator(opts CoordinatorOptions) *RuntimeSessionCoordi
 }
 
 // RegisterSession 注册或复用会话记录，必要时递增代次。
-//
 // Python: RuntimeSessionCoordinator.register_session
 // 已存在且非 CLOSED 时只更新 channel 与 policy，不递增代次。
 func (c *RuntimeSessionCoordinator) RegisterSession(
@@ -279,7 +264,6 @@ func (c *RuntimeSessionCoordinator) RegisterSession(
 }
 
 // RunUnary 运行一次同步执行并返回结果。
-//
 // Python: RuntimeSessionCoordinator.run_unary
 func (c *RuntimeSessionCoordinator) RunUnary(
 	ctx context.Context,
@@ -301,7 +285,6 @@ func (c *RuntimeSessionCoordinator) RunUnary(
 }
 
 // SubmitUnary 排队提交并立即返回快照。
-//
 // Python: RuntimeSessionCoordinator.submit_unary
 func (c *RuntimeSessionCoordinator) SubmitUnary(
 	ctx context.Context,
@@ -345,7 +328,6 @@ func (c *RuntimeSessionCoordinator) SubmitUnary(
 }
 
 // SnapshotSession 取单个会话快照。
-//
 // Python: RuntimeSessionCoordinator.snapshot_session
 func (c *RuntimeSessionCoordinator) SnapshotSession(sessionID string) *RuntimeSessionSnapshot {
 	c.mu.Lock()
@@ -359,7 +341,6 @@ func (c *RuntimeSessionCoordinator) SnapshotSession(sessionID string) *RuntimeSe
 }
 
 // SnapshotSessions 取全部会话快照。
-//
 // Python: RuntimeSessionCoordinator.snapshot_sessions
 func (c *RuntimeSessionCoordinator) SnapshotSessions() []RuntimeSessionSnapshot {
 	c.mu.Lock()
@@ -372,7 +353,6 @@ func (c *RuntimeSessionCoordinator) SnapshotSessions() []RuntimeSessionSnapshot 
 }
 
 // GetExecution 取单次执行快照。
-//
 // Python: RuntimeSessionCoordinator.get_execution
 func (c *RuntimeSessionCoordinator) GetExecution(executionID string) *SessionExecutionSnapshot {
 	// 经 registry.SnapshotOf 在锁内取快照，避免与 MarkRunning/MarkTerminal 竞争
@@ -380,7 +360,6 @@ func (c *RuntimeSessionCoordinator) GetExecution(executionID string) *SessionExe
 }
 
 // QuiesceSession 把会话置 QUIESCING 并返回生命周期上下文。
-//
 // Python: RuntimeSessionCoordinator.quiesce_session
 // 只置状态、不取消任何执行。
 func (c *RuntimeSessionCoordinator) QuiesceSession(sessionID string, generation *int) (*SessionLifecycleContext, error) {
@@ -398,7 +377,6 @@ func (c *RuntimeSessionCoordinator) QuiesceSession(sessionID string, generation 
 }
 
 // NewExecutionForTest 创建子执行（导出以便跨包测试）。
-//
 // Python: RuntimeSessionCoordinator._new_execution
 func (c *RuntimeSessionCoordinator) NewExecutionForTest(
 	sessionID, requestID string,
@@ -451,7 +429,6 @@ func trimSpace(s string) string {
 }
 
 // requireOpenSession 校验会话已注册且可接受工作。
-//
 // Python: RuntimeSessionCoordinator._require_open_session
 func (c *RuntimeSessionCoordinator) requireOpenSession(sessionID string) (*sessionRecord, error) {
 	c.mu.Lock()
@@ -470,7 +447,6 @@ func (c *RuntimeSessionCoordinator) requireOpenSession(sessionID string) (*sessi
 }
 
 // newExecution 创建并登记一次执行。
-//
 // Python: RuntimeSessionCoordinator._new_execution
 // 含 supersede 逻辑：新聊天/目标流执行会取消同代次处于 WAITING_FOR_CONTROL 的同类执行。
 func (c *RuntimeSessionCoordinator) newExecution(
@@ -513,7 +489,6 @@ func (c *RuntimeSessionCoordinator) newExecution(
 }
 
 // supersedeSiblings 取消同代次中应被新执行取代的执行。
-//
 // Python: _new_execution 内的 superseded_kinds 分支
 // 判定与置终态都在 registry 锁内（SupersedeWaiting），避免与并发
 // MarkTerminal 读写 handle.State 竞争。
@@ -537,7 +512,6 @@ func (c *RuntimeSessionCoordinator) supersedeSiblings(record *sessionRecord, wor
 }
 
 // runUnary 执行一次 unary 工作并维护状态。
-//
 // Python: RuntimeSessionCoordinator._run_unary
 // scheduled 类走 lane（SESSION_MESSAGE 除外），其余直接在当前 goroutine 执行。
 func (c *RuntimeSessionCoordinator) runUnary(
@@ -582,7 +556,6 @@ func (c *RuntimeSessionCoordinator) runUnary(
 }
 
 // executeUnaryTracked 执行并做状态迁移。
-//
 // Python: _run_unary 内的 tracked() 闭包
 func (c *RuntimeSessionCoordinator) executeUnaryTracked(
 	ctx context.Context,
@@ -624,7 +597,6 @@ func (c *RuntimeSessionCoordinator) executeUnaryTracked(
 }
 
 // refreshSessionState 依据活跃执行数刷新会话状态。
-//
 // Python: RuntimeSessionCoordinator._refresh_session_state
 func (c *RuntimeSessionCoordinator) refreshSessionState(record *sessionRecord) {
 	c.mu.Lock()
@@ -653,7 +625,6 @@ func (c *RuntimeSessionCoordinator) refreshSessionStateLocked(record *sessionRec
 }
 
 // refreshControlGateLocked 依据等待交互刷新闸门。
-//
 // Python: RuntimeSessionCoordinator._refresh_control_gate
 func (c *RuntimeSessionCoordinator) refreshControlGateLocked(record *sessionRecord, active []*SessionExecutionHandle) {
 	if active == nil {
@@ -672,7 +643,6 @@ func (c *RuntimeSessionCoordinator) refreshControlGateLocked(record *sessionReco
 }
 
 // snapshotLocked 生成会话快照。
-//
 // Python: RuntimeSessionCoordinator._snapshot
 func (c *RuntimeSessionCoordinator) snapshotLocked(record *sessionRecord) RuntimeSessionSnapshot {
 	generation := record.generation
@@ -687,7 +657,6 @@ func (c *RuntimeSessionCoordinator) snapshotLocked(record *sessionRecord) Runtim
 }
 
 // newExecutionID 生成 32 位十六进制执行标识。
-//
 // Python: uuid.uuid4().hex
 func newExecutionID() string {
 	var buf [16]byte
@@ -701,7 +670,6 @@ func newExecutionID() string {
 // ──────────────────────────── 导出函数（流式） ────────────────────────────
 
 // RunStream 运行一次流式执行，逐元素回调。
-//
 // Python: RuntimeSessionCoordinator.run_stream
 // 团队种类必须走 RunTeamStream（上游断言文案逐字对齐）。
 // emit 返回 false 表示消费方主动停止，将触发 cancel_execution。
@@ -728,7 +696,6 @@ func (c *RuntimeSessionCoordinator) RunStream(
 }
 
 // RunTeamStream 运行一次团队流式执行。
-//
 // Python: RuntimeSessionCoordinator.run_team_stream
 // operation 接收 TeamExecutionContext（由协调器按 handle 组装）。
 func (c *RuntimeSessionCoordinator) RunTeamStream(
@@ -779,7 +746,6 @@ func (c *RuntimeSessionCoordinator) RunTeamStream(
 // ──────────────────────────── 非导出函数（流式） ────────────────────────────
 
 // runStream 流式生命周期：生产者 goroutine + 有界队列 + 消费者回调。
-//
 // Python: RuntimeSessionCoordinator._run_stream
 //
 // 关键约束（spec §7.4）：
@@ -894,7 +860,6 @@ func (c *RuntimeSessionCoordinator) runStream(
 }
 
 // cancelExecutionInternal 内部取消（供 runStream 的异常清理使用）。
-//
 // CancelExecution 在后续步骤落地；此处直接取消 handle 的 ctx 并置终态，
 // 语义等价（只针对单个已知执行）。
 func (c *RuntimeSessionCoordinator) cancelExecutionInternal(
@@ -928,7 +893,6 @@ func (c *RuntimeSessionCoordinator) sessionByID(sessionID string) (*sessionRecor
 // ──────────────────────────── 结构体（取消与关闭） ────────────────────────────
 
 // CancelExecutionOptions CancelExecution 的查询条件。
-//
 // Python: RuntimeSessionCoordinator.cancel_execution 关键字参数
 type CancelExecutionOptions struct {
 	// RequestID 按请求标识取消
@@ -946,7 +910,6 @@ type CancelExecutionOptions struct {
 // ──────────────────────────── 导出函数（取消与关闭） ────────────────────────────
 
 // CancelExecution 取消匹配的执行及其后代。
-//
 // Python: RuntimeSessionCoordinator.cancel_execution
 // 超时的执行**不**标 CANCELLED（保留原状态供下次重试）。
 func (c *RuntimeSessionCoordinator) CancelExecution(
@@ -1034,7 +997,6 @@ func (c *RuntimeSessionCoordinator) CancelExecution(
 }
 
 // CloseSession 关闭一个会话代次：静默 → 逐条取消 → 等 done → 置 CLOSED。
-//
 // Python: RuntimeSessionCoordinator.close_session
 //
 // 10 步（spec §7.5）：
@@ -1126,7 +1088,6 @@ func (c *RuntimeSessionCoordinator) CloseSession(
 }
 
 // Close 关闭全部会话与调度器。
-//
 // Python: RuntimeSessionCoordinator.close
 // 与上游差异：Go 无法返回元组，timedOut 用出参并返回 error（spec §8 D-10）。
 func (c *RuntimeSessionCoordinator) Close(waitTimeout *time.Duration, timedOut *[]string) error {
@@ -1168,7 +1129,6 @@ func (c *RuntimeSessionCoordinator) Close(waitTimeout *time.Duration, timedOut *
 // ──────────────────────────── 非导出函数（取消与关闭） ────────────────────────────
 
 // requiresDirectCancel 该执行是否走直接取消（发 ctx 取消）而非 lane 取消。
-//
 // Python: RuntimeSessionCoordinator._requires_direct_cancel
 // SESSION_MESSAGE 虽属 scheduled，但强制走直接取消（spec D18）。
 func requiresDirectCancel(h *SessionExecutionHandle) bool {
@@ -1179,7 +1139,6 @@ func requiresDirectCancel(h *SessionExecutionHandle) bool {
 }
 
 // requestDirectCancel 分两批取消：fresh 先标记再取消并等；pending 只等。
-//
 // Python: RuntimeSessionCoordinator._request_direct_cancel
 func (c *RuntimeSessionCoordinator) requestDirectCancel(
 	handles []*SessionExecutionHandle,
@@ -1202,7 +1161,6 @@ func (c *RuntimeSessionCoordinator) requestDirectCancel(
 }
 
 // cancelDirectHandles 对 fresh 批发取消并等待退出。
-//
 // Python: RuntimeSessionCoordinator._cancel_direct_handles
 // 等的是 Done（执行方退出），不是 Terminal（spec §2.3）。
 func (c *RuntimeSessionCoordinator) cancelDirectHandles(
@@ -1232,7 +1190,6 @@ func (c *RuntimeSessionCoordinator) cancelDirectHandles(
 }
 
 // waitForHandles 等待一批执行退出（等 Done）。
-//
 // Python: RuntimeSessionCoordinator._wait_for_handles
 func (c *RuntimeSessionCoordinator) waitForHandles(
 	handles []*SessionExecutionHandle,
@@ -1254,7 +1211,6 @@ func (c *RuntimeSessionCoordinator) waitForHandles(
 }
 
 // withDescendants 展开执行的全部后代（跨代内同会话）。
-//
 // Python: RuntimeSessionCoordinator._with_descendants
 func (c *RuntimeSessionCoordinator) withDescendants(handles []*SessionExecutionHandle) []*SessionExecutionHandle {
 	selected := map[string]*SessionExecutionHandle{}
@@ -1300,7 +1256,6 @@ func (c *RuntimeSessionCoordinator) withDescendants(handles []*SessionExecutionH
 // ──────────────────────────── 结构体（control 通道） ────────────────────────────
 
 // ControlDeliveryOptions 控制投递可选参数。
-//
 // Python: deliver_control / deliver_control_stream 关键字参数
 type ControlDeliveryOptions struct {
 	// InteractionIDs 从结果提取交互标识
@@ -1312,7 +1267,6 @@ type ControlDeliveryOptions struct {
 // ──────────────────────────── 导出函数（control 通道） ────────────────────────────
 
 // RecordInteraction 关联执行内抛出的交互标识。
-//
 // Python: RuntimeSessionCoordinator.record_interaction
 func (c *RuntimeSessionCoordinator) RecordInteraction(
 	sessionID, requestID string,
@@ -1341,7 +1295,6 @@ func (c *RuntimeSessionCoordinator) RecordInteraction(
 }
 
 // BindAgent 把 agent 实例绑到匹配执行。
-//
 // Python: RuntimeSessionCoordinator.bind_agent
 func (c *RuntimeSessionCoordinator) BindAgent(sessionID, requestID string, agent any) {
 	c.mu.Lock()
@@ -1361,7 +1314,6 @@ func (c *RuntimeSessionCoordinator) BindAgent(sessionID, requestID string, agent
 }
 
 // ControlTargetAgent 取可接收控制的 agent。
-//
 // Python: RuntimeSessionCoordinator.control_target_agent
 func (c *RuntimeSessionCoordinator) ControlTargetAgent(sessionID string, answered []string) any {
 	c.mu.Lock()
@@ -1380,7 +1332,6 @@ func (c *RuntimeSessionCoordinator) ControlTargetAgent(sessionID string, answere
 }
 
 // HasControlTarget 会话是否有可被控制恢复的活跃执行。
-//
 // Python: RuntimeSessionCoordinator.has_control_target
 func (c *RuntimeSessionCoordinator) HasControlTarget(sessionID, requestID string) bool {
 	c.mu.Lock()
@@ -1398,7 +1349,6 @@ func (c *RuntimeSessionCoordinator) HasControlTarget(sessionID, requestID string
 }
 
 // WaitingInteractions 应答 requestID 能恢复的执行正在等待的全部交互。
-//
 // Python: RuntimeSessionCoordinator.waiting_interactions
 // 上游用 _control_parent 查找（只认 RUNNING/WAITING_FOR_CONTROL 且等待集合含该 id）；
 // 若该请求尚未进入等待态但已登记交互，_control_parent 会返回 nil。此处按 request_id
@@ -1428,7 +1378,6 @@ func (c *RuntimeSessionCoordinator) WaitingInteractions(sessionID, requestID str
 }
 
 // UnansweredInteractions 会话执行正在等待的交互，减去在飞投递已声明的部分。
-//
 // Python: RuntimeSessionCoordinator.unanswered_interactions
 func (c *RuntimeSessionCoordinator) UnansweredInteractions(sessionID string) map[string]struct{} {
 	c.mu.Lock()
@@ -1454,7 +1403,6 @@ func (c *RuntimeSessionCoordinator) UnansweredInteractions(sessionID string) map
 }
 
 // ControlTargetWorkKind 应答 requestID 的目标根执行的种类。
-//
 // Python: RuntimeSessionCoordinator.control_target_work_kind
 func (c *RuntimeSessionCoordinator) ControlTargetWorkKind(sessionID, requestID string) (SessionWorkKind, bool) {
 	parent := c.controlParent(sessionID, []string{requestID})
@@ -1477,7 +1425,6 @@ func (c *RuntimeSessionCoordinator) ControlTargetWorkKind(sessionID, requestID s
 }
 
 // DeliverControl 向运行中的会话工作投递输入，不占用其 lane。
-//
 // Python: RuntimeSessionCoordinator.deliver_control
 func (c *RuntimeSessionCoordinator) DeliverControl(
 	ctx context.Context,
@@ -1568,7 +1515,6 @@ func (c *RuntimeSessionCoordinator) DeliverControl(
 // ──────────────────────────── 非导出函数（control 通道） ────────────────────────────
 
 // claimControlParent 认领应答 answered 所指的执行，若已有投递在飞则等待其结束。
-//
 // Python: RuntimeSessionCoordinator._claim_control_parent
 func (c *RuntimeSessionCoordinator) claimControlParent(
 	sessionID string,
@@ -1635,7 +1581,6 @@ func (c *RuntimeSessionCoordinator) claimControlParent(
 }
 
 // releaseControlParent 发放在飞投递的 settled 信号。
-//
 // Python: RuntimeSessionCoordinator._release_control_parent
 func (c *RuntimeSessionCoordinator) releaseControlParent(record *sessionRecord, parent *SessionExecutionHandle) {
 	c.mu.Lock()
@@ -1650,7 +1595,6 @@ func (c *RuntimeSessionCoordinator) releaseControlParent(record *sessionRecord, 
 }
 
 // answered 把 claimed 从等待集合移除，并按需把父执行置终态。
-//
 // Python: RuntimeSessionCoordinator._answered
 func (c *RuntimeSessionCoordinator) answered(
 	parent *SessionExecutionHandle,
@@ -1667,7 +1611,6 @@ func (c *RuntimeSessionCoordinator) answered(
 }
 
 // controlParent 找出应答 answered 中任一标识的执行（取最晚开始的）。
-//
 // Python: RuntimeSessionCoordinator._control_parent
 func (c *RuntimeSessionCoordinator) controlParent(sessionID string, answered []string) *SessionExecutionHandle {
 	c.mu.Lock()
@@ -1711,7 +1654,6 @@ func (c *RuntimeSessionCoordinator) controlParent(sessionID string, answered []s
 }
 
 // claimedExecutionIDLocked 取正在投递某交互的执行标识（调用方持 c.mu）。
-//
 // Python: RuntimeSessionCoordinator._claimed_execution_id
 func (c *RuntimeSessionCoordinator) claimedExecutionIDLocked(record *sessionRecord, requestID string) (string, bool) {
 	for executionID, d := range record.deliveries {
@@ -1723,7 +1665,6 @@ func (c *RuntimeSessionCoordinator) claimedExecutionIDLocked(record *sessionReco
 }
 
 // heartbeatRoot 沿父链向上找 HEARTBEAT 根执行。
-//
 // Python: RuntimeSessionCoordinator._heartbeat_root
 func (c *RuntimeSessionCoordinator) heartbeatRoot(handle *SessionExecutionHandle) *SessionExecutionHandle {
 	current := handle

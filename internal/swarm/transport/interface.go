@@ -5,12 +5,10 @@ import "context"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentTransport Gateway ↔ AgentServer 的传输抽象。
-//
 // Python: WebSocket 单连接模型：send(json_str) / recv() → json_str。
 // 不感知 E2A 协议语义，只负责 JSON 字节传输。
 // 所有服务端→客户端消息（普通响应、server_push、connection.ack）统一走 Recv 通道，
 // 由 AgentClient 的 receiverLoop 做应用层区分。
-//
 // 无论进程内还是跨进程，Gateway 与 AgentServer 之间统一经过此接口：
 //   - 进程内：ChannelTransport（Go channel，在本包实现）
 //   - 跨进程：WebSocketTransport（WebSocket，后续实现）

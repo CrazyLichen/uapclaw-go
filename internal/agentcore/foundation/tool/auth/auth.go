@@ -3,7 +3,6 @@ package auth
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolAuthConfig 工具认证配置。
-//
 // Python: ToolAuthConfig
 type ToolAuthConfig struct {
 	// AuthType 认证类型：AuthTypeSSL 或 AuthTypeHeaderAndQuery
@@ -17,7 +16,6 @@ type ToolAuthConfig struct {
 }
 
 // ToolAuthResult 工具认证结果。
-//
 // Python: ToolAuthResult
 type ToolAuthResult struct {
 	// Success 认证是否成功

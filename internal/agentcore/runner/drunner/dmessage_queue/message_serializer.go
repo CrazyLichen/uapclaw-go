@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MaxRecurseDepth payload 递归深度上限。
-//
 // Python: message_serializer.MAX_RECURSE_DEPTH = 10
 const MaxRecurseDepth = 10
 
@@ -25,10 +24,8 @@ const MaxRecurseDepth = 10
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MessageToMap 将消息对象转为带 __class__ 标记的 map。
-//
 // Go 独有辅助：写侧 SerializeMessage 复用它，读侧 consumeLoop 用同一形态
 // 把强类型消息交给 handler（handler 契约为 map[string]any）。
-//
 // 仅接受 DmqRequestMessage / DmqResponseMessage；其它类型立即报错（偏差 D6，
 // Python 是发出去、对面 Unknown payload class 才炸）。
 func MessageToMap(msg message_queue.QueueMessageBase) (map[string]any, error) {
@@ -83,7 +80,6 @@ func MessageToMap(msg message_queue.QueueMessageBase) (map[string]any, error) {
 }
 
 // SerializeMessage 将 Dmq 消息序列化为 wire 字节。
-//
 // Python: message_serializer.serialize_message(msg)
 func SerializeMessage(msg message_queue.QueueMessageBase) ([]byte, error) {
 	asMap, err := MessageToMap(msg)
@@ -94,7 +90,6 @@ func SerializeMessage(msg message_queue.QueueMessageBase) ([]byte, error) {
 }
 
 // DeserializeMessage 将 wire 字节反序列化为强类型 Dmq 消息。
-//
 // Python: message_serializer.deserialize_message(data)
 // payload 内部不做类型重建（偏差 D4），__class__ 键原样保留在 map 中，
 // 因此 Go 收进来再发出去，wire 仍与 Python 兼容。
@@ -136,7 +131,6 @@ func DeserializeMessage(data []byte) (message_queue.QueueMessageBase, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // serializePayload 递归处理 payload 值，注入 datetime 特例并做深度检查。
-//
 // Python: message_serializer._serialize_payload(payload, depth)
 // datetime 用 RFC3339 输出，等价 Python datetime.isoformat()。
 func serializePayload(v any, depth int) (any, error) {

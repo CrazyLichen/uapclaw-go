@@ -208,10 +208,8 @@ func GetLanguage() Language {
 // T 解析本地化字符串。
 // Python: t(key, **kwargs)
 // 从 agent_teams 根包搬入，打断 schema→agent_teams 循环依赖。
-//
 // key 为点分查找键（如 "dispatcher.member_online"），
 // kwargs 为可选的插值参数映射。
-//
 // 当 key 在当前语言中缺失时，尝试在默认语言（cn）中查找，
 // 仍缺失则返回 error（对齐 Python: KeyError 可恢复行为，不再 panic）。
 func T(key string, kwargs ...map[string]any) (string, error) {
@@ -245,11 +243,9 @@ func T(key string, kwargs ...map[string]any) (string, error) {
 }
 
 // ReplyHintFor 解析某条入站消息的 reply-hint note 正文。
-//
 // user 伪成员不是名册成员、也没有 agent 进程，用纯文本答复它会被静默丢弃，
 // 所以该情形用无条件措辞（dispatcher.reply_hint_user）；其余发送者用通用的
 // 条件措辞（dispatcher.reply_hint，带 {sender} 占位符）。
-//
 // Python: reply_hint_for(sender) (openjiuwen/agent_teams/i18n.py L1122-1138)
 func ReplyHintFor(sender string) (string, error) {
 	if sender == UserPseudoMemberName {

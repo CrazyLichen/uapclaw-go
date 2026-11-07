@@ -21,9 +21,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SseClient SSE (Server-Sent Events) 传输的 MCP 客户端。
-//
 // 内部组合 mcp-go 的 SSE 客户端，实现 McpClient 接口。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/client/sse_client.py (SseClient)
 type SseClient struct {
 	// config MCP 服务器配置
@@ -457,7 +455,6 @@ func (c *SseClient) Close() error {
 }
 
 // connected 返回当前连接状态（并发安全）。
-//
 // 重连会在调用进行中改写 isConnected，直接读字段会与写入构成数据竞争。
 func (c *SseClient) connected() bool {
 	c.mu.RLock()
@@ -466,7 +463,6 @@ func (c *SseClient) connected() bool {
 }
 
 // ListTools 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 listtools
 func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
 	return withReconnect(ctx, c, 0, "ListTools", func() ([]*types.McpToolCard, error) {
@@ -475,7 +471,6 @@ func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error)
 }
 
 // CallTool 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 calltool
 func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
 	return withReconnect(ctx, c, 0, "CallTool", func() (any, error) {
@@ -484,7 +479,6 @@ func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map
 }
 
 // GetToolInfo 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 gettoolinfo
 func (c *SseClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
 	return withReconnect(ctx, c, 0, "GetToolInfo", func() (*types.McpToolCard, error) {
@@ -493,7 +487,6 @@ func (c *SseClient) GetToolInfo(ctx context.Context, toolName string) (*types.Mc
 }
 
 // ListResources 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 listresources
 func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error) {
 	return withReconnect(ctx, c, 0, "ListResources", func() ([]map[string]any, error) {
@@ -502,7 +495,6 @@ func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error)
 }
 
 // ReadResource 调用 MCP 服务，传输故障时重连并重试。
-//
 // Python: @with_reconnect 装饰 readresource
 func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	return withReconnect(ctx, c, 0, "ReadResource", func() ([]map[string]any, error) {

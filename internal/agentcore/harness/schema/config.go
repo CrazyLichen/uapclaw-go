@@ -182,9 +182,7 @@ type SubagentCreateParams struct {
 }
 
 // TaskLoopNoProgressGuardConfig 任务循环无进展守卫配置。
-//
 // 连续若干轮「有 answer 但内容过短」即判定模型没有实质进展，停止任务循环。
-//
 // Python: TaskLoopNoProgressGuardConfig (harness/schema/config.py)
 type TaskLoopNoProgressGuardConfig struct {
 	// Enabled 是否启用
@@ -453,10 +451,8 @@ func NewDeepAgentConfig() *DeepAgentConfig {
 }
 
 // ResolveInnerReactMaxIterations 解析内层 ReAct 循环的迭代上限。
-//
 // 0（未配置）表示不限（math.MaxInt）；其余值（含负数）原样透传，即使启用了
 // 外层 task loop。负数不做降级——与上游一致：上游只判 `is None`，显式值原样用。
-//
 // Python: resolve_inner_react_max_iterations() (harness/schema/config.py:174-182)
 func (c *DeepAgentConfig) ResolveInnerReactMaxIterations() int {
 	if c.MaxIterations == 0 {

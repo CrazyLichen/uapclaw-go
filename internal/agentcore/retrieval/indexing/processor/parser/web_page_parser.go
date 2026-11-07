@@ -1,5 +1,4 @@
 // Package parser web_page_parser.go：通用网页 URL 解析器（13.14）。
-//
 // 本文件对齐 Python web_page_parser.py：verify 密封 sum type、URL 正则、
 // 默认常量与 WebPageParser 本体（dispatch 动态派发 + downloadHTML + ParseURL）。
 package parser
@@ -25,7 +24,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // verifyMode TLS 校验模式密封接口（对齐 Python verify: bool | str | ssl.SSLContext）。
-//
 // 三态单参数在 Python 是一个值的四种形态：True 默认 CA / False 跳过 /
 // str CA bundle 路径 / ssl.SSLContext 自定义。Go 侧密封 sum type 四变体
 // 承载（非导出标记方法 isVerifyMode()，包外无法新增变体——13.13 cellValue 先例）。
@@ -65,7 +63,6 @@ type verifyTLSConfig struct {
 func (verifyTLSConfig) isVerifyMode() {}
 
 // htmlParseDispatcher _parse_html/_validate_url 覆写动态派发接口。
-//
 // Python classmethod 覆写（WeChatArticleParser._parse_html/_validate_url）
 // 的 Go 对应物：WebPageParser 构造时注入最终实例，ParseURL 经此派发——
 // Go 嵌入无运行时多态（*WebPageParser 上的方法调用静态绑定），覆写
@@ -78,7 +75,6 @@ type htmlParseDispatcher interface {
 }
 
 // WebPageParser 通用网页 URL 解析器（对齐 Python WebPageParser(HTMLFileParser)）。
-//
 // 嵌入 HTMLFileParser 复用 parseHTMLToDocs/共享工具；dispatch 注入最终
 // 实现实现 classmethod 覆写派发。构造四参数对齐 Python __init__
 // timeout/user_agent/verify（client 仅 parse 时 kwargs 注入）。
@@ -139,7 +135,6 @@ func NewWebPageParserWithDefaults() (*WebPageParser, error) {
 }
 
 // NewWebPageParser 构造 WebPageParser。
-//
 // timeout 收 float64 秒（字面贴近 Python timeout: float = DEFAULT_TIMEOUT），
 // 内部转 time.Duration。verify nil 防御回落默认（NewBaseParser 先例风格）。
 // Python: web_page_parser.py WebPageParser.__init__
@@ -168,7 +163,6 @@ func NewWebPageParser(timeout float64, userAgent string, verify verifyMode) (*We
 }
 
 // ParseWebPageURL 包级别名（对齐 parse_web_page_url = WebPageParser.parse_url）。
-//
 // 默认参数全链；覆盖参数经 ParseOption 传入（kwargs 对应物）。
 // Python: web_page_parser.py 模块尾别名赋值
 func ParseWebPageURL(ctx context.Context, url string, docID string, opts ...ParseOption) ([]reranker.Document, error) {
@@ -195,7 +189,6 @@ func ParseWebPageURL(ctx context.Context, url string, docID string, opts ...Pars
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isWeChatArticleURL 判定微信文章 URL（对齐 _is_wechat_article_url）。
-//
 // 空串/空 url 直接 false（对齐 bool(url and ...)）。
 // 审查修复 M-01：FindStringIndex 判 loc[0]==0 对齐 Python re.match
 // 头部锚定语义（正则自带 ^ 时等价，统一防御未来正则改动）。
@@ -209,7 +202,6 @@ func isWeChatArticleURL(url string) bool {
 }
 
 // downloadHTML 下载网页 HTML（对齐 Python _download_html）。
-//
 // 注入 client 时直接使用（UA header 仍注入——对齐 Python 注入分支
 // headers_for_request=request_headers）；自建时按 verify 变体配
 // transport + client.Timeout（对齐 httpx.AsyncClient(verify=, timeout=,
@@ -297,7 +289,6 @@ func downloadHTML(ctx context.Context, url string, timeout time.Duration, userAg
 // ──────────────────────────── WebPageParser 方法（方法跟类型走） ────────────────────────────
 
 // Parse 解析网页 URL（覆写整体，对齐 Python WebPageParser.parse）。
-//
 // 四覆盖参数从 opts 取值（未设回落实例字段）后转发 ParseURL。
 // 对齐 Python kwargs 四键：timeout/user_agent/verify/client。
 // Python: web_page_parser.py WebPageParser.parse
@@ -324,7 +315,6 @@ func (p *WebPageParser) Parse(ctx context.Context, doc string, opts ...ParseOpti
 }
 
 // ParseURL 抓取并解析网页 URL（对齐 Python classmethod parse_url）。
-//
 // validateURL（经 dispatch，子类覆写生效）→ downloadHTML → effectiveID
 // 三级回落（docID or url or uuid）→ parseHTMLToDocs（经 dispatch）→
 // 每个 doc 补 source_url + Info 日志。
@@ -368,7 +358,6 @@ func (p *WebPageParser) ParseURL(ctx context.Context, url string, docID string, 
 }
 
 // validateURLFor 校验 URL（WebPage 默认实现，对齐 Python _validate_url 静态方法）。
-//
 // 非 http(s) → 155110 "Not a valid HTTP URL: %q"（%q 对齐 Python repr）；
 // 微信 URL → 155110 引导专用解析器。
 // Python: web_page_parser.py WebPageParser._validate_url
@@ -391,7 +380,6 @@ func (p *WebPageParser) validateURLFor(url string) error {
 }
 
 // Supports 检查是否支持该文档源（覆写，对齐 Python WebPageParser.supports）。
-//
 // http(s) URL 且非微信文章 URL（strip 后匹配，对齐 doc.strip()）。
 // 审查修复 M-01：头部锚定匹配对齐 Python re.match（正则自带 ^ 等价，统一防御）。
 // Python: web_page_parser.py WebPageParser.supports

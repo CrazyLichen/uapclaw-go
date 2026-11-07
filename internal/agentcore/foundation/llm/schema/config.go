@@ -107,7 +107,6 @@ const (
 )
 
 // defaultClientTimeoutSeconds 默认请求超时（秒）。
-//
 // Python: schema/config.py:145 timeout default=360.0, gt=0——注释明文约定
 // timeout >= stream_first_chunk_timeout(300)，传输层永不先于应用层流超时触发。
 const defaultClientTimeoutSeconds = 360.0
@@ -115,7 +114,6 @@ const defaultClientTimeoutSeconds = 360.0
 // ──────────────────────────── 枚举（鉴权模式）────────────────────────────
 
 // AuthMode LLM 鉴权模式。
-//
 // Python: schema/config.py:40-44 LLMAuthMode
 // （openai_account_oauth 分支暂不生效——openai_account_model_client.py 未迁移 ⤵️）
 type AuthMode string
@@ -132,7 +130,6 @@ const (
 )
 
 // topLevelAPIKeyProviders 要求顶层 api_key 的 provider 白名单。
-//
 // Python: schema/config.py:111-126 _TOP_LEVEL_API_KEY_PROVIDERS
 var topLevelAPIKeyProviders = map[string]struct{}{
 	"OpenAI": {}, "OpenRouter": {}, "Anthropic": {}, "SiliconFlow": {},
@@ -142,7 +139,6 @@ var topLevelAPIKeyProviders = map[string]struct{}{
 }
 
 // topLevelAPIBaseProviders 要求顶层 api_base 的 provider 白名单。
-//
 // Python: schema/config.py:127 _TOP_LEVEL_API_BASE_PROVIDERS
 // （= key 白名单 ∪ {OpenAIAccount}；OpenAIAccount 客户端未迁移，白名单先对齐）
 var topLevelAPIBaseProviders = map[string]struct{}{
@@ -153,7 +149,6 @@ var topLevelAPIBaseProviders = map[string]struct{}{
 }
 
 // defaultAPIBaseByEndpointProfile endpoint_profile 缺省 base 回填表。
-//
 // Python: schema/config.py:128-131 _DEFAULT_API_BASE_BY_ENDPOINT_PROFILE
 var defaultAPIBaseByEndpointProfile = map[string]string{
 	"ollama":   "http://localhost:11434/v1",
@@ -259,7 +254,6 @@ func ValidateAndNormalizeProvider(provider string) (string, error) {
 }
 
 // ProviderRequiresAPIKey 判 provider 是否要求顶层 api_key（白名单）。
-//
 // Python: schema/config.py:111-126 _TOP_LEVEL_API_KEY_PROVIDERS
 func ProviderRequiresAPIKey(provider string) bool {
 	_, ok := topLevelAPIKeyProviders[provider]
@@ -267,7 +261,6 @@ func ProviderRequiresAPIKey(provider string) bool {
 }
 
 // ProviderRequiresAPIBase 判 provider 是否要求顶层 api_base（白名单）。
-//
 // Python: schema/config.py:127 _TOP_LEVEL_API_BASE_PROVIDERS
 func ProviderRequiresAPIBase(provider string) bool {
 	_, ok := topLevelAPIBaseProviders[provider]
@@ -500,7 +493,6 @@ func WithMaxTokens(maxTokens int) ModelRequestConfigOption {
 }
 
 // WithContextWindow 设置模型上下文窗口（内部元数据，不随请求下发）。
-//
 // 对齐上游 ModelRequestConfig.context_window：请求参数组装时显式排除。
 // 本仓请求参数由 base_client 以 map 拼装且只合并 Extra，该字段不进 Extra 即天然不外发
 // （由 config_window_test.go 固化）。

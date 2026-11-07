@@ -94,11 +94,9 @@ func (r *EvolutionApprovalRuntime) RejectPendingRequest(
 }
 
 // FinalizeStagedEvolutionRequest 将暂存请求路由到审批缓冲或自动审批副作用。
-//
 // Python: finalize_staged_evolution_request(request, requires_approval, emit_fn, on_auto_approved)
 // requires_approval=True 时调用 emit_approval_request(request)，无论回调是否异常都返回 request。
 // requires_approval=False 时调用 on_auto_approved(request)，同样无论回调是否异常都返回 request。
-//
 // 对齐 Python 行为：回调异常时记录日志但不中断流程，始终返回 request（而非 error）。
 func (r *EvolutionApprovalRuntime) FinalizeStagedEvolutionRequest(
 	request *experience.ExperienceApprovalRequest,

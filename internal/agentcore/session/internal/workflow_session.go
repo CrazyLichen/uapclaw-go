@@ -17,10 +17,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowSession 工作流级内部会话，实现 InnerSession 接口。
-//
 // 持有工作流运行所需的基础设施组件，支持延迟注入 StreamWriterManager 和 ActorManager。
 // Checkpointer 委托给 parent（通常是 AgentSession），确保父子会话共享持久化机制。
-//
 // Python: openjiuwen/core/session/internal/workflow.py (WorkflowSession)
 type WorkflowSession struct {
 	// sessionID 会话唯一标识（从 parent 继承或自动生成）
@@ -45,10 +43,8 @@ type WorkflowSession struct {
 }
 
 // NodeSession 工作流节点级会话，实现 InnerSession 接口。
-//
 // 包装一个 InnerSession（通常是 WorkflowSession），通过 CreateNodeState 创建节点专属的状态视图。
 // 大部分方法委托给被包装的 session，但 State() 返回节点专属视图，Close() 为空实现。
-//
 // Python: openjiuwen/core/session/internal/workflow.py (NodeSession)
 type NodeSession struct {
 	// delegate 被包装的会话（通常是 WorkflowSession）
@@ -74,10 +70,8 @@ type NodeSession struct {
 }
 
 // SubWorkflowSession 子工作流会话，嵌入 NodeSession。
-//
 // 在 NodeSession 基础上增加自己的 ActorManager 和嵌套深度管理。
 // Close() 时关闭自己的 ActorManager。
-//
 // Python: openjiuwen/core/session/internal/workflow.py (SubWorkflowSession)
 type SubWorkflowSession struct {
 	// NodeSession 嵌入节点会话
@@ -105,7 +99,6 @@ type WorkflowSessionOption func(*WorkflowSession)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowSession 创建内部 WorkflowSession 实例。
-//
 // 默认行为（对齐 Python WorkflowSession.__init__）：
 //   - 有 parent 时：sessionID 继承 parent、config 继承 parent、tracer 继承 parent
 //   - 无 parent 时：sessionID 自动生成 UUID、config 新建默认 Config（⤵️ 5.12 回填）、tracer 为 nil
@@ -176,7 +169,6 @@ func WithWorkflowID(id string) WorkflowSessionOption {
 }
 
 // NewNodeSession 创建节点级会话实例。
-//
 // 从 parent session 的 state 创建节点专属状态视图（共享底层状态，切换 nodeID/parentID）。
 // executableID = parentID + "." + nodeID（parentID 为空时退化为 nodeID）。
 // 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
@@ -217,7 +209,6 @@ func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, ski
 }
 
 // NewSubWorkflowSession 创建子工作流会话实例。
-//
 // 嵌套深度 = 传入 NodeSession 的深度 + 1。
 // 构造时以传入 NodeSession 的 parent() 作为父级 session，
 // 使用原 NodeSession 的 nodeID 和 nodeType。

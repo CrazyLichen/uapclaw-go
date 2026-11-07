@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AesGcmCrypt AES-256-GCM 加密实现。
-//
 // 密文格式：hex(nonce) + hex(tag) + hex(ciphertext)，与 Python 完全兼容。
 // Python: openjiuwen/core/common/security/crypt_utils.py AesGcmCrypt
 type AesGcmCrypt struct{}
@@ -45,7 +44,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Encrypt 使用 AES-256-GCM 加密明文。
-//
 // key 必须为 32 字节，返回 hex(nonce) + hex(tag) + hex(ciphertext) 格式密文。
 // 密文格式与 Python AesGcmCrypt.encrypt 完全一致，可互解。
 func (c *AesGcmCrypt) Encrypt(key []byte, plaintext string) (string, error) {
@@ -91,7 +89,6 @@ func (c *AesGcmCrypt) Encrypt(key []byte, plaintext string) (string, error) {
 }
 
 // Decrypt 使用 AES-256-GCM 解密密文。
-//
 // 密文格式必须为 hex(nonce) + hex(tag) + hex(ciphertext)，与 Python 一致。
 // 解密时会验证认证标签，确保密文未被篡改。
 func (c *AesGcmCrypt) Decrypt(key []byte, ciphertext string) (string, error) {

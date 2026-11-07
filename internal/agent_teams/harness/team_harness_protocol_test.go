@@ -12,7 +12,6 @@ import (
 )
 
 // newTestTeamHarnessWithNative 构造一个带 native 的 TeamHarness（复用无模型 NativeHarness）。
-//
 // 25.1a 把 TeamHarness 重构为"转发 native supervisor"，协议面方法（Start/Stop/Send/...）
 // 全部转调 native；这些方法在 0 覆盖时被改动行门禁拦下，本文件补齐。
 func newTestTeamHarnessWithNative(t *testing.T) *TeamHarness {
@@ -71,7 +70,6 @@ func TestTeamHarness_Start无native报错(t *testing.T) {
 }
 
 // TestTeamHarness_StartStop完整周期 验证 Start 绑定子会话并启动 native、Stop 收尾。
-//
 // 用 *AgentTeamSession 作为 teamSession：同时覆盖 makeChildSession 的
 // 团队会话分支（子会话继承团队会话 ID）与 SessionID 的转发分支（非空）。
 func TestTeamHarness_StartStop完整周期(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Intent 意图，描述用户对任务的操作意图。
-//
 // Python: openjiuwen/core/controller/schema/intent.py (Intent)
 type Intent struct {
 	// IntentType 意图类型
@@ -40,7 +39,6 @@ type IntentOption func(*Intent)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // IntentType 意图类型枚举，定义所有支持的用户意图。
-//
 // Python: openjiuwen/core/controller/schema/intent.py (IntentType)
 type IntentType string
 

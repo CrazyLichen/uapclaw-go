@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RailExecutor @rail 装饰器的 Go 等价：将函数包裹在 before/after/on_exception 钩子中。
-//
 // Python: @rail(before, after, on_exception) 装饰器
 // (openjiuwen/core/single_agent/rail/base.py L579-667)
 //
@@ -55,7 +54,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// ModelCallRail 模型调用的 Rail 执行器。
-	//
 	// Python: @rail(before=BEFORE_MODEL_CALL, after=AFTER_MODEL_CALL, on_exception=ON_MODEL_EXCEPTION)
 	// 用法：
 	// 用法: err := rail.ModelCallRail.Execute(ctx, cbc, func() error { ... })
@@ -65,7 +63,6 @@ var (
 		interfaces.CallbackOnModelException,
 	)
 	// ToolCallRail 工具调用的 Rail 执行器。
-	//
 	// Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
 	// 用法：
 	// 用法: err := rail.ToolCallRail.Execute(ctx, cbc, func() error { ... })
@@ -88,7 +85,6 @@ func NewRailExecutor(before, after, onException interfaces.AgentCallbackEvent) *
 }
 
 // Execute 在 before/after/on_exception 钩子包裹下执行 fn。
-//
 // Python: @rail 装饰器的 wrapper 函数 (base.py L603-663)
 //
 // 流程：
@@ -107,7 +103,6 @@ func NewRailExecutor(before, after, onException interfaces.AgentCallbackEvent) *
 //
 // before 和 fn 在同一个 "try" 块中（对齐 Python），
 // 异常统一走 on_exception → 重试检查 → after(finally)。
-//
 // after 事件行为：
 //   - 正常返回：触发 after，返回 nil
 //   - 异常返回：on_exception → after(finally)，返回原始错误
@@ -204,7 +199,6 @@ func (re *RailExecutor) Execute(
 }
 
 // RailEvents 返回此执行器关联的三个事件。
-//
 // Python: wrapper.rail_events = (before, after, on_exception)
 // 供反射/调试/测试使用。
 func (re *RailExecutor) RailEvents() (before, after, onException interfaces.AgentCallbackEvent) {
@@ -214,7 +208,6 @@ func (re *RailExecutor) RailEvents() (before, after, onException interfaces.Agen
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // fireAfter 触发 after 事件。
-//
 // Python: finally 块中 after 事件触发逻辑 (base.py L642-663)
 //
 // 规则：
@@ -253,7 +246,6 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCall
 }
 
 // isCancelled 检查 context 是否已被取消。
-//
 // Python: isinstance(sys.exc_info()[1], asyncio.CancelledError)
 // Go 中 ctx.Err() != nil 等价于协程被取消（context.Canceled）或超时（context.DeadlineExceeded）。
 func isCancelled(ctx context.Context) bool {

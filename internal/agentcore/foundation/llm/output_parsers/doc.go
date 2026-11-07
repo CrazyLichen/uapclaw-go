@@ -1,5 +1,4 @@
 // Package output_parsers 提供 LLM 输出解析器，将 LLM 原始输出转换为结构化数据。
-//
 // 本包是领域二（LLM 基础层）2.16 节的实现，提供两种内置解析器：
 //
 //	JsonOutputParser      — 从 LLM 输出中提取 JSON（支持 markdown 代码块和裸 JSON）

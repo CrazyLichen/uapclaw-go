@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HierarchicalToolsTeamConfig 工具委托层级团队配置。
-//
 // Python: HierarchicalTeamConfig (hierarchical_tools/hierarchical_config.py)
 type HierarchicalToolsTeamConfig struct {
 	// TeamConfig 嵌入基础团队配置

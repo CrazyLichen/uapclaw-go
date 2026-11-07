@@ -457,7 +457,6 @@ func TestRunContext_Goal字段(t *testing.T) {
 }
 
 // TestUserMessageInputs_Parts可变 验证 rails 可原地编辑。
-//
 // Python: UserMessageInputs.parts 是 mutable list，rails 编辑生效
 // (rail/base.py L378-399)
 func TestUserMessageInputs_Parts可变(t *testing.T) {

@@ -53,7 +53,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DeepAdapter Deep SDK 适配器，实现 AgentAdapter 接口。
-//
 // 封装所有 Deep SDK 专属逻辑：
 //   - DeepAgent 实例生命周期管理
 //   - Deep runtime tools 注册
@@ -107,7 +106,6 @@ type DeepAdapter struct {
 
 	// stateMu 保护模型/配置状态（model/modelCache/modelNameToKeys/modelClientConfig/
 	// modelRequestConfig/defaultModelName/configCache/configBase）。
-	//
 	// 纪律：写侧必须"构建完再发布"（先建局部 map，再在锁内整体替换），发布后的
 	// map 视为不可变；读侧统一走 snapshot 助手。这样 reload 与请求并发时不会出现
 	// "一边 range 一边写 map" 的 fatal。
@@ -276,7 +274,6 @@ type DeepAdapter struct {
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
-//
 // Python: answers 参数为 list[dict]，每个 dict 包含 selected_options 字段。
 // 对齐 Python: JiuWenClawDeepAdapter._handle_evolution_approval(answers: list)
 type ApprovalAnswer struct {
@@ -308,7 +305,6 @@ var persistentCheckpointerLock sync.Mutex
 var defaultSendPushFunc func(ctx context.Context, msg map[string]any) error
 
 // placeholderAPIBase 占位 api_base 集合：命中即视为「模型未配置」。
-//
 // Python: interface_deep.py (_PLACEHOLDER_API_BASES)
 //
 //	_PLACEHOLDER_API_BASES = frozenset({"https://example.com/compatible-mode/v1"})
@@ -330,7 +326,6 @@ func SetDefaultSendPushFunc(fn func(ctx context.Context, msg map[string]any) err
 }
 
 // ResetPersistentCheckpointer 重置持久化检查点器就绪标记（仅测试用）。
-//
 // Python 侧 _PERSISTENT_CHECKPOINTER_READY 是进程级标记，但 pytest 每个测试
 // 重新 setup 临时目录时同样面临单例指向旧目录的问题（Python 测试通过
 // subprocess/fixture 隔离规避）。Go 测试进程内多个测试连续 CreateInstance
@@ -372,7 +367,6 @@ func (d *DeepAdapter) ModelCache() map[string]*llm.Model {
 }
 
 // NewDeepAdapter 创建 DeepAdapter 实例。
-//
 // Python: JiuWenClawDeepAdapter.__init__()
 func NewDeepAdapter() *DeepAdapter {
 	d := &DeepAdapter{
@@ -398,7 +392,6 @@ func NewDeepAdapter() *DeepAdapter {
 }
 
 // CreateInstance 初始化底层 SDK Agent。
-//
 // Python: JiuWenClawDeepAdapter.create_instance() (line 2527-2621)
 //
 // Python 执行步骤：
@@ -683,7 +676,6 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 }
 
 // ReloadAgentConfig 热重载配置，不重启进程。
-//
 // Python: JiuWenClawDeepAdapter.reload_agent_config() (line 2646-2752)
 //
 // Python 执行步骤：
@@ -836,7 +828,6 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 }
 
 // ProcessMessageImpl 执行非流式请求，返回完整响应。
-//
 // Python: JiuWenClawDeepAdapter.process_message_impl() (line 4409-4512)
 //
 // Python 执行步骤：
@@ -1008,7 +999,6 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 }
 
 // ProcessMessageStreamImpl 执行流式请求，通过 channel 返回响应块。
-//
 // Python: JiuWenClawDeepAdapter.process_message_stream_impl() (line 4514-4750)
 //
 // Python 执行步骤：
@@ -1073,7 +1063,6 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		// S-07: 对齐 Python L4549-4561——team 分支 6 步运行时设置
 		// （原实现直接进 processTeamMessageStream，模型不切换、language/channel 不解析、
 		//   prompt_rail 不配置、runtime_state.yaml 不更新）
-		//
 		// 步骤 1-2: 模型解析与应用
 		// Python: resolved_model = self._resolve_model_for_request(request)
 		//         self._apply_model_to_react_agent(resolved_model)
@@ -1451,7 +1440,6 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 }
 
 // ProcessInterrupt 处理中断请求（pause/resume/cancel/supplement）。
-//
 // Python: JiuWenClawDeepAdapter.process_interrupt() (line 3268-3578)
 //
 // Python 执行步骤：
@@ -1584,7 +1572,6 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 // cancelPendingTodos 将未完成的 todo 项标记为 cancelled。
 // Python: _cancel_pending_todos (interface_deep.py:4351-4407)
 // 返回前端格式 todo 列表（附加到 interrupt_result 通知前端刷新），无 todo 或失败返回 nil。
-//
 // Python 先从 ability_manager.get("todo_modify") + resource_mgr.get_tool() 取已注册实例，
 // 失败才 fallback 构造。Go 的 tool.Tool 接口无法还原 TodoTool 基类（LoadTodos/SaveTodos
 // 在基类上），因此统一走 fallback 构造——语义等价：todos 文件路径相同（同一 workspace 的
@@ -1658,7 +1645,6 @@ func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) 
 }
 
 // HandleUserAnswer 处理用户回答（evolution 审批或权限审批）。
-//
 // Python: JiuWenClawDeepAdapter.handle_user_answer() (line 3579-3605)
 //
 // Python 执行步骤：
@@ -1710,7 +1696,6 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 }
 
 // HandleHeartbeat 处理心跳请求。
-//
 // Python: JiuWenClawDeepAdapter.handle_heartbeat() (line 3607-3624)
 //
 // Python 执行步骤：
@@ -1806,7 +1791,6 @@ func (d *DeepAdapter) Instance() *harness.DeepAgent {
 }
 
 // Cleanup 清理适配器资源。
-//
 // Python: JiuWenClawDeepAdapter.cleanup() (line 3245-3248)
 //
 // Python 执行步骤：
@@ -1821,7 +1805,6 @@ func (d *DeepAdapter) Cleanup() error {
 }
 
 // AbortOnGatewayDisconnect Gateway 断连时全局中止。
-//
 // Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3511-3538)
 //
 // 与 interrupt(cancel) 不同：无 other_sessions 保护，
@@ -1859,7 +1842,6 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 }
 
 // EnsurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
-//
 // Python: interface_deep.py ensure_persistent_checkpointer() (line 393-424)
 //
 // 并发语义：初始化被包级互斥锁串行化（首次调用创建 SQLite 检查点器并设为全局默认），
@@ -1867,7 +1849,6 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 // （与 ResetPersistentCheckpointer 的写并发），且 race detector 会直接报。
 // 初始化本身只发生一次；后续调用的代价是一次 mutex 加解锁（约 20ns），
 // 调用频率为"每次会话创建/删除"，无需快路径。
-//
 // 初始化步骤：
 //  1. 加锁
 //  2. 若已就绪直接返回
@@ -1938,7 +1919,6 @@ func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string
 // Python: load_user_rails() —— 经 get_rail_manager() 从
 // {agent_workspace}/extensions/<name>/rail.py 动态 import 用户手写的 Python Rail
 // （common/plugins/rail_manager.py，约 550 行，含 import/校验/热重载/删除）。
-//
 // S-19（归档）：这是**语言边界**导致的不可移植项，不是待实现功能——
 // Go 是编译型语言，无法 import 用户现写的 .py；1:1 对齐需另立设计
 // （Go 原生扩展注册表或 plugin 机制），本轮不做。
@@ -2158,7 +2138,6 @@ func isDir(path string) bool {
 }
 
 // setCheckpoint 设置持久化检查点。
-//
 // Python: JiuWenClawDeepAdapter.set_checkpoint() (line 1479-1480)
 //
 // Python 实现：
@@ -2174,7 +2153,6 @@ func (d *DeepAdapter) setCheckpoint(ctx context.Context) error {
 }
 
 // buildModelFromEntry 根据单个模型条目的 model_client_config / model_config_obj 构建 Model 实例。
-//
 // Python: JiuWenClawDeepAdapter._build_model_from_entry() (line 1483-1493)
 func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any) (*llm.Model, error) {
 	name, _ := mcc["model_name"].(string)
@@ -2281,15 +2259,12 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 }
 
 // buildModelCacheFromDefaults 从 models.defaults 列表构建模型缓存。
-//
 // Python: JiuWenClawDeepAdapter._build_model_cache_from_defaults() (line 1495-1533)
 //
 // key 使用 {model_name}#{index} 格式以支持同名模型共存。
 // 同时记录 modelNameToKeys 映射以便按 model_name 查找。
-//
 // cache/nameToKeys 由调用方提供并独占（构建期间不对外发布），
 // 避免直接写 d.modelCache 与并发读取打擂台。
-//
 // 返回值 defaultOrder 按 config 出现顺序记录「带纯 model_name 键」的模型名。
 // 默认模型必须按该顺序取第一个（对齐 Python `for name in self._model_name_to_keys`
 // 的 dict 插入序）：Go 直接 range map 是随机序，多模型并存时默认模型会随进程漂移。
@@ -2350,7 +2325,6 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(
 }
 
 // buildModelCacheLegacy 回退到旧格式（models.default / react 段）构建单条目缓存。
-//
 // Python: JiuWenClawDeepAdapter._build_model_cache_legacy() (line 1535-1560)
 func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any, cache map[string]*llm.Model) {
 	modelsSection, _ := configBase["models"].(map[string]any)
@@ -2416,7 +2390,6 @@ func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any, cache map
 }
 
 // createModel 从配置创建 Model 实例并构建模型缓存。
-//
 // Python: JiuWenClawDeepAdapter._create_model() (line 1562-1593)
 //
 // 构建期间只操作局部 map，全部就绪后在 stateMu 内整体发布，
@@ -2466,7 +2439,6 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 }
 
 // publishModelState 原子发布模型状态。
-//
 // cache/nameToKeys 在发布后视为不可变：写侧只能构建新 map 再整体替换，
 // 不能就地修改已发布的 map，否则并发 range 会 fatal。
 func (d *DeepAdapter) publishModelState(
@@ -2546,7 +2518,6 @@ func (d *DeepAdapter) setAppliedModel(model *llm.Model) {
 }
 
 // resolveModelForRequest 根据请求中的 model_name 参数查找对应模型。
-//
 // Python: JiuWenClawDeepAdapter._resolve_model_for_request() (line 1595-1612)
 //
 // 支持两种格式：
@@ -2581,7 +2552,6 @@ func (d *DeepAdapter) resolveModelForRequest(req *schema.AgentRequest) *llm.Mode
 }
 
 // applyModelToReactAgent 将解析后的模型应用到 ReActAgent 并同步 adapter 模型字段。
-//
 // Python: JiuWenClawDeepAdapter._apply_model_to_react_agent(resolved_model)
 // （非流式/流式/team 三条路径共用的模型应用逻辑，抽出消重）
 func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
@@ -2598,7 +2568,6 @@ func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
 }
 
 // hasValidModelConfig 检查请求的模型是否有可用配置（凭据维度）。
-//
 // Python: JiuWenClawDeepAdapter._has_valid_model_config() (interface_deep.py:3540-3580)
 //
 // 判定顺序与 Python 逐条一致：
@@ -2639,7 +2608,6 @@ func (d *DeepAdapter) hasValidModelConfig(requestedModelName string) bool {
 }
 
 // modelClientUsable 判断模型对象上的客户端配置是否含可用凭据。
-//
 // Python: _mcc_obj_looks_usable (interface_deep.py:3546-3553)：
 // 先 isinstance(ModelClientConfig)，再交给 _mcc_looks_usable。
 func modelClientUsable(m *llm.Model) bool {
@@ -2653,7 +2621,6 @@ func modelClientUsable(m *llm.Model) bool {
 }
 
 // modelClientConfigUsable 判断 model_client_config 字典是否含可用凭据。
-//
 // Python: _mcc_looks_usable (interface_deep.py:292-296)：
 // api_key 非空 且 api_base 非空 且 api_base 不在占位符黑名单（均先 strip）。
 // Python 用 str(...) 强转后 strip，Go 侧对非字符串值等价用 fmt.Sprint。
@@ -2671,7 +2638,6 @@ func modelClientConfigUsable(mcc map[string]any) bool {
 }
 
 // defaultModelClientConfig 从 config.yaml 读取 models.default.model_client_config。
-//
 // Python: get_config().get("models", {}).get("default", {}).get("model_client_config", {})
 // 任何一层缺失或读取失败都返回 nil（Python 侧 try/except 仅 Warn，不阻断请求）。
 func defaultModelClientConfig() map[string]any {
@@ -2706,7 +2672,6 @@ func modelClientConfigFromBase(data map[string]any) map[string]any {
 
 // defaultModelClientConfigFromConfigBase 优先从 adapter 已发布的 configBase 快照取配置，
 // 仅在快照为空（未初始化）时回退读盘。
-//
 // 对齐 Python：get_config() 是进程级缓存，_has_valid_model_config 第 4 步不会每次读盘。
 // Go 的 configBase 在 CreateInstance / ReloadAgentConfig 时已加载并随配置保存刷新，
 // 等价于该缓存；避免心跳/首启等"配置未就绪"场景每次都解析 YAML。
@@ -2718,7 +2683,6 @@ func (d *DeepAdapter) defaultModelClientConfigFromConfigBase() map[string]any {
 }
 
 // anyToConfigString 复刻 Python `str(v or "")` 语义。
-//
 // 注意假值处理：Python 的 `v or ""` 会把 None / "" / 0 / False / 空容器统一变成 ""，
 // 所以 api_key: 0 在 Python 侧是「未配置」。这里按 kind 判零值，
 // 其余类型走 fmt.Sprint（等价 str()）。
@@ -2755,7 +2719,6 @@ func anyToConfigString(v any) string {
 }
 
 // markSessionActive 递增 session 活跃任务计数。
-//
 // Python: _mark_session_active() (line 576-578)
 // Counter 语义：允许并发同 session（如 supplement 同时旧任务还在），
 // 避免第一个任务结束时驱逐第二个。
@@ -2766,7 +2729,6 @@ func (d *DeepAdapter) markSessionActive(sessionID string) {
 }
 
 // unmarkSessionActive 递减 session 活跃任务计数，归零时移除。
-//
 // Python: _unmark_session_active() (line 580-599)
 // 归零时清理 StreamEventRail 的 per-session 状态，防止长期运行内存泄漏。
 func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
@@ -2787,7 +2749,6 @@ func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
 }
 
 // isSessionActive 检查 session 是否有活跃任务。
-//
 // Python: _is_session_active() (line 601-603)
 func (d *DeepAdapter) isSessionActive(sessionID string) bool {
 	d.sessionMu.Lock()
@@ -2796,7 +2757,6 @@ func (d *DeepAdapter) isSessionActive(sessionID string) bool {
 }
 
 // otherActiveSessions 返回除指定 session 外的活跃任务总数。
-//
 // Python: _other_active_sessions() (line 605-610)
 func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 	d.sessionMu.Lock()
@@ -2811,7 +2771,6 @@ func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 }
 
 // activeSessionIDSnapshot 返回当前活跃 session ID 列表（计数 > 0）。
-//
 // 遍历必须在锁内完成，取值后立刻释放，调用方在锁外做 abort 等耗时操作。
 func (d *DeepAdapter) activeSessionIDSnapshot() []string {
 	d.sessionMu.Lock()
@@ -2826,7 +2785,6 @@ func (d *DeepAdapter) activeSessionIDSnapshot() []string {
 }
 
 // cancelSchedulerRunningTasks 取消 TaskScheduler 运行中的任务。
-//
 // Python: _cancel_scheduler_running_tasks (interface_deep.py L3478-3506)。
 // 协作式中断（rail.abort + instance.abort）只在检查点生效，
 // in-flight LLM HTTP 需要在 await 点直接注入取消才能立即中止。
@@ -2945,7 +2903,6 @@ func paramsInt(params map[string]any, key string, defaultVal int) int {
 }
 
 // resolveEnableModelAnomalyDetectionRail 读取 execution_guard 下的模型异常检测开关。
-//
 // 缺省为 false（对齐上游 retry_cfg.get("enabled", False)）；开关与
 // buildModelAnomalyDetectionRail 必须读同一段配置，否则会出现"配置关不掉/开不了"。
 func resolveEnableModelAnomalyDetectionRail(configBase map[string]any) bool {
@@ -3023,7 +2980,6 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 }
 
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
-//
 // Python: _make_deep_agent_config() (interface_deep.py L2245-2283)
 //
 // 必须与 CreateInstance 的 CreateDeepAgentParams 同源：Python 侧两条路径都带
@@ -3150,7 +3106,6 @@ func extractReasoningContent(payload map[string]any) string {
 }
 
 // updatePermissionRail 原地更新已有 PermissionRail 配置，或在首次启用时新建。
-//
 // Python: _update_permission_rail(config_base) (interface_deep.py L2286-2302)
 //
 // Python 执行步骤：
@@ -3183,7 +3138,6 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 }
 
 // toPositiveInt 将任意数值或字符串转为正整数；非正数或不可解析返回 (0,false)。
-//
 // 用于把 yaml/前端传来的 token 上限（可能是 int、float64 或字符串）统一成 int。
 func toPositiveInt(v any) (int, bool) {
 	// 数值转换统一走 config.IntValue（int 族/float 族/json.Number/数字字符串），

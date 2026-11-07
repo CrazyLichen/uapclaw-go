@@ -42,7 +42,6 @@ var (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTextWriter 构建文本格式化 writer。
-//
 // noColor 为 true 时不着色（写文件时使用）；控制台是否着色由 colorEnabled 决定。
 // 输出形态：[时间] [级别] [component] [文件:行号] 描述 key=value
 //
@@ -72,7 +71,6 @@ func newTextWriter(out io.Writer, noColor bool) zerolog.ConsoleWriter {
 }
 
 // colorEnabled 判定是否启用 ANSI 着色。
-//
 // 策略：默认无色（与 Python 完全一致），仅当显式设置 FORCE_COLOR 且未设置
 // NO_COLOR 时着色。这样文件/管道/supervisor 场景天然干净，无需 isatty 探测
 // ——/dev/null 也是字符设备，ModeCharDevice 会把它误判成终端。

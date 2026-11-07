@@ -1,9 +1,7 @@
 // Package interrupt 提供中断-恢复（HITL）Rail 实现。
-//
 // 在 BeforeToolCall 钩子中拦截特定工具调用，暂停 ReAct 循环
 // 等待用户输入（Human-in-the-loop），然后恢复执行。
 // 是 Agent 人工审批、用户交互的核心机制。
-//
 // 三种决策类型：
 //   - ApproveResult：放行工具执行（可修改参数）
 //   - RejectResult：跳过工具执行（预设返回结果）

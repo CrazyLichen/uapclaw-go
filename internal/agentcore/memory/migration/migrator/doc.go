@@ -1,9 +1,7 @@
 // Package migrator 提供存储层迁移执行器。
-//
 // 本包定义了 5 种存储后端的迁移执行器（Migrator），
 // 每个执行器负责检测待迁移操作、执行迁移逻辑、处理失败回滚。
 // 所有执行器实现 Migrator 接口（IndexVersionMigrator 除外）。
-//
 // 文件目录：
 //
 //	migrator/

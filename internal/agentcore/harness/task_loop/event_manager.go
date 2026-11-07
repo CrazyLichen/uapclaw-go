@@ -13,9 +13,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // EventManager 把 user 与 goal work 放进同一个调度域。
-//
 // 监督器是唯一的弹出消费者；两个独立队列实现 user 优先，而不暴露两套宿主流 API。
-//
 // ⚠️ 并发约定：本类型**不含内部锁**。所有方法要求调用方持有 DeepAgent 的
 // interaction control lock（spec K3 / D4）。Python 靠 asyncio 单线程满足此约定，
 // Go 由 S2 的 supervisor 在 NextWork/MarkStarted/PushUser/MarkFinished 四处加锁。
@@ -58,7 +56,6 @@ func (m *EventManager) PushUser(work *hschema.RoundWorkItem) error {
 }
 
 // PushGoal 入队 goal work；同 (goal_id, revision) 已存在时返回 false。
-//
 // 返回 false 表示 pending/dequeued/active 已有同一代际，调用方不得再建一次尝试。
 // Python: EventManager.push_goal (event_manager.py L33)
 func (m *EventManager) PushGoal(work *hschema.RoundWorkItem) (bool, error) {
@@ -140,7 +137,6 @@ func (m *EventManager) HasGoalWork(goalID string, revision int) bool {
 }
 
 // HasRunningGoal 返回指定目标是否已有 dequeued/active 的尝试。
-//
 // 忽略 revision 与 pending 队列：pause/resume 用它识别"仍在收尾的尝试"，
 // 即使记录 revision 已被提升，且被丢弃的排队延续不计入。
 // Python: EventManager.has_running_goal (event_manager.py L89)
@@ -154,7 +150,6 @@ func (m *EventManager) HasRunningGoal(goalID string) bool {
 }
 
 // DiscardGoalWork 丢弃被清除/替换记录所属的待办 goal work。
-//
 // goalID 为空串表示丢弃该会话的全部目标待办。
 // Python: EventManager.discard_goal_work (event_manager.py L106)
 func (m *EventManager) DiscardGoalWork(sessionID string, goalID string) int {
@@ -182,7 +177,6 @@ func (m *EventManager) DiscardGoalWork(sessionID string, goalID string) int {
 }
 
 // DiscardAllWork 在输出租约断开时丢弃两个队列的待办。
-//
 // 持久化的 GoalRecord 刻意保留：之后一次 GOAL 发送会在前端重新 attach 后
 // 重建下一个 work item。
 // Python: EventManager.discard_all_work (event_manager.py L132)

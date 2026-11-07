@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AbilityExecutionError 能力执行统一异常，嵌入 BaseError 并关联 ToolMessage。
-//
 // Python: AbilityExecutionError
 type AbilityExecutionError struct {
 	*exception.BaseError
@@ -32,7 +31,6 @@ type AbilityExecutionError struct {
 
 const (
 	// emptySuccessText 工具成功但无可渲染文本时的兜底文案。
-	//
 	// 模型收到空字符串会当成"工具什么都没做"，给一句明确的占位更利于继续推理。
 	// Python: EMPTY_SUCCESS_TEXT (foundation/tool/base.py:23)
 	emptySuccessText = "Tool succeeded with empty output."
@@ -47,7 +45,6 @@ var InterruptAutoConfirmKey = state.StringKey("__interrupt_auto_confirm__")
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAbilityExecutionError 创建能力执行错误。
-//
 // Python: AbilityExecutionError(status=..., msg=..., tool_message=...)
 func NewAbilityExecutionError(
 	status exception.StatusCode,
@@ -63,7 +60,6 @@ func NewAbilityExecutionError(
 }
 
 // BuildToolMessageContent 从执行结果中提取 ToolMessage 的 content 字段。
-//
 // 提取逻辑（对齐 Python _build_tool_message_content）：
 //
 //	路径 1: map[string]any — 按 key 提取
@@ -110,7 +106,6 @@ func BuildToolMessageContent(result any) string {
 	}
 
 	// 路径 2：反射提取（对齐 Python getattr(result, "data", None)）
-	//
 	// MCP 工具结果以结构体形态透传（success / data / error 三字段），
 	// 走到这里时按字段名取值，避免把 "&{true map[] }" 这种 Go 字形交给模型。
 	v := reflect.ValueOf(result)
@@ -157,7 +152,6 @@ func BuildToolMessageContent(result any) string {
 
 // errorToExecuteResult 将 error 转换为 saschema.ExecuteResult。
 // 用于降级路径（cbc==nil）和 railedExecuteSingleToolCall 的异常处理。
-//
 // 转换规则：
 //   - ToolInterruptException → Result=tie（平局）, ToolMsg=nil
 //   - AbilityExecutionError  → Result=err（错误）, ToolMsg=aee.ToolMessage

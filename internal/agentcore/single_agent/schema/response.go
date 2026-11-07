@@ -9,11 +9,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InterruptRequester 中断请求接口，InterruptRequest 及其子类均满足。
-//
 // Python: isinstance(x, InterruptRequest) — Python 中 interrupt_requests 的值类型
 // 实际可存 InterruptRequest 或其子类（如 AskUserRequest, ToolCallInterruptRequest）。
 // Go 中通过接口实现多态：handler 存接口值，JSON 序列化按运行时具体类型输出字段。
-//
 // Python: model_config = {"extra": "allow"}：子类扩展字段（如 questions）
 // 通过接口多态自然保留，序列化时由具体类型决定输出内容。
 type InterruptRequester interface {
@@ -37,7 +35,6 @@ type InterruptRequester interface {
 }
 
 // InterruptRequest 工具中断请求，携带需要用户确认的信息。
-//
 // Python: InterruptRequest(message, payload_schema, auto_confirm_key, ui_options,
 // metadata, interrupt_id, interrupt_kind, interrupt_owner)
 //
@@ -70,7 +67,6 @@ type InterruptRequest struct {
 
 // ToolCallInterruptRequest 工具调用级中断请求，扩展 InterruptRequest。
 // 用于序列化中断信息给用户输出。
-//
 // Python: ToolCallInterruptRequest(InterruptRequest)
 // + model_config = {"extra": "allow"} 保留子类额外字段
 //
@@ -93,10 +89,8 @@ type ToolCallInterruptRequest struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // InterruptKind 中断类型的已知取值。
-//
 // kind 告诉宿主如何呈现一个中断、答案应是什么形状。取值是普通字符串
 // （而非封闭枚举），以便第三方 rail 声明自己的类型；空串表示抛出方未声明。
-//
 // Python: class InterruptKind
 const (
 	// InterruptKindUndeclared 抛出方未声明类型
@@ -118,7 +112,6 @@ const (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ClientToolInterruptOwner 能力管理器为客户端工具抛出的中断的 owner 键。
-//
 // Python: CLIENT_TOOL_INTERRUPT_OWNER = "openjiuwen.client_tool"
 const ClientToolInterruptOwner = "openjiuwen.client_tool"
 
@@ -127,10 +120,8 @@ const ClientToolInterruptOwner = "openjiuwen.client_tool"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InterruptKindOf 返回中断类型，未声明时返回空串。
-//
 // 字段存在之前持久化的技能演化审批数据把 kind 只存在 metadata["interrupt_kind"]
 // 里，此处兼容该历史形态。
-//
 // Python: interrupt_kind_of(request)
 func InterruptKindOf(request *InterruptRequest) string {
 	if request == nil {
@@ -148,7 +139,6 @@ func InterruptKindOf(request *InterruptRequest) string {
 }
 
 // NewToolCallInterruptRequest 从 InterruptRequester 和 ToolCall 创建 ToolCallInterruptRequest。
-//
 // Python: ToolCallInterruptRequest.from_tool_call(request, tool_call)
 // request 参数接受 InterruptRequester 接口，支持传入子类（如 AskUserRequest），
 // 子类扩展字段通过接口多态保留在 Request 字段中。
@@ -163,20 +153,17 @@ func NewToolCallInterruptRequest(request InterruptRequester, toolCall *llmschema
 }
 
 // NewInterruptID 生成一个全局唯一的中断 ID。
-//
 // Python: new_interrupt_id() -> f"intr_{uuid.uuid4().hex}"
 func NewInterruptID() string {
 	return "intr_" + uuid.NewString()
 }
 
 // IssueInterruptID 给挂在 toolCallID 上的中断就地分配 ID。
-//
 // 中断处理器对每个从暂停调用收集到的中断调用它。unanswered 把每个调用映射到
 // 「本次恢复在该调用上留下的未答中断」的 (owner, interrupt_id)：
 // 若同一 owner 的上一轮中断仍未答，则新中断沿用那个 id——这样宿主分批回答
 // 并行调用时手里的 id 一直有效，即使 rail 这次问的是不同的问题；
 // 其余中断一律分配新 id。
-//
 // Python: issue_interrupt_id(request, tool_call_id, unanswered)
 func IssueInterruptID(
 	request *InterruptRequest,
@@ -195,7 +182,6 @@ func IssueInterruptID(
 }
 
 // AnswerOwnerAndID 上一轮未答中断的归属信息。
-//
 // Python: _Unanswered 的 value 形态 Tuple[str, str]（owner, interrupt_id）
 type AnswerOwnerAndID struct {
 	// Owner 中断的 owner
@@ -211,13 +197,11 @@ func (r *InterruptRequest) GetMessage() string { return r.Message }
 func (r *InterruptRequest) GetAutoConfirmKey() string { return r.AutoConfirmKey }
 
 // RequestInterruptKind 返回中断类型。
-//
 // 供 permissions 包的 InteractionRequestProvider 接口消费：root 权限队列需要
 // 读 interrupt_kind 区分客户端工具中断与权限卡，但不希望依赖 schema 具体类型。
 func (r *InterruptRequest) RequestInterruptKind() string { return r.InterruptKind }
 
 // RequestMetadata 返回中断元数据。
-//
 // 供 permissions 包的 InteractionRequestProvider 接口消费（读 tool_invocation_key）。
 func (r *InterruptRequest) RequestMetadata() map[string]any { return r.Metadata }
 
@@ -231,7 +215,6 @@ func (r *InterruptRequest) SetMetadata(metadata map[string]any) { r.Metadata = m
 func (r *InterruptRequest) GetInterruptOwner() string { return r.InterruptOwner }
 
 // GetInterruptKind 实现 InterruptRequester 接口。
-//
 // 走 InterruptKindOf 以兼容 kind 只存在 metadata 里的历史数据。
 func (r *InterruptRequest) GetInterruptKind() string { return InterruptKindOf(r) }
 

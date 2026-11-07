@@ -1,9 +1,7 @@
 // Package lite 提供轻量级记忆系统的核心实现。
-//
 // 本包对齐 Python openjiuwen/core/memory/lite/ 的目录结构，
 // 实现 MemoryIndexManager（记忆索引管理器）、混合搜索（向量+FTS5）、
 // 文件监听同步、Embedding 缓存等核心功能。
-//
 // 文件目录：
 //
 //	lite/

@@ -1,8 +1,6 @@
 // Package gateway 提供 Gateway 服务端实现。
-//
 // normalize.go 承载入站消息标准化与三层路由转发回调，
 // 对齐上游 app_gateway.py 中的 _normalize_gateway_message / _norm_and_forward。
-//
 // 文件目录：
 //
 //	gateway/
@@ -25,7 +23,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NormAndForwardFunc 标准化并转发消息的回调函数类型。
-//
 // Python: _normalize_and_forward_message：先 normalize 再 deliver_to_message_handler。
 // 返回 true 表示短路后续本地 handler，false 表示本地 handler 继续执行。
 type NormAndForwardFunc func(msg *schema.Message) bool
@@ -37,10 +34,8 @@ type NormAndForwardFunc func(msg *schema.Message) bool
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ForwardReqMethods 仅转发到 Agent 的 Web method 集合。
-//
 // 这些方法的消息会通过 _on_message_cb 转发到 MessageHandler，
 // 同时本地 handler 也会执行返回 ack 响应。
-//
 // Python: _FORWARD_REQ_METHODS
 var ForwardReqMethods = map[string]bool{
 	"initialize":                     true,
@@ -116,11 +111,9 @@ var ForwardReqMethods = map[string]bool{
 }
 
 // ForwardNoLocalHandlerMethods 仅转发、无本地 handler 的方法集合。
-//
 // 这些方法的消息仅通过 _on_message_cb 转发，本地没有对应 handler。
 // 与 ForwardReqMethods 的差集即为"既有转发又有本地 handler"的方法
 // （如 chat.send、chat.interrupt 等）。
-//
 // Python: _FORWARD_NO_LOCAL_HANDLER_METHODS
 var ForwardNoLocalHandlerMethods = map[string]bool{
 	"initialize":                     true,
@@ -184,7 +177,6 @@ var ForwardNoLocalHandlerMethods = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeGatewayMessage 对网关入站消息进行标准化处理。
-//
 // 转换规则（对齐 Python _normalize_gateway_message）：
 //  1. content → query：params 中无 query 但有 content 时，复制 content 到 query
 //  2. resume → cancel：req_method 为 CHAT_RESUME 时，改为 CHAT_CANCEL 并设置 intent=resume
@@ -252,7 +244,6 @@ func NormalizeGatewayMessage(msg *schema.Message) *schema.Message {
 }
 
 // MakeNormAndForward 创建标准化+转发回调函数。
-//
 // Python: _make_norm_and_forward (app_gateway.py)：
 // 三层路由逻辑：
 //   - 非 forwardMethods → 不转发，返回 false（让本地 handler 处理）

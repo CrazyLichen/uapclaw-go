@@ -63,7 +63,6 @@ type BaseAgent interface {
 	CallbackManager() *AgentCallbackManager
 
 	// SystemPromptBuilder 返回系统提示词构建器接口。
-	//
 	// Python: agent.system_prompt_builder 属性（harness 层扩展）。
 	// ReActAgent 和 DeepAgent 均实现此方法。
 	SystemPromptBuilder() saprompt.SystemPromptBuilderInterface
@@ -115,9 +114,7 @@ func WithSession(sess sessioninterfaces.SessionFacade) AgentOption {
 }
 
 // WithStreamLifecycleOwner 声明本次 invoke 的生命周期由 stream 层拥有。
-//
 // 仅 stream 内部调用链使用；普通 Invoke 调用方不应传。
-//
 // Python: ReActAgent._inner_stream → invoke(..., _stream_lifecycle_owner=True)
 func WithStreamLifecycleOwner() AgentOption {
 	return func(o *AgentOptions) { o.StreamLifecycleOwner = true }

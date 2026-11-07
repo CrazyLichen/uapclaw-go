@@ -1396,7 +1396,6 @@ func strVal(v any) string {
 }
 
 // strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
-//
 // sessionId / messageId 在 Python 侧一律经 str() 收敛，数字也会变成 "123"；
 // strVal 只认 string，会把数字形态静默吞成空串。
 func strScalar(v any) string {
@@ -1433,7 +1432,6 @@ func (ch *AcpChannel) ensureGatewayConnection() error {
 			// 心跳与读期限（对齐 Python ws_connect ping_interval=20/ping_timeout=20）：
 			// gorilla 不会自动 ping，须自发 ticker + pong handler 刷新读期限；
 			// 否则半开连接要等 TCP 超时才能发现，远端网关重启后本端会长期挂住。
-			//
 			// 期限语义与 Python 一致：发 ping 后 20s 内没收到 pong 即判定半开。
 			// 首次期限覆盖「等第一个周期 ping + 等它的 pong」，之后由 pingLoop/pong 刷新。
 			_ = conn.SetReadDeadline(time.Now().Add(acpGatewayPingInterval + acpGatewayPingTimeout))
@@ -1477,7 +1475,6 @@ func (ch *AcpChannel) ensureGatewayConnection() error {
 }
 
 // closeGatewayConnection Python L1573-1589。
-//
 // 顺序对齐 Python「先 cancel reader task 再 close」：reader 阻塞在 ReadMessage，
 // 只有 Close 才能唤醒它。旧实现先等 done 再 Close，导致每次关闭固定空等 1s。
 func (ch *AcpChannel) closeGatewayConnection() {
@@ -1548,7 +1545,6 @@ func (ch *AcpChannel) sendToGateway(_ context.Context, msg *schema.Message) erro
 }
 
 // gatewayPingLoop 定期发 WS ping 保活（对齐 Python ws_connect ping_interval=20）。
-//
 // gorilla 不自动 ping/pong：不发 ping 时半开连接只能等 TCP 超时暴露。
 // 每次发 ping 前把读期限压到 ping_timeout（20s）：20s 内收不到 pong/数据即由
 // reader 报错退出，等价 Python「ping 后 ping_timeout 未收到 pong 就断开」。

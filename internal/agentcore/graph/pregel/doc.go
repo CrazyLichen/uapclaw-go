@@ -1,19 +1,15 @@
 // Package pregel 提供 Pregel 图引擎的配置、常量、超步调度信号、中断值与中断控制流。
-//
 // 本包是领域八的编译期最底层：构图（8.1）、节点描述体（8.3）、
 // 调度引擎（8.3b/8.3c）、通道管理（8.4）、顶点（8.11）、工作流（8.14）
 // 均依赖本包提供的保留节点名、终止态键、递归预算、配置归一化能力，
 // 以及超步之间传递调度消息的 Message、承载中断值的 Interrupt、承载中断跳转的
 // GraphInterrupt、产出调度消息的 Router、把执行体与出边绑在一起的 PregelNode，
 // 与落地这些消息的 Channel/ChannelManager（就绪判定 + CNF 汇聚 + 检查点快照）。
-//
 // 接入状态：Router、Channel 与 PregelNode 已交付（8.4/8.5/8.3），但**尚未接入**
 // 超步循环——PregelLoop 要等 8.3b，届时由它在循环 goroutine 内串行驱动这些类型
 // 并决定下一超步激活哪些节点。当前它们在生产代码中零调用方。
-//
 // 配置以值类型结构体表达：字段零值等价于 Python TypedDict(total=False)
 // 的「键缺失/None」，因此不存在指针字段，调用方也无须判空。
-//
 // 分层纪律（审查口径）：
 //
 //   - 本包禁止 import internal/agentcore/session/ 下任何包。Python 侧 graph/pregel

@@ -8,13 +8,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolCall 工具调用信息，扁平化结构。
-//
 // 内部格式（扁平）：{"id", "type", "name", "arguments", "index"}
 // OpenAI API 格式（嵌套）：{"id", "type", "function": {"name", "arguments"}, "index"}
 //
 // 反序列化时自动将 OpenAI 嵌套格式转为扁平格式（UnmarshalJSON）。
 // 序列化时输出内部扁平格式（MarshalJSON），如需 OpenAI 格式请调用 ToOpenAIFormat()。
-//
 // Python: openjiuwen/core/foundation/llm/schema/tool_call.py (ToolCall)
 type ToolCall struct {
 	// ID 工具调用 ID
@@ -51,7 +49,6 @@ func WithToolCallType(typ string) ToolCallOption {
 }
 
 // NewToolCall 创建 ToolCall 实例，Type 默认为 "function"。
-//
 // Python: ToolCall(id=..., type="function", name=..., arguments=..., index=None)
 func NewToolCall(id, name, arguments string, opts ...ToolCallOption) *ToolCall {
 	tc := &ToolCall{
@@ -67,12 +64,10 @@ func NewToolCall(id, name, arguments string, opts ...ToolCallOption) *ToolCall {
 }
 
 // ToolCallDeltaOptions 构造流式增量帧的 ToolCall 选项。
-//
 // 真实 OpenAI 兼容 SSE 只在首个 delta 携带 type（后续帧 omitempty 缺省），
 // 空串若透传给 WithToolCallType 会覆盖 NewToolCall 的 "function" 默认值，
 // 使 mergeToolCalls 的同调用判定（要求两侧 type == "function"）失效，
 // 同一次调用的参数碎片会被拆成多个 ToolCall 并逐个当工具执行。
-//
 // 对齐 Python: openai_model_client.py:745-751 流式解析把 type 硬编码为 "function"。
 func ToolCallDeltaOptions(index int, typ string) []ToolCallOption {
 	opts := []ToolCallOption{WithToolCallIndex(index)}
@@ -83,7 +78,6 @@ func ToolCallDeltaOptions(index int, typ string) []ToolCallOption {
 }
 
 // ToOpenAIFormat 转换为 OpenAI API 嵌套格式 map。
-//
 // 输出格式：{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}
 //
 // Python: AssistantMessage.model_dump() 中 tool_calls 的序列化逻辑
@@ -105,7 +99,6 @@ func (tc *ToolCall) ToOpenAIFormat() map[string]any {
 }
 
 // MarshalJSON 实现 json.Marshaler 接口，输出内部扁平格式。
-//
 // 内部格式：{"id": "...", "type": "function", "name": "...", "arguments": "..."}
 // 如需 OpenAI API 嵌套格式，请使用 ToOpenAIFormat() + json.Marshal()。
 func (tc *ToolCall) MarshalJSON() ([]byte, error) {
@@ -119,10 +112,8 @@ func (tc *ToolCall) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON 实现 json.Unmarshaler 接口，自动处理 OpenAI 嵌套格式到扁平格式的转换。
-//
 // 如果输入数据包含 "function" 键（OpenAI 格式），自动提取 function.name 和 function.arguments
 // 填入 Name 和 Arguments 字段。
-//
 // Python: AssistantMessage.convert_openai_tool_calls_format() (model_validator)
 func (tc *ToolCall) UnmarshalJSON(data []byte) error {
 	// 先解析为通用 map，检测是否为 OpenAI 嵌套格式

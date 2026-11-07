@@ -95,7 +95,6 @@ func TestHandleCommandRecap(t *testing.T) {
 }
 
 // TestHandleCommandModel 验证 command.model 未知 action 走 Python 的缺省分支。
-//
 // Python _handle_command_model 对非 add_model/switch_model 的 action 返回
 // ok=True + {"current":..., "available":["default-model"]}，原来的 stub 冒烟
 // 断言 payload.ok==true 编码的是 stub 行为，已按 Python 改写。

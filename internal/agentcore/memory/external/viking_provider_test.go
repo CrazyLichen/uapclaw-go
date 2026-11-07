@@ -863,7 +863,6 @@ func TestOpenVikingProvider_HandleToolCall_search回退limit(t *testing.T) {
 }
 
 // TestOpenVikingProvider_HandleToolCall_search显式默认值 两者都缺时显式写 10。
-//
 // T-13：原实现「不写 top_k」依赖服务端默认值与 Schema 描述（默认 10）恰好一致，
 // 一旦不一致就是静默漂移；现改为显式写出，与工具 Schema 的承诺对齐。
 func TestOpenVikingProvider_HandleToolCall_search显式默认值(t *testing.T) {

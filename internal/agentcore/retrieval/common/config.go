@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // IndexConfig 索引配置。
-//
 // Python: openjiuwen/core/retrieval/common/config.py (IndexConfig)
 type IndexConfig struct {
 	// IndexName 索引名称（必填）
@@ -23,7 +22,6 @@ type IndexConfig struct {
 }
 
 // KnowledgeBaseConfig 知识库配置。
-//
 // Python: openjiuwen/core/retrieval/common/config.py (KnowledgeBaseConfig)
 type KnowledgeBaseConfig struct {
 	// KBID 知识库标识（必填）
@@ -41,7 +39,6 @@ type KnowledgeBaseConfig struct {
 }
 
 // RetrievalConfig 检索配置。
-//
 // Python: openjiuwen/core/retrieval/common/config.py (RetrievalConfig)
 type RetrievalConfig struct {
 	// TopK 返回结果数量
@@ -59,7 +56,6 @@ type RetrievalConfig struct {
 }
 
 // VectorStoreConfig 向量存储配置。
-//
 // Python: openjiuwen/core/retrieval/common/config.py (VectorStoreConfig)
 type VectorStoreConfig struct {
 	// StoreProvider 向量存储提供商
@@ -148,7 +144,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDefaultIndexConfig 创建默认索引配置。
-//
 // Python: IndexConfig(index_name=..., index_type="hybrid", use_caption_for_images=False)
 func NewDefaultIndexConfig(indexName string) *IndexConfig {
 	return &IndexConfig{
@@ -159,7 +154,6 @@ func NewDefaultIndexConfig(indexName string) *IndexConfig {
 }
 
 // NewDefaultKnowledgeBaseConfig 创建默认知识库配置。
-//
 // Python: KnowledgeBaseConfig(kb_id=..., index_type="hybrid", use_graph=False, chunk_size=512, chunk_overlap=50, use_caption_for_images=False)
 func NewDefaultKnowledgeBaseConfig(kbID string) *KnowledgeBaseConfig {
 	return &KnowledgeBaseConfig{
@@ -173,7 +167,6 @@ func NewDefaultKnowledgeBaseConfig(kbID string) *KnowledgeBaseConfig {
 }
 
 // NewDefaultRetrievalConfig 创建默认检索配置。
-//
 // Python: RetrievalConfig(top_k=5, score_threshold=None, use_graph=None, agentic=False, graph_expansion=False, filters=None)
 func NewDefaultRetrievalConfig() *RetrievalConfig {
 	return &RetrievalConfig{
@@ -237,7 +230,6 @@ func (c *VectorStoreConfig) Validate() error {
 }
 
 // IsValidIndexType 判断索引类型是否为合法枚举值。
-//
 // 供「需要自己决定错误码」的调用方复用：例如 ConfigManager 加载配置文件时
 // 应报 155511（配置非法）而不是 validateIndexTypeKind 的「索引构建」错误码。
 // 与 validateIndexTypeKind 共用 validIndexTypeKinds 单一真源，避免合法类型

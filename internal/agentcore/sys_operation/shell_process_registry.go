@@ -220,6 +220,7 @@ func (r *ShellProcessRegistry) KillSession(sessionID string) int {
 	return killed
 }
 
+// KillSessionTree 杀掉该会话登记的全部进程，返回实际结束的进程数。
 func (r *ShellProcessRegistry) KillSessionTree(sessionID string) int {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -275,7 +276,6 @@ func (r *ShellProcessRegistry) ConsumeCancelled(sessionID string) bool {
 }
 
 // TerminateShellProcess 两阶段终止 Shell 进程。
-//
 // Linux：先 syscall.Kill(-pgid, SIGTERM) → 等待 3s → 再 syscall.Kill(-pgid, SIGKILL)
 // Windows：先 proc.Signal(os.Interrupt) → 等待 3s → 再 proc.Kill()
 //
@@ -342,7 +342,6 @@ func ClearShellSessionID(ctx context.Context) context.Context {
 
 // ResolveShellSessionID 解析 session ID：先从 context 取，再 fallback 到 trace_id。
 // Python: resolve_shell_session_id：先从 contextvars 取，fallback 到 get_session_id()。
-//
 // TODO(#通用): 补充 fallback 到 trace_id 的逻辑。Python 在 shell_session_id 为空时，
 // 会从 logging.utils.get_session_id() 获取 trace_id 并排除 "default_trace_id" 哨兵值。
 // Go 侧等 logger 包实现 GetTraceID(context.Context) 后，在此处补充等价 fallback：

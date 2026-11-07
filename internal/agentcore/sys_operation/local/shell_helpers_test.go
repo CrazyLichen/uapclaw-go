@@ -202,7 +202,6 @@ func TestAvailableGitBash(t *testing.T) {
 // ──────────────────────────── D-12：赋值与控制流识别 ────────────────────────────
 
 // TestLooksLikePowerShell_裸变量不误判 验证 $i 这类 bash 也合法的语法不单独判 PS。
-//
 // Python: af85e33d 把 _PS_VARIABLE_PATTERN 换成 _PS_ASSIGNMENT_PATTERN。
 // 旧行为会把 `for i in 1 2; do echo $i; done` 判成 PowerShell，
 // 在 Windows 上交给 pwsh 执行而失败。

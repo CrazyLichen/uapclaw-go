@@ -271,7 +271,6 @@ func TestDistributedLock_Release_锁被抢占不误删(t *testing.T) {
 }
 
 // TestDistributedLock_并发访问无竞态 -race：T-05 回归。
-//
 // 同一实例被并发调用时，lockValue 的读写必须在 mu 内完成；原实现裸读写，
 // -race 下必报。本用例只要求不触发 data race 且不 panic，语义正确性由其余用例覆盖。
 func TestDistributedLock_并发访问无竞态(t *testing.T) {

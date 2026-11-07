@@ -3,7 +3,6 @@ package common
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SearchResult 搜索结果数据模型。
-//
 // Python: retrieval/common/retrieval_result.py (SearchResult)
 type SearchResult struct {
 	// ID 结果 ID
@@ -17,7 +16,6 @@ type SearchResult struct {
 }
 
 // RetrievalResult 检索结果数据模型。
-//
 // Python: retrieval/common/retrieval_result.py (RetrievalResult)
 type RetrievalResult struct {
 	// Text 文本内容
@@ -33,11 +31,9 @@ type RetrievalResult struct {
 }
 
 // MultiKBRetrievalResult 多知识库聚合检索结果数据模型。
-//
 // 多 KB 并行检索按 text 聚合去重后的出口契约：Score 为跨 KB 融合
 // 最大值，RawScore/RawScoreScaled 保真源库分数，KbIDs 记录命中的
 // 全部知识库。
-//
 // Python: openjiuwen/core/retrieval/common/retrieval_result.py (MultiKBRetrievalResult)
 // RawScore/RawScoreScaled 用 float64 非指针——13.27 构造点默认值
 // 回落使实际数据流恒非 None；metadata 显式 None 理论路径归档 spec §8-3。

@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TryStartDreaming 尝试启动 dreaming 进程。
-//
 // Python: JiuWenClawDeepAdapter.try_start_dreaming() (line 5935-5954)
 //
 // Python 执行步骤：
@@ -105,7 +104,6 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 }
 
 // TryStopDreaming 停止 dreaming 进程。
-//
 // Python: JiuWenClawDeepAdapter.try_stop_dreaming() (line 5956-5965)
 //
 // Python 执行步骤：

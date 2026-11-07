@@ -18,7 +18,6 @@ import (
 
 // AskUserPayload 用户回答载荷。
 // 问题文本到回答的映射。
-//
 // Python: AskUserPayload
 type AskUserPayload struct {
 	// Answers 问题文本到回答的映射
@@ -27,7 +26,6 @@ type AskUserPayload struct {
 
 // AskUserRequest 扩展 InterruptRequest，携带问题列表。
 // 满足 InterruptRequester 接口（通过嵌入 InterruptRequest 继承 GetMessage/GetAutoConfirmKey）。
-//
 // Python: AskUserRequest(InterruptRequest)
 type AskUserRequest struct {
 	// InterruptRequest 嵌入基础中断请求
@@ -39,7 +37,6 @@ type AskUserRequest struct {
 // AskUserRail 向用户提问的 Rail。
 // 拦截 ask_user 工具调用，首次触发中断等待用户输入，
 // 用户输入后解析为 AskUserPayload 并通过 Reject 返回格式化结果。
-//
 // Python: AskUserRail(BaseInterruptRail) — openjiuwen/harness/rails/interrupt/ask_user_rail.py
 type AskUserRail struct {
 	BaseInterruptRail
@@ -48,7 +45,6 @@ type AskUserRail struct {
 }
 
 // InterruptKind 本 rail 抛出的中断类型为 ask_user。
-//
 // Python: AskUserRail.interrupt_kind = InterruptKind.ASK_USER
 func (r *AskUserRail) InterruptKind() string {
 	return saschema.InterruptKindAskUser
@@ -67,7 +63,6 @@ var _ agentinterfaces.AgentRail = (*AskUserRail)(nil)
 
 // NewAskUserRail 创建 AskUserRail 实例。
 // 默认拦截 "ask_user" 工具；可传入自定义工具名覆盖。
-//
 // Python: AskUserRail.__init__(tool_names=["ask_user"])
 func NewAskUserRail(toolNames ...string) *AskUserRail {
 	// 默认拦截 "ask_user" 工具
@@ -83,7 +78,6 @@ func NewAskUserRail(toolNames ...string) *AskUserRail {
 }
 
 // Init 注册 AskUserTool 到 ResourceMgr + AbilityManager。
-//
 // Python: AskUserRail.init(agent)
 func (r *AskUserRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	var language string
@@ -130,7 +124,6 @@ func (r *AskUserRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) e
 }
 
 // Uninit 从 AbilityManager + ResourceMgr 注销 AskUserTool。
-//
 // Python: AskUserRail.uninit(agent)
 func (r *AskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if len(r.tools) == 0 {
@@ -167,7 +160,6 @@ func (r *AskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // ParseToolArgs 解析 ToolCall.Arguments JSON 为 map。
-//
 // Python: AskUserRail._parse_tool_args(tool_call)
 func ParseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 	if toolCall == nil {
@@ -183,7 +175,6 @@ func ParseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 // BuildAskRequest 构建 AskUserRequest。
 // 返回 *AskUserRequest（InterruptRequester 接口实现），携带 questions 字段。
 // JSON 序列化时，questions 自然出现在输出中（对齐 Python model_dump + extra="allow"）。
-//
 // Python: AskUserRail._build_ask_request(tool_call)
 func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
 	args := ParseToolArgs(toolCall)
@@ -210,9 +201,7 @@ func (r *AskUserRail) BuildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequ
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveAskUserInterrupt AskUserRail 的中断解析逻辑。
-//
 // 无用户输入→中断；有有效输入→Reject（返回格式化结果）。
-//
 // Python: AskUserRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
 func (r *AskUserRail) resolveAskUserInterrupt(
 	_ context.Context,
@@ -249,7 +238,6 @@ func (r *AskUserRail) resolveAskUserInterrupt(
 
 // parseUserInput 解析用户输入为 AskUserPayload。
 // 支持 AskUserPayload / map[string]any / string 三种格式。
-//
 // Python: AskUserRail.resolve_interrupt 中的解析逻辑
 func (r *AskUserRail) parseUserInput(userInput any, toolCall *llmschema.ToolCall) (*AskUserPayload, bool) {
 	switch input := userInput.(type) {
@@ -311,7 +299,6 @@ func (r *AskUserRail) parseUserInputDict(userInput map[string]any, toolCall *llm
 }
 
 // formatToolResult 格式化用户回答为工具返回结果。
-//
 // Python: AskUserRail._format_tool_result(tool_call, payload)
 func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *AskUserPayload) string {
 	args := ParseToolArgs(toolCall)

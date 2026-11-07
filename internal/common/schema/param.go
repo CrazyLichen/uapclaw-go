@@ -10,9 +10,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Param 参数定义模型，支持嵌套结构。
-//
 // 用于描述工具、Agent、Workflow 的输入参数，最终转换为 LLM function calling 的 JSON Schema。
-//
 // 设计原则：
 //   - Items 字段仅在 Type 为 Array 时使用
 //   - Properties 字段仅在 Type 为 Object 时使用
@@ -69,7 +67,6 @@ type Param struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ParamType 参数类型枚举，对应 JSON Schema 的基本类型。
-//
 // Python: openjiuwen/core/common/schema/param.py (ParamType)
 type ParamType int
 
@@ -108,7 +105,6 @@ var paramTypeMap map[string]ParamType
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStringParam 创建字符串类型参数。
-//
 // Python: Param.string(name, description, required, default)
 func NewStringParam(name, description string, required bool, defaultVal ...string) *Param {
 	p := &Param{
@@ -170,7 +166,6 @@ func NewNumberParam(name, description string, required bool, defaultVal ...float
 }
 
 // NewArrayParam 创建数组类型参数，items 定义数组元素的类型。
-//
 // Python: Param.array(name, description, required, items, default)
 func NewArrayParam(name, description string, required bool, items *Param, defaultVal ...[]any) *Param {
 	p := &Param{
@@ -187,7 +182,6 @@ func NewArrayParam(name, description string, required bool, items *Param, defaul
 }
 
 // NewObjectParam 创建对象类型参数，properties 定义对象的属性列表。
-//
 // Python: Param.object(name, description, required, properties, default)
 func NewObjectParam(name, description string, required bool, properties []*Param, defaultVal ...map[string]any) *Param {
 	p := &Param{
@@ -232,7 +226,6 @@ func (t *ParamType) UnmarshalJSON(data []byte) error {
 }
 
 // Validate 验证参数定义的一致性。
-//
 // 规则：
 //   - Array 类型必须有 Items，不能有 Properties
 //   - Object 类型必须有 Properties，不能有 Items
@@ -316,7 +309,6 @@ func (p *Param) Validate() error {
 }
 
 // ToJSONSchemaMap 将 []*Param 列表转换为 OpenAI function calling 格式的 JSON Schema parameters。
-//
 // 生成格式：
 //
 //	{
@@ -360,10 +352,8 @@ func (p *Param) String() string {
 }
 
 // ParseJSONSchemaMap 将 JSON Schema dict 转换为 []*Param。
-//
 // 输入格式为 MetadataProvider.GetInputParams() 返回的 map[string]any，
 // 即标准 JSON Schema object 定义。
-//
 // Python: 无直接等价物（Python ToolCard.input_params 直接用 Dict[str, Any]）。
 // Go 因 ToolCard.InputParams 类型为 []*Param 需要此转换。
 func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {

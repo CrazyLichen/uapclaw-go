@@ -1,17 +1,13 @@
 // Package skill 提供 AgentServer 侧的技能管理器（SkillManager），
 // 负责技能的加载、安装、卸载、marketplace 操作、SkillNet/ClawHub/TeamSkillsHub 交互，
 // 以及技能状态文件 skills_state.json 的读写与查询。
-//
 // SkillManager 对应 Python jiuwenswarm/server/runtime/skill/skill_manager.py，
 // 为独立实现（不内嵌 agentcore SkillManager），通过 handler 方法
 // 处理 skills.* 和 plugins.* 请求。
-//
 // state_utils 提供纯函数式的状态查询能力，可被 skill_manager 内部使用，
 // 也可被其他模块直接引用，避免循环依赖。
-//
 // skill_routes 定义 skills.* 和 plugins.* 的 ReqMethod → handler 方法名路由映射，
 // 以及 NeedsRebuild 判断逻辑。
-//
 // 文件目录：
 //
 //	skill/

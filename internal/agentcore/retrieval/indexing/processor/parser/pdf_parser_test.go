@@ -52,11 +52,9 @@ type pdfObject struct {
 }
 
 // buildPDF 合成最小合法 PDF 字节。
-//
 // pages：每页一项（页文本）；imgOnPage：页号→是否嵌图（嵌入 DCTDecode XObject）。
 // 固定对象布局：1=Catalog 2=Pages 3=Font 4=Image XObject（仅需要时）
 // 5..=每页 Page 与 Contents。图片绘制走内容流 Do 操作符 + Resources XObject 声明。
-//
 // 文本走裸 Td/Tj（不带 BT/ET）：ledongthuc 的 BT 操作符会注入前导 "\n"
 // （page.go showText("\n")），真实 PDF 渲染器无此行为；去掉 BT/ET 使
 // GetPlainText 输出即页面文本本身，断言无需容忍前导换行。

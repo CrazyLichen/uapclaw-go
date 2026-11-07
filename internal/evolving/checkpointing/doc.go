@@ -1,5 +1,4 @@
 // Package checkpointing 提供训练检查点保存/恢复和技能演进数据文件系统 IO。
-//
 // 本包是自演化框架的持久化层，负责：
 //   - 断点续训：CheckpointManager 在关键节点保存 EvolveCheckpoint，
 //     Trainer 下次启动时 ResumeIfNeeded 恢复状态
@@ -11,7 +10,6 @@
 // 因为 Payload 依赖 EvolutionRecord（同包类型），
 // Go 不允许 checkpointing ↔ experience 循环引用。
 // experience 包通过类型别名 PendingChange = checkpointing.PendingChange 提供等效访问。
-//
 // 文件目录：
 //
 //	checkpointing/

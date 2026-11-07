@@ -767,12 +767,10 @@ func (m *memoryIndexManager) readMeta() (map[string]any, error) {
 
 // needsReindex 统一重建判定 —— A（provider）/ B（向量维度）/ C（分词器）三处共用这一入口，
 // 避免三份 if 各自漂移。
-//
 // 对齐 Python _should_full_reindex（manager.py:587）：比对 provider / model / chunkTokens。
 // ⚠️ 差异：Python 比对的是 self.provider.id（**实例值**），这里保持一致；历史 Go 实现比对
 // settings 里的配置值，导致「embed 缺 key 静默降级为 mock」后，补好 key 也永不重建。
 // 新增两项：segmenter（C，词典/分词器变化）与 vectorDims（B，维度变化初筛）。
-//
 // 原因取值：meta_missing / provider_unavailable / provider_changed / model_changed
 // / chunking_changed / segmenter_changed / vector_dims_changed
 func (m *memoryIndexManager) needsReindex() (bool, string) {
@@ -951,7 +949,6 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 }
 
 // collectStalePaths 收集索引中已不存在的文件路径。
-//
 // 必须先把 rows 读完并关闭再调用方执行删除：SQLite 连接池上限为 1，
 // rows 未关闭时连接被占用，另行开启事务会永久阻塞。
 func (m *memoryIndexManager) collectStalePaths(source string, activePaths map[string]bool) ([]string, error) {
@@ -1066,7 +1063,6 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 	}
 
 	// FTS5 全文搜索索引写入。
-	//
 	// 写入的是**分词后**的文本（空格拼接）：FTS 表是 contentless，文本本来由我们填，
 	// 可以与 chunks.text（原文，供 snippet/citation/memory_get 展示）分离。
 	// 分词器不可用时退回原文，检索侧同时退回「正则切分 + OR」。
@@ -1704,7 +1700,6 @@ func containsSource(sources []string, source string) bool {
 }
 
 // captureCwdState 记住首次从真实请求 ctx 捕获的 CwdState。
-//
 // 后台同步（fsnotify 防抖 / 定时器）的 ctx 由 context.Background() 派生，没有
 // CwdState；沙箱开启且未显式配置 SandboxRoot 时，resolvePath 会因沙箱根为空而
 // 拒绝所有绝对路径。这里缓存一次真实 ctx 的 CwdState 供后台复用，等价 Python

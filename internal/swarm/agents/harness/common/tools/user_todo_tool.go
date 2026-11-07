@@ -313,7 +313,6 @@ func serializeTodoItem(todo *TodoItem) string {
 }
 
 // writeTodosFile 写回待办文件（同目录临时文件 + rename 原子替换）。
-//
 // Python: _write_todos_file() —— 写失败会抛异常，工具层回 success=false。
 // Go 侧必须同样上抛：原实现 `_ = os.WriteFile` 会让磁盘写失败仍向模型报成功。
 // 原子替换避免并发读方看到半截文件。
@@ -354,7 +353,6 @@ func writeTodosFile(filePath string, todos []*TodoItem) error {
 }
 
 // todosFileLocks 进程内 per-path 互斥表（读-改-写串行化）。
-//
 // Python 侧读改写之间没有 await，单事件循环下不会交错；Go 的 goroutine 真并行
 // （网关并发会话 / cron / 团队子代理都命中同一 <channel>.md），必须显式加锁。
 var todosFileLocks sync.Map // map[string]*sync.Mutex

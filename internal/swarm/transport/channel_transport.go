@@ -11,11 +11,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChannelTransport 进程内传输实现，基于 Go channel 在 Gateway 与 AgentServer 之间传递 JSON 字节。
-//
 // Python: WebSocket 单连接模型：所有消息（请求/响应/推送/事件）走同一 recvCh。
 // 适用场景：chat/serve/acp/app 等单进程模式，Gateway 和 AgentServer 运行在同一进程内。
 // 将来跨进程模式使用 WebSocketTransport（也在本包中实现）。
-//
 // Python: jiuwenswarm/server/gateway_push/transport.py (进程内路径)
 type ChannelTransport struct {
 	// sendCh 请求通道：Gateway → AgentServer（JSON 字节）

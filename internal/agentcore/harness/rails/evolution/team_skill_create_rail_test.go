@@ -229,7 +229,6 @@ type fakeLoopAgent struct {
 func (f *fakeLoopAgent) LoopController() controller.ControllerInterface { return f.ctl }
 
 // TestGetLoopController_解析ControllerInterface实现 验证能取到 LoopController 并转发 EnqueueFollowUp。
-//
 // 修复前该断言恒为 nil（要求返回类型为未导出 loopController 接口，与
 // DeepAgent.LoopController 的 controller.ControllerInterface 签名不一致），
 // 导致 TeamSkillCreateRail 的 follow-up 提议永不触发。

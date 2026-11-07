@@ -9,12 +9,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RouteBinding 描述一个 WS 路径的完整消息处理策略（工厂装配的中间形态）。
-//
 // Python: GatewayRouteBinding (routing/route_binding.py L8-19)，9 字段一一对应：
 // path / channel_id / forward_methods / forward_no_local_handler_methods /
 // inbound_interceptor / outbound_interceptor / cleanup_handler / disconnect_handler /
 // install。
-//
 // 装配链（对齐 app_gateway.py L1037-1069）：
 //
 //	bindings := []*RouteBinding{BuildACPRouteBinding(...), BuildTuiRouteBinding(...)}
@@ -50,22 +48,18 @@ type RouteBinding struct {
 }
 
 // InterceptorFunc 入站/出站拦截器函数类型（返回 true 表示已处理、短路后续链路）。
-//
 // Python: inbound_interceptor(ws, data: dict) -> bool（app_gateway.py L586）/
 // outbound_interceptor(msg, ws) -> bool（L462）。Go 侧出站统一以 {"raw": msg}
 // 包裹帧传入，故两向共用同一签名。
-//
 // ⚠️ 历史：本类型曾误写为 func(channel any, data []byte) ([]byte, error)（2026-07-09
 // 骨架凭空建模，零生产调用），与 Python 的 ws/map/bool 三处全不符，已按 Python 修正。
 type InterceptorFunc func(ctx context.Context, ws *websocket.Conn, data map[string]any) bool
 
 // CleanupFunc 断连清理函数类型（无 DisconnectHandler 时的兜底）。
-//
 // Python: cleanup_handler(ws) -> None（app_gateway.py L553）。
 type CleanupFunc func(ws *websocket.Conn)
 
 // DisconnectFunc 连接断开回调类型。
-//
 // Python: disconnect_handler(ws, stale_session_keys: list[tuple[str, str]]) -> None
 // （app_gateway.py L542；唯一实现 _tui_disconnect 首参即 ws，见 tui_connect.py L2106）。
 // ⚠️ 历史：本类型曾误写为 func(channel any, sessionKeys []string)（同上骨架），
@@ -73,16 +67,13 @@ type CleanupFunc func(ws *websocket.Conn)
 type DisconnectFunc func(ws *websocket.Conn, staleSessionKeys [][2]string)
 
 // InstallFunc 在 GatewayServer 上注册本地 handler 的钩子类型。
-//
 // Python: install: Callable[[Any], None]（route_binding.py L19）；调用点
 // app_gateway.py L1067-1068 `binding.install(gateway_server)`。
 // server 为 any：routing 包不能 import gateway（会成环），实现侧做类型断言。
 type InstallFunc func(server any)
 
 // LocalHandlerFunc 本地 handler：由通道包实现、在 GatewayServer 上注册。
-//
 // 对齐 Python Callable[..., Awaitable[None]]，签名 (ws, req_id, params, session_id)。
-//
 // 定义在 routing 而非 gateway 的原因：通道包（如 channel_manager/tui）要声明
 // 「能接收本 handler 的注册接口」以便 Install 里做类型断言；若通道包与 gateway
 // 各自定义命名函数类型，两者不满足「同一类型」，接口断言必然失败。gateway 侧
@@ -98,7 +89,6 @@ type LocalHandlerFunc func(ws *websocket.Conn, reqID string, params map[string]a
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWebRouteBinding 创建默认 Web 通道路由绑定（/ws → web）。
-//
 // 生产零调用：/ws 路由由 web channel 自身装配，不走 binding 工厂链
 // （Python 侧 /ws 也不在 route_bindings 列表里，见 app_gateway.py L1037-1055）。
 func NewWebRouteBinding() *RouteBinding {

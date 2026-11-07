@@ -8,12 +8,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowCommitState 工作流可提交状态。
-//
 // 在 WorkflowStateCollection 基础上增加 commit/rollback/IO 操作和节点状态创建能力。
 // 实现 SessionState 接口。不实现 CommitStateLike 接口（与 Python 一致，
 // CommitState 继承 StateCollection 继承 State，不是 CommitStateLike 的子类），
 // GetUpdates/SetUpdates 返回聚合视图 map[string]any 而非 map[string][]map[string]any。
-//
 // Python: openjiuwen/core/session/state/workflow_state.py (CommitState)
 type WorkflowCommitState struct {
 	// WorkflowStateCollection 嵌入基础四区状态

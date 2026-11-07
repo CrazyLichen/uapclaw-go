@@ -1,9 +1,7 @@
 // Package controller 提供会话控制器，管理会话生命周期、作用域隔离、数据持久化和跨 Agent 批量操作。
-//
 // 本包实现链式会话（ChainSession）和两级控制器（SessionController 管理单 Agent、
 // GlobalSessionController 管理全局），支持 Scope/Subject 维度的数据隔离、
 // 下游会话单向可见性、磁盘持久化（sessions.json + state.data + downstreams/*.link）。
-//
 // 文件目录：
 //
 //	controller/

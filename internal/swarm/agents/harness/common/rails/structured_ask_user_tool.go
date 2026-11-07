@@ -29,7 +29,6 @@ const (
 // NewStructuredAskUserTool 创建支持结构化选项的 AskUserTool 空壳实例。
 // 自建 EXTENDED_INPUT_PARAMS schema（不再依赖 BuildToolCard/AskUserMetadataProvider），
 // Python: StructuredAskUserTool.__init__ 直接构建 ToolCard。
-//
 // Python: StructuredAskUserTool(Tool) — jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
 func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 	// 自建 schema（对齐 Python: EXTENDED_INPUT_PARAMS_EN/CN）
@@ -200,7 +199,6 @@ func getMultiSelectDesc(language string) string {
 }
 
 // generateToolID 生成唯一工具 ID。
-//
 // Python: uuid.uuid4().hex（128 位随机，32 字符 hex）
 func generateToolID() string {
 	b := make([]byte, 16)

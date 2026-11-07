@@ -32,7 +32,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AbilityManager Agent 能力注册与调度中心。
-//
 // 职责：
 //   - 存储可用 Ability Card（仅元数据，不持有实例）
 //   - 提供 add/remove/query 接口
@@ -96,9 +95,7 @@ func NewAbilityManager(resourceMgr *resourcesmanager.ResourceMgr) *AbilityManage
 }
 
 // SetToolExposurePolicy 设置后续注册使用的默认曝光策略。
-//
 // 已注册卡片不会被改写：曝光是注册期决策，热重配只影响此后注册的卡片。
-//
 // Python: AbilityManager.set_tool_exposure_policy
 func (am *AbilityManager) SetToolExposurePolicy(progressiveToolEnabled bool, directToolNames []string) {
 	am.mu.Lock()
@@ -118,7 +115,6 @@ func (am *AbilityManager) SetToolExposurePolicy(progressiveToolEnabled bool, dir
 }
 
 // RegistryRevision 返回注册表版本号。
-//
 // Python: AbilityManager.registry_revision
 func (am *AbilityManager) RegistryRevision() int {
 	am.mu.RLock()
@@ -127,9 +123,7 @@ func (am *AbilityManager) RegistryRevision() int {
 }
 
 // applyToolExposurePolicy 在注册期解析并写回卡片曝光策略（调用方须持锁）。
-//
 // 显式声明优先；否则命中 direct 名单 → direct；否则渐进开启 → deferred。
-//
 // Python: AbilityManager._apply_tool_exposure_policy
 func (am *AbilityManager) applyToolExposurePolicy(card *tool.ToolCard) tool.ToolExposure {
 	if declared, ok := card.GetExposureDeclared(); ok && declared {
@@ -465,7 +459,6 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 // 使用 WaitGroup + 按 index 写切片，与 Python asyncio.gather(return_exceptions=True) 语义一致：
 // 所有任务都执行完毕，错误/中断统一在 agentschema.ExecuteResult.Result 中。
 // 结果顺序与输入 toolCalls 顺序一致。
-//
 // cbc 为 Rail 系统的 AgentCallbackContext，用于：
 //   - 为每个 tool_call 创建隔离子上下文（ForkForToolCall）
 //   - 传播子上下文的 force-finish 信号回父 cbc
@@ -569,7 +562,6 @@ func (am *AbilityManager) Execute(
 		// before/after 钩子请求了 force_finish：工具可能压根没执行，
 		// 必须补一条 ToolMessage，否则 assistant 的 tool_calls 在上下文里悬空，
 		// 下一轮请求会因"tool_calls 未被响应"被 provider 拒绝。
-		//
 		// Python: `result is None and has_force_finish_request` 与
 		// `isinstance(result, dict)` 两个分支（Go 侧短路后都是零值，故合并）。
 		if ffResult, hasFF := finishByIndex[i]; hasFF && res.ToolMsg == nil {
@@ -597,7 +589,6 @@ func (am *AbilityManager) Execute(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runToolCallSafely 在独立 goroutine 中执行单个工具调用，并兜底恢复 panic。
-//
 // 这是工具调用线程的唯一 panic 出口：
 //   - 工具实现里的 panic 已在下层 executeSingleToolCall 转成 error（走 rail 的
 //     异常路径，AFTER_TOOL_CALL 照常触发）；
@@ -632,7 +623,6 @@ func (am *AbilityManager) runToolCallSafely(
 }
 
 // minFinishIndex 返回 force-finish 结果表中最小索引，用于按 tool-call 顺序取首个信号。
-//
 // Python: min(force_finish_requests)
 func minFinishIndex(m map[int]map[string]any) int {
 	minIdx := math.MaxInt
@@ -645,7 +635,6 @@ func minFinishIndex(m map[int]map[string]any) int {
 }
 
 // recoverToolPanic 把 goroutine 里捕获的 panic 载荷转成 ExecuteResult，并记录日志。
-//
 // 日志分两级：中断（ToolInterruptException / AbortError）是 raiseInterrupt 与安全
 // 护栏的正常控制流，只记 Debug 且不带栈；其余 panic 是缺陷，记 Error 并带调用栈
 // ——这层若是静默，日志里只剩「executing tool call」，事后完全无从判断工具崩在哪。
@@ -710,7 +699,6 @@ func toolCallIDOf(toolCall *llmschema.ToolCall) string {
 }
 
 // railedExecuteSingleToolCall 在 Rail 生命周期内执行单个工具调用。
-//
 // 使用 ToolCallRail.Execute 包装，自动提供：
 //   - fire(BEFORE_TOOL_CALL) → before 钩子
 //   - _skip_tool 门控 → before 钩子可跳过工具执行（设置 extra["_skip_tool"]=true）
@@ -809,7 +797,6 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 
 // executeSingleToolCall 执行单个工具调用。
 // 路由逻辑：按 tool_name 查找 Card → 从 ResourceManager 获取实例 → 执行。
-//
 // 返回 (agentschema.ExecuteResult, error)：
 //   - agentschema.ExecuteResult 承载正常结果（Result + ToolMsg）
 //   - error 承载异常（ToolInterruptException 或 AbilityExecutionError）
@@ -944,7 +931,6 @@ func (am *AbilityManager) executeTool(
 		invokeOpts = append(invokeOpts, tool.WithToolCallbackContext(cbc))
 	}
 	// 外层调用预算：卡片声明 → 默认 300 → 豁免提升为 3600 → 工具钩子（bash/ps 再加清理宽限）
-	//
 	// 没有这一层时 tool.invoke 可以永久挂住，整轮 ReAct 卡死：上游 issue 的
 	// 典型场景是 glob 扫大项目跑了一小时。
 	// Python: ability_manager.py:1755-1773（注册路径）/ :1901-1907（回退路径）
@@ -1024,7 +1010,6 @@ func (am *AbilityManager) executeTool(
 }
 
 // executeWorkflow 执行 Workflow 类型能力。
-//
 // Python: AbilityManager._execute_single_tool_call (workflow 分支 L760-775)
 // Python: AbilityManager._run_workflow (L690-726)
 // 完整步骤：
@@ -1131,7 +1116,6 @@ func (am *AbilityManager) executeWorkflow(
 }
 
 // executeAgent 执行 Agent 类型能力。
-//
 // Python: AbilityManager._execute_single_tool_call (agent 分支 L776-807)
 // 完整步骤：
 //  1. 获取 AgentCard（L777-778）

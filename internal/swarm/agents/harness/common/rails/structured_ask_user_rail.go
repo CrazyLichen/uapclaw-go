@@ -17,7 +17,6 @@ import (
 
 // StructuredAskUserPayload 结构化用户回答载荷。
 // 问题文本到选择选项标签的映射。
-//
 // Python: StructuredAskUserPayload
 type StructuredAskUserPayload struct {
 	// Answers 问题文本到选择选项标签的映射
@@ -27,11 +26,9 @@ type StructuredAskUserPayload struct {
 // StructuredAskUserRail 扩展 AskUserRail，支持结构化选项问答。
 // 当 LLM 调用 ask_user 工具时携带 questions 参数（包含 header/options/multi_select），
 // 前端可渲染为可点击选项而非纯文本输入框。
-//
 // 机制：ToolCallInterruptRequest.tool_args 保留原始工具调用参数（包括 questions），
 // interrupt_helpers 的 _extract_questions_from_value() 检查 tool_args 中的 questions
 // 字段并转换为前端格式。
-//
 // Python: StructuredAskUserRail(AskUserRail) — jiuwenswarm/agents/harness/common/rails/ask_user_rail.py
 type StructuredAskUserRail struct {
 	interrupt.AskUserRail
@@ -55,7 +52,6 @@ var _ agentinterfaces.AgentRail = (*StructuredAskUserRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStructuredAskUserRail 创建 StructuredAskUserRail 实例。
-//
 // Python: StructuredAskUserRail.__init__(tool_names=None, language=None)
 func NewStructuredAskUserRail(language string) *StructuredAskUserRail {
 	r := &StructuredAskUserRail{
@@ -71,7 +67,6 @@ func NewStructuredAskUserRail(language string) *StructuredAskUserRail {
 
 // Init 注册 StructuredAskUserTool 到 ResourceMgr + AbilityManager。
 // 覆盖父类 AskUserRail 的 Init，注册扩展版工具。
-//
 // Python: StructuredAskUserRail.init(agent)
 func (r *StructuredAskUserRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 确定语言（对齐 Python: self._language or resolve_language()）
@@ -123,7 +118,6 @@ func (r *StructuredAskUserRail) Init(_ context.Context, agent agentinterfaces.Ba
 }
 
 // Uninit 从 AbilityManager + ResourceMgr 注销 StructuredAskUserTool。
-//
 // Python: StructuredAskUserRail.uninit(agent)
 func (r *StructuredAskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if len(r.structuredTools) == 0 {
@@ -160,14 +154,12 @@ func (r *StructuredAskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // GetStructuredTools 返回已注册的结构化工具列表。
-//
 // Python: StructuredAskUserRail.get_structured_tools()
 func (r *StructuredAskUserRail) GetStructuredTools() []tool.Tool {
 	return r.structuredTools
 }
 
 // ExtractQuestions 从工具调用参数中提取 questions 列表。
-//
 // Python: StructuredAskUserRail.extract_questions(tool_call)
 func (r *StructuredAskUserRail) ExtractQuestions(toolCall *llmschema.ToolCall) []map[string]any {
 	if toolCall == nil {
@@ -195,10 +187,8 @@ func (r *StructuredAskUserRail) ExtractQuestions(toolCall *llmschema.ToolCall) [
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveStructuredInterrupt StructuredAskUserRail 的中断解析逻辑。
-//
 // 结构化路径：解析为 StructuredAskUserPayload，格式化为 "question: answer" 文本，Reject。
 // 非结构化路径：回退父类 resolve 函数（对齐 Python super().resolve_interrupt()）。
-//
 // Python: StructuredAskUserRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
 func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 	ctx context.Context,
@@ -267,7 +257,6 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 
 // parseStructuredInput 解析用户输入为 StructuredAskUserPayload。
 // 支持 StructuredAskUserPayload / map[string]any / interrupt.AskUserPayload / string 四种格式。
-//
 // Python: StructuredAskUserRail.resolve_interrupt 中的解析逻辑
 func (r *StructuredAskUserRail) parseStructuredInput(userInput any) (*StructuredAskUserPayload, bool) {
 	switch input := userInput.(type) {

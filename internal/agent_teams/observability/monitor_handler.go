@@ -229,11 +229,9 @@ func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype str
 }
 
 // CloseAllSpans 结束所有仍未关闭的 team/task span（退出时调用）。
-//
 // 未 End 的 span 不会被 BatchSpanProcessor 导出，进程退出即丢失；正常收尾的团队
 // 会收到 CLEANED/任务终态事件，但异常退出、热重载或事件缺失时会留下悬挂 span。
 // 此处统一以 ERROR 状态收口，明确标注"非正常结束"，避免冒充成功。
-//
 // Python: 无对应实现（shutdown 时直接丢弃 handler）
 func (h *OtelTeamMonitorHandler) CloseAllSpans() {
 	h.mu.Lock()

@@ -1,8 +1,6 @@
 // Package command_parser 提供 Gateway slash 命令解析器。
-//
 // 解析 IM 渠道消息中的 /new_session、/mode、/switch、/skills list、
 // /branch、/rewind 等控制指令，返回结构化解析结果。
-//
 // 文件目录：
 //
 //	command_parser/

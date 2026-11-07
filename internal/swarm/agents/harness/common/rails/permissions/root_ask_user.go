@@ -1,12 +1,9 @@
 // root Host 拥有的紧凑普通 ask_user 续接。
-//
 // 当用户对权限卡不是直接"同意/拒绝"，而是反问澄清时，走 ask_user 工具自身的
 // 中断通道。本文件负责把那次反问的上下文（当时问了什么、有哪些选项）冻结进
 // 中断请求的 metadata，并在用户答案回来后把问答对还原成澄清记录，
 // 供 root_context.AppendRootClarification 追加到意图窗口。
-//
 // 关键点：澄清不是"发给 LLM 的新消息"，而是"给权限判断看的备忘录"。
-//
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/permissions/root_ask_user.py（274 行）
 package permissions
 
@@ -21,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AskUserQuestionReference 一次反问的问题快照。
-//
 // Python: @dataclass(frozen=True, slots=True) AskUserQuestionReference
 type AskUserQuestionReference struct {
 	// Question 问题文本
@@ -33,7 +29,6 @@ type AskUserQuestionReference struct {
 }
 
 // RootAskUserContinuation 一次 ask_user 中断冻结的续接上下文。
-//
 // Python: @dataclass(frozen=True, slots=True) RootAskUserContinuation
 type RootAskUserContinuation struct {
 	// ToolCallID 对应的工具调用 ID
@@ -45,7 +40,6 @@ type RootAskUserContinuation struct {
 }
 
 // RootAskUserResume 用户答案还原后的续接结果。
-//
 // Python: @dataclass(frozen=True, slots=True) RootAskUserResume
 type RootAskUserResume struct {
 	// Continuation 原始续接上下文
@@ -83,7 +77,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAskUserQuestionReference 构造并校验一个问题快照。
-//
 // Python: AskUserQuestionReference(...) 由 from_mapping 校验
 func NewAskUserQuestionReference(
 	question string,
@@ -146,9 +139,7 @@ func AskUserQuestionReferenceFromMapping(value map[string]any) (AskUserQuestionR
 }
 
 // PutAskUserResumeInInputs 把续接 DTO 写入 inputs 的 run.context.extra。
-//
 // prepared 为 nil 时只移除旧值（对齐 Python 先 pop 再按需写入）。
-//
 // Python: put_ask_user_resume_in_inputs(inputs, prepared)
 func PutAskUserResumeInInputs(inputs map[string]any, prepared *RootAskUserResume) map[string]any {
 	result := copyMap(inputs)
@@ -166,9 +157,7 @@ func PutAskUserResumeInInputs(inputs map[string]any, prepared *RootAskUserResume
 }
 
 // BuildAskUserMetadata 构造要写进中断请求 metadata 的续接快照。
-//
 // 只有工具名是 ask_user 且能解析出问题时才返回非 nil，否则返回 nil。
-//
 // Python: build_ask_user_metadata(*, context, tool_name, tool_call_id, tool_args)
 func BuildAskUserMetadata(
 	decisionContext *RootDecisionContext,
@@ -203,10 +192,8 @@ func BuildAskUserMetadata(
 }
 
 // AskUserContinuation 从 metadata 还原续接上下文。
-//
 // expectedToolCallID 必须与快照里的一致，问题数量必须在 1..MaxStructuredQuestions，
 // 且问题文本不得重复；任何不符都返回 nil（fail-closed）。
-//
 // Python: ask_user_continuation(metadata, *, expected_tool_call_id)
 func AskUserContinuation(metadata any, expectedToolCallID string) *RootAskUserContinuation {
 	asMap, ok := metadata.(map[string]any)
@@ -265,10 +252,8 @@ func AskUserContinuation(metadata any, expectedToolCallID string) *RootAskUserCo
 }
 
 // PrepareAskUserResume 把用户对该次 ask_user 的回答转成澄清记录。
-//
 // 答案必须是 {"answers": {问题文本: 答案}}，问题集合必须与快照完全一致；
 // 单条澄清超容量时返回带 CapacityReason 的结果。
-//
 // Python: prepare_ask_user_resume(*, continuation, answer)
 func PrepareAskUserResume(
 	continuation *RootAskUserContinuation,
@@ -333,9 +318,7 @@ func PrepareAskUserResume(
 }
 
 // ApplyAskUserResume 把续接结果应用到决策上下文。
-//
 // 容量原因非空时只标记阻断原因；否则把澄清追加到意图窗口。
-//
 // Python: apply_ask_user_resume(prepared)
 func ApplyAskUserResume(prepared *RootAskUserResume) *RootDecisionContext {
 	if prepared.CapacityReason != "" {
@@ -360,10 +343,8 @@ func ApplyAskUserResume(prepared *RootAskUserResume) *RootDecisionContext {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // questionsOf 从工具参数里解析问题列表。
-//
 // 支持字符串 JSON 与映射两种形态；无 questions 时回退到单个 query 字符串。
 // 任一问题非法、数量越界、文本重复都返回空（fail-closed）。
-//
 // Python: _questions(tool_args)
 func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 	switch typed := toolArgs.(type) {
@@ -430,9 +411,7 @@ func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 }
 
 // optionsOf 解析选项列表。
-//
 // 空列表合法；非空时必须是 2-4 个、标签唯一且不含 "Other"。
-//
 // Python: _options(value)
 func optionsOf(value any) ([]RootAskUserOption, bool) {
 	if value == nil {
@@ -485,10 +464,8 @@ func optionsOf(value any) ([]RootAskUserOption, bool) {
 }
 
 // answerValues 归一化单个问题的答案。
-//
 // 单值或列表均可；空、超过 8 条、单选给了多个、含空白字符串都判非法；
 // 返回值逐条 trim。
-//
 // Python: _answer_values(value, *, multi_select)
 func answerValues(value any, multiSelect bool) ([]string, bool) {
 	var raw []any

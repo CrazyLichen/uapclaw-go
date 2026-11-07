@@ -55,7 +55,6 @@ func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 }
 
 // ValidateSkillMD 校验 SKILL.md 的 YAML frontmatter 格式。
-//
 // 返回 (isValid, message)。
 func ValidateSkillMD(skillMDPath string) (bool, string) {
 	data, err := os.ReadFile(skillMDPath)
@@ -123,7 +122,6 @@ func ValidateSkillMD(skillMDPath string) (bool, string) {
 }
 
 // ParseSkillFrontmatter 从 SKILL.md 解析出 (name, description, bodyContent)。
-//
 // 轻量解析器，无 YAML 库依赖。
 func ParseSkillFrontmatter(skillMDPath string) (string, string, string) {
 	data, err := os.ReadFile(skillMDPath)
@@ -147,7 +145,6 @@ func ParseSkillFrontmatter(skillMDPath string) (string, string, string) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseFrontmatter 极简 YAML frontmatter 解析（key: value 单行 + block scalar）。
-//
 // 生产环境可替换为 yaml 库。
 func parseFrontmatter(text string) map[string]string {
 	result := make(map[string]string)

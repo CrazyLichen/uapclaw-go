@@ -1,15 +1,12 @@
 // Package team_runtime 提供多 Agent 团队的消息通信运行时基础设施。
-//
 // 包含消息信封（MessageEnvelope）、订阅管理器（SubscriptionManager）、
 // 消息路由器（MessageRouter）、消息总线（MessageBus）、
 // 团队运行时（TeamRuntime）和可通信 Agent（CommunicableAgent）。
-//
 // 支持两种通信模式：
 //   - P2P（点对点）：请求-响应模式，发送方等待接收方返回结果
 //   - Pub-Sub（发布订阅）：发后即忘模式，消息扇出到所有匹配订阅者
 //
 // 底层消息队列复用 runner/message_queue 包的 MessageQueueInMemory。
-//
 // 文件目录：
 //
 //	team_runtime/

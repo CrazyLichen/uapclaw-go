@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolInterruptException 工具中断异常，当工具需要用户确认时抛出。
-//
 // 实现 error 接口，使得：
 //   - tool.Invoke() 可通过 (any, error) 签名返回
 //   - before hook 可通过 Fire() 返回 error

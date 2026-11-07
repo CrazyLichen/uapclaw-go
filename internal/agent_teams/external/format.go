@@ -8,22 +8,18 @@ import (
 )
 
 // 本文件是进程外成员（外部 CLI 驱动）的入站消息渲染。
-//
 // 与进程内 MessageHandler 的渲染语义一致：原始消息原文进 <team-inbound>
 // （sender / message_id / type / 绝对发送时间作为属性），框架提示进独立的
 // <team-note>。human-agent 头像得到 for="controller" 加 hitt-silence note；
 // 其余成员得到 reply-hint note。
-//
 // Python: openjiuwen/agent_teams/external/format.py (213 行) 的 render_message /
 // render_messages。render_task_line / render_task_board 待 25.4 回填。
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageLike 渲染用的团队消息行结构视图。
-//
 // 用接口而非具体类型，对齐上游的 Protocol 结构化视图：调用方传数据库行或
 // 测试假实现都可。
-//
 // Python: _MessageLike (format.py L31-38)
 type MessageLike interface {
 	// MessageID 消息 id
@@ -66,10 +62,8 @@ type RenderMessagesOptions struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RenderMessage 把一条入站消息渲染为 <team-inbound> XML。
-//
 // 对应进程内 MessageHandler 的渲染：消息正文原文进 <team-inbound>，
 // 框架提示进独立的 <team-note>。
-//
 // Python: render_message (format.py L52-108)
 func RenderMessage(message MessageLike, opts RenderMessageOptions) (string, error) {
 	msgType := agentteams.InboundTypeDirect
@@ -122,10 +116,8 @@ func RenderMessage(message MessageLike, opts RenderMessageOptions) (string, erro
 }
 
 // RenderMessages 按给定顺序（最旧在前）渲染一批入站消息。
-//
 // bodies 是批次中框架模板消息的投递时正文，按 message_id 索引。
 // 普通消息不在映射里，渲染自己的 content。
-//
 // Python: render_messages (format.py L111-128)
 func RenderMessages(messages []MessageLike, opts RenderMessagesOptions) (string, error) {
 	rendered := make([]string, 0, len(messages))

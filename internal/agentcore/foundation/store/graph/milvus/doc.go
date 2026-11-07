@@ -1,9 +1,7 @@
 // Package milvus 提供 Graph Store 的 Milvus 后端实现。
-//
 // 基于 Milvus 向量数据库实现图存储，支持三集合（Entity/Relation/Episode）的
 // CRUD 操作、3通道混合搜索（name_embedding + content_embedding + content_bm25）、
 // BFS 图扩展和可选 reranking。
-//
 // 文件目录：
 //
 //	milvus/

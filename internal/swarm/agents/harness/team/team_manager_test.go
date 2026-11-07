@@ -449,7 +449,6 @@ func TestGlobalFunctions(t *testing.T) {
 // ──────────────────────────── loadTeamSpec model_pool（M-38）测试 ────────────────────────────
 
 // TestLoadTeamSpec_多模型构建modelPool 测试 M-38 model_pool 构建。
-//
 // models.defaults 两条目（都有 model_name）→ spec.ModelPool 长度 2 +
 // strategy="by_model_name"；entry 字段（model_name/api_key/api_base/client_provider/
 // metadata.client/metadata.request）正确。

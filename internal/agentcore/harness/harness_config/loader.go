@@ -58,6 +58,8 @@ var varPlaceholderRegexp = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// Load 读取并解析编排器配置文件，展开其中的变量占位符后返回解析结果。
+// workspaceRoot 可选，用于解析配置里的相对路径；缺省取当前工作目录。
 func (HarnessConfigLoader) Load(path string, params map[string]any, workspaceRoot ...string) (*ResolvedHarnessConfig, error) {
 	absPath, err := absPath(path)
 	if err != nil {

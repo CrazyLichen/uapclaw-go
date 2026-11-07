@@ -9,7 +9,6 @@ import (
 
 // Trajectory 表示一次任务执行的轨迹。
 // 对齐 Python Trajectory(BaseModel)。
-//
 // 轨迹捕获：
 //   - 执行的查询/任务
 //   - 生成的响应/输出

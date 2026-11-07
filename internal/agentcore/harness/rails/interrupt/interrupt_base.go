@@ -23,7 +23,6 @@ type InterruptDecision interface {
 }
 
 // ApproveResult 允许继续执行决策。
-//
 // Python: ApproveResult(InterruptDecision)
 type ApproveResult struct {
 	// NewArgs 可选，替换工具参数（nil=不替换，对齐 Python new_args: dict | None）
@@ -33,7 +32,6 @@ type ApproveResult struct {
 // RejectResult 拒绝执行决策。
 type RejectResult struct {
 	// ToolResult 预设的工具返回结果。
-	//
 	// 实际值类型：string（如 "已拒绝"、用户反馈文本）。
 	// 传入 skipTool 后写入 inputs.ToolResult。
 	ToolResult any
@@ -111,7 +109,6 @@ func (r *BaseInterruptRail) Reject(toolResult any) *RejectResult {
 }
 
 // Interrupt 创建中断决策。
-//
 // Python: BaseInterruptRail.interrupt(request)
 func (r *BaseInterruptRail) Interrupt(request saschema.InterruptRequester) *InterruptResult {
 	return &InterruptResult{Request: request}
@@ -186,20 +183,16 @@ func (r *BaseInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEven
 }
 
 // InterruptKind 返回本 rail 抛出中断时盖上的类型。
-//
 // 空串表示不声明（对齐 Python InterruptKind.UNDECLARED）。子类可覆盖。
-//
 // Python: InterruptOwnerMixin.interrupt_kind = InterruptKind.UNDECLARED
 func (r *BaseInterruptRail) InterruptKind() string {
 	return saschema.InterruptKindUndeclared
 }
 
 // InterruptOwner 返回本 rail 的稳定 owner 键，答案按此键路由回本 rail。
-//
 // 默认取类型全名，保证中断暂停与恢复之间 rail 被重建后仍能对上；
 // 同一 agent 上两个同类 rail 必须给出不同 owner，否则会互相读到对方的答案。
 // 子类可覆盖以实现自定义 owner。
-//
 // Python: InterruptOwnerMixin.interrupt_owner（默认 f"{cls.__module__}.{cls.__qualname__}"）
 func (r *BaseInterruptRail) InterruptOwner() string {
 	if r.interruptOwner != "" {
@@ -209,7 +202,6 @@ func (r *BaseInterruptRail) InterruptOwner() string {
 }
 
 // SetInterruptOwner 覆盖本 rail 的 owner 键。
-//
 // Python: InterruptOwnerMixin.interrupt_owner setter（非空字符串校验）
 func (r *BaseInterruptRail) SetInterruptOwner(owner string) error {
 	if owner == "" {
@@ -220,9 +212,7 @@ func (r *BaseInterruptRail) SetInterruptOwner(owner string) error {
 }
 
 // StampInterrupt 给 request 盖上本 rail 的 owner 与 kind（未声明 kind 时）。
-//
 // 中断 ID 由中断处理器在收集暂停调用时填入，此处不设置。
-//
 // Python: InterruptOwnerMixin.stamp_interrupt(request)
 func (r *BaseInterruptRail) StampInterrupt(request saschema.InterruptRequester) {
 	ir, ok := request.(*saschema.InterruptRequest)
@@ -282,9 +272,7 @@ func (r *BaseInterruptRail) applyDecision(
 }
 
 // raiseInterrupt 抛出工具中断异常，中止当前执行流程。
-//
 // 抛之前先给 request 盖上 owner 与 kind，供中断处理器按 owner 路由答案。
-//
 // Python: BaseInterruptRail._raise_interrupt（内部先 self.stamp_interrupt(request)）
 func (r *BaseInterruptRail) raiseInterrupt(
 	toolName string,

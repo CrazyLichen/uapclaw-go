@@ -31,7 +31,6 @@ type streamTaskEntry struct {
 
 var (
 	// ErrNoActiveRuntime 运行时池里没有该 (team, session) 的活跃团队，无法构造 monitor。
-	//
 	// 返回哨兵而不是 nil：调用方（OnRuntimeReady / adapter）原本只判 error，
 	// "监控没起来"与"监控已启动"在上层完全等价，排障时无从区分。
 	// （Python 侧是在函数内记 warning 后 return，行为等价，只是可观测点不同。）
@@ -181,7 +180,6 @@ func (m *TeamManager) PopTeamEvolutionWatcher(sessionID string) context.CancelFu
 
 // SetStreamTaskWaitGroup 为指定 session 的流任务设置 WaitGroup。
 // goroutine 启动时调用 wg.Add(1)，退出时调用 wg.Done()。
-//
 // S-04: 该方法读写 streamTasks map，同步加锁（报告未列的第 9 处）。
 func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGroup) {
 	m.mu.Lock()
@@ -211,12 +209,10 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 // CreateTeam（生产零调用方）里写入，导致 agent 恒 nil、monitor 永不启动。
 func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamName string, hideDM bool) error {
 	// Python 步骤 2-7 整段在 m.mu 内完成：check-then-act 必须原子。
-	//
 	// 原实现"锁内只读检查 → 锁外建 handler → 锁内覆盖"，同一 session 的两条
 	// chat.send 并发进入时会各自 Start 一个 handler、各自起一条消费 goroutine，
 	// 后者覆盖前者后，前者的消费 goroutine 永久阻塞在没人关闭的 eventQueue 上
 	// （每并发一次泄漏一条）。Python 靠单线程 asyncio 天然串行，Go 必须显式互斥。
-	//
 	// 代价（已知并接受）：持锁期间调用 runtime.GetAgentTeamMonitor（内含 DB 读）
 	// 与 handler.Start，会阻塞同进程其他 session 的 GetMonitor/RegisterMonitor/StopMonitor。
 	// GetAgentTeamMonitor 走的是 agent_teams/runtime 的 TeamRuntimeManager，
@@ -264,7 +260,6 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamN
 		Msg("TeamMonitorHandler started successfully")
 
 	// Python 步骤 8: 启动事件消费 goroutine（必须在锁外启动）
-	//
 	// 对齐 Python——_consume_monitor_events 是 asyncio.create_task 的 detached 任务，
 	// 不注册进 _stream_tasks（靠 monitor stop close event queue 自然退出）。
 	// 消费者首帧就会回调 m.onEventBroadcast（adapter 注入，逻辑不受本文件控制），

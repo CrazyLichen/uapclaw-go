@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageQueueInMemory 基于 Go channel 的内存消息队列。
-//
 // Python: MessageQueueInMemory，支持：
 //   - 按 topic 路由消息到不同订阅者
 //   - 火忘发布（QueueMessage，不等待）
@@ -66,7 +65,6 @@ type internalMessage struct {
 }
 
 // Subscription 导出的订阅句柄，实现 SubscriptionBase 接口。
-//
 // Python: MessageQueueInMemory.subscribe() 返回的 Subscription 对象
 type Subscription struct {
 	// ts 内部 topic 订阅实体
@@ -96,7 +94,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageQueueInMemory 创建内存消息队列。
-//
 // Python: MessageQueueInMemory(queue_max_size, timeout)
 func NewMessageQueueInMemory(maxSize int, timeout time.Duration) *MessageQueueInMemory {
 	return &MessageQueueInMemory{
@@ -107,7 +104,6 @@ func NewMessageQueueInMemory(maxSize int, timeout time.Duration) *MessageQueueIn
 }
 
 // Start 启动消息队列。实现 MessageQueueBase 接口。
-//
 // Python: MessageQueueInMemory.start()
 func (q *MessageQueueInMemory) Start() {
 	q.running.Store(true)
@@ -117,7 +113,6 @@ func (q *MessageQueueInMemory) Start() {
 }
 
 // Stop 停止消息队列，取消所有订阅和消费 goroutine。实现 MessageQueueBase 接口。
-//
 // Python: MessageQueueInMemory.stop()
 func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 	if !q.running.Load() {
@@ -143,7 +138,6 @@ func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 // Subscribe 创建 topic 订阅。实现 MessageQueueBase 接口。
 // 返回 SubscriptionBase 接口，调用方可通过类型断言获取 *Subscription。
 // 若 topic 已被订阅，返回 ErrTopicAlreadySubscribed 错误。
-//
 // Python: MessageQueueInMemory.subscribe(topic)
 // Python 中重复订阅同一 topic 抛 ValueError。
 func (q *MessageQueueInMemory) Subscribe(topic string) (SubscriptionBase, error) {
@@ -168,7 +162,6 @@ func (q *MessageQueueInMemory) Subscribe(topic string) (SubscriptionBase, error)
 }
 
 // Unsubscribe 取消订阅，停止消费 goroutine 并移除 topic。实现 MessageQueueBase 接口。
-//
 // Python: MessageQueueInMemory.unsubscribe(topic)
 func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) error {
 	q.mu.Lock()
@@ -235,14 +228,12 @@ func (s *Subscription) SetMessageHandler(handler func(ctx context.Context, paylo
 }
 
 // Activate 激活订阅，启动消费 goroutine。实现 SubscriptionBase 接口。
-//
 // Python: Subscription.activate()
 func (s *Subscription) Activate() {
 	s.ts.activate()
 }
 
 // Deactivate 停用订阅，停止消费 goroutine。实现 SubscriptionBase 接口。
-//
 // Python: Subscription.deactivate()
 func (s *Subscription) Deactivate() {
 	s.ts.deactivate()

@@ -14,10 +14,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentSession Agent 内部会话，实现 InnerSession 接口。
-//
 // 持有会话运行所需的基础设施组件（配置、状态、追踪器、流写入管理器、检查点器），
 // 是纯粹的组件容器，不包含业务逻辑。业务逻辑由公开层 Session 负责。
-//
 // Python: openjiuwen/core/session/internal/agent.py (AgentSession)
 type AgentSession struct {
 	// sessionID 会话唯一标识
@@ -56,7 +54,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentSession 创建内部 AgentSession 实例。
-//
 // 默认行为（对齐 Python AgentSession.__init__）：
 //   - state: 自动创建 AgentStateCollection（Python: StateCollection()）
 //   - config: 不自动创建，由外层 Session 传入（Python: 外层总创建 Config()）
@@ -211,7 +208,6 @@ func (s *AgentSession) Card() *agentschema.AgentCard {
 }
 
 // AgentID 获取 Agent ID，满足 checkpointer.AgentIDProvider 接口。
-//
 // Python: AgentSession.agent_id()：Python 原始逻辑先查 agent_config.id，
 // 但 ReActAgentConfig 未定义 id 属性，实际运行时走 card.id 分支。
 // Go 直接使用 card.AbilityID()，简洁且与 Python 运行时行为一致。

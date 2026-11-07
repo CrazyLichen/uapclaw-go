@@ -1,8 +1,6 @@
 // Package embedding 提供向量嵌入模型的抽象接口。
-//
 // 本包定义了 BaseEmbedding 接口、EmbedOption 配置和 Callback 回调，
 // 提供文本到向量的转换能力，供记忆索引等组件进行语义搜索。
-//
 // 文件目录：
 //
 //	embedding/

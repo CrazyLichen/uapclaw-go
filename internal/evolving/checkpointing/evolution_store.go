@@ -24,7 +24,6 @@ import (
 
 // EvolutionStoreReader 技能经验优化器所需的演进存储只读接口。
 // 从 skill_call/team_optimizer.go 迁移至此，与 Python evolution_store.py 位置对齐。
-//
 // Python: EvolutionStore
 type EvolutionStoreReader interface {
 	// ReadSkillContent 读取技能内容
@@ -34,10 +33,8 @@ type EvolutionStoreReader interface {
 }
 
 // EvolutionStore 技能演进数据的文件系统 IO 门面。
-//
 // 组合三个 Helper（Records/Projection/Archive）+ SysOperation 路由 + RWMutex 并发控制。
 // 所有方法为同步方法（对齐 Python 的 asyncio 在 Go 中改为同步 + 锁）。
-//
 // Python: openjiuwen/agent_evolving/checkpointing/evolution_store.py EvolutionStore
 type EvolutionStore struct {
 	// baseDirs 配置的技能基础目录列表（resolve 后的绝对路径）
@@ -89,10 +86,8 @@ var evolutionIndexPattern = regexp.MustCompile(
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEvolutionStore 创建 EvolutionStore 实例。
-//
 // dirs 为技能基础目录列表（至少一个），单个目录也用切片传入。
 // sysOperation 通过 SetSysOperation 方法注入，对齐 Python 属性赋值模式。
-//
 // Python: EvolutionStore.__init__(skills_base_dir: Union[str, List[str]])
 func NewEvolutionStore(dirs []string) *EvolutionStore {
 	dirs = normalizeBaseDirsFromList(dirs)
@@ -110,7 +105,6 @@ func NewEvolutionStore(dirs []string) *EvolutionStore {
 }
 
 // SetSysOperation 注入系统操作接口。
-//
 // 构造后调用，对齐 Python: self.sys_operation = sys_operation 属性赋值模式。
 // 缺省时 ReadFileText/WriteFileText 回退到本地 os/fs。
 func (s *EvolutionStore) SetSysOperation(op sys_operation.SysOperation) {

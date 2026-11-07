@@ -15,11 +15,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChatReranker 基于 Chat Completion 的重排序客户端。
-//
 // 利用 Chat 模型 + logit_bias 限制输出为 yes/no，
 // 从 logprobs 中提取 P("yes") 作为相关性分数。
 // 每次只能对 1 个文档进行重排序。
-//
 // Python: openjiuwen/core/retrieval/reranker/chat_reranker.py (ChatReranker)
 type ChatReranker struct {
 	// StandardReranker 嵌入标准重排序器

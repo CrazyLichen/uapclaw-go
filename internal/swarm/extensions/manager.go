@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExtensionManager 扩展生命周期管理器，对齐 Python ExtensionManager。
-//
 // 与 Python 差异：_setup_search_paths 的 config 读取上移到 cmd 启动层
 // （解 config↔extensions 循环依赖），经 WithSearchPaths 注入。
 type ExtensionManager struct {
@@ -100,7 +99,6 @@ func (m *ExtensionManager) LoadAllExtensions(ctx context.Context) error {
 
 // ShutdownAllExtensions 关闭所有扩展，对齐 Python shutdown_all_extensions：
 // 逐个 shutdown（失败仅 warn 日志）+ Kill 子进程，最后清空列表。
-//
 // M-02：Go 侧一个插件进程的多个声明共享同一 PluginClient（Python 侧
 // _loaded_extensions 存扩展实例、每实例独立 shutdown），N 声明会对同一
 // 进程发 N 次 Shutdown RPC + N 次 Kill——首次成功后其余 RPC 报错产生误导性

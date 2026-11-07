@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // taskMemoryServicer 记忆服务接口（非导出，用于测试 mock）。
-//
 // 提取 TaskMemoryService 的关键方法，ContextEvolutionRail 持有此接口而非具体类型。
 // 实现 ceservice.SummarizeTrajectorier 接口，可直接传给 SummarizeTrajectories。
 // 对齐 Python: ContextEvolutionRail 使用 TaskMemoryService 实例。
@@ -38,11 +37,9 @@ type taskMemoryServicer interface {
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextEvolutionRail 上下文演化轨道。
-//
 // 嵌入 DeepAgentRail（对齐 Python ContextEvolutionRail(DeepAgentRail)），
 // Priority=50，在 BeforeTaskIteration 中检索记忆注入系统提示词，
 // 在 AfterTaskIteration 中恢复原始提示词、标注 memoriesUsed、自动总结轨迹。
-//
 // 设计决策：
 //   - 直接嵌入 DeepAgentRail，不通过 EvolutionExtension 模式（与 SkillEvolutionRail 不同）
 //   - 记忆注入通过 type-assert Agent → DeepAgentInterface → ReactAgent → Config → PromptTemplate
@@ -111,10 +108,8 @@ var _ taskMemoryServicer = (*ceservice.TaskMemoryService)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextEvolutionRail 创建上下文演化轨道实例。
-//
 // memoryService 为 nil 时尝试创建默认 TaskMemoryService（对齐 Python TaskMemoryService() 无参创建）。
 // 如果创建失败（如 ceconfig 未配置 API_KEY），打印警告并跳过记忆功能。
-//
 // 对齐 Python: ContextEvolutionRail(user_id, memory_service, inject_memories_in_context, auto_summarize, auto_summarize_matts_mode)
 func NewContextEvolutionRail(
 	ctx context.Context,
@@ -198,7 +193,6 @@ func WithMemoryService(svc taskMemoryServicer) ContextEvolutionRailOption {
 func (r *ContextEvolutionRail) Priority() int { return contextEvolutionPriority }
 
 // GetCallbacks 注册回调。
-//
 // 合并 DeepAgentRail 基础回调 + BeforeTaskIteration / AfterTaskIteration。
 // 对齐 Python: ContextEvolutionRail 注册 before_task_iteration / after_task_iteration。
 func (r *ContextEvolutionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
@@ -232,7 +226,6 @@ func (r *ContextEvolutionRail) ToolsApplied() bool { return r.toolsApplied }
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // beforeTaskIteration 在每次任务迭代前检索记忆并注入系统提示词。
-//
 // 对齐 Python: ContextEvolutionRail.before_task_iteration(ctx) 108-193 行
 //
 // 流程：
@@ -360,7 +353,6 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 }
 
 // afterTaskIteration 在每次任务迭代后恢复原始提示词、标注 memoriesUsed、自动总结轨迹。
-//
 // 对齐 Python: ContextEvolutionRail.after_task_iteration(ctx) 199-243 行
 //
 // 流程：
@@ -430,7 +422,6 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 }
 
 // extractTrajectory 从 agent 的 context_engine 提取对话轨迹。
-//
 // 对齐 Python: ContextEvolutionRail.extract_trajectory(ctx) 249-267 行
 //
 // 流程：

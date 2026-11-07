@@ -1,5 +1,4 @@
 // 图检索器：chunk 检索 + 三元组 beam search 图扩展。
-//
 // Python: graph_retriever.py (GraphRetriever L228-814)
 //
 // 文件目录：
@@ -27,7 +26,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GraphRetriever 图检索器。
-//
 // chunk 检索 + 三元组 beam search 图扩展 + RRF 融合。六可选构造
 // （nil = Python None → 动态创建路径）。
 type GraphRetriever struct {
@@ -97,7 +95,6 @@ func WithGraphTripleCollection(name string) GraphRetrieverOption {
 }
 
 // NewGraphRetriever 创建图检索器。
-//
 // 对齐 Python __init__（L231-260）：六可选参数全收，零校验；index_type
 // 留空由上层注入（SetIndexType）。
 func NewGraphRetriever(opts ...GraphRetrieverOption) *GraphRetriever {
@@ -115,7 +112,6 @@ func (g *GraphRetriever) IndexType() string { return g.indexType }
 func (g *GraphRetriever) SetIndexType(indexType string) { g.indexType = indexType }
 
 // GetRetrieverForMode 按 mode 取对应检索器。
-//
 // 对齐 Python get_retriever_for_mode（L304-378）：固定优先（不支持
 // 155205）→ 动态创建（无 store 155206）→ SetCollectionName 先于空校验
 // （155207，L339-346 字面顺序）→ 三分支 → index_type 注入。
@@ -197,7 +193,6 @@ func (g *GraphRetriever) GetRetrieverForMode(mode RetrievalMode, isChunk bool) (
 }
 
 // Retrieve 图检索主入口。
-//
 // 对齐 Python retrieve（L380-433）：mode 校验 → graph_hops 读取（nil→2）
 // → threshold+mode≠vector 155201 → chunk 检索 → GraphExpansion。
 func (g *GraphRetriever) Retrieve(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
@@ -242,7 +237,6 @@ func (g *GraphRetriever) Retrieve(ctx context.Context, query string, topK int, s
 }
 
 // GraphExpansion 图扩展。
-//
 // 对齐 Python graph_expansion（L435-526）：空 chunks sparse 二次回落；
 // triples 未传走 _fetchTriples（异常 warn 回落空）；空 triples 返回原
 // chunks；beam search（异常 warn 回落原 chunks——降级终点）；列对齐展开；
@@ -379,7 +373,6 @@ func (g *GraphRetriever) GraphExpansion(ctx context.Context, query string, chunk
 }
 
 // BatchRetrieve 批量并发检索。
-//
 // 对齐 Python batch_retrieve（L782-790）：裸 gather 全启动、错误负载与
 // 传播序一致。裸 errgroup（不派生 ctx、不 cancel——13.20 先例；WithContext
 // 会在首错时取消兄弟协程，偏离 Python gather 语义）。
@@ -410,7 +403,6 @@ func (g *GraphRetriever) RetrieveSearchResults(context.Context, string, int, Ret
 
 // Close 关闭两个固定检索器（动态创建的不持有——对齐 Python 只关
 // chunk_retriever/triple_retriever 两字段）。
-//
 // 两者都关，返回首个非 nil 错误（Python 串行 await，异常即中断后续；
 // Go 侧同样按序调用，首错留给调用方判断）。
 func (g *GraphRetriever) Close() error {
@@ -434,7 +426,6 @@ func (g *GraphRetriever) Close() error {
 func gctx0(ctx context.Context) context.Context { return ctx }
 
 // ensureModeAllowed mode 校验（Python _ensure_mode_allowed L269-285）。
-//
 // indexType ""（None）免检；未知 155203；不兼容 155204（allowed 清单
 // sorted 逗号空格拼接）。
 func (g *GraphRetriever) ensureModeAllowed(mode RetrievalMode) error {
@@ -507,7 +498,6 @@ func retrieverTypeName(r Retriever) string {
 }
 
 // truncateResults topk 截断（nil 不截断；Python fused[:topk] if topk）。
-//
 // Python if topk 为 truthiness 判断（0 视为未设不截断），Go 统一为
 // *topk > 0 才截断（spec §8-10 偏差归档：两语言 0 语义对齐为不截断）。
 func truncateResults(results []common.RetrievalResult, topk *int) []common.RetrievalResult {

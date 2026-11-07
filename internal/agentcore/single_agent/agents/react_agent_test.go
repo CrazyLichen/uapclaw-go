@@ -99,7 +99,6 @@ func TestNewReActAgent_nilConfig(t *testing.T) {
 }
 
 // TestReActAgent_PromptAttachments 验证动态提示词管理器的注入与读取。
-//
 // Python: ReActAgent.prompt_attachment_manager（DeepAgent 创建内层 agent 时共享）
 func TestReActAgent_PromptAttachments(t *testing.T) {
 	agent := newTestAgent("prompt_attach")
@@ -2708,7 +2707,6 @@ func TestReActAgent_SystemPromptBuilder_nil(t *testing.T) {
 }
 
 // TestShouldReportStreamError 防 D2 回归：取消态下任何错误都不上报；未取消时照常上报。
-//
 // 对齐 Python react_agent.py:1549-1554 —— except Exception 抓不到 asyncio.CancelledError，
 // 因此取消不会产生 chat.error 帧；Go 用 ctx 状态表达同一语义。
 func TestShouldReportStreamError(t *testing.T) {
@@ -2737,7 +2735,6 @@ func TestShouldReportStreamError(t *testing.T) {
 }
 
 // TestInvoke_CancelPersistsSanitizedContext 取消路径改为「清洗 + 持久化」而非清空本轮。
-//
 // Python: react_agent.py L3263-3268（_handle_context_abort，marker=[Request cancelled by user]）
 func TestInvoke_CancelPersistsSanitizedContext(t *testing.T) {
 	fmc := &fakeModelContext{messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hello")}}
@@ -3215,7 +3212,6 @@ func TestInvoke_StreamLifecycleOwner_不处理中断(t *testing.T) {
 // ──────────────────────────── MCP 多模态消费端（D-15） ────────────────────────────
 
 // TestIterMultimodalImageItems_识别MCP结构体 验证结构体形态的结果也能取到图片。
-//
 // MCP 结果的 Result 是 *MCPToolResult（上游原样透传），
 // 旧的 map-only 实现会把它当无图片处理，截图永远到不了模型。
 func TestIterMultimodalImageItems_识别MCP结构体(t *testing.T) {

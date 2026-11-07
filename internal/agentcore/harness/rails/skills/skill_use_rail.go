@@ -184,7 +184,6 @@ var skillScanSkipDirs = map[string]struct{}{
 var _ agentinterfaces.AgentRail = (*SkillUseRail)(nil)
 
 // skillStopWords 关键词提取的停用词（与上游 _STOP_WORDS 一致）。
-//
 // Python: SkillUseRail._STOP_WORDS (L636-646)
 var skillStopWords = map[string]bool{
 	"the": true, "a": true, "an": true, "is": true, "are": true, "was": true,
@@ -242,7 +241,6 @@ func NewSkillUseRail(skillsDir []string, opts ...SkillUseRailOption) *SkillUseRa
 }
 
 // WithSkillBudget 设置技能提示词预算。
-//
 // Python: SkillUseRail(max_skills=..., max_total_chars=...)
 func WithSkillBudget(maxSkills, maxTotalChars int) SkillUseRailOption {
 	return func(r *SkillUseRail) {
@@ -538,7 +536,6 @@ func (r *SkillUseRail) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCa
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeInvoke + BeforeModelCall。
-//
 // Python: SkillUseRail 隐式覆盖 before_invoke/before_model_call
 func (r *SkillUseRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
@@ -712,11 +709,9 @@ func (r *SkillUseRail) buildSkillsSnapshotSignature() []string {
 }
 
 // discoverSkillDirs 递归发现技能目录，返回目录与 SKILL.md mtime。
-//
 // 规则与上游一致：一个分支上遇到第一个 SKILL.md 即认定该目录是技能并停止下钻
 // （其内部子技能由 skill_tool 的 discovered_skill_names 披露，不注册为顶层技能）；
 // 跳过 "." 开头的目录与 _SKILL_SCAN_SKIP_DIRS；用 visited 防止符号链接成环。
-//
 // Python: SkillUseRail._discover_skill_dirs (:1043-1125)
 func discoverSkillDirs(roots []string) []skillDirEntry {
 	found := make([]skillDirEntry, 0, len(roots))
@@ -1402,9 +1397,7 @@ func normalizeSkillDirs(skillsDir []string) []string {
 }
 
 // applySkillBudget 按与当前 query 的关键词重叠度排序，并按数量/字符预算整块丢弃技能。
-//
 // 丢弃以「整个技能」为粒度，绝不截断到半截文本——半截说明会让模型误用技能。
-//
 // Python: SkillUseRail._apply_skill_budget()
 func applySkillBudget(skills []*skillpkg.Skill, query string, maxSkills, maxTotalChars int) []*skillpkg.Skill {
 	if len(skills) == 0 {
@@ -1466,7 +1459,6 @@ func applySkillBudget(skills []*skillpkg.Skill, query string, maxSkills, maxTota
 
 	// 字符软上限：只算 description，整块丢弃，且至少保留 1 个（最相关的那个即使
 	// 单独超预算也保留），保证技能小节不会变成空列表。
-	//
 	// Python: SkillUseRail._apply_skill_budget() L599-634
 	if maxTotalChars > 0 {
 		totalChars := 0
@@ -1495,7 +1487,6 @@ func applySkillBudget(skills []*skillpkg.Skill, query string, maxSkills, maxTota
 }
 
 // extractSkillKeywords 提取小写字母数字关键词（去停用词、长度 > 2）。
-//
 // Python: SkillUseRail._extract_keywords() (L646-654)：按空白切分后丢弃非
 // 字母数字字符，故 "pdf-reader" → "pdfreader"。
 func extractSkillKeywords(text string) map[string]bool {
@@ -1516,7 +1507,6 @@ func extractSkillKeywords(text string) map[string]bool {
 }
 
 // extractQueryFromMessages 从本次模型调用的消息里倒序取最后一条非空用户消息。
-//
 // Python: SkillUseRail._extract_query_from_messages() (L657-669)
 func extractQueryFromMessages(messages []llmschema.BaseMessage) string {
 	for i := len(messages) - 1; i >= 0; i-- {

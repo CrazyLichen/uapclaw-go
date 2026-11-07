@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionRequestMetadataSync 「请求级参数 → 会话级元数据」同步入参。
-//
 // 字段与 Python sync_session_request_metadata 的关键字参数一一对应；
 // 指针字段沿用「nil = 不写」语义（对应 Python 的 None）。
 type SessionRequestMetadataSync struct {
@@ -52,7 +51,6 @@ type SessionRequestMetadataSync struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SyncSessionRequestMetadata 校验请求参数与磁盘 metadata 是否需要更新并按字段语义写入。
-//
 // 字段语义（逐条对齐上游）：
 //   - project_dir：首次锁定，不可改；不一致只告警不覆盖
 //   - project_id / cron_id / user_id / channel_id / work_mode：首次锁定
@@ -63,7 +61,6 @@ type SessionRequestMetadataSync struct {
 //   - persist_session：创建期锁定，字段一旦存在后续只告警
 //
 // 返回本会话生效的 project_dir（磁盘已锁定即返回锁定值）。
-//
 // Python: jiuwenswarm/server/runtime/session/session_metadata.py
 // sync_session_request_metadata（L1404-1637）
 func SyncSessionRequestMetadata(in SessionRequestMetadataSync) string {
@@ -240,7 +237,6 @@ func normalizeSyncWorkMode(raw string) string {
 }
 
 // defaultWorkModeForChannel 按渠道推断默认 work_mode（tui → code，其余 work）。
-//
 // Python: jiuwenswarm/server/runtime/session/work_mode.default_work_mode_for_channel
 func defaultWorkModeForChannel(channelID string) string {
 	if strings.EqualFold(strings.TrimSpace(channelID), "tui") {

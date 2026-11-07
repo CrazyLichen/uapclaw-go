@@ -416,11 +416,9 @@ func TestDeepAgent_RegisterRail_正常注册(t *testing.T) {
 
 // TestDeepAgent_RegisterRail_注入Workspace与SysOperation 验证「立即注册」路径
 // 会在 Init 之前给 DeepAgentRail 注入 workspace / sys_operation。
-//
 // 回归背景：RegisterRail 跳过了 pending 循环（注入只写在 ensureInitialized），
 // 导致运行期按模式注册的 MemoryRail 拿到 nil workspace，read_memory 恒返回
 // 「工作空间未初始化」。
-//
 // Python: register_rail 中的 set_sys_operation / set_workspace（deep_agent.py L1191-1193）
 func TestDeepAgent_RegisterRail_注入Workspace与SysOperation(t *testing.T) {
 	ws := workspace.NewWorkspace(t.TempDir(), "cn")
@@ -1381,11 +1379,9 @@ func TestDeepAgent_EnsureInitialized_已初始化(t *testing.T) {
 
 // TestDeepAgent_EnsureInitialized_为pendingRail注入依赖 验证排队路径
 // （AddRail → ensureInitialized）同样在 Init 之前注入 workspace / sys_operation。
-//
 // 与 TestDeepAgent_RegisterRail_注入Workspace与SysOperation 对称：两条注册路径
 // 都必须注入，漏掉任意一条都会让 rail 拿到 nil（read_memory 报工作空间未初始化、
 // fs 工具 nil op panic）。
-//
 // Python: _ensure_initialized 中的 set_sys_operation / set_workspace（deep_agent.py L846-849）
 func TestDeepAgent_EnsureInitialized_为pendingRail注入依赖(t *testing.T) {
 	ws := workspace.NewWorkspace(t.TempDir(), "cn")
@@ -4292,7 +4288,6 @@ func TestNormalizeInputs_revision类型非法时保持零值(t *testing.T) {
 }
 
 // TestDeepAgent_BridgeEvents含SteeringDrain 验证新事件桥接到内层 ReActAgent。
-//
 // spec C8：before_steering_drain 由**内层** ReActAgent 在取 steering 批之前触发；
 // 注册到外层则 rail 永远收不到（上游 _BRIDGE_EVENTS 第三条，deep_agent.py L176）。
 func TestDeepAgent_BridgeEvents含SteeringDrain(t *testing.T) {
@@ -4321,7 +4316,6 @@ func TestDeepAgent_BridgeEvents含SteeringDrain(t *testing.T) {
 }
 
 // TestNormalizeInputs_下划线key进Extra 验证 _input_parts 被保留。
-//
 // Python: inputs 为 dict 时额外 key 自然保留到 effective_inputs。
 func TestNormalizeInputs_下划线key进Extra(t *testing.T) {
 	d := &DeepAgent{}

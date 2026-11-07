@@ -12,10 +12,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InboundGatewayServer Gateway 内部入站服务：渠道消息经队列转发到 MessageHandler。
-//
 // 对齐 Python _InboundGatewayServer（app_gateway.py L132-173，
 // asyncio.Queue + 独立 task 的双层队列结构）。
-//
 // 满队语义为有意偏差（spec §7-1）：Python asyncio.Queue 无界；
 // Go 用容量 256 的 chan + 满时 Warn 丢弃，与下游
 // MessageHandler.userMessages（256 有界 chan）链路容量一致。
@@ -44,7 +42,6 @@ const inboundQueueCapacity = 256
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInboundGatewayServer 创建入站服务实例。
-//
 // Python: _InboundGatewayServer(inbound_handler)。
 func NewInboundGatewayServer(inboundHandler func(ctx context.Context, msg *schema.Message)) *InboundGatewayServer {
 	return &InboundGatewayServer{
@@ -55,7 +52,6 @@ func NewInboundGatewayServer(inboundHandler func(ctx context.Context, msg *schem
 }
 
 // Start 启动 serveLoop（幂等：已启动则直接返回）。
-//
 // Python: _InboundGatewayServer.start()——if self._task is not None: return。
 func (s *InboundGatewayServer) Start(ctx context.Context) error {
 	if s.running.Load() {
@@ -69,7 +65,6 @@ func (s *InboundGatewayServer) Start(ctx context.Context) error {
 }
 
 // Stop 停止 serveLoop 并等待退出。
-//
 // Python: _InboundGatewayServer.stop()——cancel + await + CancelledError 吞掉。
 func (s *InboundGatewayServer) Stop() {
 	s.running.Store(false)
@@ -82,7 +77,6 @@ func (s *InboundGatewayServer) Stop() {
 }
 
 // HandleMessage 入队一条消息。
-//
 // Python: handle_message——await queue.put(msg); return True。
 // 满队时 Warn 丢弃（有意偏差，见类型注释）。返回值恒 nil，
 // 签名匹配 GatewayServer.OnMessage 回调类型。
@@ -98,7 +92,6 @@ func (s *InboundGatewayServer) HandleMessage(ctx context.Context, msg *schema.Me
 }
 
 // NormalizeAndForwardMessage 标准化并入站转发到 MessageHandler。
-//
 // Python: _normalize_and_forward_message（app_gateway.py L125-129）。
 // 与 MakeNormAndForward 的本质区别：本函数恒转发不短路（无三层路由
 // 判断）——入站路由判断已在 handleRawMessage 的 ForwardMethods 集合处完成。
@@ -114,7 +107,6 @@ func NormalizeAndForwardMessage(msg *schema.Message, channelMgr *channel_manager
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // serveLoop 消费循环。
-//
 // Python: _serve_loop（L162-173）——每条消息独立异常隔离。
 func (s *InboundGatewayServer) serveLoop(ctx context.Context) {
 	defer close(s.taskDone)

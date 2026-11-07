@@ -1,9 +1,7 @@
 // Package evolution 提供技能演进（Skill Evolution）推送层的共享辅助工具。
-//
 // 本包是推送层，依赖 gateway_push 包实现事件推送能力。
 // 纯逻辑函数（事件分类、状态提取、Noop 检测、审批分组）已提取到 evolution/logic 子包，
 // adapter 包可安全导入 logic 子包而不会产生循环依赖。
-//
 // 依赖方向：
 //
 //	evolution/logic/  ← 纯逻辑，零外部依赖（adapter 可安全导入）

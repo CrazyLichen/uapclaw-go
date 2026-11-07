@@ -131,7 +131,6 @@ func TestQueueMessageBase_接口getter(t *testing.T) {
 }
 
 // TestQueueMessage_JSONTag 测试 QueueMessage 序列化使用下划线键名。
-//
 // 对齐 Python QueueMessage 的 message_id/payload/error_code/error_msg 字段名；
 // Pulsar wire 序列化依赖该键名，否则 Python 端 model_validate 取不到 message_id。
 func TestQueueMessage_JSONTag(t *testing.T) {

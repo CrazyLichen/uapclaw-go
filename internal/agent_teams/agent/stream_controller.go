@@ -409,7 +409,6 @@ func (sc *StreamController) wakeMailboxIfInterruptCleared(ctx context.Context) e
 // ──────────────────────────── 订阅驱动（对齐上游 stream_controller.py）────────────────────────────
 
 // Start 挂载输出泵与状态/轮次映射器（一个 run cycle 一次）。
-//
 // Python: StreamController.start()（stream_controller.py:305-321）
 // 由 CoordinationKernel.Start 在 harness.Start 之后调用（对齐 kernel.py:168）：
 // controller 消费 runtime 的输出，故 runtime 必须先启动。
@@ -427,7 +426,6 @@ func (sc *StreamController) Start(ctx context.Context) {
 }
 
 // forwardOutputs 把 runtime.outputs() 泵入流队列 + 观察者（一个 cycle 一次）。
-//
 // Python: StreamController._forward_outputs()（stream_controller.py:336-369）
 func (sc *StreamController) forwardOutputs(ctx context.Context) {
 	h := sc.resources.Harness
@@ -472,7 +470,6 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 }
 
 // mapState 把运行时相位迁移映射到成员状态。
-//
 // Python: StreamController._map_state(new)（stream_controller.py:440-458）
 // RUNNING→BUSY（清 idle_since ⤵️ 25.2）、IDLE→READY + onIdleSettled；
 // PAUSING/PAUSED/TERMINATED 留给生命周期层。
@@ -487,7 +484,6 @@ func (sc *StreamController) mapState(ctx context.Context, ev harness.HarnessStat
 }
 
 // mapRound 把运行时轮次事件映射到执行状态，走合法边。
-//
 // Python: StreamController._map_round(kind)（stream_controller.py:460-478）
 func (sc *StreamController) mapRound(ctx context.Context, ev harness.HarnessRoundEvent) {
 	switch ev.Kind {
@@ -513,7 +509,6 @@ func (sc *StreamController) mapRound(ctx context.Context, ev harness.HarnessRoun
 }
 
 // onIdleSettled 轮链结束（runtime IDLE）：拆机时关流，否则轮询/唤醒。
-//
 // Python: StreamController._on_idle_settled()（stream_controller.py:480-499）
 // 顺序有语义：wakeMailbox → reconcileMemberStartup（钩子）→ completionPoll。
 func (sc *StreamController) onIdleSettled(ctx context.Context) {
@@ -540,7 +535,6 @@ func (sc *StreamController) onIdleSettled(ctx context.Context) {
 }
 
 // handleRetry 检测 task_failed 并驱动瞬时重试；返回 true 表示已消费该 chunk。
-//
 // Python: StreamController._handle_retry(chunk)（stream_controller.py:396-425）
 func (sc *StreamController) handleRetry(ctx context.Context, chunk streambase.Schema) bool {
 	detected := detectTaskFailed(chunk)
@@ -577,7 +571,6 @@ func (sc *StreamController) handleRetry(ctx context.Context, chunk streambase.Sc
 }
 
 // emitRetryOutput 把可重试失败暴露为可见的流式模型输出。
-//
 // Python: StreamController._emit_retry_output(code, text)（stream_controller.py:371-394）
 func (sc *StreamController) emitRetryOutput(ctx context.Context, code int, text string) {
 	sc.mu.Lock()

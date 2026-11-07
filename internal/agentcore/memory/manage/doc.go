@@ -1,5 +1,4 @@
 // Package manage 提供记忆管理器及其子组件。
-//
 // 本包实现记忆系统的核心管理器（FragmentMemoryManager、SummaryManager、VariableManager）
 // 以及统一写入管理器（WriteManager）和搜索管理器（SearchManager）。
 // FragmentMemoryManager 和 SummaryManager 通过 BaseMemoryManager 接口统一抽象，
@@ -7,7 +6,6 @@
 // VariableManager 独立实现 BaseMemoryManager 接口，通过 BaseKVStore 委托 KV 存储操作。
 // WriteManager 作为写入操作统一路由器，按 mem_type 分发到对应子 Manager。
 // SearchManager 作为搜索操作统一路由器，按 search_type 分发语义搜索请求并聚合结果。
-//
 // 文件目录：
 //
 //	manage/

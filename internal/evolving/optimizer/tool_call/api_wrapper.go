@@ -11,7 +11,6 @@ import (
 
 // SimpleAPIWrapperFromCallable 基于可调用函数的简易 API 包装器。
 // 将工具调用委托给预先注册的可调用函数，对齐 Python SimpleAPIWrapperFromCallable。
-//
 // Python: openjiuwen/agent_evolving/optimizer/tool_call/customized_api.py (SimpleAPIWrapperFromCallable)
 type SimpleAPIWrapperFromCallable struct {
 	// callable 可调用函数
@@ -34,7 +33,6 @@ type APIWrapperFunc func(tool map[string]any, toolInput map[string]any) (string,
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSimpleAPIWrapperFromCallable 创建基于可调用函数的 API 包装器。
-//
 // Python: SimpleAPIWrapperFromCallable(tool_callable, name, config)
 func NewSimpleAPIWrapperFromCallable(callable APIWrapperFunc, name string) *SimpleAPIWrapperFromCallable {
 	return &SimpleAPIWrapperFromCallable{
@@ -45,7 +43,6 @@ func NewSimpleAPIWrapperFromCallable(callable APIWrapperFunc, name string) *Simp
 
 // Call 执行工具调用。
 // 返回 (JSON 响应字符串, 状态码)，状态码 0 表示成功，12 表示失败。
-//
 // Python: SimpleAPIWrapperFromCallable.__call__(tool, tool_input)
 //
 //  1. 记录调用日志

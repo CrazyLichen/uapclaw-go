@@ -1,5 +1,4 @@
 // Package exception 提供统一的异常体系和错误码定义。
-//
 // 核心设计原则：
 //   - StatusCode 是语义主键，ErrorCategory 表达控制语义，两者解耦通过映射表绑定
 //   - 所有异常必须挂一个 StatusCode，禁止绕开体系直接返回裸 error

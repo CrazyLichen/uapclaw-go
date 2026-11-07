@@ -67,7 +67,6 @@ type fakeSDKMessage struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestNewSDKClient_惰性创建成功 测试建客户端不立即连接、返回非 nil。
-//
 // pulsar-client-go 的 NewClient 为惰性建连（首次建 producer/consumer 才连），
 // 因此无需真实 broker 即可验证包装层。
 func TestNewSDKClient_惰性创建成功(t *testing.T) {

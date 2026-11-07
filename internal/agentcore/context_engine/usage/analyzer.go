@@ -5,7 +5,6 @@ import "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SnapshotInput 构建快照所需的全部输入。
-//
 // 由调用方（rail / agent）从上下文统计与模型响应里取好再传入，
 // analyzer 不反向依赖 ModelContext，便于单测与复用。
 type SnapshotInput struct {
@@ -54,10 +53,8 @@ type SnapshotInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildSnapshot 汇总分类用量与 provider 权威总量，产出 v1 快照。
-//
 // 归因规则：provider 上报了输入量时以其为权威总量，差额全部记到 messages
 // （本地估算漏计的部分通常是消息序列化开销）；差额为负则取 0，不做二次缩放。
-//
 // Python: ContextUsageAnalyzer.snapshot_from_report()
 func BuildSnapshot(in SnapshotInput) ContextUsageSnapshot {
 	parts := map[string]ContextPartUsage{

@@ -32,7 +32,6 @@ var _ interfaces.BaseAgent = (*ReActAgent)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AddPromptBuilderSection 添加或替换提示节，空内容时移除该节。
-//
 // Python: ReActAgent.add_prompt_builder_section(name, content, *, priority)
 // Python 行为：content 为空/None 时 remove_section，否则 add_section 且 cn/en 内容相同。
 func (a *ReActAgent) AddPromptBuilderSection(name string, content string, priority int) {
@@ -49,7 +48,6 @@ func (a *ReActAgent) AddPromptBuilderSection(name string, content string, priori
 }
 
 // Configure 配置 ReActAgent。
-//
 // Python: ReActAgent.configure(config)
 func (a *ReActAgent) Configure(ctx context.Context, config interfaces.AgentConfig) error {
 	cfg, ok := config.(*saconfig.ReActAgentConfig)
@@ -99,7 +97,6 @@ func (a *ReActAgent) SetContextEngine(ce ceinterface.ContextEngine) {
 }
 
 // UpdateModelContext 热切换当前模型与其上下文窗口（不重建上下文）。
-//
 // 引擎侧把新元数据推给池内全部已建上下文；Agent 侧同步自身配置，
 // 使后续 Configure/诊断读到同一份口径（对齐 Python ReActAgent.update_model_context）。
 func (a *ReActAgent) UpdateModelContext(modelName string, contextWindowTokens int) {
@@ -187,14 +184,12 @@ func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
 }
 
 // PromptBuilder 返回系统提示词构建器。
-//
 // Python: ReActAgent.prompt_builder / ReActAgent.system_prompt_builder
 func (a *ReActAgent) PromptBuilder() *prompts.SystemPromptBuilder {
 	return a.promptBuilder
 }
 
 // SystemPromptBuilder 返回系统提示词构建器接口（满足 RailAgent 接口）。
-//
 // 委托给 PromptBuilder()，对齐 Python: ReActAgent.system_prompt_builder 属性
 func (a *ReActAgent) SystemPromptBuilder() prompts.SystemPromptBuilderInterface {
 	if a.promptBuilder != nil {
@@ -206,10 +201,8 @@ func (a *ReActAgent) SystemPromptBuilder() prompts.SystemPromptBuilderInterface 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateSkillPromptBuilderSection 更新技能提示词区段。
-//
 // 技能小节是否注入只由「是否有已注册技能」决定：渲染后的系统提示词为空时
 // 不得静默移除 skills section（否则 register_skill 后 agent 看不到已注册技能）。
-//
 // Python: ReActAgent._update_skill_prompt_builder_section()
 func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context) {
 	if a.skillUtil == nil {
@@ -226,7 +219,6 @@ func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context) {
 
 // warnMissingSkillReadFileTool 检查技能提示词启用时是否缺少必需的 read_file 工具，
 // 若缺少则记录警告日志。
-//
 // Python: ReActAgent._warn_missing_skill_read_file_tool()
 func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
 	toolInfos, err := a.abilityManager.ListToolInfo(ctx, nil)
@@ -271,7 +263,6 @@ func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // withContextEngineModelName 在未显式配置时用当前模型名补齐引擎 model_name。
-//
 // Python: ReActAgent._with_context_engine_model_name()
 func withContextEngineModelName(cfg *saconfig.ReActAgentConfig) {
 	if strings.TrimSpace(cfg.ContextEngineConfig.ModelName) != "" {
@@ -288,9 +279,7 @@ func withContextEngineModelName(cfg *saconfig.ReActAgentConfig) {
 }
 
 // withContextEngineModelWindow 把模型条目声明的 context_window 写入引擎 override。
-//
 // 不清空已有显式值：上游语义是"没有模型元数据时保留显式 override"。
-//
 // Python: ReActAgent._with_context_engine_model_window()
 func withContextEngineModelWindow(cfg *saconfig.ReActAgentConfig) {
 	if cfg.ModelRequestConfig == nil || cfg.ModelRequestConfig.ContextWindow == nil {

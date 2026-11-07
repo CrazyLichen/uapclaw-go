@@ -563,7 +563,6 @@ func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // anyToStr 从 any 提取字符串（非 string 返回空串）。
-//
 // Python str() 会把非字符串值转为不匹配 "distributed" 等的字面量，
 // Go 返回空串同样不匹配，语义等价。
 func anyToStr(v any) string {

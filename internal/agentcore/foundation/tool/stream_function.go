@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StreamFunction 本地函数工具（Stream 模式），将 Go 流式函数包装为 Tool。
-//
 // 用户函数签名：func(ctx context.Context, input I, opts ...ToolOption) (<-chan O, error)
 //
 // Python: openjiuwen/core/foundation/tool/function/function.py (LocalFunction.stream)
@@ -33,7 +32,6 @@ type StreamFunction[I any, O any] struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamFunction 创建 Stream 模式的本地函数工具。
-//
 // 使用示例：
 //
 //	创建流式搜索工具：
@@ -99,7 +97,6 @@ func (f *StreamFunction[I, O]) Card() *ToolCard {
 }
 
 // GetCallTimeout 返回外层调用预算。
-//
 // 注册了钩子时委托给它（流式 bash/powershell 用它在执行预算上再加清理宽限），
 // 否则沿用卡片级策略。
 func (f *StreamFunction[I, O]) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {

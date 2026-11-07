@@ -1,9 +1,7 @@
 // Package interfaces 提供 single_agent 领域的核心接口与类型定义。
-//
 // 将 Agent、AgentConfig、Workflow、AgentCallbackEvent、AgentRail 等接口和类型
 // 从此包导出，供 tracer、single_agent、harness 等包共同引用，
 // 避免 rail ↔ interfaces 循环依赖。
-//
 // 文件目录：
 //
 //	interfaces/

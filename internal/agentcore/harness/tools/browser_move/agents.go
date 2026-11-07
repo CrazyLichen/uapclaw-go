@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserWorkerConfig 浏览器 Worker Agent 配置。
-//
 // Python: build_browser_worker_agent 参数 (agents.py L301-312)
 type BrowserWorkerConfig struct {
 	// Provider 模型提供商
@@ -50,7 +49,6 @@ type ToolResultObserverFunc func(ctx context.Context, toolName string, result an
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildBrowserWorkerSystemPrompt 构建浏览器 Worker Agent 系统提示词。
-//
 // Python: build_browser_worker_system_prompt (agents.py L169-225)
 // 提示词逐字符复制 Python 原文，不做自行翻译
 func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir string) string {
@@ -126,7 +124,6 @@ func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir str
 }
 
 // BuildBrowserWorkerAgent 构建浏览器 Worker Agent。
-//
 // Python: build_browser_worker_agent (agents.py L301-355)
 // 当前为占位实现，⤵️ 9.38-49 完整实现 ReActAgent 配置
 func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, error) {

@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateMilvusAlias 生成 Milvus 连接别名。
-//
 // 对齐 Python retrieval/utils/common.py (create_milvus_alias)：
 //   - alias 非空时直接返回
 //   - 否则基于 URI + 认证信息生成：token 非空用 MD5(token)，否则用 user 或 "noauth"
@@ -39,7 +38,6 @@ func CreateMilvusAlias(alias, uri, token string, user ...string) string {
 }
 
 // Deduplicate 去重并保留首次出现顺序。
-//
 // 对齐 Python retrieval/utils/common.py (deduplicate)：
 // 按 key 函数计算键，重复项只保留首次出现。
 func Deduplicate[T any, K comparable](data []T, key func(T) K) []T {

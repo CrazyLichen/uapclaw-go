@@ -456,7 +456,6 @@ func TestBaseCallTimeout_默认实现(t *testing.T) {
 }
 
 // TestLifecycleTool_透传GetCallTimeout 验证包装器不吞掉内层工具的预算钩子。
-//
 // AbilityManager 实际执行的是 LifecycleTool；若它不透传，
 // BashTool 的"执行预算+30s"永远不生效。
 func TestLifecycleTool_透传GetCallTimeout(t *testing.T) {

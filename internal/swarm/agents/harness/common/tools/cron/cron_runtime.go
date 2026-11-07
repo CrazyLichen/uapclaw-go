@@ -484,6 +484,7 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 	if data == nil {
 		data = map[string]any{}
 	}
+	// 请求上下文的频道：飞书企业应用要先归一化成网关认识的频道标识
 	contextChannel := contextChannelID(cronCtx)
 	contextTarget := ""
 	if contextChannel != "" {
@@ -493,6 +494,7 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 			contextTarget = contextChannel
 		}
 	}
+	// 三个嵌套块全缺 = 调用方传的就是扁平参数，原样返回即可
 	_, hasSchedule := data["schedule"]
 	_, hasPayload := data["payload"]
 	_, hasDelivery := data["delivery"]
@@ -500,6 +502,7 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 		return data, nil
 	}
 
+	// schedule 块：网关桥目前只支持 cron 表达式，其它类型直接拒绝
 	schedule, _ := data["schedule"].(map[string]any)
 	if schedule == nil {
 		schedule = map[string]any{}
@@ -519,6 +522,7 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 		timezone = "Asia/Shanghai"
 	}
 
+	// payload 块：只支持 agentTurn（到点让 Agent 跑一轮），其它类型拒绝
 	payloadBlock, _ := data["payload"].(map[string]any)
 	if payloadBlock == nil {
 		payloadBlock = map[string]any{}
@@ -532,6 +536,7 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 	}
 	description := firstNonEmpty(strVal(payloadBlock["message"]), strVal(data["description"]))
 
+	// delivery 块：决定任务结果推到哪个频道，缺省回落 web
 	delivery, _ := data["delivery"].(map[string]any)
 	if delivery == nil {
 		delivery = map[string]any{}
@@ -560,6 +565,8 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 		Str("targets", targets).
 		Msg("[CronRuntimeBridge] _extract_legacy_params resolved")
 
+	// 组装扁平结果：cron 表达式与时区按需保留（requireSchedule 时即使为空也写出），
+	// 其余字段只在原输入里出现过才回填，避免凭空造出默认值覆盖上层配置。
 	out := map[string]any{}
 	if cronExpr != "" || requireSchedule {
 		out["cron_expr"] = cronExpr

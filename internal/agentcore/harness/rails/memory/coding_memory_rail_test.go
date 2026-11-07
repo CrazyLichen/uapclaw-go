@@ -262,7 +262,6 @@ func (r *recordingSystemPromptBuilder) AddSection(section saprompt.PromptSection
 
 // TestCodingMemoryRail_BeforeModelCall_召回结果投递动态附件 验证召回正文走
 // coding_memory_context 附件（kind=memory、priority=85），行为指令仍留在系统提示词。
-//
 // Python: CodingMemoryRail.before_model_call → _upsert_dynamic_memory_attachment + add_section
 func TestCodingMemoryRail_BeforeModelCall_召回结果投递动态附件(t *testing.T) {
 	manager := hprompts.NewManager()

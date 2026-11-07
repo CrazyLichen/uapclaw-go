@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
 // attributionState 构造一个含指定中断的状态。
-//
 // entries: call_id → (owner, interrupt_id, kind)
 func attributionState(entries map[string]struct {
 	Owner       string

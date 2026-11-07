@@ -15,11 +15,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SkillExperienceOptimizerBase 技能经验优化器共享基类。
-//
 // 两个子类（SkillExperienceOptimizer / TeamSkillExperienceOptimizer）
 // 共享 Domain/DefaultTargets/RequiresForwardData/Bind 等行为，
 // 通过嵌入 BaseOptimizerMixin 避免重复实现。
-//
 // Python: SkillExperienceOptimizer 和 TeamSkillExperienceOptimizer 的共享字段
 type SkillExperienceOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
@@ -120,14 +118,12 @@ var TeamInitialScoreBySignal = map[string]float64{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Domain 返回优化器域 "skill_experience"。
-//
 // Python: SkillExperienceOptimizer.domain = "skill_experience"
 func (b *SkillExperienceOptimizerBase) Domain() string {
 	return "skill_experience"
 }
 
 // DefaultTargets 返回默认优化目标列表 ["experiences"]。
-//
 // Python:
 //
 //	@staticmethod
@@ -143,7 +139,6 @@ func (b *SkillExperienceOptimizerBase) RequiresForwardData() bool {
 }
 
 // Bind 过滤并绑定可优化的 Operator，从 config 提取 online_contexts。
-//
 // Python:
 //
 //	self._online_contexts = dict(config.get("online_contexts") or {})

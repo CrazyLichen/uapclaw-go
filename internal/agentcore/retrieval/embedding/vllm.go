@@ -16,10 +16,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // VLLMEmbedding vLLM 向量嵌入客户端。
-//
 // 组合 OpenAIEmbedding 实例，添加多模态指令注入。
 // vLLM 兼容 OpenAI API 格式，但多模态嵌入需要通过 extra_body.messages 传入内容。
-//
 // Python: openjiuwen/core/retrieval/embedding/vllm_embedding.py
 type VLLMEmbedding struct {
 	// openAI 委托的 OpenAI 客户端实例
@@ -39,7 +37,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVLLMEmbedding 创建 vLLM 向量嵌入客户端。
-//
 // 接收已配置的 OpenAIEmbedding 实例（baseURL 应指向 vLLM 服务地址）。
 func NewVLLMEmbedding(openAI *OpenAIEmbedding) *VLLMEmbedding {
 	return &VLLMEmbedding{openAI: openAI}
@@ -56,7 +53,6 @@ func (v *VLLMEmbedding) EmbedDocuments(ctx context.Context, texts []string, opts
 }
 
 // EmbedMultimodal 将多模态文档转换为向量。
-//
 // 注入 instruction → 构造 messages → 委托 OpenAI SDK 调用。
 // Python: VLLMEmbedding.embed_multimodal
 func (v *VLLMEmbedding) EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
@@ -107,7 +103,6 @@ func (v *VLLMEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
 }
 
 // MaxBatchSize 返回每批最大文档数（13.23 回填），委托给 OpenAIEmbedding。
-//
 // Python VLLMEmbedding 继承 OpenAIEmbedding（hasattr max_batch_size=True），
 // Go 委托结构同构转发。
 func (v *VLLMEmbedding) MaxBatchSize() int { return v.openAI.MaxBatchSize() }

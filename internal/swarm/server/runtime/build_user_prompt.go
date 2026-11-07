@@ -24,7 +24,6 @@ var skillsUseRegex = regexp.MustCompile(`^/skills use\s+(?P<skill_names>[^,]+)\s
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildUserPrompt 将用户 query 包装为结构化 JSON prompt。
-//
 // 返回格式: interactionPrefix + promptPrefix + json.dumps(userMessageContext)
 //
 // Python: build_user_prompt(content, files, channel, language, *, trusted_dirs, metadata)
@@ -121,7 +120,6 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleSkillsUseSlashCommand 解析 /skills use 斜杠命令。
-//
 // Python: _handle_skills_use_slash_command(query)
 func handleSkillsUseSlashCommand(query string) (skillsToUse []string, newQuery string) {
 	stripped := strings.TrimSpace(query)

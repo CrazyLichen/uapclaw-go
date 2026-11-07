@@ -494,9 +494,11 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 
 // E2AResponseToAgentResponse 把 E2A 响应解包回内部 AgentResponse（供本地消费方使用）。
 func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error) {
+	// 请求号与通道原样带回，供本地消费方判断这条响应属于哪个请求
 	rid := e2a.RequestID
 	ch := e2a.Channel
 
+	// 元数据与响应体都做浅拷贝，避免下游改动污染信封本身
 	var meta map[string]any
 	if e2a.Metadata != nil {
 		meta = make(map[string]any, len(e2a.Metadata))
@@ -513,6 +515,7 @@ func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error)
 		}
 	}
 
+	// 正常完成：把 result 当作业务载荷直接带回
 	if kind == E2AResponseKindE2AComplete && e2a.Status == E2AResponseStatusSucceeded {
 		res := body["result"]
 		pl := map[string]any{}
@@ -528,6 +531,7 @@ func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error)
 		}, nil
 	}
 
+	// 失败：优先用 details 里的详情，缺失时退回状态码 + 消息拼一个最小载荷
 	if kind == E2AResponseKindE2AError || e2a.Status == E2AResponseStatusFailed {
 		details := body["details"]
 		var pl map[string]any
@@ -552,6 +556,7 @@ func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error)
 		}, nil
 	}
 
+	// 其余组合（如流式帧）不能当作完整响应返回，交由调用方改走 chunk 路径
 	return nil, fmt.Errorf(
 		"e2a_response_to_agent_response: unsupported response_kind=%q status=%q",
 		kind, e2a.Status,
@@ -559,15 +564,15 @@ func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error)
 }
 
 // E2AResponseToAgentChunk 将 E2A 响应转为 Agent 响应块。
-//
 // 覆盖：流式 e2a.chunk、终止 e2a.complete / e2a.error、cron、acp.output_request。
-//
 // Python: e2a_response_to_agent_chunk(e2a)
 func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, error) {
+	// 请求号、通道与响应类型决定后续走哪个分支
 	rid := e2a.RequestID
 	ch := e2a.Channel
 	kind := e2a.ResponseKind
 
+	// 响应体浅拷贝一份，下面各分支只读不写回信封
 	body := make(map[string]any)
 	if e2a.Body != nil {
 		for k, v := range e2a.Body {
@@ -576,6 +581,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 	}
 
 	// e2a.complete + is_final 条件分支
+	// 空完成标记（只有 is_complete=true）→ 生成纯结束帧；带数据 → 数据原样作为最后一帧
 	if kind == E2AResponseKindE2AComplete && e2a.IsFinal {
 		res := body["result"]
 		if emptyCompleteMarker(body, res) {
@@ -599,6 +605,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 	}
 
 	// e2a.error + is_final 条件分支
+	// 有 details 用 details，没有就把整个 body 当作错误载荷
 	if kind == E2AResponseKindE2AError && e2a.IsFinal {
 		det := body["details"]
 		var pl map[string]any
@@ -619,6 +626,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 	}
 
 	// e2a.chunk + !is_final 条件分支
+	// 先按增量类型分流：文本/思考走 chat.delta，其余按自定义事件原样透传
 	if kind == E2AResponseKindE2AChunk && !e2a.IsFinal {
 		dk, _ := body["delta_kind"].(string)
 		et, _ := body["event_type"].(string)
@@ -677,7 +685,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}, nil
 	}
 
-	// 定时任务
+	// 定时任务：包装成一次性 cron.response 帧
 	if kind == E2AResponseKindCron {
 		bodyPayload := map[string]any{
 			"event_type": "cron.response",
@@ -694,7 +702,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}, nil
 	}
 
-	// acp.output_request 请求
+	// acp.output_request 请求：整个 body 作为 jsonrpc 对象透传给 ACP 客户端
 	if kind == E2AResponseKindACPOutputRequest {
 		jsonrpc := map[string]any{}
 		if e2a.Body != nil {
@@ -718,6 +726,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// reqMethodToString 把请求方法转成字符串；空方法返回 nil（落盘时表现为字段缺失）。
 func reqMethodToString(rm schema.ReqMethod) any {
 	if rm == "" {
 		return nil
@@ -725,6 +734,7 @@ func reqMethodToString(rm schema.ReqMethod) any {
 	return string(rm)
 }
 
+// legacyPayloadWithinLimit 旧版请求载荷超过字节上限时丢弃，返回 nil 表示不携带。
 func legacyPayloadWithinLimit(legacy map[string]any) map[string]any {
 	raw, err := json.Marshal(legacy)
 	if err != nil {

@@ -169,10 +169,13 @@ func TestReleaseDeleteLock_显式回收(t *testing.T) {
 
 // TestGlobalTeamDeletionGate_单例 校验全局围栏可访问且唯一。
 func TestGlobalTeamDeletionGate_单例(t *testing.T) {
-	if GlobalTeamDeletionGate() == nil {
+	first := GlobalTeamDeletionGate()
+	if first == nil {
 		t.Fatal("全局围栏不应为 nil")
 	}
-	if GlobalTeamDeletionGate() != GlobalTeamDeletionGate() {
+	// 再取一次必须是同一个对象（单例），否则并发删除各自加锁会失效。
+	second := GlobalTeamDeletionGate()
+	if first != second {
 		t.Fatal("全局围栏必须是同一实例")
 	}
 }

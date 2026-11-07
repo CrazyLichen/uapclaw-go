@@ -42,10 +42,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetSharedTransport 获取按 (verify_ssl, ssl_cert) 分桶的共享 Transport。
-//
 // Go 的 Transport host 无关（URL/鉴权头 per-request），按安全形态分桶即可最大化复用；
 // 上游按 connection_key（含 api_base）分桶——见设计文档偏差 D-1。
-//
 // 证书读取失败时退化为系统信任库形态并照常入池：前置校验（ValidateConfig）
 // 已在配置层拦截不可读证书，此处不重复报错。
 func GetSharedTransport(verifySSL bool, sslCert string) *http.Transport {
@@ -89,7 +87,6 @@ func GetSharedTransport(verifySSL bool, sslCert string) *http.Transport {
 }
 
 // CloseIdleTransports 关闭全部池化 Transport 的 idle 连接。
-//
 // Python: openai_model_client.py:1500 aclose（teardown 专用，禁止热路径调用）
 func CloseIdleTransports() {
 	transportPoolMu.Lock()

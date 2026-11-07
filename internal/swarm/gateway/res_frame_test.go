@@ -33,7 +33,6 @@ type resFrameCase struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestSendResFrame 校验 res 帧形状：成功帧恒带 payload，错误帧带 error/code。
-//
 // T-09 删掉 includePayload 参数后，SendResFrame 恒带 "payload": {}（对齐 Python
 // send_response 的 `"payload": payload or {}`）；内联错误帧（sendInlineError）
 // 仍是四键形状（type/id/ok/error），由它自己构造。

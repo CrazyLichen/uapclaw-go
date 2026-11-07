@@ -7,24 +7,20 @@ import "fmt"
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AgentType 构建的 Agent 类型，对齐 Python str-Enum AgentType。
-//
 // 消费方：14.5 executor（ParseAgentType 入参校验关口→140032）、
 // 14.6 factory（map[AgentType] 注册键）。
 type AgentType string
 
 // BuildState 构建器状态机三态，对齐 Python str-Enum BuildState。
-//
 // 消费方：14.6 BaseAgentBuilder._state（INITIAL→PROCESSING→COMPLETED）。
 type BuildState string
 
 // ProgressStage 构建进度阶段（15 值，分 Common/LLM Agent/Workflow Agent 三组），
 // 对齐 Python str-Enum ProgressStage。
-//
 // 消费方：14.3 progress（BuildProgress.current_stage / ProgressStep.stage）。
 type ProgressStage string
 
 // ProgressStatus 构建进度状态，对齐 Python str-Enum ProgressStatus。
-//
 // 消费方：14.3 progress（BuildProgress.current_status / ProgressStep.status）。
 type ProgressStatus string
 

@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // segmenterHandle 分词器最小契约。
-//
 // 抽成接口是为了让单测能注入「加载失败」的假实现，验证降级路径；
 // 生产实现是 *gse.Segmenter。
 type segmenterHandle interface {
@@ -49,7 +48,6 @@ var (
 	segmenterLoadFn = loadSegmenter
 
 	// cjkStopWords 中文虚词表。
-	//
 	// gse 自带的 stop_tokens.txt（1161 行）只含标点与符号，没有"的/了/是"这类虚词
 	// （标点已由 isContentToken 过滤）。AND 检索要求所有 token 同时出现，虚词一旦进
 	// token 表会无谓收窄召回，所以这里补一份最小中文虚词表。
@@ -65,7 +63,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitMemorySegmenterAsync 后台预热分词器。
-//
 // gse 加载 35 万词简体词典实测 843ms，预热后不会落在用户第一次 memory_search 上。
 func InitMemorySegmenterAsync() {
 	go func() { _, _ = ensureSegmenter() }()
@@ -96,7 +93,6 @@ func ensureSegmenter() (segmenterHandle, error) {
 }
 
 // loadSegmenter 加载 gse 内置简体词典 + 停用词表。
-//
 // ⚠️ 决策记录：使用 gse 默认 embed（`-tags ne` 未启用）。gse 会把 jp/繁/简/idf
 // 四份词典一起编进二进制（实测约 35.9MB），但运行时只加载简体这一份。
 func loadSegmenter() (segmenterHandle, error) {
@@ -115,7 +111,6 @@ func loadSegmenter() (segmenterHandle, error) {
 }
 
 // segmenterID 返回分词器标识；不可用时 "none"。
-//
 // 写入 meta：从 "none" 变回版本号（或反之）都会触发一次全量重建。
 func segmenterID() string {
 	if os.Getenv(segmenterDisableEnv) == "1" {
@@ -129,7 +124,6 @@ func segmenterID() string {
 }
 
 // segmentForFTS 分词入口 —— 索引侧与查询侧必须共用，否则 token 对不齐。
-//
 // 处理链：gse.Cut → 小写 → 去掉空白/纯标点 → 去重保序。
 // 分词器不可用时返回 nil，调用方降级为「原文 + 正则切分 + OR」。
 func segmentForFTS(text string) []string {

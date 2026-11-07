@@ -77,7 +77,6 @@ type SessionState interface {
 
 // WorkflowState 工作流状态接口，定义 Workflow 专属的提交/回滚/IO 操作。
 // Python: CommitState（继承自 StateCollection 继承自 State）。
-//
 // Python 中通过继承链直接调用，Go 中通过类型断言获取：
 //
 //	示例: if ws, ok := session.State().(state.WorkflowState); ok {

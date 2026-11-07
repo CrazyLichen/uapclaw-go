@@ -542,7 +542,6 @@ func attachmentMessage(content string, state map[string]string, sessionID string
 }
 
 // TestCodeTaskPlanningRail_OnUserMessage仍生效 回归：既有 rail 不感知 Inputs 类型变化。
-//
 // 25.0a 把 on_user_message 的 ctx.inputs 从 *InvokeInputs 换成 *UserMessageInputs，
 // 并把触发点收敛到 admitUserMessage。该 rail 的 OnUserMessage 只读
 // cbc.Agent()/Session()，不读 cbc.inputs，因此必须照常工作。

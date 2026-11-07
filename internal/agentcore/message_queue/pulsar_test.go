@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestNewMessageQueuePulsar_不建client 测试构造函数不建立连接。
-//
 // Python: __init__ 只保存 url/max_workers，client 在 start() 才建
 func TestNewMessageQueuePulsar_不建client(t *testing.T) {
 	q := NewMessageQueuePulsar(config.NewPulsarConfig("pulsar://localhost:6650"))
@@ -56,7 +55,6 @@ func TestStart_幂等(t *testing.T) {
 }
 
 // TestStart_建client失败不置running 测试 SDK 建连失败的处理。
-//
 // Go 侧 Start 无返回值（接口约束），失败只记日志并保持未运行。
 func TestStart_建client失败不置running(t *testing.T) {
 	q := NewMessageQueuePulsar(config.NewPulsarConfig("pulsar://localhost:6650"))
@@ -94,7 +92,6 @@ func TestStop_关闭client与producer(t *testing.T) {
 }
 
 // TestSubscribe_未启动报错 测试错误码为 MESSAGE_QUEUE_TOPIC_SUBSCRIPTION_ERROR。
-//
 // Python: try/except 包住含 _validate_running 的全部步骤，统一转订阅错误
 func TestSubscribe_未启动报错(t *testing.T) {
 	q := NewMessageQueuePulsar(config.NewPulsarConfig("pulsar://localhost:6650"))
@@ -170,7 +167,6 @@ func TestProduce_未启动报错(t *testing.T) {
 }
 
 // TestProduce_partitionKey为messageID 测试 partitionKey 传 message_id。
-//
 // Python: producer.send(content, partition_key=message.message_id)
 func TestProduce_partitionKey为messageID(t *testing.T) {
 	client := &fakeClient{producer: &fakeProducer{}, consumer: &fakeConsumer{}}
@@ -227,7 +223,6 @@ func TestGetOrCreateProducer_复用同一producer(t *testing.T) {
 }
 
 // TestGetOrCreateProducer_LRU淘汰最旧 测试超过容量淘汰最久未用。
-//
 // Python: OrderedDict.popitem(last=False) + move_to_end
 func TestGetOrCreateProducer_LRU淘汰最旧(t *testing.T) {
 	client := &fakeClient{producer: &fakeProducer{}, consumer: &fakeConsumer{}}
@@ -286,7 +281,6 @@ func TestDeactivate_关闭consumer并退出goroutine(t *testing.T) {
 }
 
 // TestDeactivate_未激活无副作用 测试幂等。
-//
 // Python: deactivate() 首行 if not self._active: return
 func TestDeactivate_未激活无副作用(t *testing.T) {
 	consumer := &fakeConsumer{}
@@ -298,7 +292,6 @@ func TestDeactivate_未激活无副作用(t *testing.T) {
 }
 
 // TestCallHandler_未设置返回nil 测试未注册处理器时不报错。
-//
 // Python: if self._handler: await self._handler(payload)
 func TestCallHandler_未设置返回nil(t *testing.T) {
 	sub := newPulsarSubscription("topic.a", &fakeConsumer{})

@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolCallInput tool_call 工具的输入参数。
-//
 // Python: tool_call.py (ToolCallInput)
 type ToolCallInput struct {
 	// Name tool_search 返回的准确工具名称
@@ -23,9 +22,7 @@ type ToolCallInput struct {
 }
 
 // RelayedToolOutput 携带目标工具模型可见渲染文本的包装结果。
-//
 // 渲染文本放在私有字段：结构化字段只含 data/error，转发文本单独给模型。
-//
 // Python: tool_call.py (RelayedToolOutput)
 type RelayedToolOutput struct {
 	// success 是否成功
@@ -39,10 +36,8 @@ type RelayedToolOutput struct {
 }
 
 // ToolCallTool 固定的延迟工具执行包装器。
-//
 // 执行回调由 ProgressiveToolRail 提供；目标工具经 AbilityManager 嵌套执行，
 // 从而保留其自身的 rail 生命周期。
-//
 // Python: harness/tools/tool_discovery/tool_call.py (ToolCallTool)
 type ToolCallTool struct {
 	// card 工具卡片
@@ -85,7 +80,6 @@ func (r *RelayedToolOutput) Data() map[string]any { return r.data }
 func (r *RelayedToolOutput) Err() error { return r.err }
 
 // ToMap 转换为工具返回 map；渲染文本走 mappedContentKey 交给模型。
-//
 // Python: ToolCallTool.render_for_llm 转发目标渲染文本
 func (r *RelayedToolOutput) ToMap() map[string]any {
 	payload := map[string]any{"success": r.success}
@@ -102,7 +96,6 @@ func (r *RelayedToolOutput) ToMap() map[string]any {
 }
 
 // NewToolCallTool 创建执行包装器。
-//
 // Python: ToolCallTool.__init__
 func NewToolCallTool(language string, agentID string) *ToolCallTool {
 	card, err := tools.BuildToolCard("tool_call", "ToolCallTool", language, nil, agentID)
@@ -122,7 +115,6 @@ func (t *ToolCallTool) SetDispatch(dispatch func(ctx context.Context, name strin
 }
 
 // AcceptsToolCallbackContext 声明需要执行期回调上下文。
-//
 // Python: ToolCallTool.accepts_tool_callback_context = True
 func (t *ToolCallTool) AcceptsToolCallbackContext() bool { return true }
 
@@ -135,7 +127,6 @@ func (t *ToolCallTool) GetCallTimeout(inputs map[string]any, defaultTimeout floa
 }
 
 // Invoke 从调用选项取回调上下文后执行。
-//
 // Python: ToolCallTool.invoke
 func (t *ToolCallTool) Invoke(ctx context.Context, inputs map[string]any, options ...tool.ToolOption) (map[string]any, error) {
 	opts := &tool.ToolCallOptions{}
@@ -180,7 +171,6 @@ func (t *ToolCallTool) InvokeWithCallback(
 }
 
 // Stream 不支持流式。
-//
 // Python: ToolCallTool.stream（空实现）
 func (t *ToolCallTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported

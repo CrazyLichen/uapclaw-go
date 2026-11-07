@@ -28,7 +28,6 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // gitClone 克隆远程仓库到本地目录（对齐 Python: git clone --depth 1 <url> <dir>）。
-//
 // 使用浅克隆（--depth 1）加速，支持 context 取消。
 func gitClone(ctx context.Context, url, dir string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, gitCloneTimeout*time.Second)

@@ -20,13 +20,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OpenAIEmbedding OpenAI 向量嵌入客户端。
-//
 // 使用 openai-go SDK，支持 Matryoshka 维度截断。
 // M-29: 刻意不实现 EmbedMultimodal——对齐 Python OpenAIEmbedding 无
 // embed_multimodal 方法的现状，使 ComputeChunkEmbeddings 的
 // MultimodalEmbedder 能力探测语义与 Python getattr 探测一致
 // （探测失败 → OpenAI 模型走纯文本批量路径）。
-//
 // Python: openjiuwen/core/retrieval/embedding/openai_embedding.py
 type OpenAIEmbedding struct {
 	// config 嵌入配置

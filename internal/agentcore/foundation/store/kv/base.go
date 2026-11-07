@@ -5,10 +5,8 @@ import "context"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseKVStore 键值存储后端的抽象接口。
-//
 // 所有 KV 存储后端（内存、文件、数据库、Redis 等）必须实现此接口。
 // 插件开发者可直接实现此接口，调用方通过直接导入和实例化使用。
-//
 // Python: openjiuwen/core/foundation/store/base_kv_store.py (BaseKVStore)
 type BaseKVStore interface {
 	// Set 存储或覆盖一个键值对。
@@ -30,7 +28,6 @@ type BaseKVStore interface {
 
 	// CompareAndDelete 原子性地删除 key，仅当其当前值等于 expected 时成功。
 	// 返回 true 表示值匹配且已删除；false 表示 key 不存在或值不匹配（两者均不报错）。
-	//
 	// 用于分布式锁的安全释放，避免 Get 与 Delete 之间因 TTL 过期或他人抢占造成的 TOCTOU。
 	// 注意：本方法为 Go 侧扩展，Python BaseKVStore 无对应实现。
 	CompareAndDelete(ctx context.Context, key string, expected []byte) (bool, error)
@@ -55,7 +52,6 @@ type BaseKVStore interface {
 }
 
 // KVPipeline 批量操作管道接口。
-//
 // 用于收集多个操作后一次性提交执行，减少网络往返。
 // 使用方式：
 //
@@ -87,7 +83,6 @@ type KVPipeline interface {
 }
 
 // PipelineResult Pipeline 操作的执行结果。
-//
 // 调用者根据 Op 字段判断应访问哪个字段：
 //   - Op 为 "set"：仅检查 Err 是否为 nil
 //   - Op 为 "get"：通过 Value 获取返回值（key 不存在时 Value 为 nil）

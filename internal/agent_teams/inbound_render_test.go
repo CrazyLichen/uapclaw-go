@@ -205,7 +205,6 @@ func TestRenderTeamContextWithIdentity_无转换(t *testing.T) {
 }
 
 // TestRenderTeamContextWithIdentity_空identity仍渲染空元素 验证本函数**不**做空值保护。
-//
 // 上游 render_team_context_with_identity (inbound_render.py L293-300) 无条件生成
 // <identity> 元素，空保护由调用方 _compose_blocks 负责（它只在 identity_body 非空
 // 时才走 fork 分支）。Go 侧照抄同一分工：本函数不兜底，避免与上游字节不一致。

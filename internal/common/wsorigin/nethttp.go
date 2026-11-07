@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HTTPMiddleware 返回 net/http 中间件，对 WebSocket 升级请求进行 Origin 校验。
-//
 // 使用示例：
 //
 //	示例: handler := wsorigin.HTTPMiddleware()(wsHandler)

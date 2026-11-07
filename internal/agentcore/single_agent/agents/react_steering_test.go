@@ -35,7 +35,6 @@ func (r *countingDrainRail) GetCallbacks() map[interfaces.AgentCallbackEvent]cb.
 }
 
 // TestDrainSteeringBatch_空队列不发事件 验证无积压时不触发事件。
-//
 // spec C3：Python 在 queue is None or not has_pending_steering() 时直接返回，
 // 不构造 inputs、不 fire。
 func TestDrainSteeringBatch_空队列不发事件(t *testing.T) {
@@ -56,7 +55,6 @@ func TestDrainSteeringBatch_空队列不发事件(t *testing.T) {
 }
 
 // TestDrainSteeringBatch_有积压发事件 验证事件被触发且 Pending 正确。
-//
 // spec C3/C7。
 func TestDrainSteeringBatch_有积压发事件(t *testing.T) {
 	rail := &countingDrainRail{}
@@ -75,7 +73,6 @@ func TestDrainSteeringBatch_有积压发事件(t *testing.T) {
 }
 
 // TestDrainSteeringBatch_Limit生效 验证 rail 写的上限被采纳。
-//
 // spec C4。
 func TestDrainSteeringBatch_Limit生效(t *testing.T) {
 	limit := 2
@@ -94,7 +91,6 @@ func TestDrainSteeringBatch_Limit生效(t *testing.T) {
 }
 
 // TestDrainSteeringBatch_inputs还原 验证事件后 ctx.inputs 复原。
-//
 // spec C11 同类契约：事件输入是临时替换，必须 finally 还原。
 func TestDrainSteeringBatch_inputs还原(t *testing.T) {
 	rail := &countingDrainRail{}
@@ -144,7 +140,6 @@ func newDrainCallbackContext(t *testing.T, rail *countingDrainRail) *interfaces.
 }
 
 // TestReactInvoke_steering批带前缀并触发事件 验证 steering 走 admission。
-//
 // spec C14：Python 用 _admit_user_message(source="steering", prefix="[STEERING] ")，
 // 故 on_user_message 会被触发、前缀拼在 join 之后。
 func TestReactInvoke_steering批带前缀并触发事件(t *testing.T) {

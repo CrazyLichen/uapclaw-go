@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SelectorCacheRecord 选择器缓存记录。
-//
 // Python: BrowserSelectorCache._load() 返回的 records 中每一条记录
 type SelectorCacheRecord struct {
 	// Domain 域名
@@ -46,7 +45,6 @@ type SelectorCacheRecord struct {
 }
 
 // BrowserSelectorCache 小型 JSON 选择器缓存，用于重复的浏览器探测发现结果。
-//
 // Python: BrowserSelectorCache (site_profiles.py L237-435)
 type BrowserSelectorCache struct {
 	// path 缓存文件路径
@@ -79,7 +77,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // builtinSiteProfiles 内置浏览器站点配置文件。
-//
 // Python: BUILTIN_SITE_PROFILES (site_profiles.py L16-57)
 var builtinSiteProfiles = []map[string]any{
 	{
@@ -173,14 +170,12 @@ var multiSlashRe = regexp.MustCompile(`/+`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuiltinSiteProfiles 返回内置浏览器站点配置文件的深拷贝。
-//
 // Python: builtin_site_profiles() (site_profiles.py L84-86)
 func BuiltinSiteProfiles() []map[string]any {
 	return deepCopyProfiles(builtinSiteProfiles)
 }
 
 // NormalizeRouteSignature 返回用于选择器缓存键的粗粒度路由签名。
-//
 // Python: normalize_route_signature() (site_profiles.py L89-101)
 func NormalizeRouteSignature(rawURL string) string {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
@@ -207,7 +202,6 @@ func NormalizeRouteSignature(rawURL string) string {
 }
 
 // DomainFromURL 从 URL 中提取域名。
-//
 // Python: domain_from_url() (site_profiles.py L104-106)
 func DomainFromURL(rawURL string) string {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
@@ -218,7 +212,6 @@ func DomainFromURL(rawURL string) string {
 }
 
 // GetSelectorCache 返回全局选择器缓存单例。
-//
 // Python: get_selector_cache() (site_profiles.py L441-445)
 func GetSelectorCache() *BrowserSelectorCache {
 	selectorCacheOnce.Do(func() {
@@ -228,7 +221,6 @@ func GetSelectorCache() *BrowserSelectorCache {
 }
 
 // NewBrowserSelectorCache 创建新的选择器缓存实例。
-//
 // Python: BrowserSelectorCache.__init__
 func NewBrowserSelectorCache(path string) *BrowserSelectorCache {
 	if path == "" {
@@ -238,7 +230,6 @@ func NewBrowserSelectorCache(path string) *BrowserSelectorCache {
 }
 
 // ExportForProbe 导出可用于嵌入探测 JS 的紧凑缓存记录。
-//
 // Python: BrowserSelectorCache.export_for_probe (site_profiles.py L272-290)
 func (c *BrowserSelectorCache) ExportForProbe(maxRecords ...int) []map[string]any {
 	limit := selectorCacheExportMaxRecords
@@ -289,7 +280,6 @@ func (c *BrowserSelectorCache) ExportForProbe(maxRecords ...int) []map[string]an
 }
 
 // RecordCardProbeResult 从成功的卡片探测结果中记录可复用的选择器。
-//
 // Python: BrowserSelectorCache.record_card_probe_result (site_profiles.py L292-435)
 func (c *BrowserSelectorCache) RecordCardProbeResult(result map[string]any) {
 	c.mu.Lock()

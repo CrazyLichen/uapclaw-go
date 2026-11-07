@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MarkdownOutputParser Markdown 输出解析器，将 LLM 输出解析为结构化 Markdown 元素。
-//
 // 支持提取的元素类型：headers, code_blocks, inline_code, links, images, tables, lists
 //
 // Python: openjiuwen/core/foundation/llm/output_parsers/markdown_output_parser.py (MarkdownOutputParser)
@@ -63,11 +62,9 @@ func NewMarkdownOutputParser() *MarkdownOutputParser {
 }
 
 // Parse 解析 LLM 输出中的 Markdown，返回结构化内容。
-//
 // 输入可以是 string 或 *AssistantMessage。
 // 解析成功返回 *MarkdownContent，解析失败返回 nil, error。
 // 空输入返回 nil, nil（语义：无内容可解析，不是错误）。
-//
 // Python: MarkdownOutputParser.parse()
 func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 	// 提前提取 text 和 modelName（供 defer 中日志使用）
@@ -109,7 +106,6 @@ func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 }
 
 // StreamParse 流式解析 LLM 输出中的 Markdown。
-//
 // Python: MarkdownOutputParser.stream_parse() — 全量重解析模式。
 // 每次 buffer 增长就对整个 buffer 重新提取所有元素。
 // chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
@@ -217,7 +213,6 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clien
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractAllElements 从文本中提取所有 Markdown 元素。
-//
 // Python: MarkdownOutputParser._extract_all_elements()
 func (p *MarkdownOutputParser) extractAllElements(text string, content *MarkdownContent) {
 	elements := make([]*MarkdownElement, 0)
@@ -298,7 +293,6 @@ func (p *MarkdownOutputParser) extractAllElements(text string, content *Markdown
 }
 
 // populateCategorizedLists 按 type 分发到分类列表。
-//
 // Python: MarkdownOutputParser._populate_categorized_lists()
 // 使用安全类型断言，避免 Content map 中值类型不匹配导致 panic。
 func (p *MarkdownOutputParser) populateCategorizedLists(content *MarkdownContent) {
@@ -359,7 +353,6 @@ func (p *MarkdownOutputParser) populateCategorizedLists(content *MarkdownContent
 }
 
 // extractMultilineElements 逐行扫描提取表格和列表元素。
-//
 // Python: MarkdownOutputParser._extract_multiline_elements()
 // 返回追加后的 elements 切片。
 func extractMultilineElements(text string, elements []*MarkdownElement) []*MarkdownElement {

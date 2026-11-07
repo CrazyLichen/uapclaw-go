@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // multiKBEntry with_source 的聚合中间态。
-//
 // rawScore/rawScoreScaled 用指针区分"未设置"与"显式 0"（Python None 语义）；
 // metadata 取首见值后固定不更新（Python 字面）。
 type multiKBEntry struct {
@@ -40,10 +39,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RetrieveMultiKB 跨知识库检索，按文本去重、分数取最大、降序返回文本列表。
-//
 // 单库失败只记 Warn 并当作空结果（软失败）；limit 走真值链
 // topK → config.TopK → 5。
-//
 // Python: simple_knowledge_base.py retrieve_multi_kb
 func RetrieveMultiKB(ctx context.Context, kbs []KnowledgeBase,
 	query string, config *common.RetrievalConfig, topK *int) []string {
@@ -76,14 +73,11 @@ func RetrieveMultiKB(ctx context.Context, kbs []KnowledgeBase,
 }
 
 // RetrieveMultiKBWithSource 跨知识库检索，返回带来源信息的结果。
-//
 // 聚合语义（逐条对齐 Python）：score 取最大；raw_score/raw_score_scaled
 // 在元数据中显式给出时才参与取最大（否则回落本条 score）；kb_ids 取并集
 // 后排序；metadata 固定为首次命中的那条。
-//
 // 元数据中的 raw_score / raw_score_scaled 不是数值时，Python 的 max()
 // 会抛 TypeError 中断整条聚合，故这里同样返回 155509（而非静默跳过）。
-//
 // Python: simple_knowledge_base.py retrieve_multi_kb_with_source
 func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 	query string, config *common.RetrievalConfig, topK *int) ([]common.MultiKBRetrievalResult, error) {
@@ -194,10 +188,8 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // retrieveMultiKBGather 并发检索各知识库，返回与 kbs 等长的结果切片。
-//
 // 裸 gather（13.17/13.25 方案 A 先例）：协程各写各的槽位，无 fail-fast，
 // 单库错误只 Warn 并留空槽位，与 Python asyncio.gather 全跑完语义一致。
-//
 // caller 为调用方函数名，仅用于 Warn 文案——Python 侧两个聚合函数各自
 // 打印自己的函数名（`retrieve_multi_kb:` / `retrieve_multi_kb_with_source:`），
 // 便于区分失败发生在哪条链路。
@@ -225,7 +217,6 @@ func retrieveMultiKBGather(ctx context.Context, kbs []KnowledgeBase,
 }
 
 // multiKBLimit 计算返回条数上限：Python `top_k or config.top_k or 5`。
-//
 // 真值链按 Python truthiness 判断（非零即采用，负数同样生效）。
 func multiKBLimit(topK *int, config *common.RetrievalConfig) int {
 	if topK != nil && *topK != 0 {
@@ -238,7 +229,6 @@ func multiKBLimit(topK *int, config *common.RetrievalConfig) int {
 }
 
 // pyTake 复刻 Python 切片 ranked[:limit] 的边界语义。
-//
 // limit >= 0：取前 limit 条（超长时返回全部）；limit < 0：等价于
 // 去掉末尾 |limit| 条（Python 负数切片）。
 func pyTake(items []string, limit int) []string {
@@ -257,7 +247,6 @@ func pyTake(items []string, limit int) []string {
 }
 
 // pyMetaFloat 读取元数据中的浮点字段，缺失时回落本条 score。
-//
 // 对齐 Python `meta.get(key, score)` 与其后的 `if raw_score is not None`：
 //   - 键缺失 → 回落 score，且参与取最大（true）
 //   - 键存在但值为 None → 不参与取最大（false），装填时为 0

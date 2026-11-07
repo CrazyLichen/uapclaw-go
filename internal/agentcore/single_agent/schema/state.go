@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseInterruptionState 中断状态基类。
-//
 // Python: BaseInterruptionState(ai_message, iteration, original_query)
 type BaseInterruptionState struct {
 	// AIMessage 中断时的 AI 消息
@@ -19,7 +18,6 @@ type BaseInterruptionState struct {
 }
 
 // ToolInterruptEntry 工具中断条目。
-//
 // Python: ToolInterruptEntry(tool_call, interrupt_requests, is_sub_agent)
 // Python 中 interrupt_requests 类型为 Dict[str, InterruptRequest]，但实际可存 InterruptRequest 子类
 // （如 ToolCallInterruptRequest）。Go 中用 InterruptRequester 接口实现多态。
@@ -32,17 +30,14 @@ type ToolInterruptEntry struct {
 	// IsSubAgent 是否来自子 Agent
 	IsSubAgent bool
 	// CarriedAnswers 更早恢复轮次已给出的答案，按 call_id → owner 索引。
-	//
 	// 一个调用若在本轮又暂停，它上一轮拿到的答案要保留到下一轮（标记 carried），
 	// 让 rail 知道"这个答案已经执行过副作用，不要重复执行"。若本轮该 rail
 	// 在同一调用上又重新提问，说明上轮的答案没被接受，那条答案会被丢弃。
-	//
 	// Python: ToolInterruptEntry.carried_answers
 	CarriedAnswers map[string]map[string]*InterruptAnswer
 }
 
 // ToolInterruptionState 工具中断状态（HITL 中断）。
-//
 // Python: ToolInterruptionState(BaseInterruptionState)
 type ToolInterruptionState struct {
 	// BaseInterruptionState 嵌入基类
@@ -54,7 +49,6 @@ type ToolInterruptionState struct {
 }
 
 // WorkflowInterruptEntry 工作流中断条目。
-//
 // Python: react_agent.py L406 WorkflowInterruptEntry(tool_call, component_ids, workflow_execution_state, collected_input)
 type WorkflowInterruptEntry struct {
 	// ToolCall 触发中断的工具调用
@@ -68,7 +62,6 @@ type WorkflowInterruptEntry struct {
 }
 
 // InterruptionState 工作流中断状态。
-//
 // Python: react_agent.py L414 InterruptionState(BaseInterruptionState)
 type InterruptionState struct {
 	// BaseInterruptionState 嵌入基类
@@ -95,10 +88,8 @@ const (
 	// ResumeStartIterationKey 恢复时起始迭代键
 	ResumeStartIterationKey = "_resume_start_iteration"
 	// ResumeInterruptAnswersKey 恢复期间按调用归属的答案键。
-	//
 	// 结构：{tool_call_id: {interrupt_owner: *InterruptAnswer}}。rail 只读取
 	// 自己 owner 那份答案，因此不同 rail 在同一调用上的中断不会串台。
-	//
 	// Python: RESUME_INTERRUPT_ANSWERS_KEY
 	ResumeInterruptAnswersKey = "_resume_interrupt_answers"
 	// DeferredToolImagesKey 等待同批全部调用补齐 tool message 的图片项
@@ -112,7 +103,6 @@ const (
 // ──────────────────────────── 结构体（恢复答案） ────────────────────────────
 
 // InterruptAnswer 一条答案，由中断处理器归属到它所回答的中断。
-//
 // 字段含义（对齐 Python InterruptAnswer）：
 //   - Owner：被回答中断的 interrupt_owner；只有那个 rail 会收到这条答案。
 //   - Kind：被回答中断的 interrupt_kind。

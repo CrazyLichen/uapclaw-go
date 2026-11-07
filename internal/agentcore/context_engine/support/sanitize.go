@@ -22,17 +22,14 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // dataURLPayloadPattern 匹配图片 data URL 的 base64 载荷。
-//
 // 字符类不含空白：data URL 不会带换行，允许空白会把后续散文一起吞掉。
 var dataURLPayloadPattern = regexp.MustCompile(`(?i)data:image/[^;,\s]+;base64,[A-Za-z0-9+/=]+`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SanitizeValueForText 递归替换结构化值里的图片/base64 载荷。
-//
 // 只替换"整值是图片 data URL"或"图片块载荷字段"，不改变其它结构，
 // 使父结构（消息块列表）可以直接序列化进提示词/日志而不携带几十万字符。
-//
 // Python: content_sanitize.sanitize_value_for_text()
 func SanitizeValueForText(value any) any {
 	switch typed := value.(type) {
@@ -61,9 +58,7 @@ func SanitizeValueForText(value any) any {
 }
 
 // SanitizeContentForText 把消息内容序列化为不含图片原始字节的文本。
-//
 // 文本内容原样返回；块列表先净化再以紧凑 JSON 序列化。
-//
 // Python: content_sanitize.sanitize_content_for_text()
 func SanitizeContentForText(content any) string {
 	if text, ok := content.(string); ok {
@@ -92,7 +87,6 @@ func sanitizeString(text string) string {
 }
 
 // sanitizeImageBlockMap 识别图片块形态并整体替换其载荷字段。
-//
 // 覆盖三种常见形态：{"image_url": {"url": "data:image/..."}}、
 // {"data_url": "data:image/..."}、{"source": {"type": "base64", "data": "..."}}。
 func sanitizeImageBlockMap(block map[string]any) (map[string]any, bool) {

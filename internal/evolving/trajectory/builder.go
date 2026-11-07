@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TrajectoryBuilder 轨迹组装器，用于在线和离线路径的轨迹构建。
-//
 // 职责：
 //   - 步骤累积（按插入顺序）
 //   - Cost 累积（input_tokens/output_tokens）
@@ -54,7 +53,6 @@ type TrajectoryBuilderOption func(*TrajectoryBuilder)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTrajectoryBuilder 创建 TrajectoryBuilder 实例。
-//
 // Python: TrajectoryBuilder(session_id, source, case_id, member_id, meta, max_steps)
 func NewTrajectoryBuilder(sessionID, source string, opts ...TrajectoryBuilderOption) *TrajectoryBuilder {
 	b := &TrajectoryBuilder{
@@ -76,7 +74,6 @@ func WithCaseID(caseID string) TrajectoryBuilderOption {
 }
 
 // WithMemberID 设置团队成员标识。
-//
 // Python: if member_id: self.meta.setdefault("member_id", member_id)
 func WithMemberID(memberID string) TrajectoryBuilderOption {
 	return func(b *TrajectoryBuilder) {
@@ -91,7 +88,6 @@ func WithMemberID(memberID string) TrajectoryBuilderOption {
 }
 
 // WithMeta 设置扩展元数据。
-//
 // Python: self.meta: Dict[str, Any] = dict(meta or {})
 func WithMeta(meta map[string]any) TrajectoryBuilderOption {
 	return func(b *TrajectoryBuilder) {
@@ -102,7 +98,6 @@ func WithMeta(meta map[string]any) TrajectoryBuilderOption {
 }
 
 // WithMaxSteps 设置最大保留步骤数。
-//
 // Python: max_steps < 1 时抛出 ValueError。
 // Go 中不 panic，maxSteps < 1 时忽略该选项。
 func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
@@ -116,7 +111,6 @@ func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
 }
 
 // RecordStep 记录一个步骤并累积成本。
-//
 // Python: TrajectoryBuilder.record_step(step)
 func (b *TrajectoryBuilder) RecordStep(step *TrajectoryStep) {
 	// Python: self.steps.append(step)
@@ -161,7 +155,6 @@ func (b *TrajectoryBuilder) GetSteps() []*TrajectoryStep {
 }
 
 // Build 组装最终 Trajectory。
-//
 // Python: TrajectoryBuilder.build()
 func (b *TrajectoryBuilder) Build() *Trajectory {
 	// Python: meta: dict[str, Any] = {}
@@ -200,7 +193,6 @@ func (b *TrajectoryBuilder) Build() *Trajectory {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // generateUUID 生成唯一执行标识符。
-//
 // Python: _generate_uuid() -> str(uuid.uuid4())
 func generateUUID() string {
 	return uuid.New().String()

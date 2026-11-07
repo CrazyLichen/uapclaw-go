@@ -8,10 +8,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // E2AResponse E2A 统一响应：每条出站记录（含流式多帧）一条实例；与 E2AEnvelope 对称。
-//
 // Metadata：通道/业务自定义键值；兼容旧版 AgentResponse.metadata；协议转换失败时可临时写入兜底信息
 // （如原始片段、错误说明），与 a2a_metadata / acp_meta 分工不同。
-//
 // Python: jiuwenswarm/common/e2a/models.py (E2AResponse)
 type E2AResponse struct {
 	// ─── 核心响应字段 ───

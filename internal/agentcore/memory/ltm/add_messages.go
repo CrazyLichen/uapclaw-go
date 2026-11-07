@@ -26,7 +26,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AddMessages 添加消息并生成记忆。
-//
 // ① emit_before MEMORY_ADDED 回调 → ② addMessagesImpl 执行逻辑
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_ADDED) + add_messages
 func (m *LongTermMemory) AddMessages(
@@ -52,7 +51,6 @@ func (m *LongTermMemory) AddMessages(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // addMessagesImpl AddMessages 的核心实现。
-//
 // 完整流程对齐 Python add_messages：
 // 1. 校验 scopeID（validateID）
 // 2. 获取作用域 LLM（getScopeLLM）

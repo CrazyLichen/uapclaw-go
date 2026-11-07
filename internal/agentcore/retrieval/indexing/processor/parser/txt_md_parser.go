@@ -19,11 +19,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TxtMdParser 文本/Markdown 解析器。
-//
 // 嵌入 BaseParser 仅覆写 ParseContent。编码统计检测用 chardet
 // （对齐 Python charset_normalizer.detect），经 x/net Lookup 映射
 // x/text encoding 解码。软失败语义同 JSONParser。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/parser/txt_md_parser.py (TxtMdParser)
 type TxtMdParser struct {
 	// BaseParser 默认适配器
@@ -44,9 +42,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTxtMdParser 构造 TxtMdParser。
-//
 // 零参数（对齐 Python __init__(**kwargs): pass）。
-//
 // Python: txt_md_parser.py TxtMdParser.__init__
 func NewTxtMdParser() (*TxtMdParser, error) {
 	p := &TxtMdParser{}
@@ -59,7 +55,6 @@ func NewTxtMdParser() (*TxtMdParser, error) {
 }
 
 // ParseContent 解析 TXT/MD 文件内容。
-//
 // 对齐 Python _parse 步骤顺序：
 //  1. 读原始字节（对齐 aiofiles.open(file_path, "rb")）
 //  2. chardet 统计检测编码；检测失败/空输入 → utf-8
@@ -100,7 +95,6 @@ func (p *TxtMdParser) ParseContent(ctx context.Context, doc string, llmClient *l
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // decodeDetected 统计检测编码并解码字节流。
-//
 // 检测/映射失败回落 utf-8 容错解码（对齐 Python detect 返回 None 或
 // 未知编码名时 open 回落语义）。UTF-8 BOM 前缀剥离（对齐 Python
 // strip 对 \ufeff 兜底处理的最终输出）。
@@ -124,13 +118,11 @@ func decodeDetected(raw []byte) (string, error) {
 }
 
 // detectEncoding 检测字节流编码，返回 x/text encoding（nil 表示 UTF-8 原样）。
-//
 // chardet.DetectBest 空输入返回 (nil, nil)——result 为 nil 且 err 为 nil，
 // 双重防御（探针实测）。UTF-8 检出时返回 nil 走零转换路径。
 // chardet 检出 GBK 系编码名带连字符（"GB-18030"），htmlindex 不认，
 // 手工映射 simplifiedchinese.GB18030（GB18030 是 GBK 超集，GBK 字节流
 // 按 GB18030 解码结果正确——探针验证中文完整还原）。
-//
 // M-12: ① chardet 检出 "UTF-32LE"/"UTF-32BE" 时 htmlindex.Lookup 返回
 // nil（不认该名），原实现静默回落 UTF-8 原样 → UTF-32 文件全乱码——
 // 手工映射 unicode.UTF32.LittleEndian/BigEndian；② 查表失败补 Warn
@@ -182,7 +174,6 @@ func init() {
 }
 
 // latin1Encoding ISO-8859-1（Latin-1）单字节编码：字节值即码点。
-//
 // M-12: x/net htmlindex 的 "ISO-8859-1" 实为 Windows-1252（0x80-0x9F 区间
 // 映射扩展图形字符），Python codec 严格 Latin-1（该区间为 C1 控制符）。
 // Latin-1 全 256 字节一一对应码点，手工实现对齐 Python。

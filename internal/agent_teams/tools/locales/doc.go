@@ -1,5 +1,4 @@
 // Package locales 提供团队工具的多语言支持。
-//
 // 基于 Translator 闭包 + Markdown 描述文件 + STRINGS 映射表三层体系：
 //   - Translator 闭包：绑定到特定语言，提供 tool 级别的 i18n 查询
 //   - Markdown 文件：长文本工具描述（_desc），嵌入二进制

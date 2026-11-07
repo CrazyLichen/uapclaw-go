@@ -305,7 +305,6 @@ func TestParseTriples_字段strip(t *testing.T) {
 }
 
 // TestParseTriples_数字类型字段 测试数字字段经 pyStr 字符串化（Go 增强 §7.2-5）
-//
 // 合法 JSON 主路径：jsonrepair 短路解码产出 json.Number——pyStr 整数字面
 // 原样输出（对齐 Python json.loads int → str）
 func TestParseTriples_数字类型字段(t *testing.T) {
@@ -403,7 +402,6 @@ func TestPyStr_jsonNumber超int64界(t *testing.T) {
 // ──────────────────────────── Extract/Process 测试 ────────────────────────────
 
 // captionTripleClient 可编程 mock：按序返回预置响应或错误，记录 Invoke 参数。
-//
 // 并发安全设计：responses/errs 构造后只读；callCount/current/concurrentPeak
 // 走 atomic；lastMessages/lastTemperature 经 mu 保护（多 chunk 并发 Invoke
 // 写入不 race，go test -race 下安全）。
@@ -471,7 +469,6 @@ func newExtractTestModelWithMock(t *testing.T, responses []string, errs []error)
 }
 
 // TestExtract_多分块 对齐 test_extract_multiple_chunks（invoke 计数=2）
-//
 // 注意：多 chunk 并发下 triples 顺序 = chunk 序 × 每 chunk 内列表序（方案 A
 // 扫描合并），两 chunk 各 2 条共 4 条。
 func TestExtract_多分块(t *testing.T) {
@@ -640,7 +637,6 @@ func newExtractDispatchModelWithMock(t *testing.T, dispatch map[string]string) (
 }
 
 // newDispatchTripleClient 构造按消息文本分派的 mock 客户端。
-//
 // 与 captionTripleClient（按调用序）互补：并发调度序不确定的场景用本类型
 // 按内容分派，确定性识别"哪个 chunk 的请求"。
 func newDispatchTripleClient(dispatch map[string]string) *dispatchTripleClient {

@@ -438,7 +438,6 @@ func TestAnswerValues_trim(t *testing.T) {
 // ──────────────────────────── AskUserContinuation 测试 ────────────────────────────
 
 // fullAskUserMetadata 构造一个完整的中断请求 metadata。
-//
 // 注意结构：BuildAskUserMetadata 返回的是"续接快照"本身，
 // 需要由 rail 再嵌到 request.metadata[ASK_USER_CONTINUATION_METADATA_KEY] 下
 // （对齐 Python root_context_rail.py L176-179）。

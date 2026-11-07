@@ -1,5 +1,4 @@
 // Package schema 提供团队相关的数据结构定义。
-//
 // 包含团队角色、状态枚举、规格定义、运行时上下文、配置结构体、i18n 等。
 // blueprint.go 是核心文件，定义 TeamAgentSpec（构造 TeamAgent 的完整 JSON 可序列化规格）、
 // LeaderSpec、TransportSpec/StorageSpec 及其注册表、以及全部校验方法。
@@ -8,7 +7,6 @@
 // 打断 schema→messager/memory/agent_teams 循环依赖。
 // 事件类型（BaseEventMessage、TypedEvent、TeamTopic、30+ 事件结构体及 TeamEvent 常量）
 // 已提取到 schema/events 子包，打断 schema←→team_workspace 循环依赖。
-//
 // 文件目录：
 //
 //	schema/             # Schema 类型定义

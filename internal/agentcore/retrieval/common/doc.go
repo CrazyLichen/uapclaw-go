@@ -1,8 +1,6 @@
 // Package common 提供 retrieval 子包共享的数据类型和工具函数。
-//
 // 本包存放 embedding、reranker、indexing 等子包共同依赖的文档模型和配置类型，
 // 对齐 Python 的 openjiuwen/core/retrieval/common/ 模块。
-//
 // 文件目录：
 //
 //	common/

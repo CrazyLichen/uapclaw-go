@@ -9,10 +9,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LifecycleTool 包装 Tool，在 Invoke/Stream 调用前后自动触发回调事件。
-//
 // LifecycleTool 实现了 Tool 接口，可以像普通 Tool 一样使用。
 // 注册到 AbilityManager 时自动包装，对调用方透明。
-//
 // Python: _ToolMeta.__call__ 中的生命周期注入逻辑
 type LifecycleTool struct {
 	inner Tool
@@ -28,7 +26,6 @@ type LifecycleTool struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLifecycleTool 创建带生命周期回调的工具包装器。
-//
 // fw 参数可选：不传或传 nil 时自动使用全局回调框架 GetCallbackFramework()，
 // Python: _ToolMeta.__call__ 中通过 Runner.callback_framework 获取。
 func NewLifecycleTool(inner Tool, fw ...*runnnercallback.CallbackFramework) *LifecycleTool {
@@ -50,7 +47,6 @@ func (t *LifecycleTool) Card() *ToolCard {
 }
 
 // GetCallTimeout 透传被包装工具的外层预算钩子。
-//
 // 必须显式委托：AbilityManager 执行的是 LifecycleTool，若这里不转发，
 // 接口方法会落到默认实现而吞掉 BashTool/PowerShellTool 的"执行预算+30s"。
 // Python: LifecycleTool 无对应包装，等价于 Tool.get_call_timeout 的动态派发
@@ -118,7 +114,6 @@ func (t *LifecycleTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 //	  TransformIO(input) → emit_before(STREAM_INPUT) → STARTED → [执行]
 //	  → per-chunk: RESULT_RECEIVED(原始数据) → TransformIO(output) → STREAM_OUTPUT(变换后数据)
 //	  → Done: FINISHED（完成）
-//
 //	RESULT_RECEIVED 在内层 _lifecycle_stream 触发，拿到原始 chunk（未变换）；
 //	TransformIO/STREAM_OUTPUT 在外层处理，拿到变换后的数据。
 //

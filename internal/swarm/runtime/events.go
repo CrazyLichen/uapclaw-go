@@ -5,7 +5,6 @@ import "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RuntimeEvent Runtime 流中的一个事件（线缆渲染之前的中间形态）。
-//
 // Python: jiuwenswarm/runtime/events.py RuntimeEvent
 type RuntimeEvent struct {
 	// RequestID 请求标识
@@ -25,7 +24,6 @@ type RuntimeEvent struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Control 构造控制事件。
-//
 // Python: RuntimeEvent.control(request_id=..., channel_id=..., session_id=..., payload=...)
 func Control(req *schema.AgentRequest, payload map[string]any) *RuntimeEvent {
 	ev := &RuntimeEvent{Payload: payload, OK: true}
@@ -40,7 +38,6 @@ func Control(req *schema.AgentRequest, payload map[string]any) *RuntimeEvent {
 }
 
 // FromAgentResponse 由非流式响应包装为 RuntimeEvent。
-//
 // Python: RuntimeEvent.from_agent_message
 func FromAgentResponse(resp *schema.AgentResponse) *RuntimeEvent {
 	if resp == nil {
@@ -70,7 +67,6 @@ func FromAgentResponseChunk(chunk *schema.AgentResponseChunk) *RuntimeEvent {
 }
 
 // EventType 返回 payload 中的 event_type。
-//
 // Python: RuntimeEvent.event_type
 func (e *RuntimeEvent) EventType() string {
 	if e == nil || e.Payload == nil {

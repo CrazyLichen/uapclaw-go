@@ -42,7 +42,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetLanguage 设置渲染语言（cn/en）。
-//
 // Python: DeepAgent 通过 manager.language = language 注入。
 func (m *Manager) SetLanguage(language string) {
 	m.mu.Lock()
@@ -61,14 +60,12 @@ func (m *Manager) Language() string {
 }
 
 // RenderSnapshot 渲染全量快照。
-//
 // Python: render_history_snapshot
 func (m *Manager) RenderSnapshot(items []*Attachment) string {
 	return m.render(items, nil, true)
 }
 
 // RenderDelta 渲染增量（变化项 + 移除项）。
-//
 // Python: render_delta
 func (m *Manager) RenderDelta(changed []*Attachment, removed []string) string {
 	return m.render(changed, removed, false)
@@ -77,7 +74,6 @@ func (m *Manager) RenderDelta(changed []*Attachment, removed []string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // render 统一渲染入口。
-//
 // Python: _render_history_payload
 func (m *Manager) render(items []*Attachment, removed []string, snapshot bool) string {
 	notice, intro, removedIntro := noticeCN, introSnapshotCN, removedIntroCN

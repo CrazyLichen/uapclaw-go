@@ -137,7 +137,6 @@ func TestExtractMCPToolResultContent_无Content字段(t *testing.T) {
 }
 
 // TestExtractMCPToolResultContent_保留全部Content 验证多块文本按序拼接。
-//
 // 语义变更（D-15）：旧实现只取最后一块，多块结果的文本部分全部丢失。
 // 上游改为按顺序 join，块间以空行分隔。
 func TestExtractMCPToolResultContent_保留全部Content(t *testing.T) {
@@ -254,7 +253,6 @@ func (f *fakeMcpClient) Close() error { return nil }
 // ──────────────────────────── D-15/D-16：多块抽取与状态保留 ────────────────────────────
 
 // TestExtractMCPToolResultContent_多文本块拼接 验证不再只取最后一块。
-//
 // 回归：旧实现 item := contentList[len-1] 只保留最后一个块，
 // "动作确认文本 + 截图" 这类结果会把前面的文本全丢掉。
 func TestExtractMCPToolResultContent_多文本块拼接(t *testing.T) {

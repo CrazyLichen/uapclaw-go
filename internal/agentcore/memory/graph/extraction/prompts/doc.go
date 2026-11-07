@@ -1,11 +1,8 @@
 // Package prompts 提供 Graph Extraction 提示词模板管理功能。
-//
 // 包含 .pr.md 格式解析器、线程安全的模板管理器单例。
 // .pr.md 文件使用 `#role#` 分隔消息角色（system/user/assistant/tool），
 // 解析后生成 []schema.BaseMessage 消息列表，用于 LLM 调用。
-//
 // 格式化辅助函数在 entity_extraction/ 子包中，对齐 Python 位置。
-//
 // 文件目录：
 //
 //	prompts/

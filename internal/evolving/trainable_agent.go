@@ -19,12 +19,10 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TrainableAgent 可训练 Agent 接口。
-//
 // Trainer 需要通过 Agent 获取 Operator 注册表和执行推理，
 // 这是 BaseAgent 的最小扩展接口。
 // 此接口从 trainer 包迁移至 evolving 根包，
 // 解决 checkpointing ↔ trainer 循环依赖问题。
-//
 // Python: BaseAgent + get_operators() 方法
 type TrainableAgent interface {
 	// Invoke 非流式调用 Agent。

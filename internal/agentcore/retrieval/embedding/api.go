@@ -19,10 +19,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // APIEmbedding 通用 HTTP 嵌入客户端。
-//
 // 支持 OpenAI 兼容的三种响应格式：embedding/embeddings/data[]。
 // 使用 net/http 标准库，无第三方依赖。
-//
 // Python: openjiuwen/core/retrieval/embedding/api_embedding.py
 type APIEmbedding struct {
 	// config 嵌入配置

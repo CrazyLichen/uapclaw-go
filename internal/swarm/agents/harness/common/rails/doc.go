@@ -1,8 +1,6 @@
 // Package rails 提供 Swarm 侧的 Rail 扩展实现（对齐 Python common/rails）。
-//
 // 本包对齐 Python jiuwenswarm/agents/harness/common/rails/ 下的 Rail 实现，
 // 在 agentcore 的通用 Rail 基础上增加 Swarm 专属逻辑。
-//
 // 文件目录：
 //
 //	rails/

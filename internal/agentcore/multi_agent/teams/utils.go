@@ -28,10 +28,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MakeTeamSession 创建团队会话。
-//
 // 从 message 中提取 conversation_id 作为 sessionID，若无则生成新 UUID。
 // 使用 card.GetID() 作为 teamID，调用 CreateAgentTeamSession 创建会话。
-//
 // Python: teams/utils.py make_team_session(card, message)
 func MakeTeamSession(card maschema.TeamCardInterface, message map[string]any) *session.AgentTeamSession {
 	sid := extractConversationID(message)
@@ -51,12 +49,9 @@ func MakeTeamSession(card maschema.TeamCardInterface, message map[string]any) *s
 }
 
 // StandaloneInvokeContext 独立调用上下文，管理会话生命周期。
-//
 // 若 sess 不为 nil，直接使用外部会话（调用者负责生命周期）。
 // 若 sess 为 nil，创建新会话并在函数返回后自动清理（UnbindTeamSession + CleanupSession + CloseStream + Commit）。
-//
 // fn 是业务逻辑函数，接收 (teamSession, sessionID) 并返回结果。
-//
 // Python: teams/utils.py standalone_invoke_context(runtime, card, message, session)
 func StandaloneInvokeContext(
 	ctx context.Context,
@@ -147,21 +142,17 @@ func StandaloneInvokeContext(
 }
 
 // StandaloneStreamContext 独立流式上下文，管理会话生命周期并返回流通道。
-//
 // 若 sess 不为 nil，直接使用外部会话（调用者负责生命周期）。
 // 若 sess 为 nil，创建新会话并在流结束后自动清理。
-//
 // runFn 是流式业务逻辑函数，接收 (teamSession, sessionID) 并返回 error。
 // runFn 内部通过 teamSession.WriteStream() 写入流数据，
 // 消费者通过返回的 channel 读取 teamSession.StreamIterator() 的数据。
-//
 // Python: standalone_stream_context 中
 //
 //	async for chunk in team_session.stream_iterator(): yield chunk
 //
 // Go 直接返回 teamSession.StreamIterator()，runFn 在后台 goroutine 中运行，
 // 数据通过 StreamWriterManager → StreamOutput() 自动流到消费者。
-//
 // Python: teams/utils.py standalone_stream_context(runtime, card, message, run_coro, session)
 func StandaloneStreamContext(
 	ctx context.Context,
@@ -269,7 +260,6 @@ func StandaloneStreamContext(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractConversationID 从 message 中提取 conversation_id。
-//
 // Python: message.get("conversation_id") if isinstance(message, dict) else None
 func extractConversationID(message map[string]any) string {
 	if message == nil {

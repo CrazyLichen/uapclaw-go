@@ -1,14 +1,11 @@
 // Package extraction 提供 Graph Extraction 实体/关系抽取模块。
-//
 // 包含多语言 Schema 描述替换机制、输出模型 Go struct 定义和
 // JSON Schema 生成。这些组件被 GraphMemory 的每次 LLM 调用依赖，
 // 用于生成结构化输出请求和解析 LLM 响应。
-//
 // 注意：格式化辅助函数（FormatSchemaInfo/FormatSourceDescription/FormatRelationDefinitions/
 // FormatExistingEntities/FormatExistingRelations/EnsureValidLanguage）在
 // prompts/entity_extraction/ 子包中，对齐 Python prompts/entity_extraction/base.py 位置。
 // EntityDef/RelationDef 类型定义在 registry/ 子包中，extraction 包通过类型别名重新导出。
-//
 // 文件目录：
 //
 //	extraction/

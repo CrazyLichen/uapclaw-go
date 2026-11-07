@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SchemaUtils 工具参数 Schema 工具类，提供校验、格式化、类型转换能力。
-//
 // Python: openjiuwen/core/common/utils/schema_utils.py (SchemaUtils)
 type SchemaUtils struct{}
 
@@ -45,7 +44,6 @@ func WithFormatSkipValidate(skip bool) FormatOption {
 }
 
 // FormatWithSchema 根据参数 schema 格式化输入数据，填充默认值。
-//
 // 流程：RemoveNoneValues（可选）→ Validate（可选）→ 填充默认值
 //
 // Python: SchemaUtils.format_with_schema()
@@ -98,10 +96,8 @@ func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Par
 }
 
 // FormatWithSchemaMap 根据原始 JSON Schema map 格式化输入数据，填充默认值。
-//
 // 用于 RestfulApi 等 input_params 为原始 JSON Schema map 的场景。
 // schemaMap 格式为标准 JSON Schema：{"type":"object","properties":{...},"required":[...]}。
-//
 // 流程：RemoveNoneValues（可选）→ 校验必填字段（可选）→ 填充默认值
 //
 // Python: SchemaUtils.format_with_schema(schema=Dict[str,Any]) 走 JSON Schema dict 路径
@@ -175,9 +171,7 @@ func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[str
 }
 
 // Validate 校验输入数据是否符合参数 schema。
-//
 // 检查必填字段是否存在、类型是否匹配。
-//
 // Python: SchemaUtils.validate_with_schema()
 func (su SchemaUtils) Validate(data map[string]any, params []*schema.Param) error {
 	if data == nil {
@@ -221,7 +215,6 @@ func (su SchemaUtils) Validate(data map[string]any, params []*schema.Param) erro
 }
 
 // RemoveNoneValues 递归移除 map 中的 nil 值。
-//
 // Python: SchemaUtils.remove_none_values()
 func (su SchemaUtils) RemoveNoneValues(data map[string]any) map[string]any {
 	if data == nil {

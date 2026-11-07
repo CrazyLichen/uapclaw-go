@@ -26,7 +26,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // deferredToolDocument BM25 索引的文档单元：可调用 schema + 仅检索用文本。
-//
 // Python: _DeferredToolDocument
 type deferredToolDocument struct {
 	// info 模型可见工具 schema
@@ -38,10 +37,8 @@ type deferredToolDocument struct {
 }
 
 // ProgressiveToolRail 渐进式工具发现与延迟工具目录 Rail。
-//
 // 大工具集场景下，deferred 工具不进顶层 tools，只把目录摘要写进系统提示词；
 // 模型用 tool_search 发现（返回完整 schema），用固定 tool_call 执行。
-//
 // Python: openjiuwen/harness/rails/progressive_tool_rail.py (ProgressiveToolRail)
 type ProgressiveToolRail struct {
 	DeepAgentRail
@@ -64,7 +61,6 @@ type ProgressiveToolRail struct {
 }
 
 // promptAttachmentProvider 提供会话级动态提示词管理器。
-//
 // 由 harness.DeepAgent 实现（PromptAttachments）。
 type promptAttachmentProvider interface {
 	// PromptAttachments 返回动态提示词管理器
@@ -72,7 +68,6 @@ type promptAttachmentProvider interface {
 }
 
 // attachmentManager 目录附件所需的最小能力。
-//
 // Python: PromptAttachmentManager（add_section / list_by_filter / has_history_snapshot）
 type attachmentManager interface {
 	// AddSection 写入或覆盖附件
@@ -134,7 +129,6 @@ var _ agentinterfaces.AgentRail = (*ProgressiveToolRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProgressiveToolRail 创建 ProgressiveToolRail 实例。
-//
 // Python: ProgressiveToolRail.__init__(config)
 func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail {
 	rail := &ProgressiveToolRail{
@@ -148,7 +142,6 @@ func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail
 }
 
 // Init 注册两个元工具（显式 direct），保存注册表引用，不建索引。
-//
 // Python: ProgressiveToolRail.init
 func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	language := r.catalogLanguage()
@@ -192,9 +185,7 @@ func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.Base
 }
 
 // FinalizeStartupAsync 先物化惰性 schema，再建首份 BM25 索引。
-//
 // 必须等所有 startup rail 注册完工具后调用。
-//
 // Python: ProgressiveToolRail.finalize_startup_async
 func (r *ProgressiveToolRail) FinalizeStartupAsync(ctx context.Context, agent agentinterfaces.BaseAgent) error {
 	abilityManager := agent.AbilityManager()
@@ -216,7 +207,6 @@ func (r *ProgressiveToolRail) FinalizeStartupAsync(ctx context.Context, agent ag
 }
 
 // Uninit 按 ownership 移除元工具并清空缓存。
-//
 // Python: ProgressiveToolRail.uninit
 func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	abilityManager := agent.AbilityManager()
@@ -249,7 +239,6 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // BeforeInvoke 缓存全量工具清单并冻结会话初始目录。
-//
 // Python: before_invoke
 func (r *ProgressiveToolRail) BeforeInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	abilityManager := r.abilityManagerFrom(cbc)
@@ -271,7 +260,6 @@ func (r *ProgressiveToolRail) BeforeInvoke(_ context.Context, cbc *agentinterfac
 }
 
 // BeforeModelCall 注入规则节、同步目录附件、过滤顶层工具。
-//
 // Python: before_model_call
 func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	abilityManager := r.abilityManagerFrom(cbc)
@@ -302,7 +290,6 @@ func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentint
 }
 
 // BeforeToolCall 只放行 direct 与「嵌套标记 + 已授权」的调用。
-//
 // Python: before_tool_call
 func (r *ProgressiveToolRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolName := toolNameOf(cbc)
@@ -331,7 +318,6 @@ func (r *ProgressiveToolRail) BeforeToolCall(_ context.Context, cbc *agentinterf
 }
 
 // GetCallbacks 注册 BeforeInvoke / BeforeModelCall / BeforeToolCall。
-//
 // Python: ProgressiveToolRail 隐式覆盖对应钩子
 func (r *ProgressiveToolRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
@@ -350,7 +336,6 @@ func (r *ProgressiveToolRail) GetCallbacks() map[agentinterfaces.AgentCallbackEv
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // collectDeferredToolDocuments 构造 deferred 目录文档（含仅检索用的额外文本）。
-//
 // Python: _list_registered_deferred_tool_documents
 func (r *ProgressiveToolRail) collectDeferredToolDocuments(abilityManager agentinterfaces.AbilityManagerInterface) []deferredToolDocument {
 	if abilityManager == nil {
@@ -384,7 +369,6 @@ func (r *ProgressiveToolRail) collectDeferredToolDocuments(abilityManager agenti
 }
 
 // collectDeferredToolDescriptions 返回按名排序的 deferred 目录摘要。
-//
 // Python: _collect_deferred_tool_descriptions
 func (r *ProgressiveToolRail) collectDeferredToolDescriptions(abilityManager agentinterfaces.AbilityManagerInterface) map[string]string {
 	descriptions := make(map[string]string)
@@ -397,7 +381,6 @@ func (r *ProgressiveToolRail) collectDeferredToolDescriptions(abilityManager age
 }
 
 // collectDeferredFingerprints 读取当前目录指纹（按名排序）。
-//
 // Python: _collect_deferred_tool_fingerprints
 func (r *ProgressiveToolRail) collectDeferredFingerprints() map[string]string {
 	fingerprints := make(map[string]string)
@@ -410,7 +393,6 @@ func (r *ProgressiveToolRail) collectDeferredFingerprints() map[string]string {
 }
 
 // rebuildToolSearchIndex 重建 BM25 索引并记录注册版本。
-//
 // Python: _rebuild_tool_search_index
 func (r *ProgressiveToolRail) rebuildToolSearchIndex(documents []deferredToolDocument) {
 	infos := make([]cschema.ToolInfoInterface, 0, len(documents))
@@ -428,7 +410,6 @@ func (r *ProgressiveToolRail) rebuildToolSearchIndex(documents []deferredToolDoc
 }
 
 // ensureToolSearchIndex 仅在目录或注册版本变化时重建。
-//
 // Python: _ensure_tool_search_index
 func (r *ProgressiveToolRail) ensureToolSearchIndex() {
 	abilityManager := r.abilityManager()
@@ -453,7 +434,6 @@ func (r *ProgressiveToolRail) ensureToolSearchIndex() {
 }
 
 // searchTools 检索并授权命中工具。
-//
 // Python: _search_tools
 func (r *ProgressiveToolRail) searchTools(
 	_ context.Context,
@@ -505,9 +485,7 @@ func (r *ProgressiveToolRail) searchTools(
 }
 
 // callDiscoveredTool 经 AbilityManager 嵌套执行一个已发现的 deferred 工具。
-//
 // 五道校验：非空 → 已授权 → 仍注册 → 仍为 deferred → 指纹未变。
-//
 // Python: _call_discovered_tool
 func (r *ProgressiveToolRail) callDiscoveredTool(
 	ctx context.Context,
@@ -594,7 +572,6 @@ func rejectedToolOutput(message string) *tool_discovery.RelayedToolOutput {
 }
 
 // filterModelCallTools 把模型可见工具收敛为 meta ∪ direct。
-//
 // Python: before_model_call 的工具过滤段
 func (r *ProgressiveToolRail) filterModelCallTools(
 	inputs *agentinterfaces.ModelCallInputs,
@@ -622,7 +599,6 @@ func (r *ProgressiveToolRail) filterModelCallTools(
 }
 
 // rejectToolCall 阻断执行并向模型返回可读结果。
-//
 // Python: _reject_tool_call
 func rejectToolCall(cbc *agentinterfaces.AgentCallbackContext, message string) {
 	cbc.SetExtra("_skip_tool", true)
@@ -678,7 +654,6 @@ func (r *ProgressiveToolRail) registerToolResources(tools ...tool.Tool) {
 }
 
 // getDiscoveredTools 读取已授权工具名。
-//
 // Python: _get_discovered_tools
 func (r *ProgressiveToolRail) getDiscoveredTools(sess sessioninterfaces.SessionFacade) []string {
 	if sess == nil {
@@ -696,7 +671,6 @@ func (r *ProgressiveToolRail) getDiscoveredTools(sess sessioninterfaces.SessionF
 }
 
 // getDiscoveredToolFingerprints 读取授权指纹；无记录返回 nil（对齐上游 Optional）。
-//
 // Python: _get_discovered_tool_fingerprints
 func (r *ProgressiveToolRail) getDiscoveredToolFingerprints(sess sessioninterfaces.SessionFacade) map[string]string {
 	if sess == nil {
@@ -714,7 +688,6 @@ func (r *ProgressiveToolRail) getDiscoveredToolFingerprints(sess sessioninterfac
 }
 
 // setDiscoveredTools 写入授权名单与指纹（只保留名单内的指纹）。
-//
 // Python: _set_discovered_tools
 func (r *ProgressiveToolRail) setDiscoveredTools(sess sessioninterfaces.SessionFacade, names []string, fingerprints map[string]string) {
 	if sess == nil {
@@ -755,7 +728,6 @@ func (r *ProgressiveToolRail) setDiscoveredTools(sess sessioninterfaces.SessionF
 }
 
 // authorizeDiscoveredTools 把命中工具并入授权名单。
-//
 // Python: _authorize_discovered_tools
 func (r *ProgressiveToolRail) authorizeDiscoveredTools(sess sessioninterfaces.SessionFacade, names []string, fingerprints map[string]string) {
 	if sess == nil {
@@ -765,7 +737,6 @@ func (r *ProgressiveToolRail) authorizeDiscoveredTools(sess sessioninterfaces.Se
 }
 
 // invalidateDiscoveredTools 失效指定工具的授权。
-//
 // Python: _invalidate_discovered_tools
 func (r *ProgressiveToolRail) invalidateDiscoveredTools(sess sessioninterfaces.SessionFacade, names map[string]struct{}) {
 	if sess == nil || len(names) == 0 {
@@ -785,7 +756,6 @@ func (r *ProgressiveToolRail) invalidateDiscoveredTools(sess sessioninterfaces.S
 }
 
 // appendTrace 追加发现轨迹。
-//
 // Python: _append_trace
 func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, event map[string]any) {
 	if sess == nil {
@@ -802,7 +772,6 @@ func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, 
 }
 
 // ensureInitialDeferredCatalog 读取或冻结会话初始目录。
-//
 // Python: _ensure_initial_deferred_catalog
 func (r *ProgressiveToolRail) ensureInitialDeferredCatalog(
 	sess sessioninterfaces.SessionFacade,
@@ -895,7 +864,6 @@ func (r *ProgressiveToolRail) attachments(cbc *agentinterfaces.AgentCallbackCont
 }
 
 // catalogLanguage 解析目录语言（cn/en）。
-//
 // Python: _resolve_catalog_language
 func (r *ProgressiveToolRail) catalogLanguage() string {
 	language := ""
@@ -929,7 +897,6 @@ func registryRevisionOf(abilityManager agentinterfaces.AbilityManagerInterface) 
 }
 
 // resolveProgressiveDiscovery 解析卡片上的本地化描述与检索别名。
-//
 // Python: _resolve_progressive_discovery
 func resolveProgressiveDiscovery(card *tool.ToolCard, language string) (string, string) {
 	if card.Properties == nil {
@@ -1010,9 +977,7 @@ func (a *managerAdapter) HasHistorySnapshot(sessionID string) bool {
 }
 
 // syncDeferredToolAttachment 计算目录差异并写入附件（delta / snapshot）。
-//
 // 首轮未变化不写；无快照、语言变化或连续 delta 达上限时改发全量快照。
-//
 // Python: _sync_deferred_tool_attachment
 func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 	_ context.Context,
@@ -1139,7 +1104,6 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 }
 
 // saveCatalogState 写回目录状态。
-//
 // Python: _sync_deferred_tool_attachment 末尾的 session.update_state
 func (r *ProgressiveToolRail) saveCatalogState(
 	sess sessioninterfaces.SessionFacade,
@@ -1166,7 +1130,6 @@ func (r *ProgressiveToolRail) saveCatalogState(
 }
 
 // writeCatalogAttachment 写入目录附件（priority 75）。
-//
 // Python: add_section(section=progressive_deferred_tools, kind=TOOL, priority=75)
 func (r *ProgressiveToolRail) writeCatalogAttachment(
 	manager attachmentManager,
@@ -1237,7 +1200,6 @@ func previousStateTools(catalogState map[string]any) map[string]string {
 }
 
 // normalizeDeferredCatalog 归一化目录：丢弃空名，空目录也视为有效目录。
-//
 // Python: _normalize_deferred_catalog（None 与空字典语义不同）
 func normalizeDeferredCatalog(catalog map[string]string) (map[string]string, bool) {
 	if catalog == nil {

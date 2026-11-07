@@ -194,7 +194,6 @@ func TestUnmarkSessionActive_归零清理rail(t *testing.T) {
 }
 
 // TestCreateModel_多模型默认按配置顺序 覆盖默认模型选择不依赖 map 随机序。
-//
 // 背景：读取侧 config.InferIsDefault 按 model_name 分组推断，不同名的条目标会
 // 全部变成 is_default=true，因此「默认模型」实际由 models.defaults 的出现顺序
 // 决定（Python `_create_model` 遍历 `_model_name_to_keys` 的插入序）。
@@ -223,7 +222,6 @@ func TestCreateModel_多模型默认按配置顺序(t *testing.T) {
 }
 
 // TestCreateModel_默认条目无效时回退首个index 覆盖 defaultOrder 为空时的 #index 回退分支。
-//
 // 构造同名两条目：默认位（组内首个）条目凭据非法被跳过，plain key 缺失 →
 // defaultOrder 为空，createModel 必须回退到首个可用的 #index key。
 func TestCreateModel_默认条目无效时回退首个index(t *testing.T) {

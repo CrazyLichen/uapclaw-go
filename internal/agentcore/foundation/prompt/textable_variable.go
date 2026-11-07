@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TextableVariable 字符串模板变量，处理 {{placeholder}} 占位符替换。
-//
 // Python: openjiuwen/core/foundation/prompt/assemble/variables/textable.py (TextableVariable)
 //
 // 语法特性：
@@ -61,7 +60,6 @@ func WithSuffix(suffix string) TextableOption {
 }
 
 // NewTextableVariable 创建字符串模板变量。
-//
 // 参数：
 //   - text: 模板文本，包含占位符，如 "Hello {{name}}"
 //   - name: 变量名，默认 "default"，内部使用时为 "__inner__"
@@ -139,7 +137,6 @@ func (v *TextableVariable) Eval(kwargs map[string]any) any {
 }
 
 // Update 根据传入的键值对替换占位符，更新 value。
-//
 // Python: TextableVariable.update()
 //
 // 逻辑：

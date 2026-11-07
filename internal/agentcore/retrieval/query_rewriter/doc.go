@@ -1,10 +1,8 @@
 // Package query_rewriter 提供检索前查询改写器（Query Rewriter）。
-//
 // 把多轮对话中的省略/指代 query 改写成独立可检索的 standalone_query；
 // 历史条数达阈值时用 LLM 压缩历史（失败降级为原文写回），控制提示词
 // token 膨胀。只消费 ModelContext 的 GetMessages/SetMessages 两方法，
 // 当前轮消息的追加由调用方负责（rewrite → 检索 → add_messages 顺序）。
-//
 // 文件目录：
 //
 //	query_rewriter/

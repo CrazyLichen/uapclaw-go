@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DmqRequestMessage 分布式请求消息。
-//
 // Python: DmqRequestMessage(DmqMessage)
 // 内嵌 QueueMessage 复用 message_id/payload/error_code/error_msg 四个基础字段，
 // 与 Python 的 QueueMessage 基类字段一一对应。
@@ -31,7 +30,6 @@ type DmqRequestMessage struct {
 }
 
 // DmqResponseMessage 分布式响应消息。
-//
 // Python: DmqResponseMessage(DmqMessage)
 type DmqResponseMessage struct {
 	// QueueMessage 基础消息字段
@@ -57,7 +55,6 @@ type DmqResponseMessage struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // DMessageType 分布式消息类型。
-//
 // Python: DMessageType(str, Enum)
 type DMessageType string
 
@@ -71,7 +68,6 @@ const (
 )
 
 // ResultType 响应结果类型。
-//
 // Python: ResultType(str, Enum)
 type ResultType string
 
@@ -89,7 +85,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDmqRequestMessage 创建分布式请求消息，Type 默认 INPUT。
-//
 // Python: DmqRequestMessage(payload=...)
 func NewDmqRequestMessage(payload map[string]any) *DmqRequestMessage {
 	return &DmqRequestMessage{
@@ -99,7 +94,6 @@ func NewDmqRequestMessage(payload map[string]any) *DmqRequestMessage {
 }
 
 // NewDmqResponseMessage 创建分布式响应消息，Type 默认 OUTPUT、ResultType 默认 MESSAGE。
-//
 // Python: DmqResponseMessage(payload=...)
 func NewDmqResponseMessage(payload map[string]any) *DmqResponseMessage {
 	return &DmqResponseMessage{

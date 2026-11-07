@@ -1,8 +1,6 @@
 // Package sharing 提供跨 Agent 经验共享功能。
-//
 // 本包实现了经验的上传、下载、搜索和质量筛选，
 // 让不同用户的技能演进经验可以共享和复用。
-//
 // 两条数据路径：
 //   - 上传路径：本地已审批的 EvolutionRecord → ShareStager QC 筛选 →
 //     KeywordExtractor 关键词提取 → 打包为 SharedSkillBundle → 上传到 SharingBackend

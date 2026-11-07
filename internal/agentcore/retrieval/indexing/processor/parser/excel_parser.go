@@ -18,11 +18,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExcelParser Excel(.xlsx)/CSV/TSV 文件解析器。
-//
 // 覆写整体 Parse + Supports（对齐 Python ExcelParser 两处覆写）：
 // 首个产出 N>1 Document 的解析器（每行/每列各一文档）+ 首个硬错误路径
 // 解析器（155103 文件不存在 / 155104 解析失败）。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/parser/excel_parser.py (ExcelParser)
 type ExcelParser struct {
 	// BaseParser 默认适配器（LazyParse/Process 继承；Parse 整体覆写）
@@ -50,7 +48,6 @@ func NewExcelParser() (*ExcelParser, error) {
 }
 
 // Parse 解析 Excel/CSV/TSV 为行/列 Document。
-//
 // 对齐 Python parse 整体覆写：
 //   - 文件不存在 → 155103（error_msg=f"File {doc} does not exist"）
 //   - CSV/TSV 解码或语法失败 → 155104（cause 链 + logger.exception）
@@ -59,7 +56,6 @@ func NewExcelParser() (*ExcelParser, error) {
 //
 // include_header 经 opts.Extra["include_header"] 传入（对齐 Python kwargs.get，
 // 缺省 true）。base_id 语义对齐 Python doc_id or doc or "tabular"。
-//
 // Python: excel_parser.py ExcelParser.parse
 func (p *ExcelParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
 	_ = ctx // 对齐 Python 同步语义（asyncio.to_thread 的 Go 等价物为直接调用）
@@ -154,7 +150,6 @@ func (p *ExcelParser) Parse(ctx context.Context, doc string, opts ...ParseOption
 }
 
 // Supports 对齐 Python supports 覆写：空串 false；小写后缀匹配。
-//
 // Python: excel_parser.py ExcelParser.supports
 func (p *ExcelParser) Supports(doc string) bool {
 	if doc == "" {
@@ -171,7 +166,6 @@ func (p *ExcelParser) Supports(doc string) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // rowsToDocuments 对齐 Python _rows_to_documents（黄金基准锁定语义）。
-//
 // 行文档：include_header 且表头非空 → "h: v" 无条件 append（值空也产出，
 // golden base_s0_r5 "Name: , Age: " 实证）；空表头整格跳过；
 // include_header=false 仅非空值 append；parts 空 continue。
@@ -179,7 +173,6 @@ func (p *ExcelParser) Supports(doc string) bool {
 // 列文档：空表头列回落 "Column N"；values 逐行取 col_idx<len(row) 后
 // 非空过滤；include_header=true → "Column name: X. Values: ..." 或
 // "(empty)"；false → join（空列空串）。
-//
 // Python: excel_parser.py _rows_to_documents
 func rowsToDocuments(rows [][]cellValue, sheetName, baseID string, sheetIndex int, includeHeader bool) []reranker.Document {
 	var docs []reranker.Document
@@ -275,10 +268,8 @@ func rowsToDocuments(rows [][]cellValue, sheetName, baseID string, sheetIndex in
 }
 
 // loadDelimitedRows 对齐 Python _load_delimited_rows。
-//
 // utf-8-sig：BOM 剥离 + 非法 UTF-8 字节 → error（对齐 Python
 // UnicodeDecodeError → 155104 路径）。
-//
 // Python: excel_parser.py _load_delimited_rows
 func loadDelimitedRows(path, delimiter string) ([][]string, error) {
 	data, err := os.ReadFile(path)

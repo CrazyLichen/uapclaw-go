@@ -29,7 +29,6 @@ type chromaWhereFilter struct {
 }
 
 // chromaMapWhereFilter M-27: map 形态 where 过滤适配器。
-//
 // QueryExpr.ToExpr("chroma") 输出 Chroma 原生 where 字典（如
 // {"$and": [...]}），SDK v0.4.1 未提供从 map 直构 WhereFilter 的工厂，
 // 此适配器直接持有 map 并经 json.Marshal 序列化——SDK 的
@@ -39,7 +38,6 @@ type chromaMapWhereFilter struct {
 }
 
 // chromaMapWhereDocumentFilter M-27: map 形态 where_document 过滤适配器。
-//
 // 语义同 chromaMapWhereFilter，包装 Chroma 原生 where_document 字典
 // （$contains/$regex 等文档内容过滤）。
 type chromaMapWhereDocumentFilter struct {
@@ -47,7 +45,6 @@ type chromaMapWhereDocumentFilter struct {
 }
 
 // ChromaVectorStore retrieval 层 ChromaDB 向量存储实现。
-//
 // 支持向量搜索、稀疏搜索（文本匹配）和混合搜索（RRF 融合）。
 // 对齐 Python retrieval/vector_store/chroma_store.py (ChromaVectorStore)。
 type ChromaVectorStore struct {
@@ -84,7 +81,6 @@ type ChromaVectorStore struct {
 }
 
 // ChromaStoreOption ChromaVectorStore 的可选参数函数。
-//
 // 13.23 审查拍板 A：对齐 MilvusStoreOption 先例，提供测试注入口
 // （WithChromaClientOption），消除构造期真实连接导致的测试盲区。
 type ChromaStoreOption func(*ChromaVectorStore)
@@ -192,7 +188,6 @@ func (f *chromaWhereFilter) UnmarshalJSON(b []byte) error {
 }
 
 // NewChromaVectorStore 创建 retrieval 层 ChromaVectorStore。
-//
 // 对齐 Python ChromaVectorStore.__init__。
 // vectorField 参数为 *vector_fields.ChromaVectorField 完整配置，
 // 对齐 Python vector_field: ChromaVectorField。
@@ -271,7 +266,6 @@ func NewChromaVectorStore(
 		// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
 		// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
 		// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
-		//
 		// 注：chroma-go v2 CreateCollectionOp 在 embeddingFunction==nil 时强制构建
 		// ONNX 默认 EF（运行时下载 onnxruntime 原生库与 MiniLM 模型）。本项目所有向量
 		// 均由 embedModel 预计算后显式传入，默认 EF 从未被真正使用，因此显式传入
@@ -300,7 +294,6 @@ func NewChromaVectorStore(
 func (s *ChromaVectorStore) Client() chromav2.Client { return s.client }
 
 // WithChromaClientOption 注入 ChromaDB 客户端实现。
-//
 // 13.23 审查拍板 A：对齐 WithMilvusClientOption 先例——注入即跳过
 // 构造期 CreateChromaClient + GetOrCreateCollection 两步真实连接，
 // 供测试桩注入消除 retriever 层 dispatch 胶水的测试盲区（spec §8-14）。
@@ -311,7 +304,6 @@ func WithChromaClientOption(c chromav2.Client) ChromaStoreOption {
 }
 
 // CreateChromaClient 创建 ChromaDB 持久化客户端并确保指定数据库存在。
-//
 // M-44: 对齐 Python ChromaVectorStore.create_client 静态方法
 // （chroma_store.py L119-129）——非默认 dbName 时先经 AdminClient
 // 检查/创建数据库，再以指定数据库创建主客户端；
@@ -438,7 +430,6 @@ func (s *ChromaVectorStore) CheckVectorField() error {
 }
 
 // Add 添加向量数据。
-//
 // 对齐 Python ChromaVectorStore.add + _add_batch。
 func (s *ChromaVectorStore) Add(ctx context.Context, data []map[string]any, opts ...StoreOption) error {
 	storeOpts := NewStoreOptions(opts...)
@@ -731,7 +722,6 @@ func (s *ChromaVectorStore) DeleteTable(ctx context.Context, tableName string) e
 }
 
 // Close 关闭存储（空操作，对齐 Python）。
-//
 // Python: chroma_store.py close() —— "ChromaDB client usually doesn't need
 // explicit closing"，函数体只有 pass。原因：ChromaDB 的 client 是进程级共享资源
 // （同一 persistent path 共用一个底层 System），由某个 store 关闭会连带打死
@@ -749,7 +739,6 @@ func (s *ChromaVectorStore) CollectionName() string {
 }
 
 // SetCollectionName 设置集合并失效集合缓存（13.23 回填）。
-//
 // Python 侧 collection_name 字段赋值后，collection.get 每次按名新建；
 // Go 侧 getCollection 有 nil 缓存，Set 时必须清空对齐"每次按名取"
 // 语义（spec §7-3）。
@@ -761,7 +750,6 @@ func (s *ChromaVectorStore) SetCollectionName(name string) {
 }
 
 // buildChromaFilterPair M-27: 将 QueryExpr 转换为 Chroma where/where_document 过滤对。
-//
 // 对齐 Python `query_args.update({k: v for k, v in filters.to_expr("chroma").items() if v})`：
 //   - ToExpr("chroma") 输出 {"where": ..., "where_document": ...} 双键字典
 //   - falsy 过滤：where/where_document 为空 dict 时不注入对应选项（对齐 Python if v）
@@ -808,7 +796,6 @@ func (s *ChromaVectorStore) buildChromaFilterPair(filters query.QueryExpr) (chro
 }
 
 // WrapChromaWhereMap M-27: 将 Chroma 原生 where 字典包装为 WhereFilter。
-//
 // 对齐 Python `collection.get(where={self.doc_id_field: doc_id})` 直传 dict 的
 // wire 语义（{"field": "value"} 简写等值，ChromaDB 服务端原生支持）。
 // 供 indexer 等写入路径跨包使用；nil 或空 map 返回 nil。

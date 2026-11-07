@@ -3,14 +3,11 @@ package evolving
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CheckpointProgress 训练进度接口，供 CheckpointManager 构建检查点时提取进度字段。
-//
 // 此接口定义在 evolving 根包（而非 trainer 包），解决 checkpointing ↔ trainer 循环依赖：
 // checkpointing 包需要从 progress 提取 epoch/best_score 等字段，
 // 但不能导入 trainer 包（trainer 导入 checkpointing）。
-//
 // trainer.Progress 实现此接口，通过方法暴露 CurrentEpoch/BestScore 等字段。
 // Seed 方法返回 *int，对齐 Python getattr(progress, "seed", None) 行为。
-//
 // Python: DefaultCheckpointManager.build_checkpoint 中
 //
 //	int(getattr(progress, "current_epoch", 0))

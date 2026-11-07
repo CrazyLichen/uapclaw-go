@@ -33,7 +33,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AppGatewayServer Gateway 应用服务器（HTTP 宿主+组装器），整合 HTTP 路由、WebChannel、ChannelManager、MessageHandler。
-//
 // 对应 Python app_gateway.py _run() 函数的组装职责（Python 侧无同名类）。
 // 提供 WebSocket RPC 端点、静态文件服务和文件操作 HTTP API，
 // 通过 AgentClient 与 AgentServer 通信。
@@ -76,7 +75,6 @@ type AppGatewayServer struct {
 }
 
 // ackMessagePublisher connection.ack 出站推送适配器（审查修复 T-11）。
-//
 // 将 *mh.MessageHandler 适配为 web.MessageHandler 接口：底层
 // PublishRobotMessages 无 error 返回（channel 满非阻塞丢弃 + Warn，对齐
 // Python 队列 put_nowait 语义），ctx 忽略（非阻塞无取消面）。
@@ -108,7 +106,6 @@ func (a ackMessagePublisher) PublishRobotMessages(_ context.Context, msg *schema
 }
 
 // NewAppGatewayServer 创建 Gateway 服务器实例。
-//
 // 初始化 MessageHandler、ChannelManager、WebChannel，组装 chi 路由。
 // 创建顺序对齐 Python app_gateway.py：
 //  1. 创建消息处理器
@@ -361,7 +358,6 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 }
 
 // ListenErr 返回 Web WS 服务器的监听错误通道（未启动时返回 nil）。
-//
 // 供集成测试判断 Start 是否真的绑定成功：Start 非阻塞，端口被占用时
 // 它仍返回 nil，错误只会走 gwServer 的 listenErr 通道。
 func (s *AppGatewayServer) ListenErr() <-chan error {
@@ -374,7 +370,6 @@ func (s *AppGatewayServer) ListenErr() <-chan error {
 }
 
 // Start 启动 Gateway 服务器。
-//
 // 注册 WebChannel、启动 MessageHandler 转发循环、启动 HTTP 服务器。
 func (s *AppGatewayServer) Start(ctx context.Context) error {
 	// 11.12 已回填：IM Pipeline 装配在 NewAppGatewayServer 步骤4.7（管线为纯
@@ -601,7 +596,6 @@ func (s *AppGatewayServer) Addr() string {
 }
 
 // Stop 优雅关闭 Gateway 服务器。
-//
 // 停止顺序：GatewayServer(19001) → InboundGatewayServer → WebChannel → MessageHandler → Transport → HTTP Server → CronScheduler。
 func (s *AppGatewayServer) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -627,7 +621,6 @@ func (s *AppGatewayServer) Stop() error {
 
 	// 11.26：停止 A2A 通道并注销（对齐 Python L1651-1652
 	// await a2a_channel.stop() + unregister_channel）
-	//
 	// S-04：A2A 与 WebChannel 各用独立超时 ctx。原实现共用同一个 5s ctx，
 	// A2A 一旦吃满预算，WebChannel 拿到的就是已过期 ctx，优雅停机退化为强制关闭。
 	if s.a2aChannel != nil {
@@ -719,7 +712,6 @@ func makeConfigRawReader(cfg *config.Config) func() map[string]any {
 }
 
 // setupRouter 组装 chi 路由。
-//
 // 路由布局：
 //   - GET /ws → WebSocket 端点
 //   - /file-api/* → 文件操作 API
@@ -764,7 +756,6 @@ func zerologMiddleware(next http.Handler) http.Handler {
 }
 
 // connectWithRetry 带重试的连接逻辑，对齐 Python _connect_with_retry。
-//
 // 循环 maxRetries 次，每次调用 client.Connect(ctx)：
 //   - 成功则 return nil
 //   - 失败则 Warn 日志 + time.Sleep(retryInterval)

@@ -11,11 +11,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AutoParser 顶层路由解析器：URL → AutoLinkParser，否则 → AutoFileParser。
-//
 // 组合解析器（13.10 spec 预告模式）：嵌入 BaseParser + 构造注入 self +
 // 覆写整体 Parse/Supports。单入口 parse(path_or_url)——混源输入无需
 // 区分 parse_urls / parse_files。
-//
 // Python: auto_parser.py AutoParser
 type AutoParser struct {
 	// BaseParser 模板适配器
@@ -32,9 +30,7 @@ type AutoParser struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAutoParser 构造 AutoParser。
-//
 // linkParser/fileParser 为 nil 时各自默认构造（对齐 Python None 默认参数）。
-//
 // Python: auto_parser.py AutoParser.__init__
 func NewAutoParser(linkParser, fileParser Parser) (*AutoParser, error) {
 	if linkParser == nil {
@@ -61,7 +57,6 @@ func NewAutoParser(linkParser, fileParser Parser) (*AutoParser, error) {
 }
 
 // Parse 解析文档源：URL 走 link 路由，否则走 file 路由。
-//
 // isLikelyURL && linkParser.Supports → Debug 日志 → linkParser.Parse
 // 全量透传（含 LLMClient——对齐 Python 传递，与 AutoLinkParser 内部剔除
 // 形成链路分层：顶层传、路由层丢弃）；
@@ -69,7 +64,6 @@ func NewAutoParser(linkParser, fileParser Parser) (*AutoParser, error) {
 // 都不中 → 空切片。URL-but-unsupported fall-through 到 file 分支
 // （Python 真实控制流字面保留：is_likely_url 为真但 link 不支持时
 // 不提前返回，落到 file 分支判定）。
-//
 // Python: auto_parser.py AutoParser.parse
 func (p *AutoParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
 	if isLikelyURL(doc) && p.linkParser.Supports(doc) {
@@ -86,7 +80,6 @@ func (p *AutoParser) Parse(ctx context.Context, doc string, opts ...ParseOption)
 }
 
 // Supports 检查是否支持该文档源：URL 判定后委托对应子解析器。
-//
 // Python: auto_parser.py AutoParser.supports
 func (p *AutoParser) Supports(doc string) bool {
 	if isLikelyURL(doc) {
@@ -98,7 +91,6 @@ func (p *AutoParser) Supports(doc string) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isLikelyURL 判定文档源是否像 http(s) URL（复用 13.14 httpURLPattern）。
-//
 // Python: auto_parser.py _is_likely_url
 // （bool(doc and HTTP_URL_PATTERN.match(doc.strip()))）
 func isLikelyURL(doc string) bool {

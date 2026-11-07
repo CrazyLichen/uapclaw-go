@@ -26,12 +26,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StageHandler SkillDev Pipeline 阶段处理器接口。
-//
 // 每个阶段独立实现，通过 Execute() 与 Pipeline 交互。
 // 处理器不应持有跨请求的状态——所有状态均通过 SkillDevContext 传入。
 type StageHandler interface {
 	// Execute 执行阶段逻辑。
-	//
 	// 参数：
 	//   - ctx:  上下文（控制生命周期）
 	//   - sctx: SkillDevContext，包含 state、workspace、emit、create_stage_agent 等
@@ -43,7 +41,6 @@ type StageHandler interface {
 }
 
 // SkillDevContext 阶段执行上下文。
-//
 // Context 不是 Agent，它是每阶段 StageHandler 的运行环境：
 //   - 持有 deps（外部依赖）和 state（运行时状态）的引用
 //   - 提供 Emit() 向前端推送事件
@@ -89,7 +86,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // stageToolNameAliases 阶段工具白名单别名 → 生产工具名。
-//
 // 阶段处理器沿用 Python 侧的工具命名（file_read/file_write/shell），
 // Go 工具注册名为 read_file/write_file/bash，此处做一次显式映射。
 // errStageToolOptional 表示可选工具（MCP 搜索等）当前不可用，注册时可跳过。
@@ -144,7 +140,6 @@ func (c *SkillDevContext) Emit(eventType SkillDevEventType, payload map[string]a
 }
 
 // CreateStageAgent 为当前阶段创建隔离的 ReActAgent。
-//
 // 参数：
 //   - stageName:     阶段标识，用于 agent 命名（调试/日志用）
 //   - systemPrompt:  该阶段专属的 system prompt
@@ -152,9 +147,7 @@ func (c *SkillDevContext) Emit(eventType SkillDevEventType, payload map[string]a
 //   - maxIterations: ReAct 最大循环次数
 //
 // 返回：配置完毕的 ReActAgent 实例（尚未执行）
-//
 // Python: SkillDevContext.create_stage_agent()（jiuwenswarm 侧仍为 NotImplementedError 桩）
-//
 // Go 先行实现说明：上游 create_stage_agent 只留了注释级伪代码（AgentCard +
 // ReActAgentConfig(model_name/model_client_config/max_iterations/prompt_template) +
 // _register_tools），本实现按该伪代码落地，「工具隔离」语义保持不变。
@@ -253,7 +246,7 @@ func (c *SkillDevContext) CreateStageAgent(
 	return agent, nil
 }
 
-// RegisterTools 根据工具名白名单将工具注册到 Agent。//
+// RegisterTools 根据工具名白名单将工具注册到 Agent。
 // 工具来源：
 //   - 文件类（file_read/file_write/file_edit）→ 由阶段 SysOperation 构造
 //   - shell（bash）与 code → 由阶段 SysOperation 构造
@@ -314,7 +307,6 @@ func (c *SkillDevContext) RegisterTools(agent *agents.ReActAgent, toolNames []st
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildStageModelClientConfig 把 deps.ModelClientConfig（配置字典）转换为模型客户端配置。
-//
 // 键名对齐 config.yaml 的 models.default.model_client_config。
 func buildStageModelClientConfig(raw map[string]any) (*llmschema.ModelClientConfig, error) {
 	if raw == nil {
@@ -383,7 +375,6 @@ func resolveStageToolName(raw string) string {
 }
 
 // ensureStageSysOperation 为阶段创建独立的 SysOperation 并注册到资源管理器。
-//
 // deps.SysOpConfig 为空时返回 (nil, "", nil)：命令行/文件工具不可用时，
 // 只允许纯对话阶段（如 PLAN 仅用 MCP 搜索工具）。
 func (c *SkillDevContext) ensureStageSysOperation(stageName string) (sysop.SysOperation, string, error) {
@@ -420,7 +411,6 @@ func (c *SkillDevContext) ensureStageSysOperation(stageName string) (sysop.SysOp
 }
 
 // buildStageTool 按工具名构造阶段工具实例。
-//
 // 文件/命令类工具依赖阶段 SysOperation；其余名称从 MCP 工具工厂筛选。
 func (c *SkillDevContext) buildStageTool(toolName, agentID string) (tool.Tool, error) {
 	switch toolName {

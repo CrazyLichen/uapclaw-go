@@ -8,7 +8,6 @@ import (
 )
 
 // TestSearch_中文关键词命中 端到端验证「索引写分词文本 → 查询分词 → 命中」。
-//
 // 向量侧权重置 0，排除 embedding 干扰，只看 FTS 文本路。
 func TestSearch_中文关键词命中(t *testing.T) {
 	if id := segmenterID(); id == "none" {

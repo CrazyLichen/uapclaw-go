@@ -107,7 +107,6 @@ func (p *AudioMetadataMetadataProvider) GetInputParams(language string) map[stri
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildAudioInputParams 按语言生成音频工具的参数 Schema。
-//
 // props 为「参数名 → 双语描述」，required 为必填参数（顺序与 Python 声明一致）；
 // 非法语言回落到中文，某个参数缺该语言描述时同样回落中文。
 func buildAudioInputParams(language string, props map[string]map[string]string, required []any) map[string]any {

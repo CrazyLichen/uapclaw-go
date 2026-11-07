@@ -14,10 +14,8 @@ import (
 
 // MemoryOptimizerBase 记忆维度优化器基类，固定 domain="memory"，
 // 默认优化目标为 enabled 和 max_retries。
-//
 // 子优化器嵌入此结构体，获得记忆维度的公共字段和辅助方法，
 // 然后自己实现 optimizer.BaseOptimizer 接口的全部方法。
-//
 // Python: openjiuwen/agent_evolving/optimizer/memory_call/base.py MemoryOptimizerBase
 type MemoryOptimizerBase struct {
 	optimizer.BaseOptimizerMixin
@@ -32,14 +30,12 @@ type MemoryOptimizerBase struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Domain 返回优化器域 "memory"。
-//
 // Python: MemoryOptimizerBase.domain = "memory"
 func (b *MemoryOptimizerBase) Domain() string {
 	return "memory"
 }
 
 // DefaultTargets 返回默认优化目标列表。
-//
 // Python:
 //
 //	def default_targets(self) -> List[str]:
@@ -51,7 +47,6 @@ func (b *MemoryOptimizerBase) DefaultTargets() []string {
 }
 
 // RequiresForwardData 返回 true，记忆优化器需要框架执行前向推理。
-//
 // Python:
 //
 //	@staticmethod
@@ -64,7 +59,6 @@ func (b *MemoryOptimizerBase) RequiresForwardData() bool {
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量；0 触发上层软退出。
-//
 // Python:
 //
 //	self._targets = list(targets or self.default_targets()) — 目标列表取传入值或默认值
@@ -96,7 +90,6 @@ func (b *MemoryOptimizerBase) ClearTrajectories() {
 }
 
 // Backward 反向传播：从信号计算梯度。
-//
 // Python: BaseOptimizer.backward() 模板方法流程：
 //
 //	委托 BackwardTemplate: ValidateParameters + SelectSignals + _backward + 错误包装
@@ -111,7 +104,6 @@ func (b *MemoryOptimizerBase) Backward(ctx context.Context, signals []*signal.Ev
 }
 
 // Step 生成更新映射。
-//
 // Python: BaseOptimizer.step() 模板方法流程：
 //
 //	委托 StepTemplate: ValidateParameters + _step + ClearTrajectories
@@ -136,7 +128,6 @@ func (b *MemoryOptimizerBase) SelectSignals(signals []*signal.EvolutionSignal) [
 
 // step 子类逻辑，对齐 Python _step()。
 // MemoryOptimizerBase 为空实现，返回空映射。
-//
 // Python: BaseOptimizer._step() → 抽象（子类实现）
 func (b *MemoryOptimizerBase) step() (map[cschema.UpdateKey]any, error) {
 	return map[cschema.UpdateKey]any{}, nil

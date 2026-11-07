@@ -27,7 +27,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // contextEngine 上下文引擎门面，管理上下文池、处理器创建和会话状态持久化。
-//
 // Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type contextEngine struct {
 	// config 全局引擎配置
@@ -51,7 +50,6 @@ type contextEngine struct {
 }
 
 // runtimeConfigApplier 可选能力：接收热重载后的引擎配置与处理器实例。
-//
 // 只有 SessionModelContext 实现；测试用 mock 可不实现（此时跳过刷新）。
 type runtimeConfigApplier interface {
 	// ApplyRuntimeConfig 刷新上下文级配置并替换处理器实例
@@ -82,7 +80,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextEngine 创建上下文引擎实例。
-//
 // 必选参数：config（全局配置）。
 // 可选参数通过 ContextEngineOption 传入：
 //   - WithWorkspace(w) 设置工作空间
@@ -100,10 +97,8 @@ func NewContextEngine(config schema.ContextEngineConfig, opts ...iface.ContextEn
 }
 
 // ApplyRuntimeConfig 推送热重载后的引擎配置与处理器规格。
-//
 // 只暂存期望值，真正落地发生在下一次 CreateContext（用户轮次入口），
 // 因此对正在执行的轮次零影响。同一份配置重复推送按内容指纹去重，不会重建。
-//
 // 与 Python 的差异：Python 命中上下文池时忽略 processors，老会话不跟随；
 // 本实现会把待生效配置在下次建上下文时应用到池内所有上下文（Go 侧增强）。
 func (ce *contextEngine) ApplyRuntimeConfig(config schema.ContextEngineConfig, specs []iface.ProcessorSpec) {
@@ -131,10 +126,8 @@ func (ce *contextEngine) AppliedFingerprint() string {
 }
 
 // CreateContext 创建或获取上下文。
-//
 // 若 fullContextID 已在池中，返回已有实例并刷新会话引用和状态。
 // 否则创建新实例（⤵️ 5.31 回填 SessionModelContext 构造），存入池。
-//
 // Python: ContextEngine.create_context()
 func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CreateContextOption) (iface.ModelContext, error) {
 	if contextID == "" {
@@ -218,7 +211,6 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 }
 
 // GetContext 获取上下文（不存在返回 nil）。
-//
 // Python: ContextEngine.get_context()
 func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.ModelContext {
 	contextID = processContextID(contextID)
@@ -229,9 +221,7 @@ func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.Mo
 }
 
 // CompressContext 主动压缩上下文。
-//
 // 返回值："busy"（被动压缩进行中）、"compressed"（压缩成功）、"noop"（无变化）。
-//
 // Python: ContextEngine.compress_context()
 // Python 在调用 context.compress_context() 时透传 self._sys_operation 和 **kwargs，
 // Go 通过 CompressContextOption 传入 SysOperation 和 ModelName 等可选参数。
@@ -266,7 +256,6 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 }
 
 // ClearContext 清空上下文。
-//
 // 三种粒度（对齐 Python）：
 //   - 不提供 Option → 清空所有上下文
 //   - 仅 WithSessionID → 清除该 session 下所有上下文
@@ -347,10 +336,8 @@ func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearCo
 }
 
 // SaveContexts 批量持久化上下文状态。
-//
 // 遍历目标上下文，调用 mc.SaveState() 收集状态，
 // 通过 saveStateToSession 写入 Session。
-//
 // Python: ContextEngine.save_contexts()
 func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error) {
 	if sess == nil {
@@ -398,7 +385,6 @@ func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterface
 }
 
 // UpdateModelContext 把选中模型元数据推给引擎配置与池内全部上下文（不重建上下文）。
-//
 // 对齐 Python ContextEngine.update_model_context()：全局 context_window_tokens 不动
 // （保持最高优先），只刷新 model_name 与模型级窗口 override；已建上下文同步生效，
 // 避免换模型后仍沿用旧窗口。
@@ -425,10 +411,8 @@ func (ce *contextEngine) UpdateModelContext(modelName string, contextWindowToken
 }
 
 // RecoverFromModelContextOverflow 模型报上下文溢出后压缩一次，返回是否值得重试。
-//
 // 只有压缩真的发生（结果标识为 compressed）才允许重试，否则重试必然再次溢出。
 // 流式场景已向用户吐字时直接拒绝：重试会把已发送前缀重复输出。
-//
 // Python: ContextEngine.recover_from_model_context_overflow()
 func (ce *contextEngine) RecoverFromModelContextOverflow(
 	ctx context.Context,
@@ -467,7 +451,6 @@ func (ce *contextEngine) RecoverFromModelContextOverflow(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // applyPendingLocked 把暂存的热重载配置落地到引擎与池内全部上下文。
-//
 // 调用方必须持有 ce.mu 写锁。任一处理器创建失败时整批放弃：不替换任何上下文、
 // 不推进 appliedFingerprint，下一次 CreateContext 会自动重试（指纹仍不一致），
 // 期间老上下文继续使用旧实例，不打断对话。
@@ -520,7 +503,6 @@ func (ce *contextEngine) applyPendingLocked() {
 }
 
 // runtimeConfigFingerprint 计算引擎配置与处理器规格的内容指纹。
-//
 // encoding/json 对结构体按字段序、对 map 按 key 排序，结果稳定；因此同一份配置
 // 每次算出的指纹一致，可以用于"配置没变就不重建"的去重判断。
 func runtimeConfigFingerprint(config schema.ContextEngineConfig, specs []iface.ProcessorSpec) string {
@@ -551,7 +533,6 @@ func shortFingerprint(fingerprint string) string {
 }
 
 // createProcessor 通过工厂创建处理器实例。
-//
 // Python: ContextEngine._create_processor()
 func (ce *contextEngine) createProcessor(processorType string, config iface.ProcessorConfig) (iface.ContextProcessor, error) {
 	factory, ok := GetProcessorFactory(processorType)
@@ -573,14 +554,12 @@ func (ce *contextEngine) createProcessor(processorType string, config iface.Proc
 }
 
 // processContextID 处理上下文 ID，将点号替换为下划线。
-//
 // Python: ContextEngine._process_context_id()
 func processContextID(contextID string) string {
 	return strings.ReplaceAll(contextID, ".", "_")
 }
 
 // loadStateFromSession 从 Session 中加载上下文状态到 ModelContext。
-//
 // Python: ContextEngine._load_state_from_session()
 func loadStateFromSession(mc iface.ModelContext, sess sessioninterfaces.SessionFacade, historyMessages []llm_schema.BaseMessage) {
 	if sess == nil {
@@ -608,7 +587,6 @@ func loadStateFromSession(mc iface.ModelContext, sess sessioninterfaces.SessionF
 }
 
 // saveStateToSession 将上下文状态写入 Session。
-//
 // Python: ContextEngine._save_state_to_session()
 func saveStateToSession(sess sessioninterfaces.SessionFacade, states map[string]any) {
 	if sess == nil {

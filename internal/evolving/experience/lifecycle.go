@@ -8,7 +8,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LocalApplyPreview 本地应用预览合约（frozen，Go 用值语义）。
-//
 // Python: LocalApplyPreview
 type LocalApplyPreview struct {
 	// SkillName 技能名称
@@ -24,7 +23,6 @@ type LocalApplyPreview struct {
 }
 
 // PendingCommitResult 暂存变更提交结果。
-//
 // Python: PendingCommitResult
 type PendingCommitResult struct {
 	// AppliedCount 已应用数量
@@ -34,7 +32,6 @@ type PendingCommitResult struct {
 }
 
 // HostFacingExperienceResult host-facing 稳定形态结果合约。
-//
 // Python: HostFacingExperienceResult
 type HostFacingExperienceResult struct {
 	// SkillName 技能名称
@@ -60,7 +57,6 @@ type HostFacingExperienceResult struct {
 }
 
 // RebuildRequest 技能重建请求参数。
-//
 // Python: RebuildRequest
 type RebuildRequest struct {
 	// SkillName 技能名称

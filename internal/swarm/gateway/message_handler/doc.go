@@ -1,12 +1,10 @@
 // Package message_handler 提供消息处理器，负责入站消息转发和出站消息分发。
-//
 // MessageHandler 是 Gateway 中 Channel 与 AgentServer 之间的桥梁：
 // - 入站方向：接收 Channel 投递的用户消息，转换为 E2A 信封发送到 AgentServer
 // - 出站方向：从 AgentServer 接收响应，转换为 Message 分发到 Channel
 // - 11.7：SessionMap 企业通道稳定身份→轮转 agent session_id 映射集成
 // - 11.13：GatewayHookHandler 装配 + SessionStart/UserPromptSubmit hook 触发
 // - 11.25：ACP 会话别名链（ensure/resolveInternal 入站改写 + resolveExternal 出站回落）
-//
 // 文件目录：
 //
 //	message_handler/

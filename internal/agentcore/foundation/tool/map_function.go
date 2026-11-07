@@ -10,10 +10,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MapFunction 弱类型 map 函数工具，降级模式。
-//
 // 当函数参数无法用 struct 描述时（如动态参数），使用 MapFunction 代替 InvokeFunction/StreamFunction。
 // 用户需手动提供 InputParams。
-//
 // Python: LocalFunction(func=None) 的降级场景
 type MapFunction struct {
 	card     *ToolCard
@@ -30,7 +28,6 @@ type MapFunction struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMapFunction 创建弱类型 map 函数工具（降级模式）。
-//
 // invokeFn / streamFn 二选一，另一个传 nil。
 // card.InputParams 由用户手动提供。
 func NewMapFunction(card *ToolCard,
@@ -53,7 +50,6 @@ func (f *MapFunction) Card() *ToolCard {
 }
 
 // GetCallTimeout 返回外层调用预算，沿用卡片级策略。
-//
 // MapFunction 包装的函数没有内部执行期限，不需要额外清理宽限。
 func (f *MapFunction) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
 	return BaseCallTimeout(inputs, defaultTimeout)

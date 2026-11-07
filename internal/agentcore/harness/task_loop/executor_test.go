@@ -639,7 +639,6 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
 
 // TestExtractInputParts_多帧才返回 验证有效文本不足 2 条时返回 nil。
-//
 // Python: _extract_input_parts 过滤空串后 len(texts) > 1 才算多输入
 // (task_loop_event_executor.py L431-448)
 func TestExtractInputParts_多帧才返回(t *testing.T) {
@@ -667,7 +666,6 @@ func TestExtractInputParts_非文本帧被忽略(t *testing.T) {
 }
 
 // TestTaskLoopExecutor_改写query则不带parts 验证 rail 改写 query 后不下发 parts。
-//
 // Python: if input_parts is not None and iter_inputs.query == query
 // (task_loop_event_executor.py L216-219) —— "a replaced query wins"。
 func TestTaskLoopExecutor_改写query则不带parts(t *testing.T) {
@@ -691,15 +689,15 @@ func TestTaskLoopExecutor_改写query则不带parts(t *testing.T) {
 	_, has := effective["_input_parts"]
 	require.False(t, has, "query 被改写时不得下发 _input_parts")
 
+	// 未改写场景：同一份 query 两侧相等，复刻 executor 的「未改写 → 下发」条件。
 	effective2 := map[string]any{"query": query}
-	if parts != nil && query == query {
+	if parts != nil {
 		effective2["_input_parts"] = parts
 	}
 	require.Equal(t, parts, effective2["_input_parts"])
 }
 
 // TestExtractInputParts_接线条件 验证 executor 的下发条件（有效多帧且 query 未改写）。
-//
 // 复刻 executor 步骤 14 后的判定，覆盖"真的要下发"的分支：
 //
 //	Python: if input_parts is not None and iter_inputs.query == query
@@ -715,9 +713,9 @@ func TestExtractInputParts_接线条件(t *testing.T) {
 	parts := extractInputParts(evt)
 	require.Len(t, parts, 2)
 
-	// 未改写 → 下发
+	// 未改写 → 下发（query 与改写结果相同，等价于 executor 里 query == query 恒真的分支）
 	effective := map[string]any{"query": query}
-	if parts != nil && query == query {
+	if parts != nil {
 		effective["_input_parts"] = parts
 	}
 	require.Equal(t, []string{"一", "二"}, effective["_input_parts"])
@@ -734,7 +732,6 @@ func TestExtractInputParts_接线条件(t *testing.T) {
 }
 
 // TestExecuteAbility_多帧InputEvent下发parts 端到端验证 _input_parts 全链路。
-//
 // 覆盖 spec C12：任务携带 3 帧文本的 InputEvent 时，executor 把未 join 的
 // 列表放进 effective，交给内层 ReActAgent 的 admission。
 //
@@ -784,7 +781,6 @@ func TestExecuteAbility_多帧InputEvent下发parts(t *testing.T) {
 }
 
 // TestExecuteAbility_单帧不下发parts 验证单帧任务不带 _input_parts。
-//
 // 单输入不需要列表，内层 extractUserParts 自会从 query 派生。
 func TestExecuteAbility_单帧不下发parts(t *testing.T) {
 	ctx := context.Background()
@@ -823,7 +819,6 @@ func TestExecuteAbility_单帧不下发parts(t *testing.T) {
 }
 
 // TestExecuteAbility_无InputEvent不下发parts 验证任务无 InputEvent 时不带 parts。
-//
 // inputEvt 为 nil 时 extractInputParts 返回 nil。
 func TestExecuteAbility_无InputEvent不下发parts(t *testing.T) {
 	ctx := context.Background()

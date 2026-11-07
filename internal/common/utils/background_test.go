@@ -563,7 +563,6 @@ func TestCreateBackgroundTask_ManagerTaskWait(t *testing.T) {
 }
 
 // TestCreateBackgroundTask_ManagerTaskDoneClosed 测试 TaskManager 路径下 Done() 在任务结束后关闭。
-//
 // 回归守卫：manager 路径不经过 Start()，若未镜像完成信号，Done() 永不关闭，
 // 导致 EvolutionRail.DrainPendingHostEvents(wait=true) 白等到超时（生产默认 600s）。
 func TestCreateBackgroundTask_ManagerTaskDoneClosed(t *testing.T) {

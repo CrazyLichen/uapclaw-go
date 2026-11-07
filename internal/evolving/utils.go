@@ -17,9 +17,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetContentStringFromTemplate 将 PromptTemplate 转为多行文本。
-//
 // 调用模板的 ToMessages() 获取消息列表，拼接所有消息的文本内容，用换行符连接。
-//
 // Python: TuneUtils.get_content_string_from_template(template)
 //
 //	"\n".join(msg.content for msg in template.to_messages())

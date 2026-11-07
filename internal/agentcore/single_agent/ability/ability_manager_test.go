@@ -14,7 +14,6 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -175,7 +174,7 @@ func TestAbilityManager_Add_Agent(t *testing.T) {
 
 func TestAbilityManager_Add_McpServer(t *testing.T) {
 	am := NewAbilityManager(nil)
-	mc := mcp.NewMcpServerConfig("test_server", "http://localhost:8080/sse", "sse")
+	mc := mcptool.NewMcpServerConfig("test_server", "http://localhost:8080/sse", "sse")
 	result := am.Add(mc)
 	if !result.Added {
 		t.Error("应成功添加")
@@ -221,7 +220,7 @@ func TestAbilityManager_Remove_Tool(t *testing.T) {
 func TestAbilityManager_Remove_McpServer级联删除(t *testing.T) {
 	am := NewAbilityManager(nil)
 	// 添加 MCP 服务器
-	mc := mcp.NewMcpServerConfig("my_server", "http://localhost:8080/sse", "sse")
+	mc := mcptool.NewMcpServerConfig("my_server", "http://localhost:8080/sse", "sse")
 	am.Add(mc)
 	// 手动添加属于该 MCP 服务器的工具
 	mcpTool := tool.NewToolCard("mcp_my_server_search", "MCP搜索", nil, nil)
@@ -618,8 +617,8 @@ func TestAbilityManager_Add_重复Agent(t *testing.T) {
 
 func TestAbilityManager_Add_重复McpServer(t *testing.T) {
 	am := NewAbilityManager(nil)
-	mc1 := mcp.NewMcpServerConfig("srv", "http://a", "sse")
-	mc2 := mcp.NewMcpServerConfig("srv", "http://b", "sse")
+	mc1 := mcptool.NewMcpServerConfig("srv", "http://a", "sse")
+	mc2 := mcptool.NewMcpServerConfig("srv", "http://b", "sse")
 	am.Add(mc1)
 	result := am.Add(mc2)
 	if result.Added {
@@ -643,7 +642,7 @@ func TestAbilityManager_Add_未知类型(t *testing.T) {
 
 func TestAbilityManager_ListToolInfo_MCP工具排除(t *testing.T) {
 	am := NewAbilityManager(nil)
-	mc := mcp.NewMcpServerConfig("my_server", "http://localhost:8080/sse", "sse")
+	mc := mcptool.NewMcpServerConfig("my_server", "http://localhost:8080/sse", "sse")
 	am.Add(mc)
 	// 添加属于该 MCP 服务器的工具
 	mcpTool := tool.NewToolCard("mcp_search", "MCP搜索", nil, nil)
@@ -718,7 +717,6 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 
 // TestAbilityManager_ExecuteSingleToolCall_panic转error 回归：工具实现内部
 // panic 必须被转成 error 上抛。
-//
 // 回归背景：panic 逃出 executeSingleToolCall 时，Rail 包装层的
 // AFTER_TOOL_CALL 不触发，stream_event_rail 不发 tool_result，前端工具卡片
 // 永久停在「执行中」（read_file 在 sys_operation 为 nil 时即 nil 解引用 panic）。
@@ -1001,7 +999,7 @@ func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
 func TestAbilityManager_Execute_McpServer暂未实现(t *testing.T) {
 	am := NewAbilityManager(nil)
 
-	mc := mcp.NewMcpServerConfig("my_mcp", "http://localhost:8080/sse", "sse")
+	mc := mcptool.NewMcpServerConfig("my_mcp", "http://localhost:8080/sse", "sse")
 	am.Add(mc)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
@@ -1455,7 +1453,6 @@ func newOrderTrackingTool(t *testing.T, name string, mu *sync.Mutex, order *[]st
 }
 
 // TestExecute_ParallelFalse_串行 验证关闭并行后工具按序执行。
-//
 // 有状态工具（浏览器动作序列、worktree 切换）被并行调用会打乱动作顺序，
 // 串行模式要求前一个完全退出后才进入下一个。
 func TestExecute_ParallelFalse_串行(t *testing.T) {
@@ -1538,7 +1535,6 @@ func TestExecute_ParallelFalse_结果顺序保持(t *testing.T) {
 }
 
 // addCardsToManager 把工具卡片注册进 AbilityManager。
-//
 // ResourceMgr 只装工具实例，调度入口（am.tools）还需要卡片才能找到能力；
 // 两者缺一都会落到"能力未找到"。
 func addCardsToManager(t *testing.T, am *AbilityManager, tools map[string]tool.Tool) {
@@ -1570,7 +1566,6 @@ func newSlowTool(t *testing.T, name string, sleep time.Duration, card *tool.Tool
 }
 
 // TestExecute_工具超时产出可恢复ToolMessage 验证超时不整轮失败，而是回灌 tool_message。
-//
 // 回归：此前 tool.invoke 完全无外层期限，一个挂住的工具会把整轮 ReAct 卡死。
 func TestExecute_工具超时产出可恢复ToolMessage(t *testing.T) {
 	card := tool.NewToolCard("slow", "", nil, map[string]any{
@@ -1604,7 +1599,6 @@ func TestExecute_工具超时产出可恢复ToolMessage(t *testing.T) {
 }
 
 // TestExecute_取消不转超时 验证用户中断不被渲染成工具超时。
-//
 // 取消与超时都会让 ctx 结束，但语义完全不同：取消是用户意图，
 // 转成"timed out"会误导模型继续重试。
 func TestExecute_取消不转超时(t *testing.T) {
@@ -1640,7 +1634,6 @@ func TestExecute_取消不转超时(t *testing.T) {
 }
 
 // TestExecute_豁免工具走硬上限 验证 resilience.timeout_s=null 的工具不会无限挂住。
-//
 // 豁免只表示"不用 300s 默认值"，仍受 3600s 硬上限约束。
 func TestExecute_豁免工具走硬上限(t *testing.T) {
 	card := tool.NewToolCard("exempt", "", nil, map[string]any{
@@ -1664,7 +1657,6 @@ func TestExecute_豁免工具走硬上限(t *testing.T) {
 // ──────────────────────────── MCP 结果桥接（D-15/D-16） ────────────────────────────
 
 // TestExecute_MCP多模态结果装入Result 验证 __mcp_result__ 被拆出结构体放进 Result。
-//
 // MCPTool.invoke 返回 {"__mcp_result__": *MCPToolResult}，因为普通 map 无法
 // 同时表达成功/失败与多模态数据；ability 层负责拆包，让上层拿到结构体本体。
 func TestExecute_MCP多模态结果装入Result(t *testing.T) {

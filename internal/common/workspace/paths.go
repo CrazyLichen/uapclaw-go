@@ -54,7 +54,6 @@ func WorkspaceDir() string {
 }
 
 // ConfigDir 获取配置目录。
-//
 // 有未初始化回退：已初始化时返回 ~/.uapclaw/config/，
 // 未初始化时回退到 ResourcesDir()。
 // Python: get_config_dir()
@@ -82,14 +81,12 @@ func ResourcesDir() (string, error) {
 }
 
 // ConfigFile 返回配置文件路径。
-//
 // 基于 ConfigDir()（有 resources 回退），对齐 Python get_config_file()。
 func ConfigFile() string {
 	return path.ConfigFile()
 }
 
 // EnvFile 返回环境变量文件路径。
-//
 // 基于 ConfigDir()（有 resources 回退），对齐 Python get_config_dir() 同级 .env。
 func EnvFile() string {
 	return path.EnvFile()

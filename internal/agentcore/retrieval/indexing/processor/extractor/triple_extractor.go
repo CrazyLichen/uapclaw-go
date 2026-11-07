@@ -27,7 +27,6 @@ type chunkResult struct {
 }
 
 // TripleExtractor 基于 LLM 的 OpenIE 三元组抽取器。
-//
 // Python: openjiuwen/core/retrieval/indexing/processor/extractor/triple_extractor.py
 type TripleExtractor struct {
 	// llmClient LLM 客户端实例（Python: llm_client: Any → Go 具体类型，13.15 先例）
@@ -56,7 +55,6 @@ const (
 	defaultTripleMaxConcurrent = 50
 
 	// tripleExtractionPrompt OpenIE 三元组抽取提示词模板。
-	//
 	// Python: triple_extractor.py TripleExtractor._build_prompt 内模板
 	//（逐字复制，{{/}} 归一为 {/}——Python .format 转义字面花括号；
 	// 禁止翻译改写——记忆 feedback_prompt_verbatim_copy 既定规则）。
@@ -192,7 +190,6 @@ func WithTripleMaxConcurrent(n int) TripleExtractorOption {
 
 // NewTripleExtractor 构造 TripleExtractor。
 // 默认 temperature=0.0 / maxConcurrent=50（对齐 Python 默认参数）。
-//
 // Python: triple_extractor.py TripleExtractor.__init__
 func NewTripleExtractor(llmClient *llm.Model, modelName string, opts ...TripleExtractorOption) *TripleExtractor {
 	e := &TripleExtractor{
@@ -208,7 +205,6 @@ func NewTripleExtractor(llmClient *llm.Model, modelName string, opts ...TripleEx
 }
 
 // Extract 并发抽取 chunks 的三元组（方案 A：预分配槽位 + 信号量 + 收齐扫描）。
-//
 // 语义逐字对齐 Python asyncio.gather(return_exceptions=True)：
 //   - 全部任务跑完才扫描（无 fail-fast 取消）
 //   - 成功结果按 chunk 序合并
@@ -266,7 +262,6 @@ func (e *TripleExtractor) Extract(ctx context.Context, chunks []common.TextChunk
 }
 
 // Process 处理文本分块（Processor 契约兼容入口），转发 Extract。
-//
 // Python: base.py Extractor.process → self.extract(chunks, **kwargs)
 func (e *TripleExtractor) Process(ctx context.Context, chunks []common.TextChunk, opts ...ExtractOption) ([]common.Triple, error) {
 	return e.Extract(ctx, chunks, opts...)
@@ -275,11 +270,9 @@ func (e *TripleExtractor) Process(ctx context.Context, chunks []common.TextChunk
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildPrompt 构建 OpenIE 三元组抽取提示词。
-//
 // title 空 → "Untitled"（对齐 Python title or "Untitled"）；strings.NewReplacer
 // 仅替换 {title}/{passage} 唯二命名槽——不用 fmt.Sprintf（正文大量花括号会炸）。
 // 渲染结果与 Python .format() 逐字节等价。
-//
 // Python: triple_extractor.py TripleExtractor._build_prompt
 func (e *TripleExtractor) buildPrompt(passage, title string) string {
 	if title == "" {
@@ -289,10 +282,8 @@ func (e *TripleExtractor) buildPrompt(passage, title string) string {
 }
 
 // parseTriples 解析 LLM 输出为 Triple 列表。
-//
 // 返回 (triples, parseSuccess)：硬解析失败 false；空三元组列表 true
 // （对齐 Python ([], True)）；全 invalid → (空, false) 触发上层 155507。
-//
 // Python: triple_extractor.py TripleExtractor._parse_triples（L265-338）
 func (e *TripleExtractor) parseTriples(content, docID, chunkID string) ([]common.Triple, bool) {
 	triples := []common.Triple{}
@@ -409,11 +400,9 @@ func truncateContent(s string, n int) string {
 }
 
 // extractChunk 单 chunk 抽取：构建提示词 → Invoke → 解析。
-//
 // 错误统一 wrap 155507（对齐 Python except Exception as e → build_error）。
 // nil llmClient → 155507 硬失败（Python None.invoke AttributeError 被 wrap
 // 的等价路径——偏差 §8-5）。
-//
 // Python: triple_extractor.py TripleExtractor.extract 内 _extract_chunk（L70-115）
 func (e *TripleExtractor) extractChunk(ctx context.Context, chunk common.TextChunk) chunkResult {
 	if e.llmClient == nil {

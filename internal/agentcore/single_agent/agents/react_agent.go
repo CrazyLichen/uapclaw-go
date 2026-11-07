@@ -20,10 +20,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReActAgent ReAct 循环 Agent：Think → Act → Observe。
-//
 // 直接持有基础字段（card/abilityManager/callbackManager），
 // 自行实现 Invoke/Stream，在方法体内显式调用回调骨架。
-//
 // Python: ReActAgent (openjiuwen/core/single_agent/agents/react_agent.py)
 type ReActAgent struct {
 	// card Agent 身份卡片
@@ -86,7 +84,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewReActAgent 创建 ReActAgent 实例。
-//
 // Python: ReActAgent.__init__(card)
 func NewReActAgent(
 	card *agentschema.AgentCard,
@@ -107,13 +104,11 @@ func NewReActAgent(
 }
 
 // PromptAttachments 返回动态提示词管理器（可为 nil）。
-//
 // Python: ReActAgent.prompt_attachment_manager。桥接回调里 ctx.agent 是
 // ReActAgent 而非 DeepAgent，rail 需要它才能把动态提示词投递为历史附件。
 func (a *ReActAgent) PromptAttachments() *hprompts.Manager { return a.promptAttachments }
 
 // SetPromptAttachmentManager 注入动态提示词管理器（可为 nil）。
-//
 // Python: DeepAgent 把 prompt_attachment_manager 共享给内层 ReActAgent
 // （deep_agent.py:851）。
 func (a *ReActAgent) SetPromptAttachmentManager(m *hprompts.Manager) {

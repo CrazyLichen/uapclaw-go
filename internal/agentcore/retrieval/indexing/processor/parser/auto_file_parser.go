@@ -15,13 +15,11 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AutoFileParser 扩展名自动路由解析器。
-//
 // 组合解析器（13.10 spec 预告模式）：嵌入 BaseParser + 构造注入 self +
 // 覆写整体 Parse/Supports（Python 覆写 parse/supports 非私有 _parse）。
 // 按文件扩展名从 parserRegistry 取工厂实例路由（registry 骨架由 13.16
 // 带出，各具体解析器 init 注册；Python ensure_parsers_loaded 的动态 import
 // 在 Go 由同包 init 天然完成——ImportError 容错编译期不可能，零代码归档）。
-//
 // Python: auto_file_parser.py AutoFileParser
 type AutoFileParser struct {
 	// BaseParser 模板适配器（组合解析器复用 LazyParse/Process/ParseContent 默认行为）
@@ -34,7 +32,6 @@ type AutoFileParser struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAutoFileParser 构造 AutoFileParser。
-//
 // Python: auto_file_parser.py AutoFileParser.__init__
 // （self._ensure_parsers_loaded() 对应物为 Go 同包 init 注册，构造期天然完成）
 func NewAutoFileParser() (*AutoFileParser, error) {
@@ -48,7 +45,6 @@ func NewAutoFileParser() (*AutoFileParser, error) {
 }
 
 // Parse 解析文件：按扩展名路由到注册的具体解析器并增强 metadata。
-//
 // 五步对齐 Python AutoFileParser.parse：
 //  1. 文件不存在 → 155103（error_msg "File {doc} does not exist"）
 //  2. 扩展名小写归一后未注册 → 155104（error_msg 含扩展名与已注册列表——
@@ -144,9 +140,7 @@ func (p *AutoFileParser) Parse(ctx context.Context, doc string, opts ...ParseOpt
 }
 
 // Supports 检查是否支持该文档源：文件存在且扩展名已注册。
-//
 // 对齐 Python os.path.exists 吞一切 OSError→False（偏差 #11：err != nil 全判）。
-//
 // Python: auto_file_parser.py AutoFileParser.supports
 func (p *AutoFileParser) Supports(doc string) bool {
 	if _, err := os.Stat(doc); err != nil {
@@ -157,11 +151,9 @@ func (p *AutoFileParser) Supports(doc string) bool {
 }
 
 // RegisterNewParser 运行时动态注册新解析器工厂。
-//
 // last-wins 无条件覆盖 + Info 日志（Python register_new_parser classmethod
 // 对应物）。与 RegisterParser（first-wins 静默跳过）并存——Python 两入口
 // 语义本就不同，各自忠实对齐（13.16 spec 决策 5 兑现）。
-//
 // Python: auto_file_parser.py AutoFileParser.register_new_parser
 func RegisterNewParser(fileExtension string, factory func() Parser) {
 	normalizedExt := strings.ToLower(fileExtension)
@@ -175,7 +167,6 @@ func RegisterNewParser(fileExtension string, factory func() Parser) {
 }
 
 // GetSupportedFormats 返回全部已注册扩展名列表。
-//
 // Python: auto_file_parser.py AutoFileParser.get_supported_formats
 func GetSupportedFormats() []string {
 	return snapshotRegistry()

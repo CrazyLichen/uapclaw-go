@@ -9,7 +9,6 @@ import (
 )
 
 // TestManager_UpdateByID_保留不可变字段 验证更新语义与不可变字段。
-//
 // Python: update_by_id
 func TestManager_UpdateByID_保留不可变字段(t *testing.T) {
 	m := NewManager()
@@ -30,7 +29,6 @@ func TestManager_UpdateByID_保留不可变字段(t *testing.T) {
 }
 
 // TestManager_RemoveByID与过滤器守卫 验证按 id 删除与破坏性守卫。
-//
 // Python: remove_by_id + _validate_destructive_filter
 func TestManager_RemoveByID与过滤器守卫(t *testing.T) {
 	m := NewManager()
@@ -103,7 +101,6 @@ func TestManager_ReplaceSource与FileReference(t *testing.T) {
 }
 
 // TestManager_AddFromPromptSection 验证 PromptSection 迁移与空白跳过。
-//
 // Python: PromptAttachmentContextWriter.add_from_prompt_section
 func TestManager_AddFromPromptSection(t *testing.T) {
 	m := NewManager()

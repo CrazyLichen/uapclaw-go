@@ -5,12 +5,10 @@ import "slices"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TripleBeam beam search 路径载体（GraphRetriever 的 TripleBeamSearch 消费）。
-//
 // 一条 beam = 候选三元组路径 + 累积分数；构造时一次性建立 text 去重集合，
 // Contains 按 text O(1) 判重（对齐 Python __contains__ 查 _exist_triples）。
 // 构造后事实不可变——防环靠新建 beam 而非原地修改（对齐 Python：展开恒
 // beam.triples + [triple] 新建列表，零突变路径）。
-//
 // Python: openjiuwen/core/retrieval/common/triple_beam.py
 type TripleBeam struct {
 	// beam 路径节点（RetrievalResult 列表）

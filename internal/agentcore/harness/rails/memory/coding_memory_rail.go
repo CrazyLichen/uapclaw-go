@@ -24,7 +24,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CodingMemoryRail 编程记忆护栏，面向 Coding Agent 场景。
-//
 // 特性:
 //  1. 自动召回: 每个 user turn 启动 goroutine 预取，非阻塞
 //  2. 互斥注入: 有召回结果 → 注入 top5 全文; 无结果 → 降级注入 MEMORY.md 索引
@@ -32,7 +31,6 @@ import (
 //
 // 并发说明: manager/recallResult/recallDone 等可变字段由 mu 保护，
 // autoRecall goroutine（写）与 BeforeModelCall（读）并发访问。
-//
 // Python: CodingMemoryRail (openjiuwen/harness/rails/memory/coding_memory_rail.py)
 type CodingMemoryRail struct {
 	rails.DeepAgentRail
@@ -108,7 +106,6 @@ var _ agentinterfaces.AgentRail = (*CodingMemoryRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodingMemoryRail 创建 CodingMemoryRail 实例。
-//
 // Python: CodingMemoryRail.__init__(coding_memory_dir, embedding_config, language)
 func NewCodingMemoryRail(codingMemoryDir string, embeddingConfig *embedding.EmbeddingConfig, language string) *CodingMemoryRail {
 	r := &CodingMemoryRail{
@@ -124,7 +121,6 @@ func NewCodingMemoryRail(codingMemoryDir string, embeddingConfig *embedding.Embe
 }
 
 // Init 注册编程记忆工具到 agent。
-//
 // Python: CodingMemoryRail.init(agent)
 func (r *CodingMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 获取 systemPromptBuilder
@@ -145,7 +141,6 @@ func (r *CodingMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 }
 
 // Uninit 注销编程记忆工具。
-//
 // Python: CodingMemoryRail.uninit(agent)
 func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// 锁内快照待移除的工具集合（Uninit 后清理状态会重置 map）
@@ -222,10 +217,8 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // BeforeInvoke Invoke 开始前调用。
-//
 // 1. 初始化 MemoryIndexManager（首次）
 // 2. 启动预取 goroutine（非阻塞）
-//
 // Python: CodingMemoryRail.before_invoke(ctx)
 func (r *CodingMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 初始化 Coding Memory Manager（首次）
@@ -274,7 +267,6 @@ func (r *CodingMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterface
 }
 
 // BeforeModelCall Model Call 前调用。
-//
 // 1. 注入行为指令 prompt
 // 2. 非阻塞检查预取 goroutine 结果
 // 3. 互斥注入: 有召回结果 → 注入全文; 无结果 → 降级注入索引
@@ -378,7 +370,6 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeInvoke/BeforeModelCall。
-//
 // Python: CodingMemoryRail 隐式覆盖 before_invoke/before_model_call
 // 注意: Init/Uninit 是 AgentRail 接口方法，由框架直接调用，不是回调事件
 func (r *CodingMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
@@ -397,7 +388,6 @@ func (r *CodingMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // upsertDynamicMemoryAttachment 写入（覆盖）动态记忆附件。
-//
 // Python: CodingMemoryRail._upsert_dynamic_memory_attachment(ctx, content)
 func (r *CodingMemoryRail) upsertDynamicMemoryAttachment(cbc *agentinterfaces.AgentCallbackContext, content string) {
 	if cbc == nil || content == "" {
@@ -412,7 +402,6 @@ func (r *CodingMemoryRail) upsertDynamicMemoryAttachment(cbc *agentinterfaces.Ag
 }
 
 // clearDynamicMemoryAttachment 清除动态记忆附件。
-//
 // Python: CodingMemoryRail._clear_dynamic_memory_attachment(ctx)
 func (r *CodingMemoryRail) clearDynamicMemoryAttachment(cbc *agentinterfaces.AgentCallbackContext) {
 	if cbc == nil {
@@ -426,7 +415,6 @@ func (r *CodingMemoryRail) clearDynamicMemoryAttachment(cbc *agentinterfaces.Age
 }
 
 // registerCodingMemoryTools 注册编程记忆工具到 agent。
-//
 // Python: CodingMemoryRail._register_coding_memory_tools(agent)
 func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseAgent) {
 	am := agent.AbilityManager()
@@ -542,9 +530,7 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 }
 
 // initCodingMemoryManager 初始化 Coding Memory Index Manager。
-//
 // 初始化涉及磁盘/DB 操作较耗时，在锁外执行，成功后在锁内提交结果。
-//
 // Python: CodingMemoryRail._init_coding_memory_manager(ctx)
 func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 	agentID := r.agentID
@@ -599,11 +585,9 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 }
 
 // autoRecall 自动召回相关记忆。
-//
 // 只注入 body（不含 frontmatter），避免浪费 token。
 // 标题附加时间标注辅助模型判断记忆时效性。
 // 注意: 本方法在 goroutine 中执行，写入字段须持有 r.mu 写锁。
-//
 // Python: CodingMemoryRail._auto_recall(query)
 func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 	defer func() {
@@ -735,7 +719,6 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 }
 
 // buildDateTag 构建时间标注。
-//
 // Python: CodingMemoryRail._auto_recall 中 date_tag 构建
 func (r *CodingMemoryRail) buildDateTag(fm map[string]string) string {
 	if fm == nil {
@@ -752,7 +735,6 @@ func (r *CodingMemoryRail) buildDateTag(fm map[string]string) string {
 }
 
 // readMemoryIndex 读取 MEMORY.md 索引文件。
-//
 // Python: CodingMemoryRail._read_memory_index()
 func (r *CodingMemoryRail) readMemoryIndex(ctx context.Context) string {
 	if r.SysOperation() == nil {
@@ -782,7 +764,6 @@ func (r *CodingMemoryRail) readMemoryIndex(ctx context.Context) string {
 }
 
 // readFileSafe 安全读取文件。
-//
 // Python: CodingMemoryRail._read_file_safe(filepath)
 func (r *CodingMemoryRail) readFileSafe(ctx context.Context, filepath string) string {
 	if r.SysOperation() == nil {
@@ -803,7 +784,6 @@ func (r *CodingMemoryRail) readFileSafe(ctx context.Context, filepath string) st
 }
 
 // countMemoryFiles 统计目录下的 .md 记忆文件数（排除 MEMORY.md）。
-//
 // Python: CodingMemoryRail._count_memory_files(memory_dir)
 func (r *CodingMemoryRail) countMemoryFiles(ctx context.Context) int {
 	if r.SysOperation() == nil {
@@ -837,7 +817,6 @@ func (r *CodingMemoryRail) countMemoryFiles(ctx context.Context) int {
 }
 
 // extractLastUserQuery 从上下文中提取最后一条用户消息。
-//
 // Python: CodingMemoryRail._extract_last_user_query(ctx)
 func (r *CodingMemoryRail) extractLastUserQuery(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs := cbc.Inputs()
@@ -852,7 +831,6 @@ func (r *CodingMemoryRail) extractLastUserQuery(cbc *agentinterfaces.AgentCallba
 }
 
 // isReadOnly 检查是否为 cron/heartbeat 只读模式。
-//
 // Python: isinstance(ctx.inputs, InvokeInputs) and (ctx.inputs.is_cron() or ctx.inputs.is_heartbeat())
 func (r *CodingMemoryRail) isReadOnly(cbc *agentinterfaces.AgentCallbackContext) bool {
 	inputs := cbc.Inputs()

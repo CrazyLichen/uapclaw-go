@@ -1,8 +1,6 @@
 // 单次权限决策的紧凑 root-only 权威上下文。
-//
 // 本文件定义"用户到底想干什么"这一背景的结构化载体：意图轮次（RootIntentTurn）、
 // 决策上下文（RootDecisionContext）、以及从宿主消息里提取用户原文的辅助函数。
-//
 // 该上下文有两个用途：
 //  1. 冻结在权限卡里，用户回答后随卡解冻，保证 rail 看到的是"用户看到那张卡时"的背景；
 //  2. 投影成意图视图交给审查模型，作为判断"这个操作是否违反用户意图"的依据。
@@ -23,7 +21,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RootAskUserOption 反问澄清里的一个选项。
-//
 // Python: @dataclass(frozen=True, slots=True) RootAskUserOption
 type RootAskUserOption struct {
 	// Label 选项标签，必填
@@ -35,7 +32,6 @@ type RootAskUserOption struct {
 }
 
 // RootAskUserClarification 一次反问及其答案。
-//
 // Python: @dataclass(frozen=True, slots=True) RootAskUserClarification
 type RootAskUserClarification struct {
 	// Question 反问的问题
@@ -47,10 +43,8 @@ type RootAskUserClarification struct {
 }
 
 // RootIntentTurn 一轮用户意图。
-//
 // kind 区分来源：HISTORY（历史消息）、FRESH（本次请求）、STEER（运行中插入）、
 // ASK_USER_CLARIFICATION（反问澄清）。前三者只带 Text，最后一种只带 Clarifications。
-//
 // Python: @dataclass(frozen=True, slots=True) RootIntentTurn
 type RootIntentTurn struct {
 	// RequestID 归属的宿主请求 ID
@@ -64,7 +58,6 @@ type RootIntentTurn struct {
 }
 
 // RootDecisionContext 一次权限决策的完整背景。
-//
 // Python: @dataclass(frozen=True, slots=True) RootDecisionContext
 type RootDecisionContext struct {
 	// SessionID 会话标识
@@ -80,7 +73,6 @@ type RootDecisionContext struct {
 }
 
 // RootIntentProjection 从消息列表投影出的意图轮次与被阻断原因。
-//
 // Python: @dataclass(frozen=True, slots=True) RootIntentProjection
 type RootIntentProjection struct {
 	// Turns 投影出的意图轮次
@@ -90,7 +82,6 @@ type RootIntentProjection struct {
 }
 
 // OriginalUserIntentEvidence 原始用户意图证据。
-//
 // Python: @dataclass(frozen=True, slots=True) OriginalUserIntentEvidence
 type OriginalUserIntentEvidence struct {
 	// Source 意图来源，见 UserIntentSource
@@ -107,7 +98,6 @@ type rootContextKey struct{}
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // RootIntentTurnKind 意图轮次类型取值。
-//
 // Python: class RootIntentTurnKind
 const (
 	// RootIntentTurnKindHistory 会话历史中的用户消息
@@ -121,7 +111,6 @@ const (
 )
 
 // UserIntentSource 用户意图来源取值。
-//
 // Python: class UserIntentSource
 const (
 	// UserIntentSourceHostUserMessage 来自宿主转发的用户消息
@@ -223,7 +212,6 @@ var optionalEnvelopeKeys = []string{"skills_to_use", "trusted_dirs", "timezone"}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRootAskUserOption 构造并校验一个反问选项。
-//
 // Python: RootAskUserOption(...) 的 __post_init__
 func NewRootAskUserOption(label, description, preview string) (RootAskUserOption, error) {
 	if strings.TrimSpace(label) == "" {
@@ -258,10 +246,8 @@ func RootAskUserOptionFromMapping(value map[string]any) (RootAskUserOption, erro
 }
 
 // NewRootAskUserClarification 构造并校验一条反问澄清。
-//
 // 校验顺序对齐 Python __post_init__：问题非空 → options 类型 → 选项数量
 // → 标签唯一且不含 "Other" → 答案非空且不超上限 → 逐条 trim。
-//
 // Python: RootAskUserClarification(...) 的 __post_init__
 func NewRootAskUserClarification(
 	question string,
@@ -368,7 +354,6 @@ func RootAskUserClarificationFromMapping(value map[string]any) (RootAskUserClari
 }
 
 // NewRootIntentTurn 构造并校验一轮意图。
-//
 // Python: RootIntentTurn(...) 的 __post_init__
 func NewRootIntentTurn(
 	requestID string,
@@ -456,10 +441,8 @@ func RootIntentTurnFromMapping(value map[string]any) (RootIntentTurn, error) {
 }
 
 // RootIntentTurnText 返回一轮意图的文本表示。
-//
 // 非澄清轮次直接返回原文；澄清轮次序列化成 JSON，
 // includeQuestion 控制是否带上问题与选项（容量计算时需要带上）。
-//
 // Python: root_intent_turn_text(turn, *, include_question=False)
 func RootIntentTurnText(turn RootIntentTurn, includeQuestion bool) string {
 	if turn.Kind != RootIntentTurnKindAskUserClarification {
@@ -492,7 +475,6 @@ func RootIntentTurnText(turn RootIntentTurn, includeQuestion bool) string {
 }
 
 // NewRootDecisionContext 构造并校验决策上下文。
-//
 // Python: RootDecisionContext(...) 的 __post_init__
 func NewRootDecisionContext(
 	sessionID string,
@@ -535,7 +517,6 @@ func NewRootDecisionContext(
 }
 
 // ObjectiveText 返回最近一条非澄清轮次的原文，用于作为任务目标。
-//
 // Python: RootDecisionContext.objective_text（property）
 func (c *RootDecisionContext) ObjectiveText() string {
 	if c == nil {
@@ -627,19 +608,15 @@ func CurrentRootDecisionContext(ctx context.Context) *RootDecisionContext {
 }
 
 // BindRootDecisionContext 把决策上下文绑到当前任务树。
-//
 // 返回的清理函数等价于 Python 的 reset(token)：Go 的 context 不可变，
 // 丢弃派生 ctx 即恢复上一层绑定。context 可为 nil（显式清空）。
-//
 // Python: bind_root_decision_context(context)
 func BindRootDecisionContext(ctx context.Context, decisionContext *RootDecisionContext) (context.Context, func()) {
 	return context.WithValue(ctx, rootContextKey{}, decisionContext), func() {}
 }
 
 // RootDecisionContextFromExtra 从 extra 映射里取出决策上下文。
-//
 // 值可以是 *RootDecisionContext 或 map[string]any（跨序列化边界后）。
-//
 // Python: root_decision_context_from_extra(extra)
 func RootDecisionContextFromExtra(extra map[string]any) (*RootDecisionContext, error) {
 	if extra == nil {
@@ -660,9 +637,7 @@ func RootDecisionContextFromExtra(extra map[string]any) (*RootDecisionContext, e
 }
 
 // PutRootDecisionContextInInputs 把决策上下文写入 inputs 的 run.context.extra。
-//
 // 分层路径与 Python 一致：inputs["run"]["context"]["extra"][ROOT_CONTEXT_KEY]。
-//
 // Python: put_root_decision_context_in_inputs(inputs, context)
 func PutRootDecisionContextInInputs(inputs map[string]any, decisionContext *RootDecisionContext) map[string]any {
 	result := copyMap(inputs)
@@ -677,10 +652,8 @@ func PutRootDecisionContextInInputs(inputs map[string]any, decisionContext *Root
 }
 
 // AppendRootClarification 把一批澄清作为新轮次追加到意图窗口末尾。
-//
 // 轮次上限 ROOT_INTENT_MAX_TURNS，总字符上限 ROOT_INTENT_MAX_TOTAL_CHARS；
 // 超限时从最老的轮次开始丢弃，只剩一轮仍超限则清空窗口并标记阻断原因。
-//
 // Python: append_root_clarification(context, clarifications)
 func AppendRootClarification(
 	decisionContext *RootDecisionContext,
@@ -749,9 +722,7 @@ func AppendRootClarification(
 }
 
 // HasValidAskUserClarification 判断证据里是否存在任一澄清轮次。
-//
 // ⤵️ 消费方待 9.90d（_auto_permission）批次回填：Python 侧由 url_safety.py 调用。
-//
 // Python: has_valid_ask_user_clarification(evidence)
 func HasValidAskUserClarification(evidence *OriginalUserIntentEvidence) bool {
 	if evidence == nil || evidence.Context == nil {
@@ -766,9 +737,7 @@ func HasValidAskUserClarification(evidence *OriginalUserIntentEvidence) bool {
 }
 
 // OriginalUserIntent 从当前上下文构造原始用户意图证据。
-//
 // ⤵️ 消费方待 9.90d（_auto_permission/before_tool.py）批次回填。
-//
 // Python: original_user_intent()
 func OriginalUserIntent(ctx context.Context) *OriginalUserIntentEvidence {
 	decisionContext := CurrentRootDecisionContext(ctx)
@@ -785,9 +754,7 @@ func OriginalUserIntent(ctx context.Context) *OriginalUserIntentEvidence {
 }
 
 // FileDeliveryConstraintText 把意图窗口拼成一段文字，供文件投递约束判断。
-//
 // ⤵️ 消费方待 9.90d（_auto_permission/before_tool.py）批次回填。
-//
 // Python: file_delivery_constraint_text(evidence)
 func FileDeliveryConstraintText(evidence *OriginalUserIntentEvidence) string {
 	if evidence == nil {
@@ -806,11 +773,9 @@ func FileDeliveryConstraintText(evidence *OriginalUserIntentEvidence) string {
 }
 
 // ExtractPermissionUserContent 从渲染后的宿主提示词里提取用户原文。
-//
 // 只接受指定前缀 + 合法信封 JSON 的形态，其余一律返回 nil（fail-closed）：
 // 信封键集合、type、origin_kind、source 黑名单、时间戳与语言字段、
 // files_updated_by_user 的 JSON 对象字符串均需校验通过。
-//
 // Python: extract_permission_user_content(rendered_prompt)
 func ExtractPermissionUserContent(renderedPrompt any) *string {
 	prompt, ok := renderedPrompt.(string)
@@ -888,10 +853,8 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 }
 
 // BuildRootIntentProjection 从消息列表投影意图轮次。
-//
 // 逆序遍历（由新到旧）按轮次与总字符上限挑选，最后反转回时间顺序。
 // 阻断原因按“先到先记”原则（block = block or 新原因）。
-//
 // Python: build_root_intent_projection(messages, *, context_available, current_text,
 // current_request_id, current_kind)
 func BuildRootIntentProjection(
@@ -1041,7 +1004,6 @@ func envelopeString(envelope map[string]any, key string) string {
 }
 
 // decodeStrictObject 解析 JSON 对象，重复键视为错误，返回已消费的字节数。
-//
 // Python: json.JSONDecoder(object_pairs_hook=_strict_object).raw_decode(raw)
 func decodeStrictObject(raw string) (map[string]any, int, error) {
 	decoder := json.NewDecoder(strings.NewReader(raw))
@@ -1083,7 +1045,6 @@ func decodeStrictObject(raw string) (map[string]any, int, error) {
 }
 
 // isJSONObjectString 判断值是否为 JSON 对象字符串。
-//
 // Python: _is_json_object_string(value)
 func isJSONObjectString(value any) bool {
 	text, ok := value.(string)
@@ -1099,7 +1060,6 @@ func isJSONObjectString(value any) bool {
 }
 
 // messageRole 取消息的 role，兼容字符串与带 value 字段的枚举形态。
-//
 // Python: getattr(getattr(message, "role", ""), "value", getattr(message, "role", ""))
 func messageRole(message any) string {
 	switch typed := message.(type) {
@@ -1117,7 +1077,6 @@ func messageRole(message any) string {
 }
 
 // messageContent 取消息的 content 字段。
-//
 // Python: getattr(message, "content", None)
 func messageContent(message any) any {
 	if typed, ok := message.(map[string]any); ok {

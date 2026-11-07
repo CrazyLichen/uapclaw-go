@@ -44,7 +44,6 @@ type modeSwitchParams struct {
 }
 
 // modeChangeCancelParams mode 切换取消并发通知所需的具名参数。
-//
 // Python: ModeChangeCancelParams（message_handler.py:297-305）
 type modeChangeCancelParams struct {
 	// UserInfos 回包路由身份
@@ -68,7 +67,6 @@ type modeChangeCancelParams struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // validModeInputs /mode 合法输入集合（25 项）。
-//
 // Python: _VALID_MODE_INPUTS = NEW_CANONICAL_MODES | DEPRECATION_MAP.keys() | MODE_ALIASES.keys()
 // （message_handler.py:99-101）。逐项列全，避免与上游漂移。
 var validModeInputs = map[string]bool{
@@ -99,7 +97,6 @@ var validModeInputs = map[string]bool{
 // D1（有意偏差）：保留 Type/ReqMethod 双重前置守卫。Python 的三个发布方
 // （web publish_user_messages、cron、evolution autoAnswer）均发 type=req，
 // slash 文本只出现在 query/content，守卫等价且省一次解析。
-//
 // S-02：各分支的 RPC/通知尾巴一律经 runSlashAsync 甩到独立协程（对齐 Python 每个
 // 分支的 asyncio.create_task）。forwardLoop 是唯一消费 goroutine，同步执行会让
 // /branch、/rewind、/skills 的 600s unary RPC 阻塞全渠道入站派发。
@@ -294,7 +291,6 @@ func (mh *MessageHandler) handleChannelControl(ctx context.Context, msg *schema.
 }
 
 // newSessionCancelAndNotice /new_session 收尾：取消旧会话 + 发变更通知。
-//
 // Python: _new_session_cancel_and_notice (L1862-1878)：先取消再通知。
 // 状态更新（session.create 分配/hook）已上提至 handleChannelControl（对齐 L2028-2060）。
 func (mh *MessageHandler) newSessionCancelAndNotice(ctx context.Context, infos userInfos, msg *schema.Message, oldSID, newSID string) {
@@ -308,7 +304,6 @@ func (mh *MessageHandler) newSessionCancelAndNotice(ctx context.Context, infos u
 }
 
 // handleModeSwitch 校验并应用 /mode 指令切换运行模式。
-//
 // Python: handle_mode_switch (L1902-1982)，步骤逐条对齐：
 //  1. 白名单校验（_VALID_MODE_INPUTS，25 项）：未命中 → Warn + 「非法指令」+ 返回
 //  2. 记录旧状态 → state.mode = channel_mode_from_str(mode_str)
@@ -354,7 +349,6 @@ func (mh *MessageHandler) handleModeSwitch(ctx context.Context, modeStr string, 
 }
 
 // modeChangeCancelAndNotice 取消当前会话任务并下发 mode 变更提示。
-//
 // Python: _mode_change_cancel_and_notice (L1880-1896)：
 // 先取消当前会话任务（publishInterruptResult=false），再下发 mode 已变更提示。
 func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, params modeChangeCancelParams, msg *schema.Message) {
@@ -368,14 +362,12 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, params 
 }
 
 // buildModeChangeNoticeText 构造 mode 变更提示文案。
-//
 // Python: _build_mode_change_notice_text (L1898-1900)
 func buildModeChangeNoticeText(modeLabel string) string {
 	return fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)
 }
 
 // logControlHandled 记录 channel_control_handled 兼容事件。
-//
 // Python 无此事件（Python 只在解析后记一条 info）。Go 侧历史上用该事件名做
 // 排障检索，故保留：字段与旧实现一致（action 整型 + channel_id），另补
 // action_name/channel_type 便于阅读。删掉它会断外部日志看板。
@@ -390,7 +382,6 @@ func logControlHandled(msg *schema.Message, channelType channel_manager.ChannelT
 }
 
 // sendChannelNotice 发送渠道通知消息。
-//
 // Python: _send_channel_notice (L347-379)：
 // event_type 为 CHAT_FINAL，payload 确保补齐 is_complete: true。
 // 传 string 时调用方应包装为 {"content": text}，此处仅接受 map[string]any。
@@ -430,14 +421,12 @@ func (mh *MessageHandler) sendChannelNotice(infos userInfos, channelID, sessionI
 }
 
 // isValidModeInput 判断 /mode 入参是否在白名单内。
-//
 // Python: `if mode_str not in _VALID_MODE_INPUTS`（message_handler.py:1931）
 func isValidModeInput(modeStr string) bool {
 	return validModeInputs[modeStr]
 }
 
 // skillsSlashNotice 处理 /skills list 命令。
-//
 // Python: _skills_slash_notice (L885-937)：
 // 构造 SKILLS_LIST E2A → AgentClient.SendRequest → 格式化通知。
 func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, infos userInfos, msg *schema.Message) {
@@ -506,7 +495,6 @@ func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, infos userInfos
 }
 
 // branchSlashNotice 处理 /branch 命令。
-//
 // Python: _branch_slash_notice (L939-1015)：
 // 构造 SESSION_FORK E2A → AgentClient.SendRequest → 格式化通知。
 func (mh *MessageHandler) branchSlashNotice(ctx context.Context, infos userInfos, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
@@ -613,7 +601,6 @@ func (mh *MessageHandler) branchSlashNotice(ctx context.Context, infos userInfos
 }
 
 // rewindSlashConfirmPrompt 发送 /rewind 确认提示。
-//
 // Python: _rewind_slash_confirm_prompt (L1017-1045)：
 // 两步确认：先发送确认提示，不立即执行。
 func (mh *MessageHandler) rewindSlashConfirmPrompt(infos userInfos, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
@@ -633,7 +620,6 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(infos userInfos, msg *schema.
 }
 
 // rewindSlashNotice 处理 /rewind 命令（用户已确认）。
-//
 // Python: _rewind_slash_notice (L1047-1142)：
 // E2A-first + fallback：构造 SESSION_REWIND E2A → AgentClient.SendRequest；
 // 失败/错误时 fallback 本地 sessionops.RewindSession 截断 history.json，
@@ -775,7 +761,6 @@ func payloadToInt(v any) int {
 }
 
 // extractTextFromParams 从消息 params 中提取文本内容。
-//
 // Python: params.get("query") or params.get("content") or ""
 func extractTextFromParams(params json.RawMessage) string {
 	if len(params) == 0 {
@@ -800,7 +785,6 @@ func extractTextFromParams(params json.RawMessage) string {
 }
 
 // runSlashAsync 以独立协程执行斜杠命令的 RPC/通知尾巴。
-//
 // S-02：对齐 Python 各分支的 asyncio.create_task。forwardLoop 是唯一消费
 // mh.userMessages 的 goroutine，同步执行会让 /branch、/rewind、/skills list 的
 // unary RPC（超时 600s，见 routing/agent_client.go）阻塞全渠道入站派发。

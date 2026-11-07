@@ -1,9 +1,7 @@
 // Package config 提供 Runner 全局配置类型及读写接口。
-//
 // 本包对齐 Python runner_config.py，定义消息队列类型枚举、
 // 分布式配置、Pulsar 配置、Runner 全局配置等结构体，
 // 并提供 set/get_runner_config 全局单例读写函数。
-//
 // 核心概念：
 //
 //	MessageQueueType   — 消息队列类型枚举（PULSAR / FAKE）

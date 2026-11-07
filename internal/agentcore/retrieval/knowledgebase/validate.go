@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // storageAttrProvider 校验流水线的属性消费接口（非导出，消费侧接口惯例）。
-//
 // ChromaVectorStore/MilvusVectorStore/ChromaIndexer/MilvusIndexer 已回填
 // 7 getter（13.26）。未实现本接口的对象其属性按 nil 处理——对齐 Python
 // getattr(obj, attr, None) 缺属性语义。
@@ -47,10 +46,8 @@ var validateAttrOrder = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ValidateIndex 校验 vector store 与 index manager 的 7 项配置一致性。
-//
 // 任一属性不等抛 155508（错误消息含属性名+双方值+类型名）；
 // strict 且 vectorStore 非 nil 时执行 CheckVectorField 并传播错误。
-//
 // Python: knowledge_base.py validate_index
 func (b *BaseKnowledgeBase) ValidateIndex(ctx context.Context) error {
 	// 一次性快照：避免逐属性读字段时被 Set* 替换出现「半新半旧」比对
@@ -80,7 +77,6 @@ func (b *BaseKnowledgeBase) ValidateIndex(ctx context.Context) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // postAssignValidation 赋值期三段式校验（Python __setattr__ 的显式对应物）。
-//
 // ① ValidateIndex（7 属性比对 + CheckVectorField）
 // ② Chroma 本地限制拦截（类型名前缀探测）
 // ③ ensureLoader 钩子（Milvus 构造期 load collection）
@@ -129,7 +125,6 @@ func storageAttr(obj any, attr string) any {
 }
 
 // attrEqual 属性相等比较（V1 拍板：any 槽位 + DeepEqual）。
-//
 // 双 nil → true；单 nil → false；DeepEqual 首步即类型比较——
 // Chroma 配置 vs Milvus 配置跨源天然 false → 155508（混配拦截）。
 func attrEqual(a, b any) bool {
@@ -140,7 +135,6 @@ func attrEqual(a, b any) bool {
 }
 
 // isChromaType 类型名 "chroma" 前缀探测（R1 拍板）。
-//
 // 对齐 Python type(...).__name__.casefold().startswith("chroma")：
 // 命名约定而非行为契约，第三方 Chroma 命名类型同样被拦。
 func isChromaType(obj any) bool {

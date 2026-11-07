@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DistSource 前端静态资源来源。
-//
 // 两种来源（对齐 Python _default_dist_dir 的优先级链 + Go 独有的编译期内嵌兜底）：
 //   - 目录来源：用户数据根下的 channels/web/frontend/dist，或 --dist 显式指定
 //   - 内嵌来源：编译期 go:embed 的 frontend/dist
@@ -33,7 +32,6 @@ type DistSource struct {
 
 const (
 	// DistDirEnv 显式指定前端产物目录的环境变量名。
-	//
 	// 由 cmd 层的 --dist 选项写入（本仓库既有惯例：--host/--port 也是覆写环境变量），
 	// 语义对齐 Python `--dist`（app_web.py L985-991）。
 	DistDirEnv = "UAPCLAW_WEB_DIST"
@@ -45,7 +43,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveDist 解析前端静态资源来源。
-//
 // 优先级（对齐 Python _default_dist_dir，app_web.py L53-66）：
 //  1. explicitDir 非空（即 --dist 显式指定）：必须存在且是目录，否则返回 error
 //     （Python 为 SystemExit，语义一致：显式指定错即启动失败）；
@@ -59,7 +56,6 @@ func ResolveDist(explicitDir string) (DistSource, error) {
 }
 
 // SPAHandler 返回前端静态文件处理器（未命中时回退 index.html）。
-//
 // 来源按 ResolveDist 的优先级链在**每次构造时**解析一次；解析失败（仅 --dist
 // 显式指定才可能失败）时记录 Error 并回落内嵌资源——单进程里前端目录配置错误
 // 不应拖垮 AgentServer（与 Python 独立进程 SystemExit 的有意差异，见 doc.go）。

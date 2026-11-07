@@ -1,9 +1,7 @@
 // Package context 提供上下文引擎的具体上下文实例实现。
-//
 // 本包实现 ModelContext 接口的核心类 SessionModelContext，
 // 以及其依赖的子组件：消息缓冲区、KV 缓存管理器、压缩状态记录器、
 // 上下文工具方法和会话记忆管理器。
-//
 // 文件目录：
 //
 //	context/

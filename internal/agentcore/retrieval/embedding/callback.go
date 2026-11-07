@@ -5,7 +5,6 @@ import "sync"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NoopCallback 空回调，不做任何操作。
-//
 // Python: BaseCallback（空操作基类）
 type NoopCallback struct {
 	// callCounter 调用计数

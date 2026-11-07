@@ -625,7 +625,6 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 }
 
 // approvalResultFromApprovalChunk 构造 deep 侧审批响应（有审批事件时）。
-//
 // Python: _approval_response_from_event_or_records 的 approval 分支（L3957-3968）。
 // 与 team 侧的 approvalResultFromEventOrItems 区别：文案来自 _format_approval_summary
 // （action_label 参数化 + 逐条 question 摘要），且**没有 question_count** 字段。
@@ -639,7 +638,6 @@ func approvalResultFromApprovalChunk(skillName string, approvalChunk map[string]
 }
 
 // approvalSummaryOutput 生成审批摘要文案（对齐 Python _format_approval_summary L3936-3945）。
-//
 // 计数口径与 Python 一致：条数是 questions 总数（含非 dict 项），而明细只列 dict 项，
 // 因此可能出现「3 条待审批内容」但只列 1 行——这是 Python 既有行为，不做"修正"。
 // 单条文本按 rune 截断到 200 字符（Python 的 q.get('question',”)[:200] 是字符切片）。
@@ -658,7 +656,6 @@ func approvalSummaryOutput(skillName string, questions []any, actionLabel string
 }
 
 // evolveSkillArgError 校验 Skill 名称参数（空名 / 不存在），返回 Python 同款错误响应。
-//
 // Python: simplify/rebuild/rollback 三处共同的「空名 + store.skill_exists」双校验，
 // 文案一致，仅使用示例串不同。
 func evolveSkillArgError(ctx context.Context, rail *evolution.SkillEvolutionRail, skillName, usage string) map[string]any {
@@ -707,7 +704,6 @@ func formatArchiveTimestamp(archive string) string {
 
 // handleGovernanceApproval 处理治理审批。
 // ✅ 已回填（对齐 Python: _handle_governance_approval()）
-//
 // 根据 request_id 前缀路由到 OnApproveSimplify / OnRejectSimplify
 func (d *DeepAdapter) handleGovernanceApproval(ctx context.Context, requestID string, answers []ApprovalAnswer, approvalType string) bool {
 	if d.skillEvolutionRail == nil {

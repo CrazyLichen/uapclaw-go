@@ -1,5 +1,4 @@
 // Package client 提供 MCP 客户端各传输协议的具体实现。
-//
 // 每种客户端实现 mcp 包中定义的 McpClient 接口：
 //   - SseClient — SSE (Server-Sent Events) 传输
 //   - StdioClient — Stdio 子进程传输
@@ -8,7 +7,6 @@
 //   - PlaywrightClient — Playwright 浏览器工具客户端（SSE/stdio 双传输）
 //
 // 使用 mcp.NewMcpClient 工厂函数根据 McpServerConfig.ClientType 创建对应客户端。
-//
 // 文件目录：
 //
 //	client/

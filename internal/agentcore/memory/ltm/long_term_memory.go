@@ -26,11 +26,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LongTermMemory 长期记忆编排器，记忆系统的顶层入口。
-//
 // 不实现任何存储逻辑，而是组装和协调已有的各子模块，
 // 对外提供统一的记忆写入、检索、删除、更新 API。
 // 使用 sync.Once 全局单例模式。
-//
 // Python: openjiuwen/core/memory/long_term_memory.py (LongTermMemory)
 type LongTermMemory struct {
 	// sysMemConfig 系统记忆引擎配置
@@ -90,7 +88,6 @@ var (
 
 // GetLongTermMemory 返回全局 LongTermMemory 单例。
 // 首次调用时自动初始化，后续调用返回同一实例。
-//
 // Python: LongTermMemory() — Singleton metaclass
 func GetLongTermMemory() *LongTermMemory {
 	ltmOnce.Do(func() {
@@ -100,7 +97,6 @@ func GetLongTermMemory() *LongTermMemory {
 }
 
 // NewLongTermMemory 创建新的 LongTermMemory 实例（零值初始化）。
-//
 // Python: LongTermMemory.__init__()
 func NewLongTermMemory() *LongTermMemory {
 	return &LongTermMemory{

@@ -5,7 +5,6 @@ import "fmt"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageEnvelope 消息信封，Agent 间路由消息的不可变容器。
-//
 // 通过 Recipient 和 TopicID 区分 P2P 和 Pub-Sub 两种通信模式：
 //   - P2P 模式：Recipient 非空，指定接收者 Agent ID
 //   - Pub-Sub 模式：TopicID 非空，指定发布主题
@@ -60,21 +59,18 @@ func NewMessageEnvelope(messageID string, message any, sender string, opts ...En
 }
 
 // IsP2P 判断是否为 P2P 模式消息。
-//
 // 当 Recipient 非空时为 P2P 模式。
 func (e *MessageEnvelope) IsP2P() bool {
 	return e.Recipient != ""
 }
 
 // IsPubSub 判断是否为 Pub-Sub 模式消息。
-//
 // 当 TopicID 非空时为 Pub-Sub 模式。
 func (e *MessageEnvelope) IsPubSub() bool {
 	return e.TopicID != ""
 }
 
 // String 返回消息信封的精简表示。
-//
 // P2P 模式：MessageEnvelope{id=xxx, sender=a, recipient=b}
 // Pub-Sub 模式：MessageEnvelope{id=xxx, sender=a, topic=t}
 func (e *MessageEnvelope) String() string {

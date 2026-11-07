@@ -154,7 +154,6 @@ func TestFindMainContent_嵌套外层先到(t *testing.T) {
 }
 
 // TestFindMainContent_空body返回body body 存在但无内容时返回 body 本身。
-//
 // goquery 解析自动补全 body（html.Parse 行为），"无 body"为不可能路径；
 // Python 侧 body None 场景在 Go 对应"body 空"——返回 body 兜底。
 func TestFindMainContent_空body返回body(t *testing.T) {
@@ -327,7 +326,6 @@ func TestHTMLFileParserParse_标题兜底无标题(t *testing.T) {
 }
 
 // TestHTMLFileParserParse_注册表查询 .html/.htm 注册可查。
-//
 // registry 扩展名小写归一（.HTM/.HTML 归一为 .htm/.html 存键——first-wins
 // 静默跳过既定语义），查询统一用小写键。
 func TestHTMLFileParserParse_注册表查询(t *testing.T) {

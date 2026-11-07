@@ -14,7 +14,6 @@ import (
 )
 
 // newTestCallbackContext 构造一个不含 session 的测试回调上下文。
-//
 // session 传 nil：本批测试只覆盖与 extra 交互的部分，不涉及会话解析。
 func newTestCallbackContext() *agentinterfaces.AgentCallbackContext {
 	return agentinterfaces.NewAgentCallbackContext(nil, nil, nil)

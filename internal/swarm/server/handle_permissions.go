@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handlePermissionsConfig 处理 permissions.* 请求。统一入口，按 req_method 二次分发。
-//
 // Python: dispatch_permissions_config_request(request) (permissions_config_rpc.py L57-156)
 func (s *AgentServer) handlePermissionsConfig(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	params := permrpc.ParseParams(request.Params)

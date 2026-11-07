@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Case 单个训练/评估样本。
-//
 // Python: openjiuwen/agent_evolving/dataset/case.py Case
 type Case struct {
 	// Inputs 输入数据（如查询或对话内容）
@@ -26,7 +25,6 @@ type Case struct {
 }
 
 // EvaluatedCase 评估后的样本，包含模型输出和评分。
-//
 // score 通过 SetScore 设置时自动钳位到 [0, 1] 范围，外部必须通过 GetScore/SetScore 访问。
 // 自定义 MarshalJSON/UnmarshalJSON 确保 score 在 JSON 中以 "score" 键序列化。
 // Python: openjiuwen/agent_evolving/dataset/case.py EvaluatedCase
@@ -55,7 +53,6 @@ type CaseOption func(*Case)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCase 创建 Case 实例，默认自动生成 CaseID。
-//
 // inputs 和 label 不能为空 map，否则返回 error。
 // Python: Case(inputs=..., label=..., tools=..., case_id=uuid...) 中 Field(min_length=1) 验证
 func NewCase(inputs, label map[string]any, opts ...CaseOption) (*Case, error) {
@@ -77,7 +74,6 @@ func NewCase(inputs, label map[string]any, opts ...CaseOption) (*Case, error) {
 }
 
 // NewEvaluatedCase 创建 EvaluatedCase 实例，Score 默认 0.0。
-//
 // Python: EvaluatedCase(case=..., answer=...)
 func NewEvaluatedCase(case_ Case, answer map[string]any) *EvaluatedCase {
 	return &EvaluatedCase{
@@ -88,14 +84,12 @@ func NewEvaluatedCase(case_ Case, answer map[string]any) *EvaluatedCase {
 }
 
 // GetScore 返回综合评分（范围 [0, 1]）。
-//
 // Python: EvaluatedCase.score 属性
 func (ec *EvaluatedCase) GetScore() float64 {
 	return ec.score
 }
 
 // SetScore 设置评分，自动钳位到 [0, 1]。
-//
 // Python: EvaluatedCase 的 field_validator("score") clamp_score
 func (ec *EvaluatedCase) SetScore(score float64) {
 	if score > 1.0 {

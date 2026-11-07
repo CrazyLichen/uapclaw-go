@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PulsarConfig Pulsar 消息队列连接配置。
-//
 // Python: PulsarConfig(BaseModel)
 type PulsarConfig struct {
 	// URL Pulsar 服务地址
@@ -21,7 +20,6 @@ type PulsarConfig struct {
 }
 
 // MessageQueueConfig 消息队列配置。
-//
 // Python: MessageQueueConfig(BaseModel)
 type MessageQueueConfig struct {
 	// Type 队列类型，默认 PULSAR
@@ -31,7 +29,6 @@ type MessageQueueConfig struct {
 }
 
 // DistributedConfig 分布式模式配置。
-//
 // Python: DistributedConfig(BaseModel)
 type DistributedConfig struct {
 	// RequestTimeout 请求超时秒数，默认 30.0
@@ -47,7 +44,6 @@ type DistributedConfig struct {
 }
 
 // RunnerConfig Runner 全局配置。
-//
 // Python: RunnerConfig(BaseModel)
 type RunnerConfig struct {
 	// DistributedMode 分布式模式开关
@@ -76,7 +72,6 @@ type RunnerConfig struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPulsarConfig 创建 Pulsar 配置，MaxWorkers 默认 8。
-//
 // Python: PulsarConfig(url=None, max_workers=8)
 func NewPulsarConfig(url string) *PulsarConfig {
 	return &PulsarConfig{
@@ -86,7 +81,6 @@ func NewPulsarConfig(url string) *PulsarConfig {
 }
 
 // NewMessageQueueConfig 创建消息队列配置，Type 默认 PULSAR。
-//
 // Python: MessageQueueConfig(type=MessageQueueType.PULSAR, pulsar_config=None)
 func NewMessageQueueConfig() *MessageQueueConfig {
 	return &MessageQueueConfig{
@@ -95,7 +89,6 @@ func NewMessageQueueConfig() *MessageQueueConfig {
 }
 
 // NewDistributedConfig 创建分布式配置，各字段默认值对齐 Python DistributedConfig(BaseModel)。
-//
 // Python: DistributedConfig(request_timeout=30.0, max_request_concurrency=10000, ...)
 func NewDistributedConfig() *DistributedConfig {
 	return &DistributedConfig{
@@ -108,7 +101,6 @@ func NewDistributedConfig() *DistributedConfig {
 }
 
 // NewRunnerConfig 创建 Runner 全局配置，各字段默认值对齐 Python RunnerConfig(BaseModel)。
-//
 // Python: RunnerConfig(distributed_mode=True, instance_id=uuid4(), ...)
 func NewRunnerConfig() *RunnerConfig {
 	return &RunnerConfig{
@@ -119,7 +111,6 @@ func NewRunnerConfig() *RunnerConfig {
 }
 
 // String 返回脱敏后的配置字符串表示，实现 fmt.Stringer 接口。
-//
 // Python: PulsarConfig.__repr__() / __str__()
 func (c *PulsarConfig) String() string {
 	url := c.URL
@@ -130,7 +121,6 @@ func (c *PulsarConfig) String() string {
 }
 
 // GetAgentTopicTemplate 获取 Agent topic 模板，拼接环境前缀。
-//
 // Python: DistributedConfig.get_agent_topic_template(env_prefix)
 func (c *DistributedConfig) GetAgentTopicTemplate(envPrefix string) string {
 	if envPrefix != "" {
@@ -140,7 +130,6 @@ func (c *DistributedConfig) GetAgentTopicTemplate(envPrefix string) string {
 }
 
 // GetReplyTopicTemplate 获取 Reply topic 模板，拼接环境前缀。
-//
 // Python: DistributedConfig.get_reply_topic_template(env_prefix)
 func (c *DistributedConfig) GetReplyTopicTemplate(envPrefix string) string {
 	if envPrefix != "" {
@@ -150,7 +139,6 @@ func (c *DistributedConfig) GetReplyTopicTemplate(envPrefix string) string {
 }
 
 // AgentTopicTemplate 获取 Agent topic 模板，使用 RunnerConfig.EnvPrefix 作为前缀。
-//
 // Python: RunnerConfig.agent_topic_template()
 func (c *RunnerConfig) AgentTopicTemplate() string {
 	if c.DistributedConfig == nil {
@@ -160,7 +148,6 @@ func (c *RunnerConfig) AgentTopicTemplate() string {
 }
 
 // ReplyTopicTemplate 获取 Reply topic 模板，使用 RunnerConfig.EnvPrefix 作为前缀。
-//
 // Python: RunnerConfig.reply_topic_template()
 func (c *RunnerConfig) ReplyTopicTemplate() string {
 	if c.DistributedConfig == nil {

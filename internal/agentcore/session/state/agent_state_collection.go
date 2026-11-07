@@ -9,10 +9,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentStateCollection Agent 会话状态集合。
-//
 // 组合 globalState（跨 Agent 共享的全局状态）和 agentState（当前 Agent 专属状态），
 // 提供统一的状态读写接口。实现 SessionState 接口。
-//
 // Python: openjiuwen/core/session/state/agent_state.py (StateCollection)
 type AgentStateCollection struct {
 	// mu 并发读写锁
@@ -137,7 +135,6 @@ func (s *AgentStateCollection) SetState(st map[string]any) {
 
 // Clear 清空所有状态（globalState + agentState + traceState）。
 // 对齐 Python StateCollection.clear()：重置所有内部状态为空。
-//
 // Python: session.clear_session() → StateCollection 级别的 clear
 func (s *AgentStateCollection) Clear() {
 	s.mu.Lock()

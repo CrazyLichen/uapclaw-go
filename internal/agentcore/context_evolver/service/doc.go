@@ -1,10 +1,8 @@
 // Package service 提供 Context Evolver 的服务层函数。
-//
 // 包含轨迹格式化、试验评估、MaTTS 试验运行、LLM/Embedding 适配器、
 // 任务记忆服务（TaskMemoryService）等，供 ContextEvolvingReActAgent
 // 和其他上层调用方使用。
 // 返回值使用具体 struct（RetrieveResult/SummarizeResult/AddMemoryResult/MaTTSResult）替代 map[string]any。
-//
 // 文件目录：
 //
 //	service/

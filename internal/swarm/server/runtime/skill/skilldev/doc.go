@@ -1,9 +1,7 @@
 // Package skilldev 提供 SkillDev Pipeline 的核心数据模型和基础设施。
-//
 // SkillDev 是技能开发流水线，支持从自然语言描述自动生成、测试、优化和打包技能。
 // 本包定义了流程阶段、运行时状态、挂起点配置、评测数据模型等核心数据结构，
 // 以及状态持久化、工作区管理、阶段执行上下文等基础设施。
-//
 // 核心流程：
 //
 //	INIT → PLAN → PLAN_CONFIRM(挂起) → GENERATE → VALIDATE

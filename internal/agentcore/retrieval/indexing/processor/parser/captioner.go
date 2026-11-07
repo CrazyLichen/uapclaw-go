@@ -18,10 +18,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ImageCaptioner 图片描述生成器。
-//
 // 构造即检查 LLM 客户端支持度（nil 或模型名不在白名单仅 Warn 不报错——
 // caption 是软能力，禁用态合法）。归档能力经包级 CpImage 提供。
-//
 // Python: captioner.py ImageCaptioner
 type ImageCaptioner struct {
 	// llmClient 可选 LLM 客户端（nil = 禁用态：仅归档不 caption）。
@@ -33,7 +31,6 @@ type ImageCaptioner struct {
 
 const (
 	// imageCaptionPrompt 图片描述生成提示词。
-	//
 	// Python: captioner.py IMAGE_CAPTION_PROMPT（逐字复制，禁止翻译改写——
 	// 记忆 feedback_prompt_verbatim_copy 既定规则）。
 	imageCaptionPrompt = "You are an assistant specialized in document and image analysis. " +
@@ -51,7 +48,6 @@ const (
 
 var (
 	// supportedLLMClient 支持图片 captioning 的模型名前缀白名单。
-	//
 	// Python: captioner.py ImageCaptioner._supported_llm_client（类属性，
 	// Go 归入包级变量区块）。
 	supportedLLMClient = []string{"gpt-4o", "gpt-5", "qwen3-vl", "qwen-vl"}
@@ -60,9 +56,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewImageCaptioner 构造 ImageCaptioner。
-//
 // 构造即调用 isLLMSupported（对齐 Python __init__ 内 self._is_llm_supported()）。
-//
 // Python: captioner.py ImageCaptioner.__init__
 func NewImageCaptioner(llmClient *llm.Model) *ImageCaptioner {
 	c := &ImageCaptioner{llmClient: llmClient}
@@ -71,7 +65,6 @@ func NewImageCaptioner(llmClient *llm.Model) *ImageCaptioner {
 }
 
 // CpImage 复制图片到 savedImageDir 目录并返回目标路径。
-//
 // 分支（逐条对齐 Python cp_image）：
 //  1. 源不存在 → 返回 error（对齐 raise FileNotFoundError）
 //  2. 目标目录创建失败 → 返回 error（对齐 makedirs 异常传播）
@@ -112,10 +105,8 @@ func CpImage(imageLoc string) (string, error) {
 }
 
 // CaptionImages 逐图串行生成 caption 列表。
-//
 // 文件不存在的图：Warn + 空串占位（对齐 Python skip 分支）。
 // 顺序与输入一致（对齐 Python captions.append 逐个累积）。
-//
 // Python: captioner.py ImageCaptioner.caption_images
 func (c *ImageCaptioner) CaptionImages(ctx context.Context, imageLocs []string) []string {
 	captions := make([]string, 0, len(imageLocs))
@@ -146,7 +137,6 @@ func init() {
 }
 
 // isLLMSupported 检查 LLM 客户端对图片 captioning 的支持度。
-//
 // 两分支均仅 Warn 不报错（对齐 Python docstring 声明的 bool 语义但实现
 // 只打日志）：
 //  1. nil 客户端 → 禁用态提示
@@ -178,7 +168,6 @@ func (c *ImageCaptioner) isLLMSupported() {
 }
 
 // llmCall 生成单张图片的 caption。
-//
 // 流程（逐条对齐 Python _llm_call_async）：
 //  1. nil 客户端 → 返回空串（禁用态非失败）
 //  2. mime 按扩展名检测；未知 → 回落 image/png + Warn
@@ -255,7 +244,6 @@ func (c *ImageCaptioner) llmCall(ctx context.Context, imageLoc string) string {
 }
 
 // copyFile 读源写目标复制文件。
-//
 // Python shutil.copy2 保留元数据；caption 场景仅读内容，元数据对下游
 // （13.4 多模态嵌入读内容）无意义——偏差归档 spec §8-2。
 func copyFile(src, dest string) error {

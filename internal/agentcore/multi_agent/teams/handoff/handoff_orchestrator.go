@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // handoffResult 交接编排结果，区分正常结果和错误。
-//
 // Python: asyncio.Future 的 set_result/set_exception 双通道语义：
 //   - 正常完成：result 有值，err 为 nil
 //   - 异常完成：result 为 nil，err 有值
@@ -25,10 +24,8 @@ type handoffResult struct {
 }
 
 // HandoffOrchestrator 每会话交接协调器。
-//
 // 管理交接路由、当前活跃 Agent、交接次数计数，
 // 并提供完成/错误通道用于通知编排循环结束。
-//
 // Python: HandoffOrchestrator (handoff_orchestrator.py)
 type HandoffOrchestrator struct {
 	// maxHandoffs 最大交接次数
@@ -67,10 +64,8 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHandoffOrchestrator 创建交接协调器实例。
-//
 // 从 config 提取 maxHandoffs/terminationCondition，
 // 构建 routeGraph，初始化 doneCh。
-//
 // Python: HandoffOrchestrator.__init__(start_agent_id, registered_agents, config)
 func NewHandoffOrchestrator(startAgentID string, registeredAgents []string, config *HandoffConfig) *HandoffOrchestrator {
 	maxHandoffs := defaultMaxHandoffs
@@ -107,10 +102,8 @@ func NewHandoffOrchestrator(startAgentID string, registeredAgents []string, conf
 }
 
 // BuildRouteGraph 构建路由邻接表。
-//
 // 空 routes → 全互联（每个 Agent 可交接给其他所有 Agent）。
 // 有 routes → 只允许显式路由。
-//
 // Python: HandoffOrchestrator.build_route_graph(agents, routes)
 func BuildRouteGraph(agents []string, routes []HandoffRoute) map[string]map[string]struct{} {
 	graph := make(map[string]map[string]struct{}, len(agents))
@@ -147,10 +140,8 @@ func BuildRouteGraph(agents []string, routes []HandoffRoute) map[string]map[stri
 }
 
 // RequestHandoff 请求交接到目标 Agent。
-//
 // 检查 maxHandoffs、terminationCondition、路由允许，
 // 全部通过时更新 handoffCount 和 currentAgentID。
-//
 // Python: HandoffOrchestrator.request_handoff(target_id, reason)
 func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) bool {
 	// 检查最大交接次数
@@ -215,9 +206,7 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 }
 
 // Complete 标记编排完成，发送结果到 doneCh。
-//
 // doneOnce 保证只发送一次。
-//
 // Python: HandoffOrchestrator.complete(result) — 调用 done_future.set_result(result)
 func (o *HandoffOrchestrator) Complete(result map[string]any) {
 	o.doneOnce.Do(func() {
@@ -230,10 +219,8 @@ func (o *HandoffOrchestrator) Complete(result map[string]any) {
 }
 
 // Error 标记编排错误，发送错误到 doneCh。
-//
 // Python: asyncio.Future.set_exception(exception)：
 // 错误通过 handoffResult.err 字段传递，消费方通过 hr.err != nil 判断。
-//
 // Python: HandoffOrchestrator.error(exception) — 调用 done_future.set_exception(exception)
 func (o *HandoffOrchestrator) Error(err error) {
 	o.doneOnce.Do(func() {
@@ -246,7 +233,6 @@ func (o *HandoffOrchestrator) Error(err error) {
 }
 
 // Close 关闭 doneCh，确保 channel 被关闭。
-//
 // 在 _run_chain 的 defer 中调用。
 func (o *HandoffOrchestrator) Close() {
 	o.doneOnce.Do(func() {
@@ -270,7 +256,6 @@ func (o *HandoffOrchestrator) CurrentAgentID() string {
 }
 
 // SaveToSession 将协调器状态持久化到会话。
-//
 // Python: HandoffOrchestrator.save_to_session(session)
 func (o *HandoffOrchestrator) SaveToSession(sess *session.AgentTeamSession) {
 	sess.UpdateState(map[string]any{
@@ -288,7 +273,6 @@ func (o *HandoffOrchestrator) SaveToSession(sess *session.AgentTeamSession) {
 }
 
 // RestoreFromSession 从会话恢复协调器状态。
-//
 // Python: HandoffOrchestrator.restore_from_session(session, start_agent_id, registered_agents, config)
 func RestoreFromSession(
 	sess *session.AgentTeamSession,

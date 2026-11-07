@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserService 浏览器后端服务，提供粘性会话和守护护栏。
-//
 // Python: openjiuwen/harness/tools/browser_move/playwright_runtime/service.py (BrowserService)
 type BrowserService struct {
 	// Provider 模型提供者
@@ -72,7 +71,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserService 创建新的浏览器后端服务实例。
-//
 // Python: BrowserService.__init__
 func NewBrowserService(
 	provider, apiKey, apiBase, modelName string,
@@ -100,7 +98,6 @@ func NewBrowserService(
 
 // SessionNew 创建新的浏览器会话，返回会话标识。
 // 如果 sessionID 为空则自动生成。
-//
 // Python: BrowserService.session_new
 func (s *BrowserService) SessionNew(sessionID string) string {
 	sid := strings.TrimSpace(sessionID)
@@ -117,7 +114,6 @@ func (s *BrowserService) SessionNew(sessionID string) string {
 }
 
 // RequestCancel 请求取消指定会话/请求的执行。
-//
 // Python: BrowserService.request_cancel
 func (s *BrowserService) RequestCancel(ctx context.Context, sessionID, requestID string) error {
 	sid := strings.TrimSpace(sessionID)
@@ -129,7 +125,6 @@ func (s *BrowserService) RequestCancel(ctx context.Context, sessionID, requestID
 }
 
 // ClearCancel 清除指定会话/请求的取消标记。
-//
 // Python: BrowserService.clear_cancel
 func (s *BrowserService) ClearCancel(ctx context.Context, sessionID, requestID string) error {
 	sid := strings.TrimSpace(sessionID)
@@ -144,7 +139,6 @@ func (s *BrowserService) ClearCancel(ctx context.Context, sessionID, requestID s
 }
 
 // IsCancelled 检查指定会话/请求是否已被取消。
-//
 // Python: BrowserService.is_cancelled
 func (s *BrowserService) IsCancelled(ctx context.Context, sessionID, requestID string) (bool, error) {
 	sid := strings.TrimSpace(sessionID)
@@ -169,21 +163,18 @@ func (s *BrowserService) IsCancelled(ctx context.Context, sessionID, requestID s
 }
 
 // RecordToolProgress 记录工具执行的进度信息。
-//
 // Python: BrowserService.record_tool_progress
 func (s *BrowserService) RecordToolProgress(sessionID, requestID, toolName string, toolResult any) {
 	updateProgressFromToolObservation(s, sessionID, requestID, toolName, toolResult)
 }
 
 // RecordWorkerProgress 记录 Worker 执行结果的进度信息。
-//
 // Python: BrowserService.record_worker_progress
 func (s *BrowserService) RecordWorkerProgress(sessionID, requestID string, parsed map[string]any) {
 	updateProgressFromWorkerResult(s, sessionID, requestID, parsed)
 }
 
 // GetProgressState 获取指定会话的进度状态。
-//
 // Python: BrowserService.get_progress_state
 func (s *BrowserService) GetProgressState(sessionID string) *BrowserTaskProgressState {
 	s.mu.RLock()
@@ -192,7 +183,6 @@ func (s *BrowserService) GetProgressState(sessionID string) *BrowserTaskProgress
 }
 
 // ExportProgressState 导出指定会话的进度状态为字典，空状态返回 nil。
-//
 // Python: BrowserService.export_progress_state
 func (s *BrowserService) ExportProgressState(sessionID string) map[string]any {
 	s.mu.RLock()
@@ -208,7 +198,6 @@ func (s *BrowserService) ExportProgressState(sessionID string) map[string]any {
 }
 
 // SetProgressState 设置指定会话的进度状态。空状态时移除。
-//
 // Python: BrowserService.set_progress_state
 func (s *BrowserService) SetProgressState(sessionID string, state *BrowserTaskProgressState) {
 	sid := strings.TrimSpace(sessionID)
@@ -225,7 +214,6 @@ func (s *BrowserService) SetProgressState(sessionID string, state *BrowserTaskPr
 }
 
 // ClearProgressState 清除指定会话的进度状态。
-//
 // Python: BrowserService.clear_progress_state
 func (s *BrowserService) ClearProgressState(sessionID string) {
 	sid := strings.TrimSpace(sessionID)
@@ -238,14 +226,12 @@ func (s *BrowserService) ClearProgressState(sessionID string) {
 }
 
 // BuildProgressContext 根据进度状态构建上下文文本。
-//
 // Python: BrowserService.build_progress_context
 func BuildProgressContext(state *BrowserTaskProgressState) string {
 	return buildProgressContext(state)
 }
 
 // BuildFailureSummary 构建失败摘要，供后续重试时使用。
-//
 // Python: BrowserService.build_failure_summary
 func (s *BrowserService) BuildFailureSummary(
 	task, errStr, pageURL, pageTitle, final string,
@@ -257,7 +243,6 @@ func (s *BrowserService) BuildFailureSummary(
 }
 
 // ShouldTreatAsCompleted 判断是否应将结果视为已完成。
-//
 // Python: BrowserService.should_treat_as_completed
 func ShouldTreatAsCompleted(parsed map[string]any) bool {
 	return shouldTreatAsCompleted(parsed)
@@ -266,7 +251,6 @@ func ShouldTreatAsCompleted(parsed map[string]any) bool {
 // NormalizeProgressStatus 规范化进度状态字符串。
 // complete/completed/done 映射为 completed，partial/in_progress/in-progress 映射为 partial，
 // blocked 映射为 阻塞，failed 映射为 失败。
-//
 // Python: BrowserService._normalize_progress_status
 func NormalizeProgressStatus(value any) string {
 	normalized := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", value)))
@@ -287,7 +271,6 @@ func NormalizeProgressStatus(value any) string {
 }
 
 // NormalizeScreenshotValue 规范化截图值，本地路径 → data URL。
-//
 // Python: BrowserService._normalize_screenshot_value
 // ⤵️ 9.38-49 回填：本地路径转 data URL 的文件系统逻辑
 func NormalizeScreenshotValue(screenshot any) any {
@@ -313,7 +296,6 @@ func NormalizeScreenshotValue(screenshot any) any {
 }
 
 // IsRetryableTransportMessage 判断是否为可重试的传输层错误消息。
-//
 // Python: BrowserService._is_retryable_transport_message
 func IsRetryableTransportMessage(text string) bool {
 	lowered := strings.ToLower(text)
@@ -339,7 +321,6 @@ func IsRetryableTransportMessage(text string) bool {
 }
 
 // IsRetryableRuntimeResult 判断运行时结果是否为可重试错误。
-//
 // Python: BrowserService._is_retryable_runtime_result
 func IsRetryableRuntimeResult(parsed map[string]any) bool {
 	if parsed == nil {
@@ -371,7 +352,6 @@ func IsRetryableRuntimeResult(parsed map[string]any) bool {
 }
 
 // EnsureRuntimeReady 确保浏览器运行时已就绪。
-//
 // Python: BrowserService.ensure_runtime_ready
 // TODO(#9.38-49): ⤵️ 回填 ManagedBrowserDriver 逻辑
 func (s *BrowserService) EnsureRuntimeReady(_ context.Context) error {
@@ -380,7 +360,6 @@ func (s *BrowserService) EnsureRuntimeReady(_ context.Context) error {
 }
 
 // EnsureStarted 确保浏览器服务已启动（运行时就绪 + Worker Agent 已构建）。
-//
 // Python: BrowserService.ensure_started
 // TODO(#9.38-49): ⤵️ 回填 BuildBrowserWorkerAgent
 func (s *BrowserService) EnsureStarted(ctx context.Context) error {
@@ -392,7 +371,6 @@ func (s *BrowserService) EnsureStarted(ctx context.Context) error {
 }
 
 // Shutdown 关闭浏览器服务。
-//
 // Python: BrowserService.shutdown
 func (s *BrowserService) Shutdown(_ context.Context) error {
 	s.mu.Lock()
@@ -405,7 +383,6 @@ func (s *BrowserService) Shutdown(_ context.Context) error {
 }
 
 // RunTask 执行浏览器任务，支持 retry_once + resume_on_max_iterations + transport error 重启。
-//
 // Python: BrowserService.run_task (service.py:1263-1494)
 func (s *BrowserService) RunTask(
 	ctx context.Context,

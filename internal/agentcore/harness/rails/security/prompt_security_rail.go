@@ -12,10 +12,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SafetyPromptRail 安全提示词 Rail。
-//
 // 在每次模型调用前注入安全原则到 system prompt，引导模型自律。
 // priority=85，事件集={BeforeModelCall}。
-//
 // Python: SafetyPromptRail(BaseSecurityRail) — prompt_security_rail.py L16-46
 type SafetyPromptRail struct {
 	BaseSecurityRail
@@ -41,7 +39,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSafetyPromptRail 创建安全提示词 Rail。
-//
 // Python: SafetyPromptRail.__init__()
 func NewSafetyPromptRail() *SafetyPromptRail {
 	r := &SafetyPromptRail{
@@ -57,7 +54,6 @@ func NewSafetyPromptRail() *SafetyPromptRail {
 }
 
 // Init 初始化钩子，获取 systemPromptBuilder 引用。
-//
 // Python: SafetyPromptRail.init(agent) (prompt_security_rail.py L30-31)
 func (r *SafetyPromptRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
@@ -65,7 +61,6 @@ func (r *SafetyPromptRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 }
 
 // Uninit 反初始化钩子，移除 safety section。
-//
 // Python: SafetyPromptRail.uninit(agent) (prompt_security_rail.py L33-36)
 func (r *SafetyPromptRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if r.systemPromptBuilder != nil {
@@ -78,7 +73,6 @@ func (r *SafetyPromptRail) Uninit(agent agentinterfaces.BaseAgent) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runSecurityCheck 注入安全提示词 section，始终返回 Allow。
-//
 // Python: SafetyPromptRail.run_security_check(security_ctx) (prompt_security_rail.py L38-46)
 func (r *SafetyPromptRail) runSecurityCheck(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
 	if r.systemPromptBuilder == nil {

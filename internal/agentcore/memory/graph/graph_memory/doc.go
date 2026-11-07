@@ -1,8 +1,6 @@
 // Package graph_memory 提供图记忆主类 GraphMemory 及其管线方法。
-//
 // GraphMemory 维护知识图谱的添加和检索：通过 LLM 从内容中抽取实体和关系，
 // 合并/去重后存储到图数据库，并支持跨实体、关系和片段的语义搜索。
-//
 // 文件目录：
 //
 //	graph_memory/

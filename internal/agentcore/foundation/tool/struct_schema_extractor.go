@@ -13,10 +13,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StructSchemaExtractor 从 Go struct 反射提取 []*schema.Param。
-//
 // 读取 struct 字段的 json tag（参数名）和 jsonschema tag（描述/必填/默认值/枚举），
 // 递归处理嵌套 struct 和 slice，生成完整的参数定义列表。
-//
 // Python:
 //   - openjiuwen/core/foundation/tool/utils/callable_schema_extractor.py (CallableSchemaExtractor)
 //   - openjiuwen/core/foundation/tool/utils/type_schema_extractor.py (TypeSchemaExtractor 注册表)
@@ -67,7 +65,6 @@ var commonAbbreviations = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Extract 从 Go struct 类型反射提取 []*schema.Param。
-//
 // 读取字段标签：
 //   - json:"name" 映射 Param.Name（也用于判断是否导出：无 json tag 的字段跳过）
 //   - json:"name,omitempty" 表示非必填（Param.Required=false）
@@ -209,12 +206,10 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 
 // ExtractDescription 从 struct 提取工具描述。
 // Go 无法在运行时获取注释/docstring，因此使用 humanize 将 struct 名转为可读描述。
-//
 // 与 Python 的差异：Python 的 CallableSchemaExtractor.extract_function_description() 会自动
 // 从函数名提取描述（如 do_something → "do something"），而 Go 没有运行时函数名访问能力，
 // 要求通过 jsonschema:"description=..." tag 显式指定描述。当未指定 description tag 时，
 // 本方法使用 humanizeName 从 struct 名生成描述作为回退。
-//
 // Python: CallableSchemaExtractor.extract_function_description()
 func (StructSchemaExtractor) ExtractDescription(typ reflect.Type) string {
 	if typ.Kind() == reflect.Pointer {

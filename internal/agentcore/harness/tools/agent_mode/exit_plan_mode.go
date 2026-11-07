@@ -32,7 +32,6 @@ var (
 )
 
 // NewExitPlanModeTool 创建 exit_plan_mode 工具实例。
-//
 // Python: ExitPlanModeTool.__init__() L326-348 + invoke() L350-378
 // ──────────────────────────── 导出函数 ────────────────────────────
 

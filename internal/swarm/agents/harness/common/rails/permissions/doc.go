@@ -1,16 +1,13 @@
 // Package permissions 提供数字分身场景下的权限上下文、工具权限检查、权限配置 RPC，
 // 以及 root 权限卡的串行化队列与意图窗口。
-//
 // 本包对齐 Python jiuwenswarm/agents/harness/common/rails/permissions/（38 个 .py / 11,463 行），
 // 当前已完成权限上下文与配置 RPC 部分、root 五文件（9.90c）、以及基础类型层
 // （9.90a：tool_invocation_key / protected_paths / auto_permission 子包）。剩余约
 // 9,700 行按批次推进，见 IMPLEMENTATION_PLAN.md 的 9-H 节。
-//
 // # root 权限链路
 //
 // root 系列解决的是：LLM 一批并行工具调用产生多个权限中断时，如何收敛成
 // 一条串行队列，做到一次只问用户一张卡、答案精确不串台、对不齐就冻结会话。
-//
 // 数据流（详见 docs/superpowers/specs/2026-11-07-root-permission-5-files-design.md）：
 //
 //	root_context_rail       组装 RootDecisionContext（意图窗口）并绑定
@@ -30,18 +27,15 @@
 // url_safety.has_valid_ask_user_clarification。
 // 在此之前本包 RootDecisionContext / OriginalUserIntent / FileDeliveryConstraintText /
 // HasValidAskUserClarification 均无实际调用方，属"管道就位、未接水源"。
-//
 // ⤵️ 非权限续接的包装器校验（RootPermissionWrapperResume 的完整校验链，
 // 涉及 ProgressiveToolRail._call_discovered_tool / ToolCallTool / Runner.resource_mgr）
 // 依赖 Go 侧 progressive_tool_rail 与 tool discovery 的等价内部结构，
 // 待对应章节落地后回填。
-//
 // ⤵️ auto_permission 子包中 4 个常量（ShellDisplayPathPattern /
 // ShellDisplayPreSplitPathPattern / SensitiveDisplayPathPattern /
 // DeterministicReadonlyPublicWebFetchSourceKinds）在 Python 全仓零消费，
 // 按规则 9.2-4 照抄保留，待 9.90d 的 reviewer_redaction / deterministic 启用。
 // 其余 7 个常量的消费方同样在 9.90d。
-//
 // 文件目录：
 //
 //	permissions/

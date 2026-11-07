@@ -99,7 +99,6 @@ func NewOwnerScopesPermissionContextFromDict(data map[string]any) *OwnerScopesPe
 // MatchArgs 简化的参数模式匹配。
 // 遍历 toolArgs 的 key/value，按参数名选择匹配器：
 // command/cmd → CommandMatcher, url → URLMatcher, path/file_path → PathMatcher, 其他 → MatchWildcard。
-//
 // Python: _match_args() (owner_scopes.py L209-231)
 func MatchArgs(pattern string, toolArgs map[string]any) (result bool) {
 	defer func() {
@@ -132,7 +131,6 @@ func MatchArgs(pattern string, toolArgs map[string]any) (result bool) {
 
 // ResolveOwnerScopeLevel 在 owner-scope 层按三级优先级匹配。
 // 返回 "allow"/"deny"/"ask" 或空字符串（无匹配）。
-//
 // 优先级：1. scopeCfg.tools.<tool>.patterns → 2. scopeCfg.tools.<tool>.* → 3. scopeCfg.defaults.*
 //
 // Python: _resolve_owner_scope_level() (owner_scopes.py L172-206)
@@ -182,10 +180,8 @@ func ResolveOwnerScopeLevel(scopeCfg map[string]any, toolName string, toolArgs m
 
 // CheckAvatarPermission 数字分身场景单工具 owner_scopes 权限检查。
 // 返回 "allow" 或 "deny"（ASK 自动降级为 DENY，数字分身不支持交互审批）。
-//
 // permCfg 为当前 permissions 配置快照（由调用方从 config 读取并传入），
 // 因为 Go 端没有 Python 的全局 get_config()，采用参数注入更符合 Go 风格。
-//
 // Python: check_avatar_permission() (owner_scopes.py L96-169)
 func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map[string]any, channelID string, sessionID string, principalUserID string) (string, error) {
 	// Python: if perm_ctx is None or not perm_ctx.principal_user_id: return "deny"
@@ -295,7 +291,6 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 
 // PersistToOwnerScope 将规则持久化到 config.yaml 的 owner_scopes 节点。
 // permCfg 为当前完整 permissions 配置，写盘后返回更新后的配置。
-//
 // Python: persist_to_owner_scope() (owner_scopes.py L234-259)
 func PersistToOwnerScope(toolName string, pattern string, channelID string, userID string, permCfg map[string]any, configPath string) bool {
 	persistLock.Lock()

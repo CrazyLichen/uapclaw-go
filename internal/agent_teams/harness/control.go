@@ -3,7 +3,6 @@ package harness
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // controlCmd 控制命令。
-//
 // Python: ControlEvent = _CmdSend/_CmdAbort/_CmdPause/_CmdResume/
 // _CmdRoundFinished/_CmdStop (agent_teams/harness/control.py)。
 // Go 用接口 + 各自结构体表达，每条命令携带应答通道，等价 Python 的 ack: asyncio.Future。
@@ -13,7 +12,6 @@ type controlCmd interface {
 }
 
 // cmdSend 投递一条输入。
-//
 // Python: _CmdSend（包裹 InboxMessage + ack）
 type cmdSend struct {
 	// msg 待处理输入
@@ -26,7 +24,6 @@ type cmdSend struct {
 func (c *cmdSend) ack() chan error { return c.reply }
 
 // cmdAbort 中断。
-//
 // Python: _CmdAbort
 type cmdAbort struct {
 	// immediate true 立即取消调度任务，false 让本轮自然收尾
@@ -39,7 +36,6 @@ type cmdAbort struct {
 func (c *cmdAbort) ack() chan error { return c.reply }
 
 // cmdPause 暂停（25.1c 前恒返回不支持）。
-//
 // Python: _CmdPause
 type cmdPause struct {
 	// reply 应答通道
@@ -50,7 +46,6 @@ type cmdPause struct {
 func (c *cmdPause) ack() chan error { return c.reply }
 
 // cmdResume 继续（25.1c 前恒返回不支持）。
-//
 // Python: _CmdResume（ack + query）
 type cmdResume struct {
 	// query 冷恢复载荷；暖恢复为 nil
@@ -63,7 +58,6 @@ type cmdResume struct {
 func (c *cmdResume) ack() chan error { return c.reply }
 
 // cmdRoundFinished 一轮结束（由轮次协程投递）。
-//
 // Python: _CmdRoundFinished（round_id + error + result）
 type cmdRoundFinished struct {
 	// roundID 轮次序号
@@ -80,7 +74,6 @@ type cmdRoundFinished struct {
 func (c *cmdRoundFinished) ack() chan error { return c.reply }
 
 // cmdStop 停机。
-//
 // Python: _CmdStop
 type cmdStop struct {
 	// reply 应答通道
@@ -93,7 +86,6 @@ func (c *cmdStop) ack() chan error { return c.reply }
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ack 非阻塞回写应答；通道满则丢弃，保证 supervisor 崩溃路径不卡死。
-//
 // Python: NativeHarness._ack（控制命令的 Future 由 supervisor 结算）
 func ack(ch chan error, err error) {
 	if ch == nil {

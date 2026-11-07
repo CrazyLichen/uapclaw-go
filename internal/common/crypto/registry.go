@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseCrypt 加密算法抽象接口，密钥由调用方传入。
-//
 // Python: openjiuwen/core/common/security/crypt_utils.py BaseCrypt
 //
 // 适用场景：底层加密操作，密钥由调用方管理（如存储层编解码）。
@@ -22,7 +21,6 @@ type BaseCrypt interface {
 }
 
 // CryptRegistry 加密算法注册表（并发安全）。
-//
 // Python: openjiuwen/core/common/security/crypt_utils.py CryptUtils
 //
 // 提供按名称注册、获取、注销加密算法的能力。
@@ -51,7 +49,6 @@ func NewCryptRegistry() *CryptRegistry {
 }
 
 // Register 注册加密算法。若 name 已存在则覆盖。
-//
 // crypt 必须实现 BaseCrypt 接口，否则返回错误。
 func (r *CryptRegistry) Register(name string, crypt BaseCrypt) error {
 	if crypt == nil {

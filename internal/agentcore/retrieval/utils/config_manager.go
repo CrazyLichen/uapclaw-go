@@ -21,18 +21,15 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ConfigManager 统一配置管理器，支持 JSON/YAML 文件加载与保存。
-//
 // 对齐 Python retrieval/utils/config_manager.py。**键双轨**是 Python 真实
 // 行为（spec 13.27 §8-1）：LoadFromFile 存 "knowledge_base" 字面键，
 // UpdateConfig 按类型名存键——两条键不一致，因此 update 之后再调
 // GetKnowledgeBaseConfig 必报 155304。此 bug 亦属行为，字面复刻不改。
-//
 // Python: class ConfigManager
 type ConfigManager struct {
 	// mu 保护 configs（并发 Load/Update/Save 会对同一 map 读写，未加锁会 panic）
 	mu sync.RWMutex
 	// configs 已加载配置（Python Dict[str, BaseModel]；Go 用 any 收纳）。
-	//
 	// M-12：用有序 map 复刻 Python dict 的插入序。同一类型可能存在两个键
 	// （"knowledge_base" 与类型名键），GetConfig 遍历顺序决定了返回哪个；
 	// 原实现用原生 map，遍历随机，同一进程两次调用可能拿到不同对象。
@@ -53,7 +50,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewConfigManager 创建配置管理器。configPath 非空时立即加载。
-//
 // Python: ConfigManager.__init__（config_path 真值时调 load_from_file）
 func NewConfigManager(configPath string) (*ConfigManager, error) {
 	m := &ConfigManager{configs: orderedmap.New[string, any]()}
@@ -66,12 +62,10 @@ func NewConfigManager(configPath string) (*ConfigManager, error) {
 }
 
 // LoadFromFile 从文件加载配置（支持 JSON 与 YAML）。
-//
 // 文件不存在→155300；后缀不支持→155302；成功则按 "knowledge_base" 键存
 // KnowledgeBaseConfig。Python 的 `try: import yaml except ImportError`
 // 分支（155301）在 Go 为编译期死路径（yaml.v3 是直接依赖），错误码保留定义
 // 但不可达（spec 13.27 §8-2）。
-//
 // Python: load_from_file
 func (m *ConfigManager) LoadFromFile(path string) error {
 	if _, err := os.Stat(path); err != nil {
@@ -120,15 +114,12 @@ func (m *ConfigManager) LoadFromFile(path string) error {
 }
 
 // SaveToFile 保存配置到文件（支持 JSON 与 YAML）。
-//
 // 无 "knowledge_base" 键→155303。JSON 用 indent 2 + 非 ASCII 不转义
 // （对齐 json.dump(indent=2, ensure_ascii=False)）；YAML 用 yaml.Marshal
 // 逐行输出（对齐 yaml.dump(allow_unicode=True, default_flow_style=False)）。
-//
 // 字节差异（有意保留，不影响语义）：Go 的 encoding/json 对 map 按 key 字典序
 // 输出且 Encoder 追加尾换行；Python model_dump + json.dump 按字段声明序且无尾
 // 换行。JSON 对象无序，两侧解析结果等价；仅在与 Python 做字节级对拍时不同。
-//
 // Python: save_to_file
 func (m *ConfigManager) SaveToFile(path string) error {
 	m.mu.RLock()
@@ -177,7 +168,6 @@ func (m *ConfigManager) SaveToFile(path string) error {
 }
 
 // GetConfig 按类型取回配置（Python get_config(Type[T]) 的 Go 泛型同构）。
-//
 // 遍历顺序即 map 迭代顺序（Python dict 插入序在 Go map 无序，但同类型
 // 只会有一个键命中，行为等价）。未找到返回零值与 false（Python None）。
 func GetConfig[T any](m *ConfigManager) (T, bool) {
@@ -193,10 +183,8 @@ func GetConfig[T any](m *ConfigManager) (T, bool) {
 }
 
 // GetKnowledgeBaseConfig 取回知识库配置。
-//
 // "knowledge_base" 键缺失→155304。注意键双轨偏差：UpdateConfig 存的是
 // 类型名键，故 update 路径必然取不到（Python 真实行为，spec 13.27 §8-1）。
-//
 // Python: get_knowledge_base_config
 func (m *ConfigManager) GetKnowledgeBaseConfig() (common.KnowledgeBaseConfig, error) {
 	m.mu.RLock()
@@ -219,11 +207,9 @@ func (m *ConfigManager) GetKnowledgeBaseConfig() (common.KnowledgeBaseConfig, er
 }
 
 // UpdateConfig 更新配置（按类型名存键——键双轨偏差，spec 13.27 §8-1）。
-//
 // Python 用 type(config).__name__（如 "KnowledgeBaseConfig"），Go 用
 // reflect 类型名（含包前缀 "common.KnowledgeBaseConfig"）——各自语言的
 // 类型名字面（spec 13.27 §8-10）。
-//
 // Python: update_config
 func (m *ConfigManager) UpdateConfig(config any) {
 	m.mu.Lock()
@@ -234,7 +220,6 @@ func (m *ConfigManager) UpdateConfig(config any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // knowledgeBaseConfigFromMap 由解析出的 map 构造 KnowledgeBaseConfig。
-//
 // 对齐 pydantic 默认行为（spec 13.27 §8-8）：未知键忽略；缺省字段取字段
 // 默认值（index_type="hybrid" / chunk_size=512 / chunk_overlap=50 / 两个
 // bool 为 false）。JSON 数字解码为 float64、YAML 数字解码为 int，两条路径
@@ -311,7 +296,6 @@ func knowledgeBaseConfigToMap(cfg common.KnowledgeBaseConfig) map[string]any {
 }
 
 // asInt 把 JSON 的 float64 或 YAML 的 int 统一取为 int。
-//
 // 对齐 Python int() 的精度语义：Python 任意精度整数不存在溢出，Go 的
 // int 会回绕。超出 int 可表示范围的值返回 false，调用方保留字段默认值
 // （Python 侧则是得到一个超大的合法整数——极端输入下仍是分叉，但至少

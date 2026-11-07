@@ -22,10 +22,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Trainer 离线自演化训练编排器。
-//
 // 编排 "evaluate → update → writeback" 自演化循环，
 // 接受 Updater 和 BaseEvaluator，管理检查点保存/恢复和早停。
-//
 // Python: openjiuwen/agent_evolving/trainer/trainer.py Trainer
 type Trainer struct {
 	// updater 更新生成器。
@@ -89,7 +87,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTrainer 创建 Trainer 实例。
-//
 // Python: Trainer.__init__(updater, evaluator, extractor, callbacks, ...)
 func NewTrainer(opts ...TrainerOption) *Trainer {
 	t := &Trainer{
@@ -106,7 +103,6 @@ func NewTrainer(opts ...TrainerOption) *Trainer {
 }
 
 // Train 执行离线自演化训练：验证基线评估 → 多轮 "训练前向 → 更新 → 验证评估 → 检查点"。
-//
 // 参数:
 //   - ctx: 上下文
 //   - agent: 待优化的 Agent（必须实现 evolving.TrainableAgent 接口）
@@ -116,7 +112,6 @@ func NewTrainer(opts ...TrainerOption) *Trainer {
 //   - config: 传递给 updater.Update 的配置
 //
 // 返回优化后的 Agent 和 error。
-//
 // Python: Trainer.train(agent, train_cases, val_cases, num_iterations)
 func (t *Trainer) Train(
 	ctx context.Context,
@@ -241,9 +236,7 @@ func (t *Trainer) Train(
 }
 
 // Forward 单次前向推理 + 评估 + 轨迹提取。
-//
 // 返回 (平均分数, 评估结果列表, 轨迹列表, Session列表, error)。
-//
 // Python: Trainer.forward(agent, cases) -> (score, evaluated, trajectories, sessions)
 func (t *Trainer) Forward(
 	ctx context.Context,
@@ -288,9 +281,7 @@ func (t *Trainer) Forward(
 }
 
 // Evaluate 在用例集上运行推理和评估，返回平均分数和评估结果。
-//
 // 不提取轨迹（与 Forward 的区别）。
-//
 // Python: Trainer.evaluate(agent, cases) -> (score, evaluated)
 func (t *Trainer) Evaluate(
 	ctx context.Context,
@@ -317,7 +308,6 @@ func (t *Trainer) Evaluate(
 }
 
 // PredictOnly 仅运行推理，返回每个用例的模型输出（不含 Session）。
-//
 // Python: Trainer.predict_only(agent, cases) -> predicts
 func (t *Trainer) PredictOnly(
 	ctx context.Context,
@@ -333,9 +323,7 @@ func (t *Trainer) PredictOnly(
 }
 
 // Predict 运行 Agent 推理（含 Session），并发度由 numParallel 控制。
-//
 // 返回 (模型输出列表, Session列表, error)。
-//
 // Python: Trainer.predict(agent, cases) -> (predicts, sessions)
 func (t *Trainer) Predict(
 	ctx context.Context,
@@ -398,7 +386,6 @@ func (t *Trainer) Predict(
 }
 
 // ApplyUpdates 将 Updater 生成的更新应用到 Operator 注册表。
-//
 // Python: Trainer.apply_updates(operators, updates) — 静态方法
 // 遍历 updates 映射，对每个 Operator 直接调用 SetParameter 设置参数值。
 // 注意：此方法与 update_execution.ApplyUpdates 不同——后者走 ApplyUpdate 路径
@@ -414,14 +401,11 @@ func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.Upd
 }
 
 // SelectBestCandidateOnVal 在验证集上选择最优候选更新。
-//
 // 候选评估与选择（方案 A）：
 // - 在验证集上评估每个候选更新，选择最优
 // - 使用 Operator.GetState/LoadState 快照回滚，避免复制 Agent
 // - 最终恢复 operators 为最优状态（提交最优）
-//
 // 返回 (最优分数, 最优评估结果, error)。
-//
 // Python: Trainer._select_best_candidate_on_val(candidates, agent, val_cases)
 func (t *Trainer) SelectBestCandidateOnVal(
 	ctx context.Context,
@@ -476,10 +460,8 @@ func (t *Trainer) SelectBestCandidateOnVal(
 }
 
 // SnapshotOperatorsState 快照当前所有 Operator 的状态。
-//
 // 保存 Operator 注册表的状态副本，用于候选评估回滚/提交。
 // 返回 map[operatorID]operatorState。
-//
 // Python: Trainer._snapshot_operators_state(operators) — 静态方法
 func SnapshotOperatorsState(operators map[string]operator.Operator) map[string]map[string]any {
 	out := make(map[string]map[string]any, len(operators))
@@ -490,10 +472,8 @@ func SnapshotOperatorsState(operators map[string]operator.Operator) map[string]m
 }
 
 // RestoreOperatorsState 从快照恢复 Operator 注册表状态。
-//
 // 遍历快照中的每个 operator 状态，调用 LoadState 恢复。
 // operatorID 在 operators 中不存在时跳过。
-//
 // Python: Trainer._restore_operators_state(operators, state) — 静态方法
 func RestoreOperatorsState(operators map[string]operator.Operator, state map[string]map[string]any) {
 	for opID, st := range state {
@@ -506,9 +486,7 @@ func RestoreOperatorsState(operators map[string]operator.Operator, state map[str
 }
 
 // GetOperatorRegistry 从 Agent 获取 Operator 注册表。
-//
 // 调用 Agent 的 GetOperators() 方法获取其关联的 Operator 映射。
-//
 // Python: Trainer._get_operator_registry(agent) — 静态方法
 func GetOperatorRegistry(agent evolving.TrainableAgent) map[string]operator.Operator {
 	if agent == nil {
@@ -518,10 +496,8 @@ func GetOperatorRegistry(agent evolving.TrainableAgent) map[string]operator.Oper
 }
 
 // BindUpdater 将 Updater 绑定到 Agent 的 Operator 注册表。
-//
 // 在训练开始前调用，使 Updater 能访问和修改 Operator。
 // 返回绑定的 Operator 数量；0 触发软退出。
-//
 // Python: Trainer._bind_updater(updater, operators)
 func (t *Trainer) BindUpdater(operators map[string]operator.Operator, config map[string]any) int {
 	if t.updater == nil {
@@ -531,11 +507,9 @@ func (t *Trainer) BindUpdater(operators map[string]operator.Operator, config map
 }
 
 // UpdaterRequiresForward 判断 Updater 是否需要前向推理结果。
-//
 // 某些 Updater（如基于梯度的）需要前向推理产生的轨迹数据，
 // 而另一些（如基于规则的）则不需要。
 // 当 Updater 为 nil 时默认返回 true（兼容旧行为）。
-//
 // Python: Trainer._updater_requires_forward(updater)
 func (t *Trainer) UpdaterRequiresForward() bool {
 	if t.updater == nil {
@@ -545,9 +519,7 @@ func (t *Trainer) UpdaterRequiresForward() bool {
 }
 
 // ResumeIfNeeded 如果配置了恢复路径，从检查点恢复训练状态。
-//
 // 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态和 Updater 状态。
-//
 // Python:
 //
 //	Python: ckpt = self._checkpoint_store.load_checkpoint(self._resume_from) — 加载检查点
@@ -618,9 +590,7 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 }
 
 // SaveCheckpointIfNeeded 根据条件判断是否保存检查点。
-//
 // 当达到 checkpointEveryNEpochs 间隔或验证分数提升（checkpointOnImprove）时保存。
-//
 // Python: Trainer._save_checkpoint_if_needed(epoch, val_score, operators, improved)
 func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress *Progress, improved bool) error {
 	if t.checkpointStore == nil || t.checkpointManager == nil {
@@ -649,7 +619,6 @@ func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress
 }
 
 // SetCallbacks 设置训练生命周期回调。
-//
 // Python: Trainer.set_callbacks(callbacks)
 func (t *Trainer) SetCallbacks(callbacks *Callbacks) {
 	t.callbacks = callbacks
@@ -721,7 +690,6 @@ func WithCheckpointManager(manager checkpointing.CheckpointManager) TrainerOptio
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // meanScore 计算评估用例的平均分数。
-//
 // Python: Trainer._mean_score(evaluated)
 func meanScore(cases []*dataset.EvaluatedCase) float64 {
 	if len(cases) == 0 {
@@ -735,7 +703,6 @@ func meanScore(cases []*dataset.EvaluatedCase) float64 {
 }
 
 // normalizeUpdates 将 Updater.Update 返回的 map[schema.UpdateKey]any 转为 map[schema.UpdateKey]schema.UpdateValue。
-//
 // Python: updated 是 Updates (Dict[Tuple[str,str], UpdateValue]) 类型
 func normalizeUpdates(updated map[schema.UpdateKey]any) map[schema.UpdateKey]schema.UpdateValue {
 	if updated == nil {

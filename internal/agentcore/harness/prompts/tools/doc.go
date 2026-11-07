@@ -1,8 +1,6 @@
 // Package tools 提供工具元数据提供者的注册与查询机制。
-//
 // 每个内置工具实现 ToolMetadataProvider 接口，提供双语描述（cn/en）
 // 和参数 JSON Schema。所有工具通过 init() 自注册到全局注册表。
-//
 // 文件目录：
 //
 //	tools/

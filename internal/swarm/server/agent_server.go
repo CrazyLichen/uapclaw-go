@@ -26,7 +26,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // streamTaskEntry 流式任务登记项。
-//
 // 持有 requestID 仅用于日志与身份判定；context.CancelFunc 是函数值、不可比较，
 // 因此「槽里还是不是我」必须靠本结构体的指针相等来判断。
 type streamTaskEntry struct {
@@ -37,11 +36,9 @@ type streamTaskEntry struct {
 }
 
 // AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，通过 AgentTransport 接口通信。
-//
 // Start() 非阻塞（内部起 goroutine 运行主循环），对齐 Python server.start() 风格。
 // 流式任务通过 sessionStreamTasks 追踪，支持按会话取消。
 // 支持 ChannelTransport（进程内）和将来的 WebSocketTransport（跨进程）。
-//
 // Python: jiuwenswarm/server/agent_server.py (AgentWebSocketServer)
 type AgentServer struct {
 	// config 配置实例
@@ -243,7 +240,6 @@ func (s *AgentServer) AgentManager() *runtime.AgentManager {
 }
 
 // PlanController 返回服务端持有的计划模式控制器。
-//
 // Python: agent_ws_server.py 模块级 _SERVER_PLAN_CONTROLLER（get_plan_active_sessions 同源）
 func (s *AgentServer) PlanController() *swruntime.PlanModeController {
 	return s.planController
@@ -266,7 +262,6 @@ func ResetInstance() {
 }
 
 // SendPush AgentServer 主动向 Gateway 推送消息（高层方法）。
-//
 // Python: AgentWebSocketServer.send_push(msg)
 // 内部流程：BuildServerPushWire(msg) → json.Marshal → sendToGateway(data)
 // 这是所有 server_push 场景的统一入口。
@@ -372,7 +367,6 @@ func (s *AgentServer) run(ctx context.Context) {
 
 // startConsumeLoop 从传输通道持续读取 JSON 字节并反序列化为 E2AEnvelope 分发处理。
 // 阻塞直到 ctx 取消或通道关闭。
-//
 // 当前 ChannelTransport 的 Send/Recv 接口方法是从 Gateway 视角设计的：
 //   - Send(data) 写入 sendCh（Gateway→AgentServer）
 //   - Recv() 返回 recvCh 的读取端（AgentServer→Gateway）
@@ -425,13 +419,11 @@ func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 }
 
 // beginStreamTask 创建流式请求的子 ctx 并登记任务，返回收尾函数。
-//
 // 收尾顺序：先按身份释放登记项，再无条件 cancel 本次子 ctx。
 // Python 的 asyncio.Task 完成即自身终结、自动从父任务集合移除；Go 的
 // context.WithCancel 必须显式 cancel 才会从父 ctx 的 children 表摘除，
 // 否则每次正常完成的流式请求都会泄漏一个子 context（go vet 的 lostcancel
 // 不会报，因为 cancel 作为实参传给了 registerStreamTask）。
-//
 // 这里的 cancel 只作用于本请求自己的 ctx，不会像旧实现那样按 sessionID
 // 查槽位误取消下一轮；cancel 幂等，handleCancel 提前取消后再调也是 no-op。
 func (s *AgentServer) beginStreamTask(ctx context.Context, sessionID, requestID string) (context.Context, func()) {
@@ -444,7 +436,6 @@ func (s *AgentServer) beginStreamTask(ctx context.Context, sessionID, requestID 
 }
 
 // registerStreamTask 注册流式任务并返回登记项。
-//
 // 单槽语义（对齐 Python agent_ws_server.py:1172）：同一 session 只保留最新一条，
 // 后注册会覆盖先注册。被覆盖的旧流此后无法被 cancelStreamTask 选中，
 // 因此这里补一条 warn 让"同一 session 两条流重叠"从静默变为可观测。
@@ -471,7 +462,6 @@ func (s *AgentServer) registerStreamTask(sessionID, requestID string, cancel con
 }
 
 // releaseStreamTask 释放登记项：仅当槽内仍是自己时才删除，永不调用 cancel。
-//
 // Python: agent_ws_server.py:1259-1261 —— if map.get(sid) is current_task: pop
 // （"仅清除自身，避免误删后续新任务"；Go 额外保证不会取消别人的 cancel）
 func (s *AgentServer) releaseStreamTask(sessionID string, entry *streamTaskEntry) {
@@ -490,7 +480,6 @@ func (s *AgentServer) releaseStreamTask(sessionID string, entry *streamTaskEntry
 }
 
 // cancelStreamTask 取消并移除指定会话当前登记的流式任务。
-//
 // 只有 handleCancel（intent=cancel/supplement）与进程退出才会走到这里；
 // 请求自身的收尾用 releaseStreamTask，不能用本函数。
 func (s *AgentServer) cancelStreamTask(sessionID string) {
@@ -532,15 +521,12 @@ func (s *AgentServer) cancelAllStreamTasks() {
 
 // sendToGateway 通过传输通道发送数据到 Gateway 侧。
 // Python: AgentWebSocketServer 中 ws.send(json_str) 写响应。
-//
 // 同 startConsumeLoop，AgentServer 需要反方向使用通道：
 //   - 写入响应：向 recvCh 写入（通过 ChannelTransport.TrySendToRecvCh）
 //
 // M-42: 改调 TrySendToRecvCh（持锁 + closed 检查 + 非阻塞丢弃语义）——
 // 原先裸 `ct.RecvCh() <- data` 绕过锁保护，Close 后 send on closed channel panic。
-//
 // TODO(Transport): AgentTransport 接口增加服务端方法后消除类型断言。
-//
 // 返回 false 表示 transport 已关闭或接收缓冲已满（对齐 Python _send_runtime_event
 // "发送失败即停止流" 的语义）。
 func (s *AgentServer) sendToGateway(data []byte) bool {

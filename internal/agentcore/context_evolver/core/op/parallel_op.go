@@ -12,11 +12,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ParallelOp 并行组合。
-//
 // 使用 errgroup.Group 并行执行，任一失败 cancel 其余。
 // 共享 RuntimeContext（需调用方保证并发安全，对齐 Python asyncio.gather 共享 context）。
 // With 支持扁平化嵌套的 ParallelOp（对齐 Python ParallelOp.__or__）。
-//
 // Python: openjiuwen/extensions/context_evolver/core/op/parallel_op.py
 type ParallelOp struct {
 	ops []BaseOp
@@ -26,7 +24,6 @@ type ParallelOp struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // With 追加并行操作，返回扩展后的 ParallelOp。
-//
 // 对齐 Python ParallelOp.__or__(other)。
 // 如果 other 是 *ParallelOp，则扁平化追加其所有操作（对齐 Python 的 __or__ 扁平化）。
 func (p *ParallelOp) With(other BaseOp) *ParallelOp {

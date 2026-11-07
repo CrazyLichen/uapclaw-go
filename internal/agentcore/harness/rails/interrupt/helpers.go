@@ -24,7 +24,6 @@ var logComponent = logger.ComponentAgentCore
 
 // ConvertInteractionsToAskUserQuestion 将 __interaction__ payload 转换为前端
 // chat.ask_user_question 格式。
-//
 // Python: convert_interactions_to_ask_user_question(state_outputs)
 // (interrupt_helpers.py line 285-339)
 //
@@ -155,7 +154,6 @@ func extractQuestionFromInteraction(payload map[string]any) map[string]any {
 }
 
 // isLatestInputPlaceholder 判断交互是否为 user_latest_input 占位交互（M-11）。
-//
 // 该交互的 kind 为 "latest_input"，语义是「图挂起等输入」而非权限审批；
 // 不做判别会让前端凭空弹一个空问题的三选项审批框（对齐 Python：元组形状导致
 // 转换器直接跳过）。

@@ -92,7 +92,6 @@ func DeepCopyUpdates(updates map[string][]map[string]any) map[string][]map[strin
 }
 
 // ConvertUpdatesFromJSON 将 JSON 反序列化后的 updates 数据转换为 map[string][]map[string]any。
-//
 // JSON 反序列化会将 []map[string]any 变为 []any（每个元素是 map[string]any），
 // 导致类型断言 gs.(map[string][]map[string]any) 失败。此函数递归处理，
 // 将 map[string]any 中值为 []any 的字段转换为 []map[string]any。

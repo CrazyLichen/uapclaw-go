@@ -95,7 +95,6 @@ func NewExitWorktreeTool(manager *WorktreeManager, language, agentID string) (*E
 func (t *worktreeToolBase) Card() *tool.ToolCard { return t.card }
 
 // GetCallTimeout 返回外层调用预算，沿用卡片级策略。
-//
 // worktree 操作（git 子进程）自带 30s 命令超时，不需要额外清理宽限。
 func (t *worktreeToolBase) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
 	return tool.BaseCallTimeout(inputs, defaultTimeout)

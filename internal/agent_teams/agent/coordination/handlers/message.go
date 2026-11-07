@@ -16,7 +16,6 @@ import (
 
 // MessageHandler 处理消息与邮箱事件：MESSAGE、BROADCAST、POLL_MAILBOX、
 // 以及 MEMBER_SHUTDOWN 时的邮箱排空。
-//
 // EVENT_METHOD_MAP 事件到方法映射：
 //   - message                → onMessageOrBroadcast
 //   - broadcast              → onMessageOrBroadcast
@@ -252,7 +251,6 @@ func formatTeamMessage(msg *database.TeamMessageBase, isHumanAgent bool) string 
 }
 
 // ackUserBoundMessage Leader 自动确认 teammate→user 的直接消息。
-//
 // 对齐 Python: MessageHandler._ack_user_bound_message。
 // user 伪成员没有轮询 agent，leader 代为确认——不标记则 unread 累积
 // 反复唤醒 dispatcher。M-29: 完整实现（原空壳 TODO(#9.63)）。
@@ -286,7 +284,6 @@ func (h *MessageHandler) ackUserBoundMessage(ctx context.Context, event types.Co
 }
 
 // notifyHumanAgentInbound 转发团队侧消息到 SDK human-agent 入站回调。
-//
 // 对齐 Python: MessageHandler._notify_human_agent_inbound。
 // Leader 观察团队 topic 上的每个 MESSAGE/BROADCAST 事件：
 // 直发消息接收方为 human-agent 时触发其回调；广播触发所有已注册回调

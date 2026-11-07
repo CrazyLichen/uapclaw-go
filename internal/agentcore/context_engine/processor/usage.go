@@ -17,16 +17,13 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResetCompressionUsage 重置压缩用量追踪。
-//
 // Python: ContextProcessor._reset_compression_usage()
 func (p *BaseProcessor) ResetCompressionUsage() {
 	p.compressionUsage = nil
 }
 
 // RecordCompressionUsage 记录压缩 LLM 调用的用量。
-//
 // 从 AssistantMessage 的 UsageMetadata 字段提取用量信息并合并到基类追踪中。
-//
 // Python: ContextProcessor._record_compression_usage(response)
 func (p *BaseProcessor) RecordCompressionUsage(response *llm_schema.AssistantMessage) {
 	usage := ExtractUsageMetadata(response)
@@ -37,9 +34,7 @@ func (p *BaseProcessor) RecordCompressionUsage(response *llm_schema.AssistantMes
 }
 
 // CurrentCompressionUsage 获取当前压缩用量快照。
-//
 // 返回用量 map 的副本，避免外部修改影响内部状态。
-//
 // Python: ContextProcessor._current_compression_usage()
 func (p *BaseProcessor) CurrentCompressionUsage() map[string]any {
 	if p.compressionUsage == nil {
@@ -50,7 +45,6 @@ func (p *BaseProcessor) CurrentCompressionUsage() map[string]any {
 
 // ExtractUsageMetadata 从 AssistantMessage 中提取用量元数据，
 // 转换为标准 map 格式。
-//
 // 提取结果映射：
 //
 //	calls=1（调用次数）, input_tokens（输入令牌）, output_tokens（输出令牌）, total_tokens（总令牌）, cache_tokens（缓存令牌）,
@@ -77,7 +71,6 @@ func ExtractUsageMetadata(msg *llm_schema.AssistantMessage) map[string]any {
 }
 
 // MergeCompressionUsage 合并两份压缩用量。
-//
 // 合并规则（与 Python 对齐）：
 //   - calls, input_tokens, output_tokens, total_tokens, cache_tokens → 累加（int）
 //   - input_cost, output_cost, total_cost → 累加（float64）

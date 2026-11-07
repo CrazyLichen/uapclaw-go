@@ -16,11 +16,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ParallelScalingOp 并行缩放操作：生成 k 条多样轨迹，交由 BestOfNOp 选优。
-//
 // 对齐 Python ParallelScalingOp：
 // 为同一 query 生成 k 条不同温度的轨迹，允许 Agent 探索不同解法。
 // 最佳轨迹由后续 BestOfNOp 评估选出。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reasoning_bank/matts.py
 type ParallelScalingOp struct {
 	op.OpBase
@@ -33,10 +31,8 @@ type ParallelScalingOp struct {
 }
 
 // SequentialScalingOp 串行缩放操作：对单条轨迹进行 k 轮自检精炼。
-//
 // 对齐 Python SequentialScalingOp：
 // 迭代精炼一条轨迹，每轮 Agent 重新审视并修正推理。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reasoning_bank/matts.py
 type SequentialScalingOp struct {
 	op.OpBase
@@ -47,10 +43,8 @@ type SequentialScalingOp struct {
 }
 
 // BestOfNOp Best-of-N 选择操作：用 LLM 评估器从 N 条候选轨迹中选最优。
-//
 // 对齐 Python BestOfNOp：
 // 基于 Progress/efficiency/error/quality 四维度评估，返回最佳轨迹索引。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reasoning_bank/matts.py
 type BestOfNOp struct {
 	op.OpBase
@@ -59,10 +53,8 @@ type BestOfNOp struct {
 }
 
 // SelfContrastMemoryOp 自对比记忆提取操作：对比成功/失败轨迹提取推理策略。
-//
 // 对齐 Python SelfContrastMemoryOp：
 // 比较成功与失败轨迹，识别致胜模式和失败原因，提取可迁移的记忆。
-//
 // Python: openjiuwen/extensions/context_evolver/retrieve/task/reasoning_bank/matts.py
 type SelfContrastMemoryOp struct {
 	op.OpBase

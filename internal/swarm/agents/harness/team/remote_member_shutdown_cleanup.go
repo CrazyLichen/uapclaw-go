@@ -19,12 +19,10 @@ import (
 // 本文件对齐 Python remote_member_bootstrap.py 的 shutdown cleanup 切片（S-04）：
 // 分布式 team 全员 shutdown 后延迟删除 session runtime，并在新请求进入
 // process_team_message_stream 时等待 pending 清理完成。
-//
 // 完整对应 Python: jiuwenswarm/agents/harness/team/remote_member_bootstrap.py L102-107
 // （_is_distributed_leader_runtime）、L1236-1313（全员关闭判定/调度/延迟清理/等待）、
 // L1316-1331（wait_for）、L1334-1361（notice 推送）、L1364-1386（run_pending）、
 // L1394-1474（attach wrapper）。
-//
 // Go 差异：Python 用 asyncio.Task + monkey-patch tool.invoke；Go 用
 // goroutine + done channel + ResourceMgr 注册表替换（AbilityManager.executeTool
 // 每次调用从注册表动态解析工具实例，注册表替换即生效，与 monkey-patch 等价）。

@@ -1,5 +1,4 @@
 // Package config 提供 YAML 配置管理和热重载能力。
-//
 // 核心能力：
 //   - 读写 config.yaml（基于 gopkg.in/yaml.v3）
 //   - 环境变量解析（${VAR:-default} 语法），递归处理 map/slice

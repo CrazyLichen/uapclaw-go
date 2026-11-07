@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RRFFusion 倒数秩融合（Reciprocal Rank Fusion）。
-//
 // 将多路检索结果融合为单一排序结果。
 // 对齐 Python retrieval/utils/fusion.py (rrf_fusion)。
 //   - 用 text 作为唯一键做去重

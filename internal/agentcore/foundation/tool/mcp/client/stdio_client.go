@@ -19,7 +19,6 @@ import (
 
 // StdioClient Stdio 子进程传输的 MCP 客户端。
 // 通过 stdin/stdout 与子进程通信，组合 mcp-go 的 Client 实现 MCP 协议交互。
-//
 // Python: openjiuwen/core/foundation/tool/mcp/client/stdio_client.py (StdioClient)
 type StdioClient struct {
 	// config MCP 服务器配置
@@ -54,7 +53,6 @@ func NewStdioClient(config *types.McpServerConfig) *StdioClient {
 
 // Connect 建立 Stdio 连接，启动子进程并初始化会话。
 // 从 config.Params 提取 command/args/env，创建子进程客户端并完成 MCP 握手。
-//
 // 与 Python 的差异：Python 支持 encoding_error_handler 参数指定子进程 stdin/stdout 的
 // 编码错误处理策略，Go 不需要此参数。Go 的 stdin/stdout 是字节流，JSON 编解码在
 // json.Unmarshal/json.Marshal 层统一处理 UTF-8，不涉及 Python 的 str↔bytes 编码转换问题。

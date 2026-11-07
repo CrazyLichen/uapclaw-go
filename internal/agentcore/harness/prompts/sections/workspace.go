@@ -36,7 +36,6 @@ type DirNode struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ScanDirectoryStructure 扫描目录结构（最大深度限制）
-//
 // rootPath 为当前扫描目录；currentDepth 为当前递归深度（0=根）；
 // maxDepth 为最大深度（2=扫描到第2层）；lang 为语言标识。
 func ScanDirectoryStructure(rootPath string, currentDepth int, maxDepth int, lang string) []DirNode {
@@ -131,7 +130,6 @@ func FormatTree(nodes []DirNode, lang string) string {
 }
 
 // BuildWorkspaceSection 构建工作空间节（Priority 70）
-//
 // rootPath 为工作目录根路径；dirTree 为目录树文本（可为空）。
 func BuildWorkspaceSection(rootPath string, dirTree string, lang string) saprompt.PromptSection {
 	var header string

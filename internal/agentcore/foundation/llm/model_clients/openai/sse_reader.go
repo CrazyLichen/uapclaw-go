@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SSEReader 从 HTTP 响应体读取 SSE (Server-Sent Events) 事件流。
-//
 // SSE 协议格式：
 //
 //	SSE 数据格式: data: {"id":"...","choices":[...]}\n\n
@@ -51,7 +50,6 @@ func NewSSEReader(r io.Reader) *SSEReader {
 }
 
 // ReadEvent 读取下一个 SSE 事件，返回 data 字段的 JSON 内容。
-//
 // 返回值：
 //   - data: SSE data 字段内容（不含 "data: " 前缀）
 //   - io.EOF: 流正常结束（收到 "data: [DONE]" 或底层读取完毕）

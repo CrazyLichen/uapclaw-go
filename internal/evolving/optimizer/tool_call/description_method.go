@@ -25,7 +25,6 @@ type ExamplesObtained struct {
 
 // ToolDescriptionMethod 基于正负例对比的工具描述优化方法。
 // 通过批判描述、对比正负例、生成增强描述来迭代优化工具描述。
-//
 // Python: ToolDescriptionMethod
 type ToolDescriptionMethod struct {
 	BaseMethod
@@ -53,7 +52,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewToolDescriptionMethod 创建 ToolDescriptionMethod 实例。
-//
 // Python: ToolDescriptionMethod.__init__(self, config, eval_fn)
 func NewToolDescriptionMethod(config map[string]any, model *llm.Model, evalFn *SimpleEval) *ToolDescriptionMethod {
 	return &ToolDescriptionMethod{
@@ -64,7 +62,6 @@ func NewToolDescriptionMethod(config map[string]any, model *llm.Model, evalFn *S
 
 // Step 执行单步扩展。
 // it==0 时返回原始描述，it>0 时加载负例并生成增强描述。
-//
 // Python: ToolDescriptionMethod.step(tool, examples, prev_outputs, it)
 func (m *ToolDescriptionMethod) Step(
 	ctx context.Context,
@@ -113,7 +110,6 @@ func (m *ToolDescriptionMethod) Step(
 }
 
 // Generate 生成增强描述。
-//
 // Python: ToolDescriptionMethod.generate(tool, examples, prev_outputs, it)
 func (m *ToolDescriptionMethod) Generate(
 	ctx context.Context,
@@ -130,7 +126,6 @@ func (m *ToolDescriptionMethod) Generate(
 }
 
 // EvalLoop 评估循环。
-//
 // Python: ToolDescriptionMethod.eval_loop(tool, description, examples, runs)
 func (m *ToolDescriptionMethod) EvalLoop(
 	ctx context.Context,
@@ -149,7 +144,6 @@ func (m *ToolDescriptionMethod) EvalLoop(
 
 // CritiqueDescriptions 批判描述（正负例对比版）。
 // Python 中有两个同名方法，后者覆盖前者，此处实现后者（正负例对比版）。
-//
 // Python: ToolDescriptionMethod.critique_descriptions（第二个定义，204-311 行）
 func (m *ToolDescriptionMethod) CritiqueDescriptions(
 	ctx context.Context,
@@ -292,7 +286,6 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 }
 
 // CritiqueAllDescriptions 批判所有描述（正负例对比）。
-//
 // Python: ToolDescriptionMethod.critique_all_descriptions
 func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	ctx context.Context,
@@ -384,7 +377,6 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 }
 
 // CritiqueNegativeExamples 批判负例。
-//
 // Python: ToolDescriptionMethod.critique_negative_examples
 func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 	ctx context.Context,
@@ -451,7 +443,6 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 }
 
 // GenerateDescriptionFromDocumentation 从文档生成增强描述。
-//
 // Python: ToolDescriptionMethod.generate_description_from_documentation
 func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 	ctx context.Context,
@@ -561,7 +552,6 @@ Return JSON following this exact schema structure (modify only description texts
 }
 
 // LoadExamples 从 JSON 文件加载示例。
-//
 // Python: ToolDescriptionMethod.load_examples(examples_dir, function_name, max_num_examples)
 func (m *ToolDescriptionMethod) LoadExamples(examplesDir, functionName string, maxNumExamples int) ([]ExampleTuple, error) {
 	examplesPath := examplesDir + "/" + functionName + ".json"
@@ -587,7 +577,6 @@ func (m *ToolDescriptionMethod) LoadExamples(examplesDir, functionName string, m
 
 // GetNegativeExamples 获取负例。
 // 如果配置路径不存在，回退到从示例目录加载。
-//
 // Python: ToolDescriptionMethod.get_negative_examples(function_name)
 func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []ExampleTuple {
 	examplesPath := getConfigString(m.config, "neg_ex_input_path")
@@ -641,7 +630,6 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 
 // GetOriginalDescription 获取工具的原始描述。
 // 如果描述中包含 'The description of this function is: "' 前缀，则提取其中的内容。
-//
 // Python: ToolDescriptionMethod.get_original_description(tool)
 func (m *ToolDescriptionMethod) GetOriginalDescription(tool map[string]any) string {
 	description := toString(tool["description"])
@@ -658,7 +646,6 @@ func (m *ToolDescriptionMethod) GetOriginalDescription(tool map[string]any) stri
 }
 
 // GetExamples 获取工具的示例数据（BeamSearchMethod 接口方法）。
-//
 // Python: ToolDescriptionMethod.get_examples(tool)
 func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	functionName := getToolName(tool)

@@ -314,7 +314,6 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newDisabledSearchResult 构造「记忆检索不可用」结果。
-//
 // Python 对应分支返回 {"results": [], "disabled": True, "error": ...}，
 // 这里显式给空切片，避免 nil 切片被序列化成 null。
 func newDisabledSearchResult(errMsg string) *MemorySearchResult {
@@ -326,7 +325,6 @@ func newDisabledSearchResult(errMsg string) *MemorySearchResult {
 }
 
 // fsResultError 将 sys_operation 的失败结果转为 error。
-//
 // sys_operation 的失败以 BaseResult.Code != 0 表达、err 恒为 nil（对齐 Python
 // 返回 error result 而非 raise）。Python 的 memory 工具靠解引用 result.data
 // 触发异常走 except 分支，Go 侧判空后会静默成功——必须显式检查 Code，

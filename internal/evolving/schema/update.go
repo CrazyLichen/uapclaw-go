@@ -8,12 +8,10 @@ import (
 
 // UpdateKey 更新键，标识 (operatorID, target) 二元组。
 // [0] 为 operatorID，[1] 为 target。
-//
 // Python: UpdateKey = Tuple[str, str] (agent_evolving/trajectory/types.py)
 type UpdateKey [2]string
 
 // UpdateValue 结构化更新契约，在线和离线应用路径共享。
-//
 // Python: openjiuwen/agent_evolving/types.py UpdateValue
 //
 // 注意：Go 的 struct 零值中 Mode 和 Effect 为空字符串，
@@ -32,7 +30,6 @@ type UpdateValue struct {
 }
 
 // ApplyResult 单个归一化更新应用到一个演化目标的结果。
-//
 // Python: openjiuwen/agent_evolving/types.py ApplyResult
 type ApplyResult struct {
 	// OperatorID 操作器标识
@@ -67,12 +64,10 @@ type UpdateValueOption func(*UpdateValue)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // UpdateMode 更新模式。
-//
 // Python: UpdateMode = Literal["replace", "append", "merge"]
 type UpdateMode string
 
 // UpdateEffect 更新效果。
-//
 // Python: UpdateEffect = Literal["state", "pending_change"]
 type UpdateEffect string
 
@@ -105,14 +100,12 @@ func (k UpdateKey) OperatorID() string { return k[0] }
 func (k UpdateKey) Target() string { return k[1] }
 
 // Ok 返回应用结果是否成功（已应用且无错误）。
-//
 // Python: ApplyResult.ok property
 func (r ApplyResult) Ok() bool {
 	return r.Applied && len(r.Errors) == 0
 }
 
 // NewUpdateValue 创建 UpdateValue 实例，设置默认 Mode=replace, Effect=state。
-//
 // Python: UpdateValue(payload, mode=REPLACE_MODE, effect=STATE_EFFECT, ...)
 func NewUpdateValue(payload any, opts ...UpdateValueOption) UpdateValue {
 	uv := UpdateValue{
@@ -152,7 +145,6 @@ func WithUpdateMetadata(metadata map[string]any) UpdateValueOption {
 }
 
 // NormalizeUpdateValue 将遗留更新包装为结构化契约。
-//
 // 兼容规则：
 //   - 已是 UpdateValue → 回填零值字段后返回
 //   - target 为 "experiences" → 追加 + 暂存变更
@@ -188,7 +180,6 @@ func NormalizeUpdateValue(value any, target string) UpdateValue {
 }
 
 // NormalizeUpdates 将混合的遗留/结构化更新归一化为 UpdateValue 映射。
-//
 // Python: normalize_updates(updates)
 func NormalizeUpdates(updates map[UpdateKey]any) map[UpdateKey]UpdateValue {
 	result := make(map[UpdateKey]UpdateValue, len(updates))
@@ -214,7 +205,6 @@ func NewApplyResult(operatorID, target string, applied bool, mode UpdateMode, ef
 }
 
 // ApplyResultWithErrors 创建带错误的 ApplyResult，包含 ChangeType 和 Metadata。
-//
 // Python: ApplyResult(applied=False, change_type=..., metadata=dict(...), errors=[...])
 func ApplyResultWithErrors(operatorID, target string, mode UpdateMode, effect UpdateEffect, value any, changeType *string, metadata map[string]any, errs ...string) ApplyResult {
 	return ApplyResult{

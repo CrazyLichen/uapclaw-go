@@ -1,7 +1,5 @@
 // Package wsorigin 提供 WebSocket Origin 安全校验。
-//
 // 用于验证 WebSocket 连接的 Origin 头，防止跨站 WebSocket 劫持（CSWSH）。
-//
 // 本包包含三层抽象：
 //   - 核心层：OriginChecker 结构体 + IsEnabled/IsAllowed/GetAllowedHosts/ForbiddenResponse 方法
 //     纯逻辑，不依赖任何 WebSocket 框架。
@@ -14,7 +12,6 @@
 //	UAPCLAW_WS_ALLOWED_ORIGIN_HOSTS=example.com,localhost  # 白名单（逗号分隔）
 //
 // 白名单特殊值 "none"：允许无 Origin 头的请求（如非浏览器客户端）。
-//
 // 文件目录：
 //
 //	wsorigin/

@@ -20,10 +20,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DashscopeEmbedding 阿里云 DashScope 向量嵌入客户端。
-//
 // 使用 HTTP 直接调用 DashScope 多模态嵌入 API，
 // 支持文本+图片+视频多模态嵌入。
-//
 // Python: openjiuwen/core/retrieval/embedding/dashscope_embedding.py
 type DashscopeEmbedding struct {
 	// config 嵌入配置

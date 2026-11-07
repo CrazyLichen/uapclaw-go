@@ -1,9 +1,7 @@
 // Package monitor 提供团队监控能力：事件观察、状态查询和实时事件流。
-//
 // TeamMonitor 注册到 TeamAgent 的事件监听器上，将内部 EventMessage 转换为
 // 面向前端的 MonitorEvent，并通过 channel 供消费者实时获取。
 // 同时提供团队/成员/任务/消息的只读查询接口。
-//
 // 文件目录：
 //
 //	monitor/

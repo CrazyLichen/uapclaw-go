@@ -1,6 +1,5 @@
 // 本文件对应 Python openjiuwen/harness/schema/interaction.py，
 // 提供会话级交互监督器使用的领域对象。
-//
 // 这些对象不包含任何 JiuwenSwarm 协议类型：会话要么收到完整的用户 inputs，
 // 要么收到"继续执行当前持续目标"的指令；只有拿到唯一输出租约的调用方，
 // 才会得到输出消费者。
@@ -24,7 +23,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InteractionOutputDriver 交互输出驱动，由 DeepAgent 实现。
-//
 // Python 用 TYPE_CHECKING 前向引用 DeepAgent（interaction.py L23）；
 // Go 不允许 schema 反向依赖 harness，故收窄为两个方法的接口。
 type InteractionOutputDriver interface {
@@ -51,7 +49,6 @@ type RoundWorkKind string
 type InteractionEventType string
 
 // SendInputRequest 宿主投递输入的请求。
-//
 // inputs["query"] 是唯一的用户文本来源；整个 mapping 原样保留，
 // 使既有 DeepAgent 调用元数据（会话 id、可信目录等）随 work item 传递。
 // Python: SendInputRequest (interaction.py L43)
@@ -105,7 +102,6 @@ type ActiveInteractionRound struct {
 }
 
 // InteractionEvent 由交互输出生产者发出的结构化事件。
-//
 // Payload 保持 map[string]any（与上游 Dict[str, Any] 逐字对应），键契约固定为：
 //   - goal.updated    → {"goal": map[string]any | nil}
 //   - execution.error → {"code": string, "message": string, "goal": map[string]any（可选，仅非 nil 时写入）}
@@ -121,7 +117,6 @@ type InteractionEvent struct {
 }
 
 // RoundOutcome 一个由 Agent 执行的交互轮次的结果。
-//
 // NextWork 由 Agent 决定，DeepAgent 负责入队。
 // Python: RoundOutcome (interaction.py L181)
 type RoundOutcome struct {
@@ -167,7 +162,6 @@ type leaseFrame struct {
 }
 
 // OutputLeaseManager 持有输出队列并原子地挂接/拆除唯一消费者。
-//
 // 与 Python 的差异：Python 队列无界（asyncio.Queue()），Go 用容量 128 的
 // 有界 channel，满则丢弃新帧并限流告警（spec D3）。
 // Python: OutputLeaseManager (interaction.py L237)
@@ -564,7 +558,6 @@ func (m *OutputLeaseManager) drainQueueLocked() {
 }
 
 // enqueueEndLocked 入队结束哨兵；队列满时先丢队首帧给它腾位置。
-//
 // 结束信号优先于尾部数据：若因队列满而丢失哨兵，读者将永远等不到结束。
 // 每轮迭代要么成功入队（返回），要么少一帧，故必然终止。
 func (m *OutputLeaseManager) enqueueEndLocked() {

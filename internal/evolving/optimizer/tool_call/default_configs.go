@@ -9,7 +9,6 @@ package tool_call
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // DefaultConfigEg Example Stage 默认配置。
-//
 // Python: default_config_eg
 var DefaultConfigEg = map[string]any{
 	"gen_model_id":       "gpt-5-mini",
@@ -27,7 +26,6 @@ var DefaultConfigEg = map[string]any{
 }
 
 // DefaultConfigDesc Description Stage 默认配置。
-//
 // Python: default_config_desc
 var DefaultConfigDesc = map[string]any{
 	"gen_model_id":          "gpt-5-mini",

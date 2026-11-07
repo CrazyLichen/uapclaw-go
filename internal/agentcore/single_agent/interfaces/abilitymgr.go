@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AbilityManagerInterface 能力管理器接口，Agent 通过此接口注册和调度能力。
-//
 // Python: AbilityManager 的公开方法集。
 // 具体实现：ability.AbilityManager、P2PAbilityManager。
 type AbilityManagerInterface interface {
@@ -32,7 +31,6 @@ type AbilityManagerInterface interface {
 	// ListToolInfo 列出工具信息供 LLM 使用。
 	ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]schema.ToolInfoInterface, error)
 	// Execute 执行工具调用。
-	//
 	// parallelToolCalls 为 false 时按顺序逐个执行：有状态工具（浏览器动作序列、
 	// worktree 切换）并发执行会打乱动作语义。
 	Execute(

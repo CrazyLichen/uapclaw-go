@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InstanceConfig 命名实例配置。
-//
 // Python: jiuwenswarm/instance_manager/config.py InstanceConfig
 type InstanceConfig struct {
 	Name      string         // 实例名称（唯一标识）
@@ -23,7 +22,6 @@ type InstanceConfig struct {
 }
 
 // InstanceStatus 实例运行状态。
-//
 // 1.7 仅定义结构，进程检测在领域十二实现。
 // Python: jiuwenswarm/instance_manager/config.py InstanceStatus
 type InstanceStatus struct {
@@ -36,7 +34,6 @@ type InstanceStatus struct {
 }
 
 // instancesYAMLData instances.yaml 的顶层结构。
-//
 // 预留结构体，当前未直接使用（通过 map[string]any 操作 YAML 数据）。
 //
 //nolint:unused // 预留结构体，后续领域实现时启用
@@ -45,7 +42,6 @@ type instancesYAMLData struct {
 }
 
 // instanceEntry instances.yaml 中单个实例的条目。
-//
 // 预留结构体，当前未直接使用（通过 map[string]any 操作 YAML 数据）。
 //
 //nolint:unused // 预留结构体，后续领域实现时启用
@@ -99,7 +95,6 @@ var instanceNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ValidateInstanceName 验证实例名称，返回 nil 表示合法。
-//
 // 规则（与 Python validate_instance_name() 对齐）：
 //   - 长度 1-64
 //   - 只含字母、数字、下划线、连字符
@@ -130,7 +125,6 @@ func IsValidInstanceName(name string) bool {
 }
 
 // CalculateInstancePorts 计算实例端口分配：base + index * PortStep。
-//
 // index=0 为默认实例，index=1+ 为命名实例。
 // Python: calculate_instance_ports(index)
 func CalculateInstancePorts(index int) map[string]int {
@@ -142,7 +136,6 @@ func CalculateInstancePorts(index int) map[string]int {
 }
 
 // ComputeAutoPort 计算单个端口类型。
-//
 // Python: compute_auto_port(port_type, index)
 func ComputeAutoPort(portType string, index int) int {
 	base, ok := basePorts[portType]
@@ -174,7 +167,6 @@ func InstanceWorkspacePath(name string) string {
 }
 
 // LoadInstancesYAML 加载 instances.yaml。
-//
 // 文件不存在时返回空结构（不是错误）。
 // Python: load_instances_yaml()
 func LoadInstancesYAML() (map[string]any, error) {
@@ -205,7 +197,6 @@ func LoadInstancesYAML() (map[string]any, error) {
 }
 
 // SaveInstancesYAML 保存 instances.yaml。
-//
 // Python: save_instances_yaml(data)
 func SaveInstancesYAML(data map[string]any) error {
 	path := InstancesYAMLPath()
@@ -229,7 +220,6 @@ func SaveInstancesYAML(data map[string]any) error {
 }
 
 // UpdateInstancesYAML 添加或更新实例条目。
-//
 // Python: update_instances_yaml(name, workspace, ports)
 func UpdateInstancesYAML(name string, workspace string, ports map[string]int) error {
 	data, err := LoadInstancesYAML()
@@ -265,7 +255,6 @@ func UpdateInstancesYAML(name string, workspace string, ports map[string]int) er
 }
 
 // GetInstanceIndex 获取实例在 instances.yaml 中的序号（1 起始，0 预留给默认）。
-//
 // Python: get_instance_index(name)
 func GetInstanceIndex(name string) (int, error) {
 	data, err := LoadInstancesYAML()
@@ -290,7 +279,6 @@ func GetInstanceIndex(name string) (int, error) {
 }
 
 // GetInstanceConfig 从 instances.yaml 加载实例配置。
-//
 // Python: get_instance_config(name)
 func GetInstanceConfig(name string) (*InstanceConfig, error) {
 	data, err := LoadInstancesYAML()
@@ -355,7 +343,6 @@ func GetInstanceConfig(name string) (*InstanceConfig, error) {
 }
 
 // LoadAllInstanceConfigs 加载所有实例配置。
-//
 // Python: load_all_instance_configs()
 func LoadAllInstanceConfigs() (map[string]*InstanceConfig, error) {
 	data, err := LoadInstancesYAML()
@@ -420,7 +407,6 @@ func LoadAllInstanceConfigs() (map[string]*InstanceConfig, error) {
 }
 
 // IsPortAvailable 检查端口是否可用。
-//
 // Python: is_port_available(host, port)
 func IsPortAvailable(host string, port int) bool {
 	addr := fmt.Sprintf("%s:%d", host, port)
@@ -433,7 +419,6 @@ func IsPortAvailable(host string, port int) bool {
 }
 
 // CheckPortConflicts 检查端口冲突。
-//
 // Python: check_port_conflicts(ports, host, existing_ports)
 func CheckPortConflicts(ports map[string]int, existingPorts []int) []int {
 	existingSet := make(map[int]bool, len(existingPorts))

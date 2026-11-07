@@ -3451,7 +3451,6 @@ func TestHandleSkillsClawhubDownload_已存在(t *testing.T) {
 }
 
 // TestHandleSkillsTeamSkillsHubInit_自定义输出 验证 skills 内的自定义输出目录。
-//
 // 语义变更（D-08）：output 此前接受任意路径（含绝对路径），实测 output="/etc"
 // 会在系统目录建树。现收敛为 skills 目录内的相对路径；绝对路径改为拒绝。
 func TestHandleSkillsTeamSkillsHubInit_自定义输出(t *testing.T) {
@@ -3610,7 +3609,6 @@ func newInitTestManager(t *testing.T) (*SkillManager, string) {
 }
 
 // TestHandleSkillsTeamSkillsHubInit_拒绝路径穿越 验证 path/output 越界与 name 非法均被拒。
-//
 // output 参数直接来自 web/TUI 的 RPC 请求，旧实现 filepath.Join(output, name)
 // 无任何边界校验，可让调用方在 /etc 或任意上级目录创建目录树。
 func TestHandleSkillsTeamSkillsHubInit_拒绝路径穿越(t *testing.T) {
@@ -3721,7 +3719,6 @@ func TestHandleSkillsTeamSkillsHubInit_force覆盖(t *testing.T) {
 // ──────────────────────────── 卸载 slug 兜底 ────────────────────────────
 
 // TestHandleSkillsUninstall_不安全name用slug兜底 验证含 / 的历史记录可被卸载。
-//
 // 历史安装可能写入含 / 的 name，目录实际用扁平化的 slug。旧实现遇到
 // safePathName 报错直接返回，这类记录永远卸不掉，磁盘残留也无法通过 RPC 清理。
 func TestHandleSkillsUninstall_不安全name用slug兜底(t *testing.T) {

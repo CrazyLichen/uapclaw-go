@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // slowStreamClient 按脚本在发送前等待，用于制造首帧/空闲超时。
-//
 // 内嵌 BaseModelClient 接口以获得完整方法集：本用例只走 Stream，
 // 其它方法不会被调用（调用即 panic，属测试辅助的常规写法）。
 type slowStreamClient struct {
@@ -201,7 +200,6 @@ func TestModel_Stream_排空超时兜底(t *testing.T) {
 }
 
 // stubbornStreamClient 返回一个永不关闭的通道，且不响应 ctx 取消。
-//
 // 内嵌 *mockModelClient 补齐 BaseModelClient 的其余方法（不会被调用）。
 type stubbornStreamClient struct {
 	*mockModelClient

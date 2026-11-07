@@ -9,12 +9,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SharingBackend 经验共享后端接口。
-//
 // Hub 按 skill_id 分区存储，每个技能保持一个不可变的技能包，
 // 经验 bundle 随时间追加到同一 skill_id 下。
-//
 // backend.LocalFileBackend 隐式实现此接口。
-//
 // Python: openjiuwen/agent_evolving/sharing/backends/base.py SharingBackend
 type SharingBackend interface {
 	// UploadBundle 上传经验 bundle，返回上传结果和可能的错误。

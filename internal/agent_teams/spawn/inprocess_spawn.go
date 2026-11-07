@@ -86,7 +86,6 @@ func InProcessSpawn(
 	inputs := map[string]any{"query": query}
 
 	// 3. 启动 goroutine 运行 Agent（对齐 Python: asyncio.create_task(_run())）
-	//
 	// S-46: 成员任务生命周期不随调用方 ctx 取消。Python 的 create_task 是 detached
 	// 语义——调用方（工具调用/leader 轮次）结束后任务照常运行，只有显式 cancel 才停，
 	// 也不传播 asyncio 取消。Go 直接用 WithCancel(ctx) 会让成员继承调用方取消：实测
@@ -94,7 +93,6 @@ func InProcessSpawn(
 	// ctx.Done 立即返回，defer FinalizeRound 把 streamQueue 置 nil，随后轮次产出的
 	// chunk 全被丢弃（表现为成员零输出、零回信）。这里用 WithoutCancel 切断取消传播，
 	// 保留 trace/session 等值；需要中止时走 handle.Cancel()/Close()。
-	//
 	// 注意 WithoutCancel 会一并清掉 Deadline——**这是刻意为之**：持久团队
 	// （lifecycle=persistent）的成员需要长期存活等消息，spawn 级一刀切超时会误杀。
 	// 成员的单轮超时由 StreamController 按 DeepAgentConfig.CompletionTimeout

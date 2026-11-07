@@ -482,7 +482,6 @@ func (e *AcpOutputTimeoutError) Error() string {
 // Python: str(jsonrpc_id or "").strip() (L94-95)。
 // 唯一 any→string 边界：JSON 解码后的 ID（string/float64/json.Number 皆可能）
 // 在此单点归一，Complete/Fail 等消费方一律收 string。
-//
 // 实现已下沉到 e2a/acp.NormalizeJSONRPCID（gateway 的 ACP 桥/stdio 通道共用同一实现，
 // 避免两处逻辑漂移）；本函数保留仅为既有调用方（server/handle_initialize.go）兼容。
 func NormalizeJsonrpcID(id any) string {

@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Event 事件接口，所有事件类型的公共契约。
-//
 // Python: openjiuwen/core/controller/schema/event.py (Event)
 type Event interface {
 	// GetEventType 返回事件类型
@@ -24,7 +23,6 @@ type Event interface {
 }
 
 // BaseEvent 事件基类，包含事件类型、事件 ID 和元数据。
-//
 // Python: openjiuwen/core/controller/schema/event.py (Event)
 type BaseEvent struct {
 	// EventTypeField 事件类型
@@ -36,7 +34,6 @@ type BaseEvent struct {
 }
 
 // InputEvent 输入事件，承载用户输入数据。
-//
 // Python: openjiuwen/core/controller/schema/event.py (InputEvent)
 type InputEvent struct {
 	// BaseEvent 嵌入事件基类
@@ -46,7 +43,6 @@ type InputEvent struct {
 }
 
 // TaskInteractionEvent 任务交互事件，任务执行中需要用户交互时触发。
-//
 // Python: openjiuwen/core/controller/schema/event.py (TaskInteractionEvent)
 type TaskInteractionEvent struct {
 	// BaseEvent 嵌入事件基类
@@ -58,7 +54,6 @@ type TaskInteractionEvent struct {
 }
 
 // TaskCompletionEvent 任务完成事件，包含任务输出结果。
-//
 // Python: openjiuwen/core/controller/schema/event.py (TaskCompletionEvent)
 type TaskCompletionEvent struct {
 	// BaseEvent 嵌入事件基类
@@ -70,7 +65,6 @@ type TaskCompletionEvent struct {
 }
 
 // TaskFailedEvent 任务失败事件，包含错误信息。
-//
 // Python: openjiuwen/core/controller/schema/event.py (TaskFailedEvent)
 type TaskFailedEvent struct {
 	// BaseEvent 嵌入事件基类
@@ -82,7 +76,6 @@ type TaskFailedEvent struct {
 }
 
 // FollowUpEvent 后续事件，用于继续任务循环的新输入。
-//
 // Python: openjiuwen/core/controller/schema/event.py (FollowUpEvent)
 type FollowUpEvent struct {
 	// BaseEvent 嵌入事件基类
@@ -146,7 +139,6 @@ type followUpEventJSON struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // EventType 事件类型枚举，定义所有支持的事件类型。
-//
 // Python: openjiuwen/core/controller/schema/event.py (EventType)
 type EventType string
 
@@ -190,7 +182,6 @@ func (e *BaseEvent) GetMetadata() map[string]any {
 func (e *BaseEvent) SetMetadata(meta map[string]any) { e.Metadata = meta }
 
 // NewBaseEvent 创建事件基类实例，自动生成事件 ID。
-//
 // Python: Event.event_id = Field(default_factory=lambda: str(uuid.uuid4()))
 func NewBaseEvent(eventType EventType) *BaseEvent {
 	return &BaseEvent{
@@ -201,7 +192,6 @@ func NewBaseEvent(eventType EventType) *BaseEvent {
 }
 
 // FromUserInput 从用户输入创建 InputEvent 工厂方法，支持 string→TextDataFrame, map→JsonDataFrame, *InputEvent→原样返回。
-//
 // Python: InputEvent.from_user_input
 func FromUserInput(userInput any) (*InputEvent, error) {
 	switch v := userInput.(type) {
@@ -223,7 +213,6 @@ func FromUserInput(userInput any) (*InputEvent, error) {
 }
 
 // FromText 从文本创建 FollowUpEvent 工厂方法。
-//
 // Python: FollowUpEvent.from_text
 func FromText(text string) *FollowUpEvent {
 	return &FollowUpEvent{

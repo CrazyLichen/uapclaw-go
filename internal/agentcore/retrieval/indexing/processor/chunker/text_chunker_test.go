@@ -223,7 +223,6 @@ func TestTextChunker_Process_路由到覆写版ChunkDocuments(t *testing.T) {
 // ──────────────────────────── fake 类型 ────────────────────────────
 
 // fakeEmbedModelWithTokenizer 实现 TokenizerProvider 的嵌入模型 fake。
-//
 // 嵌入 BaseEmbedding 四方法的空实现（token 路由测试不触发嵌入调用），
 // 额外实现 TokenizerProvider 携带 tokenizer。
 type fakeEmbedModelWithTokenizer struct {
@@ -253,7 +252,6 @@ func (f *fakeEmbedModelWithTokenizer) DimensionWithContext(ctx context.Context) 
 }
 
 // fakeEmbedModelPlain 无 tokenizer 能力的嵌入模型 fake（不实现 TokenizerProvider）。
-//
 // BaseEmbedding 四方法空实现。
 type fakeEmbedModelPlain struct{}
 

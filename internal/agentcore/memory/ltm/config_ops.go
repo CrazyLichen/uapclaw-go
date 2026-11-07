@@ -29,14 +29,12 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetConfig 设置系统配置，初始化所有子管理器。
-//
 // 完整流程对齐 Python set_config：
 // 1. kv_store 和 db_store 必须已注册
 // 2. memory_index 必须已提供
 // 3. 创建 AesStorageCodec 并设置到 memoryIndex
 // 4. 初始化各子管理器
 // 5. 设置初始 LLM（如果配置中有默认模型）
-//
 // Python: LongTermMemory.set_config(config)
 func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 	if m.kvStore == nil || m.dbStore == nil {
@@ -141,7 +139,6 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 }
 
 // SetScopeConfig 设置 scope 级配置，深拷贝并加密 API Key 后存入 KVStore。
-//
 // 对齐 Python: LongTermMemory.set_scope_config(scope_id, memory_scope_config)
 func (m *LongTermMemory) SetScopeConfig(ctx context.Context, scopeID string, scopeCfg *config.MemoryScopeConfig) error {
 	if !validateID("MEMORY_STORE", scopeID) {
@@ -193,7 +190,6 @@ func (m *LongTermMemory) SetScopeConfig(ctx context.Context, scopeID string, sco
 }
 
 // GetScopeConfig 从 KVStore 读取 scope 配置并解密 API Key。
-//
 // 对齐 Python: LongTermMemory.get_scope_config(scope_id)
 func (m *LongTermMemory) GetScopeConfig(ctx context.Context, scopeID string) (*config.MemoryScopeConfig, error) {
 	if !validateID("MEMORY_RETRIEVE", scopeID) {
@@ -234,7 +230,6 @@ func (m *LongTermMemory) GetScopeConfig(ctx context.Context, scopeID string) (*c
 }
 
 // DeleteScopeConfig 删除 scope 配置。
-//
 // 对齐 Python: LongTermMemory.delete_scope_config(scope_id)
 func (m *LongTermMemory) DeleteScopeConfig(ctx context.Context, scopeID string) error {
 	if !validateID("MEMORY_DELETE", scopeID) {

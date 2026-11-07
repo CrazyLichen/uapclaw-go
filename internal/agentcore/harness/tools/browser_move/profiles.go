@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserProfile 持久化的浏览器配置元数据。
-//
 // Python: BrowserProfile (profiles.py L15-46)
 type BrowserProfile struct {
 	// Name 配置名称
@@ -37,7 +36,6 @@ type BrowserProfile struct {
 }
 
 // BrowserProfileStore JSON 后端配置存储，支持选中配置追踪。
-//
 // Python: BrowserProfileStore (profiles.py L49-136)
 type BrowserProfileStore struct {
 	// path 存储文件路径
@@ -57,7 +55,6 @@ type BrowserProfileStore struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserProfileFromDict 从字典创建 BrowserProfile。
-//
 // Python: BrowserProfile.from_dict
 func NewBrowserProfileFromDict(raw map[string]any) *BrowserProfile {
 	debugPort := 0
@@ -116,7 +113,6 @@ func NewBrowserProfileFromDict(raw map[string]any) *BrowserProfile {
 }
 
 // ToDict 将 BrowserProfile 转换为字典。
-//
 // Python: BrowserProfile.to_dict
 func (p *BrowserProfile) ToDict() map[string]any {
 	return map[string]any{
@@ -132,7 +128,6 @@ func (p *BrowserProfile) ToDict() map[string]any {
 }
 
 // NewBrowserProfileStore 创建 JSON 后端配置存储。
-//
 // Python: BrowserProfileStore.__init__
 func NewBrowserProfileStore(path string) *BrowserProfileStore {
 	store := &BrowserProfileStore{
@@ -150,7 +145,6 @@ func (s *BrowserProfileStore) Path() string {
 }
 
 // Save 将配置持久化到 JSON 文件。
-//
 // Python: BrowserProfileStore.save
 func (s *BrowserProfileStore) Save() error {
 	dir := filepath.Dir(s.path)
@@ -175,14 +169,12 @@ func (s *BrowserProfileStore) Save() error {
 }
 
 // ListProfiles 返回按名称排序的配置列表。
-//
 // Python: BrowserProfileStore.list_profiles
 func (s *BrowserProfileStore) ListProfiles() []*BrowserProfile {
 	return s.sortedProfiles()
 }
 
 // GetProfile 根据名称获取配置。
-//
 // Python: BrowserProfileStore.get_profile
 func (s *BrowserProfileStore) GetProfile(name string) *BrowserProfile {
 	key := strings.TrimSpace(name)
@@ -193,7 +185,6 @@ func (s *BrowserProfileStore) GetProfile(name string) *BrowserProfile {
 }
 
 // UpsertProfile 插入或更新配置，可选设为选中。
-//
 // Python: BrowserProfileStore.upsert_profile
 func (s *BrowserProfileStore) UpsertProfile(profile *BrowserProfile, selectProfile bool) (*BrowserProfile, error) {
 	name := strings.TrimSpace(profile.Name)
@@ -223,7 +214,6 @@ func (s *BrowserProfileStore) UpsertProfile(profile *BrowserProfile, selectProfi
 }
 
 // RemoveProfile 移除配置。
-//
 // Python: BrowserProfileStore.remove_profile
 func (s *BrowserProfileStore) RemoveProfile(name string) bool {
 	key := strings.TrimSpace(name)
@@ -242,7 +232,6 @@ func (s *BrowserProfileStore) RemoveProfile(name string) bool {
 }
 
 // SelectProfile 选中指定配置。
-//
 // Python: BrowserProfileStore.select_profile
 func (s *BrowserProfileStore) SelectProfile(name string) (*BrowserProfile, error) {
 	key := strings.TrimSpace(name)
@@ -256,14 +245,12 @@ func (s *BrowserProfileStore) SelectProfile(name string) (*BrowserProfile, error
 }
 
 // SelectedName 返回选中配置名称。
-//
 // Python: BrowserProfileStore.selected_name
 func (s *BrowserProfileStore) SelectedName() string {
 	return s.selected
 }
 
 // SelectedProfile 返回选中配置。
-//
 // Python: BrowserProfileStore.selected_profile
 func (s *BrowserProfileStore) SelectedProfile() *BrowserProfile {
 	if s.selected == "" {
@@ -275,7 +262,6 @@ func (s *BrowserProfileStore) SelectedProfile() *BrowserProfile {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // load 从 JSON 文件加载配置。
-//
 // Python: BrowserProfileStore._load
 func (s *BrowserProfileStore) load() {
 	s.profiles = make(map[string]*BrowserProfile)

@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseError 统一异常基类，实现 error 接口。
-//
 // 核心设计点：
 //   - StatusCode 是主要语义标识符
 //   - ErrorCategory 表达控制/恢复语义
@@ -47,10 +46,8 @@ type ErrorOption func(*baseErrorBuilder)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ErrorCategory 错误类别枚举，表达控制流语义。
-//
 // 选择 ErrorCategory = 选择控制语义（retry? abort? terminate gracefully?）。
 // 选 StatusCode = 选错误身份（哪个模块、哪种失败）。两者正交。
-//
 // Python: BaseError 子类层级（FrameworkError/ValidationError/ExecutionError/Termination）
 type ErrorCategory int
 
@@ -68,7 +65,6 @@ const (
 // ──────────────────────────── 常量 ────────────────────────────
 
 // DetailsKeyControlFlowAbort 标记「控制流中止」（非故障）的结构化键。
-//
 // 用于区分两类异常：一类是 provider/网络故障（可重试），另一类是 rail 主动
 // 终止本轮（bailout、安全拦截等，重试只会放大问题）。抛出方在 cause 上打此标记，
 // 消费方（重试记账、备用模型切换）据此跳过处理。
@@ -148,7 +144,6 @@ func WithParams(params map[string]any) ErrorOption {
 }
 
 // NewBaseError 创建 BaseError 实例。
-//
 // 参数：
 //   - status: 关联的 StatusCode
 //   - opts: 可选配置（WithMsg, WithDetails, WithCause, WithParam, WithParams）
@@ -196,7 +191,6 @@ func (e *BaseError) Category() ErrorCategory { return e.category }
 func (e *BaseError) SetCategory(c ErrorCategory) { e.category = c }
 
 // Code 返回整数错误码，委托给 StatusCode.Code()。
-//
 // Python: BaseError.code
 func (e *BaseError) Code() int { return e.status.Code() }
 
@@ -237,7 +231,6 @@ func (e *BaseError) IsRecoverable() bool {
 }
 
 // Error 实现 error 接口，返回 "[code] message" 格式。
-//
 // Python: BaseError.__str__
 func (e *BaseError) Error() string {
 	return fmt.Sprintf("[%d] %s", e.Code(), e.message)
@@ -249,7 +242,6 @@ func (e *BaseError) String() string {
 }
 
 // ToDict 返回标准结构化输出，用于 API/RPC/日志。
-//
 // Python: BaseError.to_dict()
 func (e *BaseError) ToDict() map[string]any {
 	return map[string]any{
@@ -266,7 +258,6 @@ func (e *BaseError) ToDict() map[string]any {
 }
 
 // ToJSON 返回 JSON 格式的结构化输出。
-//
 // Python: BaseError.to_json()
 func (e *BaseError) ToJSON() string {
 	data, _ := json.Marshal(e.ToDict())
@@ -274,14 +265,12 @@ func (e *BaseError) ToJSON() string {
 }
 
 // BuildError 构建异常实例但不抛出，用于延迟抛出或包装到 Result 中。
-//
 // Python: build_error()
 func BuildError(status StatusCode, opts ...ErrorOption) *BaseError {
 	return NewBaseError(status, opts...)
 }
 
 // IsControlFlowAbort 判断异常链上是否带「控制流中止」标记。
-//
 // 沿 Unwrap 展开（BaseError.Unwrap 返回 cause），命中任一层的
 // details[DetailsKeyControlFlowAbort] == true 即视为控制流中止。
 func IsControlFlowAbort(err error) bool {
@@ -302,16 +291,13 @@ func IsControlFlowAbort(err error) bool {
 }
 
 // RaiseError 返回异常实例，供调用方 return 或 panic。
-//
 // Go 没有 raise 语义，此函数返回 *BaseError 供调用方直接 return。
-//
 // Python: raise_error()
 func RaiseError(status StatusCode, opts ...ErrorOption) *BaseError {
 	return NewBaseError(status, opts...)
 }
 
 // SystemError 返回 Framework 类别的异常。
-//
 // Python: system_error()
 func SystemError(status StatusCode, opts ...ErrorOption) *BaseError {
 	err := NewBaseError(status, opts...)
@@ -320,7 +306,6 @@ func SystemError(status StatusCode, opts ...ErrorOption) *BaseError {
 }
 
 // ValidateError 返回 Validation 类别的异常。
-//
 // Python: validate_error()
 func ValidateError(status StatusCode, opts ...ErrorOption) *BaseError {
 	err := NewBaseError(status, opts...)
@@ -329,7 +314,6 @@ func ValidateError(status StatusCode, opts ...ErrorOption) *BaseError {
 }
 
 // Terminate 返回 Termination 类别的异常。
-//
 // Python: terminate()
 func Terminate(status StatusCode, opts ...ErrorOption) *BaseError {
 	err := NewBaseError(status, opts...)

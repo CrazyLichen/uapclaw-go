@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SparseRetriever 稀疏检索器实现（BM25）。
-//
 // Python: openjiuwen/core/retrieval/retriever/sparse_retriever.py
 type SparseRetriever struct {
 	// vectorStore 底层向量存储（需支持稀疏搜索）
@@ -38,7 +37,6 @@ func NewSparseRetriever(vectorStore vector_store.VectorStore) *SparseRetriever {
 }
 
 // Retrieve 稀疏检索（BM25）。
-//
 // 对齐 Python SparseRetriever.retrieve：仅 mode 校验——
 // 无 threshold 校验（收而不用，静默忽略，spec §8-5）、
 // 无 embedModel 校验（BM25 不需要嵌入）。
@@ -95,7 +93,6 @@ func (r *SparseRetriever) BatchRetrieve(ctx context.Context, queries []string, t
 }
 
 // RetrieveSearchResults 稀疏检索（原始 SearchResult）。
-//
 // 对齐 Python SparseRetriever.retrieve_search_results：
 // 有 mode 校验（与 Vector 的无校验不对称，Python 两作者差异，字面复刻 spec §8-8）。
 func (r *SparseRetriever) RetrieveSearchResults(ctx context.Context, query string, topK int, mode RetrievalMode, _ ...RetrieveOption) ([]common.SearchResult, error) {

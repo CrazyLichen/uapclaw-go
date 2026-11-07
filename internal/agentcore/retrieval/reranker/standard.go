@@ -17,7 +17,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StandardReranker 标准重排序客户端，支持 vLLM 风格的 /rerank API。
-//
 // Python: openjiuwen/core/retrieval/reranker/standard_reranker.py (StandardReranker)
 type StandardReranker struct {
 	// RerankerBase 嵌入基类

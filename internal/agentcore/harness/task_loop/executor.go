@@ -498,12 +498,10 @@ func isSensitive() bool {
 }
 
 // extractInputParts 返回本轮输入未 join 的文本列表（多于一条时才有意义）。
-//
 // 一起排队的输入驱动同一轮，到达模型时是一条消息；但内层循环先把它们
 // 作为列表交给 ON_USER_MESSAGE 的 rails，rails 因此可以整条丢弃被后续
 // 取代的输入，而不必去解析 join 后的正文。单条输入不需要列表，内层自会
 // 从 query 派生。
-//
 // Python: TaskLoopEventExecutor._extract_input_parts
 // (harness/task_loop/task_loop_event_executor.py L431-448)
 func extractInputParts(event *cschema.InputEvent) []string {

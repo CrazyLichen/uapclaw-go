@@ -25,13 +25,11 @@ var parsedDotenv string
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseEarly 在所有子命令执行前预解析 --dotenv/--name 参数。
-//
 // 本函数在 cobra 的 PersistentPreRunE 钩子中被调用，确保
 // UAPCLAW_DATA_DIR 环境变量在任何 workspace 路径函数首次调用前就位。
 // Go 版不需要像 Python 那样手动扫描 os.Args，也不需要独立重写
 // YAML 解析，因为 Go 的包是编译时链接的，且 workspace 包使用
 // sync.Once 惰性求值。
-//
 // 优先级：
 //  1. dotenvPath 不为空：加载指定 .env 文件
 //  2. instanceName 不为空：按实例名加载 bootstrap .env
@@ -54,7 +52,6 @@ func ParseEarly(dotenvPath string, instanceName string) (string, error) {
 }
 
 // ParsedDotenv 返回已加载的 .env 文件路径。
-//
 // 如果 ParseEarly 尚未被调用或未加载任何 .env，返回空字符串。
 // Python: get_parsed_dotenv()
 func ParsedDotenv() string {
@@ -64,7 +61,6 @@ func ParsedDotenv() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadDotenvByPath 加载指定路径的 .env 文件。
-//
 // Python: parse_dotenv_early() 中 --dotenv 分支
 func loadDotenvByPath(dotenvPath string) (string, error) {
 	// 展开路径（~ → 用户主目录）
@@ -94,11 +90,9 @@ func loadDotenvByPath(dotenvPath string) (string, error) {
 }
 
 // loadBootstrapByName 按实例名加载 bootstrap .env 文件。
-//
 // 与 Python 的 _load_bootstrap_by_name_early 不同，Go 版可以直接调用
 // workspace 包的函数，因为 Go 不存在 Python 的 import 时序问题。
 // workspace 包已实现了完整的实例名称验证、配置加载和 bootstrap 创建。
-//
 // Python: _load_bootstrap_by_name_early(name, component_name)
 func loadBootstrapByName(name string) (string, error) {
 	// 验证实例名称

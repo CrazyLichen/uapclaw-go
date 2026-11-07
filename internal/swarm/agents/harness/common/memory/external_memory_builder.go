@@ -35,14 +35,11 @@ var builtinProviders = map[string]struct{}{
 // BuildExternalMemoryRail 从配置构建 ExternalMemoryRail，禁用/失败返回 nil。
 // 对齐 Python build_external_memory_rail (builder.py L29-78)：
 // 任何失败返回 nil——主流程永不阻断。
-//
 // provider 分发：openjiuwen / mem0 / openviking / 其他（插件，当前不可用）。
 // 注意：Go 侧不包含 agentarts 分支（严格对齐 jiuwenswarm builder 四路分发，
 // agentarts provider 保留在 agentcore 但不经此 builder 接线）。
-//
 // workspaceDir 为签名占位（Python builder 签名带它但函数体未用，
 // LTM 目录用 get_user_workspace_dir 即 workspace.WorkspaceDir）。
-//
 // sessionID 传 ""：空串经 provider 侧 if po.SessionID != "" 忽略，
 // 落 provider 自身默认 ltm.DefaultValue "__default__"——与 Python
 // ExternalMemoryRail 不传 session_id 参数（默认 "__default__"）等价。

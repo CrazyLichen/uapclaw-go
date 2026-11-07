@@ -1,10 +1,8 @@
 // Package agent 提供团队成员 Agent 的核心类型。
-//
 // TeamAgent 是整个多 Agent 协作系统的核心编排节点，既可充当 Leader
 // （分发任务、协调成员），也可充当 Teammate（执行具体任务）。
 // 采用组合式架构：内部包裹 DeepAgent 实例（而非继承），
 // 委托给专职 Manager 管理配置/生成/恢复/会话/流式/协调。
-//
 // 四象限分解：
 //   - 静态蓝图（TeamAgentBlueprint）：构造时确定、不可变
 //   - 可变状态（TeamAgentState）：运行时可变值，跨 Manager 共享

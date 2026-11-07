@@ -13,7 +13,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Updater 自演化更新器接口，统一单维优化器和多维归因分配为一个接口。
-//
 // Trainer 不关心实现细节，只通过此接口获取更新映射：
 //
 //	(trajectories, evaluated_cases) → 更新映射或候选集
@@ -31,13 +30,11 @@ type Updater interface {
 
 	// Update 离线兼容入口，将 evaluated_cases 转换为 signals 后调用 Process。
 	// 返回更新映射切片：单映射场景返回长度为 1 的切片，多候选集场景返回多元素切片。
-	//
 	// Python: Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]
 	Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) ([]map[schema.UpdateKey]any, error)
 
 	// Process 信号优先入口，直接消费 EvolutionSignal 列表。
 	// 返回更新映射切片：单映射场景返回长度为 1 的切片，多候选集场景返回多元素切片。
-	//
 	// Python: Union[Dict[tuple[str,str],Any], List[Dict[tuple[str,str],Any]]]
 	Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error)
 

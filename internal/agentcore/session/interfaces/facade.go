@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionFacade 门面会话共有接口。
-//
 // Python: agent.Session 和 node.Session 的共有方法集。
 // ReActAgent 的 invoke/stream 签名使用此接口，而非具体类型。
 // 需要特定门面独有方法时，直接断言具体类型：

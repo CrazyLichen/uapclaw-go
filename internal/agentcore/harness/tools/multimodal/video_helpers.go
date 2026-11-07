@@ -22,7 +22,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeVideoURL 规范化视频路径为 URL 或 data:URI。
-//
 // Python: _normalize_video_url(video_path)
 // HTTP URL → 保持原样；本地文件 → base64 → data:URI
 func NormalizeVideoURL(videoPath string) (string, error) {

@@ -107,7 +107,6 @@ func (h *EvaluateStageHandler) Execute(ctx context.Context, sctx *skilldev.Skill
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // gradeAllEvals 为每个 eval 的 with_skill / baseline 结果执行评分。
-//
 // 待实现: 接入 create_stage_agent，用 GraderSystemPrompt 调用 Agent
 func (h *EvaluateStageHandler) gradeAllEvals(ctx context.Context, sctx *skilldev.SkillDevContext, iterDir string) {
 	evals := sctx.State.Evals
@@ -312,7 +311,6 @@ func (h *EvaluateStageHandler) aggregateBenchmark(sctx *skilldev.SkillDevContext
 }
 
 // analyzePatterns 分析 benchmark 结果，发现隐藏模式。
-//
 // 待实现: 接入 create_stage_agent，用 AnalystSystemPrompt 调用 Agent
 func (h *EvaluateStageHandler) analyzePatterns(ctx context.Context, sctx *skilldev.SkillDevContext, benchmark *skilldev.Benchmark) []string {
 	if len(benchmark.Runs) == 0 {
@@ -341,7 +339,6 @@ func (h *EvaluateStageHandler) analyzePatterns(ctx context.Context, sctx *skilld
 }
 
 // gradeOneRun 调用 Grader Agent 为单个运行结果评分。
-//
 // 对齐 Python: EvaluateStageHandler._grade_single_run(ctx, expectations, transcript, outputs_dir)
 // 模型需返回 JSON：{"expectations":[{"text","passed","evidence"}],"pass_rate","passed_count","failed_count"}；
 // 解析失败时退回「全部未通过 + 待复核」的确定性结果，避免整条流水线中断。

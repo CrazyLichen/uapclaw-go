@@ -1,12 +1,10 @@
 // Package index 提供记忆管理器接口和实现。
-//
 // 本包定义了 BaseMemoryManager 抽象接口和 memoryManagerBase 嵌入结构体，
 // 提供记忆管理器的公共逻辑（参数校验、异常包装、加解密）。
 // MemoryOption/MemoryOptionConfig 提供对齐 Python **kwargs 的 Functional Options 扩展机制。
 // FragmentMemoryManager 管理碎片记忆，SummaryManager 管理摘要记忆，
 // VariableManager 管理变量记忆（独立实现，不嵌入 memoryManagerBase）。
 // WriteManager 作为写入操作统一路由器，按 mem_type 分发到对应子 Manager。
-//
 // 文件目录：
 //
 //	index/

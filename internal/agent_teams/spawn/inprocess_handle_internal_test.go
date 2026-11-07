@@ -9,7 +9,6 @@ import (
 )
 
 // TestInProcessSpawnHandle_ForceKill超时 协程不响应取消时按超时返回错误而不是永久阻塞。
-//
 // M-08：成员 runCtx 是 detached（WithoutCancel），ForceKill 是唯一停机手段；
 // 无超时会让 CleanupTeammate → 团队清理预算被彻底击穿。
 // 超时通过 forceKillTimeout 注入，避免测试真的等 10s。

@@ -12,7 +12,6 @@ import "strings"
 
 // SkillExperienceGeneratePromptCN 个体经验生成提示词（中文）。
 // 一比一复刻 Python templates.py SKILL_EXPERIENCE_GENERATE_PROMPT_CN。
-//
 // 注意：Python 使用 .format() 替换占位符，{{ 在 .format() 中表示字面量 {。
 // Go 中直接使用 {placeholder} 格式，后续通过 formatTemplate(strings.ReplaceAll) 替换。
 // Python 中的 {{ 转为 Go 中的 {（Python {{ 在 .format() 中是 { 的转义，Go 不需要）。

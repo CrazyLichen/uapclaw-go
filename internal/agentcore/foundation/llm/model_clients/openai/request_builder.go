@@ -26,17 +26,14 @@ import (
 const chatCompletionsPath = "/chat/completions"
 
 // emptyAPIKeyPlaceholder 非 api_key 模式下 provider 要求的占位密钥。
-//
 // Python: openai_model_client.py:326-330 _resolved_api_key_for_config → "EMPTY"
 const emptyAPIKeyPlaceholder = "EMPTY"
 
 // requestEncodingStage 请求编码阶段的 details.stage 标记。
-//
 // Python: request_encoding.py 的 details={"stage": "request_encoding"}
 const requestEncodingStage = "request_encoding"
 
 // defaultRequestTimeoutSeconds 默认请求超时（秒）。
-//
 // Python: schema/config.py:145 timeout 默认 360（gt=0；注释明文约定
 // timeout >= stream_first_chunk_timeout=300，传输层永不先于应用层流超时触发）
 const defaultRequestTimeoutSeconds = 360.0
@@ -46,7 +43,6 @@ const defaultRequestTimeoutSeconds = 360.0
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AdjustParamsForOpenAI 对请求参数做 OpenAI 特有调整。
-//
 // 当 api_base 含 "openai.com" 时，temperature 和 top_p 互斥：
 //   - temperature 优先级高于 top_p
 //   - 如果同时存在，删除 top_p
@@ -69,10 +65,8 @@ func AdjustParamsForOpenAI(params map[string]any, apiBase string) {
 }
 
 // NormalizeAPIBase 归一 api_base：strip 空白 → 去尾斜杠 → 剥掉已带的 /chat/completions。
-//
 // 不推断 /v1（上游同样不注入）。用户在 api_base 里粘贴完整端点 URL 时，
 // 若不剥离会拼成 ".../chat/completions/chat/completions" 导致 404。
-//
 // Python: openai_model_client.py:307-321 _normalize_openai_base_url
 func NormalizeAPIBase(apiBase string) string {
 	base := strings.TrimSpace(apiBase)
@@ -85,7 +79,6 @@ func NormalizeAPIBase(apiBase string) string {
 }
 
 // BuildHTTPRequest 构建发送给 OpenAI API 的 HTTP 请求。
-//
 // 超时语义（设计文档批次 C-A，对齐上游 httpx 分阶段超时）：
 //   - 非流式：`http.Client.Timeout` 承载总超时（Client 对象每请求新建、仅共享 Transport，
 //     不会污染其他请求）；流式下与 Python read 语义不符，故置 0
@@ -110,7 +103,6 @@ func BuildHTTPRequest(
 }
 
 // BuildHTTPRequestWithAuth 构建 HTTP 请求并按 auth_mode 决定是否设置 Authorization。
-//
 // 鉴权头规则（Python: openai_model_client.py:298-305 / 326-330）：
 //   - auth_mode=none / openai_account_oauth → 省略
 //   - auth_mode=custom_headers 且 api_key 为空 → 省略（靠自定义头携带凭据）
@@ -174,10 +166,8 @@ func BuildHTTPRequestWithAuth(
 }
 
 // HandleExtraBody 将 params 中的 return_token_ids 移入 extra_body。
-//
 // OpenAI SDK 会丢弃未知的顶级参数，vLLM 需要 return_token_ids 在 JSON body 中，
 // 因此将其移入 extra_body 字段。
-//
 // Python: OpenAIModelClient.invoke() 中的 return_token_ids 处理
 func HandleExtraBody(params map[string]any) {
 	tokenIDs, ok := params["return_token_ids"]
@@ -198,7 +188,6 @@ func HandleExtraBody(params map[string]any) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // encodeJSONChecked 序列化请求体并校验 UTF-8，失败抛 181004 MODEL_INVOKE_PARAM_ERROR。
-//
 // 覆盖四类本地请求构建失败（重试无意义的错误，不应被当成瞬时故障重试）：
 //   - json 不支持的值：NaN / ±Inf / chan / func 等不可序列化类型
 //   - 非 UTF-8 字节：Python 侧是 UnicodeEncodeError（ValueError 子类），
@@ -230,7 +219,6 @@ func encodeJSONChecked(params map[string]any) ([]byte, error) {
 }
 
 // findInvalidUTF8 递归查找参数树中第一个非法 UTF-8 字符串，返回其路径（"" 表示全部合法）。
-//
 // Python 对照：UnicodeEncodeError 在 SDK 构建请求体时抛出（lone surrogate 等），
 // Go 的 encoding/json 不报错而是替换字符，故需显式前置检查。
 func findInvalidUTF8(value any, path string) string {
@@ -267,9 +255,7 @@ func findInvalidUTF8(value any, path string) string {
 }
 
 // IsRequestEncodingErr 判是否为请求编码阶段错误（181004 + stage=request_encoding）。
-//
 // 调用方据此原样上抛，不再包装成 MODEL_CALL_FAILED，从而跳过瞬时失败重试。
-//
 // Python: openai_model_client.py:2011/2228
 //
 //	if isinstance(e, ValidationError) and getattr(e, "details", None) == {"stage": "request_encoding"}:
@@ -293,7 +279,6 @@ func encodeJSON(params map[string]any) ([]byte, error) {
 }
 
 // shouldOmitAuthorization 判是否省略 Authorization 头。
-//
 // Python: openai_model_client.py:298-305 _should_omit_authorization
 func shouldOmitAuthorization(authMode llmschema.AuthMode, apiKey string) bool {
 	switch authMode {

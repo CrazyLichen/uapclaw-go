@@ -5,7 +5,6 @@ import llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/ll
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AddAbilityResult 添加能力的返回结果。
-//
 // Python: AddAbilityResult
 type AddAbilityResult struct {
 	// Name 能力名称
@@ -19,7 +18,6 @@ type AddAbilityResult struct {
 // ExecuteResult 单个工具调用的执行结果。
 type ExecuteResult struct {
 	// Result 执行结果。
-	//
 	// 两种来源（对齐 Python 的 result tuple 第一个元素）：
 	//   1. 拦截路径：_skip_tool=True 时，从 inputs.ToolResult 读取，
 	//      值为 map[string]any{"error": msg}（Rail 拦截）或 string（RejectResult）

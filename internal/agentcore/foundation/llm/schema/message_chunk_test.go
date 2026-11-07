@@ -162,7 +162,6 @@ func TestMergeParserContent_DifferentTypes(t *testing.T) {
 }
 
 // TestMergeParserContent_MultipleParseSuccess 验证多次解析成功不丢失（核心场景）。
-//
 // 模拟流式场景：两次 JsonOutputParser 解析成功，parser_content 均为 dict，
 // Go 实现通过字典递归合并保留所有结果，比 Python 的 `or` 更正确。
 func TestMergeParserContent_MultipleParseSuccess(t *testing.T) {
@@ -521,7 +520,6 @@ func TestMergeToolCalls_MultipleFragmentsSameCall(t *testing.T) {
 }
 
 // TestMergeToolCalls_TwoDistinctCalls 验证两个不同工具调用分步合并。
-//
 // 流式场景中，多个 tool call 的 fragment 是按顺序逐个到达的：
 // 每个 chunk 只包含一个 tool call 的增量片段，不会在一个 chunk 中混合多个不同的 tool call。
 // 因此正确的测试方式是逐步合并：先合并完第一个 call 的所有片段，再合并第二个。
@@ -1011,7 +1009,6 @@ func TestAssistantMessageChunk_JSONRoundTrip(t *testing.T) {
 }
 
 // TestAssistantMessageChunk_StreamWithParserContent 模拟带输出解析器的流式场景。
-//
 // 验证多次解析成功时，Go 智能合并不会丢失前面的结果（比 Python 更正确）。
 func TestAssistantMessageChunk_StreamWithParserContent(t *testing.T) {
 	// 模拟两次 JsonOutputParser 解析成功的场景

@@ -215,7 +215,6 @@ func ToolPermissionChannelIDFromCtx(ctx context.Context) string {
 }
 
 // WithToolPermissionRequestID 将宿主请求 ID 注入 context。
-//
 // 工具 call id 可用于 UI 关联，但权限来源必须限定在宿主请求范围内。
 // Python: TOOL_PERMISSION_REQUEST_ID.set(request_id)
 func WithToolPermissionRequestID(ctx context.Context, requestID string) context.Context {
@@ -232,7 +231,6 @@ func ToolPermissionRequestIDFromCtx(ctx context.Context) string {
 }
 
 // WithSkillsRebuildSilent 设置 skills.rebuild 静默标记。
-//
 // 静默 follow-up 无 UI 审批，权限轨需自动放行。
 // Python: SKILLS_REBUILD_SILENT.set(value)
 func WithSkillsRebuildSilent(ctx context.Context, silent bool) context.Context {
@@ -265,7 +263,6 @@ func PermissionContextFromCtx(ctx context.Context) *PermissionContext {
 }
 
 // NewPermissionContextFromRequest 从 AgentRequest 的 metadata 构造 PermissionContext。
-//
 // Python: setup_permission_context(request) (owner_scopes.py L61-88)
 //
 // 返回 nil 表示无需设置权限上下文（非数字分身且非禁用记忆场景）。

@@ -1,8 +1,6 @@
 // Package resources 存储 harness 层的静态资源文件。
-//
 // 本包通过 go:embed 嵌入 YAML 等资源，供 security 等子包在运行时加载，
 // 对应 Python 源码 openjiuwen/harness/resources/ 目录。
-//
 // 文件目录：
 //
 //	resources/

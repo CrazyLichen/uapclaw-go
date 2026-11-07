@@ -25,7 +25,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RemoveTeamModeSessionDirsAtStartup AgentServer 启动时删除 metadata.json 中 mode 为 team 的会话目录。
-//
 // Python: remove_team_mode_session_dirs_at_startup()
 func RemoveTeamModeSessionDirsAtStartup() {
 	sessionsDir := GetSessionsDir()
@@ -68,7 +67,6 @@ func RemoveTeamModeSessionDirsAtStartup() {
 }
 
 // GetAllSessionsMetadata 分页获取所有会话元数据。
-//
 // Python: get_all_sessions_metadata(limit, offset) → (sessions, total)
 // 按 last_message_at 降序排列，跳过 heartbeat_ 前缀的会话。
 func GetAllSessionsMetadata(limit int, offset int) ([]map[string]any, int) {

@@ -1,7 +1,5 @@
 // Package schema 定义 LLM 基础层的核心数据模型，包括消息、工具调用和用量元数据。
-//
 // 本包是 LLM 对话交互的数据核心，几乎所有 LLM 相关模块都直接或间接依赖本包定义的消息类型。
-//
 // 消息模型体系：
 //
 //	BaseMessage — 消息接口（定义 getter/setter 协议，role/content/name/metadata 等字段的读写方法）
@@ -11,7 +9,6 @@
 //	  └── 扩展实现（嵌入 DefaultMessage + 额外字段）
 //	        ├── AssistantMessage  — 助手消息（含 tool_calls/usage_metadata/finish_reason 等，自定义序列化）
 //	        └── ToolMessage       — 工具返回消息（含 tool_call_id）
-//
 //	UnmarshalMessage — 通用消息反序列化工厂，根据 role 字段自动还原为对应子类型
 //
 // 流式消息块模型体系：

@@ -48,7 +48,6 @@ type rawTextState struct {
 }
 
 // tokenBudget 按固定预算累积 token 消耗，用于渐进式抽取时的截断判断。
-//
 // 逐块累加而非一次性比对全文，是为了让"前 N 块能读到的内容"尽量多：
 // 全文超预算就直接报错会让模型拿不到任何内容。
 // Python: _TokenBudget (filesystem.py:255-270)
@@ -243,6 +242,7 @@ func (b *tokenBudget) canFit(tokens int) bool { return b.spent+tokens <= b.maxTo
 // Python: _TokenBudget.spend
 func (b *tokenBudget) spend(tokens int) { b.spent += tokens }
 
+// readText 按行区间读取文本文件，返回渲染后的内容（超长时按 token 预算截断）。
 func readText(ctx context.Context, op sys_operation.SysOperation, filePath string, offset, limit int, applySizeCap bool) (map[string]any, error) {
 	// 将 offset/limit 转为行号 start/end
 	// Python: L460-461
@@ -306,6 +306,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	return map[string]any{"content": rendered}, nil
 }
 
+// readNotebook 读取 Jupyter 笔记本，按单元格渲染成可读文本。
 func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath string) (map[string]any, error) {
 	res, err := op.Fs().ReadFile(ctx, filePath)
 	if err != nil {
@@ -397,6 +398,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	return map[string]any{"content": content}, nil
 }
 
+// readPDF 读取 PDF 指定页范围并抽取纯文本。
 func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string, pages string) (map[string]any, error) {
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
@@ -516,6 +518,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	return map[string]any{"content": content}, nil
 }
 
+// readImage 读取图片文件；开启多模态时返回可投递的图片内容。
 func readImage(ctx context.Context, op sys_operation.SysOperation, filePath string, enableImageMultimodal bool) (map[string]any, error) {
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
@@ -654,6 +657,8 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}, nil
 }
 
+// recordReadState 记录本次读取的文件状态，供后续编辑前做「读过才允许改」判定。
+// 非文本文件或没有修改时间时不记录。
 func recordReadState(ctx context.Context, op sys_operation.SysOperation, filePath string, mtimeNS, sizeBytes int64, isPartial bool, renderedLineCount int) {
 	if mtimeNS == 0 || !isTextReadForEdit(filePath) {
 		return
@@ -689,6 +694,8 @@ func recordReadState(ctx context.Context, op sys_operation.SysOperation, filePat
 	SetFileReadState(filePath, state)
 }
 
+// parsePDFPageRange 解析页码表达式（如 "1-3,5"），返回去重排序后的页号列表。
+// 表达式为空时返回全部页码区间。
 func parsePDFPageRange(pages string, totalPages int) []int {
 	if pages == "" {
 		if totalPages > 0 {
@@ -797,6 +804,7 @@ func extractNotebookString(cell map[string]json.RawMessage, key string) string {
 	return ""
 }
 
+// extractOutputText 从命令输出的 JSON 里取出文本字段，兼容多种字段形态。
 func extractOutputText(out map[string]json.RawMessage) string {
 	// "text" 字段
 	if textRaw, ok := out["text"]; ok {
@@ -844,11 +852,9 @@ func extractOutputText(out map[string]json.RawMessage) string {
 }
 
 // estimateImageTokens 按图像尺寸估算 token（与上下文计费同一套公式）。
-//
 // 旧的 base64 字节数/8 是纯启发式，一张 200KB 的图会被估成 27k token，
 // 与上下文侧（尺寸公式，约 1.5k）差一个数量级，导致工具侧过早压缩。
 // 解码不出尺寸时仍回落旧启发式。
-//
 // Python: read_file 侧无对应实现（上游只把原始尺寸写进文本，见设计 D-3）。
 func estimateImageTokens(data []byte) int {
 	if cfg, format, err := image.DecodeConfig(bytes.NewReader(data)); err == nil && format != "" {
@@ -871,6 +877,7 @@ func imageDisplayDimensions(data []byte) (int, int) {
 	return cfg.Width, cfg.Height
 }
 
+// thumbnailImage 按最大宽高等比缩放图片，不放大只缩小。
 func thumbnailImage(img image.Image, maxW, maxH int) image.Image {
 	bounds := img.Bounds()
 	w := bounds.Dx()
@@ -918,6 +925,8 @@ func imageResize(img image.Image, newW, newH int) image.Image {
 	return dst
 }
 
+// compressImageBytes 解码原始图片字节，缩放到限制尺寸后重新编码为 JPEG。
+// 解码失败时原样返回入参，让调用方继续用未压缩的数据。
 func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
 	img, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {

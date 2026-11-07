@@ -353,7 +353,6 @@ func FilterInheritableAbilityCards(mainAgent interfaces.DeepAgentInterface) []*t
 }
 
 // BuildModelAnomalyDetectionRail 为团队成员构建模型异常检测 Rail。
-//
 // 与单 agent 路径读同一段配置（execution_guard.model_anomaly_detection_rail），
 // 保证 leader 与成员的护栏参数一致；未开启时返回 nil。
 // Python: agents/swarm/providers/member_rails.py:613 _build_model_anomaly_detection
@@ -497,7 +496,6 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajec
 //
 // 13 步逐 rail 构造，每步独立 panic 恢复 + warning 日志（对齐 Python 每步 try/except），
 // 单步失败不阻断后续。返回成功构造的 rail 列表。
-//
 // 构造顺序（箭头表示先后）：RuntimePrompt → ResponsePrompt → SysOperation → JiuClawStreamEvent →
 // TaskPlanning → Security → Heartbeat → AvatarPrompt →（team_ws_root 存在时）TeamWorkspaceReportPath →
 // （leader+skills_dir）TeamSkillEvolution →（leader+skills_dir+开关）TeamSkillCreate →
@@ -792,7 +790,6 @@ func mapIntField(m map[string]any, key string) (int, bool) {
 }
 
 // customHeadersToStringMap 将 custom_headers 配置转为 map[string]string。
-//
 // 输入可能是 JSON 字符串或 map[string]any（config 已解析路径），
 // 对齐 Python ModelClientConfig(custom_headers=...) 的 dict 语义。
 func customHeadersToStringMap(v any) map[string]string {

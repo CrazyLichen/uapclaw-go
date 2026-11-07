@@ -1,5 +1,4 @@
 // Package rails 提供团队级 Rails 实现。
-//
 // 本包包含：
 //   - FirstIterationGate：首次迭代信号门（channel 替代 Python asyncio.Event）
 //   - TeamToolRail：团队协调工具注册（priority=90）

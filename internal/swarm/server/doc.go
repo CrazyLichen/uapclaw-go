@@ -1,10 +1,8 @@
 // Package server 提供 Agent 核心服务，对齐 Python AgentWebSocketServer，适配单进程 ChannelTransport 模式。
-//
 // 从 transport.AgentTransport.Recv() 消费 E2AEnvelope，每个请求独立 goroutine 处理。
 // 流式任务通过 sessionStreamTasks 追踪，支持按会话取消。
 // 主分发逻辑在 handleMessage 中，按 ReqMethod switch 分发到具体 handler；
 // chat 轮次编排（unary/stream/cancel）经由 runtime.AgentRuntime 执行。
-//
 // 文件目录：
 //
 //	server/

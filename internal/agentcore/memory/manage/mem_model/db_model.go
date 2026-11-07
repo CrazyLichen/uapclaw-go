@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // UserMessage 用户消息表模型。
-//
 // Python: openjiuwen/core/memory/manage/mem_model/db_model.py (UserMessage)
 type UserMessage struct {
 	// MessageID 消息唯一标识（SHA-256 hash 前16位 + 时间戳毫秒）
@@ -31,7 +30,6 @@ type UserMessage struct {
 }
 
 // ScopeUserMapping 作用域用户映射表模型。
-//
 // Python: openjiuwen/core/memory/manage/mem_model/db_model.py (ScopeUserMapping)
 type ScopeUserMapping struct {
 	// UserID 用户 ID
@@ -41,7 +39,6 @@ type ScopeUserMapping struct {
 }
 
 // MemoryMeta 记忆元数据表模型，用于 schema 版本管理。
-//
 // Python: openjiuwen/core/memory/manage/mem_model/db_model.py (MemoryMeta)
 type MemoryMeta struct {
 	// TblName 元数据对应的表名

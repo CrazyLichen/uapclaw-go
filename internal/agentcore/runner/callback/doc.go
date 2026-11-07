@@ -1,9 +1,7 @@
 // Package callback 提供统一的异步回调框架，支持事件注册、触发、过滤器、钩子、
 // 链式执行、熔断器、指标记录、历史回放和 transform_io 变换。
-//
 // 本包是所有领域（LLM、Tool、Session、Agent、Workflow、Memory、TaskManager 等）共享的
 // 回调基础设施，与 Python 中 openjiuwen/core/runner/callback/ 对应。
-//
 // 6.24 节已实现完整能力：
 //   - 事件注册/触发/注销（11 个域：LLM/Tool/Session/Context/Agent/PerAgent/Workflow/
 //     AgentTeam/Retrieval/Memory/TaskManager + 自定义事件）
@@ -40,7 +38,6 @@
 //	  - 各域使用预定义枚举事件名和固定数据结构
 //	  - 自定义域使用自由字符串事件名和 map[string]any 数据
 //	这样既保留了类型安全，又支持 Python 的动态事件名场景。
-//
 //	CallbackInfo[F] 泛型包装将所有域的回调函数统一为 CallbackInfo[FuncType] 结构，
 //	每个域的注册/触发方法内部使用 CallbackInfo 包装后存入注册表。
 //	PerAgent 域通过命名空间隔离（{agentID}_{event}）实现 per-Agent 实例级回调，

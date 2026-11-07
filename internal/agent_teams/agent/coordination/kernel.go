@@ -13,17 +13,13 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CoordinationKernel 协调子系统门面，拥有 EventBus + EventDispatcher 的完整生命周期。
-//
 // 持有宿主 TeamAgent 的反向引用，因为协调需要跨多个协作者
 // （stream_controller, session_manager, spawn_manager 等）。
 // 将协调逻辑集中在此处，保持 TeamAgent 专注于 BaseAgent 公共契约。
-//
 // 内部事件总线和分发器在此构造和拥有；
 // 调用者通过此 kernel 操作，不直接接触 bus。
-//
 // 生命周期状态机：idle → running(start) → paused(pause) → stopped(stop)。
 // stopped 是终态；后续 pause/stop 调用变为 no-op。
-//
 // Python: CoordinationKernel
 type CoordinationKernel struct {
 	// host 宿主 TeamAgent 引用
@@ -593,7 +589,6 @@ func allMembersShutdown(members []*database.TeamMember) bool {
 }
 
 // shouldCleanTeam 判断启动时是否应清理团队（对齐 Python kernel.py:130 的真值语义）。
-//
 // Python: `if non_leader_members and all(m.status == SHUTDOWN for m in non_leader_members)`
 // —— 空列表为假，走 recover_team；Go 的 ListMembers 返回非 nil 空切片，
 // 因此必须显式判长度，否则"只有 leader 的团队"会被 clean_team 误删。

@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TemplateManager 提示词模板管理器（线程安全单例）
-//
 // Python: ThreadSafePromptManager
 //
 // 启动时通过 embed.FS 读取 prompts/cn/ 和 prompts/en/ 目录下的 .pr.md 文件，

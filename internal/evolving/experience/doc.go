@@ -1,9 +1,7 @@
 // Package experience 提供在线经验生命周期编排。
-//
 // Experience 包是在线经验生命周期的核心编排层，连接上游信号/轨迹检测
 // 与下游 checkpointing 持久化。包含评分器（Scorer）、展示追踪器（Tracker）、
 // 全生命周期管理器（Manager）和在线演进编排器（Orchestrator）。
-//
 // 文件目录：
 //
 //	experience/

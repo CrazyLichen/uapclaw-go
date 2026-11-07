@@ -9,11 +9,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowStateCollection 工作流场景的状态集合。
-//
 // 组合 io_state/global_state/comp_state/workflow_state 四个可提交区域，
 // 提供三级回退查询（global_state → io_state[parentID] → io_state[nodeID]）。
 // 实现 SessionState 接口。
-//
 // Python: openjiuwen/core/session/state/workflow_state.py (StateCollection)
 type WorkflowStateCollection struct {
 	// mu 并发读写锁

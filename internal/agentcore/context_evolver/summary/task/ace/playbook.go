@@ -66,7 +66,6 @@ type DeltaBatch struct {
 
 // Playbook ACE 结构化上下文存储。
 // 对齐 Python Playbook class。
-//
 // 内部维护 bullets map + sections 索引 + nextID 计数器。
 // nextID 用于生成唯一 bullet ID，格式 {section_prefix}-{五位数}。
 type Playbook struct {

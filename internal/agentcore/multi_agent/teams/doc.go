@@ -1,10 +1,8 @@
 // Package teams 提供多 Agent 团队的具体实现模式。
-//
 // 本包包含基于事件驱动的团队类型，如 HandoffTeam（单活跃 Agent 交接模式）、
 // HierarchicalTeam 消息总线模式（hierarchical_msgbus）、
 // HierarchicalToolsTeam 工具委托模式（hierarchical_tools）。
 // 所有团队类型均实现 BaseTeam 接口，可注册到 TeamRuntime 中运行。
-//
 // 文件目录：
 //
 //	teams/

@@ -6,7 +6,6 @@ import (
 )
 
 // TestSessionWorkKind_Scheduled 校验 scheduled 属性成员集合。
-//
 // Python: SessionWorkKind.scheduled —— CHAT_UNARY / CHAT_STREAM / SESSION_MESSAGE
 func TestSessionWorkKind_Scheduled(t *testing.T) {
 	scheduled := []SessionWorkKind{
@@ -32,7 +31,6 @@ func TestSessionWorkKind_Scheduled(t *testing.T) {
 }
 
 // TestSessionWorkKind_LatestFirst 校验 latest_first 属性成员集合。
-//
 // Python: SessionWorkKind.latest_first —— 仅 CHAT_UNARY / CHAT_STREAM
 func TestSessionWorkKind_LatestFirst(t *testing.T) {
 	latest := []SessionWorkKind{
@@ -53,7 +51,6 @@ func TestSessionWorkKind_LatestFirst(t *testing.T) {
 }
 
 // TestSessionExecutionState_Terminal 校验终态集合。
-//
 // Python: SessionExecutionState.terminal —— SUCCEEDED / FAILED / CANCELLED
 func TestSessionExecutionState_Terminal(t *testing.T) {
 	cases := map[SessionExecutionState]bool{
@@ -73,7 +70,6 @@ func TestSessionExecutionState_Terminal(t *testing.T) {
 }
 
 // TestModel_枚举取值与上游逐字一致 校验线协议字符串。
-//
 // 用切片而非 map：SessionPersistencePolicy 与 TeamWaiterKind 都有 "persistent"
 // 值，作为 map 键会重复。
 func TestModel_枚举取值与上游逐字一致(t *testing.T) {

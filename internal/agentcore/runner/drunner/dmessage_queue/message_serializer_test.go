@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestMessageToMap_请求注入class 测试写侧注入 __class__ 与全字段。
-//
 // Python: _serialize_payload 对 BaseModel 产出 {"__class__": 类名, ...字段}
 func TestMessageToMap_请求注入class(t *testing.T) {
 	msg := NewDmqRequestMessage(map[string]any{"q": "hi"})
@@ -53,7 +52,6 @@ func TestMessageToMap_响应全字段(t *testing.T) {
 }
 
 // TestSerializePayload_datetime 测试 time.Time 编成 __type__ 包装。
-//
 // Python: _json_serializer 对 datetime 返回 {"__type__": "datetime", "value": isoformat()}
 func TestSerializePayload_datetime(t *testing.T) {
 	ts := time.Date(2026, 11, 3, 1, 2, 3, 0, time.UTC)
@@ -88,7 +86,6 @@ func TestSerializePayload_嵌套递归(t *testing.T) {
 }
 
 // TestSerializePayload_深度超限报错 测试超过 10 层报错。
-//
 // Python: raise RecursionError(f"Payload nested too deep (> {MAX_RECURSE_DEPTH})")
 func TestSerializePayload_深度超限报错(t *testing.T) {
 	_, err := serializePayload("v", MaxRecurseDepth+1)
@@ -97,7 +94,6 @@ func TestSerializePayload_深度超限报错(t *testing.T) {
 }
 
 // TestMessageToMap_非Dmq类型报错 测试偏差 D6：非 Dmq 类型 fail fast。
-//
 // Python 是发出去、对面 Unknown payload class 才炸；Go 在发送前就报错。
 func TestMessageToMap_非Dmq类型报错(t *testing.T) {
 	_, err := MessageToMap(newPlainQueueMessage())
@@ -178,7 +174,6 @@ func TestDeserializeMessage_响应往返(t *testing.T) {
 }
 
 // TestDeserializeMessage_补默认值 测试缺 type/result_type 时补默认值。
-//
 // Python: pydantic 字段默认值 DMessageType.OUTPUT / ResultType.MESSAGE
 func TestDeserializeMessage_补默认值(t *testing.T) {
 	raw := []byte(`{"__class__":"DmqResponseMessage","message_id":"m1","payload":{}}`)
@@ -205,7 +200,6 @@ func TestDeserializeMessage_补请求默认值(t *testing.T) {
 }
 
 // TestDeserializeMessage_未知类名报错 测试对齐 Python ValueError。
-//
 // Python: raise ValueError(f"Unknown payload class: {class_name}")
 func TestDeserializeMessage_未知类名报错(t *testing.T) {
 	_, err := DeserializeMessage([]byte(`{"__class__":"UnknownThing"}`))

@@ -22,10 +22,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // FullCompactProcessorConfig 全量压缩处理器配置。
-//
 // 当上下文 Token 数超过阈值时，使用 LLM 生成完整摘要或加载 Session Memory 替换历史消息，
 // 是上下文管理的最后防线。
-//
 // Python: FullCompactProcessorConfig (pydantic.BaseModel)
 type FullCompactProcessorConfig struct {
 	// TriggerTotalTokens 触发全量压缩的 Token 阈值
@@ -67,7 +65,6 @@ type FullCompactProcessorConfig struct {
 }
 
 // FullCompactProcessor 全量压缩处理器，上下文管理的最后防线。
-//
 // 触发后执行双路径流程：
 //  1. Session Memory 路径（优先）：加载已提交的 Session Memory 笔记
 //  2. LLM 全量压缩路径（回退）：调用 LLM 生成完整摘要
@@ -84,10 +81,8 @@ type FullCompactProcessor struct {
 }
 
 // ReinjectedStateBuilderSpec 重新注入状态构建器规格。
-//
 // 每个 Builder 负责从历史消息中提取特定类型的状态信息，
 // 压缩后作为 UserMessage 重新注入上下文。
-//
 // Python: ReinjectedStateBuilderSpec (dataclass)
 type ReinjectedStateBuilderSpec struct {
 	// Name 构建器名称（用于过滤）
@@ -97,16 +92,13 @@ type ReinjectedStateBuilderSpec struct {
 	// Builder 构建器函数，第二个参数为 FullCompactProcessor 实例，
 	// 使 Builder 能访问 processor 的配置（StateMarker、ReinjectRecentSkills）和方法（TruncateStateText）。
 	// 返回 []BaseMessage（列表）或 string（文本）。
-	//
 	// Python: builder(processor, *, context, messages, messages_to_keep)
 	Builder func(ctx context.Context, fcp *FullCompactProcessor, mc iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any
 }
 
 // FullCompactStateReinjector 状态重新注入器，管理多个 Builder 的注册和执行。
-//
 // 压缩后遍历注册的 Builder，将非空结果作为状态消息重新注入上下文，
 // 确保关键信息不会因压缩而丢失。
-//
 // Python: FullCompactStateReinjector
 type FullCompactStateReinjector struct {
 	// builders 注册的构建器列表
@@ -305,12 +297,10 @@ func (fcp *FullCompactProcessor) ProcessorType() string {
 }
 
 // TriggerAddMessages 判断是否需要介入消息添加。
-//
 // 触发条件：消息列表构成完整 API 轮次 && 上下文 Token 数 > TriggerTotalTokens
 //
 // 统计口径：token 只算「缓冲区消息 + 本次新增」，不含 system prompt 与工具 schema；
 // 日志字段 path=add_messages / messages / tokens 便于与 get_context_window 口径区分。
-//
 // Python: FullCompactProcessor.trigger_add_messages()
 func (fcp *FullCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
@@ -333,7 +323,6 @@ func (fcp *FullCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.
 }
 
 // OnAddMessages 执行全量压缩，主入口。
-//
 // Python: FullCompactProcessor.on_add_messages()
 func (fcp *FullCompactProcessor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
@@ -373,7 +362,6 @@ func (fcp *FullCompactProcessor) SaveState() map[string]any {
 func (fcp *FullCompactProcessor) LoadState(_ map[string]any) {}
 
 // TruncateStateText 截断状态文本到 StateSnapshotMaxChars（头尾保留）。
-//
 // Python: FullCompactProcessor.truncate_state_text()
 func (fcp *FullCompactProcessor) TruncateStateText(text string) string {
 	if len(text) <= fcp.fcpConfig.StateSnapshotMaxChars {
@@ -418,7 +406,6 @@ func WithFullCompactModel(model *llm.Model) FullCompactProcessorOption {
 }
 
 // RegisterBuilder 注册状态构建器，同名则替换。
-//
 // Python: FullCompactStateReinjector.register_builder()
 func (r *FullCompactStateReinjector) RegisterBuilder(name, label string, builder func(ctx context.Context, fcp *FullCompactProcessor, mc iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any) {
 	spec := ReinjectedStateBuilderSpec{Name: name, Label: label, Builder: builder}
@@ -432,7 +419,6 @@ func (r *FullCompactStateReinjector) RegisterBuilder(name, label string, builder
 }
 
 // IterBuilders 返回所有注册的构建器。
-//
 // Python: FullCompactStateReinjector.iter_builders()
 func (r *FullCompactStateReinjector) IterBuilders() []ReinjectedStateBuilderSpec {
 	result := make([]ReinjectedStateBuilderSpec, len(r.builders))
@@ -453,7 +439,6 @@ func newFullCompactStateReinjector() *FullCompactStateReinjector {
 }
 
 // _buildReplacementMessages 主构建逻辑，尝试 Session Memory 路径和 LLM 全量压缩路径。
-//
 // Python: FullCompactProcessor._build_replacement_messages()
 func (fcp *FullCompactProcessor) _buildReplacementMessages(ctx context.Context, mc iface.ModelContext, allMessages []llm_schema.BaseMessage) (*iface.ContextEvent, []llm_schema.BaseMessage, *llm_schema.UserMessage) {
 	boundaryIndex := fcp._findLastCompactionBoundaryIndex(allMessages)
@@ -498,7 +483,6 @@ func (fcp *FullCompactProcessor) _buildReplacementMessages(ctx context.Context, 
 }
 
 // _buildFullCompactMessages 构建 LLM 全量压缩消息。
-//
 // Python: FullCompactProcessor._build_full_compact_messages()
 func (fcp *FullCompactProcessor) _buildFullCompactMessages(ctx context.Context, mc iface.ModelContext, prefix []llm_schema.BaseMessage, activeMessages []llm_schema.BaseMessage) ([]llm_schema.BaseMessage, string) {
 	compactSource := fcp._prepareMessagesForPrompt(activeMessages)
@@ -531,9 +515,7 @@ func (fcp *FullCompactProcessor) _buildFullCompactMessages(ctx context.Context, 
 }
 
 // _buildSessionMemoryMessages 构建 Session Memory 路径消息。
-//
 // ⤵️ 5.31 回填：当前 Session Memory 路径返回 nil（不可用）
-//
 // Python: FullCompactProcessor._build_session_memory_messages()
 func (fcp *FullCompactProcessor) _buildSessionMemoryMessages(ctx context.Context, mc iface.ModelContext, prefix []llm_schema.BaseMessage, activeMessages []llm_schema.BaseMessage, hasBoundary bool) ([]llm_schema.BaseMessage, *llm_schema.UserMessage) {
 	if !fcp.fcpConfig.SessionMemoryEnabled {
@@ -576,7 +558,6 @@ func (fcp *FullCompactProcessor) _buildSessionMemoryMessages(ctx context.Context
 }
 
 // _splitMessagesAtCompactionBoundary 在压缩边界处分割消息列表。
-//
 // Python: FullCompactProcessor._split_messages_at_compaction_boundary()
 func (fcp *FullCompactProcessor) _splitMessagesAtCompactionBoundary(messages []llm_schema.BaseMessage, boundaryIndex int) ([]llm_schema.BaseMessage, []llm_schema.BaseMessage) {
 	if boundaryIndex > 0 {
@@ -592,7 +573,6 @@ func (fcp *FullCompactProcessor) _splitMessagesAtCompactionBoundary(messages []l
 }
 
 // _generateSummary 调用 LLM 生成摘要，失败时回退到 _buildFallbackSummary。
-//
 // Python: FullCompactProcessor._generate_summary()
 func (fcp *FullCompactProcessor) _generateSummary(ctx context.Context, messages []llm_schema.BaseMessage, mc iface.ModelContext) string {
 	if fcp.model == nil {
@@ -622,7 +602,6 @@ func (fcp *FullCompactProcessor) _generateSummary(ctx context.Context, messages 
 }
 
 // _truncateForPromptBudget 按 API 轮次分组从前往后丢弃，使 prompt 适配 Token 预算。
-//
 // Python: FullCompactProcessor._truncate_for_prompt_budget()
 func (fcp *FullCompactProcessor) _truncateForPromptBudget(messages []llm_schema.BaseMessage, mc iface.ModelContext) []llm_schema.BaseMessage {
 	groups := fcp._groupMessagesByAPIRound(messages)
@@ -646,7 +625,6 @@ func (fcp *FullCompactProcessor) _truncateForPromptBudget(messages []llm_schema.
 }
 
 // _truncateMessagesFromHead 从头部逐条移除消息直到适配 Token 预算。
-//
 // Python: FullCompactProcessor._truncate_messages_from_head()
 func (fcp *FullCompactProcessor) _truncateMessagesFromHead(messages []llm_schema.BaseMessage, mc iface.ModelContext) []llm_schema.BaseMessage {
 	candidate := make([]llm_schema.BaseMessage, len(messages))
@@ -675,7 +653,6 @@ func (fcp *FullCompactProcessor) _truncateMessagesFromHead(messages []llm_schema
 }
 
 // _groupMessagesByAPIRound 按已完成 API 轮次分组。
-//
 // Python: FullCompactProcessor._group_messages_by_api_round()
 func (fcp *FullCompactProcessor) _groupMessagesByAPIRound(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
 	groups := processor.GroupCompletedAPIRoundsMessages(messages)
@@ -683,7 +660,6 @@ func (fcp *FullCompactProcessor) _groupMessagesByAPIRound(messages []llm_schema.
 }
 
 // _buildMinimalCompactInput 构建最小压缩输入（仅保留最后一条消息）。
-//
 // Python: FullCompactProcessor._build_minimal_compact_input()
 func (fcp *FullCompactProcessor) _buildMinimalCompactInput(messages []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	if len(messages) == 0 {
@@ -700,7 +676,6 @@ func (fcp *FullCompactProcessor) _buildMinimalCompactInput(messages []llm_schema
 }
 
 // _selectMessagesToKeep 保留最近 MessagesToKeep 条消息。
-//
 // Python: FullCompactProcessor._select_messages_to_keep()
 func (fcp *FullCompactProcessor) _selectMessagesToKeep(messages []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	keepRecent := fcp.fcpConfig.MessagesToKeep
@@ -719,7 +694,6 @@ func (fcp *FullCompactProcessor) _selectMessagesToKeep(messages []llm_schema.Bas
 }
 
 // _adjustStartIndexForToolPairs 调整起始索引以包含 ToolMessage 对应的 AssistantMessage。
-//
 // Python: FullCompactProcessor._adjust_start_index_for_tool_pairs()
 func (fcp *FullCompactProcessor) _adjustStartIndexForToolPairs(messages []llm_schema.BaseMessage, startIndex int) int {
 	if startIndex <= 0 || startIndex >= len(messages) {
@@ -787,7 +761,6 @@ func (fcp *FullCompactProcessor) _adjustStartIndexForToolPairs(messages []llm_sc
 }
 
 // _prepareMessagesForPrompt 过滤掉 boundary/state/session_memory 标记消息。
-//
 // Python: FullCompactProcessor._prepare_messages_for_prompt()
 func (fcp *FullCompactProcessor) _prepareMessagesForPrompt(messages []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	result := make([]llm_schema.BaseMessage, 0, len(messages))
@@ -801,7 +774,6 @@ func (fcp *FullCompactProcessor) _prepareMessagesForPrompt(messages []llm_schema
 }
 
 // _buildSummaryMessage 构建摘要消息文本。
-//
 // Python: FullCompactProcessor._build_summary_message()
 func (fcp *FullCompactProcessor) _buildSummaryMessage(summary string, hasPreservedMessages bool) string {
 	parts := []string{fcp.fcpConfig.SummaryIntro, "", summary}
@@ -812,7 +784,6 @@ func (fcp *FullCompactProcessor) _buildSummaryMessage(summary string, hasPreserv
 }
 
 // _buildSessionMemoryMessage 构建 Session Memory 消息文本。
-//
 // Python: FullCompactProcessor._build_session_memory_message()
 func (fcp *FullCompactProcessor) _buildSessionMemoryMessage(sessionMemoryText string, hasPreservedMessages bool) string {
 	parts := []string{fcp.fcpConfig.SessionMemoryIntro, "", strings.TrimSpace(sessionMemoryText)}
@@ -823,7 +794,6 @@ func (fcp *FullCompactProcessor) _buildSessionMemoryMessage(sessionMemoryText st
 }
 
 // _loadSessionMemoryRuntime 加载 Session Memory 运行时信息。
-//
 // Python: FullCompactProcessor._load_session_memory_runtime()
 func (fcp *FullCompactProcessor) _loadSessionMemoryRuntime(_ context.Context, mc iface.ModelContext) map[string]any {
 	sess := mc.GetSessionRef()
@@ -834,7 +804,6 @@ func (fcp *FullCompactProcessor) _loadSessionMemoryRuntime(_ context.Context, mc
 }
 
 // _loadSessionMemoryText 加载 Session Memory 文本内容。
-//
 // Python: FullCompactProcessor._load_session_memory_text()
 func (fcp *FullCompactProcessor) _loadSessionMemoryText(_ context.Context, mc iface.ModelContext, runtime map[string]any) string {
 	memoryPath, _ := runtime["memory_path"].(string)
@@ -849,7 +818,6 @@ func (fcp *FullCompactProcessor) _loadSessionMemoryText(_ context.Context, mc if
 }
 
 // _resolveSessionMemoryPath 解析 Session Memory 文件路径。
-//
 // Python: FullCompactProcessor._resolve_session_memory_path()
 func (fcp *FullCompactProcessor) _resolveSessionMemoryPath(_ context.Context, mc iface.ModelContext, _ map[string]any) string {
 	workspaceDir := mc.WorkspaceDir()
@@ -860,7 +828,6 @@ func (fcp *FullCompactProcessor) _resolveSessionMemoryPath(_ context.Context, mc
 }
 
 // _selectMessagesAfterSessionMemory 选择 Session Memory 之后的消息。
-//
 // Python: FullCompactProcessor._select_messages_after_session_memory()
 func (fcp *FullCompactProcessor) _selectMessagesAfterSessionMemory(messages []llm_schema.BaseMessage, runtime map[string]any, _ bool) []llm_schema.BaseMessage {
 	notesUptoID, _ := runtime["notes_upto_message_id"].(string)
@@ -878,7 +845,6 @@ func (fcp *FullCompactProcessor) _selectMessagesAfterSessionMemory(messages []ll
 }
 
 // _invalidateSessionMemoryAnchor 使 Session Memory 锚点失效。
-//
 // Python: FullCompactProcessor._invalidate_session_memory_anchor()
 func (fcp *FullCompactProcessor) _invalidateSessionMemoryAnchor(_ context.Context, mc iface.ModelContext) {
 	sess := mc.GetSessionRef()
@@ -889,9 +855,7 @@ func (fcp *FullCompactProcessor) _invalidateSessionMemoryAnchor(_ context.Contex
 }
 
 // buildReinjectedStateMessages 构建重新注入的状态消息。
-//
 // 遍历注册的 Builder，将非空结果加入最终消息序列。
-//
 // Python: FullCompactProcessor.build_reinjected_state_messages()
 func (fcp *FullCompactProcessor) buildReinjectedStateMessages(ctx context.Context, mc iface.ModelContext, sourceMessages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	candidateMessages := fcp._prepareMessagesForPrompt(sourceMessages)
@@ -918,7 +882,6 @@ func (fcp *FullCompactProcessor) buildReinjectedStateMessages(ctx context.Contex
 }
 
 // _makeStateMessage 构建状态 UserMessage。
-//
 // Python: FullCompactProcessor._make_state_message()
 func (fcp *FullCompactProcessor) _makeStateMessage(label, content string) *llm_schema.UserMessage {
 	compactContent := fcp.TruncateStateText(content)
@@ -926,7 +889,6 @@ func (fcp *FullCompactProcessor) _makeStateMessage(label, content string) *llm_s
 }
 
 // countContextWindowTokens 计算上下文窗口 Token 数。
-//
 // Python: FullCompactProcessor._count_context_window_tokens()
 func (fcp *FullCompactProcessor) countContextWindowTokens(mc iface.ModelContext, messages []llm_schema.BaseMessage) int {
 	tokenCounter := mc.TokenCounter()
@@ -948,7 +910,6 @@ func (fcp *FullCompactProcessor) countContextWindowTokens(mc iface.ModelContext,
 }
 
 // _countPromptTokens 计算含 BASE_COMPACT_PROMPT 的 prompt token 数。
-//
 // Python: FullCompactProcessor._count_prompt_tokens()
 func (fcp *FullCompactProcessor) _countPromptTokens(messages []llm_schema.BaseMessage, mc iface.ModelContext) int {
 	promptMessages := []llm_schema.BaseMessage{
@@ -970,7 +931,6 @@ func (fcp *FullCompactProcessor) _countPromptTokens(messages []llm_schema.BaseMe
 }
 
 // _buildFallbackSummary 构建降级摘要（最近 20 条消息序列化）。
-//
 // Python: FullCompactProcessor._build_fallback_summary()
 func (fcp *FullCompactProcessor) _buildFallbackSummary(messages []llm_schema.BaseMessage) string {
 	tail := messages
@@ -987,7 +947,6 @@ func (fcp *FullCompactProcessor) _buildFallbackSummary(messages []llm_schema.Bas
 }
 
 // _formatSummary 提取 <summary> 标签内容，先去除 <analysis>...</analysis>。
-//
 // Python: FullCompactProcessor._format_summary()
 func _formatSummary(content string) string {
 	stripped := analysisRegex.ReplaceAllString(content, "")
@@ -1000,7 +959,6 @@ func _formatSummary(content string) string {
 }
 
 // _serializeMessages 逐条序列化消息，换行连接。
-//
 // Python: FullCompactProcessor._serialize_messages()
 func (fcp *FullCompactProcessor) _serializeMessages(messages []llm_schema.BaseMessage) string {
 	var lines []string
@@ -1011,7 +969,6 @@ func (fcp *FullCompactProcessor) _serializeMessages(messages []llm_schema.BaseMe
 }
 
 // _serializeMessage 完整序列化单条消息。
-//
 // 包含 role + tool_calls JSON（含 id/name/arguments/type）+ tool_call_id + content
 //
 // Python: FullCompactProcessor._serialize_message()
@@ -1042,7 +999,6 @@ func (fcp *FullCompactProcessor) _serializeMessage(msg llm_schema.BaseMessage) s
 }
 
 // _findLastCompactionBoundaryIndex 从后找 boundary 或 sessionMemoryBoundary 消息索引。
-//
 // Python: FullCompactProcessor._find_last_compaction_boundary_index()
 func (fcp *FullCompactProcessor) _findLastCompactionBoundaryIndex(messages []llm_schema.BaseMessage) int {
 	for idx := len(messages) - 1; idx >= 0; idx-- {
@@ -1054,7 +1010,6 @@ func (fcp *FullCompactProcessor) _findLastCompactionBoundaryIndex(messages []llm
 }
 
 // _isBoundaryMessage 判断是否为压缩边界消息。
-//
 // SystemMessage && Content 以 Marker 开头
 func (fcp *FullCompactProcessor) _isBoundaryMessage(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(*llm_schema.SystemMessage)
@@ -1062,7 +1017,6 @@ func (fcp *FullCompactProcessor) _isBoundaryMessage(msg llm_schema.BaseMessage) 
 }
 
 // _isStateMessage 判断是否为状态消息。
-//
 // UserMessage && Content 以 StateMarker 开头
 func (fcp *FullCompactProcessor) _isStateMessage(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(*llm_schema.UserMessage)
@@ -1070,7 +1024,6 @@ func (fcp *FullCompactProcessor) _isStateMessage(msg llm_schema.BaseMessage) boo
 }
 
 // _isSessionMemoryBoundaryMessage 判断是否为 Session Memory 边界消息。
-//
 // SystemMessage && Content 以 SessionMemoryMarker 开头
 func (fcp *FullCompactProcessor) _isSessionMemoryBoundaryMessage(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(*llm_schema.SystemMessage)
@@ -1078,7 +1031,6 @@ func (fcp *FullCompactProcessor) _isSessionMemoryBoundaryMessage(msg llm_schema.
 }
 
 // _isSessionMemorySummaryMessage 判断是否为 Session Memory 摘要消息。
-//
 // UserMessage && Content 以 SessionMemoryIntro 开头
 func (fcp *FullCompactProcessor) _isSessionMemorySummaryMessage(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(*llm_schema.UserMessage)
@@ -1086,7 +1038,6 @@ func (fcp *FullCompactProcessor) _isSessionMemorySummaryMessage(msg llm_schema.B
 }
 
 // _isSyntheticMarkerMessage 判断是否为合成标记消息。
-//
 // 用户消息且内容为合成标记
 func (fcp *FullCompactProcessor) _isSyntheticMarkerMessage(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(*llm_schema.UserMessage)
@@ -1094,7 +1045,6 @@ func (fcp *FullCompactProcessor) _isSyntheticMarkerMessage(msg llm_schema.BaseMe
 }
 
 // _buildHeadTailTruncatedText 头尾保留截断文本。
-//
 // Python: FullCompactProcessor._build_head_tail_truncated_text()
 func _buildHeadTailTruncatedText(text string, keptChars int) string {
 	if keptChars <= 0 {
@@ -1126,10 +1076,8 @@ func _buildHeadTailTruncatedText(text string, keptChars int) string {
 }
 
 // buildSkillReinjectedContent 构建技能重新注入内容。
-//
 // 遍历已完成 API round，找含 skill 文件读取的轮次，
 // 最多 ReinjectRecentSkills 个，提取 skill 内容+工具调用描述。
-//
 // Python: build_skill_reinjected_content()
 func buildSkillReinjectedContent(_ context.Context, fcp *FullCompactProcessor, _ iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any {
 	keepSigs := make(map[string]bool)
@@ -1193,7 +1141,6 @@ func buildSkillReinjectedContent(_ context.Context, fcp *FullCompactProcessor, _
 }
 
 // buildTaskStatusReinjectedContent 构建任务状态重新注入内容。
-//
 // Python: build_task_status_reinjected_content()
 func buildTaskStatusReinjectedContent(_ context.Context, _ *FullCompactProcessor, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	sess := mc.GetSessionRef()
@@ -1212,7 +1159,6 @@ func buildTaskStatusReinjectedContent(_ context.Context, _ *FullCompactProcessor
 }
 
 // buildPlanModeReinjectedContent 构建计划模式重新注入内容。
-//
 // Python: build_plan_mode_reinjected_content()
 func buildPlanModeReinjectedContent(_ context.Context, _ *FullCompactProcessor, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	sess := mc.GetSessionRef()
@@ -1231,7 +1177,6 @@ func buildPlanModeReinjectedContent(_ context.Context, _ *FullCompactProcessor, 
 }
 
 // buildPlanReinjectedContent 构建计划重新注入内容，空实现。
-//
 // Python: build_plan_reinjected_content()
 func buildPlanReinjectedContent(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	return ""

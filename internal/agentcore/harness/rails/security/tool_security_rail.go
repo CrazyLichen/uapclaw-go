@@ -24,17 +24,13 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PermissionInterruptRail 工具权限中断护栏。
-//
 // 对**任意**工具名执行 before_tool_call 权限判定（不再按工具名子集短路跳过）。
 // 可选 toolNames 仅传给基类作 GetTools 展示；不参与是否拦截。
-//
 // - ALLOW → 继续执行
 // - DENY → 拒绝并返回 [PERMISSION_DENIED] 消息
 // - ASK  → 中断等待用户确认（ConfirmPayload schema）
-//
 // Auto-confirm 存储在 session 状态 (INTERRUPT_AUTO_CONFIRM_KEY)。
 // 支持 bash 类工具的细粒度 auto-confirm key（如 bash:ls）。
-//
 // Python: PermissionInterruptRail(ConfirmInterruptRail) — tool_security_rail.py L52-666
 type PermissionInterruptRail struct {
 	interrupt.BaseInterruptRail
@@ -47,7 +43,6 @@ type PermissionInterruptRail struct {
 }
 
 // InterruptKind 本 rail 抛出的中断类型为 permission。
-//
 // Python: ToolSecurityRail.interrupt_kind = InterruptKind.PERMISSION
 func (r *PermissionInterruptRail) InterruptKind() string {
 	return saschema.InterruptKindPermission
@@ -80,7 +75,6 @@ var toolNameAliases = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionInterruptRail 创建权限中断护栏实例。
-//
 // Python: PermissionInterruptRail.__init__(config, engine, tool_names, llm, model_name, host)
 func NewPermissionInterruptRail(
 	config map[string]any,
@@ -160,7 +154,6 @@ func NewPermissionInterruptRail(
 // BeforeToolCall 工具调用前拦截。
 // Python: PermissionInterruptRail.before_tool_call — 对**任意**工具名执行权限判定，
 // 不再按工具名子集短路跳过（与基类 BaseInterruptRail 不同）。
-//
 // Python: PermissionInterruptRail.before_tool_call(ctx) (tool_security_rail.py L159-186)
 func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -207,7 +200,6 @@ func (r *PermissionInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallba
 }
 
 // UpdateConfig 热更新静态权限配置；可选 toolNames 仅更新基类标签集合。
-//
 // Python: PermissionInterruptRail.update_config(config, tool_names) (tool_security_rail.py L188-204)
 func (r *PermissionInterruptRail) UpdateConfig(config map[string]any, toolNames []string) {
 	if config == nil {
@@ -248,7 +240,6 @@ func (r *PermissionInterruptRail) Engine() *harnesssecurity.PermissionEngine {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeToolName 归一化工具名，使用别名映射。
-//
 // Python: PermissionInterruptRail._normalize_tool_name(tool_name) (tool_security_rail.py L109-114)
 func (r *PermissionInterruptRail) normalizeToolName(toolName string) string {
 	if alias, ok := toolNameAliases[toolName]; ok {
@@ -259,7 +250,6 @@ func (r *PermissionInterruptRail) normalizeToolName(toolName string) string {
 
 // getAutoConfirmKey 生成保守的 session auto-confirm key。
 // 对于 bash/mcp_exec_command/create_terminal，使用 Shell AST 解析获取细粒度 key。
-//
 // Python: PermissionInterruptRail._get_auto_confirm_key(tool_call) (tool_security_rail.py L116-128)
 func (r *PermissionInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
@@ -285,7 +275,6 @@ func (r *PermissionInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall
 }
 
 // buildShellAutoConfirmKey 通过 Shell AST 解析构建细粒度 auto-confirm key。
-//
 // Python: PermissionInterruptRail._build_shell_auto_confirm_key(tool_name, command) (tool_security_rail.py L130-147)
 func buildShellAutoConfirmKey(toolName string, command string) string {
 	text := strings.TrimSpace(command)
@@ -312,14 +301,12 @@ func buildShellAutoConfirmKey(toolName string, command string) string {
 }
 
 // shouldStoreAutoConfirm 判断是否应存储 auto-confirm key 到 session。
-//
 // Python: PermissionInterruptRail._should_store_auto_confirm(...) (tool_security_rail.py L149-157)
 func shouldStoreAutoConfirm(autoConfirm bool, session sessioninterfaces.SessionFacade, autoConfirmKey string, persisted bool) bool {
 	return autoConfirm && session != nil && autoConfirmKey != "" && !persisted
 }
 
 // resolvePermissionInterrupt 权限中断解析核心逻辑。
-//
 // Python: PermissionInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config) (tool_security_rail.py L288-504)
 func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	ctx context.Context,
@@ -569,7 +556,6 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 }
 
 // parseToolArgs 从 ToolCall 中提取参数字典。
-//
 // Python: PermissionInterruptRail._parse_tool_args(tool_call) (tool_security_rail.py L506-519)
 func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 	if toolCall == nil {
@@ -589,7 +575,6 @@ func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 }
 
 // parseConfirmPayload 解析用户输入为 PermissionConfirmResponse。
-//
 // Python: PermissionInterruptRail._parse_confirm_payload(user_input) (tool_security_rail.py L521-549)
 func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmResponse {
 	switch input := userInput.(type) {
@@ -628,7 +613,6 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 }
 
 // confirmPathLabel 返回确认路径标签。
-//
 // Python: PermissionInterruptRail._confirm_path_label() (tool_security_rail.py L551-552)
 func (r *PermissionInterruptRail) confirmPathLabel() string {
 	if r.host.RequestPermissionConfirmation != nil {
@@ -638,7 +622,6 @@ func (r *PermissionInterruptRail) confirmPathLabel() string {
 }
 
 // isPermissionAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
-//
 // Python: PermissionInterruptRail._is_auto_confirmed(auto_confirm_config, key) (tool_security_rail.py L554-558)
 func isPermissionAutoConfirmed(config map[string]any, key string) bool {
 	if config == nil || key == "" {
@@ -652,7 +635,6 @@ func isPermissionAutoConfirmed(config map[string]any, key string) bool {
 }
 
 // storeAutoConfirm 写入 auto_confirm 到 session 状态。
-//
 // Python: PermissionInterruptRail._store_auto_confirm(ctx, auto_confirm_key) (tool_security_rail.py L560-567)
 func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackContext, autoConfirmKey string) {
 	sess := cbc.Session()
@@ -681,7 +663,6 @@ func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCal
 }
 
 // resolveSession 从 cbc 中解析 session 对象。
-//
 // Python: PermissionInterruptRail._resolve_session_id(ctx) (tool_security_rail.py L584-594)
 func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces.SessionFacade {
 	if cbc == nil {
@@ -691,7 +672,6 @@ func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces
 }
 
 // collectExternalDirectoryPersistPaths 收集外部目录白名单路径。
-//
 // Python: PermissionInterruptRail._collect_external_directory_persist_paths(...) (tool_security_rail.py L206-239)
 func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 	normalizedName string,
@@ -731,7 +711,6 @@ func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 }
 
 // persistAllowAlways 工具级「始终允许」与 external_directory 白名单持久化。
-//
 // Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args) (tool_security_rail.py L241-286)
 func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
 	// 深拷贝当前配置
@@ -778,7 +757,6 @@ func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, tool
 }
 
 // buildMessage 构建中断消息。
-//
 // Python: PermissionInterruptRail._build_message(tool_call, result) (tool_security_rail.py L603-628)
 func (r *PermissionInterruptRail) buildMessage(toolCall *llmschema.ToolCall, result *harnesssecurity.PermissionResult) string {
 	toolName := ""
@@ -812,7 +790,6 @@ func (r *PermissionInterruptRail) buildMessage(toolCall *llmschema.ToolCall, res
 }
 
 // buildAlwaysAllowHint 构建自动确认提示。
-//
 // Python: PermissionInterruptRail._build_always_allow_hint(tool_call) (tool_security_rail.py L630-665)
 func (r *PermissionInterruptRail) buildAlwaysAllowHint(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
@@ -851,7 +828,6 @@ func (r *PermissionInterruptRail) buildAlwaysAllowHint(toolCall *llmschema.ToolC
 }
 
 // formatArgsPreview 格式化工具参数预览。
-//
 // Python: PermissionInterruptRail._format_args_preview(tool_args) (tool_security_rail.py L597-601)
 func formatArgsPreview(toolArgs map[string]any) string {
 	if toolArgs == nil {

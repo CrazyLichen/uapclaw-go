@@ -1,8 +1,6 @@
 // Package recall 提供压缩召回的检索原语。
-//
 // 当前只落地 BM25 索引与中英混排分词；archive/retriever 与 compression_recall
 // 工具属"压缩后召回原文"能力，另开章节实施。
-//
 // 文件目录：
 //
 //	recall/

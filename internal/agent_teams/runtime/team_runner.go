@@ -1,13 +1,11 @@
 package runtime
 
 // TeamRunner — 团队执行入口函数。
-//
 // Python: _TeamRunnerMixin + _TeamRunnerClassMixin
 // (openjiuwen/core/runner/team_runner.py)
 //
 // 本文件放在 runtime 包中（而非 runner 包）以避免循环依赖：
 // runner 包被 agent_teams 下游包间接导入，无法反向导入 agent_teams。
-//
 // 三条路径路由：
 //   - TeamAgent 路径（默认）：spec/str → Activate → invoke/stream
 //   - BaseTeam 路径（base=True）：multi_agent.BaseTeam → invoke/stream
@@ -57,7 +55,6 @@ const ()
 
 // RunTeamAgent TeamAgent 路径（非流式）——统一团队执行入口。
 // Python: Runner.run_agent_team(agent_team, inputs, *, session)（默认分支）
-//
 // S-71(A1): 原路由函数 RunAgentTeam(agentTeam any, base, member) 删除——
 // 生产调用方（deep_adapter）恒走默认分支传 *TeamAgentSpec，base/member
 // 分支零生产调用且各自已有具体类型入口（RunBaseTeam/RunTeamMember）。
@@ -92,7 +89,6 @@ func RunTeamAgentStreaming(
 // M-56: 签名换 maschema.BaseTeam 具体类型（原 any）——
 // str 场景由调用方经 runner.ResourceMgr.GetAgentTeam 解析后传实例。
 // S-71(A1): inputs 收紧 map[string]any（下游 Invoke/PreRun 均要求 map）。
-//
 // M-02 有意偏差（归档）：Python `_prepare_base_team` 允许 base_team 为 str，
 // 内部经 ResourceMgr.get_agent_team(team_id=...) 解析。Go 端不提供该分支：
 //   - 类型系统直接编码约束，str 输入在编译期即被拒绝，不会运行期报错；

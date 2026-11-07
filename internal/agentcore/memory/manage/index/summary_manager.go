@@ -14,10 +14,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SummaryManager 摘要记忆管理器，管理摘要型记忆的全生命周期。
-//
 // 通过 BaseMemoryIndex 存取摘要记忆，支持语义搜索。
 // 摘要记忆用于存储对话的关键信息和主题概括。
-//
 // Python: openjiuwen/core/memory/manage/index/summary_manager.py (SummaryManager)
 type SummaryManager struct {
 	// memoryManagerBase 嵌入基类（依赖 BaseMemoryIndex）
@@ -33,7 +31,6 @@ type SummaryManager struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSummaryManager 创建摘要记忆管理器。
-//
 // Python: SummaryManager.__init__(memory_index, crypto_key)
 func NewSummaryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byte) *SummaryManager {
 	return &SummaryManager{
@@ -46,10 +43,8 @@ func NewSummaryManager(memoryIndex index.BaseMemoryIndex, cryptoKey []byte) *Sum
 }
 
 // AddMemories 批量添加摘要记忆。
-//
 // 从 memories map 中过滤 mem_type=="summary" 的 SummaryUnit，
 // 转换为 MemoryDoc 后写入索引。空结果记 Warn 日志并返回空切片。
-//
 // Python: SummaryManager.add_memories
 func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID string,
 	memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error) {
@@ -109,9 +104,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 }
 
 // Update 按 ID 更新摘要记忆内容。
-//
 // 先获取旧文档，替换 text 后更新索引。
-//
 // Python: SummaryManager.update
 func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID string, memID string, newMemory string, opts ...MemoryOption) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
@@ -142,7 +135,6 @@ func (m *SummaryManager) Update(ctx context.Context, userID string, scopeID stri
 }
 
 // Delete 按 ID 删除摘要记忆。
-//
 // Python: SummaryManager.delete
 func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
@@ -157,7 +149,6 @@ func (m *SummaryManager) Delete(ctx context.Context, userID string, scopeID stri
 }
 
 // DeleteByUserID 删除用户+scope 下所有摘要记忆。
-//
 // Python: SummaryManager.delete_by_user_id
 func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scopeID string, opts ...MemoryOption) (bool, error) {
 	if err := m.validateParams(userID, scopeID,
@@ -172,7 +163,6 @@ func (m *SummaryManager) DeleteByUserID(ctx context.Context, userID string, scop
 }
 
 // Get 按 ID 获取单条摘要记忆。
-//
 // Python: SummaryManager.get
 func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string, memID string, opts ...MemoryOption) (*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
@@ -188,9 +178,7 @@ func (m *SummaryManager) Get(ctx context.Context, userID string, scopeID string,
 }
 
 // Search 语义搜索摘要记忆。
-//
 // memTypes 参数被忽略，硬编码为 [m.memType]。
-//
 // Python: SummaryManager.search
 func (m *SummaryManager) Search(ctx context.Context, userID string, scopeID string, query string, topK int, _ []string, opts ...MemoryOption) ([]*index.MemorySearchResult, error) {
 	if err := m.validateParams(userID, scopeID,
@@ -207,7 +195,6 @@ func (m *SummaryManager) Search(ctx context.Context, userID string, scopeID stri
 }
 
 // ListUserSummary 分页列出用户摘要记忆，按 timestamp 降序排列。
-//
 // Python: SummaryManager.list_user_summary
 func (m *SummaryManager) ListUserSummary(ctx context.Context, userID string, scopeID string, offset int, batchSize int) ([]*index.MemoryDoc, error) {
 	if err := m.validateParams(userID, scopeID,
@@ -234,7 +221,6 @@ func (m *SummaryManager) ListUserSummary(ctx context.Context, userID string, sco
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // convertToMemoryDocs 将 SummaryUnit 列表转换为 MemoryDoc 列表。
-//
 // Python: SummaryManager._convert_to_memory_docs
 // 文本取 mem_unit.summary，字段含 source_id=mem_unit.message_mem_id, metadata={}
 func (m *SummaryManager) convertToMemoryDocs(units []*mem_model.SummaryUnit) []*index.MemoryDoc {

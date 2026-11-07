@@ -14,7 +14,6 @@ import "encoding/json"
 
 // ExtractSchema 从 JSON Schema 字典提取结构骨架，去除类型信息。
 // 递归处理嵌套字典，保留列表原样，将原始值替换为空字符串。
-//
 // Python: extract_schema(schema_dict)
 //
 //		if not isinstance(schema_dict, dict):
@@ -46,7 +45,6 @@ func ExtractSchema(schemaDict map[string]any) map[string]any {
 
 // ExtractSchemaFromJSON 从 JSON 字符串提取结构骨架。
 // 如果输入不是 dict，尝试 json.Unmarshal。
-//
 // Python: extract_schema(schema_dict) 中 isinstance(schema_dict, dict) 的 else 分支
 //
 //	try: schema_dict = json.loads(schema_dict)

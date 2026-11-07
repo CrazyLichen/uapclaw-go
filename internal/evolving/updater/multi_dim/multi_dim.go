@@ -16,15 +16,12 @@ import (
 
 // MultiDimUpdater 多维更新器，按 domain 分发 signals 到不同域优化器，
 // 合并各域更新映射，由 Trainer 统一应用。
-//
 // 一致性约束：维度仅按 Operator domain 划分（llm/tool/memory/skill_experience），
 // 用户只需配置 domain_optimizers 映射，每个域仅允许一个优化器。
 // 同一 workflow 可有多个 LLMCall/ToolCall/MemoryCall，但同一 domain 内
 // 所有 Operator 由同一 optimizer 管理，避免冲突。
-//
 // 当前 bind/process/get_state/load_state 为默认实现（返回零值），
 // 后续具体子类实现时重写。
-//
 // Python: openjiuwen/agent_evolving/updater/multi_dim.py MultiDimUpdater
 type MultiDimUpdater struct {
 	// domainOptimizers domain → optimizer 映射
@@ -43,7 +40,6 @@ type MultiDimUpdaterOption func(*MultiDimUpdater)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMultiDimUpdater 创建 MultiDimUpdater 实例。
-//
 // Python: MultiDimUpdater(domain_optimizers={...})
 func NewMultiDimUpdater(opts ...MultiDimUpdaterOption) *MultiDimUpdater {
 	u := &MultiDimUpdater{
@@ -72,7 +68,6 @@ func (u *MultiDimUpdater) DomainOptimizers() map[string]optimizer.BaseOptimizer 
 
 // Bind 绑定 Operator 注册表并过滤可优化的 Operator。
 // 当前默认实现返回 0，后续具体子类重写。
-//
 // Python: MultiDimUpdater.bind(operators, targets, **config) — @abstractmethod
 func (u *MultiDimUpdater) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
 	return 0
@@ -80,7 +75,6 @@ func (u *MultiDimUpdater) Bind(operators map[string]operator.Operator, targets [
 
 // RequiresForwardData 检查是否有任何域优化器需要前向推理数据。
 // 如果任意优化器的 RequiresForwardData 返回 true，则返回 true。
-//
 // Python:
 //
 //	Python: for opt in self._domain_optimizers.values():
@@ -101,14 +95,12 @@ func (u *MultiDimUpdater) RequiresForwardData() bool {
 
 // Process 信号优先入口，按 domain 分发 signals 到对应优化器，合并更新映射。
 // 当前默认实现返回空切片，后续具体子类重写。
-//
 // Python: MultiDimUpdater.process(trajectories, signals, config) — @abstractmethod
 func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	return nil, nil
 }
 
 // Update 离线兼容入口，将 EvaluatedCase 转换为 EvolutionSignal 后调用 Process。
-//
 // Python:
 //
 //		Python: score_threshold = config.get("score_threshold")
@@ -138,7 +130,6 @@ func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []*trajectory
 
 // GetState 获取 Updater 可序列化状态。
 // 当前默认实现返回空 map，后续具体子类重写。
-//
 // Python: MultiDimUpdater.get_state() — @abstractmethod
 func (u *MultiDimUpdater) GetState() map[string]any {
 	return map[string]any{}
@@ -146,7 +137,6 @@ func (u *MultiDimUpdater) GetState() map[string]any {
 
 // LoadState 从检查点恢复状态，当前为无操作。
 // 后续具体子类重写。
-//
 // Python: MultiDimUpdater.load_state(state) — @abstractmethod
 func (u *MultiDimUpdater) LoadState(_ map[string]any) {
 	// 默认 no-op，后续子类重写

@@ -1,10 +1,8 @@
 // Package config 提供记忆系统的配置类型定义。
-//
 // 包含图记忆（GraphMemory）相关的配置结构体、枚举类型和默认值，
 // 这些配置类型控制图记忆的检索策略、添加记忆行为和搜索参数，
 // 记忆作用域配置（MemoryScopeConfig）、记忆引擎配置（MemoryEngineConfig）
 // 和 Agent 记忆配置（AgentMemoryConfig）。
-//
 // 文件目录：
 //
 //	config/

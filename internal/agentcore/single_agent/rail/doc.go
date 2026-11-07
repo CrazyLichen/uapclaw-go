@@ -1,13 +1,10 @@
 // Package rail 提供 Agent 生命周期 Rail 执行器。
-//
 // 本包仅保留 RailExecutor（@rail 装饰器的 Go 等价），
 // 将函数包裹在 before/after/on_exception 钩子中执行；
 // 另提供 ModelBackupRail 模型备份护栏（LLM 调用异常时按序切换备用模型）。
-//
 // Rail 系统的核心类型（AgentCallbackEvent、AgentCallbackContext、
 // AgentCallbackManager、AgentRail、BaseRail 等）已迁至
 // single_agent/interfaces 包，以打破 rail ↔ interfaces 循环依赖。
-//
 // 文件目录：
 //
 //	rail/

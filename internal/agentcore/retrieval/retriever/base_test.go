@@ -85,7 +85,6 @@ func TestRetrievalMode_常量值(t *testing.T) {
 }
 
 // fakeVectorStore 实现 vector_store.VectorStore 全接口的测试桩。
-//
 // 检索三方法可编程返回值/错误并计数；其余方法零实现（两检索器不触达）。
 // searchErrAfter > 0 时前 N 次 Search 成功、之后返回 searchErr（G5 首错
 // 传播用：q1 成功 q2 失败）。

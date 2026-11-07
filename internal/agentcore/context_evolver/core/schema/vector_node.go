@@ -7,10 +7,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // VectorNode 向量存储标准序列化格式。
-//
 // 所有记忆类型（ACE/ReasoningBank/ReMe）通过此格式统一序列化。
 // Embedding 使用 float64（Go 无 float32 向量库生态约束）。
-//
 // Python: openjiuwen/extensions/context_evolver/core/schema/vector_node.py
 type VectorNode struct {
 	// ID 唯一标识

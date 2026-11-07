@@ -1,12 +1,9 @@
 // Package trainer 提供离线自演化训练编排器。
-//
 // Trainer 编排 "evaluate → update → writeback" 自演化循环：
 // 接受 Updater 和 BaseEvaluator，管理检查点保存/恢复和早停。
 // Progress 追踪训练进度（epoch/batch/score），Callbacks 提供训练生命周期钩子。
-//
 // TrainableAgent 接口已迁移至 evolving 根包（evolving/trainable_agent.go），
 // 以解决 checkpointing ↔ trainer 循环依赖问题。
-//
 // 核心方法实现状态：
 //   - ✅ SnapshotOperatorsState / RestoreOperatorsState（Operator 状态快照/恢复）
 //   - ✅ Predict / PredictOnly / Evaluate（推理与评估）

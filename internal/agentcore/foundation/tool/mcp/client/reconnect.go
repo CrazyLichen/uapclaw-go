@@ -19,18 +19,15 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // reconnectState 每实例的重连状态（锁、退避计数、冷却截止、代际号）。
-//
 // 不放进客户端结构体本身：两个客户端类型都要用，且 McpClient 接口
 // 不暴露这些内部字段。用 sync.Map 按客户端指针挂载，等价上游的
 // setattr(client, "_reconnect_lock", ...) 动态属性。
-//
 // Python: _get_reconnect_lock / _record_reconnect_failure 里的
 // “setattr(client, "_reconnect_*", ...)“（reconnect.py:214-245）
 type reconnectState struct {
 	// mu 重连互斥锁：同一实例的并发调用不重复重建传输
 	mu sync.Mutex
 	// stateMu 保护下面的计数与代际字段。
-	//
 	// 与 mu 分开是必须的：reconnectTransport 持 mu 期间会调用 recordFailure/
 	// recordSuccess，共用一个锁会自死锁。
 	stateMu sync.Mutex
@@ -45,10 +42,8 @@ type reconnectState struct {
 }
 
 // retryableMarker 可重试错误标记。
-//
 // skipForRuntimeError 为真时对 RuntimeError 不适用——避免把客户端自己的
 // "未连接"守卫误判成传输错误。
-//
 // Python: _RETRYABLE_MARKER_DEFS (reconnect.py:38-52)
 type retryableMarker struct {
 	// pattern 小写子串
@@ -134,10 +129,8 @@ var reconnectStates sync.Map
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsRetryableTransportError 判断 error 是否属于可重试的传输层故障。
-//
 // 先按 MCP 错误码判断（更稳健），再退回子串匹配。
 // 匹配大小写不敏感：异常名与消息都转小写后与标记比对。
-//
 // Python: is_retryable_transport_error (reconnect.py:117-146)
 func IsRetryableTransportError(err error) bool {
 	if err == nil {
@@ -161,10 +154,8 @@ func IsRetryableTransportError(err error) bool {
 }
 
 // ShouldAttemptReconnect 判断一次失败的调用是否应触发一次重连。
-//
 // "not connected" 是客户端自己的守卫：只有在传输失败把连接拆掉
 // （lazyReconnect 标记）时才可重试，用户主动断开后不可重试。
-//
 // Python: should_attempt_reconnect (reconnect.py:184-196)
 func ShouldAttemptReconnect(client any, err error) bool {
 	if err == nil {
@@ -185,7 +176,6 @@ func ShouldAttemptReconnect(client any, err error) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // reconnectStatesKey 生成状态表的键。
-//
 // 用「接口值本身」当键：同一指针必然命中同一状态；非指针实现（值类型
 // 客户端）拿不到稳定身份，返回 nil 由调用方降级为无状态处理。
 func reconnectStateOf(client any) *reconnectState {
@@ -201,7 +191,6 @@ func reconnectStateOf(client any) *reconnectState {
 }
 
 // reconnectStateKey 取客户端实例的稳定身份键（指针地址）。
-//
 // 用接口值本身做 map 键在值是「不可比较类型」时会 panic，
 // 因此统一转成指针地址；非指针实现返回 false。
 func reconnectStateKey(client any) (uintptr, bool) {
@@ -209,11 +198,9 @@ func reconnectStateKey(client any) (uintptr, bool) {
 		return 0, false
 	}
 	v := reflect.ValueOf(client)
+	// 只有「可比较类型」才有稳定的身份地址；slice 等不可比较类型直接判 false。
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		if v.Kind() == reflect.Ptr || v.Kind() == reflect.UnsafePointer {
-			return v.Pointer(), true
-		}
+	case reflect.Pointer, reflect.Map, reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		return v.Pointer(), true
 	default:
 		return 0, false
@@ -229,7 +216,6 @@ func errTypeOf(err error) string {
 }
 
 // mcpErrorCodeAndMessage 尝试从 MCP 错误里取出 JSON-RPC 码与消息。
-//
 // Go 侧没有 mcp-go 的 McpError 类型可依赖（版本间命名不同），
 // 按接口探测：具备 Code() int / Message() string 的错误视为 MCP 错误。
 func mcpErrorCodeAndMessage(err error) (int, string, bool) {
@@ -251,7 +237,6 @@ func mcpErrorCodeAndMessage(err error) (int, string, bool) {
 }
 
 // isRetryableMCPError 按 JSON-RPC 码与消息判断 MCP 错误是否可重试。
-//
 // Python: _is_retryable_mcp_error (reconnect.py:85-98)
 func isRetryableMCPError(code int, message string) bool {
 	lower := strings.ToLower(message)
@@ -281,7 +266,6 @@ func isNotConnectedGuard(err error) bool {
 }
 
 // isRuntimeError 判断是否属于"运行时错误"一族（含 fmt.Errorf 包装）。
-//
 // Go 没有 Python RuntimeError 的对应物：这里把非 MCP 业务错误的普通
 // error 视作同类，仅用于跳过 "not connected" 这条标记。
 func isRuntimeError(err error) bool {
@@ -299,7 +283,6 @@ func typeName(err error) string {
 }
 
 // resolveReconnectTimeout 解析重连用的超时。
-//
 // 原调用有期限就沿用，没有则返回 0（不限），与上游 -1 语义一致。
 // Python: _resolve_reconnect_timeout (reconnect.py:153-163)
 func resolveReconnectTimeout(ctx context.Context) float64 {
@@ -369,7 +352,6 @@ func (s *reconnectState) recordSuccess() {
 }
 
 // resolveAttempts 解析总尝试次数（首次 + 重试）。
-//
 // 优先用客户端自报的 _reconnect_attempts；其次环境变量；最后默认 3。
 // Python: _get_attempts (reconnect.py:299-318)
 func resolveAttempts(override int) int {
@@ -389,10 +371,8 @@ func resolveAttempts(override int) int {
 }
 
 // reconnectTransport 拆掉并重建传输，按实例串行化。
-//
 // 若客户端自带 Reconnect 方法（传输相关的并发保护在内部），直接委托；
 // 否则退回「断开 + 连接」并由实例锁串行化。
-//
 // Python: reconnect (reconnect.py:248-295)
 func reconnectTransport(ctx context.Context, client any, state *reconnectState, timeout float64) bool {
 	if native, ok := client.(interface {
@@ -466,11 +446,9 @@ func disconnectThenConnect(ctx context.Context, client any, c interface {
 }
 
 // withReconnect 包装一次 MCP 调用：命中可重试传输错误时重连并重试。
-//
 // 语义对齐上游装饰器：非传输错误立即上抛不重连；调用方主动取消原样抛出；
 // 已被其他调用方重建过传输（代际变化）时只重试不再拆连接；冷却期内的
 // 自动重连直接放弃。
-//
 // Python: with_reconnect (reconnect.py:320-437)
 func withReconnect[T any](ctx context.Context, client any, attemptsOverride int, method string, call func() (T, error)) (T, error) {
 	var zero T

@@ -21,11 +21,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ListSkillTool 列出所有可用技能或通过 LLM 路由筛选相关技能。
-//
 // 通过 getSkills 回调获取当前已启用技能列表。
 // 当 query 为空时返回所有技能；当 query 非空且 listSkillModel 可用时，
 // 使用 LLM 路由筛选与任务相关的技能；当 listSkillModel 不可用时回退返回全部技能。
-//
 // Python: ListSkillTool (openjiuwen/harness/tools/skills/list_skill.py)
 type ListSkillTool struct {
 	// card 工具配置卡片
@@ -47,7 +45,6 @@ type ListSkillTool struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewListSkillTool 创建 ListSkillTool 实例。
-//
 // Python: ListSkillTool.__init__(get_skills, list_skill_model, language, agent_id)
 func NewListSkillTool(
 	getSkills skillGetter,
@@ -66,7 +63,6 @@ func NewListSkillTool(
 }
 
 // Invoke 执行 list_skill 工具，列出技能或路由筛选技能。
-//
 // 一比一复刻 Python ListSkillTool.invoke()：
 //  1. query 为空 → 返回所有技能（mode="all"）
 //  2. query 非空 + listSkillModel 为 nil → 返回全部技能（mode="all", fallback 消息）
@@ -155,7 +151,6 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 }
 
 // Stream ListSkillTool 不支持流式调用。
-//
 // Python: ListSkillTool.stream(inputs, **kwargs) — if False: yield None
 func (t *ListSkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.ID)
@@ -172,7 +167,6 @@ func (t *ListSkillTool) GetCallTimeout(inputs map[string]any, defaultTimeout flo
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // dumpAllSkills 转换所有当前已启用技能为可序列化字典列表。
-//
 // 一比一复刻 Python: ListSkillTool._dump_all_skills()
 func (t *ListSkillTool) dumpAllSkills(sess sessioninterfaces.SessionFacade) []map[string]any {
 	allSkills := t.getSkills(sess)
@@ -183,7 +177,6 @@ func (t *ListSkillTool) dumpAllSkills(sess sessioninterfaces.SessionFacade) []ma
 }
 
 // dumpSkills 将技能对象列表转为可序列化字典列表。
-//
 // 一比一复刻 Python: ListSkillTool._dump_skills(skills):
 //
 //	Python: skill_dict = skill.asdict(include_directory=True)
@@ -200,7 +193,6 @@ func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
 }
 
 // routeSkills 通过 LLM 路由筛选与查询相关的技能名称。
-//
 // 一比一复刻 Python: ListSkillTool._route_skills(query):
 //
 //	Python: payload = self._dump_all_skills()
@@ -251,7 +243,6 @@ func (t *ListSkillTool) routeSkills(ctx context.Context, query string, sess sess
 }
 
 // parseSelectedSkillNames 解析 LLM 输出中的技能名称列表。
-//
 // 一比一复刻 Python: ListSkillTool._parse_selected_skill_names(content):
 //  1. strip 后为空则返回空列表
 //  2. 去除 ``` 代码块包裹
@@ -305,7 +296,6 @@ func parseSelectedSkillNames(content string) []string {
 }
 
 // selectSkillsByNames 按名称列表选择技能对象。
-//
 // 一比一复刻 Python: ListSkillTool._select_skills_by_names(names):
 //
 //	Python: if not names → []

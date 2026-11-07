@@ -3,7 +3,6 @@ package schema
 import "testing"
 
 // TestModelRequestConfig_ContextWindow不外发 验证 context_window 是内部元数据。
-//
 // 请求参数由 base_client 以 map 拼装并只合并 Extra；若 context_window 落进 Extra
 // 就会被当厂商参数下发（上游 base_model_client 显式 exclude 该字段）。
 func TestModelRequestConfig_ContextWindow不外发(t *testing.T) {

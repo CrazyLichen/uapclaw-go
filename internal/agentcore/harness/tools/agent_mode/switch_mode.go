@@ -43,7 +43,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSwitchModeTool 创建 switch_mode 工具实例。
-//
 // Python: SwitchModeTool.__init__() L205-221 + invoke() L224-256
 func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
 	lang := normalizeLanguage(language)

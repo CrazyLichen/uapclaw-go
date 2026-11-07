@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PromptAssembler 模板装配器，负责编排变量求值和模板渲染。
-//
 // Python: openjiuwen/core/foundation/prompt/assemble/assembler.py (PromptAssembler)
 //
 // 职责：
@@ -54,7 +53,6 @@ func WithAssemblerVariable(name string, variable Variable) AssemblerOption {
 }
 
 // NewPromptAssembler 创建模板装配器。
-//
 // 参数：
 //   - content: 模板内容，string 或 []schema.BaseMessage
 //   - opts: 可选配置
@@ -93,7 +91,6 @@ func (a *PromptAssembler) InputKeys() []string {
 }
 
 // Assemble 执行模板装配：更新变量值，渲染模板，返回结果。
-//
 // Python: PromptAssembler.prompt_assemble()
 //
 // 逻辑：

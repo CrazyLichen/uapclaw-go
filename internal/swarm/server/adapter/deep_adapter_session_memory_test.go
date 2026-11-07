@@ -173,7 +173,6 @@ func TestGetSkillCreateEnabled_对齐Python(t *testing.T) {
 }
 
 // TestGetLanguage_配置读取 覆盖配置命中与缺省值。
-//
 // 注：min_team_members_for_create 随单 Agent SkillCreateRail 移植一并移除
 // （Python 的 SkillCreateRail 无此参数），相关断言同步删除。
 func TestGetLanguage_配置读取(t *testing.T) {

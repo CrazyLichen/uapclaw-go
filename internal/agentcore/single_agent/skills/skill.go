@@ -8,10 +8,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Skill 表示一个技能的元数据。
-//
 // 每个技能对应磁盘上一个包含 SKILL.md 文件的目录。
 // SKILL.md 文件使用 YAML front matter 格式，其中 description 字段被解析为技能描述。
-//
 // Python: Skill(BaseModel)
 type Skill struct {
 	// Name 技能名称（通常为 SKILL.md 所在目录的目录名）
@@ -50,9 +48,7 @@ func NewSkill(name, description, directory string) *Skill {
 }
 
 // AsDict 将 Skill 转为字典。
-//
 // includeDirectory 为 true 时包含 directory 字段，为 false 时省略。
-//
 // Python: Skill.asdict(include_directory=True)
 func (s *Skill) AsDict(includeDirectory bool) map[string]any {
 	result := map[string]any{
@@ -69,14 +65,12 @@ func (s *Skill) AsDict(includeDirectory bool) map[string]any {
 }
 
 // String 返回 Skill 的多行可读格式。
-//
 // Python: Skill.__str__()
 func (s *Skill) String() string {
 	return fmt.Sprintf("Skill: %s\nDescription: %s\nDirectory: %s", s.Name, s.Description, s.Directory)
 }
 
 // GoString 返回 Skill 的单行紧凑格式，description 截断至 30 字符。
-//
 // Python: Skill.__repr__()
 func (s *Skill) GoString() string {
 	desc := s.Description

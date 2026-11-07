@@ -200,7 +200,6 @@ func TestCallDashScopeAPI_ContextCancelled(t *testing.T) {
 }
 
 // TestResolveDashScopeBaseURL_完整URL 先归一再按 compatible-mode 切分。
-//
 // 偏差 D-4：上游原生路径原样透传（openai_model_client.py:2278），Go 多做一步归一。
 func TestResolveDashScopeBaseURL_完整URL(t *testing.T) {
 	if got := ResolveDashScopeBaseURL("https://proxy.example.com/v1/chat/completions"); got != "https://proxy.example.com/v1" {

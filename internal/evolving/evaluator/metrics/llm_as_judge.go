@@ -17,10 +17,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LLMAsJudgeMetric 使用 LLM 作为裁判判断语义一致性的指标。
-//
 // 通过模板生成评估 prompt，调用 LLM 判断 prediction 与 label 的语义一致性，
 // 返回 {"llm_as_judge": 1.0}（通过）或 {"llm_as_judge": 0.0}（失败）。
-//
 // Python: openjiuwen/agent_evolving/evaluator/metrics/llm_as_judge.py LLMAsJudgeMetric
 type LLMAsJudgeMetric struct {
 	// model LLM 模型实例
@@ -45,10 +43,8 @@ const ()
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLLMAsJudgeMetric 创建 LLMAsJudgeMetric 实例。
-//
 // 传入 ModelClientConfig + ModelRequestConfig，内部创建 llm.Model。
 // userMetrics 为自定义验证规则，会注入到评估模板中。
-//
 // Python: LLMAsJudgeMetric(model_config, model_client_config, user_metrics)
 func NewLLMAsJudgeMetric(
 	clientConfig llmschema.ModelClientConfig,
@@ -83,7 +79,6 @@ func (m *LLMAsJudgeMetric) Name() string { return "llm_as_judge" }
 func (m *LLMAsJudgeMetric) HigherIsBetter() bool { return true }
 
 // Compute 使用 LLM-as-Judge 计算语义一致性分数。
-//
 // Python: LLMAsJudgeMetric.compute(prediction, label, question=None)
 func (m *LLMAsJudgeMetric) Compute(ctx context.Context, prediction, label any, opts ...MetricOption) (MetricResult, error) {
 	mc := applyMetricOptions(opts...)
@@ -127,7 +122,6 @@ func (m *LLMAsJudgeMetric) ComputeBatch(ctx context.Context, predictions, labels
 }
 
 // IsPassResult 判断评估结果是否通过。
-//
 // Python: DefaultEvaluator._is_pass_result(result)
 func IsPassResult(result any) bool {
 	if result == true {
@@ -142,7 +136,6 @@ func IsPassResult(result any) bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseResult 解析 LLM 评估结果，返回 1.0（通过）或 0.0（失败）。
-//
 // Python: LLMAsJudgeMetric._parse_result(response)
 func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) MetricResult {
 	text := response.Content.Text()

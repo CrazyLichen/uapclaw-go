@@ -1,12 +1,10 @@
 // Package tool 提供工具系统的核心抽象，包括 Tool 接口、ToolCard 配置卡片、
 // LifecycleTool 生命周期包装器和 LocalFunction 本地函数工具。
-//
 // Tool 是 Agent 调用外部能力的统一抽象。LLM 返回 ToolCall 后，
 // Agent 通过 Tool 接口执行工具调用并拿回结果。
 // Tool 接口只定义纯业务方法（Invoke/Stream/Card），
 // LifecycleTool 包装器负责在调用前后触发 ToolCallEvents 生命周期回调，
 // AbilityManager 注册时自动包装，对调用方透明。
-//
 // 工具类型体系：
 //
 //	Tool 接口 — 统一抽象（Invoke/Stream/Card）
@@ -23,7 +21,6 @@
 //	通过 NewInvokeFunction/NewStreamFunction 注册为工具。
 //	Go 编译器自动推断泛型参数，schema 从 struct tag 反射提取。
 //	便捷函数 NewTool/NewStreamTool 对标 Python @tool 装饰器。
-//
 //	Schema 提取流程：
 //
 //	用户定义 SearchInput struct（带 json + jsonschema tag）
@@ -34,7 +31,6 @@
 //	    ↓ jsonschema:"default=10" → Param.Default
 //	    ↓ 递归处理嵌套 struct（→ ParamTypeObject）和 slice（→ ParamTypeArray）
 //	ToolCard.InputParams → ToolCard.ToolInfo() → LLM function calling JSON Schema（工具参数→工具信息→LLM 函数调用 JSON Schema）
-//
 //	调用流程：
 //
 //	LLM 返回 ToolCall.Arguments = map[string]any

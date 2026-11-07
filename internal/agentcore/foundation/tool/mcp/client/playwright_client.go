@@ -12,7 +12,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PlaywrightClient Playwright 浏览器工具的 MCP 客户端（SSE/Stdio 双传输）。
-//
 // 根据 ServerPath 类型委托给 SseClient 或 StdioClient：
 //   - http:// 或 https:// 开头 → SseClient
 //   - 其他 → StdioClient

@@ -1,8 +1,6 @@
 // 自动权限审查层的共享数据契约。
-//
 // 三个类型分别是：工具调用快照、权限处理结果、权限中断请求。
 // 它们都不含判定逻辑，只是 9.90d 各文件之间传递的载体。
-//
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py
 package auto_permission
 
@@ -17,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolInvocation 从 rail 回调输入中提取的规范化工具调用。
-//
 // 四个字段的类型取舍（详见 spec §3.1.2）：
 //   - Ctx 收窄为 *AgentCallbackContext：消费方全部直接使用 .Agent() / .Session()，
 //     与 ToolCallInputs.Ctx 同源。
@@ -44,9 +41,7 @@ type ToolInvocation struct {
 }
 
 // PermissionHandlingResult 已处理结果，以及该决策的可信宿主来源。
-//
 // Handled 为 true 时 DecisionSource 必须非空，用 NewPermissionHandlingResult 保证。
-//
 // Python: @dataclass(frozen=True) PermissionHandlingResult
 //
 //	handled: bool
@@ -62,10 +57,8 @@ type PermissionHandlingResult struct {
 }
 
 // PermissionInterruptRequest 保留权限元数据供 UI 渲染的中断请求。
-//
 // 构造约定：InterruptKind 置为 saschema.InterruptKindPermission。
 // 若需挂动态字段，走已存在的 InterruptRequest.Metadata，不要新增字段。
-//
 // Python: class PermissionInterruptRequest(InterruptRequest)
 //
 //	model_config = {"extra": "allow"}
@@ -110,12 +103,9 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ShellDisplayPathPattern 从 shell 命令里抽出需要脱敏显示的路径。
-//
 // 覆盖 macOS（/Users/、/private/、/tmp/）、Linux（/home/x/）、
 // HOME 相对（~/...）与 Windows 盘符（C:\Users\、Documents and Settings）四类。
-//
 // ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
-//
 // Python: _SHELL_DISPLAY_PATH_PATTERN
 var ShellDisplayPathPattern = regexp.MustCompile(
 	`(?:` +
@@ -128,9 +118,7 @@ var ShellDisplayPathPattern = regexp.MustCompile(
 )
 
 // ShellDisplayPreSplitPathPattern 仅匹配 Windows 盘符路径，用于预切分。
-//
 // ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
-//
 // Python: _SHELL_DISPLAY_PRE_SPLIT_PATH_PATTERN
 var ShellDisplayPreSplitPathPattern = regexp.MustCompile(
 	`[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]` +
@@ -138,13 +126,10 @@ var ShellDisplayPreSplitPathPattern = regexp.MustCompile(
 )
 
 // SensitiveDisplayPathPattern 识别敏感文件名与目录（.env / 凭证 / 密钥）。
-//
 // 三类：点文件类（.env*、credentials、id_*、known_hosts）、
 // 敏感目录（.ssh / .aws / .gnupg / .jiuwenswarm/config）、
 // 关键词类（secret / token / api_key / private_key / credential / password）。
-//
 // ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
-//
 // Python: _SENSITIVE_DISPLAY_PATH_PATTERN
 var SensitiveDisplayPathPattern = regexp.MustCompile(
 	`(?i)(?:` +
@@ -156,11 +141,8 @@ var SensitiveDisplayPathPattern = regexp.MustCompile(
 )
 
 // DeterministicReadonlyPublicWebFetchSourceKinds 允许确定性放行的 fetch 来源类型集合。
-//
 // 只读用途，本包内不得对其赋值。
-//
 // ⤵️ Python 全仓零消费，待 9.90d 的 deterministic 启用。
-//
 // Python: DETERMINISTIC_READONLY_PUBLIC_WEB_FETCH_SOURCE_KINDS = frozenset({"recent_search_result"})
 var DeterministicReadonlyPublicWebFetchSourceKinds = map[string]struct{}{
 	"recent_search_result": {},
@@ -169,10 +151,8 @@ var DeterministicReadonlyPublicWebFetchSourceKinds = map[string]struct{}{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionHandlingResult 构造并校验权限处理结果。
-//
 // 校验与 Python 的 __post_init__ 逐条一致：handled 为 true 而来源为空即报错，
 // 防止下游拿到"已处理"却无从判断是谁处理的。
-//
 // Python: PermissionHandlingResult.__post_init__
 func NewPermissionHandlingResult(handled bool, result any, decisionSource string) (*PermissionHandlingResult, error) {
 	if handled && decisionSource == "" {

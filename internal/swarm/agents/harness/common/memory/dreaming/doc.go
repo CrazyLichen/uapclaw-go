@@ -1,8 +1,6 @@
 // Package dreaming 提供后台记忆整理（Dreaming）的业务实现。
-//
 // 本包实现 Sweeper 管线和公共 API（StartDreaming/StopDreaming/GetDreamingOrchestrator），
 // 对齐 Python jiuwenswarm/agents/harness/common/memory/dreaming/。
-//
 // # Sweeper 管线流程：Scan → Compress → LLM Extract → Promote
 //
 // 文件目录：

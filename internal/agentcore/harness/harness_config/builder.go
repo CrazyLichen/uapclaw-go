@@ -84,7 +84,6 @@ var railDottedToName = buildRailDottedToName()
 
 // Build 将 ResolvedHarnessConfig 转换为 CreateDeepAgentParams，
 // 供调用方传入 CreateDeepAgent() 工厂创建 DeepAgent。
-//
 // Python: HarnessConfigBuilder.build → create_deep_agent(config)。
 // 注意：此方法返回 CreateDeepAgentParams 而非直接创建 DeepAgent，
 // 以避免 harness_config → harness 循环依赖。
@@ -286,7 +285,6 @@ func GenerateHarnessConfigYAML(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveBuiltinTools 按组名实例化内置工具。
-//
 // ⤵️ 9.38 回填：内置工具集实现后补全实例化逻辑。
 // Python: resolve_builtin_tools → entry_point/module 工具加载。
 func resolveBuiltinTools(groupName string, sysOperation sysop.SysOperation) ([]*tool.ToolCard, error) {

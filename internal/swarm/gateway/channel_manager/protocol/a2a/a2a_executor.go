@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // a2aExecutor A2A 执行器：把内部消息事件流翻译成 A2A 事件序列。
-//
 // 协议侧（任务建档、状态机、SSE）由 a2asrv 负责，本类型只做桥接。
 // Python: a2a_connect.py _A2AAgentExecutor (L43-176)
 type a2aExecutor struct {
@@ -29,7 +28,6 @@ type a2aExecutor struct {
 func executorFor(ch *A2AChannel) a2asrv.AgentExecutor { return &a2aExecutor{ch: ch} }
 
 // Execute 执行一次任务：产出 A2A 事件序列。
-//
 // 序列：Task(submitted) → StatusUpdate(WORKING) → Artifact... → StatusUpdate(终态)。
 // 首事件必须是 Task（偏差 D1，a2asrv 强制）。
 // Python: _A2AAgentExecutor.execute (L49-162)
@@ -116,7 +114,6 @@ func (e *a2aExecutor) Execute(ctx context.Context, ec *a2asrv.ExecutorContext) i
 }
 
 // Cancel 响应客户端取消请求。
-//
 // 这里**不清理 pending**：对齐 Python cancel (L164-176)——只发 CANCELED 状态并关闭事件队列，
 // pending 由 Execute 的 defer 清理。a2asrv 的取消是「往活跃执行队列投递取消事件」，且 execution
 // 跑在 detached context 上不会因取消而结束（internal/taskexec/local_manager.go L51-52）；
@@ -143,7 +140,6 @@ func (e *a2aExecutor) Cancel(_ context.Context, ec *a2asrv.ExecutorContext) iter
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // terminalState 把内部终态事件映射为 A2A 任务状态。
-//
 // Python: _A2AAgentExecutor.execute (L136-149)
 func terminalState(eventType schema.EventType) sdka2a.TaskState {
 	switch eventType {
@@ -157,7 +153,6 @@ func terminalState(eventType schema.EventType) sdka2a.TaskState {
 }
 
 // filterSentinelParts 过滤完成哨兵文本 Part。
-//
 // Python: _A2AAgentExecutor.execute (L113-119)
 func filterSentinelParts(parts []*sdka2a.Part) []*sdka2a.Part {
 	if len(parts) == 0 {

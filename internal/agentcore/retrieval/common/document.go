@@ -29,7 +29,6 @@ type ModalityField struct {
 }
 
 // MultimodalDocument 多模态文档，支持文本+图片+音频+视频混合输入。
-//
 // Python: openjiuwen/core/retrieval/common/document.py (MultimodalDocument)
 type MultimodalDocument struct {
 	// Text 文本回退字段，供不支持多模态的服务使用
@@ -58,7 +57,6 @@ type addFieldOptions struct {
 type AddFieldOption func(*addFieldOptions)
 
 // TextChunk 文本分块数据模型，用于文档索引管线中的分块传递。
-//
 // Python: openjiuwen/core/retrieval/common/document.py (TextChunk)
 type TextChunk struct {
 	// ID 分块 ID
@@ -123,10 +121,8 @@ func FieldDataID(id string) AddFieldOption {
 }
 
 // AddField 添加模态字段，支持链式调用。
-//
 // kind: 模态类型；data: 文本内容/URL/base64（kind 为 text 时必传）；
 // opts: 可选参数，支持 FieldFilePath(string) 和 FieldDataID(string)。
-//
 // Python: MultimodalDocument.add_field()
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 // 注意：与 Python 对齐，add_field 不会更新 text 字段，text 始终保持默认空字符串。
@@ -172,7 +168,6 @@ func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...Ad
 // Content 返回 OpenAI/vLLM 格式的结构化内容列表。
 // 使用 mutex + 空值检查缓存结果，对齐 Python content property 的 truthiness 语义
 // （Python 侧 `if self._content_cache:` 空列表视为未缓存，重新计算）。
-//
 // Python: MultimodalDocument.content
 func (d *MultimodalDocument) Content() []map[string]any {
 	d.mu.Lock()
@@ -194,7 +189,6 @@ func (d *MultimodalDocument) Content() []map[string]any {
 // DashscopeInput 返回 DashScope 格式的输入字典。
 // 使用 mutex + 空值检查缓存结果，对齐 Python dashscope_input property 的 truthiness 语义
 // （Python 侧 `if self._dashscope_cache:` 空字典视为未缓存，重新计算）。
-//
 // Python: MultimodalDocument.dashscope_input
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
@@ -218,7 +212,6 @@ func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
 }
 
 // Strip 兼容 Python 的 strip() 语义，无字段时返回 nil。
-//
 // Python: MultimodalDocument.strip()
 func (d *MultimodalDocument) Strip() *MultimodalDocument {
 	if len(d.fields) == 0 {
@@ -235,7 +228,6 @@ func (d *MultimodalDocument) Fields() []ModalityField {
 }
 
 // NewTextChunkFromDocument 从 Document 创建 TextChunk。
-//
 // Python: TextChunk.from_document()
 // id 为空时自动生成 UUID。
 func NewTextChunkFromDocument(doc *reranker.Document, chunkText string, id string) *TextChunk {
@@ -355,7 +347,6 @@ func defaultAddFieldOptions() addFieldOptions {
 }
 
 // loadMultimodalData 加载多模态数据。
-//
 // Python: _load_multimodal_data()
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 func loadMultimodalData(kind ModalityKind, data string, filePath string) (ModalityKind, string, error) {

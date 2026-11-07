@@ -74,7 +74,6 @@ var rangeRules = []rangeRule{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveCategory 根据 StatusCode 解析其 ErrorCategory。
-//
 // 三级优先级：
 //  1. MANUAL_OVERRIDES — 手动覆盖表
 //  2. KEYWORD_RULES — 按 StatusCode.Name 关键字匹配

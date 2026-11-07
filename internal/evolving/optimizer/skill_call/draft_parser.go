@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ParsedExperienceDraft 解析后的 LLM 输出草稿，在持久化为 EvolutionRecord 前的中间形态。
-//
 // Python: experience_draft_parser.py ParsedExperienceDraft
 type ParsedExperienceDraft struct {
 	// Patch 演进补丁
@@ -38,7 +37,6 @@ var headingRE = regexp.MustCompile(`^#{1,4}\s+`)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeKeywords 规范化可选关键词列表，从 LLM JSON 输出中提取。
-//
 // Python: normalize_keywords(raw)
 //
 //	if not isinstance(raw, list): return None
@@ -66,7 +64,6 @@ func NormalizeKeywords(raw any) []string {
 }
 
 // NormalizeSummary 规范化可选的单行经验摘要，从 LLM JSON 输出中提取。
-//
 // Python: normalize_summary(raw)
 //
 //	if not isinstance(raw, str): return None
@@ -89,7 +86,6 @@ func NormalizeSummary(raw any) *string {
 }
 
 // ParseExperienceDraft 将单个 JSON 对象解析为 ParsedExperienceDraft。
-//
 // Python: parse_experience_draft(data)
 //
 //	Python: action = data.get("action", "append")
@@ -175,7 +171,6 @@ func ParseExperienceDraft(data map[string]any) *ParsedExperienceDraft {
 }
 
 // ParseExperienceDraftsWithError 从原始 LLM JSON 文本中批量解析草稿，并返回解析错误信息。
-//
 // Python: parse_experience_drafts_with_error(raw, extract_json_with_error_fn)
 //
 //	Python: data, last_error = extract_json_with_error_fn(raw)
@@ -213,7 +208,6 @@ func ParseExperienceDraftsWithError(raw string, extractFn func(string) (any, str
 }
 
 // ExtractJSONWithError 健壮 JSON 提取，同时返回最后的解析错误信息。
-//
 // Python: _extract_json_with_error(raw)
 //
 // 顺序尝试：
@@ -268,7 +262,6 @@ func ExtractJSONWithError(raw string) (any, string) {
 }
 
 // LooksTruncated 判断 LLM 输出是否看起来被截断了。
-//
 // Python: _looks_truncated(text)
 //
 //	Python: opens = text.count("{") + text.count("[")
@@ -281,7 +274,6 @@ func LooksTruncated(text string) bool {
 }
 
 // FixJSONText 修复 LLM 输出中常见的 JSON 格式错误。
-//
 // Python: _fix_json_text(text)
 //
 //	去除代码块标记 (```json)

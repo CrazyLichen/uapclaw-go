@@ -231,7 +231,6 @@ func TestPipeline_Run_ErrorHandling(t *testing.T) {
 }
 
 // TestPipeline_Run_UnknownHandler 测试未知阶段处理。
-//
 // Python: raise RuntimeError("阶段 X 没有对应的处理器")
 // Go 等价：Pipeline 不 emit ERROR 事件，而是通过 runErr 传播，
 // 上层 Service range 完后检查 pipeline.runErr 兜底。

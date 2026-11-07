@@ -1,6 +1,5 @@
 // Package spawn 提供 Spawn 子进程机制，通过 JSON over stdin/stdout（NDJSON 协议）
 // 实现父子进程通信，在独立子进程中隔离运行 Agent。
-//
 // 核心组件：
 //   - MessageType/Message：通信协议消息类型和结构
 //   - SpawnAgentConfig/ClassAgentSpawnConfig：Agent 启动配置

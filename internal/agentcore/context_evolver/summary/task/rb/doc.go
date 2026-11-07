@@ -1,9 +1,7 @@
 // Package rb 提供 ReasoningBank 算法的摘要管线操作。
-//
 // 包含轨迹标签判定（LabelDeterminator）、记忆项解析（MemoryItemParser）、
 // 单轨迹/多轨迹策略提取（SummarizeMemoryOp/SummarizeMemoryParallelOp）、
 // 向量存储更新和持久化操作。
-//
 // 文件目录：
 //
 //	rb/

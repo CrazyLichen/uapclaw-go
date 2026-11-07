@@ -18,7 +18,6 @@ const testAgentDataFileName = "agent-data.json"
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // setupDataDir 准备隔离的数据根并返回其绝对路径。
-//
 // 关键点：预先创建 <data>/config 目录，使 AgentWorkspaceDir() 走「已初始化」
 // 分支而非 resources 回退，保证测试写入位置可控。
 func setupDataDir(t *testing.T) string {

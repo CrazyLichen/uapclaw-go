@@ -19,7 +19,6 @@ type workResult struct {
 }
 
 // queuedWork 一次排队中的工作。
-//
 // Python: work_scheduler.py _QueuedWork
 type queuedWork struct {
 	// handle 对应执行句柄
@@ -59,7 +58,6 @@ func (q *queuedWork) isCancelled() bool {
 }
 
 // lane 每会话串行执行 lane。
-//
 // Python: work_scheduler.py _Lane
 type lane struct {
 	// sessionID 会话标识
@@ -81,7 +79,6 @@ type lane struct {
 }
 
 // priorityItem 优先队列项。
-//
 // Python: asyncio.PriorityQueue 的 (group, priority, sequence) 三元组
 type priorityItem struct {
 	// group 组别（0=latest_first 类，1=普通类）
@@ -98,7 +95,6 @@ type priorityItem struct {
 type priorityQueue []*priorityItem
 
 // SessionWorkScheduler 每会话一次一项、跨会话并行。
-//
 // Python: work_scheduler.py SessionWorkScheduler
 //
 // 与上游差异：Python 用 asyncio.PriorityQueue 阻塞式 get，Go 无同构原语，
@@ -124,7 +120,6 @@ type SessionWorkScheduler struct {
 func (q priorityQueue) Len() int { return len(q) }
 
 // Less 三元组比较：group → priority → sequence，均升序。
-//
 // Python: asyncio.PriorityQueue 对元组做字典序比较
 func (q priorityQueue) Less(i, j int) bool {
 	if q[i].group != q[j].group {
@@ -153,7 +148,6 @@ func (q *priorityQueue) Pop() any {
 }
 
 // NewSessionWorkScheduler 创建调度器。
-//
 // Python: SessionWorkScheduler.__init__
 func NewSessionWorkScheduler() *SessionWorkScheduler {
 	s := &SessionWorkScheduler{
@@ -166,7 +160,6 @@ func NewSessionWorkScheduler() *SessionWorkScheduler {
 }
 
 // SubmitAndWait 提交并等待一次执行完成。
-//
 // Python: SessionWorkScheduler.submit_and_wait
 // 优先级：latest_first 类 → group=0、priority 递减（后到先跑）；
 // 其余 → group=1、priority=0、按 sequence FIFO。
@@ -229,7 +222,6 @@ func (s *SessionWorkScheduler) SubmitAndWait(
 }
 
 // CancelHandles 取消一批执行：运行中的发 ctx 取消，排队中的直接摘掉。
-//
 // Python: SessionWorkScheduler.cancel_handles
 // 返回超时未停的执行标识。
 func (s *SessionWorkScheduler) CancelHandles(
@@ -304,7 +296,6 @@ func (s *SessionWorkScheduler) CancelHandles(
 }
 
 // CloseSession 关闭一个会话 lane：摘掉排队项、取消当前执行。
-//
 // Python: SessionWorkScheduler.close_session
 // 返回 (lane 是否存在, 超时未停的执行标识)。
 func (s *SessionWorkScheduler) CloseSession(
@@ -374,7 +365,6 @@ func (s *SessionWorkScheduler) CloseSession(
 }
 
 // Close 关闭调度器全部 lane。
-//
 // Python: SessionWorkScheduler.close
 // 返回超时未停的执行标识。
 func (s *SessionWorkScheduler) Close(waitTimeout time.Duration) []string {
@@ -398,7 +388,6 @@ func (s *SessionWorkScheduler) Close(waitTimeout time.Duration) []string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureLaneLocked 取或建 lane 并启动消费者。
-//
 // Python: SessionWorkScheduler._ensure_lane
 func (s *SessionWorkScheduler) ensureLaneLocked(sessionID string, generation int) (*lane, error) {
 	if ln, ok := s.lanes[sessionID]; ok {
@@ -422,7 +411,6 @@ func (s *SessionWorkScheduler) ensureLaneLocked(sessionID string, generation int
 }
 
 // process lane 消费者主循环。
-//
 // Python: SessionWorkScheduler._process
 func (s *SessionWorkScheduler) process(sessionID string, ln *lane) {
 	defer func() {
@@ -484,7 +472,6 @@ func (s *SessionWorkScheduler) process(sessionID string, ln *lane) {
 }
 
 // takeQueuedLocked 取走并清空某会话的全部排队项。
-//
 // Python: SessionWorkScheduler._drain_queued
 func (s *SessionWorkScheduler) takeQueuedLocked(sessionID string) []*queuedWork {
 	idx := s.queuedIndex[sessionID]

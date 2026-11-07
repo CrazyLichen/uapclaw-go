@@ -7,9 +7,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentMemoryConfig Agent 记忆配置。
-//
 // 定义 Agent 级别的记忆功能开关和变量配置。
-//
 // Python: openjiuwen/core/memory/config/config.py (AgentMemoryConfig)
 type AgentMemoryConfig struct {
 	// MemVariables 记忆变量配置列表
@@ -35,7 +33,6 @@ type AgentMemoryConfig struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultAgentMemoryConfig 返回默认 Agent 记忆配置。
-//
 // 所有 enable 标志默认为 true，MemVariables 为空。
 // 对齐 Python AgentMemoryConfig 的字段默认值。
 func DefaultAgentMemoryConfig() *AgentMemoryConfig {

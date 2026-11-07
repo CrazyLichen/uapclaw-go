@@ -5,7 +5,6 @@ import "context"
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Callback 嵌入进度回调接口。
-//
 // Python: BaseCallback
 type Callback interface {
 	// OnBatchComplete 一批嵌入完成时回调。
@@ -13,10 +12,8 @@ type Callback interface {
 }
 
 // BaseEmbedding 向量嵌入模型的抽象接口。
-//
 // 提供文本到向量的转换能力，供记忆索引等组件进行语义搜索。
 // 具体实现见 internal/agentcore/retrieval/embedding/ 包。
-//
 // Python: openjiuwen/core/foundation/store/base_embedding.py (Embedding)
 type BaseEmbedding interface {
 	// EmbedQuery 将单条查询文本转换为向量。
@@ -45,7 +42,6 @@ type EmbedOptions struct {
 }
 
 // EmbedOption 函数选项模式，用于配置 EmbedOptions。
-//
 // Python: embed_documents(batch_size=, callback_cls=)
 type EmbedOption func(*EmbedOptions)
 

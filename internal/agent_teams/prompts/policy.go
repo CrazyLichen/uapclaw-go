@@ -59,7 +59,6 @@ func RolePolicy(role atschema.TeamRole, language string) (string, error) {
 // 使用 system_prompt.md 模板通过双花括号 {{var}} 渲染。
 // 结果作为 DeepAgentSpec.build() 的 system_prompt 参数，
 // 放入 SystemPromptBuilder 的 IDENTITY 节。
-//
 // 参数：
 //   - memberName: 当前成员名，空时不显示
 //   - role: 角色类型，"leader" / "teammate" / "human_agent"

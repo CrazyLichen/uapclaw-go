@@ -27,7 +27,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContainerAgent 交接容器 Agent，包装目标 Agent 并注入交接工具和上下文历史管理。
-//
 // 职责：
 //   - 懒初始化目标 Agent（targetProvider）
 //   - 一次性注入 HandoffTool 到目标 Agent 的 AbilityManager + ResourceMgr
@@ -77,7 +76,6 @@ var _ tool.Tool = (*HandoffTool)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContainerAgent 创建 ContainerAgent 实例。
-//
 // 参数：
 //   - targetCard：目标 Agent 的身份卡片
 //   - targetProvider：目标 Agent 提供者函数
@@ -134,7 +132,6 @@ func (c *ContainerAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInter
 
 // Configure 空操作，返回 nil。
 // 实现 BaseAgent 接口。
-//
 // Python: ContainerAgent.configure(config) → self
 func (c *ContainerAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
@@ -159,7 +156,6 @@ func (c *ContainerAgent) UnregisterRail(_ context.Context, _ agentinterfaces.Age
 }
 
 // Invoke 非流式调用 ContainerAgent，执行交接流程。
-//
 // 流程：
 //  1. 从 inputs 提取 HandoffRequest
 //  2. 查找协调器
@@ -296,7 +292,6 @@ func (c *ContainerAgent) Invoke(ctx context.Context, inputs map[string]any, opts
 
 // Stream 流式调用 ContainerAgent，一次性 yield 完整结果后关闭。
 // 实现 BaseAgent 接口。
-//
 // Python: ContainerAgent.stream(inputs, session) → yield await self.invoke(...)
 func (c *ContainerAgent) Stream(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	result, err := c.Invoke(ctx, inputs, opts...)
@@ -314,7 +309,6 @@ func (c *ContainerAgent) Stream(ctx context.Context, inputs map[string]any, opts
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // stripHandoffMessages 过滤交接辅助消息，保留有意义的消息。
-//
 // 过滤规则：
 //   - 移除 role="tool" 的消息
 //   - 移除包含 tool_calls 的消息
@@ -356,7 +350,6 @@ func stripHandoffMessages(messages []any) []any {
 }
 
 // getTargetAgent 懒初始化目标 Agent。
-//
 // Python: ContainerAgent._get_target_agent()
 func (c *ContainerAgent) getTargetAgent(ctx context.Context) (agentinterfaces.BaseAgent, error) {
 	c.mu.Lock()
@@ -386,7 +379,6 @@ func (c *ContainerAgent) getTargetAgent(ctx context.Context) (agentinterfaces.Ba
 }
 
 // injectToolsOnce 一次性注入 HandoffTool 到目标 Agent 的 AbilityManager 和 ResourceMgr。
-//
 // Python: ContainerAgent._inject_tools_once(target_agent)
 func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentinterfaces.BaseAgent) {
 	c.mu.Lock()
@@ -446,7 +438,6 @@ func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentint
 }
 
 // buildAgentInput 构建目标 Agent 的输入，合并交接历史。
-//
 // Python: ContainerAgent._build_agent_input(inputs)
 func (c *ContainerAgent) buildAgentInput(req *HandoffRequest) map[string]any {
 	msg := req.InputMessage
@@ -474,7 +465,6 @@ func (c *ContainerAgent) buildAgentInput(req *HandoffRequest) map[string]any {
 }
 
 // invokeTargetWithStream 在 team session 内调用目标 Agent，处理流式转发和上下文管理。
-//
 // Python: ContainerAgent._invoke_target_with_stream(target_agent, agent_input, team_session)
 func (c *ContainerAgent) invokeTargetWithStream(
 	ctx context.Context,
@@ -513,7 +503,6 @@ func (c *ContainerAgent) invokeTargetWithStream(
 }
 
 // writeResultToStream 将结果写入 team session 的流。
-//
 // 支持 dict 和 list 两种结果类型：
 //   - dict 时直接 WriteStream
 //   - list 时逐个 dict 调用 WriteStream
@@ -537,10 +526,8 @@ func (c *ContainerAgent) writeResultToStream(ctx context.Context, result any, te
 }
 
 // saveAgentContext 保存目标 Agent 的上下文引擎状态。
-//
 // 通过类型断言探测目标 Agent 是否有 ContextEngine，
 // 有则调用 SaveContexts 持久化，无则跳过。
-//
 // Python: ContainerAgent._save_agent_context(target_agent, agent_session)
 //
 //	Python: context_engine = getattr(target_agent, "context_engine", None)
@@ -574,7 +561,6 @@ func (c *ContainerAgent) saveAgentContext(ctx context.Context, targetAgent agent
 }
 
 // saveContextToTeamSession 将 Agent 上下文历史保存到 team session。
-//
 // Python: ContainerAgent._save_context_to_team_session(agent_session, team_session)
 func (c *ContainerAgent) saveContextToTeamSession(agentSession sessioninterfaces.SessionFacade, teamSession *session.AgentTeamSession) {
 	if agentSession == nil || teamSession == nil {
@@ -648,7 +634,6 @@ func (c *ContainerAgent) saveContextToTeamSession(agentSession sessioninterfaces
 }
 
 // injectContextHistory 将 team session 的上下文历史注入到 agent session。
-//
 // Python: ContainerAgent._inject_context_history(agent_session, team_session)
 func (c *ContainerAgent) injectContextHistory(agentSession sessioninterfaces.SessionFacade, teamSession *session.AgentTeamSession) {
 	if agentSession == nil || teamSession == nil {
@@ -679,7 +664,6 @@ func (c *ContainerAgent) injectContextHistory(agentSession sessioninterfaces.Ses
 }
 
 // handleTeamInterrupt 处理团队中断信号。
-//
 // Python: ContainerAgent._handle_team_interrupt(signal, coordinator, history, inputs)
 func (c *ContainerAgent) handleTeamInterrupt(
 	ctx context.Context,
@@ -699,7 +683,6 @@ func (c *ContainerAgent) handleTeamInterrupt(
 }
 
 // publishHandoff 发布交接消息到下一个 ContainerAgent。
-//
 // Python: ContainerAgent._publish_handoff(next_input, history, signal, session_id)
 func (c *ContainerAgent) publishHandoff(
 	ctx context.Context,
@@ -745,7 +728,6 @@ func (c *ContainerAgent) publishHandoff(
 }
 
 // msgKey 生成消息的去重键，基于 role + content + tool_calls + tool_call_id。
-//
 // Python: _msg_key(m) = (role, str(content), str(tool_calls), tool_call_id)
 func msgKey(msg any) string {
 	msgMap, ok := msg.(map[string]any)

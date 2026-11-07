@@ -1,8 +1,6 @@
 // Package tools 提供 code 模式的 todo 工具卡片（CC 对齐文案与 schema）。
-//
 // 与 agentcore 的 todo 工具实现分离：工具行为复用
 // `internal/agentcore/harness/tools/todo`，本包只覆盖卡片文案与入参 schema。
-//
 // 文件目录：
 //
 //	tools/

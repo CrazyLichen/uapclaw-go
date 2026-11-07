@@ -16,7 +16,6 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleAgentServerPush 处理 AgentServer 主动推送的消息。
-//
 // Python: _handle_agent_server_push (L1610-L1672)：
 //  1. 解析 wire → AgentResponseChunk
 //  2. session_id 回退：优先 wire["session_id"]，否则 streamSessions[requestID]
@@ -115,7 +114,6 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 }
 
 // handleCronPushPayload 处理 cron 推送消息。
-//
 // Python: _handle_cron_push_payload (L1677-L1737)：
 // action 路由到 CronController，结果以 chat.tool_result event_type 回发。
 // create 时从 _stream_modes 取 mode 覆盖 LLM 工具调用的默认值。
@@ -202,7 +200,6 @@ func strVal(v any) string {
 }
 
 // strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
-//
 // 会话别名解析读的是外部 sessionId，Python 侧经 str() 收敛，数字也能落成
 // "123"；strVal 只认 string，会让数字形态静默变空串。
 func strScalar(v any) string {

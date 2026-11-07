@@ -18,11 +18,9 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SimpleMemoryIndex 简单记忆索引，基于 KV + Vector 双存储实现记忆的存储与语义检索。
-//
 // 写入时将完整文档存入 KV Store，向量嵌入存入 Vector Store；
 // 搜索时先通过向量相似度检索命中 ID，再从 KV Store 获取完整内容。
 // 支持 StorageCodec 对记忆文本进行加解密。
-//
 // Python: openjiuwen/core/foundation/store/index/simple_memory_index.py (SimpleMemoryIndex)
 type SimpleMemoryIndex struct {
 	// MemoryIndexBase 嵌入基类，提供 7 个默认方法

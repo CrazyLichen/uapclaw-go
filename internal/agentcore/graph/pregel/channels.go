@@ -12,12 +12,10 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Channel 通道接口：节点之间的调度边在运行时的化身。
-//
 // 归属说明：本接口在 Python 里定义于 pregel/base.py:53-84，计划表原归 8.3；
 // 2026-11-01 拍板方案 B，改由本节（channels.go）提供——接口的七个方法只有
 // TriggerChannel/BarrierChannel 两个实现，Accept 返回 bool、Consume 无返回值
 // 这些形状只有看完实现才能定（偏差 D-1），放在同一文件里才不会锁错签名。
-//
 // Python: pregel/base.py:53-84（ABC + key/node_name 两个 property）
 type Channel interface {
 	// Key 写侧路由键：TriggerChannel 即节点名；BarrierChannel 为 "barrier:...->name" 合成键
@@ -47,10 +45,8 @@ type Channel interface {
 }
 
 // ChannelSnapshot 通道快照，每个通道只填自己那一半。
-//
 // 空判定 = 两字段皆空（等价 Python 的 `state is not None and state != [] and state != {}`，
 // 两个实现只会产出 list，故空即 len==0）。
-//
 // 顺序纪律：Messages 保序；Received 升序（偏差 D-4，Python 是 set 序）。
 // Python: channels.py:122-123 / :185-186 的返回形状
 type ChannelSnapshot struct {
@@ -61,7 +57,6 @@ type ChannelSnapshot struct {
 }
 
 // TriggerChannel 触发通道：收到触发消息即激活目标节点（1→N 静态边的读侧）。
-//
 // Python: channels.py:104-126
 type TriggerChannel struct {
 	// name 节点名，同时用作 Key 与 NodeName
@@ -71,7 +66,6 @@ type TriggerChannel struct {
 }
 
 // BarrierChannel 汇聚通道：N→1 边的读侧，按 CNF（AND-of-OR）表达式判定就绪。
-//
 // groups 每个元素是一个 OR 组：组内任一 sender 到达即算该组满足，所有组都满足
 // 且至少收到一个信号才算就绪。
 //
@@ -81,7 +75,6 @@ type TriggerChannel struct {
 //
 // Key 不是节点名而是合成路由键 "barrier:(a|b)&c->target"：8.3a 的 builder 会把它
 // 转手给 NewBarrierRouter 作为消息目标（见 8.5 spec §9）。
-//
 // Python: channels.py:129-189
 type BarrierChannel struct {
 	// name 目标节点名（NodeName 返回它）
@@ -95,7 +88,6 @@ type BarrierChannel struct {
 }
 
 // ChannelManager 超步调度的通道管理器：写侧按 msg.Target 路由、读侧按节点名聚合。
-//
 // 四份状态：
 //   - keyToChannel：路由键 → 通道（写侧检索，重复键后者覆盖，偏差 D-7）
 //   - nodeToChannels：节点名 → 通道列表（读侧检索，注册顺序；Snapshot/Restore 的下标对齐依赖它）
@@ -103,12 +95,10 @@ type BarrierChannel struct {
 //   - buffer：待 Flush 的消息
 //
 // 并发纪律（偏差 D-8）：无锁，对齐 Python。
-//
 // 约定（尚未接入）：计划由 8.3c 的 PregelLoop 在超步循环所在 goroutine 内串行调用
 // 本类型全部方法；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
 // 注意 PregelLoop 目前不存在，本类型在生产代码中零调用方——接入时若改用并发调用，
 // 必须先补锁，现有注释不构成并发安全保证。
-//
 // Python: channels.py:13-101
 type ChannelManager struct {
 	// keyToChannel 写侧索引：路由键 → 通道
@@ -150,7 +140,6 @@ func (c *TriggerChannel) NodeName() string { return c.name }
 func (c *TriggerChannel) IsReady() bool { return len(c.messages) > 0 }
 
 // Accept 收下触发消息。
-//
 // 只接受 KindTrigger；零值 kind（空串）等价 Python 基类 Message 实例，被拒绝。
 // Python: channels.py:112-116
 func (c *TriggerChannel) Accept(msg Message) bool {
@@ -185,7 +174,6 @@ func (c *TriggerChannel) Restore(state ChannelSnapshot) {
 }
 
 // NewBarrierChannel 构造汇聚通道。
-//
 // 入参深复制并逐组去重（Python 的 expected_groups 是 List[Set]，重复元素天然消失；
 // Go 用 [][]string 入参必须显式去重，偏差 D-9）。
 // Python: channels.py:141-145
@@ -216,7 +204,6 @@ func (c *BarrierChannel) Key() string { return c.routerKey }
 func (c *BarrierChannel) NodeName() string { return c.name }
 
 // IsReady CNF 判定：received 非空，且每个 OR 组至少命中一个 sender。
-//
 // 空组（构造时传入空切片）永远无法满足 ⇒ 永久不就绪，属构图错误，有意复刻
 // Python 行为而不在构造期 panic（偏差 D-6）。
 // Python: channels.py:166-172
@@ -240,7 +227,6 @@ func (c *BarrierChannel) IsReady() bool {
 }
 
 // Accept 收下汇聚信号。
-//
 // 只接受 KindBarrier；同一 sender 重复到达返回 false（Set 去重），
 // 因此不会把节点重新标记为 updated。
 // Python: channels.py:174-179
@@ -282,7 +268,6 @@ func (c *BarrierChannel) Restore(state ChannelSnapshot) {
 }
 
 // NewChannelManager 按通道列表建索引。
-//
 // 构造时即扫描一次 IsReady()，把已有数据的通道所属节点放进就绪集
 // （对齐 Python 的 `# recover` 分支，channels.py:29-31）。
 // Python: channels.py:14-31
@@ -314,7 +299,6 @@ func (m *ChannelManager) BufferMessage(msg Message) {
 func (m *ChannelManager) IsEmpty() bool { return len(m.buffer) == 0 }
 
 // Flush 把 buffer 里的消息投递给各自目标通道，并按需更新就绪集。
-//
 // 语义要点（逐条对齐 channels.py:39-58）：
 //   - 找不到目标通道时返回 error 且**不清空 buffer**（Python 的 clear 在循环之后，
 //     异常路径不可达，偏差 D-3）；
@@ -346,7 +330,6 @@ func (m *ChannelManager) Flush() error {
 }
 
 // GetReadyNodes 返回就绪节点名（升序）。
-//
 // 偏差 D-4：Python 返回 list(set)，顺序无跨进程契约；Go 的 map 迭代是 per-iteration
 // 随机，因此排序是唯一能给出稳定结果的选项。顺序不携带语义——同一超步内所有就绪
 // 节点都会被提交执行。
@@ -361,7 +344,6 @@ func (m *ChannelManager) GetReadyNodes() []string {
 }
 
 // Consume 消费节点已就绪的通道，并把节点移出就绪集。
-//
 // 未知节点直接返回（对齐 Python channels.py:64-65 的存在性判断，不是 defaultdict）。
 // Python: channels.py:63-74
 func (m *ChannelManager) Consume(nodeName string) {
@@ -378,7 +360,6 @@ func (m *ChannelManager) Consume(nodeName string) {
 }
 
 // Buffer 返回 buffer 内容的**副本**。
-//
 // 偏差 D-9（2026-11-01 实施后修订）：原设计想对齐 Python「直接读 self.buffer」的
 // 别名语义，但 Go 的切片是「冻结的 len + 共享底层数组」，交出去之后有两个坏形态：
 //   - Flush 的 clear 会把旧视图的元素清零——旧视图看着还有 N 条，实际全是零值
@@ -398,7 +379,6 @@ func (m *ChannelManager) Buffer() []Message {
 }
 
 // Snapshot 导出全部通道快照。
-//
 // 语义要点（逐条对齐 channels.py:76-86）：
 //   - 跳过 pregel.End 节点；
 //   - 每节点按 nodeToChannels 顺序存**全部**通道快照——只要任一条非空就整串存储，
@@ -427,7 +407,6 @@ func (m *ChannelManager) Snapshot() map[string][]ChannelSnapshot {
 }
 
 // Restore 用快照恢复通道状态。
-//
 // 偏差 D-5（用户 2026-11-01 拍板"都先按照 Python 实现"）：三类情况**静默忽略**，
 // 不返回 error、不 panic——
 //  1. 快照里的节点在当前图中不存在；
@@ -461,10 +440,8 @@ func (m *ChannelManager) Restore(snapshot map[string][]ChannelSnapshot) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // makeBarrierRouterKey 生成 CNF 合成路由键："barrier:(a|b)&c->target"。
-//
 // 规则：单元素组直出该元素；多元素组渲染成 "(A|B)" 且组内升序；组间用 & 连接；
 // 空组渲染成 "()"（该组永不满足）；groups 为空得到 "barrier:->target"。
-//
 // 唯一生产者：8.3a 的 builder 只把返回值转手给 NewBarrierRouter（见 8.5 spec §9）。
 // Python: channels.py:155-164
 func makeBarrierRouterKey(name string, groups []map[string]struct{}) string {

@@ -1,9 +1,7 @@
 // 知识库包内共享辅助：两个子类（SimpleKnowledgeBase / GraphKnowledgeBase）
 // 共用的默认配置、模式推导、database_name 取值与 agentic 包装。
-//
 // 放独立文件而非任一子类文件：这两个函数的消费方是两个平级子类，
 // 挂在其一会造成"另一子类依赖该子类文件"的错觉（13.28 拍板）。
-//
 // 文件目录：
 //
 //	（见 knowledgebase/doc.go）
@@ -31,7 +29,6 @@ func defaultRetrievalConfig() *common.RetrievalConfig {
 }
 
 // resolveRetrievalMode 由 index_type 推导检索模式。
-//
 // Python: mode = "hybrid"; index_type=="vector"→"vector"；
 // index_type=="bm25"→"sparse"；其余保持 "hybrid"。
 func resolveRetrievalMode(indexType common.IndexTypeKind) retriever.RetrievalMode {
@@ -46,7 +43,6 @@ func resolveRetrievalMode(indexType common.IndexTypeKind) retriever.RetrievalMod
 }
 
 // vectorStoreDatabaseName 防御式取 vector_store 的 database_name。
-//
 // Python: getattr(getattr(self.vector_store, "config", None), "database_name", "")
 // 且非 str 归零。Go 用接口断言表达"属性存在性"，未实现即回落空串；
 // 非 str 归零由静态类型天然满足（13.27 spec §8-5）。
@@ -61,7 +57,6 @@ func vectorStoreDatabaseName(vs vector_store.VectorStore) string {
 }
 
 // wrapAgenticRetriever 用 AgenticRetriever 包装底层 retriever。
-//
 // 对齐 Python `AgenticRetriever(retriever=..., llm_client=..., **kwargs)`：
 // kwargs 只认 max_iter，经 KBOptions.Extra["max_iter"] 映射。Python 的
 // AgenticRetriever 不接受其他关键字参数，多传会在**构造前**抛 TypeError

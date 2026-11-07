@@ -1,11 +1,9 @@
 // Package coordination 提供团队 Agent 的事件驱动唤醒层。
-//
 // 把传输层来的 EventMessage 与内部 poll 计时器产生的 InnerEventMessage
 // 收成统一的 CoordinationEvent，按粗筛规则放行后由 CallbackFramework
 // 分发到具体的场景 handler。自身不做业务决策——handler 通过三类 narrow
 // protocol（AgentRoundController、TeamLifecycleController、PollController）
 // 触发行为，最终驱动 DeepAgent + team tools。
-//
 // 三条铁律：
 //  1. coordination 不做决策，只管 wake-up
 //  2. 每个 handler 一个业务域，跨域协作走 framework fan-out

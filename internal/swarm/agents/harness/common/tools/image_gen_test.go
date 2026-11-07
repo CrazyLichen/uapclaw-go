@@ -18,7 +18,6 @@ import (
 )
 
 // setupImageGenWorkspaceEnv 隔离 Agent 工作区目录（测试辅助）。
-//
 // 落盘路径 workspace.AgentWorkspaceDir() 在 CI 等未初始化环境不存在，
 // 注入 UAPCLAW_DATA_DIR 指向临时目录并重置路径缓存，测试后恢复。
 // 需同时创建 config 子目录（模拟已初始化，避免回退 resources）

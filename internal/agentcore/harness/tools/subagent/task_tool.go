@@ -32,7 +32,6 @@ type TaskToolInput struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskTool 创建 task_tool 工具实例。
-//
 // Python: TaskTool.__init__() L31-47 + invoke() L57-121
 func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, language, agentID string) tool.Tool {
 	lang := "cn"
@@ -112,7 +111,6 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildSubSessionID 构建子会话 ID。
-//
 // Python: TaskTool._build_sub_session_id() L49-55
 func buildSubSessionID(parentSessionID, subagentType string) string {
 	normalized := strings.TrimSpace(subagentType)

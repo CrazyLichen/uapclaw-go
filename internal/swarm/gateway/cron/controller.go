@@ -45,7 +45,6 @@ func (c *CronController) SetTargetChannel(channel string) {
 }
 
 // JobMetadata 返回 cron 任务 schema 元数据。
-//
 // Python: CronController.job_metadata() (cron/controller.py:486-487) → cron_job_metadata()。
 func (c *CronController) JobMetadata() map[string]any {
 	return CronJobMetadata()

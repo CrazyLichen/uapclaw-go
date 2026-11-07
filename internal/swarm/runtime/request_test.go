@@ -14,7 +14,6 @@ import (
 )
 
 // TestResolveRequestRuntimeMode 覆盖三段/裸 subMode/旧串回落的归一。
-//
 // Python: jiuwenswarm/runtime/request.py resolve_request_runtime_mode
 func TestResolveRequestRuntimeMode(t *testing.T) {
 	cases := []struct {
@@ -61,7 +60,6 @@ func TestIsPlanEntrySource(t *testing.T) {
 }
 
 // TestResolveAgentRequestMode 验证 mode 解析与上游 resolve_agent_request_mode 一致。
-//
 // 期望值由上游 gateway/common/mode_matrix 的 canonicalize_mode_text +
 // resolve_new_canonical_mode 实算得出（legacy canonical 原样返回，不升级三段）。
 func TestResolveAgentRequestMode(t *testing.T) {
@@ -128,7 +126,6 @@ func TestResolveRequestRuntimeModeFromRequest(t *testing.T) {
 }
 
 // TestResolveRequestRuntimeModeFromRequest_Web组合 验证 mode+work_mode 组合优先于 legacy 解析。
-//
 // Python: mode_matrix.resolve_request_mode 的 web-composition 分支（_WEB_MODE_TABLE）。
 func TestResolveRequestRuntimeModeFromRequest_Web组合(t *testing.T) {
 	cases := []struct {
@@ -160,7 +157,6 @@ func TestResolveRequestRuntimeModeFromRequest_Web组合(t *testing.T) {
 }
 
 // TestApplyResolvedModeToRequest_默认值 验证空参数回落 agent（normal），不再默认 plan。
-//
 // Python: resolve_agent_request_mode 空值 → ("agent", None, "agent")
 func TestApplyResolvedModeToRequest_默认值(t *testing.T) {
 	cases := []struct {
@@ -417,7 +413,6 @@ func chatSendRequest(t *testing.T, sessionID string, params map[string]any) *sch
 
 // TestPrepareChatTurn_默认work_mode与元数据回写 验证 tui 渠道默认 work_mode=code、
 // 同步元数据后回写 project_dir，以及 persist_session 锁定告警分支。
-//
 // Python: jiuwenswarm/runtime/request.py prepare_chat_turn（L361-575）
 func TestPrepareChatTurn_默认work_mode与元数据回写(t *testing.T) {
 	setupRuntimeSessionDir(t)

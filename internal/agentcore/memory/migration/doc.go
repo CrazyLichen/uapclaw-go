@@ -1,9 +1,7 @@
 // Package migration 提供记忆存储的迁移注册表和迁移编排器。
-//
 // 本包定义全局迁移注册表（SQL / Vector / KV / Message / Index），
 // 各 Operation 通过注册表声明迁移步骤，由 Migrator 按序执行。
 // RunXxxMigrations 函数提供迁移编排入口。
-//
 // 文件目录：
 //
 //	migration/

@@ -218,7 +218,6 @@ type DeepAgent struct {
 }
 
 // roundBoundaryFrame 内部轮边界哨兵帧。
-//
 // Python: _ROUND_BOUNDARY = object()（deep_agent.py L245）
 // 只由 forwarder 识别，绝不转发给宿主；必须与普通 chunk 走同一条 session 流，
 // 否则无法保证"本轮 chunk 已全部入队"的顺序性。
@@ -234,7 +233,6 @@ type AgentTemplateRef struct {
 }
 
 // RoundExpectation 取消时的代际校验条件（nil 字段表示不校验）。
-//
 // Python: _cancel_active_round 的 expected_run_kind / expected_goal_id / expected_revision
 // ⚠️ Revision 用指针：上游 revision 默认 0 且 0 是合法值，不能用 0 表示"不校验"。
 type RoundExpectation struct {
@@ -300,7 +298,6 @@ var (
 	_ agentinterfaces.BaseAgent      = (*DeepAgent)(nil)
 
 	// ErrNoActiveLoop 任务循环控制器已清理。
-	//
 	// 典型场景是轮次刚结束、controller 已被 forceCleanupController 回收，
 	// 此时投递运行中输入的调用方需要能区分"正常竞态"与真实故障。
 	ErrNoActiveLoop = errors.New("deep agent: 任务循环控制器未激活")
@@ -313,7 +310,6 @@ var (
 )
 
 // defaultDirectToolNames 渐进模式下保持直接可调用的工具名集合。
-//
 // Python: deep_agent.py _DEFAULT_DIRECT_TOOL_NAMES（36 项）
 // Go 侧差异：上游 subagent_spawn/wait/list/send_input/close/resume 六项在 Go 侧
 // 分别注册为 sessions_spawn/sessions_list/sessions_cancel；未实现的工具名保留原字符串
@@ -344,7 +340,6 @@ func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
 }
 
 // PromptAttachments 返回会话级动态提示词管理器。
-//
 // Python: DeepAgent.prompt_attachment_manager
 func (d *DeepAgent) PromptAttachments() *hprompts.Manager { return d.attachments }
 
@@ -593,13 +588,11 @@ func (d *DeepAgent) RegisterCallback(ctx context.Context, event agentinterfaces.
 }
 
 // RegisterRail 立即注册 Rail（不排队，不走 ensureInitialized）。
-//
 // 与 pending 路径（AddRail → ensureInitialized）的关键差异：这条路跳过了
 // pending 循环，因此 DeepAgentRail 的 sys_operation / workspace 注入必须
 // 在这里自己做——否则运行期按模式注册的 rail（MemoryRail、
 // ExternalMemoryRail、SkillEvolutionRail 等）拿到的永远是 nil，
 // 表现为 read_memory 恒返回「工作空间未初始化」、fs 工具 nil 解引用。
-//
 // Python: BaseAgent.register_rail(rail) (deep_agent.py L1187-1196)
 func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRail, opts ...cb.CallbackOption) error {
 	d.railsMu.Lock()
@@ -1593,7 +1586,6 @@ func (d *DeepAgent) HasOutputStream() bool {
 }
 
 // AttachOutput 抢占本交互唯一的输出读者。
-//
 // 已有消费者时返回 nil。若存在 ACTIVE goal，即使本次没抢到租约也要补排
 // 缺失的 goal work，让已连接的读者继续收到目标进展（切会话/并发 attach_goal）。
 // Python: DeepAgent.attach_output (L4048)
@@ -1648,7 +1640,6 @@ func (d *DeepAgent) DetachOutput(ctx context.Context, token string, abortActiveR
 }
 
 // Start 绑定任务循环内核并启动被动输出转发器。
-//
 // 持 start 锁期间被 await 的生命周期回调不得重入 Start/Stop。
 // Python: DeepAgent.start (L3912)
 func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
@@ -1687,7 +1678,6 @@ func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
 	// 对齐 Python start() L3953-3962：先建可变 worktree holder，再启动任务循环内核，
 	// 使 scheduler/supervisor/round/工具任务共享同一对象。Go 的 context.Value 不跨
 	// 调用传播，故在 attachRunContexts 里逐入口重新挂载（等价 contextvar 全局可见）。
-	//
 	// 幂等语义对齐 init_session_state()：Python 的 _get_state() 是「已有则复用、没有才建」
 	// （session.py L40-45），不是每次 start 都换新 holder。
 	if d.worktreeSessionState == nil {
@@ -1753,7 +1743,6 @@ func (d *DeepAgent) Stop(ctx context.Context) error {
 }
 
 // SendInput 分发用户文本或打断恢复输入。
-//
 // 需要读输出的宿主必须先 AttachOutput；STEER / follow-up 通常跳过 attach，
 // 让既有消费者继续接收输出。分发模式对 InteractiveInput 恢复请求不生效。
 // Python: DeepAgent.send_input (L4072)
@@ -1910,7 +1899,6 @@ func (d *DeepAgent) SetGoalCoordinator(coordinator goal.Coordinator) {
 }
 
 // GoalManager 返回会话级 Goal 能力面（未注入时 nil）。
-//
 // 供 TaskCompletionRail 的 Init 从 agent 继承兜底（Python `getattr(agent, "goal_manager")`），
 // 以及后续服务面（10.3.27 command.goal）使用。按规则 10 属 DeepAgent 的注入缝，
 // 不进 DeepAgentInterface（Python 侧同为属性而非继承接口面方法）。
@@ -2398,7 +2386,6 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 }
 
 // attachRunContexts 给「已初始化」的后续调用重新注入 agent 级 Context 值。
-//
 // Python 用 contextvars：init_cwd/InitSpanState 设置一次即对同一 context 内
 // 所有后续 await 可见。Go 的 context.Value 不会跨调用传播——调用方每次
 // Invoke/Stream 传入的 ctx 都是新的，若不重新挂载，第二次调用起：
@@ -2572,7 +2559,6 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 }
 
 // applyToolExposurePolicy 在工具注册前写入注册期曝光策略。
-//
 // Python: DeepAgent._initial_configure 中的 ability_manager.set_tool_exposure_policy
 func (d *DeepAgent) applyToolExposurePolicy(config *hschema.DeepAgentConfig) {
 	if config == nil || d.abilityManager == nil {
@@ -2586,7 +2572,6 @@ func (d *DeepAgent) applyToolExposurePolicy(config *hschema.DeepAgentConfig) {
 }
 
 // finalizeProgressiveRails 让 ProgressiveToolRail 建立初始 BM25 索引。
-//
 // Python: DeepAgent.ensure_init 末尾遍历 _registered_rails 调用 finalize_startup_async
 func (d *DeepAgent) finalizeProgressiveRails(ctx context.Context) {
 	d.railsMu.Lock()
@@ -3143,7 +3128,6 @@ func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[str
 }
 
 // WriteRoundResultToStream 将任务循环轮次结果写入会话流（跨包窄入口）。
-//
 // Python: DeepAgent._write_round_result_to_stream 是私有方法，NativeHarness 靠继承直取；
 // Go 无继承（25.1a 偏差 D-3 组合），NativeHarness（agent_teams/harness）跨包需要窄入口，
 // 与 D-7 PrepareInteractionTaskLoop 同类。NativeHarness.runRound 在 wait_round_completion
@@ -3673,7 +3657,6 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 }
 
 // emitStreamError 把流启动失败转为 error 类型的输出帧投进流通道。
-//
 // 对齐 Python interface_deep.py L4889-4898：流式任务抛异常时由适配器
 // `except Exception` 产出 chat.error。Go 的 agent 流无法抛异常，改为在流内
 // 投一个 Type="error" 的输出帧，由 DeepAdapter.ParseStreamChunk 的
@@ -3747,7 +3730,6 @@ func removeRailByRef(rails []agentinterfaces.AgentRail, target agentinterfaces.A
 }
 
 // removePendingRailsByRefs 按引用批量摘除排队队列中的 Rail。
-//
 // S-01 专用：ensureInitialized 在每条 rail Init 成功后调用，把已处理项从
 // d.pendingRails 中剔除；遍历期间经 AddRail 新追加的项不受影响。按引用（而非按类型）
 // 摘除，避免同类型的其它实例被误删。
@@ -3820,9 +3802,7 @@ func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any 
 }
 
 // buildTaskLoopEvaluators 构建外层任务循环的停止条件评估器。
-//
 // 任务完成 rail 产出的评估器在前，无进展守卫按配置追加在后（OR 语义：先命中先停）。
-//
 // Python: DeepAgent._build_task_loop_evaluators() (deep_agent.py L2279-2311)
 func (d *DeepAgent) buildTaskLoopEvaluators() []task_loop.StopConditionEvaluator {
 	var evaluators []task_loop.StopConditionEvaluator
@@ -3857,14 +3837,11 @@ func taskCompRailEvaluators(rail *rails.TaskCompletionRail) []task_loop.StopCond
 }
 
 // maxOuterRounds 外层任务循环的轮次硬上限。
-//
 // 评估器可能一个都没配置（LoopCoordinator.ShouldContinue 恒真），这是防无限循环的最后兜底。
-//
 // Python: deep_agent.py L2665（max_outer_rounds = 50）
 const maxOuterRounds = 50
 
 // outerRoundsExceededResult 判断外层轮次是否超限，超限时返回显式错误结果。
-//
 // Python: deep_agent.py L2667-2677
 func outerRoundsExceededResult(outerRound int) (map[string]any, bool) {
 	if outerRound <= maxOuterRounds {
@@ -3878,7 +3855,6 @@ func outerRoundsExceededResult(outerRound int) (map[string]any, bool) {
 }
 
 // logInnerReactMaxIterations 记录内层 ReAct 上限的解析结果（文案与上游逐字一致）。
-//
 // Python: _bind_inner_react_max_iterations() (deep_agent.py:248-263)
 func logInnerReactMaxIterations(configured, resolved int) {
 	if configured == 0 {
@@ -3944,7 +3920,6 @@ func (d *DeepAgent) isInteractionRunning() bool {
 }
 
 // isInteractionRunningLocked 同 isInteractionRunning，但要求调用方已持 controlMu。
-//
 // Go 的 sync.Mutex 不可重入：持锁路径必须用本变体，否则自锁。
 func (d *DeepAgent) isInteractionRunningLocked() bool {
 	phase := d.interactionPhase
@@ -3976,7 +3951,6 @@ func (d *DeepAgent) attachOutputLocked() *hschema.InteractionOutputStream {
 }
 
 // emitInteractionEvent 异步投递一条交互事件。
-//
 // 回调是同步的（rail 可从多个钩子调用），只能 fire-and-forget；
 // 必须在同步上下文里先抓票号，避免延迟任务把旧事件投进新租约的流。
 // Python: _emit_interaction_event (L4254)
@@ -4017,7 +3991,6 @@ func (d *DeepAgent) waitInteractionEmits(timeout time.Duration) {
 }
 
 // cancelActiveRoundLocked 取消在飞轮（调用方持 controlMu）。
-//
 // 顺序：① abort() ② 取消 round goroutine（**不等它退出**：其 defer 需要 controlMu，
 // 等待会自锁）③ scheduler.CancelTask 有界等待 1.5s。
 // Python: _cancel_active_round (L4287)
@@ -4086,7 +4059,6 @@ func (d *DeepAgent) currentLoopController() *task_loop.TaskLoopController {
 }
 
 // notifyWork 唤醒 supervisor（启动职责见 startInteractionSupervisor）。
-//
 // ⚠️ 不得取 interactionControlMu：本方法会在持 controlMu 的 sendUser 内被调用。
 // Python: _notify_work (L4369)
 func (d *DeepAgent) notifyWork() {
@@ -4099,7 +4071,6 @@ func (d *DeepAgent) notifyWork() {
 }
 
 // forwardSessionStream 把会话流转发到输出租约队列（唯一消费者）。
-//
 // 边界帧不转发，只置位本轮屏障；其余帧原样 Emit（无票即丢）。
 // 转发器崩溃必须转成 execution.error(forwarder_crashed)，否则交互会静默卡死。
 // Python: _forward_session_stream (L4462)
@@ -4144,7 +4115,6 @@ func (d *DeepAgent) signalRoundForwarded() {
 }
 
 // emitRoundBoundary 向会话流注入内部轮边界哨兵。
-//
 // 必须与普通 chunk 走同一条队列才能保证顺序；绕过 writer 回调与类型白名单
 // （对齐 Python 的 session._inner.stream_writer_manager().stream_emitter().emit）。
 // Python: _emit_round_boundary (L4481)
@@ -4195,7 +4165,6 @@ func (d *DeepAgent) prepareInteractionTaskLoop(ctx context.Context, sess *sessio
 }
 
 // PrepareInteractionTaskLoop 供宿主自建任务循环内核。
-//
 // Python: NativeHarness.start → self._setup_task_loop(session)
 // Python 靠继承直接调用私有方法；Go 跨包无法访问，故开这一扇窄门
 // （25.1a 唯一的私有缝）。语义与 prepareInteractionTaskLoop 完全一致：
@@ -4304,7 +4273,6 @@ func (d *DeepAgent) stopForwarder() {
 }
 
 // ensureSupervisorRunning 若 supervisor 未运行则启动。
-//
 // ⚠️ 只碰 supervisor 锁与缓存的 started/stopping 标记，不取 controlMu。
 // Python: _ensure_supervisor_running (L4373)
 // 返回值为"supervisor 已进入首个等待点"的信号通道；若已在运行则返回 nil。
@@ -4333,7 +4301,6 @@ func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) <-chan struct{}
 }
 
 // waitSupervisorReady 等待 supervisor 停在首个等待点（有界）。
-//
 // 必要性（Go 特有）：Python 的 start() 里 create_task 之后同一协程继续，
 // 宿主拿到 start 的返回值时 supervisor 尚未运行；它首次运行必然看到
 // "无消费者 → 睡下"。Go 的 goroutine 是异步的，若首次迭代被推迟到宿主
@@ -4488,7 +4455,6 @@ func (d *DeepAgent) closeIdleOutputIfFinished(_ context.Context) bool {
 }
 
 // shouldKeepInteractionOpenLocked 返回当前输出流是否仍持有活的工作（调用方持 controlMu）。
-//
 // 副作用（刻意）：GoalRecord 为 ACTIVE 时顺带 ensureActiveGoalWorkLocked，
 // 让下一次尝试在宿主观察到空闲完成之前就排好队。
 // Python: _should_keep_interaction_open_locked (L4442)
@@ -4744,15 +4710,12 @@ func (d *DeepAgent) executeRound(ctx context.Context, work *hschema.RoundWorkIte
 }
 
 // syncExpertRoleAttachment 物化专家角色提示词附件。
-//
 // ⤵️ #9.3 回填：等待 AgentTemplate 热加载能力落地后补完。
 // Python: _sync_expert_role_attachment (L3267)，由 run_one_round (L3787) 在
 // BEFORE_INVOKE 生命周期内、resume/submit 分支之前调用。
-//
 // 今天的等价性：activeAgentTemplate 恒为 nil（Go 无 load_agent_template），
 // 而 expert_role 附件节也永远不会被创建，故直接返回与上游"会话里不存在
 // expert_role → 清理分支直接 return"完全等价。
-//
 // ⚠️ 回填时必须**同时**补两条分支，只补①不补②会让模型在用户切走专家后
 // 仍以为自己是该专家：
 //  1. template 非 nil → add_section(expert_role, _expert_role_load_content(role, lang))

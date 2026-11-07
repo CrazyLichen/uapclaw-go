@@ -1,9 +1,7 @@
 // Package ltm 提供长期记忆编排器（LongTermMemory），记忆系统的顶层入口。
-//
 // LongTermMemory 是 Singleton 模式的全局实例，不实现任何存储逻辑，
 // 而是组装和协调已有的各子模块（manage/、process/、config/、migration/、codec/、common/），
 // 对外提供统一的记忆写入（AddMessages）、检索（SearchUserMem）、删除、更新 API。
-//
 // 在 Agent 会话中的位置：
 //   - 写入时机：每轮对话结束后调用 AddMessages 存消息 + LLM 提取记忆碎片
 //   - 检索时机：下轮对话前调用 SearchUserMem 检索相关记忆注入 Prompt

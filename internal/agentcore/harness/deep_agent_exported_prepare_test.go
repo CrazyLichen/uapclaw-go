@@ -28,7 +28,6 @@ func TestPrepareInteractionTaskLoop_导出可用且幂等(t *testing.T) {
 }
 
 // TestWriteRoundResultToStream_导出可用 验证跨包窄入口转发到内层 reactAgent。
-//
 // newTestDeepAgent 未 SetReactAgent（reactAgent==nil），writeRoundResultToStream
 // 内部走 nil 守卫 no-op，此处只验证导出方法可安全调用、不 panic。
 func TestWriteRoundResultToStream_导出可用(t *testing.T) {

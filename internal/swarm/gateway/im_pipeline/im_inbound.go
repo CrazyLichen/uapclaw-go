@@ -29,7 +29,6 @@ import (
 // IMPlatformAdapter 统一的平台适配器接口，同时服务入站和出站管线。
 // 每个数字分身 IM 平台（飞书 11.16 / 企微 11.21）实现一个适配器，
 // 注册后供 IMInboundPipeline 和 IMOutboundPipeline 共享使用。
-//
 // Python: im_inbound.py L67-127 (IMPlatformAdapter Protocol，10 方法 + channel_id
 // 类属性经构造上下文隐含——注册表 key 即 channel_id)
 type IMPlatformAdapter interface {

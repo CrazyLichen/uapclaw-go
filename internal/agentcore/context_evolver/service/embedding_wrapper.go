@@ -15,7 +15,6 @@ import (
 
 // OpenAIEmbeddingWrapper 包装 OpenAIEmbedding 提供 EmbeddingService 接口。
 // 对齐 Python OpenAIEmbeddingWrapper。
-//
 // 设计决策：
 //   - 内部用 Go 已有的 OpenAIEmbedding 构造，复用 HTTP 客户端和 API 调用逻辑
 //   - Embed → EmbedQuery，EmbedBatch → EmbedDocuments 的方法名映射

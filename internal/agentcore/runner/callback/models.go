@@ -10,7 +10,6 @@ import (
 
 // CallbackMetrics 回调执行指标，记录调用次数、耗时、错误率。
 // 并发安全：内部使用 sync.Mutex 保护所有字段。
-//
 // Python: openjiuwen/core/runner/callback/models.py (CallbackMetrics)
 type CallbackMetrics struct {
 	mu sync.Mutex
@@ -29,7 +28,6 @@ type CallbackMetrics struct {
 }
 
 // FilterResult 过滤器返回结果。
-//
 // Python: openjiuwen/core/runner/callback/models.py (FilterResult)
 type FilterResult struct {
 	// Action 过滤器动作
@@ -41,7 +39,6 @@ type FilterResult struct {
 }
 
 // ChainContext 链式执行上下文。
-//
 // Python: openjiuwen/core/runner/callback/models.py (ChainContext)
 type ChainContext struct {
 	// Event 事件名
@@ -63,7 +60,6 @@ type ChainContext struct {
 }
 
 // ChainResult 链式执行结果。
-//
 // Python: openjiuwen/core/runner/callback/models.py (ChainResult)
 type ChainResult struct {
 	// Action 链执行动作
@@ -77,7 +73,6 @@ type ChainResult struct {
 }
 
 // CallbackInfo 回调注册信息，包装回调函数及其元数据。
-//
 // Python: CallbackInfo (openjiuwen/core/runner/callback/models.py)
 // 回调按 Priority 降序排列（数值越大越先执行），
 // 相同 Priority 按 CreatedAt 升序排列（先注册的先执行）。
@@ -117,7 +112,6 @@ type CallbackInfo[F any] struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Update 记录一次回调执行。
-//
 // Python: CallbackMetrics.update(execution_time, is_error)
 func (m *CallbackMetrics) Update(executionTime float64, isError bool) {
 	m.mu.Lock()
@@ -137,7 +131,6 @@ func (m *CallbackMetrics) Update(executionTime float64, isError bool) {
 }
 
 // AvgTime 平均执行时间（秒）。
-//
 // Python: CallbackMetrics.avg_time
 func (m *CallbackMetrics) AvgTime() float64 {
 	m.mu.Lock()
@@ -149,7 +142,6 @@ func (m *CallbackMetrics) AvgTime() float64 {
 }
 
 // ToDict 序列化为 map。
-//
 // Python: CallbackMetrics.to_dict()
 func (m *CallbackMetrics) ToDict() map[string]any {
 	m.mu.Lock()
@@ -202,7 +194,6 @@ func (c *ChainContext) GetMetadata(key string) (any, bool) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // sortCallbacks 按 Priority 降序排列，相同 Priority 按 CreatedAt 升序排列（先注册的先执行）。
-//
 // Python: self._callbacks[event].sort(key=lambda x: x.priority, reverse=True)
 func sortCallbacks[F any](callbacks []*CallbackInfo[F]) {
 	sort.SliceStable(callbacks, func(i, j int) bool {

@@ -21,10 +21,8 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMcpClient 根据配置创建对应类型的 MCP 客户端。
-//
 // 支持 clientType: sse / stdio / streamable-http / streamable_http / openapi / playwright
 // 未知类型返回 StatusToolMcpClientTypeUnknown 错误。
-//
 // Python: 各客户端的构造逻辑
 func NewMcpClient(config *types.McpServerConfig) (types.McpClient, error) {
 	if config == nil {

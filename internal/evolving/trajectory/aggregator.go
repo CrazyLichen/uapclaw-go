@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamTrajectory 聚合的团队轨迹，属于单个会话。
-//
 // Python: TeamTrajectory dataclass
 type TeamTrajectory struct {
 	// TeamID 团队标识
@@ -23,7 +22,6 @@ type TeamTrajectory struct {
 }
 
 // TeamTrajectoryAggregator 从 TrajectoryStore 聚合成员轨迹。
-//
 // Python: TeamTrajectoryAggregator
 type TeamTrajectoryAggregator struct {
 	// store 轨迹存储
@@ -46,9 +44,7 @@ const (
 var (
 	// CollaborativeTools 协作工具名称集合。
 	// 反映成员间交互行为的工具名称。
-	//
 	// 注意：spawn_member 是 Leader 专用，不包含在 Teammate 上下文中。
-	//
 	// Python: COLLABORATIVE_TOOLS
 	CollaborativeTools = map[string]bool{
 		"view_task":      true,
@@ -58,7 +54,6 @@ var (
 	}
 
 	// memberRoleMetaKeys 成员角色元数据键。
-	//
 	// Python: _MEMBER_ROLE_META_KEYS
 	memberRoleMetaKeys = []string{"member_role", "role"}
 )
@@ -66,7 +61,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamTrajectoryAggregator 创建团队轨迹聚合器。
-//
 // Python: TeamTrajectoryAggregator(store=..., team_id=...)
 func NewTeamTrajectoryAggregator(store TrajectoryStore, teamID string) *TeamTrajectoryAggregator {
 	return &TeamTrajectoryAggregator{
@@ -76,7 +70,6 @@ func NewTeamTrajectoryAggregator(store TrajectoryStore, teamID string) *TeamTraj
 }
 
 // Aggregate 聚合指定会话的所有成员轨迹。
-//
 // Python: TeamTrajectoryAggregator.aggregate()
 func (a *TeamTrajectoryAggregator) Aggregate(sessionID string, filterCollaborative bool) *TeamTrajectory {
 	trajectories := a.store.Query("", map[string]any{"session_id": sessionID})
@@ -99,7 +92,6 @@ func (a *TeamTrajectoryAggregator) Aggregate(sessionID string, filterCollaborati
 }
 
 // AggregateMemberTrajectories 聚合已加载到内存的成员轨迹。
-//
 // Python: aggregate_member_trajectories()
 func AggregateMemberTrajectories(trajectories []*Trajectory, teamID, sessionID string, filterCollaborative bool) *Trajectory {
 	members := memberTrajectoriesByID(trajectories, filterCollaborative)
@@ -107,7 +99,6 @@ func AggregateMemberTrajectories(trajectories []*Trajectory, teamID, sessionID s
 }
 
 // FilterMemberTrajectory 过滤成员轨迹，仅保留协作相关步骤。
-//
 // 保留反映成员间行为的步骤：
 //   - 包含跨成员元数据键的步骤（invoke_id, parent_invoke_id, child_invokes）
 //   - 使用协作工具名称的工具调用（view_task, claim_task 等）
@@ -136,7 +127,6 @@ func FilterMemberTrajectory(trajectory *Trajectory) *Trajectory {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // emptyCombined 返回空的合并轨迹。
-//
 // Python: TeamTrajectoryAggregator._empty_combined()
 func (a *TeamTrajectoryAggregator) emptyCombined(sessionID string) *TeamTrajectory {
 	combined := &Trajectory{
@@ -154,7 +144,6 @@ func (a *TeamTrajectoryAggregator) emptyCombined(sessionID string) *TeamTrajecto
 }
 
 // memberTrajectoriesByID 按成员 ID 分组轨迹。
-//
 // Python:
 //
 //	Python: members = {}
@@ -193,7 +182,6 @@ func memberTrajectoriesByID(trajectories []*Trajectory, filterCollaborative bool
 }
 
 // buildCombinedTrajectory 构建合并后的轨迹。
-//
 // Python:
 //
 //	Python: all_steps = []
@@ -246,7 +234,6 @@ func buildCombinedTrajectory(members map[string]*Trajectory, teamID, sessionID s
 }
 
 // isLeaderTrajectory 判断轨迹是否属于 Leader 成员。
-//
 // Python:
 //
 //	Python: for key in _MEMBER_ROLE_META_KEYS:
@@ -269,7 +256,6 @@ func isLeaderTrajectory(trajectory *Trajectory, memberID string) bool {
 }
 
 // mergeMemberTrajectory 合并同一成员的多个持久化轨迹快照。
-//
 // Python:
 //
 //	Python: if existing is None:
@@ -332,7 +318,6 @@ func mergeMemberTrajectory(existing, new *Trajectory) *Trajectory {
 }
 
 // stepsArePrefix 判断 prefix 是否是 steps 的前缀。
-//
 // Python: _steps_are_prefix()
 func stepsArePrefix(prefix, steps []*TrajectoryStep) bool {
 	if len(prefix) > len(steps) {
@@ -347,7 +332,6 @@ func stepsArePrefix(prefix, steps []*TrajectoryStep) bool {
 }
 
 // mergeCost 合并两个 token 成本字典。
-//
 // Python: _merge_cost()
 func mergeCost(first, second CostInfo) CostInfo {
 	if first == nil && second == nil {
@@ -366,7 +350,6 @@ func mergeCost(first, second CostInfo) CostInfo {
 }
 
 // isCollaborativeStep 判断步骤是否反映成员间协作。
-//
 // Python:
 //
 //	Python: if step.meta and any(key in step.meta for key in CROSS_MEMBER_META_KEYS):
@@ -402,7 +385,6 @@ func isCollaborativeStep(step *TrajectoryStep) bool {
 }
 
 // isTeamSkillFileAccess 判断是否为团队技能文件访问。
-//
 // Python:
 //
 //	Python: if "read" not in tool_name and "write" not in tool_name:

@@ -248,7 +248,6 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 }
 
 // ResolveModeMemory 定位 modes 下指定 mode 的 memory 块。
-//
 // Python: _resolve_mode_memory（config.py:370-400）。plan/fast 合并后 agent 族统一读
 // modes.agent；code 族读 modes.code：
 //   - "agent" / "agent.work.*" / 历史 "agent.plan"、"agent.fast"、"plan"、"fast" → modes.agent

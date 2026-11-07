@@ -388,14 +388,11 @@ func BuildTeamMembersSection(
 }
 
 // BuildTeamInboundTagsSection 构建入站标签通知 section。
-//
 // 告诉模型 <team-inbound> / <team-note> / <team-event> / <team-context> /
 // <team-policy> 这套 XML 的含义与嵌套规则。模板是静态的，每个成员（含外部 CLI）
 // 都有，所以它进 system prompt 前缀、不随团队状态变化。
-//
 // language 参数**不使用**：content 同时携带中英两份，语言选择发生在渲染时
 // （上游显式 `del language`，保留参数只为签名一致）。
-//
 // Python: build_team_inbound_tags_section (sections.py L562-590)
 func BuildTeamInboundTagsSection(language string) (*saprompt.PromptSection, error) {
 	_ = language // 与上游 `del language` 对应：content 携带双语，语言选择在渲染侧
@@ -417,12 +414,10 @@ func BuildTeamInboundTagsSection(language string) (*saprompt.PromptSection, erro
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // sectionsLabelsFor 返回指定语言的标签字典，默认回退到中文。
-//
 // 加 sections 前缀是因为 Go 侧本包内还有 messages.go 的同名函数：上游
 // sections.py 的 _labels_for 与 messages.py 的 labels_for 分属两个模块、
 // 名字本就不同，落到同一个 Go 包后两个函数的导出名会撞成 labelsFor。
 // 两张表必须独立（同名字段取值不同），故按来源加前缀区分。
-//
 // Python: _labels_for(language) (openjiuwen/agent_teams/prompts/sections.py)
 func sectionsLabelsFor(language string) map[string]string {
 	if lbl, ok := labels[language]; ok {

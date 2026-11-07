@@ -49,7 +49,6 @@ type ScoredGraphObject struct {
 }
 
 // searchStrategyTuple 搜索策略三元组（实体/关系/片段各一个 SearchConfig）
-//
 // Python: tuple[SearchConfig, SearchConfig, SearchConfig]
 type searchStrategyTuple struct {
 	// EntityConfig 实体搜索配置
@@ -98,7 +97,6 @@ type SearchConfigOptions struct {
 //
 // 通过 LLM 从内容中抽取实体和关系，合并/去重后存储到图数据库，
 // 并支持跨实体、关系和片段的语义搜索。
-//
 // Python: GraphMemory (base.py)
 type GraphMemory struct {
 	// DBBackend 图数据库后端
@@ -134,7 +132,6 @@ type GraphMemory struct {
 	// TimeTillNextGC 下次 GC 间隔（秒），<0 表示禁用
 	TimeTillNextGC float64
 	// metricIsSim 是否使用相似度分数（距离越小越相似 → false；越大越相似 → true）
-	//
 	// Python: self.metric_is_sim = self.db_backend.return_similarity_score
 	// 从 dbBackend.ReturnSimilarityScore() 获取
 	metricIsSim bool
@@ -177,7 +174,6 @@ const (
 	// 对齐 Python: concurrency_limit = self.db_backend.config.max_concurrent or 8
 	defaultConcurrencyLimit = 8
 	// defaultGCTime 默认 GC 间隔（秒）
-	//
 	// Python: self.time_till_next_gc = 300
 	defaultGCTime = 300
 	// defaultSearchMinScoreRelation 默认关系搜索最低分数
@@ -391,7 +387,6 @@ func (gm *GraphMemory) RegisterSearchStrategy(
 }
 
 // EnsureThreadLock 确保用户级锁存在（对齐 Python ensure_thread_lock）
-//
 // Python: ensure_thread_lock(user_id)
 func (gm *GraphMemory) EnsureThreadLock(userID string) {
 	gm.ThreadLock.Lock()
@@ -402,7 +397,6 @@ func (gm *GraphMemory) EnsureThreadLock(userID string) {
 }
 
 // AddMemory 添加记忆片段到知识图谱（完整 16 步管线）
-//
 // Python: add_memory(src_type, user_id, content, content_fmt_kwargs, reference_time)
 func (gm *GraphMemory) AddMemory(ctx context.Context, cfg AddMemoryConfig) (*GraphMemUpdate, error) {
 	gm.EnsureThreadLock(cfg.UserID)
@@ -687,7 +681,6 @@ func WithQueryEmbedding(emb []float64) SearchOption {
 }
 
 // InvokeLLM 调用 LLM（带重试和信号量控制）
-//
 // Python: _invoke_llm(kwargs, template, output_model, **extra)
 func (gm *GraphMemory) InvokeLLM(ctx context.Context, kwargs map[string]any, tmpl *prompt.PromptTemplate, outputModel map[string]any, extra ...map[string]any) (*llmschema.AssistantMessage, error) {
 	// 校验 LLM 客户端
@@ -836,7 +829,6 @@ func (gm *GraphMemory) RelationDedupe(ctx context.Context, userID string, conten
 
 // ReplaceOneSideOfRelation 更新关系的一端（lhs 或 rhs）指向目标实体，
 // 若同一关系中已存在该目标实体的引用则标记为有缺陷。
-//
 // Python: _replace_one_side_of_relation(side, relation, tgt_uuid, entity_relation_updates, state)
 func ReplaceOneSideOfRelation(side string, relation *graph.Relation, tgtUUID string, entityRelationUpdates map[string]map[string]*graph.Relation, state *GraphMemState) {
 	if _, ok := entityRelationUpdates[tgtUUID]; !ok {
@@ -875,7 +867,6 @@ func newSearchConfigWithMinScore(minScore float64) *config.SearchConfig {
 }
 
 // newEntitySearchConfig 创建实体搜索默认配置。
-//
 // 对齐 Python: SearchConfig(rank_config=WeightedRankConfig())
 // （graph_memory/base.py:144、218）——min_score 保留 SearchConfig 默认 0.3，
 // 排序使用 WeightedRankConfig（name_dense/content_dense/content_sparse 加权）。
@@ -1940,7 +1931,6 @@ func (gm *GraphMemory) startTimezoneTask(ctx context.Context, content string, st
 }
 
 // startRelationExtractionAsync 启动关系抽取异步任务（返回 asyncTask，对齐 Python: state.tasks.append(...)）
-//
 // Python: state.tasks.append(asyncio.create_task(self._invoke_llm(*extract_relation_declaration(...))))
 func (gm *GraphMemory) startRelationExtractionAsync(
 	ctx context.Context,
@@ -1981,7 +1971,6 @@ func (gm *GraphMemory) startRelationExtractionAsync(
 }
 
 // startEntityDedupeAsync 启动实体去重异步任务（返回 asyncTask，对齐 Python: state.tasks.append(...)）
-//
 // Python: state.tasks.append(asyncio.create_task(self._invoke_llm(*dedupe_entity_list(...))))
 func (gm *GraphMemory) startEntityDedupeAsync(
 	ctx context.Context,
@@ -2325,7 +2314,6 @@ func (gm *GraphMemory) resolveEntityMerges(ctx context.Context, mergingArgs []Me
 }
 
 // dispatchEntityMergeTasks 分发实体合并任务（关系过滤 LLM + Episode 更新）
-//
 // Python: _dispatch_entity_merge_tasks(episodes_to_update, entity_relation_updates, state)
 func (gm *GraphMemory) dispatchEntityMergeTasks(ctx context.Context, episodesToUpdate map[string]struct{}, entityRelationUpdates map[string]map[string]*graph.Relation, state *GraphMemState) error {
 	objCache := state.LookupTable

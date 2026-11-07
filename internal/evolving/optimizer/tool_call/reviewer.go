@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolDescriptionReviewer 工具描述审查器，通过 LLM 对工具描述进行格式化、清洗、交叉检查和翻译。
-//
 // Python: ToolDescriptionReviewer
 type ToolDescriptionReviewer struct {
 	// evalModelID 评估模型 ID
@@ -35,7 +34,6 @@ type ToolDescriptionReviewer struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewToolDescriptionReviewer 创建 ToolDescriptionReviewer 实例。
-//
 // Python: ToolDescriptionReviewer.__init__(eval_model_id, llm_api_key)
 func NewToolDescriptionReviewer(evalModelID string, llmAPIKey string, model *llm.Model) *ToolDescriptionReviewer {
 	return &ToolDescriptionReviewer{
@@ -48,7 +46,6 @@ func NewToolDescriptionReviewer(evalModelID string, llmAPIKey string, model *llm
 // Format 将文本描述转换为目标 JSON 结构。
 // 定义 4 个 prompt 变体（promptOriginal/prompt1/prompt2/中文prompt），一比一复刻 Python 原文。
 // 最终只使用中文 prompt 传给 LLM，与 Python 行为一致。
-//
 // Python: ToolDescriptionReviewer.format(json_schema, description, example)
 func (r *ToolDescriptionReviewer) Format(
 	ctx context.Context,
@@ -186,7 +183,6 @@ Input:
 
 // CleanAndDeduplicate 清洗并去重工具描述 JSON。
 // 提示词一比一复刻 Python 原文（英文）。
-//
 // Python: ToolDescriptionReviewer.clean_and_deduplicate(data)
 func (r *ToolDescriptionReviewer) CleanAndDeduplicate(
 	ctx context.Context,
@@ -258,7 +254,6 @@ Input JSON:
 
 // CrossCheck 交叉检查修改后的描述与原始描述，补充丢失信息并整理位置。
 // 提示词一比一复刻 Python 原文（中文）。
-//
 // Python: ToolDescriptionReviewer.cross_check(data, ori_tool)
 func (r *ToolDescriptionReviewer) CrossCheck(
 	ctx context.Context,
@@ -314,7 +309,6 @@ func (r *ToolDescriptionReviewer) CrossCheck(
 // TranslateToChinese 将工具描述中的英文翻译为中文。
 // 如果文本主要是中文则直接返回，不调用 LLM。
 // 提示词一比一复刻 Python 原文（英文）。
-//
 // Python: ToolDescriptionReviewer.translate_to_chinese(data)
 func (r *ToolDescriptionReviewer) TranslateToChinese(
 	ctx context.Context,
@@ -409,7 +403,6 @@ func (r *ToolDescriptionReviewer) Process(
 
 // isMostlyEnglish 判断文本是否主要由英文字符组成。
 // 计算英文字符占比，超过 0.7 则判断为英文。
-//
 // Python: ToolDescriptionReviewer._is_mostly_english(text)
 func isMostlyEnglish(text string) bool {
 	// Python: text_no_space = re.sub(r'\s+', '', text)

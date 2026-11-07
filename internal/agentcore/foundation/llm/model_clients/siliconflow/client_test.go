@@ -1606,7 +1606,6 @@ func TestExtractCostFromUsage_无费用信息(t *testing.T) {
 }
 
 // TestParseStreamChunk_缺省type的增量帧可聚合 验证 SiliconFlow 流式增量帧聚合。
-//
 // 真实 SSE 只在首帧带 type，后续帧缺省；若把空串透传给 WithToolCallType，
 // mergeToolCalls 的同调用判定失效，同一次调用的参数碎片会被拆成多个 ToolCall。
 func TestParseStreamChunk_缺省type的增量帧可聚合(t *testing.T) {

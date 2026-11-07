@@ -1,5 +1,4 @@
 // Package prompt 提供可插值替换的 Prompt 模板系统，支持字符串和消息列表两种内容格式。
-//
 // 本包是领域二（LLM 基础层）2.17 节的实现，对应 Python 路径：
 //
 //	openjiuwen/core/foundation/prompt/
@@ -18,7 +17,6 @@
 //	{{user.profile.name}}  — 嵌套属性解析（逐层 map/struct 访问）
 //
 // 不支持条件逻辑、循环或表达式计算，这是纯字符串替换引擎。
-//
 // # 使用方式
 //
 // 字符串模板：

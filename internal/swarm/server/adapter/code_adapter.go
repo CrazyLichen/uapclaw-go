@@ -47,10 +47,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // CodeAdapter Code 模式适配器，组合委托 DeepAdapter。
-//
 // 继承 UapClawDeepAdapter 的全部接口方法，仅覆盖 CreateInstance。
 // Go 中通过内嵌 *DeepAdapter 实现组合委托。
-//
 // Code 模式差异点（对齐 Python JiuwenClawCodeAdapter）：
 //   - create_instance: 不传多模态/上下文引擎参数，使用 code system prompt
 //   - rails: 加入 LspRail/CodeAgentRail/CodingMemoryRail/ProjectMemoryRail
@@ -147,7 +145,6 @@ var codeRailBuildNames = map[string]string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodeAdapter 创建 CodeAdapter 实例。
-//
 // Python: JiuwenClawCodeAdapter.__init__() (line 177-192)
 func NewCodeAdapter() *CodeAdapter {
 	deep := NewDeepAdapter()
@@ -163,7 +160,6 @@ func NewCodeAdapter() *CodeAdapter {
 }
 
 // CreateInstance 初始化底层 SDK Agent（code 模式）。
-//
 // Python: JiuwenClawCodeAdapter.create_instance() (line 221-342)
 //
 // Python 执行步骤：
@@ -544,13 +540,11 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 
 // updateRailsForMode 覆写 DeepAdapter：Code 语义下管理 Rail 生命周期。
 // Python: JiuwenClawCodeAdapter._update_rails_for_mode() — 完全覆写（不调 super）
-//
 // **不判 mode**：CodeAdapter 实例只由 factory 在 mode=="code" 时创建（team 成员同属
 // code 族），Python 侧同样不对 mode 设门控。历史缺陷：此处曾有 `if mode != "code"`
 // 门控，而真实入参是 canonical 串 "code.normal"/"code.plan"/"code.team"
 // （handle_message 的 writeCanonicalMode 回写），门控恒真 → 每条消息都回落到
 // DeepAdapter.updateAgentModeRails，卸载 SubagentRail 且永不重建。
-//
 // Code 模式：卸载 TaskPlanningRail/SkillEvolutionRail；对 SubagentRail/
 // ProjectMemoryRail/CodingMemoryRail 做「缺失则重建注册」（Python 同款三段）。
 func (c *CodeAdapter) updateRailsForMode(ctx context.Context, mode string) {
@@ -633,7 +627,6 @@ func (c *CodeAdapter) resolveOutputLanguage() string {
 // updatePromptForMode 覆写 DeepAdapter，按 code 模式的运行时语言刷新提示词语言。
 // Python: JiuwenClawCodeAdapter 经 _update_prompt_for_mode(mode, resolved_language) 传入
 // self._resolve_runtime_language()（code 族固定 en 或 runtime_language_override）。
-//
 // Go 无虚方法派发：DeepAdapter.updatePromptForMode 内部调 d.resolveRuntimeLanguage()，
 // 取到的是 Deep 的偏好语言（默认 cn），会把 code 模式提示词整体降级为中文。
 // 因此必须在 CodeAdapter 侧覆写并由 CodeAdapter 自己调用。
@@ -662,7 +655,6 @@ func (c *CodeAdapter) updatePromptForMode(mode string) {
 
 // updateRuntimeConfig 覆写 DeepAdapter，Code 模式 runtime config。
 // Python: JiuwenClawCodeAdapter._update_runtime_config() — 完全覆写（不调 super）
-//
 // 与 DeepAdapter.updateRuntimeConfig 的关键差异：
 //  1. SetForceEnglish(c.forceEnglishRuntimePrompt) — Code 模式强制英文 section
 //  2. writeRuntimeStateYAML 用 resolveOutputLanguage() 而非 resolvedLanguage
@@ -1268,7 +1260,6 @@ func (c *CodeAdapter) buildCodeAgentRail() *CodeAgentRail {
 }
 
 // buildCodeTaskPlanningRail 构建 code 模式 todo 护栏。
-//
 // Python: JiuwenClawCodeAdapter._build_code_task_planning_rail()（interface_code.py:2160）
 // 注册 todo 工具但不注入 openjiuwen 静态 todo 系统提示词，并按 10/10 节奏追加提醒附件。
 func (c *CodeAdapter) buildCodeTaskPlanningRail() *coderails.CodeTaskPlanningRail {
@@ -1343,7 +1334,6 @@ func (c *CodeAdapter) buildProjectMemoryRail() *commonrails.ProjectMemoryRail {
 }
 
 // flattenStringDirs 展平额外目录配置值（对齐 Python _build_project_memory_rail 的解析分支）。
-//
 //   - string：按 os.PathListSeparator 切分后逐项 trim（Python: str.split(os.pathsep)）
 //   - []any / []string：逐项转字符串后 trim（Python: list/tuple/set 分支）
 //   - nil 与其他类型：返回空切片（非 nil，使「已配置但为空」与「未配置」可区分）
@@ -1372,7 +1362,6 @@ func flattenStringDirs(value any) []string {
 }
 
 // projectMemoryAdditionalDirectories 解析项目记忆附加目录（Python 三级回退）。
-//
 // Python: raw = self._instance_overrides.get(
 //
 //	"project_memory_additional_directories",
@@ -1451,7 +1440,6 @@ func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
 
 // buildPermissionRail 构建权限护栏。
 // ✅ 已回填：PermissionInterruptRail（对齐 Python: build_permission_rail(config, llm, model_name) — interface_code.py）
-//
 // CodeAdapter 与 DeepAdapter 逻辑基本相同，但额外接收 llm 和 modelName 参数
 // （Code 模式在 create_instance 中传递显式 llm/modelName）。
 func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *llm.Model, modelName string) sainterfaces.AgentRail {

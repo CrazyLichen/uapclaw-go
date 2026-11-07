@@ -1,11 +1,9 @@
 // Package mem_model 提供记忆系统的数据模型和数据库操作。
-//
 // 本包定义了记忆业务数据模型（MemoryType/OperationType/FragmentMemoryUnit 等）、
 // 消息存储相关的数据库模型（UserMessage）、
 // 通用 SQL CRUD 层（SqlDbStore）、消息存储实现（SqlMessageStore）
 // 和消息管理器（MessageManager）。
 // Schema 版本管理已迁移到 migrator 包，加解密编解码已迁移到 codec 包。
-//
 // 文件目录：
 //
 //	mem_model/

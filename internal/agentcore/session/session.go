@@ -15,7 +15,6 @@ import (
 //
 // 修正 Python 遗漏：Python 的 ProxySession 未覆盖 actor_manager 和 close 方法，
 // 导致这两个方法不委托给 stub。Go 实现中全部 8 个方法均委托给 stub。
-//
 // 使用模式：先 NewProxySession() 创建空实例，后续通过 SetSession() 注入真正的会话。
 // stub 为 nil 时调用任何方法会 panic。
 type ProxySession struct {

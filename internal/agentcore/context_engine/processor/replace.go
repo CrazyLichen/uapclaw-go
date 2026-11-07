@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Replacement 消息替换描述，指定消息列表中某范围替换为新消息。
-//
 // Python: ContextUtils.replace_messages() 的参数封装
 type Replacement struct {
 	// StartIdx 被替换范围的起始索引（含）
@@ -29,10 +28,8 @@ type Replacement struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ReplaceMessages 将消息列表中指定范围替换为新消息。
-//
 // 从后往前处理（避免索引偏移），每个 Replacement 将
 // messages[startIdx:endIdx+1] 替换为 replacement.Messages。
-//
 // Python: ContextUtils.replace_messages() + DialogueCompressor._apply_replacements()
 // ⤵️ 5.23-5.29 其他处理器均可复用此函数
 func ReplaceMessages(messages []llm_schema.BaseMessage, replacements []Replacement) []llm_schema.BaseMessage {

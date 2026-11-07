@@ -123,7 +123,6 @@ const (
 
 const (
 	// MetadataKeyMessageSourceKind 消息来源细分（query / steering / empty_response / attachment 等）
-	//
 	// Python: OPENJIUWEN_MESSAGE_SOURCE_KIND_METADATA (core/foundation/llm/schema/message.py:12)
 	MetadataKeyMessageSourceKind = "_openjiuwen_message_source_kind"
 )
@@ -218,6 +217,7 @@ func (c MessageContent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.parts)
 }
 
+// UnmarshalJSON 兼容两种消息内容形态：纯文本字符串，或多模态分段数组。
 func (c *MessageContent) UnmarshalJSON(data []byte) error {
 	// 尝试解析为字符串（纯文本）
 	var s string
@@ -278,7 +278,6 @@ func NewSystemMessage(content string, opts ...MessageOption) *SystemMessage {
 }
 
 // BaseMessageToMap 把 BaseMessage 转成 map 表示（OpenAI 风格）。
-//
 // BaseMessage 接口没有 ToMap 方法，只能从接口字段手工构建；
 // 供轨迹构建、会话信号等消费方复用，避免 role/content/tool_calls 映射多处漂移。
 // AssistantMessage 额外输出扁平格式的 tool_calls。

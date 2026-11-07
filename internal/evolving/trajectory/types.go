@@ -7,10 +7,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StepDetail 执行步骤的详细数据接口。
-//
 // LLM 步骤由 LLMCallDetail 实现，工具步骤由 ToolCallDetail 实现。
 // StepKind() 方法提供类型判别，也可通过 Go 类型断言 switch d.(type) 判别。
-//
 // Python: StepDetail = Union[LLMCallDetail, ToolCallDetail]
 type StepDetail interface {
 	// StepKind 返回步骤类型（llm 或 tool）。
@@ -18,7 +16,6 @@ type StepDetail interface {
 }
 
 // LLMCallDetail LLM 调用完整执行数据。
-//
 // Python: LLMCallDetail dataclass
 type LLMCallDetail struct {
 	// Model 模型名称
@@ -36,7 +33,6 @@ type LLMCallDetail struct {
 }
 
 // ToolCallDetail 工具调用完整执行数据。
-//
 // Python: ToolCallDetail dataclass
 type ToolCallDetail struct {
 	// ToolName 工具名称
@@ -54,7 +50,6 @@ type ToolCallDetail struct {
 }
 
 // TrajectoryStep 执行轨迹中的单个步骤。
-//
 // 字段分类：
 //   - 核心执行事实：Kind, Error, StartTimeMs, EndTimeMs
 //   - 结构化详情：Detail (LLMCallDetail | ToolCallDetail | nil)
@@ -87,7 +82,6 @@ type TrajectoryStep struct {
 }
 
 // Trajectory 完整执行轨迹。
-//
 // Python: Trajectory dataclass
 type Trajectory struct {
 	// ExecutionID 唯一执行标识符
@@ -109,12 +103,10 @@ type Trajectory struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // CostInfo 聚合成本指标。
-//
 // Python: CostInfo = Dict[str, int]  # {"input_tokens": N, "output_tokens": M}
 type CostInfo map[string]int
 
 // StepKind 执行步骤类型。
-//
 // Python: StepKind = Literal["llm", "tool", "workflow", "memory", "agent"]
 type StepKind string
 
@@ -138,7 +130,6 @@ const (
 var (
 	// CrossMemberMetaKeys 跨成员元数据键集合。
 	// 用于判断 Trajectory 是否处于团队协作成员上下文。
-	//
 	// Python: openjiuwen/agent_evolving/trajectory/aggregator.py
 	// Python: CROSS_MEMBER_META_KEYS = frozenset({"invoke_id", "parent_invoke_id", "child_invokes"})
 	CrossMemberMetaKeys = map[string]bool{
@@ -157,12 +148,10 @@ func (d *LLMCallDetail) StepKind() StepKind { return StepKindLLM }
 func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 
 // ToMessages 返回 LLM 步骤中记录的消息字典列表。
-//
 // 遍历所有 kind=llm 且 detail 为 LLMCallDetail 的步骤，
 // 提取 messages 和 response。
 // Messages 是 BaseMessage 对象，通过 baseMessageToMap 转换后追加；
 // Response 同为字典形式，检查是否含 role 或 content 键后追加。
-//
 // Python:
 //
 //		Python: for step in self.steps:
@@ -179,7 +168,6 @@ func (t *Trajectory) ToMessages() []map[string]any {
 }
 
 // ToMessagesLocal 投影「本轮输入」视图：每个 LLM 步骤的 prompt 只保留最后一条真实用户消息起的片段。
-//
 // Python: trajectory_to_messages(..., invoke_local=True)
 // 附件消息仍保留在 LLMCallDetail.Messages（轨迹可复现），仅投影时裁掉前序轮次。
 func (t *Trajectory) ToMessagesLocal() []map[string]any {

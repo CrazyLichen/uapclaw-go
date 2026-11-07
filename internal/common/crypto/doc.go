@@ -1,7 +1,5 @@
 // Package crypto 提供 AES 加密/解密工具。
-//
 // 用于 API Key 等敏感信息的加密存储和安全读取。
-//
 // 本包包含两层抽象：
 //   - 底层：BaseCrypt 接口 + AesGcmCrypt 实现 + CryptRegistry 注册表
 //     密钥由调用方传入，适用于存储层编解码等底层场景。
@@ -14,7 +12,6 @@
 //
 // 注意：本包禁止导入 common/logger（logger→config→crypto 环），
 // 日志用 stdlib log 以 [crypto] 前缀区分。
-//
 // 文件目录：
 //
 //	crypto/

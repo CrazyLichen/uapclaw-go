@@ -1,9 +1,7 @@
 // Package metrics 提供自演化系统的评估指标。
-//
 // 包含 Metric 抽象接口、MetricResult 统一返回类型、
 // ExactMatchMetric 精确匹配指标和 LLMAsJudgeMetric LLM 语义评估指标。
 // 同时包含 LLM 评估提示词模板（LLMMetricTemplate + LLMMetricRetryTemplate）。
-//
 // 文件目录：
 //
 //	metrics/

@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ExperienceScorer LLM 驱动的经验评分和整理器。
-//
 // Python: ExperienceScorer
 type ExperienceScorer struct {
 	llm            *llm.Model
@@ -231,7 +230,6 @@ var SimplifyPrompt = map[string]string{"cn": SimplifyPromptCN, "en": SimplifyPro
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExperienceScorer 创建 ExperienceScorer。
-//
 // llmModel 不能为 nil（对应 Python 中 Model 为必填参数，非 Optional），
 // 若传入 nil 则返回错误。
 // Python: ExperienceScorer.__init__()
@@ -263,7 +261,6 @@ func NewExperienceScorer(
 }
 
 // CalcEffectiveness 计算 E（Effectiveness）评分，使用贝叶斯平滑 Beta(1,1)。
-//
 // stats 为 nil → 返回 0.5；total == 0 → 返回 0.5；
 // 否则 (TimesPositive + 1) / (total + 2)。
 // Python: calc_effectiveness()
@@ -279,7 +276,6 @@ func CalcEffectiveness(stats *checkpointing.UsageStats) float64 {
 }
 
 // CalcUtilization 计算 U（Utilization）评分。
-//
 // stats 为 nil → 返回 0.5；TimesPresented == 0 → 返回 0.5；
 // 否则 TimesUsed / TimesPresented。
 // Python: calc_utilization()
@@ -294,7 +290,6 @@ func CalcUtilization(stats *checkpointing.UsageStats) float64 {
 }
 
 // CalcFreshness 计算 F（Freshness）评分，指数衰减 + 版本惩罚。
-//
 // timestamp 空 → 返回 0.5；解析失败 → 返回 0.5；
 // 衰减 = 0.5 * 2^(-daysOld/90)，新鲜度 = 0.5 + 衰减；
 // 版本不匹配 → *= 0.7；clamp 到 [0,1]。
@@ -328,7 +323,6 @@ func CalcFreshness(record *checkpointing.EvolutionRecord, currentSkillVersion *s
 }
 
 // CalcScore 计算综合评分 WE*e + WU*u + WF*f。
-//
 // stats 为 nil → 初始化零值；然后分别计算 e/u/f。
 // Python: calc_score()
 func CalcScore(record *checkpointing.EvolutionRecord, currentSkillVersion *string) float64 {
@@ -345,7 +339,6 @@ func CalcScore(record *checkpointing.EvolutionRecord, currentSkillVersion *strin
 }
 
 // UpdateScore 更新记录的 usage_stats 和重新计算评分。
-//
 // 如果 record.UsageStats == nil → 初始化零值；
 // 按 evalResult["used/positive/negative"] 更新 TimesUsed/TimesPositive/TimesNegative（bool 类型断言）；
 // 设置 LastEvaluatedAt = time.Now().UTC().Format(time.RFC3339Nano)；
@@ -380,7 +373,6 @@ func UpdateScore(
 }
 
 // Evaluate 评估展示经验是否被有效使用。
-//
 // 空 records → 返回空 slice, nil；
 // Python: formatted = formatPresentedExperiences(presentedRecords)
 // 选择语言模板，替换 {presented_experiences} 和 {conversation_snippet}（snippet 限制 4000 字符）；
@@ -435,7 +427,6 @@ func (s *ExperienceScorer) Evaluate(
 }
 
 // Simplify 生成经验库整理建议。
-//
 // 空 records → logger.Info 并返回空 slice, nil；
 // Python: formatted = formatScoredExperiences(records)
 // 选择语言模板，替换 {skill_name}/{skill_summary}(限1000)/{scored_experiences}；
@@ -533,7 +524,6 @@ func (s *ExperienceScorer) Simplify(
 }
 
 // UpdateLLM 热更新 LLM/model。
-//
 // llmModel 不能为 nil（与 NewExperienceScorer 一致），若传入 nil 则直接返回不更新，
 // 避免 scorer 进入不可用状态。
 // Python: ExperienceScorer.update_llm()
@@ -548,7 +538,6 @@ func (s *ExperienceScorer) UpdateLLM(llmModel *llm.Model, model string) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatPresentedExperiences 格式化展示经验用于提示词。
-//
 // 遍历 records，每条 "[record.ID] record.Change.Content[:200]"，用 "\n" 连接。
 // Python: ExperienceScorer._format_presented_experiences()
 func formatPresentedExperiences(records []checkpointing.EvolutionRecord) string {
@@ -561,7 +550,6 @@ func formatPresentedExperiences(records []checkpointing.EvolutionRecord) string 
 }
 
 // formatScoredExperiences 格式化评分经验用于提示词。
-//
 // 遍历 records，stats = record.UsageStats（nil → 零值）；
 // 每条 "[record.ID] score=%.2f | presented=stats.TimesPresented used=stats.TimesUsed | record.Change.Content[:150]"；
 // 用 "\n" 连接。
@@ -584,7 +572,6 @@ func formatScoredExperiences(records []checkpointing.EvolutionRecord) string {
 }
 
 // parseLLMJSON 最佳努力解析 LLM JSON 输出。
-//
 // 1. strip，空 → nil
 // 2. re.sub 去掉 markdown code blocks：^```(?:json)?\s* 和 ```\s*$
 // 3. re.sub 去掉 // 行注释：//[^\n]*
@@ -656,7 +643,6 @@ func convertSliceToMapSlice(slice []any) []map[string]any {
 }
 
 // parseTimestamp 解析 UTC ISO 时间戳，对齐 Python 的 datetime.fromisoformat。
-//
 // Python: record_time = datetime.fromisoformat(record.timestamp.replace("Z", "+00:00"))
 // Python: if record_time.tzinfo is None: record_time = record_time.replace(tzinfo=timezone.utc)
 func parseTimestamp(ts string) (time.Time, error) {
@@ -685,7 +671,6 @@ func truncateString(s string, maxLen int) string {
 }
 
 // getBoolFromEvalResult 从评估结果字典中获取布尔值。
-//
 // Python 的 eval_result.get("used") 对 Go 的 any 类型需要安全转换。
 func getBoolFromEvalResult(m map[string]any, key string) bool {
 	v, ok := m[key]

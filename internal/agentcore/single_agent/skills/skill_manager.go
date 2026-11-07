@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // FsProvider 文件系统操作提供者接口。
-//
 // 【临时接口】仅用于当前 SkillManager 的文件读取和目录列举，
 // 后续 9.32 SysOperation 实现后，提供 SysOperation 适配器替换此接口，
 // 届时删除 FsProvider 及其 osFsProvider 默认实现。
@@ -31,11 +30,9 @@ type FsProvider interface {
 }
 
 // SkillManager 管理技能注册和检索。
-//
 // 维护一个技能注册表 registry（name → Skill），提供注册、注销、查询方法。
 // 技能从包含 SKILL.md 文件的目录加载，SKILL.md 的 YAML front matter 中
 // 提取 name 和 description 元数据。
-//
 // Python: SkillManager
 type SkillManager struct {
 	// registry 技能注册表，name → Skill
@@ -68,7 +65,6 @@ type DirInfo struct {
 }
 
 // osFsProvider 基于 os 包的默认 FsProvider 实现。
-//
 // 【临时实现】后续 9.32 SysOperation 实现后删除，替换为 SysOperation 适配器。
 type osFsProvider struct{}
 
@@ -77,7 +73,6 @@ type osFsProvider struct{}
 // ──────────────────────────── 常量 ────────────────────────────
 
 // SkillFileName 技能文件名（SKILL.md）。
-//
 // Python: SKILL_FILE_NAME = "SKILL.md"
 const SkillFileName = "SKILL.md"
 
@@ -89,7 +84,6 @@ const yamlFrontMatterSeparator = "---"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillManager 创建 SkillManager 实例。
-//
 // Python: SkillManager.__init__(sys_operation_id)
 func NewSkillManager(sysOperationID string) *SkillManager {
 	return &SkillManager{
@@ -100,7 +94,6 @@ func NewSkillManager(sysOperationID string) *SkillManager {
 }
 
 // NewSkillManagerWithProvider 创建使用自定义 FsProvider 的 SkillManager 实例。
-//
 // 用于测试或后续 SysOperation 适配器注入。
 func NewSkillManagerWithProvider(sysOperationID string, provider FsProvider) *SkillManager {
 	return &SkillManager{
@@ -111,21 +104,18 @@ func NewSkillManagerWithProvider(sysOperationID string, provider FsProvider) *Sk
 }
 
 // SetSysOperationID 更新系统操作 ID。
-//
 // Python: SkillManager.set_sys_operation_id(sys_operation_id)
 func (sm *SkillManager) SetSysOperationID(sysOperationID string) {
 	sm.sysOperationID = sysOperationID
 }
 
 // SetFsProvider 设置文件系统操作提供者。
-//
 // 【临时方法】后续 9.32 SysOperation 适配器注入后可删除此方法。
 func (sm *SkillManager) SetFsProvider(provider FsProvider) {
 	sm.fsProvider = provider
 }
 
 // Register 注册技能元数据。
-//
 // 主注册入口：支持单个路径或多个路径。
 // 对每个路径：
 //  1. 尝试 ListDirectories → 如果成功，说明是目录
@@ -148,7 +138,6 @@ func (sm *SkillManager) Register(skillPaths []string, overwrite bool) error {
 }
 
 // Unregister 注销技能。
-//
 // Python: SkillManager.unregister(name)
 func (sm *SkillManager) Unregister(name string) {
 	sm.mu.Lock()
@@ -157,7 +146,6 @@ func (sm *SkillManager) Unregister(name string) {
 }
 
 // Get 按名称获取技能。
-//
 // Python: SkillManager.get(name)
 func (sm *SkillManager) Get(name string) *Skill {
 	sm.mu.RLock()
@@ -166,7 +154,6 @@ func (sm *SkillManager) Get(name string) *Skill {
 }
 
 // GetAll 获取所有已注册技能。
-//
 // Python: SkillManager.get_all()
 func (sm *SkillManager) GetAll() []*Skill {
 	sm.mu.RLock()
@@ -183,7 +170,6 @@ func (sm *SkillManager) GetAll() []*Skill {
 }
 
 // GetNames 获取所有技能名称。
-//
 // Python: SkillManager.get_names()
 func (sm *SkillManager) GetNames() []string {
 	sm.mu.RLock()
@@ -197,7 +183,6 @@ func (sm *SkillManager) GetNames() []string {
 }
 
 // Has 检查技能是否存在。
-//
 // Python: SkillManager.has(name)
 func (sm *SkillManager) Has(name string) bool {
 	sm.mu.RLock()
@@ -207,7 +192,6 @@ func (sm *SkillManager) Has(name string) bool {
 }
 
 // Clear 清空注册表。
-//
 // Python: SkillManager.clear()
 func (sm *SkillManager) Clear() {
 	sm.mu.Lock()
@@ -216,7 +200,6 @@ func (sm *SkillManager) Clear() {
 }
 
 // Count 返回已注册技能数量。
-//
 // Python: SkillManager.count()
 func (sm *SkillManager) Count() int {
 	sm.mu.RLock()
@@ -284,13 +267,10 @@ func (p *osFsProvider) WriteFile(path string, data []byte) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadYAML 从文件读取 YAML front-matter。
-//
 // 如果文件以 "---" 开头，则按 YAML front-matter 格式解析：
 // ---\nyaml_metadata\n---\nbody_content  ← YAML前置元数据与正文内容的分隔格式
 // 返回 (yamlData, body, error)。
-//
 // 如果不以 "---" 开头，返回 (nil, text, nil)。
-//
 // Python: SkillManager._load_yaml(path, session_id)
 func (sm *SkillManager) loadYAML(path string) (map[string]any, string, error) {
 	text, err := sm.fsProvider.ReadFile(path)
@@ -317,7 +297,6 @@ func (sm *SkillManager) loadYAML(path string) (map[string]any, string, error) {
 }
 
 // loadDescription 从 SKILL.md 的 YAML front-matter 提取 description 字段。
-//
 // Python: SkillManager._load_description(path, session_id)
 // Python 原实现把 self._description 当临时缓存（asyncio 单线程安全）；
 // Go 并发注册时实例字段写入会触发 data race——改局部变量，不再落实例字段
@@ -342,9 +321,7 @@ func (sm *SkillManager) loadDescription(path string) (string, error) {
 }
 
 // createSkillFromPath 从 SKILL.md 路径创建 Skill 对象。
-//
 // 目录名为技能名称，SKILL.md 所在目录为技能目录。
-//
 // Python: SkillManager._create_skill_from_path(path, session_id)
 func (sm *SkillManager) createSkillFromPath(skillMDPath string) (*Skill, error) {
 	description, err := sm.loadDescription(skillMDPath)
@@ -362,7 +339,6 @@ func (sm *SkillManager) createSkillFromPath(skillMDPath string) (*Skill, error) 
 }
 
 // findSkillMD 在文件列表中查找 SKILL.md（不区分大小写）。
-//
 // Python: SkillManager._find_skill_md(file_items)
 func findSkillMD(files []FileInfo) (bool, string) {
 	for _, f := range files {
@@ -374,9 +350,7 @@ func findSkillMD(files []FileInfo) (bool, string) {
 }
 
 // addToRegistry 向注册表添加技能。
-//
 // overwrite 为 false 时，如果技能已存在则返回 error。
-//
 // Python: SkillManager._add_to_registry(skill, overwrite)
 func (sm *SkillManager) addToRegistry(skill *Skill, overwrite bool) error {
 	sm.mu.Lock()
@@ -391,9 +365,7 @@ func (sm *SkillManager) addToRegistry(skill *Skill, overwrite bool) error {
 }
 
 // registerSkillFromMD 从 SKILL.md 路径注册技能。
-//
 // 路径为空时 no-op。
-//
 // Python: SkillManager._register_skill_from_md(skill_md_path, session_id, overwrite)
 func (sm *SkillManager) registerSkillFromMD(mdPath string, overwrite bool) error {
 	if mdPath == "" {
@@ -410,10 +382,8 @@ func (sm *SkillManager) registerSkillFromMD(mdPath string, overwrite bool) error
 }
 
 // tryRegisterDirAsSkill 尝试将目录注册为技能。
-//
 // 列出目录文件 → 查找 SKILL.md → 注册。
 // 返回 (found, error)：found 表示是否找到 SKILL.md。
-//
 // Python: SkillManager._try_register_dir_as_skill(fs, dir_path, session_id, overwrite)
 func (sm *SkillManager) tryRegisterDirAsSkill(dirPath string, overwrite bool) (bool, error) {
 	files, err := sm.fsProvider.ListFiles(dirPath)
@@ -434,7 +404,6 @@ func (sm *SkillManager) tryRegisterDirAsSkill(dirPath string, overwrite bool) (b
 }
 
 // registerRoot 对单个根路径执行注册逻辑。
-//
 // Python: SkillManager.register() 中的 _register_root(root) 内部函数
 func (sm *SkillManager) registerRoot(root string, overwrite bool) error {
 	// 尝试列出子目录

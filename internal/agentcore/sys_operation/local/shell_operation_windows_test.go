@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── Windows auto 分支 ────────────────────────────
 
 // TestResolveExecutionPlan_Auto选择 验证 Windows auto 分支的 shell 选择顺序。
-//
 // 仅在 Windows 上运行：auto 分支的判定依赖 runtime.GOOS。
 // 本地或发布前手工执行：
 //

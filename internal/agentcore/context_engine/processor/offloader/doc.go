@@ -1,9 +1,7 @@
 // Package offloader 提供上下文引擎的消息卸载处理器实现。
-//
 // 卸载处理器在对话消息数或 Token 数超过阈值时，将大消息的内容裁剪
 // 并卸载到文件系统或内存，生成轻量占位符。原始内容可通过 reloader_tool
 // 按 offload_handle 取回。
-//
 // 当前实现：
 //   - MessageOffloader：基础裁剪卸载，将大消息截断为 trim_size + 省略标记
 //   - MessageSummaryOffloader：LLM 自适应压缩卸载，用 LLM 生成摘要替代简单裁剪，

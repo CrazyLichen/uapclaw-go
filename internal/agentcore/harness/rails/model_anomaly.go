@@ -24,7 +24,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolLoopCompactConfig 连续相同工具调用（名称+入参）的压缩配置。
-//
 // 返回值不参与匹配；折叠时只把最新一轮的调用与结果写进警告文本。
 // Python: model_anomaly_detection_rail.py ToolLoopCompactConfig (L281-306)
 type ToolLoopCompactConfig struct {
@@ -37,7 +36,6 @@ type ToolLoopCompactConfig struct {
 }
 
 // transientDecision 一次瞬时失败的分类结论。
-//
 // Python: _TransientDecision (L56-60)
 type transientDecision struct {
 	// retryable 是否值得整调用重试
@@ -57,7 +55,6 @@ type toolFingerprintItem struct {
 }
 
 // toolRound 一轮完整的工具调用区间 [start, end)。
-//
 // Python: _ToolRound (L309-314)
 type toolRound struct {
 	// start 轮次起始消息下标（assistant 消息）
@@ -69,7 +66,6 @@ type toolRound struct {
 }
 
 // anomalyState 单次模型调用的重复检测尾窗（两个字段各自独立累计）。
-//
 // Python: ctx.extra["_model_anomaly_detection_state"] 的 dict（L430-433）
 type anomalyState struct {
 	// reasoningContent 思维链尾窗
@@ -89,10 +85,8 @@ type retryCounters struct {
 }
 
 // ModelAnomalyDetectionRail 模型异常检测 Rail。
-//
 // 处理四类故障：流式退化重复输出、流帧超时、瞬时 provider 失败、连续相同工具调用。
 // 重试复用 RailExecutor 的整调用重试（on_model_exception → RequestRetry）。
-//
 // Python: ModelAnomalyDetectionRail（priority 70，L317-392）
 type ModelAnomalyDetectionRail struct {
 	DeepAgentRail
@@ -210,7 +204,6 @@ var nonRetryableTextMarkers = []string{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewModelAnomalyDetectionRail 创建 Rail 并校验参数。
-//
 // Python: ModelAnomalyDetectionRail.__init__（L329-391，10 条 ValueError → 此处返回 error）
 func NewModelAnomalyDetectionRail(opts ...ModelAnomalyOption) (*ModelAnomalyDetectionRail, error) {
 	r := &ModelAnomalyDetectionRail{
@@ -308,7 +301,6 @@ func WithToolLoopCompact(cfg ToolLoopCompactConfig) ModelAnomalyOption {
 }
 
 // BackoffDelay 返回第 retryIndex 次重试前的等待秒数，越界取末项。
-//
 // Python: backoff_delay (L408-415)
 func (r *ModelAnomalyDetectionRail) BackoffDelay(retryIndex int) float64 {
 	if len(r.backoffSeconds) == 0 {
@@ -324,7 +316,6 @@ func (r *ModelAnomalyDetectionRail) BackoffDelay(retryIndex int) float64 {
 }
 
 // InspectStreamChunk 逐分片检查 reasoning_content / content 是否退化重复。
-//
 // Python: inspect_stream_chunk (L445-452) + _append_and_check (L483-497)
 func (r *ModelAnomalyDetectionRail) InspectStreamChunk(_ context.Context, cbc *agentinterfaces.AgentCallbackContext, chunk *llmschema.AssistantMessageChunk) error {
 	if chunk == nil {
@@ -345,7 +336,6 @@ func (r *ModelAnomalyDetectionRail) InspectStreamChunk(_ context.Context, cbc *a
 }
 
 // GetCallbacks 注册本 Rail 关心的 4 个事件。
-//
 // Python: DeepAgentRail 子类按事件自动注册；Go 必须显式声明。
 func (r *ModelAnomalyDetectionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
@@ -365,7 +355,6 @@ func (r *ModelAnomalyDetectionRail) GetCallbacks() map[agentinterfaces.AgentCall
 }
 
 // BeforeInvoke 清零本次 invoke 的三类重试计数与压缩计数。
-//
 // Python: before_invoke (L417-422)
 func (r *ModelAnomalyDetectionRail) BeforeInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	r.resetRetryCounters(cbc)
@@ -374,7 +363,6 @@ func (r *ModelAnomalyDetectionRail) BeforeInvoke(_ context.Context, cbc *agentin
 }
 
 // AfterInvoke 释放本会话条目，避免映射随会话数增长。
-//
 // Python: after_invoke (L424-425) 只清压缩计数；Go 侧一并清重试计数，
 // 因为本实现把重试计数也按会话分桶（只存正计数，归零即删）。
 func (r *ModelAnomalyDetectionRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
@@ -384,7 +372,6 @@ func (r *ModelAnomalyDetectionRail) AfterInvoke(_ context.Context, cbc *agentint
 }
 
 // BeforeModelCall 压缩工具循环、重置重复检测尾窗并安装流式分片检查器。
-//
 // 顺序不可换：先压缩（上一轮工具结果刚提交进上下文），再清尾窗，最后装检查器。
 // Python: before_model_call (L427-443)
 func (r *ModelAnomalyDetectionRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
@@ -407,7 +394,6 @@ func (r *ModelAnomalyDetectionRail) BeforeModelCall(_ context.Context, cbc *agen
 }
 
 // OnModelException 对可重试的模型异常请求整调用重试。
-//
 // 判定顺序即优先级：重复输出 → 流帧超时 → 可见输出闸门 → 瞬时失败。
 // Python: on_model_exception (L454-481)
 func (r *ModelAnomalyDetectionRail) OnModelException(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
@@ -465,7 +451,6 @@ func (r *ModelAnomalyDetectionRail) anomalyState(cbc *agentinterfaces.AgentCallb
 }
 
 // appendAndCheck 追加文本、截断尾窗并做重复检测。
-//
 // Python: _append_and_check (L483-497)：窗口按字符截断，错误文案带 repr(unit)。
 func (r *ModelAnomalyDetectionRail) appendAndCheck(state *anomalyState, field, text string) error {
 	var tail string
@@ -487,7 +472,6 @@ func (r *ModelAnomalyDetectionRail) appendAndCheck(state *anomalyState, field, t
 }
 
 // detectRepeatedSuffix 检测文本尾部的退化重复（先单字符，再多字符）。
-//
 // Python: _detect_repeated_suffix (L499-523)
 func (r *ModelAnomalyDetectionRail) detectRepeatedSuffix(text string) (string, int, bool) {
 	runes := []rune(text)
@@ -526,7 +510,6 @@ func (r *ModelAnomalyDetectionRail) detectRepeatedSuffix(text string) (string, i
 }
 
 // detectSingleCharSuffix 检测末尾同字符连续重复。
-//
 // Python: _detect_single_char_suffix (L525-539)
 func (r *ModelAnomalyDetectionRail) detectSingleCharSuffix(runes []rune) (string, int, bool) {
 	last := runes[len(runes)-1]
@@ -547,7 +530,6 @@ func (r *ModelAnomalyDetectionRail) detectSingleCharSuffix(runes []rune) (string
 }
 
 // requestRetryOrReset 重复输出/流超时共用的重试记账。
-//
 // Python: _request_retry_or_reset (L552-576)
 func (r *ModelAnomalyDetectionRail) requestRetryOrReset(cbc *agentinterfaces.AgentCallbackContext, reason string) {
 	var field, label string
@@ -579,7 +561,6 @@ func (r *ModelAnomalyDetectionRail) requestRetryOrReset(cbc *agentinterfaces.Age
 }
 
 // requestTransientRetry 瞬时失败重试记账（Retry-After 优先，否则指数退避）。
-//
 // Python: _request_transient_retry (L578-600)
 func (r *ModelAnomalyDetectionRail) requestTransientRetry(cbc *agentinterfaces.AgentCallbackContext, decision transientDecision) {
 	key := sessionKey(cbc)
@@ -714,7 +695,6 @@ func lastRunes(s string, n int) string {
 }
 
 // isSingleCharPattern 判断片段是否由同一个字符组成。
-//
 // Python: _is_single_char_pattern (L541-543)
 func isSingleCharPattern(unit string) bool {
 	runes := []rune(unit)
@@ -727,7 +707,6 @@ func isSingleCharPattern(unit string) bool {
 }
 
 // formatUnit 转义换行并截断到 80 个字符。
-//
 // Python: _format_unit (L545-550)
 func formatUnit(unit string) string {
 	const limit = 80
@@ -740,7 +719,6 @@ func formatUnit(unit string) string {
 }
 
 // pyReprString 按 Python str.__repr__ 的常用分支渲染（单引号 + 转义）。
-//
 // 用于错误文案与上游逐字一致（上游用 {unit!r}）。非可打印控制字符不展开为
 // \xNN——入参已由 formatUnit 处理过 \r/\n，其余控制字符在模型输出中极罕见。
 func pyReprString(s string) string {
@@ -767,7 +745,6 @@ func pyReprString(s string) string {
 }
 
 // funcPtrEqual 比较两个检查器的代码指针。
-//
 // Go 函数值不可 == 比较，只能取代码指针；同一方法的不同 receiver 代码指针相同，
 // 因此"同一 rail 双实例"会被判相等（可接受：双实例已被 factory 去重禁止）。
 // 先例：agentbuilder/utils/progress.go funcPtrEqual、sys_operation/registry.go:73
@@ -831,7 +808,6 @@ func (r *ModelAnomalyDetectionRail) validate() error {
 }
 
 // classifyTransientFailure 判定一次 provider 失败是否值得整调用重试。
-//
 // 优先级：client 自带的 details.should_retry > 不可重试文本 > x-should-retry:false
 // > Retry-After 超上限 > x-should-retry:true > 无状态码即重试 > 408/409/429/5xx > 其余不重试。
 // Python: _classify_transient_failure (L195-242)
@@ -892,7 +868,6 @@ func classifyTransientFailure(err error) transientDecision {
 }
 
 // clientRetryDecision 采纳模型客户端自己写入的 details.should_retry。
-//
 // Python: _client_retry_decision (L168-192)
 func clientRetryDecision(chain []error) (transientDecision, bool) {
 	for _, item := range chain {
@@ -916,7 +891,6 @@ func clientRetryDecision(chain []error) (transientDecision, bool) {
 }
 
 // exceptionChain 沿 Unwrap 展开异常链（最多 16 层，防环）。
-//
 // Python: _exception_chain (L63-77)；Go 的 Unwrap 覆盖 BaseError.Cause
 func exceptionChain(err error) []error {
 	var chain []error
@@ -937,7 +911,6 @@ func errorDetails(err error) map[string]any {
 }
 
 // headersOf 汇总错误里携带的重试相关头部（键用标准 HTTP 头名）。
-//
 // Python 走异常对象的 headers/response.headers；Go 的客户端把头部扁平进 params，
 // 故此处只认三个键（见 openai.HandleHTTPError 的 httpErrorParams）。
 func headersOf(err error) map[string]string {
@@ -967,7 +940,6 @@ func headersOf(err error) map[string]string {
 }
 
 // statusCodeOf 从 params/details 中提取 HTTP 状态码。
-//
 // Python: _status_code_of (L127-138)；Go 的状态码落在 params["http_status"]（客户端写入）
 // 或 details["status_code"/"provider_code"]（provider 错误响应）。
 func statusCodeOf(err error) *int {
@@ -992,7 +964,6 @@ func statusCodeOf(err error) *int {
 }
 
 // headerValue 大小写不敏感地取头部值。
-//
 // Python: _header_value (L91-114)
 func headerValue(headers map[string]string, name string) string {
 	if len(headers) == 0 {
@@ -1011,7 +982,6 @@ func headerValue(headers map[string]string, name string) string {
 }
 
 // parseRetryAfterSeconds 解析 Retry-After（毫秒优先，其次秒，再次 HTTP-date）。
-//
 // Python: _parse_retry_after_seconds (L141-165)
 func parseRetryAfterSeconds(headers map[string]string) *float64 {
 	if raw := headerValue(headers, "retry-after-ms"); raw != "" {
@@ -1045,7 +1015,6 @@ func parseRetryAfterSeconds(headers map[string]string) *float64 {
 }
 
 // coerceStatusCode 把任意标量转成正整数状态码。
-//
 // Python: _coerce_status_code (L80-88)：bool 与 None 一律视为无状态码。
 func coerceStatusCode(value any) *int {
 	if _, isBool := value.(bool); isBool {
@@ -1083,14 +1052,12 @@ func toFloat(value any) (float64, bool) {
 }
 
 // isRepeatException 判断是否为重复输出异常。
-//
 // Python: _is_repeat_exception (L602-604)
 func isRepeatException(err error) bool {
 	return err != nil && strings.Contains(err.Error(), repeatErrorMarker)
 }
 
 // isStreamTimeoutException 判断是否为流帧超时异常。
-//
 // Python: _is_stream_timeout_exception (L606-611)
 func isStreamTimeoutException(err error) bool {
 	if err == nil {
@@ -1106,7 +1073,6 @@ func isStreamTimeoutException(err error) bool {
 }
 
 // sessionKey 取会话标识；无会话时用指针兜底（对齐上游 id(session) 兜底）。
-//
 // Python: _tool_loop_compact_session_key (L613-629)
 func sessionKey(cbc *agentinterfaces.AgentCallbackContext) string {
 	sess := cbc.Session()
@@ -1120,7 +1086,6 @@ func sessionKey(cbc *agentinterfaces.AgentCallbackContext) string {
 }
 
 // maybeCompactOrBailoutToolLoop 折叠连续相同工具调用，或第 N 次命中时兜底中止。
-//
 // 必须在 before_model_call 执行：此时上一轮工具结果刚提交进上下文，
 // 晚一轮会把最新一轮也折进去却看不到它。
 // Python: _maybe_compact_or_bailout_tool_loop (L648-718)
@@ -1182,7 +1147,6 @@ func (r *ModelAnomalyDetectionRail) maybeCompactOrBailoutToolLoop(cbc *agentinte
 }
 
 // findToolLoopCompactRange 找出尾部背靠背相邻的相同工具轮次区间。
-//
 // 两个 break 条件缺一不可：指纹不同，或两轮之间夹了消息（end != 下一轮 start）。
 // 后者是 A-09（589da12a）的核心：读文件 → 用户新输入 → 再读同一文件不是循环，
 // 折了会把用户输入一起删掉。
@@ -1222,7 +1186,6 @@ func findToolLoopCompactRange(messages []llmschema.BaseMessage, threshold int) (
 }
 
 // collectToolRounds 收集所有"完整"的工具调用轮次。
-//
 // 完整性要求：assistant 的每个 tool_call 后面紧跟对应 tool 消息；缺一个就不算一轮。
 // 匹配只看工具名 + 规范化入参，返回值不参与。
 // Python: _collect_tool_rounds (L760-829)
@@ -1310,7 +1273,6 @@ func sameFingerprint(a, b []toolFingerprintItem) bool {
 }
 
 // collectCallAndResultSets 把折叠区间的调用与结果序列化为 JSON 文本。
-//
 // Python: _collect_call_and_result_sets (L832-861)
 func collectCallAndResultSets(folded []llmschema.BaseMessage) (string, string) {
 	var callItems []callItem
@@ -1349,7 +1311,6 @@ func collectCallAndResultSets(folded []llmschema.BaseMessage) (string, string) {
 }
 
 // parseToolArguments 解析工具入参；非法 JSON 原样返回文本。
-//
 // Python: _parse_tool_arguments (L877-888)
 func parseToolArguments(raw string) any {
 	text := strings.TrimSpace(raw)
@@ -1364,14 +1325,12 @@ func parseToolArguments(raw string) any {
 }
 
 // canonicalArgumentsText 规范化入参文本（键有序、无多余空格）。
-//
 // Python: _canonical_arguments_text (L891-896)
 func canonicalArgumentsText(raw string) string {
 	return dumpsJSONCompact(parseToolArguments(raw))
 }
 
 // dumpsJSONList 渲染 JSON 数组（缩进 2、不转义 HTML）；空列表返回 "[]"。
-//
 // Python: _dumps_json_list (L899-902)
 func dumpsJSONList[T any](items []T) string {
 	if len(items) == 0 {
@@ -1399,7 +1358,6 @@ func dumpsJSONCompact(value any) string {
 }
 
 // buildToolLoopWarningContent 渲染双语警告正文。
-//
 // Python: _build_tool_loop_warning_content (L864-874)
 func buildToolLoopWarningContent(language, toolCalls, toolResults string) string {
 	template := toolLoopWarningTemplateCN
@@ -1412,7 +1370,6 @@ func buildToolLoopWarningContent(language, toolCalls, toolResults string) string
 }
 
 // resolveToolLoopWarningLanguage 取提示词构建器语言并归一化。
-//
 // Python: _resolve_tool_loop_warning_language (L721-725)
 func resolveToolLoopWarningLanguage(cbc *agentinterfaces.AgentCallbackContext) string {
 	agent := cbc.Agent()
@@ -1427,7 +1384,6 @@ func resolveToolLoopWarningLanguage(cbc *agentinterfaces.AgentCallbackContext) s
 }
 
 // normalizeLanguage 归一化语言标记（zh* / cn → cn，en → en，其余 cn）。
-//
 // Python: _normalize_language (L905-911)
 func normalizeLanguage(language string) string {
 	normalized := strings.ToLower(strings.TrimSpace(language))

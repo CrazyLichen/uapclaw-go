@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 接口 ────────────────────────────
 
 // Retriever 检索器抽象接口。
-//
 // Python: openjiuwen/core/retrieval/retriever/base.py (Retriever)。
 // retrieve/batch_retrieve 为 Python 抽象方法；retrieve_search_results/close
 // 在 Python 基类是非抽象"可选 API"（空方法体，裸调用返回 None），Go 接口
@@ -50,7 +49,6 @@ const (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RetrieveOptions 检索选项（Python **kwargs 的闭合世界对应物）。
-//
 // 13.21 修订：原 Extra map[string]any 平铺为类型化字段（编译期类型安全，
 // 2026-10-28 拍板）。原"Extra 收纳 **kwargs"设计见 13.19 spec §4.1，
 // 修订记录归档两 spec，原约定不删除。
@@ -124,7 +122,6 @@ func WithRetrieveGraphExpansion(v bool) RetrieveOption {
 }
 
 // WithRetrieveFilters 设置元数据过滤条件的 RetrieveOption。
-//
 // 对齐 Python retrieve(filters=...)：值写进选项，但四个 retriever 实现
 // 均不消费（死参数字面复刻，见 RetrieveOptions.Filters 注释）。
 func WithRetrieveFilters(filters map[string]any) RetrieveOption {

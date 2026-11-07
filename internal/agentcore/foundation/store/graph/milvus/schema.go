@@ -41,7 +41,6 @@ const (
 // EnsureCollections 确保三个图集合（Entity/Relation/Episode）存在。
 // 如果集合不存在则创建，已存在则跳过。
 // 创建集合时会同时构建索引和加载集合。
-//
 // Python: generate_milvus_schema.py (ensure_collections)
 func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) error {
 	collections := []struct {
@@ -92,7 +91,6 @@ func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *gra
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildEntitySchema 构建 Entity 集合的 Schema。
-//
 // Entity 集合包含通用字段 + name/name_embedding + attributes + relations + episodes
 func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) (*entity.Schema, error) {
 	schema := entity.NewSchema().WithName(CollectionEntity).
@@ -148,7 +146,6 @@ func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *grap
 }
 
 // buildRelationSchema 构建 Relation 集合的 Schema。
-//
 // Relation 集合包含通用字段 + name + lhs/rhs + valid_since/valid_until + offset_since/offset_until
 func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) (*entity.Schema, error) {
 	schema := entity.NewSchema().WithName(CollectionRelation).
@@ -205,7 +202,6 @@ func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *gr
 }
 
 // buildEpisodeSchema 构建 Episode 集合的 Schema。
-//
 // Episode 集合包含通用字段 + valid_since + entities
 func buildEpisodeSchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) (*entity.Schema, error) {
 	schema := entity.NewSchema().WithName(CollectionEpisode).
@@ -242,7 +238,6 @@ func buildEpisodeSchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *gra
 }
 
 // buildIndexOptions 根据集合类型构建索引选项。
-//
 // Entity 集合：name_embedding + content_embedding + content_bm25 三个索引
 // Relation/Episode 集合：content_embedding + content_bm25 两个索引
 func buildIndexOptions(indexCfg *graph.GraphStoreIndexConfig, collection string, schema *entity.Schema) ([]milvusclient.CreateIndexOption, error) {
@@ -281,7 +276,6 @@ func buildIndexOptions(indexCfg *graph.GraphStoreIndexConfig, collection string,
 }
 
 // addCommonFields 向 Schema 添加三个集合共有的通用字段。
-//
 // 通用字段：uuid(PK), created_at, user_id, obj_type, language, metadata, content,
 // 内容嵌入向量字段和BM25全文索引字段
 func addCommonFields(schema *entity.Schema, storageCfg *graph.GraphStoreStorageConfig, embedDim int) {

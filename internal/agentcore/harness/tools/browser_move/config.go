@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BrowserRunGuardrails 浏览器运行守护护栏配置。
-//
 // Python: openjiuwen/harness/tools/browser_move/playwright_runtime/config.py (BrowserRunGuardrails)
 type BrowserRunGuardrails struct {
 	// MaxSteps 最大步数
@@ -30,7 +29,6 @@ type BrowserRunGuardrails struct {
 }
 
 // RuntimeSettings 运行时配置。
-//
 // Python: openjiuwen/harness/tools/browser_move/playwright_runtime/config.py (RuntimeSettings)
 type RuntimeSettings struct {
 	// Provider 模型提供者
@@ -56,7 +54,6 @@ type RuntimeSettings struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildBrowserGuardrails 构建浏览器运行守护护栏配置。
-//
 // Python: build_browser_guardrails()
 func BuildBrowserGuardrails() *BrowserRunGuardrails {
 	minOne := 1
@@ -71,7 +68,6 @@ func BuildBrowserGuardrails() *BrowserRunGuardrails {
 }
 
 // BuildPlaywrightMCPConfig 构建 Playwright MCP 服务器配置。
-//
 // Python: build_playwright_mcp_config()
 func BuildPlaywrightMCPConfig() *mcptypes.McpServerConfig {
 	command := strings.TrimSpace(os.Getenv("PLAYWRIGHT_MCP_COMMAND"))
@@ -187,7 +183,6 @@ func BuildPlaywrightMCPConfig() *mcptypes.McpServerConfig {
 }
 
 // BuildRuntimeSettings 构建运行时配置。
-//
 // Python: build_runtime_settings()
 func BuildRuntimeSettings() *RuntimeSettings {
 	provider, apiKey, apiBase := ResolveModelSettings()
@@ -203,7 +198,6 @@ func BuildRuntimeSettings() *RuntimeSettings {
 
 // ResolveRuntimeSettings 解析运行时配置，优先使用传入的 settings，
 // 否则从 Model 的 ModelClientConfig/ModelConfig 推导。
-//
 // Python: _resolve_runtime_settings(model, settings)
 func ResolveRuntimeSettings(model *llm.Model, settings *RuntimeSettings) *RuntimeSettings {
 	if settings != nil {
@@ -228,7 +222,6 @@ func ResolveRuntimeSettings(model *llm.Model, settings *RuntimeSettings) *Runtim
 }
 
 // ResolvePlaywrightMCPCwd 解析 MCP 工作目录，支持重定位默认值。
-//
 // Python: resolve_playwright_mcp_cwd()
 func ResolvePlaywrightMCPCwd() string {
 	configured := FirstNonEmptyEnv(

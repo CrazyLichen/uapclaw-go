@@ -170,7 +170,6 @@ func NewTeamManager() *TeamManager {
 // 对齐 Python: _broadcast_event 为模块级函数、configure_code_team_member_agent
 // 在 customizer 闭包内延迟 import——两者对任意 TeamManager 实例恒可用。
 // Go 因循环依赖改为由 adapter 包在 init() 时注册一次，NewTeamManager 继承。
-//
 // 仅允许在进程初始化阶段调用（adapter 包 init），运行期不再变更，
 // 因此两个默认值写入后对所有实例只读，无并发写读竞态。
 func RegisterTeamCallbackDefaults(

@@ -10,7 +10,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakeEmbedProvider 可配置 id/model/dims 的假 provider。
-//
 // 存在的意义：needsReindex 必须比对「实例值」（Python: self.provider.id），
 // 而 settings 里的 provider 是恒定配置值；只有换掉实例才能构造出
 // 「配置没变、实例变了」这条线上真实发生的场景（embed 缺 key → 降级 mock）。

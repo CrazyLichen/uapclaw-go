@@ -7,7 +7,6 @@ import (
 )
 
 // TestHashPromptAttachment_忽略非可见字段 验证 priority/source 不参与哈希。
-//
 // Python: hash_prompt_attachment 注释"Internal bookkeeping ... must not create
 // a new history message when the rendered prompt is unchanged"。
 func TestHashPromptAttachment_忽略非可见字段(t *testing.T) {

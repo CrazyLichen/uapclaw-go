@@ -14,10 +14,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SingleDimUpdater 单维更新器，委托内部 BaseOptimizer 的 backward→step 链路。
-//
 // 将 signals 传递给 optimizer 生成梯度（backward），
 // 再由 step 返回更新映射，由 Trainer 统一应用。
-//
 // Python: openjiuwen/agent_evolving/updater/single_dim.py SingleDimUpdater
 type SingleDimUpdater struct {
 	// opt 内部优化器实例
@@ -33,7 +31,6 @@ type SingleDimUpdater struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSingleDimUpdater 创建 SingleDimUpdater 实例。
-//
 // Python: SingleDimUpdater(optimizer=BaseOptimizer)
 func NewSingleDimUpdater(opt optimizer.BaseOptimizer) *SingleDimUpdater {
 	return &SingleDimUpdater{opt: opt}
@@ -42,10 +39,8 @@ func NewSingleDimUpdater(opt optimizer.BaseOptimizer) *SingleDimUpdater {
 // Bind 绑定 Operator 注册表，过滤可优化的 Operator。
 // 返回匹配数量；0 触发 Trainer 软退出。
 // 委托给内部优化器的 Bind 方法。
-//
 // 当 targets 为 nil 时，从 config["targets"] 中获取有效目标列表，
 // Python: effective_targets = targets or config.get("targets")。
-//
 // Python: SingleDimUpdater.bind(operators, targets, **config)
 func (u *SingleDimUpdater) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
 	effectiveTargets := targets
@@ -60,14 +55,12 @@ func (u *SingleDimUpdater) Bind(operators map[string]operator.Operator, targets 
 }
 
 // RequiresForwardData 判断是否需要前向推理数据，委托给内部优化器。
-//
 // Python: SingleDimUpdater.requires_forward_data()
 func (u *SingleDimUpdater) RequiresForwardData() bool {
 	return u.opt.RequiresForwardData()
 }
 
 // Process 信号优先入口：写入轨迹 → 执行 backward → 返回 step 结果。
-//
 // Python: SingleDimUpdater.process(trajectories, signals, config)
 func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) ([]map[schema.UpdateKey]any, error) {
 	// 写入轨迹
@@ -93,7 +86,6 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []*trajecto
 }
 
 // Update 离线兼容入口，将 EvaluatedCase 转换为 EvolutionSignal 后调用 Process。
-//
 // Python:
 //
 //	   Python: 初始化信号列表为空
@@ -122,7 +114,6 @@ func (u *SingleDimUpdater) Update(ctx context.Context, trajectories []*trajector
 
 // GetState 获取 Updater 可序列化状态。
 // 当前 BaseOptimizer 无稳定可恢复状态，返回空 map。
-//
 // Python: @staticmethod def get_state() -> Dict[str, Any]: return {}
 //
 // Python: SingleDimUpdater.get_state()
@@ -131,7 +122,6 @@ func (u *SingleDimUpdater) GetState() map[string]any {
 }
 
 // LoadState 从检查点恢复状态，当前为无操作。
-//
 // Python: @staticmethod def load_state(state: Dict[str, Any]) -> None: return None
 //
 // Python: SingleDimUpdater.load_state(state)

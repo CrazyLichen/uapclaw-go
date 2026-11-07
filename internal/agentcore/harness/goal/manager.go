@@ -34,7 +34,6 @@ type GoalStore interface {
 }
 
 // Coordinator 交互监督器所需的 Goal 能力面，由 *GoalManager 实现。
-//
 // Python: DeepAgent.goal_manager 是具体类 GoalManager；Go 用窄接口避免
 // hschema → goal 的反向依赖（规则 10.2：这是 DeepAgent 依赖他人的窄接口）。
 type Coordinator interface {
@@ -81,7 +80,6 @@ type GoalManagerConfig struct {
 }
 
 // GoalManager 会话级 Goal 能力与唯一写者。
-//
 // ⚠️ 所有状态写操作共用 DeepAgent 的交互控制锁（Python 同）。
 // 带 Locked 语义的方法要求调用方已持锁，方法内部绝不再取锁。
 // Python: GoalManager (manager.py L47)
@@ -138,7 +136,6 @@ func (m *GoalManager) Language() string {
 }
 
 // SetLanguage 设置提示词语言（经 resolve_language 归一）。
-//
 // 原子写入：DeepAgent 的系统提示词热更新路径会在 goal 轮运行期间调用它
 // （deep_agent.py L831-833），加锁会与持锁调用方互相自锁。
 // Python: language.setter (manager.py L79)
@@ -178,7 +175,6 @@ func (m *GoalManager) HasActiveRecord() bool {
 }
 
 // Set 创建目标记录；首次创建或（确认后）覆盖既有目标。
-//
 // 注意：三处参数校验在取锁之前执行，与上游一致（非法参数不排队等锁）。
 // Python: GoalManager.set (manager.py L104)
 func (m *GoalManager) Set(ctx context.Context, objective string, opts SetOptions) (*GoalRecord, error) {
@@ -333,7 +329,6 @@ func (m *GoalManager) Clear(ctx context.Context) (*GoalRecord, error) {
 }
 
 // EnsureActiveGoalWorkLocked 为当前 ACTIVE 记录补齐一个待办/在飞 work。
-//
 // ⚠️ 调用方必须已持交互控制锁，且已持有输出流。
 // Python: GoalManager.ensure_active_goal_work_locked (manager.py L251)
 func (m *GoalManager) EnsureActiveGoalWorkLocked() (bool, error) {
@@ -345,7 +340,6 @@ func (m *GoalManager) EnsureActiveGoalWorkLocked() (bool, error) {
 }
 
 // BeginAttempt 校验代际并记账一次尝试开始。
-//
 // 返回 nil 表示该 work 已过期（目标被覆盖/清除/换代），调用方应丢弃它。
 // Python: GoalManager.begin_attempt (manager.py L262)
 func (m *GoalManager) BeginAttempt(
@@ -371,7 +365,6 @@ func (m *GoalManager) BeginAttempt(
 }
 
 // AccumulateUsage 累加一次 token 用量，并结算已流逝的工时段。
-//
 // 注意：上游此处只 save 不 commit（manager.py L289-301），Go 照抄。
 // Python: GoalManager.accumulate_usage (manager.py L280)
 func (m *GoalManager) AccumulateUsage(
@@ -402,7 +395,6 @@ func (m *GoalManager) AccumulateUsage(
 }
 
 // ApplyAssessment 在当前代际仍有效时提交一次评估。
-//
 // 接受 ACTIVE 与 PAUSED：暂停只停"续跑"，允许在飞轮把评估写完。
 // Python: GoalManager.apply_assessment (manager.py L303)
 func (m *GoalManager) ApplyAssessment(
@@ -463,7 +455,6 @@ func (m *GoalManager) ApplyAssessment(
 }
 
 // TaskView 转换 <goal_task> 渲染所需的只读视图。
-//
 // ⚠️ 归属 manager.go 而非 schema.go：schema.go 目前只依赖 stdlib + uuid，
 // 把 sections.GoalTaskView 引进去会让领域模型反向绑定提示词层，
 // 并被 9.89 的 sections 侧改动立刻拖成循环依赖（spec D4）。
@@ -544,7 +535,6 @@ func (m *GoalManager) cancelRound(
 }
 
 // ensureGoalWorkLocked 为 ACTIVE 记录排一个 goal work（调用方持锁）。
-//
 // PushGoal 的错误向上抛出（上游 push_goal 抛 ValueError，会炸掉整个 set/resume/apply）。
 // Python: GoalManager._ensure_goal_work_locked (manager.py L345)
 func (m *GoalManager) ensureGoalWorkLocked(record *GoalRecord) (bool, error) {

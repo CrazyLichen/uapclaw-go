@@ -25,7 +25,6 @@ type modelSwitcher interface {
 }
 
 // ModelBackupRail 模型备份护栏，LLM 调用异常时按序切换备用模型并请求重试。
-//
 // Python: ModelBackupRail (openjiuwen/core/single_agent/rail/model_backup.py)
 //
 // 流程位置：ReAct 循环 Think 步骤的 ModelCallRail.Execute 内，

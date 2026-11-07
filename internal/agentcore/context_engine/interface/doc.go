@@ -1,10 +1,8 @@
 // Package iface 提供上下文引擎的核心抽象接口和数据结构。
-//
 // 本包将 ModelContext、ContextEngine、ContextProcessor 等核心接口
 // 以及 ContextWindow、ContextStats、ContextEvent 等数据结构集中定义，
 // 消除 context_engine ↔ processor 之间的循环依赖，
 // 同时使 ProcessorFactory 和 RegisterProcessor 具备类型安全。
-//
 // 文件目录：
 //
 //	interface/

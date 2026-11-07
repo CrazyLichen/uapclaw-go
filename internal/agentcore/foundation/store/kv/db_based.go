@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // KVStoreRow kv_store 表的 GORM 模型。
-//
 // Python: openjiuwen/core/foundation/store/kv/db_based_kv_store.py (KVStoreTable)
 type KVStoreRow struct {
 	// Key 键，主键
@@ -30,7 +29,6 @@ type KVStoreRow struct {
 }
 
 // exclusiveValue ExclusiveSet 的 JSON 包装格式。
-//
 // Python: {EXCLUSIVE_VALUE_KEY: value, EXCLUSIVE_EXPIRY_KEY: expire_at}
 type exclusiveValue struct {
 	// ExclusiveValue Base64 编码的原始 []byte
@@ -40,10 +38,8 @@ type exclusiveValue struct {
 }
 
 // DbBasedKVStore 基于 GORM 的数据库 KV 存储实现。
-//
 // 支持 SQLite、MySQL、PostgreSQL 三种方言，通过 GORM clause.OnConflict
 // 自动处理方言差异。构造函数接受已初始化的 *gorm.DB，调用方负责配置方言和连接池。
-//
 // Python: openjiuwen/core/foundation/store/kv/db_based_kv_store.py (DbBasedKVStore)
 type DbBasedKVStore struct {
 	// db GORM 数据库实例
@@ -81,7 +77,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDbBasedKVStore 创建基于 GORM 的数据库 KV 存储。
-//
 // db: 已初始化的 GORM 数据库实例（调用方负责配置方言和连接池）。
 // Python: DbBasedKVStore(engine: AsyncEngine)
 func NewDbBasedKVStore(db *gorm.DB) *DbBasedKVStore {
@@ -142,7 +137,6 @@ func (s *DbBasedKVStore) Delete(ctx context.Context, key string) error {
 }
 
 // CompareAndDelete 原子性地删除 key，仅当解包后的值等于 expected 时成功。
-//
 // S-03：删除语句携带 value 条件并校验 RowsAffected，而非先读后按 key 删。
 // 原实现（读后 `DELETE WHERE key = ?`）在 MySQL REPEATABLE READ / PostgreSQL
 // READ COMMITTED 下会删掉「他人刚重新获取的锁」：两个并发事务都能读到同一快照值，

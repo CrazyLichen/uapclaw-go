@@ -106,7 +106,6 @@ func EnsureDir(path string) error {
 }
 
 // BuildFTSQuery 构建 FTS5 MATCH 表达式。
-//
 // 对齐 Python build_fts_query（internal 层），并按本项目决策调整连接符：
 //   - 优先走分词（与索引侧 segmentForFTS 共用，token 必须对齐）
 //   - 多 token 用 AND：文本侧只占 0.3 权重，语义召回由向量侧（0.7）兜底，

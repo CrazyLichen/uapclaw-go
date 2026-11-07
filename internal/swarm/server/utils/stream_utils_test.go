@@ -345,7 +345,6 @@ func TestParseStreamChunk_todoUpdated_无todos(t *testing.T) {
 }
 
 // TestParseStreamChunk_todoUpdated_结构体切片todos 覆盖生产端真实 payload 形态。
-//
 // stream_event_emit.formatTodosForFrontend 产出 []map[string]any，
 // 只断言 []any 时该 payload 会被吞成空列表，前端任务栏表现为「永远暂无任务」。
 func TestParseStreamChunk_todoUpdated_结构体切片todos(t *testing.T) {
@@ -647,7 +646,6 @@ func TestAccumulateUsage_非法usageMetadata(t *testing.T) {
 }
 
 // TestAccumulateUsage_嵌套usageMetadata 验证 llm_usage 的真实形状能被累加。
-//
 // 生产端 react_model_call.go 写的是 {"usage_metadata": {...}, "result_type": "answer"}，
 // Python 侧读嵌套（interface_deep.py L4723-4736）；只读平铺键会得到 0，
 // 进而因 usage.TotalTokens > 0 门禁导致 chat.usage_summary 整条丢失。
@@ -864,7 +862,6 @@ func TestFindInteractionPayload_无匹配(t *testing.T) {
 }
 
 // TestExtractAnySliceFromPayload 覆盖 payload 列表字段的两种真实形态与非法形态。
-//
 // payload 里的 list 在进程内有两种类型：JSON 反序列化得到 []any，
 // 业务代码直接构造得到 []map[string]any（如 todo.updated 的 todos）。
 // 只断言其中一种都会让另一种整块丢失。

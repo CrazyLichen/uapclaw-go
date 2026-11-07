@@ -7,7 +7,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InvokeParams 非流式调用的完整参数。
-//
 // Python: BaseModelClient.invoke() 的关键字参数
 type InvokeParams struct {
 	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
@@ -39,7 +38,6 @@ type InvokeParams struct {
 }
 
 // StreamParams 流式调用的完整参数。
-//
 // Python: BaseModelClient.stream() 的关键字参数
 type StreamParams struct {
 	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
@@ -71,7 +69,6 @@ type StreamParams struct {
 }
 
 // GenerateImageParams 图片生成参数。
-//
 // Python: BaseModelClient.generate_image() 的关键字参数
 type GenerateImageParams struct {
 	// Model 模型名称
@@ -95,7 +92,6 @@ type GenerateImageParams struct {
 }
 
 // GenerateSpeechParams 语音生成参数。
-//
 // Python: BaseModelClient.generate_speech() 的关键字参数
 type GenerateSpeechParams struct {
 	// Model 模型名称
@@ -111,7 +107,6 @@ type GenerateSpeechParams struct {
 }
 
 // GenerateVideoParams 视频生成参数。
-//
 // Python: BaseModelClient.generate_video() 的关键字参数
 type GenerateVideoParams struct {
 	// ImgURL 首帧图片 URL
@@ -141,7 +136,6 @@ type GenerateVideoParams struct {
 }
 
 // ReleaseParams 释放模型缓存参数（如 vLLM KV Cache）。
-//
 // Python: InferenceAffinityModelClient.release() 的关键字参数
 type ReleaseParams struct {
 	// SessionID 缓存盐值，标识特定的缓存
@@ -299,7 +293,6 @@ func WithInvokeCustomHeaders(h map[string]string) InvokeOption {
 }
 
 // WithResponseFormat 设置结构化输出格式。
-//
 // Python: **kwargs 中的 response_format 参数，对齐 Python 透传模式。
 // 支持 structured output 的后端会将其传入 API 请求，不支持的后端静默忽略。
 func WithResponseFormat(schemaMap map[string]any) InvokeOption {
@@ -362,7 +355,6 @@ func WithStreamCustomHeaders(h map[string]string) StreamOption {
 }
 
 // WithStreamResponseFormat 设置结构化输出格式。
-//
 // Python: **kwargs 中的 response_format 参数，对齐 Python 透传模式。
 func WithStreamResponseFormat(schemaMap map[string]any) StreamOption {
 	return func(p *StreamParams) { p.ResponseFormat = schemaMap }
@@ -534,14 +526,12 @@ func WithReleaseToolsIndex(idx int) ReleaseOption {
 }
 
 // ToInvokeParams 将 InvokeParams 转换为可用于 BuildRequestParams 的 InvokeParams 指针。
-//
 // InvokeParams 本身就是目标类型，直接返回指针。
 func (p *InvokeParams) ToInvokeParams() *InvokeParams {
 	return p
 }
 
 // ToStreamParams 将 StreamParams 转换为可用于 BuildRequestParams 的 InvokeParams。
-//
 // StreamParams 和 InvokeParams 字段完全相同，逐字段拷贝转换。
 func (p *StreamParams) ToStreamParams() *InvokeParams {
 	return &InvokeParams{

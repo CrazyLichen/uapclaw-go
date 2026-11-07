@@ -1,9 +1,7 @@
 // Package filesystem 提供文件系统工具集，包括 GlobTool、ListDirTool 等具体工具，
 // 以及文件读取状态注册表、路径解析、XML 去消毒/引号容错、各类辅助函数等基础设施层。
-//
 // 本包被 ReadFileTool/WriteFileTool/EditFileTool/GrepTool 等工具依赖，
 // 为它们提供通用的路径处理、状态管理和文本预处理能力。
-//
 // 文件目录：
 //
 //	filesystem/

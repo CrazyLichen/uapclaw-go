@@ -466,7 +466,6 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 
 	// 结果条数：Schema 声明的是 top_k（默认 10），代码必须优先认它；
 	// limit 是历史参数名，保留作回退（Python 原实现只读 limit，导致 Schema 与实现不一致）。
-	//
 	// T-13：改为回退链 + 显式默认值。
 	// 原实现是 if/else if：top_k 存在但非正（0/负数）时既写不进 top_k、也不回退 limit；
 	// 两者都缺时又不写 payload，服务端默认值一旦不是 10，模型看到的行为与 Schema

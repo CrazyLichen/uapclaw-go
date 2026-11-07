@@ -26,7 +26,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestManagerSync_索引文件不自锁 回归：indexFile 在事务内不得再向连接池取连接。
-//
 // 背景：SQLite 连接池上限为 1（对齐 Python 单连接语义），indexFile 曾用
 // BeginTx 占住唯一连接后再通过 m.db.Exec / m.db.BeginTx 取第二条连接，
 // 导致 Sync 永久阻塞。修复后事务贯穿（indexChunkWithTx / getEmbeddingWithTx）。
@@ -54,7 +53,6 @@ func TestManagerSync_索引文件不自锁(t *testing.T) {
 }
 
 // TestManagerSync_删除文件不自锁 回归：清理失效索引时不得持有 rows 再开事务。
-//
 // 背景：syncMemoryFiles 曾在 rows 未关闭（占用唯一连接）时调用
 // removeFileFromIndex（内部 BeginTx），导致 Sync 永久阻塞。修复后先
 // collectStalePaths 读完并关闭 rows，再逐个删除。
@@ -139,7 +137,6 @@ func runWithTimeout(t *testing.T, name string, fn func() error) {
 // 会静默降级成 mock，而 status 曾取 settings 的 provider/model，于是 memory_search
 // 依然返回 provider=openai_compatible/model=text-embedding-v3，排查时误以为
 // 「检索已按配置生效」，实际跑的是随机向量。
-//
 // Python: status() 返回 self.provider.id / self.provider.model（实例值）。
 func TestStatus_报真实Provider而非配置值(t *testing.T) {
 	root := t.TempDir()

@@ -3,7 +3,6 @@ package state
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryWorkflowState 创建基于内存的工作流状态实例。
-//
 // globalState 可从外部传入（与 AgentSession 共享），未提供则创建新的 InMemoryCommitState。
 // workflowOnly 取决于 globalState 是否为 nil：
 //   - 传入 globalState → workflowOnly=false（global_state 由外部管理）

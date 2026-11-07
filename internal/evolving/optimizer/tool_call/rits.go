@@ -12,7 +12,6 @@ import (
 
 // VerifyFunc 验证+解析函数类型。
 // 接收 LLM 输出文本，返回解析后的对象；验证失败时返回 error 触发重试。
-//
 // Python: verify_fn(output) — 成功返回解析后对象，失败抛异常触发 tenacity 重试
 type VerifyFunc func(string) (any, error)
 
@@ -38,7 +37,6 @@ var invokeWithVerifyImpl func(
 // InvokeWithVerify 带验证的 LLM 文本调用。
 // 复用 llm_resilience.InvokeTextWithRetry，将 Python 的 verify_fn 适配为
 // isResultUsable（验证文本合法性）+ parseResult（解析验证后的结果）两步。
-//
 // Python: get_rits_response(model_id, prompt, api_key, verify_fn, max_attempts, ...)
 //
 // 适配逻辑：

@@ -1,5 +1,4 @@
 // Package workflow 提供工作流执行的基础类型定义。
-//
 // Python: openjiuwen/core/workflow/base.py
 //
 // 文件目录：

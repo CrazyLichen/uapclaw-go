@@ -21,7 +21,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskScheduler 任务调度器，负责后台调度循环、并发执行、暂停/取消。
-//
 // Python: openjiuwen/core/controller/modules/task_scheduler.py (TaskScheduler)
 type TaskScheduler struct {
 	// config 配置
@@ -82,7 +81,6 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskScheduler 创建新的 TaskScheduler 实例。
-//
 // Python: TaskScheduler.__init__
 func NewTaskScheduler(
 	cfg *config.ControllerConfig,
@@ -107,7 +105,6 @@ func NewTaskScheduler(
 }
 
 // Start 启动调度器，设置 running=true 并启动调度 goroutine。
-//
 // Python: TaskScheduler.start
 func (s *TaskScheduler) Start(ctx context.Context) error {
 	if s.running.Load() {
@@ -133,7 +130,6 @@ func (s *TaskScheduler) Start(ctx context.Context) error {
 }
 
 // Stop 停止调度器，取消运行中任务并等待退出。
-//
 // Python: TaskScheduler.stop
 func (s *TaskScheduler) Stop(ctx context.Context) error {
 	if !s.running.Load() {
@@ -159,7 +155,6 @@ func (s *TaskScheduler) Stop(ctx context.Context) error {
 }
 
 // NotifyTaskSubmitted 非阻塞写入 notifyCh 唤醒调度循环。
-//
 // Python: TaskScheduler.notify_task_submitted
 func (s *TaskScheduler) NotifyTaskSubmitted() {
 	select {
@@ -211,7 +206,6 @@ func (s *TaskScheduler) SetConfig(cfg *config.ControllerConfig) {
 }
 
 // PauseTask 暂停指定任务。
-//
 // Python: TaskScheduler.pause_task
 // 返回 (是否成功暂停, 系统级错误)。
 func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, error) {
@@ -320,7 +314,6 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 }
 
 // CancelTask 取消指定任务。
-//
 // Python: TaskScheduler.cancel_task
 // 返回 (是否成功取消, 系统级错误)。
 func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, error) {
@@ -457,7 +450,6 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 }
 
 // CancelRunningTasks 取消全部运行中任务（interrupt/abort 场景用）。
-//
 // 对齐 Python: _cancel_scheduler_running_tasks (interface_deep.py L3478-3506)
 // 遍历 _running_tasks 逐个 exec_task.cancel()。协作式中断（rail.abort +
 // instance.abort）只在检查点生效，in-flight LLM HTTP 需要在 await 点
@@ -476,7 +468,6 @@ func (s *TaskScheduler) CancelRunningTasks() int {
 }
 
 // EnsureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
-//
 // Python: TaskScheduler.ensure_session_completion_signal
 // Controller.stream() 在 publish_event 返回后调用此方法，
 // 使得没有新任务的轮次也能发送完成信号。
@@ -537,7 +528,6 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // schedule 调度循环，扫描 SUBMITTED 任务并启动执行。
-//
 // Python: TaskScheduler._schedule
 func (s *TaskScheduler) schedule(ctx context.Context) {
 	logger.Info(logComponent).
@@ -625,7 +615,6 @@ done:
 }
 
 // executeTask 执行单个任务，读取 chunk channel 并处理状态转换。
-//
 // Python: TaskScheduler._execute_task
 func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) {
 	// 1. 获取任务
@@ -793,7 +782,6 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 }
 
 // executeTaskWrapper 任务执行包装器，处理超时、取消和异常。
-//
 // Python: TaskScheduler._execute_task_wrapper
 func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade, entry *runningTaskEntry) {
 	defer s.wg.Done()
@@ -887,7 +875,6 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 }
 
 // areAllTasksCompleted 检查会话内所有任务是否处于终态。
-//
 // Python: TaskScheduler._are_all_tasks_completed
 func (s *TaskScheduler) areAllTasksCompleted(ctx context.Context, sessionID string) bool {
 	tasks, err := s.taskManager.GetTask(ctx, &TaskFilter{SessionID: sessionID})
@@ -909,7 +896,6 @@ func (s *TaskScheduler) areAllTasksCompleted(ctx context.Context, sessionID stri
 }
 
 // handleTaskExecutionFailure 处理任务执行失败：更新状态为 FAILED + 构建 failed chunk + 发布事件。
-//
 // Python: TaskScheduler._handle_task_execution_failure
 func (s *TaskScheduler) handleTaskExecutionFailure(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade, errorMsg string) {
 	// 1. 更新任务状态为 FAILED
@@ -928,7 +914,6 @@ func (s *TaskScheduler) handleTaskExecutionFailure(ctx context.Context, taskID s
 }
 
 // publishTaskEvent 根据 payload.type 构建事件并通过 EventQueue 发布。
-//
 // Python: TaskScheduler._publish_task_event
 func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, payload *schema.ControllerOutputPayload, sess sessioninterfaces.SessionFacade) {
 	if s.eventQueue == nil || payload == nil {
@@ -1025,7 +1010,6 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 }
 
 // waitAllTasksComplete 取消所有运行中任务并等待退出。
-//
 // Python: TaskScheduler._wait_all_tasks_complete（使用 asyncio.gather 等待）
 func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 	// 取消所有运行中任务

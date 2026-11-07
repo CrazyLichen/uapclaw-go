@@ -114,7 +114,6 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 // collectEvents 退出时自己 close 本地 queue（发送方关闭原则），
 // 使 consumeMonitorEvents 的 range 也能正常退出，
 // 不再依赖 ctx cancel（_monitor 后缀的 streamTask 在 cleanup 路径上未被 cancel，会泄漏）。
-//
 // 竞态修复（问题 12）：Stop 只置 nil 不再 close——close 由 collectEvents
 // （唯一发送方）负责，消除 send-on-closed-channel panic 竞态窗口。
 func (h *teamMonitorHandlerImpl) Stop(ctx context.Context) error {

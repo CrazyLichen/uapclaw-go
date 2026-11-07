@@ -1,5 +1,4 @@
 // pyjson.go 提供 Python json.dumps 语义对齐的序列化助手。
-//
 // Python json.dumps(ensure_ascii=False) 的两个关键行为：
 //  1. 非 ASCII 字符原样输出（Go json.Marshal 默认同样原样，无差异）
 //  2. HTML 字符 < > & 原样输出（Go json.Marshal 默认转义为 \u003c 等
@@ -8,7 +7,6 @@
 //
 // 注意：json.Encoder.Encode 会在产物尾部追加换行符（Python json.dumps
 // 无），助手统一去掉以对齐字节输出。
-//
 // 对应 Python 代码：json.dumps(...)（各调用点 ensure_ascii=False 形态）
 package utils
 

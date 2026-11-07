@@ -23,7 +23,6 @@ import (
 //	Python: 5. return success
 //
 // S-07: 对齐 Python 永不抛异常——所有 error/panic 均吞掉并返回 false。
-//
 // Go 差异：Python 委托 Runner.interact_agent_team → TeamRuntimeManager.interact，
 // Go 直接调 TeamRuntimeManager.Interact（省略 Runner 桥接层）。
 // Python user_input 类型为 Any；Go 端统一为 *InteractInput，外层自行包装。

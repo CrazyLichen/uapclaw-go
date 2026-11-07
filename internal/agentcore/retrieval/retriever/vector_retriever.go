@@ -15,7 +15,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // VectorRetriever 向量检索器实现。
-//
 // Python: openjiuwen/core/retrieval/retriever/vector_retriever.py
 type VectorRetriever struct {
 	// vectorStore 底层向量存储
@@ -34,7 +33,6 @@ var _ Retriever = (*VectorRetriever)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVectorRetriever 创建向量检索器。
-//
 // 对齐 Python VectorRetriever.__init__：构造零校验，
 // embedModel 为 nil 的 155202 在 Retrieve 时触发。
 func NewVectorRetriever(vectorStore vector_store.VectorStore, embedModel embedding.BaseEmbedding) *VectorRetriever {
@@ -45,7 +43,6 @@ func NewVectorRetriever(vectorStore vector_store.VectorStore, embedModel embeddi
 }
 
 // Retrieve 向量检索。
-//
 // 对齐 Python VectorRetriever.retrieve：mode 校验 → embed → search →
 // 空结果 BM25 兜底 → 归一化（chunk_id 取 metadata["chunk_id"]）。
 // 注意：Python 此处不向 store.search 传 filters（kwargs 有 filters 也不透传，字面复刻）。
@@ -104,7 +101,6 @@ func (r *VectorRetriever) Retrieve(ctx context.Context, query string, topK int, 
 }
 
 // BatchRetrieve 批量并发检索。
-//
 // 对齐 Python 裸 asyncio.gather：全启动、其余 goroutine 不取消跑完结果
 // 丢弃、错误负载与传播序一致。裸 errgroup（不派生 ctx、不 cancel）。
 // 审查修复 M-11（表述修正）：errgroup.Wait 阻塞等全部 goroutine 完成
@@ -131,7 +127,6 @@ func (r *VectorRetriever) BatchRetrieve(ctx context.Context, queries []string, t
 }
 
 // RetrieveSearchResults 向量检索（原始 SearchResult，不归一化）。
-//
 // 对齐 Python VectorRetriever.retrieve_search_results：仅 embedModel 校验，
 // 无 mode 校验（Python 两作者不对称，字面复刻 spec §8-8）。
 func (r *VectorRetriever) RetrieveSearchResults(ctx context.Context, query string, topK int, _ RetrievalMode, _ ...RetrieveOption) ([]common.SearchResult, error) {
@@ -159,7 +154,6 @@ func (r *VectorRetriever) RetrieveSearchResults(ctx context.Context, query strin
 }
 
 // Close 关闭检索器。
-//
 // 对齐 Python close()：if self.vector_store 判空后关底层。
 // Python 的 getattr+iscoroutinefunction 鸭子探测在 Go 消解为
 // 接口静态 Close() 直调（spec §8-7 语言特性级等价物）。
@@ -187,7 +181,6 @@ func (r *VectorRetriever) SetIndexType(indexType string) { r.indexType = indexTy
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // metadataString 从 metadata 取字符串值，断言失败或缺失返回空串。
-//
 // 对齐 Python metadata.get(key) + pydantic lax str 强转：正常链路
 // （写入侧 13.5 mergeChunkMetadata 恒写 uuid 字符串）不受影响；
 // non-str 值 Python 强转 str(123)="123" vs Go 空串，归档 spec §8-3。

@@ -271,7 +271,6 @@ func ExtractJSONFromResponse(text string) map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // hookTimeoutFromAny 从 hook 配置中提取 timeout（秒）。
-//
 // M-10: Python asyncio.wait_for 收到非数值 timeout（如 YAML 引号字符串 "30"）
 // 抛 TypeError → hook 拒绝执行（NON_BLOCKING_ERROR，配置错误显式暴露）。
 // Go 对齐：int/int64/float64 直接用；字符串 Atoi 成功的数字字符串宽容使用

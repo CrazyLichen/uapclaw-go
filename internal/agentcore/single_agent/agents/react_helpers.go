@@ -150,10 +150,8 @@ func (a *ReActAgent) getAbilityManager() interfaces.AbilityManagerInterface {
 }
 
 // parallelToolCalls 返回本次工具批量是否并行执行。
-//
 // 未配置时默认 true（与上游 ReActAgentConfig.parallel_tool_calls 默认一致），
 // 子代理可通过配置显式关闭，让有状态工具按序执行。
-//
 // Python: react_agent.py:2460 self._config.parallel_tool_calls
 func (a *ReActAgent) parallelToolCalls() bool {
 	if a.config == nil {
@@ -172,7 +170,6 @@ func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.Se
 }
 
 // saveContextsDetached 以脱离取消信号的 ctx 持久化上下文。
-//
 // 取消/异常路径必须写完：调用方 ctx 已取消时，KV/SQL 写入会因
 // ExecContext(canceled) 立刻失败，导致本轮清洗结果丢失，下一轮从旧 checkpoint 重建。
 // 等价 Python 的 asyncio.shield(self._save_contexts_on_cancel(session))。

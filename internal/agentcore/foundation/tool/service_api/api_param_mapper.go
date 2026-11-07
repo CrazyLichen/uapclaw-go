@@ -9,10 +9,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // APIParamMapper 将输入参数映射到 HTTP 请求的各位置（query/path/body/header/form）。
-//
 // 根据 JSON Schema 中每个参数的 location 字段决定其目标位置，
 // 并合并 Card 上预设的默认参数（queries/headers/paths）。
-//
 // Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamMapper)
 type APIParamMapper struct {
 	// schema 原始 JSON Schema map（从 RestfulApiCard.InputSchema 传入）
@@ -28,7 +26,6 @@ type APIParamMapper struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // APIParamLocation API 参数位置枚举，基于 OpenAPI 规范定义参数在 HTTP 请求中的位置。
-//
 // Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamLocation)
 type APIParamLocation int
 
@@ -79,7 +76,6 @@ func (l APIParamLocation) String() string {
 }
 
 // NewAPIParamMapper 创建参数映射器。
-//
 // 参数：
 //   - schema: 原始 JSON Schema map，properties 中可含 location 字段
 //   - defaultQueries: Card 预设的默认查询参数
@@ -100,7 +96,6 @@ func NewAPIParamMapper(
 }
 
 // Map 将输入参数映射到各 API 位置。
-//
 // 流程：
 //  1. 遍历 schema.properties，读取每个参数的 location 字段
 //  2. 有显式 location → 按指定位置；无 → 用 defaultLocation

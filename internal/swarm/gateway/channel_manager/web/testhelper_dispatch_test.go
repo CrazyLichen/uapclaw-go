@@ -5,7 +5,6 @@ import (
 )
 
 // newTestChannel 构造一个不装配任何依赖的测试通道。
-//
 // handler 需要 channel 才能回帧（对齐上游 handler 闭包捕获 channel），
 // 因此测试里所有 handler 构造都传入本函数的返回值。
 func newTestChannel() *WebChannel {
@@ -27,7 +26,6 @@ func (e *wsCallError) Error() string { return e.msg }
 func (e *wsCallError) Code() string { return e.code }
 
 // callHandler 直接执行一个 handler，把帧级结果折算成 (payload, error)。
-//
 // handler 现在自行写帧（对齐上游 send_response），测试用 frameCollector 接住；
 // 失败帧转成 *wsCallError 以携带 code。
 func callHandler(handler methodHandler, params map[string]any, sessionID string) (map[string]any, error) {
@@ -58,7 +56,6 @@ func errorCode(err error) string {
 }
 
 // dispatch 测试助手：调用已注册方法，取出响应的 payload 与错误。
-//
 // 生产路径由 WebChannel.handleWebSocket 查找 handler 并写回连接；
 // 测试里需要一个"调用即拿结果"的入口，故在此提供等价封装。
 func dispatch(wc *WebChannel, method string, params map[string]any, sessionID string) (map[string]any, error) {

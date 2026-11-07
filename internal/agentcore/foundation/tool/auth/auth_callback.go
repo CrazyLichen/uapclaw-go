@@ -14,7 +14,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AuthStrategy 认证策略接口，不同认证类型实现此接口。
-//
 // Python: AuthStrategy (ABC)
 type AuthStrategy interface {
 	// Authenticate 执行认证，返回认证结果
@@ -22,23 +21,18 @@ type AuthStrategy interface {
 }
 
 // SSLAuthStrategy SSL 认证策略。
-//
 // 从 authConfig.Config 中读取 verify_switch_env、ssl_cert_env、url，
 // 调用 security.GetSSLConfig() + CreateStrictTLSConfig() 构建 TLS 配置。
-//
 // Python: SSLAuthStrategy
 type SSLAuthStrategy struct{}
 
 // HeaderQueryAuthStrategy 请求头和查询参数认证策略。
-//
 // 从 authConfig.Config 中读取 auth_headers 和 auth_query_params，
 // 构建 HeaderQueryProvider。
-//
 // Python: HeaderQueryAuthStrategy
 type HeaderQueryAuthStrategy struct{}
 
 // HeaderQueryProvider 请求头和查询参数认证提供者。
-//
 // Python: AuthHeaderAndQueryProvider (httpx.Auth 子类)
 // Go 没有 httpx.Auth 等价物，实现为持有 headers/query maps 的结构体，
 // 调用方自行将 headers/query 注入到 HTTP 请求或 MCP 传输选项中。
@@ -50,7 +44,6 @@ type HeaderQueryProvider struct {
 }
 
 // AuthStrategyRegistry 认证策略注册表。
-//
 // Python: AuthStrategyRegistry
 type AuthStrategyRegistry struct {
 	strategies map[string]AuthStrategy
@@ -86,7 +79,6 @@ func NewHeaderQueryProvider(headers, queryParams map[string]string) *HeaderQuery
 }
 
 // RegisterAuthCallback 向回调框架注册 TOOL_AUTH 事件的统一认证处理器。
-//
 // Python: @framework.on(ToolCallEvents.TOOL_AUTH) + unified_auth_handler
 //
 // 应用初始化时调用此函数，将 TOOL_AUTH 事件处理器注册到全局 CallbackFramework。
@@ -120,7 +112,6 @@ func RegisterAuthCallback(fw *callback.CallbackFramework) {
 }
 
 // Authenticate 执行 SSL 认证。
-//
 // Python: SSLAuthStrategy.authenticate()
 func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthConfig) (*ToolAuthResult, error) {
 	url, _ := authConfig.Config["url"].(string)
@@ -173,7 +164,6 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 }
 
 // Authenticate 执行 HeaderQuery 认证。
-//
 // Python: HeaderQueryAuthStrategy.authenticate()
 func (s *HeaderQueryAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthConfig) (*ToolAuthResult, error) {
 	var provider *HeaderQueryProvider
@@ -199,7 +189,6 @@ func (r *AuthStrategyRegistry) Register(authType string, strategy AuthStrategy) 
 }
 
 // ExecuteAuth 根据认证类型执行对应策略。
-//
 // Python: AuthStrategyRegistry.execute_auth()
 func (r *AuthStrategyRegistry) ExecuteAuth(ctx context.Context, authConfig *ToolAuthConfig) (*ToolAuthResult, error) {
 	strategy, ok := r.strategies[authConfig.AuthType]

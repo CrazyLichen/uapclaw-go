@@ -13,7 +13,6 @@ import (
 
 // ModelMgr 模型资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
 // GetModel 支持可选的 tracer 装饰：当 session 非 nil 时，返回装饰后的模型客户端。
-//
 // Python: ModelMgr (openjiuwen/core/runner/resources_manager/model_manager.py)
 type ModelMgr struct {
 	AbstractManager[model_clients.BaseModelClient]
@@ -35,7 +34,6 @@ func NewModelMgr() ModelMgr {
 }
 
 // AddModel 注册模型提供者。
-//
 // Python: ModelMgr.add_model(model_id, provider)
 func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 	if modelID == "" {
@@ -77,7 +75,6 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 }
 
 // RemoveModel 注销模型提供者，返回被注销的 provider。
-//
 // Python: ModelMgr.remove_model(model_id)
 func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 	unwrapped, err := m.unregisterProvider(modelID)
@@ -109,7 +106,6 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 // GetModel 获取模型实例。
 // 先调用 GetResource 获取模型客户端，如果 session 非 nil 则调用 decorator.DecorateModelWithTrace 进行追踪装饰。
 // 资源不存在时返回 (nil, nil)，对齐 Python 的 get_model 返回 None 行为。
-//
 // Python: ModelMgr.get_model(model_id, session)
 func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorator.TracerSession) (model_clients.BaseModelClient, error) {
 	model, err := m.getResource(ctx, modelID)

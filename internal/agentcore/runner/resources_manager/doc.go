@@ -1,10 +1,8 @@
 // Package resources_manager 提供 Agent/Tool/Workflow/Model/Prompt/SysOperation 全局注册表，
 // 是 Runner 单例的核心依赖。
-//
 // 本包实现 ResourceMgr 门面类，统一管理所有资源的注册、获取、移除和标签分类。
 // 内部通过 ResourceRegistry 聚合 7 个子管理器，TagMgr 维护资源与标签的双向索引。
 // idToCard 缓存使用 schema.CardInterface 类型保留子类信息，替代原先的 *BaseCard。
-//
 // 设计模式：
 //
 //	ResourceMgr 作为门面，所有资源的 add/get/remove 操作通过内部核心方法统一流转。

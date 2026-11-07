@@ -1,7 +1,6 @@
 package utils
 
 // payload_bridge_test.go 覆盖 PayloadToMap 的四种形态与 ParseStreamChunk 的结构体 payload 分支。
-//
 // 回归背景：task_loop 产出 *cschema.ControllerOutputPayload 结构体 payload，
 // 消费端原先只断言 map[string]any，导致 task_failed 被整块丢弃（ACP 侧只剩 idle → end_turn）。
 
@@ -319,7 +318,6 @@ func TestFindInteractionPayloads_MaxDepth生效(t *testing.T) {
 
 // TestFindInteractionPayloads_同数组子切片不误判重复 seen 键带长度后，
 // 同一底层数组的不同长度子切片不会被误判为「已访问」而漏检。
-//
 // 构造：base = ["x", interaction]，s1 = base[0:1]（不含命中）、s2 = base[0:2]（含命中）。
 // 两者 Pointer() 相同（都是首元素地址），旧实现会把 s2 当成已访问而跳过 → 命中 0。
 func TestFindInteractionPayloads_同数组子切片不误判重复(t *testing.T) {

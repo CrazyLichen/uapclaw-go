@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ProcessorStateInput 处理器状态输入数据，记录一次处理器执行的关键信息。
-//
 // Python: openjiuwen/core/context_engine/context/processor_state_recorder.py (ContextProcessorStateInput)
 type ProcessorStateInput struct {
 	// OperationID 操作唯一标识
@@ -67,7 +66,6 @@ type summaryInput struct {
 }
 
 // ProcessorStateRecorder 记录上下文处理器状态变化，包括日志、回调触发、流式推送和历史记录。
-//
 // Python: openjiuwen/core/context_engine/context/processor_state_recorder.py (ContextProcessorStateRecorder)
 type ProcessorStateRecorder struct {
 	// sessionID 会话 ID
@@ -93,7 +91,6 @@ type ProcessorStateRecorder struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProcessorStateRecorder 创建处理器状态记录器实例。
-//
 // Python: ContextProcessorStateRecorder.__init__()
 func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func() sessioninterfaces.SessionFacade, tokenCounter token.TokenCounter, historyLimit int) *ProcessorStateRecorder {
 	return &ProcessorStateRecorder{
@@ -107,7 +104,6 @@ func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func()
 }
 
 // History 返回历史记录副本。
-//
 // Python: ContextProcessorStateRecorder.history 属性
 func (r *ProcessorStateRecorder) History() []map[string]any {
 	result := make([]map[string]any, len(r.history))
@@ -116,7 +112,6 @@ func (r *ProcessorStateRecorder) History() []map[string]any {
 }
 
 // LoadHistory 加载外部历史记录，截取最后 historyLimit 条。
-//
 // Python: ContextProcessorStateRecorder._load_history()
 func (r *ProcessorStateRecorder) LoadHistory(history []map[string]any) {
 	if len(history) == 0 {
@@ -131,7 +126,6 @@ func (r *ProcessorStateRecorder) LoadHistory(history []map[string]any) {
 }
 
 // Emit 记录状态、触发回调和流式推送。
-//
 // 流程：record(state) → logger.Info → callback.TriggerContext → sessionRef.WriteStream
 //
 // Python: ContextProcessorStateRecorder.emit()
@@ -176,7 +170,6 @@ func (r *ProcessorStateRecorder) Emit(ctx context.Context, state *schema.Context
 }
 
 // BuildState 构建压缩状态对象。
-//
 // Python: ContextProcessorStateRecorder.build_state()
 func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.ContextCompressionState {
 	// a. 构建 before 指标
@@ -250,10 +243,8 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildModifiedMessages 找出处理器就地改写的消息。
-//
 // 判定靠 context_message_id 配对：压缩器索引入参、卸载器索引出参、GET 走全量，
 // 只有"同一 id 但内容变了 / 新变成卸载占位"才是改写；新增、删除、无 id 都不算。
-//
 // Python: ContextProcessorStateRecorder._build_modified_messages()
 func (r *ProcessorStateRecorder) buildModifiedMessages(
 	before []llm_schema.BaseMessage,
@@ -315,10 +306,8 @@ func (r *ProcessorStateRecorder) buildModifiedMessages(
 }
 
 // durationMillis 计算处理器耗时（毫秒）。
-//
 // started 等中间态尚未有结束时间（EndedAt 为零值），此时返回 0；
 // 结束时间早于开始时间（时钟回拨）同样返回 0，避免溢出成 -9223372036854。
-//
 // Python: ContextProcessorStateRecorder.build_state() 中 duration_ms 仅在
 // ended_at 存在时计算，未结束时为 0。
 func durationMillis(startedAt, endedAt time.Time) int {
@@ -333,7 +322,6 @@ func durationMillis(startedAt, endedAt time.Time) int {
 }
 
 // buildMetric 构建压缩指标快照。
-//
 // Python: ContextProcessorStateRecorder._build_metric()
 func (r *ProcessorStateRecorder) buildMetric(messages []llm_schema.BaseMessage, contextMax int, observedAt time.Time) schema.ContextCompressionMetric {
 	tokens := r.measureMessages(messages)
@@ -346,9 +334,7 @@ func (r *ProcessorStateRecorder) buildMetric(messages []llm_schema.BaseMessage, 
 }
 
 // measureMessages 测量消息列表的 Token 数量。
-//
 // 优先使用 tokenCounter，失败时降级为字符数/3 向上取整。
-//
 // Python: ContextProcessorStateRecorder._measure_messages()
 func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessage) int {
 	if r.tokenCounter != nil {
@@ -369,7 +355,6 @@ func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessa
 }
 
 // buildStatistic 构建上下文统计快照。
-//
 // Python: ContextProcessorStateRecorder._build_statistic()
 func (r *ProcessorStateRecorder) buildStatistic(messages []llm_schema.BaseMessage) iface.ContextStats {
 	stat := iface.ContextStats{}
@@ -396,7 +381,6 @@ func (r *ProcessorStateRecorder) buildStatistic(messages []llm_schema.BaseMessag
 }
 
 // countMessageForStatistic 统计单条消息的 token 数，用于构建 statistic。
-//
 // Python: ContextProcessorStateRecorder._count_message_for_statistic()
 // 无 tokenCounter 时返回 0，对齐 Python: 无计数器时不估算。
 func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMessage) int {
@@ -411,7 +395,6 @@ func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMes
 }
 
 // buildSaved 构建压缩节省量指标。
-//
 // Python: ContextProcessorStateRecorder._build_saved()
 func (r *ProcessorStateRecorder) buildSaved(before schema.ContextCompressionMetric, after *schema.ContextCompressionMetric) *schema.ContextCompressionSaved {
 	if after == nil {
@@ -431,7 +414,6 @@ func (r *ProcessorStateRecorder) buildSaved(before schema.ContextCompressionMetr
 }
 
 // buildSummary 构建人类可读的操作摘要。
-//
 // Python: ContextProcessorStateRecorder._build_summary()
 func (r *ProcessorStateRecorder) buildSummary(input summaryInput) string {
 	var summary string
@@ -469,7 +451,6 @@ func (r *ProcessorStateRecorder) buildSummary(input summaryInput) string {
 }
 
 // record 追加状态到历史记录，超过 historyLimit 时截取。
-//
 // Python: ContextProcessorStateRecorder._record()
 func (r *ProcessorStateRecorder) record(state *schema.ContextCompressionState) {
 	stateMap := r.stateToMap(state)
@@ -480,9 +461,7 @@ func (r *ProcessorStateRecorder) record(state *schema.ContextCompressionState) {
 }
 
 // compactNumber 将数字格式化为紧凑表示。
-//
 // >=1M → "X.Xm"，>=1K → "X.Xk"，否则原样。
-//
 // Python: ContextProcessorStateRecorder._compact_number()
 func compactNumber(value int) string {
 	if value >= 1_000_000 {
@@ -495,16 +474,13 @@ func compactNumber(value int) string {
 }
 
 // formatTime 将时间格式化为 ISO 8601 毫秒精度字符串。
-//
 // Python: ContextProcessorStateRecorder._format_time()
 func formatTime(t time.Time) string {
 	return t.Format("2006-01-02T15:04:05.000Z07:00")
 }
 
 // contextPercent 计算上下文使用百分比。
-//
 // contextMax <= 0 返回 0；否则 clamp 到 [0, 100]。
-//
 // Python: ContextProcessorStateRecorder._context_percent()
 func contextPercent(tokens, contextMax int) int {
 	if contextMax <= 0 {
@@ -521,11 +497,9 @@ func contextPercent(tokens, contextMax int) int {
 }
 
 // resolveModelName 解析处理器使用的模型名称。
-//
 // 优先从 config.model.model_name/model 提取，对齐 Python _resolve_model_name()。
 // Go 无反射 getattr，通过 ProcessorConfig 接口的可选 ModelName() 方法获取，
 // 若 config 未实现该方法则回退到 BaseProcessor.Config() 上继续尝试。
-//
 // Python: ContextProcessorStateRecorder._resolve_model_name()
 func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) string {
 	_ = trigger

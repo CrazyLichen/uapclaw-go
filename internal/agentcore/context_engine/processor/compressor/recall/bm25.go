@@ -9,9 +9,7 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BM25Index 固定文档集合上的不可变 BM25 索引。
-//
 // 构建后不再修改；元数据变化时整体替换实例。
-//
 // Python: recall/bm25.py (BM25Index)
 type BM25Index struct {
 	// tokenized 分词后的文档集合
@@ -61,7 +59,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeMarkdown 去掉 Markdown 语法但保留可见文本与代码内容。
-//
 // Python: normalize_markdown
 func NormalizeMarkdown(text string) string {
 	normalized := yamlFrontmatterRe.ReplaceAllString(text, "")
@@ -73,14 +70,12 @@ func NormalizeMarkdown(text string) string {
 }
 
 // Tokenize 对中英混排、路径与代码标识符分词。
-//
 // Python: tokenize
 func Tokenize(text string) []string {
 	return tokenize(text)
 }
 
 // BuildBM25Index 构建索引。
-//
 // Python: BM25Index.build
 func BuildBM25Index(documents []string, k1 float64, b float64) *BM25Index {
 	tokenized := make([][]string, len(documents))
@@ -115,19 +110,16 @@ func BuildBM25Index(documents []string, k1 float64, b float64) *BM25Index {
 }
 
 // RankBM25 对一组文档一次性打分。
-//
 // Python: rank_bm25
 func RankBM25(query string, documents []string, k1 float64, b float64) []float64 {
 	return BuildBM25Index(documents, k1, b).Scores(query)
 }
 
 // DocumentCount 返回索引文档数。
-//
 // Python: BM25Index.document_count
 func (idx *BM25Index) DocumentCount() int { return idx.documentCount }
 
 // Scores 返回每个文档一个 BM25 分数。
-//
 // Python: BM25Index.scores
 func (idx *BM25Index) Scores(query string) []float64 {
 	if idx.documentCount == 0 {
@@ -169,9 +161,7 @@ func (idx *BM25Index) Scores(query string) []float64 {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // tokenize 小写化后切 ASCII 标识符与 CJK 片段。
-//
 // 下划线拆分子词；CJK 片段整体保留并追加双字滑窗。
-//
 // Python: tokenize
 func tokenize(text string) []string {
 	lowered := strings.ToLower(text)

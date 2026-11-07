@@ -19,7 +19,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DialogueCompressorConfig 对话压缩器配置。
-//
 // Python: DialogueCompressorConfig (pydantic.BaseModel)
 type DialogueCompressorConfig struct {
 	// MessagesThreshold 消息数触发阈值，0 表示不启用
@@ -71,10 +70,8 @@ type dialogueRound struct {
 }
 
 // DialogueCompressor 对话压缩器，将已完成的 ReAct 对话轮次压缩为摘要消息。
-//
 // 当上下文消息超过阈值（消息数量或 Token 数）时，识别完整的对话轮次，
 // 调用 LLM 生成压缩摘要，替换原始消息以减少 Token 消耗。
-//
 // Python: openjiuwen/core/context_engine/processor/compressor/dialogue_compressor.py (DialogueCompressor)
 type DialogueCompressor struct {
 	*processor.BaseProcessor
@@ -178,7 +175,6 @@ Never drop higher-priority information to preserve lower-priority details.
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDialogueCompressor 创建对话压缩器实例。
-//
 // Python: DialogueCompressor.__init__(config)
 func NewDialogueCompressor(config *DialogueCompressorConfig, opts ...DialogueCompressorOption) (*DialogueCompressor, error) {
 	if err := config.Validate(); err != nil {
@@ -265,7 +261,6 @@ func (c *DialogueCompressorConfig) GetModel() *llm_schema.ModelRequestConfig {
 func (dc *DialogueCompressor) ProcessorType() string { return "DialogueCompressor" }
 
 // TriggerAddMessages 判断是否需要介入消息添加。
-//
 // 触发条件（满足任一）：
 //   - MessagesThreshold > 0 && 总消息数 > MessagesThreshold
 //   - 总 Token 数 > TokensThreshold
@@ -276,7 +271,6 @@ func (dc *DialogueCompressor) ProcessorType() string { return "DialogueCompresso
 // 不含 system prompt 与工具 schema；两个阈值先到先判。
 // 日志字段 path=add_messages / buffer / adding / message_size / tokens 便于与
 // get_context_window 口径区分（后者含 system+tools）。
-//
 // Python: DialogueCompressor.trigger_add_messages()
 func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	messageSize := mc.Len() + len(messagesToAdd)
@@ -315,7 +309,6 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 }
 
 // OnAddMessages 执行对话压缩。
-//
 // Python: DialogueCompressor.on_add_messages()
 func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
@@ -383,7 +376,6 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 }
 
 // GetCompressIdx 计算压缩截止位置。
-//
 // Python: DialogueCompressor.get_compress_idx()
 func (dc *DialogueCompressor) GetCompressIdx(messages []llm_schema.BaseMessage) int {
 	keepIndex := len(messages)
@@ -406,7 +398,6 @@ func (dc *DialogueCompressor) GetCompressIdx(messages []llm_schema.BaseMessage) 
 }
 
 // GetCompressPairs 识别消息列表中的对话轮次配对。
-//
 // 遍历消息列表，寻找 UserMessage → ... → AssistantMessage(无 tool_calls) 的配对。
 // Python: DialogueCompressor.get_compress_pairs()
 func GetCompressPairs(messages []llm_schema.BaseMessage) [][2]int {
@@ -431,7 +422,6 @@ func GetCompressPairs(messages []llm_schema.BaseMessage) [][2]int {
 }
 
 // BuildCompressTargets 从消息列表构建压缩目标列表。
-//
 // Python: DialogueCompressor._build_compress_targets()
 func (dc *DialogueCompressor) BuildCompressTargets(messages []llm_schema.BaseMessage) []compressTarget {
 	rounds := dc.collectCompleteRounds(messages)
@@ -469,7 +459,6 @@ func (dc *DialogueCompressor) BuildCompressTargets(messages []llm_schema.BaseMes
 }
 
 // InvokeMultiBlockCompression 调用 LLM 执行多块压缩。
-//
 // Python: DialogueCompressor._invoke_multi_block_compression()
 func (dc *DialogueCompressor) InvokeMultiBlockCompression(ctx context.Context, contextMessages []llm_schema.BaseMessage, targets []compressTarget) (*llm_schema.AssistantMessage, error) {
 	systemPrompt := strings.ReplaceAll(dc.compressedPrompt, "{compression_target_tokens}", fmt.Sprintf("%d", dc.compressionTargetTokens))
@@ -495,7 +484,6 @@ func (dc *DialogueCompressor) InvokeMultiBlockCompression(ctx context.Context, c
 }
 
 // BuildJSONReplacements 从 LLM 返回的 ParserContent 解析 JSON 构建替换列表。
-//
 // Python: DialogueCompressor._build_json_replacements()
 func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc iface.ModelContext, targets []compressTarget, parserContent any) ([]processor.Replacement, []int) {
 	if !IsValidBlocksPayload(parserContent) {
@@ -563,7 +551,6 @@ func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc ifac
 }
 
 // BuildFallbackReplacement 构建降级替换（JSON 解析失败时用 LLM 原始输出整段替换）。
-//
 // Python: DialogueCompressor._build_fallback_replacement()
 func (dc *DialogueCompressor) BuildFallbackReplacement(ctx context.Context, mc iface.ModelContext, targets []compressTarget, summary string) *processor.Replacement {
 	summary = strings.TrimSpace(summary)
@@ -599,7 +586,6 @@ func (dc *DialogueCompressor) BuildFallbackReplacement(ctx context.Context, mc i
 }
 
 // BuildSplitContextPayload 构建上下文载荷（目标前/目标块/目标后）。
-//
 // Python: DialogueCompressor._build_split_context_payload()
 func (dc *DialogueCompressor) BuildSplitContextPayload(contextMessages []llm_schema.BaseMessage, targets []compressTarget) string {
 	firstTargetStart := targets[0].startIDx
@@ -643,7 +629,6 @@ func (dc *DialogueCompressor) BuildSplitContextPayload(contextMessages []llm_sch
 }
 
 // BuildTargetsPayload 构建目标映射载荷。
-//
 // Python: DialogueCompressor._build_targets_payload()
 func (dc *DialogueCompressor) BuildTargetsPayload(targets []compressTarget) string {
 	var blocks []string
@@ -673,7 +658,6 @@ func (dc *DialogueCompressor) BuildTargetsPayload(targets []compressTarget) stri
 }
 
 // SerializeMessage 将单条消息序列化为文本格式。
-//
 // Python: DialogueCompressor._serialize_message()
 func SerializeMessage(index int, msg llm_schema.BaseMessage) string {
 	var parts []string
@@ -696,7 +680,6 @@ func SerializeMessage(index int, msg llm_schema.BaseMessage) string {
 }
 
 // WrapMemoryBlock 将摘要包装为记忆块格式。
-//
 // Python: DialogueCompressor._wrap_memory_block()
 func WrapMemoryBlock(summary string) string {
 	return fmt.Sprintf(
@@ -716,7 +699,6 @@ func WrapMemoryBlock(summary string) string {
 }
 
 // HasCompressionBenefit 判断压缩是否有收益（压缩后 Token 少于原始 Token）。
-//
 // Python: DialogueCompressor._has_compression_benefit()
 func (dc *DialogueCompressor) HasCompressionBenefit(mc iface.ModelContext, originalMessages []llm_schema.BaseMessage, replacementMessages []llm_schema.BaseMessage) bool {
 	originalTokens := dc.countMessagesTokens(mc, originalMessages)
@@ -725,7 +707,6 @@ func (dc *DialogueCompressor) HasCompressionBenefit(mc iface.ModelContext, origi
 }
 
 // IsValidBlocksPayload 检查 ParserContent 是否为有效的 blocks JSON。
-//
 // Python: DialogueCompressor._is_valid_blocks_payload()
 func IsValidBlocksPayload(parserContent any) bool {
 	parserMap, ok := parserContent.(map[string]any)
@@ -741,7 +722,6 @@ func IsValidBlocksPayload(parserContent any) bool {
 }
 
 // ExtractCompactSummaryFromReplacements 从替换列表提取压缩摘要文本。
-//
 // Python: DialogueCompressor._extract_compact_summary_from_replacements()
 func (dc *DialogueCompressor) ExtractCompactSummaryFromReplacements(replacements []processor.Replacement) string {
 	var parts []string
@@ -767,7 +747,6 @@ func (dc *DialogueCompressor) LoadState(_ map[string]any) {}
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // collectCompleteRounds 收集所有完整的对话轮次。
-//
 // Python: DialogueCompressor._collect_complete_rounds()
 func (dc *DialogueCompressor) collectCompleteRounds(messages []llm_schema.BaseMessage) []dialogueRound {
 	pairs := GetCompressPairs(messages)

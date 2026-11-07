@@ -30,7 +30,6 @@ type InteractionOutputWriterProvider interface {
 // 从 interaction 包迁移到 stream 包（原 interaction.InteractionOutputWriter）。
 type InteractionOutputWriter interface {
 	// WriteInteraction 写入一条交互流输出。
-	//
 	// T-11：ctx 参与写入，调用方（交互层）传入节点执行 ctx，取消能真正传导；
 	// 原实现因接口无 ctx，内部写死 context.Background()。
 	WriteInteraction(ctx context.Context, outputType string, index int, payload any) error

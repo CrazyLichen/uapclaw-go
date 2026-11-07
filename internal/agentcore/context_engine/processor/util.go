@@ -26,10 +26,8 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractToolName 从 ToolCall 中提取工具名称。
-//
 // 优先返回 ToolCall.Name，为空时返回空字符串。
 // Go 端 ToolCall 结构直接包含 Name 字段（与 Python 的 Function.Name 不同）。
-//
 // Python: ContextUtils.extract_tool_name()
 func ExtractToolName(toolCall *llm_schema.ToolCall) string {
 	if toolCall == nil {
@@ -42,10 +40,8 @@ func ExtractToolName(toolCall *llm_schema.ToolCall) string {
 }
 
 // ResolveToolCallFromMessage 从 ToolMessage 回溯查找对应的 ToolCall 对象。
-//
 // 通过 ToolMessage 的 ToolCallID 匹配 AssistantMessage.ToolCalls 中的 ID，
 // 从后往前遍历 contextMessages 查找最近的匹配。
-//
 // Python: ContextUtils.resolve_tool_call_from_message()
 func ResolveToolCallFromMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage) *llm_schema.ToolCall {
 	tm, ok := message.(*llm_schema.ToolMessage)
@@ -72,10 +68,8 @@ func ResolveToolCallFromMessage(message llm_schema.BaseMessage, contextMessages 
 }
 
 // ResolveToolNameFromMessage 从 ToolMessage 回溯查找对应的工具名称。
-//
 // 内部调用 ResolveToolCallFromMessage 找到 ToolCall，再调用 ExtractToolName 提取名称。
 // 未找到时返回空字符串。
-//
 // Python: ContextUtils.resolve_tool_name_from_message()
 func ResolveToolNameFromMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage) string {
 	toolCall := ResolveToolCallFromMessage(message, contextMessages)
@@ -83,9 +77,7 @@ func ResolveToolNameFromMessage(message llm_schema.BaseMessage, contextMessages 
 }
 
 // MessageToText 提取消息纯文本内容。
-//
 // 优先返回 GetContent().Text()，为空时尝试从 Parts 中提取文本。
-//
 // Python: FullCompactProcessor._message_to_text() / util.message_to_text()
 func MessageToText(msg llm_schema.BaseMessage) string {
 	content := msg.GetContent().Text()
@@ -109,9 +101,7 @@ func MessageToText(msg llm_schema.BaseMessage) string {
 }
 
 // GroupCompletedAPIRoundsMessages 按已完成 API 轮次分组返回消息子列表。
-//
 // 内部调用 GroupCompletedAPIRounds 获取轮次范围，再按范围切分消息。
-//
 // Python: FullCompactProcessor._group_messages_by_api_round()
 func GroupCompletedAPIRoundsMessages(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
 	ranges := GroupCompletedAPIRounds(messages)
@@ -123,9 +113,7 @@ func GroupCompletedAPIRoundsMessages(messages []llm_schema.BaseMessage) [][]llm_
 }
 
 // MessageSignature 生成消息签名（用于去重）。
-//
 // 格式为 "role|text|toolCallIDs"，其中 toolCallIDs 以 "|" 连接。
-//
 // Python: FullCompactProcessor._message_signature()
 func MessageSignature(msg llm_schema.BaseMessage) string {
 	var toolCallIDs []string
@@ -138,7 +126,6 @@ func MessageSignature(msg llm_schema.BaseMessage) string {
 }
 
 // RoundSignature 生成轮次签名，将轮次内所有消息签名用 "|" 连接。
-//
 // Python: FullCompactProcessor._round_signature()
 func RoundSignature(messages []llm_schema.BaseMessage) string {
 	var sigs []string
@@ -149,7 +136,6 @@ func RoundSignature(messages []llm_schema.BaseMessage) string {
 }
 
 // FlattenGroups 将消息分组展平为单一切片。
-//
 // Python: FullCompactProcessor.flatten_groups()
 func FlattenGroups(groups [][]llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	var result []llm_schema.BaseMessage
@@ -160,9 +146,7 @@ func FlattenGroups(groups [][]llm_schema.BaseMessage) []llm_schema.BaseMessage {
 }
 
 // IsSkillFilePath 判断文件路径是否为 skill 文件。
-//
 // 将路径统一转小写并标准化斜杠后，检查是否以 /skill.md 或 skill.md 结尾。
-//
 // Python: FullCompactProcessor._is_skill_file_path()
 func IsSkillFilePath(filePath string) bool {
 	if filePath == "" {
@@ -173,10 +157,8 @@ func IsSkillFilePath(filePath string) bool {
 }
 
 // ExtractArgumentValue 从 JSON 参数中提取指定 key 的值。
-//
 // 优先从 parsedArgs 映射中查找，然后尝试 JSON 解析 argumentsText，
 // 最后使用正则表达式回退提取。
-//
 // Python: FullCompactProcessor._extract_argument_value()
 func ExtractArgumentValue(parsedArgs map[string]any, argumentsText string, keys ...string) string {
 	// 优先从已解析的 map 中查找
@@ -210,10 +192,8 @@ func ExtractArgumentValue(parsedArgs map[string]any, argumentsText string, keys 
 }
 
 // RoundContainsSkillRead 检查轮次中是否包含 skill 文件读取。
-//
 // 遍历轮次内所有 AssistantMessage 的 ToolCalls，查找 read_file 工具调用
 // 并判断其 file_path 参数是否指向 skill 文件。
-//
 // Python: FullCompactProcessor._round_contains_skill_read()
 func RoundContainsSkillRead(messages []llm_schema.BaseMessage) bool {
 	for _, msg := range messages {
@@ -235,10 +215,8 @@ func RoundContainsSkillRead(messages []llm_schema.BaseMessage) bool {
 }
 
 // EstimateContentTokens 估算内容的 Token 数（字符长度 / 3，最小返回 1）。
-//
 // 支持字符串和任意类型（JSON 序列化后估算）。
 // 任何非空输入至少返回 1，对齐 Python max(len//3, 1) 语义。
-//
 // Python: ContextUtils.estimate_tokens()
 func EstimateContentTokens(content any) int {
 	// 先净化图片载荷：data URL/base64 若按字符数计入会把一张图算成几万 token
@@ -266,10 +244,8 @@ func EstimateContentTokens(content any) int {
 }
 
 // EstimateMessageTokens 估算单条消息的 Token 数（最小返回 1）。
-//
 // 优先使用 content 文本估算，为空时尝试 JSON 序列化后估算。
 // 任何非 nil 消息至少返回 1，对齐 Python max(len//3, 1) 语义。
-//
 // Python: ContextUtils.estimate_message_tokens()
 func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
 	if msg == nil {
@@ -304,7 +280,6 @@ func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
 }
 
 // IsSummaryMessage 判断消息是否为指定标记的摘要消息。
-//
 // Python: util.is_summary_message()
 func IsSummaryMessage(msg llm_schema.BaseMessage, marker string) bool {
 	_, ok := msg.(*llm_schema.UserMessage)
@@ -312,7 +287,6 @@ func IsSummaryMessage(msg llm_schema.BaseMessage, marker string) bool {
 }
 
 // CollectSummaryIndices 收集所有指定标记的摘要消息索引。
-//
 // Python: util.collect_summary_indices()
 func CollectSummaryIndices(messages []llm_schema.BaseMessage, marker string) []int {
 	var indices []int
@@ -325,7 +299,6 @@ func CollectSummaryIndices(messages []llm_schema.BaseMessage, marker string) []i
 }
 
 // CountMessagesTokens 计算 Token 数，优先使用 TokenCounter，失败时降级到字符估算。
-//
 // Python: util.count_messages_tokens()
 func CountMessagesTokens(tokenCounter token.TokenCounter, messages []llm_schema.BaseMessage, modelName string, processorType string) int {
 	if len(messages) == 0 {
@@ -365,7 +338,6 @@ func FindLastFinalAssistantIdx(messages []llm_schema.BaseMessage) int {
 }
 
 // FindLastCompletedAPIRoundEndIdx 找到范围内最后一个完整 API 轮次的结束索引。
-//
 // Python: util.find_last_completed_api_round_end_idx()
 func FindLastCompletedAPIRoundEndIdx(messages []llm_schema.BaseMessage, startIdx int, endIdx int) int {
 	if endIdx < startIdx {
@@ -381,7 +353,6 @@ func FindLastCompletedAPIRoundEndIdx(messages []llm_schema.BaseMessage, startIdx
 }
 
 // IterSummaryMergeRanges 返回连续摘要消息范围，用于二次合并。
-//
 // Python: util.iter_summary_merge_ranges()
 func IterSummaryMergeRanges(messages []llm_schema.BaseMessage, marker string, minBlocks int) [][2]int {
 	var ranges [][2]int
@@ -417,7 +388,6 @@ func IterSummaryMergeRanges(messages []llm_schema.BaseMessage, marker string, mi
 }
 
 // ParseToolArguments 解析工具调用 JSON 参数。
-//
 // Python: util.parse_tool_arguments()
 func ParseToolArguments(argumentsText string) map[string]any {
 	if argumentsText == "" {
@@ -431,7 +401,6 @@ func ParseToolArguments(argumentsText string) map[string]any {
 }
 
 // DescribeToolCall 生成工具调用的可读描述。
-//
 // Python: util.describe_tool_call()
 func DescribeToolCall(toolName string, argumentsText string) string {
 	parsed := ParseToolArguments(argumentsText)
@@ -459,7 +428,6 @@ func DescribeToolCall(toolName string, argumentsText string) string {
 }
 
 // FindToolResultText 根据 toolCallID 查找工具结果文本。
-//
 // Python: util.find_tool_result_text()
 func FindToolResultText(messages []llm_schema.BaseMessage, toolCallID string) string {
 	if toolCallID == "" {
@@ -475,7 +443,6 @@ func FindToolResultText(messages []llm_schema.BaseMessage, toolCallID string) st
 }
 
 // ExtractToolResultHint 提取工具结果的简要提示。
-//
 // Python: util.extract_tool_result_hint()
 func ExtractToolResultHint(toolName string, resultText string, allowedToolNames []string) string {
 	if resultText == "" {
@@ -528,7 +495,6 @@ func ExtractToolResultHint(toolName string, resultText string, allowedToolNames 
 }
 
 // ExtractSkillNameFromPath 从文件路径中提取 skill 名称。
-//
 // Python: util.extract_skill_name_from_path()
 func ExtractSkillNameFromPath(filePath string) string {
 	if filePath == "" {
@@ -544,7 +510,6 @@ func ExtractSkillNameFromPath(filePath string) string {
 }
 
 // ExtractSkillFileContent 提取 skill 文件内容。
-//
 // truncateFn 用于截断文本，通常为 FullCompactProcessor.TruncateStateText。
 // Python: util.extract_skill_file_content()
 func ExtractSkillFileContent(truncateFn func(string) string, resultText string) string {

@@ -3,11 +3,9 @@ package schema
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolInfoInterface 工具信息接口，供 LLM 层统一消费。
-//
 // ToolInfo 和 McpToolInfo 均实现此接口。
 // LLM 层（ConvertToolsToDict / InvokeParams.Tools）只依赖此接口，
 // 不关心具体是本地工具还是 MCP 工具。
-//
 // Python: _convert_tools_to_dict() 中统一处理 ToolInfo / McpToolInfo 的逻辑
 type ToolInfoInterface interface {
 	// GetType 返回类型标识，默认 "function"
@@ -21,7 +19,6 @@ type ToolInfoInterface interface {
 }
 
 // ToolInfo 工具描述信息，供 LLM function calling 消费。
-//
 // Python: openjiuwen/core/foundation/tool/schema.py (ToolInfo)
 // 注：完整实现在领域三（工具系统），此处仅定义基础结构供 BaseCard.ToolInfo() 使用。
 type ToolInfo struct {
@@ -36,11 +33,9 @@ type ToolInfo struct {
 }
 
 // McpToolInfo MCP 协议工具描述信息，扩展 ToolInfo 增加服务器标识。
-//
 // ServerName 仅框架内部路由使用，不发送给 LLM（ConvertToolsToDict 只提取 ToolInfo 公共字段）。
 // AbilityManager 路由时可根据 ServerName 非空判断为 MCP 工具，
 // 也可根据 tool_call.Name 在注册表中查找 Tool 实例（与 Python 对齐）。
-//
 // Python: openjiuwen/core/foundation/tool/schema.py (McpToolInfo)
 type McpToolInfo struct {
 	ToolInfo
@@ -82,7 +77,6 @@ func NewToolInfo(name, description string, parameters map[string]any) *ToolInfo 
 }
 
 // NewMcpToolInfo 创建 McpToolInfo 实例，Type 默认为 "function"。
-//
 // Python: McpToolCard.tool_info() -> McpToolInfo
 func NewMcpToolInfo(name, description, serverName string, parameters map[string]any) *McpToolInfo {
 	if parameters == nil {

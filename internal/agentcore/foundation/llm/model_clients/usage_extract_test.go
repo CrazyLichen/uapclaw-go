@@ -3,7 +3,6 @@ package model_clients
 import "testing"
 
 // TestExtractCacheTokens_全路径矩阵 上游 _extract_cache_tokens 的 7 条嵌套路径 + 11 个平铺字段。
-//
 // Python: base_model_client.py:86-151
 func TestExtractCacheTokens_全路径矩阵(t *testing.T) {
 	nested := []struct {
@@ -60,7 +59,6 @@ func TestExtractCacheTokens_全路径矩阵(t *testing.T) {
 }
 
 // TestCacheUsageMetadata_归一 read/miss/write 归一 + status/source/authoritative 语义。
-//
 // Python: base_model_client.py:152-252 _cache_usage_metadata
 func TestCacheUsageMetadata_归一(t *testing.T) {
 	m := CacheUsageMetadata(map[string]any{
@@ -104,7 +102,6 @@ func TestCacheUsageMetadata_归一(t *testing.T) {
 }
 
 // TestExtractCacheCreationTokens_矩阵 3 条嵌套路径 + 4 个平铺字段。
-//
 // Python: base_model_client.py:253-292 _extract_cache_creation_tokens
 func TestExtractCacheCreationTokens_矩阵(t *testing.T) {
 	nestedKeys := [][2]string{
@@ -133,7 +130,6 @@ func TestExtractCacheCreationTokens_矩阵(t *testing.T) {
 }
 
 // TestExtractReasoningTokens_矩阵 completion_tokens_details.reasoning_tokens 嵌套 + 顶层平铺。
-//
 // Python: base_model_client.py:293-330 _extract_reasoning_tokens
 func TestExtractReasoningTokens_矩阵(t *testing.T) {
 	if got := ExtractReasoningTokens(map[string]any{
@@ -156,7 +152,6 @@ func TestExtractReasoningTokens_矩阵(t *testing.T) {
 }
 
 // TestBuildUsageMetadata_同构契约 三客户端共用一个构建函数：同输入同输出。
-//
 // Python: openai/siliconflow(=openai profile)/inference_affinity 三处组装点字段集一致
 func TestBuildUsageMetadata_同构契约(t *testing.T) {
 	usage := map[string]any{
@@ -180,7 +175,6 @@ func TestBuildUsageMetadata_同构契约(t *testing.T) {
 }
 
 // TestBuildUsageMetadata_未暴露不臆造 reasoning_tokens/cache_creation 未暴露时保持 nil。
-//
 // Python: None 字段不进 UsageMetadata（_extract_* 返回 None）
 func TestBuildUsageMetadata_未暴露不臆造(t *testing.T) {
 	meta := BuildUsageMetadata(map[string]any{"prompt_tokens": 5}, "m")

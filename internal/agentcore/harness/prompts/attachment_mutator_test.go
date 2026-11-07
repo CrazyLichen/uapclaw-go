@@ -10,7 +10,6 @@ import (
 )
 
 // TestUsesSystemAttachmentRole_矩阵 覆盖上游 4 个判定字段的组合。
-//
 // Python: _uses_system_attachment_role
 func TestUsesSystemAttachmentRole_矩阵(t *testing.T) {
 	cases := []struct {

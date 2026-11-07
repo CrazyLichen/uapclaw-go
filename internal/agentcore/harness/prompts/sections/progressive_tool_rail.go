@@ -101,9 +101,7 @@ var progressiveToolRulesBodyEN = "Progressive tool loading is enabled. Tools are
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildProgressiveToolRulesSection 构建渐进式工具规则节（Priority 75）。
-//
 // 稳定节：规则正文 + 本 session 的初始 deferred 目录；后续变化走附件。
-//
 // Python: build_multilingual_progressive_tool_rules_section
 func BuildProgressiveToolRulesSection(deferredToolDescriptions map[string]string) saprompt.PromptSection {
 	return saprompt.PromptSection{
@@ -117,7 +115,6 @@ func BuildProgressiveToolRulesSection(deferredToolDescriptions map[string]string
 }
 
 // RenderDeferredToolCatalogSnapshot 渲染全量 deferred 目录附件。
-//
 // Python: render_deferred_tool_catalog_snapshot
 func RenderDeferredToolCatalogSnapshot(toolDescriptions map[string]string, language string, version int) string {
 	lang := normalizeSectionLanguage(language)
@@ -131,7 +128,6 @@ func RenderDeferredToolCatalogSnapshot(toolDescriptions map[string]string, langu
 }
 
 // RenderDeferredToolCatalogDelta 渲染增量 deferred 目录附件。
-//
 // Python: render_deferred_tool_catalog_delta
 func RenderDeferredToolCatalogDelta(
 	added map[string]string,
@@ -191,7 +187,6 @@ func RenderDeferredToolCatalogDelta(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildProgressiveToolRulesPrompt 拼接规则正文与初始目录。
-//
 // Python: build_progressive_tool_rules_prompt
 func buildProgressiveToolRulesPrompt(language string, deferredToolDescriptions map[string]string) string {
 	lang := normalizeSectionLanguage(language)
@@ -208,7 +203,6 @@ func buildProgressiveToolRulesPrompt(language string, deferredToolDescriptions m
 }
 
 // renderDeferredToolDescriptions 渲染目录摘要列表（按名字排序）。
-//
 // Python: _render_deferred_tool_descriptions
 func renderDeferredToolDescriptions(toolDescriptions map[string]string, language string) string {
 	if len(toolDescriptions) == 0 {
@@ -244,7 +238,6 @@ func renderRemovedTools(removed []string) string {
 }
 
 // compactToolDescription 把描述压成一句（最长 120 字符，优先截到句末标点）。
-//
 // Python: _compact_tool_description
 func compactToolDescription(description string) string {
 	compact := strings.Join(strings.Fields(description), " ")

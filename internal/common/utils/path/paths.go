@@ -11,7 +11,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ResolvedPaths 缓存已解析的 ConfigDir 和 AgentWorkspaceDir。
-//
 // Python: jiuwenswarm/common/utils.py 中的 _config_dir / _workspace_dir 全局变量。
 // 未初始化时（~/.uapclaw/config/ 不存在）回退到 resources 目录，
 // 与 Python _resolve_paths() 行为对齐。
@@ -54,10 +53,8 @@ const (
 
 var (
 	// cacheMu 保护下面三个缓存槽的「指针」与「值」。
-	//
 	// 为什么需要：SetUserHome/ResetCache 会在测试 cleanup 里重置缓存，
 	// 而测试进程仍可能有后台 goroutine 在读路径（曾触发 DATA RACE）。
-	//
 	// 设计要点：Once 用指针 + 原子置换，绝不在持有 cacheMu 时调 one.Do
 	// （重置会换掉指针，而 one.Do 的执行体会再取 cacheMu 写值 —— 自锁）。
 	cacheMu sync.Mutex
@@ -72,7 +69,6 @@ var (
 )
 
 // pathCacheSlot 一个可整体置换的缓存槽：Once 保证只算一次，value 存结果。
-//
 // 注意：once 必须是**值**而非指针 —— 若为指针，重置会把 resolveSlot 换成
 // 新槽，而仍在旧 once.Do 里的调用方会继续持有旧指针，
 // 导致「已判定的新 once + 旧槽的 value」混杂。
@@ -86,7 +82,6 @@ type pathCacheSlot struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // UserHomeDir 获取用户主目录。
-//
 // 优先级（与 Python get_user_home() 对齐）：
 //  1. 缓存值（首次调用后缓存）
 //  2. UAPCLAW_HOME 环境变量
@@ -138,13 +133,11 @@ func ExpandHome(path string) string {
 }
 
 // ResolveSymlinksLenient 按 Python Path.resolve(strict=False) 语义解析路径。
-//
 // 与直接调用 filepath.EvalSymlinks 的区别：目标路径可能**尚不存在**（如待创建
 // 的文件），此时 EvalSymlinks 必然失败。Python 的做法是解析「已存在的前缀」中
 // 的符号链接、保留不存在的尾部；Go 侧同样逐级上溯最近的已存在祖先，解析后把
 // 剩余部分拼回，因此 `ws/link -> /etc` 下的 `ws/link/new.txt` 会解析成
 // `/etc/new.txt`，不会被误判为仍在 `ws` 内。
-//
 // 入参先做 ~ 展开与绝对化；磁盘根仍不存在等极端情况返回清理后的绝对路径。
 func ResolveSymlinksLenient(p string) string {
 	expanded := ExpandHome(p)
@@ -159,7 +152,6 @@ func ResolveSymlinksLenient(p string) string {
 }
 
 // IsPathWithin 判断 p 是否等于 root 或位于其下（按路径段比较，非字符串前缀）。
-//
 // 对齐 Python Path.relative_to：`/ws` 不包含 `/ws-evil`，但包含 `/ws` 本身与
 // `/ws/a/b`。两侧应已由 ResolveSymlinksLenient 解析，调用方负责。
 func IsPathWithin(root, p string) bool {
@@ -177,7 +169,6 @@ func IsPathWithin(root, p string) bool {
 }
 
 // SetUserHome 设置自定义主目录并重置所有缓存。
-//
 // 调用后 WorkspaceDir()、ConfigDir()、AgentWorkspaceDir() 都会重新解析。
 // Python: set_user_home(path)
 func SetUserHome(p string) {
@@ -185,7 +176,6 @@ func SetUserHome(p string) {
 }
 
 // ResetCache 重置所有路径缓存（供测试使用）。
-//
 // 并发安全：写入与本包的读取共用 cacheMu，因此测试 cleanup 里调用它
 // 不会再与后台 goroutine 的 WorkspaceDir()/UserHomeDir() 形成数据竞争。
 // 语义上仍建议先 FlushMetadataQueue/FlushHistoryQueue，让后台任务跑完，
@@ -195,7 +185,6 @@ func ResetCache() {
 }
 
 // WorkspaceDir 获取数据根目录（~/.uapclaw/）。
-//
 // 此函数不受未初始化回退影响，始终返回用户目录下的路径。
 // Python: get_user_workspace_dir()
 //
@@ -217,7 +206,6 @@ func WorkspaceDir() string {
 }
 
 // ConfigDir 获取配置目录。
-//
 // 有未初始化回退：已初始化时返回 ~/.uapclaw/config/，
 // 未初始化时回退到 ResourcesDir()。
 // Python: get_config_dir()
@@ -227,7 +215,6 @@ func ConfigDir() string {
 }
 
 // AgentWorkspaceDir 获取 Agent 工作空间目录。
-//
 // 有未初始化回退：已初始化时返回 ~/.uapclaw/agent/workspace/，
 // 未初始化时回退到 ResourcesDir()/agent/workspace。
 // Python: get_workspace_dir()
@@ -237,7 +224,6 @@ func AgentWorkspaceDir() string {
 }
 
 // IsInitialized 检查工作区是否已初始化。
-//
 // 判断依据：WorkspaceDir()/config/ 目录是否存在。
 // Python: _resolve_paths() 中 user_config_dir.exists() 判断
 func IsInitialized() bool {
@@ -246,7 +232,6 @@ func IsInitialized() bool {
 }
 
 // ResourcesDir 获取外部资源目录。
-//
 // 三级回退（Go 版特有，Python 通过 __file__ 反推包位置）：
 //  1. UAPCLAW_RESOURCES_DIR 环境变量
 //  2. 可执行文件同目录的 resources/
@@ -283,14 +268,12 @@ func ResourcesDir() (string, error) {
 }
 
 // ConfigFile 返回配置文件路径。
-//
 // 基于 ConfigDir()（有 resources 回退），对齐 Python get_config_file()。
 func ConfigFile() string {
 	return filepath.Join(ConfigDir(), "config.yaml")
 }
 
 // EnvFile 返回环境变量文件路径。
-//
 // 基于 ConfigDir()（有 resources 回退），对齐 Python get_config_dir() 同级 .env。
 func EnvFile() string {
 	return filepath.Join(ConfigDir(), ".env")
@@ -381,7 +364,6 @@ func CronJobsPath() string {
 }
 
 // AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/.agent_teams。
-//
 // 目录名带前导点，对齐 Python openjiuwen get_agent_teams_home()：
 // jiuwenswarm 启动时把 openjiuwen home 配置为数据根，团队状态位于 <data>/.agent_teams。
 func AgentTeamsHomeDir() string {
@@ -391,14 +373,12 @@ func AgentTeamsHomeDir() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getResolvedPaths 获取已解析的路径（带回退逻辑）。
-//
 // Python: _resolve_paths()，核心逻辑：
 //   - ~/.uapclaw/config/ 存在 → 已初始化模式，指向用户目录
 //   - 不存在 → 未初始化模式，回退到 resources 目录
 //
 // 纯计算，不含日志调用。workspace 在调用后根据 Fallback 字段补日志。
 // resetPathCache 原子地重置三个缓存槽；userHome 非空时同时设置主目录。
-//
 // 一起清空 Once 与值：只清值不清 Once 会让下一次调用复用旧值。
 func resetPathCache(userHome string) {
 	homeSlot := &pathCacheSlot{}
@@ -422,7 +402,6 @@ func loadSlot(slot **pathCacheSlot) *pathCacheSlot {
 }
 
 // setValue 在 cacheMu 保护下写入缓存结果。
-//
 // 读取侧不加锁（一次值读取，配合 once 的执行语义已足以保证 happens-before），
 // 因此这里也绝不能在持锁时调用 once.Do —— 否则与 resetPathCache 构成自锁。
 func (s *pathCacheSlot) setValue(value any) {
@@ -487,7 +466,6 @@ func dirExists(path string) bool {
 }
 
 // resolveExistingAncestor 解析最近已存在祖先的符号链接，再拼回不存在的尾部。
-//
 // 对齐 Python Path.resolve(strict=False)：`/ws/link/new.txt` 中 `/ws/link` 存在
 // 则解析为 `/etc`，尾部 `new.txt` 原样拼接，得到 `/etc/new.txt`。
 func resolveExistingAncestor(abs string) string {

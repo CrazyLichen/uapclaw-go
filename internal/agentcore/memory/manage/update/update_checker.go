@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryActionItem 记忆动作项，表示一条记忆的 ADD 或 DELETE 动作。
-//
 // Python: openjiuwen/core/memory/manage/update/mem_update_checker.py (MemoryActionItem)
 type MemoryActionItem struct {
 	// ID 记忆 ID
@@ -30,7 +29,6 @@ type MemoryActionItem struct {
 }
 
 // MemCheckItem 记忆检查结果项。
-//
 // Python: openjiuwen/core/memory/manage/update/mem_update_checker.py (MemCheckItem)
 type MemCheckItem struct {
 	// InfoID 记忆 ID
@@ -44,7 +42,6 @@ type MemCheckItem struct {
 }
 
 // MemUpdateChecker 记忆冲突检查器。
-//
 // 使用 LLM 驱动的提示词模板分析新旧记忆之间的冗余和冲突关系。
 // Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model, retries=3)
 //
@@ -65,7 +62,6 @@ type CheckOption func(*checkConfig)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // CheckResult 记忆检查结果枚举。
-//
 // Python: openjiuwen/core/memory/manage/update/mem_update_checker.py (CheckResult)
 type CheckResult int
 
@@ -79,7 +75,6 @@ const (
 )
 
 // MemoryStatus 记忆动作状态枚举。
-//
 // Python: openjiuwen/core/memory/manage/update/mem_update_checker.py (MemoryStatus)
 type MemoryStatus int
 
@@ -110,7 +105,6 @@ func WithRetries(n int) CheckOption {
 }
 
 // Check 检查新记忆与旧记忆的冗余/冲突。
-//
 // Python: MemUpdateChecker.check(new_memories, old_memories, base_chat_model, retries=3)
 //
 // 流程：
@@ -267,7 +261,6 @@ func (ms MemoryStatus) String() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatInput 格式化新旧记忆字典为提示词输入文本。
-//
 // Python: _format_input(new_memories, old_memories)
 // 新记忆按插入顺序反序（[::-1]），旧记忆按插入顺序（不排序）。
 func formatInput(newMemories *orderedmap.OrderedMap[string, string], oldMemories *orderedmap.OrderedMap[string, string]) (string, string) {
@@ -297,7 +290,6 @@ func formatInput(newMemories *orderedmap.OrderedMap[string, string], oldMemories
 }
 
 // mapCheckItemsToActionItems 将 LLM 检查结果映射为动作项列表。
-//
 // Python: check() 方法中的 action_items 映射逻辑。
 // REDUNDANT → 跳过 / CONFLICTING → 新ADD+旧DELETE / NONE → 新ADD
 // 使用 processedNewIds 追踪已处理的新记忆 ID（对齐 Python: processed_new_ids）。
@@ -360,7 +352,6 @@ func mapCheckItemsToActionItems(checkItems []*MemCheckItem, newMemories *ordered
 }
 
 // parseCheckItems 从 LLM 解析后的 any 结果中提取 MemCheckItem 列表。
-//
 // Python: parsed_result → MemCheckItem.model_validate(item)
 // 支持单对象（map）和数组（slice）两种格式。
 func parseCheckItems(parsed any) ([]*MemCheckItem, error) {

@@ -1,10 +1,8 @@
 // utils 包提供通用工具函数。
-//
 // pool.go 实现引用计数资源池和 HTTP Transport 连接池管理。
 // Python:
 //   - openjiuwen/core/common/clients/ref_counted.py（RefCountedResource）
 //   - openjiuwen/core/common/clients/connector_pool.py（ConnectorPoolManager + ConnectorPoolConfig + TcpConnectorPool）
-//
 // Go 版本使用 http.Transport 替代 Python 的 aiohttp.TCPConnector，
 // Transport 内部自带连接池，无需像 Python 那样手动管理连接。
 // 但引用计数 + 共享 Transport 实例的模式仍然需要。
@@ -26,7 +24,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RefCountedResource 引用计数资源基类。
-//
 // Python: RefCountedResource
 // 跟踪 ref_count/created_at/last_used/closed 状态。
 type RefCountedResource struct {
@@ -37,7 +34,6 @@ type RefCountedResource struct {
 }
 
 // TransportConfig HTTP Transport 连接池配置。
-//
 // Python: ConnectorPoolConfig
 type TransportConfig struct {
 	MaxIdleConns        int           // 总最大空闲连接（默认 100）
@@ -52,7 +48,6 @@ type TransportConfig struct {
 }
 
 // RefCountedTransport 引用计数的 HTTP Transport。
-//
 // Python: TcpConnectorPool (ConnectorPool)
 type RefCountedTransport struct {
 	RefCountedResource
@@ -61,7 +56,6 @@ type RefCountedTransport struct {
 }
 
 // TransportPool Transport 连接池管理器。
-//
 // Python: ConnectorPoolManager
 // 按配置 key 复用 Transport 实例，超限时淘汰最久未用的。
 type TransportPool struct {
@@ -71,7 +65,6 @@ type TransportPool struct {
 }
 
 // ResourcePool 泛型资源池，按配置 key 复用资源实例。
-//
 // Python: BaseRefResourceMgr
 // 通用版本，供未来其他资源（如 Redis 连接池）复用。
 type ResourcePool[T any] struct {

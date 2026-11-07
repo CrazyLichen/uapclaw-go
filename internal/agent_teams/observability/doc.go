@@ -1,5 +1,4 @@
 // Package observability 提供团队可观测性基础设施，集成 OpenTelemetry。
-//
 // 三层架构：
 //   - Callback 层：OtelCallbackHandler 注册到 CallbackFramework，拦截 LLM/Tool/Agent 事件
 //   - Monitor 层：OtelTeamMonitorHandler 消费 TeamAgent EventMessage 事件流
@@ -7,7 +6,6 @@
 //
 // SpanState 通过 context.Value 传播（同 SessionState 模式），
 // 每个 DeepAgent 有独立的 OtelSpanState 实例，天然并发隔离。
-//
 // 文件目录：
 //
 //	observability/

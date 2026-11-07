@@ -9,7 +9,6 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildAgentCard 由通道配置构造 A2A Agent Card。
-//
 // Python: a2a_connect.py start() 内 AgentCard 构造 (L213-238)
 func BuildAgentCard(cfg *A2AChannelConfig) *sdka2a.AgentCard {
 	if cfg == nil {

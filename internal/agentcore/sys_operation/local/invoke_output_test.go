@@ -127,7 +127,6 @@ func TestChunkDecoder_分块解码(t *testing.T) {
 }
 
 // TestChunkDecoder_残留字节收尾冲出 流结束时残留的半个字符必须吐出（不静默丢弃）。
-//
 // Python 的增量解码器 final=True 会把不完整序列解码为替换字符，Go 侧同样交给
 // 解码器处理，因此这里只要求「非空」，不锁定具体替换结果。
 func TestChunkDecoder_残留字节收尾冲出(t *testing.T) {

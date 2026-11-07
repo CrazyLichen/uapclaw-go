@@ -20,7 +20,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // WebChannelConfig Web 通道配置。
-//
 // Python: WebChannelConfig 中各字段和默认值。
 type WebChannelConfig struct {
 	// Enabled 是否启用
@@ -36,9 +35,7 @@ type WebChannelConfig struct {
 }
 
 // WebChannel Web 通道，实现 BaseChannel 接口。
-//
 // 管理 WebSocket 连接生命周期、RPC 请求分发和事件推送。
-//
 // Python: jiuwenswarm/gateway/channel_manager/web/web_connect.py (WebChannel)
 type WebChannel struct {
 	// config 通道配置
@@ -74,7 +71,6 @@ type WebChannel struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // wsSender 一帧写出的目标。
-//
 // 偏差（规则 9.6）：Python 靠 duck typing 直接把 ws 对象传给 handler（调 ws.send_text）；
 // Go 需要静态类型，故用只含 WriteJSON 的窄接口等价该形参。生产实现是帧收集器，
 // 测试用 fake 记录帧。
@@ -84,13 +80,11 @@ type wsSender interface {
 }
 
 // methodHandler RPC 方法处理器签名。
-//
 // Python: app_web_handlers.py handler 签名 `(ws, req_id, params, session_id)`；
 // 响应由 handler 内部经 sendResponse 直接下发（部分方法多帧）。
 type methodHandler func(ws wsSender, reqID string, params map[string]any, sessionID string)
 
 // ConnectHook 连接建立钩子函数。
-//
 // Python: WebChannel._connect_hooks 中的 ConnectHook 签名。
 type ConnectHook func(conn *websocket.Conn) error
 
@@ -112,7 +106,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // handlerBeforeCallbackMethods 需在回调转发之前先执行本地 handler 的方法集。
-//
 // Python: _HANDLER_BEFORE_CALLBACK_METHODS = frozenset({ReqMethod.CHAT_SEND.value})
 // （web_connect.py:101）。chat.send 的 ack 必须先于 AgentServer 事件写出。
 var handlerBeforeCallbackMethods = map[string]bool{
@@ -122,7 +115,6 @@ var handlerBeforeCallbackMethods = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWebChannel 创建 Web 通道实例。
-//
 // 初始化方法注册表、WebSocket Upgrader 和连接管理。
 // onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入。
 // Python: WebChannel.__init__ + _register_web_handlers(bind)。
@@ -154,7 +146,6 @@ func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfig
 }
 
 // HandleWebSocket 处理 WebSocket 连接。
-//
 // 升级 HTTP 连接为 WebSocket，触发 onConnect 钩子，进入消息读取循环。
 // Python: WebChannel._connection_handler 逻辑。
 func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -330,7 +321,6 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 // OnConnect 注册连接建立钩子。
-//
 // Python: WebChannel.on_connect(callback)，
 // 新客户端接入时依次调用所有已注册的钩子。
 func (wc *WebChannel) OnConnect(callback ConnectHook) {
@@ -345,7 +335,6 @@ func (wc *WebChannel) Config() any {
 }
 
 // Start 启动 Web 通道。
-//
 // 设置 running 标志。HTTP 服务器由 AppGatewayServer 启动。
 func (wc *WebChannel) Start(_ context.Context) error {
 	wc.runningMu.Lock()
@@ -394,7 +383,6 @@ func (wc *WebChannel) Stop(ctx context.Context) error {
 }
 
 // Send 向所有客户端广播消息，根据事件类型选择 full-payload 或 pure-text 路由。
-//
 // Python: web_connect.py send() (L313-L414)：
 //   - msg.type == "res" → 构造 res 帧
 //   - 确定事件名（默认 chat.final，优先 msg.EventType，fallback payload.event_type）
@@ -467,7 +455,6 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 }
 
 // OnMessage 注册入站消息回调。
-//
 // Python: BaseChannel.on_message，返回 true 表示已处理。
 func (wc *WebChannel) OnMessage(callback func(*schema.Message) bool) {
 	wc.onMessageCb = callback
@@ -560,7 +547,6 @@ func (c *frameCollector) WriteJSON(v any) error {
 }
 
 // registerMethod 注册 req method 处理器。
-//
 // Python: WebChannel.register_method (web_connect.py:371-382)。
 func (wc *WebChannel) registerMethod(method string, handler methodHandler, localOnly bool) {
 	wc.methodsMu.Lock()
@@ -572,7 +558,6 @@ func (wc *WebChannel) registerMethod(method string, handler methodHandler, local
 }
 
 // unregisterMethod 移除方法及其 localOnly 标记。
-//
 // Python: WebChannel.unregister_method (web_connect.py:384-387)。
 func (wc *WebChannel) unregisterMethod(method string) {
 	wc.methodsMu.Lock()
@@ -582,7 +567,6 @@ func (wc *WebChannel) unregisterMethod(method string) {
 }
 
 // invokeMethodHandler 调用方法处理器，返回 handler 是否已应答。
-//
 // Python: WebChannel._invoke_method_handler (web_connect.py:624-678)：
 // handler 抛异常时记录诊断日志、回 INTERNAL_ERROR 帧并返回 False
 // （调用方据此决定不再转发/不再重复调用）；正常返回 True。
@@ -619,7 +603,6 @@ func writeCollectedFrames(conn *websocket.Conn, collector *frameCollector, metho
 }
 
 // sendResponse 向客户端回一帧 res。
-//
 // Python: WebChannel.send_response。
 func (wc *WebChannel) sendResponse(ws wsSender, reqID string, ok bool, payload map[string]any, errMsg, code string) {
 	if payload == nil {
@@ -780,7 +763,6 @@ func (wc *WebChannel) broadcastInterruptSideEffect(msg *schema.Message) {
 }
 
 // BuildUserMessage 从 RPC 请求参数构建入站 Message。
-//
 // Python: WebChannel._handle_raw_message 中构建 user_message 的逻辑。
 func BuildUserMessage(reqID, method string, params map[string]any, sessionID string, query map[string][]string) *schema.Message {
 	reqMethod, _ := schema.ParseReqMethod(method)
@@ -803,7 +785,6 @@ func BuildUserMessage(reqID, method string, params map[string]any, sessionID str
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseMode 从 params 解析运行模式。
-//
 // Python: WebChannel._parse_mode (web_connect.py:2356-2358)：
 // `Mode.from_raw(raw_mode, default=Mode.AGENT_WORK_NORMAL)`——先经 DEPRECATION_MAP
 // 归一旧 canonical，缺省/非法值回落 agent.work.normal（plan 是运行期状态，不是缺省档）。

@@ -18,7 +18,6 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // VariableResult 变量提取结果，记录单个变量的键值对。
-//
 // Python: openjiuwen/core/memory/process/extract/memory_analyzer.py (VariableResult)
 type VariableResult struct {
 	// VariableKey 变量键名
@@ -28,7 +27,6 @@ type VariableResult struct {
 }
 
 // MemoryAnalyzerResult 记忆分析结果，包含关键信息标志、变量列表和摘要。
-//
 // Python: openjiuwen/core/memory/process/extract/memory_analyzer.py (MemoryAnalyzerResult)
 type MemoryAnalyzerResult struct {
 	// HasKeyInformation 是否含有关键信息
@@ -43,7 +41,6 @@ type MemoryAnalyzerResult struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Analyze 分析对话消息，提取变量和摘要。
-//
 // 包级函数，对齐 Python MemoryAnalyzer.analyze (@staticmethod)。
 func Analyze(
 	ctx context.Context,
@@ -205,7 +202,6 @@ func Analyze(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // mapToMemoryAnalyzerResult 将解析后的 map 转换为 MemoryAnalyzerResult。
-//
 // 对齐 Python: MemoryAnalyzerResult.model_validate(res)
 func mapToMemoryAnalyzerResult(m map[string]any) (*MemoryAnalyzerResult, error) {
 	result := &MemoryAnalyzerResult{}

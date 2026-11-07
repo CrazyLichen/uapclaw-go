@@ -13,10 +13,8 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TrajectoryExtractor 轨迹提取器接口。
-//
 // 从 Agent 执行 Session 中提取完整 Trajectory。
 // TracerTrajectoryExtractor 是默认实现。
-//
 // Python: openjiuwen/agent_evolving/trajectory/extractor.py TrajectoryExtractor
 //
 //	class TrajectoryExtractor:
@@ -24,16 +22,13 @@ import (
 //	    从会话中提取轨迹
 type TrajectoryExtractor interface {
 	// Extract 从 Session 提取 Trajectory。
-	//
 	// Python: TrajectoryExtractor.extract(session, case_id)
 	Extract(sess *session.Session, caseID string) *Trajectory
 }
 
 // TracerTrajectoryExtractor 基于 Tracer Span 的轨迹提取器。
-//
 // 从 Session.tracer() 的 AgentSpanManager 中提取所有 Span，
 // 逐个转换为 TrajectoryStep，通过 TrajectoryBuilder 组装完整 Trajectory。
-//
 // Python: openjiuwen/agent_evolving/trajectory/extractor.py TrajectoryExtractor
 type TracerTrajectoryExtractor struct {
 	// resourceManager 用于查询 Tool 元数据（可选）
@@ -53,7 +48,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTracerTrajectoryExtractor 创建基于 Tracer 的轨迹提取器。
-//
 // Python: TrajectoryExtractor(resource_manager=resource_manager)
 func NewTracerTrajectoryExtractor(resourceManager ...*resources_manager.ResourceMgr) *TracerTrajectoryExtractor {
 	e := &TracerTrajectoryExtractor{}
@@ -64,7 +58,6 @@ func NewTracerTrajectoryExtractor(resourceManager ...*resources_manager.Resource
 }
 
 // Extract 从 Session 提取 Trajectory。
-//
 // Python: TrajectoryExtractor.extract(session, case_id)
 func (e *TracerTrajectoryExtractor) Extract(sess *session.Session, caseID string) *Trajectory {
 	// Python: tracer = self._get_tracer(session)
@@ -108,7 +101,6 @@ func parseRoleType(s string) llmschema.RoleType {
 }
 
 // getAgentSpans 从 Session 的 Tracer 中获取 Agent Span 列表。
-//
 // Python: TrajectoryExtractor._get_agent_spans(tracer)
 func (e *TracerTrajectoryExtractor) getAgentSpans(sess *session.Session) []*tracer.TraceAgentSpan {
 	// Python: tracer = getattr(session, "tracer", None); return tracer() if callable(tracer) else tracer
@@ -131,7 +123,6 @@ func (e *TracerTrajectoryExtractor) getAgentSpans(sess *session.Session) []*trac
 }
 
 // buildStep 将 TraceAgentSpan 转换为 TrajectoryStep。
-//
 // Python: TrajectoryExtractor._build_step(span)
 func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *TrajectoryStep {
 	kind := e.classifyKind(span)
@@ -186,7 +177,6 @@ func (e *TracerTrajectoryExtractor) buildStep(span *tracer.TraceAgentSpan) *Traj
 }
 
 // buildDetail 根据 kind 构建 StepDetail。
-//
 // Python: TrajectoryExtractor._build_detail(span, kind)
 func (e *TracerTrajectoryExtractor) buildDetail(span *tracer.TraceAgentSpan, kind StepKind) StepDetail {
 	switch kind {
@@ -200,7 +190,6 @@ func (e *TracerTrajectoryExtractor) buildDetail(span *tracer.TraceAgentSpan, kin
 }
 
 // buildLLMDetail 从 Span 构建LLMCallDetail。
-//
 // Python: TrajectoryExtractor._build_llm_detail(span)
 func (e *TracerTrajectoryExtractor) buildLLMDetail(span *tracer.Span) *LLMCallDetail {
 	// Python: on_invoke = getattr(span, "on_invoke_data", None) or []
@@ -284,7 +273,6 @@ func (e *TracerTrajectoryExtractor) buildLLMDetail(span *tracer.Span) *LLMCallDe
 }
 
 // buildToolDetail 从 Span 构建 ToolCallDetail。
-//
 // Python: TrajectoryExtractor._build_tool_detail(span)
 func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan) *ToolCallDetail {
 	// Python: tool_name = getattr(span, "name", "") or ""
@@ -314,7 +302,6 @@ func (e *TracerTrajectoryExtractor) buildToolDetail(span *tracer.TraceAgentSpan)
 }
 
 // buildMeta 构建步骤元数据。
-//
 // Python: TrajectoryExtractor._build_meta(span, base_meta, kind, detail)
 func (e *TracerTrajectoryExtractor) buildMeta(span *tracer.TraceAgentSpan, baseMeta map[string]any, kind StepKind, detail StepDetail) map[string]any {
 	// Python: meta = copy.deepcopy(base_meta)
@@ -355,7 +342,6 @@ func (e *TracerTrajectoryExtractor) buildMeta(span *tracer.TraceAgentSpan, baseM
 }
 
 // classifyKind 根据 invoke_type 判断步骤类型。
-//
 // Python: TrajectoryExtractor._classify_kind(span)
 func (e *TracerTrajectoryExtractor) classifyKind(span *tracer.TraceAgentSpan) StepKind {
 	// Python: invoke_type = getattr(span, "invoke_type", None); invoke_str = str(invoke_type) if invoke_type else ""
@@ -374,7 +360,6 @@ func (e *TracerTrajectoryExtractor) classifyKind(span *tracer.TraceAgentSpan) St
 }
 
 // getOperatorID 从 Span 属性中提取 operator ID。
-//
 // Python: TrajectoryExtractor._get_operator_id(span, meta)
 // 优先级：operator_id > llm_call_id > meta.operator_id > name
 func (e *TracerTrajectoryExtractor) getOperatorID(span *tracer.TraceAgentSpan, meta map[string]any) string {
@@ -408,7 +393,6 @@ func (e *TracerTrajectoryExtractor) getOperatorID(span *tracer.TraceAgentSpan, m
 }
 
 // dtToMs 将 time.Time 转换为毫秒时间戳。
-//
 // Python: _dt_to_ms(dt) -> int(dt.timestamp() * 1000) if dt else None
 func dtToMs(t *time.Time) int {
 	if t == nil {
@@ -418,7 +402,6 @@ func dtToMs(t *time.Time) int {
 }
 
 // extractInputsAsMap 从 Span 提取输入数据为 map[string]any。
-//
 // Python: TrajectoryExtractor._extract_inputs(span)
 // Python: raw = getattr(span, "inputs", None); if isinstance(raw, dict) and "inputs" in raw: return raw["inputs"]
 func extractInputsAsMap(span *tracer.Span) map[string]any {
@@ -435,7 +418,6 @@ func extractInputsAsMap(span *tracer.Span) map[string]any {
 }
 
 // extractOutputsAsMap 从 Span 提取输出数据为 map[string]any。
-//
 // Python: TrajectoryExtractor._extract_outputs(span)
 func extractOutputsAsMap(span *tracer.Span) map[string]any {
 	raw := span.Outputs

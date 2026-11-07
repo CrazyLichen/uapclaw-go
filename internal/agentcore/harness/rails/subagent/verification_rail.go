@@ -20,13 +20,11 @@ import (
 
 // VerificationRail 验证代理约束 Rail。
 // 强制执行工具白名单和每轮约束提醒，包括工作空间范围守卫。
-//
 // 设计为叠加在 SysOperationRail 之上使用。
 // SysOperationRail 注册所有文件系统和 Shell 工具；
 // 本 Rail 限制验证代理实际可调用的工具子集，
 // 并在每轮模型调用前重新注入约束提醒，
 // 防止代理在长时间运行中忘记自身角色。
-//
 // Python: VerificationRail (openjiuwen/harness/rails/subagent/verification_rail.py)
 type VerificationRail struct {
 	rails.DeepAgentRail
@@ -127,7 +125,6 @@ var _ agentinterfaces.AgentRail = (*VerificationRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVerificationRail 创建 VerificationRail 实例。
-//
 // Python: VerificationRail(allowed_tools=None)
 func NewVerificationRail(opts ...VerificationRailOption) *VerificationRail {
 	r := &VerificationRail{
@@ -148,7 +145,6 @@ func WithAllowedTools(tools map[string]bool) VerificationRailOption {
 }
 
 // Init 初始化钩子：捕获 system_prompt_builder。
-//
 // Python: VerificationRail.init(agent)
 // Python: L115-123： self._agent = agent; self.system_prompt_builder = agent.system_prompt_builder
 func (r *VerificationRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
@@ -160,7 +156,6 @@ func (r *VerificationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 }
 
 // BeforeModelCall 模型调用前注入约束提醒 section。
-//
 // 注入逻辑：
 // 1. promptBuilder 为 nil 时跳过
 // 2. 构建约束提醒 PromptSection（双语内容）
@@ -196,7 +191,6 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 }
 
 // BeforeToolCall 工具调用前执行白名单检查和工作空间范围守卫。
-//
 // 两个守卫按顺序运行：
 //  1. 白名单 — 拒绝不在 VERIFICATION_ALLOWED_TOOLS 中的工具
 //  2. 工作空间范围 — 对于接受文件系统路径的工具，
@@ -296,7 +290,6 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 }
 
 // GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall + BeforeToolCall。
-//
 // Python: VerificationRail 隐式覆盖 before_model_call/before_tool_call
 func (r *VerificationRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
@@ -314,7 +307,6 @@ func (r *VerificationRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // rejectTool 标记工具调用为跳过并注入错误结果。
-//
 // Python: VerificationRail._reject_tool(ctx, error_msg)
 // Python: L235-248
 func (r *VerificationRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, inputs *agentinterfaces.ToolCallInputs, errorMsg string) {
