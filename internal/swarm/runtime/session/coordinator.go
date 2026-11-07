@@ -928,3 +928,374 @@ func (c *RuntimeSessionCoordinator) sessionByID(sessionID string) (*sessionRecor
 	record, ok := c.sessions[sessionID]
 	return record, ok
 }
+
+// ──────────────────────────── 结构体（取消与关闭） ────────────────────────────
+
+// CancelExecutionOptions CancelExecution 的查询条件。
+//
+// Python: RuntimeSessionCoordinator.cancel_execution 关键字参数
+type CancelExecutionOptions struct {
+	// RequestID 按请求标识取消
+	RequestID *string
+	// ExecutionID 按执行标识取消
+	ExecutionID *string
+	// Generation 按代次取消
+	Generation *int
+	// WaitTimeout 覆盖协调器默认超时
+	WaitTimeout *time.Duration
+	// ExcludedExecutionIDs 明确保留不取消的执行
+	ExcludedExecutionIDs []string
+}
+
+// ──────────────────────────── 导出函数（取消与关闭） ────────────────────────────
+
+// CancelExecution 取消匹配的执行及其后代。
+//
+// Python: RuntimeSessionCoordinator.cancel_execution
+// 超时的执行**不**标 CANCELLED（保留原状态供下次重试）。
+func (c *RuntimeSessionCoordinator) CancelExecution(
+	sessionID string,
+	opts CancelExecutionOptions,
+) (CancelExecutionResult, error) {
+	handles := c.registry.Select(SelectOptions{
+		SessionID:   sessionID,
+		RequestID:   opts.RequestID,
+		ExecutionID: opts.ExecutionID,
+		Generation:  opts.Generation,
+		ActiveOnly:  true,
+	})
+	if len(handles) == 0 {
+		return CancelExecutionResult{}, nil
+	}
+	handles = c.withDescendants(handles)
+	if len(opts.ExcludedExecutionIDs) > 0 {
+		excluded := map[string]struct{}{}
+		for _, id := range opts.ExcludedExecutionIDs {
+			excluded[id] = struct{}{}
+		}
+		filtered := handles[:0]
+		for _, h := range handles {
+			if _, skip := excluded[h.ExecutionID]; !skip {
+				filtered = append(filtered, h)
+			}
+		}
+		handles = filtered
+	}
+	if len(handles) == 0 {
+		return CancelExecutionResult{}, nil
+	}
+
+	timeout := c.cancelTimeout
+	if opts.WaitTimeout != nil {
+		timeout = *opts.WaitTimeout
+	}
+
+	directIDs := map[string]struct{}{}
+	var direct, work []*SessionExecutionHandle
+	for _, h := range handles {
+		if requiresDirectCancel(h) {
+			direct = append(direct, h)
+			directIDs[h.ExecutionID] = struct{}{}
+			continue
+		}
+		if h.WorkKind.Scheduled() {
+			work = append(work, h)
+		}
+	}
+	// 非直接取消的执行：先标 CancellationRequested（对齐上游）
+	for _, h := range handles {
+		if _, isDirect := directIDs[h.ExecutionID]; !isDirect {
+			c.registry.MarkCancellationRequested(h.ExecutionID)
+		}
+	}
+
+	schedTimeouts := c.scheduler.CancelHandles(context.Background(), work, timeout)
+	directTimeouts := c.requestDirectCancel(direct, timeout)
+	timedOut := dedupeStrings(append(schedTimeouts, directTimeouts...))
+	timedOutSet := map[string]struct{}{}
+	for _, id := range timedOut {
+		timedOutSet[id] = struct{}{}
+	}
+
+	cancelled := 0
+	for _, h := range handles {
+		if _, isTimedOut := timedOutSet[h.ExecutionID]; isTimedOut {
+			continue
+		}
+		c.registry.MarkTerminalIfActive(h.ExecutionID, SessionExecutionStateCancelled)
+		if c.registry.StateOf(h.ExecutionID) == SessionExecutionStateCancelled {
+			cancelled++
+		}
+	}
+	if record, ok := c.sessionByID(sessionID); ok {
+		c.refreshSessionState(record)
+	}
+	return CancelExecutionResult{
+		Matched:   len(handles),
+		Cancelled: cancelled,
+		TimedOut:  timedOut,
+	}, nil
+}
+
+// CloseSession 关闭一个会话代次：静默 → 逐条取消 → 等 done → 置 CLOSED。
+//
+// Python: RuntimeSessionCoordinator.close_session
+//
+// 10 步（spec §7.5）：
+//  1. 不存在或代次不符 → Existed=false
+//  2. record.state = QUIESCING
+//  3. 取该代次全部执行
+//  4. active（非终态）/ settling（终态但 RetainOwnerTask 且 Done 未关）
+//  5. direct = active 中 RequiresDirectCancel
+//  6. directTimeouts = requestDirectCancel(direct)
+//  7. scheduler.CloseSession(sid, gen)
+//  8. scheduler 不存在时把未结束的 scheduled active 塞进 settling
+//  9. settlingTimeouts = waitForHandles(settling)
+// 10. 合并超时；非超时且未终态标 CANCELLED。有超时 → 保持 QUIESCING；无超时 → CLOSED
+func (c *RuntimeSessionCoordinator) CloseSession(
+	sessionID string,
+	generation *int,
+	waitTimeout *time.Duration,
+) (CloseSessionResult, error) {
+	timeout := c.cancelTimeout
+	if waitTimeout != nil {
+		timeout = *waitTimeout
+	}
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok || (generation != nil && record.generation != *generation) {
+		c.mu.Unlock()
+		return CloseSessionResult{SessionID: sessionID, Generation: generation, Existed: false}, nil
+	}
+	record.state = RuntimeSessionStateQuiescing
+	gen := record.generation
+	c.mu.Unlock()
+
+	executions := c.registry.Select(SelectOptions{SessionID: sessionID, Generation: &gen})
+	var active, settling []*SessionExecutionHandle
+	for _, h := range executions {
+		switch {
+		case !h.State.Terminal():
+			active = append(active, h)
+		case h.RetainOwnerTask && !isDoneClosed(h.Done):
+			settling = append(settling, h)
+		}
+	}
+
+	var direct []*SessionExecutionHandle
+	for _, h := range active {
+		if requiresDirectCancel(h) {
+			direct = append(direct, h)
+		}
+	}
+	directTimeouts := c.requestDirectCancel(direct, timeout)
+
+	schedulerExisted, schedTimeouts := c.scheduler.CloseSession(sessionID, &gen, timeout)
+	if !schedulerExisted {
+		for _, h := range active {
+			if h.WorkKind.Scheduled() && !isDoneClosed(h.Done) {
+				settling = append(settling, h)
+			}
+		}
+	}
+	settlingTimeouts := c.waitForHandles(settling, timeout)
+
+	timedOut := dedupeStrings(append(append(append([]string{}, directTimeouts...), schedTimeouts...), settlingTimeouts...))
+	timedOutSet := map[string]struct{}{}
+	for _, id := range timedOut {
+		timedOutSet[id] = struct{}{}
+	}
+	for _, h := range active {
+		c.registry.MarkCancellationRequested(h.ExecutionID)
+		if _, isTimedOut := timedOutSet[h.ExecutionID]; isTimedOut {
+			continue
+		}
+		c.registry.MarkTerminalIfActive(h.ExecutionID, SessionExecutionStateCancelled)
+	}
+
+	c.mu.Lock()
+	if c.sessions[sessionID] == record && len(timedOut) == 0 {
+		record.state = RuntimeSessionStateClosed
+	}
+	// 有超时：保持 QUIESCING（spec §2.2 最后一行 / D25）
+	c.mu.Unlock()
+
+	return CloseSessionResult{
+		SessionID:  sessionID,
+		Generation: &gen,
+		Existed:    true,
+		TimedOut:   timedOut,
+	}, nil
+}
+
+// Close 关闭全部会话与调度器。
+//
+// Python: RuntimeSessionCoordinator.close
+// 与上游差异：Go 无法返回元组，timedOut 用出参并返回 error（spec §8 D-10）。
+func (c *RuntimeSessionCoordinator) Close(waitTimeout *time.Duration, timedOut *[]string) error {
+	timeout := c.cancelTimeout
+	if waitTimeout != nil {
+		timeout = *waitTimeout
+	}
+	c.mu.Lock()
+	c.accepting = false
+	records := make([]*sessionRecord, 0, len(c.sessions))
+	for _, r := range c.sessions {
+		records = append(records, r)
+	}
+	c.mu.Unlock()
+
+	var allTimedOut []string
+	for _, r := range records {
+		if r.state == RuntimeSessionStateClosed {
+			continue
+		}
+		gen := r.generation
+		res, err := c.CloseSession(r.sessionID, &gen, &timeout)
+		if err != nil {
+			return err
+		}
+		allTimedOut = append(allTimedOut, res.TimedOut...)
+	}
+	allTimedOut = dedupeStrings(allTimedOut)
+	if timedOut != nil {
+		*timedOut = allTimedOut
+	}
+	_ = c.scheduler.Close(timeout)
+	if len(allTimedOut) > 0 {
+		return &SessionCloseTimeoutError{SessionID: "runtime", ExecutionIDs: allTimedOut}
+	}
+	return nil
+}
+
+// ──────────────────────────── 非导出函数（取消与关闭） ────────────────────────────
+
+// requiresDirectCancel 该执行是否走直接取消（发 ctx 取消）而非 lane 取消。
+//
+// Python: RuntimeSessionCoordinator._requires_direct_cancel
+// SESSION_MESSAGE 虽属 scheduled，但强制走直接取消（spec D18）。
+func requiresDirectCancel(h *SessionExecutionHandle) bool {
+	if h.WorkKind == SessionWorkKindSessionMessage {
+		return true
+	}
+	return !h.WorkKind.Scheduled()
+}
+
+// requestDirectCancel 分两批取消：fresh 先标记再取消并等；pending 只等。
+//
+// Python: RuntimeSessionCoordinator._request_direct_cancel
+func (c *RuntimeSessionCoordinator) requestDirectCancel(
+	handles []*SessionExecutionHandle,
+	timeout time.Duration,
+) []string {
+	var pending, fresh []*SessionExecutionHandle
+	for _, h := range handles {
+		if c.registry.IsCancellationRequested(h.ExecutionID) {
+			pending = append(pending, h)
+		} else {
+			fresh = append(fresh, h)
+		}
+	}
+	for _, h := range fresh {
+		c.registry.MarkCancellationRequested(h.ExecutionID)
+	}
+	cancelledTimeouts := c.cancelDirectHandles(fresh, timeout)
+	pendingTimeouts := c.waitForHandles(pending, timeout)
+	return append(cancelledTimeouts, pendingTimeouts...)
+}
+
+// cancelDirectHandles 对 fresh 批发取消并等待退出。
+//
+// Python: RuntimeSessionCoordinator._cancel_direct_handles
+// 等的是 Done（执行方退出），不是 Terminal（spec §2.3）。
+func (c *RuntimeSessionCoordinator) cancelDirectHandles(
+	handles []*SessionExecutionHandle,
+	timeout time.Duration,
+) []string {
+	for _, h := range handles {
+		if isDoneClosed(h.Done) {
+			continue
+		}
+		if cancel := c.registry.CancelOf(h.ExecutionID); cancel != nil {
+			cancel()
+		}
+	}
+	var timedOut []string
+	for _, h := range handles {
+		if isDoneClosed(h.Done) {
+			continue
+		}
+		select {
+		case <-h.Done:
+		case <-time.After(timeout):
+			timedOut = append(timedOut, h.ExecutionID)
+		}
+	}
+	return timedOut
+}
+
+// waitForHandles 等待一批执行退出（等 Done）。
+//
+// Python: RuntimeSessionCoordinator._wait_for_handles
+func (c *RuntimeSessionCoordinator) waitForHandles(
+	handles []*SessionExecutionHandle,
+	timeout time.Duration,
+) []string {
+	var timedOut []string
+	deadline := time.After(timeout)
+	for _, h := range handles {
+		if isDoneClosed(h.Done) {
+			continue
+		}
+		select {
+		case <-h.Done:
+		case <-deadline:
+			timedOut = append(timedOut, h.ExecutionID)
+		}
+	}
+	return timedOut
+}
+
+// withDescendants 展开执行的全部后代（跨代内同会话）。
+//
+// Python: RuntimeSessionCoordinator._with_descendants
+func (c *RuntimeSessionCoordinator) withDescendants(handles []*SessionExecutionHandle) []*SessionExecutionHandle {
+	selected := map[string]*SessionExecutionHandle{}
+	for _, h := range handles {
+		selected[h.ExecutionID] = h
+	}
+	frontier := make(map[string]struct{}, len(selected))
+	for id := range selected {
+		frontier[id] = struct{}{}
+	}
+	for len(frontier) > 0 {
+		childIDs := map[string]struct{}{}
+		scopes := map[SessionLifecycleContext]struct{}{}
+		for _, h := range selected {
+			scopes[SessionLifecycleContext{SessionID: h.SessionID, Generation: h.Generation}] = struct{}{}
+		}
+		for scope := range scopes {
+			gen := scope.Generation
+			actives := c.registry.Select(SelectOptions{
+				SessionID: scope.SessionID, Generation: &gen, ActiveOnly: true,
+			})
+			for _, h := range actives {
+				if _, isParent := frontier[h.ParentExecutionID]; !isParent {
+					continue
+				}
+				if _, exists := selected[h.ExecutionID]; exists {
+					continue
+				}
+				selected[h.ExecutionID] = h
+				childIDs[h.ExecutionID] = struct{}{}
+			}
+		}
+		frontier = childIDs
+	}
+	out := make([]*SessionExecutionHandle, 0, len(selected))
+	for _, h := range selected {
+		out = append(out, h)
+	}
+	sortByCreatedAt(out)
+	return out
+}

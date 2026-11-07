@@ -652,3 +652,382 @@ func TestCoordinator_RunStream空流正常结束(t *testing.T) {
 		t.Fatalf("空流应正常结束且无元素，实际 (err=%v, count=%d)", err, count)
 	}
 }
+
+// TestCancelExecution_精确取消单个 校验按 execution_id 命中。
+func TestCancelExecution_精确取消单个(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(ctx context.Context) (any, error) {
+				close(started)
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-release:
+					return nil, nil
+				}
+			}, UnaryOptions{})
+	}()
+	<-started
+	snap := c.SnapshotSession("s1")
+	eid := snap.Executions[0].ExecutionID
+	res, err := c.CancelExecution("s1", CancelExecutionOptions{ExecutionID: &eid})
+	if err != nil {
+		t.Fatalf("CancelExecution 失败: %v", err)
+	}
+	if res.Matched != 1 || res.Cancelled != 1 {
+		t.Fatalf("应命中并取消 1 条，实际 %+v", res)
+	}
+	close(release)
+	<-done
+}
+
+// TestCancelExecution_已请求取消的不重复取消 校验两批语义。
+//
+// 对应上游 _request_direct_cancel 的 fresh/pending 分流。
+func TestCancelExecution_已请求取消的不重复取消(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(ctx context.Context) (any, error) {
+				close(started)
+				<-release // 故意不响应 ctx
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	snap := c.SnapshotSession("s1")
+	eid := snap.Executions[0].ExecutionID
+	shortTimeout := 50 * time.Millisecond
+	first, _ := c.CancelExecution("s1", CancelExecutionOptions{
+		ExecutionID: &eid, WaitTimeout: &shortTimeout,
+	})
+	if len(first.TimedOut) != 1 {
+		t.Fatalf("首次应超时 1 条，实际 %+v", first)
+	}
+	// 第二次：已 CancellationRequested，走 pending 分支只等
+	second, err := c.CancelExecution("s1", CancelExecutionOptions{
+		ExecutionID: &eid, WaitTimeout: &shortTimeout,
+	})
+	if err != nil {
+		t.Fatalf("重复 CancelExecution 应不报错: %v", err)
+	}
+	if len(second.TimedOut) != 1 {
+		t.Fatalf("pending 分支也应超时，实际 %+v", second)
+	}
+	close(release)
+	<-done
+}
+
+// TestCancelExecution_超时不标CANCELLED 校验 D25 语义。
+func TestCancelExecution_超时不标CANCELLED(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-release
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	snap := c.SnapshotSession("s1")
+	eid := snap.Executions[0].ExecutionID
+	shortTimeout := 50 * time.Millisecond
+	res, _ := c.CancelExecution("s1", CancelExecutionOptions{
+		ExecutionID: &eid, WaitTimeout: &shortTimeout,
+	})
+	if len(res.TimedOut) != 1 {
+		t.Fatalf("应超时 1 条，实际 %+v", res)
+	}
+	// 超时的执行状态保持原样（不标 CANCELLED）
+	got := c.GetExecution(eid)
+	if got == nil {
+		t.Fatal("超时后执行不应被回收")
+	}
+	if got.State == SessionExecutionStateCancelled {
+		t.Fatal("超时的执行不得标 CANCELLED（否则下次重试查不到残留）")
+	}
+	close(release)
+	<-done
+}
+
+// TestCancelExecution_无匹配返回零值 校验空结果。
+func TestCancelExecution_无匹配返回零值(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	notExist := "nope"
+	res, err := c.CancelExecution("s1", CancelExecutionOptions{ExecutionID: &notExist})
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if res.Matched != 0 || res.Cancelled != 0 || len(res.TimedOut) != 0 {
+		t.Fatalf("无匹配应返回零值，实际 %+v", res)
+	}
+}
+
+// TestCancelExecution_展开后代执行 校验 withDescendants。
+func TestCancelExecution_展开后代执行(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "parent", SessionWorkKindHeartbeat,
+			func(ctx context.Context) (any, error) {
+				close(started)
+				<-release
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	child, err := c.NewExecutionForTest("s1", "child", SessionWorkKindHeartbeat,
+		ChildOptions{ParentRequestID: "parent"})
+	if err != nil {
+		t.Fatalf("创建子执行失败: %v", err)
+	}
+	snap := c.SnapshotSession("s1")
+	parentID := ""
+	for _, e := range snap.Executions {
+		if e.RequestID == "parent" {
+			parentID = e.ExecutionID
+		}
+	}
+	shortTimeout := 50 * time.Millisecond
+	res, _ := c.CancelExecution("s1", CancelExecutionOptions{
+		ExecutionID: &parentID, WaitTimeout: &shortTimeout,
+	})
+	if res.Matched < 2 {
+		t.Fatalf("应展开父+子共 2 条，实际 %+v", res)
+	}
+	if c.GetExecution(child.ExecutionID) == nil {
+		// 允许已被回收
+	}
+	close(release)
+	<-done
+}
+
+// TestCancelExecution_排除指定执行 校验 ExcludedExecutionIDs。
+func TestCancelExecution_排除指定执行(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-release
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	snap := c.SnapshotSession("s1")
+	eid := snap.Executions[0].ExecutionID
+	res, _ := c.CancelExecution("s1", CancelExecutionOptions{
+		ExecutionID:          &eid,
+		ExcludedExecutionIDs: []string{eid},
+	})
+	if res.Matched != 0 {
+		t.Fatalf("被排除的执行不应命中，实际 %+v", res)
+	}
+	close(release)
+	<-done
+}
+
+// TestCloseSession_无执行时直接关闭 校验基本路径。
+func TestCloseSession_无执行时直接关闭(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	res, err := c.CloseSession("s1", nil, nil)
+	if err != nil {
+		t.Fatalf("CloseSession 失败: %v", err)
+	}
+	if !res.Existed || len(res.TimedOut) != 0 {
+		t.Fatalf("应存在且无超时，实际 %+v", res)
+	}
+	if res.Generation == nil || *res.Generation != 1 {
+		t.Fatalf("应返回代次 1，实际 %+v", res.Generation)
+	}
+	snap := c.SnapshotSession("s1")
+	if snap.State != RuntimeSessionStateClosed {
+		t.Fatalf("关闭后状态应为 CLOSED，实际 %s", snap.State)
+	}
+}
+
+// TestCloseSession_有执行时先取消再关 校验清场语义。
+func TestCloseSession_有执行时先取消再关(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(ctx context.Context) (any, error) {
+				close(started)
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}, UnaryOptions{})
+	}()
+	<-started
+	timeout := 2 * time.Second
+	res, err := c.CloseSession("s1", nil, &timeout)
+	if err != nil {
+		t.Fatalf("CloseSession 失败: %v", err)
+	}
+	if !res.Existed {
+		t.Fatal("会话应存在")
+	}
+	if len(res.TimedOut) != 0 {
+		t.Fatalf("响应取消的执行不应超时，实际 %v", res.TimedOut)
+	}
+	<-finished
+	snap := c.SnapshotSession("s1")
+	if snap.State != RuntimeSessionStateClosed {
+		t.Fatalf("应置 CLOSED，实际 %s", snap.State)
+	}
+}
+
+// TestCloseSession_代次不符返回不存在 校验代次判定。
+func TestCloseSession_代次不符返回不存在(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1") // generation=1
+	other := 9
+	res, _ := c.CloseSession("s1", &other, nil)
+	if res.Existed {
+		t.Fatal("代次不符应返回 Existed=false")
+	}
+}
+
+// TestCloseSession_超时后不置CLOSED 校验超时保状态供重试。
+//
+// spec §2.2 最后一行 + D25：超时只是"不再等"，不是"对方不停"。
+func TestCloseSession_超时后不置CLOSED(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	block := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-block // 故意不响应 ctx，模拟不检查取消的阻塞点
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	shortTimeout := 50 * time.Millisecond
+	res, err := c.CloseSession("s1", nil, &shortTimeout)
+	if err != nil {
+		t.Fatalf("CloseSession 失败: %v", err)
+	}
+	if len(res.TimedOut) == 0 {
+		t.Fatal("应记录超时执行")
+	}
+	snap := c.SnapshotSession("s1")
+	if snap.State == RuntimeSessionStateClosed {
+		t.Fatal("超时后不应置 CLOSED（否则下次重试查不到残留）")
+	}
+	if snap.State != RuntimeSessionStateQuiescing {
+		t.Fatalf("超时后应保持 QUIESCING，实际 %s", snap.State)
+	}
+	close(block)
+	<-done
+}
+
+// TestCloseSession_双删幂等 校验并发重复关闭。
+func TestCloseSession_双删幂等(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	var wg sync.WaitGroup
+	results := make([]CloseSessionResult, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			res, _ := c.CloseSession("s1", nil, nil)
+			results[n] = res
+		}(i)
+	}
+	wg.Wait()
+	if !results[0].Existed && !results[1].Existed {
+		t.Fatal("至少一次应返回 Existed=true")
+	}
+}
+
+// TestCoordinator_Close关闭全部会话 校验 Runtime 关闭。
+func TestCoordinator_Close关闭全部会话(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	mustRegister(t, c, "s2")
+	timeout := time.Second
+	var timedOut []string
+	if err := c.Close(&timeout, &timedOut); err != nil {
+		t.Fatalf("Close 失败: %v", err)
+	}
+	if len(timedOut) != 0 {
+		t.Fatalf("不应有超时，实际 %v", timedOut)
+	}
+	if _, err := c.RegisterSession("s3", "web", SessionPersistencePolicyPersistent); err == nil {
+		t.Fatal("关闭后注册应报错")
+	}
+}
+
+// TestCoordinator_Close有超时返回错误 校验 SessionCloseTimeoutError。
+func TestCoordinator_Close有超时返回错误(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	block := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-block
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	shortTimeout := 50 * time.Millisecond
+	var timedOut []string
+	err := c.Close(&shortTimeout, &timedOut)
+	if err == nil {
+		t.Fatal("有超时应返回错误")
+	}
+	var closeErr *SessionCloseTimeoutError
+	if !errors.As(err, &closeErr) {
+		t.Fatalf("应返回 SessionCloseTimeoutError，实际 %T", err)
+	}
+	if closeErr.SessionID != "runtime" {
+		t.Fatalf("SessionID 应为 runtime，实际 %q", closeErr.SessionID)
+	}
+	if len(timedOut) != 1 {
+		t.Fatalf("timedOut 出参应有 1 条，实际 %v", timedOut)
+	}
+	close(block)
+	<-done
+}

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"sort"
 	"sync"
 )
@@ -159,6 +160,74 @@ func (r *SessionExecutionRegistry) SupersedeWaiting(sessionID string, generation
 		h.CancellationRequested = true
 		markTerminalLocked(r, h, SessionExecutionStateCancelled, "")
 	}
+}
+
+// StateOf 原子读取执行状态。
+//
+// 锁外直接读 handle.State 会与并发 MarkTerminal 竞争（-race 实测），
+// 因此对外一律经此方法。
+func (r *SessionExecutionRegistry) StateOf(executionID string) SessionExecutionState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		return h.State
+	}
+	return ""
+}
+
+// CancelOf 原子取取消函数（可能为 nil）。
+func (r *SessionExecutionRegistry) CancelOf(executionID string) context.CancelFunc {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		return h.Cancel
+	}
+	return nil
+}
+
+// IsCancellationRequested 原子读取取消标记。
+func (r *SessionExecutionRegistry) IsCancellationRequested(executionID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		return h.CancellationRequested
+	}
+	return false
+}
+
+// MarkCancellationRequested 原子置取消标记。
+func (r *SessionExecutionRegistry) MarkCancellationRequested(executionID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		h.CancellationRequested = true
+	}
+}
+
+// MarkTerminalIfActive 非终态时置终态，返回是否真的置了。
+//
+// 与 MarkTerminal 的区别：已终态时不重复登记终态队列。
+func (r *SessionExecutionRegistry) MarkTerminalIfActive(executionID string, state SessionExecutionState) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	h, ok := r.executions[executionID]
+	if !ok || h.State.Terminal() {
+		return false
+	}
+	markTerminalLocked(r, h, state, "")
+	return true
+}
+
+// SnapshotOf 原子取单条执行快照（不存在返回 nil）。
+func (r *SessionExecutionRegistry) SnapshotOf(executionID string) *SessionExecutionSnapshot {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	h, ok := r.executions[executionID]
+	if !ok {
+		return nil
+	}
+	snap := h.Snapshot()
+	return &snap
 }
 
 // Get 按执行标识取句柄。
