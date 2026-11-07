@@ -3,6 +3,7 @@ package rails
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
@@ -630,3 +632,94 @@ func (f *fakeDeepAgentForNotify) InnerInvokeOverride() func(ctx context.Context,
 
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)
+
+// ──────────────────────────── goal 分支测试 ────────────────────────────
+
+// TestSetGoalManager_惰性建sinkAndEvaluator 验证 SetGoalManager 注入 + 惰性建 sink/evaluator。
+func TestSetGoalManager_惰性建sinkAndEvaluator(t *testing.T) {
+	r := NewTaskCompletionRail()
+	assert.Nil(t, r.goalReportSink)
+	assert.Nil(t, r.goalEvaluator)
+
+	r.SetGoalManager(goal.NewGoalManager(goal.GoalManagerConfig{
+		Store:             &fakeGoalStoreForRail{},
+		EventManager:      task_loop.NewEventManager(),
+		ControlLock:       &sync.Mutex{},
+		HasOutputStream:   func() bool { return true },
+		CancelActiveRound: func(_ context.Context, _ hschema.RoundWorkKind, _, _ string) {},
+		EmitEvent:         func(_ hschema.InteractionEvent) {},
+		NotifyWork:        func() {},
+	}))
+
+	assert.NotNil(t, r.goalManager)
+	assert.NotNil(t, r.goalReportSink)
+	assert.NotNil(t, r.goalEvaluator)
+}
+
+// TestValidateGoalState_各分支 验证状态与代际校验。
+func TestValidateGoalState_各分支(t *testing.T) {
+	active := goal.CreateGoalRecord("sess-1", "目标", nil, nil)
+	active.GoalID = "g1"
+	active.Revision = 2
+
+	// nil record
+	assert.False(t, validateGoalState(nil, "g1", 2, false))
+	// status 不匹配
+	active.Status = goal.GoalStatusCompleted
+	assert.False(t, validateGoalState(active, "g1", 2, false))
+	// allowPaused 下 PAUSED 通过
+	active.Status = goal.GoalStatusPaused
+	assert.True(t, validateGoalState(active, "g1", 2, true))
+	assert.False(t, validateGoalState(active, "g1", 2, false))
+	// goalID 不匹配
+	active.Status = goal.GoalStatusActive
+	assert.False(t, validateGoalState(active, "g2", 2, false))
+	// revision 不匹配
+	assert.False(t, validateGoalState(active, "g1", 3, false))
+	// 全匹配
+	assert.True(t, validateGoalState(active, "g1", 2, false))
+	// goalID 为空（对齐 Python None 语义，只查 status）
+	assert.True(t, validateGoalState(active, "", 0, false))
+}
+
+// TestGetRunKind_三级回退 验证 run_kind 解析三级回退。
+func TestGetRunKind_三级回退(t *testing.T) {
+	r := NewTaskCompletionRail()
+
+	// 第一级：TaskIterationInputs.RunKind
+	inputs := &agentinterfaces.TaskIterationInputs{RunKind: agentinterfaces.RunKindGoal}
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
+	assert.Equal(t, "goal", r.getRunKind(cbc))
+
+	// 第二级：InvokeInputs.RunKind
+	inv := &agentinterfaces.InvokeInputs{RunKind: agentinterfaces.RunKindCron}
+	cbc2 := agentinterfaces.NewAgentCallbackContext(nil, inv, nil)
+	assert.Equal(t, "cron", r.getRunKind(cbc2))
+
+	// 第三级：extra["run_kind"]
+	inputs3 := &agentinterfaces.TaskIterationInputs{}
+	cbc3 := agentinterfaces.NewAgentCallbackContext(nil, inputs3, nil)
+	cbc3.SetExtra("run_kind", "goal")
+	assert.Equal(t, "goal", r.getRunKind(cbc3))
+
+	// 全无 → 空
+	cbc4 := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.TaskIterationInputs{}, nil)
+	assert.Equal(t, "", r.getRunKind(cbc4))
+}
+
+// TestResolveGoalLang_回退 验证语言解析回退 cn。
+func TestResolveGoalLang_回退(t *testing.T) {
+	assert.Equal(t, "en", resolveGoalLang("en"))
+	assert.Equal(t, "cn", resolveGoalLang("cn"))
+	assert.Equal(t, "cn", resolveGoalLang("xx"))
+	assert.Equal(t, "cn", resolveGoalLang(""))
+}
+
+// fakeGoalStoreForRail 测试用 goal store（Load 返回 nil）。
+type fakeGoalStoreForRail struct{}
+
+func (f *fakeGoalStoreForRail) SessionID() string              { return "sess-1" }
+func (f *fakeGoalStoreForRail) Load() *goal.GoalRecord         { return nil }
+func (f *fakeGoalStoreForRail) Save(_ *goal.GoalRecord)        {}
+func (f *fakeGoalStoreForRail) Clear()                         {}
+func (f *fakeGoalStoreForRail) Commit(_ context.Context) error { return nil }
