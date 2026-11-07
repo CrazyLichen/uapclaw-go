@@ -1031,3 +1031,306 @@ func TestCoordinator_Close有超时返回错误(t *testing.T) {
 	close(block)
 	<-done
 }
+
+// TestCoordinator_RecordInteraction 校验执行内交互登记。
+func TestCoordinator_RecordInteraction(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-release
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	if !c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}}) {
+		t.Fatal("RecordInteraction 应成功")
+	}
+	if got := c.WaitingInteractions("s1", "r1"); len(got) != 1 {
+		t.Fatalf("应记录 1 个交互，实际 %v", got)
+	}
+	close(release)
+	<-done
+}
+
+// TestCoordinator_RecordInteraction会话非活跃返回false 校验前置条件。
+func TestCoordinator_RecordInteraction会话非活跃返回false(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1") // 状态 READY
+	if c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}}) {
+		t.Fatal("会话非 ACTIVE 时应返回 false")
+	}
+	if c.RecordInteraction("nope", "r1", map[string]struct{}{"c1": {}}) {
+		t.Fatal("未注册会话应返回 false")
+	}
+}
+
+// TestCoordinator_UnansweredInteractions 校验未应答集合。
+func TestCoordinator_UnansweredInteractions(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-release
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}, "c2": {}})
+	got := c.UnansweredInteractions("s1")
+	if len(got) != 2 {
+		t.Fatalf("应有 2 个未应答交互，实际 %v", got)
+	}
+	close(release)
+	<-done
+}
+
+// TestCoordinator_HasControlTarget 校验探针。
+func TestCoordinator_HasControlTarget(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	if c.HasControlTarget("s1", "nope") {
+		t.Fatal("无活跃执行时应返回 false")
+	}
+	if c.HasControlTarget("unregistered", "nope") {
+		t.Fatal("未注册会话应返回 false")
+	}
+}
+
+// TestCoordinator_BindAgent 校验 agent 绑定。
+func TestCoordinator_BindAgent(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-release
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	c.BindAgent("s1", "r1", "agent-x")
+	if got := c.ControlTargetAgent("s1", []string{"c1"}); got != nil {
+		t.Fatalf("无等待交互时不应返回 agent，实际 %v", got)
+	}
+	close(release)
+	<-done
+}
+
+// TestCoordinator_WaitingInteractions未注册返回空 校验空值语义。
+func TestCoordinator_WaitingInteractions未注册返回空(t *testing.T) {
+	c := newTestCoordinator()
+	if got := c.WaitingInteractions("nope", "r1"); len(got) != 0 {
+		t.Fatalf("未注册应返回空集合，实际 %v", got)
+	}
+	if got := c.UnansweredInteractions("nope"); len(got) != 0 {
+		t.Fatalf("未注册应返回空集合，实际 %v", got)
+	}
+	if got := c.ControlTargetAgent("nope", []string{"c1"}); got != nil {
+		t.Fatalf("未注册应返回 nil，实际 %v", got)
+	}
+	if _, ok := c.ControlTargetWorkKind("nope", "r1"); ok {
+		t.Fatal("未注册应返回 false")
+	}
+}
+
+// TestDeliverControl_无目标时报错 校验 NoControlTargetError。
+func TestDeliverControl_无目标时报错(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	_, err := c.DeliverControl(context.Background(), "s1", []string{"c1"},
+		func(context.Context) (any, error) { return nil, nil }, ControlDeliveryOptions{})
+	var target *NoControlTargetError
+	if !errors.As(err, &target) {
+		t.Fatalf("应返回 NoControlTargetError，实际 %v", err)
+	}
+	want := "session has no active execution: s1"
+	if err.Error() != want {
+		t.Fatalf("错误文案 = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestDeliverControl_投递后恢复父执行 校验 answered 语义。
+func TestDeliverControl_投递后恢复父执行(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	hold := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-hold
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}})
+
+	// 手动把父执行置 WAITING_FOR_CONTROL 以模拟等待应答
+	generation := 1
+	for _, h := range c.registry.Select(SelectOptions{
+		SessionID: "s1", Generation: &generation, ActiveOnly: true,
+	}) {
+		c.registry.MarkWaiting(h)
+	}
+
+	got, err := c.DeliverControl(context.Background(), "s1", []string{"c1"},
+		func(context.Context) (any, error) { return "answered", nil }, ControlDeliveryOptions{})
+	if err != nil {
+		t.Fatalf("DeliverControl 失败: %v", err)
+	}
+	if got != "answered" {
+		t.Fatalf("返回值错误: %v", got)
+	}
+	close(hold)
+	<-done
+}
+
+// TestDeliverControl_重复投递报AnswerInFlight 校验在飞保护。
+func TestDeliverControl_重复投递报AnswerInFlight(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	hold := make(chan struct{})
+	deliverRelease := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-hold
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}})
+	generation := 1
+	for _, h := range c.registry.Select(SelectOptions{
+		SessionID: "s1", Generation: &generation, ActiveOnly: true,
+	}) {
+		c.registry.MarkWaiting(h)
+	}
+
+	// 第一个投递挂住不返回
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		_, _ = c.DeliverControl(context.Background(), "s1", []string{"c1"},
+			func(context.Context) (any, error) {
+				<-deliverRelease
+				return "first", nil
+			}, ControlDeliveryOptions{})
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// 第二个投递应报 AnswerInFlightError
+	_, err := c.DeliverControl(context.Background(), "s1", []string{"c1"},
+		func(context.Context) (any, error) { return "second", nil }, ControlDeliveryOptions{})
+	var inFlight *AnswerInFlightError
+	if !errors.As(err, &inFlight) {
+		t.Fatalf("第二次投递应报 AnswerInFlightError，实际 %v", err)
+	}
+	close(deliverRelease)
+	<-firstDone
+	close(hold)
+	<-done
+}
+
+// TestDeliverControl_父执行已结束报错 校验 SessionExecutionEndedError。
+func TestDeliverControl_父执行已结束报错(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	hold := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-hold
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}})
+	generation := 1
+	var parent *SessionExecutionHandle
+	for _, h := range c.registry.Select(SelectOptions{
+		SessionID: "s1", Generation: &generation, ActiveOnly: true,
+	}) {
+		c.registry.MarkWaiting(h)
+		parent = h
+	}
+	// 投递过程中把父执行置终态
+	_, err := c.DeliverControl(context.Background(), "s1", []string{"c1"},
+		func(context.Context) (any, error) {
+			c.registry.MarkTerminal(parent, SessionExecutionStateCancelled, "")
+			return "late", nil
+		}, ControlDeliveryOptions{})
+	var ended *SessionExecutionEndedError
+	if !errors.As(err, &ended) {
+		t.Fatalf("父执行已结束应报 SessionExecutionEndedError，实际 %v", err)
+	}
+	close(hold)
+	<-done
+}
+
+// TestCoordinator_OnExecution回调 校验投递期执行快照回调。
+func TestCoordinator_OnExecution回调(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	started := make(chan struct{})
+	hold := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.RunUnary(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+			func(context.Context) (any, error) {
+				close(started)
+				<-hold
+				return nil, nil
+			}, UnaryOptions{})
+	}()
+	<-started
+	c.RecordInteraction("s1", "r1", map[string]struct{}{"c1": {}})
+	generation := 1
+	for _, h := range c.registry.Select(SelectOptions{
+		SessionID: "s1", Generation: &generation, ActiveOnly: true,
+	}) {
+		c.registry.MarkWaiting(h)
+	}
+	var captured *SessionExecutionSnapshot
+	_, err := c.DeliverControl(context.Background(), "s1", []string{"c1"},
+		func(context.Context) (any, error) { return nil, nil },
+		ControlDeliveryOptions{OnExecution: func(s SessionExecutionSnapshot) { captured = &s }})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if captured == nil || captured.WorkKind != SessionWorkKindControlInput {
+		t.Fatalf("OnExecution 应收到 control_input 快照，实际 %+v", captured)
+	}
+	close(hold)
+	<-done
+}

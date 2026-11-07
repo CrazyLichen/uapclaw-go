@@ -230,6 +230,79 @@ func (r *SessionExecutionRegistry) SnapshotOf(executionID string) *SessionExecut
 	return &snap
 }
 
+// AgentOf 原子读取执行绑定的 agent。
+func (r *SessionExecutionRegistry) AgentOf(executionID string) any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		return h.Agent
+	}
+	return nil
+}
+
+// SetAgent 原子设置执行绑定的 agent。
+func (r *SessionExecutionRegistry) SetAgent(executionID string, agent any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		h.Agent = agent
+	}
+}
+
+// WaitingControlIDsOf 原子取等待交互集合副本。
+func (r *SessionExecutionRegistry) WaitingControlIDsOf(executionID string) map[string]struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := map[string]struct{}{}
+	if h, ok := r.executions[executionID]; ok {
+		for k := range h.WaitingControlIDs {
+			out[k] = struct{}{}
+		}
+	}
+	return out
+}
+
+// RemoveWaitingControlIDs 原子从等待集合移除指定标识。
+func (r *SessionExecutionRegistry) RemoveWaitingControlIDs(executionID string, ids map[string]struct{}) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.executions[executionID]; ok {
+		for id := range ids {
+			delete(h.WaitingControlIDs, id)
+		}
+	}
+}
+
+// UnionWaitingControlIDs 原子并集某会话某代次全部活跃执行的等待交互集合。
+func (r *SessionExecutionRegistry) UnionWaitingControlIDs(sessionID string, generation int) map[string]struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.evictTerminalLocked()
+	out := map[string]struct{}{}
+	for _, h := range r.selectLocked(SelectOptions{
+		SessionID: sessionID, Generation: &generation, ActiveOnly: true,
+	}) {
+		for id := range h.WaitingControlIDs {
+			out[id] = struct{}{}
+		}
+	}
+	return out
+}
+
+// StartedAtOf 原子读取开始时刻（nil 时回落 CreatedAt）。
+func (r *SessionExecutionRegistry) StartedAtOf(executionID string) float64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	h, ok := r.executions[executionID]
+	if !ok {
+		return 0
+	}
+	if h.StartedAt != nil {
+		return *h.StartedAt
+	}
+	return h.CreatedAt
+}
+
 // Get 按执行标识取句柄。
 //
 // Python: SessionExecutionRegistry.get

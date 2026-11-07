@@ -1300,3 +1300,453 @@ func (c *RuntimeSessionCoordinator) withDescendants(handles []*SessionExecutionH
 	sortByCreatedAt(out)
 	return out
 }
+
+// ──────────────────────────── 结构体（control 通道） ────────────────────────────
+
+// ControlDeliveryOptions 控制投递可选参数。
+//
+// Python: deliver_control / deliver_control_stream 关键字参数
+type ControlDeliveryOptions struct {
+	// InteractionIDs 从结果提取交互标识
+	InteractionIDs func(any) map[string]struct{}
+	// OnExecution 执行快照回调
+	OnExecution func(SessionExecutionSnapshot)
+}
+
+// ──────────────────────────── 导出函数（control 通道） ────────────────────────────
+
+// RecordInteraction 关联执行内抛出的交互标识。
+//
+// Python: RuntimeSessionCoordinator.record_interaction
+func (c *RuntimeSessionCoordinator) RecordInteraction(
+	sessionID, requestID string,
+	controlIDs map[string]struct{},
+) bool {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok || record.state != RuntimeSessionStateActive {
+		c.mu.Unlock()
+		return false
+	}
+	gen := record.generation
+	c.mu.Unlock()
+
+	handles := c.registry.Select(SelectOptions{
+		SessionID: sessionID, RequestID: &requestID, Generation: &gen, ActiveOnly: true,
+	})
+	for _, h := range handles {
+		c.registry.MarkAwaitingControl(h, controlIDs)
+		c.mu.Lock()
+		c.refreshControlGateLocked(record, nil)
+		c.mu.Unlock()
+		return true
+	}
+	return false
+}
+
+// BindAgent 把 agent 实例绑到匹配执行。
+//
+// Python: RuntimeSessionCoordinator.bind_agent
+func (c *RuntimeSessionCoordinator) BindAgent(sessionID, requestID string, agent any) {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+	gen := record.generation
+	c.mu.Unlock()
+
+	for _, h := range c.registry.Select(SelectOptions{
+		SessionID: sessionID, RequestID: &requestID, Generation: &gen, ActiveOnly: true,
+	}) {
+		c.registry.SetAgent(h.ExecutionID, agent)
+	}
+}
+
+// ControlTargetAgent 取可接收控制的 agent。
+//
+// Python: RuntimeSessionCoordinator.control_target_agent
+func (c *RuntimeSessionCoordinator) ControlTargetAgent(sessionID string, answered []string) any {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok || record.state == RuntimeSessionStateClosed {
+		c.mu.Unlock()
+		return nil
+	}
+	c.mu.Unlock()
+
+	parent := c.controlParent(sessionID, answered)
+	if parent == nil {
+		return nil
+	}
+	return c.registry.AgentOf(parent.ExecutionID)
+}
+
+// HasControlTarget 会话是否有可被控制恢复的活跃执行。
+//
+// Python: RuntimeSessionCoordinator.has_control_target
+func (c *RuntimeSessionCoordinator) HasControlTarget(sessionID, requestID string) bool {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok || record.state == RuntimeSessionStateClosed {
+		c.mu.Unlock()
+		return false
+	}
+	_, claimed := c.claimedExecutionIDLocked(record, requestID)
+	c.mu.Unlock()
+	if claimed {
+		return true
+	}
+	return c.controlParent(sessionID, []string{requestID}) != nil
+}
+
+// WaitingInteractions 应答 requestID 能恢复的执行正在等待的全部交互。
+//
+// Python: RuntimeSessionCoordinator.waiting_interactions
+// 上游用 _control_parent 查找（只认 RUNNING/WAITING_FOR_CONTROL 且等待集合含该 id）；
+// 若该请求尚未进入等待态但已登记交互，_control_parent 会返回 nil。此处按 request_id
+// 直查活跃执行，覆盖「刚 record_interaction 但状态未迁移」的窗口，语义是超集。
+func (c *RuntimeSessionCoordinator) WaitingInteractions(sessionID, requestID string) map[string]struct{} {
+	if parent := c.controlParent(sessionID, []string{requestID}); parent != nil {
+		return c.registry.WaitingControlIDsOf(parent.ExecutionID)
+	}
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok {
+		c.mu.Unlock()
+		return map[string]struct{}{}
+	}
+	gen := record.generation
+	c.mu.Unlock()
+	handles := c.registry.Select(SelectOptions{
+		SessionID: sessionID, RequestID: &requestID, Generation: &gen, ActiveOnly: true,
+	})
+	out := map[string]struct{}{}
+	for _, h := range handles {
+		for id := range c.registry.WaitingControlIDsOf(h.ExecutionID) {
+			out[id] = struct{}{}
+		}
+	}
+	return out
+}
+
+// UnansweredInteractions 会话执行正在等待的交互，减去在飞投递已声明的部分。
+//
+// Python: RuntimeSessionCoordinator.unanswered_interactions
+func (c *RuntimeSessionCoordinator) UnansweredInteractions(sessionID string) map[string]struct{} {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok || record.state == RuntimeSessionStateClosed {
+		c.mu.Unlock()
+		return map[string]struct{}{}
+	}
+	gen := record.generation
+	deliveries := make([]*delivery, 0, len(record.deliveries))
+	for _, d := range record.deliveries {
+		deliveries = append(deliveries, d)
+	}
+	c.mu.Unlock()
+
+	waiting := c.registry.UnionWaitingControlIDs(sessionID, gen)
+	for _, d := range deliveries {
+		for id := range d.answered {
+			delete(waiting, id)
+		}
+	}
+	return waiting
+}
+
+// ControlTargetWorkKind 应答 requestID 的目标根执行的种类。
+//
+// Python: RuntimeSessionCoordinator.control_target_work_kind
+func (c *RuntimeSessionCoordinator) ControlTargetWorkKind(sessionID, requestID string) (SessionWorkKind, bool) {
+	parent := c.controlParent(sessionID, []string{requestID})
+	if parent == nil {
+		c.mu.Lock()
+		if record, ok := c.sessions[sessionID]; ok {
+			if eid, claimed := c.claimedExecutionIDLocked(record, requestID); claimed {
+				parent = c.registry.Get(eid)
+			}
+		}
+		c.mu.Unlock()
+	}
+	if parent == nil {
+		return "", false
+	}
+	if root := c.heartbeatRoot(parent); root != nil {
+		return root.WorkKind, true
+	}
+	return "", false
+}
+
+// DeliverControl 向运行中的会话工作投递输入，不占用其 lane。
+//
+// Python: RuntimeSessionCoordinator.deliver_control
+func (c *RuntimeSessionCoordinator) DeliverControl(
+	ctx context.Context,
+	sessionID string,
+	answered []string,
+	operation func(context.Context) (any, error),
+	opts ControlDeliveryOptions,
+) (any, error) {
+	record, parent, requestID, err := c.claimControlParent(sessionID, answered,
+		"control input is already being delivered")
+	if err != nil {
+		return nil, err
+	}
+	claimed := c.registry.WaitingControlIDsOf(parent.ExecutionID)
+	defer func() {
+		c.releaseControlParent(record, parent)
+		c.refreshSessionState(record)
+	}()
+
+	handle, err := c.newExecution(record, requestID, SessionWorkKindControlInput, parent.ExecutionID, nil)
+	if err != nil {
+		return nil, err
+	}
+	parentWasWaiting := c.registry.StateOf(parent.ExecutionID) == SessionExecutionStateWaitingForControl
+	if parentWasWaiting {
+		c.registry.ResumeWaiting(parent)
+	}
+	opCtx, cancel := context.WithCancel(ctx)
+	handle.Cancel = cancel
+	defer func() {
+		cancel()
+		handle.MarkDone()
+	}()
+	c.registry.MarkRunning(handle)
+	if opts.OnExecution != nil {
+		opts.OnExecution(handle.Snapshot())
+	}
+
+	value, opErr := operation(opCtx)
+	if opErr != nil {
+		if errors.Is(opErr, context.Canceled) {
+			c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, opErr.Error())
+		} else {
+			c.registry.MarkTerminal(handle, SessionExecutionStateFailed, opErr.Error())
+		}
+		if parentWasWaiting && !c.registry.StateOf(parent.ExecutionID).Terminal() {
+			c.registry.MarkWaiting(parent)
+		}
+		return nil, opErr
+	}
+
+	c.mu.Lock()
+	recordEnded := c.sessions[sessionID] != record ||
+		record.state == RuntimeSessionStateQuiescing ||
+		record.state == RuntimeSessionStateClosed
+	c.mu.Unlock()
+	if c.registry.StateOf(parent.ExecutionID).Terminal() || recordEnded {
+		c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, "")
+		return nil, &SessionExecutionEndedError{
+			Message: fmt.Sprintf("control input arrived after its execution ended: session=%s request=%s",
+				sessionID, requestID),
+		}
+	}
+
+	var controlIDs map[string]struct{}
+	if opts.InteractionIDs != nil {
+		controlIDs = opts.InteractionIDs(value)
+	}
+	root := c.heartbeatRoot(parent)
+	switch {
+	case len(controlIDs) > 0 && root != nil:
+		c.registry.RemoveWaitingControlIDs(parent.ExecutionID, claimed)
+		c.registry.MarkAwaitingControl(root, controlIDs)
+		c.registry.MarkWaiting(root)
+		c.registry.MarkTerminal(handle, SessionExecutionStateSucceeded, "")
+	default:
+		c.answered(parent, claimed, parentWasWaiting)
+		if len(controlIDs) > 0 {
+			c.registry.MarkAwaitingControl(handle, controlIDs)
+			c.registry.MarkWaiting(handle)
+		} else {
+			c.registry.MarkTerminal(handle, SessionExecutionStateSucceeded, "")
+		}
+	}
+	return value, nil
+}
+
+// ──────────────────────────── 非导出函数（control 通道） ────────────────────────────
+
+// claimControlParent 认领应答 answered 所指的执行，若已有投递在飞则等待其结束。
+//
+// Python: RuntimeSessionCoordinator._claim_control_parent
+func (c *RuntimeSessionCoordinator) claimControlParent(
+	sessionID string,
+	answered []string,
+	duplicateMessage string,
+) (*sessionRecord, *SessionExecutionHandle, string, error) {
+	names := map[string]struct{}{}
+	for _, id := range answered {
+		names[id] = struct{}{}
+	}
+	for {
+		record, err := c.requireOpenSession(sessionID)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		c.mu.Lock()
+		for _, d := range record.deliveries {
+			covered := true
+			for id := range names {
+				if _, ok := d.answered[id]; !ok {
+					covered = false
+					break
+				}
+			}
+			if covered {
+				c.mu.Unlock()
+				return nil, nil, "", &AnswerInFlightError{
+					NoControlTargetError: &NoControlTargetError{Message: duplicateMessage},
+				}
+			}
+		}
+		c.mu.Unlock()
+
+		parent := c.controlParent(sessionID, answered)
+		if parent == nil {
+			return nil, nil, "", &NoControlTargetError{
+				Message: fmt.Sprintf("session has no active execution: %s", sessionID),
+			}
+		}
+		parentWaiting := c.registry.WaitingControlIDsOf(parent.ExecutionID)
+		matchedRequestID := ""
+		for _, id := range answered {
+			if _, ok := parentWaiting[id]; ok {
+				matchedRequestID = id
+				break
+			}
+		}
+		if matchedRequestID == "" {
+			return nil, nil, "", &NoControlTargetError{
+				Message: fmt.Sprintf("session has no active execution: %s", sessionID),
+			}
+		}
+
+		c.mu.Lock()
+		if d, exists := record.deliveries[parent.ExecutionID]; exists {
+			c.mu.Unlock()
+			<-d.settled
+			continue
+		}
+		record.deliveries[parent.ExecutionID] = &delivery{answered: names, settled: make(chan struct{})}
+		c.mu.Unlock()
+		return record, parent, matchedRequestID, nil
+	}
+}
+
+// releaseControlParent 发放在飞投递的 settled 信号。
+//
+// Python: RuntimeSessionCoordinator._release_control_parent
+func (c *RuntimeSessionCoordinator) releaseControlParent(record *sessionRecord, parent *SessionExecutionHandle) {
+	c.mu.Lock()
+	d, ok := record.deliveries[parent.ExecutionID]
+	if ok {
+		delete(record.deliveries, parent.ExecutionID)
+	}
+	c.mu.Unlock()
+	if ok {
+		d.close()
+	}
+}
+
+// answered 把 claimed 从等待集合移除，并按需把父执行置终态。
+//
+// Python: RuntimeSessionCoordinator._answered
+func (c *RuntimeSessionCoordinator) answered(
+	parent *SessionExecutionHandle,
+	claimed map[string]struct{},
+	wasWaiting bool,
+) {
+	c.registry.RemoveWaitingControlIDs(parent.ExecutionID, claimed)
+	remaining := c.registry.WaitingControlIDsOf(parent.ExecutionID)
+	shouldTerminate := wasWaiting ||
+		(c.registry.StateOf(parent.ExecutionID) == SessionExecutionStateWaitingForControl && len(remaining) == 0)
+	if shouldTerminate {
+		c.registry.MarkTerminal(parent, SessionExecutionStateSucceeded, "")
+	}
+}
+
+// controlParent 找出应答 answered 中任一标识的执行（取最晚开始的）。
+//
+// Python: RuntimeSessionCoordinator._control_parent
+func (c *RuntimeSessionCoordinator) controlParent(sessionID string, answered []string) *SessionExecutionHandle {
+	c.mu.Lock()
+	record, ok := c.sessions[sessionID]
+	if !ok {
+		c.mu.Unlock()
+		return nil
+	}
+	gen := record.generation
+	c.mu.Unlock()
+
+	actives := c.registry.Select(SelectOptions{
+		SessionID: sessionID, Generation: &gen, ActiveOnly: true,
+	})
+	var parents []*SessionExecutionHandle
+	for _, h := range actives {
+		state := c.registry.StateOf(h.ExecutionID)
+		if state != SessionExecutionStateRunning && state != SessionExecutionStateWaitingForControl {
+			continue
+		}
+		for _, id := range answered {
+			if _, waiting := c.registry.WaitingControlIDsOf(h.ExecutionID)[id]; waiting {
+				parents = append(parents, h)
+				break
+			}
+		}
+	}
+	if len(parents) == 0 {
+		return nil
+	}
+	best := parents[0]
+	bestStart := c.registry.StartedAtOf(best.ExecutionID)
+	for _, h := range parents[1:] {
+		curStart := c.registry.StartedAtOf(h.ExecutionID)
+		if curStart > bestStart {
+			best = h
+			bestStart = curStart
+		}
+	}
+	return best
+}
+
+// claimedExecutionIDLocked 取正在投递某交互的执行标识（调用方持 c.mu）。
+//
+// Python: RuntimeSessionCoordinator._claimed_execution_id
+func (c *RuntimeSessionCoordinator) claimedExecutionIDLocked(record *sessionRecord, requestID string) (string, bool) {
+	for executionID, d := range record.deliveries {
+		if _, ok := d.answered[requestID]; ok {
+			return executionID, true
+		}
+	}
+	return "", false
+}
+
+// heartbeatRoot 沿父链向上找 HEARTBEAT 根执行。
+//
+// Python: RuntimeSessionCoordinator._heartbeat_root
+func (c *RuntimeSessionCoordinator) heartbeatRoot(handle *SessionExecutionHandle) *SessionExecutionHandle {
+	current := handle
+	seen := map[string]struct{}{}
+	for {
+		if _, dup := seen[current.ExecutionID]; dup {
+			return nil
+		}
+		seen[current.ExecutionID] = struct{}{}
+		if current.WorkKind == SessionWorkKindHeartbeat {
+			return current
+		}
+		if current.ParentExecutionID == "" {
+			return nil
+		}
+		parent := c.registry.Get(current.ParentExecutionID)
+		if parent == nil || parent.SessionID != handle.SessionID || parent.Generation != handle.Generation {
+			return nil
+		}
+		current = parent
+	}
+}
