@@ -1195,7 +1195,7 @@ func SetResolveToolByIDFunc(fn func(id string) tool.Tool) {
 
 // ResolveToolBinding 返回确切注册的实现，不匹配一律返回 nil。
 //
-// 三重校验（与 Python 逐条对应）：
+// 三重校验（与 Python 逐条对应，步骤顺序一字不差）：
 //  1. 实现类型必须精确等于 expectedType——子类不算合格，
 //     因为子类可以重写 Invoke。
 //     Python 原注释：Subclasses can replace execution; this is
@@ -1219,28 +1219,27 @@ func ResolveToolBinding(
 		return nil
 	}
 
-	// 2. 断言为 ToolCard：非工具类能力直接判不合格
+	// 2. 按卡片 ID 查实现（Python: get_tool(card.id, session=None)）
 	//
-	// Go 的 schema.Ability 接口只暴露 AbilityID()，必须断言成 *tool.ToolCard
-	// 才能拿到可供指针同一性比较的卡片对象。Python 侧该场景会走 get_tool
-	// 查不到 → 返回 None，与这里提前返回 nil 结果相同。
-	cardPtr, ok := card.(*tool.ToolCard)
-	if !ok {
-		return nil
-	}
-
-	// 3. 按卡片 ID 查实现（Python: get_tool(card.id, session=None)）
-	resource := resolveToolByID(cardPtr.ID)
+	// 用 schema.Ability 接口自带的 AbilityID()，无需先断言成 *tool.ToolCard，
+	// 保证与 Python 的步骤顺序完全一致。
+	resource := resolveToolByID(card.AbilityID())
 	if resource == nil {
 		return nil
 	}
 
-	// 4. 精确类型校验（Python: type(resource) is expected_type）
+	// 3. 精确类型校验（Python: exact_type = type(resource) is expected_type）
 	if reflect.TypeOf(resource) != expectedType {
 		return nil
 	}
 
-	// 5. 卡片同一性校验（Python: resource.card is card）
+	// 4. 卡片同一性校验（Python: resource.card is card）
+	//
+	// 指针同一性比较必须拿到 *tool.ToolCard 具体值，断言在此处才需要。
+	cardPtr, ok := card.(*tool.ToolCard)
+	if !ok {
+		return nil
+	}
 	if resource.Card() != cardPtr {
 		return nil
 	}

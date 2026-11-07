@@ -361,22 +361,23 @@ return None                                    # → 安静返回 None
 
 **六档语义全部一一对应，无偏差。**
 
-实现步骤严格按 Python 顺序（规则 9.3）：
+实现步骤严格按 Python 顺序（规则 9.3），**一字不差**：
 
 ```
 1. card := am.Get(toolName)
-2. if card == nil → return nil                      （Python: if card else None）
-3. cardPtr, ok := card.(*tool.ToolCard); if !ok → return nil
-4. resource := resolveToolByID(cardPtr.ID)
-5. if resource == nil → return nil                  （Python: get_tool 找不到返回 None）
-6. if reflect.TypeOf(resource) != expectedType → return nil
-7. if resource.Card() != cardPtr → return nil       （Python: resource.card is card）
+2. if card == nil → return nil                          （Python: if card else None）
+3. resource := resolveToolByID(card.AbilityID())        （Python: get_tool(card.id, session=None)）
+4. if resource == nil → return nil                      （Python: 返回 None 后续短路）
+5. if reflect.TypeOf(resource) != expectedType → return nil
+                                                        （Python: exact_type = type(resource) is expected_type）
+6. cardPtr, ok := card.(*tool.ToolCard); if !ok → return nil
+7. if resource.Card() != cardPtr → return nil           （Python: resource.card is card）
 8. return resource
 ```
 
-**步骤 3 与步骤 4 的顺序说明**：Python 的顺序是先 `get_tool(card.id)` 再判类型，Go 侧把「断言为 ToolCard」提到查工具之前。原因是 Go 的 `schema.Ability` 接口只暴露 `AbilityID()`，**必须**先断言成 `*tool.ToolCard` 才能拿到可供指针比较的卡片对象；而「非 ToolCard 能力」在 Python 里最终也走「`get_tool` 查不到 → 返回 `None`」，与本实现提前返回 `nil` **结果完全相同**，只是省掉一次必然失败的查找。这不构成语义偏差，但为规则 9.3「步骤顺序不得调整」记一条实现注记。
+**步骤 6 的位置说明**：Python 的 `card` 是 `AbilityCard`，天然带 `.id` 与对象同一性，所以 `card.id`（步骤 3）与 `resource.card is card`（步骤 7）都不需要额外转换。Go 的 `schema.Ability` 接口已暴露 `AbilityID()`，因此步骤 3 **不需要**断言成 `*tool.ToolCard`；断言只在步骤 6 需要——因为指针同一性比较必须拿到 `*tool.ToolCard` 具体值。这样步骤顺序与 Python 完全一致，无任何提前/延后。
 
-步骤 3 补充：Python 的 `card` 是 `AbilityCard`（有 `.id` 与 `.card` 同一性），Go 的 `schema.Ability` 接口只有三个方法。已确认 `*tool.ToolCard` 实现该接口（`foundation/tool/base.go:243-249`）且 `ToolCard` 内嵌 `schema.BaseCard`——`AbilityManager.Get()` 存的正是工具注册时的 `*tool.ToolCard` 指针，因此断言后与 `resource.Card()` 比指针即可得到 `is` 语义。
+步骤 6 承接确认：`*tool.ToolCard` 实现 `schema.Ability`（`foundation/tool/base.go:243-249`）且内嵌 `schema.BaseCard`，`AbilityManager.Get()` 存的正是工具注册时的 `*tool.ToolCard` 指针，因此断言后与 `resource.Card()` 比指针即可得到 `is` 语义。
 
 ---
 
