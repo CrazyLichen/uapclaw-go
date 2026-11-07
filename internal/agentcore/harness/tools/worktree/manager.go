@@ -460,7 +460,13 @@ func (m *WorktreeManager) resolveTargetPath(ctx context.Context, slug string) (s
 	if workspace == "" {
 		return "", fmt.Errorf("workspace 未设置，无法解析 worktree 目标路径")
 	}
-	return WorktreePathFor(workspace, slug), nil
+	target := WorktreePathFor(workspace, slug)
+	if target == "" {
+		// WorktreePathFor 对非法 slug 返回空串（上游 _flatten_slug 抛 ValueError），
+		// 空路径直接交给 git 会落到 cwd，必须在这里拦住
+		return "", fmt.Errorf("无效的 worktree 名称: %q", slug)
+	}
+	return target, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

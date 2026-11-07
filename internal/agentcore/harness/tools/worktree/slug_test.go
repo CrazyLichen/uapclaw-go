@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -89,4 +90,65 @@ func makeLongString(c rune, n int) string {
 		result[i] = c
 	}
 	return string(result)
+}
+
+// TestWorktreePathFor_嵌套slug扁平化 验证 user/feature 落盘为 user+feature。
+//
+// 理由（上游 _flatten_slug docstring）：嵌套目录在删除父 worktree 时
+// 会连带删掉其下所有子 worktree。
+func TestWorktreePathFor_嵌套slug扁平化(t *testing.T) {
+	got := WorktreePathFor("/ws", "user/feat")
+	want := filepath.Join("/ws", ".worktrees", "user+feat")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestWorktreePathFor_拒绝穿越 验证非法 slug 不被扁平化绕过
+func TestWorktreePathFor_拒绝穿越(t *testing.T) {
+	if got := WorktreePathFor("/ws", "../escape"); got != "" {
+		t.Fatalf("非法 slug 应返回空路径，实际 %q", got)
+	}
+	if got := WorktreePathFor("/ws", "a/../b"); got != "" {
+		t.Fatalf("含 .. 段的 slug 应返回空路径，实际 %q", got)
+	}
+}
+
+// TestWorktreeBranchName_嵌套slug扁平化 验证分支名同样扁平化
+func TestWorktreeBranchName_嵌套slug扁平化(t *testing.T) {
+	if got := WorktreeBranchName("user/feat"); got != "worktree-user+feat" {
+		t.Fatalf("got %q, want worktree-user+feat", got)
+	}
+}
+
+// TestWorktreeBranchName_拒绝穿越 验证非法 slug 返回空分支名
+func TestWorktreeBranchName_拒绝穿越(t *testing.T) {
+	if got := WorktreeBranchName("../escape"); got != "" {
+		t.Fatalf("非法 slug 应返回空分支名，实际 %q", got)
+	}
+}
+
+// TestValidateSlug_Windows路径 验证反斜杠与盘符被拒绝。
+//
+// Python: test_path_traversal_windows_separator / test_windows_drive_path_rejected
+func TestValidateSlug_Windows路径(t *testing.T) {
+	for _, bad := range []string{`..\evil`, `C:\evil`, `a\..\..\b`, `..\\..\\x`, `a/..\b`} {
+		if err := ValidateSlug(bad); err == nil {
+			t.Fatalf("%q 应被拒绝", bad)
+		}
+	}
+}
+
+// TestValidateSlug_反斜杠归一化错误文案 验证 `..\evil` 报的是路径段错误
+//
+// 未归一化时 `..\evil` 被当成单段，命中的是"字符集不合法"分支，
+// 错误原因误导排障方向。
+func TestValidateSlug_反斜杠归一化错误文案(t *testing.T) {
+	err := ValidateSlug(`..\evil`)
+	if err == nil {
+		t.Fatal("应被拒绝")
+	}
+	if !strings.Contains(err.Error(), "path segments") {
+		t.Fatalf("应提示路径段问题，实际 %q", err.Error())
+	}
 }
