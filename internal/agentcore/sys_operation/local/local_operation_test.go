@@ -3,6 +3,8 @@ package local
 import (
 	"context"
 	"os"
+	"os/exec"
+	"strings"
 	"path/filepath"
 	"testing"
 	"time"
@@ -545,5 +547,82 @@ func TestExecuteCmd_不截断显式超时(t *testing.T) {
 
 	if elapsed := time.Since(start); elapsed < 6*time.Second {
 		t.Fatalf("命令被提前中断（耗时 %v），说明 sh 层仍在钳制 timeout", elapsed)
+	}
+}
+
+// ──────────────────────────── 后台 stderr 保留与排空（D-12） ────────────────────────────
+
+// TestBackground_EarlyExit含stderr诊断 验证后台进程早退时错误信息带 stderr。
+//
+// 回归：历史实现把 cmd.Stderr 设为 nil（直接丢弃），早退只报退出码，
+// 调用方无从判断是依赖缺失还是命令写错。
+func TestBackground_EarlyExit含stderr诊断(t *testing.T) {
+	h := NewAsyncProcessHandler(
+		exec.Command("sh", "-c", "echo 'boom: missing dep' >&2; exit 3"),
+		1024, "utf-8", 5)
+
+	_, err := h.Background(2.0)
+	if err == nil {
+		t.Fatal("非零退出应返回错误")
+	}
+	if !strings.Contains(err.Error(), "boom: missing dep") {
+		t.Fatalf("错误信息应包含 stderr 内容，实际 %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "3") {
+		t.Fatalf("错误信息应包含退出码，实际 %q", err.Error())
+	}
+}
+
+// TestBackground_正常后台仍返回pid 验证不提前退出的进程正常返回
+func TestBackground_正常后台仍返回pid(t *testing.T) {
+	h := NewAsyncProcessHandler(
+		exec.Command("sh", "-c", "sleep 5"),
+		1024, "utf-8", 5)
+
+	pid, err := h.Background(0.2)
+	if err != nil {
+		t.Fatalf("仍在运行的进程不应报错，实际 %v", err)
+	}
+	if pid <= 0 {
+		t.Fatalf("应返回有效 pid，实际 %d", pid)
+	}
+	h.KillProcessTree()
+}
+
+// TestDrainStderr_上限 验证超长 stderr 被截断并标注
+func TestDrainStderr_上限(t *testing.T) {
+	got := drainStderr(strings.NewReader(strings.Repeat("x", 20000)), 8192)
+	if len(got) > 8300 {
+		t.Fatalf("保留量应受 8192 限制，实际 %d", len(got))
+	}
+	if !strings.Contains(got, "[stderr truncated]") {
+		t.Fatalf("超限应标注截断，实际尾部 %q", got)
+	}
+}
+
+// TestDrainStderr_空输入 验证无 stderr 时返回空串
+func TestDrainStderr_空输入(t *testing.T) {
+	if got := drainStderr(strings.NewReader(""), 8192); got != "" {
+		t.Fatalf("空输入应返回空串，实际 %q", got)
+	}
+}
+
+// TestDrainStderr_裁剪空白 验证首尾空白被去除
+func TestDrainStderr_裁剪空白(t *testing.T) {
+	if got := drainStderr(strings.NewReader("  hello  \n"), 8192); got != "hello" {
+		t.Fatalf("应裁剪空白，实际 %q", got)
+	}
+}
+
+// TestCollectBackgroundStderr_超时返回空 验证管道不关闭时按等待窗返回
+func TestCollectBackgroundStderr_超时返回空(t *testing.T) {
+	ch := make(chan string, 1)
+	done := make(chan struct{})
+	start := time.Now()
+	if got := collectBackgroundStderr(ch, done, 50*time.Millisecond); got != "" {
+		t.Fatalf("超时应返回空串，实际 %q", got)
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("应在等待窗附近返回，实际耗时 %v", elapsed)
 	}
 }

@@ -109,6 +109,16 @@ const (
 	defaultChunkSize = 1024
 	// defaultEncoding 默认编码
 	defaultEncoding = "utf-8"
+	// backgroundStderrRetainLimit 后台进程保留的 stderr 字节上限。
+	//
+	// Python: _drain_background_stderr(limit=8192) 默认值
+	backgroundStderrRetainLimit = 8192
+	// backgroundStderrWait 早退时等待 stderr 排空的最长时间。
+	//
+	// 后代进程可能继承 stderr 写端并长期持有，管道 EOF 迟迟不到；
+	// 只等一小段就把已有内容当诊断，任务本身继续留在后台排空。
+	// Python: background() 里 remaining = deadline - loop.time() 的等待窗
+	backgroundStderrWait = 500 * time.Millisecond
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -471,10 +481,17 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 		return 0, fmt.Errorf("进程命令为 nil")
 	}
 
-	// 后台模式：重定向 IO
+	// 后台模式：stdout 丢弃，stderr 保留管道。
+	//
+	// 保留 stderr 有两个目的：早退时能拿到诊断；持续排空避免子进程写满管道后
+	// 阻塞（历史实现设为 nil，进程初期的报错信息完全丢失）。
+	// Python: shell_operation.py:393-398 stderr = asyncio.subprocess.PIPE
 	h.cmd.Stdin = nil
 	h.cmd.Stdout = nil
-	h.cmd.Stderr = nil
+	stderrPipe, pipeErr := h.cmd.StderrPipe()
+	if pipeErr != nil {
+		return 0, fmt.Errorf("创建 stderr 管道失败: %w", pipeErr)
+	}
 
 	h.setProcessGroup()
 
@@ -483,6 +500,16 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 	}
 
 	pid = h.cmd.Process.Pid
+
+	// 排空协程：无论后续走哪条分支都持续读，避免管道写满阻塞子进程。
+	// Python: background() 里 create_task(_drain_background_stderr())
+	stderrCh := make(chan string, 1)
+	stderrDone := make(chan struct{})
+	go func() {
+		msg := drainStderr(stderrPipe, backgroundStderrRetainLimit)
+		stderrCh <- msg
+		close(stderrDone)
+	}()
 
 	// grace 检测：用 goroutine+Wait+select/timer 等待进程在 grace 内是否退出
 	if grace > 0 {
@@ -502,7 +529,13 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 						Int("pid", pid).
 						Int("exit_code", exitErr.ExitCode()).
 						Msg("background process exited with non-zero code within grace")
-					return pid, fmt.Errorf("进程提前退出，退出码 %d", exitErr.ExitCode())
+					// 早退时把已捕获的 stderr 拼进错误：只给退出码时，
+					// 调用方无从判断是依赖缺失、命令写错还是权限问题。
+					msg := fmt.Sprintf("进程提前退出，退出码 %d", exitErr.ExitCode())
+					if stderrText := collectBackgroundStderr(stderrCh, stderrDone, backgroundStderrWait); stderrText != "" {
+						msg += ": " + stderrText
+					}
+					return pid, fmt.Errorf("%s", msg)
 				}
 				// 退出码 0 也视为成功
 				logger.Info(logComponent).
@@ -577,6 +610,65 @@ func ResolveCwd(cwdPath string) string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// drainStderr 排空 stderr 管道并保留前 limit 字节，超限追加截断标记。
+//
+// 必须读到 EOF：提前 return 会让管道写满，子进程在 stderr 上阻塞。
+// Python: _drain_background_stderr (utils.py:322-343)
+func drainStderr(r io.Reader, limit int) string {
+	var retained bytes.Buffer
+	truncated := false
+	buf := make([]byte, defaultChunkSize)
+	for {
+		n, readErr := r.Read(buf)
+		if n > 0 {
+			remaining := limit - retained.Len()
+			if remaining > 0 {
+				if n <= remaining {
+					retained.Write(buf[:n])
+				} else {
+					retained.Write(buf[:remaining])
+					truncated = true
+				}
+			} else {
+				truncated = true
+			}
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	message := strings.TrimSpace(retained.String())
+	if truncated {
+		if message != "" {
+			return message + "\n[stderr truncated]"
+		}
+		return "[stderr truncated]"
+	}
+	return message
+}
+
+// collectBackgroundStderr 在限定时间内取排空协程的结果。
+//
+// 后代进程可能继承 stderr 写端，管道 EOF 迟迟不到；超时返回空串，
+// 协程继续排空（不阻塞调用方，也不让管道写满）。
+// Python: background() 里 asyncio.wait({stderr_task}, timeout=remaining)
+func collectBackgroundStderr(ch <-chan string, done <-chan struct{}, wait time.Duration) string {
+	select {
+	case msg := <-ch:
+		return msg
+	case <-done:
+		// 正常 EOF 后 close(done)，此时 ch 里已有值，再取一次
+		select {
+		case msg := <-ch:
+			return msg
+		default:
+			return ""
+		}
+	case <-time.After(wait):
+		return ""
+	}
+}
 
 // resolveCwd 基于调用方 ctx 中的 CwdState 解析工作目录。
 // 对齐 Python get_cwd()：contextvar 随 ctx 传播，agent 隔离靠不同 CwdState 实例。

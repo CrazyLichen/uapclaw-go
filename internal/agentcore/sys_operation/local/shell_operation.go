@@ -811,6 +811,13 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 					return []string{exe, "-lc", NormalizeWindowsPathsForBash(command)}, false, "bash", nil
 				}
 			}
+			// 裸 `$name` 在 bash 与 PowerShell 中都合法，只有 POSIX 判定未命中时才按
+			// PowerShell 处理（否则 `for i in ...; do echo $i; done` 会被误判）。
+			// Python: shell_operation.py:311-314
+			if psVariablePattern.MatchString(command) {
+				exe := AvailablePowerShell()
+				return []string{exe, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell", nil
+			}
 			return []string{"cmd", "/c", command}, true, "cmd", nil
 		}
 

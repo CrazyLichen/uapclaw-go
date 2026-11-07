@@ -198,3 +198,63 @@ func TestAvailableGitBash(t *testing.T) {
 		assert.Empty(t, AvailableGitBash())
 	}
 }
+
+// ──────────────────────────── D-12：赋值与控制流识别 ────────────────────────────
+
+// TestLooksLikePowerShell_裸变量不误判 验证 $i 这类 bash 也合法的语法不单独判 PS。
+//
+// Python: af85e33d 把 _PS_VARIABLE_PATTERN 换成 _PS_ASSIGNMENT_PATTERN。
+// 旧行为会把 `for i in 1 2; do echo $i; done` 判成 PowerShell，
+// 在 Windows 上交给 pwsh 执行而失败。
+func TestLooksLikePowerShell_裸变量不误判(t *testing.T) {
+	if LooksLikePowerShell("for i in 1 2; do echo $i; done") {
+		t.Fatal("裸 $i 不应单独判为 PowerShell")
+	}
+	if LooksLikePowerShell("echo $HOME") {
+		t.Fatal("裸 $HOME 不应单独判为 PowerShell")
+	}
+}
+
+// TestLooksLikePowerShell_赋值判PS 验证 $x = 1 是 PowerShell 独有
+func TestLooksLikePowerShell_赋值判PS(t *testing.T) {
+	for _, cmd := range []string{`$x = 1`, `$name = "a"`, `$n += 2`, `$p *= 3`} {
+		if !LooksLikePowerShell(cmd) {
+			t.Fatalf("%q 应判为 PowerShell", cmd)
+		}
+	}
+}
+
+// TestLooksLikePowerShell_比较不误判 验证 $x == 1 不被当赋值
+func TestLooksLikePowerShell_比较不误判(t *testing.T) {
+	if LooksLikePowerShell(`$x == 1`) {
+		t.Fatal("== 比较不应判为赋值")
+	}
+	if LooksLikePowerShell(`if [ "$x" == 1 ]; then echo ok; fi`) {
+		t.Fatal("比较运算不应判为 PowerShell 赋值")
+	}
+}
+
+// TestLooksLikePosix_控制流识别 验证 for/while/if 结构判为 POSIX
+func TestLooksLikePosix_控制流识别(t *testing.T) {
+	cases := []string{
+		"for i in a b; do echo $i; done",
+		"for ((i=0;i<3;i++)); do echo $i; done",
+		"while true; do sleep 1; done",
+		"until false; do break; done",
+		"if [ -f x ]; then echo y; fi",
+	}
+	for _, cmd := range cases {
+		if !LooksLikePosix(cmd) {
+			t.Fatalf("%q 应判为 POSIX", cmd)
+		}
+	}
+}
+
+// TestLooksLikePosix_普通cmd不误判 验证无控制流的 cmd 命令不判 POSIX
+func TestLooksLikePosix_普通cmd不误判(t *testing.T) {
+	for _, cmd := range []string{"dir", "copy a b", "echo hello"} {
+		if LooksLikePosix(cmd) {
+			t.Fatalf("%q 不应判为 POSIX", cmd)
+		}
+	}
+}
