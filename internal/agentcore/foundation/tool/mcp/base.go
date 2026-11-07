@@ -20,6 +20,23 @@ import (
 type MCPTool struct {
 	card      *types.McpToolCard
 	mcpClient types.McpClient
+	// includeImageContent 是否把图片块桥接为多模态数据（来自 McpServerConfig）
+	includeImageContent bool
+}
+
+// MCPToolResult 携带多模态数据或失败状态的 MCP 工具结果。
+//
+// 与 harness 的 ToolOutput 形状（success/data/error）鸭子类型兼容，
+// 使 react agent 的多模态管线无需 core 反向导入 harness。
+//
+// Python: McpToolResult (mcp/base.py:148-165)
+type MCPToolResult struct {
+	// Success 是否成功
+	Success bool
+	// Data 结果数据；多模态时含 content 与 multimodal
+	Data map[string]any
+	// Err 失败原因
+	Err string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -43,89 +60,165 @@ var (
 	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 types 包
 	NewMcpToolCard = types.NewMcpToolCard
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ExtractMCPToolResultContent 从 MCP CallToolResult 提取紧凑结果值。
+// preserveMCPToolResultStatus 按 MCP 的 isError 给抽取结果打成功/失败标。
 //
-// 解析逻辑（符合 MCP 协议）：
-//   - 提取 content 最后一个元素
-//   - 如果有 text 字段 → 返回 text 字符串
-//   - 如果有 data 字段 + mimeType 以 image/ 开头 → 返回 "[image content: {mime}, {len} base64 chars]"
-//   - 如果有 data 字段 → 返回 data
-//   - 其他 → 返回字符串化结果
+// isError 不为真时原样返回 content（成功值一个字节都不改）；
+// isError 为真时收集全部文本块作为错误信息，包成 Success=false 的结构体。
 //
-// Python: extract_mcp_tool_result_content()
-func ExtractMCPToolResultContent(toolResult any) any {
+// Python: preserve_mcp_tool_result_status (mcp/base.py:36-53)
+func preserveMCPToolResultStatus(toolResult any, content any) any {
+	resultMap, _ := toolResult.(map[string]any)
+	isError, _ := resultMap["isError"].(bool)
+	if !isError {
+		return content
+	}
+
+	var errorParts []string
+	if contentList, ok := resultMap["content"].([]any); ok {
+		for _, itemRaw := range contentList {
+			if item, ok := itemRaw.(map[string]any); ok {
+				if text, ok := item["text"].(string); ok && text != "" {
+					errorParts = append(errorParts, text)
+				}
+			}
+		}
+	}
+	errorText := strings.Join(errorParts, "\n\n")
+	if strings.TrimSpace(errorText) == "" {
+		errorText = "MCP tool reported an error."
+	}
+
+	if existing, ok := content.(*MCPToolResult); ok {
+		updated := *existing
+		updated.Success = false
+		updated.Err = errorText
+		return &updated
+	}
+	return &MCPToolResult{Success: false, Data: map[string]any{"result": content}, Err: errorText}
+}
+
+// ExtractMCPToolResultContent 从 MCP CallToolResult 抽取紧凑结果。
+//
+// 保留全部内容块：文本块与图片占位符按顺序拼接，多块结果不再只剩最后一块
+// （"动作确认文本 + 截图"这类结果的文本部分不再丢失）。
+//
+// 图片块默认转文本占位符；includeImageContent 为真时产出 *MCPToolResult，
+// 其 Data.multimodal 交给 react agent 的多模态管线。
+//
+// 四个返回点都经 preserveMCPToolResultStatus，isError 不会被吞掉。
+//
+// Python: extract_mcp_tool_result_content (mcp/base.py:56-134)
+func ExtractMCPToolResultContent(toolResult any, includeImageContent bool, toolName string) any {
 	resultMap, ok := toolResult.(map[string]any)
 	if !ok {
-		return nil
+		return preserveMCPToolResultStatus(toolResult, nil)
 	}
-	content, ok := resultMap["content"]
-	if !ok {
-		return nil
-	}
-	contentList, ok := content.([]any)
-	if !ok || len(contentList) == 0 {
-		return nil
+	contentRaw, hasContent := resultMap["content"]
+	contentList, _ := contentRaw.([]any)
+	if !hasContent || len(contentList) == 0 {
+		return preserveMCPToolResultStatus(toolResult, nil)
 	}
 
-	item, ok := contentList[len(contentList)-1].(map[string]any)
-	if !ok {
-		return fmt.Sprintf("%v", contentList[len(contentList)-1])
+	var textParts []string
+	type imageBlock struct{ mimeType, data string }
+	var images []imageBlock
+
+	for _, itemRaw := range contentList {
+		item, ok := itemRaw.(map[string]any)
+		if !ok {
+			if len(contentList) == 1 {
+				return preserveMCPToolResultStatus(toolResult, fmt.Sprintf("%v", itemRaw))
+			}
+			textParts = append(textParts, fmt.Sprintf("%v", itemRaw))
+			continue
+		}
+
+		if text, ok := item["text"].(string); ok {
+			textParts = append(textParts, text)
+			continue
+		}
+
+		if data, hasData := item["data"]; hasData {
+			mimeType, _ := item["mimeType"].(string)
+			if mimeType == "" {
+				mimeType, _ = item["mime_type"].(string)
+			}
+			if strings.HasPrefix(mimeType, "image/") {
+				dataText := fmt.Sprintf("%v", data)
+				if includeImageContent {
+					images = append(images, imageBlock{mimeType: mimeType, data: dataText})
+				} else {
+					textParts = append(textParts, fmt.Sprintf("[image content: %s, %d base64 chars]", mimeType, len(dataText)))
+				}
+				continue
+			}
+			if len(contentList) == 1 {
+				return preserveMCPToolResultStatus(toolResult, data)
+			}
+			textParts = append(textParts, fmt.Sprintf("%v", data))
+			continue
+		}
+
+		// 其他情况：等价 Python model_dump(exclude_none=True) 后 pop("data")
+		cleaned := make(map[string]any, len(item))
+		for key, value := range item {
+			if key == "data" || value == nil {
+				continue
+			}
+			cleaned[key] = value
+		}
+		if len(contentList) == 1 {
+			return preserveMCPToolResultStatus(toolResult, cleaned)
+		}
+		if jsonBytes, marshalErr := json.Marshal(cleaned); marshalErr == nil {
+			textParts = append(textParts, string(jsonBytes))
+		} else {
+			textParts = append(textParts, fmt.Sprintf("%v", item))
+		}
 	}
 
-	// 优先检查 text 字段
-	if text, ok := item["text"]; ok {
-		if s, ok := text.(string); ok {
-			return s
-		}
+	text := strings.Join(textParts, "\n\n")
+	if len(images) == 0 {
+		return preserveMCPToolResultStatus(toolResult, text)
 	}
 
-	// 检查 data 字段
-	if data, ok := item["data"]; ok {
-		// 检查是否为图片（兼容 mimeType 和 mime_type 两种键名，值做大小写不敏感比较）
-		mimeType, _ := item["mimeType"].(string)
-		if mimeType == "" {
-			mimeType, _ = item["mime_type"].(string)
-		}
-		mimeType = strings.ToLower(mimeType)
-		if strings.HasPrefix(mimeType, "image/") {
-			return fmt.Sprintf("[image content: %s, %d base64 chars]", mimeType, len(fmt.Sprintf("%v", data)))
-		}
-		return data
+	note := fmt.Sprintf("%d image(s) attached as multimodal input.", len(images))
+	content := note
+	if text != "" {
+		content = text + "\n\n" + note
 	}
-
-	// 其他情况，对齐 Python model_dump(exclude_none=True) + popped("data")
-	// 移除 data 字段后序列化，排除空值
-	cleaned := make(map[string]any)
-	for k, v := range item {
-		if k == "data" {
-			continue // 移除 data 字段，对齐 Python: dumped.pop("data", None)
+	items := make([]any, 0, len(images))
+	for _, img := range images {
+		sourcePath := toolName
+		if sourcePath == "" {
+			sourcePath = "mcp_tool"
 		}
-		if v == nil {
-			continue // 排除空值，对齐 Python: exclude_none=True
-		}
-		cleaned[k] = v
+		items = append(items, map[string]any{
+			"type":        "image",
+			"source":      "mcp",
+			"source_path": sourcePath,
+			"mime_type":   img.mimeType,
+			"data_url":    "data:" + img.mimeType + ";base64," + img.data,
+		})
 	}
-	if jsonBytes, err := json.Marshal(cleaned); err == nil {
-		return string(jsonBytes)
-	}
-	return fmt.Sprintf("%v", item)
+	return preserveMCPToolResultStatus(toolResult, &MCPToolResult{
+		Success: true,
+		Data:    map[string]any{"content": content, "multimodal": items},
+	})
 }
 
 // NewMCPTool 创建 MCP 工具实例。
 // mcpClient 为 nil 时返回 StatusToolMcpClientNotSupported 错误。
 //
 // Python: MCPTool.__init__(mcp_client, tool_info)
-func NewMCPTool(mcpClient types.McpClient, card *types.McpToolCard) (*MCPTool, error) {
+func NewMCPTool(mcpClient types.McpClient, card *types.McpToolCard, includeImageContent bool) (*MCPTool, error) {
 	if mcpClient == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpClientNotSupported,
 			exception.WithParam("card", card.String()),
 		)
 	}
-	return &MCPTool{card: card, mcpClient: mcpClient}, nil
+	return &MCPTool{card: card, mcpClient: mcpClient, includeImageContent: includeImageContent}, nil
 }
 
 // Card 返回工具配置卡片。
@@ -203,7 +296,12 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 		)
 	}
 
-	extracted := ExtractMCPToolResultContent(result)
+	extracted := ExtractMCPToolResultContent(result, t.includeImageContent, t.card.Name)
+	// 多模态/失败结果原样透传结构体，普通结果包一层 {"result": ...}。
+	// Python: invoke() 里 `if isinstance(result, McpToolResult): return result`
+	if structured, ok := extracted.(*MCPToolResult); ok {
+		return map[string]any{"__mcp_result__": structured}, nil
+	}
 	return map[string]any{"result": extracted}, nil
 }
 

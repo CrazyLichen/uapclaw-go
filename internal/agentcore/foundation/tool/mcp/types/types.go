@@ -63,6 +63,12 @@ type McpServerConfig struct {
 	AuthHeaders map[string]string
 	// AuthQueryParams 认证查询参数（预留，3.11 回填动态认证）
 	AuthQueryParams map[string]string
+	// IncludeImageContent 是否把 MCP 返回的图片块桥接为多模态工具结果数据。
+	//
+	// 默认 false：图片退化为文本占位符（[image content: image/png, N base64 chars]）。
+	// 仅对模型必须看到图片的服务端开启（如 cua-driver 截图）。
+	// Python: McpServerConfig.include_image_content (mcp/base.py:139-146)
+	IncludeImageContent bool
 }
 
 // McpToolCard MCP 工具配置卡片，扩展 ToolCard 增加服务器标识。
@@ -138,6 +144,11 @@ func WithAuthHeaders(headers map[string]string) McpServerConfigOption {
 // WithAuthQueryParams 设置认证查询参数。
 func WithAuthQueryParams(params map[string]string) McpServerConfigOption {
 	return func(c *McpServerConfig) { c.AuthQueryParams = params }
+}
+
+// WithIncludeImageContent 设置是否把图片块桥接为多模态数据。
+func WithIncludeImageContent(include bool) McpServerConfigOption {
+	return func(c *McpServerConfig) { c.IncludeImageContent = include }
 }
 
 // NewMcpServerConfig 创建 MCP 服务器配置。

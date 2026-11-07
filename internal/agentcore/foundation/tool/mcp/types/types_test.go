@@ -218,3 +218,15 @@ func TestNoTimeout_常量值(t *testing.T) {
 		t.Errorf("NoTimeout = %v, want -1", NoTimeout)
 	}
 }
+
+// TestMcpServerConfig_IncludeImageContent 验证默认 false 且可通过选项开启
+func TestMcpServerConfig_IncludeImageContent(t *testing.T) {
+	cfg := NewMcpServerConfig("s", "cmd", "stdio")
+	if cfg.IncludeImageContent {
+		t.Fatal("默认应为 false")
+	}
+	cfg = NewMcpServerConfig("s", "cmd", "stdio", WithIncludeImageContent(true))
+	if !cfg.IncludeImageContent {
+		t.Fatal("WithIncludeImageContent(true) 应生效")
+	}
+}

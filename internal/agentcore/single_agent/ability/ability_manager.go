@@ -1016,9 +1016,11 @@ func (am *AbilityManager) executeTool(
 		return agentschema.ExecuteResult{}, execErr
 	}
 
-	content := BuildToolMessageContent(result)
+	// MCP 多模态/失败结果是 *MCPToolResult：拆出结构体装进 Result
+	// （对齐 Python 原样透传 McpToolResult），ToolMsg 文本走 render_for_llm
+	resultValue, content := unwrapMCPResult(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return agentschema.ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
+	return agentschema.ExecuteResult{Result: resultValue, ToolMsg: toolMsg}, nil
 }
 
 // executeWorkflow 执行 Workflow 类型能力。
@@ -1337,9 +1339,9 @@ func (am *AbilityManager) executeFallbackTool(
 		return agentschema.ExecuteResult{}, execErr
 	}
 
-	content := BuildToolMessageContent(result)
+	resultValue, content := unwrapMCPResult(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return agentschema.ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
+	return agentschema.ExecuteResult{Result: resultValue, ToolMsg: toolMsg}, nil
 }
 
 // prioritizePaidSearch 当 paid_search 和 free_search 同时存在时，

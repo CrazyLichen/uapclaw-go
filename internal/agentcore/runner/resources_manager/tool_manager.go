@@ -628,7 +628,7 @@ func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcptypes.McpC
 
 	for _, card := range mcpCards {
 		card.ID = m.GenerateMcpToolID(serverConfig.ServerID, serverConfig.ServerName, card.Name)
-		mcpTool, createErr := mcp.NewMCPTool(client, card)
+		mcpTool, createErr := mcp.NewMCPTool(client, card, serverConfig.IncludeImageContent)
 		if createErr != nil {
 			logger.Error(logComponent).
 				Str("event_type", "TOOL_SERVER_ADD_ERROR").

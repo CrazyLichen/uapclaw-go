@@ -14,6 +14,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -1657,5 +1658,77 @@ func TestExecute_豁免工具走硬上限(t *testing.T) {
 	}
 	if strings.Contains(results[0].ToolMsg.Content.Text(), "timed out") {
 		t.Fatal("瞬时完成的豁免工具不应超时")
+	}
+}
+
+// ──────────────────────────── MCP 结果桥接（D-15/D-16） ────────────────────────────
+
+// TestExecute_MCP多模态结果装入Result 验证 __mcp_result__ 被拆出结构体放进 Result。
+//
+// MCPTool.invoke 返回 {"__mcp_result__": *MCPToolResult}，因为普通 map 无法
+// 同时表达成功/失败与多模态数据；ability 层负责拆包，让上层拿到结构体本体。
+func TestExecute_MCP多模态结果装入Result(t *testing.T) {
+	tl, err := tool.NewTool(
+		func(_ context.Context, _ orderTrackingInput, _ ...tool.ToolOption) (map[string]any, error) {
+			return map[string]any{"__mcp_result__": &mcptool.MCPToolResult{
+				Success: true,
+				Data: map[string]any{
+					"content": "shot",
+					"multimodal": []any{map[string]any{
+						"type": "image", "source": "mcp", "source_path": "t",
+						"mime_type": "image/png", "data_url": "data:image/png;base64,AA",
+					}},
+				},
+			}}, nil
+		},
+		tool.WithToolName("mcp_t"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	am := NewAbilityManager(newTestResourceMgr(map[string]tool.Tool{"mcp_t": tl}, nil, nil))
+	addCardsToManager(t, am, map[string]tool.Tool{"mcp_t": tl})
+
+	results := am.Execute(context.Background(), nil,
+		[]*llmschema.ToolCall{{ID: "m1", Name: "mcp_t", Arguments: "{}"}}, nil, "", true)
+	if len(results) != 1 {
+		t.Fatalf("期望 1 条结果，实际 %d", len(results))
+	}
+	// 上游原样透传 McpToolResult：Result 就是结构体本体，不再包一层 map
+	if _, ok := results[0].Result.(*mcptool.MCPToolResult); !ok {
+		t.Fatalf("Result 应为 *MCPToolResult，实际 %T", results[0].Result)
+	}
+	if results[0].ToolMsg == nil || !strings.Contains(results[0].ToolMsg.Content.Text(), "shot") {
+		t.Fatalf("ToolMsg 应渲染 data.content，实际 %v", results[0].ToolMsg)
+	}
+}
+
+// TestExecute_MCP失败结果文本取error 验证 isError 结果的 ToolMsg 用错误文本
+func TestExecute_MCP失败结果文本取error(t *testing.T) {
+	tl, err := tool.NewTool(
+		func(_ context.Context, _ orderTrackingInput, _ ...tool.ToolOption) (map[string]any, error) {
+			return map[string]any{"__mcp_result__": &mcptool.MCPToolResult{
+				Success: false,
+				Data:    map[string]any{"result": "raw"},
+				Err:     "Permission denied",
+			}}, nil
+		},
+		tool.WithToolName("mcp_f"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	am := NewAbilityManager(newTestResourceMgr(map[string]tool.Tool{"mcp_f": tl}, nil, nil))
+	addCardsToManager(t, am, map[string]tool.Tool{"mcp_f": tl})
+
+	results := am.Execute(context.Background(), nil,
+		[]*llmschema.ToolCall{{ID: "m2", Name: "mcp_f", Arguments: "{}"}}, nil, "", true)
+	if len(results) != 1 || results[0].ToolMsg == nil {
+		t.Fatal("应产出带 ToolMsg 的结果")
+	}
+	if !strings.Contains(results[0].ToolMsg.Content.Text(), "Permission denied") {
+		t.Fatalf("失败结果应渲染 Err，实际 %q", results[0].ToolMsg.Content.Text())
 	}
 }
