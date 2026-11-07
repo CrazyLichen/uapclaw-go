@@ -62,6 +62,32 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_broadcast": "广播消息",
 		"dispatcher.msg_type_direct":    "单播消息",
 		"dispatcher.msg_received":       "[收到{msg_type}] message_id={message_id}, 来自: {sender}\n内容: {content}\n提示: 如果对方在提问或等待回复，请务必通过 send_message 工具回复 {sender}",
+		// ── 25.0b：时间渲染（timefmt.go）──
+		"time.just_now":    "刚刚",
+		"time.seconds_ago": "{value} 秒前",
+		"time.minutes_ago": "{value} 分钟前",
+		"time.hours_ago":   "{value} 小时前",
+		"time.days_ago":    "{value} 天前",
+		"time.unknown":     "时间未知",
+		// ── 25.0b：入站 XML 标签的 note 正文（inbound_render.go / external/format.go）──
+		// 与上面 dispatcher.msg_received 那套扁平模板分开：原话与框架提示分落
+		// <team-inbound> 与 <team-note> 两个标签。扁平模板留给 external 的老路径。
+		"dispatcher.reply_hint": "如果对方在提问或等待回复，请务必通过 send_message 工具回复 {sender}。",
+		// user 伪成员没有 agent 进程，纯文本回复会被静默丢弃，所以这里用无条件措辞：
+		// 通用提示里的「如果对方在提问」会让模型说服自己不回复，而丢掉的 user 回复是不可见的。
+		"dispatcher.reply_hint_user": "这条消息来自 user——委托本团队工作的**团队外部真人**，不是团队成员，不在成员名册里。" +
+			"你必须调用 send_message(to=\"user\") 把答复发回用户；" +
+			"你写在回复正文里的任何文字都不会送达用户，不调用工具就等于没有回复。",
+		// 「严格禁止」这个措辞是承重的：没有它，头像 LLM 会漂移成自主回复。
+		"hitt.silence_note": "**这是给控制者看的通知，不是要你执行的指令**，运行时已把它原样转给控制者。\n" +
+			"**严格禁止任何自主行为**：禁止主动回复发送方 / 指派方（包括调用 send_message）、" +
+			"禁止自主调用 member_complete_task / claim_task / 文件 / shell 等任何工具去回应或推进、" +
+			"禁止用纯文本输出表达意图或承诺。\n" +
+			"**保持静默**，只有控制者在 Inbox 里下达明确指令后才能行动。",
+		// 「不要」这个措辞是承重的：否则模型看到名册变动就去寒暄。
+		"team_context.roster_announcement_note": "以上只是名册公告，不是给你的指令。" +
+			"**不要**因为看到成员变动就去和相关成员打招呼、确认或寒暄；" +
+			"只有当你手上的任务确实需要对方配合时才发消息。",
 		// agent/dispatcher.py — 空闲成员催促
 		"dispatcher.all_done_persistent":    "所有任务已完成。请汇总本轮工作成果。团队继续保持运行，等待新的任务指令。",
 		"dispatcher.all_done_temporary":     "所有任务已完成。请汇总团队工作成果，然后依次调用 shutdown_member 关闭所有成员，等待所有成员状态转为 shutdown 后，调用 clean_team 解散团队。",
@@ -105,6 +131,34 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_broadcast": "broadcast",
 		"dispatcher.msg_type_direct":    "direct message",
 		"dispatcher.msg_received":       "[Received {msg_type}] message_id={message_id}, from: {sender}\ncontent: {content}\ntip: If the sender is asking or waiting for a reply, make sure to reply to {sender} via send_message",
+		// ── 25.0b: time rendering (timefmt.go) ──
+		"time.just_now":    "just now",
+		"time.seconds_ago": "{value}s ago",
+		"time.minutes_ago": "{value}m ago",
+		"time.hours_ago":   "{value}h ago",
+		"time.days_ago":    "{value}d ago",
+		"time.unknown":     "unknown time",
+		// ── 25.0b: note bodies for inbound XML tags ──
+		"dispatcher.reply_hint": "If the sender is asking or waiting for a reply, be sure to reply to {sender} via send_message.",
+		"dispatcher.reply_hint_user": "This message is from user — the **human outside the team** who commissioned this team's work. " +
+			"They are not a team member and do not appear in the roster. " +
+			"You MUST call send_message(to=\"user\") to deliver your reply; " +
+			"any text you write in your reply body never reaches the user, " +
+			"so not calling the tool means you did not reply at all.",
+		"hitt.silence_note": "**This is a notification for your controller, NOT an instruction " +
+			"for you to act on**; the runtime has already surfaced it to the " +
+			"controller as-is.\n" +
+			"**Autonomous behavior is strictly forbidden**: do not reply to " +
+			"the sender / assigner (including via send_message), do not " +
+			"autonomously call member_complete_task / claim_task / file tools " +
+			"/ shell tools or any other tool to respond or push work forward, " +
+			"and do not emit plain-text intent or promises.\n" +
+			"**Stay silent** and act only after the controller issues an " +
+			"explicit instruction via the Inbox.",
+		"team_context.roster_announcement_note": "The above is a roster announcement, not an instruction for you. " +
+			"Do **NOT** greet, check in with, or otherwise message a member just " +
+			"because the roster changed; message someone only when the work you " +
+			"are actually holding needs them.",
 		// agent/dispatcher.py — 空闲成员催促
 		"dispatcher.all_done_persistent":    "All tasks are complete. Please summarize this round's results. The team remains running and awaits new task instructions.",
 		"dispatcher.all_done_temporary":     "All tasks are complete. Summarize the team's work, then call shutdown_member for each member in turn, wait until all members reach status shutdown, and finally call clean_team to disband the team.",
@@ -188,6 +242,20 @@ func T(key string, kwargs ...map[string]any) (string, error) {
 		return formatMap(raw, kwargs[0]), nil
 	}
 	return raw, nil
+}
+
+// ReplyHintFor 解析某条入站消息的 reply-hint note 正文。
+//
+// user 伪成员不是名册成员、也没有 agent 进程，用纯文本答复它会被静默丢弃，
+// 所以该情形用无条件措辞（dispatcher.reply_hint_user）；其余发送者用通用的
+// 条件措辞（dispatcher.reply_hint，带 {sender} 占位符）。
+//
+// Python: reply_hint_for(sender) (openjiuwen/agent_teams/i18n.py L1122-1138)
+func ReplyHintFor(sender string) (string, error) {
+	if sender == UserPseudoMemberName {
+		return T("dispatcher.reply_hint_user")
+	}
+	return T("dispatcher.reply_hint", map[string]any{"sender": sender})
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
