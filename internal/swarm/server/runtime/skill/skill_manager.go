@@ -684,14 +684,26 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 	if name == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
 	}
-	safeName, err := safePathName(name, "skill")
-	if err != nil {
-		logRejectedName("skills.uninstall", "skill", name, err)
-		return map[string]any{"success": false, "detail": err.Error()}, nil
-	}
 
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+
+	safeName, nameErr := safePathName(name, "skill")
+	if nameErr != nil {
+		// name 含不安全字符（如 /）时，从 local_skills 的 origin 里取 slug 定位目录。
+		// 记录本身仍按原始 name 删除——state 里的键就是原始 name。
+		slug := sm.lookupSkillSlugByName(name)
+		if slug == "" {
+			logRejectedName("skills.uninstall", "skill", name, nameErr)
+			return map[string]any{"success": false, "detail": nameErr.Error()}, nil
+		}
+		resolved, slugErr := safePathName(slug, "skill")
+		if slugErr != nil {
+			logRejectedName("skills.uninstall", "skill", name, nameErr)
+			return map[string]any{"success": false, "detail": nameErr.Error()}, nil
+		}
+		safeName = resolved
+	}
 
 	dest, err := safeChildPath(sm.skillsDir, safeName, "skill")
 	if err != nil {
@@ -718,11 +730,12 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 		return map[string]any{"success": false, "detail": fmt.Sprintf("卸载失败: %s", err)}, nil
 	}
 
-	sm.removeInstalledPlugin(safeName)
-	sm.removeLocalSkill(safeName)
+	// 按原始 name 删除记录：state 里的键就是安装时写入的 name（可能是含 / 的脏值）
+	sm.removeInstalledPlugin(name)
+	sm.removeLocalSkill(name)
 	sm.refreshAgentDataIndexes()
 
-	return map[string]any{"success": true, "name": safeName}, nil
+	return map[string]any{"success": true, "name": name}, nil
 }
 
 // HandleSkillsImportLocal 导入本地技能
@@ -3392,4 +3405,29 @@ func isWindowsAbsPath(p string) bool {
 		return true
 	}
 	return strings.HasPrefix(p, `\\`) || strings.HasPrefix(p, "//")
+}
+
+// lookupSkillSlugByName 按原始 name 从 local_skills 记录里取目录 slug。
+//
+// 历史安装可能写入含 / 的 name，而目录名用的是扁平化 slug（origin 形如
+// "teamskillshub:<slug>"）。卸载时按 name 定位不到目录，需要靠它兜底。
+// 找不到时返回空串，由调用方按原错误拒绝。
+//
+// 调用方必须已持有 sm.mu。
+func (sm *SkillManager) lookupSkillSlugByName(name string) string {
+	local, ok := sm.state["local_skills"].([]map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, record := range local {
+		if toString(record["name"]) != name {
+			continue
+		}
+		origin := toString(record["origin"])
+		if idx := strings.LastIndex(origin, ":"); idx >= 0 && idx < len(origin)-1 {
+			return origin[idx+1:]
+		}
+		return ""
+	}
+	return ""
 }

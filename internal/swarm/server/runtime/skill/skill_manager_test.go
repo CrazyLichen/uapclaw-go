@@ -3717,3 +3717,72 @@ func TestHandleSkillsTeamSkillsHubInit_force覆盖(t *testing.T) {
 		t.Fatal("force 后旧文件应被清除")
 	}
 }
+
+// ──────────────────────────── 卸载 slug 兜底 ────────────────────────────
+
+// TestHandleSkillsUninstall_不安全name用slug兜底 验证含 / 的历史记录可被卸载。
+//
+// 历史安装可能写入含 / 的 name，目录实际用扁平化的 slug。旧实现遇到
+// safePathName 报错直接返回，这类记录永远卸不掉，磁盘残留也无法通过 RPC 清理。
+func TestHandleSkillsUninstall_不安全name用slug兜底(t *testing.T) {
+	sm, skillsDir := newInitTestManager(t)
+
+	// 目录按 origin 里的 slug 命名
+	dir := filepath.Join(skillsDir, "a+b")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sm.state["local_skills"] = []map[string]any{
+		{"name": "a/b", "origin": "teamskillshub:a+b"},
+	}
+
+	got, err := sm.HandleSkillsUninstall(context.Background(), map[string]any{"name": "a/b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["success"] != true {
+		t.Fatalf("应卸载成功，实际 %v", got)
+	}
+	if dirExists(dir) {
+		t.Fatal("目录应被删除")
+	}
+	local, _ := sm.state["local_skills"].([]map[string]any)
+	for _, s := range local {
+		if toString(s["name"]) == "a/b" {
+			t.Fatal("记录应被清除（按原始 name 匹配）")
+		}
+	}
+}
+
+// TestHandleSkillsUninstall_无origin时仍拒绝 验证找不到 slug 时不放行
+func TestHandleSkillsUninstall_无origin时仍拒绝(t *testing.T) {
+	sm, _ := newInitTestManager(t)
+	sm.state["local_skills"] = []map[string]any{
+		{"name": "a/b"}, // 无 origin，无从推断目录
+	}
+
+	got, err := sm.HandleSkillsUninstall(context.Background(), map[string]any{"name": "a/b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["success"] != false {
+		t.Fatalf("无 origin 应拒绝，实际 %v", got)
+	}
+}
+
+// TestHandleSkillsUninstall_正常name 验证普通 name 不受影响
+func TestHandleSkillsUninstall_正常name(t *testing.T) {
+	sm, skillsDir := newInitTestManager(t)
+	dir := filepath.Join(skillsDir, "normal")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := sm.HandleSkillsUninstall(context.Background(), map[string]any{"name": "normal"})
+	if err != nil || got["success"] != true {
+		t.Fatalf("应成功，实际 %v err=%v", got, err)
+	}
+	if dirExists(dir) {
+		t.Fatal("目录应被删除")
+	}
+}
