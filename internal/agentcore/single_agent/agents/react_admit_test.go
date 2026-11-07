@@ -199,3 +199,34 @@ func newAgentWithRecordingRail(
 	cbc := interfaces.NewAgentCallbackContext(a, &interfaces.InvokeInputs{Query: interfaces.InvokeQueryString("q")}, nil)
 	return a, cbc, mc
 }
+
+// TestReActAgent_输入parts经DeepAgent传递 验证跨层透传闭环。
+//
+// Python: inputs["_input_parts"] → ctx.extra["_input_parts"] → parts
+// (react_agent.py L2981-2982, L1002-1012)
+func TestReActAgent_输入parts经DeepAgent传递(t *testing.T) {
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{Query: interfaces.InvokeQueryString("a\nb")}, nil)
+
+	applyInputPartsExtra(cbc, map[string]any{"_input_parts": []string{"a", "b"}})
+
+	raw, ok := cbc.GetExtra("_input_parts")
+	require.True(t, ok, "_input_parts 必须落到 cbc.extra")
+	require.Equal(t, []string{"a", "b"}, raw)
+	require.Equal(t, []string{"a", "b"}, extractUserParts(cbc, interfaces.InvokeQueryString("a\nb")))
+}
+
+// TestReActAgent_非法inputParts被忽略 验证 []any 或空列表不写入 extra。
+func TestReActAgent_非法inputParts被忽略(t *testing.T) {
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
+
+	applyInputPartsExtra(cbc, map[string]any{"_input_parts": []any{"a", "b"}})
+	_, ok := cbc.GetExtra("_input_parts")
+	require.False(t, ok, "类型不符不得写入")
+
+	applyInputPartsExtra(cbc, map[string]any{"_input_parts": []string{}})
+	_, ok = cbc.GetExtra("_input_parts")
+	require.False(t, ok, "空列表不得写入")
+
+	applyInputPartsExtra(cbc, nil)
+	applyInputPartsExtra(nil, map[string]any{"_input_parts": []string{"a"}})
+}

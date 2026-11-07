@@ -305,6 +305,27 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// applyInputPartsExtra 把未 join 的输入列表落到 cbc.extra。
+//
+// 只认 []string（内部路径直接传 Go 值，不经 JSON）；类型不符或空列表都忽略，
+// 下游 extractUserParts 会回退到 query 单元素。
+//
+// Python: react_agent.py L2981-2982
+func applyInputPartsExtra(cbc *interfaces.AgentCallbackContext, inputs map[string]any) {
+	if cbc == nil || inputs == nil {
+		return
+	}
+	v, ok := inputs["_input_parts"]
+	if !ok {
+		return
+	}
+	parts, ok := v.([]string)
+	if !ok || len(parts) == 0 {
+		return
+	}
+	cbc.SetExtra("_input_parts", parts)
+}
+
 // extractUserParts 把本轮 query 归一成 ON_USER_MESSAGE 看到的输入列表。
 //
 // 一轮可能由多条排队输入共同驱动，调用方把它们不 join 地交下来，rails
@@ -454,6 +475,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			cbc.BindSteeringQueue(ch)
 		}
 	}
+	// 多条输入共同驱动本轮：query 已是它们的 join 文本，这里保留未 join 的
+	// 列表，让 ON_USER_MESSAGE 的 rails 仍能看到接缝。
+	// Python: inputs.get("_input_parts") → ctx.extra (react_agent.py L2981-2982)
+	applyInputPartsExtra(cbc, inputs)
 
 	// abortPersisted 标记中断路径是否已完成「清洗 + 持久化 + commit」，
 	// 避免 finally 里重复 save/commit（对齐 Python abort_persisted）。
