@@ -19,8 +19,8 @@
 //	├── messages.go           # 团队状态消息正文（身份/团队信息/名册）+ 名册 diff
 //	├── team_plan_agent.go    # ApplyTeamPlanAgentPrompt + 常量
 //	├── team_plan_mode.go     # BuildTeamPlanModeSection + 常量
-//	├── cn/                   # 9 个中文 .md 模板
-//	├── en/                   # 9 个英文 .md 模板
+//	├── cn/                   # 10 个中文 .md 模板（含 inbound_tags.md）
+//	├── en/                   # 10 个英文 .md 模板（含 inbound_tags.md）
 //	└── system_prompt.md      # 语言无关顶层模板
 //
 // 对应 Python 代码：openjiuwen/agent_teams/prompts/
