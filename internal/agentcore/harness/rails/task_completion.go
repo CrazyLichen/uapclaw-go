@@ -190,6 +190,12 @@ func (r *TaskCompletionRail) SetGoalManager(m *goal.GoalManager) {
 	}
 }
 
+// SetGoalLanguage 设置 goal 提示词语言。
+// Python: self._task_completion_rail.goal_language = language (deep_agent.py L832)
+func (r *TaskCompletionRail) SetGoalLanguage(lang string) {
+	r.goalLanguage = lang
+}
+
 // Init 绑定 goal_manager 后注册 submit_goal_report / get_current_goal 两工具。
 // Python: TaskCompletionRail.init (task_completion_rail.py L218)
 func (r *TaskCompletionRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {

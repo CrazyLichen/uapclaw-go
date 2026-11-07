@@ -1696,8 +1696,35 @@ func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
 	if _, _, err := d.prepareInteractionTaskLoop(ctx, sess); err != nil {
 		return err
 	}
-	// ⤵️ #9.89 回填：goalPromptLanguage / TaskCompletionRail 注册 / GoalManager 构造 /
-	// bindLiveGoalManager + initRail（Python L3964-3994）
+	// ⤵️ #9.89：goal 语言 / TaskCompletionRail 注册 / GoalManager 构造 / 绑定（Python L3964-3994）
+	goalLanguage := d.goalPromptLanguage()
+	d.railsMu.Lock()
+	tcRail := d.taskCompletionRail
+	d.railsMu.Unlock()
+	if tcRail == nil {
+		tcRail = rails.NewTaskCompletionRail(rails.WithGoalLanguage(goalLanguage))
+		if err := d.RegisterRail(ctx, tcRail); err != nil {
+			return fmt.Errorf("register goal TaskCompletionRail: %w", err)
+		}
+	}
+
+	gm := goal.NewGoalManager(goal.GoalManagerConfig{
+		Store:        goal.NewSessionGoalStore(sess),
+		EventManager: d.interactionEvents,
+		ControlLock:  &d.interactionControlMu,
+		HasOutputStream: func() bool {
+			return d.HasOutputStream()
+		},
+		// GoalManager 在持 controlMu 时调此回调，故直接走 Locked 变体，不再取锁。
+		CancelActiveRound: func(ctx context.Context, kind hschema.RoundWorkKind, goalID, reason string) {
+			d.cancelActiveRoundLocked(ctx, reason, &RoundExpectation{GoalID: goalID})
+		},
+		EmitEvent:  d.emitInteractionEvent,
+		NotifyWork: d.notifyWork,
+		Language:   goalLanguage,
+	})
+	d.SetGoalCoordinator(gm)
+	d.bindLiveGoalManager(tcRail)
 
 	d.interactionSupervisorMu.Lock()
 	d.interactionStarted = true
@@ -1873,6 +1900,34 @@ func (d *DeepAgent) SetGoalCoordinator(coordinator goal.Coordinator) {
 	d.interactionControlMu.Lock()
 	defer d.interactionControlMu.Unlock()
 	d.goalCoordinator = coordinator
+}
+
+// bindLiveGoalManager 把 GoalManager 绑到 TaskCompletionRail。
+// Python: _bind_live_goal_manager (deep_agent.py L2157)
+func (d *DeepAgent) bindLiveGoalManager(rail *rails.TaskCompletionRail) {
+	if rail == nil {
+		return
+	}
+	d.interactionControlMu.Lock()
+	m := d.goalCoordinator
+	d.interactionControlMu.Unlock()
+	if m == nil {
+		return
+	}
+	if gm, ok := m.(*goal.GoalManager); ok {
+		rail.SetGoalManager(gm)
+	}
+}
+
+// goalPromptLanguage 解析 GoalManager 与自动 TaskCompletionRail 的语言。
+// Python: DeepAgent._goal_prompt_language (deep_agent.py L518)
+func (d *DeepAgent) goalPromptLanguage() string {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	if d.deepConfig == nil {
+		return hprompts.ResolveLanguage("")
+	}
+	return d.deepConfig.EffectiveLanguage()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -2150,6 +2205,17 @@ func (d *DeepAgent) hotReloadSystemPrompt(ctx context.Context, config *hschema.D
 		d.reactAgent.SetPromptBuilder(promptBuilder.SystemPromptBuilder)
 	}
 
+	// Python: 语言热同步（deep_agent.py L831-834）
+	d.railsMu.Lock()
+	if d.taskCompletionRail != nil {
+		d.taskCompletionRail.SetGoalLanguage(language)
+	}
+	gc := d.goalCoordinator
+	d.railsMu.Unlock()
+	if gm, ok := gc.(*goal.GoalManager); ok {
+		gm.SetLanguage(language)
+	}
+
 	logger.Info(logComponent).Msg("[DeepAgent] system prompt hot-reload completed")
 }
 
@@ -2172,8 +2238,8 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	}
 
 	if config.EnableTaskLoop {
-		// ⤴️ 9.12 回填：TaskCompletionRail 创建
-		d.pendingRails = append(d.pendingRails, rails.NewTaskCompletionRail())
+		// ⤴️ 9.12 回填：TaskCompletionRail 创建（⤴️ 9.89 带 goal_language，对齐 Python L907-915）
+		d.pendingRails = append(d.pendingRails, rails.NewTaskCompletionRail(rails.WithGoalLanguage(config.EffectiveLanguage())))
 		logger.Debug(logComponent).Msg("TaskCompletionRail created, backfill from 9.12")
 	}
 
