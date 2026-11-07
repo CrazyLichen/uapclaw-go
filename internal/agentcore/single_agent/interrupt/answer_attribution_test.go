@@ -486,3 +486,25 @@ func TestCarryAnswers_子Agent条目(t *testing.T) {
 
 	assert.Contains(t, entry.CarriedAnswers["sub_1"], "rail.A")
 }
+
+// TestSaveAutoConfirm_未声明kind也应写入 回归：AskUserRail 不声明 interrupt_kind，
+// 答案的 Kind 为空串（InterruptKindUndeclared）。Python 的 APPROVED_ANSWER_KINDS
+// 明确把 UNDECLARED 列入白名单（answers.py:47-52），Go 曾遗漏该取值，导致这类
+// rail 的 auto_confirm 永远写不进 session（集成套件 ConcurrentMixedInterrupt
+// 因此红）。
+func TestSaveAutoConfirm_未声明kind也应写入(t *testing.T) {
+	sess := session.NewSession()
+
+	answers := map[string]*saschema.InterruptAnswer{
+		"intr_undeclared": {
+			Kind:    saschema.InterruptKindUndeclared,
+			Value:   map[string]any{"approved": true, "auto_confirm": true},
+			Request: &saschema.InterruptRequest{AutoConfirmKey: "write_file"},
+		},
+	}
+	saveAutoConfirm(answers, sess)
+
+	configVal, _ := sess.GetState(sessionstate.StringKey(InterruptAutoConfirmKey))
+	config, _ := configVal.(map[string]any)
+	assert.Equal(t, true, config["write_file"], "未声明 kind 的 auto_confirm 应写入 session")
+}

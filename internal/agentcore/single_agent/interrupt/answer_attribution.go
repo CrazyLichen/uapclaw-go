@@ -53,11 +53,17 @@ type CallAnswers map[string]map[string]*saschema.InterruptAnswer
 // approvedAnswerKinds 只有这几种中断类型的答案形如 {"approved": ...}。
 // 用 kind 白名单挡住"宿主把 approval 形状的答案发给别的类型"（例如技能演化
 // 审批期望的是 {"action": ...}），避免误开 auto_confirm。
+//
+// 必须包含 InterruptKindUndeclared：抛出方未声明 kind 的 rail（例如
+// AskUserRail）同样以 {"approved": ...} 作答，Python 侧 APPROVED_ANSWER_KINDS
+// 也把 UNDECLARED 列入（answers.py:47-52，注释明写 "an undeclared kind included"）。
+// 漏掉它会令这类 rail 的 auto_confirm 永远写不进 session。
 // Python: APPROVED_ANSWER_KINDS
 var approvedAnswerKinds = map[string]struct{}{
 	saschema.InterruptKindPermission:       {},
 	saschema.InterruptKindConfirm:          {},
 	saschema.InterruptKindTeamToolApproval: {},
+	saschema.InterruptKindUndeclared:       {},
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
