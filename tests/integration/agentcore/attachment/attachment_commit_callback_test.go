@@ -97,7 +97,7 @@ func (s *CommitCallbackSuite) TestIT_提交回调_单条炸不拖垮整轮() {
 //
 // spec C1 后半：失败即无历史；回调不执行由单元用例覆盖
 // （syncPromptAttachments 返回 false 时调用方不进 runCommitCallbacks）。
-func (s *CommitCallbackSuite) TestIT_提交回调_失败不推进基线() {
+func (s *CommitCallbackSuite) TestIT_提交回调_历史不可写则不推进基线() {
 	ctx := context.Background()
 	m := prompts.NewManager()
 	_, err := m.AddSection("it-commit-2", "team.context", "# 团队状态 v1",

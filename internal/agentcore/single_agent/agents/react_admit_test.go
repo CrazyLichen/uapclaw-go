@@ -155,10 +155,10 @@ func TestAdmitUserMessage_panic也还原(t *testing.T) {
 	require.True(t, ok, "panic 路径也必须还原 inputs")
 }
 
-// TestExtractUserParts_无extra时单元素兜底 验证缺省时 parts 为 query 单元素。
+// TestReActAgent_无parts时单元素兜底 验证缺省时 parts 为 query 单元素。
 //
 // Python: _extract_user_parts 无 _input_parts → [query 文本]
-func TestExtractUserParts_无extra时单元素兜底(t *testing.T) {
+func TestReActAgent_无parts时单元素兜底(t *testing.T) {
 	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
 	parts := extractUserParts(cbc, interfaces.InvokeQueryString("hello world"))
 	require.Len(t, parts, 1)
