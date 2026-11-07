@@ -444,3 +444,211 @@ func TestCoordinator_SubmitUnary立即返回快照(t *testing.T) {
 	}
 	close(release)
 }
+
+// TestCoordinator_RunStream按序产出 校验流式基本语义。
+func TestCoordinator_RunStream按序产出(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	var got []any
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(context.Context) (<-chan any, error) {
+			ch := make(chan any, 3)
+			ch <- "a"
+			ch <- "b"
+			ch <- "c"
+			close(ch)
+			return ch, nil
+		}, StreamOptions{}, func(v any) bool { got = append(got, v); return true })
+	if err != nil {
+		t.Fatalf("RunStream 失败: %v", err)
+	}
+	if len(got) != 3 || got[0] != "a" || got[2] != "c" {
+		t.Fatalf("产出顺序错误: %v", got)
+	}
+}
+
+// TestCoordinator_RunStream终态不丢 校验终态标记在有界缓冲满时仍送达。
+//
+// 对应上游 finally 的 "A terminal marker must not be dropped when the
+// bounded buffer is full" 注释。
+func TestCoordinator_RunStream终态不丢(t *testing.T) {
+	opts := DefaultCoordinatorOptions()
+	opts.StreamBufferSize = 1 // 故意压到 1，制造缓冲压力
+	c := NewRuntimeSessionCoordinator(opts)
+	mustRegister(t, c, "s1")
+	count := 0
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(context.Context) (<-chan any, error) {
+			ch := make(chan any, 10)
+			for i := 0; i < 5; i++ {
+				ch <- i
+			}
+			close(ch)
+			return ch, nil
+		}, StreamOptions{}, func(any) bool { count++; return true })
+	if err != nil {
+		t.Fatalf("RunStream 失败: %v", err)
+	}
+	if count != 5 {
+		t.Fatalf("应收到 5 个元素，实际 %d（终态标记可能被丢弃导致提前退出）", count)
+	}
+}
+
+// TestCoordinator_RunStream关闭Done且置终态 校验流式路径的收尾。
+func TestCoordinator_RunStream关闭Done且置终态(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	_ = c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(context.Context) (<-chan any, error) {
+			ch := make(chan any)
+			close(ch)
+			return ch, nil
+		}, StreamOptions{}, func(any) bool { return true })
+	snap := c.SnapshotSession("s1")
+	if len(snap.Executions) != 1 {
+		t.Fatalf("应有 1 条执行，实际 %d", len(snap.Executions))
+	}
+	if snap.Executions[0].State != SessionExecutionStateSucceeded {
+		t.Fatalf("执行应为 SUCCEEDED，实际 %s", snap.Executions[0].State)
+	}
+}
+
+// TestCoordinator_RunStream拒绝团队种类 校验 work_kind 闸门。
+func TestCoordinator_RunStream拒绝团队种类(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindTeamRequest,
+		func(context.Context) (<-chan any, error) { return nil, nil },
+		StreamOptions{}, func(any) bool { return true })
+	if err == nil || err.Error() != "Team work must use run_team_stream" {
+		t.Fatalf("应拒绝团队种类并给出上游文案，实际 %v", err)
+	}
+}
+
+// TestCoordinator_RunStream中途报错上抛 校验错误传播。
+func TestCoordinator_RunStream中途报错上抛(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	boom := errors.New("stream boom")
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(context.Context) (<-chan any, error) { return nil, boom },
+		StreamOptions{}, func(any) bool { return true })
+	if !errors.Is(err, boom) {
+		t.Fatalf("应上抛原错误，实际 %v", err)
+	}
+	snap := c.SnapshotSession("s1")
+	if snap.Executions[0].State != SessionExecutionStateFailed {
+		t.Fatalf("执行应为 FAILED，实际 %s", snap.Executions[0].State)
+	}
+}
+
+// TestCoordinator_RunStream消费方主动停止 校验 emit 返回 false 时收尾干净。
+func TestCoordinator_RunStream消费方主动停止(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	seen := 0
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(ctx context.Context) (<-chan any, error) {
+			ch := make(chan any, 10)
+			for i := 0; i < 10; i++ {
+				ch <- i
+			}
+			close(ch)
+			return ch, nil
+		}, StreamOptions{}, func(any) bool {
+			seen++
+			return seen < 2 // 第二个元素后主动停
+		})
+	if err != nil {
+		t.Fatalf("主动停止不应报错: %v", err)
+	}
+	if seen != 2 {
+		t.Fatalf("应在第 2 个元素后停止，实际收到 %d 个", seen)
+	}
+}
+
+// TestCoordinator_RunTeamStream拒绝非团队种类 校验反向闸门。
+func TestCoordinator_RunTeamStream拒绝非团队种类(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	err := c.RunTeamStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(context.Context, TeamExecutionContext) (<-chan any, error) { return nil, nil },
+		StreamOptions{Details: &TeamExecutionDetails{}}, func(any) bool { return true })
+	if err == nil || err.Error() != "non-Team work must use run_stream" {
+		t.Fatalf("应拒绝非团队种类，实际 %v", err)
+	}
+}
+
+// TestCoordinator_RunTeamStream传入团队上下文 校验 TeamExecutionContext 字段。
+func TestCoordinator_RunTeamStream传入团队上下文(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	var captured TeamExecutionContext
+	err := c.RunTeamStream(context.Background(), "s1", "r-team", SessionWorkKindTeamRequest,
+		func(_ context.Context, teamCtx TeamExecutionContext) (<-chan any, error) {
+			captured = teamCtx
+			ch := make(chan any)
+			close(ch)
+			return ch, nil
+		}, StreamOptions{Details: &TeamExecutionDetails{ControlID: "c1"}},
+		func(any) bool { return true })
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	if captured.ExecutionID == "" || captured.RequestID != "r-team" {
+		t.Fatalf("团队上下文身份错误: %+v", captured)
+	}
+	if captured.Session.SessionID != "s1" || captured.Session.Generation != 1 {
+		t.Fatalf("团队上下文会话错误: %+v", captured.Session)
+	}
+	if captured.Details.ControlID != "c1" {
+		t.Fatalf("团队详情未透传: %+v", captured.Details)
+	}
+}
+
+// TestCoordinator_RunStream交互标识登记 校验 InteractionIDs 回调。
+func TestCoordinator_RunStream交互标识登记(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindHeartbeat,
+		func(ctx context.Context) (<-chan any, error) {
+			ch := make(chan any, 1)
+			ch <- "ask"
+			close(ch)
+			return ch, nil
+		}, StreamOptions{
+			InteractionIDs: func(v any) map[string]struct{} {
+				if v == "ask" {
+					return map[string]struct{}{"c1": {}}
+				}
+				return nil
+			},
+		}, func(any) bool { return true })
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	snap := c.SnapshotSession("s1")
+	if len(snap.Executions) != 1 {
+		t.Fatalf("应有 1 条执行，实际 %d", len(snap.Executions))
+	}
+	// 有等待交互时应为 WAITING_FOR_CONTROL
+	if snap.Executions[0].State != SessionExecutionStateWaitingForControl {
+		t.Fatalf("有交互应置 WAITING_FOR_CONTROL，实际 %s", snap.Executions[0].State)
+	}
+}
+
+// TestCoordinator_RunStream空流正常结束 校验零元素路径。
+func TestCoordinator_RunStream空流正常结束(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+	count := 0
+	err := c.RunStream(context.Background(), "s1", "r1", SessionWorkKindChatStream,
+		func(context.Context) (<-chan any, error) {
+			ch := make(chan any)
+			close(ch)
+			return ch, nil
+		}, StreamOptions{}, func(any) bool { count++; return true })
+	if err != nil || count != 0 {
+		t.Fatalf("空流应正常结束且无元素，实际 (err=%v, count=%d)", err, count)
+	}
+}

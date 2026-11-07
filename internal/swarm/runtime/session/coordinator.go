@@ -54,6 +54,34 @@ type ChildOptions struct {
 	Team *TeamExecutionDetails
 }
 
+// StreamOptions RunStream / RunTeamStream 的可选参数。
+//
+// Python: run_stream / run_team_stream 关键字参数
+type StreamOptions struct {
+	// InteractionIDs 从元素提取交互标识
+	InteractionIDs func(any) map[string]struct{}
+	// ParentExecutionID 父执行标识
+	ParentExecutionID string
+	// ChannelID 渠道标识
+	ChannelID string
+	// Team Team 流专用详情
+	Team *TeamExecutionDetails
+	// Details Team 流的团队详情（与 Team 同义，供 RunTeamStream 使用）
+	Details *TeamExecutionDetails
+}
+
+// streamItem 流式队列元素。
+//
+// Python: coordinator.py _StreamItem
+type streamItem struct {
+	// value 数据元素
+	value any
+	// err 错误
+	err error
+	// done 是否为终态标记
+	done bool
+}
+
 // delivery 一次控制投递的在飞状态。
 //
 // Python: coordinator.py _Delivery
@@ -672,4 +700,231 @@ func newExecutionID() string {
 		return fmt.Sprintf("%032x", uint64(time.Now().UnixNano()))
 	}
 	return hex.EncodeToString(buf[:])
+}
+
+// ──────────────────────────── 导出函数（流式） ────────────────────────────
+
+// RunStream 运行一次流式执行，逐元素回调。
+//
+// Python: RuntimeSessionCoordinator.run_stream
+// 团队种类必须走 RunTeamStream（上游断言文案逐字对齐）。
+// emit 返回 false 表示消费方主动停止，将触发 cancel_execution。
+func (c *RuntimeSessionCoordinator) RunStream(
+	ctx context.Context,
+	sessionID, requestID string,
+	workKind SessionWorkKind,
+	operation func(context.Context) (<-chan any, error),
+	opts StreamOptions,
+	emit func(any) bool,
+) error {
+	if _, isTeam := teamWorkKinds[workKind]; isTeam {
+		return errors.New("Team work must use run_team_stream")
+	}
+	record, err := c.requireOpenSession(sessionID)
+	if err != nil {
+		return err
+	}
+	handle, err := c.newExecution(record, requestID, workKind, opts.ParentExecutionID, opts.Team)
+	if err != nil {
+		return err
+	}
+	return c.runStream(ctx, record, handle, operation, opts.InteractionIDs, emit)
+}
+
+// RunTeamStream 运行一次团队流式执行。
+//
+// Python: RuntimeSessionCoordinator.run_team_stream
+// operation 接收 TeamExecutionContext（由协调器按 handle 组装）。
+func (c *RuntimeSessionCoordinator) RunTeamStream(
+	ctx context.Context,
+	sessionID, requestID string,
+	workKind SessionWorkKind,
+	operation func(context.Context, TeamExecutionContext) (<-chan any, error),
+	opts StreamOptions,
+	emit func(any) bool,
+) error {
+	if _, isTeam := teamWorkKinds[workKind]; !isTeam {
+		return errors.New("non-Team work must use run_stream")
+	}
+	details := opts.Details
+	if details == nil {
+		details = opts.Team
+	}
+	if details == nil {
+		return errors.New("Team execution details must match the work kind")
+	}
+	record, err := c.requireOpenSession(sessionID)
+	if err != nil {
+		return err
+	}
+	handle, err := c.newExecution(record, requestID, workKind, opts.ParentExecutionID, details)
+	if err != nil {
+		return err
+	}
+	teamCtx := TeamExecutionContext{
+		ExecutionLifecycleContext: ExecutionLifecycleContext{
+			Session: SessionLifecycleContext{
+				SessionID:  handle.SessionID,
+				Generation: handle.Generation,
+			},
+			ExecutionID: handle.ExecutionID,
+			RequestID:   handle.RequestID,
+			WorkKind:    handle.WorkKind,
+			ChannelID:   handle.ChannelID,
+		},
+		Details: *details,
+	}
+	contextual := func(ctx context.Context) (<-chan any, error) {
+		return operation(ctx, teamCtx)
+	}
+	return c.runStream(ctx, record, handle, contextual, opts.InteractionIDs, emit)
+}
+
+// ──────────────────────────── 非导出函数（流式） ────────────────────────────
+
+// runStream 流式生命周期：生产者 goroutine + 有界队列 + 消费者回调。
+//
+// Python: RuntimeSessionCoordinator._run_stream
+//
+// 关键约束（spec §7.4）：
+//  1. 终态标记必须**阻塞**写入 queue，不能 select-default 丢弃，
+//     否则消费者在缓冲满时会永远等待。
+//  2. 生产者 defer 顺序：刷会话状态 → 投终态标记 → close(queue) → MarkDone。
+//  3. use_lane 判定含 SESSION_MESSAGE 特例（虽有 scheduled 但不走 lane）。
+func (c *RuntimeSessionCoordinator) runStream(
+	parentCtx context.Context,
+	record *sessionRecord,
+	handle *SessionExecutionHandle,
+	operation func(context.Context) (<-chan any, error),
+	interactionIDs func(any) map[string]struct{},
+	emit func(any) bool,
+) error {
+	queue := make(chan streamItem, c.streamBufferSize)
+	opCtx, cancel := context.WithCancel(parentCtx)
+	handle.Cancel = cancel
+
+	produce := func(opCtx context.Context) (any, error) {
+		c.registry.MarkRunning(handle)
+		c.mu.Lock()
+		record.state = RuntimeSessionStateActive
+		c.mu.Unlock()
+
+		var (
+			stream       <-chan any
+			terminalItem *streamItem
+			opErr        error
+		)
+		defer func() {
+			c.refreshSessionState(record)
+			if terminalItem != nil {
+				// 必须阻塞投递：缓冲满时丢终态会让消费者永久等待
+				queue <- *terminalItem
+			}
+			close(queue)
+			// spec §2.1：Done 最后关闭，表示收尾完成
+			handle.MarkDone()
+		}()
+
+		stream, opErr = operation(opCtx)
+		if opErr != nil {
+			c.registry.MarkTerminal(handle, SessionExecutionStateFailed, opErr.Error())
+			terminalItem = &streamItem{err: opErr, done: true}
+			return nil, opErr
+		}
+		for item := range stream {
+			if interactionIDs != nil {
+				if ids := interactionIDs(item); len(ids) > 0 {
+					c.registry.MarkAwaitingControl(handle, ids)
+					c.mu.Lock()
+					c.refreshControlGateLocked(record, nil)
+					c.mu.Unlock()
+				}
+			}
+			queue <- streamItem{value: item}
+		}
+		// 正常结束：有等待交互则置 WAITING，否则 SUCCEEDED
+		if len(handle.WaitingControlIDs) > 0 {
+			c.registry.MarkWaiting(handle)
+		} else {
+			c.registry.MarkTerminal(handle, SessionExecutionStateSucceeded, "")
+		}
+		terminalItem = &streamItem{done: true}
+		return nil, nil
+	}
+
+	// use_lane：scheduled 且非 SESSION_MESSAGE
+	// 上游注释：流式邮箱工作已持有宿主准入，放进聊天 lane 会死锁
+	useLane := handle.WorkKind.Scheduled() && handle.WorkKind != SessionWorkKindSessionMessage
+
+	produceDone := make(chan error, 1)
+	go func() {
+		if useLane {
+			_, err := c.scheduler.SubmitAndWait(opCtx, handle, func(op context.Context) (any, error) {
+				return produce(op)
+			})
+			produceDone <- err
+			return
+		}
+		_, err := produce(opCtx)
+		produceDone <- err
+	}()
+
+	completedNormally := false
+	for item := range queue {
+		if item.err != nil {
+			// 生产者已结束，等它返回后上抛
+			<-produceDone
+			cancel()
+			return item.err
+		}
+		if item.done {
+			completedNormally = true
+			break
+		}
+		if !emit(item.value) {
+			// 消费方主动停止：继续 drain 队列直到生产者 close，
+			// 避免生产者阻塞在 queue <- terminalItem（有界缓冲满）。
+			for range queue {
+			}
+			break
+		}
+	}
+	produceErr := <-produceDone
+	cancel()
+	if !completedNormally {
+		_ = c.cancelExecutionInternal(handle.SessionID, handle.ExecutionID, nil)
+	}
+	return produceErr
+}
+
+// cancelExecutionInternal 内部取消（供 runStream 的异常清理使用）。
+//
+// CancelExecution 在后续步骤落地；此处直接取消 handle 的 ctx 并置终态，
+// 语义等价（只针对单个已知执行）。
+func (c *RuntimeSessionCoordinator) cancelExecutionInternal(
+	sessionID, executionID string,
+	_ *time.Duration,
+) error {
+	handle := c.registry.Get(executionID)
+	if handle == nil {
+		return nil
+	}
+	if handle.Cancel != nil {
+		handle.Cancel()
+	}
+	if !handle.State.Terminal() {
+		c.registry.MarkTerminal(handle, SessionExecutionStateCancelled, "")
+	}
+	if record, ok := c.sessionByID(sessionID); ok {
+		c.refreshSessionState(record)
+	}
+	return nil
+}
+
+// sessionByID 取会话记录。
+func (c *RuntimeSessionCoordinator) sessionByID(sessionID string) (*sessionRecord, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	record, ok := c.sessions[sessionID]
+	return record, ok
 }
