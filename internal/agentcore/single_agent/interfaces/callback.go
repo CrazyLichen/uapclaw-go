@@ -208,6 +208,29 @@ type ModelCallInputs struct {
 	Response *llmschema.AssistantMessage
 }
 
+// SteeringDrainInputs BEFORE_STEERING_DRAIN 事件输入。
+//
+// 只在"有积压的模型调用前"触发；空队列不发事件。它只问 rails 一个问题：
+// 本次模型调用吸收多少积压？没被放行的按原序留队，循环在队列非空时继续，
+// 剩下的由后续模型调用接走。
+//
+// 刻意选在**队列被取走之前**：事后再限制意味着先全取再把多余塞回去，
+// 而塞回去的会排在期间新到的消息之后。
+//
+// Python: SteeringDrainInputs (openjiuwen/core/single_agent/rail/base.py L402-427)
+type SteeringDrainInputs struct {
+	// Pending 当前排队条数（只读上下文，供"只压大批次"的 rail 参考）
+	Pending int
+	// Limit 本次最多吸收几条；nil 表示全部。
+	//
+	// rails 按优先级依次写，后写的覆盖先写的（上游原注释：the value standing
+	// at the end is the one that applies）。非空队列始终至少放行 1 条。
+	Limit *int
+}
+
+// EventKind 返回事件输入种类标识。
+func (s *SteeringDrainInputs) EventKind() string { return "steering_drain_inputs" }
+
 // ToolCallInputs BEFORE/AFTER_TOOL_CALL 事件输入。
 //
 // Python: ToolCallInputs (openjiuwen/core/single_agent/rail/base.py L119-134)
@@ -351,6 +374,11 @@ const (
 	// CallbackAfterReactIteration 内层 ReAct 单次迭代完全成功后（模型 + 全部工具 + ToolMessage 均已写入）
 	// Python: AgentCallbackEvent.AFTER_REACT_ITERATION
 	CallbackAfterReactIteration AgentCallbackEvent = "after_react_iteration"
+	// CallbackBeforeSteeringDrain 待处理 steering 消息离队之前（仅在有积压时触发）
+	//
+	// rails 通过写 SteeringDrainInputs.Limit 决定本次模型调用吸收几条，其余留在队列原位。
+	// Python: AgentCallbackEvent.BEFORE_STEERING_DRAIN (rail/base.py L516)
+	CallbackBeforeSteeringDrain AgentCallbackEvent = "before_steering_drain"
 )
 
 const (
@@ -952,6 +980,7 @@ func AllCallbackEvents() []AgentCallbackEvent {
 		CallbackAfterToolCall,
 		CallbackOnToolException,
 		CallbackAfterReactIteration,
+		CallbackBeforeSteeringDrain,
 	}
 }
 
@@ -967,6 +996,7 @@ func AllBaseCallbackEvents() []AgentCallbackEvent {
 		CallbackBeforeToolCall,
 		CallbackAfterToolCall,
 		CallbackOnToolException,
+		CallbackBeforeSteeringDrain,
 	}
 }
 

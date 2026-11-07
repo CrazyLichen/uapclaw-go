@@ -422,10 +422,10 @@ func TestAgentCallbackContext_ModelContext_SetModelContext(t *testing.T) {
 	assert.Nil(t, ctx.ModelContext())
 }
 
-// TestAllBaseCallbackEvents 验证 AllBaseCallbackEvents 返回 9 个基础事件（含 on_user_message）
+// TestAllBaseCallbackEvents 验证 AllBaseCallbackEvents 返回 10 个基础事件（含 on_user_message / before_steering_drain）
 func TestAllBaseCallbackEvents(t *testing.T) {
 	events := AllBaseCallbackEvents()
-	assert.Equal(t, 9, len(events))
+	assert.Equal(t, 10, len(events))
 
 	// 验证包含基础事件
 	seen := make(map[AgentCallbackEvent]bool)
