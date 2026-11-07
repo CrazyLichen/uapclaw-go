@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -196,6 +197,15 @@ func (r *TaskCompletionRail) SetGoalLanguage(lang string) {
 	r.goalLanguage = lang
 }
 
+// GoalReportSink 返回本轮报告暂存（供 submit_goal_report 工具与测试访问）。
+// Python: self._goal_report_sink (task_completion_rail.py L134)
+func (r *TaskCompletionRail) GoalReportSink() *goaltools.GoalReportSink {
+	if r.goalReportSink == nil {
+		r.goalReportSink = goaltools.NewGoalReportSink()
+	}
+	return r.goalReportSink
+}
+
 // Init 绑定 goal_manager 后注册 submit_goal_report / get_current_goal 两工具。
 // Python: TaskCompletionRail.init (task_completion_rail.py L218)
 func (r *TaskCompletionRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
@@ -283,7 +293,10 @@ func (r *TaskCompletionRail) BeforeModelCall(ctx context.Context, cbc *agentinte
 	if cbc == nil {
 		return nil
 	}
-	builder := cbc.Agent().SystemPromptBuilder()
+	var builder saprompt.SystemPromptBuilderInterface
+	if agent := cbc.Agent(); agent != nil {
+		builder = agent.SystemPromptBuilder()
+	}
 
 	if r.completionPromise != "" && builder != nil {
 		lang := builder.Language()
@@ -309,7 +322,10 @@ func (r *TaskCompletionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfa
 	if cbc == nil {
 		return nil
 	}
-	builder := cbc.Agent().SystemPromptBuilder()
+	var builder saprompt.SystemPromptBuilderInterface
+	if agent := cbc.Agent(); agent != nil {
+		builder = agent.SystemPromptBuilder()
+	}
 	r.syncGoalProtocolPrompt(ctx, cbc, builder)
 	return nil
 }
@@ -613,7 +629,10 @@ func (r *TaskCompletionRail) doGoalBeforeIteration(cbc *agentinterfaces.AgentCal
 	if !ok || inputs == nil {
 		return
 	}
-	language := r.resolveGoalLanguage(cbc.Agent().SystemPromptBuilder())
+	language := r.goalLanguage
+	if agent := cbc.Agent(); agent != nil {
+		language = r.resolveGoalLanguage(agent.SystemPromptBuilder())
+	}
 	r.goalLanguage = language
 	inputs.Query = sections.BuildGoalTaskQuery(record.TaskView(), language)
 }
@@ -726,7 +745,10 @@ func (r *TaskCompletionRail) invokeTranscriptAssessor(ctx context.Context, recor
 		return nil
 	}
 
-	language := r.resolveGoalLanguage(cbc.Agent().SystemPromptBuilder())
+	language := r.goalLanguage
+	if agent := cbc.Agent(); agent != nil {
+		language = r.resolveGoalLanguage(agent.SystemPromptBuilder())
+	}
 	r.goalLanguage = language
 	systemPrompt := sections.TranscriptAssessorSystem(language)
 	userPrompt := sections.BuildTranscriptAssessorPrompt(
