@@ -305,6 +305,31 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// drainSteeringBatch 取本次模型调用可以吸收的那部分 steering 积压。
+//
+// 全部一次塞进同一轮对"两三条叮嘱"是对的，对"忙碌一段后回来看到十几条"
+// 是灾难：模型被迫在一轮里同时处理所有事项。批大小因此是策略问题，由 rails
+// 在**队列被取走之前**表态——事后再限制意味着先全取再把多余塞回去，而塞回去的
+// 会排在期间新到的消息之后。
+//
+// 无队列或无积压时直接返回，不触发事件。
+//
+// Python: ReActAgent._drain_steering_batch (react_agent.py L964-1000)
+func drainSteeringBatch(ctx context.Context, cbc *interfaces.AgentCallbackContext) ([]string, error) {
+	if cbc == nil || cbc.SteeringQueue() == nil || !cbc.HasPendingSteering() {
+		return nil, nil
+	}
+	prev := cbc.Inputs()
+	inputs := &interfaces.SteeringDrainInputs{Pending: cbc.SteeringPendingCount()}
+	cbc.SetInputs(inputs)
+	defer cbc.SetInputs(prev)
+	fireErr := cbc.Fire(ctx, interfaces.CallbackBeforeSteeringDrain)
+
+	// Fire 出错仍要取走（否则积压永不消费、ReAct 循环空转），错误照抛。
+	// spec D-4：上游 fire 不返回值，无此分支。
+	return cbc.DrainSteering(inputs.Limit), fireErr
+}
+
 // shouldReportStreamError 判断 streamProcess 是否应把错误写入流。
 //
 // ctx 取消不是错误：对齐 Python react_agent.py:1549-1554 —— `except Exception`
@@ -736,13 +761,20 @@ func (a *ReActAgent) reactLoop(
 			break
 		}
 
-		// steering 注入
-		if steeringMsgs := cbc.DrainSteering(nil); len(steeringMsgs) > 0 && modelCtx != nil {
-			if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
-				runCommitCallbacks(cbc)
+		// steering 注入：rails 决定本次吸收几条，其余留队等下一次模型调用。
+		// Python: react_agent.py L3111-3119
+		if modelCtx != nil {
+			steeringMsgs, drainErr := drainSteeringBatch(ctx, cbc)
+			if drainErr != nil {
+				return nil, fmt.Errorf("迭代 %d steering 批次获取失败: %w", iteration, drainErr)
 			}
-			for _, msg := range steeringMsgs {
-				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage("[STEERING] " + msg)})
+			if len(steeringMsgs) > 0 {
+				if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
+					runCommitCallbacks(cbc)
+				}
+				for _, msg := range steeringMsgs {
+					_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage("[STEERING] " + msg)})
+				}
 			}
 		}
 
