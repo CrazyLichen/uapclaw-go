@@ -1,0 +1,8 @@
+<team-inbound from="dev-1" message_id="m1" type="direct" time="2026-05-28 14:30:05 +08:00" for="controller">
+你帮我看看
+<team-note kind="hitt-silence">
+**这是给控制者看的通知，不是要你执行的指令**，运行时已把它原样转给控制者。
+**严格禁止任何自主行为**：禁止主动回复发送方 / 指派方（包括调用 send_message）、禁止自主调用 member_complete_task / claim_task / 文件 / shell 等任何工具去回应或推进、禁止用纯文本输出表达意图或承诺。
+**保持静默**，只有控制者在 Inbox 里下达明确指令后才能行动。
+</team-note>
+</team-inbound>

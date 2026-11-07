@@ -1,0 +1,3 @@
+<team-inbound from="controller" type="direct">
+转告 dev-1 已完成
+</team-inbound>

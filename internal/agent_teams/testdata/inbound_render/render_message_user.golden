@@ -1,0 +1,6 @@
+<team-inbound from="user" message_id="m3" type="direct" time="2026-05-28 14:30:05 +08:00">
+你帮我看看
+<team-note kind="reply-hint">
+这条消息来自 user——委托本团队工作的**团队外部真人**，不是团队成员，不在成员名册里。你必须调用 send_message(to="user") 把答复发回用户；你写在回复正文里的任何文字都不会送达用户，不调用工具就等于没有回复。
+</team-note>
+</team-inbound>

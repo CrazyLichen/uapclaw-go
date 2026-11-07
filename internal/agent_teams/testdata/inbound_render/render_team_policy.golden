@@ -1,0 +1,9 @@
+<team-policy tools="team_tools">
+<team-note kind="tool-namespace">
+工具名不带命名空间前缀
+</team-note>
+
+# 团队准则
+
+用 & 表示同时满足
+</team-policy>

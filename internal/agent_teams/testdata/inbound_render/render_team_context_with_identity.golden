@@ -1,0 +1,10 @@
+<team-context>
+<identity>
+# 成员身份
+
+你的 member_name: dev-1
+</identity>
+# 团队信息
+
+- team_name: t1
+</team-context>

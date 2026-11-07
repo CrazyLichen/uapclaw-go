@@ -1,0 +1,6 @@
+<team-inbound from="dev-1" message_id="m1" type="direct" time="2026-05-28 14:30:05 +08:00">
+你帮我看看这个接口
+<team-note kind="reply-hint">
+如果对方在提问或等待回复，请务必通过 send_message 工具回复 dev-1。
+</team-note>
+</team-inbound>
