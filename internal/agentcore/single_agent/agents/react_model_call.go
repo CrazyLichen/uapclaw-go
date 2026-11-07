@@ -150,7 +150,10 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 			inputTools = inputs.Tools
 		}
 		// 附件同步：保证本轮模型看到最新动态提示词（对齐 Python _build_model_context_window）
-		_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
+		// Sync 成功才执行投递回调（25.0a ①）
+		if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
+			runCommitCallbacks(cbc)
+		}
 		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, inputTools, 0, 0, contextWindowOpts...)
 		if err != nil {
 			return fmt.Errorf("获取上下文窗口失败: %w", err)

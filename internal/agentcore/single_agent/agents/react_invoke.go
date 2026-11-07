@@ -482,7 +482,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 					return fireErr
 				}
 				// 附件先落历史，保证顺序为 [附件变更][用户消息]
-				_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
+				// Sync 成功才执行投递回调（25.0a ①）
+				if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
+					runCommitCallbacks(cbc)
+				}
 				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(plainText)})
 			}
 		}
@@ -735,7 +738,9 @@ func (a *ReActAgent) reactLoop(
 
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
-			_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
+			if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
+				runCommitCallbacks(cbc)
+			}
 			for _, msg := range steeringMsgs {
 				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage("[STEERING] " + msg)})
 			}
