@@ -19,7 +19,7 @@
 | `internal/swarm/agents/harness/common/rails/permissions/auto_permission/doc.go` | 包文档：本包在权限链路中的位置、与 9.90b/d 的关系、文件目录、零消费常量的 ⤵️ 去向 |
 | `internal/swarm/agents/harness/common/rails/permissions/auto_permission/models.go` | `ToolInvocation` / `PermissionHandlingResult` / `PermissionInterruptRequest` 三个类型 + 11 个共享常量（含 3 个 RE2 正则） |
 | `internal/swarm/agents/harness/common/rails/permissions/auto_permission/models_test.go` | models 的单元测试 |
-| `internal/swarm/agents/harness/common/rails/permissions/auto_permission/tool_binding.go` | `MatchesBoundMethod` / `ResolveToolBinding` 两个函数 + `resolveToolByID` 注入点 + `logComponent` |
+| `internal/swarm/agents/harness/common/rails/permissions/auto_permission/tool_binding.go` | `MatchesBoundMethod` / `ResolveToolBinding` 两个函数 + `resolveToolByID` 注入点 |
 | `internal/swarm/agents/harness/common/rails/permissions/auto_permission/tool_binding_test.go` | tool_binding 的单元测试（含 fake 设施） |
 | `internal/swarm/agents/harness/common/rails/permissions/doc.go` | Modify：文件目录补 `auto_permission/` 子包条目 + ⤵️ 标注 |
 | `IMPLEMENTATION_PLAN.md` | Modify：9.90a 行 `☐` → `✅`，注明提交来源，4 个零消费常量挂 ⤵️ |
@@ -910,7 +910,6 @@ import "testing"
 ```go
 import (
 	"context"
-	"errors"
 	"reflect"
 	"testing"
 
@@ -995,7 +994,7 @@ type fakeToolSub struct {
 // ──────────────────────────── ResolveToolBinding 测试 ────────────────────────────
 
 // withResolveToolByID 替换工具查找实现并在测试结束恢复
-func withResolveToolByID(t *testing.T, fn func(string) (tool.Tool, error)) {
+func withResolveToolByID(t *testing.T, fn func(string) tool.Tool) {
 	t.Helper()
 	orig := resolveToolByID
 	SetResolveToolByIDFunc(fn)
@@ -1007,46 +1006,37 @@ func TestResolveToolBinding_正常(t *testing.T) {
 	card := tool.NewToolCardWithID("t1", "read_file", "读文件", nil, nil)
 	impl := &fakeTool{card: card}
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{"read_file": card}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) { return impl, nil })
+	withResolveToolByID(t, func(string) tool.Tool { return impl })
 
-	got, err := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
-	if err != nil {
-		t.Fatalf("不应报错，实际 %v", err)
-	}
+	got := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
 	if got != tool.Tool(impl) {
 		t.Fatalf("应返回注册的实现，实际 %v", got)
 	}
 }
 
-// TestResolveToolBinding_能力不存在 验证 am.Get 返回 nil 时为 (nil, nil)
+// TestResolveToolBinding_能力不存在 验证 am.Get 返回 nil 时返回 nil
 func TestResolveToolBinding_能力不存在(t *testing.T) {
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) {
+	withResolveToolByID(t, func(string) tool.Tool {
 		t.Fatal("能力不存在时不应查找工具")
-		return nil, nil
+		return nil
 	})
 
-	got, err := ResolveToolBinding(am, "nope", reflectTypeOfTool(&fakeTool{}))
-	if err != nil {
-		t.Fatalf("应为 (nil, nil)，实际报错 %v", err)
-	}
+	got := ResolveToolBinding(am, "nope", reflectTypeOfTool(&fakeTool{}))
 	if got != nil {
 		t.Fatalf("应返回 nil，实际 %v", got)
 	}
 }
 
-// TestResolveToolBinding_类型不匹配 验证 expectedType 不符时为 (nil, nil)
+// TestResolveToolBinding_类型不匹配 验证 expectedType 不符时返回 nil
 func TestResolveToolBinding_类型不匹配(t *testing.T) {
 	card := tool.NewToolCardWithID("t1", "read_file", "读文件", nil, nil)
 	impl := &fakeTool{card: card}
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{"read_file": card}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) { return impl, nil })
+	withResolveToolByID(t, func(string) tool.Tool { return impl })
 
 	// 用 fakeToolSub 的类型做期望，实际实现是 fakeTool
-	got, err := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeToolSub{}))
-	if err != nil {
-		t.Fatalf("类型不匹配应返回 (nil, nil)，实际报错 %v", err)
-	}
+	got := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeToolSub{}))
 	if got != nil {
 		t.Fatalf("应返回 nil，实际 %v", got)
 	}
@@ -1057,12 +1047,9 @@ func TestResolveToolBinding_子类不算合格(t *testing.T) {
 	card := tool.NewToolCardWithID("t1", "read_file", "读文件", nil, nil)
 	impl := &fakeToolSub{fakeTool: fakeTool{card: card}}
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{"read_file": card}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) { return impl, nil })
+	withResolveToolByID(t, func(string) tool.Tool { return impl })
 
-	got, err := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
-	if err != nil {
-		t.Fatalf("应返回 (nil, nil)，实际报错 %v", err)
-	}
+	got := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
 	if got != nil {
 		t.Fatalf("子类实现不应被判为父类，实际返回 %v", got)
 	}
@@ -1074,66 +1061,42 @@ func TestResolveToolBinding_卡片不同一(t *testing.T) {
 	other := tool.NewToolCardWithID("t1", "read_file", "读文件", nil, nil)
 	impl := &fakeTool{card: other}
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{"read_file": registered}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) { return impl, nil })
+	withResolveToolByID(t, func(string) tool.Tool { return impl })
 
-	got, err := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
-	if err != nil {
-		t.Fatalf("应返回 (nil, nil)，实际报错 %v", err)
-	}
+	got := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
 	if got != nil {
 		t.Fatalf("卡片不同一应返回 nil，实际 %v", got)
 	}
 }
 
-// TestResolveToolBinding_非ToolCard能力 验证能力不是 *tool.ToolCard 时返 (nil, nil)
+// TestResolveToolBinding_非ToolCard能力 验证能力不是 *tool.ToolCard 时返回 nil
 //
-// 对齐 spec 偏差 D11：Python 此处会抛异常，Go 判为「不合格」返回 (nil, nil)。
+// Python 此时 get_tool 返回 None、resolve_tool_binding 安静返回 None，
+// 与 Go 返 nil 一致（spec §3.2.2 印证表）。
 func TestResolveToolBinding_非ToolCard能力(t *testing.T) {
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{
 		"some_workflow": fakeAbility{name: "some_workflow", id: "w1"},
 	}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) {
+	withResolveToolByID(t, func(string) tool.Tool {
 		t.Fatal("非 ToolCard 能力不应查找工具")
-		return nil, nil
+		return nil
 	})
 
-	got, err := ResolveToolBinding(am, "some_workflow", reflectTypeOfTool(&fakeTool{}))
-	if err != nil {
-		t.Fatalf("应返回 (nil, nil)，实际报错 %v", err)
-	}
+	got := ResolveToolBinding(am, "some_workflow", reflectTypeOfTool(&fakeTool{}))
 	if got != nil {
 		t.Fatalf("应返回 nil，实际 %v", got)
 	}
 }
 
-// TestResolveToolBinding_工具不存在返回error 验证卡在而工具不在时返 (nil, err)
+// TestResolveToolBinding_工具不存在 验证卡在而工具不在时返回 nil
 //
-// 对齐 spec 偏差 D10：Python 的 get_tool 此时抛异常，Go 用 error 承载。
-func TestResolveToolBinding_工具不存在返回error(t *testing.T) {
+// Python 此时 get_tool 返回 None（不抛异常），Go 同样返回 nil。
+func TestResolveToolBinding_工具不存在(t *testing.T) {
 	card := tool.NewToolCardWithID("t1", "read_file", "读文件", nil, nil)
 	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{"read_file": card}}
-	withResolveToolByID(t, func(string) (tool.Tool, error) { return nil, nil })
+	withResolveToolByID(t, func(string) tool.Tool { return nil })
 
-	got, err := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
-	if err == nil {
-		t.Fatal("卡在而工具不在应返回 error")
-	}
-	if got != nil {
-		t.Fatalf("应返回 nil，实际 %v", got)
-	}
-}
-
-// TestResolveToolBinding_查找报错透传 验证底层 err 原样返回
-func TestResolveToolBinding_查找报错透传(t *testing.T) {
-	card := tool.NewToolCardWithID("t1", "read_file", "读文件", nil, nil)
-	am := &fakeAbilityManager{abilities: map[string]commonschema.Ability{"read_file": card}}
-	sentinel := errors.New("boom")
-	withResolveToolByID(t, func(string) (tool.Tool, error) { return nil, sentinel })
-
-	got, err := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("应透传底层 error，实际 %v", err)
-	}
+	got := ResolveToolBinding(am, "read_file", reflectTypeOfTool(&fakeTool{}))
 	if got != nil {
 		t.Fatalf("应返回 nil，实际 %v", got)
 	}
@@ -1162,7 +1125,6 @@ func reflectTypeOfTool(v any) reflect.Type { return reflect.TypeOf(v) }
 ```go
 import (
 	"context"
-	"errors"
 	"reflect"
 	"testing"
 
@@ -1187,13 +1149,11 @@ Expected: FAIL，编译错误 `undefined: ResolveToolBinding` 与 `undefined: re
 
 ```go
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 ```
 
@@ -1202,28 +1162,22 @@ import (
 ```go
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// logComponent 日志组件
-var logComponent = logger.ComponentPermissions
-
 // resolveToolByID 按 ID 取工具实例，默认走全局 ResourceMgr。
 //
 // 不传 WithSession，等价于 Python 的 session=None——不加 trace 装饰，
 // 拿到的就是裸实现；若加了装饰会变成 *decorator.TracedTool，
 // 精确类型校验必然失败。
 //
-// 返回 (nil, nil) 表示工具不存在；(nil, err) 表示查找过程报错。
+// 返回 nil 表示工具不存在（Python 同样返回 None，不抛异常）。
 // 变量形式供测试注入，对齐 common/tools/send_file.go 的 SetXxxFunc 惯例。
 //
 // Python: Runner.resource_mgr.get_tool(tool_id, session=None)
-var resolveToolByID = func(id string) (tool.Tool, error) {
+var resolveToolByID = func(id string) tool.Tool {
 	tools, err := runner.GetResourceMgr().GetTool([]string{id})
-	if err != nil {
-		return nil, err
+	if err != nil || len(tools) == 0 {
+		return nil
 	}
-	if len(tools) == 0 {
-		return nil, nil
-	}
-	return tools[0], nil
+	return tools[0]
 }
 ```
 
@@ -1233,13 +1187,13 @@ var resolveToolByID = func(id string) (tool.Tool, error) {
 // SetResolveToolByIDFunc 替换工具查找实现，仅供测试注入。
 //
 // 对齐 common/tools/send_file.go 的 SetSendFilePushFunc 成对注入惯例。
-func SetResolveToolByIDFunc(fn func(id string) (tool.Tool, error)) {
+func SetResolveToolByIDFunc(fn func(id string) tool.Tool) {
 	if fn != nil {
 		resolveToolByID = fn
 	}
 }
 
-// ResolveToolBinding 返回确切注册的实现。
+// ResolveToolBinding 返回确切注册的实现，不匹配一律返回 nil。
 //
 // 三重校验（与 Python 逐条对应）：
 //  1. 实现类型必须精确等于 expectedType——子类不算合格，
@@ -1249,65 +1203,56 @@ func SetResolveToolByIDFunc(fn func(id string) (tool.Tool, error)) {
 //  2. 卡片必须是同一个对象（指针同一），不是字段相等的另一张卡。
 //  3. 查找时不带 session，避免拿到 trace 装饰后的包装类型。
 //
-// 返回语义（详见 spec D10/D11）：
-//   - 能力不存在 / 类型不符 / 卡片不同一 / 能力非 ToolCard → (nil, nil)
-//   - 工具查找报错、卡在而工具不在 → (nil, err)
-//   - 全部通过 → (resource, nil)
+// 六档返回语义与 Python 完全一致（spec §3.2.2 印证表）：
+// 能力不存在 / 能力非 ToolCard / 工具不存在 / 类型不符 / 卡片不同一 → nil；
+// 全部通过 → resource。
 //
 // Python: resolve_tool_binding(agent, tool_name, expected_type)
 func ResolveToolBinding(
 	am agentinterfaces.AbilityManagerInterface,
 	toolName string,
 	expectedType reflect.Type,
-) (tool.Tool, error) {
+) tool.Tool {
 	// 1. 查能力卡片（Python: card = agent.ability_manager.get(tool_name)）
 	card := am.Get(toolName)
 	if card == nil {
-		return nil, nil
+		return nil
 	}
 
-	// 2. 断言为 ToolCard：非工具类能力直接判不合格（spec D11）
+	// 2. 断言为 ToolCard：非工具类能力直接判不合格
+	//
+	// Go 的 schema.Ability 接口只暴露 AbilityID()，必须断言成 *tool.ToolCard
+	// 才能拿到可供指针同一性比较的卡片对象。Python 侧该场景会走 get_tool
+	// 查不到 → 返回 None，与这里提前返回 nil 结果相同。
 	cardPtr, ok := card.(*tool.ToolCard)
 	if !ok {
-		return nil, nil
+		return nil
 	}
 
 	// 3. 按卡片 ID 查实现（Python: get_tool(card.id, session=None)）
-	resource, err := resolveToolByID(cardPtr.ID)
-	if err != nil {
-		return nil, err
-	}
+	resource := resolveToolByID(cardPtr.ID)
 	if resource == nil {
-		// 卡在 ability_manager 而工具不在 resource_mgr，注册表自相矛盾
-		logger.Warn(logComponent).
-			Str("event_type", "PERMISSION_TOOL_BINDING_MISSING").
-			Str("tool_id", cardPtr.ID).
-			Str("tool_name", toolName).
-			Msg("tool registered in ability manager but missing from resource manager")
-		return nil, fmt.Errorf(
-			"tool %q registered in ability manager but missing from resource manager",
-			cardPtr.ID,
-		)
+		return nil
 	}
 
 	// 4. 精确类型校验（Python: type(resource) is expected_type）
 	if reflect.TypeOf(resource) != expectedType {
-		return nil, nil
+		return nil
 	}
 
 	// 5. 卡片同一性校验（Python: resource.card is card）
 	if resource.Card() != cardPtr {
-		return nil, nil
+		return nil
 	}
 
-	return resource, nil
+	return resource
 }
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/agents/harness/common/rails/permissions/auto_permission/ -v`
-Expected: 全部 PASS（25 个用例）
+Expected: 全部 PASS（24 个用例）
 
 若 `commonschema.AbilityKindTool` 名称不符，查 `internal/common/schema/card.go` 的 `AbilityKind` 常量定义后修正 `fakeAbility` 的 `AbilityKind` 返回值。
 
@@ -1328,12 +1273,11 @@ git commit -m "feat(permissions): tool_binding ResolveToolBinding 实现身份�
 对齐 Python resolve_tool_binding 的三重校验：精确类型 + 卡片指针同一 + 不带
 session 查找（避免 trace 装饰成 TracedTool 导致类型校验失败）。
 
-与 Python 的两处差异：
-- D10 返回 (tool.Tool, error)：Python 的 get_tool 找不到时抛异常冒泡，
-  Go 的 ResourceMgr.GetTool 返回空切片 + nil error，只靠 nil 会丢掉
-  「异常」这一档语义
-- D11 非 ToolCard 能力返 (nil, nil)：Python 会抛异常，但该场景实为
-  「合格性判定为否」而非系统异常
+六档返回语义与 Python 完全一致（能力不存在 / 非 ToolCard / 工具不存在 /
+类型不符 / 卡片不同一 → nil；全部通过 → resource）。曾考虑把「工具不存在」
+做成 error 以保留可观测性，读源码核实 Python 的 get_tool 在 exact_match=True
+时因 finally 分支 elif resource or exact_match 而返回 None（不抛异常），
+故撤销该偏差，保持单返回值。
 
 resolveToolByID 为包级变量，配 SetResolveToolByIDFunc 供测试注入
 （对齐 common/tools/send_file.go 的 SetXxxFunc 惯例）。"
@@ -1473,9 +1417,9 @@ Expected: 无输出
 | §3.1 #13（PermissionHandlingResult + 构造校验） | Task 2 |
 | §3.1 #14（PermissionInterruptRequest） | Task 2 |
 | §3.2.1（MatchesBoundMethod） | Task 5 |
-| §3.2.2（ResolveToolBinding + 注入点 + 日志） | Task 6 |
+| §3.2.2（ResolveToolBinding + 注入点） | Task 6 |
 | §4.1（子包结构 + doc.go） | Task 1 |
-| §4.3（日志） | Task 6 |
+| §4.3（日志：本批不引入） | Task 2-6（均无日志） |
 | §5（测试设计 + 覆盖率） | Task 2-6、Task 8 Step 2 |
 | §7（提交分层） | Task 1-7 的 commit 步骤 |
 | §7 第 4 项（计划表回填 + 父包 doc.go） | Task 7 |
@@ -1487,7 +1431,8 @@ Expected: 无输出
 **类型一致性检查**：
 - `ResolveToolBinding(am, toolName, expectedType)` 三参数签名在 Task 6 测试与实现中一致
 - `MatchesBoundMethod(receiver, method, expectedOwner, expectedFunc)` 四参数在 Task 5 测试与实现中一致
-- `resolveToolByID func(string) (tool.Tool, error)` 在 Task 6 实现与注入测试中一致
+- `resolveToolByID func(string) tool.Tool` 在 Task 6 实现与注入测试中一致
+- `ResolveToolBinding` 单返回值 `tool.Tool` 在 Task 6 测试与实现中一致
 - `NewPermissionHandlingResult(handled, result, decisionSource) (*PermissionHandlingResult, error)` 在 Task 2 测试与实现中一致
 - `ReviewerActionTargetMaxLength` 等 7 个常量名在 Task 3 定义、Task 8 验收中一致
 - `ShellDisplayPathPattern` 等 4 个变量名在 Task 4 定义、Task 7 doc.go 中一致
@@ -1500,6 +1445,6 @@ Expected: 无输出
 4. `InterruptRequest` 的 5 个 `InterruptRequester` 方法均为**指针接收者**（`response.go:208/236` 等）——Task 2 的 `var _ saschema.InterruptRequester = req` 中 `req` 必须是 `*PermissionInterruptRequest`，计划里已如此书写。
 5. `tool.NewToolCardWithID(id, name, description, inputParams, properties)` 存在（`foundation/tool/base.go:173`）——用于构造「同 ID 但不同指针」的卡片测试。
 6. `tool.WithCard(card)` 选项存在（`invoke_function.go:50`）——本计划用 `fakeTool` 直接持有 card 字段，未使用该选项，无影响。
-7. `logger.ComponentPermissions` 存在（父包 `owner_scopes.go:55` 已在用）。
+7. `logger.ComponentPermissions` 存在（父包 `owner_scopes.go:55` 已在用）——本批不用日志，仅备查。
 
 **唯一剩余风险**：Task 4 正则的 raw string 拼接写法。计划已给出 `` ` + "`" + ` `` 方案并附双引号转义备选，写完后必须跑 Task 4 Step 4 验证匹配行为。

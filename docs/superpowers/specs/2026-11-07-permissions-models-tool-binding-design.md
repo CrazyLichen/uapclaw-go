@@ -61,7 +61,7 @@ PermissionEngine 查表：read_file 是只读工具 → 自动放行
 被放行的是那个被换过的实现 → 自动放行了一次写操作
 ```
 
-`ResolveToolBinding` 就是这道闸：实现类必须是**精确**那个类（子类也算不合格，因为可重写 `Invoke`），且卡片必须是**同一个对象**（不是字段相等的另一张卡）。任一不满足返回 `(nil, nil)`（判定为不合格），调用方据此拒绝自动放行、改走问用户；注册表自相矛盾（卡在而工具不在）则返回 `(nil, err)` 由调用方记日志。
+`ResolveToolBinding` 就是这道闸：实现类必须是**精确**那个类（子类也算不合格，因为可重写 `Invoke`），且卡片必须是**同一个对象**（不是字段相等的另一张卡）。任一不满足返回 `nil`，调用方据此拒绝自动放行、改走问用户。
 
 Python 源码注释写明这一点：
 
@@ -289,60 +289,94 @@ def _method_matches(owner, expected, name):
 
 外层 `type(owner) is expected` 做类型校验，内层 `matches_bound_method` 做绑定校验——职责分工清晰，Go 迁移时 receiver 直接取 `owner`。
 
-#### 3.2.2 `ResolveToolBinding` 的签名偏差
+#### 3.2.2 `ResolveToolBinding` 的签名调整
 
 ```go
-// ResolveToolBinding 返回确切注册的实现；查找失败与身份校验失败均返回 error。
+// ResolveToolBinding 返回确切注册的实现；不匹配一律返回 nil。
 // Python: resolve_tool_binding(agent, tool_name, expected_type)
 func ResolveToolBinding(
     am agentinterfaces.AbilityManagerInterface,
     toolName string,
     expectedType reflect.Type,
-) (tool.Tool, error)
+) tool.Tool
 ```
 
-三处调整：
+两处调整：
 
 1. `agent` → `am agentinterfaces.AbilityManagerInterface`（D2 决策）。Python 侧 `agent` 只被读一个属性 `agent.ability_manager`，Go 侧直接收 manager。按规则 10.2 判定口径：「这个接口是别人用来调用 DeepAgent 的吗？」——此处是 `auto_permission` 作为**使用方**去读 agent 的能力，属「DeepAgent 用来调用别人」的正向场景，可以窄接口。直接收 `AbilityManagerInterface` 是把「从 agent 取 manager」这一步**上提到调用方**，属方法归属漂移，登记偏差 D2。
 2. `expected_type: type` → `expectedType reflect.Type`（D3 决策，用反射）。
-3. 返回值 `Tool | None` → `(tool.Tool, error)`（D10 决策）。**理由**：Python 在「卡片存在但工具不在 resource_mgr」时由 `get_tool` 抛异常冒泡（`_inner_get_resources` 中 `exact_match=True` 时 `raise`，resource_manager.py:1577-1578），`resolve_tool_binding` 自身无 try/except；Go 的 `ResourceMgr.GetTool` 找不到时返回空切片 + nil error，若只靠 nil 区分就丢失了「异常」这一档语义。改为返回 error 可保住 Python 的「找不到 = 异常」契约。
+
+**返回值保持单值 `tool.Tool`，与 Python 的 `Tool | None` 一一对应。**
 
 `get_tool(card.id, session=None)` → `runner.GetResourceMgr().GetTool([]string{id})`，**不传 `WithSession`**，等价于 `session=None`——不加 trace 装饰，拿到的就是裸实现（若加了装饰会变成 `*decorator.TracedTool`，第 4 步精确类型校验必然失败）。
 
-**返回语义对照（必须逐档分清）**：
+**Python `get_tool` 的真实行为（读源码核实，非推测）**：
+
+`resource_manager.py:1522-1545` 的 `_inner_find_resource_ids`：传入单个 ID 时**不过滤未知 ID**，直接 `ids_to_get = [resource_id]` 且 `exact_match = True`。
+
+`resource_manager.py:1562-1586` 的 `_inner_get_resources`：
+
+```python
+for get_id in ids_to_get:
+    resource = None
+    exc = None
+    try:
+        if self._tag_mgr.has_resource(get_id):
+            resource = self._dispatch_get(resource_type, get_id, session=session)
+    except Exception as e:
+        logger.error(...)
+        if exact_match:
+            raise                      # ← 仅 _dispatch_get 内部报错时才抛
+        exc = e
+    finally:
+        if exc is not None:
+            results.append(Error(exc))
+        elif resource or exact_match:  # ← exact_match=True 时，resource 为 None 也会 append
+            results.append(resource)
+
+return results[0] if results and isinstance(resource_id, str) else results
+```
+
+**结论：工具找不到时 Python 返回 `None`（不抛异常）**。因为 `exact_match=True` 让 `results = [None]`，再取 `results[0]` 得 `None`。
+
+随后 `resolve_tool_binding` 的判定：
+
+```python
+exact_type = type(resource) is expected_type   # type(None) is T → False
+if exact_type and resource.card is card:       # 短路，不会访问 None.card
+    return resource
+return None                                    # → 安静返回 None
+```
+
+**返回语义对照（Go 与 Python 完全一致）**：
 
 | 情形 | Python 行为 | Go 行为 |
 |---|---|---|
-| 能力不存在（`card is None`） | 返回 `None`（正常返回） | `(nil, nil)` |
-| 工具查找报错 / 系统异常 | 异常冒泡 | `(nil, err)` |
-| 工具不存在（卡在、工具不在） | `get_tool` 抛异常冒泡 | `(nil, err)` |
-| 实现类型不符 | 返回 `None` | `(nil, nil)` |
-| 卡片不同一 | 返回 `None` | `(nil, nil)` |
-| 全部通过 | 返回 resource | `(resource, nil)` |
+| 能力不存在（`card is None`） | 返回 `None` | `nil` |
+| 能力非 ToolCard（workflow/agent 卡） | `get_tool` 查不到 → 返回 `None` | `nil`（断言失败） |
+| 工具不存在（卡在、工具不在） | `get_tool` 返回 `None` → 返回 `None` | `nil` |
+| 实现类型不符 | 返回 `None` | `nil` |
+| 卡片不同一 | 返回 `None` | `nil` |
+| 全部通过 | 返回 resource | `resource` |
 
-即：**「否」是 `(nil, nil)`（判定为不合格），「异常」是 `(nil, err)`（本该不可能发生）。** 调用方对两者都按「不自动放行」处理，但 error 分支应记录日志，因为它意味着注册表自相矛盾（卡片在 ability_manager 而工具不在 resource_mgr）。
+**六档语义全部一一对应，无偏差。**
 
 实现步骤严格按 Python 顺序（规则 9.3）：
 
 ```
 1. card := am.Get(toolName)
-2. if card == nil → return nil, nil                 （Python: if card else None）
-3. resource, err := resourceMgr.GetTool([]string{card.AbilityID()})
-4. if err != nil → return nil, err                  （Python: 异常冒泡）
-5. if len(resource) == 0 → return nil, err          （工具不存在，对齐 Python 抛异常）
-6. resource0 := resource[0]
-7. exactType := reflect.TypeOf(resource0) == expectedType
-8. if !exactType → return nil, nil
-9. cardPtr, ok := card.(*tool.ToolCard); if !ok → return nil, nil
-10. if resource0.Card() != cardPtr → return nil, nil  （Python: resource.card is card）
-11. return resource0, nil
+2. if card == nil → return nil                      （Python: if card else None）
+3. cardPtr, ok := card.(*tool.ToolCard); if !ok → return nil
+4. resource := resolveToolByID(cardPtr.ID)
+5. if resource == nil → return nil                  （Python: get_tool 找不到返回 None）
+6. if reflect.TypeOf(resource) != expectedType → return nil
+7. if resource.Card() != cardPtr → return nil       （Python: resource.card is card）
+8. return resource
 ```
 
-步骤 5 的 error 文案：`fmt.Errorf("tool %q registered in ability manager but missing from resource manager", card.AbilityID())`。日志文案用英文（对齐 `feedback-logs-english`），若本批引入日志则记 `logger.Warn`。
+**步骤 3 与步骤 4 的顺序说明**：Python 的顺序是先 `get_tool(card.id)` 再判类型，Go 侧把「断言为 ToolCard」提到查工具之前。原因是 Go 的 `schema.Ability` 接口只暴露 `AbilityID()`，**必须**先断言成 `*tool.ToolCard` 才能拿到可供指针比较的卡片对象；而「非 ToolCard 能力」在 Python 里最终也走「`get_tool` 查不到 → 返回 `None`」，与本实现提前返回 `nil` **结果完全相同**，只是省掉一次必然失败的查找。这不构成语义偏差，但为规则 9.3「步骤顺序不得调整」记一条实现注记。
 
-步骤 9 说明：Python 的 `card` 是 `AbilityCard`（有 `.id` 与 `.card` 同一性），Go 的 `schema.Ability` 接口只暴露 `AbilityName()` / `AbilityID()` / `AbilityKind()`。已确认 `*tool.ToolCard` 实现该接口（`foundation/tool/base.go:243-249`）且 `ToolCard` 内嵌 `schema.BaseCard`——`AbilityManager.Get()` 存的正是工具注册时的 `*tool.ToolCard` 指针，因此 `card.(*tool.ToolCard)` 后与 `resource.Card()` 比指针即可得到 `is` 语义。
-
-若 `card` 不是 `*tool.ToolCard`（例如 workflow / agent 类型的能力），步骤 9 返回 `(nil, nil)`。这与 Python 一致：Python 中 workflow 能力在 `get_tool`（`resource_type="tool"`）查不到，走的是「工具不存在」分支——即 Python 会**抛异常**，而非返回 None。**这是唯一一处 Go 与 Python 不严格等价的地方**：Python 抛异常，Go 在步骤 9 提前返回 `(nil, nil)`。因为 `card.(*tool.ToolCard)` 断言失败说明该能力根本不是 tool，属「合格性判定为否」而非「系统异常」，返回 `(nil, nil)` 更合理。登记为偏差 D11。
+步骤 3 补充：Python 的 `card` 是 `AbilityCard`（有 `.id` 与 `.card` 同一性），Go 的 `schema.Ability` 接口只有三个方法。已确认 `*tool.ToolCard` 实现该接口（`foundation/tool/base.go:243-249`）且 `ToolCard` 内嵌 `schema.BaseCard`——`AbilityManager.Get()` 存的正是工具注册时的 `*tool.ToolCard` 指针，因此断言后与 `resource.Card()` 比指针即可得到 `is` 语义。
 
 ---
 
@@ -378,10 +412,12 @@ internal/swarm/agents/harness/common/rails/permissions/
 
 Python `models.py` 定义了 `logger = logging.getLogger(__name__)` 但**全文无一处 `logger.` 调用**（仅定义）。`tool_binding.py` 完全无日志。
 
-**但 `models.go` 不引入日志；`tool_binding.go` 引入一处**：因为 D10 把「工具不存在」做成 error 后，该分支需要留痕（规则 3.4 异常路径日志），否则注册表自相矛盾时无从排查。
+Go 侧 `ResolveToolBinding` 的六档语义全为正常返回（无 error 通道），**没有异常路径需要留痕**，因此：
 
 - `models.go`：无日志
-- `tool_binding.go`：`var logComponent = logger.ComponentPermissions`（对齐父包 `owner_scopes.go:55`），仅步骤 5 一处 `logger.Warn`
+- `tool_binding.go`：无日志
+
+**本批不引入 `logComponent`。** 等 9.90d 有真实日志需求时再引入，避免规则 8 意义上的死代码。
 
 ---
 
@@ -438,21 +474,18 @@ Python `models.py` 定义了 `logger = logging.getLogger(__name__)` 但**全文�
 // resolveToolByID 按 ID 取工具实例，默认走全局 ResourceMgr。
 // Python: Runner.resource_mgr.get_tool(tool_id, session=None)
 //
-// 返回 (nil, nil) 表示工具不存在；(nil, err) 表示查找过程报错。
-var resolveToolByID = func(id string) (tool.Tool, error) {
+// 返回 nil 表示工具不存在（Python 同样返回 None，不抛异常）。
+var resolveToolByID = func(id string) tool.Tool {
     tools, err := runner.GetResourceMgr().GetTool([]string{id})
-    if err != nil {
-        return nil, err
+    if err != nil || len(tools) == 0 {
+        return nil
     }
-    if len(tools) == 0 {
-        return nil, nil
-    }
-    return tools[0], nil
+    return tools[0]
 }
 
 // SetResolveToolByIDFunc 替换工具查找实现，仅供测试注入。
 // 对齐 common/tools/send_file.go 的 SetXxxFunc 成对注入惯例。
-func SetResolveToolByIDFunc(fn func(id string) (tool.Tool, error)) {
+func SetResolveToolByIDFunc(fn func(id string) tool.Tool) {
     if fn != nil {
         resolveToolByID = fn
     }
@@ -472,14 +505,13 @@ var logComponent = logger.ComponentPermissions
 
 | 用例 | 断言 |
 |---|---|
-| `TestResolveToolBinding_正常` | 注册真工具、card 同一 → 返回该实例，err 为 nil |
-| `TestResolveToolBinding_能力不存在` | `am.Get` 返回 nil → `(nil, nil)` |
-| `TestResolveToolBinding_类型不匹配` | `expectedType` 换成别的类型 → `(nil, nil)` |
-| `TestResolveToolBinding_子类不算合格` | 注册 `fakeToolSub` 但 `expectedType` 为 `fakeTool` → `(nil, nil)` |
-| `TestResolveToolBinding_卡片不同一` | 同 ID 但换一张卡 → `(nil, nil)` |
-| `TestResolveToolBinding_非ToolCard能力` | `am.Get` 返回非 `*tool.ToolCard` → `(nil, nil)`（偏差 D11） |
-| `TestResolveToolBinding_工具不存在返回error` | card 在 ability_manager 但 `resolveToolByID` 返回 nil → `(nil, err)`，err 非空 |
-| `TestResolveToolBinding_GetTool报错透传` | `resolveToolByID` 内部 err 透传 → `(nil, err)` |
+| `TestResolveToolBinding_正常` | 注册真工具、card 同一 → 返回该实例 |
+| `TestResolveToolBinding_能力不存在` | `am.Get` 返回 nil → nil |
+| `TestResolveToolBinding_类型不匹配` | `expectedType` 换成别的类型 → nil |
+| `TestResolveToolBinding_子类不算合格` | 注册 `fakeToolSub` 但 `expectedType` 为 `fakeTool` → nil |
+| `TestResolveToolBinding_卡片不同一` | 同 ID 但换一张卡 → nil |
+| `TestResolveToolBinding_非ToolCard能力` | `am.Get` 返回非 `*tool.ToolCard` → nil，且不触发工具查找 |
+| `TestResolveToolBinding_工具不存在` | card 在 ability_manager 但 `resolveToolByID` 返回 nil → nil |
 | `TestMatchesBoundMethod_正常` | receiver 同、函数同 → true |
 | `TestMatchesBoundMethod_owner为nil` | → false |
 | `TestMatchesBoundMethod_func为nil` | → false |
@@ -505,10 +537,15 @@ var logComponent = logger.ComponentPermissions
 | D7 | `@dataclass(frozen=True)` | 普通 struct，无只读保护 | 语言差异 | Go 无 frozen | 无 |
 | D8 | `__post_init__` 校验 | `NewPermissionHandlingResult` 构造函数校验 | 语言差异 | Go 无 `__post_init__` | 无 |
 | D9 | 3 个正则在 Python 全仓零消费 | 照抄并包级 `MustCompile` | 死代码保留 | 规则 9.2-4「不得裁剪成员」+ 既有「零调用死代码保留」惯例；RE2 兼容性已实测（3 个均编译通过且匹配正确） | 上游启用后自然成为活跃代码 |
-| D10 | 返回 `Tool \| None`，查找失败时异常冒泡 | 返回 `(tool.Tool, error)`，找不到做成 error | 签名调整（返回值） | Go 的 `ResourceMgr.GetTool` 找不到时返回空切片 + nil error，只靠 nil 会丢失 Python「异常」这一档语义；改返回 error 可保住「找不到 = 异常」契约 | 无（这是对 Python 异常语义的忠实表达，不需要回收） |
-| D11 | workflow/agent 类能力在 `get_tool` 查不到 → **抛异常** | 步骤 9 断言 `*tool.ToolCard` 失败 → 返回 `(nil, nil)` | 语义微调 | `card` 不是 `*tool.ToolCard` 说明该能力根本不是 tool，属「合格性判定为否」而非「系统异常」；返回 `(nil, nil)` 让调用方走「不自动放行」而非报错更合理 | 若上游把此场景明确为错误，改为返回 err |
 
-**D1、D2、D10、D11 需在实施前确认**（规则 12.3 要求）。D3-D9 已在本文档登记。
+**D1、D2 需在实施前确认**（规则 12.3 要求）。D3-D9 已在本文档登记。
+
+**已撤销的偏差（读源码后核实不成立）**：
+
+| 原编号 | 原判 | 核实结论 | 处理 |
+|---|---|---|---|
+| ~~D10~~ | 曾计划返回 `(tool.Tool, error)`，理由「Python 的 `get_tool` 找不到时抛异常」 | **误读**。`_inner_get_resources` 的 `finally` 分支是 `elif resource or exact_match`，`exact_match=True` 时 `resource` 为 `None` 也会 append，故 Python 返回 `None` 而非抛异常（`resource_manager.py:1580-1586`） | 撤销，签名保持单值 `tool.Tool`，六档语义与 Python 一一对应 |
+| ~~D11~~ | 曾登记「workflow/agent 类能力 Python 抛异常、Go 返 nil」 | **同上，误判**。Python 此时 `get_tool` 返回 `None`，`resolve_tool_binding` 靠 `type(None) is expected_type` 为 False 短路，安静返回 `None`，与 Go 返 `nil` 完全一致 | 撤销，不再构成偏差 |
 
 ---
 
@@ -548,7 +585,7 @@ var logComponent = logger.ComponentPermissions
 | 单元测试覆盖率 | `models.go` ≥ 90%，`tool_binding.go` ≥ 95% |
 | 正则 | 3 个模式串与 Python 源码逐字一致；编译成功；样例匹配通过 |
 | 常量取值 | 11 个常量与 Python 逐字一致（含 `_REVIEWER_DENIAL_GUIDANCE` 的换行与空格） |
-| 类型校验 | `ResolveToolBinding` 对「子类」「换卡」「换类型」三种情形均返回 `(nil, nil)`；「卡在工具不在」返回 `(nil, err)` |
+| 类型校验 | `ResolveToolBinding` 对「子类」「换卡」「换类型」「非 ToolCard 能力」「工具不存在」五种情形均返回 nil |
 | 结构对照 | §3 方法清单逐条落实，无「Go 侧多出/少了」未说明项 |
 | 构建 | `go build ./...`、`go vet ./...` 通过 |
 | 全量回归 | `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL |
@@ -562,8 +599,8 @@ var logComponent = logger.ComponentPermissions
 - [ ] 无「Go 侧多出来的符号」未说明
 - [ ] 无「Go 侧少了的符号」未说明
 - [ ] 命名全部 `snake_case → CamelCase`，无自行改名（`_REVIEWER_*` → `Reviewer*` 的可见性变更是 D4，已登记）
-- [ ] 步骤顺序与 Python 一致（`ResolveToolBinding` 11 步逐条对应）
-- [ ] 偏差 D1-D11 全部登记，D1/D2/D10/D11 经确认
-- [ ] 返回语义六档（能力不存在 / 查找报错 / 工具不存在 / 类型不符 / 卡片不同一 / 通过）逐档有测试
+- [ ] 步骤顺序与 Python 一致（`ResolveToolBinding` 8 步逐条对应，步骤 3/4 顺序调整已记实现注记）
+- [ ] 偏差 D1-D9 全部登记，D1/D2 经确认；D10/D11 撤销理由已记录
+- [ ] 返回语义六档（能力不存在 / 非 ToolCard / 工具不存在 / 类型不符 / 卡片不同一 / 通过）逐档有测试
 - [ ] 4 个零消费常量在 doc.go 挂 ⤵️ 到 9.90d
 - [ ] 计划表 9.90a 行回填 ✅ 并注明 `337007d0` / `bce0bd92` 来源
