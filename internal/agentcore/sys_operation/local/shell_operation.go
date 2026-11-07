@@ -143,19 +143,12 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 			&result.ExecuteCmdData{Command: command, Cwd: actualCwd}), nil
 	}
 
-	// 框架层超时上限
-	maxTimeout := 600
-	if v := os.Getenv("JW_EXECUTE_CMD_MAX_TIMEOUT"); v != "" {
-		if n, err := fmt.Sscanf(v, "%d", &maxTimeout); n != 1 || err != nil {
-			maxTimeout = 600
-		}
-	}
+	// 调用方持有执行预算，不在此处缩短（上游 55b9c571 裁决：caller owns the execution budget）。
+	// 历史实现用 JW_EXECUTE_CMD_MAX_TIMEOUT（默认 600）二次钳制，导致 tool 层放行的
+	// 3000s 到这一层被砍成 600s——模型按提示词以为有 50 分钟，实际 10 分钟就断。
 	timeout := o.Timeout
 	if timeout <= 0 {
 		timeout = defaultExecCmdTimeout
-	}
-	if timeout > maxTimeout {
-		timeout = maxTimeout
 	}
 
 	// 环境变量准备
@@ -308,19 +301,10 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 		return ch, nil
 	}
 
-	// 框架层超时上限，对齐 Python JW_EXECUTE_CMD_MAX_TIMEOUT
-	maxTimeout := 600
-	if v := os.Getenv("JW_EXECUTE_CMD_MAX_TIMEOUT"); v != "" {
-		if n, err := fmt.Sscanf(v, "%d", &maxTimeout); n != 1 || err != nil {
-			maxTimeout = 600
-		}
-	}
+	// 与 ExecuteCmd 一致：保留调用方给定的执行预算，不在此处缩短。
 	timeout := o.Timeout
 	if timeout <= 0 {
 		timeout = defaultExecCmdTimeout
-	}
-	if timeout > maxTimeout {
-		timeout = maxTimeout
 	}
 
 	// 环境变量准备

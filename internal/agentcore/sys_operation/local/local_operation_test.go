@@ -524,3 +524,26 @@ func TestSearchFiles_排除模式(t *testing.T) {
 	// 只剩 b.go（a.py 和 sub/c.py 都被排除）
 	assert.Equal(t, 1, res.Data.TotalMatches)
 }
+
+// TestExecuteCmd_不截断显式超时 验证 sh 层不再用 JW_EXECUTE_CMD_MAX_TIMEOUT 砍小显式预算。
+//
+// 回归：tool 层（3600s）放行 timeout=30，到 sh 层被 JW_EXECUTE_CMD_MAX_TIMEOUT
+// 默认 600s 砍成 600s；本条把环境变量设成 2s，若仍截断则 6s 的命令会被
+// 2s 掐断，耗时判定即可暴露。
+func TestExecuteCmd_不截断显式超时(t *testing.T) {
+	t.Setenv("JW_EXECUTE_CMD_MAX_TIMEOUT", "2")
+
+	cfg := sys_operation.NewLocalWorkConfig()
+	cfg.ShellAllowlist = []string{"sleep", "echo"}
+	shellOp := NewLocalShellOperation(cfg).(*LocalShellOperation)
+
+	start := time.Now()
+	res, err := shellOp.ExecuteCmd(context.Background(), "sleep 6", sys_operation.WithShellTimeout(30))
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 0, res.Code, "命令应成功执行，实际 %s", res.Message)
+
+	if elapsed := time.Since(start); elapsed < 6*time.Second {
+		t.Fatalf("命令被提前中断（耗时 %v），说明 sh 层仍在钳制 timeout", elapsed)
+	}
+}
