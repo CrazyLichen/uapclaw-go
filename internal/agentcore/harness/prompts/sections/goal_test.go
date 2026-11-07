@@ -101,3 +101,38 @@ func TestBuildGoalTaskQuery_双语逐字快照(t *testing.T) {
 		"make the most valuable, verifiable progress.\n</current_instruction>\n\n"+
 		"<budget_notice>\nNone.\n</budget_notice>\n</goal_task>", en)
 }
+
+// TestBuildGoalProtocolSection_双语逐字 校验 goal_protocol 附件内容与优先级。
+func TestBuildGoalProtocolSection_双语逐字(t *testing.T) {
+	cn := BuildGoalProtocolSection("cn")
+	assert.Equal(t, SectionGoalProtocol, cn.Name)
+	assert.Equal(t, 88, cn.Priority)
+	assert.Contains(t, cn.Content["cn"], "Goal 模式工作规则")
+	assert.Contains(t, cn.Content["cn"], "<goal_task>")
+	assert.Contains(t, cn.Content["cn"], "submit_goal_report")
+
+	en := BuildGoalProtocolSection("en")
+	assert.Contains(t, en.Content["en"], "Goal Mode Work Rules")
+	assert.Contains(t, en.Content["en"], "submit_goal_report")
+}
+
+// TestTranscriptAssessorSystem_双语 校验 assessor 系统提示词。
+func TestTranscriptAssessorSystem_双语(t *testing.T) {
+	cn := TranscriptAssessorSystem("cn")
+	assert.Contains(t, cn, "Goal 完成度评估器")
+	assert.Contains(t, cn, `"status": "continue | complete | blocked"`)
+
+	en := TranscriptAssessorSystem("en")
+	assert.Contains(t, en, "Goal completion assessor")
+
+	// 未知语言回退中文
+	assert.Equal(t, TranscriptAssessorSystem("cn"), TranscriptAssessorSystem("xx"))
+}
+
+// TestBuildTranscriptAssessorPrompt_结构 校验用户提示词三段落结构。
+func TestBuildTranscriptAssessorPrompt_结构(t *testing.T) {
+	p := BuildTranscriptAssessorPrompt("目标X", "指令Y", "上下文Z", "cn")
+	assert.Contains(t, p, "<objective>\n目标X\n</objective>")
+	assert.Contains(t, p, "<current_instruction>\n指令Y\n</current_instruction>")
+	assert.Contains(t, p, "<attempt_context>\n上下文Z\n</attempt_context>")
+}

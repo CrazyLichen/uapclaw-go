@@ -45,4 +45,7 @@ const (
 	SectionCompletionSignal = "completion_signal"
 	// SectionVerificationContract 验证契约节名称
 	SectionVerificationContract = "verification_contract"
+	// SectionGoalProtocol goal 协议节名称
+	// Python: SectionName.GOAL_PROTOCOL = "goal_protocol" (sections/__init__.py L34)
+	SectionGoalProtocol = "goal_protocol"
 )
