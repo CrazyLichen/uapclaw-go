@@ -44,11 +44,11 @@ func TestAgentCallbackEvent_GoString(t *testing.T) {
 	}
 }
 
-// TestAllCallbackEvents 验证 AllCallbackEvents 返回全部 12 个事件（含 on_user_message / after_react_iteration）
+// TestAllCallbackEvents 验证 AllCallbackEvents 返回全部 13 个事件（含 on_user_message / before_steering_drain）
 func TestAllCallbackEvents(t *testing.T) {
 	events := AllCallbackEvents()
-	if len(events) != 12 {
-		t.Fatalf("AllCallbackEvents() 返回 %d 个事件，want 12", len(events))
+	if len(events) != 13 {
+		t.Fatalf("AllCallbackEvents() 返回 %d 个事件，want 13", len(events))
 	}
 
 	// 验证无重复
@@ -89,5 +89,52 @@ func TestAgentCallbackEvent_事件值即方法名(t *testing.T) {
 		if string(event) != methodName {
 			t.Errorf("事件 %q 的值不等于方法名 %q", event, methodName)
 		}
+	}
+}
+
+// TestAllCallbackEvents_含BeforeSteeringDrain 验证新事件已进全集。
+//
+// spec C15：漏加会让 Clear() 清不掉该事件的回调，留下悬挂钩子。
+func TestAllCallbackEvents_含BeforeSteeringDrain(t *testing.T) {
+	events := AllCallbackEvents()
+	seen := make(map[AgentCallbackEvent]bool, len(events))
+	for _, e := range events {
+		seen[e] = true
+	}
+	if !seen[CallbackBeforeSteeringDrain] {
+		t.Fatal("AllCallbackEvents() 缺 CallbackBeforeSteeringDrain")
+	}
+	if !seen[CallbackOnUserMessage] {
+		t.Fatal("AllCallbackEvents() 缺 CallbackOnUserMessage")
+	}
+}
+
+// TestAllBaseCallbackEvents_含BeforeSteeringDrain 验证新事件进 base 集合。
+func TestAllBaseCallbackEvents_含BeforeSteeringDrain(t *testing.T) {
+	events := AllBaseCallbackEvents()
+	if len(events) != 10 {
+		t.Fatalf("AllBaseCallbackEvents() 返回 %d 个事件，want 10", len(events))
+	}
+	var found bool
+	for _, e := range events {
+		if e == CallbackBeforeSteeringDrain {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("AllBaseCallbackEvents() 缺 CallbackBeforeSteeringDrain")
+	}
+}
+
+// TestSteeringDrainInputs_EventKind 验证事件输入的种类标识与 Limit 可写。
+func TestSteeringDrainInputs_EventKind(t *testing.T) {
+	in := &SteeringDrainInputs{Pending: 3}
+	if in.EventKind() != "steering_drain_inputs" {
+		t.Fatalf("EventKind()=%q", in.EventKind())
+	}
+	limit := 2
+	in.Limit = &limit
+	if in.Limit == nil || *in.Limit != 2 {
+		t.Fatal("Limit 必须可写可读")
 	}
 }
