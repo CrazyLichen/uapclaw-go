@@ -9,7 +9,6 @@
 //	├── doc.go              # 包文档
 //	├── session_utils.go    # 通用辅助函数（AutoTitle / SerializeValue / deepCopyMap / derefStr / currentTimestamp / MakeSessionID / NormalizeSessionID）
 //	├── session_history.go  # 会话历史持久化（history.json 读写 + team 过滤 + 元数据联动）
-//	├── session_manager.go  # SessionManager（LIFO 会话队列）
 //	├── session_metadata.go # 会话元数据管理（metadata.json 读写 + delivery context + 异步队列）
 //	├── session_request_metadata.go # 请求级参数 → 会话级元数据同步（字段语义：首次锁定/显式覆盖）
 //	├── session_rename.go   # 会话重命名三种语义

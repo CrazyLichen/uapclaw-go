@@ -99,7 +99,7 @@ func (f *fakeAdapter) GenerateRecap(_ context.Context, _ string) (map[string]any
 func TestNewUapClaw(t *testing.T) {
 	uc := NewUapClaw()
 	require.NotNil(t, uc)
-	require.NotNil(t, uc.sessionManager)
+	require.NotNil(t, uc.coordinator)
 }
 
 func TestUapClaw_ensureAdapter_幂等(t *testing.T) {
