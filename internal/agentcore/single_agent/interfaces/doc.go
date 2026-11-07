@@ -19,12 +19,14 @@
 //	BaseAgent                — Agent 执行的核心行为契约（含 SystemPromptBuilder()）
 //	AgentConfig              — Agent 配置接口
 //	AbilityManagerInterface  — 能力管理器接口
-//	AgentCallbackEvent       — 10 种生命周期事件枚举
+//	AgentCallbackEvent       — 13 种生命周期事件枚举
 //	AgentCallbackContext     — Rail 系统核心中介对象（retry/force_finish/steering）
 //	AgentCallbackManager     — PerAgent 实例级回调管理器
 //	AgentRail                — Agent 生命周期 Rail 接口
 //	BaseRail                 — AgentRail 的 no-op 默认实现
 //	EventInputs              — 回调事件输入接口
+//	SteeringDrainInputs      — BEFORE_STEERING_DRAIN 事件输入（批上限）
+//	UserMessageInputs        — ON_USER_MESSAGE 事件输入（输入批次载体）
 //	Workflow                 — 工作流执行接口
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/interfaces/
