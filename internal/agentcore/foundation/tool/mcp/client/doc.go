@@ -14,6 +14,7 @@
 //	client/
 //	├── doc.go                        # 子包文档
 //	├── helpers.go                    # 共享辅助函数（结果转换、JSON Schema 解析）
+//	├── reconnect.go                  # 传输层重连（错误分类、指数退避、代际、并发去重）
 //	├── sse_client.go                 # SseClient 实现
 //	├── stdio_client.go               # StdioClient 实现
 //	├── streamable_http_client.go     # StreamableHttpClient 实现

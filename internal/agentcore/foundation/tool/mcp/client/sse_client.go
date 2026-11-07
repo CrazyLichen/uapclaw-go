@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -29,6 +30,8 @@ type SseClient struct {
 	config *types.McpServerConfig
 	// serverName 服务器名称
 	serverName string
+	// mu 保护 isConnected 与 client 字段：重连会在并发调用期间改写这两个字段
+	mu sync.RWMutex
 	// isConnected 连接状态
 	isConnected bool
 	// mcpClient mcp-go 的 SSE 客户端
@@ -255,7 +258,9 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 	}
 
 	c.mcpClient = client
+	c.mu.Lock()
 	c.isConnected = true
+	c.mu.Unlock()
 
 	logger.Info(logComponent).
 		Str("server_path", c.config.ServerPath).
@@ -267,7 +272,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 
 // Disconnect 断开 SSE 连接。
 func (c *SseClient) Disconnect(_ context.Context) error {
-	if !c.isConnected {
+	if !c.connected() {
 		return nil
 	}
 	if c.mcpClient != nil {
@@ -279,7 +284,9 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 			return err
 		}
 	}
+	c.mu.Lock()
 	c.isConnected = false
+	c.mu.Unlock()
 	c.mcpClient = nil
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
@@ -288,8 +295,8 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 }
 
 // ListTools 列出服务器提供的工具。
-func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
-	if !c.isConnected {
+func (c *SseClient) doListTools(ctx context.Context) ([]*types.McpToolCard, error) {
+	if !c.connected() {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -324,8 +331,8 @@ func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error)
 }
 
 // CallTool 调用指定工具。
-func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
-	if !c.isConnected {
+func (c *SseClient) doCallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
+	if !c.connected() {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -356,8 +363,8 @@ func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map
 }
 
 // GetToolInfo 获取指定工具信息。
-func (c *SseClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
-	if !c.isConnected {
+func (c *SseClient) doGetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
+	if !c.connected() {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -384,8 +391,8 @@ func (c *SseClient) GetToolInfo(ctx context.Context, toolName string) (*types.Mc
 }
 
 // ListResources 列出服务器提供的资源。
-func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error) {
-	if !c.isConnected {
+func (c *SseClient) doListResources(ctx context.Context) ([]map[string]any, error) {
+	if !c.connected() {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -414,8 +421,8 @@ func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error)
 }
 
 // ReadResource 读取指定资源。
-func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
-	if !c.isConnected {
+func (c *SseClient) doReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
+	if !c.connected() {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -447,4 +454,58 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]
 // Close 关闭客户端（等价于 Disconnect）。
 func (c *SseClient) Close() error {
 	return c.Disconnect(context.Background())
+}
+
+// connected 返回当前连接状态（并发安全）。
+//
+// 重连会在调用进行中改写 isConnected，直接读字段会与写入构成数据竞争。
+func (c *SseClient) connected() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.isConnected
+}
+
+// ListTools 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 listtools
+func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
+	return withReconnect(ctx, c, 0, "ListTools", func() ([]*types.McpToolCard, error) {
+		return c.doListTools(ctx)
+	})
+}
+
+// CallTool 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 calltool
+func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
+	return withReconnect(ctx, c, 0, "CallTool", func() (any, error) {
+		return c.doCallTool(ctx, toolName, arguments)
+	})
+}
+
+// GetToolInfo 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 gettoolinfo
+func (c *SseClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
+	return withReconnect(ctx, c, 0, "GetToolInfo", func() (*types.McpToolCard, error) {
+		return c.doGetToolInfo(ctx, toolName)
+	})
+}
+
+// ListResources 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 listresources
+func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error) {
+	return withReconnect(ctx, c, 0, "ListResources", func() ([]map[string]any, error) {
+		return c.doListResources(ctx)
+	})
+}
+
+// ReadResource 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 readresource
+func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
+	return withReconnect(ctx, c, 0, "ReadResource", func() ([]map[string]any, error) {
+		return c.doReadResource(ctx, uri)
+	})
 }

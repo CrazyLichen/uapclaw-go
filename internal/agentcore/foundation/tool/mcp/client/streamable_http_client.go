@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -29,6 +30,8 @@ type StreamableHttpClient struct {
 	serverName string
 	// client mcp-go 的客户端实例
 	client *mcpclient.Client
+	// mu 保护 isConnected 与 client 字段：重连会在并发调用期间改写这两个字段
+	mu sync.RWMutex
 	// isConnected 连接状态
 	isConnected bool
 }
@@ -229,8 +232,10 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 		)
 	}
 
+	c.mu.Lock()
 	c.client = mcpCli
 	c.isConnected = true
+	c.mu.Unlock()
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("server_path", c.config.ServerPath).
@@ -240,20 +245,24 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 
 // Disconnect 断开 Streamable HTTP 连接。
 func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
-	if !c.isConnected {
+	if !c.connected() {
 		return nil
 	}
-	if c.client != nil {
-		if err := c.client.Close(); err != nil {
+	// 先在锁内摘下 client，Close 放到锁外：Close 可能阻塞，持锁会拖住并发调用
+	c.mu.Lock()
+	oldClient := c.client
+	c.client = nil
+	c.isConnected = false
+	c.mu.Unlock()
+	if oldClient != nil {
+		if err := oldClient.Close(); err != nil {
 			logger.Error(logComponent).
 				Str("server_name", c.serverName).
 				Err(err).
 				Msg("StreamableHTTP failed to disconnect")
 			return err
 		}
-		c.client = nil
 	}
-	c.isConnected = false
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Msg("StreamableHTTP client disconnected")
@@ -261,15 +270,16 @@ func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
 }
 
 // ListTools 列出 MCP 服务器提供的工具。
-func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
-	if !c.isConnected || c.client == nil {
+func (c *StreamableHttpClient) doListTools(ctx context.Context) ([]*types.McpToolCard, error) {
+	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
 		)
 	}
 
-	result, err := c.client.ListTools(ctx, mcpcore.ListToolsRequest{})
+	activeClient := c.currentClient()
+	result, err := activeClient.ListTools(ctx, mcpcore.ListToolsRequest{})
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -299,8 +309,8 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 }
 
 // CallTool 调用指定工具。
-func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
-	if !c.isConnected || c.client == nil {
+func (c *StreamableHttpClient) doCallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
+	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -312,7 +322,8 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 		Str("tool_name", toolName).
 		Msg("StreamableHTTP calling tool")
 
-	result, err := c.client.CallTool(ctx, mcpcore.CallToolRequest{
+	activeClient := c.currentClient()
+	result, err := activeClient.CallTool(ctx, mcpcore.CallToolRequest{
 		Params: mcpcore.CallToolParams{
 			Name:      toolName,
 			Arguments: arguments,
@@ -336,8 +347,8 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 }
 
 // GetToolInfo 获取指定工具信息。
-func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
-	if !c.isConnected || c.client == nil {
+func (c *StreamableHttpClient) doGetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
+	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -369,15 +380,16 @@ func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string)
 }
 
 // ListResources 列出 MCP 服务器提供的资源。
-func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]any, error) {
-	if !c.isConnected || c.client == nil {
+func (c *StreamableHttpClient) doListResources(ctx context.Context) ([]map[string]any, error) {
+	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
 		)
 	}
 
-	result, err := c.client.ListResources(ctx, mcpcore.ListResourcesRequest{})
+	activeClient := c.currentClient()
+	result, err := activeClient.ListResources(ctx, mcpcore.ListResourcesRequest{})
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -395,15 +407,16 @@ func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]
 }
 
 // ReadResource 读取指定资源。
-func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
-	if !c.isConnected || c.client == nil {
+func (c *StreamableHttpClient) doReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
+	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
 		)
 	}
 
-	result, err := c.client.ReadResource(ctx, mcpcore.ReadResourceRequest{
+	activeClient := c.currentClient()
+	result, err := activeClient.ReadResource(ctx, mcpcore.ReadResourceRequest{
 		Params: mcpcore.ReadResourceParams{
 			URI: uri,
 		},
@@ -423,4 +436,67 @@ func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]
 // Close 关闭客户端（等价于 Disconnect）。
 func (c *StreamableHttpClient) Close() error {
 	return c.Disconnect(context.Background())
+}
+
+// connected 返回当前连接状态（并发安全）。
+//
+// 重连会在调用进行中改写 isConnected，直接读字段会与写入构成数据竞争。
+func (c *StreamableHttpClient) connected() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.isConnected
+}
+
+// currentClient 返回当前传输客户端（并发安全）。
+//
+// 重连期间 client 可能被置空再重建，直接读字段会与写入构成数据竞争。
+func (c *StreamableHttpClient) currentClient() *mcpclient.Client {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.client
+}
+
+// ListTools 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 listtools
+func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
+	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "ListTools", func() ([]*types.McpToolCard, error) {
+		return c.doListTools(ctx)
+	})
+}
+
+// CallTool 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 calltool
+func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
+	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "CallTool", func() (any, error) {
+		return c.doCallTool(ctx, toolName, arguments)
+	})
+}
+
+// GetToolInfo 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 gettoolinfo
+func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
+	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "GetToolInfo", func() (*types.McpToolCard, error) {
+		return c.doGetToolInfo(ctx, toolName)
+	})
+}
+
+// ListResources 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 listresources
+func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]any, error) {
+	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "ListResources", func() ([]map[string]any, error) {
+		return c.doListResources(ctx)
+	})
+}
+
+// ReadResource 调用 MCP 服务，传输故障时重连并重试。
+//
+// Python: @with_reconnect 装饰 readresource
+func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
+	return withReconnect(ctx, c, streamableHTTPReconnectAttempts, "ReadResource", func() ([]map[string]any, error) {
+		return c.doReadResource(ctx, uri)
+	})
 }
