@@ -564,7 +564,7 @@ func (r *ProgressiveToolRail) callDiscoveredTool(
 	cbc.SetExtra(nestedToolCallKey, true)
 	defer cbc.DeleteExtra(nestedToolCallKey)
 
-	results := r.abilityManagerFrom(cbc).Execute(ctx, cbc, []*llmschema.ToolCall{targetCall}, sess, "")
+	results := r.abilityManagerFrom(cbc).Execute(ctx, cbc, []*llmschema.ToolCall{targetCall}, sess, "", true)
 	if len(results) == 0 || results[0].ToolMsg == nil {
 		return rejectedToolOutput("Deferred tool '" + target + "' returned no execution result."), nil
 	}

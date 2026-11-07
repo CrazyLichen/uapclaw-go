@@ -39,6 +39,11 @@ func (f *fakeTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 	return nil, tool.ErrInvokeNotSupported
 }
 
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Stream 返回不支持 Stream 的错误
 func (f *fakeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported

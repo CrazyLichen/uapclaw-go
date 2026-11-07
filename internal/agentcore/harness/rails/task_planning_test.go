@@ -1588,7 +1588,7 @@ func (f *fakeAbilityManager) List() []cschema2.Ability                     { ret
 func (f *fakeAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]cschema2.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (f *fakeAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+func (f *fakeAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string, _ bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (f *fakeAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}

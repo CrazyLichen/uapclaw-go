@@ -2872,6 +2872,7 @@ func (s *stubAbilityManager) Execute(
 	toolCalls []*llmschema.ToolCall,
 	_ sessioninterfaces.SessionFacade,
 	_ string,
+	_ bool,
 ) []agentschema.ExecuteResult {
 	results := make([]agentschema.ExecuteResult, 0, len(toolCalls))
 	for _, tc := range toolCalls {

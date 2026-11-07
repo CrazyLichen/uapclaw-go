@@ -610,6 +610,11 @@ func (f *fakeRailTool) Card() *tool.ToolCard {
 	return &tool.ToolCard{BaseCard: commonschema.BaseCard{Name: f.name}}
 }
 
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeRailTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 空实现。
 func (f *fakeRailTool) Invoke(context.Context, map[string]any, ...tool.ToolOption) (map[string]any, error) {
 	return nil, nil

@@ -1538,6 +1538,11 @@ func (f *fakeToolForSync) Card() *tool.ToolCard {
 		BaseCard: cschema.BaseCard{ID: f.cardName, Name: f.cardName},
 	}
 }
+
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeToolForSync) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 func (f *fakeToolForSync) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, nil
 }

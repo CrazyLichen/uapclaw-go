@@ -100,7 +100,7 @@ func (m *mockAbilityManager) List() []schema.Ability {
 func (m *mockAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]schema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (m *mockAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+func (m *mockAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string, _ bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (m *mockAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}

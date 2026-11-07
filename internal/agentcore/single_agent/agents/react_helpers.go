@@ -149,6 +149,19 @@ func (a *ReActAgent) getAbilityManager() interfaces.AbilityManagerInterface {
 	return a.abilityManager
 }
 
+// parallelToolCalls 返回本次工具批量是否并行执行。
+//
+// 未配置时默认 true（与上游 ReActAgentConfig.parallel_tool_calls 默认一致），
+// 子代理可通过配置显式关闭，让有状态工具按序执行。
+//
+// Python: react_agent.py:2460 self._config.parallel_tool_calls
+func (a *ReActAgent) parallelToolCalls() bool {
+	if a.config == nil {
+		return true
+	}
+	return a.config.ParallelToolCallsOrDefault()
+}
+
 func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil || sess == nil {
 		return

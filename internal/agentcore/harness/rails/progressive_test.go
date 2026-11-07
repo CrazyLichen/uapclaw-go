@@ -112,8 +112,7 @@ func (f *progressiveFakeAbilityManager) Execute(
 	_ *agentinterfaces.AgentCallbackContext,
 	_ []*llmschema.ToolCall,
 	_ sessioninterfaces.SessionFacade,
-	_ string,
-) []agentschema.ExecuteResult {
+	_ string, parallelToolCalls bool) []agentschema.ExecuteResult {
 	f.executeCalls++
 	return f.executeResults
 }

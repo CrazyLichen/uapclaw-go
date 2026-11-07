@@ -79,6 +79,7 @@ func (m *P2PAbilityManager) Execute(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
+	parallelToolCalls bool,
 ) []agentschema.ExecuteResult {
 	if len(toolCalls) == 0 {
 		return nil
@@ -97,7 +98,7 @@ func (m *P2PAbilityManager) Execute(
 
 	// 快速路径：无 Agent 调用时委托基类
 	if len(agentIndices) == 0 {
-		return m.AbilityManager.Execute(ctx, cbc, toolCalls, sess, tag)
+		return m.AbilityManager.Execute(ctx, cbc, toolCalls, sess, tag, parallelToolCalls)
 	}
 
 	// 懒初始化信号量
@@ -136,7 +137,7 @@ func (m *P2PAbilityManager) Execute(
 			for j, idx := range otherIndices {
 				otherToolCalls[j] = toolCalls[idx]
 			}
-			otherResults := m.AbilityManager.Execute(ctx, cbc, otherToolCalls, sess, tag)
+			otherResults := m.AbilityManager.Execute(ctx, cbc, otherToolCalls, sess, tag, parallelToolCalls)
 			for j, idx := range otherIndices {
 				results[idx] = otherResults[j]
 			}
@@ -187,7 +188,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 	// 非 Agent 调用 fallback：委托基类
 	// Python: if tool_name not in self._agents: return await super()._execute_single_tool_call(...)
 	if !m.IsAgent(toolName) {
-		singleResults := m.AbilityManager.Execute(ctx, cbc, []*llmschema.ToolCall{toolCall}, sess, "")
+		singleResults := m.AbilityManager.Execute(ctx, cbc, []*llmschema.ToolCall{toolCall}, sess, "", true)
 		if len(singleResults) > 0 {
 			return singleResults[0], nil
 		}

@@ -144,6 +144,7 @@ func (m *railAbilityManager) Execute(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
+	parallelToolCalls bool,
 ) []agentschema.ExecuteResult {
 	return nil
 }

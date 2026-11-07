@@ -92,6 +92,11 @@ func (s *stubTool) Card() *tool.ToolCard {
 	return s.card
 }
 
+// GetCallTimeout 让 stubTool 满足 Tool 接口，沿用卡片级策略。
+func (s *stubTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 func (s *stubTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return map[string]any{"result": "ok"}, nil
 }

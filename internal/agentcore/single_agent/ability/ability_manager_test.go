@@ -3,8 +3,11 @@ package ability
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -382,7 +385,7 @@ func TestAbilityManager_Execute_单工具成功(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `{"query": "test"}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -411,7 +414,7 @@ func TestAbilityManager_Execute_并行多工具(t *testing.T) {
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "tool_a", `{}`),
 		llmschema.NewToolCall("call_2", "tool_b", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 2 {
 		t.Fatalf("结果数量 = %d, want 2", len(results))
@@ -437,7 +440,7 @@ func TestAbilityManager_Execute_参数解析失败(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `not json at all`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -457,7 +460,7 @@ func TestAbilityManager_Execute_能力未找到(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "nonexistent", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -680,7 +683,7 @@ func TestAbilityManager_Execute_工具实例未找到(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -702,7 +705,7 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "fail_tool", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -842,7 +845,7 @@ func TestRecoverToolPanic_nil工具调用不panic(t *testing.T) {
 func TestAbilityManager_Execute_nil工具调用不崩溃(t *testing.T) {
 	am := NewAbilityManager(newTestResourceMgr(nil, nil, nil))
 
-	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{nil}, nil, "")
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{nil}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -887,7 +890,7 @@ func TestAbilityManager_Execute_Workflow成功(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -907,7 +910,7 @@ func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -926,7 +929,7 @@ func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -945,7 +948,7 @@ func TestAbilityManager_Execute_Agent成功(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -965,7 +968,7 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -984,7 +987,7 @@ func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -1002,7 +1005,7 @@ func TestAbilityManager_Execute_McpServer暂未实现(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_mcp", "my_mcp", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -1014,7 +1017,7 @@ func TestAbilityManager_Execute_McpServer暂未实现(t *testing.T) {
 
 func TestAbilityManager_Execute_空ToolCall(t *testing.T) {
 	am := NewAbilityManager(nil)
-	results := am.Execute(context.Background(), nil, nil, nil, "")
+	results := am.Execute(context.Background(), nil, nil, nil, "", true)
 	if results != nil {
 		t.Errorf("空 ToolCall 应返回 nil")
 	}
@@ -1033,7 +1036,7 @@ func TestAbilityManager_Execute_兜底Tool成功(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_fb", "fallback_tool", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -1055,7 +1058,7 @@ func TestAbilityManager_Execute_兜底Tool执行错误(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_fb", "fail_fb", `{}`),
-	}, nil, "")
+	}, nil, "", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -1078,7 +1081,7 @@ func TestAbilityManager_Execute_带Tag(t *testing.T) {
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_tag", "tagged_tool", `{}`),
-	}, nil, "my_tag")
+	}, nil, "my_tag", true)
 
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
@@ -1185,7 +1188,7 @@ func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
 	}
 
-	results := am.Execute(context.Background(), cbc, toolCalls, nil, "")
+	results := am.Execute(context.Background(), cbc, toolCalls, nil, "", true)
 	_ = results
 
 	// 父 cbc 应收到 force-finish 信号
@@ -1221,7 +1224,7 @@ func TestAbilityManager_Execute_Rail包装(t *testing.T) {
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
 	}
 
-	_ = am.Execute(context.Background(), cbc, toolCalls, nil, "")
+	_ = am.Execute(context.Background(), cbc, toolCalls, nil, "", true)
 
 	assert.Contains(t, firedEvents, interfaces.CallbackBeforeToolCall)
 	assert.Contains(t, firedEvents, interfaces.CallbackAfterToolCall)
@@ -1267,7 +1270,7 @@ func TestAbilityManager_Execute_skipTool(t *testing.T) {
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
 	}
 
-	results := am.Execute(context.Background(), cbc, toolCalls, nil, "")
+	results := am.Execute(context.Background(), cbc, toolCalls, nil, "", true)
 
 	// 验证结果：应为 before hook 预设的拒绝结果
 	require.Len(t, results, 1)
@@ -1303,7 +1306,7 @@ func TestAbilityManager_Execute_skipTool非bool值(t *testing.T) {
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
 	}
 
-	results := am.Execute(context.Background(), cbc, toolCalls, nil, "")
+	results := am.Execute(context.Background(), cbc, toolCalls, nil, "", true)
 
 	// _skip_tool 非bool值被忽略，工具应正常执行
 	require.Len(t, results, 1)
@@ -1333,7 +1336,7 @@ func TestAbilityManager_Execute_forceFinishProducesToolMessage(t *testing.T) {
 
 	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
-	}, nil, "")
+	}, nil, "", true)
 
 	assert.Len(t, results, 1)
 	if results[0].ToolMsg == nil {
@@ -1371,7 +1374,7 @@ func TestAbilityManager_Execute_parallelForceFinishUsesFirstIndex(t *testing.T) 
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
 		{Name: "echo", Arguments: `{}`, ID: "tc2"},
 		{Name: "echo", Arguments: `{}`, ID: "tc3"},
-	}, nil, "")
+	}, nil, "", true)
 
 	assert.Len(t, results, 3)
 	for i, want := range []string{"tc1", "tc2", "tc3"} {
@@ -1410,7 +1413,7 @@ func TestAbilityManager_Execute_forceFinishPrefersInputs(t *testing.T) {
 
 	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
 		{Name: "echo", Arguments: `{}`, ID: "tc1"},
-	}, nil, "")
+	}, nil, "", true)
 
 	assert.Len(t, results, 1)
 	assert.Equal(t, "custom_result", results[0].Result)
@@ -1418,4 +1421,130 @@ func TestAbilityManager_Execute_forceFinishPrefersInputs(t *testing.T) {
 		t.Fatal("ToolMsg 不应为 nil")
 	}
 	assert.Equal(t, "custom_msg", results[0].ToolMsg.GetContent().Text())
+}
+
+// ──────────────────────────── 并行/串行执行 ────────────────────────────
+
+// orderTrackingInput 次序跟踪工具的输入（结构体占位，满足 NewTool 的反射要求）。
+type orderTrackingInput struct {
+	// Value 占位字段
+	Value string `json:"value,omitempty"`
+}
+
+// newOrderTrackingTool 创建记录进入/退出次序的测试工具。
+func newOrderTrackingTool(t *testing.T, name string, mu *sync.Mutex, order *[]string, hold time.Duration) tool.Tool {
+	t.Helper()
+	tl, err := tool.NewTool(
+		func(_ context.Context, _ orderTrackingInput, _ ...tool.ToolOption) (map[string]any, error) {
+			mu.Lock()
+			*order = append(*order, name+".enter")
+			mu.Unlock()
+			time.Sleep(hold)
+			mu.Lock()
+			*order = append(*order, name+".exit")
+			mu.Unlock()
+			return map[string]any{"ok": true}, nil
+		},
+		tool.WithToolName(name),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl
+}
+
+// TestExecute_ParallelFalse_串行 验证关闭并行后工具按序执行。
+//
+// 有状态工具（浏览器动作序列、worktree 切换）被并行调用会打乱动作顺序，
+// 串行模式要求前一个完全退出后才进入下一个。
+func TestExecute_ParallelFalse_串行(t *testing.T) {
+	var mu sync.Mutex
+	var order []string
+
+	tools := map[string]tool.Tool{
+		"a": newOrderTrackingTool(t, "a", &mu, &order, 30*time.Millisecond),
+		"b": newOrderTrackingTool(t, "b", &mu, &order, 30*time.Millisecond),
+	}
+	am := NewAbilityManager(newTestResourceMgr(tools, nil, nil))
+	addCardsToManager(t, am, tools)
+
+	calls := []*llmschema.ToolCall{
+		{ID: "1", Name: "a", Arguments: "{}"},
+		{ID: "2", Name: "b", Arguments: "{}"},
+	}
+	am.Execute(context.Background(), nil, calls, nil, "", false)
+
+	want := []string{"a.enter", "a.exit", "b.enter", "b.exit"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("串行顺序不符：got %v, want %v", order, want)
+	}
+}
+
+// TestExecute_ParallelTrue_交错 验证并行模式下两个工具的执行区间重叠
+func TestExecute_ParallelTrue_交错(t *testing.T) {
+	var mu sync.Mutex
+	var order []string
+
+	tools := map[string]tool.Tool{
+		"a": newOrderTrackingTool(t, "a", &mu, &order, 50*time.Millisecond),
+		"b": newOrderTrackingTool(t, "b", &mu, &order, 50*time.Millisecond),
+	}
+	am := NewAbilityManager(newTestResourceMgr(tools, nil, nil))
+	addCardsToManager(t, am, tools)
+
+	am.Execute(context.Background(), nil, []*llmschema.ToolCall{
+		{ID: "1", Name: "a", Arguments: "{}"},
+		{ID: "2", Name: "b", Arguments: "{}"},
+	}, nil, "", true)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 4 {
+		t.Fatalf("应有 4 条记录，实际 %v", order)
+	}
+	// 并行：两个 enter 相邻（都在任一 exit 之前）
+	if (order[0] == "a.enter" && order[1] == "b.enter") || (order[0] == "b.enter" && order[1] == "a.enter") {
+		return
+	}
+	t.Fatalf("并行模式下两个 enter 应相邻出现，实际 %v", order)
+}
+
+// TestExecute_ParallelFalse_结果顺序保持 验证串行不改变结果与输入的顺序对应
+func TestExecute_ParallelFalse_结果顺序保持(t *testing.T) {
+	var mu sync.Mutex
+	var order []string
+
+	tools := map[string]tool.Tool{
+		"a": newOrderTrackingTool(t, "a", &mu, &order, 0),
+		"b": newOrderTrackingTool(t, "b", &mu, &order, 0),
+	}
+	am := NewAbilityManager(newTestResourceMgr(tools, nil, nil))
+	addCardsToManager(t, am, tools)
+
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
+		{ID: "ca", Name: "a", Arguments: "{}"},
+		{ID: "cb", Name: "b", Arguments: "{}"},
+	}, nil, "", false)
+	if len(results) != 2 {
+		t.Fatalf("应有 2 条结果，实际 %d", len(results))
+	}
+	if results[0].ToolMsg == nil || results[0].ToolMsg.ToolCallID != "ca" {
+		t.Fatalf("结果 0 应对应 ca，实际 %+v", results[0].ToolMsg)
+	}
+	if results[1].ToolMsg == nil || results[1].ToolMsg.ToolCallID != "cb" {
+		t.Fatalf("结果 1 应对应 cb，实际 %+v", results[1].ToolMsg)
+	}
+}
+
+// addCardsToManager 把工具卡片注册进 AbilityManager。
+//
+// ResourceMgr 只装工具实例，调度入口（am.tools）还需要卡片才能找到能力；
+// 两者缺一都会落到"能力未找到"。
+func addCardsToManager(t *testing.T, am *AbilityManager, tools map[string]tool.Tool) {
+	t.Helper()
+	for _, tl := range tools {
+		if res := am.Add(tl.Card()); !res.Added {
+			t.Fatalf("注册工具卡片失败: %+v", res)
+		}
+	}
 }

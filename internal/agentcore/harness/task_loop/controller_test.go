@@ -39,7 +39,7 @@ func (m *mockAbilityMgr) List() []commonschema.Ability                 { return 
 func (m *mockAbilityMgr) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]commonschema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (m *mockAbilityMgr) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+func (m *mockAbilityMgr) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string, parallelToolCalls bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (m *mockAbilityMgr) SetContextEngine(_ ceinterface.ContextEngine) {}

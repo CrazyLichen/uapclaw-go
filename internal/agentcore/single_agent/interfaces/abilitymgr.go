@@ -32,12 +32,16 @@ type AbilityManagerInterface interface {
 	// ListToolInfo 列出工具信息供 LLM 使用。
 	ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]schema.ToolInfoInterface, error)
 	// Execute 执行工具调用。
+	//
+	// parallelToolCalls 为 false 时按顺序逐个执行：有状态工具（浏览器动作序列、
+	// worktree 切换）并发执行会打乱动作语义。
 	Execute(
 		ctx context.Context,
 		cbc *AgentCallbackContext,
 		toolCalls []*llmschema.ToolCall,
 		sess sessioninterfaces.SessionFacade,
 		tag string,
+		parallelToolCalls bool,
 	) []agentschema.ExecuteResult
 	// SetContextEngine 设置上下文引擎。
 	SetContextEngine(ce ceinterface.ContextEngine)

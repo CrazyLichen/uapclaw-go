@@ -66,7 +66,7 @@ func (f *fakeAbilityManager) List() []cschema.Ability                     { retu
 func (f *fakeAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]cschema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (f *fakeAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+func (f *fakeAbilityManager) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string, parallelToolCalls bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (f *fakeAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}

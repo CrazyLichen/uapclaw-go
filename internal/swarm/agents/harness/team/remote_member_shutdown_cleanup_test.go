@@ -643,6 +643,11 @@ func (f *fakeShutdownTool) Card() *tool.ToolCard {
 	return tool.NewToolCardWithID("team.shutdown_member.test", "shutdown_member", "test", nil, nil)
 }
 
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeShutdownTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // mkMember 在 DB 创建指定状态的成员（teamName 从 backend 动态取，避免硬编码）。
 func mkMember(t *testing.T, backend interface {
 	DB() database.TeamDatabase

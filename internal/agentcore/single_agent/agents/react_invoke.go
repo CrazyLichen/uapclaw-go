@@ -969,7 +969,7 @@ func (a *ReActAgent) executeToolCalls(
 		return nil, fmt.Errorf("AbilityManager 未初始化")
 	}
 
-	results := am.Execute(ctx, cbc, toolCalls, sess, "")
+	results := am.Execute(ctx, cbc, toolCalls, sess, "", a.parallelToolCalls())
 
 	for _, r := range results {
 		if r.ToolMsg != nil && modelCtx != nil {

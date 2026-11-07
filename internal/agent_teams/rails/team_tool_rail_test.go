@@ -150,7 +150,7 @@ func (f *fakeAbilityManagerTeam) List() []cschema.Ability                     { 
 func (f *fakeAbilityManagerTeam) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]cschema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (f *fakeAbilityManagerTeam) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+func (f *fakeAbilityManagerTeam) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string, _ bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (f *fakeAbilityManagerTeam) SetContextEngine(_ ceinterface.ContextEngine) {}

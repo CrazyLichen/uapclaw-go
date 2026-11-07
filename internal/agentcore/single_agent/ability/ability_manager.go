@@ -476,6 +476,7 @@ func (am *AbilityManager) Execute(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
+	parallelToolCalls bool,
 ) []agentschema.ExecuteResult {
 	if len(toolCalls) == 0 {
 		return nil
@@ -485,16 +486,25 @@ func (am *AbilityManager) Execute(
 	if cbc == nil {
 		am.mu.RLock()
 		results := make([]agentschema.ExecuteResult, len(toolCalls))
-		var wg sync.WaitGroup
+		if parallelToolCalls {
+			var wg sync.WaitGroup
+			for i, tc := range toolCalls {
+				wg.Add(1)
+				go func(idx int, toolCall *llmschema.ToolCall) {
+					defer wg.Done()
+					results[idx] = am.runToolCallSafely(ctx, nil, toolCall, sess, tag)
+				}(i, tc)
+			}
+			am.mu.RUnlock()
+			wg.Wait()
+			return results
+		}
+		// 串行分支：逐个执行，前一个退出后才进入下一个
+		// Python: ability_manager.py:1292-1299
 		for i, tc := range toolCalls {
-			wg.Add(1)
-			go func(idx int, toolCall *llmschema.ToolCall) {
-				defer wg.Done()
-				results[idx] = am.runToolCallSafely(ctx, nil, toolCall, sess, tag)
-			}(i, tc)
+			results[i] = am.runToolCallSafely(ctx, nil, tc, sess, tag)
 		}
 		am.mu.RUnlock()
-		wg.Wait()
 		return results
 	}
 
@@ -508,17 +518,25 @@ func (am *AbilityManager) Execute(
 		toolCtxs[i] = cbc.ForkForToolCall(tc)
 	}
 
-	var wg sync.WaitGroup
-	for i, tc := range toolCalls {
-		wg.Add(1)
-		go func(idx int, toolCall *llmschema.ToolCall, toolCtx *interfaces.AgentCallbackContext) {
-			defer wg.Done()
-			results[idx] = am.runToolCallSafely(ctx, toolCtx, toolCall, sess, tag)
-		}(i, tc, toolCtxs[i])
-	}
-	am.mu.RUnlock()
+	if parallelToolCalls {
+		var wg sync.WaitGroup
+		for i, tc := range toolCalls {
+			wg.Add(1)
+			go func(idx int, toolCall *llmschema.ToolCall, toolCtx *interfaces.AgentCallbackContext) {
+				defer wg.Done()
+				results[idx] = am.runToolCallSafely(ctx, toolCtx, toolCall, sess, tag)
+			}(i, tc, toolCtxs[i])
+		}
+		am.mu.RUnlock()
 
-	wg.Wait()
+		wg.Wait()
+	} else {
+		// 串行：单 goroutine 顺序执行，避免有状态工具的动作交错
+		for i, tc := range toolCalls {
+			results[i] = am.runToolCallSafely(ctx, toolCtxs[i], tc, sess, tag)
+		}
+		am.mu.RUnlock()
+	}
 
 	// ① 先按 tool-call 顺序一次性收敛子 ctx 上的 force-finish。
 	//    ConsumeForceFinish 是清空式消费，每个 index 至多一条，全文唯一写 map 的地方。

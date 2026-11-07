@@ -116,6 +116,11 @@ func (f *fakeTool) Card() *tool.ToolCard {
 	return f.card
 }
 
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Tracer 实现 TracerSession 接口
 func (f *fakeAgentSession) Tracer() *tracer.Tracer {
 	return f.tracer

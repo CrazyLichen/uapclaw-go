@@ -175,7 +175,7 @@ func (m *fakeAbilityManagerForTools) List() []cschema.Ability                 { 
 func (m *fakeAbilityManagerForTools) ListToolInfo(context.Context, []string, ...string) ([]cschema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (m *fakeAbilityManagerForTools) Execute(context.Context, *agentinterfaces.AgentCallbackContext, []*llmschema.ToolCall, sessioninterfaces.SessionFacade, string) []agentschema.ExecuteResult {
+func (m *fakeAbilityManagerForTools) Execute(context.Context, *agentinterfaces.AgentCallbackContext, []*llmschema.ToolCall, sessioninterfaces.SessionFacade, string, bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (m *fakeAbilityManagerForTools) SetContextEngine(ceinterface.ContextEngine) {}

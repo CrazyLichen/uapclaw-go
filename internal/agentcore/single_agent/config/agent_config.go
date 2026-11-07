@@ -52,6 +52,12 @@ type ReActAgentConfig struct {
 	ContextProcessors []ceiface.ProcessorSpec `json:"context_processors,omitempty"`
 	// Workspace 工作区实例
 	Workspace *hworkspace.Workspace `json:"-"`
+	// ParallelToolCalls 是否并行执行同一批工具调用；nil 表示未配置，按默认 true 处理。
+	//
+	// 有状态工具（浏览器动作序列、worktree 切换）被并行调用会打乱动作顺序，
+	// 子代理可通过 SubAgentConfig 单独关闭。
+	// Python: ReActAgentConfig.parallel_tool_calls (react_agent.py:332)
+	ParallelToolCalls *bool `json:"parallel_tool_calls,omitempty"`
 }
 
 // modelClientExtra WithModelClient 复合 Option 的扩展参数容器
@@ -335,4 +341,17 @@ func (c *ReActAgentConfig) Validate() error {
 		return fmt.Errorf("context_engine_config 校验失败: %w", err)
 	}
 	return nil
+}
+
+// ParallelToolCallsOrDefault 返回是否并行执行工具调用，未配置时为 true。
+//
+// 用指针而非 bool 是为了区分"未配置"与"显式 false"：
+// bool 零值是 false，直接使用会让未配置的配置项变成串行，与上游默认相反。
+//
+// Python: ReActAgentConfig.parallel_tool_calls default=True
+func (c *ReActAgentConfig) ParallelToolCallsOrDefault() bool {
+	if c == nil || c.ParallelToolCalls == nil {
+		return true
+	}
+	return *c.ParallelToolCalls
 }

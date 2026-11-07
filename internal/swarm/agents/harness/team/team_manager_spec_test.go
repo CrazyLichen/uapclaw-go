@@ -190,8 +190,7 @@ func (f *fakeAbilityMgrForCustomizer) Execute(
 	cbc *agentinterfaces.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
-	tag string,
-) []agentschema.ExecuteResult {
+	tag string, parallelToolCalls bool) []agentschema.ExecuteResult {
 	return nil
 }
 func (f *fakeAbilityMgrForCustomizer) SetContextEngine(ce ceinterface.ContextEngine) {}

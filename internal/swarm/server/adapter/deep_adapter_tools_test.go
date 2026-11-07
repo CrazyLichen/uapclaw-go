@@ -17,6 +17,11 @@ type fakeSyncTool struct{ name string }
 func (f *fakeSyncTool) Card() *tool.ToolCard {
 	return tool.NewToolCard(f.name, f.name, nil, nil)
 }
+
+// GetCallTimeout 让测试替身满足 Tool 接口，沿用卡片级策略。
+func (f *fakeSyncTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 func (f *fakeSyncTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return nil, nil
 }
