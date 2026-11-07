@@ -1,0 +1,58 @@
+// Package auto_permission 提供自动权限审查层（Auto Permission）的共享契约与身份原语。
+//
+// 本包对齐 Python jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/
+// 与同级 tool_binding.py。目录名去掉 Python 的下划线前缀——下划线在 Python 表示
+// "内部子包"，Go 无此约定且导出包名不应以下划线开头。
+//
+// # 在权限链路中的位置
+//
+// 本包是 9.90a（基础类型层）的最后一块，位于 PermissionEngine 规则判定返回 ASK
+// 之后、9.90b（决策事实层）之前：
+//
+//	PermissionEngine 规则判定
+//	        ↓  ASK
+//	【本包】数据契约 + 身份背书        ← 不产生决策
+//	        ↓
+//	9.90b 决策事实层（tool_capabilities / network_scope / policy_eval）
+//	        ↓
+//	9.90c root 五文件（串行队列 + 意图窗口）  ← 已完成
+//	        ↓
+//	9.90d 自动审查层（auto_reviewer / before_tool / adaptive 系列）
+//
+// # 两个文件的分工
+//
+//   - models.go：三个数据契约（ToolInvocation 工具调用快照、PermissionHandlingResult
+//     处理结果 + 可信来源、PermissionInterruptRequest 权限中断请求）与 11 个共享常量。
+//   - tool_binding.go：实现身份校验。回答"我要放行的这个工具，是不是我以为的那个
+//     实现"——实现类必须精确匹配、卡片必须指针同一，任一不满足即判不合格。
+//     Python 原注释：Subclasses can replace execution; this is implementation
+//     identity, not assignability.
+//
+// # 已知缺口
+//
+// ⤵️ 以下 4 个常量在 Python 全仓（含 tests）零消费，本包照抄但不被引用，
+// 待 9.90d 的 reviewer_redaction / deterministic 启用后成为活跃代码：
+//   - ShellDisplayPathPattern
+//   - ShellDisplayPreSplitPathPattern
+//   - SensitiveDisplayPathPattern
+//   - DeterministicReadonlyPublicWebFetchSourceKinds
+//
+// 保留理由：规则 9.2-4 要求 Enum/常量成员集合完整映射，不得因"Go 侧用不到"裁剪。
+//
+// ⤵️ 其余常量的消费方同样在 9.90d：ReviewerUITextMaxLength 与
+// ReviewerUIShortTextMaxLength 用于 reviewer_metadata；ReviewerDenialGuidance
+// 用于 deny_response；ProhibitedFileDeliveryReason 用于 before_tool；
+// DeterministicBoundedScopeDecisionSource 与 DeterministicReadonlyPublicWebReason
+// 用于 deterministic。
+//
+// 文件目录：
+//
+//	auto_permission/
+//	├── doc.go              # 包文档
+//	├── models.go           # ToolInvocation / PermissionHandlingResult / PermissionInterruptRequest + 11 常量
+//	└── tool_binding.go     # MatchesBoundMethod / ResolveToolBinding——实现身份背书
+//
+// 对应 Python 代码：
+//   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）
+//   - jiuwenswarm/agents/harness/common/rails/permissions/tool_binding.py（25 行）
+package auto_permission
