@@ -47,6 +47,18 @@ type rawTextState struct {
 	lineCount int
 }
 
+// tokenBudget 按固定预算累积 token 消耗，用于渐进式抽取时的截断判断。
+//
+// 逐块累加而非一次性比对全文，是为了让"前 N 块能读到的内容"尽量多：
+// 全文超预算就直接报错会让模型拿不到任何内容。
+// Python: _TokenBudget (filesystem.py:255-270)
+type tokenBudget struct {
+	// maxTokens 预算上限
+	maxTokens int
+	// spent 已消耗
+	spent int
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -223,6 +235,14 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// canFit 判断再消耗 tokens 后是否仍在预算内。
+// Python: _TokenBudget.can_fit
+func (b *tokenBudget) canFit(tokens int) bool { return b.spent+tokens <= b.maxTokens }
+
+// spend 记入已消耗 token。
+// Python: _TokenBudget.spend
+func (b *tokenBudget) spend(tokens int) { b.spent += tokens }
+
 func readText(ctx context.Context, op sys_operation.SysOperation, filePath string, offset, limit int, applySizeCap bool) (map[string]any, error) {
 	// 将 offset/limit 转为行号 start/end
 	// Python: L460-461
@@ -310,15 +330,6 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 		)
 	}
 
-	// token 估算检查
-	// Python: L515-517
-	tokens := estimateTokens(rawText)
-	if tokens > maxTokens {
-		return nil, fmt.Errorf(
-			"file content (%d tokens) exceeds maximum allowed tokens (%d). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file",
-			tokens, maxTokens,
-		)
-	}
 
 	// 解析 Notebook JSON
 	// Python: L519-545
@@ -337,7 +348,9 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 		return nil, fmt.Errorf("解析笔记本单元格失败: %w", err)
 	}
 
+	budget := &tokenBudget{maxTokens: maxTokens}
 	var blocks []string
+	extractedCount := 0
 	for idx, cell := range cells {
 		cellType := "unknown"
 		if ctRaw, ok := cell["cell_type"]; ok {
@@ -347,27 +360,38 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 			}
 		}
 
+		cellLines := []string{fmt.Sprintf("## Cell %d [%s]", idx+1, cellType)}
+
 		// 提取 source
-		source := extractNotebookString(cell, "source")
-		blocks = append(blocks, fmt.Sprintf("## Cell %d [%s]", idx+1, cellType))
-		if source != "" {
-			blocks = append(blocks, strings.TrimRight(source, "\n"))
+		if source := extractNotebookString(cell, "source"); source != "" {
+			cellLines = append(cellLines, strings.TrimRight(source, "\n"))
 		}
 
 		// 提取 outputs
-		outputsRaw, hasOutputs := cell["outputs"]
-		if hasOutputs {
+		if outputsRaw, hasOutputs := cell["outputs"]; hasOutputs {
 			var outputs []map[string]json.RawMessage
 			if json.Unmarshal(outputsRaw, &outputs) == nil && len(outputs) > 0 {
-				blocks = append(blocks, "### Outputs")
+				cellLines = append(cellLines, "### Outputs")
 				for _, out := range outputs {
-					text := extractOutputText(out)
-					if text != "" {
-						blocks = append(blocks, strings.TrimRight(text, "\n"))
+					if text := extractOutputText(out); text != "" {
+						cellLines = append(cellLines, strings.TrimRight(text, "\n"))
 					}
 				}
 			}
 		}
+
+		cellText := strings.Join(cellLines, "\n")
+		cellTokens := estimateTokens(cellText)
+		// 首块无条件放行：单块自身超预算时若也拦截，模型会拿到空内容
+		if extractedCount > 0 && !budget.canFit(cellTokens) {
+			blocks = append(blocks, fmt.Sprintf(
+				"… (truncated — %d/%d cells extracted, %d-token budget reached)",
+				extractedCount, len(cells), maxTokens))
+			break
+		}
+		budget.spend(cellTokens)
+		blocks = append(blocks, cellText)
+		extractedCount++
 	}
 
 	content := strings.TrimSpace(strings.Join(blocks, "\n"))
@@ -435,37 +459,50 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 预加载字体缓存（跨页共享）
 	fonts := make(map[string]*pdf.Font)
 
-	// 按页提取文本
-	// Python: L579-583
+	// 按页提取文本，按 token 预算截断
+	// Python: L1078-1094
+	budget := &tokenBudget{maxTokens: maxTokens}
 	var parts []string
+	extractedCount := 0
 	for pageNo := startPg; pageNo <= endPg; pageNo++ {
 		page := reader.Page(pageNo)
+		pageText := ""
 		if page.V.IsNull() {
-			parts = append(parts, fmt.Sprintf("## Page %d\n", pageNo))
-			continue
-		}
+			pageText = ""
+		} else {
+			// 缓存当前页字体
+			for _, name := range page.Fonts() {
+				if _, ok := fonts[name]; !ok {
+					f := page.Font(name)
+					fonts[name] = &f
+				}
+			}
 
-		// 缓存当前页字体
-		for _, name := range page.Fonts() {
-			if _, ok := fonts[name]; !ok {
-				f := page.Font(name)
-				fonts[name] = &f
+			extracted, err := page.GetPlainText(fonts)
+			if err != nil {
+				logger.Debug(logComponent).
+					Str("file_path", filePath).
+					Int("page_no", pageNo).
+					Err(err).
+					Msg("ReadFileTool failed to extract PDF page text")
+			} else {
+				pageText = extracted
 			}
 		}
 
-		pageText, err := page.GetPlainText(fonts)
-		if err != nil {
-			logger.Debug(logComponent).
-				Str("file_path", filePath).
-				Int("page_no", pageNo).
-				Err(err).
-				Msg("ReadFileTool failed to extract PDF page text")
-			pageText = ""
-		}
-
 		// Python: parts.append(f"## Page {page_no}\n{page_text}".rstrip())
-		block := fmt.Sprintf("## Page %d\n%s", pageNo, pageText)
-		parts = append(parts, strings.TrimRight(block, " \t\n\r"))
+		pageBlock := strings.TrimRight(fmt.Sprintf("## Page %d\n%s", pageNo, pageText), " \t\n\r")
+		pageTokens := estimateTokens(pageBlock)
+		// 首块无条件放行：单页自身超预算时不拦截，否则模型拿到空内容
+		if extractedCount > 0 && !budget.canFit(pageTokens) {
+			parts = append(parts, fmt.Sprintf(
+				"… (truncated — %d/%d pages extracted, %d-token budget reached)",
+				extractedCount, pageCount, maxTokens))
+			break
+		}
+		budget.spend(pageTokens)
+		parts = append(parts, pageBlock)
+		extractedCount++
 	}
 
 	content := strings.TrimSpace(strings.Join(parts, "\n\n"))
