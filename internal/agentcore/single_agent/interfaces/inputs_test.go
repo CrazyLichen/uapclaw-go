@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -453,4 +454,17 @@ func TestRunContext_Goal字段(t *testing.T) {
 	ctx := &RunContext{GoalID: "g1", Revision: 7}
 	assert.Equal(t, "g1", ctx.GoalID)
 	assert.Equal(t, 7, ctx.Revision)
+}
+
+// TestUserMessageInputs_Parts可变 验证 rails 可原地编辑。
+//
+// Python: UserMessageInputs.parts 是 mutable list，rails 编辑生效
+// (rail/base.py L378-399)
+func TestUserMessageInputs_Parts可变(t *testing.T) {
+	in := &UserMessageInputs{Parts: []string{"a", "b"}, Source: "query"}
+	in.Parts = append([]string{"X"}, in.Parts...)
+	in.Parts = in.Parts[:len(in.Parts)-1]
+	require.Equal(t, []string{"X", "a"}, in.Parts)
+	require.Equal(t, "query", in.Source)
+	require.Equal(t, "user_message_inputs", in.EventKind())
 }
