@@ -172,6 +172,16 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		Query:          query,
 		IsFollowUp:     isFollowUp,
 	}
+	// 从 task metadata 回填 run_kind / run_context（对齐 Python executor L154-193，
+	// run_kind/run_context 只经 task.Metadata 传播，与下方 effective 的写入同源）。
+	if task.Metadata != nil {
+		if rk, ok := task.Metadata["run_kind"].(string); ok {
+			iterInputs.RunKind = agentinterfaces.RunKind(rk)
+		}
+		if rc, ok := task.Metadata["run_context"].(*agentinterfaces.RunContext); ok {
+			iterInputs.RunContext = rc
+		}
+	}
 	// Python: AgentCallbackContext(agent=agent, inputs=iter_inputs, session=session)
 	// 运行时 provider 为 *DeepAgent，满足 BaseAgent 接口
 	var baseAgent agentinterfaces.BaseAgent
@@ -247,6 +257,10 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	go func() {
 		defer close(ch)
 
+		// afterFired 守卫：保证成功/失败路径只触发一次 after_task_iteration。
+		// Python: after_fired = False (task_loop_event_executor.py L247)
+		afterFired := false
+
 		// 测试覆写优先（对齐 runSingleRoundInvoke 的 override 逻辑）
 		var result map[string]any
 		var invokeErr error
@@ -268,6 +282,24 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			if e.getPlanTask(state, taskID) != nil {
 				if state != nil && state.TaskPlan != nil {
 					_ = state.TaskPlan.MarkCancelled(taskID, invokeErr.Error())
+				}
+			}
+
+			// Python: 失败路径也触发 AFTER_TASK_ITERATION（task_loop_event_executor.py L310-331），
+			// 带 error-shaped result + exception，让 goal rail 能读到「这轮摔死了」；
+			// 回调出错只 log 不掩盖原错误（上游 try/except 吞掉）。
+			if !afterFired {
+				iterInputs.Result = map[string]any{
+					"result_type": "error",
+					"error":       invokeErr.Error(),
+				}
+				cbCtx.SetInputs(iterInputs)
+				cbCtx.SetException(invokeErr)
+				if fireErr := cbCtx.Fire(ctx, agentinterfaces.CallbackAfterTaskIteration); fireErr != nil {
+					logger.Warn(logComponent).
+						Err(fireErr).
+						Str("event_type", "after_task_iteration").
+						Msg("failed to trigger post-callback on error path")
 				}
 			}
 
@@ -315,6 +347,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 
 		// 更新回调上下文并触发 after_task_iteration
+		afterFired = true
 		iterInputs.Result = resultMap
 		cbCtx.SetInputs(iterInputs)
 		if fireErr := cbCtx.Fire(ctx, agentinterfaces.CallbackAfterTaskIteration); fireErr != nil {

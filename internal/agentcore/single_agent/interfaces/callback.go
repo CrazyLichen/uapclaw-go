@@ -250,6 +250,12 @@ type TaskIterationInputs struct {
 	RetrievalQuery string
 	// IsFollowUp 是否由 controller follow-up 触发
 	IsFollowUp bool
+	// RunKind 运行模式，由 executor 从 task metadata 回填。
+	// Python: TaskIterationInputs.run_kind (rail/base.py L361-363)
+	RunKind RunKind
+	// RunContext 结构化运行时上下文，由 executor 从 task metadata 回填。
+	// Python: TaskIterationInputs.run_context (rail/base.py L365)
+	RunContext *RunContext
 }
 
 // MapInputs 任意字典事件输入，作为 EventInputs 的兜底类型。
