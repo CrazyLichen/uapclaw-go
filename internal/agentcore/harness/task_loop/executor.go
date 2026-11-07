@@ -101,9 +101,11 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	if task.Description != "" {
 		query = task.Description
 	}
+	var inputEvt *cschema.InputEvent
 	for _, evt := range task.Inputs {
-		if inputEvt, ok := evt.(*cschema.InputEvent); ok {
-			rawInput = ExtractInteractiveInput(inputEvt)
+		if ie, ok := evt.(*cschema.InputEvent); ok {
+			inputEvt = ie
+			rawInput = ExtractInteractiveInput(ie)
 			break
 		}
 	}
@@ -222,6 +224,12 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	// 步骤 14：构建有效输入
 	effective := map[string]any{
 		"query": effectiveQuery,
+	}
+	// Python: if input_parts is not None and iter_inputs.query == query
+	// (task_loop_event_executor.py L216-219) —— parts 描述的是原始批次，
+	// rail 在 before_task_iteration 改写了 query 就以改写后的为准。
+	if parts := extractInputParts(inputEvt); parts != nil && iterInputs.Query == query {
+		effective["_input_parts"] = parts
 	}
 	// Python: if cid: effective["conversation_id"] = cid
 	if cid != "" {
@@ -487,4 +495,29 @@ func isSensitive() bool {
 		}
 	}
 	return true
+}
+
+// extractInputParts 返回本轮输入未 join 的文本列表（多于一条时才有意义）。
+//
+// 一起排队的输入驱动同一轮，到达模型时是一条消息；但内层循环先把它们
+// 作为列表交给 ON_USER_MESSAGE 的 rails，rails 因此可以整条丢弃被后续
+// 取代的输入，而不必去解析 join 后的正文。单条输入不需要列表，内层自会
+// 从 query 派生。
+//
+// Python: TaskLoopEventExecutor._extract_input_parts
+// (harness/task_loop/task_loop_event_executor.py L431-448)
+func extractInputParts(event *cschema.InputEvent) []string {
+	if event == nil {
+		return nil
+	}
+	texts := make([]string, 0, len(event.InputData))
+	for _, df := range event.InputData {
+		if td, ok := df.(*cschema.TextDataFrame); ok && td.Text != "" {
+			texts = append(texts, td.Text)
+		}
+	}
+	if len(texts) > 1 {
+		return texts
+	}
+	return nil
 }
