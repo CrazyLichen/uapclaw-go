@@ -1,6 +1,256 @@
 package session
 
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// NoControlTargetError 会话没有可接收控制的活跃执行。
+//
+// Python: runtime/session/model.py NoControlTargetError
+type NoControlTargetError struct {
+	// Message 错误说明
+	Message string
+}
+
+// AnswerInFlightError 同一交互的应答正在投递中。
+//
+// Python: runtime/session/model.py AnswerInFlightError(NoControlTargetError)
+type AnswerInFlightError struct {
+	// NoControlTargetError 嵌入父错误，保持 errors.As 语义与上游继承一致
+	*NoControlTargetError
+}
+
+// SessionExecutionEndedError 控制输入到达时会话执行已结束。
+//
+// Python: runtime/session/model.py SessionExecutionEndedError
+type SessionExecutionEndedError struct {
+	// Message 错误说明
+	Message string
+}
+
+// SessionCloseTimeoutError 关闭会话时仍有执行未停止。
+//
+// Python: runtime/session/model.py SessionCloseTimeoutError
+type SessionCloseTimeoutError struct {
+	// SessionID 会话标识
+	SessionID string
+	// ExecutionIDs 超时未停的执行标识
+	ExecutionIDs []string
+}
+
+// terminalSignal 单次关闭信号，等价 asyncio.Event 的幂等 set()。
+type terminalSignal struct {
+	// ch 关闭即表示信号已发出
+	ch chan struct{}
+	// once 保证只关闭一次，重复 close 不 panic
+	once sync.Once
+}
+
+// SessionExecutionHandle 一次执行的运行时句柄。
+//
+// 与上游差异（spec §8 D-2 / D-3）：
+//   - Python 用单个 asyncio.Task 同时承载"可取消"与"可等待"；Go 拆为
+//     Cancel（发出取消）与 Done（执行方退出）两个成员。
+//   - Python 用 asyncio.Event 表达业务终态；Go 用 Terminal（terminalSignal，
+//     内部 sync.Once 保幂等）。
+//
+// 两个信号语义不同（spec §2.1）：
+//   - Terminal：业务结果已定（registry.MarkTerminal 触发，唯一 close 点）
+//   - Done：执行方收尾完成、协程即将退出（执行方 defer 触发）
+//
+// "清场"等 Done，"收结果"等 Terminal。
+//
+// Python: runtime/session/model.py SessionExecutionHandle
+type SessionExecutionHandle struct {
+	// ExecutionID 执行标识
+	ExecutionID string
+	// SessionID 会话标识
+	SessionID string
+	// RequestID 请求标识
+	RequestID string
+	// Generation 代次
+	Generation int
+	// WorkKind 执行种类
+	WorkKind SessionWorkKind
+	// ChannelID 渠道标识
+	ChannelID string
+	// Team 团队详情（可空）
+	Team *TeamExecutionDetails
+	// ParentExecutionID 父执行标识
+	ParentExecutionID string
+	// RootWorkKind 根执行种类
+	RootWorkKind SessionWorkKind
+	// RootRequestID 根请求标识
+	RootRequestID string
+	// WaitingControlIDs 该执行等待的交互标识
+	WaitingControlIDs map[string]struct{}
+	// State 状态
+	State SessionExecutionState
+	// CreatedAt 创建时刻（单调秒）
+	CreatedAt float64
+	// StartedAt 开始时刻（可空）
+	StartedAt *float64
+	// FinishedAt 结束时刻（可空）
+	FinishedAt *float64
+	// Error 错误文本
+	Error string
+	// CancellationRequested 是否已请求取消
+	CancellationRequested bool
+	// RetainOwnerTask 终态后是否保留 owner 执行方等待其收敛
+	RetainOwnerTask bool
+
+	// Cancel 等价 asyncio.Task.cancel()；置 nil 表示已无取消必要
+	Cancel context.CancelFunc
+	// Done 等价 "await task"；由执行方 defer 最后一行通过 MarkDone 关闭
+	Done chan struct{}
+	// Terminal 等价 handle.terminal_event；仅 registry.MarkTerminal 关闭
+	Terminal terminalSignal
+	// Agent 该执行使用的 agent 实例（仅执行期持有）
+	Agent any
+
+	// doneOnce 保证 Done 只关闭一次
+	doneOnce sync.Once
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// processStart 进程启动时刻，作为单调时钟基准。
+var processStart = time.Now()
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// Error 实现 error 接口。
+func (e *NoControlTargetError) Error() string { return e.Message }
+
+// Error 实现 error 接口，透传嵌入的父错误说明。
+func (e *AnswerInFlightError) Error() string {
+	if e.NoControlTargetError == nil {
+		return ""
+	}
+	return e.NoControlTargetError.Message
+}
+
+// Unwrap 暴露嵌入的父错误，使 errors.As/Is 能穿透到 NoControlTargetError。
+//
+// Go 的 struct 嵌入不等于 Python 继承：errors.As 靠 Unwrap 链而非字段提升。
+func (e *AnswerInFlightError) Unwrap() error {
+	if e.NoControlTargetError == nil {
+		return nil
+	}
+	return e.NoControlTargetError
+}
+
+// Error 实现 error 接口。
+func (e *SessionExecutionEndedError) Error() string { return e.Message }
+
+// Error 实现 error 接口，文案与上游 f-string 逐字一致。
+func (e *SessionCloseTimeoutError) Error() string {
+	return fmt.Sprintf("session close timed out: session_id=%s executions=%v",
+		e.SessionID, e.ExecutionIDs)
+}
+
+// Set 发出信号（幂等）。
+//
+// Python: asyncio.Event.set()
+func (s *terminalSignal) Set() { s.once.Do(func() { close(s.ch) }) }
+
+// Wait 返回等待用通道。
+func (s *terminalSignal) Wait() <-chan struct{} { return s.ch }
+
+// IsTerminalClosed 信号是否已发出。
+func (s *terminalSignal) IsTerminalClosed() bool {
+	select {
+	case <-s.ch:
+		return true
+	default:
+		return false
+	}
+}
+
+// NewSessionExecutionHandle 构造一个处于 QUEUED 的执行句柄。
+//
+// Python: RuntimeSessionCoordinator._new_execution 内构造
+func NewSessionExecutionHandle(
+	executionID, sessionID, requestID string,
+	generation int,
+	workKind SessionWorkKind,
+	channelID string,
+) *SessionExecutionHandle {
+	return &SessionExecutionHandle{
+		ExecutionID:       executionID,
+		SessionID:         sessionID,
+		RequestID:         requestID,
+		Generation:        generation,
+		WorkKind:          workKind,
+		ChannelID:         channelID,
+		WaitingControlIDs: map[string]struct{}{},
+		State:             SessionExecutionStateQueued,
+		CreatedAt:         monotonicSeconds(),
+		Done:              make(chan struct{}),
+		Terminal:          newTerminalSignal(),
+	}
+}
+
+// MarkDone 由执行方在 defer 的最后一行调用，等价"协程即将退出"。
+//
+// 与 Terminal 的分工见 SessionExecutionHandle 注释：Done 表示收尾完成，
+// Terminal 表示业务终态。
+func (h *SessionExecutionHandle) MarkDone() { h.doneOnce.Do(func() { close(h.Done) }) }
+
+// Snapshot 生成只读快照。
+//
+// Python: SessionExecutionHandle.snapshot()
+func (h *SessionExecutionHandle) Snapshot() SessionExecutionSnapshot {
+	var team *TeamExecutionDetails
+	if h.Team != nil {
+		copied := *h.Team
+		team = &copied
+	}
+	waiting := make(map[string]struct{}, len(h.WaitingControlIDs))
+	for k := range h.WaitingControlIDs {
+		waiting[k] = struct{}{}
+	}
+	return SessionExecutionSnapshot{
+		ExecutionID:           h.ExecutionID,
+		SessionID:             h.SessionID,
+		RequestID:             h.RequestID,
+		Generation:            h.Generation,
+		WorkKind:              h.WorkKind,
+		ChannelID:             h.ChannelID,
+		Team:                  team,
+		ParentExecutionID:     h.ParentExecutionID,
+		RootWorkKind:          h.RootWorkKind,
+		RootRequestID:         h.RootRequestID,
+		WaitingControlIDs:     waiting,
+		State:                 h.State,
+		CreatedAt:             h.CreatedAt,
+		StartedAt:             h.StartedAt,
+		FinishedAt:            h.FinishedAt,
+		Error:                 h.Error,
+		CancellationRequested: h.CancellationRequested,
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newTerminalSignal 创建未触发信号。
+func newTerminalSignal() terminalSignal {
+	return terminalSignal{ch: make(chan struct{})}
+}
+
+// monotonicSeconds 单调时钟秒值，等价 Python time.monotonic()。
+//
+// Go 的 time.Since(time.Time{}) 不单调，用进程启动时刻作基准。
+func monotonicSeconds() float64 {
+	return float64(time.Since(processStart).Nanoseconds()) / float64(time.Second)
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // SessionLifecycleContext 标识一个进程内产品会话的代次。
 //

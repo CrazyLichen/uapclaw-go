@@ -1,6 +1,9 @@
 package session
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // TestSessionWorkKind_Scheduled 校验 scheduled 属性成员集合。
 //
@@ -190,5 +193,96 @@ func TestCloseSessionResult_代次可空(t *testing.T) {
 	res.Generation = &gen
 	if *res.Generation != 3 {
 		t.Fatal("Generation 赋值失败")
+	}
+}
+
+// TestAnswerInFlightError_继承关系 校验可被 errors.As 捕获为父类型。
+func TestAnswerInFlightError_继承关系(t *testing.T) {
+	err := &AnswerInFlightError{NoControlTargetError: &NoControlTargetError{Message: "x"}}
+	var target *NoControlTargetError
+	if !errors.As(error(err), &target) {
+		t.Fatal("AnswerInFlightError 必须可被 errors.As 捕获为 NoControlTargetError")
+	}
+	if err.Error() != "x" {
+		t.Fatalf("Error() 应透传嵌入错误，实际 %q", err.Error())
+	}
+}
+
+// TestSessionCloseTimeoutError_字段 校验携带会话与执行标识。
+func TestSessionCloseTimeoutError_字段(t *testing.T) {
+	err := &SessionCloseTimeoutError{SessionID: "s1", ExecutionIDs: []string{"e1", "e2"}}
+	if err.SessionID != "s1" || len(err.ExecutionIDs) != 2 {
+		t.Fatalf("字段错误: %+v", err)
+	}
+	want := "session close timed out: session_id=s1 executions=[e1 e2]"
+	if err.Error() != want {
+		t.Fatalf("Error() = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestSessionExecutionHandle_双通道 校验 Done 与 Terminal 是两个独立信号。
+func TestSessionExecutionHandle_双通道(t *testing.T) {
+	h := NewSessionExecutionHandle("e1", "s1", "r1", 1, SessionWorkKindChatStream, "web")
+	if h.Done == nil {
+		t.Fatal("Done 必须初始化")
+	}
+	if h.Terminal.Wait() == nil {
+		t.Fatal("Terminal 必须初始化")
+	}
+	if h.State != SessionExecutionStateQueued {
+		t.Fatalf("初始状态应为 QUEUED，实际 %s", h.State)
+	}
+	if h.Terminal.IsTerminalClosed() {
+		t.Fatal("新建 handle 的 Terminal 不应已关闭")
+	}
+}
+
+// TestSessionExecutionHandle_MarkDone幂等 校验重复 MarkDone 不 panic。
+func TestSessionExecutionHandle_MarkDone幂等(t *testing.T) {
+	h := NewSessionExecutionHandle("e1", "s1", "r1", 1, SessionWorkKindChatStream, "web")
+	h.MarkDone()
+	h.MarkDone()
+	select {
+	case <-h.Done:
+	default:
+		t.Fatal("MarkDone 后 Done 应已关闭")
+	}
+}
+
+// TestSessionExecutionHandle_Snapshot 校验快照不含运行时字段且深复制 Team 与等待集合。
+func TestSessionExecutionHandle_Snapshot(t *testing.T) {
+	h := NewSessionExecutionHandle("e1", "s1", "r1", 2, SessionWorkKindTeamRequest, "web")
+	h.Team = &TeamExecutionDetails{WaiterKind: TeamWaiterKindRequest}
+	started := 10.0
+	h.StartedAt = &started
+	h.State = SessionExecutionStateRunning
+	h.WaitingControlIDs["c1"] = struct{}{}
+	snap := h.Snapshot()
+
+	if snap.ExecutionID != "e1" || snap.Generation != 2 || snap.WorkKind != SessionWorkKindTeamRequest {
+		t.Fatalf("快照字段错误: %+v", snap)
+	}
+	if snap.Team == nil || snap.Team.WaiterKind != TeamWaiterKindRequest {
+		t.Fatal("快照应携带 Team 详情")
+	}
+	if snap.StartedAt == nil || *snap.StartedAt != 10.0 {
+		t.Fatal("快照 StartedAt 错误")
+	}
+	// 深复制：改快照不影响 handle
+	snap.Team.WaiterKind = TeamWaiterKindExclusive
+	if h.Team.WaiterKind != TeamWaiterKindRequest {
+		t.Fatal("快照 Team 必须是深复制")
+	}
+	delete(snap.WaitingControlIDs, "c1")
+	if _, ok := h.WaitingControlIDs["c1"]; !ok {
+		t.Fatal("快照 WaitingControlIDs 必须是深复制")
+	}
+}
+
+// TestSessionExecutionHandle_初始等待集合非nil 校验可安全写入。
+func TestSessionExecutionHandle_初始等待集合非nil(t *testing.T) {
+	h := NewSessionExecutionHandle("e1", "s1", "r1", 1, SessionWorkKindChatUnary, "web")
+	if h.WaitingControlIDs == nil {
+		t.Fatal("WaitingControlIDs 必须初始化，否则写入会 panic")
 	}
 }
