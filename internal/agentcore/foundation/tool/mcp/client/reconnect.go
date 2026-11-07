@@ -5,8 +5,8 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	"reflect"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +25,7 @@ import (
 // setattr(client, "_reconnect_lock", ...) 动态属性。
 //
 // Python: _get_reconnect_lock / _record_reconnect_failure 里的
-// ``setattr(client, "_reconnect_*", ...)``（reconnect.py:214-245）
+// “setattr(client, "_reconnect_*", ...)“（reconnect.py:214-245）
 type reconnectState struct {
 	// mu 重连互斥锁：同一实例的并发调用不重复重建传输
 	mu sync.Mutex
