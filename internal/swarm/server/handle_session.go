@@ -251,8 +251,6 @@ func (s *AgentServer) disposeSessionAfterResourceRelease(_ context.Context, chan
 	return nil
 }
 
-
-
 // handleSessionRewind 处理 session.rewind 请求，对齐 Python _handle_session_rewind_full(restore_files=False)。
 func (s *AgentServer) handleSessionRewind(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params struct {

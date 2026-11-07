@@ -287,7 +287,6 @@ func TestHandleSessionRename_缺少SessionID(t *testing.T) {
 	}
 }
 
-
 // TestHandleSessionDelete_缺少SessionID 验证缺少 session_id 时返回错误。
 func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
 	_, s, cleanup := setupTestSessionsDir(t)
@@ -351,9 +350,6 @@ func TestHandleSessionDelete_空SessionID空白字符(t *testing.T) {
 		t.Errorf("code 应为 BAD_REQUEST，实际 %v", resp.Payload["code"])
 	}
 }
-
-
-
 
 // TestHandleSessionRewind_缺少参数 验证 session.rewind 缺少参数时返回错误。
 func TestHandleSessionRewind_缺少参数(t *testing.T) {
@@ -435,7 +431,6 @@ func TestHandleSessionFork_缺少参数(t *testing.T) {
 		t.Error("期望返回错误（缺少 source_session_id）")
 	}
 }
-
 
 // TestHandleHistoryListTurns_缺少参数 验证 history.list_turns 缺少参数时返回错误。
 func TestHandleHistoryListTurns_缺少参数(t *testing.T) {
