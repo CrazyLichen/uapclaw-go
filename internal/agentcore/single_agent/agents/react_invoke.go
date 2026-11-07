@@ -305,6 +305,69 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// extractUserParts 把本轮 query 归一成 ON_USER_MESSAGE 看到的输入列表。
+//
+// 一轮可能由多条排队输入共同驱动，调用方把它们不 join 地交下来，rails
+// 才能看到接缝；其余情况下就是 query 本身这一个输入。
+//
+// Python: ReActAgent._extract_user_parts (react_agent.py L1002-1012)
+func extractUserParts(cbc *interfaces.AgentCallbackContext, query interfaces.InvokeQuery) []string {
+	if cbc != nil {
+		if raw, ok := cbc.GetExtra("_input_parts"); ok {
+			if parts, ok2 := raw.([]string); ok2 && len(parts) > 0 {
+				return append([]string(nil), parts...)
+			}
+		}
+	}
+	if query == nil {
+		return nil
+	}
+	return []string{query.PlainText()}
+}
+
+// admitUserMessage 把一批已消费的输入 join 成一条 UserMessage 写入历史。
+//
+// Agent 消费的每个输入——新一轮 query、忙碌时排队的 follow-up、一批
+// steering、恢复的工作流中断——都从这里进入历史。ON_USER_MESSAGE 在
+// join **之前**对列表触发，rails 因此仍能看到单条输入，把被后续条目取代的
+// 整条丢掉。这是 rails 唯一能把它们当作**输入**处理的时刻：join 写入后
+// 就是普通历史，受 compaction 影响，不能再按位置定位。
+//
+// Python: ReActAgent._admit_user_message (react_agent.py L917-955)
+func (a *ReActAgent) admitUserMessage(
+	ctx context.Context,
+	cbc *interfaces.AgentCallbackContext,
+	modelCtx ceinterface.ModelContext,
+	parts []string,
+	source string,
+	prefix string,
+) error {
+	prev := cbc.Inputs()
+	inputs := &interfaces.UserMessageInputs{Parts: parts, Source: source}
+	cbc.SetInputs(inputs)
+	// 必须 defer：fire 里 panic 时 inputs 若停在 UserMessageInputs，
+	// 后续 before_model_call 会拿到错误类型直接崩（Python 用 finally 等价）。
+	defer cbc.SetInputs(prev)
+
+	if err := cbc.Fire(ctx, interfaces.CallbackOnUserMessage); err != nil {
+		return err
+	}
+	// Python: if not parts: return —— rails 可能把整批丢光
+	if len(inputs.Parts) == 0 {
+		return nil
+	}
+	if modelCtx == nil {
+		return nil
+	}
+	// 附件先落历史，保证顺序为 [附件变更][用户消息]
+	if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
+		runCommitCallbacks(cbc)
+	}
+	body := prefix + strings.Join(inputs.Parts, "\n")
+	_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(body)})
+	return nil
+}
+
 // drainSteeringBatch 取本次模型调用可以吸收的那部分 steering 积压。
 //
 // 全部一次塞进同一轮对"两三条叮嘱"是对的，对"忙碌一段后回来看到十几条"
@@ -497,21 +560,14 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 				}
 			}
 		} else {
-			// 正常路径：添加 UserMessage
-			// Python: _extract_user_text(user_input)
+			// 正常路径：把本轮输入批次写入历史
+			// Python: _admit_user_message(parts, source="query") (react_agent.py L2990-3000)
 			plainText := curInputs.Query.PlainText()
 			if plainText != "" && modelCtx != nil {
-				// on_user_message：每轮用户消息前触发一次（恢复附件状态等）
-				// Python: rail.on_user_message(ctx)
-				if fireErr := cbc.Fire(ctx, interfaces.CallbackOnUserMessage); fireErr != nil {
-					return fireErr
+				parts := extractUserParts(cbc, curInputs.Query)
+				if err := a.admitUserMessage(ctx, cbc, modelCtx, parts, "query", ""); err != nil {
+					return err
 				}
-				// 附件先落历史，保证顺序为 [附件变更][用户消息]
-				// Sync 成功才执行投递回调（25.0a ①）
-				if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
-					runCommitCallbacks(cbc)
-				}
-				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(plainText)})
 			}
 		}
 
