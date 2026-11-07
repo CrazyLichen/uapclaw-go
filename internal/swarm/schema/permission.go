@@ -37,6 +37,12 @@ type toolPermChannelIDKey struct{}
 // toolPermContextKey 权限上下文的 context key
 type toolPermContextKey struct{}
 
+// toolPermRequestIDKey 宿主请求 ID 的 context key
+type toolPermRequestIDKey struct{}
+
+// skillsRebuildSilentKey skills.rebuild 静默标记的 context key
+type skillsRebuildSilentKey struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // PermissionContextOption 权限上下文构造选项函数。
@@ -206,6 +212,40 @@ func ToolPermissionChannelIDFromCtx(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+// WithToolPermissionRequestID 将宿主请求 ID 注入 context。
+//
+// 工具 call id 可用于 UI 关联，但权限来源必须限定在宿主请求范围内。
+// Python: TOOL_PERMISSION_REQUEST_ID.set(request_id)
+func WithToolPermissionRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, toolPermRequestIDKey{}, requestID)
+}
+
+// ToolPermissionRequestIDFromCtx 从 context 中获取宿主请求 ID。
+// Python: TOOL_PERMISSION_REQUEST_ID.get()
+func ToolPermissionRequestIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(toolPermRequestIDKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// WithSkillsRebuildSilent 设置 skills.rebuild 静默标记。
+//
+// 静默 follow-up 无 UI 审批，权限轨需自动放行。
+// Python: SKILLS_REBUILD_SILENT.set(value)
+func WithSkillsRebuildSilent(ctx context.Context, silent bool) context.Context {
+	return context.WithValue(ctx, skillsRebuildSilentKey{}, silent)
+}
+
+// SkillsRebuildSilentFromCtx 读取 skills.rebuild 静默标记，未设置时为 false。
+// Python: SKILLS_REBUILD_SILENT.get()
+func SkillsRebuildSilentFromCtx(ctx context.Context) bool {
+	if v, ok := ctx.Value(skillsRebuildSilentKey{}).(bool); ok {
+		return v
+	}
+	return false
 }
 
 // WithPermissionContextValue 将 PermissionContext 注入 context。
