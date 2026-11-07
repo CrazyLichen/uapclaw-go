@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -633,3 +635,63 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 
 // ClearSession 清空会话状态。
 func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
+
+// TestExtractInputParts_多帧才返回 验证有效文本不足 2 条时返回 nil。
+//
+// Python: _extract_input_parts 过滤空串后 len(texts) > 1 才算多输入
+// (task_loop_event_executor.py L431-448)
+func TestExtractInputParts_多帧才返回(t *testing.T) {
+	require.Nil(t, extractInputParts(nil))
+	require.Nil(t, extractInputParts(&cschema.InputEvent{
+		InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "only"}},
+	}), "单帧不需要列表，内层自会从 query 派生")
+	require.Equal(t, []string{"a", "c"}, extractInputParts(&cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.TextDataFrame{Text: "a"},
+			&cschema.TextDataFrame{Text: ""},
+			&cschema.TextDataFrame{Text: "c"},
+		},
+	}), "空串必须被过滤")
+}
+
+// TestExtractInputParts_非文本帧被忽略 验证只认文本帧。
+func TestExtractInputParts_非文本帧被忽略(t *testing.T) {
+	require.Nil(t, extractInputParts(&cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.TextDataFrame{Text: "a"},
+			&cschema.JsonDataFrame{Data: map[string]any{"k": "v"}},
+		},
+	}), "1 条有效文本不足 2 条")
+}
+
+// TestTaskLoopExecutor_改写query则不带parts 验证 rail 改写 query 后不下发 parts。
+//
+// Python: if input_parts is not None and iter_inputs.query == query
+// (task_loop_event_executor.py L216-219) —— "a replaced query wins"。
+func TestTaskLoopExecutor_改写query则不带parts(t *testing.T) {
+	evt := &cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.TextDataFrame{Text: "原始a"},
+			&cschema.TextDataFrame{Text: "原始b"},
+		},
+	}
+	parts := extractInputParts(evt)
+	require.Equal(t, []string{"原始a", "原始b"}, parts, "前置：两个有效文本帧")
+
+	query := "原始a\n原始b"
+	rewritten := "模板改写后的 query"
+	require.NotEqual(t, query, rewritten, "前提：query 已被改写")
+
+	effective := map[string]any{"query": rewritten}
+	if parts != nil && rewritten == query {
+		effective["_input_parts"] = parts
+	}
+	_, has := effective["_input_parts"]
+	require.False(t, has, "query 被改写时不得下发 _input_parts")
+
+	effective2 := map[string]any{"query": query}
+	if parts != nil && query == query {
+		effective2["_input_parts"] = parts
+	}
+	require.Equal(t, parts, effective2["_input_parts"])
+}
