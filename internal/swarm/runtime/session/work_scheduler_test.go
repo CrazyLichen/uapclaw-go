@@ -368,3 +368,117 @@ func TestScheduler_提交方ctx取消时放弃等待(t *testing.T) {
 	}
 	close(release)
 }
+
+// TestScheduler_旧LIFO到两级规则的行为变化 固化 spec §8 D-5。
+//
+// 旧 SessionManager 对所有任务一律 LIFO（后到先跑）；改为上游两级规则后：
+// CHAT_UNARY / CHAT_STREAM 走 group=0 且 priority 递减（仍是后到先跑），
+// 其余走 group=1、priority=0、按 sequence FIFO（**变先进先跑**）。
+// 本用例锁死后半句，防止回归。
+func TestScheduler_旧LIFO到两级规则的行为变化(t *testing.T) {
+	s := newTestScheduler()
+	defer s.Close(time.Second)
+
+	var mu sync.Mutex
+	var order []string
+	record := func(name string) func(context.Context) (any, error) {
+		return func(context.Context) (any, error) {
+			mu.Lock()
+			order = append(order, name)
+			mu.Unlock()
+			return nil, nil
+		}
+	}
+
+	release := make(chan struct{})
+	blockingDone := make(chan struct{})
+	go func() {
+		defer close(blockingDone)
+		h := newSchedHandle("e-block", "s1", 1, SessionWorkKindHeartbeat)
+		_, _ = s.SubmitAndWait(context.Background(), h, func(context.Context) (any, error) {
+			<-release
+			return nil, nil
+		})
+	}()
+	time.Sleep(80 * time.Millisecond)
+
+	var wg sync.WaitGroup
+	for _, name := range []string{"hb1", "hb2", "hb3"} {
+		wg.Add(1)
+		go func(nm string) {
+			defer wg.Done()
+			h := newSchedHandle("e-"+nm, "s1", 1, SessionWorkKindHeartbeat)
+			_, _ = s.SubmitAndWait(context.Background(), h, record(nm))
+		}(name)
+		time.Sleep(15 * time.Millisecond) // 保证提交顺序确定
+	}
+	time.Sleep(80 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	<-blockingDone
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{"hb1", "hb2", "hb3"}
+	if len(order) != 3 {
+		t.Fatalf("三个任务都应执行，实际 %v", order)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("普通类应 FIFO（旧行为是 LIFO），实际 %v，期望 %v", order, want)
+		}
+	}
+}
+
+// TestScheduler_聊天类仍为后到先跑 固化 latest_first 分支。
+func TestScheduler_聊天类仍为后到先跑(t *testing.T) {
+	s := newTestScheduler()
+	defer s.Close(time.Second)
+
+	var mu sync.Mutex
+	var order []string
+	record := func(name string) func(context.Context) (any, error) {
+		return func(context.Context) (any, error) {
+			mu.Lock()
+			order = append(order, name)
+			mu.Unlock()
+			return nil, nil
+		}
+	}
+
+	release := make(chan struct{})
+	blockingDone := make(chan struct{})
+	go func() {
+		defer close(blockingDone)
+		h := newSchedHandle("e-block", "s1", 1, SessionWorkKindHeartbeat)
+		_, _ = s.SubmitAndWait(context.Background(), h, func(context.Context) (any, error) {
+			<-release
+			return nil, nil
+		})
+	}()
+	time.Sleep(80 * time.Millisecond)
+
+	var wg sync.WaitGroup
+	for _, name := range []string{"chat1", "chat2"} {
+		wg.Add(1)
+		go func(nm string) {
+			defer wg.Done()
+			h := newSchedHandle("e-"+nm, "s1", 1, SessionWorkKindChatStream)
+			_, _ = s.SubmitAndWait(context.Background(), h, record(nm))
+		}(name)
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(80 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	<-blockingDone
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 2 {
+		t.Fatalf("两个任务都应执行，实际 %v", order)
+	}
+	if order[0] != "chat2" {
+		t.Fatalf("聊天类应后到先跑，实际 %v", order)
+	}
+}
