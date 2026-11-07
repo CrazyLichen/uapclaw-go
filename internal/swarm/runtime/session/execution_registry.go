@@ -138,6 +138,29 @@ func (r *SessionExecutionRegistry) ReleaseOwnerTask(h *SessionExecutionHandle) {
 	r.releaseOwnerTaskLocked(h)
 }
 
+// SupersedeWaiting 取消同代次中工作种类属于 kinds 且处于 WAITING_FOR_CONTROL 的执行。
+//
+// Python: _new_execution 内的 superseded_kinds 分支
+// 整段在 registry 锁内完成（读写 handle.State 与 CancellationRequested），
+// 避免与并发的 MarkTerminal 竞争。
+func (r *SessionExecutionRegistry) SupersedeWaiting(sessionID string, generation int, kinds map[SessionWorkKind]struct{}) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.evictTerminalLocked()
+	for _, h := range r.selectLocked(SelectOptions{
+		SessionID: sessionID, Generation: &generation, ActiveOnly: true,
+	}) {
+		if _, want := kinds[h.WorkKind]; !want {
+			continue
+		}
+		if h.State != SessionExecutionStateWaitingForControl {
+			continue
+		}
+		h.CancellationRequested = true
+		markTerminalLocked(r, h, SessionExecutionStateCancelled, "")
+	}
+}
+
 // Get 按执行标识取句柄。
 //
 // Python: SessionExecutionRegistry.get
