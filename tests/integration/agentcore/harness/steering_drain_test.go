@@ -340,32 +340,53 @@ func (s *SteeringDrainSuite) TestIT_steering前缀与事件在真实链路上成
 	s.True(found, "第 2 次模型调用必须包含 steer 文本 %s", steerText)
 }
 
-// TestIT_Clear后重跑无残留 验证新事件已进 AllCallbackEvents（Clear 能枚举到）。
+// TestIT_Clear后重跑无残留 验证 Clear() 真的清掉了桥接到内层的钩子。
 //
-// spec C15：Clear() 依赖 AllCallbackEvents() 枚举；漏加该事件会让钩子永远
-// 清不掉，留下悬挂回调。
+// spec C15：before_steering_drain 是桥接事件，注册在内层 ReActAgent 的
+// callback manager 上。若该事件漏加进 AllCallbackEvents，Clear() 枚举不到它，
+// 钩子会残留并在后续轮次继续触发。
 //
-// 注意：before_steering_drain 是桥接事件，注册在**内层** ReActAgent 的 manager
-// 上；DeepAgent.CallbackManager() 返回外层 manager，故此处不能用它清。改为
-// 直接验证"枚举包含该事件"这一 Clear 的前提（清理语义由单元用例
-// TestClear_清得掉BeforeSteeringDrain 覆盖）。
+// 用真实链路验证：注册 rail → 内层 manager 有钩子 → Clear() → 无钩子 →
+// 重跑一轮，rail 不再被触发。
 func (s *SteeringDrainSuite) TestIT_Clear后重跑无残留() {
-	var found bool
-	for _, e := range agentinterfaces.AllCallbackEvents() {
-		if e == agentinterfaces.CallbackBeforeSteeringDrain {
-			found = true
-			break
-		}
-	}
-	s.True(found, "AllCallbackEvents 必须包含 before_steering_drain（Clear 才枚举得到）")
+	ctx := s.Ctx
+	rail := &limitRail{}
+	steeringCh := make(chan string, 8)
 
-	m := agentinterfaces.NewAgentCallbackManager("it-clear-check")
-	m.RegisterCallback(context.Background(), agentinterfaces.CallbackBeforeSteeringDrain,
-		func(_ context.Context, _ any) error { return nil })
-	s.True(m.HasHooks(agentinterfaces.CallbackBeforeSteeringDrain))
-	m.Clear()
-	s.False(m.HasHooks(agentinterfaces.CallbackBeforeSteeringDrain),
-		"Clear() 之后该事件不得再有钩子")
+	s.MockLLM.SetResponses(
+		mockllm.CreateTextResponse("first"),
+		mockllm.CreateTextResponse("second"),
+	)
+	agent, sess := s.createSteerAgent(ctx, rail, nil, "it-drain-clear")
+
+	// 必须先初始化：pending rails 在 ensureInitialized 时才转注册并桥接
+	_, initErr := agent.EnsureInitialized(ctx)
+	s.Require().NoError(initErr, "初始化 DeepAgent 失败")
+
+	// 定位内层 manager：桥接事件注册在它上面，外层 CallbackManager() 看不到
+	inner := agent.ReactAgent()
+	s.Require().NotNil(inner, "必须能取到内层 ReActAgent")
+	innerMgr := inner.CallbackManager()
+	s.Require().NotNil(innerMgr)
+	s.True(innerMgr.HasHooks(agentinterfaces.CallbackBeforeSteeringDrain),
+		"前置：rail 的 before_steering_drain 必须已桥接到内层")
+
+	// 清理
+	innerMgr.Clear()
+	s.False(innerMgr.HasHooks(agentinterfaces.CallbackBeforeSteeringDrain),
+		"Clear() 必须清掉 before_steering_drain（验证它已进 AllCallbackEvents）")
+
+	// 重跑一轮：有 steering 积压，但 rail 已被清掉，不得再被触发
+	steeringCh <- "s1"
+	s.Require().NoError(sess.PreRun(ctx))
+	_, err := agent.Invoke(ctx, map[string]any{
+		"query":           "执行",
+		"_steering_queue": steeringCh,
+	}, agentinterfaces.WithSession(sess))
+	s.Require().NoError(err)
+	sess.PostRun(ctx)
+
+	s.Zero(rail.fired, "Clear() 之后 rail 不得再被触发")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
