@@ -56,6 +56,9 @@ const (
 	SectionInfo = "team_info"
 	// SectionMembers 成员关系（P:66）
 	SectionMembers = "team_members"
+	// SectionInboundTags 入站/事件/上下文 XML 标签说明（P:18）
+	// Python: TeamSectionName.INBOUND_TAGS (sections.py L73)
+	SectionInboundTags = "team_inbound_tags"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -382,6 +385,33 @@ func BuildTeamMembersSection(
 
 	section := saprompt.NewPromptSection(SectionMembers, map[string]string{language: body}, 66)
 	return &section
+}
+
+// BuildTeamInboundTagsSection 构建入站标签通知 section。
+//
+// 告诉模型 <team-inbound> / <team-note> / <team-event> / <team-context> /
+// <team-policy> 这套 XML 的含义与嵌套规则。模板是静态的，每个成员（含外部 CLI）
+// 都有，所以它进 system prompt 前缀、不随团队状态变化。
+//
+// language 参数**不使用**：content 同时携带中英两份，语言选择发生在渲染时
+// （上游显式 `del language`，保留参数只为签名一致）。
+//
+// Python: build_team_inbound_tags_section (sections.py L562-590)
+func BuildTeamInboundTagsSection(language string) (*saprompt.PromptSection, error) {
+	_ = language // 与上游 `del language` 对应：content 携带双语，语言选择在渲染侧
+	cnTpl, err := LoadTemplate("inbound_tags", "cn")
+	if err != nil {
+		return nil, fmt.Errorf("加载 cn/inbound_tags.md 失败: %w", err)
+	}
+	enTpl, err := LoadTemplate("inbound_tags", "en")
+	if err != nil {
+		return nil, fmt.Errorf("加载 en/inbound_tags.md 失败: %w", err)
+	}
+	section := saprompt.NewPromptSection(SectionInboundTags, map[string]string{
+		"cn": cnTpl.Content(),
+		"en": enTpl.Content(),
+	}, 18)
+	return &section, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

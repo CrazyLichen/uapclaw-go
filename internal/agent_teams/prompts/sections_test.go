@@ -670,3 +670,55 @@ func mustBuildLifecycleSection(t *testing.T, role atschema.TeamRole, lifecycle, 
 	}
 	return section
 }
+
+// TestBuildTeamInboundTagsSection_cn 验证中文 section 内容等于模板全文。
+func TestBuildTeamInboundTagsSection_cn(t *testing.T) {
+	sec, err := BuildTeamInboundTagsSection("cn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec == nil {
+		t.Fatal("不应返回 nil")
+	}
+	want, err := LoadTemplate("inbound_tags", "cn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec.Content["cn"] != want.Content() {
+		t.Errorf("cn 内容与模板不一致：得到 %d 字节，模板 %d 字节",
+			len(sec.Content["cn"]), len(want.Content()))
+	}
+}
+
+// TestBuildTeamInboundTagsSection_en 验证英文 section 内容等于模板全文。
+func TestBuildTeamInboundTagsSection_en(t *testing.T) {
+	sec, err := BuildTeamInboundTagsSection("en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := LoadTemplate("inbound_tags", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec.Content["en"] != want.Content() {
+		t.Errorf("en 内容与模板不一致")
+	}
+}
+
+// TestBuildTeamInboundTagsSection_优先级 验证 section 名与优先级 P:18。
+// Python: SECTION_PRIORITY[INBOUND_TAGS] = 18 (sections.py L89)
+func TestBuildTeamInboundTagsSection_优先级(t *testing.T) {
+	sec, err := BuildTeamInboundTagsSection("cn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec.Name != SectionInboundTags {
+		t.Errorf("Name = %q，期望 %q", sec.Name, SectionInboundTags)
+	}
+	if sec.Priority != 18 {
+		t.Errorf("Priority = %d，期望 18", sec.Priority)
+	}
+	if SectionInboundTags != "team_inbound_tags" {
+		t.Errorf("SectionInboundTags = %q，期望 team_inbound_tags", SectionInboundTags)
+	}
+}
