@@ -204,6 +204,12 @@ func (h *SessionExecutionHandle) MarkDone() { h.doneOnce.Do(func() { close(h.Don
 
 // Snapshot 生成只读快照。
 //
+// ⚠️ 并发契约：本方法读取 handle 的可变字段（State/StartedAt/FinishedAt/
+// WaitingControlIDs 等），**必须在 registry 锁内调用**。锁外调用会与
+// MarkRunning / MarkTerminal 竞争（-race 实测：StartedAt 指针写 vs 读）。
+// 对外暴露的快照入口一律走 SessionExecutionRegistry.SnapshotOf /
+// SnapshotValue / SnapshotsForSession，它们自带锁。
+//
 // Python: SessionExecutionHandle.snapshot()
 func (h *SessionExecutionHandle) Snapshot() SessionExecutionSnapshot {
 	var team *TeamExecutionDetails

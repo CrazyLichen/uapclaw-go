@@ -324,13 +324,13 @@ func (c *RuntimeSessionCoordinator) SubmitUnary(
 			return SessionExecutionSnapshot{}, fmt.Errorf(
 				"request_id already belongs to %s", last.WorkKind)
 		}
-		return last.Snapshot(), nil
+		return c.registry.SnapshotValue(last.ExecutionID), nil
 	}
 	handle, err := c.newExecution(record, requestID, workKind, "", nil)
 	if err != nil {
 		return SessionExecutionSnapshot{}, err
 	}
-	snapshot := handle.Snapshot()
+	snapshot := c.registry.SnapshotValue(handle.ExecutionID)
 	go func() {
 		if workKind == SessionWorkKindSessionMessage {
 			select {
@@ -375,12 +375,8 @@ func (c *RuntimeSessionCoordinator) SnapshotSessions() []RuntimeSessionSnapshot 
 //
 // Python: RuntimeSessionCoordinator.get_execution
 func (c *RuntimeSessionCoordinator) GetExecution(executionID string) *SessionExecutionSnapshot {
-	handle := c.registry.Get(executionID)
-	if handle == nil {
-		return nil
-	}
-	snap := handle.Snapshot()
-	return &snap
+	// 经 registry.SnapshotOf 在锁内取快照，避免与 MarkRunning/MarkTerminal 竞争
+	return c.registry.SnapshotOf(executionID)
 }
 
 // QuiesceSession 把会话置 QUIESCING 并返回生命周期上下文。

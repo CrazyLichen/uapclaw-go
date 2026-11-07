@@ -220,14 +220,24 @@ func (r *SessionExecutionRegistry) MarkTerminalIfActive(executionID string, stat
 
 // SnapshotOf 原子取单条执行快照（不存在返回 nil）。
 func (r *SessionExecutionRegistry) SnapshotOf(executionID string) *SessionExecutionSnapshot {
+	snap := r.SnapshotValue(executionID)
+	if snap.ExecutionID == "" {
+		return nil
+	}
+	return &snap
+}
+
+// SnapshotValue 原子取单条执行快照值（不存在返回零值，ExecutionID 为空）。
+//
+// 与 SnapshotOf 的区别：返回值而非指针，避免调用方误以为可空。
+func (r *SessionExecutionRegistry) SnapshotValue(executionID string) SessionExecutionSnapshot {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	h, ok := r.executions[executionID]
 	if !ok {
-		return nil
+		return SessionExecutionSnapshot{}
 	}
-	snap := h.Snapshot()
-	return &snap
+	return h.Snapshot()
 }
 
 // AgentOf 原子读取执行绑定的 agent。
@@ -326,8 +336,13 @@ func (r *SessionExecutionRegistry) Select(opts SelectOptions) []*SessionExecutio
 // SnapshotsForSession 取某会话（可选代次）的全部执行快照。
 //
 // Python: SessionExecutionRegistry.snapshots_for_session
+// 全流程持锁：Snapshot() 读 handle 的可变字段，锁外调用会与 MarkRunning /
+// MarkTerminal 竞争（-race 实测）。
 func (r *SessionExecutionRegistry) SnapshotsForSession(sessionID string, generation *int) []SessionExecutionSnapshot {
-	handles := r.Select(SelectOptions{SessionID: sessionID, Generation: generation})
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.evictTerminalLocked()
+	handles := r.selectLocked(SelectOptions{SessionID: sessionID, Generation: generation})
 	out := make([]SessionExecutionSnapshot, 0, len(handles))
 	for _, h := range handles {
 		out = append(out, h.Snapshot())
