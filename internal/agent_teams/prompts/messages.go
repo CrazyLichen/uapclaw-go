@@ -254,7 +254,7 @@ func BuildIdentityText(memberName, displayName, memberWorkspacePath, memberPromp
 	if memberName == "" && label == "" && workspace == "" && privatePrompt == "" {
 		return nil
 	}
-	lbl := messageLabelsFor(language)
+	lbl := messagesLabelsFor(language)
 	var lines []string
 	if forkCapable {
 		lines = append(lines, lbl["identity_capability"], "")
@@ -292,7 +292,7 @@ func BuildIdentityPromptDelta(memberPrompt, language string) *string {
 	if privatePrompt == "" {
 		return nil
 	}
-	lbl := messageLabelsFor(language)
+	lbl := messagesLabelsFor(language)
 	out := "\n" + lbl["private_prompt_heading"] + "\n\n" + privatePrompt + "\n"
 	return &out
 }
@@ -307,7 +307,7 @@ func BuildIdentityPromptDelta(memberPrompt, language string) *string {
 //
 // Python: build_identity_conversion (messages.py L350-376)
 func BuildIdentityConversion(source, memberName, language string) string {
-	lbl := messageLabelsFor(language)
+	lbl := messagesLabelsFor(language)
 	name := memberName
 	if name == "" {
 		name = "?"
@@ -327,7 +327,7 @@ func BuildIdentityConversion(source, memberName, language string) string {
 //
 // Python: build_team_info_text (messages.py L379-428)
 func BuildTeamInfoText(teamInfo map[string]string, teamWorkspacePath, teamOutputsDir, language string) *string {
-	lbl := messageLabelsFor(language)
+	lbl := messagesLabelsFor(language)
 	teamName := teamInfo["team_name"]
 	displayName := teamInfo["display_name"]
 	desc := teamInfo["desc"]
@@ -373,7 +373,7 @@ func BuildRosterSnapshotText(members []RosterMember, markHumans bool, language s
 	if len(members) == 0 {
 		return nil
 	}
-	lbl := messageLabelsFor(language)
+	lbl := messagesLabelsFor(language)
 	rows := make([]string, 0, len(members))
 	for _, m := range members {
 		rows = append(rows, FormatMemberLine(m, markHumans, ""))
@@ -389,7 +389,7 @@ func BuildRosterDeltaText(delta RosterDelta, markHumans bool, language string) *
 	if delta.IsEmpty() {
 		return nil
 	}
-	lbl := messageLabelsFor(language)
+	lbl := messagesLabelsFor(language)
 	rows := make([]string, 0, len(delta.Joined)+len(delta.Left)+len(delta.Changed))
 	for _, m := range delta.Joined {
 		rows = append(rows, FormatMemberLine(m, markHumans, lbl["roster_joined"]))
@@ -404,10 +404,15 @@ func BuildRosterDeltaText(delta RosterDelta, markHumans bool, language string) *
 	return &out
 }
 
-// messageLabelsFor 返回某语言的标签表，缺失时回退 cn。
+// messagesLabelsFor 返回某语言的标签表，缺失时回退 cn。
+//
+// 加 messages 前缀是因为 Go 侧本包内还有 sections.go 的同名函数：上游
+// messages.py 的 labels_for 与 sections.py 的 _labels_for 分属两个模块、
+// 名字本就不同，落到同一个 Go 包后两个函数的导出名会撞成 labelsFor。
+// 两张表必须独立（同名字段取值不同），故按来源加前缀区分。
 //
 // Python: labels_for (messages.py L133-135)
-func messageLabelsFor(language string) map[string]string {
+func messagesLabelsFor(language string) map[string]string {
 	if tbl, ok := messageLabels[language]; ok {
 		return tbl
 	}

@@ -1,6 +1,7 @@
 package agent_teams
 
 import (
+	"fmt"
 	"html"
 	"strings"
 )
@@ -320,17 +321,9 @@ func snapshotKindOf(text string) string {
 		return ""
 	}
 	for kind := range snapshotEventKinds {
-		if strings.HasPrefix(stripped, sprintfEventOpenTag(kind)) {
+		if strings.HasPrefix(stripped, fmt.Sprintf(eventOpenTagFormat, kind)) {
 			return kind
 		}
 	}
 	return ""
-}
-
-// sprintfEventOpenTag 用 eventOpenTagFormat 生成某 kind 的开标签。
-// 单独抽出来避免为非格式化场景引入 fmt 的依赖面。
-func sprintfEventOpenTag(kind string) string {
-	// 等价 fmt.Sprintf(eventOpenTagFormat, kind)；kind 只做字符串拼接，
-	// 不含需要格式化的字符。
-	return strings.Replace(eventOpenTagFormat, "%s", kind, 1)
 }

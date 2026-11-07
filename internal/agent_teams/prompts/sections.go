@@ -138,7 +138,7 @@ var labels = map[string]map[string]string{
 //   - teammateMode: 执行模式 "build_mode" 或 "plan_mode"
 //   - language: 提示词语言 "cn" 或 "en"
 func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMode string, language string) (*saprompt.PromptSection, error) {
-	lbl := labelsFor(language)
+	lbl := sectionsLabelsFor(language)
 	policyName := "leader_policy"
 	if role != atschema.TeamRoleLeader {
 		policyName = "teammate_policy"
@@ -227,7 +227,7 @@ func BuildTeamWorkflowSection(role atschema.TeamRole, teamMode string, language 
 	if role != atschema.TeamRoleLeader {
 		return nil, nil
 	}
-	lbl := labelsFor(language)
+	lbl := sectionsLabelsFor(language)
 	templateName := "leader_workflow"
 	if mapped, ok := workflowTemplateName[teamMode]; ok {
 		templateName = mapped
@@ -251,7 +251,7 @@ func BuildTeamLifecycleSection(role atschema.TeamRole, lifecycle string, languag
 	if role != atschema.TeamRoleLeader {
 		return nil, nil
 	}
-	lbl := labelsFor(language)
+	lbl := sectionsLabelsFor(language)
 	templateName := "lifecycle_temporary"
 	if lifecycle == "persistent" {
 		templateName = "lifecycle_persistent"
@@ -275,7 +275,7 @@ func BuildTeamPersonaSection(persona string, language string) *saprompt.PromptSe
 	if persona == "" {
 		return nil
 	}
-	lbl := labelsFor(language)
+	lbl := sectionsLabelsFor(language)
 	body := lbl["persona_heading"] + "\n\n" + persona + "\n"
 
 	section := saprompt.NewPromptSection(SectionPersona, map[string]string{language: body}, 15)
@@ -312,7 +312,7 @@ func BuildTeamInfoSection(
 	teamWorkspacePath string,
 	language string,
 ) *saprompt.PromptSection {
-	lbl := labelsFor(language)
+	lbl := sectionsLabelsFor(language)
 
 	var teamName, displayName, desc string
 	if teamInfo != nil {
@@ -361,7 +361,7 @@ func BuildTeamMembersSection(
 	if len(teamMembers) == 0 {
 		return nil
 	}
-	lbl := labelsFor(language)
+	lbl := sectionsLabelsFor(language)
 
 	var rows []string
 	for _, member := range teamMembers {
@@ -416,9 +416,15 @@ func BuildTeamInboundTagsSection(language string) (*saprompt.PromptSection, erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// labelsFor 返回指定语言的标签字典，默认回退到中文。
+// sectionsLabelsFor 返回指定语言的标签字典，默认回退到中文。
+//
+// 加 sections 前缀是因为 Go 侧本包内还有 messages.go 的同名函数：上游
+// sections.py 的 _labels_for 与 messages.py 的 labels_for 分属两个模块、
+// 名字本就不同，落到同一个 Go 包后两个函数的导出名会撞成 labelsFor。
+// 两张表必须独立（同名字段取值不同），故按来源加前缀区分。
+//
 // Python: _labels_for(language) (openjiuwen/agent_teams/prompts/sections.py)
-func labelsFor(language string) map[string]string {
+func sectionsLabelsFor(language string) map[string]string {
 	if lbl, ok := labels[language]; ok {
 		return lbl
 	}

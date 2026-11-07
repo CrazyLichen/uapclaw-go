@@ -596,17 +596,17 @@ func TestSectionName常量(t *testing.T) {
 // TestLabelsFor 测试标签回退
 func TestLabelsFor(t *testing.T) {
 	// cn 存在
-	lbl := labelsFor("cn")
+	lbl := sectionsLabelsFor("cn")
 	if lbl["role_heading"] == "" {
 		t.Fatal("cn role_heading should not be empty")
 	}
 	// en 存在
-	lbl = labelsFor("en")
+	lbl = sectionsLabelsFor("en")
 	if lbl["role_heading"] == "" {
 		t.Fatal("en role_heading should not be empty")
 	}
 	// 未知语言回退到 cn
-	lbl = labelsFor("fr")
+	lbl = sectionsLabelsFor("fr")
 	if lbl["role_heading"] != labels["cn"]["role_heading"] {
 		t.Fatal("unknown language should fallback to cn")
 	}
