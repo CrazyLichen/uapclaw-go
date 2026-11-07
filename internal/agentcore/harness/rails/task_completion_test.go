@@ -723,3 +723,51 @@ func (f *fakeGoalStoreForRail) Load() *goal.GoalRecord         { return nil }
 func (f *fakeGoalStoreForRail) Save(_ *goal.GoalRecord)        {}
 func (f *fakeGoalStoreForRail) Clear()                         {}
 func (f *fakeGoalStoreForRail) Commit(_ context.Context) error { return nil }
+
+// TestInit_从agent继承GoalManager兜底 验证 rail 未显式注入时从 agent 继承。
+// Python: init() 里 if self._goal_manager is None: 从 agent.goal_manager 继承 (L238-241)
+func TestInit_从agent继承GoalManager兜底(t *testing.T) {
+	mgr := goal.NewGoalManager(goal.GoalManagerConfig{
+		Store:             &fakeGoalStoreForRail{},
+		EventManager:      task_loop.NewEventManager(),
+		ControlLock:       &sync.Mutex{},
+		HasOutputStream:   func() bool { return true },
+		CancelActiveRound: func(_ context.Context, _ hschema.RoundWorkKind, _, _ string) {},
+		EmitEvent:         func(_ hschema.InteractionEvent) {},
+		NotifyWork:        func() {},
+	})
+
+	r := NewTaskCompletionRail()
+	assert.Nil(t, r.goalManager, "未注入时应为 nil")
+
+	agent := newFakeBaseAgent()
+	agent.goalMgr = mgr
+
+	require.NoError(t, r.Init(context.Background(), agent))
+	assert.Same(t, mgr, r.goalManager, "Init 应从 agent 继承 GoalManager")
+	assert.NotNil(t, r.goalReportSink, "继承走 SetGoalManager，应惰性建 sink")
+}
+
+// TestInit_幂等不重复注册 验证二次 Init 不重复 append goalTools。
+func TestInit_幂等不重复注册(t *testing.T) {
+	mgr := goal.NewGoalManager(goal.GoalManagerConfig{
+		Store:             &fakeGoalStoreForRail{},
+		EventManager:      task_loop.NewEventManager(),
+		ControlLock:       &sync.Mutex{},
+		HasOutputStream:   func() bool { return true },
+		CancelActiveRound: func(_ context.Context, _ hschema.RoundWorkKind, _, _ string) {},
+		EmitEvent:         func(_ hschema.InteractionEvent) {},
+		NotifyWork:        func() {},
+	})
+
+	r := NewTaskCompletionRail()
+	r.SetGoalManager(mgr)
+	agent := newFakeBaseAgent()
+
+	require.NoError(t, r.Init(context.Background(), agent))
+	first := len(r.goalTools)
+	require.Greater(t, first, 0, "首次 Init 应注册工具")
+
+	require.NoError(t, r.Init(context.Background(), agent))
+	assert.Equal(t, first, len(r.goalTools), "二次 Init 不应重复注册")
+}

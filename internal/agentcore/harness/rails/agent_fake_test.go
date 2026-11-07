@@ -4,6 +4,7 @@ import (
 	"context"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -28,6 +29,8 @@ type fakeBaseAgent struct {
 	cbMgr *agentinterfaces.AgentCallbackManager
 	// builder 系统提示词构建器
 	builder *saprompt.SystemPromptBuilder
+	// goalMgr 会话级 Goal 能力面（默认 nil，供 Init 继承兜底用例）
+	goalMgr *goal.GoalManager
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -112,6 +115,9 @@ func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig { return nil }
 
 // AbilityManager 返回 nil。
 func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
+
+// GoalManager 实现 goalManagerProvider 接口（供 Init 继承兜底用例）。
+func (f *fakeBaseAgent) GoalManager() *goal.GoalManager { return f.goalMgr }
 
 // CallbackManager 返回回调管理器。
 func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager { return f.cbMgr }

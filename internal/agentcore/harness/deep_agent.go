@@ -1908,6 +1908,22 @@ func (d *DeepAgent) SetGoalCoordinator(coordinator goal.Coordinator) {
 	d.goalCoordinator = coordinator
 }
 
+// GoalManager 返回会话级 Goal 能力面（未注入时 nil）。
+//
+// 供 TaskCompletionRail 的 Init 从 agent 继承兜底（Python `getattr(agent, "goal_manager")`），
+// 以及后续服务面（10.3.27 command.goal）使用。按规则 10 属 DeepAgent 的注入缝，
+// 不进 DeepAgentInterface（Python 侧同为属性而非继承接口面方法）。
+// Python: self.goal_manager (L342)
+func (d *DeepAgent) GoalManager() *goal.GoalManager {
+	d.ensureInteractionState()
+	d.interactionControlMu.Lock()
+	defer d.interactionControlMu.Unlock()
+	if gm, ok := d.goalCoordinator.(*goal.GoalManager); ok {
+		return gm
+	}
+	return nil
+}
+
 // bindLiveGoalManager 把 GoalManager 绑到 TaskCompletionRail。
 // Python: _bind_live_goal_manager (deep_agent.py L2157)
 func (d *DeepAgent) bindLiveGoalManager(rail *rails.TaskCompletionRail) {

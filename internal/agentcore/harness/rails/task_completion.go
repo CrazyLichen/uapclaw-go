@@ -75,6 +75,15 @@ type TaskCompletionRail struct {
 	attachmentManagerFor func() *hprompts.Manager
 }
 
+// goalManagerProvider 提供 Goal 能力面的 Agent 能力。
+//
+// 由 harness.DeepAgent 实现（GoalManager 访问器）。
+// Python: init() 里 getattr(agent, "goal_manager", None) 的继承兜底（task_completion_rail.py L238-241）
+type goalManagerProvider interface {
+	// GoalManager 返回会话级 Goal 能力面（未注入时 nil）
+	GoalManager() *goal.GoalManager
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TaskCompletionOption TaskCompletionRail 可选配置函数
@@ -213,7 +222,20 @@ func (r *TaskCompletionRail) Init(_ context.Context, agent agentinterfaces.BaseA
 	if provider, ok := agent.(promptAttachmentProvider); ok {
 		r.attachmentManagerFor = provider.PromptAttachments
 	}
+	// Python: if self._goal_manager is None: 从 agent.goal_manager 继承兜底 (L238-241)
 	if r.goalManager == nil {
+		if provider, ok := agent.(goalManagerProvider); ok {
+			if inherited := provider.GoalManager(); inherited != nil {
+				r.SetGoalManager(inherited)
+			}
+		}
+	}
+	if r.goalManager == nil {
+		return nil
+	}
+	// 幂等：已注册过 goal 工具则直接返回（Start 绑定后二次 Init 与注册路径会重复调用；
+	// ResourceMgr.AddTool 对已存在资源返回 error，AbilityManager.Add 对重名返回 Added=false）。
+	if len(r.goalTools) > 0 {
 		return nil
 	}
 
@@ -864,6 +886,10 @@ func (r *TaskCompletionRail) resolveGoalLanguage(builder saprompt.SystemPromptBu
 // 对齐 Python Optional 语义：goal_id/revision 同源（要么都来自 run_context，
 // 要么都为 None）。goalID 非空才比较 goal_id 与 revision；goalID 为空等价
 // Python 的 expected_goal_id=None / expected_revision=None（只查 status）。
+//
+// 偏差说明（spec §5）：Python 用 `expected_revision is not None` 独立判断 revision，
+// Go 的 int 无法表达 None，故以 goalID 是否为空作为「两者都有值」的开关。当前调用链
+// 中 goal_id 与 revision 恒同源于 RunContext（9.87 定义），不会出现「一个有一个无」。
 func validateGoalState(record *goal.GoalRecord, expectedGoalID string, expectedRevision int, allowPaused bool) bool {
 	if record == nil {
 		return false
