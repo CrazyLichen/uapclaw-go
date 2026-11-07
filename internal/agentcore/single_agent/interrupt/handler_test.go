@@ -471,21 +471,20 @@ func TestHandleSubAgentInterrupt_tuple包装(t *testing.T) {
 	assert.True(t, entry.IsSubAgent)
 }
 
-func TestSaveAutoConfirmFromState(t *testing.T) {
+func TestSaveAutoConfirm(t *testing.T) {
 	sess := session.NewSession()
-	intState := &saschema.ToolInterruptionState{
-		AutoConfirmMapping: map[string]string{
-			"inner_1": "auto_key_1",
+	answers := map[string]*saschema.InterruptAnswer{
+		"intr_1": {
+			Owner: "rail.A",
+			Kind:  saschema.InterruptKindPermission,
+			Value: map[string]any{"auto_confirm": true},
+			Request: &saschema.InterruptRequest{
+				AutoConfirmKey: "auto_key_1",
+			},
 		},
 	}
 
-	interactiveInput := &interaction.InteractiveInput{
-		UserInputs: map[string]any{
-			"inner_1": map[string]any{"auto_confirm": true},
-		},
-	}
-
-	saveAutoConfirmFromState(intState, interactiveInput, sess)
+	saveAutoConfirm(answers, sess)
 
 	configVal, _ := sess.GetState(sessionstate.StringKey(InterruptAutoConfirmKey))
 	config, ok := configVal.(map[string]any)
@@ -493,17 +492,45 @@ func TestSaveAutoConfirmFromState(t *testing.T) {
 	assert.Equal(t, true, config["auto_key_1"])
 }
 
-func TestSaveAutoConfirmFromState_nilSession(t *testing.T) {
-	intState := &saschema.ToolInterruptionState{}
-	saveAutoConfirmFromState(intState, &interaction.InteractiveInput{}, nil)
+func TestSaveAutoConfirm_nilSession(t *testing.T) {
+	saveAutoConfirm(map[string]*saschema.InterruptAnswer{}, nil)
 }
 
-func TestSaveAutoConfirmFromState_非InteractiveInput(t *testing.T) {
+func TestSaveAutoConfirm_kin不在白名单(t *testing.T) {
+	// 技能演化审批期望 {"action": ...}，不应被 approval 形状的答案误开自动确认
 	sess := session.NewSession()
-	intState := &saschema.ToolInterruptionState{}
-	saveAutoConfirmFromState(intState, "string_input", sess)
+	answers := map[string]*saschema.InterruptAnswer{
+		"intr_1": {
+			Kind:  saschema.InterruptKindSkillEvolutionApproval,
+			Value: map[string]any{"auto_confirm": true},
+			Request: &saschema.InterruptRequest{
+				AutoConfirmKey: "auto_key_1",
+			},
+		},
+	}
+
+	saveAutoConfirm(answers, sess)
+
 	configVal, _ := sess.GetState(sessionstate.StringKey(InterruptAutoConfirmKey))
-	assert.Nil(t, configVal)
+	config, _ := configVal.(map[string]any)
+	assert.NotEqual(t, true, config["auto_key_1"])
+}
+
+func TestSaveAutoConfirm_非autoConfirm形状(t *testing.T) {
+	sess := session.NewSession()
+	answers := map[string]*saschema.InterruptAnswer{
+		"intr_1": {
+			Kind:    saschema.InterruptKindPermission,
+			Value:   "plain-string",
+			Request: &saschema.InterruptRequest{AutoConfirmKey: "k"},
+		},
+	}
+
+	saveAutoConfirm(answers, sess)
+
+	configVal, _ := sess.GetState(sessionstate.StringKey(InterruptAutoConfirmKey))
+	config, _ := configVal.(map[string]any)
+	assert.NotEqual(t, true, config["k"])
 }
 
 func TestBuildSubAgentResumeToolCall(t *testing.T) {
@@ -596,7 +623,7 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 		{ID: "tc3", Name: "agent_tool"},
 	}
 
-	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls)
+	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls, nil)
 	assert.Len(t, interruptedTools, 2)
 	assert.NotEmpty(t, payloads)
 	assert.Equal(t, "key1", autoConfirmMapping["tc1"])

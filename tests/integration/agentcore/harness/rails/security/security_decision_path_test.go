@@ -321,6 +321,12 @@ func (m *mockInterruptRequest) GetMetadata() map[string]any { return nil }
 // SetMetadata 实现 InterruptRequester 接口（9.90c 接口扩张）。
 func (m *mockInterruptRequest) SetMetadata(map[string]any) {}
 
+// GetInterruptOwner 实现 InterruptRequester 接口（9.90c 接口扩张）。
+func (m *mockInterruptRequest) GetInterruptOwner() string { return "" }
+
+// GetInterruptKind 实现 InterruptRequester 接口（9.90c 接口扩张）。
+func (m *mockInterruptRequest) GetInterruptKind() string { return "" }
+
 // mockInterruptRequestAdapter 适配 InterruptRequester 到 saschema.InterruptRequester。
 type mockInterruptRequestAdapter struct {
 	*mockInterruptRequest

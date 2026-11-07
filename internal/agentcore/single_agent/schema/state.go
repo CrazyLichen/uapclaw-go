@@ -31,6 +31,14 @@ type ToolInterruptEntry struct {
 	InterruptRequests map[string]InterruptRequester
 	// IsSubAgent 是否来自子 Agent
 	IsSubAgent bool
+	// CarriedAnswers 更早恢复轮次已给出的答案，按 call_id → owner 索引。
+	//
+	// 一个调用若在本轮又暂停，它上一轮拿到的答案要保留到下一轮（标记 carried），
+	// 让 rail 知道"这个答案已经执行过副作用，不要重复执行"。若本轮该 rail
+	// 在同一调用上又重新提问，说明上轮的答案没被接受，那条答案会被丢弃。
+	//
+	// Python: ToolInterruptEntry.carried_answers
+	CarriedAnswers map[string]map[string]*InterruptAnswer
 }
 
 // ToolInterruptionState 工具中断状态（HITL 中断）。

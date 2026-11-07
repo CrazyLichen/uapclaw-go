@@ -105,7 +105,7 @@ func (h *ToolInterruptHandler) BuildInterruptState(
 	iteration int,
 	originalQuery string,
 ) (*saschema.ToolInterruptionState, []PayloadEntry) {
-	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls)
+	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls, nil)
 
 	if len(interruptedTools) == 0 {
 		return nil, nil
@@ -246,13 +246,32 @@ func (h *ToolInterruptHandler) HandleResume(
 		Int("resume_iteration", resumeIteration+1).
 		Msg("resuming tool interrupt from iteration")
 
-	// 保存自动确认配置
-	saveAutoConfirmFromState(intState, userInput, sess)
+	// 把本次恢复输入翻译成按 interrupt_id 索引、带 owner 的答案。
+	// Python: fresh_answers = self._attribute_answers(state, user_input)
+	freshAnswers := attributeAnswers(intState, userInput)
+
+	// 保存自动确认配置（按 kind 白名单，只认 approval 形状的答案）
+	// Python: if isinstance(user_input, InteractiveInput): self._save_auto_confirm(fresh_answers, session)
+	if _, isInteractive := userInput.(*interaction.InteractiveInput); isInteractive {
+		saveAutoConfirm(freshAnswers, sess)
+	}
+
+	// 按 call_id → owner 重排，供重放期间的 rail 读取
+	// Python: call_answers = self._call_answers(state, fresh_answers)
+	callAnswersMap := callAnswers(intState, freshAnswers)
+
+	// 本轮没答到的中断，commit 时沿用其 id
+	// Python: unanswered = self._unanswered_interrupts(state, fresh_answers)
+	unanswered := unansweredInterrupts(intState, freshAnswers)
 
 	// 设置恢复用户输入到 ctx.extra
 	// Python: ctx.extra[RESUME_USER_INPUT_KEY] = user_input
 	// S-24: 裸 map 写迁移 SetExtra（线程安全）
 	cbc.SetExtra(ResumeUserInputKey, userInput)
+
+	// 答案归属表：rail 通过 FindOwnAnswer 只读自己 owner 那份
+	// Python: ctx.extra[RESUME_INTERRUPT_ANSWERS_KEY] = call_answers
+	cbc.SetExtra(saschema.ResumeInterruptAnswersKey, callAnswersMap)
 
 	// 构建需要重执行的工具调用列表
 	// Python: copy.deepcopy(entry.tool_call) + 子 Agent 注入 query
@@ -278,13 +297,18 @@ func (h *ToolInterruptHandler) HandleResume(
 		}
 	}
 
-	// 清除恢复用户输入
-	// Python: ctx.extra.pop(RESUME_USER_INPUT_KEY, None)
-	// S-24: 裸 map 删迁移 DeleteExtra（线程安全，语义对齐 pop）
+	// 清除恢复用户输入与答案归属表
+	// Python: finally 块里 pop 掉 RESUME_USER_INPUT_KEY / RESUME_INTERRUPT_ANSWERS_KEY
 	cbc.DeleteExtra(ResumeUserInputKey)
+	cbc.DeleteExtra(saschema.ResumeInterruptAnswersKey)
 
 	// 重新收集中断
-	newInterruptedTools, subAgentOutputs, autoConfirmMapping := h.collectInterrupts(results, toolsToExecute)
+	newInterruptedTools, subAgentOutputs, autoConfirmMapping := h.collectInterrupts(results, toolsToExecute, unanswered)
+
+	// 本轮又暂停的调用，把答案带进下一轮（标记 carried），供 rail 知道
+	// 副作用已执行过、不要重复。
+	// Python: self._carry_answers(new_interrupted_tools, call_answers)
+	carryAnswers(newInterruptedTools, callAnswersMap)
 
 	intState.InterruptedTools = newInterruptedTools
 	intState.AutoConfirmMapping = autoConfirmMapping
@@ -348,9 +372,19 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 //   - interruptedTools: outerID → ToolInterruptEntry（中断工具条目）
 //   - payloads: []PayloadEntry（负载条目列表）
 //   - autoConfirmMapping: innerID → autoConfirmKey（自动确认映射）
+//
+// collectInterrupts 收集中断并入表。
+//
+// 每个工具中断在这里拿到 id（issue_interrupt_id）；本次恢复留下未答的调用，
+// 其新中断沿用原有 id。子 Agent 的中断保留它自己处理器分配的 id。
+//
+// unanswered 可为 nil（首次收集中断，或调用方不关心 id 沿用）。
+//
+// Python: _collect_interrupts(results, tool_calls, unanswered=None)
 func (h *ToolInterruptHandler) collectInterrupts(
 	results []saschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
+	unanswered map[string]saschema.AnswerOwnerAndID,
 ) (map[string]*saschema.ToolInterruptEntry, []PayloadEntry, map[string]string) {
 	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
@@ -365,6 +399,13 @@ func (h *ToolInterruptHandler) collectInterrupts(
 
 		// Python: isinstance(tool_result, ToolInterruptException)
 		if tie, ok := toolResult.(*saschema.ToolInterruptException); ok {
+			// 先发号，再入表（对齐 Python 的两步顺序）
+			// Python: issue_interrupt_id(tool_result.request, (tool_result.tool_call or tool_call).id, unanswered)
+			owner := toolCall
+			if tie.ToolCall != nil {
+				owner = tie.ToolCall
+			}
+			issueIDFor(tie.Request, owner.ID, unanswered)
 			handleToolInterruptException(tie, toolCall, interruptedTools, &payloads, autoConfirmMapping)
 		} else if isSubAgentInterrupt(toolResult) {
 			handleSubAgentInterrupt(toolResult, toolCall, interruptedTools, &payloads, autoConfirmMapping)
@@ -372,6 +413,21 @@ func (h *ToolInterruptHandler) collectInterrupts(
 	}
 
 	return interruptedTools, payloads, autoConfirmMapping
+}
+
+// issueIDFor 给中断请求发号，兼容子类（AskUserRequest 等）。
+//
+// Python: issue_interrupt_id(request, tool_call_id, unanswered)
+func issueIDFor(
+	request saschema.InterruptRequester,
+	toolCallID string,
+	unanswered map[string]saschema.AnswerOwnerAndID,
+) {
+	ir, ok := request.(*saschema.InterruptRequest)
+	if !ok || ir == nil {
+		return
+	}
+	saschema.IssueInterruptID(ir, toolCallID, unanswered)
 }
 
 // isSubAgentInterrupt 检查结果是否为子 Agent 中断 dict。
@@ -486,47 +542,6 @@ func handleSubAgentInterrupt(
 			IsSubAgent:        true,
 		}
 	}
-}
-
-// saveAutoConfirmFromState 从用户输入中提取 auto_confirm 配置，保存到 session state。
-//
-// Python: _save_auto_confirm_from_state(state, user_input, session)
-func saveAutoConfirmFromState(
-	intState *saschema.ToolInterruptionState,
-	userInput any,
-	sess sessioninterfaces.SessionFacade,
-) {
-	if sess == nil {
-		return
-	}
-
-	interactiveInput, ok := userInput.(*interaction.InteractiveInput)
-	if !ok {
-		return
-	}
-
-	// Python: config = session.get_state(INTERRUPT_AUTO_CONFIRM_KEY) or {}
-	configVal, _ := sess.GetState(state.StringKey(InterruptAutoConfirmKey))
-	config, ok := configVal.(map[string]any)
-	if !ok {
-		config = make(map[string]any)
-	}
-
-	// Python: 遍历 user_input.user_inputs，检查 auto_confirm
-	for innerID, userValue := range interactiveInput.UserInputs {
-		userDict, ok := userValue.(map[string]any)
-		if !ok {
-			continue
-		}
-		if autoConfirm, _ := userDict["auto_confirm"].(bool); autoConfirm {
-			autoConfirmKey := intState.AutoConfirmMapping[innerID]
-			if autoConfirmKey != "" {
-				config[autoConfirmKey] = true
-			}
-		}
-	}
-
-	sess.UpdateState(map[string]any{InterruptAutoConfirmKey: config})
 }
 
 // buildSubAgentResumeToolCall 构建子 Agent 恢复时的 ToolCall。

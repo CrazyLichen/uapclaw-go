@@ -16,6 +16,14 @@ type InteractiveInput struct {
 	UserInputs map[string]any
 	// RawInputs 未绑定节点 ID 的原始输入（首次交互使用）
 	RawInputs any
+	// InterruptAnswers 按中断 ID 绑定的答案映射。
+	//
+	// key 为暂停中的工具调用中断的 interrupt_id，value 为它的答案。
+	// 与 UserInputs（按 tool_call_id / 节点 ID 答）互补：两者都答同一个中断时，
+	// 按 interrupt_id 的答案优先（对齐 Python match_answers 的取值顺序）。
+	//
+	// Python: InteractiveInput.interrupt_answers
+	InterruptAnswers map[string]any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -32,7 +40,8 @@ type InteractiveInput struct {
 // Python: InteractiveInput.__init__(raw_inputs)
 func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 	input := &InteractiveInput{
-		UserInputs: make(map[string]any),
+		UserInputs:       make(map[string]any),
+		InterruptAnswers: make(map[string]any),
 	}
 	if len(rawInputs) == 0 {
 		// 未提供 rawInputs，RawInputs 保持 nil

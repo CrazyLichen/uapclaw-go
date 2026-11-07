@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"github.com/google/uuid"
+
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -26,6 +28,12 @@ type InterruptRequester interface {
 	GetMetadata() map[string]any
 	// SetMetadata 覆盖中断元数据
 	SetMetadata(metadata map[string]any)
+	// GetInterruptOwner 返回抛出该中断的 rail 键
+	//
+	// 恢复时答案按此键路由回原 rail；同一次调用上多个 rail 的中断靠它区分。
+	GetInterruptOwner() string
+	// GetInterruptKind 返回中断类型
+	GetInterruptKind() string
 }
 
 // InterruptRequest 工具中断请求，携带需要用户确认的信息。
@@ -154,6 +162,48 @@ func NewToolCallInterruptRequest(request InterruptRequester, toolCall *llmschema
 	}
 }
 
+// NewInterruptID 生成一个全局唯一的中断 ID。
+//
+// Python: new_interrupt_id() -> f"intr_{uuid.uuid4().hex}"
+func NewInterruptID() string {
+	return "intr_" + uuid.NewString()
+}
+
+// IssueInterruptID 给挂在 toolCallID 上的中断就地分配 ID。
+//
+// 中断处理器对每个从暂停调用收集到的中断调用它。unanswered 把每个调用映射到
+// 「本次恢复在该调用上留下的未答中断」的 (owner, interrupt_id)：
+// 若同一 owner 的上一轮中断仍未答，则新中断沿用那个 id——这样宿主分批回答
+// 并行调用时手里的 id 一直有效，即使 rail 这次问的是不同的问题；
+// 其余中断一律分配新 id。
+//
+// Python: issue_interrupt_id(request, tool_call_id, unanswered)
+func IssueInterruptID(
+	request *InterruptRequest,
+	toolCallID string,
+	unanswered map[string]AnswerOwnerAndID,
+) {
+	if request == nil {
+		return
+	}
+	previous, ok := unanswered[toolCallID]
+	if ok && previous.Owner == request.InterruptOwner {
+		request.InterruptID = previous.InterruptID
+		return
+	}
+	request.InterruptID = NewInterruptID()
+}
+
+// AnswerOwnerAndID 上一轮未答中断的归属信息。
+//
+// Python: _Unanswered 的 value 形态 Tuple[str, str]（owner, interrupt_id）
+type AnswerOwnerAndID struct {
+	// Owner 中断的 owner
+	Owner string
+	// InterruptID 中断标识
+	InterruptID string
+}
+
 // GetMessage 实现 InterruptRequester 接口。
 func (r *InterruptRequest) GetMessage() string { return r.Message }
 
@@ -176,6 +226,14 @@ func (r *InterruptRequest) GetMetadata() map[string]any { return r.Metadata }
 
 // SetMetadata 实现 InterruptRequester 接口。
 func (r *InterruptRequest) SetMetadata(metadata map[string]any) { r.Metadata = metadata }
+
+// GetInterruptOwner 实现 InterruptRequester 接口。
+func (r *InterruptRequest) GetInterruptOwner() string { return r.InterruptOwner }
+
+// GetInterruptKind 实现 InterruptRequester 接口。
+//
+// 走 InterruptKindOf 以兼容 kind 只存在 metadata 里的历史数据。
+func (r *InterruptRequest) GetInterruptKind() string { return InterruptKindOf(r) }
 
 // GetMessage 实现 InterruptRequester 接口，委托给 Request 字段。
 func (r *ToolCallInterruptRequest) GetMessage() string {
@@ -206,4 +264,20 @@ func (r *ToolCallInterruptRequest) SetMetadata(metadata map[string]any) {
 	if r.Request != nil {
 		r.Request.SetMetadata(metadata)
 	}
+}
+
+// GetInterruptOwner 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) GetInterruptOwner() string {
+	if r.Request != nil {
+		return r.Request.GetInterruptOwner()
+	}
+	return ""
+}
+
+// GetInterruptKind 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) GetInterruptKind() string {
+	if r.Request != nil {
+		return r.Request.GetInterruptKind()
+	}
+	return ""
 }
