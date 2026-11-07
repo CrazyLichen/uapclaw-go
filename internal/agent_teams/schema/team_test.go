@@ -113,3 +113,49 @@ func TestUnknownHumanAgentError_Error(t *testing.T) {
 		t.Errorf("Error() 消息应包含注册成员，实际: %q", msg)
 	}
 }
+
+// TestTeamRole_七取值 验证 TeamRole 枚举与上游 7 个成员逐一对应。
+// Python: class TeamRole(str, Enum) (schema/team.py L129-145)
+func TestTeamRole_七取值(t *testing.T) {
+	cases := []struct {
+		role TeamRole
+		want string
+	}{
+		{TeamRoleLeader, "leader"},
+		{TeamRoleTeammate, "teammate"},
+		{TeamRoleHumanAgent, "human_agent"},
+		{TeamRolePassiveHuman, "passive_human"},
+		{TeamRoleBridgeAgent, "bridge_agent"},
+		{TeamRoleWorker, "worker"},
+		{TeamRoleExternalCLI, "external_cli"},
+	}
+	for _, c := range cases {
+		if string(c.role) != c.want {
+			t.Errorf("TeamRole 取值错误：得到 %q，期望 %q", string(c.role), c.want)
+		}
+	}
+}
+
+// TestIsCoordinatedMember_两角色为真 验证只有 teammate 与 external_cli 参与协调循环。
+// Python: TeamRole.is_coordinated_member (schema/team.py L150-159)
+func TestIsCoordinatedMember_两角色为真(t *testing.T) {
+	if !TeamRoleTeammate.IsCoordinatedMember() {
+		t.Error("teammate 应为协调成员")
+	}
+	if !TeamRoleExternalCLI.IsCoordinatedMember() {
+		t.Error("external_cli 应为协调成员")
+	}
+}
+
+// TestIsCoordinatedMember_其余五角色为假 验证 leader/human_agent/passive_human/bridge_agent/worker 不是协调成员。
+func TestIsCoordinatedMember_其余五角色为假(t *testing.T) {
+	others := []TeamRole{
+		TeamRoleLeader, TeamRoleHumanAgent, TeamRolePassiveHuman,
+		TeamRoleBridgeAgent, TeamRoleWorker,
+	}
+	for _, r := range others {
+		if r.IsCoordinatedMember() {
+			t.Errorf("%q 不应是协调成员", string(r))
+		}
+	}
+}

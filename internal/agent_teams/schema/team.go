@@ -105,8 +105,17 @@ const (
 	TeamRoleLeader TeamRole = "leader"
 	// TeamRoleTeammate Teammate 角色
 	TeamRoleTeammate TeamRole = "teammate"
-	// TeamRoleHumanAgent 人类代理角色
+	// TeamRoleHumanAgent 人类代理角色（有 SDK 头像，由外部控制者驱动）
 	TeamRoleHumanAgent TeamRole = "human_agent"
+	// TeamRolePassiveHuman 无头像人类成员（无 harness / 无 LLM / 不参与协调循环，
+	// 只是名册身份 + 消息总线地址，消息直转给控制者）
+	TeamRolePassiveHuman TeamRole = "passive_human"
+	// TeamRoleBridgeAgent 桥接头像角色（本地 LLM 作调度，具体产出由远端 agent 提供）
+	TeamRoleBridgeAgent TeamRole = "bridge_agent"
+	// TeamRoleWorker swarmflow 执行角色（单次无状态，用完即弃，不进协调循环）
+	TeamRoleWorker TeamRole = "worker"
+	// TeamRoleExternalCLI 外部 CLI 成员（由第三方 CLI 子进程驱动，但完整参与协调循环）
+	TeamRoleExternalCLI TeamRole = "external_cli"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -114,6 +123,17 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// IsCoordinatedMember 该角色是否作为自主成员参与协调循环。
+//
+// TEAMMATE 与 EXTERNAL_CLI 都会轮询邮箱、认领任务、对停滞的已认领任务自我催促，
+// 并接收团队的审批/worktree 策略；其余角色不是协调成员。
+// 原本以「== TEAMMATE」代替「是否自主参与成员」的判定都应改用本方法，
+// 这样下一个协调角色出现时不会静默漏出这些路径。
+// Python: TeamRole.is_coordinated_member (schema/team.py L150-159)
+func (r TeamRole) IsCoordinatedMember() bool {
+	return r == TeamRoleTeammate || r == TeamRoleExternalCLI
+}
 
 // NewMemberOpResultSuccess 创建成功结果。
 func NewMemberOpResultSuccess() MemberOpResult { return MemberOpResult{OK: true} }
