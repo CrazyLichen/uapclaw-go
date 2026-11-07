@@ -62,9 +62,14 @@ func (s *SessionLifecycleSuite) SetupSuite() {
 
 // TestDeleteSessionResetsPlanState 创建 → 查询 plan 状态 → 删除会话，全链路无错误。
 func (s *SessionLifecycleSuite) TestDeleteSessionResetsPlanState() {
-	createID := s.env.Send(string(schema.ReqMethodSessionCreate), map[string]any{}, "", false)
+	// 非 TUI 创建必须带 create_token 认领会话（对齐 Python：见
+	// SessionProvisioner.PrepareSessionCreate 第 15 步，缺省报 create_token is required）
+	createID := s.env.Send(string(schema.ReqMethodSessionCreate), map[string]any{
+		"create_token": "tok-lifecycle",
+	}, "", false)
 	created := s.env.AwaitUnary(createID)
 	s.Require().NotNil(created)
+	s.Require().True(created.OK, "session.create 应成功: %+v", created.Payload)
 	sessionID, _ := created.Payload["session_id"].(string)
 	s.Require().NotEmpty(sessionID, "session.create 应返回 session_id")
 

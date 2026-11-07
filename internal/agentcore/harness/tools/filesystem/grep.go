@@ -576,6 +576,11 @@ func applyHeadLimit(items []string, limit *int, offset int) ([]string, *int) {
 	if offset < 0 {
 		offset = 0
 	}
+	// Python 的切片在越界时静默钳制（items[10:] 于长度 4 的列表得 []），
+	// Go 的切片越界会 panic，故显式把 offset 钳到长度上限以对齐语义。
+	if offset > len(items) {
+		offset = len(items)
+	}
 	if limit != nil && *limit == 0 {
 		return items[offset:], nil
 	}
