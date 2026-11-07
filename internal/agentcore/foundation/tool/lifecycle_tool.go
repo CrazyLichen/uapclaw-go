@@ -49,6 +49,18 @@ func (t *LifecycleTool) Card() *ToolCard {
 	return t.inner.Card()
 }
 
+// GetCallTimeout 透传被包装工具的外层预算钩子。
+//
+// 必须显式委托：AbilityManager 执行的是 LifecycleTool，若这里不转发，
+// 接口方法会落到默认实现而吞掉 BashTool/PowerShellTool 的"执行预算+30s"。
+// Python: LifecycleTool 无对应包装，等价于 Tool.get_call_timeout 的动态派发
+func (t *LifecycleTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	if t.inner == nil {
+		return BaseCallTimeout(inputs, defaultTimeout)
+	}
+	return t.inner.GetCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 包装生命周期（对齐 Python _ToolMeta 两步装饰链顺序）：
 //
 //	Python 装饰器链（由内到外包装）：

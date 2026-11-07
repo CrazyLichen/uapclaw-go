@@ -17,6 +17,8 @@ type localFuncConfig struct {
 	description string
 	inputParams []*schema.Param
 	card        *ToolCard
+	// callTimeout 可选的外层预算钩子，供有内部执行期限的工具注册
+	callTimeout func(inputs map[string]any, defaultTimeout float64) float64
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -25,6 +27,9 @@ type localFuncConfig struct {
 type InvokeFunction[I any, O any] struct {
 	card *ToolCard
 	fn   func(context.Context, I, ...ToolOption) (O, error)
+	// callTimeout 可选的外层预算钩子；nil 表示沿用卡片级策略。
+	// 有内部执行期限的工具（bash/powershell）通过 WithCallTimeout 注册。
+	callTimeout func(inputs map[string]any, defaultTimeout float64) float64
 }
 
 // LocalFuncOption 本地函数构造选项函数。
@@ -49,6 +54,15 @@ func WithInputParams(params []*schema.Param) LocalFuncOption {
 // WithCard 设置工具卡片选项。
 func WithCard(card *ToolCard) LocalFuncOption {
 	return func(c *localFuncConfig) { c.card = card }
+}
+
+// WithCallTimeout 为工具注册外层调用预算钩子。
+//
+// inputs 是调用方的原始参数 map；钩子返回本次调用应使用的预算（秒）。
+// 有内部执行期限的工具（bash/powershell）用它把执行预算加上清理宽限，
+// 使外层超时晚于内层超时。
+func WithCallTimeout(fn func(inputs map[string]any, defaultTimeout float64) float64) LocalFuncOption {
+	return func(c *localFuncConfig) { c.callTimeout = fn }
 }
 
 // NewInvokeFunction 创建泛型本地函数工具，将 Go 函数包装为 Tool 接口实现。
@@ -104,7 +118,7 @@ func NewInvokeFunction[I any, O any](name string, fn func(context.Context, I, ..
 		return nil, err
 	}
 
-	return &InvokeFunction[I, O]{card: card, fn: fn}, nil
+	return &InvokeFunction[I, O]{card: card, fn: fn, callTimeout: cfg.callTimeout}, nil
 }
 
 func (f *InvokeFunction[I, O]) Card() *ToolCard {
@@ -186,6 +200,17 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 
 func (f *InvokeFunction[I, O]) Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error) {
 	return nil, NewErrStreamNotSupported(f.card.String())
+}
+
+// GetCallTimeout 返回外层调用预算。
+//
+// 注册了钩子时委托给它（bash/powershell 用它在执行预算上再加清理宽限），
+// 否则沿用卡片级策略。
+func (f *InvokeFunction[I, O]) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	if f.callTimeout != nil {
+		return f.callTimeout(inputs, defaultTimeout)
+	}
+	return BaseCallTimeout(inputs, defaultTimeout)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

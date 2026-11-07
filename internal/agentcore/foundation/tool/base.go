@@ -25,6 +25,14 @@ type Tool interface {
 	// Stream 流式执行工具，逐步返回结果块。
 	// 不支持 Stream 的工具返回 ErrStreamNotSupported 错误。
 	Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
+	// GetCallTimeout 返回本次调用的外层预算（秒）。
+	//
+	// 内部已有执行期限的工具可覆盖此方法，让外层调用预算等于执行预算加上
+	// 有界的清理时间（例如 bash 需要多留时间 kill 进程树并排空管道）。
+	// 默认实现原样返回 defaultTimeout，即沿用卡片级超时策略。
+	//
+	// Python: Tool.get_call_timeout (foundation/tool/base.py:255-276)
+	GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64
 }
 
 // ToolCard 工具配置卡片，嵌入 BaseCard，增加输入参数定义和扩展属性。
@@ -106,6 +114,16 @@ var ErrInvokeNotSupported = exception.BuildError(
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// BaseCallTimeout 是 GetCallTimeout 的默认实现，供不覆盖该钩子的工具委托调用。
+//
+// 显式实现 Tool 接口的工具应在 GetCallTimeout 中委托到本函数；
+// 有内部执行期限的工具（如 BashTool）改为返回自己的预算。
+//
+// Python: Tool.get_call_timeout 的基类实现（返回入参 default_timeout）
+func BaseCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return defaultTimeout
+}
 
 // WithSkipNoneValue 设置是否跳过 None 值。
 func WithSkipNoneValue(skip bool) ToolOption {

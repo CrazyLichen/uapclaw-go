@@ -75,6 +75,13 @@ func (h *HandoffTool) Card() *tool.ToolCard {
 	return h.card
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 交接工具只产出交接信号，不执行外部调用，不需要额外宽限。
+func (h *HandoffTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行交接工具，返回包含交接信号的 map。
 //
 // inputs 中可包含 reason 和 message 字段。

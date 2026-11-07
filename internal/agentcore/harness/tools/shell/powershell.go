@@ -259,7 +259,11 @@ func NewPowerShellTool(op sys_operation.SysOperation, language, agentID string, 
 		}, nil
 	}
 
-	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
+	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams),
+		tool.WithToolCallTimeout(func(inputs map[string]any, defaultTimeout float64) float64 {
+			in := parsePowerShellInputFromMap(inputs)
+			return psCallTimeout(&in, defaultTimeout)
+		}))
 	return invokeFn
 }
 

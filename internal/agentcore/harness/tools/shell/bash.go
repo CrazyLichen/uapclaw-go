@@ -291,7 +291,11 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 		}, nil
 	}
 
-	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
+	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams),
+		tool.WithToolCallTimeout(func(inputs map[string]any, defaultTimeout float64) float64 {
+			in := parseBashInputFromMap(inputs)
+			return bashCallTimeout(&in, defaultTimeout)
+		}))
 	return invokeFn
 }
 

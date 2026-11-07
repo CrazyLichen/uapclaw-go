@@ -52,6 +52,13 @@ func (f *MapFunction) Card() *ToolCard {
 	return f.card
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// MapFunction 包装的函数没有内部执行期限，不需要额外清理宽限。
+func (f *MapFunction) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行弱类型函数调用，直接透传 map。
 func (f *MapFunction) Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error) {
 	if f.invokeFn == nil {

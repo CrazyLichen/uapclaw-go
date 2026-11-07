@@ -201,6 +201,11 @@ func BuildBrowserRuntimeTools(runtime *BrowserAgentRuntime) []tool.Tool {
 // Card 返回工具卡片。
 func (t *BrowserCancelTool) Card() *tool.ToolCard { return t.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserCancelTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行取消操作。
 func (t *BrowserCancelTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	_ = t.runtime.EnsureRuntimeReady(ctx)
@@ -223,6 +228,11 @@ func (t *BrowserCancelTool) Stream(_ context.Context, _ map[string]any, _ ...too
 // Card 返回工具卡片。
 func (t *BrowserClearCancelTool) Card() *tool.ToolCard { return t.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserClearCancelTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行清除取消操作。
 func (t *BrowserClearCancelTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	_ = t.runtime.EnsureRuntimeReady(ctx)
@@ -244,6 +254,11 @@ func (t *BrowserClearCancelTool) Stream(_ context.Context, _ map[string]any, _ .
 
 // Card 返回工具卡片。
 func (t *BrowserCustomActionTool) Card() *tool.ToolCard { return t.card }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserCustomActionTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 
 // Invoke 执行自定义动作。
 func (t *BrowserCustomActionTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
@@ -274,6 +289,11 @@ func (t *BrowserCustomActionTool) Stream(_ context.Context, _ map[string]any, _ 
 // Card 返回工具卡片。
 func (t *BrowserListActionsTool) Card() *tool.ToolCard { return t.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserListActionsTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 列出所有可用动作。
 func (t *BrowserListActionsTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return t.runtime.ListActions(), nil
@@ -288,6 +308,11 @@ func (t *BrowserListActionsTool) Stream(_ context.Context, _ map[string]any, _ .
 
 // Card 返回工具卡片。
 func (t *BrowserProbeInteractivesTool) Card() *tool.ToolCard { return t.card }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserProbeInteractivesTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 
 // Invoke 执行交互元素探测。
 func (t *BrowserProbeInteractivesTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
@@ -317,6 +342,11 @@ func (t *BrowserProbeInteractivesTool) Stream(_ context.Context, _ map[string]an
 
 // Card 返回工具卡片。
 func (t *BrowserProbeCardsTool) Card() *tool.ToolCard { return t.card }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserProbeCardsTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 
 // Invoke 执行卡片探测。
 func (t *BrowserProbeCardsTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
@@ -350,6 +380,11 @@ func (t *BrowserProbeCardsTool) Stream(_ context.Context, _ map[string]any, _ ..
 
 // Card 返回工具卡片。
 func (t *BrowserRuntimeHealthTool) Card() *tool.ToolCard { return t.card }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *BrowserRuntimeHealthTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
 
 // Invoke 返回运行时健康状态。
 func (t *BrowserRuntimeHealthTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {

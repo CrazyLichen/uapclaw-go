@@ -221,3 +221,24 @@ func codingEditResultToMap(r *lite.CodingEditResult) map[string]any {
 	}
 	return result
 }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *CodingMemoryReadTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *CodingMemoryWriteTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *CodingMemoryEditTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}

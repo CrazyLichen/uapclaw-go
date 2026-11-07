@@ -133,6 +133,14 @@ func (t *MCPTool) Card() *tool.ToolCard {
 	return &t.card.ToolCard
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// MCP 远程调用的超时由 transport 与卡片声明共同决定，
+// 这里不需要像 bash 那样额外留清理宽限。
+func (t *MCPTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // McpCard 返回 MCP 工具配置卡片，包含服务器标识信息。
 func (t *MCPTool) McpCard() *types.McpToolCard {
 	return t.card

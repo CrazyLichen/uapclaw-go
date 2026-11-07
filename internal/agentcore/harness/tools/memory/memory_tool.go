@@ -298,3 +298,38 @@ func structToMap(v any) map[string]any {
 	}
 	return result
 }
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *MemorySearchTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *MemoryGetTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *WriteMemoryTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *EditMemoryTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 该工具没有内部执行期限，不需要额外清理宽限。
+func (t *ReadMemoryTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}

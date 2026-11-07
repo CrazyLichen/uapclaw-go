@@ -257,7 +257,11 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 		return ch, nil
 	}
 
-	streamFn, _ := tool.NewStreamTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
+	streamFn, _ := tool.NewStreamTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams),
+		tool.WithToolCallTimeout(func(inputs map[string]any, defaultTimeout float64) float64 {
+			in := parseBashStreamInputFromMap(inputs)
+			return bashStreamCallTimeout(&in, defaultTimeout)
+		}))
 	return streamFn
 }
 

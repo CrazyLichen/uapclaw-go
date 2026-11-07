@@ -266,6 +266,11 @@ func (t *SkillTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOp
 // Card 返回工具配置卡片。
 func (t *SkillTool) Card() *tool.ToolCard { return t.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *SkillTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getSkillByName 按名称在会话视图中查找技能。

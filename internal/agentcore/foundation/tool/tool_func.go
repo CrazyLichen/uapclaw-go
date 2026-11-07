@@ -17,6 +17,8 @@ type toolFuncConfig struct {
 	description string
 	inputParams []*schema.Param
 	card        *ToolCard
+	// callTimeout 可选的外层预算钩子，供有内部执行期限的工具注册
+	callTimeout func(inputs map[string]any, defaultTimeout float64) float64
 }
 
 // ToolFuncOption 工具注册选项函数。
@@ -48,6 +50,15 @@ func WithToolInputParams(params []*schema.Param) ToolFuncOption {
 // WithToolCard 使用预构建的 ToolCard。
 func WithToolCard(card *ToolCard) ToolFuncOption {
 	return func(c *toolFuncConfig) { c.card = card }
+}
+
+// WithToolCallTimeout 为工具注册外层调用预算钩子。
+//
+// 与 WithCallTimeout 同名语义，区别在所属选项体系：NewTool/NewStreamTool
+// 走 ToolFuncOption，NewInvokeFunction/NewStreamFunction 走 LocalFuncOption。
+// 有内部执行期限的工具用它把执行预算加上清理宽限。
+func WithToolCallTimeout(fn func(inputs map[string]any, defaultTimeout float64) float64) ToolFuncOption {
+	return func(c *toolFuncConfig) { c.callTimeout = fn }
 }
 
 // NewTool 便捷注册函数（Invoke 模式），对标 Python @tool 装饰器。
@@ -113,7 +124,7 @@ func NewTool[I any, O any](fn func(context.Context, I, ...ToolOption) (O, error)
 		card = NewToolCard(name, description, inputParams, nil)
 	}
 
-	return &InvokeFunction[I, O]{card: card, fn: fn}, nil
+	return &InvokeFunction[I, O]{card: card, fn: fn, callTimeout: cfg.callTimeout}, nil
 }
 
 // NewStreamTool 便捷注册函数（Stream 模式），对标 Python @tool 装饰器。
@@ -171,7 +182,7 @@ func NewStreamTool[I any, O any](fn func(context.Context, I, ...ToolOption) (<-c
 		card = NewToolCard(name, description, inputParams, nil)
 	}
 
-	return &StreamFunction[I, O]{card: card, fn: fn}, nil
+	return &StreamFunction[I, O]{card: card, fn: fn, callTimeout: cfg.callTimeout}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

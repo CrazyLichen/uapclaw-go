@@ -92,6 +92,11 @@ func NewToolSearchTool(
 // Card 返回工具卡片。
 func (t *ToolSearchTool) Card() *tool.ToolCard { return t.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *ToolSearchTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行搜索。
 //
 // Python: ToolSearchTool.invoke

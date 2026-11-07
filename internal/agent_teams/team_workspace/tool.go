@@ -111,6 +111,11 @@ func (t *WorkspaceMetaTool) Card() *tool.ToolCard {
 	return t.card
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *WorkspaceMetaTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行工作空间元数据操作。
 // Python: WorkspaceMetaTool.invoke(inputs, **kwargs)
 //

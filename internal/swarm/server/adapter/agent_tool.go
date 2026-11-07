@@ -69,6 +69,13 @@ func (t *AgentTool) Card() *tool.ToolCard {
 	return t.card
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// Agent 类工具的实际执行由内层 ReAct 循环自行约束。
+func (t *AgentTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行自定义 Agent 调度。
 // Python: AgentTool.invoke(inputs, **kwargs) (code_agent_rail.py L260-331)
 //

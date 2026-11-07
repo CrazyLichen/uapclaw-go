@@ -129,6 +129,11 @@ func (t *ToolCallTool) AcceptsToolCallbackContext() bool { return true }
 // Card 返回工具卡片。
 func (t *ToolCallTool) Card() *tool.ToolCard { return t.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+func (t *ToolCallTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 从调用选项取回调上下文后执行。
 //
 // Python: ToolCallTool.invoke

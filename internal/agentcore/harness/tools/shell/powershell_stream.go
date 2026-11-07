@@ -244,6 +244,10 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 		return ch, nil
 	}
 
-	streamFn, _ := tool.NewStreamTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
+	streamFn, _ := tool.NewStreamTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams),
+		tool.WithToolCallTimeout(func(inputs map[string]any, defaultTimeout float64) float64 {
+			in := parsePowerShellStreamInputFromMap(inputs)
+			return psStreamCallTimeout(&in, defaultTimeout)
+		}))
 	return streamFn
 }

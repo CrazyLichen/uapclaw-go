@@ -54,3 +54,31 @@ func TestCallTimeout_未传timeout(t *testing.T) {
 		t.Fatalf("未传 timeout 应按默认 300 再加 30，实际 %v", got)
 	}
 }
+
+// ──────────────────────────── 工具实例钩子 ────────────────────────────
+
+// TestBashTool_GetCallTimeout 验证工具实例的钩子委托到 bashCallTimeout
+func TestBashTool_GetCallTimeout(t *testing.T) {
+	tl := NewBashTool(nil, "cn", "", PermissionConfig{})
+	got := tl.GetCallTimeout(map[string]any{"command": "echo hi", "timeout": float64(300)}, 300)
+	if got != 330 {
+		t.Fatalf("应为 330，实际 %v", got)
+	}
+}
+
+// TestBashTool_GetCallTimeout_未传timeout 验证未传时按默认 300 再加宽限
+func TestBashTool_GetCallTimeout_未传timeout(t *testing.T) {
+	tl := NewBashTool(nil, "cn", "", PermissionConfig{})
+	if got := tl.GetCallTimeout(map[string]any{"command": "echo hi"}, 300); got != 330 {
+		t.Fatalf("未传 timeout 应为 330，实际 %v", got)
+	}
+}
+
+// TestPowerShellTool_GetCallTimeout 验证 PowerShell 同构
+func TestPowerShellTool_GetCallTimeout(t *testing.T) {
+	tl := NewPowerShellTool(nil, "cn", "", PermissionConfig{})
+	got := tl.GetCallTimeout(map[string]any{"command": "dir", "timeout": float64(60)}, 300)
+	if got != 90 {
+		t.Fatalf("应为 60+30=90，实际 %v", got)
+	}
+}

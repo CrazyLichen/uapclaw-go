@@ -56,6 +56,14 @@ func (t *TeamTool) Card() *tool.ToolCard {
 	return t.card
 }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 团队工具（建队、派成员、任务流转）没有内部执行期限，
+// 长耗时操作由各自的子流程自行约束。
+func (t *TeamTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // MapResult 将工具执行结果转换为 LLM 可读文本。
 // 对齐 Python: TeamTool.map_result(output) → str
 // 默认实现：成功时从 data 提取 key 信息，失败时返回 error。

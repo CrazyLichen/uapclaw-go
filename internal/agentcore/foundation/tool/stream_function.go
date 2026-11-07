@@ -20,6 +20,8 @@ import (
 type StreamFunction[I any, O any] struct {
 	card *ToolCard
 	fn   func(context.Context, I, ...ToolOption) (<-chan O, error)
+	// callTimeout 可选的外层预算钩子；nil 表示沿用卡片级策略。
+	callTimeout func(inputs map[string]any, defaultTimeout float64) float64
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -88,12 +90,23 @@ func NewStreamFunction[I any, O any](name string, fn func(context.Context, I, ..
 		return nil, err
 	}
 
-	return &StreamFunction[I, O]{card: card, fn: fn}, nil
+	return &StreamFunction[I, O]{card: card, fn: fn, callTimeout: cfg.callTimeout}, nil
 }
 
 // Card 返回工具配置卡片。
 func (f *StreamFunction[I, O]) Card() *ToolCard {
 	return f.card
+}
+
+// GetCallTimeout 返回外层调用预算。
+//
+// 注册了钩子时委托给它（流式 bash/powershell 用它在执行预算上再加清理宽限），
+// 否则沿用卡片级策略。
+func (f *StreamFunction[I, O]) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	if f.callTimeout != nil {
+		return f.callTimeout(inputs, defaultTimeout)
+	}
+	return BaseCallTimeout(inputs, defaultTimeout)
 }
 
 // Invoke 不支持一次性调用，返回 ErrInvokeNotSupported。

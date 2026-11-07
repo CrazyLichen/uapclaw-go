@@ -488,6 +488,13 @@ func (r *ExternalMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEve
 // Card 返回工具卡片。
 func (pt *providerTool) Card() *tool.ToolCard { return pt.card }
 
+// GetCallTimeout 返回外层调用预算，沿用卡片级策略。
+//
+// 外部记忆 provider 自带网络超时，不需要额外清理宽限。
+func (pt *providerTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 执行工具调用，委托给 provider.HandleToolCall()。
 // 对齐 Python: _tool_func(captured_name=captured_name, captured_provider=captured_provider, **kwargs)
 func (pt *providerTool) Invoke(ctx context.Context, inputs map[string]any, _ ...tool.ToolOption) (map[string]any, error) {

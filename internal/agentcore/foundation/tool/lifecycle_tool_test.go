@@ -14,12 +14,21 @@ import (
 
 // mockTool 用于测试的模拟 Tool
 type mockTool struct {
-	card     *ToolCard
-	invokeFn func(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error)
-	streamFn func(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
+	card          *ToolCard
+	invokeFn      func(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error)
+	streamFn      func(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
+	callTimeoutFn func(inputs map[string]any, defaultTimeout float64) float64
 }
 
 func (m *mockTool) Card() *ToolCard { return m.card }
+
+// GetCallTimeout 让 mockTool 满足 Tool 接口；返回固定值便于验证包装器透传。
+func (m *mockTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	if m.callTimeoutFn != nil {
+		return m.callTimeoutFn(inputs, defaultTimeout)
+	}
+	return BaseCallTimeout(inputs, defaultTimeout)
+}
 func (m *mockTool) Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error) {
 	return m.invokeFn(ctx, inputs, opts...)
 }
@@ -434,5 +443,39 @@ func TestLifecycleTool_Stream_事件顺序对齐Python(t *testing.T) {
 		if order[i] != e {
 			t.Errorf("事件[%d] = %s, want %s", i, order[i], e)
 		}
+	}
+}
+
+// ──────────────────────────── GetCallTimeout 透传 ────────────────────────────
+
+// TestBaseCallTimeout_默认实现 验证默认实现原样返回 defaultTimeout
+func TestBaseCallTimeout_默认实现(t *testing.T) {
+	if got := BaseCallTimeout(map[string]any{}, 123.0); got != 123.0 {
+		t.Fatalf("默认实现应返回 123，实际 %v", got)
+	}
+}
+
+// TestLifecycleTool_透传GetCallTimeout 验证包装器不吞掉内层工具的预算钩子。
+//
+// AbilityManager 实际执行的是 LifecycleTool；若它不透传，
+// BashTool 的"执行预算+30s"永远不生效。
+func TestLifecycleTool_透传GetCallTimeout(t *testing.T) {
+	inner := &mockTool{
+		card: NewToolCard("t", "", nil, nil),
+		callTimeoutFn: func(map[string]any, float64) float64 {
+			return 777
+		},
+	}
+	lt := NewLifecycleTool(inner)
+	if got := lt.GetCallTimeout(map[string]any{}, 300); got != 777 {
+		t.Fatalf("应透传内层的 777，实际 %v", got)
+	}
+}
+
+// TestLifecycleTool_内层nil时回落默认 验证 inner 为 nil 时不 panic
+func TestLifecycleTool_内层nil时回落默认(t *testing.T) {
+	lt := &LifecycleTool{}
+	if got := lt.GetCallTimeout(map[string]any{}, 500); got != 500 {
+		t.Fatalf("inner 为 nil 应回落默认 500，实际 %v", got)
 	}
 }

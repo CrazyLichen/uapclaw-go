@@ -279,6 +279,14 @@ func (t *TracedTool) Card() *tool.ToolCard {
 	return t.inner.Card()
 }
 
+// GetCallTimeout 透传被装饰工具的外层预算钩子。
+//
+// 装饰器不能吞掉 inner 的预算：BashTool 靠它把执行预算加 30s 清理宽限，
+// 一旦在这里返回默认值，被追踪的工具会在清理阶段被外层超时砍断。
+func (t *TracedTool) GetCallTimeout(inputs map[string]any, defaultTimeout float64) float64 {
+	return t.inner.GetCallTimeout(inputs, defaultTimeout)
+}
+
 // Invoke 非流式执行工作流，在调用前后触发追踪事件。
 // 流程：CreateAgentSpan → TriggerAgent(TraceWorkflowStart) → inner.Invoke → TriggerAgent(TraceWorkflowEnd/Error)
 //
