@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -3208,5 +3209,67 @@ func TestInvoke_StreamLifecycleOwner_不处理中断(t *testing.T) {
 	}
 	if fmc.clearCalls != 0 {
 		t.Fatalf("stream 归属时不应清空上下文，实际 ClearMessages %d 次", fmc.clearCalls)
+	}
+}
+
+// ──────────────────────────── MCP 多模态消费端（D-15） ────────────────────────────
+
+// TestIterMultimodalImageItems_识别MCP结构体 验证结构体形态的结果也能取到图片。
+//
+// MCP 结果的 Result 是 *MCPToolResult（上游原样透传），
+// 旧的 map-only 实现会把它当无图片处理，截图永远到不了模型。
+func TestIterMultimodalImageItems_识别MCP结构体(t *testing.T) {
+	res := &mcptool.MCPToolResult{
+		Success: true,
+		Data: map[string]any{
+			"multimodal": []any{map[string]any{
+				"type": "image", "source": "mcp", "source_path": "shot.png",
+				"mime_type": "image/png", "data_url": "data:image/png;base64,AA",
+			}},
+		},
+	}
+	items := iterMultimodalImageItems(res)
+	if len(items) != 1 {
+		t.Fatalf("应取到 1 张图，实际 %d", len(items))
+	}
+	if items[0]["source"] != "mcp" {
+		t.Fatalf("source 应为 mcp，实际 %v", items[0]["source"])
+	}
+}
+
+// TestBuildMultimodal_来源文案 验证文案使用 source 而非硬编码 read_file
+func TestBuildMultimodal_来源文案(t *testing.T) {
+	a := &ReActAgent{}
+	results := []agentschema.ExecuteResult{{Result: map[string]any{
+		"data": map[string]any{"multimodal": []any{map[string]any{
+			"type": "image", "source": "mcp", "source_path": "shot.png",
+			"data_url": "data:image/png;base64,AA",
+		}}},
+	}}}
+	msg := a.buildMultimodalToolResultsMessage(results)
+	if msg == nil {
+		t.Fatal("应构建出多模态消息")
+	}
+	// BaseMessage 是接口，直接序列化后断言文案
+	if !strings.Contains(fmt.Sprint(msg), "Image loaded from mcp: shot.png") {
+		t.Fatalf("文案应含 Image loaded from mcp: shot.png，实际 %v", msg)
+	}
+}
+
+// TestBuildMultimodal_缺source兜底tool 验证无 source 时兜底为 tool
+func TestBuildMultimodal_缺source兜底tool(t *testing.T) {
+	a := &ReActAgent{}
+	results := []agentschema.ExecuteResult{{Result: map[string]any{
+		"data": map[string]any{"multimodal": []any{map[string]any{
+			"type": "image", "source_path": "x.png",
+			"data_url": "data:image/png;base64,AA",
+		}}},
+	}}}
+	msg := a.buildMultimodalToolResultsMessage(results)
+	if msg == nil {
+		t.Fatal("应构建出多模态消息")
+	}
+	if !strings.Contains(fmt.Sprint(msg), "Image loaded from tool: x.png") {
+		t.Fatalf("缺 source 应兜底为 tool，实际 %v", msg)
 	}
 }

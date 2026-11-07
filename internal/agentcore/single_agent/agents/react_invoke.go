@@ -7,6 +7,7 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -1117,11 +1118,18 @@ func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.Exe
 				sourcePath = "unknown image"
 			}
 			dataURL, _ := item["data_url"].(string)
+			// 来源由 item.source 决定（read_file / mcp / ...），不能硬编码 read_file：
+			// MCP 截图与文件读取混在同一批结果里时，模型需要区分图片来源。
+			// Python: f"Image loaded from {source}: {source_path}" (react_agent.py:2538)
+			source, _ := item["source"].(string)
+			if source == "" {
+				source = "tool"
+			}
 			loadedPaths = append(loadedPaths, sourcePath)
 			parts = append(parts,
 				llmschema.ContentPart{
 					Type: "text",
-					Text: fmt.Sprintf("Image loaded from read_file: %s", sourcePath),
+					Text: fmt.Sprintf("Image loaded from %s: %s", source, sourcePath),
 				},
 				llmschema.ContentPart{
 					Type:     "image_url",
@@ -1156,11 +1164,18 @@ func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.Exe
 //
 // Python: ReActAgent._iter_multimodal_image_items()
 func iterMultimodalImageItems(toolResult any) []map[string]any {
-	resultMap, ok := toolResult.(map[string]any)
-	if !ok {
-		return nil
+	// MCP 结果以结构体形态透传（含 success/data/error 三字段），普通工具
+	// 结果仍是 map；两者都按"data.multimodal"取图片项。
+	// Python: getattr(tool_result, "data", None) 只认属性，结构体天然满足
+	var data map[string]any
+	switch v := toolResult.(type) {
+	case *mcptool.MCPToolResult:
+		if v != nil {
+			data = v.Data
+		}
+	case map[string]any:
+		data, _ = v["data"].(map[string]any)
 	}
-	data, _ := resultMap["data"].(map[string]any)
 	if data == nil {
 		return nil
 	}
