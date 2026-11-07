@@ -1,9 +1,9 @@
 package mcp
 
 import (
-	"strings"
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -379,10 +379,10 @@ func TestPreserveMCPToolResultStatus_空内容兜底(t *testing.T) {
 func TestExtractMCPToolResultContent_各返回点都过状态(t *testing.T) {
 	cases := map[string]map[string]any{
 		"无content": map[string]any{"isError": true},
-		"单块data":  map[string]any{"isError": true, "content": []any{map[string]any{"data": "raw"}}},
-		"单块other": map[string]any{"isError": true, "content": []any{map[string]any{"type": "x", "foo": "bar"}}},
-		"多块文本":    map[string]any{"isError": true, "content": []any{map[string]any{"text": "a"}, map[string]any{"text": "b"}}},
-		"单块文本":    map[string]any{"isError": true, "content": []any{map[string]any{"text": "only"}}},
+		"单块data":   map[string]any{"isError": true, "content": []any{map[string]any{"data": "raw"}}},
+		"单块other":  map[string]any{"isError": true, "content": []any{map[string]any{"type": "x", "foo": "bar"}}},
+		"多块文本":     map[string]any{"isError": true, "content": []any{map[string]any{"text": "a"}, map[string]any{"text": "b"}}},
+		"单块文本":     map[string]any{"isError": true, "content": []any{map[string]any{"text": "only"}}},
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -14,8 +14,8 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"

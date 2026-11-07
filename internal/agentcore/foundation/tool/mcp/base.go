@@ -60,6 +60,7 @@ var (
 	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 types 包
 	NewMcpToolCard = types.NewMcpToolCard
 )
+
 // preserveMCPToolResultStatus 按 MCP 的 isError 给抽取结果打成功/失败标。
 //
 // isError 不为真时原样返回 content（成功值一个字节都不改）；
