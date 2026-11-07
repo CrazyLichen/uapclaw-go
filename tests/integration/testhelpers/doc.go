@@ -15,6 +15,7 @@
 //	├── adapter_env.go            # CodeAdapter 集成测试隔离环境（数据目录/provider/收尾）
 //	├── dreaming_env.go           # Dreaming 集成测试隔离环境（会话播种/mtime/响应排队/prompt 抽取）
 //	├── context.go                # MockSessionFacade 最小会话门面（上下文类集成测试复用）
+//	├── callback_context.go       # 回调上下文与固定失败历史（附件提交回调类用例复用）
 //	├── plan_env.go               # PlanEnv 计划模式环境（AgentServer 入口驱动 + 计划模式/计划文件读取）
 //	├── server_env.go             # ServerEnv 进程内 AgentServer 环境（按 E2A 信封投递 + 出站帧收集）
 //	├── web_rpc.go                # CallWebRPC 经真实 WebSocket 链路调用 web RPC 方法
