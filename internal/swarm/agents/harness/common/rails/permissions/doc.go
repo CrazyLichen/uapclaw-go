@@ -2,8 +2,9 @@
 // 以及 root 权限卡的串行化队列与意图窗口。
 //
 // 本包对齐 Python jiuwenswarm/agents/harness/common/rails/permissions/（38 个 .py / 11,463 行），
-// 当前已完成权限上下文与配置 RPC 部分，以及 root 五文件（9.90c）。剩余约 10,000 行
-// 按批次推进，见 IMPLEMENTATION_PLAN.md 的 9-H 节。
+// 当前已完成权限上下文与配置 RPC 部分、root 五文件（9.90c）、以及基础类型层
+// （9.90a：tool_invocation_key / protected_paths / auto_permission 子包）。剩余约
+// 9,700 行按批次推进，见 IMPLEMENTATION_PLAN.md 的 9-H 节。
 //
 // # root 权限链路
 //
@@ -35,6 +36,12 @@
 // 依赖 Go 侧 progressive_tool_rail 与 tool discovery 的等价内部结构，
 // 待对应章节落地后回填。
 //
+// ⤵️ auto_permission 子包中 4 个常量（ShellDisplayPathPattern /
+// ShellDisplayPreSplitPathPattern / SensitiveDisplayPathPattern /
+// DeterministicReadonlyPublicWebFetchSourceKinds）在 Python 全仓零消费，
+// 按规则 9.2-4 照抄保留，待 9.90d 的 reviewer_redaction / deterministic 启用。
+// 其余 7 个常量的消费方同样在 9.90d。
+//
 // 文件目录：
 //
 //	permissions/
@@ -48,7 +55,10 @@
 //	├── root_permission_queue.go           # RootPermissionQueue 串行化队列状态机（active/pending/resuming + quarantine）
 //	├── root_permission_queue_rail.go      # RootPermissionQueueRail 身份绑定与闩锁 + RootPermissionCompletionRail
 //	├── root_ask_user.go                   # 用户反问续接：冻结快照 / 还原澄清 / 追加意图窗口
-//	└── root_context_rail.go               # RootContextRail 上下文绑定 rail（随 9.90c 后续提交）
+//	├── root_context_rail.go               # RootContextRail 上下文绑定 rail（随 9.90c 后续提交）
+//	└── auto_permission/                   # 自动权限审查层共享契约 + 身份原语（9.90a）
+//	    ├── models.go                     # ToolInvocation / PermissionHandlingResult / PermissionInterruptRequest + 11 常量
+//	    └── tool_binding.go               # MatchesBoundMethod / ResolveToolBinding——实现身份背书
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/permissions/ + jiuwenswarm/common/config.py（CRUD 部分）
 package permissions
