@@ -198,3 +198,47 @@ func (f *testSessionFacade) ClearSession(context.Context) {}
 func testCallbackContext(sessionID string) *agentinterfaces.AgentCallbackContext {
 	return agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.InvokeInputs{}, &testSessionFacade{id: sessionID})
 }
+
+// TestRunCommitCallbacks_单条失败不影响其余 验证单条 error 只告警。
+//
+// Python: for callback in callbacks: try: ... except Exception: logger.warning
+func TestRunCommitCallbacks_单条失败不影响其余(t *testing.T) {
+	cbc := testCallbackContext("s1")
+	var hits []int
+	cbc.SetExtra(prompts.CommitCallbacksExtraKey, []func() error{
+		func() error { return errors.New("boom") },
+		func() error { hits = append(hits, 2); return nil },
+	})
+	require.NotPanics(t, func() { runCommitCallbacks(cbc) })
+	require.Equal(t, []int{2}, hits)
+}
+
+// TestRunCommitCallbacks_panic不掀翻调用方 验证 panic 被隔离。
+//
+// Go 特有：Python 只捕 Exception，panic 等价物是进程级崩溃（spec D-2）。
+func TestRunCommitCallbacks_panic不掀翻调用方(t *testing.T) {
+	cbc := testCallbackContext("s1")
+	var hits []int
+	cbc.SetExtra(prompts.CommitCallbacksExtraKey, []func() error{
+		func() error { panic("cb panic") },
+		func() error { hits = append(hits, 2); return nil },
+	})
+	require.NotPanics(t, func() { runCommitCallbacks(cbc) })
+	require.Equal(t, []int{2}, hits)
+}
+
+// TestRunCommitCallbacks_类型不符直接丢弃 验证非 []func() error 被忽略。
+//
+// Python: if not isinstance(callbacks, list): return
+func TestRunCommitCallbacks_类型不符直接丢弃(t *testing.T) {
+	cbc := testCallbackContext("s1")
+	cbc.SetExtra(prompts.CommitCallbacksExtraKey, "not a list")
+	require.NotPanics(t, func() { runCommitCallbacks(cbc) })
+	_, still := cbc.GetExtra(prompts.CommitCallbacksExtraKey)
+	require.False(t, still, "无论类型对不对，键都必须被取走")
+}
+
+// TestRunCommitCallbacks_空上下文不panic 验证 nil 守卫。
+func TestRunCommitCallbacks_空上下文不panic(t *testing.T) {
+	require.NotPanics(t, func() { runCommitCallbacks(nil) })
+}
