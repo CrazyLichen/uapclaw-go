@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -1399,21 +1400,75 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInfo(ctx context.Context, param
 
 // HandleSkillsTeamSkillsHubInit 初始化 TeamSkills 模板目录
 // Python: SkillManager.handle_skills_team_skills_hub_init(params)
+//
+// path/output 只接受 skills 目录内的相对路径：这两个参数直接来自 web/TUI RPC，
+// 旧实现 filepath.Join(output, name) 无边界校验，可让调用方在 /etc 等任意位置
+// 创建目录树（实测 output="/etc" 会真的写出 /etc/s1）。
 func (sm *SkillManager) HandleSkillsTeamSkillsHubInit(ctx context.Context, params map[string]any) (map[string]any, error) {
-	name := trimSpace(toString(params["name"]))
-	if name == "" {
+	nameRaw := trimSpace(toString(params["name"]))
+	if nameRaw == "" {
 		return map[string]any{"success": false, "detail": "缺少参数: name"}, nil
 	}
-	output := trimSpace(toString(params["output"]))
-	var dirPath string
-	if output != "" {
-		dirPath = filepath.Join(output, name)
-	} else {
-		dirPath = filepath.Join(sm.skillsDir, name)
+	name, err := safePathName(nameRaw, "skill")
+	if err != nil {
+		logRejectedName("skills.teamskillshub.init", "skill", nameRaw, err)
+		return map[string]any{"success": false, "detail": err.Error()}, nil
 	}
 
+	// path 为主参数；output 为兼容别名，走同一套校验
+	parentRaw := trimSpace(toString(params["path"]))
+	if parentRaw == "" {
+		parentRaw = trimSpace(toString(params["output"]))
+	}
+
+	skillType := strings.ToLower(trimSpace(toString(params["skill_type"])))
+	if skillType == "" {
+		skillType = strings.ToLower(trimSpace(toString(params["plugin_type"])))
+	}
+	if skillType == "" {
+		skillType = strings.ToLower(trimSpace(toString(params["type"])))
+	}
+	if skillType == "" {
+		skillType = "teamskills"
+	}
+	if skillType != "teamskills" && skillType != "skill" {
+		return map[string]any{"success": false, "detail": "type 仅支持: teamskills 或 skill"}, nil
+	}
+	force := toBool(params["force"])
+
+	// ── path 边界收敛：仅允许 skills 目录内的相对路径 ──
+	parentDir := pathutil.ResolveSymlinksLenient(sm.skillsDir)
+	if parentRaw != "" {
+		if parentRaw == "~" || strings.HasPrefix(parentRaw, "~/") || strings.HasPrefix(parentRaw, `~\`) {
+			return map[string]any{"success": false, "detail": "path 仅支持相对路径（限制在 skills 目录内）"}, nil
+		}
+		if filepath.IsAbs(parentRaw) || isWindowsAbsPath(parentRaw) {
+			return map[string]any{"success": false, "detail": "path 仅支持相对路径（限制在 skills 目录内）"}, nil
+		}
+		parentDir = pathutil.ResolveSymlinksLenient(filepath.Join(sm.skillsDir, parentRaw))
+	}
+	skillsRoot := pathutil.ResolveSymlinksLenient(sm.skillsDir)
+	if !pathutil.IsPathWithin(skillsRoot, parentDir) {
+		return map[string]any{"success": false, "detail": "path 越界：仅允许在 skills 目录内创建"}, nil
+	}
+	if !dirExists(parentDir) {
+		return map[string]any{"success": false, "detail": fmt.Sprintf("path 不是有效目录: %s", parentDir)}, nil
+	}
+
+	// target 双保险：name 已由 safePathName 归一，再确认拼出的路径仍在 skills 内
+	dirPath := filepath.Join(parentDir, name)
+	if !pathutil.IsPathWithin(skillsRoot, pathutil.ResolveSymlinksLenient(dirPath)) {
+		return map[string]any{"success": false, "detail": "目标路径越界：仅允许在 skills 目录内创建"}, nil
+	}
+
+	// ── 已存在处理 ──
 	if dirExists(dirPath) {
-		return map[string]any{"success": false, "detail": fmt.Sprintf("目录 %s 已存在", dirPath)}, nil
+		if !force {
+			return map[string]any{"success": false, "detail": fmt.Sprintf("目标目录非空: %s（如需覆盖请传 force=true）", dirPath)}, nil
+		}
+		if err := safeRmtree(dirPath); err != nil {
+			return map[string]any{"success": false, "detail": "清理目标目录失败: " + err.Error()}, nil
+		}
 	}
 
 	// 创建目录结构
@@ -1425,7 +1480,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInit(ctx context.Context, param
 	}
 
 	// 写入 SKILL.md 骨架
-	skillContent := fmt.Sprintf("---\nname: %s\ndescription: \"\"\nversion: \"1.0.0\"\n---\n", name)
+	skillContent := buildSkillScaffold(name, skillType)
 	if err := os.WriteFile(filepath.Join(dirPath, "SKILL.md"), []byte(skillContent), 0o644); err != nil {
 		return map[string]any{"success": false, "detail": "写入 SKILL.md 失败: " + err.Error()}, nil
 	}
@@ -3303,4 +3358,38 @@ func (sm *SkillManager) downloadZipAndVerify(ctx context.Context, downloadURL, c
 	}
 
 	return data, nil
+}
+
+// ──────────────────────────── teamskillshub 助手 ────────────────────────────
+
+// buildSkillScaffold 生成 SKILL.md 骨架。
+//
+// teamskills 类型需要 kind 与 roles 两段：下游 validate 按 kind 判定技能类别，
+// 按 roles 生成团队成员；缺了任一项，建出来的目录通不过校验。
+func buildSkillScaffold(name, skillType string) string {
+	if skillType == "teamskills" {
+		return "---\n" +
+			"name: " + name + "\n" +
+			"description: \"\"\n" +
+			"version: \"1.0.0\"\n" +
+			"kind: team-skill\n" +
+			"roles:\n" +
+			"  - id: role_01\n" +
+			"    purpose: role_01_purpose\n" +
+			"  - id: role_02\n" +
+			"    purpose: role_02_purpose\n" +
+			"---\n"
+	}
+	return fmt.Sprintf("---\nname: %s\ndescription: \"\"\nversion: \"1.0.0\"\n---\n", name)
+}
+
+// isWindowsAbsPath 判断是否 Windows 绝对路径（含盘符或 UNC）。
+//
+// 跨平台判定：Linux 上 filepath.IsAbs 不认 "C:\\"，但配置可能来自
+// Windows 客户端，仍需拦下。
+func isWindowsAbsPath(p string) bool {
+	if len(p) >= 2 && p[1] == ':' {
+		return true
+	}
+	return strings.HasPrefix(p, `\\`) || strings.HasPrefix(p, "//")
 }

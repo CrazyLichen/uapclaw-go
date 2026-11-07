@@ -3450,15 +3450,24 @@ func TestHandleSkillsClawhubDownload_已存在(t *testing.T) {
 	}
 }
 
-// TestHandleSkillsTeamSkillsHubInit_自定义输出 验证自定义输出目录
+// TestHandleSkillsTeamSkillsHubInit_自定义输出 验证 skills 内的自定义输出目录。
+//
+// 语义变更（D-08）：output 此前接受任意路径（含绝对路径），实测 output="/etc"
+// 会在系统目录建树。现收敛为 skills 目录内的相对路径；绝对路径改为拒绝。
 func TestHandleSkillsTeamSkillsHubInit_自定义输出(t *testing.T) {
 	tmpDir := t.TempDir()
 	sm := NewSkillManager(tmpDir)
-	outputDir := filepath.Join(tmpDir, "custom_output")
+
+	// skills 目录内建一个子目录作为自定义输出
+	subName := "custom_output"
+	outputDir := filepath.Join(sm.skillsDir, subName)
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{
 		"name":   "custom-skill",
-		"output": outputDir,
+		"output": subName,
 	})
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
@@ -3580,5 +3589,131 @@ func TestSkillManager_GetInstallJobIDs(t *testing.T) {
 	}
 	if !idSet["job-1"] || !idSet["job-2"] {
 		t.Errorf("应包含 job-1 和 job-2，got %v", ids)
+	}
+}
+
+// ──────────────────────────── teamskillshub init 路径收敛 ────────────────────────────
+
+// newInitTestManager 构造带临时 skills 目录的 SkillManager。
+func newInitTestManager(t *testing.T) (*SkillManager, string) {
+	t.Helper()
+	root := t.TempDir()
+	skillsDir := filepath.Join(root, "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return &SkillManager{
+		agentRoot: root,
+		skillsDir: skillsDir,
+		state:     map[string]any{},
+	}, skillsDir
+}
+
+// TestHandleSkillsTeamSkillsHubInit_拒绝路径穿越 验证 path/output 越界与 name 非法均被拒。
+//
+// output 参数直接来自 web/TUI 的 RPC 请求，旧实现 filepath.Join(output, name)
+// 无任何边界校验，可让调用方在 /etc 或任意上级目录创建目录树。
+func TestHandleSkillsTeamSkillsHubInit_拒绝路径穿越(t *testing.T) {
+	sm, skillsDir := newInitTestManager(t)
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"绝对路径", map[string]any{"name": "s1", "path": "/tmp"}, "仅支持相对路径"},
+		{"上跳越界", map[string]any{"name": "s1", "path": "../../etc"}, "越界"},
+		{"家目录", map[string]any{"name": "s1", "path": "~/x"}, "仅支持相对路径"},
+		{"name 带斜杠", map[string]any{"name": "../../x"}, "无效"},
+		{"output 别名同样校验", map[string]any{"name": "s1", "output": "/etc"}, "仅支持相对路径"},
+		{"path 指向文件", map[string]any{"name": "s1", "path": "notadir.txt"}, "不是有效目录"},
+	}
+	// 造一个同名文件，验证 path 必须是目录
+	if err := os.WriteFile(filepath.Join(skillsDir, "notadir.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got["success"] != false {
+				t.Fatalf("应失败，实际 %v", got)
+			}
+			if detail, _ := got["detail"].(string); !strings.Contains(detail, tc.want) {
+				t.Fatalf("detail 应含 %q，实际 %q", tc.want, detail)
+			}
+		})
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInit_skills内正常创建 验证合法相对 path 正常建目录
+func TestHandleSkillsTeamSkillsHubInit_skills内正常创建(t *testing.T) {
+	sm, skillsDir := newInitTestManager(t)
+	sub := filepath.Join(skillsDir, "custom")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{
+		"name": "demo", "path": "custom",
+	})
+	if err != nil || got["success"] != true {
+		t.Fatalf("应成功，实际 %v err=%v", got, err)
+	}
+	if !dirExists(filepath.Join(sub, "demo", "tools")) {
+		t.Fatal("应创建 tools 子目录")
+	}
+	if !dirExists(filepath.Join(sub, "demo", "data")) {
+		t.Fatal("应创建 data 子目录")
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInit_teamskills骨架 验证 teamskills 类型产出 kind 与 roles
+func TestHandleSkillsTeamSkillsHubInit_teamskills骨架(t *testing.T) {
+	sm, skillsDir := newInitTestManager(t)
+
+	got, err := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{
+		"name": "demo", "skill_type": "teamskills",
+	})
+	if err != nil || got["success"] != true {
+		t.Fatalf("应成功，实际 %v err=%v", got, err)
+	}
+	body, err := os.ReadFile(filepath.Join(skillsDir, "demo", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "kind: team-skill") {
+		t.Fatalf("teamskills 骨架应含 kind: team-skill，实际:\n%s", body)
+	}
+	if strings.Count(string(body), "  - id: role_") != 2 {
+		t.Fatalf("应有 2 个 roles，实际:\n%s", body)
+	}
+}
+
+// TestHandleSkillsTeamSkillsHubInit_force覆盖 验证非空目录需 force 才重建
+func TestHandleSkillsTeamSkillsHubInit_force覆盖(t *testing.T) {
+	sm, skillsDir := newInitTestManager(t)
+	target := filepath.Join(skillsDir, "demo")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "junk.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{"name": "demo"})
+	if got["success"] != false || !strings.Contains(got["detail"].(string), "非空") {
+		t.Fatalf("无 force 应报目标目录非空，实际 %v", got)
+	}
+
+	got, _ = sm.HandleSkillsTeamSkillsHubInit(context.Background(), map[string]any{"name": "demo", "force": true})
+	if got["success"] != true {
+		t.Fatalf("force=true 应重建成功，实际 %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(target, "junk.txt")); !os.IsNotExist(err) {
+		t.Fatal("force 后旧文件应被清除")
 	}
 }
