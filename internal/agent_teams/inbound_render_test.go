@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
@@ -191,9 +192,7 @@ func TestRenderTeamContext(t *testing.T) {
 
 // TestRenderTeamContextWithIdentity_有转换 验证 <identity-conversion> 嵌套在 <identity> 内。
 func TestRenderTeamContextWithIdentity_有转换(t *testing.T) {
-	conv := "你继承了成员 dev-0 的上下文，你的身份现在是 dev-1。" +
-		"本对话中更早的「成员身份」块描述的是【此前】的身份，其中包含的私有工作约定与" +
-		"私有工作区对你不再适用。"
+	conv := prompts.BuildIdentityConversion("dev-0", "dev-1", "cn")
 	got := RenderTeamContextWithIdentity("# 成员身份\n\n你的 member_name: dev-1", &conv, nil)
 	assertGolden(t, "render_team_context_with_conversion", got)
 }

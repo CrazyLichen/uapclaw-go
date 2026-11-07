@@ -16,6 +16,7 @@
 //	├── section_cache.go      # MtimeSectionCache mtime 探针缓存
 //	├── policy.go             # RolePolicy + BuildSystemPrompt
 //	├── sections.go           # 8 个 PromptSection builder + TeamSectionName + _LABELS + HITT
+//	├── messages.go           # 团队状态消息正文（身份/团队信息/名册）+ 名册 diff
 //	├── team_plan_agent.go    # ApplyTeamPlanAgentPrompt + 常量
 //	├── team_plan_mode.go     # BuildTeamPlanModeSection + 常量
 //	├── cn/                   # 9 个中文 .md 模板
