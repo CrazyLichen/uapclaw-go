@@ -4319,3 +4319,19 @@ func TestDeepAgent_BridgeEvents含SteeringDrain(t *testing.T) {
 		t.Fatal("before_steering_drain 不应注册到外层 DeepAgent")
 	}
 }
+
+// TestNormalizeInputs_下划线key进Extra 验证 _input_parts 被保留。
+//
+// Python: inputs 为 dict 时额外 key 自然保留到 effective_inputs。
+func TestNormalizeInputs_下划线key进Extra(t *testing.T) {
+	d := &DeepAgent{}
+	in, err := d.normalizeInputs(map[string]any{
+		"query":        "a\nb\nc",
+		"_input_parts": []string{"a", "b", "c"},
+		"_streaming":   true,
+	})
+	require.NoError(t, err)
+	parts, ok := in.Extra["_input_parts"].([]string)
+	require.True(t, ok)
+	require.Equal(t, []string{"a", "b", "c"}, parts)
+}
