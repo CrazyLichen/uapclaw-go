@@ -73,6 +73,39 @@ type PermissionInterruptRequest struct {
 	saschema.InterruptRequest
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// ReviewerActionTargetMaxLength 审查动作目标描述的最大长度
+	// Python: _REVIEWER_ACTION_TARGET_MAX_LENGTH
+	ReviewerActionTargetMaxLength = 160
+
+	// ReviewerUITextMaxLength 审查 UI 文本的最大长度
+	// Python: _REVIEWER_UI_TEXT_MAX_LENGTH
+	ReviewerUITextMaxLength = 1024
+
+	// ReviewerUIShortTextMaxLength 审查 UI 短文本的最大长度
+	// Python: _REVIEWER_UI_SHORT_TEXT_MAX_LENGTH
+	ReviewerUIShortTextMaxLength = 240
+
+	// ReviewerDenialGuidance 拒绝时给模型的引导语，防止绕过拒绝
+	// Python: _REVIEWER_DENIAL_GUIDANCE
+	ReviewerDenialGuidance = "Do not retry, rephrase, split, or switch tools to bypass this denial. " +
+		"A materially changed user intent requires a new tool call and full review."
+
+	// ProhibitedFileDeliveryReason 用户禁止文件投递时的拒绝原因
+	// Python: PROHIBITED_FILE_DELIVERY_REASON
+	ProhibitedFileDeliveryReason = "file_delivery_prohibited_by_user"
+
+	// DeterministicBoundedScopeDecisionSource 确定性有界范围判定的决策来源
+	// Python: DETERMINISTIC_BOUNDED_SCOPE_DECISION_SOURCE
+	DeterministicBoundedScopeDecisionSource = "deterministic_bounded_scope"
+
+	// DeterministicReadonlyPublicWebReason 确定性放行只读公开 Web 的原因码
+	// Python: DETERMINISTIC_READONLY_PUBLIC_WEB_REASON
+	DeterministicReadonlyPublicWebReason = "deterministic_readonly_public_web"
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionHandlingResult 构造并校验权限处理结果。
