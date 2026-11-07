@@ -1758,3 +1758,641 @@ func toLowerSpaces(s string) string {
 func isSpaceByte(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
+
+// ──────────────────────────── 结构体（删除） ────────────────────────────
+
+// DeleteSessionOptions 删除会话的调用参数。
+//
+// Python: RuntimeSessionProvisioner.delete_session 关键字参数
+// QuiesceSession / DisposeSession 由 AgentRuntime 传入（Go 用闭包，等价上游 Callable）。
+type DeleteSessionOptions struct {
+	// ChannelID 渠道标识
+	ChannelID string
+	// SessionID 会话标识
+	SessionID string
+	// QuiesceSession 静默会话执行（关闭准入 + 等执行停下）
+	QuiesceSession func(ctx context.Context, channelID, sessionID string) error
+	// DisposeSession 释放会话内存运行时
+	DisposeSession func(ctx context.Context, channelID, sessionID string) error
+}
+
+// ──────────────────────────── 导出函数（删除） ────────────────────────────
+
+// DeleteSession 通过共享 Runtime 边界删除一个持久会话。
+//
+// Python: RuntimeSessionProvisioner.delete_session（L1444-1465）
+// 七阶段事务见 spec §6；destructive_started 是回滚的唯一分界。
+func (p *RuntimeSessionProvisioner) DeleteSession(
+	ctx context.Context,
+	opts DeleteSessionOptions,
+) (sessionpkg.SessionDeleteResult, error) {
+	target := trimSpaces(opts.SessionID)
+	if target == "" {
+		return sessionpkg.SessionDeleteResultFailure(target, "BAD_REQUEST",
+			"session_id is required"), nil
+	}
+	lock := sessionpkg.SessionDeleteLock(target)
+	lock.Lock()
+	defer lock.Unlock()
+	return p.deleteSessionLocked(ctx, opts, target), nil
+}
+
+// DeleteTeam 排他地通过 Runtime 业务边界删除一个团队。
+//
+// Python: RuntimeSessionProvisioner.delete_team（L1775-1878）
+func (p *RuntimeSessionProvisioner) DeleteTeam(
+	ctx context.Context,
+	teamName, channelID string,
+) (sessionpkg.TeamDeleteResult, error) {
+	target := trimSpaces(teamName)
+	if target == "" {
+		return sessionpkg.TeamDeleteResult{OK: false, ErrorCode: "BAD_REQUEST",
+			ErrorMessage: "team_name is required"}, nil
+	}
+	lock := sessionpkg.TeamDeleteLock(target)
+	lock.Lock()
+	defer lock.Unlock()
+	return p.deleteTeamLocked(ctx, target, channelID), nil
+}
+
+// ──────────────────────────── 非导出函数（删除事务） ────────────────────────────
+
+// deleteSessionLocked 持锁执行删除事务（七阶段）。
+//
+// Python: RuntimeSessionProvisioner._delete_session_locked（L1467-1773）
+//
+// 阶段顺序（spec §6.1）：
+//
+//	① participant.BeforeDelete
+//	② trajectory.Begin
+//	③ lifecycle.Begin
+//	④ quiesce（team: QuiesceForDelete；agent: QuiesceSession）
+//	⑤ participant.ReleaseResources         ← destructive_started 在此之后置 true
+//	⑥ dispose（team: DisposeAfterResourceRelease；agent: DisposeSession + Runner.Release）
+//	⑦ rmtree → commit 观察者 → commit_session_delete
+func (p *RuntimeSessionProvisioner) deleteSessionLocked(
+	ctx context.Context,
+	opts DeleteSessionOptions,
+	target string,
+) sessionpkg.SessionDeleteResult {
+	// 会话目录解析
+	sessionDir := ""
+	dirExists := false
+	if p.extra.ResolveSessionDir != nil {
+		sessionDir, dirExists = p.extra.ResolveSessionDir(target)
+	}
+	recovering := false
+	if p.LifecycleJournal != nil {
+		recovering = p.LifecycleJournal.RecoveringDelete(target)
+	}
+	p.mu.Lock()
+	_, commitPending := p.pendingDeleteMeta[target]
+	p.mu.Unlock()
+
+	if !dirExists && !recovering && !commitPending {
+		if cached, ok := p.completedDeletes.get(target); ok {
+			return cached
+		}
+		return sessionpkg.SessionDeleteResultFailure(target, "NOT_FOUND", "session not found")
+	}
+
+	// metadata
+	var metadata map[string]any
+	if p.extra.SessionOps != nil {
+		metadata = p.extra.SessionOps.GetSessionMetadata(target)
+	}
+	if metadata == nil {
+		p.mu.Lock()
+		metadata = p.pendingDeleteMeta[target]
+		p.mu.Unlock()
+	}
+	isTeamSession := false
+	if mode, _ := metadata["mode"].(string); mode != "" {
+		_, isTeamSession = p.resolveSwitchMode(mode, false)
+	}
+	teamName, _ := metadata["team_name"].(string)
+	channelID, _ := metadata["channel_id"].(string)
+	if channelID == "" {
+		channelID = opts.ChannelID
+	}
+	descriptor := sessionpkg.SessionDescriptor{
+		SessionID:  target,
+		ChannelID:  firstNonEmpty(channelID, "default"),
+		Mode:       stringOr(metadata["mode"], "agent.plan"),
+		WorkMode:   stringOr(metadata["work_mode"], "work"),
+		ProjectID:  stringOr(metadata["project_id"], ""),
+		ProjectDir: stringOr(metadata["project_dir"], ""),
+		UserID:     stringOr(metadata["user_id"], ""),
+	}
+	deleteTarget := sessionpkg.SessionLifecycleTarget{
+		Descriptor: descriptor,
+		Kind:       sessionKindOf(isTeamSession),
+		TeamName:   teamName,
+	}
+	result := sessionpkg.SessionDeleteResult{
+		OK: true, SessionID: target, ChannelID: channelID,
+		IsTeam: isTeamSession, TeamName: teamName,
+	}
+
+	// ① participant.BeforeDelete
+	participants := p.participants.SnapshotDelete()
+	entered := make([]sessionpkg.SessionDeleteParticipant, 0, len(participants))
+	for _, participant := range participants {
+		entered = append(entered, participant)
+		if beforeErr := participant.BeforeDelete(ctx, deleteTarget); beforeErr != nil {
+			logger.Warn(logComponent).Err(beforeErr).Str("session_id", target).
+				Msg("Runtime delete participant before_delete failed")
+		}
+	}
+
+	// 依赖检查（checkpoint）
+	if p.CheckpointEnsure != nil {
+		if cpErr := p.CheckpointEnsure(ctx); cpErr != nil {
+			return sessionpkg.SessionDeleteResultFailure(target, "CHECKPOINT_UNAVAILABLE",
+				"persistent checkpointer is unavailable")
+		}
+	}
+
+	var (
+		trajectoryPrepared bool
+		lifecyclePrepared  bool
+		destructiveStarted bool
+		deleted            bool
+	)
+	lifecycle := p.pickDeleteLifecycle(target)
+
+	// ② ③ 准备
+	if p.TrajectoryHook != nil {
+		if beginErr := p.TrajectoryHook.BeginSessionDelete(ctx, target); beginErr != nil {
+			p.abortDelete(ctx, result, false, false, lifecycle, false)
+			p.notifyDeleteFailed(ctx, entered, deleteTarget, false)
+			return sessionpkg.SessionDeleteResultFailure(target, "DELETE_FAILED",
+				"session runtime cleanup failed")
+		}
+		trajectoryPrepared = true
+	}
+	if prepErr := p.prepareDeleteLifecycle(target, lifecycle); prepErr == nil && lifecycle != nil {
+		lifecyclePrepared = true
+	}
+
+	// ④ ⑥ 分流
+	switch {
+	case !dirExists && (recovering || commitPending):
+		deleted = true
+	case isTeamSession:
+		outcome, ok := p.deleteTeamSessionPhase(ctx, opts, target, result,
+			deleteTarget, entered, &destructiveStarted)
+		if !ok {
+			p.abortDelete(ctx, result, trajectoryPrepared, lifecyclePrepared, lifecycle,
+				destructiveStarted)
+			p.notifyDeleteFailed(ctx, entered, deleteTarget, destructiveStarted)
+			return outcome
+		}
+		deleted = outcome.Deleted
+	default:
+		outcome, ok := p.deleteAgentSessionPhase(ctx, opts, target, result,
+			deleteTarget, entered, &destructiveStarted)
+		if !ok {
+			p.abortDelete(ctx, result, trajectoryPrepared, lifecyclePrepared, lifecycle,
+				destructiveStarted)
+			p.notifyDeleteFailed(ctx, entered, deleteTarget, destructiveStarted)
+			return outcome
+		}
+		deleted = outcome.Deleted
+	}
+
+	if !deleted {
+		p.abortDelete(ctx, result, trajectoryPrepared, lifecyclePrepared, lifecycle, destructiveStarted)
+		p.notifyDeleteFailed(ctx, entered, deleteTarget, destructiveStarted)
+		return cleanupFailedResult(result, destructiveStarted)
+	}
+	// ⑦ rmtree
+	if dirExists && p.extra.RemoveSessionDir != nil {
+		if rmErr := p.extra.RemoveSessionDir(sessionDir); rmErr != nil {
+			p.abortDelete(ctx, result, trajectoryPrepared, lifecyclePrepared, lifecycle,
+				destructiveStarted)
+			p.notifyDeleteFailed(ctx, entered, deleteTarget, destructiveStarted)
+			return cleanupFailedResult(result, destructiveStarted)
+		}
+	}
+	if recovering && p.LifecycleJournal != nil {
+		_ = p.LifecycleJournal.MarkCleanup(target)
+	}
+
+	// 提交观察者
+	p.mu.Lock()
+	p.pendingDeleteMeta[target] = metadata
+	p.mu.Unlock()
+	committed := sessionpkg.SessionDeleteResult{
+		OK: true, SessionID: result.SessionID, ChannelID: result.ChannelID,
+		IsTeam: result.IsTeam, TeamName: result.TeamName, Deleted: true,
+	}
+	if commitErr := p.commitDeleteObservers(ctx, committed, trajectoryPrepared,
+		lifecyclePrepared, lifecycle); commitErr != nil {
+		p.notifyDeleteFailed(ctx, entered, deleteTarget, true)
+		return sessionpkg.SessionDeleteResult{
+			OK: false, SessionID: target, ChannelID: result.ChannelID,
+			IsTeam: result.IsTeam, TeamName: result.TeamName,
+			Deleted: true, RecoveryRequired: true,
+			ErrorCode:    "DELETE_COMMIT_PENDING",
+			ErrorMessage: "session was deleted but commit is pending",
+		}
+	}
+	p.commitSessionDelete(committed)
+	if p.TeamExecutionController != nil && isTeamSession {
+		p.TeamExecutionController.DeleteCommitted(deleteTarget)
+	}
+	p.notifyDeleteCommitted(ctx, entered, deleteTarget)
+	p.completedDeletes.put(target, committed)
+	p.mu.Lock()
+	delete(p.pendingDeleteMeta, target)
+	p.mu.Unlock()
+	return committed
+}
+
+// deleteAgentSessionPhase 单 agent 会话的 ④⑤⑥ 阶段。
+//
+// Python: _delete_session_locked 中 `else` 分支（quiesce → release → dispose → Runner.release）
+// 返回 (结果, 是否继续)；ok=false 表示已失败应回滚。
+func (p *RuntimeSessionProvisioner) deleteAgentSessionPhase(
+	ctx context.Context,
+	opts DeleteSessionOptions,
+	_ string,
+	result sessionpkg.SessionDeleteResult,
+	deleteTarget sessionpkg.SessionLifecycleTarget,
+	entered []sessionpkg.SessionDeleteParticipant,
+	destructiveStarted *bool,
+) (sessionpkg.SessionDeleteResult, bool) {
+	fail := sessionpkg.SessionDeleteResultFailure(result.SessionID, "DELETE_FAILED",
+		"session runtime cleanup failed")
+	if opts.QuiesceSession == nil {
+		return fail, false
+	}
+	if quiesceErr := opts.QuiesceSession(ctx, result.ChannelID, result.SessionID); quiesceErr != nil {
+		logger.Warn(logComponent).Err(quiesceErr).Str("session_id", result.SessionID).
+			Msg("Runtime session quiesce failed")
+		return fail, false
+	}
+	p.releaseParticipants(ctx, entered, deleteTarget)
+	*destructiveStarted = true
+	if opts.DisposeSession != nil {
+		if disposeErr := opts.DisposeSession(ctx, result.ChannelID, result.SessionID); disposeErr != nil {
+			logger.Warn(logComponent).Err(disposeErr).Str("session_id", result.SessionID).
+				Msg("Runtime session dispose failed")
+			return cleanupFailedResult(result, *destructiveStarted), false
+		}
+	}
+	if p.RunnerRelease != nil {
+		if releaseErr := p.RunnerRelease(ctx, result.SessionID); releaseErr != nil {
+			logger.Warn(logComponent).Err(releaseErr).Str("session_id", result.SessionID).
+				Msg("Runtime Runner.release failed")
+			return cleanupFailedResult(result, *destructiveStarted), false
+		}
+	}
+	out := result
+	out.Deleted = true
+	return out, true
+}
+
+// deleteTeamSessionPhase 团队会话的 ④⑤⑥ 阶段。
+//
+// Python: _delete_session_locked 中 `elif is_team_session` 分支
+// （QuiesceForDelete → release → DisposeAfterResourceRelease → _delete_team_runner）
+func (p *RuntimeSessionProvisioner) deleteTeamSessionPhase(
+	ctx context.Context,
+	_ DeleteSessionOptions,
+	_ string,
+	result sessionpkg.SessionDeleteResult,
+	deleteTarget sessionpkg.SessionLifecycleTarget,
+	entered []sessionpkg.SessionDeleteParticipant,
+	destructiveStarted *bool,
+) (sessionpkg.SessionDeleteResult, bool) {
+	fail := sessionpkg.SessionDeleteResultFailure(result.SessionID, "DELETE_FAILED",
+		"session runtime cleanup failed")
+	if p.TeamExecutionController == nil {
+		return fail, false
+	}
+	if quiesceErr := p.TeamExecutionController.QuiesceForDelete(ctx, deleteTarget,
+		"session.delete: "); quiesceErr != nil {
+		logger.Warn(logComponent).Err(quiesceErr).Str("session_id", result.SessionID).
+			Msg("Runtime team quiesce failed")
+		return fail, false
+	}
+	p.releaseParticipants(ctx, entered, deleteTarget)
+	*destructiveStarted = true
+	if disposeErr := p.TeamExecutionController.DisposeAfterResourceRelease(ctx, deleteTarget,
+		"session.delete: "); disposeErr != nil {
+		logger.Warn(logComponent).Err(disposeErr).Str("session_id", result.SessionID).
+			Msg("Runtime team dispose failed")
+		return cleanupFailedResult(result, *destructiveStarted), false
+	}
+	out := result
+	out.Deleted = p.deleteTeamRunner(ctx, result)
+	return out, true
+}
+
+// pickDeleteLifecycle 取本次事务使用的删除生命周期参与者。
+//
+// Python: _delete_session_locked 里的
+// _prepared_session_deletes.get(target, self._delete_lifecycle)
+func (p *RuntimeSessionProvisioner) pickDeleteLifecycle(target string) SessionDeleteLifecycle {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if prepared, ok := p.preparedDeletes[target]; ok {
+		return prepared
+	}
+	return p.DeleteLifecycle
+}
+
+// prepareDeleteLifecycle 准备删除生命周期（幂等）。
+//
+// Python: RuntimeSessionProvisioner._prepare_delete_lifecycle
+func (p *RuntimeSessionProvisioner) prepareDeleteLifecycle(target string, lifecycle SessionDeleteLifecycle) error {
+	if lifecycle == nil {
+		return nil
+	}
+	p.mu.Lock()
+	already := p.preparedDeletes[target] == lifecycle
+	p.mu.Unlock()
+	if already {
+		return nil
+	}
+	if beginErr := lifecycle.BeginSessionDelete(target); beginErr != nil {
+		return beginErr
+	}
+	if lifecycle == p.DeleteLifecycle {
+		p.mu.Lock()
+		p.preparedDeletes[target] = lifecycle
+		p.mu.Unlock()
+	}
+	return nil
+}
+
+// releaseParticipants 逐个释放参与者资源（单条失败只告警）。
+//
+// Python: RuntimeSessionProvisioner._release_participants
+func (p *RuntimeSessionProvisioner) releaseParticipants(
+	ctx context.Context,
+	participants []sessionpkg.SessionDeleteParticipant,
+	target sessionpkg.SessionLifecycleTarget,
+) {
+	for _, participant := range participants {
+		if releaseErr := participant.ReleaseResources(ctx, target); releaseErr != nil {
+			logger.Warn(logComponent).Err(releaseErr).
+				Str("participant", participant.Name()).
+				Str("session_id", target.Descriptor.SessionID).
+				Msg("Runtime delete participant release failed")
+		}
+	}
+}
+
+// notifyDeleteFailed 逆序通知参与者删除失败。
+//
+// Python: RuntimeSessionProvisioner._notify_delete_failed（逆序遍历）
+func (p *RuntimeSessionProvisioner) notifyDeleteFailed(
+	ctx context.Context,
+	participants []sessionpkg.SessionDeleteParticipant,
+	target sessionpkg.SessionLifecycleTarget,
+	destructiveStarted bool,
+) {
+	for i := len(participants) - 1; i >= 0; i-- {
+		participant := participants[i]
+		if failErr := participant.DeleteFailed(ctx, target, destructiveStarted); failErr != nil {
+			logger.Warn(logComponent).Err(failErr).
+				Str("participant", participant.Name()).
+				Msg("Runtime delete participant failure notification failed")
+		}
+	}
+}
+
+// notifyDeleteCommitted 顺序通知参与者删除已提交。
+//
+// Python: RuntimeSessionProvisioner._notify_delete_committed
+func (p *RuntimeSessionProvisioner) notifyDeleteCommitted(
+	ctx context.Context,
+	participants []sessionpkg.SessionDeleteParticipant,
+	target sessionpkg.SessionLifecycleTarget,
+) {
+	for _, participant := range participants {
+		if commitErr := participant.DeleteCommitted(ctx, target); commitErr != nil {
+			logger.Warn(logComponent).Err(commitErr).
+				Str("participant", participant.Name()).
+				Msg("Runtime delete participant commit notification failed")
+		}
+	}
+}
+
+// abortDelete 回滚（destructiveStarted 之后直接返回）。
+//
+// Python: RuntimeSessionProvisioner._abort_delete
+func (p *RuntimeSessionProvisioner) abortDelete(
+	ctx context.Context,
+	result sessionpkg.SessionDeleteResult,
+	trajectoryPrepared, lifecyclePrepared bool,
+	lifecycle SessionDeleteLifecycle,
+	destructiveStarted bool,
+) {
+	if destructiveStarted {
+		return
+	}
+	if trajectoryPrepared && p.TrajectoryHook != nil {
+		if abortErr := p.TrajectoryHook.AbortSessionDelete(ctx, result.SessionID); abortErr != nil {
+			logger.Warn(logComponent).Err(abortErr).
+				Msg("Runtime trajectory delete rollback failed")
+		}
+	}
+	if lifecyclePrepared && lifecycle != nil {
+		// 失败的产品删除仍保持阻塞并会被重试：保留其已准备的心跳围栏
+		if p.extra.DeletePending != nil && p.extra.DeletePending(result.SessionID) {
+			return
+		}
+		if abortErr := lifecycle.AbortSessionDelete(result.SessionID, result.ChannelID); abortErr != nil {
+			logger.Warn(logComponent).Err(abortErr).
+				Msg("Runtime Session delete lifecycle rollback failed")
+			return
+		}
+		p.mu.Lock()
+		if p.preparedDeletes[result.SessionID] == lifecycle {
+			delete(p.preparedDeletes, result.SessionID)
+		}
+		p.mu.Unlock()
+	}
+}
+
+// commitDeleteObservers 提交轨迹与生命周期观察者。
+//
+// Python: RuntimeSessionProvisioner._commit_delete_observers
+func (p *RuntimeSessionProvisioner) commitDeleteObservers(
+	ctx context.Context,
+	result sessionpkg.SessionDeleteResult,
+	trajectoryPrepared, lifecyclePrepared bool,
+	lifecycle SessionDeleteLifecycle,
+) error {
+	if trajectoryPrepared && p.TrajectoryHook != nil {
+		if commitErr := p.TrajectoryHook.CommitSessionDelete(ctx, result.SessionID); commitErr != nil {
+			logger.Warn(logComponent).Err(commitErr).Msg("Runtime trajectory delete commit failed")
+			return commitErr
+		}
+	}
+	if lifecyclePrepared && lifecycle != nil {
+		if commitErr := lifecycle.CommitSessionDelete(result.SessionID); commitErr != nil {
+			logger.Warn(logComponent).Err(commitErr).
+				Msg("Runtime Session delete lifecycle commit failed")
+			return commitErr
+		}
+		p.mu.Lock()
+		if p.preparedDeletes[result.SessionID] == lifecycle {
+			delete(p.preparedDeletes, result.SessionID)
+		}
+		p.mu.Unlock()
+	}
+	return nil
+}
+
+// commitSessionDelete 提交 Runtime 侧的 Plan/缓存/绑定状态。
+//
+// Python: RuntimeSessionProvisioner.commit_session_delete（L2133-2164）
+// 团队会话解绑失败时上游 raise（删除已提交，但绑定未解）。
+func (p *RuntimeSessionProvisioner) commitSessionDelete(result sessionpkg.SessionDeleteResult) {
+	if p.PlanController != nil {
+		p.PlanController.ResetSession(result.SessionID)
+	}
+	p.participants.ForgetTarget(result.SessionID)
+	if p.RemoveMetadataCache != nil {
+		p.RemoveMetadataCache(result.SessionID)
+	}
+	if !result.IsTeam {
+		return
+	}
+	if p.TeamBinding == nil {
+		return
+	}
+	if unbindErr := p.TeamBinding.UnbindSession(result.TeamName, result.SessionID); unbindErr != nil {
+		logger.Warn(logComponent).Err(unbindErr).
+			Str("session_id", result.SessionID).Str("team_name", result.TeamName).
+			Msg("Runtime failed to unbind deleted team session")
+	}
+}
+
+// deleteTeamRunner 删除团队会话的 Runner 侧资源。
+//
+// Python: RuntimeSessionProvisioner._delete_team_runner
+func (p *RuntimeSessionProvisioner) deleteTeamRunner(
+	ctx context.Context,
+	result sessionpkg.SessionDeleteResult,
+) bool {
+	if p.DeleteAgentTeam == nil {
+		return false
+	}
+	if result.TeamName != "" {
+		deleted, err := p.DeleteAgentTeam(ctx, result.TeamName, []string{result.SessionID})
+		if err != nil {
+			return false
+		}
+		return deleted
+	}
+	logger.Warn(logComponent).Str("session_id", result.SessionID).
+		Msg("Runtime team Session delete fell back to Runner.release: reason=missing_team_name")
+	if p.RunnerRelease == nil {
+		return true
+	}
+	return p.RunnerRelease(ctx, result.SessionID) == nil
+}
+
+// cleanupFailedResult 构造 DELETE_FAILED 结果。
+//
+// Python: RuntimeSessionProvisioner._cleanup_failed
+func cleanupFailedResult(
+	result sessionpkg.SessionDeleteResult,
+	destructiveStarted bool,
+) sessionpkg.SessionDeleteResult {
+	return sessionpkg.SessionDeleteResult{
+		OK: false, SessionID: result.SessionID, ChannelID: result.ChannelID,
+		IsTeam: result.IsTeam, TeamName: result.TeamName,
+		Deleted: false, RecoveryRequired: destructiveStarted,
+		ErrorCode:    "DELETE_FAILED",
+		ErrorMessage: "session runtime cleanup failed",
+	}
+}
+
+// deleteTeamLocked 持锁删除团队。
+//
+// Python: RuntimeSessionProvisioner._delete_team_locked（L1910-2131）
+func (p *RuntimeSessionProvisioner) deleteTeamLocked(
+	ctx context.Context,
+	teamName, channelID string,
+) sessionpkg.TeamDeleteResult {
+	target := trimSpaces(teamName)
+	if target == "" {
+		return sessionpkg.TeamDeleteResult{OK: false, ErrorCode: "BAD_REQUEST",
+			ErrorMessage: "team_name is required"}
+	}
+
+	gate := sessionpkg.GlobalTeamDeletionGate()
+	if p.TeamDeletionGate != nil {
+		gate = p.TeamDeletionGate
+	}
+	gate.BeginDeleteLocked(target)
+	defer gate.FinishDeleteLocked(target)
+
+	if cached, ok := p.completedTeamDeletes.get(target); ok {
+		return cached
+	}
+
+	if p.TeamExecutionController != nil {
+		if quiesceErr := p.TeamExecutionController.QuiesceForDelete(ctx,
+			sessionpkg.SessionLifecycleTarget{TeamName: target}, "team.delete: "); quiesceErr != nil {
+			logger.Warn(logComponent).Err(quiesceErr).Str("team_name", target).
+				Msg("Runtime team quiesce failed")
+		}
+	}
+
+	var sessionIDs []string
+	if p.extra.ListTeamSessions != nil {
+		sessionIDs = p.extra.ListTeamSessions(target)
+	}
+
+	failed := []string{}
+	for _, sessionID := range sessionIDs {
+		res, _ := p.DeleteSession(ctx, DeleteSessionOptions{
+			ChannelID: channelID,
+			SessionID: sessionID,
+		})
+		if !res.Deleted {
+			failed = append(failed, sessionID)
+		}
+	}
+
+	// Runner 侧团队删除（一次）
+	deleted := true
+	if p.DeleteAgentTeam != nil {
+		ok, err := p.DeleteAgentTeam(ctx, target, sessionIDs)
+		if err != nil || !ok {
+			deleted = false
+		}
+	}
+
+	if p.TeamExecutionController != nil {
+		lifecycleTarget := sessionpkg.SessionLifecycleTarget{TeamName: target}
+		if deleted {
+			p.TeamExecutionController.DeleteCommitted(lifecycleTarget)
+		} else {
+			p.TeamExecutionController.DeleteAborted(lifecycleTarget)
+		}
+	}
+
+	result := sessionpkg.TeamDeleteResult{
+		OK:               deleted && len(failed) == 0,
+		TeamName:         target,
+		SessionIDs:       sessionIDs,
+		FailedSessionIDs: failed,
+		Deleted:          deleted,
+	}
+	if len(failed) > 0 {
+		result.ErrorCode = "DELETE_FAILED"
+		result.ErrorMessage = "one or more team sessions failed to delete"
+		result.RecoveryRequired = true
+	}
+	p.completedTeamDeletes.put(target, result)
+	return result
+}
