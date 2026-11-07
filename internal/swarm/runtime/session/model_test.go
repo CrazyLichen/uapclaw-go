@@ -139,3 +139,56 @@ func allWorkKinds() []SessionWorkKind {
 		SessionWorkKindTeamBackground,
 	}
 }
+
+// TestTeamExecutionDetails_默认值 校验 waiter_kind 默认 none。
+func TestTeamExecutionDetails_默认值(t *testing.T) {
+	d := TeamExecutionDetails{}
+	if d.WaiterKind != "" && d.WaiterKind != TeamWaiterKindNone {
+		t.Fatalf("零值 WaiterKind 应等价 none，实际 %q", d.WaiterKind)
+	}
+	if d.ObservationOnly {
+		t.Fatal("ObservationOnly 默认应为 false")
+	}
+}
+
+// TestSessionExecutionSnapshot_不含运行时字段 校验快照结构体可独立构造。
+func TestSessionExecutionSnapshot_不含运行时字段(t *testing.T) {
+	snap := SessionExecutionSnapshot{
+		ExecutionID: "e1", SessionID: "s1", RequestID: "r1",
+		Generation: 3, WorkKind: SessionWorkKindChatStream, ChannelID: "web",
+		State: SessionExecutionStateRunning, CreatedAt: 1.5,
+	}
+	if snap.Generation != 3 || snap.State != SessionExecutionStateRunning {
+		t.Fatalf("快照字段赋值失败: %+v", snap)
+	}
+}
+
+// TestTeamExecutionContext_嵌入执行身份 校验嵌入字段可访问。
+func TestTeamExecutionContext_嵌入执行身份(t *testing.T) {
+	ctx := TeamExecutionContext{
+		ExecutionLifecycleContext: ExecutionLifecycleContext{
+			Session:     SessionLifecycleContext{SessionID: "s1", Generation: 2},
+			ExecutionID: "e1",
+			RequestID:   "r1",
+			WorkKind:    SessionWorkKindTeamRequest,
+			ChannelID:   "web",
+		},
+		Details: TeamExecutionDetails{ControlID: "c1", WaiterKind: TeamWaiterKindRequest},
+	}
+	if ctx.ExecutionID != "e1" || ctx.Details.ControlID != "c1" {
+		t.Fatalf("嵌入字段访问失败: %+v", ctx)
+	}
+}
+
+// TestCloseSessionResult_代次可空 校验 Generation 为指针。
+func TestCloseSessionResult_代次可空(t *testing.T) {
+	res := CloseSessionResult{SessionID: "s1"}
+	if res.Generation != nil {
+		t.Fatal("Generation 默认应为 nil（调用方未指定代次）")
+	}
+	gen := 3
+	res.Generation = &gen
+	if *res.Generation != 3 {
+		t.Fatal("Generation 赋值失败")
+	}
+}
