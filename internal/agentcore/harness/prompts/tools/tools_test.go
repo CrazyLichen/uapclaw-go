@@ -406,3 +406,39 @@ func TestBuildToolCard_无AgentID时自动生成UUID(t *testing.T) {
 		t.Errorf("GetID() = %q, 应包含 'SearchToolsTool_'", card.GetID())
 	}
 }
+
+// TestSubmitGoalReportProvider 校验 submit_goal_report 元数据双语与 schema。
+func TestSubmitGoalReportProvider(t *testing.T) {
+	p := &SubmitGoalReportMetadataProvider{}
+	if p.GetName() != "submit_goal_report" {
+		t.Fatalf("GetName=%q", p.GetName())
+	}
+	if p.GetDescription("cn") == "" || p.GetDescription("en") == "" {
+		t.Fatal("description 双语为空")
+	}
+	schema := p.GetInputParams("cn")
+	props := schema["properties"].(map[string]any)
+	status := props["status"].(map[string]any)
+	enum := status["enum"].([]any)
+	if len(enum) != 3 || enum[0] != "continue" || enum[1] != "complete" || enum[2] != "blocked" {
+		t.Fatalf("status enum=%v", enum)
+	}
+	required := schema["required"].([]any)
+	if len(required) != 2 || required[0] != "status" || required[1] != "evidence" {
+		t.Fatalf("required=%v", required)
+	}
+	if err := ValidateToolMetadata(p); err != nil {
+		t.Fatalf("metadata 校验失败: %v", err)
+	}
+}
+
+// TestGetCurrentGoalProvider 校验 get_current_goal 元数据。
+func TestGetCurrentGoalProvider(t *testing.T) {
+	p := &GetCurrentGoalMetadataProvider{}
+	if p.GetName() != "get_current_goal" {
+		t.Fatalf("GetName=%q", p.GetName())
+	}
+	if err := ValidateToolMetadata(p); err != nil {
+		t.Fatalf("metadata 校验失败: %v", err)
+	}
+}
