@@ -48,6 +48,8 @@ type fakeDeepAgentProvider struct {
 	subagent interfaces.DeepAgentInterface
 	// createSubagentErr 预设的 CreateSubagent 错误
 	createSubagentErr error
+	// innerOverride 预设的内层 invoke 覆写（用于截获 executor 构造的 effective）
+	innerOverride func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
 }
 
 // fakeSessionFacade 用于测试的模拟会话门面
@@ -578,7 +580,7 @@ func (f *fakeDeepAgentProvider) UnregisterRail(_ context.Context, _ agentinterfa
 
 // InnerInvokeOverride 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
-	return nil
+	return f.innerOverride
 }
 
 // 10.6.19 接口面扩展桩（AbilityManager/SystemPromptBuilder/Uapswarm 访问器）
@@ -729,4 +731,129 @@ func TestExtractInputParts_接线条件(t *testing.T) {
 	}
 	_, has := effective2["_input_parts"]
 	require.False(t, has, "单帧不下发 _input_parts")
+}
+
+// TestExecuteAbility_多帧InputEvent下发parts 端到端验证 _input_parts 全链路。
+//
+// 覆盖 spec C12：任务携带 3 帧文本的 InputEvent 时，executor 把未 join 的
+// 列表放进 effective，交给内层 ReActAgent 的 admission。
+//
+//	Python: task_loop_event_executor.py L216-219
+//	if input_parts is not None and iter_inputs.query == query
+func TestExecuteAbility_多帧InputEvent下发parts(t *testing.T) {
+	ctx := context.Background()
+
+	tm := modules.NewTaskManager(&config.ControllerConfig{})
+	task := &cschema.Task{
+		TaskID:      "exec-parts",
+		Description: "第一段\n第二段\n第三段",
+		Status:      cschema.TaskSubmitted,
+		Inputs: []cschema.Event{&cschema.InputEvent{
+			InputData: []cschema.DataFrame{
+				&cschema.TextDataFrame{Text: "第一段"},
+				&cschema.TextDataFrame{Text: "第二段"},
+				&cschema.TextDataFrame{Text: "第三段"},
+			},
+		}},
+		Metadata: map[string]any{},
+	}
+	require.NoError(t, tm.AddTask(ctx, task))
+
+	var gotParts []string
+	provider := &fakeDeepAgentProvider{
+		reactAgent: agents.NewReActAgent(
+			agentschema.NewAgentCard(agentschema.WithAgentName("exec-parts-agent")),
+			saconfig.NewReActAgentConfig(),
+		),
+		innerOverride: func(_ context.Context, inputs map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+			if v, ok := inputs["_input_parts"]; ok {
+				gotParts, _ = v.([]string)
+			}
+			return map[string]any{"output": "ok"}, nil
+		},
+	}
+	exec := NewTaskLoopEventExecutor(&modules.TaskExecutorDependencies{TaskManager: tm}, provider)
+
+	ch, err := exec.ExecuteAbility(ctx, "exec-parts", &fakeSessionFacade{sessionID: "sess-exec"})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	require.Equal(t, []string{"第一段", "第二段", "第三段"}, gotParts,
+		"executor 必须把 3 帧文本作为 _input_parts 下发给内层")
+}
+
+// TestExecuteAbility_单帧不下发parts 验证单帧任务不带 _input_parts。
+//
+// 单输入不需要列表，内层 extractUserParts 自会从 query 派生。
+func TestExecuteAbility_单帧不下发parts(t *testing.T) {
+	ctx := context.Background()
+
+	tm := modules.NewTaskManager(&config.ControllerConfig{})
+	task := &cschema.Task{
+		TaskID:      "exec-single",
+		Description: "只有一段",
+		Status:      cschema.TaskSubmitted,
+		Inputs: []cschema.Event{&cschema.InputEvent{
+			InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "只有一段"}},
+		}},
+		Metadata: map[string]any{},
+	}
+	require.NoError(t, tm.AddTask(ctx, task))
+
+	sawParts := false
+	provider := &fakeDeepAgentProvider{
+		reactAgent: agents.NewReActAgent(
+			agentschema.NewAgentCard(agentschema.WithAgentName("exec-single-agent")),
+			saconfig.NewReActAgentConfig(),
+		),
+		innerOverride: func(_ context.Context, inputs map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+			_, sawParts = inputs["_input_parts"]
+			return map[string]any{"output": "ok"}, nil
+		},
+	}
+	exec := NewTaskLoopEventExecutor(&modules.TaskExecutorDependencies{TaskManager: tm}, provider)
+
+	ch, err := exec.ExecuteAbility(ctx, "exec-single", &fakeSessionFacade{sessionID: "sess-single"})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	require.False(t, sawParts, "单输入不需要 _input_parts")
+}
+
+// TestExecuteAbility_无InputEvent不下发parts 验证任务无 InputEvent 时不带 parts。
+//
+// inputEvt 为 nil 时 extractInputParts 返回 nil。
+func TestExecuteAbility_无InputEvent不下发parts(t *testing.T) {
+	ctx := context.Background()
+
+	tm := modules.NewTaskManager(&config.ControllerConfig{})
+	task := &cschema.Task{
+		TaskID:      "exec-noevt",
+		Description: "desc only",
+		Status:      cschema.TaskSubmitted,
+		Metadata:    map[string]any{},
+	}
+	require.NoError(t, tm.AddTask(ctx, task))
+
+	sawParts := false
+	provider := &fakeDeepAgentProvider{
+		reactAgent: agents.NewReActAgent(
+			agentschema.NewAgentCard(agentschema.WithAgentName("exec-single-agent")),
+			saconfig.NewReActAgentConfig(),
+		),
+		innerOverride: func(_ context.Context, inputs map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+			_, sawParts = inputs["_input_parts"]
+			return map[string]any{"output": "ok"}, nil
+		},
+	}
+	exec := NewTaskLoopEventExecutor(&modules.TaskExecutorDependencies{TaskManager: tm}, provider)
+
+	ch, err := exec.ExecuteAbility(ctx, "exec-noevt", &fakeSessionFacade{sessionID: "sess-noevt"})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	require.False(t, sawParts, "无 InputEvent 不得下发 _input_parts")
 }
