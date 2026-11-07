@@ -282,6 +282,11 @@ func (t *echoTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 	return nil, tool.ErrStreamNotSupported
 }
 
+// GetCallTimeout 使用默认外层预算（对齐 tool.BaseCallTimeout 默认实现）。
+func (t *echoTool) GetCallTimeout(_ map[string]any, defaultTimeout float64) float64 {
+	return tool.BaseCallTimeout(nil, defaultTimeout)
+}
+
 // anomalyDisabledFlag 返回 false 指针，用于关闭默认注册的模型异常检测 Rail。
 func anomalyDisabledFlag() *bool {
 	disabled := false

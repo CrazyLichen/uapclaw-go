@@ -1346,3 +1346,110 @@ func TestCreate_预热资格判据(t *testing.T) {
 		})
 	}
 }
+
+// ──────────────────────────── 覆盖率补齐 ────────────────────────────
+
+// TestProvisioner_Setter注入 校验 3 个 Set* 注入通道。
+func TestProvisioner_Setter注入(t *testing.T) {
+	p := newTestProvisioner()
+	p.SetResolveSessionDir(func(string) (string, bool) { return "/x", true })
+	p.SetRemoveSessionDir(func(string) error { return nil })
+	if p.extra.ResolveSessionDir == nil || p.extra.RemoveSessionDir == nil {
+		t.Fatal("SetResolveSessionDir / SetRemoveSessionDir 应生效")
+	}
+	dir, ok := p.extra.ResolveSessionDir("s1")
+	if dir != "/x" || !ok {
+		t.Fatalf("注入的目录解析未生效: (%q, %v)", dir, ok)
+	}
+}
+
+// TestProvisionError_Error 校验两个错误类型的 Error()。
+func TestProvisionError_Error(t *testing.T) {
+	if got := (&SessionProvisionError{Message: "boom"}).Error(); got != "boom" {
+		t.Fatalf("SessionProvisionError.Error() = %q", got)
+	}
+	if got := (&SessionProvisionStateError{Message: "state"}).Error(); got != "state" {
+		t.Fatalf("SessionProvisionStateError.Error() = %q", got)
+	}
+}
+
+// TestProvision_WarnOnParticipantError 校验参与者报错走告警分支。
+//
+// 覆盖 logProvisionWarn 与 dispatchForegroundTransition 的错误吞掉语义。
+func TestProvision_WarnOnParticipantError(t *testing.T) {
+	p := newTestProvisioner()
+	p.participants.ReplaceSessionParticipants([]session.SessionActivityParticipant{
+		&failingActivityParticipant{},
+	}, nil)
+	p.dispatchForegroundTransition(context.Background(),
+		session.SessionLifecycleTarget{
+			Descriptor: session.SessionDescriptor{SessionID: "t1"},
+			Kind:       session.SessionKindAgent,
+		}, nil, "view")
+	// 未 panic 即通过：错误只告警不外抛
+}
+
+// TestDeleteTeamRunner_缺团队名回落Runner 校验降级路径。
+func TestDeleteTeamRunner_缺团队名回落Runner(t *testing.T) {
+	p := newTestProvisioner()
+	called := false
+	p.RunnerRelease = func(context.Context, string) error {
+		called = true
+		return nil
+	}
+	p.DeleteAgentTeam = func(context.Context, string, []string) (bool, error) {
+		t.Fatal("缺团队名时不应调用 DeleteAgentTeam")
+		return false, nil
+	}
+	ok := p.deleteTeamRunner(context.Background(), session.SessionDeleteResult{SessionID: "s1"})
+	if !ok || !called {
+		t.Fatalf("缺团队名应回落 RunnerRelease，ok=%v called=%v", ok, called)
+	}
+}
+
+// TestDeleteTeamRunner_DeleteAgentTeam报错返回false 校验失败路径。
+func TestDeleteTeamRunner_DeleteAgentTeam报错返回false(t *testing.T) {
+	p := newTestProvisioner()
+	p.DeleteAgentTeam = func(context.Context, string, []string) (bool, error) {
+		return false, errors.New("boom")
+	}
+	ok := p.deleteTeamRunner(context.Background(), session.SessionDeleteResult{
+		SessionID: "s1", TeamName: "t1",
+	})
+	if ok {
+		t.Fatal("DeleteAgentTeam 报错时应返回 false")
+	}
+}
+
+// TestToLowerSpaces 校验去空白并小写。
+func TestToLowerSpaces(t *testing.T) {
+	if got := toLowerSpaces("  CODE  "); got != "code" {
+		t.Fatalf("toLowerSpaces = %q, want code", got)
+	}
+}
+
+// failingActivityParticipant 前台变更恒报错的参与者。
+type failingActivityParticipant struct{}
+
+// SessionInputIntent 无操作。
+func (f *failingActivityParticipant) SessionInputIntent(context.Context, session.SessionInputIntentEvent) (session.SessionInputIntentDisposition, error) {
+	return session.SessionInputIntentDispositionNotNeeded, nil
+}
+
+// ForegroundChanged 恒报错（覆盖告警分支）。
+func (f *failingActivityParticipant) ForegroundChanged(context.Context, session.SessionForegroundEvent) error {
+	return errors.New("participant failed")
+}
+
+// ExecutionStarted 无操作。
+func (f *failingActivityParticipant) ExecutionStarted(context.Context, session.SessionExecutionEvent) error {
+	return nil
+}
+
+// ExecutionFinished 无操作。
+func (f *failingActivityParticipant) ExecutionFinished(session.SessionExecutionFinishedEvent) {}
+
+// SessionInactive 无操作。
+func (f *failingActivityParticipant) SessionInactive(context.Context, session.SessionInactiveEvent) error {
+	return nil
+}
