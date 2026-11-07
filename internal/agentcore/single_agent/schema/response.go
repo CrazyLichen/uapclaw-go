@@ -19,11 +19,28 @@ type InterruptRequester interface {
 	GetMessage() string
 	// GetAutoConfirmKey 返回自动确认配置键
 	GetAutoConfirmKey() string
+	// GetMetadata 返回中断元数据
+	//
+	// rail 通过它把 host 侧信息（如 tool_invocation_key）挂到中断上，
+	// 队列在恢复时凭它把答案与卡片对应起来。
+	GetMetadata() map[string]any
+	// SetMetadata 覆盖中断元数据
+	SetMetadata(metadata map[string]any)
 }
 
 // InterruptRequest 工具中断请求，携带需要用户确认的信息。
 //
-// Python: InterruptRequest(message, payload_schema, auto_confirm_key, ui_options)
+// Python: InterruptRequest(message, payload_schema, auto_confirm_key, ui_options,
+// metadata, interrupt_id, interrupt_kind, interrupt_owner)
+//
+// 身份字段说明（对齐 Python docstring）：
+//   - InterruptID：本次中断的唯一标识，由中断处理器在收集暂停调用时填入；
+//     宿主通过 InteractiveInput.answer(interrupt_id, value) 回答它。
+//   - InterruptKind：这是什么类型的问题（见 InterruptKind），供宿主渲染并决定
+//     答案形状。取值是普通字符串，以便第三方 rail 声明自己的类型；空串表示
+//     抛出方未声明。
+//   - InterruptOwner：抛出该中断的 rail 的稳定键；答案只会投递给那个 rail。
+//     答案路由**始终按 owner**，与 kind 无关。
 type InterruptRequest struct {
 	// Message 向用户展示的确认消息
 	Message string
@@ -33,6 +50,14 @@ type InterruptRequest struct {
 	AutoConfirmKey string
 	// UIOptions UI 选项（对齐 Python ui_options: list[dict] | None）
 	UIOptions []map[string]any
+	// Metadata 中断元数据，承载宿主与 rail 之间传递的附加信息
+	Metadata map[string]any
+	// InterruptID 本次中断的唯一标识，由中断处理器填入
+	InterruptID string
+	// InterruptKind 中断类型（见 InterruptKind），未声明时为空串
+	InterruptKind string
+	// InterruptOwner 抛出该中断的 rail 的稳定键，答案按此路由
+	InterruptOwner string
 }
 
 // ToolCallInterruptRequest 工具调用级中断请求，扩展 InterruptRequest。
@@ -59,11 +84,60 @@ type ToolCallInterruptRequest struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// InterruptKind 中断类型的已知取值。
+//
+// kind 告诉宿主如何呈现一个中断、答案应是什么形状。取值是普通字符串
+// （而非封闭枚举），以便第三方 rail 声明自己的类型；空串表示抛出方未声明。
+//
+// Python: class InterruptKind
+const (
+	// InterruptKindUndeclared 抛出方未声明类型
+	InterruptKindUndeclared = ""
+	// InterruptKindPermission 权限审批
+	InterruptKindPermission = "permission"
+	// InterruptKindConfirm 确认
+	InterruptKindConfirm = "confirm"
+	// InterruptKindAskUser 向用户反问
+	InterruptKindAskUser = "ask_user"
+	// InterruptKindSkillEvolutionApproval 技能演化审批
+	InterruptKindSkillEvolutionApproval = "skill_evolution_approval"
+	// InterruptKindTeamToolApproval 团队工具审批
+	InterruptKindTeamToolApproval = "team_tool_approval"
+	// InterruptKindClientTool 客户端工具调用
+	InterruptKindClientTool = "client_tool"
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ClientToolInterruptOwner 能力管理器为客户端工具抛出的中断的 owner 键。
+//
+// Python: CLIENT_TOOL_INTERRUPT_OWNER = "openjiuwen.client_tool"
+const ClientToolInterruptOwner = "openjiuwen.client_tool"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// InterruptKindOf 返回中断类型，未声明时返回空串。
+//
+// 字段存在之前持久化的技能演化审批数据把 kind 只存在 metadata["interrupt_kind"]
+// 里，此处兼容该历史形态。
+//
+// Python: interrupt_kind_of(request)
+func InterruptKindOf(request *InterruptRequest) string {
+	if request == nil {
+		return InterruptKindUndeclared
+	}
+	if request.InterruptKind != "" {
+		return request.InterruptKind
+	}
+	if request.Metadata != nil {
+		if kind, ok := request.Metadata["interrupt_kind"].(string); ok {
+			return kind
+		}
+	}
+	return InterruptKindUndeclared
+}
 
 // NewToolCallInterruptRequest 从 InterruptRequester 和 ToolCall 创建 ToolCallInterruptRequest。
 //
@@ -86,6 +160,23 @@ func (r *InterruptRequest) GetMessage() string { return r.Message }
 // GetAutoConfirmKey 实现 InterruptRequester 接口。
 func (r *InterruptRequest) GetAutoConfirmKey() string { return r.AutoConfirmKey }
 
+// RequestInterruptKind 返回中断类型。
+//
+// 供 permissions 包的 InteractionRequestProvider 接口消费：root 权限队列需要
+// 读 interrupt_kind 区分客户端工具中断与权限卡，但不希望依赖 schema 具体类型。
+func (r *InterruptRequest) RequestInterruptKind() string { return r.InterruptKind }
+
+// RequestMetadata 返回中断元数据。
+//
+// 供 permissions 包的 InteractionRequestProvider 接口消费（读 tool_invocation_key）。
+func (r *InterruptRequest) RequestMetadata() map[string]any { return r.Metadata }
+
+// GetMetadata 实现 InterruptRequester 接口。
+func (r *InterruptRequest) GetMetadata() map[string]any { return r.Metadata }
+
+// SetMetadata 实现 InterruptRequester 接口。
+func (r *InterruptRequest) SetMetadata(metadata map[string]any) { r.Metadata = metadata }
+
 // GetMessage 实现 InterruptRequester 接口，委托给 Request 字段。
 func (r *ToolCallInterruptRequest) GetMessage() string {
 	if r.Request != nil {
@@ -100,4 +191,19 @@ func (r *ToolCallInterruptRequest) GetAutoConfirmKey() string {
 		return r.Request.GetAutoConfirmKey()
 	}
 	return ""
+}
+
+// GetMetadata 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) GetMetadata() map[string]any {
+	if r.Request != nil {
+		return r.Request.GetMetadata()
+	}
+	return nil
+}
+
+// SetMetadata 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) SetMetadata(metadata map[string]any) {
+	if r.Request != nil {
+		r.Request.SetMetadata(metadata)
+	}
 }

@@ -46,6 +46,13 @@ type PermissionInterruptRail struct {
 	host *harnesssecurity.ToolPermissionHost
 }
 
+// InterruptKind 本 rail 抛出的中断类型为 permission。
+//
+// Python: ToolSecurityRail.interrupt_kind = InterruptKind.PERMISSION
+func (r *PermissionInterruptRail) InterruptKind() string {
+	return saschema.InterruptKindPermission
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────

@@ -86,4 +86,45 @@ const (
 	InterruptAutoConfirmKey = "__interrupt_auto_confirm__"
 	// ResumeStartIterationKey 恢复时起始迭代键
 	ResumeStartIterationKey = "_resume_start_iteration"
+	// ResumeInterruptAnswersKey 恢复期间按调用归属的答案键。
+	//
+	// 结构：{tool_call_id: {interrupt_owner: *InterruptAnswer}}。rail 只读取
+	// 自己 owner 那份答案，因此不同 rail 在同一调用上的中断不会串台。
+	//
+	// Python: RESUME_INTERRUPT_ANSWERS_KEY
+	ResumeInterruptAnswersKey = "_resume_interrupt_answers"
+	// DeferredToolImagesKey 等待同批全部调用补齐 tool message 的图片项
+	// Python: DEFERRED_TOOL_IMAGES_KEY
+	DeferredToolImagesKey = "_deferred_tool_images"
+	// ToolCallsStillPausedKey 本轮仍有调用保持暂停、未被重放的标记
+	// Python: TOOL_CALLS_STILL_PAUSED_KEY
+	ToolCallsStillPausedKey = "_tool_calls_still_paused"
 )
+
+// ──────────────────────────── 结构体（恢复答案） ────────────────────────────
+
+// InterruptAnswer 一条答案，由中断处理器归属到它所回答的中断。
+//
+// 字段含义（对齐 Python InterruptAnswer）：
+//   - Owner：被回答中断的 interrupt_owner；只有那个 rail 会收到这条答案。
+//   - Kind：被回答中断的 interrupt_kind。
+//   - Value：宿主发来的答案原值。
+//   - Request：被回答的请求（如带客户端运行参数的 ClientToolRequest）。
+//   - Carried：该答案在同一个仍暂停的调用的更早一轮恢复中已给出并被处理。
+//   - Unaddressed：该恢复输入是纯文本，未指定任何中断（提供给该调用上挂起的中断）。
+//
+// Python: class InterruptAnswer(BaseModel)
+type InterruptAnswer struct {
+	// Owner 被回答中断的 owner
+	Owner string
+	// Kind 被回答中断的类型
+	Kind string
+	// Value 宿主发来的答案
+	Value any
+	// Request 被回答的请求
+	Request *InterruptRequest
+	// Carried 是否为更早恢复轮次已处理的答案
+	Carried bool
+	// Unaddressed 是否为未指定中断的纯文本输入
+	Unaddressed bool
+}

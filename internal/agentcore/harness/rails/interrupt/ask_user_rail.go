@@ -47,6 +47,13 @@ type AskUserRail struct {
 	tools []tool.Tool
 }
 
+// InterruptKind 本 rail 抛出的中断类型为 ask_user。
+//
+// Python: AskUserRail.interrupt_kind = InterruptKind.ASK_USER
+func (r *AskUserRail) InterruptKind() string {
+	return saschema.InterruptKindAskUser
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────

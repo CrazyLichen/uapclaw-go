@@ -315,6 +315,12 @@ type mockInterruptRequest struct {
 func (m *mockInterruptRequest) GetMessage() string        { return m.message }
 func (m *mockInterruptRequest) GetAutoConfirmKey() string { return m.autoConfirmKey }
 
+// GetMetadata 实现 InterruptRequester 接口（9.90c 接口扩张）。
+func (m *mockInterruptRequest) GetMetadata() map[string]any { return nil }
+
+// SetMetadata 实现 InterruptRequester 接口（9.90c 接口扩张）。
+func (m *mockInterruptRequest) SetMetadata(map[string]any) {}
+
 // mockInterruptRequestAdapter 适配 InterruptRequester 到 saschema.InterruptRequester。
 type mockInterruptRequestAdapter struct {
 	*mockInterruptRequest

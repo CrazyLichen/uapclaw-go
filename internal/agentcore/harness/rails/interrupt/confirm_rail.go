@@ -56,6 +56,13 @@ type ConfirmInterruptRail struct {
 	autoConfirmKeyFn AutoConfirmKeyFn
 }
 
+// InterruptKind 本 rail 抛出的中断类型为 confirm。
+//
+// Python: ConfirmInterruptRail.interrupt_kind = InterruptKind.CONFIRM
+func (r *ConfirmInterruptRail) InterruptKind() string {
+	return saschema.InterruptKindConfirm
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
