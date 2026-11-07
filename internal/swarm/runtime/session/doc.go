@@ -16,7 +16,9 @@
 //	session/
 //	├── doc.go                    # 包文档
 //	├── model.go                  # 枚举、快照、执行句柄（handle）
-//	├── execution_registry.go     # 执行索引与终态回收
+//	├── execution_registry.go     # 执行索引与终态回收（含双信号语义）
+//	├── session_lifecycle.go      # 生命周期事件、参与者接口与登记表
+//	├── session_delete.go         # 删除结果、删除锁与团队删除围栏
 //	├── work_scheduler.go         # 每会话串行 lane 与两级优先级
 //	└── coordinator.go            # 账本门面：登记、运行、取消、关闭
 //
