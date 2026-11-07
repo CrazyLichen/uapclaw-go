@@ -8,6 +8,7 @@ package auto_permission
 
 import (
 	"errors"
+	"regexp"
 
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -105,6 +106,65 @@ const (
 	// Python: DETERMINISTIC_READONLY_PUBLIC_WEB_REASON
 	DeterministicReadonlyPublicWebReason = "deterministic_readonly_public_web"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ShellDisplayPathPattern 从 shell 命令里抽出需要脱敏显示的路径。
+//
+// 覆盖 macOS（/Users/、/private/、/tmp/）、Linux（/home/x/）、
+// HOME 相对（~/...）与 Windows 盘符（C:\Users\、Documents and Settings）四类。
+//
+// ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
+//
+// Python: _SHELL_DISPLAY_PATH_PATTERN
+var ShellDisplayPathPattern = regexp.MustCompile(
+	`(?:` +
+		`(?:/Users/|/private/|/tmp/)[^\s\"']+` +
+		`|/home/[^/\s\"']+/[^\s\"']+` +
+		`|~(?:[/\\][^\s\"']+)+` +
+		`|[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]` +
+		"[^'\";|&<>`,，。；、\\r\\n]+" +
+		`)`,
+)
+
+// ShellDisplayPreSplitPathPattern 仅匹配 Windows 盘符路径，用于预切分。
+//
+// ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
+//
+// Python: _SHELL_DISPLAY_PRE_SPLIT_PATH_PATTERN
+var ShellDisplayPreSplitPathPattern = regexp.MustCompile(
+	`[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]` +
+		"[^'\";|&<>`,，。；、\\r\\n]+",
+)
+
+// SensitiveDisplayPathPattern 识别敏感文件名与目录（.env / 凭证 / 密钥）。
+//
+// 三类：点文件类（.env*、credentials、id_*、known_hosts）、
+// 敏感目录（.ssh / .aws / .gnupg / .jiuwenswarm/config）、
+// 关键词类（secret / token / api_key / private_key / credential / password）。
+//
+// ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
+//
+// Python: _SENSITIVE_DISPLAY_PATH_PATTERN
+var SensitiveDisplayPathPattern = regexp.MustCompile(
+	`(?i)(?:` +
+		`(^|[/\\])(?:\.env(?:\.[^/\\]+)?|credentials?|id_rsa|id_dsa|id_ecdsa|` +
+		`id_ed25519|known_hosts)$` +
+		`|(^|[/\\])(?:\.ssh|\.aws|\.gnupg|\.jiuwenswarm[/\\]config)(?:[/\\]|$)` +
+		`|(?:secret|token|api[_-]?key|private[_-]?key|credential|password)` +
+		`)`,
+)
+
+// DeterministicReadonlyPublicWebFetchSourceKinds 允许确定性放行的 fetch 来源类型集合。
+//
+// 只读用途，本包内不得对其赋值。
+//
+// ⤵️ Python 全仓零消费，待 9.90d 的 deterministic 启用。
+//
+// Python: DETERMINISTIC_READONLY_PUBLIC_WEB_FETCH_SOURCE_KINDS = frozenset({"recent_search_result"})
+var DeterministicReadonlyPublicWebFetchSourceKinds = map[string]struct{}{
+	"recent_search_result": {},
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

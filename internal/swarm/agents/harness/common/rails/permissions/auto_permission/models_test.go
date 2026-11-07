@@ -163,3 +163,81 @@ func TestDeterministicReadonlyPublicWebReason_取值(t *testing.T) {
 		t.Fatalf("应 deterministic_readonly_public_web，实际 %q", DeterministicReadonlyPublicWebReason)
 	}
 }
+
+// ──────────────────────────── 正则与集合常量测试 ────────────────────────────
+
+// TestShellDisplayPathPattern_编译与匹配 验证三个 shell 路径场景能抽出路径
+func TestShellDisplayPathPattern_编译与匹配(t *testing.T) {
+	if ShellDisplayPathPattern == nil {
+		t.Fatal("ShellDisplayPathPattern 不应为 nil")
+	}
+	cases := []string{
+		"/Users/alice/work/a.txt",
+		"/home/bob/project/x",
+		"~/work/file.txt",
+		"/private/tmp/z",
+		"/tmp/y.log",
+		`C:\Users\me\a.txt`,
+	}
+	for _, s := range cases {
+		if !ShellDisplayPathPattern.MatchString(s) {
+			t.Errorf("应匹配 %q", s)
+		}
+	}
+}
+
+// TestShellDisplayPreSplitPathPattern_编译与匹配 验证只匹配 Windows 盘符路径
+func TestShellDisplayPreSplitPathPattern_编译与匹配(t *testing.T) {
+	if ShellDisplayPreSplitPathPattern == nil {
+		t.Fatal("ShellDisplayPreSplitPathPattern 不应为 nil")
+	}
+	if !ShellDisplayPreSplitPathPattern.MatchString(`C:\Users\me\a.txt`) {
+		t.Error(`应匹配 C:\Users\me\a.txt`)
+	}
+	if ShellDisplayPreSplitPathPattern.MatchString("/Users/alice/a.txt") {
+		t.Error("不应匹配 Unix 路径")
+	}
+}
+
+// TestSensitiveDisplayPathPattern_编译与匹配 验证敏感文件名与目录识别
+func TestSensitiveDisplayPathPattern_编译与匹配(t *testing.T) {
+	if SensitiveDisplayPathPattern == nil {
+		t.Fatal("SensitiveDisplayPathPattern 不应为 nil")
+	}
+	yes := []string{
+		"/a/.env",
+		"/a/.env.local",
+		"/a/credentials",
+		"/a/id_rsa",
+		"/a/id_ed25519",
+		"/a/known_hosts",
+		"/a/.ssh/config",
+		"/a/.aws/credentials",
+		"/a/.gnupg/key",
+		"/a/my_secret.txt",
+		"/a/token.json",
+		"/a/api_key.txt",
+		"/a/private_key.pem",
+	}
+	for _, s := range yes {
+		if !SensitiveDisplayPathPattern.MatchString(s) {
+			t.Errorf("应匹配 %q", s)
+		}
+	}
+	no := []string{"/a/normal.txt", "/a/readme.md", "/a/public.html"}
+	for _, s := range no {
+		if SensitiveDisplayPathPattern.MatchString(s) {
+			t.Errorf("不应匹配 %q", s)
+		}
+	}
+}
+
+// TestDeterministicReadonlyPublicWebFetchSourceKinds_内容 验证集合成员
+func TestDeterministicReadonlyPublicWebFetchSourceKinds_内容(t *testing.T) {
+	if len(DeterministicReadonlyPublicWebFetchSourceKinds) != 1 {
+		t.Fatalf("应只有 1 个成员，实际 %d", len(DeterministicReadonlyPublicWebFetchSourceKinds))
+	}
+	if _, ok := DeterministicReadonlyPublicWebFetchSourceKinds["recent_search_result"]; !ok {
+		t.Fatal("应包含 recent_search_result")
+	}
+}
