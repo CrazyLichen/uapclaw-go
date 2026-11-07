@@ -210,7 +210,7 @@ func (r *TaskCompletionRail) GoalReportSink() *goaltools.GoalReportSink {
 // Python: TaskCompletionRail.init (task_completion_rail.py L218)
 func (r *TaskCompletionRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// Python: self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
-	if provider, ok := agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
+	if provider, ok := agent.(promptAttachmentProvider); ok {
 		r.attachmentManagerFor = provider.PromptAttachments
 	}
 	if r.goalManager == nil {
@@ -559,7 +559,7 @@ func notifyEvaluator(cbc *agentinterfaces.AgentCallbackContext, text string) {
 
 // syncGoalProtocolPrompt 按 run_kind 挂/清 goal_protocol 附件。
 // Python: _sync_goal_protocol_prompt (task_completion_rail.py L325)
-func (r *TaskCompletionRail) syncGoalProtocolPrompt(_ context.Context, cbc *agentinterfaces.AgentCallbackContext, builder any) {
+func (r *TaskCompletionRail) syncGoalProtocolPrompt(_ context.Context, cbc *agentinterfaces.AgentCallbackContext, builder saprompt.SystemPromptBuilderInterface) {
 	runKind := r.getRunKind(cbc)
 	wantGoal := runKind == string(agentinterfaces.RunKindGoal) && r.goalManager != nil
 	language := r.resolveGoalLanguage(builder)
@@ -845,10 +845,10 @@ func (r *TaskCompletionRail) extractAttemptContext(cbc *agentinterfaces.AgentCal
 
 // resolveGoalLanguage 解析 goal 语言：优先 builder.Language，回退 rail.goalLanguage。
 // Python: _resolve_goal_language + _goal_language_from_ctx (task_completion_rail.py L152/L163)
-func (r *TaskCompletionRail) resolveGoalLanguage(builder any) string {
+func (r *TaskCompletionRail) resolveGoalLanguage(builder saprompt.SystemPromptBuilderInterface) string {
 	raw := ""
-	if b, ok := builder.(interface{ Language() string }); ok {
-		raw = b.Language()
+	if builder != nil {
+		raw = builder.Language()
 	}
 	if raw == "" {
 		raw = r.goalLanguage

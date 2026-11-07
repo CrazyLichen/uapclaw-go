@@ -1725,6 +1725,12 @@ func (d *DeepAgent) Start(ctx context.Context, sess *session.Session) error {
 	})
 	d.SetGoalCoordinator(gm)
 	d.bindLiveGoalManager(tcRail)
+	// 绑定后必须再 Init 一次，goal 工具才会真正注册：prepareInteractionTaskLoop /
+	// RegisterRail 阶段的 Init 早于 GoalManager 构造，goalManager 为 nil 时直接返回。
+	// Python: _bind_live_goal_manager(rail) + init_rail(rail, self) (L3987-3992)
+	if err := tcRail.Init(ctx, d); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[DeepAgent] Failed to register goal tools")
+	}
 
 	d.interactionSupervisorMu.Lock()
 	d.interactionStarted = true
@@ -2509,6 +2515,8 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 			d.railsMu.Lock()
 			d.taskCompletionRail = tc
 			d.railsMu.Unlock()
+			// Python: isinstance(rail_inst, TaskCompletionRail) → _bind_live_goal_manager (L1497-1499)
+			d.bindLiveGoalManager(tc)
 		}
 		// Python: isinstance(rail_inst, DeepAgentRail) → set_sys_operation / set_workspace
 		if provider, ok := r.(rails.DeepAgentRailProvider); ok {

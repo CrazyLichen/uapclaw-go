@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
@@ -141,3 +142,23 @@ func TestGoalLifecycleSuite(t *testing.T) {
 
 // strPtr 返回字符串指针。
 func strPtr(s string) *string { return &s }
+
+// TestGoalTools注册_Start后可用 验证 Start 后 submit_goal_report / get_current_goal
+// 已注册到 AbilityManager（守护「绑定后必须再 Init」的修复）。
+func (s *goalLifecycleSuite) TestGoalTools注册_Start后可用() {
+	ctx := s.Ctx
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{EnableTaskLoop: true})
+	s.Require().NoError(err)
+
+	sess := s.NewTestSession("goal-tools-1")
+	s.Require().NoError(sess.PreRun(ctx))
+	s.Require().NoError(agent.Start(ctx, sess))
+	s.T().Cleanup(func() { _ = agent.Stop(context.Background()) })
+
+	names := make(map[string]bool)
+	for _, ability := range agent.AbilityManager().List() {
+		names[ability.AbilityName()] = true
+	}
+	s.True(names["submit_goal_report"], "submit_goal_report 应已注册，实际=%v", names)
+	s.True(names["get_current_goal"], "get_current_goal 应已注册，实际=%v", names)
+}
