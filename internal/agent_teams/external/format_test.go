@@ -36,11 +36,11 @@ type fakeMessage struct {
 	timestampMs int64
 }
 
-func (f fakeMessage) MessageID() string       { return f.messageID }
-func (f fakeMessage) FromMemberName() string  { return f.fromMember }
-func (f fakeMessage) Content() string         { return f.content }
-func (f fakeMessage) Broadcast() bool         { return f.broadcast }
-func (f fakeMessage) TimestampMs() int64      { return f.timestampMs }
+func (f fakeMessage) MessageID() string      { return f.messageID }
+func (f fakeMessage) FromMemberName() string { return f.fromMember }
+func (f fakeMessage) Content() string        { return f.content }
+func (f fakeMessage) Broadcast() bool        { return f.broadcast }
+func (f fakeMessage) TimestampMs() int64     { return f.timestampMs }
 
 // TestRenderMessage_直发普通成员 验证普通成员收到 reply-hint note（golden）。
 func TestRenderMessage_直发普通成员(t *testing.T) {
