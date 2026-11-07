@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -942,12 +943,64 @@ func (am *AbilityManager) executeTool(
 	if acceptor, ok := t.(tool.CallbackContextAcceptor); ok && acceptor.AcceptsToolCallbackContext() {
 		invokeOpts = append(invokeOpts, tool.WithToolCallbackContext(cbc))
 	}
-	result, err := lt.Invoke(ctx, toolArgs, invokeOpts...)
+	// 外层调用预算：卡片声明 → 默认 300 → 豁免提升为 3600 → 工具钩子（bash/ps 再加清理宽限）
+	//
+	// 没有这一层时 tool.invoke 可以永久挂住，整轮 ReAct 卡死：上游 issue 的
+	// 典型场景是 glob 扫大项目跑了一小时。
+	// Python: ability_manager.py:1755-1773（注册路径）/ :1901-1907（回退路径）
+	callTimeout := resolveInvocationTimeout(lt, toolArgs, effectiveCallTimeout(resolveCallTimeout(toolCard)))
+	invokeCtx, cancelInvoke := context.WithTimeout(ctx, time.Duration(callTimeout*float64(time.Second)))
+	defer cancelInvoke()
+
+	// context.WithTimeout 只把信号传给下游，不会打断不检查 ctx 的工具调用
+	// （time.Sleep、纯 CPU 循环都无视 cancel）。要拿到"到点就返回"的语义，
+	// 必须在独立 goroutine 里跑并 select 期限——对齐上游 anyio.fail_after 的
+	// 强制时限语义（Python 侧由 cancel scope 触发 CancelledError）。
+	type invokeOutcome struct {
+		result map[string]any
+		err    error
+	}
+	outcomeCh := make(chan invokeOutcome, 1)
+	go func() {
+		// 工具 panic 必须在这里 recover：调用栈已切到新 goroutine，
+		// 外层 executeSingleToolCall 的 recover 看不到它。
+		defer func() {
+			if rec := recover(); rec != nil {
+				outcomeCh <- invokeOutcome{err: panicToError(rec)}
+			}
+		}()
+		r, invokeErr := lt.Invoke(invokeCtx, toolArgs, invokeOpts...)
+		outcomeCh <- invokeOutcome{result: r, err: invokeErr}
+	}()
+
+	var result map[string]any
+	select {
+	case outcome := <-outcomeCh:
+		result, err = outcome.result, outcome.err
+	case <-invokeCtx.Done():
+		// 期限命中：下游 goroutine 会在自身检查 ctx 时退出，结果丢弃。
+		// 注意这里不能等它——那正是要避免的"等一个挂住的调用"。
+		err = invokeCtx.Err()
+	}
 	if err != nil {
 		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
 		var tie *agentschema.ToolInterruptException
 		if errors.As(err, &tie) {
 			return agentschema.ExecuteResult{}, tie
+		}
+		// 外层期限命中：转成带 tool_call_id 的可恢复错误，让模型自我纠正而非整轮失败。
+		// context.Canceled 不在此列——用户中断不是工具超时。
+		if errors.Is(invokeCtx.Err(), context.DeadlineExceeded) {
+			logger.Warn(logComponent).
+				Str("tool_name", toolName).
+				Float64("call_timeout", callTimeout).
+				Msg("tool invocation timed out")
+			return agentschema.ExecuteResult{}, NewAbilityExecutionError(
+				exception.StatusToolLocalFunctionExecutionError,
+				toolCall.ID,
+				fmt.Sprintf("Tool '%s' timed out after %vs", toolName, callTimeout),
+				exception.WithParam("tool_name", toolName),
+			)
 		}
 		logger.Error(logComponent).
 			Str("tool_name", toolName).
@@ -1221,12 +1274,54 @@ func (am *AbilityManager) executeFallbackTool(
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
 	// Python: _ToolMeta.__call__ 中的自动生命周期注入
 	lt := tool.NewLifecycleTool(t)
-	result, invokeErr := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
+	// 回退路径同样受外层调用预算约束（按工具自身卡片解析）。
+	// Python: ability_manager.py:1901-1907 使用 tool.card 走同一套策略
+	callTimeout := resolveInvocationTimeout(lt, toolArgs, effectiveCallTimeout(resolveCallTimeout(t.Card())))
+	invokeCtx, cancelInvoke := context.WithTimeout(ctx, time.Duration(callTimeout*float64(time.Second)))
+	defer cancelInvoke()
+
+	// 与注册路径一致：独立 goroutine + select 期限，让无视 ctx 的工具也能到点返回
+	type fallbackOutcome struct {
+		result map[string]any
+		err    error
+	}
+	outcomeCh := make(chan fallbackOutcome, 1)
+	go func() {
+		// 同注册路径：panic 只能在 goroutine 内 recover
+		defer func() {
+			if rec := recover(); rec != nil {
+				outcomeCh <- fallbackOutcome{err: panicToError(rec)}
+			}
+		}()
+		r, invokeErr := lt.Invoke(invokeCtx, toolArgs, tool.WithToolSession(sess))
+		outcomeCh <- fallbackOutcome{result: r, err: invokeErr}
+	}()
+
+	var result map[string]any
+	var invokeErr error
+	select {
+	case outcome := <-outcomeCh:
+		result, invokeErr = outcome.result, outcome.err
+	case <-invokeCtx.Done():
+		invokeErr = invokeCtx.Err()
+	}
 	if invokeErr != nil {
 		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
 		var tie *agentschema.ToolInterruptException
 		if errors.As(invokeErr, &tie) {
 			return agentschema.ExecuteResult{}, tie
+		}
+		if errors.Is(invokeCtx.Err(), context.DeadlineExceeded) {
+			logger.Warn(logComponent).
+				Str("tool_name", toolName).
+				Float64("call_timeout", callTimeout).
+				Msg("tool invocation timed out")
+			return agentschema.ExecuteResult{}, NewAbilityExecutionError(
+				exception.StatusToolLocalFunctionExecutionError,
+				toolCall.ID,
+				fmt.Sprintf("Tool '%s' timed out after %vs", toolName, callTimeout),
+				exception.WithParam("tool_name", toolName),
+			)
 		}
 		logger.Error(logComponent).
 			Str("tool_name", toolName).

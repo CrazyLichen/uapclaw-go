@@ -1548,3 +1548,114 @@ func addCardsToManager(t *testing.T, am *AbilityManager, tools map[string]tool.T
 		}
 	}
 }
+
+// ──────────────────────────── 外层调用超时 ────────────────────────────
+
+// newSlowTool 创建睡眠指定时长的测试工具。
+func newSlowTool(t *testing.T, name string, sleep time.Duration, card *tool.ToolCard) tool.Tool {
+	t.Helper()
+	tl, err := tool.NewTool(
+		func(_ context.Context, _ orderTrackingInput, _ ...tool.ToolOption) (map[string]any, error) {
+			time.Sleep(sleep)
+			return map[string]any{"ok": true}, nil
+		},
+		tool.WithToolName(name),
+		tool.WithToolCard(card),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tl
+}
+
+// TestExecute_工具超时产出可恢复ToolMessage 验证超时不整轮失败，而是回灌 tool_message。
+//
+// 回归：此前 tool.invoke 完全无外层期限，一个挂住的工具会把整轮 ReAct 卡死。
+func TestExecute_工具超时产出可恢复ToolMessage(t *testing.T) {
+	card := tool.NewToolCard("slow", "", nil, map[string]any{
+		"resilience": map[string]any{"timeout_s": 0.1},
+	})
+	tl := newSlowTool(t, "slow", 2*time.Second, card)
+
+	am := NewAbilityManager(newTestResourceMgr(map[string]tool.Tool{"slow": tl}, nil, nil))
+	addCardsToManager(t, am, map[string]tool.Tool{"slow": tl})
+
+	start := time.Now()
+	results := am.Execute(context.Background(), nil,
+		[]*llmschema.ToolCall{{ID: "c1", Name: "slow", Arguments: "{}"}}, nil, "", true)
+	elapsed := time.Since(start)
+
+	if elapsed > 1500*time.Millisecond {
+		t.Fatalf("应在 0.1s 预算处超时返回，实际耗时 %v", elapsed)
+	}
+	if len(results) != 1 {
+		t.Fatalf("期望 1 条结果，实际 %d", len(results))
+	}
+	if results[0].ToolMsg == nil {
+		t.Fatal("超时必须产出 ToolMessage，否则 assistant 的 tool_calls 悬空")
+	}
+	if !strings.Contains(results[0].ToolMsg.Content.Text(), "timed out") {
+		t.Fatalf("超时文案应含 timed out，实际 %q", results[0].ToolMsg.Content)
+	}
+	if results[0].ToolMsg.ToolCallID != "c1" {
+		t.Fatalf("tool_call_id 应为 c1，实际 %q", results[0].ToolMsg.ToolCallID)
+	}
+}
+
+// TestExecute_取消不转超时 验证用户中断不被渲染成工具超时。
+//
+// 取消与超时都会让 ctx 结束，但语义完全不同：取消是用户意图，
+// 转成"timed out"会误导模型继续重试。
+func TestExecute_取消不转超时(t *testing.T) {
+	card := tool.NewToolCard("blk", "", nil, nil)
+	tl, err := tool.NewTool(
+		func(ctx context.Context, _ orderTrackingInput, _ ...tool.ToolOption) (map[string]any, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+		tool.WithToolName("blk"),
+		tool.WithToolCard(card),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	am := NewAbilityManager(newTestResourceMgr(map[string]tool.Tool{"blk": tl}, nil, nil))
+	addCardsToManager(t, am, map[string]tool.Tool{"blk": tl})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+	results := am.Execute(ctx, nil,
+		[]*llmschema.ToolCall{{ID: "c2", Name: "blk", Arguments: "{}"}}, nil, "", true)
+
+	for _, r := range results {
+		if r.ToolMsg != nil && strings.Contains(r.ToolMsg.Content.Text(), "timed out") {
+			t.Fatal("取消不应被渲染成工具超时")
+		}
+	}
+}
+
+// TestExecute_豁免工具走硬上限 验证 resilience.timeout_s=null 的工具不会无限挂住。
+//
+// 豁免只表示"不用 300s 默认值"，仍受 3600s 硬上限约束。
+func TestExecute_豁免工具走硬上限(t *testing.T) {
+	card := tool.NewToolCard("exempt", "", nil, map[string]any{
+		"resilience": map[string]any{"timeout_s": nil},
+	})
+	tl := newSlowTool(t, "exempt", 0, card)
+
+	am := NewAbilityManager(newTestResourceMgr(map[string]tool.Tool{"exempt": tl}, nil, nil))
+	addCardsToManager(t, am, map[string]tool.Tool{"exempt": tl})
+
+	results := am.Execute(context.Background(), nil,
+		[]*llmschema.ToolCall{{ID: "c3", Name: "exempt", Arguments: "{}"}}, nil, "", true)
+	if len(results) != 1 || results[0].ToolMsg == nil {
+		t.Fatal("应正常完成")
+	}
+	if strings.Contains(results[0].ToolMsg.Content.Text(), "timed out") {
+		t.Fatal("瞬时完成的豁免工具不应超时")
+	}
+}
