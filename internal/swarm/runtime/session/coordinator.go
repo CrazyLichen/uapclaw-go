@@ -1051,6 +1051,7 @@ func (c *RuntimeSessionCoordinator) CancelExecution(
 //  7. scheduler.CloseSession(sid, gen)
 //  8. scheduler 不存在时把未结束的 scheduled active 塞进 settling
 //  9. settlingTimeouts = waitForHandles(settling)
+//
 // 10. 合并超时；非超时且未终态标 CANCELLED。有超时 → 保持 QUIESCING；无超时 → CLOSED
 func (c *RuntimeSessionCoordinator) CloseSession(
 	sessionID string,
