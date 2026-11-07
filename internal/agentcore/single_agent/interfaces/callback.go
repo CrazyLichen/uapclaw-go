@@ -236,6 +236,28 @@ type SteeringDrainInputs struct {
 // EventKind 返回事件输入种类标识。
 func (s *SteeringDrainInputs) EventKind() string { return "steering_drain_inputs" }
 
+// UserMessageInputs ON_USER_MESSAGE 事件输入。
+//
+// 一批即将被 join 成一条 UserMessage 的输入，最旧在前。这是 rails 唯一
+// 还能把输入**当作输入**处理的时刻：此后它们就是一条普通历史消息，会被
+// compaction 重写，不能再按位置定位，也不能再改（改一条消息会让其后每一
+// 个 KV-cache 条目失效）。
+//
+// Python: UserMessageInputs (openjiuwen/core/single_agent/rail/base.py L378-399)
+type UserMessageInputs struct {
+	// Parts 排队输入列表，最旧在前（可变，rails 原地增删）
+	//
+	// rails 在这里丢弃被后续条目取代的整条输入，或 insert(0, ...) 前插
+	// 模型应优先读到的上下文。留下来的用换行 join 成消息体，因此一条
+	// 就是一个完整输入，丢掉一条不影响其余。
+	Parts []string
+	// Source 批次来源：query（新一轮或 follow-up）/ steering（轮中注入）/ resume（中断恢复）
+	Source string
+}
+
+// EventKind 返回事件输入种类标识。
+func (u *UserMessageInputs) EventKind() string { return "user_message_inputs" }
+
 // ToolCallInputs BEFORE/AFTER_TOOL_CALL 事件输入。
 //
 // Python: ToolCallInputs (openjiuwen/core/single_agent/rail/base.py L119-134)
