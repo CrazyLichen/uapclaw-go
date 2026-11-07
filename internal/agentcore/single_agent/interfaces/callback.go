@@ -40,6 +40,8 @@ type AgentRail interface {
 	BeforeInvoke(ctx context.Context, cbc *AgentCallbackContext) error
 	// OnUserMessage 用户消息写入历史前（每轮一次）
 	OnUserMessage(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeSteeringDrain 待处理 steering 消息离队之前（仅在有积压时触发）
+	BeforeSteeringDrain(ctx context.Context, cbc *AgentCallbackContext) error
 	// AfterInvoke invoke 完成后
 	AfterInvoke(ctx context.Context, cbc *AgentCallbackContext) error
 	// BeforeTaskIteration 外层任务循环迭代开始前
@@ -154,6 +156,9 @@ type BaseRail struct {
 
 // OnUserMessage 用户消息写入历史前的默认空实现。
 func (r *BaseRail) OnUserMessage(_ context.Context, _ *AgentCallbackContext) error { return nil }
+
+// BeforeSteeringDrain 默认 no-op。
+func (r *BaseRail) BeforeSteeringDrain(_ context.Context, _ *AgentCallbackContext) error { return nil }
 
 // RunContext 结构化运行时上下文（心跳等场景）。
 //
@@ -629,15 +634,26 @@ func (c *AgentCallbackContext) PushSteering(msg string) error {
 	}
 }
 
-// DrainSteering 非阻塞排空所有待处理 steering 消息。
+// DrainSteering 非阻塞取走待处理 steering 消息，最旧优先。
 //
-// Python: AgentCallbackContext.drain_steering() -> List[str]
-func (c *AgentCallbackContext) DrainSteering() []string {
+// limit 为 nil 表示不限（全部取走）；非 nil 时上限为 max(1, *limit)——
+// 非空队列始终至少放行 1 条，否则 HasPendingSteering 会让 ReAct 循环
+// 在一个永不消费的积压上空转。未被取走的留在队列原位。
+//
+// Python: AgentCallbackContext.drain_steering(limit) (rail/base.py L725-785)
+func (c *AgentCallbackContext) DrainSteering(limit *int) []string {
 	if c.steeringQueue == nil {
 		return nil
 	}
+	take := 0 // 0 表示不限
+	if limit != nil {
+		take = *limit
+		if take < 1 {
+			take = 1
+		}
+	}
 	var msgs []string
-	for {
+	for take == 0 || len(msgs) < take {
 		select {
 		case msg := <-c.steeringQueue:
 			msgs = append(msgs, msg)
@@ -645,6 +661,17 @@ func (c *AgentCallbackContext) DrainSteering() []string {
 			return msgs
 		}
 	}
+	return msgs
+}
+
+// SteeringPendingCount 返回当前排队条数。
+//
+// Python: AgentCallbackContext.steering_pending_count() (rail/base.py L787-791)
+func (c *AgentCallbackContext) SteeringPendingCount() int {
+	if c.steeringQueue == nil {
+		return 0
+	}
+	return len(c.steeringQueue)
 }
 
 // HasPendingSteering 检查是否有待处理的 steering 消息。

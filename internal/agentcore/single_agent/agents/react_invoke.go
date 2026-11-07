@@ -737,7 +737,7 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		// steering 注入
-		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
+		if steeringMsgs := cbc.DrainSteering(nil); len(steeringMsgs) > 0 && modelCtx != nil {
 			if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
 				runCommitCallbacks(cbc)
 			}

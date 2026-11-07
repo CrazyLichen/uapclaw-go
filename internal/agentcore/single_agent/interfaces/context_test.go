@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -102,7 +103,7 @@ func TestPushSteering_正常写入(t *testing.T) {
 	_ = ctx.PushSteering("msg1")
 	_ = ctx.PushSteering("msg2")
 
-	msgs := ctx.DrainSteering()
+	msgs := ctx.DrainSteering(nil)
 	assert.Equal(t, []string{"msg1", "msg2"}, msgs)
 }
 
@@ -118,21 +119,21 @@ func TestPushSteering_队列满丢弃(t *testing.T) {
 	err := ctx.PushSteering("c")
 	assert.Equal(t, ErrSteeringQueueFull, err)
 
-	msgs := ctx.DrainSteering()
+	msgs := ctx.DrainSteering(nil)
 	assert.Equal(t, []string{"a", "b"}, msgs)
 }
 
 // TestDrainSteering_无队列 验证无队列时返回 nil
 func TestDrainSteering_无队列(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.Nil(t, ctx.DrainSteering())
+	assert.Nil(t, ctx.DrainSteering(nil))
 }
 
 // TestDrainSteering_空队列 验证空队列返回 nil
 func TestDrainSteering_空队列(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
 	ctx.BindSteeringQueue(make(chan string, 4096))
-	assert.Nil(t, ctx.DrainSteering())
+	assert.Nil(t, ctx.DrainSteering(nil))
 }
 
 // TestHasPendingSteering 验证各种状态下 HasPendingSteering
@@ -152,7 +153,7 @@ func TestHasPendingSteering(t *testing.T) {
 	assert.True(t, ctx.HasPendingSteering())
 
 	// drain 后
-	ctx.DrainSteering()
+	ctx.DrainSteering(nil)
 	assert.False(t, ctx.HasPendingSteering())
 }
 
@@ -164,7 +165,7 @@ func TestBindSteeringQueue(t *testing.T) {
 	assert.Equal(t, q, ctx.SteeringQueue())
 
 	_ = ctx.PushSteering("test")
-	msgs := ctx.DrainSteering()
+	msgs := ctx.DrainSteering(nil)
 	assert.Equal(t, []string{"test"}, msgs)
 }
 
@@ -601,4 +602,89 @@ func TestNewWorkflowOptions_空选项(t *testing.T) {
 	opts := NewWorkflowOptions()
 	assert.Nil(t, opts.Session)
 	assert.Nil(t, opts.Context)
+}
+
+// TestDrainSteering_无Limit排空全部 验证 nil 保持既有"全取"语义。
+func TestDrainSteering_无Limit排空全部(t *testing.T) {
+	cbc := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
+	ch := make(chan string, 8)
+	cbc.BindSteeringQueue(ch)
+	for _, m := range []string{"a", "b", "c", "d", "e"} {
+		require.NoError(t, cbc.PushSteering(m))
+	}
+	require.Equal(t, []string{"a", "b", "c", "d", "e"}, cbc.DrainSteering(nil))
+}
+
+// TestDrainSteering_Limit生效 验证只取 N 条且剩余保持原序。
+//
+// spec C4：剩余留在队列原位（Go channel 天然 FIFO 保留）。
+func TestDrainSteering_Limit生效(t *testing.T) {
+	cbc := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
+	ch := make(chan string, 8)
+	cbc.BindSteeringQueue(ch)
+	for _, m := range []string{"a", "b", "c", "d", "e"} {
+		require.NoError(t, cbc.PushSteering(m))
+	}
+	limit := 2
+	require.Equal(t, []string{"a", "b"}, cbc.DrainSteering(&limit))
+	require.Equal(t, []string{"c", "d", "e"}, cbc.DrainSteering(nil), "剩余必须按原序保留")
+}
+
+// TestDrainSteering_Limit非正至少取一条 验证 0/负数不会让循环空转。
+//
+// spec C6：Python take = max(1, limit)；不取任何一条会让 has_pending_steering
+// 永远为真，ReAct 循环空转不前进。
+func TestDrainSteering_Limit非正至少取一条(t *testing.T) {
+	for _, v := range []int{0, -1, -99} {
+		cbc := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
+		ch := make(chan string, 4)
+		cbc.BindSteeringQueue(ch)
+		require.NoError(t, cbc.PushSteering("a"))
+		require.NoError(t, cbc.PushSteering("b"))
+		limit := v
+		require.Equal(t, []string{"a"}, cbc.DrainSteering(&limit), "limit=%d 时必须放行 1 条", v)
+		require.True(t, cbc.HasPendingSteering(), "limit=%d 时不得把队列吃空", v)
+	}
+}
+
+// TestSteeringPendingCount_含未取积压 验证计数与队列一致。
+//
+// spec C7。
+func TestSteeringPendingCount_含未取积压(t *testing.T) {
+	cbc := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
+	require.Zero(t, cbc.SteeringPendingCount(), "未绑定队列返回 0")
+
+	ch := make(chan string, 8)
+	cbc.BindSteeringQueue(ch)
+	require.NoError(t, cbc.PushSteering("a"))
+	require.NoError(t, cbc.PushSteering("b"))
+	require.NoError(t, cbc.PushSteering("c"))
+	require.Equal(t, 3, cbc.SteeringPendingCount())
+
+	limit := 1
+	cbc.DrainSteering(&limit)
+	require.Equal(t, 2, cbc.SteeringPendingCount())
+}
+
+// TestAgentRail_BeforeSteeringDrain默认空实现 验证默认 no-op。
+func TestAgentRail_BeforeSteeringDrain默认空实现(t *testing.T) {
+	var r BaseRail
+	require.NoError(t, r.BeforeSteeringDrain(context.Background(), nil))
+}
+
+// TestClear_清得掉BeforeSteeringDrain 验证 Clear() 能清掉新事件的钩子。
+//
+// spec C15：Clear() 依赖 AllCallbackEvents() 枚举；漏加该事件会让钩子
+// 永远清不掉，留下悬挂回调。
+func TestClear_清得掉BeforeSteeringDrain(t *testing.T) {
+	m := NewAgentCallbackManager("agent-clear-test")
+	fn := func(_ context.Context, _ any) error { return nil }
+	m.RegisterCallback(context.Background(), CallbackBeforeSteeringDrain, fn)
+
+	require.True(t, m.HasHooks(CallbackBeforeSteeringDrain))
+
+	m.Clear()
+
+	require.False(t, m.HasHooks(CallbackBeforeSteeringDrain),
+		"Clear() 必须清掉 before_steering_drain（验证它已进 AllCallbackEvents）")
 }
