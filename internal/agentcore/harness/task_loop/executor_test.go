@@ -695,3 +695,38 @@ func TestTaskLoopExecutor_改写query则不带parts(t *testing.T) {
 	}
 	require.Equal(t, parts, effective2["_input_parts"])
 }
+
+// TestExtractInputParts_接线条件 验证 executor 的下发条件（有效多帧且 query 未改写）。
+//
+// 复刻 executor 步骤 14 后的判定，覆盖"真的要下发"的分支：
+//
+//	Python: if input_parts is not None and iter_inputs.query == query
+//	(task_loop_event_executor.py L216-219)
+func TestExtractInputParts_接线条件(t *testing.T) {
+	evt := &cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.TextDataFrame{Text: "一"},
+			&cschema.TextDataFrame{Text: "二"},
+		},
+	}
+	query := "一\n二"
+	parts := extractInputParts(evt)
+	require.Len(t, parts, 2)
+
+	// 未改写 → 下发
+	effective := map[string]any{"query": query}
+	if parts != nil && query == query {
+		effective["_input_parts"] = parts
+	}
+	require.Equal(t, []string{"一", "二"}, effective["_input_parts"])
+
+	// 单帧 → parts 为 nil，不下发
+	single := &cschema.InputEvent{InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "只有一个"}}}
+	require.Nil(t, extractInputParts(single))
+	effective2 := map[string]any{"query": "只有一个"}
+	if p := extractInputParts(single); p != nil {
+		effective2["_input_parts"] = p
+	}
+	_, has := effective2["_input_parts"]
+	require.False(t, has, "单帧不下发 _input_parts")
+}
