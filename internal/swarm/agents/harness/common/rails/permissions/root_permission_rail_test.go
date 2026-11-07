@@ -9,6 +9,7 @@ import (
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysoperation "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -353,24 +354,36 @@ func TestResolveSandboxed_推导(t *testing.T) {
 
 	type fakeOperation struct{}
 	if r.resolveSandboxed(fakeOperation{}) {
-		t.Fatalf("无 Mode 方法应为 false")
+		t.Fatalf("无 Card 方法应为 false")
 	}
 
-	if !r.resolveSandboxed(fakeOperationWithMode{mode: "sandbox"}) {
-		t.Fatalf("mode=sandbox 应为 true")
+	if !r.resolveSandboxed(fakeOperationWithCard{mode: sysoperation.OperationModeSandbox}) {
+		t.Fatalf("Mode=sandbox 应为 true")
 	}
-	if r.resolveSandboxed(fakeOperationWithMode{mode: "local"}) {
-		t.Fatalf("mode=local 应为 false")
+	if r.resolveSandboxed(fakeOperationWithCard{mode: sysoperation.OperationModeLocal}) {
+		t.Fatalf("Mode=local 应为 false")
+	}
+	// Card() 返回 nil 时不 panic
+	if r.resolveSandboxed(fakeOperationNilCard{}) {
+		t.Fatalf("nil card 应为 false")
 	}
 }
 
-// fakeOperationWithMode 测试用带 Mode 的对象
-type fakeOperationWithMode struct {
-	mode string
+// fakeOperationWithCard 测试用带 Card 的对象
+type fakeOperationWithCard struct {
+	mode sysoperation.OperationMode
 }
 
-// Mode 实现 modeProvider
-func (f fakeOperationWithMode) Mode() string { return f.mode }
+// Card 实现 cardProvider
+func (f fakeOperationWithCard) Card() *sysoperation.SysOperationCard {
+	return &sysoperation.SysOperationCard{Mode: f.mode}
+}
+
+// fakeOperationNilCard 测试用 Card 返回 nil 的对象
+type fakeOperationNilCard struct{}
+
+// Card 实现 cardProvider，返回 nil
+func (f fakeOperationNilCard) Card() *sysoperation.SysOperationCard { return nil }
 
 // TestResolvedSysOperation 验证 sysOperation 优先、回退 commandSysOperation
 func TestResolvedSysOperation(t *testing.T) {
@@ -889,7 +902,7 @@ func TestResolveSandboxed_显式为false(t *testing.T) {
 	q := newTestQueue()
 	sandboxed := false
 	rail, _ := NewRootContextRail(q, nil, nil, &sandboxed)
-	if rail.resolveSandboxed(fakeOperationWithMode{mode: "sandbox"}) {
+	if rail.resolveSandboxed(fakeOperationWithCard{mode: sysoperation.OperationModeSandbox}) {
 		t.Fatalf("显式 false 应优先")
 	}
 }

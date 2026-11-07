@@ -20,6 +20,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	sysoperation "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -354,15 +355,23 @@ func (r *RootContextRail) replace(
 // 构造期显式给出时以其为准；否则看 sys operation 的 mode 是否为沙箱。
 //
 // Python: self._sandboxed if self._sandboxed is not None else getattr(operation, "mode", None) == OperationMode.SANDBOX
+//
+// Go 侧 sys operation 的 mode 在 Card().Mode 上（OperationMode 是 int 枚举），
+// 不是 SysOperation 自身的方法，故走 Card() 取。operation 为 any 是因为
+// 本 rail 位于 swarm 层，sys operation 实现可能在 agentcore 或沙箱 provider 中
+// （Python 侧同为 Any）。
 func (r *RootContextRail) resolveSandboxed(operation any) bool {
 	if r.sandboxed != nil {
 		return *r.sandboxed
 	}
-	type modeProvider interface {
-		Mode() string
+	type cardProvider interface {
+		Card() *sysoperation.SysOperationCard
 	}
-	if provider, ok := operation.(modeProvider); ok {
-		return provider.Mode() == "sandbox"
+	if provider, ok := operation.(cardProvider); ok {
+		card := provider.Card()
+		if card != nil {
+			return card.Mode == sysoperation.OperationModeSandbox
+		}
 	}
 	return false
 }
