@@ -137,10 +137,6 @@ jobs:
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v6
-        with:
-          # 修改文件覆盖率门禁需要父提交作为对比基准：默认浅克隆（depth=1）下 HEAD~1 不存在，
-          # 门禁曾因此静默跳过。depth=2 保证 HEAD~1 可用。
-          fetch-depth: 2
 
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
@@ -155,109 +151,31 @@ jobs:
           path: internal/swarm/channels/web/frontend/dist
         continue-on-error: true
 
-      - name: 恢复覆盖率基线缓存
-        if: github.event_name == 'pull_request'
-        uses: actions/cache@v5
-        with:
-          path: coverage-baseline.txt
-          key: coverage-baseline-pr-${{ github.sha }}
-          restore-keys: |
-            coverage-baseline-main-
-        continue-on-error: true
-
       - name: 运行单元测试（带覆盖率）
         env:
           # mattn/go-sqlite3 为 CGO 驱动，FTS5 扩展需 sqlite_fts5 构建标签启用
           CGO_ENABLED: 1
         run: go test -mod=mod -tags "sqlite_fts5 test" -race -coverprofile=coverage.out ./...
 
-      - name: 检查覆盖率阈值（≥ 72.0%）
+      - name: 检查覆盖率阈值（≥ 80.0%）
         run: |
           COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "总覆盖率: ${COVERAGE}%"
-          PASS=$(echo "$COVERAGE >= 72.0" | bc -l)
+          PASS=$(echo "$COVERAGE >= 80.0" | bc -l)
           if [ "$PASS" != "1" ]; then
-            echo "::error::覆盖率 ${COVERAGE}% 低于阈值 72.0%"
+            echo "::error::覆盖率 ${COVERAGE}% 低于阈值 80.0%"
             exit 1
           fi
           echo "覆盖率达标"
 
-      - name: 检查修改文件「改动行」覆盖率（≥ 85%）
-        run: |
-          # 基准解析：push 用事件 before，PR 用 base 分支 merge-base
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_BRANCH="${{ github.base_ref }}"
-            git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/pr-base" >/dev/null 2>&1 || true
-            BASE_REF=$(git merge-base origin/pr-base HEAD 2>/dev/null || true)
-          else
-            BASE_REF="${{ github.event.before }}"
-            if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
-              BASE_REF=""
-            elif ! git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
-              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1（多提交首次 push 时只检查最后一个提交的改动）"
-              BASE_REF=""
-            fi
-          fi
-
-          if [ -z "$BASE_REF" ]; then
-            BASE_REF=$(git rev-parse --verify HEAD~1 2>/dev/null || true)
-          fi
-          if [ -z "$BASE_REF" ]; then
-            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），改动行覆盖率检查无法执行"
-            exit 1
-          fi
-          echo "对比基准: ${BASE_REF}"
-
-          # 改动行单测覆盖率阈值 85%：新增/修改的行必须有单测覆盖，
-          # 整文件口径只作参考列（巨型文件的整文件覆盖率长期被豁免，会掩盖新改动）。
-          bash scripts/check-changed-line-coverage.sh \
-            coverage.out "$BASE_REF" 85 .coverage-exempt
-
-      - name: 覆盖率回归检查
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ ! -f coverage-baseline.txt ]; then
-            echo "::warning::未找到 main 分支覆盖率基线（首次运行或缓存已过期），跳过回归检查"
-            exit 0
-          fi
-
-          BASELINE=$(cat coverage-baseline.txt)
-          CURRENT=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-          DIFF=$(echo "scale=1; $BASELINE - $CURRENT" | bc)
-
-          echo "覆盖率回归检查："
-          echo "  - main 基线覆盖率: ${BASELINE}%"
-          echo "  - 当前 PR 覆盖率:  ${CURRENT}%"
-          echo "  - 差值: ${DIFF}%"
-
-          if [ "$(echo "$DIFF > 1.5" | bc -l)" = "1" ]; then
-            echo "::error::覆盖率回归超过 1.5%（基线 ${BASELINE}% → 当前 ${CURRENT}%，下降 ${DIFF}%），请补充单元测试"
-            exit 1
-          elif [ "$(echo "$DIFF > 0" | bc -l)" = "1" ]; then
-            echo "::warning::覆盖率有所下降（基线 ${BASELINE}% → 当前 ${CURRENT}%，下降 ${DIFF}%），建议补充单元测试"
-          else
-            echo "覆盖率未下降"
-          fi
+      # 改动行覆盖率门禁（85%）、PR 覆盖率回归检查、覆盖率基线缓存
+      # 按用户要求停用：CI 只保留单元测试整体覆盖率阈值检查（上一步）。
 
       - name: 上传覆盖率报告
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.out
-
-      - name: 保存覆盖率基线
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-          echo "$COVERAGE" > coverage-baseline.txt
-          echo "已保存覆盖率基线: ${COVERAGE}%"
-
-      - name: 写入覆盖率基线缓存
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v5
-        with:
-          path: coverage-baseline.txt
-          key: coverage-baseline-main-${{ github.sha }}
 
   # ──────────────────────────── Integration Test ────────────────────────────
 
@@ -268,9 +186,6 @@ jobs:
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v6
-        with:
-          # 同 unit-test：修改文件集成测试覆盖率门禁需要父提交作为对比基准
-          fetch-depth: 2
 
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
@@ -310,7 +225,12 @@ jobs:
           fi
           echo "静态审计通过（调用跨度或已登记豁免的目录合规）"
 
-      - name: 运行集成测试（带覆盖率）
+      # 集成测试覆盖率门禁（总覆盖率 15% / 改动行 5% / 基线回归）已按用户要求停用：
+      # CI 只保留单元测试整体覆盖率检查（见 unit-test job）。
+      # 注意「覆盖交叉验证」不属于覆盖率门禁，它是规则 7 的第二层——对静态审计标记的
+      # 灰区目录（调用跨度不足）以真实覆盖行数裁决真伪集成测试，故保留。
+
+      - name: 运行集成测试
         env:
           CGO_ENABLED: 1
           # GitHub 远程技能集成测试（对齐 Python RUN_GITHUB_TEST=1 守卫）
@@ -320,15 +240,7 @@ jobs:
           # 读本次提交的 tree，保证 fixture 与代码同版本
           GITHUB_SKILL_TEST_REF: ${{ github.sha }}
         run: |
-          # 收集集成测试直接 import 的 internal 包，作为覆盖率追踪目标
-          COVER_PKGS=$(grep -rh '"github.com/uapclaw/uapclaw-go/internal/' tests/integration/ --include='*.go' \
-            | sed 's|.*"\(github.com/uapclaw/uapclaw-go/internal/[^"]*\)".*|\1|' \
-            | sort -u | tr '\n' ',' | sed 's/,$//')
-          echo "覆盖率追踪包: ${COVER_PKGS}"
-
           go test -mod=mod -tags "sqlite_fts5 test integration" \
-            -coverprofile=integration_coverage.out \
-            -coverpkg="${COVER_PKGS}" \
             ./tests/integration/...
 
       - name: 覆盖交叉验证（灰区目录 → 子系统真实覆盖门禁）
@@ -343,68 +255,3 @@ jobs:
             -min-call-span 3 \
             -verify \
             -verify-workdir /tmp/verify-profiles
-
-      - name: 检查集成测试总覆盖率（≥ 15.0%）
-        run: |
-          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=integration_coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-          echo "集成测试总覆盖率: ${COVERAGE}%"
-          PASS=$(echo "$COVERAGE >= 15.0" | bc -l)
-          if [ "$PASS" != "1" ]; then
-            echo "::error::集成测试覆盖率 ${COVERAGE}% 低于阈值 15.0%"
-            exit 1
-          fi
-          echo "集成测试覆盖率达标"
-
-      - name: 检查修改文件「改动行」集成测试覆盖率（≥ 5%）
-        run: |
-          # 基准解析：push 用事件 before，PR 用 base 分支 merge-base
-          #（浅克隆下 merge-base 需祖先链，故 PR 场景显式拉取 base 分支）
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_BRANCH="${{ github.base_ref }}"
-            git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/pr-base" >/dev/null 2>&1 || true
-            BASE_REF=$(git merge-base origin/pr-base HEAD 2>/dev/null || true)
-          else
-            BASE_REF="${{ github.event.before }}"
-            if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
-              BASE_REF=""
-            elif ! git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
-              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1（多提交首次 push 时只检查最后一个提交的改动）"
-              BASE_REF=""
-            fi
-          fi
-
-          # 分支首次 push / force push 后 before 为全 0 → 回退 HEAD~1。
-          # 已知盲区：一次 push 多个提交时只覆盖最后一个提交的改动（上一行 warning 会留痕）。
-          if [ -z "$BASE_REF" ]; then
-            BASE_REF=$(git rev-parse --verify HEAD~1 2>/dev/null || true)
-          fi
-          if [ -z "$BASE_REF" ]; then
-            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），改动行覆盖率检查无法执行"
-            exit 1
-          fi
-          echo "对比基准: ${BASE_REF}"
-
-          # 改动行集成覆盖率阈值 5%：本仓库集成套件尚未覆盖 agent_teams / pregel 等内部子系统，
-          # 先以低位门禁保证"改动行至少被集成链路执行过"，逐轮抬高。
-          bash scripts/check-changed-line-coverage.sh \
-            integration_coverage.out "$BASE_REF" 5 .integration-coverage-exempt
-
-      - name: 上传集成测试覆盖率报告
-        uses: actions/upload-artifact@v7
-        with:
-          name: integration-coverage-report
-          path: integration_coverage.out
-
-      - name: 保存集成测试覆盖率基线
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=integration_coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-          echo "$COVERAGE" > integration-coverage-baseline.txt
-          echo "已保存集成测试覆盖率基线: ${COVERAGE}%"
-
-      - name: 写入集成测试覆盖率基线缓存
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v5
-        with:
-          path: integration-coverage-baseline.txt
-          key: integration-coverage-baseline-main-${{ github.sha }}
