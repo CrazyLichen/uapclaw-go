@@ -278,6 +278,7 @@ var (
 		// BEFORE_STEERING_DRAIN 三条，各带同样理由的注释。
 		agentinterfaces.CallbackAfterReactIteration: true,
 		agentinterfaces.CallbackOnUserMessage:       true,
+		agentinterfaces.CallbackBeforeSteeringDrain: true,
 	}
 
 	// outerOnlyEvents 仅注册到外层 DeepAgent 的事件集合
