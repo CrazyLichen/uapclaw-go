@@ -416,3 +416,34 @@ func (s *LLMClientSuite) TestDashScopeNativeImage() {
 	s.Require().NotEmpty(resp.Images)
 	s.Contains(gotPath, "multimodal-generation", "应走 DashScope 原生多模态路径（非 OpenAI 兼容端点）")
 }
+
+// TestReleaseKVCache 验证 inference_affinity 的 Release 路径（C-E1 归一 + C-A2
+// ctx 超时派生 + 共享 Transport）：api_base 带完整端点时仍拼对路径。
+func (s *LLMClientSuite) TestReleaseKVCache() {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"status":200}`)
+	}))
+	defer srv.Close()
+
+	// api_base 故意带 /chat/completions：NormalizeAPIBase 应剥掉后再拼 /release_kv_cache
+	cc, err := llmschema.NewModelClientConfig("InferenceAffinity", "k",
+		srv.URL+"/v1/chat/completions",
+		llmschema.WithVerifySSL(false),
+		llmschema.WithTimeout(5))
+	s.Require().NoError(err)
+	cli, err := inferenceaffinity.NewInferenceAffinityModelClient(
+		llmschema.NewModelRequestConfig(llmschema.WithModelName("m")), cc)
+	s.Require().NoError(err)
+
+	sessionID := "sess-1"
+	ok, err := cli.Release(context.Background(),
+		model_clients.WithReleaseSessionID(sessionID),
+		model_clients.WithReleaseMessages(model_clients.NewMessagesParam(llmschema.NewUserMessage("hi"))),
+	)
+	s.Require().NoError(err)
+	s.True(ok)
+	s.Equal("/v1/release_kv_cache", gotPath, "应剥离 /chat/completions 后拼 release 路径")
+}
