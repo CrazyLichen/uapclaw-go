@@ -656,6 +656,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.83 | ✅ | Pulsar Message Queue | Pulsar 后端（MessageQueuePulsar + PulsarSubscription + pulsarClientAPI/pulsarConsumerAPI/pulsarProducerAPI 三窄接口 + producer LRU + 消费循环；覆盖率 96.4%）；⤴️ 提前落位 9.84 的 `drunner/dmessage_queue/{message.go, message_serializer.go}`（Dmq 消息类型 + wire 序列化器，覆盖率 87.3%）；⤵️ `runner.go` 步骤3（启动分布式队列）/步骤1（停止分布式组件）两个预留点待 9.84 回填；⤵️ 偏差 D9（Python factory import 路径不一致）待 9.84 拍板 | `openjiuwen/extensions/message_queue/` |
 | 9.84 | ☐ | DistRunner | 分布式 Runner；⤴️ 需回填 9.83 已落位的 `drunner/dmessage_queue/{message.go, message_serializer.go}`（不重写）；⤴️ 回填 `runner.go` 步骤3/步骤1 两个 ⤵️ 预留点；⤴️ 决策偏差 D9（factory import 路径 `extensions.runner.pulsar_mq` vs 实际 `extensions.message_queue`） | `openjiuwen/core/runner/drunner/` |
 | 9.85 | ✅ | TeamRunner | 团队 Runner（run_agent_team/streaming 三路径 + Activate 内联回填 #9.62 + FinalizeMember + GetMonitor + ListActiveTeams + ⤵️ 回填） | `openjiuwen/core/runner/team_runner.py` |
+| **9.x 权限体系 permissions** | — | | | |
+| 9.90a | ☐ | permissions 基础类型层 | ToolInvocationKeyV1 + normalize_tool_invocation_text + MAX_STRUCTURED_QUESTIONS + TOOL_PERMISSION_REQUEST_ID + SKILLS_REBUILD_SILENT + CommandExecutionBinding + protected_paths + tool_binding + models；约 400 行。详见 9-H 批次 | `.../rails/permissions/tool_invocation_key.py` · `tool_permission_context.py` · `protected_paths.py` · `tool_binding.py` · `models.py` · `rails/ask_user_contract.py` · `common/tools/command_execution_context.py` |
+| 9.90b | ☐ | permissions 决策事实层 | tool_capabilities(615) + tool_decision_facts(182) + network_scope(175) + policy_eval(375) + permissions_layers(676) + execution_provider_contract(37) + sandbox_profile(48) + native_path_context(65)；约 2,200 行 | `.../rails/permissions/` 同上目录 |
+| 9.90c | ✅ | permissions root 五文件 + 中断扩字段 | ✅ root_context(528)/root_permission_queue(635)/root_permission_queue_rail(536)/root_context_rail(403)/root_ask_user(274) 五文件对齐 + `InterruptRequest` 扩 `Metadata`/`InterruptID`/`InterruptKind`/`InterruptOwner` + `InterruptKind` 七值 + 答案按 `interrupt_owner` 归属；✅ 8 项前置件（含 `CommandExecutionBinding`）；⤵️ **意图窗口消费方待 9.90d 回填**（`_intent_view` / `original_user_intent` / `has_valid_ask_user_clarification` 三处当前无调用方）；⤵️ `PermissionEngine.llm`/`modelName` 字段对齐 Python 结构保留，消费方为 9.90d；Spec: `docs/superpowers/specs/2026-11-07-root-permission-5-files-design.md` | 同左 |
+| 9.90d | ☐ | permissions 自动审查层 | ⤴️ **回填 9.90c 的意图窗口消费方**（`_intent_view` / `original_user_intent` / `has_valid_ask_user_clarification`）+ auto_reviewer(888) + reviewer_redaction(689) + auto_decision(639) + reviewer_metadata(401) + reviewer_execution(389) + permission_compose(362) + reviewer_route(330) + runtime_bridge(316) + readonly_tool_bindings(320) + auto_config(315) + runtime_result(250) + openjiuwen_contract(183) + domain_grant_audit(162) + lifecycle(165) + deterministic(131) + code_tool_bindings(110) + models(101) + manual_authorization(90) + deny_response(86) + reviewer_override_*(151) + auto_permission_rail(75) + reviewer_audit(77) + reviewer_stream_metadata(57) + domain_manual(43) + before_tool(891) + invocation_context(715) + artifact_*(3 文件)；约 6,000 行；⤴️ 同时接上 `PermissionEngine.llm` 消费 | `.../rails/permissions/` · `_auto_permission/` |
+| 9.90e | ☐ | permissions 护栏与审计 | url_safety(541) + send_file_path_guard(315) + persistent_audit(296) + trusted_search_urls(236) + generated_artifact_delivery(175) + audit(65) + permission_interaction(54)；⤴️ 回填 `permissions_persist.py` 缺失 5 函数 + `PermissionApprovalInvalidated`；⤴️ 重构 `permissions_config_rpc.go`（Go 23 函数 vs Python 1 入口，层次下沉违反规则 11.1）；⤴️ 修正 `owner_scopes.go` 命名与缺失 3 符号；约 1,700 行 | 同上 |
 
 **验证点**：✅ DeepAgent 可完成复杂编程任务（搜索→规划→编码→验证）
 
@@ -676,6 +682,30 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 - **Spec 拆分**（2026-11-05 决策）：S1=B1、S2=B2+B3、S3=B4+B5；每份 800-1500 行改动，各自一个 plan。**（2026-11-06 修订）**：S2 拆开 —— 9.88 单章出 spec 并顺带落 `prompts/sections/goal.go` 的 task-query 四函数，9.89 单独一份；理由：9.88 单独约 1.3k 行已接近单份上限，且 9.88 是 9.89 的硬依赖，提前可独立验收。
 - **S1 必守设计约束**：①会话级单监督器，不得退化为「每次 Stream 开一条独立管道」；②单输出租约（`OutputLease`），else B1 的 revision/代沟检查全部失效；③goal 轮不续 user work（`_build_interaction_next_work` 对 kind=goal 直接返回 None）；④`GoalManager` 与 attach/detach/排队共用同一把 control lock；⑤复用现有 `setupTaskLoop`+`SubmitRound`+`WaitRoundCompletion`，不删除 `runTaskLoop`。
 - **上下文代价（已在设计上承认）**：goal 每轮是一次完整 ReAct，工具结果全部进历史；缓解靠 context engine 会话级压缩 + `max_attempts`/`token_budget` 硬刹车 + `<goal_task>` 每轮重建权威上下文（不依赖历史推断目标）。
+
+### 9-H 权限体系 permissions 对齐批次（2026-11-07 制定，按规则 9/11/12 执行）
+
+> 上游 `jiuwenswarm/agents/harness/common/rails/permissions/` 共 **38 个 .py / 11,463 行**；Go 侧 `internal/swarm/agents/harness/common/rails/permissions/` 现有 4 个实现文件约 1,450 行，**缺口约 10,000 行**。
+> 核心事实：Go 的 `PermissionEngine` 是**纯规则判定**（分层策略 + 外部目录，全程零 LLM）；Python 在 `check_permission` 返回 ASK 之后还有一层 `auto_authorize`（确定性规则 → 意图硬规则 → LLM 审查）。**Go 侧完全没有这一层，导致规则说 ASK 就一律弹框问用户**。
+> Spec：`docs/superpowers/specs/2026-11-07-root-permission-5-files-design.md`
+
+| 批次 | 步骤 | 内容 | 前置 | 估算 |
+|------|------|------|------|------|
+| B1 | 9.90a | **基础类型层**：`tool_invocation_key.py`（94，ToolInvocationKeyV1 + normalize_tool_invocation_text）、`ask_user_contract.py`（4，MAX_STRUCTURED_QUESTIONS）、`tool_permission_context.py`（40，TOOL_PERMISSION_REQUEST_ID / SKILLS_REBUILD_SILENT）、`command_execution_context.py`（~100，CommandExecutionBinding）、`protected_paths.py`（26）、`tool_binding.py`（25）、`models.py`（101） | — | ~400 行 |
+| B2 | 9.90b | **决策事实层**：`tool_capabilities.py`（615）、`tool_decision_facts.py`（182）、`network_scope.py`（175）、`policy_eval.py`（375）、`permissions_layers.py`（676）、`execution_provider_contract.py`（37）、`sandbox_profile.py`（48）、`native_path_context.py`（65） | B1 | ~2,200 行 |
+| B3 | 9.90c | ✅ **root 五文件 + 中断扩字段**（2026-11-07 完成）：`root_context.py`（528）、`root_permission_queue.py`（635）、`root_permission_queue_rail.py`（536）、`root_context_rail.py`（403）、`root_ask_user.py`（274）；同时扩 `InterruptRequest` 的 `Metadata`/`InterruptID`/`InterruptKind`/`InterruptOwner` + `InterruptKind` 七值 + 答案按 `interrupt_owner` 归属 | B1（中断扩字段独立可先行） | ~2,700 行 |
+| B4 | 9.90d | **自动审查层（意图窗口的真实消费方）**：`auto_decision.py`（639）、`deterministic.py`（131）、`auto_reviewer.py`（888）、`reviewer_redaction.py`（689）、`reviewer_route.py`（330）、`reviewer_execution.py`（389）、`reviewer_metadata.py`（401）、`reviewer_audit.py`（77）、`reviewer_stream_metadata.py`（57）、`reviewer_override_gate.py`（67）、`reviewer_override_consume.py`（84）、`auto_permission_rail.py`（75）、`permission_compose.py`（362）、`_auto_permission/before_tool.py`（891）、`invocation_context.py`（715）、`runtime_bridge.py`（316）、`runtime_result.py`（250）、`deny_response.py`（86）、`lifecycle.py`（165）、`manual_authorization.py`（90）、`auto_config.py`（315）、`domain_grant_audit.py`（162）、`domain_manual.py`（43）、`readonly_tool_bindings.py`（320）、`code_tool_bindings.py`（110）、`artifact_*.py`（3 文件）、`openjiuwen_contract.py`（183） | B2 + B3 | ~6,000 行 |
+| B5 | 9.90e | **护栏与审计**：`url_safety.py`（541）、`send_file_path_guard.py`（315）、`persistent_audit.py`（296）、`trusted_search_urls.py`（236）、`generated_artifact_delivery.py`（175）、`audit.py`（65）、`permission_interaction.py`（54）、`permissions_persist.py` 缺失 5 函数回填、`permissions_config_rpc.py` 层次重构、`owner_scopes.go` 命名与缺失符号修正 | B4 | ~1,700 行 |
+
+**B3 已完成（2026-11-07）**：见下方 `9.90c` 行。
+
+- **依赖链**：B1 → B2 → B3 → B4 → B5。B1 内的中断扩字段可独立先行（不依赖其它 B1 项）。
+- **每批必守**（规则 11）：目录层级一文件对一文件；类型/方法归属与原实现一致；方法内步骤顺序、条件分支嵌套不得调整；命名只做 `snake_case → CamelCase`。
+- **每批必查**（规则 12.4）：迁移前输出 Python/Go 文件清单与行数对照、旧逻辑清单、缺失项清单；缺失项必须提出讨论而非默默跳过。
+- **已登记的现有偏差**（不属本批，B5 处理）：
+  - `permissions_persist.go` 缺 `persist_exact_permission_allow_rule` / `_check_approval_accesses` / `_merge_file_guard_path_into_permissions` / `build_command_allow_pattern` / `_normalize_exact_accesses` 及 `PermissionApprovalInvalidated` 异常
+  - `permissions_config_rpc.go` Go 侧 23 个函数 vs Python 仅 1 个入口 `dispatch_permissions_config_request` + 3 私有 → **疑似把 service 层逻辑下沉，违反规则 11.1 架构层次**
+  - `owner_scopes.go` 缺 `setup_permission_context` / `cleanup_permission_context` / `current_permission_owner_scope`（Go 改用 `PermissionContextFromCtx`，命名被改，违反规则 11.1-4）；多出 `CheckAvatarPermission`
 
 ---
 
