@@ -818,18 +818,16 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		// steering 注入：rails 决定本次吸收几条，其余留队等下一次模型调用。
-		// Python: react_agent.py L3111-3119
+		// Rails 在 on_user_message 里看得见这批输入（parts），可整条丢弃或前插。
+		// Python: react_agent.py L3111-3119 → _admit_user_message(source="steering")
 		if modelCtx != nil {
 			steeringMsgs, drainErr := drainSteeringBatch(ctx, cbc)
 			if drainErr != nil {
 				return nil, fmt.Errorf("迭代 %d steering 批次获取失败: %w", iteration, drainErr)
 			}
 			if len(steeringMsgs) > 0 {
-				if syncPromptAttachments(ctx, a.promptAttachments, modelCtx) {
-					runCommitCallbacks(cbc)
-				}
-				for _, msg := range steeringMsgs {
-					_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage("[STEERING] " + msg)})
+				if err := a.admitUserMessage(ctx, cbc, modelCtx, steeringMsgs, "steering", "[STEERING] "); err != nil {
+					return nil, fmt.Errorf("迭代 %d steering 写入历史失败: %w", iteration, err)
 				}
 			}
 		}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
@@ -139,15 +140,9 @@ func (s *SteeringDrainSuite) TestIT_Steering批上限_真实链路() {
 	s.GreaterOrEqual(rail.fired, 1, "有积压必须触发事件")
 	s.Equal(5, rail.firstPending, "首次触发时应看到全部 5 条积压")
 
-	// 第 2 次模型调用（工具跑完后的第一次）只应看到 2 条 [STEERING]
-	secondMsgs := observer.GetMessages(1)
-	count := 0
-	for _, m := range secondMsgs {
-		if c := m.GetContent(); c.IsText() && strings.Contains(c.Text(), "[STEERING]") {
-			count++
-		}
-	}
-	s.Equal(2, count, "上限 2 生效：本次只吸收 2 条")
+	// 第 2 次模型调用（工具跑完后的第一次）只应吸收 s1、s2 两条。
+	s.Equal(2, countSteeringContents(observer.GetMessages(1), "s"),
+		"上限 2 生效：本次只吸收 2 条")
 }
 
 // TestIT_Steering无Limit不回归 验证不写 Limit 时一次全取（既有行为）。
@@ -188,14 +183,10 @@ func (s *SteeringDrainSuite) TestIT_Steering无Limit不回归() {
 	s.Require().NoError(<-done)
 	sess.PostRun(ctx)
 
-	secondMsgs := observer.GetMessages(1)
-	count := 0
-	for _, m := range secondMsgs {
-		if c := m.GetContent(); c.IsText() && strings.Contains(c.Text(), "[STEERING]") {
-			count++
-		}
-	}
-	s.Equal(5, count, "无 Limit 时必须一次全取（既有行为不回归）")
+	// steering 批经 admission 后 join 成**一条**消息，前缀只加一次
+	// （"[STEERING] s1\ns2\n..."），故数内容条目而不是标记次数。
+	s.Equal(5, countSteeringContents(observer.GetMessages(1), "s"),
+		"无 Limit 时必须一次全取（既有行为不回归）")
 }
 
 // TestIT_Steering_Limit为0仍前进 验证 0 不会死循环。
@@ -337,15 +328,16 @@ func (s *SteeringDrainSuite) TestIT_steering前缀与事件在真实链路上成
 	}
 
 	// 之后必须出现 [STEERING] + steer 文本
+	s.GreaterOrEqual(countSteeringContents(observer.GetMessages(1), "steer"), 1,
+		"第 2 次模型调用必须包含 [STEERING] steer-payload")
 	found := false
 	for _, m := range observer.GetMessages(1) {
-		if c := m.GetContent(); c.IsText() &&
-			strings.Contains(c.Text(), "[STEERING]") && strings.Contains(c.Text(), steerText) {
+		if c := m.GetContent(); c.IsText() && strings.Contains(c.Text(), steerText) {
 			found = true
 			break
 		}
 	}
-	s.True(found, "第 2 次模型调用必须包含 [STEERING] %s", steerText)
+	s.True(found, "第 2 次模型调用必须包含 steer 文本 %s", steerText)
 }
 
 // TestIT_Clear后重跑无残留 验证新事件已进 AllCallbackEvents（Clear 能枚举到）。
@@ -433,4 +425,30 @@ func (s *SteeringDrainSuite) createSteerAgent(
 	})
 	s.Require().NoError(err)
 	return a, s.NewTestSession(sessionName)
+}
+
+// countSteeringContents 统计 steering 消息体里 "sN" 形式的条目数。
+//
+// steering 批经 admission 后按换行 join 成一条消息，前缀 [STEERING] 只加一次
+// （上游 _admit_user_message 的 "{prefix}{body}" 语义），因此"吸收了几条"
+// 要看正文里的条目，而不是标记或消息条数。
+func countSteeringContents(msgs []llmschema.BaseMessage, prefix string) int {
+	n := 0
+	for _, m := range msgs {
+		c := m.GetContent()
+		if !c.IsText() {
+			continue
+		}
+		text := c.Text()
+		if !strings.Contains(text, "[STEERING]") {
+			continue
+		}
+		for _, piece := range strings.Split(text, "\n") {
+			trimmed := strings.TrimSpace(strings.TrimPrefix(piece, "[STEERING] "))
+			if trimmed != "" && strings.HasPrefix(trimmed, prefix) {
+				n++
+			}
+		}
+	}
+	return n
 }

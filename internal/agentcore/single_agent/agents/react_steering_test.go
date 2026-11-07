@@ -142,3 +142,41 @@ func newDrainCallbackContext(t *testing.T, rail *countingDrainRail) *interfaces.
 	}
 	return interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
 }
+
+// TestReactInvoke_steering批带前缀并触发事件 验证 steering 走 admission。
+//
+// spec C14：Python 用 _admit_user_message(source="steering", prefix="[STEERING] ")，
+// 故 on_user_message 会被触发、前缀拼在 join 之后。
+func TestReactInvoke_steering批带前缀并触发事件(t *testing.T) {
+	rail := &recordingRail{}
+	a, cbc, mc := newAgentWithRecordingRail(t, rail)
+	ch := make(chan string, 8)
+	cbc.BindSteeringQueue(ch)
+	require.NoError(t, cbc.PushSteering("s1"))
+	require.NoError(t, cbc.PushSteering("s2"))
+
+	// 完整复刻迭代内的两步：先取批，再走 admission
+	msgs, err := drainSteeringBatch(context.Background(), cbc)
+	require.NoError(t, err)
+	require.Equal(t, []string{"s1", "s2"}, msgs)
+	require.NoError(t, a.admitUserMessage(context.Background(), cbc, mc, msgs, "steering", "[STEERING] "))
+
+	require.Equal(t, []string{"s1", "s2"}, rail.seen, "rails 必须看到 steering 的 parts")
+	require.Equal(t, "steering", rail.seenSource, "source 必须为 steering")
+	require.Len(t, mc.JustAdded(), 1)
+	require.Equal(t, "[STEERING] s1\ns2", mc.JustAdded()[0].GetContent().Text())
+}
+
+// TestReactInvoke_steering被rail丢弃则不写历史 验证 rails 可整条丢弃 steering 批。
+func TestReactInvoke_steering被rail丢弃则不写历史(t *testing.T) {
+	rail := &recordingRail{mutate: func([]string) []string { return nil }}
+	a, cbc, mc := newAgentWithRecordingRail(t, rail)
+	ch := make(chan string, 4)
+	cbc.BindSteeringQueue(ch)
+	require.NoError(t, cbc.PushSteering("s1"))
+
+	msgs, err := drainSteeringBatch(context.Background(), cbc)
+	require.NoError(t, err)
+	require.NoError(t, a.admitUserMessage(context.Background(), cbc, mc, msgs, "steering", "[STEERING] "))
+	require.Empty(t, mc.JustAdded(), "rail 丢空后不得写历史")
+}
