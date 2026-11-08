@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -80,6 +81,20 @@ func (s *stubAdapter) HandleSwarmflowReply(_ context.Context, _ *schema.AgentReq
 // PendingInteractions 桩：恒空。
 func (s *stubAdapter) PendingInteractions(string) ([]map[string]any, error) { return nil, nil }
 
+// 以下三个在 10.3.28f 进入 AgentAdapter（规则 10：DeepAdapter 自身能力
+// 必须进主接口）。stub 按规则同批补齐，不改接口。
+
+// EnsureInstance 桩：无 DeepAgent。
+func (s *stubAdapter) EnsureInstance(context.Context) (*harness.DeepAgent, error) { return nil, nil }
+
+// EnsureLiveSessionInstance 桩：无 DeepAgent。
+func (s *stubAdapter) EnsureLiveSessionInstance(context.Context, string) (*harness.DeepAgent, error) {
+	return nil, nil
+}
+
+// PlanStateAccessor 桩：恒 nil。
+func (s *stubAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return nil }
+
 // TestAgentAdapter_编译期接口检查 验证 stubAdapter 满足 AgentAdapter 接口。
 func TestAgentAdapter_编译期接口检查(t *testing.T) {
 	// 此测试的目的是编译期检查：var _ AgentAdapter = (*stubAdapter)(nil)
@@ -114,5 +129,45 @@ func TestAgentAdapter_接口含会话分身方法(t *testing.T) {
 		PendingInteractions(string) ([]map[string]any, error)
 	}); !ok {
 		t.Error("AgentAdapter 应含 PendingInteractions")
+	}
+	if _, ok := a.(interface {
+		EnsureInstance(context.Context) (*harness.DeepAgent, error)
+	}); !ok {
+		t.Error("AgentAdapter 应含 EnsureInstance(Context)")
+	}
+	if _, ok := a.(interface {
+		EnsureLiveSessionInstance(context.Context, string) (*harness.DeepAgent, error)
+	}); !ok {
+		t.Error("AgentAdapter 应含 EnsureLiveSessionInstance(Context, string)")
+	}
+	if _, ok := a.(interface {
+		PlanStateAccessor() swruntime.PlanStateAccessor
+	}); !ok {
+		t.Error("AgentAdapter 应含 PlanStateAccessor()")
+	}
+}
+
+// TestCodeAdapter_实现门面所需的运行态方法 回归：CodeAdapter 是具名组合
+// （deep *DeepAdapter），不写显式委托就拿不到这些方法；门面若用匿名断言，
+// 缺失会静默退化为 nil —— 那会让 code 模式的 plan 状态读写整体失效。
+//
+// 这三个方法因此在 10.3.28f 进入 AgentAdapter（规则 10），本用例固化
+// "code 模式与 deep 模式的能力面一致"。
+func TestCodeAdapter_实现门面所需的运行态方法(t *testing.T) {
+	var a AgentAdapter = NewCodeAdapter()
+	if _, ok := a.(interface {
+		EnsureInstance(context.Context) (*harness.DeepAgent, error)
+	}); !ok {
+		t.Error("CodeAdapter 应实现 EnsureInstance")
+	}
+	if _, ok := a.(interface {
+		EnsureLiveSessionInstance(context.Context, string) (*harness.DeepAgent, error)
+	}); !ok {
+		t.Error("CodeAdapter 应实现 EnsureLiveSessionInstance")
+	}
+	if _, ok := a.(interface {
+		PlanStateAccessor() swruntime.PlanStateAccessor
+	}); !ok {
+		t.Error("CodeAdapter 应实现 PlanStateAccessor（缺失会让 code 模式 plan 状态失效）")
 	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -90,6 +91,29 @@ type AgentAdapter interface {
 	// PendingInteractions 会话被暂停的轮次仍在询问什么。
 	// Python: agent_adapters.py AgentAdapter.pending_interactions（:94）
 	PendingInteractions(sessionID string) ([]map[string]any, error)
+
+	// EnsureInstance 确保本适配器自己的 DeepAgent 就绪并返回。
+	// Python: interface_deep.py ensure_instance（:12809）
+	//
+	// 根适配器惰建时用它；调用方是"需要 DeepAgent 句柄的非 chat 路径"
+	// （harness 打包、rail 开关、会话 fork）。
+	// 注意与 EnsureLiveSessionInstance 是两个不同方法，不可互换（规则 10：
+	// 二者都是 DeepAdapter 自身能力，必须进本接口而不是靠门面类型断言）。
+	EnsureInstance(ctx context.Context) (*harness.DeepAgent, error)
+
+	// EnsureLiveSessionInstance 确保该会话的子适配器已启动，返回其 DeepAgent。
+	// Python: interface_deep.py ensure_live_session_instance（:12798）
+	//
+	// 与 EnsureInstance 的区别见上；plan 状态同步必须用这个。
+	EnsureLiveSessionInstance(ctx context.Context, sessionID string) (*harness.DeepAgent, error)
+
+	// PlanStateAccessor 返回 plan 状态读写入口。
+	// Python: PlanModeController.open_state_session(agent, session_id) 的 Go 侧适配。
+	//
+	// 放在主接口而非匿名断言：CodeAdapter 是具名组合（deep *DeepAdapter），
+	// 不写委托就拿不到该方法，用断言会静默退化为 nil —— 那会让 code 模式
+	// 的 plan 状态读写整体失效（checkPlanExit 直接跳过）。
+	PlanStateAccessor() swruntime.PlanStateAccessor
 }
 
 // ContextCompressor 上下文压缩可选接口。

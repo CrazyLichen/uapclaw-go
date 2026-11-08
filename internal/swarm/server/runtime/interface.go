@@ -779,13 +779,8 @@ func (uc *UapClawSwarm) EnsureInstance(ctx context.Context) (*harness.DeepAgent,
 	if err != nil {
 		return nil, err
 	}
-	ensurer, ok := a.(interface {
-		EnsureInstance(context.Context) (*harness.DeepAgent, error)
-	})
-	if !ok {
-		return a.Instance(), nil
-	}
-	return ensurer.EnsureInstance(ctx)
+	// AgentAdapter 已是主接口方法，直接调用（规则 10）
+	return a.EnsureInstance(ctx)
 }
 
 // EnsureLiveSessionInstance 确保该会话的子适配器已启动，返回其 DeepAgent。
@@ -802,13 +797,7 @@ func (uc *UapClawSwarm) EnsureLiveSessionInstance(ctx context.Context, sessionID
 	if err != nil {
 		return nil, err
 	}
-	starter, ok := a.(interface {
-		EnsureLiveSessionInstance(context.Context, string) (*harness.DeepAgent, error)
-	})
-	if !ok {
-		return a.GetLiveSessionInstance(sessionID), nil
-	}
-	return starter.EnsureLiveSessionInstance(ctx, sessionID)
+	return a.EnsureLiveSessionInstance(ctx, sessionID)
 }
 
 // GetLiveSessionInstance 返回正在跑该会话的 DeepAgent，没有则 nil。
@@ -1316,13 +1305,13 @@ func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
 	// 加锁读：本方法在 chat 流 goroutine 里被调用，而 Cleanup 会并发
 	// 把 uc.adapter 置 nil（-race 实测：Cleanup vs checkPlanExit）。
 	a := uc.adapterSnapshot()
-	provider, ok := a.(interface {
-		PlanStateAccessor() swruntime.PlanStateAccessor
-	})
-	if !ok {
+	if a == nil {
 		return nil
 	}
-	return provider.PlanStateAccessor()
+	// AgentAdapter 已是主接口方法，直接调用（规则 10）。
+	// 之前靠匿名断言，CodeAdapter 因具名组合缺该方法而静默返回 nil，
+	// 导致 code 模式的 plan 状态读写整体失效。
+	return a.PlanStateAccessor()
 }
 
 // PlanModeSnapshot 只读当前会话 plan 模式（不做任何状态写入）。

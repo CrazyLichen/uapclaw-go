@@ -17,6 +17,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
@@ -114,6 +115,17 @@ func (f *fakeAdapter) HandleSwarmflowReply(_ context.Context, _ *schema.AgentReq
 
 // PendingInteractions 桩：恒空。
 func (f *fakeAdapter) PendingInteractions(string) ([]map[string]any, error) { return nil, nil }
+
+// EnsureInstance 桩：无 DeepAgent（规则 10：接口扩张时测试替身自己补齐）。
+func (f *fakeAdapter) EnsureInstance(context.Context) (*harness.DeepAgent, error) { return nil, nil }
+
+// EnsureLiveSessionInstance 桩：无 DeepAgent。
+func (f *fakeAdapter) EnsureLiveSessionInstance(context.Context, string) (*harness.DeepAgent, error) {
+	return nil, nil
+}
+
+// PlanStateAccessor 桩：恒 nil。
+func (f *fakeAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return nil }
 
 // ContextCompressor 接口实现
 func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {

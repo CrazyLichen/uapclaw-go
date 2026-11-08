@@ -40,6 +40,7 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -559,6 +560,33 @@ func (c *CodeAdapter) HandleSwarmflowReply(
 }
 
 // PendingInteractions 委托 DeepAdapter。
+// EnsureInstance 委托给内层 DeepAdapter。
+// Python: CodeAdapter 继承 JiuWenSwarmDeepAdapter，无需单独实现；
+// Go 侧是具名组合，必须显式委托（规则 10）。
+func (c *CodeAdapter) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.EnsureInstance(ctx)
+}
+
+// EnsureLiveSessionInstance 委托给内层 DeepAdapter。
+func (c *CodeAdapter) EnsureLiveSessionInstance(ctx context.Context, sessionID string) (*harness.DeepAgent, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.EnsureLiveSessionInstance(ctx, sessionID)
+}
+
+// PlanStateAccessor 委托给内层 DeepAdapter。
+// 缺了它 code 模式的 plan 状态读写会整体失效。
+func (c *CodeAdapter) PlanStateAccessor() swruntime.PlanStateAccessor {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.PlanStateAccessor()
+}
+
 func (c *CodeAdapter) PendingInteractions(sessionID string) ([]map[string]any, error) {
 	if c.deep == nil {
 		return nil, nil
