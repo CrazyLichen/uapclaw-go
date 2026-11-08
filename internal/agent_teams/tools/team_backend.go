@@ -393,6 +393,61 @@ func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 	return tb.db.Member().GetMembersMaxUpdatedAt(ctx, tb.teamName)
 }
 
+// GetTeamUpdatedAtState 探测团队 card 的 updated_at 及「字段是否存在」标志。
+//
+// 偏差 D-1：上游在 workspace_cache 存在时读 team_card.md 的 frontmatter，且
+// present=false（字段空白——演化方改了正文却没戳时间戳）表示「必须重投一次」。
+// Go 侧没有 md mtime 覆盖层，探针直读 DB 列，present 恒 true——行为等价于上游
+// 「演化关闭」路径，即只有真的 build_team / 团队变更才会重投。
+//
+// Python: get_team_updated_at_state (team.py L1940-1969)
+func (tb *TeamBackend) GetTeamUpdatedAtState(ctx context.Context) (int64, bool) {
+	return tb.db.Team().GetTeamUpdatedAt(ctx, tb.teamName), true
+}
+
+// StampTeamCardUpdatedAt 把 ts 戳进 team_card.md 的 updated_at（仅 meta）。
+//
+// 偏差 D-1/D-4：Go 无 workspace_cache，该分支永不进入（present 恒 true），
+// 故为空实现。保留符号是为了与上游 1:1 对照，避免 tracker 代码出现
+// 「Go 少一个方法」的结构漂移（规则 9）。
+//
+// Python: stamp_team_card_updated_at (team.py L1971-1986)
+func (tb *TeamBackend) StampTeamCardUpdatedAt(_ context.Context, _ int64) {}
+
+// GetMemberUpdatedAtState 探测单成员 md 的 updated_at 及存在标志。
+//
+// 偏差 D-1/D-4 同 GetTeamUpdatedAtState：present 恒 true，只保留 mtime 比较
+// 分支。成员行的 UpdatedAt 由 GetMember 一并返回，无需新增 DAO 查询；
+// field 参数保留以对齐上游签名（"desc" / "prompt"），Go 侧两者同值。
+//
+// Python: get_member_updated_at_state (team.py L2007-2024)
+func (tb *TeamBackend) GetMemberUpdatedAtState(ctx context.Context, memberName, _ string) (int64, bool) {
+	if memberName == "" {
+		return 0, true
+	}
+	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
+	if err != nil || member == nil {
+		return 0, true
+	}
+	return member.UpdatedAt, true
+}
+
+// StampMemberPromptUpdatedAt 把 ts 戳进 member_prompt.md 的 updated_at（仅 meta）。
+//
+// 偏差 D-1/D-4：空实现，理由同 StampTeamCardUpdatedAt。
+//
+// Python: stamp_member_prompt_updated_at (team.py L2025-2038)
+func (tb *TeamBackend) StampMemberPromptUpdatedAt(_ context.Context, _ string, _ int64) {}
+
+// ForkEnabled 该团队的上下文继承（fork）是否开放。
+//
+// 偏差 D-8：上游直读 TeamAgentSpec.enable_fork，Go 的 TeamAgentSpec 无该字段
+// （grep 零命中），恒 false。后果：身份块不带 fork 能力声明、不嵌 <identity>
+// 元素——与上游 enable_fork=false 的字节表现一致。
+//
+// Python: fork_enabled (team.py L505-517)
+func (tb *TeamBackend) ForkEnabled() bool { return false }
+
 // SpawnMember 创建成员记录。
 // Python: TeamBackend.spawn_member(member_name, display_name, agent_card, role, ...)
 //

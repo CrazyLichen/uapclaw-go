@@ -1235,3 +1235,65 @@ func TestStartupMember_回调失败2(t *testing.T) {
 		t.Error("回调失败时不应标记为已启动")
 	}
 }
+
+// TestTeamBackend_GetTeamUpdatedAtState 测试团队 mtime 探针恒 present=true
+//
+// 偏差 D-1：Go 无 workspace_cache（md 文件 mtime 覆盖层），探针直读 DB 列，
+// present 恒 true——行为等价上游「演化关闭」路径。
+// Python: get_team_updated_at_state (team.py L1940-1969)
+func TestTeamBackend_GetTeamUpdatedAtState(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	ts, present := tb.GetTeamUpdatedAtState(ctx)
+	if !present {
+		t.Fatal("present = false, want true（偏差 D-1）")
+	}
+	_ = ts
+}
+
+// TestTeamBackend_GetMemberUpdatedAtState 测试单成员 mtime 探针
+//
+// Python: get_member_updated_at_state (team.py L2007-2024)
+func TestTeamBackend_GetMemberUpdatedAtState(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+
+	// 成员行不存在：返回 (0, true)——没有「必须更新」信号
+	ts, present := tb.GetMemberUpdatedAtState(ctx, "ghost", "prompt")
+	if !present {
+		t.Fatal("present = false, want true")
+	}
+	if ts != 0 {
+		t.Fatalf("ts = %d, want 0（成员行不存在）", ts)
+	}
+
+	// 成员行存在：返回其 UpdatedAt
+	_ = tb.db.Member().CreateMember(ctx, "alice", "test-team", "Alice", "{}", "ready", "teammate", "", "", "build_mode", "", "")
+	ts2, present2 := tb.GetMemberUpdatedAtState(ctx, "alice", "prompt")
+	if !present2 {
+		t.Fatal("present = false, want true")
+	}
+	_ = ts2
+}
+
+// TestTeamBackend_ForkEnabled 测试 fork 开关恒 false
+//
+// 偏差 D-8：上游直读 TeamAgentSpec.enable_fork，Go 的 TeamAgentSpec 无该字段。
+// Python: fork_enabled (team.py L505-517)
+func TestTeamBackend_ForkEnabled(t *testing.T) {
+	tb := newTestTeamBackend()
+	if tb.ForkEnabled() {
+		t.Fatal("ForkEnabled() = true, want false（偏差 D-8）")
+	}
+}
+
+// TestTeamBackend_Stamp_空实现不panic 测试两个 stamp 空实现
+//
+// 偏差 D-1/D-4：present 恒 true，stamp 分支永不进入，故为空实现。
+// Python: stamp_team_card_updated_at (L1971) / stamp_member_prompt_updated_at (L2025)
+func TestTeamBackend_Stamp_空实现不panic(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.StampTeamCardUpdatedAt(ctx, 123)
+	tb.StampMemberPromptUpdatedAt(ctx, "leader", 123)
+}
