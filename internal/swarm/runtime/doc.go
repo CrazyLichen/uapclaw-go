@@ -8,7 +8,12 @@
 //	├── events.go  # RuntimeEvent 与响应/片段包装
 //	├── service.go # AgentRuntime（Invoke/Stream 编排、控制事件发射）
 //	├── request.go # 请求模式解析（含 Web 组合）、工程目录解析、metadata 同步、chat turn 准备、取消请求
-//	└── plan.go    # PlanModeController 计划状态机
+//	├── plan.go    # PlanModeController 计划状态机
+//	├── session_manager.go      # 会话任务队列（同会话串行 LIFO、跨会话并发）
+//	├── session_work_kind.go    # 请求归类判定（哪些请求归 Runtime 调度）
+//	├── session_input.go        # 会话补充输入（steer / follow_up）
+//	├── interrupt_resume.go     # 暂停调用应答判定
+//	└── interrupt_helpers.go    # 中断恢复载荷判定
 //
 // 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py）
 package runtime
