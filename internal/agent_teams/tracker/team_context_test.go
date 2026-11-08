@@ -587,3 +587,131 @@ func TestTaskNotice_会话切换重载基线(t *testing.T) {
 		t.Fatal("新会话 s2 基线为空，应能再次宣告")
 	}
 }
+
+// TestLastDeliveredText_往返 测试 deliveredText 记入基线并能取回
+//
+// Python: last_delivered_text (team_context.py L285-302)
+func TestLastDeliveredText_往返(t *testing.T) {
+	sess := newFakeSession("s1")
+	tr := NewTeamContextTracker(nil, "alice", atschema.TeamRoleTeammate,
+		"Alice", "", "", "", "", false, "cn", "", nil)
+
+	if _, ok := tr.LastDeliveredText(sess); ok {
+		t.Fatal("初始不应有记录")
+	}
+	delivered := "<team-context>已投递内容</team-context>"
+	tr.Commit(sess, &delivered)
+
+	got, ok := tr.LastDeliveredText(sess)
+	if !ok || got != delivered {
+		t.Fatalf("LastDeliveredText = (%q,%v), want (%q,true)", got, ok, delivered)
+	}
+}
+
+// TestCommit_nil时不做任何事 测试无待提交且无 deliveredText 时不写状态
+func TestCommit_nil时不做任何事(t *testing.T) {
+	sess := newFakeSession("s1")
+	tr := NewTeamContextTracker(nil, "alice", atschema.TeamRoleTeammate,
+		"", "", "", "", "", false, "cn", "", nil)
+
+	tr.Commit(sess, nil)
+	if len(sess.state) != 0 {
+		t.Fatalf("无待提交时不应写状态, got %v", sess.state)
+	}
+	if sess.commits != 0 {
+		t.Fatalf("commit 次数 = %d, want 0", sess.commits)
+	}
+}
+
+// TestPendingText_无文本但推进基线 测试探针推进却无内容可说时就地推进基线
+//
+// 上游理由：那些内容不可能投递失败，不推进会导致每次调用都重新查 DB。
+// Python: pending_text 尾部（team_context.py L257-259）
+func TestPendingText_无文本但推进基线(t *testing.T) {
+	tb, _ := newTestBackend(t) // 无 team 行、无成员行
+	tr := NewTeamContextTracker(tb, "alice", atschema.TeamRoleTeammate,
+		"", "", "", "", "", false, "cn", "", nil)
+	sess := newFakeSession("s1")
+
+	if text, ok := tr.PendingText(sess); ok || text != "" {
+		t.Fatalf("无内容时应返回空, got (%q,%v)", text, ok)
+	}
+	// team_info 探针推进了（mtime 从无到有），基线应已被写回
+	if _, ok := sess.state[TeamContextStateKey]; !ok {
+		t.Fatal("探针推进且无文本时，基线应就地推进")
+	}
+}
+
+// TestPendingText_nil会话返回空 测试会话为 nil 时不做任何事
+func TestPendingText_nil会话返回空(t *testing.T) {
+	tr := NewTeamContextTracker(nil, "alice", atschema.TeamRoleTeammate,
+		"Alice", "", "", "", "", false, "cn", "", nil)
+	if text, ok := tr.PendingText(nil); ok || text != "" {
+		t.Fatalf("nil 会话应返回空, got (%q,%v)", text, ok)
+	}
+}
+
+// TestSnapshotText_含身份与团队块 测试全量快照忽略基线
+//
+// Python: snapshot_text (team_context.py L205-225)
+func TestSnapshotText_含身份与团队块(t *testing.T) {
+	tb, db := newTestBackend(t)
+	ctx := context.Background()
+	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "alice", "目标", "")
+	// 本成员自己的行：身份块要等它出现才渲染（display_name 必须来自 DB 行）
+	if ok := db.Member().CreateMember(ctx, "alice", "test-team", "Alice", "{}",
+		"ready", "teammate", "", "", "build_mode", "", ""); !ok {
+		t.Fatal("建本成员行失败")
+	}
+	createPeer(t, db, "test-team", "bob", "Bob")
+
+	tr := NewTeamContextTracker(tb, "alice", atschema.TeamRoleTeammate,
+		"Alice", "/ws/alice", "", "/team/ws", "", false, "cn", "", nil)
+	text, ok := tr.SnapshotText()
+	if !ok {
+		t.Fatal("应返回全量快照")
+	}
+	for _, want := range []string{"Alice", "测试团队", "bob"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("快照应含 %q: %q", want, text)
+		}
+	}
+	// 全量快照不写任何持久化数据
+	if text2, _ := tr.SnapshotText(); text2 != text {
+		t.Fatal("SnapshotText 应可重复调用且结果稳定")
+	}
+}
+
+// TestSnapshotText_无内容返回false 测试无 backend 且无身份字段时返回 false
+func TestSnapshotText_无内容返回false(t *testing.T) {
+	tr := NewTeamContextTracker(nil, "", atschema.TeamRoleTeammate,
+		"", "", "", "", "", false, "cn", "", nil)
+	if text, ok := tr.SnapshotText(); ok || text != "" {
+		t.Fatalf("无内容应返回 false, got (%q,%v)", text, ok)
+	}
+}
+
+// TestPendingText_身份通道首投 测试有成员行时 PendingText 产出身份块并留待提交
+func TestPendingText_身份通道首投(t *testing.T) {
+	tb, db := newTestBackend(t)
+	ctx := context.Background()
+	_ = db.Member().CreateMember(ctx, "alice", "test-team", "Alice", "{}",
+		"ready", "teammate", "", "", "build_mode", "私有约定", "")
+
+	tr := NewTeamContextTracker(tb, "alice", atschema.TeamRoleTeammate,
+		"", "/ws/alice", "私有约定", "/team/ws", "", false, "cn", "", nil)
+	sess := newFakeSession("s1")
+
+	text, ok := tr.PendingText(sess)
+	if !ok || !strings.Contains(text, "Alice") {
+		t.Fatalf("应产出身份块, got (%q,%v)", text, ok)
+	}
+	// 未 Commit 前基线不应推进
+	if _, written := sess.state[TeamContextStateKey]; written {
+		t.Fatal("PendingText 不得自行推进基线（要等 Commit）")
+	}
+	tr.Commit(sess, nil)
+	if _, written := sess.state[TeamContextStateKey]; !written {
+		t.Fatal("Commit 后基线应推进")
+	}
+}
