@@ -2,10 +2,12 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -465,5 +467,161 @@ func TestHasSessionRuntime_四源判定(t *testing.T) {
 	root.unregisterSessionAgentTask("s1", "r1")
 	if root.HasSessionRuntime("s1") {
 		t.Error("四源全空应返回 false")
+	}
+}
+
+// ──────────────────────────── 分流头 ────────────────────────────
+
+// TestProcessMessageStreamImpl_根分流到child 根收请求后转 child 执行。
+func TestProcessMessageStreamImpl_根分流到child(t *testing.T) {
+	root := NewDeepAdapter()
+	sid := "s1"
+	ch, err := root.ProcessMessageStreamImpl(context.Background(), &schema.AgentRequest{
+		RequestID: "r1",
+		ChannelID: "web",
+		SessionID: &sid,
+	}, map[string]any{"query": "hi"})
+	if err != nil {
+		t.Fatalf("分流后不应直接返回错误: %v", err)
+	}
+	for range ch {
+	}
+	// 关键断言：child 已被创建并入缓存
+	if !root.sessionAdapters.has("s1") {
+		t.Error("根处理后缓存里应有该会话的 child")
+	}
+}
+
+// TestProcessMessageStreamImpl_child不再分流 child 上不再造子。
+func TestProcessMessageStreamImpl_child不再分流(t *testing.T) {
+	child := NewDeepAdapter()
+	child.MarkAsSessionScoped("s1")
+	sid := "s1"
+	ch, _ := child.ProcessMessageStreamImpl(context.Background(), &schema.AgentRequest{
+		RequestID: "r1", ChannelID: "web", SessionID: &sid,
+	}, map[string]any{"query": "hi"})
+	for range ch {
+	}
+	if child.sessionAdapters.count() != 0 {
+		t.Error("child 不应再有子缓存")
+	}
+}
+
+// TestCompressContext_根分流到child 压缩请求转到 child。
+func TestCompressContext_根分流到child(t *testing.T) {
+	root := NewDeepAdapter()
+	_, _ = root.CompressContext(context.Background(), "s1", nil, false)
+	if !root.sessionAdapters.has("s1") {
+		t.Error("压缩应经根分流并创建 child")
+	}
+}
+
+// TestGetContextUsage_根分流到child 用量查询转到 child。
+func TestGetContextUsage_根分流到child(t *testing.T) {
+	root := NewDeepAdapter()
+	_, _ = root.GetContextUsage(context.Background(), "s1")
+	if !root.sessionAdapters.has("s1") {
+		t.Error("用量查询应经根分流并创建 child")
+	}
+}
+
+// TestGenerateRecap_根分流到child 摘要生成转到 child。
+func TestGenerateRecap_根分流到child(t *testing.T) {
+	root := NewDeepAdapter()
+	_, _ = root.GenerateRecap(context.Background(), "s1")
+	if !root.sessionAdapters.has("s1") {
+		t.Error("摘要生成应经根分流并创建 child")
+	}
+}
+
+// TestHandleUserAnswer_根分流到child 用户应答转到 child。
+func TestHandleUserAnswer_根分流到child(t *testing.T) {
+	root := NewDeepAdapter()
+	sid := "s1"
+	_, _ = root.HandleUserAnswer(context.Background(), &schema.AgentRequest{
+		RequestID: "r1", ChannelID: "web", SessionID: &sid,
+	})
+	if !root.sessionAdapters.has("s1") {
+		t.Error("用户应答应经根分流并创建 child")
+	}
+}
+
+// Test骨架方法_分流头到位 四个骨架方法同样先分流。
+func Test骨架方法_分流头到位(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(root *DeepAdapter)
+	}{
+		{"HandleSwarmflowReply", func(root *DeepAdapter) {
+			sid := "s1"
+			_, _ = root.HandleSwarmflowReply(context.Background(), &schema.AgentRequest{
+				RequestID: "r1", ChannelID: "web", SessionID: &sid,
+			})
+		}},
+		{"DispatchGoalControl", func(root *DeepAdapter) {
+			_, _ = root.DispatchGoalControl(context.Background(), "s1", "set", "obj", false, 0, 0)
+		}},
+		{"GetContextUsageEvent", func(root *DeepAdapter) {
+			_, _ = root.GetContextUsageEvent("s1", "r1")
+		}},
+		{"GenerateBtwAnswer", func(root *DeepAdapter) {
+			_, _ = root.GenerateBtwAnswer(context.Background(), "s1", "q")
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := NewDeepAdapter()
+			tc.call(root)
+			if !root.sessionAdapters.has("s1") {
+				t.Error("应经根分流并创建 child")
+			}
+		})
+	}
+}
+
+// TestIsAttachOnlySubscription 被动订阅判定。
+func TestIsAttachOnlySubscription(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"空", "", false},
+		{"非法JSON", "not-json", false},
+		{"无键", `{"query":"hi"}`, false},
+		{"false", `{"team_attach_only":false}`, false},
+		{"true", `{"team_attach_only":true}`, true},
+		{"非bool", `{"team_attach_only":"yes"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isAttachOnlySubscription(json.RawMessage(tc.in)); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAttachOnly_不占活跃 attach-only 请求不登记在飞任务。
+func TestAttachOnly_不占活跃(t *testing.T) {
+	root := NewDeepAdapter()
+	sid := "s1"
+	ch, err := root.ProcessMessageStreamImpl(context.Background(), &schema.AgentRequest{
+		RequestID: "r1",
+		ChannelID: "web",
+		SessionID: &sid,
+		Params:    json.RawMessage(`{"team_attach_only":true}`),
+	}, map[string]any{"query": "hi"})
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	for range ch {
+	}
+	child := root.getCachedSessionAdapter("s1")
+	if child == nil {
+		t.Fatal("attach-only 仍应创建 child（只是不占活跃）")
+	}
+	if root.hasRegisteredSessionTasks("s1") {
+		t.Error("attach-only 不应登记在飞任务")
 	}
 }

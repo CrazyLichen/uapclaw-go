@@ -881,6 +881,26 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 //	Python: 20. finally: 清理（取消标记活跃会话、重置上下文变量）
 //	Python: 21. return AgentResponse from result
 func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (*schema.AgentResponse, error) {
+	// 步骤 0: 根分流
+	// Python: process_message_impl :18175 → _get_session_adapter_for_request
+	//
+	// 根是路由器，不跑对话；把它转给该会话的子适配器，方法体其余步骤
+	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		reserve := !isAttachOnlySubscription(req.Params)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
+			ReserveActivity: reserve,
+			RequestID:       req.RequestID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		defer d.unregisterSessionAgentTask(sid, req.RequestID)
+		return child.ProcessMessageImpl(ctx, req, inputs)
+	}
+
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
@@ -1052,6 +1072,27 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 //	Python: 20. except asyncio.CancelledError: ...
 //	Python: 21. finally: 清理
 func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
+	// 步骤 0: 根分流
+	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		reserve := !isAttachOnlySubscription(req.Params)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
+			ReserveActivity: reserve,
+			RequestID:       req.RequestID,
+		})
+		if err != nil {
+			ch := make(chan *schema.AgentResponseChunk)
+			close(ch)
+			return ch, err
+		}
+		// 流式不能 defer 淘汰：淘汰必须在流消费完之后，而调用方持有 channel。
+		// 用转接 goroutine 在流关闭后触发（对齐 Python 的 finally 在 generator 结束时执行）。
+		return d.streamThroughChild(ctx, sid, req.RequestID, func() (<-chan *schema.AgentResponseChunk, error) {
+			return child.ProcessMessageStreamImpl(ctx, req, inputs)
+		})
+	}
+
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
 		ch := make(chan *schema.AgentResponseChunk)
@@ -1488,6 +1529,32 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	intent := paramsString(params, "intent", "cancel")
 	newInput := params["new_input"] // 可能为 nil
 
+	// 步骤 0: 根分流（双分支）
+	// Python: process_interrupt :16330
+	//
+	// cancel/supplement 只查缓存：无缓存即"无在飞流"，fallthrough 到共享
+	// teardown。不能为它造 child——造 child 会跑完整 agent 初始化
+	// （17 rail + ensure_initialized，含 ProjectMemoryRail 扫描），把 cancel
+	// 本身卡住数十秒，后续 ESC 全堵在队列里（上游 :16331-16341 注释）。
+	// pause/resume 需要 session-scoped adapter 的 StreamEventRail，按原逻辑创建。
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		if intent == "cancel" || intent == "supplement" {
+			if cached := d.getCachedSessionAdapter(sid); cached != nil {
+				defer d.evictIdleSessionAdapters(ctx)
+				return cached.ProcessInterrupt(ctx, req)
+			}
+			// fallthrough：无缓存 → 走下方共享 teardown
+		} else {
+			child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+			if err != nil {
+				return nil, err
+			}
+			defer d.evictIdleSessionAdapters(ctx)
+			return child.ProcessInterrupt(ctx, req)
+		}
+	}
+
 	// 步骤 3-4: session 规范化 + 活跃检查
 	normalizedSID := "default"
 	if req.SessionID != nil && *req.SessionID != "" {
@@ -1685,6 +1752,18 @@ func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) 
 //	Python: 7. elif request_id.startswith("skill_evolve_"): resolved = _handle_evolution_approval(...)
 //	Python: 8. return AgentResponse(ok=True, payload={"accepted": True, "resolved": resolved})
 func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 步骤 0: 根分流
+	// Python: handle_user_answer :16826 → _get_or_create_session_adapter
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		return child.HandleUserAnswer(ctx, req)
+	}
+
 	// 步骤 1-2: 解析 request_id 和 answers
 	params := parseParams(req.Params)
 	requestID := paramsString(params, "request_id", "")
@@ -1854,6 +1933,17 @@ func (d *DeepAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgen
 func (d *DeepAdapter) HandleSwarmflowReply(
 	ctx context.Context, req *schema.AgentRequest,
 ) (*schema.AgentResponse, error) {
+	// 分流头
+	// Python: :16979-16984
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		return child.HandleSwarmflowReply(ctx, req)
+	}
 	return nil, errors.New("swarmflow reply handling not implemented; owned by team domain")
 }
 

@@ -153,6 +153,9 @@ func TestDeepAdapter_CompressContext_无实例(t *testing.T) {
 // TestDeepAdapter_GetContextUsage_无实例 测试 instance 为 nil 时返回 nil, nil。
 func TestDeepAdapter_GetContextUsage_无实例(t *testing.T) {
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	result, err := d.GetContextUsage(ctx, "s1")
 	if result != nil || err != nil {
@@ -163,6 +166,9 @@ func TestDeepAdapter_GetContextUsage_无实例(t *testing.T) {
 // TestDeepAdapter_GenerateRecap_无实例 测试 instance 为 nil 时返回 no_turn。
 func TestDeepAdapter_GenerateRecap_无实例(t *testing.T) {
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	result, err := d.GenerateRecap(ctx, "s1")
 	if err != nil {

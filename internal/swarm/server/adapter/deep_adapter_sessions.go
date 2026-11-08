@@ -2,6 +2,8 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -597,4 +600,129 @@ func (c *sessionAdapterCache) markIdleForTest(sid string, secondsAgo int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastUsed[sid] = time.Now().Add(-time.Duration(secondsAgo) * time.Second)
+}
+
+// ──────────────────────────── 分流辅助 ────────────────────────────
+
+// isAttachOnlySubscription 请求是否为团队会话的被动订阅。
+// Python: interface_deep.py _is_attach_only_subscription（:355-367）
+//
+// 被动订阅不提交输入、不跑模型，因此不占活跃计数、不登记在飞任务；
+// 否则长生命周期的订阅会让会话永远显示"执行中"，挡住模型切换。
+//
+// 入参用 json.RawMessage 而非 map：req.Params 就是这个类型（schema/agent.go:35）。
+// 键名来源 runtime/request.go:79 TeamAttachOnlyParam（不 import runtime 以避免
+// adapter→runtime 的额外依赖）。
+func isAttachOnlySubscription(raw json.RawMessage) bool {
+	params := parseParams(raw)
+	attachOnly, ok := params["team_attach_only"].(bool)
+	return ok && attachOnly
+}
+
+// streamThroughChild 把 child 的流转接出来，并在流结束后淘汰空闲 child。
+// Python: process_message_stream_impl 的 finally（:18978-18983）
+//
+// Go 无法在返回 channel 后用 defer（函数已返回），故用转接 goroutine：
+// 源流读完 → 关闭外层 → 淘汰空闲 → 注销在飞任务。
+func (d *DeepAdapter) streamThroughChild(
+	ctx context.Context,
+	sid string,
+	requestID string,
+	start func() (<-chan *schema.AgentResponseChunk, error),
+) (<-chan *schema.AgentResponseChunk, error) {
+	src, err := start()
+	if err != nil {
+		return nil, err
+	}
+	out := make(chan *schema.AgentResponseChunk, 64)
+	go func() {
+		defer close(out)
+		defer d.unregisterSessionAgentTask(sid, requestID)
+		defer d.evictIdleSessionAdapters(context.Background())
+		for chunk := range src {
+			select {
+			case out <- chunk:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
+}
+
+// DispatchGoalControl goal 控制面。
+// Python: interface_deep.py dispatch_goal_control（:17744，分流头 :17775）
+//
+// 方法体归 10.3.27；10.3.28f 只保证分流结构完整（spec DEC-10）。
+func (d *DeepAdapter) DispatchGoalControl(
+	ctx context.Context,
+	sessionID, action, objective string,
+	overwriteConfirmed bool,
+	tokenBudget, maxAttempts int,
+) (map[string]any, error) {
+	// 分流头
+	// Python: :17775-17786
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(&sessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		if g, ok := child.(interface {
+			DispatchGoalControl(context.Context, string, string, string, bool, int, int) (map[string]any, error)
+		}); ok {
+			return g.DispatchGoalControl(ctx, sessionID, action, objective, overwriteConfirmed, tokenBudget, maxAttempts)
+		}
+		return nil, errors.New("goal control not implemented; owned by 10.3.27")
+	}
+	return nil, errors.New("goal control not implemented; owned by 10.3.27")
+}
+
+// GetContextUsageEvent 取上下文用量事件。
+// Python: interface_deep.py get_context_usage_event（:22060，分流头 :22067）
+//
+// 方法体归后续章节；本批只保证分流结构完整。
+func (d *DeepAdapter) GetContextUsageEvent(sessionID, requestID string) (map[string]any, error) {
+	// 分流头
+	// Python: :22067-22075
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(&sessionID)
+		child, err := d.getOrCreateSessionAdapter(context.Background(), sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(context.Background())
+		if g, ok := child.(interface {
+			GetContextUsageEvent(string, string) (map[string]any, error)
+		}); ok {
+			return g.GetContextUsageEvent(sessionID, requestID)
+		}
+		return nil, nil
+	}
+	return nil, nil
+}
+
+// GenerateBtwAnswer 单轮旁路问答。
+// Python: interface_deep.py generate_btw_answer（:22433，分流头 :22451）
+//
+// 方法体归后续章节；本批只保证分流结构完整。
+func (d *DeepAdapter) GenerateBtwAnswer(ctx context.Context, sessionID, question string) (map[string]any, error) {
+	// 分流头
+	// Python: :22451-22459
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(&sessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		if g, ok := child.(interface {
+			GenerateBtwAnswer(context.Context, string, string) (map[string]any, error)
+		}); ok {
+			return g.GenerateBtwAnswer(ctx, sessionID, question)
+		}
+		return map[string]any{"status": "failed"}, errors.New("btw answer not implemented")
+	}
+	return map[string]any{"status": "failed"}, errors.New("btw answer not implemented")
 }

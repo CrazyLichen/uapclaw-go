@@ -218,6 +218,9 @@ func TestDeepAdapter_HandleHeartbeat_前缀检查(t *testing.T) {
 // TestDeepAdapter_ProcessMessageImpl_未初始化 测试 instance=nil 时返回错误。
 func TestDeepAdapter_ProcessMessageImpl_未初始化(t *testing.T) {
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	req := schema.NewAgentRequest("req-1", "ch-1", schema.ReqMethod("chat.send"), nil)
 	_, err := d.ProcessMessageImpl(ctx, req, nil)
@@ -229,6 +232,9 @@ func TestDeepAdapter_ProcessMessageImpl_未初始化(t *testing.T) {
 // TestDeepAdapter_ProcessMessageStreamImpl_未初始化 测试 instance=nil 时返回错误。
 func TestDeepAdapter_ProcessMessageStreamImpl_未初始化(t *testing.T) {
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	req := schema.NewAgentRequest("req-1", "ch-1", schema.ReqMethod("chat.send"), nil)
 	_, err := d.ProcessMessageStreamImpl(ctx, req, nil)

@@ -41,6 +41,24 @@ const recentMessageWindow = 30
 // 编排薄层：获取 context_engine → 调 CompressContext → 统计 token → 返回结果。
 // 不依赖 SessionHistory JSONL，数据来自内存中的 ContextEngine。
 func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error) {
+	// 根分流
+	// Python: compress_context :21834 → _get_or_create_session_adapter
+	//
+	// 压缩必须作用在 child 的 context engine 上：context engine 挂在
+	// reactAgent 内部（per-instance），根的实例看不到该会话的上下文。
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(&sessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		if compressor, ok := child.(ContextCompressor); ok {
+			return compressor.CompressContext(ctx, sessionID, session, returnState)
+		}
+		return map[string]any{"result": "noop"}, nil
+	}
+
 	if d.instance == nil {
 		return map[string]any{"result": "noop"}, nil
 	}
@@ -177,6 +195,21 @@ func (d *DeepAdapter) emitPostCompactUsage(
 // GetContextUsage 获取上下文窗口占用率。
 // Python: get_context_usage() (line 5572-5588)
 func (d *DeepAdapter) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
+	// 根分流
+	// Python: get_context_usage :21927 → _get_or_create_session_adapter
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(&sessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		if compressor, ok := child.(ContextCompressor); ok {
+			return compressor.GetContextUsage(ctx, sessionID)
+		}
+		return nil, nil
+	}
+
 	if d.instance == nil {
 		return nil, nil
 	}
@@ -194,6 +227,21 @@ func (d *DeepAdapter) GetContextUsage(ctx context.Context, sessionID string) (ma
 // 从 ContextEngine 内存获取最近消息 → 调模型生成 1-3 句摘要。
 // 不依赖 SessionHistory JSONL。
 func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
+	// 根分流
+	// Python: generate_recap :22127 → _get_or_create_session_adapter
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(&sessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		if compressor, ok := child.(ContextCompressor); ok {
+			return compressor.GenerateRecap(ctx, sessionID)
+		}
+		return nil, nil
+	}
+
 	if d.instance == nil {
 		return map[string]any{"status": "no_turn"}, nil
 	}
