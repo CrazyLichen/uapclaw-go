@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -18,10 +19,21 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// maxQueryTokens 一次查询最多取用的 token 数。对齐 Python build_fts_query 的 tokens[:10]。
+	maxQueryTokens = 10
+	// ftsTrigramMinChars trigram 分词器能匹配的最小字符数。
+	// 少于这个长度的 token（典型是两个汉字）无法命中 FTS，须走 LIKE 兜底。
+	// 对齐 Python split_query_tokens 的 `len(t) < 3`（agent-core internal.py:193）。
+	ftsTrigramMinChars = 3
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ftsWordPattern FTS 分词正则。对齐 Python re.findall(r'\w+')（internal.py build_fts_query）
-var ftsWordPattern = regexp.MustCompile(`\w+`)
+// ftsWordPattern 从查询里切出词元（字母/数字/下划线连续段）。
+// 对齐 Python re.findall(r'\w+')：Python 的 \w 在 str 模式下匹配 Unicode 字母，
+// 而 Go 正则默认 \w 只匹配 ASCII，中文会整体落空，故显式写出 Unicode 字符类。
+var ftsWordPattern = regexp.MustCompile(`[\p{L}\p{N}_]+`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -218,25 +230,60 @@ func ParseEmbedding(data any) []float64 {
 	return nil
 }
 
-// BuildFTSQuery 构造 FTS5 查询。对齐 Python build_fts_query（internal.py）：
-// \w+ 分词取前 10 个，双引号包裹 OR 拼接
-func BuildFTSQuery(query string) string {
+// SplitQueryTokens 按 3 字符阈值把查询切成"长 token"与"短 token"。
+//
+// 阈值来自 FTS 表的 trigram 分词器：少于 3 个字符的 token（典型是两个汉字，如
+// "组网""日志"）无法与 trigram 索引匹配，必须交给调用方的 LIKE 兜底；3 个及以上
+// 走 BM25 排名。
+//
+// 对齐 Python split_query_tokens（agent-core internal.py:179）。本包上游（jiuwenswarm）
+// 尚未引入该函数，属超出上游的加固，见设计文档偏差 D-4。
+func SplitQueryTokens(query string) (longTokens, shortTokens []string) {
 	cleaned := strings.TrimSpace(query)
 	if cleaned == "" {
-		return ""
+		return nil, nil
 	}
 	tokens := ftsWordPattern.FindAllString(cleaned, -1)
-	if len(tokens) == 0 {
+	if len(tokens) > maxQueryTokens {
+		tokens = tokens[:maxQueryTokens]
+	}
+	for _, t := range tokens {
+		if utf8.RuneCountInString(t) < ftsTrigramMinChars {
+			shortTokens = append(shortTokens, t)
+		} else {
+			longTokens = append(longTokens, t)
+		}
+	}
+	return longTokens, shortTokens
+}
+
+// BuildFTSQuery 用长 token 构造 FTS5 查询。
+//
+// 只用长 token：短 token 由调用方的 LIKE 兜底，混进来反而让 MATCH 恒为空。
+// 无长 token 时返回空串。连接符用 OR，与上游一致。
+// 对齐 Python build_fts_query（internal.py:199）。
+func BuildFTSQuery(query string) string {
+	longTokens, _ := SplitQueryTokens(query)
+	if len(longTokens) == 0 {
 		return ""
 	}
-	if len(tokens) > 10 {
-		tokens = tokens[:10]
-	}
-	quoted := make([]string, 0, len(tokens))
-	for _, tok := range tokens {
+	quoted := make([]string, 0, len(longTokens))
+	for _, tok := range longTokens {
 		quoted = append(quoted, `"`+tok+`"`)
 	}
 	return strings.Join(quoted, " OR ")
+}
+
+// EscapeLikePattern 把 token 转成 LIKE 的 `%token%` 模式并转义 LIKE 元字符。
+//
+// 反斜杠、百分号、下划线都要转义（配合 SQL 的 `ESCAPE '\'`），否则用户查询里的
+// `%` 会变成通配符把整张表捞出来。
+// 对齐 Python MemoryIndexManager._escape_like（agent-core manager.py:1519）。
+func EscapeLikePattern(token string) string {
+	escaped := strings.ReplaceAll(token, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, "%", `\%`)
+	escaped = strings.ReplaceAll(escaped, "_", `\_`)
+	return "%" + escaped + "%"
 }
 
 // Bm25RankToScore BM25 rank 转相似度分数。对齐 Python bm25_rank_to_score（internal.py）：

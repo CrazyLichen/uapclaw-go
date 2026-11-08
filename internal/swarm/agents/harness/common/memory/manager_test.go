@@ -533,7 +533,7 @@ func TestScheduleWatchSync_防抖触发(t *testing.T) {
 	m := newPartialManager(t, db, settings, dir)
 
 	// 首次同步建立基线（走真实 syncMemoryFiles）
-	if err := m.syncMemoryFiles(context.Background()); err != nil {
+	if err := m.syncMemoryFiles(context.Background(), false); err != nil {
 		t.Fatalf("初始同步失败: %v", err)
 	}
 
@@ -564,7 +564,7 @@ func TestScheduleWatchSync_重复调用重置防抖窗口(t *testing.T) {
 		"sync": map[string]any{"watchDebounceMs": 300, "onSearch": false},
 	})
 	m := newPartialManager(t, db, settings, dir)
-	if err := m.syncMemoryFiles(context.Background()); err != nil {
+	if err := m.syncMemoryFiles(context.Background(), false); err != nil {
 		t.Fatalf("初始同步失败: %v", err)
 	}
 
@@ -996,12 +996,12 @@ func TestSyncMemoryFiles_文件删除(t *testing.T) {
 
 	settings := CreateMemorySettings(dir, nil)
 	m := newPartialManager(t, db, settings, dir)
-	if err := m.syncMemoryFiles(context.Background()); err != nil {
+	if err := m.syncMemoryFiles(context.Background(), false); err != nil {
 		t.Fatalf("首次同步失败: %v", err)
 	}
 
 	_ = os.Remove(fp)
-	if err := m.syncMemoryFiles(context.Background()); err != nil {
+	if err := m.syncMemoryFiles(context.Background(), false); err != nil {
 		t.Fatalf("二次同步失败: %v", err)
 	}
 
@@ -1018,7 +1018,7 @@ func TestSyncSessionFiles_无sessions目录(t *testing.T) {
 	dir := t.TempDir()
 	settings := CreateMemorySettings(dir, nil)
 	m := newPartialManager(t, db, settings, dir)
-	if err := m.syncSessionFiles(context.Background()); err != nil {
+	if err := m.syncSessionFiles(context.Background(), false); err != nil {
 		t.Errorf("无 sessions 目录应返回 nil: %v", err)
 	}
 }
@@ -1034,12 +1034,12 @@ func TestSyncSessionFiles_文件删除(t *testing.T) {
 
 	settings := CreateMemorySettings(dir, nil)
 	m := newPartialManager(t, db, settings, dir)
-	if err := m.syncSessionFiles(context.Background()); err != nil {
+	if err := m.syncSessionFiles(context.Background(), false); err != nil {
 		t.Fatalf("首次同步失败: %v", err)
 	}
 
 	_ = os.Remove(fp)
-	if err := m.syncSessionFiles(context.Background()); err != nil {
+	if err := m.syncSessionFiles(context.Background(), false); err != nil {
 		t.Fatalf("二次同步失败: %v", err)
 	}
 
@@ -1323,7 +1323,7 @@ func TestConcurrentSearchSync(t *testing.T) {
 		"store": map[string]any{"vector": map[string]any{"enabled": false}},
 	})
 	m := newPartialManager(t, db, settings, dir)
-	if err := m.syncMemoryFiles(context.Background()); err != nil {
+	if err := m.syncMemoryFiles(context.Background(), false); err != nil {
 		t.Fatalf("同步失败: %v", err)
 	}
 
@@ -1375,7 +1375,7 @@ func TestWatchLoop_事件触发防抖(t *testing.T) {
 		"sync": map[string]any{"watchDebounceMs": 150, "onSearch": false},
 	})
 	m := newPartialManager(t, db, settings, dir)
-	if err := m.syncMemoryFiles(context.Background()); err != nil {
+	if err := m.syncMemoryFiles(context.Background(), false); err != nil {
 		t.Fatalf("初始同步失败: %v", err)
 	}
 

@@ -54,8 +54,10 @@ func TestCreateMemorySettings_默认值(t *testing.T) {
 	if s.Model != "text-embedding-v3" {
 		t.Errorf("Model 应为 text-embedding-v3，实际为 %s", s.Model)
 	}
-	if s.Fallback != "mock" {
-		t.Errorf("Fallback 应为 mock，实际为 %s", s.Fallback)
+	// 默认不回落 mock：未配置 embedding 时应进入 FTS5-only 模式，
+	// 而不是悄悄换成产出伪随机向量的 mock provider。
+	if s.Fallback != "" {
+		t.Errorf("Fallback 默认应为空（不回落 mock），实际为 %s", s.Fallback)
 	}
 	if len(s.Sources) != 2 || s.Sources[0] != "memory" || s.Sources[1] != "sessions" {
 		t.Errorf("Sources 应为 [memory, sessions]，实际为 %v", s.Sources)

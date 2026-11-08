@@ -161,12 +161,20 @@ func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey st
 }
 
 // CreateEmbeddingProvider 根据配置创建嵌入提供者。对齐 Python create_embedding_provider
+//
+// 未配置 embedding（无 embeddingConfig 或 api_key 为空）时**返回 (nil, nil)**，表示
+// "记忆系统以 FTS5 关键词检索模式运行"。绝不自动回落 mock：mock 产出的伪随机向量会
+// 污染检索结果（向量侧权重 0.7），并写进 chunks.embedding 与 embedding_cache 持久化。
+// 需要 mock 必须显式把 fallback 配成 "mock"。
+//
+// 对齐 Python _initialize_provider（manager.py:648-659）。
 func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *apiEmbedding.EmbeddingConfig) (EmbeddingProvider, error) {
-	if provider == "mock" {
+	// 显式指定 mock 时仍然给 mock（供测试与本地联调）
+	if provider == "mock" || fallback == "mock" {
 		return NewMockEmbeddingProvider(), nil
 	}
 
-	// 优先使用 embeddingConfig
+	// 已配置 api_key → 建真实提供者
 	if embeddingConfig != nil && embeddingConfig.APIKey != "" {
 		// Python: base_url 以 /embeddings 结尾时裁剪（归一化后参与 fingerprint）
 		normalized := NormalizeEmbeddingBaseURL(embeddingConfig.BaseURL)
@@ -184,14 +192,13 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 		}, nil
 	}
 
-	// fallback 到 mock
-	// Python: logger.warning("Embedding API key not found, using mock provider")
-	if fallback == "mock" || fallback == "" {
-		logger.Warn(logComponent).Msg("Embedding API key not found, using mock provider")
-		return NewMockEmbeddingProvider(), nil
-	}
-
-	return nil, fmt.Errorf("嵌入提供者未配置: provider=%s, model=%s", provider, model)
+	// 未配置 embedding：退回关键词检索，交 nil 让调用方进入 FTS5-only 模式
+	logger.Info(logComponent).
+		Str("event_type", "memory_init").
+		Str("provider", provider).
+		Str("model", model).
+		Msg("embedding api key not configured, falling back to FTS5 keyword search only")
+	return nil, nil
 }
 
 // EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base。

@@ -126,6 +126,18 @@ const (
 	embeddingCacheTable = "embedding_cache"
 	// sessionDirtyDebounceMs session 文件脏标记防抖间隔。对齐 Python SESSION_DIRTY_DEBOUNCE_MS
 	sessionDirtyDebounceMs = 5000
+	// likeFallbackScore 短 token 走 LIKE 兜底时的固定分数。
+	// 需高于默认 minScore(0.3) 才能被检索出来，又要低于 BM25 命中，排在 FTS 结果之后。
+	// 对齐 Python _search_keyword 的 like_score（manager.py:1511）。
+	likeFallbackScore = 0.5
+	// defaultKeywordMinScore 纯关键词检索的兜底阈值。
+	// 配置项未填（<=0）时用它，避免沿用 0.3 把 BM25 中等分命中全部滤掉。
+	// 对齐 Python settings.query.get("keywordMinScore", 0.1)。
+	defaultKeywordMinScore = 0.1
+	// noEmbeddingProviderKey 未配置 embedding 时的 providerKey 占位值。
+	// 与"有 provider 的指纹"必不相同，从而让补上 key 之后能检测到配置变化并重建。
+	// 对齐 Python self.provider_key = "none:no-embedding"（manager.py:653）。
+	noEmbeddingProviderKey = "none:no-embedding"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -373,19 +385,24 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts Sear
 
 	// 向量搜索
 	// Python: _embed_query_with_timeout 60s 超时保护
-	embedCtx, embedCancel := context.WithTimeout(ctx, 60*time.Second)
-	queryVec, embedErr := m.provider.EmbedQuery(embedCtx, cleaned)
-	embedCancel()
-	if embedErr != nil {
-		if embedCtx.Err() == context.DeadlineExceeded {
-			logger.Warn(logComponent).Err(embedErr).Msg("embedding query timed out")
-		} else {
-			logger.Error(logComponent).Err(embedErr).Msg("embedding query failed")
+	// provider 为 nil 表示未配置 embedding（或已运行期降级），此时跳过向量侧、只用关键词。
+	var queryVec []float64
+	var hasVector bool
+	if m.provider != nil {
+		embedCtx, embedCancel := context.WithTimeout(ctx, 60*time.Second)
+		var embedErr error
+		queryVec, embedErr = m.provider.EmbedQuery(embedCtx, cleaned)
+		embedCancel()
+		if embedErr != nil {
+			if embedCtx.Err() == context.DeadlineExceeded {
+				logger.Warn(logComponent).Err(embedErr).Msg("embedding query timed out")
+			} else {
+				logger.Error(logComponent).Err(embedErr).Msg("embedding query failed")
+			}
+			queryVec = nil
 		}
-		queryVec = nil
 	}
 	// Python: has_vector = any(v != 0 for v in query_vec)
-	hasVector := false
 	for _, v := range queryVec {
 		if v != 0 {
 			hasVector = true
@@ -408,6 +425,28 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts Sear
 		var filtered []SearchResult
 		for _, r := range results {
 			if r.Score >= minScore {
+				filtered = append(filtered, r)
+			}
+		}
+		if len(filtered) > maxResults {
+			filtered = filtered[:maxResults]
+		}
+		return filtered, nil
+	}
+
+	// 无向量时跳过混合打分，直接用关键词原始分数。
+	//
+	// 用更低的 keywordMinScore：纯 BM25 分数常在 0.1~0.3，沿用 minScore(0.3) 会把
+	// 真实命中全滤掉、搜索返回空。对齐 Python search 的 `if not has_vector` 分支
+	// （manager.py:1370-1378）。
+	if !hasVector {
+		keywordMinScore := m.settings.Query.KeywordMinScore
+		if keywordMinScore <= 0 {
+			keywordMinScore = defaultKeywordMinScore
+		}
+		filtered := make([]SearchResult, 0, len(keywordResults))
+		for _, r := range keywordResults {
+			if r.Score >= keywordMinScore {
 				filtered = append(filtered, r)
 			}
 		}
@@ -871,6 +910,18 @@ func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// provider 为 nil 表示未配置 embedding：记忆系统照常工作，但只用 FTS5 关键词检索。
+	// 这是正常降级，不是错误——绝不能塞一个 mock provider，那样向量侧会用伪随机值
+	// 污染检索结果并写进持久化的 chunks.embedding / embedding_cache。
+	// 对齐 Python _initialize_provider 的 provider=None 分支（manager.py:651-659）。
+	if provider == nil {
+		m.provider = nil
+		m.providerKey = noEmbeddingProviderKey
+		logger.Info(logComponent).
+			Str("event_type", "memory_init").
+			Msg("embedding provider not configured (no api_key); memory will use FTS5 keyword search only")
+		return nil
+	}
 	m.provider = provider
 	// providerKey 用配置指纹：含归一化 base_url 与 api_key 哈希，换端点/密钥都能检测到。
 	// 早先只拼 id:model，换端点或只换密钥时判定不出"配置变了"。
@@ -931,14 +982,17 @@ func (m *memoryIndexManager) readMeta() (map[string]any, error) {
 	return meta, nil
 }
 
-// needsReindex 统一重建判定 —— A（provider）/ B（向量维度）/ C（分词器）三处共用这一入口，
-// 避免三份 if 各自漂移。
-// 对齐 Python _should_full_reindex（manager.py:587）：比对 provider / model / chunkTokens。
+// needsReindex 统一重建判定 —— A（provider）/ B（向量维度）两处共用这一入口，
+// 避免两份 if 各自漂移。
+// 对齐 Python _should_full_reindex（manager.py:906）：比对 provider / model / providerKey / chunkTokens。
 // ⚠️ 差异：Python 比对的是 self.provider.id（**实例值**），这里保持一致；历史 Go 实现比对
 // settings 里的配置值，导致「embed 缺 key 静默降级为 mock」后，补好 key 也永不重建。
-// 新增两项：segmenter（C，词典/分词器变化）与 vectorDims（B，维度变化初筛）。
+// Go 扩展一项：vectorDims（维度变化初筛）。
 // 原因取值：meta_missing / provider_unavailable / provider_changed / model_changed
-// / chunking_changed / segmenter_changed / vector_dims_changed
+// / provider_key_changed / chunking_changed / vector_dims_changed
+//
+// 注：分词器（gse）版本判定已随 E-04 删除——索引侧改为写原文后，分词器不再影响索引内容，
+// 该判据失去意义。
 func (m *memoryIndexManager) needsReindex() (bool, string) {
 	meta, err := m.readMeta()
 	if err != nil {
@@ -969,10 +1023,6 @@ func (m *memoryIndexManager) needsReindex() (bool, string) {
 	// Python: if meta.get("chunkTokens") != settings.chunking.get("tokens"): return True
 	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
 		return true, "chunking_changed"
-	}
-	// Go 扩展：分词器/词典版本变化（C）
-	if meta["segmenter"] != segmenterID() {
-		return true, "segmenter_changed"
 	}
 	// Go 扩展：向量维度变化初筛（B）。真实维度由 ensureVectorTable 解析 sqlite_master 兜底。
 	if dims, ok := metaInt(meta, "vectorDims"); ok && dims != m.provider.Dims() {
@@ -1027,8 +1077,6 @@ func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) erro
 		"providerKey":  m.providerKey,
 		"chunkTokens":  m.settings.Chunking.Tokens,
 		"chunkOverlap": m.settings.Chunking.Overlap,
-		// segmenter 记录分词器版本；变化即触发重建（C）
-		"segmenter": segmenterID(),
 		// ftsTrigram 标记 chunks_fts 已迁到 trigram，initialize 据此跳过迁移重建
 		"ftsTrigram": m.ftsAvailable,
 	}
@@ -1240,27 +1288,31 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 		embBlob = vectorToBlob(emb)
 	}
 
+	// model 列记提供者模型名。未配置 embedding 时记 NULL——表示这些 chunk 没有向量，
+	// 不是"用某个模型算过"。对齐 Python model_name = self.provider.model if self.provider else None。
+	var modelName any
+	if m.provider != nil {
+		modelName = m.provider.Model()
+	}
+
 	// Python: INSERT OR REPLACE INTO chunks ... RETURNING rowid
 	var rowid int64
 	err = db.QueryRow(
 		"INSERT OR REPLACE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING rowid",
-		chunkID, filePath, source, chunk.StartLine, chunk.EndLine, chunkHash, m.provider.Model(), chunk.Text, embBlob, time.Now().Unix(),
+		chunkID, filePath, source, chunk.StartLine, chunk.EndLine, chunkHash, modelName, chunk.Text, embBlob, time.Now().Unix(),
 	).Scan(&rowid)
 	if err != nil {
 		return err
 	}
 
 	// FTS5 全文搜索索引写入。
-	// 写入的是**分词后**的文本（空格拼接）：FTS 表是 contentless，文本本来由我们填，
-	// 可以与 chunks.text（原文，供 snippet/citation/memory_get 展示）分离。
-	// 分词器不可用时退回原文，检索侧同时退回「正则切分 + OR」。
+	//
+	// 写入原文：chunks_fts 用 trigram 分词器自行切分，不需要我们预先把词切好。
+	// 这与上游一致（manager.py:1075 直接把 entry 内容写进 FTS 表），也让"2 字中文词
+	// 匹配不到"的问题改由查询侧 LIKE 兜底处理，而不是靠索引侧预分词绕过。
 	if m.ftsAvailable && rowid > 0 {
-		ftsText := joinSegments(segmentForFTS(chunk.Text))
-		if ftsText == "" {
-			ftsText = chunk.Text
-		}
 		_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, id, path, source, text) VALUES (?, ?, ?, ?, ?)", ftsTable),
-			rowid, chunkID, filePath, source, ftsText)
+			rowid, chunkID, filePath, source, chunk.Text)
 		if err != nil {
 			logger.Debug(logComponent).Err(err).Msg("failed to insert FTS5")
 		}
@@ -1572,13 +1624,16 @@ func (m *memoryIndexManager) searchVectorFallback(ctx context.Context, queryVec 
 	return results, nil
 }
 
-// searchKeyword FTS5 关键词搜索。对齐 Python _search_keyword
+// searchKeyword 关键词检索：长 token 走 trigram FTS，短 token 走 LIKE 兜底。
+//
+// 长 token（≥3 字符）命中 BM25 排名索引；短 token（<3，典型是两个汉字）无法与
+// trigram 匹配，退回 `text LIKE '%tok%'` 扫 chunks.text。两路结果按 chunk id 合并，
+// 冲突时 FTS 分数优先，LIKE 命中给固定分。
+//
+// 对齐 Python _search_keyword（manager.py:1425-1520）。
 func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, limit int) ([]SearchResult, error) {
-	if !m.ftsAvailable {
-		return nil, nil
-	}
-	ftsQuery := BuildFTSQuery(query)
-	if ftsQuery == "" {
+	longTokens, shortTokens := SplitQueryTokens(query)
+	if len(longTokens) == 0 && len(shortTokens) == 0 {
 		return nil, nil
 	}
 
@@ -1608,29 +1663,95 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 		return nil, nil
 	}
 
-	ftsRows, err := m.db.Query(fmt.Sprintf("SELECT rowid, rank FROM %s WHERE %s MATCH ? ORDER BY rank LIMIT ?", ftsTable, ftsTable), ftsQuery, limit)
-	if err != nil {
-		logger.Debug(logComponent).Err(err).Msg("FTS5 query failed")
-		return nil, nil
-	}
-	defer func() { _ = ftsRows.Close() }()
-
 	var results []SearchResult
-	for ftsRows.Next() {
-		var rowid int64
-		var rank float64
-		if err := ftsRows.Scan(&rowid, &rank); err != nil {
-			continue
+	seenIDs := make(map[string]struct{})
+
+	// 长 token 走 FTS。限定 rowid 仍存在于 chunks：chunks_fts 是 contentless，历次重建
+	// 可能残留孤儿 rowid，不限定的话高分孤儿会先填满 LIMIT，把真实命中挤出去。
+	if ftsQuery := BuildFTSQuery(query); ftsQuery != "" && m.ftsAvailable {
+		rowidPlaceholders := make([]string, 0, len(chunkMap))
+		rowidArgs := make([]any, 0, len(chunkMap)+2)
+		rowidArgs = append(rowidArgs, ftsQuery)
+		for rowid := range chunkMap {
+			rowidPlaceholders = append(rowidPlaceholders, "?")
+			rowidArgs = append(rowidArgs, rowid)
 		}
-		if chunk, ok := chunkMap[rowid]; ok {
-			score := BM25RankToScore(rank)
-			results = append(results, SearchResult{
-				ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
-				StartLine: chunk.StartLine, EndLine: chunk.EndLine,
-				Snippet: chunk.Snippet, Score: score,
-			})
+		rowidArgs = append(rowidArgs, limit)
+
+		ftsRows, ftsErr := m.db.Query(fmt.Sprintf(
+			"SELECT rowid, rank FROM %s WHERE %s MATCH ? AND rowid IN (%s) ORDER BY rank LIMIT ?",
+			ftsTable, ftsTable, strings.Join(rowidPlaceholders, ","),
+		), rowidArgs...)
+		if ftsErr != nil {
+			logger.Debug(logComponent).Err(ftsErr).Msg("FTS5 query failed")
+		} else {
+			for ftsRows.Next() {
+				var rowid int64
+				var rank float64
+				if scanErr := ftsRows.Scan(&rowid, &rank); scanErr != nil {
+					continue
+				}
+				chunk, ok := chunkMap[rowid]
+				if !ok {
+					continue
+				}
+				if _, dup := seenIDs[chunk.ID]; dup {
+					continue
+				}
+				seenIDs[chunk.ID] = struct{}{}
+				results = append(results, SearchResult{
+					ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+					StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+					Snippet: chunk.Snippet, Score: BM25RankToScore(rank),
+				})
+			}
+			_ = ftsRows.Close()
 		}
 	}
+
+	// 短 token 走 LIKE 兜底：trigram 匹配不了 <3 字符，只能扫 chunks.text。
+	// 无索引，但记忆分块量小，全表扫可接受。固定分要高于 minScore(0.3) 又低于
+	// FTS 命中，保证"能搜到"且排在 BM25 结果之后。
+	if len(shortTokens) > 0 {
+		likeClauses := make([]string, 0, len(shortTokens))
+		likeArgs := make([]any, 0, len(sourceParams)+len(shortTokens)+1)
+		likeArgs = append(likeArgs, sourceParams...)
+		for _, tok := range shortTokens {
+			likeClauses = append(likeClauses, `text LIKE ? ESCAPE '\'`)
+			likeArgs = append(likeArgs, EscapeLikePattern(tok))
+		}
+		likeArgs = append(likeArgs, limit)
+
+		likeRows, likeErr := m.db.Query(fmt.Sprintf(
+			"SELECT rowid FROM chunks WHERE %s AND (%s) LIMIT ?",
+			sourceFilter, strings.Join(likeClauses, " OR "),
+		), likeArgs...)
+		if likeErr != nil {
+			logger.Debug(logComponent).Err(likeErr).Msg("keyword LIKE fallback failed")
+		} else {
+			for likeRows.Next() {
+				var rowid int64
+				if scanErr := likeRows.Scan(&rowid); scanErr != nil {
+					continue
+				}
+				chunk, ok := chunkMap[rowid]
+				if !ok {
+					continue
+				}
+				if _, dup := seenIDs[chunk.ID]; dup {
+					continue
+				}
+				seenIDs[chunk.ID] = struct{}{}
+				results = append(results, SearchResult{
+					ID: chunk.ID, Path: chunk.Path, Source: chunk.Source,
+					StartLine: chunk.StartLine, EndLine: chunk.EndLine,
+					Snippet: chunk.Snippet, Score: likeFallbackScore,
+				})
+			}
+			_ = likeRows.Close()
+		}
+	}
+
 	return results, nil
 }
 

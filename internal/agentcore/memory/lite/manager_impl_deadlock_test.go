@@ -154,7 +154,8 @@ func TestStatus_报真实Provider而非配置值(t *testing.T) {
 	settings.Sync.Watch = false
 	settings.Sync.IntervalMinutes = 0
 
-	// EmbeddingConfig 为 nil → 降级 mock（与缺 embed key 的真实场景一致）
+	// EmbeddingConfig 为 nil 且 fallback 为空 → 不配 embedding，进入 FTS5-only 模式
+	// （E-03：不再静默回落 mock，否则伪随机向量会污染检索结果）
 	mgr, err := GetMemoryIndexManager(MemoryManagerParams{
 		AgentID:         "unit_status_provider",
 		Workspace:       ws,
@@ -174,8 +175,10 @@ func TestStatus_报真实Provider而非配置值(t *testing.T) {
 	if status == nil || !status.Available {
 		t.Fatalf("Status 应可用，实际: %+v", status)
 	}
-	if status.Provider != "mock" || status.Model != "mock" {
-		t.Errorf("status 应报实际降级后的 provider/model=mock，实际: %q/%q（配置值是 %q/%q）",
+	// 未配置 embedding 时 status 报空 provider/model，而不是 settings 里的配置值——
+	// 否则排查者会以为"已配置 embedding"。
+	if status.Provider != "" || status.Model != "" {
+		t.Errorf("未配置 embedding 时 status 不应报 provider/model，实际: %q/%q（配置值是 %q/%q）",
 			status.Provider, status.Model, settings.Provider, settings.Model)
 	}
 }

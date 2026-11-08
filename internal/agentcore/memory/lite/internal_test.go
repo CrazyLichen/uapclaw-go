@@ -1,15 +1,26 @@
 package lite
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 )
+
+// equalTokens 比较两个 token 切片是否完全一致（nil 与空切片视为相等）。
+func equalTokens(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
 
 // TestBuildFTSQuery 测试 FTS5 查询构建
 func TestBuildFTSQuery(t *testing.T) {
@@ -36,29 +47,26 @@ func TestBuildFTSQuery(t *testing.T) {
 
 // TestBuildFTSQuery_格式验证 测试 FTS5 查询格式
 //
-// 已决策：分词后多 token 用 AND 连接（文本侧只占 0.3 权重，语义召回交给向量侧）。
+// 已对齐上游：正则切分 + OR 连接（多 token 用 AND 会让长查询几乎必然落空）。
 func TestBuildFTSQuery_格式验证(t *testing.T) {
 	got := BuildFTSQuery("hello world")
-	if got != `"hello" AND "world"` {
-		t.Errorf("BuildFTSQuery('hello world') = %q, 期望 %q", got, `"hello" AND "world"`)
+	if got != `"hello" OR "world"` {
+		t.Errorf("BuildFTSQuery('hello world') = %q, 期望 %q", got, `"hello" OR "world"`)
 	}
 }
 
-// TestBuildFTSQuery_AND与截断 验证 AND 连接与前 maxFTSTokens 截断
-func TestBuildFTSQuery_AND与截断(t *testing.T) {
-	if segmenterID() == "none" {
-		t.Skip("分词器不可用，跳过")
-	}
-
+// TestBuildFTSQuery_OR与截断 验证 OR 连接与前 maxQueryTokens 截断
+func TestBuildFTSQuery_OR与截断(t *testing.T) {
 	got := BuildFTSQuery("VDS15800 组网")
-	if want := `"vds15800" AND "组网"`; got != want {
+	// "组网" 只有 2 个字符 < trigram 阈值，属短 token，不参与 FTS（由 LIKE 兜底）
+	if want := `"VDS15800"`; got != want {
 		t.Errorf("BuildFTSQuery = %q, want %q", got, want)
 	}
 
-	// 超过 5 个 token 截断
-	got = BuildFTSQuery("一 二 三 四 五 六 七")
-	if n := strings.Count(got, " AND "); n != maxFTSTokens-1 {
-		t.Errorf("截断后应有 %d 个 AND，实际 %d（query=%q）", maxFTSTokens-1, n, got)
+	// 超过 maxQueryTokens 个 token 截断（全用 3 字以上词元，确保都是长 token）
+	got = BuildFTSQuery("aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll")
+	if n := strings.Count(got, " OR "); n != maxQueryTokens-1 {
+		t.Errorf("截断后应有 %d 个 OR，实际 %d（query=%q）", maxQueryTokens-1, n, got)
 	}
 }
 
@@ -72,17 +80,69 @@ func TestBuildFTSQuery_空查询(t *testing.T) {
 	}
 }
 
-// TestBuildFTSQuery_降级回OR 分词器不可用时退回「正则切分 + OR」（状态行为）
-func TestBuildFTSQuery_降级回OR(t *testing.T) {
-	prevFn, prevOnce, prevInst := segmenterLoadFn, segOnce, segInst
-	defer func() { segmenterLoadFn, segOnce, segInst = prevFn, prevOnce, prevInst }()
-	segmenterLoadFn = func() (segmenterHandle, error) { return nil, errors.New("offline") }
-	segOnce = &sync.Once{}
-	segInst = nil
+// TestBuildFTSQuery_只有短token时返回空 短 token 全部交给 LIKE 兜底，FTS 部分为空。
+func TestBuildFTSQuery_只有短token时返回空(t *testing.T) {
+	// "组网" 2 字 → 短 token；FTS 侧无可用 token
+	if got := BuildFTSQuery("组网"); got != "" {
+		t.Errorf("全为短 token 时应返回空串，实际 %q", got)
+	}
+}
 
-	got := BuildFTSQuery("VDS15800 组网")
-	if want := `"VDS15800" OR "组网"`; got != want {
-		t.Errorf("降级 BuildFTSQuery = %q, want %q", got, want)
+// TestSplitQueryTokens 验证按 3 字符阈值分流长短 token。
+// 对齐 Python split_query_tokens（internal.py:179）。
+func TestSplitQueryTokens(t *testing.T) {
+	cases := []struct {
+		// name 用例名
+		name string
+		// query 输入查询
+		query string
+		// wantLong 期望长 token
+		wantLong []string
+		// wantShort 期望短 token
+		wantShort []string
+	}{
+		{"中英混合", "VDS15800 组网", []string{"VDS15800"}, []string{"组网"}},
+		{"全短", "组网 日志", nil, []string{"组网", "日志"}},
+		{"全长", "configuration setting", []string{"configuration", "setting"}, nil},
+		{"三字中文算长", "组网模式", []string{"组网模式"}, nil},
+		{"空串", "", nil, nil},
+		{"纯标点", "，。", nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			long, short := SplitQueryTokens(tc.query)
+			if !equalTokens(long, tc.wantLong) {
+				t.Errorf("long = %v, want %v", long, tc.wantLong)
+			}
+			if !equalTokens(short, tc.wantShort) {
+				t.Errorf("short = %v, want %v", short, tc.wantShort)
+			}
+		})
+	}
+}
+
+// TestEscapeLikePattern 验证 LIKE 元字符转义。
+// 不转义的话用户查询里的 `%` 会变成通配符，把整张表都捞出来。
+func TestEscapeLikePattern(t *testing.T) {
+	cases := []struct {
+		// name 用例名
+		name string
+		// in 输入 token
+		in string
+		// want 期望模式
+		want string
+	}{
+		{"普通词", "组网", `%组网%`},
+		{"百分号", "100%", `%100\%%`},
+		{"下划线", "a_b", `%a\_b%`},
+		{"反斜杠", `a\b`, `%a\\b%`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := EscapeLikePattern(tc.in); got != tc.want {
+				t.Errorf("EscapeLikePattern(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 

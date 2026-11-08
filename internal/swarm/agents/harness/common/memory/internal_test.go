@@ -136,11 +136,41 @@ func TestBuildFTSQuery(t *testing.T) {
 
 // TestBuildFTSQuery_最多10个词 对齐 Python tokens[:10]
 func TestBuildFTSQuery_最多10个词(t *testing.T) {
-	// 12 个词只取前 10
-	q := BuildFTSQuery("w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12")
+	// 12 个词只取前 10；必须用 ≥3 字符的词元（短词会走 LIKE 兜底，不进 FTS 表达式）
+	q := BuildFTSQuery("word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12")
 	count := strings.Count(q, " OR ")
 	if count != 9 {
-		t.Errorf("应只有 10 个词（9 个 OR），got %d", count)
+		t.Errorf("应只有 10 个词（9 个 OR），got %d（q=%q）", count, q)
+	}
+}
+
+// TestSplitQueryTokens 验证按 3 字符阈值分流长短 token。
+// 对齐 Python split_query_tokens（agent-core internal.py:179）。
+func TestSplitQueryTokens(t *testing.T) {
+	long, short := SplitQueryTokens("VDS15800 组网")
+	if len(long) != 1 || long[0] != "VDS15800" {
+		t.Errorf("long = %v, want [VDS15800]", long)
+	}
+	if len(short) != 1 || short[0] != "组网" {
+		t.Errorf("short = %v, want [组网]", short)
+	}
+}
+
+// TestSplitQueryTokens_中文可切分 回归：旧正则 `\w+` 只匹配 ASCII，中文整体落空。
+func TestSplitQueryTokens_中文可切分(t *testing.T) {
+	long, _ := SplitQueryTokens("组网模式")
+	if len(long) != 1 || long[0] != "组网模式" {
+		t.Errorf("中文长词应被切出，long = %v", long)
+	}
+}
+
+// TestEscapeLikePattern 验证 LIKE 元字符转义（不转义时 `%` 会变成通配符）。
+func TestEscapeLikePattern(t *testing.T) {
+	if got := EscapeLikePattern("100%"); got != `%100\%%` {
+		t.Errorf("EscapeLikePattern(100%%) = %q, want %q", got, `%100\%%`)
+	}
+	if got := EscapeLikePattern("a_b"); got != `%a\_b%` {
+		t.Errorf("EscapeLikePattern(a_b) = %q, want %q", got, `%a\_b%`)
 	}
 }
 

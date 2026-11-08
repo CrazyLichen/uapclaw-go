@@ -8,8 +8,7 @@
 //	├── doc.go                       # 包文档
 //	├── config.go                    # MemorySettings + 子配置 struct (ChunkingConfig/QueryConfig 等) + IsMemoryEnabled
 //	├── types.go                     # MemoryChunk 数据类
-//	├── internal.go                  # 纯计算工具函数（FTS5 查询构建、BM25 分数转换等）
-//	├── segmenter.go                 # 中文分词（gse + 简体词典）+ 降级 + 索引/查询共用入口
+//	├── internal.go                  # 纯计算工具函数（FTS5 查询构建、长短 token 分流、BM25 分数转换等）
 //	├── vec_table.go                 # vec0 表维度解析与重建判定（sqlite_master 解析）
 //	├── frontmatter.go               # frontmatter 解析/验证/重建
 //	├── conflict_types.go            # WriteMode + WriteResult + ToDict（对齐 Python）

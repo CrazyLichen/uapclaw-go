@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 )
@@ -19,7 +20,20 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// maxQueryTokens 一次查询最多取用的 token 数。对齐 Python build_fts_query 的 tokens[:10]。
+	maxQueryTokens = 10
+	// ftsTrigramMinChars trigram 分词器能匹配的最小字符数。
+	// 少于这个长度的 token（典型是两个汉字）无法命中 FTS，须走 LIKE 兜底。
+	// 对齐 Python split_query_tokens 的 `len(t) < 3`（internal.py:193）。
+	ftsTrigramMinChars = 3
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// ftsWordPattern 从查询里切出词元（字母/数字/下划线连续段）。
+// 对齐 Python `re.findall(r'\w+', cleaned)`。
+var ftsWordPattern = regexp.MustCompile(`[\p{L}\p{N}_]+`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -105,40 +119,63 @@ func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }
 
-// BuildFTSQuery 构建 FTS5 MATCH 表达式。
-// 对齐 Python build_fts_query（internal 层），并按本项目决策调整连接符：
-//   - 优先走分词（与索引侧 segmentForFTS 共用，token 必须对齐）
-//   - 多 token 用 AND：文本侧只占 0.3 权重，语义召回由向量侧（0.7）兜底，
-//     这里要的是精确命中
-//   - 最多 maxFTSTokens 个 token，避免长查询被 AND 卡死召回
+// SplitQueryTokens 按 3 字符阈值把查询切成"长 token"与"短 token"。
 //
-// ⚠️ 与 Python 的差异：Python 用 OR；分词器不可用时本函数退回 OR（旧行为），
-// 因为那时中文没有整词 token，用 AND 会导致查询完全落空。
-func BuildFTSQuery(query string) string {
+// 阈值来自 FTS 表的 trigram 分词器：少于 3 个字符的 token（典型是两个汉字，如
+// "组网""日志"）无法与 trigram 索引匹配，必须交给调用方的 LIKE 兜底；3 个及以上
+// 走 BM25 排名。切分规则与上游一致：正则取词、最多 10 个、按 rune 数判长短。
+//
+// 对齐 Python split_query_tokens（internal.py:179）。
+func SplitQueryTokens(query string) (longTokens, shortTokens []string) {
 	cleaned := strings.TrimSpace(query)
 	if cleaned == "" {
+		return nil, nil
+	}
+
+	tokens := ftsWordPattern.FindAllString(cleaned, -1)
+	if len(tokens) > maxQueryTokens {
+		tokens = tokens[:maxQueryTokens]
+	}
+	for _, t := range tokens {
+		if utf8.RuneCountInString(t) < ftsTrigramMinChars {
+			shortTokens = append(shortTokens, t)
+		} else {
+			longTokens = append(longTokens, t)
+		}
+	}
+	return longTokens, shortTokens
+}
+
+// BuildFTSQuery 用长 token 构建 FTS5 MATCH 表达式。
+//
+// 只用长 token：短 token 由调用方的 LIKE 兜底，混进来反而会让 MATCH 恒为空。
+// 无长 token 时返回空串，表示"本次查询没有可走 FTS 的部分"。
+// 连接符用 OR，与上游一致——多 token 用 AND 会让长查询几乎必然落空。
+//
+// 对齐 Python build_fts_query（internal.py:199）。
+func BuildFTSQuery(query string) string {
+	longTokens, _ := SplitQueryTokens(query)
+	if len(longTokens) == 0 {
 		return ""
 	}
 
-	tokens := segmentForFTS(cleaned)
-	op := " AND "
-	if len(tokens) == 0 {
-		// 降级：分词器不可用 → 沿用旧的正则切分 + OR
-		tokens = regexp.MustCompile(`[\p{L}\p{N}_]+`).FindAllString(cleaned, maxFTSTokens)
-		op = " OR "
-	}
-	if len(tokens) == 0 {
-		return ""
-	}
-	if len(tokens) > maxFTSTokens {
-		tokens = tokens[:maxFTSTokens]
-	}
-
-	parts := make([]string, len(tokens))
-	for i, t := range tokens {
+	parts := make([]string, len(longTokens))
+	for i, t := range longTokens {
 		parts[i] = `"` + t + `"`
 	}
-	return strings.Join(parts, op)
+	return strings.Join(parts, " OR ")
+}
+
+// EscapeLikePattern 把 token 转成 LIKE 的 `%token%` 模式，并转义 LIKE 元字符。
+//
+// 反斜杠、百分号、下划线都要转义（配合 SQL 里的 `ESCAPE '\'`），否则用户查询里的
+// `%` 会变成通配符，把整张表都捞出来。
+// 对齐 Python MemoryIndexManager._escape_like（manager.py:1519）。
+func EscapeLikePattern(token string) string {
+	escaped := strings.ReplaceAll(token, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, "%", `\%`)
+	escaped = strings.ReplaceAll(escaped, "_", `\_`)
+	return "%" + escaped + "%"
 }
 
 // BM25RankToScore BM25 排名转相似度分数。对齐 Python bm25_rank_to_score — 真实实现

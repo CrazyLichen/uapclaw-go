@@ -64,6 +64,10 @@ type MemoryIndexManager struct {
 	ftsAvailable bool
 	// ftsError FTS5 错误信息
 	ftsError string
+	// ftsMigrated 本次初始化刚把 chunks_fts 从旧 tokenizer 迁到 trigram。
+	// 迁移 DROP 了旧表但没动 files/chunks 行，增量 sync 会因 hash 未变而跳过，
+	// 必须 force 全量重写一遍才能填满新表。
+	ftsMigrated bool
 	// vectorEnabled 向量开关（settings.store.vector.enabled）
 	vectorEnabled bool
 	// vectorAvailable 向量可用性
@@ -127,6 +131,10 @@ const (
 	embeddingCacheTable = "embedding_cache"
 	// sessionDirtyDebounceMs 会话脏防抖。对齐 Python SESSION_DIRTY_DEBOUNCE_MS
 	sessionDirtyDebounceMs = 5000
+	// likeFallbackScore 短 token 走 LIKE 兜底时的固定分数。
+	// 需高于默认 minScore(0.3) 才能被检索出来，又要低于 BM25 命中，排在 FTS 结果之后。
+	// 对齐 Python _search_keyword 的 like_score（agent-core manager.py:1511）。
+	likeFallbackScore = 0.5
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -183,7 +191,7 @@ func (m *MemoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	dirty := m.dirty
 	m.mu.Unlock()
 	if containsSource(m.Settings.Sources, "memory") && dirty {
-		if err := m.syncMemoryFiles(ctx); err != nil {
+		if err := m.syncMemoryFiles(ctx, false); err != nil {
 			return err
 		}
 		m.mu.Lock()
@@ -192,7 +200,7 @@ func (m *MemoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	}
 
 	if containsSource(m.Settings.Sources, "sessions") {
-		if err := m.syncSessionFiles(ctx); err != nil {
+		if err := m.syncSessionFiles(ctx, false); err != nil {
 			return err
 		}
 	}
@@ -506,7 +514,20 @@ func (m *MemoryIndexManager) initialize(ctx context.Context) error {
 	}
 
 	// Python: await self.sync(reason="initial")（失败不中断初始化——Python 内部已捕获）
-	if err := m.Sync(ctx, "initial", false); err != nil {
+	//
+	// 初始化期先判两件事：
+	//   - chunks_fts 刚从旧 tokenizer 迁到 trigram → 需要 force 全量重写一遍（迁移 DROP 了表
+	//     但 files 行还在，增量 sync 会因 hash 未变而跳过，留下空 FTS 表）
+	//   - 否则走正常 sync（内部自会按 shouldFullReindex 决定是否重建）
+	if m.needsFtsMigrationReindex() {
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", "fts_migration").
+			Msg("chunks_fts migrated to trigram, forcing full reindex")
+		if err := m.Sync(ctx, "fts_migration", true); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fts migration reindex failed")
+		}
+	} else if err := m.Sync(ctx, "initial", false); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("初始同步失败")
 	}
 
@@ -590,8 +611,17 @@ func (m *MemoryIndexManager) ensureSchema() error {
 
 	// FTS5 虚拟表（Python try/except 降级：ftsAvailable=false + ftsError + warn）
 	if m.ftsEnabled {
+		// 旧表（默认 unicode61）不切分 CJK，中文查询永远匹配不到，先 DROP 重建为 trigram。
+		// 超出 jiuwenswarm 上游的加固（见设计文档偏差 D-4）。
+		if m.ftsTableIsLegacy() {
+			logger.Info(logComponent).Msg("migrating chunks_fts from unicode61 to trigram tokenizer")
+			if _, err := m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", ftsTable)); err != nil {
+				logger.Debug(logComponent).Err(err).Msg("skipping legacy chunks_fts drop")
+			}
+			m.ftsMigrated = true
+		}
 		_, err := m.db.Exec(fmt.Sprintf(
-			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1)",
+			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1, tokenize='trigram')",
 			ftsTable,
 		))
 		if err != nil {
@@ -921,11 +951,58 @@ func (m *MemoryIndexManager) shouldFullReindex() bool {
 	return int(metaTokens) != m.Settings.Chunking.Tokens
 }
 
+// ftsTableIsLegacy 判断 chunks_fts 是否以旧 tokenizer（非 trigram）建成。
+//
+// 存在且 DDL 里没有 tokenize=trigram 即为旧表，须 DROP 重建；表不存在不算旧表。
+// 对齐 Python _fts_table_is_legacy（agent-core manager.py:609）。
+func (m *MemoryIndexManager) ftsTableIsLegacy() bool {
+	if m.db == nil {
+		return false
+	}
+	var ddl sql.NullString
+	// 用内联字面量而非 `?` 参数：sqlite_master 查询在部分驱动版本下参数化会拿到空行
+	err := m.db.QueryRow(fmt.Sprintf(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name = '%s'", ftsTable,
+	)).Scan(&ddl)
+	if err != nil || !ddl.Valid || ddl.String == "" {
+		return false
+	}
+	// sqlite_master 保存原始 DDL，tokenizer 可能是 tokenize='trigram' 或 tokenize=trigram，
+	// 先去掉单双引号与空白再比较。
+	normalized := strings.NewReplacer("'", "", `"`, "", " ", "").Replace(strings.ToLower(ddl.String))
+	return !strings.Contains(normalized, "tokenize=trigram")
+}
+
+// needsFtsMigrationReindex 判断是否因刚迁移 chunks_fts 而需要 force 全量重建。
+//
+// 两个条件同时成立才是真：本次初始化刚 DROP 过旧表（ftsMigrated），且 meta 里还没有
+// ftsTrigram 记录。后者让结论跨进程收敛。
+func (m *MemoryIndexManager) needsFtsMigrationReindex() bool {
+	if !m.ftsMigrated {
+		return false
+	}
+	var value string
+	if err := m.db.QueryRow("SELECT value FROM meta WHERE key = ?", metaKey).Scan(&value); err != nil {
+		// 无 meta（全新库）→ chunks_fts 本来就空，正常 sync 会填满
+		return false
+	}
+	var meta map[string]any
+	if err := json.Unmarshal([]byte(value), &meta); err != nil {
+		return false
+	}
+	if v, ok := meta["ftsTrigram"].(bool); ok && v {
+		return false
+	}
+	return true
+}
+
 // runReindex 全量重建。对齐 Python _run_reindex（manager.py L524-543）：
 // memory + sessions 同步后写 meta（含 vectorDims）
+//
+// 必须 force 同步：否则 hash 未变的文件被 skip，重建后索引仍然是空的。
 func (m *MemoryIndexManager) runReindex(ctx context.Context) error {
 	if containsSource(m.Settings.Sources, "memory") {
-		if err := m.syncMemoryFiles(ctx); err != nil {
+		if err := m.syncMemoryFiles(ctx, true); err != nil {
 			return err
 		}
 		m.mu.Lock()
@@ -934,7 +1011,7 @@ func (m *MemoryIndexManager) runReindex(ctx context.Context) error {
 	}
 
 	if containsSource(m.Settings.Sources, "sessions") {
-		if err := m.syncSessionFiles(ctx); err != nil {
+		if err := m.syncSessionFiles(ctx, true); err != nil {
 			return err
 		}
 	}
@@ -945,6 +1022,8 @@ func (m *MemoryIndexManager) runReindex(ctx context.Context) error {
 		"providerKey":  m.providerKey,
 		"chunkTokens":  m.Settings.Chunking.Tokens,
 		"chunkOverlap": m.Settings.Chunking.Overlap,
+		// ftsTrigram 标记 chunks_fts 已迁到 trigram，initialize 据此跳过迁移重建
+		"ftsTrigram": m.ftsAvailable,
 	}
 	// Python: if self.vector_available and self.vector_dims: meta["vectorDims"] = self.vector_dims
 	if m.vectorAvailable && m.vectorDims != nil {
@@ -975,11 +1054,13 @@ func (m *MemoryIndexManager) isRecentSessionFile(filename string) bool {
 
 // syncMemoryFiles 同步记忆文件。对齐 Python _sync_memory_files（manager.py L574-604）：
 // ListMemoryFiles → hash 未变跳过 → indexFile；最后删除消失文件
-func (m *MemoryIndexManager) syncMemoryFiles(ctx context.Context) error {
+//
+// force 为 true 时跳过 hash 比对，无条件重建每个文件的索引（向量配置切换后的重建语义）。
+func (m *MemoryIndexManager) syncMemoryFiles(ctx context.Context, force bool) error {
 	files := ListMemoryFiles(m.WorkspaceDir, m.Settings.ExtraPaths)
 
 	// 对齐 Python: logger.debug(f"Syncing {len(files)} memory files")
-	logger.Debug(logComponent).Int("files", len(files)).Msg("Syncing memory files")
+	logger.Debug(logComponent).Int("files", len(files)).Bool("force", force).Msg("Syncing memory files")
 
 	activePaths := make(map[string]struct{}, len(files))
 	for _, fp := range files {
@@ -989,14 +1070,16 @@ func (m *MemoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 		}
 		activePaths[entry.Path] = struct{}{}
 
-		var existingHash string
-		err = m.db.QueryRow(
-			"SELECT hash FROM files WHERE path = ? AND source = ?",
-			entry.Path, MemorySourceMemory,
-		).Scan(&existingHash)
-		// Python: if row and row["hash"] == entry["hash"]: continue
-		if err == nil && existingHash == entry.Hash {
-			continue
+		if !force {
+			var existingHash string
+			queryErr := m.db.QueryRow(
+				"SELECT hash FROM files WHERE path = ? AND source = ?",
+				entry.Path, MemorySourceMemory,
+			).Scan(&existingHash)
+			// Python: if row and row["hash"] == entry["hash"]: continue
+			if queryErr == nil && existingHash == entry.Hash {
+				continue
+			}
 		}
 
 		if err := m.indexFile(ctx, entry, MemorySourceMemory); err != nil {
@@ -1028,7 +1111,9 @@ func (m *MemoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 
 // syncSessionFiles 同班会话记录文件。对齐 Python _sync_session_files（manager.py L606-639）：
 // sessions/ 目录递归找 .jsonl → hash 跳过 → indexFile；删除消失文件
-func (m *MemoryIndexManager) syncSessionFiles(ctx context.Context) error {
+//
+// force 语义同 syncMemoryFiles。
+func (m *MemoryIndexManager) syncSessionFiles(ctx context.Context, force bool) error {
 	sessionsDir := filepath.Join(m.WorkspaceDir, "sessions")
 	if st, err := os.Stat(sessionsDir); err != nil || !st.IsDir() {
 		return nil
@@ -1046,7 +1131,7 @@ func (m *MemoryIndexManager) syncSessionFiles(ctx context.Context) error {
 	})
 
 	// 对齐 Python: logger.debug(f"Syncing {len(session_files)} session files")
-	logger.Debug(logComponent).Int("files", len(sessionFiles)).Msg("Syncing session files")
+	logger.Debug(logComponent).Int("files", len(sessionFiles)).Bool("force", force).Msg("Syncing session files")
 
 	activePaths := make(map[string]struct{}, len(sessionFiles))
 	for _, sf := range sessionFiles {
@@ -1056,13 +1141,15 @@ func (m *MemoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		}
 		activePaths[entry.Path] = struct{}{}
 
-		var existingHash string
-		err = m.db.QueryRow(
-			"SELECT hash FROM files WHERE path = ? AND source = ?",
-			entry.Path, MemorySourceSessions,
-		).Scan(&existingHash)
-		if err == nil && existingHash == entry.Hash {
-			continue
+		if !force {
+			var existingHash string
+			queryErr := m.db.QueryRow(
+				"SELECT hash FROM files WHERE path = ? AND source = ?",
+				entry.Path, MemorySourceSessions,
+			).Scan(&existingHash)
+			if queryErr == nil && existingHash == entry.Hash {
+				continue
+			}
 		}
 
 		if err := m.indexFile(ctx, entry, MemorySourceSessions); err != nil {
@@ -1456,15 +1543,17 @@ func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int)
 	return results
 }
 
-// searchKeyword FTS5 关键词检索。对齐 Python _search_keyword（manager.py L964-1024）：
-// build_fts_query → MATCH → bm25_rank_to_score；异常返回空
+// searchKeyword 关键词检索：长 token 走 trigram FTS，短 token 走 LIKE 兜底。
+//
+// 长 token（≥3 字符）命中 BM25 排名索引；短 token（<3，典型是两个汉字）无法与
+// trigram 匹配，退回 `text LIKE '%tok%'` 扫 chunks.text。两路结果按 chunk id 合并，
+// 冲突时 FTS 分数优先，LIKE 命中给固定分。
+//
+// 对齐 Python _search_keyword（agent-core manager.py:1425-1520）。本包上游
+// （jiuwenswarm）尚未引入 LIKE 兜底，属超出上游的加固，见设计文档偏差 D-4。
 func (m *MemoryIndexManager) searchKeyword(query string, limit int) []MemorySearchResult {
-	if !m.ftsAvailable {
-		return []MemorySearchResult{}
-	}
-
-	ftsQuery := BuildFTSQuery(query)
-	if ftsQuery == "" {
+	longTokens, shortTokens := SplitQueryTokens(query)
+	if len(longTokens) == 0 && len(shortTokens) == 0 {
 		return []MemorySearchResult{}
 	}
 
@@ -1502,23 +1591,42 @@ func (m *MemoryIndexManager) searchKeyword(query string, limit int) []MemorySear
 		return []MemorySearchResult{}
 	}
 
-	// Python: SELECT rowid, rank FROM FTS_TABLE WHERE FTS_TABLE MATCH ? ORDER BY rank LIMIT ?
-	ftsRows, err := m.db.Query(fmt.Sprintf(
-		"SELECT rowid, rank FROM %s WHERE %s MATCH ? ORDER BY rank LIMIT ?", ftsTable, ftsTable,
-	), ftsQuery, limit)
-	if err != nil {
-		logger.Debug(logComponent).Err(err).Msg("Keyword search failed")
-		return []MemorySearchResult{}
-	}
-	defer func() { _ = ftsRows.Close() }()
-
 	results := make([]MemorySearchResult, 0)
-	for ftsRows.Next() {
-		var rowid int64
-		var rank float64
-		if err := ftsRows.Scan(&rowid, &rank); err == nil {
-			if base, ok := chunkMap[rowid]; ok {
-				// Python: score = bm25_rank_to_score(float(row["rank"]))
+	seenIDs := make(map[string]struct{})
+
+	// 长 token 走 FTS。限定 rowid 仍存在于 chunks：chunks_fts 是 contentless，历次重建
+	// 可能残留孤儿 rowid，不限定的话高分孤儿会先填满 LIMIT 把真实命中挤掉。
+	if ftsQuery := BuildFTSQuery(query); ftsQuery != "" && m.ftsAvailable {
+		placeholders := make([]string, 0, len(chunkMap))
+		args := make([]any, 0, len(chunkMap)+2)
+		args = append(args, ftsQuery)
+		for rowid := range chunkMap {
+			placeholders = append(placeholders, "?")
+			args = append(args, rowid)
+		}
+		args = append(args, limit)
+
+		ftsRows, ftsErr := m.db.Query(fmt.Sprintf(
+			"SELECT rowid, rank FROM %s WHERE %s MATCH ? AND rowid IN (%s) ORDER BY rank LIMIT ?",
+			ftsTable, ftsTable, strings.Join(placeholders, ","),
+		), args...)
+		if ftsErr != nil {
+			logger.Debug(logComponent).Err(ftsErr).Msg("Keyword search failed")
+		} else {
+			for ftsRows.Next() {
+				var rowid int64
+				var rank float64
+				if scanErr := ftsRows.Scan(&rowid, &rank); scanErr != nil {
+					continue
+				}
+				base, ok := chunkMap[rowid]
+				if !ok {
+					continue
+				}
+				if _, dup := seenIDs[base.id]; dup {
+					continue
+				}
+				seenIDs[base.id] = struct{}{}
 				results = append(results, MemorySearchResult{
 					ID: base.id, Path: base.path, Source: base.source,
 					StartLine: base.startLine, EndLine: base.endLine,
@@ -1526,8 +1634,52 @@ func (m *MemoryIndexManager) searchKeyword(query string, limit int) []MemorySear
 					Score:   Bm25RankToScore(rank),
 				})
 			}
+			_ = ftsRows.Close()
 		}
 	}
+
+	// 短 token 走 LIKE 兜底：trigram 匹配不了 <3 字符，只能扫 chunks.text。
+	// 固定分要高于 minScore(0.3) 又低于 FTS 命中，保证"能搜到"且排在 BM25 之后。
+	if len(shortTokens) > 0 {
+		clauses := make([]string, 0, len(shortTokens))
+		args := make([]any, 0, len(shortTokens)+1)
+		for _, tok := range shortTokens {
+			clauses = append(clauses, `text LIKE ? ESCAPE '\'`)
+			args = append(args, EscapeLikePattern(tok))
+		}
+		args = append(args, limit)
+
+		likeRows, likeErr := m.db.Query(fmt.Sprintf(
+			"SELECT rowid FROM chunks WHERE %s AND (%s) LIMIT ?",
+			sourceFilter, strings.Join(clauses, " OR "),
+		), args...)
+		if likeErr != nil {
+			logger.Debug(logComponent).Err(likeErr).Msg("keyword LIKE fallback failed")
+		} else {
+			for likeRows.Next() {
+				var rowid int64
+				if scanErr := likeRows.Scan(&rowid); scanErr != nil {
+					continue
+				}
+				base, ok := chunkMap[rowid]
+				if !ok {
+					continue
+				}
+				if _, dup := seenIDs[base.id]; dup {
+					continue
+				}
+				seenIDs[base.id] = struct{}{}
+				results = append(results, MemorySearchResult{
+					ID: base.id, Path: base.path, Source: base.source,
+					StartLine: base.startLine, EndLine: base.endLine,
+					Snippet: base.snippet,
+					Score:   likeFallbackScore,
+				})
+			}
+			_ = likeRows.Close()
+		}
+	}
+
 	return results
 }
 

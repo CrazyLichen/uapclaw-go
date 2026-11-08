@@ -70,11 +70,16 @@ func TestCreateEmbeddingProvider_无配置回退mock(t *testing.T) {
 	}
 }
 
-// TestCreateEmbeddingProvider_无配置无回退 测试无配置且无回退时返回错误
-func TestCreateEmbeddingProvider_无配置无回退(t *testing.T) {
-	_, err := CreateEmbeddingProvider("openai_compatible", "model", "none", nil)
-	if err == nil {
-		t.Error("无配置且 fallback 非 mock 时应返回错误")
+// TestCreateEmbeddingProvider_无配置返回nil 无配置且无 mock 回退时返回 (nil, nil)，
+// 表示调用方应进入 FTS5-only 关键词检索模式——这是正常降级，不是错误。
+// 对齐 Python _initialize_provider 的 provider=None 分支（manager.py:648）。
+func TestCreateEmbeddingProvider_无配置返回nil(t *testing.T) {
+	provider, err := CreateEmbeddingProvider("openai_compatible", "model", "", nil)
+	if err != nil {
+		t.Fatalf("无配置应返回 (nil, nil) 而非错误，实际 err=%v", err)
+	}
+	if provider != nil {
+		t.Errorf("无配置应返回 nil provider（不得自动回落 mock），实际 %T", provider)
 	}
 }
 

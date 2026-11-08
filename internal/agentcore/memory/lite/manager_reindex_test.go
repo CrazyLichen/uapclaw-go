@@ -46,9 +46,9 @@ func (f *fakeEmbedProvider) Dims() int { return f.dims }
 // ConfigFingerprint 返回配置指纹（测试替身固定值）
 func (f *fakeEmbedProvider) ConfigFingerprint() string { return f.id + ":" + f.model }
 
-// TestNeedsReindex_表驱动 覆盖重建判定的 7 条路径。
-// 对齐 Python _should_full_reindex（manager.py:587）的判定项，并补齐
-// segmenter / vectorDims 两个新增项。
+// TestNeedsReindex_表驱动 覆盖重建判定的各条路径。
+// 对齐 Python _should_full_reindex（manager.py:906）的判定项，并补齐
+// providerKey / vectorDims 两项。
 func TestNeedsReindex_表驱动(t *testing.T) {
 	baseMeta := func(over map[string]any) map[string]any {
 		meta := map[string]any{
@@ -57,8 +57,6 @@ func TestNeedsReindex_表驱动(t *testing.T) {
 			// providerKey 现为 config fingerprint；fake 替身返回 id:model
 			"providerKey": "mock:mock",
 			"chunkTokens": float64(256),
-			// 用当前分词器标识，保证「全一致」基线真的全一致
-			"segmenter": segmenterID(),
 		}
 		for k, v := range over {
 			meta[k] = v
@@ -86,7 +84,6 @@ func TestNeedsReindex_表驱动(t *testing.T) {
 		{"model 变化", baseMeta(nil), "mock", "other-model", true, "model_changed"},
 		{"chunkTokens 变化", baseMeta(map[string]any{"chunkTokens": float64(128)}), "mock", "mock", true, "chunking_changed"},
 		{"providerKey 变化（换端点或密钥）", baseMeta(map[string]any{"providerKey": "mock:mock:https://old:aaa"}), "mock", "mock", true, "provider_key_changed"},
-		{"segmenter 变化", baseMeta(map[string]any{"segmenter": "stale-segmenter"}), "mock", "mock", true, "segmenter_changed"},
 		{"vectorDims 变化", baseMeta(map[string]any{"vectorDims": float64(128)}), "mock", "mock", true, "vector_dims_changed"},
 	}
 	for _, tc := range cases {
@@ -95,6 +92,9 @@ func TestNeedsReindex_表驱动(t *testing.T) {
 			defer cleanup()
 
 			m.provider = &fakeEmbedProvider{id: tc.providerID, model: tc.providerMd, dims: 1024}
+			// providerKey 必须与实例 fingerprint 同步：needsReindex 现在比对它，
+			// 不同步的话每个用例都会被判成 provider_key_changed
+			m.providerKey = m.provider.ConfigFingerprint()
 			if tc.meta != nil {
 				if err := m.writeMeta(tc.meta); err != nil {
 					t.Fatalf("写 meta 失败: %v", err)
@@ -174,8 +174,5 @@ func TestRunReindex_meta写实例值(t *testing.T) {
 	}
 	if meta["provider"] != "mock" || meta["model"] != "mock" {
 		t.Errorf("meta 应记实例值 mock/mock，实际 %v/%v", meta["provider"], meta["model"])
-	}
-	if meta["segmenter"] != segmenterID() {
-		t.Errorf("meta.segmenter = %v, want %v", meta["segmenter"], segmenterID())
 	}
 }

@@ -33,6 +33,12 @@ type QueryConfig struct {
 	MaxResults float64
 	// MinScore 最小相关度分数，默认 0.3
 	MinScore float64
+	// KeywordMinScore 纯关键词检索（无向量）时的最小相关度分数，默认 0.1。
+	//
+	// 为何比 MinScore 低：纯 BM25 分数经 rank→score 变换后常落在 0.1~0.3，
+	// 沿用 0.3 会把真实命中全滤掉、搜索返回空。混合检索仍用 MinScore。
+	// 对齐 Python settings.query["keywordMinScore"]（manager.py:1373）。
+	KeywordMinScore float64
 	// Hybrid 混合搜索配置
 	Hybrid HybridConfig
 }
@@ -87,7 +93,11 @@ type MemorySettings struct {
 	Provider string
 	// Model 嵌入模型名称，默认 "text-embedding-v3"
 	Model string
-	// Fallback 嵌入回退策略，默认 "mock"
+	// Fallback 嵌入回退策略。
+	//
+	// 默认空串（不回落）：未配置 embedding 时记忆系统以 FTS5 关键词检索模式运行，
+	// 而不是悄悄换成 mock provider。只有显式填 "mock" 才会用 mock（测试/本地联调）。
+	// 上游 MemorySettings 无此字段——它压根没有 mock 回落机制。
 	Fallback string
 	// Sources 记忆来源目录列表，默认 ["memory", "sessions"]
 	Sources []string
@@ -130,7 +140,7 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 	s := &MemorySettings{
 		Provider:   "openai_compatible",
 		Model:      "text-embedding-v3",
-		Fallback:   "mock",
+		Fallback:   "",
 		Sources:    []string{"memory", "sessions"},
 		ExtraPaths: nil,
 		Chunking: ChunkingConfig{
@@ -140,6 +150,8 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 		Query: QueryConfig{
 			MaxResults: 10,
 			MinScore:   0.3,
+			// 纯关键词路径用更低阈值，否则 BM25 中等分命中会被 0.3 全部滤掉
+			KeywordMinScore: 0.1,
 			Hybrid: HybridConfig{
 				Enabled:             true,
 				VectorWeight:        0.7,
