@@ -238,6 +238,17 @@ func (t *TeamContextTracker) Commit(sess sessioninterfaces.SessionFacade, delive
 	t.persist(sess, pending)
 }
 
+// PolicyTextForTest 返回已渲染的 <team-policy> 块与是否开启。
+//
+// 仅供其它包的测试断言 policyText 通道是否开启（framework 建队时非 nil）。
+// 生产代码不应读它——政策块的投递一律走 PendingText。
+func (t *TeamContextTracker) PolicyTextForTest() (string, bool) {
+	if t == nil || t.policyText == nil {
+		return "", false
+	}
+	return *t.policyText, true
+}
+
 // LastDeliveredText 返回上次经 deliveredText 提交的内容。
 //
 // 「当前状态」通道一旦某 section 未重新注册就视为撤回，而 PendingText 在成员

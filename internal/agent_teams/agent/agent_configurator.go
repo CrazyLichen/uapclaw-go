@@ -893,8 +893,8 @@ func (c *AgentConfigurator) FirstIterGate() *rails.FirstIterationGate {
 // TaskOutcomeTracker（scheduled）或 TaskRevisionTracker（autonomous）；
 // 它由 TeamAgent 持有、rail 只借用，因此基线超出 rail 生命周期。
 //
-// 偏差 D-3：framework 建队的政策块依赖 buildLeaderPolicyDisclosure（⤵️ 25.0g），
-// 本节 policyText 恒 nil，政策通道关闭。
+// framework 建队的政策块由 TeamPolicyRail 构造期自行渲染（bootstrap_mode
+// 取自 spec），无需在此传入——25.0g 已闭环 25.0c 的 D-3。
 //
 // Python: agent_configurator.py 步骤 10
 func (c *AgentConfigurator) buildTeamPolicyRail(
@@ -920,7 +920,6 @@ func (c *AgentConfigurator) buildTeamPolicyRail(
 		rails.WithPolicyTeamBackend(c.TeamBackend()),
 		rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
 		rails.WithPolicyTaskEventTracker(taskTracker),
-		// 偏差 D-3：政策块 ⤵️ 25.0g
 	}
 	if c.WorkspaceManager() != nil {
 		opts = append(opts,

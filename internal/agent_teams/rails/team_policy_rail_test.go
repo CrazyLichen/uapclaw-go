@@ -35,26 +35,6 @@ func TestNewTeamPolicyRail_WithOptions(t *testing.T) {
 	}
 }
 
-// TestTeamPolicyRail_静态Sections_Leader 测试 Leader 静态 Section 数量
-func TestTeamPolicyRail_静态Sections_Leader(t *testing.T) {
-	r := mustNewPolicyRail(t,
-		WithPolicyRole(atschema.TeamRoleLeader),
-		WithPolicyMemberName("alice"),
-		WithPolicyTeammateMode("build_mode"),
-		WithPolicyLifecycle("temporary"),
-		WithPolicyLanguage("cn"),
-		WithPolicyTeamMode("default"),
-	)
-	// Leader 应有：Role(P:11) + Workflow(P:13) + Lifecycle(P:14) + Persona(P:15) = 4 个
-	if len(r.staticSections) < 3 {
-		t.Fatalf("expected at least 3 static sections for leader, got %d", len(r.staticSections))
-	}
-	// 第一个 section 应为 team_role
-	if r.staticSections[0].Name != string(prompts.SectionRole) {
-		t.Fatalf("expected first section name=%s, got %s", prompts.SectionRole, r.staticSections[0].Name)
-	}
-}
-
 // TestTeamPolicyRail_静态Sections_Teammate 测试 Teammate 静态 Section
 func TestTeamPolicyRail_静态Sections_Teammate(t *testing.T) {
 	r := mustNewPolicyRail(t,
@@ -455,5 +435,161 @@ func TestQueueTeamContextAttachment_无附件管理器走兜底(t *testing.T) {
 	cbc := newTestCallbackContextWithSession(&agentinterfaces.InvokeInputs{}, sess)
 	if got := r.queueTeamContextAttachment(context.Background(), cbc, sess); got {
 		t.Fatal("无附件管理器时应返回 false（交回兜底车道）")
+	}
+}
+
+// TestTeamPolicyRail_Leader只有bootstrap 验证 leader 前缀严格复刻上游。
+//
+// 上游 _build_leader_sections (team_policy_rail.py L554-600) 只给 leader
+// bootstrap/prebuilt + bound_group + extra 三段；role/HITT/workflow/lifecycle/
+// dispatch/task_state/inbound_tags 全部由 build_team 结果披露（F_76）。
+func TestTeamPolicyRail_Leader只有bootstrap(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyMemberName("alice"),
+		WithPolicyTeammateMode("build_mode"),
+		WithPolicyLifecycle("temporary"),
+		WithPolicyLanguage("cn"),
+		WithPolicyTeamMode("default"),
+	)
+	if len(r.staticSections) != 1 {
+		t.Fatalf("leader 默认应只有 1 个 section（bootstrap），实际 %d 个", len(r.staticSections))
+	}
+	if r.staticSections[0].Name != string(prompts.SectionBootstrap) {
+		t.Fatalf("首项应为 %s，实际 %s", prompts.SectionBootstrap, r.staticSections[0].Name)
+	}
+}
+
+// TestTeamPolicyRail_Leader带extra 验证 basePrompt 非空时多一段。
+func TestTeamPolicyRail_Leader带extra(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyBasePrompt("你是支付负责人"),
+		WithPolicyLanguage("cn"),
+	)
+	if len(r.staticSections) != 2 {
+		t.Fatalf("bootstrap + extra 应为 2 个，实际 %d", len(r.staticSections))
+	}
+	if r.staticSections[1].Name != string(prompts.SectionExtra) {
+		t.Fatalf("第二项应为 extra，实际 %s", r.staticSections[1].Name)
+	}
+}
+
+// TestTeamPolicyRail_LeaderFramework用prebuilt 验证 framework 分支（可达性单测 D-2）。
+func TestTeamPolicyRail_LeaderFramework用prebuilt(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyBootstrapMode("framework"),
+		WithPolicyDispatchMode("scheduled"),
+		WithPolicyLanguage("cn"),
+	)
+	if len(r.staticSections) == 0 {
+		t.Fatal("应至少有 prebuilt 一个 section")
+	}
+	if r.staticSections[0].Name != string(prompts.SectionPrebuilt) {
+		t.Fatalf("framework 首项应为 %s，实际 %s", prompts.SectionPrebuilt, r.staticSections[0].Name)
+	}
+}
+
+// TestTeamPolicyRail_LeaderBoundGroup 验证 scheduled + 绑定团时加 bound_group（D-2）。
+func TestTeamPolicyRail_LeaderBoundGroup(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyDispatchMode("scheduled"),
+		WithPolicyBoundGroupName("grp1"),
+		WithPolicyLanguage("cn"),
+	)
+	found := false
+	for _, s := range r.staticSections {
+		if s.Name == string(prompts.SectionBoundGroup) {
+			found = true
+		}
+	}
+	if !found {
+		var names []string
+		for _, s := range r.staticSections {
+			names = append(names, s.Name)
+		}
+		t.Fatalf("scheduled + boundGroup 应有 bound_group，实际 %v", names)
+	}
+}
+
+// TestTeamPolicyRail_LeaderAutonomous无BoundGroup 验证 autonomous 不加载 bound_group。
+func TestTeamPolicyRail_LeaderAutonomous无BoundGroup(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyDispatchMode("autonomous"),
+		WithPolicyBoundGroupName("grp1"),
+		WithPolicyLanguage("cn"),
+	)
+	for _, s := range r.staticSections {
+		if s.Name == string(prompts.SectionBoundGroup) {
+			t.Fatal("autonomous 不应加载 bound_group")
+		}
+	}
+}
+
+// TestTeamPolicyRail_Teammate全套 验证非 leader 走统一入口拿到全套。
+func TestTeamPolicyRail_Teammate全套(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleTeammate),
+		WithPolicyMemberName("bob"),
+		WithPolicyHittEnabled(true),
+		WithPolicyLanguage("cn"),
+	)
+	want := []string{
+		string(prompts.SectionRole),
+		string(prompts.SectionHITT),
+		string(prompts.SectionDispatch),
+		string(prompts.SectionInboundTags),
+	}
+	if len(r.staticSections) != len(want) {
+		var got []string
+		for _, s := range r.staticSections {
+			got = append(got, s.Name)
+		}
+		t.Fatalf("teammate section 数不符：got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if r.staticSections[i].Name != want[i] {
+			t.Fatalf("第 %d 项应为 %s，实际 %s", i, want[i], r.staticSections[i].Name)
+		}
+	}
+}
+
+// TestTeamPolicyRail_policyText_framework建队 验证 D-3 闭环。
+//
+// framework 建队时 leader 没有 build_team 结果可承载政策，同一段披露文本
+// 在构造期渲染好、以 <team-policy> 块交给 tracker。
+// Python: team_policy_rail.py L204-218
+func TestTeamPolicyRail_policyText_framework建队(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyBootstrapMode("framework"),
+		WithPolicyDispatchMode("scheduled"),
+		WithPolicyHittEnabled(true),
+		WithPolicyLanguage("cn"),
+	)
+	if r.tracker == nil {
+		t.Fatal("tracker 不应为 nil")
+	}
+	text, ok := r.tracker.PolicyTextForTest()
+	if !ok || text == "" {
+		t.Fatal("framework 建队时 policyText 应非空（D-3 闭环）")
+	}
+	if !strings.Contains(text, "<team-policy>") {
+		t.Fatalf("policyText 应包在 <team-policy> 里，实际：%s", text)
+	}
+}
+
+// TestTeamPolicyRail_policyText_leader建队为nil 验证 leader 模式不投政策块。
+func TestTeamPolicyRail_policyText_leader建队为nil(t *testing.T) {
+	r := mustNewPolicyRail(t,
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyBootstrapMode("leader"),
+		WithPolicyLanguage("cn"),
+	)
+	if _, ok := r.tracker.PolicyTextForTest(); ok {
+		t.Fatal("leader 建队时 policyText 应为 nil（政策走 build_team 结果）")
 	}
 }

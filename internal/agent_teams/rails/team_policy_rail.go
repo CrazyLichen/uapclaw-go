@@ -65,7 +65,8 @@ type TeamPolicyRail struct {
 	teamOutputsDir string
 	// forkSource 该成员 fork 自谁；空串表示普通 spawn
 	forkSource string
-	// policyText framework 建队的政策块；nil 关闭政策通道（偏差 D-3，⤵️ 25.0g）
+	// policyText framework 建队的政策块（构造期由 BuildLeaderPolicyDisclosure 渲染）；
+	// nil 表示走 build_team 结果披露（bootstrap_mode="leader"）
 	policyText *string
 	// steerBatchSize 一次模型调用最多吸收的 steering 条数
 	steerBatchSize int
@@ -79,6 +80,16 @@ type TeamPolicyRail struct {
 	exposeHumanAgentsToTeammates bool
 	// hittEnabled HITT 能力开关（门控 HITT section，不依赖实时人类名册）
 	hittEnabled bool
+	// bootstrapMode 建队模式（"leader" / "framework"）（F_122）
+	bootstrapMode string
+	// swarmflowEnabled leader 是否持有 swarmflow 工具
+	swarmflowEnabled bool
+	// boundGroupName 绑定的 AgentGroup 名（空串表示未绑定）（F_125）
+	boundGroupName string
+	// memberMessaging scheduled 成员可否互发消息（F_126）
+	memberMessaging bool
+	// memberSubtasks 成员可否拆子任务（F_128）
+	memberSubtasks bool
 	// systemPromptBuilder 系统提示词构建器（Init 时缓存）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// staticSections 静态 PromptSection 列表（构造时构建）
@@ -133,14 +144,32 @@ func NewTeamPolicyRail(opts ...TeamPolicyRailOption) (*TeamPolicyRail, error) {
 		opt(r)
 	}
 
-	// Python: human_names = sorted(team_backend.human_agent_names()) if team_backend else []
-	var humanNames []string
-	if r.teamBackend != nil {
-		humanNames = r.teamBackend.HumanAgentNames()
+	// 归一建队模式：空串/未知 → "leader"
+	// Python: bootstrap_mode: Literal["leader","framework"] = "leader" (blueprint.py L395)
+	if r.bootstrapMode != "framework" {
+		r.bootstrapMode = "leader"
+	}
+
+	// framework 建队的团队（F_122）没有 build_team 结果来承载 leader 的政策，
+	// 所以同一段披露文本在这里渲染——它依赖的每个变量都已由 spec 定死
+	// （没有待定选择）——并作为 <team-policy> 块交给 tracker。
+	// hittEnabled 用 spec 天花板：没有 build_team 调用时它就是生效值。
+	//
+	// Python: team_policy_rail.py L204-218
+	if r.role == atschema.TeamRoleLeader && r.bootstrapMode == "framework" {
+		disclosure, err := prompts.BuildLeaderPolicyDisclosure(
+			r.lifecycle, r.teammateMode, r.teamMode, r.dispatchMode,
+			r.memberMessaging, r.memberSubtasks, r.language, r.hittEnabled,
+		)
+		if err != nil {
+			return nil, err
+		}
+		inline := inboundtags.RenderTeamPolicyInline(disclosure)
+		r.policyText = &inline
 	}
 
 	// Python: self._static_sections = self._build_static_sections(...)
-	staticSections, err := r.buildStaticSections(humanNames)
+	staticSections, err := r.buildStaticSections(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -568,56 +597,111 @@ func WithPolicyExposeHumanAgents(v bool) TeamPolicyRailOption {
 	return func(r *TeamPolicyRail) { r.exposeHumanAgentsToTeammates = v }
 }
 
+// WithPolicyHittEnabled 设置 HITT 能力开关。
+func WithPolicyHittEnabled(v bool) TeamPolicyRailOption {
+	return func(r *TeamPolicyRail) { r.hittEnabled = v }
+}
+
+// WithPolicyBootstrapMode 设置建队模式。
+func WithPolicyBootstrapMode(mode string) TeamPolicyRailOption {
+	return func(r *TeamPolicyRail) { r.bootstrapMode = mode }
+}
+
+// WithPolicySwarmflowEnabled 设置 leader 是否持有 swarmflow 工具。
+func WithPolicySwarmflowEnabled(enabled bool) TeamPolicyRailOption {
+	return func(r *TeamPolicyRail) { r.swarmflowEnabled = enabled }
+}
+
+// WithPolicyBoundGroupName 设置绑定的 AgentGroup 名。
+func WithPolicyBoundGroupName(group string) TeamPolicyRailOption {
+	return func(r *TeamPolicyRail) { r.boundGroupName = group }
+}
+
+// WithPolicyMemberMessaging 设置 scheduled 成员可否互发消息。
+func WithPolicyMemberMessaging(enabled bool) TeamPolicyRailOption {
+	return func(r *TeamPolicyRail) { r.memberMessaging = enabled }
+}
+
+// WithPolicyMemberSubtasks 设置成员可否拆子任务。
+func WithPolicyMemberSubtasks(enabled bool) TeamPolicyRailOption {
+	return func(r *TeamPolicyRail) { r.memberSubtasks = enabled }
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildStaticSections 构造不变的静态 Section 列表。
-// 模板缺失时返回错误（对齐 Python _build_static_sections 内 load_template 抛异常）。
+// buildStaticSections 构造永不变化的 section 集合（构造期一次）。
 //
-// humanNames 保留入参位但不再使用：HITT 已改为门控 hittEnabled 能力开关，
-// 人类名册走状态车道（标 [human]）。保留参数只为与 NewTeamPolicyRail 的
-// 调用形态一致（Task 13 会改为直接传 nil）。
+// 两个分支就是上游的两条车道：leader 走渐进式披露（只留开场段 + extra，
+// 其余全部延迟到 build_team 结果），非 leader 走完整静态集。
 //
-// Python: TeamPolicyRail._build_static_sections(...)
+// humanNames 入参保留位但不再使用：HITT 已改为门控 hittEnabled 能力开关，
+// 人类名册走状态车道（标 [human]）。上游 _build_static_sections 同样不再
+// 需要实时的名册快照。
+//
+// Python: TeamPolicyRail._build_static_sections (team_policy_rail.py L479-552)
 func (r *TeamPolicyRail) buildStaticSections(_ []string) ([]saprompt.PromptSection, error) {
-	var sections []saprompt.PromptSection
+	if r.role == atschema.TeamRoleLeader {
+		return r.buildLeaderSections()
+	}
+	return r.buildMemberSections()
+}
 
-	// Role Section（总是存在）
-	roleSection, err := prompts.BuildTeamRoleSection(r.role, r.teammateMode, r.workspacePromptVariant(), r.language)
+// buildLeaderSections 构造 leader 的前缀：一段开场，加上调用方自己的提示词。
+//
+// 开场段是 team_bootstrap（路由到 build_team）或——framework 建队时（F_122）
+// ——team_prebuilt（团队已存在，政策以 <team-policy> 块到达）。
+// extra 段留在这里而不是挪进政策披露，因为它不是团队政策：它是 SDK 调用方
+// 告诉这个 leader 要做的事，且必须在团队存在之前就生效——它很可能就是
+// 决定要建什么团队的那句话。
+//
+// Python: _build_leader_sections (team_policy_rail.py L554-600)
+func (r *TeamPolicyRail) buildLeaderSections() ([]saprompt.PromptSection, error) {
+	var opening *saprompt.PromptSection
+	var err error
+	if r.bootstrapMode == "framework" {
+		opening, err = prompts.BuildLeaderPrebuiltSection(r.language)
+	} else {
+		opening, err = prompts.BuildLeaderBootstrapSection(r.swarmflowEnabled, r.language)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if roleSection != nil {
-		sections = append(sections, *roleSection)
+	sections := make([]saprompt.PromptSection, 0, 3)
+	if opening != nil {
+		sections = append(sections, *opening)
 	}
-	// HITT Section（门控在 hittEnabled 能力开关上，不在实时名册上）
-	hittSection, err := prompts.BuildTeamHITTSection(r.role, r.hittEnabled, r.language, r.memberName, r.exposeHumanAgentsToTeammates)
-	if err != nil {
-		return nil, err
+	// scheduled 调度 + 绑定 AgentGroup（F_125 决议 14）：命名该组，让 leader
+	// 先在那里找专家——与把 view_experts 限定在该团是同一个信号。
+	if r.boundGroupName != "" && r.dispatchMode == "scheduled" {
+		s, err := prompts.BuildLeaderBoundGroupSection(r.boundGroupName, r.language)
+		if err != nil {
+			return nil, err
+		}
+		if s != nil {
+			sections = append(sections, *s)
+		}
 	}
-	if hittSection != nil {
-		sections = append(sections, *hittSection)
-	}
-	// Workflow Section（仅 Leader）
-	workflowSection, err := prompts.BuildTeamWorkflowSection(r.role, r.teamMode, r.language)
-	if err != nil {
-		return nil, err
-	}
-	if workflowSection != nil {
-		sections = append(sections, *workflowSection)
-	}
-	// Lifecycle Section（仅 Leader）
-	lifecycleSection, err := prompts.BuildTeamLifecycleSection(r.role, r.lifecycle, r.language)
-	if err != nil {
-		return nil, err
-	}
-	if lifecycleSection != nil {
-		sections = append(sections, *lifecycleSection)
-	}
-	// Extra Section（仅当 basePrompt 非空）
 	if s := prompts.BuildTeamExtraSection(r.basePrompt, r.language); s != nil {
 		sections = append(sections, *s)
 	}
 	return sections, nil
+}
+
+// buildMemberSections 构造非 leader 成员的完整静态 section 集。
+//
+// 成员的约定在 spawn 时就定死了，它也没有 build_team 调用可以把约定挂在
+// 上面，所以走统一入口拿全套。
+//
+// Python: _build_static_sections 的 else 分支 (team_policy_rail.py L517-535)
+func (r *TeamPolicyRail) buildMemberSections() ([]saprompt.PromptSection, error) {
+	return prompts.BuildTeamStaticSections(
+		r.role, r.memberName,
+		r.lifecycle, r.teammateMode, r.teamMode, r.dispatchMode,
+		r.memberMessaging, r.memberSubtasks,
+		r.basePrompt, r.language,
+		r.hittEnabled, r.exposeHumanAgentsToTeammates,
+		r.workspacePromptVariant(),
+	)
 }
 
 // workspacePromptVariant 返回工作区措辞变体。
