@@ -1038,6 +1038,13 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	if runtimeSpec != nil && runtimeSpec.AgentCustomizer != nil {
 		spec.AgentCustomizer = runtimeSpec.AgentCustomizer
 	}
+	// 步骤 3b: embedding_config 同样是 Field(exclude=True) 不参与序列化，冷恢复必须
+	// 从运行时 spec 重注，否则 resolve_embedding_config 找不到它、记忆检索退化为纯关键词。
+	// 对齐 Python TeamAgent.recover_from_session（team_agent.py:1119-1124）。
+	if runtimeSpec != nil && runtimeSpec.Memory != nil &&
+		runtimeSpec.Memory.EmbeddingConfig != nil && spec.Memory != nil {
+		spec.Memory.EmbeddingConfig = runtimeSpec.Memory.EmbeddingConfig
+	}
 
 	// 步骤 4: 反序列化 context（S-26: 同步骤 2 的桥接修复）
 	runtimeCtx, err := teamRuntimeContextFromAny(bucket["context"])

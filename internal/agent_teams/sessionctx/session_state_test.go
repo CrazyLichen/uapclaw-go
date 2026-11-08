@@ -117,3 +117,50 @@ func TestWithMemberID_覆盖(t *testing.T) {
 	got := MemberIDFromCtx(ctx)
 	assert.Equal(t, "member2", got)
 }
+
+// TestSetSessionIDIfAbsent_临时注入并还原 验证 pause/stop 阶段提取记忆时的
+// session 上下文注入：临时生效、结束还原，不污染调用方状态。
+func TestSetSessionIDIfAbsent_临时注入并还原(t *testing.T) {
+	state := InitSessionState()
+	ctx := WithSessionState(context.Background(), state)
+
+	restore := SetSessionIDIfAbsent(ctx, "sess-temp")
+	if got := GetSessionID(ctx); got != "sess-temp" {
+		t.Fatalf("注入后应读到 sess-temp，实际 %q", got)
+	}
+	restore()
+	if got := GetSessionID(ctx); got != "" {
+		t.Errorf("还原后应为空，实际 %q", got)
+	}
+}
+
+// TestSetSessionIDIfAbsent_已有值时不覆盖 上游语义是"仅在缺失时注入"，
+// ctx 已有 session_id 时必须原样保留。
+func TestSetSessionIDIfAbsent_已有值时不覆盖(t *testing.T) {
+	state := InitSessionState()
+	state.SetSessionID("sess-origin")
+	ctx := WithSessionState(context.Background(), state)
+
+	restore := SetSessionIDIfAbsent(ctx, "sess-new")
+	if got := GetSessionID(ctx); got != "sess-origin" {
+		t.Errorf("已有 session 不应被覆盖，实际 %q", got)
+	}
+	restore()
+	if got := GetSessionID(ctx); got != "sess-origin" {
+		t.Errorf("还原后应保持原值 sess-origin，实际 %q", got)
+	}
+}
+
+// TestSetSessionIDIfAbsent_空输入或无状态时是空操作 两者都不应 panic。
+func TestSetSessionIDIfAbsent_空输入或无状态时是空操作(t *testing.T) {
+	restore := SetSessionIDIfAbsent(context.Background(), "sess-x")
+	restore() // 无 SessionState，不应 panic
+
+	state := InitSessionState()
+	ctx := WithSessionState(context.Background(), state)
+	restore = SetSessionIDIfAbsent(ctx, "")
+	restore()
+	if got := GetSessionID(ctx); got != "" {
+		t.Errorf("空 sessionID 不应写入，实际 %q", got)
+	}
+}

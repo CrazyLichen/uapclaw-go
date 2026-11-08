@@ -9,9 +9,13 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	runner "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -307,10 +311,70 @@ func (h *NativeHarness) RunOnce(ctx context.Context, content any, sess *session.
 		agentinterfaces.WithSession(sess))
 }
 
-// Dispose 永久收尾：停机。
-// Python: NativeHarness.dispose / _close_memory_managers (native_harness.py:464/499)
+// Dispose 永久收尾：停机 + 释放本成员的进程级资源。
+//
+// 与 Stop 的区别：Stop 是轮末拆除，native 会在同一 session 上重建，所以它的
+// sys_operation（按 session 稳定）是**有意保留**供下一轮复用的。Dispose 才是销毁钩子，
+// 必须把该成员的资源真正摘掉，否则退役成员/废弃会话会一直占着它们。
+//
+// 三件事：先停 supervisor（停掉后 ContextEngine 不再通过 sys_operation 读写），
+// 再关该成员打开的记忆索引管理器，最后幂等释放 sys_operation。Stop 本身幂等，
+// 因此 finalize 已停过时这里不重复动作。
+//
+// Python: NativeHarness.dispose (native_harness.py:469-502)。
 func (h *NativeHarness) Dispose(ctx context.Context) error {
-	return h.Stop(ctx)
+	if err := h.Stop(ctx); err != nil {
+		return err
+	}
+
+	if h.agent == nil {
+		return nil
+	}
+
+	// 关闭该成员在工作空间上打开的记忆索引管理器（各带文件监听 goroutine、
+	// 定时器与 SQLite 连接）。只关自己的，不影响同进程其他 agent。
+	agentID := ""
+	if card := h.agent.Card(); card != nil {
+		agentID = card.GetID()
+	}
+	if agentID != "" {
+		var ws *workspace.Workspace
+		if dc := h.agent.DeepConfig(); dc != nil {
+			ws = dc.Workspace
+		}
+		if closed := lite.CloseMemoryManagersFor(agentID, ws); closed > 0 {
+			logger.Info(logComponent).
+				Str("agent_id", agentID).
+				Int("closed", closed).
+				Msg("dispose: closed memory manager(s)")
+		}
+	}
+
+	// 幂等释放 sys_operation：只在仍注册时移除，二次 dispose 是空操作。
+	if dc := h.agent.DeepConfig(); dc != nil && dc.SysOperation != nil {
+		if card := dc.SysOperation.Card(); card != nil {
+			id := card.GetID()
+			if id != "" {
+				rm := runner.GetResourceMgr()
+				existing, getErr := rm.GetSysOperation([]string{id})
+				if getErr != nil {
+					logger.Warn(logComponent).
+						Str("sys_operation_id", id).
+						Err(getErr).
+						Msg("dispose: query sys_operation failed")
+				} else if len(existing) > 0 {
+					if rmErr := rm.RemoveSysOperation([]string{id}); rmErr != nil {
+						logger.Warn(logComponent).
+							Str("sys_operation_id", id).
+							Err(rmErr).
+							Msg("dispose: remove sys_operation failed")
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

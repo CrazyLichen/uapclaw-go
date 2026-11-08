@@ -779,6 +779,47 @@ func clearMemoryManagerCache() {
 	})
 }
 
+// closeMemoryManagersFor 关闭指定 agent 在指定工作空间上的全部管理器。
+//
+// 匹配条件与缓存键一致：agent_id + workspace.root_path。逐个 Close 而不是只从缓存
+// 里删——只删不关会留下文件监听与定时器（Python 注释里点名过这个坑）。
+// 返回关闭个数，调用方据此打日志。
+// 对齐 Python aclose_memory_managers_for（manager.py:1727-1755）。
+func closeMemoryManagersFor(agentID string, ws *workspace.Workspace) int {
+	rootPath := ""
+	if ws != nil {
+		rootPath = ws.RootPath
+	}
+	closed := 0
+	indexCache.Range(func(key, value any) bool {
+		mgr, ok := value.(*memoryIndexManager)
+		if !ok {
+			return true
+		}
+		if mgr.agentID != agentID || mgr.memoryDir == "" {
+			return true
+		}
+		// 按工作空间根路径匹配：同一 agentID 在不同 workspace 上是不同实例
+		mgrRoot := ""
+		if mgr.workspace != nil {
+			mgrRoot = mgr.workspace.RootPath
+		}
+		if mgrRoot != rootPath {
+			return true
+		}
+		if err := mgr.Close(); err != nil {
+			logger.Warn(logComponent).
+				Str("agent_id", agentID).
+				Err(err).
+				Msg("failed to close memory manager for agent")
+			return true
+		}
+		closed++
+		return true
+	})
+	return closed
+}
+
 // resolveDBPath 解析数据库路径。对齐 Python _resolve_db_path
 func (m *memoryIndexManager) resolveDBPath() string {
 	storePath := "memory.db"

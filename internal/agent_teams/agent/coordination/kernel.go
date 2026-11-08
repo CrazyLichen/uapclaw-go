@@ -205,9 +205,22 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 				Msg("kernel start: bind session failed")
 		} else {
 			ctx = newCtx
+			// 同步把 session_id 告知记忆管理器：pause/stop 阶段的记忆提取要用它做
+			// 日志 trace 与消息隔离，而那时 session 可能已 release。
+			// 对齐 Python kernel.py:130-132。
+			if memMgr := k.host.MemoryManager(); memMgr != nil {
+				if idProvider, ok := session.(interface{ GetSessionID() string }); ok {
+					memMgr.BindSessionID(idProvider.GetSessionID())
+				}
+			}
 		}
 	} else if sessCtrl != nil {
 		_ = sessCtrl.ReleaseSession(ctx)
+		// 解绑后清空记忆管理器持有的 session_id，避免下一次提取串用旧会话。
+		// 对齐 Python kernel.py:142-144。
+		if memMgr := k.host.MemoryManager(); memMgr != nil {
+			memMgr.BindSessionID("")
+		}
 	}
 
 	// 步骤 4: [Leader] 检查全 SHUTDOWN → clean_team 或 recover
@@ -334,7 +347,18 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	// 步骤 2: Persist allocator state
 	k.host.PersistAllocatorState()
 
-	// 步骤 3: [Leader] 标记活跃成员为 PAUSED
+	// 步骤 3: 记忆提取。
+	//
+	// 时机从 finalize_round（每轮回合都跑）挪到这里（每个 run cycle 只跑一次）：
+	// 此时 session 仍绑定、DB 仍可访问，提取条件齐备。
+	// 对齐 Python CoordinationKernel.pause（kernel.py:206-213）。
+	if memMgr := k.host.MemoryManager(); memMgr != nil {
+		if err := memMgr.ExtractAfterRound(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("pause: extract_after_round failed")
+		}
+	}
+
+	// 步骤 4: [Leader] 标记活跃成员为 PAUSED
 	if k.host.Role() == schema.TeamRoleLeader {
 		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusPaused))
 	}
@@ -402,7 +426,19 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 	// 步骤 2: Persist allocator state
 	k.host.PersistAllocatorState()
 
-	// 步骤 3: [Leader] 标记活跃成员为 STOPPED（在关闭句柄前，避免任务取消与状态写入竞争）
+	// 步骤 3: 记忆提取（仅当从 running 直接进入 stop）。
+	//
+	// 从 paused 进来时提取已在 Pause 做过、session 也已释放，再查 DB 会失败，故跳过。
+	// 对齐 Python CoordinationKernel.stop（kernel.py:322-330）。
+	if k.lifecycleState == kernelStateRunning {
+		if memMgr := k.host.MemoryManager(); memMgr != nil {
+			if err := memMgr.ExtractAfterRound(ctx); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("stop: extract_after_round failed")
+			}
+		}
+	}
+
+	// 步骤 4: [Leader] 标记活跃成员为 STOPPED（在关闭句柄前，避免任务取消与状态写入竞争）
 	if k.host.Role() == schema.TeamRoleLeader {
 		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusStopped))
 	}
@@ -513,21 +549,14 @@ func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Conte
 	})
 }
 
-// FinalizeRound 执行轮次结束清理：记忆提取 + 释放 streamQueue。
-// 对齐 Python: CoordinationKernel.finalize_round (kernel.py:421-434)
+// FinalizeRound 执行轮次结束清理：释放 streamQueue。
+// 对齐 Python: CoordinationKernel.finalize_round (kernel.py:456-470)
 //
-// 纯 round-end hook，仅做两件事：
-// 1. 记忆管理器执行轮次后提取（extract_after_round）
-// 2. 释放流控制器队列（stream_queue = None）
+// 纯 round-end hook，只释放本轮运行时资源。
+// 记忆提取已挪到 Pause/Stop——原来放在这里会导致每个**流式回合**都提取一次，
+// 而语义上应当每个 run cycle 一次（对齐上游 06def473）。
 // 不做 pause/stop/lifecycle 决策（由 Runner 层负责）。
 func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
-	// Python: memory_manager = host.resources.memory_manager
-	memMgr := k.host.MemoryManager()
-	if memMgr != nil {
-		if err := memMgr.ExtractAfterRound(ctx); err != nil {
-			logger.Error(logComponent).Err(err).Msg("finalizeRound: extract_after_round failed")
-		}
-	}
 	// Python: host.stream_controller.stream_queue = None
 	sc := k.host.StreamController()
 	if sc != nil {

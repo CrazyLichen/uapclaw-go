@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -76,6 +77,13 @@ type TeamMemoryManager struct {
 	sharedManager *SharedMemoryManager
 	// cachedBaseSection 缓存的基础提示词段。⤵️ 回填: 7.2
 	cachedBaseSection *saprompt.PromptSection
+	// activeSessionID 当前绑定的会话 ID。
+	//
+	// 提取记忆时日志 trace 与消息隔离都要用当前 session_id，但提取发生在 pause/stop
+	// 阶段，调用方的 ctx 未必带着它。由 kernel 在 bind session 后写入、release 后清空，
+	// ExtractAfterRound 提取前临时注入。
+	// 对齐 Python TeamMemoryManager._active_session_id（manager.py:89）。
+	activeSessionID string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -192,8 +200,16 @@ func (m *TeamMemoryManager) InitToolkit(ctx context.Context) (bool, error) {
 // 幂等（已注册跳过）；先剥离 MemoryRail/CodingMemoryRail（团队场景由本管理器接管记忆）；
 // toolkit 工具注册到 Runner.resource_mgr（不存在的）+ ability_manager（记录到 owned 集合）。
 func (m *TeamMemoryManager) RegisterTools(deepAgent interfaces.DeepAgentInterface) {
-	if len(m.ownedToolNames) > 0 {
+	// 幂等键必须带 deep_agent 身份：热重载/重建后是一个**新**的 deep_agent，
+	// 旧的名字名单对它无效——只判名单非空会让新 agent 拿不到记忆工具。
+	// 对齐 Python register_tools：`if self._owned_tool_names and deep_agent is
+	// self._deep_agent_for_cleanup: return`（manager.py:150）。
+	if len(m.ownedToolNames) > 0 && deepAgent == m.deepAgentForCleanup {
 		return
+	}
+	// 换了 agent：清空旧名单，重新注册到新 agent 上
+	if m.deepAgentForCleanup != nil && deepAgent != m.deepAgentForCleanup {
+		m.ownedToolNames = make(map[string]struct{})
 	}
 
 	// Python: _strip_memory_rails_from_deep_agent
@@ -342,11 +358,41 @@ func (m *TeamMemoryManager) LoadAndInject(ctx context.Context, deepAgent interfa
 	return nil
 }
 
+// BindSessionID 绑定当前活跃会话 ID；传空串表示解绑。
+//
+// 由 kernel 在 bind/release session 时同步调用，使提取阶段能拿到正确的 session_id。
+// 对齐 Python TeamMemoryManager.bind_session_id（manager.py:320）。
+func (m *TeamMemoryManager) BindSessionID(sessionID string) {
+	m.activeSessionID = sessionID
+}
+
 // ExtractAfterRound Leader 专属：提取 agent 蒸馏团队记忆。
 // S-12: 对齐 Python extract_after_round（L311-334）——
 // 四重前置条件（auto_extract/persistent/leader/team_memory_dir+db）后调
 // ExtractTeamMemories，失败仅告警不中断。原桩空实现导致提取功能失效。
+//
+// 提取前临时把 activeSessionID 注入 SessionState，供提取链路的日志 trace 与消息隔离
+// 使用；结束后还原。对齐 Python _extract_with_session_context（manager.py:322-333）。
 func (m *TeamMemoryManager) ExtractAfterRound(ctx context.Context) error {
+	return m.extractWithSessionContext(ctx)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// extractWithSessionContext 在绑定的 session 上下文里执行提取。
+//
+// 若 ctx 里没有 session_id 而管理器已绑定，则临时注入、结束后还原。为什么要这层：
+// 提取发生在 pause/stop，调用方的 ctx 往往已经不带 session（session 已 release），
+// 而提取链路的日志 trace 与消息隔离都依赖它。
+// 对齐 Python _extract_with_session_context（manager.py:322-333）。
+func (m *TeamMemoryManager) extractWithSessionContext(ctx context.Context) error {
+	restore := sessionctx.SetSessionIDIfAbsent(ctx, m.activeSessionID)
+	defer restore()
+	return m.extractAfterRoundBound(ctx)
+}
+
+// extractAfterRoundBound 执行提取本体（四重前置条件 + 调用）。
+func (m *TeamMemoryManager) extractAfterRoundBound(ctx context.Context) error {
 	if !m.enableAutoExtract {
 		return nil
 	}
@@ -387,10 +433,6 @@ func (m *TeamMemoryManager) Close(ctx context.Context) error {
 	for id := range m.ownedToolIDs {
 		toolIDs = append(toolIDs, id)
 	}
-	toolNames := make([]string, 0, len(m.ownedToolNames))
-	for name := range m.ownedToolNames {
-		toolNames = append(toolNames, name)
-	}
 	deepAgent := m.deepAgentForCleanup
 
 	if deepAgent != nil {
@@ -398,13 +440,13 @@ func (m *TeamMemoryManager) Close(ctx context.Context) error {
 		if builder := deepAgent.SystemPromptBuilder(); builder != nil {
 			builder.RemoveSection(SectionName)
 		}
-		// Python: am.remove(tool_names)
-		if am := deepAgent.AbilityManager(); am != nil && len(toolNames) > 0 {
-			sort.Strings(toolNames)
-			am.RemoveMany(toolNames)
-		}
+		// 注：上游 close 已删除 ability_manager.remove(tool_names) 整段——工具回收
+		// 统一走下面的 resource_mgr.remove_tool（按 id 精确摘除），既避免按名字误删
+		// 同名工具，也不再需要维护名字名单。
+		// 对齐 Python close（manager.py:359-372）。
 	}
 
+	// 清空自有痕迹：换 agent 后 RegisterTools 才能重新注册
 	m.deepAgentForCleanup = nil
 	m.ownedToolNames = make(map[string]struct{})
 	m.ownedToolIDs = make(map[string]struct{})

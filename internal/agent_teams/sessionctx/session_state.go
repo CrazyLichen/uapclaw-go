@@ -83,6 +83,29 @@ func (s *SessionState) SetSessionID(sessionID string) {
 	s.sessionID = sessionID
 }
 
+// SetSessionIDIfAbsent 临时把 session_id 设为给定值，返回还原函数。
+//
+// 用于"某段逻辑需要 session 上下文、但当前 ctx 未带"的场景（如 pause/stop 阶段的
+// 团队记忆提取）。三者短路：目标为空、ctx 无 SessionState、ctx 已有非空 session_id 时，
+// 都不做任何修改，返回空操作。
+// 对齐 Python _extract_with_session_context 的 token 语义（manager.py:322-333）：
+// Python 用 contextvar token 还原，Go 用共享 SessionState 的原值还原。
+func SetSessionIDIfAbsent(ctx context.Context, sessionID string) func() {
+	if sessionID == "" {
+		return func() {}
+	}
+	state := SessionStateFromCtx(ctx)
+	if state == nil {
+		return func() {}
+	}
+	prev := state.GetSessionID()
+	if prev != "" {
+		return func() {}
+	}
+	state.SetSessionID(sessionID)
+	return func() { state.SetSessionID(prev) }
+}
+
 // WithMemberID 将成员 ID 注入 context。
 // 对齐 Python: set_member_id(member_name) — Python 用 contextvars.ContextVar，
 // Go 通过 context.WithValue 传播，返回新 ctx 供下游使用。

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
 
@@ -291,4 +292,92 @@ func countRows(t *testing.T, m *memoryIndexManager, table string) int {
 		t.Fatalf("统计 %s 行数失败: %v", table, err)
 	}
 	return n
+}
+
+// TestCloseMemoryManagersFor_只关目标agent 定向关闭：同进程多个 agent 的 manager
+// 必须互不影响，否则成员退役会把别人的记忆索引一起关掉。
+// 对齐 Python aclose_memory_managers_for（manager.py:1727）。
+func TestCloseMemoryManagersFor_只关目标agent(t *testing.T) {
+	ws := workspace.NewWorkspace(t.TempDir(), "cn")
+	nodePath := ws.GetNodePath("memory")
+	if nodePath == nil {
+		t.Fatal("Workspace 应包含 memory 节点")
+	}
+	settings := CreateMemorySettings(*nodePath, nil)
+	settings.Sync.Watch = false
+	settings.Sync.IntervalMinutes = 0
+
+	open := func(agentID string) *memoryIndexManager {
+		mgr, err := GetMemoryIndexManager(MemoryManagerParams{
+			AgentID:   agentID,
+			Workspace: ws,
+			Settings:  settings,
+			NodeName:  "memory",
+		})
+		if err != nil {
+			t.Fatalf("初始化 manager 失败: %v", err)
+		}
+		return mgr.(*memoryIndexManager)
+	}
+	defer ClearMemoryManagerCache()
+
+	target := open("agent-target")
+	other := open("agent-other")
+
+	closed := CloseMemoryManagersFor("agent-target", ws)
+	if closed != 1 {
+		t.Errorf("应关闭 1 个 manager，实际 %d", closed)
+	}
+	if !target.IsClosed() {
+		t.Error("目标 agent 的 manager 应已关闭")
+	}
+	if other.IsClosed() {
+		t.Error("其他 agent 的 manager 不应被关闭")
+	}
+}
+
+// TestCloseMemoryManagersFor_不同工作空间不误关 同一 agentID 在不同 workspace 上是
+// 不同实例，按根路径匹配才不会误关。
+func TestCloseMemoryManagersFor_不同工作空间不误关(t *testing.T) {
+	mkWS := func() (*workspace.Workspace, string) {
+		ws := workspace.NewWorkspace(t.TempDir(), "cn")
+		p := ws.GetNodePath("memory")
+		if p == nil {
+			t.Fatal("Workspace 应包含 memory 节点")
+		}
+		return ws, *p
+	}
+	wsA, dirA := mkWS()
+	wsB, dirB := mkWS()
+
+	mkSettings := func(dir string) *MemorySettings {
+		s := CreateMemorySettings(dir, nil)
+		s.Sync.Watch = false
+		s.Sync.IntervalMinutes = 0
+		return s
+	}
+
+	get := func(ws *workspace.Workspace, dir string) *memoryIndexManager {
+		mgr, err := GetMemoryIndexManager(MemoryManagerParams{
+			AgentID: "same-agent", Workspace: ws, Settings: mkSettings(dir), NodeName: "memory",
+		})
+		if err != nil {
+			t.Fatalf("初始化失败: %v", err)
+		}
+		return mgr.(*memoryIndexManager)
+	}
+	defer ClearMemoryManagerCache()
+
+	onA := get(wsA, dirA)
+	onB := get(wsB, dirB)
+
+	if closed := CloseMemoryManagersFor("same-agent", wsA); closed != 1 {
+		t.Errorf("应只关闭 wsA 上的 1 个，实际 %d", closed)
+	}
+	if !onA.IsClosed() {
+		t.Error("wsA 的 manager 应已关闭")
+	}
+	if onB.IsClosed() {
+		t.Error("wsB 的 manager 不应被关闭")
+	}
 }

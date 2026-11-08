@@ -69,3 +69,13 @@ func GetMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 func ClearMemoryManagerCache() {
 	clearMemoryManagerCache()
 }
+
+// CloseMemoryManagersFor 关闭某个 agent 在某个工作空间上打开的全部索引管理器，返回关闭个数。
+//
+// 为什么要定向关闭：管理器带文件监听 goroutine、定时器和 SQLite 连接，只要留在
+// 进程级 indexCache 里就一直占着。成员退役时若只关它自己开的那几个，不能误伤同进程
+// 其他 agent 的管理器（ClearMemoryManagerCache 会全关，不能用于此场景）。
+// 对齐 Python aclose_memory_managers_for（manager.py:1727）。
+func CloseMemoryManagersFor(agentID string, ws *workspace.Workspace) int {
+	return closeMemoryManagersFor(agentID, ws)
+}

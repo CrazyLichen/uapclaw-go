@@ -673,11 +673,26 @@ func (c *AgentConfigurator) CreateWorktreeManager(spec atschema.TeamAgentSpec) *
 // Python: AgentConfigurator._build_memory_manager(spec, ctx, ...)
 // ⤴️ 9.64 回填完成
 func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, agentSpec atschema.DeepAgentSpec, language string, memberName string) *memory.TeamMemoryManager {
-	// 记忆配置从 spec 中获取，当前为默认配置
-	memCfg := atschema.NewTeamMemoryConfig()
+	// 记忆配置从 spec 读取。原先用硬编码 NewTeamMemoryConfig()，导致用户在
+	// spec.memory 里写的 scenario / auto_extract / embedding_config 全部被忽略，
+	// 且 enabled=false 时也会构造管理器。
+	// 对齐 Python _build_memory_manager 的 `if not (spec.memory and spec.memory.enabled): return None`
+	// （agent_configurator.py:1038-1039）。
+	if spec.Memory == nil || !spec.Memory.Enabled {
+		return nil
+	}
+	memCfg := *spec.Memory
 
-	// Python: team_memory_dir = team_memory_dir(team_name)
-	teamMemoryDir := agentteams.DefaultTeamMemoryDir(c.TeamName())
+	// Python: team_memory_dir = spec.memory.team_memory_dir or default_team_memory_dir(team_name)
+	// 仅在 shared_memory 且 persistent 时才启用团队记忆目录（agent_configurator.py:1055-1057）
+	var teamMemoryDir string
+	if memCfg.SharedMemory && c.Lifecycle() == string(memory.TeamLifecyclePersistent) {
+		if memCfg.TeamMemoryDir != "" {
+			teamMemoryDir = memCfg.TeamMemoryDir
+		} else {
+			teamMemoryDir = agentteams.DefaultTeamMemoryDir(c.TeamName())
+		}
+	}
 
 	// Python: read_only_source = ctx.get("read_only_source_workspace")
 	var readOnlySource *string
@@ -689,6 +704,13 @@ func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx 
 	var db database.TeamDatabase
 	if c.TeamBackend() != nil {
 		db = c.TeamBackend().DB()
+	}
+
+	// 目录未启用时必须是 nil 而不是空串指针：提取前置条件是 teamMemoryDir != nil，
+	// 传空串指针会让"不该提取"的场景仍进入提取流程。
+	var teamMemoryDirPtr *string
+	if teamMemoryDir != "" {
+		teamMemoryDirPtr = &teamMemoryDir
 	}
 
 	params := memory.TeamMemoryManagerParams{
@@ -705,7 +727,7 @@ func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx 
 		TimezoneOffsetHours:     memCfg.TimezoneOffsetHours,
 		Workspace:               c.Harness().Workspace(),
 		SysOperation:            c.Harness().SysOperation(),
-		TeamMemoryDir:           &teamMemoryDir,
+		TeamMemoryDir:           teamMemoryDirPtr,
 		ReadOnlySourceWorkspace: readOnlySource,
 		DB:                      db,
 		TaskManager:             c.TaskManager(),

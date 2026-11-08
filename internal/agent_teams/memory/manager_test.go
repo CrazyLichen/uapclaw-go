@@ -611,3 +611,67 @@ func toStringSlice(t *testing.T, v any) []string {
 	}
 	return out
 }
+
+// TestBindSessionID 会话 ID 绑定/解绑。
+//
+// 用途：pause/stop 阶段提取记忆时，日志 trace 与消息隔离需要当前 session_id，
+// 而那时 ctx 里可能已没有它，靠这里绑定的值临时注入。
+func TestBindSessionID(t *testing.T) {
+	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{MemberName: "m1"})
+
+	mgr.BindSessionID("sess-1")
+	assert.Equal(t, "sess-1", mgr.activeSessionID)
+
+	mgr.BindSessionID("")
+	assert.Equal(t, "", mgr.activeSessionID, "传空串应解绑")
+}
+
+// TestExtractAfterRound_非Leader直接返回 四重前置条件之一：只有 leader 才做团队记忆提取。
+func TestExtractAfterRound_非Leader直接返回(t *testing.T) {
+	dir := "/tmp/test-team-memory-extract"
+	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{
+		MemberName:        "m1",
+		Role:              TeamRoleTeammate,
+		Lifecycle:         TeamLifecyclePersistent,
+		EnableAutoExtract: true,
+		TeamMemoryDir:     &dir,
+	})
+	// 非 leader → 立即返回，不触碰 nil 的 db
+	assert.NoError(t, mgr.ExtractAfterRound(context.Background()))
+}
+
+// TestRegisterTools_换Agent后重新注册 回归 E-10 第 3 项：幂等键必须带 deep_agent 身份。
+//
+// 旧实现"名单非空就跳过"，热重载/重建后新 agent 拿不到记忆工具。
+func TestRegisterTools_换Agent后重新注册(t *testing.T) {
+	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{MemberName: "m1"})
+
+	first := &fakeDeepAgentForInject{builder: nil}
+	// 模拟"已注册过到 first 上"
+	mgr.deepAgentForCleanup = first
+	mgr.ownedToolNames = map[string]struct{}{"memory_search": {}}
+
+	// 同一 agent 再注册 → 幂等跳过，名单不变
+	mgr.RegisterTools(first)
+	assert.Contains(t, mgr.ownedToolNames, "memory_search")
+
+	// 换一个新 agent → 名单必须被清空（重新注册的前提）
+	second := &fakeDeepAgentForInject{builder: nil}
+	mgr.RegisterTools(second)
+	// toolkit 为 nil 时会在清空后提前返回，正好验证"清空"这一步
+	assert.Empty(t, mgr.ownedToolNames, "换 agent 后应清空旧名单以重新注册")
+}
+
+// TestClose_清空清理痕迹 Close 后必须把 deepAgentForCleanup 与两个名单都清干净，
+// 否则下次 RegisterTools 会误判"已注册"。
+func TestClose_清空清理痕迹(t *testing.T) {
+	mgr := NewTeamMemoryManager(TeamMemoryManagerParams{MemberName: "m1"})
+	mgr.deepAgentForCleanup = &fakeDeepAgentForInject{}
+	mgr.ownedToolNames = map[string]struct{}{"a": {}}
+	mgr.ownedToolIDs = map[string]struct{}{"id-a": {}}
+
+	assert.NoError(t, mgr.Close(context.Background()))
+	assert.Nil(t, mgr.deepAgentForCleanup, "close 后应清空 deepAgentForCleanup")
+	assert.Empty(t, mgr.ownedToolNames)
+	assert.Empty(t, mgr.ownedToolIDs)
+}
