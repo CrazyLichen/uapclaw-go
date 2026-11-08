@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 非导出函数测试 ────────────────────────────
@@ -155,6 +157,29 @@ func TestCodeAdapterResolveRuntimeLanguage(t *testing.T) {
 	c.runtimeLanguageOverride = "cn"
 	if got := c.resolveRuntimeLanguage(); got != "cn" {
 		t.Fatalf("覆写后应为 cn，实际 %q", got)
+	}
+}
+
+// TestCodeAdapter_Instance_NilDeep 验证未装配 deep 时 Instance 返回 nil。
+func TestCodeAdapter_Instance_NilDeep(t *testing.T) {
+	c := NewCodeAdapter()
+	if got := c.Instance(); got != nil {
+		t.Fatalf("未装配 deep 时应返回 nil，实际 %#v", got)
+	}
+}
+
+// TestMergeMemberMcpConfigs_无DeepConfig 验证 agent 无 DeepConfig 时返回 0。
+func TestMergeMemberMcpConfigs_无DeepConfig(t *testing.T) {
+	c := NewCodeAdapter()
+	c.deep = NewDeepAdapter()
+	// MergeMemberMcpConfigs 内部直接取 agent.DeepConfig()，传 nil 会 panic，
+	// 故用未配置的真实 DeepAgent（DeepConfig() 返回 nil）覆盖该短路径。
+	agent := harness.NewDeepAgent(agentschema.NewAgentCard(
+		agentschema.WithAgentID("merge-mcp-test"),
+		agentschema.WithAgentName("merge-mcp-test"),
+	))
+	if got := c.MergeMemberMcpConfigs(agent, map[string]any{}); got != 0 {
+		t.Fatalf("无 DeepConfig 时应返回 0，实际 %d", got)
 	}
 }
 
