@@ -4,6 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -86,23 +87,19 @@ type SysOperationSpec struct {
 	GatewayConfig any `json:"gateway_config,omitempty"`
 }
 
-// RailSpec 约束规则规格占位类型。
-// Python: RailSpec
-type RailSpec struct {
-	// Type 规则类型
-	Type string `json:"type"`
-	// Params 规则参数
-	Params map[string]any `json:"params,omitempty"`
-}
+// RailSpec 约束规则声明的团队侧别名。
+//
+// 类型本体已下沉到 core（internal/agentcore/harness/schema/deep_agent_spec.go），
+// 对齐上游归属：openjiuwen/harness/schema/deep_agent_spec.py 是真相来源。
+// 保留别名让既有团队 import 路径继续工作，且与 core 是**同一类型**。
+//
+// Python: RailSpec (openjiuwen/harness/schema/deep_agent_spec.py:248)
+type RailSpec = hschema.RailSpec
 
-// BuiltinToolSpec 内置工具规格占位类型。
-// Python: BuiltinToolSpec
-type BuiltinToolSpec struct {
-	// Type 工具类型
-	Type string `json:"type"`
-	// Params 工具参数
-	Params map[string]any `json:"params,omitempty"`
-}
+// BuiltinToolSpec 内置工具声明的团队侧别名（同 RailSpec，指向 core 类型）。
+//
+// Python: BuiltinToolSpec (openjiuwen/harness/schema/deep_agent_spec.py:296)
+type BuiltinToolSpec = hschema.BuiltinToolSpec
 
 // SubAgentSpec 子代理规格占位类型。
 // Python: SubAgentSpec
