@@ -39,7 +39,7 @@ type TeamMember struct {
 // Section 名称常量，对齐 Python TeamSectionName。
 // Python: class TeamSectionName (openjiuwen/agent_teams/prompts/sections.py)
 const (
-	// SectionRole 角色 + member_name + 执行模式（P:11）
+	// SectionRole 角色策略 + 执行模式（P:11）
 	SectionRole = "team_role"
 	// SectionHITT HITT 人类成员协作规则（P:12）
 	SectionHITT = "team_hitt"
@@ -47,11 +47,29 @@ const (
 	SectionWorkflow = "team_workflow"
 	// SectionLifecycle 团队生命周期策略（P:14）
 	SectionLifecycle = "team_lifecycle"
-	// SectionExtra 用户自定义 base prompt（P:16）
+	// SectionExtra 用户自定义 base prompt（P:17）
 	SectionExtra = "team_extra"
 	// SectionInboundTags 入站/事件/上下文 XML 标签说明（P:18）
 	// Python: TeamSectionName.INBOUND_TAGS (sections.py L73)
 	SectionInboundTags = "team_inbound_tags"
+	// SectionBootstrap leader 起手段（P:11）
+	// Python: TeamSectionName.BOOTSTRAP (sections.py L62)
+	SectionBootstrap = "team_bootstrap"
+	// SectionPrebuilt 框架建队 leader 起手段（P:11）
+	// Python: TeamSectionName.PREBUILT (sections.py L63)
+	SectionPrebuilt = "team_prebuilt"
+	// SectionBoundGroup leader 绑定的专家团（P:12）
+	// Python: TeamSectionName.BOUND_GROUP (sections.py L64)
+	SectionBoundGroup = "team_bound_group"
+	// SectionBridge Bridge Agent 自契约（P:12）
+	// Python: TeamSectionName.BRIDGE (sections.py L67)
+	SectionBridge = "team_bridge"
+	// SectionDispatch 任务下发与获取（P:15）
+	// Python: TeamSectionName.DISPATCH (sections.py L69)
+	SectionDispatch = "team_dispatch"
+	// SectionTaskState 任务状态流转（P:16）
+	// Python: TeamSectionName.TASK_STATE (sections.py L70)
+	SectionTaskState = "team_task_state"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -64,12 +82,34 @@ var workflowTemplateName = map[string]string{
 	"hybrid":     "leader_workflow_hybrid",
 }
 
+// dispatchRoleSlugs 参与任务下发的角色到模板 slug 的映射。
+//
+// 只有 LEADER 与 TEAMMATE 参与下发：HUMAN_AGENT 的「等指派」契约已在它的
+// HITT section 里，BRIDGE_AGENT 是纯转发 avatar、不承担看板工作。
+// EXTERNAL_CLI 归入 teammate（它是完整的 teammate，只是内容来自远端执行器）。
+//
+// Python: _DISPATCH_ROLE_SLUGS (prompts/sections.py L370-375)
+var dispatchRoleSlugs = map[atschema.TeamRole]string{
+	atschema.TeamRoleLeader:      "leader",
+	atschema.TeamRoleTeammate:    "teammate",
+	atschema.TeamRoleExternalCLI: "teammate",
+}
+
+// dispatchModes 合法的调度模式集合。
+// Python: _DISPATCH_MODES (prompts/sections.py L365)
+var dispatchModes = map[string]struct{}{
+	"autonomous": {},
+	"scheduled":  {},
+}
+
 // labels 双语标签字典，对齐 Python _LABELS。
 // Python: _LABELS: dict[str, dict[str, str]] (openjiuwen/agent_teams/prompts/sections.py)
 var labels = map[string]map[string]string{
 	"cn": {
 		"role_heading":       "# 团队角色",
 		"workflow_heading":   "# 工作流程",
+		"dispatch_heading":   "# 任务下发与获取",
+		"task_state_heading": "# 任务状态流转",
 		"lifecycle_heading":  "# 团队生命周期",
 		"persona_heading":    "# 当前人设",
 		"info_heading":       "# 团队信息",
@@ -91,6 +131,8 @@ var labels = map[string]map[string]string{
 	"en": {
 		"role_heading":       "# Team Role",
 		"workflow_heading":   "# Workflow",
+		"dispatch_heading":   "# Task Dispatch",
+		"task_state_heading": "# Task State Transitions",
 		"lifecycle_heading":  "# Team Lifecycle",
 		"persona_heading":    "# Current Persona",
 		"info_heading":       "# Team Info",
@@ -317,7 +359,160 @@ func BuildTeamInboundTagsSection(language string) (*saprompt.PromptSection, erro
 	return &section, nil
 }
 
+// BuildTeamDispatchSection 构建任务下发 section（LEADER + TEAMMATE）。
+//
+// 调度模式与 team_mode 正交：team_mode 决定名册能否增长，本轴决定任务
+// 如何到达执行它的成员。拆成两个 section 避免了 3×2 的模板矩阵——每个维度
+// 各自贡献一份文件。
+//
+// 参数：
+//   - role: 角色；不在 dispatchRoleSlugs 里的返回 nil
+//   - dispatchMode: "autonomous"（成员自己从看板认领）/ "scheduled"（leader 指派、调度器拉起）
+//   - memberMessaging: scheduled 成员之间是否可互发消息（F_126）
+//   - memberSubtasks: scheduled 成员是否可把任务拆成子任务（F_128）
+//   - language: "cn" 或 "en"
+//
+// Python: build_team_dispatch_section (prompts/sections.py L377-446)
+func BuildTeamDispatchSection(
+	role atschema.TeamRole,
+	dispatchMode string,
+	memberMessaging, memberSubtasks bool,
+	language string,
+) (*saprompt.PromptSection, error) {
+	slug, ok := dispatchRoleSlugs[role]
+	if !ok {
+		return nil, nil
+	}
+	mode := dispatchMode
+	if _, valid := dispatchModes[mode]; !valid {
+		mode = "autonomous"
+	}
+	lbl := sectionsLabelsFor(language)
+	tpl, err := LoadTemplate("dispatch_"+mode+"_"+slug, language)
+	if err != nil {
+		return nil, err
+	}
+	rendered := tpl.Content()
+	if mode == "scheduled" {
+		// 槽位在模板里都结束一列表行，所以规则自己作为列表项加入；
+		// 空槽位不留空行。
+		memberSubtasksText := ""
+		if memberSubtasks {
+			sub, err := LoadTemplate("dispatch_scheduled_"+slug+"_subtasks", language)
+			if err != nil {
+				return nil, err
+			}
+			memberSubtasksText = "\n" + strings.TrimSpace(sub.Content())
+		}
+		messaging, err := scheduledMemberMessaging(slug, memberMessaging, language)
+		if err != nil {
+			return nil, err
+		}
+		// 两次 Render 照抄上游的两次 format：先填两个能力槽位，
+		// 再填 inline_member（未提供的 key 保留占位符原文）。
+		rendered = (&PromptTemplate{content: rendered}).Render(map[string]string{
+			"member_messaging": messaging,
+			"member_subtasks":  memberSubtasksText,
+		})
+		if slug == "leader" {
+			// 任务级内联成员（F_118）在硬开关后面；关闭时教 member / lifetime /
+			// 休眠的那段散文一起消失。
+			inlineMember := ""
+			if atschema.InlineTaskMemberEnabled {
+				seg, err := LoadTemplate("dispatch_scheduled_leader_inline_member", language)
+				if err != nil {
+					return nil, err
+				}
+				inlineMember = strings.TrimSpace(seg.Content()) + "\n\n"
+			}
+			rendered = (&PromptTemplate{content: rendered}).Render(map[string]string{"inline_member": inlineMember})
+		}
+	}
+	body := lbl["dispatch_heading"] + "\n\n" + strings.TrimSpace(rendered) + "\n"
+	section := saprompt.NewPromptSection(SectionDispatch, map[string]string{language: body}, 15)
+	return &section, nil
+}
+
+// BuildTeamTaskStateSection 构建任务状态机 section（仅 LEADER）。
+//
+// 状态机不是模式中立的，所以按调度模式各一份模板，而不是一份模板里塞模式
+// caveat。有两条边直接不同——谁驱动 pending → in_progress、以及到底有没有
+// 验证闸——一份同时描述两者的文本必须每行都打补丁，自主认领模式的 leader
+// 就是这么被教成去调 create_task(reviewer=[...]) 的：那个模式的 create_task
+// 根本没这个参数。
+//
+// 所以 autonomous 不描述验证闸。那不是遗漏：TaskCreateTool 不暴露 reviewer，
+// 手工也到不了那道闸——验证者机制由调度运行时驱动，只有 scheduled 模式的
+// leader 才有；在 autonomous 里把任务推进 in_review 只会卡住、没人裁决。
+//
+// Python: build_team_task_state_section (prompts/sections.py L463-507)
+func BuildTeamTaskStateSection(role atschema.TeamRole, dispatchMode, language string) (*saprompt.PromptSection, error) {
+	if role != atschema.TeamRoleLeader {
+		return nil, nil
+	}
+	mode := dispatchMode
+	if _, valid := dispatchModes[mode]; !valid {
+		mode = "autonomous"
+	}
+	lbl := sectionsLabelsFor(language)
+	tpl, err := LoadTemplate("task_state_"+mode, language)
+	if err != nil {
+		return nil, err
+	}
+	body := lbl["task_state_heading"] + "\n\n" + strings.TrimSpace(tpl.Content()) + "\n"
+	// priority=16 硬编码：上游 SECTION_PRIORITY 表里没有 TASK_STATE 项。
+	section := saprompt.NewPromptSection(SectionTaskState, map[string]string{language: body}, 16)
+	return &section, nil
+}
+
+// BuildTeamBridgeSection 构建 Bridge Agent 自契约 section（仅 BRIDGE_AGENT）。
+//
+// 从其他每个成员的视角看，bridge 就是普通 teammate——在统一名册里不带标记、
+// 也没有面向同伴的 section。只有 bridge avatar 本身收到这份调度自契约
+// （怎么转达远端执行器的输出）。{{self_line}} 携带 avatar 自己的 member_name。
+//
+// Python: build_team_bridge_section (prompts/sections.py L687-720)
+func BuildTeamBridgeSection(role atschema.TeamRole, language, selfMemberName string) (*saprompt.PromptSection, error) {
+	if role != atschema.TeamRoleBridgeAgent {
+		return nil, nil
+	}
+	tpl, err := LoadTemplate("bridge_agent", language)
+	if err != nil {
+		return nil, err
+	}
+	selfLine := selfMemberLine(selfMemberName, language)
+	// 不 TrimSpace：上游取 loader(...).format(...).content 原样
+	body := tpl.Render(map[string]string{"self_line": selfLine})
+	section := saprompt.NewPromptSection(SectionBridge, map[string]string{language: body}, 12)
+	return &section, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// scheduledMemberMessaging 渲染 scheduled dispatch 模板的 {{member_messaging}} 槽位。
+//
+// leader 永远拿到一条规则（成员能联系到谁，决定它怎么路由信息）。
+// teammate 的「关闭」规则已经写在它的 send_message 描述里，所以那里塌成
+// 空串，模板把槽位留在最后一行让 TrimSpace 吸收。
+//
+// Python: _scheduled_member_messaging (prompts/sections.py L448-461)
+func scheduledMemberMessaging(slug string, enabled bool, language string) (string, error) {
+	if enabled {
+		tpl, err := LoadTemplate("dispatch_scheduled_"+slug+"_messaging_open", language)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(tpl.Content()), nil
+	}
+	if slug == "leader" {
+		tpl, err := LoadTemplate("dispatch_scheduled_leader_messaging_closed", language)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(tpl.Content()), nil
+	}
+	return "", nil
+}
 
 // hittTemplateName 选角色的 HITT 契约模板。
 // TEAMMATE 与 EXTERNAL_CLI 同一分支（external CLI 是完整的 teammate，

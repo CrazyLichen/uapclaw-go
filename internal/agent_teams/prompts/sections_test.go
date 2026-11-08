@@ -498,3 +498,235 @@ func TestBuildTeamHITTSection_未知角色返回nil(t *testing.T) {
 		t.Fatalf("未知角色应返回 nil,nil，实际 %v,%v", s, err)
 	}
 }
+
+// ──────────────────────────── dispatch ────────────────────────────
+
+// TestBuildTeamDispatchSection_角色分派 验证只有 leader/teammate/external_cli 有。
+// Python: _DISPATCH_ROLE_SLUGS (sections.py L370-375)
+func TestBuildTeamDispatchSection_角色分派(t *testing.T) {
+	cases := []struct {
+		role atschema.TeamRole
+		want bool
+	}{
+		{atschema.TeamRoleLeader, true},
+		{atschema.TeamRoleTeammate, true},
+		{atschema.TeamRoleExternalCLI, true},
+		{atschema.TeamRoleHumanAgent, false},
+		{atschema.TeamRoleBridgeAgent, false},
+	}
+	for _, c := range cases {
+		s, err := BuildTeamDispatchSection(c.role, "autonomous", false, false, "cn")
+		if err != nil {
+			t.Fatalf("%s 返回错误: %v", c.role, err)
+		}
+		if (s != nil) != c.want {
+			t.Fatalf("%s: 期望有 section=%v，实际 %v", c.role, c.want, s != nil)
+		}
+	}
+}
+
+// TestBuildTeamDispatchSection_优先级 验证 P:15。
+func TestBuildTeamDispatchSection_优先级(t *testing.T) {
+	s, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if s.Name != SectionDispatch {
+		t.Fatalf("section 名应为 %s，实际 %s", SectionDispatch, s.Name)
+	}
+	if s.Priority != 15 {
+		t.Fatalf("priority 应为 15，实际 %d", s.Priority)
+	}
+}
+
+// TestBuildTeamDispatchSection_两种模式内容不同 验证 autonomous/scheduled 取不同模板。
+func TestBuildTeamDispatchSection_两种模式内容不同(t *testing.T) {
+	auto, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "cn")
+	if err != nil {
+		t.Fatalf("autonomous 返回错误: %v", err)
+	}
+	sched, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("scheduled 返回错误: %v", err)
+	}
+	if auto.Render("cn") == sched.Render("cn") {
+		t.Fatal("两种调度模式应取不同模板")
+	}
+}
+
+// TestBuildTeamDispatchSection_未知模式回落autonomous 验证非法值归一。
+// Python: `mode = dispatch_mode if dispatch_mode in _DISPATCH_MODES else "autonomous"`
+func TestBuildTeamDispatchSection_未知模式回落autonomous(t *testing.T) {
+	auto, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	unknown, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "bogus", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if auto.Render("cn") != unknown.Render("cn") {
+		t.Fatal("未知模式应回落 autonomous")
+	}
+}
+
+// TestBuildTeamDispatchSection_messaging槽位 验证 member_messaging 开闭。
+// Python: _scheduled_member_messaging (sections.py L448-461) ——
+// leader 两种变体都渲染；teammate 关闭时空串。
+func TestBuildTeamDispatchSection_messaging槽位(t *testing.T) {
+	leaderOn, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", true, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	leaderOff, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if leaderOn.Render("cn") == leaderOff.Render("cn") {
+		t.Fatal("leader 的 messaging 开闭应产生不同文本")
+	}
+	if strings.Contains(leaderOn.Render("cn"), "{{member_messaging}}") {
+		t.Fatal("槽位应已被替换，不应残留占位符")
+	}
+	if strings.Contains(leaderOff.Render("cn"), "{{member_messaging}}") {
+		t.Fatal("槽位应已被替换，不应残留占位符")
+	}
+}
+
+// TestBuildTeamDispatchSection_subtasks槽位 验证 member_subtasks 开闭。
+func TestBuildTeamDispatchSection_subtasks槽位(t *testing.T) {
+	on, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, true, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	off, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if on.Render("cn") == off.Render("cn") {
+		t.Fatal("subtasks 开闭应产生不同文本")
+	}
+	if strings.Contains(on.Render("cn"), "{{member_subtasks}}") {
+		t.Fatal("槽位应已被替换")
+	}
+}
+
+// TestBuildTeamDispatchSection_inlineMember槽位恒空 验证硬开关关闭。
+// Python: constants.INLINE_TASK_MEMBER_ENABLED = False —— 槽位塌成空串。
+func TestBuildTeamDispatchSection_inlineMember槽位恒空(t *testing.T) {
+	s, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(s.Render("cn"), "{{inline_member}}") {
+		t.Fatal("inline_member 槽位应被替换为空串，不应残留占位符")
+	}
+}
+
+// TestBuildTeamDispatchSection_英文 验证 en 取英文模板。
+func TestBuildTeamDispatchSection_英文(t *testing.T) {
+	s, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "en")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(s.Render("en"), "任务下发") {
+		t.Fatal("en 不应含中文标题")
+	}
+}
+
+// ──────────────────────────── task_state ────────────────────────────
+
+// TestBuildTeamTaskStateSection_仅Leader 验证非 leader 返回 nil。
+func TestBuildTeamTaskStateSection_仅Leader(t *testing.T) {
+	if s, err := BuildTeamTaskStateSection(atschema.TeamRoleTeammate, "autonomous", "cn"); err != nil || s != nil {
+		t.Fatalf("teammate 应返回 nil,nil，实际 %v,%v", s, err)
+	}
+	s, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "autonomous", "cn")
+	if err != nil {
+		t.Fatalf("leader 返回错误: %v", err)
+	}
+	if s == nil {
+		t.Fatal("leader 应返回 section")
+	}
+	if s.Name != SectionTaskState {
+		t.Fatalf("section 名应为 %s，实际 %s", SectionTaskState, s.Name)
+	}
+	if s.Priority != 16 {
+		t.Fatalf("priority 应为 16（硬编码，不进 SECTION_PRIORITY 表），实际 %d", s.Priority)
+	}
+}
+
+// TestBuildTeamTaskStateSection_两种模式 验证 autonomous 无 in_review。
+func TestBuildTeamTaskStateSection_两种模式(t *testing.T) {
+	auto, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "autonomous", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	sched, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "scheduled", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(auto.Render("cn"), "in_review") {
+		t.Fatal("autonomous 状态机不应出现 in_review（该模式无验证闸）")
+	}
+	if !strings.Contains(sched.Render("cn"), "in_review") {
+		t.Fatal("scheduled 状态机应含 in_review")
+	}
+}
+
+// TestBuildTeamTaskStateSection_未知模式回落 验证非法值归一。
+func TestBuildTeamTaskStateSection_未知模式回落(t *testing.T) {
+	auto, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "autonomous", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	unknown, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "bogus", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if auto.Render("cn") != unknown.Render("cn") {
+		t.Fatal("未知模式应回落 autonomous")
+	}
+}
+
+// ──────────────────────────── bridge ────────────────────────────
+
+// TestBuildTeamBridgeSection_仅BridgeAgent 验证角色门控。
+func TestBuildTeamBridgeSection_仅BridgeAgent(t *testing.T) {
+	for _, role := range []atschema.TeamRole{atschema.TeamRoleLeader, atschema.TeamRoleTeammate, atschema.TeamRoleHumanAgent} {
+		if s, err := BuildTeamBridgeSection(role, "cn", ""); err != nil || s != nil {
+			t.Fatalf("%s 应返回 nil,nil，实际 %v,%v", role, s, err)
+		}
+	}
+	s, err := BuildTeamBridgeSection(atschema.TeamRoleBridgeAgent, "cn", "bridge_1")
+	if err != nil {
+		t.Fatalf("bridge 返回错误: %v", err)
+	}
+	if s == nil {
+		t.Fatal("BRIDGE_AGENT 应返回 section")
+	}
+	if s.Name != SectionBridge {
+		t.Fatalf("section 名应为 %s，实际 %s", SectionBridge, s.Name)
+	}
+	if s.Priority != 12 {
+		t.Fatalf("priority 应为 12，实际 %d", s.Priority)
+	}
+}
+
+// TestBuildTeamBridgeSection_selfLine 验证自身名注入与空值。
+func TestBuildTeamBridgeSection_selfLine(t *testing.T) {
+	withName, err := BuildTeamBridgeSection(atschema.TeamRoleBridgeAgent, "cn", "bridge_1")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if !strings.Contains(withName.Render("cn"), "bridge_1") {
+		t.Fatal("应含自身 member_name")
+	}
+	empty, err := BuildTeamBridgeSection(atschema.TeamRoleBridgeAgent, "cn", "")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(empty.Render("cn"), "你的 member_name 是") {
+		t.Fatal("空名不应渲染 self_line")
+	}
+}
