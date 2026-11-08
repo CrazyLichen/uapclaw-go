@@ -743,7 +743,7 @@ func (s *CliRouteFullChainSuite) sendFeishuControl(text, reqID string) {
 func (s *CliRouteFullChainSuite) channelModeOf() string {
 	probe := schema.NewReqMessage(testChannelID, "", schema.ReqMethodChatSend,
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
-	return string(s.msgHandler.GetOrCreateChannelState(probe).Mode)
+	return string(s.msgHandler.GetOrCreateChannelState(probe).Mode())
 }
 
 // sessionModeOf 读取会话元数据里的 mode（未落盘时返回空串）。

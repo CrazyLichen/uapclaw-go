@@ -184,7 +184,7 @@ func TestNewSessionCancelAndNotice(t *testing.T) {
 
 	// 预建 state（模拟首建），获取 oldSID 后重构
 	state := mh.GetOrCreateChannelState(msg)
-	oldSID := state.SessionID
+	oldSID := state.SessionID()
 
 	mh.newSessionCancelAndNotice(context.Background(), testUserInfos(msg), msg, oldSID, "new-sid-x")
 
@@ -221,7 +221,7 @@ func TestHandleChannelControl_newSession分配失败回滚(t *testing.T) {
 		schema.WithUserID("u-1"))
 
 	state := mh.GetOrCreateChannelState(msg)
-	state.SessionID = "sess-old"
+	state.SetSessionID("sess-old")
 
 	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "控制指令应被消费")
@@ -233,7 +233,7 @@ func TestHandleChannelControl_newSession分配失败回滚(t *testing.T) {
 		t.Fatal("分配失败应下发错误通知")
 	}
 	// 事务回滚：失败时保留旧 session_id
-	assert.Equal(t, "sess-old", state.SessionID, "分配失败应回滚 session_id")
+	assert.Equal(t, "sess-old", state.SessionID(), "分配失败应回滚 session_id")
 }
 
 // TestModeChangeCancelAndNotice 测试 /mode 处理
@@ -257,7 +257,7 @@ func TestModeChangeCancelAndNotice(t *testing.T) {
 	})
 
 	state := mh.GetOrCreateChannelState(msg)
-	assert.Equal(t, ChannelModeAgentCodeNormal, state.Mode)
+	assert.Equal(t, ChannelModeAgentCodeNormal, state.Mode())
 }
 
 // TestModeChange_一级映射 验证 /mode 各入参归一结果（对齐 channel_mode_from_str）。
@@ -297,7 +297,7 @@ func TestModeChange_一级映射(t *testing.T) {
 				ReplySessionID: msg.SessionID,
 				Msg:            msg,
 			})
-			assert.Equal(t, tt.wantMode, state.Mode, "/mode %s 应映射到 %v", tt.subcommand, tt.wantMode)
+			assert.Equal(t, tt.wantMode, state.Mode(), "/mode %s 应映射到 %v", tt.subcommand, tt.wantMode)
 		})
 	}
 }
@@ -314,7 +314,7 @@ func TestModeSwitch_非法指令(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	state := mh.GetOrCreateChannelState(msg)
-	before := state.Mode
+	before := state.Mode()
 
 	mh.handleModeSwitch(context.Background(), "plan", modeSwitchParams{
 		State:          state,
@@ -324,7 +324,7 @@ func TestModeSwitch_非法指令(t *testing.T) {
 		Msg:            msg,
 	})
 
-	assert.Equal(t, before, state.Mode, "非法入参不应改状态")
+	assert.Equal(t, before, state.Mode(), "非法入参不应改状态")
 	select {
 	case notice := <-notices:
 		assert.Equal(t, "非法指令", notice.Payload["content"])
@@ -464,15 +464,15 @@ func TestSwitchMode_模式家族映射(t *testing.T) {
 				json.RawMessage(`{"content":"/switch `+tt.switchCmd+`"}`), schema.WithProvider("feishu"))
 
 			state := mh.GetOrCreateChannelState(msg)
-			state.Mode = tt.currentMode
+			state.SetMode(tt.currentMode)
 
 			handled := mh.handleChannelControl(context.Background(), msg)
 			assert.True(t, handled, "控制指令应被消费")
 
 			if tt.wantInvalid {
-				assert.Equal(t, tt.currentMode, state.Mode, "非法切换时模式不应变更")
+				assert.Equal(t, tt.currentMode, state.Mode(), "非法切换时模式不应变更")
 			} else {
-				assert.Equal(t, tt.wantMode, state.Mode, "模式应变更为目标模式")
+				assert.Equal(t, tt.wantMode, state.Mode(), "模式应变更为目标模式")
 			}
 		})
 	}
@@ -573,7 +573,7 @@ func branchReplies() map[string]fakeReply {
 func seedChannelSession(mh *MessageHandler, msg *schema.Message, sid string) {
 	mh.statesMu.Lock()
 	defer mh.statesMu.Unlock()
-	mh.channelStates[getChannelStateKey(msg.ChannelID, msg.SessionID)] = &ChannelControlState{SessionID: sid}
+	mh.channelStates[getChannelStateKey(msg.ChannelID, msg.SessionID)] = newChannelControlState(sid, "")
 }
 
 // TestBranchSlashNotice_取消先于通知 A1：Python await 取消后再发通知。
@@ -621,7 +621,7 @@ func TestBranchSlashNotice_成功回填字段(t *testing.T) {
 	content, _ := notice.Payload["content"].(string)
 	assert.Contains(t, content, "named")
 	state := mh.GetOrCreateChannelState(msg)
-	assert.NotEmpty(t, state.SessionID, "回落后应写入生成的 newSID")
+	assert.NotEmpty(t, state.SessionID(), "回落后应写入生成的 newSID")
 }
 
 // rewindReplies 构造 /rewind 的假响应。

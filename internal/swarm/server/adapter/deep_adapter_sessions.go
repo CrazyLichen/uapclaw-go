@@ -758,6 +758,18 @@ func (d *DeepAdapter) skipOwnInstanceBuild() bool {
 // Python: interface_deep.py ensure_instance（:12809-12845）
 //
 // child 一定已有 instance；根在需要句柄的非 chat RPC 上才建。
+//
+// # 当前调用方（10.3.28f 收口时点）
+//
+// 生产：`DeepAdapter.SwitchMode`（plan 状态机 → planStateStore.SwitchPlanMode
+// → 本方法）。分身后它在 **child** 上调，child 已有 instance，走步骤 1 快速返回，
+// 不会触发重建。
+//
+// 上游保留本方法的另外三类用途在 Go 侧尚无调用方，待相应能力落地后接入：
+// ① harness 打包（`subagent_harness` 之类需要 DeepAgent 句柄的入口）；
+// ② rail 热开关（ACL / evolution 等按需装卸 rail 的 RPC）；
+// ③ 会话 fork（fork 前需取父 agent 句柄）。
+// 这些路径落地时直接从本方法取句柄即可，无需再改接口（已在 AgentAdapter 上）。
 func (d *DeepAdapter) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
 	// 步骤 1: 已有则直接返回（持锁读，避免与 CreateInstance 的写并发）
 	// Python: :12823-12824 的快速路径

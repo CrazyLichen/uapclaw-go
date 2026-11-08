@@ -247,13 +247,21 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	}
 	// Python: handle_message：入队前记录用户查询上下文
 	mh.rememberUserQueryContext(msg)
+	// 日志字段在**入队之前**取快照。
+	//
+	// Python 侧是 `put_nowait(msg)` 后再打日志（message_handler.py:580-584），
+	// 单线程 asyncio 下无问题；Go 侧 forwardLoop 是另一个 goroutine，它接手后
+	// 会经 ApplyChannelState 改写 msg.SessionID，与这里的读取构成 DATA RACE
+	// （-race 实测）。入队前取值语义等价（日志本意是记录入队时刻的状态），
+	// 但消除了与下游写者的竞争。
+	msgID, channelID, sessionID := msg.ID, msg.ChannelID, msg.SessionID
 	select {
 	case mh.userMessages <- msg:
 		logger.Info(logComponent).
 			Str("event_type", "handle_inbound").
-			Str("msg_id", msg.ID).
-			Str("channel_id", msg.ChannelID).
-			Str("session_id", msg.SessionID).
+			Str("msg_id", msgID).
+			Str("channel_id", channelID).
+			Str("session_id", sessionID).
 			Msg("inbound message enqueued")
 	default:
 		logger.Warn(logComponent).

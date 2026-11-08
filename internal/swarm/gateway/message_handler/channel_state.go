@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -18,11 +19,25 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ChannelControlState 渠道控制状态
+//
+// # 并发保护
+//
+// Python 侧是 `@dataclass`（message_handler.py:281-284）、无锁——asyncio 单线程
+// 串行处理，不存在并发访问。Go 侧同一份状态会被多个 goroutine 访问：
+//   - forwardLoop goroutine：ApplyChannelState / handleChannelSwitchMode 写
+//   - serveLoop goroutine：HandleMessage 等读
+//   - 外部调用方（如 GetOrCreateChannelState 的持有者）读
+//
+// 故本结构自带 RWMutex，字段私有化，只经访问器读写。
+// 注意：statesMu 保护的是**map 本身**（增删条目），与这里的**条目内字段**
+// 是两把不同的锁，二者都不可省。
 type ChannelControlState struct {
-	// SessionID 当前会话标识
-	SessionID string
-	// Mode 当前渠道模式
-	Mode ChannelMode
+	// mu 保护 sessionID / mode
+	mu sync.RWMutex
+	// sessionID 当前会话标识
+	sessionID string
+	// mode 当前渠道模式
+	mode ChannelMode
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -176,13 +191,13 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 	// Python: 企业通道族走 SessionMap；其它受控通道按 state（elif）；都没有时记键并清空
 	if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(msg.ChannelID) {
 		if sid := mh.sessionMap.GetSessionID(p, c, b, u, false); sid != "" {
-			state.SessionID = sid
+			state.SetSessionID(sid)
 			msg.SessionID = sid
 		} else {
 			msg.SessionID = ""
 		}
-	} else if state.SessionID != "" {
-		msg.SessionID = state.SessionID
+	} else if state.SessionID() != "" {
+		msg.SessionID = state.SessionID()
 	} else {
 		// Python: _remember_alloc_state_key(msg, cid); msg.session_id = None
 		mh.rememberAllocStateKey(msg, msg.ChannelID)
@@ -192,9 +207,58 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 	// 5. 将 mode 写入 params（setdefault 语义）
 	params := decodeMessageParams(msg)
 	if _, exists := params["mode"]; !exists {
-		params["mode"] = string(state.Mode)
+		params["mode"] = string(state.Mode())
 	}
 	encodeMessageParams(msg, params)
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// newChannelControlState 构造渠道控制状态。
+//
+// 字段私有，故只经本构造器与访问器读写；内嵌锁零值即可用。
+func newChannelControlState(sessionID string, mode ChannelMode) *ChannelControlState {
+	return &ChannelControlState{sessionID: sessionID, mode: mode}
+}
+
+// SessionID 读取当前会话标识（并发安全）。
+func (s *ChannelControlState) SessionID() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sessionID
+}
+
+// SetSessionID 写入当前会话标识（并发安全）。
+func (s *ChannelControlState) SetSessionID(sid string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionID = sid
+}
+
+// Mode 读取当前渠道模式（并发安全）。
+func (s *ChannelControlState) Mode() ChannelMode {
+	if s == nil {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mode
+}
+
+// SetMode 写入当前渠道模式（并发安全）。
+func (s *ChannelControlState) SetMode(mode ChannelMode) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mode = mode
 }
 
 // GetOrCreateChannelState 获取或创建消息对应 channel 状态。
@@ -218,7 +282,7 @@ func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelC
 
 	// 企业通道身份齐备时，SessionMap 覆盖默认 session_id
 	if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(ch) {
-		state.SessionID = mh.sessionMap.GetSessionID(p, c, b, u, false)
+		state.SetSessionID(mh.sessionMap.GetSessionID(p, c, b, u, false))
 	}
 
 	mh.statesMu.Lock()
@@ -295,7 +359,7 @@ func (mh *MessageHandler) resolveExternalChannelSession(ctx context.Context, msg
 				rawMode = v
 			}
 		}
-		state := &ChannelControlState{Mode: channelModeFromStr(rawMode)}
+		state := newChannelControlState("", channelModeFromStr(rawMode))
 		sessionID, err := mh.allocateChannelSession(ctx, msg, state, false)
 		if err != nil {
 			mh.externalAliasMu.Unlock()
@@ -454,10 +518,7 @@ func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelContr
 		modeRaw = "agent"
 	}
 	mode := channelModeFromStr(strings.ToLower(strings.TrimSpace(modeRaw)))
-	return &ChannelControlState{
-		SessionID: sid,
-		Mode:      mode,
-	}
+	return newChannelControlState(sid, mode)
 }
 
 // allocateChannelSession 为渠道分配并持久化一个 AgentServer 侧真实会话。
@@ -465,7 +526,7 @@ func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelContr
 // 回包 session_id 写入 state 与企业通道 SessionMap。
 func (mh *MessageHandler) allocateChannelSession(ctx context.Context, msg *schema.Message, state *ChannelControlState, persistSession bool) (string, error) {
 	channelType := mh.resolveControlChannelType(msg)
-	mode := string(state.Mode)
+	mode := string(state.Mode())
 	params := decodeMessageParams(msg)
 	createParams := map[string]any{
 		"create_token": generateRandomHex(16),
@@ -506,7 +567,7 @@ func (mh *MessageHandler) allocateChannelSession(ctx context.Context, msg *schem
 	if sid == "" {
 		return "", fmt.Errorf("session.create returned empty session_id")
 	}
-	state.SessionID = sid
+	state.SetSessionID(sid)
 	if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(string(channelType)) {
 		if err := mh.sessionMap.SetSessionID(p, c, b, u, sid); err != nil {
 			return "", err
@@ -554,8 +615,8 @@ func (mh *MessageHandler) saveChannelStateToConfig(channelID string) {
 	}
 
 	mh.updateChannelInConfig(channelID, map[string]any{
-		"default_session_id": state.SessionID,
-		"default_mode":       string(state.Mode),
+		"default_session_id": state.SessionID(),
+		"default_mode":       string(state.Mode()),
 	})
 }
 

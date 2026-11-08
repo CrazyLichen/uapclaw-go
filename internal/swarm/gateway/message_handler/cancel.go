@@ -187,7 +187,7 @@ func (mh *MessageHandler) buildCancelMessage(msg *schema.Message, sessionID stri
 	// 如果 params 中没有 mode，从 channelStates 补充
 	if _, hasMode := params["mode"]; !hasMode {
 		state := mh.GetOrCreateChannelState(msg)
-		params["mode"] = string(state.Mode)
+		params["mode"] = string(state.Mode())
 	}
 
 	paramsJSON, _ := json.Marshal(params)
