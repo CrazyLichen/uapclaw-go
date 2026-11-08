@@ -232,7 +232,11 @@ func TestParseAllRelations_基本(t *testing.T) {
 	}
 }
 
-// TestParseAllRelations_去重 测试关系内容去重
+// TestParseAllRelations_去重 测试关系按 fact 去重，重复项直接丢弃。
+//
+// 对齐 Python parse_all_relations（parse_llm_response.py:98-106）：去重键是 fact
+// （dict2relation 实际读取的字段），且重复项 continue 丢弃而非置空。
+// 旧实现按 content 去重会导致空转——LLM 返回体里根本没有 content 字段。
 func TestParseAllRelations_去重(t *testing.T) {
 	entityTypes := []registry.EntityDef{
 		{Name: "Person"},
@@ -249,14 +253,13 @@ func TestParseAllRelations_去重(t *testing.T) {
 			"target_id": 2,
 			"name":      "knows",
 			"fact":      "Alice knows Bob very well",
-			"content":   "Alice knows Bob very well",
 		},
 		{
+			// fact 是第一条的子串 → 判为重复，丢弃
 			"source_id": 1,
 			"target_id": 2,
 			"name":      "knows2",
 			"fact":      "Alice knows Bob",
-			"content":   "Alice knows Bob",
 		},
 	}
 
@@ -268,9 +271,63 @@ func TestParseAllRelations_去重(t *testing.T) {
 
 	resultRels, _ := ParseAllRelations(relations, entityOrDecls2, entityTypes, 0, "test-user")
 
-	// 第二条内容是第一条的子串，应被标记为空 content，Dict2Relation 会用 name 作为 content
-	if len(resultRels) != 2 {
-		t.Fatalf("期望 2 个关系，得到 %d", len(resultRels))
+	// 重复关系被丢弃，只剩第一条
+	if len(resultRels) != 1 {
+		t.Fatalf("重复关系应被丢弃，期望 1 个关系，得到 %d", len(resultRels))
+	}
+	if resultRels[0].Content != "Alice knows Bob very well" {
+		t.Errorf("保留的应是完整 fact，实际 %q", resultRels[0].Content)
+	}
+}
+
+// TestParseAllRelations_按fact去重不空转 回归：LLM 只返回 fact 不返回 content 时，
+// 重复关系必须被识别并丢弃（旧实现读 content 恒为空串，去重完全空转）。
+func TestParseAllRelations_按fact去重不空转(t *testing.T) {
+	entityTypes := []registry.EntityDef{{Name: "Person"}}
+	entityDecls := []extraction.EntityDeclaration{
+		{Name: "Alice", EntityTypeID: 0},
+		{Name: "Bob", EntityTypeID: 0},
+	}
+
+	// 同一 fact 重复三次，无 content 字段
+	relations := []map[string]any{
+		{"source_id": 1, "target_id": 2, "name": "knows", "fact": "Alice 认识 Bob"},
+		{"source_id": 1, "target_id": 2, "name": "knows", "fact": "Alice 认识 Bob"},
+		{"source_id": 1, "target_id": 2, "name": "knows", "fact": "Alice 认识 Bob"},
+	}
+
+	decls := make([]EntityOrDeclaration, len(entityDecls))
+	for i := range entityDecls {
+		d := entityDecls[i]
+		decls[i] = EntityOrDeclaration{Decl: &d}
+	}
+
+	resultRels, _ := ParseAllRelations(relations, decls, entityTypes, 0, "u")
+	if len(resultRels) != 1 {
+		t.Fatalf("同一 fact 重复 3 次应只留 1 条，实际 %d 条（去重空转）", len(resultRels))
+	}
+}
+
+// TestParseAllRelations_空fact丢弃 fact 为空的关系无内容可存，直接丢弃。
+func TestParseAllRelations_空fact丢弃(t *testing.T) {
+	entityTypes := []registry.EntityDef{{Name: "Person"}}
+	entityDecls := []extraction.EntityDeclaration{
+		{Name: "Alice", EntityTypeID: 0},
+		{Name: "Bob", EntityTypeID: 0},
+	}
+	relations := []map[string]any{
+		{"source_id": 1, "target_id": 2, "name": "knows", "fact": ""},
+	}
+
+	decls := make([]EntityOrDeclaration, len(entityDecls))
+	for i := range entityDecls {
+		d := entityDecls[i]
+		decls[i] = EntityOrDeclaration{Decl: &d}
+	}
+
+	resultRels, _ := ParseAllRelations(relations, decls, entityTypes, 0, "u")
+	if len(resultRels) != 0 {
+		t.Errorf("空 fact 关系应被丢弃，实际保留 %d 条", len(resultRels))
 	}
 }
 

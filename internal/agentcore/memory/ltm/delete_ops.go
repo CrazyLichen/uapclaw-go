@@ -77,6 +77,13 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 	if err != nil {
 		return err
 	}
+	// 无映射即该 scope 下没有任何用户数据，删无可删，直接成功返回。
+	// 对齐 Python delete_mem_by_scope 的空映射分支（long_term_memory.py:526-532）。
+	if len(scopeUserData) == 0 {
+		logger.Debug(logComponent).Str("event_type", "MEMORY_DELETE").
+			Str("scope_id", scopeID).Msg("No scope user mapping found.")
+		return nil
+	}
 	userIDs := make([]string, 0, len(scopeUserData))
 	for _, data := range scopeUserData {
 		if uid, ok := data["user_id"]; ok {

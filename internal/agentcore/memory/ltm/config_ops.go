@@ -37,10 +37,12 @@ import (
 // 5. 设置初始 LLM（如果配置中有默认模型）
 // Python: LongTermMemory.set_config(config)
 func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
-	if m.kvStore == nil || m.dbStore == nil {
+	// db_store 可选：缺失时 scope 映射改走 kv 后端，其余记忆能力本来就不依赖 db。
+	// 对齐 Python LongTermMemory.set_config 只校验 kv_store（long_term_memory.py:284）。
+	if m.kvStore == nil {
 		return exception.BuildError(exception.StatusMemorySetConfigExecutionError,
 			exception.WithParam("config_type", "system"),
-			exception.WithMsg("kv store and db store must be registered before setting config"),
+			exception.WithMsg("kv store must be registered before setting config"),
 		)
 	}
 	if m.memoryIndex == nil {
@@ -68,12 +70,29 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 	// 初始化 DataIdManager
 	dataIdGenerator := mem_model.NewDataIdManager()
 
-	// 初始化 ScopeUserMappingManager
-	// M-02: 缓存 sqlDbStore，对齐 Python self._sql_db_store 复用
-	if m.sqlDbStore == nil {
-		m.sqlDbStore = mem_model.NewSqlDbStore(m.dbStore)
+	// 初始化 ScopeUserMappingManager：有 db_store 走 SQL 表，否则退到 KV 后端。
+	// 两条路径语义一致（add / get_by_scope_id / delete_by_scope_id），只是存储介质不同。
+	// M-02: 缓存 sqlDbStore，对齐 Python self._sql_db_store 复用。
+	// 对齐 Python set_config 的 if/else 双分支（long_term_memory.py:305-312）。
+	if m.dbStore != nil {
+		if m.sqlDbStore == nil {
+			m.sqlDbStore = mem_model.NewSqlDbStore(m.dbStore)
+		}
+		m.scopeUserMappingManager = mem_model.NewScopeUserMappingManager(m.sqlDbStore)
+	} else {
+		kvMgr, kvErr := mem_model.NewKvScopeUserMappingManager(m.kvStore)
+		if kvErr != nil {
+			return exception.BuildError(exception.StatusMemorySetConfigExecutionError,
+				exception.WithParam("config_type", "system"),
+				exception.WithMsg(fmt.Sprintf("创建 KvScopeUserMappingManager 失败: %v", kvErr)),
+				exception.WithCause(kvErr),
+			)
+		}
+		m.scopeUserMappingManager = kvMgr
+		logger.Warn(logComponent).
+			Str("event_type", "MEMORY_INIT").
+			Msg("scope_user_mapping will use kv_store backend (db_store not provided)")
 	}
-	m.scopeUserMappingManager = mem_model.NewScopeUserMappingManager(m.sqlDbStore)
 
 	// 初始化 MessageManager
 	if m.messageStore != nil {
@@ -85,6 +104,14 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 			}
 		}
 		m.messageManager = mem_model.NewMessageManager(m.messageStore)
+	} else {
+		// 无 message_store 时消息不落盘：历史上下文与消息溯源不可用，记忆退化为无状态单轮。
+		// 显式告警，避免排查时误以为消息存过。
+		// 对齐 Python set_config 的同名告警（long_term_memory.py:354-359）。
+		logger.Warn(logComponent).
+			Str("event_type", "MEMORY_INIT").
+			Msg("message persistence not enabled: historical context and source tracing are unavailable; " +
+				"memory will operate in stateless single-turn mode")
 	}
 
 	// 初始化 FragmentMemoryManager

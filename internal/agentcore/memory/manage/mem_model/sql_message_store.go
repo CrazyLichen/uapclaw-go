@@ -39,6 +39,14 @@ type SqlMessageStore struct {
 const (
 	// DefaultTableName 默认消息表名
 	DefaultTableName = "user_message"
+	// MessageTimestampLayout 消息时间戳落盘格式（UTC，不带时区偏移）。
+	//
+	// 为什么不用 RFC3339：消息按 timestamp 做**字符串**排序（ORDER BY timestamp），
+	// 一旦同一列里混入 "…T10:00:00Z" 与 "…T18:00:00+08:00" 两种形态，字典序就不
+	// 等于时序（后者截取前 19 字符是 "…T18:00:00"，比前者大，但时刻更早），历史消息
+	// 顺序会错乱。统一成不带偏移的固定宽度格式后，字典序即时序。
+	// 对齐 Python 的 timestamp.strftime('%Y-%m-%d %H:%M:%S')（long_term_memory.py:605）。
+	MessageTimestampLayout = "2006-01-02 15:04:05"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -89,6 +97,9 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 	if timestamp.IsZero() {
 		timestamp = time.Now()
 	}
+	// 统一归一到 UTC 再落盘：消息表按 timestamp 字符串排序，混用不同时区偏移会让
+	// 字典序不等于时序（见 MessageTimestampLayout 注释）。
+	timestamp = timestamp.UTC()
 
 	// 序列化并生成消息 ID
 	contentStr, err := marshalContent(message.GetContent())
@@ -108,7 +119,7 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 		"scope_id":   messageAdd.ScopeID,
 		"role":       message.GetRole().String(),
 		"content":    encrypted,
-		"timestamp":  timestamp.Format(time.RFC3339),
+		"timestamp":  timestamp.Format(MessageTimestampLayout),
 	}
 
 	if err := s.sqlDbStore.Write(ctx, s.tableName, data); err != nil {
@@ -134,6 +145,8 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 		if timestamp.IsZero() {
 			timestamp = time.Now()
 		}
+		// 同 AddMessage：归一到 UTC 再落盘
+		timestamp = timestamp.UTC()
 
 		// 序列化并生成消息 ID
 		contentStr, err := marshalContent(message.GetContent())
@@ -152,7 +165,7 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 			"scope_id":   messageAdd.ScopeID,
 			"role":       message.GetRole().String(),
 			"content":    encrypted,
-			"timestamp":  timestamp.Format(time.RFC3339),
+			"timestamp":  timestamp.Format(MessageTimestampLayout),
 		}
 
 		rows = append(rows, data)
@@ -440,7 +453,13 @@ func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (schema.BaseMe
 	if err != nil {
 		return nil, nil, err
 	}
-	timestamp, parseErr := time.Parse(time.RFC3339, timestampStr)
+	// 优先按新格式（UTC、不带偏移）解析；失败则回退 RFC3339，兼容升级前的历史行。
+	// 历史行仍带偏移，只在读侧容忍，不做数据迁移（历史 message_id 由旧格式算出，
+	// 无法回溯改写）——见设计文档偏差 D-1。
+	timestamp, parseErr := time.Parse(MessageTimestampLayout, timestampStr)
+	if parseErr != nil {
+		timestamp, parseErr = time.Parse(time.RFC3339, timestampStr)
+	}
 	if parseErr != nil {
 		logger.Warn(logComponent).Err(parseErr).
 			Str("timestamp_str", timestampStr).

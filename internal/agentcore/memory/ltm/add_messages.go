@@ -121,13 +121,21 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			}
 		}
 
-		// 步骤 9：timestamp 为 nil 时 time.Now()
+		// 步骤 9：timestamp 为 nil 时取当前时间，并统一归一到 UTC
+		//
+		// 归一化是必须的：消息表按 timestamp 做字符串排序，同一列里若混着 "Z" 与
+		// "+08:00" 两种偏移，字典序就不等于时序（"…T10:00:00Z" 排在 "…T18:00:00+08:00"
+		// 之前，但后者才是更早的时刻），导致历史消息顺序错乱。
+		// 对齐 Python LongTermMemory.add_messages（long_term_memory.py:563-567）。
 		timestamp := p.Timestamp
 		if timestamp == nil {
-			now := time.Now()
+			now := time.Now().UTC()
 			timestamp = &now
+		} else {
+			utc := timestamp.UTC()
+			timestamp = &utc
 		}
-		timestampStr := timestamp.Format("2006-01-02 15:04:05")
+		timestampStr := timestamp.Format(mem_model.MessageTimestampLayout)
 
 		// 步骤 10：遍历 messages 调 messageManager.Add()
 		msgID := "-1"

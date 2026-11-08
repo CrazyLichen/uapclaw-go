@@ -124,7 +124,7 @@ func TestSqlDbStore_CountWithTimeRange(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// 写入一条记录
+	// 写入一条记录（timestamp 用与生产一致的新格式：UTC + MessageTimestampLayout）
 	err := store.Write(ctx, "user_message", map[string]any{
 		"message_id": "msg1",
 		"user_id":    "user1",
@@ -132,7 +132,7 @@ func TestSqlDbStore_CountWithTimeRange(t *testing.T) {
 		"content":    "hello",
 		"session_id": "sess1",
 		"role":       "user",
-		"timestamp":  time.Now().Format(time.RFC3339),
+		"timestamp":  time.Now().UTC().Format(MessageTimestampLayout),
 	})
 	assert.NoError(t, err)
 

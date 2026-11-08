@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	memconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
 )
 
@@ -47,14 +48,32 @@ func (s *LongTermMemoryE2ESuite) TestLTM_单例() {
 	s.Equal(m1, m2, "GetLongTermMemory 应返回同一实例")
 }
 
-// TestLTM_RegisterStore_KVOnly 测试仅注册 KV 存储需要 dbStore
+// TestLTM_RegisterStore_KVOnly 仅注册 KV 时的错误不应再提"缺 db store"（db 已可选）。
+//
+// E-07：db_store 不再是必需项——缺失时 scope 映射退到 kv 后端。此时若仍失败，
+// 原因必须是别的独立前置项（memory_index），而不是 db。
 func (s *LongTermMemoryE2ESuite) TestLTM_RegisterStore_KVOnly() {
 	m := ltm.NewLongTermMemory()
 	kvStore := kv.NewInMemoryKVStore()
 
 	err := m.RegisterStore(s.ctx, kvStore)
-	s.Error(err, "仅注册 KV 应报错：需要 dbStore")
-	s.Contains(err.Error(), "db store", "错误信息应提及 db store")
+	if err != nil {
+		s.NotContains(err.Error(), "db store", "db_store 已是可选项，错误不应再提及它")
+		s.Contains(err.Error(), "memory_index", "错误应指明真正的缺失项 memory_index")
+	}
+}
+
+// TestLTM_SetConfig_不再因缺db报错 db_store 缺失时，SetConfig 的拒绝理由应该是
+// "缺 memory_index"（独立必需项），而不再是"缺 db store"（E-07 已解除）。
+func (s *LongTermMemoryE2ESuite) TestLTM_SetConfig_不再因缺db报错() {
+	m := ltm.NewLongTermMemory()
+	kvStore := kv.NewInMemoryKVStore()
+	_ = m.RegisterStore(s.ctx, kvStore)
+
+	err := m.SetConfig(memconfig.DefaultMemoryEngineConfig())
+	s.Require().Error(err, "缺 memory_index 时仍应报错（它是独立必需项）")
+	s.NotContains(err.Error(), "db store", "错误不应再提及缺 db store")
+	s.Contains(err.Error(), "memory_index", "错误应指明缺 memory_index")
 }
 
 // TestLTM_RegisterStore_nilKV 测试 nil KV 报错

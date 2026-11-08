@@ -105,10 +105,33 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 
 	for memType, docs := range byType {
 		col := getCollectionName(userID, scopeID, memType)
-		texts := make([]string, len(docs))
-		for i, d := range docs {
-			texts[i] = d.Text
+		// 空文本兜底过滤：EmbedDocuments 对任何空串都会整批报错，一条空文档就会让
+		// 同批所有正常文档都写不进去。上层（如 SummaryManager）应已过滤，这里再挡一次。
+		// 记 Warn 保留线索——上层漏过滤是需要修的 bug，不能静默吞掉。
+		texts := make([]string, 0, len(docs))
+		keptDocs := make([]*MemoryDoc, 0, len(docs))
+		for _, d := range docs {
+			if strings.TrimSpace(d.Text) == "" {
+				logger.Warn(logComponent).
+					Str("event_type", "memory_store").
+					Str("scope_id", scopeID).
+					Str("collection", col).
+					Str("doc_id", d.ID).
+					Msg("skipping document with empty text to avoid failing the whole embedding batch")
+				continue
+			}
+			texts = append(texts, d.Text)
+			keptDocs = append(keptDocs, d)
 		}
+		if len(keptDocs) == 0 {
+			logger.Warn(logComponent).
+				Str("event_type", "memory_store").
+				Str("scope_id", scopeID).
+				Str("collection", col).
+				Msg("all documents in this batch have empty text, skipping collection")
+			continue
+		}
+		docs = keptDocs
 
 		// 嵌入模型检查
 		if s.embeddingModel == nil {

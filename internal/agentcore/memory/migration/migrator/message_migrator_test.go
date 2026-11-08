@@ -262,3 +262,126 @@ func TestMessageMigrator_TryMigrate_部分操作待执行(t *testing.T) {
 		t.Error("schema_version=3 的操作应执行")
 	}
 }
+
+// truncatingStore 每次 GetMessages 最多返回固定条数的存储，用于构造"备份取不全"。
+//
+// 真实 store 不存在这种截断，但备份不足是必须防的失败模式：一旦以不完整的备份
+// 走恢复流程，那些没被备份的记录会被 DeleteMessages 永久删掉。
+type truncatingStore struct {
+	*fakeMessageStore
+	// maxPerGet 单次 GetMessages 最多返回条数
+	maxPerGet int
+}
+
+// GetMessages 忽略 limit 与分页参数，恒定只返回前 maxPerGet 条。
+func (s *truncatingStore) GetMessages(_ context.Context, _ *db.MessageFilter, _ int, _, _ string) ([]*db.MessageAndMeta, error) {
+	if s.maxPerGet < len(s.messages) {
+		return s.messages[:s.maxPerGet], nil
+	}
+	return s.messages, nil
+}
+
+// TestCreateBackup_返回备份总数 备份必须同时返回"库中应有条数"，作为恢复阶段的判据。
+func TestCreateBackup_返回备份总数(t *testing.T) {
+	store := newFakeMessageStore()
+	for i := 0; i < 3; i++ {
+		_, _ = store.AddMessage(context.Background(), &db.MessageAdd{
+			Message: schema.NewUserMessage(fmt.Sprintf("msg-%d", i)),
+			UserID:  "u1", ScopeID: "s1",
+		})
+	}
+
+	m := NewMessageMigrator(store)
+	records, expected, err := m.createBackup(context.Background())
+	if err != nil {
+		t.Fatalf("createBackup 失败: %v", err)
+	}
+	if len(records) != 3 {
+		t.Errorf("备份条数 = %d, want 3", len(records))
+	}
+	if expected != 3 {
+		t.Errorf("expected = %d, want 3", expected)
+	}
+}
+
+// TestRestoreFromBackup_备份不足时拒绝删除 这是 E-08 的核心：备份不完整时宁可恢复
+// 失败，也不能删掉备份里没有的记录。
+func TestRestoreFromBackup_备份不足时拒绝删除(t *testing.T) {
+	store := newFakeMessageStore()
+	for i := 0; i < 5; i++ {
+		_, _ = store.AddMessage(context.Background(), &db.MessageAdd{
+			Message: schema.NewUserMessage(fmt.Sprintf("msg-%d", i)),
+			UserID:  "u1", ScopeID: "s1",
+		})
+	}
+
+	m := NewMessageMigrator(store)
+	// 备份只有 2 条，但库里有 5 条
+	partial := []messageBackupRecord{
+		{MessageContent: "msg-0", MessageRole: "user", UserID: "u1", ScopeID: "s1"},
+		{MessageContent: "msg-1", MessageRole: "user", UserID: "u1", ScopeID: "s1"},
+	}
+
+	err := m.restoreFromBackup(context.Background(), partial, 5, nil)
+	if err == nil {
+		t.Fatal("备份不足时应返回错误并跳过恢复")
+	}
+	// 关键断言：一条都不能删
+	if len(store.messages) != 5 {
+		t.Errorf("备份不足时不得删除消息，剩余 %d 条，want 5", len(store.messages))
+	}
+}
+
+// TestRestoreFromBackup_备份完整时正常恢复 条数一致时按备份重建。
+func TestRestoreFromBackup_备份完整时正常恢复(t *testing.T) {
+	store := newFakeMessageStore()
+	for i := 0; i < 2; i++ {
+		_, _ = store.AddMessage(context.Background(), &db.MessageAdd{
+			Message: schema.NewUserMessage(fmt.Sprintf("old-%d", i)),
+			UserID:  "u1", ScopeID: "s1",
+		})
+	}
+
+	m := NewMessageMigrator(store)
+	full := []messageBackupRecord{
+		{MessageContent: "new-0", MessageRole: "user", UserID: "u1", ScopeID: "s1"},
+		{MessageContent: "new-1", MessageRole: "user", UserID: "u1", ScopeID: "s1"},
+	}
+
+	if err := m.restoreFromBackup(context.Background(), full, 2, nil); err != nil {
+		t.Fatalf("完整备份应能正常恢复: %v", err)
+	}
+	if len(store.messages) != 2 {
+		t.Errorf("恢复后条数 = %d, want 2", len(store.messages))
+	}
+}
+
+// TestTryMigrate_备份被截断时不丢数据 端到端回归：store 只能取回部分消息时，
+// 迁移失败后的恢复流程必须整体放弃删除，原有记录一条不少。
+func TestTryMigrate_备份被截断时不丢数据(t *testing.T) {
+	base := newFakeMessageStore()
+	for i := 0; i < 5; i++ {
+		_, _ = base.AddMessage(context.Background(), &db.MessageAdd{
+			Message: schema.NewUserMessage(fmt.Sprintf("msg-%d", i)),
+			UserID:  "u1", ScopeID: "s1",
+		})
+	}
+	// 只取回 2 条，模拟备份不完整
+	store := &truncatingStore{fakeMessageStore: base, maxPerGet: 2}
+
+	m := NewMessageMigrator(store)
+	ops := []operation.Operation{
+		&operation.UpdateMessageOperation{
+			BaseOperation: operation.BaseOperation{Metadata: operation.OperationMetadata{SchemaVersion: 1}},
+			UpdateFunc: func(ctx context.Context, messageStore db.BaseMessageStore) error {
+				return fmt.Errorf("迁移故意失败以触发恢复")
+			},
+		},
+	}
+
+	_ = m.TryMigrate(context.Background(), MessageEntityKey, ops)
+
+	if len(base.messages) != 5 {
+		t.Errorf("备份不完整时不得删除消息，剩余 %d 条，want 5", len(base.messages))
+	}
+}

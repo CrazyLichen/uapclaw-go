@@ -118,7 +118,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("found pending operations")
 
 	// 迁移前先备份，失败时按备份回滚
-	backupData, err := m.createBackup(ctx)
+	backupData, backupExpected, err := m.createBackup(ctx)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("failed to create message backup")
 		return err
@@ -135,7 +135,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 			logger.Error(logComponent).Err(err).Str("op_type", op.TypeName()).
 				Int("schema_version", op.SchemaVersion()).Msg("operation execution failed")
 
-			if restoreErr := m.restoreFromBackup(ctx, backupData, currentVersionPtr); restoreErr != nil {
+			if restoreErr := m.restoreFromBackup(ctx, backupData, backupExpected, currentVersionPtr); restoreErr != nil {
 				logger.Error(logComponent).Err(restoreErr).Msg("failed to restore from backup")
 			}
 			return err
@@ -177,68 +177,66 @@ func (m *MessageMigrator) executeOperation(ctx context.Context, op operation.Ope
 // createBackup 创建消息备份。
 // S-03: 实现基于游标的分页循环，对齐 Python 遍历所有消息而非只取前 backupPageSize 条。
 // GetMessages 接口不支持 offset 参数，使用 StartTime 游标分页：每页取完后用最后一条消息的
-// timestamp 作为下一页的 StartTime，避免重复取同一页数据。
-// Python: MessageMigrator._create_backup
-func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupRecord, error) {
-	var backupData []messageBackupRecord
-
-	// S-03: 基于游标的分页循环，直到所有消息已备份
-	var cursorTime time.Time
-	for {
-		// 构建 filter：使用游标时间作为 StartTime，避免重复
-		var filter *db.MessageFilter
-		if !cursorTime.IsZero() {
-			filter = &db.MessageFilter{StartTime: &cursorTime}
-		}
-		messages, err := m.messageStore.GetMessages(ctx, filter, backupPageSize, "timestamp", "asc")
-		if err != nil {
-			return nil, err
-		}
-
-		// 跳过游标重复：第一页之后，首条消息 timestamp 可能等于 cursorTime（已备份过）
-		skipIdx := 0
-		if !cursorTime.IsZero() && len(messages) > 0 {
-			for skipIdx < len(messages) && messages[skipIdx].Metadata != nil &&
-				!messages[skipIdx].Metadata.Timestamp.After(cursorTime) {
-				skipIdx++
-			}
-		}
-
-		for _, msg := range messages[skipIdx:] {
-			record := messageBackupRecord{
-				MessageContent: msg.Message.GetContent().String(),
-				MessageRole:    msg.Message.GetRole().String(),
-			}
-			if msg.Metadata != nil {
-				record.UserID = msg.Metadata.UserID
-				record.ScopeID = msg.Metadata.ScopeID
-				record.SessionID = msg.Metadata.SessionID
-				record.Timestamp = msg.Metadata.Timestamp.Format("2006-01-02T15:04:05Z07:00")
-			}
-			backupData = append(backupData, record)
-		}
-
-		// 如果返回数量不足一页，说明已读完
-		if len(messages) < backupPageSize {
-			break
-		}
-
-		// 更新游标为当前页最后一条消息的 timestamp
-		if lastMsg := messages[len(messages)-1]; lastMsg.Metadata != nil {
-			cursorTime = lastMsg.Metadata.Timestamp
-		} else {
-			// 无 metadata 无法继续分页，终止循环
-			break
-		}
+// createBackup 创建消息备份，返回备份记录与备份时库中的消息总数。
+//
+// 第二个返回值 expected 是"备份是否完整"的判据：恢复阶段据此决定能否删除现有数据。
+// 取法是先 CountMessages 拿真实条数，再以 max(expected, backupPageSize) 一次取全——
+// GetMessages 没有 offset，固定分页必然漏掉最新消息，而漏掉的记录一旦在恢复前被删
+// 就再也补不回来。
+//
+// 对齐 Python MessageMigrator._create_backup（message_migrator.py:134-163）。
+func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupRecord, int, error) {
+	expected, err := m.messageStore.CountMessages(ctx, nil)
+	if err != nil {
+		return nil, 0, err
 	}
 
-	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("message backup created")
-	return backupData, nil
+	limit := int(expected)
+	if limit < backupPageSize {
+		limit = backupPageSize
+	}
+
+	messages, err := m.messageStore.GetMessages(ctx, nil, limit, "timestamp", "asc")
+	if err != nil {
+		return nil, 0, err
+	}
+
+	backupData := make([]messageBackupRecord, 0, len(messages))
+	for _, msg := range messages {
+		record := messageBackupRecord{
+			MessageContent: msg.Message.GetContent().String(),
+			MessageRole:    msg.Message.GetRole().String(),
+		}
+		if msg.Metadata != nil {
+			record.UserID = msg.Metadata.UserID
+			record.ScopeID = msg.Metadata.ScopeID
+			record.SessionID = msg.Metadata.SessionID
+			record.Timestamp = msg.Metadata.Timestamp.Format("2006-01-02T15:04:05Z07:00")
+		}
+		backupData = append(backupData, record)
+	}
+
+	logger.Info(logComponent).
+		Int("record_count", len(backupData)).
+		Int64("expected", expected).
+		Msg("message backup created")
+	return backupData, int(expected), nil
 }
 
 // restoreFromBackup 从备份恢复消息。
-// Python: MessageMigrator._restore_from_backup
-func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []messageBackupRecord, preMigrationVersion *int) error {
+//
+// backupExpected 是备份时库中的消息总数。备份条数少于它时**拒绝删除**——宁可让恢复
+// 失败，也不能删掉备份里没有、删了就补不回来的记录。
+// 对齐 Python MessageMigrator._restore_from_backup（message_migrator.py:165-225）。
+func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []messageBackupRecord, backupExpected int, preMigrationVersion *int) error {
+	if len(backupData) < backupExpected {
+		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
+			exception.WithParam("error_msg", fmt.Sprintf(
+				"backup holds %d of %d messages; skipping restore so messages missing from the backup are not deleted",
+				len(backupData), backupExpected)),
+		)
+	}
+
 	// 删除所有消息
 	if _, err := m.messageStore.DeleteMessages(ctx, nil); err != nil {
 		logger.Error(logComponent).Err(err).Msg("failed to delete messages")
@@ -279,7 +277,19 @@ func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []me
 		}
 	}
 
-	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("messages restored from backup")
+	// 恢复后复核条数：不等说明写入过程中有丢失，必须留下明确线索。
+	// 对齐 Python _restore_from_backup 的 count_messages 复核（message_migrator.py:216-225）。
+	restored, countErr := m.messageStore.CountMessages(ctx, nil)
+	if countErr != nil {
+		logger.Error(logComponent).Err(countErr).Msg("failed to verify restored message count")
+	} else if int(restored) != len(backupData) {
+		logger.Error(logComponent).
+			Int64("restored", restored).
+			Int("backup_count", len(backupData)).
+			Msg("restored message count does not match backup")
+	} else {
+		logger.Info(logComponent).Int("record_count", len(backupData)).Msg("messages restored from backup")
+	}
 
 	// 重置 schema 版本（M-05: 对齐 Python，版本重置失败只记录日志，不影响恢复流程）
 	if preMigrationVersion != nil {

@@ -210,7 +210,7 @@ func Dict2Relation(response map[string]any, entities []*graph.Entity, createdAt 
 
 // ParseAllRelations 解析全部关系 + 去重 + 实体声明转换
 //
-// 先将 EntityDeclaration 转为 Entity，再对关系内容去重（短内容被长内容覆盖），
+// 先将 EntityDeclaration 转为 Entity，再按 fact 对关系去重（空 fact 与重复 fact 丢弃），
 // 最后解析为 Relation 对象并去重实体。
 // Python: parse_all_relations(relations, entities, entity_types, **kwargs)
 // ParseAllRelations 解析所有关系抽取结果。
@@ -230,24 +230,36 @@ func ParseAllRelations(relations []map[string]any, entityList []EntityOrDeclarat
 		}
 	}
 
-	// 去重关系内容（LLM 可能重复输出）
-	existingContents := make(map[string]struct{})
+	// 关系去重（按 fact 字段——Dict2Relation 真正读取的字段）。
+	//
+	// 必须按 fact 而不是 content：LLM 返回的关系体里只有 fact（source_id/target_id/
+	// fact/name/valid_since…），没有 content 字段。按 content 去重会让每条都取到空串，
+	// 空串"包含于"任何字符串 → 从第二条起全被判为重复，但 Dict2Relation 又不读 content，
+	// 于是去重完全空转、重复关系全部入库。
+	//
+	// fact 为空或与已见 fact 重复时直接丢弃（不再置空 content 留壳）。
+	// 对齐 Python parse_all_relations（parse_llm_response.py:98-106）。
+	seenFacts := make(map[string]struct{}, len(relations))
+	dedupedRelations := make([]map[string]any, 0, len(relations))
 	for _, relation := range relations {
-		newContent := strings.TrimSpace(anyToStr(relation["content"]))
+		newFact := strings.TrimSpace(anyToStr(relation["fact"]))
+		if newFact == "" {
+			continue
+		}
 		duplicate := false
-		for oldContent := range existingContents {
-			if strings.Contains(oldContent, newContent) {
+		for seenFact := range seenFacts {
+			if strings.Contains(seenFact, newFact) {
 				duplicate = true
 				break
 			}
 		}
 		if duplicate {
-			relation["content"] = ""
-		} else {
-			relation["content"] = newContent
+			continue
 		}
-		existingContents[newContent] = struct{}{}
+		seenFacts[newFact] = struct{}{}
+		dedupedRelations = append(dedupedRelations, relation)
 	}
+	relations = dedupedRelations
 
 	// 解析关系抽取结果
 	var result []*graph.Relation

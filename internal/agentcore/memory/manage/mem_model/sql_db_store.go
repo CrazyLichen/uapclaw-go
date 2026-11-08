@@ -302,12 +302,14 @@ func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, condi
 	query := s.db.Table(table)
 	// 等值过滤（支持 nil 值表示 IS NULL）
 	query = applyConditions(query, conditions)
-	// 时间范围过滤
+	// 时间范围过滤。边界值必须与写入侧同格式同归一（UTC + MessageTimestampLayout），
+	// 否则字符串比较会错位——写入是 "2026-11-07 10:00:00"，用 "2026-11-07T10:00:00Z"
+	// 比较永远不成立。
 	if startTime != nil {
-		query = query.Where("timestamp >= ?", startTime.Format(time.RFC3339))
+		query = query.Where("timestamp >= ?", startTime.UTC().Format(MessageTimestampLayout))
 	}
 	if endTime != nil {
-		query = query.Where("timestamp <= ?", endTime.Format(time.RFC3339))
+		query = query.Where("timestamp <= ?", endTime.UTC().Format(MessageTimestampLayout))
 	}
 
 	var count int64
@@ -346,12 +348,14 @@ func (s *SqlDbStore) GetWithSortAndTimeRange(ctx context.Context, table string, 
 	query := s.db.Table(table)
 	// 等值过滤（支持 nil 值表示 IS NULL）
 	query = applyConditions(query, filters)
-	// 时间范围过滤
+	// 时间范围过滤。边界值必须与写入侧同格式同归一（UTC + MessageTimestampLayout），
+	// 否则字符串比较会错位——写入是 "2026-11-07 10:00:00"，用 "2026-11-07T10:00:00Z"
+	// 比较永远不成立。
 	if startTime != nil {
-		query = query.Where("timestamp >= ?", startTime.Format(time.RFC3339))
+		query = query.Where("timestamp >= ?", startTime.UTC().Format(MessageTimestampLayout))
 	}
 	if endTime != nil {
-		query = query.Where("timestamp <= ?", endTime.Format(time.RFC3339))
+		query = query.Where("timestamp <= ?", endTime.UTC().Format(MessageTimestampLayout))
 	}
 	// 排序
 	if sortBy != "" {

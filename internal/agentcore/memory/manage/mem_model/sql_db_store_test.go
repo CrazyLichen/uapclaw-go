@@ -322,7 +322,8 @@ func TestSqlDbStore_GetWithSortAndTimeRange(t *testing.T) {
 			"scope_id":   "scope1",
 			"content":    fmt.Sprintf("content_%d", i),
 			"role":       "user",
-			"timestamp":  fmt.Sprintf("2024-01-0%dT00:00:00Z", i),
+			// 与生产写入同格式：UTC + MessageTimestampLayout（不带偏移，字典序即时序）
+			"timestamp": fmt.Sprintf("2024-01-0%d 00:00:00", i),
 		}
 		if err := store.Write(context.Background(), "user_message", data); err != nil {
 			t.Fatalf("Write 失败: %v", err)

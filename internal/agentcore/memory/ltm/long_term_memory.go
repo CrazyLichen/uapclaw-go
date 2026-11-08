@@ -48,7 +48,7 @@ type LongTermMemory struct {
 	// storageCodec AES 编解码器
 	storageCodec *codec.AesStorageCodec
 	// managers 各子管理器
-	scopeUserMappingManager *mem_model.ScopeUserMappingManager
+	scopeUserMappingManager mem_model.ScopeUserMappingStore
 	messageManager          *mem_model.MessageManager
 	fragmentMemoryManager   *index.FragmentMemoryManager
 	variableManager         *index.VariableManager

@@ -3,6 +3,7 @@ package index
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
@@ -77,6 +78,19 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 					Str("user_id", userID).
 					Str("scope_id", scopeID).
 					Msg("mem_unit is not a SummaryUnit, skipping")
+				continue
+			}
+			// 空摘要必须跳过：索引层按批调用 EmbedDocuments，只要有一条空文本，
+			// 整批（含正常摘要）都会因 embedding 输入校验失败而写不进去。
+			// 对齐 Python SummaryManager.add_memories（summary_manager.py:48）。
+			if strings.TrimSpace(summary.Summary) == "" {
+				logger.Warn(logComponent).
+					Str("event_type", "MEMORY_STORE").
+					Str("memory_type", m.memType).
+					Str("user_id", userID).
+					Str("scope_id", scopeID).
+					Str("mem_id", summary.MemID).
+					Msg("summary content is empty, skipping to avoid poisoning the whole embedding batch")
 				continue
 			}
 			summaryUnits = append(summaryUnits, summary)
