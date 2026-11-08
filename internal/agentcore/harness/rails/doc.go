@@ -19,6 +19,7 @@
 //	rails/              # Rail 实现
 //	├── doc.go              # 包文档
 //	├── base.go             # DeepAgentRail 基类 + DeepAgentRailProvider 接口
+//	├── registry.go         # rail provider 注册表（type 名 → 工厂，RWMutex 保护）
 //	├── sys_operation.go    # SysOperationRail 系统操作工具注册（Init/Uninit + 幂等注册）
 //	├── progressive.go      # ProgressiveToolRail 延迟工具目录（exposure 策略 + BM25 检索 + tool_search/tool_call + 目录附件）
 //	├── task_completion.go  # TaskCompletionRail 任务完成检测
