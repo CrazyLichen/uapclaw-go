@@ -18,8 +18,6 @@ import (
 // Python: openjiuwen/core/memory/migration/migrator/index_version_migrator.py (IndexVersionMigrator)
 type IndexVersionMigrator struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -27,8 +25,6 @@ const (
 	// Python: batch_size = 100
 	indexBatchSize = 100
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

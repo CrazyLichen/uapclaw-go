@@ -121,8 +121,6 @@ type WorkflowState interface {
 // Transformer 状态转换函数，接受只读状态视图返回任意值
 type Transformer func(readable ReadableStateLike) any
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// DefaultNodeID 默认节点 ID

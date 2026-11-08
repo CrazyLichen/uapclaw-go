@@ -21,7 +21,6 @@ type RBRecallMemoryOp struct {
 	topK int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRBRecallMemoryOp 创建 ReasoningBank 记忆检索操作。

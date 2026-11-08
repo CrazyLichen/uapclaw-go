@@ -11,8 +11,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleAgentServerPush 处理 AgentServer 主动推送的消息。

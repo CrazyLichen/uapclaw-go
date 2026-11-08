@@ -72,8 +72,6 @@ type BeamSearch struct {
 // BeamSearchOption BeamSearch 函数选项。
 type BeamSearchOption func(*BeamSearch)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -82,8 +80,6 @@ const (
 	// defaultBeamSearchNumRetry 默认重试次数
 	defaultBeamSearchNumRetry int = 1
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

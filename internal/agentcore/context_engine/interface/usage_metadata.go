@@ -6,18 +6,12 @@ import (
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// ContextUsageStaleKey 消息 metadata 上的"用量记录已过期"标记键
 	ContextUsageStaleKey = "context_usage_stale"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -83,5 +77,3 @@ func CountCategoryTokens(
 	}
 	return systemTokens, toolsTokens, messageTokens
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

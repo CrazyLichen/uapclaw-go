@@ -121,8 +121,6 @@ type RoundLevelCompressor struct {
 // RoundLevelCompressorOption RoundLevelCompressor 构造选项函数。
 type RoundLevelCompressorOption func(*RoundLevelCompressor)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // roundLevelFallbackMarker 轮级记忆块标记
@@ -174,8 +172,6 @@ Rules:
 - For completed blocks, keep the final result before secondary detail.
 - Return valid JSON only.
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

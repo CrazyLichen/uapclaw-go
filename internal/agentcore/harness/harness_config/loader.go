@@ -48,10 +48,6 @@ type ResolvedHarnessConfig struct {
 // HarnessConfigLoader harness_config.yaml 的加载器（无状态，方法直接挂在值类型上）。
 type HarnessConfigLoader struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var varPlaceholderRegexp = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)

@@ -6,10 +6,6 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -18,8 +14,6 @@ const (
 	// DefaultMinTargetContextRatio 默认待压缩内容占比下限（对齐上游默认 0.1）
 	DefaultMinTargetContextRatio = 0.1
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -49,5 +43,3 @@ func targetAboveMinRatio(mc iface.ModelContext, messages []llm_schema.BaseMessag
 	}
 	return processor.CountMessagesTokens(mc.TokenCounter(), messages, "", "") >= minTokens
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -20,7 +20,6 @@ type ReasoningBankPrompt struct {
 	SequentialFollowUpRefinePrompt *template.Template
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 提示词模板 — 一比一复刻 Python 原文，不做自行翻译

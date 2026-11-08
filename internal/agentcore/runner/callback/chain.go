@@ -37,14 +37,10 @@ type ChainRollbackHandler func(ctx context.Context, cctx *ChainContext) error
 // Python: Callable (error handler)，返回 ChainAction 决定后续动作
 type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) (ChainAction, error)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

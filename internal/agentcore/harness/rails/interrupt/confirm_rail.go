@@ -58,10 +58,6 @@ func (r *ConfirmInterruptRail) InterruptKind() string {
 	return saschema.InterruptKindConfirm
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 ConfirmInterruptRail 满足 AgentRail 接口

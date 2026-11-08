@@ -38,8 +38,6 @@ type IMOutboundPipeline struct {
 	llmModelName string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // classifyPromptTemplate DM/CHAT 分类提示词（Python 原文逐字）。

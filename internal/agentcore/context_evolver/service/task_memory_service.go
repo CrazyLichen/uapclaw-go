@@ -158,10 +158,6 @@ type TaskMemoryService struct {
 	persistenceHelper *cepersistence.MemoryPersistenceHelper
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // algoNameMap 算法名规范化映射。对齐 Python normalize_algo_name。

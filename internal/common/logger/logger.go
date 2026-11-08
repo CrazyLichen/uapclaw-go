@@ -51,8 +51,6 @@ type Logger struct {
 // Option 日志选项函数（Functional Options 模式，与项目约定一致）。
 type Option func(*Logger)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// global 全局 Logger 单例

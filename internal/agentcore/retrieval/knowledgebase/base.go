@@ -118,8 +118,6 @@ type KBOption func(*KBOptions)
 // logComponent knowledgebase 包日志组件常量。
 const logComponent = logger.ComponentAgentCore
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseKnowledgeBase 构造知识库基座。
@@ -371,5 +369,3 @@ func (b *BaseKnowledgeBase) maybeClose(c closeable) error {
 	}
 	return err
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

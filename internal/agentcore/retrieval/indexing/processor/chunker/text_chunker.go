@@ -63,8 +63,6 @@ type textChunkerOptions struct {
 // TextChunkerOption TextChunker 构造选项函数。
 type TextChunkerOption func(*textChunkerOptions)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期断言 TextChunker 实现 Chunker

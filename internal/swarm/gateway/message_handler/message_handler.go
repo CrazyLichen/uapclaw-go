@@ -178,8 +178,6 @@ type CronControllerAPI interface {
 	RunNow(jobID string) (string, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

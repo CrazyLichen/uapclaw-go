@@ -27,8 +27,6 @@ type MemoryEngineConfig struct {
 	SingleTurnHistorySummaryMaxToken int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // AESKeyLength AES 密钥长度（32 字节 = AES-256）

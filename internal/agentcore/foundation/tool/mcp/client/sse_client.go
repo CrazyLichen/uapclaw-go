@@ -36,8 +36,6 @@ type SseClient struct {
 	mcpClient *mcpclient.Client
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// mcpProtocolVersion MCP 协议版本

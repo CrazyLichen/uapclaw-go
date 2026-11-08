@@ -90,8 +90,6 @@ const (
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithModel 设置 LLM 模型（对齐 Python: base_chat_model）。

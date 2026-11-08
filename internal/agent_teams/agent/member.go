@@ -42,8 +42,6 @@ type messagerBus interface {
 	Publish(ctx context.Context, topicID string, message *events.EventMessage) error
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

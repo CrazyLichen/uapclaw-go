@@ -47,8 +47,6 @@ type EvolutionStatusUpdate struct {
 // Python: group_evolution_approvals 的 warn_missing_request_id 参数
 type WarnMissingRequestIDFunc func(sessionID string)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

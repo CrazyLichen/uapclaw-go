@@ -87,7 +87,6 @@ type ContextEvolutionRail struct {
 // ContextEvolutionRailOption 构造选项函数。
 type ContextEvolutionRailOption func(*ContextEvolutionRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

@@ -70,8 +70,6 @@ type TeamContextTracker struct {
 	uncommitted map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // TeamContextStateKey 成员子会话 state 里存投递基线的键。
@@ -116,8 +114,6 @@ const RosterNoteKind = "announcement-only"
 
 // logComponent 本包日志组件（团队状态属于 agentcore 团队域）。
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

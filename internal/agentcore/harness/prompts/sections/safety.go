@@ -2,10 +2,6 @@ package sections
 
 import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -31,8 +27,6 @@ const (
 - If uncertain, state the uncertainty first, then give the most likely answer or plan
 `
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

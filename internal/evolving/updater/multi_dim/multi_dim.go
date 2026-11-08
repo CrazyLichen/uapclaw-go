@@ -31,12 +31,6 @@ type MultiDimUpdater struct {
 // MultiDimUpdaterOption MultiDimUpdater 构造选项函数。
 type MultiDimUpdaterOption func(*MultiDimUpdater)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMultiDimUpdater 创建 MultiDimUpdater 实例。

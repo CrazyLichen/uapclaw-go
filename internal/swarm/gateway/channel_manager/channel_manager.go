@@ -72,14 +72,10 @@ type ChannelManager struct {
 // 当 Channel 配置发生变更时触发，由外部实现具体的 Channel 重新实例化逻辑。
 type OnConfigUpdatedFunc func(config map[string]map[string]any)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 本包日志组件
 const logComponent = logger.ComponentChannel
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -95,10 +95,6 @@ const (
 	WorktreeLifecyclePolicyDurable WorktreeLifecyclePolicy = "durable"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorktreeConfig 创建默认 WorktreeConfig。

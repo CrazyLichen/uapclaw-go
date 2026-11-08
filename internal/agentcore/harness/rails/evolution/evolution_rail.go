@@ -63,14 +63,10 @@ type EvolutionRail struct {
 // EvolutionRailOption EvolutionRail 构造选项函数。
 type EvolutionRailOption func(*EvolutionRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件常量
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

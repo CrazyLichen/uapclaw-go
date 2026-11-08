@@ -90,8 +90,6 @@ const (
 	dashscopeDefaultBaseURL = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithDashscopeTimeout 设置请求超时。

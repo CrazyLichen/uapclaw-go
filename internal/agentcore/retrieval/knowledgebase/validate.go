@@ -32,8 +32,6 @@ type ensureLoader interface {
 	EnsureLoaded(ctx context.Context) error
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // validateAttrOrder 7 属性固定比对顺序（Python 字面：

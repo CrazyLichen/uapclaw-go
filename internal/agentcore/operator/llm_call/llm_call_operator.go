@@ -38,8 +38,6 @@ type LLMCallOperator struct {
 // LLMCallOperatorOption LLMCallOperator 构造选项函数。
 type LLMCallOperatorOption func(*LLMCallOperator)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -55,8 +53,6 @@ const (
 	// defaultOperatorID 默认操作器标识。
 	defaultOperatorID = "llm_call"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

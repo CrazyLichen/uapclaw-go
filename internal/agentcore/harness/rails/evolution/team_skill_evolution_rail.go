@@ -114,8 +114,6 @@ type TeamSkillEvolutionRail struct {
 // TeamSkillEvolutionRailOption TeamSkillEvolutionRail 构造选项函数。
 type TeamSkillEvolutionRailOption func(*TeamSkillEvolutionRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

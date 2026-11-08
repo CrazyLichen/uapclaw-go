@@ -42,8 +42,6 @@ type SysOperationRail struct {
 // SysOperationRailOption 配置选项函数
 type SysOperationRailOption func(*SysOperationRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

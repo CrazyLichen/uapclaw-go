@@ -55,12 +55,6 @@ type ChromaIndexer struct {
 // ChromaIndexerOption ChromaIndexer 的可选参数函数。
 type ChromaIndexerOption func(*ChromaIndexer)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewChromaIndexer 创建 ChromaIndexer 实例。

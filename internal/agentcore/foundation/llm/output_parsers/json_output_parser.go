@@ -21,8 +21,6 @@ import (
 // Python: openjiuwen/core/foundation/llm/output_parsers/json_output_parser.py (JsonOutputParser)
 type JsonOutputParser struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent output_parsers 包日志组件标识（AgentCore 层）。

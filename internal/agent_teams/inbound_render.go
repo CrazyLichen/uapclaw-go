@@ -26,8 +26,6 @@ type InboundOptions = inboundtags.InboundOptions
 // Python: inbound_render.EventOptions
 type EventOptions = inboundtags.EventOptions
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -38,8 +36,6 @@ const (
 	// ControllerSender 见 inboundtags.ControllerSender。
 	ControllerSender = inboundtags.ControllerSender
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -81,5 +77,3 @@ func RenderTeamPolicyInline(body string) string { return inboundtags.RenderTeamP
 func DropSupersededSnapshots(parts []string) []string {
 	return inboundtags.DropSupersededSnapshots(parts)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

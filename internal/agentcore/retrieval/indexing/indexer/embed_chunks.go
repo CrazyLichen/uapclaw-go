@@ -31,12 +31,6 @@ type ChunkEmbedOptions struct {
 // ChunkEmbedOption ComputeChunkEmbeddings 的可选参数函数。
 type ChunkEmbedOption func(*ChunkEmbedOptions)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewChunkEmbedOptions 从可变参数构建 ChunkEmbedOptions。

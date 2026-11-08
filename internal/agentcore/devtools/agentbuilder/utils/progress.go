@@ -424,8 +424,6 @@ type FailStageOption func(*failStageConfig)
 // WarnStageOption WarnStage 方法选项。
 type WarnStageOption func(*warnStageConfig)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (

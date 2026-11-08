@@ -27,8 +27,6 @@ type FragmentMemoryManager struct {
 	memoryManagerBase
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -37,8 +35,6 @@ const (
 	// UpdateCheckOldMemoryRelevanceThreshold 旧记忆相关度阈值，高于此值才纳入冲突检查
 	UpdateCheckOldMemoryRelevanceThreshold = 0.75
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -40,12 +40,6 @@ type BrowserWorkerConfig struct {
 // Python: ToolResultObserver callback
 type ToolResultObserverFunc func(ctx context.Context, toolName string, result any) error
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildBrowserWorkerSystemPrompt 构建浏览器 Worker Agent 系统提示词。

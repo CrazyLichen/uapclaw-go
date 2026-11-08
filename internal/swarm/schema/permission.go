@@ -48,10 +48,6 @@ type skillsRebuildSilentKey struct{}
 // PermissionContextOption 权限上下文构造选项函数。
 type PermissionContextOption func(*PermissionContext)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionContext 创建权限上下文实例。

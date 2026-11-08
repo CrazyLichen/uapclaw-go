@@ -20,14 +20,10 @@ type LocalMessageQueue struct{}
 // Python: SubscriptionBase 的 no-op 默认实现
 type LocalSubscription struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

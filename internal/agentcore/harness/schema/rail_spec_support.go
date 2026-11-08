@@ -65,7 +65,6 @@ func logRailTypeUnknown(railType string) {
 //
 // Python: BuildContext(language=language, workspace=workspace)
 // (deep_agent_spec.py:292)
-//
 func newMinimalBuildContext(language string, ws *workspace.Workspace) BuildContextInterface {
 	return &BuildContext{Language: language, Workspace: ws}
 }

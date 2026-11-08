@@ -46,10 +46,6 @@ type AgentTeamSession struct {
 // AgentTeamSessionOption AgentTeamSession 构造选项函数类型
 type AgentTeamSessionOption func(*AgentTeamSession)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 AgentTeamSession 满足 SessionFacade 接口

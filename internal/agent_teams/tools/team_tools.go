@@ -184,8 +184,6 @@ type SendMessageTool struct {
 	onTeammateCreated func(ctx context.Context, memberName string) error
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 工具权限集合，对齐 Python LEADER_ONLY_TOOLS / MEMBER_ONLY_TOOLS / SHARED_TOOLS / HUMAN_AGENT_TOOLS。

@@ -33,8 +33,6 @@ type VideoUnderstandingInput struct {
 	ThinkingEnabled bool `json:"thinking_enabled,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -59,8 +57,6 @@ const (
 	// defaultVideoModel 默认视频理解模型（对齐 jiuwenswarm: glm-4.6v）
 	defaultVideoModel = "glm-4.6v"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

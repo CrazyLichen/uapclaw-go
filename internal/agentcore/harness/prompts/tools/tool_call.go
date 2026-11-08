@@ -6,10 +6,6 @@ package tools
 // Python: openjiuwen/harness/prompts/tools/tool_call.py (ToolCallMetadataProvider)
 type ToolCallMetadataProvider struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // toolCallDescription tool_call 工具双语描述

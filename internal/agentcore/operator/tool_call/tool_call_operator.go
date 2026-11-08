@@ -30,8 +30,6 @@ type ToolCallOperator struct {
 // ToolCallOperatorOption ToolCallOperator 构造选项函数。
 type ToolCallOperatorOption func(*ToolCallOperator)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -39,8 +37,6 @@ const (
 	// Python: "tool_description"
 	TargetToolDescription = "tool_description"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

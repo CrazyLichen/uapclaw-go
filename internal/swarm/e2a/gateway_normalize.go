@@ -39,8 +39,6 @@ const (
 	logComponent = logger.ComponentChannel
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MessageToLegacyAgentDict 把内部 Message 摊平成旧版 Agent 请求的 map 形状。

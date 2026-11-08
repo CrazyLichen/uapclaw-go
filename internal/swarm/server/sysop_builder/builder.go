@@ -12,10 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件
@@ -24,8 +20,6 @@ const logComponent = logger.ComponentAgentServer
 // preserveFileSharingMode 固有文件共享模式，当前只支持 "mount"。
 // Python: PreserveFileSharingMode = Literal["mount"]
 const preserveFileSharingMode = "mount"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

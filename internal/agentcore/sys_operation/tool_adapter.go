@@ -24,12 +24,6 @@ type ToolAdapterEntry struct {
 // Python: SysOperationToolAdapter：extract_tools。
 type SysOperationToolAdapter struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractTools 从 SysOperation 提取所有方法包装为 tool.Tool。

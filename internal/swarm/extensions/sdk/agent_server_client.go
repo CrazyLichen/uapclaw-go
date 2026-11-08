@@ -25,12 +25,6 @@ type AgentServerClientExtensionImpl struct {
 	client transport.AgentTransport
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetClient 返回与 AgentServer 通信的客户端，对齐 Python AgentServerClientExtension.get_client()

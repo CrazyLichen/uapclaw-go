@@ -26,9 +26,6 @@ type AutoFileParser struct {
 	*BaseParser
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-// ──────────────────────────── 常量 ────────────────────────────
-// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAutoFileParser 构造 AutoFileParser。
@@ -171,5 +168,3 @@ func RegisterNewParser(fileExtension string, factory func() Parser) {
 func GetSupportedFormats() []string {
 	return snapshotRegistry()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -33,12 +33,6 @@ type TeamCompletionHandler struct {
 	completionCallbacks []func(ctx context.Context) error
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamCompletionHandler 创建 TeamCompletionHandler 实例。

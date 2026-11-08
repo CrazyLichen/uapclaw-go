@@ -20,10 +20,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -37,8 +33,6 @@ const (
 	// Python: _EMPTY_RESPONSE_NOTICE (react_agent.py L127-130)
 	emptyResponseNotice = "[EMPTY_RESPONSE] The previous turn had no content and no tool_calls. Reply with user-visible content or a tool call."
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

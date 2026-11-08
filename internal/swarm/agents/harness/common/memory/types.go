@@ -104,8 +104,6 @@ type VectorStatus struct {
 	Dims *int `json:"dims,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 记忆来源常量。对齐 Python MemorySource Literal["memory", "sessions"]（types.py）

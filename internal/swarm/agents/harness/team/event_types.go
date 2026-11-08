@@ -4,8 +4,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TeamEventCategory 前端事件类别。
@@ -56,8 +54,6 @@ const (
 	// TeamEventMessageBroadcast 广播消息
 	TeamEventMessageBroadcast TeamEventType = "team.message.broadcast"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

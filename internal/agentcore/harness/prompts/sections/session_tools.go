@@ -2,10 +2,6 @@ package sections
 
 import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -52,8 +48,6 @@ and ask them to wait for subsequent system notifications or the next round of in
 - Only initiate a new function call when the user explicitly requests a retry, changes parameters, or cancels the task.
 `
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

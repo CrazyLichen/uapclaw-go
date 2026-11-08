@@ -41,8 +41,6 @@ type FormHandlerManager struct {
 	defaultHandler FormHandler
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

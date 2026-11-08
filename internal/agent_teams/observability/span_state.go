@@ -44,10 +44,6 @@ type OtelSpanState struct {
 // spanStateKeyType OtelSpanState 的 context key 类型。
 type spanStateKeyType struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (

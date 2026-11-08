@@ -52,8 +52,6 @@ type LocalShellOperation struct {
 	tuiCommandPatterns []TUICommandPattern
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

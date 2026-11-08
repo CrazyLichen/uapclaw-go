@@ -79,8 +79,6 @@ type managerOptions struct {
 // ManagerOption WorktreeManager 构造选项。
 type ManagerOption func(*managerOptions)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // backendRegistry 后端注册表。

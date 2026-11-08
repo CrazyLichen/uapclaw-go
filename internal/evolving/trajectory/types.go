@@ -123,8 +123,6 @@ const (
 	StepKindAgent StepKind = "agent"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -206,5 +204,3 @@ func (t *Trajectory) toMessages(trimToLastUser bool) []map[string]any {
 	}
 	return messages
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

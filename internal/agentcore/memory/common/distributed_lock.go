@@ -38,8 +38,6 @@ type DistributedLock struct {
 	mu sync.Mutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logEventMemoryStore 对齐 Python LogEventType.MEMORY_STORE 枚举值

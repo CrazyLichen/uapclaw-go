@@ -46,8 +46,6 @@ type ToolCallTool struct {
 	dispatch func(ctx context.Context, name string, args map[string]any, cb tool.ToolCallbackContext) (any, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -175,5 +173,3 @@ func (t *ToolCallTool) InvokeWithCallback(
 func (t *ToolCallTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

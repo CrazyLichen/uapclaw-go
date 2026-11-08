@@ -2,8 +2,6 @@ package schema
 
 import "github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MemberStatus 成员状态枚举。

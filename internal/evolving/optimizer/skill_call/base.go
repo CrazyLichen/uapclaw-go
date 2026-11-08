@@ -31,8 +31,6 @@ type SkillExperienceOptimizerBase struct {
 	onlineContexts map[string]*experience.EvolutionContext
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent skill_call 包日志组件常量

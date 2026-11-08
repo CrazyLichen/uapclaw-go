@@ -124,8 +124,6 @@ type SkillEvolutionRail struct {
 // SkillEvolutionRailOption SkillEvolutionRail 构造选项函数。
 type SkillEvolutionRailOption func(*SkillEvolutionRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

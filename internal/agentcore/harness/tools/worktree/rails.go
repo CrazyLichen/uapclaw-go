@@ -80,8 +80,6 @@ const defaultWorktreeNameKey = "_worktree_default_name"
 // 与 SysOperationRail 同级（100）。
 const worktreeRailPriority = 100
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorktreeRail 创建 WorktreeRail 实例。

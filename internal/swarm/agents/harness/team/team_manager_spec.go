@@ -49,7 +49,6 @@ type CodeMemberConfigurer func(
 	forceEnglishRuntimePrompt bool,
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEnrichedTeamSpec 获取增强的 TeamAgentSpec。
@@ -440,7 +439,6 @@ func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) (i
 	return ParsePort(value, defaultPort, fieldName)
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildSessionScopedTeamName 构建 session 作用域的 team name。

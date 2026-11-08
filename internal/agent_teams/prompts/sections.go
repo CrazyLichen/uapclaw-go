@@ -33,8 +33,6 @@ type TeamMember struct {
 	Description string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // Section 名称常量，对齐 Python TeamSectionName。

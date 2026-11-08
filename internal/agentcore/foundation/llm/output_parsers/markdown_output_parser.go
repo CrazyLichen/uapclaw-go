@@ -19,10 +19,6 @@ import (
 // Python: openjiuwen/core/foundation/llm/output_parsers/markdown_output_parser.py (MarkdownOutputParser)
 type MarkdownOutputParser struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (

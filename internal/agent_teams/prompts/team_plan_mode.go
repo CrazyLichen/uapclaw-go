@@ -7,14 +7,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetTeamPlanModePrompt 返回指定语言的 team.plan 提示词模板。
@@ -111,5 +103,3 @@ func BuildPlanFileInfoEN(planFilePath string, exists bool) string {
 	}
 	return "No plan file exists yet. You should create your plan at " + planFilePath + " using the write_file tool."
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

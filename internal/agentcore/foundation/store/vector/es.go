@@ -62,8 +62,6 @@ type ESVectorStore struct {
 // ESOption ESVectorStore 构造选项
 type ESOption func(*ESVectorStore)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// esDefaultBatchSize ES 默认批量插入大小
@@ -77,8 +75,6 @@ const (
 	// esMigrationSearchSize 迁移时单次搜索读取的文档数量，对齐 Python: size = 10000
 	esMigrationSearchSize = 10000
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

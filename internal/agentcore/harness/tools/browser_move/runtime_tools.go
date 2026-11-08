@@ -114,8 +114,6 @@ const (
 		"This should usually be preferred over browser_probe_interactives for product/listing/item-data tasks."
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserCancelTool 创建取消工具。
@@ -387,8 +385,6 @@ func (t *BrowserRuntimeHealthTool) Invoke(_ context.Context, _ map[string]any, _
 func (t *BrowserRuntimeHealthTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ── ToolCard 工厂函数 ──
 

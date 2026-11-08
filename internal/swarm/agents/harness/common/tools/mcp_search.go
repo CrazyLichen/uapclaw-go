@@ -67,8 +67,6 @@ type mcpPaidSearchInput struct {
 	TimeoutSeconds int `json:"timeout_seconds" jsonschema:"description=Timeout in seconds for the search request"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -150,8 +148,6 @@ var McpFreeSearch = newMcpFreeSearchTool()
 
 // McpPaidSearch mcp_paid_search 工具单例（对齐 Python @tool 模块级实例）
 var McpPaidSearch = newMcpPaidSearchTool()
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

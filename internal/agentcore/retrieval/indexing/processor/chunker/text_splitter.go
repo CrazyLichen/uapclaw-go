@@ -86,7 +86,6 @@ type IndexSentenceSplitter struct {
 	splitter *splitter.SentenceSplitter
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

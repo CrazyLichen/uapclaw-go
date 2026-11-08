@@ -8,8 +8,6 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // Translator 翻译器闭包。

@@ -2,10 +2,6 @@ package agent_teams
 
 import "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // HumanAgentMemberName 保留的 Human-in-the-Team 成员名。

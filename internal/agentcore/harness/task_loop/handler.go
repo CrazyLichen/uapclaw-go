@@ -44,8 +44,6 @@ type TaskLoopEventHandler struct {
 	sessionToolkit *subagent.SessionToolkit
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

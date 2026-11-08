@@ -72,8 +72,6 @@ const stopWaitTimeout = 5 * time.Second
 // pollWaitTimeout PausePolls/Stop 等待 poll goroutine 退出的超时
 const pollWaitTimeout = 2 * time.Second
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEventBus 创建事件总线实例。

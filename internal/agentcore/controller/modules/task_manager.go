@@ -93,15 +93,11 @@ type TaskStatusOption func(*taskStatusConfig)
 // TaskPriorityOption 任务优先级更新选项函数。
 type TaskPriorityOption func(*taskPriorityConfig)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

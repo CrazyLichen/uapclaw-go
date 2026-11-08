@@ -50,8 +50,6 @@ type SkillManager struct {
 	skillnetInstallCompleteHook func(ctx context.Context) error
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

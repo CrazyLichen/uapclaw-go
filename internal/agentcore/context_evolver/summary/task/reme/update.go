@@ -97,7 +97,6 @@ type PersistMemoryOp struct {
 	helper *cepersistence.MemoryPersistenceHelper
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTrajectoryPreprocessOp 创建轨迹预处理操作。
@@ -802,7 +801,6 @@ func (op *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	return nil
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateMemory 校验单条记忆质量。

@@ -77,8 +77,6 @@ type RegisterCapable interface {
 // LoaderOption loader 构造选项
 type LoaderOption func(*ExtensionLoader)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -89,8 +87,6 @@ const (
 	// logComponent 日志组件（基础设施层）
 	logComponent = logger.ComponentCommon
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

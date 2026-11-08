@@ -46,8 +46,6 @@ type ProjectMemoryRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

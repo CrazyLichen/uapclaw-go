@@ -127,8 +127,6 @@ var (
 // McpExecCommand mcp_exec_command 工具单例（对齐 Python @tool 模块级实例）
 var McpExecCommand = newMcpExecCommandTool()
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // workspaceAgentDir 获取 Agent 工作空间目录（测试辅助暴露点）。

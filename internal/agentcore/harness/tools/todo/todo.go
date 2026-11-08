@@ -100,8 +100,6 @@ type TodoModifyToolFactory func(todoTool TodoTool, language, agentID string) too
 // 等价 Python CodeTodoCreateTool 等子类覆盖 _build_code_todo_card()。
 type TodoCardBuilder func(name, toolID, language, agentID string) *tool.ToolCard
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -111,8 +109,6 @@ const (
 	// todoFileName 待办事项持久化文件名
 	todoFileName = "todo.json"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

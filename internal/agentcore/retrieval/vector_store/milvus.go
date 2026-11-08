@@ -119,8 +119,6 @@ type MilvusVectorStore struct {
 // MilvusStoreOption MilvusVectorStore 的可选参数函数。
 type MilvusStoreOption func(*MilvusVectorStore)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

@@ -29,7 +29,6 @@ type HybridChunker struct {
 	noSplitWhen func(*reranker.Document) bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

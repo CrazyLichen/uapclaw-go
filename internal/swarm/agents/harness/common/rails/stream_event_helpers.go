@@ -12,10 +12,6 @@ import (
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -41,8 +37,6 @@ var (
 	// 对齐 Python: exit_code/returncode/return_code 正则，re.IGNORECASE
 	exitCodeRe = regexp.MustCompile(`(?i)\b(?:exit(?:[_ ]?code)?|returncode|return[_ ]code)\s*[:= ]\s*(-?\d+)\b`)
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 func boolishFalse(value any) bool {

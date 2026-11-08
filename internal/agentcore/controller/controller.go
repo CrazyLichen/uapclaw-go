@@ -52,8 +52,6 @@ type Controller struct {
 	mu sync.RWMutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore

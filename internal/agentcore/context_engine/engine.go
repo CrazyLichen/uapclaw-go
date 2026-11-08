@@ -56,8 +56,6 @@ type runtimeConfigApplier interface {
 	ApplyRuntimeConfig(config schema.ContextEngineConfig, processors []iface.ContextProcessor)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
@@ -74,8 +72,6 @@ const (
 	// defaultSessionID 默认会话 ID
 	defaultSessionID = "default_session_id"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

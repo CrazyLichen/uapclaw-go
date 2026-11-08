@@ -33,8 +33,6 @@ type PowerShellInput struct {
 	Description string `json:"description"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -46,8 +44,6 @@ const (
 	// Python: PowerShellTool._resolve_max_output_chars default=20000
 	psDefaultMaxOutputChars = 20000
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

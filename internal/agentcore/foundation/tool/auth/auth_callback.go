@@ -49,8 +49,6 @@ type AuthStrategyRegistry struct {
 	strategies map[string]AuthStrategy
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// AuthTypeSSL SSL 认证类型

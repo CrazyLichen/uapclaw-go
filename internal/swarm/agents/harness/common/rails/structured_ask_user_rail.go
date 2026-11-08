@@ -40,10 +40,6 @@ type StructuredAskUserRail struct {
 	parentResolve interrupt.ResolveInterruptFn
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 StructuredAskUserRail 满足 AgentRail 接口

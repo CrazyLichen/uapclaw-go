@@ -25,7 +25,6 @@ type ObservabilityConfig struct {
 	ExportTimeoutMs int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultObservabilityConfig 创建默认配置。

@@ -29,8 +29,6 @@ type MemoryCallOperator struct {
 // MemoryCallOperatorOption MemoryCallOperator 构造选项函数。
 type MemoryCallOperatorOption func(*MemoryCallOperator)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -47,8 +45,6 @@ const (
 	// maxRetries 上限
 	maxMaxRetries = 5
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

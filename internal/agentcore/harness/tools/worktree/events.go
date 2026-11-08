@@ -44,14 +44,6 @@ type WorktreeEvent interface {
 // Python: WorktreeEventHandler = Callable[[WorktreeEvent], Awaitable[None]]
 type WorktreeEventHandler func(ctx context.Context, event WorktreeEvent) error
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isWorktreeEvent 实现 WorktreeEvent 接口

@@ -131,8 +131,6 @@ const (
 	OnlineEvolutionStatusSkippedSkillNotFound OnlineEvolutionStatus = "skipped_skill_not_found"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RecordCount 返回提案中的记录数量。

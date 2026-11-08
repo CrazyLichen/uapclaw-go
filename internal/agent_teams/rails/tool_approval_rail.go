@@ -39,10 +39,6 @@ type TeamToolApprovalRail struct {
 	messageManager *tools.TeamMessageManager
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamToolApprovalRail 创建 TeamToolApprovalRail 实例。

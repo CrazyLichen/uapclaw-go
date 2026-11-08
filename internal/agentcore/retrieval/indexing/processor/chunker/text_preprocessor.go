@@ -58,7 +58,6 @@ type PreprocessingPipeline struct {
 	preprocessors []TextPreprocessor
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // D1' 决策：Python \w/\s 与 regexp2(.NET) 的字符类语义有分叉，

@@ -124,7 +124,6 @@ type ReMeMemory struct {
 	Metadata ReMeMemoryMetadata `json:"metadata"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewACEMemoryFromVectorNode 从 VectorNode 反序列化 ACEMemory。
@@ -368,7 +367,6 @@ func (m ACEMemory) FormatMemoryString() string {
 		m.ID, m.Helpful, m.Harmful, m.Neutral, m.Section, m.Content)
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // md5Hash 计算字符串的 MD5 哈希。

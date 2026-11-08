@@ -26,12 +26,6 @@ type CommandExecutionBinding struct {
 // commandExecutionKey 命令执行绑定的 context key
 type commandExecutionKey struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCommandExecutionBinding 构造并校验命令执行绑定。
@@ -76,5 +70,3 @@ func CurrentCommandExecution(ctx context.Context) *CommandExecutionBinding {
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

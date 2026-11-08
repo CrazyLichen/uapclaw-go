@@ -31,12 +31,6 @@ type SkillExperienceOptimizer struct {
 	generateRecordsLLMPolicy llm_resilience.LLMInvokePolicy
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillExperienceOptimizer 创建 SkillExperienceOptimizer 实例。

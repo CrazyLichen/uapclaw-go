@@ -18,8 +18,6 @@ import (
 // Python: importlib.import_module + getattr + cls(**kwargs)
 type DefaultAgentCreator struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// AgentTypeReAct ReAct Agent 类型名

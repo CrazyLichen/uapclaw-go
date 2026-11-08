@@ -8,10 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 var contextOverflowPhrases = []string{
@@ -26,8 +22,6 @@ var contextOverflowPhrases = []string{
 	// 百炼（DashScope）原文：Range of input length should be [1, 129024]
 	"range of input length",
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

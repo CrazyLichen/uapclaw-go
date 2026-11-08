@@ -103,8 +103,6 @@ type TeamPolicyRail struct {
 // TeamPolicyRailOption TeamPolicyRail 构造选项。
 type TeamPolicyRailOption func(*TeamPolicyRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

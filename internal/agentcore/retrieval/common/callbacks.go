@@ -45,10 +45,6 @@ type LoggingDocIndexCallback struct {
 // Python: retrieval/common/callbacks.py (BaseCallback)
 type DocIndexCallback = embedding.Callback
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLoggingDocIndexCallback 创建日志进度回调。

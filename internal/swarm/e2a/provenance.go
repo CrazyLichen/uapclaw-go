@@ -70,8 +70,6 @@ const (
 	IdentityOriginService IdentityOrigin = "service"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // identityOriginLookup 字符串值到 IdentityOrigin 枚举的查找表

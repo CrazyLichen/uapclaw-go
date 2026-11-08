@@ -19,10 +19,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // sandboxPathMarker sandbox 路径标记（对齐 Python: SANDBOX_PATH_MARKER = "home/user"）
@@ -52,8 +48,6 @@ const maxImageFileSize = 20 * 1024 * 1024
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -27,10 +27,6 @@ type SessionSpawnExecutor struct {
 	provider interfaces.DeepAgentInterface
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查：SessionSpawnExecutor 必须满足 modules.TaskExecutor

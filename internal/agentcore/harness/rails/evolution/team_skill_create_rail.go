@@ -50,8 +50,6 @@ type TeamSkillCreateRail struct {
 	proposedSpawnCounts map[string]int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

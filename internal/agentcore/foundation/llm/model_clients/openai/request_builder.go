@@ -16,10 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // chatCompletionsPath Chat Completion API 路径
@@ -37,8 +33,6 @@ const requestEncodingStage = "request_encoding"
 // Python: schema/config.py:145 timeout 默认 360（gt=0；注释明文约定
 // timeout >= stream_first_chunk_timeout=300，传输层永不先于应用层流超时触发）
 const defaultRequestTimeoutSeconds = 360.0
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

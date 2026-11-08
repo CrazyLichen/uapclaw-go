@@ -131,8 +131,6 @@ type skillDirEntry struct {
 // SkillUseRailOption SkillUseRail 构造选项
 type SkillUseRailOption func(*SkillUseRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

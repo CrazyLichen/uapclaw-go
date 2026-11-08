@@ -26,8 +26,6 @@ type OriginChecker struct {
 	allowedHostsEnv string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// DefaultEnableCheckEnv 默认的总开关环境变量名。

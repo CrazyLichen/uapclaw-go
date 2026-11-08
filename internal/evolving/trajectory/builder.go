@@ -44,12 +44,6 @@ type TrajectoryBuilder struct {
 // TrajectoryBuilderOption TrajectoryBuilder 构造选项函数。
 type TrajectoryBuilderOption func(*TrajectoryBuilder)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTrajectoryBuilder 创建 TrajectoryBuilder 实例。

@@ -24,8 +24,6 @@ type StreamKeepalive struct {
 	once sync.Once
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamKeepalive 创建心跳（interval<=0 时用 keepaliveInterval）。

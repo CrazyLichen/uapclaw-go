@@ -55,8 +55,6 @@ type Session struct {
 // SessionOption Session 构造选项函数类型
 type SessionOption func(*Session)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

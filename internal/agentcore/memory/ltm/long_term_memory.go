@@ -66,8 +66,6 @@ type LongTermMemory struct {
 	scopeEmbedding map[string]embedding.BaseEmbedding
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

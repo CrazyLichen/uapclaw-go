@@ -53,8 +53,6 @@ const (
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 返回 APIParamLocation 的字符串表示。

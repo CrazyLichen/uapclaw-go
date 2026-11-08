@@ -83,8 +83,6 @@ type ackMessagePublisher struct {
 	mh *mh.MessageHandler
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
@@ -92,8 +90,6 @@ const logComponent = logger.ComponentGateway
 
 // shutdownTimeout 优雅关闭超时时间
 const shutdownTimeout = 5 * time.Second
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

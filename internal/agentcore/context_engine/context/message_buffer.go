@@ -44,8 +44,6 @@ type OffloadMessageBuffer struct {
 	sessionID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // offloadTypeInMemory 内存存储类型标识
@@ -53,8 +51,6 @@ const offloadTypeInMemory = "in_memory"
 
 // offloadTypeFilesystem 文件系统存储类型标识
 const offloadTypeFilesystem = "filesystem"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

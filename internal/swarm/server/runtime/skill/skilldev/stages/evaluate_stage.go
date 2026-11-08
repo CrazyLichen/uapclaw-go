@@ -19,8 +19,6 @@ import (
 // EvaluateStageHandler EVALUATE 阶段：Grader 评分 → Benchmark 聚合 → Analyst 分析。
 type EvaluateStageHandler struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // GraderSystemPrompt Grader Agent 系统 Prompt。
@@ -63,8 +61,6 @@ const AnalystSystemPrompt = `你是一个 Benchmark 分析师。分析所有评�
 输出一个 JSON 字符串数组，每条是一句简洁的观察（用中文）：
 ["观察1", "观察2", ...]
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

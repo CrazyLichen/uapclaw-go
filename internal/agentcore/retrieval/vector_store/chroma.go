@@ -85,8 +85,6 @@ type ChromaVectorStore struct {
 // （WithChromaClientOption），消除构造期真实连接导致的测试盲区。
 type ChromaStoreOption func(*ChromaVectorStore)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -95,8 +93,6 @@ const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -83,12 +83,6 @@ type setupTeamBackendConfig struct {
 // SetupTeamBackendOption SetupTeamBackend 的可选参数。
 type SetupTeamBackendOption func(*setupTeamBackendConfig)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentConfigurator 创建新的 AgentConfigurator 实例。

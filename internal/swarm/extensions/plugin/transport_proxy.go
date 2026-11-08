@@ -37,8 +37,6 @@ type GRPCPluginTransport struct {
 	recvCancel context.CancelFunc
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

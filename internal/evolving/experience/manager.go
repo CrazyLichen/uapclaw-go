@@ -48,8 +48,6 @@ type ExperienceManager struct {
 	pendingGovernance map[string]*PendingGovernance
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

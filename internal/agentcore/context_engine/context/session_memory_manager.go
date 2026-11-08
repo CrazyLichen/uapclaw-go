@@ -132,8 +132,6 @@ type SessionMemoryManager struct {
 	onTaskDone SessionMemoryTaskCallback
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // sessionMemoryStateKey 会话记忆运行时状态键
@@ -307,8 +305,6 @@ You ONLY update the actual content that comes AFTER these two preserved lines.
 The italic description lines starting and ending with underscores are part of
 the template structure, NOT content to be edited or removed.
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

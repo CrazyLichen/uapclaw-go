@@ -76,16 +76,12 @@ type TrainCallbackFunc func(agent evolving.TrainableAgent, progress *Progress, e
 //	on_train_epoch_begin(self, agent: BaseAgent, progress: Progress) -> None
 type TrainEpochBeginFunc func(agent evolving.TrainableAgent, progress *Progress)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// 默认迭代次数，对应 Python TuneConstant.default_iteration_num=3
 	defaultNumIterations = 3
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

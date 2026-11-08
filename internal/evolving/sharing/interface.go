@@ -30,8 +30,6 @@ type SharingBackend interface {
 	SearchSkills(ctx context.Context, query QueryKeywords, topK int) ([]SkillSearchResult, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件常量，sharing 包和 backend 子包共用。

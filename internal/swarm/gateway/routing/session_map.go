@@ -57,8 +57,6 @@ const (
 	sessionMapFileName = "session_map.json"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // LoadSessionMapScope 读 config gateway.session_map_scope（构造时读一次，不热重载）。

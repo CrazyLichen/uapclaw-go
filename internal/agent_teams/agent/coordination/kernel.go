@@ -43,8 +43,6 @@ type kernelOptions struct {
 // KernelOption CoordinationKernel.Setup 的选项函数。
 type KernelOption func(*kernelOptions)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -57,8 +55,6 @@ const (
 	// kernelStateStopped 停止态（终态）
 	kernelStateStopped = "stopped"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

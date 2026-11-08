@@ -2,14 +2,6 @@ package usage
 
 import "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RequestCacheFromUsage 把 provider 上报的用量转成请求级 KV cache 用量。
@@ -110,5 +102,3 @@ func AggregateSessionCache(requests []RequestKVCacheUsage) SessionKVCacheUsage {
 	}
 	return out
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -171,8 +171,6 @@ type TransportBuilder func(params map[string]any) (MessagerTransportConfig, erro
 // StorageBuilder 存储层构建器函数类型。
 type StorageBuilder func(params map[string]any) (any, error)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件

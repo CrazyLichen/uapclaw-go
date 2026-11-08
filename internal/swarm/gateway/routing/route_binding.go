@@ -80,12 +80,6 @@ type InstallFunc func(server any)
 // 以类型别名复用（见 gateway.LocalHandlerFunc）。
 type LocalHandlerFunc func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWebRouteBinding 创建默认 Web 通道路由绑定（/ws → web）。

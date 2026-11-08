@@ -26,8 +26,6 @@ type GatewayHookHandler struct {
 	activeSessions map[string]bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -37,8 +35,6 @@ const (
 	// defaultGatewayTimeout 默认网关 hook 超时 10 秒（对齐 Python _gateway_timeout）
 	defaultGatewayTimeout = 10
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

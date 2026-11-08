@@ -66,10 +66,6 @@ type HumanAgentInbox struct {
 // 类型已提升到 schema 包，此处保留别名以兼容现有调用方。
 type UnknownHumanAgentError = schema.UnknownHumanAgentError
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHumanAgentInbox 创建 Human-Agent 收件箱。

@@ -68,8 +68,6 @@ type MessageSummaryOffloader struct {
 // MessageSummaryOffloaderOption 摘要卸载器构造选项
 type MessageSummaryOffloaderOption func(*MessageSummaryOffloader)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// msoDefaultLargeMessageThreshold 默认大消息判定阈值
@@ -189,8 +187,6 @@ const defaultOffloadSummaryPrompt = `
     Do NOT explain, comment, or add extra information—output the summary only.
     Begin:
     `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -78,10 +78,6 @@ const (
 	ResultTypeError ResultType = "ERROR"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDmqRequestMessage 创建分布式请求消息，Type 默认 INPUT。
@@ -102,5 +98,3 @@ func NewDmqResponseMessage(payload map[string]any) *DmqResponseMessage {
 		ResultType:   ResultTypeMessage,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

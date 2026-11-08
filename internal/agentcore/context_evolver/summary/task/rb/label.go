@@ -23,7 +23,6 @@ type LabelDeterminator struct {
 	prompts *ReasoningBankSummaryPrompt
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

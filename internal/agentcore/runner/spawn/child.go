@@ -44,8 +44,6 @@ type AgentCreator interface {
 	CreateByType(ctx context.Context, agentType string, agentCard map[string]any, initKwargs map[string]any) (interfaces.BaseAgent, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

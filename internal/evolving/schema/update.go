@@ -89,8 +89,6 @@ const (
 	UpdateEffectPendingChange UpdateEffect = PendingChangeEffect // "pending_change"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // OperatorID 返回 UpdateKey 的 operatorID 部分。

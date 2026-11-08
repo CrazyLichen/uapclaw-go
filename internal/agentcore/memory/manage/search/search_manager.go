@@ -54,8 +54,6 @@ type SearchManager struct {
 	memoryIndex storeindex.BaseMemoryIndex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

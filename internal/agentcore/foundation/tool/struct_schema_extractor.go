@@ -28,10 +28,6 @@ type StructSchemaExtractor struct{}
 // schemaTagMap jsonschema tag 的键值对映射
 type schemaTagMap map[string]string
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // commonAbbreviations 常见缩写列表，humanizeName 时转大写处理。

@@ -28,7 +28,6 @@ type ChunkerOptions struct {
 // ChunkerOption 工厂可选参数函数。
 type ChunkerOption func(*ChunkerOptions)
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

@@ -18,8 +18,6 @@ import (
 // Python: openjiuwen/core/common/security/crypt_utils.py AesGcmCrypt
 type AesGcmCrypt struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// NonceLength GCM nonce 长度（字节）。
@@ -38,8 +36,6 @@ const (
 	// Python: CryptUtils.AES_GCM_CRYPT_NAME = "aes_gcm"
 	AesGcmName = "aes_gcm"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

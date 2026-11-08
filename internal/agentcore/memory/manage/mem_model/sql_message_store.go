@@ -33,8 +33,6 @@ type SqlMessageStore struct {
 	metaMgr *migrator.MemoryMetaManager
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// DefaultTableName 默认消息表名
@@ -48,8 +46,6 @@ const (
 	// 对齐 Python 的 timestamp.strftime('%Y-%m-%d %H:%M:%S')（long_term_memory.py:605）。
 	MessageTimestampLayout = "2006-01-02 15:04:05"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

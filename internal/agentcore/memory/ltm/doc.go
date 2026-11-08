@@ -21,7 +21,6 @@
 //	├── delete_ops.go          # DeleteMemByID / DeleteMemByUserID / DeleteMemByScope / DeleteMessages / DeleteVariables
 //	├── update_ops.go          # UpdateMemByID / UpdateVariables
 //	├── query_ops.go           # GetRecentMessages / GetMessageByID / GetUserMemByPage / UserMemTotalNum
-//	├── scope_helpers.go       # scope_helpers 占位文件（实际方法在 config_ops.go）
 //	└── helpers.go             # validateKVStore / acquireUserLock 等辅助方法
 //
 // 对应 Python 代码：openjiuwen/core/memory/long_term_memory.py

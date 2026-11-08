@@ -74,8 +74,6 @@ type TeamRailMountContext struct {
 	TeamWorkspace *TeamWorkspaceInfo
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // railWhitelist 成员 rail 白名单（按 Go 实际反射类型名）。

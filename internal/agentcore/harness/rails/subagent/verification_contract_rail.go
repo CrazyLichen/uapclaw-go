@@ -31,8 +31,6 @@ type VerificationContractRail struct {
 	section *saprompt.PromptSection
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

@@ -17,10 +17,6 @@ import (
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 工具名称常量，对齐 Python tool_cards 中的工具名
@@ -62,10 +58,6 @@ const (
 	// ToolNameAudioTranscription 音频转录工具
 	ToolNameAudioTranscription = "audio_transcription"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -656,7 +648,6 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		}
 	}
 
-	// ── 步骤 8: 小艺手机端工具 ──
 	// Python:
 	//   Python: xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
 	//   Python: if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:

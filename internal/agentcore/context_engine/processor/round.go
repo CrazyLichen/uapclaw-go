@@ -4,8 +4,6 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // DialogueRound 对话轮次，[0]=userIdx, [1]=assistantIdx（nil 表示不完整轮次）。
@@ -13,10 +11,6 @@ import (
 // 不完整轮次（有 user 无 assistant）的 assistantIdx 为 nil。
 // Python: ContextUtils.find_all_dialogue_round() 返回的单个 [user_idx, assistant_idx]
 type DialogueRound [2]*int
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

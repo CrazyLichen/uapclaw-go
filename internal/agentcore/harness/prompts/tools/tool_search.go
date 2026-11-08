@@ -6,10 +6,6 @@ package tools
 // Python: openjiuwen/harness/prompts/tools/tool_search.py (ToolSearchMetadataProvider)
 type ToolSearchMetadataProvider struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // toolSearchDescription tool_search 工具双语描述

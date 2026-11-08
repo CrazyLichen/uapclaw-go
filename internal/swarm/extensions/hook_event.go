@@ -16,8 +16,6 @@ type AgentServerHookEvents struct {
 	*schema.HookEventBase
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // Gateway 事件常量，对齐 Python GatewayHookEvents 类属性
@@ -47,8 +45,6 @@ const (
 	// AgentServerBeforeSystemPromptBuild 系统提示词构建前事件，对齐 Python BEFORE_SYSTEM_PROMPT_BUILD
 	AgentServerBeforeSystemPromptBuild = "agent_server:before_system_prompt_build"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

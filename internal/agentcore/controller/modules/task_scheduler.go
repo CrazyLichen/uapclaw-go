@@ -64,8 +64,6 @@ type runningTaskEntry struct {
 	done chan struct{}
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// payloadTypeTaskCompletion 任务完成载荷类型（对齐 EventType 枚举值）
@@ -75,8 +73,6 @@ const (
 	// payloadTypeTaskFailed 任务失败载荷类型（对齐 EventType 枚举值）
 	payloadTypeTaskFailed = "task_failed"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

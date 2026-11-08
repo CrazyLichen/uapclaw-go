@@ -115,8 +115,6 @@ const (
 // Python: CLIENT_TOOL_INTERRUPT_OWNER = "openjiuwen.client_tool"
 const ClientToolInterruptOwner = "openjiuwen.client_tool"
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InterruptKindOf 返回中断类型，未声明时返回空串。

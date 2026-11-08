@@ -35,10 +35,6 @@ type formattingConfig struct {
 // formattingOption 格式化参数选项
 type formattingOption func(*formattingConfig)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractEntityDeclaration 组装实体声明（名称）抽取提示词

@@ -24,12 +24,6 @@ type SimpleAPIWrapperFromCallable struct {
 // 状态码 0 表示成功，12 表示失败（对齐 Python __call__ 返回值）。
 type APIWrapperFunc func(tool map[string]any, toolInput map[string]any) (string, int)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSimpleAPIWrapperFromCallable 创建基于可调用函数的 API 包装器。

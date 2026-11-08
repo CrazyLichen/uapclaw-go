@@ -57,8 +57,6 @@ type coordCallbackFunc func(ctx context.Context, event types.CoordinationEvent)
 // coordEventMapKey 适配层：在 map[string]any 中存储 CoordinationEvent 的 key。
 const coordEventMapKey = "__coordination_event"
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewEventDispatcher 创建事件分发器，内部创建 6 个 handler 并注册回调。

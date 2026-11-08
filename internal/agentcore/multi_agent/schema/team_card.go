@@ -91,10 +91,6 @@ type TeamCardOption func(*TeamCard)
 // EventDrivenTeamCardOption EventDrivenTeamCard 构造选项函数。
 type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 TeamCard 满足 TeamCardInterface 接口

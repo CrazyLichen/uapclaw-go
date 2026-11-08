@@ -78,8 +78,6 @@ type WorkflowStorage struct {
 	stateUpdatesBlobs map[string]serdeTuple
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// emptyFormatTag 空状态标记，用于 WorkflowStorage.exists 判断
@@ -87,8 +85,6 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

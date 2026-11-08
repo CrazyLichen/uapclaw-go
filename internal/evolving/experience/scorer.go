@@ -27,8 +27,6 @@ type ExperienceScorer struct {
 	simplifyPolicy llm_resilience.LLMInvokePolicy
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

@@ -24,8 +24,6 @@ type ControllerOutput struct {
 	InputEventID string `json:"input_event_id,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// TaskProcessing 处理中类型标识

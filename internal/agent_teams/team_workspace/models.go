@@ -75,10 +75,6 @@ const (
 	ConflictStrategyLastWriteWins ConflictStrategy = "last_write_wins"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamWorkspaceConfig 创建默认 TeamWorkspaceConfig。

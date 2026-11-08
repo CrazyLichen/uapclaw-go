@@ -66,8 +66,6 @@ type MemoryOptionConfig struct {
 // 使用 Functional Options 模式，对齐 Python 的 **kwargs 扩展机制。
 type MemoryOption func(*MemoryOptionConfig)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

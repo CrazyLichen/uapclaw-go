@@ -42,8 +42,6 @@ type RailExecutor struct {
 	OnException interfaces.AgentCallbackEvent
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

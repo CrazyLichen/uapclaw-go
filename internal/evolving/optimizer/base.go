@@ -99,14 +99,10 @@ type BaseOptimizerMixin struct {
 	selectedSignals []*signal.EvolutionSignal
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent optimizer 包日志组件常量
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

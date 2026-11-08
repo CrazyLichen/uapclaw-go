@@ -27,10 +27,6 @@ import (
 // 返回 true 表示短路后续本地 handler，false 表示本地 handler 继续执行。
 type NormAndForwardFunc func(msg *schema.Message) bool
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ForwardReqMethods 仅转发到 Agent 的 Web method 集合。

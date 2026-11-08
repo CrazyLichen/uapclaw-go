@@ -23,16 +23,12 @@ type ExtensionManager struct {
 // ManagerOption manager 构造选项
 type ManagerOption func(*ExtensionManager)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// managerLogComponent 日志组件
 	managerLogComponent = logger.ComponentCommon
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

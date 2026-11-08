@@ -19,8 +19,6 @@ type acpToolDescriptorConfig struct {
 // AcpToolDescriptorOption descriptor 构造选项。
 type AcpToolDescriptorOption func(*acpToolDescriptorConfig)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (

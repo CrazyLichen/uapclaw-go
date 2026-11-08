@@ -38,8 +38,6 @@ type TeamPlanModeRail struct {
 // TeamPlanModeRailOption TeamPlanModeRail 构造选项。
 type TeamPlanModeRailOption func(*TeamPlanModeRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

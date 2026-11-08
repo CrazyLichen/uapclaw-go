@@ -72,8 +72,6 @@ type taskFailedError struct {
 // StreamControllerOption 流式控制器可选配置
 type StreamControllerOption func(*StreamController)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

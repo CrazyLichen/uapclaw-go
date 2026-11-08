@@ -43,10 +43,6 @@ type TeamSkillExperienceOptimizer struct {
 // TeamSkillOptimizer 团队技能优化器类型别名，对齐 Python: TeamSkillOptimizer = TeamSkillExperienceOptimizer
 type TeamSkillOptimizer = TeamSkillExperienceOptimizer
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamSkillExperienceOptimizer 创建 TeamSkillExperienceOptimizer 实例。

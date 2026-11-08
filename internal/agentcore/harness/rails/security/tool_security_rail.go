@@ -54,8 +54,6 @@ func (r *PermissionInterruptRail) InterruptKind() string {
 	return saschema.InterruptKindPermission
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

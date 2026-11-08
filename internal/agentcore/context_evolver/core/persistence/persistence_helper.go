@@ -49,7 +49,6 @@ type MemoryPersistenceHelper struct {
 // PersistenceOption 持久化助手配置选项。
 type PersistenceOption func(*MemoryPersistenceHelper)
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -77,7 +76,6 @@ const (
 	logComponent = logger.ComponentCommon
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemoryPersistenceHelper 创建记忆持久化助手。

@@ -109,8 +109,6 @@ type browserWorkerActionKey struct{}
 // Python: ActionResult = dict[str, Any]
 type ActionResult = map[string]any
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // recursiveBrowserActions 禁止递归调用的浏览器动作集合。

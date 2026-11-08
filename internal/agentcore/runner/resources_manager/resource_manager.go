@@ -96,8 +96,6 @@ type McpOption func(*mcpOptions)
 // TagOption 标签操作选项函数。
 type TagOption func(*tagOptions)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
 	// registryAccessors 资源类型 → 子管理器访问器名称的映射

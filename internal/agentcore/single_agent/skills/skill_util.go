@@ -21,8 +21,6 @@ type SkillUtil struct {
 	remoteSkillUtil *RemoteSkillUtil
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // skillPromptContent 技能提示词模板内容。
@@ -44,8 +42,6 @@ You can use the read_file tool to read the corresponding SKILL.md file to obtain
 const skillSystemPrefix = "You are an agent equipped with various skills to solve problems.\n" +
 	"Before attempting any task, read the relevant skill document (SKILL.md) " +
 	"using read_file and follow its workflow.\n"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

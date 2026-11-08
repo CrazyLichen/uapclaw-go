@@ -28,8 +28,6 @@ type AvatarPromptRail struct {
 	injectedSections map[string]struct{}
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

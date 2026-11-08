@@ -29,8 +29,6 @@ type TextableVariable struct {
 // TextableOption TextableVariable 构造选项函数。
 type TextableOption func(*TextableVariable)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultPrefix 默认占位符前缀。
@@ -44,8 +42,6 @@ const (
 )
 
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

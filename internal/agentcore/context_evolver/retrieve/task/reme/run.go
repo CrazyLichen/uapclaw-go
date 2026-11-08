@@ -50,7 +50,6 @@ type RewriteMemoryOp struct {
 	prompts *ReMeRetrievePrompts
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRecallMemoryOp 创建向量检索操作。
@@ -322,7 +321,6 @@ func (o *RewriteMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	return nil
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extractReMeRetrievedMemories 从 []MemoryItem 中提取 ReMeRetrievedMemory。

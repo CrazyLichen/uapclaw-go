@@ -91,8 +91,6 @@ type pendingInteractionAlias struct {
 	UpdatedAt *float64 `json:"updated_at"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

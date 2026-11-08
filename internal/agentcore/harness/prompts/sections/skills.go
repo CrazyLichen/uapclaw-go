@@ -7,10 +7,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -68,8 +64,6 @@ Use code for Python or JavaScript snippets when needed, and use bash for shell c
 No skill was selected for this task. When skill information is available, read the relevant SKILL.md using read_file.
 `
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

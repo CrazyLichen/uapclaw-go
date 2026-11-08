@@ -50,8 +50,6 @@ type WorkflowNodeSession interface {
 // 空结构体，所有方法均为静态风格（不持有状态）。
 type TracerWorkflowUtils struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // loopID 循环节点标识的 state 全局键，对应 Python 常量 LOOP_ID = "__sys_loop_id"
@@ -63,8 +61,6 @@ const loopID = "__sys_loop_id"
 // loopIndexSuffix 循环索引的后缀，对应 Python INDEX = "index" + NESTED_PATH_SPLIT = "."
 // 完整 key 为 loopID_value + "." + "index"，如 "loop_node_1.index"
 const loopIndexSuffix = ".index"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

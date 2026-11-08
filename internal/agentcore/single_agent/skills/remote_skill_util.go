@@ -79,8 +79,6 @@ type gitHubFileItem struct {
 	RelativePath string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // githubAPI GitHub API 基础 URL

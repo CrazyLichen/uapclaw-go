@@ -33,16 +33,12 @@ type loggedTeamTool struct {
 	}
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MappedContentKey 工具返回 map 中的映射内容键。
 // 对齐 Python: MappedToolOutput._mapped_content。
 // BuildToolMessageContent 检测到此键时，优先返回其值作为 LLM 友好文本。
 const MappedContentKey = "__mapped_content"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

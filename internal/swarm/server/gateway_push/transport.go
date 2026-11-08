@@ -28,8 +28,6 @@ type GatewayPushTransport interface {
 // Go 侧同样通过 server.GetInstance().SendPush(msg) 推送。
 type ChannelPushTransport struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

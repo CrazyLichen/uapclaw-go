@@ -39,14 +39,10 @@ type MicroCompactProcessor struct {
 	mcpConfig *MicroCompactProcessorConfig
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MicroCompactClearedMarker 旧工具结果内容清除标记
 const MicroCompactClearedMarker = "[Old tool result Content cleared]"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

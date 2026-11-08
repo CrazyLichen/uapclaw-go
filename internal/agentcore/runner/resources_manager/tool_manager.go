@@ -67,14 +67,10 @@ type ToolMgr struct {
 // 先例：swarm/server/runtime.AgentManager.SetAgentFactory 的 AgentFactory 注入模式。
 type McpClientFactory func(config *mcptypes.McpServerConfig) (mcptypes.McpClient, error)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 // logComponent 日志组件标识
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

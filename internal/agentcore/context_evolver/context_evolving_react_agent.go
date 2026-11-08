@@ -69,8 +69,6 @@ type ContextEvolvingReActAgent struct {
 	lastRetrievalResult *service.RetrieveResult
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // defaultContextEvolvingSystemPrompt 自动配置时使用的默认系统提示词。
@@ -78,8 +76,6 @@ type ContextEvolvingReActAgent struct {
 const defaultContextEvolvingSystemPrompt = "You are a helpful assistant with access to a memory system. " +
 	"When relevant memories are provided in your context, use them to inform your responses. " +
 	"Always provide accurate, helpful answers based on both your knowledge and any retrieved memories."
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

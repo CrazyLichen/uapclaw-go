@@ -38,8 +38,6 @@ type SkillTool struct {
 	enableReadImageMultimodal bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -67,8 +65,6 @@ const (
 		"branch mode (multimodal_skill_mode=branch); do not read_file skill videos on the " +
 		"main agent loop as it makes the context window too large."
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

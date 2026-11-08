@@ -69,7 +69,6 @@ type ACEPrompt struct {
 	ACECuratorScalingPrompt *template.Template
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // aceReflectorPrompt 反思 prompt（含 Ground Truth）。

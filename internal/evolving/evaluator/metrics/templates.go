@@ -4,10 +4,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 一比一复刻 Python LLM_METRIC_TEMPLATE，占位符 {{variable}} 与 PromptTemplate 格式一致

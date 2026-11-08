@@ -6,8 +6,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // CodePromptPriority Code 模式提示词节优先级
@@ -32,8 +30,6 @@ const (
 	// CodePrioritySessionGuidance 会话指导节
 	CodePrioritySessionGuidance CodePromptPriority = 55
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

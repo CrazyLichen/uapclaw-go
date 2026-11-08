@@ -35,8 +35,6 @@ type KeywordExtractor struct {
 	policy llm_resilience.LLMInvokePolicy
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 声明在 interface.go 中，包内共享

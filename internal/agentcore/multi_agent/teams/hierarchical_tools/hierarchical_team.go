@@ -38,8 +38,6 @@ type HierarchicalToolsTeam struct {
 	pendingChildren map[string][]*agentschema.AgentCard
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

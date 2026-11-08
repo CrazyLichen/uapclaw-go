@@ -23,10 +23,6 @@ type EntityDefAttr = registry.EntityDefAttr
 // Python: RelationDef (entity_type_definition.py)
 type RelationDef = registry.RelationDef
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (

@@ -45,10 +45,6 @@ type CheckpointerFactory struct {
 // Python: InMemoryCheckpointerProvider
 type inMemoryProvider struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // defaultFactory 全局默认工厂单例

@@ -29,8 +29,6 @@ type registryProviderValidator struct{}
 // Python: factory 可以抛异常，Go 通过 error 返回值表达创建失败。
 type ClientFactory func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) (BaseModelClient, error)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // clientTypeLLM LLM 客户端类型标识。

@@ -46,8 +46,6 @@ type invokeRetryConfig struct {
 	isResultUsable func(string) bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent llm_resilience 包日志组件常量
@@ -60,8 +58,6 @@ const (
 	reasonEmptyResponse       = "empty_response"
 	reasonUnusableResponse    = "unusable_response"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

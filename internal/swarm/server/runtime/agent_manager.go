@@ -87,12 +87,6 @@ type agentCreateParamsEntry struct {
 // 生产环境使用默认的 NewUapClaw + CreateInstance；测试环境可注入 mock 工厂跳过真实 LLM 初始化。
 type AgentFactory func(config map[string]any, mode, subMode string) (*UapClawSwarm, error)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentManager 创建 AgentManager 实例。

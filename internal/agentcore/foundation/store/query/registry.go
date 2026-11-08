@@ -32,8 +32,6 @@ type QueryLanguageDefinition struct {
 	TextMatch func(QueryExpr) (any, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识

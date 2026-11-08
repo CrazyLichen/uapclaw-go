@@ -28,12 +28,6 @@ type WorktreeSessionState struct {
 // worktreeSessionStateKeyType WorktreeSessionState 的 context key 类型。
 type worktreeSessionStateKeyType struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitWorktreeSessionState 创建新的 WorktreeSessionState 实例。

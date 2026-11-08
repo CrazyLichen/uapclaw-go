@@ -7,10 +7,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -172,8 +168,6 @@ IMPORTANT: PLEASE STRICTLY FOLLOW THE PLAN WORKFLOW.
 // BuildPlanModeSection 构建计划模式节（Priority 85）。
 // 内聚 buildEnterPlanModeStatus 和 buildPlanFileInfo 逻辑，对齐 Python 的内聚结构。
 // planFilePath 为计划文件路径；planExists 为计划文件是否存在；lang 为语言。
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

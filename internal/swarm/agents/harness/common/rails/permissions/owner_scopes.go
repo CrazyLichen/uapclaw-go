@@ -37,10 +37,6 @@ type OwnerScopesPermissionContext struct {
 // Python: TOOL_PERMISSION_CONTEXT ContextVar
 type permissionContextKey struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // severityMap 权限级别严重度映射，数值越大越严格。

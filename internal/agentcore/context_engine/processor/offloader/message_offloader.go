@@ -59,8 +59,6 @@ type MessageOffloader struct {
 	config *MessageOffloaderConfig
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// omitString 省略标记，等价 Python OMIT_STRING = "..."
@@ -74,8 +72,6 @@ const (
 )
 
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

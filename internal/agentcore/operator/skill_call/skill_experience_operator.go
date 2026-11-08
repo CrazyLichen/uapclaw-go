@@ -25,12 +25,6 @@ type SkillExperienceOperator struct {
 // SkillExperienceOperatorOption SkillExperienceOperator 构造选项函数。
 type SkillExperienceOperatorOption func(*SkillExperienceOperator)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillExperienceOperator 创建 SkillExperienceOperator 实例。

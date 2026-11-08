@@ -72,8 +72,6 @@ type PulsarSubscription struct {
 	active atomic.Bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MaxProducers producer LRU 容量上限。

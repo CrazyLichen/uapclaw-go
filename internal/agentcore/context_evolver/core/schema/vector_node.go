@@ -21,7 +21,6 @@ type VectorNode struct {
 	Metadata map[string]any `json:"metadata"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVectorNode 创建 VectorNode 实例。

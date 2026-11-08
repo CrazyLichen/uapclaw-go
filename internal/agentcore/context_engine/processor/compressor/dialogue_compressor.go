@@ -96,8 +96,6 @@ type DialogueCompressor struct {
 // DialogueCompressorOption DialogueCompressor 构造选项函数。
 type DialogueCompressorOption func(*DialogueCompressor)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // dialogueMemoryBlockMarker 对话记忆块标记
@@ -169,8 +167,6 @@ Never drop higher-priority information to preserve lower-priority details.
 - Include at most one result per block_id.
 - Do not emit undeclared block_ids.
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

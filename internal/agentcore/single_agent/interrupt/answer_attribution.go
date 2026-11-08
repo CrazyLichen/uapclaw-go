@@ -46,8 +46,6 @@ type MatchedAnswers struct {
 // Python: _CallAnswers = Dict[str, Dict[str, InterruptAnswer]]
 type CallAnswers map[string]map[string]*saschema.InterruptAnswer
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // approvedAnswerKinds 只有这几种中断类型的答案形如 {"approved": ...}。

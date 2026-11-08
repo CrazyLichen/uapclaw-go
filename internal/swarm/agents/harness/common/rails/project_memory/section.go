@@ -14,7 +14,6 @@ const (
 	SectionName = "project_memory"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildProjectMemorySection 构建 project_memory PromptSection。

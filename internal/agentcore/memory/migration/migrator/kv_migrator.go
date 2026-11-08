@@ -35,8 +35,6 @@ type KVMigrator struct {
 	kvRegistry *operation.OperationRegistry
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

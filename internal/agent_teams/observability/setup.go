@@ -41,8 +41,6 @@ type observabilityOptions struct {
 	spanExporterOverride sdktrace.SpanExporter
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

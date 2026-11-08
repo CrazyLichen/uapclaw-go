@@ -69,12 +69,6 @@ type RebuildRequest struct {
 	Metadata map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HostFacingExperienceResultPendingApproval 创建 pending_approval 状态的 HostFacingExperienceResult。

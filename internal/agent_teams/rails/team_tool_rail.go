@@ -71,8 +71,6 @@ type TeamToolRail struct {
 // TeamToolRailOption TeamToolRail 构造选项。
 type TeamToolRailOption func(*TeamToolRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件

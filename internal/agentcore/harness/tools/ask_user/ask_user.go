@@ -17,16 +17,12 @@ import (
 // Python 中 AskUserTool.invoke(query, **kwargs) return {} / stream(query, **kwargs) yield {}
 type AskUserTool struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

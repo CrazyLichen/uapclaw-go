@@ -109,8 +109,6 @@ type TeamManager struct {
 	codeMemberConfigurer CodeMemberConfigurer
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

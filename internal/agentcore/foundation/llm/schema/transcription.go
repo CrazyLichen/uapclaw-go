@@ -23,12 +23,6 @@ type TranscriptionParams struct {
 // TranscribeAudioOption 音频转写选项函数
 type TranscribeAudioOption func(*TranscriptionParams)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTranscriptionParams 创建 TranscriptionParams（默认零值，通过 opts 填充）。

@@ -22,7 +22,6 @@ type ReasoningBankSummaryPrompt struct {
 	ParallelScalingUserPrompt *template.Template
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

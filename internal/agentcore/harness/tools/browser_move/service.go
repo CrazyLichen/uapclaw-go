@@ -56,8 +56,6 @@ type BrowserService struct {
 	lastHeartbeatOK *time.Time
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -65,8 +63,6 @@ const (
 	// Python: MAX_ITERATION_MESSAGE
 	MaxIterationMessage = "Max iterations reached without completion"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

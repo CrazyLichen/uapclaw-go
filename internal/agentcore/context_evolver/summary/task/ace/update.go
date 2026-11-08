@@ -75,7 +75,6 @@ type PersistMemoryOp struct {
 	helper *cepersistence.MemoryPersistenceHelper
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -83,7 +82,6 @@ const (
 	aceAlgoName = "ace"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLoadPlaybookOp 创建 playbook 加载操作。
@@ -824,8 +822,6 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // 辅助函数 derefString/getString/getInt/parseTime 已在 playbook.go 中定义，
 // 同包可直接使用，此处不再重复定义。

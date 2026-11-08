@@ -132,8 +132,6 @@ type EventSender func(event string, payload map[string]any)
 //   - configPayload: 完整配置快照
 type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -289,8 +287,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("models.replace_all", modelsReplaceAll(wc, onConfigSaved, cryptoProv), false)
 	wc.registerMethod("models.validate", modelsValidate(wc), false)
 
-	// ─── session 辅助方法 ───
-
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	wc.registerMethod("chat.send", chatSend(wc), false)
 	wc.registerMethod("chat.resume", chatResume(wc), false)
@@ -416,8 +412,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		wc.registerMethod("cron.job.delete", cronOkStub, false)
 		wc.registerMethod("cron.job.meta", stubHandler(wc, map[string]any{}), false)
 	}
-
-	// ─── 运行时 ───
 
 	// ─── 转发方法（全部 stub）───
 	forwardStubs := map[string]map[string]any{
@@ -2270,8 +2264,6 @@ type ConfigInternalError struct {
 	Message string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponentConfigApply 本文件日志组件
@@ -3319,8 +3311,6 @@ var currentPID = os.Getpid
 
 // systemVirtualMemory 采集系统内存（测试注入点）。
 var systemVirtualMemory = mem.VirtualMemory
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

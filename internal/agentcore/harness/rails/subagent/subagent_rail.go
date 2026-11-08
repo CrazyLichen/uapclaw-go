@@ -40,8 +40,6 @@ type SubagentRail struct {
 // SubagentRailOption 配置选项函数
 type SubagentRailOption func(*SubagentRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

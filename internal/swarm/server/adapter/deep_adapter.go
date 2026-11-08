@@ -284,8 +284,6 @@ type ApprovalAnswer struct {
 	SelectedOptions []string `json:"selected_options"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // persistentCheckpointerInitTimeout 持久化检查点器初始化超时上限。

@@ -88,8 +88,6 @@ type GatewayHeartbeatService struct {
 	lastTickAt *float64
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -105,8 +103,6 @@ const HeartbeatPrompt = "如果你的workspace目录存在HEARTBEAT.md文件, �
 
 // logComponent 日志组件
 const logComponent = logger.ComponentGateway
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

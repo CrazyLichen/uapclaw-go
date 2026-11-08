@@ -285,7 +285,6 @@ func (r *ReMeRetrieveRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // FormatMemoryString 对齐 Python ACE 的记忆格式化。

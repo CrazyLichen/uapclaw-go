@@ -42,14 +42,10 @@ type AgentSession struct {
 // AgentSessionOption AgentSession 构造选项函数类型
 type AgentSessionOption func(*AgentSession)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

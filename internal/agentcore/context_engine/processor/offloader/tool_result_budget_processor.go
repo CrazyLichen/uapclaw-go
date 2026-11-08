@@ -71,8 +71,6 @@ type offloadCandidate struct {
 // ToolResultBudgetProcessorOption 构造选项函数
 type ToolResultBudgetProcessorOption func(*ToolResultBudgetProcessor)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// PersistedOutputTag 卸载后占位符开始标签
@@ -80,8 +78,6 @@ const (
 	// PersistedOutputClosingTag 卸载后占位符结束标签
 	PersistedOutputClosingTag = "</persisted-output>"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

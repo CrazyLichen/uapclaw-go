@@ -80,8 +80,6 @@ const (
 	ChannelTypeA2A ChannelType = "a2a"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // channelTypeLookup 字符串值到 ChannelType 枚举的查找表，用于 ParseChannelType/IsValidChannelType 的 O(1) 查找。
