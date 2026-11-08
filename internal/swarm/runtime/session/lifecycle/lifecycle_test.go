@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // setupDataRoot 建独立的 agent 数据根并注入环境变量。
@@ -1059,5 +1060,44 @@ func TestMarkFinalizing_未开始(t *testing.T) {
 	}
 	if len(operation) != 0 {
 		t.Errorf("无操作应返回空 map，实际 %v", operation)
+	}
+}
+
+// TestResourceLock_跨协程互斥 可重入必须按协程判定，不能全局共享。
+//
+// 若可重入判定用全局集合（而非协程级），A 协程持锁时 B 协程会误判
+// "已持有"直接放行，锁形同虚设——这是并发下会静默丢数据的那类缺陷。
+func TestResourceLock_跨协程互斥(t *testing.T) {
+	setupDataRoot(t)
+
+	releaseFirst, err := ResourceLock("session", "s1")
+	if err != nil {
+		t.Fatalf("首次加锁失败: %v", err)
+	}
+
+	acquired := make(chan struct{})
+	go func() {
+		releaseSecond, lockErr := ResourceLock("session", "s1")
+		if lockErr == nil {
+			close(acquired)
+			releaseSecond()
+		}
+	}()
+
+	// 另一协程必须被挡住
+	select {
+	case <-acquired:
+		close(acquired)
+		releaseFirst()
+		t.Fatal("跨协程不应放行：可重入判定必须按协程隔离")
+	case <-time.After(50 * time.Millisecond):
+	}
+	releaseFirst()
+
+	// 释放后另一协程应能拿到
+	select {
+	case <-acquired:
+	case <-time.After(2 * time.Second):
+		t.Fatal("释放后另一协程应能获取锁")
 	}
 }

@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,11 +40,16 @@ type processFileLock struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// heldLockPaths 当前协程已持有的锁路径（可重入判定）。
-	// Python: lifecycle.py _HELD_LOCKS（threading.local）
-	heldLockPaths sync.Map
+	// goroutineLockState 协程 → 已持有的锁路径集合。
+	//
+	// 可重入必须按"持有者"判定：Python 用 threading.local，Go 没有协程局部存储，
+	// 因此用协程 ID 显式分表。若只用一个全局集合，A 协程持锁时 B 协程会误判
+	// "已持有"而直接放行，锁形同虚设。
+	goroutineLockState sync.Map
 	// processLocks 进程内锁表（键为资源路径）
 	processLocks sync.Map
+	// goroutineSeq 协程 ID 分配器
+	goroutineSeq atomic.Uint64
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -109,8 +118,11 @@ func ResourceLock(kind, resourceID string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, held := heldLockPaths.Load(path); held {
-		return func() {}, nil
+	gid := currentGoroutineID()
+	if held, ok := goroutineLockState.Load(gid); ok {
+		if _, exists := held.(*sync.Map).Load(path); exists {
+			return func() {}, nil
+		}
 	}
 	value, _ := processLocks.LoadOrStore(path, &processFileLock{})
 	lock := value.(*processFileLock)
@@ -126,9 +138,9 @@ func ResourceLock(kind, resourceID string) (func(), error) {
 		lock.mu.Unlock()
 		return nil, lockErr
 	}
-	heldLockPaths.Store(path, struct{}{})
+	setGoroutineHeld(gid, path, true)
 	return func() {
-		heldLockPaths.Delete(path)
+		setGoroutineHeld(gid, path, false)
 		unlockFileHandle(handle)
 		_ = handle.Close()
 		lock.mu.Unlock()
@@ -243,5 +255,53 @@ func asInt(value any) int {
 		return int(typed)
 	default:
 		return 0
+	}
+}
+
+// currentGoroutineID 取当前协程标识。
+//
+// Go 不暴露 goroutine ID，标准做法是从 runtime.Stack 的首行解析
+// "goroutine <id> ["。这里只用于锁归属判定，不参与任何业务逻辑，
+// 解析失败时退化为 0（等价于"不认为已持有"，只是失去可重入）。
+func currentGoroutineID() uint64 {
+	var buffer [64]byte
+	n := runtime.Stack(buffer[:], false)
+	text := string(buffer[:n])
+	const prefix = "goroutine "
+	if !strings.HasPrefix(text, prefix) {
+		return 0
+	}
+	rest := text[len(prefix):]
+	spaceIndex := strings.IndexByte(rest, ' ')
+	if spaceIndex <= 0 {
+		return 0
+	}
+	id, err := strconv.ParseUint(rest[:spaceIndex], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+// setGoroutineHeld 记录/清除某协程对某路径的持有状态。
+func setGoroutineHeld(gid uint64, path string, held bool) {
+	if held {
+		value, _ := goroutineLockState.LoadOrStore(gid, &sync.Map{})
+		value.(*sync.Map).Store(path, struct{}{})
+		return
+	}
+	value, ok := goroutineLockState.Load(gid)
+	if !ok {
+		return
+	}
+	paths := value.(*sync.Map)
+	paths.Delete(path)
+	empty := true
+	paths.Range(func(any, any) bool {
+		empty = false
+		return false
+	})
+	if empty {
+		goroutineLockState.Delete(gid)
 	}
 }
