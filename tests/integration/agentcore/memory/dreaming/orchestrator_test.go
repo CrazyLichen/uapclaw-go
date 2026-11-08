@@ -38,8 +38,6 @@ func TestDreamingOrchestratorSuite(t *testing.T) {
 	suite.Run(t, new(DreamingOrchestratorSuite))
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ---------------------------------------------------------------------------
 // 构造与默认值（对齐 Python: TestDreamingOrchestratorInit）
 // ---------------------------------------------------------------------------

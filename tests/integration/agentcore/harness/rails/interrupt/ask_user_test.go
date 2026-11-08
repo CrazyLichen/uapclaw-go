@@ -412,5 +412,3 @@ func (s *AskUserSuite) TestAskUserRail_无问题时空答案恢复() {
 
 	sess.PostRun(ctx)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

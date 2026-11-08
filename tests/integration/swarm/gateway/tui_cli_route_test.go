@@ -64,10 +64,6 @@ type CliRouteFullChainSuite struct {
 	}
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // TestCliRouteFullChainSuite 运行 CLI 路由全链路集成测试套件
@@ -755,5 +751,3 @@ func (s *CliRouteFullChainSuite) sessionModeOf(msg *schema.Message) string {
 	mode, _ := meta["mode"].(string)
 	return mode
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

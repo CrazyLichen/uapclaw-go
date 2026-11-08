@@ -244,5 +244,3 @@ func (s *CodingMemoryRailDeepSuite) TestInit_Uninit后BeforeModelCall不再注�
 	// 验证 SectionMemory 已移除
 	s.False(spb.HasSection(hsections.SectionMemory), "Uninit 后应移除 SectionMemory 节")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

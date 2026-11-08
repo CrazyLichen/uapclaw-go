@@ -348,5 +348,3 @@ func (s *CodingMemoryRailSuite) TestCodingMemoryRail_BeforeInvoke_初始化Manag
 	s.Require().NotNil(spb)
 	s.True(spb.HasSection(hsections.SectionMemory), "BeforeModelCall 应正常完成并注入 SectionMemory")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
