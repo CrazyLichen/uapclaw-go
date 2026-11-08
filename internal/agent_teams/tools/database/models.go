@@ -1,5 +1,9 @@
 package database
 
+import (
+	"encoding/json"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Team 团队信息模型。
@@ -68,6 +72,22 @@ type TeamTaskBase struct {
 	Status string `json:"status" gorm:"column:status"`
 	// Assignee 认领人/分配人（nil 表示未分配，对齐 Python: Optional[str] = Field(nullable=True)）
 	Assignee *string `json:"assignee,omitempty" gorm:"column:assignee"`
+	// Reviewer 验收人 JSON 文本（nil = 无验收门）
+	// Python: reviewer: Optional[str] = Field(default=None, nullable=True)（models.py L145）
+	// 格式 [{"reviewer_id":"bob","type":"verifier"}]；空表示完成时直接 COMPLETED，
+	// 非空则完成后先进 IN_REVIEW 走验收门（F_59/F_62）
+	Reviewer *string `json:"reviewer,omitempty" gorm:"column:reviewer"`
+	// Revision 正文修订号，每次 title/content 编辑 +1（F_129）
+	// Python: revision: int = Field(default=0, nullable=False)（models.py L182）
+	Revision int64 `json:"revision" gorm:"column:revision;not null;default:0"`
+	// ObservedRevision 认领人最后看到的修订号（F_129）
+	// Python: observed_revision: int = Field(default=0, nullable=False)（models.py L183）
+	// revision > observed_revision 即「改过但未读」，是独立于任何通知标志的常驻信号
+	ObservedRevision int64 `json:"observed_revision" gorm:"column:observed_revision;not null;default:0"`
+	// ChangeNotes 编辑说明 JSON 列表 [{"revision","note","by"}]（F_129 / D8）
+	// Python: change_notes: Optional[str] = Field(default=None, nullable=True)（models.py L189）
+	// 随 revision bump 一同追加，作为审计历史保存
+	ChangeNotes *string `json:"change_notes,omitempty" gorm:"column:change_notes"`
 	// UpdatedAt 更新时间（毫秒时间戳）
 	UpdatedAt int64 `json:"updated_at,omitempty" gorm:"column:updated_at"`
 }
@@ -206,3 +226,44 @@ func Int64Ptr(v int64) *int64 { return &v }
 
 // StringPtr 返回 string 的指针。
 func StringPtr(v string) *string { return &v }
+
+// Reviewers 解析 reviewer 列为成员名列表。
+//
+// 新格式元素是对象 {"reviewer_id":"bob","type":"verifier"}；字符串元素同样接受
+// （宽松，对应上游 reviewers() 对旧格式的自动升级语义）。空值 / 非 JSON / 非列表
+// 一律返回空，语义是「无验收门」，完成路径按直接 COMPLETED 处理。
+//
+// 偏差 D-2（Q2 裁决）：生成侧只写新对象格式（Go 无历史数据，旧字符串格式永远
+// 不会产生），但解析侧保留字符串分支以对齐上游容错行为。
+//
+// Python: TeamTaskBase.reviewers() (models.py L193-219)
+func (t *TeamTaskBase) Reviewers() []string {
+	if t == nil || t.Reviewer == nil || *t.Reviewer == "" {
+		return nil
+	}
+	var parsed []any
+	if err := json.Unmarshal([]byte(*t.Reviewer), &parsed); err != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(parsed))
+	for _, entry := range parsed {
+		switch v := entry.(type) {
+		case string:
+			if v != "" {
+				ids = append(ids, v)
+			}
+		case map[string]any:
+			if id, ok := v["reviewer_id"].(string); ok && id != "" {
+				ids = append(ids, id)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+// HasReviewers 该任务是否配了验收人（决定完成时是否走 IN_REVIEW）。
+// Python: 调用点 if task.reviewers():（team_context.py L899）
+func (t *TeamTaskBase) HasReviewers() bool { return len(t.Reviewers()) > 0 }

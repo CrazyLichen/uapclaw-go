@@ -318,3 +318,55 @@ func TestInt64Ptr(t *testing.T) {
 		t.Errorf("Int64Ptr(0) = %v, want *0", p2)
 	}
 }
+
+// TestTeamTaskBase_Reviewers_新对象格式 测试新格式 [{"reviewer_id":"bob"}] 解析
+func TestTeamTaskBase_Reviewers_新对象格式(t *testing.T) {
+	task := &TeamTaskBase{
+		Reviewer: StringPtr(`[{"reviewer_id":"bob","type":"verifier"},{"reviewer_id":"carol"}]`),
+	}
+	got := task.Reviewers()
+	want := []string{"bob", "carol"}
+	if len(got) != len(want) {
+		t.Fatalf("Reviewers() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("Reviewers()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestTeamTaskBase_Reviewers_字符串元素宽松接受 测试混合格式仍能解析
+func TestTeamTaskBase_Reviewers_字符串元素宽松接受(t *testing.T) {
+	task := &TeamTaskBase{Reviewer: StringPtr(`["bob",{"reviewer_id":"carol"}]`)}
+	got := task.Reviewers()
+	if len(got) != 2 || got[0] != "bob" || got[1] != "carol" {
+		t.Fatalf("Reviewers() = %v, want [bob carol]", got)
+	}
+}
+
+// TestTeamTaskBase_Reviewers_空与坏JSON 测试空值与非 JSON 均返回空切片
+func TestTeamTaskBase_Reviewers_空与坏JSON(t *testing.T) {
+	cases := []*TeamTaskBase{
+		{},
+		{Reviewer: StringPtr("")},
+		{Reviewer: StringPtr("not-json")},
+		{Reviewer: StringPtr(`{"not":"a list"}`)},
+	}
+	for i, task := range cases {
+		if got := task.Reviewers(); len(got) != 0 {
+			t.Fatalf("case %d: Reviewers() = %v, want empty", i, got)
+		}
+	}
+}
+
+// TestTeamTaskBase_HasReviewers 测试验收门判定
+func TestTeamTaskBase_HasReviewers(t *testing.T) {
+	withReviewer := &TeamTaskBase{Reviewer: StringPtr(`[{"reviewer_id":"bob"}]`)}
+	if !withReviewer.HasReviewers() {
+		t.Fatal("HasReviewers() = false, want true")
+	}
+	if (&TeamTaskBase{}).HasReviewers() {
+		t.Fatal("HasReviewers() = true, want false")
+	}
+}

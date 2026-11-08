@@ -47,6 +47,11 @@ const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentCommon
 	// Python: TeamTaskBase (team_task_{suffix})
+	//
+	// reviewer / revision / observed_revision / change_notes 是 25.0c 为任务通知
+	// 补的四列（Q1 裁决：只改建表 DDL，不写 ALTER 迁移——任务表是每 session
+	// 一张动态表，随会话重建；老会话读到零值即「无验收门 / 无编辑」，而编辑功能
+	// 本身由 25.4 才落，老会话本就没有编辑数据）。
 	createTaskTableDDL = `CREATE TABLE IF NOT EXISTS team_task_%s (
     task_id      TEXT PRIMARY KEY,
     team_name    TEXT NOT NULL DEFAULT '',
@@ -54,7 +59,11 @@ const (
     content      TEXT NOT NULL DEFAULT '',
     status       TEXT NOT NULL DEFAULT '',
     assignee     TEXT,
-    updated_at   INTEGER NOT NULL DEFAULT 0
+    updated_at   INTEGER NOT NULL DEFAULT 0,
+    reviewer          TEXT,
+    revision          INTEGER NOT NULL DEFAULT 0,
+    observed_revision INTEGER NOT NULL DEFAULT 0,
+    change_notes      TEXT
 )`
 	// Python: TeamTaskDependencyBase (team_task_dependency_{suffix})
 	// 复合主键 (task_id, depends_on_task_id)，task_id 和 depends_on_task_id 引用同 suffix 的 team_task
