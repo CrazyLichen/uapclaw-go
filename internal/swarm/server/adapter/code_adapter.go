@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -516,6 +517,48 @@ func (c *CodeAdapter) Instance() *harness.DeepAgent {
 		return nil
 	}
 	return c.deep.Instance()
+}
+
+// IsSessionScoped 委托 DeepAdapter。
+// Python: JiuwenSwarmCodeAdapter 继承 JiuWenSwarmDeepAdapter，同理委托。
+func (c *CodeAdapter) IsSessionScoped() bool {
+	if c.deep == nil {
+		return false
+	}
+	return c.deep.IsSessionScoped()
+}
+
+// MarkAsSessionScoped 委托 DeepAdapter。
+func (c *CodeAdapter) MarkAsSessionScoped(sessionID string) {
+	if c.deep != nil {
+		c.deep.MarkAsSessionScoped(sessionID)
+	}
+}
+
+// GetLiveSessionInstance 委托 DeepAdapter。
+func (c *CodeAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.GetLiveSessionInstance(sessionID)
+}
+
+// HandleSwarmflowReply 委托 DeepAdapter。
+func (c *CodeAdapter) HandleSwarmflowReply(
+	ctx context.Context, req *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	if c.deep == nil {
+		return nil, errors.New("code adapter deep is nil")
+	}
+	return c.deep.HandleSwarmflowReply(ctx, req)
+}
+
+// PendingInteractions 委托 DeepAdapter。
+func (c *CodeAdapter) PendingInteractions(sessionID string) ([]map[string]any, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.PendingInteractions(sessionID)
 }
 
 // CompressContext 委托 DeepAdapter 的 ContextCompressor 接口。

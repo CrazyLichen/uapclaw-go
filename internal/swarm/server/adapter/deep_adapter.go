@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -96,6 +97,12 @@ type DeepAdapter struct {
 	// sessionAdapters 会话级子适配器缓存（按会话分身）
 	// Python: interface_deep.py _session_adapters（:2126）
 	sessionAdapters *sessionAdapterCache
+	// isSessionScoped 本适配器是否为会话级子适配器。
+	// Python: interface_deep.py _is_session_scoped_adapter（:2110 定义，:2711 置真）
+	isSessionScoped bool
+	// parentSessionID 子适配器所属的会话标识（仅 isSessionScoped 为真时有意义）。
+	// Python: interface_deep.py _parent_session_id
+	parentSessionID string
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -1792,6 +1799,50 @@ func (d *DeepAdapter) Instance() *harness.DeepAgent {
 		return nil
 	}
 	return d.instance
+}
+
+// IsSessionScoped 是否为会话级子适配器。
+// Python: interface_deep.py _is_session_scoped_adapter（:2110）
+func (d *DeepAdapter) IsSessionScoped() bool {
+	return d.isSessionScoped
+}
+
+// MarkAsSessionScoped 标记为指定会话的子适配器。
+// Python: interface_deep.py mark_as_session_scoped（:2711-2714）
+func (d *DeepAdapter) MarkAsSessionScoped(sessionID string) {
+	d.isSessionScoped = true
+	d.parentSessionID = sessionID
+}
+
+// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent。
+// Python: interface_deep.py get_live_session_instance（:12744）
+//
+// child 返回自己的 instance；根的缓存查询与递归一跳在 Task 3 补齐，
+// 本步骤先返回 nil（根没有"该会话的"实例）。
+func (d *DeepAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if d.isSessionScoped {
+		return d.instance
+	}
+	return nil
+}
+
+// HandleSwarmflowReply 处理人对 swarmflow 人工轮次的回复。
+// Python: interface_deep.py handle_swarmflow_reply（:16971）
+//
+// 方法体归团队域；10.3.28f 只保证接口面与分流结构（spec DEC-10）。
+func (d *DeepAdapter) HandleSwarmflowReply(
+	ctx context.Context, req *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	return nil, errors.New("swarmflow reply handling not implemented; owned by team domain")
+}
+
+// PendingInteractions 会话被暂停的轮次仍在询问什么。
+// Python: interface_deep.py pending_interactions（:15984）
+//
+// 该方法是根上的查询入口，不转 child（对齐上游：它自己查 child）。
+// 方法体依赖 paused_interaction_events，归后续章节。
+func (d *DeepAdapter) PendingInteractions(sessionID string) ([]map[string]any, error) {
+	return nil, nil
 }
 
 // Cleanup 清理适配器资源。

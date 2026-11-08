@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
@@ -62,10 +63,56 @@ func (s *stubAdapter) SwitchMode(_ context.Context, _, _ string) error {
 	return nil
 }
 
+// IsSessionScoped 桩：恒 false（本桩不模拟会话分身）。
+func (s *stubAdapter) IsSessionScoped() bool { return false }
+
+// MarkAsSessionScoped 桩：无操作。
+func (s *stubAdapter) MarkAsSessionScoped(string) {}
+
+// GetLiveSessionInstance 桩：恒 nil。
+func (s *stubAdapter) GetLiveSessionInstance(string) *harness.DeepAgent { return nil }
+
+// HandleSwarmflowReply 桩：返回未实现错误（方法体归团队域）。
+func (s *stubAdapter) HandleSwarmflowReply(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return nil, errors.New("swarmflow reply not implemented")
+}
+
+// PendingInteractions 桩：恒空。
+func (s *stubAdapter) PendingInteractions(string) ([]map[string]any, error) { return nil, nil }
+
 // TestAgentAdapter_编译期接口检查 验证 stubAdapter 满足 AgentAdapter 接口。
 func TestAgentAdapter_编译期接口检查(t *testing.T) {
 	// 此测试的目的是编译期检查：var _ AgentAdapter = (*stubAdapter)(nil)
 	// 如果 stubAdapter 未完整实现 AgentAdapter，编译将失败。
 	var a AgentAdapter = &stubAdapter{}
 	_ = a
+}
+
+// TestAgentAdapter_接口含会话分身方法 编译期确认接口面已扩。
+// 五方法来源：Python interface_deep.py 的三方法（:2110/:2711/:12744）
+// 与 agent_adapters.py AgentAdapter Protocol 的两方法（:86/:94）。
+func TestAgentAdapter_接口含会话分身方法(t *testing.T) {
+	var a AgentAdapter = (*stubAdapter)(nil)
+	var _ = a
+	if _, ok := a.(interface{ IsSessionScoped() bool }); !ok {
+		t.Error("AgentAdapter 应含 IsSessionScoped()")
+	}
+	if _, ok := a.(interface{ MarkAsSessionScoped(string) }); !ok {
+		t.Error("AgentAdapter 应含 MarkAsSessionScoped(string)")
+	}
+	if _, ok := a.(interface {
+		GetLiveSessionInstance(string) *harness.DeepAgent
+	}); !ok {
+		t.Error("AgentAdapter 应含 GetLiveSessionInstance(string)")
+	}
+	if _, ok := a.(interface {
+		HandleSwarmflowReply(context.Context, *schema.AgentRequest) (*schema.AgentResponse, error)
+	}); !ok {
+		t.Error("AgentAdapter 应含 HandleSwarmflowReply")
+	}
+	if _, ok := a.(interface {
+		PendingInteractions(string) ([]map[string]any, error)
+	}); !ok {
+		t.Error("AgentAdapter 应含 PendingInteractions")
+	}
 }

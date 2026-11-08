@@ -14,6 +14,13 @@ import (
 // 最小能力集，UapClawSwarm 门面仅依赖此接口驱动任意 SDK 后端，
 // 不耦合其内部结构。
 // Python: jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py (AgentAdapter)
+//
+// 会话分身的三方法（IsSessionScoped / MarkAsSessionScoped / GetLiveSessionInstance）
+// 与 HandleSwarmflowReply / PendingInteractions 直接进本接口而非另立窄接口：
+// 它们是"调用方用来驱动适配器"的能力面（规则 10），且 Python 的 AgentAdapter
+// Protocol（agent_adapters.py:25）本就含后两者。会话子适配器缓存
+// （sessionAdapterCache.entries）以本接口为元素类型，故根与 child 都是
+// 同一个接口的实例，无需额外抽象层。
 type AgentAdapter interface {
 	// CreateInstance 初始化底层 SDK Agent。
 	// 启动时调用一次，skill install/uninstall 后再次调用。
@@ -63,6 +70,26 @@ type AgentAdapter interface {
 	// 流程：preRun → switchMode → loadState → updateState → postRun
 	// Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 	SwitchMode(ctx context.Context, sessionID, subMode string) error
+
+	// IsSessionScoped 本适配器是否为某会话的子适配器。
+	// Python: interface_deep.py _is_session_scoped_adapter（:2110 定义，:2711 置真）
+	IsSessionScoped() bool
+
+	// MarkAsSessionScoped 把本适配器标记为指定会话的子适配器。
+	// Python: interface_deep.py mark_as_session_scoped（:2711）
+	MarkAsSessionScoped(sessionID string)
+
+	// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent；该会话未启动时返回 nil。
+	// Python: interface_deep.py get_live_session_instance（:12744）
+	GetLiveSessionInstance(sessionID string) *harness.DeepAgent
+
+	// HandleSwarmflowReply 处理人对 swarmflow 人工轮次的回复。
+	// Python: agent_adapters.py AgentAdapter.handle_swarmflow_reply（:86）
+	HandleSwarmflowReply(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
+
+	// PendingInteractions 会话被暂停的轮次仍在询问什么。
+	// Python: agent_adapters.py AgentAdapter.pending_interactions（:94）
+	PendingInteractions(sessionID string) ([]map[string]any, error)
 }
 
 // ContextCompressor 上下文压缩可选接口。
