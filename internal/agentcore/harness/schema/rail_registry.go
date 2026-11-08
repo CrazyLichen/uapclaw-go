@@ -1,10 +1,6 @@
-package rails
+package schema
 
-import (
-	"sync"
-
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-)
+import "sync"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -18,7 +14,7 @@ import (
 //
 // Python: _RAIL_PROVIDER_REGISTRY 的工厂契约
 // (openjiuwen/harness/schema/deep_agent_spec.py:60-78)
-type RailProvider func(params map[string]any, ctx hschema.BuildContextInterface) (any, error)
+type RailProvider func(params map[string]any, ctx BuildContextInterface) (any, error)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -36,6 +32,14 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterRailProvider 注册一个 rail provider（同名覆盖，幂等）。
+//
+// 放在 schema 包而非 rails 包，是为了对齐上游的**同文件结构**：
+// openjiuwen/harness/schema/deep_agent_spec.py 里 _RAIL_PROVIDER_REGISTRY
+// 与 RailSpec 定义在同一文件，RailSpec.build 直接查本地 dict。
+// Go 无「函数内延迟导入」，若注册表放 rails 包则 schema→rails 与
+// rails→schema 会成环；同放 schema 是最忠实的等价方案。
+//
+// rails 包如需转发，调用本函数即可（方向仍是 rails→schema，无环）。
 //
 // Python: register_rail_provider
 // (openjiuwen/harness/schema/deep_agent_spec.py:71-78)
