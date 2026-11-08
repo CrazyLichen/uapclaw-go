@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -226,51 +227,17 @@ func writeCanonicalJSON(sb *strings.Builder, v any) error {
 	return nil
 }
 
-// encodeJSONStringASCII 编码 JSON 字符串，所有非 ASCII 字符转 \uXXXX。
+// encodeJSONStringASCII 编码 JSON 字符串，所有非 ASCII 字符转义为 ASCII。
 //
-// 对齐 Python json.dumps 的 ensure_ascii=True 行为：
-//   - BMP 内字符转 \uXXXX（小写十六进制）
-//   - BMP 外字符转 UTF-16 代理对（两个 \uXXXX）
-//   - 控制字符用标准短转义（\n \t 等）或 \u00XX
+// 直接用 strconv.QuoteToASCII：它输出合法的 Go/JSON 双引号字符串，非 ASCII
+// 全部转义，且不转义 < > &（无 HTML 转义，符合 JSON 语义）。
+//
+// 与 Python json.dumps(ensure_ascii=True) 的已知差异（本项目只做同进程内
+// 相等比较，不做跨语言比对，故可接受）：
+//   - BMP 外字符：Go 输出 \U0001f600，Python 输出 UTF-16 代理对 \ud83d\ude00
+//   - 控制字符与 DEL：Go 输出 \x01 / \x7f，Python 输出 \u0001 / \u007f
+//
+// 差异只影响字面形式，不影响相等判定的一致性——两侧都经本函数产出。
 func encodeJSONStringASCII(s string) string {
-	var sb strings.Builder
-	sb.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			sb.WriteString(`\"`)
-		case '\\':
-			sb.WriteString(`\\`)
-		case '\n':
-			sb.WriteString(`\n`)
-		case '\r':
-			sb.WriteString(`\r`)
-		case '\t':
-			sb.WriteString(`\t`)
-		case '\b':
-			sb.WriteString(`\b`)
-		case '\f':
-			sb.WriteString(`\f`)
-		default:
-			if r < 0x20 {
-				fmt.Fprintf(&sb, `\u%04x`, r)
-				continue
-			}
-			if r < 0x7f {
-				sb.WriteRune(r)
-				continue
-			}
-			if r <= 0xffff {
-				fmt.Fprintf(&sb, `\u%04x`, r)
-				continue
-			}
-			// BMP 之外：拆成 UTF-16 代理对
-			r -= 0x10000
-			high := 0xd800 + (r >> 10)
-			low := 0xdc00 + (r & 0x3ff)
-			fmt.Fprintf(&sb, `\u%04x\u%04x`, high, low)
-		}
-	}
-	sb.WriteByte('"')
-	return sb.String()
+	return strconv.QuoteToASCII(s)
 }

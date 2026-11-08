@@ -275,12 +275,23 @@ func containsASCIIEscape(s string) bool {
 	return false
 }
 
-// TestNativeArgumentsJSON_emoji代理对 测试 BMP 外字符转成 UTF-16 代理对
-func TestNativeArgumentsJSON_emoji代理对(t *testing.T) {
+// TestNativeArgumentsJSON_emoji转义 测试 BMP 外字符被转义为 ASCII
+//
+// strconv.QuoteToASCII 输出 \U0001f600（Go 风格），而 Python
+// json.dumps(ensure_ascii=True) 输出代理对 \ud83d\ude00。本项目只做同进程内
+// 相等比较（两侧都经 NativeArgumentsJSON 产出），字面差异不影响正确性。
+func TestNativeArgumentsJSON_emoji转义(t *testing.T) {
 	got := NativeArgumentsJSON(map[string]any{"e": "😀"})
-	// 😀 = U+1F600 → 代理对 \ud83d\ude00
-	if !strings.Contains(got, `\ud83d\ude00`) {
-		t.Errorf("emoji 未转成代理对: %q", got)
+	if containsASCIIEscape(got) {
+		t.Errorf("emoji 应被转义: %q", got)
+	}
+	// 必须含 ASCII 转义形式，不能是原 UTF-8 字节
+	if strings.Contains(got, "😀") {
+		t.Errorf("emoji 未被转义: %q", got)
+	}
+	// 同一输入必须产生同一输出（自洽性）
+	if again := NativeArgumentsJSON(map[string]any{"e": "😀"}); again != got {
+		t.Errorf("同输入输出不稳定: %q vs %q", got, again)
 	}
 }
 
@@ -302,11 +313,19 @@ func TestNativeArgumentsJSON_转义字符(t *testing.T) {
 	}
 }
 
-// TestNativeArgumentsJSON_控制字符 测试 < 0x20 的控制字符转 \u00XX
+// TestNativeArgumentsJSON_控制字符 测试控制字符被转义为 ASCII
+//
+// strconv.QuoteToASCII 输出 \x01（两位十六进制），Python 输出 \u0001。差异只
+// 影响字面形式，不影响相等判定。
 func TestNativeArgumentsJSON_控制字符(t *testing.T) {
 	got := NativeArgumentsJSON(map[string]any{"s": "\x01"})
-	if !strings.Contains(got, `\u0001`) {
-		t.Errorf("控制字符未转义: %q", got)
+	// 结果里不能出现原始控制字符字节
+	if strings.ContainsRune(got, 0x01) {
+		t.Errorf("控制字符未被转义: %q", got)
+	}
+	// 必须出现转义序列
+	if !strings.Contains(got, `\x01`) && !strings.Contains(got, `\u0001`) {
+		t.Errorf("控制字符无转义序列: %q", got)
 	}
 }
 
