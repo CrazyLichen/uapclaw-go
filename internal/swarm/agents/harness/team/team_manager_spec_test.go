@@ -843,3 +843,6 @@ func TestRegisterMemberRuntimeTools_SendFile重复注册前缀移除(t *testing.
 		t.Errorf("二轮 send_file 卡应前缀移除后仍 1 张, got %d", sfCount2)
 	}
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityMgrForCustomizer) TeardownTools() {}

@@ -1549,3 +1549,6 @@ func (f *fakeToolForSync) Invoke(_ context.Context, _ map[string]any, _ ...tool.
 func (f *fakeToolForSync) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, nil
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManager) TeardownTools() {}

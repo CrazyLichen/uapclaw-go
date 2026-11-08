@@ -456,3 +456,6 @@ func TestRailPriority(t *testing.T) {
 	rail := NewContextAssembleRail()
 	assert.Equal(t, 85, rail.Priority())
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *railAbilityManager) TeardownTools() {}

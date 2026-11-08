@@ -1024,3 +1024,6 @@ func (f *fakeProviderErrHandle) Prefetch(_ context.Context, _ string, _ ...ext.P
 func (f *fakeProviderErrHandle) SyncTurn(_ context.Context, _, _ string, _ ...ext.ProviderOption) error {
 	return nil
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManager) TeardownTools() {}

@@ -470,3 +470,6 @@ func TestTaskLoopController_EnqueueSteer(t *testing.T) {
 	bare.EnqueueSteer("丢弃")
 	assert.Equal(t, 0, bare.SteerLen())
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *mockAbilityMgr) TeardownTools() {}

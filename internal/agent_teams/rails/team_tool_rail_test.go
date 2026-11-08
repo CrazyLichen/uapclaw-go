@@ -404,3 +404,6 @@ func TestNewTeamToolRail_空成员名归一化(t *testing.T) {
 		t.Fatalf("memberName = %q, want unknown", r.memberName)
 	}
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManagerTeam) TeardownTools() {}

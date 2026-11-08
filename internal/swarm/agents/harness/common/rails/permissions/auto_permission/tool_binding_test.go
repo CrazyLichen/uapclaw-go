@@ -371,3 +371,6 @@ func TestResolveToolBinding_非ToolCard但工具存在(t *testing.T) {
 		t.Fatalf("卡片非 *tool.ToolCard 时应返回 nil，实际 %v", got)
 	}
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManager) TeardownTools() {}
