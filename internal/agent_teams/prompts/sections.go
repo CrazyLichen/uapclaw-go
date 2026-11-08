@@ -487,6 +487,137 @@ func BuildTeamBridgeSection(role atschema.TeamRole, language, selfMemberName str
 	return &section, nil
 }
 
+// BuildTeamStaticSections 构建一个成员永不变化的团队 section 集合。
+//
+// 静态团队 section 的唯一真相源。进程内 DeepAgent 成员经 TeamPolicyRail
+// 调它；外部 CLI 成员直接调它来拼一份独立提示词快照。这里每一节都是静态的
+// ——HITT 门控在 hittEnabled、bridge 门控在 role == BRIDGE_AGENT。
+//
+// **团队状态不在这里**：成员自己的身份、团队元信息和同伴名册都在出现时投递
+// 进成员的对话（见 agent_teams/tracker 的 TeamContextTracker），这让本节对
+// 同角色的每个成员保持逐字节相同，也给会话中途会变的状态留恰好一条可以纠正
+// 的通道。
+//
+// 参数：
+//   - role: 角色
+//   - memberName: 语义成员标识，供 HITT / bridge 自契约使用（"" 等价 Python None）
+//   - lifecycle: "temporary" / "persistent"
+//   - teammateMode: "build_mode" / "plan_mode"
+//   - teamMode: "default" / "predefined" / "hybrid"
+//   - dispatchMode: "autonomous" / "scheduled"
+//   - memberMessaging: scheduled 成员可否互发消息（F_126）
+//   - memberSubtasks: scheduled 成员可否拆子任务（F_128）
+//   - basePrompt: 调用方附加的提示词（"" 等价 Python None）
+//   - language: "cn" / "en"
+//   - hittEnabled: HITT 开关；门控静态 HITT 契约
+//   - exposeHumanAgentsToTeammates: teammate 是否取名册感知的 HITT 变体
+//   - workspacePromptVariant: "native" / "external"，转发给 role section
+//
+// 返回的 section 未排序（调用方按 priority 排）。
+//
+// Python: build_team_static_sections (prompts/sections.py L722-835)
+func BuildTeamStaticSections(
+	role atschema.TeamRole,
+	memberName, lifecycle, teammateMode, teamMode, dispatchMode string,
+	memberMessaging, memberSubtasks bool,
+	basePrompt, language string,
+	hittEnabled, exposeHumanAgentsToTeammates bool,
+	workspacePromptVariant string,
+) ([]saprompt.PromptSection, error) {
+	sections := make([]saprompt.PromptSection, 0, 9)
+
+	if s, err := BuildTeamRoleSection(role, teammateMode, workspacePromptVariant, language); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s, err := BuildTeamHITTSection(role, hittEnabled, language, memberName, exposeHumanAgentsToTeammates); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s, err := BuildTeamBridgeSection(role, language, memberName); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s, err := BuildTeamWorkflowSection(role, teamMode, language); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s, err := BuildTeamDispatchSection(role, dispatchMode, memberMessaging, memberSubtasks, language); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s, err := BuildTeamTaskStateSection(role, dispatchMode, language); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s, err := BuildTeamLifecycleSection(role, lifecycle, language); err != nil {
+		return nil, err
+	} else if s != nil {
+		sections = append(sections, *s)
+	}
+	if s := BuildTeamExtraSection(basePrompt, language); s != nil {
+		sections = append(sections, *s)
+	}
+	// 每个成员——进程内或外部 CLI——都以 <team-inbound> / <team-event> /
+	// <team-context> XML 收到入站消息、框架事件和团队状态更新，所以入站标签
+	// 说明永远加上。
+	tagsSection, err := BuildTeamInboundTagsSection(language)
+	if err != nil {
+		return nil, err
+	}
+	if tagsSection != nil {
+		sections = append(sections, *tagsSection)
+	}
+	return sections, nil
+}
+
+// BuildLeaderPolicyDisclosure 渲染 leader 的协作政策，供 build_team 结果下发。
+//
+// 这是 leader 渐进式披露拆分（F_76）的披露那一半：同样这批 section，原本
+// 该待在 leader 系统提示词里，现在按同样方式组装（priority 排序、"\n\n"
+// 连接），但作为 build_team 的工具结果交付。leader 读到每一节的哪个变体，
+// 由创建团队那次调用的参数决定，所以团队并不运行的调度模式的约定永远到不了
+// 它手上。
+//
+// **刻意排除三项**：
+//   - team_identity —— 逐成员，经 TeamContextTracker 走对话投递
+//   - team_extra —— 用户给的 base prompt 是调用方给这个 leader 的指令，
+//     不是团队政策，且必须在团队存在之前就生效；它留在系统提示词里
+//   - team_bootstrap —— 已在系统提示词里；路由已走过之后再重复一遍是噪音
+//
+// Python: build_leader_policy_disclosure (prompts/sections.py L837-903)
+func BuildLeaderPolicyDisclosure(
+	lifecycle, teammateMode, teamMode, dispatchMode string,
+	memberMessaging, memberSubtasks bool,
+	language string, hittEnabled bool,
+) (string, error) {
+	sections, err := BuildTeamStaticSections(
+		atschema.TeamRoleLeader,
+		"", // memberName：leader 无自身名（等价 Python None）
+		lifecycle, teammateMode, teamMode, dispatchMode,
+		memberMessaging, memberSubtasks,
+		"", // basePrompt：刻意排除 team_extra
+		language,
+		hittEnabled,
+		false,    // exposeHumanAgentsToTeammates：leader 恒 false
+		"native", // workspacePromptVariant：leader 用 native
+	)
+	if err != nil {
+		return "", err
+	}
+	builder := saprompt.NewSystemPromptBuilderWithFilter(language, nil)
+	for _, s := range sections {
+		builder.AddSection(s)
+	}
+	return builder.Build(), nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // scheduledMemberMessaging 渲染 scheduled dispatch 模板的 {{member_messaging}} 槽位。

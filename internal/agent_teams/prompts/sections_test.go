@@ -730,3 +730,139 @@ func TestBuildTeamBridgeSection_selfLine(t *testing.T) {
 		t.Fatal("空名不应渲染 self_line")
 	}
 }
+
+// ──────────────────────────── 统一入口 ────────────────────────────
+
+// staticSectionsTestArgs 统一入口测试的通用参数。
+func staticSectionsTestArgs(role atschema.TeamRole) (
+	atschema.TeamRole, string, string, string, string, string, bool, bool, string, string, bool, bool, string,
+) {
+	return role, "bob", "temporary", "build_mode", "default", "autonomous",
+		false, false, "", "cn", true, false, "native"
+}
+
+// TestBuildTeamStaticSections_Teammate顺序 验证组装顺序与 inbound_tags 收尾。
+// Python: build_team_static_sections (sections.py L722-835) —— builders 列表
+// 顺序 role→hitt→bridge→workflow→dispatch→task_state→lifecycle→extra，
+// 最后无条件 append inbound_tags。
+func TestBuildTeamStaticSections_Teammate顺序(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleTeammate)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	var names []string
+	for _, s := range got {
+		names = append(names, s.Name)
+	}
+	want := []string{SectionRole, SectionHITT, SectionDispatch, SectionInboundTags}
+	if len(names) != len(want) {
+		t.Fatalf("section 数量不符：got=%v want=%v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("第 %d 个 section 应为 %s，实际 %s（全序 %v）", i, want[i], names[i], names)
+		}
+	}
+}
+
+// TestBuildTeamStaticSections_HITT关闭时无HITT 验证 hittEnabled=false 跳过。
+func TestBuildTeamStaticSections_HITT关闭时无HITT(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, _, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleTeammate)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, false, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	for _, s := range got {
+		if s.Name == SectionHITT {
+			t.Fatal("hittEnabled=false 时不应有 HITT section")
+		}
+	}
+}
+
+// TestBuildTeamStaticSections_Extra为空时跳过 验证 basePrompt 空串不产生 section。
+func TestBuildTeamStaticSections_Extra为空时跳过(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, _, lang, hitt, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleTeammate)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, "", lang, hitt, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	for _, s := range got {
+		if s.Name == SectionExtra {
+			t.Fatal("basePrompt 为空时不应有 extra section")
+		}
+	}
+}
+
+// TestBuildTeamStaticSections_Leader全套 验证 leader 调统一入口时拿到全套
+// （这是 policy disclosure 的输入，不是 leader 的系统提示词）。
+func TestBuildTeamStaticSections_Leader全套(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleLeader)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	var names []string
+	for _, s := range got {
+		names = append(names, s.Name)
+	}
+	// leader: role(11) hitt(12) workflow(13) dispatch(15) task_state(16) lifecycle(14) inbound(18)
+	want := []string{SectionRole, SectionHITT, SectionWorkflow, SectionDispatch, SectionTaskState, SectionLifecycle, SectionInboundTags}
+	if len(names) != len(want) {
+		t.Fatalf("section 数量不符：got=%v want=%v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("第 %d 个应为 %s，实际 %s（全序 %v）", i, want[i], names[i], names)
+		}
+	}
+}
+
+// ──────────────────────────── policy disclosure ────────────────────────────
+
+// TestBuildLeaderPolicyDisclosure_含关键章节 验证披露含 dispatch/task_state。
+// Python: build_leader_policy_disclosure (sections.py L837-903)
+func TestBuildLeaderPolicyDisclosure_含关键章节(t *testing.T) {
+	got, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "autonomous", false, false, "cn", true)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if got == "" {
+		t.Fatal("policy 不应为空")
+	}
+	for _, want := range []string{"任务下发", "任务状态流转", "工作流程", "团队生命周期"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("policy 应含 %q", want)
+		}
+	}
+}
+
+// TestBuildLeaderPolicyDisclosure_不含extra与bootstrap 验证三项排除。
+// Python: docstring 明说排除 team_identity / team_extra / team_bootstrap。
+func TestBuildLeaderPolicyDisclosure_不含extra与bootstrap(t *testing.T) {
+	got, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "autonomous", false, false, "cn", true)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(got, "第一步就调用") {
+		t.Fatal("不应含 bootstrap 的起手指令")
+	}
+}
+
+// TestBuildLeaderPolicyDisclosure_scheduled含验证闸 验证模式切换生效。
+func TestBuildLeaderPolicyDisclosure_scheduled含验证闸(t *testing.T) {
+	auto, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "autonomous", false, false, "cn", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	sched, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "scheduled", false, true, "cn", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(auto, "in_review") {
+		t.Fatal("autonomous 的披露不应出现 in_review")
+	}
+	if !strings.Contains(sched, "in_review") {
+		t.Fatal("scheduled 的披露应出现 in_review")
+	}
+}
