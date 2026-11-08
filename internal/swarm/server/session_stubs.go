@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -13,7 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -57,6 +58,14 @@ type sessionCleanerAdapter struct {
 	mgr *srvruntime.AgentManager
 }
 
+// teamExecutionControllerAdapter 团队执行控制面适配器。
+//
+// spec §8 D-13：TeamManager 的四方法（SetRoundStateReporter 等）仍待 25.2，
+// 此处只实现删除事务所需的 quiesce / dispose / committed / aborted 四个动作。
+// 未实现的动作记 Debug 并返回 nil——删除事务不能因为"团队体系还没迁移"
+// 而整体失败，否则 team.delete 仍然不可用。
+type teamExecutionControllerAdapter struct{}
+
 // noopPromptSuggestionForks 会话建议生成分支持有者桩。
 // spec §8 D-10：待 10.3.30 recommendation（43821 行）落地后回填。
 type noopPromptSuggestionForks struct{}
@@ -90,15 +99,17 @@ func newSessionProvisioner(
 		agentManager = &sessionAgentManagerAdapter{mgr: mgr}
 	}
 	prov := swruntime.NewRuntimeSessionProvisioner(swruntime.ProvisionerDeps{
-		AgentManager:        agentManager,
-		PlanController:      planController,
-		TrajectoryHook:      noopTrajectoryHook{},
-		TeamBinding:         noopTeamBindingUnbinder{},
-		LifecycleJournal:    noopLifecycleJournal{},
-		ParticipantRegistry: session.NewRuntimeParticipantRegistry(),
-		PromptForks:         noopPromptSuggestionForks{},
-		SubagentStopper:     noopSubagentRuntimeStopper{},
+		AgentManager:            agentManager,
+		PlanController:          planController,
+		TrajectoryHook:          noopTrajectoryHook{},
+		TeamBinding:             noopTeamBindingUnbinder{},
+		LifecycleJournal:        noopLifecycleJournal{},
+		ParticipantRegistry:     sessionpkg.NewRuntimeParticipantRegistry(),
+		PromptForks:             noopPromptSuggestionForks{},
+		SubagentStopper:         noopSubagentRuntimeStopper{},
+		TeamExecutionController: teamExecutionControllerAdapter{},
 	})
+	prov.SetListTeamSessions(listTeamSessionIDs)
 	prov.SetSessionOps(&sessionOpsAdapter{})
 	prov.CheckpointEnsure = adapter.EnsurePersistentCheckpointer
 	prov.SessionCleaner = &sessionCleanerAdapter{mgr: mgr}
@@ -289,6 +300,40 @@ func (a *sessionCleanerAdapter) CleanupSession(
 	return err
 }
 
+// QuiesceForDelete 静默团队执行（删除前）。
+// Python: TeamExecutionController.quiesce_for_delete
+func (teamExecutionControllerAdapter) QuiesceForDelete(
+	_ context.Context, target sessionpkg.SessionLifecycleTarget, _ string,
+) error {
+	logger.Debug(logComponent).Str("team_name", target.TeamName).
+		Msg("team quiesce for delete not implemented (see 10.3.28 spec D-13)")
+	return nil
+}
+
+// DisposeAfterResourceRelease 释放资源后销毁团队执行。
+// Python: TeamExecutionController.dispose_after_resource_release
+func (teamExecutionControllerAdapter) DisposeAfterResourceRelease(
+	_ context.Context, target sessionpkg.SessionLifecycleTarget, _ string,
+) error {
+	logger.Debug(logComponent).Str("team_name", target.TeamName).
+		Msg("team dispose after release not implemented (see 10.3.28 spec D-13)")
+	return nil
+}
+
+// DeleteAborted 删除已中止（Runner 失败）。
+// Python: TeamExecutionController.delete_aborted
+func (teamExecutionControllerAdapter) DeleteAborted(target sessionpkg.SessionLifecycleTarget) {
+	logger.Debug(logComponent).Str("team_name", target.TeamName).
+		Msg("team delete aborted")
+}
+
+// DeleteCommitted 删除已提交。
+// Python: TeamExecutionController.delete_committed
+func (teamExecutionControllerAdapter) DeleteCommitted(target sessionpkg.SessionLifecycleTarget) {
+	logger.Debug(logComponent).Str("team_name", target.TeamName).
+		Msg("team delete committed")
+}
+
 // SessionDeleted 桩：记 Debug 并返回。
 func (noopPromptSuggestionForks) SessionDeleted(sessionID string) {
 	logger.Debug(logComponent).Str("session_id", sessionID).
@@ -393,4 +438,38 @@ func sessionProvisionErrorResponse(
 			"code":  code,
 		}),
 	)
+}
+
+// listTeamSessionIDs 列出团队下全部会话标识（绑定的 ∪ 扫目录的）。
+// Python: session_provisioner.py _inventory_team_session_ids（:1873）
+//
+// 两处都要扫：活动区与归档区。团队删除必须把已归档的成员会话也算进来，
+// 否则归档区会留下属于已删除团队的孤儿目录。
+func listTeamSessionIDs(teamName string) []string {
+	active := swarmsession.GetSessionsDir()
+	roots := []string{active, filepath.Join(filepath.Dir(active), "sessions_archived")}
+	matched := map[string]struct{}{}
+	for _, root := range roots {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			metadata := swarmsession.GetSessionMetadata(entry.Name())
+			mode, _ := metadata["mode"].(string)
+			storedTeam, _ := metadata["team_name"].(string)
+			if schema.IsTeamMode(mode) && storedTeam == teamName {
+				matched[entry.Name()] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(matched))
+	for sessionID := range matched {
+		out = append(out, sessionID)
+	}
+	sort.Strings(out)
+	return out
 }

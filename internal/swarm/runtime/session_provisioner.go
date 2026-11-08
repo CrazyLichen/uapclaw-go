@@ -747,6 +747,12 @@ func (p *RuntimeSessionProvisioner) SetRemoveSessionDir(fn func(sessionDir strin
 }
 
 // SetTeamManagerProvider 注入团队管理器获取函数。
+// SetListTeamSessions 注入团队会话清单读取器（团队删除用）。
+// Python: session_provisioner.py _inventory_team_session_ids（:1873）
+func (p *RuntimeSessionProvisioner) SetListTeamSessions(fn func(teamName string) []string) {
+	p.extra.ListTeamSessions = fn
+}
+
 func (p *RuntimeSessionProvisioner) SetTeamManagerProvider(fn func(channelID string) TeamSwitchPreparer) {
 	p.extra.teamManagerProvider = fn
 }
@@ -2380,6 +2386,13 @@ func (p *RuntimeSessionProvisioner) deleteTeamLocked(
 	}
 	gate.BeginDeleteLocked(target)
 	defer gate.FinishDeleteLocked(target)
+
+	// Python: TeamDeletionGate.mutation_lock 包住 binding/entity 读写。
+	// 没有这把锁时，删除期间并发的团队变更（改名/加成员）会与删除交错，
+	// 留下半删的绑定记录。
+	mutationLock := gate.MutationLock(target)
+	mutationLock.Lock()
+	defer mutationLock.Unlock()
 
 	if cached, ok := p.completedTeamDeletes.get(target); ok {
 		return cached
