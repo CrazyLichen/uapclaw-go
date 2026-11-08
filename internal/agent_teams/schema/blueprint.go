@@ -106,7 +106,6 @@ type TeamAgentSpec struct {
 	// Python: enable_member_messaging (blueprint.py L374)
 	EnableMemberMessaging bool `json:"enable_member_messaging,omitempty"`
 	// MaxSubtaskDepth 允许 scheduled 成员把任务拆成子任务（F_128）
-	//
 	// 0（默认）让 create_task 只属于 leader。正值给 scheduled 成员一个
 	// create_task，把它正在执行的任务停在 BLOCKED 直到新子任务完成，并限制
 	// 子任务嵌套深度（leader 的任务是深度 0，其子任务是 1，……）。
@@ -114,6 +113,16 @@ type TeamAgentSpec struct {
 	//
 	// Python: max_subtask_depth (blueprint.py L385)
 	MaxSubtaskDepth int `json:"max_subtask_depth,omitempty"`
+	// EnableTaskVerification 团队级「验证预期」开关（F_62）
+	//
+	// 纯提示词驱动：True 时 leader 的建任务指引会要求它按自己的判断给每个任务
+	// 分配 0..N 个 reviewer（无硬校验——leader 认为琐碎的任务仍可不配）。
+	// 验证者机制本身（列、守卫、投票）与该开关无关，始终可用。
+	// 可在 build_team 时按团队实例覆盖（spec 对该开关是静默收窄，不像
+	// enable_hitt 撞顶会报错）。
+	//
+	// Python: enable_task_verification (blueprint.py L364)
+	EnableTaskVerification bool `json:"enable_task_verification,omitempty"`
 	// BootstrapMode 谁物化团队行，以及 leader 如何收到它的政策（F_122）
 	//
 	// "leader"（默认）：leader 调 build_team 工具，该工具创建团队并在结果里

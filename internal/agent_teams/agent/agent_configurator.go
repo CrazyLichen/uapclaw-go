@@ -356,6 +356,10 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		rails.WithWorktreeManager(c.WorktreeManager()),
 		rails.WithTeamName(c.TeamName()),
 		rails.WithMemberName(c.MemberName()),
+		rails.WithToolDispatchMode(resolveDispatchMode(spec)),
+		rails.WithToolTeamMode(teamMode),
+		rails.WithToolBootstrapMode(resolveBootstrapMode(spec)),
+		rails.WithToolSwarmflowEnabled(spec.SwarmflowEnabled),
 	)
 
 	// 步骤 10: TeamPolicyRail
@@ -529,6 +533,13 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	if ctx.TeamSpec != nil && ctx.TeamSpec.LeaderMemberName != "" {
 		tbOpts = append(tbOpts, tools.WithLeaderMemberName(ctx.TeamSpec.LeaderMemberName))
 	}
+	// 能力开关（25.0g）：调度模式、成员互发消息、成员拆子任务、任务验证天花板
+	tbOpts = append(tbOpts,
+		tools.WithDispatchMode(resolveDispatchMode(spec)),
+		tools.WithMemberMessaging(spec.EnableMemberMessaging),
+		tools.WithMaxSubtaskDepth(spec.MaxSubtaskDepth),
+		tools.WithSpecEnableTaskVerification(spec.EnableTaskVerification),
+	)
 
 	tb := tools.NewTeamBackend(teamName, currentMemberName, isLeader, db, msg, tbOpts...)
 
@@ -920,6 +931,12 @@ func (c *AgentConfigurator) buildTeamPolicyRail(
 		rails.WithPolicyTeamBackend(c.TeamBackend()),
 		rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
 		rails.WithPolicyTaskEventTracker(taskTracker),
+		rails.WithPolicyBootstrapMode(resolveBootstrapMode(spec)),
+		rails.WithPolicySwarmflowEnabled(spec.SwarmflowEnabled),
+		rails.WithPolicyBoundGroupName(spec.BoundGroupName),
+		rails.WithPolicyMemberMessaging(backendMemberMessaging(c.TeamBackend())),
+		rails.WithPolicyMemberSubtasks(backendMemberSubtasks(c.TeamBackend())),
+		rails.WithPolicyHittEnabled(backendHittEnabled(c.TeamBackend())),
 	}
 	if c.WorkspaceManager() != nil {
 		opts = append(opts,
@@ -933,11 +950,53 @@ func (c *AgentConfigurator) buildTeamPolicyRail(
 
 // resolveDispatchMode 解析本团队的调度模式。
 //
-// 偏差 D-10：Go 的 TeamAgentSpec 暂无 DispatchMode 字段（grep 零命中），调度模式
-// 整体属 25.2。此处恒返回 "autonomous"，即非 leader 成员注入
-// TaskRevisionTracker（编辑通知）而非 TaskOutcomeTracker（评审通过通知）。
-// 25.2 落地 DispatchMode 后，本函数改成直接读字段即可。
-func resolveDispatchMode(_ atschema.TeamAgentSpec) string { return "autonomous" }
+// 空串与未知值一律回落 "autonomous"（上游默认值）。
+//
+// Python: dispatch_mode: Literal["autonomous","scheduled"] = "autonomous"
+// (schema/blueprint.py L350)
+func resolveDispatchMode(spec atschema.TeamAgentSpec) string {
+	if spec.DispatchMode == "scheduled" {
+		return "scheduled"
+	}
+	return "autonomous"
+}
+
+// resolveBootstrapMode 解析本团队的建队模式。
+//
+// 空串与未知值一律回落 "leader"（上游默认值）。
+//
+// Python: bootstrap_mode: Literal["leader","framework"] = "leader"
+// (schema/blueprint.py L395)
+func resolveBootstrapMode(spec atschema.TeamAgentSpec) string {
+	if spec.BootstrapMode == "framework" {
+		return "framework"
+	}
+	return "leader"
+}
+
+// backendMemberMessaging 读团队成员的 messaging 能力（nil 安全）。
+func backendMemberMessaging(tb *tools.TeamBackend) bool {
+	if tb == nil {
+		return false
+	}
+	return tb.MemberMessagingEnabled()
+}
+
+// backendMemberSubtasks 读团队的 subtasks 能力（nil 安全）。
+func backendMemberSubtasks(tb *tools.TeamBackend) bool {
+	if tb == nil {
+		return false
+	}
+	return tb.MemberSubtasksEnabled()
+}
+
+// backendHittEnabled 读团队的 HITT 能力开关（nil 安全）。
+func backendHittEnabled(tb *tools.TeamBackend) bool {
+	if tb == nil {
+		return false
+	}
+	return tb.HITTEnabled()
+}
 
 // SetTaskEventTracker 记录本成员的任务通知器（非 leader 才有）。
 func (c *AgentConfigurator) SetTaskEventTracker(t tracker.TaskEventTracker) {
