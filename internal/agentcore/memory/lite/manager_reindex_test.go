@@ -43,14 +43,19 @@ func (f *fakeEmbedProvider) Model() string { return f.model }
 // Dims 返回向量维度
 func (f *fakeEmbedProvider) Dims() int { return f.dims }
 
+// ConfigFingerprint 返回配置指纹（测试替身固定值）
+func (f *fakeEmbedProvider) ConfigFingerprint() string { return f.id + ":" + f.model }
+
 // TestNeedsReindex_表驱动 覆盖重建判定的 7 条路径。
 // 对齐 Python _should_full_reindex（manager.py:587）的判定项，并补齐
 // segmenter / vectorDims 两个新增项。
 func TestNeedsReindex_表驱动(t *testing.T) {
 	baseMeta := func(over map[string]any) map[string]any {
 		meta := map[string]any{
-			"provider":    "mock",
-			"model":       "mock",
+			"provider": "mock",
+			"model":    "mock",
+			// providerKey 现为 config fingerprint；fake 替身返回 id:model
+			"providerKey": "mock:mock",
 			"chunkTokens": float64(256),
 			// 用当前分词器标识，保证「全一致」基线真的全一致
 			"segmenter": segmenterID(),
@@ -80,6 +85,7 @@ func TestNeedsReindex_表驱动(t *testing.T) {
 		{"provider 从 mock 换成真模型", baseMeta(nil), "openai_compatible", "text-embedding-v3", true, "provider_changed"},
 		{"model 变化", baseMeta(nil), "mock", "other-model", true, "model_changed"},
 		{"chunkTokens 变化", baseMeta(map[string]any{"chunkTokens": float64(128)}), "mock", "mock", true, "chunking_changed"},
+		{"providerKey 变化（换端点或密钥）", baseMeta(map[string]any{"providerKey": "mock:mock:https://old:aaa"}), "mock", "mock", true, "provider_key_changed"},
 		{"segmenter 变化", baseMeta(map[string]any{"segmenter": "stale-segmenter"}), "mock", "mock", true, "segmenter_changed"},
 		{"vectorDims 变化", baseMeta(map[string]any{"vectorDims": float64(128)}), "mock", "mock", true, "vector_dims_changed"},
 	}

@@ -3,6 +3,7 @@ package lite
 import (
 	"context"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -29,6 +30,11 @@ type EmbeddingProvider interface {
 	Model() string
 	// Dims 返回嵌入向量维度。对齐 Python: self.provider.dims
 	Dims() int
+	// ConfigFingerprint 返回影响向量结果的配置指纹。
+	//
+	// 用于两件事：判定配置是否变更（需要重建索引），以及隔离 embedding_cache。
+	// 对齐 Python EmbeddingProvider.config_fingerprint（embeddings.py:19）。
+	ConfigFingerprint() string
 }
 
 // MockEmbeddingProvider 模拟嵌入提供者。对齐 Python MockEmbeddingProvider
@@ -47,6 +53,10 @@ type baseEmbeddingAdapter struct {
 	prov  string // 提供者标识
 	model string // 提供者模型名
 	dims  int    // 嵌入向量维度
+	// baseURL 归一化后的端点（不含尾部 /embeddings 与斜杠），参与 config fingerprint
+	baseURL string
+	// apiKeyHash api_key 的 sha256 前 16 位（不存原文），参与 config fingerprint
+	apiKeyHash string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -60,6 +70,25 @@ type baseEmbeddingAdapter struct {
 // NewMockEmbeddingProvider 创建模拟嵌入提供者
 func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 	return &MockEmbeddingProvider{id: "mock", model: "mock", dims: 128}
+}
+
+// NormalizeEmbeddingBaseURL 归一化嵌入端点，使等价写法得到同一形态。
+//
+// 先去尾部斜杠，再剥掉 `/embeddings` 后缀（请求路径会再补回来）。
+// 这样 "https://x.com/embeddings"、"https://x.com/"、"https://x.com/embeddings/"
+// 三者归一到 "https://x.com"。
+//
+// 对齐 Python OpenAICompatibleEmbeddingProvider.normalize_base_url（embeddings.py:51）。
+func NormalizeEmbeddingBaseURL(baseURL string) string {
+	url := strings.TrimSpace(baseURL)
+	// 先收敛尾部所有斜杠，否则 ".../embeddings/" 会因 endswith 判断落空而漏剥
+	for strings.HasSuffix(url, "/") {
+		url = url[:len(url)-1]
+	}
+	if strings.HasSuffix(url, "/embeddings") {
+		url = url[:len(url)-len("/embeddings")]
+	}
+	return url
 }
 
 // EmbedQuery 返回基于文本 hash 的 128 维确定性随机向量。
@@ -100,6 +129,12 @@ func (m *MockEmbeddingProvider) Model() string { return m.model }
 // Dims 返回嵌入向量维度
 func (m *MockEmbeddingProvider) Dims() int { return m.dims }
 
+// ConfigFingerprint 返回配置指纹。
+// Mock 提供者无外部配置，沿用基类形态 `id:model`。对齐 Python EmbeddingProvider.config_fingerprint
+func (m *MockEmbeddingProvider) ConfigFingerprint() string {
+	return fmt.Sprintf("%s:%s", m.id, m.model)
+}
+
 // ResolveEmbeddingConfigFromEnv 从环境变量构建 EmbeddingConfig。对齐 Python resolve_embedding_config_from_env
 func ResolveEmbeddingConfigFromEnv(modelName, fallbackBaseURL, fallbackAPIKey string) *apiEmbedding.EmbeddingConfig {
 	envModelName := os.Getenv("EMBEDDING_MODEL_NAME")
@@ -133,10 +168,20 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 
 	// 优先使用 embeddingConfig
 	if embeddingConfig != nil && embeddingConfig.APIKey != "" {
-		// Python: base_url 以 /embeddings 结尾时裁剪
-		embeddingConfig.BaseURL = strings.TrimSuffix(embeddingConfig.BaseURL, "/embeddings")
+		// Python: base_url 以 /embeddings 结尾时裁剪（归一化后参与 fingerprint）
+		normalized := NormalizeEmbeddingBaseURL(embeddingConfig.BaseURL)
+		embeddingConfig.BaseURL = normalized
 		base := apiEmbedding.NewAPIEmbedding(*embeddingConfig)
-		return &baseEmbeddingAdapter{base: base, prov: provider, model: model, dims: 1024}, nil
+		keyHash := sha256.Sum256([]byte(embeddingConfig.APIKey))
+		return &baseEmbeddingAdapter{
+			base:  base,
+			prov:  provider,
+			model: model,
+			dims:  1024,
+			// 归一化端点与 key 哈希参与 config fingerprint（Python: config_fingerprint）
+			baseURL:    normalized,
+			apiKeyHash: hex.EncodeToString(keyHash[:])[:16],
+		}, nil
 	}
 
 	// fallback 到 mock
@@ -167,3 +212,16 @@ func (a *baseEmbeddingAdapter) Model() string { return a.model }
 
 // Dims 返回嵌入向量维度。
 func (a *baseEmbeddingAdapter) Dims() int { return a.dims }
+
+// ConfigFingerprint 返回覆盖全部影响向量结果字段的指纹。
+//
+// 组成：`{id}:{model}:{归一化 base_url}:{api_key 的 sha256 前 16 位}`。
+// 端点 / 密钥 / 模型任一变化都会得出不同指纹，从而：
+//   - 让 needsRebuildOnConfigChange 检测到配置变更并重建索引；
+//   - 让 embedding_cache 按 (base_url, api_key, model) 隔离。
+//
+// 只存 api_key 的哈希，不落原文。
+// 对齐 Python OpenAICompatibleEmbeddingProvider.config_fingerprint（embeddings.py:78）。
+func (a *baseEmbeddingAdapter) ConfigFingerprint() string {
+	return fmt.Sprintf("%s:%s:%s:%s", a.prov, a.model, a.baseURL, a.apiKeyHash)
+}

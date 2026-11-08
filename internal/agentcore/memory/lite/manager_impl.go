@@ -65,10 +65,14 @@ type memoryIndexManager struct {
 	// 状态
 	mu sync.Mutex
 	// dirty 是否需要重新同步（文件监听协程写、搜索路径读，用原子避免数据竞争）
-	dirty           atomic.Bool
-	closed          bool
-	ftsAvailable    bool
-	ftsError        string
+	dirty        atomic.Bool
+	closed       bool
+	ftsAvailable bool
+	ftsError     string
+	// ftsMigrated 本次初始化刚把 chunks_fts 从旧 tokenizer 迁到 trigram。
+	// 迁移 DROP 了旧表但没动 files/chunks 行，增量 sync 会因 hash 未变而跳过，
+	// 必须 force 全量重写一遍才能填满新表。对齐 Python self._fts_migrated。
+	ftsMigrated     bool
 	vectorAvailable bool
 	vectorError     string
 	vectorDims      *int
@@ -160,8 +164,42 @@ func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 		logger.Warn(logComponent).Err(err).Msg("failed to load vec0 extension, falling back to in-memory cosine")
 	}
 
-	if err := m.Sync(ctx, "initial", false); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("initial sync failed")
+	// 初始化阶段的重建判定：配置变更时先清表再全量重建，而不是在脏索引上增量改。
+	//
+	// 两件事分开判：
+	//   - configRebuild：embedding 配置（provider/model/providerKey/chunkTokens）变了
+	//   - ftsMigration：chunks_fts 刚从旧 tokenizer 迁到 trigram，需要 force 重写一遍
+	//
+	// provider 不可用属运行期健康问题而非配置变更，needsRebuildOnConfigChange 对此返回
+	// false，保留既有向量索引等端点恢复。
+	//
+	// 对齐 Python MemoryIndexManager.initialize（manager.py:344-370）。
+	configRebuild, configReason := m.needsRebuildOnConfigChange()
+	ftsMigration := m.needsFtsMigrationReindex()
+	switch {
+	case configRebuild:
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", configReason).
+			Msg("embedding config changed, clearing index tables before rebuild")
+		if err := m.clearIndexTables(); err != nil {
+			return fmt.Errorf("清空索引表失败: %w", err)
+		}
+		if err := m.Sync(ctx, "initial", true); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("initial reindex failed")
+		}
+	case ftsMigration:
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", "fts_migration").
+			Msg("chunks_fts migrated to trigram, forcing full reindex")
+		if err := m.Sync(ctx, "fts_migration", true); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("fts migration reindex failed")
+		}
+	default:
+		if err := m.Sync(ctx, "initial", false); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("initial sync failed")
+		}
 	}
 
 	// 文件监听
@@ -205,18 +243,77 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	logger.Debug(logComponent).Str("reason", reason).Msg("incremental sync")
 
 	if containsSource(m.settings.Sources, "memory") && m.dirty.Load() {
-		if err := m.syncMemoryFiles(ctx); err != nil {
+		if err := m.syncMemoryFiles(ctx, false); err != nil {
 			return err
 		}
 		m.dirty.Store(false)
 	}
 
 	if containsSource(m.settings.Sources, "sessions") {
-		if err := m.syncSessionFiles(ctx); err != nil {
+		if err := m.syncSessionFiles(ctx, false); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+// needsRebuildOnConfigChange 判定 embedding 配置相对上次索引是否已变更（需重建）。
+//
+// 在 init 阶段求值——此时可以清空索引表后重建，而不必在有脏数据的索引上原地改。
+// 无历史索引（无 meta）时返回 false：那种情况 sync 会正常全量建索引，没有"重建"一说。
+//
+// 只比对 provider / model / providerKey / chunkTokens 四项，与上游一致。provider 为 nil
+// 时返回 false：端点不可用是运行期健康状态，不是配置变更，应保留既有向量索引、降级用
+// 关键词检索，等端点恢复。
+//
+// 对齐 Python MemoryIndexManager._needs_rebuild_on_config_change（manager.py:376-407）。
+func (m *memoryIndexManager) needsRebuildOnConfigChange() (bool, string) {
+	if m.provider == nil {
+		return false, ""
+	}
+	meta, err := m.readMeta()
+	if err != nil {
+		// 无历史索引（或 meta 损坏）→ 交给正常 sync 建，不算配置变更
+		return false, ""
+	}
+	if meta["provider"] != m.provider.ID() {
+		return true, "provider_changed"
+	}
+	if meta["model"] != m.provider.Model() {
+		return true, "model_changed"
+	}
+	if meta["providerKey"] != m.providerKey {
+		return true, "provider_key_changed"
+	}
+	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
+		return true, "chunking_changed"
+	}
+	return false, ""
+}
+
+// clearIndexTables 清空全部索引表，供配置变更后重建使用。
+//
+// 清四张表：files（文件指纹）、chunks（分块正文）、chunks_vec（向量，按存在性）、
+// chunks_fts（全文，按存在性）。留空后 runReindex 会重新写入完整索引。
+//
+// 对齐 Python MemoryIndexManager._clear_index_tables（manager.py:412）。
+func (m *memoryIndexManager) clearIndexTables() error {
+	tables := []string{"files", "chunks"}
+	if m.vectorAvailable {
+		tables = append(tables, vectorTable)
+	}
+	if m.ftsAvailable {
+		tables = append(tables, ftsTable)
+	}
+	for _, table := range tables {
+		if _, err := m.db.Exec(fmt.Sprintf("DELETE FROM %s", table)); err != nil {
+			// 虚拟表（vec0 / fts5 contentless）的 DELETE 可能不被支持，降级为 Debug
+			logger.Debug(logComponent).Err(err).Str("table", table).
+				Msg("failed to clear index table")
+		}
+	}
+	logger.Info(logComponent).Msg("index tables cleared")
 	return nil
 }
 
@@ -687,8 +784,21 @@ func (m *memoryIndexManager) ensureSchema() error {
 	// FTS5 虚拟表
 	ftsEnabled := m.settings.Store.Fts.Enabled
 	if ftsEnabled {
+		// 旧表（默认 unicode61）不切分 CJK，中文查询永远匹配不到，必须先 DROP 重建为
+		// trigram。DROP 后本表为空，files/chunks 行还在 → 增量 sync 会因 hash 未变而
+		// 跳过，故置 ftsMigrated 让 initialize 走 force 全量重写。
+		// 对齐 Python _ensure_schema 的 legacy 迁移（manager.py:579-606）。
+		if m.ftsTableIsLegacy() {
+			logger.Info(logComponent).
+				Msg("migrating chunks_fts from unicode61 to trigram tokenizer")
+			if _, err := m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", ftsTable)); err != nil {
+				logger.Debug(logComponent).Err(err).Msg("skipping legacy chunks_fts drop")
+			}
+			m.ftsMigrated = true
+		}
+
 		_, err := m.db.Exec(fmt.Sprintf(
-			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1)",
+			"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(id UNINDEXED, path UNINDEXED, source UNINDEXED, text, content='', contentless_delete=1, tokenize='trigram')",
 			ftsTable,
 		))
 		if err != nil {
@@ -700,6 +810,54 @@ func (m *memoryIndexManager) ensureSchema() error {
 		}
 	}
 	return nil
+}
+
+// ftsTableIsLegacy 判断 chunks_fts 是否以旧 tokenizer（非 trigram）建成。
+//
+// 存在且 DDL 里没有 tokenize=trigram 即为旧表，须 DROP 重建；表不存在不算旧表
+// （首次建库走正常 CREATE）。对齐 Python _fts_table_is_legacy（manager.py:609）。
+func (m *memoryIndexManager) ftsTableIsLegacy() bool {
+	if m.db == nil {
+		return false
+	}
+	var ddl sql.NullString
+	// 注意：必须是内联字面量而非 `?` 参数——SQLite 对 sqlite_master 的 name 列可参数化，
+	// 但 mattn/go-sqlite3 在部分版本下该查询走 schema 缓存路径，参数化会拿到空行。
+	err := m.db.QueryRow(fmt.Sprintf(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name = '%s'", ftsTable,
+	)).Scan(&ddl)
+	if err != nil {
+		// 表不存在（sql.ErrNoRows）或查询失败：都不算旧表
+		return false
+	}
+	if !ddl.Valid || ddl.String == "" {
+		return false
+	}
+	// sqlite_master 保存的是原始 DDL，tokenizer 可能写成 tokenize='trigram'
+	// （带引号）或 tokenize=trigram，两种形态都要认出，故先去掉单双引号再比较。
+	normalized := strings.NewReplacer("'", "", `"`, "", " ", "").Replace(strings.ToLower(ddl.String))
+	return !strings.Contains(normalized, "tokenize=trigram")
+}
+
+// needsFtsMigrationReindex 判断是否因刚迁移 chunks_fts 而需要 force 全量重建。
+//
+// 两个条件同时满足才是真：本次初始化刚 DROP 过旧表（ftsMigrated），且 meta 里还没有
+// ftsTrigram 记录。后者让结论跨进程收敛——某进程 force 重建并写入 ftsTrigram 后，
+// 后续进程就不会重复重建。
+// 对齐 Python _needs_fts_migration_reindex（manager.py:409）。
+func (m *memoryIndexManager) needsFtsMigrationReindex() bool {
+	if !m.ftsMigrated {
+		return false
+	}
+	meta, err := m.readMeta()
+	if err != nil {
+		// 无 meta（全新库）→ chunks_fts 本来就空，正常 sync 会填满，无需 force
+		return false
+	}
+	if v, ok := meta["ftsTrigram"].(bool); ok && v {
+		return false
+	}
+	return true
 }
 
 // initializeProvider 初始化嵌入提供者。对齐 Python _initialize_provider
@@ -714,8 +872,10 @@ func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
 		return err
 	}
 	m.provider = provider
-	// Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
-	m.providerKey = fmt.Sprintf("%s:%s", m.provider.ID(), m.provider.Model())
+	// providerKey 用配置指纹：含归一化 base_url 与 api_key 哈希，换端点/密钥都能检测到。
+	// 早先只拼 id:model，换端点或只换密钥时判定不出"配置变了"。
+	// 对齐 Python: self.provider_key = self.provider.config_fingerprint（manager.py:669）。
+	m.providerKey = provider.ConfigFingerprint()
 	// 打实际实例值：settings 里永远是配置值，mock 降级时会把排查者误导成"已配置"
 	logger.Info(logComponent).
 		Str("provider", provider.ID()).
@@ -799,6 +959,13 @@ func (m *memoryIndexManager) needsReindex() (bool, string) {
 	if meta["model"] != m.provider.Model() {
 		return true, "model_changed"
 	}
+	// providerKey 含归一化 base_url 与 api_key 哈希：换端点/换密钥都会翻转。
+	// 早于该字段存在的老 meta（或旧的 id:model 形态）必定不匹配 → 重建一次后写入新 meta，
+	// 这是天然的向后兼容迁移路径。
+	// 对齐 Python _should_full_reindex 的 providerKey 比对（manager.py:942）。
+	if meta["providerKey"] != m.providerKey {
+		return true, "provider_key_changed"
+	}
 	// Python: if meta.get("chunkTokens") != settings.chunking.get("tokens"): return True
 	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
 		return true, "chunking_changed"
@@ -827,19 +994,23 @@ func metaInt(meta map[string]any, key string) (int, bool) {
 //
 // reason 只用于日志（provider_changed / vector_dims_changed / segmenter_changed …），
 // 便于用户一眼看出"为什么这次要重建"。
+//
+// 必须 force 同步：否则 hash 未变的文件会被 skip，重建后索引仍然是空的
+// （配置切换模型/dims 时正是这种情形——文件没动，但旧向量已失效）。
+// 对齐 Python _run_reindex 里 sync(force=True)（manager.py:963-967）。
 func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) error {
 	logger.Info(logComponent).
 		Str("event_type", "memory_reindex_triggered").
 		Str("reason", reason).
 		Msg("running full reindex")
 	if containsSource(m.settings.Sources, "memory") {
-		if err := m.syncMemoryFiles(ctx); err != nil {
+		if err := m.syncMemoryFiles(ctx, true); err != nil {
 			return err
 		}
 		m.dirty.Store(false)
 	}
 	if containsSource(m.settings.Sources, "sessions") {
-		if err := m.syncSessionFiles(ctx); err != nil {
+		if err := m.syncSessionFiles(ctx, true); err != nil {
 			return err
 		}
 	}
@@ -858,6 +1029,8 @@ func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) erro
 		"chunkOverlap": m.settings.Chunking.Overlap,
 		// segmenter 记录分词器版本；变化即触发重建（C）
 		"segmenter": segmenterID(),
+		// ftsTrigram 标记 chunks_fts 已迁到 trigram，initialize 据此跳过迁移重建
+		"ftsTrigram": m.ftsAvailable,
 	}
 	if m.vectorAvailable && m.vectorDims != nil {
 		meta["vectorDims"] = *m.vectorDims
@@ -866,11 +1039,14 @@ func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) erro
 }
 
 // syncMemoryFiles 同步 .md 记忆文件。对齐 Python _sync_memory_files
-func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
+//
+// force 为 true 时跳过 hash 比对、无条件重建每个文件的索引。这是"向量配置切换后
+// 重建"的正确语义——文件内容没变，但旧向量已失效，必须重新嵌入。
+func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context, force bool) error {
 	// Python: files = list_memory_files(self.workspace, node_name=self.node_name)
 	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
 
-	logger.Debug(logComponent).Int("file_count", len(files)).Msg("syncing memory files")
+	logger.Debug(logComponent).Int("file_count", len(files)).Bool("force", force).Msg("syncing memory files")
 
 	activePaths := make(map[string]bool)
 	for _, fp := range files {
@@ -882,10 +1058,12 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 		}
 		activePaths[entry.Path] = true
 
-		var hash string
-		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "memory")
-		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
-			continue
+		if !force {
+			var hash string
+			row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "memory")
+			if err := row.Scan(&hash); err == nil && hash == entry.Hash {
+				continue
+			}
 		}
 		if err := m.indexFile(ctx, entry, "memory"); err != nil {
 			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("indexfile failed")
@@ -904,7 +1082,9 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 }
 
 // syncSessionFiles 同步 session 文件。对齐 Python _sync_session_files
-func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
+//
+// force 语义同 syncMemoryFiles。
+func (m *memoryIndexManager) syncSessionFiles(ctx context.Context, force bool) error {
 	sessionsDir := filepath.Join(m.memoryDir, "sessions")
 	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
 		return nil
@@ -923,7 +1103,7 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		return nil
 	})
 
-	logger.Debug(logComponent).Int("file_count", len(sessionFiles)).Msg("syncing session files")
+	logger.Debug(logComponent).Int("file_count", len(sessionFiles)).Bool("force", force).Msg("syncing session files")
 
 	activePaths := make(map[string]bool)
 	for _, sessionFile := range sessionFiles {
@@ -933,10 +1113,12 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		}
 		activePaths[entry.Path] = true
 
-		var hash string
-		row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "sessions")
-		if err := row.Scan(&hash); err == nil && hash == entry.Hash {
-			continue
+		if !force {
+			var hash string
+			row := m.db.QueryRow("SELECT hash FROM files WHERE path = ? AND source = ?", entry.Path, "sessions")
+			if err := row.Scan(&hash); err == nil && hash == entry.Hash {
+				continue
+			}
 		}
 		if err := m.indexFile(ctx, entry, "sessions"); err != nil {
 			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("index session file failed")
