@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -145,18 +144,6 @@ func TestClipText_截断(t *testing.T) {
 	}
 }
 
-// TestResolveCommandWorkdir_三根白名单 验证 project_root/workspace_root/agent_workspace 三根白名单。
-func TestResolveCommandWorkdir_三根白名单(t *testing.T) {
-	// 相对路径基于 cwd 应通过（cwd 本身在三根内或其回退链内）
-	if _, err := resolveCommandWorkdir(t.Context(), "."); err != nil {
-		t.Errorf("相对路径基于 cwd 应通过: %v", err)
-	}
-	// /etc 通常不在任何允许根内（除非极端环境），越界应返回错误
-	if _, err := resolveCommandWorkdir(t.Context(), "/etc"); err == nil {
-		t.Error("/etc 越界应返回错误")
-	}
-}
-
 // TestResolveExecutionPlan_linuxAuto 验证 Linux auto 分支 bash 探测。
 func TestResolveExecutionPlan_linuxAuto(t *testing.T) {
 	plan, useShell, resolved := resolveExecutionPlan("echo hi", "auto")
@@ -269,18 +256,6 @@ func TestMcpExecCommand_二进制不存在仍走ERROR(t *testing.T) {
 	}
 	if !strings.Contains(s, "[ERROR]: command execution failed:") {
 		t.Errorf("启动失败应返回 [ERROR]: %s", s)
-	}
-}
-
-// TestResolveCommandWorkdir_绝对路径在白名单内 AgentWorkspaceDir 恒在白名单。
-func TestResolveCommandWorkdir_绝对路径在白名单内(t *testing.T) {
-	agentDir := agentWorkspaceDirForTest()
-	if _, err := resolveCommandWorkdir(t.Context(), agentDir); err != nil {
-		t.Errorf("AgentWorkspaceDir 应在白名单: %v", err)
-	}
-	// 子目录也在白名单
-	if _, err := resolveCommandWorkdir(t.Context(), filepath.Join(agentDir, "sub")); err != nil {
-		t.Errorf("AgentWorkspaceDir 子目录应在白名单: %v", err)
 	}
 }
 

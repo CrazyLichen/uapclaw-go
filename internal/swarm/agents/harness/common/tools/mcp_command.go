@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -18,9 +17,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -152,82 +149,6 @@ func checkCommandSafety(command string) string {
 		}
 	}
 	return ""
-}
-
-// contextCwd 获取当前工作目录（resolve 后）。
-// Python: _context_cwd —— get_cwd 失败回退 get_agent_workspace_dir
-// Go 差异：cwd.GetCwd 无 error 返回（ctx 未绑定时回退 os.Getwd），恒非空。
-func contextCwd(ctx context.Context) string {
-	dir := cwd.GetCwd(ctx)
-	if dir == "" {
-		return workspace.AgentWorkspaceDir()
-	}
-	return resolvePathString(dir)
-}
-
-// contextProjectRoot 获取项目根目录（resolve 后）。
-// Python: _context_project_root —— 失败回退 _context_cwd
-// Go 差异：GetProjectRoot 无 error 返回（回退链 internal 已处理），恒非空。
-func contextProjectRoot(ctx context.Context) string {
-	dir := cwd.GetProjectRoot(ctx)
-	if dir == "" {
-		return contextCwd(ctx)
-	}
-	return resolvePathString(dir)
-}
-
-// contextWorkspaceRoot 获取 agent workspace（空=未设置）。
-// Python: _context_workspace_root —— 失败返回 None
-func contextWorkspaceRoot(ctx context.Context) string {
-	dir := cwd.GetWorkspace(ctx)
-	if dir == "" {
-		return ""
-	}
-	return resolvePathString(dir)
-}
-
-// resolvePathString 路径 resolve（对齐 Python Path.resolve 的 strict=False 语义）。
-func resolvePathString(p string) string {
-	return upath.ResolveSymlinksLenient(p)
-}
-
-// isRelativeTo 判断 path 是否位于 root 之下。
-// Python: _is_relative_to
-func isRelativeTo(path, root string) bool {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// resolveCommandWorkdir 解析并校验工作目录（三根白名单）。
-// Python: _resolve_command_workdir（Go 签名差异：加 ctx 参数，因 Go cwd 函数需要 ctx）
-// 白名单：project_root、workspace_root（非空时）、agent_workspace_dir。
-func resolveCommandWorkdir(ctx context.Context, workdir string) (string, error) {
-	currentCwd := contextCwd(ctx)
-	projectRoot := contextProjectRoot(ctx)
-	candidate := workdir
-	if candidate == "" {
-		candidate = currentCwd
-	}
-	if !filepath.IsAbs(candidate) {
-		candidate = filepath.Join(currentCwd, candidate)
-	}
-	candidate = resolvePathString(candidate)
-
-	allowedRoots := []string{projectRoot}
-	if workspaceRoot := contextWorkspaceRoot(ctx); workspaceRoot != "" {
-		allowedRoots = append(allowedRoots, workspaceRoot)
-	}
-	allowedRoots = append(allowedRoots, workspace.AgentWorkspaceDir())
-
-	for _, root := range allowedRoots {
-		if isRelativeTo(candidate, root) {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("workdir is outside project workspace")
 }
 
 // normalizeShellType 归一化 shell 类型。
@@ -629,7 +550,11 @@ func newMcpExecCommandTool() tool.Tool {
 			return map[string]any{"result": fmt.Sprintf("[ERROR]: command rejected for safety (%s).", blockedReason)}, nil
 		}
 
-		resolvedWorkdir, err := resolveCommandWorkdir(ctx, input.Workdir)
+		runtimePaths, pathsErr := CurrentCommandRuntimePaths(ctx, false)
+		if pathsErr != nil {
+			return map[string]any{"result": "[ERROR]: workdir is outside project workspace."}, nil
+		}
+		resolvedWorkdir, err := ResolveCommandWorkdir(input.Workdir, runtimePaths)
 		if err != nil {
 			return map[string]any{"result": "[ERROR]: workdir is outside project workspace."}, nil
 		}
