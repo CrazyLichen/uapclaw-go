@@ -30,11 +30,11 @@
 //	├── message_template.go   # 任务修订说明与正文 diff（expand_message 全家 ⤵️ 25.6）
 //	├── team_plan_agent.go    # ApplyTeamPlanAgentPrompt + 常量
 //	├── team_plan_mode.go     # BuildTeamPlanModeSection + 常量
-//	├── cn/                   # 30 个中文 .md 模板
-//	├── en/                   # 30 个英文 .md 模板
+//	├── cn/                   # 33 个中文 .md 模板
+//	├── en/                   # 33 个英文 .md 模板
 //	└── system_prompt.md      # 语言无关顶层模板
 //
-// cn/ 与 en/ 各 30 个模板（20 个模板名 × 2 语言，含 inbound_tags.md）：
+// cn/ 与 en/ 各 33 个模板（含 inbound_tags.md）：
 //
 //	角色与策略：leader_policy / teammate_policy / teammate_policy_external /
 //	           human_agent_policy / leader_workflow{,_predefined,_hybrid} /
