@@ -113,6 +113,9 @@ type DeepAdapter struct {
 	// childMode 子适配器使用的 mode（"agent" 或 "code"）。
 	// Python 由 type(self)() 天然决定，Go 需显式注入。
 	childMode string
+	// sessionAgentTasks 会话标识 → 在飞请求标识集合。
+	// Python: interface_deep.py _session_agent_tasks（_register_session_agent_task :4869）
+	sessionAgentTasks map[string]map[string]struct{}
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -396,6 +399,7 @@ func NewDeepAdapter() *DeepAdapter {
 		sessionAdapters:        newSessionAdapterCache(),
 		sessionChildFactory:    func() (AgentAdapter, error) { return CreateAdapter("harness", "agent") },
 		childMode:              "agent",
+		sessionAgentTasks:      make(map[string]map[string]struct{}),
 		modelCache:             make(map[string]*llm.Model),
 		modelNameToKeys:        make(map[string][]string),
 		registeredMCPServerIDs: make(map[string]bool),
@@ -1827,15 +1831,20 @@ func (d *DeepAdapter) MarkAsSessionScoped(sessionID string) {
 }
 
 // GetLiveSessionInstance 返回正在跑该会话的 DeepAgent。
-// Python: interface_deep.py get_live_session_instance（:12744）
+// Python: interface_deep.py get_live_session_instance（:12744-12769）
 //
-// child 返回自己的 instance；根的缓存查询与递归一跳在 Task 3 补齐，
-// 本步骤先返回 nil（根没有"该会话的"实例）。
+// child 返回自己的 instance；根查缓存后递归一跳（子适配器一定是
+// session 级的，递归只会走上面的 isSessionScoped 分支返回它自己的实例）。
 func (d *DeepAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
 	if d.isSessionScoped {
 		return d.instance
 	}
-	return nil
+	sid := sessionAdapterKey(&sessionID)
+	child := d.getCachedSessionAdapter(sid)
+	if child == nil {
+		return nil
+	}
+	return child.GetLiveSessionInstance(sid)
 }
 
 // HandleSwarmflowReply 处理人对 swarmflow 人工轮次的回复。
@@ -3221,23 +3230,18 @@ func toPositiveInt(v any) (int, bool) {
 //
 // 两个来源任一非空即为真：会话级子适配器缓存、活跃执行计数。
 func (d *DeepAdapter) HasSessionRuntime(sessionID string) bool {
-	if d.sessionAdapters != nil && d.sessionAdapters.has(sessionID) {
+	sid := sessionAdapterKey(&sessionID)
+	// child 只认自己的会话
+	if d.isSessionScoped {
+		return d.parentSessionID == sid
+	}
+	if d.sessionAdapters != nil {
+		if d.sessionAdapters.has(sid) || d.sessionAdapters.hasGuard(sid) {
+			return true
+		}
+	}
+	if d.isSessionActive(sid) {
 		return true
 	}
-	d.sessionMu.Lock()
-	count := d.activeSessionIDs[sessionID]
-	d.sessionMu.Unlock()
-	return count > 0
-}
-
-// CleanupSessionAdapter 清理该会话的 adapter 侧缓存，返回是否清到东西。
-// Python: interface_deep.py cleanup_session_adapter
-//
-// 只清"归属该会话"的那一份；活跃执行计数由执行路径自己递减，
-// 此处不动，否则会把正在跑的请求误判成已结束。
-func (d *DeepAdapter) CleanupSessionAdapter(sessionID string) bool {
-	if d.sessionAdapters == nil {
-		return false
-	}
-	return d.sessionAdapters.cleanup(sessionID)
+	return d.hasRegisteredSessionTasks(sid)
 }
