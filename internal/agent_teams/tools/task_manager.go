@@ -616,7 +616,15 @@ func (tm *TeamTaskManager) Reset(ctx context.Context, taskID string) (schema.Tas
 	return schema.TaskOpResult{}.Success(), nil
 }
 
-// UpdateTask 更新标题/内容。对齐 Python: TeamTaskManager.update_task()
+// UpdateTask 更新标题/内容并推进 revision。
+//
+// 对齐 Python: TeamTaskManager.update_task()——编辑使 revision += 1 并追加
+// change_notes（F_129 / D8），让「改过但未读」成为可判定的常驻信号
+// （revision > observed_revision），无需单独的未读标志。
+//
+// 上游 update_task 把 note 作为显式参数由调用方给出；Go 的 UpdateTask 签名
+// 没有该参数，故从实际变更的字段推断（见 buildRevisionNote）——change_notes
+// 至少有一行内容，下游 TaskRevisionTracker 才能渲染出 `- rN (by): note`。
 func (tm *TeamTaskManager) UpdateTask(ctx context.Context, taskID, title, content string) error {
 	ok, err := tm.db.Task().UpdateTask(ctx, taskID, title, content)
 	if err != nil {
@@ -625,11 +633,43 @@ func (tm *TeamTaskManager) UpdateTask(ctx context.Context, taskID, title, conten
 	if !ok {
 		return fmt.Errorf("更新任务失败: 任务不存在或状态不允许编辑 %s", taskID)
 	}
+
+	// 步骤：推进 revision + 追加 change_notes（上游在 update_task 内原子完成）
+	old, getErr := tm.db.Task().GetTask(ctx, taskID)
+	if getErr == nil && old != nil {
+		note := buildRevisionNote(title, content)
+		if _, bumpErr := tm.db.Task().AppendChangeNote(ctx, taskID, old.Revision+1, note, tm.memberName); bumpErr != nil {
+			// 编辑本身已成功，bump 失败只告警：不能因为通知基线写失败把一次
+			// 成功的编辑报成失败（上游 update_task 在同事务内，Go 的 DAO 拆分
+			// 导致此处非原子，故降级为告警）。
+			logger.Warn(logComponent).Err(bumpErr).Str("task_id", taskID).
+				Msg("append change note failed")
+		}
+	}
+
 	tm.publishTaskEvent(ctx, events.TaskUpdatedEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
 		TaskID:           taskID,
 	})
 	return nil
+}
+
+// buildRevisionNote 从未被改动的字段生成一行编辑说明。
+//
+// 上游 update_task 的 note 是调用方显式传入的（工具层带 note 参数）；Go 的
+// UpdateTask 没有该参数，故从实际变更的字段推断，保证 change_notes 至少
+// 有一行可渲染内容——否则 TaskRevisionTracker 的通知只剩任务行、没有说明。
+func buildRevisionNote(title, content string) string {
+	switch {
+	case title != "" && content != "":
+		return "更新标题与正文"
+	case title != "":
+		return "更新标题"
+	case content != "":
+		return "更新正文"
+	default:
+		return "更新任务"
+	}
 }
 
 // AddWithPriority 带双向依赖创建任务。对齐 Python: TeamTaskManager.add_with_priority()

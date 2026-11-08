@@ -1183,3 +1183,60 @@ func TestTaskManager_Complete_成员不存在(t *testing.T) {
 		t.Error("不存在的成员完成任务应返回错误")
 	}
 }
+
+// TestTeamTaskManager_UpdateTask_推进revision 测试编辑推进 revision 并记 change_notes
+//
+// Python: TeamTaskManager.update_task()（F_129 / D8）——编辑使 revision += 1
+// 并追加 change_notes，让「改过但未读」成为可判定信号。
+func TestTeamTaskManager_UpdateTask_推进revision(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+	created, err := tm.Add(ctx, "原标题", "原正文")
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if created == nil || created.TaskID == "" {
+		t.Fatal("Add 未返回任务")
+	}
+
+	if err := tm.UpdateTask(ctx, created.TaskID, "新标题", ""); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+
+	got, err := tm.Get(ctx, created.TaskID)
+	if err != nil || got == nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Revision != 1 {
+		t.Fatalf("Revision = %d, want 1", got.Revision)
+	}
+	if got.ChangeNotes == nil || *got.ChangeNotes == "" {
+		t.Fatal("ChangeNotes 未追加")
+	}
+}
+
+// TestTeamTaskManager_UpdateTask_两次编辑累加 测试 revision 递增且说明累加
+func TestTeamTaskManager_UpdateTask_两次编辑累加(t *testing.T) {
+	tm, _ := setupTestTaskManager()
+	ctx := context.Background()
+	created, err := tm.Add(ctx, "标题", "正文")
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := tm.UpdateTask(ctx, created.TaskID, "标题v2", ""); err != nil {
+		t.Fatalf("第一次 UpdateTask: %v", err)
+	}
+	if err := tm.UpdateTask(ctx, created.TaskID, "标题v3", ""); err != nil {
+		t.Fatalf("第二次 UpdateTask: %v", err)
+	}
+	got, err := tm.Get(ctx, created.TaskID)
+	if err != nil || got == nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Revision != 2 {
+		t.Fatalf("Revision = %d, want 2", got.Revision)
+	}
+	if strings.Count(*got.ChangeNotes, `"revision"`) != 2 {
+		t.Fatalf("change_notes 应有 2 条, got %q", *got.ChangeNotes)
+	}
+}
