@@ -422,9 +422,6 @@ func newPlanEnvWithEnv(t *testing.T, env *AdapterTestEnv, mock *mockllm.MockMode
 		agentMode = "code"
 	}
 	planEnv.FactoryMode = agentMode
-	if workMode == "code" {
-		planEnv.FactoryMode = "agent"
-	}
 	if _, err := planEnv.Server.Server.AgentManager().GetAgent(
 		context.Background(), planEnvChannel, agentMode, projectDir, ""); err != nil {
 		t.Fatalf("预创建 agent 失败: %v", err)

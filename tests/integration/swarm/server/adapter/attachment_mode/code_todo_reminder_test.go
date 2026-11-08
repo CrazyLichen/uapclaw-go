@@ -41,6 +41,15 @@ const (
 	codeSession = "itest-code-session"
 	// reminderTurns 触发提醒所需轮次（上游 10/10 节奏）
 	reminderTurns = 10
+	// codeEntrySession 入口级用例的会话 ID
+	codeEntrySession = "itest-code-entry-session"
+	// codeEntryMode 入口级用例的 mode 入参。
+	//
+	// 必须用裸 "agent"：code 族由 work_mode=code 组合出来
+	// （runtime/request.go resolveRequestMode → ComposeWebMode）。
+	// 直接传三段 "agent.work.normal" 时 work_mode 已无位置可组合，
+	// 请求就会落到 work 族的 agent 上。
+	codeEntryMode = "agent"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -91,6 +100,129 @@ func (s *CodeTodoReminderSuite) TestIT_S2_11_code提醒节奏() {
 	second := s.env.AttachmentOf(taskReminderSection)
 	s.Require().NotNil(second)
 	s.Contains(second.Content, "<!-- task-reminder-delivery:2 -->", "重置后应再次提醒且序号递增")
+}
+
+// ──────────────────────────── 入口级（真 AgentManager） ────────────────────────────
+
+// TestIT_S2_11b_code提醒节奏_入口级 与 S2_11 同断言序列，但从 chat.send
+// 入口进入：真 AgentServer → AgentManager（按 code 模式选 agent）→
+// adapter 根路由 → 会话 child → code rails。
+//
+// 存在理由：adapter 已是"根 router + 会话 child"双形态，入口级链路才能
+// 证明"从请求进来，code 专属 rail 真的装上了并按时投递提醒"。直连
+// CodeAdapter 的 S2_11 只覆盖装配后的行为，覆盖不到 AgentManager 选型
+// 与根分流这两段。
+func (s *CodeTodoReminderSuite) TestIT_S2_11b_code提醒节奏_入口级() {
+	env := newEntryCodeEnv(s.T(), s.MockLLM, "mock_s2_code_entry")
+
+	// 第 1~9 轮：未达阈值，不应有提醒
+	for i := 0; i < reminderTurns-1; i++ {
+		env.Send(fmt.Sprintf("第%d轮", i+1))
+	}
+	s.Nil(env.AttachmentOf(taskReminderSection), "未达 10 轮不应有提醒附件")
+
+	// 第 10 轮：触发第一次提醒
+	env.Send("第10轮")
+	first := env.AttachmentOf(taskReminderSection)
+	s.Require().NotNil(first, "满 10 轮必须出现 task_reminder 附件（入口级）")
+	s.Equal("todo_reminder", string(first.Kind))
+	s.Equal("jiuwenswarm.code_task_planning.task_reminder", first.Source)
+	s.Contains(first.Content, "<!-- task-reminder-delivery:1 -->")
+
+	// 再两轮：内容未变，不产生新的投递序号
+	env.Send("第11轮")
+	env.Send("第12轮")
+	stable := env.AttachmentOf(taskReminderSection)
+	s.Require().NotNil(stable)
+	s.Equal(first.Content, stable.Content, "内容未变不得重复追加")
+	s.Equal(1, env.CountAttachmentsContaining("<!-- task-reminder-delivery:1 -->"),
+		"模型窗口里同一提醒只应出现一次")
+
+	// 模拟一次 todo 工具调用 → 计数重置
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("todo_create",
+			`{"todos":[{"id":"phase-1","content":"实现后端","activeForm":"实现后端","description":"接口与存储"}]}`),
+		mockllm.CreateTextResponse("已创建任务列表"),
+	)
+	env.Send("创建任务")
+
+	// 重置后再满 10 轮 → 第二次提醒
+	for i := 0; i < reminderTurns; i++ {
+		env.Send(fmt.Sprintf("重置后第%d轮", i+1))
+	}
+	second := env.AttachmentOf(taskReminderSection)
+	s.Require().NotNil(second)
+	s.Contains(second.Content, "<!-- task-reminder-delivery:2 -->", "重置后应再次提醒且序号递增")
+}
+
+// entryCodeEnv 入口级 code 环境：真 AgentServer + AgentManager，
+// 工厂按 manager 解析出的 code 模式创建 agent。
+//
+// 与 codeEnv（直连 CodeAdapter）的区别：请求从 chat.send 入口进入，
+// 经 AgentManager 选 agent、经 adapter 根路由到会话 child，覆盖完整链路。
+type entryCodeEnv struct {
+	// plan 复用 PlanEnv 的 Server/Mock/附件读取能力
+	plan *testhelpers.PlanEnv
+	// mock 模型桩
+	mock *mockllm.MockModelClient
+	// t 测试句柄
+	t *testing.T
+}
+
+// newEntryCodeEnv 构建入口级 code 环境。
+//
+// work_mode=code 让 AgentManager 按 code 族解析 mode，
+// 从而 create_instance 拿到的就是 code 模式（与生产一致）。
+func newEntryCodeEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *entryCodeEnv {
+	t.Helper()
+	// NewCodePlanEnv 已带 WorkMode="code"：每轮请求都会带 work_mode=code，
+	// 让 AgentManager 按 code 族选 agent（与生产同一路径）。
+	// 不要再另建 AdapterTestEnv 覆盖 plan.Env —— 两套数据目录会让 agent
+	// 与 mock 各读一份 config。
+	plan := testhelpers.NewCodePlanEnv(t, mock, prefix)
+	return &entryCodeEnv{plan: plan, mock: mock, t: t}
+}
+
+// Send 从 chat.send 入口发一轮（流式）。
+func (e *entryCodeEnv) Send(query string) {
+	e.t.Helper()
+	e.plan.SendStream(codeEntrySession, codeEntryMode, query, nil)
+}
+
+// AttachmentOf 返回指定 section 的附件。
+//
+// 附件挂在"正在跑该会话的 DeepAgent"上（会话分身后在 child），
+// PlanEnv.AttachmentOf 已按 sessionID 走 GetLiveSessionInstance。
+func (e *entryCodeEnv) AttachmentOf(section string) *hprompts.Attachment {
+	e.t.Helper()
+	return e.plan.AttachmentOf(codeEntrySession, section)
+}
+
+// CountAttachmentsContaining 统计最近一次模型窗口里包含指定文本的消息数。
+func (e *entryCodeEnv) CountAttachmentsContaining(substr string) int {
+	e.t.Helper()
+	var messages []llmschema.BaseMessage
+	if rec := e.mock.LastStreamCall(); rec != nil {
+		messages = rec.Messages.Messages()
+	} else if rec := e.mock.LastInvokeCall(); rec != nil {
+		messages = rec.Messages.Messages()
+	}
+	count := 0
+	for _, msg := range messages {
+		meta := msg.GetMetadata()
+		if meta == nil {
+			continue
+		}
+		// 只统计"历史附件"消息（与 codeEnv 同口径），避免把普通
+		// 对话/系统提示词里出现的同串也算进去。
+		if marked, _ := meta["_openjiuwen_prompt_attachment_history"].(bool); !marked {
+			continue
+		}
+		if strings.Contains(msg.GetContent().Text(), substr) {
+			count++
+		}
+	}
+	return count
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
