@@ -49,6 +49,13 @@ type noopTeamBindingUnbinder struct{}
 // spec §10 R-4：等 session/lifecycle.py 迁移后回填。
 type noopLifecycleJournal struct{}
 
+// sessionCleanerAdapter 把 AgentManager 的会话清理适配到 provisioner 窄接口。
+// Python: runtime/service.py cleanup_session（:3024）的 AgentServer 侧传参
+type sessionCleanerAdapter struct {
+	// mgr 被适配的 AgentManager
+	mgr *srvruntime.AgentManager
+}
+
 // noopPromptSuggestionForks 会话建议生成分支持有者桩。
 // spec §8 D-10：待 10.3.30 recommendation（43821 行）落地后回填。
 type noopPromptSuggestionForks struct{}
@@ -93,6 +100,7 @@ func newSessionProvisioner(
 	})
 	prov.SetSessionOps(&sessionOpsAdapter{})
 	prov.CheckpointEnsure = adapter.EnsurePersistentCheckpointer
+	prov.SessionCleaner = &sessionCleanerAdapter{mgr: mgr}
 	prov.RunnerRelease = func(ctx context.Context, sessionID string) error {
 		return runner.Release(ctx, sessionID, false)
 	}
@@ -271,6 +279,17 @@ func (noopTeamBindingUnbinder) UnbindSession(teamName, sessionID string) error {
 	logger.Debug(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("team binding unbind not implemented (see 10.3.28 spec R-1 batch)")
 	return nil
+}
+
+// CleanupSession 委托 AgentManager.CleanupSessionRuntime。
+func (a *sessionCleanerAdapter) CleanupSession(
+	ctx context.Context, channelID, sessionID string,
+) error {
+	if a.mgr == nil {
+		return nil
+	}
+	_, err := a.mgr.CleanupSessionRuntime(ctx, channelID, sessionID)
+	return err
 }
 
 // SessionDeleted 桩：记 Debug 并返回。

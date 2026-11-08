@@ -1282,3 +1282,47 @@ func hasActiveExecutions(c *swsession.RuntimeSessionCoordinator) bool {
 func facadeUsesSessionRuntime(request *schema.AgentRequest) bool {
 	return swruntime.UsesSessionRuntime(request, false)
 }
+
+// HasSessionRuntime 门面是否还持有该会话运行时。
+// Python: interface.py has_session_runtime（:6188）
+//
+// 两侧都查：门面会话队列 + adapter 侧会话运行时。任一为真即认为仍占用，
+// 这样 cleanup_session_runtime 不会漏掉"队列还排着活"的会话。
+func (uc *UapClawSwarm) HasSessionRuntime(sessionID string) bool {
+	if uc.sessionManager != nil && uc.sessionManager.HasSessionRuntime(&sessionID) {
+		return true
+	}
+	adapterValue := uc.adapterSnapshot()
+	if adapterValue == nil {
+		return false
+	}
+	return adapterValue.HasSessionRuntime(sessionID)
+}
+
+// CleanupSessionRuntime 释放该会话在门面与 adapter 侧的内存运行时，保留持久历史。
+// Python: interface.py cleanup_session_runtime（:6176）
+//
+// 两半顺序与上游一致：先关门面队列，再清 adapter 侧缓存。
+func (uc *UapClawSwarm) CleanupSessionRuntime(ctx context.Context, sessionID string) error {
+	if uc.sessionManager != nil {
+		if _, err := uc.sessionManager.CloseSession(ctx, sessionID, nil); err != nil {
+			return err
+		}
+	}
+	adapterValue := uc.adapterSnapshot()
+	if adapterValue == nil {
+		return nil
+	}
+	if !adapterValue.CleanupSessionAdapter(sessionID) {
+		logger.Debug(logComponent).Str("session_id", sessionID).
+			Msg("adapter side cleanup_session_adapter found nothing to clean")
+	}
+	return nil
+}
+
+// adapterSnapshot 并发安全地取当前 adapter（未初始化返回 nil）。
+func (uc *UapClawSwarm) adapterSnapshot() adapter.AgentAdapter {
+	uc.adapterMu.Lock()
+	defer uc.adapterMu.Unlock()
+	return uc.adapter
+}

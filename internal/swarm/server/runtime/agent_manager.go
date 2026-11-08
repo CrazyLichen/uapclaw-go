@@ -107,6 +107,50 @@ func NewAgentManager() *AgentManager {
 	}
 }
 
+// CleanupSessionRuntime 释放某会话在既有渠道 agent 上的内存运行时。
+// Python: agent_manager.py cleanup_session_runtime（:863）
+//
+// 遍历该渠道缓存的每个 agent，调它的 CleanupSessionRuntime；单个 agent 失败
+// 不中断其余（上游聚合后统一报错，Go 侧只告警，因为删除事务的其余步骤不该
+// 因为一次清理失败而整体回滚）。
+//
+// 返回是否至少有一个 agent 报告清理到了东西——该值决定 disposed 是否落盘。
+func (am *AgentManager) CleanupSessionRuntime(
+	ctx context.Context, channelID, sessionID string,
+) (bool, error) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		return false, nil
+	}
+	channelKey := normalizeChannelID(channelID)
+
+	am.mu.RLock()
+	channelAgents := make([]*UapClawSwarm, 0)
+	if cached, ok := am.agents[channelKey]; ok {
+		for _, entry := range cached {
+			if entry != nil && entry.agent != nil {
+				channelAgents = append(channelAgents, entry.agent)
+			}
+		}
+	}
+	am.mu.RUnlock()
+
+	cleaned := false
+	for _, agent := range channelAgents {
+		if !agent.HasSessionRuntime(sid) {
+			continue
+		}
+		if err := agent.CleanupSessionRuntime(ctx, sid); err != nil {
+			logger.Warn(logComponent).Err(err).
+				Str("channel_id", channelKey).Str("session_id", sid).
+				Msg("[AgentManager] cleanup_session_runtime failed")
+			continue
+		}
+		cleaned = true
+	}
+	return cleaned, nil
+}
+
 // SetAgentFactory 设置 Agent 创建工厂函数（供测试注入 mock，生产环境不需要调用）。
 func (am *AgentManager) SetAgentFactory(factory AgentFactory) {
 	am.mu.Lock()
