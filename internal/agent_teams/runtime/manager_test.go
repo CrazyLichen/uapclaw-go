@@ -20,7 +20,7 @@ func newTestTeamBackendForRuntime() *tools.TeamBackend {
 	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
 	tb := tools.NewTeamBackend("team-1", "leader", true, db, msg)
 	ctx := context.Background()
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	return tb
 }
 

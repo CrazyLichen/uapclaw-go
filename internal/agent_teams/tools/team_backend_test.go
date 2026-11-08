@@ -150,7 +150,7 @@ func TestListMembers(t *testing.T) {
 	ctx := context.Background()
 
 	// 先创建团队和 leader
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 添加成员
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
@@ -171,7 +171,8 @@ func TestBuildTeam(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	err := tb.BuildTeam(ctx, "Test Team", "description", "Leader", "leader desc", nil)
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "description", "Leader", "leader desc", nil, nil)
+	_ = outcome
 	if err != nil {
 		t.Fatalf("BuildTeam() error = %v", err)
 	}
@@ -205,7 +206,8 @@ func TestBuildTeam_HITT天花板(t *testing.T) {
 	ctx := context.Background()
 
 	enableHITT := true
-	err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", &enableHITT)
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", &enableHITT, nil)
+	_ = outcome
 	if err != ErrHITTConfigInvalid {
 		t.Errorf("BuildTeam() error = %v, want ErrHITTConfigInvalid", err)
 	}
@@ -220,7 +222,8 @@ func TestBuildTeam_预定义成员(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithPredefinedMembers(predefined))
 	ctx := context.Background()
 
-	err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
+	_ = outcome
 	if err != nil {
 		t.Fatalf("BuildTeam() error = %v", err)
 	}
@@ -241,7 +244,7 @@ func TestCleanTeam(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 有活跃成员（leader 是 BUSY，但跳过 self，所以只有非 self 成员算活跃）→ 应返回 false
 	ok, err := tb.CleanTeam(ctx)
@@ -259,7 +262,7 @@ func TestForceCleanTeam(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 强制清理（含关闭成员）
 	ok, err := tb.ForceCleanTeam(ctx, true)
@@ -276,7 +279,7 @@ func TestShutdownMember(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	// 先启动成员
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
@@ -303,7 +306,7 @@ func TestShutdownMember_已终态(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
 
@@ -318,7 +321,7 @@ func TestCancelMember(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
 
@@ -333,7 +336,7 @@ func TestStartup(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.SpawnMember(ctx, "teammate2", "T2", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
@@ -351,7 +354,7 @@ func TestStartupMember(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	ok, err := tb.StartupMember(ctx, "teammate1", nil)
@@ -369,7 +372,7 @@ func TestStartupMember_回调失败回滚(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	errOnCreated := errors.New("spawn failed")
@@ -397,7 +400,7 @@ func TestStartupMember_回调失败回滚(t *testing.T) {
 func TestSpawnAndPublish(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	var called bool
 	onCreated := func(ctx context.Context, memberName string) error {
@@ -418,7 +421,7 @@ func TestSpawnAndPublish(t *testing.T) {
 func TestSpawnAndPublish_nil回调(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	err := tb.spawnAndPublish(ctx, "leader", nil)
 	if err != nil {
@@ -444,7 +447,7 @@ func TestHumanAgentNames(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnHumanAgent(ctx, "human1", "Human 1", "", "")
 	tb.SpawnHumanAgent(ctx, "human2", "Human 2", "", "")
 
@@ -459,7 +462,7 @@ func TestIsHumanAgent(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnHumanAgent(ctx, "human1", "Human 1", "", "")
 
 	if !tb.IsHumanAgent("human1") {
@@ -475,7 +478,7 @@ func TestRegisterHumanAgentInbound(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnHumanAgent(ctx, "human1", "Human 1", "", "")
 
 	// 注册回调
@@ -507,7 +510,7 @@ func TestRegisterHumanAgentInbound_未知成员(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	cb := func(ctx context.Context, memberName string, payload any) error { return nil }
 	err := tb.RegisterHumanAgentInbound(ctx, "unknown", cb)
@@ -521,7 +524,7 @@ func TestRefreshHumanAgentRoster(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnHumanAgent(ctx, "human1", "Human 1", "", "")
 
 	// 刷新后应仍能识别
@@ -565,7 +568,7 @@ func TestCancelTask(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 创建任务
 	_, err := tb.taskManager.Add(ctx, "Test Task", "desc")
@@ -590,7 +593,7 @@ func TestCancelAllTasks(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	tb.taskManager.Add(ctx, "Task 1", "desc")
 	tb.taskManager.Add(ctx, "Task 2", "desc")
@@ -610,7 +613,7 @@ func TestApprovePlan(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithPlanStorageDir(planDir))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 创建任务
 	task, _ := tb.taskManager.Add(ctx, "Plan Task", "desc")
@@ -639,7 +642,7 @@ func TestApproveTool(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	result := tb.ApproveTool(ctx, "teammate1", "tool-call-1", true, "ok", false)
@@ -659,7 +662,7 @@ func TestGetTeamInfo(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "description", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "description", "Leader", "leader desc", nil, nil)
 
 	team, err := tb.GetTeamInfo(ctx)
 	if err != nil {
@@ -678,7 +681,7 @@ func TestGetTeamUpdatedAt(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	ts := tb.GetTeamUpdatedAt(ctx)
 	// 内存数据库时间戳可能为 0
@@ -690,7 +693,7 @@ func TestGetMembersMaxUpdatedAt(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	ts := tb.GetMembersMaxUpdatedAt(ctx)
 	_ = ts
@@ -701,7 +704,7 @@ func TestHumanAgentNames_Concurrent(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithEnableHITT(true))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	var wg sync.WaitGroup
 	// 并发写入
@@ -737,7 +740,7 @@ func TestSpawnHumanAgent_HITT未启用(t *testing.T) {
 	tb := newTestTeamBackend() // 默认 HITT 未启用
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	result := tb.SpawnHumanAgent(ctx, "human1", "Human 1", "", "")
 	if result.OK {
@@ -754,7 +757,7 @@ func TestOnTeamBuiltCallback(t *testing.T) {
 	}))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	if !called {
 		t.Error("onTeamBuilt callback was not called")
 	}
@@ -769,7 +772,7 @@ func TestOnTeamCleanedCallback(t *testing.T) {
 	}))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	// 关闭所有成员（BUSY → SHUTDOWN_REQUESTED → SHUTDOWN）
 	tb.db.Member().UpdateMemberStatus(ctx, "leader", tb.TeamName(), string(atschema.MemberStatusShutdownRequested))
 	tb.db.Member().UpdateMemberStatus(ctx, "leader", tb.TeamName(), string(atschema.MemberStatusShutdown))
@@ -785,7 +788,7 @@ func TestIsTeamCompleted_未完成(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 有活跃任务 → 未完成
 	snapshot, err := tb.IsTeamCompleted(ctx)
@@ -802,7 +805,7 @@ func TestIsTeamCompleted_已完成(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 创建一个终态任务（对齐 Python: if not tasks: return None — 无任务时无法判定完成）
 	tb.db.Task().CreateTask(ctx, &database.TeamTaskBase{
@@ -835,7 +838,7 @@ func TestWithModelConfigAllocator(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithModelConfigAllocator(allocator))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "qwen-max")
 
 	if !called {
@@ -851,7 +854,7 @@ func TestWithLeaderAllocation(t *testing.T) {
 	}))
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
 	// 验证 Leader 有 model_ref_json
 	leader, _ := tb.GetMember(ctx, "leader")
@@ -883,7 +886,8 @@ func TestBuildTeam_HITT启用(t *testing.T) {
 	)
 	ctx := context.Background()
 
-	err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
+	_ = outcome
 	if err != nil {
 		t.Fatalf("BuildTeam() error = %v", err)
 	}
@@ -902,7 +906,8 @@ func TestBuildTeam_HITT未启用但有预定义HumanAgent(t *testing.T) {
 	tb := newTestTeamBackendWithOptions(WithPredefinedMembers(predefined))
 	ctx := context.Background()
 
-	err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
+	_ = outcome
 	if err != nil {
 		t.Fatalf("BuildTeam() error = %v", err)
 	}
@@ -920,7 +925,7 @@ func TestCancelMember_Busy(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
 
@@ -969,7 +974,7 @@ func TestCancelTask_有Assignee(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	task, _ := tb.taskManager.Add(ctx, "可取消任务", "内容")
@@ -986,7 +991,7 @@ func TestApprovePlan_通过Backend(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	// 设为 plan_mode（InMemory 特有方法）
 	if imDB, ok := tb.db.(*database.InMemoryTeamDatabase); ok {
@@ -1020,7 +1025,7 @@ func TestCleanTeam_有活跃成员(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusReady))
 
@@ -1039,7 +1044,7 @@ func TestCleanTeam_所有成员已关闭(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	// 将成员设为 SHUTDOWN
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
@@ -1058,7 +1063,7 @@ func TestForceCleanTeam_不关闭成员(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	// shutdownMembers=false → 直接删除
@@ -1076,7 +1081,7 @@ func TestForceCleanTeam_关闭成员(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	// 将成员设为 ready 以便可以被 shutdown
@@ -1118,7 +1123,7 @@ func TestRefreshHumanAgentRoster_HITT未启用(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	// 不应 panic
 	tb.RefreshHumanAgentRoster(ctx)
 }
@@ -1178,7 +1183,7 @@ func TestShutdownMember_已关闭(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.db.Member().UpdateMemberStatus(ctx, "teammate1", tb.TeamName(), string(atschema.MemberStatusShutdown))
 
@@ -1204,7 +1209,7 @@ func TestSpawnMember_已存在成员(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	result := tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	if !result.OK {
 		t.Fatalf("首次 SpawnMember 应成功: %s", result.Reason)
@@ -1221,7 +1226,7 @@ func TestStartupMember_回调失败2(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()
 
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
 	// 回调返回错误
@@ -1296,4 +1301,92 @@ func TestTeamBackend_Stamp_空实现不panic(t *testing.T) {
 	ctx := context.Background()
 	tb.StampTeamCardUpdatedAt(ctx, 123)
 	tb.StampMemberPromptUpdatedAt(ctx, "leader", 123)
+}
+
+// TestBuildTeam_首次建队返回Outcome 验证新建路径的返回值。
+func TestBuildTeam_首次建队返回Outcome(t *testing.T) {
+	tb := newTestTeamBackend()
+	outcome, err := tb.BuildTeam(context.Background(), "Test Team", "desc", "Leader", "leader desc", nil, nil)
+	if err != nil {
+		t.Fatalf("BuildTeam 返回错误: %v", err)
+	}
+	if outcome == nil {
+		t.Fatal("outcome 不应为 nil")
+	}
+	if outcome.TakenOver {
+		t.Fatal("首次建队 TakenOver 应为 false")
+	}
+}
+
+// TestBuildTeam_二次调用接管 验证幂等接管路径（NEW_TEAM_IN_SESSION）。
+//
+// 新会话继承一个正在跑的团队时，承载协作政策的 build_team 结果随旧历史
+// 一起消失，而团队/名册/任务都还在。因为那是政策的唯一交付点（F_76），
+// 在这里失败会让 leader 只剩 bootstrap。
+//
+// Python: build_team Step 0 / _reattach_team (team.py L2164-2258)
+func TestBuildTeam_二次调用接管(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	if _, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil); err != nil {
+		t.Fatalf("首次 BuildTeam 返回错误: %v", err)
+	}
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
+	if err != nil {
+		t.Fatalf("接管不应报错: %v", err)
+	}
+	if outcome == nil || !outcome.TakenOver {
+		t.Fatalf("第二次调用 TakenOver 应为 true，实际 %+v", outcome)
+	}
+	// 接管不写行、不注册成员：leader 仍是唯一成员，且没有第二个成员被注册
+	leader, err := tb.GetMember(ctx, "leader")
+	if err != nil {
+		t.Fatalf("GetMember 返回错误: %v", err)
+	}
+	if leader == nil {
+		t.Fatal("接管后 leader 应仍在名册上")
+	}
+}
+
+// TestBuildTeam_接管读回验证开关 验证能力参数不适用于接管，从行里读回。
+// Python: _reattach_team —— self._enable_task_verification = bool(existing.enable_task_verification)
+func TestBuildTeam_接管读回验证开关(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	if _, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil); err != nil {
+		t.Fatalf("首次 BuildTeam 返回错误: %v", err)
+	}
+	// 人工把行改成 true，模拟「团队建队时就配了验证闸」
+	team, err := tb.DB().Team().GetTeam(ctx, tb.TeamName())
+	if err != nil || team == nil {
+		t.Fatalf("GetTeam 失败: %v", err)
+	}
+	team.EnableTaskVerification = true
+
+	outcome, err := tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
+	if err != nil {
+		t.Fatalf("接管返回错误: %v", err)
+	}
+	if !outcome.EnableTaskVerification {
+		t.Fatal("接管应从团队行读回 enable_task_verification=true")
+	}
+}
+
+// TestMemberMessagingAndSubtasksEnabled 验证两个探针。
+// Python: member_messaging_enabled / member_subtasks_enabled (team.py L516-543)
+func TestMemberMessagingAndSubtasksEnabled(t *testing.T) {
+	tb := newTestTeamBackendWithOptions(
+		WithMemberMessaging(true),
+		WithMaxSubtaskDepth(2),
+	)
+	if !tb.MemberMessagingEnabled() {
+		t.Fatal("MemberMessagingEnabled 应为 true")
+	}
+	if !tb.MemberSubtasksEnabled() {
+		t.Fatal("MemberSubtasksEnabled 在 MaxSubtaskDepth>0 时应为 true")
+	}
+	tb0 := newTestTeamBackendWithOptions(WithMaxSubtaskDepth(0))
+	if tb0.MemberSubtasksEnabled() {
+		t.Fatal("MaxSubtaskDepth=0 时 MemberSubtasksEnabled 应为 false")
+	}
 }

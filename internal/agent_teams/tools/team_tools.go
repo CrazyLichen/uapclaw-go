@@ -581,16 +581,24 @@ func (t *BuildTeamTool) Invoke(ctx context.Context, inputs map[string]any, _ ...
 			enableHITT = &b
 		}
 	}
-	err := t.team.BuildTeam(ctx, displayName, teamDesc, leaderDisplayName, leaderDesc, enableHITT)
+	var enableTaskVerification *bool
+	if v, ok := inputs["enable_task_verification"]; ok {
+		if b, ok := v.(bool); ok {
+			enableTaskVerification = &b
+		}
+	}
+	outcome, err := t.team.BuildTeam(ctx, displayName, teamDesc, leaderDisplayName, leaderDesc, enableHITT, enableTaskVerification)
 	if err != nil {
 		return toolError(err.Error())
 	}
 	return toolSuccess(map[string]any{
-		"team_name":           t.team.TeamName(),
-		"display_name":        displayName,
-		"leader_member_name":  t.team.MemberName(),
-		"leader_display_name": leaderDisplayName,
-		"enable_hitt":         t.team.HITTEnabled(),
+		"team_name":                t.team.TeamName(),
+		"display_name":             displayName,
+		"leader_member_name":       t.team.MemberName(),
+		"leader_display_name":      leaderDisplayName,
+		"enable_hitt":              t.team.HITTEnabled(),
+		"taken_over":               outcome.TakenOver,
+		"enable_task_verification": outcome.EnableTaskVerification,
 	})
 }
 
