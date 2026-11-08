@@ -715,3 +715,25 @@ func TestPendingText_身份通道首投(t *testing.T) {
 		t.Fatal("Commit 后基线应推进")
 	}
 }
+
+// TestPersist_失败不推进基线 验证写库失败时基线原地不动。
+//
+// pendingText 算出增量后、commit 推进基线前，调用方必须先把文本真正投递出去。
+// 投递（或基线写库）失败时基线不推进，下一轮重算会重新吐同样的内容——
+// 否则那句话就永久丢了。
+//
+// Python: TeamContextTracker.commit + _persist（写库失败只告警，但基线不得前进）
+func TestPersist_失败不推进基线(t *testing.T) {
+	sess := newFakeSession("s1")
+	sess.commitErr = context.Canceled
+	tr := &TeamContextTracker{memberName: "alice"}
+
+	first := map[string]any{baselineIdentityEmitted: true}
+	tr.persist(sess, first)
+
+	// Commit 失败 → 基线不得留在内存态的「已推进」位置
+	got := tr.readBaseline(sess)
+	if _, ok := got[baselineIdentityEmitted]; ok {
+		t.Fatalf("写库失败后基线不应被推进，实际 %v", got)
+	}
+}
