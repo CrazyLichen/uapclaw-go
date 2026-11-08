@@ -85,6 +85,58 @@ type TeamAgentSpec struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableHITT 是否启用 Human-in-the-Team
 	EnableHITT bool `json:"enable_hitt"`
+	// DispatchMode 任务如何到达执行成员（"autonomous" / "scheduled"）
+	//
+	// 与 TeamMode 正交（后者管名册能否增长）。"autonomous"（默认）把任务放进
+	// 共享看板，成员认领与自己专长匹配的，leader 用 send_message 广播拉起；
+	// "scheduled" 由 leader 事先把每个任务指派给具名成员，调度运行时（F_62）
+	// 启动每个任务并执行全部交接——开工、验收派发、返工、验收通过——作为
+	// leader 身份的信箱消息，成员失去 claim_task 而得到 member_complete_task。
+	// 提示词与工具形态都在构建期按模式装配；运行期永不改变。
+	//
+	// Python: dispatch_mode (blueprint.py L350)
+	DispatchMode string `json:"dispatch_mode,omitempty"`
+	// EnableMemberMessaging 允许 scheduled 成员直接互发消息（F_126）
+	//
+	// scheduled 收窄了成员的 send_message 到 leader 与 user，所以 leader 要
+	// 路由每次交换。开启后成员保留 autonomous 成员的完整触达——点对点、
+	// 组播、对同伴广播——同时 "leader" 仍是合法的接收方。
+	// 静态配置；在 dispatch_mode="autonomous" 下无意义（那里成员本就能互相触达）。
+	//
+	// Python: enable_member_messaging (blueprint.py L374)
+	EnableMemberMessaging bool `json:"enable_member_messaging,omitempty"`
+	// MaxSubtaskDepth 允许 scheduled 成员把任务拆成子任务（F_128）
+	//
+	// 0（默认）让 create_task 只属于 leader。正值给 scheduled 成员一个
+	// create_task，把它正在执行的任务停在 BLOCKED 直到新子任务完成，并限制
+	// 子任务嵌套深度（leader 的任务是深度 0，其子任务是 1，……）。
+	// 静态配置，build_team 不可覆盖；在 dispatch_mode="autonomous" 下无意义。
+	//
+	// Python: max_subtask_depth (blueprint.py L385)
+	MaxSubtaskDepth int `json:"max_subtask_depth,omitempty"`
+	// BootstrapMode 谁物化团队行，以及 leader 如何收到它的政策（F_122）
+	//
+	// "leader"（默认）：leader 调 build_team 工具，该工具创建团队并在结果里
+	// 披露协作政策（F_76）。"framework"：leader 的协调内核在 start() 时若
+	// 团队行尚不存在就自己建，leader 的工具集不含 build_team，政策经
+	// TeamContextTracker 以 <team-policy> 块在首条输入之前到达。
+	// 只在与 dispatch_mode="scheduled" 同时使用时合法。
+	//
+	// Python: bootstrap_mode (blueprint.py L395)
+	BootstrapMode string `json:"bootstrap_mode,omitempty"`
+	// BoundGroupName 绑定的 AgentGroup 名（F_125）
+	//
+	// scheduled + 绑定专家团 + 专家工具接线时，leader 段会命名该组，指示
+	// 先在这个团里找专家。非空即视为绑定。
+	//
+	// Python: expert_binding 的 group（blueprint.py）
+	BoundGroupName string `json:"bound_group_name,omitempty"`
+	// SwarmflowEnabled leader 是否持有 swarmflow 工具
+	//
+	// 偏差 D-3：上游不是 spec 字段，而是由工具工厂根据「是否注册了 swarmflow
+	// 工具」推导后传给 rail 工厂。Go 侧 swarmflow 工具族属后续章节，工厂门控
+	// 尚不存在，故暂作 spec 字段；swarmflow 落地后改为工厂推导。
+	SwarmflowEnabled bool `json:"swarmflow_enabled,omitempty"`
 	// ExposeHumanAgentsToTeammates 是否向队友暴露人类代理
 	ExposeHumanAgentsToTeammates bool `json:"expose_human_agents_to_teammates"`
 	// Language 团队默认语言
@@ -222,6 +274,9 @@ func (s *TeamAgentSpec) Validate() error {
 	if err := s.validateHittConsistency(); err != nil {
 		return err
 	}
+	if err := s.validateBootstrapMode(); err != nil {
+		return err
+	}
 	s.defaultTransportForSpawnMode()
 	return nil
 }
@@ -357,6 +412,20 @@ func (s *TeamAgentSpec) validateReservedNames() error {
 			continue
 		}
 		return fmt.Errorf("预定义成员 %q 使用了保留名", m.MemberName)
+	}
+	return nil
+}
+
+// validateBootstrapMode 校验 bootstrap_mode 与 dispatch_mode 的组合合法性。
+//
+// framework 建队意味着「团队在 start() 时就建好、成员为零」，这种团队只有
+// 靠调度指派（scheduled）才有可用性——任务驱动的交接是它唯一的工作来源。
+// 所以 framework 只在 scheduled 下合法。
+//
+// Python: _validate_bootstrap_mode (blueprint.py L781-793)
+func (s *TeamAgentSpec) validateBootstrapMode() error {
+	if s.BootstrapMode == "framework" && s.DispatchMode != "scheduled" {
+		return fmt.Errorf("bootstrap_mode='framework' requires dispatch_mode='scheduled'; got dispatch_mode=%q", s.DispatchMode)
 	}
 	return nil
 }
