@@ -119,7 +119,14 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]
 		r.ensurePlanState(ctx, req, subMode, agent)
 	}
 
-	resp, execErr := agent.ProcessMessage(ctx, req)
+	// Python: service.py:1873 if uses_session_runtime(request): execute_message else: process_message
+	var resp *schema.AgentResponse
+	var execErr error
+	if UsesSessionRuntime(req, false) {
+		resp, execErr = agent.ExecuteMessage(ctx, req)
+	} else {
+		resp, execErr = agent.ProcessMessage(ctx, req)
+	}
 
 	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
 	if enabled {
@@ -148,7 +155,13 @@ func (r *AgentRuntime) Stream(
 		r.ensurePlanState(ctx, req, subMode, agent)
 	}
 
-	ch, streamErr := agent.ProcessMessageStream(ctx, req)
+	var ch <-chan *schema.AgentResponseChunk
+	var streamErr error
+	if UsesSessionRuntime(req, false) {
+		ch, streamErr = agent.ExecuteMessageStream(ctx, req)
+	} else {
+		ch, streamErr = agent.ProcessMessageStream(ctx, req)
+	}
 	if streamErr != nil {
 		if enabled {
 			r.checkPlanExit(ctx, req, subMode, agent)

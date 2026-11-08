@@ -26,10 +26,18 @@ type AgentManagerPort interface {
 
 // ChatAgentPort 运行时需要的 agent 能力。
 type ChatAgentPort interface {
-	// ProcessMessage 非流式执行
+	// ProcessMessage 通过门面会话队列非流式执行
+	// Python: interface.py process_message（schedule_session=True）
 	ProcessMessage(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
-	// ProcessMessageStream 流式执行
+	// ProcessMessageStream 通过门面会话队列流式执行
+	// Python: interface.py process_message_stream（schedule_session=True）
 	ProcessMessageStream(ctx context.Context, req *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error)
+	// ExecuteMessage 由 Runtime 持有调度的非流式执行
+	// Python: interface.py execute_message（schedule_session=False）
+	ExecuteMessage(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
+	// ExecuteMessageStream 由 Runtime 持有调度的流式执行
+	// Python: interface.py execute_message_stream（schedule_session=False）
+	ExecuteMessageStream(ctx context.Context, req *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error)
 	// PlanStateAccessor 返回 plan 状态读写入口
 	PlanStateAccessor() PlanStateAccessor
 }

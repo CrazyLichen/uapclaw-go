@@ -295,9 +295,69 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 	return resp, nil
 }
 
-// ProcessMessageStream 处理流式 Agent 请求。
-// Python: JiuWenClaw.process_message_stream(request)
-func (uc *UapClawSwarm) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+// ProcessMessageStream 通过门面自有的会话调度器处理流式请求。
+// Python: interface.py process_message_stream（schedule_session=True）
+//
+// 与 ExecuteMessageStream 的唯一区别是调度归属；流式请求一旦排进队列，
+// 返回的 channel 由队列内的执行协程生产，调用方照常消费。
+func (uc *UapClawSwarm) ProcessMessageStream(
+	ctx context.Context, request *schema.AgentRequest,
+) (<-chan *schema.AgentResponseChunk, error) {
+	return uc.processMessageStreamInternal(ctx, request, true)
+}
+
+// ExecuteMessageStream 执行一次由 AgentRuntime 拥有调度的流式请求。
+// Python: interface.py execute_message_stream（schedule_session=False）
+func (uc *UapClawSwarm) ExecuteMessageStream(
+	ctx context.Context, request *schema.AgentRequest,
+) (<-chan *schema.AgentResponseChunk, error) {
+	return uc.processMessageStreamInternal(ctx, request, false)
+}
+
+// processMessageStreamInternal 流式请求的公共实现。
+// Python: interface.py _process_message_stream(request, schedule_session=...)
+//
+// 流式不能像非流式那样"先排队再同步等结果"：队列里跑的是生产协程，
+// 调用方要在外面消费它产出的 channel。这里用转接协程把队列内的输出搬到
+// 外层 channel，保证调用方拿到的仍是连续流。
+func (uc *UapClawSwarm) processMessageStreamInternal(
+	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
+) (<-chan *schema.AgentResponseChunk, error) {
+	if !scheduleSession || uc.sessionManager == nil {
+		return uc.runMessageStreamDirect(ctx, request)
+	}
+	sessionID := swruntime.GetSessionID(request.SessionID)
+	inner := make(chan *schema.AgentResponseChunk)
+	ready := make(chan error, 1)
+	uc.sessionManager.SubmitTask(ctx, sessionID, func(taskCtx context.Context) (any, error) {
+		stream, streamErr := uc.runMessageStreamDirect(taskCtx, request)
+		if streamErr != nil {
+			ready <- streamErr
+			close(inner)
+			return nil, streamErr
+		}
+		ready <- nil
+		for chunk := range stream {
+			select {
+			case inner <- chunk:
+			case <-taskCtx.Done():
+				close(inner)
+				return nil, taskCtx.Err()
+			}
+		}
+		close(inner)
+		return nil, nil
+	})
+	// 等首个结果（错误或"已开始生产"），避免调用方拿到空 channel 却不知原因
+	if err := <-ready; err != nil {
+		return nil, err
+	}
+	return inner, nil
+}
+
+// runMessageStreamDirect 直接执行一次流式 Agent 请求（不经门面队列）。
+// Python: JiuWenClaw.process_message_stream(request) 的实现体
+func (uc *UapClawSwarm) runMessageStreamDirect(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// Python: logger.info：流式请求日志
 	sessionIDForLog := ""
 	if request.SessionID != nil {
