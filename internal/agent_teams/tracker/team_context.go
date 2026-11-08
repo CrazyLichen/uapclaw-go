@@ -351,16 +351,17 @@ func (t *TeamContextTracker) readBaseline(sess sessioninterfaces.SessionFacade) 
 // 共享同一个 agent-session state bucket，由同一次 AgentStorage.save 写入。
 // 写失败只告警——绝不因为一次 checkpoint 写失败而中断模型调用。
 //
-// **写失败时基线必须回滚**：UpdateState 先改了内存态，若 Commit 失败而
-// 不回滚，下一轮 PendingText 会以为「已经说过了」，那段状态就永久丢了。
-// 回滚到调用前快照，下一轮重算会重新吐出同样的内容。
+// **不做回滚**：上游 _persist 同样只告警不回滚。回滚看似更安全，实则有害
+// ——Commit 失败的原因可能与会话环境有关（例如会话尚未注册 agent store），
+// 此时内存态的 UpdateState 其实已经生效，回滚会让基线永远推不动，
+// 每轮都重投同一段状态。真正该保证的是「投递失败时调用方不调 Commit」，
+// 那条由 PendingText/Commit 的两段式契约承担，不在本函数。
 //
 // Python: _persist (team_context.py L656-671)
 func (t *TeamContextTracker) persist(sess sessioninterfaces.SessionFacade, st map[string]any) {
 	if sess == nil {
 		return
 	}
-	prev, _ := sess.GetState(sessionstate.StringKey(TeamContextStateKey))
 	sess.UpdateState(map[string]any{TeamContextStateKey: st})
 	committer, ok := sess.(interface {
 		Commit(ctx context.Context) error
@@ -369,13 +370,6 @@ func (t *TeamContextTracker) persist(sess sessioninterfaces.SessionFacade, st ma
 		return
 	}
 	if err := committer.Commit(context.Background()); err != nil {
-		// 回滚：Commit 失败说明这次写入没落盘，内存态也必须退回，
-		// 否则基线前进而磁盘没有，下一轮就不会再宣告这段状态。
-		if prev != nil {
-			sess.UpdateState(map[string]any{TeamContextStateKey: prev})
-		} else {
-			sess.UpdateState(map[string]any{TeamContextStateKey: nil})
-		}
 		logger.Warn(logComponent).
 			Str("event_type", "team_context_baseline_persist_failed").
 			Str("member_name", t.memberName).

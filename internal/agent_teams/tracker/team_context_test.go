@@ -716,24 +716,54 @@ func TestPendingText_身份通道首投(t *testing.T) {
 	}
 }
 
-// TestPersist_失败不推进基线 验证写库失败时基线原地不动。
+// TestCommit_投递失败不推进基线 验证两段式契约：没调 Commit 基线就不动。
 //
-// pendingText 算出增量后、commit 推进基线前，调用方必须先把文本真正投递出去。
-// 投递（或基线写库）失败时基线不推进，下一轮重算会重新吐同样的内容——
-// 否则那句话就永久丢了。
+// PendingText 只算增量、不推进；只有调用方把文本真正投递出去之后才调
+// Commit。投递失败时调用方不调，下一轮 PendingText 必须重新吐出同样的内容
+// ——否则那句话就永久丢了。
 //
-// Python: TeamContextTracker.commit + _persist（写库失败只告警，但基线不得前进）
-func TestPersist_失败不推进基线(t *testing.T) {
+// Python: pending_text / commit 两段式（team_context.py L227-259 / L659-671）
+func TestCommit_投递失败不推进基线(t *testing.T) {
 	sess := newFakeSession("s1")
-	sess.commitErr = context.Canceled
-	tr := &TeamContextTracker{memberName: "alice"}
+	tr := &TeamContextTracker{
+		memberName:  "alice",
+		displayName: "Alice",
+		role:        atschema.TeamRoleLeader,
+		language:    "cn",
+	}
 
-	first := map[string]any{baselineIdentityEmitted: true}
-	tr.persist(sess, first)
+	first, ok := tr.PendingText(sess)
+	if !ok || first == "" {
+		t.Fatal("首轮应有待投文本")
+	}
+	// 模拟「投递失败」：调用方不调 Commit
 
-	// Commit 失败 → 基线不得留在内存态的「已推进」位置
-	got := tr.readBaseline(sess)
-	if _, ok := got[baselineIdentityEmitted]; ok {
-		t.Fatalf("写库失败后基线不应被推进，实际 %v", got)
+	second, ok := tr.PendingText(sess)
+	if !ok || second == "" {
+		t.Fatal("基线未推进，第二轮应重新算出同样的内容")
+	}
+	if second != first {
+		t.Fatalf("两轮内容应一致：first=%q second=%q", first, second)
+	}
+}
+
+// TestCommit_调Commit后推进基线 验证正常路径：Commit 之后不再重投。
+func TestCommit_调Commit后推进基线(t *testing.T) {
+	sess := newFakeSession("s1")
+	tr := &TeamContextTracker{
+		memberName:  "alice",
+		displayName: "Alice",
+		role:        atschema.TeamRoleLeader,
+		language:    "cn",
+	}
+
+	first, ok := tr.PendingText(sess)
+	if !ok || first == "" {
+		t.Fatal("首轮应有待投文本")
+	}
+	tr.Commit(sess, nil)
+
+	if again, has := tr.PendingText(sess); has {
+		t.Fatalf("Commit 后不应再重投，实际：%s", again)
 	}
 }
