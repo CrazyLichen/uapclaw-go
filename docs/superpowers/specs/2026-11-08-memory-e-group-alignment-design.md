@@ -235,6 +235,24 @@
 | B10 | E-10（team 记忆四项） | 无 |
 | B11 | E-13（Dispose 两处释放） | 依赖 B1 的 `Close` 语义 |
 
+### 实施完成（2026-11-08）
+
+| 批次 | 内容 | 提交 |
+| --- | --- | --- |
+| B1 | E-02 重建通路 | `840078c5` |
+| B2 + B3 | E-03 降级 + E-04 分词器（两份实现） | `7f356aa8` |
+| B4~B9 | E-05 / E-01 / E-08 / E-07 / E-12 / E-11 | `9bc13236` |
+| B10 + B11 | E-10 team 记忆四项 + E-13 Dispose | `b45def43` |
+
+B2 与 B3 合并提交：两者都改 `Search`/`initializeProvider` 同一段代码，拆开会产生一次"改一半"的中间态。
+
+### 实施期新增发现
+
+1. **`ftsTableIsLegacy` 的引号陷阱**：`sqlite_master` 存的是 `tokenize='trigram'`（带引号），直接 `strings.Contains(ddl, "tokenize=trigram")` 恒不匹配，会把新建的 trigram 表也判成旧表、反复 DROP 重建。修法：先去掉单双引号与空白再比较。
+2. **Go 正则 `\w` 不匹配中文**：第二份实现的 `ftsWordPattern` 原为 `\w+`（Python 的 `\w` 在 str 模式匹配 Unicode），中文查询整体落空。改为 `[\p{L}\p{N}_]+`。
+3. **gse 分词器整条链路失去用途**：索引侧改写入原文后 `segmentForFTS`/`joinSegments`/`maxFTSTokens`/`cjkStopWords`/`isContentToken`/`ensureSegmenter`/`segmenterID`/`InitMemorySegmenterAsync` 全部无生产调用方，按规则 8 同改动删除（含 `memory_rail.go` 的预热调用与 `go.mod` 的 gse 依赖），启动省 843ms 词典加载。meta 的 `segmenter` 字段一并移除——分词器版本已不影响索引内容。
+4. **`Query.MinScore` 值类型语义**：Go 用值类型 `SearchOpts`，"显式传 0"与"未设置"不可区分（偏差 D-3 已登记）。
+
 ---
 
 ## 13. 已知偏差汇总

@@ -119,7 +119,9 @@ func (s *CodingMemorySuite) TestMemorySettings_默认值() {
 	settings := lite.CreateMemorySettings("", nil)
 	s.Require().NotNil(settings)
 	s.Equal("memory.db", settings.Store.Path, "默认 Store.Path 应为 memory.db")
-	s.Equal("mock", settings.Fallback, "默认 Fallback 应为 mock")
+	// 默认不回落 mock：未配置 embedding 时进入 FTS5-only 模式，
+	// 而不是悄悄换成产出伪随机向量的 mock provider（E-03）
+	s.Equal("", settings.Fallback, "默认 Fallback 应为空（不回落 mock）")
 	s.Equal("openai_compatible", settings.Provider, "默认 Provider 应为 openai_compatible")
 	s.True(settings.Sync.Watch, "默认 Sync.Watch 应为 true")
 	s.True(settings.Store.Vector.Enabled, "默认 Vector.Enabled 应为 true")

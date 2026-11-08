@@ -12,7 +12,7 @@
 1. **不能逐条照搬**：2713 条修复里，259 条带 `web`/`tui`/`designer` scope，另有 606 条无 scope 提交中约半数为前端修复；这些属于 Go 未迁移的前端产物，不构成本项目缺陷。真正落在 Go 已迁移包上的，聚合后为 **14 组、185 个缺陷行**。
 2. **不是"上游修了 Go 就一定有"**：Go 迁移时基线早于这批修复，但部分防护在迁移时就已按当时的 Python 行为实现（例：技能包解压 zip-slip 防护 Go 已有 `filepath.Rel` 校验）。因此每个缺陷族必须先在 Go 侧核验再动手。
 3. **优先看 P0**：数据丢失 / 崩溃 / 安全边界三类共 **30 行**（见 §4 批次一），其余为行为偏差与可观测性偏差。
-4. **核验进度**：185 行中已核验 **53 行**（✅ 36 + ➖ 11 + ⤵️ 6），剩余 132 行为 🔍。**B 组 17 行**已核验并处置（修复 8 组 C1~C6、延期 3 条、对齐 1 条；实施完成见 §3.B 处置决定）。**C 组 15 行**本轮完成核验与修复：✅ 修复 11 行（C-01/03/04/05/06/07/08/09/10/13/14），➖ 已对齐 3 行（C-02 阻塞 channel 无丢弃、C-11 rail 层状态码分类、C-12 transient retry），另有 C-15 早已 ➖；设计见 `docs/superpowers/specs/2026-11-06-llm-client-c-group-alignment-design.md`，计划见 `docs/superpowers/plans/2026-11-06-llm-client-c-group-alignment.md`。
+4. **核验进度**：185 行中已核验 **77 行**（✅ 59 + ➖ 12 + ⤵️ 6），剩余 108 行为 🔍。**B 组 17 行**已核验并处置（修复 8 组 C1~C6、延期 3 条、对齐 1 条；实施完成见 §3.B 处置决定）。**C 组 15 行**本轮完成核验与修复：✅ 修复 11 行（C-01/03/04/05/06/07/08/09/10/13/14），➖ 已对齐 3 行（C-02 阻塞 channel 无丢弃、C-11 rail 层状态码分类、C-12 transient retry），另有 C-15 早已 ➖；设计见 `docs/superpowers/specs/2026-11-06-llm-client-c-group-alignment-design.md`，计划见 `docs/superpowers/plans/2026-11-06-llm-client-c-group-alignment.md`。**E 组 13 行**（2026-11-08）：✅ 修复 11 行、➖ 不适用 2 行，见 §3.E 完结说明。
 5. **高价值系统性缺陷**集中在四处：① ReAct 循环终止语义（force_finish / 无进展 / 迭代上限）② 上下文压缩的取消与预算守卫 ③ AgentTeams 任务与 worktree 生命周期 ④ Gateway 会话路由与资源释放。
 
 ### 状态图例
@@ -201,21 +201,26 @@ rg -n "<Python 符号>" internal/
 
 ### E. 记忆
 
+> **2026-11-08 完结**：13 行全部核验并处置 —— ✅ 修复 11 行（E-01~E-05、E-07、E-08、E-10~E-13），➖ 不适用 2 行（E-06/E-09 的 `JiuwenMemoryProvider`（mem2）Go 未迁移）。
+> 设计见 `docs/superpowers/specs/2026-11-08-memory-e-group-alignment-design.md`，实施分 B1~B11 十一个批次（b1=840078c5、B2+B3=7f356aa8、B4~B9=9bc13236、B10+B11=b45def43）。
+> **关键发现**：E-04 涉两份平行实现（`agentcore/memory/lite` ↔ agent-core、`swarm/.../common/memory` ↔ jiuwenswarm），各有各的上游且修复状态不同；E-13 上游 `dispose` 除 memory manager 外还释放 `sys_operation`，Go 两项都缺。
+> 已知偏差 D-1~D-5 见设计文档 §13。
+
 | 编号 | 缺陷（Go 语义） | 上游证据 | Go 落点 | 级别 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| E-01 | 消息创建时间时区不一致导致记忆消息**排序错乱** | `5ba83785` | `memory` 消息存储/排序 | P0 | 🔍 |
-| E-02 | embedding 配置变更后索引无法重建/热更新 | `0d62218`、`5dcd1357` | `memory` 索引管理 | P1 | 🔍 |
-| E-03 | 未配置 embedding 时未降级为 FTS5-only 检索（直接失败） | `0fc618ad` | 混合检索 | P1 | 🔍 |
-| E-04 | BM25 分词器缺陷（CJK/标点处理） | `1df6d247` | BM25 实现 | P1 | 🔍 |
-| E-05 | summary 记忆内容为空串时 embedding 报错 | `1fced429` | 索引写入 | P2 | 🔍 |
-| E-06 | `mem2_search` 的 `top_k` 为 null 时崩溃 | `02cc37e9` | 外部 provider 调用 | P1 | 🔍 |
-| E-07 | LongTermMemory 对 `db_store` 强依赖（无 db 时不可用） | `117b1290` | 记忆装配 | P1 | 🔍 |
-| E-08 | 迁移前必须备份每条消息，且**不得删除未备份的记录** | `adce3cda` | 记忆迁移 | P0 | 🔍 |
-| E-09 | JiuwenMemory provider 服务端与 `/v1` API 契约漂移（三元组字段） | `df67f86b`、`86b58bc` | provider 适配 | P1 | 🔍 |
-| E-10 | team 模式下 memory 工具初始化失败 / 团队记忆生成失败 | `06def473` | `agent_teams/memory` | P1 | 🔍 |
-| E-11 | episodic memory 时间抽取不准（"昨天/上周"锚点） | `688b38f5`、`e343eed` | 记忆抽取 | P2 | 🔍 |
-| E-12 | graph-memory 关系去重应按 `fact` 字段（当前按实体对，丢关系） | `600b468f` | 图记忆写入 | P1 | 🔍 |
-| E-13 | 成员释放时未关闭 memory index manager（句柄泄漏） | `339d64df` | `agent_teams` dispose | P2 | 🔍 |
+| E-01 | 消息创建时间时区不一致导致记忆消息**排序错乱** | `5ba83785` | `memory` 消息存储/排序 | P0 | ✅ 已修（B5：UTC 归一 + `MessageTimestampLayout` 落盘，读取侧回退 RFC3339；偏差 D-1） |
+| E-02 | embedding 配置变更后索引无法重建/热更新 | `0d62218`、`5dcd1357` | `memory` 索引管理 | P1 | ✅ 已修（B1：`ConfigFingerprint` + 初始化期清表重建 + `sync*Files(force)`） |
+| E-03 | 未配置 embedding 时未降级为 FTS5-only 检索（直接失败） | `0fc618ad` | 混合检索 | P1 | ✅ 已修（B2：缺 key 返回 nil provider + `!hasVector` 走 `keywordMinScore`） |
+| E-04 | BM25 分词器缺陷（CJK/标点处理） | `1df6d247` | BM25 实现 | P1 | ✅ 已修（B3：两份实现均补 `SplitQueryTokens` + trigram + LIKE 兜底；`gse` 链路删除） |
+| E-05 | summary 记忆内容为空串时 embedding 报错 | `1fced429` | 索引写入 | P2 | ✅ 已修（B4：SummaryManager 过滤 + 索引层兜底，均 Warn） |
+| E-06 | `mem2_search` 的 `top_k` 为 null 时崩溃 | `02cc37e9` | 外部 provider 调用 | P1 | ➖ 不适用（Go 未迁移 `JiuwenMemoryProvider`/mem2） |
+| E-07 | LongTermMemory 对 `db_store` 强依赖（无 db 时不可用） | `117b1290` | 记忆装配 | P1 | ✅ 已修（B7：db_store 可选 + `KvScopeUserMappingManager`） |
+| E-08 | 迁移前必须备份每条消息，且**不得删除未备份的记录** | `adce3cda` | 记忆迁移 | P0 | ✅ 已修（B6：一次取全 + 备份不足拒删守卫 + 恢复后复核） |
+| E-09 | JiuwenMemory provider 服务端与 `/v1` API 契约漂移（三元组字段） | `df67f86b`、`86b58bc` | provider 适配 | P1 | ➖ 不适用（同 E-06） |
+| E-10 | team 模式下 memory 工具初始化失败 / 团队记忆生成失败 | `06def473` | `agent_teams/memory` | P1 | ✅ 已修（B10：bind_session_id + 提取挪到 pause/stop + 幂等键改判 agent + 读 `spec.Memory`） |
+| E-11 | episodic memory 时间抽取不准（"昨天/上周"锚点） | `688b38f5`、`e343eed` | 记忆抽取 | P2 | ✅ 已修（B9：提示词逐字复刻上游；其余 14 个提示词核对无漂移） |
+| E-12 | graph-memory 关系去重应按 `fact` 字段（当前按实体对，丢关系） | `600b468f` | 图记忆写入 | P1 | ✅ 已修（B8：按 `fact` 去重，重复项丢弃） |
+| E-13 | 成员释放时未关闭 memory index manager（句柄泄漏） | `339d64df` | `agent_teams` dispose | P2 | ✅ 已修（B11：`CloseMemoryManagersFor` + `Dispose` 释放 sys_operation） |
 
 ### F. 会话 / 状态 / 检查点 / VCS
 
