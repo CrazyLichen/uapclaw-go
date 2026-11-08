@@ -92,3 +92,48 @@ func TestResolveMultimediaModelClients(t *testing.T) {
 		_ = d.resolveAudioModelClient()
 	})
 }
+
+// ──────────────────────────── 非导出函数补充测试 ────────────────────────────
+
+// TestCancelSchedulerRunningTasks_无实例 验证 instance 缺失时安全返回。
+func TestCancelSchedulerRunningTasks_无实例(t *testing.T) {
+	d := NewDeepAdapter()
+	assertNotPanicsAdapter(t, func() { d.cancelSchedulerRunningTasks() })
+}
+
+// TestCancelSchedulerRunningTasks_无LoopController 验证无 LoopController 时安全返回。
+func TestCancelSchedulerRunningTasks_无LoopController(t *testing.T) {
+	d := newEvolutionTestAdapter(t)
+	assertNotPanicsAdapter(t, func() { d.cancelSchedulerRunningTasks() })
+}
+
+
+
+// TestExtractRebuildFollowupPrompt 验证 followup prompt 提取条件。
+func TestExtractRebuildFollowupPrompt(t *testing.T) {
+	t.Run("nil 返回空", func(t *testing.T) {
+		if got := extractRebuildFollowupPrompt(nil); got != "" {
+			t.Fatalf("应返回空，实际 %q", got)
+		}
+	})
+
+	t.Run("action 不匹配返回空", func(t *testing.T) {
+		got := extractRebuildFollowupPrompt(map[string]any{
+			"action":          "other",
+			"followup_prompt": "p",
+		})
+		if got != "" {
+			t.Fatalf("应返回空，实际 %q", got)
+		}
+	})
+
+	t.Run("action 匹配时返回裁剪后的 prompt", func(t *testing.T) {
+		got := extractRebuildFollowupPrompt(map[string]any{
+			"action":          "run_rebuild_followup",
+			"followup_prompt": "  hello  ",
+		})
+		if got != "hello" {
+			t.Fatalf("应返回 hello，实际 %q", got)
+		}
+	})
+}

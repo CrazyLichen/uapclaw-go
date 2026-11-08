@@ -55,6 +55,35 @@ type TeamBindingUnbinder interface {
 	UnbindSession(teamName, sessionID string) error
 }
 
+// PromptSuggestionForks 会话建议生成的分支持有者。
+// Python: agents/harness/common/recommendation/prompt_suggestion.py
+//
+//	PromptSuggestionForks.session_deleted（:428）
+//
+// spec §8 D-10：实现待 10.3.30 recommendation，桩被调用时记 Debug 并返回。
+type PromptSuggestionForks interface {
+	// SessionDeleted 清除该会话的轮次、已回答主调用与在飞生成
+	SessionDeleted(sessionID string)
+}
+
+// SubagentRuntimeStopper 会话常驻子代理运行时停止器。
+// Python: runtime/service.py stop_subagent_runtimes（:3183）
+// spec §8 D-9：实现待 25.8 subagent_runtime，桩被调用时记 Debug 并返回 nil。
+type SubagentRuntimeStopper interface {
+	// StopSubagentRuntimes 释放该会话常驻的子代理
+	StopSubagentRuntimes(ctx context.Context, sessionID, reason string) error
+}
+
+// SessionRuntimeCleaner 会话内存运行时清理器。
+// Python: runtime/service.py cleanup_session（:3024）
+//
+// 与 RunnerRelease 不同：本接口清的是门面队列与 adapter 侧缓存，
+// Runner.release 由 provisioner 在 dispose 之后调用。
+type SessionRuntimeCleaner interface {
+	// CleanupSession 释放该会话的内存运行时（resetPlanState 恒 false：事务内保留 plan 供回滚）
+	CleanupSession(ctx context.Context, channelID, sessionID string) error
+}
+
 // SessionLifecycleJournal 会话生命周期操作日志（删除可恢复性）。
 // Python: server/runtime/session/lifecycle.py 的 state / update
 // spec §10 R-4：Go 侧为桩实现，recovering 恒 false。
@@ -456,6 +485,12 @@ type ProvisionerDeps struct {
 	TeamExecutionController sessionpkg.TeamExecutionController
 	// DeleteLifecycle 删除生命周期参与者
 	DeleteLifecycle SessionDeleteLifecycle
+	// PromptForks 会话建议生成分支持有者
+	PromptForks PromptSuggestionForks
+	// SubagentStopper 子代理运行时停止器
+	SubagentStopper SubagentRuntimeStopper
+	// SessionCleaner 会话内存运行时清理器
+	SessionCleaner SessionRuntimeCleaner
 }
 
 // RuntimeSessionProvisioner 单个 Runtime 的会话供给事务编排器。
@@ -485,6 +520,12 @@ type RuntimeSessionProvisioner struct {
 	DeleteAgentTeam func(ctx context.Context, teamName string, sessionIDs []string) (bool, error)
 	// RemoveMetadataCache 清理会话元数据内存缓存
 	RemoveMetadataCache func(sessionID string)
+	// PromptForks 会话建议生成分支持有者
+	PromptForks PromptSuggestionForks
+	// SubagentStopper 子代理运行时停止器
+	SubagentStopper SubagentRuntimeStopper
+	// SessionCleaner 会话内存运行时清理器
+	SessionCleaner SessionRuntimeCleaner
 
 	// mu 保护以下全部可变状态
 	mu sync.Mutex
@@ -678,6 +719,9 @@ func NewRuntimeSessionProvisioner(deps ProvisionerDeps) *RuntimeSessionProvision
 		TeamBinding:             deps.TeamBinding,
 		LifecycleJournal:        deps.LifecycleJournal,
 		TeamExecutionController: deps.TeamExecutionController,
+		PromptForks:             deps.PromptForks,
+		SubagentStopper:         deps.SubagentStopper,
+		SessionCleaner:          deps.SessionCleaner,
 		DeleteLifecycle:         deps.DeleteLifecycle,
 		provisionOwnerToken:     &provisionOwnerToken{},
 		nowFunc:                 nowFunc,
@@ -2260,6 +2304,47 @@ func (p *RuntimeSessionProvisioner) deleteTeamRunner(
 		return true
 	}
 	return p.RunnerRelease(ctx, result.SessionID) == nil
+}
+
+// disposeSessionAfterResourceRelease 释放会话内存运行时。
+// Python: runtime/service.py _dispose_agent_session_after_resource_release（:3424）
+//
+// 三步顺序不得调整（短路顺序即语义边界）：
+//  1. PromptForks.SessionDeleted(session_id)               清建议生成
+//  2. SubagentStopper.StopSubagentRuntimes(session_id)     停常驻子代理
+//  3. SessionCleaner.CleanupSession(session_id)            清内存运行时
+//
+// 注意第 3 步的 resetPlanState 恒为 false：删除事务还在进行，plan 状态要留到
+// commit 之后由 commitSessionDelete 重置，否则回滚时状态已丢。
+//
+// 单条失败只告警不中断（对齐上游逐步 try/except 语义），方法本身恒返回 nil。
+func (p *RuntimeSessionProvisioner) disposeSessionAfterResourceRelease(
+	ctx context.Context, channelID, sessionID string,
+) error {
+	if p.PromptForks != nil {
+		p.PromptForks.SessionDeleted(sessionID)
+	}
+	if p.SubagentStopper != nil {
+		if err := p.SubagentStopper.StopSubagentRuntimes(ctx, sessionID, "session_deleted"); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+				Msg("Runtime session delete could not release subagents")
+		}
+	}
+	if p.SessionCleaner != nil {
+		if err := p.SessionCleaner.CleanupSession(ctx, channelID, sessionID); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+				Msg("Runtime session delete could not clean session runtime")
+		}
+	}
+	return nil
+}
+
+// DisposeSessionAfterResourceRelease 导出给 server 侧注入 dispose 回调。
+// Python: 同一函数的对外入口（server 侧把 self._dispose_agent_session_after_resource_release 传入）
+func (p *RuntimeSessionProvisioner) DisposeSessionAfterResourceRelease(
+	ctx context.Context, channelID, sessionID string,
+) error {
+	return p.disposeSessionAfterResourceRelease(ctx, channelID, sessionID)
 }
 
 // cleanupFailedResult 构造 DELETE_FAILED 结果。

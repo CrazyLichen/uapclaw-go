@@ -49,6 +49,14 @@ type noopTeamBindingUnbinder struct{}
 // spec §10 R-4：等 session/lifecycle.py 迁移后回填。
 type noopLifecycleJournal struct{}
 
+// noopPromptSuggestionForks 会话建议生成分支持有者桩。
+// spec §8 D-10：待 10.3.30 recommendation（43821 行）落地后回填。
+type noopPromptSuggestionForks struct{}
+
+// noopSubagentRuntimeStopper 子代理运行时停止器桩。
+// spec §8 D-9：待 25.8 subagent_runtime（3650 行）落地后回填。
+type noopSubagentRuntimeStopper struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -80,6 +88,8 @@ func newSessionProvisioner(
 		TeamBinding:         noopTeamBindingUnbinder{},
 		LifecycleJournal:    noopLifecycleJournal{},
 		ParticipantRegistry: session.NewRuntimeParticipantRegistry(),
+		PromptForks:         noopPromptSuggestionForks{},
+		SubagentStopper:     noopSubagentRuntimeStopper{},
 	})
 	prov.SetSessionOps(&sessionOpsAdapter{})
 	prov.CheckpointEnsure = adapter.EnsurePersistentCheckpointer
@@ -260,6 +270,21 @@ func (noopTrajectoryHook) CommitSessionDelete(context.Context, string) error { r
 func (noopTeamBindingUnbinder) UnbindSession(teamName, sessionID string) error {
 	logger.Debug(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
 		Msg("team binding unbind not implemented (see 10.3.28 spec R-1 batch)")
+	return nil
+}
+
+// SessionDeleted 桩：记 Debug 并返回。
+func (noopPromptSuggestionForks) SessionDeleted(sessionID string) {
+	logger.Debug(logComponent).Str("session_id", sessionID).
+		Msg("prompt suggestion forks session_deleted not implemented (see 10.3.28 spec D-10)")
+}
+
+// StopSubagentRuntimes 桩：记 Debug 并返回 nil。
+func (noopSubagentRuntimeStopper) StopSubagentRuntimes(
+	_ context.Context, sessionID, _ string,
+) error {
+	logger.Debug(logComponent).Str("session_id", sessionID).
+		Msg("stop subagent runtimes not implemented (see 10.3.28 spec D-9)")
 	return nil
 }
 

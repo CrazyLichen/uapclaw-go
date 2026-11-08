@@ -238,15 +238,15 @@ func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, se
 }
 
 // disposeSessionAfterResourceRelease 释放会话内存运行时。
-// spec §10 R-1/R-2/R-3：三个依赖（prompt_suggestion.forks.session_deleted /
-// stop_subagent_runtimes / cleanup_session_runtime）Go 侧尚未落地，此处仅
-// 记告警。Runner.release 由 provisioner 在其后调用，语义不丢失。
-func (s *AgentServer) disposeSessionAfterResourceRelease(_ context.Context, channelID, sessionID string) error {
-	logger.Debug(logComponent).
-		Str("channel_id", channelID).
-		Str("session_id", sessionID).
-		Msg("dispose: prompt_suggestion/subagent/cleanup_session_runtime pending (10.3.28 spec R-1/R-2/R-3)")
-	return nil
+// 委托 provisioner 的三步编排（10.3.28c 七阶段事务的第⑥步）。
+// Python: runtime/service.py _dispose_agent_session_after_resource_release（:3424）
+//
+// 三步：清建议生成 → 停常驻子代理 → 清内存运行时；Runner.release 由 provisioner
+// 在其后调用。三条实现中 PromptForks / SubagentStopper 仍是桩（spec D-9/D-10）。
+func (s *AgentServer) disposeSessionAfterResourceRelease(
+	ctx context.Context, channelID, sessionID string,
+) error {
+	return s.provisioner.DisposeSessionAfterResourceRelease(ctx, channelID, sessionID)
 }
 
 // handleSessionRewind 处理 session.rewind 请求，对齐 Python _handle_session_rewind_full(restore_files=False)。

@@ -31,6 +31,24 @@ func (s *stubChatAgent) ProcessMessage(_ context.Context, req *schema.AgentReque
 	}, nil
 }
 
+// ExecuteMessage 由 Runtime 持有调度的非流式执行（与 ProcessMessage 同行为）
+func (s *stubChatAgent) ExecuteMessage(_ context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return &schema.AgentResponse{
+		RequestID: req.RequestID, ChannelID: req.ChannelID, OK: true,
+		Payload: map[string]any{"event_type": "chat.final", "content": "ok"},
+	}, nil
+}
+
+// ExecuteMessageStream 由 Runtime 持有调度的流式执行（与 ProcessMessageStream 同行为）
+func (s *stubChatAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	ch := make(chan *schema.AgentResponseChunk, len(s.chunks))
+	for _, c := range s.chunks {
+		ch <- c
+	}
+	close(ch)
+	return ch, nil
+}
+
 // ProcessMessageStream 返回预置片段后关闭通道
 func (s *stubChatAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	ch := make(chan *schema.AgentResponseChunk, len(s.chunks))
@@ -195,6 +213,17 @@ func (e *errStreamAgent) ProcessMessageStream(_ context.Context, _ *schema.Agent
 	return nil, errors.New("stream boom")
 }
 
+// ExecuteMessage 由 Runtime 持有调度的非流式执行（与 ProcessMessage 同行为）
+func (e *errStreamAgent) ExecuteMessage(_ context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return &schema.AgentResponse{RequestID: req.RequestID, ChannelID: req.ChannelID, OK: true,
+		Payload: map[string]any{"event_type": "chat.final"}}, nil
+}
+
+// ExecuteMessageStream 由 Runtime 持有调度的流式执行（与 ProcessMessageStream 同行为）
+func (e *errStreamAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	return nil, errors.New("stream boom")
+}
+
 // PlanStateAccessor 无状态存储
 func (e *errStreamAgent) PlanStateAccessor() swruntime.PlanStateAccessor { return nil }
 
@@ -208,6 +237,18 @@ func (n *nilPayloadAgent) ProcessMessage(_ context.Context, req *schema.AgentReq
 
 // ProcessMessageStream 返回空通道
 func (n *nilPayloadAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	ch := make(chan *schema.AgentResponseChunk)
+	close(ch)
+	return ch, nil
+}
+
+// ExecuteMessage 由 Runtime 持有调度的非流式执行（与 ProcessMessage 同行为）
+func (n *nilPayloadAgent) ExecuteMessage(_ context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return &schema.AgentResponse{RequestID: req.RequestID, ChannelID: req.ChannelID, OK: true}, nil
+}
+
+// ExecuteMessageStream 由 Runtime 持有调度的流式执行（与 ProcessMessageStream 同行为）
+func (n *nilPayloadAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	ch := make(chan *schema.AgentResponseChunk)
 	close(ch)
 	return ch, nil
@@ -230,6 +271,17 @@ func (c *chunkHolderAgent) ProcessMessage(_ context.Context, req *schema.AgentRe
 
 // ProcessMessageStream 返回预填通道
 func (c *chunkHolderAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	return c.ch, nil
+}
+
+// ExecuteMessage 由 Runtime 持有调度的非流式执行（与 ProcessMessage 同行为）
+func (c *chunkHolderAgent) ExecuteMessage(_ context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return &schema.AgentResponse{RequestID: req.RequestID, ChannelID: req.ChannelID, OK: true,
+		Payload: map[string]any{"event_type": "chat.final"}}, nil
+}
+
+// ExecuteMessageStream 由 Runtime 持有调度的流式执行（与 ProcessMessageStream 同行为）
+func (c *chunkHolderAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	return c.ch, nil
 }
 
@@ -367,6 +419,23 @@ func (b *blockingStreamAgent) ProcessMessage(_ context.Context, req *schema.Agen
 
 // ProcessMessageStream 收到 release 信号后才产出终态 chunk
 func (b *blockingStreamAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	ch := make(chan *schema.AgentResponseChunk, 1)
+	go func() {
+		<-b.release
+		ch <- &schema.AgentResponseChunk{Payload: map[string]any{"event_type": "chat.final"}, IsComplete: true}
+		close(ch)
+	}()
+	return ch, nil
+}
+
+// ExecuteMessage 由 Runtime 持有调度的非流式执行（与 ProcessMessage 同行为）
+func (b *blockingStreamAgent) ExecuteMessage(_ context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return &schema.AgentResponse{RequestID: req.RequestID, ChannelID: req.ChannelID, OK: true,
+		Payload: map[string]any{"event_type": "chat.final"}}, nil
+}
+
+// ExecuteMessageStream 由 Runtime 持有调度的流式执行（与 ProcessMessageStream 同行为）
+func (b *blockingStreamAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	ch := make(chan *schema.AgentResponseChunk, 1)
 	go func() {
 		<-b.release
