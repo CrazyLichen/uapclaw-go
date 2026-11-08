@@ -37,11 +37,12 @@ type planControllerAdapter struct {
 type sessionOpsAdapter struct{}
 
 // noopTrajectoryHook 轨迹删除钩子桩。
-// spec §10 R-3：等领域二十二 trajectory 落地后回填。
+// spec §10 R-8：等领域二十二（可观测性与 Trajectory v2）落地后回填。
 type noopTrajectoryHook struct{}
 
 // noopTeamBindingUnbinder 团队绑定解绑桩。
-// spec §10 R-1：等 team_binding_store 落地后回填。
+// spec §10 R-1 同批缺口：团队绑定解绑（team_binding_store 迁移后回填，
+// 与 R-1 同属"删除后置副作用"，spec §10 未单列编号）。
 type noopTeamBindingUnbinder struct{}
 
 // noopLifecycleJournal 生命周期日志桩。
@@ -245,7 +246,7 @@ func (*sessionOpsAdapter) HistoryExists(sessionID string) bool {
 // BeginSessionDelete 桩：告警并放行。
 func (noopTrajectoryHook) BeginSessionDelete(_ context.Context, sessionID string) error {
 	logger.Debug(logComponent).Str("session_id", sessionID).
-		Msg("trajectory delete not implemented (see 10.3.28 spec R-3)")
+		Msg("trajectory delete not implemented (see 10.3.28 spec R-8)")
 	return nil
 }
 
@@ -258,7 +259,7 @@ func (noopTrajectoryHook) CommitSessionDelete(context.Context, string) error { r
 // UnbindSession 桩：告警并放行。
 func (noopTeamBindingUnbinder) UnbindSession(teamName, sessionID string) error {
 	logger.Debug(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("team binding unbind not implemented (see 10.3.28 spec R-1)")
+		Msg("team binding unbind not implemented (see 10.3.28 spec R-1 batch)")
 	return nil
 }
 

@@ -238,14 +238,14 @@ func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, se
 }
 
 // disposeSessionAfterResourceRelease 释放会话内存运行时。
-// spec §10 R-2/R-3：三个依赖（prompt_suggestion.forks.session_deleted /
+// spec §10 R-1/R-2/R-3：三个依赖（prompt_suggestion.forks.session_deleted /
 // stop_subagent_runtimes / cleanup_session_runtime）Go 侧尚未落地，此处仅
 // 记告警。Runner.release 由 provisioner 在其后调用，语义不丢失。
 func (s *AgentServer) disposeSessionAfterResourceRelease(_ context.Context, channelID, sessionID string) error {
 	logger.Debug(logComponent).
 		Str("channel_id", channelID).
 		Str("session_id", sessionID).
-		Msg("dispose: prompt_suggestion/subagent/cleanup_session_runtime pending (10.3.28 spec R-2/R-3)")
+		Msg("dispose: prompt_suggestion/subagent/cleanup_session_runtime pending (10.3.28 spec R-1/R-2/R-3)")
 	return nil
 }
 
