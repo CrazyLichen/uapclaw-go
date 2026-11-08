@@ -38,6 +38,10 @@ type fakeAdapter struct {
 	userAnswerResp  *schema.AgentResponse
 	userAnswerErr   error
 	instanceCreated bool
+	// hasRuntime 预设的 HasSessionRuntime 返回值
+	hasRuntime bool
+	// cleanupCalled 是否被调用过 CleanupSessionAdapter
+	cleanupCalled bool
 	// ContextCompressor mock 返回值
 	compressResult  map[string]any
 	compressErr     error
@@ -81,11 +85,14 @@ func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest)
 }
 func (f *fakeAdapter) Cleanup() error { return nil }
 
-// HasSessionRuntime 桩：恒 false。
-func (f *fakeAdapter) HasSessionRuntime(string) bool { return false }
+// HasSessionRuntime 返回预设值。
+func (f *fakeAdapter) HasSessionRuntime(string) bool { return f.hasRuntime }
 
-// CleanupSessionAdapter 桩：恒 false。
-func (f *fakeAdapter) CleanupSessionAdapter(string) bool               { return false }
+// CleanupSessionAdapter 记录调用并返回 false（表示无缓存可清）。
+func (f *fakeAdapter) CleanupSessionAdapter(string) bool {
+	f.cleanupCalled = true
+	return false
+}
 func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
 func (f *fakeAdapter) Instance() *harness.DeepAgent                    { return nil }
 
