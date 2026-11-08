@@ -164,13 +164,24 @@ func TestCodeAdapter_ProcessMessageStreamImpl_未初始化(t *testing.T) {
 	}
 }
 
-// TestCodeAdapter_ReloadAgentConfig_未初始化 测试未初始化时返回错误。
-func TestCodeAdapter_ReloadAgentConfig_未初始化(t *testing.T) {
+// TestCodeAdapter_ReloadAgentConfig_根无instance不报错 与 DeepAdapter 同语义：
+// 根的 instance 为空时不报错也不惰建（上游 _reload_agent_config :13623-13630）。
+func TestCodeAdapter_ReloadAgentConfig_根无instance不报错(t *testing.T) {
 	c := NewCodeAdapter()
-	ctx := t.Context()
-	err := c.ReloadAgentConfig(ctx, nil, nil)
-	if err == nil {
-		t.Error("instance=nil 时应返回错误")
+	if err := c.ReloadAgentConfig(t.Context(), nil, nil); err != nil {
+		t.Errorf("根的 instance 为空时不应报错，实际 %v", err)
+	}
+	if c.deep.instance != nil {
+		t.Error("根不应因此惰建 instance")
+	}
+}
+
+// TestCodeAdapter_ReloadAgentConfig_child无instance报错 child 的 instance 为空时报错。
+func TestCodeAdapter_ReloadAgentConfig_child无instance报错(t *testing.T) {
+	c := NewCodeAdapter()
+	c.deep.MarkAsSessionScoped("s1")
+	if err := c.ReloadAgentConfig(t.Context(), nil, nil); err == nil {
+		t.Error("child 的 instance 为 nil 时应返回错误")
 	}
 }
 

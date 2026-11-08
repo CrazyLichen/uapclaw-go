@@ -216,10 +216,44 @@ func (d *DeepAdapter) GetContextUsage(ctx context.Context, sessionID string) (ma
 	// Python: 直接调 instance.get_context_usage()
 	usage, err := d.instance.GetContextUsage(ctx, sessionID, "")
 	if err != nil {
+		// 对齐 Python get_context_usage（:21953-21961）：
+		// context is None 时返回全零用量而不是抛错。
+		// 该会话尚未产生任何上下文（新会话、首轮之前）是正常态，
+		// 尤其在会话分身后每个 child 都有自己的 context engine，
+		// 首次查询必然为空——不能当错误上报到前端。
+		if isContextMissingError(err) {
+			return emptyContextUsage(), nil
+		}
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("GetContextUsage failed")
 		return nil, err
 	}
 	return usage, nil
+}
+
+// emptyContextUsage 空上下文时的全零用量结构。
+// Python: get_context_usage 的 context is None 分支（:21953-21961）
+func emptyContextUsage() map[string]any {
+	return map[string]any{
+		"context_window_limit": 0,
+		"total_tokens":         0,
+		"system_prompt_tokens": 0,
+		"messages_tokens":      0,
+		"tools_tokens":         0,
+		"occupancy_rate":       0,
+		"message_count":        0,
+		"context_occupancy":    nil,
+	}
+}
+
+// isContextMissingError 判断是否为"该会话尚无上下文"。
+// Go 的 context engine 用错误码 123022 + "cannot find context" 表达该状态。
+func isContextMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "cannot find context") ||
+		strings.Contains(msg, "123022")
 }
 
 // GenerateRecap 生成会话回顾摘要。

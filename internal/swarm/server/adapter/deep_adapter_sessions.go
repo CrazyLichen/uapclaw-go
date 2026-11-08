@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -725,4 +727,87 @@ func (d *DeepAdapter) GenerateBtwAnswer(ctx context.Context, sessionID, question
 		return map[string]any{"status": "failed"}, errors.New("btw answer not implemented")
 	}
 	return map[string]any{"status": "failed"}, errors.New("btw answer not implemented")
+}
+
+// ──────────────────────────── 根 instance 惰建 ────────────────────────────
+
+// skipOwnInstanceBuild 本次 create_instance 是否应跳过建立 DeepAgent。
+// Python: interface_deep.py _skip_own_instance_build（:12727-12742）
+//
+// 根只做 router 与 template holder：chat 每轮都跑在 child 上，
+// 给根也建一份会双倍工具注册、双倍 rail 装配、双倍 ensure_initialized、
+// 双倍 MCP 注册，全都挂在关键路径上。根的 DeepAgent 改由 EnsureInstance 惰建。
+func (d *DeepAdapter) skipOwnInstanceBuild() bool {
+	return !d.isSessionScoped && !d.rootInstanceRequested
+}
+
+// EnsureInstance 返回根的 DeepAgent，首次调用时惰建。
+// Python: interface_deep.py ensure_instance（:12809-12845）
+//
+// child 一定已有 instance；根在需要句柄的非 chat RPC 上才建。
+func (d *DeepAdapter) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
+	// 步骤 1: 已有则直接返回（持锁读，避免与 CreateInstance 的写并发）
+	// Python: :12823-12824 的快速路径
+	//
+	// Python 的 asyncio 单线程让这处无锁读是安全的；Go 里 d.instance 由
+	// CreateInstance 写入，必须先取锁（race detector 已实证）。
+	d.rootInstanceMu.Lock()
+	if d.instance != nil {
+		inst := d.instance
+		d.rootInstanceMu.Unlock()
+		return inst, nil
+	}
+
+	// 步骤 2: 惰建（锁已持有）
+	// Python: :12826-12828 if self._root_instance_lock is None: ... async with
+	defer d.rootInstanceMu.Unlock()
+
+	// 步骤 3: 标记已请求（让 create_instance 不再早退）
+	// Python: :12833 self._root_instance_requested = True
+	d.rootInstanceRequested = true
+
+	mode := d.sessionInstanceMode
+	if mode == "" {
+		mode = d.mode
+	}
+	if mode == "" {
+		mode = "agent"
+	}
+	logger.Info(logComponent).
+		Str("mode", mode).
+		Str("sub_mode", d.sessionInstanceSubMode).
+		Msg("building root DeepAgent on demand")
+
+	// 步骤 4: 复用 create_instance
+	// Python: :12838-12843
+	if err := d.CreateInstance(ctx, d.sessionInstanceConfig, mode, d.sessionInstanceSubMode); err != nil {
+		// 建失败要撤销标记，否则下次 create_instance 会跳过且 instance 永远为空
+		d.rootInstanceRequested = false
+		return nil, err
+	}
+	return d.instance, nil
+}
+
+// resolveLiveAgentSession 取 DeepAgent 上绑定到该会话的长生命周期 Session。
+// Python: session_ops_service.py resolve_live_agent_session（:1721-1747）
+//
+// chat 轮复用 _interaction_session（pre_run 一次）。拿新造的 Session 去写
+// 只会更新 checkpointer，下一轮仍读绑定 Session 上的旧内存快照。
+//
+// 返回 *session.Session（与 InteractionSession/LoopSession 同一类型），
+// 调用方需要 SessionFacade 时直接赋值即可（*Session 已实现该接口，
+// 见 session/agent.go:68 的编译期断言）。
+func resolveLiveAgentSession(inst *harness.DeepAgent, sessionID string) *session.Session {
+	if inst == nil {
+		return nil
+	}
+	for _, sess := range []*session.Session{inst.InteractionSession(), inst.LoopSession()} {
+		if sess == nil {
+			continue
+		}
+		if sess.GetSessionID() == sessionID {
+			return sess
+		}
+	}
+	return nil
 }

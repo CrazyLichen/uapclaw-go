@@ -116,6 +116,21 @@ type DeepAdapter struct {
 	// sessionAgentTasks 会话标识 → 在飞请求标识集合。
 	// Python: interface_deep.py _session_agent_tasks（_register_session_agent_task :4869）
 	sessionAgentTasks map[string]map[string]struct{}
+	// rootInstanceRequested 根是否已请求建立自己的 DeepAgent。
+	// Python: interface_deep.py _root_instance_requested（:2124）
+	rootInstanceRequested bool
+	// rootInstanceMu 根 DeepAgent 惰建互斥锁。
+	// Python: interface_deep.py _root_instance_lock（:2125）
+	rootInstanceMu sync.Mutex
+	// sessionInstanceConfig create_instance 的入参快照，供 EnsureInstance 惰建时复用。
+	// Python: interface_deep.py _session_instance_config
+	sessionInstanceConfig map[string]any
+	// sessionInstanceMode 惰建时使用的 mode。
+	// Python: interface_deep.py _session_instance_mode
+	sessionInstanceMode string
+	// sessionInstanceSubMode 惰建时使用的 sub_mode。
+	// Python: interface_deep.py _session_instance_sub_mode
+	sessionInstanceSubMode string
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -562,6 +577,26 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.mode = mode
 	d.subMode = subMode
 
+	// 步骤 11.5: 根只做 router/template holder，不建自己的 DeepAgent
+	// Python: interface_deep.py :13109 if self._skip_own_instance_build(): return
+	//
+	// 位置与上游一致：在便宜的 config-cache 段之后、model 构建之前。
+	// 先记下惰建所需的入参，供 EnsureInstance 复用。
+	//
+	// ⤵️ 上游此处还有 web channel 的 _start_mcp_prewarm()（fire-and-forget
+	//    预热 connected MCP 的进程级连接缓存）；Go 侧 MCP 生命周期尚未对齐，
+	//    随 R-6 一并回填。
+	d.sessionInstanceConfig = configMap
+	d.sessionInstanceMode = mode
+	d.sessionInstanceSubMode = subMode
+	if d.skipOwnInstanceBuild() {
+		logger.Info(logComponent).
+			Str("mode", mode).
+			Str("sub_mode", subMode).
+			Msg("root adapter skips own DeepAgent build (router only)")
+		return nil
+	}
+
 	// 步骤 12: model = d.createModel(configBase)
 	// createModel 内部构建完再发布（stateMu 保护），调用方不要再直接赋值 d.model。
 	d.createModel(configBase)
@@ -723,9 +758,30 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 //	Python: 12. self._registered_mcp_server_ids.clear()
 //	Python: 13. await self._register_mcp_servers_from_config(config_base, tag)
 func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
-	// 步骤 0: 实例 nil 检查
+	// 步骤 0: instance 为 nil 的分流
+	// Python: _reload_agent_config :13623-13632
+	//
+	//   if self._instance is None:
+	//       if self._is_session_scoped_adapter:
+	//           raise RuntimeError("未初始化，请先调用 create_instance()")
+	//       # Root adapter whose lazily-built DeepAgent nobody has needed yet:
+	//       # it has nothing of its own to reconfigure, but the cached config
+	//       # snapshot still has to move forward and the live session adapters
+	//       # still have to be reloaded.
+	//
+	// 即：child 报错；根**不惰建**，只推进 config 快照并扇出到各 child。
+	// 根自己的 DeepAgent 没被任何人需要过，就没有"自己的"东西要重配。
 	if d.instance == nil {
-		return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+		if d.isSessionScoped {
+			return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+		}
+		// 根的 config 快照照常推进（后续扇出给 child 用）
+		// ⤵️ _apply_reload_config_snapshot 与 _cancel_skill_retrieval_build_after_reload
+		//    依赖 skill retrieval 构建链路，随 R-5 回填；此处先返回，保留
+		//    "不惰建、不报错"这一上游核心语义。
+		logger.Info(logComponent).
+			Msg("root adapter has no instance; skip own reload, config snapshot advanced")
+		return nil
 	}
 
 	// Python: clear_config_cache() + clear_memory_manager_cache()
@@ -1859,10 +1915,17 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string) error {
-	if d.instance == nil {
+	// 10.3.28f：SwitchMode 是根上的独立 RPC，需要 DeepAgent 句柄。
+	// 根不再在 create_instance 时自建 instance，故此处惰建。
+	inst, err := d.EnsureInstance(ctx)
+	if err != nil {
+		return err
+	}
+	if inst == nil {
 		return nil
 	}
-	card := d.instance.Card()
+
+	card := inst.Card()
 	if card == nil {
 		return nil
 	}
@@ -1873,8 +1936,8 @@ func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 		return fmt.Errorf("SwitchMode PreRun 失败: %w", err)
 	}
 
-	d.instance.SwitchMode(sess, subMode)
-	state := d.instance.LoadState(sess)
+	inst.SwitchMode(sess, subMode)
+	state := inst.LoadState(sess)
 
 	sess.UpdateState(map[string]any{
 		hschema.SessionStateKey: state.ToSessionDict(),

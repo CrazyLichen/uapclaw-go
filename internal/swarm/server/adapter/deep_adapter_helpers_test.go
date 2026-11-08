@@ -1232,13 +1232,28 @@ func TestBuildMcpServerConfig(t *testing.T) {
 	})
 }
 
-// TestDeepAdapter_ReloadAgentConfig_未初始化 测试 instance 为 nil 时返回错误。
-func TestDeepAdapter_ReloadAgentConfig_未初始化(t *testing.T) {
+// TestDeepAdapter_ReloadAgentConfig_根无instance不报错 根的 instance 为空时
+// 不报错也不惰建（对齐上游 _reload_agent_config :13623-13630：
+// "Root adapter whose lazily-built DeepAgent nobody has needed yet:
+//
+//	it has nothing of its own to reconfigure"）。
+func TestDeepAdapter_ReloadAgentConfig_根无instance不报错(t *testing.T) {
 	d := NewDeepAdapter()
-	ctx := t.Context()
-	err := d.ReloadAgentConfig(ctx, nil, nil)
-	if err == nil {
-		t.Error("instance 为 nil 时应返回错误")
+	if err := d.ReloadAgentConfig(t.Context(), nil, nil); err != nil {
+		t.Errorf("根的 instance 为空时不应报错，实际 %v", err)
+	}
+	if d.instance != nil {
+		t.Error("根不应因此惰建 instance")
+	}
+}
+
+// TestDeepAdapter_ReloadAgentConfig_child无instance报错 child 的 instance 为空
+// 时报错（对齐上游 :13624-13625 的 session-scoped 分支）。
+func TestDeepAdapter_ReloadAgentConfig_child无instance报错(t *testing.T) {
+	d := NewDeepAdapter()
+	d.MarkAsSessionScoped("s1")
+	if err := d.ReloadAgentConfig(t.Context(), nil, nil); err == nil {
+		t.Error("child 的 instance 为 nil 时应返回错误")
 	}
 }
 

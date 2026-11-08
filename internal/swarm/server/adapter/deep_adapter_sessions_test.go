@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -623,5 +624,89 @@ func TestAttachOnly_不占活跃(t *testing.T) {
 	}
 	if root.hasRegisteredSessionTasks("s1") {
 		t.Error("attach-only 不应登记在飞任务")
+	}
+}
+
+// ──────────────────────────── 根 instance 惰建 ────────────────────────────
+
+// TestSkipOwnInstanceBuild_根与child 根的判定随 rootInstanceRequested 变化。
+func TestSkipOwnInstanceBuild_根与child(t *testing.T) {
+	root := NewDeepAdapter()
+	if !root.skipOwnInstanceBuild() {
+		t.Error("根未请求 instance 时应跳过建立")
+	}
+	root.rootInstanceRequested = true
+	if root.skipOwnInstanceBuild() {
+		t.Error("根已请求 instance 后不应跳过")
+	}
+	child := NewDeepAdapter()
+	child.MarkAsSessionScoped("s1")
+	if child.skipOwnInstanceBuild() {
+		t.Error("child 从不跳过")
+	}
+}
+
+// TestEnsureInstance_惰建与复用 首次建、二次复用。
+func TestEnsureInstance_惰建与复用(t *testing.T) {
+	root := NewDeepAdapter()
+	if root.Instance() != nil {
+		t.Fatal("初始不应有 instance")
+	}
+	first, err := root.EnsureInstance(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureInstance 失败: %v", err)
+	}
+	if first == nil {
+		t.Fatal("EnsureInstance 应返回非 nil instance")
+	}
+	second, err := root.EnsureInstance(context.Background())
+	if err != nil {
+		t.Fatalf("二次 EnsureInstance 失败: %v", err)
+	}
+	if first != second {
+		t.Error("二次调用应返回同一 instance")
+	}
+	if !root.rootInstanceRequested {
+		t.Error("rootInstanceRequested 应被置真")
+	}
+}
+
+// TestEnsureInstance_并发双检 -race 下并发只建一次。
+func TestEnsureInstance_并发双检(t *testing.T) {
+	root := NewDeepAdapter()
+	const n = 8
+	results := make([]*harness.DeepAgent, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			inst, err := root.EnsureInstance(context.Background())
+			if err != nil {
+				t.Errorf("并发 EnsureInstance 失败: %v", err)
+				return
+			}
+			results[idx] = inst
+		}(i)
+	}
+	wg.Wait()
+	for i := 1; i < n; i++ {
+		if results[i] != results[0] {
+			t.Fatal("并发应只建一个 instance")
+		}
+	}
+}
+
+// TestCreateInstance_根跳过建instance 根的 CreateInstance 不建 DeepAgent。
+func TestCreateInstance_根跳过建instance(t *testing.T) {
+	root := NewDeepAdapter()
+	if err := root.CreateInstance(context.Background(), map[string]any{}, "agent", ""); err != nil {
+		t.Fatalf("CreateInstance 失败: %v", err)
+	}
+	if root.Instance() != nil {
+		t.Error("根 CreateInstance 后不应有 instance（router only）")
+	}
+	if root.rootInstanceRequested {
+		t.Error("根 CreateInstance 不应置 rootInstanceRequested")
 	}
 }

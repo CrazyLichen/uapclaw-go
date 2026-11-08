@@ -96,6 +96,25 @@ func (f *fakeAdapter) CleanupSessionAdapter(string) bool {
 func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
 func (f *fakeAdapter) Instance() *harness.DeepAgent                    { return nil }
 
+// ── 10.3.28f 会话分身接口（规则 10：接口扩张时测试替身自己补齐）──
+
+// IsSessionScoped 桩：本替身不分身。
+func (f *fakeAdapter) IsSessionScoped() bool { return false }
+
+// MarkAsSessionScoped 桩：无操作。
+func (f *fakeAdapter) MarkAsSessionScoped(string) {}
+
+// GetLiveSessionInstance 桩：恒 nil。
+func (f *fakeAdapter) GetLiveSessionInstance(string) *harness.DeepAgent { return nil }
+
+// HandleSwarmflowReply 桩：未实现（方法体归团队域）。
+func (f *fakeAdapter) HandleSwarmflowReply(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return nil, nil
+}
+
+// PendingInteractions 桩：恒空。
+func (f *fakeAdapter) PendingInteractions(string) ([]map[string]any, error) { return nil, nil }
+
 // ContextCompressor 接口实现
 func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {
 	return f.compressResult, f.compressErr
