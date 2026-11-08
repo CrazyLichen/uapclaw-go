@@ -42,6 +42,9 @@ const (
 	ReqMethodCommandCompact ReqMethod = "command.compact"
 	// ReqMethodCommandContext 上下文信息
 	ReqMethodCommandContext ReqMethod = "command.context"
+	// ReqMethodCommandGoal 持续目标命令（action=set/resume/pause/clear/get）
+	// 上游协议成员，此前 Go 侧缺此常量、只用裸字符串（slash_command.go:279）。
+	ReqMethodCommandGoal ReqMethod = "command.goal"
 	// ReqMethodCommandRecap 回顾总结
 	ReqMethodCommandRecap ReqMethod = "command.recap"
 	// ReqMethodCommandDiff 查看差异
