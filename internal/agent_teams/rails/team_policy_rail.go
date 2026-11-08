@@ -532,11 +532,6 @@ func WithPolicySteerBatchSize(size int) TeamPolicyRailOption {
 	return func(r *TeamPolicyRail) { r.steerBatchSize = size }
 }
 
-// WithPolicyPolicyText 设置 framework 建队的政策块（已渲染）。
-func WithPolicyPolicyText(text *string) TeamPolicyRailOption {
-	return func(r *TeamPolicyRail) { r.policyText = text }
-}
-
 // WithPolicyTaskEventTracker 注入任务通知器。
 func WithPolicyTaskEventTracker(t tracker.TaskEventTracker) TeamPolicyRailOption {
 	return func(r *TeamPolicyRail) { r.taskEventTracker = t }
