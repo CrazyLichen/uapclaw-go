@@ -376,3 +376,79 @@ func TestSQLTaskDao_VerifyAndFixTaskConsistency(t *testing.T) {
 	require.NoError(t, err)
 	_ = refreshed
 }
+
+// TestSQLTaskDao_GetUnseenEdits 测试 revision > observed_revision 过滤非终态任务
+//
+// Python: get_unseen_edits (task_dao.py L763-779)
+func TestSQLTaskDao_GetUnseenEdits(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "unseen-1")
+	ctx := newTestCtx("unseen-1")
+	dao := db.Task()
+	assignee := "alice"
+
+	mk := func(id, status string, rev, observed int64) {
+		ok, err := dao.CreateTask(ctx, &TeamTaskBase{
+			TaskID: id, TeamName: "team1", Title: "T" + id, Content: "C",
+			Status: status, Assignee: &assignee, Revision: rev, ObservedRevision: observed,
+		})
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+	mk("t-1", fsm.TaskStatusClaimed, 2, 1)      // 未读 → 返回
+	mk("t-2", fsm.TaskStatusClaimed, 1, 1)      // 已读 → 不返回
+	mk("t-3", fsm.TaskStatusCompleted, 2, 0)    // 终态 → 不返回
+	mk("t-4", fsm.TaskStatusCancelled, 3, 0)    // 终态 → 不返回
+	mk("t-5", fsm.TaskStatusPlanApproved, 5, 0) // 未读非终态 → 返回
+
+	rows, err := dao.GetUnseenEdits(ctx, "team1", "alice")
+	require.NoError(t, err)
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.TaskID)
+	}
+	assert.ElementsMatch(t, []string{"t-1", "t-5"}, ids)
+}
+
+// TestSQLTaskDao_AppendChangeNote 测试 revision 推进与 change_notes 追加
+//
+// Python: update_task 内 revision += 1 + change_notes 追加（F_129 / D8）
+func TestSQLTaskDao_AppendChangeNote(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "changenote-1")
+	ctx := newTestCtx("changenote-1")
+	dao := db.Task()
+
+	ok, err := dao.CreateTask(ctx, &TeamTaskBase{TaskID: "t-1", TeamName: "team1", Title: "T", Content: "C", Status: fsm.TaskStatusPending})
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	ok, err = dao.AppendChangeNote(ctx, "t-1", 1, "改了要求", "leader")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	got, err := dao.GetTask(ctx, "t-1")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, int64(1), got.Revision)
+	require.NotNil(t, got.ChangeNotes)
+	assert.Contains(t, *got.ChangeNotes, "改了要求")
+	assert.Contains(t, *got.ChangeNotes, "leader")
+
+	// 第二次追加：列表累加，revision 推进
+	ok, err = dao.AppendChangeNote(ctx, "t-1", 2, "再改一次", "bob")
+	require.NoError(t, err)
+	require.True(t, ok)
+	got2, err := dao.GetTask(ctx, "t-1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), got2.Revision)
+	assert.Contains(t, *got2.ChangeNotes, "改了要求")
+	assert.Contains(t, *got2.ChangeNotes, "再改一次")
+}
+
+// TestSQLTaskDao_AppendChangeNote_任务不存在 测试不存在返回 false 不报错
+func TestSQLTaskDao_AppendChangeNote_任务不存在(t *testing.T) {
+	db := newTestSqlDBWithSession(t, "changenote-2")
+	ctx := newTestCtx("changenote-2")
+	ok, err := db.Task().AppendChangeNote(ctx, "ghost", 1, "x", "y")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}

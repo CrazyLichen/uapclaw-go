@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -102,6 +103,64 @@ func (d *SQLTaskDao) GetTasksByAssignee(ctx context.Context, teamName, assignee,
 		return nil, result.Error
 	}
 	return tasks, nil
+}
+
+// GetUnseenEdits 查询成员名下非终态且 revision > observed_revision 的任务。
+//
+// 偏差 D-5：上游用 TASK_WORKING_STATUSES（planning / in_progress / in_review），
+// Go 任务状态机目前只有 6 态（pending / claimed / plan_approved / completed /
+// cancelled / blocked），故用 NOT IN (completed, cancelled) 近似；
+// 25.4 condition-named 状态机落地后改回精确集合。
+//
+// Python: get_unseen_edits (task_dao.py L763-779)
+func (d *SQLTaskDao) GetUnseenEdits(ctx context.Context, teamName, assignee string) ([]*TeamTaskBase, error) {
+	table := d.taskTableName(ctx)
+	var tasks []*TeamTaskBase
+	result := d.db.WithContext(ctx).Table(table).
+		Where("team_name = ?", teamName).
+		Where("assignee = ?", assignee).
+		Where("status NOT IN ?", []string{fsm.TaskStatusCompleted, fsm.TaskStatusCancelled}).
+		Where("revision > observed_revision").
+		Find(&tasks)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return tasks, nil
+}
+
+// AppendChangeNote 追加一条编辑说明并推进 revision。
+//
+// revision 推进与 change_notes 追加在同一事务内完成：单独推进 revision 会让
+// 「改过但未读」成立却读不到说明，单独追加说明会让条目落在区间外被过滤掉。
+//
+// Python: update_task 内的 revision += 1 / change_notes 追加（F_129 / D8）
+func (d *SQLTaskDao) AppendChangeNote(ctx context.Context, taskID string, revision int64, note, by string) (bool, error) {
+	table := d.taskTableName(ctx)
+	var ok bool
+	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var task TeamTaskBase
+		result := tx.Table(table).Where("task_id = ?", taskID).First(&task)
+		if result.Error != nil {
+			return nil
+		}
+		notes := decodeChangeNotes(task.ChangeNotes)
+		notes = append(notes, map[string]any{
+			"revision": revision,
+			"note":     note,
+			"by":       by,
+		})
+		encoded, marshalErr := json.Marshal(notes)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		tx.Table(table).Where("task_id = ?", taskID).Updates(map[string]any{
+			"revision":     revision,
+			"change_notes": string(encoded),
+		})
+		ok = true
+		return nil
+	})
+	return ok, err
 }
 
 // ClaimTask 认领任务：设置 assignee + pending→claimed FSM 校验。
@@ -570,6 +629,23 @@ func (d *SQLTaskDao) VerifyAndFixTaskConsistency(ctx context.Context, teamName s
 func (e *mutationFailure) Error() string { return e.reason }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// decodeChangeNotes 解析 change_notes JSON 列表，坏值返回空切片。
+//
+// 上游 unseen_change_notes 对坏 JSON 也是返回空（吞掉解析错误），
+// 这里保持同样宽容：一条坏记录不该让整个追加流程失败。
+//
+// Python: message_template.unseen_change_notes 的 json.loads 容错（L410-421）
+func decodeChangeNotes(raw *string) []map[string]any {
+	if raw == nil || *raw == "" {
+		return nil
+	}
+	var notes []map[string]any
+	if err := json.Unmarshal([]byte(*raw), &notes); err != nil {
+		return nil
+	}
+	return notes
+}
 
 // withTx 返回绑定指定事务的 DAO 实例。
 func (d *SQLTaskDao) withTx(tx *gorm.DB) *SQLTaskDao {

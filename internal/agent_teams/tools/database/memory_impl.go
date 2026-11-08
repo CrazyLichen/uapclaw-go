@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 
@@ -470,6 +471,59 @@ func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, 
 		result = append(result, task)
 	}
 	return result, nil
+}
+
+// GetUnseenEdits 查询成员名下非终态且 revision > observed_revision 的任务。
+//
+// 偏差 D-5 同 SQL 实现：用 NOT IN (completed, cancelled) 近似上游
+// TASK_WORKING_STATUSES（Go 状态机暂无 planning / in_progress / in_review）。
+//
+// Python: get_unseen_edits (task_dao.py L763-779)
+func (db *InMemoryTeamDatabase) GetUnseenEdits(_ context.Context, teamName, assignee string) ([]*TeamTaskBase, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var result []*TeamTaskBase
+	for _, task := range db.tasks {
+		if task.TeamName != teamName {
+			continue
+		}
+		taskAssignee := ""
+		if task.Assignee != nil {
+			taskAssignee = *task.Assignee
+		}
+		if taskAssignee != assignee {
+			continue
+		}
+		if task.Status == fsm.TaskStatusCompleted || task.Status == fsm.TaskStatusCancelled {
+			continue
+		}
+		if task.Revision <= task.ObservedRevision {
+			continue
+		}
+		result = append(result, task)
+	}
+	return result, nil
+}
+
+// AppendChangeNote 追加一条编辑说明并推进 revision。
+// Python: update_task 内的 revision += 1 / change_notes 追加（F_129 / D8）
+func (db *InMemoryTeamDatabase) AppendChangeNote(_ context.Context, taskID string, revision int64, note, by string) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	task, exists := db.tasks[taskID]
+	if !exists {
+		return false, nil
+	}
+	notes := decodeChangeNotes(task.ChangeNotes)
+	notes = append(notes, map[string]any{"revision": revision, "note": note, "by": by})
+	encoded, err := json.Marshal(notes)
+	if err != nil {
+		return false, err
+	}
+	raw := string(encoded)
+	task.Revision = revision
+	task.ChangeNotes = &raw
+	return true, nil
 }
 
 // ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。

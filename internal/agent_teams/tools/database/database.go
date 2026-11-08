@@ -96,6 +96,14 @@ type TaskDao interface {
 	GetTeamTasks(ctx context.Context, teamName, status string) ([]*TeamTaskBase, error)
 	// GetTasksByAssignee 查询成员的任务。status 为空字符串表示不过滤。
 	GetTasksByAssignee(ctx context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error)
+	// GetUnseenEdits 查询成员名下「改过但未读」的任务（revision > observed_revision）。
+	// Python: get_unseen_edits(team_name, assignee) (task_dao.py L763-779)
+	// 只查非终态任务；正文可能被溢出占位符替代，调用方不应读 Content。
+	GetUnseenEdits(ctx context.Context, teamName, assignee string) ([]*TeamTaskBase, error)
+	// AppendChangeNote 追加一条编辑说明并把 revision 推进到 revision（F_129 / D8）。
+	// Python: update_task 内 revision += 1 + change_notes 追加
+	// note 为编辑说明正文，by 为修改人（空串表示未知）。
+	AppendChangeNote(ctx context.Context, taskID string, revision int64, note, by string) (bool, error)
 	// ClaimTask 认领任务：设置 assignee + PENDING→CLAIMED FSM 校验。
 	// Python: claim_task() → bool
 	ClaimTask(ctx context.Context, taskID, assignee string) (bool, error)
