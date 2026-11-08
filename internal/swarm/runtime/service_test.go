@@ -241,13 +241,6 @@ func TestAgentRuntime_Stream_逐块回传(t *testing.T) {
 	require.Equal(t, PlanModeExitedEvent, seen[0].EventType())
 }
 
-// TestUsesSessionRuntime 验证 team/stateless 不占用会话流槽。
-func TestUsesSessionRuntime(t *testing.T) {
-	require.True(t, UsesSessionRuntime(reqWithParams(t, map[string]any{"mode": "agent.work.normal"})))
-	require.False(t, UsesSessionRuntime(reqWithParams(t, map[string]any{"mode": "team.work.normal"})))
-	require.False(t, UsesSessionRuntime(reqWithParams(t, map[string]any{"mode": "agent.work.normal", "stateless": true})))
-}
-
 // TestApplyPlanResult 验证阻断分支回写 mode、进入分支回写 query。
 func TestApplyPlanResult(t *testing.T) {
 	req := reqWithParams(t, map[string]any{"mode": "agent.work.plan", "query": "原文"})

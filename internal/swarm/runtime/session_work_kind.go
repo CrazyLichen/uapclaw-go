@@ -99,13 +99,15 @@ func SessionWorkKind(request *schema.AgentRequest, background bool) *sessionpkg.
 	return kindPtr(sessionpkg.SessionWorkKindChatUnary)
 }
 
-// WorkKindUsesSessionRuntime 这次执行是否由 Session Runtime 持有。
+// UsesSessionRuntime 这次执行是否由 Session Runtime 持有调度。
 // Python: runtime/service.py uses_session_runtime（:3843）
 //
-// ⚠️ 与同包已有的 UsesSessionRuntime（service.go:111，「是否占用会话流槽」，
-// team/stateless 返回 false）语义不同：本函数按上游定义，team 请求也返回 true，
-// 因为团队执行同样由 Runtime 协调器调度。两者待统一，见 spec 冲突登记。
-func WorkKindUsesSessionRuntime(request *schema.AgentRequest, background bool) bool {
+// 为真时调用方走 ExecuteMessage（协调器调度），为假时走 ProcessMessage（门面队列）。
+// 团队与 goal 类请求同样为真——它们都由 Runtime 协调器持有执行与代次。
+//
+// 历史上的同名函数曾判「是否占用会话流槽」（team 返回 false），与上游语义相反
+// 且零生产调用方，已按规则 8 删除。
+func UsesSessionRuntime(request *schema.AgentRequest, background bool) bool {
 	return SessionWorkKind(request, background) != nil
 }
 

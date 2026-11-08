@@ -106,19 +106,6 @@ func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
 	return req
 }
 
-// UsesSessionRuntime 判断请求是否走 session runtime 路径（team 与 stateless 不占用会话流槽）。
-// Python: AgentRuntime.uses_session_runtime（service.py:3842）
-func UsesSessionRuntime(req *schema.AgentRequest) bool {
-	params := parseRequestParams(req)
-	if mode, ok := params["mode"].(string); ok && schema.IsTeamMode(mode) {
-		return false
-	}
-	if v, ok := params["stateless"].(bool); ok && v {
-		return false
-	}
-	return true
-}
-
 // Invoke 执行非流式 chat turn。
 // Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
 func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {

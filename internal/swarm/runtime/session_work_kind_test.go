@@ -239,18 +239,17 @@ func TestSessionWorkKind_nil请求(t *testing.T) {
 	}
 }
 
-// TestWorkKindUsesSessionRuntime 包一层布尔判定（与已有的
-// UsesSessionRuntime「是否占用会话流槽」是不同语义，见 spec 冲突登记）。
-func TestWorkKindUsesSessionRuntime(t *testing.T) {
+// TestUsesSessionRuntime 验证上游语义：为真走 ExecuteMessage，为假走 ProcessMessage。
+func TestUsesSessionRuntime(t *testing.T) {
 	sid := "s1"
 	chat := newWorkKindRequest(schema.ReqMethodChatSend, &sid, true,
 		map[string]any{"mode": "agent.work.normal"})
-	if !WorkKindUsesSessionRuntime(chat, false) {
+	if !UsesSessionRuntime(chat, false) {
 		t.Error("聊天请求应归 Runtime")
 	}
 	rename := newWorkKindRequest(schema.ReqMethodSessionRename, &sid, false,
 		map[string]any{"mode": "agent.work.normal"})
-	if WorkKindUsesSessionRuntime(rename, false) {
+	if UsesSessionRuntime(rename, false) {
 		t.Error("session.rename 不应归 Runtime")
 	}
 }
@@ -341,5 +340,21 @@ func TestRequestTargetsTeam_直接判定(t *testing.T) {
 	if got := SessionWorkKind(req, false); got == nil ||
 		*got != sessionpkg.SessionWorkKindTeamRequest {
 		t.Errorf("mode=team 应为 team_request，实际 %v", got)
+	}
+}
+
+// TestUsesSessionRuntime_团队为真 上游语义：团队执行同样由 Runtime 协调器持有。
+// 与历史实现（team 返回 false，判「是否占用会话流槽」）相反，此处固化上游定义。
+func TestUsesSessionRuntime_团队为真(t *testing.T) {
+	sid := "s1"
+	team := newWorkKindRequest(schema.ReqMethodChatSend, &sid, true,
+		map[string]any{"mode": "team.work.normal"})
+	if !UsesSessionRuntime(team, false) {
+		t.Error("团队请求应由 Runtime 持有调度（上游语义为 true）")
+	}
+	goal := newWorkKindRequest(schema.ReqMethodCommandGoal, &sid, true,
+		map[string]any{"mode": "agent.work.normal", "action": "set"})
+	if !UsesSessionRuntime(goal, false) {
+		t.Error("goal 请求应由 Runtime 持有调度")
 	}
 }
