@@ -41,3 +41,23 @@ func createPeer(t *testing.T, db *database.InMemoryTeamDatabase, teamName, membe
 		t.Fatalf("createPeer(%s) 失败", memberName)
 	}
 }
+
+// createAssignedTask 建一条指定 assignee / 状态 / reviewer 的任务行。
+func createAssignedTask(t *testing.T, db *database.InMemoryTeamDatabase, teamName, taskID, assignee, status, reviewerJSON string) {
+	t.Helper()
+	task := &database.TeamTaskBase{
+		TaskID:   taskID,
+		TeamName: teamName,
+		Title:    "标题-" + taskID,
+		Content:  "正文",
+		Status:   status,
+		Assignee: database.StringPtr(assignee),
+	}
+	if reviewerJSON != "" {
+		task.Reviewer = database.StringPtr(reviewerJSON)
+	}
+	ok, err := db.Task().CreateTask(context.Background(), task)
+	if err != nil || !ok {
+		t.Fatalf("createAssignedTask(%s) = (%v,%v)", taskID, ok, err)
+	}
+}

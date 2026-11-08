@@ -7,6 +7,7 @@ import (
 	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -334,5 +335,255 @@ func TestRosterBlock_探针未动零新增(t *testing.T) {
 	_ = tr.rosterBlock(map[string]any{}, updated)
 	if got := tr.rosterBlock(updated, map[string]any{}); got != nil {
 		t.Fatalf("探针未动应返回 nil, got %q", *got)
+	}
+}
+
+// ──────────────────────────── 任务通知三兄弟 ────────────────────────────
+
+// TestTaskOutcome_带reviewer完成触发通知 测试验收通过的完成才通知
+//
+// Python: TaskOutcomeTracker (team_context.py L871-907)
+func TestTaskOutcome_带reviewer完成触发通知(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	notice := tr.claim(newFakeSession("s1"))
+	if notice == nil {
+		t.Fatal("带 reviewer 的完成应通知")
+	}
+	if !strings.Contains(notice.Text, "task-verified") {
+		t.Fatalf("kind 应为 task-verified: %q", notice.Text)
+	}
+	if !strings.Contains(notice.Text, "t-1") {
+		t.Fatalf("应含任务 id: %q", notice.Text)
+	}
+	if len(notice.Entries) != 1 || notice.Entries[0] != "t-1" {
+		t.Fatalf("entries = %v", notice.Entries)
+	}
+}
+
+// TestTaskOutcome_无reviewer不通知 测试自己交差的完成不播
+func TestTaskOutcome_无reviewer不通知(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusCompleted), "")
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	if got := tr.claim(newFakeSession("s1")); got != nil {
+		t.Fatalf("无 reviewer 不应通知, got %+v", got)
+	}
+}
+
+// TestTaskOutcome_重复claim只播一次 测试基线生效
+func TestTaskOutcome_重复claim只播一次(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	sess := newFakeSession("s1")
+	if tr.claim(sess) == nil {
+		t.Fatal("首次应通知")
+	}
+	if got := tr.claim(sess); got != nil {
+		t.Fatalf("重复 claim 不应再通知, got %+v", got)
+	}
+}
+
+// TestTaskOutcome_无backend返回nil 测试 tracker 关闭时 claim nil
+func TestTaskOutcome_无backend返回nil(t *testing.T) {
+	tr := newTaskOutcomeTracker(nil, "alice")
+	if got := tr.claim(newFakeSession("s1")); got != nil {
+		t.Fatalf("无 backend 应返回 nil, got %+v", got)
+	}
+}
+
+// TestTaskRevision_未读编辑触发通知 测试 revision>observed 时通知且含编辑说明
+//
+// Python: TaskRevisionTracker (team_context.py L918-971)
+func TestTaskRevision_未读编辑触发通知(t *testing.T) {
+	tb, db := newTestBackend(t)
+	ctx := context.Background()
+	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusClaimed), "")
+	if ok, err := db.Task().AppendChangeNote(ctx, "t-1", 1, "改了要求", "leader"); err != nil || !ok {
+		t.Fatalf("AppendChangeNote = (%v,%v)", ok, err)
+	}
+
+	tr := newTaskRevisionTracker(tb, "alice")
+	notice := tr.claim(newFakeSession("s1"))
+	if notice == nil {
+		t.Fatal("应通知未读编辑")
+	}
+	if !strings.Contains(notice.Text, "task-revised") {
+		t.Fatalf("kind 应为 task-revised: %q", notice.Text)
+	}
+	if !strings.Contains(notice.Text, "改了要求") {
+		t.Fatalf("应含编辑说明: %q", notice.Text)
+	}
+	if !strings.Contains(notice.Text, "r0 → r1") {
+		t.Fatalf("应含修订区间: %q", notice.Text)
+	}
+}
+
+// TestTaskRevision_entry格式 测试 entry 形如 taskID@revision
+func TestTaskRevision_entry格式(t *testing.T) {
+	tr := newTaskRevisionTracker(nil, "alice")
+	task := &database.TeamTaskBase{TaskID: "t-9", Revision: 4}
+	if got := tr.hookEntry(task); got != "t-9@4" {
+		t.Fatalf("entry = %q, want t-9@4", got)
+	}
+}
+
+// TestTaskRevision_superseded保留最新 测试每个任务只保留最新修订
+//
+// Python: TaskRevisionTracker._superseded (team_context.py L948-959)
+func TestTaskRevision_superseded保留最新(t *testing.T) {
+	tr := newTaskRevisionTracker(nil, "alice")
+	got := tr.supersededEntries([]string{"t-1@1", "t-1@3", "t-1@2", "t-2@1"})
+	if len(got) != 2 {
+		t.Fatalf("superseded = %v, want 2 条被淘汰", got)
+	}
+	for _, e := range got {
+		if e == "t-1@3" || e == "t-2@1" {
+			t.Fatalf("最新条目被误淘汰: %s", e)
+		}
+	}
+}
+
+// TestTaskNotice_claim后release可再claim 测试投递失败归还条目
+//
+// Python: release (team_context.py L795-799)
+func TestTaskNotice_claim后release可再claim(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	sess := newFakeSession("s1")
+	first := tr.claim(sess)
+	if first == nil {
+		t.Fatal("应 claim 到通知")
+	}
+	tr.release(first)
+	if second := tr.claim(sess); second == nil {
+		t.Fatal("release 后应能再次 claim")
+	}
+}
+
+// TestTaskNotice_persist幂等 测试基线未变时不重复 commit
+//
+// Python: persist (team_context.py L801-821)
+func TestTaskNotice_persist幂等(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	sess := newFakeSession("s1")
+	_ = tr.claim(sess)
+	tr.persist(sess)
+	firstCommits := sess.commits
+	tr.persist(sess) // 基线未变 → 不再 commit
+	if sess.commits != firstCommits {
+		t.Fatalf("commit 次数 %d → %d，基线未变不应重写", firstCommits, sess.commits)
+	}
+}
+
+// TestTaskNotice_persist写回基线 测试基线落进会话 state
+func TestTaskNotice_persist写回基线(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	sess := newFakeSession("s1")
+	_ = tr.claim(sess)
+	tr.persist(sess)
+
+	raw, ok := sess.state[TaskOutcomeStateKey].([]string)
+	if !ok {
+		t.Fatalf("基线未写入: %v", sess.state)
+	}
+	if len(raw) != 1 || raw[0] != "t-1" {
+		t.Fatalf("基线内容 = %v, want [t-1]", raw)
+	}
+}
+
+// TestTaskNotice_announce_wakes为假不发送 测试 TaskOutcomeTracker 不主动唤醒
+//
+// Python: announce 的 `if not self.WAKES: return False`（L835-836）
+func TestTaskNotice_announce_wakes为假不发送(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	sent := false
+	ok, err := tr.announce(newFakeSession("s1"), func(string) error { sent = true; return nil })
+	if err != nil {
+		t.Fatalf("announce: %v", err)
+	}
+	if ok || sent {
+		t.Fatal("wakes=false 的 tracker 不应发送")
+	}
+}
+
+// TestTaskRevision_announce发送失败归还 测试 send 抛错时 release
+func TestTaskRevision_announce发送失败归还(t *testing.T) {
+	tb, db := newTestBackend(t)
+	ctx := context.Background()
+	createAssignedTask(t, db, "test-team", "t-1", "alice", string(atschema.TaskStatusClaimed), "")
+	_, _ = db.Task().AppendChangeNote(ctx, "t-1", 1, "改了", "leader")
+
+	tr := newTaskRevisionTracker(tb, "alice")
+	sess := newFakeSession("s1")
+	sendErr := context.DeadlineExceeded
+	ok, err := tr.announce(sess, func(string) error { return sendErr })
+	if ok || err == nil {
+		t.Fatalf("发送失败应返回 (false, err), got (%v,%v)", ok, err)
+	}
+	// 归还后应能再次 claim
+	if tr.claim(sess) == nil {
+		t.Fatal("release 后应能再次 claim")
+	}
+}
+
+// TestBuildTaskEventTracker_按dispatchMode分派 测试两种模式返不同具体类型
+//
+// Python: build_task_event_tracker (team_context.py L974-990)
+func TestBuildTaskEventTracker_按dispatchMode分派(t *testing.T) {
+	tb, _ := newTestBackend(t)
+	if _, ok := BuildTaskEventTracker("scheduled", tb, "alice").(*TaskOutcomeTracker); !ok {
+		t.Fatal("scheduled 应返 TaskOutcomeTracker")
+	}
+	if _, ok := BuildTaskEventTracker("autonomous", tb, "alice").(*TaskRevisionTracker); !ok {
+		t.Fatal("autonomous 应返 TaskRevisionTracker")
+	}
+	if got := BuildTaskEventTracker("scheduled", nil, "alice"); got != nil {
+		t.Fatalf("backend nil 应返 nil, got %T", got)
+	}
+}
+
+// TestTaskNotice_会话切换重载基线 测试换 session id 时从新会话状态重新加载
+//
+// Python: _bind (team_context.py L750-764)
+func TestTaskNotice_会话切换重载基线(t *testing.T) {
+	tb, db := newTestBackend(t)
+	createAssignedTask(t, db, "test-team", "t-1", "alice",
+		string(atschema.TaskStatusCompleted), `[{"reviewer_id":"bob"}]`)
+
+	tr := newTaskOutcomeTracker(tb, "alice")
+	s1 := newFakeSession("s1")
+	notice := tr.claim(s1)
+	if notice == nil {
+		t.Fatal("s1 应 claim 到")
+	}
+	tr.persist(s1)
+
+	// 新会话 s2 有自己的（空）基线 → 应能再次宣告
+	s2 := newFakeSession("s2")
+	if tr.claim(s2) == nil {
+		t.Fatal("新会话 s2 基线为空，应能再次宣告")
 	}
 }

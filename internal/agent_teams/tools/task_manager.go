@@ -371,6 +371,12 @@ func (tm *TeamTaskManager) GetTasksByAssignee(ctx context.Context, memberName, s
 	return tm.db.Task().GetTasksByAssignee(ctx, tm.teamName, memberName, status)
 }
 
+// UnseenEdits 成员名下「改过但未读」的任务（F_129）。
+// Python: unseen_edits(member_name) (task_manager.py L1748-1750)
+func (tm *TeamTaskManager) UnseenEdits(ctx context.Context, memberName string) ([]*database.TeamTaskBase, error) {
+	return tm.db.Task().GetUnseenEdits(ctx, tm.teamName, memberName)
+}
+
 // Claim 成员自认领。对齐 Python: TeamTaskManager.claim()
 func (tm *TeamTaskManager) Claim(ctx context.Context, taskID string) (schema.TaskOpResult, error) {
 	// 1. 检查任务是否存在（对齐 Python: task = await self.get(task_id)）

@@ -4,14 +4,18 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -607,3 +611,573 @@ func (t *TeamContextTracker) renderRosterEvent(kind, body string) *string {
 	})
 	return &out
 }
+
+// ──────────────────────────── 任务通知三兄弟 ────────────────────────────
+
+// TaskOutcomeStateKey 已告知该成员「通过验收」的任务 id 基线键。
+// Python: TASK_OUTCOME_STATE_KEY (team_context.py L675)
+const TaskOutcomeStateKey = "task_outcome_announced"
+
+// TaskVerifiedEventKind <team-event> 的 kind 契约 token（评审通过）。
+// Python: TASK_VERIFIED_EVENT_KIND (team_context.py L678)
+const TaskVerifiedEventKind = "task-verified"
+
+// TaskRevisionStateKey 编辑通知的基线键。
+// Python: TASK_REVISION_STATE_KEY (team_context.py L680)
+const TaskRevisionStateKey = "task_revision_announced"
+
+// TaskRevisedEventKind 自主成员编辑通知的 kind token（F_129）。
+// Python: TASK_REVISED_EVENT_KIND (team_context.py L681)
+const TaskRevisedEventKind = "task-revised"
+
+// ClaimedNotice 已认领待投递的一条任务通知。
+// Python: ClaimedNotice (team_context.py L684-689)
+type ClaimedNotice struct {
+	// Text 要投递的 <team-event> 块
+	Text string
+	// Entries 本次覆盖的基线条目
+	Entries []string
+}
+
+// TaskEventTracker 任务通知器的最小对外面（rail 注入用）。
+//
+// Python 侧 rail 直接持有 tracker 对象并调 claim/persist；Go 用一个窄接口
+// 让 rail 与具体子类解耦，测试可注入替身。
+type TaskEventTracker interface {
+	// Claim 认领未宣告条目并渲染；无新内容返回 nil
+	Claim(sess sessioninterfaces.SessionFacade) *ClaimedNotice
+	// Persist 把基线写进会话状态
+	Persist(sess sessioninterfaces.SessionFacade)
+}
+
+// taskNoticeTracker 下一次输入的任务通知共享基线（F_119 / F_129）。
+//
+// 每成员一个实例，由它的 TeamAgent 持有、被所有能「告诉成员某事」的路径借用：
+// 策略 rail 在每次受理输入时、成员运行时在任务事件要求它立刻说话时、外部
+// 运行时在每次 send 时。哪条路径先 Claim 到条目就由它投递，其余路径看到空。
+//
+// 基线是「已宣告条目」的有序集合，绑定到**一个成员会话**：每次调用都指名它为
+// 哪个会话服务，换成别的会话就重置集合并从那个会话的状态重新加载。每个运行
+// 周期、恢复进另一个团队会话、重启、checkpoint 恢复都会递一个新的子会话，
+// 因此基线总是与该会话的历史配套——一个会话的宣告不会压制另一个的，回滚后的
+// 状态也不会被回滚之后的条目覆盖。已 Claim 的内容在投递后立即持久化；持久化
+// 失败的条目会被带到同一 session id 的下一个会话（下一个运行周期）再写，
+// 不同 session 则丢弃。
+//
+// 偏差 D-7：Python 靠单事件循环保证 claim 与 mark 之间无 await（不重复）；
+// Go 多协程，故用 sync.Mutex 把「绑定 + 检查 + 标记」包成一步。
+//
+// Python: _TaskNoticeTracker (team_context.py L692-868)
+type taskNoticeTracker struct {
+	// mu 保护下列全部字段
+	mu sync.Mutex
+	// teamBackend 后端；nil 时 tracker 关闭
+	teamBackend *tools.TeamBackend
+	// memberName 本成员语义标识
+	memberName string
+	// announced 已宣告条目（保序）
+	announced []string
+	// announcedSet announced 的快速查表
+	announcedSet map[string]struct{}
+	// sessionID 当前绑定的会话 id
+	sessionID string
+	// sessionBound 是否已绑定过会话
+	sessionBound bool
+	// persisted 上次写入会话状态的条目快照
+	persisted []string
+	// pending 已 Claim 但尚未写入任何会话状态的条目
+	pending []string
+	// stateKey 本 tracker 的状态键
+	stateKey string
+	// wakes 该通知是否可作为独立输入发送（唤醒空闲成员）
+	wakes bool
+	// hookCandidates 候选行查询钩子（子类在构造时注入）
+	//
+	// **必须用函数指针而非方法重写**：Go 的 struct embedding 没有虚方法派发，
+	// 基类方法体里写 t.candidates(...) 会静态绑定到基类的空实现，子类覆盖
+	// 永远不生效。构造期把子类实现装进来是最直接的等价手段。
+	hookCandidates func(tm *tools.TeamTaskManager) []*database.TeamTaskBase
+	// hookEntry 基线条目生成钩子
+	hookEntry func(task *database.TeamTaskBase) string
+	// hookRender 渲染钩子
+	hookRender func(tasks []*database.TeamTaskBase) string
+	// hookSuperseded 条目淘汰钩子（nil 表示不淘汰）
+	hookSuperseded func(entries []string) []string
+}
+
+// claim 把本成员尚未宣告的条目标记为已宣告并渲染。
+//
+// sess 为 nil 时不做任何 Claim：没有基线就可能重复通知。
+// 返回 nil 表示没有新内容（或 tracker 未绑定 / 关闭）。
+//
+// Python: claim (team_context.py L766-793)
+func (t *taskNoticeTracker) claim(sess sessioninterfaces.SessionFacade) *ClaimedNotice {
+	if sess == nil || t.teamBackend == nil || t.memberName == "" {
+		return nil
+	}
+	taskManager := t.teamBackend.TaskManager()
+	if taskManager == nil {
+		return nil
+	}
+	// 候选查询在锁外（要查 DB）；之后绑定 + 检查 + 标记在锁内一步完成
+	rows := t.callCandidates(taskManager)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.bindLocked(sess)
+	fresh := make([]*database.TeamTaskBase, 0, len(rows))
+	entries := make([]string, 0, len(rows))
+	for _, row := range rows {
+		e := t.callEntry(row)
+		if _, seen := t.announcedSet[e]; seen {
+			continue
+		}
+		fresh = append(fresh, row)
+		entries = append(entries, e)
+	}
+	if len(fresh) == 0 {
+		return nil
+	}
+	for _, e := range entries {
+		t.announcedSet[e] = struct{}{}
+		t.announced = append(t.announced, e)
+		t.pending = append(t.pending, e)
+	}
+	t.compactLocked()
+	return &ClaimedNotice{Text: t.callRender(fresh), Entries: entries}
+}
+
+// release 投递失败时把条目还回去。
+// Python: release (team_context.py L795-799)
+func (t *taskNoticeTracker) release(notice *ClaimedNotice) {
+	if notice == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, e := range notice.Entries {
+		delete(t.announcedSet, e)
+		t.announced = removeString(t.announced, e)
+		t.pending = removeString(t.pending, e)
+	}
+}
+
+// persist 基线自上次写入以来有变化时写进会话状态。
+// Python: persist (team_context.py L801-821)
+func (t *taskNoticeTracker) persist(sess sessioninterfaces.SessionFacade) {
+	if sess == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.bindLocked(sess)
+	current := append([]string(nil), t.announced...)
+	if stringSliceEqual(current, t.persisted) {
+		return
+	}
+	sess.UpdateState(map[string]any{t.stateKey: current})
+	committer, ok := sess.(interface {
+		Commit(ctx context.Context) error
+	})
+	if !ok {
+		t.persisted = current
+		t.pending = nil
+		return
+	}
+	if err := committer.Commit(context.Background()); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "task_notice_persist_failed").
+			Str("state_key", t.stateKey).
+			Str("member_name", t.memberName).
+			Err(err).
+			Msg("failed to persist task notice baseline")
+		return
+	}
+	t.persisted = current
+	t.pending = nil
+}
+
+// announce 把待发通知作为独立输入投递：claim → send → persist。
+//
+// wakes 为假的通知只 Claim 不发（通过的评审不该唤醒作者），由下一次输入携带。
+// 返回是否真的发出。send 抛错时归还 Claim——取消的投递也归还，因为它可能发出
+// 也可能没发出，重复一条比丢一条便宜。
+//
+// Python: announce (team_context.py L823-846)
+func (t *taskNoticeTracker) announce(
+	sess sessioninterfaces.SessionFacade,
+	send func(text string) error,
+) (bool, error) {
+	if !t.wakes {
+		return false, nil
+	}
+	notice := t.claim(sess)
+	if notice == nil {
+		return false, nil
+	}
+	if err := send(notice.Text); err != nil {
+		t.release(notice)
+		return false, err
+	}
+	t.persist(sess)
+	return true, nil
+}
+
+// bindLocked 让 sess 存的基线成为当前基线。
+//
+// 同一个 session id 再次进来只补 pending（上一个会话已持久化的部分不重读）；
+// 换成不同会话则从它的状态重新加载，待写条目只在本会话 id 相同时继承。
+//
+// Python: _bind (team_context.py L750-764)
+func (t *taskNoticeTracker) bindLocked(sess sessioninterfaces.SessionFacade) {
+	sessID := sess.GetSessionID()
+	if t.sessionBound && sessID == t.sessionID {
+		return
+	}
+	// 同 session id 换对象（下一个运行周期）时继承待写条目；不同 session 丢弃
+	var carried []string
+	if t.sessionBound && sessID == t.sessionID {
+		carried = append([]string(nil), t.pending...)
+	}
+	stored := t.readAnnounced(sess)
+	t.sessionID = sessID
+	t.sessionBound = true
+	t.pending = carried
+	merged := make([]string, 0, len(stored)+len(carried))
+	merged = append(merged, stored...)
+	merged = append(merged, carried...)
+	t.announced = merged
+	t.announcedSet = make(map[string]struct{}, len(merged))
+	for _, e := range merged {
+		t.announcedSet[e] = struct{}{}
+	}
+	t.compactLocked()
+	t.persisted = append([]string(nil), stored...)
+}
+
+// compactLocked 丢掉 superseded 判定为「永不再匹配」的条目。
+// Python: _compact (team_context.py L848-854)
+func (t *taskNoticeTracker) compactLocked() {
+	dropped := t.callSuperseded(t.announced)
+	if len(dropped) == 0 {
+		return
+	}
+	drop := make(map[string]struct{}, len(dropped))
+	for _, e := range dropped {
+		drop[e] = struct{}{}
+	}
+	kept := make([]string, 0, len(t.announced))
+	for _, e := range t.announced {
+		if _, ok := drop[e]; ok {
+			delete(t.announcedSet, e)
+			continue
+		}
+		kept = append(kept, e)
+	}
+	t.announced = kept
+	pending := make([]string, 0, len(t.pending))
+	for _, e := range t.pending {
+		if _, ok := drop[e]; ok {
+			continue
+		}
+		pending = append(pending, e)
+	}
+	t.pending = pending
+}
+
+// readAnnounced 读本成员在该键下已宣告的条目。
+//
+// Python 侧 state 是 list；Go 侧经 JSON/checkpoint 往返后可能是 []any，
+// 两种都接受（与 readAnnounced 上游容忍非 list 的语义一致）。
+//
+// Python: _read_announced (team_context.py L910-915)
+func (t *taskNoticeTracker) readAnnounced(sess sessioninterfaces.SessionFacade) []string {
+	v, err := sess.GetState(sessionstate.StringKey(t.stateKey))
+	if err != nil || v == nil {
+		return nil
+	}
+	if list, ok := v.([]string); ok {
+		return list
+	}
+	listAny, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(listAny))
+	for _, item := range listAny {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// callSuperseded 调淘汰钩子（未注入则不淘汰）。
+// Python: _superseded (team_context.py L856-859)
+func (t *taskNoticeTracker) callSuperseded(entries []string) []string {
+	if t.hookSuperseded == nil {
+		return nil
+	}
+	return t.hookSuperseded(entries)
+}
+
+// callCandidates 调候选查询钩子（未注入则无候选）。
+// Python: _candidates (team_context.py L861-862)
+func (t *taskNoticeTracker) callCandidates(tm *tools.TeamTaskManager) []*database.TeamTaskBase {
+	if t.hookCandidates == nil {
+		return nil
+	}
+	return t.hookCandidates(tm)
+}
+
+// callEntry 调条目生成钩子（未注入则空串）。
+// Python: _entry (team_context.py L864-865)
+func (t *taskNoticeTracker) callEntry(task *database.TeamTaskBase) string {
+	if t.hookEntry == nil {
+		return ""
+	}
+	return t.hookEntry(task)
+}
+
+// callRender 调渲染钩子（未注入则空串）。
+// Python: _render (team_context.py L867-868)
+func (t *taskNoticeTracker) callRender(tasks []*database.TeamTaskBase) string {
+	if t.hookRender == nil {
+		return ""
+	}
+	return t.hookRender(tasks)
+}
+
+// TaskOutcomeTracker 在下一次输入时告知成员「你提交的哪些任务通过了验收」。
+//
+// 调度模式下通过的评审不唤醒作者（F_119）：它无事可做，唤醒只会推迟它退休。
+// 事实仍然到达——晚一点，由下一次唤醒它的东西（启动通知、leader 或用户消息）
+// 携带。
+//
+// 这是**事件**而非持续状态，因此折进被受理的输入本身，永不进 team.context
+// 附件（那是当前状态通道）。真相来源是任务表：成员名下**带验收人**的已完成
+// 任务；一个条目就是一个 task_id。没有验收人而完成的永不宣告——那是成员自己
+// 交的差。
+//
+// 通知文案跟进程级运行时语言（schema.T），与名册 note 一致。
+//
+// Python: TaskOutcomeTracker (team_context.py L871-907)
+type TaskOutcomeTracker struct {
+	// taskNoticeTracker 共享基线机制
+	taskNoticeTracker
+}
+
+// newTaskOutcomeTracker 构造评审通过通知器。
+func newTaskOutcomeTracker(tb *tools.TeamBackend, memberName string) *TaskOutcomeTracker {
+	tr := &TaskOutcomeTracker{}
+	tr.teamBackend = tb
+	tr.memberName = memberName
+	tr.stateKey = TaskOutcomeStateKey
+	tr.wakes = false
+	tr.announcedSet = map[string]struct{}{}
+	tr.initOutcomeHooks()
+	return tr
+}
+
+// initOutcomeHooks 装上本子类的四个钩子。
+func (t *TaskOutcomeTracker) initOutcomeHooks() {
+	t.hookCandidates = t.candidateRows
+	t.hookEntry = func(task *database.TeamTaskBase) string { return task.TaskID }
+	t.hookRender = t.renderVerified
+}
+
+// Claim 见 taskNoticeTracker.claim。
+func (t *TaskOutcomeTracker) Claim(sess sessioninterfaces.SessionFacade) *ClaimedNotice {
+	return t.claim(sess)
+}
+
+// Persist 见 taskNoticeTracker.persist。
+func (t *TaskOutcomeTracker) Persist(sess sessioninterfaces.SessionFacade) { t.persist(sess) }
+
+// candidateRows 取成员名下带验收人的已完成任务。
+// Python: TaskOutcomeTracker._candidates (team_context.py L897-899)
+func (t *TaskOutcomeTracker) candidateRows(tm *tools.TeamTaskManager) []*database.TeamTaskBase {
+	completed, err := tm.GetTasksByAssignee(context.Background(), t.memberName, string(atschema.TaskStatusCompleted))
+	if err != nil {
+		return nil
+	}
+	out := make([]*database.TeamTaskBase, 0, len(completed))
+	for _, task := range completed {
+		if task.HasReviewers() {
+			out = append(out, task)
+		}
+	}
+	return out
+}
+
+// renderVerified 渲染 kind=task-verified 的事件块。
+// Python: TaskOutcomeTracker._render (team_context.py L904-907)
+func (t *TaskOutcomeTracker) renderVerified(tasks []*database.TeamTaskBase) string {
+	intro, err := atschema.T("team_context.task_verified_intro")
+	if err != nil {
+		intro = ""
+	}
+	lines := []string{intro}
+	for _, task := range tasks {
+		lines = append(lines, "- "+task.TaskID+" · "+task.Title)
+	}
+	return inboundtags.RenderEvent(TaskVerifiedEventKind, strings.Join(lines, "\n"), inboundtags.EventOptions{})
+}
+
+// TaskRevisionTracker 告诉自主成员哪些在手任务被编辑过（F_129）。
+//
+// 编辑通知的唯一来源：一个 <team-event kind="task-revised">，列出被编辑的任务、
+// 它错过的修订与编辑说明，并要求重读任务。编辑的 TASK_UPDATED 事件只促成一次
+// 提前 Claim；leader 编辑时恰好离线的成员则由下一次受理的输入告知，因为编辑
+// 仍以 revision > observed_revision 立在行上。调度模式不需要它：调度器把最新
+// 内容作为持久邮件推送。
+//
+// 通知不计入「已看到」——它不携带正文。「已看到」始终是 DB 的
+// observed_revision；条目是 task_id@revision，只用于阻止同一修订播两次，
+// 因此每个任务只保留最新那条。
+//
+// Python: TaskRevisionTracker (team_context.py L918-971)
+type TaskRevisionTracker struct {
+	// taskNoticeTracker 共享基线机制
+	taskNoticeTracker
+}
+
+// newTaskRevisionTracker 构造编辑通知器。
+func newTaskRevisionTracker(tb *tools.TeamBackend, memberName string) *TaskRevisionTracker {
+	tr := &TaskRevisionTracker{}
+	tr.teamBackend = tb
+	tr.memberName = memberName
+	tr.stateKey = TaskRevisionStateKey
+	tr.wakes = true
+	tr.announcedSet = map[string]struct{}{}
+	tr.hookCandidates = tr.candidateRows
+	tr.hookEntry = func(task *database.TeamTaskBase) string {
+		return task.TaskID + "@" + strconv.FormatInt(task.Revision, 10)
+	}
+	tr.hookRender = tr.renderRevised
+	tr.hookSuperseded = tr.supersededEntries
+	return tr
+}
+
+// Claim 见 taskNoticeTracker.claim。
+func (t *TaskRevisionTracker) Claim(sess sessioninterfaces.SessionFacade) *ClaimedNotice {
+	return t.claim(sess)
+}
+
+// Persist 见 taskNoticeTracker.persist。
+func (t *TaskRevisionTracker) Persist(sess sessioninterfaces.SessionFacade) { t.persist(sess) }
+
+// candidateRows 取成员名下「改过但未读」的任务。
+// Python: TaskRevisionTracker._candidates (team_context.py L945-946)
+func (t *TaskRevisionTracker) candidateRows(tm *tools.TeamTaskManager) []*database.TeamTaskBase {
+	rows, err := tm.UnseenEdits(context.Background(), t.memberName)
+	if err != nil {
+		return nil
+	}
+	return rows
+}
+
+// supersededEntries 每个任务只留最新修订（修订号只增，旧的永不再匹配）。
+// Python: TaskRevisionTracker._superseded (team_context.py L948-959)
+func (t *TaskRevisionTracker) supersededEntries(entries []string) []string {
+	type newest struct {
+		num   int64
+		entry string
+	}
+	latest := make(map[string]newest, len(entries))
+	for _, e := range entries {
+		idx := strings.LastIndex(e, "@")
+		if idx < 0 {
+			continue
+		}
+		taskID, revStr := e[:idx], e[idx+1:]
+		rev, err := strconv.ParseInt(revStr, 10, 64)
+		if err != nil {
+			rev = -1
+		}
+		cur, ok := latest[taskID]
+		if !ok || rev > cur.num {
+			latest[taskID] = newest{num: rev, entry: e}
+		}
+	}
+	keep := make(map[string]struct{}, len(latest))
+	for _, v := range latest {
+		keep[v.entry] = struct{}{}
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if _, ok := keep[e]; !ok {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// renderRevised 渲染 kind=task-revised 的事件块，含每个任务的未读编辑说明。
+// Python: TaskRevisionTracker._render (team_context.py L964-971)
+func (t *TaskRevisionTracker) renderRevised(tasks []*database.TeamTaskBase) string {
+	intro, err := atschema.T("team_context.task_revised_intro")
+	if err != nil {
+		intro = ""
+	}
+	lines := []string{intro}
+	for _, task := range tasks {
+		lines = append(lines, fmt.Sprintf("- %s · %s · r%d → r%d",
+			task.TaskID, task.Title, task.ObservedRevision, task.Revision))
+		for _, note := range prompts.ChangeNotesLines(task) {
+			lines = append(lines, "  "+note)
+		}
+	}
+	return inboundtags.RenderEvent(TaskRevisedEventKind, strings.Join(lines, "\n"), inboundtags.EventOptions{})
+}
+
+// BuildTaskEventTracker 按 dispatch 模式构造非 leader 成员需要的任务通知器。
+//
+// 调度成员被告知延迟的「评审通过」（F_119）；自主成员被告知它错过的编辑
+// （F_129）。每种模式恰好需要一个，另一种情况由该模式自己的通道覆盖。
+//
+// Python: build_task_event_tracker (team_context.py L974-990)
+func BuildTaskEventTracker(
+	dispatchMode string,
+	tb *tools.TeamBackend,
+	memberName string,
+) TaskEventTracker {
+	if tb == nil {
+		return nil
+	}
+	if dispatchMode == "scheduled" {
+		return newTaskOutcomeTracker(tb, memberName)
+	}
+	return newTaskRevisionTracker(tb, memberName)
+}
+
+// removeString 从切片中移除首个匹配项。
+func removeString(list []string, target string) []string {
+	for i, v := range list {
+		if v == target {
+			out := make([]string, 0, len(list)-1)
+			out = append(out, list[:i]...)
+			out = append(out, list[i+1:]...)
+			return out
+		}
+	}
+	return list
+}
+
+// stringSliceEqual 比较两个字符串切片。
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// 编译期兜住：两个具体类型都满足 rail 注入用的窄接口。
+var (
+	_ TaskEventTracker = (*TaskOutcomeTracker)(nil)
+	_ TaskEventTracker = (*TaskRevisionTracker)(nil)
+)
