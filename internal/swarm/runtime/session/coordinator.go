@@ -1687,3 +1687,112 @@ func (c *RuntimeSessionCoordinator) heartbeatRoot(handle *SessionExecutionHandle
 		current = parent
 	}
 }
+
+// ──────────────────────────── StreamSessionInput（10.3.28d） ────────────────────────────
+
+// StreamSessionInputOptions StreamSessionInput 的调用参数。
+type StreamSessionInputOptions struct {
+	// SessionID 会话标识
+	SessionID string
+	// RequestID 请求标识
+	RequestID string
+	// Operation 有父执行时运行的操作（接收会话渠道标识）
+	Operation func(ctx context.Context, channelID string) (<-chan any, error)
+	// IdleOperation 无父执行时的回落操作
+	IdleOperation func(ctx context.Context) (<-chan any, error)
+	// InteractionIDs 从元素提取交互标识
+	InteractionIDs func(any) map[string]struct{}
+	// ExpectedExecutionID 调用方期望的目标执行（nil 表示不校验）
+	ExpectedExecutionID *string
+}
+
+// StreamSessionInput 跟踪一次补充输入，不占用活跃任务的调度通道。
+// Python: coordinator.py stream_session_input（:576-624）
+//
+// 输入不恢复、不完成、不替换等待中的交互；未绑定父执行时回落 idle 分支。
+// 传 expected_execution_id 时父执行必须仍然匹配：该输入不能自起一个聊天轮。
+func (c *RuntimeSessionCoordinator) StreamSessionInput(
+	ctx context.Context,
+	opts StreamSessionInputOptions,
+	emit func(any) bool,
+) error {
+	// 1. 会话必须打开
+	record, requireErr := c.requireOpenSession(opts.SessionID)
+	if requireErr != nil {
+		return requireErr
+	}
+
+	// 2. 取当前代次全部活跃执行
+	generation := record.generation
+	active := c.registry.Select(SelectOptions{
+		SessionID:  opts.SessionID,
+		Generation: &generation,
+		ActiveOnly: true,
+	})
+
+	// 3. 任一执行在等交互应答 → 拒收
+	for _, handle := range active {
+		if len(c.registry.WaitingControlIDsOf(handle.ExecutionID)) > 0 {
+			return &SessionInputRejectedError{
+				Message: "session is waiting for an interaction answer; supplemental input was not sent",
+			}
+		}
+	}
+
+	// 4. 收集可作为父执行的候选：只认 RUNNING，且排除输入/目标控制类
+	parents := make([]*SessionExecutionHandle, 0, len(active))
+	for _, handle := range active {
+		if c.registry.StateOf(handle.ExecutionID) != SessionExecutionStateRunning {
+			continue
+		}
+		switch handle.WorkKind {
+		case SessionWorkKindSessionInput, SessionWorkKindGoalControl, SessionWorkKindGoalAttach:
+			continue
+		}
+		parents = append(parents, handle)
+	}
+
+	// 5. 父执行正在被取消 → 拒收
+	for _, handle := range parents {
+		if c.registry.IsCancellationRequested(handle.ExecutionID) {
+			return &SessionInputRejectedError{
+				Message: "session execution is being cancelled",
+			}
+		}
+	}
+
+	// 6. 取最新一个作为父执行
+	var parent *SessionExecutionHandle
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	}
+
+	// 7. 目标执行校验：给了 expected_execution_id 就必须仍匹配
+	if opts.ExpectedExecutionID != nil {
+		if parent == nil || parent.ExecutionID != *opts.ExpectedExecutionID {
+			return &SessionInputTargetError{
+				Message: "the targeted execution has ended or changed; supplemental input was not sent",
+			}
+		}
+	}
+
+	// 8. 分流：有父执行走 session_input，否则走普通 chat_stream
+	workKind := SessionWorkKindChatStream
+	parentExecutionID := ""
+	var operation func(context.Context) (<-chan any, error)
+	if parent != nil {
+		workKind = SessionWorkKindSessionInput
+		parentExecutionID = parent.ExecutionID
+		channelID := record.channelID
+		operation = func(opCtx context.Context) (<-chan any, error) {
+			return opts.Operation(opCtx, channelID)
+		}
+	} else {
+		operation = opts.IdleOperation
+	}
+	handle, newErr := c.newExecution(record, opts.RequestID, workKind, parentExecutionID, nil)
+	if newErr != nil {
+		return newErr
+	}
+	return c.runStream(ctx, record, handle, operation, opts.InteractionIDs, emit)
+}

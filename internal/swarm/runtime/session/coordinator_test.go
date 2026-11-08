@@ -1326,3 +1326,275 @@ func TestCoordinator_OnExecution回调(t *testing.T) {
 	close(hold)
 	<-done
 }
+
+// ──────────────────────────── StreamSessionInput（10.3.28d） ────────────────────────────
+
+// TestStreamSessionInput_无父执行走idle 无活跃聊天时回落 idle 分支。
+func TestStreamSessionInput_无父执行走idle(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	idleCalled := false
+	parentCalled := false
+	err := c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID: "s1",
+		RequestID: "r1",
+		Operation: func(_ context.Context, _ string) (<-chan any, error) {
+			parentCalled = true
+			ch := make(chan any, 1)
+			ch <- "parent"
+			close(ch)
+			return ch, nil
+		},
+		IdleOperation: func(context.Context) (<-chan any, error) {
+			idleCalled = true
+			ch := make(chan any, 1)
+			ch <- "idle"
+			close(ch)
+			return ch, nil
+		},
+	}, func(any) bool { return true })
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if !idleCalled {
+		t.Error("无父执行时应走 idle 分支")
+	}
+	if parentCalled {
+		t.Error("无父执行时不应走父执行分支")
+	}
+}
+
+// TestStreamSessionInput_有父执行 有活跃聊天时走父执行分支。
+func TestStreamSessionInput_有父执行(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	chatDone := make(chan struct{})
+	go func() {
+		defer close(chatDone)
+		_ = c.RunStream(context.Background(), "s1", "chat-1", SessionWorkKindChatStream,
+			func(ctx context.Context) (<-chan any, error) {
+				close(started)
+				ch := make(chan any)
+				go func() {
+					<-release
+					close(ch)
+				}()
+				return ch, nil
+			},
+			StreamOptions{}, func(any) bool { return true })
+	}()
+	<-started
+
+	parentCalled := false
+	idleCalled := false
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+			SessionID: "s1",
+			RequestID: "r2",
+			Operation: func(_ context.Context, channelID string) (<-chan any, error) {
+				parentCalled = true
+				if channelID == "" {
+					t.Error("应传入会话渠道标识")
+				}
+				ch := make(chan any, 1)
+				ch <- "steer"
+				close(ch)
+				return ch, nil
+			},
+			IdleOperation: func(context.Context) (<-chan any, error) {
+				idleCalled = true
+				return nil, nil
+			},
+		}, func(any) bool { return true })
+	}()
+
+	// 等补投完成后释放聊天流
+	if err := <-errCh; err != nil {
+		close(release)
+		<-chatDone
+		t.Fatalf("不应报错: %v", err)
+	}
+	close(release)
+	<-chatDone
+
+	if !parentCalled {
+		t.Error("有活跃聊天时应走父执行分支")
+	}
+	if idleCalled {
+		t.Error("有活跃聊天时不应走 idle 分支")
+	}
+}
+
+// TestStreamSessionInput_等交互时拒绝 有等待交互的执行时拒收。
+func TestStreamSessionInput_等交互时拒绝(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	handle, err := c.NewExecutionForTest("s1", "chat-1", SessionWorkKindChatStream, ChildOptions{})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(handle)
+	c.registry.MarkAwaitingControl(handle, map[string]struct{}{"q1": {}})
+
+	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID: "s1",
+		RequestID: "r2",
+		Operation: func(context.Context, string) (<-chan any, error) {
+			return nil, nil
+		},
+		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
+	}, func(any) bool { return true })
+
+	var rejected *SessionInputRejectedError
+	if !errors.As(err, &rejected) {
+		t.Fatalf("应返回 SessionInputRejectedError，实际 %v", err)
+	}
+	if rejected.Error() != "session is waiting for an interaction answer; supplemental input was not sent" {
+		t.Errorf("错误文案不符: %q", rejected.Error())
+	}
+}
+
+// TestStreamSessionInput_取消中拒绝 父执行正在取消时拒收。
+func TestStreamSessionInput_取消中拒绝(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	handle, err := c.NewExecutionForTest("s1", "chat-1", SessionWorkKindChatStream, ChildOptions{})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(handle)
+	c.registry.MarkCancellationRequested(handle.ExecutionID)
+
+	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID: "s1",
+		RequestID: "r2",
+		Operation: func(context.Context, string) (<-chan any, error) {
+			return nil, nil
+		},
+		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
+	}, func(any) bool { return true })
+
+	var rejected *SessionInputRejectedError
+	if !errors.As(err, &rejected) {
+		t.Fatalf("应返回 SessionInputRejectedError，实际 %v", err)
+	}
+	if rejected.Error() != "session execution is being cancelled" {
+		t.Errorf("错误文案不符: %q", rejected.Error())
+	}
+}
+
+// TestStreamSessionInput_目标已变时拒绝 expected_execution_id 不匹配。
+func TestStreamSessionInput_目标已变时拒绝(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	expected := "not-exist"
+	err := c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID:           "s1",
+		RequestID:           "r2",
+		ExpectedExecutionID: &expected,
+		Operation: func(context.Context, string) (<-chan any, error) {
+			return nil, nil
+		},
+		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
+	}, func(any) bool { return true })
+
+	var target *SessionInputTargetError
+	if !errors.As(err, &target) {
+		t.Fatalf("应返回 SessionInputTargetError，实际 %v", err)
+	}
+	if target.Error() != "the targeted execution has ended or changed; supplemental input was not sent" {
+		t.Errorf("错误文案不符: %q", target.Error())
+	}
+}
+
+// TestStreamSessionInput_目标匹配通过 expected_execution_id 命中父执行。
+func TestStreamSessionInput_目标匹配通过(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	handle, err := c.NewExecutionForTest("s1", "chat-1", SessionWorkKindChatStream, ChildOptions{})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(handle)
+
+	expected := handle.ExecutionID
+	called := false
+	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID:           "s1",
+		RequestID:           "r2",
+		ExpectedExecutionID: &expected,
+		Operation: func(_ context.Context, _ string) (<-chan any, error) {
+			called = true
+			ch := make(chan any, 1)
+			ch <- "ok"
+			close(ch)
+			return ch, nil
+		},
+		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
+	}, func(any) bool { return true })
+	if err != nil {
+		t.Fatalf("目标匹配不应报错: %v", err)
+	}
+	if !called {
+		t.Error("目标匹配时应走父执行分支")
+	}
+}
+
+// TestStreamSessionInput_会话未注册 未注册会话报错。
+func TestStreamSessionInput_会话未注册(t *testing.T) {
+	c := newTestCoordinator()
+	err := c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID:     "nope",
+		RequestID:     "r1",
+		Operation:     func(context.Context, string) (<-chan any, error) { return nil, nil },
+		IdleOperation: func(context.Context) (<-chan any, error) { return nil, nil },
+	}, func(any) bool { return true })
+	if err == nil {
+		t.Fatal("未注册会话应报错")
+	}
+}
+
+// TestStreamSessionInput_跳过输入类父执行 session_input/goal 类执行不作为父。
+func TestStreamSessionInput_跳过输入类父执行(t *testing.T) {
+	c := newTestCoordinator()
+	mustRegister(t, c, "s1")
+
+	// 一个 session_input 类执行（不应成为父执行）
+	inputHandle, err := c.NewExecutionForTest("s1", "prev-input", SessionWorkKindSessionInput, ChildOptions{})
+	if err != nil {
+		t.Fatalf("登记失败: %v", err)
+	}
+	c.registry.MarkRunning(inputHandle)
+
+	idleCalled := false
+	err = c.StreamSessionInput(context.Background(), StreamSessionInputOptions{
+		SessionID: "s1",
+		RequestID: "r2",
+		Operation: func(context.Context, string) (<-chan any, error) {
+			t.Error("session_input 类执行不应作为父执行")
+			return nil, nil
+		},
+		IdleOperation: func(context.Context) (<-chan any, error) {
+			idleCalled = true
+			ch := make(chan any, 1)
+			ch <- "idle"
+			close(ch)
+			return ch, nil
+		},
+	}, func(any) bool { return true })
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if !idleCalled {
+		t.Error("只有 session_input 类执行时应走 idle 分支")
+	}
+}

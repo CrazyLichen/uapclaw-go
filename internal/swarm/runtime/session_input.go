@@ -3,38 +3,13 @@ package runtime
 import (
 	"errors"
 	"strings"
+
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 )
 
 // 本文件对应上游两份字节相同的副本，合并为一份（spec DEC-13，登记为偏差 D-1）：
 //   - gateway/runtime/session_input.py
 //   - jiuwenswarm/runtime/session_input.py
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// SessionInputMode 会话补充输入的意图。
-// Python: session_input.py SessionInputMode(str, Enum)
-type SessionInputMode string
-
-const (
-	// SessionInputModeSteer 转向：注入正在跑的轮次
-	SessionInputModeSteer SessionInputMode = "steer"
-	// SessionInputModeFollowUp 追加：排在当前轮之后
-	SessionInputModeFollowUp SessionInputMode = "follow_up"
-)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// sessionInputRejectedCode 输入被拒的错误码
-	// Python: SessionInputRejectedError.code
-	sessionInputRejectedCode = "SESSION_INPUT_REJECTED"
-	// sessionInputTargetChangedCode 目标执行已变的错误码
-	// Python: SessionInputTargetError.code
-	sessionInputTargetChangedCode = "SESSION_INPUT_TARGET_CHANGED"
-	// sessionInputQueueRequiredCode 需先排队的错误码
-	// Python: SessionInputQueueRequiredError.code
-	sessionInputQueueRequiredCode = "SESSION_INPUT_QUEUE_REQUIRED"
-)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -56,58 +31,38 @@ var (
 	}
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ──────────────────────────── 类型别名 ────────────────────────────
 
-// SessionInputRejectedError 已知拒收：输入未到达 SDK 队列。
-// Python: session_input.py SessionInputRejectedError(RuntimeError)
-type SessionInputRejectedError struct {
-	// Message 错误说明
-	Message string
-}
+// 三个拒收异常与输入意图枚举定义在 session 包（见 session/session_input_errors.go）。
+// 原因：session 包零内部依赖、被 runtime 包依赖；Python 的 session_input.py 虽在
+// runtime/ 下，但 Go 的包即编译边界，定义在本包会让 session 包反向依赖成环。
+// 此处用类型别名 re-export，保持 runtime 包对外的 API 面与上游调用点一致。
 
-// SessionInputTargetError 补充输入不得变成另一个执行的工作。
-// Python: session_input.py SessionInputTargetError(SessionInputRejectedError)
-type SessionInputTargetError struct {
-	// Message 错误说明
-	Message string
-}
+// SessionInputMode 会话补充输入的意图（别名）。
+type SessionInputMode = sessionpkg.SessionInputMode
 
-// SessionInputQueueRequiredError 跨会话输入须等普通任务准入。
-// Python: session_input.py SessionInputQueueRequiredError(SessionInputRejectedError)
-type SessionInputQueueRequiredError struct {
-	// Message 错误说明
-	Message string
-}
+const (
+	// SessionInputModeSteer 转向（别名）
+	SessionInputModeSteer = sessionpkg.SessionInputModeSteer
+	// SessionInputModeFollowUp 追加（别名）
+	SessionInputModeFollowUp = sessionpkg.SessionInputModeFollowUp
+)
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// SessionInputRejectedError 已知拒收：输入未到达 SDK 队列（别名）。
+type SessionInputRejectedError = sessionpkg.SessionInputRejectedError
 
-// Error 实现 error 接口。
-func (e *SessionInputRejectedError) Error() string { return e.Message }
+// SessionInputTargetError 补充输入不得变成另一个执行的工作（别名）。
+type SessionInputTargetError = sessionpkg.SessionInputTargetError
 
-// Code 稳定错误码。
-func (e *SessionInputRejectedError) Code() string { return sessionInputRejectedCode }
+// SessionInputQueueRequiredError 跨会话输入须等普通任务准入（别名）。
+type SessionInputQueueRequiredError = sessionpkg.SessionInputQueueRequiredError
 
-// Error 实现 error 接口。
-func (e *SessionInputTargetError) Error() string { return e.Message }
-
-// Code 稳定错误码。
-func (e *SessionInputTargetError) Code() string { return sessionInputTargetChangedCode }
-
-// Unwrap 让 errors.As 能命中 SessionInputRejectedError（对齐上游继承）。
-func (e *SessionInputTargetError) Unwrap() error {
-	return &SessionInputRejectedError{Message: e.Message}
-}
-
-// Error 实现 error 接口。
-func (e *SessionInputQueueRequiredError) Error() string { return e.Message }
-
-// Code 稳定错误码。
-func (e *SessionInputQueueRequiredError) Code() string { return sessionInputQueueRequiredCode }
-
-// Unwrap 同 TargetError。
-func (e *SessionInputQueueRequiredError) Unwrap() error {
-	return &SessionInputRejectedError{Message: e.Message}
-}
+// 错误码常量（别名，供调用方判断）。
+const (
+	sessionInputRejectedCode      = sessionpkg.SessionInputRejectedCode
+	sessionInputTargetChangedCode = sessionpkg.SessionInputTargetChangedCode
+	sessionInputQueueRequiredCode = sessionpkg.SessionInputQueueRequiredCode
+)
 
 // ResolveSessionInputMode 归一化 input_mode 与其遗留别名 runtime_mode。
 // Python: session_input.py resolve_session_input_mode
