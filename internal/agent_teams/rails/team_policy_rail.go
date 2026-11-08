@@ -77,6 +77,8 @@ type TeamPolicyRail struct {
 	teamWorkspacePath string
 	// exposeHumanAgentsToTeammates 是否暴露人类成员给队友
 	exposeHumanAgentsToTeammates bool
+	// hittEnabled HITT 能力开关（门控 HITT section，不依赖实时人类名册）
+	hittEnabled bool
 	// systemPromptBuilder 系统提示词构建器（Init 时缓存）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// staticSections 静态 PromptSection 列表（构造时构建）
@@ -570,21 +572,30 @@ func WithPolicyExposeHumanAgents(v bool) TeamPolicyRailOption {
 
 // buildStaticSections 构造不变的静态 Section 列表。
 // 模板缺失时返回错误（对齐 Python _build_static_sections 内 load_template 抛异常）。
+//
+// humanNames 保留入参位但不再使用：HITT 已改为门控 hittEnabled 能力开关，
+// 人类名册走状态车道（标 [human]）。保留参数只为与 NewTeamPolicyRail 的
+// 调用形态一致（Task 13 会改为直接传 nil）。
+//
 // Python: TeamPolicyRail._build_static_sections(...)
-func (r *TeamPolicyRail) buildStaticSections(humanNames []string) ([]saprompt.PromptSection, error) {
+func (r *TeamPolicyRail) buildStaticSections(_ []string) ([]saprompt.PromptSection, error) {
 	var sections []saprompt.PromptSection
 
 	// Role Section（总是存在）
-	roleSection, err := prompts.BuildTeamRoleSection(r.role, r.memberName, r.teammateMode, r.language)
+	roleSection, err := prompts.BuildTeamRoleSection(r.role, r.teammateMode, r.workspacePromptVariant(), r.language)
 	if err != nil {
 		return nil, err
 	}
 	if roleSection != nil {
 		sections = append(sections, *roleSection)
 	}
-	// HITT Section（仅当有人类成员时非 nil）
-	if s := prompts.BuildTeamHITTSection(r.role, humanNames, r.language, r.memberName, r.exposeHumanAgentsToTeammates); s != nil {
-		sections = append(sections, *s)
+	// HITT Section（门控在 hittEnabled 能力开关上，不在实时名册上）
+	hittSection, err := prompts.BuildTeamHITTSection(r.role, r.hittEnabled, r.language, r.memberName, r.exposeHumanAgentsToTeammates)
+	if err != nil {
+		return nil, err
+	}
+	if hittSection != nil {
+		sections = append(sections, *hittSection)
 	}
 	// Workflow Section（仅 Leader）
 	workflowSection, err := prompts.BuildTeamWorkflowSection(r.role, r.teamMode, r.language)
@@ -607,6 +618,19 @@ func (r *TeamPolicyRail) buildStaticSections(humanNames []string) ([]saprompt.Pr
 		sections = append(sections, *s)
 	}
 	return sections, nil
+}
+
+// workspacePromptVariant 返回工作区措辞变体。
+//
+// 外部 CLI 成员拿到的是路径式共享工作区说明，进程内成员拿 .team 挂载说明。
+// 上游由 rail 工厂按成员类型判定后传入；Go 侧角色即判定依据。
+//
+// Python: team_policy_rail.py —— rail 工厂按成员类型判定
+func (r *TeamPolicyRail) workspacePromptVariant() string {
+	if r.role == atschema.TeamRoleExternalCLI {
+		return "external"
+	}
+	return "native"
 }
 
 // appendCommitCallback 把回调追加进本次调用的投递成功队列。

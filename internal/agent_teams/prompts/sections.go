@@ -2,7 +2,6 @@ package prompts
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -69,7 +68,6 @@ var workflowTemplateName = map[string]string{
 // Python: _LABELS: dict[str, dict[str, str]] (openjiuwen/agent_teams/prompts/sections.py)
 var labels = map[string]map[string]string{
 	"cn": {
-		"member_name_line":   "你的 member_name",
 		"role_heading":       "# 团队角色",
 		"workflow_heading":   "# 工作流程",
 		"lifecycle_heading":  "# 团队生命周期",
@@ -91,7 +89,6 @@ var labels = map[string]map[string]string{
 		"teammate_mode_build": "你的执行模式: build_mode（领取任务后可自主执行并直接标记完成，无需 leader 审批计划）",
 	},
 	"en": {
-		"member_name_line":   "Your member_name",
 		"role_heading":       "# Team Role",
 		"workflow_heading":   "# Workflow",
 		"lifecycle_heading":  "# Team Lifecycle",
@@ -123,18 +120,38 @@ var labels = map[string]map[string]string{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildTeamRoleSection 构建角色 + member_name + 执行模式 section。
-// Python: build_team_role_section() (openjiuwen/agent_teams/prompts/sections.py)
+// BuildTeamRoleSection 构建角色策略 + 执行模式 section。
+//
+// 成员的 member_name **不在此渲染**——它是唯一的逐成员值，住在
+// team_identity 状态车道（由 TeamContextTracker 投递）。渲染进来会让同一
+// 角色的所有成员前缀不再逐字节相同，KV 缓存前缀就失效了。
+//
+// HUMAN_AGENT 取独立策略（human_agent_policy）：avatar 的对话方与输出通道
+// 和 teammate 最要紧的那点不同——它的 controller 直接读纯文本输出，而
+// teammate 策略把 send_message(to="user") 定成必须的回复通道，套给 avatar 会
+// 让它用「给 user 发消息」来回答自己的 controller，那是另一个真人。
+// BRIDGE_AGENT 沿用 teammate 策略：它是货真价实的 teammate，只是内容来自
+// 远端执行器。
 //
 // 参数：
-//   - role: 角色枚举 TeamRole（leader/teammate/human_agent）
-//   - memberName: 成员名（语义 slug），空字符串表示不显示
-//   - teammateMode: 执行模式 "build_mode" 或 "plan_mode"
+//   - role: 角色枚举 TeamRole
+//   - teammateMode: 队友执行模式 "build_mode" / "plan_mode"
+//   - workspacePromptVariant: "native"（.team 挂载）/ "external"（路径式共享工作区）
 //   - language: 提示词语言 "cn" 或 "en"
-func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMode string, language string) (*saprompt.PromptSection, error) {
+//
+// Python: build_team_role_section (prompts/sections.py L254-325)
+func BuildTeamRoleSection(role atschema.TeamRole, teammateMode, workspacePromptVariant, language string) (*saprompt.PromptSection, error) {
 	lbl := sectionsLabelsFor(language)
-	policyName := "leader_policy"
-	if role != atschema.TeamRoleLeader {
+
+	var policyName string
+	switch {
+	case role == atschema.TeamRoleLeader:
+		policyName = "leader_policy"
+	case role == atschema.TeamRoleHumanAgent:
+		policyName = "human_agent_policy"
+	case workspacePromptVariant == "external":
+		policyName = "teammate_policy_external"
+	default:
 		policyName = "teammate_policy"
 	}
 	roleTpl, err := LoadTemplate(policyName, language)
@@ -144,73 +161,74 @@ func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMod
 	// 模板缺失直接返回错误，不再注入 Python 中不存在的「加载失败」占位文案
 	roleText := strings.TrimSpace(roleTpl.Content())
 
-	memberLine := ""
-	if memberName != "" {
-		memberLine = lbl["member_name_line"] + ": " + memberName + "\n\n"
-	}
-
-	isPlanMode := teammateMode == "plan_mode"
-	var modeLabelKey string
-	if role == atschema.TeamRoleLeader {
-		if isPlanMode {
-			modeLabelKey = "leader_mode_plan"
+	// avatar 不自己规划任务，它只按 controller 的指令行动，所以执行模式行
+	// 对它什么都不说。
+	// 模式行只说「任务到了成员手上之后」怎么办，从不说怎么到达——
+	// 认领（autonomous）还是调度器拉起（scheduled）是 dispatch section 的事，
+	// 本节两种模式共用。
+	modeLine := ""
+	if role != atschema.TeamRoleHumanAgent {
+		isPlanMode := teammateMode == "plan_mode"
+		var modeLabelKey string
+		if role == atschema.TeamRoleLeader {
+			if isPlanMode {
+				modeLabelKey = "leader_mode_plan"
+			} else {
+				modeLabelKey = "leader_mode_build"
+			}
 		} else {
-			modeLabelKey = "leader_mode_build"
+			if isPlanMode {
+				modeLabelKey = "teammate_mode_plan"
+			} else {
+				modeLabelKey = "teammate_mode_build"
+			}
 		}
-	} else {
-		if isPlanMode {
-			modeLabelKey = "teammate_mode_plan"
-		} else {
-			modeLabelKey = "teammate_mode_build"
-		}
+		modeLine = lbl[modeLabelKey] + "\n\n"
 	}
-	modeLine := lbl[modeLabelKey] + "\n\n"
-	body := lbl["role_heading"] + "\n\n" + memberLine + modeLine + roleText + "\n"
+	body := lbl["role_heading"] + "\n\n" + modeLine + roleText + "\n"
 
 	section := saprompt.NewPromptSection(SectionRole, map[string]string{language: body}, 11)
 	return &section, nil
 }
 
-// BuildTeamHITTSection 构建 HITT 人类成员协作规则 section。
-// Python: build_team_hitt_section() (openjiuwen/agent_teams/prompts/sections.py)
+// BuildTeamHITTSection 构建 HITT 协作契约 section（仅规则，不含名册）。
 //
-// 仅当至少有一个 human_agent 成员时返回非 nil section。
-// 文本内容因角色而异：
-//   - LEADER / HUMAN_AGENT: 始终获得完整花名册
-//   - TEAMMATE: 默认匿名变体（不暴露成员名），exposeHumanAgentsToTeammates=true 时使用旧版花名册
+// 门控在 HITT **能力开关**上，不在实时人类名册上——这样人类 agent 还没
+// spawn 时规则就已就绪；人类成员本身在统一名册里以 [human] 标记出现
+// （由 exposeHumanAgentsToTeammates 控制是否向 teammate 暴露）。
+// 因此本节是静态的、字节稳定，可以进系统提示词前缀。
+//
+// 文本因角色而异：LEADER 拿指派规则，TEAMMATE 拿角色中立协作习惯
+// （默认匿名，exposeHumanAgentsToTeammates 切到名册感知变体），
+// HUMAN_AGENT 拿 avatar 自契约（需注入自身 member_name）。
 //
 // 参数：
-//   - role: 角色枚举 TeamRole
-//   - humanAgentNames: 已注册的 human_agent 成员名列表，nil/空时返回 nil
+//   - role: 角色枚举
+//   - hittEnabled: HITT 是否为本团队启用；false → 返回 nil
 //   - language: "cn" 或 "en"
-//   - selfMemberName: 当前成员的自身名（human_agent 用来区分自己）
-//   - exposeHumanAgentsToTeammates: 是否向 teammate 暴露人类成员名
+//   - selfMemberName: 当前成员自身名（仅 HUMAN_AGENT 契约使用）
+//   - exposeHumanAgentsToTeammates: TEAMMATE 在匿名（默认）与名册感知两模板间切换
+//
+// Python: build_team_hitt_section (prompts/sections.py L642-685)
 func BuildTeamHITTSection(
 	role atschema.TeamRole,
-	humanAgentNames []string,
+	hittEnabled bool,
 	language string,
 	selfMemberName string,
 	exposeHumanAgentsToTeammates bool,
-) *saprompt.PromptSection {
-	if len(humanAgentNames) == 0 {
-		return nil
+) (*saprompt.PromptSection, error) {
+	if !hittEnabled {
+		return nil, nil
 	}
-	names := make([]string, len(humanAgentNames))
-	copy(names, humanAgentNames)
-	sort.Strings(names)
-
-	var body string
-	if language == "cn" {
-		body = buildHITTSectionCN(role, names, selfMemberName, exposeHumanAgentsToTeammates)
-	} else {
-		body = buildHITTSectionEN(role, names, selfMemberName, exposeHumanAgentsToTeammates)
+	body, ok, err := hittContractBody(role, selfMemberName, exposeHumanAgentsToTeammates, language)
+	if err != nil {
+		return nil, err
 	}
-	if body == "" {
-		return nil
+	if !ok {
+		return nil, nil
 	}
-
 	section := saprompt.NewPromptSection(SectionHITT, map[string]string{language: body}, 12)
-	return &section
+	return &section, nil
 }
 
 // BuildTeamWorkflowSection 构建 Leader 工作流 section。
@@ -301,6 +319,66 @@ func BuildTeamInboundTagsSection(language string) (*saprompt.PromptSection, erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// hittTemplateName 选角色的 HITT 契约模板。
+// TEAMMATE 与 EXTERNAL_CLI 同一分支（external CLI 是完整的 teammate，
+// 只是内容来自远端执行器）。
+// Python: _hitt_template_name (prompts/sections.py L601-615)
+func hittTemplateName(role atschema.TeamRole, exposeHumanAgentsToTeammates bool) (string, bool) {
+	switch role {
+	case atschema.TeamRoleLeader:
+		return "hitt_leader", true
+	case atschema.TeamRoleTeammate, atschema.TeamRoleExternalCLI:
+		if exposeHumanAgentsToTeammates {
+			return "hitt_teammate", true
+		}
+		return "hitt_teammate_anonymous", true
+	case atschema.TeamRoleHumanAgent:
+		return "hitt_human_agent", true
+	default:
+		return "", false
+	}
+}
+
+// hittContractBody 渲染 HITT 协作契约 markdown（仅规则）。
+//
+// 人类名册**不内联**在这里——人类成员在统一名册里以 [human] 标记出现。
+// 四个模板里只有 hitt_human_agent.md 含 {{self_line}} 占位符，其余三个是
+// 纯文本、不调 format。
+//
+// Python: _hitt_contract_body (prompts/sections.py L617-640)
+func hittContractBody(
+	role atschema.TeamRole,
+	selfMemberName string,
+	exposeHumanAgentsToTeammates bool,
+	language string,
+) (string, bool, error) {
+	name, ok := hittTemplateName(role, exposeHumanAgentsToTeammates)
+	if !ok {
+		return "", false, nil
+	}
+	tpl, err := LoadTemplate(name, language)
+	if err != nil {
+		return "", false, err
+	}
+	if role == atschema.TeamRoleHumanAgent {
+		selfLine := selfMemberLine(selfMemberName, language)
+		return tpl.Render(map[string]string{"self_line": selfLine}), true, nil
+	}
+	return tpl.Content(), true, nil
+}
+
+// selfMemberLine 渲染「你的 member_name 是 X」这一行，未设置时返回空串。
+// Python: _self_member_line (prompts/sections.py L592-599)
+func selfMemberLine(selfName, language string) string {
+	if selfName == "" {
+		return ""
+	}
+	if language == "cn" {
+		return "你的 member_name 是 `" + selfName + "`。\n"
+	}
+	return "Your member_name is `" + selfName + "`.\n"
+}
+
 // sectionsLabelsFor 返回指定语言的标签字典，默认回退到中文。
 // 加 sections 前缀是因为 Go 侧本包内还有 messages.go 的同名函数：上游
 // sections.py 的 _labels_for 与 messages.py 的 labels_for 分属两个模块、
@@ -312,323 +390,4 @@ func sectionsLabelsFor(language string) map[string]string {
 		return lbl
 	}
 	return labels["cn"]
-}
-
-// formatHumanAgentRoster 渲染 human-agent 成员名列表。
-// Python: _format_human_agent_roster(names, language) (openjiuwen/agent_teams/prompts/sections.py)
-func formatHumanAgentRoster(names []string, language string) string {
-	quoted := make([]string, len(names))
-	for i, n := range names {
-		quoted[i] = fmt.Sprintf("`%s`", n)
-	}
-	joined := strings.Join(quoted, ", ")
-	if language == "cn" {
-		return fmt.Sprintf("注册的人类成员：%s", joined)
-	}
-	return fmt.Sprintf("Registered human members: %s", joined)
-}
-
-// buildHITTSectionCN 根据 role 构建中文 HITT section 文本。
-func buildHITTSectionCN(
-	role atschema.TeamRole,
-	names []string,
-	selfMemberName string,
-	exposeHumanAgentsToTeammates bool,
-) string {
-	switch role {
-	case atschema.TeamRoleLeader:
-		return hittSectionLeaderCN(names)
-	case atschema.TeamRoleTeammate:
-		if exposeHumanAgentsToTeammates {
-			return hittSectionTeammateCN(names)
-		}
-		return hittSectionTeammateAnonymousCN()
-	case atschema.TeamRoleHumanAgent:
-		return hittSectionHumanAgentCN(names, selfMemberName)
-	default:
-		return ""
-	}
-}
-
-// buildHITTSectionEN 根据 role 构建英文 HITT section 文本。
-func buildHITTSectionEN(
-	role atschema.TeamRole,
-	names []string,
-	selfMemberName string,
-	exposeHumanAgentsToTeammates bool,
-) string {
-	switch role {
-	case atschema.TeamRoleLeader:
-		return hittSectionLeaderEN(names)
-	case atschema.TeamRoleTeammate:
-		if exposeHumanAgentsToTeammates {
-			return hittSectionTeammateEN(names)
-		}
-		return hittSectionTeammateAnonymousEN()
-	case atschema.TeamRoleHumanAgent:
-		return hittSectionHumanAgentEN(names, selfMemberName)
-	default:
-		return ""
-	}
-}
-
-// hittSectionLeaderCN Leader 中文 HITT 协作规则。
-// Python: _hitt_section_leader_cn(names) (openjiuwen/agent_teams/prompts/sections.py)
-func hittSectionLeaderCN(names []string) string {
-	roster := formatHumanAgentRoster(names, "cn")
-	return "# HITT — 人类成员协作规则\n\n" +
-		roster + "。他们是真实人类操作者的代理，与你和其它 teammate 平等。" +
-		"所有 role=human_agent 的成员都适用下列规则：\n\n" +
-		"1. **禁止** 用 plain text 向任何人类成员发问或对话——所有定向" +
-		"沟通必须调用 `send_message(to=\"<human_member_name>\", ...)`，你的" +
-		"纯文本输出对方是看不到的。\n" +
-		"2. 可以通过 `update_task(task_id=..., assignee=\"<human_member_name>\")` " +
-		"把需要特定人类判断或操作的任务指派给对应成员。\n" +
-		"3. 一旦某个人类成员认领了任务（status=claimed），你 **不能** 取消" +
-		"（update_task status=cancelled）也 **不能** 改派（update_task " +
-		"assignee=<他人>），即使团队因人类没及时响应而停滞也必须保持停滞，" +
-		"只能用 `send_message` 催促对应人类成员。\n" +
-		"4. 每个人类成员始终是 ready 状态，不会进入 busy 或 shutdown，" +
-		"所以不要对它们调用 `shutdown_member` / `spawn_member`。\n" +
-		"5. 如果 user 表达了\"我也要加入团队\"之类的加入意图，且团队尚未" +
-		"创建，请在 `build_team` 时把 `enable_hitt=true`；若需要多个不同" +
-		"人类成员，通过 `predefined_members` 传入 role=human_agent 的 spec。\n"
-}
-
-// hittSectionTeammateCN Teammate 旧版花名册中文 HITT 协作规则。
-// Python: _hitt_section_teammate_cn(names) (openjiuwen/agent_teams/prompts/sections.py)
-//
-// 仅在 exposeHumanAgentsToTeammates=true 时使用。
-func hittSectionTeammateCN(names []string) string {
-	roster := formatHumanAgentRoster(names, "cn")
-	return "# HITT — 与人类成员协作\n\n" +
-		"团队里存在下列人类成员（真实人类）：" + roster + "。把他们视作普通 " +
-		"teammate：与他们交流一律通过 `send_message(to=<对应名字>, ...)`，" +
-		"不要假设他们会自动看到你的 plain text。他们可能拥有你无法完成的" +
-		"决策权或操作能力。\n"
-}
-
-// hittSectionTeammateAnonymousCN Teammate 匿名中文 HITT 协作规则。
-// Python: _hitt_section_teammate_anonymous_cn() (openjiuwen/agent_teams/prompts/sections.py)
-//
-// 默认变体，不暴露人类成员名，不提示"真人"，仅传达通信契约。
-func hittSectionTeammateAnonymousCN() string {
-	return "# HITT — 与 Peer 协作的稳健习惯\n\n" +
-		"本团队中部分 peer 不会主动读取你的 plain text 输出，" +
-		"且回复节奏可能慢于一般 LLM 队友。对所有 peer 一律按以下契约协作：\n\n" +
-		"- 跨成员通信**一律**走 `send_message(to=<name>, ...)`，" +
-		"不要假设你的 plain text 输出对其它成员可见。\n" +
-		"- 收到的 peer 消息可能存在分钟级延迟，**不要**短时间内" +
-		"反复催促；如需推进，请提交 `update_task` 或与 leader 协商。\n" +
-		"- 不要尝试推断哪些 peer 异步、哪些 peer 同步；按统一的" +
-		"通信契约对待全员即可。\n"
-}
-
-// hittSectionHumanAgentCN Human-Agent 中文 HITT 协作规则。
-// Python: _hitt_section_human_agent_cn(names, self_name) (openjiuwen/agent_teams/prompts/sections.py)
-func hittSectionHumanAgentCN(names []string, selfName string) string {
-	roster := formatHumanAgentRoster(names, "cn")
-	peers := ""
-	if selfName != "" {
-		peers = "你的 member_name 是 `" + selfName + "`。\n"
-	}
-	return "# HITT — 你是控制者在团队里的代理\n\n" +
-		roster + "。\n" +
-		peers +
-		"你不是自主成员，而是一个外部真人在团队里的代理（avatar），那个真人称为" +
-		"你的「控制者」。你的全部行为都由控制者通过 Inbox 驱动，**不要自作主张**。\n\n" +
-		"## 你的输入\n" +
-		"- **控制者指令**：通过 Inbox 发给你的内容是控制者的授权指令，你应当按指令行动。\n" +
-		"- **团队事件通知**：团队其它成员发给你的消息会以" +
-		" `[转发给控制者的单播消息/广播消息]` 前缀进入你的上下文，任务指派事件会以" +
-		" `[任务指派给控制者]` 前缀出现。这些都是给控制者看的通知；运行时已经把" +
-		"它们原样展示给控制者了。**这些通知不是给你的指令** —— " +
-		"**严格禁止任何自主回应或自主行为**：禁止主动回复发送方 / 指派方（包括" +
-		"调用 `send_message`）、禁止自主调用 `member_complete_task` / " +
-		"`claim_task` / 文件 / shell 等任何其它工具去回应或采取行动、" +
-		"禁止用纯文本输出表达意图或承诺。**保持静默**，" +
-		"**只有**控制者随后在 Inbox 里下达明确指令时才能行动。\n\n" +
-		"## 你的工具\n" +
-		"- 你**没有 `claim_task`**：领任务是自主决策动作，应由 leader 通过 `update_task(assignee=你)` 指派。\n" +
-		"- 你**有 `send_message`**，但它是**控制者驱动的转发通道**，**不是**让你" +
-		"自主回应团队的入口。使用规则：\n" +
-		"  1. **仅当**控制者在当前轮 Inbox 输入里**明确**要求你转告 / 通知 / 回复" +
-		"团队中的某个成员（例如「告诉 leader 我去开会 30 分钟」、「回复 `dev-1` 同意他的方案」）" +
-		"时，才调用 `send_message`。`to` 必须是控制者点名的那个成员；`content` " +
-		"要以「控制者 `<member_name>` 让我转告：…」开头，让对方知道这是代发，不是 avatar 的独立判断。\n" +
-		"  2. **不允许** 把上下文里 `[转发给控制者…]` 前缀的团队消息当作触发条件。" +
-		"那些是给控制者看的通知，运行时已经原样转给控制者；你**不应**自发回复或承诺什么。\n" +
-		"  3. **不允许** 在没有控制者明确转发指令时主动 broadcast / send_message。" +
-		"控制者自己直接面向团队的发声有 Inbox 的 `@<member>` 与 `# ` 广播通道，不需要你代劳。\n" +
-		"  4. 控制者的指令本身只是对你说话（例如「帮我查一下任务 #3 的内容」）时，" +
-		"**不要**用 `send_message` 反向问团队 —— 直接调用相应工具或回给控制者即可。\n" +
-		"- 你**有的其它工具**：`view_task`（看任务）、`workspace_meta`（工作空间锁/版本）、" +
-		"`member_complete_task`（标记自己被指派的任务为完成）以及标准的" +
-		"文件操作 / shell 工具，用于真正完成控制者交代的事务。\n\n" +
-		"## 行为准则\n" +
-		"- **严格禁止主动发声**：你不应该用自然语言" +
-		"试图与团队沟通进展（团队看不到你的纯文本，他们看到的是控制者的话）。" +
-		"如果控制者没明确让你转告，就**禁止**触发 `send_message`。\n" +
-		"- 看到 `[任务指派给控制者]` 通知时**严格禁止**自动调用 `member_complete_task` / " +
-		"`claim_task` / 文件 / shell 等任何工具去推进任务；" +
-		"也**严格禁止**对该通知用纯文本「领命」或承诺；" +
-		"**只有**控制者在 Inbox 里下达明确指令时才能行动。\n" +
-		"- 如果控制者的指令需要文件读写、查看任务、提交结果，立即调用对应工具完成；" +
-		"完成后简洁地把结果回给控制者即可（你的回应只对控制者可见）。\n" +
-		"- 第一次启动时如果只收到「Join the team and wait...」之类的占位消息，" +
-		"**直接静默等待**，不要调用任何工具，不要广播任何文字。\n"
-}
-
-// hittSectionLeaderEN Leader 英文 HITT 协作规则。
-// Python: _hitt_section_leader_en(names) (openjiuwen/agent_teams/prompts/sections.py)
-func hittSectionLeaderEN(names []string) string {
-	roster := formatHumanAgentRoster(names, "en")
-	return "# HITT — Collaborating with Human Members\n\n" +
-		roster + ". They represent real human operators and stand on " +
-		"equal footing with you and the other teammates. The following " +
-		"rules apply to every member whose role is `human_agent`:\n\n" +
-		"1. You **must not** address a human member via plain text — " +
-		"every direct exchange must go through " +
-		"`send_message(to=\"<human_member_name>\", ...)`. Your plain text " +
-		"output is not visible to human members.\n" +
-		"2. Use `update_task(task_id=..., " +
-		"assignee=\"<human_member_name>\")` to assign tasks that require a " +
-		"specific human's judgement or action.\n" +
-		"3. Once a human member claims a task (status=claimed) you " +
-		"**cannot** cancel it (`update_task status=cancelled`) and " +
-		"**cannot** reassign it (`update_task assignee=<someone>`). Even " +
-		"if the team stalls waiting for that human, it must stall — only " +
-		"`send_message` nudges to the specific human are allowed.\n" +
-		"4. Every human member stays READY forever; never call " +
-		"`shutdown_member` or `spawn_member` on them.\n" +
-		"5. If the user signals intent to join the team (e.g. \"I want " +
-		"to join\") and the team has not been created yet, call " +
-		"`build_team` with `enable_hitt=true`. If multiple distinct " +
-		"human members are needed, pass them via `predefined_members` " +
-		"as TeamMemberSpec entries with role=human_agent.\n"
-}
-
-// hittSectionTeammateEN Teammate 旧版花名册英文 HITT 协作规则。
-// Python: _hitt_section_teammate_en(names) (openjiuwen/agent_teams/prompts/sections.py)
-//
-// 仅在 exposeHumanAgentsToTeammates=true 时使用。
-func hittSectionTeammateEN(names []string) string {
-	roster := formatHumanAgentRoster(names, "en")
-	return "# HITT — Working with Human Members\n\n" +
-		"The team includes the following human members (real humans): " +
-		roster + ". Treat each of them as an ordinary teammate: every " +
-		"direct exchange must use `send_message(to=<their_name>, ...)`. " +
-		"Do not assume your plain text is visible to a human member; " +
-		"they may hold decisions or privileges you cannot execute.\n"
-}
-
-// hittSectionTeammateAnonymousEN Teammate 匿名英文 HITT 协作规则。
-// Python: _hitt_section_teammate_anonymous_en() (openjiuwen/agent_teams/prompts/sections.py)
-//
-// 默认变体，不暴露人类成员名。
-func hittSectionTeammateAnonymousEN() string {
-	return "# HITT — Robust Habits for Peer Collaboration\n\n" +
-		"Some peers in this team do not actively read your plain " +
-		"text output, and their reply cadence may be slower than a " +
-		"typical LLM teammate. Apply the following contract uniformly " +
-		"to every peer:\n\n" +
-		"- **Always** use `send_message(to=<name>, ...)` for " +
-		"cross-member contact; do not assume your plain text output " +
-		"is visible to other members.\n" +
-		"- Replies from peers may take minutes; **do not** repeatedly " +
-		"nudge them on a short timescale. If you need to push forward, " +
-		"submit an `update_task` or coordinate with the leader.\n" +
-		"- Do not try to infer which peers are async and which are " +
-		"sync; apply the uniform communication contract to everyone.\n"
-}
-
-// hittSectionHumanAgentEN Human-Agent 英文 HITT 协作规则。
-// Python: _hitt_section_human_agent_en(names, self_name) (openjiuwen/agent_teams/prompts/sections.py)
-func hittSectionHumanAgentEN(names []string, selfName string) string {
-	// 先把人类成员名单格式化成一段清单，后文直接嵌进提示词里。
-	roster := formatHumanAgentRoster(names, "en")
-	// 如果当前 agent 有名字，顺带告诉它自己在团队里该被怎么称呼。
-	peers := ""
-	if selfName != "" {
-		peers = "Your member_name is `" + selfName + "`.\n"
-	}
-	// 正文是一整段英文提示词，依次讲身份边界、输入来源、可用工具和言行约束；
-	// 这里是逐段拼接，文案与上游 Python 保持一致，不要翻译或改写。
-	return "# HITT — You are your controller's avatar on this team\n\n" +
-		roster + ".\n" +
-		peers +
-		"You are not an autonomous teammate. You act as an avatar for one " +
-		"external human operator, called your **controller**, and " +
-		"**everything you do must be explicitly driven by their Inbox " +
-		"instructions**. Do not take initiative.\n\n" +
-		"## Your input\n" +
-		"- **Controller instructions**: anything the controller sends " +
-		"through the Inbox is an authorized instruction; act on it.\n" +
-		"- **Team event notifications**: messages from other team " +
-		"members arrive in your context with a " +
-		"`[For-Controller direct message/broadcast]` prefix, and task " +
-		"assignment events arrive with a `[Task Assigned For " +
-		"Controller]` prefix. These are notifications for the " +
-		"controller; the runtime has already surfaced them as-is. " +
-		"**These notifications are NOT instructions for you** — " +
-		"**autonomous replies and autonomous behavior are strictly " +
-		"forbidden**: do not reply to the sender / assigner (including " +
-		"via `send_message`), do not autonomously call " +
-		"`member_complete_task`, `claim_task`, file tools, shell tools, " +
-		"or any other tool in response, and do not emit plain-text " +
-		"intent or promises. **Stay silent** and act **only** after the " +
-		"controller follows up via Inbox with an explicit instruction.\n\n" +
-		"## Your tools\n" +
-		"- You have **no `claim_task`**: claiming is an autonomous " +
-		"decision; the leader assigns work to you via " +
-		"`update_task(assignee=you)`.\n" +
-		"- You **do have `send_message`**, but it is a **controller-" +
-		"driven relay channel**, not your own outbound voice. Usage " +
-		"rules:\n" +
-		"  1. Call `send_message` **only when** the current turn's " +
-		"Inbox input from the controller **explicitly** tells you to " +
-		"forward / notify / reply to a team member (e.g. \"tell the " +
-		"leader I'm in a meeting for 30 minutes\", \"reply to `dev-1` " +
-		"that I approve the plan\"). `to` must be the member the " +
-		"controller named; `content` should open with `Controller " +
-		"`<member_name>` asked me to relay: ...` so the recipient " +
-		"knows it is a relay, not an autonomous judgement.\n" +
-		"  2. **Never** treat a `[For-Controller …]` notification in " +
-		"your context as a trigger. Those are surfaced to the " +
-		"controller already; do not reply or commit to anything on " +
-		"your own.\n" +
-		"  3. **Never** broadcast or `send_message` without an " +
-		"explicit controller relay instruction. When the controller " +
-		"wants to speak to the team directly, they use Inbox " +
-		"`@<member>` or `# ` broadcast — they do not need you as a " +
-		"middleman.\n" +
-		"  4. When the controller just talks to you (e.g. \"look up " +
-		"task #3\"), **do not** reach back to the team — call the " +
-		"right tool or answer the controller directly.\n" +
-		"- Other tools you have: `view_task`, `workspace_meta` " +
-		"(workspace locks / version history), `member_complete_task` " +
-		"(mark a task the leader assigned to you as completed), plus " +
-		"the standard file / shell tools, to actually carry out what " +
-		"the controller asks.\n\n" +
-		"## Conduct\n" +
-		"- **Speaking up on your own is strictly forbidden**: do not " +
-		"narrate progress to the team via plain text — the team cannot " +
-		"see your text anyway; they see the controller's voice through " +
-		"the Inbox. If the controller did not explicitly ask you to " +
-		"relay something, triggering `send_message` is forbidden.\n" +
-		"- When a `[Task Assigned For Controller]` notification arrives, " +
-		"**autonomously calling `member_complete_task`, `claim_task`, " +
-		"file tools, shell tools, or any other tool to act on the " +
-		"assignment is strictly forbidden**; also do **not** acknowledge " +
-		"the assignment with plain text or commit to anything. **Only** " +
-		"act when the controller follows up with an explicit Inbox " +
-		"instruction (e.g. \"mark task X completed\").\n" +
-		"- When the controller's instruction needs file work, task " +
-		"lookup, or completion, call the right tool immediately, then " +
-		"reply to the controller with a concise result. Your reply is " +
-		"visible to the controller only.\n" +
-		"- If the only input you ever received is a placeholder like " +
-		"\"Join the team and wait for your first assignment.\", " +
-		"**stay silent** — make no tool calls and emit no broadcast " +
-		"text.\n"
 }
