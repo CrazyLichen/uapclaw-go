@@ -391,6 +391,12 @@ func (m *memoryIndexManager) ReadFile(ctx context.Context, relPath string, fromL
 		if lines != nil {
 			end = min(totalLines, start+*lines)
 		}
+		// Python 切片 all_lines[start:end] 在 start 越过末尾时静默返回空列表；
+		// Go 的 slice 表达式会越界 panic（slice bounds out of range [98:3]），
+		// 必须显式把 start 钳到 end 以内才能等价。
+		if start > end {
+			start = end
+		}
 		contentLines = allLines[start:end]
 	} else {
 		contentLines = allLines
