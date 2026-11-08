@@ -717,3 +717,43 @@ func TestFormatWithSchema_数组items递归默认值(t *testing.T) {
 		t.Errorf("Bob.role 期望 'admin'，实际 %v", bob["role"])
 	}
 }
+
+// TestSchemaUtils_Validate_Integer接受int 回归 D-13（上游 92a04257）：
+// integer 参数必须接受 int/int32/int64/float64 —— Go 调用方传字面量是 int，
+// JSON 解码过来是 float64。旧实现只认 float64，传 int 会被判成
+// "expected integer, got int" 直接拒掉。
+func TestSchemaUtils_Validate_Integer接受int(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewIntegerParam("limit", "条数", true),
+	}
+
+	cases := []struct {
+		// name 用例名
+		name string
+		// val 待校验值
+		val any
+	}{
+		{"int", 10},
+		{"int32", int32(10)},
+		{"int64", int64(10)},
+		{"float64 整数值", float64(10)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := (SchemaUtils{}).Validate(map[string]any{"limit": tc.val}, params); err != nil {
+				t.Errorf("integer 应接受 %s，实际报错: %v", tc.name, err)
+			}
+		})
+	}
+}
+
+// TestSchemaUtils_Validate_Integer拒绝小数 integer 仍需拒绝带小数部分的值，
+// 放宽类型接受集不能放宽整数语义。
+func TestSchemaUtils_Validate_Integer拒绝小数(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewIntegerParam("limit", "条数", true),
+	}
+	if err := (SchemaUtils{}).Validate(map[string]any{"limit": 10.5}, params); err == nil {
+		t.Error("10.5 不应通过 integer 校验")
+	}
+}

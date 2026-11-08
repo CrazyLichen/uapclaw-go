@@ -268,7 +268,12 @@ func validateParamType(key string, val any, p *schema.Param) error {
 			)
 		}
 	case schema.ParamTypeInteger:
-		f, ok := val.(float64)
+		// 整数允许 int / int32 / int64 / float64 等多种表示：Go 侧调用方直接传
+		// 字面量就是 int，JSON 解码过来则是 float64。旧实现只认 float64，传 int 会被
+		// 判成 "expected integer, got int" 而拒掉——这正是上游 92a04257 修的
+		// "parsing int type as float" 问题，Go 侧因为类型更松散反而暴露得更直接。
+		// 对齐 number 分支的接受集（下方 ParamTypeNumber）。
+		f, ok := toFloat64(val)
 		if !ok {
 			return exception.BuildError(
 				exception.StatusSchemaValidateInvalid,

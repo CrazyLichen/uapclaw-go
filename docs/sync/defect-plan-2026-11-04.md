@@ -12,7 +12,7 @@
 1. **不能逐条照搬**：2713 条修复里，259 条带 `web`/`tui`/`designer` scope，另有 606 条无 scope 提交中约半数为前端修复；这些属于 Go 未迁移的前端产物，不构成本项目缺陷。真正落在 Go 已迁移包上的，聚合后为 **14 组、185 个缺陷行**。
 2. **不是"上游修了 Go 就一定有"**：Go 迁移时基线早于这批修复，但部分防护在迁移时就已按当时的 Python 行为实现（例：技能包解压 zip-slip 防护 Go 已有 `filepath.Rel` 校验）。因此每个缺陷族必须先在 Go 侧核验再动手。
 3. **优先看 P0**：数据丢失 / 崩溃 / 安全边界三类共 **30 行**（见 §4 批次一），其余为行为偏差与可观测性偏差。
-4. **核验进度**：185 行中已核验 **77 行**（✅ 59 + ➖ 12 + ⤵️ 6），剩余 108 行为 🔍。**B 组 17 行**已核验并处置（修复 8 组 C1~C6、延期 3 条、对齐 1 条；实施完成见 §3.B 处置决定）。**C 组 15 行**本轮完成核验与修复：✅ 修复 11 行（C-01/03/04/05/06/07/08/09/10/13/14），➖ 已对齐 3 行（C-02 阻塞 channel 无丢弃、C-11 rail 层状态码分类、C-12 transient retry），另有 C-15 早已 ➖；设计见 `docs/superpowers/specs/2026-11-06-llm-client-c-group-alignment-design.md`，计划见 `docs/superpowers/plans/2026-11-06-llm-client-c-group-alignment.md`。**E 组 13 行**（2026-11-08）：✅ 修复 11 行、➖ 不适用 2 行，见 §3.E 完结说明。
+4. **核验进度**：185 行中已核验 **79 行**（✅ 61 + ➖ 12 + ⤵️ 6），剩余 106 行为 🔍。**B 组 17 行**已核验并处置（修复 8 组 C1~C6、延期 3 条、对齐 1 条；实施完成见 §3.B 处置决定）。**C 组 15 行**本轮完成核验与修复：✅ 修复 11 行（C-01/03/04/05/06/07/08/09/10/13/14），➖ 已对齐 3 行（C-02 阻塞 channel 无丢弃、C-11 rail 层状态码分类、C-12 transient retry），另有 C-15 早已 ➖；设计见 `docs/superpowers/specs/2026-11-06-llm-client-c-group-alignment-design.md`，计划见 `docs/superpowers/plans/2026-11-06-llm-client-c-group-alignment.md`。**D 组 18 行**已完结：✅ 修复 16 行、➖ 无需修 2 行（D-07 技能包解压 Go 迁移时已有 `filepath.Rel` 校验、D-17 无 task 概念需核验连接释放）。**E 组 13 行**（2026-11-08）：✅ 修复 11 行、➖ 不适用 2 行，见 §3.E 完结说明。
 5. **高价值系统性缺陷**集中在四处：① ReAct 循环终止语义（force_finish / 无进展 / 迭代上限）② 上下文压缩的取消与预算守卫 ③ AgentTeams 任务与 worktree 生命周期 ④ Gateway 会话路由与资源释放。
 
 ### 状态图例
@@ -185,14 +185,14 @@ rg -n "<Python 符号>" internal/
 | D-03 | 工具执行缺少"串行执行"选项（默认并行会破坏有状态工具） | `6eba3e6` | `ability` 调度 | P2 | ✅（本轮：`Execute` 增 `parallelToolCalls` 参数，false 时两处 WaitGroup 循环改顺序执行；配置面 `ReActAgentConfig.ParallelToolCalls`，未配置默认 true） |
 | D-04 | 工具调用整体无超时（模型卡住时无法中断） | `fe99da2` | `ability`/`react` 执行点 | P0 | ✅（本轮：三层预算 `resilience.timeout_s`→300→豁免提升 3600→工具钩子；独立 goroutine + select 期限，超时产出带 tool_call_id 的可恢复 tool_message） |
 | D-05 | worktree 路径穿越：`gitdir` 内容拼接后未校验是否逃出仓库 | `e868918b` | `harness/tools/worktree/git.go` | P0 | ✅（本轮：实测发现 git 2.x 写绝对 gitdir，旧代码 `Join(wtPath, gitdir)` 拼错路径致 HEAD SHA 永远读不到；另加工作树特征校验（HEAD+commondir 必须存在）；slug 扁平化 + 反斜杠归一化。上游 e868918b 未改 git.py，属本仓加固） |
-| D-06 | SkillTool 的 `relative_file_path` 未校验（可读任意文件） | `710b2b09` | `harness/tools`（skill_tool） | P0 | 🔍 |
+| D-06 | SkillTool 的 `relative_file_path` 未校验（可读任意文件） | `710b2b09` | `harness/tools`（skill_tool） | P0 | ✅（本轮核验：`isSafeRelativeFilePath` 已在 `skill_tool.go:123` 对每个入参校验，拒绝绝对路径与 `..` 穿越；evolution 两处同名参数只做路径分类、实际读取仍过该校验） |
 | D-07 | 技能包解压路径穿越（zip/tar slip） | `c993823`、`8c5b537b` | `server/runtime/skill/remote_import.go` | P0 | ➖ |
 | D-08 | teamskillshub 初始化路径穿越 | `92ab155f` | 同上（hub 分支） | P1 | ✅（本轮：path/output 收敛为 skills 目录内相对路径——实测 `output="/etc"` 会真的建出 `/etc/s1`；name 经 safePathName + IsPathWithin 双保险；teamskills 骨架补 kind/roles） |
 | D-09 | 技能卸载用 slug 而非不安全 name（含 `..`/斜杠） | `910af579` | `skill_manager.go` | P1 | ✅（本轮：safePathName 失败时按原始 name 查 local_skills 的 origin 末段作 slug 定位目录；记录删除改传原始 name） |
 | D-10 | PDF/notebook 读取超 token 预算未截断 | `810bb071` | fs 工具读取 | P1 | ✅（本轮：新增 tokenBudget，notebook 逐 cell、PDF 逐页累加截断；首块无条件放行；截断文案逐字对齐上游） |
 | D-11 | 流式子进程输出需增量解码（多字节字符跨 chunk 被切碎） | `ce2aedda` | `sys_operation/local` 流式读 | P1 | ✅（既有实现：`chunkDecoder` 跨块保留半个多字节字符，已在 `utils.go:331` 使用；本轮未改动） |
 | D-12 | Windows shell 自动检测错误 / 后台输出捕获缺失 | `af85e33d` | `sys_operation/local/proc_windows.go` | P1 | ✅（本轮：`_PS_ASSIGNMENT_PATTERN` 替换裸变量判定（裸 `$var` 在 bash/PS 都合法）；新增 bash 控制流模式 for/while/until/if；后台 stderr 从 nil 改为管道 + 持续排空（保 8KB），早退时拼进错误） |
-| D-13 | MCP 参数 int 被解析成 float（工具校验失败） | `92a04257` | `tool/mcp` 参数解码 | P1 | 🔍（本轮未处置：`CallTool` 直接透传 `map[string]any`，未见 `json.Number` 处理；需单独核验） |
+| D-13 | MCP 参数 int 被解析成 float（工具校验失败） | `92a04257` | `tool/mcp` 参数解码 | P1 | ✅（本轮：`validateParamType` 的 integer 分支只认 `float64`，Go 调用方传字面量 int 会被判 `expected integer, got int` 拒掉——上游 `92a04257` 同一症结，Go 因类型更松暴露更直接。改用 `toFloat64` 接受 int/int32/int64/float64，同时保留「拒绝带小数部分」的整数语义；number 分支原已如此，此次对齐） |
 | D-14 | MCP SSE/streamable-http 连接被重置后不重连 | `1bd6360c`、`d90a442` | `tool/mcp/client` | P1 | ✅（本轮：新建 `reconnect.go` 对齐上游——错误分类 + 指数退避 5s→120s ±20% 抖动 + 代际机制 + 每实例锁去重 + 取消区分 + lazyReconnect；覆盖 5 个方法。补并发基础：两客户端 `isConnected`/`client` 此前零锁保护） |
 | D-15 | MCP 工具结果 content blocks 被丢弃（多模态/多段结果丢失） | `5a5d7c61` | 结果解析 | P1 | ✅（本轮：抽取改为按序 join 全部 content blocks（旧实现只取最后一块）；新增 `McpServerConfig.IncludeImageContent` + multimodal 产出；消费端 `iterMultimodalImageItems` 识别结构体，文案改用 `source`） |
 | D-16 | MCP 错误状态在结果抽取中丢失（失败被当成成功） | `5d2eef7f` | 结果解析 | P1 | ✅（本轮：新增 `preserveMCPToolResultStatus`，四个返回点都按 isError 打标，失败包成 `MCPToolResult{Success:false}` 并保留服务端错误文本） |
