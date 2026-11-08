@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
@@ -109,11 +110,7 @@ func newSessionProvisioner(
 	}
 	prov.RemoveMetadataCache = swarmsession.RemoveSessionMetadataCache
 	// 会话目录解析与删除（删除事务的存在性判定与 rmtree）
-	prov.SetResolveSessionDir(func(sessionID string) (string, bool) {
-		dir := filepath.Join(swarmsession.GetSessionsDir(), sessionID)
-		info, statErr := os.Stat(dir)
-		return dir, statErr == nil && info.IsDir()
-	})
+	prov.SetResolveSessionDir(resolveSessionDirForProvisioner)
 	prov.SetRemoveSessionDir(func(dir string) error { return os.RemoveAll(dir) })
 	return prov
 }
@@ -315,6 +312,20 @@ func (noopLifecycleJournal) RecoveringDelete(string) bool { return false }
 func (noopLifecycleJournal) MarkCleanup(string) error { return nil }
 
 // ──────────────────────────── 参数解析辅助（10.3.28b/c） ────────────────────────────
+
+// resolveSessionDirForProvisioner 解析会话目录并过白名单。
+// Python: server/runtime/session/session_history.py resolve_session_dir
+//
+// 两步防御（白名单 + 根内确认）与归档目录回退都在 common.ResolveSessionDir 内。
+// 非法标识返回空路径 + false，由 provisioner 转成 BAD_REQUEST。
+func resolveSessionDirForProvisioner(sessionID string) (string, bool) {
+	dir, exists, err := common.ResolveSessionDir(sessionID, swarmsession.GetSessionsDir())
+	if err != nil {
+		logger.Debug(logComponent).Err(err).Msg("session directory rejected by whitelist")
+		return "", false
+	}
+	return dir, exists
+}
 
 // parseSessionParams 解析请求参数为可写 map（nil/非法返回空 map）。
 // 与 server/runtime 的同名函数语义一致，但本包需要独立实现以避开跨包依赖。
