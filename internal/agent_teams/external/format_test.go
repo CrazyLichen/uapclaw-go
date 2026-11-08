@@ -15,10 +15,13 @@ const ts20260528 int64 = 1779949805000
 // CI runner 是 UTC，不固定时区就会把 +08:00 渲染成 +00:00 导致比对失败。
 var goldenZone = time.FixedZone("CST", 8*3600)
 
-// goldenPath 返回 golden 绝对路径（与 inbound_render 共用目录）。
+// goldenPath 返回 golden 绝对路径。
+//
+// golden 随 inbound_render 一起下沉到 inboundtags 子包（Task 5b：渲染层搬到
+// 零依赖叶子包，父包改纯转发），此处路径同步指向新位置。
 func goldenPath(t *testing.T, name string) string {
 	t.Helper()
-	return filepath.Join("..", "testdata", "inbound_render", name+".golden")
+	return filepath.Join("..", "inboundtags", "testdata", "inbound_render", name+".golden")
 }
 
 // assertGolden 逐字节比对。

@@ -8,10 +8,13 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
-// goldenPath 返回 messages golden 的绝对路径（golden 与 inbound_render 共用目录）。
+// goldenPath 返回 messages golden 的绝对路径。
+//
+// golden 随 inbound_render 一起下沉到 inboundtags 子包（Task 5b：渲染层搬到
+// 零依赖叶子包），此处路径同步指向新位置。
 func goldenPath(t *testing.T, name string) string {
 	t.Helper()
-	return filepath.Join("..", "testdata", "inbound_render", name+".golden")
+	return filepath.Join("..", "inboundtags", "testdata", "inbound_render", name+".golden")
 }
 
 // assertGolden 逐字节比对代码输出与上游 golden。

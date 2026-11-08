@@ -12,7 +12,8 @@
 //	agent_teams/
 //	├── doc.go              # 包文档
 //	├── constants.go        # 保留名常量
-//	├── inbound_render.go   # 团队入站消息 XML 渲染（六类标签）
+//	├── inbound_render.go   # 转发出 inboundtags 子包的六类标签渲染
+//	├── inboundtags/        # 团队入站消息 XML 渲染（零依赖叶子包，六类标签）
 //	├── timefmt.go          # 时间渲染（绝对时间 + 相对分桶）
 //	├── context.go          # SessionState 委托（定义已迁移至 sessionctx 包）
 //	├── i18n.go             # 多语言 i18n 支持
