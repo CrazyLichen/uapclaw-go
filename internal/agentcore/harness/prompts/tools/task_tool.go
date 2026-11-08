@@ -112,13 +112,18 @@ func GetTaskMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "task_tool"。
 func (p *TaskMetadataProvider) GetName() string { return "task_tool" }
+
+// GetDescription 返回 "task_tool" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *TaskMetadataProvider) GetDescription(language string) string {
 	if d, ok := taskToolDescription[language]; ok {
 		return d
 	}
 	return taskToolDescription["cn"]
 }
+
+// GetInputParams 返回 "task_tool" 工具的参数 Schema。
 func (p *TaskMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetTaskMetadataProviderInputParams(language)
 }

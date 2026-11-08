@@ -64,6 +64,7 @@ func NewShellProcessRegistry() *ShellProcessRegistry {
 	}
 }
 
+// Register 把一个正在运行的进程登记到会话名下，供后续取消或写入标准输入时查找。
 func (r *ShellProcessRegistry) Register(sessionID string, proc *os.Process) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" || proc == nil {
@@ -79,6 +80,7 @@ func (r *ShellProcessRegistry) Register(sessionID string, proc *os.Process) {
 	bucket[proc] = struct{}{}
 }
 
+// Unregister 把进程从会话名下的登记表中移除。
 func (r *ShellProcessRegistry) Unregister(sessionID string, proc *os.Process) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" || proc == nil {
@@ -195,6 +197,7 @@ func (r *ShellProcessRegistry) WriteStdinForSession(sessionID string, data []byt
 	return written, firstErr
 }
 
+// KillSession 结束某个会话名下登记的全部进程，返回实际结束的进程数。
 func (r *ShellProcessRegistry) KillSession(sessionID string) int {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -259,6 +262,7 @@ func (r *ShellProcessRegistry) KillSessionTree(sessionID string) int {
 	return killed
 }
 
+// ConsumeCancelled 读出该会话是否被取消过，读出后标记即清除，保证只生效一次。
 func (r *ShellProcessRegistry) ConsumeCancelled(sessionID string) bool {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {

@@ -638,6 +638,7 @@ func (r *JiuClawStreamEventRail) getPromptLanguage() string {
 // PerAgentCallbackFunc 签名为 func(ctx context.Context, agentCallbackContext any) error
 // 需要将 any 断言为 *AgentCallbackContext
 
+// wrapBeforeInvoke 适配通用回调签名，把入参断言成具体上下文后转调 BeforeInvoke。
 func (r *JiuClawStreamEventRail) wrapBeforeInvoke(ctx context.Context, cbcAny any) error {
 	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
 	if !ok {
@@ -646,6 +647,7 @@ func (r *JiuClawStreamEventRail) wrapBeforeInvoke(ctx context.Context, cbcAny an
 	return r.BeforeInvoke(ctx, cbc)
 }
 
+// wrapBeforeModelCall 适配通用回调签名，转调 BeforeModelCall。
 func (r *JiuClawStreamEventRail) wrapBeforeModelCall(ctx context.Context, cbcAny any) error {
 	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
 	if !ok {
@@ -654,6 +656,7 @@ func (r *JiuClawStreamEventRail) wrapBeforeModelCall(ctx context.Context, cbcAny
 	return r.BeforeModelCall(ctx, cbc)
 }
 
+// wrapAfterModelCall 适配通用回调签名，转调 AfterModelCall。
 func (r *JiuClawStreamEventRail) wrapAfterModelCall(ctx context.Context, cbcAny any) error {
 	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
 	if !ok {
@@ -662,6 +665,7 @@ func (r *JiuClawStreamEventRail) wrapAfterModelCall(ctx context.Context, cbcAny 
 	return r.AfterModelCall(ctx, cbc)
 }
 
+// wrapBeforeToolCall 适配通用回调签名，转调 BeforeToolCall。
 func (r *JiuClawStreamEventRail) wrapBeforeToolCall(ctx context.Context, cbcAny any) error {
 	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
 	if !ok {
@@ -670,6 +674,7 @@ func (r *JiuClawStreamEventRail) wrapBeforeToolCall(ctx context.Context, cbcAny 
 	return r.BeforeToolCall(ctx, cbc)
 }
 
+// wrapAfterToolCall 适配通用回调签名，转调 AfterToolCall。
 func (r *JiuClawStreamEventRail) wrapAfterToolCall(ctx context.Context, cbcAny any) error {
 	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
 	if !ok {
@@ -678,6 +683,7 @@ func (r *JiuClawStreamEventRail) wrapAfterToolCall(ctx context.Context, cbcAny a
 	return r.AfterToolCall(ctx, cbc)
 }
 
+// wrapOnModelException 适配通用回调签名，转调 OnModelException。
 func (r *JiuClawStreamEventRail) wrapOnModelException(ctx context.Context, cbcAny any) error {
 	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
 	if !ok {

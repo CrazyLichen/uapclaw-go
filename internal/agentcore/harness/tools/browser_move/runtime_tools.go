@@ -388,6 +388,7 @@ func (t *BrowserRuntimeHealthTool) Stream(_ context.Context, _ map[string]any, _
 
 // ── ToolCard 工厂函数 ──
 
+// newCancelToolCard 构造「取消正在运行的任务」工具卡。
 func newCancelToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_cancel_run", cancelDesc, []*cschema.Param{
 		cschema.NewStringParam("session_id", "Session ID of the task to cancel", true),
@@ -395,6 +396,7 @@ func newCancelToolCard() *tool.ToolCard {
 	}, nil)
 }
 
+// newClearCancelToolCard 构造「清除取消标记」工具卡。
 func newClearCancelToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_clear_cancel", clearCancelDesc, []*cschema.Param{
 		cschema.NewStringParam("session_id", "Session ID to clear", true),
@@ -402,6 +404,7 @@ func newClearCancelToolCard() *tool.ToolCard {
 	}, nil)
 }
 
+// newCustomActionToolCard 构造「执行自定义动作」工具卡。
 func newCustomActionToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_custom_action", customActionDesc, []*cschema.Param{
 		cschema.NewStringParam("action", "Name of the custom action to run", true),
@@ -411,14 +414,17 @@ func newCustomActionToolCard() *tool.ToolCard {
 	}, nil)
 }
 
+// newListActionsToolCard 构造「列出可用自定义动作」工具卡。
 func newListActionsToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_list_custom_actions", listActionsDesc, []*cschema.Param{}, nil)
 }
 
+// newRuntimeHealthToolCard 构造「查询运行时健康状态」工具卡。
 func newRuntimeHealthToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_runtime_health", runtimeHealthDesc, []*cschema.Param{}, nil)
 }
 
+// newProbeInteractivesToolCard 构造「探测页面可交互元素」工具卡。
 func newProbeInteractivesToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_probe_interactives", probeInteractivesDesc, []*cschema.Param{
 		cschema.NewIntegerParam("max_items", "Maximum number of elements to return. Default 50, hard-capped at 100.", false),
@@ -427,6 +433,7 @@ func newProbeInteractivesToolCard() *tool.ToolCard {
 	}, nil)
 }
 
+// newProbeCardsToolCard 构造「探测页面卡片元素」工具卡。
 func newProbeCardsToolCard() *tool.ToolCard {
 	return tool.NewToolCard("browser_probe_cards", probeCardsDesc, []*cschema.Param{
 		cschema.NewIntegerParam("max_cards", "Maximum number of cards to return. Default 20, hard-capped at 50.", false),

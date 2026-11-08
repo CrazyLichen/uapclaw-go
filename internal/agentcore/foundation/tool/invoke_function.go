@@ -116,6 +116,7 @@ func NewInvokeFunction[I any, O any](name string, fn func(context.Context, I, ..
 	return &InvokeFunction[I, O]{card: card, fn: fn, callTimeout: cfg.callTimeout}, nil
 }
 
+// Card 返回该工具的描述卡片。
 func (f *InvokeFunction[I, O]) Card() *ToolCard {
 	return f.card
 }
@@ -194,6 +195,7 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 	return result, nil
 }
 
+// Stream 流式执行工具，函数式工具不支持流式返回。
 func (f *InvokeFunction[I, O]) Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error) {
 	return nil, NewErrStreamNotSupported(f.card.String())
 }
@@ -210,6 +212,7 @@ func (f *InvokeFunction[I, O]) GetCallTimeout(inputs map[string]any, defaultTime
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// structToMap 把结构体转成字典，非字典结构的输出统一包成 {"result": v}。
 func structToMap(v any) (map[string]any, error) {
 	jsonBytes, err := json.Marshal(v)
 	if err != nil {

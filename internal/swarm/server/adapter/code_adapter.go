@@ -507,6 +507,7 @@ func (c *CodeAdapter) CleanupSessionAdapter(sessionID string) bool {
 	return c.deep.CleanupSessionAdapter(sessionID)
 }
 
+// Instance 返回适配器持有的 DeepAgent 实例。
 func (c *CodeAdapter) Instance() *harness.DeepAgent {
 	if c.deep == nil {
 		return nil

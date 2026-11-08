@@ -540,6 +540,7 @@ func filePathOrDefault(path string) string {
 	return path
 }
 
+// pathOrDefault 路径为空时返回当前目录，避免拼出非法路径。
 func pathOrDefault(path string) string {
 	if path == "" {
 		return "."

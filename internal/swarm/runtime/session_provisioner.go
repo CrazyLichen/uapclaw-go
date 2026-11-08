@@ -753,6 +753,7 @@ func (p *RuntimeSessionProvisioner) SetListTeamSessions(fn func(teamName string)
 	p.extra.ListTeamSessions = fn
 }
 
+// SetTeamManagerProvider 注入按渠道取团队管理器的函数，供会话切换时使用。
 func (p *RuntimeSessionProvisioner) SetTeamManagerProvider(fn func(channelID string) TeamSwitchPreparer) {
 	p.extra.teamManagerProvider = fn
 }

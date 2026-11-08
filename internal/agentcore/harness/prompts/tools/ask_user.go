@@ -81,13 +81,18 @@ func GetAskUserMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "ask_user"。
 func (p *AskUserMetadataProvider) GetName() string { return "ask_user" }
+
+// GetDescription 返回 "ask_user" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *AskUserMetadataProvider) GetDescription(language string) string {
 	if d, ok := askUserDescription[language]; ok {
 		return d
 	}
 	return askUserDescription["cn"]
 }
+
+// GetInputParams 返回 "ask_user" 工具的参数 Schema。
 func (p *AskUserMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetAskUserMetadataProviderInputParams(language)
 }

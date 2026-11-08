@@ -91,13 +91,18 @@ func GetLspToolMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "lsp"。
 func (p *LspToolMetadataProvider) GetName() string { return "lsp" }
+
+// GetDescription 返回 "lsp" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *LspToolMetadataProvider) GetDescription(language string) string {
 	if d, ok := lspToolDescription[language]; ok {
 		return d
 	}
 	return lspToolDescription["cn"]
 }
+
+// GetInputParams 返回 "lsp" 工具的参数 Schema。
 func (p *LspToolMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetLspToolMetadataProviderInputParams(language)
 }

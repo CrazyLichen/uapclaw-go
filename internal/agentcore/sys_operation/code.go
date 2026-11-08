@@ -80,12 +80,15 @@ func WithCodeOptions(options map[string]any) CodeOption {
 	return func(o *CodeOptions) { o.Options = options }
 }
 
+// ExecuteCode 执行一段代码并等待结束，基类默认返回未实现错误。
 func (b *BaseCodeOperation) ExecuteCode(_ context.Context, _ string, _ ...CodeOption) (*result.ExecuteCodeResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCode")
 }
 
+// ExecuteCodeStream 流式执行一段代码，基类默认返回未实现错误。
 func (b *BaseCodeOperation) ExecuteCodeStream(_ context.Context, _ string, _ ...CodeOption) (<-chan result.ExecuteCodeStreamResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCodeStream")
 }
 
+// ListTools 返回本操作可用的工具卡，基类默认不提供任何工具。
 func (b *BaseCodeOperation) ListTools() []*tool.ToolCard { return nil }

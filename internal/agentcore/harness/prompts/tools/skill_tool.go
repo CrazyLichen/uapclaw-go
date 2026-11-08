@@ -47,13 +47,18 @@ func GetSkillToolMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "skill_tool"。
 func (p *SkillToolMetadataProvider) GetName() string { return "skill_tool" }
+
+// GetDescription 返回 "skill_tool" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *SkillToolMetadataProvider) GetDescription(language string) string {
 	if d, ok := skillToolDescription[language]; ok {
 		return d
 	}
 	return skillToolDescription["cn"]
 }
+
+// GetInputParams 返回 "skill_tool" 工具的参数 Schema。
 func (p *SkillToolMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetSkillToolMetadataProviderInputParams(language)
 }

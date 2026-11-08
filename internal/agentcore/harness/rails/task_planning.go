@@ -471,6 +471,7 @@ func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterface
 	return nil
 }
 
+// AfterTaskIteration 每轮任务结束后把计划里的条目同步成待办列表。
 func (r *TaskPlanningRail) AfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	r.syncTodosFromPlan(ctx, cbc)
 	return nil
@@ -756,6 +757,7 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 		Msg("TaskPlanningRail synced todos from TaskPlan")
 }
 
+// buildModelSelectionString 把可选的模型清单拼成提示词里的一段说明。
 func (r *TaskPlanningRail) buildModelSelectionString() string {
 	if len(r.modelSelection) == 0 {
 		return ""

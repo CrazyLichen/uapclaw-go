@@ -15,6 +15,7 @@ type echoExtension struct {
 	recvCh chan []byte
 }
 
+// newEchoExtension 创建一个回环扩展实例。
 func newEchoExtension() *echoExtension {
 	return &echoExtension{recvCh: make(chan []byte, 16)}
 }

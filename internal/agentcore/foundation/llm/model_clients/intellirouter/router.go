@@ -194,12 +194,14 @@ func NewDeployment(config DeploymentConfig) *Deployment {
 	}
 }
 
+// IsHealthy 判断该部署当前是否处于可用状态。
 func (d *Deployment) IsHealthy() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.healthy
 }
 
+// GetAvgLatency 返回该部署的平均响应延迟（毫秒）。
 func (d *Deployment) GetAvgLatency() float64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -235,6 +237,7 @@ func (d *Deployment) GetStats() map[string]any {
 	}
 }
 
+// RecordSuccess 记录一次调用成功，顺带刷新平均延迟并清零连续失败计数。
 func (d *Deployment) RecordSuccess(latency time.Duration) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -256,6 +259,7 @@ func (d *Deployment) RecordSuccess(latency time.Duration) {
 	d.healthy = true
 }
 
+// RecordFailure 记录一次调用失败，连续失败越多冷却时间越长。
 func (d *Deployment) RecordFailure() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -269,6 +273,7 @@ func (d *Deployment) RecordFailure() {
 	)
 }
 
+// IsCoolingDown 判断该部署是否还在失败后的冷却期内。
 func (d *Deployment) IsCoolingDown() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -291,6 +296,7 @@ func NewHealthChecker(deployments []*Deployment, checkInterval, checkTimeout flo
 	}
 }
 
+// Start 启动后台协程，按固定间隔探测各部署的健康状态。
 func (h *HealthChecker) Start() {
 	if h.running.Load() {
 		return
@@ -301,6 +307,7 @@ func (h *HealthChecker) Start() {
 	go h.backgroundLoop(ctx)
 }
 
+// Stop 停止后台健康探测。
 func (h *HealthChecker) Stop() {
 	if !h.running.Load() {
 		return
@@ -345,6 +352,7 @@ func (h *HealthChecker) CheckAll() map[string]HealthCheckResult {
 	return results
 }
 
+// GetLastResults 返回最近一轮健康探测的结果快照。
 func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -388,12 +396,14 @@ func NewReliableRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	return router
 }
 
+// GetDeploymentsForModel 返回某个模型下配置的全部部署。
 func (r *ReliableRouter) GetDeploymentsForModel(model string) []*Deployment {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.modelIndices[model]
 }
 
+// GetModelList 返回当前可路由的模型名列表。
 func (r *ReliableRouter) GetModelList() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -404,6 +414,7 @@ func (r *ReliableRouter) GetModelList() []string {
 	return list
 }
 
+// SelectDeployment 为一次调用挑选一个可用部署，按路由策略并跳过不健康或冷却中的部署。
 func (r *ReliableRouter) SelectDeployment(modelName string) (*Deployment, error) {
 	return r.SelectDeploymentWithContext(modelName, nil)
 }
@@ -463,10 +474,12 @@ func (r *ReliableRouter) SelectDeploymentWithContext(modelName string, ctx *Rout
 	return r.strategy.Select(available, modelName, ctx)
 }
 
+// RecordSuccess 把调用成功的结果记到对应部署上。
 func (r *ReliableRouter) RecordSuccess(dep *Deployment, latency time.Duration) {
 	dep.RecordSuccess(latency)
 }
 
+// RecordSuccessWithSession 记录调用成功，并记住本次会话落在哪个部署上以便后续保持粘性。
 func (r *ReliableRouter) RecordSuccessWithSession(dep *Deployment, latency time.Duration, sessionID string) {
 	dep.RecordSuccess(latency)
 	if sessionID != "" {
@@ -474,10 +487,12 @@ func (r *ReliableRouter) RecordSuccessWithSession(dep *Deployment, latency time.
 	}
 }
 
+// RecordFailure 把调用失败的结果记到对应部署上。
 func (r *ReliableRouter) RecordFailure(dep *Deployment) {
 	dep.RecordFailure()
 }
 
+// UpdateDeployments 用最新配置替换部署列表，并重建按模型查找的索引。
 func (r *ReliableRouter) UpdateDeployments(newDeployments []*Deployment) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -529,6 +544,7 @@ func (r *ReliableRouter) GetStats() map[string]any {
 	return stats
 }
 
+// GetHealthCheckResults 返回各部署最近一次健康探测的结果。
 func (r *ReliableRouter) GetHealthCheckResults() map[string]HealthCheckResult {
 	if r.healthChecker == nil {
 		return nil
@@ -536,6 +552,7 @@ func (r *ReliableRouter) GetHealthCheckResults() map[string]HealthCheckResult {
 	return r.healthChecker.GetLastResults()
 }
 
+// StopHealthChecker 停止健康探测协程，通常在客户端关闭时调用。
 func (r *ReliableRouter) StopHealthChecker() {
 	if r.healthChecker != nil {
 		r.healthChecker.Stop()
@@ -595,6 +612,7 @@ func ResetRouterCache(key string) {
 	old.Close()
 }
 
+// Select 随机洗牌后返回第一个部署，实现简单的负载打散。
 func (s *SimpleShuffleStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -614,6 +632,7 @@ func (s *SimpleShuffleStrategy) Select(deployments []*Deployment, _ string, _ *R
 	return shuffled[0], nil
 }
 
+// Select 按轮询顺序挑下一个部署，保证各部署被均匀调用。
 func (s *RoundRobinStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -749,6 +768,7 @@ func (s *AdaptiveStrategy) Select(deployments []*Deployment, _ string, ctx *Rout
 	return scores[0].dep, nil
 }
 
+// Read 实现 io.Reader 接口，按顺序读出自带的字节数据。
 func (b *bytesReaderImpl) Read(p []byte) (int, error) {
 	if len(b.data) == 0 {
 		return 0, io.EOF
@@ -760,8 +780,10 @@ func (b *bytesReaderImpl) Read(p []byte) (int, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// bytesReader 把一段字节包装成 io.Reader。
 func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
 
+// withBytes 把字节数据挂到读取器上。
 func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
 	return &bytesReaderImpl{data: data}
 }
@@ -823,6 +845,7 @@ func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
 	return result
 }
 
+// backgroundLoop 按固定间隔循环探测，直到收到停止信号。
 func (h *HealthChecker) backgroundLoop(ctx context.Context) {
 	// 首次立即检查一次
 	h.CheckAll()
@@ -840,6 +863,7 @@ func (h *HealthChecker) backgroundLoop(ctx context.Context) {
 	}
 }
 
+// buildModelIndices 按模型名重建部署索引。
 func (r *ReliableRouter) buildModelIndices() {
 	r.modelIndices = make(map[string][]*Deployment)
 	for _, dep := range r.deployments {
@@ -887,6 +911,7 @@ func (r *ReliableRouter) getSessionAffinityDeployment(sessionID string, availabl
 	return nil
 }
 
+// updateSessionMapping 记录会话最近一次使用的部署，供下次保持粘性。
 func (r *ReliableRouter) updateSessionMapping(sessionID, deploymentID string) {
 	if sessionID == "" {
 		return
@@ -907,6 +932,7 @@ func (r *ReliableRouter) updateSessionMapping(sessionID, deploymentID string) {
 	}
 }
 
+// cleanupExpiredSessions 清掉过期的会话与部署的对应关系。
 func (r *ReliableRouter) cleanupExpiredSessions() {
 	now := time.Now()
 	for sid, entry := range r.sessionMap {
@@ -967,6 +993,7 @@ func init() {
 	routerCache = make(map[string]*ReliableRouter)
 }
 
+// createStrategy 按配置里的策略名创建对应的路由策略。
 func createStrategy(strategyName string, kwargs map[string]any) RouteStrategy {
 	switch strategyName {
 	case "round-robin":
@@ -986,6 +1013,7 @@ func createStrategy(strategyName string, kwargs map[string]any) RouteStrategy {
 	}
 }
 
+// makeRouterKey 按配置生成路由实例的唯一键，便于相同配置复用同一实例。
 func makeRouterKey(config *IntelliRouterClientConfig) string {
 	// 序列化 deployments
 	depIDs := make([]string, 0, len(config.Deployments))
@@ -1012,6 +1040,7 @@ func makeRouterKey(config *IntelliRouterClientConfig) string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(raw)))
 }
 
+// getFloatFromAny 把任意数值转成 float64，无法转换时第二个返回值为 false。
 func getFloatFromAny(v any) (float64, bool) {
 	if v == nil {
 		return 0, false

@@ -56,6 +56,7 @@ func (a *ReActAgent) GetLLM() (*llm.Model, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// initContext 按配置创建本轮的模型上下文，并同步刷新上下文重载工具。
 func (a *ReActAgent) initContext(ctx context.Context, sess sessioninterfaces.SessionFacade) (ceinterface.ModelContext, error) {
 	if a.contextEngine == nil {
 		return nil, nil
@@ -90,6 +91,7 @@ func (a *ReActAgent) initContext(ctx context.Context, sess sessioninterfaces.Ses
 	return modelCtx, nil
 }
 
+// getLLM 返回模型客户端，未初始化时按配置创建。
 func (a *ReActAgent) getLLM() (*llm.Model, error) {
 	if a.llm != nil {
 		return a.llm, nil
@@ -119,6 +121,7 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 	return a.llm, nil
 }
 
+// getTools 取当前可用的工具列表，取不到时直接报错而不是返回空列表。
 func (a *ReActAgent) getTools(ctx context.Context) ([]cschema.ToolInfoInterface, error) {
 	am := a.getAbilityManager()
 	if am == nil {
@@ -152,6 +155,7 @@ func (a *ReActAgent) parallelToolCalls() bool {
 	return a.config.ParallelToolCallsOrDefault()
 }
 
+// saveContexts 把本轮上下文写回会话存储，写失败只记日志不影响主流程。
 func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil || sess == nil {
 		return

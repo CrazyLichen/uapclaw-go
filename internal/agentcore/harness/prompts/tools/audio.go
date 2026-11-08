@@ -67,35 +67,50 @@ func GetAudioMetadataMetadataProviderInputParams(language string) map[string]any
 	}, []any{"audio_path_or_url"})
 }
 
+// GetName 返回工具名称 "audio_transcription"。
 func (p *AudioTranscriptionMetadataProvider) GetName() string { return "audio_transcription" }
+
+// GetDescription 返回 "audio_transcription" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *AudioTranscriptionMetadataProvider) GetDescription(language string) string {
 	if d, ok := audioTranscriptionDescription[language]; ok {
 		return d
 	}
 	return audioTranscriptionDescription["cn"]
 }
+
+// GetInputParams 返回 "audio_transcription" 工具的参数 Schema。
 func (p *AudioTranscriptionMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetAudioTranscriptionMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "audio_question_answering"。
 func (p *AudioQuestionAnsweringMetadataProvider) GetName() string { return "audio_question_answering" }
+
+// GetDescription 返回 "audio_question_answering" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *AudioQuestionAnsweringMetadataProvider) GetDescription(language string) string {
 	if d, ok := audioQuestionAnsweringDescription[language]; ok {
 		return d
 	}
 	return audioQuestionAnsweringDescription["cn"]
 }
+
+// GetInputParams 返回 "audio_question_answering" 工具的参数 Schema。
 func (p *AudioQuestionAnsweringMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetAudioQuestionAnsweringMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "audio_metadata"。
 func (p *AudioMetadataMetadataProvider) GetName() string { return "audio_metadata" }
+
+// GetDescription 返回 "audio_metadata" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *AudioMetadataMetadataProvider) GetDescription(language string) string {
 	if d, ok := audioMetadataDescription[language]; ok {
 		return d
 	}
 	return audioMetadataDescription["cn"]
 }
+
+// GetInputParams 返回 "audio_metadata" 工具的参数 Schema。
 func (p *AudioMetadataMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetAudioMetadataMetadataProviderInputParams(language)
 }

@@ -193,57 +193,82 @@ func GetReadMemoryMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "memory_search"。
 func (p *MemorySearchMetadataProvider) GetName() string { return "memory_search" }
+
+// GetDescription 返回 "memory_search" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *MemorySearchMetadataProvider) GetDescription(language string) string {
 	if d, ok := memorySearchDescription[language]; ok {
 		return d
 	}
 	return memorySearchDescription["cn"]
 }
+
+// GetInputParams 返回 "memory_search" 工具的参数 Schema。
 func (p *MemorySearchMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetMemorySearchMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "memory_get"。
 func (p *MemoryGetMetadataProvider) GetName() string { return "memory_get" }
+
+// GetDescription 返回 "memory_get" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *MemoryGetMetadataProvider) GetDescription(language string) string {
 	if d, ok := memoryGetDescription[language]; ok {
 		return d
 	}
 	return memoryGetDescription["cn"]
 }
+
+// GetInputParams 返回 "memory_get" 工具的参数 Schema。
 func (p *MemoryGetMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetMemoryGetMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "write_memory"。
 func (p *WriteMemoryMetadataProvider) GetName() string { return "write_memory" }
+
+// GetDescription 返回 "write_memory" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *WriteMemoryMetadataProvider) GetDescription(language string) string {
 	if d, ok := writeMemoryDescription[language]; ok {
 		return d
 	}
 	return writeMemoryDescription["cn"]
 }
+
+// GetInputParams 返回 "write_memory" 工具的参数 Schema。
 func (p *WriteMemoryMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetWriteMemoryMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "edit_memory"。
 func (p *EditMemoryMetadataProvider) GetName() string { return "edit_memory" }
+
+// GetDescription 返回 "edit_memory" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *EditMemoryMetadataProvider) GetDescription(language string) string {
 	if d, ok := editMemoryDescription[language]; ok {
 		return d
 	}
 	return editMemoryDescription["cn"]
 }
+
+// GetInputParams 返回 "edit_memory" 工具的参数 Schema。
 func (p *EditMemoryMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetEditMemoryMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "read_memory"。
 func (p *ReadMemoryMetadataProvider) GetName() string { return "read_memory" }
+
+// GetDescription 返回 "read_memory" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ReadMemoryMetadataProvider) GetDescription(language string) string {
 	if d, ok := readMemoryDescription[language]; ok {
 		return d
 	}
 	return readMemoryDescription["cn"]
 }
+
+// GetInputParams 返回 "read_memory" 工具的参数 Schema。
 func (p *ReadMemoryMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetReadMemoryMetadataProviderInputParams(language)
 }

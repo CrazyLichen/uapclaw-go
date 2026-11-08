@@ -397,6 +397,7 @@ func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged stream
 	}
 }
 
+// wakeMailboxIfInterruptCleared 打断结束后唤醒邮箱，让积压的输入继续被处理。
 func (sc *StreamController) wakeMailboxIfInterruptCleared(ctx context.Context) error {
 	if sc.wakeMailboxCb == nil {
 		return nil

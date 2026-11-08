@@ -295,6 +295,7 @@ func (l *ExtensionLoader) makeEventBridge(pc PluginClientFace, event string) cal
 // pluginHostAdapter 生产适配：go-plugin 子进程加载 → PluginClientFace
 type pluginHostAdapter struct{}
 
+// Load 加载插件目录下的扩展。
 func (a *pluginHostAdapter) Load(root string) (PluginClientFace, error) {
 	pc, err := plugin.LoadPluginClient(root)
 	if err != nil {
@@ -308,30 +309,37 @@ type pluginClientAdapter struct {
 	pc *plugin.PluginClient
 }
 
+// SetExtensionDir 设置扩展所在的目录。
 func (a *pluginClientAdapter) SetExtensionDir(ctx context.Context, path string) error {
 	return a.pc.SetExtensionDir(ctx, path)
 }
 
+// HandleEvent 把一个事件转交给插件侧处理。
 func (a *pluginClientAdapter) HandleEvent(ctx context.Context, event string, data map[string]any) (map[string]any, error) {
 	return a.pc.HandleEvent(ctx, event, data)
 }
 
+// Shutdown 关闭插件客户端。
 func (a *pluginClientAdapter) Shutdown(ctx context.Context) error {
 	return a.pc.Shutdown(ctx)
 }
 
+// Transport 返回插件提供的传输通道。
 func (a *pluginClientAdapter) Transport() transport.AgentTransport {
 	return plugin.NewGRPCPluginTransport(a.pc)
 }
 
+// Crypto 返回插件提供的加解密能力。
 func (a *pluginClientAdapter) Crypto() crypto.CryptoProvider {
 	return plugin.NewGRPCPluginCryptoProvider(a.pc)
 }
 
+// RegisterDeclarations 取回插件侧声明的能力清单。
 func (a *pluginClientAdapter) RegisterDeclarations(ctx context.Context) ([]plugin.Declaration, error) {
 	return a.pc.Register(ctx)
 }
 
+// Kill 结束插件进程。
 func (a *pluginClientAdapter) Kill() {
 	a.pc.Kill()
 }

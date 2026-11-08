@@ -48,4 +48,6 @@ type WorktreeEventHandler func(ctx context.Context, event WorktreeEvent) error
 
 // isWorktreeEvent 实现 WorktreeEvent 接口
 func (*WorktreeCreatedEvent) isWorktreeEvent() {}
+
+// isWorktreeEvent 标记 WorktreeRemovedEvent 属于 worktree 事件类型。
 func (*WorktreeRemovedEvent) isWorktreeEvent() {}

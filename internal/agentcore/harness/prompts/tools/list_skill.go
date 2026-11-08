@@ -39,13 +39,18 @@ func GetListSkillMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "list_skill"。
 func (p *ListSkillMetadataProvider) GetName() string { return "list_skill" }
+
+// GetDescription 返回 "list_skill" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ListSkillMetadataProvider) GetDescription(language string) string {
 	if d, ok := listSkillDescription[language]; ok {
 		return d
 	}
 	return listSkillDescription["cn"]
 }
+
+// GetInputParams 返回 "list_skill" 工具的参数 Schema。
 func (p *ListSkillMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetListSkillMetadataProviderInputParams(language)
 }

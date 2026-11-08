@@ -140,22 +140,31 @@ var roleTypeMap map[string]RoleType
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// GetRole 返回消息角色。
 func (m *DefaultMessage) GetRole() RoleType { return m.Role }
 
+// SetRole 设置消息角色。
 func (m *DefaultMessage) SetRole(role RoleType) { m.Role = role }
 
+// GetContent 返回消息内容。
 func (m *DefaultMessage) GetContent() MessageContent { return m.Content }
 
+// SetContent 设置消息内容。
 func (m *DefaultMessage) SetContent(content MessageContent) { m.Content = content }
 
+// GetName 返回消息名称（工具消息里指工具名）。
 func (m *DefaultMessage) GetName() string { return m.Name }
 
+// SetName 设置消息名称。
 func (m *DefaultMessage) SetName(name string) { m.Name = name }
 
+// GetMetadata 返回消息附带的元数据。
 func (m *DefaultMessage) GetMetadata() map[string]any { return m.Metadata }
 
+// SetMetadata 设置消息附带的元数据。
 func (m *DefaultMessage) SetMetadata(metadata map[string]any) { m.Metadata = metadata }
 
+// String 返回角色对应的字符串名称，超出枚举范围时返回带原始值的占位文本。
 func (r RoleType) String() string {
 	if int(r) >= 0 && int(r) < len(roleTypeStrings) {
 		return roleTypeStrings[r]
@@ -163,10 +172,12 @@ func (r RoleType) String() string {
 	return fmt.Sprintf("RoleType(%d)", int(r))
 }
 
+// MarshalJSON 把角色序列化成它的字符串名称。
 func (r RoleType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.String())
 }
 
+// UnmarshalJSON 从字符串名称还原角色，大小写不敏感，未知名称直接报错。
 func (r *RoleType) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -190,18 +201,22 @@ func NewMultiModalContent(parts ...ContentPart) MessageContent {
 	return MessageContent{parts: parts}
 }
 
+// IsText 判断该内容是不是纯文本（没有多模态分段）。
 func (c MessageContent) IsText() bool {
 	return c.parts == nil
 }
 
+// Text 返回纯文本内容。
 func (c MessageContent) Text() string {
 	return c.text
 }
 
+// Parts 返回多模态分段内容。
 func (c MessageContent) Parts() []ContentPart {
 	return c.parts
 }
 
+// String 返回内容的可读形式：纯文本直接返回，多模态转成 JSON。
 func (c MessageContent) String() string {
 	if c.IsText() {
 		return c.text
@@ -210,6 +225,7 @@ func (c MessageContent) String() string {
 	return string(data)
 }
 
+// MarshalJSON 按内容形态分别序列化成字符串或数组。
 func (c MessageContent) MarshalJSON() ([]byte, error) {
 	if c.IsText() {
 		return json.Marshal(c.text)

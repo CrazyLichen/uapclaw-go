@@ -99,13 +99,18 @@ func GetEnterWorktreeMetadataProviderInputParams(language string) map[string]any
 	}
 }
 
+// GetName 返回工具名称 "enter_worktree"。
 func (p *EnterWorktreeMetadataProvider) GetName() string { return "enter_worktree" }
+
+// GetDescription 返回 "enter_worktree" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *EnterWorktreeMetadataProvider) GetDescription(language string) string {
 	if d, ok := enterWorktreeDescription[language]; ok {
 		return d
 	}
 	return enterWorktreeDescription["cn"]
 }
+
+// GetInputParams 返回 "enter_worktree" 工具的参数 Schema。
 func (p *EnterWorktreeMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetEnterWorktreeMetadataProviderInputParams(language)
 }

@@ -148,6 +148,7 @@ func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataC
 	return container, nil
 }
 
+// Register 登记一种数据容器的创建与载入方式。
 func (f *DataContainerFactory) Register(containerType string, loader ContainerLoader, constructor func(opts ...ContainerOption) DataContainer) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -157,6 +158,7 @@ func (f *DataContainerFactory) Register(containerType string, loader ContainerLo
 	}
 }
 
+// Create 按类型新建一个空的数据容器。
 func (f *DataContainerFactory) Create(containerType string, opts ...ContainerOption) (DataContainer, error) {
 	f.mu.RLock()
 	entry, ok := f.entries[containerType]
@@ -167,6 +169,7 @@ func (f *DataContainerFactory) Create(containerType string, opts ...ContainerOpt
 	return entry.constructor(opts...), nil
 }
 
+// Load 按类型把已保存的数据还原成容器。
 func (f *DataContainerFactory) Load(containerType, agentID, sessionID string, serialized any) (DataContainer, error) {
 	f.mu.RLock()
 	entry, ok := f.entries[containerType]
@@ -177,6 +180,7 @@ func (f *DataContainerFactory) Load(containerType, agentID, sessionID string, se
 	return entry.loader(agentID, sessionID, serialized)
 }
 
+// Has 判断该类型是否已登记。
 func (f *DataContainerFactory) Has(containerType string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -184,12 +188,14 @@ func (f *DataContainerFactory) Has(containerType string) bool {
 	return ok
 }
 
+// ListTypes 返回已登记的全部容器类型。
 func (f *DataContainerFactory) ListTypes() []string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.listTypesLocked()
 }
 
+// Get 按状态键读取容器里的数据，不传键时返回整份状态快照。
 func (c *AgentSessionContainer) Get(key any) map[string]any {
 	if c.session == nil {
 		return nil
@@ -206,6 +212,7 @@ func (c *AgentSessionContainer) Get(key any) map[string]any {
 	return c.session.DumpState()
 }
 
+// Update 把数据合并写回会话状态。
 func (c *AgentSessionContainer) Update(data map[string]any) bool {
 	if c.session == nil {
 		return false
@@ -214,16 +221,19 @@ func (c *AgentSessionContainer) Update(data map[string]any) bool {
 	return true
 }
 
+// Dump 返回容器需要持久化的内容，这里不需要额外保存。
 func (c *AgentSessionContainer) Dump() (any, error) {
 	return map[string]any{}, nil
 }
 
+// SetSession 绑定该容器所属的会话状态访问器。
 func (c *AgentSessionContainer) SetSession(session StateAccessor) {
 	c.session = session
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// listTypesLocked 返回已登记的类型列表，调用方需自行持锁。
 func (f *DataContainerFactory) listTypesLocked() []string {
 	types := make([]string, 0, len(f.entries))
 	for t := range f.entries {

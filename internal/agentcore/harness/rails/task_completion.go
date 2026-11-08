@@ -522,10 +522,12 @@ func PromiseMatches(block string, expected string) bool {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// normalizePromiseText 把完成承诺文本里的连续空白压成一个空格，便于比较。
 func normalizePromiseText(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
+// extractOutput 从本轮任务回调的入参里取出结果文本。
 func extractOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.TaskIterationInputs)
 	if !ok || inputs == nil {
@@ -546,6 +548,7 @@ func extractOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 	return s
 }
 
+// notifyEvaluator 把结果文本交给完成承诺评估器判定是否真的完成。
 func notifyEvaluator(cbc *agentinterfaces.AgentCallbackContext, text string) {
 	agent := cbc.Agent()
 

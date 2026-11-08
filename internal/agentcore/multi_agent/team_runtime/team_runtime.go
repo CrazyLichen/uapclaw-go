@@ -497,6 +497,7 @@ func isResourceAlreadyExistsError(err error) bool {
 	return false
 }
 
+// wrapProvider 包一层 Agent 提供者，在创建成员时补上所属团队的运行时信息。
 func (tr *TeamRuntime) wrapProvider(provider resources_manager.AgentProvider, agentID string) resources_manager.AgentProvider {
 	return func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		agent, err := provider(ctx, card)

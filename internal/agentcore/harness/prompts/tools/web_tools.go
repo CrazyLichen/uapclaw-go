@@ -135,35 +135,50 @@ func GetFetchWebpageMetadataProviderInputParams(language string) map[string]any 
 	}
 }
 
+// GetName 返回工具名称 "free_search"。
 func (p *FreeSearchMetadataProvider) GetName() string { return "free_search" }
+
+// GetDescription 返回 "free_search" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *FreeSearchMetadataProvider) GetDescription(language string) string {
 	if d, ok := freeSearchDescription[language]; ok {
 		return d
 	}
 	return freeSearchDescription["cn"]
 }
+
+// GetInputParams 返回 "free_search" 工具的参数 Schema。
 func (p *FreeSearchMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetFreeSearchMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "paid_search"。
 func (p *PaidSearchMetadataProvider) GetName() string { return "paid_search" }
+
+// GetDescription 返回 "paid_search" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *PaidSearchMetadataProvider) GetDescription(language string) string {
 	if d, ok := paidSearchDescription[language]; ok {
 		return d
 	}
 	return paidSearchDescription["cn"]
 }
+
+// GetInputParams 返回 "paid_search" 工具的参数 Schema。
 func (p *PaidSearchMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetPaidSearchMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "fetch_webpage"。
 func (p *FetchWebpageMetadataProvider) GetName() string { return "fetch_webpage" }
+
+// GetDescription 返回 "fetch_webpage" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *FetchWebpageMetadataProvider) GetDescription(language string) string {
 	if d, ok := fetchWebpageDescription[language]; ok {
 		return d
 	}
 	return fetchWebpageDescription["cn"]
 }
+
+// GetInputParams 返回 "fetch_webpage" 工具的参数 Schema。
 func (p *FetchWebpageMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetFetchWebpageMetadataProviderInputParams(language)
 }

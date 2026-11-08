@@ -177,35 +177,50 @@ func GetSessionsCancelMetadataProviderInputParams(language string) map[string]an
 	}
 }
 
+// GetName 返回工具名称 "sessions_list"。
 func (p *SessionsListMetadataProvider) GetName() string { return "sessions_list" }
+
+// GetDescription 返回 "sessions_list" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *SessionsListMetadataProvider) GetDescription(language string) string {
 	if d, ok := sessionsListDescription[language]; ok {
 		return d
 	}
 	return sessionsListDescription["cn"]
 }
+
+// GetInputParams 返回 "sessions_list" 工具的参数 Schema。
 func (p *SessionsListMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetSessionsListMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "sessions_spawn"。
 func (p *SessionsSpawnMetadataProvider) GetName() string { return "sessions_spawn" }
+
+// GetDescription 返回 "sessions_spawn" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *SessionsSpawnMetadataProvider) GetDescription(language string) string {
 	if d, ok := sessionsSpawnDescription[language]; ok {
 		return d
 	}
 	return sessionsSpawnDescription["cn"]
 }
+
+// GetInputParams 返回 "sessions_spawn" 工具的参数 Schema。
 func (p *SessionsSpawnMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetSessionsSpawnMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "sessions_cancel"。
 func (p *SessionsCancelMetadataProvider) GetName() string { return "sessions_cancel" }
+
+// GetDescription 返回 "sessions_cancel" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *SessionsCancelMetadataProvider) GetDescription(language string) string {
 	if d, ok := sessionsCancelDescription[language]; ok {
 		return d
 	}
 	return sessionsCancelDescription["cn"]
 }
+
+// GetInputParams 返回 "sessions_cancel" 工具的参数 Schema。
 func (p *SessionsCancelMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetSessionsCancelMetadataProviderInputParams(language)
 }

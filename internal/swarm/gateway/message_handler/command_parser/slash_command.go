@@ -569,10 +569,12 @@ func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// normalizeSpaces 把连续空白压成一个空格并去掉首尾空白，便于比较命令文本。
 func normalizeSpaces(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
+// buildValidModeLines 拼出所有合法的 /mode 子命令文本集合。
 func buildValidModeLines() map[string]bool {
 	result := make(map[string]bool)
 	for _, sub := range allModeSubcommands() {
@@ -581,10 +583,12 @@ func buildValidModeLines() map[string]bool {
 	return result
 }
 
+// buildModeSubcommandValues 返回所有 /mode 子命令取值列表。
 func buildModeSubcommandValues() []string {
 	return allModeSubcommands()
 }
 
+// buildValidSwitchLines 拼出所有合法的 /switch 子命令文本集合。
 func buildValidSwitchLines() map[string]bool {
 	result := make(map[string]bool)
 	for _, sub := range allSwitchSubcommands() {
@@ -593,10 +597,12 @@ func buildValidSwitchLines() map[string]bool {
 	return result
 }
 
+// buildSwitchSubcommandValues 返回所有 /switch 子命令取值列表。
 func buildSwitchSubcommandValues() []string {
 	return allSwitchSubcommands()
 }
 
+// buildControlMessageTexts 汇总被当作控制指令而不是普通消息的文本集合。
 func buildControlMessageTexts() map[string]bool {
 	result := make(map[string]bool)
 	result["/new_session"] = true
@@ -688,6 +694,7 @@ func buildFirstBatchRegistry() []SlashCommandEntry {
 	}
 }
 
+// allModeSubcommands 返回所有 /mode 子命令名称。
 func allModeSubcommands() []string {
 	result := make([]string, 0, len(modeSubcommandStrings))
 	for _, v := range modeSubcommandStrings {
@@ -696,6 +703,7 @@ func allModeSubcommands() []string {
 	return result
 }
 
+// allSwitchSubcommands 返回所有 /switch 子命令名称。
 func allSwitchSubcommands() []string {
 	result := make([]string, 0, len(switchSubcommandStrings))
 	for _, v := range switchSubcommandStrings {

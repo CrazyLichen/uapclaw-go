@@ -236,13 +236,18 @@ func GetPowerShellMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "powershell"。
 func (p *PowerShellMetadataProvider) GetName() string { return "powershell" }
+
+// GetDescription 返回 "powershell" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *PowerShellMetadataProvider) GetDescription(language string) string {
 	if d, ok := powershellDescription[language]; ok {
 		return d
 	}
 	return powershellDescription["cn"]
 }
+
+// GetInputParams 返回 "powershell" 工具的参数 Schema。
 func (p *PowerShellMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetPowerShellMetadataProviderInputParams(language)
 }

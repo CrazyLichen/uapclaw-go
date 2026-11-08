@@ -760,6 +760,7 @@ func legacyPayloadWithinLimit(legacy map[string]any) map[string]any {
 	return slim
 }
 
+// isTerminalPayload 判断这个负载是不是一次会话的终态事件。
 func isTerminalPayload(pl map[string]any) bool {
 	if len(pl) != 1 {
 		return false
@@ -772,6 +773,7 @@ func isTerminalPayload(pl map[string]any) bool {
 	return ok && b
 }
 
+// emptyCompleteMarker 判断负载既是「完成」标记又没有实际内容，这类帧要丢弃。
 func emptyCompleteMarker(body map[string]any, res any) bool {
 	// body 等于 {"result": {}} 判断
 	if len(body) == 1 {
@@ -797,10 +799,12 @@ func emptyCompleteMarker(body map[string]any, res any) bool {
 	return len(keys) == 1 && keys[0] == "result"
 }
 
+// copyMap 浅拷贝一个字典，避免调用方改动影响原始数据。
 func copyMap(m map[string]any) map[string]any {
 	return maps.Clone(m)
 }
 
+// toBool 把任意值按真假语义转成布尔，无法判断时返回 false。
 func toBool(v any) bool {
 	if v == nil {
 		return false

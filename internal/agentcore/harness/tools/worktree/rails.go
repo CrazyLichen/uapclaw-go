@@ -379,15 +379,22 @@ func (a *AutoSetupRail) AfterWorktreeExit(_ context.Context, _ *interfaces.Agent
 
 // ─── AutoSetupRail 其余空方法实现 ───
 
+// OnWorktreeFileWrite AutoSetupRail 不拦截文件写入，始终放行。
 func (a *AutoSetupRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
+
+// BeforeWorktreeCommit AutoSetupRail 不改动提交信息。
 func (a *AutoSetupRail) BeforeWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, message string, _ []string) (*string, error) {
 	return &message, nil
 }
+
+// AfterWorktreeCommit AutoSetupRail 提交后无需处理，直接返回。
 func (a *AutoSetupRail) AfterWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
+
+// OnWorktreeSync AutoSetupRail 不同步文件，原样返回入参列表。
 func (a *AutoSetupRail) OnWorktreeSync(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string, files []string) []string {
 	return files
 }
@@ -426,15 +433,22 @@ func (d *DiffSummaryRail) AfterWorktreeExit(_ context.Context, _ *interfaces.Age
 
 // ─── DiffSummaryRail 其余空方法实现 ───
 
+// OnWorktreeFileWrite DiffSummaryRail 不拦截文件写入，始终放行。
 func (d *DiffSummaryRail) OnWorktreeFileWrite(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) bool {
 	return true
 }
+
+// BeforeWorktreeCommit DiffSummaryRail 不改动提交信息。
 func (d *DiffSummaryRail) BeforeWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, message string, _ []string) (*string, error) {
 	return &message, nil
 }
+
+// AfterWorktreeCommit DiffSummaryRail 提交后无需处理，直接返回。
 func (d *DiffSummaryRail) AfterWorktreeCommit(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string) error {
 	return nil
 }
+
+// OnWorktreeSync DiffSummaryRail 不同步文件，原样返回入参列表。
 func (d *DiffSummaryRail) OnWorktreeSync(_ context.Context, _ *interfaces.AgentCallbackContext, _ *WorktreeSession, _ string, files []string) []string {
 	return files
 }

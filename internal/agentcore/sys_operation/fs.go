@@ -245,44 +245,55 @@ func WithFsOptions(options map[string]any) FsOption {
 	return func(o *FsOptions) { o.Options = options }
 }
 
+// ReadFile 读取文件内容，基类默认返回未实现错误，由各平台实现覆盖。
 func (b *BaseFsOperation) ReadFile(_ context.Context, _ string, _ ...FsOption) (*result.ReadFileResult, error) {
 	return nil, fmt.Errorf("未实现: ReadFile")
 }
 
+// ReadFileStream 流式读取文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) ReadFileStream(_ context.Context, _ string, _ ...FsOption) (<-chan result.ReadFileStreamResult, error) {
 	return nil, fmt.Errorf("未实现: ReadFileStream")
 }
 
+// WriteFile 写入文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) WriteFile(_ context.Context, _ string, _ string, _ ...FsOption) (*result.WriteFileResult, error) {
 	return nil, fmt.Errorf("未实现: WriteFile")
 }
 
+// UploadFile 上传文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) UploadFile(_ context.Context, _ string, _ string, _ ...FsOption) (*result.UploadFileResult, error) {
 	return nil, fmt.Errorf("未实现: UploadFile")
 }
 
+// UploadFileStream 流式上传文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) UploadFileStream(_ context.Context, _ string, _ string, _ ...FsOption) (<-chan result.UploadFileStreamResult, error) {
 	return nil, fmt.Errorf("未实现: UploadFileStream")
 }
 
+// DownloadFile 下载文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ ...FsOption) (*result.DownloadFileResult, error) {
 	return nil, fmt.Errorf("未实现: DownloadFile")
 }
 
+// DownloadFileStream 流式下载文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...FsOption) (<-chan result.DownloadFileStreamResult, error) {
 	return nil, fmt.Errorf("未实现: DownloadFileStream")
 }
 
+// ListFiles 列出目录下的文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) ListFiles(_ context.Context, _ string, _ ...FsOption) (*result.ListFilesResult, error) {
 	return nil, fmt.Errorf("未实现: ListFiles")
 }
 
+// ListDirectories 列出子目录，基类默认返回未实现错误。
 func (b *BaseFsOperation) ListDirectories(_ context.Context, _ string, _ ...FsOption) (*result.ListDirsResult, error) {
 	return nil, fmt.Errorf("未实现: ListDirectories")
 }
 
+// SearchFiles 按模式搜索文件，基类默认返回未实现错误。
 func (b *BaseFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...FsOption) (*result.SearchFilesResult, error) {
 	return nil, fmt.Errorf("未实现: SearchFiles")
 }
 
+// ListTools 返回本操作可用的工具卡，基类默认不提供任何工具。
 func (b *BaseFsOperation) ListTools() []*tool.ToolCard { return nil }

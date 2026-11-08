@@ -382,46 +382,66 @@ func GetTodoGetMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "todo_create"。
 func (p *TodoCreateMetadataProvider) GetName() string { return "todo_create" }
+
+// GetDescription 返回 "todo_create" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *TodoCreateMetadataProvider) GetDescription(language string) string {
 	if d, ok := todoCreateDescription[language]; ok {
 		return d
 	}
 	return todoCreateDescription["cn"]
 }
+
+// GetInputParams 返回 "todo_create" 工具的参数 Schema。
 func (p *TodoCreateMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetTodoCreateMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "todo_list"。
 func (p *TodoListMetadataProvider) GetName() string { return "todo_list" }
+
+// GetDescription 返回 "todo_list" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *TodoListMetadataProvider) GetDescription(language string) string {
 	if d, ok := todoListDescription[language]; ok {
 		return d
 	}
 	return todoListDescription["cn"]
 }
+
+// GetInputParams 返回 "todo_list" 工具的参数 Schema。
 func (p *TodoListMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetTodoListMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "todo_modify"。
 func (p *TodoModifyMetadataProvider) GetName() string { return "todo_modify" }
+
+// GetDescription 返回 "todo_modify" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *TodoModifyMetadataProvider) GetDescription(language string) string {
 	if d, ok := todoModifyDescription[language]; ok {
 		return d
 	}
 	return todoModifyDescription["cn"]
 }
+
+// GetInputParams 返回 "todo_modify" 工具的参数 Schema。
 func (p *TodoModifyMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetTodoModifyMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "todo_get"。
 func (p *TodoGetMetadataProvider) GetName() string { return "todo_get" }
+
+// GetDescription 返回 "todo_get" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *TodoGetMetadataProvider) GetDescription(language string) string {
 	if d, ok := todoGetDescription[language]; ok {
 		return d
 	}
 	return todoGetDescription["cn"]
 }
+
+// GetInputParams 返回 "todo_get" 工具的参数 Schema。
 func (p *TodoGetMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetTodoGetMetadataProviderInputParams(language)
 }

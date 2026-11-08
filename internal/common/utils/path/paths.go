@@ -408,6 +408,7 @@ func (s *pathCacheSlot) setValue(value any) {
 	cacheMu.Unlock()
 }
 
+// getResolvedPaths 返回解析好的各类目录路径，首次调用时算一次并缓存。
 func getResolvedPaths() *ResolvedPaths {
 	slot := loadSlot(&resolvedSlot)
 	slot.once.Do(func() {

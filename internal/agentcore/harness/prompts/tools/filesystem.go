@@ -252,68 +252,98 @@ func GetGrepMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "read_file"。
 func (p *ReadFileMetadataProvider) GetName() string { return "read_file" }
+
+// GetDescription 返回 "read_file" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ReadFileMetadataProvider) GetDescription(language string) string {
 	if d, ok := readFileDescription[language]; ok {
 		return d
 	}
 	return readFileDescription["cn"]
 }
+
+// GetInputParams 返回 "read_file" 工具的参数 Schema。
 func (p *ReadFileMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetReadFileMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "write_file"。
 func (p *WriteFileMetadataProvider) GetName() string { return "write_file" }
+
+// GetDescription 返回 "write_file" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *WriteFileMetadataProvider) GetDescription(language string) string {
 	if d, ok := writeFileDescription[language]; ok {
 		return d
 	}
 	return writeFileDescription["cn"]
 }
+
+// GetInputParams 返回 "write_file" 工具的参数 Schema。
 func (p *WriteFileMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetWriteFileMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "edit_file"。
 func (p *EditFileMetadataProvider) GetName() string { return "edit_file" }
+
+// GetDescription 返回 "edit_file" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *EditFileMetadataProvider) GetDescription(language string) string {
 	if d, ok := editFileDescription[language]; ok {
 		return d
 	}
 	return editFileDescription["cn"]
 }
+
+// GetInputParams 返回 "edit_file" 工具的参数 Schema。
 func (p *EditFileMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetEditFileMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "glob"。
 func (p *GlobMetadataProvider) GetName() string { return "glob" }
+
+// GetDescription 返回 "glob" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *GlobMetadataProvider) GetDescription(language string) string {
 	if d, ok := globDescription[language]; ok {
 		return d
 	}
 	return globDescription["cn"]
 }
+
+// GetInputParams 返回 "glob" 工具的参数 Schema。
 func (p *GlobMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetGlobMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "list_files"。
 func (p *ListDirMetadataProvider) GetName() string { return "list_files" }
+
+// GetDescription 返回 "list_files" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ListDirMetadataProvider) GetDescription(language string) string {
 	if d, ok := listDirDescription[language]; ok {
 		return d
 	}
 	return listDirDescription["cn"]
 }
+
+// GetInputParams 返回 "list_files" 工具的参数 Schema。
 func (p *ListDirMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetListDirMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "grep"。
 func (p *GrepMetadataProvider) GetName() string { return "grep" }
+
+// GetDescription 返回 "grep" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *GrepMetadataProvider) GetDescription(language string) string {
 	if d, ok := grepDescription[language]; ok {
 		return d
 	}
 	return grepDescription["cn"]
 }
+
+// GetInputParams 返回 "grep" 工具的参数 Schema。
 func (p *GrepMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetGrepMetadataProviderInputParams(language)
 }

@@ -80,6 +80,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// String 返回 Shell 类型的可读名称。
 func (s ShellType) String() string {
 	switch s {
 	case ShellTypeAuto:
@@ -159,24 +160,30 @@ func (b *BaseShellOperation) ExecuteCmd(_ context.Context, _ string, _ ...ShellO
 	return nil, fmt.Errorf("未实现: ExecuteCmd")
 }
 
+// ExecuteCmdStream 流式执行命令，基类默认返回未实现错误。
 func (b *BaseShellOperation) ExecuteCmdStream(_ context.Context, _ string, _ ...ShellOption) (<-chan result.ExecuteCmdStreamResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCmdStream")
 }
 
+// ExecuteCmdBackground 后台执行命令，基类默认返回未实现错误。
 func (b *BaseShellOperation) ExecuteCmdBackground(_ context.Context, _ string, _ ...ShellOption) (*result.ExecuteCmdBackgroundResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCmdBackground")
 }
 
+// ListTools 返回本操作可用的工具卡，基类默认不提供任何工具。
 func (b *BaseShellOperation) ListTools() []*tool.ToolCard { return nil }
 
+// WriteStdin 向正在运行的命令写入标准输入，基类默认返回未实现错误。
 func (b *BaseShellOperation) WriteStdin(_ context.Context, _ string, _ string, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: WriteStdin")
 }
 
+// KillProcess 结束指定进程，基类默认返回未实现错误。
 func (b *BaseShellOperation) KillProcess(_ context.Context, _ string, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: KillProcess")
 }
 
+// ListProcesses 列出正在运行的进程，基类默认返回未实现错误。
 func (b *BaseShellOperation) ListProcesses(_ context.Context, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: ListProcesses")
 }

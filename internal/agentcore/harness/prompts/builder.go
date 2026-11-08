@@ -99,6 +99,7 @@ func (b *SystemPromptBuilder) Build() string {
 	}
 }
 
+// BuildReport 生成一份系统提示词的组装报告，便于排查各节内容来源。
 func (b *SystemPromptBuilder) BuildReport() *PromptReport {
 	return NewPromptReport(b)
 }

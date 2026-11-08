@@ -174,6 +174,7 @@ func NewCallbackFramework() *CallbackFramework {
 	return fw
 }
 
+// OnLLM 注册模型调用事件的回调，额外选项（优先级、超时、重试等）由 opts 给出。
 func (fw *CallbackFramework) OnLLM(event LLMCallEventType, fn LLMCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[LLMCallbackFunc]{
@@ -196,6 +197,7 @@ func (fw *CallbackFramework) OnLLM(event LLMCallEventType, fn LLMCallbackFunc, o
 	sortCallbacks(fw.llmCallbacks[event])
 }
 
+// OffLLM 注销模型调用事件上指定的回调函数。
 func (fw *CallbackFramework) OffLLM(event LLMCallEventType, fn LLMCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -213,6 +215,7 @@ func (fw *CallbackFramework) OffLLM(event LLMCallEventType, fn LLMCallbackFunc) 
 	}
 }
 
+// TriggerLLM 触发模型调用事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -228,6 +231,7 @@ func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventD
 	return results
 }
 
+// OnTool 注册工具调用事件的回调。
 func (fw *CallbackFramework) OnTool(event ToolCallEventType, fn ToolCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[ToolCallbackFunc]{
@@ -250,6 +254,7 @@ func (fw *CallbackFramework) OnTool(event ToolCallEventType, fn ToolCallbackFunc
 	sortCallbacks(fw.toolCallbacks[event])
 }
 
+// OffTool 注销工具调用事件上指定的回调函数。
 func (fw *CallbackFramework) OffTool(event ToolCallEventType, fn ToolCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -267,6 +272,7 @@ func (fw *CallbackFramework) OffTool(event ToolCallEventType, fn ToolCallbackFun
 	}
 }
 
+// TriggerTool 触发工具调用事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -282,6 +288,7 @@ func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEven
 	return results
 }
 
+// OnSession 注册会话事件的回调。
 func (fw *CallbackFramework) OnSession(event SessionCallEventType, fn SessionCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[SessionCallbackFunc]{
@@ -304,6 +311,7 @@ func (fw *CallbackFramework) OnSession(event SessionCallEventType, fn SessionCal
 	sortCallbacks(fw.sessionCallbacks[event])
 }
 
+// OffSession 注销会话事件上指定的回调函数。
 func (fw *CallbackFramework) OffSession(event SessionCallEventType, fn SessionCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -321,6 +329,7 @@ func (fw *CallbackFramework) OffSession(event SessionCallEventType, fn SessionCa
 	}
 }
 
+// TriggerSession 触发会话事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -336,6 +345,7 @@ func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCa
 	return results
 }
 
+// OnCustom 注册自定义事件的回调，事件名由调用方自由命名。
 func (fw *CallbackFramework) OnCustom(event string, fn CustomCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[CustomCallbackFunc]{
@@ -358,6 +368,7 @@ func (fw *CallbackFramework) OnCustom(event string, fn CustomCallbackFunc, opts 
 	sortCallbacks(fw.customCallbacks[event])
 }
 
+// OffCustom 注销自定义事件上指定的回调函数。
 func (fw *CallbackFramework) OffCustom(event string, fn CustomCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -375,6 +386,7 @@ func (fw *CallbackFramework) OffCustom(event string, fn CustomCallbackFunc) {
 	}
 }
 
+// OffAllCustom 注销某个自定义事件上的全部回调。
 func (fw *CallbackFramework) OffAllCustom(event string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -394,6 +406,7 @@ func (fw *CallbackFramework) OffAllCustom(event string) {
 	}
 }
 
+// TriggerCustom 触发自定义事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerCustom(ctx context.Context, event string, data map[string]any) []any {
 	if ctx == nil {
 		return nil
@@ -409,12 +422,14 @@ func (fw *CallbackFramework) TriggerCustom(ctx context.Context, event string, da
 	return results
 }
 
+// GetCallbacksForTest 返回某个模型事件上已注册的回调列表，仅供测试断言使用。
 func (fw *CallbackFramework) GetCallbacksForTest(event LLMCallEventType) []*CallbackInfo[LLMCallbackFunc] {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
 	return fw.llmCallbacks[event]
 }
 
+// OnContext 注册上下文事件的回调。
 func (fw *CallbackFramework) OnContext(event ContextCallEventType, fn ContextCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[ContextCallbackFunc]{
@@ -437,6 +452,7 @@ func (fw *CallbackFramework) OnContext(event ContextCallEventType, fn ContextCal
 	sortCallbacks(fw.contextCallbacks[event])
 }
 
+// OffContext 注销上下文事件上指定的回调函数。
 func (fw *CallbackFramework) OffContext(event ContextCallEventType, fn ContextCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -454,6 +470,7 @@ func (fw *CallbackFramework) OffContext(event ContextCallEventType, fn ContextCa
 	}
 }
 
+// TriggerContext 触发上下文事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -469,6 +486,7 @@ func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCa
 	return results
 }
 
+// OnGlobalAgent 注册全局 Agent 事件的回调。
 func (fw *CallbackFramework) OnGlobalAgent(event GlobalAgentEventType, fn GlobalAgentCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[GlobalAgentCallbackFunc]{
@@ -491,6 +509,7 @@ func (fw *CallbackFramework) OnGlobalAgent(event GlobalAgentEventType, fn Global
 	sortCallbacks(fw.globalAgentCallbacks[event])
 }
 
+// OffGlobalAgent 注销全局 Agent 事件上指定的回调函数。
 func (fw *CallbackFramework) OffGlobalAgent(event GlobalAgentEventType, fn GlobalAgentCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -508,6 +527,7 @@ func (fw *CallbackFramework) OffGlobalAgent(event GlobalAgentEventType, fn Globa
 	}
 }
 
+// TriggerGlobalAgent 触发全局 Agent 事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerGlobalAgent(ctx context.Context, data *GlobalAgentEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -523,6 +543,7 @@ func (fw *CallbackFramework) TriggerGlobalAgent(ctx context.Context, data *Globa
 	return results
 }
 
+// OnPerAgent 注册单个 Agent 事件的回调，事件名由调用方给出。
 func (fw *CallbackFramework) OnPerAgent(event string, fn PerAgentCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[PerAgentCallbackFunc]{
@@ -545,6 +566,7 @@ func (fw *CallbackFramework) OnPerAgent(event string, fn PerAgentCallbackFunc, o
 	sortCallbacks(fw.perAgentCallbacks[event])
 }
 
+// OffPerAgent 注销单个 Agent 事件上指定的回调函数。
 func (fw *CallbackFramework) OffPerAgent(event string, fn PerAgentCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -562,6 +584,7 @@ func (fw *CallbackFramework) OffPerAgent(event string, fn PerAgentCallbackFunc) 
 	}
 }
 
+// OffAllPerAgent 注销某个单个 Agent 事件上的全部回调。
 func (fw *CallbackFramework) OffAllPerAgent(event string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -581,6 +604,7 @@ func (fw *CallbackFramework) OffAllPerAgent(event string) {
 	}
 }
 
+// TriggerPerAgent 触发单个 Agent 事件，把回调返回的错误汇总后返回。
 func (fw *CallbackFramework) TriggerPerAgent(ctx context.Context, event string, agentCallbackContext any) error {
 	if ctx == nil {
 		return nil
@@ -596,6 +620,7 @@ func (fw *CallbackFramework) TriggerPerAgent(ctx context.Context, event string, 
 	return err
 }
 
+// HasPerAgentHooks 判断某个单个 Agent 事件上是否注册过回调。
 func (fw *CallbackFramework) HasPerAgentHooks(event string) bool {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -603,6 +628,7 @@ func (fw *CallbackFramework) HasPerAgentHooks(event string) bool {
 	return ok && len(callbacks) > 0
 }
 
+// RegisterLLMTransformIO 注册模型调用前后的输入输出转换函数。
 func (fw *CallbackFramework) RegisterLLMTransformIO(
 	inputEvent LLMCallEventType,
 	outputEvent LLMCallEventType,
@@ -619,6 +645,7 @@ func (fw *CallbackFramework) RegisterLLMTransformIO(
 	fw.llmTransformIO[outputEvent] = entry
 }
 
+// TransformLLMIOInput 用已注册的转换函数加工模型调用前的输入。
 func (fw *CallbackFramework) TransformLLMIOInput(ctx context.Context, event LLMCallEventType, input any) any {
 	fw.mu.RLock()
 	entry, ok := fw.llmTransformIO[event]
@@ -629,6 +656,7 @@ func (fw *CallbackFramework) TransformLLMIOInput(ctx context.Context, event LLMC
 	return entry.inputFn(ctx, event, input)
 }
 
+// TransformLLMIOOutput 用已注册的转换函数加工模型调用的输出。
 func (fw *CallbackFramework) TransformLLMIOOutput(ctx context.Context, event LLMCallEventType, output any) any {
 	fw.mu.RLock()
 	entry, ok := fw.llmTransformIO[event]
@@ -639,6 +667,7 @@ func (fw *CallbackFramework) TransformLLMIOOutput(ctx context.Context, event LLM
 	return entry.outputFn(ctx, event, output)
 }
 
+// RegisterAgentTransformIO 注册 Agent 调用前后的输入输出转换函数。
 func (fw *CallbackFramework) RegisterAgentTransformIO(
 	inputEvent GlobalAgentEventType,
 	outputEvent GlobalAgentEventType,
@@ -655,6 +684,7 @@ func (fw *CallbackFramework) RegisterAgentTransformIO(
 	fw.agentTransformIO[outputEvent] = entry
 }
 
+// TransformAgentIOInput 用已注册的转换函数加工 Agent 调用前的输入。
 func (fw *CallbackFramework) TransformAgentIOInput(ctx context.Context, event GlobalAgentEventType, input any) any {
 	fw.mu.RLock()
 	entry, ok := fw.agentTransformIO[event]
@@ -665,6 +695,7 @@ func (fw *CallbackFramework) TransformAgentIOInput(ctx context.Context, event Gl
 	return entry.inputFn(ctx, event, input)
 }
 
+// TransformAgentIOOutput 用已注册的转换函数加工 Agent 调用的输出。
 func (fw *CallbackFramework) TransformAgentIOOutput(ctx context.Context, event GlobalAgentEventType, output any) any {
 	fw.mu.RLock()
 	entry, ok := fw.agentTransformIO[event]
@@ -675,6 +706,7 @@ func (fw *CallbackFramework) TransformAgentIOOutput(ctx context.Context, event G
 	return entry.outputFn(ctx, event, output)
 }
 
+// RegisterToolTransformIO 注册工具调用前后的输入输出转换函数。
 func (fw *CallbackFramework) RegisterToolTransformIO(
 	inputEvent ToolCallEventType,
 	outputEvent ToolCallEventType,
@@ -691,6 +723,7 @@ func (fw *CallbackFramework) RegisterToolTransformIO(
 	fw.toolTransformIO[outputEvent] = entry
 }
 
+// TransformToolIOInput 用已注册的转换函数加工工具调用前的输入。
 func (fw *CallbackFramework) TransformToolIOInput(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any {
 	fw.mu.RLock()
 	entry, ok := fw.toolTransformIO[event]
@@ -701,6 +734,7 @@ func (fw *CallbackFramework) TransformToolIOInput(ctx context.Context, event Too
 	return entry.inputFn(ctx, event, input)
 }
 
+// TransformToolIOOutput 用已注册的转换函数加工工具调用的输出。
 func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any {
 	fw.mu.RLock()
 	entry, ok := fw.toolTransformIO[event]
@@ -711,6 +745,7 @@ func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event To
 	return entry.outputFn(ctx, event, output)
 }
 
+// OnWorkflow 注册工作流事件的回调。
 func (fw *CallbackFramework) OnWorkflow(event WorkflowEventType, fn WorkflowCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[WorkflowCallbackFunc]{
@@ -733,6 +768,7 @@ func (fw *CallbackFramework) OnWorkflow(event WorkflowEventType, fn WorkflowCall
 	sortCallbacks(fw.workflowCallbacks[event])
 }
 
+// OffWorkflow 注销工作流事件上指定的回调函数。
 func (fw *CallbackFramework) OffWorkflow(event WorkflowEventType, fn WorkflowCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -750,6 +786,7 @@ func (fw *CallbackFramework) OffWorkflow(event WorkflowEventType, fn WorkflowCal
 	}
 }
 
+// TriggerWorkflow 触发工作流事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerWorkflow(ctx context.Context, data *WorkflowEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -765,6 +802,7 @@ func (fw *CallbackFramework) TriggerWorkflow(ctx context.Context, data *Workflow
 	return results
 }
 
+// OnAgentTeam 注册 Agent 团队事件的回调。
 func (fw *CallbackFramework) OnAgentTeam(event AgentTeamEventType, fn AgentTeamCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[AgentTeamCallbackFunc]{
@@ -787,6 +825,7 @@ func (fw *CallbackFramework) OnAgentTeam(event AgentTeamEventType, fn AgentTeamC
 	sortCallbacks(fw.agentTeamCallbacks[event])
 }
 
+// OffAgentTeam 注销 Agent 团队事件上指定的回调函数。
 func (fw *CallbackFramework) OffAgentTeam(event AgentTeamEventType, fn AgentTeamCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -804,6 +843,7 @@ func (fw *CallbackFramework) OffAgentTeam(event AgentTeamEventType, fn AgentTeam
 	}
 }
 
+// TriggerAgentTeam 触发 Agent 团队事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerAgentTeam(ctx context.Context, data *AgentTeamEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -819,6 +859,7 @@ func (fw *CallbackFramework) TriggerAgentTeam(ctx context.Context, data *AgentTe
 	return results
 }
 
+// OnRetrieval 注册检索事件的回调。
 func (fw *CallbackFramework) OnRetrieval(event RetrievalEventType, fn RetrievalCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[RetrievalCallbackFunc]{
@@ -841,6 +882,7 @@ func (fw *CallbackFramework) OnRetrieval(event RetrievalEventType, fn RetrievalC
 	sortCallbacks(fw.retrievalCallbacks[event])
 }
 
+// OffRetrieval 注销检索事件上指定的回调函数。
 func (fw *CallbackFramework) OffRetrieval(event RetrievalEventType, fn RetrievalCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -858,6 +900,7 @@ func (fw *CallbackFramework) OffRetrieval(event RetrievalEventType, fn Retrieval
 	}
 }
 
+// TriggerRetrieval 触发检索事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerRetrieval(ctx context.Context, data *RetrievalEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -873,6 +916,7 @@ func (fw *CallbackFramework) TriggerRetrieval(ctx context.Context, data *Retriev
 	return results
 }
 
+// OnMemory 注册记忆事件的回调。
 func (fw *CallbackFramework) OnMemory(event MemoryEventType, fn MemoryCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[MemoryCallbackFunc]{
@@ -895,6 +939,7 @@ func (fw *CallbackFramework) OnMemory(event MemoryEventType, fn MemoryCallbackFu
 	sortCallbacks(fw.memoryCallbacks[event])
 }
 
+// OffMemory 注销记忆事件上指定的回调函数。
 func (fw *CallbackFramework) OffMemory(event MemoryEventType, fn MemoryCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -912,6 +957,7 @@ func (fw *CallbackFramework) OffMemory(event MemoryEventType, fn MemoryCallbackF
 	}
 }
 
+// TriggerMemory 触发记忆事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerMemory(ctx context.Context, data *MemoryEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -927,6 +973,7 @@ func (fw *CallbackFramework) TriggerMemory(ctx context.Context, data *MemoryEven
 	return results
 }
 
+// OnTaskManager 注册任务管理事件的回调。
 func (fw *CallbackFramework) OnTaskManager(event TaskManagerEventType, fn TaskManagerCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[TaskManagerCallbackFunc]{
@@ -949,6 +996,7 @@ func (fw *CallbackFramework) OnTaskManager(event TaskManagerEventType, fn TaskMa
 	sortCallbacks(fw.taskManagerCallbacks[event])
 }
 
+// OffTaskManager 注销任务管理事件上指定的回调函数。
 func (fw *CallbackFramework) OffTaskManager(event TaskManagerEventType, fn TaskManagerCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -966,6 +1014,7 @@ func (fw *CallbackFramework) OffTaskManager(event TaskManagerEventType, fn TaskM
 	}
 }
 
+// TriggerTaskManager 触发任务管理事件，返回所有回调的执行结果。
 func (fw *CallbackFramework) TriggerTaskManager(ctx context.Context, data *TaskManagerEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -981,18 +1030,21 @@ func (fw *CallbackFramework) TriggerTaskManager(ctx context.Context, data *TaskM
 	return results
 }
 
+// AddFilter 为某个事件添加过滤器，回调执行前先由过滤器判断是否跳过。
 func (fw *CallbackFramework) AddFilter(event string, filter EventFilter) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.filters[event] = append(fw.filters[event], filter)
 }
 
+// AddGlobalFilter 添加对所有事件都生效的过滤器。
 func (fw *CallbackFramework) AddGlobalFilter(filter EventFilter) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.globalFilters = append(fw.globalFilters, filter)
 }
 
+// AddCircuitBreaker 为某个事件的某个回调登记熔断规则。
 func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failureThreshold int, timeout float64) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1003,6 +1055,7 @@ func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failu
 	fw.filters[event] = append(fw.filters[event], breaker)
 }
 
+// AddHook 给某个事件的指定阶段挂一个钩子函数。
 func (fw *CallbackFramework) AddHook(event string, hookType HookType, hook HookFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1012,6 +1065,7 @@ func (fw *CallbackFramework) AddHook(event string, hookType HookType, hook HookF
 	fw.hooks[event][hookType] = append(fw.hooks[event][hookType], hook)
 }
 
+// TriggerChain 按注册的链式顺序依次触发回调，任一步失败即回滚并返回结果。
 func (fw *CallbackFramework) TriggerChain(ctx context.Context, event string, data any) *ChainResult {
 	fw.mu.RLock()
 	chain, ok := fw.chains[event]
@@ -1169,6 +1223,7 @@ func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, con
 	return nil
 }
 
+// TriggerWithTimeout 在给定超时时间内触发事件，超时按失败处理。
 func (fw *CallbackFramework) TriggerWithTimeout(ctx context.Context, event string, timeout float64, data map[string]any) ([]any, error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout*float64(time.Second)))
 	defer cancel()
@@ -1182,6 +1237,7 @@ func (fw *CallbackFramework) TriggerWithTimeout(ctx context.Context, event strin
 	)
 }
 
+// GetMetrics 返回某个回调的调用次数、耗时等统计数据。
 func (fw *CallbackFramework) GetMetrics(event, callbackName string) *CallbackMetrics {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1189,12 +1245,14 @@ func (fw *CallbackFramework) GetMetrics(event, callbackName string) *CallbackMet
 	return fw.metrics[key]
 }
 
+// ResetMetrics 清空所有回调的统计数据。
 func (fw *CallbackFramework) ResetMetrics() {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.metrics = make(map[string]*CallbackMetrics)
 }
 
+// GetSlowCallbacks 返回平均耗时超过阈值的回调清单。
 func (fw *CallbackFramework) GetSlowCallbacks(threshold float64) map[string]*CallbackMetrics {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1207,18 +1265,21 @@ func (fw *CallbackFramework) GetSlowCallbacks(threshold float64) map[string]*Cal
 	return result
 }
 
+// EnableMetrics 打开或关闭回调统计。
 func (fw *CallbackFramework) EnableMetrics(enabled bool) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.enableMetrics = enabled
 }
 
+// EnableEventHistory 打开或关闭事件历史记录。
 func (fw *CallbackFramework) EnableEventHistory(enabled bool) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.enableEventHistory = enabled
 }
 
+// GetEventHistory 返回指定时间点之后记录的事件历史。
 func (fw *CallbackFramework) GetEventHistory(event string, since time.Time) []eventHistoryEntry {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1236,6 +1297,7 @@ func (fw *CallbackFramework) GetEventHistory(event string, since time.Time) []ev
 	return result
 }
 
+// ReplayEvents 重放某个时间点之后的历史事件，用于补跑遗漏的回调。
 func (fw *CallbackFramework) ReplayEvents(ctx context.Context, since time.Time) {
 	history := fw.GetEventHistory("", since)
 	for _, entry := range history {
@@ -1277,6 +1339,7 @@ func (fw *CallbackFramework) GetStatistics() map[string]any {
 	}
 }
 
+// TriggerDelayed 延时一段时间后再触发事件，返回可用于取消的句柄。
 func (fw *CallbackFramework) TriggerDelayed(ctx context.Context, event string, data map[string]any, delay time.Duration) {
 	go func() {
 		time.Sleep(delay)
@@ -1453,6 +1516,7 @@ func (fw *CallbackFramework) UnregisterByTags(event string, tags []string) {
 	}
 }
 
+// ListEvents 列出某个命名空间下已注册的事件名。
 func (fw *CallbackFramework) ListEvents(namespace string) []string {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1473,6 +1537,7 @@ func (fw *CallbackFramework) ListEvents(namespace string) []string {
 	return result
 }
 
+// ListCallbacks 列出某个事件上已注册回调的描述信息。
 func (fw *CallbackFramework) ListCallbacks(event string) []map[string]any {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1492,6 +1557,7 @@ func (fw *CallbackFramework) ListCallbacks(event string) []map[string]any {
 	return result
 }
 
+// OnChain 注册链式回调，并为这条链指定回滚与错误处理函数。
 func (fw *CallbackFramework) OnChain(event string, rollbackHandler, errorHandler any) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1502,6 +1568,7 @@ func (fw *CallbackFramework) OnChain(event string, rollbackHandler, errorHandler
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// triggerCallbacks 按事件类型取出回调逐个执行，内部处理优先级、过滤、熔断与结果汇总。
 func triggerCallbacks[F any, E comparable, D any](
 	callbacksMap map[E][]*CallbackInfo[F],
 	event E,
@@ -1695,6 +1762,7 @@ func triggerCallbacks[F any, E comparable, D any](
 	return results, nil
 }
 
+// executeHooks 执行某个事件上挂载的各个阶段的钩子函数。
 func (fw *CallbackFramework) executeHooks(ctx context.Context, event string, hookType HookType, data any) {
 	fw.mu.RLock()
 	hookTypes, ok := fw.hooks[event]
@@ -1758,6 +1826,7 @@ func (fw *CallbackFramework) applyFilters(ctx context.Context, event string, inf
 	return FilterResult{Action: FilterActionContinue}
 }
 
+// updateMetrics 记录一次回调执行的耗时与失败次数，用于统计慢回调。
 func (fw *CallbackFramework) updateMetrics(key string, executionTime float64, isError bool) {
 	fw.mu.Lock()
 	m, ok := fw.metrics[key]
@@ -1769,14 +1838,17 @@ func (fw *CallbackFramework) updateMetrics(key string, executionTime float64, is
 	m.Update(executionTime, isError)
 }
 
+// getCallbackName 取回调函数的名称，未登记名称时用函数指针代替。
 func getCallbackName[F any](info *CallbackInfo[F]) string {
 	return fmt.Sprintf("%T", info.Callback)
 }
 
+// getCallbackNameFromAny 从任意回调信息里取回调名称，类型不符时返回空串。
 func getCallbackNameFromAny(info any) string {
 	return fmt.Sprintf("%T", info)
 }
 
+// splitCircuitBreakerKey 把「事件@回调名」形式的熔断键拆成事件和回调名两段。
 func splitCircuitBreakerKey(key string) [2]string {
 	for i := len(key) - 1; i >= 0; i-- {
 		if key[i] == ':' {

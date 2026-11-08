@@ -43,13 +43,18 @@ func GetCodeMetadataProviderInputParams(language string) map[string]any {
 	}
 }
 
+// GetName 返回工具名称 "code"。
 func (p *CodeMetadataProvider) GetName() string { return "code" }
+
+// GetDescription 返回 "code" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *CodeMetadataProvider) GetDescription(language string) string {
 	if desc, ok := codeDescription[language]; ok {
 		return desc
 	}
 	return codeDescription["cn"]
 }
+
+// GetInputParams 返回 "code" 工具的参数 Schema。
 func (p *CodeMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetCodeMetadataProviderInputParams(language)
 }

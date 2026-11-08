@@ -492,10 +492,16 @@ func (r *BaseSecurityRail) SanitizeMatchingMessages(cbc *agentinterfaces.AgentCa
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isSecurityDecision 实现 SecurityDecision 接口标记
-func (a *SecurityAllow) isSecurityDecision()     {}
-func (r *SecurityReject) isSecurityDecision()    {}
+func (a *SecurityAllow) isSecurityDecision() {}
+
+// isSecurityDecision 标记 SecurityReject 属于安全决策类型。
+func (r *SecurityReject) isSecurityDecision() {}
+
+// isSecurityDecision 标记 SecurityInterrupt 属于安全决策类型。
 func (i *SecurityInterrupt) isSecurityDecision() {}
-func (a *SecurityAlert) isSecurityDecision()     {}
+
+// isSecurityDecision 标记 SecurityAlert 属于安全决策类型。
+func (a *SecurityAlert) isSecurityDecision() {}
 
 // runAndApply 执行安全检查并应用决策。
 // Python: BaseSecurityRail._run_and_apply(ctx, event) (base_security_rail.py L225-252)

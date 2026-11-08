@@ -109,35 +109,50 @@ func GetExitPlanModeMetadataProviderInputParams(language string) map[string]any 
 	}
 }
 
+// GetName 返回工具名称 "switch_mode"。
 func (p *SwitchModeMetadataProvider) GetName() string { return "switch_mode" }
+
+// GetDescription 返回 "switch_mode" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *SwitchModeMetadataProvider) GetDescription(language string) string {
 	if d, ok := switchModeDescription[language]; ok {
 		return d
 	}
 	return switchModeDescription["cn"]
 }
+
+// GetInputParams 返回 "switch_mode" 工具的参数 Schema。
 func (p *SwitchModeMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetSwitchModeMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "enter_plan_mode"。
 func (p *EnterPlanModeMetadataProvider) GetName() string { return "enter_plan_mode" }
+
+// GetDescription 返回 "enter_plan_mode" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *EnterPlanModeMetadataProvider) GetDescription(language string) string {
 	if d, ok := enterPlanModeDescription[language]; ok {
 		return d
 	}
 	return enterPlanModeDescription["cn"]
 }
+
+// GetInputParams 返回 "enter_plan_mode" 工具的参数 Schema。
 func (p *EnterPlanModeMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetEnterPlanModeMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "exit_plan_mode"。
 func (p *ExitPlanModeMetadataProvider) GetName() string { return "exit_plan_mode" }
+
+// GetDescription 返回 "exit_plan_mode" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ExitPlanModeMetadataProvider) GetDescription(language string) string {
 	if d, ok := exitPlanModeDescription[language]; ok {
 		return d
 	}
 	return exitPlanModeDescription["cn"]
 }
+
+// GetInputParams 返回 "exit_plan_mode" 工具的参数 Schema。
 func (p *ExitPlanModeMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetExitPlanModeMetadataProviderInputParams(language)
 }

@@ -741,6 +741,7 @@ func parsePDFPageRange(pages string, totalPages int) []int {
 	return []int{start, end}
 }
 
+// estimateTokens 按字符数粗估 token 数量（约四个字符一个 token）。
 func estimateTokens(text string) int {
 	charCount := utf8.RuneCountInString(text)
 	if charCount/4 < 1 {
@@ -749,6 +750,7 @@ func estimateTokens(text string) int {
 	return charCount / 4
 }
 
+// isTextReadForEdit 判断该文件是否可以按文本读取并参与编辑校验（图片、PDF、notebook 除外）。
 func isTextReadForEdit(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	return !ImageExtensions[ext] && ext != ".pdf" && ext != ".ipynb"
@@ -779,6 +781,7 @@ func readRawTextForEditState(ctx context.Context, op sys_operation.SysOperation,
 	}
 }
 
+// extractNotebookString 从 notebook 单元格的某个字段里取出文本内容，字符串数组会拼成一个串。
 func extractNotebookString(cell map[string]json.RawMessage, key string) string {
 	raw, ok := cell[key]
 	if !ok {
@@ -905,6 +908,7 @@ func thumbnailImage(img image.Image, maxW, maxH int) image.Image {
 	return imageResize(img, newW, newH)
 }
 
+// imageResize 用最近邻采样把图片缩放到指定宽高。
 func imageResize(img image.Image, newW, newH int) image.Image {
 	srcBounds := img.Bounds()
 	srcW := srcBounds.Dx()
@@ -955,6 +959,7 @@ func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
 	return buf.Bytes()
 }
 
+// encodeImage 把图片编码成指定格式的字节，格式不支持时按 PNG 处理。
 func encodeImage(img image.Image, format string) ([]byte, error) {
 	var buf bytes.Buffer
 	switch strings.ToLower(format) {
@@ -971,6 +976,7 @@ func encodeImage(img image.Image, format string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// detectImageFormat 先按文件头魔数判断图片格式，认不出来再退回按扩展名判断。
 func detectImageFormat(raw []byte, ext string) string {
 	// 从文件头魔数检测
 	if len(raw) >= 8 {

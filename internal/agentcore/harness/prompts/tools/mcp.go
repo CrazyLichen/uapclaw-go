@@ -74,24 +74,34 @@ func GetReadMcpResourceMetadataProviderInputParams(language string) map[string]a
 	}
 }
 
+// GetName 返回工具名称 "list_mcp_resources"。
 func (p *ListMcpResourcesMetadataProvider) GetName() string { return "list_mcp_resources" }
+
+// GetDescription 返回 "list_mcp_resources" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ListMcpResourcesMetadataProvider) GetDescription(language string) string {
 	if d, ok := listMcpResourcesDescription[language]; ok {
 		return d
 	}
 	return listMcpResourcesDescription["cn"]
 }
+
+// GetInputParams 返回 "list_mcp_resources" 工具的参数 Schema。
 func (p *ListMcpResourcesMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetListMcpResourcesMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "read_mcp_resource"。
 func (p *ReadMcpResourceMetadataProvider) GetName() string { return "read_mcp_resource" }
+
+// GetDescription 返回 "read_mcp_resource" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *ReadMcpResourceMetadataProvider) GetDescription(language string) string {
 	if d, ok := readMcpResourceDescription[language]; ok {
 		return d
 	}
 	return readMcpResourceDescription["cn"]
 }
+
+// GetInputParams 返回 "read_mcp_resource" 工具的参数 Schema。
 func (p *ReadMcpResourceMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetReadMcpResourceMetadataProviderInputParams(language)
 }

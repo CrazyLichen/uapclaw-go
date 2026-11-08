@@ -530,6 +530,7 @@ func (mh *MessageHandler) rememberAllocStateKey(msg *schema.Message, channelID s
 	mh.statesMu.Unlock()
 }
 
+// getChannelStateKey 拼出「渠道 + 会话」的存储键。
 func getChannelStateKey(channelID, sessionID string) string {
 	if sessionID != "" {
 		return fmt.Sprintf("%s:%s", channelID, sessionID)
@@ -613,6 +614,7 @@ func channelIDMatchesSessionMapTypes(channelID string) bool {
 	return false
 }
 
+// generateRandomHex 生成指定长度的随机十六进制串，用作临时标识。
 func generateRandomHex(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {

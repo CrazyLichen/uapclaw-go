@@ -910,26 +910,32 @@ func (a *persistenceClientAdapter) HasCollection(ctx context.Context, option mil
 	return a.client.HasCollection(ctx, option)
 }
 
+// DescribeCollection 查询集合的结构信息。
 func (a *persistenceClientAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption) (*entity.Collection, error) {
 	return a.client.DescribeCollection(ctx, option)
 }
 
+// Insert 向集合插入数据。
 func (a *persistenceClientAdapter) Insert(ctx context.Context, option milvusclient.InsertOption) (milvusclient.InsertResult, error) {
 	return a.client.Insert(ctx, option)
 }
 
+// Search 在集合里做向量检索。
 func (a *persistenceClientAdapter) Search(ctx context.Context, option milvusclient.SearchOption) ([]milvusclient.ResultSet, error) {
 	return a.client.Search(ctx, option)
 }
 
+// Query 按条件查询集合数据。
 func (a *persistenceClientAdapter) Query(ctx context.Context, option milvusclient.QueryOption) (milvusclient.ResultSet, error) {
 	return a.client.Query(ctx, option)
 }
 
+// Delete 按条件删除集合数据。
 func (a *persistenceClientAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption) (milvusclient.DeleteResult, error) {
 	return a.client.Delete(ctx, option)
 }
 
+// LoadCollection 把集合载入内存并等待加载完成。
 func (a *persistenceClientAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption) error {
 	task, err := a.client.LoadCollection(ctx, option)
 	if err != nil {
@@ -938,6 +944,7 @@ func (a *persistenceClientAdapter) LoadCollection(ctx context.Context, option mi
 	return task.Await(ctx)
 }
 
+// Flush 把集合数据落盘并等待完成。
 func (a *persistenceClientAdapter) Flush(ctx context.Context, option milvusclient.FlushOption) error {
 	task, err := a.client.Flush(ctx, option)
 	if err != nil {
@@ -949,6 +956,7 @@ func (a *persistenceClientAdapter) Flush(ctx context.Context, option milvusclien
 	return nil
 }
 
+// CreateIndex 为集合建索引并等待建完。
 func (a *persistenceClientAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption) error {
 	task, err := a.client.CreateIndex(ctx, option)
 	if err != nil {
@@ -960,6 +968,7 @@ func (a *persistenceClientAdapter) CreateIndex(ctx context.Context, option milvu
 	return nil
 }
 
+// Close 关闭底层客户端。
 func (a *persistenceClientAdapter) Close(ctx context.Context) error {
 	return a.client.Close(ctx)
 }

@@ -463,10 +463,12 @@ func NewSkillDevState(taskID string) *SkillDevState {
 	}
 }
 
+// Touch 把状态里的更新时间刷新为当前时间。
 func (s *SkillDevState) Touch() {
 	s.UpdatedAt = nowISO()
 }
 
+// ToCheckpointDict 把状态整体转成可存档的字典，供断点续跑时原样恢复。
 func (s *SkillDevState) ToCheckpointDict() map[string]any {
 	return map[string]any{
 		"task_id":              s.TaskID,
@@ -517,6 +519,7 @@ func FromCheckpointDict(data map[string]any) *SkillDevState {
 	return state
 }
 
+// ToStatusDict 把状态的概要字段转成字典，作为对外展示的进度视图。
 func (s *SkillDevState) ToStatusDict() map[string]any {
 	return map[string]any{
 		"task_id":      s.TaskID,
@@ -531,6 +534,7 @@ func (s *SkillDevState) ToStatusDict() map[string]any {
 	}
 }
 
+// ToDict 把单条评测用例转成字典。
 func (e *EvalCase) ToDict() map[string]any {
 	return map[string]any{
 		"id":              e.ID,
@@ -541,6 +545,7 @@ func (e *EvalCase) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把整组评测用例转成字典。
 func (es *EvalSet) ToDict() map[string]any {
 	evals := make([]map[string]any, len(es.Evals))
 	for i, e := range es.Evals {
@@ -581,6 +586,7 @@ func NewEvalSetFromDict(data map[string]any) *EvalSet {
 	return &EvalSet{SkillName: skillName, Evals: evals}
 }
 
+// ToDict 把评分结果转成字典。
 func (g *GradingResult) ToDict() map[string]any {
 	expectations := make([]map[string]any, len(g.Expectations))
 	for i, e := range g.Expectations {
@@ -601,6 +607,7 @@ func (g *GradingResult) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把各阶段耗时转成字典。
 func (rt *RunTiming) ToDict() map[string]any {
 	return map[string]any{
 		"total_tokens":           rt.TotalTokens,
@@ -609,6 +616,7 @@ func (rt *RunTiming) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把指标统计转成字典。
 func (ms *MetricStats) ToDict() map[string]any {
 	return map[string]any{
 		"mean":   ms.Mean,
@@ -618,6 +626,7 @@ func (ms *MetricStats) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把一次基准运行的结果转成字典。
 func (br *BenchmarkRun) ToDict() map[string]any {
 	return map[string]any{
 		"eval_id":       br.EvalID,
@@ -633,6 +642,7 @@ func (br *BenchmarkRun) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把基准定义转成字典。
 func (b *Benchmark) ToDict() map[string]any {
 	runs := make([]map[string]any, len(b.Runs))
 	for i, r := range b.Runs {
@@ -649,6 +659,7 @@ func (b *Benchmark) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把一条触发评测的查询转成字典。
 func (t *TriggerEvalQuery) ToDict() map[string]any {
 	return map[string]any{
 		"query":          t.Query,
@@ -656,6 +667,7 @@ func (t *TriggerEvalQuery) ToDict() map[string]any {
 	}
 }
 
+// ToDict 把描述优化的一轮记录转成字典。
 func (d *DescOptimizeIteration) ToDict() map[string]any {
 	result := map[string]any{
 		"iteration":    d.Iteration,
@@ -776,6 +788,7 @@ func CalcStats(values []float64) MetricStats {
 	}
 }
 
+// GetNextStage 按挂起时的回填数据算出接下来要进入的阶段。
 func (sc *SuspensionConfig) GetNextStage(data map[string]any) SkillDevStage {
 	// 互斥校验：NextStage 和 NextStageFunc 不应同时设置
 	if sc.NextStageFunc != nil && sc.NextStage != "" {
@@ -792,14 +805,17 @@ func (sc *SuspensionConfig) GetNextStage(data map[string]any) SkillDevStage {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// nowISO 返回当前 UTC 时间的 ISO 8601 字符串，作为状态里的时间戳格式。
 func nowISO() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05Z")
 }
 
+// planExtractData 挂起时取出规划阶段需要保存的内容。
 func planExtractData(state *SkillDevState) map[string]any {
 	return map[string]any{"plan": state.Plan}
 }
 
+// planConfirmOnResume 续跑时把规划阶段保存的内容写回状态。
 func planConfirmOnResume(state *SkillDevState, data map[string]any) {
 	if _, ok := data["plan"]; ok {
 		state.Plan = getNilMap(data, "plan")
@@ -808,6 +824,7 @@ func planConfirmOnResume(state *SkillDevState, data map[string]any) {
 	state.PlanConfirmedAt = &now
 }
 
+// reviewExtractData 挂起时取出评审阶段需要保存的内容。
 func reviewExtractData(state *SkillDevState) map[string]any {
 	evalResults := state.EvalResults
 	if evalResults == nil {
@@ -820,6 +837,7 @@ func reviewExtractData(state *SkillDevState) map[string]any {
 	}
 }
 
+// reviewOnResume 续跑时把评审阶段保存的内容写回状态。
 func reviewOnResume(state *SkillDevState, data map[string]any) {
 	if feedback, ok := data["feedback"]; ok {
 		state.FeedbackHistory = append(state.FeedbackHistory, map[string]any{
@@ -829,6 +847,7 @@ func reviewOnResume(state *SkillDevState, data map[string]any) {
 	}
 }
 
+// reviewNextStage 按评审结果决定下一个阶段。
 func reviewNextStage(data map[string]any) SkillDevStage {
 	action, _ := data["action"].(string)
 	if action == "" {
@@ -840,6 +859,7 @@ func reviewNextStage(data map[string]any) SkillDevStage {
 	return SkillDevStagePackage
 }
 
+// descOptExtractData 挂起时取出描述优化阶段需要保存的内容。
 func descOptExtractData(state *SkillDevState) map[string]any {
 	plan := state.Plan
 	if plan == nil {
@@ -849,10 +869,12 @@ func descOptExtractData(state *SkillDevState) map[string]any {
 	return map[string]any{"current_description": desc}
 }
 
+// descOptimizeConfirmOnResume 续跑时把描述优化确认阶段的内容写回状态。
 func descOptimizeConfirmOnResume(_ *SkillDevState, _ map[string]any) {
 	// 无操作，对齐 Python pass
 }
 
+// descOptimizeConfirmNextStage 按确认结果决定下一个阶段。
 func descOptimizeConfirmNextStage(data map[string]any) SkillDevStage {
 	action, _ := data["action"].(string)
 	if action == "" {
@@ -864,11 +886,13 @@ func descOptimizeConfirmNextStage(data map[string]any) SkillDevStage {
 	return SkillDevStageCompleted
 }
 
+// getStr 取字典里的字符串值，缺失或类型不符时返回空串。
 func getStr(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
 }
 
+// getStrDefault 取字典里的字符串值，缺失或类型不符时返回默认值。
 func getStrDefault(m map[string]any, key, defaultVal string) string {
 	v, ok := m[key].(string)
 	if !ok {
@@ -877,6 +901,7 @@ func getStrDefault(m map[string]any, key, defaultVal string) string {
 	return v
 }
 
+// getIntDefault 取字典里的整数值，缺失时返回默认值。
 func getIntDefault(m map[string]any, key string, defaultVal int) int {
 	v, ok := m[key]
 	if !ok {
@@ -885,6 +910,7 @@ func getIntDefault(m map[string]any, key string, defaultVal int) int {
 	return toInt(v)
 }
 
+// toInt 把任意数值类型转成 int，无法转换时返回 0。
 func toInt(v any) int {
 	switch n := v.(type) {
 	case int:
@@ -904,6 +930,7 @@ func toInt(v any) int {
 	}
 }
 
+// getMapDefault 取字典里的子字典，缺失时返回空字典。
 func getMapDefault(m map[string]any, key string) map[string]any {
 	v, ok := m[key].(map[string]any)
 	if !ok {
@@ -912,6 +939,7 @@ func getMapDefault(m map[string]any, key string) map[string]any {
 	return v
 }
 
+// getNilMap 取字典里的子字典，缺失时返回 nil。
 func getNilMap(m map[string]any, key string) map[string]any {
 	v, ok := m[key].(map[string]any)
 	if !ok {
@@ -920,6 +948,7 @@ func getNilMap(m map[string]any, key string) map[string]any {
 	return v
 }
 
+// getStrSliceDefault 取字典里的字符串列表，缺失时返回空列表。
 func getStrSliceDefault(m map[string]any, key string) []string {
 	v, ok := m[key].([]any)
 	if !ok {
@@ -928,6 +957,7 @@ func getStrSliceDefault(m map[string]any, key string) []string {
 	return toStringSlice(v)
 }
 
+// toStringSlice 把通用列表转成字符串列表，跳过非字符串元素。
 func toStringSlice(v []any) []string {
 	result := make([]string, 0, len(v))
 	for _, item := range v {
@@ -938,6 +968,7 @@ func toStringSlice(v []any) []string {
 	return result
 }
 
+// getMapSliceDefault 取字典里的字典列表，缺失时返回空列表。
 func getMapSliceDefault(m map[string]any, key string) []map[string]any {
 	v, ok := m[key].([]any)
 	if !ok {
@@ -952,6 +983,7 @@ func getMapSliceDefault(m map[string]any, key string) []map[string]any {
 	return result
 }
 
+// getNilStr 取字典里的字符串值，缺失时返回 nil 指针，用于区分「没传」和「传了空串」。
 func getNilStr(m map[string]any, key string) *string {
 	v, ok := m[key]
 	if !ok || v == nil {

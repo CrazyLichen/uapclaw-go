@@ -115,35 +115,50 @@ func GetCodingMemoryEditMetadataProviderInputParams(language string) map[string]
 	}
 }
 
+// GetName 返回工具名称 "coding_memory_read"。
 func (p *CodingMemoryReadMetadataProvider) GetName() string { return "coding_memory_read" }
+
+// GetDescription 返回 "coding_memory_read" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *CodingMemoryReadMetadataProvider) GetDescription(language string) string {
 	if d, ok := codingMemoryReadDescription[language]; ok {
 		return d
 	}
 	return codingMemoryReadDescription["cn"]
 }
+
+// GetInputParams 返回 "coding_memory_read" 工具的参数 Schema。
 func (p *CodingMemoryReadMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetCodingMemoryReadMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "coding_memory_write"。
 func (p *CodingMemoryWriteMetadataProvider) GetName() string { return "coding_memory_write" }
+
+// GetDescription 返回 "coding_memory_write" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *CodingMemoryWriteMetadataProvider) GetDescription(language string) string {
 	if d, ok := codingMemoryWriteDescription[language]; ok {
 		return d
 	}
 	return codingMemoryWriteDescription["cn"]
 }
+
+// GetInputParams 返回 "coding_memory_write" 工具的参数 Schema。
 func (p *CodingMemoryWriteMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetCodingMemoryWriteMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称 "coding_memory_edit"。
 func (p *CodingMemoryEditMetadataProvider) GetName() string { return "coding_memory_edit" }
+
+// GetDescription 返回 "coding_memory_edit" 工具的描述文本，按 language 选择中文或英文，未命中时用中文。
 func (p *CodingMemoryEditMetadataProvider) GetDescription(language string) string {
 	if d, ok := codingMemoryEditDescription[language]; ok {
 		return d
 	}
 	return codingMemoryEditDescription["cn"]
 }
+
+// GetInputParams 返回 "coding_memory_edit" 工具的参数 Schema。
 func (p *CodingMemoryEditMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetCodingMemoryEditMetadataProviderInputParams(language)
 }

@@ -631,6 +631,7 @@ func (m *TaskManager) GetTaskTree(taskID string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// executeTask 在独立协程里跑一个后台任务，并维护它的运行状态与结果。
 func (m *TaskManager) executeTask(ctx context.Context, task *Task, fn func(ctx context.Context) (any, error)) {
 	task.mu.Lock()
 	task.Status = TaskRunning

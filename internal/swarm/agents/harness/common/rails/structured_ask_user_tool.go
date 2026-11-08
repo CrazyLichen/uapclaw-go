@@ -132,6 +132,7 @@ func getStructuredDescription(language string) string {
 
 // 以下描述函数一比一复刻 Python 的 EXTENDED_INPUT_PARAMS_EN/CN 中的 description 字段。
 
+// getQueryDesc 返回提问字段的说明文案，按语言切换。
 func getQueryDesc(language string) string {
 	if language == "en" {
 		return "The question to present to the user (required)."
@@ -139,6 +140,7 @@ func getQueryDesc(language string) string {
 	return "向用户展示的问题（必填）。"
 }
 
+// getQuestionsArrayDesc 返回问题列表字段的说明文案，按语言切换。
 func getQuestionsArrayDesc(language string) string {
 	if language == "en" {
 		return "Structured questions with selectable options. " +
@@ -150,6 +152,7 @@ func getQuestionsArrayDesc(language string) string {
 		"每个问题必须提供 2-4 个选项。用户始终可以选择「其他」进行自定义输入。"
 }
 
+// getQuestionDesc 返回单个问题字段的说明文案，按语言切换。
 func getQuestionDesc(language string) string {
 	if language == "en" {
 		return "The question to present to the user."
@@ -157,6 +160,7 @@ func getQuestionDesc(language string) string {
 	return "向用户展示的问题。"
 }
 
+// getHeaderDesc 返回选项组标题字段的说明文案，按语言切换。
 func getHeaderDesc(language string) string {
 	if language == "en" {
 		return "A short label displayed as a chip/tag (max 12 chars)."
@@ -164,6 +168,7 @@ func getHeaderDesc(language string) string {
 	return "短标签（最多 12 字符）。"
 }
 
+// getOptionsDesc 返回可选项列表字段的说明文案，按语言切换。
 func getOptionsDesc(language string) string {
 	if language == "en" {
 		return "Available choices for this question (2-4 items)."
@@ -171,6 +176,7 @@ func getOptionsDesc(language string) string {
 	return "问题的可选项（2-4 项）。"
 }
 
+// getLabelDesc 返回选项显示名字段的说明文案，按语言切换。
 func getLabelDesc(language string) string {
 	if language == "en" {
 		return "Display text for this option (1-5 words)."
@@ -178,6 +184,7 @@ func getLabelDesc(language string) string {
 	return "选项显示文本（1-5 个词）。"
 }
 
+// getOptionDescDesc 返回选项补充说明字段的说明文案，按语言切换。
 func getOptionDescDesc(language string) string {
 	if language == "en" {
 		return "Explanation of what this option means."
@@ -185,6 +192,7 @@ func getOptionDescDesc(language string) string {
 	return "选项含义说明。"
 }
 
+// getMultiSelectDesc 返回是否多选字段的说明文案，按语言切换。
 func getMultiSelectDesc(language string) string {
 	if language == "en" {
 		return "Allow multiple selections instead of just one."

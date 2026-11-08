@@ -151,6 +151,7 @@ func (HarnessConfigLoader) Load(path string, params map[string]any, workspaceRoo
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// normalizeContent 把不同写法的内容字段统一成「语言 → 文本」的映射。
 func normalizeContent(content any) map[string]string {
 	if content == nil {
 		return map[string]string{}
@@ -173,6 +174,7 @@ func normalizeContent(content any) map[string]string {
 	}
 }
 
+// renderTemplate 用参数渲染模板，模板出错时退回简单的占位符替换。
 func renderTemplate(text string, params map[string]any) (string, error) {
 	if text == "" || !varPlaceholderRegexp.MatchString(text) {
 		return text, nil
@@ -201,6 +203,7 @@ func renderTemplate(text string, params map[string]any) (string, error) {
 	return buf.String(), nil
 }
 
+// simpleSubstitute 直接把 {{ var }} 占位符替换成参数值，不做模板解析。
 func simpleSubstitute(text string, params map[string]any) string {
 	return varPlaceholderRegexp.ReplaceAllStringFunc(text, func(match string) string {
 		submatch := varPlaceholderRegexp.FindStringSubmatch(match)
@@ -215,6 +218,7 @@ func simpleSubstitute(text string, params map[string]any) string {
 	})
 }
 
+// capitalize 把字符串首字母转成大写，用于模板里的字段名。
 func capitalize(s string) string {
 	if s == "" {
 		return s
@@ -226,6 +230,7 @@ func capitalize(s string) string {
 	return string(c) + s[1:]
 }
 
+// absPath 把可能是相对路径的入参补成绝对路径。
 func absPath(path string) (string, error) {
 	if len(path) > 0 && path[0] == '/' {
 		return path, nil
@@ -237,6 +242,7 @@ func absPath(path string) (string, error) {
 	return wd + "/" + path, nil
 }
 
+// dirOf 返回路径中最后一段之前的目录部分。
 func dirOf(path string) string {
 	for i := len(path) - 1; i >= 0; i-- {
 		if path[i] == '/' {
