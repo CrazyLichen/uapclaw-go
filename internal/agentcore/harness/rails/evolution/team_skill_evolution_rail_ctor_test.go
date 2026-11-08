@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -130,5 +132,71 @@ func TestTeamRail_技能目录解析(t *testing.T) {
 	// store 能解析到该技能目录时，kind=team-skill 应判为团队技能
 	if r.EvolutionStore().ResolveSkillDir(ctx, "team-skill-one") != "" {
 		assert.True(t, r.isTeamSkill(ctx, "team-skill-one"), "kind=team-skill 应判为团队技能")
+	}
+}
+
+// ──────────────────────────── 非导出函数补充测试 ────────────────────────────
+
+// TestTeamRail_IsSkillDisabled 验证禁用名单判定。
+func TestTeamRail_IsSkillDisabled(t *testing.T) {
+	r := newTeamRail(t, WithTeamSkillDisabledSkills([]string{"blocked-skill"}))
+	assert.True(t, r.isSkillDisabled("blocked-skill"), "名单内技能应判为禁用")
+	assert.False(t, r.isSkillDisabled("other-skill"), "名单外技能不应判为禁用")
+}
+
+// TestTeamRail_IsActiveRequestSubject 验证活跃请求主体判定（要求技能存在且为团队技能）。
+func TestTeamRail_IsActiveRequestSubject(t *testing.T) {
+	ctx := context.Background()
+	r := newTeamRail(t)
+	assert.False(t, r.isActiveRequestSubject(ctx, "not-exist-skill"), "不存在的技能不应判为活跃主体")
+}
+
+// TestTeamRail_SnapshotForEvolution_autoScan开 验证开启扫描时产出快照。
+// 注意：该实现末尾直接读 traj.SessionID，traj 为 nil 会 panic，故传非 nil 轨迹。
+func TestTeamRail_SnapshotForEvolution_autoScan开(t *testing.T) {
+	r := newTeamRail(t)
+	traj := &trajectory.Trajectory{SessionID: "sess-snap"}
+	snap := r.SnapshotForEvolution(context.Background(), traj, nil)
+	require.NotNil(t, snap, "auto_scan 开启时应返回快照")
+	require.NotNil(t, snap.SkillName, "SkillName 不应为 nil")
+	assert.Equal(t, "team-skill", *snap.SkillName)
+	assert.Equal(t, "sess-snap", snap.SessionID)
+}
+
+// TestTeamRail_DetectUserRequest_空消息 验证无消息时返回 nil 且无错误。
+func TestTeamRail_DetectUserRequest_空消息(t *testing.T) {
+	r := newTeamRail(t)
+	got, err := r.detectUserRequest(context.Background(), nil, "")
+	assert.NoError(t, err)
+	assert.Nil(t, got)
+}
+
+// TestTeamRail_BuildRecordApprovalEvent_Nil请求 验证 request 为 nil 时返回 nil。
+func TestTeamRail_BuildRecordApprovalEvent_Nil请求(t *testing.T) {
+	r := newTeamRail(t)
+	assert.Nil(t, r.buildRecordApprovalEvent("skill-a", nil))
+}
+
+// TestTeamRail_CurrentBuilderSessionID 验证未设 builder 时返回空串。
+func TestTeamRail_CurrentBuilderSessionID(t *testing.T) {
+	r := newTeamRail(t)
+	assert.Empty(t, r.currentBuilderSessionID(), "未设 builder 时应返回空串")
+}
+
+// TestTeamRail_BuildTrajectory 验证未设 builder 时返回 nil。
+func TestTeamRail_BuildTrajectory(t *testing.T) {
+	r := newTeamRail(t)
+	assert.Nil(t, r.buildTrajectory(), "未设 builder 时应返回 nil")
+}
+
+// TestTeamRail_RequestUserEvolution_无信号 验证无轨迹且无意图时返回空结果。
+func TestTeamRail_RequestUserEvolution_无信号(t *testing.T) {
+	r := newTeamRail(t)
+	res, err := r.RequestUserEvolution(context.Background(), "skill-z", "", false)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if res == nil || res.SkillName != "skill-z" {
+		t.Fatalf("res = %+v", res)
 	}
 }
