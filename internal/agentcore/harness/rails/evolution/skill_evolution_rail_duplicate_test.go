@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 )
 
