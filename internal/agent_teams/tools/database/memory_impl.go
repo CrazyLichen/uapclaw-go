@@ -196,7 +196,9 @@ func (db *InMemoryTeamDatabase) Message() MessageDao { return db }
 
 // CreateTeam 创建团队。对齐 Python: TeamDao.create_team()
 // 成功返回 true，团队已存在返回 false（对齐 Python IntegrityError → False）
-func (db *InMemoryTeamDatabase) CreateTeam(_ context.Context, teamName, displayName, leaderMemberName, desc, prompt string) bool {
+func (db *InMemoryTeamDatabase) CreateTeam(_ context.Context, teamName, displayName,
+	leaderMemberName, desc, prompt string,
+	dispatchMode string, enableTaskVerification bool) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if _, exists := db.teams[teamName]; exists {
@@ -204,13 +206,15 @@ func (db *InMemoryTeamDatabase) CreateTeam(_ context.Context, teamName, displayN
 	}
 	ts := GetCurrentTime()
 	db.teams[teamName] = &Team{
-		TeamName:         teamName,
-		DisplayName:      displayName,
-		LeaderMemberName: leaderMemberName,
-		Desc:             desc,
-		Prompt:           prompt,
-		Created:          ts,
-		UpdatedAt:        ts,
+		TeamName:               teamName,
+		DisplayName:            displayName,
+		LeaderMemberName:       leaderMemberName,
+		Desc:                   desc,
+		Prompt:                 prompt,
+		DispatchMode:           dispatchMode,
+		EnableTaskVerification: enableTaskVerification,
+		Created:                ts,
+		UpdatedAt:              ts,
 	}
 	return true
 }

@@ -10,7 +10,7 @@ import (
 
 // TestBuildTeamRoleSection_Leader 测试 Leader 角色构建
 func TestBuildTeamRoleSection_Leader(t *testing.T) {
-	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "alice", "build_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "build_mode", "native", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -24,9 +24,10 @@ func TestBuildTeamRoleSection_Leader(t *testing.T) {
 	if cnContent == "" {
 		t.Fatal("cn content is empty")
 	}
-	// 应包含 member_name
-	if !strings.Contains(cnContent, "alice") {
-		t.Fatal("cn content should contain member_name 'alice'")
+	// 上游刻意不渲染 member_name（它住 team_identity 状态车道），
+	// 否则同角色成员前缀不再逐字节相同、KV 缓存前缀失效。
+	if strings.Contains(cnContent, "member_name") {
+		t.Fatal("role section 不应渲染 member_name")
 	}
 	// 应包含 build_mode 标签
 	if !strings.Contains(cnContent, "build_mode") {
@@ -36,7 +37,7 @@ func TestBuildTeamRoleSection_Leader(t *testing.T) {
 
 // TestBuildTeamRoleSection_LeaderPlanMode 测试 Leader plan_mode
 func TestBuildTeamRoleSection_LeaderPlanMode(t *testing.T) {
-	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "alice", "plan_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "plan_mode", "native", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -51,7 +52,7 @@ func TestBuildTeamRoleSection_LeaderPlanMode(t *testing.T) {
 
 // TestBuildTeamRoleSection_TeammateBuildMode 测试 Teammate build_mode
 func TestBuildTeamRoleSection_TeammateBuildMode(t *testing.T) {
-	section := mustBuildRoleSection(t, atschema.TeamRoleTeammate, "bob", "build_mode", "en")
+	section := mustBuildRoleSection(t, atschema.TeamRoleTeammate, "build_mode", "native", "en")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -59,8 +60,8 @@ func TestBuildTeamRoleSection_TeammateBuildMode(t *testing.T) {
 	if enContent == "" {
 		t.Fatal("en content is empty")
 	}
-	if !strings.Contains(enContent, "bob") {
-		t.Fatal("en content should contain member_name 'bob'")
+	if strings.Contains(enContent, "member_name") {
+		t.Fatal("role section 不应渲染 member_name（上游刻意排除）")
 	}
 	if !strings.Contains(enContent, "build_mode") {
 		t.Fatal("en content should contain build_mode")
@@ -69,7 +70,7 @@ func TestBuildTeamRoleSection_TeammateBuildMode(t *testing.T) {
 
 // TestBuildTeamRoleSection_TeammatePlanMode 测试 Teammate plan_mode
 func TestBuildTeamRoleSection_TeammatePlanMode(t *testing.T) {
-	section := mustBuildRoleSection(t, atschema.TeamRoleTeammate, "bob", "plan_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleTeammate, "plan_mode", "native", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -83,22 +84,9 @@ func TestBuildTeamRoleSection_TeammatePlanMode(t *testing.T) {
 	}
 }
 
-// TestBuildTeamRoleSection_无MemberName 测试无 member_name 时不显示
-func TestBuildTeamRoleSection_无MemberName(t *testing.T) {
-	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "", "build_mode", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamRoleSection returned nil")
-	}
-	cnContent := section.Content["cn"]
-	// 无 member_name 时不应该有 "你的 member_name:" 行
-	if strings.Contains(cnContent, "你的 member_name: \n\n") {
-		t.Fatal("cn content should not have empty member_name line")
-	}
-}
-
 // TestBuildTeamRoleSection_English 测试英文 Leader 角色
 func TestBuildTeamRoleSection_English(t *testing.T) {
-	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "leader1", "plan_mode", "en")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "plan_mode", "native", "en")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -108,156 +96,6 @@ func TestBuildTeamRoleSection_English(t *testing.T) {
 	}
 	if !strings.Contains(enContent, "approve_plan") {
 		t.Fatal("en content should contain approve_plan in leader plan_mode label")
-	}
-}
-
-// TestBuildTeamHITTSection_Leader 测试 Leader HITT section
-func TestBuildTeamHITTSection_Leader(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"human_1"}, "cn", "alice", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for leader with human agents")
-	}
-	if section.Priority != 12 {
-		t.Fatalf("expected priority 12, got %d", section.Priority)
-	}
-	if section.Name != SectionHITT {
-		t.Fatalf("expected section name %s, got %s", SectionHITT, section.Name)
-	}
-}
-
-// TestBuildTeamHITTSection_无人类成员返回nil 测试无人类成员时返回 nil
-func TestBuildTeamHITTSection_无人类成员返回nil(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleLeader, nil, "cn", "alice", false)
-	if section != nil {
-		t.Fatal("expected nil when no human agents")
-	}
-	section = BuildTeamHITTSection(atschema.TeamRoleLeader, []string{}, "cn", "alice", false)
-	if section != nil {
-		t.Fatal("expected nil when empty human agents")
-	}
-}
-
-// TestBuildTeamHITTSection_Teammate匿名 测试 Teammate 默认匿名变体
-func TestBuildTeamHITTSection_Teammate匿名(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleTeammate, []string{"human_1"}, "cn", "bob", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for teammate with human agents")
-	}
-	cnContent := section.Content["cn"]
-	// 匿名变体不应包含具体人类成员名
-	if strings.Contains(cnContent, "human_1") {
-		t.Fatal("anonymous variant should not contain human member name")
-	}
-	// 匿名变体应包含 "Peer 协作"
-	if !strings.Contains(cnContent, "Peer") {
-		t.Fatal("anonymous variant should contain 'Peer' heading")
-	}
-}
-
-// TestBuildTeamHITTSection_Teammate暴露 测试 Teammate 暴露人类成员
-func TestBuildTeamHITTSection_Teammate暴露(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleTeammate, []string{"human_1"}, "cn", "bob", true)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for teammate with expose=true")
-	}
-	cnContent := section.Content["cn"]
-	// 暴露变体应包含具体人类成员名
-	if !strings.Contains(cnContent, "human_1") {
-		t.Fatal("exposed variant should contain human member name")
-	}
-}
-
-// TestBuildTeamHITTSection_HumanAgent 测试 Human-Agent HITT section
-func TestBuildTeamHITTSection_HumanAgent(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleHumanAgent, []string{"human_1", "human_2"}, "cn", "human_1", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for human_agent")
-	}
-	cnContent := section.Content["cn"]
-	// 应包含控制者描述
-	if !strings.Contains(cnContent, "控制者") {
-		t.Fatal("human_agent HITT should contain '控制者'")
-	}
-	// 应包含自身 member_name
-	if !strings.Contains(cnContent, "human_1") {
-		t.Fatal("human_agent HITT should contain self member_name")
-	}
-}
-
-// TestBuildTeamHITTSection_EnglishLeader 测试英文 Leader HITT
-func TestBuildTeamHITTSection_EnglishLeader(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"human_1"}, "en", "leader1", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for English leader")
-	}
-	enContent := section.Content["en"]
-	if !strings.Contains(enContent, "Collaborating with Human Members") {
-		t.Fatal("English leader HITT should contain correct heading")
-	}
-}
-
-// TestBuildTeamHITTSection_EnglishTeammateAnonymous 测试英文 Teammate 匿名 HITT
-func TestBuildTeamHITTSection_EnglishTeammateAnonymous(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleTeammate, []string{"human_1"}, "en", "bob", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for English teammate")
-	}
-	enContent := section.Content["en"]
-	if !strings.Contains(enContent, "Peer Collaboration") {
-		t.Fatal("English anonymous teammate HITT should contain 'Peer Collaboration'")
-	}
-}
-
-// TestBuildTeamHITTSection_EnglishHumanAgent 测试英文 Human-Agent HITT
-func TestBuildTeamHITTSection_EnglishHumanAgent(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleHumanAgent, []string{"human_1"}, "en", "human_1", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for English human_agent")
-	}
-	enContent := section.Content["en"]
-	if !strings.Contains(enContent, "controller") {
-		t.Fatal("English human_agent HITT should contain 'controller'")
-	}
-	if !strings.Contains(enContent, "human_1") {
-		t.Fatal("English human_agent HITT should contain self member_name")
-	}
-}
-
-// TestBuildTeamHITTSection_EnglishTeammateExposed 测试英文 Teammate 暴露变体
-func TestBuildTeamHITTSection_EnglishTeammateExposed(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleTeammate, []string{"human_1"}, "en", "bob", true)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil for English teammate exposed")
-	}
-	enContent := section.Content["en"]
-	if !strings.Contains(enContent, "human_1") {
-		t.Fatal("English exposed teammate HITT should contain human member name")
-	}
-	if !strings.Contains(enContent, "Human Members") {
-		t.Fatal("English exposed teammate HITT should contain 'Human Members' heading")
-	}
-}
-
-// TestBuildTeamHITTSection_未知角色返回nil 测试未知角色返回 nil
-func TestBuildTeamHITTSection_未知角色返回nil(t *testing.T) {
-	section := BuildTeamHITTSection("unknown_role", []string{"human_1"}, "cn", "alice", false)
-	if section != nil {
-		t.Fatal("expected nil for unknown role")
-	}
-}
-
-// TestBuildTeamHITTSection_名字排序 测试人类成员名排序
-func TestBuildTeamHITTSection_名字排序(t *testing.T) {
-	section := BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"zeta", "alpha"}, "cn", "leader", false)
-	if section == nil {
-		t.Fatal("BuildTeamHITTSection returned nil")
-	}
-	cnContent := section.Content["cn"]
-	// alpha 应排在 zeta 之前
-	alphaIdx := strings.Index(cnContent, "alpha")
-	zetaIdx := strings.Index(cnContent, "zeta")
-	if alphaIdx >= zetaIdx {
-		t.Fatal("human agent names should be sorted alphabetically")
 	}
 }
 
@@ -423,38 +261,32 @@ func TestLabelsFor(t *testing.T) {
 	}
 }
 
-// TestFormatHumanAgentRoster 测试格式化人类成员名列表
-func TestFormatHumanAgentRoster(t *testing.T) {
-	result := formatHumanAgentRoster([]string{"alice", "bob"}, "cn")
-	if !strings.Contains(result, "注册的人类成员") {
-		t.Fatal("cn roster should contain '注册的人类成员'")
-	}
-	if !strings.Contains(result, "`alice`") {
-		t.Fatal("cn roster should contain backtick-quoted alice")
-	}
-
-	result = formatHumanAgentRoster([]string{"alice"}, "en")
-	if !strings.Contains(result, "Registered human members") {
-		t.Fatal("en roster should contain 'Registered human members'")
-	}
-}
-
 // TestAllBuilders 返回类型验证
 func TestAllBuilders(t *testing.T) {
 	// 验证所有 builder 返回正确的 PromptSection 类型
-	var _ = mustBuildRoleSection(t, atschema.TeamRoleLeader, "a", "build_mode", "cn")
+	var _ = mustBuildRoleSection(t, atschema.TeamRoleLeader, "build_mode", "native", "cn")
 	var _ = mustBuildWorkflowSection(t, atschema.TeamRoleLeader, "default", "cn")
 	var _ = mustBuildLifecycleSection(t, atschema.TeamRoleLeader, "temporary", "cn")
 	var _ = BuildTeamExtraSection("e", "cn")
-	var _ = BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"h"}, "cn", "", false)
+	var _ = mustBuildHITTSection(t, atschema.TeamRoleLeader, "cn", "", false)
+}
+
+// mustBuildHITTSection 断言 BuildTeamHITTSection 无错误。
+func mustBuildHITTSection(t *testing.T, role atschema.TeamRole, language, selfName string, expose bool) *saprompt.PromptSection {
+	t.Helper()
+	section, err := BuildTeamHITTSection(role, true, language, selfName, expose)
+	if err != nil {
+		t.Fatalf("BuildTeamHITTSection(%v, %s) 返回错误: %v", role, language, err)
+	}
+	return section
 }
 
 // mustBuildRoleSection 断言 BuildTeamRoleSection 无错误。
-func mustBuildRoleSection(t *testing.T, role atschema.TeamRole, memberName, teammateMode, language string) *saprompt.PromptSection {
+func mustBuildRoleSection(t *testing.T, role atschema.TeamRole, teammateMode, workspaceVariant, language string) *saprompt.PromptSection {
 	t.Helper()
-	section, err := BuildTeamRoleSection(role, memberName, teammateMode, language)
+	section, err := BuildTeamRoleSection(role, teammateMode, workspaceVariant, language)
 	if err != nil {
-		t.Fatalf("BuildTeamRoleSection(%v, %s, %s, %s) 返回错误: %v", role, memberName, teammateMode, language, err)
+		t.Fatalf("BuildTeamRoleSection(%v, %s, %s, %s) 返回错误: %v", role, teammateMode, workspaceVariant, language, err)
 	}
 	return section
 }
@@ -528,5 +360,509 @@ func TestBuildTeamInboundTagsSection_优先级(t *testing.T) {
 	}
 	if SectionInboundTags != "team_inbound_tags" {
 		t.Errorf("SectionInboundTags = %q，期望 team_inbound_tags", SectionInboundTags)
+	}
+}
+
+// TestBuildTeamRoleSection_不渲染MemberName 验证 role section 不含成员名。
+// Python: build_team_role_section 无 member_name 参数
+// （sections.py L254-263 的签名里没有它；docstring 明说
+// "The member's own member_name is deliberately NOT rendered here"）。
+func TestBuildTeamRoleSection_不渲染MemberName(t *testing.T) {
+	section, err := BuildTeamRoleSection(atschema.TeamRoleTeammate, "build_mode", "native", "cn")
+	if err != nil {
+		t.Fatalf("BuildTeamRoleSection 返回错误: %v", err)
+	}
+	body := section.Render("cn")
+	if strings.Contains(body, "member_name") {
+		t.Fatalf("role section 不应渲染 member_name，实际包含：%q", body)
+	}
+}
+
+// TestBuildTeamRoleSection_HumanAgent 验证 HUMAN_AGENT 用独立策略且无执行模式行。
+// Python: build_team_role_section —— HUMAN_AGENT 取 human_agent_policy，
+// 且 mode_line = ""（avatar 不自己规划任务）。
+func TestBuildTeamRoleSection_HumanAgent(t *testing.T) {
+	section, err := BuildTeamRoleSection(atschema.TeamRoleHumanAgent, "build_mode", "native", "cn")
+	if err != nil {
+		t.Fatalf("BuildTeamRoleSection 返回错误: %v", err)
+	}
+	body := section.Render("cn")
+	if strings.Contains(body, "你的执行模式:") {
+		t.Fatalf("HUMAN_AGENT 不应有执行模式行，实际：%q", body)
+	}
+}
+
+// TestBuildTeamRoleSection_ExternalWorkspace 验证 external 变体取另一份策略模板。
+// Python: build_team_role_section —— workspace_prompt_variant="external"
+// 时 policy_name = "teammate_policy_external"。
+func TestBuildTeamRoleSection_ExternalWorkspace(t *testing.T) {
+	native, err := BuildTeamRoleSection(atschema.TeamRoleTeammate, "build_mode", "native", "cn")
+	if err != nil {
+		t.Fatalf("native 返回错误: %v", err)
+	}
+	external, err := BuildTeamRoleSection(atschema.TeamRoleTeammate, "build_mode", "external", "cn")
+	if err != nil {
+		t.Fatalf("external 返回错误: %v", err)
+	}
+	if native.Render("cn") == external.Render("cn") {
+		t.Fatal("native 与 external 变体应取不同策略模板")
+	}
+}
+
+// TestBuildTeamHITTSection_HITT关闭返回nil 验证门控在 hittEnabled 开关上。
+// Python: build_team_hitt_section —— `if not hitt_enabled: return None`，
+// docstring 明说门控在能力开关而非实时名册上，这样人类 agent 还没 spawn
+// 时规则就已就绪。
+func TestBuildTeamHITTSection_HITT关闭返回nil(t *testing.T) {
+	if s, err := BuildTeamHITTSection(atschema.TeamRoleLeader, false, "cn", "", false); err != nil || s != nil {
+		t.Fatalf("hittEnabled=false 应返回 nil,nil，实际 %v,%v", s, err)
+	}
+}
+
+// TestBuildTeamHITTSection_HITT开启即有内容 验证不需要人类名册。
+func TestBuildTeamHITTSection_HITT开启即有内容(t *testing.T) {
+	s, err := BuildTeamHITTSection(atschema.TeamRoleLeader, true, "cn", "", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if s == nil {
+		t.Fatal("hittEnabled=true 应返回 section（不依赖人类名册）")
+	}
+	if s.Priority != 12 {
+		t.Fatalf("HITT priority 应为 12，实际 %d", s.Priority)
+	}
+	if s.Render("cn") == "" {
+		t.Fatal("HITT section 内容为空")
+	}
+}
+
+// TestBuildTeamHITTSection_HumanAgent含自身名 验证 avatar 契约注入 self_line。
+// Python: _hitt_contract_body —— 只有 HUMAN_AGENT 走 format({self_line: ...})。
+func TestBuildTeamHITTSection_HumanAgent含自身名(t *testing.T) {
+	s, err := BuildTeamHITTSection(atschema.TeamRoleHumanAgent, true, "cn", "human_1", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if s == nil {
+		t.Fatal("HUMAN_AGENT + hittEnabled 应返回 section")
+	}
+	if !strings.Contains(s.Render("cn"), "human_1") {
+		t.Fatal("human_agent 契约应含自身 member_name")
+	}
+}
+
+// TestBuildTeamHITTSection_Teammate匿名与暴露 验证变体切换。
+// Python: _hitt_template_name —— expose=True 取 hitt_teammate，否则 anonymous。
+func TestBuildTeamHITTSection_Teammate匿名与暴露(t *testing.T) {
+	anon, err := BuildTeamHITTSection(atschema.TeamRoleTeammate, true, "cn", "bob", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	exposed, err := BuildTeamHITTSection(atschema.TeamRoleTeammate, true, "cn", "bob", true)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if anon == nil || exposed == nil {
+		t.Fatal("teammate + hittEnabled 应返回 section")
+	}
+	if anon.Render("cn") == exposed.Render("cn") {
+		t.Fatal("匿名与暴露两个变体应不同")
+	}
+	if strings.Contains(anon.Render("cn"), "bob") {
+		t.Fatal("匿名变体不应出现成员名")
+	}
+}
+
+// TestBuildTeamHITTSection_Bridge用队友策略 验证 EXTERNAL_CLI 归入 teammate 模板。
+// Python: _hitt_template_name —— TEAMMATE 与 EXTERNAL_CLI 同一分支。
+func TestBuildTeamHITTSection_Bridge用队友策略(t *testing.T) {
+	ext, err := BuildTeamHITTSection(atschema.TeamRoleExternalCLI, true, "cn", "", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	tm, err := BuildTeamHITTSection(atschema.TeamRoleTeammate, true, "cn", "", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if ext == nil || tm == nil {
+		t.Fatal("应返回 section")
+	}
+	if ext.Render("cn") != tm.Render("cn") {
+		t.Fatal("EXTERNAL_CLI 与 TEAMMATE 应取同一份 HITT 模板")
+	}
+}
+
+// TestBuildTeamHITTSection_未知角色返回nil 验证无模板角色返回 nil。
+func TestBuildTeamHITTSection_未知角色返回nil(t *testing.T) {
+	if s, err := BuildTeamHITTSection(atschema.TeamRole("unknown_role"), true, "cn", "", false); err != nil || s != nil {
+		t.Fatalf("未知角色应返回 nil,nil，实际 %v,%v", s, err)
+	}
+}
+
+// ──────────────────────────── dispatch ────────────────────────────
+
+// TestBuildTeamDispatchSection_角色分派 验证只有 leader/teammate/external_cli 有。
+// Python: _DISPATCH_ROLE_SLUGS (sections.py L370-375)
+func TestBuildTeamDispatchSection_角色分派(t *testing.T) {
+	cases := []struct {
+		role atschema.TeamRole
+		want bool
+	}{
+		{atschema.TeamRoleLeader, true},
+		{atschema.TeamRoleTeammate, true},
+		{atschema.TeamRoleExternalCLI, true},
+		{atschema.TeamRoleHumanAgent, false},
+		{atschema.TeamRoleBridgeAgent, false},
+	}
+	for _, c := range cases {
+		s, err := BuildTeamDispatchSection(c.role, "autonomous", false, false, "cn")
+		if err != nil {
+			t.Fatalf("%s 返回错误: %v", c.role, err)
+		}
+		if (s != nil) != c.want {
+			t.Fatalf("%s: 期望有 section=%v，实际 %v", c.role, c.want, s != nil)
+		}
+	}
+}
+
+// TestBuildTeamDispatchSection_优先级 验证 P:15。
+func TestBuildTeamDispatchSection_优先级(t *testing.T) {
+	s, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if s.Name != SectionDispatch {
+		t.Fatalf("section 名应为 %s，实际 %s", SectionDispatch, s.Name)
+	}
+	if s.Priority != 15 {
+		t.Fatalf("priority 应为 15，实际 %d", s.Priority)
+	}
+}
+
+// TestBuildTeamDispatchSection_两种模式内容不同 验证 autonomous/scheduled 取不同模板。
+func TestBuildTeamDispatchSection_两种模式内容不同(t *testing.T) {
+	auto, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "cn")
+	if err != nil {
+		t.Fatalf("autonomous 返回错误: %v", err)
+	}
+	sched, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("scheduled 返回错误: %v", err)
+	}
+	if auto.Render("cn") == sched.Render("cn") {
+		t.Fatal("两种调度模式应取不同模板")
+	}
+}
+
+// TestBuildTeamDispatchSection_未知模式回落autonomous 验证非法值归一。
+// Python: `mode = dispatch_mode if dispatch_mode in _DISPATCH_MODES else "autonomous"`
+func TestBuildTeamDispatchSection_未知模式回落autonomous(t *testing.T) {
+	auto, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	unknown, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "bogus", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if auto.Render("cn") != unknown.Render("cn") {
+		t.Fatal("未知模式应回落 autonomous")
+	}
+}
+
+// TestBuildTeamDispatchSection_messaging槽位 验证 member_messaging 开闭。
+// Python: _scheduled_member_messaging (sections.py L448-461) ——
+// leader 两种变体都渲染；teammate 关闭时空串。
+func TestBuildTeamDispatchSection_messaging槽位(t *testing.T) {
+	leaderOn, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", true, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	leaderOff, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if leaderOn.Render("cn") == leaderOff.Render("cn") {
+		t.Fatal("leader 的 messaging 开闭应产生不同文本")
+	}
+	if strings.Contains(leaderOn.Render("cn"), "{{member_messaging}}") {
+		t.Fatal("槽位应已被替换，不应残留占位符")
+	}
+	if strings.Contains(leaderOff.Render("cn"), "{{member_messaging}}") {
+		t.Fatal("槽位应已被替换，不应残留占位符")
+	}
+}
+
+// TestBuildTeamDispatchSection_subtasks槽位 验证 member_subtasks 开闭。
+func TestBuildTeamDispatchSection_subtasks槽位(t *testing.T) {
+	on, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, true, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	off, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if on.Render("cn") == off.Render("cn") {
+		t.Fatal("subtasks 开闭应产生不同文本")
+	}
+	if strings.Contains(on.Render("cn"), "{{member_subtasks}}") {
+		t.Fatal("槽位应已被替换")
+	}
+}
+
+// TestBuildTeamDispatchSection_inlineMember槽位恒空 验证硬开关关闭。
+// Python: constants.INLINE_TASK_MEMBER_ENABLED = False —— 槽位塌成空串。
+func TestBuildTeamDispatchSection_inlineMember槽位恒空(t *testing.T) {
+	s, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "scheduled", false, false, "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(s.Render("cn"), "{{inline_member}}") {
+		t.Fatal("inline_member 槽位应被替换为空串，不应残留占位符")
+	}
+}
+
+// TestBuildTeamDispatchSection_英文 验证 en 取英文模板。
+func TestBuildTeamDispatchSection_英文(t *testing.T) {
+	s, err := BuildTeamDispatchSection(atschema.TeamRoleLeader, "autonomous", false, false, "en")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(s.Render("en"), "任务下发") {
+		t.Fatal("en 不应含中文标题")
+	}
+}
+
+// ──────────────────────────── task_state ────────────────────────────
+
+// TestBuildTeamTaskStateSection_仅Leader 验证非 leader 返回 nil。
+func TestBuildTeamTaskStateSection_仅Leader(t *testing.T) {
+	if s, err := BuildTeamTaskStateSection(atschema.TeamRoleTeammate, "autonomous", "cn"); err != nil || s != nil {
+		t.Fatalf("teammate 应返回 nil,nil，实际 %v,%v", s, err)
+	}
+	s, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "autonomous", "cn")
+	if err != nil {
+		t.Fatalf("leader 返回错误: %v", err)
+	}
+	if s == nil {
+		t.Fatal("leader 应返回 section")
+	}
+	if s.Name != SectionTaskState {
+		t.Fatalf("section 名应为 %s，实际 %s", SectionTaskState, s.Name)
+	}
+	if s.Priority != 16 {
+		t.Fatalf("priority 应为 16（硬编码，不进 SECTION_PRIORITY 表），实际 %d", s.Priority)
+	}
+}
+
+// TestBuildTeamTaskStateSection_两种模式 验证 autonomous 无 in_review。
+func TestBuildTeamTaskStateSection_两种模式(t *testing.T) {
+	auto, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "autonomous", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	sched, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "scheduled", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(auto.Render("cn"), "in_review") {
+		t.Fatal("autonomous 状态机不应出现 in_review（该模式无验证闸）")
+	}
+	if !strings.Contains(sched.Render("cn"), "in_review") {
+		t.Fatal("scheduled 状态机应含 in_review")
+	}
+}
+
+// TestBuildTeamTaskStateSection_未知模式回落 验证非法值归一。
+func TestBuildTeamTaskStateSection_未知模式回落(t *testing.T) {
+	auto, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "autonomous", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	unknown, err := BuildTeamTaskStateSection(atschema.TeamRoleLeader, "bogus", "cn")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if auto.Render("cn") != unknown.Render("cn") {
+		t.Fatal("未知模式应回落 autonomous")
+	}
+}
+
+// ──────────────────────────── bridge ────────────────────────────
+
+// TestBuildTeamBridgeSection_仅BridgeAgent 验证角色门控。
+func TestBuildTeamBridgeSection_仅BridgeAgent(t *testing.T) {
+	for _, role := range []atschema.TeamRole{atschema.TeamRoleLeader, atschema.TeamRoleTeammate, atschema.TeamRoleHumanAgent} {
+		if s, err := BuildTeamBridgeSection(role, "cn", ""); err != nil || s != nil {
+			t.Fatalf("%s 应返回 nil,nil，实际 %v,%v", role, s, err)
+		}
+	}
+	s, err := BuildTeamBridgeSection(atschema.TeamRoleBridgeAgent, "cn", "bridge_1")
+	if err != nil {
+		t.Fatalf("bridge 返回错误: %v", err)
+	}
+	if s == nil {
+		t.Fatal("BRIDGE_AGENT 应返回 section")
+	}
+	if s.Name != SectionBridge {
+		t.Fatalf("section 名应为 %s，实际 %s", SectionBridge, s.Name)
+	}
+	if s.Priority != 12 {
+		t.Fatalf("priority 应为 12，实际 %d", s.Priority)
+	}
+}
+
+// TestBuildTeamBridgeSection_selfLine 验证自身名注入与空值。
+func TestBuildTeamBridgeSection_selfLine(t *testing.T) {
+	withName, err := BuildTeamBridgeSection(atschema.TeamRoleBridgeAgent, "cn", "bridge_1")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if !strings.Contains(withName.Render("cn"), "bridge_1") {
+		t.Fatal("应含自身 member_name")
+	}
+	empty, err := BuildTeamBridgeSection(atschema.TeamRoleBridgeAgent, "cn", "")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(empty.Render("cn"), "你的 member_name 是") {
+		t.Fatal("空名不应渲染 self_line")
+	}
+}
+
+// ──────────────────────────── 统一入口 ────────────────────────────
+
+// staticSectionsTestArgs 统一入口测试的通用参数。
+func staticSectionsTestArgs(role atschema.TeamRole) (
+	atschema.TeamRole, string, string, string, string, string, bool, bool, string, string, bool, bool, string,
+) {
+	return role, "bob", "temporary", "build_mode", "default", "autonomous",
+		false, false, "", "cn", true, false, "native"
+}
+
+// TestBuildTeamStaticSections_Teammate顺序 验证组装顺序与 inbound_tags 收尾。
+// Python: build_team_static_sections (sections.py L722-835) —— builders 列表
+// 顺序 role→hitt→bridge→workflow→dispatch→task_state→lifecycle→extra，
+// 最后无条件 append inbound_tags。
+func TestBuildTeamStaticSections_Teammate顺序(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleTeammate)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	var names []string
+	for _, s := range got {
+		names = append(names, s.Name)
+	}
+	want := []string{SectionRole, SectionHITT, SectionDispatch, SectionInboundTags}
+	if len(names) != len(want) {
+		t.Fatalf("section 数量不符：got=%v want=%v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("第 %d 个 section 应为 %s，实际 %s（全序 %v）", i, want[i], names[i], names)
+		}
+	}
+}
+
+// TestBuildTeamStaticSections_HITT关闭时无HITT 验证 hittEnabled=false 跳过。
+func TestBuildTeamStaticSections_HITT关闭时无HITT(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, _, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleTeammate)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, false, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	for _, s := range got {
+		if s.Name == SectionHITT {
+			t.Fatal("hittEnabled=false 时不应有 HITT section")
+		}
+	}
+}
+
+// TestBuildTeamStaticSections_Extra为空时跳过 验证 basePrompt 空串不产生 section。
+func TestBuildTeamStaticSections_Extra为空时跳过(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, _, lang, hitt, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleTeammate)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, "", lang, hitt, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	for _, s := range got {
+		if s.Name == SectionExtra {
+			t.Fatal("basePrompt 为空时不应有 extra section")
+		}
+	}
+}
+
+// TestBuildTeamStaticSections_Leader全套 验证 leader 调统一入口时拿到全套
+// （这是 policy disclosure 的输入，不是 leader 的系统提示词）。
+func TestBuildTeamStaticSections_Leader全套(t *testing.T) {
+	role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv := staticSectionsTestArgs(atschema.TeamRoleLeader)
+	got, err := BuildTeamStaticSections(role, mn, lc, tm, teamMode, dm, mm, ms, bp, lang, hitt, expose, wsv)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	var names []string
+	for _, s := range got {
+		names = append(names, s.Name)
+	}
+	// leader: role(11) hitt(12) workflow(13) dispatch(15) task_state(16) lifecycle(14) inbound(18)
+	want := []string{SectionRole, SectionHITT, SectionWorkflow, SectionDispatch, SectionTaskState, SectionLifecycle, SectionInboundTags}
+	if len(names) != len(want) {
+		t.Fatalf("section 数量不符：got=%v want=%v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("第 %d 个应为 %s，实际 %s（全序 %v）", i, want[i], names[i], names)
+		}
+	}
+}
+
+// ──────────────────────────── policy disclosure ────────────────────────────
+
+// TestBuildLeaderPolicyDisclosure_含关键章节 验证披露含 dispatch/task_state。
+// Python: build_leader_policy_disclosure (sections.py L837-903)
+func TestBuildLeaderPolicyDisclosure_含关键章节(t *testing.T) {
+	got, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "autonomous", false, false, "cn", true)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if got == "" {
+		t.Fatal("policy 不应为空")
+	}
+	for _, want := range []string{"任务下发", "任务状态流转", "工作流程", "团队生命周期"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("policy 应含 %q", want)
+		}
+	}
+}
+
+// TestBuildLeaderPolicyDisclosure_不含extra与bootstrap 验证三项排除。
+// Python: docstring 明说排除 team_identity / team_extra / team_bootstrap。
+func TestBuildLeaderPolicyDisclosure_不含extra与bootstrap(t *testing.T) {
+	got, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "autonomous", false, false, "cn", true)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(got, "第一步就调用") {
+		t.Fatal("不应含 bootstrap 的起手指令")
+	}
+}
+
+// TestBuildLeaderPolicyDisclosure_scheduled含验证闸 验证模式切换生效。
+func TestBuildLeaderPolicyDisclosure_scheduled含验证闸(t *testing.T) {
+	auto, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "autonomous", false, false, "cn", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	sched, err := BuildLeaderPolicyDisclosure("temporary", "build_mode", "default", "scheduled", false, true, "cn", false)
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if strings.Contains(auto, "in_review") {
+		t.Fatal("autonomous 的披露不应出现 in_review")
+	}
+	if !strings.Contains(sched, "in_review") {
+		t.Fatal("scheduled 的披露应出现 in_review")
 	}
 }

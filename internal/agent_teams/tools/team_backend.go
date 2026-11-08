@@ -88,6 +88,18 @@ type TeamBackend struct {
 	// ── 文件系统清理路径 ──
 	// cleanupPaths 待清理的文件路径集合
 	cleanupPaths map[string]struct{}
+
+	// ── 能力开关（hittMu 保护）──
+	// dispatchMode 本团队的调度模式（"autonomous" / "scheduled"）
+	dispatchMode string
+	// specEnableTaskVerification 配置层的任务验证开关天花板
+	specEnableTaskVerification bool
+	// enableTaskVerification 运行时的任务验证开关生效值
+	enableTaskVerification bool
+	// enableMemberMessaging scheduled 成员可否互发消息（F_126）
+	enableMemberMessaging bool
+	// maxSubtaskDepth 成员拆子任务的深度上限（F_128），0=不启用
+	maxSubtaskDepth int
 }
 
 // TeamBackendOption TeamBackend 构造可选参数。
@@ -143,6 +155,22 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildTeamOutcome build_team 的执行结果。
+//
+// TakenOver 为 true 表示本次是接管已有团队：没写行、没注册成员、没发
+// TeamCreated 事件，只把 onTeamBuilt 回调走了一遍。
+//
+// EnableTaskVerification 是生效的任务验证开关。接管时它从已有团队行读回
+// ——那次调用的能力参数对已经配好的团队不适用，因为团队在建队时就配置完了、
+// 成员已按那套配置在跑、任务可能也已被它塑形；leader 只能从工具结果里得知
+// 自己实际拿到了什么。
+type BuildTeamOutcome struct {
+	// TakenOver 本次是接管已有团队
+	TakenOver bool
+	// EnableTaskVerification 生效的任务验证开关
+	EnableTaskVerification bool
+}
+
 // WithTeammateMode 设置默认成员模式。
 func WithTeammateMode(mode string) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.teammateMode = mode }
@@ -166,6 +194,34 @@ func WithLeaderAllocation(a *models.Allocation) TeamBackendOption {
 // WithEnableHITT 设置 HITT 能力开关（spec 级天花板）。
 func WithEnableHITT(enable bool) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.specEnableHITT = enable; tb.enableHITT = enable }
+}
+
+// WithDispatchMode 设置本团队的调度模式（"autonomous" / "scheduled"）。
+// Python: TeamBackend.dispatch_mode（由 spec 传入）
+func WithDispatchMode(mode string) TeamBackendOption {
+	return func(tb *TeamBackend) {
+		if mode != "" {
+			tb.dispatchMode = mode
+		}
+	}
+}
+
+// WithMemberMessaging 设置 scheduled 成员可否互发消息（F_126）。
+// Python: TeamBackend._enable_member_messaging
+func WithMemberMessaging(enabled bool) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.enableMemberMessaging = enabled }
+}
+
+// WithMaxSubtaskDepth 设置成员拆子任务的深度上限（F_128）。
+// Python: TeamBackend._max_subtask_depth
+func WithMaxSubtaskDepth(depth int) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.maxSubtaskDepth = depth }
+}
+
+// WithSpecEnableTaskVerification 设置任务验证开关的天花板。
+// Python: TeamBackend._spec_enable_task_verification
+func WithSpecEnableTaskVerification(enabled bool) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.specEnableTaskVerification = enabled }
 }
 
 // WithOnTeamCleaned 设置团队清理回调。
@@ -245,6 +301,7 @@ func NewTeamBackend(
 		db:                   db,
 		messager:             msg,
 		teammateMode:         string(atschema.MemberModeBuildMode),
+		dispatchMode:         "autonomous",
 		hittNames:            make(map[string]struct{}),
 		hittInboundCallbacks: make(map[string]OnInbound),
 		cleanupPaths:         make(map[string]struct{}),
@@ -707,24 +764,48 @@ func (tb *TeamBackend) CancelMember(ctx context.Context, memberName string) atsc
 }
 
 // BuildTeam 创建团队 + 注册 leader + 预定义成员 + HITT。
-// Python: TeamBackend.build_team(display_name, desc, leader_display_name, leader_desc, enable_hitt)
+//
+// **对已存在的团队幂等**：团队行已经在时接管（见 reattachTeam）而不报错，
+// 因为这也是把协作政策交给 leader 的唯一一次调用——而继承团队的 leader 至少
+// 同样需要那份政策。
 //
 // Python 步骤：
 //
-//	A. 强制 spec 天花板：enable_hitt=True 但 spec_enable_hitt=False → 报错
-//	B. 计算有效 HITT 开关：enable_hitt=None 继承 spec，否则覆盖
-//	1. 创建团队行
-//	2. 注册 Leader（status=BUSY, execution=RUNNING, allocation=leader_allocation）
-//	3. 注册预定义成员（跳过 HUMAN_AGENT，由后续 spawn_human_agent 处理）
-//	4. HITT 处理：若 effective_enable_hitt，为每个 HUMAN_AGENT spec 调用 spawn_human_agent
-//	5. 回调触发
-//	6. 事件发布
-func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderDisplayName, leaderDesc string, enableHITT *bool) error {
+//  0. 团队行已存在 → 接管（写零行、注册零人、不发 TeamCreated）
+//     A. 强制 spec 天花板：enable_hitt=True 但 spec_enable_hitt=False → 报错
+//     B. 计算有效 HITT 开关：enable_hitt=None 继承 spec，否则覆盖
+//     B2. 计算生效的任务验证开关（spec 天花板 ∧ 本次覆盖）
+//  1. 创建团队行
+//  2. 注册 Leader（status=BUSY, execution=RUNNING, allocation=leader_allocation）
+//  3. 注册预定义成员（跳过 HUMAN_AGENT，由后续 spawn_human_agent 处理）
+//  4. HITT 处理：若 effective_enable_hitt，为每个 HUMAN_AGENT spec 调用 spawn_human_agent
+//  5. 回调触发
+//  6. 事件发布
+//
+// Python: build_team (team.py L2211-2340)
+func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc,
+	leaderDisplayName, leaderDesc string, enableHITT, enableTaskVerification *bool) (*BuildTeamOutcome, error) {
+	// 步骤 0: 团队已存在 → 接管，不重建。
+	//
+	// 这个分支为 NEW_TEAM_IN_SESSION 而存在——一个新会话继承了一个已经在跑的
+	// 团队。子 agent session 共享 team session id，所以新 session 意味着空历史：
+	// 承载协作政策的 build_team 结果没了，而团队、名册、任务都还在。既然那次
+	// 调用是政策唯一的交付点（F_76），在这里失败会让那个 leader 只剩 bootstrap。
+	//
+	// Python: team.py L2253-2258
+	existing, err := tb.db.Team().GetTeam(ctx, tb.teamName)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return tb.reattachTeam(ctx, existing)
+	}
+
 	// 步骤 A: 强制 spec 天花板
 	if enableHITT != nil && *enableHITT && !tb.specEnableHITT {
 		logger.Error(logComponent).Bool("enable_hitt", *enableHITT).Bool("spec_enable_hitt", tb.specEnableHITT).
 			Msg("BuildTeam: enable_hitt=True but spec_enable_hitt=False, cannot enable HITT")
-		return ErrHITTConfigInvalid
+		return nil, ErrHITTConfigInvalid
 	}
 
 	// 步骤 B: 计算有效 HITT 开关
@@ -736,9 +817,21 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 	tb.enableHITT = effectiveHITT
 	tb.hittMu.Unlock()
 
+	// 步骤 B2: 计算生效的任务验证开关。
+	// spec 天花板与本次调用覆盖取与；enableTaskVerification 为 nil 时继承天花板。
+	// Python: effective_task_verification = spec_enable_task_verification and
+	//         (enable_task_verification if enable_task_verification is not None else True)
+	effectiveTaskVerification := tb.specEnableTaskVerification
+	if enableTaskVerification != nil {
+		effectiveTaskVerification = tb.specEnableTaskVerification && *enableTaskVerification
+	}
+	tb.hittMu.Lock()
+	tb.enableTaskVerification = effectiveTaskVerification
+	tb.hittMu.Unlock()
+
 	// 步骤 1: 创建团队行
-	if !tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "") {
-		return fmt.Errorf("创建团队 %s 失败", tb.teamName)
+	if !tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "", tb.dispatchMode, effectiveTaskVerification) {
+		return nil, fmt.Errorf("创建团队 %s 失败", tb.teamName)
 	}
 
 	// 步骤 2: 注册 Leader（改走 SpawnMember 统一路径，对齐 Python: spawn_member(status=BUSY, execution_status=RUNNING, mode=BUILD_MODE)）
@@ -756,7 +849,7 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 		WithAllocation(tb.leaderAllocation),
 	)
 	if !result.OK {
-		return fmt.Errorf("注册 Leader 失败: %s", tb.memberName)
+		return nil, fmt.Errorf("注册 Leader 失败: %s", tb.memberName)
 	}
 
 	// 步骤 3: 注册预定义成员（跳过 HUMAN_AGENT）
@@ -811,7 +904,42 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 		Created:          database.GetCurrentTime(),
 	})
 	logger.Info(logComponent).Str("team_name", tb.teamName).Msg("BuildTeam: team created")
-	return nil
+	return &BuildTeamOutcome{TakenOver: false, EnableTaskVerification: effectiveTaskVerification}, nil
+}
+
+// reattachTeam 接管一个已经存在的团队，而不是新建一个。
+//
+// leader 对一个行已在静态表里的团队调 build_team 时走到这里——实践上就是
+// 一个新会话继承一个正在跑的团队（NEW_TEAM_IN_SESSION）。那时行、名册和
+// 成员各自的配置都是既定事实——teammate 由 recover_team 按那份名册重新拉起，
+// 不是由这里决定的东西——所以本路径不写任何行、也不重新注册任何人。
+//
+// **本次调用的能力参数不适用。** 团队在建队时就配置完了，它的成员已按那套
+// 配置在跑，它的任务也可能已被它塑形（验证闸看板上的 reviewer）。所以生效的
+// 验证开关从行里读回、而不是重新计算，leader 从工具结果得知它实际拿到了什么
+// ——与它在新建路径上得知天花板被收窄是同一种方式。
+//
+// onTeamBuilt 照常触发：本 session 的 checkpoint 需要记下团队 DB 行存在，
+// 否则后续某次运行会按一个与数据库不符的状态调度。不发 TeamCreated 事件
+// ——什么都没创建，照它行动的成员会是在对一个它们已经在其中的团队的事件
+// 做出反应。
+//
+// Python: _reattach_team (team.py L2164-2209)
+func (tb *TeamBackend) reattachTeam(ctx context.Context, existing *database.Team) (*BuildTeamOutcome, error) {
+	tb.hittMu.Lock()
+	tb.enableTaskVerification = existing.EnableTaskVerification
+	tb.hittMu.Unlock()
+
+	logger.Info(logComponent).Str("team_name", tb.teamName).Bool("task_verification", existing.EnableTaskVerification).
+		Msg("team already exists; taking it over")
+
+	if tb.onTeamBuilt != nil {
+		if err := tb.onTeamBuilt(ctx); err != nil {
+			logger.Error(logComponent).Str("team_name", tb.teamName).Err(err).
+				Msg("reattachTeam: onTeamBuilt callback failed")
+		}
+	}
+	return &BuildTeamOutcome{TakenOver: true, EnableTaskVerification: existing.EnableTaskVerification}, nil
 }
 
 // CleanTeam 清理团队（全部 SHUTDOWN → 删 DB → 回调 → 清理路径 → 事件）。
@@ -1119,6 +1247,40 @@ func (tb *TeamBackend) HITTEnabled() bool {
 	tb.hittMu.RLock()
 	defer tb.hittMu.RUnlock()
 	return tb.enableHITT
+}
+
+// MemberMessagingEnabled scheduled 成员可否互发消息（F_126）。
+//
+// 直接来自 TeamAgentSpec.enable_member_messaging，只在 scheduled 下有意义：
+// autonomous 成员本来就能互相触达，所以消费方会结合自己所属的调度模式一起用。
+// 这是成员 send_message 变体与 scheduled dispatch 提示词中消息散文的同一个
+// 门控信号。
+//
+// Python: member_messaging_enabled (team.py L516-526)
+func (tb *TeamBackend) MemberMessagingEnabled() bool {
+	tb.hittMu.RLock()
+	defer tb.hittMu.RUnlock()
+	return tb.enableMemberMessaging
+}
+
+// MemberSubtasksEnabled scheduled 成员可否把任务拆成子任务（F_128）。
+//
+// 成员 create_task、scheduled dispatch 提示词的子任务散文、leader 政策披露
+// 三处的同一个门控信号。只在 scheduled 下有意义。
+//
+// Python: member_subtasks_enabled (team.py L536-543)
+func (tb *TeamBackend) MemberSubtasksEnabled() bool {
+	tb.hittMu.RLock()
+	defer tb.hittMu.RUnlock()
+	return tb.maxSubtaskDepth > 0
+}
+
+// EnableTaskVerification 返回生效的任务验证开关。
+// Python: TeamBackend._enable_task_verification
+func (tb *TeamBackend) EnableTaskVerification() bool {
+	tb.hittMu.RLock()
+	defer tb.hittMu.RUnlock()
+	return tb.enableTaskVerification
 }
 
 // RegisterCleanupPath 注册清理路径（去重）。

@@ -20,6 +20,20 @@ type Team struct {
 	Desc string `json:"desc,omitempty"`
 	// Prompt 团队提示词
 	Prompt string `json:"prompt,omitempty"`
+	// DispatchMode 任务下发模式（"autonomous" / "scheduled"）
+	//
+	// 记录本团队实例建队时的调度模式。F_62 规格：dispatch_mode 是静态配置，
+	// spec 是运行期真相源，此列供 team_info 展示与恢复时读回。
+	//
+	// Python: Team.dispatch_mode
+	DispatchMode string `json:"dispatch_mode"`
+	// EnableTaskVerification 生效的任务验证开关
+	//
+	// spec 天花板与 build_team 参数共同决定的生效值，落库后接管路径从行里
+	// 读回（能力参数对已配好的团队不适用）。
+	//
+	// Python: Team.enable_task_verification
+	EnableTaskVerification bool `json:"enable_task_verification"`
 	// Created 创建时间（毫秒时间戳）
 	Created int64 `json:"created"`
 	// UpdatedAt 更新时间（毫秒时间戳，仅 roster 变更时 bump）

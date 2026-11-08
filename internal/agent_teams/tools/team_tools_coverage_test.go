@@ -80,7 +80,12 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 	backend := newTestTeamBackend()
 
 	t.Run("leader 默认模式", func(t *testing.T) {
-		tools := CreateTeamTools(backend, "leader", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		tools := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		if !hasTool(tools, "build_team") || !hasTool(tools, "spawn_member") {
 			t.Fatalf("leader 应包含 build_team/spawn_member，实际 %v", namesOf(tools))
 		}
@@ -90,36 +95,60 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 	})
 
 	t.Run("leader + plan_mode 含审批工具", func(t *testing.T) {
-		tools := CreateTeamTools(backend, "leader", "plan_mode", "ephemeral", "cn", nil, nil, nil)
+		tools := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "plan_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		if !hasTool(tools, "approve_plan") || !hasTool(tools, "approve_tool") {
 			t.Fatalf("plan_mode 应包含审批工具，实际 %v", namesOf(tools))
 		}
 	})
 
 	t.Run("persistent 生命周期移除 clean_team", func(t *testing.T) {
-		tools := CreateTeamTools(backend, "leader", "build_mode", "persistent", "cn", nil, nil, nil)
+		tools := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "persistent",
+			Language:     "cn",
+		}, nil, nil, nil)
 		if hasTool(tools, "clean_team") {
 			t.Fatalf("persistent 不应包含 clean_team，实际 %v", namesOf(tools))
 		}
 	})
 
 	t.Run("excludeTools 生效", func(t *testing.T) {
-		tools := CreateTeamTools(backend, "leader", "build_mode", "ephemeral", "cn", nil, nil,
-			map[string]struct{}{"spawn_member": {}})
+		tools := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, map[string]struct{}{"spawn_member": {}})
 		if hasTool(tools, "spawn_member") {
 			t.Fatalf("排除的 spawn_member 不应出现，实际 %v", namesOf(tools))
 		}
 	})
 
 	t.Run("backend 为 nil 时无工具", func(t *testing.T) {
-		tools := CreateTeamTools(nil, "leader", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		tools := CreateTeamTools(nil, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		if len(tools) != 0 {
 			t.Fatalf("backend 为 nil 时应无工具，实际 %v", namesOf(tools))
 		}
 	})
 
 	t.Run("member 角色集合", func(t *testing.T) {
-		tools := CreateTeamTools(backend, "", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		tools := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		if hasTool(tools, "build_team") {
 			t.Fatalf("member 不应包含 build_team，实际 %v", namesOf(tools))
 		}
@@ -129,7 +158,12 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 	})
 
 	t.Run("human_agent 角色集合", func(t *testing.T) {
-		tools := CreateTeamTools(backend, "human_agent", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		tools := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "human_agent",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		if hasTool(tools, "spawn_member") {
 			t.Fatalf("human_agent 不应包含 spawn_member，实际 %v", namesOf(tools))
 		}
@@ -141,7 +175,12 @@ func TestQualifyTeamToolIDs(t *testing.T) {
 	backend := newTestTeamBackend()
 
 	t.Run("空团队名回落 default", func(t *testing.T) {
-		cp := CreateTeamTools(backend, "leader", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		cp := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		before := make([]string, len(cp))
 		for i, tl := range cp {
 			before[i] = tl.Card().ID
@@ -155,7 +194,12 @@ func TestQualifyTeamToolIDs(t *testing.T) {
 	})
 
 	t.Run("成员名为空时用 unknown 占位", func(t *testing.T) {
-		cp := CreateTeamTools(backend, "leader", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		cp := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		before := make([]string, len(cp))
 		for i, tl := range cp {
 			before[i] = tl.Card().ID
@@ -169,7 +213,12 @@ func TestQualifyTeamToolIDs(t *testing.T) {
 	})
 
 	t.Run("空 ID 的卡片被跳过", func(t *testing.T) {
-		cp := CreateTeamTools(backend, "leader", "build_mode", "ephemeral", "cn", nil, nil, nil)
+		cp := CreateTeamTools(backend, TeamToolOptions{
+			Role:         "leader",
+			TeammateMode: "build_mode",
+			Lifecycle:    "ephemeral",
+			Language:     "cn",
+		}, nil, nil, nil)
 		for _, tl := range cp {
 			tl.Card().ID = ""
 		}
@@ -247,7 +296,12 @@ func TestCopySet(t *testing.T) {
 // TestTeamTools_StreamNotSupported 验证所有工具显式拒绝流式调用。
 func TestTeamTools_StreamNotSupported(t *testing.T) {
 	backend := newTestTeamBackend()
-	tools := CreateTeamTools(backend, "leader", "plan_mode", "ephemeral", "cn", nil, nil, nil)
+	tools := CreateTeamTools(backend, TeamToolOptions{
+		Role:         "leader",
+		TeammateMode: "plan_mode",
+		Lifecycle:    "ephemeral",
+		Language:     "cn",
+	}, nil, nil, nil)
 	for _, tl := range tools {
 		ch, err := tl.Stream(context.Background(), map[string]any{})
 		if err == nil || ch != nil {
@@ -260,10 +314,25 @@ func TestTeamTools_StreamNotSupported(t *testing.T) {
 func TestTeamTools_参数校验失败分支(t *testing.T) {
 	ctx := context.Background()
 	backend := newTestTeamBackend()
-	tools := CreateTeamTools(backend, "leader", "plan_mode", "ephemeral", "cn", nil, nil, nil)
+	tools := CreateTeamTools(backend, TeamToolOptions{
+		Role:         "leader",
+		TeammateMode: "plan_mode",
+		Lifecycle:    "ephemeral",
+		Language:     "cn",
+	}, nil, nil, nil)
 	// claim_task / member_complete_task 分属成员集与 human_agent 集，leader 集合里没有
-	memberTools := CreateTeamTools(backend, "", "build_mode", "ephemeral", "cn", nil, nil, nil)
-	humanTools := CreateTeamTools(backend, "human_agent", "build_mode", "ephemeral", "cn", nil, nil, nil)
+	memberTools := CreateTeamTools(backend, TeamToolOptions{
+		Role:         "",
+		TeammateMode: "build_mode",
+		Lifecycle:    "ephemeral",
+		Language:     "cn",
+	}, nil, nil, nil)
+	humanTools := CreateTeamTools(backend, TeamToolOptions{
+		Role:         "human_agent",
+		TeammateMode: "build_mode",
+		Lifecycle:    "ephemeral",
+		Language:     "cn",
+	}, nil, nil, nil)
 
 	t.Run("spawn_member 成员名非法", func(t *testing.T) {
 		res := invokeByName(t, tools, "spawn_member", map[string]any{"member_name": "Dev_1"})
@@ -413,7 +482,12 @@ func TestTeamTools_参数校验失败分支(t *testing.T) {
 // TestTeamTools_后端交互分支 覆盖 leader 工具与后端交互的成功/失败路径。
 func TestTeamTools_后端交互分支(t *testing.T) {
 	backend := newTestTeamBackend()
-	tools := CreateTeamTools(backend, "leader", "plan_mode", "ephemeral", "cn", nil, nil, nil)
+	tools := CreateTeamTools(backend, TeamToolOptions{
+		Role:         "leader",
+		TeammateMode: "plan_mode",
+		Lifecycle:    "ephemeral",
+		Language:     "cn",
+	}, nil, nil, nil)
 
 	t.Run("list_members 空团队返回零成员", func(t *testing.T) {
 		res := invokeByName(t, tools, "list_members", map[string]any{})

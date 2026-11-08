@@ -238,6 +238,17 @@ func (t *TeamContextTracker) Commit(sess sessioninterfaces.SessionFacade, delive
 	t.persist(sess, pending)
 }
 
+// PolicyTextForTest 返回已渲染的 <team-policy> 块与是否开启。
+//
+// 仅供其它包的测试断言 policyText 通道是否开启（framework 建队时非 nil）。
+// 生产代码不应读它——政策块的投递一律走 PendingText。
+func (t *TeamContextTracker) PolicyTextForTest() (string, bool) {
+	if t == nil || t.policyText == nil {
+		return "", false
+	}
+	return *t.policyText, true
+}
+
 // LastDeliveredText 返回上次经 deliveredText 提交的内容。
 //
 // 「当前状态」通道一旦某 section 未重新注册就视为撤回，而 PendingText 在成员
@@ -339,6 +350,12 @@ func (t *TeamContextTracker) readBaseline(sess sessioninterfaces.SessionFacade) 
 // commit 是让「中途崩溃 / 暂停」落在一致状态的那一步：成员的对话与本基线
 // 共享同一个 agent-session state bucket，由同一次 AgentStorage.save 写入。
 // 写失败只告警——绝不因为一次 checkpoint 写失败而中断模型调用。
+//
+// **不做回滚**：上游 _persist 同样只告警不回滚。回滚看似更安全，实则有害
+// ——Commit 失败的原因可能与会话环境有关（例如会话尚未注册 agent store），
+// 此时内存态的 UpdateState 其实已经生效，回滚会让基线永远推不动，
+// 每轮都重投同一段状态。真正该保证的是「投递失败时调用方不调 Commit」，
+// 那条由 PendingText/Commit 的两段式契约承担，不在本函数。
 //
 // Python: _persist (team_context.py L656-671)
 func (t *TeamContextTracker) persist(sess sessioninterfaces.SessionFacade, st map[string]any) {

@@ -29,19 +29,20 @@ func GetTeamPlanModePrompt(language string) (string, error) {
 }
 
 // BuildTeamPlanModePrompt 渲染 team.plan 提示词模板。
-// Python: build_team_plan_mode_prompt(language, enter_plan_mode_status, plan_file_info)
 //
-// 使用 PromptTemplate.Render 渲染 {var} 占位符（对齐 Python .format() 风格）。
+// Go 侧与上游同样**不做占位符替换**：team_plan_mode.md 用的是单花括号
+// {enter_plan_mode_status} / {plan_file_info}，而上游 PromptTemplate.format
+// 走 PromptAssembler，其占位符正则是 `\{\{([^{}]*?)\}\}`（TextableVariable），
+// 匹配不到单花括号——所以两个占位符在 Python 侧一直原样留在文本里。
+// Go 侧保持这一事实，不"修正"成替换（规则 9：行为等价，不自行改良）。
+//
+// 两个入参保留：上游 build_team_plan_mode_prompt 同样收这两个参数并传给
+// format，只是 format 匹配不到、不生效。签名保形是为了逐符号对照。
+//
+// Python: build_team_plan_mode_prompt (prompts/team_plan_mode.py L80-92)
 func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFileInfo string) (string, error) {
-	tpl, err := GetTeamPlanModePrompt(language)
-	if err != nil {
-		return "", err
-	}
-	pt := &PromptTemplate{content: tpl}
-	return pt.Render(map[string]string{
-		"enter_plan_mode_status": enterPlanModeStatus,
-		"plan_file_info":         planFileInfo,
-	}), nil
+	_, _ = enterPlanModeStatus, planFileInfo // 上游 format 匹配不到单花括号，等价于未使用
+	return GetTeamPlanModePrompt(language)
 }
 
 // BuildTeamPlanModeSection 构建 team.plan MODE_INSTRUCTIONS PromptSection。

@@ -413,6 +413,9 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 	// Python: await conn.run_sync(_ensure_team_member_role_column) — 迁移补 role 列
 	ensureTeamMemberRoleColumn(db)
 
+	// Python: await conn.run_sync(_ensure_team_info_capability_columns) — 迁移补能力列
+	ensureTeamInfoCapabilityColumns(db)
+
 	logger.Info(logComponent).Str("db_type", string(s.config.DBType)).Msg("SQL database engine initialized")
 	return db, nil
 }
@@ -434,6 +437,37 @@ func ensureTeamMemberRoleColumn(db *gorm.DB) {
 	// 补列：对齐 Python ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'
 	db.Exec("ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'")
 	logger.Info(logComponent).Msg("migrating team_member table: adding role column with default 'teammate'")
+}
+
+// ensureTeamInfoCapabilityColumns 为已存在的 team_info 表补齐 F_62 能力列。
+//
+// team_info 是**静态表**，在用户存量库里已经建好：gorm AutoMigrate 只加列
+// 不删列，但旧库升级上来时缺这两列会让 INSERT 失败。
+// （注意与 team_task_* 动态表不同——那些随 session 重建，只改建表 DDL 即可。）
+//
+// Python: _ensure_team_info_capability_columns (database/engine.py L384-405)
+func ensureTeamInfoCapabilityColumns(db *gorm.DB) {
+	columns, err := db.Migrator().ColumnTypes(&Team{})
+	if err != nil {
+		return
+	}
+	hasDispatch, hasVerification := false, false
+	for _, col := range columns {
+		switch col.Name() {
+		case "dispatch_mode":
+			hasDispatch = true
+		case "enable_task_verification":
+			hasVerification = true
+		}
+	}
+	if !hasDispatch {
+		db.Exec("ALTER TABLE team_info ADD COLUMN dispatch_mode TEXT NOT NULL DEFAULT 'autonomous'")
+		logger.Info(logComponent).Msg("migrating team_info table: adding dispatch_mode column with default 'autonomous'")
+	}
+	if !hasVerification {
+		db.Exec("ALTER TABLE team_info ADD COLUMN enable_task_verification BOOLEAN NOT NULL DEFAULT 0")
+		logger.Info(logComponent).Msg("migrating team_info table: adding enable_task_verification column with default 0")
+	}
 }
 
 // createSessionTablesDDL 用手写 DDL 创建4张动态表并建立索引。

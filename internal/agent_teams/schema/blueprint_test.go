@@ -439,3 +439,48 @@ func TestVisionModelSpec_JSON序列化(t *testing.T) {
 		t.Errorf("不匹配")
 	}
 }
+
+// TestTeamAgentSpec_新增能力字段 验证 25.0g 补的 6 个字段可读写。
+// Python: blueprint.py L350 dispatch_mode / L374 enable_member_messaging /
+// L385 max_subtask_depth / L395 bootstrap_mode
+func TestTeamAgentSpec_新增能力字段(t *testing.T) {
+	spec := TeamAgentSpec{
+		DispatchMode:          "scheduled",
+		EnableMemberMessaging: true,
+		MaxSubtaskDepth:       2,
+		BootstrapMode:         "framework",
+		BoundGroupName:        "grp",
+		SwarmflowEnabled:      true,
+	}
+	if spec.DispatchMode != "scheduled" {
+		t.Fatal("DispatchMode 未保存")
+	}
+	if !spec.EnableMemberMessaging {
+		t.Fatal("EnableMemberMessaging 未保存")
+	}
+	if spec.MaxSubtaskDepth != 2 {
+		t.Fatal("MaxSubtaskDepth 未保存")
+	}
+	if spec.BootstrapMode != "framework" {
+		t.Fatal("BootstrapMode 未保存")
+	}
+	if spec.BoundGroupName != "grp" {
+		t.Fatal("BoundGroupName 未保存")
+	}
+	if !spec.SwarmflowEnabled {
+		t.Fatal("SwarmflowEnabled 未保存")
+	}
+}
+
+// TestTeamAgentSpec_Validate_bootstrap需要scheduled 验证跨字段校验。
+// Python: _validate_bootstrap_mode (blueprint.py L781-793)
+func TestTeamAgentSpec_Validate_bootstrap需要scheduled(t *testing.T) {
+	spec := TeamAgentSpec{BootstrapMode: "framework", DispatchMode: "autonomous"}
+	if err := spec.Validate(); err == nil {
+		t.Fatal("framework + autonomous 应报错")
+	}
+	spec.DispatchMode = "scheduled"
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("framework + scheduled 不应报错：%v", err)
+	}
+}

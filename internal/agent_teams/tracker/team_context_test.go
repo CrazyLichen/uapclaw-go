@@ -239,7 +239,7 @@ func TestTeamInfoBody_无团队行不播(t *testing.T) {
 func TestTeamInfoBody_有团队行首投(t *testing.T) {
 	tb, _ := newTestBackend(t)
 	ctx := context.Background()
-	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "leader", "目标描述", "")
+	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "leader", "目标描述", "", "autonomous", false)
 	tr := NewTeamContextTracker(tb, "alice", atschema.TeamRoleTeammate,
 		"", "", "", "/team/ws", "", false, "cn", "", nil)
 	got := tr.teamInfoBody(map[string]any{}, map[string]any{})
@@ -657,7 +657,7 @@ func TestPendingText_nil会话返回空(t *testing.T) {
 func TestSnapshotText_含身份与团队块(t *testing.T) {
 	tb, db := newTestBackend(t)
 	ctx := context.Background()
-	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "alice", "目标", "")
+	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "alice", "目标", "", "autonomous", false)
 	// 本成员自己的行：身份块要等它出现才渲染（display_name 必须来自 DB 行）
 	if ok := db.Member().CreateMember(ctx, "alice", "test-team", "Alice", "{}",
 		"ready", "teammate", "", "", "build_mode", "", ""); !ok {
@@ -713,5 +713,57 @@ func TestPendingText_身份通道首投(t *testing.T) {
 	tr.Commit(sess, nil)
 	if _, written := sess.state[TeamContextStateKey]; !written {
 		t.Fatal("Commit 后基线应推进")
+	}
+}
+
+// TestCommit_投递失败不推进基线 验证两段式契约：没调 Commit 基线就不动。
+//
+// PendingText 只算增量、不推进；只有调用方把文本真正投递出去之后才调
+// Commit。投递失败时调用方不调，下一轮 PendingText 必须重新吐出同样的内容
+// ——否则那句话就永久丢了。
+//
+// Python: pending_text / commit 两段式（team_context.py L227-259 / L659-671）
+func TestCommit_投递失败不推进基线(t *testing.T) {
+	sess := newFakeSession("s1")
+	tr := &TeamContextTracker{
+		memberName:  "alice",
+		displayName: "Alice",
+		role:        atschema.TeamRoleLeader,
+		language:    "cn",
+	}
+
+	first, ok := tr.PendingText(sess)
+	if !ok || first == "" {
+		t.Fatal("首轮应有待投文本")
+	}
+	// 模拟「投递失败」：调用方不调 Commit
+
+	second, ok := tr.PendingText(sess)
+	if !ok || second == "" {
+		t.Fatal("基线未推进，第二轮应重新算出同样的内容")
+	}
+	if second != first {
+		t.Fatalf("两轮内容应一致：first=%q second=%q", first, second)
+	}
+}
+
+// TestCommit_调Commit后推进基线 验证正常路径：Commit 之后不再重投。
+func TestCommit_调Commit后推进基线(t *testing.T) {
+	sess := newFakeSession("s1")
+	tr := &TeamContextTracker{
+		memberName:  "alice",
+		displayName: "Alice",
+		role:        atschema.TeamRoleLeader,
+		language:    "cn",
+	}
+
+	first, ok := tr.PendingText(sess)
+	if !ok || first == "" {
+		t.Fatal("首轮应有待投文本")
+	}
+	tr.Commit(sess, nil)
+
+	if again, has := tr.PendingText(sess); has {
+		t.Fatalf("Commit 后不应再重投，实际：%s", again)
 	}
 }

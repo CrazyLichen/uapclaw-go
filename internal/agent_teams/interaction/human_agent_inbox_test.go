@@ -27,7 +27,7 @@ func newTestTeamBackendForInteraction() *tools.TeamBackend {
 	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
 	tb := tools.NewTeamBackend("test-team", "leader", true, db, msg, tools.WithEnableHITT(true))
 	ctx := context.Background()
-	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil)
+	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 	tb.SpawnHumanAgent(ctx, "human_agent", "Human Agent", "", "")
 	return tb
 }

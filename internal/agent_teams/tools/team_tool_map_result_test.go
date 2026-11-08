@@ -476,3 +476,107 @@ func TestFormatMulticastText(t *testing.T) {
 	})
 	assert.True(t, strings.Contains(result, "; "), "多段内容应使用分号分隔")
 }
+
+// TestBuildTeamMapResult_成功含政策披露 验证成功分支追加政策正文。
+// Python: BuildTeamTool.render_for_llm (tool_team.py L178-221)
+func TestBuildTeamMapResult_成功含政策披露(t *testing.T) {
+	tool := &BuildTeamTool{
+		lifecycle:    "temporary",
+		teammateMode: "build_mode",
+		teamMode:     "default",
+		dispatchMode: "autonomous",
+		language:     "cn",
+	}
+	out := map[string]any{
+		"success": true,
+		"data": map[string]any{
+			"team_name":                "t1",
+			"display_name":             "T1",
+			"leader_member_name":       "leader1",
+			"leader_display_name":      "Leader",
+			"enable_hitt":              false,
+			"taken_over":               false,
+			"enable_task_verification": false,
+		},
+	}
+	got := tool.MapResult(out)
+	if !strings.Contains(got, "Team created:") {
+		t.Fatalf("应含 Team created 首行，实际：%s", got)
+	}
+	if !strings.Contains(got, "任务下发") {
+		t.Fatalf("应追加政策披露（含任务下发一节），实际：%s", got)
+	}
+	if strings.Contains(got, "Existing team taken over") {
+		t.Fatal("新建不应出现接管首行")
+	}
+}
+
+// TestBuildTeamMapResult_接管首行 验证接管分支首行与提示语。
+// Python: render_for_llm —— taken_over 时 lead 换成 "Existing team taken over"
+// 并追加「不要重复 spawn」提示。
+func TestBuildTeamMapResult_接管首行(t *testing.T) {
+	tool := &BuildTeamTool{
+		lifecycle: "temporary", teammateMode: "build_mode",
+		teamMode: "default", dispatchMode: "autonomous", language: "cn",
+	}
+	out := map[string]any{
+		"success": true,
+		"data": map[string]any{
+			"team_name": "t1", "display_name": "T1",
+			"leader_member_name": "leader1", "leader_display_name": "Leader",
+			"enable_hitt": false, "taken_over": true,
+			"enable_task_verification": false,
+		},
+	}
+	got := tool.MapResult(out)
+	if !strings.Contains(got, "Existing team taken over") {
+		t.Fatalf("接管应含 Existing team taken over 首行，实际：%s", got)
+	}
+	if strings.Contains(got, "Team created:") {
+		t.Fatal("接管不应出现 Team created")
+	}
+	if !strings.Contains(got, "do not re-spawn members that are already there") {
+		t.Fatalf("接管应含不重复 spawn 提示，实际：%s", got)
+	}
+}
+
+// TestBuildTeamMapResult_验证开关回带 验证 task_verification 只在该键存在时回带。
+// Python: `if self._VERIFY_PARAM in d: facts += f" task_verification={d[...]}"`
+func TestBuildTeamMapResult_验证开关回带(t *testing.T) {
+	tool := &BuildTeamTool{
+		lifecycle: "temporary", teammateMode: "build_mode",
+		teamMode: "default", dispatchMode: "scheduled", language: "cn",
+	}
+	withKey := map[string]any{"success": true, "data": map[string]any{
+		"team_name": "t1", "display_name": "T1",
+		"leader_member_name": "leader1", "leader_display_name": "Leader",
+		"enable_hitt": false, "taken_over": false,
+		"enable_task_verification": true,
+	}}
+	if got := tool.MapResult(withKey); !strings.Contains(got, "task_verification=true") {
+		t.Fatalf("应回带 task_verification=true，实际：%s", got)
+	}
+
+	withoutKey := map[string]any{"success": true, "data": map[string]any{
+		"team_name": "t1", "display_name": "T1",
+		"leader_member_name": "leader1", "leader_display_name": "Leader",
+		"enable_hitt": false, "taken_over": false,
+	}}
+	if got := tool.MapResult(withoutKey); strings.Contains(got, "task_verification=") {
+		t.Fatalf("键不存在时不应回带，实际：%s", got)
+	}
+}
+
+// TestBuildTeamMapResult_失败不追加政策 验证失败分支。
+func TestBuildTeamMapResult_失败不追加政策(t *testing.T) {
+	tool := &BuildTeamTool{language: "cn", dispatchMode: "autonomous",
+		lifecycle: "temporary", teammateMode: "build_mode", teamMode: "default"}
+	got := tool.MapResult(map[string]any{"success": false, "error": "boom"})
+	if got != "boom" {
+		t.Fatalf("失败应原样返回 error，实际：%q", got)
+	}
+	got = tool.MapResult(map[string]any{"success": false})
+	if got != "Failed to build team" {
+		t.Fatalf("无 error 时应返回兜底文案，实际：%q", got)
+	}
+}

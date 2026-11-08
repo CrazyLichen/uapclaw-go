@@ -40,6 +40,14 @@ type TeamToolRail struct {
 	lifecycle string
 	// language 语言
 	language string
+	// dispatchMode 调度模式（转发给 TeamToolOptions）
+	dispatchMode string
+	// teamMode 团队模式（转发给 TeamToolOptions）
+	teamMode string
+	// bootstrapMode 建队模式（转发给 TeamToolOptions）
+	bootstrapMode string
+	// swarmflowEnabled leader 是否持有 swarmflow 工具
+	swarmflowEnabled bool
 	// onTeammateCreated 队友创建回调
 	onTeammateCreated func(ctx context.Context, memberName string) error
 	// modelConfigAlloc 模型配置分配器
@@ -115,10 +123,16 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	// Python: tools = create_team_tools(...)
 	toolList := tools.CreateTeamTools(
 		r.teamBackend,
-		r.role,
-		r.teammateMode,
-		r.lifecycle,
-		r.language,
+		tools.TeamToolOptions{
+			Role:             r.role,
+			TeammateMode:     r.teammateMode,
+			Lifecycle:        r.lifecycle,
+			Language:         r.language,
+			DispatchMode:     r.dispatchMode,
+			TeamMode:         r.teamMode,
+			BootstrapMode:    r.bootstrapMode,
+			SwarmflowEnabled: r.swarmflowEnabled,
+		},
 		r.onTeammateCreated,
 		r.modelConfigAlloc,
 		r.excludeTools,
@@ -260,6 +274,26 @@ func WithLifecycle(lifecycle string) TeamToolRailOption {
 // WithLanguage 设置语言。
 func WithLanguage(lang string) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.language = lang }
+}
+
+// WithToolDispatchMode 设置调度模式。
+func WithToolDispatchMode(mode string) TeamToolRailOption {
+	return func(r *TeamToolRail) { r.dispatchMode = mode }
+}
+
+// WithToolTeamMode 设置团队模式。
+func WithToolTeamMode(mode string) TeamToolRailOption {
+	return func(r *TeamToolRail) { r.teamMode = mode }
+}
+
+// WithToolBootstrapMode 设置建队模式。
+func WithToolBootstrapMode(mode string) TeamToolRailOption {
+	return func(r *TeamToolRail) { r.bootstrapMode = mode }
+}
+
+// WithToolSwarmflowEnabled 设置 leader 是否持有 swarmflow 工具。
+func WithToolSwarmflowEnabled(enabled bool) TeamToolRailOption {
+	return func(r *TeamToolRail) { r.swarmflowEnabled = enabled }
 }
 
 // WithOnTeammateCreated 设置队友创建回调。

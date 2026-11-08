@@ -33,3 +33,11 @@ func TestConstantValues(t *testing.T) {
 		t.Errorf("len(ReservedMemberNames) = %d, want 3", len(ReservedMemberNames))
 	}
 }
+
+// TestInlineTaskMemberEnabled_默认关闭 验证任务级内联成员硬开关默认关闭。
+// Python: INLINE_TASK_MEMBER_ENABLED = False (agent_teams/constants.py L36)
+func TestInlineTaskMemberEnabled_默认关闭(t *testing.T) {
+	if InlineTaskMemberEnabled {
+		t.Fatal("InlineTaskMemberEnabled 必须为 false（上游本版本关闭 F_118）")
+	}
+}

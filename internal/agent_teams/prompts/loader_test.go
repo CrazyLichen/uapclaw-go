@@ -130,3 +130,26 @@ func TestPromptTemplate_ToSection(t *testing.T) {
 		t.Fatal("section cn content is empty")
 	}
 }
+
+// TestRender_单花括号不被替换 验证 Render 只识别 {{var}}。
+// Python: PromptAssembler 的 placeholder_prefix="{{" / suffix="}}"
+// （core/foundation/prompt/template.py L33-34）——单花括号是字面文本。
+func TestRender_单花括号不被替换(t *testing.T) {
+	tpl := &PromptTemplate{content: "a {single} b {{double}} c"}
+	got := tpl.Render(map[string]string{"single": "S", "double": "D"})
+	want := "a {single} b D c"
+	if got != want {
+		t.Fatalf("Render 结果不符：got=%q want=%q", got, want)
+	}
+}
+
+// TestRender_替换值含花括号不被二次解析 验证切段语义：替换进去的值不再被解析。
+// 上游 TextableVariable 把模板切成「字面段 / 占位符段」再只替换占位符段。
+func TestRender_替换值含花括号不被二次解析(t *testing.T) {
+	tpl := &PromptTemplate{content: "x {{a}} y {{b}}"}
+	got := tpl.Render(map[string]string{"a": "{{b}}", "b": "B"})
+	want := "x {{b}} y B"
+	if got != want {
+		t.Fatalf("Render 结果不符：got=%q want=%q", got, want)
+	}
+}

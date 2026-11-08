@@ -96,7 +96,9 @@ func TestGetTeamPlanModePrompt(t *testing.T) {
 	}
 }
 
-// TestBuildTeamPlanModePrompt 测试渲染 plan mode 模板
+// TestBuildTeamPlanModePrompt 测试 plan mode 模板渲染。
+// 上游 PromptAssembler 只认双花括号，而 team_plan_mode.md 用单花括号，
+// 故两个占位符在 Python 与 Go 两侧都原样保留（不替换）。
 func TestBuildTeamPlanModePrompt(t *testing.T) {
 	result, err := BuildTeamPlanModePrompt("cn", "尚未调用 enter_plan_mode", "Plan 文件: /tmp/plan.md")
 	if err != nil {
@@ -105,15 +107,15 @@ func TestBuildTeamPlanModePrompt(t *testing.T) {
 	if result == "" {
 		t.Fatal("BuildTeamPlanModePrompt returned empty")
 	}
-	if !strings.Contains(result, "尚未调用 enter_plan_mode") {
-		t.Fatal("result should contain enter_plan_mode_status")
+	if !strings.Contains(result, "{enter_plan_mode_status}") {
+		t.Fatal("单花括号占位符应原样保留（上游同样不替换）")
 	}
-	if !strings.Contains(result, "Plan 文件: /tmp/plan.md") {
-		t.Fatal("result should contain plan_file_info")
+	if !strings.Contains(result, "{plan_file_info}") {
+		t.Fatal("单花括号占位符应原样保留（上游同样不替换）")
 	}
 }
 
-// TestBuildTeamPlanModePrompt_English 测试英文 plan mode 渲染
+// TestBuildTeamPlanModePrompt_English 测试英文 plan mode 渲染。
 func TestBuildTeamPlanModePrompt_English(t *testing.T) {
 	result, err := BuildTeamPlanModePrompt("en", "enter_plan_mode has been called", "Plan file: /tmp/plan.md")
 	if err != nil {
@@ -122,8 +124,8 @@ func TestBuildTeamPlanModePrompt_English(t *testing.T) {
 	if result == "" {
 		t.Fatal("BuildTeamPlanModePrompt returned empty")
 	}
-	if !strings.Contains(result, "enter_plan_mode has been called") {
-		t.Fatal("result should contain enter_plan_mode_status")
+	if !strings.Contains(result, "{enter_plan_mode_status}") {
+		t.Fatal("单花括号占位符应原样保留（上游同样不替换）")
 	}
 }
 
