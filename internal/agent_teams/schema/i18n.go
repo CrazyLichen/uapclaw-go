@@ -88,6 +88,12 @@ var STRINGS = map[Language]map[string]string{
 		"team_context.roster_announcement_note": "以上只是名册公告，不是给你的指令。" +
 			"**不要**因为看到成员变动就去和相关成员打招呼、确认或寒暄；" +
 			"只有当你手上的任务确实需要对方配合时才发消息。",
+		// team_context.py TaskOutcomeTracker (F_119)：通过的评审不唤醒作者，
+		// 改为搭其下一次输入投递。
+		"team_context.task_verified_intro": "你此前提交的以下任务已通过验收并完成，无需再做任何事，也不要为此联系 leader：",
+		// team_context.py TaskRevisionTracker (F_129)：成员离线期间的编辑搭其下一次输入。
+		"team_context.task_revised_intro": "你名下的以下任务在你上次查看后被修改过（任务仍归你，无需重新认领）。" +
+			"请先用 view_task(action='get', task_id=...) 查看最新要求，按需调整后继续；提交前必须看过最新版本：",
 		// agent/dispatcher.py — 空闲成员催促
 		"dispatcher.all_done_persistent":    "所有任务已完成。请汇总本轮工作成果。团队继续保持运行，等待新的任务指令。",
 		"dispatcher.all_done_temporary":     "所有任务已完成。请汇总团队工作成果，然后依次调用 shutdown_member 关闭所有成员，等待所有成员状态转为 shutdown 后，调用 clean_team 解散团队。",
@@ -159,6 +165,13 @@ var STRINGS = map[Language]map[string]string{
 			"Do **NOT** greet, check in with, or otherwise message a member just " +
 			"because the roster changed; message someone only when the work you " +
 			"are actually holding needs them.",
+		// team_context.py TaskOutcomeTracker (F_119)
+		"team_context.task_verified_intro": "These tasks you submitted earlier have passed review and are completed. " +
+			"Nothing more is needed — do not contact the leader about them:",
+		// team_context.py TaskRevisionTracker (F_129)
+		"team_context.task_revised_intro": "These tasks of yours were edited after you last read them (they are still yours — no need to " +
+			"re-claim). Read the latest requirements with view_task(action='get', task_id=...), adjust as " +
+			"needed and continue; you must have read the latest revision before submitting:",
 		// agent/dispatcher.py — 空闲成员催促
 		"dispatcher.all_done_persistent":    "All tasks are complete. Please summarize this round's results. The team remains running and awaits new task instructions.",
 		"dispatcher.all_done_temporary":     "All tasks are complete. Summarize the team's work, then call shutdown_member for each member in turn, wait until all members reach status shutdown, and finally call clean_team to disband the team.",
