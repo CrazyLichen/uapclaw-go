@@ -7,9 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -605,3 +609,51 @@ func TestAgentConfigurator_BuildSpawnConfig_配置前(t *testing.T) {
 }
 
 // mockTeamDatabase 测试用 mock 数据库（仅用于类型验证，实际未使用）
+
+// TestResolveDispatchMode 测试调度模式解析（偏差 D-10：恒 autonomous）
+//
+// 25.2 落地 TeamAgentSpec.DispatchMode 后本用例改成断言真实字段值。
+func TestResolveDispatchMode(t *testing.T) {
+	assert.Equal(t, "autonomous", resolveDispatchMode(atschema.TeamAgentSpec{}))
+}
+
+// TestBuildTaskEventTracker_按模式分派 测试两种 dispatch 模式各返对应 tracker
+//
+// 这是 configurator 注入任务通知器的唯一分支点，直接验证分派契约。
+// Python: build_task_event_tracker (team_context.py L974-990)
+func TestBuildTaskEventTracker_按模式分派(t *testing.T) {
+	db := database.NewInMemoryTeamDatabase()
+	require.NoError(t, db.Initialize(context.Background()))
+	tb := tools.NewTeamBackend("test-team", "alice", false, db,
+		messager.NewInProcessMessager(atschema.MessagerTransportConfig{}))
+
+	if _, ok := tracker.BuildTaskEventTracker("scheduled", tb, "alice").(*tracker.TaskOutcomeTracker); !ok {
+		t.Fatal("scheduled 应返回 TaskOutcomeTracker（评审通过通知）")
+	}
+	if _, ok := tracker.BuildTaskEventTracker("autonomous", tb, "alice").(*tracker.TaskRevisionTracker); !ok {
+		t.Fatal("autonomous 应返回 TaskRevisionTracker（编辑通知）")
+	}
+	if tracker.BuildTaskEventTracker("scheduled", nil, "alice") != nil {
+		t.Fatal("backend 为 nil 应返回 nil")
+	}
+}
+
+// TestTeamAgent_TaskEventTracker往返 测试 TeamAgent 持有并透出任务通知器
+//
+// 设计要点：通知器由 TeamAgent 持有、rail 借用——基线因此超出 rail 生命周期，
+// 与运行时的事件驱动宣告共享同一份（两份会把同一次编辑播两遍）。
+func TestTeamAgent_TaskEventTracker往返(t *testing.T) {
+	a := NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	if a.TaskEventTracker() != nil {
+		t.Fatal("初始应为 nil")
+	}
+	fake := &stubTaskTracker{}
+	a.SetTaskEventTracker(fake)
+	if a.TaskEventTracker() != fake {
+		t.Fatal("SetTaskEventTracker 后应能取回同一个实例")
+	}
+	// 同时写进 configurator 资源区，供 rail 构造时借用
+	if a.configurator.TaskEventTracker() != fake {
+		t.Fatal("configurator 资源区未同步")
+	}
+}
