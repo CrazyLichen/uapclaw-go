@@ -88,6 +88,18 @@ type TeamBackend struct {
 	// ── 文件系统清理路径 ──
 	// cleanupPaths 待清理的文件路径集合
 	cleanupPaths map[string]struct{}
+
+	// ── 能力开关（hittMu 保护）──
+	// dispatchMode 本团队的调度模式（"autonomous" / "scheduled"）
+	dispatchMode string
+	// specEnableTaskVerification 配置层的任务验证开关天花板
+	specEnableTaskVerification bool
+	// enableTaskVerification 运行时的任务验证开关生效值
+	enableTaskVerification bool
+	// enableMemberMessaging scheduled 成员可否互发消息（F_126）
+	enableMemberMessaging bool
+	// maxSubtaskDepth 成员拆子任务的深度上限（F_128），0=不启用
+	maxSubtaskDepth int
 }
 
 // TeamBackendOption TeamBackend 构造可选参数。
@@ -736,8 +748,11 @@ func (tb *TeamBackend) BuildTeam(ctx context.Context, displayName, desc, leaderD
 	tb.enableHITT = effectiveHITT
 	tb.hittMu.Unlock()
 
+	// 步骤 B2: 计算生效的任务验证开关（spec 天花板 ∧ 本次覆盖）
+	effectiveTaskVerification := tb.specEnableTaskVerification
+
 	// 步骤 1: 创建团队行
-	if !tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "") {
+	if !tb.db.Team().CreateTeam(ctx, tb.teamName, displayName, tb.leaderMemberName, desc, "", tb.dispatchMode, effectiveTaskVerification) {
 		return fmt.Errorf("创建团队 %s 失败", tb.teamName)
 	}
 

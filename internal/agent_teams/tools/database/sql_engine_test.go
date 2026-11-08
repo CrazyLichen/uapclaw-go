@@ -69,7 +69,7 @@ func TestSqlTeamDatabase_CleanupAllRuntimeState(t *testing.T) {
 	_ = db.CreateCurSessionTables(ctx)
 
 	// 向静态表插入数据，验证 DELETE FROM 能清理
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 	db.Member().CreateMember(context.Background(), "m1", "t1", "M1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	dropped, cleared, err := db.CleanupAllRuntimeState(ctx)
@@ -162,7 +162,7 @@ func TestSqlTeamDatabase_ForceDeleteTeamSession(t *testing.T) {
 	db := newTestSqlDB(t)
 	ctx := newTestCtx("force-delete-test")
 
-	db.Team().CreateTeam(ctx, "ft1", "FT1", "l1", "", "")
+	db.Team().CreateTeam(ctx, "ft1", "FT1", "l1", "", "", "autonomous", false)
 	db.Member().CreateMember(ctx, "m1", "ft1", "M1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	result := db.ForceDeleteTeamSession(ctx, "ft1")

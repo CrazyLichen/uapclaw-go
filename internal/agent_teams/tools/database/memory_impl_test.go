@@ -14,7 +14,7 @@ func TestCreateTeam_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	result := db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "测试团队", "你是一个领导者")
+	result := db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "测试团队", "你是一个领导者", "autonomous", false)
 	if !result {
 		t.Error("CreateTeam 应返回 true")
 	}
@@ -54,8 +54,8 @@ func TestCreateTeam_已存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
-	result := db.CreateTeam(ctx, "alpha", "Other", "other", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
+	result := db.CreateTeam(ctx, "alpha", "Other", "other", "", "", "autonomous", false)
 	if result {
 		t.Error("重复创建团队应返回 false")
 	}
@@ -66,7 +66,7 @@ func TestGetTeam_存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	team, err := db.GetTeam(ctx, "alpha")
 	if err != nil {
 		t.Fatalf("GetTeam 返回错误: %v", err)
@@ -98,7 +98,7 @@ func TestTeamExists_存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	if !db.TeamExists(ctx, "alpha") {
 		t.Error("TeamExists 应返回 true")
 	}
@@ -119,7 +119,7 @@ func TestDeleteTeam_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent2", "alpha", "Agent2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
@@ -158,7 +158,7 @@ func TestGetTeamUpdatedAt_存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	ts := db.GetTeamUpdatedAt(ctx, "alpha")
 	if ts == 0 {
 		t.Error("GetTeamUpdatedAt 应返回非零时间戳")
@@ -182,7 +182,7 @@ func TestGetTeamUpdatedAt_不存在(t *testing.T) {
 func TestCreateMember_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	result := db.CreateMember(ctx, "agent1", "alpha", "Agent One", `{"name":"agent1"}`,
 		"ready", "teammate", "智能助手", "idle", "build_mode", "你是一个助手",
@@ -240,7 +240,7 @@ func TestCreateMember_成功(t *testing.T) {
 func TestCreateMember_已存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateMember(ctx, "agent1", "alpha", "Agent One", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	result := db.CreateMember(ctx, "agent1", "alpha", "Other", "{}", "ready", "teammate", "", "", "build_mode", "", "")
@@ -253,7 +253,7 @@ func TestCreateMember_已存在(t *testing.T) {
 func TestGetMember_存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "Agent One", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	member, err := db.GetMember(ctx, "agent1", "alpha")
@@ -283,7 +283,7 @@ func TestGetMember_不存在(t *testing.T) {
 func TestGetTeamMembers_全部(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent2", "alpha", "A2", "{}", "busy", "teammate", "", "", "build_mode", "", "")
@@ -302,7 +302,7 @@ func TestGetTeamMembers_全部(t *testing.T) {
 func TestGetTeamMembers_按状态过滤(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent2", "alpha", "A2", "{}", "busy", "teammate", "", "", "build_mode", "", "")
@@ -324,7 +324,7 @@ func TestGetTeamMembers_按状态过滤(t *testing.T) {
 func TestUpdateMemberStatus_合法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	result := db.UpdateMemberStatus(ctx, "agent1", "alpha", "busy")
@@ -342,7 +342,7 @@ func TestUpdateMemberStatus_合法转换(t *testing.T) {
 func TestUpdateMemberStatus_非法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "unstarted", "teammate", "", "", "build_mode", "", "")
 
 	result := db.UpdateMemberStatus(ctx, "agent1", "alpha", "busy")
@@ -366,7 +366,7 @@ func TestUpdateMemberStatus_成员不存在(t *testing.T) {
 func TestTryTransitionMemberStatus_CAS成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	result := db.TryTransitionMemberStatus(ctx, "agent1", "alpha", "ready", "busy")
@@ -384,7 +384,7 @@ func TestTryTransitionMemberStatus_CAS成功(t *testing.T) {
 func TestTryTransitionMemberStatus_CAS失败(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	result := db.TryTransitionMemberStatus(ctx, "agent1", "alpha", "busy", "paused")
@@ -402,7 +402,7 @@ func TestTryTransitionMemberStatus_CAS失败(t *testing.T) {
 func TestListHumanAgentNames_有human_agent(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "human1", "alpha", "Human1", "{}", "ready", "human_agent", "", "", "build_mode", "", "")
@@ -422,7 +422,7 @@ func TestListHumanAgentNames_有human_agent(t *testing.T) {
 func TestListHumanAgentNames_无human_agent(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
@@ -440,7 +440,7 @@ func TestListHumanAgentNames_无human_agent(t *testing.T) {
 func TestGetMembersMaxUpdatedAt_有数据(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent2", "alpha", "A2", "{}", "ready", "teammate", "", "", "build_mode", "", "")
@@ -466,7 +466,7 @@ func TestGetMembersMaxUpdatedAt_无数据(t *testing.T) {
 func TestUpdateMemberExecutionStatus_合法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "idle", "build_mode", "", "")
 
 	result := db.UpdateMemberExecutionStatus(ctx, "agent1", "alpha", "starting")
@@ -484,7 +484,7 @@ func TestUpdateMemberExecutionStatus_合法转换(t *testing.T) {
 func TestUpdateMemberExecutionStatus_非法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "idle", "build_mode", "", "")
 
 	result := db.UpdateMemberExecutionStatus(ctx, "agent1", "alpha", "running")
@@ -520,7 +520,7 @@ func TestInMemoryTeamDatabase_CleanupAllRuntimeState(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	droppedTables, droppedDirs, err := db.CleanupAllRuntimeState(ctx)
@@ -544,7 +544,7 @@ func TestInMemoryTeamDatabase_ForceDeleteTeamSession(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "agent1", "alpha", "A1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
 	result := db.ForceDeleteTeamSession(ctx, "alpha")
@@ -577,7 +577,7 @@ func TestInMemoryTeamDatabase_Close(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	if err := db.Close(); err != nil {
 		t.Fatalf("Close 返回错误: %v", err)
@@ -607,7 +607,7 @@ func TestInMemoryTeamDatabase_Member_自引用(t *testing.T) {
 func TestCreateTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	task := &TeamTaskBase{TaskID: "task1", TeamName: "alpha", Title: "任务1", Content: "内容1", Status: fsm.TaskStatusPending}
 	ok, err := db.CreateTask(ctx, task)
@@ -633,7 +633,7 @@ func TestCreateTask_成功(t *testing.T) {
 func TestCreateTask_已存在(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	task := &TeamTaskBase{TaskID: "task1", TeamName: "alpha", Title: "任务1", Status: fsm.TaskStatusPending}
 	db.CreateTask(ctx, task)
@@ -658,7 +658,7 @@ func TestGetTask_不存在(t *testing.T) {
 func TestGetTeamTasks_按状态过滤(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "P1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "C1"})
@@ -678,7 +678,7 @@ func TestGetTeamTasks_按状态过滤(t *testing.T) {
 func TestGetTasksByAssignee(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Assignee: StringPtr("agent1"), Status: fsm.TaskStatusClaimed, Title: "A1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Assignee: StringPtr("agent2"), Status: fsm.TaskStatusClaimed, Title: "A2"})
@@ -692,7 +692,7 @@ func TestGetTasksByAssignee(t *testing.T) {
 func TestDeleteTask_级联删依赖(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -708,7 +708,7 @@ func TestDeleteTask_级联删依赖(t *testing.T) {
 func TestClaimTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务"})
 
 	ok, _ := db.ClaimTask(ctx, "t1", "agent1")
@@ -724,7 +724,7 @@ func TestClaimTask_成功(t *testing.T) {
 func TestClaimTask_非法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 
 	ok, _ := db.ClaimTask(ctx, "t1", "agent1")
@@ -736,7 +736,7 @@ func TestClaimTask_非法转换(t *testing.T) {
 func TestResetTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务"})
 
 	ok, _ := db.ResetTask(ctx, "t1")
@@ -752,7 +752,7 @@ func TestResetTask_成功(t *testing.T) {
 func TestApprovePlanTask_成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "任务"})
 
 	ok, _ := db.ApprovePlanTask(ctx, "t1")
@@ -768,7 +768,7 @@ func TestApprovePlanTask_成功(t *testing.T) {
 func TestMutateDependencyGraph_简单成功(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	newTasks := []NewTaskSpec{{TaskID: "t2", Title: "下游", InitialStatus: fsm.TaskStatusPending}}
@@ -791,7 +791,7 @@ func TestMutateDependencyGraph_简单成功(t *testing.T) {
 func TestMutateDependencyGraph_环路检测(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "A"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "B"})
@@ -809,7 +809,7 @@ func TestMutateDependencyGraph_环路检测(t *testing.T) {
 func TestMutateDependencyGraph_taskID冲突(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "已有"})
 
 	newTasks := []NewTaskSpec{{TaskID: "t1", Title: "冲突"}}
@@ -822,7 +822,7 @@ func TestMutateDependencyGraph_taskID冲突(t *testing.T) {
 func TestCompleteTask_终止传播(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -853,7 +853,7 @@ func TestCompleteTask_终止传播(t *testing.T) {
 func TestCancelTask_终止传播(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -874,7 +874,7 @@ func TestCancelTask_终止传播(t *testing.T) {
 func TestCancelAllTasks(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务2"})
@@ -888,7 +888,7 @@ func TestCancelAllTasks(t *testing.T) {
 func TestCancelAllTasks_skipAssignees(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "任务1"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "任务2"})
@@ -902,7 +902,7 @@ func TestCancelAllTasks_skipAssignees(t *testing.T) {
 func TestVerifyAndFixTaskConsistency(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "A"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "B"})
@@ -929,7 +929,7 @@ func TestVerifyAndFixTaskConsistency(t *testing.T) {
 func TestUpdateTask_禁止编辑CLAIMED(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Title: "已认领"})
 
 	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
@@ -941,7 +941,7 @@ func TestUpdateTask_禁止编辑CLAIMED(t *testing.T) {
 func TestUpdateTask_允许编辑PENDING(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "待定"})
 
 	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
@@ -957,7 +957,7 @@ func TestUpdateTask_允许编辑PENDING(t *testing.T) {
 func TestGetUnresolvedDependenciesCount(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -980,7 +980,7 @@ func TestGetUnresolvedDependenciesCount(t *testing.T) {
 func TestGetTasksDependingOn(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -998,7 +998,7 @@ func TestGetTasksDependingOn(t *testing.T) {
 func TestUpdateTaskStatus_终态传播(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "upstream", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("agent1"), Title: "上游"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "downstream", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -1019,7 +1019,7 @@ func TestUpdateTaskStatus_终态传播(t *testing.T) {
 func TestAddTaskWithBidirectionalDependencies(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "已有任务"})
 
@@ -1046,7 +1046,7 @@ func TestTask_自引用(t *testing.T) {
 func TestApprovePlanTask_非法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "未认领"})
 
 	ok, _ := db.ApprovePlanTask(ctx, "t1")
@@ -1058,7 +1058,7 @@ func TestApprovePlanTask_非法转换(t *testing.T) {
 func TestUpdateTask_禁止编辑PLAN_APPROVED(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Title: "已审批"})
 
 	ok, _ := db.UpdateTask(ctx, "t1", "新标题", "新内容")
@@ -1070,7 +1070,7 @@ func TestUpdateTask_禁止编辑PLAN_APPROVED(t *testing.T) {
 func TestResetTask_非法转换(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 
 	ok, _ := db.ResetTask(ctx, "t1")
@@ -1082,7 +1082,7 @@ func TestResetTask_非法转换(t *testing.T) {
 func TestMutateDependencyGraph_端点缺失(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	// 只有 t1，但 edge 引用不存在的 t3
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "A"})
@@ -1096,7 +1096,7 @@ func TestMutateDependencyGraph_端点缺失(t *testing.T) {
 func TestMutateDependencyGraph_终态目标(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusCompleted, Title: "已完成"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "下游"})
@@ -1116,7 +1116,7 @@ func TestMutateDependencyGraph_终态目标(t *testing.T) {
 func TestMutateDependencyGraph_CLAIMED源拒绝(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusClaimed, Assignee: StringPtr("m1"), Title: "已认领"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
@@ -1131,7 +1131,7 @@ func TestMutateDependencyGraph_CLAIMED源拒绝(t *testing.T) {
 func TestMutateDependencyGraph_PLAN_APPROVED源拒绝(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "m1", "alpha", "M1", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t1", TeamName: "alpha", Status: fsm.TaskStatusPlanApproved, Assignee: StringPtr("m1"), Title: "计划已批准"})
 	db.CreateTask(ctx, &TeamTaskBase{TaskID: "t2", TeamName: "alpha", Status: fsm.TaskStatusPending, Title: "上游"})
@@ -1149,7 +1149,7 @@ func newTestMessageDB() *InMemoryTeamDatabase {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 	_ = db.Initialize(ctx)
-	_ = db.CreateTeam(ctx, "team1", "Team1", "leader", "", "")
+	_ = db.CreateTeam(ctx, "team1", "Team1", "leader", "", "", "autonomous", false)
 	_ = db.CreateMember(ctx, "alice", "team1", "Alice", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	_ = db.CreateMember(ctx, "bob", "team1", "Bob", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	_ = db.CreateMember(ctx, "leader", "team1", "Leader", "", "active", "leader", "", "idle", "build_mode", "", "")
@@ -1546,7 +1546,7 @@ func TestSetMemberMode_存在成员(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	ctx := context.Background()
 
-	db.CreateTeam(ctx, "team1", "Team1", "leader", "desc", "prompt")
+	db.CreateTeam(ctx, "team1", "Team1", "leader", "desc", "prompt", "autonomous", false)
 	db.CreateMember(ctx, "alice", "team1", "Alice", "", "active", "teammate", "desc", "idle", "plan", "prompt", "")
 
 	db.SetMemberMode("alice", "team1", "code")

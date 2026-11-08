@@ -27,18 +27,27 @@ type SQLTeamDao struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateTeam 创建团队。返回 true 表示成功，false 表示团队已存在。
-// Python: create_team() → bool（IntegrityError → False）
-func (d *SQLTeamDao) CreateTeam(ctx context.Context, teamName, displayName, leaderMemberName, desc, prompt string) bool {
+//
+// dispatchMode 与 enableTaskVerification 记录本次实例的能力取值：前者供
+// team_info 展示与恢复，后者是「验证预期」开关的生效值（spec 天花板可能被
+// build_team 参数收窄）。
+//
+// Python: TeamDao.create_team (team_dao.py L25-60)
+func (d *SQLTeamDao) CreateTeam(ctx context.Context, teamName, displayName,
+	leaderMemberName, desc, prompt string,
+	dispatchMode string, enableTaskVerification bool) bool {
 	// Python: ts = get_current_time()
 	now := GetCurrentTime()
 	team := &Team{
-		TeamName:         teamName,
-		DisplayName:      displayName,
-		LeaderMemberName: leaderMemberName,
-		Desc:             desc,
-		Prompt:           prompt,
-		Created:          now,
-		UpdatedAt:        now,
+		TeamName:               teamName,
+		DisplayName:            displayName,
+		LeaderMemberName:       leaderMemberName,
+		Desc:                   desc,
+		Prompt:                 prompt,
+		DispatchMode:           dispatchMode,
+		EnableTaskVerification: enableTaskVerification,
+		Created:                now,
+		UpdatedAt:              now,
 	}
 	result := d.db.WithContext(ctx).Create(team)
 	if result.Error != nil {

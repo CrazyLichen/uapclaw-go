@@ -16,7 +16,7 @@ import (
 func setupTestTaskManager() (*TeamTaskManager, *database.InMemoryTeamDatabase) {
 	db := database.NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "build_mode", "", "")
 
@@ -279,7 +279,7 @@ func TestTaskManager_AddBatch(t *testing.T) {
 func setupPlanModeTaskManager(t *testing.T) (*TeamTaskManager, *database.InMemoryTeamDatabase, string) {
 	db := database.NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "plan_mode", "", "")
 
@@ -863,7 +863,7 @@ func TestTaskManager_ApprovePlan_不存在计划(t *testing.T) {
 func TestTaskManager_SubmitPlan_带Messager(t *testing.T) {
 	db := database.NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	db.CreateMember(ctx, "agent1", "alpha", "Agent1", "{}", "ready", "teammate", "", "", "plan_mode", "", "")
 
@@ -1171,7 +1171,7 @@ func TestTaskManager_Complete_成员不存在(t *testing.T) {
 	// 创建一个不存在的成员的 manager
 	db := database.NewInMemoryTeamDatabase()
 	ctx := context.Background()
-	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "")
+	db.CreateTeam(ctx, "alpha", "Alpha Team", "leader1", "", "", "autonomous", false)
 	db.CreateMember(ctx, "leader1", "alpha", "Leader", "{}", "ready", "leader", "", "", "build_mode", "", "")
 	// 不创建 agent1
 	tm := NewTeamTaskManager(db, "alpha", "ghost", nil, nil, "", "", "leader1")

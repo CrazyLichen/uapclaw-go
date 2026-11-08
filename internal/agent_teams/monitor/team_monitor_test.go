@@ -231,7 +231,7 @@ func TestTeamMonitor_GetTeamInfo(t *testing.T) {
 	_ = db.Initialize(ctx)
 
 	// 创建团队
-	db.Team().CreateTeam(ctx, "team1", "测试团队", "leader", "描述", "")
+	db.Team().CreateTeam(ctx, "team1", "测试团队", "leader", "描述", "", "autonomous", false)
 
 	agent := newFakeTeamAgent()
 	mon := NewTeamMonitor("team1", "sess", db, agent, false)

@@ -13,7 +13,7 @@ import (
 func newTestMessageManager() *TeamMessageManager {
 	db := database.NewInMemoryTeamDatabase()
 	_ = db.Initialize(context.Background())
-	_ = db.CreateTeam(context.Background(), "team1", "Team1", "leader", "", "")
+	_ = db.CreateTeam(context.Background(), "team1", "Team1", "leader", "", "", "autonomous", false)
 	_ = db.CreateMember(context.Background(), "alice", "team1", "Alice", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	_ = db.CreateMember(context.Background(), "bob", "team1", "Bob", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	return NewTeamMessageManager(db, "team1", "alice", nil)
@@ -144,7 +144,7 @@ func TestTeamMessageManager_GetTeamMessages(t *testing.T) {
 func TestTeamMessageManager_带Messager(t *testing.T) {
 	db := database.NewInMemoryTeamDatabase()
 	_ = db.Initialize(context.Background())
-	_ = db.CreateTeam(context.Background(), "team1", "Team1", "leader", "", "")
+	_ = db.CreateTeam(context.Background(), "team1", "Team1", "leader", "", "", "autonomous", false)
 	_ = db.CreateMember(context.Background(), "alice", "team1", "Alice", "", "active", "teammate", "", "idle", "build_mode", "", "")
 	_ = db.CreateMember(context.Background(), "bob", "team1", "Bob", "", "active", "teammate", "", "idle", "build_mode", "", "")
 

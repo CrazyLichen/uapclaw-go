@@ -239,7 +239,7 @@ func TestTeamInfoBody_无团队行不播(t *testing.T) {
 func TestTeamInfoBody_有团队行首投(t *testing.T) {
 	tb, _ := newTestBackend(t)
 	ctx := context.Background()
-	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "leader", "目标描述", "")
+	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "leader", "目标描述", "", "autonomous", false)
 	tr := NewTeamContextTracker(tb, "alice", atschema.TeamRoleTeammate,
 		"", "", "", "/team/ws", "", false, "cn", "", nil)
 	got := tr.teamInfoBody(map[string]any{}, map[string]any{})
@@ -657,7 +657,7 @@ func TestPendingText_nil会话返回空(t *testing.T) {
 func TestSnapshotText_含身份与团队块(t *testing.T) {
 	tb, db := newTestBackend(t)
 	ctx := context.Background()
-	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "alice", "目标", "")
+	_ = tb.DB().Team().CreateTeam(ctx, "test-team", "测试团队", "alice", "目标", "", "autonomous", false)
 	// 本成员自己的行：身份块要等它出现才渲染（display_name 必须来自 DB 行）
 	if ok := db.Member().CreateMember(ctx, "alice", "test-team", "Alice", "{}",
 		"ready", "teammate", "", "", "build_mode", "", ""); !ok {

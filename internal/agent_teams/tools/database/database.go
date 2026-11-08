@@ -42,7 +42,10 @@ type TeamDatabase interface {
 type TeamDao interface {
 	// CreateTeam 创建团队。返回 true 表示成功，false 表示团队已存在（对齐 Python IntegrityError → False）。
 	// 参数 prompt 为新增字段（Python 原有）。
-	CreateTeam(ctx context.Context, teamName, displayName, leaderMemberName, desc, prompt string) bool
+	// dispatchMode 与 enableTaskVerification 记录本次实例的能力取值
+	// （Python team_dao.py L31-32 同序）。
+	CreateTeam(ctx context.Context, teamName, displayName, leaderMemberName, desc, prompt string,
+		dispatchMode string, enableTaskVerification bool) bool
 	// GetTeam 获取团队信息。返回 nil 表示团队不存在（对齐 Python Optional[Team]）。
 	GetTeam(ctx context.Context, teamName string) (*Team, error)
 	// TeamExists 团队是否存在。对齐 Python: team_exists()

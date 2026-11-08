@@ -13,7 +13,7 @@ import (
 func TestSQLMemberDao_CreateAndGet(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 
 	ok := dao.CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
 	assert.True(t, ok)
@@ -36,7 +36,7 @@ func TestSQLMemberDao_CreateAndGet(t *testing.T) {
 func TestSQLMemberDao_GetTeamMembers(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 
 	dao.CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
 	dao.CreateMember(context.Background(), "m2", "t1", "M2", "{}", fsm.MemberStatusBusy, "teammate", "", "", "build_mode", "", "")
@@ -54,7 +54,7 @@ func TestSQLMemberDao_GetTeamMembers(t *testing.T) {
 func TestSQLMemberDao_UpdateMemberStatus(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 	dao.CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
 
 	// Python: is_valid_transition(ready, busy) → True
@@ -73,7 +73,7 @@ func TestSQLMemberDao_UpdateMemberStatus(t *testing.T) {
 func TestSQLMemberDao_TryTransitionMemberStatus_CAS(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 	dao.CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
 
 	// Python: CAS — where status = from_status, update to_status
@@ -88,7 +88,7 @@ func TestSQLMemberDao_TryTransitionMemberStatus_CAS(t *testing.T) {
 func TestSQLMemberDao_ListHumanAgentNames(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 
 	dao.CreateMember(context.Background(), "ha1", "t1", "HA1", "{}", fsm.MemberStatusReady, "human_agent", "", "", "build_mode", "", "")
 	dao.CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", "", "build_mode", "", "")
@@ -101,7 +101,7 @@ func TestSQLMemberDao_ListHumanAgentNames(t *testing.T) {
 func TestSQLMemberDao_GetMembersMaxUpdatedAt(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 
 	maxTs := dao.GetMembersMaxUpdatedAt(context.Background(), "t1")
 	assert.Equal(t, int64(0), maxTs) // 无成员
@@ -114,7 +114,7 @@ func TestSQLMemberDao_GetMembersMaxUpdatedAt(t *testing.T) {
 func TestSQLMemberDao_UpdateMemberExecutionStatus(t *testing.T) {
 	db := newTestSqlDB(t)
 	dao := db.Member()
-	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "")
+	db.Team().CreateTeam(context.Background(), "t1", "T1", "l1", "", "", "autonomous", false)
 	dao.CreateMember(context.Background(), "m1", "t1", "M1", "{}", fsm.MemberStatusReady, "teammate", "", fsm.ExecutionStatusIdle, "build_mode", "", "")
 
 	// Python: is_valid_execution_transition(idle, starting) → True
