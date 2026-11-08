@@ -17,7 +17,7 @@ func TestUnseenChangeNotes_区间过滤(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("UnseenChangeNotes 返回 %d 条, want 2: %v", len(got), got)
 	}
-	if got[0]["note"] != "b" || got[1]["note"] != "c" {
+	if got[0].Note != "b" || got[1].Note != "c" {
 		t.Fatalf("顺序/内容错误: %v", got)
 	}
 }
@@ -130,5 +130,70 @@ func TestRevisionDiff_对齐PythonGolden(t *testing.T) {
 				t.Fatalf("diff 仍含文件头: %q", got)
 			}
 		})
+	}
+}
+
+// TestUnseenChangeNotes_缺revision按0处理 测试字段缺失 / null / 0 三者等价
+//
+// Python: `int(note.get("revision") or 0)` —— 缺失、None、0 都得到 0。
+func TestUnseenChangeNotes_缺revision按0处理(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"缺字段", `[{"note":"a"}]`},
+		{"null", `[{"revision":null,"note":"a"}]`},
+		{"零值", `[{"revision":0,"note":"a"}]`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			raw := c.raw
+			// observed=0, revision=3：0 不满足 observed < rev，故不入选
+			task := &database.TeamTaskBase{ChangeNotes: &raw, Revision: 3, ObservedRevision: 0}
+			if got := UnseenChangeNotes(task); len(got) != 0 {
+				t.Fatalf("rev=0 不应入选, got %v", got)
+			}
+			// observed=-1 时 0 满足 -1 < 0 <= 3，应入选（证明取值确实是 0）
+			task.ObservedRevision = -1
+			got := UnseenChangeNotes(task)
+			if len(got) != 1 {
+				t.Fatalf("observed=-1 时 rev=0 应入选, got %v", got)
+			}
+			if noteRevision(got[0]) != 0 {
+				t.Fatalf("noteRevision = %d, want 0", noteRevision(got[0]))
+			}
+		})
+	}
+}
+
+// TestFormatNoteRevision_缺字段渲染None 测试缺失 revision 渲染成 None（对齐上游 f-string）
+//
+// 上游 `f"- r{note.get('revision')}"` 在字段缺失时输出 "None"。
+// 该分支在当前区间判定下不可达（rev=0 时 observed<0 不成立），但保留是为了
+// 字节一致性——若将来区间判定的下界放宽，渲染结果仍与上游相同。
+func TestFormatNoteRevision_缺字段渲染None(t *testing.T) {
+	if got := formatNoteRevision(database.ChangeNote{}); got != "None" {
+		t.Fatalf("缺 revision 渲染 = %q, want None", got)
+	}
+	zero := int64(0)
+	if got := formatNoteRevision(database.ChangeNote{Revision: &zero}); got != "0" {
+		t.Fatalf("零 revision 渲染 = %q, want 0", got)
+	}
+	seven := int64(7)
+	if got := formatNoteRevision(database.ChangeNote{Revision: &seven}); got != "7" {
+		t.Fatalf("revision=7 渲染 = %q, want 7", got)
+	}
+}
+
+// TestChangeNotesLines_字段缺失时的输出 测试 note/by 缺失时不 panic 且格式正确
+func TestChangeNotesLines_字段缺失时的输出(t *testing.T) {
+	raw := `[{"revision":1}]`
+	task := &database.TeamTaskBase{ChangeNotes: &raw, Revision: 1, ObservedRevision: 0}
+	lines := ChangeNotesLines(task)
+	if len(lines) != 1 {
+		t.Fatalf("返回 %d 行, want 1", len(lines))
+	}
+	if lines[0] != "- r1: " {
+		t.Fatalf("lines[0] = %q, want %q", lines[0], "- r1: ")
 	}
 }

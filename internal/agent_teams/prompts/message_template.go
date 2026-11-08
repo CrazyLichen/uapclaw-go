@@ -58,17 +58,17 @@ const (
 // 坏 JSON / 非列表一律返回空（上游同样吞掉 json.loads 的解析错误）。
 //
 // Python: unseen_change_notes (message_template.py L410-421)
-func UnseenChangeNotes(task *database.TeamTaskBase) []map[string]any {
+func UnseenChangeNotes(task *database.TeamTaskBase) []database.ChangeNote {
 	if task == nil || task.ChangeNotes == nil || *task.ChangeNotes == "" {
 		return nil
 	}
-	var notes []map[string]any
+	var notes []database.ChangeNote
 	if err := json.Unmarshal([]byte(*task.ChangeNotes), &notes); err != nil {
 		return nil
 	}
 	observed := task.ObservedRevision
 	current := task.Revision
-	unseen := make([]map[string]any, 0, len(notes))
+	unseen := make([]database.ChangeNote, 0, len(notes))
 	for _, note := range notes {
 		rev := noteRevision(note)
 		if observed < rev && rev <= current {
@@ -94,11 +94,10 @@ func ChangeNotesLines(task *database.TeamTaskBase) []string {
 	lines := make([]string, 0, len(notes))
 	for _, note := range notes {
 		by := ""
-		if s, ok := note["by"].(string); ok && s != "" {
-			by = " (" + s + ")"
+		if note.By != "" {
+			by = " (" + note.By + ")"
 		}
-		noteText, _ := note["note"].(string)
-		lines = append(lines, "- r"+formatRevision(noteRevision(note))+by+": "+noteText)
+		lines = append(lines, "- r"+formatNoteRevision(note)+by+": "+note.Note)
 	}
 	return lines
 }
@@ -130,34 +129,27 @@ func RevisionDiff(previous, current string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// noteRevision 取条目里的 revision 数值，缺失或非数字返回 -1（永不匹配区间）。
+// noteRevision 取条目里的 revision 数值，缺失按 0（与上游 `or 0` 一致）。
 //
-// JSON 数字解到 any 是 float64；调用方若自行构造 int/int64 也一并接受。
-func noteRevision(note map[string]any) int64 {
-	switch v := note["revision"].(type) {
-	case float64:
-		return int64(v)
-	case int:
-		return int64(v)
-	case int64:
-		return v
-	case json.Number:
-		n, err := v.Int64()
-		if err != nil {
-			return -1
-		}
-		return n
-	default:
-		return -1
+// 上游：`int(note.get("revision") or 0)` —— 字段缺失、None、0 都得到 0，
+// 因此「缺失」的条目仍然参与区间判定（observed < 0 通常不成立，自然不会入选）。
+func noteRevision(note database.ChangeNote) int64 {
+	if note.Revision == nil {
+		return 0
 	}
+	return *note.Revision
 }
 
-// formatRevision 把 revision 渲染成十进制字符串，负数渲染为 "?"。
-func formatRevision(rev int64) string {
-	if rev < 0 {
-		return "?"
+// formatNoteRevision 渲染同一把逗号后的修订号，与上游 f-string 逐字节一致。
+//
+// 上游直接写 `f"- r{note.get('revision')}"`：字段缺失时 Python 格式化 None
+// 得到 "None"。这里保持同样输出，而不是替换成别的占位符——渲染结果会进模型
+// 提示词，与上游有任何字节差异都会在 golden 对拍里暴露。
+func formatNoteRevision(note database.ChangeNote) string {
+	if note.Revision == nil {
+		return "None"
 	}
-	return strconv.FormatInt(rev, 10)
+	return strconv.FormatInt(*note.Revision, 10)
 }
 
 // splitLines 按 Python str.splitlines() 的语义切行。

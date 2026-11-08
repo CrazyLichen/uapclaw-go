@@ -216,6 +216,27 @@ func (Team) TableName() string { return "team_info" }
 // TableName 指定 TeamMember 对应的数据库表名
 func (TeamMember) TableName() string { return "team_member" }
 
+// ChangeNote 一条任务编辑说明。
+//
+// 对应 change_notes 列里 JSON 数组的元素。用结构体而非 map[string]any：
+// 字段集合固定（revision / note / by），结构体让解码一次成型，也让下游不必
+// 做 `note["x"].(string)` 这类类型断言。
+//
+// Revision 用指针：上游以 `int(note.get("revision") or 0)` 取值，字段缺失与
+// 显式 0 等价（都是 0），但**渲染**时上游直接格式化原值（缺失输出 "None"）。
+// 用指针可以同时支持「缺失」（渲染为 None）与「0」（渲染为 0）两种输出，
+// 与上游逐字节一致。
+//
+// Python: change_notes 元素（message_template.py L410-421 的 note dict）
+type ChangeNote struct {
+	// Revision 该条说明对应的修订号；nil 表示字段缺失
+	Revision *int64 `json:"revision,omitempty"`
+	// Note 编辑说明正文
+	Note string `json:"note,omitempty"`
+	// By 修改人（空串表示未知）
+	By string `json:"by,omitempty"`
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BoolPtr 返回 bool 的指针。

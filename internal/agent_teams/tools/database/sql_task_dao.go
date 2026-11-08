@@ -144,11 +144,8 @@ func (d *SQLTaskDao) AppendChangeNote(ctx context.Context, taskID string, revisi
 			return nil
 		}
 		notes := decodeChangeNotes(task.ChangeNotes)
-		notes = append(notes, map[string]any{
-			"revision": revision,
-			"note":     note,
-			"by":       by,
-		})
+		rev := revision
+		notes = append(notes, ChangeNote{Revision: &rev, Note: note, By: by})
 		encoded, marshalErr := json.Marshal(notes)
 		if marshalErr != nil {
 			return marshalErr
@@ -636,11 +633,11 @@ func (e *mutationFailure) Error() string { return e.reason }
 // 这里保持同样宽容：一条坏记录不该让整个追加流程失败。
 //
 // Python: message_template.unseen_change_notes 的 json.loads 容错（L410-421）
-func decodeChangeNotes(raw *string) []map[string]any {
+func decodeChangeNotes(raw *string) []ChangeNote {
 	if raw == nil || *raw == "" {
 		return nil
 	}
-	var notes []map[string]any
+	var notes []ChangeNote
 	if err := json.Unmarshal([]byte(*raw), &notes); err != nil {
 		return nil
 	}
