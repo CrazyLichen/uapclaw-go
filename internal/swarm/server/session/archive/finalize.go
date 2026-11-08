@@ -385,10 +385,7 @@ func (s *Service) flushWrites() bool {
 	metadata := s.metadataFlusher
 	history := s.historyFlusher
 	s.mu.Unlock()
-	ok := true
-	if metadata != nil && !metadata.FlushPendingWrites(flushTimeoutSeconds) {
-		ok = false
-	}
+	ok := metadata == nil || metadata.FlushPendingWrites(flushTimeoutSeconds)
 	if history != nil && !history.FlushPendingWrites(flushTimeoutSeconds) {
 		ok = false
 	}

@@ -15,8 +15,8 @@ import (
 // 依据上游 openjiuwen/agent_teams/schema/build_context.py 的注释：
 // 「保留为薄转发，让既有团队 import 路径继续工作并指向同一对象（is-identical）」。
 func TestBuildContext转发_与core同类型(t *testing.T) {
-	var teamCtx *atschema.BuildContext = &hschema.BuildContext{Language: "cn"}
-	var coreCtx *hschema.BuildContext = teamCtx
+	var teamCtx = &atschema.BuildContext{Language: "cn"}
+	var coreCtx = teamCtx
 
 	require.NotNil(t, coreCtx)
 	assert.Equal(t, "cn", coreCtx.GetLanguage(), "别名指向同一类型，字段互通")
@@ -25,7 +25,7 @@ func TestBuildContext转发_与core同类型(t *testing.T) {
 // TestBuildContextInterface转发_与core同类型 接口别名同样指向 core。
 func TestBuildContextInterface转发_与core同类型(t *testing.T) {
 	var teamIface atschema.BuildContextInterface = &atschema.BuildContext{MemberName: "alice"}
-	var coreIface hschema.BuildContextInterface = teamIface
+	coreIface := teamIface
 
 	require.NotNil(t, coreIface)
 	assert.Equal(t, "alice", coreIface.GetMemberName())

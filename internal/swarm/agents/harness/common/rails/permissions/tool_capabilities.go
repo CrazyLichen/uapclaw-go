@@ -418,7 +418,7 @@ func ClassifyTool(toolName string) ToolCapability {
 	// 17. 固定 browser 工具（browser_recall_offload 是特例）
 	if _, hit := fixedBrowserTools[lowered]; hit {
 		family := "browser_session_observe"
-		var sideEffects map[string]struct{} = toSet("session_cache_write")
+		sideEffects := toSet("session_cache_write")
 		if lowered == "browser_recall_offload" {
 			family = "browser_session_recall"
 			sideEffects = nil

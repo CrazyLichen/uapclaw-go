@@ -711,7 +711,7 @@ func TestInjectors_全部注入点(t *testing.T) {
 		return nil
 	})
 
-	context.Background()
+	_ = context.Background()
 	if heartbeat == nil || subagent == nil || sessionStopper == nil {
 		t.Fatal("注入器不应为 nil")
 	}

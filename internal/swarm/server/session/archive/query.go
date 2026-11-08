@@ -94,8 +94,7 @@ func (s *Service) unarchiveSession(
 		}, nil
 	}
 
-	operation, beginErr := lifecycle.Begin("session", sessionID, operationKindUnarchive, true)
-	if beginErr != nil {
+	if _, beginErr := lifecycle.Begin("session", sessionID, operationKindUnarchive, true); beginErr != nil {
 		return nil, beginErr
 	}
 	operation, claimErr := lifecycle.ClaimOperation("session", sessionID, s.ownerID)

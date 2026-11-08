@@ -102,7 +102,7 @@ func (t *PromptTemplate) Render(vars map[string]string) string {
 	if t == nil {
 		return ""
 	}
-	if vars == nil || len(vars) == 0 {
+	if len(vars) == 0 {
 		return t.content
 	}
 	matches := renderPlaceholderPattern.FindAllStringSubmatchIndex(t.content, -1)

@@ -64,7 +64,7 @@ func valueGet(source any, name string) any {
 	}
 	// struct 形态：反射按字段名或 json tag 匹配（Python 的 getattr）
 	v := reflect.ValueOf(source)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return nil
 		}

@@ -79,7 +79,7 @@ func (s *Service) acceptSession(
 
 	activeExists := pathExists(active)
 	archivedExists := pathExists(archived)
-	if !activeExists && !archivedExists && !(pending && action == operationKindDelete) {
+	if !activeExists && !archivedExists && (!pending || action != operationKindDelete) {
 		return nil, &lifecycle.LifecycleError{Code: "NOT_FOUND", Message: "session not found"}
 	}
 
@@ -166,8 +166,7 @@ func (s *Service) acceptSessionCleanup(
 		}, nil
 	}
 
-	operation, beginErr := lifecycle.Begin("session", sessionID, action, true)
-	if beginErr != nil {
+	if _, beginErr := lifecycle.Begin("session", sessionID, action, true); beginErr != nil {
 		return nil, beginErr
 	}
 	operation, claimErr := lifecycle.ClaimOperation("session", sessionID, s.ownerID)

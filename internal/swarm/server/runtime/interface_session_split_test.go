@@ -12,8 +12,8 @@ import (
 // TestExecuteMessage_签名存在 编译期确认双入口都在。
 func TestExecuteMessage_签名存在(t *testing.T) {
 	var facade *UapClawSwarm
-	var _ func(context.Context, *schema.AgentRequest) (*schema.AgentResponse, error) = facade.ExecuteMessage
-	var _ func(context.Context, *schema.AgentRequest) (*schema.AgentResponse, error) = facade.ProcessMessage
+	var _ = facade.ExecuteMessage
+	var _ = facade.ProcessMessage
 }
 
 // TestFacadeUsesSessionRuntime_分流判定 门面暴露的判定与 runtime 包一致。

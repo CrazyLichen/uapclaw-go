@@ -833,10 +833,7 @@ func hasNativeFileGuard(fg, permissions map[string]any) bool {
 			return true
 		}
 	}
-	if externalDirectoryNonEmpty(permissions["external_directory"]) {
-		return false
-	}
-	return true
+	return !externalDirectoryNonEmpty(permissions["external_directory"])
 }
 
 // explicitEnabled 读 file_guard.enabled；键不存在返回 (false, false)。

@@ -191,10 +191,7 @@ func (e *OpenJiuwenPolicyEvaluator) Evaluate(invocation PolicyInvocation, sceneA
 
 	// refresh_failed：配置取不到但宿主提供了快照钩子（说明本应能取到，
 	// 取不到即是刷新失败，必须 fail-closed）。
-	refreshFailed := false
-	if effectiveConfig == nil && e.baseRail != nil && e.baseRail.HasPermissionsSnapshot() {
-		refreshFailed = true
-	}
+	refreshFailed := effectiveConfig == nil && e.baseRail != nil && e.baseRail.HasPermissionsSnapshot()
 	if engine != nil && effectiveConfig != nil {
 		if err := e.applyConfig(engine, effectiveConfig); err != nil {
 			refreshFailed = true

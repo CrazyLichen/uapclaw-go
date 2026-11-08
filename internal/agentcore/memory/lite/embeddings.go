@@ -79,10 +79,7 @@ func NormalizeEmbeddingBaseURL(baseURL string) string {
 	for strings.HasSuffix(url, "/") {
 		url = url[:len(url)-1]
 	}
-	if strings.HasSuffix(url, "/embeddings") {
-		url = url[:len(url)-len("/embeddings")]
-	}
-	return url
+	return strings.TrimSuffix(url, "/embeddings")
 }
 
 // EmbedQuery 返回基于文本 hash 的 128 维确定性随机向量。
