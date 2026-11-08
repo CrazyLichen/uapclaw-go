@@ -103,6 +103,16 @@ type DeepAdapter struct {
 	// parentSessionID 子适配器所属的会话标识（仅 isSessionScoped 为真时有意义）。
 	// Python: interface_deep.py _parent_session_id
 	parentSessionID string
+	// sessionChildFactory 造一个与原适配器同类的新适配器。
+	// Python: type(self)()（_new_session_scoped_adapter :2680）
+	//
+	// Go 无继承：CodeAdapter 与 DeepAdapter 是两个类型，且 c.deep 不知道自己
+	// 属于 CodeAdapter，故用构造期注入的工厂等价替代；实现直接复用
+	// CreateAdapter，与 Python create_adapter 同构。
+	sessionChildFactory func() (AgentAdapter, error)
+	// childMode 子适配器使用的 mode（"agent" 或 "code"）。
+	// Python 由 type(self)() 天然决定，Go 需显式注入。
+	childMode string
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -384,6 +394,8 @@ func NewDeepAdapter() *DeepAdapter {
 		isCodeAgent:            false,
 		activeSessionIDs:       make(map[string]int),
 		sessionAdapters:        newSessionAdapterCache(),
+		sessionChildFactory:    func() (AgentAdapter, error) { return CreateAdapter("harness", "agent") },
+		childMode:              "agent",
 		modelCache:             make(map[string]*llm.Model),
 		modelNameToKeys:        make(map[string][]string),
 		registeredMCPServerIDs: make(map[string]bool),

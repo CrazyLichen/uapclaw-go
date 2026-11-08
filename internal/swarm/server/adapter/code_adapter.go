@@ -157,6 +157,11 @@ func NewCodeAdapter() *CodeAdapter {
 	// 修复 S-17: 覆写 runtimeConfigUpdater 指向 CodeAdapter 的版本
 	// 对齐 Python 继承中 self._update_runtime_config() 的动态分派
 	deep.runtimeConfigUpdater = c.updateRuntimeConfig
+	// 会话子适配器必须是完整的 CodeAdapter（对齐 Python type(self)()）。
+	// 不能从 c.deep 提取：那样会丢掉 code 专属的 20+ 方法覆写，
+	// UpdateAgentRails 会跑 deep 版本、静默降级成 deep 模式且不报错。
+	deep.sessionChildFactory = func() (AgentAdapter, error) { return CreateAdapter("harness", "code") }
+	deep.childMode = "code"
 	return c
 }
 
