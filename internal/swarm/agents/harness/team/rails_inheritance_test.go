@@ -182,3 +182,6 @@ func TestMemberSkillToolkitRail_InitUninit(t *testing.T) {
 		t.Fatalf("abilities should be empty after Uninit")
 	}
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityMgrForFilter) TeardownTools() {}

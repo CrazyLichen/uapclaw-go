@@ -45,4 +45,8 @@ type AbilityManagerInterface interface {
 	SetContextEngine(ce ceinterface.ContextEngine)
 	// ReorderTools 重排工具顺序。
 	ReorderTools(orderedNames []string)
+	// TeardownTools 摘除本 owner 限定过的有状态工具（轮末拆除用）。
+	// 无状态共享单例不受影响（其他 agent 仍在用）。
+	// Python: AbilityManager.teardown_tools
+	TeardownTools()
 }

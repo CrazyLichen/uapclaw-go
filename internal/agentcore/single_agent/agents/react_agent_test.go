@@ -3269,3 +3269,6 @@ func TestBuildMultimodal_缺source兜底tool(t *testing.T) {
 		t.Fatalf("缺 source 应兜底为 tool，实际 %v", msg)
 	}
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *stubAbilityManager) TeardownTools() {}

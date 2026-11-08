@@ -834,3 +834,6 @@ func toolCallCtx(agent agentinterfaces.BaseAgent, session sessioninterfaces.Sess
 	}, session)
 	return cbc
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *progressiveFakeAbilityManager) TeardownTools() {}

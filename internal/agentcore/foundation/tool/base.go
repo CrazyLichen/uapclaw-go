@@ -41,6 +41,15 @@ type ToolCard struct {
 	Properties map[string]any
 	// Exposure 注册期解析的曝光策略（direct/deferred），零值等价 direct
 	Exposure ToolExposure `json:"-"`
+	// Stateless 该工具是否不持有 per-agent / per-session 状态。
+	//
+	// false（默认）= 有状态：由持有它的单个 agent 独占，注册时 id 会被改写为
+	// "{name}_{ownerID}"，轮末 teardown 由该 agent 摘除。
+	// true = 无状态（模块级单例）：在裸 id 下跨 agent 共享，teardown 不动它
+	// （其他 agent 还在用）。
+	//
+	// Python: ToolCard.stateless（默认 False，core/foundation/tool/base.py:109-115）
+	Stateless bool `json:"stateless,omitempty"`
 	// exposureDeclared 曝光策略是否已解析并锁定
 	exposureDeclared bool
 	// exposureDeclaredSet exposureDeclared 是否被显式设置过（对齐 Python bool|None）

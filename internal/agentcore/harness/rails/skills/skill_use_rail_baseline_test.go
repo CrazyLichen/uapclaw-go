@@ -425,3 +425,6 @@ func TestSkillsSignatureEquals(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "beta", "SKILL.md"), []byte("# beta"), 0o644))
 	assert.False(t, r.skillsSignatureEquals(), "新增技能目录应判为变化")
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *mockAbilityManager) TeardownTools() {}
