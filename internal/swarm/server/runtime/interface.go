@@ -42,9 +42,16 @@ type UapClawSwarm struct {
 	// agentConfigService Agent 配置 CRUD 服务。
 	agentConfigService *AgentConfigService
 
-	// coordinator 会话执行协调器（10.3.28d 取代 sessionManager）
+	// coordinator 会话执行协调器（Runtime 层的跨会话执行账本）
 	// Python: AgentRuntime._session_coordinator
 	coordinator *swsession.RuntimeSessionCoordinator
+
+	// sessionManager 门面自有的会话任务队列（同会话串行、跨会话并发）
+	// Python: self._session_manager = SessionManager()（interface.py:1574）
+	//
+	// 与 coordinator 是**互斥**关系而非串联：一次请求按 uses_session_runtime 二选一，
+	// 走协调器的不再进门面队列（Python service.py:1873 同）。
+	sessionManager *swruntime.SessionManager
 
 	// skilldevService SkillDev 服务（懒初始化，ensureSkillDevService 时创建）。
 	skilldevService *skilldev.SkillDevService
@@ -115,12 +122,58 @@ func NewUapClaw() *UapClawSwarm {
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
 		appCtx:             appCtx,
 		appCancel:          appCancel,
+		sessionManager:     swruntime.NewSessionManager(),
 	}
 }
 
-// ProcessMessage 处理非流式 Agent 请求。
-// Python: JiuWenClaw.process_message(request)
-func (uc *UapClawSwarm) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// ProcessMessage 通过门面自有的会话调度器处理请求。
+// Python: interface.py process_message（schedule_session=True）
+//
+// 与 ExecuteMessage 的唯一区别是调度归属：本方法把执行排进门面会话队列
+// （同会话串行），适用于不归 Runtime 协调器管的零碎 RPC。
+func (uc *UapClawSwarm) ProcessMessage(
+	ctx context.Context, request *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	return uc.processMessageInternal(ctx, request, true)
+}
+
+// ExecuteMessage 执行一次由 AgentRuntime 拥有调度的请求。
+// Python: interface.py execute_message（schedule_session=False）
+//
+// 不排门面队列：Runtime 协调器已经为它分配了执行与代次，再排一次会把
+// 同一请求调度两遍。
+func (uc *UapClawSwarm) ExecuteMessage(
+	ctx context.Context, request *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	return uc.processMessageInternal(ctx, request, false)
+}
+
+// processMessageInternal 处理非流式请求的公共实现。
+// Python: interface.py _process_message(request, schedule_session=...)
+//
+// scheduleSession 为真时把执行排进门面会话队列（同会话串行）；
+// 为假时直接执行（Runtime 协调器已负责调度）。
+func (uc *UapClawSwarm) processMessageInternal(
+	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
+) (*schema.AgentResponse, error) {
+	if !scheduleSession || uc.sessionManager == nil {
+		return uc.runMessageDirect(ctx, request)
+	}
+	sessionID := swruntime.GetSessionID(request.SessionID)
+	value, err := uc.sessionManager.SubmitAndWait(ctx, sessionID,
+		func(taskCtx context.Context) (any, error) {
+			return uc.runMessageDirect(taskCtx, request)
+		})
+	if err != nil {
+		return nil, err
+	}
+	response, _ := value.(*schema.AgentResponse)
+	return response, nil
+}
+
+// runMessageDirect 直接执行一次非流式 Agent 请求（不经门面队列）。
+// Python: JiuWenClaw.process_message(request) 的实现体
+func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// Python: logger.info：请求日志
 	sessionIDForLog := ""
 	if request.SessionID != nil {
@@ -1162,4 +1215,10 @@ func hasActiveExecutions(c *swsession.RuntimeSessionCoordinator) bool {
 		}
 	}
 	return false
+}
+
+// facadeUsesSessionRuntime 门面侧判定这次请求是否归 Runtime 调度。
+// 委托 runtime 包的 UsesSessionRuntime（上游 uses_session_runtime）。
+func facadeUsesSessionRuntime(request *schema.AgentRequest) bool {
+	return swruntime.UsesSessionRuntime(request, false)
 }

@@ -182,3 +182,76 @@ func TestSafeExtractZIPBytesToDir(t *testing.T) {
 		}
 	})
 }
+
+// ──────────────────────────── 导出函数补充测试 ────────────────────────────
+
+// TestIsBuiltinSkill 验证内置技能判定（按 SKILL.md 的 name 匹配）。
+func TestIsBuiltinSkill(t *testing.T) {
+	sm := NewSkillManager(t.TempDir())
+
+	t.Run("目录不存在返回 false", func(t *testing.T) {
+		ok, dir := sm.isBuiltinSkill("any", filepath.Join(t.TempDir(), "missing"))
+		if ok || dir != "" {
+			t.Fatalf("应返回 (false, \"\")，实际 (%v, %q)", ok, dir)
+		}
+	})
+
+	t.Run("按 name 命中内置技能", func(t *testing.T) {
+		root := t.TempDir()
+		skillDir := filepath.Join(root, "builtin-one", "skill")
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatalf("创建目录失败: %v", err)
+		}
+		content := "---\nname: builtin-one\ndescription: d\n---\nbody"
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+			t.Fatalf("写入 SKILL.md 失败: %v", err)
+		}
+
+		ok, got := sm.isBuiltinSkill("builtin-one", root)
+		if !ok {
+			t.Fatal("应命中内置技能")
+		}
+		if got != skillDir {
+			t.Fatalf("目录 = %q, 期望 %q", got, skillDir)
+		}
+	})
+
+	t.Run("name 不匹配返回 false", func(t *testing.T) {
+		root := t.TempDir()
+		skillDir := filepath.Join(root, "builtin-two", "skill")
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatalf("创建目录失败: %v", err)
+		}
+		content := "---\nname: builtin-two\ndescription: d\n---\nbody"
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+			t.Fatalf("写入 SKILL.md 失败: %v", err)
+		}
+
+		ok, dir := sm.isBuiltinSkill("other-name", root)
+		if ok || dir != "" {
+			t.Fatalf("应返回 (false, \"\")，实际 (%v, %q)", ok, dir)
+		}
+	})
+
+	t.Run("目录下缺少 SKILL.md 时跳过", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "empty-skill", "skill"), 0o755); err != nil {
+			t.Fatalf("创建目录失败: %v", err)
+		}
+		ok, _ := sm.isBuiltinSkill("empty-skill", root)
+		if ok {
+			t.Fatal("缺少 SKILL.md 不应命中")
+		}
+	})
+
+	t.Run("普通文件被跳过", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "not-a-dir.txt"), []byte("x"), 0o644); err != nil {
+			t.Fatalf("写入文件失败: %v", err)
+		}
+		ok, _ := sm.isBuiltinSkill("not-a-dir", root)
+		if ok {
+			t.Fatal("普通文件不应命中")
+		}
+	})
+}
