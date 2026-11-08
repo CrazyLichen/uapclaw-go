@@ -289,6 +289,12 @@ func (r *TeamPolicyRail) OnUserMessage(ctx context.Context, cbc *agentinterfaces
 
 // foldTaskOutcomes 把尚未告知成员的任务事实前插到它的输入上。
 //
+// 顺序是「先 insert 进本批输入，再 persist 基线」，与上游一致。这个顺序不是
+// 随意的：persist 只写会话 state 并 commit，它成功不代表这条 notice 真的会成为
+// 一条历史消息。先把 text 放进 parts，本轮就一定会投递出去；persist 若失败，
+// 基线留在旧值，下次会再 claim 一次（重复一条总比丢一条便宜）。反过来先
+// persist 再插入，一旦「基线已推进、但 parts 没来得及交付」，这条通知就永久丢了。
+//
 // Python: _fold_task_outcomes (team_policy_rail.py L321-328)
 func (r *TeamPolicyRail) foldTaskOutcomes(parts []string, sess sessioninterfaces.SessionFacade) []string {
 	if r.taskEventTracker == nil {
@@ -298,9 +304,10 @@ func (r *TeamPolicyRail) foldTaskOutcomes(parts []string, sess sessioninterfaces
 	if notice == nil {
 		return parts
 	}
-	// 必须先 Persist 再返回：基线推进后即便本轮投递失败，条目也不会重复播
+	// 先插入（Python: parts.insert(0, notice.text)），再持久化基线
+	out := append([]string{notice.Text}, parts...)
 	r.taskEventTracker.Persist(sess)
-	return append([]string{notice.Text}, parts...)
+	return out
 }
 
 // BeforeSteeringDrain 限制一次模型调用吸收多少 steering 积压。

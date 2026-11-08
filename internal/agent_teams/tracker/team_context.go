@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -388,16 +387,6 @@ func baselineEqual(a, b map[string]any) bool {
 	return true
 }
 
-// sortRoster 按 member_name 排序名册，保证跨调用的比较与渲染顺序稳定。
-//
-// Python: list_members 的返回顺序由 DB 决定（按 member_name 主键）；Go 的
-// in-memory 实现遍历 map，顺序随机，故此处显式排序以对齐可比较、可对拍的行为。
-func sortRoster(roster []prompts.RosterMember) {
-	sort.SliceStable(roster, func(i, j int) bool {
-		return roster[i].MemberName < roster[j].MemberName
-	})
-}
-
 // ──────────────────────────── 通道：identity ────────────────────────────
 
 // identityBody 渲染身份正文；已投递过则只在 prompt 变化时重播该小节。
@@ -422,8 +411,23 @@ func (t *TeamContextTracker) identityBody(baseline, updated map[string]any) *str
 			return nil
 		}
 		mtime, _ := t.teamBackend.GetMemberUpdatedAtState(context.Background(), t.memberName, "prompt")
-		// 偏差 D-1：present 恒 true，故只保留「已戳过时间戳 → 比 mtime」分支；
-		// 上游 present=false 的「强制重投一次 + 回戳」需要 workspace_cache。
+		// 偏差 D-1：present 恒 true，故只保留「已戳过时间戳 → 比 mtime」分支。
+		//
+		// ⤴️ 上游 present=false 分支被整段删掉，但它承载一个必须保留的不变量：
+		//
+		//	present=false 表示「md 的 frontmatter 里 updated_at 字段为空」——
+		//	演化方改了正文却没戳时间戳，这是显式的「必须更新一次」信号。
+		//	上游的处理是：不看基线、直接重投，随后把同一个时间戳 T 回戳进文件
+		//	（仅 meta，正文保留）并记入基线。因为 T 同时是「文件里的值」与
+		//	「基线里的值」，下次探测得到 present=true, mtime=T，比较相等，
+		//	不再触发——空字段因此**恰好强制一次重投，永不形成循环**。
+		//
+		//	Go 侧没有 md mtime 覆盖层（workspace_cache），这个状态不可能出现，
+		//	所以分支不可达。但它是「不回戳就会每轮重投」这一防循环设计的唯一
+		//	记录：将来补上 workspace_cache、让 present 能返回 false 时，必须
+		//	照着上面把「重投 + 回戳 + 记基线」三步一起补回来，只补前两步会死循环。
+		//
+		// 回收条件：25.x 落地 workspace_cache 时按 Python L421-438 完整恢复。
 		if prev, ok := baseline[baselineMemberPromptMtime].(int64); ok && prev == mtime {
 			return nil
 		}
@@ -583,8 +587,9 @@ func (t *TeamContextTracker) listRoster() ([]prompts.RosterMember, bool) {
 			// ModelGroup / ModelsUsed 留空（偏差 D-2）
 		})
 	}
-	// Go 的 in-memory 库遍历 map，顺序随机；显式排序保证 delta 与渲染稳定
-	sortRoster(roster)
+	// 不在此处排序：上游 _list_roster 也按后端返回顺序原样组装，渲染层
+	// （BuildRosterSnapshotText / DiffRoster）保持「按输入顺序」不改写。
+	// 顺序确定性由 DAO 层保证（GetTeamMembers 带 ORDER BY member_name）。
 	return roster, true
 }
 

@@ -420,6 +420,12 @@ func (tb *TeamBackend) StampTeamCardUpdatedAt(_ context.Context, _ int64) {}
 // 分支。成员行的 UpdatedAt 由 GetMember 一并返回，无需新增 DAO 查询；
 // field 参数保留以对齐上游签名（"desc" / "prompt"），Go 侧两者同值。
 //
+// ⚠️ present 恒 true 会让上游的 `present=false` 分支不可达，而那个分支不是
+// 可有可无的：它表示「frontmatter 的 updated_at 为空（演化方改了正文没戳）」，
+// 上游在那里做「强制重投一次 + 回戳时间戳防循环」。跟踪侧要记住这个不变量
+// （见 TeamContextTracker.identityBody 的注释），将来本方法能返回 false 时
+// 必须同步恢复该分支，否则会每轮重投。
+//
 // Python: get_member_updated_at_state (team.py L2007-2024)
 func (tb *TeamBackend) GetMemberUpdatedAtState(ctx context.Context, memberName, _ string) (int64, bool) {
 	if memberName == "" {

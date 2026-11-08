@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"sync"
 
@@ -300,6 +301,11 @@ func (db *InMemoryTeamDatabase) GetMember(_ context.Context, memberName, teamNam
 }
 
 // GetTeamMembers 获取团队成员列表，可选按 status 过滤。对齐 Python: MemberDao.get_team_members(team, status=None)
+//
+// 按 member_name 排序后返回：db.members 是 map，遍历顺序随机，不排序会让
+// 名册渲染与 delta 比较每次都不同。上游 SQL 查询虽无 ORDER BY，但其行序对
+// 同一份数据是稳定的；Go 侧用显式排序提供同等甚至更强的确定性。
+// SQL 实现同样带 ORDER BY member_name，两层行为一致。
 func (db *InMemoryTeamDatabase) GetTeamMembers(_ context.Context, teamName string, status string) ([]*TeamMember, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -313,6 +319,9 @@ func (db *InMemoryTeamDatabase) GetTeamMembers(_ context.Context, teamName strin
 		}
 		result = append(result, member)
 	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].MemberName < result[j].MemberName
+	})
 	return result, nil
 }
 
@@ -515,7 +524,8 @@ func (db *InMemoryTeamDatabase) AppendChangeNote(_ context.Context, taskID strin
 		return false, nil
 	}
 	notes := decodeChangeNotes(task.ChangeNotes)
-	notes = append(notes, map[string]any{"revision": revision, "note": note, "by": by})
+	rev := revision
+	notes = append(notes, ChangeNote{Revision: &rev, Note: note, By: by})
 	encoded, err := json.Marshal(notes)
 	if err != nil {
 		return false, err

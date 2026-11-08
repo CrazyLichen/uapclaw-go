@@ -69,13 +69,18 @@ func (d *SQLMemberDao) GetMember(ctx context.Context, memberName, teamName strin
 
 // GetTeamMembers 获取团队成员列表，可选按 status 过滤。
 // Python: get_team_members(team, status=None)
+//
+// 显式 ORDER BY member_name：上游 SQLAlchemy 查询不带 ORDER BY，行序由引擎
+// 决定（SQLite 通常按 rowid，即插入序）。Go 侧要让名册渲染与 delta 比较可复现，
+// 就必须自己定序；定在 DAO 层而不是渲染层，因为这是「数据读取的确定性」，
+// 与渲染逻辑无关（渲染层照上游保持「按输入顺序」不改写）。
 func (d *SQLMemberDao) GetTeamMembers(ctx context.Context, teamName string, status string) ([]*TeamMember, error) {
 	query := d.db.WithContext(ctx).Table("team_member").Where("team_name = ?", teamName)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
 	var members []*TeamMember
-	result := query.Find(&members)
+	result := query.Order("member_name").Find(&members)
 	if result.Error != nil {
 		return nil, result.Error
 	}
