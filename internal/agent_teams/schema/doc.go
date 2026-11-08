@@ -13,6 +13,7 @@
 //	├── doc.go               # 包文档
 //	├── team.go              # TeamRole/TeamSpec/TeamRuntimeContext 等团队级类型
 //	├── deep_agent_spec.go   # DeepAgentSpec/SubAgentSpec 等单角色规格定义（TeamModelConfig 已迁移至 models 包）
+//	├── build_context.go     # core BuildContext 的薄转发（对齐上游同名文件）
 //	├── blueprint.go         # TeamAgentSpec/LeaderSpec/TransportSpec 等团队规格与校验
 //	├── status.go            # 成员/任务状态枚举与状态转换表
 //	├── stream.go            # TeamOutputSchema 团队流式输出 Schema

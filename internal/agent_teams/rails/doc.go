@@ -14,6 +14,7 @@
 //
 //	rails/
 //	├── doc.go                  # 包文档
+//	├── team_context.go      # TeamHandleKey 17 键 + InjectTeamHandles + 17 个 getter
 //	├── first_iteration_gate.go # 首次迭代信号门
 //	├── team_tool_rail.go       # TeamToolRail (priority=90)
 //	├── team_policy_rail.go     # TeamPolicyRail (priority=12)
