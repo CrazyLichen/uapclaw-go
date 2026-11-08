@@ -56,6 +56,7 @@ import (
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -97,6 +98,12 @@ type TeamAgent struct {
 	streamController *StreamController
 	// coordination 协调内核
 	coordination *coordination.CoordinationKernel
+	// taskEventTracker 任务通知器（非 leader 才有，⤴️ 25.0c）
+	//
+	// 由 TeamAgent 持有、TeamPolicyRail 借用——基线因此超出 rail 的生命周期，
+	// 与运行时的「事件驱动宣告」共享同一份（Python 同构：两个 rail 各自持有一份
+	// tracker 会把同一次编辑播两遍）。
+	taskEventTracker tracker.TaskEventTracker
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -1804,4 +1811,19 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 		}
 	}()
 	pool.RemoveTeam(teamName)
+}
+
+// TaskEventTracker 返回本成员的任务通知器。
+func (a *TeamAgent) TaskEventTracker() tracker.TaskEventTracker {
+	return a.taskEventTracker
+}
+
+// SetTaskEventTracker 设置任务通知器（装配期由 configurator 调用）。
+//
+// 同时写到 configurator 的资源区，供 rail 构造时借用。
+func (a *TeamAgent) SetTaskEventTracker(t tracker.TaskEventTracker) {
+	a.taskEventTracker = t
+	if a.configurator != nil {
+		a.configurator.SetTaskEventTracker(t)
+	}
 }

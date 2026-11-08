@@ -48,14 +48,8 @@ const (
 	SectionWorkflow = "team_workflow"
 	// SectionLifecycle 团队生命周期策略（P:14）
 	SectionLifecycle = "team_lifecycle"
-	// SectionPersona 当前人设（P:15）
-	SectionPersona = "team_persona"
 	// SectionExtra 用户自定义 base prompt（P:16）
 	SectionExtra = "team_extra"
-	// SectionInfo 团队元数据（P:65）
-	SectionInfo = "team_info"
-	// SectionMembers 成员关系（P:66）
-	SectionMembers = "team_members"
 	// SectionInboundTags 入站/事件/上下文 XML 标签说明（P:18）
 	// Python: TeamSectionName.INBOUND_TAGS (sections.py L73)
 	SectionInboundTags = "team_inbound_tags"
@@ -267,21 +261,6 @@ func BuildTeamLifecycleSection(role atschema.TeamRole, lifecycle string, languag
 	return &section, nil
 }
 
-// BuildTeamPersonaSection 构建当前人设 section。
-// Python: build_team_persona_section() (openjiuwen/agent_teams/prompts/sections.py)
-//
-// persona 为空时返回 nil。
-func BuildTeamPersonaSection(persona string, language string) *saprompt.PromptSection {
-	if persona == "" {
-		return nil
-	}
-	lbl := sectionsLabelsFor(language)
-	body := lbl["persona_heading"] + "\n\n" + persona + "\n"
-
-	section := saprompt.NewPromptSection(SectionPersona, map[string]string{language: body}, 15)
-	return &section
-}
-
 // BuildTeamExtraSection 构建用户自定义 base prompt section。
 // Python: build_team_extra_section() (openjiuwen/agent_teams/prompts/sections.py)
 //
@@ -293,97 +272,6 @@ func BuildTeamExtraSection(basePrompt string, language string) *saprompt.PromptS
 	}
 
 	section := saprompt.NewPromptSection(SectionExtra, map[string]string{language: trimmed + "\n"}, 16)
-	return &section
-}
-
-// BuildTeamInfoSection 构建团队元数据 section。
-// Python: build_team_info_section() (openjiuwen/agent_teams/prompts/sections.py)
-//
-// 参数：
-//   - teamInfo: 团队元数据，nil 时各字段为零值
-//   - teamWorkspaceMount: 团队共享工作空间的 Agent 相对挂载点
-//   - teamWorkspacePath: 团队共享工作空间的磁盘绝对路径
-//   - language: 提示词语言
-//
-// 所有字段为空时返回 nil。
-func BuildTeamInfoSection(
-	teamInfo *TeamInfo,
-	teamWorkspaceMount string,
-	teamWorkspacePath string,
-	language string,
-) *saprompt.PromptSection {
-	lbl := sectionsLabelsFor(language)
-
-	var teamName, displayName, desc string
-	if teamInfo != nil {
-		teamName = teamInfo.TeamName
-		displayName = teamInfo.DisplayName
-		desc = teamInfo.Description
-	}
-	mount := strings.TrimSpace(teamWorkspaceMount)
-
-	if teamName == "" && displayName == "" && desc == "" && mount == "" {
-		return nil
-	}
-
-	lines := []string{lbl["info_heading"], ""}
-	if teamName != "" {
-		lines = append(lines, fmt.Sprintf("- %s: %s", lbl["team_name_label"], teamName))
-	}
-	if displayName != "" {
-		lines = append(lines, fmt.Sprintf("- %s: %s", lbl["display_name_label"], displayName))
-	}
-	if desc != "" {
-		lines = append(lines, fmt.Sprintf("- %s: %s", lbl["team_desc"], desc))
-	}
-	if mount != "" {
-		lines = append(lines, fmt.Sprintf("- %s: `%s`", lbl["team_workspace"], mount))
-		lines = append(lines, fmt.Sprintf("  - %s", lbl["team_workspace_purpose"]))
-		if teamWorkspacePath != "" {
-			lines = append(lines, fmt.Sprintf("  - %s: `%s`", lbl["team_workspace_abs"], teamWorkspacePath))
-		}
-	}
-	body := strings.Join(lines, "\n") + "\n"
-
-	section := saprompt.NewPromptSection(SectionInfo, map[string]string{language: body}, 65)
-	return &section
-}
-
-// BuildTeamMembersSection 构建成员关系 section。
-// Python: build_team_members_section() (openjiuwen/agent_teams/prompts/sections.py)
-//
-// 排除 selfMemberName 对应的自身成员。过滤后为空则返回 nil。
-func BuildTeamMembersSection(
-	teamMembers []TeamMember,
-	selfMemberName string,
-	language string,
-) *saprompt.PromptSection {
-	if len(teamMembers) == 0 {
-		return nil
-	}
-	lbl := sectionsLabelsFor(language)
-
-	var rows []string
-	for _, member := range teamMembers {
-		if member.MemberName == selfMemberName {
-			continue
-		}
-		displayName := member.DisplayName
-		if displayName == "" {
-			displayName = "unknown"
-		}
-		line := fmt.Sprintf("- member_name=%s display_name=%s", member.MemberName, displayName)
-		if member.Description != "" {
-			line += fmt.Sprintf(" :: %s", member.Description)
-		}
-		rows = append(rows, line)
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-	body := lbl["members_heading"] + "\n\n" + strings.Join(rows, "\n") + "\n"
-
-	section := saprompt.NewPromptSection(SectionMembers, map[string]string{language: body}, 66)
 	return &section
 }
 

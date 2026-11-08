@@ -13,8 +13,8 @@
 //	├── doc.go              # 包文档
 //	├── constants.go        # 保留名常量
 //	├── inbound_render.go   # 转发出 inboundtags 子包的六类标签渲染
-//	├── inboundtags/        # 团队入站消息 XML 渲染（零依赖叶子包，六类标签）
-//	├── timefmt.go          # 时间渲染（绝对时间 + 相对分桶）
+//	├── inboundtags/        # 六类标签渲染 + 时间渲染（零依赖叶子包）
+//	├── tracker/            # TeamContextTracker 团队状态增量宣告 + 任务通知三兄弟
 //	├── context.go          # SessionState 委托（定义已迁移至 sessionctx 包）
 //	├── i18n.go             # 多语言 i18n 支持
 //	├── paths.go            # 团队路径工具

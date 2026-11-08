@@ -18,7 +18,7 @@
 //	├── doc.go                # 包文档
 //	├── loader.go             # go:embed 模板加载器
 //	├── policy.go             # RolePolicy + BuildSystemPrompt
-//	├── sections.go           # 8 个 PromptSection builder + TeamSectionName + _LABELS + HITT
+//	├── sections.go           # 静态 PromptSection builder（角色/HITT/工作流/生命周期/额外/入站标签）
 //	├── messages.go           # 团队状态消息正文（身份/团队信息/名册）+ 名册 diff
 //	├── message_template.go   # 任务修订说明与正文 diff（expand_message 全家 ⤵️ 25.6）
 //	├── team_plan_agent.go    # ApplyTeamPlanAgentPrompt + 常量

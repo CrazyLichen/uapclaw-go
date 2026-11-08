@@ -5,6 +5,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 )
 
@@ -26,4 +27,7 @@ type PrivateAgentResources struct {
 	FirstIterGate *rails.FirstIterationGate
 	// ModelAllocator 模型分配器（仅 Leader）。⤴️ 9.64 回填完成
 	ModelAllocator models.ModelAllocator
+	// TaskEventTracker 任务通知器（非 leader 才有，⤴️ 25.0c）
+	// 由 TeamAgent 持有、TeamPolicyRail 借用——基线因此超出 rail 生命周期。
+	TaskEventTracker tracker.TaskEventTracker
 }

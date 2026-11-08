@@ -18,6 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -358,48 +359,15 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	)
 
 	// 步骤 10: TeamPolicyRail
-	// Persona 从 spec 或 PredefinedMembers 中获取
-	// Python: persona 来自 agent_spec.persona，Go 侧 DeepAgentSpec 暂无此字段
-	// TODO(#9.runtime): 从 DeepAgentSpec 或 TeamMemberSpec 获取 persona
-	persona := ""
-	var teamPolicyRail *rails.TeamPolicyRail
-	if spec.Workspace != nil && c.WorkspaceManager() != nil {
-		var err error
-		teamPolicyRail, err = rails.NewTeamPolicyRail(
-			rails.WithPolicyRole(ctx.Role),
-			rails.WithPolicyPersona(persona),
-			rails.WithPolicyMemberName(ctx.MemberName),
-			rails.WithPolicyLifecycle(c.Lifecycle()),
-			rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
-			rails.WithPolicyLanguage(resolvedLanguage),
-			rails.WithPolicyTeamMode(teamMode),
-			rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
-			rails.WithPolicyTeamWorkspaceMount("/.team/workspace"),
-			rails.WithPolicyTeamWorkspacePath(c.WorkspaceManager().WorkspacePath()),
-			rails.WithPolicyTeamBackend(c.TeamBackend()),
-			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
-		)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		var err error
-		teamPolicyRail, err = rails.NewTeamPolicyRail(
-			rails.WithPolicyRole(ctx.Role),
-			rails.WithPolicyPersona(persona),
-			rails.WithPolicyMemberName(ctx.MemberName),
-			rails.WithPolicyLifecycle(c.Lifecycle()),
-			rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
-			rails.WithPolicyLanguage(resolvedLanguage),
-			rails.WithPolicyTeamMode(teamMode),
-			rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
-			rails.WithPolicyTeamBackend(c.TeamBackend()),
-			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
-		)
-		if err != nil {
-			return nil, err
-		}
+	// ⤴️ 25.0c：构造收敛到一个 helper，20 个参数集中一处；同时产出任务通知器
+	// （非 leader 才有），由 TeamAgent 持有、rail 借用。
+	teamPolicyRail, taskEventTracker, err := c.buildTeamPolicyRail(
+		ctx.Role, spec, agentSpec, resolveDispatchMode(spec), resolvedLanguage, teamMode,
+	)
+	if err != nil {
+		return nil, err
 	}
+	c.SetTaskEventTracker(taskEventTracker)
 
 	// 步骤 11: FirstIterationGate（非 HUMAN_AGENT 角色时创建）
 	var firstIterGate *rails.FirstIterationGate
@@ -917,6 +885,74 @@ func (c *AgentConfigurator) FirstIterGate() *rails.FirstIterationGate {
 		return nil
 	}
 	return c.resources.FirstIterGate
+}
+
+// buildTeamPolicyRail 构造 TeamPolicyRail（20 个构造参数集中一处）。
+//
+// 任务通知器在这里一并构造：非 leader 成员按 dispatch 模式取
+// TaskOutcomeTracker（scheduled）或 TaskRevisionTracker（autonomous）；
+// 它由 TeamAgent 持有、rail 只借用，因此基线超出 rail 生命周期。
+//
+// 偏差 D-3：framework 建队的政策块依赖 buildLeaderPolicyDisclosure（⤵️ 25.0g），
+// 本节 policyText 恒 nil，政策通道关闭。
+//
+// Python: agent_configurator.py 步骤 10
+func (c *AgentConfigurator) buildTeamPolicyRail(
+	role atschema.TeamRole,
+	spec atschema.TeamAgentSpec,
+	agentSpec atschema.DeepAgentSpec,
+	dispatchMode, resolvedLanguage, teamMode string,
+) (*rails.TeamPolicyRail, tracker.TaskEventTracker, error) {
+	var taskTracker tracker.TaskEventTracker
+	if role != atschema.TeamRoleLeader {
+		taskTracker = tracker.BuildTaskEventTracker(dispatchMode, c.TeamBackend(), c.MemberName())
+	}
+
+	opts := []rails.TeamPolicyRailOption{
+		rails.WithPolicyRole(role),
+		rails.WithPolicyMemberName(c.MemberName()),
+		rails.WithPolicyLifecycle(c.Lifecycle()),
+		rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
+		rails.WithPolicyLanguage(resolvedLanguage),
+		rails.WithPolicyTeamMode(teamMode),
+		rails.WithPolicyDispatchMode(dispatchMode),
+		rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
+		rails.WithPolicyTeamBackend(c.TeamBackend()),
+		rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
+		rails.WithPolicyTaskEventTracker(taskTracker),
+		// 偏差 D-3：政策块 ⤵️ 25.0g
+	}
+	if c.WorkspaceManager() != nil {
+		opts = append(opts,
+			rails.WithPolicyTeamWorkspaceMount("/.team/workspace"),
+			rails.WithPolicyTeamWorkspacePath(c.WorkspaceManager().WorkspacePath()),
+		)
+	}
+	rail, err := rails.NewTeamPolicyRail(opts...)
+	return rail, taskTracker, err
+}
+
+// resolveDispatchMode 解析本团队的调度模式。
+//
+// 偏差 D-10：Go 的 TeamAgentSpec 暂无 DispatchMode 字段（grep 零命中），调度模式
+// 整体属 25.2。此处恒返回 "autonomous"，即非 leader 成员注入
+// TaskRevisionTracker（编辑通知）而非 TaskOutcomeTracker（评审通过通知）。
+// 25.2 落地 DispatchMode 后，本函数改成直接读字段即可。
+func resolveDispatchMode(_ atschema.TeamAgentSpec) string { return "autonomous" }
+
+// SetTaskEventTracker 记录本成员的任务通知器（非 leader 才有）。
+func (c *AgentConfigurator) SetTaskEventTracker(t tracker.TaskEventTracker) {
+	if c.resources != nil {
+		c.resources.TaskEventTracker = t
+	}
+}
+
+// TaskEventTracker 返回本成员的任务通知器。
+func (c *AgentConfigurator) TaskEventTracker() tracker.TaskEventTracker {
+	if c.resources == nil {
+		return nil
+	}
+	return c.resources.TaskEventTracker
 }
 
 // SetFirstIterGate 设置首轮迭代门控。

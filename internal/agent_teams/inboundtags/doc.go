@@ -24,7 +24,13 @@
 //
 //	inboundtags/
 //	├── doc.go          # 包文档
-//	└── inbound_tags.go # 六类标签渲染 + 被取代快照剪枝
+//	├── inbound_tags.go # 六类标签渲染 + 被取代快照剪枝
+//	└── timefmt.go      # 时间渲染（绝对时间 + 相对分桶）
 //
-// 对应 Python 代码：openjiuwen/agent_teams/inbound_render.py (417 行)
+// 另含时间渲染（timefmt.go）：团队数据库把时间戳存为毫秒 UTC epoch，但原始
+// epoch 对 LLM 无用——它无法可靠地从裸整数推理顺序或「多久之前」。本包把它转成
+// 「<绝对本地时间> (<相对差>)」。分桶选择是纯数值、与语言无关，只有文案在 i18n。
+//
+// 对应 Python 代码：openjiuwen/agent_teams/inbound_render.py (417 行) +
+// openjiuwen/agent_teams/timefmt.py (125 行)
 package inboundtags

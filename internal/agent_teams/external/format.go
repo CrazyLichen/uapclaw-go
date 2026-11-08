@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 

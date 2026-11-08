@@ -343,41 +343,6 @@ func TestBuildTeamLifecycleSection_Persistent(t *testing.T) {
 	}
 }
 
-// TestBuildTeamPersonaSection_有persona 测试有 persona 时构建 section
-func TestBuildTeamPersonaSection_有persona(t *testing.T) {
-	section := BuildTeamPersonaSection("高级工程师", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamPersonaSection returned nil when persona is set")
-	}
-	if section.Priority != 15 {
-		t.Fatalf("expected priority 15, got %d", section.Priority)
-	}
-	cnContent := section.Content["cn"]
-	if !strings.Contains(cnContent, "高级工程师") {
-		t.Fatal("cn content should contain persona text")
-	}
-}
-
-// TestBuildTeamPersonaSection_空persona返回nil 测试空 persona 返回 nil
-func TestBuildTeamPersonaSection_空persona返回nil(t *testing.T) {
-	section := BuildTeamPersonaSection("", "cn")
-	if section != nil {
-		t.Fatal("expected nil when persona is empty")
-	}
-}
-
-// TestBuildTeamPersonaSection_English 测试英文 persona
-func TestBuildTeamPersonaSection_English(t *testing.T) {
-	section := BuildTeamPersonaSection("Senior Engineer", "en")
-	if section == nil {
-		t.Fatal("BuildTeamPersonaSection returned nil for English persona")
-	}
-	enContent := section.Content["en"]
-	if !strings.Contains(enContent, "Senior Engineer") {
-		t.Fatal("en content should contain persona text")
-	}
-}
-
 // TestBuildTeamExtraSection 测试额外提示
 func TestBuildTeamExtraSection(t *testing.T) {
 	section := BuildTeamExtraSection("custom instructions", "cn")
@@ -420,151 +385,6 @@ func TestBuildTeamExtraSection_无标题头(t *testing.T) {
 	}
 }
 
-// TestBuildTeamInfoSection 测试团队信息 section
-func TestBuildTeamInfoSection(t *testing.T) {
-	info := &TeamInfo{
-		TeamName:    "my-team",
-		DisplayName: "My Team",
-		Description: "A test team",
-	}
-	section := BuildTeamInfoSection(info, "/.team/workspace", "/abs/path", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamInfoSection returned nil")
-	}
-	if section.Priority != 65 {
-		t.Fatalf("expected priority 65, got %d", section.Priority)
-	}
-	cnContent := section.Content["cn"]
-	if !strings.Contains(cnContent, "my-team") {
-		t.Fatal("cn content should contain team_name")
-	}
-	if !strings.Contains(cnContent, "My Team") {
-		t.Fatal("cn content should contain display_name")
-	}
-	if !strings.Contains(cnContent, "A test team") {
-		t.Fatal("cn content should contain description")
-	}
-	if !strings.Contains(cnContent, "/.team/workspace") {
-		t.Fatal("cn content should contain workspace mount")
-	}
-	if !strings.Contains(cnContent, "/abs/path") {
-		t.Fatal("cn content should contain workspace absolute path")
-	}
-}
-
-// TestBuildTeamInfoSection_无workspace 测试无工作空间挂载
-func TestBuildTeamInfoSection_无workspace(t *testing.T) {
-	info := &TeamInfo{TeamName: "test"}
-	section := BuildTeamInfoSection(info, "", "", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamInfoSection returned nil when team_name is set")
-	}
-	cnContent := section.Content["cn"]
-	if strings.Contains(cnContent, "团队共享工作空间") {
-		t.Fatal("cn content should not contain workspace section when mount is empty")
-	}
-}
-
-// TestBuildTeamInfoSection_全空返回nil 测试全空时返回 nil
-func TestBuildTeamInfoSection_全空返回nil(t *testing.T) {
-	section := BuildTeamInfoSection(nil, "", "", "cn")
-	if section != nil {
-		t.Fatal("expected nil when all fields are empty")
-	}
-	section = BuildTeamInfoSection(&TeamInfo{}, "", "", "cn")
-	if section != nil {
-		t.Fatal("expected nil when TeamInfo is zero-value and no workspace")
-	}
-}
-
-// TestBuildTeamInfoSection_English 测试英文团队信息
-func TestBuildTeamInfoSection_English(t *testing.T) {
-	info := &TeamInfo{TeamName: "test", DisplayName: "Test"}
-	section := BuildTeamInfoSection(info, "/mount", "", "en")
-	if section == nil {
-		t.Fatal("BuildTeamInfoSection returned nil")
-	}
-	enContent := section.Content["en"]
-	if !strings.Contains(enContent, "Team Info") {
-		t.Fatal("English section should contain 'Team Info' heading")
-	}
-}
-
-// TestBuildTeamMembersSection 测试成员关系 section
-func TestBuildTeamMembersSection(t *testing.T) {
-	members := []TeamMember{
-		{MemberName: "bob", DisplayName: "Bob", Description: "Engineer"},
-		{MemberName: "alice", DisplayName: "Alice", Description: "Leader"},
-	}
-	section := BuildTeamMembersSection(members, "alice", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamMembersSection returned nil")
-	}
-	if section.Priority != 66 {
-		t.Fatalf("expected priority 66, got %d", section.Priority)
-	}
-	if section.Name != SectionMembers {
-		t.Fatalf("expected section name %s, got %s", SectionMembers, section.Name)
-	}
-	cnContent := section.Content["cn"]
-	// 应排除自身 alice
-	if strings.Contains(cnContent, "member_name=alice") {
-		t.Fatal("cn content should exclude self member_name 'alice'")
-	}
-	// 应包含 bob
-	if !strings.Contains(cnContent, "member_name=bob") {
-		t.Fatal("cn content should contain member 'bob'")
-	}
-}
-
-// TestBuildTeamMembersSection_空列表返回nil 测试空成员列表返回 nil
-func TestBuildTeamMembersSection_空列表返回nil(t *testing.T) {
-	section := BuildTeamMembersSection(nil, "alice", "cn")
-	if section != nil {
-		t.Fatal("expected nil for nil member list")
-	}
-	section = BuildTeamMembersSection([]TeamMember{}, "alice", "cn")
-	if section != nil {
-		t.Fatal("expected nil for empty member list")
-	}
-}
-
-// TestBuildTeamMembersSection_全排除后返回nil 测试全部排除后返回 nil
-func TestBuildTeamMembersSection_全排除后返回nil(t *testing.T) {
-	members := []TeamMember{{MemberName: "alice", DisplayName: "Alice"}}
-	section := BuildTeamMembersSection(members, "alice", "cn")
-	if section != nil {
-		t.Fatal("expected nil when only self member in list")
-	}
-}
-
-// TestBuildTeamMembersSection_无Description 测试成员无描述
-func TestBuildTeamMembersSection_无Description(t *testing.T) {
-	members := []TeamMember{{MemberName: "bob", DisplayName: "Bob", Description: ""}}
-	section := BuildTeamMembersSection(members, "alice", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamMembersSection returned nil")
-	}
-	cnContent := section.Content["cn"]
-	// 无描述时行尾不应有 " :: "
-	if strings.Contains(cnContent, " :: ") {
-		t.Fatal("member without description should not have ' :: ' separator")
-	}
-}
-
-// TestBuildTeamMembersSection_无DisplayName 测试成员无展示名时默认 unknown
-func TestBuildTeamMembersSection_无DisplayName(t *testing.T) {
-	members := []TeamMember{{MemberName: "bob", DisplayName: "", Description: ""}}
-	section := BuildTeamMembersSection(members, "alice", "cn")
-	if section == nil {
-		t.Fatal("BuildTeamMembersSection returned nil")
-	}
-	cnContent := section.Content["cn"]
-	if !strings.Contains(cnContent, "unknown") {
-		t.Fatal("member without display_name should default to 'unknown'")
-	}
-}
-
 // TestSectionName常量 测试 Section 名称常量与 Python 对齐
 func TestSectionName常量(t *testing.T) {
 	if SectionRole != "team_role" {
@@ -579,17 +399,8 @@ func TestSectionName常量(t *testing.T) {
 	if SectionLifecycle != "team_lifecycle" {
 		t.Fatalf("expected team_lifecycle, got %s", SectionLifecycle)
 	}
-	if SectionPersona != "team_persona" {
-		t.Fatalf("expected team_persona, got %s", SectionPersona)
-	}
 	if SectionExtra != "team_extra" {
 		t.Fatalf("expected team_extra, got %s", SectionExtra)
-	}
-	if SectionInfo != "team_info" {
-		t.Fatalf("expected team_info, got %s", SectionInfo)
-	}
-	if SectionMembers != "team_members" {
-		t.Fatalf("expected team_members, got %s", SectionMembers)
 	}
 }
 
@@ -634,10 +445,7 @@ func TestAllBuilders(t *testing.T) {
 	var _ = mustBuildRoleSection(t, atschema.TeamRoleLeader, "a", "build_mode", "cn")
 	var _ = mustBuildWorkflowSection(t, atschema.TeamRoleLeader, "default", "cn")
 	var _ = mustBuildLifecycleSection(t, atschema.TeamRoleLeader, "temporary", "cn")
-	var _ = BuildTeamPersonaSection("p", "cn")
 	var _ = BuildTeamExtraSection("e", "cn")
-	var _ = BuildTeamInfoSection(&TeamInfo{TeamName: "t"}, "", "", "cn")
-	var _ = BuildTeamMembersSection([]TeamMember{{MemberName: "b"}}, "", "cn")
 	var _ = BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"h"}, "cn", "", false)
 }
 
