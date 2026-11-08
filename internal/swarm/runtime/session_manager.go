@@ -188,11 +188,22 @@ func (m *SessionManager) CancelAllSessionTasks(
 // Python: session_manager.py close_session
 //
 // 返回值语义与协调器 CloseSession 不同：本方法回答"清没清到东西"。
+//
+// 步骤与上游一致：
+//  1. 取本代 closing_tasks 快照、processor、task、queue
+//  2. 取消该 task 的等待结果（若有）
+//  3. 清空队列并取消每个排队项的结果通道
+//  4. 通知 processor 退出、取消 task
+//  5. 把等待目标登记进 closing_tasks（带 finish 回调语义）
+//  6. 等剩余目标，完成的走 finishClosingTask，超时的告警
 func (m *SessionManager) CloseSession(
 	ctx context.Context, sessionID string, waitTimeout *float64,
 ) (bool, error) {
 	m.mu.Lock()
-	closing := m.closingTasks[sessionID]
+	closing := make(map[*sessionTask]struct{}, len(m.closingTasks[sessionID]))
+	for target := range m.closingTasks[sessionID] {
+		closing[target] = struct{}{}
+	}
 	processor := m.sessionProcessors[sessionID]
 	task := m.sessionTasks[sessionID]
 	queue := m.sessionQueues[sessionID]
@@ -204,18 +215,37 @@ func (m *SessionManager) CloseSession(
 	delete(m.sessionQueues, sessionID)
 	delete(m.sessionPriorities, sessionID)
 	delete(m.sessionTasks, sessionID)
+	m.mu.Unlock()
+
+	// 步骤 2：取消该 task 的等待结果（唤醒 submit_and_wait 的等待方）
+	if task != nil {
+		m.cancelResultFuture(task)
+	}
+	// 步骤 3：清空队列并取消每个排队项的结果通道
 	if queue != nil {
 		queue.drainCancelled()
 	}
-	m.mu.Unlock()
 
+	// 步骤 4：通知 processor 退出、取消 task
 	if processor != nil {
 		close(processor.closing)
 	}
 	if task != nil && task.cancel != nil {
 		task.cancel()
 	}
-	if processor == nil && task == nil {
+
+	// 步骤 5：把等待目标登记进 closing_tasks
+	waitTargets := make([]*sessionTask, 0, len(closing)+1)
+	for target := range closing {
+		waitTargets = append(waitTargets, target)
+	}
+	if task != nil {
+		if _, already := closing[task]; !already {
+			waitTargets = append(waitTargets, task)
+			m.trackClosingTask(sessionID, task)
+		}
+	}
+	if len(waitTargets) == 0 && processor == nil {
 		return hadRuntime, nil
 	}
 
@@ -225,20 +255,100 @@ func (m *SessionManager) CloseSession(
 	}
 	timer := time.NewTimer(time.Duration(timeout * float64(time.Second)))
 	defer timer.Stop()
-	// 等处理器真正退出（Python 用 asyncio.wait 等 Task 本身）
-	var exited <-chan struct{}
-	if processor != nil {
-		exited = processor.exited
+
+	// 步骤 6：等剩余目标
+	pending := 0
+	for _, target := range waitTargets {
+		select {
+		case <-target.result:
+			m.finishClosingTask(sessionID, target)
+		case <-timer.C:
+			pending++
+		case <-ctx.Done():
+			pending++
+		}
 	}
-	select {
-	case <-exited:
-	case <-timer.C:
+	if processor != nil {
+		select {
+		case <-processor.exited:
+		case <-timer.C:
+			pending++
+		case <-ctx.Done():
+			pending++
+		}
+	}
+	if pending > 0 {
 		logger.Warn(logComponent).Str("session_id", sessionID).
-			Float64("wait_timeout", timeout).
+			Float64("wait_timeout", timeout).Int("pending", pending).
 			Msg("[SessionManager] close session wait timeout")
-	case <-ctx.Done():
 	}
 	return hadRuntime, nil
+}
+
+// cancelResultFuture 取消任务的结果等待（唤醒 submit_and_wait 的等待方）。
+// Python: session_manager.py _cancel_result_future
+//
+// Go 侧结果通道是 chan taskResult：取消即向通道投一个已取消错误，
+// 让仍在 result 上阻塞的调用方立刻返回，而不是等任务真正结束。
+func (m *SessionManager) cancelResultFuture(task *sessionTask) {
+	if task == nil || task.result == nil {
+		return
+	}
+	select {
+	case task.result <- taskResult{err: context.Canceled}:
+	default:
+	}
+}
+
+// trackClosingTask 把待关闭的任务登记进 closing_tasks。
+// Python: session_manager.py _track_closing_task
+//
+// 登记后由 finishClosingTask 在任务结束时移除；集合清空时连会话条目一起删，
+// 避免按会话泄漏小 map。上游用 task.add_done_callback 挂回调，
+// Go 侧由 CloseSession 的等待循环在通道关闭后显式调用（等价时序）。
+func (m *SessionManager) trackClosingTask(sessionID string, task *sessionTask) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	tasks, ok := m.closingTasks[sessionID]
+	if !ok {
+		tasks = make(map[*sessionTask]struct{})
+		m.closingTasks[sessionID] = tasks
+	}
+	if _, already := tasks[task]; already {
+		return
+	}
+	tasks[task] = struct{}{}
+}
+
+// finishClosingTask 从 closing_tasks 移除已结束的任务。
+// Python: session_manager.py _finish_closing_task
+//
+// 集合为空时删除会话条目；任务结果的取消错误静默吞掉，其他错误记日志。
+func (m *SessionManager) finishClosingTask(sessionID string, task *sessionTask) {
+	m.mu.Lock()
+	tasks, ok := m.closingTasks[sessionID]
+	if !ok {
+		m.mu.Unlock()
+		return
+	}
+	if _, exists := tasks[task]; !exists {
+		m.mu.Unlock()
+		return
+	}
+	delete(tasks, task)
+	if len(tasks) == 0 {
+		delete(m.closingTasks, sessionID)
+	}
+	m.mu.Unlock()
+
+	select {
+	case result := <-task.result:
+		if result.err != nil && !errors.Is(result.err, context.Canceled) {
+			logger.Error(logComponent).Err(result.err).Str("session_id", sessionID).
+				Msg("[SessionManager] close session failed")
+		}
+	default:
+	}
 }
 
 // CloseAllSessions 进程级关闭全量会话。

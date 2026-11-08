@@ -26,6 +26,13 @@ type sessionAdapterCache struct {
 	// mu 保护以下字段
 	mu sync.RWMutex
 	// entries 会话标识 → 子适配器（Go 侧以 map 承载等价句柄）
+	//
+	// TODO(回填): 该 map 目前无类型约束、无生产写入方（只有测试塞空 map），
+	// 是为了保持 API 面完整的占位。真正落地依赖两块未迁移的能力：
+	//   1. DeepAgent 按会话分身（Python 每个子适配器一份 _instance + 子代理控制表）；
+	//   2. 子代理运行时（25.8，subagents/ 整层 Go 侧 0 实现）。
+	// 两者落地后应改为具体类型（如 *DeepAdapter 或 SessionAdapter 结构体），
+	// 并在 ensureAdapter 路径上调用 remember。计划登记见 10.3.28e 的 D-17。
 	entries map[string]map[string]any
 	// lastUsed 会话标识 → 最后使用时刻
 	lastUsed map[string]time.Time
@@ -44,6 +51,8 @@ func newSessionAdapterCache() *sessionAdapterCache {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // remember 记住某会话的子适配器。
+//
+// TODO(回填): 生产代码尚无调用方，见 entries 字段的说明。
 func (c *sessionAdapterCache) remember(sessionID string, entry map[string]any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

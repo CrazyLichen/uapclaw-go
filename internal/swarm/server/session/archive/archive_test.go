@@ -1087,3 +1087,141 @@ func TestSession_删除接替失败归档(t *testing.T) {
 		t.Fatalf("删除应接管失败归档: %v", err)
 	}
 }
+
+// TestListableArchivedDirectory 符号链接与根外目录被拒。
+func TestListableArchivedDirectory(t *testing.T) {
+	root := setupRoot(t)
+	_, archivedRoot := sessionRoots()
+	inside := filepath.Join(archivedRoot, "s1")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	rootResolved := resolvePath(archivedRoot)
+	if !listableArchivedDirectory(inside, rootResolved) {
+		t.Error("根内普通目录应可列出")
+	}
+
+	// 根外目录
+	outside := filepath.Join(root, "outside-dir")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	if listableArchivedDirectory(outside, rootResolved) {
+		t.Error("根外目录不应列出")
+	}
+
+	// 符号链接
+	link := filepath.Join(archivedRoot, "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skip("平台不支持符号链接")
+	}
+	if listableArchivedDirectory(link, rootResolved) {
+		t.Error("符号链接不应列出")
+	}
+}
+
+// TestListingArchivedAt 三级回退取值。
+func TestListingArchivedAt(t *testing.T) {
+	setupRoot(t)
+	dir := t.TempDir()
+
+	// 1. 元数据优先
+	if got := listingArchivedAt(dir, map[string]any{"archived_at": 100.0}, map[string]any{}); got != 100.0 {
+		t.Errorf("应取元数据值，实际 %v", got)
+	}
+	// 2. 操作记录
+	value := map[string]any{"operation": map[string]any{"archived_at": 200.0}}
+	if got := listingArchivedAt(dir, map[string]any{}, value); got != 200.0 {
+		t.Errorf("应取操作记录值，实际 %v", got)
+	}
+	// 3. 修复标记
+	value = map[string]any{"archive_time_repair": 300.0}
+	if got := listingArchivedAt(dir, map[string]any{}, value); got != 300.0 {
+		t.Errorf("应取修复标记，实际 %v", got)
+	}
+	// 4. 目录 mtime 兜底
+	if got := listingArchivedAt(dir, map[string]any{}, map[string]any{}); got <= 0 {
+		t.Errorf("应回退到目录 mtime，实际 %v", got)
+	}
+}
+
+// TestBackfillArchiveTimes 历史会话补齐 archived_at。
+func TestBackfillArchiveTimes(t *testing.T) {
+	setupRoot(t)
+	_, archivedRoot := sessionRoots()
+	legacyDir := filepath.Join(archivedRoot, "legacy-1")
+	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	// 无 archived_at 的旧元数据
+	if err := lifecycle.AtomicJSON(filepath.Join(legacyDir, "metadata.json"),
+		map[string]any{"session_id": "legacy-1", "title": "旧会话"}); err != nil {
+		t.Fatalf("写元数据失败: %v", err)
+	}
+
+	service := NewService(&stubRuntime{}, "owner-1")
+	defer service.Close()
+	service.BackfillArchiveTimes()
+
+	meta, err := lifecycle.ReadJSON(filepath.Join(legacyDir, "metadata.json"))
+	if err != nil {
+		t.Fatalf("读元数据失败: %v", err)
+	}
+	if asFloatValue(meta["archived_at"]) <= 0 {
+		t.Error("应回填 archived_at")
+	}
+	if meta["title"] != "旧会话" {
+		t.Error("回填不应丢其他字段")
+	}
+}
+
+// TestBackfillArchiveTimes_已有值不覆盖 已有 archived_at 不动。
+func TestBackfillArchiveTimes_已有值不覆盖(t *testing.T) {
+	setupRoot(t)
+	_, archivedRoot := sessionRoots()
+	dir := filepath.Join(archivedRoot, "s1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	if err := lifecycle.AtomicJSON(filepath.Join(dir, "metadata.json"),
+		map[string]any{"archived_at": 111.0}); err != nil {
+		t.Fatalf("写元数据失败: %v", err)
+	}
+	service := NewService(&stubRuntime{}, "owner-1")
+	defer service.Close()
+	service.BackfillArchiveTimes()
+
+	meta, _ := lifecycle.ReadJSON(filepath.Join(dir, "metadata.json"))
+	if asFloatValue(meta["archived_at"]) != 111.0 {
+		t.Errorf("已有值不应被覆盖，实际 %v", meta["archived_at"])
+	}
+}
+
+// TestListSessions_跳过符号链接目录 符号链接条目不出现在列表。
+func TestListSessions_跳过符号链接目录(t *testing.T) {
+	root := setupRoot(t)
+	_, archivedRoot := sessionRoots()
+	if err := os.MkdirAll(archivedRoot, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(archivedRoot, "evil")); err != nil {
+		t.Skip("平台不支持符号链接")
+	}
+	service := NewService(&stubRuntime{}, "owner-1")
+	defer service.Close()
+
+	result, err := service.ListSessions(map[string]any{})
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	sessions, _ := result["sessions"].([]map[string]any)
+	for _, item := range sessions {
+		if item["session_id"] == "evil" {
+			t.Error("符号链接条目不应出现在列表")
+		}
+	}
+}

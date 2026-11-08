@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -478,5 +479,99 @@ func TestDrainCancelled_nil任务(t *testing.T) {
 	queue.drainCancelled()
 	if queue.Len() != 0 {
 		t.Error("清空后队列应为空")
+	}
+}
+
+// TestSessionManager_closingTasks_登记与清理 closing_tasks 三个助手的行为。
+//
+// 这三个方法此前被合并成 cleanupProcessorGeneration 而未实现，
+// 导致 closingTasks 字段只读不写——"同一 session_id 可在旧 processor
+// 退出前重连"的保证实际不存在。
+func TestSessionManager_closingTasks_登记与清理(t *testing.T) {
+	manager := NewSessionManager()
+	task := &sessionTask{result: make(chan taskResult, 1)}
+
+	manager.trackClosingTask("s1", task)
+	manager.mu.Lock()
+	registered := len(manager.closingTasks["s1"])
+	manager.mu.Unlock()
+	if registered != 1 {
+		t.Fatalf("应登记 1 个待关闭任务，实际 %d", registered)
+	}
+
+	// 重复登记幂等
+	manager.trackClosingTask("s1", task)
+	manager.mu.Lock()
+	registered = len(manager.closingTasks["s1"])
+	manager.mu.Unlock()
+	if registered != 1 {
+		t.Errorf("重复登记应幂等，实际 %d", registered)
+	}
+
+	manager.finishClosingTask("s1", task)
+	manager.mu.Lock()
+	_, stillExists := manager.closingTasks["s1"]
+	manager.mu.Unlock()
+	if stillExists {
+		t.Error("清空后应删除会话条目，避免按会话泄漏")
+	}
+}
+
+// TestSessionManager_finishClosingTask_吞取消错误 取消错误静默，其他错误记日志。
+func TestSessionManager_finishClosingTask_吞取消错误(t *testing.T) {
+	manager := NewSessionManager()
+	task := &sessionTask{result: make(chan taskResult, 1)}
+	manager.trackClosingTask("s1", task)
+	task.result <- taskResult{err: context.Canceled}
+	// 不应 panic
+	manager.finishClosingTask("s1", task)
+
+	// 未登记的任务调用是空操作
+	manager.finishClosingTask("s2", &sessionTask{result: make(chan taskResult, 1)})
+}
+
+// TestSessionManager_cancelResultFuture 取消结果等待唤醒调用方。
+func TestSessionManager_cancelResultFuture(t *testing.T) {
+	manager := NewSessionManager()
+	task := &sessionTask{result: make(chan taskResult, 1)}
+	manager.cancelResultFuture(task)
+	select {
+	case result := <-task.result:
+		if !errors.Is(result.err, context.Canceled) {
+			t.Errorf("应投递取消错误，实际 %v", result.err)
+		}
+	default:
+		t.Error("应唤醒等待方")
+	}
+	// nil 安全
+	manager.cancelResultFuture(nil)
+	manager.cancelResultFuture(&sessionTask{})
+}
+
+// TestSessionManager_CloseSession_待到任务结束 close 时等 task 完成。
+func TestSessionManager_CloseSession_待到任务结束(t *testing.T) {
+	manager := NewSessionManager()
+	started := make(chan struct{})
+	manager.SubmitTask(context.Background(), "s1", func(ctx context.Context) (any, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	<-started
+
+	timeout := 2.0
+	cleaned, err := manager.CloseSession(context.Background(), "s1", &timeout)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if !cleaned {
+		t.Error("应报告清理了运行时")
+	}
+	// 关闭后不应残留 closing_tasks 条目
+	manager.mu.Lock()
+	_, leftover := manager.closingTasks["s1"]
+	manager.mu.Unlock()
+	if leftover {
+		t.Error("关闭后不应残留 closing_tasks 条目")
 	}
 }

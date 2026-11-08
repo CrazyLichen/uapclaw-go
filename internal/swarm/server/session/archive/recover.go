@@ -24,6 +24,10 @@ func (s *Service) StartRecovery(ctx context.Context) {
 	s.recoveryActive = true
 	s.mu.Unlock()
 
+	// 启动时先做一次 archived_at 回填：列表只读取值，历史会话需要这一次补写
+	// （Python: session_archive.py start_recovery 里 asyncio.to_thread(self._backfill_archive_times)）
+	s.BackfillArchiveTimes()
+
 	go func() {
 		ticker := time.NewTicker(recoveryIdleInterval)
 		defer ticker.Stop()
