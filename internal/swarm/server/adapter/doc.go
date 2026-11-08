@@ -15,6 +15,7 @@
 //	├── interface.go              # AgentAdapter 接口 + 3 个可选接口
 //	├── factory.go                # CreateAdapter 工厂 + ResolveSDKChoice
 //	├── deep_adapter.go           # DeepAdapter 核心结构体 + 8 接口方法 + 模型构建 + CWD 种子
+//	├── deep_adapter_sessions.go  # 会话级 adapter 分层（按会话分身缓存 + 清理入口）
 //	├── deep_adapter_rails.go     # ~20 个 rail builder + buildAgentRails + 幂等 UpdateAgentRails
 //	├── deep_adapter_plan.go      # plan 状态机接入（EnsureState/check_post_process_exit/控制事件）
 //	├── deep_adapter_skills.go    # 技能 rail 热刷新（RefreshSkillRails）+ 技能扫描根汇总

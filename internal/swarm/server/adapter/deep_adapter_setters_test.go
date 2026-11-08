@@ -107,8 +107,6 @@ func TestCancelSchedulerRunningTasks_无LoopController(t *testing.T) {
 	assertNotPanicsAdapter(t, func() { d.cancelSchedulerRunningTasks() })
 }
 
-
-
 // TestExtractRebuildFollowupPrompt 验证 followup prompt 提取条件。
 func TestExtractRebuildFollowupPrompt(t *testing.T) {
 	t.Run("nil 返回空", func(t *testing.T) {

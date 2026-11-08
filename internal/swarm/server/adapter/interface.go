@@ -47,6 +47,13 @@ type AgentAdapter interface {
 	// Cleanup 清理适配器资源。
 	// Python 中不在 Protocol 里但门面会调用，Go 纳入接口更规范，避免运行时类型断言。
 	Cleanup() error
+	// HasSessionRuntime 该会话是否还占用 adapter 侧运行时。
+	// Python: interface_deep.py has_session_runtime（:4565）
+	HasSessionRuntime(sessionID string) bool
+
+	// CleanupSessionAdapter 清理该会话的 adapter 侧缓存，返回是否清到东西。
+	// Python: interface_deep.py cleanup_session_adapter
+	CleanupSessionAdapter(sessionID string) bool
 
 	// Instance 返回底层 DeepAgent 实例，未初始化时返回 nil。
 	// Python: JiuWenClaw.get_instance() → self._adapter._instance

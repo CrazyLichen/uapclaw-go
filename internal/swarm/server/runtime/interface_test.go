@@ -79,7 +79,13 @@ func (f *fakeAdapter) HandleUserAnswer(_ context.Context, _ *schema.AgentRequest
 func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return f.heartbeatResp, f.heartbeatErr
 }
-func (f *fakeAdapter) Cleanup() error                                  { return nil }
+func (f *fakeAdapter) Cleanup() error { return nil }
+
+// HasSessionRuntime 桩：恒 false。
+func (f *fakeAdapter) HasSessionRuntime(string) bool { return false }
+
+// CleanupSessionAdapter 桩：恒 false。
+func (f *fakeAdapter) CleanupSessionAdapter(string) bool               { return false }
 func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
 func (f *fakeAdapter) Instance() *harness.DeepAgent                    { return nil }
 

@@ -93,6 +93,9 @@ type DeepAdapter struct {
 	configBase map[string]any
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
+	// sessionAdapters 会话级子适配器缓存（按会话分身）
+	// Python: interface_deep.py _session_adapters（:2126）
+	sessionAdapters *sessionAdapterCache
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -373,6 +376,7 @@ func NewDeepAdapter() *DeepAdapter {
 		agentName:              "main_agent",
 		isCodeAgent:            false,
 		activeSessionIDs:       make(map[string]int),
+		sessionAdapters:        newSessionAdapterCache(),
 		modelCache:             make(map[string]*llm.Model),
 		modelNameToKeys:        make(map[string][]string),
 		registeredMCPServerIDs: make(map[string]bool),
@@ -3147,4 +3151,30 @@ func toPositiveInt(v any) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// HasSessionRuntime 该会话是否还占用 adapter 侧运行时。
+// Python: interface_deep.py has_session_runtime（:4565）
+//
+// 两个来源任一非空即为真：会话级子适配器缓存、活跃执行计数。
+func (d *DeepAdapter) HasSessionRuntime(sessionID string) bool {
+	if d.sessionAdapters != nil && d.sessionAdapters.has(sessionID) {
+		return true
+	}
+	d.sessionMu.Lock()
+	count := d.activeSessionIDs[sessionID]
+	d.sessionMu.Unlock()
+	return count > 0
+}
+
+// CleanupSessionAdapter 清理该会话的 adapter 侧缓存，返回是否清到东西。
+// Python: interface_deep.py cleanup_session_adapter
+//
+// 只清"归属该会话"的那一份；活跃执行计数由执行路径自己递减，
+// 此处不动，否则会把正在跑的请求误判成已结束。
+func (d *DeepAdapter) CleanupSessionAdapter(sessionID string) bool {
+	if d.sessionAdapters == nil {
+		return false
+	}
+	return d.sessionAdapters.cleanup(sessionID)
 }

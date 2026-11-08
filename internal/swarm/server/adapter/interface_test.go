@@ -48,6 +48,12 @@ func (s *stubAdapter) Cleanup() error {
 	return nil
 }
 
+// HasSessionRuntime 桩：恒 false。
+func (s *stubAdapter) HasSessionRuntime(string) bool { return false }
+
+// CleanupSessionAdapter 桩：恒 false。
+func (s *stubAdapter) CleanupSessionAdapter(string) bool { return false }
+
 func (s *stubAdapter) Instance() *harness.DeepAgent {
 	return nil
 }
