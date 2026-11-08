@@ -63,9 +63,13 @@ func (s *planStateStore) openPlanSession(ctx context.Context, sessionID string) 
 		return live, sess, nil
 	}
 
-	// 步骤 2: 该会话尚未启动 → 用本适配器自己的 DeepAgent
-	// Python: :119 ensure_live_session_instance（首轮建 live adapter）
-	inst, err := s.d.EnsureInstance(ctx)
+	// 步骤 2: 该会话尚未启动 → 建会话 child
+	// Python: plan.py:119 `starter = agent.ensure_live_session_instance`
+	//
+	// 注意不是 EnsureInstance：后者建的是适配器**自己的** DeepAgent，
+	// 而 plan 状态必须落到即将承接 chat.send 的那个 Session 上
+	// （plan.py 与 interface_deep.py:12801-12804 的注释都点明了这点）。
+	inst, err := s.d.EnsureLiveSessionInstance(ctx, sessionID)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -512,6 +512,17 @@ func (e *PlanEnv) instForState() *harness.DeepAgent {
 			return live
 		}
 	}
+	// 与上游同序：get_live_session_instance → ensure_live_session_instance
+	// （建会话 child），而不是 EnsureInstance（建本适配器自己的 DeepAgent）。
+	if sid != "" {
+		inst, err := agent.EnsureLiveSessionInstance(context.Background(), sid)
+		if err != nil {
+			e.T.Fatalf("确保会话 DeepAgent 实例失败: %v", err)
+		}
+		if inst != nil {
+			return inst
+		}
+	}
 	inst, err := agent.EnsureInstance(context.Background())
 	if err != nil {
 		e.T.Fatalf("确保 DeepAgent 实例失败: %v", err)

@@ -899,3 +899,36 @@ func (d *DeepAdapter) fanOutReloadToSessionAdapters(
 		}
 	}
 }
+
+// EnsureLiveSessionInstance 确保该会话的子适配器已启动，返回其 DeepAgent。
+// Python: interface_deep.py ensure_live_session_instance（:12798-12807）
+//
+// 与 EnsureInstance 的区别（上游是两个不同方法，不可混用）：
+//   - EnsureInstance：建**本适配器自己的** DeepAgent，供 harness 打包、
+//     rail 开关、会话 fork 等"需要 DeepAgent 句柄"的路径用。
+//   - EnsureLiveSessionInstance：建**会话 child**，供 plan 状态同步等
+//     "要写到即将承接 chat.send 的那个 Session"的路径用。
+//
+// 上游注释（:12801-12804）点明后果：plan-mode 同步必须写进 start_interaction
+// 绑定的那个 Session；写一个临时 Session 只会更新 checkpointer，并发的首个
+// chat.send / command.goal 可能已经绑定了 normal 模式快照，正在跑的轮次
+// 会继续用旧快照。
+//
+// 因此本方法先取 live，取不到就造会话 child（走 chat 同一条路径），
+// **不**去重建根的 DeepAgent——那样做代价高且与后台 dreaming 等
+// goroutine 争用字段（-race 实测）。
+func (d *DeepAdapter) EnsureLiveSessionInstance(ctx context.Context, sessionID string) (*harness.DeepAgent, error) {
+	// 步骤 1: 已有 live 则直接返回
+	// Python: :12806-12807 等价（get_live_session_instance 查缓存）
+	if live := d.GetLiveSessionInstance(sessionID); live != nil {
+		return live, nil
+	}
+
+	// 步骤 2: 建会话 child 再取其 instance
+	// Python: _get_or_create_session_adapter(session_id)
+	child, err := d.getOrCreateSessionAdapter(ctx, sessionAdapterKey(&sessionID), sessionAdapterOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return child.GetLiveSessionInstance(sessionID), nil
+}
