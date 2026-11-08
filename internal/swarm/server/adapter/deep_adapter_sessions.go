@@ -12,7 +12,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -249,6 +251,17 @@ func (d *DeepAdapter) touchSessionAdapter(sessionID string) {
 // Python: interface_deep.py _get_cached_session_adapter（:3254-3256）
 func (d *DeepAdapter) getCachedSessionAdapter(sessionID string) AgentAdapter {
 	return d.sessionAdapters.get(sessionAdapterKey(&sessionID))
+}
+
+// CachedSessionAdapter 取该会话当前的子适配器（不存在返回 nil）。
+// Python: interface_deep.py _get_cached_session_adapter（:3254）
+//
+// 导出仅为诊断与集成测试：会话分身后，模型缓存、rail 表等运行时状态
+// 挂在 child 的 DeepAdapter 上（不在它的 DeepAgent 上，Python 同理——
+// agent-core 的 DeepAgent 没有 _model_cache），验证"热重载是否推到 live
+// 会话"只能从这一层取。
+func (d *DeepAdapter) CachedSessionAdapter(sessionID string) AgentAdapter {
+	return d.getCachedSessionAdapter(sessionID)
 }
 
 // dropSessionAdapterCacheEntry 从缓存移除并可选删除运行时文件。
@@ -810,4 +823,79 @@ func resolveLiveAgentSession(inst *harness.DeepAgent, sessionID string) *session
 		}
 	}
 	return nil
+}
+
+// applyReloadConfigSnapshot 推进本适配器缓存的 config 快照。
+// Python: _apply_reload_config_snapshot（:13372）
+//
+// 只做快照推进，不重建模型、不动 instance：根没有 DeepAgent 时
+// 也需要这一步，否则之后为 child 建 instance 时用的还是旧配置。
+func (d *DeepAdapter) applyReloadConfigSnapshot(configBase map[string]any, envOverrides map[string]any) error {
+	// 步骤 1: configBase 为空则从磁盘读
+	// Python: config_base is None → get_config()
+	if configBase == nil {
+		cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+		if err != nil {
+			return fmt.Errorf("创建配置管理器失败: %w", err)
+		}
+		loaded, err := cfg.Load()
+		if err != nil {
+			return fmt.Errorf("加载配置失败: %w", err)
+		}
+		configBase = loaded
+	} else {
+		// Python: resolve_env_vars(config_base)
+		// 与 ReloadAgentConfig 主体一致：第二参是 DecryptFunc 而非 env 覆盖。
+		configBase = config.ResolveEnvVars(configBase, nil).(map[string]any)
+	}
+
+	// 步骤 2: 清进程级缓存
+	// Python: clear_config_cache()
+	commmem.ClearConfigCache()
+	commmem.ClearMemoryManagerCache()
+
+	// 步骤 3: 取 react 段并发布快照
+	// Python: config = self._config_cache.copy() 前的一步
+	newCache := make(map[string]any)
+	if reactRaw, ok := configBase["react"]; ok {
+		if reactMap, ok := reactRaw.(map[string]any); ok {
+			for k, v := range reactMap {
+				newCache[k] = v
+			}
+		}
+	}
+	d.setConfigSnapshots(newCache, configBase)
+	d.refreshMultimodalConfigs(configBase)
+	return nil
+}
+
+// fanOutReloadToSessionAdapters 把配置重载级联到所有 live 子适配器。
+// Python: _fan_out_reload_to_session_adapters（:13461-13504）
+//
+// child 上调用为 no-op（它不持有子适配器）。
+//
+// 差异说明：上游在"无 target_sid"时走 _mark_session_adapters_stale_for_reload
+// （打脏标记，请求边界再懒重载）。Go 侧该脏标记属于 R-7 重建判据，尚未实现；
+// 本批改为**立即逐个重载**，语义上比"标脏后懒重载"更早生效、不会漏，
+// 代价是热重载时多跑几次 child 重载。R-7 落地后再切回延迟语义。
+func (d *DeepAdapter) fanOutReloadToSessionAdapters(
+	ctx context.Context,
+	configBase map[string]any,
+	envOverrides map[string]any,
+) {
+	if d.isSessionScoped {
+		return
+	}
+	for _, sid := range d.sessionAdapters.sessionIDs() {
+		child := d.getCachedSessionAdapter(sid)
+		if child == nil {
+			continue
+		}
+		if err := child.ReloadAgentConfig(ctx, configBase, envOverrides); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("session_id", sid).
+				Msg("session adapter reload failed; continue with others")
+		}
+	}
 }

@@ -758,29 +758,30 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 //	Python: 12. self._registered_mcp_server_ids.clear()
 //	Python: 13. await self._register_mcp_servers_from_config(config_base, tag)
 func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
-	// 步骤 0: instance 为 nil 的分流
-	// Python: _reload_agent_config :13623-13632
+	// 步骤 0: 根无 instance 的分支
+	// Python: _reload_agent_config :13623-13631
 	//
-	//   if self._instance is None:
-	//       if self._is_session_scoped_adapter:
-	//           raise RuntimeError("未初始化，请先调用 create_instance()")
-	//       # Root adapter whose lazily-built DeepAgent nobody has needed yet:
-	//       # it has nothing of its own to reconfigure, but the cached config
-	//       # snapshot still has to move forward and the live session adapters
-	//       # still have to be reloaded.
+	// 上游注释：根 adapter 的惰建 DeepAgent 若还没被任何人需要过，
+	// "it has nothing of its own to reconfigure, but the cached config
+	//  snapshot still has to move forward and the live session adapters
+	//  still have to be reloaded."
 	//
-	// 即：child 报错；根**不惰建**，只推进 config 快照并扇出到各 child。
-	// 根自己的 DeepAgent 没被任何人需要过，就没有"自己的"东西要重配。
+	// 所以根分支必须做三件实事，不能直接返回：
+	//  1. 推进 config 快照（否则后续 child 建出来还是旧配置）
+	//  2. 取消 skill retrieval 构建（⤵️ 依赖该链路，随 R-5）
+	//  3. 扇出到所有 live child 重载（否则已在跑的会话继续用旧模型）
 	if d.instance == nil {
 		if d.isSessionScoped {
 			return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 		}
-		// 根的 config 快照照常推进（后续扇出给 child 用）
-		// ⤵️ _apply_reload_config_snapshot 与 _cancel_skill_retrieval_build_after_reload
-		//    依赖 skill retrieval 构建链路，随 R-5 回填；此处先返回，保留
-		//    "不惰建、不报错"这一上游核心语义。
+		if err := d.applyReloadConfigSnapshot(configBase, envOverrides); err != nil {
+			return err
+		}
+		// ⤵️ _cancel_skill_retrieval_build_after_reload：依赖 skill retrieval
+		//    构建缓存，随 R-5（tool_retrieval 开关）回填。
+		d.fanOutReloadToSessionAdapters(ctx, configBase, envOverrides)
 		logger.Info(logComponent).
-			Msg("root adapter has no instance; skip own reload, config snapshot advanced")
+			Msg("config hot-reloaded (root instance not built; snapshot refreshed and session adapters cascaded)")
 		return nil
 	}
 

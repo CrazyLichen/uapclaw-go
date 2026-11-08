@@ -126,6 +126,14 @@ func newCodeEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *cod
 	env := testhelpers.NewAdapterTestEnv(t, mock, prefix)
 	env.WriteConfigYAML(t, "")
 	d := adapter.NewCodeAdapter()
+	// 10.3.28f：本用例直连 adapter 跑多轮，验证 code 模式的 todo 提醒节奏
+	// （10/10 rail 行为）。根 adapter 现在是纯 router，chat 入口会分流到
+	// 会话 child；而 child 的 CreateInstance 用的是根的 mode（"agent"），
+	// 与这里要测的 code 运行态不符。
+	// 标记为 session-scoped 与 child 同构（生产里 code 模式由 AgentManager
+	// 按 mode 单独建 agent，其 CreateInstance 的 mode 就是 code 族），
+	// 让本案在"已装配好的 code adapter"上直接验证行为。
+	d.MarkAsSessionScoped(codeSession)
 	if err := d.CreateInstance(context.Background(), map[string]any{
 		"project_dir": filepath.Join(env.DataDir, "myproj"),
 	}, "agent", ""); err != nil {

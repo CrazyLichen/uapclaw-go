@@ -136,7 +136,22 @@ func (s *HotReloadSuite) TestUISave_切换默认模型后主循环跟随() {
 	})
 
 	s.Run("模型缓存已包含新旧模型", func() {
-		cache := d.ModelCache()
+		// 10.3.28f：根 adapter 是纯 router，不建自己的 DeepAgent 也不建模型缓存
+		// ——与 Python 一致：_skip_own_instance_build 在 :13109，_create_model 在
+		// :13654，早退在前，所以根的 _model_cache 同样为空。
+		//
+		// 模型缓存属于真正跑对话的 child，且挂在 child 的 DeepAdapter 上
+		// （不在它的 DeepAgent 上：agent-core 的 DeepAgent 没有 _model_cache，
+		// Python 的 agent_tool.py 里 getattr(parent_agent, "_model_cache", None)
+		// 因此恒为 None）。故经 CachedSessionAdapter 取该会话的子适配器再断言。
+		//
+		// 这样断言的是"热重载把新模型推进了 live 会话的运行时"，正是主循环
+		// 实际读取的那一份。
+		child := d.CachedSessionAdapter("sess_hr_main")
+		s.Require().NotNil(child, "该会话应有 live 子适配器")
+		deepChild, ok := child.(*adapter.DeepAdapter)
+		s.Require().True(ok, "deep 模式的 child 应为 *DeepAdapter")
+		cache := deepChild.ModelCache()
 		s.Require().Contains(cache, "model-a")
 		s.Require().Contains(cache, "model-b")
 	})
@@ -153,7 +168,11 @@ func (s *HotReloadSuite) TestUISave_切换模型与token后新会话压缩链路
 	d := s.newAdapter()
 
 	// 保存前：窗口 800 → 触发 640（800×0.8），目标为固定预算 160000，压缩走 model-a
-	trigger, target := thresholds(s.reactConfig(d).ContextProcessors, 800)
+	//
+	// 10.3.28f：ReActAgent 建在会话 child 上，需要先有一轮对话把 child 建出来
+	// 才能读到 context_processors 规格；首轮本身不受后续保存影响。
+	s.runTurn(d, "sess_hr_compress_new", "req-hr-3-warmup", "预热一轮")
+	trigger, target := thresholds(s.reactConfig(d, "sess_hr_compress_new").ContextProcessors, 800)
 	s.Equal(640, trigger, "保存前触发阈值 = 800×0.8（比例化后运行时计算）")
 	s.Equal(160000, target, "目标预算固定 160000，不随窗口缩放")
 
@@ -172,7 +191,7 @@ func (s *HotReloadSuite) TestUISave_切换模型与token后新会话压缩链路
 	// 阈值在下一轮 ensureInitialized 重建 rail 时重算，因此断言放在轮次之后
 	s.runTurn(d, "sess_hr_compress_new", "req-hr-4", "再压缩一次")
 
-	trigger, target = thresholds(s.reactConfig(d).ContextProcessors, 600)
+	trigger, target = thresholds(s.reactConfig(d, "sess_hr_compress_new").ContextProcessors, 600)
 	s.Equal(480, trigger, "保存后触发阈值应重算为 600×0.8")
 	s.Equal(160000, target, "目标预算仍为固定 160000")
 }
@@ -196,7 +215,7 @@ func (s *HotReloadSuite) TestUISave_已存在会话的压缩处理器跟随() {
 	s.runTurn(d, "sess_hr_legacy", "req-hr-6", "再压缩一次")
 
 	// 老会话在同一轮入口按配置指纹重建处理器：阈值必须跟随新窗口
-	trigger, target := thresholds(s.reactConfig(d).ContextProcessors, 600)
+	trigger, target := thresholds(s.reactConfig(d, "sess_hr_legacy").ContextProcessors, 600)
 	s.Equal(480, trigger, "老会话触发阈值应重算为 600×0.8")
 	s.Equal(160000, target, "老会话目标预算仍为固定 160000")
 }
@@ -465,11 +484,21 @@ func (c *recordingClient) Stream(
 	return c.MockModelClient.Stream(ctx, messages, opts...)
 }
 
-// reactConfig 返回主 ReActAgent 的配置。
-func (s *HotReloadSuite) reactConfig(d *adapter.DeepAdapter) *saconfig.ReActAgentConfig {
+// reactConfig 返回该会话的 ReActAgent 配置。
+//
+// 10.3.28f：根 adapter 是纯 router，不持有 DeepAgent（对齐 Python
+// _skip_own_instance_build :13109）；ReActAgent 与它承载的
+// context_processors 规格都挂在各会话的 child 上，故按 sessionID 取。
+func (s *HotReloadSuite) reactConfig(d *adapter.DeepAdapter, sessionID string) *saconfig.ReActAgentConfig {
 	s.T().Helper()
 
-	reactAgent := d.Instance().ReactAgent()
+	child := d.CachedSessionAdapter(sessionID)
+	s.Require().NotNil(child, "会话 %s 应有 live 子适配器", sessionID)
+	deepChild, ok := child.(*adapter.DeepAdapter)
+	s.Require().True(ok, "deep 模式的 child 应为 *DeepAdapter，实际 %T", child)
+	inst := deepChild.Instance()
+	s.Require().NotNil(inst, "child 应有 DeepAgent")
+	reactAgent := inst.ReactAgent()
 	s.Require().NotNil(reactAgent)
 	cfg, ok := reactAgent.Config().(*saconfig.ReActAgentConfig)
 	s.Require().True(ok, "应为 *ReActAgentConfig，实际 %T", reactAgent.Config())

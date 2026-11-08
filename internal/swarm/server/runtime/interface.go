@@ -748,11 +748,50 @@ func (uc *UapClawSwarm) Cleanup() error {
 
 // GetInstance 获取底层 DeepAgent 实例。
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
+//
+// 10.3.28f 起根 adapter 是纯 router，不再持有自己的 DeepAgent，
+// 因此该方法在"该 agent 只有根、尚未发生任何会话"时返回 nil。
+// 需要"该会话正在跑的实例"请用 GetLiveSessionInstance。
 func (uc *UapClawSwarm) GetInstance() *harness.DeepAgent {
 	if uc == nil || uc.adapter == nil {
 		return nil
 	}
 	return uc.adapter.Instance()
+}
+
+// EnsureInstance 确保该 agent 的 DeepAgent 就绪并返回。
+// Python: interface.py ensure_instance（:5779-5793）
+//
+// 根的 DeepAgent 是惰建的（_skip_own_instance_build :12727）：
+// chat 路径只建会话 child，只有"需要 DeepAgent 句柄的非 chat 路径"
+// （plan 状态读写、harness 包装配、rewind 等）才会在这里把它建出来。
+func (uc *UapClawSwarm) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
+	if uc == nil {
+		return nil, nil
+	}
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return nil, err
+	}
+	ensurer, ok := a.(interface {
+		EnsureInstance(context.Context) (*harness.DeepAgent, error)
+	})
+	if !ok {
+		return a.Instance(), nil
+	}
+	return ensurer.EnsureInstance(ctx)
+}
+
+// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent，没有则 nil。
+// Python: interface.py get_live_session_instance（:5795-5808）
+//
+// 会话分身后 DeepAgent 按会话各一份，plan 状态、上下文用量等运行态
+// 都挂在"那一个"上；取根的 instance 是错的。
+func (uc *UapClawSwarm) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if uc == nil || uc.adapter == nil {
+		return nil
+	}
+	return uc.adapter.GetLiveSessionInstance(sessionID)
 }
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
