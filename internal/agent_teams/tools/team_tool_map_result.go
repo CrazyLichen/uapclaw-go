@@ -3,6 +3,9 @@ package tools
 import (
 	"fmt"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -16,7 +19,17 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MapResult 将 BuildTeamTool 执行结果转换为 LLM 可读文本。
-// 对齐 Python: BuildTeamTool.map_result (tools/team_tools.py L230-240)
+//
+// 先渲染结果，再披露协作政策（F_76 渐进式披露）。
+//
+// 政策只在成功时追加——失败的 build_team 把 leader 留在 bootstrap 路径上，
+// 那时它需要的是重读路由指南，而不是一本给不存在的团队写的规则书。
+//
+// 首行区分「创建」与「接管已有团队」。接手一个正在跑的团队的 leader 绝不能
+// 接着去 spawn 名册上已有的成员，而其后跟随的政策两种情况下完全一样——
+// 所以这个差异必须在这里说出来，否则 leader 根本看不见它。
+//
+// Python: BuildTeamTool.render_for_llm (tools/tool_team.py L178-221)
 func (t *BuildTeamTool) MapResult(output map[string]any) string {
 	success, _ := output["success"].(bool)
 	if !success {
@@ -29,8 +42,73 @@ func (t *BuildTeamTool) MapResult(output map[string]any) string {
 	if d == nil {
 		d = map[string]any{}
 	}
-	return fmt.Sprintf("Team created: team_name=%v display_name=%v leader_member_name=%v leader_display_name=%v hitt_enabled=%v",
-		d["team_name"], d["display_name"], d["leader_member_name"], d["leader_display_name"], d["enable_hitt"])
+
+	takenOver, _ := d["taken_over"].(bool)
+	lead := "Team created"
+	if takenOver {
+		lead = "Existing team taken over"
+	}
+	facts := fmt.Sprintf("%s: team_name=%v display_name=%v leader_member_name=%v leader_display_name=%v hitt_enabled=%v",
+		lead, d["team_name"], d["display_name"], d["leader_member_name"], d["leader_display_name"], d["enable_hitt"])
+
+	if takenOver {
+		// Python: render_for_llm 的 taken_over 提示原文（协议字符串，不本地化）
+		facts += "\nThis team already existed: its members are on the roster and were restarted " +
+			"for you. Call list_members and view_task to see where the work stands before " +
+			"planning anything — do not re-spawn members that are already there."
+	}
+	// Python: `if self._VERIFY_PARAM in d` —— 键不存在则完全不提
+	if verify, ok := d["enable_task_verification"]; ok {
+		facts += fmt.Sprintf(" task_verification=%v", verify)
+	}
+
+	policy, err := prompts.BuildLeaderPolicyDisclosure(
+		t.lifecycle, t.teammateMode, t.teamMode, t.dispatchMode,
+		t.teamMemberMessaging(), t.teamMemberSubtasks(),
+		t.language, hittEnabledFromData(d),
+	)
+	if err != nil {
+		// 偏差 D-5：上游 render_for_llm 无 try，加载失败会抛异常整轮失败。
+		// Go 侧 MapResult 返回 string 是既有契约，改为记日志后返回 facts：
+		// 模板缺失属打包期错误（go:embed 编译期确定），运行期不该发生；
+		// 真发生时应让 leader 至少拿到建队结果，而不是整轮失败。
+		logger.Error(logComponent).Err(err).Msg("build_team: render policy disclosure failed")
+		return facts
+	}
+	if policy == "" {
+		return facts
+	}
+	return facts + "\n\n" + policy
+}
+
+// teamMemberMessaging 读团队的 member_messaging 能力开关。
+//
+// 加 team 前缀：TeamPolicyRail 的字段名为 memberMessaging，两个类型同处
+// rails/tools 两层，避免后续读者混淆。
+func (t *BuildTeamTool) teamMemberMessaging() bool {
+	if t.team == nil {
+		return false
+	}
+	return t.team.MemberMessagingEnabled()
+}
+
+// teamMemberSubtasks 读团队的 member_subtasks 能力开关。
+func (t *BuildTeamTool) teamMemberSubtasks() bool {
+	if t.team == nil {
+		return false
+	}
+	return t.team.MemberSubtasksEnabled()
+}
+
+// hittEnabledFromData 从工具结果读实际生效的 HITT 开关。
+//
+// 用的是 build_team 调用后真正生效的值（可能被 enable_hitt 收窄或降级），
+// 不是 spec 天花板——政策必须按团队实际拥有的能力裁剪。
+//
+// Python: `hitt_enabled=bool(d.get("enable_hitt"))`
+func hittEnabledFromData(d map[string]any) bool {
+	v, _ := d["enable_hitt"].(bool)
+	return v
 }
 
 // MapResult 将 CleanTeamTool 执行结果转换为 LLM 可读文本。
