@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -24,13 +25,17 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PermissionInterruptRail 工具权限中断护栏。
+//
 // 对**任意**工具名执行 before_tool_call 权限判定（不再按工具名子集短路跳过）。
 // 可选 toolNames 仅传给基类作 GetTools 展示；不参与是否拦截。
+//
 // - ALLOW → 继续执行
 // - DENY → 拒绝并返回 [PERMISSION_DENIED] 消息
 // - ASK  → 中断等待用户确认（ConfirmPayload schema）
+//
 // Auto-confirm 存储在 session 状态 (INTERRUPT_AUTO_CONFIRM_KEY)。
 // 支持 bash 类工具的细粒度 auto-confirm key（如 bash:ls）。
+//
 // Python: PermissionInterruptRail(ConfirmInterruptRail) — tool_security_rail.py L52-666
 type PermissionInterruptRail struct {
 	interrupt.BaseInterruptRail
@@ -43,6 +48,7 @@ type PermissionInterruptRail struct {
 }
 
 // InterruptKind 本 rail 抛出的中断类型为 permission。
+//
 // Python: ToolSecurityRail.interrupt_kind = InterruptKind.PERMISSION
 func (r *PermissionInterruptRail) InterruptKind() string {
 	return saschema.InterruptKindPermission
@@ -63,18 +69,24 @@ const (
 // _ 编译时验证 PermissionInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*PermissionInterruptRail)(nil)
 
-// toolNameAliases 工具名别名映射
+// toolNameAliases 工具名别名映射（本表 5 项，服务于中断卡的展示名归一化，无 conflict 检测）。
+//
+// 与 common/permission_tools 的 4 项别名表是两份独立数据：本表多
+// web_fetch_webpage。二者在 Python 侧也是两份，不得合并。
+//
 // Python: TOOL_NAME_ALIASES (tool_security_rail.py L44-49)
 var toolNameAliases = map[string]string{
-	"free_search":   "mcp_free_search",
-	"paid_search":   "mcp_paid_search",
-	"fetch_webpage": "mcp_fetch_webpage",
-	"exec_command":  "mcp_exec_command",
+	"free_search":       "mcp_free_search",
+	"paid_search":       "mcp_paid_search",
+	"fetch_webpage":     "mcp_fetch_webpage",
+	"web_fetch_webpage": "mcp_fetch_webpage",
+	"exec_command":      "mcp_exec_command",
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionInterruptRail 创建权限中断护栏实例。
+//
 // Python: PermissionInterruptRail.__init__(config, engine, tool_names, llm, model_name, host)
 func NewPermissionInterruptRail(
 	config map[string]any,
@@ -154,6 +166,7 @@ func NewPermissionInterruptRail(
 // BeforeToolCall 工具调用前拦截。
 // Python: PermissionInterruptRail.before_tool_call — 对**任意**工具名执行权限判定，
 // 不再按工具名子集短路跳过（与基类 BaseInterruptRail 不同）。
+//
 // Python: PermissionInterruptRail.before_tool_call(ctx) (tool_security_rail.py L159-186)
 func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -200,6 +213,7 @@ func (r *PermissionInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallba
 }
 
 // UpdateConfig 热更新静态权限配置；可选 toolNames 仅更新基类标签集合。
+//
 // Python: PermissionInterruptRail.update_config(config, tool_names) (tool_security_rail.py L188-204)
 func (r *PermissionInterruptRail) UpdateConfig(config map[string]any, toolNames []string) {
 	if config == nil {
@@ -240,6 +254,7 @@ func (r *PermissionInterruptRail) Engine() *harnesssecurity.PermissionEngine {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeToolName 归一化工具名，使用别名映射。
+//
 // Python: PermissionInterruptRail._normalize_tool_name(tool_name) (tool_security_rail.py L109-114)
 func (r *PermissionInterruptRail) normalizeToolName(toolName string) string {
 	if alias, ok := toolNameAliases[toolName]; ok {
@@ -250,6 +265,7 @@ func (r *PermissionInterruptRail) normalizeToolName(toolName string) string {
 
 // getAutoConfirmKey 生成保守的 session auto-confirm key。
 // 对于 bash/mcp_exec_command/create_terminal，使用 Shell AST 解析获取细粒度 key。
+//
 // Python: PermissionInterruptRail._get_auto_confirm_key(tool_call) (tool_security_rail.py L116-128)
 func (r *PermissionInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
@@ -275,6 +291,7 @@ func (r *PermissionInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall
 }
 
 // buildShellAutoConfirmKey 通过 Shell AST 解析构建细粒度 auto-confirm key。
+//
 // Python: PermissionInterruptRail._build_shell_auto_confirm_key(tool_name, command) (tool_security_rail.py L130-147)
 func buildShellAutoConfirmKey(toolName string, command string) string {
 	text := strings.TrimSpace(command)
@@ -301,12 +318,14 @@ func buildShellAutoConfirmKey(toolName string, command string) string {
 }
 
 // shouldStoreAutoConfirm 判断是否应存储 auto-confirm key 到 session。
+//
 // Python: PermissionInterruptRail._should_store_auto_confirm(...) (tool_security_rail.py L149-157)
 func shouldStoreAutoConfirm(autoConfirm bool, session sessioninterfaces.SessionFacade, autoConfirmKey string, persisted bool) bool {
 	return autoConfirm && session != nil && autoConfirmKey != "" && !persisted
 }
 
 // resolvePermissionInterrupt 权限中断解析核心逻辑。
+//
 // Python: PermissionInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config) (tool_security_rail.py L288-504)
 func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	ctx context.Context,
@@ -556,6 +575,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 }
 
 // parseToolArgs 从 ToolCall 中提取参数字典。
+//
 // Python: PermissionInterruptRail._parse_tool_args(tool_call) (tool_security_rail.py L506-519)
 func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 	if toolCall == nil {
@@ -575,6 +595,7 @@ func parseToolArgs(toolCall *llmschema.ToolCall) map[string]any {
 }
 
 // parseConfirmPayload 解析用户输入为 PermissionConfirmResponse。
+//
 // Python: PermissionInterruptRail._parse_confirm_payload(user_input) (tool_security_rail.py L521-549)
 func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmResponse {
 	switch input := userInput.(type) {
@@ -613,6 +634,7 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 }
 
 // confirmPathLabel 返回确认路径标签。
+//
 // Python: PermissionInterruptRail._confirm_path_label() (tool_security_rail.py L551-552)
 func (r *PermissionInterruptRail) confirmPathLabel() string {
 	if r.host.RequestPermissionConfirmation != nil {
@@ -622,6 +644,7 @@ func (r *PermissionInterruptRail) confirmPathLabel() string {
 }
 
 // isPermissionAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
+//
 // Python: PermissionInterruptRail._is_auto_confirmed(auto_confirm_config, key) (tool_security_rail.py L554-558)
 func isPermissionAutoConfirmed(config map[string]any, key string) bool {
 	if config == nil || key == "" {
@@ -635,6 +658,7 @@ func isPermissionAutoConfirmed(config map[string]any, key string) bool {
 }
 
 // storeAutoConfirm 写入 auto_confirm 到 session 状态。
+//
 // Python: PermissionInterruptRail._store_auto_confirm(ctx, auto_confirm_key) (tool_security_rail.py L560-567)
 func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackContext, autoConfirmKey string) {
 	sess := cbc.Session()
@@ -663,6 +687,7 @@ func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCal
 }
 
 // resolveSession 从 cbc 中解析 session 对象。
+//
 // Python: PermissionInterruptRail._resolve_session_id(ctx) (tool_security_rail.py L584-594)
 func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces.SessionFacade {
 	if cbc == nil {
@@ -671,19 +696,126 @@ func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces
 	return cbc.Session()
 }
 
-// collectExternalDirectoryPersistPaths 收集外部目录白名单路径。
-// Python: PermissionInterruptRail._collect_external_directory_persist_paths(...) (tool_security_rail.py L206-239)
-func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
+// persistAllowAlways 永久允许：合并后走 persist_allow_rule（无 Host 则写 YAML）。
+//
+// Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args, *, session_id=None)
+func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
+	return r.persistMergedAllow(normalizedName, toolArgs, r.hostPersistAllowRule(), true)
+}
+
+// persistSessionAllow 会话内记住：合并后走 persist_session_allow_rule
+// （无钩子则只更新内存，不写 YAML）。
+//
+// Python: PermissionInterruptRail._persist_session_allow(normalized_name, tool_args, *, session_id=None)
+func (r *PermissionInterruptRail) persistSessionAllow(normalizedName string, toolArgs map[string]any, sessionID string) bool {
+	return r.persistMergedAllow(normalizedName, toolArgs, r.hostPersistSessionAllowRule(sessionID), false)
+}
+
+// persistMergedAllow 工具级记住与 file_guard 路径白名单：先合并快照，再写盘。
+//
+// 步骤顺序（对齐 Python _persist_merged_allow，不可调换）：
+//  1. base_cfg：先试 host.get_permissions_snapshot，失败/非 dict 回落 engine.config 深拷贝
+//  2. 合并工具级 allow 规则
+//  3. 收集本次判定为 ASK 的 file_guard 访问（用合并后的 cfg）
+//  4. 合并 file_guard 路径白名单（按轴）
+//  5. 两者都没写入 → 返回 false（不改配置）
+//  6. 记 prev_cfg（必须在 update_config 之前）→ update_config
+//  7. 钩子存在：调钩子；失败/异常则回滚并返回 false
+//  8. 无钩子且 writeYAMLFallback=false → 返回 true（只更新内存）
+//  9. 无钩子且 writeYAMLFallback=true → 写 YAML；失败则回滚并返回 false
+//
+// Python: PermissionInterruptRail._persist_merged_allow(...)
+func (r *PermissionInterruptRail) persistMergedAllow(
+	normalizedName string,
+	toolArgs map[string]any,
+	persistHook func(map[string]any) bool,
+	writeYAMLFallback bool,
+) bool {
+	// 1. base_cfg
+	var baseCfg map[string]any
+	if r.host != nil && r.host.GetPermissionsSnapshot != nil {
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Debug(logComponent).
+						Interface("recover", rec).
+						Msg("permission.persist.snapshot_failed")
+				}
+			}()
+			if snap := r.host.GetPermissionsSnapshot(); snap != nil {
+				baseCfg = snap
+			}
+		}()
+	}
+	if baseCfg == nil {
+		baseCfg = utils.DeepCopyMap(r.engine.Config())
+	}
+
+	// 2. 工具级 allow
+	cfg, okTool := harnesssecurity.MergePermissionAllowRuleIntoPermissions(baseCfg, normalizedName, toolArgs)
+
+	// 3. 收集 file_guard ASK 访问（用合并后的 cfg，因为工具级合并可能改了配置）
+	accesses := r.collectFileGuardPersistAccesses(normalizedName, toolArgs, cfg)
+
+	// 4. 合并路径白名单（按轴写 file_guard.paths，不是 external_directory）
+	var okExt bool
+	if len(accesses) > 0 {
+		cfg, okExt = harnesssecurity.MergeFileGuardAccessAllows(cfg, accesses)
+	}
+	if !okTool && !okExt {
+		return false
+	}
+
+	// 6. 回滚基线必须在 update_config 之前取
+	prevCfg := utils.DeepCopyMap(r.engine.Config())
+	r.UpdateConfig(cfg, nil)
+
+	// 7. 钩子路径
+	if persistHook != nil {
+		persisted := func() bool {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Warn(logComponent).
+						Interface("recover", rec).
+						Msg("permission.persist.host_failed")
+				}
+			}()
+			return persistHook(cfg)
+		}()
+		if !persisted {
+			r.UpdateConfig(prevCfg, nil)
+		}
+		return persisted
+	}
+
+	// 8. session 版不写 YAML，只更新内存
+	if !writeYAMLFallback {
+		return true
+	}
+
+	// 9. YAML 兜底
+	if !harnesssecurity.WritePermissionsSectionToAgentConfigYAML(r.host.PermissionYAMLPath, cfg) {
+		r.UpdateConfig(prevCfg, nil)
+		return false
+	}
+	return true
+}
+
+// collectFileGuardPersistAccesses 若本次调用路径层为 ASK，返回需落盘的 (path, action)。
+//
+// 用引擎的 per-request trusted_dirs（set_trusted_dirs 设置），使落盘时的外部
+// 路径检测与运行时判定一致。
+//
+// Python: PermissionInterruptRail._collect_file_guard_persist_accesses(normalized_name, tool_args, permissions_cfg)
+func (r *PermissionInterruptRail) collectFileGuardPersistAccesses(
 	normalizedName string,
 	toolArgs map[string]any,
 	permissionsCfg map[string]any,
-) []string {
-	if r.host.ResolveWorkspaceDir == nil {
+) []harnesssecurity.PathAction {
+	if r.host == nil || r.host.ResolveWorkspaceDir == nil {
 		return nil
 	}
-
 	var workspace string
-	// Python: try workspace resolve
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -694,69 +826,80 @@ func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 		}()
 		workspace = r.host.ResolveWorkspaceDir()
 	}()
-
 	if workspace == "" {
 		return nil
 	}
 
-	checker := harnesssecurity.NewExternalDirectoryChecker(permissionsCfg, workspace)
-	extResult := checker.CheckExternalPaths(normalizedName, toolArgs)
-	if extResult == nil || extResult.Permission != harnesssecurity.PermissionLevelAsk {
+	var trustedDirs []string
+	if r.engine != nil {
+		trustedDirs = r.engine.TrustedDirs()
+	}
+
+	var evaluator harnesssecurity.FileGuardEvaluator
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Warn(logComponent).
+					Interface("recover", rec).
+					Msg("permission.persist.external.check_failed")
+			}
+		}()
+		evaluator = harnesssecurity.NewFileGuardEvaluator(permissionsCfg, workspace, trustedDirs)
+	}()
+	if evaluator == nil {
 		return nil
 	}
-	if extResult.ExternalPaths == nil {
-		return nil
-	}
-	return extResult.ExternalPaths
+	return evaluator.CollectAskAccesses(normalizedName, toolArgs)
 }
 
-// persistAllowAlways 工具级「始终允许」与 external_directory 白名单持久化。
-// Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args) (tool_security_rail.py L241-286)
-func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
-	// 深拷贝当前配置
-	cfg := utils.DeepCopyMap(r.engine.Config())
-
-	cfg, okTool := harnesssecurity.MergePermissionAllowRuleIntoPermissions(cfg, normalizedName, toolArgs)
-	extPaths := r.collectExternalDirectoryPersistPaths(normalizedName, toolArgs, cfg)
-	var okExt bool
-	if len(extPaths) > 0 {
-		cfg, okExt = harnesssecurity.MergeExternalDirectoryAllowIntoPermissions(cfg, extPaths)
+// hostPersistAllowRule 返回 host 的永久允许钩子（host 为 nil 时返回 nil）。
+func (r *PermissionInterruptRail) hostPersistAllowRule() func(map[string]any) bool {
+	if r.host == nil {
+		return nil
 	}
-	if !okTool && !okExt {
-		return false
+	return r.host.PersistAllowRule
+}
+
+// hostPersistSessionAllowRule 把 host 的两参会话钩子适配为一参闭包。
+// host 或钩子为 nil 时返回 nil（调用方据此走「只更新内存」分支）。
+func (r *PermissionInterruptRail) hostPersistSessionAllowRule(sessionID string) func(map[string]any) bool {
+	if r.host == nil || r.host.PersistSessionAllowRule == nil {
+		return nil
 	}
+	sessionHook := r.host.PersistSessionAllowRule
+	return func(perms map[string]any) bool {
+		return sessionHook(perms, sessionID)
+	}
+}
 
-	// 保存旧配置以便回滚
-	prevCfg := utils.DeepCopyMap(r.engine.Config())
-	r.UpdateConfig(cfg, nil)
-
-	// 持久化
-	if r.host.PersistAllowRule != nil {
-		persisted := func() bool {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Warn(logComponent).
-						Interface("recover", rec).
-						Msg("permission.persist.host_failed")
-				}
-			}()
-			return r.host.PersistAllowRule(cfg)
-		}()
-		if !persisted {
-			r.UpdateConfig(prevCfg, nil)
+// SetTrustedDirs 每次请求热更新受信目录。
+//
+// 宿主（如数字分身 adapter）在请求到达时调用，使外部路径检查把这些子树
+// 视为内部，跳过 ask/deny。
+//
+// Python: PermissionInterruptRail.set_trusted_dirs(trusted_dirs)
+func (r *PermissionInterruptRail) SetTrustedDirs(trustedDirs []string) {
+	normalized := make([]string, 0, len(trustedDirs))
+	for _, d := range trustedDirs {
+		d = strings.TrimSpace(d)
+		if d == "" {
+			continue
 		}
-		return persisted
+		if abs, err := filepath.Abs(d); err == nil {
+			normalized = append(normalized, abs)
+		} else {
+			normalized = append(normalized, d)
+		}
 	}
-
-	// 回退到 YAML 写盘
-	if !harnesssecurity.WritePermissionsSectionToAgentConfigYAML(r.host.PermissionYAMLPath, cfg) {
-		r.UpdateConfig(prevCfg, nil)
-		return false
+	if r.engine != nil {
+		r.engine.UpdateTrustedDirs(normalized)
 	}
-	return true
+	logger.Info(logComponent).Int("count", len(normalized)).
+		Msg("permission.rail.trusted_dirs_updated")
 }
 
 // buildMessage 构建中断消息。
+//
 // Python: PermissionInterruptRail._build_message(tool_call, result) (tool_security_rail.py L603-628)
 func (r *PermissionInterruptRail) buildMessage(toolCall *llmschema.ToolCall, result *harnesssecurity.PermissionResult) string {
 	toolName := ""
@@ -790,6 +933,7 @@ func (r *PermissionInterruptRail) buildMessage(toolCall *llmschema.ToolCall, res
 }
 
 // buildAlwaysAllowHint 构建自动确认提示。
+//
 // Python: PermissionInterruptRail._build_always_allow_hint(tool_call) (tool_security_rail.py L630-665)
 func (r *PermissionInterruptRail) buildAlwaysAllowHint(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
@@ -828,6 +972,7 @@ func (r *PermissionInterruptRail) buildAlwaysAllowHint(toolCall *llmschema.ToolC
 }
 
 // formatArgsPreview 格式化工具参数预览。
+//
 // Python: PermissionInterruptRail._format_args_preview(tool_args) (tool_security_rail.py L597-601)
 func formatArgsPreview(toolArgs map[string]any) string {
 	if toolArgs == nil {

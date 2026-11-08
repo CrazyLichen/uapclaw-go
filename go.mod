@@ -65,6 +65,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/getkin/kin-openapi v0.140.0
 	github.com/go-chi/chi/v5 v5.3.1
+	github.com/gofrs/flock v0.13.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-plugin v1.8.0

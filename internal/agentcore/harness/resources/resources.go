@@ -11,10 +11,23 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// BuiltinRules 内置安全规则集合
+// BuiltinRules 内置安全规则集合。
+//
+// 三个顶层段对应 openjiuwen/harness/resources/builtin_rules.yaml：
+// rules（命令参数级规则）、sensitive_paths（敏感路径底线，供 fileguard 注入）、
+// net_urls（抓取工具内置黑名单，供 netguard 注入）。
 type BuiltinRules struct {
 	// Rules 规则列表
 	Rules []SecurityRule `yaml:"rules"`
+	// SensitivePaths 敏感路径底线（file_guard 路径层）。
+	// 用 map 而非结构体：Python 侧是 list[dict[str, Any]]，
+	// load_package_sensitive_paths 会向条目追加 read/write/exec/layer 四个键，
+	// 封闭结构体会丢失这些键，导致 merge 逻辑无法照抄。
+	SensitivePaths []map[string]any `yaml:"sensitive_paths"`
+	// NetUrls 抓取工具内置黑名单。值在 YAML 里是 "deny" 字符串，
+	// 但 Python 的 _parse_action 也接受 {"action":...} / {"fetch":...} 包装，
+	// 用 any 保留解析弹性。
+	NetUrls map[string]any `yaml:"net_urls"`
 }
 
 // SecurityRule 单条安全规则

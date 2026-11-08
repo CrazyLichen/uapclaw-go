@@ -128,16 +128,6 @@ func TestPermissionEngine_CheckToolPermissionDirectly(t *testing.T) {
 	assert.Contains(t, matchedRule, "defaults")
 }
 
-// TestPermissionEngine_SetWorkspaceRoot 设置工作空间
-func TestPermissionEngine_SetWorkspaceRoot(t *testing.T) {
-	engine := NewPermissionEngine(map[string]any{"enabled": true}, nil, "", "")
-	assert.Equal(t, "", engine.workspaceRoot)
-
-	engine.SetWorkspaceRoot("/new/workspace")
-	assert.Equal(t, "/new/workspace", engine.workspaceRoot)
-	require.NotNil(t, engine.externalChecker)
-}
-
 // TestGetReason 测试 reason 生成
 func TestGetReason(t *testing.T) {
 	assert.Contains(t, getReason(PermissionLevelAllow, "bash", "test_rule"), "放行")
@@ -266,8 +256,21 @@ func TestPermissionEngine_EvaluateGlobalPolicyDirectly_nilArgs(t *testing.T) {
 }
 
 // TestPermissionEngine_Config 测试 Config 返回当前配置
+// TestPermissionEngine_Config 测试 Config 返回已 ingest 的配置
+//
+// 构造时走 PreparePermissionsForEngine，因此返回的配置里有注入的 17 条
+// 内置规则（layer=builtin），而不是调用方传入的原始 map。这是对齐 Python
+// prepare_permissions_for_engine 的预期行为。
 func TestPermissionEngine_Config(t *testing.T) {
 	cfg := map[string]any{"enabled": true}
 	engine := NewPermissionEngine(cfg, nil, "", "/workspace")
-	assert.Equal(t, cfg, engine.Config())
+
+	got := engine.Config()
+	assert.Equal(t, true, got["enabled"])
+	rules, ok := got["rules"].([]any)
+	require.True(t, ok, "rules 应为列表")
+	assert.Len(t, rules, 17, "应注入 17 条内置规则")
+	// 调用方传入的原始 map 不应被修改
+	_, mutated := cfg["rules"]
+	assert.False(t, mutated, "原始配置不应被修改")
 }

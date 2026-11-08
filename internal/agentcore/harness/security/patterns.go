@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security/toolguard"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -19,28 +20,33 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PatternMatcher 通配符模式匹配器（仅支持 wildcard 模式 * 和 ?）。
+//
 // Python: PatternMatcher (patterns.py L162-173)
 type PatternMatcher struct{}
 
 // PathMatcher 路径匹配器。
+//
 // Python: PathMatcher (patterns.py L176-203)
 type PathMatcher struct {
 	pm PatternMatcher
 }
 
 // URLMatcher URL 匹配器。
+//
 // Python: URLMatcher (patterns.py L206-234)
 type URLMatcher struct {
 	pm PatternMatcher
 }
 
 // CommandMatcher 命令匹配器（wildcard 模式，全串锚定防注入）。
+//
 // Python: CommandMatcher (patterns.py L237-250)
 type CommandMatcher struct {
 	pm PatternMatcher
 }
 
 // approvalOverrideSignature 审批覆盖签名，用于去重判断。
+//
 // Python: _ApprovalOverrideSignature (patterns.py L106-115)
 type approvalOverrideSignature struct {
 	// ToolName 目标工具名
@@ -103,6 +109,7 @@ var pathApprovalKeys = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MatchWildcard 通配符匹配。
+//
 // - * → 限制性字符类*（排除 shell 元字符，防命令拼接）
 // - ? → 限制性字符类（恰好一个）
 // - 正则元字符转义
@@ -146,6 +153,7 @@ func MatchWildcard(pattern, value string) bool {
 }
 
 // BuildCommandAllowPattern 构建匹配完整命令的通配符模式。
+//
 // Python: build_command_allow_pattern(cmd) (patterns.py L253-261)
 // 示例："start chrome" → "start chrome *"
 func BuildCommandAllowPattern(cmd string) string {
@@ -153,6 +161,7 @@ func BuildCommandAllowPattern(cmd string) string {
 }
 
 // ContainsPath 子路径是否在父路径下（含路径穿越防护）。
+//
 // Python: contains_path(parent, child) (patterns.py L264-271)
 func ContainsPath(parent, child string) bool {
 	parentPath := filepath.Clean(parent)
@@ -180,6 +189,7 @@ func ContainsPath(parent, child string) bool {
 
 // WritePermissionsSectionToAgentConfigYAML 将 permissions 整段写入 agent YAML
 // （保留其它顶层键；文件不存在则新建仅含 permissions 的根）。
+//
 // Python: write_permissions_section_to_agent_config_yaml(config_yaml_path, permissions) (patterns.py L383-412)
 func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions map[string]any) bool {
 	cfgPath := resolveAgentConfigYAMLPath(configYAMLPath)
@@ -200,6 +210,7 @@ func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions
 
 // ReadAgentConfigYAML 读取 agent YAML 配置文件，返回顶层 map。
 // 如果 filePath 为空，使用默认的 workspace.ConfigFile() 路径。
+//
 // Python: load_yaml_round_trip(CONFIG_YAML_PATH)
 func ReadAgentConfigYAML(filePath string) map[string]any {
 	cfgPath := filePath
@@ -225,6 +236,7 @@ func ReadAgentConfigYAML(filePath string) map[string]any {
 
 // WriteAgentConfigYAML 将顶层 map 写回 agent YAML 配置文件。
 // 如果 filePath 为空，使用默认的 workspace.ConfigFile() 路径。
+//
 // Python: dump_yaml_round_trip(CONFIG_YAML_PATH, data)
 func WriteAgentConfigYAML(filePath string, data map[string]any) error {
 	cfgPath := filePath
@@ -246,6 +258,7 @@ func WriteAgentConfigYAML(filePath string, data map[string]any) error {
 
 // MergeExternalDirectoryAllowIntoPermissions 在 permissions 副本上合并外部目录白名单。
 // 返回 (merged, wrote_any)。
+//
 // Python: merge_external_directory_allow_into_permissions(permissions, paths) (patterns.py L415-439)
 func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, paths []string) (map[string]any, bool) {
 	if len(paths) == 0 {
@@ -283,9 +296,15 @@ func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, path
 
 // MergePermissionAllowRuleIntoPermissions 在 permissions 副本上合并「始终允许」规则。
 // 返回 (merged, applied)。applied 为假表示未写入任何变更。
+//
 // Python: merge_permission_allow_rule_into_permissions(permissions, tool_name, tool_args) (patterns.py L442-493)
 func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolName string, toolArgs map[string]any) (map[string]any, bool) {
 	perms := utils.DeepCopyMap(permissions)
+	// 判定前必须注入内置规则层：EvaluateTieredPolicy 只从 config["rules"]
+	// 按 layer=="builtin" 切分，不再自行 load YAML（见 9.90b spec §12.5.3）。
+	// 本函数的调用方传入的是 YAML 原始配置（permissions_persist.go 的
+	// readYAMLData / rail 的 engine.Config 快照），未经 ingest，此处补一次。
+	perms = prepareForEvaluation(perms)
 
 	currentPermission, _ := EvaluateTieredPolicy(perms, toolName, toolArgs)
 	if currentPermission != PermissionLevelAsk {
@@ -325,6 +344,7 @@ func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolNam
 }
 
 // PersistCliTrustedDirectory CLI add_dir：全局信任目录子树。
+//
 // Python: persist_cli_trusted_directory(raw_path, config_yaml_path, bootstrap_permissions) (patterns.py L496-616)
 func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrapPermissions map[string]any) map[string]any {
 	rawPath = strings.TrimSpace(rawPath)
@@ -442,6 +462,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 }
 
 // Match 实现 PatternMatcher 的静态匹配方法。
+//
 // Python: PatternMatcher.match(pattern, value) (patterns.py L166-169)
 func (pm *PatternMatcher) Match(pattern, value string) bool {
 	if pattern == "" || value == "" {
@@ -451,6 +472,7 @@ func (pm *PatternMatcher) Match(pattern, value string) bool {
 }
 
 // MatchAny 匹配任意一个模式。
+//
 // Python: PatternMatcher.match_any(patterns, value) (patterns.py L171-173)
 func (pm *PatternMatcher) MatchAny(patterns []string, value string) bool {
 	for _, p := range patterns {
@@ -462,6 +484,7 @@ func (pm *PatternMatcher) MatchAny(patterns []string, value string) bool {
 }
 
 // MatchPath 匹配文件路径（规范化分隔符后再比较）。
+//
 // Python: PathMatcher.match_path(pattern, path) (patterns.py L182-200)
 func (pm *PathMatcher) MatchPath(pattern, path string) bool {
 	normalizedPath := strings.ReplaceAll(path, `\`, "/")
@@ -504,6 +527,7 @@ func (pm *PathMatcher) MatchPathAny(patterns []string, path string) bool {
 }
 
 // MatchURL 匹配 URL（支持 hostname、netloc、full URL）。
+//
 // Python: URLMatcher.match_url(pattern, url) (patterns.py L212-231)
 func (pm *URLMatcher) MatchURL(pattern, url string) bool {
 	if url == "" {
@@ -556,6 +580,7 @@ func (pm *URLMatcher) MatchURLAny(patterns []string, url string) bool {
 }
 
 // MatchCommand 匹配命令字符串（wildcard 模式，全串锚定）。
+//
 // Python: CommandMatcher.match_command(pattern, command) (patterns.py L243-247)
 func (pm *CommandMatcher) MatchCommand(pattern, command string) bool {
 	if command == "" {
@@ -616,6 +641,7 @@ func parseURL(urlStr string) (scheme, host, path string) {
 }
 
 // resolveAgentConfigYAMLPath 解析落盘用的 agent 配置文件路径。
+//
 // Python: _resolve_agent_config_yaml_path(explicit) (patterns.py L38-55)
 func resolveAgentConfigYAMLPath(explicit string) string {
 	if explicit == "" {
@@ -635,6 +661,7 @@ func resolveAgentConfigYAMLPath(explicit string) string {
 }
 
 // persistTieredApprovalOverrideSuggestions 持久化审批覆盖建议。
+//
 // Python: _persist_tiered_approval_override_suggestions(permissions, suggestions) (patterns.py L277-299)
 func persistTieredApprovalOverrideSuggestions(permissions map[string]any, suggestions []PermissionSuggestion) bool {
 	if len(suggestions) == 0 {
@@ -661,6 +688,7 @@ func persistTieredApprovalOverrideSuggestions(permissions map[string]any, sugges
 }
 
 // ensureSingleAllowOverride 确保单个 allow override 条目存在。
+//
 // Python: _ensure_single_allow_override(overrides, ...) (patterns.py L302-345)
 func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, action string) bool {
 	for _, existing := range *overrides {
@@ -703,6 +731,7 @@ func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, a
 }
 
 // isSameAllowOverride 判断是否为相同的 allow override。
+//
 // Python: _is_same_allow_override(signature) (patterns.py L348-355)
 func isSameAllowOverride(sig approvalOverrideSignature) bool {
 	found := false
@@ -725,6 +754,7 @@ func isSameAllowOverride(sig approvalOverrideSignature) bool {
 }
 
 // buildApprovalOverrideID 构建 override 条目 ID。
+//
 // Python: _build_approval_override_id(tool_name, match_type, pattern) (patterns.py L358-363)
 func buildApprovalOverrideID(toolName, matchType, pattern string) string {
 	raw := fmt.Sprintf("user_allow_%s_%s_%s", toolName, matchType, pattern)
@@ -742,6 +772,7 @@ func buildApprovalOverrideID(toolName, matchType, pattern string) string {
 }
 
 // persistTieredToolAllow 持久化整工具 allow。
+//
 // Python: _persist_tiered_tool_allow(permissions, tool_name) (patterns.py L366-380)
 func persistTieredToolAllow(permissions map[string]any, toolName string) bool {
 	if toolName == "" {
@@ -803,6 +834,7 @@ func sortStrings(s []string) {
 }
 
 // commandText 从 toolArgs 中提取命令文本。
+//
 // Python: _command_text(tool_args) (tiered_policy.py L163-164)
 func commandText(toolArgs map[string]any) string {
 	cmd, _ := toolArgs["command"].(string)
@@ -834,4 +866,184 @@ func ruleToolsList(rule map[string]any) []string {
 	default:
 		return nil
 	}
+}
+
+// prepareForEvaluation 对未经 ingest 的原始配置做一次内置规则注入。
+//
+// 与 security.PreparePermissionsForEngine 的差别：只做命令规则注入，
+// 不碰 file_guard / net_guard（那两者需要 workspace_root 与 trusted_dirs，
+// 由引擎构造时处理）。本函数用于 persist 链路——那里的配置直接来自 YAML。
+func prepareForEvaluation(permissions map[string]any) map[string]any {
+	if permissions == nil {
+		return map[string]any{}
+	}
+	return toolguard.InlinePackageCommandRules(permissions)
+}
+
+// ──────────────────────────── FileGuard 路径白名单合并 ────────────────────────────
+
+// MergeFileGuardAccessAllows 按 (path, action) 写入 file_guard.paths。
+//
+// 这是 HITL「总是允许」的主路径：read 访问只放开 read 轴，write 访问放开
+// read+write（Write⇒Read 蕴含），exec 访问放开 read+exec。避免 read 场景
+// 顺带把 write 也放开。
+//
+// Python: merge_file_guard_access_allows(permissions, accesses) (persist_rule_merge.py L331-351)
+func MergeFileGuardAccessAllows(permissions map[string]any, accesses []PathAction) (map[string]any, bool) {
+	if len(accesses) == 0 {
+		return utils.DeepCopyMap(permissions), false
+	}
+	perms := utils.DeepCopyMap(permissions)
+	wrote := false
+	for _, acc := range accesses {
+		if strings.TrimSpace(acc.Path) == "" {
+			continue
+		}
+		pathNorm := strings.TrimSuffix(strings.ReplaceAll(acc.Path, `\`, "/"), "/")
+		if pathNorm == "" {
+			continue
+		}
+		read, write, execP := axesForFileGuardAction(acc.Action)
+		var did bool
+		perms, did = mergeFileGuardPathRule(perms, pathNorm, read, write, execP, "prefix")
+		wrote = wrote || did
+	}
+	return perms, wrote
+}
+
+// axesForFileGuardAction HITL「总是允许」按当时的 path action 落盘，
+// 避免 read 场景顺带写开放 write。
+//
+// Python: _axes_for_file_guard_action(action) (persist_rule_merge.py L240-247)
+func axesForFileGuardAction(action string) (read, write, execP string) {
+	act := strings.ToLower(strings.TrimSpace(action))
+	if act == "" {
+		act = "read"
+	}
+	switch act {
+	case "write":
+		return "allow", "allow", "ask"
+	case "exec":
+		return "allow", "ask", "allow"
+	}
+	return "allow", "ask", "ask"
+}
+
+// escalateAxisTowardAllow 合并同 path 规则：仅在 new=allow 时抬升，
+// 不降级已有 allow/ask/deny。
+//
+// Python: _escalate_axis_toward_allow(old, new) (persist_rule_merge.py L250-256)
+func escalateAxisTowardAllow(old any, newLevel string) string {
+	if newLevel == "allow" {
+		return "allow"
+	}
+	if s, ok := old.(string); ok {
+		switch s {
+		case "allow", "ask", "deny":
+			return s
+		}
+	}
+	return newLevel
+}
+
+// mergeFileGuardPathRule 合并一条 file_guard.paths 规则。
+//
+// 同 path 已存在时按轴「仅向 allow 抬升」，不降级已有 allow/deny；
+// 已存在且结果无变化时返回 (perms, false)。
+//
+// Python: merge_file_guard_path_rule(permissions, path, *, read, write, exec_, match) (persist_rule_merge.py L259-329)
+func mergeFileGuardPathRule(perms map[string]any, pathNorm, read, write, execP, match string) (map[string]any, bool) {
+	if pathNorm == "" {
+		return utils.DeepCopyMap(perms), false
+	}
+	out := utils.DeepCopyMap(perms)
+
+	fg, ok := out["file_guard"].(map[string]any)
+	if !ok {
+		fg = map[string]any{}
+		out["file_guard"] = fg
+	}
+	fg["enabled"] = true
+	paths, ok := fg["paths"].([]any)
+	if !ok {
+		paths = []any{}
+		fg["paths"] = paths
+	}
+
+	for i, item := range paths {
+		existing, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		existingPath, _ := existing["path"].(string)
+		if strings.TrimSuffix(strings.ReplaceAll(existingPath, `\`, "/"), "/") != pathNorm {
+			continue
+		}
+		mergedRead := escalateAxisTowardAllow(existing["read"], read)
+		mergedWrite := escalateAxisTowardAllow(existing["write"], write)
+		mergedExec := escalateAxisTowardAllow(existing["exec"], execP)
+		// Python: existing.get("match", "prefix") or match
+		mergedMatch := "prefix"
+		if m, ok := existing["match"].(string); ok && m != "" {
+			mergedMatch = m
+		} else if match != "" {
+			mergedMatch = match
+		}
+		unchanged := existing["read"] == mergedRead &&
+			existing["write"] == mergedWrite &&
+			existing["exec"] == mergedExec &&
+			stringValue(existing["match"], "prefix") == mergedMatch
+		if unchanged {
+			return out, false
+		}
+		merged := shallowCopyAnyMap(existing)
+		merged["path"] = pathNorm
+		merged["read"] = mergedRead
+		merged["write"] = mergedWrite
+		merged["exec"] = mergedExec
+		merged["match"] = mergedMatch
+		paths[i] = merged
+		// Python 的 spread 会保留 existing 的其他键（如 id / layer）
+		fg["paths"] = paths
+		logger.Info(logComponent).
+			Str("path", pathNorm).
+			Str("read", mergedRead).
+			Str("write", mergedWrite).
+			Str("exec", mergedExec).
+			Msg("permission.merge.file_guard")
+		return out, true
+	}
+
+	paths = append(paths, map[string]any{
+		"path":  pathNorm,
+		"read":  read,
+		"write": write,
+		"exec":  execP,
+		"match": match,
+	})
+	fg["paths"] = paths
+	logger.Info(logComponent).
+		Str("path", pathNorm).
+		Str("read", read).
+		Str("write", write).
+		Str("exec", execP).
+		Msg("permission.merge.file_guard")
+	return out, true
+}
+
+// stringValue 取字符串值，非字符串或空串用默认值。
+func stringValue(v any, def string) string {
+	if s, ok := v.(string); ok && s != "" {
+		return s
+	}
+	return def
+}
+
+// shallowCopyAnyMap 浅拷贝一个 map[string]any。
+func shallowCopyAnyMap(src map[string]any) map[string]any {
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }

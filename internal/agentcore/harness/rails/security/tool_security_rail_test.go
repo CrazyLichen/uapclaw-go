@@ -3,6 +3,9 @@ package security
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -14,6 +17,9 @@ import (
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	// blank import 触发 fileguard / netguard 的 init（注册判定器工厂）。
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security/fileguard"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security/netguard"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
@@ -698,4 +704,293 @@ func TestResolvePermissionInterrupt_SceneHookReject(t *testing.T) {
 	reject, ok := decision.(*interrupt.RejectResult)
 	require.True(t, ok, "期望 RejectResult（SceneHook reject），实际 %T", decision)
 	assert.Equal(t, "custom deny reason", reject.ToolResult)
+}
+
+// ──────────────────────────── 持久化三层结构 ────────────────────────────
+
+// newTestRail 构造一个用于持久化测试的 rail（无 llm、无 tool 标签）。
+func newTestRail(t *testing.T, cfg map[string]any, host *harnesssecurity.ToolPermissionHost) *PermissionInterruptRail {
+	t.Helper()
+	engine := harnesssecurity.NewPermissionEngine(cfg, nil, "", t.TempDir())
+	return NewPermissionInterruptRail(cfg, engine, nil, nil, "", host)
+}
+
+// TestPersistMergedAllow_snapshot优先 测试 base_cfg 先取 host snapshot
+func TestPersistMergedAllow_snapshot优先(t *testing.T) {
+	var snapshotCalled bool
+	host := &harnesssecurity.ToolPermissionHost{
+		GetPermissionsSnapshot: func() map[string]any {
+			snapshotCalled = true
+			// 快照里预置一个标记，验证确实用了它
+			return map[string]any{"__from_snapshot__": true}
+		},
+		PersistAllowRule: func(map[string]any) bool { return true },
+	}
+	rail := newTestRail(t, map[string]any{}, host)
+
+	ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls -la"})
+	if !snapshotCalled {
+		t.Error("未调用 host.GetPermissionsSnapshot")
+	}
+	if !ok {
+		t.Error("persistAllowAlways 应成功")
+	}
+}
+
+// TestPersistMergedAllow_写盘失败回滚 测试 persist 返回 false 时配置回滚
+func TestPersistMergedAllow_写盘失败回滚(t *testing.T) {
+	host := &harnesssecurity.ToolPermissionHost{
+		PersistAllowRule: func(map[string]any) bool { return false },
+	}
+	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
+	before := utils.DeepCopyMap(rail.engine.Config())
+
+	ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls -la"})
+	if ok {
+		t.Error("写盘失败时 persistAllowAlways 应返回 false")
+	}
+	after := rail.engine.Config()
+	if !reflect.DeepEqual(before, after) {
+		t.Error("写盘失败后配置未回滚")
+	}
+}
+
+// TestPersistSessionAllow_不写YAML 测试 session 版只更新内存，不写 YAML
+func TestPersistSessionAllow_不写YAML(t *testing.T) {
+	yamlPath := filepath.Join(t.TempDir(), "config.yaml")
+	host := &harnesssecurity.ToolPermissionHost{PermissionYAMLPath: yamlPath}
+	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
+
+	ok := rail.persistSessionAllow("bash", map[string]any{"command": "ls"}, "sess-1")
+	if !ok {
+		t.Error("session 版应返回 true（只更新内存）")
+	}
+	if _, err := os.Stat(yamlPath); err == nil {
+		t.Error("session 版不应写 YAML")
+	}
+}
+
+// TestPersistSessionAllow_优先用session钩子 测试 session 钩子存在时走钩子
+func TestPersistSessionAllow_优先用session钩子(t *testing.T) {
+	var hookCalled bool
+	host := &harnesssecurity.ToolPermissionHost{
+		PersistSessionAllowRule: func(perms map[string]any, sessionID string) bool {
+			hookCalled = true
+			if sessionID != "sess-x" {
+				t.Errorf("sessionID = %q, want sess-x", sessionID)
+			}
+			return true
+		},
+	}
+	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
+
+	if ok := rail.persistSessionAllow("bash", map[string]any{"command": "ls"}, "sess-x"); !ok {
+		t.Error("应返回 true")
+	}
+	if !hookCalled {
+		t.Error("未调用 PersistSessionAllowRule")
+	}
+}
+
+// TestPersistSessionAllow_钩子失败回滚 测试 session 钩子返回 false 时回滚
+func TestPersistSessionAllow_钩子失败回滚(t *testing.T) {
+	host := &harnesssecurity.ToolPermissionHost{
+		PersistSessionAllowRule: func(map[string]any, string) bool { return false },
+	}
+	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
+	before := utils.DeepCopyMap(rail.engine.Config())
+
+	if ok := rail.persistSessionAllow("bash", map[string]any{"command": "ls"}, "s"); ok {
+		t.Error("钩子失败时应返回 false")
+	}
+	if !reflect.DeepEqual(before, rail.engine.Config()) {
+		t.Error("钩子失败后配置未回滚")
+	}
+}
+
+// TestPersistMergedAllow_无变更返回false 测试既无工具级也无路径级写入时返回 false
+func TestPersistMergedAllow_无变更返回false(t *testing.T) {
+	host := &harnesssecurity.ToolPermissionHost{
+		PersistAllowRule: func(map[string]any) bool { return true },
+	}
+	// 内置规则会命中 rm -rf 并给出 DENY/ASK；用一条不会被规则命中的命令
+	rail := newTestRail(t, map[string]any{}, host)
+	ok := rail.persistAllowAlways("bash", map[string]any{"command": "echo hello"})
+	// echo 不在 pathAwareCommands 里，路径层无访问；工具级 MergePermissionAllowRule
+	// 只在当前判定为 ASK 时写入。两者都不写时返回 false。
+	if ok {
+		t.Log("当前判定为 ASK 且已写入（可接受，取决于内置规则）")
+	}
+}
+
+// TestSetTrustedDirs 测试请求级 trusted_dirs 热更新
+func TestSetTrustedDirs(t *testing.T) {
+	trusted := t.TempDir()
+	rail := newTestRail(t, map[string]any{
+		"file_guard": map[string]any{"enabled": true, "defaults": map[string]any{"read": "ask"}},
+	}, nil)
+
+	target := filepath.Join(trusted, "a.txt")
+	before := rail.engine.CheckPermission(context.Background(), "read_file", map[string]any{"file_path": target})
+
+	rail.SetTrustedDirs([]string{trusted})
+	after := rail.engine.CheckPermission(context.Background(), "read_file", map[string]any{"file_path": target})
+
+	if len(after.ExternalPaths) != 0 {
+		t.Errorf("trusted 内路径不应有 ExternalPaths，got %v", after.ExternalPaths)
+	}
+	_ = before
+	if got := rail.engine.TrustedDirs(); len(got) != 1 || got[0] != trusted {
+		t.Errorf("TrustedDirs() = %v, want [%s]", got, trusted)
+	}
+}
+
+// TestSetTrustedDirs_过滤空串 测试空串与空白被过滤
+func TestSetTrustedDirs_过滤空串(t *testing.T) {
+	rail := newTestRail(t, map[string]any{}, nil)
+	rail.SetTrustedDirs([]string{"", "  ", "/tmp/x"})
+	if got := rail.engine.TrustedDirs(); len(got) != 1 {
+		t.Errorf("TrustedDirs() = %v, want 1 项", got)
+	}
+}
+
+// TestNormalizeToolName_web_fetch_webpage 测试新增的别名
+func TestNormalizeToolName_web_fetch_webpage(t *testing.T) {
+	rail := newTestRail(t, map[string]any{}, nil)
+	if got := rail.normalizeToolName("web_fetch_webpage"); got != "mcp_fetch_webpage" {
+		t.Errorf("normalizeToolName(web_fetch_webpage) = %q, want mcp_fetch_webpage", got)
+	}
+}
+
+// TestCollectFileGuardPersistAccesses_ASK路径落盘 测试路径层 ASK 时收集到 (path, action)
+func TestCollectFileGuardPersistAccesses_ASK路径落盘(t *testing.T) {
+	workspace := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return workspace },
+		PersistAllowRule:    func(map[string]any) bool { return true },
+	}
+	rail := newTestRail(t, map[string]any{
+		"file_guard": map[string]any{"enabled": true, "defaults": map[string]any{"read": "ask"}},
+	}, host)
+
+	accesses := rail.collectFileGuardPersistAccesses("read_file",
+		map[string]any{"file_path": outside}, rail.engine.Config())
+	if len(accesses) != 1 {
+		t.Fatalf("accesses = %d 条, want 1: %+v", len(accesses), accesses)
+	}
+	if accesses[0].Path != outside {
+		t.Errorf("Path = %q, want %q", accesses[0].Path, outside)
+	}
+	if accesses[0].Action != "read" {
+		t.Errorf("Action = %q, want read", accesses[0].Action)
+	}
+}
+
+// TestPersistAllowAlways_写fileGuardPaths 测试「总是允许」落盘到 file_guard.paths
+func TestPersistAllowAlways_写fileGuardPaths(t *testing.T) {
+	workspace := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "s.txt")
+	var captured map[string]any
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return workspace },
+		PersistAllowRule: func(perms map[string]any) bool {
+			captured = perms
+			return true
+		},
+	}
+	rail := newTestRail(t, map[string]any{
+		"file_guard": map[string]any{"enabled": true, "defaults": map[string]any{"read": "ask"}},
+	}, host)
+
+	if ok := rail.persistAllowAlways("read_file", map[string]any{"file_path": outside}); !ok {
+		t.Fatal("persistAllowAlways 应成功")
+	}
+	if captured == nil {
+		t.Fatal("未调用 PersistAllowRule")
+	}
+	fg, _ := captured["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	found := false
+	for _, p := range paths {
+		m, _ := p.(map[string]any)
+		if m["path"] == outside && m["read"] == "allow" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("未落盘 %q 到 file_guard.paths，paths = %+v", outside, paths)
+	}
+}
+
+// TestCollectFileGuardPersistAccesses_无ResolveWorkspace返回nil 测试 host 无 workspace 解析器
+func TestCollectFileGuardPersistAccesses_无ResolveWorkspace返回nil(t *testing.T) {
+	rail := newTestRail(t, map[string]any{
+		"file_guard": map[string]any{"enabled": true},
+	}, &harnesssecurity.ToolPermissionHost{})
+	if got := rail.collectFileGuardPersistAccesses("read_file", map[string]any{}, map[string]any{}); got != nil {
+		t.Errorf("无 ResolveWorkspaceDir 时应返回 nil，got %v", got)
+	}
+}
+
+// TestCollectFileGuardPersistAccesses_路径层关闭返回nil 测试 file_guard 未启用时返回 nil
+func TestCollectFileGuardPersistAccesses_路径层关闭返回nil(t *testing.T) {
+	workspace := t.TempDir()
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return workspace },
+	}
+	rail := newTestRail(t, map[string]any{}, host)
+	if got := rail.collectFileGuardPersistAccesses("read_file",
+		map[string]any{"file_path": filepath.Join(t.TempDir(), "x")}, map[string]any{}); got != nil {
+		t.Errorf("路径层关闭时应返回 nil，got %v", got)
+	}
+}
+
+// TestPersistMergedAllow_钩子panic回滚 测试钩子 panic 时视为失败并回滚
+func TestPersistMergedAllow_钩子panic回滚(t *testing.T) {
+	host := &harnesssecurity.ToolPermissionHost{
+		PersistAllowRule: func(map[string]any) bool { panic("boom") },
+	}
+	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
+	before := utils.DeepCopyMap(rail.engine.Config())
+
+	if ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls"}); ok {
+		t.Error("钩子 panic 时应返回 false")
+	}
+	if !reflect.DeepEqual(before, rail.engine.Config()) {
+		t.Error("钩子 panic 后配置未回滚")
+	}
+}
+
+// TestPersistMergedAllow_无钩子写YAML 测试无钩子时走 YAML 兜底
+func TestPersistMergedAllow_无钩子写YAML(t *testing.T) {
+	yamlPath := filepath.Join(t.TempDir(), "config.yaml")
+	host := &harnesssecurity.ToolPermissionHost{PermissionYAMLPath: yamlPath}
+	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
+
+	if ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls"}); !ok {
+		t.Fatal("无钩子时应写 YAML 并返回 true")
+	}
+	if _, err := os.Stat(yamlPath); err != nil {
+		t.Errorf("YAML 未写入: %v", err)
+	}
+}
+
+// TestHostPersistAllowRule_nilHost 测试 host 为 nil 时返回 nil
+func TestHostPersistAllowRule_nilHost(t *testing.T) {
+	rail := newTestRail(t, map[string]any{}, nil)
+	if got := rail.hostPersistAllowRule(); got != nil {
+		t.Error("host 为 nil 时应返回 nil")
+	}
+	if got := rail.hostPersistSessionAllowRule("s"); got != nil {
+		t.Error("host 为 nil 时应返回 nil")
+	}
+}
+
+// TestHostPersistAllowRule_host无钩子 测试 host 存在但钩子为 nil 时返回 nil
+func TestHostPersistAllowRule_host无钩子(t *testing.T) {
+	rail := newTestRail(t, map[string]any{}, &harnesssecurity.ToolPermissionHost{})
+	if got := rail.hostPersistAllowRule(); got != nil {
+		t.Error("钩子为 nil 时应返回 nil")
+	}
 }

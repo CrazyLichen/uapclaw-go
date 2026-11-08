@@ -1022,3 +1022,218 @@ func stringsLower(s string) string {
 	}
 	return string(result)
 }
+
+// ──────────────────────────── MergeFileGuardAccessAllows ────────────────────────────
+
+// TestMergeFileGuardAccessAllows_read保留精确目录 测试 read 访问只放开 read 轴
+func TestMergeFileGuardAccessAllows_read保留精确目录(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": true}}
+	target := "/tmp/exact/file.txt"
+
+	merged, wrote := MergeFileGuardAccessAllows(perms, []PathAction{{Path: target, Action: "read"}})
+	if !wrote {
+		t.Fatal("未写入")
+	}
+	fg, _ := merged["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	if len(paths) != 1 {
+		t.Fatalf("paths 条数 = %d, want 1", len(paths))
+	}
+	rule, _ := paths[0].(map[string]any)
+	if rule["path"] != target {
+		t.Errorf("path = %v, want %v（精确路径，不加 /**）", rule["path"], target)
+	}
+	if rule["read"] != "allow" {
+		t.Errorf("read = %v, want allow", rule["read"])
+	}
+	if rule["write"] != "ask" {
+		t.Errorf("write = %v, want ask（read 访问不授权写）", rule["write"])
+	}
+	if rule["exec"] != "ask" {
+		t.Errorf("exec = %v, want ask", rule["exec"])
+	}
+	if rule["match"] != "prefix" {
+		t.Errorf("match = %v, want prefix", rule["match"])
+	}
+}
+
+// TestMergeFileGuardAccessAllows_write升格 测试 write 访问把 read+write 一起提
+func TestMergeFileGuardAccessAllows_write升格(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": true}}
+	target := "/tmp/w/file.txt"
+
+	first, _ := MergeFileGuardAccessAllows(perms, []PathAction{{Path: target, Action: "read"}})
+	second, wrote := MergeFileGuardAccessAllows(first, []PathAction{{Path: target, Action: "write"}})
+	if !wrote {
+		t.Fatal("write 访问未写入")
+	}
+	fg, _ := second["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	rule, _ := paths[0].(map[string]any)
+	if rule["write"] != "allow" {
+		t.Errorf("write = %v, want allow", rule["write"])
+	}
+	if rule["read"] != "allow" {
+		t.Errorf("read = %v, want allow（Write⇒Read 蕴含）", rule["read"])
+	}
+	if rule["exec"] != "ask" {
+		t.Errorf("exec = %v, want ask（write 不授权执行）", rule["exec"])
+	}
+}
+
+// TestMergeFileGuardAccessAllows_exec升格 测试 exec 访问把 read+exec 一起提
+func TestMergeFileGuardAccessAllows_exec升格(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": true}}
+	target := "/tmp/e/script.sh"
+
+	merged, wrote := MergeFileGuardAccessAllows(perms, []PathAction{{Path: target, Action: "exec"}})
+	if !wrote {
+		t.Fatal("exec 访问未写入")
+	}
+	fg, _ := merged["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	rule, _ := paths[0].(map[string]any)
+	if rule["exec"] != "allow" {
+		t.Errorf("exec = %v, want allow", rule["exec"])
+	}
+	if rule["read"] != "allow" {
+		t.Errorf("read = %v, want allow（Exec⇒Read 蕴含）", rule["read"])
+	}
+	if rule["write"] != "ask" {
+		t.Errorf("write = %v, want ask（exec 不授权写）", rule["write"])
+	}
+}
+
+// TestMergeFileGuardAccessAllows_无访问不写 测试空访问列表不产生变更
+func TestMergeFileGuardAccessAllows_无访问不写(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": true}}
+	_, wrote := MergeFileGuardAccessAllows(perms, nil)
+	if wrote {
+		t.Error("空访问列表不应写入")
+	}
+}
+
+// TestMergeFileGuardAccessAllows_不修改入参 测试深拷贝
+func TestMergeFileGuardAccessAllows_不修改入参(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": true}}
+	_, _ = MergeFileGuardAccessAllows(perms, []PathAction{{Path: "/tmp/x", Action: "read"}})
+	fg, _ := perms["file_guard"].(map[string]any)
+	if _, has := fg["paths"]; has {
+		t.Error("入参被修改")
+	}
+}
+
+// TestMergeFileGuardAccessAllows_重复调用幂等 测试同访问二次合并不再写
+func TestMergeFileGuardAccessAllows_重复调用幂等(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": true}}
+	accesses := []PathAction{{Path: "/tmp/idem", Action: "read"}}
+	first, ok1 := MergeFileGuardAccessAllows(perms, accesses)
+	if !ok1 {
+		t.Fatal("首次应写入")
+	}
+	_, ok2 := MergeFileGuardAccessAllows(first, accesses)
+	if ok2 {
+		t.Error("二次相同访问不应再写（unchanged 时返回 false）")
+	}
+	// 路径数仍为 1
+	fg, _ := first["file_guard"].(map[string]any)
+	if paths, _ := fg["paths"].([]any); len(paths) != 1 {
+		t.Errorf("paths = %d, want 1", len(paths))
+	}
+}
+
+// TestMergeFileGuardAccessAllows_不降级已有deny 测试已有 deny 不被 ask 降级
+func TestMergeFileGuardAccessAllows_不降级已有deny(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{
+		"enabled": true,
+		"paths": []any{
+			map[string]any{"path": "/tmp/denied", "read": "deny", "write": "deny", "exec": "deny"},
+		},
+	}}
+	merged, _ := MergeFileGuardAccessAllows(perms, []PathAction{{Path: "/tmp/denied", Action: "read"}})
+	fg, _ := merged["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	rule, _ := paths[0].(map[string]any)
+	// read 访问把 read 提到 allow（new=allow 时抬升），但 write/exec 保持 deny
+	if rule["read"] != "allow" {
+		t.Errorf("read = %v, want allow（new=allow 抬升）", rule["read"])
+	}
+	if rule["write"] != "deny" {
+		t.Errorf("write = %v, want deny（new=ask 不降级已有 deny）", rule["write"])
+	}
+	if rule["exec"] != "deny" {
+		t.Errorf("exec = %v, want deny", rule["exec"])
+	}
+}
+
+// TestMergeFileGuardAccessAllows_路径反斜杠归一 测试 Windows 路径归一为 /
+func TestMergeFileGuardAccessAllows_路径反斜杠归一(t *testing.T) {
+	perms := map[string]any{}
+	merged, wrote := MergeFileGuardAccessAllows(perms, []PathAction{{Path: `C:\Users\x\a.txt`, Action: "read"}})
+	if !wrote {
+		t.Fatal("未写入")
+	}
+	fg, _ := merged["file_guard"].(map[string]any)
+	if fg["enabled"] != true {
+		t.Error("file_guard.enabled 应被置为 true")
+	}
+	paths, _ := fg["paths"].([]any)
+	rule, _ := paths[0].(map[string]any)
+	if rule["path"] != "C:/Users/x/a.txt" {
+		t.Errorf("path = %v, want C:/Users/x/a.txt（反斜杠归一）", rule["path"])
+	}
+}
+
+// TestMergeFileGuardAccessAllows_尾部斜杠去除 测试路径尾部 / 被去掉
+func TestMergeFileGuardAccessAllows_尾部斜杠去除(t *testing.T) {
+	perms := map[string]any{}
+	merged, _ := MergeFileGuardAccessAllows(perms, []PathAction{{Path: "/tmp/dir/", Action: "read"}})
+	fg, _ := merged["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	rule, _ := paths[0].(map[string]any)
+	if rule["path"] != "/tmp/dir" {
+		t.Errorf("path = %v, want /tmp/dir（去尾部斜杠）", rule["path"])
+	}
+}
+
+// TestAxesForFileGuardAction 测试三种 action 的轴组合
+func TestAxesForFileGuardAction(t *testing.T) {
+	cases := []struct {
+		action            string
+		read, write, exec string
+	}{
+		{"read", "allow", "ask", "ask"},
+		{"write", "allow", "allow", "ask"},
+		{"exec", "allow", "ask", "allow"},
+		{"", "allow", "ask", "ask"},     // 空按 read
+		{"READ", "allow", "ask", "ask"}, // 大小写不敏感
+	}
+	for _, c := range cases {
+		r, w, e := axesForFileGuardAction(c.action)
+		if r != c.read || w != c.write || e != c.exec {
+			t.Errorf("axesForFileGuardAction(%q) = (%s,%s,%s), want (%s,%s,%s)",
+				c.action, r, w, e, c.read, c.write, c.exec)
+		}
+	}
+}
+
+// TestEscalateAxisTowardAllow 测试仅在 new=allow 时抬升
+func TestEscalateAxisTowardAllow(t *testing.T) {
+	cases := []struct {
+		old  any
+		newV string
+		want string
+	}{
+		{"deny", "allow", "allow"}, // new=allow 时抬升
+		{"ask", "allow", "allow"},
+		{"deny", "ask", "deny"}, // new≠allow 时不降级
+		{"allow", "ask", "allow"},
+		{nil, "ask", "ask"},     // 旧值缺失且 new≠allow → 用 new
+		{"bogus", "ask", "ask"}, // 旧值非法 → 用 new
+	}
+	for _, c := range cases {
+		if got := escalateAxisTowardAllow(c.old, c.newV); got != c.want {
+			t.Errorf("escalateAxisTowardAllow(%v, %q) = %q, want %q", c.old, c.newV, got, c.want)
+		}
+	}
+}
