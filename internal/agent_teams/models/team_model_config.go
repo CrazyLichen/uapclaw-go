@@ -1,35 +1,19 @@
 package models
 
 import (
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ──────────────────────────── 类型别名 ────────────────────────────
 
-// TeamModelConfig 可序列化的团队模型配置。
-// Python: TeamModelConfig (openjiuwen/agent_teams/schema/deep_agent_spec.py)
+// TeamModelConfig 可序列化的团队模型配置（core schema 的类型别名）。
 //
-// 用于团队角色级别的模型配置，包含客户端配置和请求配置。
-type TeamModelConfig struct {
-	// ModelClientConfig 模型客户端配置
-	ModelClientConfig llmschema.ModelClientConfig `json:"model_client_config"`
-	// ModelRequestConfig 模型请求配置（可选）
-	ModelRequestConfig *llmschema.ModelRequestConfig `json:"model_request_config,omitempty"`
-}
+// 类型本体已下沉到 internal/agentcore/harness/schema/team_model_config.go，
+// 对齐上游归属（openjiuwen/harness/schema/deep_agent_spec.py:127）。
+// 保留别名让既有 models.TeamModelConfig 引用继续工作，且与 core 是同一类型。
+type TeamModelConfig = hschema.TeamModelConfig
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewTeamModelConfig 创建默认 TeamModelConfig。
-// Python: TeamModelConfig()
-func NewTeamModelConfig() TeamModelConfig {
-	return TeamModelConfig{
-		ModelClientConfig:  llmschema.ModelClientConfig{Timeout: 60, MaxRetries: 3, VerifySSL: true},
-		ModelRequestConfig: llmschema.NewModelRequestConfig(),
-	}
-}
-
-// Build 构建团队模型配置。
-// ⤵️ 回填: 9.57 — 当前返回 nil, nil
-func (c TeamModelConfig) Build() (any, error) {
-	return nil, nil
-}
+// NewTeamModelConfig 创建默认 TeamModelConfig（转发 core 实现）。
+func NewTeamModelConfig() TeamModelConfig { return hschema.NewTeamModelConfig() }
