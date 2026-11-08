@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
@@ -13,7 +12,7 @@ import (
 
 // TestSystemPromptBuilder_Full模式 测试 FULL 模式下所有节均参与构建
 func TestSystemPromptBuilder_Full模式(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeFull)
+	builder := NewSystemPromptBuilder("cn", PromptModeFull)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "我是身份"}, 10))
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSafety, map[string]string{"cn": "安全规则"}, 20))
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSkills, map[string]string{"cn": "技能描述"}, 30))
@@ -35,7 +34,7 @@ func TestSystemPromptBuilder_Full模式(t *testing.T) {
 
 // TestSystemPromptBuilder_Minimal模式 测试 MINIMAL 模式仅保留 MinimalSections 中的节
 func TestSystemPromptBuilder_Minimal模式(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeMinimal)
+	builder := NewSystemPromptBuilder("cn", PromptModeMinimal)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "身份"}, 10))
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSafety, map[string]string{"cn": "安全"}, 20))
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSkills, map[string]string{"cn": "技能"}, 30))
@@ -63,7 +62,7 @@ func TestSystemPromptBuilder_Minimal模式(t *testing.T) {
 
 // TestSystemPromptBuilder_None模式 测试 NONE 模式仅渲染 identity 节
 func TestSystemPromptBuilder_None模式(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeNone)
+	builder := NewSystemPromptBuilder("cn", PromptModeNone)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "仅身份"}, 10))
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSafety, map[string]string{"cn": "安全"}, 20))
 
@@ -78,7 +77,7 @@ func TestSystemPromptBuilder_None模式(t *testing.T) {
 
 // TestSystemPromptBuilder_None模式_无Identity 测试 NONE 模式无 identity 节时返回空串
 func TestSystemPromptBuilder_None模式_无Identity(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeNone)
+	builder := NewSystemPromptBuilder("cn", PromptModeNone)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSafety, map[string]string{"cn": "安全"}, 20))
 
 	result := builder.Build()
@@ -164,13 +163,13 @@ func TestIsSupportedLanguage(t *testing.T) {
 func TestResolveMode(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected hschema.PromptMode
+		expected PromptMode
 	}{
-		{"full", hschema.PromptModeFull},
-		{"minimal", hschema.PromptModeMinimal},
-		{"none", hschema.PromptModeNone},
-		{"", hschema.PromptModeFull},
-		{"invalid", hschema.PromptModeFull},
+		{"full", PromptModeFull},
+		{"minimal", PromptModeMinimal},
+		{"none", PromptModeNone},
+		{"", PromptModeFull},
+		{"invalid", PromptModeFull},
 	}
 	for _, tt := range tests {
 		result := ResolveMode(tt.input)

@@ -9,6 +9,7 @@
 //	prompts/
 //	├── doc.go                 # 包文档
 //	├── builder.go             # harness 扩展 SystemPromptBuilder + 语言/模式解析
+//	├── prompt_mode.go # PromptMode 枚举 + 解析/序列化（上游 prompts/builder.py:21）
 //	├── report.go              # PromptReport 提示词诊断报告
 //	├── sanitize.go            # 提示词注入防御函数
 //	├── attachment_types.go    # 动态提示词片段类型、常量与写入选项

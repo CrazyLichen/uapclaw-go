@@ -2,9 +2,9 @@ package schema
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -44,7 +44,7 @@ func (s *DeepAgentSpec) ResolveParts(ctx BuildContextInterface) (*DeepAgentParts
 	llmModel := buildModelFromSpec(s.Model)
 
 	// Python: language = resolve_language(self.language)（:543）
-	language := resolveLanguage(s.Language)
+	language := prompts.ResolveLanguage(s.Language)
 
 	// Python: :545-548
 	visionConfig := s.VisionModel
@@ -216,42 +216,4 @@ func flattenBuiltRails(built any) []agentinterfaces.AgentRail {
 			Msg("resolve parts: rail provider returned unexpected type, skipping")
 		return nil
 	}
-}
-
-// ──────────────────────────── 语言解析 ────────────────────────────
-
-// supportedLanguages 支持的语言列表（与 prompts 包保持一致）。
-//
-// 在 schema 包重复一份而非 import prompts：prompts → schema 是既有方向，
-// 反向引用会成环。这里只复制两个纯数据常量与一段无依赖的判定逻辑。
-var supportedLanguages = []string{"cn", "en"}
-
-// supportedLanguageEnv 环境变量覆盖语言的键名。
-// Python: AGENT_PROMPT_LANGUAGE
-const supportedLanguageEnv = "AGENT_PROMPT_LANGUAGE"
-
-// resolveLanguage 解析语言配置，返回合法语言码或默认值。
-//
-// 与 prompts.ResolveLanguage 行为一致（同一套判定与同一环境变量）；
-// 在 schema 包内实现是为了打破 schema → prompts → schema 的环。
-//
-// Python: resolve_language()
-func resolveLanguage(configLanguage string) string {
-	if configLanguage != "" && isSupportedLanguage(configLanguage) {
-		return configLanguage
-	}
-	if envLang := os.Getenv(supportedLanguageEnv); isSupportedLanguage(envLang) {
-		return envLang
-	}
-	return DefaultLanguage
-}
-
-// isSupportedLanguage 检查语言是否在支持列表中。
-func isSupportedLanguage(lang string) bool {
-	for _, supported := range supportedLanguages {
-		if lang == supported {
-			return true
-		}
-	}
-	return false
 }

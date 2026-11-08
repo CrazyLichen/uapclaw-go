@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
@@ -16,7 +15,7 @@ import (
 type SystemPromptBuilder struct {
 	*saprompt.SystemPromptBuilder
 	// mode 提示词模式
-	mode hschema.PromptMode
+	mode PromptMode
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -49,13 +48,13 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSystemPromptBuilder 创建系统提示词构建器。
-func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPromptBuilder {
+func NewSystemPromptBuilder(language string, mode PromptMode) *SystemPromptBuilder {
 	// 按 PromptMode 创建基础构建器（对齐 Python: harness/prompts/builder.py）
 	var base *saprompt.SystemPromptBuilder
 	switch mode {
-	case hschema.PromptModeFull:
+	case PromptModeFull:
 		base = saprompt.NewSystemPromptBuilderWithFilter(language, nil)
-	case hschema.PromptModeMinimal:
+	case PromptModeMinimal:
 		base = saprompt.NewSystemPromptBuilderWithFilter(language, func(sections []saprompt.PromptSection) []saprompt.PromptSection {
 			result := make([]saprompt.PromptSection, 0, len(sections))
 			for _, s := range sections {
@@ -65,7 +64,7 @@ func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPro
 			}
 			return result
 		})
-	case hschema.PromptModeNone:
+	case PromptModeNone:
 		base = saprompt.NewSystemPromptBuilderWithFilter(language, func(_ []saprompt.PromptSection) []saprompt.PromptSection {
 			return nil
 		})
@@ -81,14 +80,14 @@ func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPro
 // Build 按当前模式把各提示词段落拼成完整的系统提示词。
 func (b *SystemPromptBuilder) Build() string {
 	switch b.mode {
-	case hschema.PromptModeNone:
+	case PromptModeNone:
 		// NONE 模式：仅渲染 identity 节
 		section := b.GetSection(sections.SectionIdentity)
 		if section == nil {
 			return ""
 		}
 		return section.Render(b.Language())
-	case hschema.PromptModeMinimal:
+	case PromptModeMinimal:
 		// MINIMAL 模式：仅渲染 MinimalSections 中的节
 		return b.buildWithFilter(func(s saprompt.PromptSection) bool {
 			return MinimalSections[s.Name]
@@ -117,13 +116,13 @@ func ResolveLanguage(configLanguage string) string {
 
 // ResolveMode 从配置字符串解析 PromptMode，空串默认为 PromptModeFull。
 // Python: resolve_mode()
-func ResolveMode(configMode string) hschema.PromptMode {
+func ResolveMode(configMode string) PromptMode {
 	if configMode == "" {
-		return hschema.PromptModeFull
+		return PromptModeFull
 	}
-	mode, err := hschema.ParsePromptMode(configMode)
+	mode, err := ParsePromptMode(configMode)
 	if err != nil {
-		return hschema.PromptModeFull
+		return PromptModeFull
 	}
 	return mode
 }

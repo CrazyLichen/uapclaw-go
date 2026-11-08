@@ -1,70 +1,34 @@
 package schema
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 类型别名 ────────────────────────────
 
-// PromptMode 提示词注入模式枚举
-type PromptMode int
+// PromptMode 提示词注入模式的 schema 侧别名。
+//
+// 类型本体定义在 prompts 包（internal/agentcore/harness/prompts/prompt_mode.go），
+// 对齐上游归属：openjiuwen/harness/prompts/builder.py:21。
+//
+// 保留别名让既有 hschema.PromptMode 引用继续工作，
+// 且与 prompts 包是**同一类型**（非副本）。
+type PromptMode = hprompts.PromptMode
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// PromptModeFull 完整提示词（不过滤）
-	PromptModeFull PromptMode = iota
+	PromptModeFull = hprompts.PromptModeFull
 	// PromptModeMinimal 精简提示词（仅保留 priority <= 20）
-	PromptModeMinimal
+	PromptModeMinimal = hprompts.PromptModeMinimal
 	// PromptModeNone 无提示词（不注入系统提示词）
-	PromptModeNone
+	PromptModeNone = hprompts.PromptModeNone
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ParsePromptMode 从字符串解析 PromptMode
+// ParsePromptMode 从字符串解析 PromptMode（转发 prompts 实现）。
 func ParsePromptMode(s string) (PromptMode, error) {
-	switch strings.ToLower(s) {
-	case "full":
-		return PromptModeFull, nil
-	case "minimal":
-		return PromptModeMinimal, nil
-	case "none":
-		return PromptModeNone, nil
-	default:
-		return PromptModeFull, fmt.Errorf("未知的 PromptMode: %q", s)
-	}
-}
-
-// String 返回 PromptMode 的字符串表示
-func (m PromptMode) String() string {
-	switch m {
-	case PromptModeFull:
-		return "full"
-	case PromptModeMinimal:
-		return "minimal"
-	case PromptModeNone:
-		return "none"
-	default:
-		return fmt.Sprintf("unknown(%d)", m)
-	}
-}
-
-// MarshalJSON 实现 json.Marshaler 接口
-func (m PromptMode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(m.String())
-}
-
-// UnmarshalJSON 实现 json.Unmarshaler 接口
-func (m *PromptMode) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return fmt.Errorf("PromptMode 应为字符串，解析失败: %w", err)
-	}
-	parsed, err := ParsePromptMode(s)
-	if err != nil {
-		return err
-	}
-	*m = parsed
-	return nil
+	return hprompts.ParsePromptMode(s)
 }
