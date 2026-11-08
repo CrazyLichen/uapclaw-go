@@ -440,6 +440,7 @@ func (r *DeepAgentRail) IsTrusted() bool {
 | **V-6** | `readonly_tool_bindings` 只覆盖 `ProgressiveToolRail` | 覆盖 5 类 rail（`ProgressiveToolRail` / `ToolRetrievalPromptRail`+`ToolRetrievalToolkit` / `SkillRetrievalPromptRail`+`SkillRetrievalToolkit` / `HeartbeatRuntimeBridge` / `_RestrictedCronBackend`） | 仅 `ProgressiveToolRail` | 功能范围 | 4 类 rail/toolkit 在 Go 侧不存在 | **9.11b 落地后回填** | **🔴 新增 `9.11b` 行，标 ☐ + ⤴️ 指向 9.90d-2** |
 | **V-7** | `code_tool_bindings` 不含 LSP | 含 `LspRail` + `lsp_tool/*`（约 1,239 行） | 仅 `agent_mode` 三工具 | 功能范围 | Go 侧 LSP 整层未实现 | **9.17 LSPRail 落地后回填** | **✅ 9.17 行追加 ⤴️** |
 | **V-8** | `_emit_audit` / `_emit_permission_result_observation` 空实现 | `runtime_bridge.py:62/69` | no-op 桩（保留完整签名与 31 个调用点） | 功能缺失 | `audit.py` 留 9.90e | **9.90e 回填** | **✅ 9.90e 行追加 ⤴️** |
+| **V-9** | `NATIVE_PATH_ACCESS` 由 task-local 降级为全局单例 | `ContextVar`（按 asyncio task 隔离） | `native_path_context.go:130` 全局变量 + `sync.Mutex` | 并发语义 | Go 无 task-local 存储；9.90b 落地时即采用全局变量式 | 改用 ctx 派生式重写 `native_path_context.go` 时回收 | 9.90d-2 行内说明（本批是首个并发消费者） |
 
 ### 5.1 V-6 的前置件规模（新增 9.11b）
 
