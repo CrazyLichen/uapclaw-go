@@ -21,11 +21,57 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BuildTeamTool 创建团队工具。
-// Python: BuildTeamTool(TeamTool) (tools/team_tools.py L173)
+// Python: BuildTeamTool(TeamTool) (tools/team_tool.py L150)
 type BuildTeamTool struct {
 	TeamTool
 	// team 团队后端实例
 	team *TeamBackend
+	// language 提示词语言（披露文本用）
+	language string
+	// lifecycle 团队生命周期（披露文本用）
+	lifecycle string
+	// teammateMode 队友执行模式（披露文本用）
+	teammateMode string
+	// teamMode 团队模式（披露文本用）
+	teamMode string
+	// dispatchMode 调度模式（披露文本用）
+	dispatchMode string
+}
+
+// TeamToolOptions 团队工具集的配置项。
+//
+// 上游 create_team_tools 全是关键字参数（tool_factory.py L184-206 的 `*` 之后），
+// Go 侧若平铺为位置参数会出现 7 个连续 string（role / teammateMode /
+// lifecycle / language / dispatchMode / teamMode / bootstrapMode），传错顺序
+// 编译器不报错。收进结构体是唯一安全的表达。
+//
+// 偏差 D-8：参数顺序偏离规则 12。上游本就无顺序可言（全关键字），
+// 故这里的「结构体」比「位置参数」更接近原意。
+type TeamToolOptions struct {
+	// Role 角色（"leader" / "teammate" / "human_agent" / "bridge_agent" / "external_cli"）
+	// Python: role=
+	Role string
+	// TeammateMode 队友执行模式（"build_mode" / "plan_mode"）
+	// Python: teammate_mode=
+	TeammateMode string
+	// Lifecycle 团队生命周期（"temporary" / "persistent"）
+	// Python: lifecycle=
+	Lifecycle string
+	// Language 提示词语言（"cn" / "en"）
+	// Python: lang=
+	Language string
+	// DispatchMode 任务下发模式（"autonomous" / "scheduled"）
+	// Python: dispatch_mode=
+	DispatchMode string
+	// TeamMode 团队模式（"default" / "predefined" / "hybrid"）
+	// Python: team_mode=
+	TeamMode string
+	// BootstrapMode 建队模式（"leader" / "framework"）
+	// Python: bootstrap_mode=
+	BootstrapMode string
+	// SwarmflowEnabled leader 是否持有 swarmflow 工具（偏差 D-3）
+	// Python: 由 swarmflow 工具是否注册推导，非显式参数
+	SwarmflowEnabled bool
 }
 
 // CleanTeamTool 清理团队工具。
@@ -187,24 +233,21 @@ var memberSet = mergeSets(memberOnlySet, sharedSet)
 //
 // 参数：
 //   - teamBackend: TeamBackend 门面实例
-//   - role: 角色类型，"leader" / "teammate" / "human_agent"
-//   - teammateMode: "build_mode" 或 "plan_mode"
-//   - lifecycle: "temporary" 或 "persistent"
-//   - language: "cn" 或 "en"
+//   - opts: 配置项（角色、模式、语言等）
 //   - onTeammateCreated: Teammate 创建回调（可选）
 //   - modelConfigAlloc: 模型配置分配器（可选）
 //   - excludeTools: 排除的工具名集合（可选）
 func CreateTeamTools(
 	teamBackend *TeamBackend,
-	role string,
-	teammateMode string,
-	lifecycle string,
-	language string,
+	opts TeamToolOptions,
 	onTeammateCreated func(ctx context.Context, memberName string) error,
 	modelConfigAlloc func(modelName string) *models.Allocation,
 	excludeTools map[string]struct{},
 ) []tool.Tool {
-	t := locales.MakeTranslator(atschema.Language(language))
+	role := opts.Role
+	teammateMode := opts.TeammateMode
+	lifecycle := opts.Lifecycle
+	t := locales.MakeTranslator(atschema.Language(opts.Language))
 
 	// 提取子管理器（teamBackend 可能为 nil，测试场景下）
 	var taskMgr *TeamTaskManager
@@ -217,7 +260,7 @@ func CreateTeamTools(
 	// 构建所有工具实例（teamBackend 为 nil 时跳过依赖后端的工具）
 	allTools := make(map[string]tool.Tool)
 	if teamBackend != nil {
-		allTools["build_team"] = newBuildTeamTool(teamBackend, t)
+		allTools["build_team"] = newBuildTeamTool(teamBackend, t, opts)
 		allTools["clean_team"] = newCleanTeamTool(teamBackend, t)
 		allTools["spawn_member"] = newSpawnMemberTool(teamBackend, t, modelConfigAlloc)
 		allTools["shutdown_member"] = newShutdownMemberTool(teamBackend, t)
@@ -357,7 +400,7 @@ func copySet(s map[string]struct{}) map[string]struct{} {
 }
 
 // newBuildTeamTool 创建 BuildTeamTool 实例。
-func newBuildTeamTool(team *TeamBackend, t locales.Translator) *BuildTeamTool {
+func newBuildTeamTool(team *TeamBackend, t locales.Translator, opts TeamToolOptions) *BuildTeamTool {
 	return &BuildTeamTool{
 		TeamTool: NewTeamTool(tool.NewToolCardWithID("team.build_team", "build_team", t("build_team"),
 			[]*schema.Param{
@@ -367,7 +410,12 @@ func newBuildTeamTool(team *TeamBackend, t locales.Translator) *BuildTeamTool {
 				schema.NewStringParam("leader_desc", t("build_team", "leader_desc"), true),
 				schema.NewBooleanParam("enable_hitt", t("build_team", "enable_hitt"), false),
 			}, nil)),
-		team: team,
+		team:         team,
+		language:     opts.Language,
+		lifecycle:    opts.Lifecycle,
+		teammateMode: opts.TeammateMode,
+		teamMode:     opts.TeamMode,
+		dispatchMode: opts.DispatchMode,
 	}
 }
 

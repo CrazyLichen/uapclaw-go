@@ -115,10 +115,12 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	// Python: tools = create_team_tools(...)
 	toolList := tools.CreateTeamTools(
 		r.teamBackend,
-		r.role,
-		r.teammateMode,
-		r.lifecycle,
-		r.language,
+		tools.TeamToolOptions{
+			Role:         r.role,
+			TeammateMode: r.teammateMode,
+			Lifecycle:    r.lifecycle,
+			Language:     r.language,
+		},
 		r.onTeammateCreated,
 		r.modelConfigAlloc,
 		r.excludeTools,
