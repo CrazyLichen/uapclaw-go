@@ -866,3 +866,105 @@ func TestBuildLeaderPolicyDisclosure_scheduled含验证闸(t *testing.T) {
 		t.Fatal("scheduled 的披露应出现 in_review")
 	}
 }
+
+// TestBuildTeamMemberSystemPrompt_无MCP裸准则 验证 mcp_server_name 为空时只输出准则。
+//
+// Python: build_team_member_system_prompt (sections.py L905-977)
+func TestBuildTeamMemberSystemPrompt_无MCP裸准则(t *testing.T) {
+	got, err := BuildTeamMemberSystemPrompt(atschema.TeamRoleTeammate, "bob",
+		"temporary", "build_mode", "default", "autonomous",
+		false, false, "", "cn", true, false, "native", "")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if got == "" {
+		t.Fatal("准则不应为空")
+	}
+	// inbound_tags 正文里本来就会提到 <team-policy>（它是标签说明的一部分），
+	// 所以只能看是否以带 tools 属性的块**开头**。
+	if strings.HasPrefix(got, "<team-policy tools=") {
+		t.Fatalf("无 MCP 时不应包成带 tools 的 <team-policy>，实际：%s", got[:80])
+	}
+	if strings.HasPrefix(got, "<team-policy>") {
+		t.Fatal("无 MCP 时不应包 <team-policy>")
+	}
+	if !strings.Contains(got, "团队角色") {
+		t.Fatal("应含 role section")
+	}
+}
+
+// TestBuildTeamMemberSystemPrompt_带MCP包policy 验证 mcp_server_name 非空时的包装。
+//
+// 命名空间声明是 <team-policy> 的首个子元素，tools 属性带 server 名。
+func TestBuildTeamMemberSystemPrompt_带MCP包policy(t *testing.T) {
+	got, err := BuildTeamMemberSystemPrompt(atschema.TeamRoleTeammate, "bob",
+		"temporary", "build_mode", "default", "autonomous",
+		false, false, "", "cn", true, false, "native", "uapclaw-team")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if !strings.HasPrefix(got, `<team-policy tools="uapclaw-team">`) {
+		t.Fatalf("应以带 tools 属性的 <team-policy> 开头，实际：%s", got[:80])
+	}
+	if !strings.HasSuffix(got, "</team-policy>") {
+		t.Fatal("应以 </team-policy> 结尾")
+	}
+	if !strings.Contains(got, `<team-note kind="tool-namespace">`) {
+		t.Fatal("应含工具命名空间声明")
+	}
+	if !strings.Contains(got, "uapclaw-team") {
+		t.Fatal("声明里应提到 server 名")
+	}
+	// 声明必须在准则正文之前
+	noteIdx := strings.Index(got, "<team-note")
+	roleIdx := strings.Index(got, "团队角色")
+	if noteIdx > roleIdx {
+		t.Fatal("工具命名空间声明应是 <team-policy> 的首个子元素")
+	}
+}
+
+// TestBuildTeamMemberSystemPrompt_未知角色回落teammate 验证未知角色的处理。
+//
+// BuildTeamRoleSection 对非 LEADER / HUMAN_AGENT 一律按 teammate 处理
+// （上游同样如此，见 sections.py 的 if role == LEADER / elif HUMAN_AGENT /
+// else 三分支），所以未知角色仍会拿到 teammate 策略。
+// inbound_tags 则是无条件追加的——任何角色都不会得到空串。
+func TestBuildTeamMemberSystemPrompt_未知角色回落teammate(t *testing.T) {
+	got, err := BuildTeamMemberSystemPrompt(atschema.TeamRole("nobody"), "",
+		"temporary", "build_mode", "default", "autonomous",
+		false, false, "", "cn", false, false, "native", "")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if !strings.Contains(got, "# 团队角色") {
+		t.Fatal("未知角色应回落 teammate 策略")
+	}
+	if !strings.Contains(got, "入站消息标签") {
+		t.Fatal("inbound_tags 是无条件追加的，应当存在")
+	}
+}
+
+// TestBuildTeamMemberSystemPrompt_英文模板 验证 en 走英文 namespace 模板。
+func TestBuildTeamMemberSystemPrompt_英文模板(t *testing.T) {
+	got, err := BuildTeamMemberSystemPrompt(atschema.TeamRoleTeammate, "bob",
+		"temporary", "build_mode", "default", "autonomous",
+		false, false, "", "en", true, false, "native", "uapclaw-team")
+	if err != nil {
+		t.Fatalf("返回错误: %v", err)
+	}
+	if !strings.Contains(got, "namespace") {
+		t.Fatal("en 应含英文命名空间说明")
+	}
+}
+
+// TestIdentityConversion_文本与inboundtags测试同步 验证转换文本两边一致。
+//
+// inboundtags 的测试无法导入本包（本包依赖它，测试内反向导入会成环），
+// 所以那里把转换文本写成字面量。本用例保证那个字面量与生成端逐字相同。
+func TestIdentityConversion_文本与inboundtags测试同步(t *testing.T) {
+	const inInboundtagsTest = "你继承了成员 dev-0 的上下文，你的身份现在是 dev-1。本对话中更早的「成员身份」块描述的是【此前】的身份，其中包含的私有工作约定与私有工作区对你不再适用。"
+	got := BuildIdentityConversion("dev-0", "dev-1", "cn")
+	if got != inInboundtagsTest {
+		t.Fatalf("inboundtags 测试里的字面量与生产者不一致：\n生产: %q\n测试: %q", got, inInboundtagsTest)
+	}
+}

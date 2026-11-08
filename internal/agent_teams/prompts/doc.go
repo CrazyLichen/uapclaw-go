@@ -7,9 +7,7 @@
 //   - 任务修订说明与正文 diff（message_template）
 //   - team.plan 模式下的 plan_agent 提示词特化
 //
-// 本包承载上游 prompts/sections.py 的全部 15 个 build_* 函数：14 个已移植，
-// build_team_member_system_prompt 因唯一消费者（external_cli_spawn）尚未移植
-// 而缺失（spec D-9，⤵️ 15.7-15.9 / 25.9）。
+// 本包承载上游 prompts/sections.py 的全部 15 个 build_* 函数，已全部移植。
 //
 // 注意：团队**状态**（身份/团队信息/名册/政策块）不进 system prompt，也不再走
 // mtime 缓存全量重建——它由 agent_teams/tracker 的 TeamContextTracker 按增量写进
@@ -30,11 +28,11 @@
 //	├── message_template.go   # 任务修订说明与正文 diff（expand_message 全家 ⤵️ 25.6）
 //	├── team_plan_agent.go    # ApplyTeamPlanAgentPrompt + 常量
 //	├── team_plan_mode.go     # BuildTeamPlanModeSection + 常量
-//	├── cn/                   # 33 个中文 .md 模板
-//	├── en/                   # 33 个英文 .md 模板
+//	├── cn/                   # 34 个中文 .md 模板
+//	├── en/                   # 34 个英文 .md 模板
 //	└── system_prompt.md      # 语言无关顶层模板
 //
-// cn/ 与 en/ 各 33 个模板（含 inbound_tags.md）：
+// cn/ 与 en/ 各 34 个模板（含 inbound_tags.md / tool_namespace.md）：
 //
 //	角色与策略：leader_policy / teammate_policy / teammate_policy_external /
 //	           human_agent_policy / leader_workflow{,_predefined,_hybrid} /
@@ -46,7 +44,7 @@
 //	HITT：     hitt_{leader,teammate,teammate_anonymous,human_agent}
 //	其它：     bridge_agent / leader_bootstrap / leader_prebuilt /
 //	           leader_bound_group / leader_swarmflow / inbound_tags /
-//	           team_plan_agent / team_plan_mode
+//	           tool_namespace / team_plan_agent / team_plan_mode
 //
 // 对应 Python 代码：openjiuwen/agent_teams/prompts/
 package prompts

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/inboundtags"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
@@ -616,6 +617,67 @@ func BuildLeaderPolicyDisclosure(
 		builder.AddSection(s)
 	}
 	return builder.Build(), nil
+}
+
+// BuildTeamMemberSystemPrompt 把成员的团队 section 渲染成一份独立系统提示词。
+//
+// 给「大脑不在本地 DeepAgent 里」的外部 CLI 成员：让它拿到与进程内成员同批
+// 的 team rail section，并以同样方式组装（按 priority 排序、"\n\n" 连接）。
+// 只含团队 section——harness 与其余 DeepAgent rail 对外部 CLI 不适用，
+// 它们的提示词贡献被有意排除。
+//
+// 提示词承载的是团队的**常驻政策**：角色，以及该角色每个成员共享的协作契约。
+// 成员是谁（名字、工作区、私有工作约定）属于团队状态，它与团队元信息、同伴名册
+// 走同一条路：作为对话里的一条 <team-context> 消息到达。两边都说一遍等于说两遍，
+// 而且写在系统提示词里的身份在成员私有约定于会话中途演化时永远改不掉。
+//
+// 工具经 MCP 到达的成员看不到政策里使用的裸名：它的 CLI 把每个 MCP 工具放进
+// 自己的命名空间，而 CLI 自带的工具里完全可能有一个名字与团队工具相像。
+// mcpServerName 非空时把提示词包进 <team-policy>，并一次性声明那些裸名属于
+// 该 server。只说 server 名——CLI 如何拼写其中一个工具是 harness provider
+// 的职责，由它在注册工具的地方声明。
+//
+// 参数：
+//   - mcpServerName: 提供团队工具的 MCP server 名；"" 表示进程内成员
+//     （用裸名调用），此时只渲染政策本体
+//   - 其余参数同 BuildTeamStaticSections
+//
+// 返回 "" 表示没有任何 section 产生内容。
+//
+// Python: build_team_member_system_prompt (prompts/sections.py L905-977)
+func BuildTeamMemberSystemPrompt(
+	role atschema.TeamRole,
+	memberName, lifecycle, teammateMode, teamMode, dispatchMode string,
+	memberMessaging, memberSubtasks bool,
+	basePrompt, language string,
+	hittEnabled, exposeHumanAgentsToTeammates bool,
+	workspacePromptVariant, mcpServerName string,
+) (string, error) {
+	sections, err := BuildTeamStaticSections(
+		role, memberName,
+		lifecycle, teammateMode, teamMode, dispatchMode,
+		memberMessaging, memberSubtasks,
+		basePrompt, language,
+		hittEnabled, exposeHumanAgentsToTeammates,
+		workspacePromptVariant,
+	)
+	if err != nil {
+		return "", err
+	}
+	builder := saprompt.NewSystemPromptBuilderWithFilter(language, nil)
+	for _, s := range sections {
+		builder.AddSection(s)
+	}
+	prompt := builder.Build()
+	if prompt == "" || mcpServerName == "" {
+		return prompt, nil
+	}
+	tpl, err := LoadTemplate("tool_namespace", language)
+	if err != nil {
+		return "", err
+	}
+	note := strings.TrimSpace(tpl.Render(map[string]string{"server": mcpServerName}))
+	return inboundtags.RenderTeamPolicy(prompt, mcpServerName, note), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
