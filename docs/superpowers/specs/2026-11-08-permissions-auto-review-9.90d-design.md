@@ -1680,3 +1680,61 @@ fmt.Sprint(&"path") → "0xc000123456"    ← 不是 "path"
 Python 的 `init(agent)` / `uninit(agent)` 无 ctx、无返回值；Go 的
 `AgentRail` 接口要求 `Init(ctx, agent) error` / `Uninit(agent) error`。
 按接口实现，错误向上传播（Python 是直接抛出，语义等价）。
+
+### 12.22 Task 27 执行结论：`invocation_context`（含 1 个结构性障碍的处置）
+
+**落地**：`auto_permission/invocation_context.go`（715 行 Python → 约 1,010 行 Go /
+30 函数 + 2 类型），覆盖率 **85.2%**，auto_permission 包 87.7%。
+
+#### 这个文件在防什么（安全边界）
+
+权限层用 `resolvePathStr(raw, workspace)` 拼 **workspace** 算校验路径，
+工具执行器用 `ResolveToolFilePath(ctx, raw)` 拼 **cwd** 算执行路径。
+两者不总相等：用户在子目录工作时，`read_file("config.yaml")` 会被
+权限层算成 `{workspace}/config.yaml`、被执行器算成 `{cwd}/config.yaml`——
+**批准的是 A 文件，动的是 B 文件**。
+
+`NormalizeNativePathInvocationForExecution` 在执行前把参数改写成绝对路径，
+使两侧指向同一文件；并把改写后的路径再喂给 `ExtractAccessesNative` 做交叉
+验证（`native_path_guard_execution_mismatch`）。
+
+#### 结构性障碍：执行器身份判断
+
+Python 用 `type(resource) is ReadFileTool` 比较**类身份**：
+
+```python
+_NATIVE_PATH_EXECUTORS = {"read_file": ReadFileTool, ...}
+if type(resource) is not expected: return invocation, ""
+```
+
+Go 侧工具是**函数式实现**（`NewReadFileTool` 返回 `tool.Tool` 接口，
+`read_file.go` 里没有 `type ReadFileTool` 定义），所有工具的具体类型相同，
+`reflect.TypeOf` 无法区分。
+
+**处置（方案 B，用户拍板）**：新增 `SetNativePathExecutors`，装配期登记
+「工具名 → 执行器实例」，运行时用**指针相等**判断
+（`ResourceMgr.GetTool(card.ID)[0] == registered`）。
+
+语义差异：Python 要求「同一类」，Go 要求「同一实例」——**更严格**。
+若工具被重新注册成新实例，判断会失败（fail-closed），符合安全取向。
+Task 42 装配时需接线。
+
+#### 其余 5 处 Go 侧适配（登记偏差）
+
+| Python | Go | 原因 |
+|---|---|---|
+| `*args, **kwargs` | `(ctx, cbc, toolCall, kwargs map[string]any)` | Go 无 kwargs；**必须用 map**——`CompatibilitySendMatchesHost` 靠「key 是否存在于 kwargs」决定校验范围，struct 无法表达 |
+| `setattr` 就地改属性 | 构造新 `ToolCallInputs` + `SetInputs` | Go 无动态属性 |
+| `TOOL_PERMISSION_REQUEST_ID.get()`（ContextVar 隐式） | 显式传 `ctx` 参数 | `AgentCallbackContext` 无 ctx 访问器，ContextVar 在 Go 是 ctx 派生 |
+| `json_repair` 库 | 自写 `repairJSONText`（单引号/尾逗号） | 无等价库；Python 该依赖可选（未安装返回 None） |
+| `tool_call` 为 `Any` | `any`（支持 `map` 与 `*llmschema.ToolCall`） | 保持鸭子类型 |
+
+#### 测试中的一个坑
+
+`reflect.DeepEqual` 对 `nil` 与空切片**不相等**：`NormalizeSendFilePaths(nil)`
+返回 nil，而测试里写 `[]string{}` 会误判。identity 的期望值应直接用
+`NormalizeInvocationToolArgs` 的真实输出构造。
+
+另：`CompatibilitySendMatchesHost` 校验 `tool_call` 时，若该 call 缺
+`arguments` 字段，归一结果是 `{}`（不含 send_file 的两个字段），与 identity
+（从 dict 算出、含两字段）不等 → 判失败。这是 Python 同款行为。

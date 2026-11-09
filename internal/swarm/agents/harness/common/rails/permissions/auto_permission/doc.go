@@ -50,7 +50,8 @@
 //	├── doc.go              # 包文档
 //	├── models.go           # ToolInvocation / PermissionHandlingResult / PermissionInterruptRequest + 11 常量
 //	├── tool_binding.go     # MatchesBoundMethod / ResolveToolBinding——实现身份背书
-//	└── lifecycle.go        # AutoPermissionRail 结构体 + 构造/Init/Uninit/配置更新（9.90d-2 Task 26）
+//	├── lifecycle.go        # AutoPermissionRail 结构体 + 构造/Init/Uninit/配置更新（9.90d-2 Task 26）
+//	└── invocation_context.go # 工具调用提取 + 执行前路径冻结（9.90d-2 Task 27）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）
