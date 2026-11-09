@@ -40,6 +40,8 @@ type roundOptions struct {
 	turnNumber int
 	// resumeContinuation 本轮是否在既有上下文上续跑
 	resumeContinuation bool
+	// inputParts 本轮原始输入批次（未 join），供 ON_USER_MESSAGE rails 看到接缝
+	inputParts []string
 }
 
 // WithTurnNumber 设置本轮成员 turn 号。
@@ -52,6 +54,12 @@ func WithTurnNumber(n int) RoundOption {
 // Python: submit_round(resume_continuation=True)
 func WithResumeContinuation(v bool) RoundOption {
 	return func(o *roundOptions) { o.resumeContinuation = v }
+}
+
+// WithInputParts 携带本轮原始输入批次（未 join）。
+// Python: InputEvent 的多条 TextDataFrame（executor 据此还原 _input_parts）
+func WithInputParts(parts []string) RoundOption {
+	return func(o *roundOptions) { o.inputParts = parts }
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -135,6 +143,10 @@ func (tc *TaskLoopController) SubmitRound(
 	if ro.resumeContinuation {
 		// Python: event.metadata["_resume_continuation"] = True
 		meta["_resume_continuation"] = true
+	}
+	if len(ro.inputParts) > 1 {
+		// Python: 多条输入合成一个 InputEvent 的多个 TextDataFrame
+		meta["_input_parts"] = append([]string(nil), ro.inputParts...)
 	}
 	event.SetMetadata(meta)
 

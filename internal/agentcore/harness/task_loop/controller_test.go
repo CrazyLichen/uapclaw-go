@@ -482,3 +482,24 @@ func TestTaskLoopController_EnqueueSteer(t *testing.T) {
 
 // TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
 func (f *mockAbilityMgr) TeardownTools() {}
+
+// TestSubmitRound_WithInputParts 验证批量输入的原始批次写入 metadata（ON_USER_MESSAGE 接缝）。
+func TestSubmitRound_WithInputParts(t *testing.T) {
+	tc := NewTaskLoopController()
+	tc.Init(newTestCard(), config.DefaultControllerConfig(), &mockAbilityMgr{}, nil)
+
+	handler := &capturingEventHandler{queues: NewLoopQueues(16)}
+	tc.SetEventHandler(handler)
+
+	require.NoError(t, tc.Start(context.Background()))
+	sess := session.NewSession()
+	require.NoError(t, tc.BindSession(context.Background(), sess))
+
+	require.NoError(t, tc.SubmitRound(context.Background(), sess, "a\nb", false, false,
+		agentinterfaces.RunKindNormal, nil, WithInputParts([]string{"a", "b"})))
+
+	require.Eventually(t, func() bool { return handler.Last() != nil }, time.Second, 5*time.Millisecond)
+	parts, ok := handler.Last().GetMetadata()["_input_parts"].([]string)
+	require.True(t, ok, "_input_parts 应以 []string 落在 metadata")
+	assert.Equal(t, []string{"a", "b"}, parts)
+}

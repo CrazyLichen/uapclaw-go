@@ -35,7 +35,7 @@ type cmdAbort struct {
 // ack 实现 controlCmd。
 func (c *cmdAbort) ack() chan error { return c.reply }
 
-// cmdPause 暂停（25.1c 前恒返回不支持）。
+// cmdPause 暂停。
 // Python: _CmdPause
 type cmdPause struct {
 	// reply 应答通道
@@ -45,7 +45,7 @@ type cmdPause struct {
 // ack 实现 controlCmd。
 func (c *cmdPause) ack() chan error { return c.reply }
 
-// cmdResume 继续（25.1c 前恒返回不支持）。
+// cmdResume 继续。
 // Python: _CmdResume（ack + query）
 type cmdResume struct {
 	// query 冷恢复载荷；暖恢复为 nil

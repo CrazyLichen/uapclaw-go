@@ -31,9 +31,9 @@ type HarnessProtocol interface {
 	Send(ctx context.Context, content any, immediate bool) error
 	// Abort 中断；immediate=true 立即取消调度任务，false 让本轮自然收尾
 	Abort(ctx context.Context, immediate bool) error
-	// Pause 暂停到可恢复边界（25.1c 前返回 ErrPauseUnsupported）
+	// Pause 暂停到最近的内层迭代边界（可恢复）
 	Pause(ctx context.Context) error
-	// Resume 从暂停处继续（25.1c 前返回 ErrPauseUnsupported）
+	// Resume 就地续跑暂停轮；query 非 nil 为冷恢复
 	Resume(ctx context.Context, query any) error
 	// Subscribe 订阅生命周期事件
 	Subscribe(ctx context.Context, onState StateHandler, onRound RoundHandler) error

@@ -270,6 +270,9 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	if v, ok := metadata["_resume_continuation"]; ok {
 		coreTask.Metadata["_resume_continuation"] = v
 	}
+	if v, ok := metadata["_input_parts"]; ok {
+		coreTask.Metadata["_input_parts"] = v
+	}
 
 	logger.Info(logComponent).
 		Str("task_id", taskID).

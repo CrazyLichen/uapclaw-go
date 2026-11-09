@@ -332,7 +332,7 @@ func (h *NativeHarness) Abort(ctx context.Context, immediate bool) error {
 	return waitAck(ctx, reply)
 }
 
-// Pause 暂停（25.1c 前不支持）。
+// Pause 暂停到最近的内层迭代边界。
 func (h *NativeHarness) Pause(ctx context.Context) error {
 	reply := make(chan error, 1)
 	if err := h.enqueue(ctx, &cmdPause{reply: reply}); err != nil {
@@ -341,7 +341,7 @@ func (h *NativeHarness) Pause(ctx context.Context) error {
 	return waitAck(ctx, reply)
 }
 
-// Resume 继续（25.1c 前不支持）。
+// Resume 就地续跑暂停轮；query 非 nil 为冷恢复。
 func (h *NativeHarness) Resume(ctx context.Context, query any) error {
 	reply := make(chan error, 1)
 	if err := h.enqueue(ctx, &cmdResume{query: query, reply: reply}); err != nil {
@@ -754,13 +754,17 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 			// 传 false 会走 callLLMInvoke（非流式），Leader 一轮的输出（tool_call/tool_result/answer）
 			// 批量到齐，首条流在成员 spawn 的 tool_result 被观测前就 final，团队时序契约
 			// （第二条消息在首条流未结束时被受理）失稳。
-			err := h.controller.SubmitRound(ctx, h.sess, query,
-				active.mode == startModeFollowUp, true,
-				agentinterfaces.RunKindNormal, active.RunContext,
+			opts := []task_loop.RoundOption{
 				task_loop.WithTaskID(active.TaskID),
 				task_loop.WithTurnNumber(active.Turn.TurnNumber),
 				task_loop.WithResumeContinuation(active.mode == startModeResumeContinuation),
-			)
+			}
+			if parts, isParts := active.OriginalQuery.([]string); isParts {
+				opts = append(opts, task_loop.WithInputParts(parts))
+			}
+			err := h.controller.SubmitRound(ctx, h.sess, query,
+				active.mode == startModeFollowUp, true,
+				agentinterfaces.RunKindNormal, active.RunContext, opts...)
 			if err != nil {
 				runErr = err
 				return err
