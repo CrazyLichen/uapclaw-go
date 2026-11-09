@@ -22,7 +22,7 @@ import (
 //
 // 对齐 Python jiuwenswarm tests/system_tests 的团队成员端到端用例：
 // 真 TeamAgent + MockLLM 走完整 Configure 装配链（BuildTeamHarness →
-// buildDeepAgentFromSpec → llm.NewModel 取 MockLLM），验证 25.1a 订阅驱动的
+// spec.ResolveParts → llm.NewModel 取 MockLLM），验证 25.1a 订阅驱动的
 // 团队流程（send/outputs/subscribe/retry/interrupt）。
 type TeamMemberSuite struct {
 	isuite.AgentSuite

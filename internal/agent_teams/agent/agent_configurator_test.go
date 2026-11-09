@@ -307,7 +307,7 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 	})
 
 	t.Run("Harness设置后获取", func(t *testing.T) {
-		harness := harness.BuildTeamHarness(atschema.DeepAgentSpec{}, "leader", "l1", nil, nil, nil, nil, nil, nil, false)
+		harness := harness.BuildTeamHarness(atschema.DeepAgentSpec{}, "leader", "l1", false, nil, nil)
 		c.SetHarness(harness)
 		assert.Equal(t, harness, c.Harness())
 	})

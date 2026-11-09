@@ -20,16 +20,16 @@ func newTestTeamHarnessWithNative(t *testing.T) *TeamHarness {
 	return newTeamHarnessWithNative(
 		native,
 		native.DeepAgent(),
-		nil,
 		string(atschema.TeamRoleLeader),
 		"leader-1",
 		false,
+		nil, // taskEventTracker
 	)
 }
 
 // TestTeamHarness_State无native返回Idle 验证 State 的 nil native 分支。
 func TestTeamHarness_State无native返回Idle(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Equal(t, HarnessStateIdle, h.State())
 }
 
@@ -41,7 +41,7 @@ func TestTeamHarness_State转发native(t *testing.T) {
 
 // TestTeamHarness_SessionID无native返回空 验证 SessionID 的 nil native 分支。
 func TestTeamHarness_SessionID无native返回空(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Equal(t, "", h.SessionID())
 }
 
@@ -53,7 +53,7 @@ func TestTeamHarness_Native返回底层(t *testing.T) {
 
 // TestTeamHarness_Outputs无native返回Nil 验证 Outputs 的 nil native 分支。
 func TestTeamHarness_Outputs无native返回Nil(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Nil(t, h.Outputs())
 }
 
@@ -65,7 +65,7 @@ func TestTeamHarness_Outputs转发native(t *testing.T) {
 
 // TestTeamHarness_Start无native报错 验证 Start 的 nil native 守卫。
 func TestTeamHarness_Start无native报错(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.Start(context.Background(), nil))
 }
 
@@ -93,13 +93,13 @@ func TestTeamHarness_StartStop完整周期(t *testing.T) {
 
 // TestTeamHarness_Stop无native不报错 验证 Stop 的 nil native 分支。
 func TestTeamHarness_Stop无native不报错(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.Stop(context.Background()))
 }
 
 // TestTeamHarness_Send无native报错 验证 Send 的 nil native 守卫。
 func TestTeamHarness_Send无native报错(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Error(t, h.Send(context.Background(), "x", false))
 }
 
@@ -115,7 +115,7 @@ func TestTeamHarness_Send转发native(t *testing.T) {
 
 // TestTeamHarness_Abort无活跃会话NoOp 验证 Abort 在无 native/无活跃会话时 no-op。
 func TestTeamHarness_Abort无活跃会话NoOp(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.Abort(context.Background(), false))
 }
 
@@ -143,7 +143,7 @@ func TestTeamHarness_PauseResume转发native(t *testing.T) {
 
 // TestTeamHarness_Pause无活跃会话NoOp 验证 Pause 无活跃会话时 no-op。
 func TestTeamHarness_Pause无活跃会话NoOp(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.Pause(context.Background()))
 	assert.NoError(t, h.Resume(context.Background(), nil))
 }
@@ -157,13 +157,13 @@ func TestTeamHarness_Subscribe转发native(t *testing.T) {
 
 // TestTeamHarness_Subscribe无nativeNoOp 验证 Subscribe 的 nil native 分支。
 func TestTeamHarness_Subscribe无nativeNoOp(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.Subscribe(context.Background(), nil, nil))
 }
 
 // TestTeamHarness_RunOnce无native报错 验证 RunOnce 的 nil native 守卫。
 func TestTeamHarness_RunOnce无native报错(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	_, err := h.RunOnce(context.Background(), "x", nil)
 	assert.Error(t, err)
 }
@@ -180,7 +180,7 @@ func TestTeamHarness_RunOnce不启动supervisor(t *testing.T) {
 
 // TestTeamHarness_Dispose无nativeNoOp 验证 Dispose 的 nil native 分支。
 func TestTeamHarness_Dispose无nativeNoOp(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.Dispose(context.Background()))
 }
 
@@ -232,23 +232,23 @@ func TestTeamHarness_card(t *testing.T) {
 
 	// 无 native 有 deepAgent 分支
 	native := newTestNativeHarness(t)
-	h2 := NewTeamHarness(native.DeepAgent(), nil, string(atschema.TeamRoleLeader), "", false)
+	h2 := NewTeamHarness(native.DeepAgent(), string(atschema.TeamRoleLeader), "", false)
 	assert.NotNil(t, h2.card())
 
 	// 无 native 无 deepAgent 分支
-	h3 := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h3 := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.Nil(t, h3.card())
 }
 
 // TestTeamHarness_isInitialTeamPlanLeader 验证 plan 模式判定。
 func TestTeamHarness_isInitialTeamPlanLeader(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", true)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", true)
 	assert.True(t, h.isInitialTeamPlanLeader())
 
-	h2 := NewTeamHarness(nil, nil, string(atschema.TeamRoleTeammate), "", true)
+	h2 := NewTeamHarness(nil, string(atschema.TeamRoleTeammate), "", true)
 	assert.False(t, h2.isInitialTeamPlanLeader())
 
-	h3 := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
+	h3 := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
 	assert.False(t, h3.isInitialTeamPlanLeader())
 }
 
@@ -270,10 +270,10 @@ func TestTeamHarness_ensureInitialPlanMode_Leader种子化(t *testing.T) {
 	h := newTeamHarnessWithNative(
 		native,
 		native.DeepAgent(),
-		nil,
 		string(atschema.TeamRoleLeader),
 		"leader-1",
 		true, // initialPlanMode=true
+		nil,  // taskEventTracker
 	)
 	child := session.CreateAgentSession("", h.card(), nil)
 	require.NotNil(t, child)
