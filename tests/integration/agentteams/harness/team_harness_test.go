@@ -47,7 +47,7 @@ func (s *TeamHarnessSuite) newTeamHarness() *teamharness.TeamHarness {
 		s.T().Fatalf("NewNativeHarness: %v", nativeErr)
 	}
 	// 复用 newTeamHarnessWithNative 的等价构造：NewTeamHarness 接收接口 + 手动包 native
-	h := teamharness.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader", false)
+	h := teamharness.NewTeamHarness(agent, string(atschema.TeamRoleLeader), "leader", false)
 	// 通过 Native() 不暴露 setter，改用 BuildTeamHarness 太重；此处直接验证 Send/State 转发面
 	_ = native
 	return h
@@ -84,7 +84,7 @@ func (s *TeamHarnessSuite) TestRunOnce跑一轮() {
 	if nativeErr != nil {
 		s.T().Fatalf("NewNativeHarness: %v", nativeErr)
 	}
-	h := teamharness.NewTeamHarness(agent, nil, string(atschema.TeamRoleTeammate), "m1", false)
+	h := teamharness.NewTeamHarness(agent, string(atschema.TeamRoleTeammate), "m1", false)
 
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("单次完成"))
 
