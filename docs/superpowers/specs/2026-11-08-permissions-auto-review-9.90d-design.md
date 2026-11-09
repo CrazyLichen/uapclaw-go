@@ -1247,3 +1247,50 @@ Python 侧调用点不会传 None，但 Go 的防御性检查更稳。
 编译期断言真的生效：临时把接口里 `InstalledPermissionConfig` 改名后，
 编译立即报 `*JiuwenSwarmPermissionInterruptRail does not implement
 BasePermissionRail (missing method ...)`，已还原。
+
+### 12.14 Task 16 覆盖率盘点结论
+
+#### 统计口径修正（重要）
+
+单包 `-cover` **看不全跨包调用**：函数定义在 A 包、测试在 B 包时，A 包的
+profile 显示 0%。本批受影响的两个文件：
+
+| 文件 | 单包 `-cover` | 实际（`-coverpkg` 或双 profile 并集） |
+|---|---|---|
+| `permission_engine_accessors.go` | 5 个方法全 0% | 由 permissions 包测试跨包覆盖，达标 |
+| `tool_security_rail_override.go` | `ResolvePermissionInterrupt` / `CollectFileGuardPersistAccessesDefault` 0% | 由 permissions 包测试覆盖；其余由 rails/security 包测试覆盖 |
+
+判定方法：`go test -coverpkg=./internal/agentcore/harness/rails/security/,./internal/agentcore/harness/security/ ./internal/swarm/.../permissions/`
+补看跨包调用，再与单包 profile 取并集。
+
+#### 本批新增文件的真实缺口与处置
+
+| 文件 | 缺口 | 处置 |
+|---|---|---|
+| `native_path_context.go` | `Enabled` / `Mode` / `CollectAskAccesses` 均 0%（Task 13 新增，无调用方） | **已补测试**，三者 100% |
+| `permission_interrupt_rail.go` | `callExactPersist` / `removeExactAutoConfirm` / `bindApprovalOnInterrupt` 0% | **已补测试**，100% / 95.0% / 87.5%；无 0% 函数 |
+
+`native_path_context.go` 的三个新方法**没有生产调用方**——它们只是为了让
+`*NativePathGuardProjection` 满足 `harnesssecurity.FileGuardEvaluator` 接口
+（否则 `engine.SetFileGuard(NewNativePathGuardProjection(checker))` 编译不过）。
+按规则 8，这类「为满足接口而存在」的方法理由充分，但补测试直接调用覆盖。
+
+#### 既有缺口（非本批引入，登记不修）
+
+以下函数覆盖率 <85%，但都是 9.90b/c 或更早交付的代码，本批未改动：
+
+| 文件 | 低覆盖函数 | 性质 |
+|---|---|---|
+| `native_path_context.go` | `Evaluate` 80.0% / `NativeArgumentsJSON` 83.3% / `canonicalizeJSON` 77.8% | 9.90b 交付 |
+| `send_file_path_guard.go` | `evaluateSendFilePathSafely` 50.0% / `buildSendFileGuardChecker` 60.0% 等 | Task 10 已登记：panic recover 防御分支，需外部包 panic 才能触发 |
+| `reviewer_redaction.go` | 10 个函数 33.3%~80.0% | 9.90d-1 Task 5c 交付，既有缺口 |
+| `persistent_audit.go` | `Write` 80.0% | Task 7 已登记：写盘失败分支 |
+| `url_safety.go` | `inspectURI` 82.0% / `regexp2FindAll` 81.8% | Task 8 已登记 |
+| `generated_artifact_delivery.go` | `resolveSendFilePath` 80.0% | Task 9 已登记：`filepath.Abs` 失败分支不可达 |
+| `tool_display.go` | 1 个函数 60.0% | Task 1 交付 |
+| `workspace_paths.go` | 4 个函数 73.1%~83.3% | Task 5c 交付 |
+| `pdf_tools.go` | 1 个函数 71.4% | Task 6 交付 |
+
+**包整体覆盖率**：`permissions` 87.4%（≥85% 达标）。
+其余包（`rails` 79.8% / `rails/security` 59.2% / `harness/security` 78.2% /
+`single_agent/schema` 69.8%）的整体值受大量非本批文件影响，不代表本批质量。
