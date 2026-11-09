@@ -809,3 +809,46 @@ Go 侧：
 偏移），覆盖全文读取 / 指定页码 / 越界 / max_chars 截断 / 100 页上限 /
 空文本层 / 三种 remedy 分支。pdf_tools.go 函数级覆盖率最低 71.4%
 （`NewReadPDFTool` 的框架调用分支），其余 ≥94%。
+
+### 12.5 Task 7 执行时的核实结论：`persistent_audit`
+
+**全量落地**：296 行 / 10 个符号 + 8 个常量逐条对齐。
+`PersistentAuditWriter` 的 `Write` 是 observe-only：任何异常降级为
+`audit_write_failed`，绝不改变被观察的权限决策。
+
+**品牌映射（记忆规则）**：Python `DATA_DIR_ENV_NAME = "JIUWENSWARM_DATA_DIR"`
+→ Go `DataDirEnvName = "UAPCLAW_DATA_DIR"`（与全仓既有 env 命名一致）。
+其余 7 个常量逐字对齐。
+
+**计划文档勘误**：计划 Task 7 的 `fakeFacts()` 示例写的是
+`ToolDecisionFacts{ToolName: "bash", ToolCategory: "command", ...}`，
+但 Go 侧 `ToolDecisionFacts` 的 `ToolName` / `ToolCategory` 是**方法**
+（`tool_decision_facts.go:71/76`，从 `Capability` 取值），不是字段。
+测试改用 `Capability{ToolName, Category, RiskTier, StaticSideEffects}` 构造。
+
+**RE2 改写（按计划对照表逐项执行）**：
+| Python 原式 | Go 实现 |
+|---|---|
+| `(?<!\w)/(?:[^\s'"\\]+/?)+` | `(?:^\|[^\w])(/[^\s'"\\]+)` 捕获组替代 lookbehind |
+| `\b[A-Za-z]:\\[^\s'"]+` | 直接复用（RE2 支持 `\b`） |
+| `(?i)(bearer...\|sk-...)` / `(?i)\b(?:bash\|...)\s+\S+` | 直接复用（RE2 支持内联 `(?i)`） |
+| `(&&\|\|\|[;<>`$])` | `regexp.MustCompile` 原样（反引号用字符串拼接） |
+
+与 9.90d-1 Task 5 那两个用 `regexp2` 的文件不同，本文件按计划要求
+使用 Go 标准库 `regexp`，差异已在代码注释登记。
+
+**Python 正则行为核实（避免测试预期写错）**：
+`_CONTEXTUAL_PRICE_PATTERN` 含 `budget(?:ed)?`，**不匹配 `budget of $...`**。
+因此 `"a budget of $20"` 掩码后 `strict_view` 仍含 `$` → `[redacted]`；
+只有 `"costs $5"` / `"price at $3.50"` 这类会被掩码成 `price` 并保留。
+测试据此分两条断言，未自行放宽上游语义。
+
+**已知偏差（不可达）**：Python `json.dumps(..., ensure_ascii=True)` 会把
+非 ASCII 转成 `\uXXXX`，Go `json.Marshal` 默认输出 UTF-8。但所有审计
+字段都经 `_sanitize_audit_text` 的 `^[A-Za-z0-9][A-Za-z0-9_.: -]+$`
+白名单，非 ASCII 一律替换为 `[redacted]`，故落盘记录实际不含非 ASCII，
+该差异不可达。另 `json.Marshal` 的失败分支同样不可达（脱敏后所有值
+均为 string/bool/int/map/slice），故 `Write` 覆盖率 80%，其余函数 100%。
+
+**测试**：35 个用例，覆盖 10 字段 / 白名单 / 五类敏感内容检测 /
+自然语言双通道 / 根解析五级优先级 / JSONL 追加 / 三种降级路径。
