@@ -1386,3 +1386,174 @@ func (uc *UapClawSwarm) adapterSnapshot() adapter.AgentAdapter {
 	defer uc.adapterMu.Unlock()
 	return uc.adapter
 }
+
+// processGoalCommand 处理非流式 command.goal 请求。
+// Python: interface.py:3408-3505 _process_message 的 COMMAND_GOAL 分支
+//
+// 非流式承担全部五个 action；set/resume 的真正执行仍走流式路径。
+func (uc *UapClawSwarm) processGoalCommand(
+	ctx context.Context, request *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	params := parseRequestParams(request)
+	action := goalActionOf(request)
+	sessionID := swruntime.GetSessionID(request.SessionID)
+	logger.Info(logComponent).
+		Str("event_type", "goal_command").
+		Str("request_id", request.RequestID).
+		Str("action", action).
+		Str("session_id", sessionID).
+		Msg("command.goal received")
+
+	a, err := uc.goalAdapter(request)
+	if err != nil {
+		return nil, err
+	}
+	control, err := a.DispatchGoalControl(ctx, sessionID, action,
+		paramString(params, "objective"), boolField(params, "overwrite_confirmed"),
+		intField(params, "token_budget"), intField(params, "max_attempts"))
+	if err != nil {
+		// Python: except Exception → ok=False, {"error": f"Goal command error: {exc}"}
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "GOAL_COMMAND_FAILED").
+			Str("request_id", request.RequestID).
+			Msg("command.goal failed")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "Goal command error: " + err.Error(),
+			})), nil
+	}
+	if control == nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"error": "Goal command not handled"})), nil
+	}
+	return goalControlResponse(request, action, control), nil
+}
+
+// processGoalCommandStream 流式 command.goal 的 get/pause/clear 单帧短路。
+// Python: interface.py:4175-4235 —— action 不在 {set,resume} 时只发一帧即 return，
+// 不进入 attach_output；set/resume 由适配器流式主链路接管（attach→control 两段映射）。
+func (uc *UapClawSwarm) processGoalCommandStream(
+	ctx context.Context, request *schema.AgentRequest,
+) ([]*schema.AgentResponseChunk, error) {
+	params := parseRequestParams(request)
+	action := goalActionOf(request)
+	sessionID := swruntime.GetSessionID(request.SessionID)
+	a, err := uc.goalAdapter(request)
+	if err != nil {
+		return nil, err
+	}
+	control, err := a.DispatchGoalControl(ctx, sessionID, action,
+		paramString(params, "objective"), boolField(params, "overwrite_confirmed"),
+		intField(params, "token_budget"), intField(params, "max_attempts"))
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "GOAL_COMMAND_STREAM_FAILED").
+			Str("request_id", request.RequestID).
+			Msg("streaming command.goal failed")
+		return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+			request.RequestID, request.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"error":      "Goal command error: " + err.Error(),
+			}, schema.WithChunkIsComplete(true))}, nil
+	}
+	if control == nil {
+		return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+			request.RequestID, request.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"error":      "Goal command not handled",
+			}, schema.WithChunkIsComplete(true))}, nil
+	}
+	if resultType, _ := control["result_type"].(string); resultType == "goal_error" {
+		return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+			request.RequestID, request.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"code":       control["error_code"],
+				"error":      control["error"],
+				"goal":       control["goal"],
+			}, schema.WithChunkIsComplete(true))}, nil
+	}
+	return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+		request.RequestID, request.ChannelID, map[string]any{
+			"event_type":   "goal.snapshot",
+			"action":       control["action"],
+			"goal":         control["goal"],
+			"cleared_goal": control["cleared_goal"],
+			"message":      control["output"],
+		}, schema.WithChunkIsComplete(true))}, nil
+}
+
+// goalAdapter 按请求 mode 取适配器（goal 命令必须真实 adapter）。
+func (uc *UapClawSwarm) goalAdapter(request *schema.AgentRequest) (adapter.AgentAdapter, error) {
+	return uc.ensureAdapter(uc.adapterModeForRequest(request))
+}
+
+// goalControlResponse 把控制结果组装成 RPC payload。
+// Python: interface.py:3460-3485 —— message 与 error 双写，兼容 Gateway 顶层
+// error 转发与旧客户端；record 是 goal 的副本，保留给既有 TUI 命令面。
+func goalControlResponse(
+	request *schema.AgentRequest, action string, control map[string]any,
+) *schema.AgentResponse {
+	resultType, _ := control["result_type"].(string)
+	ok := resultType != "goal_error" && resultType != "goal_confirm_required"
+	human, _ := control["output"].(string)
+	if human == "" {
+		human, _ = control["error"].(string)
+	}
+	payload := map[string]any{
+		"action":              control["action"],
+		"message":             human,
+		"goal":                control["goal"],
+		"record":              control["goal"],
+		"cleared_goal":        control["cleared_goal"],
+		"existing_goal":       control["existing_goal"],
+		"requested_objective": control["requested_objective"],
+		"code":                control["error_code"],
+	}
+	if !ok && human != "" {
+		payload["error"] = human
+	}
+	if action == "" {
+		action = "get"
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(ok),
+		schema.WithPayload(payload))
+}
+
+// goalActionOf 取 command.goal 的 action（缺省 get）。
+// Python: str(params.get("action") or "get").strip().lower()
+func goalActionOf(request *schema.AgentRequest) string {
+	action := strings.ToLower(strings.TrimSpace(paramString(parseRequestParams(request), "action")))
+	if action == "" {
+		action = "get"
+	}
+	return action
+}
+
+// boolField 取布尔参数（非 bool 返回 false）。
+func boolField(params map[string]any, key string) bool {
+	value, _ := params[key].(bool)
+	return value
+}
+
+// intField 取整型参数（JSON 解出 float64；非数值返回 0）。
+func intField(params map[string]any, key string) int {
+	switch value := params[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+// paramString 取字符串参数（非字符串返回空串）。
+func paramString(params map[string]any, key string) string {
+	value, _ := params[key].(string)
+	return value
+}

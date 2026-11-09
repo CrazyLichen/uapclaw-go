@@ -114,6 +114,12 @@ func (f *fakeAdapter) HandleSwarmflowReply(_ context.Context, _ *schema.AgentReq
 }
 
 // PendingInteractions 桩：恒空。
+func (f *fakeAdapter) DispatchGoalControl(
+	_ context.Context, _, _, _ string, _ bool, _, _ int,
+) (map[string]any, error) {
+	return nil, nil
+}
+
 func (f *fakeAdapter) PendingInteractions(string) ([]map[string]any, error) { return nil, nil }
 
 // EnsureInstance 桩：无 DeepAgent（规则 10：接口扩张时测试替身自己补齐）。

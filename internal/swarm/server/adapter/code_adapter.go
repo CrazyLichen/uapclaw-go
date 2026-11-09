@@ -546,6 +546,18 @@ func (c *CodeAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgen
 	return c.deep.GetLiveSessionInstance(sessionID)
 }
 
+// DispatchGoalControl 委托 DeepAdapter。
+func (c *CodeAdapter) DispatchGoalControl(
+	ctx context.Context, sessionID, action, objective string,
+	overwriteConfirmed bool, tokenBudget, maxAttempts int,
+) (map[string]any, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.DispatchGoalControl(ctx, sessionID, action, objective,
+		overwriteConfirmed, tokenBudget, maxAttempts)
+}
+
 // HandleSwarmflowReply 委托 DeepAdapter。
 func (c *CodeAdapter) HandleSwarmflowReply(
 	ctx context.Context, req *schema.AgentRequest,

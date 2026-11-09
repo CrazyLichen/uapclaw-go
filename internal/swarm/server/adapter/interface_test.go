@@ -171,3 +171,9 @@ func TestCodeAdapter_实现门面所需的运行态方法(t *testing.T) {
 		t.Error("CodeAdapter 应实现 PlanStateAccessor（缺失会让 code 模式 plan 状态失效）")
 	}
 }
+
+func (s *stubAdapter) DispatchGoalControl(
+	_ context.Context, _, _, _ string, _ bool, _, _ int,
+) (map[string]any, error) {
+	return nil, nil
+}

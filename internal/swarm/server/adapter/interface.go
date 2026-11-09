@@ -84,6 +84,13 @@ type AgentAdapter interface {
 	// Python: interface_deep.py get_live_session_instance（:12744）
 	GetLiveSessionInstance(sessionID string) *harness.DeepAgent
 
+	// DispatchGoalControl 把协议字段映射到 Goal 能力方法。
+	// Python: interface_deep.py:17744 dispatch_goal_control（分流头 :17775）
+	DispatchGoalControl(
+		ctx context.Context, sessionID, action, objective string,
+		overwriteConfirmed bool, tokenBudget, maxAttempts int,
+	) (map[string]any, error)
+
 	// HandleSwarmflowReply 处理人对 swarmflow 人工轮次的回复。
 	// Python: agent_adapters.py AgentAdapter.handle_swarmflow_reply（:86）
 	HandleSwarmflowReply(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
