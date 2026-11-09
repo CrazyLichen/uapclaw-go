@@ -258,6 +258,11 @@ func buildTeamToolRail(params map[string]any, ctx hschema.BuildContextInterface)
 	if alloc := GetModelAllocator(ctx); alloc != nil {
 		opts = append(opts, WithModelConfigAllocator(alloc.Allocate))
 	}
+	// 成员创建回调：autoStartMembers 靠它真正启动 teammate。
+	// 上游 TeamBackend 自带 spawn 能力，Go 侧 Startup 以参数接收，故经句柄传递。
+	if onCreated := GetOnTeammateCreated(ctx); onCreated != nil {
+		opts = append(opts, WithOnTeammateCreated(onCreated))
+	}
 	return NewTeamToolRail(opts...), nil
 }
 

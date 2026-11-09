@@ -99,7 +99,7 @@ type TeamRuntimeContext struct {
 	ForkSource string `json:"fork_source,omitempty"`
 	// PermissionsOverride 平台下发的权限覆盖（nil 表示不覆盖）
 	// Python: TeamRuntimeContext.permissions_override
-	PermissionsOverride any `json:"permissions_override,omitempty"`
+	PermissionsOverride map[string]string `json:"permissions_override,omitempty"`
 	// TeamSpec 团队规格（可选）
 	TeamSpec *TeamSpec `json:"team_spec,omitempty"`
 	// MessagerConfig 消息传输配置（可选）

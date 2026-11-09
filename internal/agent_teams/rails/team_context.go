@@ -1,6 +1,8 @@
 package rails
 
 import (
+	"context"
+
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
@@ -47,6 +49,13 @@ const (
 	TeamHandlePermissionsOverride TeamHandleKey = "team.permissions_override"
 	// TeamHandleWorktreeManager owner 作用域的 worktree 管理器
 	TeamHandleWorktreeManager TeamHandleKey = "team.worktree_manager"
+	// TeamHandleOnTeammateCreated 成员创建回调（spawn 落地后由 TeamManager 通知）
+	//
+	// 上游由 TeamBackend.autostart_unstarted() 自带 spawn 能力，无需回调；
+	// Go 侧 TeamBackend.Startup(ctx, onTeammateCreated) 以参数接收，
+	// 故必须经 build context 句柄传递，否则 autoStartMembers 直接返回、
+	// 成员永不启动（F-02）。
+	TeamHandleOnTeammateCreated TeamHandleKey = "team.on_teammate_created"
 	// TeamHandleSwarmflowExternalCLIAgents 声明的外部 CLI agent 条目
 	TeamHandleSwarmflowExternalCLIAgents TeamHandleKey = "team.swarmflow_external_cli_agents"
 	// TeamHandleSwarmflowExpertSpecs swarmflow 可选用的专家表
@@ -118,6 +127,8 @@ type TeamHandles struct {
 	ExpertBinding any
 	// TaskEventTracker 任务通知器
 	TaskEventTracker tracker.TaskEventTracker
+	// OnTeammateCreated 成员创建回调（Go 专有，见 TeamHandleOnTeammateCreated）
+	OnTeammateCreated func(ctx context.Context, memberName string) error
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -148,6 +159,7 @@ func InjectTeamHandles(ctx hschema.BuildContextInterface, h TeamHandles) {
 	extras[string(TeamHandleReliabilityComponents)] = h.ReliabilityComponents
 	extras[string(TeamHandlePermissionsOverride)] = h.PermissionsOverride
 	extras[string(TeamHandleWorktreeManager)] = h.WorktreeManager
+	extras[string(TeamHandleOnTeammateCreated)] = h.OnTeammateCreated
 	extras[string(TeamHandleSwarmflowExternalCLIAgents)] = h.SwarmflowExternalCLIAgents
 	// Python: extras[...] = dict(swarmflow_expert_specs or {})
 	// —— nil 时写空 map，不写 None（下游 getter 依赖此语义）
@@ -159,6 +171,17 @@ func InjectTeamHandles(ctx hschema.BuildContextInterface, h TeamHandles) {
 	extras[string(TeamHandleExpertCatalog)] = h.ExpertCatalog
 	extras[string(TeamHandleExpertBinding)] = h.ExpertBinding
 	extras[string(TeamHandleTaskEventTracker)] = h.TaskEventTracker
+}
+
+// GetOnTeammateCreated 返回成员创建回调，缺失返回 nil。
+//
+// Python 无对应物：上游 TeamBackend 自带 spawn 能力（autostart_unstarted），
+// Go 以回调形式经 build context 传递，见 TeamHandleOnTeammateCreated。
+func GetOnTeammateCreated(ctx hschema.BuildContextInterface) func(ctx context.Context, memberName string) error {
+	if v, ok := getHandle(ctx, TeamHandleOnTeammateCreated).(func(ctx context.Context, memberName string) error); ok {
+		return v
+	}
+	return nil
 }
 
 // GetTeamBackend 返回团队后端句柄，缺失或类型不符返回 nil。

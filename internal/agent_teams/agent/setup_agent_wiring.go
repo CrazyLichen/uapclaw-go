@@ -62,14 +62,16 @@ func buildTeamHandles(
 	agentSpec atschema.DeepAgentSpec,
 ) rails.TeamHandles {
 	return rails.TeamHandles{
-		TeamBackend:      c.TeamBackend(),
-		WorkspaceManager: c.WorkspaceManager(),
-		ModelAllocator:   c.ModelAllocator(),
-		Messager:         c.Messager(),
-		// ⤵️ ctx.PermissionsOverride 在 Go 侧 TeamRuntimeContext 无此字段
-		// （上游 agent_configurator.py:915 有），本批不臆造，留零值。
-		WorktreeManager:  c.WorktreeManager(),
-		TaskEventTracker: c.TaskEventTracker(),
+		TeamBackend:         c.TeamBackend(),
+		WorkspaceManager:    c.WorkspaceManager(),
+		ModelAllocator:      c.ModelAllocator(),
+		Messager:            c.Messager(),
+		PermissionsOverride: ctx.PermissionsOverride,
+		WorktreeManager:     c.WorktreeManager(),
+		TaskEventTracker:    c.TaskEventTracker(),
+		// 成员创建回调：TeamBackend.Startup 以参数接收（上游由 backend 自带），
+		// 不经句柄传就会让 autoStartMembers 直接返回、成员永不启动（F-02）。
+		OnTeammateCreated: c.onTeammateCreated,
 	}
 }
 
@@ -112,9 +114,20 @@ func buildTeamRailSpecInput(
 		LeaderMemberName: leaderMemberName,
 		// ⤵️ ctx.Prompt / DisplayName / ForkSource 及 team_outputs_dir 在 Go 侧
 		// TeamRuntimeContext 无对应字段（上游 :687-689/:737-752 有），本批留零值。
-		BasePrompt:            agentSpec.SystemPrompt,
-		ExcludeTools:          predefinedExcludeTools(spec),
-		QualifyIDs:            spec.SpawnMode == "inprocess",
+		BasePrompt:   agentSpec.SystemPrompt,
+		ExcludeTools: predefinedExcludeTools(spec),
+		// 上游 agent_configurator.py:739 写的是 spawn_mode == "inprocess"，
+		// 但 team_tool_rail.py:193-208 已明确废弃 qualify_team_tool_ids：
+		// 现在走 ability_manager.add_ability，由框架把 id 限定成
+		// `{name}_{owner_id}`，"superseding the old qualify_ids suffixing"，
+		// 并注明旧的 bespoke 路径（qualify + add_tool + ability_manager.add）
+		// 产出的 team.<tool>.<session>.<member> id 与 teardown_tools 不匹配、
+		// 会跨 native 重建泄漏。
+		//
+		// Go 侧 TeamToolRail.Init 仍是那条 bespoke 路径（无 AddAbility），
+		// 打开后缀会让工具按限定 id 注册而按原名调用 → 结果为空。
+		// 故此处关闭，等 F-03 把注册改为 add_ability 后即可去掉本字段。
+		QualifyIDs:            false,
 		ApprovalTools:         approvalTools,
 		SwarmflowEnabled:      spec.SwarmflowEnabled,
 		HasWorkspaceManager:   c.WorkspaceManager() != nil,
