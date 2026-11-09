@@ -1785,3 +1785,43 @@ feedback 里的标记：
 - user_rejection → feedback 含 `[permission_rejected]`
 
 初版测试用 `map{"approved": true}` 一律被归类为 `interrupt`。
+
+### 12.24 Task 29 执行结论：`runtime_bridge`
+
+**落地**：`auto_permission/runtime_bridge.go`（316 行 Python → 约 380 行 Go /
+12 方法），覆盖率 **92.2%**，auto_permission 包 89.4%。
+
+#### 偏差 V-8 落地：审计观测为 no-op 桩
+
+`emitAudit` / `emitPermissionResultObservation` 依赖 `audit.py`（9.90e 落地）。
+本批保留完整签名与全部调用点，函数体为空并标 `⤵️ 9.90e 回填`。
+9.90e 只需把桩体换成真实 `EmitPermissionAudit` 调用。
+
+#### 新增偏差 V-9：`_reviewer_ui_metadata` 未落地（⤵️ Task 30）
+
+`normalizeRuntimePermissionResult` 的 user_rejection 分支在 Python 里会构造
+含 `_reviewer_ui_metadata` 的标准 denied payload。该函数属
+`reviewer_metadata.py`（401 行，Task 30 内容），本批**直接返回原 result**。
+
+影响：`decision_source == "manual_approval"` 且结果为 user_rejection 时，
+不会转成 denied payload。Task 30 落地后必须回填。
+
+#### 3 处 Go 侧适配
+
+| Python | Go | 说明 |
+|---|---|---|
+| `_skip_tool` 钩子（`getattr(base_rail, "_skip_tool")`） | 直接 `SetExtra("_skip_tool", true)` + 写 `inputs.ToolResult` | `BasePermissionRail` 无该钩子，走副作用式 |
+| `_raise_interrupt` 钩子 + `raise AbortError` | 返回 `*callback.AbortError` | Go 用 error 而非 raise |
+| `_get_auto_confirm_key` 钩子 | 类型断言 `AutoConfirmKey(toolCall)`，缺失返回空串 | 等价 Python 的 getattr 缺失分支 |
+
+#### 跨包导出改动
+
+`confirmPayloadSchema`（私有）改名为导出的 `ConfirmPayloadSchema`，
+供 `auto_permission` 包构造中断请求的 payload schema。
+同步修正 `confirm_rail_test.go` 的引用，grep 锚点为空（规则 8）。
+
+#### 测试要点
+
+`ToolInvocationKeyFromContext` 只需 `cbc.GetExtra(ToolInvocationContextAttribute)`
+返回 `*ToolInvocationKeyV1`——测试通过 `SetExtra` 注入完整 key 后，
+`prepareManualPendingInvocation` 的 value/metadata 双段注入路径即可覆盖。

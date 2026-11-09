@@ -82,7 +82,7 @@ func NewConfirmInterruptRail(opts ...ConfirmInterruptRailOption) *ConfirmInterru
 		BaseInterruptRail: *NewBaseInterruptRail(),
 		request: ConfirmRequest{
 			Message:       "请批准或拒绝？",
-			PayloadSchema: confirmPayloadSchema(),
+			PayloadSchema: ConfirmPayloadSchema(),
 		},
 	}
 	// 覆盖 ResolveInterruptFn
@@ -259,9 +259,9 @@ func isAutoConfirmed(config map[string]any, key string) bool {
 	return IsTruthyValue(val)
 }
 
-// confirmPayloadSchema 返回 ConfirmPayload 的 JSON Schema。
+// ConfirmPayloadSchema 返回 ConfirmPayload 的 JSON Schema。
 // 严格对齐 Python Pydantic ConfirmPayload.model_json_schema() 输出。
-func confirmPayloadSchema() map[string]any {
+func ConfirmPayloadSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
