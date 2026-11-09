@@ -32,6 +32,8 @@
 //	├── mcp_command.go            # mcp_exec_command + 安全检查 + 后台进程
 //	├── mcp_command_windows.go    # Windows 专属 shell 探测 + 进程组空实现（build tag 隔离）
 //	├── mcp_command_other.go      # 非 Windows 平台进程组实现 + Windows 函数桩（build tag 隔离）
+//	├── command_runtime.go        # 命令工作目录运行时契约（9.90d-1 Task 2）
+//	├── pdf_tools.go              # read_pdf 页级 PDF 读取（9.90d-1 Task 6）
 //	└── todo_compat.go            # compatibleUpdateTodos + NewCompatibleTodoModifyTool
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/tools/

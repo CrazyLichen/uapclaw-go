@@ -780,3 +780,32 @@ permissions 导致 0% 死代码，已按规则 8 修正）。
 完成后落地；`reviewer_metadata.go` 本身仍属 9.90d-2。
 
 **验证**：`common` 包 92.4%、`permissions` 包 86.5%，均 ≥85%。
+
+### 12.4 Task 6 执行时的核实结论：`pdf_tools` 装配与 PDF 库
+
+**PDF 库选型**：Python 用 `pdfplumber.extract_text()`；Go 侧复用 13.16 已落地的
+`github.com/ledongthuc/pdf` 逐页 `Page.GetPlainText(fonts)`（见
+`retrieval/indexing/processor/parser/pdf_parser.go:161-204`），不引入新依赖。
+`GetPlainText` 返回空串对应 Python 的「无文本层」，据此标记扫描件。
+
+**工具本体**：`NewReadPDFTool()` 用 `tool.NewToolCard` + `tool.NewTool` 构造，
+description 逐字复制 Python 原文（含 `fmt.Sprintf` 插值的
+`maxPagesPerCall=100` / `DefaultMaxChars=50000` 两个常量值）。
+8 个私有函数 + `ReadPdfRequest` 结构体全量落地，逐条对齐 275 行。
+
+**⤵️ 装配缺口（本批不修，9.90d-2 处理）**：Python 侧 `read_pdf` 由
+`@tool` 装饰器注册，且被
+`permissions/_auto_permission/invocation_context.py:25` 直接 import 了
+**私有函数 `_resolve_pdf_path`** 并用 `resource is read_pdf` 做身份比较。
+Go 侧：
+- `NewReadPDFTool` 已导出，但尚未接入任何工具聚合器（`GetMcpTools`
+  是 MCP 搜索/网页/命令集合，与 `@tool` 装饰器的注册路径不同）
+- `resolvePDFPath` 保持私有（对齐 Python 命名），将来 `invocation_context.go`
+  需要时要么导出、要么在该包内做路径解析等价物
+
+按规则 13.2 登记，不属本批（计划 Task 6 只要求「Create pdf_tools.go + Test」）。
+
+**测试**：40 个用例，含手写最小 PDF（未压缩 content stream + 正确 xref
+偏移），覆盖全文读取 / 指定页码 / 越界 / max_chars 截断 / 100 页上限 /
+空文本层 / 三种 remedy 分支。pdf_tools.go 函数级覆盖率最低 71.4%
+（`NewReadPDFTool` 的框架调用分支），其余 ≥94%。
