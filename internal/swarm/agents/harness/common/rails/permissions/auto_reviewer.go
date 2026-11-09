@@ -520,20 +520,40 @@ func (c *IsolatedModelReviewerClient) displayLanguage() (language string) {
 //
 // Python: IsolatedModelReviewerClient._format_kwargs()
 // 只为内置 OpenAI Chat Completions 传输注入 JSON 模式，不改变其配置。
-// 偏差：Go 的 ModelClientConfig 无 api_mode 字段、ModelRequestConfig 无
-// response_format 字段，故省略 Python 的两项检查（等价于恒不阻断）。
+//
+// 逐项对齐 Python 的六道关卡：
+//  1. output_format == "prompt" → 不注入（用户要求走提示词方式）
+//  2. type(model) is not Model → Go 的 *llm.Model 无子类，天然满足（不另判）
+//  3. config is None → 不注入
+//  4. client_provider != OpenAI → 不注入（其他厂商不认该参数）
+//  5. api_mode 非空且非 ChatCompletions → 不注入（Responses 协议参数不同）
+//  6. auth_mode == OpenAIAccountOAuth → 不注入（OAuth 账号模式不认）
+//  7. model_config.response_format 已设置 → 不注入（不覆盖用户配置）
 func (c *IsolatedModelReviewerClient) formatResponseFormat() map[string]any {
+	// 关卡 1 + 2
 	if c.OutputFormat == "prompt" || c.Model == nil {
 		return nil
 	}
-	config := c.Model.ClientConfig
+	// 关卡 3
+	if c.Model.ClientConfig == nil {
+		return nil
+	}
+	// Python 在这里先 normalize_model_client_config 再判断：
+	// 归一后 provider 名才是权威值（endpoint_profile 可能影响 api_base，
+	// 但 provider 名归一同样必要，例如小写 "openai" → "OpenAI"）
+	config := llmschema.NormalizeModelClientConfig(c.Model.ClientConfig)
 	if config == nil {
 		return nil
 	}
-	if config.ClientProvider != llmschema.ProviderTypeOpenAI.String() {
+	// 关卡 4 + 5 + 6
+	apiModeOK := config.APIMode == "" || config.APIMode == llmschema.APIModeChatCompletions
+	if config.ClientProvider != llmschema.ProviderTypeOpenAI.String() ||
+		!apiModeOK ||
+		config.AuthMode == llmschema.AuthModeOpenAIAccountOAuth {
 		return nil
 	}
-	if config.AuthMode == llmschema.AuthModeOpenAIAccountOAuth {
+	// 关卡 7：用户已设 response_format 时不覆盖
+	if c.Model.ModelConfig != nil && c.Model.ModelConfig.ResponseFormat != nil {
 		return nil
 	}
 	return map[string]any{"type": "json_object"}

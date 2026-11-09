@@ -34,6 +34,9 @@ type ModelClientConfig struct {
 	// AuthMode 鉴权模式，默认 api_key；none/custom_headers 时不强制 api_key
 	// Python: schema/config.py:186 auth_mode: LLMAuthMode = ApiKey
 	AuthMode AuthMode `json:"auth_mode,omitempty"`
+	// APIMode 接口协议模式，默认（空值）Chat Completions。
+	// Python: schema/config.py api_mode: LLMApiMode | None = None
+	APIMode APIMode `json:"api_mode,omitempty"`
 	// EndpointProfile 端点配置档名（ollama/lmstudio 等），缺 base 时回填默认地址
 	// Python: schema/config.py endpoint_profile
 	EndpointProfile string `json:"endpoint_profile,omitempty"`
@@ -70,6 +73,9 @@ type ModelRequestConfig struct {
 	MaxTokens *int `json:"max_tokens,omitempty"`
 	// Stop 停止序列（可选）
 	Stop *string `json:"stop,omitempty"`
+	// ResponseFormat 响应格式约束（如 {"type":"json_object"}）。
+	// nil 表示未设置（不下发）。Python: model_config.response_format
+	ResponseFormat map[string]any `json:"response_format,omitempty"`
 	// ContextWindow 模型支持的上下文窗口总长（token），内部元数据，不参与厂商请求
 	ContextWindow *int `json:"context_window,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
@@ -127,6 +133,20 @@ const (
 	AuthModeCustomHeaders AuthMode = "custom_headers"
 	// AuthModeOpenAIAccountOAuth OpenAI 账号 OAuth（未迁移，占位）
 	AuthModeOpenAIAccountOAuth AuthMode = "openai_account_oauth"
+)
+
+// ──────────────────────────── 枚举（API 模式）────────────────────────────
+
+// APIMode LLM 接口协议模式。
+// Python: schema/config.py LLMApiMode
+// 零值 "" 等价 Python 的 None（表示用 provider 默认协议，即 Chat Completions）。
+type APIMode string
+
+const (
+	// APIModeChatCompletions Chat Completions 协议（/v1/chat/completions）
+	APIModeChatCompletions APIMode = "chat_completions"
+	// APIModeResponses Responses API 协议（/v1/responses）
+	APIModeResponses APIMode = "responses"
 )
 
 // topLevelAPIKeyProviders 要求顶层 api_key 的 provider 白名单。
@@ -354,17 +374,16 @@ func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientC
 }
 
 // Validate 校验模型客户端配置必填字段并规范化 provider。
-func (c *ModelClientConfig) Validate() error {
-	// 规范化 provider（对齐 Python: 严格拒绝未知 provider）
+// normalize 就地归一 provider / auth_mode / api_base，不做必填校验。
+//
+// 与 Validate 共用，保证「只归一不校验」的调用方（如
+// NormalizeModelClientConfig）行为一致。返回 provider 归一错误供调用方决定。
+func (c *ModelClientConfig) normalize() error {
 	normalized, err := ValidateAndNormalizeProvider(c.ClientProvider)
 	if err != nil {
 		return err
 	}
 	c.ClientProvider = normalized
-
-	if c.ClientProvider == "" {
-		return fmt.Errorf("client_provider 不能为空")
-	}
 
 	// auth_mode 归一（Go string 零值是 ""，Python 默认 ApiKey）
 	if c.AuthMode == "" {
@@ -377,6 +396,63 @@ func (c *ModelClientConfig) Validate() error {
 		if def, ok := defaultAPIBaseByEndpointProfile[strings.ToLower(strings.TrimSpace(c.EndpointProfile))]; ok {
 			c.APIBase = def
 		}
+	}
+	return nil
+}
+
+// NormalizeModelClientConfig 返回归一化后的配置副本（不修改入参、不校验必填）。
+//
+// Python: openjiuwen/core/foundation/llm/utils/endpoint_profiles.py
+//
+//	normalize_model_client_config(config)
+//
+// 与 Validate 的区别：只做 provider / auth_mode / api_base 归一，
+// 不因缺 api_key、缺 api_base 或 timeout 非法而报错——调用方通常只想
+// 拿到「归一后的 client_provider」做判断。
+func NormalizeModelClientConfig(config *ModelClientConfig) *ModelClientConfig {
+	if config == nil {
+		return nil
+	}
+	out := &ModelClientConfig{
+		ClientID:                config.ClientID,
+		ClientProvider:          config.ClientProvider,
+		APIKey:                  config.APIKey,
+		APIBase:                 config.APIBase,
+		Timeout:                 config.Timeout,
+		AuthMode:                config.AuthMode,
+		APIMode:                 config.APIMode,
+		EndpointProfile:         config.EndpointProfile,
+		StreamFirstChunkTimeout: config.StreamFirstChunkTimeout,
+		StreamIdleTimeout:       config.StreamIdleTimeout,
+		MaxRetries:              config.MaxRetries,
+		VerifySSL:               config.VerifySSL,
+		SSLCert:                 config.SSLCert,
+	}
+	if config.CustomHeaders != nil {
+		out.CustomHeaders = make(map[string]string, len(config.CustomHeaders))
+		for key, value := range config.CustomHeaders {
+			out.CustomHeaders[key] = value
+		}
+	}
+	if config.Extra != nil {
+		out.Extra = make(map[string]any, len(config.Extra))
+		for key, value := range config.Extra {
+			out.Extra[key] = value
+		}
+	}
+	// 归一失败时保留原值（不因未知 provider 阻断调用方）
+	_ = out.normalize()
+	return out
+}
+
+func (c *ModelClientConfig) Validate() error {
+	// 归一 provider / auth_mode / api_base（与 NormalizeModelClientConfig 共用）
+	if err := c.normalize(); err != nil {
+		return err
+	}
+
+	if c.ClientProvider == "" {
+		return fmt.Errorf("client_provider 不能为空")
 	}
 
 	// 凭据必填判定（对齐 Python:225-256）
@@ -599,23 +675,29 @@ func init() {
 
 	// 初始化 ModelClientConfig 已知 JSON 键名集合
 	modelClientConfigKnownKeys = map[string]struct{}{
-		"client_id":       {},
-		"client_provider": {},
-		"api_key":         {},
-		"api_base":        {},
-		"timeout":         {},
-		"max_retries":     {},
-		"verify_ssl":      {},
-		"ssl_cert":        {},
-		"custom_headers":  {},
+		"client_id":                  {},
+		"client_provider":            {},
+		"api_key":                    {},
+		"api_base":                   {},
+		"timeout":                    {},
+		"auth_mode":                  {},
+		"api_mode":                   {},
+		"endpoint_profile":           {},
+		"stream_first_chunk_timeout": {},
+		"stream_idle_timeout":        {},
+		"max_retries":                {},
+		"verify_ssl":                 {},
+		"ssl_cert":                   {},
+		"custom_headers":             {},
 	}
 
 	// 初始化 ModelRequestConfig 已知 JSON 键名集合
 	modelRequestConfigKnownKeys = map[string]struct{}{
-		"model":       {},
-		"temperature": {},
-		"top_p":       {},
-		"max_tokens":  {},
-		"stop":        {},
+		"model":           {},
+		"temperature":     {},
+		"top_p":           {},
+		"max_tokens":      {},
+		"stop":            {},
+		"response_format": {},
 	}
 }

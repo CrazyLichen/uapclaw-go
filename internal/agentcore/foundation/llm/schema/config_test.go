@@ -721,3 +721,187 @@ func TestValidate_AuthMode默认归一(t *testing.T) {
 		t.Errorf("AuthMode = %q want %q", cfg.AuthMode, AuthModeAPIKey)
 	}
 }
+
+// ──────────────────────────── knownKeys 完整性（9.90d-2 Task 24 修复） ────────────────────────────
+
+// TestModelClientConfig_JSON往返保留全部字段 验证 knownKeys 不再漏字段。
+//
+// 既存 bug：knownKeys 曾漏 auth_mode / endpoint_profile /
+// stream_first_chunk_timeout / stream_idle_timeout，导致这些字段从 JSON
+// 读入后被归到 Extra，结构体字段保持零值。
+func TestModelClientConfig_JSON往返保留全部字段(t *testing.T) {
+	firstChunk := 300.0
+	idle := 60.0
+	raw := `{
+		"client_id": "cid",
+		"client_provider": "OpenAI",
+		"api_key": "k",
+		"api_base": "https://api.example.com",
+		"timeout": 360,
+		"auth_mode": "openai_account_oauth",
+		"api_mode": "responses",
+		"endpoint_profile": "ollama",
+		"stream_first_chunk_timeout": 300,
+		"stream_idle_timeout": 60,
+		"max_retries": 3,
+		"verify_ssl": true,
+		"ssl_cert": "/cert.pem"
+	}`
+	var config ModelClientConfig
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if config.ClientID != "cid" {
+		t.Errorf("ClientID = %q", config.ClientID)
+	}
+	if config.AuthMode != AuthModeOpenAIAccountOAuth {
+		t.Errorf("AuthMode = %q, want openai_account_oauth", config.AuthMode)
+	}
+	if config.APIMode != APIModeResponses {
+		t.Errorf("APIMode = %q, want responses", config.APIMode)
+	}
+	if config.EndpointProfile != "ollama" {
+		t.Errorf("EndpointProfile = %q", config.EndpointProfile)
+	}
+	if config.StreamFirstChunkTimeout == nil || *config.StreamFirstChunkTimeout != firstChunk {
+		t.Errorf("StreamFirstChunkTimeout = %v", config.StreamFirstChunkTimeout)
+	}
+	if config.StreamIdleTimeout == nil || *config.StreamIdleTimeout != idle {
+		t.Errorf("StreamIdleTimeout = %v", config.StreamIdleTimeout)
+	}
+	// 这些字段不应再落到 Extra
+	for _, key := range []string{"auth_mode", "api_mode", "endpoint_profile",
+		"stream_first_chunk_timeout", "stream_idle_timeout"} {
+		if _, leaked := config.Extra[key]; leaked {
+			t.Errorf("%s should not leak into Extra", key)
+		}
+	}
+}
+
+// TestModelRequestConfig_JSON往返保留responseFormat 验证新字段不被丢。
+func TestModelRequestConfig_JSON往返保留responseFormat(t *testing.T) {
+	raw := `{"model":"gpt-4","response_format":{"type":"json_object"}}`
+	var config ModelRequestConfig
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if config.ResponseFormat == nil {
+		t.Fatal("ResponseFormat should not be nil")
+	}
+	if config.ResponseFormat["type"] != "json_object" {
+		t.Errorf("ResponseFormat = %v", config.ResponseFormat)
+	}
+	if _, leaked := config.Extra["response_format"]; leaked {
+		t.Error("response_format should not leak into Extra")
+	}
+}
+
+// TestAPIMode_零值语义 验证零值等价 Python None。
+func TestAPIMode_零值语义(t *testing.T) {
+	var zero APIMode
+	if zero != "" {
+		t.Errorf("zero APIMode = %q, want empty", zero)
+	}
+	if APIModeChatCompletions != "chat_completions" {
+		t.Errorf("APIModeChatCompletions = %q", APIModeChatCompletions)
+	}
+	if APIModeResponses != "responses" {
+		t.Errorf("APIModeResponses = %q", APIModeResponses)
+	}
+}
+
+// ──────────────────────────── NormalizeModelClientConfig ────────────────────────────
+
+// TestNormalizeModelClientConfig_回填端点base 验证 endpoint_profile 回填。
+func TestNormalizeModelClientConfig_回填端点base(t *testing.T) {
+	// 回填只依赖 EndpointProfile；provider 需合法，否则归一提前返回
+	config := &ModelClientConfig{
+		ClientProvider:  "OpenAI",
+		EndpointProfile: "ollama",
+	}
+	got := NormalizeModelClientConfig(config)
+	if got == nil {
+		t.Fatal("should not be nil")
+	}
+	if got.APIBase != "http://localhost:11434/v1" {
+		t.Errorf("APIBase = %q", got.APIBase)
+	}
+	// 入参不被修改
+	if config.APIBase != "" {
+		t.Error("input should not be mutated")
+	}
+}
+
+// TestNormalizeModelClientConfig_authMode默认 验证 auth_mode 归一。
+func TestNormalizeModelClientConfig_authMode默认(t *testing.T) {
+	config := &ModelClientConfig{ClientProvider: "OpenAI", APIKey: "k"}
+	got := NormalizeModelClientConfig(config)
+	if got.AuthMode != AuthModeAPIKey {
+		t.Errorf("AuthMode = %q", got.AuthMode)
+	}
+}
+
+// TestNormalizeModelClientConfig_不校验必填 验证缺 api_key 不报错。
+func TestNormalizeModelClientConfig_不校验必填(t *testing.T) {
+	// 缺 api_key / api_base / timeout 非法 —— 都不应阻断
+	config := &ModelClientConfig{ClientProvider: "OpenAI", Timeout: -1}
+	got := NormalizeModelClientConfig(config)
+	if got == nil {
+		t.Fatal("should not be nil")
+	}
+	if got.ClientProvider != "OpenAI" {
+		t.Errorf("ClientProvider = %q", got.ClientProvider)
+	}
+}
+
+// TestNormalizeModelClientConfig_nil 验证 nil 安全。
+func TestNormalizeModelClientConfig_nil(t *testing.T) {
+	if got := NormalizeModelClientConfig(nil); got != nil {
+		t.Errorf("got %v", got)
+	}
+}
+
+// TestNormalizeModelClientConfig_provider小写归一 验证 provider 名归一。
+func TestNormalizeModelClientConfig_provider小写归一(t *testing.T) {
+	config := &ModelClientConfig{ClientProvider: "openai", APIKey: "k"}
+	got := NormalizeModelClientConfig(config)
+	if got.ClientProvider != "OpenAI" {
+		t.Errorf("ClientProvider = %q, want OpenAI", got.ClientProvider)
+	}
+}
+
+// TestNormalizeModelClientConfig_深拷贝 验证 CustomHeaders / Extra 独立。
+func TestNormalizeModelClientConfig_深拷贝(t *testing.T) {
+	config := &ModelClientConfig{
+		ClientProvider: "OpenAI",
+		APIKey:         "k",
+		CustomHeaders:  map[string]string{"X": "1"},
+		Extra:          map[string]any{"y": 2},
+	}
+	got := NormalizeModelClientConfig(config)
+	got.CustomHeaders["X"] = "changed"
+	got.Extra["y"] = 99
+	if config.CustomHeaders["X"] != "1" {
+		t.Error("CustomHeaders should be copied")
+	}
+	if config.Extra["y"] != 2 {
+		t.Error("Extra should be copied")
+	}
+}
+
+// TestValidate_与normalize行为一致 验证 Validate 仍做归一。
+func TestValidate_与normalize行为一致(t *testing.T) {
+	config := &ModelClientConfig{
+		ClientProvider:  "OpenAI",
+		EndpointProfile: "ollama",
+		Timeout:         360,
+		AuthMode:        AuthModeNone,
+	}
+	if err := config.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if config.APIBase != "http://localhost:11434/v1" {
+		t.Errorf("Validate should still backfill APIBase, got %q", config.APIBase)
+	}
+}

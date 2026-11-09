@@ -1084,9 +1084,11 @@ func TestRedactJSONValueStrict_各类型(t *testing.T) {
 func newTestModel(t *testing.T, provider string, authMode llmschema.AuthMode) *llm.Model {
 	t.Helper()
 	clientConfig := &llmschema.ModelClientConfig{
+		ClientID:       "test-client",
 		ClientProvider: provider,
 		APIKey:         "test-key",
 		APIBase:        "https://api.example.com",
+		Timeout:        360,
 		AuthMode:       authMode,
 	}
 	modelConfig := &llmschema.ModelRequestConfig{ModelName: "test-model"}
@@ -1118,7 +1120,7 @@ func TestFormatResponseFormat_prompt模式不注入(t *testing.T) {
 
 // TestFormatResponseFormat_非OpenAI不注入 验证其他 provider。
 func TestFormatResponseFormat_非OpenAI不注入(t *testing.T) {
-	model := newTestModel(t, "Anthropic", llmschema.AuthModeAPIKey)
+	model := newTestModel(t, "DeepSeek", llmschema.AuthModeAPIKey)
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
 	if got := client.formatResponseFormat(); got != nil {
 		t.Errorf("got %v, want nil", got)
@@ -1307,5 +1309,139 @@ func TestBuildReviewerActionView_读写计数(t *testing.T) {
 	counts, _ := got.DescriptorSummary["path_counts"].(map[string]any)
 	if counts["read"] != 2 || counts["write"] != 1 || counts["external"] != 3 {
 		t.Errorf("counts = %v", counts)
+	}
+}
+
+// ──────────────────────────── formatResponseFormat 七道关卡（对齐 Python） ────────────────────────────
+
+// newGateModel 构造指定配置的 Model（不发起调用）。
+func newGateModel(t *testing.T, mutate func(*llmschema.ModelClientConfig, *llmschema.ModelRequestConfig)) *llm.Model {
+	t.Helper()
+	clientConfig := &llmschema.ModelClientConfig{
+		ClientID:       "test-client",
+		ClientProvider: "OpenAI",
+		APIKey:         "test-key",
+		APIBase:        "https://api.example.com",
+		Timeout:        360,
+		AuthMode:       llmschema.AuthModeAPIKey,
+	}
+	modelConfig := &llmschema.ModelRequestConfig{ModelName: "test-model"}
+	if mutate != nil {
+		mutate(clientConfig, modelConfig)
+	}
+	model, err := llm.NewModel(clientConfig, modelConfig)
+	if err != nil {
+		t.Skipf("cannot construct model: %v", err)
+	}
+	return model
+}
+
+// TestFormatResponseFormat_关卡1_prompt模式 验证 output_format=prompt 不注入。
+func TestFormatResponseFormat_关卡1_prompt模式(t *testing.T) {
+	client := &IsolatedModelReviewerClient{
+		Model:        newGateModel(t, nil),
+		OutputFormat: "prompt",
+	}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡2_nil模型 验证 nil 模型不注入。
+func TestFormatResponseFormat_关卡2_nil模型(t *testing.T) {
+	client := &IsolatedModelReviewerClient{OutputFormat: "json_object"}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡3_nil配置 验证 nil ClientConfig 不注入。
+func TestFormatResponseFormat_关卡3_nil配置(t *testing.T) {
+	client := &IsolatedModelReviewerClient{
+		Model:        &llm.Model{},
+		OutputFormat: "json_object",
+	}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡4_非OpenAI 验证其他 provider 不注入。
+func TestFormatResponseFormat_关卡4_非OpenAI(t *testing.T) {
+	model := newGateModel(t, func(c *llmschema.ModelClientConfig, _ *llmschema.ModelRequestConfig) {
+		c.ClientProvider = "DeepSeek"
+		c.APIBase = "https://api.deepseek.com"
+	})
+	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡5_Responses协议 验证 api_mode=responses 不注入。
+func TestFormatResponseFormat_关卡5_Responses协议(t *testing.T) {
+	model := newGateModel(t, func(c *llmschema.ModelClientConfig, _ *llmschema.ModelRequestConfig) {
+		c.APIMode = llmschema.APIModeResponses
+	})
+	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil（Responses 协议参数不同）", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡5_ChatCompletions协议 验证显式 Chat 协议可注入。
+func TestFormatResponseFormat_关卡5_ChatCompletions协议(t *testing.T) {
+	model := newGateModel(t, func(c *llmschema.ModelClientConfig, _ *llmschema.ModelRequestConfig) {
+		c.APIMode = llmschema.APIModeChatCompletions
+	})
+	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
+	got := client.formatResponseFormat()
+	if got == nil || got["type"] != "json_object" {
+		t.Errorf("got %v", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡6_OAuth 验证 OAuth 模式不注入。
+func TestFormatResponseFormat_关卡6_OAuth(t *testing.T) {
+	model := newGateModel(t, func(c *llmschema.ModelClientConfig, _ *llmschema.ModelRequestConfig) {
+		c.AuthMode = llmschema.AuthModeOpenAIAccountOAuth
+	})
+	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestFormatResponseFormat_关卡7_用户已设responseFormat 验证不覆盖。
+func TestFormatResponseFormat_关卡7_用户已设responseFormat(t *testing.T) {
+	model := newGateModel(t, func(_ *llmschema.ModelClientConfig, m *llmschema.ModelRequestConfig) {
+		m.ResponseFormat = map[string]any{"type": "json_schema"}
+	})
+	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
+	if got := client.formatResponseFormat(); got != nil {
+		t.Errorf("got %v, want nil（不覆盖用户配置）", got)
+	}
+}
+
+// TestFormatResponseFormat_全通过 验证默认配置注入 json_object。
+func TestFormatResponseFormat_全通过(t *testing.T) {
+	client := &IsolatedModelReviewerClient{
+		Model:        newGateModel(t, nil),
+		OutputFormat: "json_object",
+	}
+	got := client.formatResponseFormat()
+	if got == nil || got["type"] != "json_object" {
+		t.Errorf("got %v", got)
+	}
+}
+
+// TestFormatResponseFormat_空apiMode视为Chat 验证零值等价 Python None。
+func TestFormatResponseFormat_空apiMode视为Chat(t *testing.T) {
+	model := newGateModel(t, func(c *llmschema.ModelClientConfig, _ *llmschema.ModelRequestConfig) {
+		c.APIMode = "" // 显式零值
+	})
+	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
+	if got := client.formatResponseFormat(); got == nil {
+		t.Error("empty api_mode should be treated as Chat Completions")
 	}
 }

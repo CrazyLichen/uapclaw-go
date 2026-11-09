@@ -1552,16 +1552,54 @@ func (c *...) displayLanguage() string {
 panic 发生后函数不会执行 `return "zh"`，直接跳到 defer，返回值是**零值空串**
 而不是 `"zh"`。已改为具名返回值 + defer 里赋值，确保取语言失败时兜底为中文。
 
-#### LLM 集成的 3 处 Go 侧简化（已登记偏差）
+#### `_format_kwargs` 七道关卡全量对齐（用户要求「先对齐 Python」后补齐）
 
-| Python | Go | 说明 |
+初版曾以「Go 侧无对应字段」为由省略 3 项检查。用户要求先对齐 Python 后，
+改为**先补齐 Go 侧基础设施再逐项对齐**，过程中发现一个既存 bug。
+
+**发现的既存 bug：`knownKeys` 漏字段导致 JSON 反序列化丢值**
+
+`ModelClientConfig.UnmarshalJSON` 用 `modelClientConfigKnownKeys` 白名单拆分
+已知字段与 `Extra`，但白名单只列了 9 个键，漏了结构体里实际存在的 4 个：
+
+| 漏掉的键 | 后果 |
+|---|---|
+| `auth_mode` | 从 JSON 读入后 `AuthMode` 恒为空串 |
+| `endpoint_profile` | 端点档名丢失，`api_base` 回填失效 |
+| `stream_first_chunk_timeout` | 流式首帧超时配置丢失 |
+| `stream_idle_timeout` | 流式空闲超时配置丢失 |
+
+**这个 bug 直接架空了本任务的关卡 6**：`formatResponseFormat` 检查
+`AuthMode == OpenAIAccountOAuth`，但 `AuthMode` 从 JSON 读进来永远是空串，
+检查永远不生效。若只做「省略」而不查底层，这个漏洞不会被发现。
+
+已补齐 4 个键 + 新增的 `api_mode` / `response_format`，共 6 个。
+`TestModelClientConfig_JSON往返保留全部字段` 锁住该行为。
+
+**新增的 Go 侧基础设施**（`internal/agentcore/foundation/llm/schema/config.go`）：
+
+| 新增 | 说明 |
+|---|---|
+| `APIMode` 枚举 + `APIModeChatCompletions` / `APIModeResponses` | 零值 `""` 等价 Python 的 `None` |
+| `ModelClientConfig.APIMode` 字段 | 对齐 `api_mode: LLMApiMode or None` |
+| `ModelRequestConfig.ResponseFormat` 字段 | 对齐 `model_config.response_format` |
+| `ModelClientConfig.normalize()` 私有方法 | 从 `Validate` 抽出「归一」部分（provider / auth_mode / api_base），供 `Validate` 与 `NormalizeModelClientConfig` 共用，避免重复（规则 8） |
+| `NormalizeModelClientConfig(config) *ModelClientConfig` | 深拷贝 + 归一，**不校验必填**——调用方只想拿归一后的 provider 做判断，不该因缺 api_key 报错 |
+
+**`formatResponseFormat` 现在的 7 道关卡**（逐条对齐 Python）：
+
+| # | 关卡 | 判定 |
 |---|---|---|
-| `config.api_mode not in {None, ChatCompletions}` | 省略 | Go 的 `ModelClientConfig` 无 `api_mode` 字段，等价于恒为 ChatCompletions |
-| `model_config.response_format is not None` | 省略 | Go 把 `response_format` 作为调用期 `InvokeOption` 而非配置字段 |
-| `normalize_model_client_config(config)` | 省略 | Go 的端点归一化在 `WithEndpointProfile` 构造期完成，`Model.ClientConfig` 已是归一形态 |
+| 1 | `output_format == "prompt"` | 不注入 |
+| 2 | `type(model) is not Model` | Go 的 `*llm.Model` 无子类，天然满足，不另判 |
+| 3 | `config is None` | 不注入 |
+| 4 | `client_provider != OpenAI` | 不注入 |
+| 5 | `api_mode` 非空且非 `ChatCompletions` | 不注入 |
+| 6 | `auth_mode == OpenAIAccountOAuth` | 不注入 |
+| 7 | `model_config.response_format` 已设置 | 不注入（不覆盖用户配置） |
 
-`formatResponseFormat` 的实际判定保留 3 项：`output_format == "prompt"`、
-`ClientProvider != OpenAI`、`AuthMode == OpenAIAccountOAuth`。
+`TestFormatResponseFormat_关卡1` ~ `关卡7` 七个用例逐条覆盖。
+`auto_reviewer.go` 覆盖率 85.6% -> **88.1%**。
 
 #### `redactJSONValueStrict` 的补充实现
 
