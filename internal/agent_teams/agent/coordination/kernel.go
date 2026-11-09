@@ -517,32 +517,43 @@ func (k *CoordinationKernel) WakeMailboxIfInterruptCleared(ctx context.Context) 
 	return nil
 }
 
-// EnqueueMailboxAfterFirstIteration 等待首轮迭代门控后投递 POLL_MAILBOX 事件。
-// 对齐 Python: CoordinationKernel.enqueue_mailbox_after_first_iteration (kernel.py:391-401)
+// EnqueueMailboxAfterFirstIteration 首轮邮箱轮询。
 //
-// 仅 Teammate 使用（Leader 直接 return）。确保 Teammate 在首次迭代完成前
-// 不做邮箱 sweep，避免启动竞争。
+// 上游 kernel.py:701-711：leader 直接 return，成员直接 enqueue POLL_MAILBOX。
+// §3.4.2 决策 C7 已删除 FirstIterationGate（kernel.py:709 明确
+// "old FirstIterationGate wait is gone"），故这里不再等 gate。
 func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Context) {
-	// Python: if host.role == TeamRole.LEADER: return
 	if k.host.Role() == schema.TeamRoleLeader {
 		return
 	}
-	// Python: gate = host.resources.first_iter_gate
-	gate := k.host.FirstIterGate()
-	if gate == nil || k.eventBus == nil {
+	if k.eventBus == nil {
 		return
 	}
-	// Python: await gate.wait()
-	if err := gate.Wait(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("enqueueMailboxAfterFirstIteration: gate wait canceled")
-		return
-	}
-	// Python: await self._event_bus.enqueue(InnerEventMessage(event_type=InnerEventType.POLL_MAILBOX))
 	k.eventBus.Enqueue(types.CoordinationEvent{
 		Inner: &types.InnerEventMessage{
 			EventType: types.InnerEventTypePollMailbox,
 		},
 	})
+	_ = ctx
+}
+
+// EnqueueInitialTaskPoll 启动时的一次性任务板普查。
+//
+// 上游 kernel.py:714-730 / team_agent.py:975：不等 30s 周期 tick，
+// 立刻投一个 POLL_TASK，让 TeamCompletionHandler 有机会在首次流里
+// 判定完成（否则空团队只能等周期轮询，流永不结束）。
+//
+// Python: CoordinationKernel.enqueue_initial_task_poll
+func (k *CoordinationKernel) EnqueueInitialTaskPoll(ctx context.Context) {
+	if k.eventBus == nil {
+		return
+	}
+	k.eventBus.Enqueue(types.CoordinationEvent{
+		Inner: &types.InnerEventMessage{
+			EventType: types.InnerEventTypePollTask,
+		},
+	})
+	_ = ctx
 }
 
 // FinalizeRound 执行轮次结束清理：释放 streamQueue。

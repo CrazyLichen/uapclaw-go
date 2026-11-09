@@ -583,12 +583,14 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	// 25.1a：改传会话对象（sessionFromOptsOrCtx），kernel 需对象启动 harness native supervisor。
 	a.coordination.Start(ctx, a.sessionFromOptsOrCtx(ctx, opts...))
 
-	// Python: try:
-	//   await self._coordination.enqueue_user_input(inputs)
-	//   await self._coordination.enqueue_mailbox_after_first_iteration()
-	// S-07: query 已在上方无条件覆盖处声明，与 Python inputs.get("query", "") 同源
+	// Python team_agent.py:970-976：
+	//   if raw_query: enqueue_user_input(inputs)
+	//   enqueue_initial_mailbox_poll()
+	//   enqueue_initial_task_poll()
+	// 两个初始 poll 是「流开始时立刻做一次完成判定」的源头，不等 30s 周期 tick。
 	a.coordination.EnqueueUserInput(query)
 	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
+	a.coordination.EnqueueInitialTaskPoll(ctx)
 
 	// Python: last_result = None
 	//   while True:
@@ -655,12 +657,14 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	// 25.1a：改传会话对象（sessionFromOptsOrCtx），kernel 需对象启动 harness native supervisor。
 	a.coordination.Start(ctx, a.sessionFromOptsOrCtx(ctx, opts...))
 
-	// Python: try:
-	//   await self._coordination.enqueue_user_input(inputs)
-	//   await self._coordination.enqueue_mailbox_after_first_iteration()
-	// S-07: query 已在上方无条件覆盖处声明，与 Python inputs.get("query", "") 同源
+	// Python team_agent.py:970-976：
+	//   if raw_query: enqueue_user_input(inputs)
+	//   enqueue_initial_mailbox_poll()
+	//   enqueue_initial_task_poll()
+	// 两个初始 poll 是「流开始时立刻做一次完成判定」的源头，不等 30s 周期 tick。
 	a.coordination.EnqueueUserInput(query)
 	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
+	a.coordination.EnqueueInitialTaskPoll(ctx)
 
 	// Python: while True:
 	//   chunk = await self._stream_controller.stream_queue.get()
