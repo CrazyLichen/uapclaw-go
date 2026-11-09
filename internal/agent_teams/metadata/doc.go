@@ -11,6 +11,7 @@
 //	    "model_allocator_state": ...,     // 可选
 //	    "lifecycle": "running"|"paused",  // 可选，由 pause 路径写入
 //	    "db_state": "pending_create"|"created"|"cleaned",
+//	    "pending_resume": {"query": ...}, // 可选，leader 冷恢复续跑标记
 //	}
 //
 // 文件目录：

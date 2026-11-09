@@ -321,6 +321,10 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 	}
 
 	k.lifecycleState = kernelStateRunning
+
+	// 步骤 11: 续跑被生命周期暂停挂起的轮次（warm / cold）。
+	// Python: await self.resume_paused_round()（kernel.py L291）——内核完全就绪后最后执行。
+	k.resumePausedRound(ctx)
 }
 
 // Pause 暂停协调子系统（幂等）。
@@ -337,8 +341,15 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("lifecycle", k.host.Lifecycle()).Msg("coordination pausing (persistent)")
 
-	// 步骤 1: Drain agent task
-	k.host.DrainAgentTask(ctx)
+	// 步骤 1: 暂停在飞轮次（就地停车，不拆毁）。
+	// Python: await self.pause_agent_round()（kernel.py L343）
+	// 旧实现走 drain_agent_task → abort(immediate=True)，会丢掉被中断那一轮
+	// 已完成的工作；pause 必须停在干净边界且可续跑。
+	if sc := k.host.StreamController(); sc != nil {
+		if err := sc.PauseAgent(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("pause: pause_agent_round failed")
+		}
+	}
 
 	// 步骤 2: Persist allocator state
 	k.host.PersistAllocatorState()
@@ -375,6 +386,9 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	// 修复 S-06: 对齐 Python: self._persist_team_lifecycle("paused")
 	if k.host.Role() == schema.TeamRoleLeader {
 		k.persistTeamLifecycle(ctx, "paused")
+		// 记录冷恢复标记：让 pause → stop → start 等价于 pause → resume。
+		// Python: self._persist_pending_resume()（kernel.py L362）
+		k.persistPendingResume(ctx)
 	}
 
 	// 步骤 7: [Leader] 发布 TEAM_STANDBY 事件
@@ -598,6 +612,110 @@ func (k *CoordinationKernel) persistTeamLifecycle(ctx context.Context, lifecycle
 	metadata.MergeTeamNamespace(teamSession, teamName, map[string]any{"lifecycle": lifecycle})
 	logger.Debug(logComponent).Str("team_name", teamName).Str("lifecycle", lifecycle).
 		Msg("persistTeamLifecycle completed")
+}
+
+// persistPendingResume 记录冷恢复标记（仅 leader 且确有暂停轮）。
+// Python: _persist_pending_resume (kernel.py L458-493)
+//
+// 记录的 query 不会重放进续跑轮上下文（上下文来自 checkpoint），
+// 它驱动的是**其后**的轮次：任务计划续跑或崩溃重试。
+func (k *CoordinationKernel) persistPendingResume(_ context.Context) {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return
+	}
+	harness := k.host.HarnessAccessor()
+	if harness == nil {
+		return
+	}
+	query, ok := harness.PausedQuery()
+	if !ok {
+		// 没有挂起的轮，无需记录
+		return
+	}
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return
+	}
+	metadata.MergePendingResume(teamSession, teamName, map[string]any{"query": query})
+	logger.Debug(logComponent).Str("team_name", teamName).Msg("pending resume persisted")
+}
+
+// resumePausedRound 续跑被生命周期暂停挂起的轮次。
+// Python: resume_paused_round (kernel.py L747-790)
+//
+// 两条路径：
+//   - warm：本进程仍 PAUSED，轮还在内存里，直接续跑。
+//   - cold：harness 被重建（IDLE），上下文来自会话 checkpoint，
+//     标记里的 query 驱动续跑。仅 leader（标记在团队共享桶里）。
+func (k *CoordinationKernel) resumePausedRound(ctx context.Context) {
+	harness := k.host.HarnessAccessor()
+	sc := k.host.StreamController()
+	if harness == nil || sc == nil {
+		return
+	}
+	if _, paused := harness.PausedQuery(); paused {
+		logger.Info(logComponent).Str("member_name", k.host.MemberName()).
+			Msg("resuming the paused round in place")
+		if err := sc.ResumeAgent(ctx, nil); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("resume: warm resume failed")
+		}
+		k.clearPendingResume()
+		return
+	}
+	if k.host.Role() != schema.TeamRoleLeader {
+		return
+	}
+	pending, ok := k.readPendingResume()
+	if !ok {
+		return
+	}
+	logger.Info(logComponent).Str("member_name", k.host.MemberName()).
+		Msg("resuming the paused round from the session checkpoint")
+	query, _ := pending["query"].(string)
+	if err := sc.ResumeAgent(ctx, &query); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("resume: cold resume failed")
+		return
+	}
+	k.clearPendingResume()
+}
+
+// readPendingResume 读取冷恢复标记。
+func (k *CoordinationKernel) readPendingResume() (map[string]any, bool) {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return nil, false
+	}
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return nil, false
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return nil, false
+	}
+	return metadata.ReadPendingResume(teamSession, teamName)
+}
+
+// clearPendingResume 清除冷恢复标记。
+func (k *CoordinationKernel) clearPendingResume() {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return
+	}
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return
+	}
+	metadata.ClearPendingResume(teamSession, teamName)
 }
 
 // publishTeamStandby 发布 TEAM_STANDBY 事件。
