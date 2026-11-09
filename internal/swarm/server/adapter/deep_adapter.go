@@ -964,6 +964,12 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 //	Python: 20. finally: 清理（取消标记活跃会话、重置上下文变量）
 //	Python: 21. return AgentResponse from result
 func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (*schema.AgentResponse, error) {
+	// query 的唯一事实源是 params（见下方步骤 5-6 注释）。直接调用方（测试、
+	// 内部复用）可能传 nil inputs，此时用 params 兜底，否则 send_input 会以
+	// "inputs['query'] must be a non-empty string" 拒绝，整个轮次不执行。
+	if inputs == nil {
+		inputs = parseParams(req.Params)
+	}
 	// 步骤 0: 根分流
 	// Python: process_message_impl :18175 → _get_session_adapter_for_request
 	//
@@ -1173,6 +1179,12 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 //	Python: 20. except asyncio.CancelledError: ...
 //	Python: 21. finally: 清理
 func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
+	// query 的唯一事实源是 params（见下方步骤 5-6 注释）。直接调用方（测试、
+	// 内部复用）可能传 nil inputs，此时用 params 兜底，否则 send_input 会以
+	// "inputs['query'] must be a non-empty string" 拒绝，整个轮次不执行。
+	if inputs == nil {
+		inputs = parseParams(req.Params)
+	}
 	// 步骤 0: 根分流
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {
@@ -2153,6 +2165,31 @@ func (d *DeepAdapter) PendingInteractions(sessionID string) ([]map[string]any, e
 func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
 	_ = d.closeA2xClient()
+
+	// 步骤 2: 停止交互循环
+	// Python: interface_deep.py:15147-15171 —— 根逐个停掉缓存的会话级 child 并清缓存；
+	// 会话级 child 只停自己。此前 Go 侧只 Abort 从不 Stop，supervisor goroutine
+	// 永不退出：进程内多套件连续 CreateInstance 会累积泄漏的监督器，
+	// 它们继续消费 work、继续写输出，污染后续用例（集成包失败集合随运行变化）。
+	if !d.isSessionScoped {
+		if d.sessionAdapters != nil {
+			for _, sid := range d.sessionAdapters.sessionIDs() {
+				child := d.sessionAdapters.get(sid)
+				if child == nil {
+					continue
+				}
+				if stopper, ok := child.(interface{ stopInteraction() }); ok {
+					stopper.stopInteraction()
+				}
+				if cleaner, ok := child.(interface{ Cleanup() error }); ok {
+					_ = cleaner.Cleanup()
+				}
+				d.sessionAdapters.forget(sid)
+			}
+		}
+	} else {
+		d.stopInteraction()
+	}
 
 	logger.Info(logComponent).Msg("DeepAdapter Cleanup completed")
 	return nil

@@ -610,3 +610,17 @@ func (d *DeepAdapter) consumedRoundRunKind() string {
 	}
 	return d.currentInteractionRunKind()
 }
+
+// stopInteraction 停止本适配器的 DeepAgent 交互循环（若已启动）。
+// Python: interface_deep.py:15102-15117 stop_interaction
+//
+// 必须真正 Stop 而不是只 Abort：Abort 是协作式的（只置标志、取消流处理任务），
+// supervisor goroutine 仍活着并继续消费 work；Stop 才会让循环退出。
+func (d *DeepAdapter) stopInteraction() {
+	if d.instance == nil {
+		return
+	}
+	if err := d.instance.Stop(context.Background()); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("stop interaction failed")
+	}
+}

@@ -2024,3 +2024,11 @@ func setCodingMemoryDirectory(agent *harness.DeepAgent, projectDir string) {
 		},
 	})
 }
+
+// stopInteraction 委托 DeepAdapter。
+func (c *CodeAdapter) stopInteraction() {
+	if c.deep == nil {
+		return
+	}
+	c.deep.stopInteraction()
+}
