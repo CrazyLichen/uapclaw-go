@@ -1514,9 +1514,28 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					// goal attempt 边界的 chat.final 必须降级，否则每个 attempt
 					// 都终结气泡，10 轮就有 10 个"答案"。
 					// Python: interface_deep.py:15619 _adapt_goal_intermediate_final
-					if adapted, keep := d.adaptGoalIntermediateFinal(parsed); keep {
-						outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, adapted)
+					adapted, keep := d.adaptGoalIntermediateFinal(parsed)
+					if !keep {
+						continue
 					}
+					// user→goal 切换处补分气泡 final，否则两个答案糊进同一气泡。
+					// Python: interface_deep.py:15574 _begin_visible_chat_content
+					if boundary := d.beginVisibleChatContent(req, true); boundary != nil {
+						outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, boundary)
+					}
+					// 目标完成卡片幂等落盘（覆盖所有 goal.updated 来源）。
+					// Python: interface_deep.py:17677 _record_goal_completed_history_if_needed
+					if eventType, _ := adapted["event_type"].(string); eventType == goalUpdatedEventType {
+						if goalPayload, ok := adapted["goal"].(map[string]any); ok {
+							sid := "default"
+							if req.SessionID != nil && *req.SessionID != "" {
+								sid = *req.SessionID
+							}
+							d.recordGoalCompletedHistoryIfNeeded(sid, req.ChannelID, req.Metadata,
+								paramsString(parseParams(req.Params), "mode", ""), goalPayload)
+						}
+					}
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, adapted)
 				}
 
 			default:
@@ -1545,9 +1564,28 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					// goal attempt 边界的 chat.final 必须降级，否则每个 attempt
 					// 都终结气泡，10 轮就有 10 个"答案"。
 					// Python: interface_deep.py:15619 _adapt_goal_intermediate_final
-					if adapted, keep := d.adaptGoalIntermediateFinal(parsed); keep {
-						outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, adapted)
+					adapted, keep := d.adaptGoalIntermediateFinal(parsed)
+					if !keep {
+						continue
 					}
+					// user→goal 切换处补分气泡 final，否则两个答案糊进同一气泡。
+					// Python: interface_deep.py:15574 _begin_visible_chat_content
+					if boundary := d.beginVisibleChatContent(req, true); boundary != nil {
+						outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, boundary)
+					}
+					// 目标完成卡片幂等落盘（覆盖所有 goal.updated 来源）。
+					// Python: interface_deep.py:17677 _record_goal_completed_history_if_needed
+					if eventType, _ := adapted["event_type"].(string); eventType == goalUpdatedEventType {
+						if goalPayload, ok := adapted["goal"].(map[string]any); ok {
+							sid := "default"
+							if req.SessionID != nil && *req.SessionID != "" {
+								sid = *req.SessionID
+							}
+							d.recordGoalCompletedHistoryIfNeeded(sid, req.ChannelID, req.Metadata,
+								paramsString(parseParams(req.Params), "mode", ""), goalPayload)
+						}
+					}
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, adapted)
 				}
 			}
 		}
@@ -3058,6 +3096,14 @@ func (d *DeepAdapter) isSessionActive(sessionID string) bool {
 
 // otherActiveSessions 返回除指定 session 外的活跃任务总数。
 // Python: _other_active_sessions() (line 605-610)
+// activeSessionCount 返回某会话的活跃计数（0 表示不在跑）。
+// Python: dict(self._active_session_ids).get(session_id, 0)
+func (d *DeepAdapter) activeSessionCount(sessionID string) int {
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
+	return d.activeSessionIDs[sessionID]
+}
+
 func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 	d.sessionMu.Lock()
 	defer d.sessionMu.Unlock()

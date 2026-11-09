@@ -461,3 +461,50 @@ func (d *DeepAdapter) goalIntermediateFinalRepeatsStreamedText(content string) b
 	streamed := strings.TrimSpace(d.streamRoundVisibleText)
 	return streamed != "" && strings.Contains(streamed, answer)
 }
+
+// beginVisibleChatContent 给内容来源盖章，并在 user→goal 切换处注入分气泡 final。
+// Python: interface_deep.py:15574-15617
+//
+// 共享流从 user 轮文本切到 goal 轮文本且中间没有终止 chat.final 时，补一个
+// 空 final，让前端 stopStreaming 并开新气泡。
+//
+// userOriginated 标记「这是普通用户聊天消费者」（不是 command.goal / attach
+// goal 的流）。这种流可能在 user 轮吐出第一个可见 token 之前就被 goal 轮
+// 劫持（慢首 token + 早到的 goal 插入），此时 prev 仍是空但边界 final 仍然
+// 需要——否则 goal 答案会并进那个（空的）user 气泡。非用户来源的流保留严格
+// prev=="user" 规则，纯 goal 流不会在自己头部凭空多一个 final。
+func (d *DeepAdapter) beginVisibleChatContent(
+	req *schema.AgentRequest, userOriginated bool,
+) map[string]any {
+	kind := d.consumedRoundRunKind()
+	prev := d.streamContentRunKind
+	var boundary map[string]any
+
+	switchedFromUser := prev == "user" && kind == "goal"
+	hijackedBeforeUserToken := userOriginated && kind == "goal" && prev == ""
+
+	if kind == "goal" && req != nil {
+		sessionID := "default"
+		if req.SessionID != nil && *req.SessionID != "" {
+			sessionID = *req.SessionID
+		}
+		d.flushPendingGoalObjectiveHistory(sessionID)
+	}
+	if switchedFromUser || hijackedBeforeUserToken {
+		boundary = map[string]any{"event_type": "chat.final", "content": ""}
+		d.streamContentRunKind = ""
+	}
+	if kind != "" {
+		d.streamContentRunKind = kind
+	}
+	return boundary
+}
+
+// consumedRoundRunKind 产出当前 chunk 的那一轮的 run kind。
+// Python: interface_deep.py:15510-15521
+func (d *DeepAdapter) consumedRoundRunKind() string {
+	if d.streamRoundKindLatch != "" {
+		return d.streamRoundKindLatch
+	}
+	return d.currentInteractionRunKind()
+}
