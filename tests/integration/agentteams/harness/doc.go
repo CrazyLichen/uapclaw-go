@@ -11,8 +11,10 @@
 // 文件目录：
 //
 //	harness/
-//	├── doc.go                  # 包文档
-//	└── native_harness_itest.go # NativeHarnessSuite：生命周期契约
+//	├── doc.go                 # 包文档
+//	├── native_harness_test.go # NativeHarnessSuite：生命周期契约
+//	├── team_harness_test.go   # TeamHarnessSuite：start/send/outputs 生命周期
+//	└── spec_assembly_test.go  # SpecAssemblySuite：spec 驱动装配（I-01~I-05）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/harness/native_harness.py
 package harness_test
