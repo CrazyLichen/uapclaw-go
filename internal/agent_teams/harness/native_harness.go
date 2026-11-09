@@ -1088,16 +1088,33 @@ func (h *NativeHarness) hasRemainingTasks() bool {
 	return st.TaskPlan.GetNextTask() != nil
 }
 
-// hardCancelRound 取消在飞轮次并等其协程退出。
+// hardCancelRound 先取消调度器任务，再取消轮协程并等其退出。
 // Python: _hard_cancel_round (native_harness.py L1527-1574)
 //
-// Go 无 scheduler.cancel_task，取消即 active.Cancel()；等 Done 不设超时
-// （cmdRoundFinished 已去 ack，Done 会及时关闭）。等待是必要的：
+// 真实 LLM/工具工作跑在 TaskScheduler 自己的任务里（submit_round 只等到任务
+// 登记就返回），所以必须先取消调度器任务：只取消轮 ctx 停不下内层循环，
+// 它会在自己的 ctx 上跑完模型调用并把半轮 assistant 消息追加进上下文，
+// 覆盖掉紧随其后的回滚结果。
+//
+// 等 Done 不设超时（cmdRoundFinished 已去 ack，Done 会及时关闭）。等待是必要的：
 // Stop 的 UnbindSession 会 RemoveSession，若轮协程仍在 SubmitRound，
 // 会与 scheduler 并发读写 session map（race）。
 func (h *NativeHarness) hardCancelRound(active *ActiveRound) {
 	if active == nil {
 		return
+	}
+	// Python: await controller.task_scheduler.cancel_task(active.task_id)
+	// 失败只记日志（对齐 Python 的 try/except 包裹）。
+	if h.controller != nil {
+		if scheduler := h.controller.TaskScheduler(); scheduler != nil {
+			if _, err := scheduler.CancelTask(context.Background(), active.TaskID); err != nil {
+				logger.Error(logComponent).
+					Err(err).
+					Int("round_id", active.RoundID).
+					Str("task_id", active.TaskID).
+					Msg("cancel scheduler task failed")
+			}
+		}
 	}
 	if active.Cancel != nil {
 		active.Cancel()
