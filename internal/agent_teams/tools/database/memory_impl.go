@@ -458,6 +458,24 @@ func (db *InMemoryTeamDatabase) GetTeamTasks(_ context.Context, teamName, status
 
 // GetTasksByAssignee 查询成员的任务。对齐 Python: TaskDao.get_tasks_by_assignee()
 // status 为空字符串表示不过滤。
+// OpenTaskCountsByAssignee 按 assignee 统计非终态任务数。
+// Python: open_task_counts_by_assignee (task_dao.py:685-705)
+func (db *InMemoryTeamDatabase) OpenTaskCountsByAssignee(_ context.Context, teamName string) (map[string]int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	counts := make(map[string]int)
+	for _, task := range db.tasks {
+		if task.TeamName != teamName || task.Assignee == nil {
+			continue
+		}
+		if fsm.IsTaskTerminal(task.Status) {
+			continue
+		}
+		counts[*task.Assignee]++
+	}
+	return counts, nil
+}
+
 func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()

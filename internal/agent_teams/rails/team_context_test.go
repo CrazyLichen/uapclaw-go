@@ -45,20 +45,17 @@ func TestTeamHandleKey_键值逐字对齐(t *testing.T) {
 	}
 }
 
-// TestInjectTeamHandles_18键全落 传入句柄后 Extras 有 18 个键。
+// TestInjectTeamHandles_17键全落 传入句柄后 Extras 有 17 个键。
 //
 // 对齐上游 inject_team_handles：nil 也写入键（`extras[key] = None`），
 // 查询方据此区分"未注入该键"与"注入为 nil"。
-//
-// 18 = 上游 17 键 + Go 专有的 team.on_teammate_created（见该常量注释：
-// 上游 TeamBackend 自带 spawn 能力，Go 以回调经 build context 传递）。
-func TestInjectTeamHandles_18键全落(t *testing.T) {
+func TestInjectTeamHandles_17键全落(t *testing.T) {
 	ctx := &hschema.BuildContext{}
 
 	rails.InjectTeamHandles(ctx, rails.TeamHandles{})
 
 	extras := ctx.GetExtras()
-	assert.Len(t, extras, 18, "18 个键全部写入（含 nil 值）")
+	assert.Len(t, extras, 17, "17 个键全部写入（含 nil 值）")
 	_, exists := extras[string(rails.TeamHandleTeamBackend)]
 	assert.True(t, exists, "nil 句柄也占位")
 }

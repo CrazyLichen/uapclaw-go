@@ -85,7 +85,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if !hasTool(tools, "build_team") || !hasTool(tools, "spawn_member") {
 			t.Fatalf("leader 应包含 build_team/spawn_member，实际 %v", namesOf(tools))
 		}
@@ -100,7 +100,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "plan_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if !hasTool(tools, "approve_plan") || !hasTool(tools, "approve_tool") {
 			t.Fatalf("plan_mode 应包含审批工具，实际 %v", namesOf(tools))
 		}
@@ -112,7 +112,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "persistent",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if hasTool(tools, "clean_team") {
 			t.Fatalf("persistent 不应包含 clean_team，实际 %v", namesOf(tools))
 		}
@@ -124,7 +124,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, map[string]struct{}{"spawn_member": {}})
+		}, nil, map[string]struct{}{"spawn_member": {}})
 		if hasTool(tools, "spawn_member") {
 			t.Fatalf("排除的 spawn_member 不应出现，实际 %v", namesOf(tools))
 		}
@@ -136,7 +136,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if len(tools) != 0 {
 			t.Fatalf("backend 为 nil 时应无工具，实际 %v", namesOf(tools))
 		}
@@ -148,7 +148,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if hasTool(tools, "build_team") {
 			t.Fatalf("member 不应包含 build_team，实际 %v", namesOf(tools))
 		}
@@ -163,7 +163,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if hasTool(tools, "spawn_member") {
 			t.Fatalf("human_agent 不应包含 spawn_member，实际 %v", namesOf(tools))
 		}
@@ -180,7 +180,7 @@ func TestQualifyTeamToolIDs(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		before := make([]string, len(cp))
 		for i, tl := range cp {
 			before[i] = tl.Card().ID
@@ -199,7 +199,7 @@ func TestQualifyTeamToolIDs(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		before := make([]string, len(cp))
 		for i, tl := range cp {
 			before[i] = tl.Card().ID
@@ -218,7 +218,7 @@ func TestQualifyTeamToolIDs(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		for _, tl := range cp {
 			tl.Card().ID = ""
 		}
@@ -301,7 +301,7 @@ func TestTeamTools_StreamNotSupported(t *testing.T) {
 		TeammateMode: "plan_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 	for _, tl := range tools {
 		ch, err := tl.Stream(context.Background(), map[string]any{})
 		if err == nil || ch != nil {
@@ -319,20 +319,20 @@ func TestTeamTools_参数校验失败分支(t *testing.T) {
 		TeammateMode: "plan_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 	// claim_task / member_complete_task 分属成员集与 human_agent 集，leader 集合里没有
 	memberTools := CreateTeamTools(backend, TeamToolOptions{
 		Role:         "",
 		TeammateMode: "build_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 	humanTools := CreateTeamTools(backend, TeamToolOptions{
 		Role:         "human_agent",
 		TeammateMode: "build_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 
 	t.Run("spawn_member 成员名非法", func(t *testing.T) {
 		res := invokeByName(t, tools, "spawn_member", map[string]any{"member_name": "Dev_1"})
@@ -487,7 +487,7 @@ func TestTeamTools_后端交互分支(t *testing.T) {
 		TeammateMode: "plan_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 
 	t.Run("list_members 空团队返回零成员", func(t *testing.T) {
 		res := invokeByName(t, tools, "list_members", map[string]any{})

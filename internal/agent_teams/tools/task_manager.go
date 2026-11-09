@@ -345,6 +345,12 @@ func (tm *TeamTaskManager) ListTasks(ctx context.Context, status string) ([]*dat
 	return tm.db.Task().GetTeamTasks(ctx, tm.teamName, status)
 }
 
+// OpenTaskCountsByAssignee 按 assignee 统计非终态任务数（缺席 = 没有开放任务）。
+// Python: TeamTaskManager.open_task_counts_by_assignee (task_manager.py:1552-1554)
+func (tm *TeamTaskManager) OpenTaskCountsByAssignee(ctx context.Context) (map[string]int, error) {
+	return tm.db.Task().OpenTaskCountsByAssignee(ctx, tm.teamName)
+}
+
 // GetClaimableTasks 获取可认领任务（PENDING + 无未解决依赖）。
 // Python: TeamTaskManager.get_claimable_tasks()
 func (tm *TeamTaskManager) GetClaimableTasks(ctx context.Context) ([]*database.TeamTaskBase, error) {

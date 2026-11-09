@@ -68,6 +68,13 @@ type TeamBackend struct {
 	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建完成回调
 	onTeamBuilt func(ctx context.Context) error
+	// onMemberStarted 成员启动回调（spawn 落地）
+	//
+	// 存在 backend 上而不是每次 startup 传参：调用方（发消息、建任务）只需
+	// 表达"确保名册都起来了"，不必各自揣着 spawn 回调。
+	//
+	// Python: self._on_member_started (tools/team.py:348)
+	onMemberStarted func(ctx context.Context, memberName string) error
 	// planStorageDir 计划存储目录
 	planStorageDir string
 	// planID 当前计划标识
@@ -232,6 +239,13 @@ func WithOnTeamCleaned(fn func(ctx context.Context) error) TeamBackendOption {
 // Python: on_team_built 参数
 func WithOnTeamBuilt(fn func(ctx context.Context) error) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.onTeamBuilt = fn }
+}
+
+// WithOnMemberStarted 设置成员启动回调（spawn 落地时由 TeamManager 通知）。
+//
+// Python: on_member_started 参数（tools/team.py:148）
+func WithOnMemberStarted(fn func(ctx context.Context, memberName string) error) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.onMemberStarted = fn }
 }
 
 // WithPlanStorageDir 设置计划文件存储目录。
@@ -579,36 +593,77 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 	return atschema.NewMemberOpResultSuccess()
 }
 
-// Startup 启动所有 UNSTARTED 成员。
-// Python: TeamBackend.startup(on_created=...)
+// Startup 启动所有"有活要干"的 UNSTARTED 成员。
+// Python: TeamBackend.startup(on_created=..., *, include_idle_task_scoped=False)
 //
-// Python 步骤：
+// 步骤：
 //
 //  1. 查询所有 UNSTARTED 成员
-//  2. 逐个调用 startup_member(member_name, on_created)
-//  3. 返回已启动的成员名列表
+//  2. task-scoped 成员（options.lifetime 非空）在没有开放任务时跳过——
+//     它只为任务而生，空板子上叫起来只会白跑一轮再被调度器退役
+//     （lifetime="shutdown" 是永久退役），把 leader 后续交给它的任务搁死。
+//     它仍可被指派；调度器的启动交接或指名消息（wake_member）会把它叫起来。
+//  3. 逐个调用 startup_member(member_name, on_created)
+//  4. 返回已启动的成员名列表
+//
+// 广播类路径传 includeIdleTaskScoped=true：广播也是发给它的，必须能读到。
 //
 // startup_member 失败时回滚 STARTING→UNSTARTED 并 re-raise，
 // Python 的 startup() 会在异常时中断循环。Go 也对齐此行为。
 func (tb *TeamBackend) Startup(
 	ctx context.Context,
 	onCreated func(ctx context.Context, memberName string) error,
+	includeIdleTaskScoped bool,
 ) ([]string, error) {
 	members, err := tb.db.Member().GetTeamMembers(ctx, tb.teamName, string(atschema.MemberStatusUnstarted))
 	if err != nil {
 		return nil, err
 	}
+	var openCounts map[string]int
 	var started []string
 	for _, m := range members {
-		ok, err := tb.StartupMember(ctx, m.MemberName, onCreated)
-		if err != nil {
-			return started, err
+		if !includeIdleTaskScoped && database.GetMemberLifetime(m) != nil {
+			if openCounts == nil {
+				counts, countsErr := tb.taskManager.OpenTaskCountsByAssignee(ctx)
+				if countsErr != nil {
+					return started, countsErr
+				}
+				openCounts = counts
+			}
+			if openCounts[m.MemberName] == 0 {
+				logger.Debug(logComponent).
+					Str("member_name", m.MemberName).
+					Msg("skip starting task-scoped member with no open task")
+				continue
+			}
+		}
+		ok, startErr := tb.StartupMember(ctx, m.MemberName, onCreated)
+		if startErr != nil {
+			return started, startErr
 		}
 		// Python: started.append(member.member_name) — 无条件 append
 		_ = ok
 		started = append(started, m.MemberName)
 	}
 	return started, nil
+}
+
+// AutostartUnstarted 用 backend 上注入的 spawn 回调启动所有 UNSTARTED 成员。
+//
+// 自动启动漏斗的唯一入口：即将交给成员的工作（一条消息、一个新任务）不能落到
+// 一个进程从未启动过的成员身上。调用方只表达"确保名册都起来了"，不必各自
+// 揣着 spawn 回调。
+//
+// 仅 leader 且回调已注入时才动作——teammate backend 或外部进程 backend
+// 返回空列表，而不是去 spawn 一个它管不了的东西。并发由 startup_member 的
+// UNSTARTED→STARTING CAS 在一层之下兜住，重复调用幂等。
+//
+// Python: TeamBackend.autostart_unstarted (tools/team.py:1034-1064)
+func (tb *TeamBackend) AutostartUnstarted(ctx context.Context, includeIdleTaskScoped bool) ([]string, error) {
+	if !tb.isLeader || tb.onMemberStarted == nil {
+		return nil, nil
+	}
+	return tb.Startup(ctx, tb.onMemberStarted, includeIdleTaskScoped)
 }
 
 // StartupMember CAS 启动单个成员（UNSTARTED→STARTING）。

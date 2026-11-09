@@ -70,7 +70,7 @@ func (s *TeamContextSuite) buildTool() tool.Tool {
 		Role: "leader", TeammateMode: "build_mode", Lifecycle: "temporary",
 		Language: "cn", DispatchMode: "autonomous", TeamMode: "default",
 	}
-	for _, tl := range tools.CreateTeamTools(s.backend, opts, nil, nil, nil) {
+	for _, tl := range tools.CreateTeamTools(s.backend, opts, nil, nil) {
 		if card := tl.Card(); card != nil && card.Name == "build_team" {
 			return tl
 		}

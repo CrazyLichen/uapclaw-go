@@ -99,6 +99,14 @@ type TaskDao interface {
 	GetTeamTasks(ctx context.Context, teamName, status string) ([]*TeamTaskBase, error)
 	// GetTasksByAssignee 查询成员的任务。status 为空字符串表示不过滤。
 	GetTasksByAssignee(ctx context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error)
+	// OpenTaskCountsByAssignee 按 assignee 统计非终态任务数（一条分组查询）。
+	//
+	// 非终态 = TASK_TERMINAL_STATUSES 之外的全部状态（PENDING/BLOCKED/PLANNING/
+	// IN_PROGRESS/IN_REVIEW 都算）：任务在评审或依赖队列里，成员名下就还有活。
+	// 没有开放任务的成员不会出现在结果里。
+	//
+	// Python: open_task_counts_by_assignee (task_dao.py:685-705)
+	OpenTaskCountsByAssignee(ctx context.Context, teamName string) (map[string]int, error)
 	// GetUnseenEdits 查询成员名下「改过但未读」的任务（revision > observed_revision）。
 	// Python: get_unseen_edits(team_name, assignee) (task_dao.py L763-779)
 	// 只查非终态任务；正文可能被溢出占位符替代，调用方不应读 Content。

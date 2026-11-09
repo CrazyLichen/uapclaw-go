@@ -13,6 +13,9 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -340,7 +343,7 @@ func TestStartup(t *testing.T) {
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.SpawnMember(ctx, "teammate2", "T2", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
-	started, err := tb.Startup(ctx, nil)
+	started, err := tb.Startup(ctx, nil, false)
 	if err != nil {
 		t.Fatalf("Startup() error = %v", err)
 	}
@@ -1389,4 +1392,107 @@ func TestMemberMessagingAndSubtasksEnabled(t *testing.T) {
 	if tb0.MemberSubtasksEnabled() {
 		t.Fatal("MaxSubtaskDepth=0 时 MemberSubtasksEnabled 应为 false")
 	}
+}
+
+// ──────────────────────────── AutostartUnstarted 测试 ────────────────────────────
+
+// TestAutostartUnstarted_非Leader返回空 非 leader 不 spawn（它管不了）。
+func TestAutostartUnstarted_非Leader返回空(t *testing.T) {
+	called := false
+	tb := NewTeamBackend("t", "m", false, database.NewInMemoryTeamDatabase(), newTestMessager(),
+		WithOnMemberStarted(func(_ context.Context, _ string) error { called = true; return nil }))
+
+	started, err := tb.AutostartUnstarted(context.Background(), false)
+	require.NoError(t, err)
+	assert.Nil(t, started)
+	assert.False(t, called)
+}
+
+// TestAutostartUnstarted_回调nil返回空 没注入回调时不动作。
+func TestAutostartUnstarted_回调nil返回空(t *testing.T) {
+	tb := newTestTeamBackend()
+
+	started, err := tb.AutostartUnstarted(context.Background(), false)
+	require.NoError(t, err)
+	assert.Nil(t, started)
+}
+
+// TestAutostartUnstarted_启动成员 回调注入后启动 UNSTARTED 成员。
+func TestAutostartUnstarted_启动成员(t *testing.T) {
+	var got []string
+	tb := newTestTeamBackendWithOptions(
+		WithOnMemberStarted(func(_ context.Context, name string) error {
+			got = append(got, name)
+			return nil
+		}),
+	)
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "a1", "A1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "a2", "A2", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	started, err := tb.AutostartUnstarted(ctx, false)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a1", "a2"}, started)
+	assert.ElementsMatch(t, []string{"a1", "a2"}, got)
+}
+
+// ──────────────────────────── Startup 的 task-scoped 筛选 ────────────────────────────
+
+// setMemberLifetime 直接把 lifetime 写进成员 options（内存实现返回指针，改动即生效）。
+func setMemberLifetime(t *testing.T, tb *TeamBackend, memberName string, lifetime database.MemberLifetime) {
+	t.Helper()
+	m, err := tb.db.Member().GetMember(context.Background(), memberName, tb.teamName)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	m.Options = database.BuildMemberOptions(database.MemberOptionsInput{Lifetime: &lifetime})
+}
+
+// TestStartup_taskScoped无开放任务时跳过 默认不叫醒没有活儿的 task-scoped 成员。
+func TestStartup_taskScoped无开放任务时跳过(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "resident", "R", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "scoped", "S", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	setMemberLifetime(t, tb, "scoped", database.MemberLifetimeShutdown)
+
+	started, err := tb.Startup(ctx, func(_ context.Context, _ string) error { return nil }, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"resident"}, started, "task-scoped 且无开放任务的成员应跳过")
+}
+
+// TestStartup_includeIdleTaskScoped启动全部 广播路径要连空闲的 task-scoped 成员一起叫醒。
+func TestStartup_includeIdleTaskScoped启动全部(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "resident", "R", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "scoped", "S", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	setMemberLifetime(t, tb, "scoped", database.MemberLifetimeDormant)
+
+	started, err := tb.Startup(ctx, func(_ context.Context, _ string) error { return nil }, true)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"resident", "scoped"}, started)
+}
+
+// TestStartup_taskScoped有开放任务时启动 板子上有活儿就必须起来。
+func TestStartup_taskScoped有开放任务时启动(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "scoped", "S", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	setMemberLifetime(t, tb, "scoped", database.MemberLifetimeShutdown)
+
+	// 给该成员挂一个非终态任务：先建任务再认领（认领即写入 assignee）
+	assignee := "scoped"
+	task, addErr := tb.taskManager.Add(ctx, "任务", "内容")
+	require.NoError(t, addErr)
+	ok, claimErr := tb.db.Task().ClaimTask(ctx, task.TaskID, assignee)
+	require.NoError(t, claimErr)
+	require.True(t, ok)
+
+	started, err := tb.Startup(ctx, func(_ context.Context, _ string) error { return nil }, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"scoped"}, started, "有开放任务的 task-scoped 成员必须启动")
 }

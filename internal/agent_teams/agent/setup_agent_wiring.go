@@ -69,9 +69,6 @@ func buildTeamHandles(
 		PermissionsOverride: ctx.PermissionsOverride,
 		WorktreeManager:     c.WorktreeManager(),
 		TaskEventTracker:    c.TaskEventTracker(),
-		// 成员创建回调：TeamBackend.Startup 以参数接收（上游由 backend 自带），
-		// 不经句柄传就会让 autoStartMembers 直接返回、成员永不启动（F-02）。
-		OnTeammateCreated: c.onTeammateCreated,
 	}
 }
 
