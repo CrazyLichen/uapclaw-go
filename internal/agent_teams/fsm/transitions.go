@@ -176,6 +176,12 @@ func IsValidTaskTransition(current, target string) bool {
 	return false
 }
 
+// TerminalTaskStatuses 返回任务终态集合（用于 SQL NOT IN 过滤）。
+// Python: list(TASK_TERMINAL_STATUSES)
+func TerminalTaskStatuses() []string {
+	return []string{TaskStatusCompleted, TaskStatusCancelled}
+}
+
 // IsTaskTerminal 判断任务状态是否为终态。
 // Python: TASK_TERMINAL_STATUSES = {COMPLETED, CANCELLED}
 func IsTaskTerminal(status string) bool {

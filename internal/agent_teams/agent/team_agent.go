@@ -943,15 +943,17 @@ func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool
 }
 
 // AutoStartAll 启动所有 UNSTARTED 成员。
-// Python: TeamAgent.auto_start_all()
+//
+// 只有交互广播（@all / 未指名消息）会走到这里，所以 task-scoped 且没有开放
+// 任务的成员也要起来：广播同样是发给它的。
+//
+// Python: TeamAgent.auto_start_all (team_agent.py:1976-1997)
 func (a *TeamAgent) AutoStartAll(ctx context.Context) []string {
 	backend := a.TeamBackend()
 	if backend == nil || !backend.IsLeader() {
 		return nil
 	}
-	started, err := backend.Startup(ctx, func(ctx context.Context, name string) error {
-		return a.onTeammateCreated(ctx, name)
-	})
+	started, err := backend.AutostartUnstarted(ctx, true)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("AutoStartAll failed")
 		return nil

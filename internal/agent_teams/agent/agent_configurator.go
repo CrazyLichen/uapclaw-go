@@ -61,6 +61,9 @@ type setupInfraConfig struct {
 	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建回调
 	onTeamBuilt func(ctx context.Context) error
+	// onMemberStarted 成员启动回调（spawn 落地）
+	// Python: on_member_started 参数（tools/team.py:148）
+	onMemberStarted func(ctx context.Context, memberName string) error
 }
 
 // SetupInfraOption SetupInfra 的可选参数。
@@ -78,6 +81,9 @@ type setupTeamBackendConfig struct {
 	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建回调
 	onTeamBuilt func(ctx context.Context) error
+	// onMemberStarted 成员启动回调（spawn 落地）
+	// Python: on_member_started 参数（tools/team.py:148）
+	onMemberStarted func(ctx context.Context, memberName string) error
 }
 
 // SetupTeamBackendOption SetupTeamBackend 的可选参数。
@@ -140,6 +146,12 @@ func WithBackendOnTeamBuilt(cb func(ctx context.Context) error) SetupTeamBackend
 }
 
 // WithBackendDB 设置数据库实例。
+// WithBackendOnMemberStarted 设置成员启动回调。
+// Python: setup_team_backend(on_member_started=...)（tools/team.py:148）
+func WithBackendOnMemberStarted(cb func(ctx context.Context, memberName string) error) SetupTeamBackendOption {
+	return func(cfg *setupTeamBackendConfig) { cfg.onMemberStarted = cb }
+}
+
 func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.db = db }
 }
@@ -240,7 +252,14 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	// ⤴️ 9.58 回填完成：团队后端
 	// 对齐 Python: self.setup_team_backend(spec, ctx, messager, ...)
 	if c.Messager() != nil {
-		c.SetupTeamBackend(spec, ctx, c.Messager())
+		// 三个生命周期回调都必须显式下传：上游 setup_team_backend 以关键字参数
+		// 接收 on_team_cleaned / on_team_built / on_member_started，
+		// 少传一个就会让对应能力在 backend 里恒为 nil（此前两者即漏传）。
+		c.SetupTeamBackend(spec, ctx, c.Messager(),
+			WithBackendOnTeamCleaned(cfg.onTeamCleaned),
+			WithBackendOnTeamBuilt(cfg.onTeamBuilt),
+			WithBackendOnMemberStarted(cfg.onTeammateCreated),
+		)
 	}
 
 	// 9. 工作树管理器（仅非 leader）
@@ -475,6 +494,9 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	}
 	if cfg.onTeamBuilt != nil {
 		tbOpts = append(tbOpts, tools.WithOnTeamBuilt(cfg.onTeamBuilt))
+	}
+	if cfg.onMemberStarted != nil {
+		tbOpts = append(tbOpts, tools.WithOnMemberStarted(cfg.onMemberStarted))
 	}
 	if ctx.TeamSpec != nil && ctx.TeamSpec.LeaderMemberName != "" {
 		tbOpts = append(tbOpts, tools.WithLeaderMemberName(ctx.TeamSpec.LeaderMemberName))

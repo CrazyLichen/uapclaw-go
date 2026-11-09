@@ -48,8 +48,6 @@ type TeamToolRail struct {
 	bootstrapMode string
 	// swarmflowEnabled leader 是否持有 swarmflow 工具
 	swarmflowEnabled bool
-	// onTeammateCreated 队友创建回调
-	onTeammateCreated func(ctx context.Context, memberName string) error
 	// modelConfigAlloc 模型配置分配器
 	modelConfigAlloc func(modelName string) *models.Allocation
 	// excludeTools 排除的工具名集合
@@ -131,7 +129,6 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 			BootstrapMode:    r.bootstrapMode,
 			SwarmflowEnabled: r.swarmflowEnabled,
 		},
-		r.onTeammateCreated,
 		r.modelConfigAlloc,
 		r.excludeTools,
 	)
@@ -292,11 +289,6 @@ func WithToolBootstrapMode(mode string) TeamToolRailOption {
 // WithToolSwarmflowEnabled 设置 leader 是否持有 swarmflow 工具。
 func WithToolSwarmflowEnabled(enabled bool) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.swarmflowEnabled = enabled }
-}
-
-// WithOnTeammateCreated 设置队友创建回调。
-func WithOnTeammateCreated(fn func(ctx context.Context, memberName string) error) TeamToolRailOption {
-	return func(r *TeamToolRail) { r.onTeammateCreated = fn }
 }
 
 // WithModelConfigAllocator 设置模型配置分配器。

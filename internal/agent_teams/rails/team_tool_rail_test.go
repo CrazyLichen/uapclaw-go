@@ -342,17 +342,6 @@ func TestTeamToolRail_RegisteredTools(t *testing.T) {
 	}
 }
 
-// TestWithOnTeammateCreated 验证 WithOnTeammateCreated 选项。
-func TestWithOnTeammateCreated(t *testing.T) {
-	called := false
-	fn := func(_ context.Context, _ string) error { called = true; return nil }
-	r := &TeamToolRail{}
-	WithOnTeammateCreated(fn)(r)
-	assert.NotNil(t, r.onTeammateCreated)
-	r.onTeammateCreated(context.Background(), "alice")
-	assert.True(t, called)
-}
-
 // TestWithModelConfigAllocator 验证 WithModelConfigAllocator 选项。
 func TestWithModelConfigAllocator(t *testing.T) {
 	alloc := func(_ string) *models.Allocation { return nil }

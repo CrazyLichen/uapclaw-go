@@ -16,7 +16,7 @@
 //	├── doc.go                  # 包文档
 //	├── elements.go          # 8 个 team rail 常量 + provider 工厂（5 真 3 占位）+ TeamRailSpecs
 //	├── registration.go      # EnsureHarnessElementsRegistered（三步注册 + 幂等守卫）
-//	├── team_context.go      # TeamHandleKey 17 键（上游）+ 1 键（Go 专有）+ InjectTeamHandles + 18 个 getter
+//	├── team_context.go      # TeamHandleKey 17 键 + InjectTeamHandles + 17 个 getter
 //	├── first_iteration_gate.go # 首次迭代信号门
 //	├── team_tool_rail.go       # TeamToolRail (priority=90)
 //	├── team_policy_rail.go     # TeamPolicyRail (priority=12)

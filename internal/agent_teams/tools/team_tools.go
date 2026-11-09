@@ -180,8 +180,6 @@ type SendMessageTool struct {
 	messageManager *TeamMessageManager
 	// team 团队后端实例
 	team *TeamBackend
-	// onTeammateCreated 队友创建回调
-	onTeammateCreated func(ctx context.Context, memberName string) error
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -232,13 +230,11 @@ var memberSet = mergeSets(memberOnlySet, sharedSet)
 // 参数：
 //   - teamBackend: TeamBackend 门面实例
 //   - opts: 配置项（角色、模式、语言等）
-//   - onTeammateCreated: Teammate 创建回调（可选）
 //   - modelConfigAlloc: 模型配置分配器（可选）
 //   - excludeTools: 排除的工具名集合（可选）
 func CreateTeamTools(
 	teamBackend *TeamBackend,
 	opts TeamToolOptions,
-	onTeammateCreated func(ctx context.Context, memberName string) error,
 	modelConfigAlloc func(modelName string) *models.Allocation,
 	excludeTools map[string]struct{},
 ) []tool.Tool {
@@ -275,7 +271,7 @@ func CreateTeamTools(
 		allTools["member_complete_task"] = newMemberCompleteTaskTool(taskMgr, t)
 	}
 	if msgMgr != nil {
-		allTools["send_message"] = newSendMessageTool(msgMgr, t, teamBackend, onTeammateCreated)
+		allTools["send_message"] = newSendMessageTool(msgMgr, t, teamBackend)
 	}
 
 	// 角色过滤
@@ -592,7 +588,7 @@ func newMemberCompleteTaskTool(taskManager *TeamTaskManager, t locales.Translato
 }
 
 // newSendMessageTool 创建 SendMessageTool 实例。
-func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *TeamBackend, onCreated func(ctx context.Context, memberName string) error) *SendMessageTool {
+func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *TeamBackend) *SendMessageTool {
 	toParam := &schema.Param{
 		Name: "to", Type: schema.ParamTypeString, Required: true,
 		Description: t("send_message", "to"),
@@ -609,9 +605,8 @@ func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *
 				schema.NewStringParam("content", t("send_message", "content"), true),
 				schema.NewStringParam("summary", t("send_message", "summary"), false),
 			}, nil)),
-		messageManager:    msgMgr,
-		team:              team,
-		onTeammateCreated: onCreated,
+		messageManager: msgMgr,
+		team:           team,
 	}
 }
 
@@ -1497,10 +1492,12 @@ func (t *SendMessageTool) multicast(ctx context.Context, targets []any, content,
 
 // autoStartMembers Leader 自动启动未启动的成员（对齐 Python SendMessageTool._auto_start_members）。
 func (t *SendMessageTool) autoStartMembers(ctx context.Context) {
-	if t.team == nil || t.onTeammateCreated == nil || !t.team.IsLeader() {
+	if t.team == nil {
 		return
 	}
-	started, err := t.team.Startup(ctx, t.onTeammateCreated)
+	// 回调与 leader 判定都在 AutostartUnstarted 内部（对齐上游 callback-gated）。
+	// 消息路径不是广播，task-scoped 且无开放任务的成员留到有活儿再叫。
+	started, err := t.team.AutostartUnstarted(ctx, false)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("auto_start_members failed")
 	}
