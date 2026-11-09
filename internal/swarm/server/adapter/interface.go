@@ -84,6 +84,10 @@ type AgentAdapter interface {
 	// Python: interface_deep.py get_live_session_instance（:12744）
 	GetLiveSessionInstance(sessionID string) *harness.DeepAgent
 
+	// HasActiveGoal 该会话是否持有活跃 goal（只读缓存，不借不建 agent）。
+	// Python: interface_deep.py:15450
+	HasActiveGoal(sessionID string) bool
+
 	// DispatchGoalControl 把协议字段映射到 Goal 能力方法。
 	// Python: interface_deep.py:17744 dispatch_goal_control（分流头 :17775）
 	DispatchGoalControl(

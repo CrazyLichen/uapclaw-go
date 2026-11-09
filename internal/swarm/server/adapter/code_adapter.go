@@ -546,6 +546,14 @@ func (c *CodeAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgen
 	return c.deep.GetLiveSessionInstance(sessionID)
 }
 
+// HasActiveGoal 委托 DeepAdapter。
+func (c *CodeAdapter) HasActiveGoal(sessionID string) bool {
+	if c.deep == nil {
+		return false
+	}
+	return c.deep.HasActiveGoal(sessionID)
+}
+
 // DispatchGoalControl 委托 DeepAdapter。
 func (c *CodeAdapter) DispatchGoalControl(
 	ctx context.Context, sessionID, action, objective string,

@@ -198,3 +198,30 @@ func mustJSON(t *testing.T, value map[string]any) json.RawMessage {
 	require.NoError(t, err)
 	return raw
 }
+
+// TestGoalGuards_未启动时全为假 instance 缺失/未 start 时三守卫都返回 false。
+// Python: interface_deep.py:15402/15427/15464
+func TestGoalGuards_未启动时全为假(t *testing.T) {
+	d := &DeepAdapter{}
+	require.False(t, d.hasActiveGoalRound())
+	require.False(t, d.goalRecordIsActive())
+	require.False(t, d.HasActiveGoalInteraction())
+	require.False(t, d.HasActiveGoal("s1"))
+}
+
+// TestHasActiveGoal_会话不匹配为假 子适配器只认自己绑定的会话。
+// Python: interface_deep.py:15450-15462
+func TestHasActiveGoal_会话不匹配为假(t *testing.T) {
+	d := &DeepAdapter{isSessionScoped: true, parentSessionID: "sess-a"}
+	require.False(t, d.HasActiveGoal("sess-b"))
+	// 同会话时回落到 HasActiveGoalInteraction（未启动 → false）
+	require.False(t, d.HasActiveGoal("sess-a"))
+}
+
+// TestHasActiveGoal_根无缓存子适配器为假 不借也不建 agent。
+// Python: agent_manager.py:1423（inspect cached Goal owners without borrowing）
+func TestHasActiveGoal_根无缓存子适配器为假(t *testing.T) {
+	d := &DeepAdapter{sessionAdapters: newSessionAdapterCache()}
+	require.False(t, d.HasActiveGoal("sess-none"))
+	require.False(t, d.sessionAdapters.has("sess-none"), "探针不得创建子适配器")
+}

@@ -177,3 +177,5 @@ func (s *stubAdapter) DispatchGoalControl(
 ) (map[string]any, error) {
 	return nil, nil
 }
+
+func (s *stubAdapter) HasActiveGoal(string) bool { return false }

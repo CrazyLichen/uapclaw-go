@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -371,4 +372,72 @@ func positiveIntField(params map[string]any, key string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// HasActiveGoalInteraction 共享 DeepAgent 是否仍持有活跃的 goal 交互。
+// Python: interface_deep.py:15464-15468
+func (d *DeepAdapter) HasActiveGoalInteraction() bool {
+	if d.hasActiveGoalRound() {
+		return true
+	}
+	return d.goalRecordIsActive()
+}
+
+// HasActiveGoal 查询指定会话是否持有活跃 goal（含自主轮之间的空隙）。
+// Python: interface_deep.py:15450-15462
+//
+// 只读已有缓存，不借也不建 agent：调用方是跨会话准入判定。
+func (d *DeepAdapter) HasActiveGoal(sessionID string) bool {
+	if d.isSessionScoped {
+		if d.parentSessionID != "" && d.parentSessionID != sessionID {
+			return false
+		}
+		return d.HasActiveGoalInteraction()
+	}
+	if d.sessionAdapters == nil {
+		return false
+	}
+	child := d.getCachedSessionAdapter(sessionID)
+	if child == nil {
+		return false
+	}
+	checker, ok := child.(interface{ HasActiveGoalInteraction() bool })
+	return ok && checker.HasActiveGoalInteraction()
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// hasActiveGoalRound 当前是否正在执行 goal 轮。
+// Python: interface_deep.py:15402-15425
+//
+// goal 轮是会话级持久目标，必须扛住杂散的 stream_cancel 与 chat.interrupt；
+// 只能通过 /goal pause|clear 停止。
+func (d *DeepAdapter) hasActiveGoalRound() bool {
+	if d.instance == nil || !d.instance.InteractionStarted() {
+		return false
+	}
+	active := d.instance.ActiveRound()
+	if active == nil || active.Work == nil {
+		return false
+	}
+	return active.Work.Kind == hschema.RoundWorkKindGoal
+}
+
+// goalRecordIsActive GoalRecord 是否为 ACTIVE（不看在飞轮）。
+// Python: interface_deep.py:15427-15448
+//
+// 与 HasActiveGoalInteraction 的差别：用户取消/暂停后记录已非 ACTIVE，
+// 但被中止的轮次可能还在收尾——决定 chat.final 是否降级时必须用这个。
+func (d *DeepAdapter) goalRecordIsActive() bool {
+	manager := d.goalManager()
+	if manager == nil {
+		return false
+	}
+	record := manager.Peek()
+	if record == nil {
+		return false
+	}
+	return record.Status == goal.GoalStatusActive
 }
