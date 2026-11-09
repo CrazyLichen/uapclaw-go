@@ -691,6 +691,13 @@ func (h *TeamHarness) AnnounceTaskRevisions(ctx context.Context) error {
 	return err
 }
 
+// CurrentSession 返回当前活跃的子会话；harness 未运行时返回 nil。
+//
+// Python: TeamHarness.current_session (team_harness.py:306-308)
+func (h *TeamHarness) CurrentSession() *session.Session {
+	return h.getActiveSession()
+}
+
 // getActiveSession 读取最近一次轮次的 Agent 会话（并发安全）。
 func (h *TeamHarness) getActiveSession() *session.Session {
 	h.mu.RLock()
