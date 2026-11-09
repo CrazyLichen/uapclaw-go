@@ -1023,7 +1023,7 @@ func stringsLower(s string) string {
 	return string(result)
 }
 
-// ──────────────────────────── MergeFileGuardAccessAllows ────────────────────────────
+// ──────────────────────────── MergeFileGuardAccessAllows 合并文件护栏放行规则 ────────────────────────────
 
 // TestMergeFileGuardAccessAllows_read保留精确目录 测试 read 访问只放开 read 轴
 func TestMergeFileGuardAccessAllows_read保留精确目录(t *testing.T) {

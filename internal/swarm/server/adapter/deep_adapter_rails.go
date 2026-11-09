@@ -269,7 +269,7 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 	return nil
 }
 
-// buildSkillRail 构建技能使用护栏（include_tools 由调用方在 filesystemRail
+// buildSkillRailWithIncludeTools 构建技能使用护栏（include_tools 由调用方在 filesystemRail
 // 赋值前求值后传入，见 buildAgentRails 步骤 3 注释）。
 // ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
 func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sainterfaces.AgentRail) {

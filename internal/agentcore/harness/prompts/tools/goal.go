@@ -80,16 +80,8 @@ var getCurrentGoalDescription = map[string]string{
 // GetSubmitGoalReportInputParams 构建 submit_goal_report 工具的参数 Schema。
 // Python: get_submit_goal_report_input_params (prompts/tools/goal.py L81)
 func GetSubmitGoalReportInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
-	desc := func(key string) string {
-		if d, ok := submitGoalReportParams[key][lang]; ok {
-			return d
-		}
-		return submitGoalReportParams[key]["cn"]
-	}
+	lang := normalizeToolLang(language)
+	desc := i18nPicker(submitGoalReportParams, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

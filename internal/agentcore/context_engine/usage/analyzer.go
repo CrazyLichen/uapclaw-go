@@ -51,6 +51,7 @@ type SnapshotInput struct {
 // （本地估算漏计的部分通常是消息序列化开销）；差额为负则取 0，不做二次缩放。
 // Python: ContextUsageAnalyzer.snapshot_from_report()
 func BuildSnapshot(in SnapshotInput) ContextUsageSnapshot {
+	// 1. 各分类 token 数先按本地估算装配
 	parts := map[string]ContextPartUsage{
 		CategorySystemPrompt: newPart(CategorySystemPrompt, in.SystemPromptTokens),
 		CategoryTools:        newPart(CategoryTools, in.ToolsTokens),
@@ -58,6 +59,7 @@ func BuildSnapshot(in SnapshotInput) ContextUsageSnapshot {
 		CategoryMessages:     newPart(CategoryMessages, in.MessagesTokens),
 	}
 
+	// 2. provider 有真实用量时以其为准，与本地估算的差额并入消息分类
 	localTotal := in.SystemPromptTokens + in.ToolsTokens + in.SkillsTokens + in.MessagesTokens
 	requestCache := RequestCacheFromUsage(in.Usage)
 	inputTokens := requestCache.InputTokens
@@ -73,6 +75,7 @@ func BuildSnapshot(in SnapshotInput) ContextUsageSnapshot {
 		}
 	}
 
+	// 3. 有窗口上限时算出各分类占比与整体占用率
 	window := ContextWindowUsage{TokensSource: tokensSource}
 	if in.LimitTokens > 0 {
 		limit := in.LimitTokens
@@ -94,6 +97,7 @@ func BuildSnapshot(in SnapshotInput) ContextUsageSnapshot {
 		window.InputTokens = inputTokens
 	}
 
+	// 4. 补齐会话/路径缺省值后组装最终快照
 	productSessionID := in.ProductSessionID
 	if productSessionID == "" {
 		productSessionID = in.SessionID

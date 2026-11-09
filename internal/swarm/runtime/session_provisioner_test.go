@@ -660,7 +660,7 @@ func newTestProvisionerWithMetadata(metadata map[string]map[string]any) *Runtime
 	return p
 }
 
-// ──────────────────────────── switch ────────────────────────────
+// ──────────────────────────── switch 会话切换 ────────────────────────────
 
 // TestSwitch_空目标报BAD_REQUEST 校验参数校验。
 func TestSwitch_空目标报BAD_REQUEST(t *testing.T) {
@@ -815,7 +815,7 @@ func TestSwitch_前后会话都传participant(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── fork ────────────────────────────
+// ──────────────────────────── fork 会话分叉 ────────────────────────────
 
 // TestFork_空源报BAD_REQUEST 校验参数校验。
 func TestFork_空源报BAD_REQUEST(t *testing.T) {
@@ -988,7 +988,7 @@ func TestFork_结果无hook可提交(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── create ────────────────────────────
+// ──────────────────────────── create 会话创建 ────────────────────────────
 
 // TestCreate_非TUI显式ID报错 校验 session_id 不再被接受。
 func TestCreate_非TUI显式ID报错(t *testing.T) {

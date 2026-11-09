@@ -53,7 +53,7 @@ func WithToolCalls(calls []*ToolCall) AssistantMessageOption {
 	return func(m *AssistantMessage) { m.ToolCalls = calls }
 }
 
-// WithUsageMetadata 设置用量元数据。
+// WithAssistantUsageMetadata 设置用量元数据。
 func WithAssistantUsageMetadata(meta *UsageMetadata) AssistantMessageOption {
 	return func(m *AssistantMessage) { m.UsageMetadata = meta }
 }

@@ -843,7 +843,7 @@ func TestFinishOnToolException与Completion(t *testing.T) {
 		t.Fatalf("异常路径应结束卡片")
 	}
 
-	// completion rail
+	// completion rail 完成护栏
 	card2, _ := q.Begin("s", "r2", "s", "call-2", "tool")
 	cbc.SetExtra(ToolInvocationContextAttribute, card2.Key)
 	finishOnCompletion(NewRootPermissionCompletionRail(q), cbc)

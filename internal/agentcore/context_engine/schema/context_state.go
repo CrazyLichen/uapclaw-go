@@ -55,10 +55,6 @@ type ContextCompressionUsage struct {
 	Details []map[string]any `json:"details,omitempty"`
 }
 
-// ContextCompressionState 上下文压缩状态完整快照。
-// 由 ProcessorStateRecorder.BuildState() 构建，记录一次压缩操作的完整生命周期。
-// 通过回调框架和 session stream 发射，供外部系统观测上下文引擎行为。
-// Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionState)
 // ContextCompressionModifiedMessage 压缩过程中被就地改写的消息条目。
 // 前端轨迹面板据此标出"哪条消息被压了、原文还能不能取回"（offload_handle 可达时）。
 // Python: ContextCompressionModifiedMessage
@@ -75,6 +71,10 @@ type ContextCompressionModifiedMessage struct {
 	OffloadType string `json:"offload_type,omitempty"`
 }
 
+// ContextCompressionState 上下文压缩状态完整快照。
+// 由 ProcessorStateRecorder.BuildState() 构建，记录一次压缩操作的完整生命周期。
+// 通过回调框架和 session stream 发射，供外部系统观测上下文引擎行为。
+// Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionState)
 type ContextCompressionState struct {
 	// Type 事件类型标识，固定为 ContextCompressionStateType
 	Type string `json:"type"`

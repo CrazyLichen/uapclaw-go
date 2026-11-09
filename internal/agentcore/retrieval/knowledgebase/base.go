@@ -60,16 +60,16 @@ var _ interface {
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// BaseKnowledgeBase 子类嵌入的共享基座（13.10 BaseParser 先例）。
-// 持有知识库的 7 大组件与配置；模板方法（ParseFiles/ParseURLs/
-// DeleteCollection/Close）与配置一致性防线由基座提供，5 抽象方法
-// 由 SimpleKnowledgeBase（13.27）/GraphKnowledgeBase（13.28）实现。
-// Python: knowledge_base.py (KnowledgeBase 的 __init__ 部分)
 // closeable 可关闭组件的最小契约（Python close 鸭子类型的静态化替代）。
 type closeable interface {
 	Close() error
 }
 
+// BaseKnowledgeBase 子类嵌入的共享基座（13.10 BaseParser 先例）。
+// 持有知识库的 7 大组件与配置；模板方法（ParseFiles/ParseURLs/
+// DeleteCollection/Close）与配置一致性防线由基座提供，5 抽象方法
+// 由 SimpleKnowledgeBase（13.27）/GraphKnowledgeBase（13.28）实现。
+// Python: knowledge_base.py (KnowledgeBase 的 __init__ 部分)
 type BaseKnowledgeBase struct {
 	// mu 保护 SetVectorStore / SetIndexManager 的写入与 getter 读取。
 	// S-05 契约（与实现一致）：Set* **仅允许在构造期或发布给其他 goroutine 之前调用**。

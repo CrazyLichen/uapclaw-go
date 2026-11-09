@@ -20,6 +20,7 @@
 //	├── round.go        # GroupCompletedAPIRounds 包级导出函数
 //	├── replace.go      # Replacement 结构体 + ReplaceMessages 通用替换函数
 //	├── util.go         # 包级共享工具函数（FindLastFinalAssistantIdx 等，从 compressor 迁移）
+//	├── budget_guard.go # 上下文预算与触发阈值 + 超限内容头尾截断
 //	├── compressor/     # 压缩处理器子包
 //	│   ├── doc.go                          # 子包文档
 //	│   ├── dialogue_compressor.go          # DialogueCompressor 对话压缩器

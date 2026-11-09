@@ -370,12 +370,6 @@ func AgentTeamsHomeDir() string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// getResolvedPaths 获取已解析的路径（带回退逻辑）。
-// Python: _resolve_paths()，核心逻辑：
-//   - ~/.uapclaw/config/ 存在 → 已初始化模式，指向用户目录
-//   - 不存在 → 未初始化模式，回退到 resources 目录
-//
-// 纯计算，不含日志调用。workspace 在调用后根据 Fallback 字段补日志。
 // resetPathCache 原子地重置三个缓存槽；userHome 非空时同时设置主目录。
 // 一起清空 Once 与值：只清值不清 Once 会让下一次调用复用旧值。
 func resetPathCache(userHome string) {
@@ -409,6 +403,11 @@ func (s *pathCacheSlot) setValue(value any) {
 }
 
 // getResolvedPaths 返回解析好的各类目录路径，首次调用时算一次并缓存。
+// Python: _resolve_paths()，核心逻辑：
+//   - ~/.uapclaw/config/ 存在 → 已初始化模式，指向用户目录
+//   - 不存在 → 未初始化模式，回退到 resources 目录
+//
+// 纯计算，不含日志调用。workspace 在调用后根据 Fallback 字段补日志。
 func getResolvedPaths() *ResolvedPaths {
 	slot := loadSlot(&resolvedSlot)
 	slot.once.Do(func() {

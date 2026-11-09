@@ -115,10 +115,7 @@ var sessionsCancelDescription = map[string]string{
 
 // GetSessionsListMetadataProviderInputParams 构建 sessions_list 工具的参数 Schema
 func GetSessionsListMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	_ = lang // 无参数工具
 	return map[string]any{
 		"type":       "object",
@@ -129,20 +126,12 @@ func GetSessionsListMetadataProviderInputParams(language string) map[string]any 
 
 // GetSessionsSpawnMetadataProviderInputParams 构建 sessions_spawn 工具的参数 Schema
 func GetSessionsSpawnMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"subagent_type":    {"cn": "子 agent 类型(如 'general-purpose')", "en": "Subagent type (e.g., 'general-purpose')"},
 		"task_description": {"cn": "任务描述", "en": "Task description"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -155,19 +144,11 @@ func GetSessionsSpawnMetadataProviderInputParams(language string) map[string]any
 
 // GetSessionsCancelMetadataProviderInputParams 构建 sessions_cancel 工具的参数 Schema
 func GetSessionsCancelMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"task_id": {"cn": "要取消的任务 ID（从 sessions_list 获取）", "en": "Task ID to cancel (obtained from sessions_list)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

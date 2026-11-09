@@ -129,7 +129,7 @@ func inScope(rows []matrixRow) []matrixRow {
 	return out
 }
 
-// writeFile 写文件并按需建目录。
+// writeOutputFile 写文件并按需建目录。
 func writeOutputFile(path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

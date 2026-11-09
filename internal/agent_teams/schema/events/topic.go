@@ -24,7 +24,7 @@ var AllTeamTopics = []TeamTopic{TeamTopicTeam, TeamTopicTask, TeamTopicMessage}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildTopic 构建 topic 字符串。
+// Build 构建 topic 字符串。
 // Python: TeamTopic.build(session_id, team_name)
 func (t TeamTopic) Build(sessionID, teamName string) string {
 	return "session:" + sessionID + ":team:" + teamName + ":" + string(t)

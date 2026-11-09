@@ -559,6 +559,7 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 	skillMap := make(map[string]*skillpkg.Skill)
 	loader := NewSkillUseRail(skillsDir, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 
+	// 逐个 skills 根目录扫描，不存在的目录跳过
 	for _, root := range roots {
 		if _, err := os.Stat(root); os.IsNotExist(err) {
 			logger.Debug(logger.ComponentAgentCore).
@@ -582,6 +583,7 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 			return entries[i].Name() < entries[j].Name()
 		})
 
+		// 根目录下每个子目录视为一个技能，必须含 SKILL.md
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
@@ -599,6 +601,7 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 				continue
 			}
 
+			// 同名技能保留先加载的，后者只告警跳过
 			if _, exists := skillMap[skill.Name]; exists {
 				prevDir := skillMap[skill.Name].Directory
 				logger.Warn(logger.ComponentAgentCore).
@@ -612,6 +615,7 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 		}
 	}
 
+	// 汇总结果：去重用的 map 转成切片返回
 	result := make([]*skillpkg.Skill, 0, len(skillMap))
 	for _, skill := range skillMap {
 		result = append(result, skill)

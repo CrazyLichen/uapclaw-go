@@ -38,6 +38,7 @@ func SplitString(s, sep string) []string {
 // ParseListIndexes 解析包含数组索引的部分
 // 例: "c[1]" → ["c", 1], "[1]" → [1], "a[-1]" → ["a", -1]
 func ParseListIndexes(part string) []any {
+	// 找到第一个左括号的位置；没有则整段作为单元素返回
 	var result []any
 	bracketIdx := -1
 	for i := 0; i < len(part); i++ {
@@ -55,6 +56,7 @@ func ParseListIndexes(part string) []any {
 		result = append(result, base)
 	}
 
+	// 逐个解析 [n]：合法整数转成 int（支持负数），否则保留原字符串
 	remaining := part[bracketIdx:]
 	for len(remaining) > 0 {
 		if remaining[0] != '[' {

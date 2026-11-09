@@ -139,7 +139,7 @@ func (k *ToolInvocationKeyV1) ToWire() map[string]any {
 	}
 }
 
-// FromWire 从 wire 映射还原，字段集合必须完全一致（不接受部分身份）。
+// ToolInvocationKeyV1FromWire 从 wire 映射还原，字段集合必须完全一致（不接受部分身份）。
 // Python: ToolInvocationKeyV1.from_wire(value)
 func ToolInvocationKeyV1FromWire(value map[string]any) (*ToolInvocationKeyV1, error) {
 	if value == nil {

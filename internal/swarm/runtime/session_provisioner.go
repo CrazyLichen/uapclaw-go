@@ -746,7 +746,6 @@ func (p *RuntimeSessionProvisioner) SetRemoveSessionDir(fn func(sessionDir strin
 	p.extra.RemoveSessionDir = fn
 }
 
-// SetTeamManagerProvider 注入团队管理器获取函数。
 // SetListTeamSessions 注入团队会话清单读取器（团队删除用）。
 // Python: session_provisioner.py _inventory_team_session_ids（:1873）
 func (p *RuntimeSessionProvisioner) SetListTeamSessions(fn func(teamName string) []string) {
@@ -1881,7 +1880,7 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 		return sessionpkg.SessionDeleteResultFailure(target, "NOT_FOUND", "session not found")
 	}
 
-	// metadata
+	// metadata 读取会话元数据
 	var metadata map[string]any
 	if p.extra.SessionOps != nil {
 		metadata = p.extra.SessionOps.GetSessionMetadata(target)
@@ -1919,7 +1918,7 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 		IsTeam: isTeamSession, TeamName: teamName,
 	}
 
-	// ① participant.BeforeDelete
+	// ① participant.BeforeDelete 删除前回调
 	participants := p.participants.SnapshotDelete()
 	entered := make([]sessionpkg.SessionDeleteParticipant, 0, len(participants))
 	for _, participant := range participants {
@@ -1991,7 +1990,7 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 		p.notifyDeleteFailed(ctx, entered, deleteTarget, destructiveStarted)
 		return cleanupFailedResult(result, destructiveStarted)
 	}
-	// ⑦ rmtree
+	// ⑦ rmtree 删除会话目录
 	if dirExists && p.extra.RemoveSessionDir != nil {
 		if rmErr := p.extra.RemoveSessionDir(sessionDir); rmErr != nil {
 			p.abortDelete(ctx, result, trajectoryPrepared, lifecyclePrepared, lifecycle,

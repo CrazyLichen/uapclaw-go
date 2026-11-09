@@ -17,19 +17,11 @@ var listSkillDescription = map[string]string{
 
 // GetListSkillMetadataProviderInputParams 构建 list_skill 工具的参数 Schema
 func GetListSkillMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"query": {"cn": "可选。当前用户任务。为空时返回所有可用技能。", "en": "Optional. Current user task. If empty, return all available skills."},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

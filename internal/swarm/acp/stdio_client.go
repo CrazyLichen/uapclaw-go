@@ -788,7 +788,6 @@ func splitLinesKeepEnds(text string) []string {
 	return lines
 }
 
-// expandUser 展开 ~ 前缀。
 // toInt 宽松整数转换（float64/字符串）。
 func toInt(v any) (int, bool) {
 	switch n := v.(type) {

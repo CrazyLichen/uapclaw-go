@@ -17,21 +17,13 @@ var codeDescription = map[string]string{
 
 // GetCodeMetadataProviderInputParams 构建 code 工具的参数 Schema
 func GetCodeMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"code":     {"cn": "要执行的代码", "en": "Code to execute"},
 		"language": {"cn": "编程语言，支持 python 或 javascript，默认 python", "en": "Programming language, supports python or javascript, default python"},
 		"timeout":  {"cn": "超时时间（秒），默认 300，上限 3600", "en": "Timeout in seconds, default 300, max 3600"},
 	}
-	desc := func(key string) string {
-		if d, ok := p[key][lang]; ok {
-			return d
-		}
-		return p[key]["cn"]
-	}
+	desc := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

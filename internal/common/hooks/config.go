@@ -139,11 +139,13 @@ func LoadHooksConfig(configBase map[string]any) *HooksConfig {
 		return &HooksConfig{}
 	}
 
+	// 全局开关：配置为真时所有钩子都不执行
 	disableAll := false
 	if v, ok := hooksMap["disable_all_hooks"]; ok {
 		disableAll = toBool(v)
 	}
 
+	// 逐事件解析 matcher 列表；缺省 matcher 记为 "*"（匹配全部）
 	events := make(map[string][]HookMatcher)
 	for _, eventName := range allHookEventValues() {
 		eventConfigs, ok := hooksMap[eventName]

@@ -45,16 +45,8 @@ var toolCallParams = map[string]map[string]string{
 // GetToolCallInputParams 构建 tool_call 工具的参数 Schema。
 // Python: get_tool_call_input_params
 func GetToolCallInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
-	describe := func(key string) string {
-		if value, ok := toolCallParams[key][lang]; ok {
-			return value
-		}
-		return toolCallParams[key]["cn"]
-	}
+	lang := normalizeToolLang(language)
+	describe := i18nPicker(toolCallParams, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

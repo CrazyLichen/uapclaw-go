@@ -325,8 +325,6 @@ func (db *InMemoryTeamDatabase) GetTeamMembers(_ context.Context, teamName strin
 	return result, nil
 }
 
-// UpdateMemberStatus 更新成员状态（含 FSM 校验）。对齐 Python: MemberDao.update_member_status()
-// 返回 true 表示成功，false 表示成员不存在或状态转换不合法
 // GetMemberStatus 窄投影读取成员状态。
 // Python: get_member_status (member_dao.py)
 func (db *InMemoryTeamDatabase) GetMemberStatus(_ context.Context, teamName, memberName string) (string, bool) {
@@ -353,6 +351,8 @@ func (db *InMemoryTeamDatabase) DeleteUnstartedMember(_ context.Context, memberN
 	return true
 }
 
+// UpdateMemberStatus 更新成员状态（含 FSM 校验）。对齐 Python: MemberDao.update_member_status()
+// 返回 true 表示成功，false 表示成员不存在或状态转换不合法
 func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName, teamName, status string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -482,8 +482,6 @@ func (db *InMemoryTeamDatabase) GetTeamTasks(_ context.Context, teamName, status
 	return result, nil
 }
 
-// GetTasksByAssignee 查询成员的任务。对齐 Python: TaskDao.get_tasks_by_assignee()
-// status 为空字符串表示不过滤。
 // OpenTaskCountsByAssignee 按 assignee 统计非终态任务数。
 // Python: open_task_counts_by_assignee (task_dao.py:685-705)
 func (db *InMemoryTeamDatabase) OpenTaskCountsByAssignee(_ context.Context, teamName string) (map[string]int, error) {
@@ -502,6 +500,8 @@ func (db *InMemoryTeamDatabase) OpenTaskCountsByAssignee(_ context.Context, team
 	return counts, nil
 }
 
+// GetTasksByAssignee 查询成员的任务。对齐 Python: TaskDao.get_tasks_by_assignee()
+// status 为空字符串表示不过滤。
 func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()

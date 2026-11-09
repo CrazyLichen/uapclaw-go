@@ -30,7 +30,7 @@ func newTestManager(t *testing.T, ownerID string) *ability.AbilityManager {
 	return ability.NewAbilityManagerWithOwner(rm, ownerID)
 }
 
-// ──────────────────────────── qualify_tool_id ────────────────────────────
+// ──────────────────────────── qualify_tool_id 工具 ID 限定 ────────────────────────────
 
 // TestQualifyToolID_改写为name_owner 有状态工具 id 改写为 {name}_{owner}。
 //
@@ -141,7 +141,7 @@ func TestAdd_无owner不限定(t *testing.T) {
 	assert.Equal(t, "bash", card.ID, "无 owner 时不限定")
 }
 
-// ──────────────────────────── TeardownTools ────────────────────────────
+// ──────────────────────────── TeardownTools 工具拆除 ────────────────────────────
 
 // TestTeardownTools_只删owner限定有状态工具 删掉本 owner 的有状态工具。
 //

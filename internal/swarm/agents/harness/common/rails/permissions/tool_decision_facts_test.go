@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── DecisionRoute ────────────────────────────
+// ──────────────────────────── DecisionRoute 决策路由 ────────────────────────────
 
 // TestDecisionRoute_六种source 测试六个 source 对应的谓词
 func TestDecisionRoute_六种source(t *testing.T) {
@@ -90,7 +90,7 @@ func TestDecisionRoute_NoAutoAllowReason(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ToolDecisionFacts ────────────────────────────
+// ──────────────────────────── ToolDecisionFacts 工具决策事实 ────────────────────────────
 
 // TestBuildToolDecisionFacts_基本字段 测试基本投影
 func TestBuildToolDecisionFacts_基本字段(t *testing.T) {

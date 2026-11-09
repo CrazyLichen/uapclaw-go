@@ -2,12 +2,12 @@ package message_handler
 
 import (
 	"context"
-	"sync"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"

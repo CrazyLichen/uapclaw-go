@@ -187,7 +187,6 @@ func WithTaskID(taskID string) TaskAddOption {
 	}
 }
 
-// WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
 // WithTaskAssignee 指定任务所有者。
 //
 // 调度式创建（create_task 带 member/assignee）用它在写图阶段就把 owner 落上：
@@ -198,6 +197,7 @@ func WithTaskAssignee(assignee string) TaskAddOption {
 	return func(c *taskAddConfig) { c.assignee = &assignee }
 }
 
+// WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
 func WithDependencies(deps []string) TaskAddOption {
 	return func(c *taskAddConfig) {
 		c.dependencies = deps

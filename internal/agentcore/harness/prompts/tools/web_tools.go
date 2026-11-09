@@ -51,21 +51,13 @@ Git repository URLs (GitHub/GitLab/Gitee/Gitcode/Bitbucket, etc.) are usually a 
 
 // GetFreeSearchMetadataProviderInputParams 构建 free_search 工具的参数 Schema
 func GetFreeSearchMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"query":           {"cn": "搜索查询文本。查询最新、当前、今年、实时、近期信息时，必须使用系统提示中的当前年份或日期。", "en": "Free search query text. For latest/current/this-year/recent information, use the current year or date from the system prompt."},
 		"max_results":     {"cn": "最大结果数（1-20）。", "en": "Maximum number of results (1-20)."},
 		"timeout_seconds": {"cn": "请求超时时间（秒，5-60）。", "en": "Request timeout in seconds (5-60)."},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -79,22 +71,14 @@ func GetFreeSearchMetadataProviderInputParams(language string) map[string]any {
 
 // GetPaidSearchMetadataProviderInputParams 构建 paid_search 工具的参数 Schema
 func GetPaidSearchMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"query":           {"cn": "付费搜索查询文本。", "en": "Paid search query text."},
 		"provider":        {"cn": "Provider: auto|bocha|perplexity|serper|jina。", "en": "Provider: auto|bocha|perplexity|serper|jina."},
 		"max_results":     {"cn": "最大 URL 数（1-20）。", "en": "Maximum number of URLs (1-20)."},
 		"timeout_seconds": {"cn": "请求超时时间（秒，30-300）。", "en": "Request timeout in seconds (30-300)."},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -109,21 +93,13 @@ func GetPaidSearchMetadataProviderInputParams(language string) map[string]any {
 
 // GetFetchWebpageMetadataProviderInputParams 构建 fetch_webpage 工具的参数 Schema
 func GetFetchWebpageMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"url":             {"cn": "要抓取的网页 URL。", "en": "Webpage URL to fetch."},
 		"max_chars":       {"cn": "返回内容最大字符数；设为 0 表示不截断。", "en": "Maximum content characters. Set to 0 to disable clipping."},
 		"timeout_seconds": {"cn": "请求超时时间（秒）；慢站点可适当调大。", "en": "Request timeout in seconds. Larger values can be used for slow websites."},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

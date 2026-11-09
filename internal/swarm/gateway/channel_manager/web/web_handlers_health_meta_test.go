@@ -84,7 +84,7 @@ func TestHealthCheckSetConf_写回health_check段(t *testing.T) {
 	assert.NotContains(t, mapSection(cfg, "heartbeat"), "every", "不得再写旧 heartbeat 段")
 }
 
-// ──────────────────────────── cron.job.meta ────────────────────────────
+// ──────────────────────────── cron.job.meta 定时任务元数据 ────────────────────────────
 
 // TestCronJobMeta_返回schema 元数据来自 controller.JobMetadata()。
 func TestCronJobMeta_返回schema(t *testing.T) {
@@ -106,7 +106,7 @@ func TestCronJobMeta_无控制器(t *testing.T) {
 	assert.Equal(t, "cron not available", err.Error())
 }
 
-// ──────────────────────────── updater（stub） ────────────────────────────
+// ──────────────────────────── updater（stub） 更新器桩 ────────────────────────────
 
 // TestUpdater_默认配置 http 层注册了 4 个方法，均回上游默认运行时配置。
 func TestUpdater_默认配置(t *testing.T) {

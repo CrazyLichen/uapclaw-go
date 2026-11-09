@@ -53,22 +53,14 @@ var readMemoryDescription = map[string]string{
 
 // GetMemorySearchMetadataProviderInputParams 构建 memory_search 工具的参数 Schema
 func GetMemorySearchMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"query":       {"cn": "检索关键词或问题", "en": "Search query string"},
 		"max_results": {"cn": "最多返回条数（可选）", "en": "Maximum number of results (optional)"},
 		"min_score":   {"cn": "最小相关度阈值（可选）", "en": "Minimum relevance score threshold (optional)"},
 		"session_key": {"cn": "会话键（可选，用于上下文隔离/过滤）", "en": "Session key (optional, for scoping/filtering)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -83,21 +75,13 @@ func GetMemorySearchMetadataProviderInputParams(language string) map[string]any 
 
 // GetMemoryGetMetadataProviderInputParams 构建 memory_get 工具的参数 Schema
 func GetMemoryGetMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":      {"cn": "memory/ 下的目标文件路径（相对路径）", "en": "Target path under memory/ (relative path)"},
 		"from_line": {"cn": "起始行号（可选）", "en": "Starting line number (optional)"},
 		"lines":     {"cn": "读取行数（可选）", "en": "Number of lines to read (optional)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -111,21 +95,13 @@ func GetMemoryGetMetadataProviderInputParams(language string) map[string]any {
 
 // GetWriteMemoryMetadataProviderInputParams 构建 write_memory 工具的参数 Schema
 func GetWriteMemoryMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":    {"cn": "memory/ 下的目标文件路径（相对路径）", "en": "Target path under memory/ (relative path)"},
 		"content": {"cn": "要写入的内容", "en": "Content to write"},
 		"append":  {"cn": "是否追加写入（默认 false）", "en": "Append to file instead of overwrite (default false)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -139,21 +115,13 @@ func GetWriteMemoryMetadataProviderInputParams(language string) map[string]any {
 
 // GetEditMemoryMetadataProviderInputParams 构建 edit_memory 工具的参数 Schema
 func GetEditMemoryMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":     {"cn": "memory/ 下的目标文件路径（相对路径）", "en": "Target path under memory/ (relative path)"},
 		"old_text": {"cn": "要替换的原始文本", "en": "Original text to replace"},
 		"new_text": {"cn": "替换后的新文本", "en": "New replacement text"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -167,21 +135,13 @@ func GetEditMemoryMetadataProviderInputParams(language string) map[string]any {
 
 // GetReadMemoryMetadataProviderInputParams 构建 read_memory 工具的参数 Schema
 func GetReadMemoryMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":   {"cn": "memory/ 下的目标文件路径（相对路径）", "en": "Target path under memory/ (relative path)"},
 		"offset": {"cn": "从第几行开始读取（可选）", "en": "Line offset to start reading from (optional)"},
 		"limit":  {"cn": "最多读取多少行（可选）", "en": "Maximum number of lines to read (optional)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

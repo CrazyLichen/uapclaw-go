@@ -1686,7 +1686,7 @@ func (c *RuntimeSessionCoordinator) heartbeatRoot(handle *SessionExecutionHandle
 	}
 }
 
-// ──────────────────────────── StreamSessionInput（10.3.28d） ────────────────────────────
+// ──────────────────────────── StreamSessionInput（10.3.28d） 流式会话输入 ────────────────────────────
 
 // StreamSessionInputOptions StreamSessionInput 的调用参数。
 type StreamSessionInputOptions struct {

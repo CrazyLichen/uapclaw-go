@@ -26,19 +26,11 @@ var readMcpResourceDescription = map[string]string{
 
 // GetListMcpResourcesMetadataProviderInputParams 构建 list_mcp_resources 工具的参数 Schema
 func GetListMcpResourcesMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"server_id": {"cn": "MCP 服务器的 server_id", "en": "The server_id of the MCP server"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -50,20 +42,12 @@ func GetListMcpResourcesMetadataProviderInputParams(language string) map[string]
 
 // GetReadMcpResourceMetadataProviderInputParams 构建 read_mcp_resource 工具的参数 Schema
 func GetReadMcpResourceMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"server_id": {"cn": "MCP 服务器的 server_id", "en": "The server_id of the MCP server"},
 		"uri":       {"cn": "要读取的资源 URI", "en": "The URI of the resource to read"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

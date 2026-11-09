@@ -88,20 +88,12 @@ var taskToolDescription = map[string]string{
 
 // GetTaskMetadataProviderInputParams 构建 task_tool 工具的参数 Schema
 func GetTaskMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"subagent_type":    {"cn": "子代理类型", "en": "Type of subagent to use"},
 		"task_description": {"cn": "任务描述", "en": "Task description"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

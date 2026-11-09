@@ -44,7 +44,7 @@ func writeSessionDir(t *testing.T, sessionID string, meta map[string]any) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "metadata.json"), data, 0o644))
 }
 
-// ──────────────────────────── memory.forbidden ────────────────────────────
+// ──────────────────────────── memory.forbidden 禁用记忆配置 ────────────────────────────
 
 // TestMemoryForbiddenGet_无配置回空对象 config.yaml 缺失时落默认空对象而非报错。
 func TestMemoryForbiddenGet_无配置回空对象(t *testing.T) {
@@ -82,7 +82,7 @@ func TestMemoryForbiddenSet_params为空(t *testing.T) {
 	assert.Equal(t, WsErrBadRequest, errorCode(err))
 }
 
-// ──────────────────────────── session.list ────────────────────────────
+// ──────────────────────────── session.list 会话列表 ────────────────────────────
 
 // TestSessionList_分页与过滤 覆盖分页参数解析（int/float64）、clamp、
 // heartbeat_ 前缀过滤、缺 metadata 与坏 JSON 兜底、按 last_message_at 降序。
@@ -160,7 +160,7 @@ func TestSessionList_会话目录不可读(t *testing.T) {
 	assert.Equal(t, WsErrInternalError, errorCode(err))
 }
 
-// ──────────────────────────── session.create ────────────────────────────
+// ──────────────────────────── session.create 会话创建 ────────────────────────────
 
 // TestSessionCreate_写入可选字段 channel_id/user_id/title/mode 一并落 metadata.json。
 func TestSessionCreate_写入可选字段(t *testing.T) {
@@ -200,7 +200,7 @@ func TestSessionCreate_建目录失败(t *testing.T) {
 	assert.Equal(t, WsErrInternalError, errorCode(err))
 }
 
-// ──────────────────────────── history.get ────────────────────────────
+// ──────────────────────────── history.get 历史读取 ────────────────────────────
 
 // TestHistoryGet_透传cursor与limit 对齐上游 app_web_handlers.py:4165-4176 的四个可选键。
 func TestHistoryGet_透传cursor与limit(t *testing.T) {
@@ -218,7 +218,7 @@ func TestHistoryGet_透传cursor与limit(t *testing.T) {
 	assert.Equal(t, true, payload["accepted"])
 }
 
-// ──────────────────────────── permissions.* ────────────────────────────
+// ──────────────────────────── permissions.* 权限相关接口 ────────────────────────────
 
 // TestPermissionsOwnerScopesGet_无配置回空表 config.yaml 缺失时落空表而非报错。
 func TestPermissionsOwnerScopesGet_无配置回空表(t *testing.T) {

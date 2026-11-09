@@ -1118,7 +1118,7 @@ func evaluateSingleInvocation(toolName string, toolArgs map[string]any, ctx *tie
 	return subcommandResult{Permission: PermissionLevelAsk, MatchedRule: mr + ":fallback(no_config)"}
 }
 
-// shellAstFloor Shell AST 地板权限。
+// shellAstFloorFor 计算 Shell AST 解析结果对应的地板权限。
 // Python: _shell_ast_floor(shell_parse) (tiered_policy.py L388-408)
 func shellAstFloorFor(shellParse *ShellAstParseResult, unknownStructure bool) (PermissionLevel, string) {
 	if shellParse == nil || !unknownStructure {

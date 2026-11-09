@@ -1304,17 +1304,10 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// degradeAtRoundBoundary 把"轮次刚结束、controller 已回收"的投递失败降级为排队。
-// M-02：`d.Steer/FollowUp` 现在会返回 ErrNoActiveLoop。这个错误出现在
-// "IsAgentRunning() 仍为真，但任务循环控制器已被 forceCleanupController 回收"
-// 的轮次切换窗口里——属正常竞态而非故障。Python 在同一窗口静默丢弃输入，
-// 这里改为降级投递到下一轮队列：消息不丢，也不给用户一个假错误。
-// 其余错误（会话缺失、发布失败）原样上抛，由调用方决定是否 failure。
-// sessionIDFromOptsOrCtx 解析本轮应绑定的 sessionID。
+// sessionFromOptsOrCtx 返回本轮应绑定的会话对象（any，nil 表示无会话）。
 // M-19: 对齐 Python invoke(inputs, session=None) / stream(inputs, session=None) 的
 // 显式 session 参数语义——优先取 opts 传入的 SessionFacade；
 // opts 未传时回退 ctx 中 SessionState 的 sessionID（对齐 Python contextvar 兜底）。
-// sessionFromOptsOrCtx 返回本轮应绑定的会话对象（any，nil 表示无会话）。
 // 25.1a 接线：CoordinationKernel.Start 需要 AgentTeamSession 对象来启动
 // harness 的 native supervisor（harness.Start(team_session=session) 会拿它建子会话）。
 // 旧实现 sessionIDFromOptsOrCtx 只提取 sessionID，把对象丢了——TeamSession 存 nil，

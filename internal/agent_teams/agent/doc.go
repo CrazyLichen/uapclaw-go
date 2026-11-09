@@ -21,6 +21,7 @@
 //	├── infra.go              # TeamInfra 进程级基础设施
 //	├── resources.go          # PrivateAgentResources 实例级资源
 //	├── agent_configurator.go # AgentConfigurator Agent 配置器（9.57）
+//	├── setup_agent_wiring.go # setup_agent 装配接线（成员构建上下文/团队句柄/rail spec 输入）
 //	├── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
 //	├── spawn_manager.go      # SpawnManager 子进程管理（9.58）
 //	├── session_manager.go    # SessionManager 会话三态管理（9.59）

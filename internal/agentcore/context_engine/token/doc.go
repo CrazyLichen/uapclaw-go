@@ -7,6 +7,7 @@
 //	token/
 //	├── doc.go                 # 包文档
 //	├── base.go                # TokenCounter 接口定义
+//	├── image_tokens.go        # 图片 token 估算（尺寸分档 + 占位覆盖）
 //	└── tiktoken_counter.go    # TiktokenCounter 实现（基于 tiktoken-go/tokenizer）
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/token/

@@ -59,10 +59,7 @@ Note: LSP servers must be configured for the file type. If no server is availabl
 
 // GetLspToolMetadataProviderInputParams 构建 lsp 工具的参数 Schema
 func GetLspToolMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"operation":           {"cn": "LSP 操作类型，可选值：goToDefinition、findReferences、documentSymbol、workspaceSymbol、goToImplementation、prepareCallHierarchy、incomingCalls、outgoingCalls", "en": "LSP operation type. Options: goToDefinition, findReferences, documentSymbol, workspaceSymbol, goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls"},
 		"file_path":           {"cn": "文件路径（绝对路径或相对于工作区根目录的路径）", "en": "The absolute or relative path to the file"},
@@ -71,12 +68,7 @@ func GetLspToolMetadataProviderInputParams(language string) map[string]any {
 		"query":               {"cn": "搜索查询字符串；为空时返回所有可用符号（仅 workspaceSymbol 使用）", "en": "Search query string; when empty, returns all available symbols (used by workspaceSymbol only)"},
 		"include_declaration": {"cn": "为 true 时，结果中包含符号的定义位置（默认 true）", "en": "When true, the declaration location itself is included in the results (default: true)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

@@ -489,7 +489,6 @@ func (c *CodeAdapter) Cleanup() error {
 	return c.deep.Cleanup()
 }
 
-// Instance 返回底层 DeepAgent 实例，委托给内嵌 DeepAdapter。
 // HasSessionRuntime 委托 DeepAdapter（Code 模式与会话运行时语义一致）。
 // Python: JiuwenSwarmCodeAdapter 继承 JiuWenSwarmDeepAdapter，同理委托。
 func (c *CodeAdapter) HasSessionRuntime(sessionID string) bool {

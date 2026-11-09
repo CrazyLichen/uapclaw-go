@@ -1327,7 +1327,7 @@ func TestCoordinator_OnExecution回调(t *testing.T) {
 	<-done
 }
 
-// ──────────────────────────── StreamSessionInput（10.3.28d） ────────────────────────────
+// ──────────────────────────── StreamSessionInput（10.3.28d） 流式会话输入 ────────────────────────────
 
 // TestStreamSessionInput_无父执行走idle 无活跃聊天时回落 idle 分支。
 func TestStreamSessionInput_无父执行走idle(t *testing.T) {

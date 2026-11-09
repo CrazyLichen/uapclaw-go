@@ -37,10 +37,10 @@ func TestNativeHarness_onAbort立即中断取消活动轮(t *testing.T) {
 	h.st.setPhase(HarnessStateRunning)
 	cancelled := false
 	h.st.SetActive(&ActiveRound{
-		RoundID: 1,
-		TaskID:  "t1",
-		OriginalQuery:   "长任务",
-		Cancel:  func() { cancelled = true },
+		RoundID:       1,
+		TaskID:        "t1",
+		OriginalQuery: "长任务",
+		Cancel:        func() { cancelled = true },
 	})
 
 	require.NoError(t, h.onAbort(&cmdAbort{immediate: true}))

@@ -12,7 +12,12 @@
 //	├── lock.go        # 跨进程文件锁、原子写、写围栏
 //	├── operation.go   # 操作状态机（begin/claim/renew/update/complete/mark_finalizing）
 //	├── guard.go       # 准入判定（guard/write_guard/runtime owner）
-//	└── query.go       # 投影、分页、事件快照
+//	├── project.go     # 工程目录候选/记录/来源解析
+//	├── query.go       # 投影、分页、事件快照
+//	├── lock_unix.go   # Unix 跨进程锁实现
+//	├── lock_windows.go # Windows 跨进程锁实现
+//	├── process_unix.go # Unix 进程存活探测
+//	└── process_windows.go # Windows 进程存活探测
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/session/lifecycle.py（805 行，39 函数）
 package lifecycle

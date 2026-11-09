@@ -13,7 +13,9 @@
 //	├── session_work_kind.go    # 请求归类判定（哪些请求归 Runtime 调度）
 //	├── session_input.go        # 会话补充输入（steer / follow_up）
 //	├── interrupt_resume.go     # 暂停调用应答判定
-//	└── interrupt_helpers.go    # 中断恢复载荷判定
+//	├── interrupt_helpers.go    # 中断恢复载荷判定
+//	├── session_provisioner.go  # 会话创建/删除/切换事务（RuntimeSessionProvisioner）
+//	└── team_session_lifecycle.go # 团队会话生命周期适配（TeamSessionLifecycleAdapter）
 //
 // 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py）
 package runtime

@@ -71,20 +71,12 @@ Calling outside an enter_worktree session is a no-op.
 
 // GetExitWorktreeMetadataProviderInputParams 构建 exit_worktree 工具的参数 Schema
 func GetExitWorktreeMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"action":          {"cn": "\"keep\" 保留 worktree 目录和分支在磁盘上;\"remove\" 删除目录和分支", "en": "\"keep\" leaves the worktree and branch on disk; \"remove\" deletes both"},
 		"discard_changes": {"cn": "仅在 action=\"remove\" 且 worktree 有未提交文件或未合并提交时需设为 true。工具会先拒绝并列出变更,确认后再设此参数重新调用", "en": "Required true when action is \"remove\" and the worktree has uncommitted files or unmerged commits. The tool will refuse and list them otherwise"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

@@ -44,9 +44,6 @@ type streamTaskEntry struct {
 	wg sync.WaitGroup
 }
 
-// MessageHandler 消息处理器
-// 入站：Channel → MessageHandler → AgentClient → AgentServer
-// 出站：AgentServer → AgentClient → MessageHandler → ChannelManager → Channel
 // externalSessionAliasKey 外部会话别名的键：(channel_id, 外部 session_id)。
 // Python: _external_session_aliases 的 tuple 键 (message_handler.py:394)。
 type externalSessionAliasKey struct {

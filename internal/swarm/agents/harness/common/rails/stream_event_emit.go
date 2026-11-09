@@ -32,7 +32,7 @@ type todoToolLoader interface {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// EmitToolCall 发送 tool_call 事件，对齐 Python: _emit_tool_call
+// emitToolCall 发送 tool_call 事件，对齐 Python: _emit_tool_call
 //
 // 在 before_model_call 钩子中调用，通知前端 Agent 正在发起工具调用。
 func emitToolCall(ctx context.Context, session sessioninterfaces.SessionFacade, toolCall *llmschema.ToolCall) {
@@ -55,7 +55,7 @@ func emitToolCall(ctx context.Context, session sessioninterfaces.SessionFacade, 
 	}
 }
 
-// EmitToolResult 发送 tool_result 事件，对齐 Python: _emit_tool_result
+// emitToolResult 发送 tool_result 事件，对齐 Python: _emit_tool_result
 //
 // 在 after_tool_call 钩子中调用，通知前端工具执行结果。
 func emitToolResult(ctx context.Context, session sessioninterfaces.SessionFacade, toolCall *llmschema.ToolCall, result any) {
@@ -95,7 +95,7 @@ func emitToolResult(ctx context.Context, session sessioninterfaces.SessionFacade
 	}
 }
 
-// EmitToolUpdate 发送 tool_update 事件，对齐 Python: _emit_tool_update
+// emitToolUpdate 发送 tool_update 事件，对齐 Python: _emit_tool_update
 //
 // 在工具执行过程中发送状态更新（如 in_progress/completed/cancelled）。
 func emitToolUpdate(ctx context.Context, session sessioninterfaces.SessionFacade, toolCall *llmschema.ToolCall, status string) {
@@ -123,7 +123,7 @@ func emitToolUpdate(ctx context.Context, session sessioninterfaces.SessionFacade
 	}
 }
 
-// EmitAskUserQuestionIfInterrupted 当 ask_user 工具被中断时发送 chat.ask_user_question 事件，
+// emitAskUserQuestionIfInterrupted 当 ask_user 工具被中断时发送 chat.ask_user_question 事件，
 // 对齐 Python: _emit_ask_user_question_if_interrupted
 func emitAskUserQuestionIfInterrupted(ctx context.Context, session sessioninterfaces.SessionFacade, toolCall *llmschema.ToolCall, toolName string, result any, exception error) {
 	if session == nil {
@@ -153,7 +153,7 @@ func emitAskUserQuestionIfInterrupted(ctx context.Context, session sessioninterf
 	}
 }
 
-// EmitTodoUpdated 加载主 Agent 的 todo 列表并推送 todo.updated 事件，对齐 Python: _emit_todo_updated
+// emitTodoUpdated 加载主 Agent 的 todo 列表并推送 todo.updated 事件，对齐 Python: _emit_todo_updated
 func emitTodoUpdated(ctx context.Context, session sessioninterfaces.SessionFacade, todoTool todoToolLoader, sessionID string) {
 	if session == nil || todoTool == nil {
 		return
@@ -173,7 +173,7 @@ func emitTodoUpdated(ctx context.Context, session sessioninterfaces.SessionFacad
 	}
 }
 
-// EmitContextUsage 发送 context.usage 事件（context-usage.v1 快照）。
+// emitContextUsage 发送 context.usage 事件（context-usage.v1 快照）。
 // 载荷必须是完整快照：前端 parseContextUsageSnapshot 校验不过会整条丢弃，
 // 旧扁平 {rate, context_max, tokens_used} 板会让上下文指示器彻底失效。
 // Python: react_agent._emit_context_usage → OutputSchema(payload=snapshot.model_dump())

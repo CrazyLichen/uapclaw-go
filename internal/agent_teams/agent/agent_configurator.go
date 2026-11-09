@@ -148,13 +148,13 @@ func WithBackendOnTeamBuilt(cb func(ctx context.Context) error) SetupTeamBackend
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamBuilt = cb }
 }
 
-// WithBackendDB 设置数据库实例。
 // WithBackendOnMemberStarted 设置成员启动回调。
 // Python: setup_team_backend(on_member_started=...)（tools/team.py:148）
 func WithBackendOnMemberStarted(cb func(ctx context.Context, memberName string) error) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.onMemberStarted = cb }
 }
 
+// WithBackendDB 设置数据库实例。
 func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.db = db }
 }
