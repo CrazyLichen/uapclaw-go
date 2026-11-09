@@ -888,3 +888,32 @@ Go 的 `url.Parse` 对 `:abc` 直接返回 error，但对 `:99999` **放行**且
 file URI 五种解析失败原因 / 域名压缩 / 端口范围。
 `url_safety.go` 函数级覆盖率最低 81.8%（`regexp2FindAll` 的错误分支），
 `inspectURI` 82.0%，其余 ≥90%；permissions 包整体 87.3%。
+
+### 12.7 Task 9 执行时的核实结论：`generated_artifact_delivery`
+
+**全量落地**：175 行 / 9 项（3 结构 + 6 函数）逐条对齐。
+
+**命名勘误**：计划表把 `normalize_send_file_paths` 写成
+`NormalizeSendFilePath`（缺 `s`）。按规则 12「`snake_case → CamelCase`
+是唯一允许的转换」，Go 侧为 `NormalizeSendFilePaths`。
+
+**实施中发现并修复的 bug**：初版 `ConsumeSendFileExecutionGrant` 复用了
+`ClearSendFileExecutionGrant(ctx)` 来清绑定，但后者会**额外**把
+`lease.terminal` 置真，导致紧接着的 `if lease.terminal` 检查必然命中，
+所有消费都返回 `send_file_execution_grant_missing`。
+Python 的 `consume` 只做 `ContextVar.set(None)`，**不**调用
+`clear_send_file_execution_grant`。已改为不复用 Clear。
+
+**ctx 派生语义差异**：Python 的 `set(None)` 能清掉当前上下文里的绑定；
+Go 的 ctx 派生不可变，无法清除父 ctx 的绑定。但把 `lease.terminal` 置真后，
+`CurrentSendFileExecutionGrant` 对所有持有该 lease 的分支都返回 nil，
+与 Python「消费后读不到」语义等价（已由
+`TestConsumeSendFileExecutionGrant_消费后不可再读` 与
+`TestClearSendFileExecutionGrant_旧ctx的lease被标记终态` 两条测试固定）。
+
+**并发安全**：`sendFileExecutionLease` 用 `sync.Mutex` 保护 `terminal`，
+对齐 Python 的 `threading.Lock`（Python 注释说明该锁用于「被复制的 async
+上下文共享同一终态」）。
+
+**测试**：28 个用例，7 个导出函数 100%，私有函数除
+`resolveSendFilePath` 80%（`filepath.Abs` 失败分支不可达）外均 100%。
