@@ -585,12 +585,16 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
 	// 确保 mode 信息存在，否则从 channelStates 注入
+	sessionMode := ""
 	if len(agentMsg.Params) > 0 {
 		var paramsMap map[string]any
 		if err := json.Unmarshal(agentMsg.Params, &paramsMap); err == nil {
-			if _, hasMode := paramsMap["mode"]; !hasMode {
+			if mode, hasMode := paramsMap["mode"].(string); hasMode {
+				sessionMode = mode
+			} else {
 				state := mh.GetOrCreateChannelState(msg)
-				paramsMap["mode"] = string(state.Mode)
+				sessionMode = string(state.Mode)
+				paramsMap["mode"] = sessionMode
 				if updated, err := json.Marshal(paramsMap); err == nil {
 					agentMsg.Params = json.RawMessage(updated)
 				}
@@ -599,12 +603,28 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 	}
 
 	// Python: env_interrupt = message_to_e2a(agent_msg)
-	// 将 agentMsg（已注入 mode）转为 E2A 信封后传给 sendInterruptToAgent
 	envInterrupt := e2a.MessageToE2AOrFallback(agentMsg)
-	go mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
 
-	// 检查当前 session 是否有活跃流式任务
+	// 活跃流检查必须在治理之前：治理会清掉这些登记。
 	hasActiveTask := mh.hasActiveStreamTaskForSession(msg.SessionID)
+
+	if intent == "pause" {
+		// G2（issue 5448）：团队暂停后 AgentServer 的流不再发终态帧，
+		// 网关消费者必须同步退出；治理只在 AgentServer 确认暂停后执行，
+		// 否则轮次仍在产出，取消消费者会丢掉在飞输出。
+		resp, err := mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
+		if err == nil && resp != nil && resp.OK {
+			mh.cancelStreamsForPausedSession(ctx, msg, sessionMode)
+		} else {
+			logger.Warn(logComponent).
+				Str("event_type", "pause_governance_skipped").
+				Str("session_id", msg.SessionID).
+				Msg("AgentServer did not acknowledge pause; skip stream governance")
+		}
+	} else {
+		go mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
+	}
+
 	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, hasActiveTask)
 }
 
