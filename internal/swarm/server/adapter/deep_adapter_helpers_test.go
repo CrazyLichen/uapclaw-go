@@ -214,7 +214,7 @@ func TestBuildRecapPrompt_有memory(t *testing.T) {
 func TestDeepAdapter_HandleSlashCommand_非斜杠命令(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
-	result, err := d.handleSlashCommand(ctx, "hello", "s1", "agent.work.plan")
+	result, err := d.handleSlashCommand(ctx, "hello", "s1", "agent.work.plan", "web")
 	if result != nil || err != nil {
 		t.Errorf("非斜杠命令应返回 nil, nil")
 	}
@@ -224,7 +224,7 @@ func TestDeepAdapter_HandleSlashCommand_非斜杠命令(t *testing.T) {
 func TestDeepAdapter_HandleSlashCommand_空查询(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
-	result, err := d.handleSlashCommand(ctx, "", "s1", "agent.work.plan")
+	result, err := d.handleSlashCommand(ctx, "", "s1", "agent.work.plan", "web")
 	if result != nil || err != nil {
 		t.Errorf("空查询应返回 nil, nil")
 	}
@@ -234,7 +234,7 @@ func TestDeepAdapter_HandleSlashCommand_空查询(t *testing.T) {
 func TestDeepAdapter_HandleSlashCommand_未知斜杠命令(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
-	result, err := d.handleSlashCommand(ctx, "/unknown", "s1", "agent.work.plan")
+	result, err := d.handleSlashCommand(ctx, "/unknown", "s1", "agent.work.plan", "web")
 	if result != nil || err != nil {
 		t.Errorf("未知斜杠命令应返回 nil, nil")
 	}
@@ -1374,7 +1374,7 @@ func TestDeepAdapter_HandleSlashCommand_evolve前缀(t *testing.T) {
 	}
 	// agent.plan + evolution 未启用 → 返回 "演进功能未启用。" 错误
 	for _, query := range tests {
-		result, err := d.handleSlashCommand(ctx, query, "s1", "agent.work.plan")
+		result, err := d.handleSlashCommand(ctx, query, "s1", "agent.work.plan", "web")
 		if err != nil {
 			t.Errorf("handleSlashCommand(%q) 意外返回 error: %v", query, err)
 		}
@@ -1391,7 +1391,7 @@ func TestDeepAdapter_HandleSlashCommand_evolve前缀(t *testing.T) {
 
 	// 非 agent.plan 模式 → 返回 "agent 模式下演进功能不可用。" 错误
 	for _, query := range tests {
-		result, _ := d.handleSlashCommand(ctx, query, "s1", "agent.work.normal")
+		result, _ := d.handleSlashCommand(ctx, query, "s1", "agent.work.normal", "web")
 		if result == nil {
 			t.Errorf("handleSlashCommand(%q, agent.fast) 应返回错误信息，得到 nil", query)
 		}

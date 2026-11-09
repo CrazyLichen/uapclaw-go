@@ -985,7 +985,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 
 	// 步骤 7-8: slash 命令处理
 	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
-	slashResult, slashErr := d.handleSlashCommand(ctx, query, sessionID, mode)
+	slashResult, slashErr := d.handleSlashCommand(ctx, query, sessionID, mode, req.ChannelID)
 	if slashErr != nil {
 		logger.Warn(logComponent).Err(slashErr).Msg("handleSlashCommand failed, continuing normal flow")
 	}
@@ -1228,7 +1228,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 9: slash 命令处理
 	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
 	streamQuery := paramsString(params, "query", "")
-	slashResultStream, slashErrStream := d.handleSlashCommand(ctx, streamQuery, sessionID, mode)
+	slashResultStream, slashErrStream := d.handleSlashCommand(ctx, streamQuery, sessionID, mode, req.ChannelID)
 	if slashErrStream != nil {
 		logger.Warn(logComponent).Err(slashErrStream).Msg("handleSlashCommand failed, continuing normal flow")
 	}

@@ -2,12 +2,14 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // TestDispatchGoalControl_无管理器返回结构化错误 未 start_interaction 时的兜底。
@@ -105,4 +107,94 @@ func TestOptionalPositive(t *testing.T) {
 	value := optionalPositive(200)
 	require.NotNil(t, value)
 	require.Equal(t, 200, *value)
+}
+
+// TestParseGoalSlashIntent_语法映射 只翻译产品语法，不碰 GoalManager。
+// Python: interface_deep.py:15739-15757
+func TestParseGoalSlashIntent_语法映射(t *testing.T) {
+	cases := []struct {
+		query  string
+		action string
+		object string
+		isNil  bool
+	}{
+		{"/goal", "get", "", false},
+		{"/goal   ", "get", "", false},
+		{"/goal pause", "pause", "", false},
+		{"/goal RESUME", "resume", "", false},
+		{"/goal clear", "clear", "", false},
+		{"/goal set 修完测试", "set", "修完测试", false},
+		{"/goal set", "set", "", false},
+		{"/goal 修完测试", "set", "修完测试", false},
+		{"/goals", "set", "s", false},
+		{"hello /goal", "", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.query, func(t *testing.T) {
+			got := parseGoalSlashIntent(c.query)
+			if c.isNil {
+				require.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			require.Equal(t, c.action, got["action"])
+			if c.action == "set" {
+				require.Equal(t, c.object, got["objective"])
+			}
+		})
+	}
+}
+
+// TestShouldParseTUIGoalSlash_仅TUI且无结构化op 产品入口互斥规则。
+// Python: interface_deep.py:15724-15737
+func TestShouldParseTUIGoalSlash_仅TUI且无结构化op(t *testing.T) {
+	require.True(t, shouldParseTUIGoalSlash(nil, false, "tui", "/goal"))
+	require.False(t, shouldParseTUIGoalSlash(map[string]any{}, false, "tui", "/goal"))
+	require.False(t, shouldParseTUIGoalSlash(nil, true, "tui", "/goal"))
+	require.False(t, shouldParseTUIGoalSlash(nil, false, "web", "/goal"))
+	require.False(t, shouldParseTUIGoalSlash(nil, false, "tui", 123))
+}
+
+// TestStructuredGoalOpFromRequest_只映射set与resume 结构化入口只接管执行类动作。
+// Python: interface_deep.py:16251-16281
+func TestStructuredGoalOpFromRequest_只映射set与resume(t *testing.T) {
+	setReq := &schema.AgentRequest{
+		ReqMethod: schema.ReqMethodCommandGoal,
+		Params: mustJSON(t, map[string]any{
+			"action": "set", "objective": "x", "overwrite_confirmed": true,
+			"token_budget": "200", "max_attempts": 3,
+		}),
+	}
+	op := structuredGoalOpFromRequest(setReq)
+	require.NotNil(t, op)
+	require.Equal(t, "set", op["action"])
+	require.Equal(t, "x", op["objective"])
+	require.Equal(t, true, op["overwrite_confirmed"])
+	require.Equal(t, 200, op["token_budget"])
+	require.Equal(t, 3, op["max_attempts"])
+
+	resumeReq := &schema.AgentRequest{
+		ReqMethod: schema.ReqMethodCommandGoal,
+		Params:    mustJSON(t, map[string]any{"action": "resume"}),
+	}
+	resumeOp := structuredGoalOpFromRequest(resumeReq)
+	require.NotNil(t, resumeOp)
+	require.Equal(t, "resume", resumeOp["action"])
+	require.NotContains(t, resumeOp, "objective")
+
+	getReq := &schema.AgentRequest{
+		ReqMethod: schema.ReqMethodCommandGoal,
+		Params:    mustJSON(t, map[string]any{"action": "get"}),
+	}
+	require.Nil(t, structuredGoalOpFromRequest(getReq))
+	require.Nil(t, structuredGoalOpFromRequest(&schema.AgentRequest{ReqMethod: schema.ReqMethodChatSend}))
+	require.Nil(t, structuredGoalOpFromRequest(nil))
+}
+
+// mustJSON 序列化测试参数（失败即判失败）。
+func mustJSON(t *testing.T, value map[string]any) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	require.NoError(t, err)
+	return raw
 }

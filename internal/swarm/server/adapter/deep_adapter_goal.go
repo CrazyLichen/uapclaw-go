@@ -3,10 +3,12 @@ package adapter
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -236,4 +238,137 @@ func optionalPositive(value int) *int {
 		return nil
 	}
 	return &value
+}
+
+// parseGoalSlashIntent 把 "/goal ..." 解析成 action 字典，不触碰 GoalManager。
+// Python: interface_deep.py:15739-15757
+func parseGoalSlashIntent(query string) map[string]any {
+	text := strings.TrimSpace(query)
+	if !strings.HasPrefix(text, "/goal") {
+		return nil
+	}
+	args := strings.TrimSpace(text[5:])
+	if args == "" {
+		return map[string]any{"action": "get"}
+	}
+	lower := strings.ToLower(args)
+	if lower == "pause" || lower == "resume" || lower == "clear" {
+		return map[string]any{"action": lower}
+	}
+	if strings.HasPrefix(lower, "set ") {
+		return map[string]any{"action": "set", "objective": strings.TrimSpace(args[4:])}
+	}
+	if lower == "set" {
+		return map[string]any{"action": "set", "objective": ""}
+	}
+	// get / stop 不是用户命令词，保留为 "/goal <objective>" 形式的正文
+	return map[string]any{"action": "set", "objective": args}
+}
+
+// shouldParseTUIGoalSlash 是否需要把聊天文本 "/goal ..." 当意图解析。
+// Python: interface_deep.py:15724-15737 —— 仅 TUI 通道，且无结构化 op / 非 attach。
+func shouldParseTUIGoalSlash(
+	pendingGoalOp map[string]any, attachGoalRequest bool, channelID string, query any,
+) bool {
+	if pendingGoalOp != nil || attachGoalRequest {
+		return false
+	}
+	if strings.ToLower(strings.TrimSpace(channelID)) != "tui" {
+		return false
+	}
+	_, isString := query.(string)
+	return isString
+}
+
+// structuredGoalOpFromRequest 把流式 command.goal 的 set/resume 映射成
+// attach→control 两段路径的 pending op。
+// Python: interface_deep.py:16251-16281
+//
+// 普通聊天文本 "/goal set ..." 不走这里——只有显式 command.goal 方法才映射。
+func structuredGoalOpFromRequest(req *schema.AgentRequest) map[string]any {
+	if req == nil || req.ReqMethod != schema.ReqMethodCommandGoal {
+		return nil
+	}
+	raw := parseParams(req.Params)
+	action := strings.ToLower(strings.TrimSpace(paramsString(raw, "action", "")))
+	if action == "" {
+		action = "get"
+	}
+	if action != "set" && action != "resume" {
+		return nil
+	}
+	op := map[string]any{"action": action}
+	if action != "set" {
+		return op
+	}
+	objective, _ := raw["objective"].(string)
+	op["objective"] = objective
+	overwrite, _ := raw["overwrite_confirmed"].(bool)
+	op["overwrite_confirmed"] = overwrite
+	for _, key := range []string{"token_budget", "max_attempts"} {
+		if value, ok := positiveIntField(raw, key); ok {
+			op[key] = value
+		}
+	}
+	return op
+}
+
+// handleGoalSlashCommand 把 "/goal ..." 翻译成能力调用。
+// Python: interface_deep.py:17949-17977
+//
+// 返回 nil 表示不是 goal 斜杠文本，调用方继续走其它斜杠分发。
+func (d *DeepAdapter) handleGoalSlashCommand(
+	ctx context.Context, query, sessionID string,
+) map[string]any {
+	intent := parseGoalSlashIntent(query)
+	if intent == nil {
+		return nil
+	}
+	action, _ := intent["action"].(string)
+	objective, _ := intent["objective"].(string)
+	out, err := d.DispatchGoalControl(ctx, sessionID, action, objective, false, 0, 0)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "GOAL_SLASH_FAILED").
+			Str("session_id", sessionID).
+			Msg("goal slash command failed")
+		return map[string]any{
+			"result_type": goalResultError,
+			"error_code":  "goal_operation_failed",
+			"error":       err.Error(),
+		}
+	}
+	return out
+}
+
+// positiveIntField 取正整数参数（接受 int / 纯数字字符串，拒绝 bool）。
+// Python: isinstance(value, int) 或 str.strip().lstrip("-").isdigit()
+func positiveIntField(params map[string]any, key string) (int, bool) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return 0, false
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		digits := strings.TrimPrefix(trimmed, "-")
+		if digits == "" || strings.TrimLeft(digits, "0123456789") != "" {
+			return 0, false
+		}
+		parsed, err := strconv.Atoi(trimmed)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
 }
