@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"sync/atomic"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
@@ -35,6 +36,9 @@ type DeepAgentRail struct {
 	workspace *workspace.Workspace
 	// sysOperation 系统操作引用（接口值，无需取地址）
 	sysOperation sys_operation.SysOperation
+	// trusted 是否由受信任构造函数创建（1=是）。
+	// 权限审查层据此判定该 rail 的只读工具可免于 LLM 审查。
+	trusted uint32
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -45,6 +49,25 @@ func NewDeepAgentRail() *DeepAgentRail {
 	return &DeepAgentRail{
 		BaseRail: *agentinterfaces.NewBaseRail(),
 	}
+}
+
+// MarkTrusted 标记该 rail 实例由受信任构造函数创建。
+//
+// 权限审查层据此判定该 rail 的只读工具可免于 LLM 审查。
+//
+// ⚠️ 残余风险：Go 无法阻止调用方绕过构造函数后手工调用本方法。
+// 详见 docs/superpowers/specs/2026-11-08-permissions-auto-review-9.90d-design.md
+// 已知偏差 V-4。本方法替代 Python readonly_tool_bindings._closure 的
+// 闭包链反射校验（Go 无 __code__.co_freevars / __closure__）。
+func (d *DeepAgentRail) MarkTrusted() {
+	atomic.StoreUint32(&d.trusted, 1)
+}
+
+// IsTrusted 返回该 rail 是否已由受信任构造函数标记。
+//
+// Python: readonly_tool_bindings 的 _closure / _methods_match 校验结果
+func (d *DeepAgentRail) IsTrusted() bool {
+	return atomic.LoadUint32(&d.trusted) == 1
 }
 
 // SetWorkspace 设置工作空间引用。

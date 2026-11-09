@@ -83,3 +83,72 @@ func TestDeepAgentRail_GetCallbacks_合并taskIteration(t *testing.T) {
 	assert.Contains(t, callbacks, agentinterfaces.CallbackBeforeTaskIteration)
 	assert.Contains(t, callbacks, agentinterfaces.CallbackAfterTaskIteration)
 }
+
+// ──────────────────────────── MarkTrusted / IsTrusted（9.90d-1 Task 14） ────────────────────────────
+
+// TestDeepAgentRail_MarkTrusted 验证标记后 IsTrusted 为 true。
+func TestDeepAgentRail_MarkTrusted(t *testing.T) {
+	r := NewDeepAgentRail()
+	if r.IsTrusted() {
+		t.Error("new rail should not be trusted")
+	}
+
+	r.MarkTrusted()
+	if !r.IsTrusted() {
+		t.Error("should be trusted after MarkTrusted")
+	}
+}
+
+// TestDeepAgentRail_MarkTrusted幂等 验证重复标记不出错。
+func TestDeepAgentRail_MarkTrusted幂等(t *testing.T) {
+	r := NewDeepAgentRail()
+	r.MarkTrusted()
+	r.MarkTrusted()
+	if !r.IsTrusted() {
+		t.Error("repeated marks should keep trusted")
+	}
+}
+
+// TestDeepAgentRail_MarkTrusted并发安全 验证原子操作无竞态。
+func TestDeepAgentRail_MarkTrusted并发安全(t *testing.T) {
+	r := NewDeepAgentRail()
+	done := make(chan struct{})
+
+	for i := 0; i < 50; i++ {
+		go func() {
+			r.MarkTrusted()
+			_ = r.IsTrusted()
+			done <- struct{}{}
+		}()
+	}
+	for i := 0; i < 50; i++ {
+		<-done
+	}
+
+	if !r.IsTrusted() {
+		t.Error("should be trusted after concurrent marks")
+	}
+}
+
+// TestDeepAgentRail_多个实例互不影响 验证 trusted 是实例级而非类型级。
+func TestDeepAgentRail_多个实例互不影响(t *testing.T) {
+	a := NewDeepAgentRail()
+	b := NewDeepAgentRail()
+
+	a.MarkTrusted()
+
+	if !a.IsTrusted() {
+		t.Error("a should be trusted")
+	}
+	if b.IsTrusted() {
+		t.Error("b should NOT be trusted（实例级标记）")
+	}
+}
+
+// TestDeepAgentRail_零值不trusted 验证未调用构造函数时默认不可信。
+func TestDeepAgentRail_零值不trusted(t *testing.T) {
+	var r DeepAgentRail
+	if r.IsTrusted() {
+		t.Error("zero value should not be trusted")
+	}
+}

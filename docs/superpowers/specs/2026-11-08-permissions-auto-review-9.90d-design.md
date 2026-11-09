@@ -1178,3 +1178,23 @@ SDK `PermissionConfirmResponse` 的两个方法，用于区分「会话内记住
 （父类抛 `AbortError` + session auto_confirm 状态）下才会被触发，
 单测需构造整套回调上下文，留待 Task 16 测试补齐时处理。
 `tool_security_rail_override.go` 全函数 100%。
+
+### 12.12 Task 14 执行时的核实结论：`MarkTrusted()`
+
+**落地**：`rails/base.go` 的 `DeepAgentRail` 加 `trusted uint32` 字段 +
+`MarkTrusted()` / `IsTrusted()` 两个方法（`sync/atomic` 原子读写）。
+
+**实现细节**：
+- 用 `uint32` + `atomic.StoreUint32` / `LoadUint32` 而非 `bool`——
+  `sync/atomic` 没有 `bool` 的原子操作，`uint32` 是 Go 的标准做法
+- 实例级标记（非类型级/包级），多实例互不影响
+- 零值默认不可信（`&DeepAgentRail{}` 的 `trusted == 0`）
+
+**本批无调用方（规则 8 说明）**：`MarkTrusted` 的消费方是 9.90d-2 的
+`AutoPermissionRail`（用它判定 rail 的只读工具可免于 LLM 审查）。
+本批按计划交付该前置件，非「以防外部引用」的遗留符号。
+设计依据与强度降级见 §4.4（第 4 层由闭包链反射降级为构造期标记，
+第 5 层无等价实现），残余风险已在那里登记。
+
+**测试**：5 个用例——基本标记、幂等、50 goroutine 并发、
+多实例隔离、零值不可信。`MarkTrusted` / `IsTrusted` 均 100%。
