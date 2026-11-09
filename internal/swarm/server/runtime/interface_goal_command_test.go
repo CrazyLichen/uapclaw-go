@@ -10,9 +10,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// TestProcessGoalCommand_无管理器返回结构化错误 会话未 start_interaction 时的兜底。
-// Python: interface_deep.py:17812-17818
-func TestProcessGoalCommand_无管理器返回结构化错误(t *testing.T) {
+// TestProcessGoalCommand_无目标返回控制响应 会话已启动但尚无目标时的只读查询。
+// Python: interface_deep.py:17822-17829（peek 为 nil → 控制类结果 + 逐字文案）
+//
+// 注：start_interaction 接线后（Task 9），会话级 child 会自动启动交互循环，
+// 因此 goal_manager_not_started 只出现在真正未初始化的路径上。
+func TestProcessGoalCommand_无目标返回控制响应(t *testing.T) {
 	uc := NewUapClaw()
 	params, _ := json.Marshal(map[string]any{"action": "get", "mode": "agent"})
 	sid := "sess-goal-cmd"
@@ -23,10 +26,12 @@ func TestProcessGoalCommand_无管理器返回结构化错误(t *testing.T) {
 	resp, err := uc.processGoalCommand(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	require.False(t, resp.OK)
-	require.Equal(t, "goal_manager_not_started", resp.Payload["code"])
+	require.True(t, resp.OK, "已启动的会话查询空目标应成功返回")
 	require.Equal(t, "get", resp.Payload["action"])
-	require.NotEmpty(t, resp.Payload["error"])
+	require.Equal(t, "No goal in this session.", resp.Payload["message"])
+	require.Nil(t, resp.Payload["goal"])
+	require.Nil(t, resp.Payload["code"])
+	require.Nil(t, resp.Payload["error"])
 }
 
 // TestProcessGoalCommandStream_非setresume单帧 流式 get 只回一帧即结束。
@@ -43,9 +48,10 @@ func TestProcessGoalCommandStream_非setresume单帧(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	require.True(t, chunks[0].IsComplete)
+	// pause 无目标 → goal_error → 单帧 chat.error 带 no_goal
 	require.Equal(t, "chat.error", chunks[0].Payload["event_type"])
-	require.Equal(t, "goal_manager_not_started", chunks[0].Payload["code"])
-	require.Equal(t, "goal manager is not started", chunks[0].Payload["error"])
+	require.Equal(t, "no_goal", chunks[0].Payload["code"])
+	require.Equal(t, "No goal in this session; cannot pause.", chunks[0].Payload["error"])
 }
 
 // TestGoalControlResponse_成功与失败双写 payload message 与 error 保持兼容。

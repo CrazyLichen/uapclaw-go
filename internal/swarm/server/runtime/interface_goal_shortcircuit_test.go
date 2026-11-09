@@ -58,7 +58,9 @@ func TestRunMessageDirect_CommandGoal不写user历史(t *testing.T) {
 	resp, err := uc.runMessageDirect(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	require.Equal(t, "goal_manager_not_started", resp.Payload["code"])
+	// 短路后走门面的 goal 命令处理，而不是 chat 轮：无目标时回控制响应
+	require.True(t, resp.OK)
+	require.Equal(t, "No goal in this session.", resp.Payload["message"])
 	require.Empty(t, historyRecords(t, sid), "只读 goal 查询不得写入任何历史")
 }
 
@@ -75,11 +77,13 @@ func TestProcessMessageStreamInternal_CommandGoal不写user历史(t *testing.T) 
 	}
 	ch, err := uc.processMessageStreamInternal(context.Background(), req, false)
 	require.NoError(t, err)
-	var chunks int
-	for range ch {
-		chunks++
+	var events []string
+	for chunk := range ch {
+		if eventType, ok := chunk.Payload["event_type"].(string); ok {
+			events = append(events, eventType)
+		}
 	}
-	require.Equal(t, 1, chunks)
+	require.Equal(t, []string{"goal.snapshot"}, events, "只读 goal 查询应单帧 goal.snapshot")
 	require.Empty(t, historyRecords(t, sid), "流式只读 goal 查询不得写入任何历史")
 }
 

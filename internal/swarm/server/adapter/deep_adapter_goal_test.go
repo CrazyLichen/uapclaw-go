@@ -225,3 +225,112 @@ func TestHasActiveGoal_根无缓存子适配器为假(t *testing.T) {
 	require.False(t, d.HasActiveGoal("sess-none"))
 	require.False(t, d.sessionAdapters.has("sess-none"), "探针不得创建子适配器")
 }
+
+// TestDispatchGoalControl_五action状态往返 set→get→pause→resume→clear 全链路。
+// Python: interface_deep.py:17764-17930
+func TestDispatchGoalControl_五action状态往返(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-five")
+
+	// set → 进入执行流
+	setOut, err := d.dispatchGoalControl(ctx, "sess-five", "set", "修完测试", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultStream, setOut["result_type"])
+	require.Equal(t, "Goal set.", setOut["output"])
+	require.Equal(t, "active", setOut["goal"].(map[string]any)["status"])
+
+	// get → 读回同一目标
+	getOut, err := d.dispatchGoalControl(ctx, "sess-five", "get", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultControl, getOut["result_type"])
+	require.Equal(t, "Goal: 修完测试", getOut["output"])
+
+	// set 二次（未确认覆盖）→ 要求确认
+	dupOut, err := d.dispatchGoalControl(ctx, "sess-five", "set", "新目标", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultConfirmRequired, dupOut["result_type"])
+	require.Equal(t, goalErrAlreadyExists, dupOut["error_code"])
+	require.Equal(t, "新目标", dupOut["requested_objective"])
+
+	// set 二次（已确认覆盖）→ 覆盖成功
+	overOut, err := d.dispatchGoalControl(ctx, "sess-five", "set", "新目标", true, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultStream, overOut["result_type"])
+
+	// pause → 控制类
+	pauseOut, err := d.dispatchGoalControl(ctx, "sess-five", "pause", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultControl, pauseOut["result_type"])
+	require.Equal(t, "Goal paused.", pauseOut["output"])
+	require.Equal(t, "paused", pauseOut["goal"].(map[string]any)["status"])
+
+	// pause 二次 → invalid_state
+	againOut, err := d.dispatchGoalControl(ctx, "sess-five", "pause", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalErrInvalidState, againOut["error_code"])
+
+	// resume → 回到执行流
+	resumeOut, err := d.dispatchGoalControl(ctx, "sess-five", "resume", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultStream, resumeOut["result_type"])
+	require.Equal(t, "Goal resumed.", resumeOut["output"])
+
+	// clear → 清空并带回 cleared_goal
+	clearOut, err := d.dispatchGoalControl(ctx, "sess-five", "clear", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultControl, clearOut["result_type"])
+	require.Equal(t, "Goal cleared.", clearOut["output"])
+	require.Nil(t, clearOut["goal"])
+	require.Equal(t, "新目标", clearOut["cleared_goal"].(map[string]any)["objective"])
+
+	// clear 二次 → no_goal
+	noneOut, err := d.dispatchGoalControl(ctx, "sess-five", "clear", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalErrNoGoal, noneOut["error_code"])
+}
+
+// TestDispatchGoalControl_无目标的三条错误分支 pause/resume/clear 在空会话下各自报 no_goal。
+// Python: interface_deep.py:17833-17880
+func TestDispatchGoalControl_无目标的三条错误分支(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-empty")
+
+	pauseOut, _ := d.dispatchGoalControl(ctx, "sess-empty", "pause", "", false, 0, 0)
+	require.Equal(t, goalErrNoGoal, pauseOut["error_code"])
+	require.Equal(t, "No goal in this session; cannot pause.", pauseOut["error"])
+
+	resumeOut, _ := d.dispatchGoalControl(ctx, "sess-empty", "resume", "", false, 0, 0)
+	require.Equal(t, goalErrNoGoal, resumeOut["error_code"])
+	require.Equal(t, "No goal in this session; cannot resume.", resumeOut["error"])
+
+	clearOut, _ := d.dispatchGoalControl(ctx, "sess-empty", "clear", "", false, 0, 0)
+	require.Equal(t, goalErrNoGoal, clearOut["error_code"])
+	require.Equal(t, "No goal in this session; nothing to clear.", clearOut["error"])
+
+	getOut, _ := d.dispatchGoalControl(ctx, "sess-empty", "get", "", false, 0, 0)
+	require.Equal(t, "No goal in this session.", getOut["output"])
+	require.Nil(t, getOut["goal"])
+}
+
+// TestDispatchGoalControl_未知action 非法 action 不 panic。
+// Python: interface_deep.py:17898-17902
+func TestDispatchGoalControl_未知action(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-bad-action")
+	out, err := d.dispatchGoalControl(ctx, "sess-bad-action", "explode", "", false, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, goalResultError, out["result_type"])
+	require.Equal(t, goalErrInvalidAction, out["error_code"])
+	require.Equal(t, "unsupported goal action: explode", out["error"])
+}
+
+// TestDispatchGoalControl_预算与轮次上限 正整数才透传，非正数视为未指定。
+// Python: interface_deep.py:16251-16281
+func TestDispatchGoalControl_预算与轮次上限(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-budget")
+	out, err := d.dispatchGoalControl(ctx, "sess-budget", "set", "带预算的目标", false, 5000, 3)
+	require.NoError(t, err)
+	goalPayload := out["goal"].(map[string]any)
+	require.Equal(t, 3, goalPayload["max_attempts"])
+}

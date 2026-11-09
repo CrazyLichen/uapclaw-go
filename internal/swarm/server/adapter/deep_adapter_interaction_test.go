@@ -82,3 +82,18 @@ func TestStartInteractionIfNeeded_改绑其它会话报错(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "无法改绑")
 }
+
+// newStartedGoalAdapter 构造一个已 start_interaction 的适配器（GoalManager 就位）。
+func newStartedGoalAdapter(t *testing.T, sessionID string) *DeepAdapter {
+	t.Helper()
+	ctx := context.Background()
+	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Card: agentschema.NewAgentCard(agentschema.WithAgentName("goal-test-agent")),
+	})
+	require.NoError(t, err, "创建 DeepAgent 失败")
+	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
+
+	d := &DeepAdapter{instance: agent, isSessionScoped: true, parentSessionID: sessionID}
+	require.NoError(t, d.StartInteraction(ctx, sessionID))
+	return d
+}
