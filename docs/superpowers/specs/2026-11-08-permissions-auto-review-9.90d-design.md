@@ -1113,27 +1113,24 @@ Python 的 `super().resolve_interrupt()` 内部调 `self._persist_allow_always()
 | `request.auto_confirm_key = ""` | 直接赋值 | 类型断言到 `*saschema.InterruptRequest` 后赋值 | `InterruptRequester` 接口只读该字段 |
 | `RUN_PERMISSIONS` 8 处 | ContextVar | `runtime.RunPermissionsFromCtx` / `WithRunPermissions` / `OverlayRunPermissions` | 9.90d-1 Task 4a 已落地的等价物 |
 
-#### 🔴 新发现缺口（9.90b 遗留，需用户决策）
+#### ✅ 已解决：`wants_session_persist` / `wants_permanent_persist` 缺口
 
 `payload.wants_session_persist()` / `wants_permanent_persist()` 是 openjiuwen
 SDK `PermissionConfirmResponse` 的两个方法，用于区分「会话内记住」与
-「总是允许（永久）」。**Go 侧 `security.PermissionConfirmResponse` 与
-`interrupt.ConfirmPayload` 都只有 `AutoConfirm` 一个 bool 字段，无此区分**
-（9.90b 落地时的缺口）。
+「总是允许（永久）」。Go 侧原本只有 `AutoConfirm` 一个 bool（9.90b 遗留），
+无法区分。
 
-当前实现（临时）：两者都映射到 `AutoConfirm`，即无法区分 session-only 与
-permanent。影响面：`attempt.sessionOnly` 恒等于「是否 auto_confirm」，
-`persistAllowAlways` 收到的 `sessionOnly` 参数可能不准；
-`resolveInterruptWithRunPolicy` 里「永久记住后移除 auto_confirm」的判断
-也会把 session-only 误判为 permanent。
+**用户拍板方案 (a)，已回填（commit `01400ede7`）**：
 
-**待用户拍板**：
-- (a) 给 `PermissionConfirmResponse` / `ConfirmPayload` 补 `PersistScope` 字段
-  （`"session"` / `"permanent"`），回填 9.90b —— 最忠实，但要改 9.90b 已落地件
-- (b) 维持现状（都映射 `AutoConfirm`），把差异登记为功能偏差 —— 零改动，
-  但「会话内记住」与「总是允许」在 exact-persist 路径上不可区分
-- (c) 挂 ⤵️ 到 9.90d-2（那里有 auto_permission 的完整审批流），本批只落
-  rail 骨架
+- `security.PermissionConfirmResponse` 与 `interrupt.ConfirmPayload` 各加
+  `PersistScope string`（`"session"` / `"permanent"` / 空）
+- `parseConfirmPayload` 在 `*ConfirmPayload` 与 `map[string]any` 两条路径都传递
+  `persist_scope`（map 路径新增该键解析）
+- `payloadApprovedSessionOnly` / `payloadWantsPermanentPersist` 改为**优先读
+  `PersistScope`**，空串或未知值回退 `AutoConfirm`（兼容旧载荷与旧调用方）
+
+三条测试固定语义：scope 优先于 auto_confirm（session 时 permanent 为假、
+反之亦然）、空 scope 回退、未知 scope 回退。
 
 **测试**：permissions 包 86.4%（Task 13 前 87.9%）。
 `permission_interrupt_rail.go` 里 `callExactPersist` / `removeExactAutoConfirm` /
