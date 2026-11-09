@@ -689,9 +689,9 @@ func (d *DeepAdapter) DispatchGoalControl(
 		}); ok {
 			return g.DispatchGoalControl(ctx, sessionID, action, objective, overwriteConfirmed, tokenBudget, maxAttempts)
 		}
-		return nil, errors.New("goal control not implemented; owned by 10.3.27")
+		return nil, errors.New("session child does not expose DispatchGoalControl")
 	}
-	return nil, errors.New("goal control not implemented; owned by 10.3.27")
+	return d.dispatchGoalControl(ctx, sessionID, action, objective, overwriteConfirmed, tokenBudget, maxAttempts)
 }
 
 // GetContextUsageEvent 取上下文用量事件。
