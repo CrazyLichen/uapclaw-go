@@ -716,6 +716,9 @@ func (r *JiuwenSwarmPermissionInterruptRail) bindApprovalOnInterrupt(
 	cbc *agentinterfaces.AgentCallbackContext,
 	recovered any,
 ) {
+	if cbc == nil {
+		return
+	}
 	abortErr, ok := recovered.(*cb.AbortError)
 	if !ok || abortErr == nil {
 		return

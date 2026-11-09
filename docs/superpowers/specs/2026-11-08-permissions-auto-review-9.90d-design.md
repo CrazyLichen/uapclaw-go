@@ -1172,11 +1172,20 @@ SDK `PermissionConfirmResponse` 的两个方法，用于区分「会话内记住
 三条测试固定语义：scope 优先于 auto_confirm（session 时 permanent 为假、
 反之亦然）、空 scope 回退、未知 scope 回退。
 
-**测试**：permissions 包 86.4%（Task 13 前 87.9%）。
-`permission_interrupt_rail.go` 里 `callExactPersist` / `removeExactAutoConfirm` /
-`bindApprovalOnInterrupt` 三个函数仍 0%——它们只在完整中断链路
-（父类抛 `AbortError` + session auto_confirm 状态）下才会被触发，
-单测需构造整套回调上下文，留待 Task 16 测试补齐时处理。
+**测试**：Task 16 补齐后 permissions 包 87.1%。
+`permission_interrupt_rail.go` **已无 0% 函数**——`callExactPersist` 100%、
+`removeExactAutoConfirm` 95.0%、`bindApprovalOnInterrupt` 87.5%。
+补齐方式（Task 16）：
+- `callExactPersist`：注入正常/返回 false/panic 三种回调 + nil toolCall
+- `removeExactAutoConfirm`：用 `recordingSession`（覆盖 `fakeSession` 的空
+  `UpdateState`）验证命中移除、其余保留、无命中不写、4 个提前返回分支
+- `bindApprovalOnInterrupt`：构造真实
+  `cb.NewAbortError(msg, &saschema.ToolInterruptException{Request})`，
+  验证摘要写入 metadata 且请求挂到 cbc；另测 5 个提前返回分支
+
+**补齐时发现并修复的实现 bug**：`bindApprovalOnInterrupt` 在 `cbc == nil`
+时会 panic（`cbc.Inputs()` 对 nil 接收者解引用）。已加 nil 检查。
+Python 侧调用点不会传 None，但 Go 的防御性检查更稳。
 `tool_security_rail_override.go` 全函数 100%。
 
 ### 12.12 Task 14 执行时的核实结论：`MarkTrusted()`

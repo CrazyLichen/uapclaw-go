@@ -2,11 +2,13 @@ package permissions
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
@@ -568,5 +570,222 @@ func TestPersistMergedAllow_run策略下拒绝(t *testing.T) {
 	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
 	if got := rail.PersistMergedAllow(ctx, "bash", map[string]any{}, nil, true); got {
 		t.Error("with run policy merged persist should be refused")
+	}
+}
+
+// ──────────────────────────── callExactPersist ────────────────────────────
+
+// TestCallExactPersist_正常返回 验证回调结果透传。
+func TestCallExactPersist_正常返回(t *testing.T) {
+	rail := newTestInterruptRail(t, true) // 回调恒返回 true
+	attempt := &exactPersistAttempt{}
+	got := rail.callExactPersist(
+		&llmschema.ToolCall{Name: "read_file", Arguments: `{}`},
+		map[string]any{}, attempt, true)
+	if !got {
+		t.Error("callback returned true, want true")
+	}
+	if attempt.Invalidated {
+		t.Error("should not be invalidated")
+	}
+}
+
+// TestCallExactPersist_回调返回false 验证 false 透传且不标记失效。
+func TestCallExactPersist_回调返回false(t *testing.T) {
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", nil,
+		func(string, map[string]any, [][2]string, bool, bool) bool { return false })
+	attempt := &exactPersistAttempt{}
+	got := rail.callExactPersist(&llmschema.ToolCall{Name: "read_file"}, map[string]any{}, attempt, true)
+	if got {
+		t.Error("callback returned false, want false")
+	}
+	if attempt.Invalidated {
+		t.Error("false return should not invalidate")
+	}
+}
+
+// TestCallExactPersist_panic转invalidated 验证异常被吞并标记失效。
+func TestCallExactPersist_panic转invalidated(t *testing.T) {
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", nil,
+		func(string, map[string]any, [][2]string, bool, bool) bool {
+			panic("persist boom")
+		})
+	attempt := &exactPersistAttempt{}
+	got := rail.callExactPersist(&llmschema.ToolCall{Name: "read_file"}, map[string]any{}, attempt, true)
+	if got {
+		t.Error("panic should yield false")
+	}
+	if !attempt.Invalidated {
+		t.Error("panic should mark attempt invalidated")
+	}
+}
+
+// TestCallExactPersist_nilToolCall 验证 nil toolCall 时工具名为空。
+func TestCallExactPersist_nilToolCall(t *testing.T) {
+	var capturedName string
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", nil,
+		func(name string, _ map[string]any, _ [][2]string, _ bool, _ bool) bool {
+			capturedName = name
+			return true
+		})
+	attempt := &exactPersistAttempt{}
+	rail.callExactPersist(nil, map[string]any{}, attempt, false)
+	if capturedName != "" {
+		t.Errorf("nil toolCall should give empty name, got %q", capturedName)
+	}
+}
+
+// ──────────────────────────── removeExactAutoConfirm ────────────────────────────
+
+// recordingSession 记录 UpdateState 写入的会话替身。
+type recordingSession struct {
+	fakeSession
+	// updates 记录每次 UpdateState 的入参
+	updates []map[string]any
+}
+
+// UpdateState 记录写入内容（覆盖 fakeSession 的空实现）。
+func (r *recordingSession) UpdateState(data map[string]any) {
+	r.updates = append(r.updates, data)
+}
+
+// TestRemoveExactAutoConfirm_移除命中条目 验证 key 被删且其余保留。
+func TestRemoveExactAutoConfirm_移除命中条目(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	sess := &recordingSession{fakeSession: fakeSession{
+		sessionID: "sess-1",
+		state: map[string]any{
+			saschema.InterruptAutoConfirmKey: map[string]any{
+				"read_file": "v1",
+				"bash:ls":   "v2",
+			},
+		},
+	}}
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, sess)
+	toolCall := &llmschema.ToolCall{Name: "read_file", Arguments: `{}`}
+
+	rail.removeExactAutoConfirm(cbc, toolCall)
+
+	if len(sess.updates) != 1 {
+		t.Fatalf("should write once, got %d", len(sess.updates))
+	}
+	updated, ok := sess.updates[0][saschema.InterruptAutoConfirmKey].(map[string]any)
+	if !ok {
+		t.Fatalf("updated config type = %T", sess.updates[0][saschema.InterruptAutoConfirmKey])
+	}
+	if _, exists := updated["read_file"]; exists {
+		t.Error("read_file should be removed")
+	}
+	if updated["bash:ls"] != "v2" {
+		t.Errorf("other entries should be kept, got %v", updated)
+	}
+}
+
+// TestRemoveExactAutoConfirm_无命中不写 验证 key 不存在时不写回。
+func TestRemoveExactAutoConfirm_无命中不写(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	sess := &recordingSession{fakeSession: fakeSession{
+		sessionID: "sess-1",
+		state: map[string]any{
+			saschema.InterruptAutoConfirmKey: map[string]any{"other": "v"},
+		},
+	}}
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, sess)
+	rail.removeExactAutoConfirm(cbc, &llmschema.ToolCall{Name: "read_file"})
+
+	if len(sess.updates) != 0 {
+		t.Errorf("no matching key should not write, got %d writes", len(sess.updates))
+	}
+}
+
+// TestRemoveExactAutoConfirm_各提前返回分支 验证 nil cbc / 无 session / 空 key / 非 map。
+func TestRemoveExactAutoConfirm_各提前返回分支(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+
+	// nil cbc
+	rail.removeExactAutoConfirm(nil, &llmschema.ToolCall{Name: "read_file"})
+
+	// 无 session
+	cbcNoSession := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	rail.removeExactAutoConfirm(cbcNoSession, &llmschema.ToolCall{Name: "read_file"})
+
+	// 空 key（toolCall 为 nil）
+	sess := &recordingSession{fakeSession: fakeSession{sessionID: "s"}}
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, sess)
+	rail.removeExactAutoConfirm(cbc, nil)
+
+	// state 不是 map
+	sess2 := &recordingSession{fakeSession: fakeSession{
+		sessionID: "s",
+		state:     map[string]any{saschema.InterruptAutoConfirmKey: "not-a-map"},
+	}}
+	cbc2 := agentinterfaces.NewAgentCallbackContext(nil, nil, sess2)
+	rail.removeExactAutoConfirm(cbc2, &llmschema.ToolCall{Name: "read_file"})
+
+	if len(sess.updates) != 0 || len(sess2.updates) != 0 {
+		t.Error("early-return branches should not write")
+	}
+}
+
+// ──────────────────────────── bindApprovalOnInterrupt ────────────────────────────
+
+// TestBindApprovalOnInterrupt_正常登记 验证从 AbortError 提取请求并登记。
+func TestBindApprovalOnInterrupt_正常登记(t *testing.T) {
+	dir := t.TempDir()
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return dir },
+		GetPermissionsSnapshot: func() map[string]any {
+			return map[string]any{"file_guard": map[string]any{"enabled": true}}
+		},
+	}
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", host,
+		func(string, map[string]any, [][2]string, bool, bool) bool { return true })
+
+	toolCall := &llmschema.ToolCall{ID: "call-1", Name: "read_file", Arguments: `{"file_path":"/a.txt"}`}
+	inputs := &agentinterfaces.ToolCallInputs{ToolName: "read_file", ToolArgs: map[string]any{}}
+	inputs.ToolCall = toolCall
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
+
+	request := &saschema.InterruptRequest{Message: "确认？"}
+	exc := &saschema.ToolInterruptException{Request: request, ToolCall: toolCall}
+	abortErr := cb.NewAbortError("工具执行已中断", exc)
+
+	rail.bindApprovalOnInterrupt(cbc, abortErr)
+
+	// BindApprovalRequest 应把摘要写进 metadata
+	if request.Metadata[permissionArgumentsSHA256Key] == "" {
+		t.Error("approval digest should be written into request metadata")
+	}
+	// MarkPermissionInterruptRequest 应把 request 挂到 cbc
+	if _, exists := cbc.GetExtra(PermissionInterruptRequestAttribute); !exists {
+		t.Error("interrupt request should be marked on cbc")
+	}
+}
+
+// TestBindApprovalOnInterrupt_各提前返回分支 验证类型不匹配时静默返回。
+func TestBindApprovalOnInterrupt_各提前返回分支(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+
+	// 非 AbortError
+	rail.bindApprovalOnInterrupt(cbc, "not-an-abort-error")
+	// nil AbortError 指针
+	var nilAbort *cb.AbortError
+	rail.bindApprovalOnInterrupt(cbc, nilAbort)
+	// Cause 不是 ToolInterruptException
+	rail.bindApprovalOnInterrupt(cbc, cb.NewAbortError("x", fmt.Errorf("other")))
+	// Request 为 nil
+	rail.bindApprovalOnInterrupt(cbc, cb.NewAbortError("x", &saschema.ToolInterruptException{}))
+	// nil cbc
+	rail.bindApprovalOnInterrupt(nil, cb.NewAbortError("x", &saschema.ToolInterruptException{
+		Request: &saschema.InterruptRequest{},
+	}))
+
+	if _, exists := cbc.GetExtra(PermissionInterruptRequestAttribute); exists {
+		t.Error("no branch should mark the request")
 	}
 }
