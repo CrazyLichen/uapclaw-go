@@ -65,7 +65,11 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		}
 		// 如果是 Local 模式注入 cwd
 		if op.Card() != nil && op.Card().Mode == sys_operation.OperationModeLocal {
-			codeOpts = append(codeOpts, sys_operation.WithCodeCwd(cwd.GetCwd(ctx)))
+			currentCwd, err := cwd.GetCwd(ctx)
+			if err != nil {
+				return nil, err
+			}
+			codeOpts = append(codeOpts, sys_operation.WithCodeCwd(currentCwd))
 		}
 
 		// 执行代码

@@ -849,7 +849,11 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 			subWwRootPath = createParams.Workspace.RootPath
 		}
 		if subWwRootPath == "" {
-			subWwRootPath = cwd.GetCwd(ctx)
+			currentCwd, cwdErr := cwd.GetCwd(ctx)
+			if cwdErr != nil {
+				return nil, cwdErr
+			}
+			subWwRootPath = currentCwd
 		}
 		subCwdState := cwd.InitCwd(subWwRootPath, cwd.WithWorkspace(subWwRootPath))
 		subCtx := cwd.WithCwdState(ctx, subCwdState)

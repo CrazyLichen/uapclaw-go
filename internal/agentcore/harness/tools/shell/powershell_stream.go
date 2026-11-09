@@ -93,7 +93,10 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 
 		// ── cwd 解析 ──
 		// Python: L230-231
-		currentCwd := cwd.GetCwd(ctx)
+		currentCwd, err := cwd.GetCwd(ctx)
+		if err != nil {
+			return nil, err
+		}
 		resolvedCwd := workdir
 		if resolvedCwd == "" {
 			resolvedCwd = currentCwd

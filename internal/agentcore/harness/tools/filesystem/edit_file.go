@@ -58,7 +58,10 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 
 		// 路径解析
 		// Python: L1196-1199
-		filePath := ResolveToolFilePath(ctx, input.FilePath)
+		filePath, err := ResolveToolFilePath(ctx, input.FilePath)
+		if err != nil {
+			return nil, err
+		}
 
 		// 拒绝 Jupyter Notebook
 		// Python: L1202-1207

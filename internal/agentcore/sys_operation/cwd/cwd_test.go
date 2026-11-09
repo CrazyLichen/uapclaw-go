@@ -10,13 +10,53 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// mustGetCwd 把 state 注入 ctx 后调用唯一入口 GetCwd（测试辅助）。
+func mustGetCwd(t *testing.T, state *CwdState) string {
+	t.Helper()
+	got, err := GetCwd(WithCwdState(context.Background(), state))
+	if err != nil {
+		t.Fatalf("GetCwd failed: %v", err)
+	}
+	return got
+}
+
+// mustGetProjectRoot 把 state 注入 ctx 后调用唯一入口 GetProjectRoot（测试辅助）。
+func mustGetProjectRoot(t *testing.T, state *CwdState) string {
+	t.Helper()
+	got, err := GetProjectRoot(WithCwdState(context.Background(), state))
+	if err != nil {
+		t.Fatalf("GetProjectRoot failed: %v", err)
+	}
+	return got
+}
+
+// mustResolveCwd ResolveCwd 的测试辅助。
+func mustResolveCwd(t *testing.T, ctx context.Context, explicit string) string {
+	t.Helper()
+	got, err := ResolveCwd(ctx, explicit)
+	if err != nil {
+		t.Fatalf("ResolveCwd failed: %v", err)
+	}
+	return got
+}
+
+// mustResolvePath ResolvePath 的测试辅助。
+func mustResolvePath(t *testing.T, ctx context.Context, path string) string {
+	t.Helper()
+	got, err := ResolvePath(ctx, path)
+	if err != nil {
+		t.Fatalf("ResolvePath failed: %v", err)
+	}
+	return got
+}
+
 // TestInitCwd_基本初始化 测试 InitCwd 创建 CwdState
 // Python: init_cwd(cwd) → CwdState(cwd=resolved, original_cwd=resolved, project_root=resolved)
 func TestInitCwd_基本初始化(t *testing.T) {
 	state := InitCwd("/project", WithWorkspace("/project/ws"))
-	assert.Equal(t, resolve("/project"), state.GetCwd())
+	assert.Equal(t, resolve("/project"), mustGetCwd(t, state))
 	assert.Equal(t, resolve("/project"), state.GetOriginalCwd())
-	assert.Equal(t, resolve("/project"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/project"), mustGetProjectRoot(t, state))
 	assert.Equal(t, resolve("/project/ws"), state.GetWorkspace())
 }
 
@@ -24,8 +64,8 @@ func TestInitCwd_基本初始化(t *testing.T) {
 // Python: init_cwd(cwd, project_root="/project")
 func TestInitCwd_自定义ProjectRoot(t *testing.T) {
 	state := InitCwd("/workspace", WithProjectRoot("/project"))
-	assert.Equal(t, resolve("/workspace"), state.GetCwd())
-	assert.Equal(t, resolve("/project"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/workspace"), mustGetCwd(t, state))
+	assert.Equal(t, resolve("/project"), mustGetProjectRoot(t, state))
 }
 
 // TestInitCwd_全选项 测试所有选项同时设置
@@ -35,9 +75,9 @@ func TestInitCwd_全选项(t *testing.T) {
 		WithWorkspace("/workspace"),
 		WithTeamWorkspace("/team"),
 	)
-	assert.Equal(t, resolve("/cwd"), state.GetCwd())
+	assert.Equal(t, resolve("/cwd"), mustGetCwd(t, state))
 	assert.Equal(t, resolve("/cwd"), state.GetOriginalCwd())
-	assert.Equal(t, resolve("/project"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/project"), mustGetProjectRoot(t, state))
 	assert.Equal(t, resolve("/workspace"), state.GetWorkspace())
 	assert.Equal(t, resolve("/team"), state.GetTeamWorkspace())
 }
@@ -47,10 +87,10 @@ func TestInitCwd_全选项(t *testing.T) {
 func TestCwdState_SetCwd(t *testing.T) {
 	state := InitCwd("/project")
 	state.SetCwd("/project/worktree")
-	assert.Equal(t, resolve("/project/worktree"), state.GetCwd())
+	assert.Equal(t, resolve("/project/worktree"), mustGetCwd(t, state))
 	// originalCwd 和 projectRoot 不受影响
 	assert.Equal(t, resolve("/project"), state.GetOriginalCwd())
-	assert.Equal(t, resolve("/project"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/project"), mustGetProjectRoot(t, state))
 }
 
 // TestCwdState_SetOriginalCwd 测试修改会话起始点
@@ -66,20 +106,20 @@ func TestCwdState_SetOriginalCwd(t *testing.T) {
 func TestCwdState_读取优先级(t *testing.T) {
 	state := InitCwd("/project")
 	// 正常：返回 cwd
-	assert.Equal(t, resolve("/project"), state.GetCwd())
+	assert.Equal(t, resolve("/project"), mustGetCwd(t, state))
 
 	// 清空 cwd：回退到 originalCwd
 	state.mu.Lock()
 	state.cwd = ""
 	state.mu.Unlock()
-	assert.Equal(t, resolve("/project"), state.GetCwd())
+	assert.Equal(t, resolve("/project"), mustGetCwd(t, state))
 
 	// 清空 originalCwd：回退到 os.Getwd()
 	state.mu.Lock()
 	state.originalCwd = ""
 	state.mu.Unlock()
 	wd, _ := os.Getwd()
-	assert.Equal(t, wd, state.GetCwd())
+	assert.Equal(t, wd, mustGetCwd(t, state))
 }
 
 // TestCwdState_GetProjectRoot优先级 测试 projectRoot -> originalCwd -> os.Getwd()
@@ -87,13 +127,13 @@ func TestCwdState_读取优先级(t *testing.T) {
 func TestCwdState_GetProjectRoot优先级(t *testing.T) {
 	state := InitCwd("/project")
 	// 正常：返回 projectRoot
-	assert.Equal(t, resolve("/project"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/project"), mustGetProjectRoot(t, state))
 
 	// 清空 projectRoot：回退到 originalCwd
 	state.mu.Lock()
 	state.projectRoot = ""
 	state.mu.Unlock()
-	assert.Equal(t, resolve("/project"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/project"), mustGetProjectRoot(t, state))
 }
 
 // TestCwdState_并发安全 测试并发读写不 panic
@@ -104,7 +144,7 @@ func TestCwdState_并发安全(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			_ = state.GetCwd()
+			_ = mustGetCwd(t, state)
 		}()
 		go func() {
 			defer wg.Done()
@@ -134,12 +174,19 @@ func TestWithCwdState_上下文无CwdState(t *testing.T) {
 func TestGetCwd_从上下文获取(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
-	assert.Equal(t, resolve("/project"), GetCwd(ctx))
+	gotCwd, errCwd := GetCwd(ctx)
+	if errCwd != nil {
+		t.Fatalf("GetCwd failed: %v", errCwd)
+	}
+	assert.Equal(t, resolve("/project"), gotCwd)
 }
 
 // TestGetCwd_上下文无CwdState回退 测试 ctx 无 CwdState 时回退到 os.Getwd()
 func TestGetCwd_上下文无CwdState回退(t *testing.T) {
-	cwd := GetCwd(context.Background())
+	cwd, err := GetCwd(context.Background())
+	if err != nil {
+		t.Fatalf("GetCwd failed: %v", err)
+	}
 	wd, _ := os.Getwd()
 	assert.Equal(t, wd, cwd)
 }
@@ -165,7 +212,7 @@ func TestGetWorkspace_未设置返回空(t *testing.T) {
 func TestResolveCwd_显式绝对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
-	assert.Equal(t, resolve("/tmp"), ResolveCwd(ctx, "/tmp"))
+	assert.Equal(t, resolve("/tmp"), mustResolveCwd(t, ctx, "/tmp"))
 }
 
 // TestResolveCwd_显式相对路径 测试相对路径基于 GetCwd 解析
@@ -174,14 +221,14 @@ func TestResolveCwd_显式相对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
 	expected := resolve(filepath.Join(resolve("/project"), "subdir"))
-	assert.Equal(t, expected, ResolveCwd(ctx, "subdir"))
+	assert.Equal(t, expected, mustResolveCwd(t, ctx, "subdir"))
 }
 
 // TestResolveCwd_空值回退 测试空值使用 GetCwd
 func TestResolveCwd_空值回退(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
-	assert.Equal(t, resolve("/project"), ResolveCwd(ctx, ""))
+	assert.Equal(t, resolve("/project"), mustResolveCwd(t, ctx, ""))
 }
 
 // TestResolvePath_相对路径 测试相对路径基于 GetCwd 解析
@@ -190,14 +237,14 @@ func TestResolvePath_相对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
 	expected := filepath.Clean(filepath.Join(resolve("/project"), "src/main.go"))
-	assert.Equal(t, expected, ResolvePath(ctx, "src/main.go"))
+	assert.Equal(t, expected, mustResolvePath(t, ctx, "src/main.go"))
 }
 
 // TestResolvePath_绝对路径 测试绝对路径直接使用
 func TestResolvePath_绝对路径(t *testing.T) {
 	state := InitCwd("/project")
 	ctx := WithCwdState(context.Background(), state)
-	assert.Equal(t, filepath.Clean("/tmp/file.go"), ResolvePath(ctx, "/tmp/file.go"))
+	assert.Equal(t, filepath.Clean("/tmp/file.go"), mustResolvePath(t, ctx, "/tmp/file.go"))
 }
 
 // Test子Agent隔离 测试子 Agent 创建独立 CwdState 不影响父
@@ -214,9 +261,17 @@ func Test子Agent隔离(t *testing.T) {
 	subState.SetCwd("/project/.sub/xxx/worktree")
 
 	// 父 Agent 不受影响
-	assert.Equal(t, resolve("/project"), GetCwd(parentCtx))
+	gotParent, errParent := GetCwd(parentCtx)
+	if errParent != nil {
+		t.Fatalf("GetCwd failed: %v", errParent)
+	}
+	assert.Equal(t, resolve("/project"), gotParent)
 	// 子 Agent 看到新 CWD
-	assert.Equal(t, resolve("/project/.sub/xxx/worktree"), GetCwd(subCtx))
+	gotSub, errSub := GetCwd(subCtx)
+	if errSub != nil {
+		t.Fatalf("GetCwd failed: %v", errSub)
+	}
+	assert.Equal(t, resolve("/project/.sub/xxx/worktree"), gotSub)
 }
 
 // Test父改子可见 测试父修改 CWD 后同一 ctx 下的子 goroutine 可见
@@ -229,7 +284,11 @@ func Test父改子可见(t *testing.T) {
 	state.SetCwd("/project/worktree")
 
 	// 同一 ctx 读取可见
-	assert.Equal(t, resolve("/project/worktree"), GetCwd(ctx))
+	gotCwd2, errCwd2 := GetCwd(ctx)
+	if errCwd2 != nil {
+		t.Fatalf("GetCwd failed: %v", errCwd2)
+	}
+	assert.Equal(t, resolve("/project/worktree"), gotCwd2)
 }
 
 // TestGetOriginalCwd_从上下文获取 测试 GetOriginalCwd(ctx)
@@ -250,12 +309,19 @@ func TestGetOriginalCwd_上下文无CwdState回退(t *testing.T) {
 func TestGetProjectRoot_从上下文获取(t *testing.T) {
 	state := InitCwd("/project", WithProjectRoot("/root"))
 	ctx := WithCwdState(context.Background(), state)
-	assert.Equal(t, resolve("/root"), GetProjectRoot(ctx))
+	gotRoot, errRoot := GetProjectRoot(ctx)
+	if errRoot != nil {
+		t.Fatalf("GetProjectRoot failed: %v", errRoot)
+	}
+	assert.Equal(t, resolve("/root"), gotRoot)
 }
 
 // TestGetProjectRoot_上下文无CwdState回退 测试 ctx 无 CwdState 时回退
 func TestGetProjectRoot_上下文无CwdState回退(t *testing.T) {
-	root := GetProjectRoot(context.Background())
+	root, err := GetProjectRoot(context.Background())
+	if err != nil {
+		t.Fatalf("GetProjectRoot failed: %v", err)
+	}
 	wd, _ := os.Getwd()
 	assert.Equal(t, wd, root)
 }
@@ -279,7 +345,7 @@ func TestGetTeamWorkspace_未设置返回空(t *testing.T) {
 func TestCwdState_SetProjectRoot(t *testing.T) {
 	state := InitCwd("/project")
 	state.SetProjectRoot("/newroot")
-	assert.Equal(t, resolve("/newroot"), state.GetProjectRoot())
+	assert.Equal(t, resolve("/newroot"), mustGetProjectRoot(t, state))
 }
 
 // TestCwdState_SetWorkspace 测试设置 workspace

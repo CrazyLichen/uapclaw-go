@@ -12,18 +12,25 @@
 // 辅助字段：Workspace（per-agent artifact 目录）、TeamWorkspace（团队共享目录）
 // 读取优先级：Cwd -> OriginalCwd -> os.Getwd()
 //
-// # error 传播变体
+// # 唯一入口与 error 传播
 //
-// GetCwd / GetProjectRoot 保持历史签名（吞掉 os.Getwd() 的 error 并返回空串），
-// 全仓 22 处既有调用方不受影响。9.90d-1 新增 GetCwdE / GetProjectRootE 两个
-// 变体，把最后一级 os.Getwd() 的 error 原样返回，供需要一比一对齐 Python
-// try/except Exception 异常路径的调用方使用（见 command_runtime.go）。
+// 与 Python 一致，本包只提供唯一的 get_cwd() 等价物：
+// GetCwd(ctx) (string, error) / GetProjectRoot(ctx) (string, error)。
+// 三级回退（Cwd -> OriginalCwd -> os.Getwd()）全部内联在模块级函数里，
+// CwdState 是纯数据容器（仅保留字段快照与 setter，无读取 getter）。
+//
+// 最后一级 os.Getwd() 失败时返回 error，对应 Python os.getcwd() 抛 OSError。
+// Python 的调用方多数不捕获、让异常自然上冒；Go 侧调用方须显式处理或传播
+// error（登记为偏差 V-10，见 9.90d spec §五）。
+//
+// 历史：9.90d-1 曾短暂存在过吞异常的兼容壳 GetCwd(ctx) string 与
+// GetCwdE/GetProjectRootE 变体，已按规则 8 全部删除，不留残留。
 //
 // 文件目录：
 //
 //	cwd/
 //	├── doc.go           # 包文档
-//	└── cwd.go           # CwdState 结构体及全部方法（含 GetCwdE/GetProjectRootE）
+//	└── cwd.go           # CwdState 数据容器 + 模块级唯一读取入口
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/cwd.py
 package cwd

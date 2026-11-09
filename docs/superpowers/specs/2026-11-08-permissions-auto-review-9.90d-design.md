@@ -441,6 +441,7 @@ func (r *DeepAgentRail) IsTrusted() bool {
 | **V-7** | `code_tool_bindings` 不含 LSP | 含 `LspRail` + `lsp_tool/*`（约 1,239 行） | 仅 `agent_mode` 三工具 | 功能范围 | Go 侧 LSP 整层未实现 | **9.17 LSPRail 落地后回填** | **✅ 9.17 行追加 ⤴️** |
 | **V-8** | `_emit_audit` / `_emit_permission_result_observation` 空实现 | `runtime_bridge.py:62/69` | no-op 桩（保留完整签名与 31 个调用点） | 功能缺失 | `audit.py` 留 9.90e | **9.90e 回填** | **✅ 9.90e 行追加 ⤴️** |
 | **V-9** | `NATIVE_PATH_ACCESS` 由 task-local 降级为全局单例 | `ContextVar`（按 asyncio task 隔离） | `native_path_context.go:130` 全局变量 + `sync.Mutex` | 并发语义 | Go 无 task-local 存储；9.90b 落地时即采用全局变量式 | 改用 ctx 派生式重写 `native_path_context.go` 时回收 | 9.90d-2 行内说明（本批是首个并发消费者） |
+| **V-10** | `get_cwd()` 的隐式异常改为显式 error 分支 | `openjiuwen/core/sys_operation/cwd.py:81` `get_cwd()` 抛 `OSError`；33 处调用方**全部不捕获**，异常自然上冒 | `cwd.GetCwd(ctx) (string, error)`；13 个生产文件 18 处调用点显式 `if err != nil { return err }` | 代码形状 / 调用方职责 | Go 无隐式异常，唯一等价物是返回 error 并由调用方传播；用户拍板「方案 1 全做」接受形状差异 | Go 引入异常机制时回收（不回收） | 9.90d-1 行内说明 + `cwd/doc.go` |
 
 ### 5.1 V-6 的前置件规模（新增 9.11b）
 
@@ -642,14 +643,52 @@ go build ./... && go vet ./...
 
 ---
 
-## 十二、Task 0 前置核实（待执行）
+## 十二、Task 0 前置核实结果（2026-11-08 已执行）
 
-以下项需在实施前核实并回填本节：
+| # | 核实项 | 结论 |
+|---|---|---|
+| 1 | `rails/security` 是否 import `permissions` | ✅ **否** —— 新增 `permissions` → `rails/security` 单向依赖不成环 |
+| 2 | `PermissionInterruptRail` 缺哪 5 个成员 | ✅ 确认 5 个**全部 0 命中**：`PermissionCheckContext` / `GetPermissionSnapshot` / `InstalledPermissionConfig` / `ReplaceInstalledGlobalPermissions` / `BindApprovalRequest`，须在子类新增 |
+| 3 | `MarkTrusted()` 落点 | ✅ `BaseRail`（`callback.go:141`）只有 `priority int` 一字段，可安全增补。**落点选 `DeepAgentRail`**（`rails/base.go:32`）而非 `BaseRail` —— 因为 `BaseRail` 在 `single_agent/interfaces` 包，是更底层的基础设施，不应承载权限域语义 |
+| 4 | `internal/common` 顶层 doc.go | ✅ **存在**（`internal/common/doc.go`），Task 1 新建 `tool_display/` 子包须同步更新它 |
+| 5 | `tool_display` 既有消费者 | ✅ **0 命中** —— 纯新建，无需兼容既有实现 |
+| 6 | `pdf_tools.py` 符号清单 | ✅ 6 个：`ReadPdfRequest`(类) + `_parse_page_ranges` / `_resolve_pdf_path` / `_normalize_request` / `_read_pdf_sync` / `_format_page_list`。**注意 `read_pdf` 是工具入口，`_read_pdf_sync` 是同步实现** |
+| 7 | `policy_eval.go` 的 ⤵️ 注释位置 | ⚠️ **行号已变**：当前在 `policy_eval.go:231`（非计划写的 234），因其他流的 lint 修复提交改变了行号 |
+| 8 | `BaseRail` 可加字段 | ✅ 确认只有 `priority int`，但按第 3 条改为落在 `DeepAgentRail` |
 
-1. `agentcore/harness/rails/security` 是否 import `permissions`（已核实：否）
-2. `PermissionInterruptRail` 的公开方法清单（确认 5 个缺失成员：`PermissionCheckContext` / `GetPermissionSnapshot` / `InstalledPermissionConfig` / `ReplaceInstalledGlobalPermissions` / `BindApprovalRequest`）
-3. `agentinterfaces.BaseRail` 是否有扩展点（`MarkTrusted()` 落点选择 `DeepAgentRail` 还是 `BaseRail`）
-4. `internal/common` 新建顶层子包的可行性（`tool_display`）
-5. `IsolatedModelReviewerClient` 的 LLM 注入路径（Go 侧对应 `llm.Model` 构造方式）
-6. `cron_runtime.go` 的 `cronToolsBackend` 与 Python `_CronToolsCronBackend` 的等价性（V-6 回收依赖）
-7. `permission_mode.py`（47 行，`is_auto_permission_enabled`）Go 侧 0 命中，确认归属 9.90d-2 装配层
+**遗留未核实项**（Task 0 未覆盖，需在对应 Task 内核实）：
+
+- `IsolatedModelReviewerClient` 的 LLM 注入路径（9.90d-2 Task 24）
+- `cron_runtime.go` 与 `_CronToolsCronBackend` 的等价性（V-6 回收，9.11b 时处理）
+- `permission_mode.py` 归属（9.90d-2 装配层）
+
+### 12.1 Task 2 执行时的追加决策：`cwd` 包唯一入口返回 error
+
+**问题**：`command_runtime.py` 的 `_current_cwd` / `_current_project_root` 用
+`try/except Exception` 捕获 `get_cwd()` / `get_project_root()` 的异常并回退。
+Go 侧 `cwd.GetCwd(ctx) string` 把 `os.Getwd()` 的 error 吞成空串，无法表达
+Python 的异常路径；初版 `command_runtime.go` 用「判空」近似，语义错位。
+
+**决策演进（两轮用户拍板）**：
+
+1. 第一轮（方案 A）：新增 `GetCwdE` / `GetProjectRootE` 传播 error，保留
+   `GetCwd` / `GetProjectRoot` 兼容壳。
+2. 第二轮（用户指出兼容壳无必要）：**彻底删除兼容壳**（规则 8），
+   `E` 变体改名为唯一入口 `GetCwd(ctx) (string, error)` /
+   `GetProjectRoot(ctx) (string, error)`；删除 `CwdState.GetCwd` /
+   `GetProjectRoot` 方法（Python 的 `CwdState` 本就是纯 dataclass，无 getter）；
+   三级回退内联到模块级函数，与 Python `get_cwd()` 结构一致。
+
+**改动面**：13 个生产文件 18 处调用点全部改为 `got, err :=` 并传播 error；
+连锁函数 `ResolveToolFilePath`（4 调用方）、`resolveCwd`（7 调用方）、
+`ResolveCwd` / `ResolvePath` 签名改为返回 error；导出兼容壳
+`local.OperationUtils.ResolveCwd`（零调用方）已删除。
+4 个测试文件适配新签名。
+
+**登记偏差 V-10**：Python 的 33 处 `get_cwd()` 调用方全部不捕获异常
+（隐式上冒），Go 侧须在每个调用点显式 `if err != nil { return err }`，
+代码形状与上游不同。用户明确接受该差异。
+
+**验证**：`go build ./...` / `go vet ./...` /
+`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 全绿。
+异常分支通过 `os.Chdir` 到已删除目录真实构造（测试内 defer 恢复 cwd）。

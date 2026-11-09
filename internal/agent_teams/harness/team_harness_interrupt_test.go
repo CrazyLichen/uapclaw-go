@@ -188,15 +188,21 @@ func TestTeamHarness_InitCwdForRound_每轮重置(t *testing.T) {
 	round1 := h.InitCwdForRound(context.Background())
 	state := cwd.CwdStateFromCtx(round1)
 	require.NotNil(t, state, "本轮 ctx 必须携带新的 CwdState")
-	assert.Equal(t, root, state.GetCwd())
+	cwd1, errCwd1 := cwd.GetCwd(round1)
+	require.NoError(t, errCwd1)
+	assert.Equal(t, root, cwd1)
 
 	// 模拟第一轮里 cd 到子目录
 	state.SetCwd(root + "/sub")
-	assert.NotEqual(t, root, cwd.CwdStateFromCtx(round1).GetCwd())
+	cwd1b, errCwd1b := cwd.GetCwd(round1)
+	require.NoError(t, errCwd1b)
+	assert.NotEqual(t, root, cwd1b)
 
 	// 第二轮必须回到 workspace 根，而不是沿用上一轮被改过的状态
 	round2 := h.InitCwdForRound(context.Background())
-	assert.Equal(t, root, cwd.CwdStateFromCtx(round2).GetCwd())
+	cwd2, errCwd2 := cwd.GetCwd(round2)
+	require.NoError(t, errCwd2)
+	assert.Equal(t, root, cwd2)
 }
 
 // TestTeamHarness_InitCwdForRound_无工作空间 无 workspace 时原样返回 ctx。

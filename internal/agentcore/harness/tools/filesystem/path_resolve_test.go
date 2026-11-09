@@ -16,7 +16,10 @@ func TestResolveToolFilePath_绝对路径(t *testing.T) {
 	if testing.Short() {
 		t.Skip("需要文件系统")
 	}
-	got := ResolveToolFilePath(ctx, absPath)
+	got, err := ResolveToolFilePath(ctx, absPath)
+	if err != nil {
+		t.Fatalf("ResolveToolFilePath failed: %v", err)
+	}
 	if got != absPath {
 		t.Errorf("绝对路径应直接返回，got %q", got)
 	}
@@ -26,7 +29,10 @@ func TestResolveToolFilePath_绝对路径(t *testing.T) {
 func TestResolveToolFilePath_UNC路径(t *testing.T) {
 	ctx := context.Background()
 	uncPath := `\\server\share\file.txt`
-	got := ResolveToolFilePath(ctx, uncPath)
+	got, err := ResolveToolFilePath(ctx, uncPath)
+	if err != nil {
+		t.Fatalf("ResolveToolFilePath failed: %v", err)
+	}
 	if got != uncPath {
 		t.Errorf("UNC 路径应直接返回，got %q", got)
 	}
@@ -37,7 +43,10 @@ func TestResolveToolFilePath_相对路径(t *testing.T) {
 	dir := t.TempDir()
 	state := cwd.InitCwd(dir)
 	ctx := cwd.WithCwdState(context.Background(), state)
-	got := ResolveToolFilePath(ctx, "sub/file.txt")
+	got, err := ResolveToolFilePath(ctx, "sub/file.txt")
+	if err != nil {
+		t.Fatalf("ResolveToolFilePath failed: %v", err)
+	}
 	expected := filepath.Join(dir, "sub/file.txt")
 	if got != expected {
 		t.Errorf("相对路径应基于 cwd 解析，got %q, want %q", got, expected)
@@ -51,7 +60,10 @@ func TestResolveToolFilePath_波浪线展开(t *testing.T) {
 	if err != nil {
 		t.Skip("无法获取用户主目录")
 	}
-	got := ResolveToolFilePath(ctx, "~/test.txt")
+	got, err2 := ResolveToolFilePath(ctx, "~/test.txt")
+	if err2 != nil {
+		t.Fatalf("ResolveToolFilePath failed: %v", err2)
+	}
 	expected := filepath.Join(homeDir, "test.txt")
 	if got != expected {
 		t.Errorf("~ 应展开为用户目录，got %q, want %q", got, expected)

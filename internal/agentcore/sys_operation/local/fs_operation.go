@@ -1030,7 +1030,10 @@ func (f *LocalFsOperation) resolvePath(ctx context.Context, path string, createP
 	}
 
 	// 基于 CWD 解析（对齐 Python get_cwd()：读 ctx 中的 CwdState）
-	base := resolveCwd(ctx, "")
+	base, err := resolveCwd(ctx, "")
+	if err != nil {
+		return "", err
+	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(base, path)
 	}
@@ -1057,7 +1060,11 @@ func (f *LocalFsOperation) resolvePath(ctx context.Context, path string, createP
 			if ws := cwd.GetWorkspace(ctx); ws != "" {
 				sandboxRoots = append(sandboxRoots, ws)
 			}
-			if pr := cwd.GetProjectRoot(ctx); pr != "" {
+			pr, prErr := cwd.GetProjectRoot(ctx)
+			if prErr != nil {
+				return "", prErr
+			}
+			if pr != "" {
 				sandboxRoots = append(sandboxRoots, pr)
 			}
 		}

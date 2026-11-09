@@ -121,17 +121,16 @@ func ResolveCommandWorkdir(workdir any, paths CommandRuntimePaths) (string, erro
 //	    return get_agent_workspace_dir().resolve()
 //
 // 一比一对应：
-//   - cwd.GetCwdE(ctx) 对应 get_cwd()（含 os.getcwd() 可能抛的 OSError）
+//   - cwd.GetCwd(ctx) 对应 get_cwd()（含 os.getcwd() 可能抛的 OSError）
 //   - resolvePath(...) 对应 Path(...).resolve()
 //   - if err != nil 对应 except Exception
 //   - require 分支对应 raise ValueError
 //   - agentWorkspaceDir() 对应 get_agent_workspace_dir().resolve()
 //
-// 注：cwd 包原有的 GetCwd(ctx) string 会把 os.Getwd() 的 error 吞成空串，
-// 无法表达 Python 的异常路径；本函数改用 GetCwdE（9.90d-1 新增的
-// error 传播变体），既有 22 处 GetCwd 调用方保持不变。
+// 注：cwd 包现已删除吞异常的兼容壳，GetCwd 是唯一入口并返回
+// (string, error)，与 Python get_cwd() 的异常语义一致。
 func currentCwdPath(ctx context.Context, requireRuntimeCwd bool) (string, error) {
-	got, err := cwd.GetCwdE(ctx)
+	got, err := cwd.GetCwd(ctx)
 	if err == nil {
 		return resolvePath(got), nil
 	}
@@ -151,9 +150,9 @@ func currentCwdPath(ctx context.Context, requireRuntimeCwd bool) (string, error)
 //	except Exception:
 //	    return current_cwd
 //
-// 一比一对应：GetProjectRootE 的 err != nil 对应 except Exception。
+// 一比一对应：cwd.GetProjectRoot(ctx) 的 err != nil 对应 except Exception。
 func currentProjectRoot(ctx context.Context, currentCwd string) string {
-	got, err := cwd.GetProjectRootE(ctx)
+	got, err := cwd.GetProjectRoot(ctx)
 	if err == nil {
 		return resolvePath(got)
 	}

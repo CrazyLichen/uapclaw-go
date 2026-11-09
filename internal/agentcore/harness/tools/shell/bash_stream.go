@@ -96,7 +96,10 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 		}
 
 		// ── cwd 解析 ──
-		currentCwd := cwd.GetCwd(ctx)
+		currentCwd, err := cwd.GetCwd(ctx)
+		if err != nil {
+			return nil, err
+		}
 		resolvedCwd := workdir
 		if resolvedCwd == "" {
 			resolvedCwd = currentCwd

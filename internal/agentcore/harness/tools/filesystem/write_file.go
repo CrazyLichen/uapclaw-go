@@ -76,7 +76,10 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 
 		// 路径解析
 		// Python: L888-891
-		path := ResolveToolFilePath(ctx, input.FilePath)
+		path, err := ResolveToolFilePath(ctx, input.FilePath)
+		if err != nil {
+			return nil, err
+		}
 		isUNC := isUNCPath(path)
 
 		operationType := "create"

@@ -100,7 +100,10 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 
 		// 路径解析
 		// Python: L704-706
-		filePath := ResolveToolFilePath(ctx, input.FilePath)
+		filePath, err := ResolveToolFilePath(ctx, input.FilePath)
+		if err != nil {
+			return nil, err
+		}
 
 		// 设备路径检查
 		// Python: L709-713

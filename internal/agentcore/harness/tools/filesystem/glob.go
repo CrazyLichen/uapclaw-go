@@ -152,10 +152,13 @@ func NewGlobTool(op sys_operation.SysOperation, language, agentID string) tool.T
 // Python: GlobTool._resolve_search_path (filesystem.py L1408-1411)
 func resolveSearchPath(ctx context.Context, path string) (string, error) {
 	if path != "" {
-		return ResolveToolFilePath(ctx, path), nil
+		return ResolveToolFilePath(ctx, path)
 	}
 	// path 为空时默认 cwd
-	wd := cwd.GetCwd(ctx)
+	wd, err := cwd.GetCwd(ctx)
+	if err != nil {
+		return "", err
+	}
 	abs, err := filepath.Abs(wd)
 	if err != nil {
 		return wd, nil

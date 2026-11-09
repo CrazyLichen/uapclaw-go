@@ -127,7 +127,10 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 		return createErrResult("command can not be empty", nil), nil
 	}
 
-	actualCwd := resolveCwd(ctx, o.Cwd)
+	actualCwd, err := resolveCwd(ctx, o.Cwd)
+	if err != nil {
+		return nil, err
+	}
 
 	// 安全检查
 	if blocked := s.checkCommandSafety(command); blocked != "" {
@@ -270,7 +273,10 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 		return ch, nil
 	}
 
-	actualCwd := resolveCwd(ctx, o.Cwd)
+	actualCwd, err := resolveCwd(ctx, o.Cwd)
+	if err != nil {
+		return nil, err
+	}
 
 	if blocked := s.checkCommandSafety(command); blocked != "" {
 		exitCode := -1
@@ -442,7 +448,10 @@ func (s *LocalShellOperation) ExecuteCmdBackground(ctx context.Context, command 
 		}, nil
 	}
 
-	actualCwd := resolveCwd(ctx, o.Cwd)
+	actualCwd, err := resolveCwd(ctx, o.Cwd)
+	if err != nil {
+		return nil, err
+	}
 
 	if blocked := s.checkCommandSafety(command); blocked != "" {
 		return &result.ExecuteCmdBackgroundResult{

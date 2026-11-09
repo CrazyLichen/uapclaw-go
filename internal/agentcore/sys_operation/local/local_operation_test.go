@@ -44,14 +44,16 @@ func TestOperationUtils_PrepareEnvironment_空(t *testing.T) {
 	assert.NotEmpty(t, env)
 }
 
-// TestResolveCwd 测试工作目录解析
+// TestResolveCwd 测试工作目录解析（ctx 版本）。
 func TestResolveCwd(t *testing.T) {
-	cwd := ResolveCwd("")
-	assert.NotEmpty(t, cwd)
+	got, err := resolveCwd(context.Background(), "")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, got)
 
 	tmpDir := t.TempDir()
-	cwd = ResolveCwd(tmpDir)
-	assert.Equal(t, tmpDir, cwd)
+	got, err = resolveCwd(context.Background(), tmpDir)
+	assert.NoError(t, err)
+	assert.Equal(t, tmpDir, got)
 }
 
 // TestOperationUtils_CreateTmpFile 测试临时文件创建

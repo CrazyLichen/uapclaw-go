@@ -97,12 +97,16 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 		return nil, err
 	}
 
-	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	currentCwd, err := cwd.GetCwd(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
 	if err != nil || repoRoot == "" {
 		return nil, fmt.Errorf("无法创建 worktree: 不在 git 仓库中")
 	}
 
-	originalCwd := cwd.GetCwd(ctx)
+	originalCwd := currentCwd
 	originalBranch, _ := getCurrentBranch(ctx, repoRoot)
 	targetPath, err := m.resolveTargetPath(ctx, slug)
 	if err != nil {
@@ -277,7 +281,11 @@ func (m *WorktreeManager) CreateOwnerWorktree(ctx context.Context, slug string) 
 		return nil, err
 	}
 
-	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	currentCwd, cwdErr := cwd.GetCwd(ctx)
+	if cwdErr != nil {
+		return nil, cwdErr
+	}
+	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
 	if err != nil || repoRoot == "" {
 		return nil, fmt.Errorf("无法创建 owner worktree: 不在 git 仓库中")
 	}
@@ -312,7 +320,11 @@ func (m *WorktreeManager) CreateAgentWorktree(ctx context.Context, slug string) 
 // Python: WorktreeManager.recover_worktree_for_owner(owner_id, tag)
 func (m *WorktreeManager) RecoverWorktreeForOwner(ctx context.Context, ownerID, tag string) (*WorktreeSession, error) {
 	slug := ownerSlug(ownerID)
-	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	currentCwd, cwdErr := cwd.GetCwd(ctx)
+	if cwdErr != nil {
+		return nil, cwdErr
+	}
+	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
 	if err != nil || repoRoot == "" {
 		return nil, nil
 	}
@@ -381,7 +393,11 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 		return nil, nil
 	}
 
-	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	currentCwd, cwdErr := cwd.GetCwd(ctx)
+	if cwdErr != nil {
+		return nil, cwdErr
+	}
+	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
 	if err != nil || repoRoot == "" {
 		return nil, nil
 	}

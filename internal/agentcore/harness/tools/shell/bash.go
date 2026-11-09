@@ -122,7 +122,10 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 
 		// ── cwd 解析 ──
 		// Python: L172-176
-		currentCwd := cwd.GetCwd(ctx)
+		currentCwd, err := cwd.GetCwd(ctx)
+		if err != nil {
+			return nil, err
+		}
 		resolvedCwd := workdir
 		if resolvedCwd == "" {
 			resolvedCwd = currentCwd

@@ -325,7 +325,7 @@ func TestCurrentCommandRuntimePaths_cwd异常不require(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应返回 error（应回退到 agent workspace）: %v", err)
 	}
-	// currentCwdPath 回退到 agentWorkspaceDir；注意此时 cwd.GetCwdE 也失败，
+	// currentCwdPath 回退到 agentWorkspaceDir；注意此时 cwd.GetCwd 也失败，
 	// 但 agentWorkspaceDir 走 workspace.AgentWorkspaceDir()，不依赖 os.Getwd()
 	if paths.CurrentCwd == "" {
 		t.Error("CurrentCwd 应回退到 agent workspace，不应为空")
@@ -338,7 +338,7 @@ func TestCurrentCommandRuntimePaths_projectRoot异常回退(t *testing.T) {
 	defer deletedCwd(t)()
 
 	// require=true 时 currentCwdPath 会先报错，因此用 require=false 走回退路径，
-	// 此时 currentProjectRoot 的 GetProjectRootE 同样失败 → 回退到 currentCwd
+	// 此时 currentProjectRoot 的 cwd.GetProjectRoot 同样失败 → 回退到 currentCwd
 	paths, err := CurrentCommandRuntimePaths(context.Background(), false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

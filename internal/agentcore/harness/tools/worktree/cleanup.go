@@ -44,7 +44,11 @@ func IsEphemeralSlug(slug string) bool {
 // 4. 检查未推送提交（git rev-list）
 // 5. 任何检查失败 → 跳过
 func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend WorktreeBackend, currentWorktreePath string) (int, error) {
-	repoRoot, err := findCanonicalGitRoot(ctx, cwd.GetCwd(ctx))
+	currentCwd, cwdErr := cwd.GetCwd(ctx)
+	if cwdErr != nil {
+		return 0, cwdErr
+	}
+	repoRoot, err := findCanonicalGitRoot(ctx, currentCwd)
 	if err != nil || repoRoot == "" {
 		return 0, nil
 	}

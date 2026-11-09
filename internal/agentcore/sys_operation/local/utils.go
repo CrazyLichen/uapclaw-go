@@ -596,14 +596,6 @@ func (OperationUtils) DeleteTmpFile(path string) error {
 	return os.Remove(path)
 }
 
-// ResolveCwd 解析当前工作目录路径（无 ctx 版本，保留兼容）。
-// 优先使用 resolveCwd(ctx, ...)：agent 的 CwdState（cwd/project_root/
-// workspace）经 ctx 注入，用 context.Background() 读取恒为空，
-// 会让沙箱根为空、相对路径基准退化为进程 CWD。
-func ResolveCwd(cwdPath string) string {
-	return resolveCwd(context.Background(), cwdPath)
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // drainStderr 排空 stderr 管道并保留前 limit 字节，超限追加截断标记。
@@ -665,17 +657,23 @@ func collectBackgroundStderr(ch <-chan string, done <-chan struct{}, wait time.D
 
 // resolveCwd 基于调用方 ctx 中的 CwdState 解析工作目录。
 // 对齐 Python get_cwd()：contextvar 随 ctx 传播，agent 隔离靠不同 CwdState 实例。
-func resolveCwd(ctx context.Context, cwdPath string) string {
+//
+// 返回 error 以传播 cwd.GetCwd 的 os.Getwd() 异常。
+func resolveCwd(ctx context.Context, cwdPath string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	base, err := cwd.GetCwd(ctx)
+	if err != nil {
+		return "", err
+	}
 	if cwdPath != "" {
 		if !filepath.IsAbs(cwdPath) {
-			return filepath.Join(cwd.GetCwd(ctx), cwdPath)
+			return filepath.Join(base, cwdPath), nil
 		}
-		return cwdPath
+		return cwdPath, nil
 	}
-	return cwd.GetCwd(ctx)
+	return base, nil
 }
 
 // setProcessGroup 让子进程独立成组（平台实现在 proc_unix.go / proc_windows.go）。

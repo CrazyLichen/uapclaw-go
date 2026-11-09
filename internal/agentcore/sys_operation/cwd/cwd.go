@@ -11,6 +11,9 @@ import (
 
 // CwdState 每个-Agent 的可变 CWD 状态容器。
 // Python: CwdState dataclass (cwd.py:48-59)。
+//
+// 与 Python 一致，本类型只是纯数据容器，不承载读取逻辑；
+// 三级回退（cwd -> originalCwd -> os.getcwd()）全部在模块级 GetCwd 里。
 // 通过 context.Value 传播 *CwdState 指针：
 //   - 同一 Agent 内的 goroutine 共享同一 CwdState 引用，SetCwd 后立即可见
 //   - 子 Agent 调用 InitCwd 创建新 CwdState + WithCwdState 派生新 ctx，父不受影响
@@ -105,35 +108,39 @@ func CwdStateFromCtx(ctx context.Context) *CwdState {
 }
 
 // GetCwd 从 context 中获取当前工作目录。
+//
 // Python: get_cwd() (cwd.py:80-87)
-// 读取优先级：cwd -> originalCwd -> os.Getwd()
 //
-// 本函数吞掉 os.Getwd() 的 error 并返回空串（历史行为，22 处调用方依赖）。
-// 需要感知异常的调用方请用 GetCwdE。
-func GetCwd(ctx context.Context) string {
-	got, _ := GetCwdE(ctx)
-	return got
-}
-
-// GetCwdE 从 context 中获取当前工作目录，并把 os.Getwd() 的异常传播出来。
+//	s = _state()
+//	return s.cwd or s.original_cwd or os.getcwd()
 //
-// 读取优先级与 GetCwd 完全一致：cwd -> originalCwd -> os.Getwd()。
-// 仅当三级都落空、且 os.Getwd() 失败时返回 error。
+// 三级回退完全内联在本函数（与 Python 结构一致）：
+//  1. CwdState.cwd
+//  2. CwdState.originalCwd
+//  3. os.Getwd() —— 失败时返回 error（Python 抛 OSError）
 //
-// 用途：Python command_runtime._current_cwd 用 try/except Exception 感知
-// get_cwd() 的异常并回退到 agent workspace；Go 侧原先由 GetCwd 把异常吞成
-// 空串，导致无法一比一对齐。本函数是该异常路径的忠实等价物。
-//
-// Python: get_cwd() (cwd.py:80-87)，异常由调用方 try/except 捕获
-func GetCwdE(ctx context.Context) (string, error) {
+// 返回 error 而非吞掉：Python 的异常会自然向上传播，Go 用显式 error 表达。
+// 调用方须处理或传播；command_runtime.go 用 if err != nil 对应 Python 的
+// try/except Exception。
+func GetCwd(ctx context.Context) (string, error) {
 	if s := CwdStateFromCtx(ctx); s != nil {
-		return s.getCwdE()
+		cwd, original := s.snapshotCwd()
+		if cwd != "" {
+			return cwd, nil
+		}
+		if original != "" {
+			return original, nil
+		}
 	}
 	return os.Getwd()
 }
 
 // GetOriginalCwd 从 context 中获取会话起始点。
 // Python: get_original_cwd() (cwd.py:102-105)
+//
+// 注：本次 9.90d-1 改动只针对 GetCwd/GetProjectRoot（command_runtime 的
+// 依赖面）。GetOriginalCwd 保持历史签名，其 os.Getwd() 回退仍吞 error，
+// 待后续章节需要时统一处理。
 func GetOriginalCwd(ctx context.Context) string {
 	if s := CwdStateFromCtx(ctx); s != nil {
 		return s.GetOriginalCwd()
@@ -143,28 +150,24 @@ func GetOriginalCwd(ctx context.Context) string {
 }
 
 // GetProjectRoot 从 context 中获取项目根目录。
-// Python: get_project_root() (cwd.py:115-121)
-// 读取优先级：projectRoot -> originalCwd -> os.Getwd()
-//
-// 本函数吞掉 os.Getwd() 的 error 并返回空串（历史行为）。
-// 需要感知异常的调用方请用 GetProjectRootE。
-func GetProjectRoot(ctx context.Context) string {
-	got, _ := GetProjectRootE(ctx)
-	return got
-}
-
-// GetProjectRootE 从 context 中获取项目根目录，并把 os.Getwd() 的异常传播出来。
-//
-// 读取优先级与 GetProjectRoot 完全一致：
-// projectRoot -> originalCwd -> os.Getwd()。
-//
-// 用途：Python command_runtime._current_project_root 用 try/except Exception
-// 感知 get_project_root() 的异常并回退到 current_cwd。本函数是忠实等价物。
 //
 // Python: get_project_root() (cwd.py:115-121)
-func GetProjectRootE(ctx context.Context) (string, error) {
+//
+//	s = _state()
+//	return s.project_root or get_original_cwd()
+//
+// 其中 get_original_cwd() = s.original_cwd or os.getcwd()。
+// 因此三级回退：projectRoot -> originalCwd -> os.Getwd()，
+// 最后一级失败时返回 error（Python 抛 OSError）。
+func GetProjectRoot(ctx context.Context) (string, error) {
 	if s := CwdStateFromCtx(ctx); s != nil {
-		return s.getProjectRootE()
+		root, original := s.snapshotProjectRoot()
+		if root != "" {
+			return root, nil
+		}
+		if original != "" {
+			return original, nil
+		}
 	}
 	return os.Getwd()
 }
@@ -196,15 +199,25 @@ func GetTeamWorkspace(ctx context.Context) string {
 //  1. explicitCwd 非空且为绝对路径 → 直接使用（resolve）
 //  2. explicitCwd 非空且为相对路径 → 基于 GetCwd(ctx) 解析
 //  3. explicitCwd 为空 → 使用 GetCwd(ctx)
-func ResolveCwd(ctx context.Context, explicitCwd string) string {
+//
+// 返回 error 以传播 GetCwd 的 os.Getwd() 异常。
+func ResolveCwd(ctx context.Context, explicitCwd string) (string, error) {
 	if explicitCwd == "" {
-		return GetCwd(ctx)
+		got, err := GetCwd(ctx)
+		if err != nil {
+			return "", err
+		}
+		return got, nil
 	}
 	target := filepath.Clean(explicitCwd)
 	if !filepath.IsAbs(target) {
-		target = filepath.Join(GetCwd(ctx), target)
+		base, err := GetCwd(ctx)
+		if err != nil {
+			return "", err
+		}
+		target = filepath.Join(base, target)
 	}
-	return resolve(target)
+	return resolve(target), nil
 }
 
 // ResolvePath 基于当前 CWD 解析文件路径。
@@ -212,37 +225,17 @@ func ResolveCwd(ctx context.Context, explicitCwd string) string {
 //
 // 对相对路径：基于 GetCwd(ctx) 解析
 // 对绝对路径：直接使用
-func ResolvePath(ctx context.Context, path string) string {
+//
+// 返回 error 以传播 GetCwd 的 os.Getwd() 异常。
+func ResolvePath(ctx context.Context, path string) (string, error) {
 	if filepath.IsAbs(path) {
-		return filepath.Clean(path)
+		return filepath.Clean(path), nil
 	}
-	return filepath.Clean(filepath.Join(GetCwd(ctx), path))
-}
-
-// GetCwd 获取当前工作目录。
-// Python: get_cwd() (cwd.py:80-87)
-// 读取优先级：cwd -> originalCwd -> os.Getwd()
-//
-// 本方法吞掉 os.Getwd() 的 error；需要感知异常请用 getCwdE。
-func (s *CwdState) GetCwd() string {
-	got, _ := s.getCwdE()
-	return got
-}
-
-// getCwdE 三级读取并把最后一级 os.Getwd() 的 error 传播出来。
-//
-// Python: get_cwd() 的 s.cwd or s.original_cwd or os.getcwd()，
-// 其中 os.getcwd() 会抛 OSError，由调用方的 try/except 捕获。
-func (s *CwdState) getCwdE() (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.cwd != "" {
-		return s.cwd, nil
+	base, err := GetCwd(ctx)
+	if err != nil {
+		return "", err
 	}
-	if s.originalCwd != "" {
-		return s.originalCwd, nil
-	}
-	return os.Getwd()
+	return filepath.Clean(filepath.Join(base, path)), nil
 }
 
 // GetOriginalCwd 获取会话起始点。
@@ -255,34 +248,6 @@ func (s *CwdState) GetOriginalCwd() string {
 	}
 	wd, _ := os.Getwd()
 	return wd
-}
-
-// GetProjectRoot 获取项目根目录。
-// Python: get_project_root() (cwd.py:115-121)
-// 读取优先级：projectRoot -> originalCwd -> os.Getwd()
-// 注意：内联读取 originalCwd 而非调用 GetOriginalCwd()，避免嵌套加锁风险。
-//
-// 本方法吞掉 os.Getwd() 的 error；需要感知异常请用 getProjectRootE。
-func (s *CwdState) GetProjectRoot() string {
-	got, _ := s.getProjectRootE()
-	return got
-}
-
-// getProjectRootE 三级读取并把最后一级 os.Getwd() 的 error 传播出来。
-//
-// 同样内联读取 originalCwd 避免嵌套加锁。
-// Python: get_project_root() 的 s.project_root or get_original_cwd()，
-// 最终落到 os.getcwd() 抛 OSError，由调用方 try/except 捕获。
-func (s *CwdState) getProjectRootE() (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.projectRoot != "" {
-		return s.projectRoot, nil
-	}
-	if s.originalCwd != "" {
-		return s.originalCwd, nil
-	}
-	return os.Getwd()
 }
 
 // GetWorkspace 获取 agent workspace。
@@ -345,6 +310,22 @@ func (s *CwdState) SetTeamWorkspace(path string) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// snapshotCwd 读取 cwd 与 originalCwd 两个字段（加锁快照）。
+// 只做字段读取，不做 os.Getwd() 回退——回退是模块级 GetCwd 的职责。
+func (s *CwdState) snapshotCwd() (cwd, originalCwd string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cwd, s.originalCwd
+}
+
+// snapshotProjectRoot 读取 projectRoot 与 originalCwd 两个字段（加锁快照）。
+// 内联读取 originalCwd 而非调用 GetOriginalCwd()，避免嵌套加锁风险。
+func (s *CwdState) snapshotProjectRoot() (projectRoot, originalCwd string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.projectRoot, s.originalCwd
+}
 
 // resolve 解析路径为绝对路径。
 // Python: _resolve(path) (cwd.py:65-66)
