@@ -852,3 +852,39 @@ Go 侧：
 
 **测试**：35 个用例，覆盖 10 字段 / 白名单 / 五类敏感内容检测 /
 自然语言双通道 / 根解析五级优先级 / JSONL 追加 / 三种降级路径。
+
+### 12.6 Task 8 执行时的核实结论：`url_safety`
+
+**全量落地**：541 行 / 25 函数 + 3 类型 + 11 常量逐条对齐。
+依赖 `network_scope` 四函数（`NormalizeNetworkHost` / `NetworkHostRejectionReason` /
+`HostMatchesAllowedDomain` / `HasSecretQuery`）与 `root_context` 三符号
+（`OriginalUserIntentEvidence` / `UserIntentSource` / `HasValidAskUserClarification`），
+均已存在，无新增依赖。
+
+**端口语义差异（关键）**：Python `urlparse().port` 对超范围端口（如 `:99999`）
+和非法端口（如 `:abc`）都抛 ValueError，`_has_invalid_port` 据此返回 true。
+Go 的 `url.Parse` 对 `:abc` 直接返回 error，但对 `:99999` **放行**且
+`url.URL.Port()` 返回字符串 `"99999"`。故 `hasInvalidPort` 自行校验
+`0 <= n <= 65535`，等价于 Python 的 `parsed.port` 取值范围检查。
+`EvaluateReviewableURLScope` 里 `url.Parse` 失败时按 `network_url_invalid_port`
+硬拦处理（对应 Python 侧端口异常被 `unsafe_public_https_url_reason` 捕获）。
+
+**正则方案**：沿用本批 Task 5/6 的 `regexp2`（`(?<![A-Za-z0-9.-])` /
+`(?<![A-Za-z0-9+.-])` 两处 lookbehind 需要）。
+
+**Python 语义核实（避免测试预期写错）**：
+1. `_inspect_uri` 的 NUL 检测写入 `parse_failure_reason`（值 `uri_nul`），
+   随后 `if scheme != "file" or parse_failure` 直接返回，**不进入** file
+   解析分支，故 `file_local` 为 false。测试据此断言。
+2. `file:relative.txt` 的 path 是 `relative.txt`，**不以 `/` 开头** →
+   `file_uri_path_invalid`。root 拼接只对已通过 `/` 前缀检查的路径生效，
+   故「相对路径 + root」不会生效。测试按上游行为断言，未放宽。
+
+**规则 8 清理**：初版 `hasPassword` 辅助函数未被任何调用方使用（0%），
+已删除并把判定内联到 `inspectURI` 与 `UnsafePublicHTTPSURLReason`。
+
+**测试**：45 个用例，覆盖 9 类硬拦原因 / 单标签主机 / 三态决策
+（拒绝 / 硬拦 / 语义未决）/ 显式意图与最近搜索结果两条接受路径 /
+file URI 五种解析失败原因 / 域名压缩 / 端口范围。
+`url_safety.go` 函数级覆盖率最低 81.8%（`regexp2FindAll` 的错误分支），
+`inspectURI` 82.0%，其余 ≥90%；permissions 包整体 87.3%。

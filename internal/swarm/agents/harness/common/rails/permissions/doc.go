@@ -72,6 +72,7 @@
 //	├── policy_eval.go                     # 只做策略评估、不进入人工确认流程（9.90b）
 //	├── reviewer_redaction.go              # AutoReviewer 证据脱敏（689 行 / 20 函数，原属 9.90d-2，因 workspace_paths 依赖提前到 9.90d-1）
 //	├── persistent_audit.go                # 追加式持久化审计（9.90d-1 Task 7）
+//	├── url_safety.go                      # 只读网络/浏览器 URL 审查助手（9.90d-1 Task 8）
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）
