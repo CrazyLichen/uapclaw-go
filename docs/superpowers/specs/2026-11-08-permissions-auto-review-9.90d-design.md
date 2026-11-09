@@ -1738,3 +1738,50 @@ Task 42 装配时需接线。
 另：`CompatibilitySendMatchesHost` 校验 `tool_call` 时，若该 call 缺
 `arguments` 字段，归一结果是 `{}`（不含 send_file 的两个字段），与 identity
 （从 dict 算出、含两字段）不等 → 判失败。这是 Python 同款行为。
+
+### 12.23 Task 28 执行结论：`runtime_result`
+
+**落地**：`auto_permission/runtime_result.go`（250 行 Python → 约 290 行 Go /
+10 函数），覆盖率 **97.4%**，auto_permission 包 88.9%。
+
+#### 偏差 V-3 落地：5 个反射适配函数不实现
+
+Python 用 `inspect.signature` 动态适配父类 `before_tool_call` 的调用形状：
+
+| Python 函数 | 用途 |
+|---|---|
+| `_resolve_base_call_args` | 按签名裁剪位置参数 |
+| `_needs_runtime_tool_call` | 判断是否要补 tool_call 参数 |
+| `_positional_capacity` | 数位置参数容量 |
+| `_filter_base_call_kwargs` | 按签名过滤 kwargs |
+| `_is_openjiuwen_runtime_context` | 类型判断 |
+
+Go 的函数签名静态固定，无 `inspect` 需求——这 5 个函数没有对应物。
+调用父类的部分由 `runtime_bridge.go` 的 `callBaseRail` 以固定签名直接完成。
+
+#### 10 个实现函数
+
+| Go | Python | 职责 |
+|---|---|---|
+| `resultFromBaseSideEffect` | `_result_from_base_side_effect` | 父类返回 nil 但设了 `_skip_tool` 时，从 `inputs.ToolResult` 还原 |
+| `permissionToolResultText` | `_permission_tool_result_text` | 三级回落：feedback → 非空串 → 默认拒绝文案 |
+| `permissionToolResultPayload` | `_permission_tool_result_payload` | 拒绝类 → 结构化 payload；其余 → 纯文本 |
+| `isPermissionDeniedMetadataPayload` | `_is_permission_denied_metadata_payload` | 三种「已拒绝」标记判定 |
+| `permissionDeniedToolResultPayload` | `_permission_denied_tool_result_payload` | 7 个固定字段 + 可选 reviewer_metadata / reason |
+| `permissionInterruptMessage` | `_permission_interrupt_message` | 四级回落：value.message → message → feedback → 默认 |
+| `permissionInterruptExtraFields` | `_permission_interrupt_extra_fields` | metadata 全量 + value 段排除 message/question |
+| `permissionTerminalOutcome` | `_permission_terminal_outcome` | allow / deny / cancel，interrupt 无终态 |
+| `permissionTerminalDecisionSource` | `_permission_terminal_decision_source` | 正则 `^[a-z][a-z0-9_]{0,63}$`，非法回落 unknown |
+| `permissionFeedbackText` | `_permission_feedback_text` | 三态：字符串 / map（含 value.feedback 嵌套）/ Feedback 接口 |
+
+#### 测试中踩的坑
+
+`ClassifyPermissionResult` 对 `map[string]any` 的判定**不看 `approved` 字段**
+（`approvedAttribute` 只认 `security.PermissionConfirmResponse`），而是看
+feedback 里的标记：
+
+- allow → `PermissionConfirmResponse{Approved: true}`
+- denied → feedback 含 `[permission_denied]`
+- user_rejection → feedback 含 `[permission_rejected]`
+
+初版测试用 `map{"approved": true}` 一律被归类为 `interrupt`。
