@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -278,5 +279,90 @@ func TestCurrentCommandRuntimePaths_无Workspace(t *testing.T) {
 	}
 	if paths.WorkspaceRoot != "" {
 		t.Errorf("WorkspaceRoot = %q, want empty（Python None）", paths.WorkspaceRoot)
+	}
+}
+
+// ─── Python except Exception 路径的三条分支 ───
+
+// deletedCwd 把进程切到一个随后被删除的目录，使 os.Getwd() 失败。
+// 返回恢复函数（务必 defer 调用，避免污染同包其他测试）。
+func deletedCwd(t *testing.T) func() {
+	t.Helper()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() 前置失败: %v", err)
+	}
+	deleted := t.TempDir()
+	if err := os.Chdir(deleted); err != nil {
+		t.Fatalf("os.Chdir 失败: %v", err)
+	}
+	if err := os.RemoveAll(deleted); err != nil {
+		t.Fatalf("os.RemoveAll 失败: %v", err)
+	}
+	return func() { _ = os.Chdir(origWd) }
+}
+
+// TestCurrentCommandRuntimePaths_cwd异常且require 验证 Python 的
+// except + require_runtime_cwd=True → raise ValueError。
+func TestCurrentCommandRuntimePaths_cwd异常且require(t *testing.T) {
+	defer deletedCwd(t)()
+
+	_, err := CurrentCommandRuntimePaths(context.Background(), true)
+	if err == nil {
+		t.Fatal("requireRuntimeCwd=true 且 cwd 异常时应返回 error")
+	}
+	if !strings.Contains(err.Error(), "command runtime cwd is unavailable") {
+		t.Errorf("error = %q", err.Error())
+	}
+}
+
+// TestCurrentCommandRuntimePaths_cwd异常不require 验证 Python 的
+// except + require_runtime_cwd=False → 回退到 get_agent_workspace_dir()。
+func TestCurrentCommandRuntimePaths_cwd异常不require(t *testing.T) {
+	defer deletedCwd(t)()
+
+	paths, err := CurrentCommandRuntimePaths(context.Background(), false)
+	if err != nil {
+		t.Fatalf("不应返回 error（应回退到 agent workspace）: %v", err)
+	}
+	// currentCwdPath 回退到 agentWorkspaceDir；注意此时 cwd.GetCwdE 也失败，
+	// 但 agentWorkspaceDir 走 workspace.AgentWorkspaceDir()，不依赖 os.Getwd()
+	if paths.CurrentCwd == "" {
+		t.Error("CurrentCwd 应回退到 agent workspace，不应为空")
+	}
+}
+
+// TestCurrentCommandRuntimePaths_projectRoot异常回退 验证 Python 的
+// _current_project_root 的 except → return current_cwd。
+func TestCurrentCommandRuntimePaths_projectRoot异常回退(t *testing.T) {
+	defer deletedCwd(t)()
+
+	// require=true 时 currentCwdPath 会先报错，因此用 require=false 走回退路径，
+	// 此时 currentProjectRoot 的 GetProjectRootE 同样失败 → 回退到 currentCwd
+	paths, err := CurrentCommandRuntimePaths(context.Background(), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if paths.ProjectRoot != paths.CurrentCwd {
+		t.Errorf("ProjectRoot = %q, 应回退到 CurrentCwd = %q",
+			paths.ProjectRoot, paths.CurrentCwd)
+	}
+}
+
+// TestResolveCommandWorkdir_异常下仍可解析 验证回退后的路径仍可用于白名单判定。
+func TestResolveCommandWorkdir_异常下仍可解析(t *testing.T) {
+	defer deletedCwd(t)()
+
+	paths, err := CurrentCommandRuntimePaths(context.Background(), false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 回退得到的 CurrentCwd/ProjectRoot 应至少允许 "." 通过
+	got, err := ResolveCommandWorkdir(".", paths)
+	if err != nil {
+		t.Errorf("回退路径下相对 workdir 应可解析: %v", err)
+	}
+	if got == "" {
+		t.Error("解析结果不应为空")
 	}
 }

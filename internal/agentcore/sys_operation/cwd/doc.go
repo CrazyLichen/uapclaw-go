@@ -12,11 +12,18 @@
 // 辅助字段：Workspace（per-agent artifact 目录）、TeamWorkspace（团队共享目录）
 // 读取优先级：Cwd -> OriginalCwd -> os.Getwd()
 //
+// # error 传播变体
+//
+// GetCwd / GetProjectRoot 保持历史签名（吞掉 os.Getwd() 的 error 并返回空串），
+// 全仓 22 处既有调用方不受影响。9.90d-1 新增 GetCwdE / GetProjectRootE 两个
+// 变体，把最后一级 os.Getwd() 的 error 原样返回，供需要一比一对齐 Python
+// try/except Exception 异常路径的调用方使用（见 command_runtime.go）。
+//
 // 文件目录：
 //
 //	cwd/
 //	├── doc.go           # 包文档
-//	└── cwd.go           # CwdState（当前工作目录状态） 结构体及全部方法
+//	└── cwd.go           # CwdState 结构体及全部方法（含 GetCwdE/GetProjectRootE）
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/cwd.py
 package cwd

@@ -108,20 +108,31 @@ func ResolveCommandWorkdir(workdir any, paths CommandRuntimePaths) (string, erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// currentCwdPath 读当前 cwd；读不到时按 requireRuntimeCwd 决定报错或回退。
+// currentCwdPath 读当前 cwd；异常时按 requireRuntimeCwd 决定报错或回退。
 //
 // Python: _current_cwd(*, require_runtime_cwd)
-// 异常分支：Python 捕获 Exception 后按 require 决定 raise 或回退到 agent workspace。
 //
-// ⚠️ Go 侧差异（保留 Python 步骤结构，不删分支）：
-// Python 的 get_cwd() 在无 CwdState 绑定时会抛异常，因此下面的两个错误/回退
-// 分支是真实可走的。Go 的 cwd.GetCwd 内建三级回退（cwd → originalCwd →
-// os.Getwd()），恒返回非空串，所以这两个分支在当前 Go 实现下不可达。
-// 保留它们的原因：(a) 规则 9.3 要求条件分支嵌套不得调整；(b) 若日后
-// cwd.GetCwd 改为可返回空（例如允许显式清空 CwdState），这两个分支即刻生效。
-// 测试无法覆盖不可达分支，属规则 3.2 的覆盖率例外情形。
+//	try:
+//	    from ...cwd import get_cwd
+//	    return Path(get_cwd()).resolve()
+//	except Exception:
+//	    if require_runtime_cwd:
+//	        raise ValueError("command runtime cwd is unavailable") from None
+//	    return get_agent_workspace_dir().resolve()
+//
+// 一比一对应：
+//   - cwd.GetCwdE(ctx) 对应 get_cwd()（含 os.getcwd() 可能抛的 OSError）
+//   - resolvePath(...) 对应 Path(...).resolve()
+//   - if err != nil 对应 except Exception
+//   - require 分支对应 raise ValueError
+//   - agentWorkspaceDir() 对应 get_agent_workspace_dir().resolve()
+//
+// 注：cwd 包原有的 GetCwd(ctx) string 会把 os.Getwd() 的 error 吞成空串，
+// 无法表达 Python 的异常路径；本函数改用 GetCwdE（9.90d-1 新增的
+// error 传播变体），既有 22 处 GetCwd 调用方保持不变。
 func currentCwdPath(ctx context.Context, requireRuntimeCwd bool) (string, error) {
-	if got := cwd.GetCwd(ctx); got != "" {
+	got, err := cwd.GetCwdE(ctx)
+	if err == nil {
 		return resolvePath(got), nil
 	}
 	if requireRuntimeCwd {
@@ -130,14 +141,20 @@ func currentCwdPath(ctx context.Context, requireRuntimeCwd bool) (string, error)
 	return agentWorkspaceDir(), nil
 }
 
-// currentProjectRoot 读项目根；读不到时回退到 cwd。
+// currentProjectRoot 读项目根；异常时回退到 cwd。
 //
 // Python: _current_project_root(current_cwd)
 //
-// ⚠️ Go 侧差异同 currentCwdPath：cwd.GetProjectRoot 恒返回非空串，
-// 回退分支当前不可达，保留以对齐 Python 步骤结构。
+//	try:
+//	    from ...cwd import get_project_root
+//	    return Path(get_project_root()).resolve()
+//	except Exception:
+//	    return current_cwd
+//
+// 一比一对应：GetProjectRootE 的 err != nil 对应 except Exception。
 func currentProjectRoot(ctx context.Context, currentCwd string) string {
-	if got := cwd.GetProjectRoot(ctx); got != "" {
+	got, err := cwd.GetProjectRootE(ctx)
+	if err == nil {
 		return resolvePath(got)
 	}
 	return currentCwd
