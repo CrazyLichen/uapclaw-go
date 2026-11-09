@@ -1404,3 +1404,46 @@ Task 18 依赖两个 Go 侧**完全不存在**的模块，计划文档未列：
 `JiuwenclawProtectedWritePaths`（`protected_paths.go`）、
 `ClassifyTool`（`tool_capabilities.go`）。新增仅 4 个：
 `anyToBool` / `anyToInt` / `anyToStringSlice` / `mapGet`。
+
+### 12.17 Task 19 执行结论：`permission_compose`
+
+**落地**：`permissions/permission_compose.go`（362 行 Python → 218 行 Go 有效代码 +
+测试 600 行），覆盖率 **95.0%**，permissions 包 88.9%。
+
+#### 旧实现已删除（规则 8）
+
+`permissions_layers.go` 里 9.90b 落地的最小实现（112 行）已整体删除：
+`ComposeHostEffectivePermissions` + 仅被它使用的 `resolveToolLevel`。
+grep 锚点为空，无兼容壳。
+
+#### 相对最小实现新增的能力
+
+| 能力 | 说明 |
+|---|---|
+| `rules` 合并 + P1 severity→action | 多层规则拼接后给缺 action 的规则按 `LOW/MEDIUM→allow`、`HIGH→ask`、`CRITICAL→deny` 补动作；已有显式 action 的规则不覆盖 |
+| `approval_overrides` 合并 | 三层 list 拼接 |
+| `file_guard.paths` 叠加 | Global 为基底，User/Session **只能追加路径**，不能改 `enabled`/`defaults` |
+| `net_guard` 合成 | `enabled` 只取 Global（User 不能关）；`defaults` 上 Global deny 不可被 User allow 放宽；`urls` 逐项合并且 deny 不可放宽 |
+| `shell_guard` 合成 | 只看 Global ⊕ User（忽略 Session）；后层覆盖前层；缺失或非法一律 `true`（fail-closed） |
+| `categories.shell` 强制覆盖 | Host 事实，User/Session 不得覆盖 |
+| `package_builtin_rules` | 只取 Global；字符串 `false`/`0`/`no`/`off` 视为关闭 |
+| 包内规则注入 | `InlinePackageCommandRules` → `MergePackageSensitivePaths` → `MergePackageNetURLs`（三者 Go 侧均已存在） |
+| fail-closed 兜底 | `defer`/`recover` 捕获 panic → `failClosed`（默认全 ask、护栏全开） |
+
+#### 依赖核实结论
+
+Python 侧从 openjiuwen SDK 导入的 5 个符号，Go 侧**全部已存在**，无需新写：
+
+| Python | Go |
+|---|---|
+| `package_builtin_rules_enabled` | `toolguard.PackageBuiltinRulesEnabled` |
+| `merge_package_sensitive_paths` | `fileguard.MergePackageSensitivePaths` |
+| `merge_package_net_urls` | `netguard.MergePackageNetURLs` |
+| `inline_package_command_rules` | `toolguard.InlinePackageCommandRules` |
+| `shell_tool_names` | `permissions.ShellToolNames` |
+
+#### 一处签名偏差
+
+Python 的 `compose_host_effective_permissions` 有 `agent_permissions` 关键字参数，
+但函数体首行 `_ = (session_id, agent_permissions)` 显式忽略它。Go 侧**不保留该参数**
+——P1 阶段它是死参数，违反规则 8。`session_id` 保留（现有调用方传位置参数）。

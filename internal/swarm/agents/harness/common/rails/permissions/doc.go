@@ -25,16 +25,14 @@
 //
 // # 已知缺口
 //
-// ⤵️ 9.90b 遗留一处，属后续章节的职责：
-//
-//	permission_compose（约 300 行，9.90d）：permissions_layers 需要的
-//	ComposeHostEffectivePermissions 目前是最小实现（整工具 deny 优先、
-//	allow 放宽低层 ask、session 的 ask/deny 丢弃）。9.90d 用完整版替换时
-//	保留函数签名，调用方无需改动。permissions_layers.go 内已标注
-//	「⤴️ 9.90d 回填」。
-//
 // ✅ 已回填（9.90d-1 Task 10）：send_file_path_guard 落地，
 // policy_eval 的 send_file 分支已接上 SendFilePathGuardEvaluator。
+//
+// ✅ 已回填（9.90d-2 Task 19）：permission_compose 完整版落地
+// （permission_compose.go），permissions_layers 的最小实现已删除。
+// 现覆盖 rules 合并 + P1 severity→action、approval_overrides、
+// file_guard.paths 叠加、net_guard / shell_guard 合成、
+// categories / package_builtin_rules 的 Host 事实保护、fail-closed 兜底。
 //
 // ⤵️ 意图窗口的消费方待 9.90d（_auto_permission）批次回填：
 // RootDecisionContext 目前只被两个 root rail 读写，尚无判定逻辑消费。
@@ -79,6 +77,7 @@
 //	├── permission_interrupt_rail.go       # 精确持久化 + 中断归属标记的权限 rail（9.90d-1 Task 13）
 //	├── base_rail.go                       # 自动审查层包装权限轨的协作面接口（9.90d-1 Task 15）
 //	├── auto_config.go                     # auto 模式运行时配置归一化（9.90d-2 Task 18）
+//	├── permission_compose.go              # Global⊕User⊕Session 权限合成（9.90d-2 Task 19）
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）
