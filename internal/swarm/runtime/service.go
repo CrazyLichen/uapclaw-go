@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -114,8 +115,8 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]
 	if err != nil {
 		return nil, err
 	}
-	enabled := r.planEnabled(req)
-	if enabled {
+	// 执行前：同步 plan 状态（Python: service.py:1860 `if not readonly_goal_get`）
+	if r.shouldSyncPlanState(req) {
 		r.ensurePlanState(ctx, req, subMode, agent)
 	}
 
@@ -129,7 +130,7 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]
 	}
 
 	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
-	if enabled {
+	if r.shouldCheckPlanExit(req) {
 		r.checkPlanExit(ctx, req, subMode, agent)
 	}
 	if execErr != nil {
@@ -150,8 +151,8 @@ func (r *AgentRuntime) Stream(
 	if err != nil {
 		return err
 	}
-	enabled := r.planEnabled(req)
-	if enabled {
+	// 执行前：同步 plan 状态（Python: service.py:1860 `if not readonly_goal_get`）
+	if r.shouldSyncPlanState(req) {
 		r.ensurePlanState(ctx, req, subMode, agent)
 	}
 
@@ -163,7 +164,7 @@ func (r *AgentRuntime) Stream(
 		ch, streamErr = agent.ProcessMessageStream(ctx, req)
 	}
 	if streamErr != nil {
-		if enabled {
+		if r.shouldCheckPlanExit(req) {
 			r.checkPlanExit(ctx, req, subMode, agent)
 		}
 		return streamErr
@@ -174,7 +175,7 @@ func (r *AgentRuntime) Stream(
 		}
 	}
 	// 流结束：退出事件在 channel 关闭前发出（对齐 Python generator finally 里的 yield）
-	if enabled {
+	if r.shouldCheckPlanExit(req) {
 		r.checkPlanExit(ctx, req, subMode, agent)
 	}
 	return nil
@@ -193,24 +194,54 @@ func (r *AgentRuntime) prepareTurn(
 	if r.manager == nil {
 		return "", "", nil, errors.New("agent runtime manager is nil")
 	}
-	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID, true)
+	// Python: service.py:1848 `"sync_metadata": not readonly_goal_get` —— 只读的
+	// command.goal get 不得兜底新建 session metadata（否则一次状态查询就凭空写出
+	// metadata.json）。
+	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID, !isReadonlyGoalGetRequest(req))
 }
 
-// planEnabled 判定本轮是否参与 plan 状态同步。
-// Python: service.py:1859 `if not readonly_goal_get` + PlanModeController.should_sync
-func (r *AgentRuntime) planEnabled(req *schema.AgentRequest) bool {
+// isReadonlyGoalGetRequest 是否为只读的持续目标状态查询。
+// Python: service.py:4321 _is_readonly_goal_get_request
+//
+// 只有 command.goal 且 action=get（含 action 缺省）为真。这类请求仍需真实执行
+// （可能从 checkpointer / Session state 读出已有 GoalRecord），但三个副作用必须
+// 关掉：不写 session metadata、不同步 plan 状态、不检查 plan 退出。
+func isReadonlyGoalGetRequest(req *schema.AgentRequest) bool {
+	if req == nil || req.ReqMethod != schema.ReqMethodCommandGoal {
+		return false
+	}
+	// Python: str(params.get("action") or "get").strip().lower() == "get"
+	action := strings.ToLower(strings.TrimSpace(stringParam(parseRequestParams(req), "action")))
+	if action == "" {
+		action = "get"
+	}
+	return action == "get"
+}
+
+// shouldSyncPlanState 本轮执行前是否同步 plan 状态。
+// Python: service.py:1860 `if not readonly_goal_get:` → ensure_state
+//
+// 上游此处只判 not readonly_goal_get；is_team / resume / should_sync 三个条件
+// 都在 EnsureState 内部（plan.py:196-204），Go 侧同样由控制器负责，不在此重复。
+func (r *AgentRuntime) shouldSyncPlanState(req *schema.AgentRequest) bool {
 	if req == nil || r.planController == nil {
 		return false
 	}
-	resolved := ResolveRequestRuntimeModeFromRequest(req)
-	if resolved.IsTeam {
+	return !isReadonlyGoalGetRequest(req)
+}
+
+// shouldCheckPlanExit 本轮结束后是否检查工具触发的 plan 退出。
+// Python: service.py:1908 `if agent is not None and not stateless and not readonly_goal_get:`
+//
+// 上游该处的 agent is not None 在 Go 恒成立（agent 来自 prepareTurn）；stateless
+// 方法在门面层已被 handleSkillsRequest / handleSkillDevRequest 拦下，到不了
+// Runtime。session_id / is_team / is_plan 三个条件在 CheckPostProcessExit 内部
+// （plan.go），不在此重复。
+func (r *AgentRuntime) shouldCheckPlanExit(req *schema.AgentRequest) bool {
+	if req == nil || r.planController == nil {
 		return false
 	}
-	params := parseRequestParams(req)
-	if resume, ok := params["resume"].(bool); ok && resume {
-		return false
-	}
-	return ShouldSync(req.ReqMethod.String())
+	return !isReadonlyGoalGetRequest(req)
 }
 
 // ensurePlanState 同步本轮 plan 状态，回写 query/mode 并下发进入事件。
