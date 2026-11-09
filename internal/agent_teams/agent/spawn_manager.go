@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -357,9 +357,9 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 		return atschema.TeamRuntimeContext{}, fmt.Errorf("成员 %s 不存在", memberName)
 	}
 
-	// 解析 model_ref_json → resolveMemberModelFromDB
+	// 解析 member.options.model_ref → resolveMemberModelFromDB
 	// S-16: resolveMemberModelFromDB 已返回具体类型 *models.TeamModelConfig
-	memberModel := resolveMemberModelFromDB(m.configurator, teammate.ModelRefJSON)
+	memberModel := resolveMemberModelFromDB(m.configurator, database.GetMemberModelRef(teammate))
 
 	// 从 configurator 继承 team_spec、db_config 等
 	runtimeCtx := m.configurator.RuntimeContext()
@@ -469,37 +469,23 @@ func (m *SpawnManager) CancelRecoveryTasks() {
 // 经 resolve_member_model(team_spec, model_name, model_index) 从活跃池做纯位置查找。
 // S-16: 原实现恒返回 nil，重启/恢复场景下成员拿到 nil 模型无法调用 LLM。
 // 9.64 已实现 ResolveMemberModelFromPool——此处接线即可。
-func resolveMemberModelFromDB(configurator *AgentConfigurator, modelRefJSON string) *models.TeamModelConfig {
-	if configurator == nil || modelRefJSON == "" {
-		return nil
-	}
-	// Python: ref = json.loads(ref_json)（解析失败仅告警并忽略）
-	var ref map[string]any
-	if err := json.Unmarshal([]byte(modelRefJSON), &ref); err != nil {
-		logger.Warn(logComponent).
-			Str("member_name", func() string {
-				if configurator != nil {
-					return configurator.MemberName()
-				}
-				return "?"
-			}()).
-			Err(err).
-			Msg("resolveMemberModelFromDB: malformed model_ref_json on DB record; ignoring")
-		return nil
-	}
-	// Python: if isinstance(ref, dict): team_spec → resolve_member_model(...)
-	if len(ref) == 0 {
+func resolveMemberModelFromDB(configurator *AgentConfigurator, ref *database.MemberModelRef) *models.TeamModelConfig {
+	if configurator == nil || ref == nil {
 		return nil
 	}
 	teamSpec := configurator.TeamSpec()
 	if teamSpec == nil {
 		return nil
 	}
-	modelName, _ := ref["model_name"].(string)
-	modelIndex := 0
-	if idx, ok := ref["model_index"].(float64); ok {
-		modelIndex = int(idx)
+	modelName := ""
+	if ref.ModelName != nil {
+		modelName = *ref.ModelName
 	}
+	modelIndex := 0
+	if ref.ModelIndex != nil {
+		modelIndex = *ref.ModelIndex
+	}
+	// Python: resolve_member_model(team_spec, model_name=..., model_index=..., route_tag=...)
 	return models.ResolveMemberModelFromPool(teamSpec.ModelPool, modelName, modelIndex)
 }
 

@@ -148,6 +148,20 @@ type spawnMemberConfig struct {
 	mode string
 	// allocation 模型配置分配（对齐 Python: allocation=None）
 	allocation *models.Allocation
+	// fallbackAllocation 外部 CLI 成员的认证兜底分配
+	fallbackAllocation *models.Allocation
+	// isolation 隔离模式（"worktree" 或空）
+	isolation string
+	// cliAgent 外部 CLI 后端名
+	cliAgent string
+	// builtinModel 外部 CLI 成员自带登录态使用的内置模型
+	builtinModel *database.MemberBuiltinModel
+	// permissionsOverride 成员级权限收窄
+	permissionsOverride map[string]string
+	// lifetime task-scoped 成员的退役策略（空 = 常驻）
+	lifetime *database.MemberLifetime
+	// agentTemplate 专家模板
+	agentTemplate *database.MemberAgentTemplate
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -296,6 +310,75 @@ func WithMode(m string) SpawnMemberOption {
 // WithAllocation 设置模型配置分配（对齐 Python: spawn_member(allocation=...)）。
 func WithAllocation(a *models.Allocation) SpawnMemberOption {
 	return func(c *spawnMemberConfig) { c.allocation = a }
+}
+
+// WithFallbackAllocation 设置认证兜底分配（对齐 Python: spawn_member(fallback_allocation=...)）。
+func WithFallbackAllocation(a *models.Allocation) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.fallbackAllocation = a }
+}
+
+// WithIsolation 设置隔离模式（对齐 Python: spawn_member(isolation=...)）。
+func WithIsolation(isolation string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.isolation = isolation }
+}
+
+// WithCLIAgent 设置外部 CLI 后端名（对齐 Python: spawn_member(cli_agent=...)）。
+func WithCLIAgent(name string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.cliAgent = name }
+}
+
+// WithBuiltinModel 设置内置 CLI 模型（对齐 Python: spawn_member(builtin_model=...)）。
+func WithBuiltinModel(m *database.MemberBuiltinModel) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.builtinModel = m }
+}
+
+// WithPermissionsOverride 设置成员级权限收窄（对齐 Python: spawn_member(permissions_override=...)）。
+func WithPermissionsOverride(o map[string]string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.permissionsOverride = o }
+}
+
+// WithLifetime 设置退役策略（对齐 Python: spawn_member(lifetime=...)）。
+func WithLifetime(l *database.MemberLifetime) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.lifetime = l }
+}
+
+// WithAgentTemplate 设置专家模板（对齐 Python: spawn_member(agent_template=...)）。
+func WithAgentTemplate(t *database.MemberAgentTemplate) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.agentTemplate = t }
+}
+
+// RegisterTeammate 注册一条普通 LLM 成员行（UNSTARTED）。
+//
+// 唯一知道"成员的 card 与 mode 怎么派生"的地方。spawn_teammate、
+// create_task 的内联 member、spawn_expert（带 agentTemplate）都走它，
+// 三处不会在 card id / mode / options 上漂移。
+//
+// Python: register_teammate (tools/tool_member.py:626-667)
+func RegisterTeammate(
+	team *TeamBackend,
+	memberName, displayName, desc string,
+	prompt *string,
+	allocation *models.Allocation,
+	opts ...SpawnMemberOption,
+) atschema.MemberOpResult {
+	if team == nil {
+		return atschema.NewMemberOpResultFail("team backend is nil")
+	}
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID(fmt.Sprintf("%s_%s", team.teamName, memberName)),
+		agentschema.WithAgentName(displayName),
+		agentschema.WithAgentDescription(desc),
+	)
+	promptText := ""
+	if prompt != nil {
+		promptText = *prompt
+	}
+	allOpts := append([]SpawnMemberOption{
+		WithMode(string(team.teammateMode)),
+		WithAllocation(allocation),
+	}, opts...)
+	return team.SpawnMember(context.Background(), memberName, displayName, card,
+		string(atschema.TeamRoleTeammate), desc, promptText, "", allOpts...)
 }
 
 // NewTeamBackend 创建团队后端门面。
@@ -552,20 +635,35 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 			Msg("SpawnMember: member already exists")
 		return atschema.NewMemberOpResultFail("成员 " + memberName + " 已存在于团队 " + tb.teamName)
 	}
-	// 步骤 2: 模型分配（优先使用 opts 中的 allocation，否则使用 modelConfigAllocator）
-	// Python: model_ref_json = _json.dumps(allocation.to_db_ref()) if allocation is not None else None
-	modelRefJSON := ""
-	if cfg.allocation != nil {
-		if data, err := json.Marshal(cfg.allocation.ToDBRef()); err == nil {
-			modelRefJSON = string(data)
-		}
-	} else if tb.modelConfigAllocator != nil {
-		if alloc := tb.modelConfigAllocator(modelName); alloc != nil {
-			if data, err := json.Marshal(alloc.ToDBRef()); err == nil {
-				modelRefJSON = string(data)
-			}
-		}
+	// 步骤 2: 模型分配 + options 构造
+	// Python: options = build_member_options(model_ref=allocation.to_db_ref() if ... else None, ...)
+	allocation := cfg.allocation
+	if allocation == nil && tb.modelConfigAllocator != nil {
+		allocation = tb.modelConfigAllocator(modelName)
 	}
+	var modelRef map[string]any
+	if allocation != nil {
+		modelRef = allocation.ToDBRef()
+	}
+	var fallbackRef map[string]any
+	if cfg.fallbackAllocation != nil {
+		fallbackRef = cfg.fallbackAllocation.ToDBRef()
+	}
+	var cliAgentPtr *string
+	if cfg.cliAgent != "" {
+		cliAgent := cfg.cliAgent
+		cliAgentPtr = &cliAgent
+	}
+	options := database.BuildMemberOptions(database.MemberOptionsInput{
+		ModelRef:            modelRef,
+		FallbackModelRef:    fallbackRef,
+		BuiltinModel:        cfg.builtinModel,
+		CLIAgent:            cliAgentPtr,
+		WorktreeIsolation:   cfg.isolation,
+		PermissionsOverride: cfg.permissionsOverride,
+		Lifetime:            cfg.lifetime,
+		AgentTemplate:       cfg.agentTemplate,
+	})
 	// 步骤 3: DB 写入（使用 cfg 中的状态值，对齐 Python: create_member(status=cfg.status, ...)）
 	// Python: agent_card.model_dump_json() — 将 AgentCard 序列化为 JSON 存入 DB
 	agentCardJSON := "{}"
@@ -576,7 +674,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 	}
 	ok := tb.db.Member().CreateMember(ctx, memberName, tb.teamName, displayName, agentCardJSON,
 		cfg.status, role, desc,
-		cfg.executionStatus, cfg.mode, prompt, modelRefJSON)
+		cfg.executionStatus, cfg.mode, prompt, options)
 	if !ok {
 		logger.Warn(logComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
 			Msg("SpawnMember: database refused creation")

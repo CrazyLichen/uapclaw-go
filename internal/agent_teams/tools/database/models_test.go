@@ -94,7 +94,7 @@ func TestTeamMember_JSON序列化_roundtrip(t *testing.T) {
 		Mode:            "build_mode",
 		Role:            "teammate",
 		Prompt:          "你是一个助手",
-		ModelRefJSON:    `{"model_id":"qwen-max","model_name":"qwen-max"}`,
+		Options:         `{"model_id":"qwen-max","model_name":"qwen-max"}`,
 		UpdatedAt:       1700000002000,
 	}
 
@@ -138,8 +138,8 @@ func TestTeamMember_JSON序列化_roundtrip(t *testing.T) {
 	if decoded.Prompt != member.Prompt {
 		t.Errorf("Prompt: got %q, want %q", decoded.Prompt, member.Prompt)
 	}
-	if decoded.ModelRefJSON != member.ModelRefJSON {
-		t.Errorf("ModelRefJSON: got %q, want %q", decoded.ModelRefJSON, member.ModelRefJSON)
+	if decoded.Options != member.Options {
+		t.Errorf("Options: got %q, want %q", decoded.Options, member.Options)
 	}
 	if decoded.UpdatedAt != member.UpdatedAt {
 		t.Errorf("UpdatedAt: got %d, want %d", decoded.UpdatedAt, member.UpdatedAt)

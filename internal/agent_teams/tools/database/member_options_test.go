@@ -421,12 +421,12 @@ func TestEnsureTeamMemberOptionsColumn_补列并合并legacy(t *testing.T) {
 func TestEnsureTeamMemberOptionsColumn_options已有时不覆盖(t *testing.T) {
 	db := newMigrationTestDB(t)
 	require.NoError(t, db.AutoMigrate(&TeamMember{}))
-	require.NoError(t, db.Create(&TeamMember{
-		MemberName:   "m2",
-		TeamName:     "team1",
-		Options:      `{"model_ref":{"model_name":"from-options"}}`,
-		ModelRefJSON: `{"model_name":"from-legacy"}`,
-	}).Error)
+	// legacy 列已从模型删除，测试用原生 SQL 造出"升级前"的行
+	require.NoError(t, db.Exec("ALTER TABLE team_member ADD COLUMN model_ref_json TEXT").Error)
+	require.NoError(t, db.Exec(
+		`INSERT INTO team_member (member_name, team_name, options, model_ref_json) VALUES (?,?,?,?)`,
+		"m2", "team1", `{"model_ref":{"model_name":"from-options"}}`, `{"model_name":"from-legacy"}`,
+	).Error)
 
 	ensureTeamMemberOptionsColumn(db)
 

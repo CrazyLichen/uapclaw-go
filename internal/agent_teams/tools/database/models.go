@@ -71,12 +71,6 @@ type TeamMember struct {
 	//
 	// Python: TeamMember.options (tools/member_options.py:80)
 	Options string `json:"options,omitempty"`
-	// ModelRefJSON 模型引用 JSON（{"model_id": str, "model_name": str}）
-	//
-	// legacy 列：上游已把该列合并进 options 并 DROP（_ensure_team_member_options_column）。
-	// Go 侧本批只做合并、暂不 drop——仍有 13 处引用（spawn_manager / team_tools /
-	// memory_impl / sql_member_dao），删除属独立重构，登记为 spec §7 的 D-17。
-	ModelRefJSON string `json:"model_ref_json,omitempty"`
 	// UpdatedAt 更新时间（毫秒时间戳，仅 roster 变更时 bump，status 变更不 bump）
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }

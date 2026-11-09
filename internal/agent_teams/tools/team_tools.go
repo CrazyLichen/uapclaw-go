@@ -826,7 +826,7 @@ func (t *ListMembersTool) Invoke(ctx context.Context, _ map[string]any, _ ...too
 			"mode":             m.Mode,
 			"role":             m.Role,
 			"prompt":           m.Prompt,
-			"model_ref_json":   m.ModelRefJSON,
+			"options":          m.Options,
 			"updated_at":       m.UpdatedAt,
 		}
 	}

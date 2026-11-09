@@ -441,14 +441,11 @@ func ensureTeamMemberRoleColumn(db *gorm.DB) {
 }
 
 // ensureTeamMemberOptionsColumn 为已存在的 team_member 表补齐 options 列，
-// 并把 legacy model_ref_json 列的内容合并进 options。
+// 把 legacy model_ref_json 的内容合并进 options，然后删除旧列。
 //
 // AutoMigrate 只建缺失的表、只加缺失的列，不会改存量行；因此升级上来的库里
 // options 列是新加的空列，而 model_ref 只存在于 model_ref_json。这里逐行合并，
-// 让老数据在新代码下仍能读到模型引用。
-//
-// 上游还会 DROP COLUMN model_ref_json；Go 侧暂不 drop（仍有 13 处引用），
-// 只做合并——options 是权威，model_ref_json 保留为只读兼容。
+// 让老数据在新代码下仍能读到模型引用；合并完成后旧列即无用，一并删掉。
 //
 // Python: _ensure_team_member_options_column (database/engine.py L350-381)
 func ensureTeamMemberOptionsColumn(db *gorm.DB) {
@@ -473,8 +470,17 @@ func ensureTeamMemberOptionsColumn(db *gorm.DB) {
 		return
 	}
 
-	var rows []TeamMember
-	if err := db.Select("member_name", "team_name", "options", "model_ref_json").Find(&rows).Error; err != nil {
+	// 合并阶段：用 row struct 读取（此时 ModelRefJSON 字段已删除，故走原生 SQL）
+	type legacyRow struct {
+		MemberName   string
+		TeamName     string
+		Options      string
+		ModelRefJSON string
+	}
+	var rows []legacyRow
+	if err := db.Table("team_member").
+		Select("member_name, team_name, options, model_ref_json").
+		Scan(&rows).Error; err != nil {
 		logger.Warn(logComponent).Err(err).Msg("migrating team_member options: read legacy rows failed")
 		return
 	}
@@ -488,7 +494,12 @@ func ensureTeamMemberOptionsColumn(db *gorm.DB) {
 			merged, row.MemberName, row.TeamName,
 		)
 	}
-	logger.Info(logComponent).Msg("migrating team_member options: merged legacy model_ref_json")
+	if dropErr := db.Exec("ALTER TABLE team_member DROP COLUMN model_ref_json").Error; dropErr != nil {
+		logger.Warn(logComponent).Err(dropErr).
+			Msg("migrating team_member options: drop legacy model_ref_json failed")
+		return
+	}
+	logger.Info(logComponent).Msg("migrating team_member options: merged legacy model_ref_json and dropped the column")
 }
 
 // ensureTeamInfoCapabilityColumns 为已存在的 team_info 表补齐 F_62 能力列。
