@@ -25,17 +25,16 @@
 //
 // # 已知缺口
 //
-// ⤵️ 9.90b 遗留两处，均属后续章节的职责：
+// ⤵️ 9.90b 遗留一处，属后续章节的职责：
 //
-//  1. send_file_path_guard（315 行，9.90e）：policy_eval 的 send_file 分支
-//     目前 path_result 恒 nil，待 SendFilePathGuardEvaluator 落地后回填。
-//     policy_eval.go 内已标注「⤵️ 9.90e 回填」。
+//	permission_compose（约 300 行，9.90d）：permissions_layers 需要的
+//	ComposeHostEffectivePermissions 目前是最小实现（整工具 deny 优先、
+//	allow 放宽低层 ask、session 的 ask/deny 丢弃）。9.90d 用完整版替换时
+//	保留函数签名，调用方无需改动。permissions_layers.go 内已标注
+//	「⤴️ 9.90d 回填」。
 //
-//  2. permission_compose（约 300 行，9.90d）：permissions_layers 需要的
-//     ComposeHostEffectivePermissions 目前是最小实现（整工具 deny 优先、
-//     allow 放宽低层 ask、session 的 ask/deny 丢弃）。9.90d 用完整版替换时
-//     保留函数签名，调用方无需改动。permissions_layers.go 内已标注
-//     「⤴️ 9.90d 回填」。
+// ✅ 已回填（9.90d-1 Task 10）：send_file_path_guard 落地，
+// policy_eval 的 send_file 分支已接上 SendFilePathGuardEvaluator。
 //
 // ⤵️ 意图窗口的消费方待 9.90d（_auto_permission）批次回填：
 // RootDecisionContext 目前只被两个 root rail 读写，尚无判定逻辑消费。
