@@ -162,6 +162,14 @@ type fakeAbilityManagerForTools struct {
 	abilities []cschema.Ability
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (m *fakeAbilityManagerForTools) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (m *fakeAbilityManagerForTools) Add(ability cschema.Ability) agentschema.AddAbilityResult {
 	return agentschema.AddAbilityResult{Added: true}
 }

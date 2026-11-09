@@ -321,29 +321,6 @@ func CreateTeamTools(
 	return result
 }
 
-// QualifyTeamToolIDs 为工具 ID 添加 team.member 后缀，避免 inprocess 模式下的 ID 冲突。
-// Python: qualify_team_tool_ids() (rails/team_tool_rail.py L174)
-func QualifyTeamToolIDs(tools []tool.Tool, teamName string, memberName string) {
-	teamKey := teamName
-	if teamKey == "" {
-		teamKey = "default"
-	}
-	memberKey := memberName
-	if memberKey == "" {
-		memberKey = "unknown"
-	}
-	for _, tl := range tools {
-		card := tl.Card()
-		if card == nil || card.ID == "" {
-			continue
-		}
-		qualifiedID := fmt.Sprintf("%s.%s.%s", card.ID, teamKey, memberKey)
-		if card.ID != qualifiedID {
-			card.ID = qualifiedID
-		}
-	}
-}
-
 // MemberNameRegexp 返回成员名校验正则（用于 SpawnMemberTool 校验）。
 func MemberNameRegexp() *regexp.Regexp {
 	return memberNamePattern

@@ -2835,6 +2835,14 @@ func (f *fakeModelContext) containsContent(substr string) bool {
 // 不触达真实工具与资源管理器。
 type stubAbilityManager struct{}
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (s *stubAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 // newStubAbilityManager 创建能力管理器桩。
 func newStubAbilityManager() *stubAbilityManager { return &stubAbilityManager{} }
 

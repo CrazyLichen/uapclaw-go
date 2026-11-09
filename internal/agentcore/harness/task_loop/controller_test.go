@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	controllerschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -25,6 +26,14 @@ import (
 
 // mockAbilityMgr 简单的 AbilityManagerInterface mock
 type mockAbilityMgr struct{}
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (m *mockAbilityMgr) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
 
 func (m *mockAbilityMgr) Add(_ commonschema.Ability) agentschema.AddAbilityResult {
 	return agentschema.AddAbilityResult{}

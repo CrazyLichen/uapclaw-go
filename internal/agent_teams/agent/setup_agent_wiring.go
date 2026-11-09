@@ -124,7 +124,6 @@ func buildTeamRailSpecInput(
 		// Go 侧 TeamToolRail.Init 仍是那条 bespoke 路径（无 AddAbility），
 		// 打开后缀会让工具按限定 id 注册而按原名调用 → 结果为空。
 		// 故此处关闭，等 F-03 把注册改为 add_ability 后即可去掉本字段。
-		QualifyIDs:            false,
 		ApprovalTools:         approvalTools,
 		SwarmflowEnabled:      spec.SwarmflowEnabled,
 		HasWorkspaceManager:   c.WorkspaceManager() != nil,

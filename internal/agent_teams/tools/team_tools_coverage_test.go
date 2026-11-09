@@ -177,67 +177,6 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 	})
 }
 
-// TestQualifyTeamToolIDs 验证工具 ID 加团队/成员后缀（改的是 Card.ID）与空值回退。
-func TestQualifyTeamToolIDs(t *testing.T) {
-	backend := newTestTeamBackend()
-
-	t.Run("空团队名回落 default", func(t *testing.T) {
-		cp := CreateTeamTools(backend, TeamToolOptions{
-			Role:         "leader",
-			TeammateMode: "build_mode",
-			Lifecycle:    "ephemeral",
-			Language:     "cn",
-		}, nil, nil)
-		before := make([]string, len(cp))
-		for i, tl := range cp {
-			before[i] = tl.Card().ID
-		}
-		QualifyTeamToolIDs(cp, "", "m1")
-		for i, tl := range cp {
-			if want := before[i] + ".default.m1"; tl.Card().ID != want {
-				t.Fatalf("工具 %d ID = %q, 期望 %q", i, tl.Card().ID, want)
-			}
-		}
-	})
-
-	t.Run("成员名为空时用 unknown 占位", func(t *testing.T) {
-		cp := CreateTeamTools(backend, TeamToolOptions{
-			Role:         "leader",
-			TeammateMode: "build_mode",
-			Lifecycle:    "ephemeral",
-			Language:     "cn",
-		}, nil, nil)
-		before := make([]string, len(cp))
-		for i, tl := range cp {
-			before[i] = tl.Card().ID
-		}
-		QualifyTeamToolIDs(cp, "t1", "")
-		for i, tl := range cp {
-			if want := before[i] + ".t1.unknown"; tl.Card().ID != want {
-				t.Fatalf("工具 %d ID = %q, 期望 %q", i, tl.Card().ID, want)
-			}
-		}
-	})
-
-	t.Run("空 ID 的卡片被跳过", func(t *testing.T) {
-		cp := CreateTeamTools(backend, TeamToolOptions{
-			Role:         "leader",
-			TeammateMode: "build_mode",
-			Lifecycle:    "ephemeral",
-			Language:     "cn",
-		}, nil, nil)
-		for _, tl := range cp {
-			tl.Card().ID = ""
-		}
-		QualifyTeamToolIDs(cp, "t1", "m1")
-		for _, tl := range cp {
-			if tl.Card().ID != "" {
-				t.Fatalf("空 ID 不应被改写，实际 %q", tl.Card().ID)
-			}
-		}
-	})
-}
-
 // TestMemberNameRegexp 验证成员名正则暴露。
 func TestMemberNameRegexp(t *testing.T) {
 	re := MemberNameRegexp()

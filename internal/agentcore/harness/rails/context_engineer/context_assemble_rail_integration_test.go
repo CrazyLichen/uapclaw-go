@@ -118,6 +118,15 @@ func (m *railAbilityManager) Add(ability schema.Ability) agentschema.AddAbilityR
 	}
 	return agentschema.AddAbilityResult{}
 }
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (m *railAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (m *railAbilityManager) AddMany(abilities []schema.Ability) []agentschema.AddAbilityResult {
 	for _, a := range abilities {
 		m.Add(a)

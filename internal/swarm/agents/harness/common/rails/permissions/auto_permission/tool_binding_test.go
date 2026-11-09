@@ -2,6 +2,7 @@ package auto_permission
 
 import (
 	"context"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"reflect"
 	"testing"
 
@@ -86,6 +87,14 @@ func TestMatchesBoundMethod_非指针接收者(t *testing.T) {
 type fakeAbilityManager struct {
 	// abilities 按名称索引的能力
 	abilities map[string]commonschema.Ability
+}
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
 }
 
 func (f *fakeAbilityManager) Add(commonschema.Ability) saschema.AddAbilityResult {

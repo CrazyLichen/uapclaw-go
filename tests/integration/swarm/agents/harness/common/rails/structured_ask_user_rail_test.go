@@ -5,6 +5,7 @@ package rails
 import (
 	"context"
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -484,6 +485,14 @@ func (f *fakeIntegrationSPB) HasSection(_ string) bool                          
 // 实现 agentinterfaces.AbilityManagerInterface
 type fakeAbilityManager struct {
 	abilities map[string]schema.Ability
+}
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
 }
 
 func newFakeAbilityManager() *fakeAbilityManager {

@@ -14,6 +14,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -71,6 +72,14 @@ func (m *mockSystemPromptBuilder) HasSection(name string) bool {
 // mockAbilityManager 测试用 mock AbilityManager
 type mockAbilityManager struct {
 	abilities map[string]schema.Ability
+}
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (m *mockAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
 }
 
 func newMockAbilityManager() *mockAbilityManager {

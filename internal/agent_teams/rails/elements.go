@@ -51,8 +51,6 @@ type TeamRailSpecInput struct {
 	ForkSource string
 	// ExcludeTools 要排除的工具名
 	ExcludeTools []string
-	// QualifyIDs 是否按成员后缀工具 id（inprocess spawn）
-	QualifyIDs bool
 	// TeamPermissionsEnabled 团队权限开关（开启时用 TeamPermissionRail 替代审批轨）
 	TeamPermissionsEnabled bool
 	// ExposeHumanAgents 是否暴露人类成员给队友
@@ -151,7 +149,6 @@ func TeamRailSpecs(in TeamRailSpecInput) []hschema.RailSpec {
 				"team_mode":                in.TeamMode,
 				"team_name":                in.TeamName,
 				"exclude_tools":            in.ExcludeTools,
-				"qualify_ids":              in.QualifyIDs,
 				"team_permissions_enabled": in.TeamPermissionsEnabled,
 				"swarmflow_enabled":        in.SwarmflowEnabled,
 			},
@@ -246,7 +243,6 @@ func buildTeamToolRail(params map[string]any, ctx hschema.BuildContextInterface)
 		WithToolTeamMode(hschema.ParamString(params, "team_mode", "default")),
 		WithTeamName(hschema.ParamString(params, "team_name", "default")),
 		WithExcludeTools(excludeTools),
-		WithQualifyIDs(hschema.ParamBool(params, "qualify_ids", false)),
 		WithToolSwarmflowEnabled(hschema.ParamBool(params, "swarmflow_enabled", false)),
 		WithWorkspaceManager(GetTeamWorkspaceManager(ctx)),
 		WithWorktreeManager(GetWorktreeManager(ctx)),

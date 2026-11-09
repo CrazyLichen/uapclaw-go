@@ -33,6 +33,14 @@ type progressiveFakeAbilityManager struct {
 	executeCalls int
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *progressiveFakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 // newProgressiveFakeAbilityManager 创建测试用能力管理器。
 func newProgressiveFakeAbilityManager() *progressiveFakeAbilityManager {
 	return &progressiveFakeAbilityManager{cards: make(map[string]*tool.ToolCard)}

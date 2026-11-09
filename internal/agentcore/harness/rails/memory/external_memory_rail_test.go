@@ -52,6 +52,15 @@ func (f *fakeAbilityManager) Add(ability cschema.Ability) agentschema.AddAbility
 	f.addedAbilities[name] = true
 	return agentschema.AddAbilityResult{Name: name, Added: true, Reason: "added_tool"}
 }
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (f *fakeAbilityManager) AddMany(abilities []cschema.Ability) []agentschema.AddAbilityResult {
 	var results []agentschema.AddAbilityResult
 	for _, a := range abilities {

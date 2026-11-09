@@ -25,9 +25,9 @@ import (
 // Rail 的 Init 构建角色相关的团队工具（协调、消息、任务、可选工作空间
 // 和工作树扩展），并将它们的 ToolCard 注册到 Agent 的 ability_manager。
 // Uninit 清理时从 ability_manager 移除。
-// 当 team 运行在 inprocess spawn 模式时，qualify_ids 将每个 ToolCard.id
-// 后缀加上 {team_name}.{member_name}，避免多个 in-process 成员在共享
-// Runner.resource_mgr 上的 ID 冲突。
+// 注册统一走 ability_manager.add_ability：有状态工具的 card id 会被限定为
+// {name}_{owner_id}，无状态工具保留裸 id 且幂等跳过，两个注册表的 key 因此
+// 始终一致（避免多个 in-process 成员在共享 Runner.resource_mgr 上的 ID 冲突）。
 type TeamToolRail struct {
 	harnessrails.DeepAgentRail
 	// teamBackend 团队后端门面
@@ -56,8 +56,6 @@ type TeamToolRail struct {
 	workspaceManager *team_workspace.TeamWorkspaceManager
 	// worktreeManager 工作树管理器
 	worktreeManager *worktree.WorktreeManager
-	// qualifyIDs 是否后缀工具 ID
-	qualifyIDs bool
 	// teamName 团队名
 	teamName string
 	// memberName 成员名
@@ -159,39 +157,44 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 		}
 	}
 
-	// Python: if self._qualify_ids
-	if r.qualifyIDs {
-		tools.QualifyTeamToolIDs(toolList, r.teamName, r.memberName)
-	}
-
-	// Python: try: Runner.resource_mgr.add_tool(tools, refresh=True)
-	// Python: except Exception: team_logger.debug("Runner.resource_mgr not available, skipping...")
-	// Go 侧等价：使用 recover 静默吞错
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Debug(logComponent).Any("recover", r).Msg("Runner.resource_mgr unavailable, skipping tool registration")
-			}
-		}()
-		rm := runner.GetResourceMgr()
-		if rm != nil {
-			for _, t := range toolList {
-				if err := rm.AddTool(t, resources_manager.WithRefresh()); err != nil {
-					logger.Debug(logComponent).Err(err).Msg("resource_mgr.add_tool failed")
-				}
-			}
-		}
-	}()
-
-	// Python: ability_manager = getattr(agent, "ability_manager", None)
+	// Python: for tool in tools: ability_manager.add_ability(tool.card, tool)
+	//
+	// 上游用 add_ability 这个单一入口取代了旧的「qualify_team_tool_ids 后缀 +
+	// resource_mgr.add_tool(refresh=True) + ability_manager.add」三件套
+	// （team_tool_rail.py:193-208，注释原文 "superseding the old ``qualify_ids``
+	// suffixing"）。bespoke 路径的问题在于两次注册用的 id 不同：resource_mgr
+	// 拿的是限定前的 id，ability_manager 的 card 随后被改写成
+	// `{name}_{owner_id}`，于是 teardown_tools 按限定 id 回收时对不上，
+	// 跨 native 重建会泄漏并每轮 refresh 告警。
+	//
+	// AddAbility 内部按 Stateless 分支：有状态 → 先限定 id 再 refresh 重绑；
+	// 无状态 → 裸 id + skip_if_exists 幂等。两者都保证两个注册表的 key 一致。
 	am := agent.AbilityManager()
 	if am != nil {
 		for _, tl := range toolList {
-			card := tl.Card()
-			if card != nil {
-				am.Add(card)
+			if card := tl.Card(); card != nil {
+				am.AddAbility(card, tl)
 			}
 		}
+	} else {
+		// 无 ability manager（降级路径）：仍直注册到资源管理器，
+		// 保持既有行为（此时没有 owner 限定，不存在 id 错配问题）。
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Debug(logComponent).Any("recover", rec).
+						Msg("Runner.resource_mgr unavailable, skipping tool registration")
+				}
+			}()
+			rm := runner.GetResourceMgr()
+			if rm != nil {
+				for _, t := range toolList {
+					if err := rm.AddTool(t, resources_manager.WithRefresh()); err != nil {
+						logger.Debug(logComponent).Err(err).Msg("resource_mgr.add_tool failed")
+					}
+				}
+			}
+		}()
 	}
 
 	r.registeredTools = toolList
@@ -309,11 +312,6 @@ func WithWorkspaceManager(mgr *team_workspace.TeamWorkspaceManager) TeamToolRail
 // WithWorktreeManager 设置工作树管理器。
 func WithWorktreeManager(mgr *worktree.WorktreeManager) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.worktreeManager = mgr }
-}
-
-// WithQualifyIDs 设置是否后缀工具 ID。
-func WithQualifyIDs(v bool) TeamToolRailOption {
-	return func(r *TeamToolRail) { r.qualifyIDs = v }
 }
 
 // WithTeamName 设置团队名。

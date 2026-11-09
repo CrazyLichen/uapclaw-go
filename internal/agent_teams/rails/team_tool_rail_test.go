@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -134,6 +135,16 @@ func (f *fakeAbilityManagerTeam) Add(ability cschema.Ability) agentschema.AddAbi
 	f.added = append(f.added, ability.AbilityName())
 	return agentschema.AddAbilityResult{}
 }
+
+// AddAbility 记录添加（对齐 AbilityManagerInterface.AddAbility）。
+func (f *fakeAbilityManagerTeam) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	f.added = append(f.added, card.Name)
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true, Reason: "added_tool"}
+}
+
 func (f *fakeAbilityManagerTeam) AddMany(abilities []cschema.Ability) []agentschema.AddAbilityResult {
 	for _, a := range abilities {
 		f.Add(a)
@@ -268,32 +279,6 @@ func TestTeamToolRail_Uninit(t *testing.T) {
 	am := agent.am.(*fakeAbilityManagerTeam)
 	if len(am.removed) == 0 {
 		t.Fatal("expected tools removed from AbilityManager")
-	}
-}
-
-// TestTeamToolRail_QualifyIDs 测试工具 ID 后缀
-func TestTeamToolRail_QualifyIDs(t *testing.T) {
-	agent := newFakeBaseAgentTeam()
-
-	r := NewTeamToolRail(
-		WithRole("leader"),
-		WithTeammateMode("build_mode"),
-		WithLifecycle("temporary"),
-		WithLanguage("cn"),
-		WithQualifyIDs(true),
-		WithTeamName("my-team"),
-		WithMemberName("alice"),
-	)
-	_ = r.Init(context.Background(), agent)
-
-	for _, tl := range r.registeredTools {
-		card := tl.Card()
-		if card != nil && card.ID != "" {
-			hasSuffix := len(card.ID) > len(".my-team.alice")
-			if !hasSuffix {
-				t.Fatalf("expected qualified ID, got %s", card.ID)
-			}
-		}
 	}
 }
 
