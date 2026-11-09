@@ -22,7 +22,7 @@ type PolicyEvaluation struct {
 	MatchedRule string
 	// Source 结果来源（permission_engine / scene_hook / fail_closed / file_guard_adapter）
 	Source string
-	// PathResult send_file 路径守卫结果（9.90e 前恒 nil）
+	// PathResult send_file 路径守卫结果
 	PathResult *SendFilePathGuardResult
 	// ExternalPaths 外部路径
 	ExternalPaths []string
@@ -30,18 +30,8 @@ type PolicyEvaluation struct {
 	ManualApprovalRequired bool
 }
 
-// SendFilePathGuardResult send_file_to_user 的路径守卫结果。
-//
-// 完整实现属 9.90e（send_file_path_guard.py 315 行）；此处只定义
-// policy_eval 需要的三个字段，避免循环依赖。
-type SendFilePathGuardResult struct {
-	// Level 判定级别（neutral 表示无意见）
-	Level string
-	// Reason 原因
-	Reason string
-	// MatchedRules 命中的规则列表
-	MatchedRules []string
-}
+// SendFilePathGuardResult 定义已按规则 9.1（Python 文件归属）迁至
+// send_file_path_guard.go，与本批 9.90e 的完整实现同文件。
 
 // OpenJiuwenPolicyEvaluator 只做策略评估，不进入人工确认流程。
 //
@@ -53,6 +43,8 @@ type OpenJiuwenPolicyEvaluator struct {
 	permissionConfigGetter func() map[string]any
 	// workspaceRoot 工作空间根（send_file 路径守卫用）
 	workspaceRoot string
+	// pathGuardEvaluator send_file 路径守卫评估器（可注入，默认懒构造）
+	pathGuardEvaluator *SendFilePathGuardEvaluator
 }
 
 // PolicyInvocation 一次待评估的调用（供策略评估器使用）。
@@ -141,9 +133,6 @@ const (
 	maxExternalPathLength = 4096
 	// maxExternalPathsTotalLength 全部外部路径的总长度上限
 	maxExternalPathsTotalLength = 16384
-
-	// sendFileToolName send_file 工具名
-	sendFileToolName = "send_file_to_user"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -178,6 +167,14 @@ func NewOpenJiuwenPolicyEvaluator(
 	}
 }
 
+// SetPathGuardEvaluator 注入 send_file 路径守卫评估器。
+//
+// Python: OpenJiuwenPolicyEvaluator.__init__ 的 path_guard_evaluator 参数
+// （Python 注释说明 evaluator 替换是宿主接缝的一部分，故 Go 也支持注入）。
+func (e *OpenJiuwenPolicyEvaluator) SetPathGuardEvaluator(evaluator *SendFilePathGuardEvaluator) {
+	e.pathGuardEvaluator = evaluator
+}
+
 // Evaluate 评估策略，不进入人工确认流程。
 //
 // 七步顺序不可调换（对齐 Python evaluate）：
@@ -187,7 +184,7 @@ func NewOpenJiuwenPolicyEvaluator(
 //  4. 场景钩子：DENY 或「场景审批即最终」时直接返回
 //  5. 引擎不可用 / 刷新失败 / 检查异常 → fail_closed ASK；否则再 apply 一次
 //     config（场景钩子可能 await 过，配置可能已被改）后调引擎
-//  6. send_file 分支：path_result（9.90e 前恒 nil）
+//  6. send_file 分支：path_result 由 SendFilePathGuardEvaluator 产出
 //  7. 三者取最严并合并 matched_rule 与 external_paths
 //
 // Python: OpenJiuwenPolicyEvaluator.evaluate(invocation, *, scene_approval_is_final=False)
@@ -247,8 +244,8 @@ func (e *OpenJiuwenPolicyEvaluator) Evaluate(
 	// SendFilePathGuardEvaluator 未实现，path_result 恒 nil。
 	// 9.90e 落地 send_file_path_guard.py（315 行）后在此构造并调用。
 	var pathResult *SendFilePathGuardResult
-	if normalizedToolName == sendFileToolName {
-		pathResult = nil
+	if normalizedToolName == SendFileToolName {
+		pathResult = e.sendFilePathGuardResult(effectiveConfig, toolArgs, engine)
 	}
 
 	return strictestEvaluation(
@@ -258,6 +255,43 @@ func (e *OpenJiuwenPolicyEvaluator) Evaluate(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// sendFilePathGuardResult 调 send_file 路径守卫评估器。
+//
+// Python: self._path_guard_evaluator.evaluate(permissions=..., workspace_root=...,
+// trusted_dirs=..., raw_paths=tool_args.get("abs_file_path_list"))
+func (e *OpenJiuwenPolicyEvaluator) sendFilePathGuardResult(
+	effectiveConfig map[string]any,
+	toolArgs map[string]any,
+	engine PolicyEngine,
+) *SendFilePathGuardResult {
+	evaluator := e.pathGuardEvaluator
+	if evaluator == nil {
+		evaluator = NewSendFilePathGuardEvaluator()
+	}
+	result := evaluator.Evaluate(
+		effectiveConfig,
+		e.workspaceRoot,
+		trustedDirsFromEngine(engine),
+		toolArgs["abs_file_path_list"],
+	)
+	return &result
+}
+
+// trustedDirsFromEngine 从引擎取受信目录（取不到返回 nil）。
+//
+// Python: OpenJiuwenPolicyEvaluator._trusted_dirs(engine)
+// 用可选接口断言等价于 Python 的 getattr + try/except。
+func trustedDirsFromEngine(engine PolicyEngine) []string {
+	if engine == nil {
+		return nil
+	}
+	provider, ok := engine.(interface{ TrustedDirs() []string })
+	if !ok {
+		return nil
+	}
+	return provider.TrustedDirs()
+}
 
 // normalizeToolName 先试 base rail 的归一化，再经 permission_tools 归一。
 //

@@ -74,6 +74,7 @@
 //	├── persistent_audit.go                # 追加式持久化审计（9.90d-1 Task 7）
 //	├── url_safety.go                      # 只读网络/浏览器 URL 审查助手（9.90d-1 Task 8）
 //	├── generated_artifact_delivery.go     # send_file 单次调用的任务级授权租约（9.90d-1 Task 9）
+//	├── send_file_path_guard.go            # send_file 多路径 file_guard 读判定聚合（9.90d-1 Task 10）
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）

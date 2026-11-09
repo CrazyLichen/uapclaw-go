@@ -917,3 +917,49 @@ Go 的 ctx 派生不可变，无法清除父 ctx 的绑定。但把 `lease.termi
 
 **测试**：28 个用例，7 个导出函数 100%，私有函数除
 `resolveSendFilePath` 80%（`filepath.Abs` 失败分支不可达）外均 100%。
+
+### 12.8 Task 10 执行时的核实结论：`send_file_path_guard`
+
+**全量落地**：315 行 / 11 项逐条对齐。
+
+**类型归属迁移（规则 9.1）**：`SendFilePathGuardResult` 原在
+`policy_eval.go` 作为 3 字段空壳（注释写「完整实现属 9.90e」）。
+Python 里该类型定义在 `send_file_path_guard.py:39`，故本批把它整体迁到
+`send_file_path_guard.go` 并扩展为完整 6 字段（status / level / reason /
+canonical_paths / matched_rules / ask_accesses），`policy_eval.go` 只留引用。
+旧空壳按规则 8 同改动删除。
+
+**品牌映射**：Python `SEND_FILE_PATH_ARGUMENT = "__jiuwenswarm_file_guard_read_path"`
+→ Go `SendFilePathArgument = "__uapclawswarm_file_guard_read_path"`
+（与 `UAPCLAW_DATA_DIR` 同款映射，记忆规则「品牌/身份标识类字符串」）。
+
+**常量去重（规则 8）**：`policy_eval.go` 原有私有 `sendFileToolName =
+"send_file_to_user"`，与新文件的导出 `SendFileToolName` 重复。已删除私有版本，
+统一用导出常量。
+
+**实施中发现并修复的 bug**：`evaluateSendFilePaths` 里
+`matchedRule := result.MatchedRule` 在 `result == nil` 时 nil 解引用 panic。
+Python 的 `getattr(result, "matched_rule", None)` 对 None 安全。
+已改为显式判空（`result != nil` 才取 MatchedRule/Reason）。
+该 bug 由 `TestSendFilePathGuardEvaluator_评估为allow` 暴露——该测试第一次
+真正走到「Evaluate 返回 nil（合法 allow）」这条路径。
+
+**接缝设计**：Python 的 `path_guard_evaluator` 是构造参数（注释说明
+「evaluator substitution is part of the host seam」）。Go 保持
+`NewOpenJiuwenPolicyEvaluator` 三参数签名不变（13 处既有调用零破坏），
+改提供 `SetPathGuardEvaluator` 注入方法，默认懒构造。
+
+**`_trusted_dirs(engine)` 的 Go 等价**：Python 用 `getattr(engine,
+"trusted_dirs")` + try/except duck-typing。Go 用可选接口断言
+`engine.(interface{ TrustedDirs() []string })`，取不到返回 nil。
+未扩展 `PolicyEngine` 接口（避免为单一可选能力污染主接口）。
+
+**policy_eval 接线**：删掉 `⤵️ 9.90e 回填` 注释与 `pathResult = nil` 占位，
+改为调 `sendFilePathGuardResult(effectiveConfig, toolArgs, engine)`，
+参数对齐 Python（permissions / workspace_root / trusted_dirs /
+`tool_args["abs_file_path_list"]`）。
+
+**覆盖率**：包整体 87.6%。`send_file_path_guard.go` 里
+`evaluateSendFilePathSafely` 50% 与 `buildSendFileGuardChecker` 60% 的缺口
+都是 panic recover 防御分支——需 fileguard 内部 panic 才能触发，
+在不改外部包的前提下不可达，属正常防御性代码。

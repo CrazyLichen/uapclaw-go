@@ -3,6 +3,7 @@ package permissions
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -812,3 +813,120 @@ func TestEffectivePermissionConfig_三条路径叠加失败(t *testing.T) {
 		})
 	}
 }
+
+// ──────────────────────────── send_file 路径守卫接线（9.90d-1 Task 10） ────────────────────────────
+
+// TestEvaluate_sendFile触发路径守卫 验证 send_file_to_user 走守卫并填充 PathResult。
+func TestEvaluate_sendFile触发路径守卫(t *testing.T) {
+	dir := t.TempDir()
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine: engine,
+		staticConfig: map[string]any{
+			"file_guard": map[string]any{"enabled": true},
+		},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, dir)
+
+	inv := PolicyInvocation{
+		ToolName: SendFileToolName,
+		ToolArgs: map[string]any{"abs_file_path_list": filepath.Join(dir, "a.txt")},
+	}
+	got := evaluator.Evaluate(context.Background(), inv, false)
+
+	// 守卫评估为 allow 时 evaluationFromPathResult 返回非 nil（Level=allow）
+	if got.PathResult == nil {
+		t.Fatalf("PathResult should be populated for send_file, got %+v", got)
+	}
+	if got.PathResult.Status != SendFileGuardStatusEvaluated {
+		t.Errorf("status = %q", got.PathResult.Status)
+	}
+	if len(got.PathResult.CanonicalPaths) != 1 {
+		t.Errorf("canonical_paths = %v", got.PathResult.CanonicalPaths)
+	}
+}
+
+// TestEvaluate_sendFile守卫deny最严 验证路径守卫 deny 会压过引擎 allow。
+func TestEvaluate_sendFile守卫deny最严(t *testing.T) {
+	dir := t.TempDir()
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine: engine,
+		staticConfig: map[string]any{"file_guard": map[string]any{
+			"enabled": true,
+			"paths": []any{map[string]any{
+				"match": "prefix", "path": dir,
+				"read": "deny", "write": "deny", "exec": "deny",
+			}},
+		}},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, dir)
+
+	inv := PolicyInvocation{
+		ToolName: SendFileToolName,
+		ToolArgs: map[string]any{"abs_file_path_list": filepath.Join(dir, "a.txt")},
+	}
+	got := evaluator.Evaluate(context.Background(), inv, false)
+
+	if got.Level != "deny" {
+		t.Errorf("level = %q, want deny（路径守卫应压过引擎 allow）", got.Level)
+	}
+	if got.Source != "file_guard_adapter" {
+		t.Errorf("source = %q", got.Source)
+	}
+}
+
+// TestEvaluate_非sendFile不触发守卫 验证其他工具 PathResult 恒 nil。
+func TestEvaluate_非sendFile不触发守卫(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{engine: engine, staticConfig: map[string]any{}}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, t.TempDir())
+
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
+	if got.PathResult != nil {
+		t.Errorf("non-send_file should have nil PathResult, got %+v", got.PathResult)
+	}
+}
+
+// TestSetPathGuardEvaluator_注入生效 验证宿主可替换评估器。
+func TestSetPathGuardEvaluator_注入生效(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine:       engine,
+		staticConfig: map[string]any{"file_guard": map[string]any{"enabled": true}},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, t.TempDir())
+	evaluator.SetPathGuardEvaluator(NewSendFilePathGuardEvaluator())
+
+	inv := PolicyInvocation{
+		ToolName: SendFileToolName,
+		ToolArgs: map[string]any{"abs_file_path_list": "/tmp/x.txt"},
+	}
+	got := evaluator.Evaluate(context.Background(), inv, false)
+	if got.PathResult == nil {
+		t.Error("injected evaluator should still produce PathResult")
+	}
+}
+
+// TestTrustedDirsFromEngine_各分支 验证可选接口断言。
+func TestTrustedDirsFromEngine_各分支(t *testing.T) {
+	if got := trustedDirsFromEngine(nil); got != nil {
+		t.Errorf("nil engine -> %v", got)
+	}
+	// fakePolicyEngine 未实现 TrustedDirs → nil
+	if got := trustedDirsFromEngine(&fakePolicyEngine{}); got != nil {
+		t.Errorf("engine without TrustedDirs -> %v", got)
+	}
+	// 实现 TrustedDirs 的替身
+	if got := trustedDirsFromEngine(&fakeTrustedDirsEngine{}); len(got) != 1 {
+		t.Errorf("engine with TrustedDirs -> %v", got)
+	}
+}
+
+// fakeTrustedDirsEngine 实现 PolicyEngine + TrustedDirs。
+type fakeTrustedDirsEngine struct {
+	fakePolicyEngine
+}
+
+// TrustedDirs 返回预置受信目录
+func (f *fakeTrustedDirsEngine) TrustedDirs() []string { return []string{"/trusted"} }
