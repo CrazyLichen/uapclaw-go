@@ -408,7 +408,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 上游 TeamHarness.build（team_harness.py:982-988）6 参数：
 	// agent_spec / role / member_name / initial_plan_mode / build_context /
 	// task_event_tracker。团队 rails 已在 15a 折进 agentSpec.Rails。
-	harness := harness.BuildTeamHarness(
+	harness := harness.TeamHarnessBuild(
 		agentSpec,
 		string(ctx.Role),
 		ctx.MemberName,

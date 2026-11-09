@@ -82,7 +82,7 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewNativeHarness 由已构建的 DeepAgent 构造 NativeHarness。
-// 25.1a 阶段接收外部已建好的 agent（因为 rail 仍由 BuildTeamHarness 手工挂载）；
+// 25.1a 阶段接收外部已建好的 agent（因为 rail 仍由 TeamHarnessBuild 手工挂载）；
 // 25.1b 改为接收 spec 并内部自建（对齐 Python 的 spec 前向构造）。
 // NewNativeHarness 从 spec 物化自身（前向构造）。
 //
@@ -92,7 +92,7 @@ const (
 // DeepAgent(parts.config.card))」。
 //
 // 与 25.1a 的差别：那时收的是"外部已建好的 agent"（rail 仍由
-// BuildTeamHarness 手工挂载）；现在 spec 自己解析出全部 parts，
+// TeamHarnessBuild 手工挂载）；现在 spec 自己解析出全部 parts，
 // 不再有 throwaway 模板 DeepAgent。
 //
 // 构造是同步的：宿主构造完即可从 DeepConfig 读到 workspace / sys_operation。

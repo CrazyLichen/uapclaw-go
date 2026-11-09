@@ -90,9 +90,9 @@ func TestTeamHarness_RunAgentCustomizer_Nil(t *testing.T) {
 	})
 }
 
-// TestBuildTeamHarness 测试 Build 函数（25.1b：6 参数 + spec 驱动）。
-func TestBuildTeamHarness(t *testing.T) {
-	h := harness.BuildTeamHarness(
+// TestTeamHarnessBuild 测试 Build 函数（25.1b：6 参数 + spec 驱动）。
+func TestTeamHarnessBuild(t *testing.T) {
+	h := harness.TeamHarnessBuild(
 		atschema.DeepAgentSpec{},
 		string(atschema.TeamRoleTeammate),
 		"teammate_1",

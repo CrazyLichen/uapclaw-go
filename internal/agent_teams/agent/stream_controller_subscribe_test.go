@@ -337,7 +337,7 @@ func newStreamControllerWithTeamHarness() *StreamController {
 	spec := atschema.DeepAgentSpec{
 		Card: agentschema.NewAgentCard(agentschema.WithAgentName("sc-itest")),
 	}
-	sc.resources.Harness = harness.BuildTeamHarness(spec, "leader", "m1", false, nil, nil)
+	sc.resources.Harness = harness.TeamHarnessBuild(spec, "leader", "m1", false, nil, nil)
 	return sc
 }
 

@@ -48,7 +48,7 @@ func (s *TeamHarnessSuite) newTeamHarness() *teamharness.TeamHarness {
 	}
 	// 复用 newTeamHarnessWithNative 的等价构造：NewTeamHarness 接收接口 + 手动包 native
 	h := teamharness.NewTeamHarness(agent, string(atschema.TeamRoleLeader), "leader", false)
-	// 通过 Native() 不暴露 setter，改用 BuildTeamHarness 太重；此处直接验证 Send/State 转发面
+	// 通过 Native() 不暴露 setter，改用 TeamHarnessBuild 太重；此处直接验证 Send/State 转发面
 	_ = native
 	return h
 }

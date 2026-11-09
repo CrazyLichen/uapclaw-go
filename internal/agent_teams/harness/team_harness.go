@@ -130,7 +130,7 @@ func newTeamHarnessWithNative(
 	}
 }
 
-// BuildTeamHarness 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
+// TeamHarnessBuild 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
 // Python: TeamHarness.build(...)
 //
 // S-06: 对齐 Python deep_agent = agent_spec.build()——从 spec 构建 DeepAgent
@@ -138,7 +138,7 @@ func newTeamHarnessWithNative(
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
 // ⤴️ 9.68 回填完成：Rails 挂载逻辑已实现
-// BuildTeamHarness 前向构造团队线束（6 参数，对齐上游 TeamHarness.build）。
+// TeamHarnessBuild 前向构造团队线束（6 参数，对齐上游 TeamHarness.build）。
 //
 // 上游 team_harness.py:93-130：native 从 spec 物化自身，团队 rails 在
 // agent_spec.rails 里声明，经 spec build + ensure_initialized 统一挂载——
@@ -153,7 +153,7 @@ func newTeamHarnessWithNative(
 // 否则 8 个 team rail provider 是死代码，声明会被静默跳过。
 //
 // Python: TeamHarness.build (team_harness.py:93-130)
-func BuildTeamHarness(
+func TeamHarnessBuild(
 	agentSpec atschema.DeepAgentSpec,
 	role string,
 	memberName string,
@@ -165,7 +165,7 @@ func BuildTeamHarness(
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("member_name", memberName).
-			Msg("BuildTeamHarness: native construction failed")
+			Msg("TeamHarnessBuild: native construction failed")
 		return newTeamHarnessWithNative(nil, nil, role, memberName, initialPlanMode, taskEventTracker)
 	}
 	return newTeamHarnessWithNative(native, native.DeepAgent(), role, memberName,
@@ -377,12 +377,12 @@ func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
 
 // Start 绑定子会话并启动 native 的 supervisor（一个 run cycle 一次）。
 // Python: TeamHarness.start(team_session)（team_harness.py:135-169）
-// 步骤对齐上游 9 步；25.1a 阶段 native 由 BuildTeamHarness 物化且 fresh，
+// 步骤对齐上游 9 步；25.1a 阶段 native 由 TeamHarnessBuild 物化且 fresh，
 // 故"重建 native / _remount_dynamic_tools / background_task_controller / kv_cache hook"
 // 四步在本阶段为 no-op（⤵️ 25.1b spec 驱动 + ⤵️ 25.1d 异步工具 + ⤵️ 25.6 会话钩子）。
 func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
 	if h.native == nil {
-		return fmt.Errorf("team harness: 未构建 native（须经 BuildTeamHarness）")
+		return fmt.Errorf("team harness: 未构建 native（须经 TeamHarnessBuild）")
 	}
 
 	// 步骤 3：建子会话（对齐 _make_child_session）
@@ -427,7 +427,7 @@ func (h *TeamHarness) Stop(ctx context.Context) error {
 // Python: TeamHarness.run_once(content, team_session)（team_harness.py:201-250）
 func (h *TeamHarness) RunOnce(ctx context.Context, content any, teamSession any) (map[string]any, error) {
 	if h.native == nil {
-		return nil, fmt.Errorf("team harness: 未构建 native（须经 BuildTeamHarness）")
+		return nil, fmt.Errorf("team harness: 未构建 native（须经 TeamHarnessBuild）")
 	}
 	child := h.makeChildSession(teamSession)
 	if child == nil {
@@ -607,6 +607,18 @@ func (h *TeamHarness) FindRails(railType reflect.Type) []any {
 		result[i] = r
 	}
 	return result
+}
+
+// FindRailsByType 按具体类型查 rail（FindRails 的类型安全包装）。
+//
+// 上游没有对应物：Go 侧 find_rails 收 reflect.Type，调用方写
+// FindRails(reflect.TypeOf(&X{})) 太啰嗦，故补一个收原型的薄封装。
+func (h *TeamHarness) FindRailsByType(prototype any) []any {
+	t := reflect.TypeOf(prototype)
+	if t == nil {
+		return nil
+	}
+	return h.FindRails(t)
 }
 
 // RegisterRail 在运行中的 Agent 上注册额外 Rail。
