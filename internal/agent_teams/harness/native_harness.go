@@ -2,12 +2,14 @@ package harness
 
 import (
 	"context"
+
 	"fmt"
 	"sync"
 	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
@@ -27,8 +29,12 @@ import (
 type NativeHarness struct {
 	// agent 内层 DeepAgent（组合，不是嵌入）
 	agent *agentcore.DeepAgent
-	// spec 构造规格（25.1b 起用于自配置，本阶段仅保存）
+	// spec 构造规格（构造期据此 resolve parts 自配置）
 	spec atschema.DeepAgentSpec
+	// buildCtx 构建上下文（构造期解析 parts 用；之后供用量归属读取）
+	buildCtx hschema.BuildContextInterface
+	// prepared 是否已完成 prepare（rail 初始化 + 模板热加载）
+	prepared bool
 	// st 唯一可变状态容器
 	st *HarnessInternalState
 	// cmd 控制命令队列
@@ -78,18 +84,70 @@ const (
 // NewNativeHarness 由已构建的 DeepAgent 构造 NativeHarness。
 // 25.1a 阶段接收外部已建好的 agent（因为 rail 仍由 BuildTeamHarness 手工挂载）；
 // 25.1b 改为接收 spec 并内部自建（对齐 Python 的 spec 前向构造）。
-func NewNativeHarness(agent *agentcore.DeepAgent, spec atschema.DeepAgentSpec) *NativeHarness {
+// NewNativeHarness 从 spec 物化自身（前向构造）。
+//
+// 顺序不可换：先 resolve parts，再用 spec 的真实 card 配置 DeepAgent——
+// 上游注释：「Resolve parts before super().__init__ so the spec's real card
+// configures this DeepAgent at construction (mirrors DeepAgentSpec.build's
+// DeepAgent(parts.config.card))」。
+//
+// 与 25.1a 的差别：那时收的是"外部已建好的 agent"（rail 仍由
+// BuildTeamHarness 手工挂载）；现在 spec 自己解析出全部 parts，
+// 不再有 throwaway 模板 DeepAgent。
+//
+// 构造是同步的：宿主构造完即可从 DeepConfig 读到 workspace / sys_operation。
+//
+// Python: NativeHarness.__init__ (native_harness.py:150-232)
+func NewNativeHarness(spec atschema.DeepAgentSpec, buildCtx hschema.BuildContextInterface) (*NativeHarness, error) {
+	// 步骤 1：先解析 parts（对应上游 "Resolve parts before super().__init__"）
+	parts, err := spec.ResolveParts(buildCtx)
+	if err != nil {
+		return nil, fmt.Errorf("native harness: resolve parts failed: %w", err)
+	}
+
+	// 步骤 2：用 parts 物化 DeepAgent
+	// Go 无继承，上游的「apply parts 到自己」在这里等价于「建实例再 apply」
+	agent, err := agentcore.ApplyDeepAgentParts(context.Background(), parts)
+	if err != nil {
+		return nil, fmt.Errorf("native harness: apply parts failed: %w", err)
+	}
+
+	// 步骤 3：初始化内部状态
 	h := &NativeHarness{
-		agent:   agent,
-		spec:    spec,
-		st:      newInternalState(),
-		cmd:     make(chan controlCmd, controlQueueSize),
-		events:  newEventBus(),
-		queue:   make(chan stream.Schema, outputQueueSize),
-		startMu: sync.Mutex{},
+		agent:    agent,
+		spec:     spec,
+		buildCtx: buildCtx,
+		st:       newInternalState(),
+		cmd:      make(chan controlCmd, controlQueueSize),
+		events:   newEventBus(),
+		queue:    make(chan stream.Schema, outputQueueSize),
+		startMu:  sync.Mutex{},
 	}
 	h.out = newOutputIterator(h.queue)
-	return h
+	return h, nil
+}
+
+// prepare 初始化基础 rails，再应用序列化的 AgentTemplate。
+//
+// 幂等。Start 与 RunOnce 都先调它；同步的配置 + rail 挂载已在构造期完成。
+// 基础 rails 必须先初始化再热加载模板：模板的技能要绑到已存在的
+// SkillUseRail 上。此方法返回前不会有模型调用，所以成员启动时
+// 一定拿到了完整模板。
+//
+// Python: NativeHarness._prepare (native_harness.py:281-301)
+func (h *NativeHarness) prepare(ctx context.Context) error {
+	if h.prepared {
+		return nil
+	}
+	if _, err := h.agent.EnsureInitialized(ctx); err != nil {
+		return fmt.Errorf("harness: 初始化失败: %w", err)
+	}
+	// ⤵️ 15.7-15.9：AgentTemplateSpec 真实现（此时应 model_validate + 热加载）
+	if h.spec.AgentTemplateSpec != nil {
+		return ErrTemplateUnsupported
+	}
+	h.prepared = true
+	return nil
 }
 
 // State 返回当前相位。
@@ -126,9 +184,9 @@ func (h *NativeHarness) Start(ctx context.Context, sess *session.Session) error 
 		return nil
 	}
 
-	// 步骤 2：初始化 rails（模板热加载在 25.1b 随 spec 驱动一起落）
-	if _, err := h.agent.EnsureInitialized(ctx); err != nil {
-		return fmt.Errorf("harness: 初始化失败: %w", err)
+	// 步骤 2：初始化基础 rails + 应用模板（模板热加载 ⤵️ 15.7-15.9）
+	if err := h.prepare(ctx); err != nil {
+		return err
 	}
 
 	// 步骤 3：定会话（25.1a 阶段要求显式会话；自建会话语义随 25.1b spec 驱动补齐）
@@ -224,10 +282,14 @@ func (h *NativeHarness) Stop(ctx context.Context) error {
 	}
 
 	// 步骤 6：工具拆除。
-	// Python: ability_manager.teardown_tools()（native_harness.py:457）。
-	// Go 的 AbilityManagerInterface 无 teardown_tools 等价物，属既有 parity 缺口
-	// （⤵️ 见计划 25.1a 偏差登记；25.1b spec 驱动装配时一并补齐）。
-	_ = h.agent.AbilityManager() // 占位保留接入点，避免误删步骤结构
+	// 轮末拆除本 owner 的有状态工具：native 每个运行周期都会重建
+	// （TeamHarness.start），不留这一步会让每周期都把工具重新注册到陈旧 id 上，
+	// 而 add_ability 的 refresh 路径会为每个残留 id 记一条告警。
+	// 无状态共享工具保留，其他 agent 还在用。
+	// Python: ability_manager.teardown_tools()（native_harness.py:457）
+	if am := h.agent.AbilityManager(); am != nil {
+		am.TeardownTools()
+	}
 
 	h.startMu.Lock()
 	h.stopping = false
@@ -291,6 +353,20 @@ func (h *NativeHarness) RunOnce(ctx context.Context, content any, sess *session.
 	if started {
 		return nil, fmt.Errorf("harness: supervisor 运行中不允许 run_once（请用 Send）")
 	}
+
+	// Python: await self._prepare()（run_once 第一步）
+	if err := h.prepare(ctx); err != nil {
+		return nil, err
+	}
+	// 轮末拆除本 owner 的有状态工具：停掉的 agent 不该把逐 agent 的工具实例
+	// 留在进程级资源管理器里，否则下一周期重建会为每个残留 id 记一条告警。
+	// 与上游一致：失败只记日志，不影响本次调用的返回。
+	// Python: finally 里 self.ability_manager.teardown_tools()
+	defer func() {
+		if am := h.agent.AbilityManager(); am != nil {
+			am.TeardownTools()
+		}
+	}()
 
 	own := false
 	if sess == nil {

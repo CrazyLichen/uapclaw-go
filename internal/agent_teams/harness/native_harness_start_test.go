@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -17,8 +16,15 @@ import (
 func newTestNativeHarness(t *testing.T) *NativeHarness {
 	t.Helper()
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("test-native"))
-	agent := agentcore.NewDeepAgent(card)
-	return NewNativeHarness(agent, atschema.DeepAgentSpec{})
+	// 25.1b：前向构造——由 spec 解析 parts 并物化，不再收外部 agent。
+	// card 必须放进 spec（上游：spec 的真实 card 在构造期配置 agent）。
+	spec := atschema.NewDeepAgentSpec()
+	spec.Card = card
+	h, err := NewNativeHarness(spec, nil)
+	if err != nil {
+		t.Fatalf("NewNativeHarness: %v", err)
+	}
+	return h
 }
 
 // TestNativeHarness_Start幂等 验证重复 Start 不重建内核（C1）。

@@ -28,4 +28,16 @@ type DeepAgentParts struct {
 	ToolCards []*tool.ToolCard
 	// ToolInstances 待注册到资源管理器的工具实例
 	ToolInstances []tool.Tool
+	// Subagents 已解析的子代理（apply 侧算默认 rails 时需要，判断是否加 SubagentRail）
+	Subagents []SubagentSpec
+	// EnableAsyncSubagent 是否启用异步子代理（apply 侧算默认 rails 时需要）
+	EnableAsyncSubagent bool
+	// EnableTaskPlanning 是否启用任务规划（apply 侧算默认 rails 时需要）
+	EnableTaskPlanning bool
+	// EnableModelAnomalyDetectionRail 是否启用模型异常检测 rail（nil 跟随上游默认 true）
+	EnableModelAnomalyDetectionRail *bool
+	// Skills 技能列表（apply 侧算默认 SkillUseRail 时需要）
+	Skills []string
+	// ModelSelection 模型选择配置（apply 侧算默认 TaskPlanningRail 时需要）
+	ModelSelection []ModelSelectionEntry
 }
