@@ -1133,11 +1133,20 @@ func TestPlanControllerEnsureState(t *testing.T) {
 		t.Fatalf("EnsureState: %v", err)
 	}
 
+	// plan 状态必须落在「即将承接该会话的那个 Session」上：EnsureState 会通过
+	// ensure_live_session_instance 建出会话级 child 并绑定会话，因此优先按
+	// live instance 的绑定会话读；没有 live 时回落到新建会话（根路径）。
+	readAgent := agent
 	loaded := session.CreateAgentSession("sess-plan-state", agent.Card(), nil)
+	if live := d.GetLiveSessionInstance("sess-plan-state"); live != nil {
+		if bound := resolveLiveAgentSession(live, "sess-plan-state"); bound != nil {
+			readAgent, loaded = live, bound
+		}
+	}
 	if err := loaded.PreRun(context.Background()); err != nil {
 		t.Fatalf("PreRun: %v", err)
 	}
-	if state := agent.LoadState(loaded); state.PlanMode.Mode != "plan" {
+	if state := readAgent.LoadState(loaded); state.PlanMode.Mode != "plan" {
 		t.Errorf("进入 plan 后状态应为 plan，实际 %q", state.PlanMode.Mode)
 	}
 }
