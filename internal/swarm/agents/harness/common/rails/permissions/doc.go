@@ -47,11 +47,14 @@
 // 依赖 Go 侧 progressive_tool_rail 与 tool discovery 的等价内部结构，
 // 待对应章节落地后回填。
 //
-// ⤵️ auto_permission 子包中 4 个常量（ShellDisplayPathPattern /
-// ShellDisplayPreSplitPathPattern / SensitiveDisplayPathPattern /
-// DeterministicReadonlyPublicWebFetchSourceKinds）在 Python 全仓零消费，
-// 按规则 9.2-4 照抄保留，待 9.90d 的 reviewer_redaction / deterministic 启用。
-// 其余 7 个常量的消费方同样在 9.90d。
+// ⤵️ auto_permission 子包中 5 个符号在 Python 全仓零消费——不是「待启用」，
+// 而是上游从未接入：ShellDisplayPathPattern / ShellDisplayPreSplitPathPattern /
+// SensitiveDisplayPathPattern / DeterministicReadonlyPublicWebFetchSourceKinds /
+// ReviewerActionTargetMaxLength。按规则 9.2-4 照抄保留。
+// 9.90d-1 已落地 reviewer_redaction.go，该文件并未消费上述三个正则，
+// 后续不要凭旧注释臆断「接上」它们。
+// 其余常量的消费方在 9.90d-2 的 reviewer_metadata / deny_response /
+// before_tool / deterministic。
 //
 // 文件目录：
 //

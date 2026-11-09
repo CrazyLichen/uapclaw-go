@@ -71,6 +71,7 @@ type PermissionInterruptRequest struct {
 
 const (
 	// ReviewerActionTargetMaxLength 审查动作目标描述的最大长度
+	// ⤵️ Python 全仓零消费（reviewer_metadata 用的是字面量 160），照抄保留。
 	// Python: _REVIEWER_ACTION_TARGET_MAX_LENGTH
 	ReviewerActionTargetMaxLength = 160
 
@@ -105,7 +106,8 @@ const (
 // ShellDisplayPathPattern 从 shell 命令里抽出需要脱敏显示的路径。
 // 覆盖 macOS（/Users/、/private/、/tmp/）、Linux（/home/x/）、
 // HOME 相对（~/...）与 Windows 盘符（C:\Users\、Documents and Settings）四类。
-// ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
+// ⤵️ Python 全仓（含 reviewer_redaction.py 与 tests）零消费——不是「待启用」，
+// 而是上游从未接入。按规则 9.2-4 照抄保留，不因 Go 侧无消费方裁剪。
 // Python: _SHELL_DISPLAY_PATH_PATTERN
 var ShellDisplayPathPattern = regexp.MustCompile(
 	`(?:` +
@@ -118,7 +120,7 @@ var ShellDisplayPathPattern = regexp.MustCompile(
 )
 
 // ShellDisplayPreSplitPathPattern 仅匹配 Windows 盘符路径，用于预切分。
-// ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
+// ⤵️ Python 全仓零消费（同 ShellDisplayPathPattern），照抄保留。
 // Python: _SHELL_DISPLAY_PRE_SPLIT_PATH_PATTERN
 var ShellDisplayPreSplitPathPattern = regexp.MustCompile(
 	`[A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/]` +
@@ -129,7 +131,7 @@ var ShellDisplayPreSplitPathPattern = regexp.MustCompile(
 // 三类：点文件类（.env*、credentials、id_*、known_hosts）、
 // 敏感目录（.ssh / .aws / .gnupg / .jiuwenswarm/config）、
 // 关键词类（secret / token / api_key / private_key / credential / password）。
-// ⤵️ Python 全仓零消费，待 9.90d 的 reviewer_redaction 启用。
+// ⤵️ Python 全仓零消费（同 ShellDisplayPathPattern），照抄保留。
 // Python: _SENSITIVE_DISPLAY_PATH_PATTERN
 var SensitiveDisplayPathPattern = regexp.MustCompile(
 	`(?i)(?:` +
@@ -142,7 +144,8 @@ var SensitiveDisplayPathPattern = regexp.MustCompile(
 
 // DeterministicReadonlyPublicWebFetchSourceKinds 允许确定性放行的 fetch 来源类型集合。
 // 只读用途，本包内不得对其赋值。
-// ⤵️ Python 全仓零消费，待 9.90d 的 deterministic 启用。
+// ⤵️ Python 全仓零消费——deterministic.py 用的是字面量 "recent_search_result"
+// 而非本集合。照抄保留（规则 9.2-4）。
 // Python: DETERMINISTIC_READONLY_PUBLIC_WEB_FETCH_SOURCE_KINDS = frozenset({"recent_search_result"})
 var DeterministicReadonlyPublicWebFetchSourceKinds = map[string]struct{}{
 	"recent_search_result": {},

@@ -28,14 +28,17 @@
 //
 // # 已知缺口
 //
-// ⤵️ 以下 4 个常量在 Python 全仓（含 tests）零消费，本包照抄但不被引用，
-// 待 9.90d 的 reviewer_redaction / deterministic 启用后成为活跃代码：
+// ⤵️ 以下 5 个符号在 Python 全仓（含 reviewer_redaction.py / deterministic.py
+// 与 tests）零消费——**不是「待 9.90d 启用」，而是上游从未接入**：
 //   - ShellDisplayPathPattern
 //   - ShellDisplayPreSplitPathPattern
 //   - SensitiveDisplayPathPattern
 //   - DeterministicReadonlyPublicWebFetchSourceKinds
+//   - ReviewerActionTargetMaxLength（reviewer_metadata 用字面量 160）
 //
 // 保留理由：规则 9.2-4 要求 Enum/常量成员集合完整映射，不得因"Go 侧用不到"裁剪。
+// 注意：9.90d-1 已落地 reviewer_redaction.go，该文件并未消费上述三个正则——
+// 后续若有人想「接上」这些常量，先确认上游是否真有消费方，不要凭注释臆断。
 // ⤵️ 其余常量的消费方同样在 9.90d：ReviewerUITextMaxLength 与
 // ReviewerUIShortTextMaxLength 用于 reviewer_metadata；ReviewerDenialGuidance
 // 用于 deny_response；ProhibitedFileDeliveryReason 用于 before_tool；
