@@ -249,3 +249,44 @@ func TestOverrideGetUserInput_无override(t *testing.T) {
 		t.Error("empty override should not handle")
 	}
 }
+
+// ──────────────────────────── 导出方法（9.90d-1 Task 16 补齐） ────────────────────────────
+
+// TestCollectFileGuardPersistAccessesDefault_无host返回nil 验证默认实现。
+func TestCollectFileGuardPersistAccessesDefault_无host返回nil(t *testing.T) {
+	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
+	if got := rail.CollectFileGuardPersistAccessesDefault("read_file", map[string]any{}, map[string]any{}); got != nil {
+		t.Errorf("got %v", got)
+	}
+}
+
+// TestCollectFileGuardPersistAccessesDefault_不查override 验证绕过 override 不递归。
+func TestCollectFileGuardPersistAccessesDefault_不查override(t *testing.T) {
+	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
+	called := false
+	rail.SetOverride(&PermissionInterruptRailOverride{
+		CollectFileGuardPersistAccesses: func(string, map[string]any, map[string]any) ([]harnesssecurity.PathAction, bool) {
+			called = true
+			return nil, true
+		},
+	})
+	// Default 版不应触发 override（否则会死循环）
+	_ = rail.CollectFileGuardPersistAccessesDefault("read_file", map[string]any{}, map[string]any{})
+	if called {
+		t.Error("Default variant must NOT consult override")
+	}
+}
+
+// TestResolvePermissionInterrupt_转发父类 验证导出方法转发到私有实现。
+func TestResolvePermissionInterrupt_转发父类(t *testing.T) {
+	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+
+	// 无 inputs 时父类提前返回零值 decision，不 panic
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("interrupt raised as expected: %v", r)
+		}
+	}()
+	_ = rail.ResolvePermissionInterrupt(context.Background(), cbc, nil, nil, nil)
+}

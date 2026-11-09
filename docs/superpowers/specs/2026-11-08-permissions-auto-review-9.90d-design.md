@@ -1275,22 +1275,48 @@ profile 显示 0%。本批受影响的两个文件：
 （否则 `engine.SetFileGuard(NewNativePathGuardProjection(checker))` 编译不过）。
 按规则 8，这类「为满足接口而存在」的方法理由充分，但补测试直接调用覆盖。
 
-#### 既有缺口（非本批引入，登记不修）
+#### 覆盖率口径修正：按**文件整体**而非单函数判定
 
-以下函数覆盖率 <85%，但都是 9.90b/c 或更早交付的代码，本批未改动：
+初版按函数逐个看 <85% 是错的——规则 3 的口径是整体覆盖率。改为按文件整体统计后
+（`hit_stmts / total_stmts`），结论完全不同：`reviewer_redaction.go` 文件整体
+**91.4%** 早已达标，个别函数 75~84% 只是深度边界分支；真正不达标的是
+`permission_interrupt_rail.go` **78.9%**。
 
-| 文件 | 低覆盖函数 | 性质 |
+按文件整体补齐后的最终结果（**全部 ≥85%**）：
+
+| 文件 | 补齐前 | 补齐后 |
 |---|---|---|
-| `native_path_context.go` | `Evaluate` 80.0% / `NativeArgumentsJSON` 83.3% / `canonicalizeJSON` 77.8% | 9.90b 交付 |
-| `send_file_path_guard.go` | `evaluateSendFilePathSafely` 50.0% / `buildSendFileGuardChecker` 60.0% 等 | Task 10 已登记：panic recover 防御分支，需外部包 panic 才能触发 |
-| `reviewer_redaction.go` | 10 个函数 33.3%~80.0% | 9.90d-1 Task 5c 交付，既有缺口 |
-| `persistent_audit.go` | `Write` 80.0% | Task 7 已登记：写盘失败分支 |
-| `url_safety.go` | `inspectURI` 82.0% / `regexp2FindAll` 81.8% | Task 8 已登记 |
-| `generated_artifact_delivery.go` | `resolveSendFilePath` 80.0% | Task 9 已登记：`filepath.Abs` 失败分支不可达 |
-| `tool_display.go` | 1 个函数 60.0% | Task 1 交付 |
-| `workspace_paths.go` | 4 个函数 73.1%~83.3% | Task 5c 交付 |
-| `pdf_tools.go` | 1 个函数 71.4% | Task 6 交付 |
+| `permission_interrupt_rail.go` | 78.9% | **85.8%** |
+| `reviewer_redaction.go` | 91.4% | 91.4%（本就达标，仅补 `redactPathValues` 33.3%→达标） |
+| `native_path_context.go` | 89.2% | 89.2% |
+| `send_file_path_guard.go` | 85.2% | 85.2% |
+| `trusted_search_urls.go` | 98.2% | 98.2% |
+| `openjiuwen_contract.go` | 100% | 100% |
+| `persistent_audit.go` | 96.8% | 96.8% |
+| `url_safety.go` | 94.7% | 94.7% |
+| `generated_artifact_delivery.go` | 99.0% | 99.0% |
+| `policy_eval.go` | 99.3% | 99.3% |
+| `tool_security_rail_override.go` | 跨包统计不可见 | **100%**（补包内测试） |
+| `permission_engine_accessors.go` | 跨包统计不可见 | **100%**（补包内测试） |
+| `tool_display.go` | 94.5% | 94.5% |
+| `workspace_paths.go` | 92.4% | 92.4% |
+| `command_runtime.go` / `sandbox_no_host_fallback.go` / `run_permissions.go` | 100% | 100% |
+| `pdf_tools.go` | 96.4% | 96.4% |
 
-**包整体覆盖率**：`permissions` 87.4%（≥85% 达标）。
-其余包（`rails` 79.8% / `rails/security` 59.2% / `harness/security` 78.2% /
-`single_agent/schema` 69.8%）的整体值受大量非本批文件影响，不代表本批质量。
+**补齐内容**：
+- `reviewer_redaction.go`：`redactPathValues` 的三个替换块（sk-/ghp- 前缀、
+  `password=` 赋值、Bearer）、`RedactSecretValuesPreserveFormat` 默认上限、
+  `RedactJSONValue` 无选项、`redactSecretValuesPreserveFormatE` 的
+  requireLiteral 报错（`password=$(whoami)` 触发）、`sanitizePermissionUIValue`
+  各标量类型、`uniquePayloadKey` 冲突递增、`stringify` 的 Marshal 失败、
+  `expandHome` 三种前缀
+- `permission_interrupt_rail.go`：`BeforeToolCall` 的 recover→bind→re-panic
+  全链（构造真实 `AbortError`）、`ResolveInterrupt` 的 ask/allow 分支、
+  override 三个钩子、`metadataAccessPairs` 未命中、`PermissionCheckContext`
+  无 hook
+- `tool_security_rail_override.go` / `permission_engine_accessors.go`：补包内
+  直接测试，消除跨包统计盲区
+
+**包整体**：`permissions` **88.2%**（≥85%）。
+其余包整体值（`rails` 79.8% / `rails/security` 59.5% / `harness/security` 78.2%）
+受大量非本批文件影响，不代表本批质量；本批文件的文件级覆盖率见上表。

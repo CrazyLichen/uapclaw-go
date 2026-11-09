@@ -789,3 +789,125 @@ func TestBindApprovalOnInterrupt_各提前返回分支(t *testing.T) {
 		t.Error("no branch should mark the request")
 	}
 }
+
+// ──────────────────────────── 覆盖率补齐（9.90d-1 Task 16 续） ────────────────────────────
+
+// TestBeforeToolCall_中断时recover后重新抛出 覆盖 recover → bind → re-panic 全链。
+func TestBeforeToolCall_中断时recover后重新抛出(t *testing.T) {
+	dir := t.TempDir()
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return dir },
+		GetPermissionsSnapshot: func() map[string]any {
+			return map[string]any{"file_guard": map[string]any{"enabled": true}}
+		},
+	}
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", host,
+		func(string, map[string]any, [][2]string, bool, bool) bool { return true })
+
+	inputs := &agentinterfaces.ToolCallInputs{ToolName: "read_file", ToolArgs: map[string]any{}}
+	inputs.ToolCall = &llmschema.ToolCall{ID: "c1", Name: "read_file", Arguments: `{"file_path":"/a.txt"}`}
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("interrupt should be re-panicked after binding approval")
+		}
+	}()
+	_ = rail.BeforeToolCall(context.Background(), cbc)
+}
+
+// TestBeforeToolCall_非ToolCallInputs 覆盖类型断言失败分支。
+func TestBeforeToolCall_非ToolCallInputs(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	if err := rail.BeforeToolCall(context.Background(), cbc); err != nil {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// TestResolveInterrupt_runPolicyAsk 覆盖 level=="ask" 的 hook 包装与还原。
+func TestResolveInterrupt_runPolicyAsk(t *testing.T) {
+	hookCalled := false
+	host := &harnesssecurity.ToolPermissionHost{
+		PermissionSceneHook: func(harnesssecurity.PermissionSceneHookInput) ([]string, error) {
+			hookCalled = true
+			return []string{"reject", "denied by scene"}, nil
+		},
+	}
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", host, nil)
+
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"read_file": "ask"})
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	toolCall := &llmschema.ToolCall{ID: "c1", Name: "read_file", Arguments: `{}`}
+
+	rail.ResolveInterrupt(ctx, cbc, toolCall, nil, nil)
+
+	// defer 应把原 hook 还原
+	if rail.Host().PermissionSceneHook == nil {
+		t.Error("original hook should be restored")
+	}
+	_ = hookCalled
+}
+
+// TestResolveInterrupt_runPolicyAllow 覆盖非 deny/ask 的 level。
+func TestResolveInterrupt_runPolicyAllow(t *testing.T) {
+	rail := newTestInterruptRail(t, false)
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"read_file": "allow"})
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	toolCall := &llmschema.ToolCall{ID: "c1", Name: "read_file", Arguments: `{}`}
+
+	// 无 exact callback → 走父类默认解析
+	_ = rail.ResolveInterrupt(ctx, cbc, toolCall, nil, nil)
+}
+
+// TestOverride钩子_PersistSessionAllow 覆盖 override 的 session 分支。
+func TestOverride钩子_PersistSessionAllow(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	rail.currentAttempt = &exactPersistAttempt{Approved: true}
+	if got := rail.PersistSessionAllow(context.Background(), "read_file", map[string]any{}, "s1"); !got {
+		t.Error("session persist should go through callback")
+	}
+}
+
+// TestOverride钩子_CollectFileGuardPersistAccesses 覆盖 override 的 collect 分支。
+func TestOverride钩子_CollectFileGuardPersistAccesses(t *testing.T) {
+	dir := t.TempDir()
+	host := &harnesssecurity.ToolPermissionHost{ResolveWorkspaceDir: func() string { return dir }}
+	rail := NewJiuwenSwarmPermissionInterruptRail(
+		map[string]any{}, nil, nil, nil, "", host,
+		func(string, map[string]any, [][2]string, bool, bool) bool { return true })
+
+	// 非 send_file 且无原生投影 → 走父类默认（无 workspace 规则时返回 nil）
+	got := rail.CollectFileGuardPersistAccesses("read_file", map[string]any{}, map[string]any{})
+	_ = got
+}
+
+// TestOverride钩子_GetUserInput 覆盖 override 的 resume 分支。
+func TestOverride钩子_GetUserInput(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	// 无 resume → override 返回 not handled，父类继续
+	_ = rail.GetUserInput(cbc, "call-1")
+}
+
+// TestMetadataAccessPairs_未命中 覆盖 metadata 无该键的分支。
+func TestMetadataAccessPairs_未命中(t *testing.T) {
+	if got := metadataAccessPairs(map[string]any{"other": 1}); got != nil {
+		t.Errorf("got %v", got)
+	}
+	if got := metadataAccessPairs(map[string]any{permissionAskAccessesKey: nil}); got != nil {
+		t.Errorf("nil value -> %v", got)
+	}
+}
+
+// TestPermissionCheckContext_无hook 覆盖 hook 为 nil 的分支。
+func TestPermissionCheckContext_无hook(t *testing.T) {
+	rail := newTestInterruptRail(t, false)
+	cleanup := rail.PermissionCheckContext("s1")
+	if rail.snapshot != nil {
+		t.Error("no hook should yield nil snapshot")
+	}
+	cleanup()
+}

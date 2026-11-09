@@ -3,6 +3,7 @@ package permissions
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"testing"
 )
@@ -521,5 +522,142 @@ func TestIsPermissionUISecretKey_后缀(t *testing.T) {
 	}
 	if got["safeName"] != "z" {
 		t.Errorf("safe key changed: %v", got)
+	}
+}
+
+// ──────────────────────────── 覆盖率补齐（9.90d-1 Task 16） ────────────────────────────
+
+// TestRedactPathValues_常见密钥与赋值 覆盖三个替换块中的后两个。
+func TestRedactPathValues_常见密钥与赋值(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"sk前缀", "/home/u/sk-abcdefgh12345678/x", "/home/u/[redacted]/x"},
+		{"ghp前缀", "/tmp/ghp_abcdefghij1234567890/y", "/tmp/[redacted]/y"},
+		{"赋值password", "password=/home/u/secret", "password=/[redacted]/[redacted]/[redacted]"},
+		{"赋值token", "token: abcdef", "token: [redacted]"},
+		{"Bearer", "/x/Bearer abcdefgh12345678", "/x/Bearer [redacted]"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := redactPathValues(c.in); got != c.want {
+				t.Errorf("redactPathValues(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestRedactSecretValuesPreserveFormat_默认上限 覆盖不传 maxLength 的分支。
+func TestRedactSecretValuesPreserveFormat_默认上限(t *testing.T) {
+	got := RedactSecretValuesPreserveFormat("password=abc123")
+	if strings.Contains(got, "abc123") {
+		t.Errorf("secret should be redacted, got %q", got)
+	}
+}
+
+// TestRedactJSONValue_无选项 覆盖 opts 为空的分支。
+func TestRedactJSONValue_无选项(t *testing.T) {
+	got := RedactJSONValue(map[string]any{"key": "password=abc"})
+	m, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("got %T", got)
+	}
+	if s, _ := m["key"].(string); strings.Contains(s, "abc") {
+		t.Errorf("should be redacted, got %v", m)
+	}
+}
+
+// TestRedactSecretValuesPreserveFormatE_字面量校验失败 覆盖 requireLiteral 报错分支。
+func TestRedactSecretValuesPreserveFormatE_字面量校验失败(t *testing.T) {
+	// require_literal_values=True 且赋值值含 shell 元字符（$ ` ( ) \ 换行）
+	// 且非单引号开头 → 报 reviewer_redaction_incomplete
+	if _, err := RedactSecretValuesPreserveFormatE("password=$(whoami)", true); err == nil {
+		t.Error("shell metachar in assignment value should error")
+	}
+	// 单引号开头不报错
+	if _, err := RedactSecretValuesPreserveFormatE("password='$(whoami)'", true); err != nil {
+		t.Errorf("single-quoted value should not error: %v", err)
+	}
+	// 普通字面量不报错
+	if _, err := RedactSecretValuesPreserveFormatE("password=abc123", true); err != nil {
+		t.Errorf("plain literal should not error: %v", err)
+	}
+}
+
+// TestSanitizePermissionUIValue_各标量类型 覆盖 nil/bool/int/int64/float64 分支。
+func TestSanitizePermissionUIValue_各标量类型(t *testing.T) {
+	o := permissionUIOptions{maxDepth: 5, maxItems: 10, maxStringLen: 100}
+	active := map[uintptr]bool{}
+
+	for _, v := range []any{nil, true, false, 1, int64(2), 3.5} {
+		if got := sanitizePermissionUIValue(v, 0, o, active); got != v {
+			t.Errorf("scalar %v (%T) -> %v", v, v, got)
+		}
+	}
+	// Inf / NaN → unavailable
+	for _, v := range []float64{math.Inf(1), math.Inf(-1), math.NaN()} {
+		if got := sanitizePermissionUIValue(v, 0, o, active); got != PermissionUIUnavailable {
+			t.Errorf("float %v -> %v", v, got)
+		}
+	}
+}
+
+// TestUniquePayloadKey_冲突递增 覆盖第二轮循环。
+func TestUniquePayloadKey_冲突递增(t *testing.T) {
+	payload := map[string]any{
+		PermissionUITruncated:          1,
+		PermissionUITruncated + " (2)": 2,
+	}
+	got := uniquePayloadKey(payload, PermissionUITruncated)
+	if got != PermissionUITruncated+" (3)" {
+		t.Errorf("got %q, want %q", got, PermissionUITruncated+" (3)")
+	}
+}
+
+// TestStringify_Marshal失败 覆盖不可序列化值的回退分支。
+func TestStringify_Marshal失败(t *testing.T) {
+	// 含 func 的 map 无法 json.Marshal
+	got := stringify(map[string]any{"fn": func() {}})
+	if got == "" {
+		t.Error("should fall back to fmt.Sprint")
+	}
+	if !strings.Contains(got, "map[") {
+		t.Errorf("expected fmt.Sprint output, got %q", got)
+	}
+}
+
+// TestStringify_nil与非map 覆盖其余分支。
+func TestStringify_nil与非map(t *testing.T) {
+	if got := stringify(nil); got != "" {
+		t.Errorf("nil -> %q", got)
+	}
+	if got := stringify(42); got != "42" {
+		t.Errorf("int -> %q", got)
+	}
+}
+
+// TestExpandHome_三种前缀 覆盖 ~ / ~/ / ~\ 分支。
+func TestExpandHome_三种前缀(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home dir")
+	}
+	// 裸 ~
+	if got := expandHome("~"); got != home {
+		t.Errorf("~ -> %q, want %q", got, home)
+	}
+	// ~/sub
+	if got := expandHome("~/sub"); !strings.HasPrefix(got, home) || !strings.HasSuffix(got, "sub") {
+		t.Errorf("~/sub -> %q", got)
+	}
+	// ~\sub（Windows 风格前缀）
+	if got := expandHome(`~\sub`); !strings.HasPrefix(got, home) {
+		t.Errorf(`~\sub -> %q`, got)
+	}
+	// 非 ~ 开头原样返回
+	if got := expandHome("/abs/path"); got != "/abs/path" {
+		t.Errorf("abs -> %q", got)
 	}
 }
