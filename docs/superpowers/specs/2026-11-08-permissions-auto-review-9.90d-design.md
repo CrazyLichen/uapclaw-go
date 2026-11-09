@@ -102,7 +102,7 @@ from ...url_safety import (RecentUrlSource, absolute_uri_hard_block_reason,
 | `auto_config.py` | 315 | ❌ 0 | 9.90d-2 |
 | `auto_permission_rail.py` | 75 | ❌ 0 | 9.90d-2 |
 | `permission_compose.py` | 362 | ⚠️ **最小实现**（`permissions_layers.go:1419`） | 9.90d-2 |
-| `reviewer_redaction.py` | 689 | ❌ 0 | 9.90d-2 |
+| `reviewer_redaction.py` | 689 | ✅ **提前落地**（`permissions/reviewer_redaction.go`，9.90d-1 Task 5） | 原 9.90d-2 → **9.90d-1 提前** |
 | `reviewer_route.py` | 330 | ❌ 0 | 9.90d-2 |
 | `reviewer_stream_metadata.py` | 57 | ❌ 0 | 9.90d-2 |
 | `openjiuwen_contract.py` | 183 | ❌ 0 | **9.90d-1** |
@@ -556,7 +556,7 @@ func (r *DeepAgentRail) IsTrusted() bool {
 |---|---|---|---|---|
 | 18 | `auto_config.go` | 315 | 9.90d-1 | 单测 |
 | 19 | `permission_compose.go`（替换最小实现 + D-1/D-2 删除） | 362 | Task 18 | 单测 |
-| 20 | `reviewer_redaction.go` | 689 | 9.90d-1 `workspace_paths` | 单测 |
+| 20 | `reviewer_redaction.go` | 689 | 9.90d-1 `workspace_paths` | 单测（**已由 9.90d-1 Task 5 提前完成，9.90d-2 不再重复创建**） |
 | 21 | `reviewer_stream_metadata.go` | 57 | 无 | 单测 |
 | 22 | `auto_permission/models.go` 扩展 + `tool_binding.go` 扩展 | ~60 | 无 | 单测 |
 | 23 | `auto_permission/lifecycle.go` | 165 | Task 22 | 单测 |
@@ -737,3 +737,46 @@ Go 返回 error 由调用方传播。
 测试验证两条：`TestEvaluate_Ctx字段与GoContext互不干扰` 断言
 `invocation.Ctx` **不得**是 `context.Context`；三条取值路径各有独立
 叠加测试（getter / snapshot / static）。
+
+### 12.3 Task 5 执行时的追加决策：`reviewer_redaction` 提前落地 + 新建 common 包
+
+**问题**：`workspace_paths.py`（518 行）末尾 `_redact_review_ui_secrets` 调用
+`reviewer_redaction.py:283` 的 `redact_secret_values_preserve_format`。而
+`reviewer_redaction.py`（689 行 / 20 函数）在计划表中归 **9.90d-2**，Go 侧
+0 命中。更关键的是：`workspace_paths.py` 全仓只有 1 个消费者
+（`_auto_permission/reviewer_metadata.py:282`），且走的正是 `review_ui` 模式，
+即**唯一会被调用的路径恰好依赖下批子系统**。
+
+**决策（用户拍板全量一起落）**：本批额外新建
+`permissions/reviewer_redaction.go`，把 9.90d-2 Task 20 提前完成。
+spec §3.1 与 §6 的 Task 20 行已标注「提前完成，9.90d-2 不再重复创建」。
+
+**新建 Go 包**：Python 文件在 `agents/harness/common/workspace_paths.py`，
+Go 侧对应 `internal/swarm/agents/harness/common/workspace_paths.go`。
+该目录此前只有子目录、无 Go 包，按规则 9.1 新建 `package common`
+（含 `doc.go`）。依赖方向 `common → common/rails/permissions` 单向，
+`go list -deps` 验证不成环。
+
+**regexp2 方案**：Python re 的 `(?<!...)` / `(?<=...)` / `(?!...)` / `(?=...)`
+/ `(?P=quote)` / `re.DOTALL` 在 Go RE2 不支持，统一用项目已引入的
+`github.com/dlclark/regexp2 v1.12.0`（先例 `gateway/message_handler/at_file.go`）：
+- 四类断言原生支持
+- `(?P=quote)` → .NET `\k<quote>`
+- `re.DOTALL` → `regexp2.Singleline`
+- Go raw string 无法内嵌反引号，用 `bt = "\x60"` 常量拼接
+
+**两处 Go/Python 语义差异（已修）**：
+1. `urlparse().netloc` 含 userinfo；Go `url.Parse` 把 userinfo 拆到
+   `parsed.User`，`Host` 不含 `@` —— 显式重建 netloc 才能脱敏凭据
+2. `urlencode(...).replace("%5Bredacted%5D", "[redacted]")` 是字符串层还原；
+   Go `URL.String()` 会重新转义方括号，需在最终串上等价还原
+
+**结构忠实修正**：`workspace_paths.py` 的 22 个符号全量落地，末尾
+`redactReviewUISecrets` 作为独立私有函数存在并被调用（初版绕过它直接调
+permissions 导致 0% 死代码，已按规则 8 修正）。
+
+**`reviewer_metadata` 三段脱敏链**：spec §6 D2 原计划的集成测试
+`reviewer_metadata → workspace_paths → reviewer_redaction` 现可在本批
+完成后落地；`reviewer_metadata.go` 本身仍属 9.90d-2。
+
+**验证**：`common` 包 92.4%、`permissions` 包 86.5%，均 ≥85%。

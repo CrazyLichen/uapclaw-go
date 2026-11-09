@@ -70,6 +70,7 @@
 //	├── network_scope.go                   # 网络授权域原语（9.90b：host 归一 / is_global / 敏感查询键）
 //	├── permissions_layers.go              # Global/User/Session 三层覆盖读写 + 跨进程文件锁（9.90b）
 //	├── policy_eval.go                     # 只做策略评估、不进入人工确认流程（9.90b）
+//	├── reviewer_redaction.go              # AutoReviewer 证据脱敏（689 行 / 20 函数，原属 9.90d-2，因 workspace_paths 依赖提前到 9.90d-1）
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）
