@@ -1879,3 +1879,40 @@ user_rejection 分支：
 3. `withHostOwnedManualReviewDisplay` 只在 `route.Source == manual_only` 时
    改写；且 `browser` 类目下会强制覆盖为
    `browser_network_guard_unverified`
+
+### 12.26 Task 31 执行结论：`reviewer_audit`
+
+**落地**：`auto_permission/reviewer_audit.go`（77 行 Python → 约 230 行 Go /
+5 函数），覆盖率 **100%**，auto_permission 包 91.7%。
+
+#### 安全要点：退役任务级载荷必须被**拒绝**而非兼容
+
+`_RETIRED_TASK_SCOPE_CONFIRMATION_KEYS` 三个键
+（`task_grant` / `task_grant_proposal_id` / `task_grant_request_id`）是已退役的
+任务级授权拼写。识别它们的目的**不是向后兼容**，而是**让旧载荷无法被当作
+单次放行**——否则一个过期的任务级授权会被降格成 allow-once，绕过后续审查。
+
+`IsAllowOnceConfirmation` 的四个否定条件（任一命中即返回 false）：
+
+1. 载荷不可解析（空 map / 非对象 / 非法 JSON）
+2. `approved` 不是严格 `true`（字符串 `"true"`、数字 `1` 都不算）
+3. 有持久化意图（`auto_confirm` 或 `persist_allow` 为严格 true）
+4. 含退役任务级键，或含 `reviewer_override_token`
+
+#### 新增偏差 V-11：`persist_allow` 的 Go 映射
+
+Python 的确认对象有 `persist_allow: bool`；Go 的
+`security.PermissionConfirmResponse` 用 `PersistScope string`
+（`"session"` / `"permanent"` / 空串）+ `AutoConfirm bool` 表达。
+
+映射为「有持久化意图」：`PersistScope ∈ {session, permanent} || AutoConfirm`。
+
+这与 `permission_interrupt_rail.go` 的 `wantsSessionPersist` /
+`wantsPermanentPersist` 判定口径一致（都是「PersistScope 优先，空串回退
+AutoConfirm」）。
+
+#### 严格判等而非 truthy
+
+Python 用 `is True` / `is False`（严格判等），Go 用 `value.(bool)` 断言后
+再判值。`isStrictTrue` 与 `ParseConfirmationPayload` 的 `approved` 处理都
+遵循此口径——`map{"approved": "true"}` 不算批准，`map{"approved": 1}` 也不算。
