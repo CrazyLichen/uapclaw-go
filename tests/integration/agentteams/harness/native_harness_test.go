@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -41,11 +40,18 @@ func TestNativeHarnessSuite(t *testing.T) {
 
 // newNativeHarness 构造一个带 MockLLM 的 NativeHarness（不 Start）。
 func (s *NativeHarnessSuite) newNativeHarness() *teamharness.NativeHarness {
+	// 25.1b：前向构造——spec 自己解析 parts。把 MockLLM 的 card + model
+	// 装进 spec，使物化出的 agent 与被替换的 agent 等价。
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
 		MaxIterations: 4,
 	})
 	s.Require().NoError(err)
-	return teamharness.NewNativeHarness(agent, atschema.DeepAgentSpec{})
+	_ = agent
+	spec, specErr := s.NewSpecWithMockLLM(4)
+	s.Require().NoError(specErr)
+	h, err := teamharness.NewNativeHarness(spec, nil)
+	s.Require().NoError(err, "NewNativeHarness")
+	return h
 }
 
 // newStartedHarness 构造并 Start 一个 NativeHarness，返回 harness + 会话。

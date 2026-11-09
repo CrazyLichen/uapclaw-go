@@ -94,6 +94,16 @@ const (
 // ErrPauseUnsupported 暂停/继续尚未实现（⤵️ 25.1c 换真实现）。
 var ErrPauseUnsupported = errors.New("harness: pause/resume 尚未实现（25.1c）")
 
+// ErrTemplateUnsupported AgentTemplateSpec 热加载尚未实现。
+//
+// ⤵️ 15.7-15.9：AgentTemplateSpec 依赖链（manifest 加载 / extension_binder /
+// LoadRecord）体量约 2-3 倍，属模板与技能域。本版按 25.1a 的
+// ErrPauseUnsupported 同款手法：接口面完整、调用链对齐、行为待补。
+//
+// Python: NativeHarness._prepare 里的 AgentTemplateSpec.model_validate +
+// load_agent_template_spec (native_harness.py:293-300)
+var ErrTemplateUnsupported = errors.New("harness: agent template hot-load is not supported yet")
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newEventBus 创建事件总线。

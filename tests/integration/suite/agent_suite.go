@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -86,6 +87,27 @@ func (s *AgentSuite) NewAgentCard(id, name string) *agentschema.AgentCard {
 		agentschema.WithAgentID(id),
 		agentschema.WithAgentName(name),
 	)
+}
+
+// NewSpecWithMockLLM 构造一个带 MockLLM 的 DeepAgentSpec（25.1b 前向构造用）。
+//
+// NativeHarness 自 25.1b 起收 spec 而非已建好的 agent，所以测试要自己把
+// MockLLM 的 card + model 装进 spec，才能物化出与被替换 agent 等价的对象。
+//
+// 每次调用都生成唯一 card id：全局 ResourceMgr / 回调框架按 id 归集，
+// 固定 id 会让上一个用例的 rail 继续处理下个用例的会话。
+func (s *AgentSuite) NewSpecWithMockLLM(maxIterations int) (hschema.DeepAgentSpec, error) {
+	if _, err := llm.NewModel(s.ClientConfig, s.ModelConfig); err != nil {
+		return hschema.DeepAgentSpec{}, fmt.Errorf("创建 Mock Model 失败: %w", err)
+	}
+	spec := hschema.NewDeepAgentSpec()
+	spec.MaxIterations = maxIterations
+	spec.Card = s.NewAgentCard(fmt.Sprintf("itest_spec_agent_%d", time.Now().UnixNano()), "测试DeepAgent")
+	spec.Model = &hschema.TeamModelConfig{
+		ModelClientConfig:  *s.ClientConfig,
+		ModelRequestConfig: s.ModelConfig,
+	}
+	return spec, nil
 }
 
 // NewDeepAgentForTest 通过工厂创建 DeepAgent 实例。

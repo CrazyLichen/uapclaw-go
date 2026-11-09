@@ -14,7 +14,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
@@ -74,135 +73,18 @@ var (
 // Python: openjiuwen/harness/factory.py create_deep_agent()
 
 // CreateDeepAgent 创建深度 Agent 实例，完成卡片、模型、工具、轨道等全部初始化。
+// CreateDeepAgent 从参数创建 DeepAgent 实例。
+//
+// 内部就是 resolve + apply 两步组合（对齐上游 create_deep_agent）：
+// 先组装 parts（不创建实例），再物化。行为与拆分前完全一致。
+//
+// Python: create_deep_agent (harness/factory.py)
 func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) (*DeepAgent, error) {
-	// ── 步骤 1：默认 AgentCard ──
-	// Python: factory.py L219-223
-	card := params.Card
-	if card == nil {
-		card = agentschema.NewAgentCard(
-			agentschema.WithAgentName("deep_agent"),
-			agentschema.WithAgentDescription("DeepAgent instance"),
-		)
-	}
-
-	// ── 步骤 2：工具规范化 ──
-	// Python: factory.py _normalize_tools(tools: List[Tool | ToolCard])
-	normalizedCards, toolInstances := normalizeTools(params.ToolCards, params.ToolInstances)
-
-	// ── 步骤 3：语言解析 ──
-	// Python: factory.py L232-233
-	resolvedLanguage := hprompts.ResolveLanguage(params.Language)
-
-	// ── 步骤 4：通用子 Agent 注入 ──
-	// Python: factory.py L235-257
-	effectiveSubagents := injectGeneralPurposeSubagent(
-		params.Subagents,
-		params.AddGeneralPurposeAgent,
-		resolvedLanguage,
-		params.Rails,
-		params.SystemPrompt,
-		params.ToolCards,
-		params.ToolInstances,
-		params.Mcps,
-		params.Model,
-		params.Skills,
-	)
-
-	// ── 步骤 5：Workspace 构建 ──
-	// Python: factory.py L260-265
-	workspaceObj := buildWorkspace(params.Workspace, resolvedLanguage)
-
-	// ── 步骤 6：SysOperation 构建 ──
-	// Python: factory.py L267-281
-	sysOp, err := buildSysOperation(card, params.SysOperation, params.RestrictToWorkDir)
+	parts, err := ResolveDeepAgentParts(&params)
 	if err != nil {
-		return nil, fmt.Errorf("构建 SysOperation 失败: %w", err)
+		return nil, err
 	}
-
-	// ── 步骤 7：DeepAgentConfig 组装 ──
-	// Python: factory.py L283-355
-	config := hschema.NewDeepAgentConfig()
-	config.Model = params.Model
-	config.Card = card
-	config.SystemPrompt = params.SystemPrompt
-	config.EnableTaskLoop = params.EnableTaskLoop
-	config.ProgressiveToolEnabled = params.ProgressiveToolEnabled
-	if params.ToolSearchLimit > 0 {
-		config.ToolSearchLimit = params.ToolSearchLimit
-	}
-	config.EnableAsyncSubagent = params.EnableAsyncSubagent
-	config.AddGeneralPurposeAgent = params.AddGeneralPurposeAgent
-	config.MaxIterations = params.MaxIterations
-	if params.TaskLoopNoProgressGuard != nil {
-		config.TaskLoopNoProgressGuard = *params.TaskLoopNoProgressGuard
-	}
-	config.SkillBudgetMaxSkills = params.SkillBudgetMaxSkills
-	config.SkillBudgetMaxTotalChars = params.SkillBudgetMaxTotalChars
-	// Python: subagents=effective_subagents or None（空列表 → nil）
-	if len(effectiveSubagents) > 0 {
-		config.Subagents = effectiveSubagents
-	}
-	if len(normalizedCards) > 0 {
-		config.Tools = normalizedCards
-	}
-	config.Mcps = params.Mcps
-	config.Workspace = workspaceObj
-	config.Skills = params.Skills
-	config.EnableSkillDiscovery = params.EnableSkillDiscovery
-	config.Backend = params.Backend
-	config.SysOperation = sysOp
-	config.Language = resolvedLanguage
-	config.PromptMode = params.PromptMode
-	config.VisionModelConfig = params.VisionModelConfig
-	config.AudioModelConfig = params.AudioModelConfig
-	config.EnableReadImageMultimodal = params.EnableReadImageMultimodal
-	config.DefaultMode = params.DefaultMode
-	config.EnablePlanMode = params.EnableTaskPlanning
-	config.ModelSelection = params.ModelSelection
-	config.AutoCreateWorkspace = params.AutoCreateWorkspace
-	if params.CompletionTimeout > 0 {
-		config.CompletionTimeout = params.CompletionTimeout
-	}
-	// Python: factory.py L305-310「Forward extra kwargs to config fields」
-	// create_deep_agent(**kwargs) 把 context_engine_config 透传到 DeepAgentConfig；
-	// Go 侧无 kwargs 机制，需显式透传，否则适配器算出的窗口映射/比例/亲和开关会被静默丢弃。
-	if params.ContextEngineConfig != nil {
-		config.ContextEngineConfig = params.ContextEngineConfig
-	}
-
-	// ── 步骤 8：DeepAgent 实例化 ──
-	// Python: factory.py L356-357
-	agent := NewDeepAgent(card)
-	if cfgErr := agent.ConfigureDeepConfig(ctx, config); cfgErr != nil {
-		return nil, fmt.Errorf("配置 DeepAgent 失败: %w", cfgErr)
-	}
-
-	// ── 步骤 9：工具注册 ──
-	// Python: factory.py L329-344
-	if len(toolInstances) > 0 {
-		tag := card.GetID()
-		if tag == "" {
-			tag = card.GetName()
-		}
-		if regErr := registerToolInstances(toolInstances, tag); regErr != nil {
-			logger.Warn(logComponent).Err(regErr).Msg("failed to register tool instance")
-		}
-	}
-	for _, tc := range normalizedCards {
-		agent.abilityManager.Add(tc)
-	}
-
-	// ── 步骤 10：Rail 注册 ──
-	// Python: factory.py L346-367
-	// 10a：显式提供的 Rails
-	for _, r := range params.Rails {
-		agent.AddRail(r)
-	}
-
-	// 10b：默认 Rails 自动添加
-	addDefaultRails(agent, params, config, effectiveSubagents, workspaceObj, resolvedLanguage)
-
-	return agent, nil
+	return ApplyDeepAgentParts(ctx, parts)
 }
 
 // IsFreeSearchEnabled 检查是否至少启用一个免费搜索后端。

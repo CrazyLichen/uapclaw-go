@@ -40,7 +40,12 @@ func (s *TeamHarnessSuite) newTeamHarness() *teamharness.TeamHarness {
 		MaxIterations: 4,
 	})
 	s.Require().NoError(err)
-	native := teamharness.NewNativeHarness(agent, atschema.DeepAgentSpec{})
+	spec, specErr := s.NewSpecWithMockLLM(4)
+	s.Require().NoError(specErr)
+	native, nativeErr := teamharness.NewNativeHarness(spec, nil)
+	if nativeErr != nil {
+		s.T().Fatalf("NewNativeHarness: %v", nativeErr)
+	}
 	// 复用 newTeamHarnessWithNative 的等价构造：NewTeamHarness 接收接口 + 手动包 native
 	h := teamharness.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader", false)
 	// 通过 Native() 不暴露 setter，改用 BuildTeamHarness 太重；此处直接验证 Send/State 转发面
@@ -73,7 +78,12 @@ func (s *TeamHarnessSuite) TestOutputs未启动为nil() {
 func (s *TeamHarnessSuite) TestRunOnce跑一轮() {
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{MaxIterations: 4})
 	s.Require().NoError(err)
-	native := teamharness.NewNativeHarness(agent, atschema.DeepAgentSpec{})
+	spec, specErr := s.NewSpecWithMockLLM(4)
+	s.Require().NoError(specErr)
+	native, nativeErr := teamharness.NewNativeHarness(spec, nil)
+	if nativeErr != nil {
+		s.T().Fatalf("NewNativeHarness: %v", nativeErr)
+	}
 	h := teamharness.NewTeamHarness(agent, nil, string(atschema.TeamRoleTeammate), "m1", false)
 
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("单次完成"))

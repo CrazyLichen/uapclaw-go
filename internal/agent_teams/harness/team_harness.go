@@ -230,9 +230,15 @@ func BuildTeamHarness(
 	if agent == nil {
 		return NewTeamHarness(nil, rails, role, memberName, initialPlanMode)
 	}
-	// ⤴️ 25.1a：把 DeepAgent 包成 NativeHarness，作为团队成员的协议面载体
-	native := NewNativeHarness(agent, agentSpec)
-	return newTeamHarnessWithNative(native, agent, rails, role, memberName, initialPlanMode)
+	// ⤴️ 25.1b：NativeHarness 前向构造（spec 自解析 parts，不再收外部 agent）
+	native, nativeErr := NewNativeHarness(agentSpec, nil)
+	if nativeErr != nil {
+		logger.Error(logComponent).Err(nativeErr).
+			Str("member_name", memberName).
+			Msg("BuildTeamHarness: native construction failed")
+		return newTeamHarnessWithNative(nil, agent, rails, role, memberName, initialPlanMode)
+	}
+	return newTeamHarnessWithNative(native, native.DeepAgent(), rails, role, memberName, initialPlanMode)
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
