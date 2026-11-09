@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -227,4 +229,129 @@ func TestAbortSharedAgentIfSafe_goal记录活跃但无在飞轮仍中止(t *test
 	require.False(t, d.hasActiveGoalRound(), "但没有在飞的 goal 轮")
 	require.True(t, d.abortSharedAgentIfSafe(ctx, "sess-abort-record", "cancel"),
 		"仅记录 ACTIVE 不得阻止中止")
+}
+
+// TestIsRoundTerminalChunkType 终块三类型。
+// Python: interface_deep.py:197-203 _ROUND_TERMINAL_CHUNK_TYPES
+func TestIsRoundTerminalChunkType(t *testing.T) {
+	require.True(t, isRoundTerminalChunkType("answer"))
+	require.True(t, isRoundTerminalChunkType("chat.ask_user_question"))
+	require.True(t, isRoundTerminalChunkType("__interaction__"))
+	require.False(t, isRoundTerminalChunkType("llm_output"))
+	require.False(t, isRoundTerminalChunkType(""))
+}
+
+// TestTrackRoundOutputBoundary_每轮只采样一次 输出从队列读，active_round 可能已
+// 指向下一轮；必须按轮闩住归属，否则 user 轮的尾巴会被误标成 goal。
+// Python: interface_deep.py:15542-15573
+func TestTrackRoundOutputBoundary_每轮只采样一次(t *testing.T) {
+	d := &DeepAdapter{}
+	// 第一轮归属 user（此处直接置闩，等价于首块采样结果）
+	d.streamRoundKindLatch = "user"
+
+	// 调度器切到 goal，但上一轮尾巴仍在队列里 —— 闩不能变
+	d.trackRoundOutputBoundary(&stream.OutputSchema{Type: "llm_output"})
+	require.Equal(t, "user", d.streamRoundKindLatch)
+
+	// 上一轮终块到达 → 置位结束标志
+	d.trackRoundOutputBoundary(&stream.OutputSchema{Type: "answer"})
+	require.True(t, d.streamRoundOutputEnded)
+	require.Equal(t, "user", d.streamRoundKindLatch, "终块本身仍属旧轮")
+
+	// 下一块重新采样：无在飞轮 → 空串
+	d.trackRoundOutputBoundary(&stream.OutputSchema{Type: "llm_output"})
+	require.Equal(t, "", d.streamRoundKindLatch)
+	require.False(t, d.streamRoundOutputEnded)
+}
+
+// TestNoteRoundVisibleText_尾部截断 上限 256KB，保留尾部。
+// Python: interface_deep.py:15518-15525
+func TestNoteRoundVisibleText_尾部截断(t *testing.T) {
+	d := &DeepAdapter{}
+	d.noteRoundVisibleText("")
+	require.Equal(t, "", d.streamRoundVisibleText)
+
+	d.noteRoundVisibleText("abc")
+	d.noteRoundVisibleText("def")
+	require.Equal(t, "abcdef", d.streamRoundVisibleText)
+
+	big := strings.Repeat("x", roundVisibleTextMaxChars)
+	d.noteRoundVisibleText(big)
+	require.Len(t, d.streamRoundVisibleText, roundVisibleTextMaxChars)
+}
+
+// TestAdaptGoalIntermediateFinal_降级与丢弃 中间 final 不能当正式回答。
+// Python: interface_deep.py:15619-15637
+func TestAdaptGoalIntermediateFinal_降级与丢弃(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-demote")
+	_, err := d.dispatchGoalControl(ctx, "sess-demote", "set", "修完测试", false, 0, 0)
+	require.NoError(t, err)
+	d.streamRoundKindLatch = "goal"
+
+	// 已流过的文本：直接丢弃（避免气泡重复）
+	d.noteRoundVisibleText("完整答案")
+	adapted, keep := d.adaptGoalIntermediateFinal(map[string]any{
+		"event_type": "chat.final", "content": "完整答案",
+	})
+	require.False(t, keep)
+	require.Nil(t, adapted)
+
+	// 未流过的文本：降级为 chat.delta + goal_intermediate
+	adapted, keep = d.adaptGoalIntermediateFinal(map[string]any{
+		"event_type": "chat.final", "content": "新内容",
+	})
+	require.True(t, keep)
+	require.Equal(t, "chat.delta", adapted["event_type"])
+	require.Equal(t, true, adapted[goalIntermediateField])
+
+	// 非 final 不降级
+	adapted, keep = d.adaptGoalIntermediateFinal(map[string]any{
+		"event_type": "chat.delta", "content": "增量",
+	})
+	require.True(t, keep)
+	require.Equal(t, "chat.delta", adapted["event_type"])
+	require.NotContains(t, adapted, goalIntermediateField)
+
+	// user 轮的 final 不降级
+	d.streamRoundKindLatch = "user"
+	d.resetRoundKindLatch()
+	d.streamRoundKindLatch = "user"
+	adapted, keep = d.adaptGoalIntermediateFinal(map[string]any{
+		"event_type": "chat.final", "content": "用户答案",
+	})
+	require.True(t, keep)
+	require.Equal(t, "chat.final", adapted["event_type"])
+	require.NotContains(t, adapted, goalIntermediateField)
+}
+
+// TestAdaptGoalIntermediateFinal_目标非ACTIVE不降级 记录已完成后 final 就是正式回答。
+// Python: interface_deep.py:15470（先判 goal record ACTIVE）
+func TestAdaptGoalIntermediateFinal_目标非ACTIVE不降级(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-no-demote")
+	_, err := d.dispatchGoalControl(ctx, "sess-no-demote", "set", "目标", false, 0, 0)
+	require.NoError(t, err)
+	_, err = d.dispatchGoalControl(ctx, "sess-no-demote", "pause", "", false, 0, 0)
+	require.NoError(t, err)
+	d.streamRoundKindLatch = "goal"
+
+	adapted, keep := d.adaptGoalIntermediateFinal(map[string]any{
+		"event_type": "chat.final", "content": "最终答案",
+	})
+	require.True(t, keep)
+	require.Equal(t, "chat.final", adapted["event_type"])
+}
+
+// TestGoalIntermediateFinalRepeatsStreamedText 空答案视为重复，包含关系视为重复。
+// Python: interface_deep.py:15527-15540
+func TestGoalIntermediateFinalRepeatsStreamedText(t *testing.T) {
+	d := &DeepAdapter{}
+	require.True(t, d.goalIntermediateFinalRepeatsStreamedText(""), "空答案视为已重复")
+	require.True(t, d.goalIntermediateFinalRepeatsStreamedText("   "))
+	require.False(t, d.goalIntermediateFinalRepeatsStreamedText("答案"), "未流过任何文本时不重复")
+
+	d.noteRoundVisibleText("前缀 答案 后缀")
+	require.True(t, d.goalIntermediateFinalRepeatsStreamedText("答案"))
+	require.False(t, d.goalIntermediateFinalRepeatsStreamedText("别的"))
 }

@@ -333,3 +333,131 @@ func (d *DeepAdapter) abortSharedAgentIfSafe(ctx context.Context, normalizedSID,
 	d.cancelSchedulerRunningTasks()
 	return true
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// roundVisibleTextMaxChars 降级去重文本上限（够放完整答案，又有界）。
+// Python: interface_deep.py:208 _ROUND_VISIBLE_TEXT_MAX_CHARS
+const roundVisibleTextMaxChars = 256 * 1024
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// trackRoundOutputBoundary 给「当前消费的 chunk 属于哪一轮」盖章。
+// Python: interface_deep.py:15542-15573
+//
+// 输出从队列读，active_round 可能已经指向下一个（goal）轮，而本轮的尾巴
+// 还在队列里。逐 chunk 现查会把尾巴误标成 goal，进而把 user 轮的终止 final
+// 降级、把两个答案糊进同一个气泡。所以每轮只在第一个 chunk 采样一次。
+func (d *DeepAdapter) trackRoundOutputBoundary(output *stream.OutputSchema) {
+	if d.streamRoundOutputEnded {
+		d.resetRoundKindLatch()
+	}
+	if d.streamRoundKindLatch == "" {
+		d.streamRoundKindLatch = d.currentInteractionRunKind()
+	}
+	if isRoundTerminalChunkType(output.Type) {
+		d.streamRoundOutputEnded = true
+	}
+}
+
+// isRoundTerminalChunkType 该类型是否为一轮输出的最后一块。
+// Python: interface_deep.py:197-203 _ROUND_TERMINAL_CHUNK_TYPES
+// （answer / chat.ask_user_question / __interaction__）
+func isRoundTerminalChunkType(chunkType string) bool {
+	switch chunkType {
+	case "answer", "chat.ask_user_question", "__interaction__":
+		return true
+	default:
+		return false
+	}
+}
+
+// resetRoundKindLatch 忘记上一轮的归属，下一块重新采样。
+// Python: interface_deep.py:15512-15516
+func (d *DeepAdapter) resetRoundKindLatch() {
+	d.streamRoundKindLatch = ""
+	d.streamRoundOutputEnded = false
+	d.streamRoundVisibleText = ""
+}
+
+// noteRoundVisibleText 记住本轮已流出的可见文本（尾部截断到上限）。
+// Python: interface_deep.py:15518-15525
+func (d *DeepAdapter) noteRoundVisibleText(content string) {
+	if content == "" {
+		return
+	}
+	text := d.streamRoundVisibleText + content
+	if len(text) > roundVisibleTextMaxChars {
+		text = text[len(text)-roundVisibleTextMaxChars:]
+	}
+	d.streamRoundVisibleText = text
+}
+
+// currentInteractionRunKind 当前活跃轮的 run kind（未启动/无活跃轮返回空串）。
+// Python: interface_deep.py:15497-15508
+func (d *DeepAdapter) currentInteractionRunKind() string {
+	if d.instance == nil || !d.instance.InteractionStarted() {
+		return ""
+	}
+	active := d.instance.ActiveRound()
+	if active == nil || active.Work == nil {
+		return ""
+	}
+	return string(active.Work.Kind)
+}
+
+// adaptGoalIntermediateFinal 把 goal attempt 边界的 chat.final 降级。
+// Python: interface_deep.py:15619-15637
+//
+// 返回 (payload, keep)：keep=false 表示应当丢弃该帧。
+func (d *DeepAdapter) adaptGoalIntermediateFinal(chunk map[string]any) (map[string]any, bool) {
+	if eventType, _ := chunk["event_type"].(string); eventType != "chat.final" {
+		return chunk, true
+	}
+	if !d.shouldDemoteGoalIntermediateFinal() {
+		return chunk, true
+	}
+	content, _ := chunk["content"].(string)
+	if d.goalIntermediateFinalRepeatsStreamedText(content) {
+		// 气泡（以及历史）已经有这段文本。降级成 delta 会追加第二份，
+		// 因为只有真正的 chat.final 才替换气泡内容。
+		return nil, false
+	}
+	adapted := make(map[string]any, len(chunk)+1)
+	for key, value := range chunk {
+		adapted[key] = value
+	}
+	adapted["event_type"] = "chat.delta"
+	adapted[goalIntermediateField] = true
+	return adapted, true
+}
+
+// shouldDemoteGoalIntermediateFinal attempt 边界的 chat.final 是否必须降级。
+// Python: interface_deep.py:15470-15500
+//
+// 只在「GoalRecord 仍 ACTIVE」且「正在关闭的文本属于 goal 轮」时降级。
+// 归属优先取轮次闩（chunk 的来源证明），再取 streamContentRunKind，
+// 最后才回落 live active_round。
+func (d *DeepAdapter) shouldDemoteGoalIntermediateFinal() bool {
+	if !d.goalRecordIsActive() {
+		return false
+	}
+	if kind := d.streamRoundKindLatch; kind != "" {
+		return kind == "goal"
+	}
+	if kind := d.streamContentRunKind; kind != "" {
+		return kind == "goal"
+	}
+	return d.hasActiveGoalRound()
+}
+
+// goalIntermediateFinalRepeatsStreamedText 降级后的 final 是否只是重复已流文本。
+// Python: interface_deep.py:15527-15540
+func (d *DeepAdapter) goalIntermediateFinalRepeatsStreamedText(content string) bool {
+	answer := strings.TrimSpace(content)
+	if answer == "" {
+		return true
+	}
+	streamed := strings.TrimSpace(d.streamRoundVisibleText)
+	return streamed != "" && strings.Contains(streamed, answer)
+}

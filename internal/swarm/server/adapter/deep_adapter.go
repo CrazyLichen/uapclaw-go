@@ -93,6 +93,18 @@ type DeepAdapter struct {
 	configBase map[string]any
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
+	// streamRoundKindLatch 本轮输出归属（"user"/"goal"），整轮不变。
+	// Python: interface_deep.py:2019 _stream_round_kind_latch
+	streamRoundKindLatch string
+	// streamRoundOutputEnded 上一轮是否已到终块。
+	// Python: interface_deep.py:2020 _stream_round_output_ended
+	streamRoundOutputEnded bool
+	// streamRoundVisibleText 本轮已流出的可见文本（降级去重，上限 256KB）。
+	// Python: interface_deep.py:2021 _stream_round_visible_text
+	streamRoundVisibleText string
+	// streamContentRunKind 上一个可见内容块的归属（判断 user→goal 切换点）。
+	// Python: interface_deep.py _stream_content_run_kind
+	streamContentRunKind string
 	// interactionOutputHandoff 上一次输出的排空屏障（宿主自持，不碰 Core 私有字段）。
 	// Python: interface_deep.py:16029 _interaction_output_handoff
 	interactionOutputHandoff *outputHandoff
@@ -1423,6 +1435,9 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				continue
 			}
 
+			// 轮次盖章：每轮只在首块采样一次归属，不信 live active_round。
+			// Python: interface_deep.py:15542 _track_round_output_boundary
+			d.trackRoundOutputBoundary(output)
 			chunkType := output.Type
 			// payloadToMap 桥接 map 与 *cschema.ControllerOutputPayload 两种形态
 			// （task_loop 产出结构体指针，只断言 map 会让整块 chunk 不可读）
@@ -1468,6 +1483,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				// M-02: 对齐 Python — llm_output 直接 yield + continue，不累加 accumulated_text
 				// Python: if chunk_type == "llm_output": yield ... ; continue
 				hasStreamedContent = true
+				d.noteRoundVisibleText(textContent)
 				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
 					"event_type": "chat.delta",
 					"content":    textContent,
@@ -1492,7 +1508,15 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				// Python: if has_streamed_content: parsed = self._parse_stream_chunk(chunk, _has_streamed_content=True)
 				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
 				if parsed != nil {
-					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
+					if text, ok := parsed["content"].(string); ok {
+						d.noteRoundVisibleText(text)
+					}
+					// goal attempt 边界的 chat.final 必须降级，否则每个 attempt
+					// 都终结气泡，10 轮就有 10 个"答案"。
+					// Python: interface_deep.py:15619 _adapt_goal_intermediate_final
+					if adapted, keep := d.adaptGoalIntermediateFinal(parsed); keep {
+						outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, adapted)
+					}
 				}
 
 			default:
@@ -1515,7 +1539,15 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				// Python: _has_streamed_content 在流式场景下为 true（已有内容输出后）
 				parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs, d.interactionConverter, hasStreamedContent)
 				if parsed != nil {
-					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
+					if text, ok := parsed["content"].(string); ok {
+						d.noteRoundVisibleText(text)
+					}
+					// goal attempt 边界的 chat.final 必须降级，否则每个 attempt
+					// 都终结气泡，10 轮就有 10 个"答案"。
+					// Python: interface_deep.py:15619 _adapt_goal_intermediate_final
+					if adapted, keep := d.adaptGoalIntermediateFinal(parsed); keep {
+						outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, adapted)
+					}
 				}
 			}
 		}
