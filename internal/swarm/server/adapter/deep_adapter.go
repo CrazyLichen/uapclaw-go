@@ -1695,13 +1695,10 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		if sessionActive && d.streamEventRail != nil {
 			d.streamEventRail.Abort(normalizedSID)
 		}
-		// Python: instance.abort() 仅当 otherActiveSessions == 0
-		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
-			d.instance.Abort(ctx)
-			// 协作式 abort 只能在 checkpoint 之间生效，无法打断 in-flight LLM HTTP 调用。
-			// 直接取消 TaskScheduler 中运行中的任务，注入取消到 await 点。
-			// Python: self._cancel_scheduler_running_tasks()（other_sessions guard 内）
-			d.cancelSchedulerRunningTasks()
+		// Python: interface_deep.py:16473 —— 仅当本会话确有在飞工作时才考虑全局中止；
+		// 会话不活跃时别的会话可能刚起来，abort 共享实例会误伤。
+		if sessionActive {
+			d.abortSharedAgentIfSafe(ctx, normalizedSID, intent)
 		}
 		interruptMsg = "supplement 已处理"
 		logger.Info(logComponent).Str("intent", "supplement").Msg("Interrupt: supplement processed")
@@ -1712,12 +1709,9 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			d.streamEventRail.CollectCancelledToolUpdates(normalizedSID)
 			d.streamEventRail.ResetForNewTask(normalizedSID)
 		}
-		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
-			d.instance.Abort(ctx)
-			// 协作式 abort 只能在 checkpoint 之间生效，无法打断 in-flight LLM HTTP 调用。
-			// 直接取消 TaskScheduler 中运行中的任务，注入取消到 await 点。
-			// Python: self._cancel_scheduler_running_tasks()（other_sessions guard 内）
-			d.cancelSchedulerRunningTasks()
+		// Python: interface_deep.py:16505 —— 同上，goal 轮在飞或有其它会话活跃时跳过。
+		if sessionActive {
+			d.abortSharedAgentIfSafe(ctx, normalizedSID, intent)
 		}
 		d.unmarkSessionActive(normalizedSID)
 		// Python: cancelled_todos = await self._cancel_pending_todos(session_id)

@@ -11,6 +11,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
@@ -291,4 +292,44 @@ func (d *DeepAdapter) aggregateInteractionStream(
 		}
 	}
 	return map[string]any{"content": content}
+}
+
+// abortSharedAgentIfSafe 对无关会话安全时才中止共享 DeepAgent/调度器。
+// Python: interface_deep.py:16277-16310 _abort_shared_agent_if_safe
+//
+// 绝不在 goal 轮在飞时中止：goal 监督器拥有自己的生命周期，这里 abort
+// 共享 DeepAgent（例如前端"发送前先 cancel"触发的 stream_cancel）会杀掉
+// goal 生产者，让该会话的后端永久冻结。goal 只能由 /goal pause|clear 停止。
+//
+// 返回 true 表示已执行中止；false 表示跳过。
+func (d *DeepAdapter) abortSharedAgentIfSafe(ctx context.Context, normalizedSID, intent string) bool {
+	if d.instance == nil {
+		return true
+	}
+	if d.hasActiveGoalRound() {
+		logger.Info(logComponent).
+			Str("event_type", "GOAL_ABORT_SKIPPED").
+			Str("intent", intent).
+			Str("session_id", normalizedSID).
+			Msg("interrupt: active goal round -> skip instance.abort (goal controlled via /goal pause|clear)")
+		return false
+	}
+	otherCount := d.otherActiveSessions(normalizedSID)
+	if otherCount > 0 {
+		// instance.abort() 是共享 DeepAgent 上的全局操作，会中止所有会话；
+		// 有其它会话活跃时不得调用。按会话收尾（rail abort / 取消该会话任务 /
+		// 杀 shell 进程）足以停掉目标会话的工作。
+		logger.Info(logComponent).
+			Str("event_type", "ABORT_SKIPPED_OTHER_SESSIONS").
+			Str("intent", intent).
+			Str("session_id", normalizedSID).
+			Int("other_active_count", otherCount).
+			Msg("interrupt: skip instance.abort/scheduler cancel, other sessions still active")
+		return false
+	}
+	d.instance.Abort(ctx)
+	// 协作式 abort 只能在 checkpoint 之间生效，无法打断 in-flight LLM HTTP 调用。
+	// 直接取消 TaskScheduler 中运行中的任务，注入取消到 await 点。
+	d.cancelSchedulerRunningTasks()
+	return true
 }

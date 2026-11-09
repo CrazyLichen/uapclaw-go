@@ -95,7 +95,12 @@ func newStartedGoalAdapter(t *testing.T, sessionID string) *DeepAdapter {
 	require.NoError(t, err, "创建 DeepAgent 失败")
 	t.Cleanup(func() { _ = agent.Stop(context.Background()) })
 
-	d := &DeepAdapter{instance: agent, isSessionScoped: true, parentSessionID: sessionID}
+	d := &DeepAdapter{
+		instance:         agent,
+		isSessionScoped:  true,
+		parentSessionID:  sessionID,
+		activeSessionIDs: make(map[string]int),
+	}
 	require.NoError(t, d.StartInteraction(ctx, sessionID))
 	return d
 }
@@ -182,4 +187,44 @@ func TestShouldInjectIntoExistingInteraction(t *testing.T) {
 		mustJSON(t, map[string]any{"input_mode": "follow_up"})))
 	require.True(t, d.shouldInjectIntoExistingInteraction(
 		mustJSON(t, map[string]any{"answers": []any{map[string]any{"a": 1}}})))
+}
+
+// TestAbortSharedAgentIfSafe_无实例直接放行 未初始化时无共享实例可中止。
+// Python: interface_deep.py:16279 `if self._instance is None: return True`
+func TestAbortSharedAgentIfSafe_无实例直接放行(t *testing.T) {
+	d := &DeepAdapter{}
+	require.True(t, d.abortSharedAgentIfSafe(context.Background(), "sess-a", "cancel"))
+}
+
+// TestAbortSharedAgentIfSafe_无冲突时中止 无 goal 轮、无其它会话 → 执行中止。
+// Python: interface_deep.py:16303-16310
+func TestAbortSharedAgentIfSafe_无冲突时中止(t *testing.T) {
+	d := newStartedGoalAdapter(t, "sess-abort-ok")
+	require.False(t, d.hasActiveGoalRound())
+	require.True(t, d.abortSharedAgentIfSafe(context.Background(), "sess-abort-ok", "cancel"))
+}
+
+// TestAbortSharedAgentIfSafe_其它会话活跃时跳过 全局 abort 会误伤别的会话。
+// Python: interface_deep.py:16291-16302
+func TestAbortSharedAgentIfSafe_其它会话活跃时跳过(t *testing.T) {
+	d := newStartedGoalAdapter(t, "sess-abort-other")
+	d.markSessionActive("sess-other")
+	t.Cleanup(func() { d.unmarkSessionActive("sess-other") })
+
+	require.Equal(t, 1, d.otherActiveSessions("sess-abort-other"))
+	require.False(t, d.abortSharedAgentIfSafe(context.Background(), "sess-abort-other", "cancel"))
+}
+
+// TestAbortSharedAgentIfSafe_goal记录活跃但无在飞轮仍中止 记录 ACTIVE 不等于轮在飞，
+// 只有真正跑着 goal 轮才跳过中止（否则用户 ESC 会永远失效）。
+// Python: interface_deep.py:16286（判的是 _has_active_goal_round，不是记录状态）
+func TestAbortSharedAgentIfSafe_goal记录活跃但无在飞轮仍中止(t *testing.T) {
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-abort-record")
+	_, err := d.dispatchGoalControl(ctx, "sess-abort-record", "set", "修完测试", false, 0, 0)
+	require.NoError(t, err)
+	require.True(t, d.goalRecordIsActive(), "记录应为 ACTIVE")
+	require.False(t, d.hasActiveGoalRound(), "但没有在飞的 goal 轮")
+	require.True(t, d.abortSharedAgentIfSafe(ctx, "sess-abort-record", "cancel"),
+		"仅记录 ACTIVE 不得阻止中止")
 }
