@@ -76,3 +76,19 @@ func TestIsControlResult(t *testing.T) {
 	// 正常 answer → 非控制信号
 	assert.False(t, isControlResult(map[string]any{"output": "text", "result_type": "answer"}))
 }
+
+// TestStartRound_ResumeContinuation续用turn且带轮前基线 验证启动模式与轮前快照。
+func TestStartRound_ResumeContinuation续用turn且带轮前基线(t *testing.T) {
+	h := newTestNativeHarness(t)
+	h.sess = session.NewSession(session.WithSessionID("round-sess-1"))
+
+	first := h.startRound(context.Background(), "任务", startModeDefault, nil)
+	assert.True(t, first.TurnOpened)
+	assert.Equal(t, 1, first.Turn.TurnNumber)
+	require.NotNil(t, first.PreRoundSnapshot)
+	assert.Equal(t, 0, first.PreRoundSnapshot.IterationIndex)
+
+	second := h.startRound(context.Background(), "任务", startModeResumeContinuation, nil)
+	assert.False(t, second.TurnOpened)
+	assert.Equal(t, first.Turn.TurnNumber, second.Turn.TurnNumber)
+}

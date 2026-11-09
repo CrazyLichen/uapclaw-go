@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -16,6 +18,7 @@ import (
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
 	runner "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -597,7 +600,7 @@ func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 	phase := h.st.Phase()
 	switch phase {
 	case HarnessStateIdle:
-		active := h.startRound(ctx, msg.Content)
+		active := h.startRound(ctx, msg.Content, startModeDefault, nil)
 		h.transition(ctx, HarnessStateRunning)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 	case HarnessStateRunning:
@@ -633,52 +636,126 @@ func (h *NativeHarness) steerActive(_ context.Context, content any) error {
 }
 
 // startRound 起一轮执行并返回活动轮次。
-// Python: NativeHarness._start_round (native_harness.py:1287)
-// 本阶段不含快照（pre_round_snapshot）与 turn 解析（⤵️ 25.1c / 25.1e）。
-func (h *NativeHarness) startRound(ctx context.Context, query any) *ActiveRound {
+// Python: NativeHarness._start_round (native_harness.py L1287-1359)
+//
+// 快照轨通过 harness 反向引用定位本轮（harness.st.active），
+// 该引用在内层循环所在的 TaskScheduler 执行协程里同样有效。
+func (h *NativeHarness) startRound(
+	ctx context.Context,
+	query any,
+	mode startMode,
+	runContext *agentinterfaces.RunContext,
+) *ActiveRound {
 	roundID := h.st.NextRoundID()
 	roundCtx, cancel := context.WithCancel(ctx)
-	active := &ActiveRound{
-		RoundID:       roundID,
-		TaskID:        fmt.Sprintf("round-%d", roundID),
-		OriginalQuery: query,
-		Cancel:        cancel,
-		Done:          make(chan struct{}),
+
+	var pre *SafeStateSnapshot
+	if h.sess != nil {
+		zero := 0
+		pre = captureSnapshot(h.agent, h.sess, nil, &zero)
 	}
+	keepsTurn := mode == startModeContinuesTurn ||
+		mode == startModeFailureRetry ||
+		mode == startModeResumeContinuation
+	if _, isInteractive := query.(*interaction.InteractiveInput); isInteractive {
+		keepsTurn = true
+	}
+	var store TurnStateStore
+	if h.sess != nil {
+		store = h.sess
+	}
+	turn, opened := ResolveMemberTurn(store, keepsTurn)
+
+	active := &ActiveRound{
+		RoundID:          roundID,
+		TaskID:           uuid.NewString(),
+		OriginalQuery:    query,
+		RunContext:       runContext,
+		Turn:             turn,
+		TurnOpened:       opened,
+		Cancel:           cancel,
+		Done:             make(chan struct{}),
+		PreRoundSnapshot: pre,
+		FailureRetry:     mode == startModeFailureRetry,
+		mode:             mode,
+	}
+	active.SetPhase(RoundPhaseBoundary)
 	h.st.SetActive(active)
 
 	go h.runRound(roundCtx, active)
+
+	logger.Info(logComponent).
+		Int("round_id", roundID).
+		Str("query", truncateForLog(query, 120)).
+		Bool("follow_up", mode == startModeFollowUp).
+		Int("turn_number", turn.TurnNumber).
+		Bool("turn_opened", opened).
+		Msg("round started")
 	return active
 }
 
 // runRound 驱动一轮并回报结果。
-// Python: NativeHarness._run_round（提交轮次 + 等待完成）
+// Python: NativeHarness._run_round (native_harness.py L1361-1447)
+//
+// supervisor 直接驱动外圈轮（绕过 DeepAgent.invoke），所以 invoke 级回调
+// 没有别的触发点；每个外圈轮就是一个逻辑 invoke，用 FireLifecycle 包裹。
 func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 	defer close(active.Done)
 
-	query := queryText(active.OriginalQuery)
-	// isStreaming 必须为 true：对齐 Python submit_round 后 executor 硬编码 _streaming=True。
-	// 传 false 会走 callLLMInvoke（非流式），Leader 一轮的输出（tool_call/tool_result/answer）
-	// 批量到齐，首条流在成员 spawn 的 tool_result 被观测前就 final，团队时序契约
-	// （第二条消息在首条流未结束时被受理）失稳。
-	err := h.controller.SubmitRound(ctx, h.sess, query, false, true,
-		agentinterfaces.RunKindNormal, nil, task_loop.WithTaskID(active.TaskID))
+	h.commitOpenedTurn(ctx, active)
+
+	inv := &agentinterfaces.InvokeInputs{
+		Query:          toInvokeQuery(active.OriginalQuery),
+		ConversationID: h.SessionID(),
+		RunContext:     active.RunContext,
+	}
+	cbc := agentinterfaces.NewAgentCallbackContext(h.agent, inv, h.sess)
+
 	var result map[string]any
-	if err == nil {
-		result = h.controller.WaitRoundCompletion(ctx, nil)
-		// 写轮次结果到流（对齐 Python _persist_and_write_round_result → _write_round_result_to_stream）。
-		// task_loop 的 result 走 controller_output(task_completion)，被 team 消费端丢弃；
-		// 必须把 answer 写成 answer chunk 写流，否则 chat.final 缺失、首条流永不结束。
-		// control result（error / cooperative-stop）不写流（对齐 _is_control_result）。
-		if !isControlResult(result) {
-			h.agent.WriteRoundResultToStream(ctx, result, h.sess)
-		}
+	var runErr error
+	lifeErr := cbc.FireLifecycle(ctx,
+		agentinterfaces.CallbackBeforeInvoke,
+		agentinterfaces.CallbackAfterInvoke,
+		func() error {
+			if h.controller == nil {
+				runErr = fmt.Errorf("harness: 无任务循环控制器")
+				return runErr
+			}
+			query := queryText(active.OriginalQuery)
+			// isStreaming 必须为 true：对齐 Python submit_round 后 executor 硬编码 _streaming=True。
+			// 传 false 会走 callLLMInvoke（非流式），Leader 一轮的输出（tool_call/tool_result/answer）
+			// 批量到齐，首条流在成员 spawn 的 tool_result 被观测前就 final，团队时序契约
+			// （第二条消息在首条流未结束时被受理）失稳。
+			err := h.controller.SubmitRound(ctx, h.sess, query,
+				active.mode == startModeFollowUp, true,
+				agentinterfaces.RunKindNormal, active.RunContext,
+				task_loop.WithTaskID(active.TaskID),
+				task_loop.WithTurnNumber(active.Turn.TurnNumber),
+				task_loop.WithResumeContinuation(active.mode == startModeResumeContinuation),
+			)
+			if err != nil {
+				runErr = err
+				return err
+			}
+			result = h.controller.WaitRoundCompletion(ctx, nil)
+			// 写轮次结果到流（对齐 Python _persist_and_write_round_result → _write_round_result_to_stream）。
+			// task_loop 的 result 走 controller_output(task_completion)，被 team 消费端丢弃；
+			// 必须把 answer 写成 answer chunk 写流，否则 chat.final 缺失、首条流永不结束。
+			// control result（error / cooperative-stop）不写流（对齐 _is_control_result）。
+			if !isControlResult(result) {
+				h.agent.WriteRoundResultToStream(ctx, result, h.sess)
+				inv.Result = result
+			}
+			return nil
+		})
+	if lifeErr != nil && runErr == nil {
+		runErr = lifeErr
 	}
 
 	// 轮末命令无应答方（对齐 Python _CmdRoundFinished 无 ack）：
 	// 若在此等 supervisor 处理，会与 hardCancelRound 等 active.Done 互等。
 	select {
-	case h.cmd <- &cmdRoundFinished{roundID: active.RoundID, result: result, err: err}:
+	case h.cmd <- &cmdRoundFinished{roundID: active.RoundID, result: result, err: runErr}:
 	case <-ctx.Done():
 	}
 }
@@ -757,7 +834,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	// 崩溃重试：轮次异常死亡、查询未消费，重放一次；第二次放弃。
 	if runtimeCrashed {
 		if replayable, ok := active.OriginalQuery.(string); ok && replayable != "" {
-			nxt := h.startRound(ctx, active.OriginalQuery)
+			nxt := h.startRound(ctx, active.OriginalQuery, startModeFailureRetry, active.RunContext)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 			return
 		}
@@ -779,13 +856,13 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	// 决策优先级：外部 follow-up 队列 > 内部 follow-up > 剩余任务 > IDLE
 	if h.st.dequeueInbox() {
 		content := h.st.popInboxContent()
-		nxt := h.startRound(ctx, content)
+		nxt := h.startRound(ctx, content, startModeFollowUp, nil)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 		return
 	}
 	if h.controller.HasFollowUp() || len(st.PendingFollowUps) > 0 {
 		followUps := h.controller.DrainFollowUp()
-		nxt := h.startRound(ctx, followUps)
+		nxt := h.startRound(ctx, followUps, startModeFollowUp, nil)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 		return
 	}
@@ -795,7 +872,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	// 剩余任务：任务计划仍有下一项则继续（原查询驱动）
 	if h.hasRemainingTasks() {
 		if q, ok := active.OriginalQuery.(string); ok && q != "" {
-			nxt := h.startRound(ctx, active.OriginalQuery)
+			nxt := h.startRound(ctx, active.OriginalQuery, startModeContinuesTurn, nil)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 			return
 		}
@@ -850,6 +927,43 @@ func isControlResult(result map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// commitOpenedTurn 在新开 turn 的轮次运行前提交会话状态。
+// Python: _commit_opened_turn (native_harness.py L1449-1470)
+// 提交失败只记日志：成员的工作比 turn 编号重要。
+func (h *NativeHarness) commitOpenedTurn(ctx context.Context, active *ActiveRound) {
+	if !active.TurnOpened || h.sess == nil {
+		return
+	}
+	if err := h.sess.Commit(ctx); err != nil {
+		logger.Debug(logComponent).Err(err).Int("round_id", active.RoundID).
+			Msg("turn state commit failed")
+	}
+}
+
+// toInvokeQuery 把查询转成 InvokeQuery。
+func toInvokeQuery(q any) agentinterfaces.InvokeQuery {
+	switch v := q.(type) {
+	case string:
+		return agentinterfaces.InvokeQueryString(v)
+	case *interaction.InteractiveInput:
+		return v
+	case []string:
+		return agentinterfaces.InvokeQueryString(strings.Join(v, "\n"))
+	default:
+		return agentinterfaces.InvokeQueryString(fmt.Sprintf("%v", v))
+	}
+}
+
+// truncateForLog 截断日志字段到 n 个 rune。
+func truncateForLog(v any, n int) string {
+	s := fmt.Sprintf("%v", v)
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }
 
 // queryText 把本轮查询压平成可重放的纯文本。
