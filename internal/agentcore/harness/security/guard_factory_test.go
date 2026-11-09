@@ -31,13 +31,25 @@ type stubNetGuard struct{}
 // Evaluate 无意见。
 func (stubNetGuard) Evaluate(_ string, _ map[string]any) *PermissionResult { return nil }
 
-// restoreGuardRegistries 用例结束后恢复全局注册表，避免串味。
+// restoreGuardRegistries 用例结束后恢复原有全局注册表，避免串味。
 func restoreGuardRegistries(t *testing.T) {
 	t.Helper()
+	fileGuardFactoryMu.RLock()
+	origFile := fileGuardFactory
+	fileGuardFactoryMu.RUnlock()
+	netGuardFactoryMu.RLock()
+	origNet := netGuardFactory
+	netGuardFactoryMu.RUnlock()
+	bridgeMu.RLock()
+	origSensitive := sensitivePathsMerger
+	origNetURLs := netURLsMerger
+	origHasURLs := hasPackageNetURLs
+	bridgeMu.RUnlock()
+
 	t.Cleanup(func() {
-		RegisterFileGuardFactory(nil)
-		RegisterNetGuardFactory(nil)
-		RegisterPermissionBridges(nil, nil, nil)
+		RegisterFileGuardFactory(origFile)
+		RegisterNetGuardFactory(origNet)
+		RegisterPermissionBridges(origSensitive, origNetURLs, origHasURLs)
 	})
 }
 
