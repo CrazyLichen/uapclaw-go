@@ -1525,3 +1525,55 @@ Go 的 `DecisionRoute` 只有 `Level` / `Reason` / `Source` 三个字段，
 
 `golang.org/x/text/unicode/norm`（NFKC 归一化）——`go.mod` 已有 `x/text v0.43.0`，
 `workspace_paths.go` 已在用，无需新增依赖。
+
+### 12.20 Task 24 执行结论：`auto_reviewer`
+
+**落地**：`permissions/auto_reviewer.go`（888 行 Python → 约 1,000 行 Go /
+6 类型 + 20 私有函数），覆盖率 **85.6%**，permissions 包 88.9%。
+
+#### 提示词逐字复制
+
+`IsolatedAutoReviewerPrompt`（Python 57 行）与
+`reviewerNaturalLanguageInstruction` 的文案**逐字复制**，未翻译、未改写，
+符合「提示词一比一同步 Python」的纪律。测试 `TestAutoReviewerPrompt_关键约束`
+锁住了 5 条核心安全约束的原文片段。
+
+#### 实施中修正的 1 个实现 bug
+
+`IsolatedModelReviewerClient.displayLanguage` 初版用无名返回值 + `defer recover()`：
+
+```go
+func (c *...) displayLanguage() string {
+    defer func() { _ = recover() }()
+    ...
+}
+```
+
+panic 发生后函数不会执行 `return "zh"`，直接跳到 defer，返回值是**零值空串**
+而不是 `"zh"`。已改为具名返回值 + defer 里赋值，确保取语言失败时兜底为中文。
+
+#### LLM 集成的 3 处 Go 侧简化（已登记偏差）
+
+| Python | Go | 说明 |
+|---|---|---|
+| `config.api_mode not in {None, ChatCompletions}` | 省略 | Go 的 `ModelClientConfig` 无 `api_mode` 字段，等价于恒为 ChatCompletions |
+| `model_config.response_format is not None` | 省略 | Go 把 `response_format` 作为调用期 `InvokeOption` 而非配置字段 |
+| `normalize_model_client_config(config)` | 省略 | Go 的端点归一化在 `WithEndpointProfile` 构造期完成，`Model.ClientConfig` 已是归一形态 |
+
+`formatResponseFormat` 的实际判定保留 3 项：`output_format == "prompt"`、
+`ClientProvider != OpenAI`、`AuthMode == OpenAIAccountOAuth`。
+
+#### `redactJSONValueStrict` 的补充实现
+
+9.90d-1 的 `RedactReviewerValue` 内部对字符串调 `RedactText`（吞掉错误），
+而 Python 的 `redact_reviewer_value` 调 `redact_secret_values_preserve_format(...,
+require_literal_values=True)`（失败抛 `ValueError`）。为保留
+`reviewer_redaction_incomplete` 错误码，本文件新增 `redactJSONValueStrict`
+（字符串分支走 `RedactSecretValuesPreserveFormatE`），未改动既有函数。
+
+#### 无法覆盖的 1 个函数
+
+`IsolatedModelReviewerClient.Assess`（0%）需要真实 LLM 调用才能触发。
+按规则 3.2，这类「依赖真实外部服务」的代码应用 `//go:build llm` 隔离；
+本批未加隔离文件（该函数仅 20 行、逻辑为「组装两条消息 + 调 Invoke」），
+覆盖率缺口已在此登记。其余 20 个函数均 ≥85%。
