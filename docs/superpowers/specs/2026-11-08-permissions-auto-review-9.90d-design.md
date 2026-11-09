@@ -1825,3 +1825,57 @@ feedback 里的标记：
 `ToolInvocationKeyFromContext` 只需 `cbc.GetExtra(ToolInvocationContextAttribute)`
 返回 `*ToolInvocationKeyV1`——测试通过 `SetExtra` 注入完整 key 后，
 `prepareManualPendingInvocation` 的 value/metadata 双段注入路径即可覆盖。
+
+### 12.25 Task 30 执行结论：`reviewer_metadata`（并回填 V-9）
+
+**落地**：`auto_permission/reviewer_metadata.go`（401 行 Python → 约 560 行 Go /
+11 函数 + 1 注入点），覆盖率 **97.9%**，auto_permission 包 91.2%。
+
+#### 双语文案逐字复制
+
+`_DISPLAY_MESSAGES`（15 项）与 `_MANUAL_HINTS`（3 项）是「中文, 英文」双语对，
+**逐字复制**上游文案，未翻译未改写（符合「提示词一比一同步 Python」纪律）。
+
+#### 新增偏差 V-10：显示语言读取方式
+
+Python 用 `get_config()` 全局单例读 `preferred_language`；Go 的 `config` 包
+只有 `New(path)`、**无全局单例**。改为包级变量 + `SetReviewerDisplayLanguage`
+注入点（装配期由 Task 42 接线），默认 `"zh"`——等价 Python 的
+`except Exception: return "zh"` 回落分支。
+
+#### `DecisionRoute.no_auto_allow_reason` 是 property 而非字段
+
+Python 的 `no_auto_allow_reason` 是 property：
+
+```python
+@property
+def no_auto_allow_reason(self) -> str:
+    return self.reason if self.requires_manual else ""
+```
+
+即「source == manual_only 时返回 reason」。Go 侧无需扩展 `DecisionRoute`
+结构体，用 `decisionRouteNoAutoAllowReason(route)` 函数等价实现。
+
+#### V-9 已回填
+
+`runtime_bridge.go` 的 `normalizeRuntimePermissionResult` 补全了
+user_rejection 分支：
+
+- 触发条件：`ClassifyPermissionResult(result) == user_rejection` 且
+  `decision_source == "manual_approval"`
+- 输出：6 字段标准 denied payload（feedback / reason / status /
+  permission_decision / permission_status / reviewer_metadata）
+- `reviewer_metadata` 由 `reviewerUIMetadata(facts, "user_rejected", {...})` 生成
+
+签名同步增加 `facts` 参数（Python 原本就传），`runtime_bridge_test.go` 的
+旧调用已更新。
+
+#### 三个易错点
+
+1. `uiText` 的候选键取「首个非 nil 且非空串」——空串要继续找下一个键，
+   不能当作有效值
+2. `reviewerUIMetadata` 的 `naturalLanguage` 判定有 5 个条件串联，任一不满足
+   就回落到 `hostDisplayReason` 的固定文案
+3. `withHostOwnedManualReviewDisplay` 只在 `route.Source == manual_only` 时
+   改写；且 `browser` 类目下会强制覆盖为
+   `browser_network_guard_unverified`

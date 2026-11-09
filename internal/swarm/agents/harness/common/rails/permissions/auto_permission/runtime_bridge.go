@@ -152,17 +152,30 @@ func prepareManualPendingInvocation(invocation ToolInvocation, result any) any {
 // normalizeRuntimePermissionResult 在观测前做运行时专属的终态转换。
 //
 // Python: AutoPermissionRuntimeBridgeMixin._normalize_runtime_permission_result
-//
-// ⤵️ Task 30 回填：`decision_source == "manual_approval"` 且结果为
-// user_rejection 时，Python 会构造含 `_reviewer_ui_metadata` 的标准 denied
-// payload。该函数属 reviewer_metadata.py（401 行，Task 30 内容），
-// 本批直接返回原 result。
+// 把「人工审批拒绝」的 user_rejection 结果转成标准 denied payload，
+// 并挂上宿主侧归一化的 reviewer_metadata。
 func normalizeRuntimePermissionResult(
 	invocation ToolInvocation,
 	result any,
+	facts permissions.ToolDecisionFacts,
 	decisionSource string,
 ) any {
-	// ⤵️ Task 30 回填 user_rejection → denied 的 payload 构造
+	if permissions.ClassifyPermissionResult(result) == permissions.PermissionResultUserRejection &&
+		decisionSource == manualApprovalDecisionSource {
+		reviewerMetadata := reviewerUIMetadata(facts, "user_rejected", map[string]any{
+			"decision_source":       manualApprovalDecisionSource,
+			"final_reviewer_status": reviewerUIStatusDenied,
+			"reviewer_status":       reviewerUIStatusDenied,
+		})
+		return map[string]any{
+			"feedback":            permissionToolResultText(result),
+			"reason":              "user_rejected",
+			"status":              "denied",
+			"permission_decision": "deny",
+			"permission_status":   "denied",
+			"reviewer_metadata":   reviewerMetadata,
+		}
+	}
 	return result
 }
 

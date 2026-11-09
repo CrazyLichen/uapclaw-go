@@ -131,13 +131,18 @@ func TestPrepareManualPendingInvocation_非map直返(t *testing.T) {
 
 // ──────────────────────────── normalizeRuntimePermissionResult ────────────────────────────
 
-// TestNormalizeRuntimePermissionResult_直返 验证 ⤵️ Task 30 占位行为。
+// TestNormalizeRuntimePermissionResult_直返 验证 V-9 回填后的转换行为。
+//
+// V-9 已回填：user_rejection + manual_approval 会转成标准 denied payload，
+// 详细断言见 reviewer_metadata_test.go 的
+// TestNormalizeRuntimePermissionResult_用户拒绝转denied。
 func TestNormalizeRuntimePermissionResult_直返(t *testing.T) {
 	result := map[string]any{"feedback": "[permission_rejected] rejected"}
 	got := normalizeRuntimePermissionResult(
-		bridgeInvocation("bash", nil), result, manualApprovalDecisionSource)
+		bridgeInvocation("bash", nil), result, permissions.ToolDecisionFacts{},
+		manualApprovalDecisionSource)
 	if got == nil {
-		t.Fatal("should return result unchanged（⤵️ Task 30 回填）")
+		t.Fatal("should not return nil")
 	}
 }
 
