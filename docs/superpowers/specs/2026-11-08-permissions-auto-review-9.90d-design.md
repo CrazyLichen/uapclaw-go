@@ -963,3 +963,57 @@ Python 的 `getattr(result, "matched_rule", None)` 对 None 安全。
 `evaluateSendFilePathSafely` 50% 与 `buildSendFileGuardChecker` 60% 的缺口
 都是 panic recover 防御分支——需 fileguard 内部 panic 才能触发，
 在不改外部包的前提下不可达，属正常防御性代码。
+
+### 12.9 Task 11 执行时的核实结论：`trusted_search_urls`
+
+**全量落地**：236 行 / 6 项逐条对齐（`SessionTrustedSearchUrls` 6 方法 +
+`trustedSearchProducerBinding` + `trustedSearchProducerLease` + 3 个包级函数）。
+
+#### 前置缺失项（规则 13.2，用户拍板本批一起补）
+
+`trusted_search_urls.py` 直接 import `common/tools/search_tools` 的三个符号，
+Go 侧 `common/tools` 完全没有：
+
+| Python | Go 补入位置 |
+|---|---|
+| `MIN_SEARCH_MAX_RESULTS = 1` | `mcp_search.go` `MinSearchMaxResults` |
+| `MAX_SEARCH_MAX_RESULTS = 20` | `mcp_search.go` `MaxSearchMaxResults` |
+| `normalize_search_max_results(v)` | `mcp_search.go` `NormalizeSearchMaxResults` |
+
+并把 `clampInt(input.MaxResults, 1, 20, 8)` 的两处魔数换成常量（消除魔数）。
+
+**关键语义差异**：`clampInt` 是「零值取默认值」（工具参数缺省用，0 → 8），
+`NormalizeSearchMaxResults` 是**纯钳制**（0 → 1）。两者不可混用，
+已由 `TestNormalizeSearchMaxResults_与clampInt语义不同` 固定。
+
+#### 上游两处 limit 语义不同（极易混淆）
+
+| 位置 | 表达式 | 0 的取值 |
+|---|---|---|
+| `record_batch` | `max(0, min(max_results, MAX_SEARCH_MAX_RESULTS))` | **0**（直接返回 (0,0)） |
+| `bind_trusted_search_producer` | `normalize_search_max_results(max_results)` | **1** |
+
+初版实现把 `record_batch` 也写成 `NormalizeSearchMaxResults`，导致
+`max_results=0` 时错误接受 1 个 URL。已按上游分别实现，两处各有独立测试。
+
+#### 上游行为核实：userinfo URL 会被接受
+
+`normalize_url_for_match` 用 `parsed.hostname` 重建 URL，**丢弃 userinfo**。
+故 `https://user:pw@example.com/b` 归一化为 `https://example.com/b` 后再判
+`unsafe_public_https_url_reason` 已无 userinfo，最终**被接受**。
+这是上游既有行为（可能不符直觉），已忠实复刻并在测试注释标注。
+`TestRecordBatch_unsafeURL被过滤` 据此断言 accepted=2 而非 1。
+
+#### 并发与租约
+
+- 台账用 `sync.RWMutex`（Python `RLock`），`urls` 切片 + `urlSet` 索引
+  保序去重（Python `OrderedDict`）
+- producer 租约用 `sync.Mutex` + `terminal`，被复制的 async 上下文共享终态
+- `bind` 前先 revoke 旧租约（对齐 Python `current.revoke()`）
+- `clear` 只 revoke 不消费；`complete` 一次性消费
+
+**测试**：45 个用例，覆盖 3 类 bind 错误 / 9 类 record_batch 分支
+（含容量 500 满后 dropped）/ contains / sources 的 source_kind 默认值 /
+dispose 幂等 / 租约 6 种状态 / 并发记录与读写。
+`trusted_search_urls.go` 除 `RecordBatch` 95.3%（`url.Parse` 失败与
+`remaining<0` 分支不可达）外全部 100%。

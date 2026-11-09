@@ -387,3 +387,43 @@ func TestSearchBing_默认verify校验证书(t *testing.T) {
 		t.Errorf("应为证书校验错误，实际: %v", err)
 	}
 }
+
+// ──────────────────────────── NormalizeSearchMaxResults（9.90d-1 Task 11） ────────────────────────────
+
+// TestNormalizeSearchMaxResults_纯钳制 验证与 clampInt 的零值语义不同。
+func TestNormalizeSearchMaxResults_纯钳制(t *testing.T) {
+	cases := []struct{ in, want int }{
+		{0, MinSearchMaxResults},  // ⚠️ 0 → 1（clampInt 会给默认值 8）
+		{-5, MinSearchMaxResults}, // 负数 → 下限
+		{1, 1},
+		{8, 8},
+		{20, MaxSearchMaxResults},
+		{100, MaxSearchMaxResults}, // 超上限 → 上限
+	}
+	for _, c := range cases {
+		if got := NormalizeSearchMaxResults(c.in); got != c.want {
+			t.Errorf("NormalizeSearchMaxResults(%d) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+// TestNormalizeSearchMaxResults_与clampInt语义不同 固定两者的关键差异。
+func TestNormalizeSearchMaxResults_与clampInt语义不同(t *testing.T) {
+	// 0 输入：normalize 钳到下限 1，clampInt 取默认值 8
+	if got := NormalizeSearchMaxResults(0); got != 1 {
+		t.Errorf("normalize(0) = %d, want 1", got)
+	}
+	if got := clampInt(0, MinSearchMaxResults, MaxSearchMaxResults, 8); got != 8 {
+		t.Errorf("clampInt(0) = %d, want 8", got)
+	}
+}
+
+// TestSearchMaxResults常量 验证常量值与 Python 一致。
+func TestSearchMaxResults常量(t *testing.T) {
+	if MinSearchMaxResults != 1 {
+		t.Errorf("MinSearchMaxResults = %d, want 1", MinSearchMaxResults)
+	}
+	if MaxSearchMaxResults != 20 {
+		t.Errorf("MaxSearchMaxResults = %d, want 20", MaxSearchMaxResults)
+	}
+}

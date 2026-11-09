@@ -27,7 +27,7 @@
 //	├── multi_session_toolkits.go # MultiSessionToolkit——session_new/cancel/list（10.6.24c）
 //	├── user_todo_tool.go         # user_todos——按 channel 隔离用户待办（10.6.24c）
 //	├── mcp_toolkits.go           # GetMcpTools 聚合器
-//	├── mcp_search.go             # mcp_free_search + mcp_paid_search + 4 provider
+//	├── mcp_search.go             # mcp_free_search + mcp_paid_search + 4 provider + 搜索契约常量
 //	├── mcp_web_fetch.go          # mcp_fetch_webpage + Jina Reader 兜底
 //	├── mcp_command.go            # mcp_exec_command + 安全检查 + 后台进程
 //	├── mcp_command_windows.go    # Windows 专属 shell 探测 + 进程组空实现（build tag 隔离）

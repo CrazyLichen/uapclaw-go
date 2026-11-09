@@ -70,6 +70,13 @@ type mcpPaidSearchInput struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// MinSearchMaxResults 搜索结果数下限
+	// Python: MIN_SEARCH_MAX_RESULTS = 1（search_tools.py:32）
+	MinSearchMaxResults = 1
+	// MaxSearchMaxResults 搜索结果数上限
+	// Python: MAX_SEARCH_MAX_RESULTS = 20（search_tools.py:33）
+	MaxSearchMaxResults = 20
+
 	// searchUA 请求 UA（Python _USER_AGENT 逐字）
 	searchUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 		"AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -968,7 +975,7 @@ func newMcpFreeSearchTool() tool.Tool {
 			return map[string]any{"result": "[ERROR]: query cannot be empty."}, nil
 		}
 
-		maxResults := clampInt(input.MaxResults, 1, 20, 8)
+		maxResults := clampInt(input.MaxResults, MinSearchMaxResults, MaxSearchMaxResults, 8)
 		timeoutSeconds := clampInt(input.TimeoutSeconds, 5, 60, 20)
 
 		engineUsed, rows, err := searchFree(query, maxResults, timeoutSeconds)
@@ -1021,7 +1028,7 @@ func newMcpPaidSearchTool() tool.Tool {
 		}
 
 		timeoutSeconds := clampInt(input.TimeoutSeconds, 10, 120, 45)
-		maxResults := clampInt(input.MaxResults, 1, 20, 8)
+		maxResults := clampInt(input.MaxResults, MinSearchMaxResults, MaxSearchMaxResults, 8)
 
 		// available providers 按 env key 检测（bocha→perplexity→serper→jina）
 		var availableProviders []string
@@ -1115,6 +1122,21 @@ func newMcpPaidSearchTool() tool.Tool {
 
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
+}
+
+// NormalizeSearchMaxResults 把搜索结果数钳制到共享的中立搜索契约。
+//
+// Python: normalize_search_max_results(value)（search_tools.py:36-39）
+// 注意与 clampInt 的区别：本函数是**纯钳制**，0 → MinSearchMaxResults；
+// clampInt 的零值语义是「取默认值」（工具参数缺省用），两者不可混用。
+func NormalizeSearchMaxResults(value int) int {
+	if value < MinSearchMaxResults {
+		return MinSearchMaxResults
+	}
+	if value > MaxSearchMaxResults {
+		return MaxSearchMaxResults
+	}
+	return value
 }
 
 // clampInt 钳制整数值到 [lo, hi]，零值取 defaultVal。
