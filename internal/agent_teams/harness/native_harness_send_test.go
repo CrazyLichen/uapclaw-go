@@ -39,7 +39,8 @@ func TestNativeHarness_Send在Running时排队(t *testing.T) {
 
 	// 非立即输入进入 pending 队列，而不是新开一轮（roundSeq 保持 0，未起新轮）
 	assert.Equal(t, 0, h.st.roundSeqSnapshot())
-	assert.True(t, h.st.dequeueInbox())
+	_, queued := h.st.popInboxBatch()
+	assert.True(t, queued)
 }
 
 // TestNativeHarness_onSend在Running时立即输入转向 验证 immediate=true 走 steer（C1）。
@@ -51,7 +52,8 @@ func TestNativeHarness_onSend在Running时立即输入转向(t *testing.T) {
 	// 无 controller 时 steerActive 返回错误（验证走的是 steer 分支而非排队）
 	err := h.onSend(context.Background(), &InboxMessage{Content: "steer", Immediate: true})
 	assert.Error(t, err)
-	assert.False(t, h.st.dequeueInbox(), "immediate 输入不得进 pending 队列")
+	_, queued := h.st.popInboxBatch()
+	assert.False(t, queued, "immediate 输入不得进 pending 队列")
 }
 
 // TestNativeHarness_Send在Terminated后报错 验证 C16 的入队守卫。

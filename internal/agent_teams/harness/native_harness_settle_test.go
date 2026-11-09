@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // prepareSettleHarness 构造一个可驱动 settleRoundDone 的 NativeHarness（已 Start + 有 coordinator/controller）。
@@ -230,12 +231,12 @@ func TestWaitAck_上下文取消(t *testing.T) {
 	assert.Error(t, err, "上下文取消应返回错误")
 }
 
-// TestSettleRoundDone_崩溃不可重放转idle 覆盖 runtime crash 但 Query 非 string 分支。
+// TestSettleRoundDone_崩溃不可重放转idle 覆盖 InteractiveInput 不可重放分支。
+// Python: _settle_round_done 的 replayable = not isinstance(original_query, InteractiveInput)
 func TestSettleRoundDone_崩溃不可重放转idle(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	// Query 非 string（如 int）→ 不可重放 → 直接 idle
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: 42})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: &interaction.InteractiveInput{}})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1, err: errors.New("崩溃")})
 
@@ -275,4 +276,53 @@ func TestSteerActive_字符串入队(t *testing.T) {
 
 	err := h.onSend(context.Background(), &InboxMessage{Content: "转向指令", Immediate: true})
 	assert.NoError(t, err, "字符串转向应成功入队")
+}
+
+// TestSettle_协作暂停到PAUSED并解ack 验证协作暂停结算为 PAUSED 并兑现延迟应答。
+func TestSettle_协作暂停到PAUSED并解ack(t *testing.T) {
+	h := prepareSettleHarness(t)
+	h.st.setPhase(HarnessStateRunning)
+	ackCh := make(chan error, 1)
+	active := &ActiveRound{
+		RoundID: 1, TaskID: "t1", OriginalQuery: "任务",
+		Done: make(chan struct{}), PauseAck: ackCh,
+	}
+	active.PauseRequested.Store(true)
+	h.st.SetActive(active)
+
+	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1})
+
+	assert.Equal(t, HarnessStatePaused, h.State())
+	assert.NoError(t, <-ackCh)
+}
+
+// TestSettle_第二次崩溃放弃不重试 验证 failure_retry 的一次性护栏。
+func TestSettle_第二次崩溃放弃不重试(t *testing.T) {
+	h := prepareSettleHarness(t)
+	h.st.setPhase(HarnessStateRunning)
+	h.st.SetActive(&ActiveRound{
+		RoundID: 5, TaskID: "t5", OriginalQuery: "任务",
+		FailureRetry: true, Done: make(chan struct{}),
+	})
+
+	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 5, err: errors.New("boom")})
+
+	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Nil(t, h.st.Active())
+}
+
+// TestSettle_优雅中止丢弃待驱动输入 验证 graceful abort 丢弃排队输入后 IDLE。
+func TestSettle_优雅中止丢弃待驱动输入(t *testing.T) {
+	h := prepareSettleHarness(t)
+	h.st.setPhase(HarnessStateRunning)
+	active := &ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "任务", Done: make(chan struct{})}
+	active.GracefulAbort.Store(true)
+	h.st.SetActive(active)
+	h.enqueueInbox(InboxMessage{Content: "不该跑"})
+
+	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1})
+
+	assert.Equal(t, HarnessStateIdle, h.State())
+	_, stillQueued := h.st.popInboxBatch()
+	assert.False(t, stillQueued, "优雅中止应丢弃待驱动输入")
 }

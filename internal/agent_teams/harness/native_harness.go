@@ -908,6 +908,9 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 		return
 	}
 
+	wasGraceful := active.GracefulAbort.Load()
+	_, isResume := active.OriginalQuery.(*interaction.InteractiveInput)
+
 	resultError := ""
 	if cmd.result != nil {
 		if e, ok := cmd.result["error"].(string); ok {
@@ -918,13 +921,23 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	runtimeCrashed := cmd.err != nil
 	h.st.SetActive(nil)
 
-	// 协作暂停 ⤵️ 25.1c（本阶段无 pause_requested，跳过）
+	// 协作暂停：轮在干净边界自然收尾——不回滚、不推进 coordinator、
+	// 不丢排队 follow-up（它们属于 resume 续跑的那一轮）。
+	if active.PauseRequested.Load() && !runtimeCrashed && !taskFailed {
+		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "paused", RoundID: cmd.roundID})
+		h.transition(ctx, HarnessStatePaused)
+		h.resolvePauseAck(active)
+		return
+	}
+	// 其余任何路径都必须兑现延迟的暂停 ack，否则 Pause() 调用方永久阻塞。
+	defer h.resolvePauseAck(active)
 
-	if cmd.err != nil {
+	switch {
+	case cmd.err != nil:
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "failed", RoundID: cmd.roundID, Result: cmd.result})
-	} else if taskFailed {
+	case taskFailed:
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "failed", RoundID: cmd.roundID, Result: cmd.result})
-	} else {
+	default:
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "finished", RoundID: cmd.roundID, Result: cmd.result})
 	}
 
@@ -948,13 +961,27 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	}
 	h.agent.SaveState(h.sess, st)
 
-	// 崩溃重试：轮次异常死亡、查询未消费，重放一次；第二次放弃。
+	// 优雅中止：本轮已跑完，用户要求停止——丢弃排队 follow-up 后 IDLE。
+	if wasGraceful {
+		h.drainFollowUpsDiscard(ctx)
+		h.transition(ctx, HarnessStateIdle)
+		return
+	}
+
+	// 崩溃重试：先重置 coordinator（executor.cancel 会置 is_aborted），
+	// 只重试一次；InteractiveInput 不可重放，直接放弃。
 	if runtimeCrashed {
-		if replayable, ok := active.OriginalQuery.(string); ok && replayable != "" {
+		h.resetCoordinator()
+		replayable := !isResume
+		if replayable && !active.FailureRetry {
+			logger.Warn(logComponent).Err(cmd.err).Int("round_id", cmd.roundID).
+				Msg("round died abnormally; retrying its query once")
 			nxt := h.startRound(ctx, active.OriginalQuery, startModeFailureRetry, active.RunContext)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 			return
 		}
+		logger.Warn(logComponent).Err(cmd.err).Int("round_id", cmd.roundID).
+			Msg("round died abnormally; giving up on its query and going idle")
 		h.transition(ctx, HarnessStateIdle)
 		return
 	}
@@ -970,32 +997,78 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 		return
 	}
 
-	// 决策优先级：外部 follow-up 队列 > 内部 follow-up > 剩余任务 > IDLE
-	if h.st.dequeueInbox() {
-		content := h.st.popInboxContent()
+	// 决策优先级：外部待驱动队列 > 内部 follow-up > resume 单轮 > 剩余任务 > IDLE
+	if content, ok := h.st.popInboxBatch(); ok {
 		nxt := h.startRound(ctx, content, startModeFollowUp, nil)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 		return
 	}
-	if h.controller.HasFollowUp() || len(st.PendingFollowUps) > 0 {
-		followUps := h.controller.DrainFollowUp()
-		nxt := h.startRound(ctx, followUps, startModeFollowUp, nil)
+	if batch := h.drainPendingFollowUps(); len(batch) > 0 {
+		var q any = batch
+		if len(batch) == 1 {
+			q = batch[0]
+		}
+		nxt := h.startRound(ctx, q, startModeFollowUp, nil)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 		return
 	}
 
-	// resume 单轮语义 ⤵️ 25.1c（本阶段无 InteractiveInput resume）
+	// resume 单轮语义：不得用 InteractiveInput 查询去驱动任务计划续跑
+	// （那会重新恢复一个已被清除的中断）。
+	if isResume {
+		h.transition(ctx, HarnessStateIdle)
+		return
+	}
 
 	// 剩余任务：任务计划仍有下一项则继续（原查询驱动）
-	if h.hasRemainingTasks() {
-		if q, ok := active.OriginalQuery.(string); ok && q != "" {
-			nxt := h.startRound(ctx, active.OriginalQuery, startModeContinuesTurn, nil)
-			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
-			return
-		}
+	if h.hasRemainingTasks() && queryText(active.OriginalQuery) != "" {
+		nxt := h.startRound(ctx, active.OriginalQuery, startModeContinuesTurn, nil)
+		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
+		return
 	}
 
 	h.transition(ctx, HarnessStateIdle)
+}
+
+// drainPendingFollowUps 排空内部 follow-up 并合成一批。
+// Python: _drain_pending_follow_ups (native_harness.py L1596-1634)
+//
+// 一批 follow-up 驱动**一轮**，与 steering 队列一次驱动一个模型调用同构。
+// 批保持为列表而非在此 join：内层 agent 会 join，且 ON_USER_MESSAGE rails
+// 仍能看到单条输入并丢掉被取代的条目。
+func (h *NativeHarness) drainPendingFollowUps() []string {
+	var fresh []string
+	if h.controller != nil {
+		fresh = h.controller.DrainFollowUp()
+	}
+	st := h.agent.LoadState(h.sess)
+	if len(fresh) > 0 {
+		st.PendingFollowUps = append(st.PendingFollowUps, fresh...)
+	}
+	if len(st.PendingFollowUps) == 0 {
+		return nil
+	}
+	batch := append([]string(nil), st.PendingFollowUps...)
+	st.PendingFollowUps = nil
+	h.agent.SaveState(h.sess, st)
+	return batch
+}
+
+// drainFollowUpsDiscard 丢弃所有排队 follow-up（优雅停止路径）。
+// Python: _drain_follow_ups_discard (native_harness.py L1636-1645)
+func (h *NativeHarness) drainFollowUpsDiscard(_ context.Context) {
+	h.st.clearInbox()
+	if h.controller != nil {
+		_ = h.controller.DrainFollowUp()
+	}
+	if h.sess == nil {
+		return
+	}
+	st := h.agent.LoadState(h.sess)
+	if len(st.PendingFollowUps) > 0 {
+		st.PendingFollowUps = nil
+		h.agent.SaveState(h.sess, st)
+	}
 }
 
 // hasRemainingTasks 判断任务计划是否仍有待办（对齐 Python _has_remaining_tasks）。

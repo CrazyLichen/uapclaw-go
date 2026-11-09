@@ -2,7 +2,6 @@ package harness
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,12 +35,6 @@ func TestEventBus_轮次事件载荷(t *testing.T) {
 	bus.emitRound(context.Background(), HarnessRoundEvent{Kind: "started", RoundID: 3})
 	assert.Equal(t, "started", got.Kind)
 	assert.Equal(t, 3, got.RoundID)
-}
-
-// TestHarnessProtocol_哨兵错误可判定 验证 ErrPauseUnsupported 可用 errors.Is 判断（C2）。
-func TestHarnessProtocol_哨兵错误可判定(t *testing.T) {
-	assert.True(t, errors.Is(ErrPauseUnsupported, ErrPauseUnsupported))
-	assert.EqualError(t, ErrPauseUnsupported, "harness: pause/resume 尚未实现（25.1c）")
 }
 
 // TestProtocol_类型转换边界 覆盖 toHarnessState/toString/toInt/toMap 各分支。

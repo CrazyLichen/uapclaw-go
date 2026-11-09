@@ -212,23 +212,42 @@ func (s *HarnessInternalState) roundSeqSnapshot() int {
 	return s.roundSeq
 }
 
-// dequeueInbox 判断待驱动队列是否非空。
-func (s *HarnessInternalState) dequeueInbox() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return len(s.queue) > 0
-}
-
-// popInboxContent 弹出队首输入内容（调用方须先用 dequeueInbox 判非空）。
-func (s *HarnessInternalState) popInboxContent() any {
+// popInboxBatch 取队首批输入：连续字符串合批，遇非字符串停止。
+// Python: _drain_pending_messages (native_harness.py L1239-1259)
+// Go 的 InboxMessage 无 run_context（偏差 D-5），故不按上下文切批。
+func (s *HarnessInternalState) popInboxBatch() (any, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.queue) == 0 {
-		return nil
+		return nil, false
 	}
-	content := s.queue[0].Content
+	first := s.queue[0]
+	if _, isStr := first.Content.(string); !isStr {
+		s.queue = s.queue[1:]
+		return first.Content, true
+	}
+	batch := []string{first.Content.(string)}
 	s.queue = s.queue[1:]
-	return content
+	for len(s.queue) > 0 {
+		next := s.queue[0]
+		text, isStr := next.Content.(string)
+		if !isStr {
+			break
+		}
+		batch = append(batch, text)
+		s.queue = s.queue[1:]
+	}
+	if len(batch) == 1 {
+		return batch[0], true
+	}
+	return batch, true
+}
+
+// clearInbox 清空待驱动队列。
+func (s *HarnessInternalState) clearInbox() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.queue = nil
 }
 
 // SetPausedQuery 记录暂停轮查询。
