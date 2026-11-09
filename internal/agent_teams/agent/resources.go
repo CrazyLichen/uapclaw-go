@@ -4,7 +4,6 @@ import (
 	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 )
@@ -22,9 +21,6 @@ type PrivateAgentResources struct {
 	WorktreeManager *worktree.WorktreeManager
 	// MemoryManager 团队记忆管理器。⤴️ 9.64 回填完成
 	MemoryManager *memory.TeamMemoryManager
-	// FirstIterGate 首轮迭代门控
-	// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
-	FirstIterGate *rails.FirstIterationGate
 	// ModelAllocator 模型分配器（仅 Leader）。⤴️ 9.64 回填完成
 	ModelAllocator models.ModelAllocator
 	// TaskEventTracker 任务通知器（非 leader 才有，⤴️ 25.0c）

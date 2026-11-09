@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
@@ -112,7 +114,6 @@ func (f *fakeKernelHost) Lifecycle() string                                     
 func (f *fakeKernelHost) CancelRecoveryTasks()                                      {}
 func (f *fakeKernelHost) ShutdownAllHandles(_ context.Context)                      {}
 func (f *fakeKernelHost) SpawnedHandleNames() []string                              { return nil }
-func (f *fakeKernelHost) FirstIterGate() types.FirstIterGateAccessor                { return nil }
 func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor {
 	return f.streamControllerAccessor
 }
@@ -637,4 +638,30 @@ func verifyLifecyclePersisted(sess *session.AgentTeamSession, teamName, want str
 		return fmt.Errorf("lifecycle = %q, want %q", got, want)
 	}
 	return nil
+}
+
+// ──────────────────────────── Task14：门控删除后的回归保护 ────────────────────────────
+
+// TestEnqueueMailboxAfterFirstIteration_Leader跳过 Leader 不入队且不 panic。
+//
+// 上游 kernel.py:709：「成员运行时在 coordination 运行之前就由 start 启动了，
+// 所以首次邮箱轮询直接入队——旧的首轮迭代门控等待随单 supervisor 模型消失」。
+// FirstIterationGate 已按决策 C7 整类删除，此处只保证 leader 早退分支仍然成立。
+func TestEnqueueMailboxAfterFirstIteration_Leader跳过(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
+	k := NewCoordinationKernel(host)
+
+	assert.NotPanics(t, func() {
+		k.EnqueueMailboxAfterFirstIteration(context.Background())
+	})
+}
+
+// TestEnqueueMailboxAfterFirstIteration_eventBus为nil不panic 未 Setup 时安全返回。
+func TestEnqueueMailboxAfterFirstIteration_eventBus为nil不panic(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleTeammate, memberName: "m1"}
+	k := NewCoordinationKernel(host)
+
+	assert.NotPanics(t, func() {
+		k.EnqueueMailboxAfterFirstIteration(context.Background())
+	})
 }

@@ -1494,16 +1494,6 @@ func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
 	return nil
 }
 
-// FirstIterGate 返回首轮迭代门控。
-// 满足 types.ResourceAccessor 接口。
-// 对齐 Python: host.resources.first_iter_gate
-func (a *TeamAgent) FirstIterGate() types.FirstIterGateAccessor {
-	if a.configurator == nil {
-		return nil
-	}
-	return a.configurator.FirstIterGate()
-}
-
 // SubscribeTransport 订阅团队传输主题。
 // 满足 types.TransportAccessor 接口。
 // 修复 S-10: 对齐 Python subscribe_transport 完整实现 (kernel.py:330-356)
