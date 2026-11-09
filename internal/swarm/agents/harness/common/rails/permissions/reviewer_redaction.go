@@ -188,7 +188,7 @@ var (
 			`private[_-]?key|secret|token|access[_-]?token|refresh[_-]?token|`+
 			`session[_-]?token|client[_-]?secret|aws[_-]?access[_-]?key[_-]?id|`+
 			`aws[_-]?secret[_-]?access[_-]?key)["']?\s*[:=]\s*)`+
-			`(?:"[^"]*"|'[^']*'|[^"'\s,;}&|<`+bt+`]+)`,
+			`(?:"[^"]*"|'[^']*'|[^"'\s,;}&|<>`+bt+`]+)`,
 		regexp2.IgnoreCase,
 	)
 	// authValuePattern 匹配 Bearer / Basic 认证值

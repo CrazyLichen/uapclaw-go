@@ -1320,3 +1320,40 @@ profile 显示 0%。本批受影响的两个文件：
 **包整体**：`permissions` **88.2%**（≥85%）。
 其余包整体值（`rails` 79.8% / `rails/security` 59.5% / `harness/security` 78.2%）
 受大量非本批文件影响，不代表本批质量；本批文件的文件级覆盖率见上表。
+
+### 12.15 与 Python 逐值对照发现的真实偏差
+
+用户质疑「maskParts / requireLiteral 两个实施细节是否对齐 Python」后，用 Python
+真实源码跑对照，结论：**两者都已对齐**，但对照过程中**发现另一处真实偏差**。
+
+#### 已对齐（此前误以为「测试预期写错」）
+
+| 项 | Python | Go | 结论 |
+|---|---|---|---|
+| `mask_parts` | `re.sub(r"[^/]+", "[redacted]", secret)` | `strings.Split` + 逐段替换 + `Join` | ✅ 等价（`/home/u/secret` → `/[redacted]/[redacted]/[redacted]`；`//a//b` → `//[redacted]//[redacted]`；`/` → `/`） |
+| `require_literal_values` 报错条件 | `not value.startswith("'") and any(m in value for m in ("$","`","(",")","\\","\n","\r"))` | `!strings.HasPrefix(val, "'") && strings.ContainsAny(val, "$`()\\\n\r")` | ✅ 完全一致 |
+
+⚠️ **`password=`id`` 不报错是正确的**：反引号被 `_SECRET_ASSIGNMENT_PATTERN`
+的值字符集排除，正则根本匹配不到值部分（`value` 为空串），条件不成立。
+初版对照脚本直接对原始字符串判断，漏了「正则先匹配」这一步，导致误判为偏差。
+
+#### 🔴 真实偏差（已修复）
+
+`secretAssignmentPattern` 的值字符集少排除了 `>`：
+
+| | 值字符集 |
+|---|---|
+| Python | `[^"'\s,;}&|<>`]` |
+| Go（修复前） | `[^"'\s,;}&|<`]` |
+
+影响：`password=a>b`
+- Python：值只匹配到 `a` → 脱敏为 `password=[redacted]>b`
+- Go（修复前）：值匹配到 `a>b` → 脱敏为 `password=[redacted]`（吞掉了 `>`）
+
+已给 Go 正则补 `>`，并新增 `TestSecretAssignment_大于号排除` 固定该行为。
+
+#### 新增回归保护
+
+新建 `reviewer_redaction_python_alignment_test.go`，内含三组与 Python 逐值对照
+的用例（`maskParts` 六个边界、`requireLiteral` 七个取值、`>` 排除），
+期望值全部从 Python 源码真实跑出，不是推断。
