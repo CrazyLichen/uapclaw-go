@@ -1198,3 +1198,43 @@ SDK `PermissionConfirmResponse` 的两个方法，用于区分「会话内记住
 
 **测试**：5 个用例——基本标记、幂等、50 goroutine 并发、
 多实例隔离、零值不可信。`MarkTrusted` / `IsTrusted` 均 100%。
+
+### 12.13 Task 15 执行时的核实结论：`BasePermissionRail`
+
+**落地**：`permissions/base_rail.go` 定义 7 方法接口 + 编译期断言
+`var _ BasePermissionRail = (*JiuwenSwarmPermissionInterruptRail)(nil)`。
+
+#### 计划文档的 5 处不符（逐条核实）
+
+计划给出的接口是 9 个方法，与 Task 13 实际实现有 5 处不符。逐条查证结果：
+
+| 计划项 | 实际 | 处理 |
+|---|---|---|
+| `AfterToolCall` | Python `permission_interrupt_rail.py` 全文只有 `before_tool_call`（第 402 行），无 `after_tool_call`；Go 的 `PermissionInterruptRail.GetCallbacks()` 也只注册 `CallbackBeforeToolCall` | **删除**——凭空添加。Go 框架本身支持该事件（`callback.go:367` 有常量、`deep_agent.go:268` 注册、7 个 rail 在用），只是权限 rail 不需要：权限判定在工具执行前完成，执行后无事可做 |
+| `ReplaceInstalledGlobalPermissions` | **不是类方法**——Python 在 `interrupt_helpers.py:880` 用 monkey-patch 动态挂到 rail 实例上。`_auto_permission/lifecycle.py:126` 里虽有包装方法但**无调用方**；真正消费方是 `server/runtime/agent_adapter/interface_deep.py:11904`（9.90d-2 之外） | **不进接口**，挂 ⤵️ 9.90d-2（`interface_deep` 落地时一并处理） |
+| `GetPermissionSnapshot` 返回 `map[string]any` | 实际返回 `(map[string]any, error)` | 用实际签名（保留 error 对齐 Python 的 `raise ValueError`） |
+| `PermissionCheckContext` 返回 `(cleanup, bound)` | 实际返回 `func()` | 用实际签名 |
+| `BindApprovalRequest(request any, toolCall)` | 实际是 `(saschema.InterruptRequester, *llmschema.ToolCall) error` | 用实际签名（收窄类型 + 保留 error） |
+
+#### 命名澄清（写进接口注释）
+
+`BasePermissionRail` 与 `agentinterfaces.BaseRail` **无关**：
+- `BaseRail` 是「所有 rail 的公共基类」（继承链 `is-a`）
+- `BasePermissionRail` 是「外层包装者看内层的视角」（组合链 `has-a`）
+
+两者名字都含 Base 纯属巧合。已把这段说明写进 `base_rail.go` 的包注释，
+避免后续再混淆。
+
+#### 方法分类（写进接口注释）
+
+- **回调类**（1 个）：`BeforeToolCall` —— 框架 ReAct 触发后由外层转发给内层
+- **业务类**（6 个）：`UpdateConfig` / `SetTrustedDirs` /
+  `InstalledPermissionConfig` / `GetPermissionSnapshot` /
+  `PermissionCheckContext` / `BindApprovalRequest` ——
+  外层在决策过程中主动向内层查询或写回，与基类无关
+
+#### 验证方式
+
+编译期断言真的生效：临时把接口里 `InstalledPermissionConfig` 改名后，
+编译立即报 `*JiuwenSwarmPermissionInterruptRail does not implement
+BasePermissionRail (missing method ...)`，已还原。
