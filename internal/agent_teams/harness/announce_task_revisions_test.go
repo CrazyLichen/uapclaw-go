@@ -68,3 +68,29 @@ func TestAnnounceTaskRevisions_投递失败归还(t *testing.T) {
 	require.Error(t, err, "native 为 nil 时 Send 应报错")
 	assert.Equal(t, 1, tr.releaseCalls, "投递失败必须归还认领")
 }
+
+// TestCurrentSession_未启动返回nil 未设置活跃会话时返回 nil。
+func TestCurrentSession_未启动返回nil(t *testing.T) {
+	h := &TeamHarness{}
+	assert.Nil(t, h.CurrentSession())
+}
+
+// TestCurrentSession_返回活跃会话 已设置活跃会话时原样返回。
+func TestCurrentSession_返回活跃会话(t *testing.T) {
+	h := &TeamHarness{}
+	sess := &session.Session{}
+	h.setActiveSession(sess)
+	assert.Equal(t, sess, h.CurrentSession())
+}
+
+// TestFindRailsByType_原型为nil返回nil nil 原型安全返回。
+func TestFindRailsByType_原型为nil返回nil(t *testing.T) {
+	h := &TeamHarness{}
+	assert.Nil(t, h.FindRailsByType(nil))
+}
+
+// TestFindRailsByType_无deepAgent返回nil 未装配底层 agent 时返回 nil。
+func TestFindRailsByType_无deepAgent返回nil(t *testing.T) {
+	h := &TeamHarness{}
+	assert.Nil(t, h.FindRailsByType(&struct{}{}))
+}
