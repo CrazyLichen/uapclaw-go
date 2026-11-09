@@ -1447,3 +1447,52 @@ Python 侧从 openjiuwen SDK 导入的 5 个符号，Go 侧**全部已存在**�
 Python 的 `compose_host_effective_permissions` 有 `agent_permissions` 关键字参数，
 但函数体首行 `_ = (session_id, agent_permissions)` 显式忽略它。Go 侧**不保留该参数**
 ——P1 阶段它是死参数，违反规则 8。`session_id` 保留（现有调用方传位置参数）。
+
+### 12.18 Task 22 执行结论：`auto_decision`
+
+**落地**：`permissions/auto_decision.go`（639 行 Python → 约 1,050 行 Go /
+8 导出 + 6 私有 + 7 常量），覆盖率 **92.9%**。
+
+#### 结构映射（9.90b 已定的差异）
+
+Python 的 `facts.tool_name` / `facts.tool_category` 在 Go 侧位于
+`facts.Capability.ToolName` / `facts.Capability.Category`——9.90b 落地
+`ToolDecisionFacts` 时把工具身份收进了 `Capability`。本文件全程沿用。
+
+#### 实施中发现并修正的 2 个实现 bug
+
+两处都是 Python 用 `dict.get(key, default)` 而 Go 直接索引导致的：
+
+| 位置 | Python | Go 初版 | 后果 |
+|---|---|---|---|
+| `_catalogue_args_valid` 的 `tool_search` 分支 | `args.get("query", "")` | `args["query"]`（缺失为 nil） | 空 args 被误判为非法 |
+| `session_observation_args_valid` 的 `list_skill` 分支 | `args.get("query", "")` | 同上 | 空 args 被误判为非法 |
+
+两处都已改为「键存在才取，否则用 Python 的默认值」。
+
+#### 测试预期写错 4 处（已用 Python 实测校正）
+
+用 Python 复刻 `_catalogue_args_valid` / `tool_search_args_valid` 逐值跑，
+发现我的初版测试预期与上游行为相反：
+
+| 用例 | 我初版预期 | Python 实际 |
+|---|---|---|
+| `catalogue_args_valid` 空 args | False | **True**（末行 `operation != "get_schema"` 对空串恒真） |
+| `catalogue_args_valid` search 无 query | False | **True**（同上） |
+| `tool_search_args_valid` progressive 空 args | True | **False**（`args.get("query")` 为 None，`_bounded_text(None)` 为 False） |
+| `tool_search_args_valid` progressive 仅 limit | True | **False**（同上，query 必须存在） |
+
+`boundedTextList([]any{})` 也按 Python 的 `all([]) == True` 返回 true（初版测试预期写成 false）。
+
+#### 上游死键（照抄保留）
+
+`browser_reasons` 里的 `"credential_form"` 是**死键**——`_domain_operation`
+没有任何分支会返回 `"credential_form"`（含 `submit` 的 operation 会先被
+`{"post","submit","external_submit"}` 判定为 `external_submit`，
+`submit_form` 则落入 `unknown`）。按规则 9.2-4 照抄保留，测试注释已标注。
+
+#### 一处语义偏差
+
+`_bounded_text` 的 `len(value) <= limit`：Python 是**字符数**，Go 用**字节数**。
+对含中文的参数，Go 的限制更严格（不会放过超限值，但可能提前拒绝）。
+登记为可接受偏差。
