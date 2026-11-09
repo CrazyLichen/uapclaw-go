@@ -8,12 +8,10 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -29,32 +27,6 @@ import (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// MountedRails 已挂载的团队侧 Rails 句柄。
-// Python: _MountedRails (openjiuwen/agent_teams/harness.py)
-//
-// 保留为数据类使 Rails 阵容（及哪些是可选的）对读者和测试可见。
-// 字段顺序与 BuildTeamHarness 中 Rails 挂载顺序一致。
-type MountedRails struct {
-	// TeamTool 团队工具轨
-	// ⤴️ 9.68 回填完成：TeamToolRail 具体类型
-	TeamTool *rails.TeamToolRail
-	// TeamPolicy 团队策略轨
-	// ⤴️ 9.68 回填完成：TeamPolicyRail 具体类型
-	TeamPolicy *rails.TeamPolicyRail
-	// FirstIterGate 首轮迭代门控
-	// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
-	FirstIterGate *rails.FirstIterationGate
-	// TeamWorkspace 团队工作空间轨
-	// ⤴️ 9.66 回填完成：TeamWorkspaceRail 具体类型
-	TeamWorkspace *team_workspace.TeamWorkspaceRail
-	// ToolApproval 工具审批轨
-	// ⤴️ 9.68 回填完成：TeamToolApprovalRail 具体类型
-	ToolApproval *rails.TeamToolApprovalRail
-	// TeamPlanMode 团队计划模式轨
-	// ⤴️ 9.68 回填完成：TeamPlanModeRail 具体类型
-	TeamPlanMode *rails.TeamPlanModeRail
-}
 
 // AgentCustomizer 用户自定义钩子签名。
 // S-01: 全项目唯一类型定义在 agent_teams/schema 包，此处保留类型别名。
@@ -78,13 +50,15 @@ type TeamHarness struct {
 	// 调用方（InnerAgent）的向后访问；协议面方法（Start/Stop/Send/...）转 native。
 	native *NativeHarness
 	// rails 已挂载的 Rails 句柄
-	rails *MountedRails
 	// role 团队角色（对齐 Python TeamRole，底层为 string）
 	role string
 	// memberName 成员名
 	memberName string
 	// initialPlanMode 初始计划模式
 	initialPlanMode bool
+	// taskEventTracker 成员的任务通知器（上游 _task_event_tracker）
+	// Python: TeamHarness._task_event_tracker (team_harness.py:93-130)
+	taskEventTracker tracker.TaskEventTracker
 	// mu 保护 activeAgentSession 与 initialPlanModeSeeded。
 	// 写点在轮次 goroutine（prepareAgentSession），读点在消息处理 goroutine
 	// （interactLoop ← StreamController.Steer）与协调内核的邮箱轮询
@@ -125,14 +99,12 @@ var (
 // Python: TeamHarness.__init__(deep_agent, rails, ...)
 func NewTeamHarness(
 	deepAgent hinterfaces.DeepAgentInterface,
-	rails *MountedRails,
 	role string,
 	memberName string,
 	initialPlanMode bool,
 ) *TeamHarness {
 	return &TeamHarness{
 		deepAgent:       deepAgent,
-		rails:           rails,
 		role:            role,
 		memberName:      memberName,
 		initialPlanMode: initialPlanMode,
@@ -143,18 +115,18 @@ func NewTeamHarness(
 func newTeamHarnessWithNative(
 	native *NativeHarness,
 	deepAgent hinterfaces.DeepAgentInterface,
-	rails *MountedRails,
 	role string,
 	memberName string,
 	initialPlanMode bool,
+	taskEventTracker tracker.TaskEventTracker,
 ) *TeamHarness {
 	return &TeamHarness{
-		deepAgent:       deepAgent,
-		native:          native,
-		rails:           rails,
-		role:            role,
-		memberName:      memberName,
-		initialPlanMode: initialPlanMode,
+		deepAgent:        deepAgent,
+		native:           native,
+		role:             role,
+		memberName:       memberName,
+		initialPlanMode:  initialPlanMode,
+		taskEventTracker: taskEventTracker,
 	}
 }
 
@@ -166,79 +138,38 @@ func newTeamHarnessWithNative(
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
 // ⤴️ 9.68 回填完成：Rails 挂载逻辑已实现
+// BuildTeamHarness 前向构造团队线束（6 参数，对齐上游 TeamHarness.build）。
+//
+// 上游 team_harness.py:93-130：native 从 spec 物化自身，团队 rails 在
+// agent_spec.rails 里声明，经 spec build + ensure_initialized 统一挂载——
+// 这里不做手工挂载，也不建 throwaway 模板 DeepAgent。
+//
+// 前置：调用方（AgentConfigurator.SetupAgent）必须已经
+//
+//	① EnsureHarnessElementsRegistered()
+//	② InjectTeamHandles(memberBuildCtx, handles)
+//	③ 把 TeamRailSpecs 折进 agentSpec.Rails
+//
+// 否则 8 个 team rail provider 是死代码，声明会被静默跳过。
+//
+// Python: TeamHarness.build (team_harness.py:93-130)
 func BuildTeamHarness(
 	agentSpec atschema.DeepAgentSpec,
 	role string,
 	memberName string,
-	teamToolRail *rails.TeamToolRail,
-	teamPolicyRail *rails.TeamPolicyRail,
-	firstIterGate *rails.FirstIterationGate,
-	teamWorkspaceRail *team_workspace.TeamWorkspaceRail, // ⤴️ 9.66: 团队工作空间Rail
-	toolApprovalRail *rails.TeamToolApprovalRail,
-	teamPlanModeRail *rails.TeamPlanModeRail,
 	initialPlanMode bool,
+	buildCtx hschema.BuildContextInterface,
+	taskEventTracker tracker.TaskEventTracker,
 ) *TeamHarness {
-	// S-06: 对齐 Python deep_agent = agent_spec.build()——物化 DeepAgent
-	agent := buildDeepAgentFromSpec(agentSpec)
-
-	// S-06: 对齐 Python build() 的 Rail 挂载顺序（L118-140）：
-	// deep_agent.add_rail(team_tool_rail) + 急切初始化（set_sys_operation/
-	// set_workspace/init），随后 team_policy、first_iter_gate、team_workspace、
-	// tool_approval、team_plan_mode 依次挂载。
-	// 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并急切初始化，
-	// 以便 LLM 看到的能力快照与测试观察到的一致（Init 幂等，延迟注册变为 no-op）。
-	if agent != nil {
-		if teamToolRail != nil {
-			agent.AddRail(teamToolRail)
-			// 急切初始化：rail 的延迟 init 在首次 invoke 时运行，
-			// 但在那之前获取的工具快照会遗漏团队工具
-			if dc := agent.DeepConfig(); dc != nil {
-				teamToolRail.SetSysOperation(dc.SysOperation)
-				teamToolRail.SetWorkspace(dc.Workspace)
-			}
-			if err := teamToolRail.Init(context.Background(), agent); err != nil {
-				logger.Warn(logComponent).Err(err).
-					Str("member_name", memberName).
-					Msg("BuildTeamHarness: TeamToolRail eager init failed")
-			}
-		}
-		if teamPolicyRail != nil {
-			agent.AddRail(teamPolicyRail)
-		}
-		if firstIterGate != nil {
-			agent.AddRail(firstIterGate)
-		}
-		if teamWorkspaceRail != nil {
-			agent.AddRail(teamWorkspaceRail)
-		}
-		if toolApprovalRail != nil {
-			agent.AddRail(toolApprovalRail)
-		}
-		if teamPlanModeRail != nil {
-			agent.AddRail(teamPlanModeRail)
-		}
-	}
-
-	rails := &MountedRails{
-		TeamTool:      teamToolRail,
-		TeamPolicy:    teamPolicyRail,
-		FirstIterGate: firstIterGate,
-		TeamWorkspace: teamWorkspaceRail,
-		ToolApproval:  toolApprovalRail,
-		TeamPlanMode:  teamPlanModeRail,
-	}
-	if agent == nil {
-		return NewTeamHarness(nil, rails, role, memberName, initialPlanMode)
-	}
-	// ⤴️ 25.1b：NativeHarness 前向构造（spec 自解析 parts，不再收外部 agent）
-	native, nativeErr := NewNativeHarness(agentSpec, nil)
-	if nativeErr != nil {
-		logger.Error(logComponent).Err(nativeErr).
+	native, err := NewNativeHarness(agentSpec, buildCtx)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
 			Str("member_name", memberName).
 			Msg("BuildTeamHarness: native construction failed")
-		return newTeamHarnessWithNative(nil, agent, rails, role, memberName, initialPlanMode)
+		return newTeamHarnessWithNative(nil, nil, role, memberName, initialPlanMode, taskEventTracker)
 	}
-	return newTeamHarnessWithNative(native, native.DeepAgent(), rails, role, memberName, initialPlanMode)
+	return newTeamHarnessWithNative(native, native.DeepAgent(), role, memberName,
+		initialPlanMode, taskEventTracker)
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
@@ -272,12 +203,6 @@ func (h *TeamHarness) RunAgentCustomizer(ctx context.Context, customizer AgentCu
 			Err(err).
 			Msg("agent_customizer failed")
 	}
-}
-
-// Rails 返回已挂载的团队侧 Rails 句柄。
-// Python: TeamHarness.rails property
-func (h *TeamHarness) Rails() *MountedRails {
-	return h.rails
 }
 
 // Role 返回团队角色。
@@ -774,104 +699,4 @@ func interruptionStateOf(val any) *agentschema.ToolInterruptionState {
 		return nil
 	}
 	return st
-}
-
-// buildDeepAgentFromSpec 从 DeepAgentSpec 物化 DeepAgent 实例。
-// S-06: 对齐 Python DeepAgentSpec.build() (deep_agent_spec.py L461-515)
-//
-// Python 步骤：
-//
-//	Python: 1. llm_model = self.model.build()（TeamModelConfig → Model）
-//	Python: 2. language = resolve_language(self.language)
-//	3. vision_config / audio_config / workspace / rails / subagents / sys_operation 逐项 build
-//	Python: 4. create_deep_agent(...)
-//
-// Go 差异：团队 Rails（TeamToolRail 等 6 个）由调用方（AgentConfigurator）先构建、
-// 经 BuildTeamHarness 参数传入后挂载（挂载顺序有语义），不在此处从 RailSpec 构建；
-// subagents/sys_operation 等字段由 CreateDeepAgent 内部处理。
-// 构建失败时记日志并返回 nil（对齐 Python 异常向上传播由调用方兜底的容错语义，
-// 避免团队启动因单个成员物化失败而中断）。
-func buildDeepAgentFromSpec(spec atschema.DeepAgentSpec) *agentcore.DeepAgent {
-	// Python: llm_model = self.model.build() if self.model else None
-	var llmModel *llm.Model
-	if spec.Model != nil {
-		cfg := spec.Model.ModelClientConfig
-		m, err := llm.NewModel(&cfg, spec.Model.ModelRequestConfig)
-		if err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("member_card", spec.Card.GetName()).
-				Msg("buildDeepAgentFromSpec: model build failed, agent will have no model")
-		} else {
-			llmModel = m
-		}
-	}
-
-	// Python: workspace = self.workspace.build() if self.workspace else None
-	// Go 差异：WorkspaceSpec → workspace.Workspace 由 CreateDeepAgent 内部
-	// buildWorkspace 处理（harness_config.Params.Workspace 为 *Workspace），
-	// 此处传入 nil 让 factory 走默认构建。
-
-	params := hconfig.CreateDeepAgentParams{
-		Model:                  llmModel,
-		Card:                   spec.Card,
-		SystemPrompt:           spec.SystemPrompt,
-		ToolCards:              spec.ToolCards,
-		Mcps:                   spec.Mcps,
-		EnableTaskLoop:         true, // Python: enable_task_loop=True（build 中硬编码）
-		EnableAsyncSubagent:    spec.EnableAsyncSubagent,
-		AddGeneralPurposeAgent: spec.AddGeneralPurposeAgent,
-		MaxIterations:          spec.MaxIterations,
-		Skills:                 spec.Skills,
-		EnableSkillDiscovery:   spec.EnableSkillDiscovery,
-		Language:               spec.Language,
-		AutoCreateWorkspace:    spec.AutoCreateWorkspace,
-	}
-
-	// Python: vision_config = self.vision_model.build() if self.vision_model else None
-	if spec.VisionModel != nil {
-		params.VisionModelConfig = &hschema.VisionModelConfig{
-			APIKey:     spec.VisionModel.APIKey,
-			BaseURL:    spec.VisionModel.BaseURL,
-			Model:      spec.VisionModel.Model,
-			MaxRetries: spec.VisionModel.MaxRetries,
-		}
-	}
-	// Python: audio_config = self.audio_model.build() if self.audio_model else None
-	if spec.AudioModel != nil {
-		params.AudioModelConfig = &hschema.AudioModelConfig{
-			APIKey:             spec.AudioModel.APIKey,
-			BaseURL:            spec.AudioModel.BaseURL,
-			TranscriptionModel: spec.AudioModel.TranscriptionModel,
-			QAModel:            spec.AudioModel.QAModel,
-			MaxRetries:         spec.AudioModel.MaxRetries,
-		}
-	}
-	// Python: completion_timeout=self.completion_timeout
-	if spec.CompletionTimeout > 0 {
-		params.CompletionTimeout = spec.CompletionTimeout
-	}
-	// Python: enable_task_planning=self.enable_task_planning
-	params.EnableTaskPlanning = spec.EnableTaskPlanning
-	// Python: restrict_to_work_dir=self.restrict_to_sandbox（*bool，非零时设置）
-	if spec.RestrictToSandbox {
-		restrict := true
-		params.RestrictToWorkDir = &restrict
-	}
-	// Python: prompt_mode=self.prompt_mode（字符串解析，失败保持默认 Full）
-	if spec.PromptMode != "" {
-		if pm, err := hschema.ParsePromptMode(spec.PromptMode); err == nil {
-			params.PromptMode = pm
-		} else {
-			logger.Warn(logComponent).Err(err).Str("prompt_mode", spec.PromptMode).
-				Msg("buildDeepAgentFromSpec: invalid prompt_mode, using default")
-		}
-	}
-
-	agent, err := agentcore.CreateDeepAgent(context.Background(), params)
-	if err != nil {
-		logger.Error(logComponent).Err(err).
-			Msg("buildDeepAgentFromSpec: CreateDeepAgent failed")
-		return nil
-	}
-	return agent
 }

@@ -322,44 +322,14 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 9-14. 构造 Rails
 	// ⤴️ 9.68 回填完成：Rails 挂载逻辑
 
-	// 步骤 9: TeamToolRail
+	// 步骤 9（25.1b）：TeamToolRail 改由 spec.Rails 声明驱动，
+	// 见下方 15a 的 TeamRailSpecs + InjectTeamHandles。原手工构造已删除。
 	teamMode := resolveTeamMode(spec)
-	var excludeTools map[string]struct{}
-	if teamMode == "predefined" {
-		excludeTools = map[string]struct{}{"spawn_member": {}}
-	}
-	var modelConfigAlloc func(modelName string) *models.Allocation
-	if c.resources.ModelAllocator != nil {
-		modelConfigAlloc = c.resources.ModelAllocator.Allocate
-	}
-	teamToolRail := rails.NewTeamToolRail(
-		rails.WithTeamBackend(c.TeamBackend()),
-		rails.WithRole(string(ctx.Role)),
-		rails.WithTeammateMode(string(spec.TeammateMode)),
-		rails.WithLifecycle(c.Lifecycle()),
-		rails.WithLanguage(resolvedLanguage),
-		rails.WithOnTeammateCreated(func(ctx context.Context, memberName string) error {
-			if c.onTeammateCreated != nil {
-				return c.onTeammateCreated(ctx, memberName)
-			}
-			return nil
-		}),
-		rails.WithModelConfigAllocator(modelConfigAlloc),
-		rails.WithExcludeTools(excludeTools),
-		rails.WithWorkspaceManager(c.WorkspaceManager()),
-		rails.WithWorktreeManager(c.WorktreeManager()),
-		rails.WithTeamName(c.TeamName()),
-		rails.WithMemberName(c.MemberName()),
-		rails.WithToolDispatchMode(resolveDispatchMode(spec)),
-		rails.WithToolTeamMode(teamMode),
-		rails.WithToolBootstrapMode(resolveBootstrapMode(spec)),
-		rails.WithToolSwarmflowEnabled(spec.SwarmflowEnabled),
-	)
 
 	// 步骤 10: TeamPolicyRail
 	// ⤴️ 25.0c：构造收敛到一个 helper，20 个参数集中一处；同时产出任务通知器
 	// （非 leader 才有），由 TeamAgent 持有、rail 借用。
-	teamPolicyRail, taskEventTracker, err := c.buildTeamPolicyRail(
+	_, taskEventTracker, err := c.buildTeamPolicyRail(
 		ctx.Role, spec, agentSpec, resolveDispatchMode(spec), resolvedLanguage, teamMode,
 	)
 	if err != nil {
@@ -367,69 +337,51 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	}
 	c.SetTaskEventTracker(taskEventTracker)
 
-	// 步骤 11: FirstIterationGate（非 HUMAN_AGENT 角色时创建）
-	var firstIterGate *rails.FirstIterationGate
-	if ctx.Role != atschema.TeamRoleHumanAgent {
-		firstIterGate = rails.NewFirstIterationGate()
-	}
-	c.SetFirstIterGate(firstIterGate)
+	// 步骤 11（25.1b）：FirstIterationGate 已按 §3.4.2 决策 C7 删除
+	// （上游 kernel.py:709 明确 "old FirstIterationGate wait is gone"）。
 
-	// 步骤 12: TeamWorkspaceRail（有 workspace_manager 时）
-	// ⤴️ 9.66 回填完成：已在下方传参
-
-	// 步骤 13: TeamToolApprovalRail（仅 TEAMMATE + 有审批工具时）
-	// S-11: 对齐 Python agent_configurator.py L404-418——
-	// is_coordinated_teammate = role==TEAMMATE and team_spec 存在；
-	// 且 team_backend/messager 可用且 agent_spec.approval_required_tools 非空时构造。
-	// 原实现 TODO 占位导致审批流在生产链路完全失效（Rail 实现已就绪但永不构造）。
-	var toolApprovalRail *rails.TeamToolApprovalRail
+	// 步骤 12-14（25.1b）：TeamWorkspaceRail / TeamToolApprovalRail /
+	// TeamPlanModeRail 改由 spec.Rails 声明驱动，见 15a。原手工构造已删除。
+	approvalTools := agentSpec.ApprovalRequiredTools
 	isCoordinatedTeammate := ctx.Role == atschema.TeamRoleTeammate && ctx.TeamSpec != nil
-	if isCoordinatedTeammate && c.TeamBackend() != nil && c.Messager() != nil {
-		approvalTools := agentSpec.ApprovalRequiredTools
-		if len(approvalTools) > 0 {
-			teamSpecForRail := ctx.TeamSpec
-			leaderMemberName := ""
-			if teamSpecForRail != nil {
-				leaderMemberName = teamSpecForRail.LeaderMemberName
-			}
-			toolApprovalRail = rails.NewTeamToolApprovalRail(
-				ctx.TeamSpec.TeamName,
-				ctx.MemberName,
-				c.TeamBackend().DB(),
-				c.Messager(),
-				leaderMemberName,
-				approvalTools,
-			)
-		}
-	}
-
-	// 步骤 14: TeamPlanModeRail（仅 LEADER + team.plan 启用时）
-	// S-11: 对齐 Python L420-425——is_team_plan_leader = role==LEADER and
-	// is_team_plan_enabled(spec)（enable_team_plan 字段，team_plan.py L25-27）。
-	// initial_plan_mode=is_team_plan_leader（Python TeamHarness.build L437）。
-	var teamPlanModeRail *rails.TeamPlanModeRail
 	isTeamPlanLeader := ctx.Role == atschema.TeamRoleLeader && spec.EnableTeamPlan
-	if isTeamPlanLeader {
-		teamPlanModeRail = rails.NewTeamPlanModeRail(rails.WithLanguageOverride(resolvedLanguage))
-	}
+
+	// ── 15a. spec 驱动装配接线（对齐上游 agent_configurator.py:706-940）──
+	//
+	// 四步，顺序与上游一致：
+	//   ① ensure_harness_elements_registered()（:711）
+	//   ② derive 每成员 build context + 重绑 extras（:835-852）
+	//   ③ inject_team_handles(extras, 17 个句柄)（:910-928）
+	//   ④ team_rail_specs 折进 build_spec.rails（:930-940）
+	//
+	// 不做这四步，8 个 team rail provider 与 TeamRailSpecs 全是死代码，
+	// 而 spec.Rails 里的声明会走"未知 type"分支被静默跳过。
+	rails.EnsureHarnessElementsRegistered()
+
+	memberBuildCtx := deriveMemberBuildContext(nil, ctx, resolvedLanguage, cardIDOf(c.card))
+
+	rails.InjectTeamHandles(memberBuildCtx, buildTeamHandles(c, ctx, agentSpec))
+
+	teamSpecs := rails.TeamRailSpecs(buildTeamRailSpecInput(
+		spec, ctx, agentSpec, resolvedLanguage, isTeamPlanLeader,
+		approvalTools, isCoordinatedTeammate, c,
+	))
+	// 上游："Fold the team rails into the spec rails (after the user rails)"
+	// 用户声明的 rails 在前，团队 rails 在后，保持既有挂载顺序语义。
+	agentSpec.Rails = append(agentSpec.Rails, teamSpecs...)
 
 	// 15. 构建团队线束
 	// ⤴️ 9.68 回填完成：Rail 实例传入
-	var wsRail *team_workspace.TeamWorkspaceRail
-	if c.WorkspaceManager() != nil {
-		wsRail = team_workspace.NewTeamWorkspaceRail(c.WorkspaceManager(), c.MemberName())
-	}
+	// 上游 TeamHarness.build（team_harness.py:982-988）6 参数：
+	// agent_spec / role / member_name / initial_plan_mode / build_context /
+	// task_event_tracker。团队 rails 已在 15a 折进 agentSpec.Rails。
 	harness := harness.BuildTeamHarness(
 		agentSpec,
 		string(ctx.Role),
 		ctx.MemberName,
-		teamToolRail,
-		teamPolicyRail,
-		firstIterGate,
-		wsRail,
-		toolApprovalRail,
-		teamPlanModeRail,
 		isTeamPlanLeader, // S-11: initial_plan_mode 对齐 Python（原 TODO 恒 false）
+		memberBuildCtx,
+		c.TaskEventTracker(),
 	)
 	c.SetHarness(harness)
 

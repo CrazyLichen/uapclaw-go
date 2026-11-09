@@ -21,7 +21,7 @@ import (
 //
 // 对齐 Python tests/system_tests 里构造真 TeamAgent + MockLLMModel 的 fixture：
 // 通过 AgentConfigurator.Configure 走完整装配链（SetupInfra + SetupAgent →
-// BuildTeamHarness → buildDeepAgentFromSpec → llm.NewModel 取 MockLLM）。
+// BuildTeamHarness → spec.ResolveParts → llm.NewModel 取 MockLLM）。
 type MockMember struct {
 	// Agent 已装配的 TeamAgent
 	Agent *agent.TeamAgent

@@ -623,10 +623,18 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Stream started")
 
-	// 未配置时直接返回空流（对齐 Python：未 configure 的 TeamAgent 无法执行 stream）
+	// 未配置时返回**已关闭**的空流。
+	//
+	// 上游 team_agent.py:958-980 的 stream 是 async generator，无条件走流程；
+	// generator 自然 return 等价于流立即结束，不存在「返回 nil 流」这一态。
+	// Go 用 channel 表达流，返回 nil channel 会让下游 `for range agentCh`
+	// 永久阻塞（连带 mergedCh 的 defer close 执行不到）。故这里显式造一个
+	// 已关闭的通道，让 range 立即结束——这才是一比一等价。
 	if a.configurator == nil || a.configurator.Blueprint() == nil {
 		logger.Warn(logComponent).Msg("TeamAgent Stream: not configured, skipped")
-		return nil, nil
+		closed := make(chan stream.Schema)
+		close(closed)
+		return closed, nil
 	}
 
 	// Python: self._stream_controller.stream_queue = asyncio.Queue()
