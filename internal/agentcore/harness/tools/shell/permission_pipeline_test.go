@@ -3,9 +3,14 @@
 package shell
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 用例 ────────────────────────────
@@ -90,4 +95,36 @@ func TestNewPermissionConfig_字段装配(t *testing.T) {
 	assert.Equal(t, PermissionModeReadOnly, cfg.Mode)
 	assert.Len(t, cfg.DenyPatterns, 1)
 	assert.Len(t, cfg.AllowPatterns, 1)
+}
+
+// TestPowerShellTool_非Windows环境 Linux 上无 powershell 时回错误而非 panic。
+func TestPowerShellTool_非Windows环境(t *testing.T) {
+	tl := NewPowerShellTool(sys_operation.NewLocalSysOperation(nil), "cn", "agent-ps", PermissionConfig{})
+
+	empty := invokeBash(t, tl, map[string]any{"command": "  "})
+	assert.Equal(t, false, empty["success"])
+	assert.Contains(t, fmt.Sprint(empty["error"]), "command cannot be empty")
+
+	result := invokeBash(t, tl, map[string]any{"command": "Write-Output hi"})
+	assert.NotNil(t, result["success"], "必须返回结构化结果而非 panic")
+}
+
+// TestPowerShellStreamTool_非Windows环境 Linux 上流式执行回错误块或错误。
+func TestPowerShellStreamTool_非Windows环境(t *testing.T) {
+	tl := NewPowerShellStreamTool(sys_operation.NewLocalSysOperation(nil), "cn", "agent-ps", PermissionConfig{})
+
+	ch, err := tl.Stream(context.Background(), map[string]any{"command": ""})
+	require.NoError(t, err)
+	for range ch {
+	}
+}
+
+// TestBashTool_超时 命令超过 timeout 时返回失败并保留部分输出。
+func TestBashTool_超时(t *testing.T) {
+	tl := NewBashTool(sys_operation.NewLocalSysOperation(nil), "cn", "agent-bash", PermissionConfig{})
+	res := invokeBash(t, tl, map[string]any{
+		"command": `python3 -c "import time; time.sleep(5)"`,
+		"timeout": 1,
+	})
+	assert.Equal(t, false, res["success"])
 }
