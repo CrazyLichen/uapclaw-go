@@ -455,6 +455,15 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			cbc.BindSteeringQueue(ch)
 		}
 	}
+	// Harness 驱动的续跑轮：继续既有上下文，不追加新 user turn。
+	// Python: react_agent.py L2976-2977（inputs.get("_resume_continuation") → ctx.extra）
+	if rc, ok := inputs["_resume_continuation"].(bool); ok && rc {
+		cbc.SetExtra("_resume_continuation", true)
+		if invokeInputs.Extra == nil {
+			invokeInputs.Extra = make(map[string]any, 1)
+		}
+		invokeInputs.Extra["_resume_continuation"] = true
+	}
 	// 多条输入共同驱动本轮：query 已是它们的 join 文本，这里保留未 join 的
 	// 列表，让 ON_USER_MESSAGE 的 rails 仍能看到接缝。
 	// Python: inputs.get("_input_parts") → ctx.extra (react_agent.py L2981-2982)
@@ -495,9 +504,22 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			curInputs = ci
 		}
 
+		// Harness 驱动的续跑轮：在既有上下文上继续，不追加新 user turn。
+		// Python: react_agent.py L2976-2977 / L2989-2991 / L3081
+		resumeContinuation := false
+		if v, ok := cbc.GetExtra("_resume_continuation"); ok {
+			if b, isBool := v.(bool); isBool {
+				resumeContinuation = b
+			}
+		}
+
 		// Python: L1301-1302: 空 query 校验
-		// InteractiveInput（中断恢复）不校验 PlainText 是否为空
-		if curInputs.Query.PlainText() == "" && !curInputs.Query.IsInteractiveInput() {
+		// InteractiveInput（中断恢复）与续跑轮不校验 PlainText 是否为空
+		if curInputs.Query == nil {
+			if !resumeContinuation {
+				return fmt.Errorf("输入必须包含 'query'")
+			}
+		} else if curInputs.Query.PlainText() == "" && !curInputs.Query.IsInteractiveInput() && !resumeContinuation {
 			return fmt.Errorf("输入必须包含 'query'")
 		}
 
@@ -566,8 +588,11 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		} else {
 			// 正常路径：把本轮输入批次写入历史
 			// Python: _admit_user_message(parts, source="query") (react_agent.py L2990-3000)
-			plainText := curInputs.Query.PlainText()
-			if plainText != "" && modelCtx != nil {
+			plainText := ""
+			if curInputs.Query != nil {
+				plainText = curInputs.Query.PlainText()
+			}
+			if plainText != "" && !resumeContinuation && modelCtx != nil {
 				parts := extractUserParts(cbc, curInputs.Query)
 				if err := a.admitUserMessage(ctx, cbc, modelCtx, parts, "query", ""); err != nil {
 					return err

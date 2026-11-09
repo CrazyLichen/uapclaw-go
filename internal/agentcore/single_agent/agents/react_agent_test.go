@@ -3280,3 +3280,44 @@ func TestBuildMultimodal_缺source兜底tool(t *testing.T) {
 
 // TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
 func (f *stubAbilityManager) TeardownTools() {}
+
+// TestInvoke_ResumeContinuation不追加用户消息 验证续跑轮不把 query 写成新 user turn。
+// Python: react_agent.py L2976-2977 / L3081（_resume_continuation 跳过 _admit_user_message）
+func TestInvoke_ResumeContinuation不追加用户消息(t *testing.T) {
+	fmc := &fakeModelContext{}
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage("继续完成"),
+	}, 1)
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	sess := session.NewSession(session.WithSessionID("sess-resume-cont"))
+
+	_, err := agent.Invoke(context.Background(), map[string]any{
+		"query":                "原始任务",
+		"_resume_continuation": true,
+	}, interfaces.WithSession(sess))
+	if err != nil {
+		t.Fatalf("续跑轮不应报错: %v", err)
+	}
+	if fmc.containsContent("原始任务") {
+		t.Fatal("续跑轮不得把 query 追加成新的 UserMessage")
+	}
+}
+
+// TestInvoke_ResumeContinuation允许空query 验证续跑轮允许空查询。
+// Python: react_agent.py L2989-2991（not user_input and not resume_continuation 才报错）
+func TestInvoke_ResumeContinuation允许空query(t *testing.T) {
+	fmc := &fakeModelContext{}
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage("ok"),
+	}, 1)
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	sess := session.NewSession(session.WithSessionID("sess-resume-empty"))
+
+	_, err := agent.Invoke(context.Background(), map[string]any{
+		"query":                "",
+		"_resume_continuation": true,
+	}, interfaces.WithSession(sess))
+	if err != nil {
+		t.Fatalf("空 query 的续跑轮不应报错: %v", err)
+	}
+}

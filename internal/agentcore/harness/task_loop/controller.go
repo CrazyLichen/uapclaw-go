@@ -36,6 +36,22 @@ type RoundOption func(*roundOptions)
 type roundOptions struct {
 	// taskID 调用方指定的调度任务标识
 	taskID string
+	// turnNumber 本轮所属成员 turn 号（0 表示未设置）
+	turnNumber int
+	// resumeContinuation 本轮是否在既有上下文上续跑
+	resumeContinuation bool
+}
+
+// WithTurnNumber 设置本轮成员 turn 号。
+// Python: submit_round(turn_number=...)
+func WithTurnNumber(n int) RoundOption {
+	return func(o *roundOptions) { o.turnNumber = n }
+}
+
+// WithResumeContinuation 标记本轮为续跑轮。
+// Python: submit_round(resume_continuation=True)
+func WithResumeContinuation(v bool) RoundOption {
+	return func(o *roundOptions) { o.resumeContinuation = v }
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -111,6 +127,14 @@ func (tc *TaskLoopController) SubmitRound(
 	if ro.taskID != "" {
 		// Python: if task_id is not None: event.metadata["task_id"] = task_id
 		meta["task_id"] = ro.taskID
+	}
+	if ro.turnNumber > 0 {
+		// Python: event.metadata["_turn_number"] = turn_number
+		meta["_turn_number"] = ro.turnNumber
+	}
+	if ro.resumeContinuation {
+		// Python: event.metadata["_resume_continuation"] = True
+		meta["_resume_continuation"] = true
 	}
 	event.SetMetadata(meta)
 

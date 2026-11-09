@@ -244,6 +244,15 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		if sv, ok := task.Metadata["_streaming"]; ok {
 			effective["_streaming"] = sv
 		}
+		if v, ok := task.Metadata["_turn_number"]; ok && v != nil {
+			effective["_turn_number"] = v
+		}
+		// 续跑轮：内层循环不得追加新的 user turn
+		if v, ok := task.Metadata["_resume_continuation"]; ok {
+			if b, isBool := v.(bool); isBool && b {
+				effective["_resume_continuation"] = true
+			}
+		}
 	}
 
 	// 步骤 15：注入 steering_queue
