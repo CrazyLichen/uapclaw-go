@@ -327,6 +327,32 @@ func (db *InMemoryTeamDatabase) GetTeamMembers(_ context.Context, teamName strin
 
 // UpdateMemberStatus 更新成员状态（含 FSM 校验）。对齐 Python: MemberDao.update_member_status()
 // 返回 true 表示成功，false 表示成员不存在或状态转换不合法
+// GetMemberStatus 窄投影读取成员状态。
+// Python: get_member_status (member_dao.py)
+func (db *InMemoryTeamDatabase) GetMemberStatus(_ context.Context, teamName, memberName string) (string, bool) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	member, exists := db.members[memberKey(memberName, teamName)]
+	if !exists {
+		return "", false
+	}
+	return member.Status, true
+}
+
+// DeleteUnstartedMember 删除尚未离开 UNSTARTED 的成员行。
+// Python: delete_unstarted_member (member_dao.py:397-415)
+func (db *InMemoryTeamDatabase) DeleteUnstartedMember(_ context.Context, memberName, teamName string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	member, exists := db.members[key]
+	if !exists || member.Status != memberStatusUnstarted {
+		return false
+	}
+	delete(db.members, key)
+	return true
+}
+
 func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName, teamName, status string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -1111,6 +1137,7 @@ func (mc *mutationContext) stageNewTasks() {
 			Title:     spec.Title,
 			Content:   spec.Content,
 			Status:    status,
+			Assignee:  spec.Assignee,
 			UpdatedAt: GetCurrentTime(),
 		}
 		mc.db.tasks[spec.TaskID] = task

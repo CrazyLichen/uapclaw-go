@@ -83,6 +83,35 @@ func (d *SQLMemberDao) GetTeamMembers(ctx context.Context, teamName string, stat
 
 // UpdateMemberStatus 更新成员状态（含 FSM 校验）。
 // Python: update_member_status() → bool
+// GetMemberStatus 窄投影读取成员状态。
+// Python: get_member_status (member_dao.py)
+func (d *SQLMemberDao) GetMemberStatus(ctx context.Context, teamName, memberName string) (string, bool) {
+	var status string
+	result := d.db.WithContext(ctx).Table("team_member").
+		Select("status").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Scan(&status)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return "", false
+	}
+	return status, true
+}
+
+// DeleteUnstartedMember 删除尚未离开 UNSTARTED 的成员行。
+// Python: delete_unstarted_member (member_dao.py:397-415)
+func (d *SQLMemberDao) DeleteUnstartedMember(ctx context.Context, memberName, teamName string) bool {
+	result := d.db.WithContext(ctx).
+		Where("member_name = ? AND team_name = ? AND status = ?",
+			memberName, teamName, memberStatusUnstarted).
+		Delete(&TeamMember{})
+	if result.Error != nil {
+		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).
+			Err(result.Error).Msg("delete unstarted member failed")
+		return false
+	}
+	return result.RowsAffected == 1
+}
+
 func (d *SQLMemberDao) UpdateMemberStatus(ctx context.Context, memberName, teamName, status string) bool {
 	// Python: 先查再改 + is_valid_transition 校验
 	var member TeamMember

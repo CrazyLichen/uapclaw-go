@@ -525,3 +525,85 @@ func TestOpenTaskCountsByAssignee_SQL表不存在返回错误(t *testing.T) {
 func TestTerminalTaskStatuses_取值(t *testing.T) {
 	assert.ElementsMatch(t, []string{fsm.TaskStatusCompleted, fsm.TaskStatusCancelled}, fsm.TerminalTaskStatuses())
 }
+
+// ──────────────────────────── 成员删除 / 状态窄投影测试 ────────────────────────────
+
+// TestDeleteUnstartedMember_内存实现 只删 UNSTARTED 行。
+func TestDeleteUnstartedMember_内存实现(t *testing.T) {
+	ctx := context.Background()
+	db := NewInMemoryTeamDatabase()
+	require.NoError(t, db.Initialize(ctx))
+
+	ok := db.Member().CreateMember(ctx, "m1", "t1", "M1", "{}", "unstarted", "teammate", "", "", "build_mode", "", "")
+	require.True(t, ok)
+	assert.True(t, db.Member().DeleteUnstartedMember(ctx, "m1", "t1"), "UNSTARTED 行应删除成功")
+	m, _ := db.Member().GetMember(ctx, "m1", "t1")
+	assert.Nil(t, m)
+
+	// 已离开 UNSTARTED 的行拒绝删除
+	require.True(t, db.Member().CreateMember(ctx, "m2", "t1", "M2", "{}", "unstarted", "teammate", "", "", "build_mode", "", ""))
+	db.Member().UpdateMemberStatus(ctx, "m2", "t1", "ready")
+	assert.False(t, db.Member().DeleteUnstartedMember(ctx, "m2", "t1"), "READY 行不应被删")
+	m2, _ := db.Member().GetMember(ctx, "m2", "t1")
+	assert.NotNil(t, m2)
+
+	assert.False(t, db.Member().DeleteUnstartedMember(ctx, "ghost", "t1"), "不存在的行返回 false")
+}
+
+// TestGetMemberStatus_内存实现 返回状态与存在性。
+func TestGetMemberStatus_内存实现(t *testing.T) {
+	ctx := context.Background()
+	db := NewInMemoryTeamDatabase()
+	require.NoError(t, db.Initialize(ctx))
+	require.True(t, db.Member().CreateMember(ctx, "m1", "t1", "M1", "{}", "unstarted", "teammate", "", "", "build_mode", "", ""))
+
+	status, found := db.Member().GetMemberStatus(ctx, "t1", "m1")
+	assert.True(t, found)
+	assert.Equal(t, "unstarted", status)
+
+	_, found = db.Member().GetMemberStatus(ctx, "t1", "ghost")
+	assert.False(t, found)
+}
+
+// TestDeleteUnstartedMember_SQL实现 与内存实现同语义。
+func TestDeleteUnstartedMember_SQL实现(t *testing.T) {
+	db := newMigrationTestDB(t)
+	require.NoError(t, db.AutoMigrate(&TeamMember{}))
+	dao := &SQLMemberDao{db: db}
+	ctx := context.Background()
+
+	require.True(t, dao.CreateMember(ctx, "m1", "t1", "M1", "{}", "unstarted", "teammate", "", "", "build_mode", "", ""))
+	assert.True(t, dao.DeleteUnstartedMember(ctx, "m1", "t1"))
+	_, err := dao.GetMember(ctx, "m1", "t1")
+	assert.NoError(t, err)
+
+	require.True(t, dao.CreateMember(ctx, "m2", "t1", "M2", "{}", "unstarted", "teammate", "", "", "build_mode", "", ""))
+	require.True(t, dao.UpdateMemberStatus(ctx, "m2", "t1", "ready"))
+	assert.False(t, dao.DeleteUnstartedMember(ctx, "m2", "t1"))
+}
+
+// TestGetMemberStatus_SQL实现 与内存实现同语义。
+func TestGetMemberStatus_SQL实现(t *testing.T) {
+	db := newMigrationTestDB(t)
+	require.NoError(t, db.AutoMigrate(&TeamMember{}))
+	dao := &SQLMemberDao{db: db}
+	ctx := context.Background()
+
+	require.True(t, dao.CreateMember(ctx, "m1", "t1", "M1", "{}", "unstarted", "teammate", "", "", "build_mode", "", ""))
+	status, found := dao.GetMemberStatus(ctx, "t1", "m1")
+	assert.True(t, found)
+	assert.Equal(t, "unstarted", status)
+
+	_, found = dao.GetMemberStatus(ctx, "t1", "ghost")
+	assert.False(t, found)
+}
+
+// TestDeleteUnstartedMember_SQL执行报错 表缺失时返回 false 而非 panic。
+func TestDeleteUnstartedMember_SQL执行报错(t *testing.T) {
+	gdb, err := gorm.Open(sqlite.Open("file:del_err_"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	require.NoError(t, err)
+	dao := &SQLMemberDao{db: gdb}
+	assert.False(t, dao.DeleteUnstartedMember(context.Background(), "m", "t"), "表不存在应安全返回 false")
+}

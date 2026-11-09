@@ -70,6 +70,22 @@ type MemberDao interface {
 	// GetTeamMembers 获取团队成员列表，可选按 status 过滤。
 	// Python: get_team_members(team, status=None)，空字符串 status 表示不过滤。
 	GetTeamMembers(ctx context.Context, teamName string, status string) ([]*TeamMember, error)
+	// GetMemberStatus 窄投影：只取成员当前持久化状态，未知返回 ("", false)。
+	//
+	// 协调层的 harness 输入门卫只需要状态，不需要拉整行（agent_card /
+	// prompt / options）。
+	//
+	// Python: get_member_status (member_dao.py)
+	GetMemberStatus(ctx context.Context, teamName, memberName string) (string, bool)
+	// DeleteUnstartedMember 删除一条尚未被触碰的成员行（status = UNSTARTED）。
+	//
+	// DAO 里唯一的成员删除路径，且带状态守卫：存在的意义是回滚 create_task
+	// 内联成员——任务图没落地时把刚写的成员行撤掉。离开 UNSTARTED 的行已经绑了
+	// 运行时/邮箱/任务，绝不在这里删。
+	//
+	// Python: delete_unstarted_member (member_dao.py:397-415)
+	DeleteUnstartedMember(ctx context.Context, memberName, teamName string) bool
+
 	// UpdateMemberStatus 更新成员状态（含 FSM 校验）。返回 true 表示成功，false 表示成员不存在或转换不合法。
 	// Python: update_member_status() → bool
 	UpdateMemberStatus(ctx context.Context, memberName, teamName, status string) bool

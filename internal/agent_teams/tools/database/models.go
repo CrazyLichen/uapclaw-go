@@ -136,6 +136,12 @@ type NewTaskSpec struct {
 	Content string
 	// InitialStatus 初始状态
 	InitialStatus string
+	// Assignee 任务所有者（nil = 未指派）
+	//
+	// 调度式创建（create_task 带 member/assignee）在写图时就把 owner 落上，
+	// 任务停在 PENDING（有依赖则 BLOCKED）并带着 owner，由调度器交接启动。
+	// Python: NewTaskSpec.assignee
+	Assignee *string
 }
 
 // EdgeSpec 依赖边规范（管线输入）。
@@ -205,6 +211,14 @@ type CancelAllTasksResult struct {
 	// Unblocked 被解除阻塞的任务列表（从 BLOCKED→PENDING 的任务，对齐 Python: unblocked_tasks）
 	Unblocked []*TeamTaskBase
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// memberStatusUnstarted UNSTARTED 状态的字面值。
+//
+// 本包刻意不 import agent_teams/schema（会成环），故与上游 engine.py 同款：
+// 用字面量而非枚举值。若 TeamRole/Status 枚举取值变更需同步此处。
+const memberStatusUnstarted = "unstarted"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

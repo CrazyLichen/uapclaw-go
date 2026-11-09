@@ -829,6 +829,7 @@ func stageNewTasksInTx(tx *gorm.DB, taskTable, teamName string, newTasks []NewTa
 			Title:     spec.Title,
 			Content:   spec.Content,
 			Status:    spec.InitialStatus,
+			Assignee:  spec.Assignee,
 			UpdatedAt: now,
 		}
 		if err := tx.Table(taskTable).Create(row).Error; err != nil {

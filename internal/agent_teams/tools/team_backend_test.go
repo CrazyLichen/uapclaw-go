@@ -1496,3 +1496,185 @@ func TestStartup_taskScoped有开放任务时启动(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"scoped"}, started, "有开放任务的 task-scoped 成员必须启动")
 }
+
+// closedMemberDB 让 Member() 返回一个会报错的 DAO，用于覆盖错误分支。
+type closedMemberDB struct {
+	database.TeamDatabase
+}
+
+// Member 返回永远报错的 DAO。
+func (c closedMemberDB) Member() database.MemberDao { return errMemberDao{} }
+
+// errMemberDao 所有查询都报错的 MemberDao 替身。
+type errMemberDao struct {
+	database.MemberDao
+}
+
+// GetMember 恒返回错误。
+func (errMemberDao) GetMember(context.Context, string, string) (*database.TeamMember, error) {
+	return nil, errors.New("boom")
+}
+
+// GetMemberStatus 恒返回错误语义（未找到）。
+func (errMemberDao) GetMemberStatus(context.Context, string, string) (string, bool) {
+	return "", false
+}
+
+// ──────────────────────────── ResolveLeaderMemberName / MemberExists 测试 ────────────────────────────
+
+// TestResolveLeaderMemberName_构造期已知 构造时给了 leader 名就直接返回。
+func TestResolveLeaderMemberName_构造期已知(t *testing.T) {
+	tb := newTestTeamBackendWithOptions(WithLeaderMemberName("boss"))
+	assert.Equal(t, "boss", tb.ResolveLeaderMemberName(context.Background()))
+}
+
+// TestResolveLeaderMemberName_从DB行解析 leader 名来自 team_info 行，并缓存。
+func TestResolveLeaderMemberName_从DB行解析(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+
+	assert.Equal(t, "leader", tb.ResolveLeaderMemberName(ctx))
+	// 第二次走缓存（字段已填）
+	assert.Equal(t, "leader", tb.ResolveLeaderMemberName(ctx))
+}
+
+// TestResolveLeaderMemberName_团队行缺失返回空串 空团队返回空串而非报错。
+//
+// 用非 leader 的 backend：leader 在构造期就会把 memberName 回填成 leader 名，
+// 只有普通成员才会真的去查 team_info 行。
+func TestResolveLeaderMemberName_团队行缺失返回空串(t *testing.T) {
+	tb := NewTeamBackend("test-team", "member", false,
+		database.NewInMemoryTeamDatabase(), newTestMessager())
+	assert.Equal(t, "", tb.ResolveLeaderMemberName(context.Background()))
+}
+
+// TestMemberExists 在册返回 true，不在返回 false。
+func TestMemberExists(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	assert.True(t, tb.MemberExists(ctx, "dev-1"))
+	assert.False(t, tb.MemberExists(ctx, "ghost"))
+}
+
+// TestGetMemberStatus 未知成员返回 false。
+func TestGetMemberStatus(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	status, found := tb.GetMemberStatus(ctx, "dev-1")
+	assert.True(t, found)
+	assert.Equal(t, string(atschema.MemberStatusUnstarted), status)
+
+	_, found = tb.GetMemberStatus(ctx, "ghost")
+	assert.False(t, found)
+}
+
+// TestDeleteUnstartedMember_Backend 回滚未启动成员。
+func TestDeleteUnstartedMember_Backend(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	assert.True(t, tb.DeleteUnstartedMember(ctx, "dev-1"))
+	assert.False(t, tb.MemberExists(ctx, "dev-1"))
+	assert.False(t, tb.DeleteUnstartedMember(ctx, "ghost"))
+}
+
+// TestSpawnMember_Lifetime与Isolation 新选项落到 options 里。
+func TestSpawnMember_Lifetime与Isolation(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+
+	lifetime := database.MemberLifetimeDormant
+	res := tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "d", "", "",
+		WithLifetime(&lifetime), WithIsolation("worktree"), WithPermissionsOverride(map[string]string{"bash": "deny"}))
+	require.True(t, res.OK)
+
+	member, err := tb.GetMember(ctx, "dev-1")
+	require.NoError(t, err)
+	require.NotNil(t, member)
+
+	got := database.GetMemberLifetime(member)
+	require.NotNil(t, got)
+	assert.Equal(t, database.MemberLifetimeDormant, *got)
+
+	wt := database.GetMemberWorktree(member)
+	require.NotNil(t, wt)
+	require.NotNil(t, wt.Isolation)
+	assert.Equal(t, "worktree", *wt.Isolation)
+
+	assert.Equal(t, map[string]string{"bash": "deny"}, database.GetMemberPermissionsOverride(member))
+}
+
+// TestRegisterTeammate_边界 team 为 nil 时返回失败；prompt 为 nil 时不 panic。
+func TestRegisterTeammate_边界(t *testing.T) {
+	if res := RegisterTeammate(nil, "dev-1", "Dev", "d", nil, nil); res.OK {
+		t.Fatal("team 为 nil 应失败")
+	}
+
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	prompt := "干活"
+	res := RegisterTeammate(tb, "dev-1", "Dev", "d", &prompt, nil)
+	require.True(t, res.OK)
+	m, err := tb.GetMember(ctx, "dev-1")
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	assert.Equal(t, "干活", m.Prompt)
+	assert.Equal(t, string(atschema.TeamRoleTeammate), m.Role, "RegisterTeammate 固定 teammate 角色")
+}
+
+// TestMemberExists_查询失败返回false 底层报错时安全返回 false。
+func TestMemberExists_查询失败返回false(t *testing.T) {
+	db := database.NewInMemoryTeamDatabase()
+	tb := NewTeamBackend("t", "m", true, closedMemberDB{db}, newTestMessager())
+	assert.False(t, tb.MemberExists(context.Background(), "x"))
+}
+
+// nilMemberDB Member() 返回 nil 的 TeamDatabase 替身。
+type nilMemberDB struct {
+	database.TeamDatabase
+}
+
+// Member 恒返回 nil。
+func (nilMemberDB) Member() database.MemberDao { return nil }
+
+// errTeamDB Team() 返回错误的 TeamDatabase 替身。
+type errTeamDB struct {
+	database.TeamDatabase
+}
+
+// Team 返回永远报错的 TeamDao。
+func (errTeamDB) Team() database.TeamDao { return errTeamDao{} }
+
+// errTeamDao 所有查询都报错的 TeamDao 替身。
+type errTeamDao struct {
+	database.TeamDao
+}
+
+// GetTeam 恒返回错误。
+func (errTeamDao) GetTeam(context.Context, string) (*database.Team, error) {
+	return nil, errors.New("boom")
+}
+
+// TestGetMemberStatus_成员DAO为nil 缺 Member() 时返回 false。
+func TestGetMemberStatus_成员DAO为nil(t *testing.T) {
+	tb := NewTeamBackend("t", "m", false, nilMemberDB{}, newTestMessager())
+	_, found := tb.GetMemberStatus(context.Background(), "x")
+	assert.False(t, found)
+}
+
+// TestResolveLeaderMemberName_读团队行报错 读失败返回空串且不 panic。
+func TestResolveLeaderMemberName_读团队行报错(t *testing.T) {
+	tb := NewTeamBackend("t", "m", false, errTeamDB{}, newTestMessager())
+	assert.Equal(t, "", tb.ResolveLeaderMemberName(context.Background()))
+}
