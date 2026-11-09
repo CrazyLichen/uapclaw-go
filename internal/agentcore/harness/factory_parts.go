@@ -199,32 +199,3 @@ func buildDeepAgentConfig(
 	}
 	return config
 }
-
-// ──────────────────────────── 非导出函数（init 注入） ────────────────────────────
-
-// init 把默认 rails 计算器注入 schema 包。
-//
-// schema 包不能 import harness（成环），而 spec.ResolveParts 又需要
-// addDefaultRails 的结果。用构造期函数指针注入，避免 Go embedding
-// 虚方法派发陷阱（基类方法体内 t.xxx() 会静态绑定到空实现）。
-func init() {
-	hschema.SetDefaultRailsResolver(computeDefaultRails)
-}
-
-// computeDefaultRails 把 spec 字段摊成 addDefaultRails 所需的参数并计算。
-//
-// 与 ResolveDeepAgentParts 里的调用完全同源（同一个 addDefaultRails），
-// 只是入参来源从 CreateDeepAgentParams 变成 DeepAgentSpec。
-//
-// Python: resolve_deep_agent_parts 的 default_rails 循环 (factory.py:394-415)
-func computeDefaultRails(spec *hschema.DeepAgentSpec, config *hschema.DeepAgentConfig, userRails []agentinterfaces.AgentRail) []agentinterfaces.AgentRail {
-	params := harness_config.CreateDeepAgentParams{
-		Rails:               userRails, // 防重复追加：addDefaultRails 会检查已提供的同类型 rail
-		EnableTaskPlanning:  spec.EnableTaskPlanning,
-		EnableAsyncSubagent: spec.EnableAsyncSubagent,
-		Skills:              spec.Skills,
-	}
-	return addDefaultRails(
-		params, config, config.Subagents, config.Workspace, config.Language,
-	)
-}

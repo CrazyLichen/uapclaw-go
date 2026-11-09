@@ -557,3 +557,6 @@ func (f *fakeAbilityManager) Has(name string) bool {
 	_, ok := f.abilities[name]
 	return ok
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManager) TeardownTools() {}

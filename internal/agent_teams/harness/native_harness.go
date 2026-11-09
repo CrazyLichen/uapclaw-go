@@ -100,7 +100,7 @@ const (
 // Python: NativeHarness.__init__ (native_harness.py:150-232)
 func NewNativeHarness(spec atschema.DeepAgentSpec, buildCtx hschema.BuildContextInterface) (*NativeHarness, error) {
 	// 步骤 1：先解析 parts（对应上游 "Resolve parts before super().__init__"）
-	parts, err := spec.ResolveParts(buildCtx)
+	parts, err := agentcore.ResolveDeepAgentSpecParts(&spec, buildCtx)
 	if err != nil {
 		return nil, fmt.Errorf("native harness: resolve parts failed: %w", err)
 	}
