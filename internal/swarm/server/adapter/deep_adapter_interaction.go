@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -249,4 +250,45 @@ func (d *DeepAdapter) isInterruptResumeDispatch(params json.RawMessage) bool {
 	parsed := parseParams(params)
 	answers, ok := parsed["answers"].([]any)
 	return ok && len(answers) > 0
+}
+
+// interactionFrameOutput 从租约帧里取出 SDK 输出块（非输出帧返回 nil）。
+func interactionFrameOutput(frame stream.Schema) *stream.OutputSchema {
+	switch v := frame.(type) {
+	case *stream.OutputSchema:
+		return v
+	case stream.OutputSchema:
+		return &v
+	default:
+		return nil
+	}
+}
+
+// aggregateInteractionStream 把租约帧聚合成一次非流式响应载荷。
+// Python: interface_deep.py:18480-18560 的非流式聚合
+func (d *DeepAdapter) aggregateInteractionStream(
+	rawCh <-chan stream.Schema,
+) map[string]any {
+	usage := &utils.UsageAccumulator{}
+	emittedAskUserIDs := make(map[string]bool)
+	content := ""
+	for frame := range rawCh {
+		output := interactionFrameOutput(frame)
+		if output == nil {
+			continue
+		}
+		parsed := utils.ParseStreamChunk(output, usage, emittedAskUserIDs,
+			d.interactionConverter, content != "")
+		if parsed == nil {
+			continue
+		}
+		eventType, _ := parsed["event_type"].(string)
+		if eventType != "chat.delta" && eventType != "chat.final" {
+			continue
+		}
+		if text, ok := parsed["content"].(string); ok {
+			content += text
+		}
+	}
+	return map[string]any{"content": content}
 }

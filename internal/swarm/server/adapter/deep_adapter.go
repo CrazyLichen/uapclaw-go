@@ -28,7 +28,6 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -1091,7 +1090,20 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 			// （绑定后的 ctx 只在本次请求闭包内传递，函数返回即失效，无需显式 reset）
 			d.unmarkSessionActive(sessionID)
 		}()
-		result, runErr = runner.RunAgent(ctx, runner.ByAgent(d.instance), inputs, runner.BySessionID(sessionID), nil, nil)
+		// 步骤 18: 抢租约 + 投递输入，把租约帧聚合成响应载荷。
+		// Python: interface_deep.py:18457-18560 —— 非流式同样先 attach 再 send_input。
+		var rawCh <-chan stream.Schema
+		var accepted bool
+		rawCh, accepted, runErr = d.openInteractionStream(ctx, req, inputs, sessionID)
+		if runErr == nil && accepted {
+			// 拿不到租约：只回受理确认（输入已投递，不读输出）。
+			// Python: interface_deep.py:18470-18475
+			result = map[string]any{"event_type": runtimeAcceptedEventType}
+			return
+		}
+		if runErr == nil {
+			result = d.aggregateInteractionStream(rawCh)
+		}
 	}()
 
 	if runErr != nil {
