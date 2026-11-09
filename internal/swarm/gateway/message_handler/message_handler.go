@@ -245,18 +245,21 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	}
 	// Python: handle_message：入队前记录用户查询上下文
 	mh.rememberUserQueryContext(msg)
+	// 入队后 msg 归 forwardLoop 所有（它会 ApplyChannelState 改写 session_id/mode），
+	// 生产侧不能在入队后再读其字段，否则与消费侧并发读写同一对象。
+	msgID, channelID, sessionID := msg.ID, msg.ChannelID, msg.SessionID
 	select {
 	case mh.userMessages <- msg:
 		logger.Info(logComponent).
 			Str("event_type", "handle_inbound").
-			Str("msg_id", msg.ID).
-			Str("channel_id", msg.ChannelID).
-			Str("session_id", msg.SessionID).
+			Str("msg_id", msgID).
+			Str("channel_id", channelID).
+			Str("session_id", sessionID).
 			Msg("inbound message enqueued")
 	default:
 		logger.Warn(logComponent).
 			Str("event_type", "handle_inbound_dropped").
-			Str("msg_id", msg.ID).
+			Str("msg_id", msgID).
 			Msg("inbound message queue full, dropping message")
 	}
 }

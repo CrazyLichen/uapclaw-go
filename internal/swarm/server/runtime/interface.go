@@ -643,10 +643,11 @@ func (uc *UapClawSwarm) GenerateRecap(ctx context.Context, sessionID string) (ma
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (uc *UapClawSwarm) SwitchMode(ctx context.Context, sessionID, subMode string) error {
-	if uc.adapter == nil {
+	a := uc.adapterSnapshot()
+	if a == nil {
 		return nil
 	}
-	return uc.adapter.SwitchMode(ctx, sessionID, subMode)
+	return a.SwitchMode(ctx, sessionID, subMode)
 }
 
 // CreateInstance 创建 Agent 实例。
@@ -746,10 +747,14 @@ func (uc *UapClawSwarm) Cleanup() error {
 // GetInstance 获取底层 DeepAgent 实例。
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
 func (uc *UapClawSwarm) GetInstance() *harness.DeepAgent {
-	if uc == nil || uc.adapter == nil {
+	if uc == nil {
 		return nil
 	}
-	return uc.adapter.Instance()
+	a := uc.adapterSnapshot()
+	if a == nil {
+		return nil
+	}
+	return a.Instance()
 }
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
@@ -1249,7 +1254,7 @@ func truncateStr(s string, maxLen int) string {
 
 // PlanStateAccessor 返回 plan 状态读写入口。
 func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
-	provider, ok := uc.adapter.(interface {
+	provider, ok := uc.adapterSnapshot().(interface {
 		PlanStateAccessor() swruntime.PlanStateAccessor
 	})
 	if !ok {
