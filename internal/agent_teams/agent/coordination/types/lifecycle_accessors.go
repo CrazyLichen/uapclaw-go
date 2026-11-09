@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -115,6 +116,9 @@ type HarnessAccessor interface {
 	// PausedQuery 返回暂停轮查询；ok=false 表示当前没有暂停轮。
 	// 对齐 Python: TeamHarness.paused_query（team_harness.py:402-406）
 	PausedQuery() (string, bool)
+	// State 返回当前生命周期相位。
+	// 对齐 Python: TeamHarness.state property（team_harness.py:327-331）
+	State() harness.HarnessState
 }
 
 // BlueprintAccessor 蓝图扩展接口。

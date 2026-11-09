@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -624,15 +625,15 @@ func (k *CoordinationKernel) persistPendingResume(_ context.Context) {
 	if teamName == "" {
 		return
 	}
-	harness := k.host.HarnessAccessor()
-	if harness == nil {
+	harnessAcc := k.host.HarnessAccessor()
+	if harnessAcc == nil {
 		return
 	}
-	query, ok := harness.PausedQuery()
-	if !ok {
+	if harnessAcc.State() != harness.HarnessStatePaused {
 		// 没有挂起的轮，无需记录
 		return
 	}
+	query, _ := harnessAcc.PausedQuery()
 	sessCtrl := k.host.SessionController()
 	if sessCtrl == nil {
 		return
@@ -653,12 +654,12 @@ func (k *CoordinationKernel) persistPendingResume(_ context.Context) {
 //   - cold：harness 被重建（IDLE），上下文来自会话 checkpoint，
 //     标记里的 query 驱动续跑。仅 leader（标记在团队共享桶里）。
 func (k *CoordinationKernel) resumePausedRound(ctx context.Context) {
-	harness := k.host.HarnessAccessor()
+	harnessAcc := k.host.HarnessAccessor()
 	sc := k.host.StreamController()
-	if harness == nil || sc == nil {
+	if harnessAcc == nil || sc == nil {
 		return
 	}
-	if _, paused := harness.PausedQuery(); paused {
+	if harnessAcc.State() == harness.HarnessStatePaused {
 		logger.Info(logComponent).Str("member_name", k.host.MemberName()).
 			Msg("resuming the paused round in place")
 		if err := sc.ResumeAgent(ctx, nil); err != nil {

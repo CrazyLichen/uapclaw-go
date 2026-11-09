@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -31,6 +32,8 @@ type fakeHarnessAccessor struct {
 	pausedQuery string
 	// paused 是否存在暂停轮
 	paused bool
+	// state 当前生命周期相位
+	state harness.HarnessState
 }
 
 func (f *fakeHarnessAccessor) RegisterMemberTools(_ *memory.TeamMemoryManager) {}
@@ -45,6 +48,9 @@ func (f *fakeHarnessAccessor) Start(_ context.Context, _ any) error {
 
 // PausedQuery 实现 types.HarnessAccessor。
 func (f *fakeHarnessAccessor) PausedQuery() (string, bool) { return f.pausedQuery, f.paused }
+
+// State 实现 types.HarnessAccessor。
+func (f *fakeHarnessAccessor) State() harness.HarnessState { return f.state }
 
 // fakeStreamControllerAccessor 测试用 StreamControllerAccessor 实现。
 type fakeStreamControllerAccessor struct {
