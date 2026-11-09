@@ -9,6 +9,9 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeSession 极简 SessionFacade，只为基线读写。
@@ -766,4 +769,55 @@ func TestCommit_调Commit后推进基线(t *testing.T) {
 	if again, has := tr.PendingText(sess); has {
 		t.Fatalf("Commit 后不应再重投，实际：%s", again)
 	}
+}
+
+// TestTaskOutcomeTracker_Wakes假 评审通过通知不得唤醒作者（F-119）。
+func TestTaskOutcomeTracker_Wakes假(t *testing.T) {
+	tr := newTaskOutcomeTracker(nil, "alice")
+	require.NotNil(t, tr)
+
+	assert.False(t, tr.Wakes(), "scheduled 模式的通知不得唤醒")
+}
+
+// TestTaskRevisionTracker_Wakes真 自主模式的任务编辑通知可唤醒（F-129）。
+func TestTaskRevisionTracker_Wakes真(t *testing.T) {
+	tr := newTaskRevisionTracker(nil, "alice")
+	require.NotNil(t, tr)
+
+	assert.True(t, tr.Wakes(), "autonomous 模式的通知可唤醒")
+}
+
+// TestAnnounce_wakes为假不发送 Wakes=false 时 Claim 与 send 都不发生。
+func TestAnnounce_wakes为假不发送(t *testing.T) {
+	tr := newTaskOutcomeTracker(nil, "alice")
+	require.NotNil(t, tr)
+
+	sent := false
+	ok, err := tr.Announce(nil, func(string) error {
+		sent = true
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.False(t, ok, "不应发出")
+	assert.False(t, sent, "send 不应被调用")
+}
+
+// TestUnimplementedTaskEventTracker_空实现 测试替身基类的五个方法都安全。
+func TestUnimplementedTaskEventTracker_空实现(t *testing.T) {
+	var tr UnimplementedTaskEventTracker
+	assert.Nil(t, tr.Claim(nil))
+	tr.Persist(nil)
+	ok, err := tr.Announce(nil, func(string) error { return nil })
+	assert.False(t, ok)
+	assert.NoError(t, err)
+	assert.False(t, tr.Wakes())
+	tr.Release(nil)
+}
+
+// TestTaskEventTracker_接口满足 两个生产实现都满足扩张后的接口。
+func TestTaskEventTracker_接口满足(t *testing.T) {
+	var _ TaskEventTracker = (*TaskOutcomeTracker)(nil)
+	var _ TaskEventTracker = (*TaskRevisionTracker)(nil)
+	var _ TaskEventTracker = UnimplementedTaskEventTracker{}
 }

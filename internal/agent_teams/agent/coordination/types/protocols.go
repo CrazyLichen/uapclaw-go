@@ -29,6 +29,10 @@ type AgentRoundController interface {
 	// ResumeInterrupt 以结构化输入恢复 HITL 中断
 	// Python: resume_interrupt(user_input: Any) — 实际调用始终传 InteractiveInput
 	ResumeInterrupt(ctx context.Context, userInput *interaction.InteractiveInput) error
+	// AnnounceTaskRevisions 让成员运行时立刻投递待发任务编辑通知（F-129）。
+	// 运行时不支持则静默跳过——下一个输入会携带它。
+	// Python: AgentRoundController.announce_task_revisions (coordination/dispatcher.py:111)
+	AnnounceTaskRevisions(ctx context.Context) error
 }
 
 // TeamLifecycleController TeamAgent 级生命周期效果，跨多个 manager。

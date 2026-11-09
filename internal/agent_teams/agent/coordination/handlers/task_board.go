@@ -21,7 +21,7 @@ import (
 //   - task_created       映射 onTaskBoardEvent
 //   - task_plan_request  映射 onTaskBoardEvent
 //   - task_plan_response 映射 onTaskPlanDecision
-//   - task_updated       映射 onTaskBoardEvent
+//   - task_updated       映射 onTaskUpdated
 //   - task_completed     映射 onTaskBoardEvent
 //   - task_cancelled     映射 onTaskBoardEvent
 //   - task_unblocked     映射 onTaskBoardEvent
@@ -54,7 +54,7 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 		events.TeamEventTaskCreated:      h.OnTaskBoardEvent,
 		events.TeamEventTaskPlanRequest:  h.OnTaskBoardEvent,
 		events.TeamEventTaskPlanResponse: h.OnTaskPlanDecision,
-		events.TeamEventTaskUpdated:      h.OnTaskBoardEvent,
+		events.TeamEventTaskUpdated:      h.OnTaskUpdated,
 		events.TeamEventTaskCompleted:    h.OnTaskBoardEvent,
 		events.TeamEventTaskCancelled:    h.OnTaskBoardEvent,
 		events.TeamEventTaskUnblocked:    h.OnTaskBoardEvent,
@@ -100,6 +100,49 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 			Err(err).
 			Str("event_type", em.EventType).
 			Msg("onTaskClaimed: deliver_input failed")
+	}
+}
+
+// OnTaskUpdated 任务内容被编辑；若目标是自己，让任务通知器立刻说话。
+//
+// member_name 携带当前 owner（编辑不改 owner）。目标是自己时经任务通知器
+// 投递（F-129 的唯一来源，渲染 revision 区间 + 编辑备注 + 要求重读）；
+// 其他成员落到通用任务板逻辑（leader 观察；编辑不扩大可认领池，故不推成员）。
+// 本方法自己不渲染任何内容，所以通知不会到两次。
+//
+// human-agent 已认领的任务被 leader 编辑是不允许的（上游拒绝），
+// 所以更新事件永远不会指向 human avatar——不需要 HITT 分支。
+//
+// 注意上游此方法**没有** is_inner 守卫（与 on_task_claimed 不同），故这里也不加。
+//
+// Python: TaskBoardHandler.on_task_updated (task_board.py:332-360)
+func (h *TaskBoardHandler) OnTaskUpdated(ctx context.Context, event types.CoordinationEvent) {
+	memberName := h.blueprint.DispatcherMemberName()
+	if memberName == "" || h.infra == nil || h.infra.TaskManager() == nil {
+		return
+	}
+	em := event.Transport
+
+	payloadMember, _ := em.Payload["member_name"].(string)
+	if payloadMember != memberName {
+		// 别人的编辑：走通用任务板逻辑
+		h.OnTaskBoardEvent(ctx, event)
+		return
+	}
+
+	// 是自己的任务：恢复轮询 + 让通知器立刻说话
+	h.poll.ResumePolls(ctx)
+	taskID, _ := em.Payload["task_id"].(string)
+	logger.Info(logComponent).
+		Str("event_type", "task_updated_for_self").
+		Str("member_name", memberName).
+		Str("task_id", taskID).
+		Msg("received TASK_UPDATED for self")
+
+	if err := h.round.AnnounceTaskRevisions(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("member_name", memberName).
+			Msg("onTaskUpdated: announce_task_revisions failed")
 	}
 }
 
