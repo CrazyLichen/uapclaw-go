@@ -94,6 +94,9 @@ type DeepAdapter struct {
 	configBase map[string]any
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
+	// interactionOutputHandoff 上一次输出的排空屏障（宿主自持，不碰 Core 私有字段）。
+	// Python: interface_deep.py:16029 _interaction_output_handoff
+	interactionOutputHandoff *outputHandoff
 	// sessionAdapters 会话级子适配器缓存（按会话分身）
 	// Python: interface_deep.py _session_adapters（:2126）
 	sessionAdapters *sessionAdapterCache
@@ -1345,12 +1348,29 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 18: Runner.RunAgentStreaming(agent=d.instance, inputs=inputs)
 	// Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
-	rawCh, streamErr := runner.RunAgentStreaming(ctx, runner.ByAgent(d.instance), inputs, runner.BySessionID(sessionID), nil, nil, nil)
+	// 步骤 18: 抢输出租约 + 投递输入，从租约队列取帧。
+	// Python: interface_deep.py:19953-20010 —— attach → send_input → for chunk in stream
+	//
+	// 下游解析（usage 累加 / askUser 去重 / evolution 块 / 控制事件）原样保留：
+	// 租约队列与 runner 输出同为 stream.Schema，只换数据源。
+	rawCh, accepted, streamErr := d.openInteractionStream(ctx, req, inputs, sessionID)
 	if streamErr != nil {
 		d.unmarkSessionActive(sessionID)
 		ch := make(chan *schema.AgentResponseChunk)
 		close(ch)
-		return ch, fmt.Errorf("Runner.RunAgentStreaming start failed: %w", streamErr)
+		return ch, fmt.Errorf("interaction attach/send_input failed: %w", streamErr)
+	}
+	if accepted {
+		// 拿不到租约（另一读者持有）：只回受理确认，不投递。
+		// Python: interface_deep.py:20000-20005
+		d.unmarkSessionActive(sessionID)
+		ch := make(chan *schema.AgentResponseChunk, 1)
+		ch <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+			"event_type": runtimeAcceptedEventType,
+			"request_id": req.RequestID,
+		})
+		close(ch)
+		return ch, nil
 	}
 
 	// goroutine 从 rawCh 读取，parseStreamChunk 转换，写入 outCh
