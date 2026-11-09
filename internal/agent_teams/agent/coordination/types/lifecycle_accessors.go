@@ -119,6 +119,9 @@ type HarnessAccessor interface {
 	// State 返回当前生命周期相位。
 	// 对齐 Python: TeamHarness.state property（team_harness.py:327-331）
 	State() harness.HarnessState
+	// Dispose 永久收尾：停机 + 释放该成员的进程级资源（记忆索引、sys_operation）。
+	// Python: TeamHarness.dispose()（team_harness.py:201-230）；kernel.stop 尾部调用。
+	Dispose(ctx context.Context) error
 }
 
 // BlueprintAccessor 蓝图扩展接口。

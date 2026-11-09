@@ -34,6 +34,8 @@ type fakeHarnessAccessor struct {
 	paused bool
 	// state 当前生命周期相位
 	state harness.HarnessState
+	// disposed 是否调用过 Dispose
+	disposed bool
 }
 
 func (f *fakeHarnessAccessor) RegisterMemberTools(_ *memory.TeamMemoryManager) {}
@@ -51,6 +53,12 @@ func (f *fakeHarnessAccessor) PausedQuery() (string, bool) { return f.pausedQuer
 
 // State 实现 types.HarnessAccessor。
 func (f *fakeHarnessAccessor) State() harness.HarnessState { return f.state }
+
+// Dispose 实现 types.HarnessAccessor（kernel.stop 尾部的永久收尾）。
+func (f *fakeHarnessAccessor) Dispose(_ context.Context) error {
+	f.disposed = true
+	return nil
+}
 
 // fakeStreamControllerAccessor 测试用 StreamControllerAccessor 实现。
 type fakeStreamControllerAccessor struct {
@@ -696,4 +704,17 @@ func TestEnqueueMailboxAfterFirstIteration_eventBus为nil不panic(t *testing.T) 
 	assert.NotPanics(t, func() {
 		k.EnqueueMailboxAfterFirstIteration(context.Background())
 	})
+}
+
+// TestStop_调用HarnessDispose 回归 G-06：
+// kernel.Stop 必须销毁原生运行时（Dispose），不能只停 stream 就释放会话。
+func TestStop_调用HarnessDispose(t *testing.T) {
+	acc := &fakeHarnessAccessor{}
+	host := &fakeKernelHost{harnessAccessor: acc}
+	k := NewCoordinationKernel(host)
+	k.lifecycleState = kernelStateRunning
+
+	k.Stop(context.Background())
+
+	assert.True(t, acc.disposed, "Stop 必须调用 HarnessAccessor.Dispose")
 }

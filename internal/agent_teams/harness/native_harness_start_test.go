@@ -92,3 +92,19 @@ func TestStartRound_ResumeContinuation续用turn且带轮前基线(t *testing.T)
 	assert.False(t, second.TurnOpened)
 	assert.Equal(t, first.Turn.TurnNumber, second.Turn.TurnNumber)
 }
+
+// TestStop后Start重建运行期容器 回归 G-08：
+// Stop 后 started 必须复位，Start 才能重建 supervisor/forwarder 与输出队列。
+func TestStop后Start重建运行期容器(t *testing.T) {
+	h := newTestNativeHarness(t)
+	sess := session.CreateAgentSession("restart-sess", h.DeepAgent().Card(), nil)
+	require.NoError(t, sess.PreRun(context.Background(), map[string]any{}))
+
+	require.NoError(t, h.Start(context.Background(), sess))
+	require.NoError(t, h.Stop(context.Background()))
+	require.Equal(t, HarnessStateTerminated, h.State())
+
+	require.NoError(t, h.Start(context.Background(), sess))
+	assert.Equal(t, HarnessStateIdle, h.State(), "重建后应回到 IDLE 并接受新命令")
+	require.NoError(t, h.Stop(context.Background()))
+}

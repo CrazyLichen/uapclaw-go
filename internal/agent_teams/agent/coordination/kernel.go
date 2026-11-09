@@ -366,26 +366,25 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 		}
 	}
 
-	// 步骤 4: [Leader] 标记活跃成员为 PAUSED
+	// 步骤 4-6: [Leader] 标记 PAUSED → 取消恢复任务 → 关闭句柄 →
+	// 复位暂停成员的执行状态 → 持久化生命周期与冷恢复标记。
+	// 顺序对齐 Python kernel.py:351-362：paused_teammates 必须在
+	// MarkLiveTeammates / ShutdownAllHandles 之前抓取，否则句柄已被关闭。
 	if k.host.Role() == schema.TeamRoleLeader {
+		pausedTeammates := k.host.SpawnedHandleNames()
 		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusPaused))
-	}
-
-	// 步骤 4: [Leader] 取消恢复任务
-	// 修复 S-06: 对齐 Python: await host.spawn_manager.cancel_recovery_tasks()
-	if k.host.Role() == schema.TeamRoleLeader {
 		k.host.CancelRecoveryTasks()
-	}
-
-	// 步骤 5: [Leader] 关闭所有已生成句柄
-	// 修复 S-06: 对齐 Python: await host.spawn_manager.shutdown_all_handles()
-	if k.host.Role() == schema.TeamRoleLeader {
 		k.host.ShutdownAllHandles(ctx)
-	}
-
-	// 步骤 6: [Leader] 持久化生命周期状态 "paused"
-	// 修复 S-06: 对齐 Python: self._persist_team_lifecycle("paused")
-	if k.host.Role() == schema.TeamRoleLeader {
+		// 暂停后成员运行时已停，DB 里不能还留着 running 之类的执行状态：
+		// 否则列表/看板显示"还在跑"，且下次启动的 FSM 可能拒绝合法转换。
+		// Python: reset_paused_member_execution_status (kernel.py:355-357)
+		if backend := k.host.TeamBackendAccessor(); backend != nil && k.host.TeamName() != "" {
+			if reset := backend.DB().Member().ResetPausedMemberExecutionStatus(ctx, k.host.TeamName(), pausedTeammates); reset > 0 {
+				logger.Debug(logComponent).Int("reset", reset).
+					Str("team_name", k.host.TeamName()).
+					Msg("pause: reset paused member execution status")
+			}
+		}
 		k.persistTeamLifecycle(ctx, "paused")
 		// 记录冷恢复标记：让 pause → stop → start 等价于 pause → resume。
 		// Python: self._persist_pending_resume()（kernel.py L362）
@@ -478,6 +477,23 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 
 	// 步骤 9: Close stream
 	k.host.CloseStream()
+
+	// 步骤 9.5: 销毁原生运行时 + 停 messager。
+	// Python: kernel.py:590-593 —— close_stream 之后、release_session 之前。
+	// Dispose 是永久收尾（Stop 只做轮末拆除），不接这一步会让 supervisor/
+	// forwarder 持有会话继续跑、sys_operation 不从全局 ResourceMgr 摘除。
+	if harnessAcc := k.host.HarnessAccessor(); harnessAcc != nil {
+		if err := harnessAcc.Dispose(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("stop: harness dispose failed")
+		}
+	}
+	if infra := k.host.DispatcherInfra(); infra != nil {
+		if m := infra.Messager(); m != nil {
+			if err := m.Stop(ctx); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("stop: messager stop failed")
+			}
+		}
+	}
 
 	// 步骤 10: Release session
 	sessCtrl := k.host.SessionController()

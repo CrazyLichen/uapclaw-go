@@ -77,9 +77,10 @@ func (r *ActiveRound) SetPhase(p RoundPhase) { r.IterPhase.Store(p) }
 
 // InboxMessage 排队等待驱动的输入。
 // Python: InboxMessage (state.py)
+//
+// 与上游的差异：上游带单调递增 seq 并把它作为 send() 的返回值；Go 的
+// Send 只返回 error（HarnessProtocol 契约），seq 没有消费者，故不保留。
 type InboxMessage struct {
-	// Seq 单调递增序号，定义全局 FIFO
-	Seq int
 	// Content 输入内容
 	Content any
 	// Immediate true 表示转向当前轮，false 表示等本轮结束后再跑
@@ -93,14 +94,12 @@ type InboxMessage struct {
 type HarnessInternalState struct {
 	// phase 当前生命周期相位
 	phase atomic.Value
-	// mu 保护 active、queue、seq、roundSeq 与暂停轮查询
+	// mu 保护 active、queue、roundSeq 与暂停轮查询
 	mu sync.RWMutex
 	// active 当前活动轮次，无则为 nil
 	active *ActiveRound
 	// queue 待驱动输入队列
 	queue []InboxMessage
-	// seq 输入序号自增源
-	seq int
 	// roundSeq 轮次序号自增源
 	roundSeq int
 	// pausedQuery 暂停轮的原始查询

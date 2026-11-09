@@ -200,6 +200,25 @@ func (d *SQLMemberDao) UpdateMemberExecutionStatus(ctx context.Context, memberNa
 	return true
 }
 
+// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+func (d *SQLMemberDao) ResetPausedMemberExecutionStatus(ctx context.Context, teamName string, memberNames []string) int {
+	if len(memberNames) == 0 {
+		return 0
+	}
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND member_name IN ? AND status = ? AND (execution_status IS NULL OR execution_status <> ?)",
+			teamName, memberNames, "paused", "idle").
+		Update("execution_status", "idle")
+	if result.Error != nil {
+		logger.Error(logComponent).Err(result.Error).
+			Str("team_name", teamName).
+			Msg("reset paused member execution status failed")
+		return 0
+	}
+	return int(result.RowsAffected)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // withTx 返回绑定指定事务的 DAO 实例。

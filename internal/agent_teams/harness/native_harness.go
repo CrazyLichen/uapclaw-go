@@ -196,6 +196,17 @@ func (h *NativeHarness) Start(ctx context.Context, sess *session.Session) error 
 		return nil
 	}
 
+	// 已终止的实例重建运行期容器：旧 supervisor/forwarder 已退出，输出迭代器
+	// 已被消费（consumed=true），命令队列里可能残留未处理命令。
+	// 等价上游 TeamHarness.start 在 native 处于 TERMINATED 时重建 native
+	// （team_harness.py:147-151）。
+	if h.st.Phase() == HarnessStateTerminated {
+		h.st = newInternalState()
+		h.cmd = make(chan controlCmd, controlQueueSize)
+		h.queue = make(chan stream.Schema, outputQueueSize)
+		h.out = newOutputIterator(h.queue)
+	}
+
 	// 步骤 2：初始化基础 rails + 应用模板（模板热加载 ⤵️ 15.7-15.9）
 	if err := h.prepare(ctx); err != nil {
 		return err
@@ -303,8 +314,15 @@ func (h *NativeHarness) Stop(ctx context.Context) error {
 		am.TeardownTools()
 	}
 
+	// 步骤 7：断开事件订阅。
+	// Python: await self._events.unregister_namespace(_EVENT_NAMESPACE)（native_harness.py:452）
+	h.events.reset()
+
 	h.startMu.Lock()
 	h.stopping = false
+	// 复位 started：否则 Stop 后再 Start 会静默返回，命令进入没有消费者的队列。
+	// 对齐上游 TeamHarness.start 的「TERMINATED 则重建 native」判定。
+	h.started = false
 	h.startMu.Unlock()
 	return nil
 }
@@ -322,8 +340,10 @@ func (h *NativeHarness) Send(ctx context.Context, content any, immediate bool) e
 }
 
 // Abort 中断当前轮。
-// Python: NativeHarness.abort (native_harness.py:605)。
-// 本阶段 immediate=true 只取消调度任务，不回滚上下文（spec D-2，⤵️ 25.1c 补回滚）。
+// Python: NativeHarness.abort (native_harness.py:605)
+//
+// immediate=true 取消调度任务并把上下文+状态回滚到最近干净边界；
+// immediate=false 让在飞迭代跑完后在下一个模型调用边界退出（不回滚）。
 func (h *NativeHarness) Abort(ctx context.Context, immediate bool) error {
 	reply := make(chan error, 1)
 	if err := h.enqueue(ctx, &cmdAbort{immediate: immediate, reply: reply}); err != nil {
@@ -550,6 +570,9 @@ func (h *NativeHarness) dispatch(ctx context.Context, c controlCmd) bool {
 		h.transition(ctx, HarnessStateTerminated)
 		h.hardCancelRound(h.st.Active())
 		h.st.SetActive(nil)
+		// 停止后暂停轮作废，避免 IDLE/终止态读到过期查询。
+		// Python: _on_stop 的 self._st.paused_query = None（native_harness.py:1272）
+		h.st.ClearPausedQuery()
 		ack(cmd.reply, nil)
 		return true
 	case *cmdSend:
@@ -557,11 +580,11 @@ func (h *NativeHarness) dispatch(ctx context.Context, c controlCmd) bool {
 	case *cmdAbort:
 		ack(cmd.reply, h.onAbort(cmd))
 	case *cmdPause:
-		// 工具相位的暂停把 ack 延迟到轮末结算，此处不能提前应答。
-		if err := h.onPause(cmd); err != nil {
+		// 只有工具相位的协作暂停会把 ack 延迟到轮末；是否延迟由 onPause 明确返回，
+		// 不能用相位反推（第二次 Pause 进来时相位已是 PAUSING，反推会漏 ack）。
+		deferred, err := h.onPause(cmd)
+		if err != nil || !deferred {
 			ack(cmd.reply, err)
-		} else if h.st.Phase() != HarnessStatePausing {
-			ack(cmd.reply, nil)
 		}
 	case *cmdResume:
 		ack(cmd.reply, h.onResume(cmd))
@@ -775,6 +798,15 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 			// 必须把 answer 写成 answer chunk 写流，否则 chat.final 缺失、首条流永不结束。
 			// control result（error / cooperative-stop）不写流（对齐 _is_control_result）。
 			if !isControlResult(result) {
+				// 中断态先落检查点再暴露可恢复载荷：否则进程重启/冷恢复
+				// 找不到"这一轮停在哪个中断上"。
+				// Python: _persist_and_write_round_result（native_harness.py:1472-1483）
+				if rt, ok := result["result_type"].(string); ok && rt == "interrupt" && h.sess != nil {
+					if err := h.sess.CommitInterrupt(ctx); err != nil {
+						logger.Warn(logComponent).Err(err).Int("round_id", active.RoundID).
+							Msg("commit interrupt checkpoint failed")
+					}
+				}
 				h.agent.WriteRoundResultToStream(ctx, result, h.sess)
 				inv.Result = result
 			}
@@ -801,17 +833,19 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 //   - 工具/边界相位：已开始的迭代必须跑完（工具副作用不可逆），
 //     武装协作停止，由快照轨在下一个模型调用边界强制收尾。
 //
-// pause_requested 在硬取消之前武装：若模型调用在取消准备期间完成，
-// after_model_call 仍会在任何工具启动前强制收尾。
-func (h *NativeHarness) onPause(cmd *cmdPause) error {
+// 返回值 deferred 表示本次暂停的 ack 已转交给轮末结算（工具相位）；
+// 其余所有路径（含非 RUNNING 的幂等早退）都必须由调用方立即应答，
+// 对齐上游 `if phase is not RUNNING: self._ack(cmd.ack, None); return`。
+func (h *NativeHarness) onPause(cmd *cmdPause) (deferred bool, err error) {
 	if h.st.Phase() != HarnessStateRunning {
 		// PAUSING：协作暂停已在飞；PAUSED/IDLE/TERMINATED：无可暂停。
-		return nil
+		// 本次调用必须立即应答，否则重复暂停会永久挂住调用方。
+		return false, nil
 	}
 	active := h.st.Active()
 	if active == nil {
 		h.transition(context.Background(), HarnessStatePaused)
-		return nil
+		return false, nil
 	}
 
 	// 记住本轮原始查询：resume 把它交给续跑轮当 original_query，
@@ -830,13 +864,13 @@ func (h *NativeHarness) onPause(cmd *cmdPause) error {
 		h.events.emitRound(context.Background(), HarnessRoundEvent{Kind: "paused", RoundID: active.RoundID})
 		h.st.SetActive(nil)
 		h.transition(context.Background(), HarnessStatePaused)
-		return nil
+		return false, nil
 	}
 
 	// 协作：让在飞迭代跑完，ack 由轮末结算（_on_round_done）兑现。
 	active.PauseAck = cmd.reply
 	h.transition(context.Background(), HarnessStatePausing)
-	return nil
+	return true, nil
 }
 
 // onResume 就地续跑暂停轮；query 非 nil 为冷恢复。

@@ -398,6 +398,18 @@ func (s *Session) Commit(ctx context.Context) error {
 	return nil
 }
 
+// CommitInterrupt 在轮次以中断（ask_user / 工具中断）收尾时落检查点。
+// Python: Session.commit_interrupt()（native_harness.py:1481 调用）
+//
+// 与 Commit 的区别：中断态需要 InterruptAgentExecute 这条专用入口，
+// 只写 PostAgentExecute 不会记录"这一轮停在哪个中断上"，冷恢复时无法续。
+func (s *Session) CommitInterrupt(ctx context.Context) error {
+	if cp := s.inner.Checkpointer(); cp != nil {
+		return cp.InterruptAgentExecute(ctx, s.inner)
+	}
+	return nil
+}
+
 // ClearSession 清空所有会话状态并重置生命周期标志。
 // 对齐 Python session.clear_session()：
 //   - 清除 globalState / agentState / traceState
