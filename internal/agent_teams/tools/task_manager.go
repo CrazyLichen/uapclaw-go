@@ -44,6 +44,8 @@ type taskAddConfig struct {
 	taskID string
 	// dependencies 可选依赖列表
 	dependencies []string
+	// assignee 可选任务所有者（调度式创建时在写图阶段就落上）
+	assignee *string
 }
 
 // TaskAddWithPriorityOption AddWithPriority 的可选参数。
@@ -186,6 +188,16 @@ func WithTaskID(taskID string) TaskAddOption {
 }
 
 // WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
+// WithTaskAssignee 指定任务所有者。
+//
+// 调度式创建（create_task 带 member/assignee）用它在写图阶段就把 owner 落上：
+// 任务停在 PENDING（有依赖则 BLOCKED）并带着 owner，由调度器交接启动。
+//
+// Python: NewTaskSpec.assignee（add_graph 时一并写入）
+func WithTaskAssignee(assignee string) TaskAddOption {
+	return func(c *taskAddConfig) { c.assignee = &assignee }
+}
+
 func WithDependencies(deps []string) TaskAddOption {
 	return func(c *taskAddConfig) {
 		c.dependencies = deps
@@ -253,6 +265,7 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 			Title:         title,
 			Content:       content,
 			InitialStatus: fsm.TaskStatusPending,
+			Assignee:      cfg.assignee,
 		}
 		edges := make([]database.EdgeSpec, 0, len(cfg.dependencies))
 		for _, depID := range cfg.dependencies {
@@ -284,6 +297,7 @@ func (tm *TeamTaskManager) Add(ctx context.Context, title, content string, opts 
 		Title:    title,
 		Content:  content,
 		Status:   fsm.TaskStatusPending,
+		Assignee: cfg.assignee,
 	}
 	ok, err := tm.db.Task().CreateTask(ctx, task)
 	if err != nil {

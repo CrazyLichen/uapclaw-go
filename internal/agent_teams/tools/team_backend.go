@@ -46,6 +46,11 @@ type TeamBackend struct {
 	isLeader bool
 	// leaderMemberName 领导者成员名称
 	leaderMemberName string
+	// leaderNameCache 从 team_info 行解析出的 leader 名（懒加载缓存）
+	//
+	// leader 是团队的持久属性，一个团队生命周期内不会变，故解析一次即可。
+	// Python: self._leader_name_cache (tools/team.py:1825)
+	leaderNameCache *string
 	// db 团队数据库
 	db database.TeamDatabase
 	// messager 消息发送器
@@ -689,6 +694,79 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 	// 步骤 5: 日志
 	logger.Info(logComponent).Str("member_name", memberName).Msg("SpawnMember: member created")
 	return atschema.NewMemberOpResultSuccess()
+}
+
+// ResolveLeaderMemberName 返回团队的 leader 成员名（必要时查 DB 行）。
+//
+// leader 是团队的持久属性——build_team 把它写进 team_info 行，因此那一行是
+// 唯一真相，不必在 spawn / 描述符链路里层层传递。leader 自己（或构造时已拿到
+// 名字的 backend）直接返回；普通成员从行里解析一次并缓存。
+//
+// 团队行不存在时返回空串。
+//
+// Python: TeamBackend.resolve_leader_member_name (tools/team.py:1811-1829)
+func (tb *TeamBackend) ResolveLeaderMemberName(ctx context.Context) string {
+	if tb.leaderMemberName != "" {
+		return tb.leaderMemberName
+	}
+	if tb.leaderNameCache == nil {
+		team, err := tb.db.Team().GetTeam(ctx, tb.teamName)
+		if err != nil {
+			logger.Warn(logComponent).Str("team_name", tb.teamName).Err(err).
+				Msg("resolve_leader_member_name: read team row failed")
+			cached := ""
+			tb.leaderNameCache = &cached
+			return ""
+		}
+		cached := ""
+		if team != nil {
+			cached = team.LeaderMemberName
+		}
+		tb.leaderNameCache = &cached
+	}
+	return *tb.leaderNameCache
+}
+
+// GetMemberStatus 返回成员当前持久化状态；未知返回 ("", false)。
+//
+// 协调层 harness 输入门卫用的窄投影。
+//
+// Python: TeamBackend.get_member_status (tools/team.py:2684-2692)
+func (tb *TeamBackend) GetMemberStatus(ctx context.Context, memberName string) (string, bool) {
+	if tb.db == nil || tb.db.Member() == nil {
+		return "", false
+	}
+	return tb.db.Member().GetMemberStatus(ctx, tb.teamName, memberName)
+}
+
+// MemberExists 判断成员是否在团队名册里（不拉整行）。
+// Python: TeamBackend.member_exists (tools/team.py:1796)
+func (tb *TeamBackend) MemberExists(ctx context.Context, memberName string) bool {
+	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
+	if err != nil {
+		logger.Warn(logComponent).Str("member_name", memberName).Err(err).Msg("member_exists probe failed")
+		return false
+	}
+	return member != nil
+}
+
+// DeleteUnstartedMember 回滚一个从未离开 UNSTARTED 的内联成员（F_118）。
+//
+// spawn_member 的精确逆操作：行删掉；开启可演进工作空间时，spawn_member
+// 准备过的成员工作空间与缓存条目也一并释放。文件系统清理是尽力而为，
+// 残留目录只告警不抛错。
+//
+// Python: TeamBackend.delete_unstarted_member (tools/team.py:2714-2741)
+func (tb *TeamBackend) DeleteUnstartedMember(ctx context.Context, memberName string) bool {
+	deleted := tb.db.Member().DeleteUnstartedMember(ctx, memberName, tb.teamName)
+	if !deleted {
+		return false
+	}
+	// ⤵️ 上游此处还有两件清理：①`self._external_cli_specs.pop(member_name)`
+	// （外部 CLI kind 映射）②释放 MemberWorkspaceBinder 并清理 workspace_cache
+	// 的 desc/prompt 字段。Go 侧外部 CLI 域、TeamWorkspaceBinder 与
+	// workspace_cache 均未迁移，登记为缺口，不在此臆造空实现。
+	return true
 }
 
 // Startup 启动所有"有活要干"的 UNSTARTED 成员。
