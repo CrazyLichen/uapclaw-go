@@ -19,8 +19,9 @@
 //	├── agent_config.go       # AgentConfigService 配置 CRUD（10.3.13）
 //	├── agent_config_yaml.go  # config.yaml react.subagents 联动
 //	├── agent_config_llm.go   # LLM 生成 whenToUse + systemPrompt
-//	├── tenant_pool.go        # TenantAgentPool 多租户 Agent 池化（10.3.14）
-//	└── skill/                # 技能管理子包
+//	├── tenant_pool.go                 # TenantAgentPool 多租户 Agent 池化（10.3.14）
+//	├── sandbox_no_host_fallback.go    # 沙箱禁宿主回退的任务级执行域标记
+//	└── skill/                         # 技能管理子包
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/
 package runtime
