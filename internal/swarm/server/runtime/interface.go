@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
@@ -812,13 +813,24 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		), nil
 
 	case "pause":
-		// ⤵️ 10.6.19-23: team_manager.pause_session_runtime(sessionID, reason)
-		// S10: paused 硬编码为 false，Team pause 功能完全无效，依赖 TeamManager
+		// Python: paused = await team_manager.pause_session_runtime(session_id, reason=reason)
+		// 团队运行时由 Runner 池持有：pause 把运行时就地停住（可续跑），
+		// 随后取消前台业务流；runtime 保留纯观测订阅。
+		reason := "interrupt(intent=pause): "
 		paused := false
-		// Python: paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
-		_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
-			RequestID: &sessionID,
-		})
+		if tm := team.GetTeamManager(request.ChannelID); tm != nil {
+			var pauseErr error
+			paused, pauseErr = tm.PauseSessionRuntime(ctx, sessionID, reason)
+			if pauseErr != nil {
+				logger.Warn(logComponent).Err(pauseErr).Str("session_id", sessionID).
+					Msg("team pause failed")
+			}
+		}
+		// Python: await self._session_manager.cancel_session_task(session_id, reason, wait_timeout=5.0)
+		if uc.sessionManager != nil {
+			timeout := 5.0
+			_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, reason, &timeout)
+		}
 		message := "团队已暂停"
 		if !paused {
 			message = "当前没有可暂停的团队任务"

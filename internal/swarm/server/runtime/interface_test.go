@@ -707,3 +707,22 @@ func TestUapClaw_ensureSkillDevService_完整构造与幂等(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, svc1, svc2, "ensureSkillDevService 应幂等返回同一实例")
 }
+
+// TestProcessTeamInterrupt_Pause返回interrupt_result 验证团队暂停真接线后返回协议事件。
+func TestProcessTeamInterrupt_Pause返回interrupt_result(t *testing.T) {
+	uc := &UapClawSwarm{}
+	req := &schema.AgentRequest{
+		RequestID: "req-1",
+		ChannelID: "web",
+		Params:    json.RawMessage(`{"intent":"pause","mode":"team.normal"}`),
+	}
+
+	resp, err := uc.processTeamInterrupt(context.Background(), req, "pause", "sess-1")
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "chat.interrupt_result", resp.Payload["event_type"])
+	assert.Equal(t, "pause", resp.Payload["intent"])
+	// 本用例没有真实 team runtime，故 paused=false（协议字段仍须完整）
+	assert.Equal(t, false, resp.Payload["success"])
+}
