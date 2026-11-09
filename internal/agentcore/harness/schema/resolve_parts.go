@@ -101,8 +101,20 @@ func (s *DeepAgentSpec) ResolveParts(ctx BuildContextInterface) (*DeepAgentParts
 	subagents := s.Subagents
 
 	// 步骤 7：委托工厂侧完成 config 组装
-	return resolveDeepAgentPartsFromSpec(s, llmModel, language, workspaceObj,
+	parts, err := resolveDeepAgentPartsFromSpec(s, llmModel, language, workspaceObj,
 		visionConfig, audioConfig, sysOperation, resolvedRails, subagents)
+	if err != nil {
+		return nil, err
+	}
+
+	// 步骤 7b：默认 rails 在此算好并构造实例放进 parts.Rails。
+	//
+	// 上游 spec.resolve_parts 委托 resolve_deep_agent_parts，后者在同一次
+	// 调用里跑完 default_rails 循环（factory.py:394-415）。Go 侧计算器
+	// 住在 harness 包，通过构造期注入的函数指针调进来。
+	// apply 阶段只负责逐个挂载，不做判断。
+	parts.Rails = append(parts.Rails, resolveDefaultRails(s, parts.Config, parts.Rails)...)
+	return parts, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
