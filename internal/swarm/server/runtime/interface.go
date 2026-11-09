@@ -642,10 +642,12 @@ func (uc *UapClawSwarm) GenerateRecap(ctx context.Context, sessionID string) (ma
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (uc *UapClawSwarm) SwitchMode(ctx context.Context, sessionID, subMode string) error {
-	if uc.adapter == nil {
+	// adapterSnapshot 加锁读：与 Cleanup 的 `uc.adapter = nil` 并发时不得裸读。
+	a := uc.adapterSnapshot()
+	if a == nil {
 		return nil
 	}
-	return uc.adapter.SwitchMode(ctx, sessionID, subMode)
+	return a.SwitchMode(ctx, sessionID, subMode)
 }
 
 // CreateInstance 创建 Agent 实例。
@@ -744,11 +746,70 @@ func (uc *UapClawSwarm) Cleanup() error {
 
 // GetInstance 获取底层 DeepAgent 实例。
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
+//
+// 10.3.28f 起根 adapter 是纯 router，不再持有自己的 DeepAgent，
+// 因此该方法在"该 agent 只有根、尚未发生任何会话"时返回 nil。
+// 需要"该会话正在跑的实例"请用 GetLiveSessionInstance。
 func (uc *UapClawSwarm) GetInstance() *harness.DeepAgent {
-	if uc == nil || uc.adapter == nil {
+	if uc == nil {
 		return nil
 	}
-	return uc.adapter.Instance()
+	a := uc.adapterSnapshot()
+	if a == nil {
+		return nil
+	}
+	return a.Instance()
+}
+
+// EnsureInstance 确保该 agent 的 DeepAgent 就绪并返回。
+// Python: interface.py ensure_instance（:5779-5793）
+//
+// 根的 DeepAgent 是惰建的（_skip_own_instance_build :12727）：
+// chat 路径只建会话 child，只有"需要 DeepAgent 句柄的非 chat 路径"
+// （plan 状态读写、harness 包装配、rewind 等）才会在这里把它建出来。
+func (uc *UapClawSwarm) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
+	if uc == nil {
+		return nil, nil
+	}
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return nil, err
+	}
+	// AgentAdapter 已是主接口方法，直接调用（规则 10）
+	return a.EnsureInstance(ctx)
+}
+
+// EnsureLiveSessionInstance 确保该会话的子适配器已启动，返回其 DeepAgent。
+// Python: interface.py ensure_live_session_instance（:5809-5821）
+//
+// 上游用途写明：plan 状态同步必须写进"即将承接 chat.send 的那个 Session"，
+// 而非临时 Session。与 EnsureInstance（建本适配器自己的 DeepAgent）是
+// 两个不同方法，不可互换。
+func (uc *UapClawSwarm) EnsureLiveSessionInstance(ctx context.Context, sessionID string) (*harness.DeepAgent, error) {
+	if live := uc.GetLiveSessionInstance(sessionID); live != nil {
+		return live, nil
+	}
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return nil, err
+	}
+	return a.EnsureLiveSessionInstance(ctx, sessionID)
+}
+
+// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent，没有则 nil。
+// Python: interface.py get_live_session_instance（:5795-5808）
+//
+// 会话分身后 DeepAgent 按会话各一份，plan 状态、上下文用量等运行态
+// 都挂在"那一个"上；取根的 instance 是错的。
+func (uc *UapClawSwarm) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if uc == nil {
+		return nil
+	}
+	a := uc.adapterSnapshot()
+	if a == nil {
+		return nil
+	}
+	return a.GetLiveSessionInstance(sessionID)
 }
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
@@ -1237,13 +1298,16 @@ func truncateStr(s string, maxLen int) string {
 
 // PlanStateAccessor 返回 plan 状态读写入口。
 func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
-	provider, ok := uc.adapter.(interface {
-		PlanStateAccessor() swruntime.PlanStateAccessor
-	})
-	if !ok {
+	// 加锁读：本方法在 chat 流 goroutine 里被调用，而 Cleanup 会并发
+	// 把 uc.adapter 置 nil（-race 实测：Cleanup vs checkPlanExit）。
+	a := uc.adapterSnapshot()
+	if a == nil {
 		return nil
 	}
-	return provider.PlanStateAccessor()
+	// AgentAdapter 已是主接口方法，直接调用（规则 10）。
+	// 之前靠匿名断言，CodeAdapter 因具名组合缺该方法而静默返回 nil，
+	// 导致 code 模式的 plan 状态读写整体失效。
+	return a.PlanStateAccessor()
 }
 
 // PlanModeSnapshot 只读当前会话 plan 模式（不做任何状态写入）。

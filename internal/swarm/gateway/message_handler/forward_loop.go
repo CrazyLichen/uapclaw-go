@@ -590,7 +590,7 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 		if err := json.Unmarshal(agentMsg.Params, &paramsMap); err == nil {
 			if _, hasMode := paramsMap["mode"]; !hasMode {
 				state := mh.GetOrCreateChannelState(msg)
-				paramsMap["mode"] = string(state.Mode)
+				paramsMap["mode"] = string(state.Mode())
 				if updated, err := json.Marshal(paramsMap); err == nil {
 					agentMsg.Params = json.RawMessage(updated)
 				}
@@ -976,7 +976,7 @@ func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap ma
 	// 从 channelStates 补充 mode
 	if _, hasMode := runtimeParams["mode"]; !hasMode {
 		state := mh.GetOrCreateChannelState(msg)
-		runtimeParams["mode"] = string(state.Mode)
+		runtimeParams["mode"] = string(state.Mode())
 	}
 
 	return runtimeParams

@@ -84,9 +84,7 @@ func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 func (s *ModelTokenConfigSuite) TestContextWindow_FromModelEntry() {
 	s.writeEnvConfig(32000, 8192, true)
 
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
+	d := s.newSessionScopedAdapterForTest()
 
 	deepCfg := d.Instance().DeepConfig()
 	s.Require().NotNil(deepCfg)
@@ -114,9 +112,7 @@ func (s *ModelTokenConfigSuite) TestContextWindow_FromModelEntry() {
 func (s *ModelTokenConfigSuite) TestMaxOutputTokens_IntoModelConfig() {
 	s.writeEnvConfig(32000, 8192, true)
 
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
+	d := s.newSessionScopedAdapterForTest()
 
 	model, ok := d.ModelCache()["mock-model"]
 	s.Require().True(ok, "模型缓存应包含 mock-model")
@@ -129,9 +125,7 @@ func (s *ModelTokenConfigSuite) TestMaxOutputTokens_IntoModelConfig() {
 func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 	s.writeEnvConfig(32000, 8192, true)
 
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
+	d := s.newSessionScopedAdapterForTest()
 
 	reactAgent := d.Instance().ReactAgent()
 	s.Require().NotNil(reactAgent)
@@ -145,6 +139,24 @@ func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newSessionScopedAdapterForTest 造一个会话级 adapter 用于验证运行时装配结果。
+//
+// 10.3.28f：根 adapter 是纯 router，不建 DeepAgent 也不建模型缓存
+// （对齐 Python _skip_own_instance_build :13109 —— 早退在 _create_model
+// :13654 之前，根的 _model_cache 同样为空）。模型解析、ContextEngineConfig、
+// 压缩阈值这些装配结果都长在各会话的 child 上，因此本套件在会话级 adapter
+// 上验证，与真实运行路径一致（主循环读的正是 child 的这份）。
+func (s *ModelTokenConfigSuite) newSessionScopedAdapterForTest() *adapter.DeepAdapter {
+	s.T().Helper()
+
+	d := adapter.NewDeepAdapter()
+	// 标记为 session-scoped：create_instance 不会走根的早退分支
+	d.MarkAsSessionScoped("model-token-cfg-session")
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+	return d
+}
 
 // writeEnvConfig 写入含 token 上限与压缩段的 config.yaml。
 func (s *ModelTokenConfigSuite) writeEnvConfig(maxInput, maxOutput int, enabled bool) {

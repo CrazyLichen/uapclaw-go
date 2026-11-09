@@ -60,9 +60,16 @@ func (s *RailRegistrationSuite) SetupTest() {
 }
 
 // newAdapter 写入配置并装配 DeepAdapter。
+//
+// 10.3.28f：本 suite 断言的是"CreateInstance 装出了哪些 rail"与"热重载是否
+// 原地刷新 rail"，都是装配层行为，不涉及会话分流。根 adapter 现在是纯 router
+// （对齐 Python _skip_own_instance_build :13109），不建 DeepAgent，
+// 故标记为 session-scoped：装配逻辑与 child 完全一致，rail 挂在它自己的
+// DeepAgent 上，可直接断言。根分流本身由 session_fork_test.go 覆盖。
 func (s *RailRegistrationSuite) newAdapter(mode, reactExtra string) *adapter.DeepAdapter {
 	s.env.WriteConfigYAML(s.T(), reactExtra)
 	d := adapter.NewDeepAdapter()
+	d.MarkAsSessionScoped("itest-rail")
 	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, mode, ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d

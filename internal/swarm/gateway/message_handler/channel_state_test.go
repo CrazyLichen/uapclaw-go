@@ -320,8 +320,8 @@ func TestApplyChannelState_sessionMap分支(t *testing.T) {
 	}
 	// state 同步刷新（无条件覆盖，spec 陷阱点）
 	state := mh.GetOrCreateChannelState(msg)
-	if state.SessionID != msg.SessionID {
-		t.Errorf("state.SessionID 应与 msg.SessionID 同步: %q vs %q", state.SessionID, msg.SessionID)
+	if state.SessionID() != msg.SessionID {
+		t.Errorf("state.SessionID() 应与 msg.SessionID 同步: %q vs %q", state.SessionID(), msg.SessionID)
 	}
 	// 二次应用幂等（非轮转返回同值）
 	first := msg.SessionID
@@ -346,7 +346,7 @@ func TestApplyChannelState_身份缺失走elif(t *testing.T) {
 	mh.ApplyChannelState(msg)
 	// 身份缺失 → 不走 SessionMap → elif 分支用 state 覆盖（state 为首建生成值）
 	if msg.SessionID == "existing-sid" {
-		t.Errorf("elif 分支应用 state.SessionID 覆盖入站 sid（对齐 Python L1158-1159），实际保留入站值")
+		t.Errorf("elif 分支应用 state.SessionID() 覆盖入站 sid（对齐 Python L1158-1159），实际保留入站值")
 	}
 	if strings.Contains(msg.SessionID, "::") {
 		t.Errorf("身份缺失不应走 SessionMap，实际 sid %q", msg.SessionID)
@@ -385,7 +385,7 @@ func TestGetOrCreateChannelState_首次创建sessionMap覆盖(t *testing.T) {
 		schema.WithUserID("u-1"))
 
 	state := mh.GetOrCreateChannelState(msg)
-	if !strings.Contains(state.SessionID, "feishu::oc-9::bot-1::") {
-		t.Errorf("首次创建应被 SessionMap 覆盖 config 默认，实际 %q", state.SessionID)
+	if !strings.Contains(state.SessionID(), "feishu::oc-9::bot-1::") {
+		t.Errorf("首次创建应被 SessionMap 覆盖 config 默认，实际 %q", state.SessionID())
 	}
 }

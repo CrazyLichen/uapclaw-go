@@ -1425,6 +1425,19 @@ func (d *DeepAgent) LoopSession() *session.Session {
 	return d.loopSession
 }
 
+// InteractionSession 返回 start_interaction 绑定的长生命周期会话。
+// Python: DeepAgent._interaction_session
+// （interface_deep.py resolve_live_agent_session :1729 读它）
+//
+// 返回 nil 表示交互尚未启动。调用方需只读使用：该 Session 归 DeepAgent 所有。
+// 存在意义：会话状态（plan_mode 等）缓存在绑定的 Session 上，改运行态的
+// 调用方必须拿到这一个，用临时 Session 写入只会更新 checkpointer。
+func (d *DeepAgent) InteractionSession() *session.Session {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.interactionSession
+}
+
 // ReactConfig 返回内层 ReActAgent 配置（仅用于测试）。
 // Python: DeepAgent.react_config 属性 (line 894)
 func (d *DeepAgent) ReactConfig() agentinterfaces.AgentConfig {

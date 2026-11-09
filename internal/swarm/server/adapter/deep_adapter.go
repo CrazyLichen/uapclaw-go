@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -96,6 +97,40 @@ type DeepAdapter struct {
 	// sessionAdapters 会话级子适配器缓存（按会话分身）
 	// Python: interface_deep.py _session_adapters（:2126）
 	sessionAdapters *sessionAdapterCache
+	// isSessionScoped 本适配器是否为会话级子适配器。
+	// Python: interface_deep.py _is_session_scoped_adapter（:2110 定义，:2711 置真）
+	isSessionScoped bool
+	// parentSessionID 子适配器所属的会话标识（仅 isSessionScoped 为真时有意义）。
+	// Python: interface_deep.py _parent_session_id
+	parentSessionID string
+	// sessionChildFactory 造一个与原适配器同类的新适配器。
+	// Python: type(self)()（_new_session_scoped_adapter :2680）
+	//
+	// Go 无继承：CodeAdapter 与 DeepAdapter 是两个类型，且 c.deep 不知道自己
+	// 属于 CodeAdapter，故用构造期注入的工厂等价替代；实现直接复用
+	// CreateAdapter，与 Python create_adapter 同构。
+	sessionChildFactory func() (AgentAdapter, error)
+	// childMode 子适配器使用的 mode（"agent" 或 "code"）。
+	// Python 由 type(self)() 天然决定，Go 需显式注入。
+	childMode string
+	// sessionAgentTasks 会话标识 → 在飞请求标识集合。
+	// Python: interface_deep.py _session_agent_tasks（_register_session_agent_task :4869）
+	sessionAgentTasks map[string]map[string]struct{}
+	// rootInstanceRequested 根是否已请求建立自己的 DeepAgent。
+	// Python: interface_deep.py _root_instance_requested（:2124）
+	rootInstanceRequested bool
+	// rootInstanceMu 根 DeepAgent 惰建互斥锁。
+	// Python: interface_deep.py _root_instance_lock（:2125）
+	rootInstanceMu sync.Mutex
+	// sessionInstanceConfig create_instance 的入参快照，供 EnsureInstance 惰建时复用。
+	// Python: interface_deep.py _session_instance_config
+	sessionInstanceConfig map[string]any
+	// sessionInstanceMode 惰建时使用的 mode。
+	// Python: interface_deep.py _session_instance_mode
+	sessionInstanceMode string
+	// sessionInstanceSubMode 惰建时使用的 sub_mode。
+	// Python: interface_deep.py _session_instance_sub_mode
+	sessionInstanceSubMode string
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -375,6 +410,9 @@ func NewDeepAdapter() *DeepAdapter {
 		isCodeAgent:            false,
 		activeSessionIDs:       make(map[string]int),
 		sessionAdapters:        newSessionAdapterCache(),
+		sessionChildFactory:    func() (AgentAdapter, error) { return CreateAdapter("harness", "agent") },
+		childMode:              "agent",
+		sessionAgentTasks:      make(map[string]map[string]struct{}),
 		modelCache:             make(map[string]*llm.Model),
 		modelNameToKeys:        make(map[string][]string),
 		registeredMCPServerIDs: make(map[string]bool),
@@ -537,6 +575,26 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.mode = mode
 	d.subMode = subMode
 
+	// 步骤 11.5: 根只做 router/template holder，不建自己的 DeepAgent
+	// Python: interface_deep.py :13109 if self._skip_own_instance_build(): return
+	//
+	// 位置与上游一致：在便宜的 config-cache 段之后、model 构建之前。
+	// 先记下惰建所需的入参，供 EnsureInstance 复用。
+	//
+	// ⤵️ 上游此处还有 web channel 的 _start_mcp_prewarm()（fire-and-forget
+	//    预热 connected MCP 的进程级连接缓存）；Go 侧 MCP 生命周期尚未对齐，
+	//    随 R-6 一并回填。
+	d.sessionInstanceConfig = configMap
+	d.sessionInstanceMode = mode
+	d.sessionInstanceSubMode = subMode
+	if d.skipOwnInstanceBuild() {
+		logger.Info(logComponent).
+			Str("mode", mode).
+			Str("sub_mode", subMode).
+			Msg("root adapter skips own DeepAgent build (router only)")
+		return nil
+	}
+
 	// 步骤 12: model = d.createModel(configBase)
 	// createModel 内部构建完再发布（stateMu 保护），调用方不要再直接赋值 d.model。
 	d.createModel(configBase)
@@ -698,9 +756,31 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 //	Python: 12. self._registered_mcp_server_ids.clear()
 //	Python: 13. await self._register_mcp_servers_from_config(config_base, tag)
 func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
-	// 步骤 0: 实例 nil 检查
+	// 步骤 0: 根无 instance 的分支
+	// Python: _reload_agent_config :13623-13631
+	//
+	// 上游注释：根 adapter 的惰建 DeepAgent 若还没被任何人需要过，
+	// "it has nothing of its own to reconfigure, but the cached config
+	//  snapshot still has to move forward and the live session adapters
+	//  still have to be reloaded."
+	//
+	// 所以根分支必须做三件实事，不能直接返回：
+	//  1. 推进 config 快照（否则后续 child 建出来还是旧配置）
+	//  2. 取消 skill retrieval 构建（⤵️ 依赖该链路，随 R-5）
+	//  3. 扇出到所有 live child 重载（否则已在跑的会话继续用旧模型）
 	if d.instance == nil {
-		return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+		if d.isSessionScoped {
+			return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+		}
+		if err := d.applyReloadConfigSnapshot(configBase, envOverrides); err != nil {
+			return err
+		}
+		// ⤵️ _cancel_skill_retrieval_build_after_reload：依赖 skill retrieval
+		//    构建缓存，随 R-5（tool_retrieval 开关）回填。
+		d.fanOutReloadToSessionAdapters(ctx, configBase, envOverrides)
+		logger.Info(logComponent).
+			Msg("config hot-reloaded (root instance not built; snapshot refreshed and session adapters cascaded)")
+		return nil
 	}
 
 	// Python: clear_config_cache() + clear_memory_manager_cache()
@@ -856,6 +936,26 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 //	Python: 20. finally: 清理（取消标记活跃会话、重置上下文变量）
 //	Python: 21. return AgentResponse from result
 func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (*schema.AgentResponse, error) {
+	// 步骤 0: 根分流
+	// Python: process_message_impl :18175 → _get_session_adapter_for_request
+	//
+	// 根是路由器，不跑对话；把它转给该会话的子适配器，方法体其余步骤
+	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		reserve := !isAttachOnlySubscription(req.Params)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
+			ReserveActivity: reserve,
+			RequestID:       req.RequestID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		defer d.unregisterSessionAgentTask(sid, req.RequestID)
+		return child.ProcessMessageImpl(ctx, req, inputs)
+	}
+
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
@@ -1027,6 +1127,27 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 //	Python: 20. except asyncio.CancelledError: ...
 //	Python: 21. finally: 清理
 func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
+	// 步骤 0: 根分流
+	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		reserve := !isAttachOnlySubscription(req.Params)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
+			ReserveActivity: reserve,
+			RequestID:       req.RequestID,
+		})
+		if err != nil {
+			ch := make(chan *schema.AgentResponseChunk)
+			close(ch)
+			return ch, err
+		}
+		// 流式不能 defer 淘汰：淘汰必须在流消费完之后，而调用方持有 channel。
+		// 用转接 goroutine 在流关闭后触发（对齐 Python 的 finally 在 generator 结束时执行）。
+		return d.streamThroughChild(ctx, sid, req.RequestID, func() (<-chan *schema.AgentResponseChunk, error) {
+			return child.ProcessMessageStreamImpl(ctx, req, inputs)
+		})
+	}
+
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
 		ch := make(chan *schema.AgentResponseChunk)
@@ -1463,6 +1584,32 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	intent := paramsString(params, "intent", "cancel")
 	newInput := params["new_input"] // 可能为 nil
 
+	// 步骤 0: 根分流（双分支）
+	// Python: process_interrupt :16330
+	//
+	// cancel/supplement 只查缓存：无缓存即"无在飞流"，fallthrough 到共享
+	// teardown。不能为它造 child——造 child 会跑完整 agent 初始化
+	// （17 rail + ensure_initialized，含 ProjectMemoryRail 扫描），把 cancel
+	// 本身卡住数十秒，后续 ESC 全堵在队列里（上游 :16331-16341 注释）。
+	// pause/resume 需要 session-scoped adapter 的 StreamEventRail，按原逻辑创建。
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		if intent == "cancel" || intent == "supplement" {
+			if cached := d.getCachedSessionAdapter(sid); cached != nil {
+				defer d.evictIdleSessionAdapters(ctx)
+				return cached.ProcessInterrupt(ctx, req)
+			}
+			// fallthrough：无缓存 → 走下方共享 teardown
+		} else {
+			child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+			if err != nil {
+				return nil, err
+			}
+			defer d.evictIdleSessionAdapters(ctx)
+			return child.ProcessInterrupt(ctx, req)
+		}
+	}
+
 	// 步骤 3-4: session 规范化 + 活跃检查
 	normalizedSID := "default"
 	if req.SessionID != nil && *req.SessionID != "" {
@@ -1660,6 +1807,18 @@ func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) 
 //	Python: 7. elif request_id.startswith("skill_evolve_"): resolved = _handle_evolution_approval(...)
 //	Python: 8. return AgentResponse(ok=True, payload={"accepted": True, "resolved": resolved})
 func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 步骤 0: 根分流
+	// Python: handle_user_answer :16826 → _get_or_create_session_adapter
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		return child.HandleUserAnswer(ctx, req)
+	}
+
 	// 步骤 1-2: 解析 request_id 和 answers
 	params := parseParams(req.Params)
 	requestID := paramsString(params, "request_id", "")
@@ -1755,10 +1914,17 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string) error {
-	if d.instance == nil {
+	// 10.3.28f：SwitchMode 是根上的独立 RPC，需要 DeepAgent 句柄。
+	// 根不再在 create_instance 时自建 instance，故此处惰建。
+	inst, err := d.EnsureInstance(ctx)
+	if err != nil {
+		return err
+	}
+	if inst == nil {
 		return nil
 	}
-	card := d.instance.Card()
+
+	card := inst.Card()
 	if card == nil {
 		return nil
 	}
@@ -1769,8 +1935,8 @@ func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 		return fmt.Errorf("SwitchMode PreRun 失败: %w", err)
 	}
 
-	d.instance.SwitchMode(sess, subMode)
-	state := d.instance.LoadState(sess)
+	inst.SwitchMode(sess, subMode)
+	state := inst.LoadState(sess)
 
 	sess.UpdateState(map[string]any{
 		hschema.SessionStateKey: state.ToSessionDict(),
@@ -1790,6 +1956,66 @@ func (d *DeepAdapter) Instance() *harness.DeepAgent {
 		return nil
 	}
 	return d.instance
+}
+
+// IsSessionScoped 是否为会话级子适配器。
+// Python: interface_deep.py _is_session_scoped_adapter（:2110）
+func (d *DeepAdapter) IsSessionScoped() bool {
+	return d.isSessionScoped
+}
+
+// MarkAsSessionScoped 标记为指定会话的子适配器。
+// Python: interface_deep.py mark_as_session_scoped（:2711-2714）
+func (d *DeepAdapter) MarkAsSessionScoped(sessionID string) {
+	d.isSessionScoped = true
+	d.parentSessionID = sessionID
+}
+
+// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent。
+// Python: interface_deep.py get_live_session_instance（:12744-12769）
+//
+// child 返回自己的 instance；根查缓存后递归一跳（子适配器一定是
+// session 级的，递归只会走上面的 isSessionScoped 分支返回它自己的实例）。
+func (d *DeepAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if d.isSessionScoped {
+		return d.instance
+	}
+	sid := sessionAdapterKey(&sessionID)
+	child := d.getCachedSessionAdapter(sid)
+	if child == nil {
+		return nil
+	}
+	return child.GetLiveSessionInstance(sid)
+}
+
+// HandleSwarmflowReply 处理人对 swarmflow 人工轮次的回复。
+// Python: interface_deep.py handle_swarmflow_reply（:16971）
+//
+// 方法体归团队域；10.3.28f 只保证接口面与分流结构（spec DEC-10）。
+func (d *DeepAdapter) HandleSwarmflowReply(
+	ctx context.Context, req *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	// 分流头
+	// Python: :16979-16984
+	if !d.isSessionScoped {
+		sid := sessionAdapterKey(req.SessionID)
+		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer d.evictIdleSessionAdapters(ctx)
+		return child.HandleSwarmflowReply(ctx, req)
+	}
+	return nil, errors.New("swarmflow reply handling not implemented; owned by team domain")
+}
+
+// PendingInteractions 会话被暂停的轮次仍在询问什么。
+// Python: interface_deep.py pending_interactions（:15984）
+//
+// 该方法是根上的查询入口，不转 child（对齐上游：它自己查 child）。
+// 方法体依赖 paused_interaction_events，归后续章节。
+func (d *DeepAdapter) PendingInteractions(sessionID string) ([]map[string]any, error) {
+	return nil, nil
 }
 
 // Cleanup 清理适配器资源。
@@ -3156,23 +3382,18 @@ func toPositiveInt(v any) (int, bool) {
 //
 // 两个来源任一非空即为真：会话级子适配器缓存、活跃执行计数。
 func (d *DeepAdapter) HasSessionRuntime(sessionID string) bool {
-	if d.sessionAdapters != nil && d.sessionAdapters.has(sessionID) {
+	sid := sessionAdapterKey(&sessionID)
+	// child 只认自己的会话
+	if d.isSessionScoped {
+		return d.parentSessionID == sid
+	}
+	if d.sessionAdapters != nil {
+		if d.sessionAdapters.has(sid) || d.sessionAdapters.hasGuard(sid) {
+			return true
+		}
+	}
+	if d.isSessionActive(sid) {
 		return true
 	}
-	d.sessionMu.Lock()
-	count := d.activeSessionIDs[sessionID]
-	d.sessionMu.Unlock()
-	return count > 0
-}
-
-// CleanupSessionAdapter 清理该会话的 adapter 侧缓存，返回是否清到东西。
-// Python: interface_deep.py cleanup_session_adapter
-//
-// 只清"归属该会话"的那一份；活跃执行计数由执行路径自己递减，
-// 此处不动，否则会把正在跑的请求误判成已结束。
-func (d *DeepAdapter) CleanupSessionAdapter(sessionID string) bool {
-	if d.sessionAdapters == nil {
-		return false
-	}
-	return d.sessionAdapters.cleanup(sessionID)
+	return d.hasRegisteredSessionTasks(sid)
 }
