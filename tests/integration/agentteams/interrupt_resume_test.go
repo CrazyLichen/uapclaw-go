@@ -90,7 +90,7 @@ func (s *TeamInterruptResumeSuite) TestHarnessReadsSessionState() {
 	deepAgent := harness.NewDeepAgent(card)
 	s.Require().NotNil(deepAgent)
 
-	h := ateamharness.NewTeamHarness(deepAgent, nil, string(atschema.TeamRoleLeader), "leader-1", false)
+	h := ateamharness.NewTeamHarness(deepAgent, string(atschema.TeamRoleLeader), "leader-1", false)
 	s.Require().NotNil(h)
 
 	// 无活跃/循环会话 → 判定为"无待处理中断"（不能 panic、不能误判）
