@@ -435,6 +435,7 @@ func (r *DeepAgentRail) IsTrusted() bool {
 | **V-1** | `auto_permission_rail.go` 目录归属漂移 | `permissions/auto_permission_rail.py` | `permissions/auto_permission/auto_permission_rail.go` | 目录层级 | 避免 `permissions` ↔ `auto_permission` 循环依赖 | Go 支持子包回引父包类型时回收 | 9.90d-2 行内说明 |
 | **V-2** | 12 个 mixin 合并为单结构体 | 12 个 `*Mixin` 类 | `AutoPermissionRail` 单类型 + 方法分文件 | 类型归属 | Go 无多继承；12 mixin 共享同一 `self` 状态 | 不回收（语言限制） | 9.90d-2 行内说明 |
 | **V-3** | 5 个反射适配函数不实现 | `runtime_result.py:20/46/79/96/132` | 无 | 方法缺失 | Go 签名静态固定，无 `inspect.signature` 需求 | 不回收（语言限制） | 9.90d-2 行内说明 |
+| **V-3b** | `load_openjiuwen_permission_contract` 的三项运行时探测退化为常量 | `openjiuwen_contract.py:36-47`（`inspect.iscoroutinefunction` / `hasattr` / `callable`） | `openjiuwen_contract.go` 常量 `true` + 文件底部编译期断言 `var _ = (*secrail.PermissionInterruptRail).UpdateConfig` 等 | 校验机制 | Go 无 async 概念，方法/工厂的存在性由类型系统在**编译期**保证，运行时探测无意义 | 不回收（语言限制） | 9.90d-1 Task 12 行内说明 |
 | **V-4** | `_closure` 闭包链校验 → `MarkTrusted()` | `readonly_tool_bindings.py:44` | `rails/base.go` `MarkTrusted()` | 校验机制 | Go 无 `__code__.co_freevars` / `__closure__` 反射 | 不回收（语言限制），残余风险登记 | 9.90d-2 行内说明 |
 | **V-5** | `_methods_match` 反射方法归属 → 接口断言 | `readonly_tool_bindings.py:65` | 同上 | 校验机制 | Go 方法值无法还原 `__self__`/`__func__` | 同上 | 9.90d-2 行内说明 |
 | **V-6** | `readonly_tool_bindings` 只覆盖 `ProgressiveToolRail` | 覆盖 5 类 rail（`ProgressiveToolRail` / `ToolRetrievalPromptRail`+`ToolRetrievalToolkit` / `SkillRetrievalPromptRail`+`SkillRetrievalToolkit` / `HeartbeatRuntimeBridge` / `_RestrictedCronBackend`） | 仅 `ProgressiveToolRail` | 功能范围 | 4 类 rail/toolkit 在 Go 侧不存在 | **9.11b 落地后回填** | **🔴 新增 `9.11b` 行，标 ☐ + ⤴️ 指向 9.90d-2** |
@@ -1017,3 +1018,49 @@ Go 侧 `common/tools` 完全没有：
 dispose 幂等 / 租约 6 种状态 / 并发记录与读写。
 `trusted_search_urls.go` 除 `RecordBatch` 95.3%（`url.Parse` 失败与
 `remaining<0` 分支不可达）外全部 100%。
+
+### 12.10 Task 12 执行时的核实结论：`openjiuwen_contract`
+
+**全量落地**：183 行 / 1 类型 + 12 函数逐条对齐。
+
+**偏差 V-3b（已登记 §五）**：Python 用 `inspect.iscoroutinefunction` /
+`hasattr(PermissionInterruptRail, "update_config")` /
+`callable(build_permission_interrupt_rail)` 做**运行时**能力探测；
+Go 的能力由类型系统在**编译期**保证，故三项退化为常量 `true`，
+并在文件底部加编译期断言固定：
+`var _ = (*secrail.PermissionInterruptRail).UpdateConfig`、
+`var _ = security.BuildPermissionInterruptRail`。
+
+**包路径勘误**：`PermissionInterruptRail` 在
+`internal/agentcore/harness/rails/security`（不是
+`internal/agentcore/harness/security`），需两个 import 别名
+（`secrail` / `security`）。`UpdateConfig` 是**指针接收者**方法，
+方法表达式须写 `(*secrail.PermissionInterruptRail).UpdateConfig`。
+
+#### 计划测试示例的 4 处预期有误（已按上游行为改写）
+
+Python 的 `classify_permission_result` 第 4 步是
+`getattr(result, "approved", None)`——**`getattr` 对 dict 无效**
+（dict 没有 `approved` 属性），所以 `map{"approved": true}` 根本不参与
+allow/denied 判定，最终落到兜底分支 `interrupt`。
+
+| 计划测试 | 计划预期 | Python 实际 | 处理 |
+|---|---|---|---|
+| `map{approved:true}` | allow | **interrupt** | 改测试，改用 `*security.PermissionConfirmResponse` 验证 allow |
+| `map{approved:false}` | denied | **interrupt** | 同上 |
+| `map{user_rejection:true, denied:true}` | user_rejection | **interrupt**（这两个键上游根本不读） | 改测 feedback 标记路径 |
+| `map{interrupt:false}`（`TestIsInterruptResult`） | 非 interrupt | **interrupt**（兜底分支） | 改断言为 interrupt |
+
+新增 `TestClassifyPermissionResult_dict带approved键仍是interrupt` 专门固定
+这条上游行为，避免后续有人"修"成 allow/denied。
+
+**另一处上游细节**：`_is_user_rejection_payload` 对**字符串**输入在检查完
+`[permission_rejected]` 后**直接 return False**，不再看 `cancelled` 标记。
+故裸字符串 `"cancelled"` 不是 user_rejection，而
+`map{"feedback": "cancelled"}` 是。已由
+`TestClassifyPermissionResult_字符串cancelled不是驳回` 与
+`TestClassifyPermissionResult_dict带feedback取消` 成对固定。
+
+**测试**：40 个用例。`openjiuwen_contract.go` 12 个导出函数 + 2 个私有
+函数全部 100%（`permissionFeedback` / `approvedAttribute` 的各类型分支
+均覆盖，含值类型结构体与 nil 指针）。
