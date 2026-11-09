@@ -481,7 +481,7 @@ func (h *TeamHarness) Abort(ctx context.Context, immediate bool) error {
 	return h.native.Abort(ctx, immediate)
 }
 
-// Pause 暂停当前轮（25.1c 前返回哨兵错误）。
+// Pause 暂停当前轮到最近的内层迭代边界。
 // Python: TeamHarness.pause()（team_harness.py:383-390）
 func (h *TeamHarness) Pause(ctx context.Context) error {
 	if h.native == nil || h.getActiveSession() == nil {
@@ -490,13 +490,22 @@ func (h *TeamHarness) Pause(ctx context.Context) error {
 	return h.native.Pause(ctx)
 }
 
-// Resume 继续暂停的轮（25.1c 前返回哨兵错误）。
+// Resume 继续暂停的轮；query 非 nil 为冷恢复。
 // Python: TeamHarness.resume(query=...)（team_harness.py:392-400）
 func (h *TeamHarness) Resume(ctx context.Context, query any) error {
 	if h.native == nil || h.getActiveSession() == nil {
 		return nil
 	}
 	return h.native.Resume(ctx, query)
+}
+
+// PausedQuery 返回暂停轮原始查询；ok=false 表示当前没有暂停轮。
+// Python: TeamHarness.paused_query (team_harness.py L402-406)
+func (h *TeamHarness) PausedQuery() (string, bool) {
+	if h.native == nil {
+		return "", false
+	}
+	return h.native.PausedQuery()
 }
 
 // State 返回 native 生命周期相位；无 native 时返回 idle。

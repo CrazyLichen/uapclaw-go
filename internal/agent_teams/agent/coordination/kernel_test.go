@@ -27,6 +27,10 @@ import (
 type fakeHarnessAccessor struct {
 	startCalled bool
 	startErr    error
+	// pausedQuery 暂停轮查询
+	pausedQuery string
+	// paused 是否存在暂停轮
+	paused bool
 }
 
 func (f *fakeHarnessAccessor) RegisterMemberTools(_ *memory.TeamMemoryManager) {}
@@ -39,13 +43,35 @@ func (f *fakeHarnessAccessor) Start(_ context.Context, _ any) error {
 	return f.startErr
 }
 
+// PausedQuery 实现 types.HarnessAccessor。
+func (f *fakeHarnessAccessor) PausedQuery() (string, bool) { return f.pausedQuery, f.paused }
+
 // fakeStreamControllerAccessor 测试用 StreamControllerAccessor 实现。
 type fakeStreamControllerAccessor struct {
 	startCalled bool
+	// pauseCalled 是否调用过 PauseAgent
+	pauseCalled bool
+	// resumeCalled 是否调用过 ResumeAgent
+	resumeCalled bool
+	// resumeQuery 最近一次 ResumeAgent 的 query
+	resumeQuery *string
 }
 
 func (f *fakeStreamControllerAccessor) ResetStreamQueue()       {}
 func (f *fakeStreamControllerAccessor) Start(_ context.Context) { f.startCalled = true }
+
+// PauseAgent 实现 types.StreamControllerAccessor。
+func (f *fakeStreamControllerAccessor) PauseAgent(_ context.Context) error {
+	f.pauseCalled = true
+	return nil
+}
+
+// ResumeAgent 实现 types.StreamControllerAccessor。
+func (f *fakeStreamControllerAccessor) ResumeAgent(_ context.Context, query *string) error {
+	f.resumeCalled = true
+	f.resumeQuery = query
+	return nil
+}
 
 // fakeDispatcherInfra S-32: 测试用 DispatcherInfra 实现（对齐 *TeamInfra 具体类型签名）
 type fakeDispatcherInfra struct{}

@@ -263,6 +263,30 @@ func (sc *StreamController) DrainAgentTask(ctx context.Context) error {
 	return sc.CancelAgent(ctx)
 }
 
+// PauseAgent 暂停在飞轮次到最近的内层迭代边界。
+// Python: StreamController.pause_agent (stream_controller.py L711-720)
+//
+// 与 CancelAgent 的区别：轮次被保留——停在模型调用上的轮被中断并回退到
+// 上一边界，正在跑工具的迭代则先跑完。ResumeAgent 从该边界继续。
+func (sc *StreamController) PauseAgent(ctx context.Context) error {
+	if sc.resources == nil || sc.resources.Harness == nil {
+		return nil
+	}
+	return sc.resources.Harness.Pause(ctx)
+}
+
+// ResumeAgent 就地续跑暂停轮；query 非 nil 为冷恢复。
+// Python: StreamController.resume_agent (stream_controller.py L722-730)
+func (sc *StreamController) ResumeAgent(ctx context.Context, query *string) error {
+	if sc.resources == nil || sc.resources.Harness == nil {
+		return nil
+	}
+	if query == nil {
+		return sc.resources.Harness.Resume(ctx, nil)
+	}
+	return sc.resources.Harness.Resume(ctx, *query)
+}
+
 // CooperativeCancel 协作取消（优雅中断）。
 // Python: StreamController.cooperative_cancel() → runtime.abort(immediate=False)
 func (sc *StreamController) CooperativeCancel(ctx context.Context) error {

@@ -91,6 +91,12 @@ type StreamControllerAccessor interface {
 	// 对齐 Python: StreamController.start()（stream_controller.py:305-321）——
 	// kernel.start 在 harness.start 之后调用，controller 消费 runtime 输出。
 	Start(ctx context.Context)
+	// PauseAgent 暂停在飞轮次到最近的内层迭代边界。
+	// 对齐 Python: StreamController.pause_agent()（stream_controller.py:711-720）
+	PauseAgent(ctx context.Context) error
+	// ResumeAgent 就地续跑暂停轮；query 非 nil 为冷恢复。
+	// 对齐 Python: StreamController.resume_agent(query=...)（stream_controller.py:722-730）
+	ResumeAgent(ctx context.Context, query *string) error
 }
 
 // HarnessAccessor Harness 窄接口。
@@ -106,6 +112,9 @@ type HarnessAccessor interface {
 	// 对齐 Python: TeamHarness.start(team_session=session)（team_harness.py:135-169）——
 	// kernel.start 在 bind_session 之后调用，先起 runtime 再让 controller 消费输出。
 	Start(ctx context.Context, teamSession any) error
+	// PausedQuery 返回暂停轮查询；ok=false 表示当前没有暂停轮。
+	// 对齐 Python: TeamHarness.paused_query（team_harness.py:402-406）
+	PausedQuery() (string, bool)
 }
 
 // BlueprintAccessor 蓝图扩展接口。

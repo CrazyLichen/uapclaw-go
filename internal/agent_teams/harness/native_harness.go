@@ -172,6 +172,10 @@ func (h *NativeHarness) SessionID() string {
 	return h.sess.GetSessionID()
 }
 
+// PausedQuery 返回暂停轮查询与是否存在。
+// Python: NativeHarness.paused_query (native_harness.py L259-265)
+func (h *NativeHarness) PausedQuery() (string, bool) { return h.st.PausedQuery() }
+
 // DeepAgent 返回内层 DeepAgent（团队侧需要 rails/workspace 等能力时使用）。
 func (h *NativeHarness) DeepAgent() *agentcore.DeepAgent { return h.agent }
 
