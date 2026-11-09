@@ -75,6 +75,7 @@ func (f *fakeKernelHost) IsAgentRunning() bool                                { 
 func (f *fakeKernelHost) HasInFlightRound() bool                              { return f.inFlight }
 func (f *fakeKernelHost) HasPendingInterrupt() bool                           { return f.pendingInt }
 func (f *fakeKernelHost) CancelAgent(_ context.Context) error                 { return nil }
+func (f *fakeKernelHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
 func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
 func (f *fakeKernelHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil

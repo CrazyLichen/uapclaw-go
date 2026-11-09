@@ -942,6 +942,20 @@ func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool
 	return started
 }
 
+// AnnounceTaskRevisions 让成员运行时立刻投递待发任务编辑通知（F-129）。
+//
+// 通知的唯一来源是成员的任务通知器；TASK_UPDATED 事件只是"要求提前说"。
+// 运行时不支持则静默跳过——下一个输入会携带它。
+//
+// Python: TeamAgent.announce_task_revisions (team_agent.py:539-550)
+func (a *TeamAgent) AnnounceTaskRevisions(ctx context.Context) error {
+	h := a.Harness()
+	if h == nil {
+		return nil
+	}
+	return h.AnnounceTaskRevisions(ctx)
+}
+
 // AutoStartAll 启动所有 UNSTARTED 成员。
 //
 // 只有交互广播（@all / 未指名消息）会走到这里，所以 task-scoped 且没有开放

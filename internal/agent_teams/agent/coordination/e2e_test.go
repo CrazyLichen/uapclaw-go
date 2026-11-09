@@ -43,6 +43,9 @@ func (f *fakeTrackableHost) CancelAgent(_ context.Context) error {
 	return nil
 }
 
+// AnnounceTaskRevisions 空实现（接口扩张后补齐）。
+func (f *fakeTrackableHost) AnnounceTaskRevisions(_ context.Context) error { return nil }
+
 func (f *fakeTrackableHost) DeliveredInputs() []any {
 	f.mu.Lock()
 	defer f.mu.Unlock()

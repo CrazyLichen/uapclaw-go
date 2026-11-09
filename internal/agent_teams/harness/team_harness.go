@@ -658,6 +658,27 @@ func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *mem
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// AnnounceTaskRevisions 立刻投递成员待发的任务编辑通知（F_129）。
+//
+// 通知的唯一来源是成员的任务通知器（TeamAgent 的那个实例，策略 rail 借用的
+// 是同一个）。轮次之外没有可认领的会话，因此什么都不会认领：rail 会在成员
+// 下一个输入时告诉它。通知会转向忙碌成员、并为空闲成员开一轮。
+//
+// Python: TeamHarness.announce_task_revisions (team_harness.py:291-304)
+func (h *TeamHarness) AnnounceTaskRevisions(ctx context.Context) error {
+	if h.taskEventTracker == nil {
+		return nil
+	}
+	sess := h.getActiveSession()
+	if sess == nil {
+		return nil
+	}
+	_, err := h.taskEventTracker.Announce(sess, func(text string) error {
+		return h.Send(ctx, text, true)
+	})
+	return err
+}
+
 // getActiveSession 读取最近一次轮次的 Agent 会话（并发安全）。
 func (h *TeamHarness) getActiveSession() *session.Session {
 	h.mu.RLock()

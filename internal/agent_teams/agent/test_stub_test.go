@@ -6,7 +6,12 @@ import (
 )
 
 // stubTaskTracker 任务通知器替身，用于断言 Set/Get 往返拿到同一实例。
-type stubTaskTracker struct{}
+//
+// 嵌入 tracker.UnimplementedTaskEventTracker 补齐 Announce/Wakes/Release
+// （规则 10：接口扩张时改替身，不改接口）。
+type stubTaskTracker struct {
+	tracker.UnimplementedTaskEventTracker
+}
 
 // Claim 见 tracker.TaskEventTracker。
 func (stubTaskTracker) Claim(_ sessioninterfaces.SessionFacade) *tracker.ClaimedNotice {

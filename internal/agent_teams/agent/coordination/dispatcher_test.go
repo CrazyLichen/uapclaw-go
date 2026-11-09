@@ -25,6 +25,7 @@ func (f *fakeDispatcherHost) IsAgentRunning() bool                              
 func (f *fakeDispatcherHost) HasInFlightRound() bool                              { return f.inFlight }
 func (f *fakeDispatcherHost) HasPendingInterrupt() bool                           { return f.pendingInt }
 func (f *fakeDispatcherHost) CancelAgent(_ context.Context) error                 { return nil }
+func (f *fakeDispatcherHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
 func (f *fakeDispatcherHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
 func (f *fakeDispatcherHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil

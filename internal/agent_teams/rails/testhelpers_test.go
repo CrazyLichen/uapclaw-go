@@ -13,7 +13,11 @@ import (
 // ──────────────────────────── 测试替身 ────────────────────────────
 
 // fakeTaskTracker 任务通知器的测试替身。
+//
+// 嵌入 tracker.UnimplementedTaskEventTracker 补齐 Announce/Wakes/Release
+// （规则 10：接口扩张时改替身，不改接口）。
 type fakeTaskTracker struct {
+	tracker.UnimplementedTaskEventTracker
 	// notice 待发的通知（取一次即清空，模拟真实 tracker 的「先 claim 先得」）
 	notice *tracker.ClaimedNotice
 	// persistCount persist 被调用次数
