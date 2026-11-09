@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -80,18 +81,20 @@ func ResolveDeepAgentParts(params *harness_config.CreateDeepAgentParams) (*hsche
 	config := buildDeepAgentConfig(&local, card, workspaceObj, sysOp, resolvedLanguage,
 		effectiveSubagents, normalizedCards)
 
+	// 步骤 8：默认 rails **在 resolve 阶段就算好并构造实例**，
+	// 与上游 factory.py:394-415 一致（all_rails = user + default）。
+	// apply 阶段只负责逐个挂载，不再做任何判断。
+	allRails := make([]agentinterfaces.AgentRail, 0, len(local.Rails)+8)
+	allRails = append(allRails, local.Rails...)
+	allRails = append(allRails, addDefaultRails(
+		local, config, effectiveSubagents, workspaceObj, resolvedLanguage,
+	)...)
+
 	return &hschema.DeepAgentParts{
 		Config:        config,
-		Rails:         local.Rails,
+		Rails:         allRails,
 		ToolCards:     normalizedCards,
 		ToolInstances: toolInstances,
-		// 默认 rails 算账所需的输入（apply 侧使用，见偏差 D-9）
-		Subagents:                       effectiveSubagents,
-		EnableAsyncSubagent:             local.EnableAsyncSubagent,
-		EnableTaskPlanning:              local.EnableTaskPlanning,
-		EnableModelAnomalyDetectionRail: local.EnableModelAnomalyDetectionRail,
-		Skills:                          local.Skills,
-		ModelSelection:                  local.ModelSelection,
 	}, nil
 }
 
@@ -133,9 +136,6 @@ func ApplyDeepAgentParts(ctx context.Context, parts *hschema.DeepAgentParts) (*D
 	for _, r := range parts.Rails {
 		agent.AddRail(r)
 	}
-	// 10b：默认 Rails 自动补齐
-	addDefaultRailsForParts(agent, parts)
-
 	return agent, nil
 }
 
@@ -200,23 +200,31 @@ func buildDeepAgentConfig(
 	return config
 }
 
-// addDefaultRailsForParts 补齐默认 rails（从 parts 反推 addDefaultRails 所需参数）。
-func addDefaultRailsForParts(agent *DeepAgent, parts *hschema.DeepAgentParts) {
-	optionalBool := parts.EnableModelAnomalyDetectionRail
+// ──────────────────────────── 非导出函数（init 注入） ────────────────────────────
+
+// init 把默认 rails 计算器注入 schema 包。
+//
+// schema 包不能 import harness（成环），而 spec.ResolveParts 又需要
+// addDefaultRails 的结果。用构造期函数指针注入，避免 Go embedding
+// 虚方法派发陷阱（基类方法体内 t.xxx() 会静态绑定到空实现）。
+func init() {
+	hschema.SetDefaultRailsResolver(computeDefaultRails)
+}
+
+// computeDefaultRails 把 spec 字段摊成 addDefaultRails 所需的参数并计算。
+//
+// 与 ResolveDeepAgentParts 里的调用完全同源（同一个 addDefaultRails），
+// 只是入参来源从 CreateDeepAgentParams 变成 DeepAgentSpec。
+//
+// Python: resolve_deep_agent_parts 的 default_rails 循环 (factory.py:394-415)
+func computeDefaultRails(spec *hschema.DeepAgentSpec, config *hschema.DeepAgentConfig, userRails []agentinterfaces.AgentRail) []agentinterfaces.AgentRail {
 	params := harness_config.CreateDeepAgentParams{
-		Rails:                           parts.Rails,
-		EnableAsyncSubagent:             parts.EnableAsyncSubagent,
-		EnableTaskPlanning:              parts.EnableTaskPlanning,
-		EnableModelAnomalyDetectionRail: optionalBool,
-		Skills:                          parts.Skills,
-		ModelSelection:                  parts.ModelSelection,
+		Rails:               userRails, // 防重复追加：addDefaultRails 会检查已提供的同类型 rail
+		EnableTaskPlanning:  spec.EnableTaskPlanning,
+		EnableAsyncSubagent: spec.EnableAsyncSubagent,
+		Skills:              spec.Skills,
 	}
-	addDefaultRails(
-		agent,
-		params,
-		parts.Config,
-		parts.Subagents,
-		parts.Config.Workspace,
-		parts.Config.Language,
+	return addDefaultRails(
+		params, config, config.Subagents, config.Workspace, config.Language,
 	)
 }

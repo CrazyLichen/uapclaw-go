@@ -418,14 +418,22 @@ func collectDisabledSkillsFromState(skillsDirs []string) []string {
 // addDefaultRails 自动添加调用方未显式提供的默认 Rail。
 // Python: factory.py L358-367 default_rails 自动添加
 // ⤵️ 9.8-9.24 回填：SecurityRail/SkillUseRail/SubagentRail/TaskPlanningRail 具体实例化
+// addDefaultRails 计算要自动补齐的默认 rails（不挂载）。
+//
+// 返回值即挂载顺序，对齐上游 factory.py:394-415 的 default_rails 计算：
+// resolve 阶段就算好并构造实例，apply 阶段只负责逐个 add_rail。
+// 把"计算"与"挂载"分开，DeepAgentParts 就不需要携带任何
+// "默认 rails 所需输入"的冗余字段。
+//
+// Python: resolve_deep_agent_parts 里的 default_rails 循环
 func addDefaultRails(
-	agent *DeepAgent,
 	params hconfig.CreateDeepAgentParams,
 	config *hschema.DeepAgentConfig,
 	effectiveSubagents []hschema.SubagentSpec,
 	ws *workspace.Workspace,
 	resolvedLanguage string,
-) {
+) []agentinterfaces.AgentRail {
+	out := make([]agentinterfaces.AgentRail, 0, 8)
 	userProvidedTypes := make(map[reflect.Type]bool)
 	for _, r := range params.Rails {
 		rt := reflect.TypeOf(r)
@@ -443,7 +451,7 @@ func addDefaultRails(
 	// SecurityRail（SafetyPromptRail）— 始终添加
 	// ⤴️ 9.19-23 回填：SafetyPromptRail 具体实例化
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&securityrail.SafetyPromptRail{})) {
-		agent.AddRail(securityrail.NewSafetyPromptRail())
+		out = append(out, securityrail.NewSafetyPromptRail())
 		logger.Debug(logComponent).Msg("SafetyPromptRail added (SecurityRail)")
 	}
 
@@ -458,14 +466,14 @@ func addDefaultRails(
 		if anomalyErr != nil {
 			logger.Warn(logComponent).Err(anomalyErr).Msg("ModelAnomalyDetectionRail construction failed, skipped")
 		} else {
-			agent.AddRail(anomalyRail)
+			out = append(out, anomalyRail)
 			logger.Debug(logComponent).Msg("ModelAnomalyDetectionRail added")
 		}
 	}
 
 	// AskUserRail — 始终添加（拦截 ask_user 工具，实现 HITL 用户交互）
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&interrupt.AskUserRail{})) {
-		agent.AddRail(interrupt.NewAskUserRail())
+		out = append(out, interrupt.NewAskUserRail())
 		logger.Debug(logComponent).Msg("AskUserRail added")
 	}
 
@@ -478,7 +486,7 @@ func addDefaultRails(
 	// SysOperationRail — 始终添加（系统操作工具注册）
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.SysOperationRail{})) {
 		sysOpRail := rails.NewSysOperationRail()
-		agent.AddRail(sysOpRail)
+		out = append(out, sysOpRail)
 		logger.Debug(logComponent).Msg("SysOperationRail added")
 	}
 
@@ -501,7 +509,7 @@ func addDefaultRails(
 			rails.WithLanguage(resolvedLanguage),
 			rails.WithTodoModifyFactory(params.TodoModifyFactory),
 		)
-		agent.AddRail(taskPlanningRail)
+		out = append(out, taskPlanningRail)
 		logger.Debug(logComponent).
 			Int("model_selection_count", len(modelSelMap)).
 			Msg("TaskPlanningRail added")
@@ -514,7 +522,7 @@ func addDefaultRails(
 	if len(params.Skills) > 0 || config.EnableSkillDiscovery {
 		if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&skillrails.SkillUseRail{})) {
 			if rail := buildDefaultSkillUseRail(config, ws, userProvidedTypes); rail != nil {
-				agent.AddRail(rail)
+				out = append(out, rail)
 			}
 		}
 	}
@@ -524,7 +532,7 @@ func addDefaultRails(
 		subRail := subagent.NewSubagentRail(
 			subagent.WithEnableAsyncSubagent(params.EnableAsyncSubagent),
 		)
-		agent.AddRail(subRail)
+		out = append(out, subRail)
 		logger.Debug(logComponent).
 			Bool("enable_async_subagent", params.EnableAsyncSubagent).
 			Int("subagent_count", len(effectiveSubagents)).
@@ -534,9 +542,10 @@ func addDefaultRails(
 	// VerificationContractRail — 仅当配置了 verification_agent 时注入到父 Agent
 	// Python: create_deep_agent 中动态添加 VerificationContractRail
 	if hasVerificationAgent(effectiveSubagents) && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&subagent.VerificationContractRail{})) {
-		agent.AddRail(subagent.NewVerificationContractRail())
+		out = append(out, subagent.NewVerificationContractRail())
 		logger.Debug(logComponent).Msg("VerificationContractRail added (verification_agent detected)")
 	}
+	return out
 }
 
 // alreadyProvidedByType 检查用户提供的 Rail 类型映射中是否包含指定类型。
