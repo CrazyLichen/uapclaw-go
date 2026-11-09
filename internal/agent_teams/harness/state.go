@@ -3,27 +3,77 @@ package harness
 import (
 	"sync"
 	"sync/atomic"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SafeStateSnapshot 迭代/轮边界处捕获的可回滚快照。
+// Python: SafeStateSnapshot (state.py L42-59)
+type SafeStateSnapshot struct {
+	// ContextMessages 当前轮上下文消息（with_history=false 段）的独立副本
+	ContextMessages []llmschema.BaseMessage
+	// DeepAgentState DeepAgentState.ToSessionDict() 的结果
+	DeepAgentState map[string]any
+	// IterationIndex 轮前基线为 0；其余为刚完成那一轮的 1-based 序号
+	IterationIndex int
+}
+
 // ActiveRound 一次外圈执行（一轮）。
-// Python: ActiveRound (agent_teams/harness/state.py)
-// 本阶段只含"驱动一轮"所需字段；快照（pre_round_snapshot/last_safe_snapshot/
-// last_iter_snapshot）、相位跟踪（iter_phase/model_call_in_flight/tool_started）、
-// pause（pause_requested/pause_ack）、turn 由 25.1c / 25.1e 追加。
+// Python: ActiveRound (agent_teams/harness/state.py L82-165)
 type ActiveRound struct {
 	// RoundID 轮次序号（自 1 递增）
 	RoundID int
-	// TaskID 提交给任务循环内核的任务标识（立即中断取消它）
+	// TaskID 提交给任务循环内核的任务标识
 	TaskID string
-	// Query 本轮原始查询
-	Query any
+	// OriginalQuery 本轮原始查询（string / []string / *interaction.InteractiveInput）
+	OriginalQuery any
+	// RunContext 本轮请求上下文（可为 nil）
+	RunContext *agentinterfaces.RunContext
+	// Turn 本轮所属的成员 turn
+	Turn MemberTurn
+	// TurnOpened 本轮是否新开 turn（决定是否 commit）
+	TurnOpened bool
 	// Cancel 取消本轮的上下文取消函数
 	Cancel func()
 	// Done 本轮结束信号
 	Done chan struct{}
+	// PreRoundSnapshot 轮前基线（index=0）
+	PreRoundSnapshot *SafeStateSnapshot
+	// LastSafeSnapshot 最近一次轮边界快照
+	LastSafeSnapshot *SafeStateSnapshot
+	// LastIterSnapshot 最近一次迭代边界快照（主回滚目标）
+	LastIterSnapshot *SafeStateSnapshot
+	// IterPhase 当前子相位（atomic.Value 存 RoundPhase）
+	IterPhase atomic.Value
+	// ModelCallInFlight 模型调用在飞（唯一可安全硬取消的窗口）
+	ModelCallInFlight atomic.Bool
+	// ToolStarted 当前迭代已开始执行工具
+	ToolStarted atomic.Bool
+	// PauseRequested 协作停止已武装（正确性权威）
+	PauseRequested atomic.Bool
+	// GracefulAbort 优雅中止：跑完本轮后回 IDLE
+	GracefulAbort atomic.Bool
+	// FailureRetry 本轮是否为崩溃后的一次性重试
+	FailureRetry bool
+	// PauseAck 工具相位暂停的延迟应答
+	PauseAck chan error
+	// mode 本轮启动方式（同包可见）
+	mode startMode
 }
+
+// Phase 返回当前子相位。
+func (r *ActiveRound) Phase() RoundPhase {
+	if v, ok := r.IterPhase.Load().(RoundPhase); ok {
+		return v
+	}
+	return RoundPhaseBoundary
+}
+
+// SetPhase 设置当前子相位。
+func (r *ActiveRound) SetPhase(p RoundPhase) { r.IterPhase.Store(p) }
 
 // InboxMessage 排队等待驱动的输入。
 // Python: InboxMessage (state.py)
@@ -43,8 +93,7 @@ type InboxMessage struct {
 type HarnessInternalState struct {
 	// phase 当前生命周期相位
 	phase atomic.Value
-	// mu 保护 active、queue、seq 与 roundSeq（仅 supervisor 写入，
-	// 但 State 之外的读取路径也在锁内）
+	// mu 保护 active、queue、seq、roundSeq 与暂停轮查询
 	mu sync.RWMutex
 	// active 当前活动轮次，无则为 nil
 	active *ActiveRound
@@ -54,6 +103,10 @@ type HarnessInternalState struct {
 	seq int
 	// roundSeq 轮次序号自增源
 	roundSeq int
+	// pausedQuery 暂停轮的原始查询
+	pausedQuery string
+	// hasPausedQuery 区分“空查询”与“没有暂停轮”
+	hasPausedQuery bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -69,12 +122,42 @@ const (
 	HarnessStateIdle HarnessState = "idle"
 	// HarnessStateRunning 有轮次在执行
 	HarnessStateRunning HarnessState = "running"
-	// HarnessStatePausing 已接受暂停、尚未抵达可恢复边界（25.1c 启用）
+	// HarnessStatePausing 已接受暂停、尚未抵达可恢复边界
 	HarnessStatePausing HarnessState = "pausing"
-	// HarnessStatePaused 已暂停在可恢复边界（25.1c 启用）
+	// HarnessStatePaused 已暂停在可恢复边界
 	HarnessStatePaused HarnessState = "paused"
 	// HarnessStateTerminated 已终止（不可逆）
 	HarnessStateTerminated HarnessState = "terminated"
+)
+
+// RoundPhase 内层 ReAct 循环在当前轮内的子相位。
+// Python: RoundPhase (state.py L27-39)
+type RoundPhase string
+
+const (
+	// RoundPhaseBoundary 迭代之间：无模型调用、无工具在跑
+	RoundPhaseBoundary RoundPhase = "boundary"
+	// RoundPhaseModel 模型调用中，尚未提交 tool_calls
+	RoundPhaseModel RoundPhase = "model"
+	// RoundPhaseTool 正在执行本轮工具
+	RoundPhaseTool RoundPhase = "tool"
+)
+
+// startMode 本轮启动方式（互斥）。
+// Python: _StartMode (native_harness.py L108-117)
+type startMode int
+
+const (
+	// startModeDefault 空闲起轮
+	startModeDefault startMode = iota
+	// startModeFollowUp 由排队输入驱动
+	startModeFollowUp
+	// startModeFailureRetry 崩溃后的一次性重试
+	startModeFailureRetry
+	// startModeResumeContinuation 暂停轮续跑
+	startModeResumeContinuation
+	// startModeContinuesTurn 任务计划续跑
+	startModeContinuesTurn
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -146,4 +229,27 @@ func (s *HarnessInternalState) popInboxContent() any {
 	content := s.queue[0].Content
 	s.queue = s.queue[1:]
 	return content
+}
+
+// SetPausedQuery 记录暂停轮查询。
+func (s *HarnessInternalState) SetPausedQuery(q string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pausedQuery = q
+	s.hasPausedQuery = true
+}
+
+// ClearPausedQuery 清除暂停轮查询。
+func (s *HarnessInternalState) ClearPausedQuery() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pausedQuery = ""
+	s.hasPausedQuery = false
+}
+
+// PausedQuery 返回暂停轮查询；第二个返回值表示是否存在暂停轮。
+func (s *HarnessInternalState) PausedQuery() (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pausedQuery, s.hasPausedQuery
 }

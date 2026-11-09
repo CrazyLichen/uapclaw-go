@@ -19,7 +19,7 @@ func TestInternalState_ActiveRound可写入读出(t *testing.T) {
 	st := newInternalState()
 	assert.Nil(t, st.Active())
 
-	r := &ActiveRound{RoundID: 1, TaskID: "t1", Query: "hi"}
+	r := &ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "hi"}
 	st.SetActive(r)
 	assert.Equal(t, r, st.Active())
 	// NextRoundID 是独立自增源：首次调用返回 1

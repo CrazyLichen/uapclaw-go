@@ -58,7 +58,7 @@ type cmdResume struct {
 func (c *cmdResume) ack() chan error { return c.reply }
 
 // cmdRoundFinished 一轮结束（由轮次协程投递）。
-// Python: _CmdRoundFinished（round_id + error + result）
+// Python: _CmdRoundFinished（round_id + error + result，无 ack）
 type cmdRoundFinished struct {
 	// roundID 轮次序号
 	roundID int
@@ -66,12 +66,10 @@ type cmdRoundFinished struct {
 	result map[string]any
 	// err 本轮错误（成功为 nil）
 	err error
-	// reply 应答通道
-	reply chan error
 }
 
-// ack 实现 controlCmd。
-func (c *cmdRoundFinished) ack() chan error { return c.reply }
+// ack 实现 controlCmd；轮末命令无应答方。
+func (c *cmdRoundFinished) ack() chan error { return nil }
 
 // cmdStop 停机。
 // Python: _CmdStop

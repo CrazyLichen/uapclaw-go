@@ -32,7 +32,7 @@ func TestSettleRoundDone_finished转idle(t *testing.T) {
 
 	// 模拟一个在飞的轮次
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "任务"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "任务"})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{
 		roundID: 1,
@@ -59,7 +59,7 @@ func TestSettleRoundDone_崩溃重试一轮(t *testing.T) {
 	})
 
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "会崩的任务"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "会崩的任务"})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{
 		roundID: 1,
@@ -87,7 +87,7 @@ func TestSettleRoundDone_崩溃重试一轮(t *testing.T) {
 func TestSettleRoundDone_interrupt转idle(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "打断"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "打断"})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{
 		roundID: 1,
@@ -110,7 +110,7 @@ func TestSettleRoundDone_followUp队列续轮(t *testing.T) {
 	h.enqueueInbox(InboxMessage{Seq: 1, Content: "后续任务"})
 
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "首轮"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "首轮"})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{
 		roundID: 1,
@@ -140,7 +140,7 @@ func TestSettleRoundDone_taskFailed发failed事件(t *testing.T) {
 	})
 
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "任务"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "任务"})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{
 		roundID: 1,
@@ -160,7 +160,7 @@ func TestSettleRoundDone_taskFailed发failed事件(t *testing.T) {
 func TestSettleRoundDone_roundID不匹配跳过(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 2, TaskID: "t2", Query: "新轮"})
+	h.st.SetActive(&ActiveRound{RoundID: 2, TaskID: "t2", OriginalQuery: "新轮"})
 
 	// 旧轮（roundID=1）的迟到结果 → 跳过
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1, result: map[string]any{}})
@@ -191,7 +191,7 @@ func TestNativeHarness_OutputsAbortSubscribe转发(t *testing.T) {
 func TestNativeHarness_SteerActive非字符串报错(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "首轮"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "首轮"})
 
 	// 非字符串 content → steerActive 报错
 	err := h.onSend(context.Background(), &InboxMessage{Content: 123, Immediate: true})
@@ -202,7 +202,7 @@ func TestNativeHarness_SteerActive非字符串报错(t *testing.T) {
 func TestNativeHarness_SteerActive无控制器报错(t *testing.T) {
 	h := newTestNativeHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "首轮"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "首轮"})
 	// controller 为 nil（未 Start）
 	err := h.onSend(context.Background(), &InboxMessage{Content: "转向", Immediate: true})
 	assert.Error(t, err, "无 controller 时转向应报错")
@@ -235,7 +235,7 @@ func TestSettleRoundDone_崩溃不可重放转idle(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
 	// Query 非 string（如 int）→ 不可重放 → 直接 idle
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: 42})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: 42})
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1, err: errors.New("崩溃")})
 
@@ -247,7 +247,7 @@ func TestSettleRoundDone_崩溃不可重放转idle(t *testing.T) {
 func TestSettleRoundDone_aborted转idle(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "任务"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "任务"})
 	h.coordinator.RequestAbort() // 标记中止
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1, result: map[string]any{"output": "完成"}})
@@ -259,7 +259,7 @@ func TestSettleRoundDone_aborted转idle(t *testing.T) {
 func TestSettleRoundDone_内部followUp续轮(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "任务"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "任务"})
 	h.controller.EnqueueFollowUp("内部跟进") // 预置内部 follow-up
 
 	h.settleRoundDone(context.Background(), &cmdRoundFinished{roundID: 1, result: map[string]any{"output": "完成"}})
@@ -271,7 +271,7 @@ func TestSettleRoundDone_内部followUp续轮(t *testing.T) {
 func TestSteerActive_字符串入队(t *testing.T) {
 	h := prepareSettleHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "首轮"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "首轮"})
 
 	err := h.onSend(context.Background(), &InboxMessage{Content: "转向指令", Immediate: true})
 	assert.NoError(t, err, "字符串转向应成功入队")

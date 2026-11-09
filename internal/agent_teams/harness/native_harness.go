@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -548,8 +549,8 @@ func (h *NativeHarness) dispatch(ctx context.Context, c controlCmd) bool {
 	case *cmdResume:
 		ack(cmd.reply, ErrPauseUnsupported)
 	case *cmdRoundFinished:
+		// 轮末命令无应答方
 		h.settleRoundDone(ctx, cmd)
-		ack(cmd.reply, nil)
 	default:
 		ack(c.ack(), nil)
 	}
@@ -633,11 +634,11 @@ func (h *NativeHarness) startRound(ctx context.Context, query any) *ActiveRound 
 	roundID := h.st.NextRoundID()
 	roundCtx, cancel := context.WithCancel(ctx)
 	active := &ActiveRound{
-		RoundID: roundID,
-		TaskID:  fmt.Sprintf("round-%d", roundID),
-		Query:   query,
-		Cancel:  cancel,
-		Done:    make(chan struct{}),
+		RoundID:       roundID,
+		TaskID:        fmt.Sprintf("round-%d", roundID),
+		OriginalQuery: query,
+		Cancel:        cancel,
+		Done:          make(chan struct{}),
 	}
 	h.st.SetActive(active)
 
@@ -650,7 +651,7 @@ func (h *NativeHarness) startRound(ctx context.Context, query any) *ActiveRound 
 func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 	defer close(active.Done)
 
-	query, _ := active.Query.(string)
+	query := queryText(active.OriginalQuery)
 	// isStreaming 必须为 true：对齐 Python submit_round 后 executor 硬编码 _streaming=True。
 	// 传 false 会走 callLLMInvoke（非流式），Leader 一轮的输出（tool_call/tool_result/answer）
 	// 批量到齐，首条流在成员 spawn 的 tool_result 被观测前就 final，团队时序契约
@@ -669,10 +670,10 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 		}
 	}
 
-	reply := make(chan error, 1)
+	// 轮末命令无应答方（对齐 Python _CmdRoundFinished 无 ack）：
+	// 若在此等 supervisor 处理，会与 hardCancelRound 等 active.Done 互等。
 	select {
-	case h.cmd <- &cmdRoundFinished{roundID: active.RoundID, result: result, err: err, reply: reply}:
-		_ = waitAck(context.WithoutCancel(ctx), reply)
+	case h.cmd <- &cmdRoundFinished{roundID: active.RoundID, result: result, err: err}:
 	case <-ctx.Done():
 	}
 }
@@ -750,8 +751,8 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 
 	// 崩溃重试：轮次异常死亡、查询未消费，重放一次；第二次放弃。
 	if runtimeCrashed {
-		if replayable, ok := active.Query.(string); ok && replayable != "" {
-			nxt := h.startRound(ctx, active.Query)
+		if replayable, ok := active.OriginalQuery.(string); ok && replayable != "" {
+			nxt := h.startRound(ctx, active.OriginalQuery)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 			return
 		}
@@ -788,8 +789,8 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 
 	// 剩余任务：任务计划仍有下一项则继续（原查询驱动）
 	if h.hasRemainingTasks() {
-		if q, ok := active.Query.(string); ok && q != "" {
-			nxt := h.startRound(ctx, active.Query)
+		if q, ok := active.OriginalQuery.(string); ok && q != "" {
+			nxt := h.startRound(ctx, active.OriginalQuery)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: nxt.RoundID})
 			return
 		}
@@ -844,6 +845,20 @@ func isControlResult(result map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// queryText 把本轮查询压平成可重放的纯文本。
+// Python: _query_text (native_harness.py L120-131)
+// string → 原样；[]string → "\n" 连接；*InteractiveInput → ""（单轮载荷不可重放）。
+func queryText(query any) string {
+	switch v := query.(type) {
+	case string:
+		return v
+	case []string:
+		return strings.Join(v, "\n")
+	default:
+		return ""
+	}
 }
 
 // failRemainingCommands supervisor 退出时把队列中剩余命令统一回错误，

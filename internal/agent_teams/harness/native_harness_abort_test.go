@@ -38,7 +38,7 @@ func TestNativeHarness_onAbort立即中断取消活动轮(t *testing.T) {
 	h.st.SetActive(&ActiveRound{
 		RoundID: 1,
 		TaskID:  "t1",
-		Query:   "长任务",
+		OriginalQuery:   "长任务",
 		Cancel:  func() { cancelled = true },
 	})
 
@@ -59,7 +59,7 @@ func TestNativeHarness_onAbort优雅中断标记coordinator(t *testing.T) {
 	cancelled := false
 	h.st.setPhase(HarnessStateRunning)
 	h.st.SetActive(&ActiveRound{
-		RoundID: 1, TaskID: "t1", Query: "q",
+		RoundID: 1, TaskID: "t1", OriginalQuery: "q",
 		Cancel: func() { cancelled = true },
 	})
 

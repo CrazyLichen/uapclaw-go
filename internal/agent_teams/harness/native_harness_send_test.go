@@ -33,7 +33,7 @@ func TestNativeHarness_Send在Running时排队(t *testing.T) {
 	h := newTestNativeHarness(t)
 	// 手动把相位拨到 running 并挂一个活动轮，模拟"有轮在飞"
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "A"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "A"})
 
 	require.NoError(t, h.onSend(context.Background(), &InboxMessage{Content: "B", Immediate: false}))
 
@@ -46,7 +46,7 @@ func TestNativeHarness_Send在Running时排队(t *testing.T) {
 func TestNativeHarness_onSend在Running时立即输入转向(t *testing.T) {
 	h := newTestNativeHarness(t)
 	h.st.setPhase(HarnessStateRunning)
-	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", Query: "A"})
+	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "A"})
 
 	// 无 controller 时 steerActive 返回错误（验证走的是 steer 分支而非排队）
 	err := h.onSend(context.Background(), &InboxMessage{Content: "steer", Immediate: true})

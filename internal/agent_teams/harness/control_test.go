@@ -9,19 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestControlCmd_每条命令都带应答通道 验证 6 条命令均可 ack（C1/C16）。
-func TestControlCmd_每条命令都带应答通道(t *testing.T) {
+// TestControlCmd_外部命令都带应答通道 验证 5 条外部命令均可 ack（C1/C16）。
+func TestControlCmd_外部命令都带应答通道(t *testing.T) {
 	cmds := []controlCmd{
 		&cmdSend{msg: InboxMessage{Content: "hi", Immediate: true}, reply: make(chan error, 1)},
 		&cmdAbort{immediate: true, reply: make(chan error, 1)},
 		&cmdPause{reply: make(chan error, 1)},
 		&cmdResume{reply: make(chan error, 1)},
-		&cmdRoundFinished{roundID: 1, reply: make(chan error, 1)},
 		&cmdStop{reply: make(chan error, 1)},
 	}
 	for _, c := range cmds {
 		require.NotNil(t, c.ack())
 	}
+}
+
+// TestControlCmd_轮末命令无应答 验证 cmdRoundFinished 与上游一致：没有 ack。
+// Python: _CmdRoundFinished 只有 round_id/error/result，无 ack（control.py L64-80）
+func TestControlCmd_轮末命令无应答(t *testing.T) {
+	assert.Nil(t, (&cmdRoundFinished{roundID: 1}).ack())
 }
 
 // TestAck_非阻塞回错误 验证 ack 在通道满时不阻塞（supervisor 崩溃兜底路径）。
