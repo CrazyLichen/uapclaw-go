@@ -319,12 +319,6 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 		assert.Equal(t, wtMgr, c.WorktreeManager())
 	})
 
-	t.Run("FirstIterGate设置后获取", func(t *testing.T) {
-		gate := rails.NewFirstIterationGate()
-		c.SetFirstIterGate(gate)
-		assert.Equal(t, gate, c.FirstIterGate())
-	})
-
 	t.Run("ModelAllocator设置后获取", func(t *testing.T) {
 		c.SetModelAllocator(nil)
 		assert.Nil(t, c.ModelAllocator())

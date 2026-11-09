@@ -870,16 +870,6 @@ func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) {
 	c.resources.MemoryManager = v
 }
 
-// FirstIterGate 返回首轮迭代门控。
-// Python: AgentConfigurator.first_iter_gate property
-// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
-func (c *AgentConfigurator) FirstIterGate() *rails.FirstIterationGate {
-	if c.resources == nil {
-		return nil
-	}
-	return c.resources.FirstIterGate
-}
-
 // resolveDispatchMode 解析本团队的调度模式。
 //
 // 空串与未知值一律回落 "autonomous"（上游默认值）。
@@ -943,13 +933,6 @@ func (c *AgentConfigurator) TaskEventTracker() tracker.TaskEventTracker {
 		return nil
 	}
 	return c.resources.TaskEventTracker
-}
-
-// SetFirstIterGate 设置首轮迭代门控。
-func (c *AgentConfigurator) SetFirstIterGate(v *rails.FirstIterationGate) {
-	if c.resources != nil {
-		c.resources.FirstIterGate = v
-	}
 }
 
 // ModelAllocator 返回模型分配器。⤴️ 9.64 回填完成

@@ -61,16 +61,6 @@ func TestTeamAgent_InfraAccessors_NilSafe(t *testing.T) {
 		}
 	})
 
-	t.Run("FirstIterGate 未装配时是可安全调用的空实现", func(t *testing.T) {
-		// FirstIterGate 不做判空，直接把 *rails.FirstIterationGate 装进接口，
-		// 因此接口值本身非 nil（typed-nil）。断言它可被取出且不 panic 即达标；
-		// 真正解引用会 panic 的风险由 configurator 保证非 nil 来控制。
-		got := a.FirstIterGate()
-		if got == nil {
-			t.Skip("实现已改为判空返回 nil，此处分支不适用")
-		}
-		assertNotPanic(t, func() { _ = got })
-	})
 }
 
 // TestTeamAgent_WorkspaceInitialized 验证工作空间初始化标记的读写。
@@ -99,9 +89,6 @@ func TestTeamAgent_AccessorsWithNilConfigurator(t *testing.T) {
 		t.Fatalf("configurator 为 nil 时应返回 nil，实际 %#v", got)
 	}
 	if got := a.MemoryManager(); got != nil {
-		t.Fatalf("configurator 为 nil 时应返回 nil，实际 %#v", got)
-	}
-	if got := a.FirstIterGate(); got != nil {
 		t.Fatalf("configurator 为 nil 时应返回 nil，实际 %#v", got)
 	}
 	if a.IsWorkspaceInitialized() {
