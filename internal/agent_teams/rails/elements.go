@@ -251,6 +251,13 @@ func buildTeamToolRail(params map[string]any, ctx hschema.BuildContextInterface)
 		WithWorkspaceManager(GetTeamWorkspaceManager(ctx)),
 		WithWorktreeManager(GetWorktreeManager(ctx)),
 	}
+	// 模型分配器：teammate spawn 时按 model_name 领取端点。
+	// 旧的手工挂载路径由 AgentConfigurator 直接注入 ModelAllocator.Allocate；
+	// 改为 spec 声明驱动后必须从 build context 的句柄取，否则 spawn 拿不到模型。
+	// Python: build_team_tool_rail 从 build_context 取 model_allocator
+	if alloc := GetModelAllocator(ctx); alloc != nil {
+		opts = append(opts, WithModelConfigAllocator(alloc.Allocate))
+	}
 	return NewTeamToolRail(opts...), nil
 }
 

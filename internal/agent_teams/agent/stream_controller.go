@@ -436,17 +436,6 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 			logger.Error(logComponent).Str("member_name", sc.memberName()).
 				Any("panic", r).Msg("output forwarder panic")
 		}
-		// harness.outputs() 耗尽 = 一个 run cycle 的流结束。
-		//
-		// 上游 async generator 走到 finally 即结束；Go 侧用 streamQueue 的
-		// None 哨兵表达同一语义（team_agent.py:1008-1013 的
-		// `if chunk is None: break`）。不投这个哨兵，下游
-		// `for chunk := range streamQueue` 会永久阻塞，连带
-		// runTeamAgentStreaming 的 mergedCh 无法 close、cleanup（含
-		// Finalize→StopCoordination→CloseStream）永远不执行 —— 形成死锁环。
-		//
-		// Python: StreamController.close_stream (stream_controller.py:515-525)
-		sc.CloseStream()
 	}()
 
 	it := h.Outputs()

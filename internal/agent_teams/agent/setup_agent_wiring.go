@@ -86,19 +86,28 @@ func buildTeamRailSpecInput(
 	isCoordinatedTeammate bool,
 	c *AgentConfigurator,
 ) rails.TeamRailSpecInput {
-	teamName := ""
+	// 团队名优先取配置器持有的（旧路径 c.TeamName()），TeamSpec 兜底——
+	// ctx.TeamSpec 可能为 nil（leader 首轮建队前），只读它会得到空团队名，
+	// 让 TeamToolRail 的工具名/主题全部错位。
+	teamName := c.TeamName()
 	leaderMemberName := ""
 	if ctx.TeamSpec != nil {
-		teamName = ctx.TeamSpec.TeamName
+		if ctx.TeamSpec.TeamName != "" {
+			teamName = ctx.TeamSpec.TeamName
+		}
 		leaderMemberName = ctx.TeamSpec.LeaderMemberName
 	}
 	return rails.TeamRailSpecInput{
-		Role:             string(ctx.Role),
-		MemberName:       ctx.MemberName,
-		Language:         resolvedLanguage,
-		TeammateMode:     string(spec.TeammateMode),
-		Lifecycle:        string(spec.Lifecycle),
-		TeamMode:         spec.TeamMode,
+		Role:         string(ctx.Role),
+		MemberName:   ctx.MemberName,
+		Language:     resolvedLanguage,
+		TeammateMode: string(spec.TeammateMode),
+		Lifecycle:    string(spec.Lifecycle),
+		// 三个 mode 必须走与旧手工挂载路径相同的解析函数：
+		// 留空会让 provider 落到自己的默认值，spawn 工具行为随之改变。
+		TeamMode:         resolveTeamMode(spec),
+		DispatchMode:     resolveDispatchMode(spec),
+		BootstrapMode:    resolveBootstrapMode(spec),
 		TeamName:         teamName,
 		LeaderMemberName: leaderMemberName,
 		// ⤵️ ctx.Prompt / DisplayName / ForkSource 及 team_outputs_dir 在 Go 侧
