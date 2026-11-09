@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
@@ -816,4 +817,19 @@ func TestTeamAgent_Configure后markTeamCleaned(t *testing.T) {
 	err := a.markTeamCleaned(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, a.state.TeamCleaned)
+}
+
+// TestTeamAgent_AnnounceTaskRevisions_无harness返回nil 未装配 harness 时静默跳过。
+func TestTeamAgent_AnnounceTaskRevisions_无harness返回nil(t *testing.T) {
+	a := NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	assert.NoError(t, a.AnnounceTaskRevisions(context.Background()))
+}
+
+// TestTeamAgent_AnnounceTaskRevisions_转发到harness harness 就位后转发（harness 无 tracker 时静默）。
+func TestTeamAgent_AnnounceTaskRevisions_转发到harness(t *testing.T) {
+	a := NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	require.NotNil(t, a.configurator, "NewTeamAgent 应建出 configurator")
+	a.configurator.SetHarness(&harness.TeamHarness{})
+
+	assert.NoError(t, a.AnnounceTaskRevisions(context.Background()))
 }
