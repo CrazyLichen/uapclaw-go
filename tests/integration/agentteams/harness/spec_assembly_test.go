@@ -200,3 +200,46 @@ func (s *SpecAssemblySuite) TestI05_构造输入双源() {
 	found := h.FindRailsByType(&rails.TeamPolicyRail{})
 	s.NotEmpty(found, "params 与 context 双源都应参与构造")
 }
+
+// TestI08_占位rail不阻断构建 5 真 + 3 占位同时声明，构建成功且成员可跑一轮。
+func (s *SpecAssemblySuite) TestI08_占位rail不阻断构建() {
+	spec, err := s.NewSpecWithMockLLM(2)
+	s.Require().NoError(err)
+	spec.Language = "cn"
+	spec.Rails = []hschema.RailSpec{
+		{Type: rails.TeamPolicy, Params: map[string]any{"member_name": "alice"}},
+		// 三个未实现的占位
+		{Type: rails.TeamReliability},
+		{Type: rails.TeamSkillUse},
+		{Type: rails.TeamObservability},
+	}
+
+	h := teamharness.TeamHarnessBuild(spec, "teammate", "alice", false, nil, nil)
+	s.Require().NotNil(h, "占位 rail 不得让构建失败")
+	s.Require().NotNil(h.Native())
+
+	// 成员仍可正常跑一轮
+	sess := session.CreateAgentSession("", h.Native().DeepAgent().Card(), nil)
+	_, runErr := h.Native().RunOnce(s.Ctx, "占位场景", sess)
+
+	s.NoError(runErr, "占位 rail 不得毒化整条链路")
+}
+
+// TestI10_无Rails访问器 FindRails 仍可查到已挂载 rail（删除 Rails() 后功能未丢）。
+func (s *SpecAssemblySuite) TestI10_无Rails访问器() {
+	buildCtx := &hschema.BuildContext{Language: "cn", MemberName: "alice", Role: "teammate"}
+	rails.InjectTeamHandles(buildCtx, rails.TeamHandles{})
+
+	spec := atschema.NewDeepAgentSpec()
+	spec.Language = "cn"
+	spec.Rails = []hschema.RailSpec{{Type: rails.TeamPolicy, Params: map[string]any{
+		"member_name": "alice",
+	}}}
+
+	h := teamharness.TeamHarnessBuild(spec, "teammate", "alice", false, buildCtx, nil)
+	s.Require().NotNil(h)
+
+	// 替代查询路径：FindRails（旧 Rails() 已删）
+	found := h.FindRailsByType(&rails.TeamPolicyRail{})
+	s.NotEmpty(found, "删除 Rails() 后 FindRails 仍应是受支持的查询路径")
+}
