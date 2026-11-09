@@ -511,6 +511,18 @@ func (m *OutputLeaseManager) NextItem(ctx context.Context, lease *OutputLease) (
 		case <-lease.closed:
 			return nil, false
 		case <-ctx.Done():
+			// Go 侧独有的取消路径：Python 的 next_output(self._lease) 不接受 ctx，
+			// 因此上游不存在"消费者被取消但租约槽位仍被占"的状态。
+			// 这里必须像结束哨兵一样清掉槽位——否则 m.lease 永远指向这个死句柄，
+			// 而 Next 已把句柄标成 closed 使后续 Close 变成 no-op，
+			// 于是 AttachOutput 从此一律返回 nil（会话被永久锁死）。
+			// 不清 work 队列：下一位消费者应当继续收到排队中的输出。
+			m.mu.Lock()
+			if m.lease == lease {
+				m.lease = nil
+				lease.Close()
+			}
+			m.mu.Unlock()
 			return nil, false
 		case frame := <-m.queue:
 			if !frame.end {

@@ -545,3 +545,32 @@ func TestOutputLeaseManager_CurrentToken无租约(t *testing.T) {
 	m := NewOutputLeaseManager()
 	assert.Equal(t, "", m.CurrentToken())
 }
+
+// TestNextItem_ctx取消释放租约槽位 Go 侧独有的取消路径必须清槽位。
+//
+// Python 的 next_output(self._lease) 不接受 ctx，不存在"消费者被取消但槽位
+// 仍被占"的状态；Go 给 NextItem 加了 ctx.Done() 早退，若不在此清掉 m.lease，
+// 句柄会被 Next 标成 closed 使后续 Close 变 no-op，于是租约永远指向死句柄、
+// AttachOutput 从此一律返回 nil（会话被永久锁死，supplement 打断后的新一轮
+// 就是这么丢的）。
+func TestNextItem_ctx取消释放租约槽位(t *testing.T) {
+	m := NewOutputLeaseManager()
+
+	first := m.Attach()
+	require.NotNil(t, first, "空闲时第一次 attach 必须成功")
+	require.True(t, m.HasConsumer())
+
+	// 消费者被取消（模拟网关断连 / 请求 ctx 结束）
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, ok := m.NextItem(ctx, first)
+	require.False(t, ok, "ctx 取消后必须返回 false")
+
+	// 槽位必须已释放：下一位消费者能 attach
+	require.False(t, m.HasConsumer(), "取消后不得再认为有消费者")
+	second := m.Attach()
+	require.NotNil(t, second, "取消后下一位消费者必须能 attach（槽位已释放）")
+	require.True(t, m.HasConsumer())
+
+	m.Detach(second.Token, true)
+}
