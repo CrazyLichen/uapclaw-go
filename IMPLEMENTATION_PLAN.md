@@ -1277,8 +1277,11 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 25.9 | ☐ | 专家与组织 | AgentGroup、专家团、组织 id 冲突后缀、BM25 专家检索、模板 worker、按需加载成员 | `internal/agent_teams/registry/` · `internal/swarm/extensions/` ← `openjiuwen/agent_teams/` · `jiuwenswarm/agents/` |
 | 25.10 | ☐ | 团队技能 | 共享 skill library、技能声明、渐进式工具暴露、技能链接视图下线 | `internal/agent_teams/rails/` ← `openjiuwen/agent_teams/` |
 | 25.11 | ☐ | 测试 | 调度模式端到端（MockLLM）、任务板并发、fork/恢复、worktree 清理 | `tests/integration/agent_teams/` |
+| 25.12 | ☐ | swarmflow 编排引擎（25.1d 的首个生产消费者） | 上游 `agent_teams/workflow/` 整体迁移（**40 文件 / 11,905 行**，机器核对）：① engine 内核（`primitives`/`runtime`/`runner`/`journal`/`budget`/`cap`/`admission`/`loader`/`progress`/`verify`/`errors`/`provider`/`facade`/`seam`/`schema` + `backends/{base,mock}`）；② worker 后端（`team_worker_backend`/`avatar_session_backend`/`external_{turns,fork,model}`/`expert_specs`/`budget_rail`/`activity_emitter`/`_member_spec`/`_result_text`）；③ 工具与宿主（`tool_swarmflow`/`external_swarmflow_host`/`swarmflow_infra`/`runner`/`concurrency`/`review`/`observer`/`worktree`/`schema`）；④ `background_task_controller`（session 级 pause/resume/stop 控制面，Go 现 0 命中）。`SwarmflowTool` 继承 25.1d 的 `AsyncTool`，经 `parent_agent.launch_async_tool` 两阶段启动；⤴️ 25.1d 的 runtime/spill/i18n/id_generator 在此接上生产消费者；⤴️ 25.1d 的 `TeamToolRail._wire_async_spill` 随本节的 `SwarmflowTool` 装配一起落。实施前需单独 brainstorming + spec（体量约为 25.1a 的 2.8 倍），建议拆 25.12a 引擎内核 / 25.12b worker 后端 / 25.12c 工具与宿主 / 25.12d 测试 | `internal/agent_teams/workflow/` ← `openjiuwen/agent_teams/workflow/` |
 
 **验证点**：调度模式下团队可自主认领/评审/返工直至收敛，中断后可 cold resume。
+
+> **25.12 登记（2026-11-10）**：25.1d 的首个生产消费者是 25.12 swarmflow（`agent_teams/workflow/` 40 文件 / 11,905 行）。在 25.12 落地前，25.1d 的 `AsyncToolRuntime` 只有单测覆盖、生产零调用；25.1d spec 的「已知偏差」登记**回收条件 = 25.12 接入**。25.12 实施前需单独 brainstorming/spec，且必须先确认 25.1d 的 `AsyncTool` 基类与 `LaunchAsyncTool` 缝已稳定。
 
 > **25.0 前置说明**：本节是 9.68 TeamPolicyRail 动态车道的**替代**（⤴️ 回填 9.68），不是新增旁路——静态 Section（role/HITT/workflow/lifecycle/persona/extra）与 7 个构造参数全部保留，只把 info/members 的 mtime 全量重建换成"增量宣告 + 附件车道"。它是 25.2/25.3/25.4/25.6 的共同前置：调度模式要能"告诉成员该干什么"，评审返工要能"告诉作者评审过了"，名册变化要能"只播 join/leave"。Go 现状：`team_context.go`/`inbound_render.go`/`prompts/messages.go` 三个文件均不存在，`team_policy_rail.go` 为上游引入 tracker 之前的 337 行版本，`<team-inbound>/<team-event>/<team-note>/<team-policy>` 标签全仓零命中。
 
