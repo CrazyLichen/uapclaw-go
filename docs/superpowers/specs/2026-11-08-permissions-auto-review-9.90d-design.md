@@ -1615,3 +1615,68 @@ require_literal_values=True)`（失败抛 `ValueError`）。为保留
 按规则 3.2，这类「依赖真实外部服务」的代码应用 `//go:build llm` 隔离；
 本批未加隔离文件（该函数仅 20 行、逻辑为「组装两条消息 + 调 Invoke」），
 覆盖率缺口已在此登记。其余 20 个函数均 ≥85%。
+
+### 12.21 Task 26 执行结论：`lifecycle`（含 3 个阻塞问题的处置）
+
+**落地**：`auto_permission/lifecycle.go`（165 行 Python → 约 420 行 Go /
+1 结构体 + 1 options + 8 方法 + 9 个适配器方法），覆盖率 **94.8%**。
+
+本文件同时定义了 `AutoPermissionRail` 单结构体（spec §3.3 的 15 字段），
+是后续 11 个 mixin 文件的基础。
+
+#### 阻塞 1：`BasePermissionRail` 与 `PolicyBaseRail` 无法由同一类型满足
+
+`NewOpenJiuwenPolicyEvaluator` 需要 `PolicyBaseRail`（9 个方法），
+而 9.90d-1 的 `BasePermissionRail` 有 7 个方法且 `UpdateConfig` 签名不同：
+
+| 接口 | UpdateConfig 签名 |
+|---|---|
+| `BasePermissionRail` | `UpdateConfig(config map[string]any, toolNames []string)` |
+| `PolicyBaseRail` | `UpdateConfig(config map[string]any)` |
+
+Go 不允许同名不同签名的方法共存，因此**没有任何类型能同时满足两者**。
+实测确认 `PolicyBaseRail` 此前**零实现者**，`NewOpenJiuwenPolicyEvaluator`
+是死代码。
+
+**根因**：Python 的 `policy_eval.py` 对 `base_rail` 全部用
+`getattr(self._base_rail, "_xxx", None)` 容忍缺失（鸭子类型 + 默认值），
+Go 的 `PolicyBaseRail` 是 9.90b 自造的强类型约束，比上游严格。
+
+**处置**：新增 `policySurfaceAdapter`，把 `BasePermissionRail` 适配成
+`PolicyBaseRail`——能力存在则类型断言转发，缺失则返回 Python 的默认值
+（`NormalizeToolName` 返回原名、其余返回 nil/false）。这既不破坏两个既有
+接口，又忠实复刻上游语义。`UpdateConfig` 的 1→2 参数桥接补 `nil` toolNames。
+
+**遗留**：`PolicyBaseRail` 的强类型约束与上游鸭子类型不一致，属 9.90b 设计
+偏差。彻底修法是把两个接口统一（或让 rail 直接实现 `PolicyBaseRail`），
+但那会动 9.90d-1 的接口面，留待后续重构。
+
+#### 阻塞 2：`NewPersistentAuditWriter` 传 `*string` 会打印指针地址
+
+`NewPersistentAuditWriter(dataRoot any)` 内部用 `fmt.Sprint(dataRoot)`，
+传入 `*string` 时得到的是**指针地址字符串**而非路径值：
+
+```
+fmt.Sprint(&"path") → "0xc000123456"    ← 不是 "path"
+```
+
+后果：`update_config` 里的「同根复用写入器」判定永远失败，每次配置更新都
+重建写入器。已改为按类型分支处理（`*string` 解引用 / `string` 直用 /
+其余走 `fmt.Sprint`），`TestUpdateConfig_复用同根写入器` 锁住该行为。
+
+#### 跨包访问器补齐
+
+子包需要访问父包的 3 项私有能力，已导出最小访问器：
+
+| 新增 | 用途 |
+|---|---|
+| `permissions.DeepCopyPermissionConfig` | 深拷贝权限配置（`copy.deepcopy` 等价） |
+| `permissions.ResolvePathStrictFalse` | 路径归一（`Path.resolve(strict=False)` 等价） |
+| `permissions.AutoOptionTimeoutMs` / `AutoOptionOutputFormat` | 从归一后 auto 段取超时/格式 |
+| `(*PersistentAuditWriter).DataRoot()` | 读取审计根（比较同根复用） |
+
+#### 一处签名偏差
+
+Python 的 `init(agent)` / `uninit(agent)` 无 ctx、无返回值；Go 的
+`AgentRail` 接口要求 `Init(ctx, agent) error` / `Uninit(agent) error`。
+按接口实现，错误向上传播（Python 是直接抛出，语义等价）。

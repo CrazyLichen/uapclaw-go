@@ -633,3 +633,31 @@ func mapGet(source map[string]any, key string) any {
 	}
 	return source[key]
 }
+
+// DeepCopyPermissionConfig 深拷贝一份权限配置（供子包复用）。
+//
+// 等价于 Python 的 copy.deepcopy(permission_config)。
+func DeepCopyPermissionConfig(config map[string]any) map[string]any {
+	if config == nil {
+		return map[string]any{}
+	}
+	return deepCopyAnyMap(config)
+}
+
+// AutoOptionTimeoutMs 从归一后的 auto 选项取审查器超时（毫秒）。
+//
+// Python: int(auto_options.get("reviewer_timeout_ms", 60000))
+func AutoOptionTimeoutMs(autoOptions map[string]any) int {
+	timeout, ok := anyToInt(autoOptions["reviewer_timeout_ms"])
+	if !ok || timeout <= 0 {
+		return 60000
+	}
+	return timeout
+}
+
+// AutoOptionOutputFormat 从归一后的 auto 选项取审查器输出格式。
+//
+// Python: auto_options["reviewer_output_format"]
+func AutoOptionOutputFormat(autoOptions map[string]any) string {
+	return NormalizeReviewerOutputFormat(autoOptions["reviewer_output_format"])
+}

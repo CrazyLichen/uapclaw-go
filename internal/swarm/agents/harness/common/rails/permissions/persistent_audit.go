@@ -47,6 +47,16 @@ type PersistentAuditWriter struct {
 	dataRoot *string
 }
 
+// DataRoot 返回审计数据根（nil 表示不可用）。
+//
+// 供子包比较「当前写入器是否已指向目标根」时使用。
+func (w *PersistentAuditWriter) DataRoot() *string {
+	if w == nil {
+		return nil
+	}
+	return w.dataRoot
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -130,7 +140,20 @@ func NewPersistentAuditWriter(dataRoot any) *PersistentAuditWriter {
 	if dataRoot == nil {
 		return &PersistentAuditWriter{}
 	}
-	s := fmt.Sprint(dataRoot)
+	// 注意：入参是 any，*string 必须解引用——直接用 fmt.Sprint 会打印指针地址
+	// 而不是路径值，导致「同根复用」判定永远失败。
+	var s string
+	switch typed := dataRoot.(type) {
+	case *string:
+		if typed == nil {
+			return &PersistentAuditWriter{}
+		}
+		s = *typed
+	case string:
+		s = typed
+	default:
+		s = fmt.Sprint(dataRoot)
+	}
 	return &PersistentAuditWriter{dataRoot: &s}
 }
 

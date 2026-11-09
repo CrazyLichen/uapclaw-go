@@ -418,6 +418,13 @@ func resolvePathStrictFalseWithHome(raw string) (string, error) {
 	return resolveUserPathStrictFalse(raw)
 }
 
+// ResolvePathStrictFalse 展开 ~ 并取绝对路径（供子包复用）。
+//
+// Python: Path(raw).expanduser().resolve(strict=False)
+func ResolvePathStrictFalse(raw string) (string, error) {
+	return resolveUserPathStrictFalse(raw)
+}
+
 // isPathWithin 判断 candidate 是否在 root 之下。
 //
 // Python: Path.is_relative_to
