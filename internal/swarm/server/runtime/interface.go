@@ -182,6 +182,13 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 		Str("session_id", sessionIDForLog).
 		Msg("processing non-stream request")
 
+	// Python: interface.py:3408 —— COMMAND_GOAL 在无状态 RPC / skills 判定之前
+	// 单独处理，且不写 user 历史（:4205 的条件）。此前缺这段，导致
+	// command.goal 被当普通 chat 轮执行：写空 query 历史 + 调模型。
+	if request.ReqMethod == schema.ReqMethodCommandGoal {
+		return uc.processGoalCommand(ctx, request)
+	}
+
 	// 1. CANCEL 分支 → 委托 ProcessInterrupt
 	if request.ReqMethod == schema.ReqMethodChatCancel {
 		return uc.ProcessInterrupt(ctx, request)
@@ -319,6 +326,23 @@ func (uc *UapClawSwarm) ExecuteMessageStream(
 func (uc *UapClawSwarm) processMessageStreamInternal(
 	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
 ) (<-chan *schema.AgentResponseChunk, error) {
+	// Python: interface.py:4175 —— 流式 command.goal 的 get/pause/clear 在此单帧
+	// 短路（控制类流量不进会话队列）；set/resume 继续走下面的完整流式链
+	// （适配器的 attach→control 两段映射）。
+	if request.ReqMethod == schema.ReqMethodCommandGoal {
+		if action := goalActionOf(request); action != "set" && action != "resume" {
+			chunks, goalErr := uc.processGoalCommandStream(ctx, request)
+			if goalErr != nil {
+				return nil, goalErr
+			}
+			out := make(chan *schema.AgentResponseChunk, len(chunks))
+			for _, chunk := range chunks {
+				out <- chunk
+			}
+			close(out)
+			return out, nil
+		}
+	}
 	if !scheduleSession || uc.sessionManager == nil {
 		return uc.runMessageStreamDirect(ctx, request)
 	}
