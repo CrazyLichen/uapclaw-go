@@ -110,6 +110,10 @@ const (
 	permissionAskAccessesKey = "permission_ask_accesses"
 	// permissionInterruptLogComponent 日志组件
 	permissionInterruptLogComponent = logger.ComponentAgentCore
+	// persistScopeSession 持久化范围：仅本会话
+	persistScopeSession = "session"
+	// persistScopePermanent 持久化范围：总是允许（永久）
+	persistScopePermanent = "permanent"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -846,24 +850,37 @@ func metadataAccessPairs(metadata map[string]any) [][2]string {
 // payloadApprovedSessionOnly 判定载荷是否要求「仅会话内记住」。
 //
 // Python: payload.wants_session_persist()
-// ⚠️ Go 侧 PermissionConfirmResponse / ConfirmPayload 只有 AutoConfirm 一个
-// 持久化字段，无 session/permanent 区分（9.90b 缺口，见 spec §12.11 偏差）。
+// 优先读 PersistScope（"session"）；为空时回退到 AutoConfirm（兼容旧载荷）。
 func payloadApprovedSessionOnly(payload *harnesssecurity.PermissionConfirmResponse) bool {
 	if payload == nil {
 		return false
 	}
-	return payload.AutoConfirm
+	switch payload.PersistScope {
+	case persistScopeSession:
+		return true
+	case persistScopePermanent:
+		return false
+	default:
+		return payload.AutoConfirm
+	}
 }
 
 // payloadWantsPermanentPersist 判定载荷是否要求「永久记住」。
 //
 // Python: payload.wants_permanent_persist()
-// ⚠️ 同 payloadApprovedSessionOnly：Go 侧无法与 session-only 区分。
+// 优先读 PersistScope（"permanent"）；为空时回退到 AutoConfirm（兼容旧载荷）。
 func payloadWantsPermanentPersist(payload *harnesssecurity.PermissionConfirmResponse) bool {
 	if payload == nil {
 		return false
 	}
-	return payload.AutoConfirm
+	switch payload.PersistScope {
+	case persistScopePermanent:
+		return true
+	case persistScopeSession:
+		return false
+	default:
+		return payload.AutoConfirm
+	}
 }
 
 // approvalRequestFromContext 从回调上下文取待审批请求。

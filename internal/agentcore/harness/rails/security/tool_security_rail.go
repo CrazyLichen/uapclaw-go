@@ -603,9 +603,10 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 		return input
 	case *interrupt.ConfirmPayload:
 		return &harnesssecurity.PermissionConfirmResponse{
-			Approved:    input.Approved,
-			Feedback:    input.Feedback,
-			AutoConfirm: input.AutoConfirm,
+			Approved:     input.Approved,
+			Feedback:     input.Feedback,
+			AutoConfirm:  input.AutoConfirm,
+			PersistScope: input.PersistScope,
 		}
 	case map[string]any:
 		approved, _ := input["approved"].(bool)
@@ -617,10 +618,12 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 		}
 		feedback, _ := input["feedback"].(string)
 		autoConfirm, _ := input["auto_confirm"].(bool)
+		persistScope, _ := input["persist_scope"].(string)
 		return &harnesssecurity.PermissionConfirmResponse{
-			Approved:    approved,
-			Feedback:    feedback,
-			AutoConfirm: autoConfirm,
+			Approved:     approved,
+			Feedback:     feedback,
+			AutoConfirm:  autoConfirm,
+			PersistScope: persistScope,
 		}
 	case string:
 		var raw map[string]any

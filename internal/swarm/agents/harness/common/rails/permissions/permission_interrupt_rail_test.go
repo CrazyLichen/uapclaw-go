@@ -290,20 +290,49 @@ func TestResolveInterrupt_runPolicyDeny(t *testing.T) {
 
 // ──────────────────────────── 补充：核心路径 ────────────────────────────
 
-func TestPayloadPersist判定(t *testing.T) {
+func TestPayloadPersist判定_PersistScope优先(t *testing.T) {
 	if payloadApprovedSessionOnly(nil) || payloadWantsPermanentPersist(nil) {
 		t.Error("nil payload should be false")
 	}
-	auto := &harnesssecurity.PermissionConfirmResponse{AutoConfirm: true}
-	if !payloadApprovedSessionOnly(auto) {
-		t.Error("auto_confirm should map to session persist")
+	// PersistScope 显式 session：即使 AutoConfirm=true 也只算 session
+	session := &harnesssecurity.PermissionConfirmResponse{
+		AutoConfirm: true, PersistScope: persistScopeSession,
 	}
-	if !payloadWantsPermanentPersist(auto) {
-		t.Error("auto_confirm should map to permanent persist")
+	if !payloadApprovedSessionOnly(session) {
+		t.Error("scope=session should be session persist")
+	}
+	if payloadWantsPermanentPersist(session) {
+		t.Error("scope=session should NOT be permanent persist")
+	}
+	// PersistScope 显式 permanent：即使 AutoConfirm=false 也算 permanent
+	permanent := &harnesssecurity.PermissionConfirmResponse{
+		AutoConfirm: false, PersistScope: persistScopePermanent,
+	}
+	if payloadApprovedSessionOnly(permanent) {
+		t.Error("scope=permanent should NOT be session persist")
+	}
+	if !payloadWantsPermanentPersist(permanent) {
+		t.Error("scope=permanent should be permanent persist")
+	}
+}
+
+func TestPayloadPersist判定_空scope回退AutoConfirm(t *testing.T) {
+	auto := &harnesssecurity.PermissionConfirmResponse{AutoConfirm: true}
+	if !payloadApprovedSessionOnly(auto) || !payloadWantsPermanentPersist(auto) {
+		t.Error("empty scope with auto_confirm should fall back to true for both")
 	}
 	plain := &harnesssecurity.PermissionConfirmResponse{}
 	if payloadApprovedSessionOnly(plain) || payloadWantsPermanentPersist(plain) {
-		t.Error("no auto_confirm should be false")
+		t.Error("empty scope without auto_confirm should be false for both")
+	}
+}
+
+func TestPayloadPersist判定_未知scope回退AutoConfirm(t *testing.T) {
+	unknown := &harnesssecurity.PermissionConfirmResponse{
+		AutoConfirm: true, PersistScope: "whatever",
+	}
+	if !payloadApprovedSessionOnly(unknown) || !payloadWantsPermanentPersist(unknown) {
+		t.Error("unknown scope should fall back to auto_confirm")
 	}
 }
 

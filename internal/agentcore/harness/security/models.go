@@ -42,6 +42,12 @@ type PermissionConfirmResponse struct {
 	Feedback string `json:"feedback,omitempty"`
 	// AutoConfirm 是否自动确认（记住并写回策略）
 	AutoConfirm bool `json:"auto_confirm,omitempty"`
+	// PersistScope 持久化范围："session"（仅本会话）/ "permanent"（总是允许）
+	// 空串表示未指定，调用方回退到 AutoConfirm 判定。
+	//
+	// Python: openjiuwen PermissionConfirmResponse.wants_session_persist() /
+	// wants_permanent_persist()（SDK 方法，Go 侧改用显式字段表达）
+	PersistScope string `json:"persist_scope,omitempty"`
 }
 
 // ApprovalOverrideEntry 用户/CLI 覆盖条目
