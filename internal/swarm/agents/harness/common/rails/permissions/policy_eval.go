@@ -1,8 +1,11 @@
 package permissions
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -54,7 +57,13 @@ type OpenJiuwenPolicyEvaluator struct {
 
 // PolicyInvocation 一次待评估的调用（供策略评估器使用）。
 //
-// Python 侧是 duck-typed 的 invocation 对象；Go 用显式结构体承载三个字段。
+// Python 侧是 duck-typed 的 invocation 对象；Go 用显式结构体承载四个字段。
+//
+// ⚠️ Ctx 字段装的是**宿主回调上下文**（AgentCallbackContext，承载 session /
+// extra / agent 等），对应 Python ToolInvocation.ctx: Any | None，仅透传给
+// 场景钩子（PermissionSceneHookInput.ctx）。它**不是** Go 的 context.Context。
+// Go 的 context.Context 从请求入口一路透传，作为 Evaluate 的独立形参传入，
+// 供 OverlayRunPermissions 等读取请求级绑定。两者语义分离，不得混用。
 type PolicyInvocation struct {
 	// ToolName 工具名
 	ToolName string
@@ -62,7 +71,7 @@ type PolicyInvocation struct {
 	ToolCall any
 	// ToolArgs 回退参数（map 或 JSON 字符串）
 	ToolArgs any
-	// Ctx 宿主上下文（透传给场景钩子）
+	// Ctx 宿主回调上下文对象（非 context.Context），透传给场景钩子
 	Ctx any
 }
 
@@ -182,16 +191,22 @@ func NewOpenJiuwenPolicyEvaluator(
 //  7. 三者取最严并合并 matched_rule 与 external_paths
 //
 // Python: OpenJiuwenPolicyEvaluator.evaluate(invocation, *, scene_approval_is_final=False)
-func (e *OpenJiuwenPolicyEvaluator) Evaluate(invocation PolicyInvocation, sceneApprovalIsFinal bool) PolicyEvaluation {
+func (e *OpenJiuwenPolicyEvaluator) Evaluate(
+	ctx context.Context,
+	invocation PolicyInvocation,
+	sceneApprovalIsFinal bool,
+) PolicyEvaluation {
 	normalizedToolName := e.normalizeToolName(invocation.ToolName)
 	toolArgs := e.parseToolArgs(invocation.ToolCall, invocation.ToolArgs)
 
 	engine := e.engine()
-	effectiveConfig := e.effectivePermissionConfig()
+	effectiveConfig, overlayErr := e.effectivePermissionConfig(ctx)
 
 	// refresh_failed：配置取不到但宿主提供了快照钩子（说明本应能取到，
-	// 取不到即是刷新失败，必须 fail-closed）。
-	refreshFailed := effectiveConfig == nil && e.baseRail != nil && e.baseRail.HasPermissionsSnapshot()
+	// 取不到即是刷新失败，必须 fail-closed）；或请求级权限叠加失败
+	// （Python 的 ValueError 上冒导致本轮判定失败）。
+	refreshFailed := overlayErr != nil ||
+		(effectiveConfig == nil && e.baseRail != nil && e.baseRail.HasPermissionsSnapshot())
 	if engine != nil && effectiveConfig != nil {
 		if err := e.applyConfig(engine, effectiveConfig); err != nil {
 			refreshFailed = true
@@ -324,7 +339,7 @@ func (e *OpenJiuwenPolicyEvaluator) evaluateSceneHook(
 	return nil
 }
 
-// effectivePermissionConfig 按优先级取生效配置。
+// effectivePermissionConfig 按优先级取生效配置，并叠加请求级权限选择。
 //
 // 三层（对齐 Python _effective_permission_config）：
 //  1. runtime getter（若配置成功返回非 nil，用它）
@@ -332,24 +347,30 @@ func (e *OpenJiuwenPolicyEvaluator) evaluateSceneHook(
 //     表示刷新失败，由调用方 fail-closed）
 //  3. 静态配置
 //
+// 三条 return 路径**各自**过 OverlayRunPermissions（对齐 Python
+// policy_eval.py:228 / :242 / :248 的三处调用）。叠加失败（请求级工具名
+// 歧义等）时返回 nil，由 Evaluate 的 refreshFailed 机制 fail-closed，
+// 等价于 Python 的 ValueError 向上冒导致本轮判定失败。
+//
 // Python: OpenJiuwenPolicyEvaluator._effective_permission_config()
-func (e *OpenJiuwenPolicyEvaluator) effectivePermissionConfig() map[string]any {
+// 返回 error 表示叠加失败（请求级工具名歧义等），调用方须 fail-closed。
+func (e *OpenJiuwenPolicyEvaluator) effectivePermissionConfig(ctx context.Context) (map[string]any, error) {
 	if e.permissionConfigGetter != nil {
 		if cfg := e.permissionConfigGetter(); cfg != nil {
-			return cfg
+			return runtime.OverlayRunPermissions(ctx, cfg)
 		}
 	}
 	if e.baseRail != nil {
 		if snap := e.baseRail.PermissionsSnapshot(); snap != nil {
-			return snap
+			return runtime.OverlayRunPermissions(ctx, snap)
 		}
 	}
 	if e.baseRail != nil {
 		if staticCfg := e.baseRail.StaticConfig(); staticCfg != nil {
-			return staticCfg
+			return runtime.OverlayRunPermissions(ctx, staticCfg)
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // applyConfig 热更新配置：优先 rail 的 update_config，其次 engine 的。

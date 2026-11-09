@@ -692,3 +692,48 @@ Python 的异常路径；初版 `command_runtime.go` 用「判空」近似，语
 **验证**：`go build ./...` / `go vet ./...` /
 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 全绿。
 异常分支通过 `os.Chdir` 到已删除目录真实构造（测试内 defer 恢复 cwd）。
+
+### 12.2 Task 4 执行时的追加决策：`RUN_PERMISSIONS` 全量落地 + 双 ctx 类型契约
+
+**`RUN_PERMISSIONS` 的作用**：一次请求（一次用户消息）携带的临时工具权限
+选择（如 `{"bash": "allow"}`），由请求入口 `WithRunPermissions(ctx, levels)`
+绑定，只影响本次请求。叠加到已安装 Host 策略上后，决定本轮每个工具调用
+是否弹权限卡。消费面共 8 处，集中在
+`JiuwenSwarmPermissionInterruptRail.resolve_interrupt`（叠加配置 / 快照 /
+拒绝「总是允许」持久化 / 拒绝 auto_confirm）与
+`policy_eval._effective_permission_config`（策略影子复算的三条取值路径）。
+
+**决策（用户拍板全量落）**：本批新建
+`swarm/runtime/run_context.go`（`RunContext` 8 字段 +
+`CURRENT_RUN_CONTEXT` ctx 绑定）与
+`swarm/runtime/run_permissions.go`（54 行完整，含 `CURRENT_RUN_CONTEXT`
+兜底、别名归一歧义校验、deny 不可放宽、三桶同步、深拷贝、排序）。
+`CwdState` 那轮的 error 口径同样适用：Python 歧义抛 `ValueError`，
+Go 返回 error 由调用方传播。
+
+**⤵️ 延后项**：
+- 请求入口的写入方（`WithRunPermissions` / `WithRunContext` 绑定）→ 9.90d-2 装配层
+- `JiuwenSwarmPermissionInterruptRail` 的 8 处消费点 → 9.90d-1 Task 13
+
+#### 类型契约（用户明确要求登记）：两个 ctx 语义分离
+
+| 名称 | Go 类型 | 装的是什么 | 传递方式 | 用途 |
+|---|---|---|---|---|
+| `Evaluate` 的 `ctx` 形参 | `context.Context` | 请求级绑定（`WithRunPermissions`） | **从请求入口一路透传**，独立形参 | `OverlayRunPermissions` 读请求级权限 |
+| `PolicyInvocation.Ctx` 字段 | `any` | 宿主回调上下文 `AgentCallbackContext`（session / extra / agent） | 塞在业务结构体里 | 仅透传给场景钩子 `PermissionSceneHookInput.ctx` |
+
+**核实结论**：Python `models.py:75` 的 `ToolInvocation.ctx: Any | None`
+对应宿主回调上下文，**不是** Go 的 `context.Context`；Go 侧该字段此前
+0 处使用、注释含糊。用户指出 Go 的 `context.Context` 应从会话开始一路
+传递，不应塞进业务结构体再断言取出。据此：
+
+- `Evaluate(ctx context.Context, invocation PolicyInvocation, ...)` 加独立形参
+- `effectivePermissionConfig(ctx) (map[string]any, error)` 三条 return 路径
+  各过 `OverlayRunPermissions(ctx, cfg)`（对齐 `policy_eval.py:228/:242/:248`）
+- `PolicyInvocation.Ctx` 保持 `any`，注释改准确
+- 返回 error 表示叠加失败，`Evaluate` 直接置 `refreshFailed = true`
+  fail-closed（等价 Python 的 `ValueError` 上冒导致本轮判定失败）
+
+测试验证两条：`TestEvaluate_Ctx字段与GoContext互不干扰` 断言
+`invocation.Ctx` **不得**是 `context.Context`；三条取值路径各有独立
+叠加测试（getter / snapshot / static）。

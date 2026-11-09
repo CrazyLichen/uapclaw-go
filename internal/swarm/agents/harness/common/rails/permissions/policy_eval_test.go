@@ -1,8 +1,12 @@
 package permissions
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 )
 
 // ──────────────────────────── 替身 ────────────────────────────
@@ -302,7 +306,7 @@ func TestEvaluationFromPathResult_有意见(t *testing.T) {
 func TestEvaluate_引擎不可用failClosed(t *testing.T) {
 	rail := &fakePolicyRail{staticConfig: map[string]any{}}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "ask" {
 		t.Errorf("Level = %q, want ask", got.Level)
 	}
@@ -323,7 +327,7 @@ func TestEvaluate_引擎结果透传(t *testing.T) {
 	}}
 	rail := &fakePolicyRail{engine: engine, staticConfig: map[string]any{"a": 1}}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "deny" {
 		t.Errorf("Level = %q, want deny", got.Level)
 	}
@@ -337,7 +341,7 @@ func TestEvaluate_apply两次config(t *testing.T) {
 	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
 	rail := &fakePolicyRail{engine: engine, staticConfig: map[string]any{"a": 1}}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	_ = evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	_ = evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 
 	// rail.UpdateConfig 被调用两次（钩子前 + 引擎前）
 	if len(rail.updateCalls) != 2 {
@@ -356,7 +360,7 @@ func TestEvaluate_场景钩子approve(t *testing.T) {
 		},
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	// approve 不是 final → 继续走引擎，引擎 deny 更严 → 最终 deny
 	if got.Level != "deny" {
 		t.Errorf("Level = %q, want deny（引擎更严胜出）", got.Level)
@@ -374,7 +378,7 @@ func TestEvaluate_场景钩子approve且final(t *testing.T) {
 		},
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, true)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, true)
 	if got.Level != "allow" {
 		t.Errorf("Level = %q, want allow（scene_approval_is_final）", got.Level)
 	}
@@ -394,7 +398,7 @@ func TestEvaluate_场景钩子reject(t *testing.T) {
 		},
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "deny" {
 		t.Errorf("Level = %q, want deny", got.Level)
 	}
@@ -414,7 +418,7 @@ func TestEvaluate_场景钩子异常不短路(t *testing.T) {
 		},
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "allow" {
 		t.Errorf("Level = %q, want allow（钩子异常不短路）", got.Level)
 	}
@@ -430,7 +434,7 @@ func TestEvaluate_配置刷新失败failClosed(t *testing.T) {
 	rail := &fakePolicyRail{engine: engine, hasSnapshot: true, snapshot: nil}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
 
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "ask" {
 		t.Errorf("Level = %q, want ask（配置刷新失败 fail-closed）", got.Level)
 	}
@@ -449,7 +453,7 @@ func TestEvaluate_无快照钩子不算刷新失败(t *testing.T) {
 	rail := &fakePolicyRail{engine: engine}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
 
-	got := evaluator.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "allow" {
 		t.Errorf("Level = %q, want allow（未声明快照钩子，不 fail-closed）", got.Level)
 	}
@@ -514,21 +518,21 @@ func TestEffectivePermissionConfig_三层(t *testing.T) {
 	// getter 优先
 	rail := &fakePolicyRail{snapshot: map[string]any{"from": "snapshot"}, staticConfig: map[string]any{"from": "static"}}
 	ev := NewOpenJiuwenPolicyEvaluator(rail, func() map[string]any { return map[string]any{"from": "getter"} }, "")
-	if got := ev.effectivePermissionConfig(); got["from"] != "getter" {
-		t.Errorf("应优先 getter，got %v", got)
+	if got, err := ev.effectivePermissionConfig(context.Background()); err != nil || got["from"] != "getter" {
+		t.Errorf("应优先 getter，got %v, err %v", got, err)
 	}
 
 	// getter 返回 nil → snapshot
 	ev2 := NewOpenJiuwenPolicyEvaluator(rail, func() map[string]any { return nil }, "")
-	if got := ev2.effectivePermissionConfig(); got["from"] != "snapshot" {
-		t.Errorf("应回退 snapshot，got %v", got)
+	if got, err := ev2.effectivePermissionConfig(context.Background()); err != nil || got["from"] != "snapshot" {
+		t.Errorf("应回退 snapshot，got %v, err %v", got, err)
 	}
 
 	// snapshot 也 nil → static
 	rail3 := &fakePolicyRail{staticConfig: map[string]any{"from": "static"}}
 	ev3 := NewOpenJiuwenPolicyEvaluator(rail3, nil, "")
-	if got := ev3.effectivePermissionConfig(); got["from"] != "static" {
-		t.Errorf("应回退 static，got %v", got)
+	if got, err := ev3.effectivePermissionConfig(context.Background()); err != nil || got["from"] != "static" {
+		t.Errorf("应回退 static，got %v, err %v", got, err)
 	}
 }
 
@@ -580,7 +584,7 @@ func TestEngine_nilRail(t *testing.T) {
 // TestEvaluate_nilRail fail-closed 测试无 rail 时引擎不可用
 func TestEvaluate_nilRail(t *testing.T) {
 	ev := NewOpenJiuwenPolicyEvaluator(nil, nil, "")
-	got := ev.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := ev.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Level != "ask" || got.Source != "fail_closed" {
 		t.Errorf("got (%q, %q), want (ask, fail_closed)", got.Level, got.Source)
 	}
@@ -598,7 +602,7 @@ func TestEvaluateSceneHook_返回空与未知决策(t *testing.T) {
 		},
 	}
 	ev := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	if got := ev.Evaluate(PolicyInvocation{ToolName: "bash"}, false); got.Level != "allow" {
+	if got := ev.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false); got.Level != "allow" {
 		t.Errorf("空返回应不短路，got %q", got.Level)
 	}
 
@@ -610,7 +614,7 @@ func TestEvaluateSceneHook_返回空与未知决策(t *testing.T) {
 		},
 	}
 	ev2 := NewOpenJiuwenPolicyEvaluator(rail2, nil, "")
-	if got := ev2.Evaluate(PolicyInvocation{ToolName: "bash"}, false); got.Level != "allow" {
+	if got := ev2.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false); got.Level != "allow" {
 		t.Errorf("未知决策应不短路，got %q", got.Level)
 	}
 }
@@ -625,8 +629,186 @@ func TestEvaluateSceneHook_reject无原因(t *testing.T) {
 		},
 	}
 	ev := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
-	got := ev.Evaluate(PolicyInvocation{ToolName: "bash"}, false)
+	got := ev.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
 	if got.Reason != "scene_hook_rejected" {
 		t.Errorf("Reason = %q, want scene_hook_rejected", got.Reason)
+	}
+}
+
+// ──────────────────────────── 请求级权限叠加（9.90d-1 Task 4b） ────────────────────────────
+
+// TestEvaluate_叠加请求级权限_静态配置路径 验证第三条 return 路径过 OverlayRunPermissions。
+func TestEvaluate_叠加请求级权限_静态配置路径(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine:       engine,
+		staticConfig: map[string]any{"tools": map[string]any{"bash": "ask"}},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
+
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
+	got := evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
+
+	if got.Level != "allow" {
+		t.Errorf("Level = %q, want allow", got.Level)
+	}
+	if len(rail.updateCalls) == 0 {
+		t.Fatal("UpdateConfig should be called with overlaid config")
+	}
+	applied := rail.updateCalls[0]["tools"].(map[string]any)
+	if applied["bash"] != "allow" {
+		t.Errorf("overlaid tools.bash = %v, want allow", applied["bash"])
+	}
+	// 三桶同步
+	allowTools, _ := rail.updateCalls[0]["allow_tools"].([]string)
+	if len(allowTools) != 1 || allowTools[0] != "bash" {
+		t.Errorf("allow_tools = %v", allowTools)
+	}
+}
+
+// TestEvaluate_叠加请求级权限_运行时getter路径 验证第一条 return 路径。
+func TestEvaluate_叠加请求级权限_运行时getter路径(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{engine: engine}
+	getter := func() map[string]any {
+		return map[string]any{"tools": map[string]any{"bash": "ask"}}
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, getter, "")
+
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "deny"})
+	_ = evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
+
+	if len(rail.updateCalls) == 0 {
+		t.Fatal("UpdateConfig should be called")
+	}
+	if rail.updateCalls[0]["tools"].(map[string]any)["bash"] != "deny" {
+		t.Errorf("overlaid tools.bash = %v, want deny",
+			rail.updateCalls[0]["tools"].(map[string]any)["bash"])
+	}
+}
+
+// TestEvaluate_叠加请求级权限_快照路径 验证第二条 return 路径。
+func TestEvaluate_叠加请求级权限_快照路径(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine:       engine,
+		hasSnapshot:  true,
+		snapshot:     map[string]any{"tools": map[string]any{"bash": "ask"}},
+		staticConfig: map[string]any{"tools": map[string]any{"bash": "deny"}},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
+
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
+	_ = evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
+
+	if len(rail.updateCalls) == 0 {
+		t.Fatal("UpdateConfig should be called")
+	}
+	if rail.updateCalls[0]["tools"].(map[string]any)["bash"] != "allow" {
+		t.Errorf("snapshot path should be overlaid, got %v",
+			rail.updateCalls[0]["tools"].(map[string]any)["bash"])
+	}
+}
+
+// TestEvaluate_无请求级绑定不叠加 验证未绑定时配置原样透传
+func TestEvaluate_无请求级绑定不叠加(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine:       engine,
+		staticConfig: map[string]any{"tools": map[string]any{"bash": "ask"}},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
+
+	_ = evaluator.Evaluate(context.Background(), PolicyInvocation{ToolName: "bash"}, false)
+
+	if len(rail.updateCalls) == 0 {
+		t.Fatal("UpdateConfig should be called")
+	}
+	if rail.updateCalls[0]["tools"].(map[string]any)["bash"] != "ask" {
+		t.Errorf("no overlay should keep ask, got %v",
+			rail.updateCalls[0]["tools"].(map[string]any)["bash"])
+	}
+	// 不叠加时不应凭空产生三桶
+	if _, exists := rail.updateCalls[0]["allow_tools"]; exists {
+		t.Error("no overlay should not synthesize allow_tools")
+	}
+}
+
+// TestEvaluate_Ctx字段与GoContext互不干扰 验证两个 ctx 语义分离
+func TestEvaluate_Ctx字段与GoContext互不干扰(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine:       engine,
+		staticConfig: map[string]any{"tools": map[string]any{"bash": "ask"}},
+		sceneHook: func(inv PolicyInvocation, _ string, _ map[string]any, _ PolicyEngine) ([]string, error) {
+			// invocation.Ctx 装的是宿主回调上下文对象，不是 context.Context
+			if _, ok := inv.Ctx.(context.Context); ok {
+				return nil, fmt.Errorf("invocation.Ctx must NOT be context.Context")
+			}
+			return nil, nil
+		},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
+
+	goCtx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
+	inv := PolicyInvocation{ToolName: "bash", Ctx: "host-callback-context"}
+	got := evaluator.Evaluate(goCtx, inv, false)
+	if got.Level != "allow" {
+		t.Errorf("Level = %q, want allow", got.Level)
+	}
+}
+
+// TestEvaluate_叠加歧义failClosed 验证 OverlayRunPermissions 返回 error 时
+// effectivePermissionConfig 返回 nil，Evaluate 走 fail-closed。
+func TestEvaluate_叠加歧义failClosed(t *testing.T) {
+	engine := &fakePolicyEngine{result: &PolicyPermissionResult{Permission: "allow"}}
+	rail := &fakePolicyRail{
+		engine:       engine,
+		staticConfig: map[string]any{"tools": map[string]any{"bash": "ask"}},
+	}
+	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
+
+	// 通过 CURRENT_RUN_CONTEXT 兜底路径构造歧义（别名 + 本名归一撞车）
+	rc := &runtime.RunContext{
+		ToolPermissions: []runtime.ToolPermissionLevel{
+			{Name: "exec_command", Level: "allow"},
+			{Name: "mcp_exec_command", Level: "deny"},
+		},
+	}
+	ctx := runtime.WithRunContext(context.Background(), rc)
+
+	got := evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
+	if got.Source != "fail_closed" {
+		t.Errorf("Source = %q, want fail_closed（叠加失败应降级）", got.Source)
+	}
+}
+
+// TestEffectivePermissionConfig_三条路径叠加失败 覆盖三个 error 分支
+func TestEffectivePermissionConfig_三条路径叠加失败(t *testing.T) {
+	rc := &runtime.RunContext{
+		ToolPermissions: []runtime.ToolPermissionLevel{
+			{Name: "exec_command", Level: "allow"},
+			{Name: "mcp_exec_command", Level: "deny"},
+		},
+	}
+	ctx := runtime.WithRunContext(context.Background(), rc)
+
+	cases := []struct {
+		name   string
+		rail   *fakePolicyRail
+		getter func() map[string]any
+	}{
+		{"getter", &fakePolicyRail{}, func() map[string]any { return map[string]any{"tools": map[string]any{}} }},
+		{"snapshot", &fakePolicyRail{snapshot: map[string]any{"tools": map[string]any{}}}, nil},
+		{"static", &fakePolicyRail{staticConfig: map[string]any{"tools": map[string]any{}}}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ev := NewOpenJiuwenPolicyEvaluator(c.rail, c.getter, "")
+			got, err := ev.effectivePermissionConfig(ctx)
+			if err == nil {
+				t.Errorf("overlay error should be propagated, got %v", got)
+			}
+		})
 	}
 }
