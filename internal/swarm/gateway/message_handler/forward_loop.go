@@ -622,7 +622,7 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 				Msg("AgentServer did not acknowledge pause; skip stream governance")
 		}
 	} else {
-		go mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
+		go func() { _, _ = mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent) }()
 	}
 
 	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, hasActiveTask)

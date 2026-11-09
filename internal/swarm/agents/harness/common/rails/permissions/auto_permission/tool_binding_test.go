@@ -2,7 +2,6 @@ package auto_permission
 
 import (
 	"context"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"reflect"
 	"testing"
 
@@ -90,11 +89,11 @@ type fakeAbilityManager struct {
 }
 
 // AddAbility 空实现（接口扩张后补齐，规则 10）。
-func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) saschema.AddAbilityResult {
 	if card == nil {
-		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+		return saschema.AddAbilityResult{Added: false, Reason: "nil_card"}
 	}
-	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+	return saschema.AddAbilityResult{Name: card.Name, Added: true}
 }
 
 func (f *fakeAbilityManager) Add(commonschema.Ability) saschema.AddAbilityResult {

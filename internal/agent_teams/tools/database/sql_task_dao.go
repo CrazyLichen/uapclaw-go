@@ -115,7 +115,7 @@ func (d *SQLTaskDao) OpenTaskCountsByAssignee(ctx context.Context, teamName stri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	counts := make(map[string]int)
 	for rows.Next() {

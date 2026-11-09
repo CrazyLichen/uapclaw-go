@@ -523,7 +523,7 @@ func recordValueString(record any, key string) string {
 		return v
 	}
 	rv := reflect.ValueOf(record)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			return ""
 		}
