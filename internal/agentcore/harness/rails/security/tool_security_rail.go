@@ -45,6 +45,8 @@ type PermissionInterruptRail struct {
 	engine *harnesssecurity.PermissionEngine
 	// host 权限宿主回调
 	host *harnesssecurity.ToolPermissionHost
+	// override 子类派发覆写（Go 嵌入不做虚函数派发，用显式钩子复刻 Python MRO）
+	override *PermissionInterruptRailOverride
 }
 
 // InterruptKind 本 rail 抛出的中断类型为 permission。
@@ -698,6 +700,9 @@ func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces
 //
 // Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args, *, session_id=None)
 func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
+	if result, handled := r.overridePersistAllowAlways(normalizedName, toolArgs); handled {
+		return result
+	}
 	return r.persistMergedAllow(normalizedName, toolArgs, r.hostPersistAllowRule(), true)
 }
 
@@ -706,6 +711,9 @@ func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, tool
 //
 // Python: PermissionInterruptRail._persist_session_allow(normalized_name, tool_args, *, session_id=None)
 func (r *PermissionInterruptRail) persistSessionAllow(normalizedName string, toolArgs map[string]any, sessionID string) bool {
+	if result, handled := r.overridePersistSessionAllow(normalizedName, toolArgs, sessionID); handled {
+		return result
+	}
 	return r.persistMergedAllow(normalizedName, toolArgs, r.hostPersistSessionAllowRule(sessionID), false)
 }
 
@@ -729,6 +737,9 @@ func (r *PermissionInterruptRail) persistMergedAllow(
 	persistHook func(map[string]any) bool,
 	writeYAMLFallback bool,
 ) bool {
+	if result, handled := r.overridePersistMergedAllow(normalizedName, toolArgs, persistHook, writeYAMLFallback); handled {
+		return result
+	}
 	// 1. base_cfg
 	var baseCfg map[string]any
 	if r.host != nil && r.host.GetPermissionsSnapshot != nil {
@@ -806,6 +817,20 @@ func (r *PermissionInterruptRail) persistMergedAllow(
 //
 // Python: PermissionInterruptRail._collect_file_guard_persist_accesses(normalized_name, tool_args, permissions_cfg)
 func (r *PermissionInterruptRail) collectFileGuardPersistAccesses(
+	normalizedName string,
+	toolArgs map[string]any,
+	permissionsCfg map[string]any,
+) []harnesssecurity.PathAction {
+	if result, handled := r.overrideCollectFileGuardPersistAccesses(normalizedName, toolArgs, permissionsCfg); handled {
+		return result
+	}
+	return r.collectFileGuardPersistAccessesDefault(normalizedName, toolArgs, permissionsCfg)
+}
+
+// collectFileGuardPersistAccessesDefault 父类默认实现（不查 override）。
+//
+// 供子类在 override 内显式回落时调用，避免「子类→父类导出方法→override→子类」死循环。
+func (r *PermissionInterruptRail) collectFileGuardPersistAccessesDefault(
 	normalizedName string,
 	toolArgs map[string]any,
 	permissionsCfg map[string]any,
@@ -1074,6 +1099,9 @@ func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall
 // getUserInput 从回调上下文中提取用户输入。
 // Python: BaseInterruptRail._get_user_input
 func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
+	if result, handled := r.overrideGetUserInput(cbc, toolCallID); handled {
+		return result
+	}
 	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
 	// Python: logger.info("[_get_user_input] tool_call_id=%r raw_input_type=%s", ...)
 	if !exists || rawInput == nil {

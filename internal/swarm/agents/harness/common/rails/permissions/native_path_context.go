@@ -154,6 +154,42 @@ func (p *NativePathGuardProjection) Evaluate(toolName string, toolArgs map[strin
 	return p.checker.Evaluate(toolName, toolArgs)
 }
 
+// Enabled 透传内层判定器的启用状态。
+//
+// Python: NativePathGuardProjection.enabled（property 透传）
+func (p *NativePathGuardProjection) Enabled() bool {
+	if p == nil || p.checker == nil {
+		return false
+	}
+	return p.checker.Enabled()
+}
+
+// Mode 透传内层判定器的模式。
+//
+// Python: NativePathGuardProjection.mode（property 透传）
+func (p *NativePathGuardProjection) Mode() string {
+	if p == nil || p.checker == nil {
+		return ""
+	}
+	return p.checker.Mode()
+}
+
+// CollectAskAccesses 有投影时用 guard 工具与参数收集，否则透传。
+//
+// Python: NativePathGuardProjection.collect_ask_accesses(tool_name, tool_args)
+func (p *NativePathGuardProjection) CollectAskAccesses(
+	toolName string,
+	toolArgs map[string]any,
+) []harnesssecurity.PathAction {
+	if p == nil || p.checker == nil {
+		return nil
+	}
+	if access := CurrentNativePathAccess(toolName, toolArgs); access != nil {
+		return p.checker.CollectAskAccesses(access.GuardTool(), access.GuardArgs())
+	}
+	return p.checker.CollectAskAccesses(toolName, toolArgs)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // canonicalizeJSON 把 JSON 文本重排为键有序 + 非 ASCII 全转义的形式。

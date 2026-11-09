@@ -1064,3 +1064,80 @@ allow/denied 判定，最终落到兜底分支 `interrupt`。
 **测试**：40 个用例。`openjiuwen_contract.go` 12 个导出函数 + 2 个私有
 函数全部 100%（`permissionFeedback` / `approvedAttribute` 的各类型分支
 均覆盖，含值类型结构体与 nil 指针）。
+
+### 12.11 Task 13 执行时的核实结论：`permission_interrupt_rail`
+
+**全量落地**：417 行 / 1 类 + 2 函数 + 1 类型 + 22 方法/属性。
+
+#### 前置基础设施（方案 A，用户拍板）
+
+计划把 Task 13 排在 Task 14/15 之前，但 13 实际需要三类父类改造。已按方案 A
+先行完成，共 3 个新文件 + 2 处父类插入：
+
+| 基础设施 | 文件 | 内容 |
+|---|---|---|
+| 派发注入 | `rails/security/tool_security_rail_override.go` | `PermissionInterruptRailOverride`（5 个钩子）+ `SetOverride` + 11 个导出访问器 + `ResolvePermissionInterrupt` |
+| 引擎访问器 | `harness/security/permission_engine_accessors.go` | `FileGuard` / `SetFileGuard` / `WorkspaceRoot` / `SetWorkspaceRoot` / `RebuildFileGuard` |
+| 投影接口补齐 | `permissions/native_path_context.go` | `NativePathGuardProjection` 补 `Enabled` / `Mode` / `CollectAskAccesses`（9.90b 落地时只实现了 `Evaluate`，不满足 `FileGuardEvaluator`） |
+
+#### 为什么需要派发注入（Go 嵌入不做虚函数派发）
+
+Python 的 `super().resolve_interrupt()` 内部调 `self._persist_allow_always()`
+会**动态派发**到子类覆写版本。Go 嵌入**不会**——父类方法体内
+`r.persistAllowAlways(...)` 静态绑定父类实现。
+
+实测父类内部对这 4 个方法的调用点：`persistAllowAlways` 2 处、
+`persistMergedAllow` 2 处、`collectFileGuardPersistAccesses` 1 处、
+`getUserInput` 1 处。故给父类加 override 钩子，每个钩子返回
+`(结果, handled)`，`handled=false` 回落父类默认（对齐 Python 的 `super()` 分支）。
+
+#### 实施中发现并修复的无限递归 bug
+
+子类 `collectFileGuardPersistAccesses` 的非 send_file 路径原本调
+`r.PermissionInterruptRail.CollectFileGuardPersistAccesses(...)`（想走父类默认），
+但父类该导出方法开头会查 override → 又回调子类 override → **无限递归栈溢出**。
+
+修复：把父类原方法体拆为 `collectFileGuardPersistAccesses`（查 override）
++ `collectFileGuardPersistAccessesDefault`（纯默认逻辑），并导出
+`CollectFileGuardPersistAccessesDefault` 供子类在 override 内回落时调用。
+**这条约束已写入父类方法注释**：override 内回落必须调 `...Default`。
+
+#### 语言差异（登记为偏差）
+
+| 项 | Python | Go | 理由 |
+|---|---|---|---|
+| `_EXACT_PERSIST_ATTEMPT` | ContextVar | rail 实例字段 `currentAttempt` | 父类内部 override 调用点无 ctx 形参，无法从 ctx 读；单次 `ResolveInterrupt` 内串行使用，语义等价 |
+| `_PERMISSION_SNAPSHOT` | ContextVar | rail 实例字段 `snapshotOwner`/`snapshot`/`snapshotActive` | 同上；`snapshotActive` 用于区分「未进入」与「进入但 snapshot 为 nil」（对齐 Python 的 `current is not None` 判据） |
+| `permission_check_context` | `@contextmanager` | `func() (cleanup func())` | Go 无 contextmanager |
+| `before_tool_call` 的 `except AbortError` | 异常捕获 | `defer`/`recover` 查 `cb.AbortError.Cause.(*saschema.ToolInterruptException)` | Go 父类用 `panic(cb.NewAbortError(...))` 抛中断 |
+| `request.auto_confirm_key = ""` | 直接赋值 | 类型断言到 `*saschema.InterruptRequest` 后赋值 | `InterruptRequester` 接口只读该字段 |
+| `RUN_PERMISSIONS` 8 处 | ContextVar | `runtime.RunPermissionsFromCtx` / `WithRunPermissions` / `OverlayRunPermissions` | 9.90d-1 Task 4a 已落地的等价物 |
+
+#### 🔴 新发现缺口（9.90b 遗留，需用户决策）
+
+`payload.wants_session_persist()` / `wants_permanent_persist()` 是 openjiuwen
+SDK `PermissionConfirmResponse` 的两个方法，用于区分「会话内记住」与
+「总是允许（永久）」。**Go 侧 `security.PermissionConfirmResponse` 与
+`interrupt.ConfirmPayload` 都只有 `AutoConfirm` 一个 bool 字段，无此区分**
+（9.90b 落地时的缺口）。
+
+当前实现（临时）：两者都映射到 `AutoConfirm`，即无法区分 session-only 与
+permanent。影响面：`attempt.sessionOnly` 恒等于「是否 auto_confirm」，
+`persistAllowAlways` 收到的 `sessionOnly` 参数可能不准；
+`resolveInterruptWithRunPolicy` 里「永久记住后移除 auto_confirm」的判断
+也会把 session-only 误判为 permanent。
+
+**待用户拍板**：
+- (a) 给 `PermissionConfirmResponse` / `ConfirmPayload` 补 `PersistScope` 字段
+  （`"session"` / `"permanent"`），回填 9.90b —— 最忠实，但要改 9.90b 已落地件
+- (b) 维持现状（都映射 `AutoConfirm`），把差异登记为功能偏差 —— 零改动，
+  但「会话内记住」与「总是允许」在 exact-persist 路径上不可区分
+- (c) 挂 ⤵️ 到 9.90d-2（那里有 auto_permission 的完整审批流），本批只落
+  rail 骨架
+
+**测试**：permissions 包 86.4%（Task 13 前 87.9%）。
+`permission_interrupt_rail.go` 里 `callExactPersist` / `removeExactAutoConfirm` /
+`bindApprovalOnInterrupt` 三个函数仍 0%——它们只在完整中断链路
+（父类抛 `AbortError` + session auto_confirm 状态）下才会被触发，
+单测需构造整套回调上下文，留待 Task 16 测试补齐时处理。
+`tool_security_rail_override.go` 全函数 100%。
