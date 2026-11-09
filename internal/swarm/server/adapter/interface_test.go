@@ -179,3 +179,5 @@ func (s *stubAdapter) DispatchGoalControl(
 }
 
 func (s *stubAdapter) HasActiveGoal(string) bool { return false }
+
+func (s *stubAdapter) StartInteraction(_ context.Context, _ string) error { return nil }

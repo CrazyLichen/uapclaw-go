@@ -727,6 +727,20 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
 	d.loadUserRails()
 
+	// 步骤 26: start_interaction
+	// Python: interface_deep.py:15069 —— create_instance 成功后立刻绑定会话并
+	// 启动交互循环；GoalManager 只在这一步构造（deep_agent.py:3972）。
+	// 只有会话级 child 才持有确定会话（28f 的 MarkAsSessionScoped 写入），
+	// 根适配器不绑定会话，交由请求期惰建（见 startInteractionIfNeeded）。
+	if d.isSessionScoped && d.parentSessionID != "" {
+		if startErr := d.startInteractionIfNeeded(ctx, d.parentSessionID); startErr != nil {
+			logger.Warn(logComponent).Err(startErr).
+				Str("event_type", "GOAL_INTERACTION_START_FAILED").
+				Str("session_id", d.parentSessionID).
+				Msg("start interaction failed; goal capability unavailable for this session")
+		}
+	}
+
 	logger.Info(logComponent).
 		Str("agent_name", d.agentName).
 		Str("mode", mode).

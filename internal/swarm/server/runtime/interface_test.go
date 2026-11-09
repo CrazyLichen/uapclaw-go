@@ -114,6 +114,8 @@ func (f *fakeAdapter) HandleSwarmflowReply(_ context.Context, _ *schema.AgentReq
 }
 
 // PendingInteractions 桩：恒空。
+func (f *fakeAdapter) StartInteraction(_ context.Context, _ string) error { return nil }
+
 func (f *fakeAdapter) HasActiveGoal(string) bool { return false }
 
 func (f *fakeAdapter) DispatchGoalControl(
