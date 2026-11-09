@@ -13,7 +13,17 @@
 //	├── session_work_kind.go    # 请求归类判定（哪些请求归 Runtime 调度）
 //	├── session_input.go        # 会话补充输入（steer / follow_up）
 //	├── interrupt_resume.go     # 暂停调用应答判定
-//	└── interrupt_helpers.go    # 中断恢复载荷判定
+//	├── interrupt_helpers.go    # 中断恢复载荷判定
+//	├── run_context.go          # RunContext 一次调用选项 + CURRENT_RUN_CONTEXT ctx 绑定
+//	└── run_permissions.go      # 请求级权限覆盖层（overlay_run_permissions）
 //
-// 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py）
+// 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py /
+// run_context.py / run_permissions.py）
+//
+// # 请求级权限覆盖
+//
+// run_permissions.go 把一次请求携带的临时工具权限选择叠加到已安装配置上，
+// 保留所有已装安全护栏；deny 不可放宽、三个桶同步、深拷贝、排序输出。
+// 请求入口的写入方（WithRunPermissions / WithRunContext 绑定）暂留
+// ⤵️ 9.90d-2 装配层。
 package runtime
