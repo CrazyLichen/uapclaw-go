@@ -7,8 +7,10 @@
 //	harness/
 //	├── doc.go            # 包文档
 //	├── protocol.go       # HarnessProtocol 接口与事件载荷
-//	├── state.go          # 生命周期相位、活动轮次、内部状态
-//	├── control.go        # 控制命令（带应答通道）
+//	├── state.go          # 生命周期相位、活动轮次、快照、内部状态
+//	├── turn.go           # 成员 turn 身份（轨迹归属）
+//	├── snapshot_rail.go  # 相位跟踪、边界快照、协作停止
+//	├── control.go        # 控制命令（外部命令带应答通道）
 //	├── outputs.go        # 输出迭代器（单消费者 + END 哨兵）
 //	├── native_harness.go # NativeHarness 本体
 //	└── team_harness.go   # TeamHarness（团队对外窗口）
