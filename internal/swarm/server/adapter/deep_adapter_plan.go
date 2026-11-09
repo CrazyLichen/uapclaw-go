@@ -112,11 +112,23 @@ func (s *planStateStore) SavePlanState(ctx context.Context, sessionID string, ps
 	return sess.PostRun(ctx)
 }
 
-// SwitchPlanMode 切换 plan 模式。
-// Python: DeepAgent.switch_mode —— 调用点位于 update_runtime_config 之后，
-// 此时 agent 已 Configure，可安全执行完整 session 生命周期。
+// SwitchPlanMode 同步会话的 plan 状态。
+// Python: jiuwenswarm/runtime/plan.py:177-252 ensure_state 的切换段：
+//
+//	deep_agent, session, live = await self.open_state_session(agent, session_id)
+//	deep_agent.switch_mode(session=session, mode=target_state)
+//	await session.commit()
+//
+// 关键是 session 必须来自 open_state_session（= 正在承接该会话的 live 会话），
+// 且收尾用 commit 而不是 post_run：plan 状态要写在 rail 随后 LoadState 的那个
+// 对象上，否则写一个读另一个，plan 模式永远不生效。
 func (s *planStateStore) SwitchPlanMode(ctx context.Context, sessionID, mode string) error {
-	return s.d.SwitchMode(ctx, sessionID, mode)
+	inst, sess, err := s.openPlanSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	inst.SwitchMode(sess, mode)
+	return sess.Commit(ctx)
 }
 
 // CommitSession 提交会话（SwitchMode/SavePlanState 已完成会话收尾，此处无需额外动作）

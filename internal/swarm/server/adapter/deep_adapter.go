@@ -2052,17 +2052,11 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string) error {
-	// 优先落到正在承接该会话的 instance/session。
-	// Python: plan.py 的 starter = agent.ensure_live_session_instance —— plan 状态
-	// 必须写在即将执行本轮的那个 Session 上。若在这里另建 Session，rail 侧
-	// LoadState 读的是交互会话（各自持有内存状态），写一个读另一个，
-	// plan 模式永远不会生效（todo 不拦截、mode_instructions 附件不投递）。
-	if live := d.GetLiveSessionInstance(sessionID); live != nil {
-		if bound := resolveLiveAgentSession(live, sessionID); bound != nil {
-			live.SwitchMode(bound, subMode)
-			return nil
-		}
-	}
+	// 注意：本方法服务 ws-server 的切模式流程（preRun → switch_mode → postRun，
+	// Python: agent_ws_server.py）。plan 状态同步走的是另一条流程
+	// （plan.py:ensure_state → open_state_session → switch_mode → session.commit），
+	// 由 planStateStore.SwitchPlanMode 实现，**不要**复用本方法：
+	// 这里自建 Session 会把状态写到 rail 读不到的对象上。
 
 	// 10.3.28f：SwitchMode 是根上的独立 RPC，需要 DeepAgent 句柄。
 	// 根不再在 create_instance 时自建 instance，故此处惰建。
