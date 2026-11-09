@@ -612,20 +612,38 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 		// G2（issue 5448）：团队暂停后 AgentServer 的流不再发终态帧，
 		// 网关消费者必须同步退出；治理只在 AgentServer 确认暂停后执行，
 		// 否则轮次仍在产出，取消消费者会丢掉在飞输出。
-		resp, err := mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
-		if err == nil && resp != nil && resp.OK {
-			mh.cancelStreamsForPausedSession(ctx, msg, sessionMode)
-		} else {
-			logger.Warn(logComponent).
-				Str("event_type", "pause_governance_skipped").
-				Str("session_id", msg.SessionID).
-				Msg("AgentServer did not acknowledge pause; skip stream governance")
-		}
+		//
+		// 等待放到独立协程并设短超时：forwardLoop 是串行消息循环，
+		// 而 AgentClient.SendRequest 的超时是 600s——同步等会让暂停期间
+		// 整条网关 10 分钟不处理任何消息（Python 同样用 create_task 异步发）。
+		go mh.sendPauseAndGovernStreams(ctx, envInterrupt, msg, sessionMode)
 	} else {
 		go func() { _, _ = mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent) }()
 	}
 
 	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, hasActiveTask)
+}
+
+// pauseGovernAckTimeout 暂停治理等待 AgentServer 应答的上限。
+// 超时只跳过流治理，不影响已发出的暂停请求本身。
+const pauseGovernAckTimeout = 5 * time.Second
+
+// sendPauseAndGovernStreams 转发暂停，并在 AgentServer 确认后治理同 session 流消费者。
+// Python: _send_pause_and_govern_streams (message_handler.py L1372-1394)
+func (mh *MessageHandler) sendPauseAndGovernStreams(
+	ctx context.Context, env *e2a.E2AEnvelope, msg *schema.Message, sessionMode string,
+) {
+	waitCtx, cancel := context.WithTimeout(ctx, pauseGovernAckTimeout)
+	defer cancel()
+	resp, err := mh.sendInterruptToAgentWithEnvelope(waitCtx, env, "pause")
+	if err != nil || resp == nil || !resp.OK {
+		logger.Warn(logComponent).
+			Str("event_type", "pause_governance_skipped").
+			Str("session_id", msg.SessionID).
+			Msg("AgentServer did not acknowledge pause; skip stream governance")
+		return
+	}
+	mh.cancelStreamsForPausedSession(ctx, msg, sessionMode)
 }
 
 // resolveInboundReferences 解析入站消息中的 @file/@agent 引用。

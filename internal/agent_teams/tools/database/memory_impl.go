@@ -440,6 +440,29 @@ func (db *InMemoryTeamDatabase) UpdateMemberExecutionStatus(_ context.Context, m
 	return true
 }
 
+// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+func (db *InMemoryTeamDatabase) ResetPausedMemberExecutionStatus(_ context.Context, teamName string, memberNames []string) int {
+	if len(memberNames) == 0 {
+		return 0
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	reset := 0
+	for _, name := range memberNames {
+		member, exists := db.members[memberKey(name, teamName)]
+		if !exists {
+			continue
+		}
+		if member.Status != "paused" || member.ExecutionStatus == "idle" {
+			continue
+		}
+		member.ExecutionStatus = "idle"
+		reset++
+	}
+	return reset
+}
+
 // CreateTask 创建单条任务。对齐 Python: TaskDao.create_task()
 // 成功返回 true，task_id 冲突返回 false（对齐 Python IntegrityError → False）
 func (db *InMemoryTeamDatabase) CreateTask(_ context.Context, task *TeamTaskBase) (bool, error) {

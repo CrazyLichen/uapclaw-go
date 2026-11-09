@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -73,6 +74,8 @@ type RoundHandler func(ctx context.Context, ev HarnessRoundEvent)
 // （OnCustom/TriggerCustom），事件名用 "harness.state"/"harness.round"，
 // 命名空间 native_harness。上游的 metrics/logging 噪声开关在 Go 框架中不存在。
 type eventBus struct {
+	// mu 保护 fw：reset 与 emit/subscribe 可能来自不同协程
+	mu sync.RWMutex
 	// fw 底层回调框架
 	fw *callback.CallbackFramework
 }
@@ -110,8 +113,11 @@ func newEventBus() *eventBus {
 
 // subscribe 注册事件回调；回调在触发方协程内同步执行。
 func (b *eventBus) subscribe(_ context.Context, onState StateHandler, onRound RoundHandler) error {
+	b.mu.RLock()
+	fw := b.fw
+	b.mu.RUnlock()
 	if onState != nil {
-		b.fw.OnCustom(eventNameState, func(ctx context.Context, data map[string]any) any {
+		fw.OnCustom(eventNameState, func(ctx context.Context, data map[string]any) any {
 			onState(ctx, HarnessStateEvent{
 				Old:       toHarnessState(data["old"]),
 				New:       toHarnessState(data["new"]),
@@ -121,7 +127,7 @@ func (b *eventBus) subscribe(_ context.Context, onState StateHandler, onRound Ro
 		}, callback.WithNamespace(eventNamespace))
 	}
 	if onRound != nil {
-		b.fw.OnCustom(eventNameRound, func(ctx context.Context, data map[string]any) any {
+		fw.OnCustom(eventNameRound, func(ctx context.Context, data map[string]any) any {
 			onRound(ctx, HarnessRoundEvent{
 				Kind:    toString(data["kind"]),
 				RoundID: toInt(data["round_id"]),
@@ -133,9 +139,21 @@ func (b *eventBus) subscribe(_ context.Context, onState StateHandler, onRound Ro
 	return nil
 }
 
+// reset 丢弃当前命名空间的全部订阅者。
+// 等价上游 stop() 里的 _events.unregister_namespace(_EVENT_NAMESPACE)：
+// 断开消费者闭包引用，下一个 run cycle 的 Subscribe 会重新注册。
+func (b *eventBus) reset() {
+	b.mu.Lock()
+	b.fw = callback.NewCallbackFramework()
+	b.mu.Unlock()
+}
+
 // emitState 触发相位事件。
 func (b *eventBus) emitState(ctx context.Context, ev HarnessStateEvent) {
-	b.fw.TriggerCustom(ctx, eventNameState, map[string]any{
+	b.mu.RLock()
+	fw := b.fw
+	b.mu.RUnlock()
+	fw.TriggerCustom(ctx, eventNameState, map[string]any{
 		"old":        string(ev.Old),
 		"new":        string(ev.New),
 		"session_id": ev.SessionID,
@@ -144,7 +162,10 @@ func (b *eventBus) emitState(ctx context.Context, ev HarnessStateEvent) {
 
 // emitRound 触发轮次事件。
 func (b *eventBus) emitRound(ctx context.Context, ev HarnessRoundEvent) {
-	b.fw.TriggerCustom(ctx, eventNameRound, map[string]any{
+	b.mu.RLock()
+	fw := b.fw
+	b.mu.RUnlock()
+	fw.TriggerCustom(ctx, eventNameRound, map[string]any{
 		"kind":     ev.Kind,
 		"round_id": ev.RoundID,
 		"result":   ev.Result,

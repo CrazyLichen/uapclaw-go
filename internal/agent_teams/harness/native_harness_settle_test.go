@@ -108,7 +108,7 @@ func TestSettleRoundDone_followUp队列续轮(t *testing.T) {
 	})
 
 	// 预置一条 pending inbox（模拟 running 期间排队）
-	h.enqueueInbox(InboxMessage{Seq: 1, Content: "后续任务"})
+	h.enqueueInbox(InboxMessage{Content: "后续任务"})
 
 	h.st.setPhase(HarnessStateRunning)
 	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "首轮"})

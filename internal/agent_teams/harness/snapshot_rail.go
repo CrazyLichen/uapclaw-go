@@ -115,6 +115,13 @@ func (r *PhaseSnapshotRail) AfterReactIteration(_ context.Context, cbc *agentint
 		return nil
 	}
 	active.LastIterSnapshot = captureSnapshot(r.harness.agent, sess, active.LastIterSnapshot, nil)
+	// 排查“快照为什么是空的”时，这三项是唯一线索。
+	// Python: snapshot_rail.py L219-224 的同位 debug 日志
+	logger.Debug(logComponent).
+		Int("round_id", active.RoundID).
+		Int("iteration", active.LastIterSnapshot.IterationIndex).
+		Int("msgs", len(active.LastIterSnapshot.ContextMessages)).
+		Msg("iteration boundary snapshot captured")
 	return nil
 }
 

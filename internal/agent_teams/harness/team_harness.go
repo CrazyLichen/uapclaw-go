@@ -75,6 +75,11 @@ type TeamHarness struct {
 	// nativeSessionID 当前 run cycle 对应的团队会话标识。
 	// Python: _native_session_id（start 时记录、stop 时清空）
 	nativeSessionID string
+	// agentSpec 构造 native 的规格；native 终止后按它重建。
+	// Python: TeamHarness._agent_spec（start 里 `if native is None or TERMINATED: rebuild`）
+	agentSpec atschema.DeepAgentSpec
+	// buildCtx native 重建时解析 rails 等部件所需的构建上下文。
+	buildCtx hschema.BuildContextInterface
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -168,8 +173,12 @@ func TeamHarnessBuild(
 			Msg("TeamHarnessBuild: native construction failed")
 		return newTeamHarnessWithNative(nil, nil, role, memberName, initialPlanMode, taskEventTracker)
 	}
-	return newTeamHarnessWithNative(native, native.DeepAgent(), role, memberName,
+	h := newTeamHarnessWithNative(native, native.DeepAgent(), role, memberName,
 		initialPlanMode, taskEventTracker)
+	// 保存规格：native 在 Stop 后终止，下一个 run cycle 的 Start 需要按它重建。
+	h.agentSpec = agentSpec
+	h.buildCtx = buildCtx
+	return h
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
@@ -377,12 +386,25 @@ func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
 
 // Start 绑定子会话并启动 native 的 supervisor（一个 run cycle 一次）。
 // Python: TeamHarness.start(team_session)（team_harness.py:135-169）
-// 步骤对齐上游 9 步；25.1a 阶段 native 由 TeamHarnessBuild 物化且 fresh，
-// 故"重建 native / _remount_dynamic_tools / background_task_controller / kv_cache hook"
-// 四步在本阶段为 no-op（⤵️ 25.1b spec 驱动 + ⤵️ 25.1d 异步工具 + ⤵️ 25.6 会话钩子）。
+//
+// 步骤对齐上游 9 步。其中「重建 native」在本方法内实现：上一个 run cycle
+// 的 native 在 Stop 后处于 TERMINATED，必须按保存的 spec 重建，
+// 否则新 cycle 的 Send/Resume 会落到没有消费者的队列上。
+// 其余三步仍是明确登记的回填点：
+//   - _remount_dynamic_tools / background_task_controller → 25.1d / 25.6
+//   - kv_cache 会话生命周期钩子 → 25.6
 func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
+	// 步骤 1：native 缺失或已终止则重建（对齐上游 start 首步）
 	if h.native == nil {
 		return fmt.Errorf("team harness: 未构建 native（须经 TeamHarnessBuild）")
+	}
+	if h.native.State() == HarnessStateTerminated {
+		rebuilt, err := NewNativeHarness(h.agentSpec, h.buildCtx)
+		if err != nil {
+			return fmt.Errorf("team harness: 重建 native 失败: %w", err)
+		}
+		h.native = rebuilt
+		h.deepAgent = rebuilt.DeepAgent()
 	}
 
 	// 步骤 3：建子会话（对齐 _make_child_session）
@@ -416,6 +438,16 @@ func (h *TeamHarness) Stop(ctx context.Context) error {
 	if h.native != nil && h.native.State() != HarnessStateTerminated {
 		if err := h.native.Stop(ctx); err != nil {
 			return err
+		}
+	}
+	// 提交子会话：跨 run cycle 的任务计划/历史/plan mode 依赖同一 session id 的
+	// checkpoint 恢复；注入会话的 ownSession=false，NativeHarness.Stop 不会 post_run。
+	// 失败只记 Debug（对齐上游 try/except Exception）。
+	if active := h.getActiveSession(); active != nil {
+		if err := active.Commit(ctx); err != nil {
+			logger.Debug(logComponent).Err(err).
+				Str("member_name", h.memberName).
+				Msg("TeamHarness.Stop: commit child session failed")
 		}
 	}
 	h.nativeSessionID = ""

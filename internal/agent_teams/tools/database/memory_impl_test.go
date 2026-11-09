@@ -1562,3 +1562,30 @@ func TestSetMemberMode_不存在成员(t *testing.T) {
 	// 不应 panic
 	db.SetMemberMode("nobody", "team1", "code")
 }
+
+// TestResetPausedMemberExecutionStatus_只复位暂停成员 验证批量复位的过滤条件。
+func TestResetPausedMemberExecutionStatus_只复位暂停成员(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+
+	db.CreateTeam(ctx, "team1", "Team1", "leader", "desc", "prompt", "autonomous", false)
+	// 已暂停且仍在 running：应复位
+	db.CreateMember(ctx, "alice", "team1", "Alice", "", "paused", "teammate", "desc", "running", "plan", "prompt", "")
+	// 已暂停但已 idle：不计数
+	db.CreateMember(ctx, "bob", "team1", "Bob", "", "paused", "teammate", "desc", "idle", "plan", "prompt", "")
+	// 未暂停：不动
+	db.CreateMember(ctx, "carol", "team1", "Carol", "", "active", "teammate", "desc", "running", "plan", "prompt", "")
+
+	reset := db.ResetPausedMemberExecutionStatus(ctx, "team1", []string{"alice", "bob", "carol"})
+	if reset != 1 {
+		t.Fatalf("reset = %d, want 1", reset)
+	}
+	alice, _ := db.GetMember(ctx, "alice", "team1")
+	if alice.ExecutionStatus != "idle" {
+		t.Errorf("alice execution_status = %q, want idle", alice.ExecutionStatus)
+	}
+	carol, _ := db.GetMember(ctx, "carol", "team1")
+	if carol.ExecutionStatus != "running" {
+		t.Errorf("carol execution_status = %q, want running（未暂停不应复位）", carol.ExecutionStatus)
+	}
+}

@@ -1,7 +1,9 @@
 package harness
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +41,8 @@ func TestOnPause_模型相位硬取消并回滚(t *testing.T) {
 	active.LastIterSnapshot = &SafeStateSnapshot{IterationIndex: 1, DeepAgentState: map[string]any{}}
 	reply := make(chan error, 1)
 
-	require.NoError(t, h.onPause(&cmdPause{reply: reply}))
+	_, err := h.onPause(&cmdPause{reply: reply})
+	require.NoError(t, err)
 
 	assert.Equal(t, HarnessStatePaused, h.State())
 	assert.Nil(t, h.st.Active())
@@ -61,7 +64,8 @@ func TestOnPause_工具相位延迟应答(t *testing.T) {
 	active.ModelCallInFlight.Store(false)
 	reply := make(chan error, 1)
 
-	require.NoError(t, h.onPause(&cmdPause{reply: reply}))
+	_, err := h.onPause(&cmdPause{reply: reply})
+	require.NoError(t, err)
 
 	assert.Equal(t, HarnessStatePausing, h.State())
 	assert.True(t, active.PauseRequested.Load())
@@ -101,4 +105,39 @@ func TestOnResume_Warm续跑清空查询(t *testing.T) {
 	assert.False(t, has)
 	assert.Empty(t, q)
 	require.NotNil(t, h.st.Active())
+}
+
+// TestOnPause_非Running立即应答 验证重复暂停不会把第二次调用的 ack 吞掉。
+// 回归 S-04：dispatch 曾用相位反推“是否延迟应答”，PAUSING 时两次都漏 ack。
+func TestOnPause_非Running立即应答(t *testing.T) {
+	h, _ := newPauseTestHarness(t)
+	h.st.setPhase(HarnessStatePausing)
+
+	reply := make(chan error, 1)
+	deferred, err := h.onPause(&cmdPause{reply: reply})
+	require.NoError(t, err)
+	assert.False(t, deferred, "非 RUNNING 的暂停必须由调用方立即应答")
+
+	// dispatch 层同样要应答，不能挂住调用方
+	h.dispatch(context.Background(), &cmdPause{reply: reply})
+	select {
+	case <-reply:
+	case <-time.After(time.Second):
+		t.Fatal("重复暂停必须立即应答，不能挂住调用方")
+	}
+}
+
+// TestStop_清除暂停查询 回归 T-02：停止后 PausedQuery 不应再返回旧值。
+func TestStop_清除暂停查询(t *testing.T) {
+	h := newTestNativeHarness(t)
+	sess := session.CreateAgentSession("stop-paused-query", h.DeepAgent().Card(), nil)
+	require.NoError(t, sess.PreRun(context.Background(), map[string]any{}))
+	require.NoError(t, h.Start(context.Background(), sess))
+
+	h.st.SetPausedQuery("已作废的任务")
+	h.st.setPhase(HarnessStatePaused)
+
+	require.NoError(t, h.Stop(context.Background()))
+	_, ok := h.st.PausedQuery()
+	assert.False(t, ok, "Stop 后不得残留暂停查询")
 }

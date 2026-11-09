@@ -102,6 +102,14 @@ type MemberDao interface {
 	// UpdateMemberExecutionStatus 更新执行状态（含 FSM 校验）。
 	// Python: update_member_execution_status() → bool
 	UpdateMemberExecutionStatus(ctx context.Context, memberName, teamName, executionStatus string) bool
+	// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+	//
+	// 只用于生命周期收尾（暂停后成员运行时已停），不走轮次驱动的 FSM 校验；
+	// 与 Python reset_paused_member_execution_status 的条件一致：
+	// status=PAUSED 且 execution_status != IDLE。
+	//
+	// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+	ResetPausedMemberExecutionStatus(ctx context.Context, teamName string, memberNames []string) int
 }
 
 // TaskDao 任务 DAO 接口。
