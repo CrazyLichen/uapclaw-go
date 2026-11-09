@@ -595,9 +595,9 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 	// Python: 创建转发回调 teammate chunk → leader streamQueue
 	// Python 的 put_nowait 满时抛 QueueFull 异常（被上层捕获），Go 的 select default 静默丢弃
 	forwardCb := func(ctx context.Context, chunk streambase.Schema) error {
-		if leaderSC.streamQueue != nil {
+		if q := leaderSC.streamQueueSnapshot(); q != nil {
 			select {
-			case leaderSC.streamQueue <- chunk:
+			case q <- chunk:
 			default:
 				// G20: 对齐 Python QueueFull 异常的可观测性，记录丢弃日志
 				logger.Warn(logComponent).

@@ -30,7 +30,7 @@ import (
 //   - 重试逻辑（错误码 181001 最多重试 10 次）
 type StreamController struct {
 	// mu 保护并发访问的字段（cancelRequested, pendingInputs, pendingInterruptResumes, streamingActive, chunkObservers）
-	mu sync.Mutex
+	mu sync.RWMutex
 	// getBlueprint 蓝图获取器（延迟获取，configure 后才有值）
 	getBlueprint func() *TeamAgentBlueprint
 	// state 共享可变状态
@@ -215,10 +215,11 @@ func (sc *StreamController) CancelAgent(ctx context.Context) error {
 // CloseStream 关闭流（向 streamQueue 写入 nil sentinel）。
 // Python: StreamController.close_stream()
 func (sc *StreamController) CloseStream() {
-	if sc.streamQueue != nil {
+	q := sc.streamQueueSnapshot()
+	if q != nil {
 		// 非阻塞写入 nil sentinel
 		select {
-		case sc.streamQueue <- nil:
+		case q <- nil:
 		default:
 		}
 	}
@@ -227,7 +228,8 @@ func (sc *StreamController) CloseStream() {
 // EmitCompletionAndClose 发出 team.completed 标记块再关闭流。
 // Python: StreamController.emit_completion_and_close(member_count, task_count)
 func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
-	if sc.streamQueue == nil {
+	q := sc.streamQueueSnapshot()
+	if q == nil {
 		return
 	}
 	bp := sc.getBlueprint()
@@ -250,7 +252,7 @@ func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 	}
 	// marker 先入队，然后 nil sentinel 关闭流
 	select {
-	case sc.streamQueue <- marker:
+	case q <- marker:
 	default:
 	}
 	sc.CloseStream()
@@ -329,6 +331,15 @@ func (sc *StreamController) ResetStreamQueue() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	sc.streamQueue = nil
+}
+
+// streamQueueSnapshot 在读锁内取当前流队列快照。
+// 所有读路径（转发、关闭、观察者转发）都必须经此取值：
+// finalize_round 会在另一协程把 streamQueue 置 nil。
+func (sc *StreamController) streamQueueSnapshot() chan streambase.Schema {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	return sc.streamQueue
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -481,9 +492,9 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 			continue
 		}
 		tagged := sc.tagChunk(chunk)
-		if sc.streamQueue != nil {
+		if q := sc.streamQueueSnapshot(); q != nil {
 			select {
-			case sc.streamQueue <- tagged:
+			case q <- tagged:
 			case <-ctx.Done():
 				return
 			}
