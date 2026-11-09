@@ -78,6 +78,7 @@
 //	├── openjiuwen_contract.go             # openjiuwen 权限 rail 运行时契约 + 结果分类（9.90d-1 Task 12）
 //	├── permission_interrupt_rail.go       # 精确持久化 + 中断归属标记的权限 rail（9.90d-1 Task 13）
 //	├── base_rail.go                       # 自动审查层包装权限轨的协作面接口（9.90d-1 Task 15）
+//	├── auto_config.go                     # auto 模式运行时配置归一化（9.90d-2 Task 18）
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）

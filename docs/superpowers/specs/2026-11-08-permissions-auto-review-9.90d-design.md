@@ -1357,3 +1357,50 @@ profile 显示 0%。本批受影响的两个文件：
 新建 `reviewer_redaction_python_alignment_test.go`，内含三组与 Python 逐值对照
 的用例（`maskParts` 六个边界、`requireLiteral` 七个取值、`>` 排除），
 期望值全部从 Python 源码真实跑出，不是推断。
+
+### 12.16 Task 18 执行结论：`auto_config`
+
+**落地**：`permissions/auto_config.go`（315 行 Python → 561 行 Go / 5 导出 + 16 私有），
+`auto_config.go` 覆盖率 **93.7%**，permissions 包 88.5%。
+
+#### 两项计划外前置件（计划遗漏，已补）
+
+Task 18 依赖两个 Go 侧**完全不存在**的模块，计划文档未列：
+
+| Python | 行数 | Go 落地 |
+|---|---|---|
+| `jiuwenswarm/common/permission_mode.py` | 47 | 新建 `internal/common/permission_mode/` 包（100% 覆盖） |
+| `gateway/common/mode_matrix.py` 的 `supports_single_agent_permission_profile` | 约 25 | 补进 `internal/swarm/schema/mode.go` |
+
+`mode_matrix.py` 其余 490 行**不需要新写**——`internal/swarm/schema/mode.go`(450 行)
+已实现 `CanonicalizeModeText` / `ComposeWebMode` / `CanonicalizeMode` / `NormalizeMode`
+/ `IsPlanMode` / `IsSingleAgentMode` 等，且 `singleAgentCanonicalModes` 常量已存在
+（值完全一致：`agent.work.normal` / `agent.work.plan` / `agent.code.normal` / `agent.code.plan`）。
+只缺 `SupportsSingleAgentPermissionProfile` 一个函数。
+
+#### 计划测试示例的 2 处错误
+
+| 计划写法 | 实际 |
+|---|---|
+| `got["reviewer_output_format"] != "json"` | 默认是 **`"json_object"`**（`AUTO_PERMISSION_DEFAULT_OPTIONS`） |
+| `TestToolRequiresAskInAuto` 用 `t.Skip("需按 Python 实际清单核对")` 占位 | 已按 `ClassifyTool` 的 `HighFlex \|\| RiskTier == "high"` 实现并测试（`bash` 强制 ask、`read_file` 保留 allow） |
+
+#### 对齐细节
+
+- `normalizeLevel` 对 map 入参先取 `["*"]`（Python 同款）
+- `normalizeAutoDefaultLevel`：只允许 `deny`，其余（含 `allow`）一律收窄为 `ask`——
+  auto 模式下默认档位不能是 allow，否则等于关掉审查
+- `anyToBool` 复刻 Python `bool()`：非空串为真（`bool("false") == True`）
+- `positiveInt` 复刻 Python `int()`：`"5000"` 可转、`3.9` 截断为 3、`true` 为 1、
+  非正数回落默认
+- 同名工具合并：`exec_command` 与 `mcp_exec_command` 归一后同名，按
+  `StricterPermissionLevel` 取严格者
+
+#### 复用而非新造的辅助
+
+`anyToStringValue`（Python `str()` 等价，`generated_artifact_delivery.go`）、
+`deepCopyAnyMap` / `deepCopyAnyValue`（`permissions_layers.go`）、
+`userHomeDir`（`tool_decision_facts.go`）、`MergeProtectedWritePaths` /
+`JiuwenclawProtectedWritePaths`（`protected_paths.go`）、
+`ClassifyTool`（`tool_capabilities.go`）。新增仅 4 个：
+`anyToBool` / `anyToInt` / `anyToStringSlice` / `mapGet`。

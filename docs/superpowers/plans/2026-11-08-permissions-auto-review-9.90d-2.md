@@ -122,6 +122,32 @@ func CurrentNativePathAccess(toolName string, args map[string]any) *NativePathAc
 
 ---
 
+## ⚠️ 签名校正（9.90d-2 开工前核实，2026-11-08）
+
+上文「已核实的关键签名」写于 9.90d-1 之前，实施时 7 处已变更。**以下为实际签名，
+本计划所有 Task 以此为准**：
+
+| 上文声明 | 实际签名 | 变更原因 |
+|---|---|---|
+| `MarkPlanHardReject(ctx context.Context) context.Context` | `MarkPlanHardReject(cbc *agentinterfaces.AgentCallbackContext)`（无返回） | Python 是 `setattr(ctx, ...)` 改 ctx 属性；Go 用 `cbc.SetExtra` 就地写，无需派生 ctx |
+| `PlanHardRejected(ctx context.Context) bool` | `PlanHardRejected(ctx any) bool` | 内部断言到 `*AgentCallbackContext` |
+| `OverlayRunPermissions(ctx, config) map[string]any` | `OverlayRunPermissions(ctx, config) (map[string]any, error)` | Python 的歧义检查抛 ValueError，Go 用 error 传播（偏差 V-10 口径） |
+| `GetPermissionSnapshot(sid) map[string]any` | `GetPermissionSnapshot(sid) (map[string]any, error)` | 对齐 Python 的 `raise ValueError("Installed permission snapshot unavailable")` |
+| `PermissionCheckContext(sid) (cleanup func(), bound bool)` | `PermissionCheckContext(sid) (cleanup func())` | Python 的 `@contextmanager` 只产出清理语义，`bound` 无用 |
+| `BindApprovalRequest(request any, toolCall *llmschema.ToolCall)` | `BindApprovalRequest(request saschema.InterruptRequester, toolCall *llmschema.ToolCall) error` | 收窄类型 + 保留 error（Python 抛 `permission_snapshot_unavailable`） |
+| `BasePermissionRail` 9 方法 | **7 方法**：`BeforeToolCall` / `UpdateConfig` / `SetTrustedDirs` / `InstalledPermissionConfig` / `GetPermissionSnapshot` / `PermissionCheckContext` / `BindApprovalRequest` | `AfterToolCall` 在 Python 权限 rail 上不存在（凭空添加）；`ReplaceInstalledGlobalPermissions` 是 Python monkey-patch 动态挂的，非类方法，挂 ⤵️ 9.90d-2 |
+
+**另需注意**：
+- `MarkTrusted` / `IsTrusted` 挂在 `*rails.DeepAgentRail` 上（`internal/agentcore/harness/rails/base.go`）
+- `PermissionInterruptRailOverride` 的 3 个 persist 钩子带 `ctx context.Context` 首参
+- `JiuwenSwarmPermissionInterruptRail` 已满足 `BasePermissionRail`（编译期断言在 `base_rail.go`）
+
+**已完成、本计划跳过**：
+- Task 20 `reviewer_redaction`(689 行) —— 9.90d-1 已落地，含与 Python 逐值对照的回归测试
+- `reviewer_redaction_python_alignment_test.go` 已覆盖 `maskParts` / `requireLiteral` / `>` 排除
+
+---
+
 ## 文件结构
 
 ### 新建文件（29 个）

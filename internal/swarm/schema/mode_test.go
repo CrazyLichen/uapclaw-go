@@ -344,3 +344,105 @@ func TestIsNewCanonicalMode(t *testing.T) {
 		}
 	}
 }
+
+// ──────────────────────────── SupportsSingleAgentPermissionProfile（9.90d-2 前置） ────────────────────────────
+
+// TestSupportsSingleAgentPermissionProfile_基础组合 验证 normal/plan 档位。
+func TestSupportsSingleAgentPermissionProfile_基础组合(t *testing.T) {
+	cases := []struct {
+		name            string
+		mode, sub, work any
+		want            bool
+	}{
+		{"agent裸", "agent", nil, nil, true},
+		{"agent+normal", "agent", "normal", nil, true},
+		{"agent+plan", "agent", "plan", nil, true},
+		{"agent+fast", "agent", "fast", nil, true},
+		{"code裸", "code", nil, nil, true},
+		{"code+normal", "code", "normal", nil, true},
+		{"code+plan", "code", "plan", nil, true},
+		{"code+fast不支持", "code", "fast", nil, false},
+		{"agent+非法sub", "agent", "turbo", nil, false},
+		{"空mode", "", nil, nil, false},
+		{"nil mode", nil, nil, nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := SupportsSingleAgentPermissionProfile(c.mode, c.sub, c.work); got != c.want {
+				t.Errorf("(%v,%v,%v) = %v, want %v", c.mode, c.sub, c.work, got, c.want)
+			}
+		})
+	}
+}
+
+// TestSupportsSingleAgentPermissionProfile_workMode 验证 work_mode 组合。
+func TestSupportsSingleAgentPermissionProfile_workMode(t *testing.T) {
+	// work 只能是 ""/work/code
+	if SupportsSingleAgentPermissionProfile("agent", nil, "deploy") {
+		t.Error("invalid work_mode should be false")
+	}
+	// agent + work → agent.work.normal（白名单内）
+	if !SupportsSingleAgentPermissionProfile("agent", nil, "work") {
+		t.Error("agent+work should be true")
+	}
+	// agent + code → agent.code.normal，要求 canonical 含 .code.
+	if !SupportsSingleAgentPermissionProfile("agent", nil, "code") {
+		t.Error("agent+code should be true")
+	}
+}
+
+// TestSupportsSingleAgentPermissionProfile_Mode枚举 验证 Mode 类型入参。
+func TestSupportsSingleAgentPermissionProfile_Mode枚举(t *testing.T) {
+	if !SupportsSingleAgentPermissionProfile(ModeAgentWorkNormal, nil, nil) {
+		t.Error("ModeAgentWorkNormal should be supported")
+	}
+	if !SupportsSingleAgentPermissionProfile(ModeAgentCodePlan, nil, nil) {
+		t.Error("ModeAgentCodePlan should be supported")
+	}
+	// team 族不在白名单
+	if SupportsSingleAgentPermissionProfile(ModeTeamWorkNormal, nil, nil) {
+		t.Error("team mode should be false")
+	}
+}
+
+// TestSupportsSingleAgentPermissionProfile_非agent族带sub 验证非 agent/code 族的 sub 校验。
+func TestSupportsSingleAgentPermissionProfile_非agent族带sub(t *testing.T) {
+	// 非 agent/code 族，sub 只能是 normal/plan
+	if SupportsSingleAgentPermissionProfile("team", "turbo", nil) {
+		t.Error("team+turbo should be false")
+	}
+	// 非 agent/code 族且 sub 合法，但 team 不在白名单
+	if SupportsSingleAgentPermissionProfile("team", "plan", nil) {
+		t.Error("team+plan should be false (team not in single-agent allowlist)")
+	}
+}
+
+// TestModeTextValue 验证各类型取文本。
+func TestModeTextValue(t *testing.T) {
+	if got := modeTextValue(nil); got != "" {
+		t.Errorf("nil -> %q", got)
+	}
+	if got := modeTextValue("agent"); got != "agent" {
+		t.Errorf("string -> %q", got)
+	}
+	if got := modeTextValue(ModeAgentWorkPlan); got != "agent.work.plan" {
+		t.Errorf("Mode -> %q", got)
+	}
+	if got := modeTextValue(42); got != "42" {
+		t.Errorf("int -> %q", got)
+	}
+}
+
+// TestContainsModeText 验证切片包含判定。
+func TestContainsModeText(t *testing.T) {
+	items := []string{"", "normal", "plan"}
+	if !containsModeText(items, "plan") {
+		t.Error("should contain plan")
+	}
+	if containsModeText(items, "fast") {
+		t.Error("should not contain fast")
+	}
+	if containsModeText(nil, "x") {
+		t.Error("nil should be false")
+	}
+}

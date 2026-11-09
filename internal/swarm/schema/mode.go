@@ -315,6 +315,78 @@ var webComposeTable = map[[2]string][3]string{
 	{"agent.work.plan", "work"}:   {"agent", "plan", "agent.work.plan"},
 }
 
+// SupportsSingleAgentPermissionProfile 该 mode/sub_mode/work_mode 组合是否支持
+// 单 Agent 权限档位（只允许已知的独立 normal/plan 档）。
+//
+// Python: gateway/common/mode_matrix.py supports_single_agent_permission_profile
+// 参数用 any 以兼容 Mode 枚举与裸字符串（Python 用 getattr(mode, "value", mode)）。
+func SupportsSingleAgentPermissionProfile(mode, subMode, workMode any) bool {
+	rawMode := modeTextValue(mode)
+	if strings.TrimSpace(rawMode) == "" {
+		return false
+	}
+	text := CanonicalizeModeText(rawMode)
+	sub := strings.ToLower(strings.TrimSpace(modeTextValue(subMode)))
+	work := strings.ToLower(strings.TrimSpace(modeTextValue(workMode)))
+	if work != "" && work != "work" && work != "code" {
+		return false
+	}
+	switch text {
+	case "agent", "code":
+		allowed := []string{"", "normal", "plan"}
+		if text == "agent" {
+			allowed = []string{"", "normal", "plan", "fast"}
+		}
+		if !containsModeText(allowed, sub) {
+			return false
+		}
+		if sub == "plan" || sub == "fast" {
+			text = text + "." + sub
+		}
+	default:
+		if sub != "" && sub != "normal" && sub != "plan" {
+			return false
+		}
+	}
+	if (text == "agent" || text == "agent.plan") && work != "" {
+		if _, _, canonical, ok := ComposeWebMode(text, work); ok {
+			text = canonical
+		}
+	}
+	canonical := CanonicalizeMode(text)
+	if _, allowed := singleAgentCanonicalModes[canonical]; !allowed {
+		return false
+	}
+	if work == "" {
+		return true
+	}
+	return strings.Contains(canonical, ".code.") == (work == "code")
+}
+
+// modeTextValue 取 mode 的文本值（Mode 枚举取底层串，其余走 fmt）。
+func modeTextValue(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case Mode:
+		return string(v)
+	default:
+		return fmt.Sprint(value)
+	}
+}
+
+// containsModeText 判断切片是否含指定文本。
+func containsModeText(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
 // CanonicalizeMode 把任意入站模式串 canonicalize 到新三段命名。
 // Python: gateway/common/mode_matrix.py canonicalize_mode_text（别名 → 弃用映射 →
 // 未命中原样返回）。与 NormalizeMode 的区别：本函数不做"未知串回落默认"，
