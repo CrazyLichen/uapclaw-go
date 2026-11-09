@@ -1,4 +1,4 @@
-package schema_test
+package harness_test
 
 import (
 	"testing"
@@ -6,8 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // TestResolveParts_产出配置 基础场景：产出 config 且 card 已配置。
@@ -18,7 +21,7 @@ func TestResolveParts_产出配置(t *testing.T) {
 		MaxIterations:  5,
 	}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, parts)
@@ -41,7 +44,7 @@ func TestResolveParts_parentModel不污染调用方(t *testing.T) {
 	spec := &hschema.DeepAgentSpec{Language: "cn"}
 	ctx := &hschema.BuildContext{Language: "cn"}
 
-	_, err := spec.ResolveParts(ctx)
+	_, err := harness.ResolveDeepAgentSpecParts(spec, ctx)
 	require.NoError(t, err)
 
 	_, leaked := ctx.GetExtras()["_parent_model"]
@@ -58,7 +61,7 @@ func TestResolveParts_extras不共享(t *testing.T) {
 	ctx := &hschema.BuildContext{Language: "cn"}
 	ctx.GetExtras()["caller.handle"] = "keep-me"
 
-	_, err := spec.ResolveParts(ctx)
+	_, err := harness.ResolveDeepAgentSpecParts(spec, ctx)
 	require.NoError(t, err)
 
 	assert.Equal(t, "keep-me", ctx.GetExtras()["caller.handle"], "调用方原有键保留")
@@ -75,7 +78,7 @@ func TestResolveParts_衍生context回填workspace(t *testing.T) {
 	}
 	origCtx := &hschema.BuildContext{Language: "cn"}
 
-	_, err := spec.ResolveParts(origCtx)
+	_, err := harness.ResolveDeepAgentSpecParts(spec, origCtx)
 	require.NoError(t, err)
 
 	// 原 ctx 不被改写（derive 语义）
@@ -87,7 +90,7 @@ func TestResolveParts_衍生context回填workspace(t *testing.T) {
 func TestResolveParts_nilContext自建(t *testing.T) {
 	spec := &hschema.DeepAgentSpec{Language: "en"}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err, "nil ctx 不得报错")
 	require.NotNil(t, parts)
@@ -110,7 +113,7 @@ func TestResolveParts_rails经provider解析(t *testing.T) {
 		Language: "cn",
 		Rails:    []hschema.RailSpec{{Type: "test.resolve.rail"}},
 	}
-	_, err := spec.ResolveParts(nil)
+	_, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, called, "spec 声明的 rail 必须经 provider 解析")
@@ -126,13 +129,16 @@ func TestResolveParts_未知rail不报错(t *testing.T) {
 		Rails:    []hschema.RailSpec{{Type: "core.does.not.exist"}},
 	}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err, "未知 rail 不得中断解析")
 	require.NotNil(t, parts)
 }
 
-// TestResolveParts_rail返回列表被展平 provider 返回 []rail 时展平进 parts.Rails。
+// TestResolveParts_rail返回列表被展平 provider 返回 rail 列表时逐个展平进 parts.Rails。
+//
+// 注意：parts.Rails 还含默认 rails，所以不能断言"总数"，而要精确数
+// 目标类型的实例数（默认 rails 里也可能有同类型，需先排除基线）。
 func TestResolveParts_rail返回列表被展平(t *testing.T) {
 	hschema.ResetRailRegistryForTest()
 	t.Cleanup(hschema.ResetRailRegistryForTest)
@@ -140,19 +146,32 @@ func TestResolveParts_rail返回列表被展平(t *testing.T) {
 	hschema.RegisterRailProvider("test.list.rail", func(
 		params map[string]any, ctx hschema.BuildContextInterface,
 	) (any, error) {
-		// 返回一个 []any（模拟上游 "a list of rails"）
-		return []any{}, nil
+		// 返回两个实例（模拟上游 "a list of rails"）
+		return []any{rails.NewSysOperationRail(), rails.NewSysOperationRail()}, nil
 	})
 
 	spec := &hschema.DeepAgentSpec{
 		Language: "cn",
 		Rails:    []hschema.RailSpec{{Type: "test.list.rail"}},
 	}
-
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
-	assert.Empty(t, parts.Rails, "空列表展平后无 rail")
+	// 用户已提供 SysOperationRail → 默认补齐跳过同类型，
+	// 所以总数恰好是 provider 列表里的两个（展平生效 + 去重生效）
+	assert.Equal(t, 2, countSysOpRails(parts.Rails),
+		"列表里的两个实例都应展平进 parts.Rails，且默认补齐不重复追加")
+}
+
+// countSysOpRails 统计 SysOperationRail 实例数（展平测试用）。
+func countSysOpRails(list []agentinterfaces.AgentRail) int {
+	n := 0
+	for _, r := range list {
+		if _, ok := r.(*rails.SysOperationRail); ok {
+			n++
+		}
+	}
+	return n
 }
 
 // TestResolveParts_workspace回填到config spec 的 Workspace 解析进 config。
@@ -162,7 +181,7 @@ func TestResolveParts_workspace回填到config(t *testing.T) {
 		Workspace: &hschema.WorkspaceSpec{RootPath: "/my-ws"},
 	}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, parts.Config.Workspace, "config.Workspace 必须就位")
@@ -173,7 +192,7 @@ func TestResolveParts_workspace回填到config(t *testing.T) {
 func TestResolveParts_memberCardID回填(t *testing.T) {
 	spec := &hschema.DeepAgentSpec{Language: "cn"}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, parts.Config.Card, "config.Card 必须就位（nil 时建默认卡）")
@@ -188,7 +207,7 @@ func TestResolveParts_不修改spec自身(t *testing.T) {
 		Rails:         rails,
 	}
 
-	_, err := spec.ResolveParts(nil)
+	_, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "cn", spec.Language)
@@ -200,7 +219,7 @@ func TestResolveParts_不修改spec自身(t *testing.T) {
 func TestResolveParts_workspaceSpec为空(t *testing.T) {
 	spec := &hschema.DeepAgentSpec{Language: "cn"}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	// 未指定 Workspace 时，config.Workspace 由工厂侧建默认（buildWorkspace），

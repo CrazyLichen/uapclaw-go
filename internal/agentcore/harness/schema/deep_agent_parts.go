@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"sync"
-
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
@@ -28,47 +26,4 @@ type DeepAgentParts struct {
 	ToolCards []*tool.ToolCard
 	// ToolInstances 待注册到资源管理器的工具实例
 	ToolInstances []tool.Tool
-}
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-var (
-	// defaultRailsResolverMu 保护 defaultRailsResolver
-	defaultRailsResolverMu sync.RWMutex
-	// defaultRailsResolver 默认 rails 计算器（由 harness 包在 init 注入）
-	//
-	// 存在的原因：上游 spec.resolve_parts 委托 resolve_deep_agent_parts，
-	// 后者在同一次调用里算好默认 rails 放进 parts.rails。Go 侧
-	// addDefaultRails 住在 harness 包（依赖 rails/prompts 等上层），
-	// schema 不能反向引用，故改为构造期注入函数指针。
-	//
-	// ⚠️ 与 Go embedding 虚方法不同：这是**显式函数指针**，
-	// 调用处 `if fn != nil { fn(...) }` 会真正执行注入的实现，
-	// 不会静态绑定到空实现（2026-11-08 的 25.0c 陷阱）。
-	defaultRailsResolver func(spec *DeepAgentSpec, config *DeepAgentConfig, userRails []agentinterfaces.AgentRail) []agentinterfaces.AgentRail
-)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// SetDefaultRailsResolver 注入默认 rails 计算器（由 harness 包在 init 调用）。
-//
-// 对齐上游：spec.resolve_parts → resolve_deep_agent_parts 的 default_rails 循环
-// (factory.py:394-415)。Go 侧因包层次限制改为注入。
-func SetDefaultRailsResolver(
-	fn func(spec *DeepAgentSpec, config *DeepAgentConfig, userRails []agentinterfaces.AgentRail) []agentinterfaces.AgentRail,
-) {
-	defaultRailsResolverMu.Lock()
-	defer defaultRailsResolverMu.Unlock()
-	defaultRailsResolver = fn
-}
-
-// resolveDefaultRails 调默认 rails 计算器（未注入时返回 nil）。
-func resolveDefaultRails(spec *DeepAgentSpec, config *DeepAgentConfig, userRails []agentinterfaces.AgentRail) []agentinterfaces.AgentRail {
-	defaultRailsResolverMu.RLock()
-	fn := defaultRailsResolver
-	defaultRailsResolverMu.RUnlock()
-	if fn == nil {
-		return nil
-	}
-	return fn(spec, config, userRails)
 }

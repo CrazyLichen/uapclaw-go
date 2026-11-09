@@ -104,7 +104,7 @@ func TestCreateDeepAgent_等价于resolve加apply(t *testing.T) {
 func TestSpecResolveParts_默认rails在resolve阶段算好(t *testing.T) {
 	spec := &hschema.DeepAgentSpec{Language: "cn"}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, parts)
@@ -128,7 +128,7 @@ func TestSpecResolveParts_不重复追加已声明的rail(t *testing.T) {
 		Rails:    []hschema.RailSpec{{Type: "test.dup.rail"}},
 	}
 
-	parts, err := spec.ResolveParts(nil)
+	parts, err := harness.ResolveDeepAgentSpecParts(spec, nil)
 
 	require.NoError(t, err)
 	count := 0
