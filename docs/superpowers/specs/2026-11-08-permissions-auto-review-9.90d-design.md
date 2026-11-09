@@ -1496,3 +1496,32 @@ Python 的 `facts.tool_name` / `facts.tool_category` 在 Go 侧位于
 `_bounded_text` 的 `len(value) <= limit`：Python 是**字符数**，Go 用**字节数**。
 对含中文的参数，Go 的限制更严格（不会放过超限值，但可能提前拒绝）。
 登记为可接受偏差。
+
+### 12.19 Task 23 执行结论：`reviewer_route`
+
+**落地**：`permissions/reviewer_route.go`（330 行 Python → 约 480 行 Go /
+4 导出 + 8 私有 + 4 常量 + 3 集合），覆盖率 **87.2%**。
+
+#### `DecisionRoute` 的 property 映射
+
+Python 的 `DecisionRoute.is_hard_block` / `requires_manual` 是 property，
+分别等价于 `source == "hard_guard"` / `source == "manual_only"`。
+Go 的 `DecisionRoute` 只有 `Level` / `Reason` / `Source` 三个字段，
+因此本文件用 `Source` 直接比较，不额外加方法（避免为两个 property 扩张结构体）。
+
+#### 对齐细节
+
+- `percentDecode` 用 `url.PathUnescape` 而非 `QueryUnescape`——Python 的
+  `urllib.parse.unquote` **不把 `+` 转空格**，`QueryUnescape` 会转，语义不同
+- `searchQueryIsSecretLike` 的令牌规则要求 20+ 字符（`[a-z0-9][a-z0-9_.-]{19,}`），
+  所以 `token is abc` 返回 **false**、`token is abcdefghij1234567890` 才返回 true
+  （初版测试预期写错，已用 Python 实测校正）
+- `pathMatchesExclusion` 三级判定：绝对路径前缀 → 相对工作区路径 →
+  大小写无关的分段子序列匹配（单段时任意位置命中，多段时滑动窗口比对）
+- `DEFAULT_DELIVERY_EXCLUDED_PATHS` 61 项原样照抄（含 `config/permissions.yaml`、
+  `permissions.tools` 等配置文件名，防止把自身权限配置投递给用户）
+
+#### 新增依赖
+
+`golang.org/x/text/unicode/norm`（NFKC 归一化）——`go.mod` 已有 `x/text v0.43.0`，
+`workspace_paths.go` 已在用，无需新增依赖。

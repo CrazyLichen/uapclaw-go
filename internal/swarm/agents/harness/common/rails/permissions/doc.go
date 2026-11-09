@@ -80,6 +80,7 @@
 //	├── permission_compose.go              # Global⊕User⊕Session 权限合成（9.90d-2 Task 19）
 //	├── reviewer_stream_metadata.go        # Reviewer 元数据按 tool_call_id 分桶（9.90d-2 Task 21）
 //	├── auto_decision.go                   # 自动审查的确定性判定助手（9.90d-2 Task 22）
+//	├── reviewer_route.go                  # 语义审查器的紧凑 Host 路由（9.90d-2 Task 23）
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）
