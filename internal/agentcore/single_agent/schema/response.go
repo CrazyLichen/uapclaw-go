@@ -19,6 +19,11 @@ type InterruptRequester interface {
 	GetMessage() string
 	// GetAutoConfirmKey 返回自动确认配置键
 	GetAutoConfirmKey() string
+	// SetAutoConfirmKey 覆盖自动确认配置键
+	//
+	// Python 侧是直接属性赋值（request.auto_confirm_key = ""），
+	// Go 用接口方法表达同一能力，避免调用方做类型断言。
+	SetAutoConfirmKey(key string)
 	// GetMetadata 返回中断元数据
 	//
 	// rail 通过它把 host 侧信息（如 tool_invocation_key）挂到中断上，
@@ -194,6 +199,9 @@ func (r *InterruptRequest) GetMessage() string { return r.Message }
 // GetAutoConfirmKey 实现 InterruptRequester 接口。
 func (r *InterruptRequest) GetAutoConfirmKey() string { return r.AutoConfirmKey }
 
+// SetAutoConfirmKey 实现 InterruptRequester 接口。
+func (r *InterruptRequest) SetAutoConfirmKey(key string) { r.AutoConfirmKey = key }
+
 // RequestInterruptKind 返回中断类型。
 // 供 permissions 包的 InteractionRequestProvider 接口消费：root 权限队列需要
 // 读 interrupt_kind 区分客户端工具中断与权限卡，但不希望依赖 schema 具体类型。
@@ -230,6 +238,13 @@ func (r *ToolCallInterruptRequest) GetAutoConfirmKey() string {
 		return r.Request.GetAutoConfirmKey()
 	}
 	return ""
+}
+
+// SetAutoConfirmKey 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) SetAutoConfirmKey(key string) {
+	if r.Request != nil {
+		r.Request.SetAutoConfirmKey(key)
+	}
 }
 
 // GetMetadata 实现 InterruptRequester 接口，委托给 Request 字段。

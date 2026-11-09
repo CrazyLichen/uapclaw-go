@@ -728,7 +728,7 @@ func TestPersistMergedAllow_snapshot优先(t *testing.T) {
 	}
 	rail := newTestRail(t, map[string]any{}, host)
 
-	ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls -la"})
+	ok := rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "ls -la"})
 	if !snapshotCalled {
 		t.Error("未调用 host.GetPermissionsSnapshot")
 	}
@@ -745,7 +745,7 @@ func TestPersistMergedAllow_写盘失败回滚(t *testing.T) {
 	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
 	before := utils.DeepCopyMap(rail.engine.Config())
 
-	ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls -la"})
+	ok := rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "ls -la"})
 	if ok {
 		t.Error("写盘失败时 persistAllowAlways 应返回 false")
 	}
@@ -761,7 +761,7 @@ func TestPersistSessionAllow_不写YAML(t *testing.T) {
 	host := &harnesssecurity.ToolPermissionHost{PermissionYAMLPath: yamlPath}
 	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
 
-	ok := rail.persistSessionAllow("bash", map[string]any{"command": "ls"}, "sess-1")
+	ok := rail.persistSessionAllow(context.Background(), "bash", map[string]any{"command": "ls"}, "sess-1")
 	if !ok {
 		t.Error("session 版应返回 true（只更新内存）")
 	}
@@ -784,7 +784,7 @@ func TestPersistSessionAllow_优先用session钩子(t *testing.T) {
 	}
 	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
 
-	if ok := rail.persistSessionAllow("bash", map[string]any{"command": "ls"}, "sess-x"); !ok {
+	if ok := rail.persistSessionAllow(context.Background(), "bash", map[string]any{"command": "ls"}, "sess-x"); !ok {
 		t.Error("应返回 true")
 	}
 	if !hookCalled {
@@ -800,7 +800,7 @@ func TestPersistSessionAllow_钩子失败回滚(t *testing.T) {
 	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
 	before := utils.DeepCopyMap(rail.engine.Config())
 
-	if ok := rail.persistSessionAllow("bash", map[string]any{"command": "ls"}, "s"); ok {
+	if ok := rail.persistSessionAllow(context.Background(), "bash", map[string]any{"command": "ls"}, "s"); ok {
 		t.Error("钩子失败时应返回 false")
 	}
 	if !reflect.DeepEqual(before, rail.engine.Config()) {
@@ -815,7 +815,7 @@ func TestPersistMergedAllow_无变更返回false(t *testing.T) {
 	}
 	// 内置规则会命中 rm -rf 并给出 DENY/ASK；用一条不会被规则命中的命令
 	rail := newTestRail(t, map[string]any{}, host)
-	ok := rail.persistAllowAlways("bash", map[string]any{"command": "echo hello"})
+	ok := rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "echo hello"})
 	// echo 不在 pathAwareCommands 里，路径层无访问；工具级 MergePermissionAllowRule
 	// 只在当前判定为 ASK 时写入。两者都不写时返回 false。
 	if ok {
@@ -903,7 +903,7 @@ func TestPersistAllowAlways_写fileGuardPaths(t *testing.T) {
 		"file_guard": map[string]any{"enabled": true, "defaults": map[string]any{"read": "ask"}},
 	}, host)
 
-	if ok := rail.persistAllowAlways("read_file", map[string]any{"file_path": outside}); !ok {
+	if ok := rail.persistAllowAlways(context.Background(), "read_file", map[string]any{"file_path": outside}); !ok {
 		t.Fatal("persistAllowAlways 应成功")
 	}
 	if captured == nil {
@@ -954,7 +954,7 @@ func TestPersistMergedAllow_钩子panic回滚(t *testing.T) {
 	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
 	before := utils.DeepCopyMap(rail.engine.Config())
 
-	if ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls"}); ok {
+	if ok := rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "ls"}); ok {
 		t.Error("钩子 panic 时应返回 false")
 	}
 	if !reflect.DeepEqual(before, rail.engine.Config()) {
@@ -968,7 +968,7 @@ func TestPersistMergedAllow_无钩子写YAML(t *testing.T) {
 	host := &harnesssecurity.ToolPermissionHost{PermissionYAMLPath: yamlPath}
 	rail := newTestRail(t, map[string]any{"tools": map[string]any{"bash": "ask"}}, host)
 
-	if ok := rail.persistAllowAlways("bash", map[string]any{"command": "ls"}); !ok {
+	if ok := rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "ls"}); !ok {
 		t.Fatal("无钩子时应写 YAML 并返回 true")
 	}
 	if _, err := os.Stat(yamlPath); err != nil {

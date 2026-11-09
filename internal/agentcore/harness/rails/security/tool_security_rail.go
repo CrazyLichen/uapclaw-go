@@ -463,7 +463,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				// ConfirmActionConfirm（默认）→ 处理确认结果
 				persisted := false
 				if extOut.Approved && extOut.AutoConfirm {
-					persisted = r.persistAllowAlways(normalizedName, toolArgs)
+					persisted = r.persistAllowAlways(ctx, normalizedName, toolArgs)
 				}
 				logger.Info(logComponent).
 					Str("tool", toolName).
@@ -536,7 +536,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 	persisted := false
 	if payload.Approved && payload.AutoConfirm {
-		persisted = r.persistAllowAlways(normalizedName, toolArgs)
+		persisted = r.persistAllowAlways(ctx, normalizedName, toolArgs)
 		logger.Info(logComponent).
 			Str("tool", toolName).
 			Str("confirm_path", r.confirmPathLabel()).
@@ -702,22 +702,31 @@ func resolveSession(cbc *agentinterfaces.AgentCallbackContext) sessioninterfaces
 // persistAllowAlways 永久允许：合并后走 persist_allow_rule（无 Host 则写 YAML）。
 //
 // Python: PermissionInterruptRail._persist_allow_always(normalized_name, tool_args, *, session_id=None)
-func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
-	if result, handled := r.overridePersistAllowAlways(normalizedName, toolArgs); handled {
+func (r *PermissionInterruptRail) persistAllowAlways(
+	ctx context.Context,
+	normalizedName string,
+	toolArgs map[string]any,
+) bool {
+	if result, handled := r.overridePersistAllowAlways(ctx, normalizedName, toolArgs); handled {
 		return result
 	}
-	return r.persistMergedAllow(normalizedName, toolArgs, r.hostPersistAllowRule(), true)
+	return r.persistMergedAllow(ctx, normalizedName, toolArgs, r.hostPersistAllowRule(), true)
 }
 
 // persistSessionAllow 会话内记住：合并后走 persist_session_allow_rule
 // （无钩子则只更新内存，不写 YAML）。
 //
 // Python: PermissionInterruptRail._persist_session_allow(normalized_name, tool_args, *, session_id=None)
-func (r *PermissionInterruptRail) persistSessionAllow(normalizedName string, toolArgs map[string]any, sessionID string) bool {
-	if result, handled := r.overridePersistSessionAllow(normalizedName, toolArgs, sessionID); handled {
+func (r *PermissionInterruptRail) persistSessionAllow(
+	ctx context.Context,
+	normalizedName string,
+	toolArgs map[string]any,
+	sessionID string,
+) bool {
+	if result, handled := r.overridePersistSessionAllow(ctx, normalizedName, toolArgs, sessionID); handled {
 		return result
 	}
-	return r.persistMergedAllow(normalizedName, toolArgs, r.hostPersistSessionAllowRule(sessionID), false)
+	return r.persistMergedAllow(ctx, normalizedName, toolArgs, r.hostPersistSessionAllowRule(sessionID), false)
 }
 
 // persistMergedAllow 工具级记住与 file_guard 路径白名单：先合并快照，再写盘。
@@ -735,12 +744,13 @@ func (r *PermissionInterruptRail) persistSessionAllow(normalizedName string, too
 //
 // Python: PermissionInterruptRail._persist_merged_allow(...)
 func (r *PermissionInterruptRail) persistMergedAllow(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 	persistHook func(map[string]any) bool,
 	writeYAMLFallback bool,
 ) bool {
-	if result, handled := r.overridePersistMergedAllow(normalizedName, toolArgs, persistHook, writeYAMLFallback); handled {
+	if result, handled := r.overridePersistMergedAllow(ctx, normalizedName, toolArgs, persistHook, writeYAMLFallback); handled {
 		return result
 	}
 	// 1. base_cfg

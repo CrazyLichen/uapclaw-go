@@ -1104,14 +1104,54 @@ Python 的 `super().resolve_interrupt()` 内部调 `self._persist_allow_always()
 
 #### 语言差异（登记为偏差）
 
-| 项 | Python | Go | 理由 |
+| 项 | Python | Go | 状态 |
 |---|---|---|---|
-| `_EXACT_PERSIST_ATTEMPT` | ContextVar | rail 实例字段 `currentAttempt` | 父类内部 override 调用点无 ctx 形参，无法从 ctx 读；单次 `ResolveInterrupt` 内串行使用，语义等价 |
-| `_PERMISSION_SNAPSHOT` | ContextVar | rail 实例字段 `snapshotOwner`/`snapshot`/`snapshotActive` | 同上；`snapshotActive` 用于区分「未进入」与「进入但 snapshot 为 nil」（对齐 Python 的 `current is not None` 判据） |
-| `permission_check_context` | `@contextmanager` | `func() (cleanup func())` | Go 无 contextmanager |
-| `before_tool_call` 的 `except AbortError` | 异常捕获 | `defer`/`recover` 查 `cb.AbortError.Cause.(*saschema.ToolInterruptException)` | Go 父类用 `panic(cb.NewAbortError(...))` 抛中断 |
-| `request.auto_confirm_key = ""` | 直接赋值 | 类型断言到 `*saschema.InterruptRequest` 后赋值 | `InterruptRequester` 接口只读该字段 |
-| `RUN_PERMISSIONS` 8 处 | ContextVar | `runtime.RunPermissionsFromCtx` / `WithRunPermissions` / `OverlayRunPermissions` | 9.90d-1 Task 4a 已落地的等价物 |
+| `RUN_PERMISSIONS` 8 处 | ContextVar | `runtime.RunPermissionsFromCtx` / `WithRunPermissions` / `OverlayRunPermissions` | ✅ 等价物，9.90d-1 Task 4a 已落地 |
+| `_EXACT_PERSIST_ATTEMPT` 的 run-policy 检查 | ContextVar | **ctx 显式传递** | ✅ 已消除（见下） |
+| `_PERMISSION_SNAPSHOT` | ContextVar | rail 实例字段 `snapshotOwner`/`snapshot`/`snapshotActive` | ⚠️ 保留（见下） |
+| `permission_check_context` | `@contextmanager` | `func() (cleanup func())` | 语言特性，改不掉；语义等价 |
+| `before_tool_call` 的 `except AbortError` | 异常捕获 | `defer`/`recover` 查 `cb.AbortError.Cause.(*saschema.ToolInterruptException)` | 语言特性，改不掉；语义等价 |
+| `request.auto_confirm_key = ""` | 直接赋值 | `InterruptRequester.SetAutoConfirmKey` 接口方法 | ✅ 已消除（见下） |
+
+#### ✅ 已消除：run-policy 检查改用 ctx 显式传递
+
+`_persist_allow_always` / `_persist_session_allow` / `_persist_merged_allow`
+在 Python 里靠 `RUN_PERMISSIONS.get()`（ContextVar）判断「本次请求有权限覆盖
+时不落盘」。初版 Go 实现只能靠 rail 实例字段，读不到 ctx，等于**丢失了这条
+检查**。
+
+用户要求消除该差异后，给父类这 3 个方法加 `context.Context` 首参，
+`PermissionInterruptRailOverride` 对应 3 个钩子同步加 ctx，
+导出访问器 `PersistAllowAlways` / `PersistSessionAllow` / `PersistMergedAllow`
+也加 ctx。子类实现改为 `runtime.RunPermissionsFromCtx(ctx) != nil` 直接读。
+
+**调用链是通的**：`resolvePermissionInterrupt`（有 ctx）→
+`persistAllowAlways(ctx, ...)` → `persistMergedAllow(ctx, ...)`。
+`collectFileGuardPersistAccesses` 未加 ctx——子类实现只用 host 与参数，
+Python 侧也不用 ContextVar。
+
+两条测试固定语义：`TestPersistAllowAlways_run策略下拒绝` /
+`TestPersistMergedAllow_run策略下拒绝`（无 run 策略走回调、有 run 策略直接拒绝）。
+
+#### ⚠️ 保留：`_PERMISSION_SNAPSHOT` 仍用实例字段
+
+`permission_check_context` 是「进入时读一次快照、退出时清理」的
+`@contextmanager`，其消费点（`_invoke_permissions_hook`）同样没有 ctx 形参。
+给它加 ctx 需要把 contextmanager 改成「返回派生 ctx」的形式，
+会改变调用方写法（`ctx = rail.PermissionCheckContext(ctx, sid)`），
+而 Python 侧是 `with rail.permission_check_context(sid):` 的块状语义。
+**收益低、改动面大**，故保留实例字段并登记。
+
+风险：rail 实例被多 goroutine 共享时快照会串。当前 rail 按 session 持有，
+单次请求内串行，实际不触发。
+
+#### ✅ 已消除：`auto_confirm_key` 改用接口方法
+
+给 `saschema.InterruptRequester` 接口加 `SetAutoConfirmKey(key string)`，
+两个实现者（`InterruptRequest` / `ToolCallInterruptRequest`）补齐
+（后者委托给内部 `Request`）。子类 `setInterruptRequestAutoConfirmKey`
+不再做类型断言，直接调接口方法。测试替身 `testInterruptRequest` 按规则 10
+自行补空实现。
 
 #### ✅ 已解决：`wants_session_persist` / `wants_permanent_persist` 缺口
 

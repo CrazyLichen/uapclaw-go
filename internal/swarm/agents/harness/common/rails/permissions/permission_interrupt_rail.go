@@ -370,22 +370,28 @@ func ApprovalArgumentsDigest(args map[string]any) string {
 // （对齐 Python 的 `if callback is None: return super().xxx()`）。
 func (r *JiuwenSwarmPermissionInterruptRail) installOverride() {
 	r.SetOverride(&secrail.PermissionInterruptRailOverride{
-		PersistAllowAlways: func(normalizedName string, toolArgs map[string]any) (bool, bool) {
+		PersistAllowAlways: func(ctx context.Context, normalizedName string, toolArgs map[string]any) (bool, bool) {
 			if r.exactPersistCallback == nil {
 				return false, false
 			}
-			return r.persistAllowAlways(normalizedName, toolArgs), true
+			return r.persistAllowAlways(ctx, normalizedName, toolArgs), true
 		},
-		PersistSessionAllow: func(normalizedName string, toolArgs map[string]any, sessionID string) (bool, bool) {
+		PersistSessionAllow: func(
+			ctx context.Context, normalizedName string, toolArgs map[string]any, sessionID string,
+		) (bool, bool) {
 			if r.exactPersistCallback == nil {
 				return false, false
 			}
-			return r.persistAllowAlways(normalizedName, toolArgs), true
+			return r.persistAllowAlways(ctx, normalizedName, toolArgs), true
 		},
 		PersistMergedAllow: func(
-			normalizedName string, toolArgs map[string]any,
+			ctx context.Context, normalizedName string, toolArgs map[string]any,
 			persistHook func(map[string]any) bool, writeYAMLFallback bool,
 		) (bool, bool) {
+			// 子类不覆写 merged：run 策略下拒绝，其余回落父类默认
+			if runtime.RunPermissionsFromCtx(ctx) != nil {
+				return false, true
+			}
 			return false, false
 		},
 		CollectFileGuardPersistAccesses: func(
@@ -623,9 +629,14 @@ func (r *JiuwenSwarmPermissionInterruptRail) resolveInterruptWithRunPolicy(
 //
 // Python: JiuwenSwarmPermissionInterruptRail._persist_allow_always(...)
 func (r *JiuwenSwarmPermissionInterruptRail) persistAllowAlways(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 ) bool {
+	// Python: if RUN_PERMISSIONS.get() is not None: return False
+	if runtime.RunPermissionsFromCtx(ctx) != nil {
+		return false
+	}
 	attempt := r.currentAttempt
 	if attempt == nil {
 		return false
@@ -789,13 +800,13 @@ func setInterruptRequestMetadata(request saschema.InterruptRequester, metadata m
 // setInterruptRequestAutoConfirmKey 清空中断请求的自动确认键。
 //
 // Python: request.auto_confirm_key = ""
-// Go 的 InterruptRequester 接口只读该字段，需断言到具体结构体。
+// 走 InterruptRequester.SetAutoConfirmKey 接口方法（9.90d-1 补齐），
+// 不再依赖类型断言到具体结构体。
 func setInterruptRequestAutoConfirmKey(request saschema.InterruptRequester, key string) {
-	concrete, ok := request.(*saschema.InterruptRequest)
-	if !ok || concrete == nil {
+	if request == nil {
 		return
 	}
-	concrete.AutoConfirmKey = key
+	request.SetAutoConfirmKey(key)
 }
 
 // metadataString 从 metadata 取字符串值。

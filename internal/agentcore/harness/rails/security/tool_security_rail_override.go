@@ -35,11 +35,14 @@ import (
 // （permission_interrupt_rail.py:140/201/355/377/384）。
 type PermissionInterruptRailOverride struct {
 	// PersistAllowAlways 覆写 _persist_allow_always
-	PersistAllowAlways func(normalizedName string, toolArgs map[string]any) (bool, bool)
+	PersistAllowAlways func(ctx context.Context, normalizedName string, toolArgs map[string]any) (bool, bool)
 	// PersistSessionAllow 覆写 _persist_session_allow
-	PersistSessionAllow func(normalizedName string, toolArgs map[string]any, sessionID string) (bool, bool)
+	PersistSessionAllow func(
+		ctx context.Context, normalizedName string, toolArgs map[string]any, sessionID string,
+	) (bool, bool)
 	// PersistMergedAllow 覆写 _persist_merged_allow
 	PersistMergedAllow func(
+		ctx context.Context,
 		normalizedName string,
 		toolArgs map[string]any,
 		persistHook func(map[string]any) bool,
@@ -111,27 +114,33 @@ func (r *PermissionInterruptRail) GetUserInput(
 }
 
 // PersistAllowAlways 执行「总是允许」持久化（Python self._persist_allow_always）。
-func (r *PermissionInterruptRail) PersistAllowAlways(normalizedName string, toolArgs map[string]any) bool {
-	return r.persistAllowAlways(normalizedName, toolArgs)
+func (r *PermissionInterruptRail) PersistAllowAlways(
+	ctx context.Context,
+	normalizedName string,
+	toolArgs map[string]any,
+) bool {
+	return r.persistAllowAlways(ctx, normalizedName, toolArgs)
 }
 
 // PersistSessionAllow 执行「会话内记住」持久化（Python self._persist_session_allow）。
 func (r *PermissionInterruptRail) PersistSessionAllow(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 	sessionID string,
 ) bool {
-	return r.persistSessionAllow(normalizedName, toolArgs, sessionID)
+	return r.persistSessionAllow(ctx, normalizedName, toolArgs, sessionID)
 }
 
 // PersistMergedAllow 执行合并后持久化（Python self._persist_merged_allow）。
 func (r *PermissionInterruptRail) PersistMergedAllow(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 	persistHook func(map[string]any) bool,
 	writeYAMLFallback bool,
 ) bool {
-	return r.persistMergedAllow(normalizedName, toolArgs, persistHook, writeYAMLFallback)
+	return r.persistMergedAllow(ctx, normalizedName, toolArgs, persistHook, writeYAMLFallback)
 }
 
 // ParseToolArgs 解析工具调用参数（Python self.parse_tool_args）。
@@ -148,17 +157,19 @@ func ParseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 
 // overridePersistAllowAlways 查询 PersistAllowAlways 覆写。
 func (r *PermissionInterruptRail) overridePersistAllowAlways(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 ) (bool, bool) {
 	if r.override == nil || r.override.PersistAllowAlways == nil {
 		return false, false
 	}
-	return r.override.PersistAllowAlways(normalizedName, toolArgs)
+	return r.override.PersistAllowAlways(ctx, normalizedName, toolArgs)
 }
 
 // overridePersistSessionAllow 查询 PersistSessionAllow 覆写。
 func (r *PermissionInterruptRail) overridePersistSessionAllow(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 	sessionID string,
@@ -166,11 +177,12 @@ func (r *PermissionInterruptRail) overridePersistSessionAllow(
 	if r.override == nil || r.override.PersistSessionAllow == nil {
 		return false, false
 	}
-	return r.override.PersistSessionAllow(normalizedName, toolArgs, sessionID)
+	return r.override.PersistSessionAllow(ctx, normalizedName, toolArgs, sessionID)
 }
 
 // overridePersistMergedAllow 查询 PersistMergedAllow 覆写。
 func (r *PermissionInterruptRail) overridePersistMergedAllow(
+	ctx context.Context,
 	normalizedName string,
 	toolArgs map[string]any,
 	persistHook func(map[string]any) bool,
@@ -179,7 +191,7 @@ func (r *PermissionInterruptRail) overridePersistMergedAllow(
 	if r.override == nil || r.override.PersistMergedAllow == nil {
 		return false, false
 	}
-	return r.override.PersistMergedAllow(normalizedName, toolArgs, persistHook, writeYAMLFallback)
+	return r.override.PersistMergedAllow(ctx, normalizedName, toolArgs, persistHook, writeYAMLFallback)
 }
 
 // overrideCollectFileGuardPersistAccesses 查询 CollectFileGuardPersistAccesses 覆写。

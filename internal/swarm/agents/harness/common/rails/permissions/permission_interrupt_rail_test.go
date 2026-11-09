@@ -94,7 +94,7 @@ func TestNewRail_嵌入父类可用(t *testing.T) {
 func TestNewRail_无回调时走父类默认(t *testing.T) {
 	rail := newTestInterruptRail(t, false)
 	// 无回调时 override 返回 handled=false，走父类默认实现（无 host 钩子 → false）
-	if got := rail.PersistAllowAlways("bash", map[string]any{}); got {
+	if got := rail.PersistAllowAlways(context.Background(), "bash", map[string]any{}); got {
 		t.Error("no-callback rail should fall back to parent (false without host hook)")
 	}
 }
@@ -102,7 +102,7 @@ func TestNewRail_无回调时走父类默认(t *testing.T) {
 func TestNewRail_有回调但无attempt时返回false(t *testing.T) {
 	rail := newTestInterruptRail(t, true)
 	// 有回调时 override 接管，但无 currentAttempt → persistAllowAlways 返回 false
-	if got := rail.PersistAllowAlways("bash", map[string]any{}); got {
+	if got := rail.PersistAllowAlways(context.Background(), "bash", map[string]any{}); got {
 		t.Error("no attempt should return false")
 	}
 }
@@ -536,5 +536,37 @@ func TestBindApprovalRequest_完整路径(t *testing.T) {
 	}
 	if request.AutoConfirmKey != "" {
 		t.Errorf("auto_confirm_key should be cleared, got %q", request.AutoConfirmKey)
+	}
+}
+
+// ──────────────────────────── ctx 传递：run 策略下拒绝持久化 ────────────────────────────
+
+// TestPersistAllowAlways_run策略下拒绝 验证 ctx 里的 RUN_PERMISSIONS 生效。
+//
+// Python: _persist_allow_always 开头 `if RUN_PERMISSIONS.get() is not None: return False`
+func TestPersistAllowAlways_run策略下拒绝(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	rail.currentAttempt = &exactPersistAttempt{Approved: true}
+
+	// 无 run 策略 → 走回调（返回 true）
+	if got := rail.PersistAllowAlways(context.Background(), "bash", map[string]any{}); !got {
+		t.Error("without run policy should persist via callback")
+	}
+	// 有 run 策略 → 直接拒绝
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
+	rail.currentAttempt = &exactPersistAttempt{Approved: true}
+	if got := rail.PersistAllowAlways(ctx, "bash", map[string]any{}); got {
+		t.Error("with run policy should refuse to persist")
+	}
+}
+
+// TestPersistMergedAllow_run策略下拒绝 验证 merged 也读 ctx。
+//
+// Python: _persist_merged_allow 开头同样的 RUN_PERMISSIONS 检查。
+func TestPersistMergedAllow_run策略下拒绝(t *testing.T) {
+	rail := newTestInterruptRail(t, true)
+	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
+	if got := rail.PersistMergedAllow(ctx, "bash", map[string]any{}, nil, true); got {
+		t.Error("with run policy merged persist should be refused")
 	}
 }

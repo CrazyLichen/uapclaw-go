@@ -298,6 +298,9 @@ type testInterruptRequest struct{ msg string }
 func (r testInterruptRequest) GetMessage() string        { return r.msg }
 func (r testInterruptRequest) GetAutoConfirmKey() string { return "" }
 
+// SetAutoConfirmKey 测试替身的空实现（值类型无法修改，仅满足接口）
+func (r testInterruptRequest) SetAutoConfirmKey(string) {}
+
 // GetMetadata 实现 InterruptRequester 接口（9.90c 接口扩张）。
 func (r testInterruptRequest) GetMetadata() map[string]any { return nil }
 

@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"testing"
 
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
@@ -22,12 +23,12 @@ func TestPersistAllowAlways_注入后派发(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	called := false
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistAllowAlways: func(normalizedName string, toolArgs map[string]any) (bool, bool) {
+		PersistAllowAlways: func(ctx context.Context, normalizedName string, toolArgs map[string]any) (bool, bool) {
 			called = true
 			return true, true // handled
 		},
 	})
-	got := rail.persistAllowAlways("bash", map[string]any{"command": "ls"})
+	got := rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "ls"})
 	if !called {
 		t.Error("override should be called")
 	}
@@ -41,13 +42,13 @@ func TestPersistAllowAlways_未处理回落父类(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	called := false
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistAllowAlways: func(string, map[string]any) (bool, bool) {
+		PersistAllowAlways: func(context.Context, string, map[string]any) (bool, bool) {
 			called = true
 			return false, false // not handled → 回落
 		},
 	})
 	// 父类默认实现会走到 persistMergedAllow，无 host 钩子时返回 false
-	_ = rail.persistAllowAlways("bash", map[string]any{"command": "ls"})
+	_ = rail.persistAllowAlways(context.Background(), "bash", map[string]any{"command": "ls"})
 	if !called {
 		t.Error("override should still be consulted")
 	}
@@ -58,12 +59,12 @@ func TestPersistMergedAllow_注入后派发(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	called := false
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistMergedAllow: func(string, map[string]any, func(map[string]any) bool, bool) (bool, bool) {
+		PersistMergedAllow: func(context.Context, string, map[string]any, func(map[string]any) bool, bool) (bool, bool) {
 			called = true
 			return true, true
 		},
 	})
-	got := rail.persistMergedAllow("bash", map[string]any{}, nil, true)
+	got := rail.persistMergedAllow(context.Background(), "bash", map[string]any{}, nil, true)
 	if !called || !got {
 		t.Errorf("called=%v got=%v", called, got)
 	}
@@ -74,12 +75,12 @@ func TestPersistSessionAllow_注入后派发(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	called := false
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistSessionAllow: func(string, map[string]any, string) (bool, bool) {
+		PersistSessionAllow: func(context.Context, string, map[string]any, string) (bool, bool) {
 			called = true
 			return true, true
 		},
 	})
-	got := rail.persistSessionAllow("bash", map[string]any{}, "sess-1")
+	got := rail.persistSessionAllow(context.Background(), "bash", map[string]any{}, "sess-1")
 	if !called || !got {
 		t.Errorf("called=%v got=%v", called, got)
 	}
@@ -206,9 +207,9 @@ func TestGetUserInput_导出(t *testing.T) {
 func TestPersistAllowAlways_导出(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistAllowAlways: func(string, map[string]any) (bool, bool) { return true, true },
+		PersistAllowAlways: func(context.Context, string, map[string]any) (bool, bool) { return true, true },
 	})
-	if got := rail.PersistAllowAlways("bash", map[string]any{}); !got {
+	if got := rail.PersistAllowAlways(context.Background(), "bash", map[string]any{}); !got {
 		t.Error("should be true via override")
 	}
 }
@@ -217,9 +218,9 @@ func TestPersistAllowAlways_导出(t *testing.T) {
 func TestPersistSessionAllow_导出(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistSessionAllow: func(string, map[string]any, string) (bool, bool) { return true, true },
+		PersistSessionAllow: func(context.Context, string, map[string]any, string) (bool, bool) { return true, true },
 	})
-	if got := rail.PersistSessionAllow("bash", map[string]any{}, "sess-1"); !got {
+	if got := rail.PersistSessionAllow(context.Background(), "bash", map[string]any{}, "sess-1"); !got {
 		t.Error("should be true via override")
 	}
 }
@@ -228,11 +229,11 @@ func TestPersistSessionAllow_导出(t *testing.T) {
 func TestPersistMergedAllow_导出(t *testing.T) {
 	rail := NewPermissionInterruptRail(map[string]any{}, nil, nil, nil, "", nil)
 	rail.SetOverride(&PermissionInterruptRailOverride{
-		PersistMergedAllow: func(string, map[string]any, func(map[string]any) bool, bool) (bool, bool) {
+		PersistMergedAllow: func(context.Context, string, map[string]any, func(map[string]any) bool, bool) (bool, bool) {
 			return true, true
 		},
 	})
-	if got := rail.PersistMergedAllow("bash", map[string]any{}, nil, true); !got {
+	if got := rail.PersistMergedAllow(context.Background(), "bash", map[string]any{}, nil, true); !got {
 		t.Error("should be true via override")
 	}
 }
