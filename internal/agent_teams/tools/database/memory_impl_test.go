@@ -228,8 +228,8 @@ func TestCreateMember_成功(t *testing.T) {
 	if member.Prompt != "你是一个助手" {
 		t.Errorf("Prompt: got %q, want %q", member.Prompt, "你是一个助手")
 	}
-	if member.ModelRefJSON != `{"model_id":"qwen-max","model_name":"qwen-max"}` {
-		t.Errorf("ModelRefJSON: got %q, want %q", member.ModelRefJSON, `{"model_id":"qwen-max","model_name":"qwen-max"}`)
+	if member.Options != `{"model_id":"qwen-max","model_name":"qwen-max"}` {
+		t.Errorf("Options: got %q, want %q", member.Options, `{"model_id":"qwen-max","model_name":"qwen-max"}`)
 	}
 	if member.UpdatedAt == 0 {
 		t.Error("UpdatedAt 应非零")

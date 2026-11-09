@@ -63,7 +63,7 @@ type TeamDao interface {
 type MemberDao interface {
 	// CreateMember 创建成员。返回 true 表示成功，false 表示成员已存在（对齐 Python IntegrityError → False）。
 	// Python: create_member 的全部 11 参数。
-	CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool
+	CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool
 	// GetMember 获取成员信息。返回 nil 表示成员不存在（对齐 Python Optional[TeamMember]）。
 	// 参数顺序 (memberName, teamName) 对齐 Python。
 	GetMember(ctx context.Context, memberName, teamName string) (*TeamMember, error)

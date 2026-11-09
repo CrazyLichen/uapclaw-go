@@ -22,7 +22,7 @@ type SQLMemberDao struct {
 
 // CreateMember 创建成员。返回 true 表示成功，false 表示成员已存在。
 // Python: create_member() → bool（IntegrityError → False）
-func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool {
+func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool {
 	now := GetCurrentTime()
 	member := &TeamMember{
 		MemberName:      memberName,
@@ -35,7 +35,7 @@ func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, d
 		ExecutionStatus: executionStatus,
 		Mode:            mode,
 		Prompt:          prompt,
-		ModelRefJSON:    modelRefJSON,
+		Options:         options,
 		UpdatedAt:       now,
 	}
 	result := d.db.WithContext(ctx).Create(member)

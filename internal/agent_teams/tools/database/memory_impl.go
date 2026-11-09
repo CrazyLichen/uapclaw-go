@@ -265,7 +265,7 @@ func (db *InMemoryTeamDatabase) GetTeamUpdatedAt(_ context.Context, teamName str
 
 // CreateMember 创建成员。对齐 Python: MemberDao.create_member()
 // 成功返回 true，成员已存在返回 false（对齐 Python IntegrityError → False）
-func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool {
+func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	key := memberKey(memberName, teamName)
@@ -283,7 +283,7 @@ func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, team
 		Mode:            mode,
 		Role:            role,
 		Prompt:          prompt,
-		ModelRefJSON:    modelRefJSON,
+		Options:         options,
 		UpdatedAt:       GetCurrentTime(), // Python: updated_at = get_current_time()
 	}
 	return true

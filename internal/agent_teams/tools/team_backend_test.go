@@ -859,13 +859,13 @@ func TestWithLeaderAllocation(t *testing.T) {
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
-	// 验证 Leader 有 model_ref_json
+	// 验证 Leader 的 options 里带 model_ref
 	leader, _ := tb.GetMember(ctx, "leader")
 	if leader == nil {
 		t.Fatal("Leader not found")
 	}
-	if leader.ModelRefJSON == "" {
-		t.Error("Leader ModelRefJSON is empty, want non-empty")
+	if database.GetMemberModelRef(leader) == nil {
+		t.Error("Leader options.model_ref is nil, want non-nil")
 	}
 }
 
