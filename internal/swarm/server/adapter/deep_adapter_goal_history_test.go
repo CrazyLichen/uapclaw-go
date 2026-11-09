@@ -65,7 +65,7 @@ func TestRecordGoalSetHistory_空闲时立刻落盘(t *testing.T) {
 	req := goalHistoryRequest(t, "sess-hist-idle", "req-h1")
 
 	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultStream,
-		map[string]any{"goal_id": "g1", "objective": "修完测试"})
+		map[string]any{"goal_id": "g1", "objective": "修完测试"}, nil)
 
 	records := goalHistoryRecords(t, "sess-hist-idle")
 	require.Len(t, records, 1)
@@ -85,7 +85,7 @@ func TestRecordGoalSetHistory_忙碌时挂起待轮边界flush(t *testing.T) {
 	req := goalHistoryRequest(t, "sess-hist-busy", "req-h2")
 
 	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultStream,
-		map[string]any{"goal_id": "g2", "objective": "忙碌目标"})
+		map[string]any{"goal_id": "g2", "objective": "忙碌目标"}, nil)
 	require.Empty(t, goalHistoryRecords(t, "sess-hist-busy"), "忙碌时不得立刻落盘")
 	require.NotNil(t, d.pendingGoalObjective("sess-hist-busy"))
 
@@ -103,10 +103,10 @@ func TestRecordGoalSetHistory_非set或失败不写(t *testing.T) {
 	d := &DeepAdapter{activeSessionIDs: make(map[string]int)}
 	req := goalHistoryRequest(t, "sess-hist-skip", "req-h3")
 
-	d.recordGoalSetHistoryIfNeeded(req, "pause", goalResultControl, nil)
-	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultError, nil)
-	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultConfirmRequired, nil)
-	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultStream, map[string]any{"objective": ""})
+	d.recordGoalSetHistoryIfNeeded(req, "pause", goalResultControl, nil, nil)
+	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultError, nil, nil)
+	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultConfirmRequired, nil, nil)
+	d.recordGoalSetHistoryIfNeeded(req, "set", goalResultStream, map[string]any{"objective": ""}, nil)
 	require.Empty(t, goalHistoryRecords(t, "sess-hist-skip"))
 	require.Nil(t, d.pendingGoalObjective("sess-hist-skip"))
 }

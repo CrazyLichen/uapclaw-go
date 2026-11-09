@@ -80,6 +80,16 @@ func (d *DeepAdapter) interactionSession() *session.Session {
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// interactionOpenResult 打开交互的结果。
+type interactionOpenResult struct {
+	// rawCh 租约帧通道（accepted 或 controlFrame 为真时可能为 nil）
+	rawCh <-chan stream.Schema
+	// accepted 拿不到租约：只回受理确认
+	accepted bool
+	// controlFrame 非 nil 表示 goal op 提前结束，调用方应只发这一帧
+	controlFrame map[string]any
+}
+
 // outputHandoff 宿主自持的输出排空屏障。
 // Python: output_handoff.py OutputHandoff（整文件）
 //
@@ -188,23 +198,115 @@ func (d *DeepAdapter) attachAndSendInputs(
 }
 
 // openInteractionStream 启动交互、抢租约、投递输入，返回租约帧通道。
-// Python: interface_deep.py:19953-20010 attach → send_input → for chunk in stream
+// Python: interface_deep.py:19953-20010（attach → send_input → for chunk in stream）
 //
-// accepted 为真表示拿不到租约（另一读者持有）：调用方应只回受理确认帧。
+// 带 pending goal op（流式 command.goal 的 set/resume）时走上游的
+// attach→control 两段映射：先 attach 再 dispatch 控制，confirm/error 提前结束，
+// 成功才继续投递输入（:19823-19870）。
 func (d *DeepAdapter) openInteractionStream(
 	ctx context.Context, req *schema.AgentRequest, inputs map[string]any, sessionID string,
-) (rawCh <-chan stream.Schema, accepted bool, err error) {
+) (interactionOpenResult, error) {
 	if startErr := d.startInteractionIfNeeded(ctx, sessionID); startErr != nil {
-		return nil, false, startErr
+		return interactionOpenResult{}, startErr
 	}
+
+	if op := structuredGoalOpFromRequest(req); op != nil {
+		return d.openInteractionWithGoalOp(ctx, req, inputs, sessionID, op)
+	}
+
 	inject := d.shouldInjectIntoExistingInteraction(req.Params)
 	interactionStream, _, attachErr := d.attachAndSendInputs(ctx, req, inputs, inject)
 	if attachErr != nil {
-		return nil, false, attachErr
+		return interactionOpenResult{}, attachErr
 	}
 	if interactionStream == nil {
-		return nil, true, nil
+		return interactionOpenResult{accepted: true}, nil
 	}
+	return interactionOpenResult{rawCh: d.drainInteractionStream(ctx, interactionStream)}, nil
+}
+
+// openInteractionWithGoalOp attach→control 两段映射。
+// Python: interface_deep.py:19823-19875
+func (d *DeepAdapter) openInteractionWithGoalOp(
+	ctx context.Context, req *schema.AgentRequest, inputs map[string]any,
+	sessionID string, op map[string]any,
+) (interactionOpenResult, error) {
+	// dispatch 前采样：之后 active_round 可能已切到 goal
+	deferHistory := d.shouldDeferGoalObjectiveHistory(sessionID)
+
+	interactionStream, attachErr := d.instance.AttachOutput(ctx)
+	if attachErr != nil {
+		return interactionOpenResult{}, attachErr
+	}
+	if interactionStream != nil {
+		d.interactionOutputHandoff = newOutputHandoff(d.instance, interactionStream)
+	}
+
+	action, _ := op["action"].(string)
+	objective, _ := op["objective"].(string)
+	overwrite, _ := op["overwrite_confirmed"].(bool)
+	budget, _ := op["token_budget"].(int)
+	attempts, _ := op["max_attempts"].(int)
+	control, controlErr := d.dispatchGoalControl(ctx, sessionID, action, objective,
+		overwrite, budget, attempts)
+	if controlErr != nil {
+		d.closeInteractionStream(ctx, interactionStream)
+		return interactionOpenResult{}, controlErr
+	}
+
+	resultType, _ := control["result_type"].(string)
+	switch resultType {
+	case goalResultConfirmRequired:
+		d.closeInteractionStream(ctx, interactionStream)
+		return interactionOpenResult{controlFrame: map[string]any{
+			"event_type":          goalConfirmRequiredEventType,
+			"existing_goal":       control["existing_goal"],
+			"requested_objective": control["requested_objective"],
+		}}, nil
+	case goalResultError:
+		d.closeInteractionStream(ctx, interactionStream)
+		return interactionOpenResult{controlFrame: map[string]any{
+			"event_type": "chat.error",
+			"code":       control["error_code"],
+			"error":      control["error"],
+			"goal":       control["goal"],
+		}}, nil
+	}
+
+	// 成功（goal_stream）：objective 落盘后继续投递输入
+	if goalPayload, ok := control["goal"].(map[string]any); ok {
+		d.recordGoalSetHistoryIfNeeded(req, action, resultType, goalPayload, &deferHistory)
+	}
+	if interactionStream == nil {
+		return interactionOpenResult{accepted: true}, nil
+	}
+
+	sendReq := hschema.SendInputRequest{
+		RequestID: req.RequestID,
+		Inputs:    inputs,
+		Mode:      resolveInputDispatchMode(req.Params),
+	}
+	if sendErr := d.instance.SendInput(ctx, sendReq); sendErr != nil {
+		d.closeInteractionStream(ctx, interactionStream)
+		return interactionOpenResult{}, sendErr
+	}
+	return interactionOpenResult{rawCh: d.drainInteractionStream(ctx, interactionStream)}, nil
+}
+
+// closeInteractionStream 关闭租约并清掉排空屏障。
+func (d *DeepAdapter) closeInteractionStream(
+	ctx context.Context, interactionStream *hschema.InteractionOutputStream,
+) {
+	if interactionStream != nil {
+		interactionStream.Close(ctx, false)
+	}
+	d.interactionOutputHandoff = nil
+}
+
+// drainInteractionStream 把租约帧转发到返回通道，结束时释放租约。
+func (d *DeepAdapter) drainInteractionStream(
+	ctx context.Context, interactionStream *hschema.InteractionOutputStream,
+) <-chan stream.Schema {
 	out := make(chan stream.Schema, 64)
 	go func() {
 		defer close(out)
@@ -221,7 +323,7 @@ func (d *DeepAdapter) openInteractionStream(
 			}
 		}
 	}()
-	return out, false, nil
+	return out
 }
 
 // resolveInputDispatchMode 解析输入分发模式。

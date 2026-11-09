@@ -116,10 +116,11 @@ func TestOpenInteractionStream_拿到租约返回帧通道(t *testing.T) {
 
 	req := &schema.AgentRequest{RequestID: "r-open-1", ChannelID: "web",
 		Params: mustJSON(t, map[string]any{"query": "hi"})}
-	rawCh, accepted, err := d.openInteractionStream(ctx, req, map[string]any{"query": "hi"}, "sess-open-1")
+	opened, err := d.openInteractionStream(ctx, req, map[string]any{"query": "hi"}, "sess-open-1")
 	require.NoError(t, err)
-	require.False(t, accepted)
-	require.NotNil(t, rawCh)
+	require.False(t, opened.accepted)
+	require.Nil(t, opened.controlFrame)
+	require.NotNil(t, opened.rawCh)
 	require.NotNil(t, d.interactionOutputHandoff, "拿到租约后必须挂排空屏障")
 }
 
@@ -134,11 +135,11 @@ func TestOpenInteractionStream_无租约非inject返回accepted(t *testing.T) {
 
 	req := &schema.AgentRequest{RequestID: "r-open-2", ChannelID: "web",
 		Params: mustJSON(t, map[string]any{"query": "hi"})}
-	rawCh, accepted, err := d.openInteractionStream(context.Background(), req,
+	opened, err := d.openInteractionStream(context.Background(), req,
 		map[string]any{"query": "hi"}, "sess-open-2")
 	require.NoError(t, err)
-	require.True(t, accepted, "非 inject 模式拿不到租约应回 accepted")
-	require.Nil(t, rawCh)
+	require.True(t, opened.accepted, "非 inject 模式拿不到租约应回 accepted")
+	require.Nil(t, opened.rawCh)
 }
 
 // TestOpenInteractionStream_inject模式无租约投递但不读输出 steer 的输入必须送进
@@ -155,11 +156,11 @@ func TestOpenInteractionStream_inject模式无租约投递但不读输出(t *tes
 		Params: mustJSON(t, map[string]any{"query": "转向", "input_mode": "steer"})}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rawCh, accepted, err := d.openInteractionStream(ctx, req,
+	opened, err := d.openInteractionStream(ctx, req,
 		map[string]any{"query": "转向"}, "sess-open-3")
 	require.NoError(t, err, "inject 模式必须投递且不得报错")
-	require.True(t, accepted, "没有可读流：调用方只回受理确认")
-	require.Nil(t, rawCh)
+	require.True(t, opened.accepted, "没有可读流：调用方只回受理确认")
+	require.Nil(t, opened.rawCh)
 
 	// 直接验证 attachAndSendInputs：inject 模式在租约被占时仍不报错（SendInput 已执行），
 	// 而非 inject 模式会静默放弃。
@@ -354,4 +355,81 @@ func TestGoalIntermediateFinalRepeatsStreamedText(t *testing.T) {
 	d.noteRoundVisibleText("前缀 答案 后缀")
 	require.True(t, d.goalIntermediateFinalRepeatsStreamedText("答案"))
 	require.False(t, d.goalIntermediateFinalRepeatsStreamedText("别的"))
+}
+
+// goalOpRequest 构造流式 command.goal 请求（set/resume 才进两段映射）。
+func goalOpRequest(t *testing.T, sessionID string, params map[string]any) *schema.AgentRequest {
+	t.Helper()
+	sid := sessionID
+	return &schema.AgentRequest{
+		RequestID: "req-goal-op",
+		ChannelID: "web",
+		SessionID: &sid,
+		ReqMethod: schema.ReqMethodCommandGoal,
+		IsStream:  true,
+		Params:    mustJSON(t, params),
+	}
+}
+
+// TestOpenInteractionWithGoalOp_二次set未确认返回confirmRequired attach 后 dispatch，
+// confirm_required 提前结束且不投递输入。
+// Python: interface_deep.py:19823-19845
+func TestOpenInteractionWithGoalOp_二次set未确认返回confirmRequired(t *testing.T) {
+	isolateGoalHistoryDataDir(t)
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-goalop-confirm")
+	_, err := d.dispatchGoalControl(ctx, "sess-goalop-confirm", "set", "第一个", false, 0, 0)
+	require.NoError(t, err)
+
+	req := goalOpRequest(t, "sess-goalop-confirm", map[string]any{
+		"action": "set", "objective": "第二个", "mode": "agent",
+	})
+	opened, err := d.openInteractionStream(ctx, req, map[string]any{"query": "第二个"}, "sess-goalop-confirm")
+	require.NoError(t, err)
+	require.NotNil(t, opened.controlFrame, "已存在目标时必须以 confirm_required 提前结束")
+	require.Equal(t, "goal.confirm_required", opened.controlFrame["event_type"])
+	require.Equal(t, "第二个", opened.controlFrame["requested_objective"])
+	require.Nil(t, opened.rawCh)
+	// 未确认覆盖：不得写 objective 历史
+	require.Empty(t, goalHistoryRecords(t, "sess-goalop-confirm"))
+}
+
+// TestOpenInteractionWithGoalOp_set成功写objective历史并继续 成功才落历史。
+// Python: interface_deep.py:19850-19870
+func TestOpenInteractionWithGoalOp_set成功写objective历史并继续(t *testing.T) {
+	isolateGoalHistoryDataDir(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d := newStartedGoalAdapter(t, "sess-goalop-ok")
+
+	req := goalOpRequest(t, "sess-goalop-ok", map[string]any{
+		"action": "set", "objective": "修完测试", "mode": "agent",
+	})
+	opened, err := d.openInteractionStream(ctx, req, map[string]any{"query": "修完测试"}, "sess-goalop-ok")
+	require.NoError(t, err)
+	require.Nil(t, opened.controlFrame, "set 成功不得提前结束")
+	require.False(t, opened.accepted)
+
+	records := goalHistoryRecords(t, "sess-goalop-ok")
+	require.Len(t, records, 1, "set 成功必须写 objective 历史")
+	require.Equal(t, "user", records[0]["role"])
+	require.Equal(t, "修完测试", records[0]["content"])
+	require.Equal(t, true, records[0]["is_goal_objective_message"])
+}
+
+// TestOpenInteractionWithGoalOp_resume无目标返回error resume 无目标时报 no_goal。
+// Python: interface_deep.py:19846-19875
+func TestOpenInteractionWithGoalOp_resume无目标返回error(t *testing.T) {
+	isolateGoalHistoryDataDir(t)
+	ctx := context.Background()
+	d := newStartedGoalAdapter(t, "sess-goalop-resume")
+
+	req := goalOpRequest(t, "sess-goalop-resume", map[string]any{
+		"action": "resume", "mode": "agent",
+	})
+	opened, err := d.openInteractionStream(ctx, req, map[string]any{"query": ""}, "sess-goalop-resume")
+	require.NoError(t, err)
+	require.NotNil(t, opened.controlFrame)
+	require.Equal(t, "chat.error", opened.controlFrame["event_type"])
+	require.Equal(t, "no_goal", opened.controlFrame["code"])
 }

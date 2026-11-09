@@ -1104,17 +1104,22 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		}()
 		// 步骤 18: 抢租约 + 投递输入，把租约帧聚合成响应载荷。
 		// Python: interface_deep.py:18457-18560 —— 非流式同样先 attach 再 send_input。
-		var rawCh <-chan stream.Schema
-		var accepted bool
-		rawCh, accepted, runErr = d.openInteractionStream(ctx, req, inputs, sessionID)
-		if runErr == nil && accepted {
+		var opened interactionOpenResult
+		opened, runErr = d.openInteractionStream(ctx, req, inputs, sessionID)
+		if runErr == nil && opened.controlFrame != nil {
+			// goal op 提前结束（confirm_required / error）：直接作为响应载荷。
+			// Python: interface_deep.py:18480-18560
+			result = opened.controlFrame
+			return
+		}
+		if runErr == nil && opened.accepted {
 			// 拿不到租约：只回受理确认（输入已投递，不读输出）。
 			// Python: interface_deep.py:18470-18475
 			result = map[string]any{"event_type": runtimeAcceptedEventType}
 			return
 		}
 		if runErr == nil {
-			result = d.aggregateInteractionStream(rawCh)
+			result = d.aggregateInteractionStream(opened.rawCh)
 		}
 	}()
 
@@ -1377,14 +1382,25 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	//
 	// 下游解析（usage 累加 / askUser 去重 / evolution 块 / 控制事件）原样保留：
 	// 租约队列与 runner 输出同为 stream.Schema，只换数据源。
-	rawCh, accepted, streamErr := d.openInteractionStream(ctx, req, inputs, sessionID)
+	opened, streamErr := d.openInteractionStream(ctx, req, inputs, sessionID)
 	if streamErr != nil {
 		d.unmarkSessionActive(sessionID)
 		ch := make(chan *schema.AgentResponseChunk)
 		close(ch)
 		return ch, fmt.Errorf("interaction attach/send_input failed: %w", streamErr)
 	}
-	if accepted {
+	if opened.controlFrame != nil {
+		// goal op 提前结束（confirm_required / error）：只发这一帧。
+		// Python: interface_deep.py:19842-19875
+		d.unmarkSessionActive(sessionID)
+		ch := make(chan *schema.AgentResponseChunk, 1)
+		ch <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, opened.controlFrame,
+			schema.WithChunkIsComplete(true))
+		close(ch)
+		return ch, nil
+	}
+	rawCh := opened.rawCh
+	if opened.accepted {
 		// 拿不到租约（另一读者持有）：只回受理确认，不投递。
 		// Python: interface_deep.py:20000-20005
 		d.unmarkSessionActive(sessionID)

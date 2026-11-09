@@ -49,6 +49,7 @@ var (
 // 否则重载后的时间线顺序会错。
 func (d *DeepAdapter) recordGoalSetHistoryIfNeeded(
 	req *schema.AgentRequest, action, resultType string, goalPayload map[string]any,
+	deferOverride *bool,
 ) {
 	if req == nil || action != "set" {
 		return
@@ -82,7 +83,12 @@ func (d *DeepAdapter) recordGoalSetHistoryIfNeeded(
 		mode:            mode,
 		goalID:          goalID,
 	}
-	if d.shouldDeferGoalObjectiveHistory(sessionID) {
+	shouldDefer := d.shouldDeferGoalObjectiveHistory(sessionID)
+	if deferOverride != nil {
+		// 上游在 dispatch 前采样，避免 active_round 切到 goal 后误判
+		shouldDefer = *deferOverride
+	}
+	if shouldDefer {
 		pendingGoalObjectivesMu.Lock()
 		pendingGoalObjectives[sessionID] = entry
 		pendingGoalObjectivesMu.Unlock()
