@@ -349,3 +349,158 @@ func TestPayloadKind_turnLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "turn_lifecycle", ev.payloadKind())
 }
+
+// TestModelRequestEvent_19字段与口径 验证字段齐备与默认值。
+// Python: events.py:185-271 ModelRequestEvent（AST 机器核对 19 字段）
+func TestModelRequestEvent_19字段与口径(t *testing.T) {
+	usage, err := NewTurnUsage(intPtr(12), intPtr(3), nil, nil, intPtr(15), nil)
+	require.NoError(t, err)
+	outMsg, err := NewTurnMessage("m2", MessageRoleAssistant, nil, nil)
+	require.NoError(t, err)
+	cost, err := NewMonetaryAmount(1500, "usd")
+	require.NoError(t, err)
+
+	ev, err := NewModelRequestEvent(ModelRequestOptions{
+		RequestID:         "req-1",
+		Status:            ModelRequestStatusCompleted,
+		StartedAt:         10.0,
+		EndedAt:           12.5,
+		Model:             "qwen-max",
+		ProviderName:      "dashscope",
+		InputObserved:     true,
+		OutputMessage:     &outMsg,
+		ToolDefinitions:   []any{map[string]any{"name": "read_file"}},
+		RequestParameters: map[string]any{"temperature": 0.2},
+		ResponseID:        "resp-1",
+		TimeToFirstChunk:  floatPtr(0.35),
+		FinishReasons:     []string{"stop"},
+		Usage:             &usage,
+		Cost:              &cost,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "req-1", ev.RequestID)
+	assert.True(t, ev.InputObserved)
+	require.NotNil(t, ev.TimeToFirstChunk)
+	assert.Equal(t, 0.35, *ev.TimeToFirstChunk)
+	assert.Equal(t, []string{"stop"}, ev.FinishReasons)
+	require.NotNil(t, ev.Cost)
+	assert.Equal(t, int64(1500), ev.Cost.Micros)
+	// 19 个字段全部可达（编译期保证，此处抽验 3 个"易漏"字段）
+	assert.Equal(t, "dashscope", ev.ProviderName)
+	assert.Equal(t, "resp-1", ev.ResponseID)
+	assert.Equal(t, "qwen-max", ev.Model)
+}
+
+// TestModelRequestEvent_校验顺序 逐条验证 7 步校验。
+// Python: events.py:252-270
+func TestModelRequestEvent_校验顺序(t *testing.T) {
+	base := func() ModelRequestOptions {
+		return ModelRequestOptions{
+			RequestID: "req-1",
+			Status:    ModelRequestStatusCompleted,
+			StartedAt: 1.0,
+			EndedAt:   2.0,
+		}
+	}
+
+	// ① request_id 空
+	o := base()
+	o.RequestID = ""
+	_, err := NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request_id must not be empty")
+
+	// ② started_at 非有限
+	o = base()
+	o.StartedAt = math.NaN()
+	_, err = NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request started_at must be a finite Unix timestamp")
+
+	// ② ended_at 为负
+	o = base()
+	o.EndedAt = -1
+	_, err = NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request ended_at must be a finite Unix timestamp")
+
+	// ③ ended_at 早于 started_at
+	o = base()
+	o.EndedAt = 0.5
+	_, err = NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request ended_at must not precede started_at")
+
+	// ④ completed 不得带 error
+	o = base()
+	te := TurnError{Message: "boom"}
+	o.Error = &te
+	_, err = NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "completed model request must not contain error")
+
+	// ⑤ time_to_first_chunk 非负有限
+	o = base()
+	o.TimeToFirstChunk = floatPtr(-0.1)
+	_, err = NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request time_to_first_chunk must be a non-negative duration")
+
+	o = base()
+	o.TimeToFirstChunk = floatPtr(math.Inf(1))
+	_, err = NewModelRequestEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request time_to_first_chunk must be a non-negative duration")
+}
+
+// TestModelRequestEvent_冻结与拷贝 验证 5 处深拷贝/冻结。
+// Python: events.py:265-270（4 处 tuple + 3 处 freeze）
+func TestModelRequestEvent_冻结与拷贝(t *testing.T) {
+	finish := []string{"stop"}
+	params := map[string]any{"temperature": 0.2}
+	ev, err := NewModelRequestEvent(ModelRequestOptions{
+		RequestID:         "req-1",
+		Status:            ModelRequestStatusCompleted,
+		StartedAt:         1.0,
+		EndedAt:           2.0,
+		FinishReasons:     finish,
+		RequestParameters: params,
+		ToolDefinitions:   map[string]any{"t": 1},
+	})
+	require.NoError(t, err)
+
+	finish[0] = "mutated"
+	params["temperature"] = 9.9
+	assert.Equal(t, []string{"stop"}, ev.FinishReasons)
+	assert.Equal(t, 0.2, ev.RequestParameters["temperature"])
+}
+
+// TestModelRequestEvent_失败状态可带错误 验证 failed 分支合法。
+// Python: events.py:260-261（仅 completed 禁带 error）
+func TestModelRequestEvent_失败状态可带错误(t *testing.T) {
+	te := TurnError{Message: "auth", Code: strPtr("auth_required")}
+	ev, err := NewModelRequestEvent(ModelRequestOptions{
+		RequestID: "req-2",
+		Status:    ModelRequestStatusFailed,
+		StartedAt: 1.0,
+		EndedAt:   1.5,
+		Error:     &te,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ev.Error)
+	assert.Equal(t, "auth", ev.Error.Message)
+}
+
+// TestPayloadKind_modelRequest 守护 discriminator。
+// Python: serialization.py:312-313（→ "model_request"）
+func TestPayloadKind_modelRequest(t *testing.T) {
+	ev, err := NewModelRequestEvent(ModelRequestOptions{
+		RequestID: "r", Status: ModelRequestStatusCompleted, StartedAt: 1, EndedAt: 2,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "model_request", ev.payloadKind())
+}
+
+// intPtr / floatPtr 测试助手。
+func intPtr(i int) *int           { return &i }
+func floatPtr(f float64) *float64 { return &f }

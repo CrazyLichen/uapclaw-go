@@ -1,5 +1,7 @@
 package harness_protocol
 
+import "math"
+
 // 本文件对应 Python openjiuwen/harness_protocol/events.py（456 行）：
 // provider-neutral 的有序观测事件信封与其载荷。
 // 本文件只定义契约与构造期校验，不含任何缓冲/游标行为
@@ -68,6 +70,94 @@ type HookObservedEvent struct {
 	// HookID 钩子标识
 	HookID string
 	// Data 附加数据（已冻结）
+	Data JsonObject
+}
+
+// ModelRequestEvent 轮内观测到的一次物理模型请求。
+// 只有当宿主声明 HostCapabilityModelRequestObservation 时才发出；
+// 事件在该请求结束后发出一次，且必定先于它引发的任何 item 与该轮终态事件。
+// Python: events.py:185-271 ModelRequestEvent（19 字段）
+type ModelRequestEvent struct {
+	// RequestID 会话内 provider 稳定的请求标识
+	RequestID string
+	// Status 请求终态
+	Status ModelRequestStatus
+	// StartedAt 请求发出时的 Unix 秒
+	StartedAt float64
+	// EndedAt 响应完成时的 Unix 秒
+	EndedAt float64
+	// Model 服务该请求的模型（空串表示未提供）
+	Model string
+	// ProviderName 服务该请求的厂商（空串表示未提供）
+	ProviderName string
+	// SystemInstructions 对话之外单独提供的指令
+	SystemInstructions []ContentBlock
+	// InputMessages 实际随请求发送的对话，按序
+	InputMessages []TurnMessage
+	// InputObserved 是否从请求本身观测到输入侧
+	InputObserved bool
+	// OutputMessage 该请求产出的助手消息
+	OutputMessage *TurnMessage
+	// ToolDefinitions 提供给模型的工具（已冻结）
+	ToolDefinitions JsonValue
+	// RequestParameters 请求携带的采样参数（已冻结）
+	RequestParameters JsonObject
+	// ResponseID provider 给出的响应标识（空串表示未提供）
+	ResponseID string
+	// TimeToFirstChunk 从发出到首个流式块之间的秒数
+	TimeToFirstChunk *float64
+	// FinishReasons 厂商口径的生成停止原因
+	FinishReasons []string
+	// Usage 仅本次请求的 token 用量
+	Usage *TurnUsage
+	// Cost 本次请求的精确金额
+	Cost *MonetaryAmount
+	// Error status 非 completed 时的归一化失败
+	Error *TurnError
+	// Data 命名空间化的 provider 诊断数据（已冻结）
+	Data JsonObject
+}
+
+// ModelRequestOptions ModelRequestEvent 的构造入参。
+// Python: events.py:232-250（dataclass 字段与默认值）
+type ModelRequestOptions struct {
+	// RequestID 请求标识
+	RequestID string
+	// Status 请求终态
+	Status ModelRequestStatus
+	// StartedAt 发出时间
+	StartedAt float64
+	// EndedAt 完成时间
+	EndedAt float64
+	// Model 模型名
+	Model string
+	// ProviderName 厂商名
+	ProviderName string
+	// SystemInstructions 系统指令
+	SystemInstructions []ContentBlock
+	// InputMessages 输入对话
+	InputMessages []TurnMessage
+	// InputObserved 输入是否可观测
+	InputObserved bool
+	// OutputMessage 输出消息
+	OutputMessage *TurnMessage
+	// ToolDefinitions 工具定义
+	ToolDefinitions JsonValue
+	// RequestParameters 采样参数
+	RequestParameters JsonObject
+	// ResponseID 响应标识
+	ResponseID string
+	// TimeToFirstChunk 首块延迟
+	TimeToFirstChunk *float64
+	// FinishReasons 停止原因
+	FinishReasons []string
+	// Usage 本次用量
+	Usage *TurnUsage
+	// Cost 本次金额
+	Cost *MonetaryAmount
+	// Error 失败信息
+	Error *TurnError
+	// Data 诊断数据
 	Data JsonObject
 }
 
@@ -357,6 +447,84 @@ func NewHookObservedEvent(phase HookEventPhase, hookName, hookID string, data Js
 	return HookObservedEvent{Phase: phase, HookName: hookName, HookID: hookID, Data: frozenData}, nil
 }
 
+// NewModelRequestEvent 创建物理模型请求事件。
+// Python: events.py:252-270 ModelRequestEvent.__post_init__
+func NewModelRequestEvent(opts ModelRequestOptions) (ModelRequestEvent, error) {
+	// 步骤 1：request_id 非空
+	if opts.RequestID == "" {
+		return ModelRequestEvent{}, &HarnessProtocolError{Msg: "model request_id must not be empty"}
+	}
+	// 步骤 2：两个时间戳有限且非负（顺序 started_at → ended_at）
+	for _, ts := range []struct {
+		name  string
+		value float64
+	}{{"started_at", opts.StartedAt}, {"ended_at", opts.EndedAt}} {
+		if math.IsNaN(ts.value) || math.IsInf(ts.value, 0) || ts.value < 0 {
+			return ModelRequestEvent{}, &HarnessProtocolError{
+				Msg: "model request " + ts.name + " must be a finite Unix timestamp",
+			}
+		}
+	}
+	// 步骤 3：ended_at 不得早于 started_at
+	if opts.EndedAt < opts.StartedAt {
+		return ModelRequestEvent{}, &HarnessProtocolError{Msg: "model request ended_at must not precede started_at"}
+	}
+	// 步骤 4：completed 不得带 error
+	if opts.Status == ModelRequestStatusCompleted && opts.Error != nil {
+		return ModelRequestEvent{}, &HarnessProtocolError{Msg: "completed model request must not contain error"}
+	}
+	// 步骤 5：time_to_first_chunk 非负有限
+	if opts.TimeToFirstChunk != nil {
+		v := *opts.TimeToFirstChunk
+		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+			return ModelRequestEvent{}, &HarnessProtocolError{
+				Msg: "model request time_to_first_chunk must be a non-negative duration",
+			}
+		}
+	}
+	// 步骤 6：两处切片拷贝为独立切片（Go 取代 Python 的 tuple(t)）
+	systemInstructions := append([]ContentBlock(nil), opts.SystemInstructions...)
+	inputMessages := append([]TurnMessage(nil), opts.InputMessages...)
+	// 步骤 7a：冻结 tool_definitions
+	frozenToolDefs, err := FreezeJsonValue(opts.ToolDefinitions)
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	// 步骤 7b：冻结 request_parameters
+	frozenParams, err := FreezeJsonObject(opts.RequestParameters)
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	// 步骤 7c：finish_reasons 拷贝
+	finishReasons := append([]string(nil), opts.FinishReasons...)
+	// 步骤 7d：冻结 data
+	frozenData, err := FreezeJsonObject(opts.Data)
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	return ModelRequestEvent{
+		RequestID:          opts.RequestID,
+		Status:             opts.Status,
+		StartedAt:          opts.StartedAt,
+		EndedAt:            opts.EndedAt,
+		Model:              opts.Model,
+		ProviderName:       opts.ProviderName,
+		SystemInstructions: systemInstructions,
+		InputMessages:      inputMessages,
+		InputObserved:      opts.InputObserved,
+		OutputMessage:      opts.OutputMessage,
+		ToolDefinitions:    frozenToolDefs,
+		RequestParameters:  frozenParams,
+		ResponseID:         opts.ResponseID,
+		TimeToFirstChunk:   opts.TimeToFirstChunk,
+		FinishReasons:      finishReasons,
+		Usage:              opts.Usage,
+		Cost:               opts.Cost,
+		Error:              opts.Error,
+		Data:               frozenData,
+	}, nil
+}
+
 // NewTurnLifecycleEvent 创建轮次生命周期事件。
 // Python: events.py:288-303 TurnLifecycleEvent.__post_init__
 func NewTurnLifecycleEvent(kind TurnEventKind, result *TurnResult) (TurnLifecycleEvent, error) {
@@ -463,3 +631,7 @@ func (HookObservedEvent) payloadKind() string { return "hook_observed" }
 // payloadKind 返回线格式 discriminator。
 // Python: serialization.py:316-324（→ "turn_lifecycle"）
 func (TurnLifecycleEvent) payloadKind() string { return "turn_lifecycle" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:312-313（→ "model_request"）
+func (ModelRequestEvent) payloadKind() string { return "model_request" }
