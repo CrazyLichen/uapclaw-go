@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -22,7 +23,7 @@ func TestNativeHarness_PauseResume空闲时幂等(t *testing.T) {
 	assert.NoError(t, h.Pause(context.Background()))
 	// 无 query 的 resume 在 IDLE 下是 no-op；带 query 属冷恢复，会起续跑轮。
 	assert.NoError(t, h.Resume(context.Background(), nil))
-	assert.Equal(t, HarnessStateIdle, h.State(), "空闲暂停/无 query 继续不得改相位")
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State(), "空闲暂停/无 query 继续不得改相位")
 }
 
 // TestNativeHarness_Pause未启动报错 验证未 Start 时入队被拒（不会空等 supervisor）。
@@ -34,7 +35,7 @@ func TestNativeHarness_Pause未启动报错(t *testing.T) {
 // TestNativeHarness_onAbort立即中断取消活动轮 验证 immediate abort 取消活动轮（C11）。
 func TestNativeHarness_onAbort立即中断取消活动轮(t *testing.T) {
 	h := newTestNativeHarness(t)
-	h.st.setPhase(HarnessStateRunning)
+	h.st.setPhase(harnessprotocol.HarnessStateRunning)
 	cancelled := false
 	h.st.SetActive(&ActiveRound{
 		RoundID:       1,
@@ -54,7 +55,7 @@ func TestNativeHarness_onAbort优雅中断标记graceful(t *testing.T) {
 	h := newTestNativeHarness(t)
 
 	cancelled := false
-	h.st.setPhase(HarnessStateRunning)
+	h.st.setPhase(harnessprotocol.HarnessStateRunning)
 	active := &ActiveRound{
 		RoundID: 1, TaskID: "t1", OriginalQuery: "q",
 		Cancel: func() { cancelled = true },
@@ -69,6 +70,6 @@ func TestNativeHarness_onAbort优雅中断标记graceful(t *testing.T) {
 // TestNativeHarness_onAbort无活动轮返回 验证无活动轮时 abort 是 no-op。
 func TestNativeHarness_onAbort无活动轮返回(t *testing.T) {
 	h := newTestNativeHarness(t)
-	h.st.setPhase(HarnessStateIdle)
+	h.st.setPhase(harnessprotocol.HarnessStateIdle)
 	require.NoError(t, h.onAbort(&cmdAbort{immediate: true}))
 }

@@ -16,5 +16,14 @@
 //	├── async_tools.go    # 两阶段异步工具运行时（AsyncToolRuntime / AsyncTool / spill）
 //	└── team_harness.go   # TeamHarness（团队对外窗口）
 //
+// HarnessState 单一真源：本包不再定义该类型，直接使用
+// internal/agentcore/harness_protocol 的 HarnessState（对齐上游
+// openjiuwen/agent_teams/harness/state.py:18 从 harness_protocol.state import）。
+//
+// 同名区分：本包的 HarnessProtocol 是团队成员 L2 交互契约
+// （对应 openjiuwen/agent_teams/harness/protocol.py），与
+// harness_protocol 包的 HarnessProtocol（第三方 CLI 协议，对应
+// openjiuwen/harness_protocol/protocol.py）同名不同物、不同层。
+//
 // 对应 Python 代码：openjiuwen/agent_teams/harness/
 package harness

@@ -11,6 +11,7 @@ import (
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -58,7 +59,7 @@ func (s *TeamHarnessSuite) newTeamHarness() *teamharness.TeamHarness {
 // TestState未启动为Idle 验证未 Start 时 State() 返回 idle、SessionID 为空。
 func (s *TeamHarnessSuite) TestState未启动为Idle() {
 	h := s.newTeamHarness()
-	s.Equal(teamharness.HarnessStateIdle, h.State())
+	s.Equal(harnessprotocol.HarnessStateIdle, h.State())
 	s.Empty(h.SessionID())
 }
 

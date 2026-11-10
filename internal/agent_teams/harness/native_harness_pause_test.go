@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
@@ -19,7 +20,7 @@ func newPauseTestHarness(t *testing.T) (*NativeHarness, *ActiveRound) {
 	h := newTestNativeHarness(t)
 	h.sess = session.NewSession(session.WithSessionID("pause-sess"))
 
-	h.st.setPhase(HarnessStateRunning)
+	h.st.setPhase(harnessprotocol.HarnessStateRunning)
 	done := make(chan struct{})
 	close(done)
 	active := &ActiveRound{
@@ -44,7 +45,7 @@ func TestOnPause_模型相位硬取消并回滚(t *testing.T) {
 	_, err := h.onPause(&cmdPause{reply: reply})
 	require.NoError(t, err)
 
-	assert.Equal(t, HarnessStatePaused, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStatePaused, h.State())
 	assert.Nil(t, h.st.Active())
 
 	select {
@@ -67,7 +68,7 @@ func TestOnPause_工具相位延迟应答(t *testing.T) {
 	_, err := h.onPause(&cmdPause{reply: reply})
 	require.NoError(t, err)
 
-	assert.Equal(t, HarnessStatePausing, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStatePausing, h.State())
 	assert.True(t, active.PauseRequested.Load())
 	assert.Equal(t, reply, active.PauseAck)
 }
@@ -79,7 +80,7 @@ func TestOnAbort_Immediate回滚并作废(t *testing.T) {
 
 	require.NoError(t, h.onAbort(&cmdAbort{immediate: true, reply: reply}))
 
-	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State())
 	select {
 	case chunk := <-h.queue:
 		out := chunk.(stream.OutputSchema)
@@ -94,13 +95,13 @@ func TestOnAbort_Immediate回滚并作废(t *testing.T) {
 func TestOnResume_Warm续跑清空查询(t *testing.T) {
 	h, _ := newPauseTestHarness(t)
 	h.st.SetActive(nil)
-	h.st.setPhase(HarnessStatePaused)
+	h.st.setPhase(harnessprotocol.HarnessStatePaused)
 	h.st.SetPausedQuery("任务")
 
 	reply := make(chan error, 1)
 	require.NoError(t, h.onResume(&cmdResume{reply: reply}))
 
-	assert.Equal(t, HarnessStateRunning, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateRunning, h.State())
 	q, has := h.st.PausedQuery()
 	assert.False(t, has)
 	assert.Empty(t, q)
@@ -111,7 +112,7 @@ func TestOnResume_Warm续跑清空查询(t *testing.T) {
 // 回归 S-04：dispatch 曾用相位反推“是否延迟应答”，PAUSING 时两次都漏 ack。
 func TestOnPause_非Running立即应答(t *testing.T) {
 	h, _ := newPauseTestHarness(t)
-	h.st.setPhase(HarnessStatePausing)
+	h.st.setPhase(harnessprotocol.HarnessStatePausing)
 
 	reply := make(chan error, 1)
 	deferred, err := h.onPause(&cmdPause{reply: reply})
@@ -135,7 +136,7 @@ func TestStop_清除暂停查询(t *testing.T) {
 	require.NoError(t, h.Start(context.Background(), sess))
 
 	h.st.SetPausedQuery("已作废的任务")
-	h.st.setPhase(HarnessStatePaused)
+	h.st.setPhase(harnessprotocol.HarnessStatePaused)
 
 	require.NoError(t, h.Stop(context.Background()))
 	_, ok := h.st.PausedQuery()

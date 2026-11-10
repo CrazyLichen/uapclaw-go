@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
@@ -19,7 +20,7 @@ import (
 //  3. 订阅回调在 supervisor 协程内同步执行，必须便宜且不可阻塞。
 type HarnessProtocol interface {
 	// State 返回当前生命周期相位
-	State() HarnessState
+	State() harnessprotocol.HarnessState
 	// SessionID 返回拥有的会话标识（start 前为空串）
 	SessionID() string
 	// Start 初始化并启动 supervisor
@@ -44,9 +45,9 @@ type HarnessProtocol interface {
 // Python: harness.state 事件载荷（kwargs old/new/session_id）
 type HarnessStateEvent struct {
 	// Old 变化前相位
-	Old HarnessState
+	Old harnessprotocol.HarnessState
 	// New 变化后相位
-	New HarnessState
+	New harnessprotocol.HarnessState
 	// SessionID 所属会话
 	SessionID string
 }
@@ -173,14 +174,14 @@ func (b *eventBus) emitRound(ctx context.Context, ev HarnessRoundEvent) {
 }
 
 // toHarnessState 载荷转相位。
-func toHarnessState(v any) HarnessState {
+func toHarnessState(v any) harnessprotocol.HarnessState {
 	if s, ok := v.(string); ok {
-		return HarnessState(s)
+		return harnessprotocol.HarnessState(s)
 	}
-	if st, ok := v.(HarnessState); ok {
+	if st, ok := v.(harnessprotocol.HarnessState); ok {
 		return st
 	}
-	return HarnessStateIdle
+	return harnessprotocol.HarnessStateIdle
 }
 
 // toString 载荷转字符串。

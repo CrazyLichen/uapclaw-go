@@ -5,13 +5,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 )
 
 // TestHarnessState_零值为Idle 验证状态默认值是 idle（未启动即空闲）。
 func TestHarnessState_零值为Idle(t *testing.T) {
 	st := newInternalState()
 	require.NotNil(t, st)
-	assert.Equal(t, HarnessStateIdle, st.Phase())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, st.Phase())
 }
 
 // TestInternalState_ActiveRound可写入读出 验证唯一可变容器的最小契约。

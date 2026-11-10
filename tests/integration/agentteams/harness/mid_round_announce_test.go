@@ -10,6 +10,7 @@ import (
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -68,7 +69,7 @@ func (s *MidRoundAnnounceSuite) TestI07_首轮不再等门控() {
 	defer func() { _ = h.Stop(s.Ctx) }()
 
 	// 启动即 IDLE（不是 RUNNING），第一条 Send 应立刻开轮
-	s.Equal(teamharness.HarnessStateIdle, h.State())
+	s.Equal(harnessprotocol.HarnessStateIdle, h.State())
 
 	s.NoError(h.Send(s.Ctx, "开始工作", false))
 
@@ -76,6 +77,6 @@ func (s *MidRoundAnnounceSuite) TestI07_首轮不再等门控() {
 	// 不断言"最终回到 IDLE"——那取决于 MockLLM 响应队列是否够用，
 	// 属测试夹具细节，不是本用例要验证的门控语义。
 	s.Eventually(func() bool {
-		return h.State() == teamharness.HarnessStateRunning
+		return h.State() == harnessprotocol.HarnessStateRunning
 	}, 15*time.Second, 20*time.Millisecond, "Send 后轮次应立即开始（无门控阻塞）")
 }

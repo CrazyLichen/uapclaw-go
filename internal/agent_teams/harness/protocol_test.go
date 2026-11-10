@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 )
 
 // TestEventBus_状态事件同步送达 验证订阅回调在触发协程内同步执行（C7）。
@@ -19,7 +20,7 @@ func TestEventBus_状态事件同步送达(t *testing.T) {
 	require.NoError(t, err)
 
 	bus.emitState(context.Background(), HarnessStateEvent{
-		Old: HarnessStateIdle, New: HarnessStateRunning, SessionID: "s1",
+		Old: harnessprotocol.HarnessStateIdle, New: harnessprotocol.HarnessStateRunning, SessionID: "s1",
 	})
 	assert.True(t, called, "回调必须同步执行，不能另起协程")
 }
@@ -40,10 +41,10 @@ func TestEventBus_轮次事件载荷(t *testing.T) {
 // TestProtocol_类型转换边界 覆盖 toHarnessState/toString/toInt/toMap 各分支。
 func TestProtocol_类型转换边界(t *testing.T) {
 	// toHarnessState 状态转换
-	assert.Equal(t, HarnessStateRunning, toHarnessState("running"))
-	assert.Equal(t, HarnessStatePaused, toHarnessState(HarnessStatePaused)) // HarnessState 类型
-	assert.Equal(t, HarnessStateIdle, toHarnessState(123))                  // 非法类型兜底
-	assert.Equal(t, HarnessStateIdle, toHarnessState(nil))
+	assert.Equal(t, harnessprotocol.HarnessStateRunning, toHarnessState("running"))
+	assert.Equal(t, harnessprotocol.HarnessStatePaused, toHarnessState(harnessprotocol.HarnessStatePaused)) // harnessprotocol.HarnessState 类型
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, toHarnessState(123))                                  // 非法类型兜底
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, toHarnessState(nil))
 
 	// toString 字符串转换
 	assert.Equal(t, "x", toString("x"))

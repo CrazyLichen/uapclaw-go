@@ -11,6 +11,7 @@ import (
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -74,9 +75,9 @@ func (s *NativeHarnessSuite) TestStart后Send一轮回到Idle() {
 
 	s.Require().NoError(h.Send(s.Ctx, "开始任务", false))
 
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateRunning },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond, "Send 后应进入 RUNNING")
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond, "一轮完成后应回到 IDLE")
 }
 
@@ -93,11 +94,11 @@ func (s *NativeHarnessSuite) Test连发两轮() {
 
 	s.Require().NoError(h.Send(s.Ctx, "任务一", false))
 	// 等第一轮结束回到 idle
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
 	s.Require().NoError(h.Send(s.Ctx, "任务二", false))
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
 	// MockLLM 至少被调用两次（两轮各一次）

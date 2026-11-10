@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -110,24 +111,12 @@ type HarnessInternalState struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// HarnessState 生命周期相位。
-// Python: HarnessState (harness_protocol/state.py)，5 态。
+// harnessprotocol.HarnessState 的生命周期相位定义已收敛到
+// internal/agentcore/harness_protocol（单一真源）。
+// 对齐上游 openjiuwen/agent_teams/harness/state.py:18 从
+// harness_protocol.state import HarnessState——同一个类型，不在本包重复定义。
 // 注意：DeepAgent 内部的 InteractionPhase 只有 idle/running/terminated 三态，
 // 暂停是 L2 独有的概念。
-type HarnessState string
-
-const (
-	// HarnessStateIdle 空闲（无在飞轮次）
-	HarnessStateIdle HarnessState = "idle"
-	// HarnessStateRunning 有轮次在执行
-	HarnessStateRunning HarnessState = "running"
-	// HarnessStatePausing 已接受暂停、尚未抵达可恢复边界
-	HarnessStatePausing HarnessState = "pausing"
-	// HarnessStatePaused 已暂停在可恢复边界
-	HarnessStatePaused HarnessState = "paused"
-	// HarnessStateTerminated 已终止（不可逆）
-	HarnessStateTerminated HarnessState = "terminated"
-)
 
 // RoundPhase 内层 ReAct 循环在当前轮内的子相位。
 // Python: RoundPhase (state.py L27-39)
@@ -164,20 +153,20 @@ const (
 // newInternalState 创建内部状态，相位初始化为 idle。
 func newInternalState() *HarnessInternalState {
 	st := &HarnessInternalState{queue: make([]InboxMessage, 0, 4)}
-	st.phase.Store(HarnessStateIdle)
+	st.phase.Store(harnessprotocol.HarnessStateIdle)
 	return st
 }
 
 // Phase 返回当前相位。
-func (s *HarnessInternalState) Phase() HarnessState {
-	if v, ok := s.phase.Load().(HarnessState); ok {
+func (s *HarnessInternalState) Phase() harnessprotocol.HarnessState {
+	if v, ok := s.phase.Load().(harnessprotocol.HarnessState); ok {
 		return v
 	}
-	return HarnessStateIdle
+	return harnessprotocol.HarnessStateIdle
 }
 
 // setPhase 更新相位（仅 supervisor 调用）。
-func (s *HarnessInternalState) setPhase(p HarnessState) {
+func (s *HarnessInternalState) setPhase(p harnessprotocol.HarnessState) {
 	s.phase.Store(p)
 }
 
