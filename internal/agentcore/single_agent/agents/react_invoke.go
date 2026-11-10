@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
@@ -14,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -462,12 +465,84 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	// Python: 外部传入 session 时，不调 pre_run（由调用方负责）
 
 	invokeQuery := interfaces.QueryFromInputs(inputs)
+	// 用量归属：本次请求的 owner 与调用血缘。
+	// parent 归属来自 ctx（父 agent 绑定），delegation 来自调度方为本次委派准备的数据；
+	// 两者都可能缺，按 Python 的四级回退链逐级兜底。
+	// Python: react_agent.py L2876-2944
+	parentUsageAttribution := rail.CurrentUsageAttribution(ctx)
+	delegationAttribution := rail.CurrentUsageDelegation(ctx)
+	invocationID := inputString(inputs, "invocation_id")
+	if invocationID == "" {
+		// Python: uuid.uuid4().hex（无连字符）
+		invocationID = strings.ReplaceAll(uuid.NewString(), "-", "")
+	}
+	parentSessionID := firstNonEmptyString(
+		inputString(inputs, "parent_session_id"),
+		attributionString(delegationAttribution, "parent_session_id"))
+	parentInvocationID := firstNonEmptyString(
+		inputString(inputs, "parent_invocation_id"),
+		attributionString(delegationAttribution, "parent_invocation_id"),
+		rail.CurrentUsageInvocationID(ctx))
+	delegationID := firstNonEmptyString(
+		inputString(inputs, "delegation_id"),
+		attributionString(delegationAttribution, "delegation_id"))
+	agentPath := inputStringSlice(inputs, "agent_path")
+	if len(agentPath) == 0 {
+		agentPath = attributionStringSlice(delegationAttribution, "agent_path")
+	}
+	if len(agentPath) == 0 {
+		selfName := "agent"
+		if a.card != nil {
+			if a.card.ID != "" {
+				selfName = a.card.ID
+			} else if a.card.Name != "" {
+				selfName = a.card.Name
+			}
+		}
+		if parentPath := attributionStringSlice(parentUsageAttribution, "agent_path"); len(parentPath) > 0 {
+			agentPath = append(parentPath, selfName)
+		} else {
+			agentPath = []string{selfName}
+		}
+	}
+	var depth int
+	if rawDepth, ok := inputs["depth"]; ok {
+		// Python: int(inputs.get("depth") or 0)——键存在即采用，0 是合法值
+		depth = attributionInt(map[string]any{"depth": rawDepth}, "depth")
+	} else if rawDelegationDepth, ok := delegationAttribution["depth"]; ok {
+		depth = attributionInt(map[string]any{"depth": rawDelegationDepth}, "depth")
+	} else if len(attributionStringSlice(parentUsageAttribution, "agent_path")) > 0 {
+		depth = attributionInt(parentUsageAttribution, "depth") + 1
+	}
 	invokeInputs := &interfaces.InvokeInputs{
-		Query:          invokeQuery,
-		ConversationID: sess.GetSessionID(),
-		TurnNumber:     turnNumberFromInputs(inputs),
+		Query:              invokeQuery,
+		ConversationID:     sess.GetSessionID(),
+		ParentSessionID:    parentSessionID,
+		InvocationID:       invocationID,
+		ParentInvocationID: parentInvocationID,
+		DelegationID:       delegationID,
+		AgentPath:          agentPath,
+		Depth:              depth,
+		TurnNumber:         turnNumberFromInputs(inputs),
 	}
 	cbc := interfaces.NewAgentCallbackContext(a, invokeInputs, sess)
+	// 绑定调用标识与归属：内层循环、工具执行与子代理 spawn 都从 ctx 读。
+	// Python: bind_usage_invocation_id / bind_usage_attribution（react_agent.py L2946-2963）
+	ctx = rail.BindUsageInvocationID(ctx, invocationID)
+	contextUsageAttribution := make(map[string]any, 6)
+	for _, key := range []string{"product_session_id", "parent_cache_identity", "cache_mode", "cache_scope"} {
+		if v, ok := delegationAttribution[key]; ok {
+			contextUsageAttribution[key] = v
+		}
+	}
+	contextUsageAttribution["parent_session_id"] = parentSessionID
+	contextUsageAttribution["invocation_id"] = invocationID
+	contextUsageAttribution["parent_invocation_id"] = parentInvocationID
+	contextUsageAttribution["delegation_id"] = delegationID
+	contextUsageAttribution["agent_path"] = agentPath
+	contextUsageAttribution["depth"] = depth
+	cbc.SetContextUsageAttribution(contextUsageAttribution)
+	ctx = rail.BindUsageAttribution(ctx, contextUsageAttribution)
 
 	// 设置 extra（对齐 Python L1289-1296）
 	if userID, ok := inputs["user_id"].(string); ok {

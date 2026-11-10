@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -143,6 +144,18 @@ func NewNativeHarness(spec atschema.DeepAgentSpec, buildCtx hschema.BuildContext
 	// model/tool/react-iteration 桥到内层 ReActAgent，AFTER_TASK_ITERATION 留外层。
 	// Python: self.add_rail(self._snapshot_rail)（native_harness.py L229）
 	agent.AddRail(newPhaseSnapshotRail(h))
+
+	// 成员身份留给内层 ReActAgent 的用量归属：内层产生模型调用用量事件，
+	// 这两个字段让归属认出成员，而不必让核心用量代码依赖团队包。
+	// Python: native_harness.py L182-187（_usage_build_context / _usage_agent_id）
+	if react := agent.ReactAgent(); react != nil {
+		var identity agents.UsageIdentityProvider = buildCtx
+		agentID := ""
+		if spec.Card != nil {
+			agentID = spec.Card.ID
+		}
+		react.SetUsageIdentity(identity, agentID)
+	}
 
 	h.out = newOutputIterator(h.queue)
 

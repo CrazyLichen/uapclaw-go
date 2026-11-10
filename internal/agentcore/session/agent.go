@@ -207,6 +207,16 @@ func (s *Session) GetEnvs() map[string]any {
 	return cfg.GetEnvs()
 }
 
+// GetSourceMetadata 返回描述会话归属方的元数据副本。
+// Python: Session.get_source_metadata (core/session/agent.py L116-118)
+func (s *Session) GetSourceMetadata() map[string]any {
+	out := make(map[string]any, len(s.sourceMetadata))
+	for k, v := range s.sourceMetadata {
+		out[k] = v
+	}
+	return out
+}
+
 // GetAgentID 返回 Agent ID
 // Python: AgentSession.agent_id()
 func (s *Session) GetAgentID() string {

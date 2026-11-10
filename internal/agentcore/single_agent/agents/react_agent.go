@@ -51,6 +51,12 @@ type ReActAgent struct {
 	// promptAttachments 动态提示词管理器（由 DeepAgent 注入，可空）
 	// Python: ReActAgent.prompt_attachment_manager
 	promptAttachments *hprompts.Manager
+	// usageBuildContext 团队成员的构建上下文（成员名来源，可空）
+	// Python: ReActAgent._usage_build_context（native_harness.py L186 注入）
+	usageBuildContext UsageIdentityProvider
+	// usageAgentID 团队成员的 agent 标识
+	// Python: ReActAgent._usage_agent_id（native_harness.py L187 注入）
+	usageAgentID string
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

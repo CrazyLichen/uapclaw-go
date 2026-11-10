@@ -11,6 +11,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -122,7 +123,21 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 			"query":           query,
 			"conversation_id": cid,
 		}
-		result, invokeErr := subAgent.Invoke(ctx, effective, agentinterfaces.WithSession(sess))
+		// 委派归属：本次子 agent 的用量归到父调用链上。
+		// Python: session_spawn_executor.py L123-132（bind_usage_delegation(build_usage_delegation_attribution(...))）
+		parentSessionID, _ := meta["parent_session_id"].(string)
+		if parentSessionID == "" && sess != nil {
+			parentSessionID = sess.GetSessionID()
+		}
+		parentInvocationID, _ := meta["parent_invocation_id"].(string)
+		parentAttribution, _ := meta["parent_usage_attribution"].(map[string]any)
+		subAgentID := ""
+		if card := subAgent.Card(); card != nil {
+			subAgentID = card.ID
+		}
+		invokeCtx := rail.BindUsageDelegation(ctx, rail.BuildUsageDelegationAttribution(
+			ctx, subAgentID, parentSessionID, taskID, parentAttribution, parentInvocationID))
+		result, invokeErr := subAgent.Invoke(invokeCtx, effective, agentinterfaces.WithSession(sess))
 
 		if invokeErr != nil {
 			// 取消静默路径：任务被 TaskScheduler.CancelTask 取消时 ctx 已取消，

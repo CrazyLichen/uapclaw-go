@@ -6,13 +6,14 @@
 // 文件目录：
 //
 //	agents/
-//	├── doc.go               # 包文档
-//	├── react_agent.go       # ReActAgent（ReAct循环Agent） 结构体定义 + 构造函数
-//	├── react_invoke.go      # Invoke/Stream 入口（含回调骨架）+ invokeImpl/streamImpl + ReAct 循环
-//	├── react_model_call.go  # LLM 模型调用（callModel/railedModelCall/callLLMInvoke/callLLMStream）
-//	├── react_prompt.go      # 系统提示词构建（AddPromptBuilderSection/Configure/updateSkillPromptBuilderSection）
-//	├── react_attachment.go  # 提示词附件同步 + 按 provider 注册窗口投影（对齐 ReActAgent._sync_prompt_attachments）
-//	└── react_helpers.go     # 内部辅助函数（initContext/getLLM/getTools/saveContexts 等）
+//	├── doc.go                    # 包文档
+//	├── react_agent.go            # ReActAgent（ReAct循环Agent） 结构体定义 + 构造函数
+//	├── react_invoke.go           # Invoke/Stream 入口（含回调骨架）+ invokeImpl/streamImpl + ReAct 循环
+//	├── react_model_call.go       # LLM 模型调用（callModel/railedModelCall/callLLMInvoke/callLLMStream）
+//	├── react_prompt.go           # 系统提示词构建（AddPromptBuilderSection/Configure/updateSkillPromptBuilderSection）
+//	├── react_attachment.go       # 提示词附件同步 + 按 provider 注册窗口投影（对齐 ReActAgent._sync_prompt_attachments）
+//	├── react_usage_attribution.go # 用量归属解析（owner/血缘字段，对齐 ReActAgent._context_usage_attribution）
+//	└── react_helpers.go          # 内部辅助函数（initContext/getLLM/getTools/saveContexts 等）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/agents/
 package agents
