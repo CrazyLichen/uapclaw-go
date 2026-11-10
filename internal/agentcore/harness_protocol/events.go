@@ -71,6 +71,15 @@ type HookObservedEvent struct {
 	Data JsonObject
 }
 
+// TurnLifecycleEvent 一轮的生命周期转换。
+// Python: events.py:281-303 TurnLifecycleEvent
+type TurnLifecycleEvent struct {
+	// Kind 轮次生命周期转换
+	Kind TurnEventKind
+	// Result 终态结果（非终态必须为 nil）
+	Result *TurnResult
+}
+
 // StateChangedEvent 一次高层 harness 状态转换。
 // Python: events.py:273-278 StateChangedEvent
 type StateChangedEvent struct {
@@ -348,6 +357,36 @@ func NewHookObservedEvent(phase HookEventPhase, hookName, hookID string, data Js
 	return HookObservedEvent{Phase: phase, HookName: hookName, HookID: hookID, Data: frozenData}, nil
 }
 
+// NewTurnLifecycleEvent 创建轮次生命周期事件。
+// Python: events.py:288-303 TurnLifecycleEvent.__post_init__
+func NewTurnLifecycleEvent(kind TurnEventKind, result *TurnResult) (TurnLifecycleEvent, error) {
+	// 分支 A（非终态）：events.py:289-292
+	if !IsTerminalTurnEventKind(kind) {
+		if result != nil {
+			return TurnLifecycleEvent{}, &HarnessProtocolError{
+				Msg: "non-terminal " + string(kind) + " turn event must not contain a result",
+			}
+		}
+		return TurnLifecycleEvent{Kind: kind}, nil
+	}
+	// 分支 B：终态必须带 result（events.py:294-295）
+	if result == nil {
+		return TurnLifecycleEvent{}, &HarnessProtocolError{Msg: "terminal turn event requires a result"}
+	}
+	// 分支 C：result.status 必须与 kind 匹配（events.py:297-303）
+	expected := map[TurnEventKind]TurnStatus{
+		TurnEventKindFinished: TurnStatusCompleted,
+		TurnEventKindAborted:  TurnStatusInterrupted,
+		TurnEventKindFailed:   TurnStatusFailed,
+	}[kind]
+	if result.Status != expected {
+		return TurnLifecycleEvent{}, &HarnessProtocolError{
+			Msg: string(kind) + " turn event requires " + string(expected) + " result",
+		}
+	}
+	return TurnLifecycleEvent{Kind: kind, Result: result}, nil
+}
+
 // NewStateChangedEvent 创建状态转换事件（上游无 __post_init__）。
 // Python: events.py:273-278
 func NewStateChangedEvent(old, newState HarnessState) (StateChangedEvent, error) {
@@ -420,3 +459,7 @@ func (UsageUpdatedEvent) payloadKind() string { return "usage_updated" }
 // payloadKind 返回线格式 discriminator。
 // Python: serialization.py:325-335（→ "hook_observed"）
 func (HookObservedEvent) payloadKind() string { return "hook_observed" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:316-324（→ "turn_lifecycle"）
+func (TurnLifecycleEvent) payloadKind() string { return "turn_lifecycle" }
