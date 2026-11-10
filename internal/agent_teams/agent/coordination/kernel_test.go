@@ -36,6 +36,10 @@ type fakeHarnessAccessor struct {
 	state harness.HarnessState
 	// disposed 是否调用过 Dispose
 	disposed bool
+	// stopCalled 是否调用过 Stop
+	stopCalled bool
+	// stopErr Stop 返回值
+	stopErr error
 }
 
 func (f *fakeHarnessAccessor) RegisterMemberTools(_ *memory.TeamMemoryManager) {}
@@ -46,6 +50,12 @@ func (f *fakeHarnessAccessor) Model() *llm.Model { return nil }
 func (f *fakeHarnessAccessor) Start(_ context.Context, _ any) error {
 	f.startCalled = true
 	return f.startErr
+}
+
+// Stop 实现 types.HarnessAccessor。
+func (f *fakeHarnessAccessor) Stop(_ context.Context) error {
+	f.stopCalled = true
+	return f.stopErr
 }
 
 // PausedQuery 实现 types.HarnessAccessor。
@@ -69,10 +79,17 @@ type fakeStreamControllerAccessor struct {
 	resumeCalled bool
 	// resumeQuery 最近一次 ResumeAgent 的 query
 	resumeQuery *string
+	// stopCalled 是否调用过 Stop
+	stopCalled bool
+	// resetCalled 是否调用过 ResetStreamQueue
+	resetCalled bool
 }
 
-func (f *fakeStreamControllerAccessor) ResetStreamQueue()       {}
+func (f *fakeStreamControllerAccessor) ResetStreamQueue()       { f.resetCalled = true }
 func (f *fakeStreamControllerAccessor) Start(_ context.Context) { f.startCalled = true }
+
+// Stop 实现 types.StreamControllerAccessor。
+func (f *fakeStreamControllerAccessor) Stop(_ context.Context) { f.stopCalled = true }
 
 // PauseAgent 实现 types.StreamControllerAccessor。
 func (f *fakeStreamControllerAccessor) PauseAgent(_ context.Context) error {
