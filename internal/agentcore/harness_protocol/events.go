@@ -49,6 +49,28 @@ type ItemLifecycleEvent struct {
 	Data JsonObject
 }
 
+// UsageUpdatedEvent 累计或增量的归一化用量信息。
+// Python: events.py:177-182 UsageUpdatedEvent
+type UsageUpdatedEvent struct {
+	// Usage 归一化 token 用量
+	Usage TurnUsage
+	// Mode 更新模式（delta / cumulative）
+	Mode UsageUpdateMode
+}
+
+// HookObservedEvent 钩子执行的观测镜像，绝不承载控制应答。
+// Python: events.py:306-318 HookObservedEvent
+type HookObservedEvent struct {
+	// Phase 钩子相位
+	Phase HookEventPhase
+	// HookName 钩子名
+	HookName string
+	// HookID 钩子标识
+	HookID string
+	// Data 附加数据（已冻结）
+	Data JsonObject
+}
+
 // StateChangedEvent 一次高层 harness 状态转换。
 // Python: events.py:273-278 StateChangedEvent
 type StateChangedEvent struct {
@@ -305,6 +327,27 @@ func NewItemLifecycleEvent(kind ItemEventKind, itemType string, data JsonObject)
 	return ItemLifecycleEvent{Kind: kind, ItemType: itemType, Data: frozenData}, nil
 }
 
+// NewUsageUpdatedEvent 创建用量更新事件（上游无 __post_init__）。
+// Python: events.py:177-182
+func NewUsageUpdatedEvent(usage TurnUsage, mode UsageUpdateMode) (UsageUpdatedEvent, error) {
+	return UsageUpdatedEvent{Usage: usage, Mode: mode}, nil
+}
+
+// NewHookObservedEvent 创建钩子观测事件。
+// Python: events.py:315-318 HookObservedEvent.__post_init__
+func NewHookObservedEvent(phase HookEventPhase, hookName, hookID string, data JsonObject) (HookObservedEvent, error) {
+	// 步骤 1：钩子名与 id 均非空
+	if hookName == "" || hookID == "" {
+		return HookObservedEvent{}, &HarnessProtocolError{Msg: "hook observation name and id must not be empty"}
+	}
+	// 步骤 2：冻结 data
+	frozenData, err := FreezeJsonObject(data)
+	if err != nil {
+		return HookObservedEvent{}, err
+	}
+	return HookObservedEvent{Phase: phase, HookName: hookName, HookID: hookID, Data: frozenData}, nil
+}
+
 // NewStateChangedEvent 创建状态转换事件（上游无 __post_init__）。
 // Python: events.py:273-278
 func NewStateChangedEvent(old, newState HarnessState) (StateChangedEvent, error) {
@@ -369,3 +412,11 @@ func (ProviderEvent) payloadKind() string { return "provider" }
 // payloadKind 返回线格式 discriminator。
 // Python: serialization.py:336-345（→ "diagnostic"）
 func (DiagnosticEvent) payloadKind() string { return "diagnostic" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:303-311（→ "usage_updated"）
+func (UsageUpdatedEvent) payloadKind() string { return "usage_updated" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:325-335（→ "hook_observed"）
+func (HookObservedEvent) payloadKind() string { return "hook_observed" }

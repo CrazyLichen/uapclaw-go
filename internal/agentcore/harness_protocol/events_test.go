@@ -222,3 +222,47 @@ func TestPayloadKind_线格式字面量(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "diagnostic", de.payloadKind())
 }
+
+// TestUsageUpdatedEvent_无校验 验证用量更新直接构造（TurnUsage 已在 15.1 校验）。
+// Python: events.py:177-182（无 __post_init__）
+func TestUsageUpdatedEvent_无校验(t *testing.T) {
+	in := 4
+	usage, err := NewTurnUsage(&in, nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	ev, err := NewUsageUpdatedEvent(usage, UsageUpdateModeDelta)
+	require.NoError(t, err)
+	assert.Equal(t, UsageUpdateModeDelta, ev.Mode)
+	require.NotNil(t, ev.Usage.InputTokens)
+	assert.Equal(t, 4, *ev.Usage.InputTokens)
+}
+
+// TestHookObservedEvent_名称与id非空 验证钩子观测必填两项。
+// Python: events.py:315-318
+func TestHookObservedEvent_名称与id非空(t *testing.T) {
+	ev, err := NewHookObservedEvent(HookEventPhaseStarted, "before_tool", "hook-1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "before_tool", ev.HookName)
+
+	_, err = NewHookObservedEvent(HookEventPhaseStarted, "", "hook-1", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hook observation name and id must not be empty")
+
+	_, err = NewHookObservedEvent(HookEventPhaseStarted, "before_tool", "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hook observation name and id must not be empty")
+}
+
+// TestPayloadKind_usage与hook 守护这两个 discriminator。
+// Python: serialization.py:303-311（usage_updated）/ :325-335（hook_observed）
+func TestPayloadKind_usage与hook(t *testing.T) {
+	in := 1
+	usage, err := NewTurnUsage(&in, nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	ue, err := NewUsageUpdatedEvent(usage, UsageUpdateModeCumulative)
+	require.NoError(t, err)
+	assert.Equal(t, "usage_updated", ue.payloadKind())
+
+	ho, err := NewHookObservedEvent(HookEventPhaseFinished, "on_stop", "h1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "hook_observed", ho.payloadKind())
+}
