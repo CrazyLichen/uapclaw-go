@@ -2,14 +2,15 @@ package harness
 
 import (
 	"context"
-
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
@@ -71,6 +72,13 @@ type NativeHarness struct {
 	forwarderDone chan struct{}
 	// ready supervisor 抵达首个等待点的信号
 	ready chan struct{}
+
+	// asyncMu 保护异步运行时与 spill 解析器
+	asyncMu sync.Mutex
+	// asyncRuntime 懒创建的异步任务运行时
+	asyncRuntime *AsyncToolRuntime
+	// asyncOutputDirResolver spill 目录解析器（25.12 rail 注入）
+	asyncOutputDirResolver func() string
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -81,6 +89,11 @@ const (
 	// outputQueueSize 输出队列容量
 	outputQueueSize = 256
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// NativeHarness 实现异步工具宿主能力（25.1d）。
+var _ tools.AsyncToolHost = (*NativeHarness)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -132,6 +145,16 @@ func NewNativeHarness(spec atschema.DeepAgentSpec, buildCtx hschema.BuildContext
 	agent.AddRail(newPhaseSnapshotRail(h))
 
 	h.out = newOutputIterator(h.queue)
+
+	// spawn-done 自动调用改道到 supervisor（复用测试覆写钩子）。
+	// Python: NativeHarness.schedule_auto_invoke_on_spawn_done 覆写（native_harness.py:672-705）
+	agent.SetScheduleAutoInvokeOverride(h.ScheduleAutoInvokeOnSpawnDone)
+	// 把自身作为异步工具宿主挂到 BuildContext 句柄（25.12 的 SwarmflowTool 消费）。
+	if buildCtx != nil {
+		if extras := buildCtx.GetExtras(); extras != nil {
+			extras[tools.TeamHandleAsyncToolHost] = h
+		}
+	}
 	return h, nil
 }
 
@@ -181,6 +204,75 @@ func (h *NativeHarness) DeepAgent() *agentcore.DeepAgent { return h.agent }
 
 // Outputs 返回输出迭代器。
 func (h *NativeHarness) Outputs() *OutputIterator { return h.out }
+
+// AsyncToolRuntime 返回懒创建的异步运行时。
+// Python: NativeHarness.async_tool_runtime (native_harness.py:711-721)
+func (h *NativeHarness) AsyncToolRuntime() *AsyncToolRuntime {
+	h.asyncMu.Lock()
+	defer h.asyncMu.Unlock()
+	if h.asyncRuntime == nil {
+		h.asyncRuntime = NewAsyncToolRuntime(h.injectAsyncCompletion)
+		h.asyncRuntime.outputDirResolver = h.asyncOutputDirResolver
+	}
+	return h.asyncRuntime
+}
+
+// LaunchAsyncTool 启动一个后台任务。
+// Python: NativeHarness.launch_async_tool (native_harness.py:727-754)
+func (h *NativeHarness) LaunchAsyncTool(taskID string, factory func(context.Context) (any, error), opts tools.AsyncToolLaunchOptions) error {
+	h.AsyncToolRuntime().Launch(taskID, factory, opts)
+	return nil
+}
+
+// SetAsyncToolOutputDirResolver 注入 spill 目录解析器。
+func (h *NativeHarness) SetAsyncToolOutputDirResolver(fn func() string) {
+	h.asyncMu.Lock()
+	h.asyncOutputDirResolver = fn
+	rt := h.asyncRuntime
+	h.asyncMu.Unlock()
+	if rt != nil {
+		rt.mu.Lock()
+		rt.outputDirResolver = fn
+		rt.mu.Unlock()
+	}
+}
+
+// injectAsyncCompletion 把完成文本作为非立即输入回灌。
+// Python: NativeHarness._inject_async_completion (native_harness.py:723-725)
+func (h *NativeHarness) injectAsyncCompletion(ctx context.Context, text string) error {
+	return h.Send(ctx, text, false)
+}
+
+// ScheduleAutoInvokeOnSpawnDone 把 SESSION_SPAWN 完成后的自动调用改道到 supervisor。
+// Python: NativeHarness.schedule_auto_invoke_on_spawn_done (native_harness.py:672-705)
+func (h *NativeHarness) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, query string, delay float64) error {
+	go func() {
+		if delay > 0 {
+			timer := time.NewTimer(time.Duration(delay * float64(time.Second)))
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				return
+			}
+		}
+		h.agent.SetAutoInvokeScheduled(false)
+		if h.State() == HarnessStateTerminated {
+			return
+		}
+		h.startMu.Lock()
+		started := h.started
+		h.startMu.Unlock()
+		if !started {
+			logger.Warn(logComponent).Msg("[NativeHarness] auto-invoke before start; skipping")
+			return
+		}
+		if err := h.Send(context.WithoutCancel(ctx), query, false); err != nil {
+			logger.Debug(logComponent).Err(err).Msg("[NativeHarness] auto-invoke send rejected")
+		}
+	}()
+	return nil
+}
 
 // Start 初始化内核并启动 supervisor 与 forwarder。
 // Python: NativeHarness.start (native_harness.py:348)
@@ -262,6 +354,15 @@ func (h *NativeHarness) Stop(ctx context.Context) error {
 	ctrl := h.controller
 	sess := h.sess
 	h.startMu.Unlock()
+
+	// 步骤 0：取消在飞异步任务（对齐 native_harness.py:401-404），
+	// 避免完成注入与停机竞态。
+	h.asyncMu.Lock()
+	rt := h.asyncRuntime
+	h.asyncMu.Unlock()
+	if rt != nil {
+		rt.CancelAll()
+	}
 
 	// 步骤 1：入队停机命令（含 ack 等待；supervisor 崩溃时降级由 done 通道兜底）
 	reply := make(chan error, 1)

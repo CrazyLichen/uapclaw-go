@@ -91,7 +91,7 @@ type DeepAgent struct {
 	// 设置后，CreateSubagent 将调用此函数而非工厂分派，
 	// 对齐 Python 测试中 agent.create_subagent = _factory 的替身能力。
 	createSubagentOverride func(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error)
-	// scheduleAutoInvokeOverride 自动 invoke 调度覆写函数（仅测试使用）。
+	// scheduleAutoInvokeOverride 自动 invoke 调度覆写函数（生产 NativeHarness 与测试共用）。
 	// 设置后，ScheduleAutoInvokeOnSpawnDone 将调用此函数而非延迟调度，
 	// 对齐 Python 测试中 agent.schedule_auto_invoke_on_spawn_done = noop 的替身能力。
 	scheduleAutoInvokeOverride func(ctx context.Context, steerText string, delay float64) error
@@ -750,7 +750,7 @@ func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText string, delay float64) error {
 	d.autoInvokeScheduled.Store(true)
 
-	// 测试覆写钩子：优先使用 scheduleAutoInvokeOverride（仅测试使用）
+	// 覆写钩子：优先使用 scheduleAutoInvokeOverride（生产 NativeHarness 与测试共用）
 	// 对齐 Python 测试 agent.schedule_auto_invoke_on_spawn_done = noop 的直接替换语义
 	d.configMu.RLock()
 	overrideFn := d.scheduleAutoInvokeOverride
@@ -996,7 +996,7 @@ func (d *DeepAgent) CreateSubagentOverride() func(ctx context.Context, subagentT
 	return d.createSubagentOverride
 }
 
-// SetScheduleAutoInvokeOverride 设置自动 invoke 调度覆写函数（仅测试使用）。
+// SetScheduleAutoInvokeOverride 设置自动 invoke 调度覆写函数（生产 NativeHarness 与测试共用）。
 // 对齐 Python 测试中 agent.schedule_auto_invoke_on_spawn_done = noop 的替身能力。
 func (d *DeepAgent) SetScheduleAutoInvokeOverride(fn func(ctx context.Context, steerText string, delay float64) error) {
 	d.configMu.Lock()
