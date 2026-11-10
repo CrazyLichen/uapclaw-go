@@ -468,3 +468,32 @@ func TestNewModelOption_extensions非法(t *testing.T) {
 	_, err := NewModelOption("m", "", "", nil, nil, false, map[string]any{"k": math.NaN()})
 	require.Error(t, err)
 }
+
+// TestNewHarnessContext_必填四字段同循环 验证 4 个必填走同一个 required 循环，
+// 且 protocol_version 在循环前已回落默认值（对齐 models.py:344 默认值 + :359-367 单循环）。
+func TestNewHarnessContext_必填四字段同循环(t *testing.T) {
+	// protocol_version 默认回落，故不参与"空值报错"
+	c, err := NewHarnessContext("a", "a1", "s1", "sys", ContextOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, ProtocolVersion, c.ProtocolVersion)
+
+	// 四个必填逐个缺失都报同一条模板文案
+	cases := []struct {
+		name     string
+		agent    string
+		agentID  string
+		session  string
+		wantWord string
+	}{
+		{"agent_name", "", "a1", "s1", "agent_name"},
+		{"agent_id", "a", "", "s1", "agent_id"},
+		{"host_session_id", "a", "a1", "", "host_session_id"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewHarnessContext(tc.agent, tc.agentID, tc.session, "sys", ContextOptions{})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "harness context "+tc.wantWord+" must not be empty")
+		})
+	}
+}

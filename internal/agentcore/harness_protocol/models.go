@@ -8,13 +8,27 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// 类型别名放在结构体之前（规则 2 的特例说明：type X = Y 归枚举区块）。
+
+// JsonValue 一条 JSON 兼容值。
+// Python: models.py:24-26 JsonValue: TypeAlias = str | int | float | bool | None |
+// list["JsonValue"] | tuple["JsonValue", ...] | Mapping[str, "JsonValue"]
+// Go 无递归类型别名能力，用 any + FreezeJsonValue 运行期校验等价（spec §6 B3）。
+type JsonValue = any
+
+// JsonObject 一个 JSON 对象（键必须是字符串）。
+// Python: models.py:27 JsonObject = Mapping[str, JsonValue]
+type JsonObject = map[string]JsonValue
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // HarnessTelemetry 宿主提供的最小 provider-neutral 遥测服务。
 // Python: models.py:70-76 HarnessTelemetry（@runtime_checkable Protocol，1 方法）
 type HarnessTelemetry interface {
 	// Record 记录一条已脱敏的遥测观测
-	Record(name string, attributes map[string]any)
+	Record(name string, attributes JsonObject)
 }
 
 // HarnessCard 一个 harness 实现的静态身份与能力元数据。
@@ -59,9 +73,9 @@ type CardOptions struct {
 // Python: models.py:198-207
 type HarnessInput struct {
 	// Content 输入内容（已冻结）
-	Content any
+	Content JsonValue
 	// Metadata 输入元数据（已冻结）
-	Metadata map[string]any
+	Metadata JsonObject
 }
 
 // SendReceipt 确认 harness 已接受一条输入命令。
@@ -124,7 +138,7 @@ type ModelOption struct {
 	// IsDefault 是否为目录默认模型
 	IsDefault bool
 	// Extensions vendor 扩展数据（已冻结）
-	Extensions map[string]any
+	Extensions JsonObject
 }
 
 // HarnessContext 第三方 harness 启动时注入的 per-agent 运行上下文。
@@ -164,7 +178,7 @@ type HarnessContext struct {
 	// Telemetry 遥测服务
 	Telemetry HarnessTelemetry
 	// Metadata 附加元数据（已冻结）
-	Metadata map[string]any
+	Metadata JsonObject
 }
 
 // ContextOptions HarnessContext 的可选字段。
@@ -195,7 +209,7 @@ type ContextOptions struct {
 	// Telemetry 遥测服务
 	Telemetry HarnessTelemetry
 	// Metadata 附加元数据
-	Metadata map[string]any
+	Metadata JsonObject
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -318,7 +332,7 @@ const (
 // FreezeJsonValue 校验并递归冻结一个 JSON 兼容值。
 // 返回值不再与入参共享可变容器，调用方修改入参不影响结果。
 // Python: models.py:30-48 freeze_json_value（5 个分支顺序一致）
-func FreezeJsonValue(value any) (any, error) {
+func FreezeJsonValue(value JsonValue) (JsonValue, error) {
 	// 分支 1：None（Go 的 nil）/ string / bool / 各类整数 原样返回
 	// Python: models.py:33-34
 	if value == nil {
@@ -385,7 +399,7 @@ func FreezeJsonValue(value any) (any, error) {
 
 // FreezeJsonObject 校验、复制并递归冻结一个 JSON 对象。
 // Python: models.py:51-57 freeze_json_object
-func FreezeJsonObject(value any) (map[string]any, error) {
+func FreezeJsonObject(value JsonValue) (JsonObject, error) {
 	frozen, err := FreezeJsonValue(value)
 	if err != nil {
 		return nil, err
@@ -403,7 +417,7 @@ func FreezeJsonObject(value any) (map[string]any, error) {
 
 // JsonValueToBuiltin 把冻结后的协议 JSON 值转回标准 JSON 容器。
 // Python: models.py:60-67 json_value_to_builtin
-func JsonValueToBuiltin(value any) any {
+func JsonValueToBuiltin(value JsonValue) JsonValue {
 	switch v := value.(type) {
 	case []any:
 		out := make([]any, len(v))
@@ -518,7 +532,7 @@ func (c HarnessCard) ValidateHost(protocolVersion string, hostCapabilities map[H
 
 // NewHarnessInput 创建输入并冻结 content / metadata。
 // Python: models.py:198-207
-func NewHarnessInput(content any, metadata map[string]any) (HarnessInput, error) {
+func NewHarnessInput(content JsonValue, metadata JsonObject) (HarnessInput, error) {
 	// 步骤 1：冻结 content
 	frozenContent, err := FreezeJsonValue(content)
 	if err != nil {
@@ -604,7 +618,7 @@ func (c ModelChoice) IsBuiltin() bool { return c.Endpoint == nil }
 // Python: models.py:302-327
 func NewModelOption(
 	modelID, displayName, description string,
-	efforts []string, defaultEffort *string, isDefault bool, extensions map[string]any,
+	efforts []string, defaultEffort *string, isDefault bool, extensions JsonObject,
 ) (ModelOption, error) {
 	// 步骤 1：model_id 非空
 	if modelID == "" {
@@ -651,7 +665,13 @@ func NewModelOption(
 // NewHarnessContext 创建运行上下文（env 走 ContextOptions）。
 // Python: models.py:330-373
 func NewHarnessContext(agentName, agentID, hostSessionID, systemPrompt string, opts ContextOptions) (HarnessContext, error) {
-	// 步骤 1：4 个必填字段非空
+	// 步骤 0：协议版本先回落默认值（对应 dataclass 默认值，非 __post_init__ 步骤）
+	// Python: models.py:344 protocol_version: str = PROTOCOL_VERSION
+	protocolVersion := opts.ProtocolVersion
+	if protocolVersion == "" {
+		protocolVersion = ProtocolVersion
+	}
+	// 步骤 1：4 个必填字段用同一个循环判定（顺序与上游 required dict 一致）
 	// Python: models.py:359-367
 	required := []struct {
 		name  string
@@ -660,27 +680,20 @@ func NewHarnessContext(agentName, agentID, hostSessionID, systemPrompt string, o
 		{"agent_name", agentName},
 		{"agent_id", agentID},
 		{"host_session_id", hostSessionID},
+		{"protocol_version", protocolVersion},
 	}
 	for _, f := range required {
 		if f.value == "" {
 			return HarnessContext{}, &HarnessProtocolError{Msg: "harness context " + f.name + " must not be empty"}
 		}
 	}
-	protocolVersion := opts.ProtocolVersion
-	if protocolVersion == "" {
-		protocolVersion = ProtocolVersion
-	}
-	// 步骤 2：协议版本非空（纳入同一必填集合）
-	if protocolVersion == "" {
-		return HarnessContext{}, &HarnessProtocolError{Msg: "harness context protocol_version must not be empty"}
-	}
-	// 步骤 3：env 必须 string→string
+	// 步骤 2：env 必须 string→string
 	// Python: models.py:368-369
 	env := make(map[string]string, len(opts.Env))
 	for k, v := range opts.Env {
 		env[k] = v
 	}
-	// 步骤 4：4 处归一化（host_capabilities / env / mcp_servers / metadata）
+	// 步骤 3：4 处归一化（host_capabilities / env / mcp_servers / metadata）
 	// Python: models.py:370-373
 	hostCapabilities := copyHostCapabilitySet(opts.HostCapabilities)
 	mcpServers := make([]McpServerConfig, len(opts.McpServers))
@@ -714,10 +727,10 @@ func NewHarnessContext(agentName, agentID, hostSessionID, systemPrompt string, o
 	}, nil
 }
 
-// NewHarnessContextWithEnv 用 map[string]any 形态的 env 创建上下文，类型不符即报错。
+// NewHarnessContextWithEnv 用 JsonObject 形态的 env 创建上下文，类型不符即报错。
 // 仅服务于「与上游 env 类型校验等价」的测试与反序列化入口。
 // Python: models.py:368-369（env 键值必须都是 str）
-func NewHarnessContextWithEnv(agentName, agentID, hostSessionID, systemPrompt string, env map[string]any) (HarnessContext, error) {
+func NewHarnessContextWithEnv(agentName, agentID, hostSessionID, systemPrompt string, env JsonObject) (HarnessContext, error) {
 	typed := make(map[string]string, len(env))
 	for k, v := range env {
 		s, ok := v.(string)

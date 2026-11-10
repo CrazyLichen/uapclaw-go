@@ -48,7 +48,7 @@ type HarnessCheckpoint struct {
 	// Sequence 同一 provider/agent/会话作用域内单调递增序号
 	Sequence int
 	// Data provider 私有数据（已冻结）
-	Data map[string]any
+	Data JsonObject
 	// ProviderSessionID provider 原生会话标识
 	ProviderSessionID *string
 	// Revision 宿主存储修订号

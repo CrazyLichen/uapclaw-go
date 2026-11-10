@@ -4,10 +4,6 @@ import "context"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// JsonObject provider 配置等 JSON 对象的 Go 形态。
-// Python: models.py:27 JsonObject = Mapping[str, JsonValue]
-type JsonObject = map[string]any
-
 // HarnessProtocol 第三方 agent 必须满足的并发安全 harness 行为契约。
 //
 // Events 与 TurnEvents 是同一逻辑单消费者观测通道的两种视图；

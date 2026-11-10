@@ -15,9 +15,9 @@ type ContentBlock struct {
 	// Kind 块类型
 	Kind string
 	// Content 块内容（已冻结）
-	Content any
+	Content JsonValue
 	// Data 附加数据（已冻结）
-	Data map[string]any
+	Data JsonObject
 }
 
 // TurnMessage 终态结果保留的一条归一化消息。
@@ -30,7 +30,7 @@ type TurnMessage struct {
 	// Content 内容块序列
 	Content []ContentBlock
 	// Data 附加数据（已冻结）
-	Data map[string]any
+	Data JsonObject
 }
 
 // TurnTermination 被中断轮次的结构化原因。
@@ -43,7 +43,7 @@ type TurnTermination struct {
 	// Code 错误码（可为 nil）
 	Code *string
 	// ProviderData provider 扩展数据（已冻结）
-	ProviderData map[string]any
+	ProviderData JsonObject
 }
 
 // MonetaryAmount 以百万分之一货币单位表示的精确金额。
@@ -69,7 +69,7 @@ type TurnUsage struct {
 	// TotalTokens 总 token（可为 nil）
 	TotalTokens *int
 	// ProviderData provider 扩展数据（已冻结）
-	ProviderData map[string]any
+	ProviderData JsonObject
 }
 
 // TurnError 一轮的归一化失败信息。
@@ -84,7 +84,7 @@ type TurnError struct {
 	// Retryable 是否可重试
 	Retryable *bool
 	// ProviderData provider 扩展数据（已冻结）
-	ProviderData map[string]any
+	ProviderData JsonObject
 }
 
 // TurnResult 一轮完整的 provider-neutral 终态结果。
@@ -96,9 +96,9 @@ type TurnResult struct {
 	// Messages 归一化消息序列
 	Messages []TurnMessage
 	// FinalOutput 便捷终态输出（已冻结）
-	FinalOutput any
+	FinalOutput JsonValue
 	// StructuredOutput 便捷结构化输出（已冻结）
-	StructuredOutput any
+	StructuredOutput JsonValue
 	// StopReason 停止原因
 	StopReason *string
 	// Termination 中断原因（仅 interrupted）
@@ -116,7 +116,7 @@ type TurnResult struct {
 	// DurationMS 单调耗时毫秒
 	DurationMS *int
 	// ProviderData provider 扩展数据（已冻结）
-	ProviderData map[string]any
+	ProviderData JsonObject
 }
 
 // ResultOptions TurnResult 的可选字段。
@@ -125,9 +125,9 @@ type ResultOptions struct {
 	// Messages 归一化消息序列
 	Messages []TurnMessage
 	// FinalOutput 便捷终态输出
-	FinalOutput any
+	FinalOutput JsonValue
 	// StructuredOutput 便捷结构化输出
-	StructuredOutput any
+	StructuredOutput JsonValue
 	// StopReason 停止原因
 	StopReason *string
 	// Termination 中断原因
@@ -145,7 +145,7 @@ type ResultOptions struct {
 	// DurationMS 单调耗时毫秒
 	DurationMS *int
 	// ProviderData provider 扩展数据
-	ProviderData map[string]any
+	ProviderData JsonObject
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -199,7 +199,7 @@ const (
 
 // NewContentBlock 创建内容块。
 // Python: results.py:56-60
-func NewContentBlock(blockID, kind string, content any, data map[string]any) (ContentBlock, error) {
+func NewContentBlock(blockID, kind string, content JsonValue, data JsonObject) (ContentBlock, error) {
 	// 步骤 1：id 与 kind 非空
 	if blockID == "" || kind == "" {
 		return ContentBlock{}, &HarnessProtocolError{Msg: "content block id and kind must not be empty"}
@@ -219,7 +219,7 @@ func NewContentBlock(blockID, kind string, content any, data map[string]any) (Co
 
 // NewTurnMessage 创建轮次消息。
 // Python: results.py:72-76
-func NewTurnMessage(messageID string, role MessageRole, content []ContentBlock, data map[string]any) (TurnMessage, error) {
+func NewTurnMessage(messageID string, role MessageRole, content []ContentBlock, data JsonObject) (TurnMessage, error) {
 	// 步骤 1：message_id 非空
 	if messageID == "" {
 		return TurnMessage{}, &HarnessProtocolError{Msg: "turn message_id must not be empty"}
@@ -237,7 +237,7 @@ func NewTurnMessage(messageID string, role MessageRole, content []ContentBlock, 
 
 // NewTurnTermination 创建中断原因。
 // Python: results.py:88-89
-func NewTurnTermination(kind TurnTerminationKind, message, code *string, providerData map[string]any) (TurnTermination, error) {
+func NewTurnTermination(kind TurnTerminationKind, message, code *string, providerData JsonObject) (TurnTermination, error) {
 	frozen, err := FreezeJsonObject(providerData)
 	if err != nil {
 		return TurnTermination{}, err
@@ -265,7 +265,7 @@ func NewMonetaryAmount(micros int64, currency string) (MonetaryAmount, error) {
 // Python: results.py:119-129
 func NewTurnUsage(
 	inputTokens, outputTokens, cachedInputTokens, reasoningOutputTokens, totalTokens *int,
-	providerData map[string]any,
+	providerData JsonObject,
 ) (TurnUsage, error) {
 	// 步骤 1：5 个计数均需非负
 	for _, counter := range []*int{inputTokens, outputTokens, cachedInputTokens, reasoningOutputTokens, totalTokens} {
@@ -290,7 +290,7 @@ func NewTurnUsage(
 
 // NewTurnError 创建失败信息。
 // Python: results.py:142-145
-func NewTurnError(message string, code, category *string, retryable *bool, providerData map[string]any) (TurnError, error) {
+func NewTurnError(message string, code, category *string, retryable *bool, providerData JsonObject) (TurnError, error) {
 	// 步骤 1：message 非空
 	if message == "" {
 		return TurnError{}, &HarnessProtocolError{Msg: "turn error message must not be empty"}

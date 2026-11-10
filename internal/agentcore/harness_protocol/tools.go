@@ -12,7 +12,7 @@ type ToolDefinition struct {
 	// Description 描述
 	Description string
 	// InputSchema 入参 JSON schema（已冻结）
-	InputSchema map[string]any
+	InputSchema JsonObject
 }
 
 // ToolInvocation 外部 harness 请求的一次原生工具调用。
@@ -23,14 +23,14 @@ type ToolInvocation struct {
 	// Name 工具名
 	Name string
 	// Arguments 入参（已冻结）
-	Arguments map[string]any
+	Arguments JsonObject
 }
 
 // ToolExecutionResult 原生工具调用的 provider-neutral 结果。
 // Python: tools.py:44-52 ToolExecutionResult
 type ToolExecutionResult struct {
 	// Content 结果内容（已冻结）
-	Content any
+	Content JsonValue
 	// IsError 是否为错误结果
 	IsError bool
 }
@@ -84,7 +84,7 @@ const (
 
 // NewToolDefinition 创建工具定义。
 // Python: tools.py:16-27
-func NewToolDefinition(name, description string, inputSchema map[string]any) (ToolDefinition, error) {
+func NewToolDefinition(name, description string, inputSchema JsonObject) (ToolDefinition, error) {
 	// 步骤 1：name 非空
 	if name == "" {
 		return ToolDefinition{}, &HarnessProtocolError{Msg: "tool definition name must not be empty"}
@@ -99,7 +99,7 @@ func NewToolDefinition(name, description string, inputSchema map[string]any) (To
 
 // NewToolInvocation 创建工具调用请求。
 // Python: tools.py:30-41
-func NewToolInvocation(callID, name string, arguments map[string]any) (ToolInvocation, error) {
+func NewToolInvocation(callID, name string, arguments JsonObject) (ToolInvocation, error) {
 	// 步骤 1：call_id 与 name 非空
 	if callID == "" || name == "" {
 		return ToolInvocation{}, &HarnessProtocolError{Msg: "tool invocation call_id and name must not be empty"}
@@ -114,7 +114,7 @@ func NewToolInvocation(callID, name string, arguments map[string]any) (ToolInvoc
 
 // NewToolExecutionResult 创建工具执行结果。
 // Python: tools.py:44-52
-func NewToolExecutionResult(content any, isError bool) (ToolExecutionResult, error) {
+func NewToolExecutionResult(content JsonValue, isError bool) (ToolExecutionResult, error) {
 	// 步骤 1：冻结 content
 	frozen, err := FreezeJsonValue(content)
 	if err != nil {
