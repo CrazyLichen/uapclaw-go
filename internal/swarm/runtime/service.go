@@ -60,17 +60,33 @@ type AgentRuntimeDeps struct {
 	IterModelEntries func() []any
 }
 
-// SessionCoordinatorPort 清理路径需要的协调器能力。
-// Python: service.py:3052-3057 self._session_coordinator.close_session + :1235-1242 snapshot_session
+// SessionCoordinatorPort 清理与执行账本需要的协调器能力。
+// Python: service.py 里 self._session_coordinator 的调用面（清理、登记、执行、取消、关闭）
 //
-// 窄接口而非具体类型：CleanupSession 只需关闭与快照两能力，避免把千行协调器
-// 的完整方法面拖进 service.go 依赖面（与 goalActivityChecker 同款约定）。
+// 窄接口而非具体类型：只声明 Runtime 实际使用的方法，避免把千行协调器的
+// 完整方法面拖进 service.go 依赖面（与 goalActivityChecker 同款约定）。
 type SessionCoordinatorPort interface {
 	// CloseSession 关闭某会话的运行中执行
 	CloseSession(sessionID string, generation *int, waitTimeout *time.Duration) (sessionpkg.CloseSessionResult, error)
 	// SnapshotSession 取会话快照（不存在返回 nil）
 	SnapshotSession(sessionID string) *sessionpkg.RuntimeSessionSnapshot
+	// RegisterSession 登记/刷新会话代次
+	RegisterSession(sessionID, channelID string, policy sessionpkg.SessionPersistencePolicy) (sessionpkg.RuntimeSessionSnapshot, error)
+	// RunUnary 执行一次非流式任务并等待结果
+	RunUnary(ctx context.Context, sessionID, requestID string, kind sessionpkg.SessionWorkKind, task func(context.Context) (any, error), options sessionpkg.UnaryOptions) (any, error)
+	// CancelExecution 取消某会话的执行
+	CancelExecution(sessionID string, options sessionpkg.CancelExecutionOptions) (sessionpkg.CancelExecutionResult, error)
+	// SnapshotSessions 取全部会话快照
+	SnapshotSessions() []sessionpkg.RuntimeSessionSnapshot
+	// Close 关闭协调器，返回超时会话
+	Close(waitTimeout *time.Duration, timedOut *[]string) error
 }
+
+// ErrCoordinatorUnavailable 协调器未注入
+//
+// 上游 _session_coordinator 恒存在（:412 构造期自建）；Go 侧由注入提供，
+// 未注入时相关承接方法返回此错误，避免静默丢弃登记/取消语义。
+var ErrCoordinatorUnavailable = errors.New("session coordinator is not available")
 
 // sessionRuntimeCleaner 可清理会话内存运行时的 manager 能力。
 // Python: server/runtime/agent_manager.py:863 cleanup_session_runtime
@@ -1193,4 +1209,70 @@ func (r *AgentRuntime) requireStarted() error {
 		return errors.New("agent runtime is not started")
 	}
 	return nil
+}
+
+// ──────────────────────────── 执行账本承接（P4 归属重构） ────────────────────────────
+//
+// Python 里下列能力全部由 AgentRuntime 直接调用（service.py 的 self._session_coordinator
+// / self._session_manager），门面（interface.py）0 处使用。Go 10.3.28d 把它们放在了
+// 门面上，导致同一账本被多个 UapClawSwarm 各持一份。以下方法把这批调用收归
+// Runtime，门面改为经注入的 Runtime 调用。
+
+// RegisterSession 在协调器中登记/刷新一个会话代次。
+// Python: service.py:1229 self._session_coordinator.register_session(...)
+func (r *AgentRuntime) RegisterSession(
+	sessionID, channelID string, policy sessionpkg.SessionPersistencePolicy,
+) (sessionpkg.RuntimeSessionSnapshot, error) {
+	if r.coordinator == nil {
+		return sessionpkg.RuntimeSessionSnapshot{}, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.RegisterSession(sessionID, channelID, policy)
+}
+
+// RunUnary 在协调器中执行一次非流式任务并等待结果。
+// Python: service.py:1764 return await self._session_coordinator.run_unary(...)
+func (r *AgentRuntime) RunUnary(
+	ctx context.Context, sessionID, requestID string, kind sessionpkg.SessionWorkKind,
+	task func(context.Context) (any, error), options sessionpkg.UnaryOptions,
+) (any, error) {
+	if r.coordinator == nil {
+		return nil, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.RunUnary(ctx, sessionID, requestID, kind, task, options)
+}
+
+// CancelExecution 取消某会话的执行。
+// Python: service.py:1373 results.append(await self._session_coordinator.cancel_execution(...))
+func (r *AgentRuntime) CancelExecution(
+	sessionID string, options sessionpkg.CancelExecutionOptions,
+) (sessionpkg.CancelExecutionResult, error) {
+	if r.coordinator == nil {
+		return sessionpkg.CancelExecutionResult{}, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.CancelExecution(sessionID, options)
+}
+
+// ActiveExecutions 返回协调器中仍有未终态执行的会话数（dreaming 探针用）。
+// Python: service.py:845/:1216 snapshot_session(...).executions 判定
+func (r *AgentRuntime) ActiveExecutions() bool {
+	if r.coordinator == nil {
+		return false
+	}
+	for _, snapshot := range r.coordinator.SnapshotSessions() {
+		for _, execution := range snapshot.Executions {
+			if !execution.State.Terminal() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// CloseCoordinator 关闭协调器并返回超时会话。
+// Python: AgentRuntime.close 内的协调器关闭
+func (r *AgentRuntime) CloseCoordinator(waitTimeout *time.Duration, timedOut *[]string) error {
+	if r.coordinator == nil {
+		return nil
+	}
+	return r.coordinator.Close(waitTimeout, timedOut)
 }

@@ -311,3 +311,42 @@ func activeSnapshot(sessionID string) *sessionpkg.RuntimeSessionSnapshot {
 		State:     sessionpkg.RuntimeSessionStateActive,
 	}
 }
+
+// RegisterSession 登记会话（记账并返回空快照）。
+func (f *fakeCoordinator) RegisterSession(
+	sessionID, _ string, _ sessionpkg.SessionPersistencePolicy,
+) (sessionpkg.RuntimeSessionSnapshot, error) {
+	f.recorder.record("coordinator.RegisterSession")
+	return sessionpkg.RuntimeSessionSnapshot{SessionID: sessionID}, nil
+}
+
+// RunUnary 执行任务并透传结果。
+func (f *fakeCoordinator) RunUnary(
+	ctx context.Context, _, _ string, _ sessionpkg.SessionWorkKind,
+	task func(context.Context) (any, error), _ sessionpkg.UnaryOptions,
+) (any, error) {
+	f.recorder.record("coordinator.RunUnary")
+	return task(ctx)
+}
+
+// CancelExecution 记录取消并返回空结果。
+func (f *fakeCoordinator) CancelExecution(
+	_ string, _ sessionpkg.CancelExecutionOptions,
+) (sessionpkg.CancelExecutionResult, error) {
+	f.recorder.record("coordinator.CancelExecution")
+	return sessionpkg.CancelExecutionResult{}, nil
+}
+
+// SnapshotSessions 返回空快照集。
+func (f *fakeCoordinator) SnapshotSessions() []sessionpkg.RuntimeSessionSnapshot {
+	return nil
+}
+
+// Close 记录关闭。
+func (f *fakeCoordinator) Close(_ *time.Duration, _ *[]string) error {
+	f.recorder.record("coordinator.Close")
+	return nil
+}
+
+// 编译期断言：测试替身满足扩展后的端口
+var _ SessionCoordinatorPort = (*fakeCoordinator)(nil)
