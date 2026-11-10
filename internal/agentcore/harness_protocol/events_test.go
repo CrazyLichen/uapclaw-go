@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestEvents枚举_值集与成员数 逐字核对 11 个枚举的全部取值与成员数。
@@ -109,6 +110,115 @@ func TestTerminalTurnEventKinds_三值(t *testing.T) {
 	assert.False(t, IsTerminalTurnEventKind(TurnEventKind("nope")))
 }
 
-// 上面对 events.go 的构造器尚未实现，故本文件先只覆盖枚举；
-// 后续任务在同文件追加构造器用例（math 的引用在 Task 2 起生效）。
-var _ = math.NaN
+// TestOutputEvent_校验与冻结 验证 output_id 非空、content_index 非负、content/data 被冻结。
+// Python: events.py:141-160 OutputEvent.__post_init__
+func TestOutputEvent_校验与冻结(t *testing.T) {
+	src := map[string]any{"k": "v"}
+	ev, err := NewOutputEvent("answer-1", OutputKindText, "done", OutputOperationDelta, OutputChannelAnswer, 1, "", src)
+	require.NoError(t, err)
+	assert.Equal(t, "answer-1", ev.OutputID)
+	assert.Equal(t, 1, ev.ContentIndex)
+	assert.Equal(t, "done", ev.Content)
+	// data 被深拷贝：改入参不影响结果
+	src["k"] = "changed"
+	assert.Equal(t, "v", ev.Data["k"])
+
+	// output_id 空
+	_, err = NewOutputEvent("", OutputKindText, "x", OutputOperationSnapshot, OutputChannelAnswer, 0, "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "output_id must not be empty")
+
+	// content_index 负
+	_, err = NewOutputEvent("id", OutputKindText, "x", OutputOperationSnapshot, OutputChannelAnswer, -1, "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "output content_index must be non-negative")
+
+	// content 含 NaN 被拒
+	_, err = NewOutputEvent("id", OutputKindText, math.NaN(), OutputOperationSnapshot, OutputChannelAnswer, 0, "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "JSON numbers must be finite")
+}
+
+// TestOutputEvent_默认值 验证 content_type 空串表示未提供。
+// Python: events.py:151 content_type: str | None = None
+func TestOutputEvent_默认值(t *testing.T) {
+	ev, err := NewOutputEvent("id", OutputKindStructured, map[string]any{"a": 1}, OutputOperationFinal, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "", ev.ContentType)
+	assert.Equal(t, OutputOperationFinal, ev.Operation)
+	assert.Equal(t, OutputChannelAnswer, ev.Channel)
+}
+
+// TestItemLifecycleEvent_校验 验证 item_type 非空与 data 冻结。
+// Python: events.py:163-174
+func TestItemLifecycleEvent_校验(t *testing.T) {
+	ev, err := NewItemLifecycleEvent(ItemEventKindStarted, "tool", map[string]any{"name": "read_file"})
+	require.NoError(t, err)
+	assert.Equal(t, "tool", ev.ItemType)
+	assert.Equal(t, "read_file", ev.Data["name"])
+
+	_, err = NewItemLifecycleEvent(ItemEventKindStarted, "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "item_type must not be empty")
+}
+
+// TestStateChangedEvent_无校验 验证直接构造成功。
+// Python: events.py:273-278（无 __post_init__）
+func TestStateChangedEvent_无校验(t *testing.T) {
+	ev, err := NewStateChangedEvent(HarnessStateIdle, HarnessStateRunning)
+	require.NoError(t, err)
+	assert.Equal(t, HarnessStateIdle, ev.Old)
+	assert.Equal(t, HarnessStateRunning, ev.New)
+}
+
+// TestProviderEvent_三标识非空 验证 provider/event_type/schema_version 均不可空。
+// Python: events.py:335-347
+func TestProviderEvent_三标识非空(t *testing.T) {
+	ev, err := NewProviderEvent("codex", "thread.compacted", "1", map[string]any{"thread_id": "t1"})
+	require.NoError(t, err)
+	assert.Equal(t, "codex", ev.Provider)
+
+	for _, bad := range [][3]string{{"", "x", "1"}, {"p", "", "1"}, {"p", "x", ""}} {
+		_, err := NewProviderEvent(bad[0], bad[1], bad[2], nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "provider event namespace, type, and schema version must not be empty")
+	}
+}
+
+// TestDiagnosticEvent_message非空 验证诊断文案必填。
+// Python: events.py:321-332
+func TestDiagnosticEvent_message非空(t *testing.T) {
+	ev, err := NewDiagnosticEvent(DiagnosticLevelDebug, "trace", nil)
+	require.NoError(t, err)
+	assert.Equal(t, DiagnosticLevelDebug, ev.Level)
+
+	_, err = NewDiagnosticEvent(DiagnosticLevelDebug, "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "diagnostic message must not be empty")
+}
+
+// TestPayloadKind_线格式字面量 守护 10 个 payload 的 discriminator，
+// 15.4 的 serialization 依赖这些字面量与 Python 一致。
+// Python: serialization.py:_payload_to_wire（"output"/"item_lifecycle"/"usage_updated"/
+// "model_request"/"state_changed"/"turn_lifecycle"/"hook_observed"/"diagnostic"/"provider"）
+func TestPayloadKind_线格式字面量(t *testing.T) {
+	out, err := NewOutputEvent("id", OutputKindText, "x", OutputOperationSnapshot, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "output", out.payloadKind())
+
+	item, err := NewItemLifecycleEvent(ItemEventKindStarted, "tool", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "item_lifecycle", item.payloadKind())
+
+	st, err := NewStateChangedEvent(HarnessStateIdle, HarnessStateRunning)
+	require.NoError(t, err)
+	assert.Equal(t, "state_changed", st.payloadKind())
+
+	pe, err := NewProviderEvent("p", "e", "1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "provider", pe.payloadKind())
+
+	de, err := NewDiagnosticEvent(DiagnosticLevelInfo, "m", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "diagnostic", de.payloadKind())
+}
