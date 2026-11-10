@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -192,18 +193,35 @@ func requireGoalRecord(t *testing.T, raw any) map[string]any {
 
 // ──────────────────────────── 测试 ────────────────────────────
 
-// TestGoalContractHelpersSuite 自测助手：索引、计数、15 字段校验的红绿基线。
-func TestGoalContractHelpersSuite(t *testing.T) {
+// GoalHelpersSuite 帧断言助手自身的红绿基线。
+// 规则 7 要求目录内每个 _test.go 都调用 suite.Run(，故本文件保留一个
+// 真实可跑的 suite 入口，而不是把 helper 挪成非测试文件（会被覆盖率
+// 门禁当生产代码、且违反 tests/integration 目录包名约定）。
+type GoalHelpersSuite struct {
+	isuite.BaseIntegrationSuite
+}
+
+// TestGoalHelpersSuite 套件入口。
+func TestGoalHelpersSuite(t *testing.T) {
+	suite.Run(t, new(GoalHelpersSuite))
+}
+
+// Test帧索引与计数 验证 indexOfEvent / countEvent。
+func (s *GoalHelpersSuite) Test帧索引与计数() {
 	frames := goalFrames{
 		{Payload: map[string]any{"event_type": eventGoalSnapshot}},
 		{Payload: map[string]any{"event_type": eventRuntimeAccepted}},
 		{Payload: map[string]any{"event_type": eventGoalUpdated}},
 	}
-	require.Equal(t, 0, indexOfEvent(frames, eventGoalSnapshot))
-	require.Equal(t, 1, indexOfEvent(frames, eventRuntimeAccepted))
-	require.Equal(t, -1, indexOfEvent(frames, eventGoalConfirmRequire))
-	require.Equal(t, 1, countEvent(frames, eventGoalUpdated))
+	s.Equal(0, indexOfEvent(frames, eventGoalSnapshot))
+	s.Equal(1, indexOfEvent(frames, eventRuntimeAccepted))
+	s.Equal(-1, indexOfEvent(frames, eventGoalConfirmRequire))
+	s.Equal(1, countEvent(frames, eventGoalUpdated))
+}
 
+// Test15字段校验 验证 requireGoalRecord 的白名单 + 类型断言，
+// 且 JSON float64 与 Go int 两种数值来源都合法。
+func (s *GoalHelpersSuite) Test15字段校验() {
 	record := map[string]any{
 		"goal_id": "abc123def456", "session_id": "s1", "objective": "修完测试",
 		"status": "active", "created_at": "2026-11-09T00:00:00+00:00",
@@ -216,9 +234,7 @@ func TestGoalContractHelpersSuite(t *testing.T) {
 		"max_attempts": nil, "token_budget": nil,
 		"last_assessment": nil, "last_stop_reason": nil, "active_started_at": nil,
 	}
-	requireGoalRecord(t, record)
-
-	// Go 直构 map 用 int 也必须通过（requireNumeric 兼容两种来源）
+	requireGoalRecord(s.T(), record)
 	record["revision"] = 2
-	requireGoalRecord(t, record)
+	requireGoalRecord(s.T(), record)
 }

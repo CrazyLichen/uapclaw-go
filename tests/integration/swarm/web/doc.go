@@ -12,8 +12,8 @@
 //
 //	web/
 //	├── doc.go                            # 包文档（本文件）
-//	├── goal_contract_helpers_test.go      # 共用 suite 基类 + 帧断言助手 + 15 字段校验
-//	├── goal_rpc_contract_test.go          # G1：8 组 RPC/事件契约对拍
+//	├── goal_contract_helpers_test.go      # 纯 helper：suite 基类 + 帧断言助手 + 15 字段校验（不含测试体，规则 7）
+//	├── goal_rpc_contract_test.go          # G1：9 组 RPC/事件契约对拍 + 帧助手自测
 //	├── goal_event_order_test.go           # G2：O1-O5 事件顺序与形状
 //	├── goal_reconnect_test.go             # G3：R1-R4 断线/重连/切会话
 //	├── goal_unattended_test.go            # G4 MockLLM 无人值守全链
