@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -114,6 +115,12 @@ func (s *TeamMemberSuite) TestMemberConcurrentDeliver_无丢失() {
 
 	// 先跑一轮让 native supervisor 启动
 	s.runRoundAndClose(ta, teamSession, "预热")
+
+	// 轮末 finalize_round 已 Stop harness（相位 TERMINATED），
+	// 而 TERMINATED 下 send 必须报错（Python native_harness.send 契约：
+	// "TERMINATED: raises"）。并发投递需要一个活跃周期，故先重新 Start。
+	s.Require().Equal(harnessprotocol.HarnessStateTerminated, ta.Harness().State())
+	s.Require().NoError(ta.Harness().Start(s.Ctx, teamSession))
 
 	// 两协程并发 Send
 	base := s.MockLLM.InvokeCallCount()
