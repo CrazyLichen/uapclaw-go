@@ -193,12 +193,13 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_CreateAgentSession() {
 	)
 
 	// 创建共享 StreamWriterManager 的子会话
-	agentSess := sess.CreateAgentSession(card, "worker-1", true)
+	// memberName 传空串：等价于 Python 侧 member_name=None（不加 source_member_name）
+	agentSess := sess.CreateAgentSession(card, "worker-1", true, "")
 	s.NotNil(agentSess)
 	s.Equal("team-sess-1", agentSess.GetSessionID(), "子会话应继承父 sessionID")
 
 	// 创建不共享 StreamWriterManager 的子会话
-	agentSessNoShare := sess.CreateAgentSession(card, "worker-1", false)
+	agentSessNoShare := sess.CreateAgentSession(card, "worker-1", false, "")
 	s.NotNil(agentSessNoShare)
 }
 
@@ -207,7 +208,7 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_CreateAgentSession() {
 func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_CreateAgentSession_nilCard() {
 	sess := session.NewAgentTeamSession()
 
-	agentSess := sess.CreateAgentSession(nil, "agent-1", true)
+	agentSess := sess.CreateAgentSession(nil, "agent-1", true, "")
 	s.NotNil(agentSess)
 }
 

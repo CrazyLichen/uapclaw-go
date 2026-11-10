@@ -61,9 +61,12 @@ func (s *GoalRoundAbortGuardSuite) TestGoalRoundInFlight_ActiveRoundKindIsGoal()
 	_, err = manager.Set(ctx, "修完测试", goal.SetOptions{})
 	s.Require().NoError(err, "set 目标失败")
 
-	// 幂等补排队：Set 内部可能已经排过，这里返回 false 表示"已有 work"而非失败。
-	_, queueErr := manager.EnsureActiveGoalWorkLocked()
-	s.Require().NoError(queueErr)
+	// 说明：此处不再手工调 EnsureActiveGoalWorkLocked 补排。
+	// 该方法要求调用方持 DeepAgent 的交互控制锁（spec K3/D4），而 Set 内部
+	// （manager.go:219 ensureGoalWorkLocked）已经排好了 work；测试侧裸调会与
+	// 后台 supervisor goroutine 的 NextWork 竞争 EventManager 队列（CI -race 实测
+	// event_manager.go:87 写 vs :131 读）。此用例的判据在下方 ActiveRound，
+	// 它以已加锁的接口暴露在飞轮，足够验收本用例。
 
 	s.Require().NoError(blocking.WaitEntered(ctx), "等待 goal 轮进入工具超时")
 
