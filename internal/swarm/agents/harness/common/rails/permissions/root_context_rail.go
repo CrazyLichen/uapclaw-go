@@ -30,6 +30,8 @@ import (
 // 权限判定才有背景可读。
 // Python: class RootContextRail(DeepAgentRail)
 type RootContextRail struct {
+	// BaseRail 提供生命周期钩子的默认实现（Python: class RootContextRail(DeepAgentRail)）
+	agentinterfaces.BaseRail
 	// rootPermissionQueue 关联的权限队列
 	rootPermissionQueue *RootPermissionQueue
 	// sysOperation 构造期注入的系统操作，可为 nil

@@ -16,6 +16,23 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// PermissionRailMarker 权限中断轨标识接口（无方法，仅用于类型判定）。
+//
+// Python: permission_rail_group.PERMISSION_RAIL_TYPES 的 isinstance 判定
+// Go 侧无法跨包做类型集合匹配，用空接口 + 显式实现标记替代。
+type PermissionRailMarker interface {
+	// PermissionRailMarker 标识该轨参与权限判定
+	PermissionRailMarker()
+}
+
+// AutoPermissionRailMarker 自动权限轨标识接口。
+//
+// Python: isinstance(permission, AutoPermissionInterruptRail)
+type AutoPermissionRailMarker interface {
+	// AutoPermissionRailMarker 标识该轨为自动权限轨
+	AutoPermissionRailMarker()
+}
+
 // PermissionEngine 权限引擎 — 负责加载配置、评估权限。
 //
 // Python: PermissionEngine (core.py L33-52)
@@ -201,6 +218,24 @@ func (e *PermissionEngine) UpdateLLM(llmModel *llm.Model, modelName string) {
 	e.llm = llmModel
 	e.modelName = modelName
 	e.mu.Unlock()
+}
+
+// LLM 返回当前模型实例（可能为 nil）。
+//
+// Python: tool_security_rail.py:113 `self._engine._llm is not None`
+func (e *PermissionEngine) LLM() *llm.Model {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.llm
+}
+
+// ModelName 返回当前模型名称（可能为空）。
+//
+// Python: tool_security_rail.py:114 `self._engine._model_name`
+func (e *PermissionEngine) ModelName() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.modelName
 }
 
 // Enabled 返回权限系统是否启用。

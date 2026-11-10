@@ -2581,3 +2581,77 @@ Go 侧处置：给 `internal/agentcore/foundation/tool/base.go` 的 `ToolCard`
 - `TestPublicHTTPSFetchContextAttributeName` 改引用导出常量
 
 验证：gofmt / go vet ./... / 全量回归全绿。
+
+### 12.37 Task 42 执行结论：权限 rail 组装配 + 9.90c 遗留清理
+
+**触发**：用户指出三个 root rail（`RootPermissionQueueRail` / `RootContextRail` /
+`RootPermissionCompletionRail`）「应该也要装配接线，有做吗」。
+
+**核实结论：确实没做，且是 9.90c 的遗留**——`IMPLEMENTATION_PLAN` 把 9.90c 标为 ✅
+「root 五文件全部落地」，但**只落地了文件本体，没有装配接线**。三个构造函数
+生产调用数均为 0，`RootPermissionQueue` 实例从未创建。
+
+#### 挖出的更深问题：三个 root rail 不满足 `AgentRail` 接口
+
+`RootPermissionQueueRail` / `RootPermissionCompletionRail` / `RootContextRail`
+在 Go 侧**都没嵌入任何基类**，因此不实现 `AgentRail`（缺 `AfterInvoke` /
+`AfterModelCall` 等）。Python 侧三者分别继承 `AgentRail` / `AgentRail` /
+`DeepAgentRail`。
+
+这解释了为什么「装不上」——不是忘了接线，是**类型上就装不进去**。
+
+处置：三者各嵌入 `agentinterfaces.BaseRail`（提供全部生命周期钩子的默认实现），
+`RootContextRail` 原有的 7 个钩子覆盖基类实现。
+
+#### 落地清单
+
+| # | 内容 | 文件 |
+|---|---|---|
+| 1 | `PermissionRailGroup` 配方 + `Rails()` / `ValidateComposition()` / `Verify()` | 新建 `permissions/permission_rail_group.go` |
+| 2 | `RootPermissionQueue` 实例创建 + 三个 rail 共享同一队列 | `code_adapter.go` 装配序列第 3 项 |
+| 3 | 三个 root rail 嵌入 `BaseRail` 以满足接口 | `root_permission_queue_rail.go` / `root_context_rail.go` |
+| 4 | `JiuClawStreamEventRail.rootPermissionQueue` 字段 + setter/getter | `stream_event_rail.go` |
+| 5 | `StructuredAskUserRail.strictContinuationContract` 字段 + setter/getter | `structured_ask_user_rail.go` |
+| 6 | questions 严格校验（8 个拒绝分支）+ `IsSavedPendingToolCall` | 新建 `structured_ask_user_validation.go` |
+| 7 | `PermissionEngine.LLM()` / `ModelName()` 访问器 + 补齐 init 日志两个字段 | `permission_engine.go` / `tool_security_rail.go` |
+
+覆盖率：`permission_rail_group.go` **86.4%**、`structured_ask_user_validation.go`
+**94.5%**。
+
+#### 两处「我搞错」的修正（重要）
+
+初核时我报告了 6 项缺口，其中两项经复核对不上：
+
+| 项 | 我最初的说法 | 实际 |
+|---|---|---|
+| `_intent_view` 消费 | 「零消费，需回填」 | **已实现**：`auto_reviewer.go:864` 的 `intentView`，被 `:392` 调用。签名少 `facts` 参数是**正确的**——`facts` 在 Python 函数体内一次未用，只出现在签名行 |
+| `PermissionEngine.llm` | 「未消费」 | **只有一行日志消费**：`tool_security_rail.py:113-114` 的 `llm_enabled` / `model_name`。`engine.update_llm` 全仓零调用。Go 侧缺的是这两个日志字段，不是功能逻辑 |
+
+#### 循环依赖的处置
+
+`stream_event_rail.go` 需要持有 `*permissions.RootPermissionQueue`，而
+`permissions` 包已依赖 `rails`（`root_ask_user.go` / `root_context.go`），
+形成 `rails ↔ rails/permissions` 环。
+
+处置：`rails` 侧只用窄接口 `RootPermissionQueueAccessor`（规则 10.2：本包是
+使用方，描述协作方能力），`RootPermissionQueue` 实现标记方法
+`IsRootPermissionQueue()`。未引入 `any` 破环。
+
+#### ⤴️ 登记到 9.90e：四个 queue 消费函数
+
+`JiuClawStreamEventRail` 的四个 queue 消费函数**本批未实现**：
+
+| 函数 | Python 位置 |
+|---|---|
+| `_project_complete_interruption` | `stream_event_rail.py:811` |
+| `_project_ordinary_interruption` | `stream_event_rail.py:862` |
+| `_trusted_cleanup_scope` | `stream_event_rail.py:926` |
+| `_discard_permission_records` | `stream_event_rail.py:943` |
+
+**阻塞原因**：它们依赖 `contains_permission_interaction`，而该函数所在的
+`permission_interaction.py`（54 行）**属于 9.90e 范围**
+（`IMPLEMENTATION_PLAN:666`）。
+
+本批只完成 `rootPermissionQueue` 字段 + setter/getter 接线（建好插座），
+四个消费函数留 ⏵。**已在 `IMPLEMENTATION_PLAN.md` 的 9.90e 行追加 ⤴️ 回填项**，
+防止遗漏。

@@ -31,10 +31,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/permission_mode"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
 	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	permissionsrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	projectmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
@@ -1085,8 +1087,33 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 		railsList = append(railsList, resp)
 	}
 
-	// 3: StreamEventRail（流事件护栏）
+	// 3: 权限 rail 组 —— 队列 + 三个 root rail（9.90c 五文件的装配点）
+	// Python: permission_rail_group.build_permission_group(...) → PermissionRailGroup
+	//
+	// 三个 root rail 共享**同一个** RootPermissionQueue 实例：号码牌由
+	// RootPermissionQueueRail 发出、卡由它写入，RootContextRail 与
+	// RootPermissionCompletionRail 读同一队列。各自 new 会互相看不见。
+	permissionQueue := permissionsrails.NewRootPermissionQueue(nil)
+	rootContextRail, err := permissionsrails.NewRootContextRail(
+		permissionQueue, nil, nil, nil)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("RootContextRail creation failed")
+		rootContextRail = nil
+	} else {
+		railsList = append(railsList, rootContextRail)
+	}
+	railsList = append(railsList,
+		permissionsrails.NewRootPermissionQueueRail(permissionQueue, nil))
+	railsList = append(railsList,
+		permissionsrails.NewRootPermissionCompletionRail(permissionQueue))
+	logger.Info(logComponent).
+		Bool("root_context_rail", rootContextRail != nil).
+		Msg("permission rail group assembled")
+
+	// 4: StreamEventRail（流事件护栏）
+	// 注入同一个队列，供中断快照投影与清理范围校验使用
 	if se := c.deep.buildStreamEventRail(); se != nil {
+		se.SetRootPermissionQueue(permissionQueue)
 		c.deep.streamEventRail = se
 		railsList = append(railsList, se)
 	}
@@ -1138,7 +1165,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 
 	// 11: StructuredAskUserRail（结构化询问护栏）
 	// ✅ 10.6.3: StructuredAskUserRail 已实现
-	if sau := c.buildStructuredAskUserRail(); sau != nil {
+	if sau := c.buildStructuredAskUserRail(configBase); sau != nil {
 		railsList = append(railsList, sau)
 	}
 
@@ -1432,7 +1459,7 @@ func (c *CodeAdapter) buildCodingMemoryRail() sainterfaces.AgentRail {
 // buildStructuredAskUserRail 构建结构化询问护栏。
 // Python: JiuwenClawCodeAdapter._build_structured_ask_user_rail() (interface_code.py)
 // ✅ 10.6.3: StructuredAskUserRail 已实现
-func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
+func (c *CodeAdapter) buildStructuredAskUserRail(config map[string]any) sainterfaces.AgentRail {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("panic", r).
@@ -1440,7 +1467,13 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 		}
 	}()
 	rail := commonrails.NewStructuredAskUserRail(c.deep.resolveRuntimeLanguage())
-	logger.Info(logComponent).Msg("StructuredAskUserRail created")
+	// Python: StructuredAskUserRail(language=..., strict_continuation_contract=smart)
+	// smart 即启用自动权限（AutoPermissionRail 在场）时为 true
+	rail.SetStrictContinuationContract(
+		permission_mode.IsAutoPermissionEnabled(permissionsrails.DeepCopyPermissionConfig(config)))
+	logger.Info(logComponent).
+		Bool("strict_continuation_contract", rail.StrictContinuationContract()).
+		Msg("StructuredAskUserRail created")
 	return rail
 }
 

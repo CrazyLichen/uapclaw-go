@@ -155,13 +155,27 @@ func NewPermissionInterruptRail(
 	sort.Strings(sortedToolTags)
 	sort.Strings(toolsKeys)
 
+	// Python: llm_enabled=self._engine._llm is not None, model_name=self._engine._model_name
+	var engineLLMEnabled bool
+	var engineModelName string
+	if r.engine != nil {
+		engineLLMEnabled = r.engine.LLM() != nil
+		engineModelName = r.engine.ModelName()
+	}
 	logger.Info(logComponent).
 		Strs("optional_tool_tags", sortedToolTags).
 		Strs("tools_keys", toolsKeys).
+		Bool("llm_enabled", engineLLMEnabled).
+		Str("model_name", engineModelName).
 		Msg("permission.rail.init intercept=all_tools")
 
 	return r
 }
+
+// PermissionRailMarker 标识该轨参与权限判定。
+//
+// Python: permission_rail_group.PERMISSION_RAIL_TYPES 成员判定
+func (r *PermissionInterruptRail) PermissionRailMarker() {}
 
 // BeforeToolCall 工具调用前拦截。
 // Python: PermissionInterruptRail.before_tool_call — 对**任意**工具名执行权限判定，

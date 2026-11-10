@@ -198,6 +198,15 @@ func (e *RootPermissionQueueError) Error() string {
 // NewRootPermissionQueue 创建权限队列。
 // idFactory 为 nil 时使用默认的随机号码牌生成器（对齐 Python secrets.token_urlsafe(18)）。
 // Python: RootPermissionQueue.__init__(*, id_factory=None)
+// IsRootPermissionQueue 标识该值为根权限队列。
+//
+// 供 common/rails 的窄接口 RootPermissionQueueAccessor 判定，
+// 避免 rails ↔ rails/permissions 循环依赖。
+func (q *RootPermissionQueue) IsRootPermissionQueue() {}
+
+// NewRootPermissionQueue 创建根权限队列。
+//
+// Python: RootPermissionQueue(id_factory)
 func NewRootPermissionQueue(idFactory func() string) *RootPermissionQueue {
 	if idFactory == nil {
 		idFactory = defaultInvocationIDFactory

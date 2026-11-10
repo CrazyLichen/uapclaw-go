@@ -38,6 +38,11 @@ type StructuredAskUserRail struct {
 	language string
 	// parentResolve 保存父类 resolve 函数，用于非结构化路径回退
 	parentResolve interrupt.ResolveInterruptFn
+	// strictContinuationContract 是否启用 Smart Approval 的严格续接输入契约。
+	// 开启后，首次请求（无 user_input 且非稀疏重放）会走严格校验：
+	// questions 必须是数组、数量受限、每项必须是含非空 question 的对象等。
+	// Python: _strict_continuation_contract
+	strictContinuationContract bool
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -59,6 +64,19 @@ func NewStructuredAskUserRail(language string) *StructuredAskUserRail {
 	// 覆盖为自己的 resolve 函数
 	r.AskUserRail.BaseInterruptRail.ResolveInterruptFn = r.resolveStructuredInterrupt
 	return r
+}
+
+// SetStrictContinuationContract 启用/关闭严格续接输入契约。
+//
+// Python: StructuredAskUserRail.set_strict_continuation_contract(enabled)
+// Python 对非 bool 输入抛 TypeError；Go 静态类型已保证，无需运行时校验。
+func (r *StructuredAskUserRail) SetStrictContinuationContract(enabled bool) {
+	r.strictContinuationContract = enabled
+}
+
+// StrictContinuationContract 返回严格续接契约是否启用。
+func (r *StructuredAskUserRail) StrictContinuationContract() bool {
+	return r.strictContinuationContract
 }
 
 // Init 注册 StructuredAskUserTool 到 ResourceMgr + AbilityManager。
@@ -202,6 +220,21 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 			decision = r.AskUserRail.Interrupt(r.AskUserRail.BuildAskRequest(toolCall))
 		}
 	}()
+
+	// questions 严格校验：必须在 user_input 分支**之前**执行
+	// Python: strict_initial_request = _strict_continuation_contract and
+	//         user_input is None and not _is_saved_pending_tool_call(ctx, tool_call)
+	//         ... 然后逐项校验 questions（L363-480）
+	strictInitialRequest := r.strictContinuationContract &&
+		userInput == nil &&
+		!IsSavedPendingToolCall(cbc, toolCall)
+	if rejectText := ValidateStructuredQuestions(toolCall, strictInitialRequest); rejectText != "" {
+		logger.Info(logComponent).
+			Str("event_type", "structured_ask_user_rail_invalid_arguments").
+			Bool("strict_initial_request", strictInitialRequest).
+			Msg("Rejected malformed structured questions")
+		return r.AskUserRail.BaseInterruptRail.Reject(rejectText)
+	}
 
 	// 无用户输入 → 中断（对齐 Python: if user_input is None: return self.interrupt(self._build_ask_request(tool_call))）
 	if userInput == nil {

@@ -494,6 +494,8 @@ func abortWithInterrupt(
 // 带着正确的上下文做判定。
 // Python: class RootPermissionQueueRail(AgentRail)
 type RootPermissionQueueRail struct {
+	// BaseRail 提供生命周期钩子的默认实现（Python: class RootPermissionQueueRail(AgentRail)）
+	agentinterfaces.BaseRail
 	// queue 本 rail 服务的队列
 	queue *RootPermissionQueue
 	// answerClaimed 答案被认领时的回调，可为 nil
@@ -505,6 +507,8 @@ type RootPermissionQueueRail struct {
 // 不应继续占用待决状态。
 // Python: class RootPermissionCompletionRail(AgentRail)
 type RootPermissionCompletionRail struct {
+	// BaseRail 提供生命周期钩子的默认实现（Python: class RootPermissionCompletionRail(AgentRail)）
+	agentinterfaces.BaseRail
 	// queue 本 rail 服务的队列
 	queue *RootPermissionQueue
 }

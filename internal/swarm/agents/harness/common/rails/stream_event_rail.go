@@ -58,6 +58,14 @@ type JiuClawStreamEventRail struct {
 
 	// todoTool 共享 TodoTool 实例，对齐 Python: _main_todo_tool
 	todoTool todoToolLoader
+
+	// rootPermissionQueue 根权限队列，供中断快照投影与清理范围校验使用。
+	// 装配期由 permission_rail_group 注入；为 nil 表示非自动权限模式。
+	// Python: _root_permission_queue
+	//
+	// 用窄接口承载以避免 rails ↔ rails/permissions 循环依赖
+	// （规则 10.2：本包是使用方，描述协作方能力）。
+	rootPermissionQueue RootPermissionQueueAccessor
 }
 
 // pauseCond 封装 sync.Mutex + sync.Cond 实现 asyncio.Event 语义
@@ -81,6 +89,20 @@ type deepConfigProvider interface {
 	DeepConfig() *hschema.DeepAgentConfig
 }
 
+// RootPermissionQueueAccessor 根权限队列在本 rail 视角下的能力面。
+//
+// 只列举 stream rail 真正需要的方法，避免引入整个 RootPermissionQueue
+// （同时打破 rails ↔ rails/permissions 的循环依赖）。
+//
+// ⚠️ 当前无消费方：4 个 queue 消费函数（_project_complete_interruption /
+// _project_ordinary_interruption / _trusted_cleanup_scope /
+// _discard_permission_records）的前置件 permission_interaction.py 属 9.90e，
+// 故本接口暂只作接线占位，待 9.90e 补齐后启用。
+type RootPermissionQueueAccessor interface {
+	// IsRootPermissionQueue 标识该值是可用的根权限队列
+	IsRootPermissionQueue()
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewJiuClawStreamEventRail 创建 StreamEvent Rail 实例
@@ -93,6 +115,22 @@ func NewJiuClawStreamEventRail() *JiuClawStreamEventRail {
 		inflightToolCalls:    make(map[string]inflightToolCallInfo),
 		cancelledToolResults: make(map[string][]map[string]any),
 	}
+}
+
+// SetRootPermissionQueue 注入根权限队列（装配期调用）。
+//
+// Python: JiuSwarmStreamEventRail.__init__(root_permission_queue=...)
+func (r *JiuClawStreamEventRail) SetRootPermissionQueue(queue RootPermissionQueueAccessor) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rootPermissionQueue = queue
+}
+
+// RootPermissionQueue 返回已注入的根权限队列（未注入为 nil）。
+func (r *JiuClawStreamEventRail) RootPermissionQueue() RootPermissionQueueAccessor {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rootPermissionQueue
 }
 
 // Priority 返回执行优先级，对齐 Python: priority = 80
