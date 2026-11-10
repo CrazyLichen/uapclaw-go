@@ -36,20 +36,25 @@
 //
 // ## ⏵ 本批三处未落地前置件（均 fail-closed，见 spec §12.35）
 //
-//  1. `is_client_tool` 的 Go 等价判定 → `clientToolMarked` 恒 false
-//  2. 六个 `SubagentXxxTool` 具体类型 → `trustedSubagentRuntimeControlBinding` 恒 false
-//  3. `tool_permission_context` 模块本体 → 常量值已用上游真实值对齐
+// 三处前置件均已对齐（见 spec §12.36）：
+//  1. `is_client_tool` → `foundationtool.IsClientTool`（ToolCard.Execution）
+//  2. 六个 `SubagentXxxTool` → Go 侧三个 `sessions_*` 工具映射
+//  3. `tool_permission_context` → 三个 ContextVar 在 `swarm/schema/permission.go`
 
 package auto_permission
 
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sync"
 
+	foundationtool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	runpermissions "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	schemaswarm "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	runtimesandbox "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 
@@ -83,7 +88,39 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// subagentRuntimeControlToolNames Go 侧会话控制工具闭集（V-22）
+	//
+	// Python: _SUBAGENT_RUNTIME_CONTROL_TYPES 的六个 subagent_* 名字。
+	// Go 侧合并为三个 sessions_*（deep_agent.go:312 已登记）；
+	// 同时保留六个上游名字，避免上游载荷直接带这些名字时被漏过。
+	subagentRuntimeControlToolNames = map[string]struct{}{
+		"sessions_spawn": {}, "sessions_list": {}, "sessions_cancel": {},
+		"subagent_spawn": {}, "subagent_close": {}, "subagent_list": {},
+		"subagent_resume": {}, "subagent_send_input": {}, "subagent_wait": {},
+	}
+
+	// subagentControlToolTypes 装配期登记的会话控制工具具体类型表。
+	subagentControlToolTypesMu sync.RWMutex
+	subagentControlToolTypes   = map[string]reflect.Type{}
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// SetSubagentRuntimeControlToolTypes 在装配期登记会话控制工具的具体类型。
+//
+// 与 SetReadonlyToolTypes / SetCodeControlToolTypes 同一设计（V-18）。
+func SetSubagentRuntimeControlToolTypes(types map[string]reflect.Type) {
+	subagentControlToolTypesMu.Lock()
+	defer subagentControlToolTypesMu.Unlock()
+	subagentControlToolTypes = make(map[string]reflect.Type, len(types))
+	for name, toolType := range types {
+		if toolType == nil {
+			continue
+		}
+		subagentControlToolTypes[name] = toolType
+	}
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -188,7 +225,7 @@ func (r *AutoPermissionRail) beforeToolCallImpl(
 
 	// mcp_fetch_webpage 打公开 HTTPS 标记
 	if cbc != nil && invocation.ToolName == mcpFetchWebpageTool {
-		cbc.SetExtra(publicHTTPSFetchContextAttributeName, true)
+		cbc.SetExtra(schemaswarm.PublicHTTPSFetchContextAttr, true)
 	}
 	// _skip_tool + 根上下文失败 → 短路
 	if cbc != nil {
@@ -206,7 +243,9 @@ func (r *AutoPermissionRail) beforeToolCallImpl(
 	}
 	// 客户端工具短路（Go 侧无 is_client_tool，用能力卡标记判定）
 	if cbc != nil && cbc.Agent() != nil && cbc.Agent().AbilityManager() != nil {
-		if clientToolMarked(cbc.Agent().AbilityManager().Get(invocation.ToolName)) {
+		if card, isCard := cbc.Agent().AbilityManager().Get(
+			invocation.ToolName).(*foundationtool.ToolCard); isCard &&
+			foundationtool.IsClientTool(card) {
 			return r.clientToolPermission(ctx, cbc, invocation)
 		}
 	}
@@ -770,14 +809,7 @@ func (r *AutoPermissionRail) beforeToolCallImpl(
 // 这些是 Python 模块级函数 / 常量在 Go 侧的等价物，仅供本文件的单方法使用，
 // 不参与七步编排（规则 9.3 禁止拆的是「方法内步骤」，不是模块级常量）。
 
-const (
-	// publicHTTPSFetchContextAttributeName 公开 HTTPS 抓取的 extra 属性键。
-	//
-	// Python: tool_permission_context.PUBLIC_HTTPS_FETCH_CONTEXT_ATTR
-	// 上游真实值（tool_permission_context.py:14）。
-	// Go 侧该模块未落地，用字面常量对齐该值（⏵ 9.17 回填模块本体）。
-	publicHTTPSFetchContextAttributeName = "_jiuwenswarm_public_https_fetch"
-)
+const ()
 
 // buildToolDecisionFactsForBeforeTool 构造当前调用的判定事实。
 //
@@ -796,31 +828,52 @@ func buildToolDecisionFactsForBeforeTool(
 		originalArgsWereValidObject, externalPaths, sendPaths)
 }
 
-// clientToolMarked 能力卡是否标记为客户端工具。
-//
-// Python: is_client_tool(card)
-//
-// ⏵ 未落地（spec §12.35 ⏵-1）：Go 侧无 `is_client_tool` 等价判定。
-// 当前保守返回 false，客户端工具不走短路、继续走完整审查链——多问用户但
-// 不会误放行（fail-closed）。
-func clientToolMarked(card any) bool {
-	if card == nil {
-		return false
-	}
-	// TODO(#9.90e): 补齐 is_client_tool 等价判定后替换此处
-	return false
-}
-
 // trustedSubagentRuntimeControlBinding 校验子代理运行时控制工具的可执行绑定。
 //
 // Python: _trusted_subagent_runtime_control_binding(invocation)
 //
-// ⏵ 未落地（spec §12.35 ⏵-2）：六个 `SubagentXxxTool` 具体类型在 Go 侧
-// 全部不存在（与 V-6 的 4,286 行前置件同源）。当前恒 false，使
-// subagent_runtime_control 类工具被强制压到 manual_only 路由走人工审批
-// （fail-closed）。
+// ## 命名偏差 V-22：六个上游工具名 → Go 侧三个 sessions_* 工具
+//
+// Python 用 `_SUBAGENT_RUNTIME_CONTROL_TYPES` 六个类对象常量
+// （SubagentCloseTool / List / Resume / SendInput / Spawn / Wait），
+// 再读 `resource._parent_agent` 校验归属。
+//
+// Go 侧在 `deep_agent.go:312` 已登记架构决策：这六项合并注册为
+// `sessions_spawn` / `sessions_list` / `sessions_cancel` 三个工具，
+// 且 `NewSessions*Tool` 把 provider 捕获进闭包、无导出访问器。
+//
+// 因此改为按 V-18 的装配期登记模式：`SetSubagentRuntimeControlToolTypes`
+// 登记具体类型，`ResolveToolBinding` 做精确类型 + 卡片同一性校验。
+// 未登记一律 false（fail-closed → 强制走人工审批）。
 func trustedSubagentRuntimeControlBinding(invocation ToolInvocation) bool {
-	return false
+	if !isSubagentRuntimeControlTool(invocation.ToolName) {
+		return false
+	}
+	if invocation.Ctx == nil || invocation.Ctx.Agent() == nil {
+		return false
+	}
+	am := invocation.Ctx.Agent().AbilityManager()
+	if am == nil {
+		return false
+	}
+	expectedType := registeredSubagentControlToolType(invocation.ToolName)
+	if expectedType == nil {
+		return false
+	}
+	return ResolveToolBinding(am, invocation.ToolName, expectedType) != nil
+}
+
+// isSubagentRuntimeControlTool 是否属于 Go 侧的会话控制工具闭集。
+func isSubagentRuntimeControlTool(toolName string) bool {
+	_, exists := subagentRuntimeControlToolNames[toolName]
+	return exists
+}
+
+// registeredSubagentControlToolType 取登记的具体类型，未登记返回 nil。
+func registeredSubagentControlToolType(toolName string) reflect.Type {
+	subagentControlToolTypesMu.RLock()
+	defer subagentControlToolTypesMu.RUnlock()
+	return subagentControlToolTypes[toolName]
 }
 
 // trustedTaskToolName 是否为宿主注册的、未走别名的 task_tool。

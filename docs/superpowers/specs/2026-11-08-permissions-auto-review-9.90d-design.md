@@ -2444,3 +2444,80 @@ session / 权限队列 / 审查器 / 领域路由 / trusted_send 身份的**组�
 计划 Task 41.2 的骨架是 `BeforeToolCall(ctx, cbc) error` + 单方法，本实现
 遵循该形状；Python 的 `*args, **kwargs` 用 `(ctx, cbc)` 固定签名承载
 （V-3 反射适配不实现，已在 §12.14 登记）。
+
+### 12.36 三处 ⏵ 前置件的对齐（全部消除）
+
+§12.35 曾登记三处 fail-closed 占位。逐项回读上游 SDK 源码后确认：
+**⏵-3 是误判（已对齐），⏵-2 是命名替代而非缺失，只有 ⏵-1 是真缺失且可小改解决**。
+本批三项全部落地，⏵ 标记消除。
+
+#### ⏵-1 `is_client_tool`：完全对齐
+
+回读 `/home/opensource/agent-core/openjiuwen/core/foundation/tool/client.py:198`：
+
+```python
+def is_client_tool(card: Optional[ToolCard]) -> bool:
+    """Whether calls to ``card`` are executed by the client."""
+    return card is not None and card.execution == ToolExecution.CLIENT
+```
+
+`ToolExecution` 只有 `SERVER="server"` / `CLIENT="client"` 两值
+（`foundation/tool/execution.py`）。
+
+Go 侧处置：给 `internal/agentcore/foundation/tool/base.go` 的 `ToolCard`
+加 `Execution string` 字段（零值 `""` 等价 server，行为不变），
+并新增 `IsClientTool(card)` 与两个常量 `ToolExecutionServer` /
+`ToolExecutionClient`。`before_tool.go` 改为直接调用，删掉原先恒 false 的
+`clientToolMarked`。
+
+这是**纯增量改动**：所有既有 `ToolCard` 构造点零值非客户端，行为不变。
+
+#### ⏵-2 六个 `SubagentXxxTool`：命名偏差 V-22，按 V-18 装配期登记
+
+回读后确认这不是「等前置件」：
+
+- `deep_agent.go:312` 早已登记架构决策——上游六个 `subagent_*` 工具在 Go 侧
+  **合并注册为三个** `sessions_spawn` / `sessions_list` / `sessions_cancel`
+- `NewSessions*Tool` 把 `provider` 捕获进 `LocalFunction` 闭包、**无导出访问器**，
+  与 Python 读 `resource._parent_agent` 同属私有属性
+- 六个 `SubagentXxxTool` 类在 Go 侧确实不存在，但补出来会与既有架构决策
+  制造双份实现（违反规则 8）
+
+处置：按 **V-18 既有模式**（`SetReadonlyToolTypes` / `SetCodeControlToolTypes`）
+新增 `SetSubagentRuntimeControlToolTypes` 装配期登记 +
+`ResolveToolBinding` 精确类型/卡片同一性校验。闭集包含九个名字
+（三个 `sessions_*` + 六个上游 `subagent_*`，后者保留以防上游载荷直接带名）。
+
+**新增偏差 V-22**：工具名与数量不同（6→3），且身份校验从
+「`_parent_agent` 归属」改为「装配期类型登记」。回收条件：Go 侧为
+`SessionToolkit` 增加导出 parent 访问器后，可补回归属校验。
+
+#### ⏵-3 `tool_permission_context`：**误判，撤销 ⏵**
+
+回读上游全文件（`tool_permission_context.py`，仅 1 常量 + 3 ContextVar）：
+
+| Python | Go 等价（已在 `swarm/schema/permission.go`） |
+|---|---|
+| `TOOL_PERMISSION_CHANNEL_ID` | `WithToolPermissionChannelID` / `ToolPermissionChannelIDFromCtx` |
+| `TOOL_PERMISSION_REQUEST_ID` | `WithToolPermissionRequestID` / `ToolPermissionRequestIDFromCtx` |
+| `SKILLS_REBUILD_SILENT` | `WithSkillsRebuildSilent` / `SkillsRebuildSilentFromCtx` |
+| `PUBLIC_HTTPS_FETCH_CONTEXT_ATTR` | 本批新增导出常量 `PublicHTTPSFetchContextAttr` |
+
+三个 ContextVar **早就对齐了**，只是不在同名文件/同包，导致初版误判为「模块缺失」。
+唯一缺的是常量，本批提到 `schema` 包导出，`before_tool.go` 不再留字面量。
+
+注：上游 `__all__` **不含** `PUBLIC_HTTPS_FETCH_CONTEXT_ATTR`——注释说明它是
+「per-tool callback attribute, never shared ctx.extra，是限制而非授权」，
+只在权限层内部使用。Go 侧放在 `schema` 包供引用，未扩大可见性语义。
+
+#### 测试变更
+
+原先三个「锁定恒 false」的用例全部改写：
+
+- `TestIsClientTool_对齐上游` / `TestToolCard_Execution默认值` /
+  `TestIsClientTool_逐值对照` / `TestIsClientTool_nilCard`
+- `TestTrustedSubagentRuntimeControlBinding_未登记时拒绝` /
+  `TestIsSubagentRuntimeControlTool` / `TestSetSubagentRuntimeControlToolTypes`
+- `TestPublicHTTPSFetchContextAttributeName` 改引用导出常量
+
+验证：gofmt / go vet ./... / 全量回归全绿。

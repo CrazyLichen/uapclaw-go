@@ -6,6 +6,19 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// PublicHTTPSFetchContextAttr 公开 HTTPS 抓取的 per-tool 回调属性键。
+	//
+	// Python: tool_permission_context.PUBLIC_HTTPS_FETCH_CONTEXT_ATTR
+	// （jiuwenswarm/agents/harness/common/rails/permissions/tool_permission_context.py:14）
+	//
+	// 这是限制标记而非授权，且「从不共享 ctx.extra」——上游刻意不把它放进
+	// __all__，只在权限层内部使用。Go 侧落在 schema 包供 permissions 引用。
+	PublicHTTPSFetchContextAttr = "_jiuwenswarm_public_https_fetch"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PermissionContext 权限上下文，描述一次权限判断所需的环境信息。

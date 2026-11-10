@@ -2,10 +2,13 @@ package auto_permission
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
+	foundationtool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	schemaswarm "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // beforeToolCbc 构造 before_tool 测试用回调上下文。
@@ -71,35 +74,85 @@ func TestBeforeToolCall_取消上下文(t *testing.T) {
 
 // ──────────────────────────── 三处 ⏵ 的锁定测试 ────────────────────────────
 
-// TestClientToolMarked_恒false 锁定 ⏵-1（9.90e 回填后本用例应改）。
-func TestClientToolMarked_恒false(t *testing.T) {
-	for _, card := range []any{
-		nil,
-		map[string]any{"is_client_tool": true},
-		"anything",
-	} {
-		if clientToolMarked(card) {
-			t.Errorf("⏵-1: clientToolMarked(%v) should be false until 9.90e", card)
-		}
+// TestIsClientTool_对齐上游 验证 ⏵-1 已消除。
+//
+// Python: is_client_tool(card) = card is not None and card.execution == "client"
+func TestIsClientTool_对齐上游(t *testing.T) {
+	if foundationtool.IsClientTool(nil) {
+		t.Error("nil card should be false")
+	}
+	server := foundationtool.NewToolCardWithID("id1", "t", "", nil, nil)
+	if foundationtool.IsClientTool(server) {
+		t.Error("default (server) should be false")
+	}
+	client := foundationtool.NewToolCardWithID("id2", "t", "", nil, nil)
+	client.Execution = foundationtool.ToolExecutionClient
+	if !foundationtool.IsClientTool(client) {
+		t.Error("execution=client should be true")
+	}
+	unknown := foundationtool.NewToolCardWithID("id3", "t", "", nil, nil)
+	unknown.Execution = "other"
+	if foundationtool.IsClientTool(unknown) {
+		t.Error("unknown execution should be false")
 	}
 }
 
-// TestTrustedSubagentRuntimeControlBinding_恒false 锁定 ⏵-2。
-func TestTrustedSubagentRuntimeControlBinding_恒false(t *testing.T) {
+// TestTrustedSubagentRuntimeControlBinding_未登记时拒绝 验证 ⏵-2 的 fail-closed。
+func TestTrustedSubagentRuntimeControlBinding_未登记时拒绝(t *testing.T) {
+	defer SetSubagentRuntimeControlToolTypes(nil)
+	SetSubagentRuntimeControlToolTypes(nil)
 	for _, name := range []string{
+		"sessions_spawn", "sessions_list", "sessions_cancel",
 		"subagent_close", "subagent_list", "subagent_resume",
 		"subagent_send_input", "subagent_spawn", "subagent_wait",
 	} {
 		if trustedSubagentRuntimeControlBinding(ToolInvocation{ToolName: name}) {
-			t.Errorf("⏵-2: %s should be false until 9.90e", name)
+			t.Errorf("%s should be false when unregistered", name)
 		}
+	}
+	// 非闭集工具名直接拒绝
+	if trustedSubagentRuntimeControlBinding(ToolInvocation{ToolName: "bash"}) {
+		t.Error("non-closed-set tool should be false")
+	}
+}
+
+// TestIsSubagentRuntimeControlTool 验证九个名字的闭集判定。
+func TestIsSubagentRuntimeControlTool(t *testing.T) {
+	if !isSubagentRuntimeControlTool("sessions_spawn") {
+		t.Error("sessions_spawn should be in the set")
+	}
+	if !isSubagentRuntimeControlTool("subagent_wait") {
+		t.Error("upstream subagent_wait should be kept")
+	}
+	if isSubagentRuntimeControlTool("bash") {
+		t.Error("bash should not be in the set")
+	}
+}
+
+// TestSetSubagentRuntimeControlToolTypes 验证登记与读取。
+func TestSetSubagentRuntimeControlToolTypes(t *testing.T) {
+	defer SetSubagentRuntimeControlToolTypes(nil)
+	SetSubagentRuntimeControlToolTypes(nil)
+	if got := registeredSubagentControlToolType("sessions_spawn"); got != nil {
+		t.Errorf("got %v", got)
+	}
+	typ := reflect.TypeOf((*fakeCodeControlTool)(nil))
+	SetSubagentRuntimeControlToolTypes(map[string]reflect.Type{
+		"sessions_spawn": typ,
+		"bad":            nil,
+	})
+	if got := registeredSubagentControlToolType("sessions_spawn"); got != typ {
+		t.Errorf("got %v", got)
+	}
+	if got := registeredSubagentControlToolType("bad"); got != nil {
+		t.Errorf("nil type should be skipped, got %v", got)
 	}
 }
 
 // TestPublicHTTPSFetchContextAttributeName 锁定 ⏵-3 的常量值与上游一致。
 func TestPublicHTTPSFetchContextAttributeName(t *testing.T) {
-	if publicHTTPSFetchContextAttributeName != "_jiuwenswarm_public_https_fetch" {
-		t.Errorf("got %q, want upstream value", publicHTTPSFetchContextAttributeName)
+	if schemaswarm.PublicHTTPSFetchContextAttr != "_jiuwenswarm_public_https_fetch" {
+		t.Errorf("got %q, want upstream value", schemaswarm.PublicHTTPSFetchContextAttr)
 	}
 }
 

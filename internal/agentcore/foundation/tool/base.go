@@ -41,6 +41,11 @@ type ToolCard struct {
 	Properties map[string]any
 	// Exposure 注册期解析的曝光策略（direct/deferred），零值等价 direct
 	Exposure ToolExposure `json:"-"`
+	// Execution 由谁执行工具调用："server"（默认）/ "client"。
+	// "client" 表示连接的客户端执行本次调用，运行时应暂停并转成
+	// client_tool 中断，客户端的应答成为工具结果。
+	// Python: ToolCard.execution (ToolExecution)
+	Execution string `json:"execution,omitempty"`
 	// exposureDeclared 曝光策略是否已解析并锁定
 	exposureDeclared bool
 	// exposureDeclaredSet exposureDeclared 是否被显式设置过（对齐 Python bool|None）
@@ -85,6 +90,19 @@ type StreamChunk struct {
 // ToolOption 工具调用选项函数。
 type ToolOption func(*ToolCallOptions)
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// ToolExecutionServer 由 agent 运行时调用 Tool.Invoke（默认）
+	//
+	// Python: ToolExecution.SERVER = "server"
+	ToolExecutionServer = "server"
+	// ToolExecutionClient 由连接的客户端执行调用
+	//
+	// Python: ToolExecution.CLIENT = "client"
+	ToolExecutionClient = "client"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 ToolCard 满足 CardInterface 接口
@@ -103,6 +121,15 @@ var ErrInvokeNotSupported = exception.BuildError(
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// IsClientTool 判定该能力卡对应的调用是否由客户端执行。
+//
+// Python: openjiuwen/core/foundation/tool/client.py is_client_tool(card)
+//
+//	card is not None and card.execution == ToolExecution.CLIENT
+func IsClientTool(card *ToolCard) bool {
+	return card != nil && card.Execution == ToolExecutionClient
+}
 
 // BaseCallTimeout 是 GetCallTimeout 的默认实现，供不覆盖该钩子的工具委托调用。
 // 显式实现 Tool 接口的工具应在 GetCallTimeout 中委托到本函数；

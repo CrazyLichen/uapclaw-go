@@ -253,3 +253,46 @@ func TestNewToolCardWithID(t *testing.T) {
 		t.Errorf("Name = %q, want %q", card.Name, "weather")
 	}
 }
+
+// ──────────────────────────── ToolCard.Execution / IsClientTool（⏵-1 对齐） ────────────────────────────
+
+// TestToolCard_Execution默认值 验证零值等价 server（非客户端）。
+func TestToolCard_Execution默认值(t *testing.T) {
+	card := NewToolCardWithID("id", "tool", "", nil, nil)
+	if card.Execution != "" {
+		t.Errorf("zero value = %q, want empty (equivalent to server)", card.Execution)
+	}
+	if IsClientTool(card) {
+		t.Error("default card should not be a client tool")
+	}
+}
+
+// TestIsClientTool_逐值对照 验证与 Python is_client_tool 一致。
+func TestIsClientTool_逐值对照(t *testing.T) {
+	cases := []struct {
+		name      string
+		execution string
+		want      bool
+	}{
+		{"空值", "", false},
+		{"server", ToolExecutionServer, false},
+		{"client", ToolExecutionClient, true},
+		{"未知", "other", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			card := NewToolCardWithID("id", "tool", "", nil, nil)
+			card.Execution = c.execution
+			if got := IsClientTool(card); got != c.want {
+				t.Errorf("got %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// TestIsClientTool_nilCard 验证 Python 的 `card is not None` 前置。
+func TestIsClientTool_nilCard(t *testing.T) {
+	if IsClientTool(nil) {
+		t.Error("nil card should be false")
+	}
+}
