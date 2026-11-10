@@ -19,6 +19,17 @@ type PrepareChatTurnFunc func(
 	channelID string,
 ) (mode, subMode string, agent ChatAgentPort, err error)
 
+// goalActivityChecker 协作方（AgentManager）的 goal 活跃判定能力。
+// Python: service.py:545-548 `checker = getattr(manager, "has_active_goal", None)`
+//
+// 具名窄接口而非匿名断言：与 task_loop.interactionQueuesProvider 同款约定，
+// 能力面可检索、可注释；不塞进 AgentManagerPort 是因为 goal 判定只有这一处
+// 使用方，塞进去会让全部测试替身各多实现一个方法。
+type goalActivityChecker interface {
+	// HasActiveGoal 会话是否持有活跃 goal
+	HasActiveGoal(channelID, sessionID string) bool
+}
+
 // AgentRuntimeDeps AgentRuntime 依赖（构造注入）。
 type AgentRuntimeDeps struct {
 	// Manager agent 实例管理器
@@ -260,9 +271,7 @@ func (r *AgentRuntime) sessionMessageRequiresQueue(sessionID string) bool {
 // manager.HasActiveGoal 这一路——它按 adapter 的 GoalRecord 判定，已覆盖
 // 「goal 记录仍 ACTIVE」的情形。回收条件：session coordinator 落地后补齐。
 func (r *AgentRuntime) sessionMessageGoalBusy(sessionID string) bool {
-	checker, ok := r.manager.(interface {
-		HasActiveGoal(channelID, sessionID string) bool
-	})
+	checker, ok := r.manager.(goalActivityChecker)
 	if !ok {
 		return false
 	}
