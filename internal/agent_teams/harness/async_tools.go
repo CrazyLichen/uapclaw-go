@@ -244,19 +244,23 @@ func (rt *AsyncToolRuntime) ListAll() []*AsyncToolRecord {
 // 上游 _tasks 在完成时被 add_done_callback pop，故已完成任务 cancel 返回 false。
 func (rt *AsyncToolRuntime) Cancel(taskID string) bool {
 	rt.mu.Lock()
+	defer rt.mu.Unlock()
 	task := rt.tasks[taskID]
 	rec := rt.registry[taskID]
-	if task == nil || rec == nil {
-		rt.mu.Unlock()
+	// 已完成（终态）的任务视同「已从 tasks 摘除」，与上游 _tasks.pop 后的效果一致。
+	// 这里必须覆盖「结算已完成、但 run 还没走到摘除动作」这一瞬间，否则会误判为在飞。
+	if task == nil || rec == nil || rec.Status != AsyncToolStatusRunning {
 		return false
 	}
-	if rec.Status == AsyncToolStatusRunning {
-		rec.Status = AsyncToolStatusError
-		rec.Error = "cancelled"
+	rec.Status = AsyncToolStatusError
+	rec.Error = "cancelled"
+	// 在锁内关终态信号，保证「置终态」与「唤醒等待者」对 Wait 一方是原子的：
+	// 等的人一旦醒来，读到的必定是 cancelled，而不是又被 run 末尾改成 completed。
+	event := rt.events[taskID]
+	if event != nil {
+		event.once.Do(func() { close(event.done) })
 	}
-	rt.mu.Unlock()
 	task.cancel()
-	rt.signal(taskID)
 	return true
 }
 
@@ -363,14 +367,15 @@ func (rt *AsyncToolRuntime) getRecord(taskID string) *AsyncToolRecord {
 // Python: AsyncToolRuntime._run (async_tools.py:227-264)
 func (rt *AsyncToolRuntime) run(ctx context.Context, taskID string, factory func(context.Context) (any, error), toolName string) {
 	rec := rt.getRecord(taskID)
+	// panic 兜底：把异常转成失败结果。正常路径的「摘任务 + 唤醒等待者」写在函数末尾。
 	defer func() {
 		if r := recover(); r != nil {
 			rt.reportFailure(ctx, taskID, rec, toolName, fmt.Errorf("panic: %v", r))
+			rt.mu.Lock()
+			delete(rt.tasks, taskID)
+			rt.mu.Unlock()
+			rt.closeDone(taskID)
 		}
-		// 完成即从 tasks 删除（对齐上游 add_done_callback 的 _tasks.pop）。
-		rt.mu.Lock()
-		delete(rt.tasks, taskID)
-		rt.mu.Unlock()
 	}()
 	result, err := factory(ctx)
 	switch {
@@ -384,6 +389,12 @@ func (rt *AsyncToolRuntime) run(ctx context.Context, taskID string, factory func
 	default:
 		rt.reportCompleted(ctx, taskID, rec, toolName, result)
 	}
+	// 结算完毕，先从 tasks 摘掉条目再唤醒等待者：这样被唤醒的一方看到的已经是终态，
+	// 此时再取消（Cancel 找不到 tasks 条目）一律返回 false，与上游「完成即 pop」一致。
+	rt.mu.Lock()
+	delete(rt.tasks, taskID)
+	rt.mu.Unlock()
+	rt.closeDone(taskID)
 }
 
 // markError 标记终态错误并唤醒等待者。
@@ -432,6 +443,20 @@ func (rt *AsyncToolRuntime) reportCompleted(ctx context.Context, taskID string, 
 		text, _ = atschema.T("async_tool.completed", map[string]any{"tool": toolName, "result": resultText})
 	}
 	rt.injectText(ctx, text)
+}
+
+// closeDone 关闭终态信号，唤醒所有等待者（幂等，且与 tasks 的删除解耦）。
+//
+// 上游的事件对象独立于 _tasks 存活，这里同样只关事件、不删条目；
+// 这样即使取消把任务置为终态，正在 Wait 的一方也能立刻被叫醒。
+func (rt *AsyncToolRuntime) closeDone(taskID string) {
+	rt.mu.Lock()
+	event := rt.events[taskID]
+	rt.mu.Unlock()
+	if event == nil {
+		return
+	}
+	event.once.Do(func() { close(event.done) })
 }
 
 // signal 唤醒等待者（幂等）。
