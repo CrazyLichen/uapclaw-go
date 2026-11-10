@@ -2371,3 +2371,76 @@ NewAgentModeRail → MarkTrusted()           本提交 ✅
 | 真实 `AgentModeRail` + 登记类型 → `code_plan_control` | ✅ |
 | 未 MarkTrusted（`&AgentModeRail{}`）→ 拒绝 | ✅ |
 | 适配器模式非 code / 多 rail / 未登记类型 / 参数非对象 | ✅ 各自拒绝 |
+
+### 12.35 Task 41 执行结论：`before_tool`（七步编排主入口）
+
+**落地**：`auto_permission/before_tool.go`（891 行 Python → 862 行 Go），
+单方法 + 三个内联闭包（`trustedSendGuardResult` / `runtimeResult` / `runReviewer`），
+符合规则 9.3「不得拆 helper」与计划 Task 41.2。
+
+覆盖率：`before_tool.go` **60.1%**，`auto_permission` 包 **86.4%**。
+
+#### 覆盖率说明（如实记录）
+
+单方法 891 行只覆盖 60.1%，原因：大量分支需要真实
+session / 权限队列 / 审查器 / 领域路由 / trusted_send 身份的**组合状态**
+才能走到（例如 `invocation_resume` + `explicit_send_authorization`、
+`wrapper_resume`、`path_policy_requires_approval` + `post_policy_route`）。
+包整体 86.4% 达标（规范 3.1 按包计），但主方法的分支覆盖**留待集成测试
+（Task 43）补齐**，不宣称已完整验证。
+
+#### 「结果回传」不是设计冲突（重要更正）
+
+本轮曾把「Go 的 `BeforeToolCall` 只返回 error，Python 返回任意结果对象」
+当成待选架构决策（(A)/(B)/(C) 三档）。**该判断错误**。
+
+回读 Python 后确认，Python 本来就走 cbc 副作用：
+
+| 机制 | Python | Go |
+|---|---|---|
+| 阻止工具执行 | `_skip_runtime_tool` 写 `ctx.extra["_skip_tool"]` + `inputs.tool_result` / `tool_msg` | `skipRuntimeTool` 写 cbc |
+| 人工审批中断 | `_raise_runtime_interrupt` → `mark` + `raise AbortError` | `raiseRuntimeInterrupt` 返回 error |
+| 反向读回结果 | `_result_from_base_side_effect`（父轨返回 None 且 `_skip_tool` 时从 `inputs.tool_result` 捞回） | `resultFromBaseSideEffect`（`callBaseRail` 已调） |
+| manual 响应归类 | `classify_permission_result` 兜底 `return "interrupt"` | `ClassifyPermissionResult` 同样兜底 |
+| 中断消息提取 | `_permission_interrupt_message(result)` 读 `value.message` | `permissionInterruptMessage` 同路径 |
+
+`before_tool.py` 里那些 `return runtime_result(build_denied_permission_response(...))`
+的返回值只是**透传给框架**，真正阻止执行靠副作用。Go 侧沿用同一套，
+`BeforeToolCall` 返回 error 与 Python 不矛盾。故 (B) 不是新方案，而是
+既有设计的延续；⏵-4 从缺口清单撤销。
+
+#### 三处本批未落地前置件（均 fail-closed）
+
+| 编号 | 项 | 当前行为 | 影响 | 回收条件 |
+|---|---|---|---|---|
+| ⏵-1 | `is_client_tool` 的 Go 等价判定 | `clientToolMarked` 恒 false | 客户端工具不走短路 → 继续完整审查链，**多问用户但不误放行** | 9.90e 定清 `schema.Ability` 上客户端标记方式后补齐 |
+| ⏵-2 | 六个 `SubagentXxxTool` 具体类型 | `trustedSubagentRuntimeControlBinding` 恒 false | `subagent_runtime_control` 类工具被强制压到 `manual_only` → 走人工审批 | 与 V-6 的 4,286 行前置件同批（9.11b） |
+| ⏵-3 | `tool_permission_context` 模块本体 | 常量 `PUBLIC_HTTPS_FETCH_CONTEXT_ATTR` 用上游真实值 `"_jiuwenswarm_public_https_fetch"` 字面量对齐 | 目前只用到这一个常量，字面量已等价 | 9.17 回填模块 |
+
+三处都有对应测试**锁定当前行为**（`TestClientToolMarked_恒false` /
+`TestTrustedSubagentRuntimeControlBinding_恒false` /
+`TestPublicHTTPSFetchContextAttributeName`），回填时用例会失败提醒更新。
+
+#### 两处「我搞错」而非项目缺失（已直接修，不进台账）
+
+1. `PUBLIC_HTTPS_FETCH_CONTEXT_ATTR` 初版瞎编成 `"_public_https_fetch_context"`，
+   上游真实值见 `tool_permission_context.py:14`
+2. `resumeRequestID` 用反射读 `Card.Key.RequestID` 是多余的——
+   `RootPermissionCard.Key` 是 `*ToolInvocationKeyV1`，`RequestID` 为导出字段，
+   直接访问即可，反射已删除
+
+#### 其他偏差
+
+- **V-19**：`NATIVE_PATH_ACCESS` 在 Go 侧是包级全局（`SetNativePathAccess`），
+  非 Python 的 ContextVar token；复位用 `defer` 显式清 nil。
+  多会话并发时存在串扰风险，登记待 9.90e 评估。
+- **V-16 延伸**：`ClearNoHostFallback` / `ClearSendFileExecutionGrant` /
+  `BindTrustedSearchProducer` 都返回派生 ctx，而 `BeforeToolCall` 的 ctx 无法
+  回传（同 `artifact_tracking_capture`）。当前保留调用以对齐步骤顺序，
+  清除动作在默认情形下与默认值等价。
+
+#### 与计划骨架的签名差异
+
+计划 Task 41.2 的骨架是 `BeforeToolCall(ctx, cbc) error` + 单方法，本实现
+遵循该形状；Python 的 `*args, **kwargs` 用 `(ctx, cbc)` 固定签名承载
+（V-3 反射适配不实现，已在 §12.14 登记）。
