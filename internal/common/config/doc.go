@@ -22,6 +22,7 @@
 //	├── default_models.go # 默认模型列表：GetDefaultModels/InferIsDefault
 //	├── values.go         # 数值读取：Float/Int（兼容 YAML int 与 JSON float64）
 //	├── context_window.go # 上下文窗口 token 解析：ParsePositiveTokens
+//	├── permissions.go    # permissions 配置读写 11 函数（对齐 common/config.py L1199-1500）
 //	├── doc.go            # 包文档
 //	└── testdata/         # 测试数据
 //	    ├── config.yaml       # 示例配置
