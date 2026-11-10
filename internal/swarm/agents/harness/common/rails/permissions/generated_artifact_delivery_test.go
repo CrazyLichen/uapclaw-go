@@ -120,7 +120,7 @@ func TestNormalizeSendFilePaths_非法JSON当单值(t *testing.T) {
 
 func TestCreateSendFileExecutionGrant_路径解析(t *testing.T) {
 	dir := t.TempDir()
-	got := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
+	got := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
 	if len(got.Items) != 1 {
 		t.Fatalf("items = %v", got.Items)
 	}
@@ -129,18 +129,19 @@ func TestCreateSendFileExecutionGrant_路径解析(t *testing.T) {
 	}
 }
 
-func TestCreateSendFileExecutionGrant_空路径报错(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("empty paths should raise send_file_authorization_missing_path")
-		}
-	}()
-	CreateSendFileExecutionGrant(nil, nil)
+func TestCreateSendFileExecutionGrant_空路径返回错误(t *testing.T) {
+	_, err := CreateSendFileExecutionGrant(nil, nil)
+	if err == nil {
+		t.Fatal("empty paths should return error（对齐 Python 的 ValueError）")
+	}
+	if !strings.Contains(err.Error(), "send_file_authorization_missing_path") {
+		t.Errorf("err = %v", err)
+	}
 }
 
 func TestCreateSendFileExecutionGrant_目标渠道(t *testing.T) {
 	dir := t.TempDir()
-	got := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, []any{"web", "cli"})
+	got := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, []any{"web", "cli"})
 	want := []string{"cli", "web"}
 	if !reflect.DeepEqual(got.TargetChannels, want) {
 		t.Errorf("got %v, want %v", got.TargetChannels, want)
@@ -149,7 +150,7 @@ func TestCreateSendFileExecutionGrant_目标渠道(t *testing.T) {
 
 func TestCreateSendFileExecutionGrant_nil目标渠道为空(t *testing.T) {
 	dir := t.TempDir()
-	got := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
+	got := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
 	if len(got.TargetChannels) != 0 {
 		t.Errorf("got %v, want empty", got.TargetChannels)
 	}
@@ -159,7 +160,7 @@ func TestCreateSendFileExecutionGrant_nil目标渠道为空(t *testing.T) {
 
 func TestPublishSendFileExecutionGrant_发布后可读(t *testing.T) {
 	dir := t.TempDir()
-	grant := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
+	grant := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 
 	got := CurrentSendFileExecutionGrant(ctx)
@@ -173,8 +174,8 @@ func TestPublishSendFileExecutionGrant_发布后可读(t *testing.T) {
 
 func TestPublishSendFileExecutionGrant_覆盖旧值(t *testing.T) {
 	dir := t.TempDir()
-	first := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
-	second := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "b.txt")}, nil)
+	first := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
+	second := mustCreateGrant(t, []string{filepath.Join(dir, "b.txt")}, nil)
 
 	ctx := PublishSendFileExecutionGrant(context.Background(), first)
 	ctx = PublishSendFileExecutionGrant(ctx, second)
@@ -193,7 +194,7 @@ func TestCurrentSendFileExecutionGrant_未发布为nil(t *testing.T) {
 
 func TestClearSendFileExecutionGrant_清除后不可读(t *testing.T) {
 	dir := t.TempDir()
-	grant := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
+	grant := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 	ctx = ClearSendFileExecutionGrant(ctx)
 
@@ -206,7 +207,7 @@ func TestClearSendFileExecutionGrant_旧ctx的lease被标记终态(t *testing.T)
 	// Python: clear 会 set(None) 并把旧 lease.terminal = True，
 	// 因此持有旧 ctx 的分支也读不到 grant（共享终态）。
 	dir := t.TempDir()
-	grant := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
+	grant := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
 	oldCtx := PublishSendFileExecutionGrant(context.Background(), grant)
 	_ = ClearSendFileExecutionGrant(oldCtx)
 
@@ -218,7 +219,7 @@ func TestClearSendFileExecutionGrant_旧ctx的lease被标记终态(t *testing.T)
 func TestConsumeSendFileExecutionGrant_正常消费(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a.txt")
-	grant := CreateSendFileExecutionGrant([]string{p}, nil)
+	grant := mustCreateGrant(t, []string{p}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 
 	items, err := ConsumeSendFileExecutionGrant(ctx, []string{p}, nil)
@@ -233,7 +234,7 @@ func TestConsumeSendFileExecutionGrant_正常消费(t *testing.T) {
 func TestConsumeSendFileExecutionGrant_二次消费失败(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a.txt")
-	grant := CreateSendFileExecutionGrant([]string{p}, nil)
+	grant := mustCreateGrant(t, []string{p}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 
 	if _, err := ConsumeSendFileExecutionGrant(ctx, []string{p}, nil); err != nil {
@@ -259,7 +260,7 @@ func TestConsumeSendFileExecutionGrant_路径不匹配失败(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.txt")
 	b := filepath.Join(dir, "b.txt")
-	grant := CreateSendFileExecutionGrant([]string{a}, nil)
+	grant := mustCreateGrant(t, []string{a}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 
 	_, err := ConsumeSendFileExecutionGrant(ctx, []string{b}, nil)
@@ -271,7 +272,7 @@ func TestConsumeSendFileExecutionGrant_路径不匹配失败(t *testing.T) {
 func TestConsumeSendFileExecutionGrant_渠道不匹配失败(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a.txt")
-	grant := CreateSendFileExecutionGrant([]string{p}, []any{"web"})
+	grant := mustCreateGrant(t, []string{p}, []any{"web"})
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 
 	_, err := ConsumeSendFileExecutionGrant(ctx, []string{p}, []any{"cli"})
@@ -283,7 +284,7 @@ func TestConsumeSendFileExecutionGrant_渠道不匹配失败(t *testing.T) {
 func TestConsumeSendFileExecutionGrant_消费后不可再读(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a.txt")
-	grant := CreateSendFileExecutionGrant([]string{p}, nil)
+	grant := mustCreateGrant(t, []string{p}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 	_, _ = ConsumeSendFileExecutionGrant(ctx, []string{p}, nil)
 
@@ -371,10 +372,20 @@ func TestSendFileGrantEqual_不等分支(t *testing.T) {
 
 func TestLeaseFromCtx_显式nil(t *testing.T) {
 	dir := t.TempDir()
-	grant := CreateSendFileExecutionGrant([]string{filepath.Join(dir, "a.txt")}, nil)
+	grant := mustCreateGrant(t, []string{filepath.Join(dir, "a.txt")}, nil)
 	ctx := PublishSendFileExecutionGrant(context.Background(), grant)
 	ctx = ClearSendFileExecutionGrant(ctx)
 	if leaseFromCtx(ctx) != nil {
 		t.Error("explicit nil lease should read back as nil")
 	}
+}
+
+// mustCreateGrant 测试辅助：构造授权，失败直接 fail。
+func mustCreateGrant(t *testing.T, paths []string, channels any) SendFileExecutionGrant {
+	t.Helper()
+	grant, err := CreateSendFileExecutionGrant(paths, channels)
+	if err != nil {
+		t.Fatalf("CreateSendFileExecutionGrant: %v", err)
+	}
+	return grant
 }

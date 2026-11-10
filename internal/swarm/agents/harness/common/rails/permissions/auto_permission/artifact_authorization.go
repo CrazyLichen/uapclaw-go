@@ -218,8 +218,11 @@ func sendFileExecutionGrantForAllow(
 	if len(requestedPaths) == 0 {
 		return nil, "send_file_authorization_missing_path"
 	}
-	expected := permissions.CreateSendFileExecutionGrant(
+	expected, err := permissions.CreateSendFileExecutionGrant(
 		requestedPaths, facts.UntrustedArgs["target_channels"])
+	if err != nil {
+		return nil, "send_file_authorization_missing_path"
+	}
 	grant := permissions.CurrentSendFileExecutionGrant(ctx)
 	if grant == nil {
 		return nil, "send_file_authorization_missing"
@@ -250,17 +253,11 @@ func issueSendFileAuthorization(
 	if len(requestedPaths) == 0 {
 		return "send_file_authorization_missing_path", ctx
 	}
-	// Python 捕获 create 抛出的 ValueError；Go 侧该函数 panic，用 recover 等价
-	reason := ""
-	func() {
-		defer func() {
-			if recover() != nil {
-				reason = "send_file_authorization_not_file"
-			}
-		}()
-		grant := permissions.CreateSendFileExecutionGrant(
-			requestedPaths, facts.UntrustedArgs["target_channels"])
-		ctx = permissions.PublishSendFileExecutionGrant(ctx, grant)
-	}()
-	return reason, ctx
+	grant, err := permissions.CreateSendFileExecutionGrant(
+		requestedPaths, facts.UntrustedArgs["target_channels"])
+	if err != nil {
+		// Python 捕获 ValueError 后返回该原因码；Go 侧 error 语义一一对应
+		return "send_file_authorization_not_file", ctx
+	}
+	return "", permissions.PublishSendFileExecutionGrant(ctx, grant)
 }

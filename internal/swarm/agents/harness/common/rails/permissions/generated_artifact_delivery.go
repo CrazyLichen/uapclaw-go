@@ -113,19 +113,22 @@ func NormalizeSendFilePaths(value any) []string {
 // CreateSendFileExecutionGrant 构造当前 send sink 所需的最小授权。
 //
 // Python: create_send_file_execution_grant(requested_paths, *, target_channels=None)
-// 路径为空时 panic（Python 抛 ValueError）。
-func CreateSendFileExecutionGrant(requestedPaths []string, targetChannels any) SendFileExecutionGrant {
+// 路径为空时返回错误（对齐 Python 抛出的 ValueError）。
+func CreateSendFileExecutionGrant(
+	requestedPaths []string,
+	targetChannels any,
+) (SendFileExecutionGrant, error) {
 	items := make([]SendFileAuthorizationItem, 0, len(requestedPaths))
 	for _, path := range requestedPaths {
 		items = append(items, SendFileAuthorizationItem{ResolvedPath: resolveSendFilePath(path)})
 	}
 	if len(items) == 0 {
-		panic(fmt.Errorf("%s", errSendFileAuthorizationMissingPath))
+		return SendFileExecutionGrant{}, fmt.Errorf("%s", errSendFileAuthorizationMissingPath)
 	}
 	return SendFileExecutionGrant{
 		Items:          items,
 		TargetChannels: NormalizeSendFileTargetChannels(targetChannels),
-	}
+	}, nil
 }
 
 // PublishSendFileExecutionGrant 把精确授权发布到当前任务，返回派生 ctx。
@@ -198,7 +201,10 @@ func ConsumeSendFileExecutionGrant(
 	grant := lease.grant
 	lease.mu.Unlock()
 
-	expected := CreateSendFileExecutionGrant(requestedPaths, targetChannels)
+	expected, err := CreateSendFileExecutionGrant(requestedPaths, targetChannels)
+	if err != nil {
+		return nil, err
+	}
 	if !sendFileGrantEqual(grant, expected) {
 		return nil, fmt.Errorf("%s", errSendFileExecutionGrantMismatch)
 	}
