@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -86,9 +87,42 @@ type childProc struct {
 	// frames 已解析的 JSON-RPC 帧
 	frames chan map[string]any
 	// stderr 子进程 stderr（诊断 + 非 JSON stdout 行）
-	stderr *strings.Builder
+	stderr *syncBuffer
 	// dirty 非 JSON 的 stdout 行计数（协议帧污染检测）
 	dirty int32
+}
+
+// syncBuffer 并发安全的字节缓冲。
+//
+// 必要性（CI -race 实测）：子进程 stderr 由 exec 的内部读协程写，非 JSON 的
+// stdout 行由本文件的扫描协程写，而测试主体在多处读 stderr 做失败诊断——
+// 三方并发访问 strings.Builder 会报 data race（strings/builder.go:47）。
+type syncBuffer struct {
+	// mu 保护 buf
+	mu sync.Mutex
+	// buf 底层缓冲
+	buf strings.Builder
+}
+
+// Write 实现 io.Writer，供 exec.Cmd.Stderr 使用。
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// WriteString 追加字符串（读协程记录污染行用）。
+func (b *syncBuffer) WriteString(s string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf.WriteString(s)
+}
+
+// String 返回当前累计内容（测试侧诊断用）。
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -350,7 +384,7 @@ func (s *AcpStdioBinarySuite) startChild(gatewayURL string) *childProc {
 	if gatewayURL == "" {
 		gatewayURL = fmt.Sprintf("ws://127.0.0.1:%d/acp", s.gwPort)
 	}
-	child := &childProc{stderr: &strings.Builder{}}
+	child := &childProc{stderr: &syncBuffer{}}
 	child.cmd = exec.Command(s.uapclawBin, "acp", "--gateway-url", gatewayURL)
 	// 子进程用独立 data dir（不与父进程共享 config，避免竞争）
 	child.cmd.Env = append(os.Environ(), "UAPCLAW_DATA_DIR="+s.setupDataDir())
