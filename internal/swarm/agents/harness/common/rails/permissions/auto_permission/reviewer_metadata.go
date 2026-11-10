@@ -354,10 +354,12 @@ func reviewerUIMetadata(
 	reason string,
 	metadata map[string]any,
 ) map[string]any {
+	// 第一步：先复制一份元数据，后面的改写都落在这份副本上。
 	merged := make(map[string]any, len(metadata)+8)
 	for key, value := range metadata {
 		merged[key] = value
 	}
+	// 第二步：定下审查状态、展示语言与决策来源；兜底或超时时来源强制记为 fallback。
 	status := reviewerStatus(merged)
 	language := configuredReviewerDisplayLanguage()
 
@@ -367,6 +369,8 @@ func reviewerUIMetadata(
 	}
 	source := uiText(merged, []string{"decision_source"}, defaultSource, ReviewerUIShortTextMaxLength)
 
+	// 第三步：判断这次结论能否直接用模型自己的自然语言说明——
+	// 来源是自动审查、状态正常、没有兜底原因、也不是「结论不被允许」的降级。
 	naturalLanguage := source == "auto_reviewer" &&
 		status != reviewerUIStatusFallback &&
 		status != reviewerUIStatusTimedOut &&
@@ -385,6 +389,8 @@ func reviewerUIMetadata(
 		uiText(merged, []string{"reviewer_reason_code", "reason_code"}, "",
 			ReviewerUIShortTextMaxLength) == "reviewer_outcome_not_allowed"
 
+	// 第四步：按三种情况挑「证据说明」：降级放行用宿主理由、自然语言用模型摘要、
+	// 其余回落到本地化后的固定文案。
 	var evidence string
 	switch {
 	case downgradedAllow:
@@ -396,6 +402,7 @@ func reviewerUIMetadata(
 		evidence = hostDisplayReason(reason, merged, status, language)
 	}
 
+	// 第五步：补齐界面要展示的固定字段（动作摘要、来源、证据、状态、风险等级）。
 	actionSummary := uiText(merged, []string{"action_summary"}, reviewerActionSummary(facts),
 		ReviewerUIShortTextMaxLength)
 
@@ -416,6 +423,7 @@ func reviewerUIMetadata(
 	}
 	merged["risk_level"] = riskLevel
 
+	// 第六步：删掉不该给前端看的内部字段（原始结局、延迟、摘要指纹等）。
 	delete(merged, "user_authorization")
 	for _, key := range []string{
 		"decision_digest", "latency_ms", "reviewer_raw_outcome", "reviewer_raw_status",
@@ -425,6 +433,7 @@ func reviewerUIMetadata(
 		delete(merged, key)
 	}
 
+	// 第七步：人工态要补转人工的理由与提示；非人工态反过来把这些字段清掉。
 	if hasKey(manualStatuses, status) {
 		merged["manual_reason_code"] = uiText(merged,
 			[]string{"manual_reason_code", "reviewer_reason_code"}, reason, ReviewerUIShortTextMaxLength)

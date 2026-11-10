@@ -335,6 +335,7 @@ func (m *ExperienceManager) RequestSimplify(
 ) (string, error) {
 	startedAt := time.Now()
 
+	// 技能不存在或还没有演化记录时无需整理，直接返回空结果。
 	if !m.store.SkillExists(ctx, skillName) {
 		logger.Info(logComponent).
 			Str("kind", m.kind).
@@ -358,6 +359,7 @@ func (m *ExperienceManager) RequestSimplify(
 		return "", nil
 	}
 
+	// 读技能正文并取其中的简介，作为整理时的上下文。
 	content, err := m.store.ReadSkillContent(ctx, skillName)
 	if err != nil {
 		logger.Warn(logComponent).
@@ -375,6 +377,7 @@ func (m *ExperienceManager) RequestSimplify(
 		Int("records", len(records)).
 		Msg("[ExperienceManager] request_simplify loaded records")
 
+	// 让打分器出整理动作；没有动作就说明这次没什么可整理的。
 	actions, err := m.scorer.Simplify(ctx, skillName, summary, records, userIntent)
 	if err != nil || len(actions) == 0 {
 		elapsed := time.Since(startedAt).Seconds()
@@ -386,6 +389,7 @@ func (m *ExperienceManager) RequestSimplify(
 		return "", nil
 	}
 
+	// 有动作则登记为待审批，返回请求号给上层走审批。
 	requestID := fmt.Sprintf("evolve_simplify_%08x", time.Now().UTC().UnixNano()&0xFFFFFFFF)
 	m.pendingGovernance[requestID] = &PendingGovernance{
 		Kind:      "simplify",

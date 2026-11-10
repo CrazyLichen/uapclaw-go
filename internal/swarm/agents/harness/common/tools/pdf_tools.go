@@ -153,12 +153,14 @@ func parsePageRanges(value any) []int {
 			panic(fmt.Errorf("page numbers are 1-based, got: %d", v))
 		}
 		return []int{int(v)}
+	// JSON 解出来的数字是 float64，取整后同样按 1 起页校验。
 	case float64:
 		n := int(v)
 		if n < 1 {
 			panic(fmt.Errorf("page numbers are 1-based, got: %v", v))
 		}
 		return []int{n}
+	// 列表形态：逐项递归解析后去重排序。
 	case []any:
 		pages := map[int]bool{}
 		for _, entry := range v {
@@ -177,6 +179,7 @@ func parsePageRanges(value any) []int {
 		return sortedPageList(pages)
 	}
 
+	// 其余形态按 "1-5,8" 这样的范围串解析：逗号分隔，每段是单页或 a-b 区间。
 	text := strings.TrimSpace(fmt.Sprint(value))
 	if text == "" {
 		return nil
@@ -187,6 +190,7 @@ func parsePageRanges(value any) []int {
 		if part == "" {
 			continue
 		}
+		// 带连字符的是区间段，展开成逐页；否则就是单页。
 		if strings.Contains(part, "-") {
 			startText, endText := partition(part, "-")
 			start, err1 := strconv.Atoi(startText)

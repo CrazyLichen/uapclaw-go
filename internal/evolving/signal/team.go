@@ -364,6 +364,7 @@ func (d *TeamSignalDetector) DetectUserIntent(
 	messages []map[string]any,
 	teamSkillContent string,
 ) (*UserIntent, error) {
+	// 第一步：只取用户消息，最多保留最近 10 条；一条用户消息都没有就不用判定了。
 	var userMsgs []string
 	for _, m := range messages {
 		role := fmt.Sprintf("%v", m["role"])
@@ -378,6 +379,7 @@ func (d *TeamSignalDetector) DetectUserIntent(
 		return nil, nil
 	}
 
+	// 第二步：按语言选提示词模板，把技能简介、角色摘要、用户原话填进占位符（都做长度截断）。
 	userText := strings.Join(userMsgs, "\n")
 	promptTemplate := teamUserRequestPromptCN
 	if d.language != "cn" {
@@ -399,6 +401,7 @@ func (d *TeamSignalDetector) DetectUserIntent(
 	}
 	prompt = strings.ReplaceAll(prompt, "{user_messages}", userTextTruncated)
 
+	// 第三步：请模型判断，结果必须是 JSON 对象才算可用，否则触发重试。
 	raw, err := llm_resilience.InvokeTextWithRetry(
 		ctx, d.llm, d.model, prompt, d.userIntentLLMPolicy,
 		llm_resilience.WithIsResultUsable(func(text string) bool {
@@ -414,6 +417,7 @@ func (d *TeamSignalDetector) DetectUserIntent(
 		return nil, err
 	}
 
+	// 第四步：解析结论，只有明确表示「需要改进」时才返回意图，其余一律当作没有意图。
 	m, ok := parseTeamModelJSONAsDict(raw)
 	if !ok {
 		return nil, nil

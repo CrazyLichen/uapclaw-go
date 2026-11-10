@@ -531,6 +531,8 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 	truncated := LooksTruncated(brokenRaw)
 	var retryPrompt string
 
+	// 先按失败形态挑重试策略：输出被截断 → 原提示重新生成；JSON 格式错 → 让模型修格式，
+	// 第三次还不行就换成更严格的修复提示。
 	if truncated {
 		if attemptNumber >= 3 {
 			logger.Warn(logComponent).
@@ -566,6 +568,7 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 		)
 	}
 
+	// 调模型拿重试结果；调用失败直接上抛，不在这里吞掉。
 	response, err := llm_resilience.InvokeTextWithRetry(
 		ctx,
 		o.llm,
@@ -583,6 +586,7 @@ func (o *TeamSkillExperienceOptimizer) RetryParseDrafts(ctx context.Context, bro
 		return nil, "", err
 	}
 
+	// 解析重试结果：仍解析不出来就放弃，并把用的是哪种策略写进错误里方便排查。
 	drafts, _ := ParseExperienceDraftsWithError(response, teamExtractJSONWithError)
 	if drafts == nil {
 		strategy := "regeneration"

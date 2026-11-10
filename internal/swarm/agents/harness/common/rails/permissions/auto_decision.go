@@ -170,14 +170,18 @@ func DeterministicDomainRoute(
 	recentURLSources []RecentURLSource,
 	browserProfile *BrowserRuntimeSecurityProfile,
 ) *DecisionRoute {
+	// 先算出三个共用输入：工具大类、细分操作、网络事实；后面按大类逐段判定。
 	category := facts.Capability.Category
 	operation := domainOperation(facts)
 	network := InspectNetworkScope(facts)
 
+	// MCP：仓库里没有插件注册表，无法确知影响面，一律走人工。
 	switch category {
 	case "mcp":
 		return &DecisionRoute{Level: AutoDecisionAskLevel, Reason: "domain_policy_generic_mcp_manual", Source: "manual_only"}
 
+	// 浏览器：先用网址硬守卫与协议白名单挡掉明确危险的，
+	// 再看操作类型分流（导航单独判、其余查操作表）。
 	case "browser":
 		for _, uri := range network.AbsoluteURIs {
 			if reason := AbsoluteURIHardBlockReason(uri); reason != "" {
@@ -250,6 +254,7 @@ func DeterministicDomainRoute(
 		}
 		return &DecisionRoute{Level: AutoDecisionAskLevel, Reason: "domain_policy_browser_unknown_payload", Source: "manual_only"}
 
+	// 定时任务：预览只读，增删改一类的操作按操作表区分「变更」与「破坏性」。
 	case "cron":
 		cronReasons := map[string]string{
 			"preview": "domain_policy_cron_preview",
@@ -264,6 +269,7 @@ func DeterministicDomainRoute(
 		}
 		return &DecisionRoute{Level: AutoDecisionAskLevel, Reason: "domain_policy_cron_unknown_payload", Source: "manual_only"}
 
+	// 记忆：只有写类操作需要判定，且命名空间/作用域/保留期三者缺一即转人工。
 	case "memory":
 		if facts.Capability.OperationFamily != "memory_write" {
 			return nil
@@ -288,6 +294,7 @@ func DeterministicDomainRoute(
 		}
 		return &DecisionRoute{Level: AutoDecisionAskLevel, Reason: reason, Source: source}
 
+	// 技能：读取类与变更类分开给理由，未知操作转人工。
 	case "skill":
 		switch operation {
 		case "read", "search", "list":
@@ -546,6 +553,7 @@ func evaluateSearchSkillEgressGuard(facts ToolDecisionFacts) *DecisionRoute {
 //
 // Python: _domain_operation(facts)
 func domainOperation(facts ToolDecisionFacts) string {
+	// 优先取参数里的操作名；没给就退回用工具名，统一小写并把连字符换成下划线。
 	raw := textArg(facts.UntrustedArgs, "operation", "action", "mode", "op")
 	operation := strings.ToLower(strings.ReplaceAll(raw, "-", "_"))
 	if raw == "" {
@@ -553,8 +561,11 @@ func domainOperation(facts ToolDecisionFacts) string {
 	}
 	category := facts.Capability.Category
 
+	// 按工具大类把操作名映射成固定的操作标签，映射不到的记为 unknown。
 	switch category {
 	case "browser":
+		// 浏览器操作名很不统一，这里按关键字优先级逐个尝试：
+		// 先处理特殊工具与破坏性动作（取消/路由/上传/下载），再按只读 → 导航 → 点击 → 输入收口。
 		toolName := facts.Capability.ToolName
 		if toolName == "browser_page_action" && containsString([]string{
 			"read_text", "find", "snapshot", "tabs", "wait"}, operation) {
@@ -600,6 +611,7 @@ func domainOperation(facts ToolDecisionFacts) string {
 		}
 		return "unknown"
 
+	// 定时任务：成对的关键字表，命中即返回对应的操作标签。
 	case "cron":
 		for _, pair := range [][2]string{
 			{"preview", "preview"},
@@ -620,6 +632,7 @@ func domainOperation(facts ToolDecisionFacts) string {
 		}
 		return "unknown"
 
+	// 记忆：先看能力族定读/搜，再看操作名区分编辑与写入。
 	case "memory":
 		family := facts.Capability.OperationFamily
 		if family == "memory_read" {
@@ -638,6 +651,7 @@ func domainOperation(facts ToolDecisionFacts) string {
 		}
 		return "unknown"
 
+	// 技能：先看能力族定读/搜，再看操作名关键字。
 	case "skill":
 		family := facts.Capability.OperationFamily
 		if family == "skill_read" {
@@ -693,6 +707,7 @@ func boundedText(value any, limit int, allowEmpty bool) bool {
 //
 // Python: _catalogue_args_valid(name, args)
 func catalogueArgsValid(name string, args map[string]any) bool {
+	// tool_search：先限定允许的键，再逐字段校验取值（长度、枚举、条数）。
 	if name == "tool_search" {
 		if !keysSubsetOf(args, "operation", "category", "tool", "tools", "query", "cursor", "call_goal") {
 			return false
@@ -799,8 +814,10 @@ func closedInternalArgsValid(facts ToolDecisionFacts, network NetworkScopeFacts)
 	family := facts.Capability.OperationFamily
 	args := facts.UntrustedArgs
 
+	// 按能力族分别校验参数形状：只读内部动作、会话状态查询等各自允许不同的键。
 	switch family {
 	case "internal_readonly":
+		// 只读内部动作：不同工具允许的键不同，这里逐个工具判。
 		name := facts.Capability.ToolName
 		if name == "cron_list_jobs" {
 			return len(args) == 0
@@ -854,6 +871,7 @@ func closedInternalArgsValid(facts ToolDecisionFacts, network NetworkScopeFacts)
 		}
 		return true
 
+	// 会话状态查询：每个工具一张允许键表，不在表里就不算合法。
 	case "session_status":
 		schemas := map[string][]string{
 			"session_list":         {"query", "limit", "offset"},

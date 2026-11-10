@@ -94,10 +94,12 @@ func ValidateStructuredQuestions(
 		return ""
 	}
 	args := interrupt.ParseToolArgs(toolCall)
+	// 没有传 questions 的调用是单纯提问，直接放过。
 	rawQuestions, hasQuestions := args["questions"]
 	if !hasQuestions {
 		return ""
 	}
+	// 第一层：整个 questions 必须是数组，且条数不超过上限。
 	questionsList, isList := rawQuestions.([]any)
 	if !isList {
 		return "[INVALID_ARGUMENT] questions must be an array of question " +
@@ -106,12 +108,14 @@ func ValidateStructuredQuestions(
 			`{"label": "B"}]}]. To ask a single free-text question ` +
 			"instead, omit questions entirely and send only query."
 	}
+	// 条数超上限时让模型分批问，避免一次弹太多问题。
 	if len(questionsList) > MaxStructuredQuestions {
 		return fmt.Sprintf("[INVALID_ARGUMENT] ask_user accepts at most %d questions "+
 			"per call; received %d. Call ask_user again with the first %d questions, "+
 			"and ask the remaining ones in a further call once these are answered.",
 			MaxStructuredQuestions, len(questionsList), MaxStructuredQuestions)
 	}
+	// 第二层：逐个问题检查形状 —— 问题体、题干、可选标题。
 	for questionIndex, rawQuestion := range questionsList {
 		question, isMapping := rawQuestion.(map[string]any)
 		if !isMapping {
@@ -134,6 +138,7 @@ func ValidateStructuredQuestions(
 					"e.g. header: \"Deployment\", or drop the field.", questionIndex)
 			}
 		}
+		// 第三层：选项列表的形状 —— 数组、每项有标签、标签不重复也不占用保留名。
 		rawOptions, hasOptions := question["options"]
 		if !hasOptions {
 			continue
@@ -187,6 +192,7 @@ func ValidateStructuredQuestions(
 				canonicalLabels[canonicalLabel] = struct{}{}
 			}
 		}
+		// 第四层：选项个数只允许 0 或 2-4 个（1 个选项不构成选择）。
 		if len(optionsList) > 0 &&
 			(len(optionsList) < minStructuredOptions || len(optionsList) > maxStructuredOptions) {
 			return fmt.Sprintf("[INVALID_ARGUMENT] questions[%d].options must contain "+

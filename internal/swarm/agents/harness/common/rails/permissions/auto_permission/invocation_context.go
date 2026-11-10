@@ -271,6 +271,7 @@ func ResolveTrustedSendIdentity(
 	kwargs map[string]any,
 	compatibilityInvocation ToolInvocation,
 ) *TrustedSendIdentityResolution {
+	// 第一步：从回调上下文里取出宿主侧的调用信息（工具名、入参、工具调用）。
 	var hostToolCall any
 	var hostToolName any
 	var hostToolArgs any
@@ -284,6 +285,7 @@ func ResolveTrustedSendIdentity(
 		}
 	}
 
+	// 第二步：两侧工具名统一归一后比对；两边都不是 send_file 就不用做身份校验。
 	normalizedHostName := NormalizedIdentifier(hostToolName)
 	compatibilityName := NormalizedIdentifier(compatibilityInvocation.ToolName)
 	hostIsSend := normalizedHostName == SendFileToolName
@@ -292,6 +294,7 @@ func ResolveTrustedSendIdentity(
 		return nil
 	}
 
+	// 第三步：先按宿主信息拼出可信调用，后面即使校验失败也把它带回给调用方。
 	trustedName := normalizedHostName
 	if trustedName == "" {
 		trustedName = SendFileToolName
@@ -307,6 +310,7 @@ func ResolveTrustedSendIdentity(
 		ToolArgs: trustedArgs,
 	}
 
+	// 第四步：宿主信息缺失，或两侧对「是不是 send_file」判断不一致，都不能建立可信身份。
 	if cbc == nil || !hasInputs || hostToolCall == nil || normalizedHostName == "" || hostToolArgs == nil {
 		return &TrustedSendIdentityResolution{
 			Invocation: trustedInvocation,
@@ -320,6 +324,7 @@ func ResolveTrustedSendIdentity(
 		}
 	}
 
+	// 第五步：会话、请求、工具调用、渠道四要素齐全才继续，再从上下文里取调用身份。
 	sessionID := HostSessionID(cbc)
 	requestID := NormalizedIdentifier(swarmschema.ToolPermissionRequestIDFromCtx(ctx))
 	toolCallID := HostToolCallID(hostToolCall)
@@ -339,6 +344,7 @@ func ResolveTrustedSendIdentity(
 		ToolName:           normalizedHostName,
 		NormalizedToolArgs: NormalizeInvocationToolArgs(SendFileToolName, hostToolArgs),
 	}
+	// 最后：兼容通道的入参必须与宿主一致，不一致说明两个入口看到的不是同一次调用。
 	if !CompatibilitySendMatchesHost(kwargs, compatibilityInvocation, identity) {
 		return &TrustedSendIdentityResolution{
 			Invocation: trustedInvocation,

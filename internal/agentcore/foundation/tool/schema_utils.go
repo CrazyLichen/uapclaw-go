@@ -293,6 +293,7 @@ func validateParamType(key string, val any, p *schema.Param) error {
 				exception.WithParam("reason", fmt.Sprintf("expected number, got %T", val)),
 			)
 		}
+	// 数组：元素个数上下限。
 	case schema.ParamTypeArray:
 		arr, ok := val.([]any)
 		if !ok {
@@ -359,6 +360,7 @@ func validateParamType(key string, val any, p *schema.Param) error {
 // validateParamConstraints 校验值是否符合参数约束条件（minLength/maxLength/pattern/minimum/maximum）
 func validateParamConstraints(key string, val any, p *schema.Param) error {
 	switch p.Type {
+	// 字符串：长度上下限 + 正则匹配。
 	case schema.ParamTypeString:
 		s, ok := val.(string)
 		if !ok {
@@ -395,6 +397,7 @@ func validateParamConstraints(key string, val any, p *schema.Param) error {
 				)
 			}
 		}
+	// 数值：最小/最大值（NaN 表示该约束未设置）。
 	case schema.ParamTypeInteger, schema.ParamTypeNumber:
 		f, ok := toFloat64(val)
 		if !ok {

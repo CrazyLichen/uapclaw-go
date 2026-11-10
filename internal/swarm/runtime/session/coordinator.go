@@ -1431,6 +1431,7 @@ func (c *RuntimeSessionCoordinator) DeliverControl(
 	operation func(context.Context) (any, error),
 	opts ControlDeliveryOptions,
 ) (any, error) {
+	// 先认领父执行：同一个执行只允许一条控制输入在飞。
 	record, parent, requestID, err := c.claimControlParent(sessionID, answered,
 		"control input is already being delivered")
 	if err != nil {
@@ -1442,6 +1443,7 @@ func (c *RuntimeSessionCoordinator) DeliverControl(
 		c.refreshSessionState(record)
 	}()
 
+	// 构建这次投递自己的执行句柄；父执行若在等待控制，先把它叫醒再跑。
 	handle, err := c.newExecution(record, requestID, SessionWorkKindControlInput, parent.ExecutionID, nil)
 	if err != nil {
 		return nil, err
@@ -1461,6 +1463,7 @@ func (c *RuntimeSessionCoordinator) DeliverControl(
 		opts.OnExecution(handle.Snapshot())
 	}
 
+	// 真正执行调用方给的操作，失败按取消/失败两种终态收尾。
 	value, opErr := operation(opCtx)
 	if opErr != nil {
 		if errors.Is(opErr, context.Canceled) {
@@ -1474,6 +1477,7 @@ func (c *RuntimeSessionCoordinator) DeliverControl(
 		return nil, opErr
 	}
 
+	// 操作跑完可能父执行或整个会话已经结束，这种投递结果直接丢弃。
 	c.mu.Lock()
 	recordEnded := c.sessions[sessionID] != record ||
 		record.state == RuntimeSessionStateQuiescing ||
@@ -1487,6 +1491,7 @@ func (c *RuntimeSessionCoordinator) DeliverControl(
 		}
 	}
 
+	// 判断结果是否带新的交互：有交互就继续挂起等用户，否则标记本次投递完成。
 	var controlIDs map[string]struct{}
 	if opts.InteractionIDs != nil {
 		controlIDs = opts.InteractionIDs(value)

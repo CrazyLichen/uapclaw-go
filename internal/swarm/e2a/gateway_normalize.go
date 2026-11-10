@@ -297,6 +297,7 @@ func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string,
 		Details:        map[string]any{"kind": "legacy_agent_response", "ok": resp.OK},
 	}
 
+	// 元数据复制一份再往下传，不直接复用调用方的 map。
 	meta := map[string]any{}
 	if resp.Metadata != nil {
 		for k, v := range resp.Metadata {
@@ -304,6 +305,7 @@ func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string,
 		}
 	}
 
+	// 按成功/失败分两条路生成响应体：成功带 result，失败带错误码与错误信息。
 	var body map[string]any
 	var status, kind string
 

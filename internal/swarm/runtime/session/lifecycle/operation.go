@@ -97,6 +97,7 @@ func SaveLocked(kind, resourceID string, value map[string]any) {
 //  3. 资源已永久删除 → delete 返回既有操作，其他动作 NOT_FOUND
 //  4. 否则新建操作，generation 累加 blockExecution
 func Begin(kind, resourceID, action string, blockExecution bool) (map[string]any, error) {
+	// 先拿资源锁，整个判定与写入都在锁内完成，避免两个操作同时起。
 	release, err := ResourceLock(kind, resourceID)
 	if err != nil {
 		return nil, err
@@ -107,6 +108,7 @@ func Begin(kind, resourceID, action string, blockExecution bool) (map[string]any
 	if readErr != nil {
 		return nil, readErr
 	}
+	// 规则一、二：已有未完成操作时——类型不同就报「操作进行中」，类型相同直接返回原操作。
 	existing, _ := value["operation"].(map[string]any)
 	if existing != nil {
 		status, _ := existing["status"].(string)
@@ -120,12 +122,14 @@ func Begin(kind, resourceID, action string, blockExecution bool) (map[string]any
 			return existing, nil
 		}
 	}
+	// 规则三：资源已永久删除时，只有删除动作能返回原操作，其它动作按找不到处理。
 	if deleted, _ := value["deleted"].(bool); deleted {
 		if action == OperationKindDelete {
 			return existing, nil
 		}
 		return nil, &LifecycleError{Code: "NOT_FOUND", Message: "resource was permanently deleted"}
 	}
+	// 规则四：新建操作记录，需要阻断执行时把代次加一，并同步更新阻断相关字段。
 	generation := asInt(value["generation"])
 	if blockExecution {
 		generation++

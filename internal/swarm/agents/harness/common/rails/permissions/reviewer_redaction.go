@@ -294,6 +294,7 @@ func ReviewerPathLocation(rawPath, workspaceRoot, platformTrustedRoot string) (*
 	if containsControlChar(rawPath) {
 		return nil, "redacted"
 	}
+	// 第一步：先脱敏一遍原路径，逐段对比找出哪些段落本身是敏感值。
 	rawNative := strings.ReplaceAll(rawPath, string(os.PathSeparator), "/")
 	rawSecretParts := map[string]bool{}
 	rawParts := strings.Split(rawNative, "/")
@@ -303,6 +304,7 @@ func ReviewerPathLocation(rawPath, workspaceRoot, platformTrustedRoot string) (*
 			rawSecretParts[part] = true
 		}
 	}
+	// 第二步：只处理绝对路径；相对路径与网络共享路径无法定位，直接判不可用。
 	expanded := expandHome(rawPath)
 	if !filepath.IsAbs(expanded) || strings.HasPrefix(rawPath, "//") || strings.HasPrefix(rawPath, "\\\\") {
 		return nil, "unavailable"
@@ -312,6 +314,7 @@ func ReviewerPathLocation(rawPath, workspaceRoot, platformTrustedRoot string) (*
 	if containsControlChar(targetPosix) {
 		return nil, "redacted"
 	}
+	// 第三步：把解析后的真实路径再脱敏，并把上一步找出的敏感段落强制替换掉。
 	safeTarget := redactPathValues(targetPosix)
 	targetSegs := strings.Split(targetPosix, "/")
 	safeSegs := strings.Split(safeTarget, "/")
@@ -324,6 +327,8 @@ func ReviewerPathLocation(rawPath, workspaceRoot, platformTrustedRoot string) (*
 	}
 	safeTarget = strings.Join(merged, "/")
 
+	// 第四步：依次尝试工作区根、平台信任根，算出相对路径并记下用的是哪个根；
+	// 都不命中时退回卷根（Windows 是盘符，类 Unix 是 /）。
 	base := ""
 	relative := ""
 	for _, candidate := range []struct{ name, root string }{
@@ -350,6 +355,8 @@ func ReviewerPathLocation(rawPath, workspaceRoot, platformTrustedRoot string) (*
 	if relative == "" {
 		relative = "."
 	}
+	// 第五步：从脱敏后的段落里截出与相对路径对应的尾部；
+	// 长度超限就整条省略，脱敏生效则把状态标成 redacted。
 	relativeSegs := strings.Split(relative, "/")
 	if len(relativeSegs) > len(merged) {
 		return nil, "unavailable"

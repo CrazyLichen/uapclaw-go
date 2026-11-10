@@ -89,6 +89,7 @@ func ParseIDs(params map[string]any, deleteMode bool) ([]string, error) {
 // 排序：archived_at 倒序，同刻按 ID 升序——保证分页稳定。
 // offset 语义（非游标）与上游一致。
 func Page(items []map[string]any, params map[string]any, key string, maximum int) (map[string]any, error) {
+	// 第一步：解析并校验分页参数（limit 有上限，offset 不能为负）。
 	limit, ok := asPageInt(params["limit"], defaultPageLimit)
 	if !ok || limit < 1 || limit > maximum {
 		return nil, &LifecycleError{Code: "BAD_REQUEST", Message: "invalid pagination"}
@@ -97,6 +98,7 @@ func Page(items []map[string]any, params map[string]any, key string, maximum int
 	if !ok || offset < 0 {
 		return nil, &LifecycleError{Code: "BAD_REQUEST", Message: "invalid pagination"}
 	}
+	// 第二步：解析过滤条件，非法取值一律按 400 拒绝，不做猜测式纠正。
 	workMode, hasWorkMode := params["work_mode"]
 	if hasWorkMode {
 		text, isString := workMode.(string)
@@ -121,12 +123,14 @@ func Page(items []map[string]any, params map[string]any, key string, maximum int
 		}
 		projectFilter = validated
 	}
+	// 会话列表看 title，项目列表看 name，两者字段名不同。
 	keyword = strings.ToLower(strings.TrimSpace(keyword))
 	titleKey := "title"
 	if key != "sessions" {
 		titleKey = "name"
 	}
 
+	// 第三步：按上面的条件逐条过滤。
 	filtered := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		if hasWorkMode {
@@ -149,6 +153,7 @@ func Page(items []map[string]any, params map[string]any, key string, maximum int
 		}
 		filtered = append(filtered, item)
 	}
+	// 第四步：排序（归档时间倒序，同一时刻按标识升序，保证翻页顺序稳定）。
 	idKey := "session_id"
 	if key != "sessions" {
 		idKey = "project_id"
@@ -163,6 +168,7 @@ func Page(items []map[string]any, params map[string]any, key string, maximum int
 		rightID, _ := filtered[j][idKey].(string)
 		return leftID < rightID
 	})
+	// 第五步：按 offset/limit 切片，并给出是否还有下一页。
 	total := len(filtered)
 	start := offset
 	if start > total {
@@ -303,6 +309,7 @@ func EventSnapshots() ([]map[string]any, error) {
 	if err != nil {
 		return nil, nil
 	}
+	// 逐个资源文件处理：只认 .json，读不动或没有 operation 段的直接跳过。
 	projectStates := map[string]map[string]any{}
 	result := make([]map[string]any, 0, len(entries))
 	for _, entry := range entries {
@@ -317,6 +324,7 @@ func EventSnapshots() ([]map[string]any, error) {
 		if operation == nil {
 			continue
 		}
+		// 项目类只关心「删除」这一类操作，其它操作不产生刷新事件。
 		kind, _ := operation["resource_type"].(string)
 		resourceID, _ := operation["resource_id"].(string)
 		if kind == "project" {
@@ -330,6 +338,7 @@ func EventSnapshots() ([]map[string]any, error) {
 		} else if kind == "project" {
 			projectID = resourceID
 		}
+		// 会话条目要带上所属项目状态，同项目多条只读一次，用上面的缓存兜住。
 		var projectValue map[string]any
 		if kind == "session" {
 			cached, ok := projectStates[projectID]
@@ -343,6 +352,7 @@ func EventSnapshots() ([]map[string]any, error) {
 		if kind == "session" {
 			projectionProjectID = projectID
 		}
+		// 组装推送内容：先放标识与 revision，再并入投影出来的字段。
 		payload := map[string]any{
 			"resource_id":  resourceID,
 			"operation_id": operation["operation_id"],

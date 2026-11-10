@@ -495,6 +495,7 @@ func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 	if maxItems <= 0 {
 		maxItems = 50
 	}
+	// 先处理拿不到数据的情况：空 payload、payload 里带错误、没有技能列表。
 	if payload == nil {
 		return "暂无技能数据。"
 	}
@@ -513,6 +514,7 @@ func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 		return "当前无可用技能。"
 	}
 
+	// 逐条拼展示行：标题、可选来源后缀、可选描述（超长截断），条数受 maxItems 限制。
 	lines := []string{"【技能列表】"}
 	limit := len(skillsSlice)
 	if limit > maxItems {
@@ -560,6 +562,7 @@ func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 			lines = append(lines, fmt.Sprintf("%d. %v", i+1, item))
 		}
 	}
+	// 被截断时补一行说明总数，免得用户以为技能只有这几条。
 	if len(skillsSlice) > maxItems {
 		lines = append(lines, fmt.Sprintf("... 共 %d 项，仅显示前 %d 项。", len(skillsSlice), maxItems))
 	}
@@ -618,6 +621,9 @@ func buildControlMessageTexts() map[string]bool {
 }
 
 // buildFirstBatchRegistry 构建首批内置斜杠命令的登记表。
+//
+// 每条命令都标明归属（gateway 拦截 / client 本地）、对应的 RPC 方法与用途，
+// 后面按表派发，不再逐条写分支。
 func buildFirstBatchRegistry() []SlashCommandEntry {
 	return []SlashCommandEntry{
 		{

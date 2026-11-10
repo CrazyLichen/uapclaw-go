@@ -60,6 +60,7 @@ func BuildEvolutionProgressEvent(railKind, stage, message string, opts ...Progre
 		displayPrefix = *cfg.prefix
 	}
 
+	// 最后套上宿主事件元数据，前端据此识别这是演进审批而不是普通提问。
 	meta := EvolutionHostEventMeta{
 		EventKind: EvolutionEventKindProgress,
 		RailKind:  &railKind,
@@ -339,6 +340,7 @@ func buildTeamSkillExperienceQuestionEvent(
 ) *stream.OutputSchema {
 	en := isEn(language)
 
+	// 每个候选经验转成一条提问：正文截断到 1000 字符，题干、标题、两个选项都按语言出。
 	questionPayload := make([]map[string]any, 0, len(questions))
 
 	for _, q := range questions {

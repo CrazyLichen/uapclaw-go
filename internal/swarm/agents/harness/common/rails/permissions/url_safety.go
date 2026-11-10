@@ -603,6 +603,7 @@ func label(value any) string {
 //
 // Python: _inspect_uri(uri, root)
 func inspectURI(uri string, root *string) AbsoluteURIFacts {
+	// 第一步：拆出协议、主机、端口、账号等基础事实。
 	parsed, err := url.Parse(uri)
 	if err != nil {
 		return AbsoluteURIFacts{URI: uri, ParseFailureReason: "uri_parse_invalid"}
@@ -616,6 +617,8 @@ func inspectURI(uri string, root *string) AbsoluteURIFacts {
 		userinfo = parsed.User.Username() != "" || hasPwd
 	}
 
+	// 第二步：再做两项额外的文本检查——百分号编码能否解开、有没有 NUL 字符；
+	// 非 file 协议缺主机也算解析失败。
 	parseFailure := ""
 	if strings.Contains(uri, "%") {
 		decoded, decodeErr := url.PathUnescape(uri)
@@ -631,6 +634,7 @@ func inspectURI(uri string, root *string) AbsoluteURIFacts {
 		}
 	}
 
+	// 第三步：先落基础事实。非 file 协议或已判定解析失败的，到这里就返回。
 	common := AbsoluteURIFacts{
 		URI:                uri,
 		Scheme:             scheme,
@@ -644,6 +648,7 @@ func inspectURI(uri string, root *string) AbsoluteURIFacts {
 	if scheme != "file" || parseFailure != "" {
 		return common
 	}
+	// 第四步：file 协议还要确认是本机、且没带查询串或片段，否则只算「本地但不可解析」。
 	if host != "" && host != "localhost" {
 		common.FileResolutionReason = "file_uri_nonlocal_host"
 		return common
@@ -653,6 +658,7 @@ func inspectURI(uri string, root *string) AbsoluteURIFacts {
 		common.FileResolutionReason = "file_uri_query_or_fragment"
 		return common
 	}
+	// 第五步：把路径解出来，相对路径按工作区根补全，最后给出规范化后的绝对路径。
 	pathText, decodeErr := url.PathUnescape(parsed.Path)
 	if decodeErr != nil {
 		common.FileLocal = true

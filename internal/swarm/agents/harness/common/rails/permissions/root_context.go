@@ -778,6 +778,7 @@ func FileDeliveryConstraintText(evidence *OriginalUserIntentEvidence) string {
 // files_updated_by_user 的 JSON 对象字符串均需校验通过。
 // Python: extract_permission_user_content(rendered_prompt)
 func ExtractPermissionUserContent(renderedPrompt any) *string {
+	// 第一步：输入必须是字符串，且以中文或英文的宿主前缀开头，否则不是用户原文。
 	prompt, ok := renderedPrompt.(string)
 	if !ok {
 		return nil
@@ -795,6 +796,7 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 		return nil
 	}
 
+	// 第二步：前缀之后必须紧跟一个完整信封对象，多余尾巴一律拒绝。
 	envelope, end, err := decodeStrictObject(raw)
 	if err != nil {
 		return nil
@@ -803,6 +805,7 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 		return nil
 	}
 
+	// 第三步：信封的键集合必须「必填齐全 + 不含未知键」。
 	keys := make(map[string]struct{}, len(envelope))
 	for key := range envelope {
 		keys[key] = struct{}{}
@@ -818,6 +821,7 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 		}
 	}
 
+	// 第四步：类型必须是用户输入、来源必须是外部；系统、定时任务、心跳都不是用户原话。
 	if envelopeString(envelope, "type") != "user input" {
 		return nil
 	}
@@ -832,6 +836,7 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 	if lowerSource == "system" || lowerSource == "cron" || lowerSource == "heartbeat" {
 		return nil
 	}
+	// 第五步：时间戳与回复语言不能为空，用户改动过的文件字段必须是 JSON 对象串。
 	for _, name := range []string{"timestamp", "preferred_response_language"} {
 		if strings.TrimSpace(envelopeString(envelope, name)) == "" {
 			return nil
@@ -841,6 +846,7 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 		return nil
 	}
 
+	// 最后：取出正文，去空白后为空仍视为没有用户原文。
 	content, ok := envelope["content"].(string)
 	if !ok {
 		return nil

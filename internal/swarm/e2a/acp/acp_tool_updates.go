@@ -403,6 +403,7 @@ func inferToolKind(toolName string) string {
 // buildToolTitle 构造人类可读标题。
 // Python: _build_tool_title (L331-378)——分支链照抄
 func buildToolTitle(toolName string, arguments map[string]any) string {
+	// 先统一工具名并抽出几种常用参数，后面每个分支只读需要的那个。
 	normalized := strings.ToLower(NormalizeToolName(toolName))
 	path := summarizePath(firstStringStrict(arguments, pathKeys...))
 	query := firstStringStrict(arguments, "pattern", "query", "term", "text")
@@ -410,6 +411,7 @@ func buildToolTitle(toolName string, arguments map[string]any) string {
 	command := firstStringStrict(arguments, "command", "cmd")
 	terminalID := firstStringStrict(arguments, "terminalId", "terminal_id")
 
+	// 执行类工具：优先说清跑的是哪条命令或在哪个目录跑。
 	if containsSet(executeToolNames, normalized) {
 		switch normalized {
 		case "read_terminal_output", "wait_for_terminal_exit", "release_terminal":
@@ -430,9 +432,11 @@ func buildToolTitle(toolName string, arguments map[string]any) string {
 		}
 		return "Running command"
 	}
+	// 抓取类工具：标题里直接带出网址。
 	if containsSet(fetchToolNames, normalized) && url != "" {
 		return "Fetching " + url
 	}
+	// 搜索类工具：按「关键词 + 路径」的齐全程度拼不同说法。
 	if containsSet(searchToolNames, normalized) {
 		switch {
 		case query != "" && path != "":
@@ -445,6 +449,7 @@ func buildToolTitle(toolName string, arguments map[string]any) string {
 			return "Searching"
 		}
 	}
+	// 编辑 / 删除 / 移动 / 列举 / 读取：都尽量带上文件路径，缺失时退回泛指说法。
 	if containsSet(editToolNames, normalized) {
 		if path != "" {
 			return "Editing " + path
@@ -480,6 +485,7 @@ func buildToolTitle(toolName string, arguments map[string]any) string {
 		}
 		return "Reading data"
 	}
+	// 都不命中时退回把工具名人性化展示。
 	return humanizeToolName(toolName)
 }
 

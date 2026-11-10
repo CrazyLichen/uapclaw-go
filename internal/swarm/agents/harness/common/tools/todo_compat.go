@@ -38,6 +38,7 @@ func compatibleUpdateTodos(todos []hschema.TodoItem, updates []map[string]any) (
 	if updates == nil {
 		updates = []map[string]any{}
 	}
+	// 先建 ID → 任务指针的索引，后面的批量更新都按 ID 直接命中。
 	todoMap := make(map[string]*hschema.TodoItem, len(todos))
 	for i := range todos {
 		todoMap[todos[i].ID] = &todos[i]
@@ -45,6 +46,7 @@ func compatibleUpdateTodos(todos []hschema.TodoItem, updates []map[string]any) (
 	deletedIDs := make(map[string]bool)
 	updatedCount := 0
 
+	// 逐条应用更新：缺 ID 或 ID 不存在都整批拒绝，避免部分生效。
 	for _, todoData := range updates {
 		todoID := utils.StrValFromMap(todoData, "id")
 		if todoID == "" {
@@ -60,12 +62,14 @@ func compatibleUpdateTodos(todos []hschema.TodoItem, updates []map[string]any) (
 			)
 		}
 
+		// 状态为删除时不改内容，只记下待删 ID，最后统一剔除。
 		statusValue := utils.StrValFromMap(todoData, "status")
 		if statusValue == "deleted" || statusValue == "delete" {
 			deletedIDs[todoID] = true
 			continue
 		}
 
+		// 其余字段按「请求里给了才覆盖」处理，没给的保持原值。
 		currentTodo := todoMap[todoID]
 		if _, exists := todoData["content"]; exists {
 			currentTodo.Content = utils.StrValFromMap(todoData, "content")
@@ -95,6 +99,7 @@ func compatibleUpdateTodos(todos []hschema.TodoItem, updates []map[string]any) (
 		updatedCount++
 	}
 
+	// 剔除被删除的条目，再检查「同一时刻只能有一项 in_progress」。
 	updatedTodos := make([]hschema.TodoItem, 0, len(todos))
 	for _, item := range todos {
 		if !deletedIDs[item.ID] {
@@ -105,6 +110,7 @@ func compatibleUpdateTodos(todos []hschema.TodoItem, updates []map[string]any) (
 		return nil, "", err
 	}
 
+	// 拼回给模型的说明文案：更新了几条、删了哪几条。
 	var parts []string
 	if updatedCount > 0 {
 		parts = append(parts, fmt.Sprintf("Successfully updated %d task(s)", updatedCount))

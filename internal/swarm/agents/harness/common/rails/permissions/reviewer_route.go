@@ -133,6 +133,7 @@ func ReviewerRoute(
 	domainRoute *DecisionRoute,
 	recentURLSources []RecentURLSource,
 ) DecisionRoute {
+	// 第一段：策略与守卫结果里出现拒绝就立刻拒绝；两者都不是「询问类」时也拒绝。
 	policy := strings.ToLower(strings.TrimSpace(policyLevel))
 	guard := strings.ToLower(strings.TrimSpace(guardResult))
 
@@ -145,6 +146,7 @@ func ReviewerRoute(
 	if policy != AutoDecisionAskLevel && policy != AutoDecisionAllowLevel && guard != "scoped_candidate" {
 		return reviewerDeny("policy_not_ask")
 	}
+	// 第二段：守卫明确要求人工，以及结构性风险，都直接转人工。
 	if guard == "terminal_manual" {
 		return reviewerManual("terminal_manual")
 	}
@@ -153,6 +155,7 @@ func ReviewerRoute(
 		return reviewerManual(reason)
 	}
 
+	// 第三段：领域路由给出的结论优先——硬拦转拒绝，人工审查转人工。
 	if domainRoute != nil {
 		if domainRoute.Source == HardBlockSource {
 			if domainRoute.Reason != "" {
@@ -168,6 +171,7 @@ func ReviewerRoute(
 		}
 	}
 
+	// 第四段：执行提供方契约未验证、文件投递不合规，都转人工。
 	if RequiresManualExecutionProviderReview(facts.Capability.ToolName, facts.Capability.Category) {
 		return reviewerManual(ExecutionProviderContractUnverified)
 	}
@@ -179,6 +183,7 @@ func ReviewerRoute(
 		}
 	}
 
+	// 第五段：写工作区内文件、或访问用户自有路径，只需要语义审查。
 	if isWorkspaceWrite(facts) {
 		if workspaceRoot == "" {
 			return reviewerManual("bounded_write_workspace_missing")
@@ -189,6 +194,7 @@ func ReviewerRoute(
 		return reviewerSemantic()
 	}
 
+	// 第六段：公开搜索缺关键词转人工，关键词像密钥则拒绝。
 	if isPublicSearch(facts) {
 		query := strings.TrimSpace(anyToStringValue(facts.UntrustedArgs["query"]))
 		if query == "" {
@@ -199,6 +205,8 @@ func ReviewerRoute(
 		}
 	}
 
+	// 第七段：公开抓取按网址作用域判定——硬拦拒绝，不接受则人工；
+	// 命中「用户最近刚打开过的网址」时可直接放行。都不命中时走语义审查。
 	if isPublicFetch(facts) {
 		urlDecision := EvaluateReviewableURLScope(facts, originalUserIntent, recentURLSources)
 		if urlDecision.HardBlock {

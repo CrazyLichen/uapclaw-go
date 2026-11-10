@@ -341,6 +341,7 @@ func BuildReviewerActionView(
 	originalUserIntent *OriginalUserIntentEvidence,
 	domainRoute *DecisionRoute,
 ) *ReviewerActionView {
+	// 第一步：先做网络与副作用摘要（副作用名排序，保证同一输入输出稳定）。
 	network := InspectNetworkScope(facts)
 	sideEffects := make([]string, 0, len(facts.Capability.StaticSideEffects))
 	for effect := range facts.Capability.StaticSideEffects {
@@ -360,8 +361,10 @@ func BuildReviewerActionView(
 		"tool_category": facts.Capability.Category,
 		"tool_name":     facts.Capability.ToolName,
 	}
+	// 第二步：路径视图单独投影，可能被截断，用 pathsIncomplete 标记。
 	pathTargets, pathsIncomplete := pathTargetView(facts, policyLevel)
 
+	// 第三步：主机、协议、网址各留前 5 条，网址还要再做一次脱敏。
 	hosts := network.Hosts
 	if len(hosts) > 5 {
 		hosts = hosts[:5]
@@ -379,6 +382,7 @@ func BuildReviewerActionView(
 		redactedURLs = append(redactedURLs, RedactURL(rawURL))
 	}
 
+	// 第四步：组装审查证据；有领域路由时附上路由结论，供审查器参考。
 	reviewEvidence := map[string]any{
 		"command": commandView(facts),
 		"network": map[string]any{
@@ -399,6 +403,7 @@ func BuildReviewerActionView(
 		}
 	}
 
+	// 第五步：payload 不完整时撤销「允许一次」，并把原因写进不允许自动放行的说明。
 	payloadError := completePayloadEvidence(facts, reviewEvidence)
 	outcomes := append([]string{}, allowedOutcomes...)
 	noAutoAllow := noAutoAllowReason
@@ -917,10 +922,12 @@ func (r *AutoReviewer) parseResponse(
 	request *ReviewerActionView,
 	rawResponse any,
 ) AutoReviewAssessment {
+	// 第一关：必须是严格 JSON 对象，否则本次判定作废。
 	payload, ok := decodeStrictResponse(rawResponse)
 	if !ok {
 		return manualAssessment("invalid_json")
 	}
+	// 第二关：字段白名单——禁止出现的字段、必须出现的字段、未知字段任一违规都退回人工。
 	for field := range forbiddenReviewerFields {
 		if _, exists := payload[field]; exists {
 			return manualAssessment("forbidden_field")
@@ -936,6 +943,7 @@ func (r *AutoReviewer) parseResponse(
 			return manualAssessment("unknown_field")
 		}
 	}
+	// 第三关：三个必填字段必须是非空字符串，可选字段给了也必须是字符串。
 	for _, field := range []string{"outcome", "reason_code", "rationale"} {
 		if !isNonemptyString(payload[field]) {
 			return manualAssessment("invalid_field")
@@ -947,6 +955,7 @@ func (r *AutoReviewer) parseResponse(
 		}
 	}
 
+	// 第四关：结论只能是三种之一，且不能超出调用方允许的结论集合。
 	outcome := strings.ToLower(strings.TrimSpace(payload["outcome"].(string)))
 	switch outcome {
 	case ReviewerOutcomeAllowOnce, ReviewerOutcomeManual, ReviewerOutcomeDeny:
@@ -958,6 +967,7 @@ func (r *AutoReviewer) parseResponse(
 		return manualOutcomeNotAllowed(request, outcome)
 	}
 
+	// 第五关：结论是 manual 时，若带了可选字段就要求整套给齐，避免半截信息误导用户。
 	reasonCode := sanitizeReasonCode(payload["reason_code"])
 	reasonSummary := sanitizeReasonSummary(payload["rationale"])
 	if outcome == ReviewerOutcomeManual {
@@ -977,6 +987,7 @@ func (r *AutoReviewer) parseResponse(
 		}
 	}
 
+	// 最后：manual 结论补齐转人工的理由与提示，其余结论只带结论本身。
 	manualReasonCode := ""
 	manualReasonSummary := ""
 	userReviewHint := ""

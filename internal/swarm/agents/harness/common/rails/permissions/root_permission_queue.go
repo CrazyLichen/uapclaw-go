@@ -231,6 +231,7 @@ func (q *RootPermissionQueue) Begin(
 	toolCallID string,
 	toolName string,
 ) (RootPermissionCard, error) {
+	// 先把几个必填标识补齐并做长度校验，任一不合法就拒绝绑定。
 	rootSessionID, err := rootQueueText("root_session_id", rootSessionID, 512)
 	if err != nil {
 		return RootPermissionCard{}, err
@@ -248,6 +249,8 @@ func (q *RootPermissionQueue) Begin(
 		return RootPermissionCard{}, err
 	}
 
+	// 同一「会话 + 执行 + 工具调用」若已有待决卡，说明是 Core 恢复后的重放，
+	// 直接把原卡还回去，不再新建。
 	pendingKey := pendingCallKey{rootSessionID, executionSessionID, toolCallID}
 
 	q.mu.Lock()
@@ -265,6 +268,7 @@ func (q *RootPermissionQueue) Begin(
 		return card, nil
 	}
 
+	// 走到这里说明是新调用：request_id 变成必填，且四条标识组合不能重复。
 	requestID, err = rootQueueText("request_id", requestID, 512)
 	if err != nil {
 		return RootPermissionCard{}, err
@@ -275,6 +279,7 @@ func (q *RootPermissionQueue) Begin(
 		return RootPermissionCard{}, &RootPermissionQueueError{"permission_queue_duplicate_call"}
 	}
 
+	// 生成新的调用标识，并保证不与已有卡片撞号。
 	invocationID, err := rootQueueText("invocation_id", q.idFactory(), MaxToolInvocationIDLength)
 	if err != nil {
 		return RootPermissionCard{}, err
@@ -291,6 +296,7 @@ func (q *RootPermissionQueue) Begin(
 		return RootPermissionCard{}, &RootPermissionQueueError{"permission_queue_invocation_id_invalid"}
 	}
 
+	// 卡片落库并登记为活跃调用，后续中断请求按 active 索引找回来。
 	card := RootPermissionCard{
 		Key:      toolKey,
 		ToolName: toolName,
@@ -551,6 +557,8 @@ func (q *RootPermissionQueue) Reconcile(
 		return nil, nil
 	}
 
+	// 第一段：先否决快照本身——两份列表必须同时存在、长度一致、条数在合理范围。
+	// 这一段的任何不合规都说明 Core 与本队列已经不同步，直接隔离该会话。
 	if state == nil || interruptIDs == nil || len(state) != len(interruptIDs) {
 		q.Quarantine(rootSessionID)
 		return nil, &RootPermissionQueueError{"permission_queue_snapshot_invalid"}
@@ -564,6 +572,8 @@ func (q *RootPermissionQueue) Reconcile(
 		return nil, &RootPermissionQueueError{"permission_queue_snapshot_invalid"}
 	}
 
+	// 第二段：逐条核对身份并取出调用键。客户端工具类中断不归本队列管，跳过；
+	// 取不到键的中断记为「其它中断」，只要混入就整批拒绝。
 	interactions := make([]map[string]any, 0, len(state))
 	keys := make([]*ToolInvocationKeyV1, 0, len(state))
 	sawOther := false
@@ -608,6 +618,7 @@ func (q *RootPermissionQueue) Reconcile(
 		interactions = append(interactions, interaction)
 	}
 
+	// 第三段：全是其它中断等于本队列无事可做；混着来则判为混合中断。
 	if len(keys) == 0 {
 		return nil, nil
 	}
@@ -616,6 +627,7 @@ func (q *RootPermissionQueue) Reconcile(
 		return nil, &RootPermissionQueueError{"permission_queue_mixed_interrupt"}
 	}
 
+	// 第四段：同一次调用不能出现两张卡。
 	seenInvocation := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
 		if _, dup := seenInvocation[key.InvocationID]; dup {
@@ -628,6 +640,7 @@ func (q *RootPermissionQueue) Reconcile(
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	// 第五段：按调用键取卡，卡不在或不是 pending 都算对不齐。
 	cards := make([]RootPermissionCard, 0, len(keys))
 	for _, key := range keys {
 		card, err := q.exactCardLocked(key)
@@ -642,6 +655,7 @@ func (q *RootPermissionQueue) Reconcile(
 		cards = append(cards, card)
 	}
 
+	// 第六段：本会话其它卡不能有「还在排队」或「恢复了一半」的，否则只能隔离。
 	liveIDs := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
 		liveIDs[key.InvocationID] = struct{}{}
@@ -663,6 +677,7 @@ func (q *RootPermissionQueue) Reconcile(
 		}
 	}
 
+	// 最后：按 Core 给的顺序输出队首，后面交给调用方只暴露第一张。
 	order := make([]string, 0, len(keys))
 	for _, key := range keys {
 		order = append(order, key.InvocationID)
