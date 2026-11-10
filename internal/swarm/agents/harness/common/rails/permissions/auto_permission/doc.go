@@ -69,7 +69,8 @@
 //	├── domain_grant_audit.go # 固定领域路由判定与响应（Task 35）
 //	├── readonly_tool_bindings.go # 只读快速路径身份校验（V-4/D3/D5）
 //	├── code_tool_bindings.go # Code 控制路由绑定校验（V-7/D4）
-//	└── before_tool.go    # 七步编排主入口（Task 41）
+//	├── before_tool.go    # 七步编排主入口（Task 41）
+//	└── tool_registration.go # 工具实例装配期自动登记（V-18 接线）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）

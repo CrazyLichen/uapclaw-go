@@ -2655,3 +2655,55 @@ Go 侧处置：给 `internal/agentcore/foundation/tool/base.go` 的 `ToolCard`
 本批只完成 `rootPermissionQueue` 字段 + setter/getter 接线（建好插座），
 四个消费函数留 ⏵。**已在 `IMPLEMENTATION_PLAN.md` 的 9.90e 行追加 ⤴️ 回填项**，
 防止遗漏。
+
+### 12.38 注入点核对：四个登记表生产零调用，已改为自动登记
+
+**触发**：用户要求核对 root rail 之外的其余注入点。
+
+**核对结果**：五个 setter 的**生产调用数全部为 0**，只有测试在用。
+
+| 注入点 | 生产 | 测试 | 后果 | 判定 |
+|---|---|---|---|---|
+| `SetResolveToolByIDFunc` | 0 | 4 | 无影响 | ✅ **设计如此**——有默认实现走 `ResourceMgr`，是标准测试钩子 |
+| `SetNativePathExecutors` | 0 | 8 | 路径不冻结：`registered == nil` → 直接返回不做归一化 | ⚠️ 功能缺失 |
+| `SetReadonlyToolTypes` | 0 | 10 | **只读快速路径永久失效**：`toolSearchToolType()` 返 nil → `ResolveToolBinding` 返 nil → 永远 fail-closed | ⚠️ 功能缺失 |
+| `SetCodeControlToolTypes` | 0 | 12 | `code_plan_control` 路由永不命中 | ⚠️ 功能缺失 |
+| `SetSubagentRuntimeControlToolTypes` | 0 | 6 | `subagent_runtime_control` 恒未验证 → 强制人工 | ⚠️ 功能缺失 |
+
+#### 处置：观察者模式自动登记（不手工接线）
+
+**为什么不能直接调 setter**：登记表需要「工具实例的真实类型」，而实例在
+`ProgressiveToolRail.Init` / `AgentModeRail.Init` / `SysOperationRail.Init`
+这些 **agentcore 层**的位置才构造出来。若这些文件直接 import 本包会形成
+循环依赖（本包已依赖 `agentcore/harness/rails` 取 `ProgressiveToolRail` 类型）。
+
+**方案**：`agentcore/harness/rails` 暴露 `SetToolInstanceObserver` 回调，
+本包在 `init()` 注册观察者（`tool_registration.go`）。依赖方向仍是
+swarm → agentcore，单向外。
+
+三处构造点已接：
+
+| 构造点 | 通知的工具 |
+|---|---|
+| `ProgressiveToolRail.Init` | `tool_search` / `tool_call` |
+| `AgentModeRail.Init` | `switch_mode` / `enter_plan_mode` / `exit_plan_mode` |
+| `SysOperationRail.init` | `read_file` / `write_file` / `edit_file` / `glob` / `grep` / `list_files` / `read_pdf` / `bash` |
+
+观察者按工具名分派到三张表：
+
+- `tool_search` → `SetReadonlyToolTypes`
+- 三个 code control → `codeControlToolTypes`
+- `sessions_*` / `subagent_*` → `subagentControlToolTypes`
+- 七个 native path 工具 → **实例**表（路径冻结要校验指针同一性，故存实例不存类型）
+
+未在闭集内的工具（如 `tool_call`）不登记，避免表无界增长。
+
+#### 端到端验证
+
+`TestToolRegistration_ProgressiveRail真实装配`：真实构造 `ProgressiveToolRail`
+并 `Init` → 观察者触发 → `toolSearchToolType()` 返回非 nil。
+**只读快速路径从「永久失效」变为「可用」。**
+
+`TestToolRegistration_AgentModeRail真实装配`：三个控制工具类型全部自动登记。
+
+覆盖率：`tool_registration.go` **96.7%**。

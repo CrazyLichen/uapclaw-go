@@ -153,6 +153,9 @@ func (r *SysOperationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	permConfig := shell.NewPermissionConfig(r.permissionMode, r.denyPatterns, r.allowPatterns)
 	bashTool := shell.NewBashTool(op, language, agentID, permConfig)
 
+	// 通知权限层登记原生路径工具的具体类型（供路径冻结校验）
+	notifyToolInstances(readTool, writeTool, editTool, globTool, listDirTool, grepTool, bashTool)
+
 	// 构建工具列表
 	// Python: L69-78
 	shared := []tool.Tool{globTool, listDirTool, grepTool, bashTool}

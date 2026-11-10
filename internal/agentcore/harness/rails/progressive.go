@@ -119,7 +119,20 @@ const (
 	progressiveDiscoveryProperty = "progressive_discovery"
 )
 
+// ToolInstanceObserver 工具实例装配后的观察回调。
+//
+// 供权限层登记「装配期实际使用的工具实例类型」，避免 agentcore/harness/rails
+// 反向依赖 swarm 层的 permissions 包（会形成循环依赖）。
+// 权限层在 init 阶段调用 SetToolInstanceObserver 注入。
+type ToolInstanceObserver func(toolName string, instance tool.Tool)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// toolInstanceObserver 工具实例装配后的观察回调（可为 nil）
+	toolInstanceObserverMu sync.RWMutex
+	toolInstanceObserver   ToolInstanceObserver
+)
 
 // _ 编译时验证 ProgressiveToolRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ProgressiveToolRail)(nil)
@@ -141,6 +154,36 @@ func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail
 	// Go 无 __code__.co_freevars / __closure__，改用 MarkTrusted（已知偏差 V-4）。
 	rail.MarkTrusted()
 	return rail
+}
+
+// SetToolInstanceObserver 注入工具实例观察回调。
+//
+// 权限层用它登记工具具体类型（替代 Python 的类对象常量），
+// 从而不反向依赖 swarm 层的 permissions 包。
+func SetToolInstanceObserver(observer ToolInstanceObserver) {
+	toolInstanceObserverMu.Lock()
+	defer toolInstanceObserverMu.Unlock()
+	toolInstanceObserver = observer
+}
+
+// notifyToolInstances 通知观察者工具实例已装配。
+func notifyToolInstances(tools ...tool.Tool) {
+	toolInstanceObserverMu.RLock()
+	observer := toolInstanceObserver
+	toolInstanceObserverMu.RUnlock()
+	if observer == nil {
+		return
+	}
+	for _, candidate := range tools {
+		if candidate == nil {
+			continue
+		}
+		card := candidate.Card()
+		if card == nil {
+			continue
+		}
+		observer(card.Name, candidate)
+	}
 }
 
 // Init 注册两个元工具（显式 direct），保存注册表引用，不建索引。
@@ -183,6 +226,7 @@ func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.Base
 	r.mu.Unlock()
 
 	r.registerToolResources(searchTool, callTool)
+	notifyToolInstances(searchTool, callTool)
 	return nil
 }
 

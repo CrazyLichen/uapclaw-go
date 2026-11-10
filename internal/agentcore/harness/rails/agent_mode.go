@@ -181,6 +181,9 @@ func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 		agent_mode.NewExitPlanModeTool(deepAgent, r.language, r.agentID),
 	}
 
+	// 通知权限层登记这三个工具的具体类型（偏差 V-18 的装配期登记）
+	notifyToolInstances(r.tools...)
+
 	// Python: L120-122: 注册每个工具的 Card 到 AbilityManager 和 ResourceMgr
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
