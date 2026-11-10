@@ -4,29 +4,10 @@ import "context"
 
 // 本文件提供「protocol.go 签名需要、但归属后续章节实现」的最小形状占位。
 // 占位只保证签名可编译，**不含任何行为**（校验 / 租约 / 持久化语义全部留待回填章节）。
-// 每个占位注明 Python 依据、回填章节与回收条件；15.2 / 15.3 / 15.4 落地时
+// 每个占位注明 Python 依据、回填章节与回收条件；15.3 / 15.4 落地时
 // 在本包原地补全，**不得**回头修改 protocol.go 或 models.go 的 HarnessContext。
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// HarnessEvent 一条 harness 事件信封。
-//
-// ⤵️ 15.2 回填：本处仅空壳，用于让 HarnessEventCursor.Next 签名闭合。
-// 回收条件：15.2 落地后替换为 events.py 的完整 HarnessEvent（信封 + 有序号 + 关联 ID）。
-// Python: events.py 的 HarnessEvent（核心类型）
-type HarnessEvent struct{}
-
-// EventBufferConfig 实现方声明的有界观测缓冲契约。
-//
-// ⤵️ 15.2 回填：字段已与上游一致，capacity>0 校验留 15.2。
-// 回收条件：15.2 落地 NewEventBufferConfig 时补校验（Python: events.py:104-106）。
-// Python: events.py:98-106 EventBufferConfig
-type EventBufferConfig struct {
-	// Capacity 缓冲容量（上游默认 1024）
-	Capacity int
-	// Overflow 缓冲满时的策略（上游默认 coalesce_or_block）
-	Overflow EventOverflowPolicy
-}
 
 // HarnessCheckpoint 不透明的 provider 状态，作用域为单个 agent + 宿主会话。
 //

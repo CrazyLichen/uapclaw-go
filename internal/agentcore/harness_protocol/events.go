@@ -161,6 +161,78 @@ type ModelRequestOptions struct {
 	Data JsonObject
 }
 
+// UnknownEvent 本消费者不认识的新 schema 共享事件，解码时无损保留。
+// Python: events.py:350-361 UnknownEvent
+// 注：它的线格式 event_type 取自自身 EventType（serialization.py:357-358），
+// 15.4 codec 必须特判 *UnknownEvent，不得依赖 payloadKind()。
+type UnknownEvent struct {
+	// EventType 未知事件类型
+	EventType string
+	// SchemaVersion 该事件的 schema 版本
+	SchemaVersion string
+	// Payload 原始载荷（已冻结）
+	Payload JsonObject
+}
+
+// EventBufferConfig 实现方声明的有界观测缓冲契约。
+// Python: events.py:97-106 EventBufferConfig
+type EventBufferConfig struct {
+	// Capacity 缓冲容量（上游默认 1024）
+	Capacity int
+	// Overflow 缓冲满时的策略（上游默认 coalesce_or_block）
+	Overflow EventOverflowPolicy
+}
+
+// HarnessEvent 携带共享关联元数据的有序事件信封。
+// Python: events.py:392-426 HarnessEvent（10 字段）
+type HarnessEvent struct {
+	// Sequence 一个 start/stop 周期内严格递增的序号
+	Sequence int
+	// Timestamp 观测时刻的 Unix 秒
+	Timestamp float64
+	// Event 载荷
+	Event HarnessEventPayload
+	// HostSessionID 宿主会话标识
+	HostSessionID string
+	// AgentID agent 标识
+	AgentID string
+	// ProviderSessionID provider 原生会话标识（空串表示未提供）
+	ProviderSessionID string
+	// TurnID 所属轮次（空串表示不属于某轮）
+	TurnID string
+	// ItemID 所属 provider item（空串表示未提供）
+	ItemID string
+	// CorrelationID 聚合同一逻辑 trace（空串表示未提供）
+	CorrelationID string
+	// CausationIDs 实际触发本事件的消息/请求
+	CausationIDs []string
+}
+
+// HarnessEventOptions HarnessEvent 的构造入参。
+// Python: events.py:396-405（dataclass 字段与默认值）
+type HarnessEventOptions struct {
+	// Sequence 序号
+	Sequence int
+	// Timestamp 观测时刻
+	Timestamp float64
+	// Event 载荷
+	Event HarnessEventPayload
+	// HostSessionID 宿主会话
+	HostSessionID string
+	// AgentID agent 标识
+	AgentID string
+	// ProviderSessionID provider 会话（空串 = 未提供）
+	ProviderSessionID string
+	// TurnID 所属轮次（空串 = 未提供）
+	TurnID string
+	// ItemID item 标识（空串 = 未提供）
+	ItemID string
+	// CorrelationID trace 聚合（空串 = 未提供）
+	CorrelationID string
+	// CausationIDs 因果 ID
+	CausationIDs []string
+}
+
 // TurnLifecycleEvent 一轮的生命周期转换。
 // Python: events.py:281-303 TurnLifecycleEvent
 type TurnLifecycleEvent struct {
@@ -525,6 +597,86 @@ func NewModelRequestEvent(opts ModelRequestOptions) (ModelRequestEvent, error) {
 	}, nil
 }
 
+// NewUnknownEvent 创建未知事件（解码兜底用）。
+// Python: events.py:358-361 UnknownEvent.__post_init__
+func NewUnknownEvent(eventType, schemaVersion string, payload JsonObject) (UnknownEvent, error) {
+	// 步骤 1：event_type 与 schema_version 均非空
+	if eventType == "" || schemaVersion == "" {
+		return UnknownEvent{}, &HarnessProtocolError{
+			Msg: "unknown event type and schema version must not be empty",
+		}
+	}
+	// 步骤 2：冻结 payload
+	frozenPayload, err := FreezeJsonObject(payload)
+	if err != nil {
+		return UnknownEvent{}, err
+	}
+	return UnknownEvent{EventType: eventType, SchemaVersion: schemaVersion, Payload: frozenPayload}, nil
+}
+
+// NewHarnessEvent 创建事件信封。
+// Python: events.py:407-426 HarnessEvent.__post_init__（9 步）
+func NewHarnessEvent(opts HarnessEventOptions) (HarnessEvent, error) {
+	// 步骤 1：sequence 非负
+	if opts.Sequence < 0 {
+		return HarnessEvent{}, &HarnessProtocolError{Msg: "event sequence must be non-negative"}
+	}
+	// 步骤 2：timestamp 有限且非负
+	if math.IsNaN(opts.Timestamp) || math.IsInf(opts.Timestamp, 0) || opts.Timestamp < 0 {
+		return HarnessEvent{}, &HarnessProtocolError{Msg: "event timestamp must be a finite Unix timestamp"}
+	}
+	// 步骤 3：host_session_id 与 agent_id 非空
+	if opts.HostSessionID == "" || opts.AgentID == "" {
+		return HarnessEvent{}, &HarnessProtocolError{Msg: "event host_session_id and agent_id must not be empty"}
+	}
+	// 步骤 4：4 个 optional ID 一律用 string 表达，空串即"未提供"——
+	// 用户 2026-11-10 Q4 决策：Python 的 str|None 区分 None 与空串非法，
+	// Go 统一为 string 后空串 = 未提供，不存在"有值但为空"的中间态。
+	// Python: events.py:414-416（any(identifier == "" ...) 拒绝）在 Go 恒不成立。
+	// 步骤 5：causation_ids 拷贝并逐项非空
+	causationIDs := append([]string(nil), opts.CausationIDs...)
+	for _, id := range causationIDs {
+		if id == "" {
+			return HarnessEvent{}, &HarnessProtocolError{Msg: "event causation_ids must not contain empty values"}
+		}
+	}
+	// 步骤 6：causation_ids 不得重复
+	seen := make(map[string]struct{}, len(causationIDs))
+	for _, id := range causationIDs {
+		if _, dup := seen[id]; dup {
+			return HarnessEvent{}, &HarnessProtocolError{Msg: "event causation_ids must not contain duplicates"}
+		}
+		seen[id] = struct{}{}
+	}
+	// 步骤 7：载荷不得为 nil。
+	// 注：上游不显式校验此项（dataclass 类型注解已排除 None）。
+	// Go 侧 nil 接口会让下游 type switch 静默走 default，故显式拒绝。
+	// Python 侧无对应实现（Go 专有防御）。
+	if opts.Event == nil {
+		return HarnessEvent{}, &HarnessProtocolError{Msg: "event payload must not be nil"}
+	}
+	// 步骤 8：轮次生命周期事件必须有 turn_id
+	if _, ok := opts.Event.(*TurnLifecycleEvent); ok && opts.TurnID == "" {
+		return HarnessEvent{}, &HarnessProtocolError{Msg: "turn lifecycle event requires turn_id"}
+	}
+	// 步骤 9：模型请求事件必须有 turn_id
+	if _, ok := opts.Event.(*ModelRequestEvent); ok && opts.TurnID == "" {
+		return HarnessEvent{}, &HarnessProtocolError{Msg: "model request event requires turn_id"}
+	}
+	return HarnessEvent{
+		Sequence:          opts.Sequence,
+		Timestamp:         opts.Timestamp,
+		Event:             opts.Event,
+		HostSessionID:     opts.HostSessionID,
+		AgentID:           opts.AgentID,
+		ProviderSessionID: opts.ProviderSessionID,
+		TurnID:            opts.TurnID,
+		ItemID:            opts.ItemID,
+		CorrelationID:     opts.CorrelationID,
+		CausationIDs:      causationIDs,
+	}, nil
+}
+
 // NewTurnLifecycleEvent 创建轮次生命周期事件。
 // Python: events.py:288-303 TurnLifecycleEvent.__post_init__
 func NewTurnLifecycleEvent(kind TurnEventKind, result *TurnResult) (TurnLifecycleEvent, error) {
@@ -635,3 +787,8 @@ func (TurnLifecycleEvent) payloadKind() string { return "turn_lifecycle" }
 // payloadKind 返回线格式 discriminator。
 // Python: serialization.py:312-313（→ "model_request"）
 func (ModelRequestEvent) payloadKind() string { return "model_request" }
+
+// payloadKind 返回内部标记（该类型不进 wire discriminator 映射，
+// 15.4 codec 必须特判 *UnknownEvent 取自身 EventType）。
+// Python: serialization.py:357-358
+func (UnknownEvent) payloadKind() string { return "unknown" }
