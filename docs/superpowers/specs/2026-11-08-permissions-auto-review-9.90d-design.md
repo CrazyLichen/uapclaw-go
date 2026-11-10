@@ -2187,3 +2187,38 @@ return ok && boolean
 `fakeAutoConfirmRail` 嵌入 `fakePermissionRail` 并补 `AutoConfirmKey`，
 避免污染既有 fake（`lifecycle_test.go` 的 `TestRuntimeAutoConfirmKey_无能力`
 依赖 fake 无该方法）。
+
+### 12.31 Task 34 执行结论：`artifact_declaration` + `artifact_tracking_capture`
+
+**落地**：两个文件共 38 行 Python → 约 90 行 Go，覆盖率
+`artifact_declaration.go` **87.5%** / `artifact_tracking_capture.go` **100%**，
+auto_permission 包 91.6%。
+
+#### `artifact_declaration.go`（15 行 / 1 函数）
+
+`requestedFilePaths` —— 把读路径归一成绝对路径。此前已在
+`artifact_authorization.go` 里实现过同名函数，本次按「一文件对一文件」原则
+迁到独立文件，并从原处删除（规则 8：不留重复）。`artifact_authorization_test.go`
+的重复用例一并移除。
+
+#### `artifact_tracking_capture.go`（23 行 / 1 方法）
+
+`AfterToolCall` 职责极窄：清执行域标记 → 提取调用 → 转发父轨。
+**不推断生成物**——产物识别由专门逻辑负责，这里只做上下文卫生。
+
+#### 新增偏差 V-16：`clear_no_host_fallback` 的清除无法回传
+
+Python 的 `clear_no_host_fallback()` 写 ContextVar（任务级全局），调用方无需
+接收返回值；Go 的 `ClearNoHostFallback(ctx)` 返回派生 ctx，而
+`AfterToolCall(ctx, cbc)` 的 ctx 是入参、`AgentCallbackContext` 也没有 ctx
+设置器，派生结果无法回传。
+
+**影响范围**：若上游 ctx 已设 `no_host_fallback=true`，本次清除**不生效**。
+默认情形（上游未设）下清除值与默认值等价（`NoHostFallbackRequired` 读不到
+key 时返回 false），行为一致。
+
+**修法（已进 9.90e 回填清单）**：给 `AgentCallbackContext` 增加 ctx 设置器，
+或把 `AfterToolCall` 改为由调用方接收派生 ctx。
+
+测试 `TestAfterToolCall_清理执行域标记` 用断言锁住了当前行为：
+传入已设 `true` 的 ctx，调用后该 ctx 仍为 `true`（ctx 不可变）。

@@ -17,12 +17,10 @@ package auto_permission
 
 import (
 	"context"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
 
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
@@ -184,23 +182,6 @@ func hasDeliveryValue(value any) bool {
 	default:
 		return true
 	}
-}
-
-// requestedFilePaths 把读路径归一成绝对路径。
-//
-// Python: _requested_file_paths(facts)
-// Path(path).expanduser().resolve(strict=False)
-func requestedFilePaths(facts permissions.ToolDecisionFacts) []string {
-	out := make([]string, 0, len(facts.ReadPaths))
-	for _, rawPath := range facts.ReadPaths {
-		expanded := pathutil.ExpandHome(rawPath)
-		if resolved, err := permissions.ResolvePathStrictFalse(expanded); err == nil {
-			out = append(out, resolved)
-			continue
-		}
-		out = append(out, filepath.Clean(expanded))
-	}
-	return out
 }
 
 // sendFileExecutionGrantForAllow 为「已放行」的调用解析当前任务的精确授权。

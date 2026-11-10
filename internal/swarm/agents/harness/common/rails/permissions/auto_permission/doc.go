@@ -63,7 +63,9 @@
 //	├── artifact_authorization.go # 文件投递的精确授权（9.90d-2 依赖前置）
 //	├── reviewer_execution.go # 审查器执行编排：主入口 maybeRunReviewer（Task 32）
 //	├── reviewer_override_gate.go # 单次放行的审查器前置闸门（Task 33）
-//	└── reviewer_override_consume.go # 消费旧版 Core 会话级自动确认（Task 33）
+//	├── reviewer_override_consume.go # 消费旧版 Core 会话级自动确认（Task 33）
+//	├── artifact_declaration.go # send_file 参数辅助（Task 34）
+//	└── artifact_tracking_capture.go # 工具执行后捕获（Task 34）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）

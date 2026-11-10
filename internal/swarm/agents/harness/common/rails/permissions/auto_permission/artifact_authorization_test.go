@@ -221,19 +221,6 @@ func TestIssueSendFileAuthorization_正常签发(t *testing.T) {
 	}
 }
 
-// TestRequestedFilePaths 验证路径归一。
-func TestRequestedFilePaths(t *testing.T) {
-	facts := permissions.ToolDecisionFacts{ReadPaths: []string{"/ws/a.txt"}}
-	got := requestedFilePaths(facts)
-	if len(got) != 1 || got[0] != "/ws/a.txt" {
-		t.Errorf("got %v", got)
-	}
-	// 空输入
-	if got := requestedFilePaths(permissions.ToolDecisionFacts{}); len(got) != 0 {
-		t.Errorf("empty -> %v", got)
-	}
-}
-
 // TestSendFileExecutionGrantForAllow_非sendFile 验证直接返回。
 func TestSendFileExecutionGrantForAllow_非sendFile(t *testing.T) {
 	facts := permissions.ToolDecisionFacts{
