@@ -504,3 +504,164 @@ func TestPayloadKind_modelRequest(t *testing.T) {
 // intPtr / floatPtr 测试助手。
 func intPtr(i int) *int           { return &i }
 func floatPtr(f float64) *float64 { return &f }
+
+// TestHarnessEvent_信封关联字段 验证 10 字段齐备与关联语义。
+// Python: events.py:392-426 HarnessEvent（AST 机器核对 10 字段）
+// 上游用例: test_protocol.py:576 test_event_envelope_carries_neutral_output_and_correlation
+func TestHarnessEvent_信封关联字段(t *testing.T) {
+	payload, err := NewOutputEvent(
+		"answer-1", OutputKindText, "done", OutputOperationDelta, OutputChannelAnswer, 1, "", nil,
+	)
+	require.NoError(t, err)
+	ev, err := NewHarnessEvent(HarnessEventOptions{
+		Sequence:          1,
+		Timestamp:         1.5,
+		Event:             &payload,
+		HostSessionID:     "team-session-1",
+		AgentID:           "team-a_member-a",
+		ProviderSessionID: "session-1",
+		TurnID:            "turn-1",
+		CorrelationID:     "message-1",
+		CausationIDs:      []string{"message-1", "steer-1"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, ev.Sequence)
+	assert.Equal(t, 1.5, ev.Timestamp)
+	assert.Equal(t, "turn-1", ev.TurnID)
+	assert.Equal(t, "message-1", ev.CorrelationID)
+	assert.Equal(t, []string{"message-1", "steer-1"}, ev.CausationIDs)
+	assert.Equal(t, "output", ev.Event.payloadKind())
+}
+
+// TestHarnessEvent_校验九步 逐条验证 9 步校验。
+// Python: events.py:407-426
+// 上游用例: test_protocol.py:859 test_event_scope_time_and_causation_are_validated
+func TestHarnessEvent_校验九步(t *testing.T) {
+	p, err := NewStateChangedEvent(HarnessStateIdle, HarnessStateRunning)
+	require.NoError(t, err)
+	base := func() HarnessEventOptions {
+		return HarnessEventOptions{
+			Sequence:      1,
+			Timestamp:     1.0,
+			Event:         &p,
+			HostSessionID: "s1",
+			AgentID:       "a1",
+		}
+	}
+
+	// ① sequence 为负
+	o := base()
+	o.Sequence = -1
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event sequence must be non-negative")
+
+	// ② timestamp 非有限
+	o = base()
+	o.Timestamp = math.NaN()
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event timestamp must be a finite Unix timestamp")
+
+	// ② timestamp 为负
+	o = base()
+	o.Timestamp = -0.5
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event timestamp must be a finite Unix timestamp")
+
+	// ③ host_session_id 空
+	o = base()
+	o.HostSessionID = ""
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event host_session_id and agent_id must not be empty")
+
+	// ③ agent_id 空
+	o = base()
+	o.AgentID = ""
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event host_session_id and agent_id must not be empty")
+
+	// ④ optional ID 为空串 == 未提供，合法（Q4 用户决策）
+	o = base()
+	o.ProviderSessionID = ""
+	o.TurnID = ""
+	o.ItemID = ""
+	o.CorrelationID = ""
+	_, err = NewHarnessEvent(o)
+	require.NoError(t, err)
+
+	// ⑤ causation_ids 含空串
+	o = base()
+	o.CausationIDs = []string{"c1", ""}
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event causation_ids must not contain empty values")
+
+	// ⑥ causation_ids 重复
+	o = base()
+	o.CausationIDs = []string{"c1", "c1"}
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event causation_ids must not contain duplicates")
+
+	// ⑦ Event 为 nil
+	o = base()
+	o.Event = nil
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event payload must not be nil")
+
+	// ⑧ turn_lifecycle 缺 turn_id
+	started, err2 := NewTurnLifecycleEvent(TurnEventKindStarted, nil)
+	require.NoError(t, err2)
+	o = base()
+	o.Event = &started
+	o.TurnID = ""
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "turn lifecycle event requires turn_id")
+
+	// ⑨ model_request 缺 turn_id
+	mr, err3 := NewModelRequestEvent(ModelRequestOptions{
+		RequestID: "r", Status: ModelRequestStatusCompleted, StartedAt: 1, EndedAt: 2,
+	})
+	require.NoError(t, err3)
+	o = base()
+	o.Event = &mr
+	o.TurnID = ""
+	_, err = NewHarnessEvent(o)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model request event requires turn_id")
+}
+
+// TestHarnessEvent_causation深拷贝 验证 causation_ids 不与入参共享。
+// Python: events.py:417（tuple(self.causation_ids)）
+func TestHarnessEvent_causation深拷贝(t *testing.T) {
+	p, err := NewStateChangedEvent(HarnessStateIdle, HarnessStateRunning)
+	require.NoError(t, err)
+	causes := []string{"c1"}
+	ev, err := NewHarnessEvent(HarnessEventOptions{
+		Sequence: 1, Timestamp: 1, Event: &p,
+		HostSessionID: "s1", AgentID: "a1", CausationIDs: causes,
+	})
+	require.NoError(t, err)
+	causes[0] = "mutated"
+	assert.Equal(t, []string{"c1"}, ev.CausationIDs)
+}
+
+// TestUnknownEvent_形状 验证未知事件保留 event_type 与 schema_version。
+// Python: events.py:350-361 UnknownEvent（codec 行为留 15.4）
+func TestUnknownEvent_形状(t *testing.T) {
+	ev, err := NewUnknownEvent("future_event", "2", map[string]any{"k": 1})
+	require.NoError(t, err)
+	assert.Equal(t, "future_event", ev.EventType)
+	assert.Equal(t, "2", ev.SchemaVersion)
+	assert.Equal(t, "unknown", ev.payloadKind())
+
+	_, err = NewUnknownEvent("", "2", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown event type and schema version must not be empty")
+}
