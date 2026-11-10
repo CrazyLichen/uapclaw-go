@@ -22,3 +22,11 @@ func TestRenderResultText_变体(t *testing.T) {
 		t.Fatalf("struct 应可渲染，实际 %q", got)
 	}
 }
+
+// TestRenderResultText_不可序列化降级 验证 JSON 失败时回落 fmt.Sprint。
+func TestRenderResultText_不可序列化降级(t *testing.T) {
+	got := RenderResultText(map[string]any{"f": func() {}})
+	if got == "" {
+		t.Fatal("不可序列化值应降级为非空文本")
+	}
+}

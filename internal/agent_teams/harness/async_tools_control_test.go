@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 
 // TestRuntime_HasRunning与CancelAll 验证在飞统计与停机取消。
 func TestRuntime_HasRunning与CancelAll(t *testing.T) {
-	var injected []string
-	rt := newTestRuntime(t, &injected)
+	rec := &injectionRecorder{}
+	rt := newTestRuntime(t, rec)
 	started := make(chan struct{})
 	rt.Launch("t3", func(ctx context.Context) (any, error) {
 		close(started)
@@ -27,13 +28,13 @@ func TestRuntime_HasRunning与CancelAll(t *testing.T) {
 	rt.CancelAll()
 	waitStatus(t, rt, "t3", AsyncToolStatusError)
 	assert.Equal(t, "cancelled", rt.Get("t3").Error)
-	assert.Empty(t, injected)
+	assert.Empty(t, rec.snapshot())
 }
 
 // TestRuntime_Cancel与Wait 验证按 id 取消与等待。
 func TestRuntime_Cancel与Wait(t *testing.T) {
-	var injected []string
-	rt := newTestRuntime(t, &injected)
+	rec := &injectionRecorder{}
+	rt := newTestRuntime(t, rec)
 	gate := make(chan struct{})
 	rt.Launch("w", func(ctx context.Context) (any, error) {
 		select {
@@ -44,15 +45,15 @@ func TestRuntime_Cancel与Wait(t *testing.T) {
 		}
 	}, tools.AsyncToolLaunchOptions{ToolName: "demo"})
 
-	rec := rt.Wait(context.Background(), "w", 10*time.Millisecond)
-	require.NotNil(t, rec)
-	assert.Equal(t, AsyncToolStatusRunning, rec.Status)
+	record := rt.Wait(context.Background(), "w", 10*time.Millisecond)
+	require.NotNil(t, record)
+	assert.Equal(t, AsyncToolStatusRunning, record.Status)
 	assert.Nil(t, rt.Wait(context.Background(), "missing", time.Millisecond))
 
 	close(gate)
-	rec = rt.Wait(context.Background(), "w", time.Second)
-	assert.Equal(t, AsyncToolStatusCompleted, rec.Status)
-	assert.Equal(t, "done", rec.Result)
+	record = rt.Wait(context.Background(), "w", time.Second)
+	assert.Equal(t, AsyncToolStatusCompleted, record.Status)
+	assert.Equal(t, "done", record.Result)
 
 	assert.True(t, rt.Cancel("w"), "已完成任务按 docstring 返回 true")
 	assert.False(t, rt.Cancel("missing"))
@@ -60,8 +61,8 @@ func TestRuntime_Cancel与Wait(t *testing.T) {
 
 // TestRuntime_ListAll保序 验证 launch 顺序与未知 id。
 func TestRuntime_ListAll保序(t *testing.T) {
-	var injected []string
-	rt := newTestRuntime(t, &injected)
+	rec := &injectionRecorder{}
+	rt := newTestRuntime(t, rec)
 	rt.Launch("a", func(context.Context) (any, error) { return "a", nil }, tools.AsyncToolLaunchOptions{ToolName: "demo"})
 	rt.Launch("b", func(context.Context) (any, error) { return "b", nil }, tools.AsyncToolLaunchOptions{ToolName: "demo"})
 	waitStatus(t, rt, "a", AsyncToolStatusCompleted)
@@ -71,4 +72,55 @@ func TestRuntime_ListAll保序(t *testing.T) {
 	assert.Equal(t, "a", all[0].TaskID)
 	assert.Equal(t, "b", all[1].TaskID)
 	assert.Nil(t, rt.Get("missing"))
+}
+
+// TestRuntime_Wait取消立即返回 验证 ctx 取消时返回当前（running）记录。
+func TestRuntime_Wait取消立即返回(t *testing.T) {
+	rec := &injectionRecorder{}
+	rt := newTestRuntime(t, rec)
+	gate := make(chan struct{})
+	defer close(gate)
+	rt.Launch("wc", func(context.Context) (any, error) {
+		<-gate
+		return "x", nil
+	}, tools.AsyncToolLaunchOptions{ToolName: "demo"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	record := rt.Wait(ctx, "wc", time.Second)
+	require.NotNil(t, record)
+	assert.Equal(t, AsyncToolStatusRunning, record.Status)
+}
+
+// TestRuntime_取消后factory忽略取消 验证 ctx 已取消但 factory 返回成功时按取消结算。
+func TestRuntime_取消后factory忽略取消(t *testing.T) {
+	rec := &injectionRecorder{}
+	rt := newTestRuntime(t, rec)
+	started := make(chan struct{})
+	rt.Launch("ignore", func(ctx context.Context) (any, error) {
+		close(started)
+		<-ctx.Done()
+		return "late", nil
+	}, tools.AsyncToolLaunchOptions{ToolName: "demo"})
+	<-started
+	rt.CancelAll()
+	waitStatus(t, rt, "ignore", AsyncToolStatusError)
+	assert.Equal(t, "cancelled", rt.Get("ignore").Error)
+	assert.Empty(t, rec.snapshot())
+}
+
+// TestRuntime_inject为nil 验证无注入回调时不 panic。
+func TestRuntime_inject为nil(t *testing.T) {
+	rt := NewAsyncToolRuntime(nil)
+	rt.Launch("n", func(context.Context) (any, error) { return "x", nil },
+		tools.AsyncToolLaunchOptions{ToolName: "demo"})
+	waitStatus(t, rt, "n", AsyncToolStatusCompleted)
+}
+
+// TestRuntime_inject返回错误不panic 验证注入失败只吞掉，不影响任务终态。
+func TestRuntime_inject返回错误不panic(t *testing.T) {
+	rt := NewAsyncToolRuntime(func(context.Context, string) error { return errors.New("closed") })
+	rt.Launch("e", func(context.Context) (any, error) { return "x", nil },
+		tools.AsyncToolLaunchOptions{ToolName: "demo"})
+	waitStatus(t, rt, "e", AsyncToolStatusCompleted)
 }

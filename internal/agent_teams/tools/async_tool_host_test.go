@@ -16,5 +16,5 @@ type fakeAsyncHost struct{}
 func (f *fakeAsyncHost) LaunchAsyncTool(string, func(context.Context) (any, error), AsyncToolLaunchOptions) error {
 	return nil
 }
-func (f *fakeAsyncHost) SessionID() string                          { return "" }
+func (f *fakeAsyncHost) SessionID() string                           { return "" }
 func (f *fakeAsyncHost) SetAsyncToolOutputDirResolver(func() string) {}
