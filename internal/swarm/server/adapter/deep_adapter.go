@@ -2058,6 +2058,23 @@ func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 	// 由 planStateStore.SwitchPlanMode 实现，**不要**复用本方法：
 	// 这里自建 Session 会把状态写到 rail 读不到的对象上。
 
+	// 优先落到正在承接该会话的 live instance/session。
+	// Python: plan.py 的 starter = agent.ensure_live_session_instance —— 状态必须
+	// 写在即将执行本轮的那个 Session 上。create_instance 现在会 start_interaction
+	// 绑定 live 会话，若这里仍 EnsureInstance + 新建 Session，就会写出两个
+	// Session 对象（写一个读另一个），rail / CheckPostProcessExit 都读不到。
+	if live := d.GetLiveSessionInstance(sessionID); live != nil {
+		if bound := resolveLiveAgentSession(live, sessionID); bound != nil {
+			live.SwitchMode(bound, subMode)
+			return nil
+		}
+	}
+	if d.instance != nil {
+		if bound := resolveLiveAgentSession(d.instance, sessionID); bound != nil {
+			d.instance.SwitchMode(bound, subMode)
+			return nil
+		}
+	}
 	// 10.3.28f：SwitchMode 是根上的独立 RPC，需要 DeepAgent 句柄。
 	// 根不再在 create_instance 时自建 instance，故此处惰建。
 	inst, err := d.EnsureInstance(ctx)
