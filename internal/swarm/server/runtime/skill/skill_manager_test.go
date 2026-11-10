@@ -1923,27 +1923,26 @@ func TestLogRejectedName(t *testing.T) {
 	logRejectedName("test-op", "skill", "bad-name", fmt.Errorf("test error"))
 }
 
-// TestGetBuiltinSkillsDir_环境变量优先 BUILTIN_SKILLS_DIR 最高优先。
-// Python 无该环境变量，Go 侧为测试可覆盖性新增（对齐既有 envInt/env 覆盖惯例）。
-func TestGetBuiltinSkillsDir_环境变量优先(t *testing.T) {
-	want := t.TempDir()
-	t.Setenv("BUILTIN_SKILLS_DIR", want)
-	if got := getBuiltinSkillsDir(); got != want {
-		t.Errorf("内置技能目录 = %q, 期望 %q", got, want)
+// setupBuiltinSkillsDir 在临时 resources 目录下造 agent/workspace/skills，
+// 并把 UAPCLAW_RESOURCES_DIR 指向它。返回内置技能目录路径。
+//
+// 测试不设专用环境变量：Go 侧只用 UAPCLAW_RESOURCES_DIR 这一个既有正规入口
+// （内置技能目录 = 包内置源，Python 用 _find_package_root 反推，Go 用 ResourcesDir）。
+func setupBuiltinSkillsDir(t *testing.T) string {
+	t.Helper()
+	resDir := t.TempDir()
+	primary := filepath.Join(resDir, "agent", "workspace", "skills")
+	if err := os.MkdirAll(primary, 0o755); err != nil {
+		t.Fatalf("创建内置技能目录失败: %v", err)
 	}
+	t.Setenv(pathutil.EnvResourcesDir, resDir)
+	return primary
 }
 
 // TestGetBuiltinSkillsDir_primary存在 解析到 resources/agent/workspace/skills。
 // Python: common/utils.py:2392-2394 primary_path 存在则返回 primary_path
 func TestGetBuiltinSkillsDir_primary存在(t *testing.T) {
-	resDir := t.TempDir()
-	primary := filepath.Join(resDir, "agent", "workspace", "skills")
-	if err := os.MkdirAll(primary, 0o755); err != nil {
-		t.Fatalf("创建 primary 目录失败: %v", err)
-	}
-	t.Setenv("BUILTIN_SKILLS_DIR", "")
-	t.Setenv(pathutil.EnvResourcesDir, resDir)
-
+	primary := setupBuiltinSkillsDir(t)
 	if got := getBuiltinSkillsDir(); got != primary {
 		t.Errorf("内置技能目录 = %q, 期望 primary %q", got, primary)
 	}
@@ -1955,7 +1954,6 @@ func TestGetBuiltinSkillsDir_primary存在(t *testing.T) {
 func TestGetBuiltinSkillsDir_primary缺失回落fallback(t *testing.T) {
 	resDir := t.TempDir()
 	fallback := filepath.Join(resDir, "agent", "skills")
-	t.Setenv("BUILTIN_SKILLS_DIR", "")
 	t.Setenv(pathutil.EnvResourcesDir, resDir)
 
 	got := getBuiltinSkillsDir()
@@ -1970,7 +1968,6 @@ func TestGetBuiltinSkillsDir_primary缺失回落fallback(t *testing.T) {
 // TestGetBuiltinSkillsDir_资源目录缺失 找不到 resources 时返回空串。
 // Python 无此分支（_find_package_root 恒有值），Go 侧因磁盘回退可能失败而新增。
 func TestGetBuiltinSkillsDir_资源目录缺失(t *testing.T) {
-	t.Setenv("BUILTIN_SKILLS_DIR", "")
 	t.Setenv(pathutil.EnvResourcesDir, filepath.Join(t.TempDir(), "not-exist"))
 
 	if got := getBuiltinSkillsDir(); got != "" {
@@ -1993,7 +1990,6 @@ func TestGetBuiltinSkillsDir_真实资源(t *testing.T) {
 	if !dirExists(primary) {
 		t.Fatalf("resources/agent/workspace/skills 不存在: %s", primary)
 	}
-	t.Setenv("BUILTIN_SKILLS_DIR", "")
 	t.Setenv(pathutil.EnvResourcesDir, resDir)
 
 	got := getBuiltinSkillsDir()
@@ -2633,17 +2629,93 @@ func TestIsBuiltinSkill_空名(t *testing.T) {
 	}
 }
 
+// TestHandleSkillsUninstall_内置保护看包内置源 :714 的内置技能保护必须基于
+// **包内置源目录**（getBuiltinSkillsDir），不能基于 `sm.skillsDir/builtin`。
+//
+// 判据：在隔离 workspace 下，仅当 `sm.skillsDir/builtin` 里存在同名技能时，
+// 旧实现（方法版）才会认为"这是内置技能"并触发保护；新实现完全不看该目录。
+// 因此构造"sm.skillsDir/builtin 有保护名单、包内置源没有"的场景，
+// 验证内置保护**不再**因 skillsDir/builtin 而误触发（正常删除）。
+//
+// 反向场景（包内置源有、skillsDir/builtin 没有）由
+// TestHandleSkillsUninstall_保护判定读包内置源 覆盖。
+func TestHandleSkillsUninstall_内置保护不看skillsDir_builtin(t *testing.T) {
+	// 包内置源为空目录（无任何技能）
+	setupBuiltinSkillsDir(t)
+
+	workspaceDir := t.TempDir()
+	sm := NewSkillManager(workspaceDir)
+	// 在隔离 workspace 的 skillsDir/builtin 下造同名技能 —— 旧实现会据此误判为内置
+	staleBuiltin := filepath.Join(sm.skillsDir, "builtin", "trap_skill", "skill")
+	if err := os.MkdirAll(staleBuiltin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleBuiltin, "SKILL.md"),
+		[]byte("---\nname: trap_skill\ndescription: 陷阱\n---\n正文"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 待删的目标技能
+	installed := filepath.Join(sm.skillsDir, "trap_skill")
+	if err := os.MkdirAll(installed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(installed, "SKILL.md"),
+		[]byte("---\nname: trap_skill\ndescription: 目标\n---\n正文"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := sm.HandleSkillsUninstall(context.Background(), map[string]any{
+		"name": "trap_skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if !toBool(result["success"]) {
+		t.Errorf("包内置源无此技能，不应被误判为内置而拒绝删除, got %v", result)
+	}
+	if dirExists(installed) {
+		t.Error("目标技能目录应已被删除")
+	}
+}
+
+// TestHandleSkillsUninstall_普通技能可删 对照组：非内置技能应被正常删除，
+// 证明上面的拒绝不是"所有技能都删不掉"。
+func TestHandleSkillsUninstall_普通技能可删(t *testing.T) {
+	setupBuiltinSkillsDir(t) // 内置源目录存在但无同名技能
+
+	workspaceDir := t.TempDir()
+	sm := NewSkillManager(workspaceDir)
+	ordinary := filepath.Join(sm.skillsDir, "ordinary-skill")
+	if err := os.MkdirAll(ordinary, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ordinary, "SKILL.md"),
+		[]byte("---\nname: ordinary-skill\ndescription: 普通\n---\n正文"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := sm.HandleSkillsUninstall(context.Background(), map[string]any{
+		"name": "ordinary-skill",
+	})
+	if err != nil {
+		t.Fatalf("不应返回错误: %v", err)
+	}
+	if !toBool(result["success"]) {
+		t.Fatalf("普通技能应可删除, got %v", result)
+	}
+	if dirExists(ordinary) {
+		t.Error("普通技能目录应已被删除")
+	}
+}
+
 // TestIsBuiltinSkill_内置技能 验证内置技能返回 true
 func TestIsBuiltinSkill_内置技能(t *testing.T) {
 	tmpDir := t.TempDir()
-	builtinDir := filepath.Join(tmpDir, "builtin_skills")
+	builtinDir := setupBuiltinSkillsDir(t)
 	skillDir := filepath.Join(builtinDir, "my-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	// 设置环境变量指向内置目录
-	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
 
 	// 在 skillsDir 下创建同名的符号链接
 	sm := NewSkillManager(tmpDir)
@@ -3310,16 +3382,12 @@ func TestDownloadZipAndVerify_非ZIP(t *testing.T) {
 
 // TestScanBuiltinSkills_有技能 验证扫描内置技能
 func TestScanBuiltinSkills_有技能(t *testing.T) {
-	tmpDir := t.TempDir()
-	builtinDir := filepath.Join(tmpDir, "builtin_skills")
-	os.MkdirAll(builtinDir, 0o755)
+	builtinDir := setupBuiltinSkillsDir(t)
 
 	// 创建一个内置技能
 	skillDir := filepath.Join(builtinDir, "builtin-test")
 	os.MkdirAll(skillDir, 0o755)
 	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: builtin-test\ndescription: 内置测试\n---\n# Test\n"), 0o644)
-
-	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
 
 	sm := NewSkillManager(t.TempDir())
 	skills := sm.scanBuiltinSkills()
@@ -3372,16 +3440,12 @@ func TestSaveState_持久化(t *testing.T) {
 
 // TestHandleSkillsInstallBuiltin_正常 验证安装内置技能
 func TestHandleSkillsInstallBuiltin_正常(t *testing.T) {
-	tmpDir := t.TempDir()
-	builtinDir := filepath.Join(tmpDir, "builtin_skills")
-	os.MkdirAll(builtinDir, 0o755)
+	builtinDir := setupBuiltinSkillsDir(t)
 
 	// 创建一个内置技能
 	skillDir := filepath.Join(builtinDir, "builtin-test")
 	os.MkdirAll(skillDir, 0o755)
 	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: builtin-test\ndescription: 内置测试\n---\n# Test\n"), 0o644)
-
-	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
 
 	sm := NewSkillManager(t.TempDir())
 	result, err := sm.HandleSkillsInstallBuiltin(context.Background(), map[string]any{

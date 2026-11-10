@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -503,14 +504,15 @@ func TestUninstallSkill_正常(t *testing.T) {
 
 // TestUninstallSkill_内置技能 验证内置技能不可卸载
 func TestUninstallSkill_内置技能(t *testing.T) {
-	tmpDir := t.TempDir()
-	builtinDir := filepath.Join(tmpDir, "builtin_skills")
+	// 内置技能源目录 = <UAPCLAW_RESOURCES_DIR>/agent/workspace/skills
+	resDir := t.TempDir()
+	builtinDir := filepath.Join(resDir, "agent", "workspace", "skills")
 	os.MkdirAll(builtinDir, 0o755)
 	skillDir := filepath.Join(builtinDir, "builtin-skill")
 	os.MkdirAll(skillDir, 0o755)
 	os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: builtin-skill\ndescription: 内置技能\n---\n技能正文"), 0o644)
 
-	t.Setenv("BUILTIN_SKILLS_DIR", builtinDir)
+	t.Setenv(pathutil.EnvResourcesDir, resDir)
 
 	sm := skillpkg.NewSkillManager(t.TempDir())
 	tk := NewSkillToolkit(sm)

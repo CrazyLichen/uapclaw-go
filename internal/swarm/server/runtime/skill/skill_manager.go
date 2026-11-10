@@ -2980,11 +2980,8 @@ func logRejectedName(operation, label string, value any, exc error) {
 //
 // Go 二进制无 package_root 概念，用 pathutil.ResourcesDir() 的磁盘三级回退
 // （UAPCLAW_RESOURCES_DIR → 可执行文件同目录 → 当前工作目录）等价替代
-// Python 的 Path(__file__) 反推。BUILTIN_SKILLS_DIR 环境变量最高优先，供测试覆盖。
+// Python 的 Path(__file__) 反推。测试用 t.Setenv(pathutil.EnvResourcesDir, ...) 覆盖。
 func getBuiltinSkillsDir() string {
-	if dir := os.Getenv("BUILTIN_SKILLS_DIR"); dir != "" {
-		return dir
-	}
 	resDir, err := pathutil.ResourcesDir()
 	if err != nil {
 		return ""
