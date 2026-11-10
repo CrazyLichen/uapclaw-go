@@ -2,6 +2,7 @@ package goal
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,3 +117,11 @@ func TestSessionGoalStore_提交委托会话(t *testing.T) {
 	require.NoError(t, store.Commit(context.Background()))
 	assert.Equal(t, 1, session.commits)
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (s *fakeGoalSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (s *fakeGoalSession) GetParentSessionID() string { return "" }

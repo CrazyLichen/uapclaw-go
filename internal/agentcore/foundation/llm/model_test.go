@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -885,3 +886,11 @@ func TestModel_Stream_wrapperPanicConvertsToStreamError(t *testing.T) {
 	}
 	assert.Contains(t, gotErr.Error(), "stream wrapper panic")
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (s *mockSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (s *mockSession) GetParentSessionID() string { return "" }

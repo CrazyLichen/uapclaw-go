@@ -47,7 +47,8 @@ type usageParentSessionIDProvider interface {
 // Python: getattr(session, "get_cache_identity", None)（react_agent.py L1385-1397）
 type usageCacheIdentityProvider interface {
 	// GetCacheIdentity 返回 provider 侧缓存身份
-	GetCacheIdentity() (kv_cache.KVCacheIdentity, error)
+	// Python: agent.py:126 -> KVCacheIdentity（无 raise），故 Go 无 error
+	GetCacheIdentity() kv_cache.KVCacheIdentity
 }
 
 // usageContextUsageMetadataProvider 会话级用量元数据能力。
@@ -149,18 +150,26 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	parentCacheIdentity := attributionString(values, "parent_cache_identity")
 	if cbc != nil {
 		if provider, ok := cbc.Session().(usageCacheIdentityProvider); ok {
-			// 遥测不得影响模型执行：取身份失败只记 debug，继续用兜底值。
-			// Python: try/except → logger.debug("Failed to resolve session cache identity ...")（react_agent.py L1393-1397）
-			if identity, err := provider.GetCacheIdentity(); err != nil {
-				logger.Debug(logComponent).Err(err).Msg("failed to resolve session cache identity for usage telemetry")
-			} else {
+			// 遥测不得影响模型执行：取身份异常只记 debug，继续用兜底值。
+			// Python: try/except Exception → logger.debug("Failed to resolve session cache identity for usage telemetry")
+			// （react_agent.py L1390-1393，注释为 defensive for third-party sessions）。
+			// Go 的 GetCacheIdentity 无 error（对齐 Python 无 raise），但第三方实现仍可能
+			// panic，故保留 recover 兜底，与 Python 的外层 try 等价。
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Debug(logComponent).Any("panic", r).
+							Msg("failed to resolve session cache identity for usage telemetry")
+					}
+				}()
+				identity := provider.GetCacheIdentity()
 				if cacheIdentity == "" {
 					cacheIdentity = identity.CacheID
 				}
 				if parentCacheIdentity == "" {
 					parentCacheIdentity = identity.ParentCacheID
 				}
-			}
+			}()
 		}
 	}
 

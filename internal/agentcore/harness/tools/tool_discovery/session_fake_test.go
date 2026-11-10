@@ -2,6 +2,7 @@ package tool_discovery
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
@@ -35,3 +36,11 @@ func (m *mockSessionFacade) Interact(_ context.Context, _ any) error { return ni
 
 // ClearSession 忽略清理。
 func (m *mockSessionFacade) ClearSession(_ context.Context) {}
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (m *mockSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSessionFacade) GetParentSessionID() string { return "" }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"os"
 	"path/filepath"
 	"strings"
@@ -3321,3 +3322,11 @@ func TestInvoke_ResumeContinuation允许空query(t *testing.T) {
 		t.Fatalf("空 query 的续跑轮不应报错: %v", err)
 	}
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeSessionFacade) GetParentSessionID() string { return "" }

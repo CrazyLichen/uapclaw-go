@@ -41,8 +41,8 @@ func (s *attributionSession) GetTeamID() string { return s.teamID }
 func (s *attributionSession) GetParentSessionID() string { return s.parentSessionID }
 
 // GetCacheIdentity 返回缓存身份
-func (s *attributionSession) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
-	return kv_cache.KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCacheID}, nil
+func (s *attributionSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCacheID}
 }
 
 // GetEnv 返回环境变量

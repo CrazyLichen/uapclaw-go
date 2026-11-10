@@ -2,6 +2,7 @@ package task_loop
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 	"time"
 
@@ -1167,3 +1168,12 @@ func (f *fakeHandlerSess) Interact(_ context.Context, _ any) error {
 
 // ClearSession 实现 SessionFacade 接口
 func (f *fakeHandlerSess) ClearSession(_ context.Context) {}
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (f *fakeHandlerSess) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeHandlerSess) GetParentSessionID() string { return "" }

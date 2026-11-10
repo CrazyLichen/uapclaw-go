@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -253,3 +254,12 @@ func TestNewToolCardWithID(t *testing.T) {
 		t.Errorf("Name = %q, want %q", card.Name, "weather")
 	}
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *mockSessionFacadeForBase) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSessionFacadeForBase) GetParentSessionID() string { return "" }

@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -262,3 +263,12 @@ func TestPersistLeaderConfig_已有dbState(t *testing.T) {
 func strPtr(s string) *string {
 	return &s
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeSessionFacade) GetParentSessionID() string { return "" }

@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"strings"
 	"sync"
 	"testing"
@@ -436,3 +437,12 @@ func TestResolvePermissionSessionID(t *testing.T) {
 		t.Errorf("无 session = %q", got)
 	}
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *acpPermSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *acpPermSession) GetParentSessionID() string { return "" }
