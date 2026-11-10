@@ -301,9 +301,13 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 		}
 		return resp, nil
 	}
-	_, _ = uc.coordinator.RegisterSession(sessionID, request.ChannelID,
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
+		return nil, swruntime.ErrCoordinatorUnavailable
+	}
+	_, _ = coordinator.RegisterSession(sessionID, request.ChannelID,
 		swsession.SessionPersistencePolicyPersistent)
-	result, err := uc.coordinator.RunUnary(ctx, sessionID, request.RequestID,
+	result, err := coordinator.RunUnary(ctx, sessionID, request.RequestID,
 		swsession.SessionWorkKindChatStream,
 		func(taskCtx context.Context) (any, error) {
 			return a.ProcessMessageImpl(taskCtx, request, inputs)
@@ -622,7 +626,9 @@ func (uc *UapClawSwarm) runMessageStreamDirect(ctx context.Context, request *sch
 		if runtime := uc.agentRuntime; runtime != nil {
 			_, _ = runtime.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
 		} else {
-			_, _ = uc.coordinator.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
+			if coordinator := uc.executionCoordinator(); coordinator != nil {
+				_, _ = coordinator.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
+			}
 		}
 	}
 
@@ -1657,10 +1663,11 @@ func (uc *UapClawSwarm) cancelExecution(
 	if runtime := uc.agentRuntime; runtime != nil {
 		return runtime.CancelExecution(sessionID, options)
 	}
-	if uc.coordinator == nil {
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
 		return swsession.CancelExecutionResult{}, swruntime.ErrCoordinatorUnavailable
 	}
-	return uc.coordinator.CancelExecution(sessionID, options)
+	return coordinator.CancelExecution(sessionID, options)
 }
 
 // hasActiveExecutions 是否存在未终态执行。
@@ -1669,10 +1676,19 @@ func (uc *UapClawSwarm) hasActiveExecutions() bool {
 	if runtime := uc.agentRuntime; runtime != nil {
 		return runtime.ActiveExecutions()
 	}
-	if uc.coordinator == nil {
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
 		return false
 	}
-	return hasActiveExecutions(uc.coordinator)
+	// 与 hasActiveExecutions 同一判定：任一执行未终态即为真
+	for _, snapshot := range coordinator.SnapshotSessions() {
+		for _, execution := range snapshot.Executions {
+			if !execution.State.Terminal() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // closeCoordinator 关闭执行账本。
@@ -1681,8 +1697,9 @@ func (uc *UapClawSwarm) closeCoordinator() error {
 	if runtime := uc.agentRuntime; runtime != nil {
 		return runtime.CloseCoordinator(nil, nil)
 	}
-	if uc.coordinator == nil {
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
 		return nil
 	}
-	return uc.coordinator.Close(nil, nil)
+	return coordinator.Close(nil, nil)
 }

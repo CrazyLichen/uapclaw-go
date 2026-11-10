@@ -55,11 +55,15 @@ type noopTeamBindingUnbinder struct{}
 // Python: server/runtime/session/lifecycle.py
 type lifecycleJournal struct{}
 
-// sessionCleanerAdapter 把 AgentManager 的会话清理适配到 provisioner 窄接口。
-// Python: runtime/service.py cleanup_session（:3024）的 AgentServer 侧传参
-type sessionCleanerAdapter struct {
-	// mgr 被适配的 AgentManager
-	mgr *srvruntime.AgentManager
+// sessionRuntimeCleanerAgent 把 Runtime 的会话清理适配到 provisioner 窄接口。
+// Python: runtime/service.py cleanup_session（:3024）—— 上游删除事务经
+// SessionDeleteLifecycle 回调 Runtime 自身方法，因此这里只做"转接到 Runtime"。
+//
+// 取代此前直接调 AgentManager.CleanupSessionRuntime 的旧适配器：它只实现了
+// 四步中的第 2 步，丢掉了关协调器、解绑 owner、重置 plan（spec G-4）。
+type sessionRuntimeCleanerAgent struct {
+	// runtime 执行账本归属方
+	runtime *swruntime.AgentRuntime
 }
 
 // teamExecutionControllerAdapter 团队执行控制面适配器。
@@ -89,6 +93,7 @@ var (
 func newSessionProvisioner(
 	plan *swruntime.PlanModeController,
 	mgr *srvruntime.AgentManager,
+	agentRuntime *swruntime.AgentRuntime,
 ) *swruntime.RuntimeSessionProvisioner {
 	var planController swruntime.SessionPlanController
 	if plan != nil {
@@ -112,7 +117,7 @@ func newSessionProvisioner(
 	prov.SetListTeamSessions(listTeamSessionIDs)
 	prov.SetSessionOps(&sessionOpsAdapter{})
 	prov.CheckpointEnsure = adapter.EnsurePersistentCheckpointer
-	prov.SessionCleaner = &sessionCleanerAdapter{mgr: mgr}
+	prov.SessionCleaner = &sessionRuntimeCleanerAgent{runtime: agentRuntime}
 	prov.RunnerRelease = func(ctx context.Context, sessionID string) error {
 		return runner.Release(ctx, sessionID, false)
 	}
@@ -328,14 +333,17 @@ func (noopTeamBindingUnbinder) UnbindSession(teamName, sessionID string) error {
 	return nil
 }
 
-// CleanupSession 委托 AgentManager.CleanupSessionRuntime。
-func (a *sessionCleanerAdapter) CleanupSession(
+// CleanupSession 委托 Runtime 的四步清理（resetPlanState=false）。
+// Python: service.py:3440 cleanup_session(reset_plan_state=False)
+//
+// 删除事务期间必须保留 plan 状态：否则回滚时状态已丢。
+func (a *sessionRuntimeCleanerAgent) CleanupSession(
 	ctx context.Context, channelID, sessionID string,
 ) error {
-	if a.mgr == nil {
+	if a.runtime == nil {
 		return nil
 	}
-	_, err := a.mgr.CleanupSessionRuntime(ctx, channelID, sessionID)
+	_, err := a.runtime.CleanupSession(ctx, channelID, sessionID, false)
 	return err
 }
 

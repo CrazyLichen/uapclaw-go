@@ -104,7 +104,12 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	// Python: AgentConfigService(workspace_dir)
 	// Python 默认 Path.cwd()，Go 使用 workspace.WorkspaceDir()
 	agentConfigService := runtime.NewAgentConfigService(workspace.WorkspaceDir())
-	// Python: self._agent_manager = AgentManager()（在 __init__ 中创建）
+	// manager 由 AgentServer 创建后注入 Runtime。
+	//
+	// spec D-1 原计划"Runtime 内部自建"，但 AgentManager 属于 server 包，
+	// 上游 Runtime 无法 import 它（会成循环），故自建只能在 server 侧完成；
+	// Runtime 仍是唯一持有与对外提供方（AgentManager() 访问器），
+	// 门面与用法一律经 Runtime 取，不再各自持有。
 	agentManager := runtime.NewAgentManager()
 	server := &AgentServer{
 		config:                  cfg,
@@ -117,11 +122,15 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	}
 	// 控制事件走 push 通道（对齐 Python _send_runtime_event 的 plan_mode_exited 分支）
 	server.planController = swruntime.NewPlanModeController()
-	server.provisioner = newSessionProvisioner(server.planController, server.agentManager)
+	// 协调器由 Runtime 持有（Python: AgentRuntime._session_coordinator）
 	server.coordinator = swsession.NewRuntimeSessionCoordinator(swsession.DefaultCoordinatorOptions())
 	server.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
 		Manager:        agentManager,
 		PlanController: server.planController,
+		Coordinator:    server.coordinator,
+		ResetPlanSession: func(sessionID string) {
+			server.planController.ResetSession(sessionID)
+		},
 		OnControlEvent: func(ev *swruntime.RuntimeEvent) {
 			// 控制事件推送失败只影响前端状态刷新，记日志不阻断运行时
 			if pushErr := server.SendPush(context.Background(), map[string]any{
@@ -136,6 +145,7 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 			}
 		},
 	})
+	server.provisioner = newSessionProvisioner(server.planController, server.agentManager, server.agentRuntime)
 	return server
 }
 
