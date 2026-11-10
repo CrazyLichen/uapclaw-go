@@ -665,3 +665,93 @@ func TestUnknownEvent_形状(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown event type and schema version must not be empty")
 }
+
+// TestEventBufferConfig_默认值与容量校验 验证 1024 默认与 capacity>0。
+// Python: events.py:97-106 EventBufferConfig
+// 上游用例: test_protocol.py:721 test_event_backpressure_retention_is_not_provider_selected
+func TestEventBufferConfig_默认值与容量校验(t *testing.T) {
+	c, err := NewEventBufferConfig(1024, EventOverflowPolicyCoalesceOrBlock)
+	require.NoError(t, err)
+	assert.Equal(t, 1024, c.Capacity)
+	assert.Equal(t, EventOverflowPolicy("coalesce_or_block"), c.Overflow)
+
+	_, err = NewEventBufferConfig(0, EventOverflowPolicyCoalesceOrBlock)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event buffer capacity must be positive")
+
+	_, err = NewEventBufferConfig(-3, EventOverflowPolicyBlock)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event buffer capacity must be positive")
+}
+
+// TestEventRetentionOf_五条规则 逐条验证 retention 推导，顺序与上游一致。
+// Python: events.py:378-389 event_retention（5 条 if，短路顺序不可调）
+// 上游用例: test_protocol.py:721
+func TestEventRetentionOf_五条规则(t *testing.T) {
+	// 规则 1：OutputEvent + SNAPSHOT → coalescible
+	snap, err := NewOutputEvent("a", OutputKindText, "current", OutputOperationSnapshot, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionCoalescible, EventRetentionOf(&snap))
+
+	// 规则 1 反例：DELTA → required
+	delta, err := NewOutputEvent("a", OutputKindText, "next", OutputOperationDelta, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&delta))
+
+	// 规则 1 反例：FINAL → required
+	final, err := NewOutputEvent("a", OutputKindText, "done", OutputOperationFinal, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&final))
+
+	// 规则 2：UsageUpdatedEvent + CUMULATIVE → coalescible
+	in := 1
+	usage, err := NewTurnUsage(&in, nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	cum, err := NewUsageUpdatedEvent(usage, UsageUpdateModeCumulative)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionCoalescible, EventRetentionOf(&cum))
+
+	// 规则 2 反例：DELTA → required
+	ud, err := NewUsageUpdatedEvent(usage, UsageUpdateModeDelta)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&ud))
+
+	// 规则 3：HookObservedEvent → best_effort
+	hook, err := NewHookObservedEvent(HookEventPhaseStarted, "before_tool", "h1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionBestEffort, EventRetentionOf(&hook))
+
+	// 规则 4：DiagnosticEvent + debug/info → best_effort
+	for _, lv := range []DiagnosticLevel{DiagnosticLevelDebug, DiagnosticLevelInfo} {
+		de, err := NewDiagnosticEvent(lv, "m", nil)
+		require.NoError(t, err)
+		assert.Equal(t, EventRetentionBestEffort, EventRetentionOf(&de), "level=%s", lv)
+	}
+
+	// 规则 4 反例：warning/error → required
+	for _, lv := range []DiagnosticLevel{DiagnosticLevelWarning, DiagnosticLevelError} {
+		de, err := NewDiagnosticEvent(lv, "m", nil)
+		require.NoError(t, err)
+		assert.Equal(t, EventRetentionRequired, EventRetentionOf(&de), "level=%s", lv)
+	}
+
+	// 规则 5：其余 → required
+	item, err := NewItemLifecycleEvent(ItemEventKindStarted, "tool", nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&item))
+
+	st, err := NewStateChangedEvent(HarnessStateIdle, HarnessStateRunning)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&st))
+
+	tl, err := NewTurnLifecycleEvent(TurnEventKindStarted, nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&tl))
+
+	unk, err := NewUnknownEvent("future", "2", nil)
+	require.NoError(t, err)
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(&unk))
+
+	// 规则 5：nil 兜底 required
+	assert.Equal(t, EventRetentionRequired, EventRetentionOf(nil))
+}

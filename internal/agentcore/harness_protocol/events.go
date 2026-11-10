@@ -441,6 +441,41 @@ func IsTerminalTurnEventKind(kind TurnEventKind) bool {
 	return TerminalTurnEventKinds[kind]
 }
 
+// EventRetentionOf 返回生产者对 payload 唯一可用的保留类别。
+// 这是背压保留档位的唯一来源：生产者不得自行选择（SPEC.md 不变量 12）。
+// Python: events.py:378-389 event_retention（5 条 if 短路，顺序不可调）
+func EventRetentionOf(payload HarnessEventPayload) EventRetention {
+	// 规则 1：快照输出可合并（events.py:381-382）
+	if out, ok := payload.(*OutputEvent); ok && out.Operation == OutputOperationSnapshot {
+		return EventRetentionCoalescible
+	}
+	// 规则 2：累计用量可合并（events.py:383-384）
+	if usage, ok := payload.(*UsageUpdatedEvent); ok && usage.Mode == UsageUpdateModeCumulative {
+		return EventRetentionCoalescible
+	}
+	// 规则 3：钩子观测只是镜像，可丢（events.py:385-386）
+	if _, ok := payload.(*HookObservedEvent); ok {
+		return EventRetentionBestEffort
+	}
+	// 规则 4：debug/info 级诊断可丢（events.py:387-388）
+	if diag, ok := payload.(*DiagnosticEvent); ok &&
+		(diag.Level == DiagnosticLevelDebug || diag.Level == DiagnosticLevelInfo) {
+		return EventRetentionBestEffort
+	}
+	// 规则 5：其余一律必需，永不丢弃（events.py:389）
+	return EventRetentionRequired
+}
+
+// NewEventBufferConfig 创建有界观测缓冲契约。
+// Python: events.py:104-106 EventBufferConfig.__post_init__
+func NewEventBufferConfig(capacity int, overflow EventOverflowPolicy) (EventBufferConfig, error) {
+	// 步骤 1：容量必须为正
+	if capacity <= 0 {
+		return EventBufferConfig{}, &HarnessProtocolError{Msg: "event buffer capacity must be positive"}
+	}
+	return EventBufferConfig{Capacity: capacity, Overflow: overflow}, nil
+}
+
 // NewOutputEvent 创建输出更新事件。
 // Python: events.py:154-160 OutputEvent.__post_init__
 func NewOutputEvent(
