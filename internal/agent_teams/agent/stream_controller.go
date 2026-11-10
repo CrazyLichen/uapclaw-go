@@ -52,6 +52,10 @@ type StreamController struct {
 	// streamQueue 流式分块队列（nil sentinel 关闭流）
 	// Python: self.stream_queue: Optional[asyncio.Queue] = None
 	streamQueue chan streambase.Schema
+	// forwardCancel 取消当前 cycle 的输出泵（S-01）
+	forwardCancel context.CancelFunc
+	// forwardDone 输出泵退出信号（S-01）
+	forwardDone chan struct{}
 	// retryAttempt 重试计数（Python self._retry_attempt，start 时清零）
 	retryAttempt int
 	// swallowFailedRound 是否吞掉失败轮剩余的 chunk（Python self._swallow_failed_round）
@@ -454,9 +458,36 @@ func (sc *StreamController) Start(ctx context.Context) {
 	sc.mu.Lock()
 	sc.retryAttempt = 0
 	sc.swallowFailedRound = false
+	fctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	sc.forwardCancel = cancel
+	sc.forwardDone = done
 	sc.mu.Unlock()
 	_ = h.Subscribe(ctx, sc.mapState, sc.mapRound)
-	go sc.forwardOutputs(ctx)
+	go func() {
+		defer close(done)
+		sc.forwardOutputs(fctx)
+	}()
+}
+
+// Stop 取消输出泵并等待其退出（一个 run cycle 一次）。
+// Python: StreamController.stop()（stream_controller.py:320-334）
+func (sc *StreamController) Stop(ctx context.Context) {
+	sc.mu.Lock()
+	cancel := sc.forwardCancel
+	done := sc.forwardDone
+	sc.forwardCancel = nil
+	sc.forwardDone = nil
+	sc.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+	}
 }
 
 // forwardOutputs 把 runtime.outputs() 泵入流队列 + 观察者（一个 cycle 一次）。
