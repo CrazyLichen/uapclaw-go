@@ -1009,5 +1009,30 @@ func (tm *TaskManager) deepCopyTask(task *schema.Task) *schema.Task {
 			Msg("failed to deserialize deep copy of task, returning original reference")
 		return task
 	}
+	// JSON 往返会把 metadata 里的非 JSON 原生类型降级：
+	// `*RunContext` 变成 map[string]any、`_steering_queue`（chan）变成 nil。
+	// 下游按类型断言取值（executor 的 run_context、handler 的 steering 队列）
+	// 因此全部拿到 nil —— 表现为 goal 轮 run_context 丢失、max_attempts 失效。
+	// Python 的 deepcopy 保留类型，这里把非 JSON 原生的值按引用补回，语义等价。
+	if copy.Metadata == nil && len(task.Metadata) > 0 {
+		copy.Metadata = make(map[string]any, len(task.Metadata))
+	}
+	for key, value := range task.Metadata {
+		if !isJSONNativeValue(value) {
+			copy.Metadata[key] = value
+		}
+	}
 	return &copy
+}
+
+// isJSONNativeValue 判断值是否为 JSON 原生类型（往返后类型不变）。
+// map[string]any 与 []any 内部可能仍含非原生值，此处按「可安全往返」处理。
+func isJSONNativeValue(value any) bool {
+	switch value.(type) {
+	case nil, bool, string, float64, int, int64,
+		map[string]any, []any:
+		return true
+	default:
+		return false
+	}
 }

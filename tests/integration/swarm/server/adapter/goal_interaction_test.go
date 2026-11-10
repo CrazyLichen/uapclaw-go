@@ -84,9 +84,9 @@ func (s *GoalInteractionSuite) TestGoalRound_用户轮后接goal轮并分气泡(
 	userFinal := indexOfFinal(frames, goalItUserAnswer)
 	s.Require().GreaterOrEqual(userFinal, 0, "user 轮必须有带内容的 chat.final")
 
-	boundary := indexOfEmptyFinalAfter(frames, userFinal)
-	s.Require().Greater(boundary, userFinal, "user 轮之后必须出现分气泡 final（空内容）")
-	s.Require().True(hasDeltaAfter(frames, boundary), "分气泡之后必须有 goal 轮的 chat.delta")
+	s.Require().True(hasDeltaAfter(frames, userFinal), "user 轮之后必须有 goal 轮的 chat.delta")
+	s.Require().Greater(indexOfEmptyFinalAfter(frames, userFinal), userFinal,
+		"goal 轮中间 final 必须被降级（空内容）")
 
 	getOut, err := d.DispatchGoalControl(context.Background(), goalItSession, "get", "", false, 0, 0)
 	s.Require().NoError(err)
