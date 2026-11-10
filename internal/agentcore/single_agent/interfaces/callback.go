@@ -12,6 +12,7 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/usageattr"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema2 "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -126,7 +127,7 @@ type AgentCallbackContext struct {
 	// contextUsageAttribution 本次请求的用量归属（owner 与调用血缘）
 	// 由 extraMuPtr 一并保护：模型调用前刷新、rail 读取可能跨协程。
 	// Python: AgentCallbackContext.context_usage_attribution（rail/base.py L579）
-	contextUsageAttribution map[string]any
+	contextUsageAttribution usageattr.Attribution
 }
 
 // AgentCallbackManager PerAgent 实例级回调管理器。
@@ -224,7 +225,7 @@ type ModelCallInputs struct {
 	Response *llmschema.AssistantMessage
 	// ContextUsageAttribution 本次上报的用量归属快照
 	// Python: ctx.inputs.context_usage_attribution（动态属性，react_agent.py L1483/L1703/L1779）
-	ContextUsageAttribution map[string]any
+	ContextUsageAttribution usageattr.Attribution
 }
 
 // SteeringDrainInputs BEFORE_STEERING_DRAIN 事件输入。
@@ -518,14 +519,14 @@ func (c *AgentCallbackContext) SetModelContext(mc ceinterface.ModelContext) { c.
 
 // ContextUsageAttribution 返回本次请求的用量归属（owner 与调用血缘）。
 // Python: AgentCallbackContext.context_usage_attribution（rail/base.py L579）
-func (c *AgentCallbackContext) ContextUsageAttribution() map[string]any {
+func (c *AgentCallbackContext) ContextUsageAttribution() usageattr.Attribution {
 	mu := c.extraLock()
 	mu.RLock()
 	defer mu.RUnlock()
 	if c.contextUsageAttribution == nil {
-		return map[string]any{}
+		return usageattr.Attribution{}
 	}
-	out := make(map[string]any, len(c.contextUsageAttribution))
+	out := make(usageattr.Attribution, len(c.contextUsageAttribution))
 	for k, v := range c.contextUsageAttribution {
 		out[k] = v
 	}
@@ -535,7 +536,7 @@ func (c *AgentCallbackContext) ContextUsageAttribution() map[string]any {
 // SetContextUsageAttribution 替换本次请求的用量归属。
 // 内层 ReActAgent 在 invoke 起点与每次模型调用上报前各刷新一次。
 // Python: ctx.context_usage_attribution（rail/base.py L579）
-func (c *AgentCallbackContext) SetContextUsageAttribution(attribution map[string]any) {
+func (c *AgentCallbackContext) SetContextUsageAttribution(attribution usageattr.Attribution) {
 	mu := c.extraLock()
 	mu.Lock()
 	defer mu.Unlock()
@@ -543,7 +544,7 @@ func (c *AgentCallbackContext) SetContextUsageAttribution(attribution map[string
 		c.contextUsageAttribution = nil
 		return
 	}
-	c.contextUsageAttribution = make(map[string]any, len(attribution))
+	c.contextUsageAttribution = make(usageattr.Attribution, len(attribution))
 	for k, v := range attribution {
 		c.contextUsageAttribution[k] = v
 	}

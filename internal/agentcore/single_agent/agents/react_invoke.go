@@ -459,10 +459,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		// 自建会话要带上父会话血缘的 env：后续读缓存身份/归属都靠它。
 		// Python: parent_session_id = inputs.get(...) or self._usage_parent_session_id
 		//         or current_usage_delegation().get(...) → envs（react_agent.py L2845-2856）
-		parentSessionID := firstNonEmptyString(
-			inputString(inputs, "parent_session_id"),
+		parentSessionID := utils.FirstNonEmpty(
+			utils.MapString(inputs, "parent_session_id"),
 			a.usageParentSessionID,
-			attributionString(rail.CurrentUsageDelegation(ctx), "parent_session_id"))
+			utils.MapString(rail.CurrentUsageDelegation(ctx), "parent_session_id"))
 		sessOpts := []session.SessionOption{session.WithSessionID(sessionID), session.WithCard(a.card)}
 		if parentSessionID != "" {
 			sessOpts = append(sessOpts, session.WithEnvs(map[string]any{
@@ -485,30 +485,30 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	// Python: react_agent.py L2876-2944
 	parentUsageAttribution := rail.CurrentUsageAttribution(ctx)
 	delegationAttribution := rail.CurrentUsageDelegation(ctx)
-	invocationID := inputString(inputs, "invocation_id")
+	invocationID := utils.MapString(inputs, "invocation_id")
 	if invocationID == "" {
 		// Python: uuid.uuid4().hex（无连字符）
 		invocationID = strings.ReplaceAll(uuid.NewString(), "-", "")
 	}
-	parentSessionID := firstNonEmptyString(
-		inputString(inputs, "parent_session_id"),
+	parentSessionID := utils.FirstNonEmpty(
+		utils.MapString(inputs, "parent_session_id"),
 		a.usageParentSessionID,
-		attributionString(delegationAttribution, "parent_session_id"))
-	parentInvocationID := firstNonEmptyString(
-		inputString(inputs, "parent_invocation_id"),
+		utils.MapString(delegationAttribution, "parent_session_id"))
+	parentInvocationID := utils.FirstNonEmpty(
+		utils.MapString(inputs, "parent_invocation_id"),
 		a.usageParentInvocationID,
-		attributionString(delegationAttribution, "parent_invocation_id"),
+		utils.MapString(delegationAttribution, "parent_invocation_id"),
 		rail.CurrentUsageInvocationID(ctx))
-	delegationID := firstNonEmptyString(
-		inputString(inputs, "delegation_id"),
+	delegationID := utils.FirstNonEmpty(
+		utils.MapString(inputs, "delegation_id"),
 		a.usageDelegationID,
-		attributionString(delegationAttribution, "delegation_id"))
-	agentPath := inputStringSlice(inputs, "agent_path")
+		utils.MapString(delegationAttribution, "delegation_id"))
+	agentPath := utils.MapStringSlice(inputs, "agent_path")
 	if len(agentPath) == 0 {
 		agentPath = a.usageAgentPath
 	}
 	if len(agentPath) == 0 {
-		agentPath = attributionStringSlice(delegationAttribution, "agent_path")
+		agentPath = utils.MapStringSlice(delegationAttribution, "agent_path")
 	}
 	if len(agentPath) == 0 {
 		selfName := "agent"
@@ -519,7 +519,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 				selfName = a.card.Name
 			}
 		}
-		if parentPath := attributionStringSlice(parentUsageAttribution, "agent_path"); len(parentPath) > 0 {
+		if parentPath := utils.MapStringSlice(parentUsageAttribution, "agent_path"); len(parentPath) > 0 {
 			agentPath = append(parentPath, selfName)
 		} else {
 			agentPath = []string{selfName}
@@ -528,13 +528,13 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	var depth int
 	if rawDepth, ok := inputs["depth"]; ok {
 		// Python: int(inputs.get("depth") or 0)——键存在即采用，0 是合法值
-		depth = attributionInt(map[string]any{"depth": rawDepth}, "depth")
+		depth = utils.MapInt(map[string]any{"depth": rawDepth}, "depth")
 	} else if a.usageDepth != nil {
 		depth = *a.usageDepth
 	} else if rawDelegationDepth, ok := delegationAttribution["depth"]; ok {
-		depth = attributionInt(map[string]any{"depth": rawDelegationDepth}, "depth")
-	} else if len(attributionStringSlice(parentUsageAttribution, "agent_path")) > 0 {
-		depth = attributionInt(parentUsageAttribution, "depth") + 1
+		depth = utils.MapInt(map[string]any{"depth": rawDelegationDepth}, "depth")
+	} else if len(utils.MapStringSlice(parentUsageAttribution, "agent_path")) > 0 {
+		depth = utils.MapInt(parentUsageAttribution, "depth") + 1
 	}
 	invokeInputs := &interfaces.InvokeInputs{
 		Query:              invokeQuery,
@@ -798,7 +798,7 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 			session.WithSessionID(sessionID),
 			session.WithCard(a.card),
 		}
-		if parentSessionID := inputString(inputs, "parent_session_id"); parentSessionID != "" {
+		if parentSessionID := utils.MapString(inputs, "parent_session_id"); parentSessionID != "" {
 			baseOpts = append(baseOpts, session.WithEnvs(map[string]any{
 				kv_cache.KVCacheAffinityParentSessionIDEnv: parentSessionID,
 			}))

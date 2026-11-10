@@ -12,18 +12,21 @@ package rail
 import (
 	"context"
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/usageattr"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // attributionBox 请求级归属的可变载体。
 // Python 把同一个 dict 绑进 ContextVar，之后原地 clear()+update() 让读取方看到新值；
-// Go 的 ctx 值不可替换，所以绑一个加锁的盒子，刷新时原地更新。
+// Go 的 ctx 值不可替换，所以绑一个加锁的盒子，刷新时整体替换。
 type attributionBox struct {
 	// mu 保护 data 的并发读写（模型调用刷新与并发工具读取）
 	mu sync.RWMutex
-	// data 当前归属
-	data map[string]any
+	// data 当前归属（由绑定方移交所有权，盒子内不再复制）
+	data usageattr.Attribution
 }
 
 // usageInvocationIDKey 当前调用标识的 ctx 键。
@@ -55,30 +58,35 @@ func BindUsageInvocationID(ctx context.Context, invocationID string) context.Con
 	return context.WithValue(ctx, usageInvocationIDKey{}, invocationID)
 }
 
-// CurrentUsageAttribution 返回当前 agent 的请求血缘，缺失返回空字典。
+// CurrentUsageAttribution 返回当前 agent 的请求血缘副本，缺失返回空字典。
 // Python: current_usage_attribution (rail/base.py L101-104)
-func CurrentUsageAttribution(ctx context.Context) map[string]any {
+func CurrentUsageAttribution(ctx context.Context) usageattr.Attribution {
 	if ctx == nil {
-		return map[string]any{}
+		return usageattr.Attribution{}
 	}
 	box, ok := ctx.Value(usageAttributionKey{}).(*attributionBox)
 	if !ok || box == nil {
-		return map[string]any{}
+		return usageattr.Attribution{}
 	}
 	return box.snapshot()
 }
 
-// BindUsageAttribution 绑定归属字典，返回派生 ctx。
+// BindUsageAttribution 绑定归属，返回派生 ctx。
+// 盒子接管 attribution 的所有权，调用方不得在绑定后继续修改它
+// （刷新请走 UpdateUsageAttribution）。
 // Python: bind_usage_attribution (rail/base.py L106-108)
-func BindUsageAttribution(ctx context.Context, attribution map[string]any) context.Context {
-	return context.WithValue(ctx, usageAttributionKey{}, &attributionBox{data: copyAttribution(attribution)})
+func BindUsageAttribution(ctx context.Context, attribution usageattr.Attribution) context.Context {
+	if attribution == nil {
+		attribution = usageattr.Attribution{}
+	}
+	return context.WithValue(ctx, usageAttributionKey{}, &attributionBox{data: attribution})
 }
 
-// UpdateUsageAttribution 原地更新当前绑定的归属（不影响父 ctx）。
+// UpdateUsageAttribution 整体替换当前绑定的归属（不影响父 ctx）。
 // 刷新后的完整归属会立刻对同一条 ctx 链上的读取方可见，等价 Python 的
-// ctx.context_usage_attribution.clear() + update()。
+// ctx.context_usage_attribution.clear() + update()。传入值同样移交所有权。
 // Python: react_agent.py L1478-1479 / L1682-1683 / L1757-1758
-func UpdateUsageAttribution(ctx context.Context, attribution map[string]any) {
+func UpdateUsageAttribution(ctx context.Context, attribution usageattr.Attribution) {
 	if ctx == nil {
 		return
 	}
@@ -91,19 +99,19 @@ func UpdateUsageAttribution(ctx context.Context, attribution map[string]any) {
 
 // CurrentUsageDelegation 返回为即将启动的子调用准备的委派归属，缺失返回空字典。
 // Python: current_usage_delegation (rail/base.py L116-118)
-func CurrentUsageDelegation(ctx context.Context) map[string]any {
+func CurrentUsageDelegation(ctx context.Context) usageattr.Attribution {
 	if ctx == nil {
-		return map[string]any{}
+		return usageattr.Attribution{}
 	}
-	if v, ok := ctx.Value(usageDelegationKey{}).(map[string]any); ok && v != nil {
+	if v, ok := ctx.Value(usageDelegationKey{}).(usageattr.Attribution); ok && v != nil {
 		return copyAttribution(v)
 	}
-	return map[string]any{}
+	return usageattr.Attribution{}
 }
 
 // BindUsageDelegation 绑定子调用委派归属（不替换父归属），返回派生 ctx。
 // Python: bind_usage_delegation (rail/base.py L121-123)
-func BindUsageDelegation(ctx context.Context, delegation map[string]any) context.Context {
+func BindUsageDelegation(ctx context.Context, delegation usageattr.Attribution) context.Context {
 	return context.WithValue(ctx, usageDelegationKey{}, copyAttribution(delegation))
 }
 
@@ -116,14 +124,14 @@ func BuildUsageDelegationAttribution(
 	agentID string,
 	parentSessionID string,
 	delegationID string,
-	parentAttribution map[string]any,
+	parentAttribution usageattr.Attribution,
 	parentInvocationID string,
-) map[string]any {
+) usageattr.Attribution {
 	parent := parentAttribution
 	if parent == nil {
 		parent = CurrentUsageAttribution(ctx)
 	}
-	parentPath := stringSliceVal(parent, "agent_path")
+	parentPath := utils.MapStringSlice(parent, "agent_path")
 	childID := agentID
 	if childID == "" {
 		childID = "agent"
@@ -134,13 +142,13 @@ func BuildUsageDelegationAttribution(
 	} else {
 		agentPath = []string{childID}
 	}
-	parentDepth := intVal(parent, "depth")
+	parentDepth := utils.MapInt(parent, "depth")
 	resolvedParentInvocationID := parentInvocationID
 	if resolvedParentInvocationID == "" {
 		resolvedParentInvocationID = CurrentUsageInvocationID(ctx)
 	}
 	if resolvedParentInvocationID == "" {
-		resolvedParentInvocationID = stringVal(parent, "invocation_id")
+		resolvedParentInvocationID = utils.MapString(parent, "invocation_id")
 	}
 
 	// agent_id 在 Python 侧允许为 None，此处用 nil 保留同形（键存在、值为空）
@@ -152,104 +160,47 @@ func BuildUsageDelegationAttribution(
 	if len(parentPath) > 0 {
 		depth = parentDepth + 1
 	}
-	return map[string]any{
+	return usageattr.Attribution{
 		"agent_id":              agentIDValue,
-		"product_session_id":    firstNonEmpty(stringVal(parent, "product_session_id"), stringVal(parent, "execution_session_id"), parentSessionID),
+		"product_session_id":    utils.FirstNonEmpty(utils.MapString(parent, "product_session_id"), utils.MapString(parent, "execution_session_id"), parentSessionID),
 		"parent_session_id":     parentSessionID,
 		"parent_invocation_id":  resolvedParentInvocationID,
 		"delegation_id":         delegationID,
 		"agent_path":            agentPath,
 		"depth":                 depth,
-		"parent_cache_identity": stringVal(parent, "cache_identity"),
-		"cache_mode":            firstNonEmpty(stringVal(parent, "cache_mode"), "provider"),
-		"cache_scope":           firstNonEmpty(stringVal(parent, "cache_scope"), "session"),
+		"parent_cache_identity": utils.MapString(parent, "cache_identity"),
+		"cache_mode":            utils.FirstNonEmpty(utils.MapString(parent, "cache_mode"), "provider"),
+		"cache_scope":           utils.FirstNonEmpty(utils.MapString(parent, "cache_scope"), "session"),
 	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // snapshot 返回归属副本（读取方改不到内部字典）。
-func (b *attributionBox) snapshot() map[string]any {
+func (b *attributionBox) snapshot() usageattr.Attribution {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return copyAttribution(b.data)
 }
 
-// replace 整体替换归属。
-func (b *attributionBox) replace(data map[string]any) {
+// replace 整体替换归属（接管所有权，不复制）。
+func (b *attributionBox) replace(data usageattr.Attribution) {
+	if data == nil {
+		data = usageattr.Attribution{}
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.data = copyAttribution(data)
+	b.data = data
 }
 
 // copyAttribution 复制归属字典（对齐 Python 的 dict(...) 语义）。
-func copyAttribution(src map[string]any) map[string]any {
+func copyAttribution(src usageattr.Attribution) usageattr.Attribution {
 	if src == nil {
-		return map[string]any{}
+		return usageattr.Attribution{}
 	}
-	dst := make(map[string]any, len(src))
+	dst := make(usageattr.Attribution, len(src))
 	for k, v := range src {
 		dst[k] = v
 	}
 	return dst
-}
-
-// stringVal 读取字典里的字符串值，缺失或类型不符返回空串。
-func stringVal(m map[string]any, key string) string {
-	if m == nil {
-		return ""
-	}
-	switch v := m[key].(type) {
-	case string:
-		return v
-	case []byte:
-		return string(v)
-	}
-	return ""
-}
-
-// intVal 读取字典里的整数值（兼容 int/int64/float64），缺失或类型不符返回 0。
-func intVal(m map[string]any, key string) int {
-	if m == nil {
-		return 0
-	}
-	switch v := m[key].(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	}
-	return 0
-}
-
-// stringSliceVal 读取字典里的字符串列表，缺失或类型不符返回 nil。
-func stringSliceVal(m map[string]any, key string) []string {
-	if m == nil {
-		return nil
-	}
-	switch v := m[key].(type) {
-	case []string:
-		return append([]string{}, v...)
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	}
-	return nil
-}
-
-// firstNonEmpty 返回第一个非空串。
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }

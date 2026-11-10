@@ -107,6 +107,25 @@ func TestResolveContextUsageAttribution_来源元数据与构建上下文(t *tes
 	assert.Equal(t, "leader", got["agent_path"].([]string)[0])
 }
 
+// TestResolveContextUsageAttribution_成员名四级回退 验证第四级
+// `getattr(self, "member_name", None)` 在前三级都缺失时仍是归属来源。
+// Python: react_agent.py L1367-1371
+func TestResolveContextUsageAttribution_成员名四级回退(t *testing.T) {
+	a := newAttributionAgent(t, "agent-4")
+	// 前三级：ctx 归属 / source_metadata / build_context 全部为空，
+	// 只挂上 agent 自身的 member_name（对应 Python 宿主动态挂属性）。
+	a.usageMemberName = "host-member"
+	cbc := interfaces.NewAgentCallbackContext(a, &interfaces.InvokeInputs{}, nil)
+
+	got := a.resolveContextUsageAttribution(cbc)
+
+	assert.Equal(t, "host-member", got["member_name"], "第四级成员名回退生效")
+	assert.Equal(t, []string{"host-member"}, got["agent_path"], "路径用成员名兜底")
+	// Python: owner_parts = [team_id, member_name or agent_id or "agent", ...]
+	// 无团队时 team_id 为空片段被过滤，故不含 agent-4 前缀。
+	assert.Equal(t, "host-member|default|default", got["context_owner_id"])
+}
+
 // TestResolveContextUsageAttribution_归属值优先 验证 ctx 归属覆盖会话推断。
 func TestResolveContextUsageAttribution_归属值优先(t *testing.T) {
 	a := newAttributionAgent(t, "agent-3")

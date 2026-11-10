@@ -10,7 +10,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/usageattr"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -67,8 +69,8 @@ const kvCacheAffinityParentSessionIDEnv = kv_cache.KVCacheAffinityParentSessionI
 
 // resolveContextUsageAttribution 解析一次模型调用上报所需的 owner 与调用血缘。
 // Python: ReActAgent._context_usage_attribution (react_agent.py L1326-1418)
-func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbackContext) map[string]any {
-	values := map[string]any{}
+func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbackContext) usageattr.Attribution {
+	values := usageattr.Attribution{}
 	if cbc != nil {
 		// 会话级用量元数据（Python 先取 session 元数据，再用 ctx 归属覆盖）
 		if provider, ok := cbc.Session().(usageContextUsageMetadataProvider); ok {
@@ -92,7 +94,7 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 
 	// agent id：ctx 归属 → card.id → card.name
 	// （Python 的 _usage_agent_id 与本 agent 的 card.id 恒等，Go 不重复保存）
-	agentID := attributionString(values, "agent_id")
+	agentID := utils.MapString(values, "agent_id")
 	if agentID == "" && a.card != nil {
 		agentID = a.card.ID
 		if agentID == "" {
@@ -101,9 +103,9 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	}
 
 	// team id：ctx 归属 → 来源元数据 → 会话能力
-	teamID := attributionString(values, "team_id")
+	teamID := utils.MapString(values, "team_id")
 	if teamID == "" {
-		teamID = attributionString(sourceMetadata, "source_team_id")
+		teamID = utils.MapString(sourceMetadata, "source_team_id")
 	}
 	if teamID == "" {
 		if provider, ok := cbc.Session().(usageTeamIDProvider); ok {
@@ -112,16 +114,23 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	}
 
 	// 成员名：ctx 归属 → 来源元数据 → build context → agent 自身
-	memberName := attributionString(values, "member_name")
+	// Python: react_agent.py L1367-1371（四级，最后一级是 getattr(self, "member_name", None)）
+	memberName := utils.MapString(values, "member_name")
 	if memberName == "" {
-		memberName = attributionString(sourceMetadata, "source_member_name")
+		memberName = utils.MapString(sourceMetadata, "source_member_name")
 	}
 	if memberName == "" && a.usageBuildContext != nil {
 		memberName = a.usageBuildContext.GetMemberName()
 	}
+	if memberName == "" {
+		// Python 的 ReActAgent 本身不声明 member_name 属性，这一级恒为空；
+		// 保留该步骤是为了与上游逐行可对照（可由宿主动态挂属性）。
+		// Python: member_name = getattr(self, "member_name", None)（L1370-1371）
+		memberName = a.usageMemberName
+	}
 
 	executionSessionID := usageSessionID(cbc)
-	parentSessionID := attributionString(values, "parent_session_id")
+	parentSessionID := utils.MapString(values, "parent_session_id")
 	if parentSessionID == "" && cbc != nil {
 		if provider, ok := cbc.Session().(usageParentSessionIDProvider); ok {
 			parentSessionID = provider.GetParentSessionID()
@@ -135,11 +144,11 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 			}
 		}
 	}
-	productSessionID := firstNonEmptyString(
-		attributionString(values, "product_session_id"), parentSessionID, executionSessionID)
+	productSessionID := utils.FirstNonEmpty(
+		utils.MapString(values, "product_session_id"), parentSessionID, executionSessionID)
 
-	cacheIdentity := attributionString(values, "cache_identity")
-	parentCacheIdentity := attributionString(values, "parent_cache_identity")
+	cacheIdentity := utils.MapString(values, "cache_identity")
+	parentCacheIdentity := utils.MapString(values, "parent_cache_identity")
 	if cbc != nil {
 		if provider, ok := cbc.Session().(usageCacheIdentityProvider); ok {
 			// 遥测不得影响模型执行：取身份失败只记 debug，继续用兜底值。
@@ -158,22 +167,22 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	}
 
 	contextID := usageContextID(cbc, executionSessionID)
-	contextOwnerID := attributionString(values, "context_owner_id")
+	contextOwnerID := utils.MapString(values, "context_owner_id")
 	if contextOwnerID == "" {
-		ownerName := firstNonEmptyString(memberName, agentID, "agent")
+		ownerName := utils.FirstNonEmpty(memberName, agentID, "agent")
 		contextOwnerID = joinNonEmpty("|", teamID, ownerName, executionSessionID, contextID)
 	}
 
-	agentPath := attributionStringSlice(values, "agent_path")
+	agentPath := utils.MapStringSlice(values, "agent_path")
 	if len(agentPath) == 0 {
-		agentPath = []string{firstNonEmptyString(memberName, agentID, "agent")}
+		agentPath = []string{utils.FirstNonEmpty(memberName, agentID, "agent")}
 	}
-	depth := attributionInt(values, "depth")
+	depth := utils.MapInt(values, "depth")
 	if depth == 0 && len(agentPath)-1 > 0 {
 		depth = len(agentPath) - 1
 	}
 
-	out := make(map[string]any, len(values)+9)
+	out := make(usageattr.Attribution, len(values)+9)
 	for k, v := range values {
 		out[k] = v
 	}
@@ -185,10 +194,10 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	out["member_name"] = memberName
 	out["agent_path"] = agentPath
 	out["depth"] = depth
-	out["cache_identity"] = firstNonEmptyString(cacheIdentity, executionSessionID)
-	out["parent_cache_identity"] = firstNonEmptyString(parentCacheIdentity, productSessionID)
-	out["cache_mode"] = firstNonEmptyString(attributionString(values, "cache_mode"), "provider")
-	out["cache_scope"] = firstNonEmptyString(attributionString(values, "cache_scope"), "session")
+	out["cache_identity"] = utils.FirstNonEmpty(cacheIdentity, executionSessionID)
+	out["parent_cache_identity"] = utils.FirstNonEmpty(parentCacheIdentity, productSessionID)
+	out["cache_mode"] = utils.FirstNonEmpty(utils.MapString(values, "cache_mode"), "provider")
+	out["cache_scope"] = utils.FirstNonEmpty(utils.MapString(values, "cache_scope"), "session")
 	return out
 }
 
@@ -225,94 +234,6 @@ func usageContextID(cbc *interfaces.AgentCallbackContext, fallback string) strin
 		}
 	}
 	return fallback
-}
-
-// inputString 读取输入字典里的字符串值。
-func inputString(inputs map[string]any, key string) string {
-	if inputs == nil {
-		return ""
-	}
-	if s, ok := inputs[key].(string); ok {
-		return s
-	}
-	return ""
-}
-
-// inputStringSlice 读取输入字典里的字符串列表。
-func inputStringSlice(inputs map[string]any, key string) []string {
-	if inputs == nil {
-		return nil
-	}
-	switch v := inputs[key].(type) {
-	case []string:
-		return append([]string{}, v...)
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	}
-	return nil
-}
-
-// attributionString 读取归属字典里的字符串值。
-func attributionString(m map[string]any, key string) string {
-	if m == nil {
-		return ""
-	}
-	if s, ok := m[key].(string); ok {
-		return s
-	}
-	return ""
-}
-
-// attributionInt 读取归属字典里的整数值（兼容 int/int64/float64）。
-func attributionInt(m map[string]any, key string) int {
-	if m == nil {
-		return 0
-	}
-	switch v := m[key].(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	}
-	return 0
-}
-
-// attributionStringSlice 读取归属字典里的字符串列表。
-func attributionStringSlice(m map[string]any, key string) []string {
-	if m == nil {
-		return nil
-	}
-	switch v := m[key].(type) {
-	case []string:
-		return append([]string{}, v...)
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	}
-	return nil
-}
-
-// firstNonEmptyString 返回第一个非空串。
-func firstNonEmptyString(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // joinNonEmpty 用 sep 连接非空片段（对齐 Python "|".join(part for part in ... if part)）。
