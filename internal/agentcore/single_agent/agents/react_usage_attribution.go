@@ -112,12 +112,19 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	}
 
 	// 成员名：ctx 归属 → 来源元数据 → build context → agent 自身
+	// Python: react_agent.py L1367-1371（四级，最后一级是 getattr(self, "member_name", None)）
 	memberName := attributionString(values, "member_name")
 	if memberName == "" {
 		memberName = attributionString(sourceMetadata, "source_member_name")
 	}
 	if memberName == "" && a.usageBuildContext != nil {
 		memberName = a.usageBuildContext.GetMemberName()
+	}
+	if memberName == "" {
+		// Python 的 ReActAgent 本身不声明 member_name 属性，这一级恒为空；
+		// 保留该步骤是为了与上游逐行可对照（可由宿主动态挂属性）。
+		// Python: member_name = getattr(self, "member_name", None)（L1370-1371）
+		memberName = a.usageMemberName
 	}
 
 	executionSessionID := usageSessionID(cbc)

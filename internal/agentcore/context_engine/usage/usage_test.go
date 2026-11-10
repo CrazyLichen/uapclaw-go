@@ -230,6 +230,47 @@ func TestBuildSnapshot_归属字段覆盖(t *testing.T) {
 	}
 }
 
+// TestBuildSnapshot_归属键存在但值为nil仍覆盖 验证 Python 的
+// `{name: values.get(name) for name in names if name in values}` 语义：
+// 判定依据是"键存在"，不是"值形状正确"；nil 等价于 Python 的 None，
+// 同样要把已有缺省值清成零值。
+// Python: _attribution_fields（analyzer.py L357-373）
+func TestBuildSnapshot_归属键存在但值为nil仍覆盖(t *testing.T) {
+	snapshot := BuildSnapshot(SnapshotInput{
+		Phase:            PhasePostCall,
+		RequestID:        "req-nil",
+		SessionID:        "sess-nil",
+		ProductSessionID: "product-default",
+		AgentID:          "agent-default",
+		AgentPath:        []string{"root", "child"},
+		Depth:            3,
+		Attribution: map[string]any{
+			// BuildUsageDelegationAttribution 在 agent_id 为空时产出 nil 值，
+			// 上游就是靠"键存在"把字段重置掉，这里不能跳过覆盖。
+			"agent_id":   nil,
+			"agent_path": nil,
+			"depth":      nil,
+			"team_id":    "team-from-delegation",
+		},
+	})
+
+	if snapshot.AgentID != "" {
+		t.Fatalf("agent_id 键存在但值为 nil，应被清零，实际 %q", snapshot.AgentID)
+	}
+	if snapshot.AgentPath != nil {
+		t.Fatalf("agent_path 键存在但值为 nil，应被清零，实际 %v", snapshot.AgentPath)
+	}
+	if snapshot.Depth != 0 {
+		t.Fatalf("depth 键存在但值为 nil，应被清零，实际 %d", snapshot.Depth)
+	}
+	if snapshot.TeamID != "team-from-delegation" {
+		t.Fatalf("team_id 应正常覆盖，实际 %q", snapshot.TeamID)
+	}
+	if snapshot.ProductSessionID != "product-default" {
+		t.Fatalf("未提供的键不得改写缺省，实际 %q", snapshot.ProductSessionID)
+	}
+}
+
 // TestBuildSnapshot_无归属保留缺省 验证没有归属时缺省值不被清空。
 func TestBuildSnapshot_无归属保留缺省(t *testing.T) {
 	snapshot := BuildSnapshot(SnapshotInput{

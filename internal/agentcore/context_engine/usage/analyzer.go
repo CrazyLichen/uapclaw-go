@@ -195,16 +195,17 @@ func applyAttributionFields(snapshot *ContextUsageSnapshot, attribution map[stri
 	}
 }
 
-// attributionString 读取归属字典里的字符串值；非字符串视为未提供。
+// attributionString 读取归属字典里的字符串值。
+// Python 的 _attribution_fields 是 `if name in values` 而非类型守卫：键存在即覆盖，
+// 值为 None 时也要把字段清成零值（pydantic Optional[str] 收 None）。
+// 非字符串值同样按零值覆盖，保持"键存在即生效"的语义。
+// Python: usage/analyzer.py L357-373
 func attributionString(m map[string]any, key string) (string, bool) {
 	raw, ok := m[key]
 	if !ok {
 		return "", false
 	}
-	s, ok := raw.(string)
-	if !ok {
-		return "", false
-	}
+	s, _ := raw.(string)
 	return s, true
 }
 
@@ -226,7 +227,8 @@ func attributionAgentPath(m map[string]any) ([]string, bool) {
 		}
 		return out, true
 	}
-	return nil, false
+	// 键存在但形状不符（含 nil）：按 Python 的 `values.get(name)` 覆盖为空列表。
+	return nil, true
 }
 
 // attributionIntValue 读取归属字典里的整数值（兼容 int/int64/float64）。
@@ -243,7 +245,8 @@ func attributionIntValue(m map[string]any, key string) (int, bool) {
 	case float64:
 		return int(v), true
 	}
-	return 0, false
+	// 键存在但形状不符（含 nil）：按 Python 的 `values.get(name)` 覆盖为零值。
+	return 0, true
 }
 
 // newPart 构造分类条目（估算来源固定为 tokenizer 计数）。

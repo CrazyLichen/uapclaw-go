@@ -54,6 +54,9 @@ type ReActAgent struct {
 	// usageBuildContext 团队成员的构建上下文（成员名来源，可空）
 	// Python: ReActAgent._usage_build_context（native_harness.py L186 注入）
 	usageBuildContext UsageIdentityProvider
+	// usageMemberName 宿主动态挂在 ReActAgent 上的成员名（Python 侧无声明、无赋值点）
+	// Python: getattr(self, "member_name", None)（react_agent.py L1370-1371）
+	usageMemberName string
 	// usageParentSessionID 显式父会话覆盖（Python 侧无赋值点，仅回退链读取）
 	// Python: ReActAgent._usage_parent_session_id（react_agent.py L2890）
 	usageParentSessionID string
