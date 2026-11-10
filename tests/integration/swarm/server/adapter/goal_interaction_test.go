@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -79,7 +78,9 @@ func (s *GoalInteractionSuite) TestGoalRound_用户轮后接goal轮并分气泡(
 	s.Require().NoError(err)
 	s.Require().Equal("goal_stream", out["result_type"], "set 必须返回 goal_stream")
 
-	frames := s.streamFramesBounded(d, goalItSession, "开始干活", goalRoundFrameBudget)
+	// goal 轮收敛后流会自然关闭（max_attempts 生效）；这里直接等关闭，
+	// 顺带断言「goal 轮不再无限重试」——若回归成不收敛，本用例会挂住而非假绿。
+	frames := s.streamFrames(d, goalItSession, "开始干活")
 
 	userFinal := indexOfFinal(frames, goalItUserAnswer)
 	s.Require().GreaterOrEqual(userFinal, 0, "user 轮必须有带内容的 chat.final")
@@ -140,47 +141,6 @@ func (s *GoalInteractionSuite) streamFrames(
 	return frames
 }
 
-// streamFramesBounded 跑一轮流式并按帧数上限收集（流可能不自然结束）。
-func (s *GoalInteractionSuite) streamFramesBounded(
-	d *adapter.DeepAdapter, sessionID, query string, limit int,
-) []map[string]any {
-	s.T().Helper()
-
-	params, err := json.Marshal(map[string]any{"mode": "agent.work.plan"})
-	s.Require().NoError(err)
-
-	sid := sessionID
-	req := &schema.AgentRequest{
-		RequestID: "req-" + sessionID,
-		ChannelID: "web",
-		SessionID: &sid,
-		Params:    params,
-		IsStream:  true,
-	}
-	chunkCh, streamErr := d.ProcessMessageStreamImpl(s.Ctx, req, map[string]any{
-		"query":           query,
-		"conversation_id": sessionID,
-	})
-	s.Require().NoError(streamErr, "ProcessMessageStreamImpl 不应返回启动错误")
-
-	var frames []map[string]any
-	deadline := time.After(goalRoundCollectTimeout)
-	for len(frames) < limit {
-		select {
-		case <-deadline:
-			return frames
-		case chunk, ok := <-chunkCh:
-			if !ok {
-				return frames
-			}
-			if chunk != nil && chunk.Payload != nil {
-				frames = append(frames, chunk.Payload)
-			}
-		}
-	}
-	return frames
-}
-
 // hasDeltaAfter 下标之后是否还有 chat.delta。
 func hasDeltaAfter(frames []map[string]any, from int) bool {
 	for i := from + 1; i < len(frames); i++ {
@@ -229,8 +189,4 @@ const (
 	goalItUserAnswer = "已完成第一步。"
 	// goalItObjective 目标文本
 	goalItObjective = "修完测试"
-	// goalRoundFrameBudget 有界收集的帧数上限（够覆盖 user 轮 + 分气泡 + 若干 goal 轮）
-	goalRoundFrameBudget = 30
-	// goalRoundCollectTimeout 有界收集的墙钟上限
-	goalRoundCollectTimeout = 15 * time.Second
 )
