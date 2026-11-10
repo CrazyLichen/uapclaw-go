@@ -677,7 +677,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | B2 | 9.88 | ✅ 2026-11-06 | Goal 域模型（可并行） | ~1.15k 行（实际 goal/ 五文件 + sections 四函数，42 用例） |
 | B3 | 9.89 | ✅ 2026-11-06 | Goal 提示词/工具/生命周期接线 | ~1.5k 行 |
 | B4 | 10.3.27 | ✅ 2026-11-09 | 服务面 `command.goal`（五 action + 三个守卫 + 轮次输出语义 + goal busy 互斥 + 跨会话 session-input 准入） | ~1.0-1.5k 行 |
-| B5 | 27.2 | 🔄 部分 | 前端契约验证 + `goal.snapshot` 补发：**后端事件与 get 单帧已落地并有集成用例**（`interface_goal_shortcircuit_test.go` / `goal_events.go`），但**前端 16 处 `command.goal` 调用与 5 类事件尚无端到端契约快照用例**（27.10 亦 ☐），未按 27.2 完成验收 | ~0.2k 行 |
+| B5 | 27.2 + 27.10 | ✅ 2026-11-09 | 前端契约全量验收完成：`tests/integration/swarm/web/` 7 文件 / 1088 行 / 23 条 suite 测试方法（默认门禁内 20 条 + `integration&&llm` 冒烟 1 条）；G1 9 组契约 + G2 O1-O5 + G3 R1-R4 + G4 MockLLM 状态机 + G4 真 LLM 冒烟。审计 `[通过] 调用跨度 3 / 有效测试 20` | 实际 1088 行 |
 
 - **依赖**：B1、B2 可并行 → B3 需 B1+B2 → B4 需 B3 → B5 需 B4。
 - **Spec 拆分**（2026-11-05 决策）：S1=B1、S2=B2+B3、S3=B4+B5；每份 800-1500 行改动，各自一个 plan。**（2026-11-06 修订）**：S2 拆开 —— 9.88 单章出 spec 并顺带落 `prompts/sections/goal.go` 的 task-query 四函数，9.89 单独一份；理由：9.88 单独约 1.3k 行已接近单份上限，且 9.88 是 9.89 的硬依赖，提前可独立验收。
@@ -687,13 +687,13 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | # | 缺口 | 性质 | 章节 | 影响 |
 |---|------|------|------|------|
-| 1 | 前端 16 处 `command.goal` 调用 + 5 类事件的端到端契约快照、事件顺序、断线补发 | **验收缺口**（后端已实现，缺联调用例） | 27.2 + 27.10 | Web GoalBar 可能字段/顺序不匹配而静默失效；**这是"能不能用"的最后一环** |
+| 1 | ✅ 已完成 | 前端契约全量验收 | 27.2 + 27.10 | 20 条默认门禁用例 + 1 条 `llm` 冒烟；`created_at`/`updated_at` 按 Python `schema.py:225-226` 保留（前端注释为文档滞后，属超集不冲突） |
 | 2 | `9.66a-1` worktree 会话态单真源（现为双真源 + 每次调用 Warn） | 9.87 审查遗留，非 goal 专属 | 9.66a-1 ☐ | goal 轮进 worktree 时日志刷屏、状态可能不一致 |
 | 3 | `22.3a` 观测 session 绑定（`set_current_session_id` 未移植） | 9.87 审查遗留 | 22.3a ☐ | goal 多轮 span 缺 `session.id`，轨迹面板难归因 |
 | 4 | `15.6` native provider（消费 L1 交互面的另一入口） | 独立能力 | 15.6 ☐ | **不阻塞 Web goal**；仅影响第三方 harness 协议接入 |
-| 5 |真 LLM 下的 goal 无人值守端到端（自动 attempt 续跑 → complete/blocked → 完成卡片） | 真 LLM 集成用例 | 无独立章节，建议随 27.10 | 现有 9 例均为 MockLLM/单轮，未验证"自动推进到终态"全链 |
+| 5 | ✅ 已交付（口径订正） | MockLLM 全链状态机 + `integration && llm` 真 LLM 冒烟 | 27.10 | MockLLM 硬断言 continue 自动续跑 / query 每轮重建 / `max_attempts` 硬刹车到 BLOCKED / goal work 去重；真 LLM 冒烟按「只硬断言确定性契约」不锁模型是否跑到 COMPLETED（spec §7.2） |
 
-> **结论**：Go 侧 goal 功能本体（域 / 调度 / 生命周期 / 服务面）**已完成**，`command.goal` 五 action 与全部出站事件已接通；**只差第 1 项（前端契约联调验收）才算"完整可用"**，第 2-5 项为质量/扩展项，不阻塞主链路。按规则 13.2，第 2/3/4 项此前已在计划登记并明确归属，非本批新增缺口；第 5 项为本轮盘点新增，建议挂 27.10 一并验收。
+> **结论（2026-11-09 更新）**：第 1、5 项已由 27.2 + 27.10 验收批次闭合，Go 侧 goal 功能本体（域 / 调度 / 生命周期 / 服务面）与前端契约**全部完成且本地验证通过**。剩余第 2（`9.66a-1`）、3（`22.3a`）、4（`15.6`）项为质量/扩展项，不阻塞主链路，此前已按规则 13.2 登记归属章节，非本批新增缺口。
 
 ### 9-H 权限体系 permissions 对齐批次（2026-11-07 制定，按规则 9/11/12 执行）
 
@@ -1352,7 +1352,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | 27.1 | ☐ | Code 模式 | 前端 MVP 后端、git 状态按轮次索引、last-turn 审核、按轮 diff 统计、work/code 双模式 | `internal/swarm/channels/web/codemode/` ← `jiuwenswarm/channels/web` · `jiuwenswarm/agents/...aipc*` |
-| 27.2 | 🔄 | Goal | goal 流式（is_stream）、失败文案、历史写入、目标与计划模式互斥；✅ **归属订正（2026-11-05）**：上游 `jiuwenswarm/channels/web/` 下 Python 侧 0 处 goal，goal RPC 实际在 `server/agent_ws_server.py` + `runtime/agent_adapter/interface_deep.py`，故本行范围收窄为**前端契约验证 + `goal.snapshot` 补发**，功能本体拆分至 9.87-9.89（agent-core）与 10.3.27（服务面）；✅ **后端部分已交付（2026-11-09 复核）**：`goal.snapshot` get 单帧短路（`runtime/interface.go:1515` + `interface_goal_shortcircuit_test.go`）、五个出站事件常量（`adapter/goal_events.go`）、goal 完成卡片幂等落盘（`deep_adapter_goal_history.go`）、plan 模式互斥（`service_plan_guard_test.go`）、历史写入与中间 final 降级（`deep_adapter_interaction.go:511`）；⤵️ **剩余**：前端 16 处 `command.goal` 调用 + 5 类事件（`goal.snapshot`/`goal.updated`/`execution.error`/`goal.confirm_required`/`runtime.accepted`）**端到端契约快照与事件顺序用例**（与 27.10 合并验收）、断线补发；`internal/swarm/channels/web/` 下无新建 go 包（按订正归属，后端逻辑全在 server 侧，不新造目录） | 前端契约验证 → `tests/integration/swarm/web/`（与 27.10 合批） ← `jiuwenswarm/server` · `jiuwenswarm/channels/web/frontend/src/hooks/useWebSocket.ts` |
+| 27.2 | ✅ | Goal | goal 流式（is_stream）、失败文案、历史写入、目标与计划模式互斥；✅ **归属订正（2026-11-05）**：上游 `jiuwenswarm/channels/web/` 下 Python 侧 0 处 goal，goal RPC 实际在 `server/agent_ws_server.py` + `runtime/agent_adapter/interface_deep.py`，故本行范围收窄为**前端契约验证 + `goal.snapshot` 补发**，功能本体拆分至 9.87-9.89（agent-core）与 10.3.27（服务面）；✅ **后端部分已交付（2026-11-09 复核）**：`goal.snapshot` get 单帧短路（`runtime/interface.go:1515` + `interface_goal_shortcircuit_test.go`）、五个出站事件常量（`adapter/goal_events.go`）、goal 完成卡片幂等落盘（`deep_adapter_goal_history.go`）、plan 模式互斥（`service_plan_guard_test.go`）、历史写入与中间 final 降级（`deep_adapter_interaction.go:511`）；✅ **验收完成（2026-11-09，与 27.10 合批）**：`tests/integration/swarm/web/` G1 9 组 RPC 契约（一元/流式 get 分路、pause/clear 空会话 `no_goal`、set/resume 进适配器链、未确认覆盖 `already_exists`、execution.error 帧形状）+ G2 O1-O5 顺序 + G3 R1-R4 断线/隔离 + G4 状态机；**两处按 Python 语义订正测试假设**：①空会话 pause/clear 应返回 `goal_error/no_goal`（`interface_deep.py:17815`），不是成功控制响应；②默认 HYBRID 策略下 COMPLETE 报告需 transcript assessor 验证，无模型时保守回落 continue（`evaluation.py:190-208/228-237` ↔ `task_completion.go:747-759`），Go 与 Python 逐字一致，故不硬断言「跑到 COMPLETED」；③规则 7 要求每 `_test.go` 调 `suite.Run(` → helper 文件补真实 `GoalHelpersSuite`。本地 build/vet/全量单测 325 包 0 FAIL / 集成 `-race -count=2` 绿 / 审计通过；`internal/swarm/channels/web/` 下无新建 go 包（按订正归属，后端逻辑全在 server 侧，不新造目录） | 前端契约验证 → `tests/integration/swarm/web/`（与 27.10 合批） ← `jiuwenswarm/server` · `jiuwenswarm/channels/web/frontend/src/hooks/useWebSocket.ts` |
 | 27.3 | ☐ | 轨迹面板 | token 成本时间线、成员泳道、错误原因、上下文压缩标记 | 同上 ← `jiuwenswarm/channels/web`（trajectory） |
 | 27.4 | ☐ | 配置面板 | `/config` 交互面板、模型增删改、多模态开关、实验特性开关、API Key 长度 2048。⤴️ **待回填**：27-A Task 8 的 10 个 config 代理 RPC（`models.get/upsert/delete/references`、`model_groups.list/upsert/delete`、`vendors.list/fetch_models`、`session.selection.set`）—— 个人版恒走 E2A 而本仓无对应 `ReqMethod`，需先移植模型目录子系统（`model_catalog`+`model_selection`+`model_errors`+config upsert/delete+`model_vendor_registry` ≈1,200 行），详见 `docs/superpowers/plans/2026-11-05-web-ws-rpc-alignment.md` Task 8 | 同上 ← `jiuwenswarm/gateway/channel_manager/web` |
 | 27.5 | ☐ | 技能与市场 | 技能广场/我的技能/插件市场/MCP 市场、Hub 缓存与四类资产统一列表 | 同上 ← `jiuwenswarm/server`（marketplace/skills） |
@@ -1360,7 +1360,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 27.7 | ☐ | 心跳与定时任务面板 | 执行与聊天会话统一、未读标记、模式/模型选择、抽屉交互契约 | 同上 ← `jiuwenswarm/channels/web` |
 | 27.8 | ☐ | 富媒体 | 图片附件与多模态对话、artifact 预览/下载、SVG 渲染、文件卡片 | 同上 ← `jiuwenswarm/channels/web` · `jiuwenswarm/server` |
 | 27.9 | ☐ | 前端产物托管 | dist 构建与嵌入、低版本内核 polyfill、同端口 HTTP 就绪探针 | `internal/swarm/channels/web/dist.go` ← `jiuwenswarm/channels/web/frontend` |
-| 27.10 | ☐ | 测试 | RPC 契约快照（现有 file-api 对齐方式）、事件流顺序、断线补发 | `tests/integration/swarm/web/` |
+| 27.10 | ✅ | 测试 | RPC 契约快照、事件流顺序、断线补发；✅ **完成（2026-11-09）**：7 文件 / 1088 行 / 23 条 suite 测试方法（有效 20）；`go run ./cmd/integration-audit -verify` → `[通过] tests/integration/swarm/web（调用跨度 3，有效测试 20）`；审计总退出码 1 来自**既有违规** `tests/integration/agentteams/harness`（25.1d 并发会话 `async_tools_test.go` 未调 suite.Run，main 上同样为 0），本批未触碰；📄 spec `2026-11-09-goal-web-contract-27.2-27.10-design.md` · plan `2026-11-09-goal-web-contract-27.2-27.10.md` | `tests/integration/swarm/web/` |
 
 **验证点**：Web 端所有面板依赖的 RPC 与事件均可用，且与 Python 契约字段一致。
 
