@@ -266,3 +266,86 @@ func TestPayloadKind_usage与hook(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "hook_observed", ho.payloadKind())
 }
+
+// TestTurnLifecycleEvent_终态必须匹配结果 逐格验证 3×3 状态匹配表。
+// Python: events.py:288-303 TurnLifecycleEvent.__post_init__
+func TestTurnLifecycleEvent_终态必须匹配结果(t *testing.T) {
+	completed, err := NewTurnResult(TurnStatusCompleted, ResultOptions{FinalOutput: "done"})
+	require.NoError(t, err)
+	interruptedTerm := TurnTermination{Kind: TurnTerminationKindUserAbort}
+	interrupted, err := NewTurnResult(TurnStatusInterrupted, ResultOptions{Termination: &interruptedTerm})
+	require.NoError(t, err)
+	turnErr := TurnError{Message: "provider failed", Code: strPtr("provider_error")}
+	failed, err := NewTurnResult(TurnStatusFailed, ResultOptions{Error: &turnErr})
+	require.NoError(t, err)
+
+	// 匹配：finished→completed / aborted→interrupted / failed→failed
+	for _, ok := range []struct {
+		kind   TurnEventKind
+		result TurnResult
+	}{
+		{TurnEventKindFinished, completed},
+		{TurnEventKindAborted, interrupted},
+		{TurnEventKindFailed, failed},
+	} {
+		ev, err := NewTurnLifecycleEvent(ok.kind, &ok.result)
+		require.NoError(t, err, "kind=%s", ok.kind)
+		require.NotNil(t, ev.Result)
+		assert.Equal(t, ok.kind, ev.Kind)
+	}
+
+	// 不匹配：finished←interrupted
+	_, err = NewTurnLifecycleEvent(TurnEventKindFinished, &interrupted)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "finished turn event requires completed result")
+
+	// 不匹配：aborted←completed
+	_, err = NewTurnLifecycleEvent(TurnEventKindAborted, &completed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "aborted turn event requires interrupted result")
+
+	// 不匹配：failed←completed
+	_, err = NewTurnLifecycleEvent(TurnEventKindFailed, &completed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed turn event requires failed result")
+}
+
+// TestTurnLifecycleEvent_非终态禁带结果 验证 started/paused/resumed 不得带 result。
+// Python: events.py:289-292
+func TestTurnLifecycleEvent_非终态禁带结果(t *testing.T) {
+	completed, err := NewTurnResult(TurnStatusCompleted, ResultOptions{})
+	require.NoError(t, err)
+	for _, kind := range []TurnEventKind{
+		TurnEventKindStarted, TurnEventKindPaused, TurnEventKindResumed,
+	} {
+		// 不带 result：通过
+		ev, err := NewTurnLifecycleEvent(kind, nil)
+		require.NoError(t, err, "kind=%s", kind)
+		assert.Nil(t, ev.Result)
+
+		// 带 result：拒绝
+		_, err = NewTurnLifecycleEvent(kind, &completed)
+		require.Error(t, err, "kind=%s", kind)
+		assert.Contains(t, err.Error(), "non-terminal "+string(kind)+" turn event must not contain a result")
+	}
+}
+
+// TestTurnLifecycleEvent_终态必须带结果 验证终态缺 result 被拒。
+// Python: events.py:294-295
+func TestTurnLifecycleEvent_终态必须带结果(t *testing.T) {
+	for _, kind := range []TurnEventKind{
+		TurnEventKindFinished, TurnEventKindAborted, TurnEventKindFailed,
+	} {
+		_, err := NewTurnLifecycleEvent(kind, nil)
+		require.Error(t, err, "kind=%s", kind)
+		assert.Contains(t, err.Error(), "terminal turn event requires a result")
+	}
+}
+
+// TestPayloadKind_turnLifecycle 守护 discriminator。
+// Python: serialization.py:316-324（→ "turn_lifecycle"）
+func TestPayloadKind_turnLifecycle(t *testing.T) {
+	ev, err := NewTurnLifecycleEvent(TurnEventKindStarted, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "turn_lifecycle", ev.payloadKind())
+}
