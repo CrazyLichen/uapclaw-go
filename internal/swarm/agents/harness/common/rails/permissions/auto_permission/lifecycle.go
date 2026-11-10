@@ -92,6 +92,22 @@ type AutoPermissionRailOptions struct {
 	WrittenPermissions func() map[string]any
 }
 
+// WrappedBaseRail 返回被包装的权限轨实例（装配期注入）。
+//
+// 命名避开嵌入字段 BaseRail 的方法提升冲突。
+// Python: self.base_rail
+func (r *AutoPermissionRail) WrappedBaseRail() permissions.BasePermissionRail {
+	return r.baseRail
+}
+
+// AutoPermissionRailMarker 标识该轨为自动权限轨。
+//
+// Python: permission_rail_group 的 isinstance(permission, AutoPermissionInterruptRail)
+func (r *AutoPermissionRail) AutoPermissionRailMarker() {}
+
+// PermissionRailMarker 标识该轨参与权限判定。
+func (r *AutoPermissionRail) PermissionRailMarker() {}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
