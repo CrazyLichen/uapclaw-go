@@ -3,8 +3,10 @@
 package adapter_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -59,6 +61,41 @@ func (s *GoalInteractionSuite) TestNoGoal_不产生分气泡final() {
 		"没有活跃 goal 时不得出现分气泡 final")
 }
 
+// TestGoalRound_用户轮后接goal轮并分气泡 user 轮正常收尾，goal 轮在其后接棒，
+// 两段内容不得糊进同一个气泡。
+// Python: interface_deep.py:15574-15617（beginVisibleChatContent）
+//
+// 注意：本用例用**有界收集**（deadline）而非等流关闭。当前 goal 轮在
+// max_attempts=1 下仍会无限重试——`ApplyAssessment` 收到的 goalID 为空，
+// 与记录里的 goal_id 不匹配后静默跳过，状态永远停在 ACTIVE（详见
+// docs/superpowers/plans 的已知问题）。因此这里只断言「goal 轮确实接棒
+// 且分气泡正确」，不依赖流自然结束。
+func (s *GoalInteractionSuite) TestGoalRound_用户轮后接goal轮并分气泡() {
+	s.env.WriteConfigYAML(s.T(), "")
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse(goalItUserAnswer))
+
+	d := s.newGoalAdapter()
+	out, err := d.DispatchGoalControl(context.Background(), goalItSession, "set", goalItObjective, false, 0, 1)
+	s.Require().NoError(err)
+	s.Require().Equal("goal_stream", out["result_type"], "set 必须返回 goal_stream")
+
+	frames := s.streamFramesBounded(d, goalItSession, "开始干活", goalRoundFrameBudget)
+
+	userFinal := indexOfFinal(frames, goalItUserAnswer)
+	s.Require().GreaterOrEqual(userFinal, 0, "user 轮必须有带内容的 chat.final")
+
+	boundary := indexOfEmptyFinalAfter(frames, userFinal)
+	s.Require().Greater(boundary, userFinal, "user 轮之后必须出现分气泡 final（空内容）")
+	s.Require().True(hasDeltaAfter(frames, boundary), "分气泡之后必须有 goal 轮的 chat.delta")
+
+	getOut, err := d.DispatchGoalControl(context.Background(), goalItSession, "get", "", false, 0, 0)
+	s.Require().NoError(err)
+	record, ok := getOut["goal"].(map[string]any)
+	s.Require().True(ok, "get 必须返回 goal 记录")
+	attempts, _ := record["attempt_count"].(int)
+	s.GreaterOrEqual(attempts, 1, "goal 轮必须至少执行过一次")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newGoalAdapter 建根适配器并 CreateInstance（child 尾段自动 start_interaction）。
@@ -103,6 +140,57 @@ func (s *GoalInteractionSuite) streamFrames(
 	return frames
 }
 
+// streamFramesBounded 跑一轮流式并按帧数上限收集（流可能不自然结束）。
+func (s *GoalInteractionSuite) streamFramesBounded(
+	d *adapter.DeepAdapter, sessionID, query string, limit int,
+) []map[string]any {
+	s.T().Helper()
+
+	params, err := json.Marshal(map[string]any{"mode": "agent.work.plan"})
+	s.Require().NoError(err)
+
+	sid := sessionID
+	req := &schema.AgentRequest{
+		RequestID: "req-" + sessionID,
+		ChannelID: "web",
+		SessionID: &sid,
+		Params:    params,
+		IsStream:  true,
+	}
+	chunkCh, streamErr := d.ProcessMessageStreamImpl(s.Ctx, req, map[string]any{
+		"query":           query,
+		"conversation_id": sessionID,
+	})
+	s.Require().NoError(streamErr, "ProcessMessageStreamImpl 不应返回启动错误")
+
+	var frames []map[string]any
+	deadline := time.After(goalRoundCollectTimeout)
+	for len(frames) < limit {
+		select {
+		case <-deadline:
+			return frames
+		case chunk, ok := <-chunkCh:
+			if !ok {
+				return frames
+			}
+			if chunk != nil && chunk.Payload != nil {
+				frames = append(frames, chunk.Payload)
+			}
+		}
+	}
+	return frames
+}
+
+// hasDeltaAfter 下标之后是否还有 chat.delta。
+func hasDeltaAfter(frames []map[string]any, from int) bool {
+	for i := from + 1; i < len(frames); i++ {
+		if eventType, _ := frames[i]["event_type"].(string); eventType == "chat.delta" {
+			return true
+		}
+	}
+	return false
+}
+
 // indexOfFinal 找内容等于 content 的 chat.final 下标（找不到返回 -1）。
 func indexOfFinal(frames []map[string]any, content string) int {
 	for i, frame := range frames {
@@ -139,4 +227,10 @@ const (
 	goalItSession = "it-goal-interaction"
 	// goalItUserAnswer 用户轮的模型回答
 	goalItUserAnswer = "已完成第一步。"
+	// goalItObjective 目标文本
+	goalItObjective = "修完测试"
+	// goalRoundFrameBudget 有界收集的帧数上限（够覆盖 user 轮 + 分气泡 + 若干 goal 轮）
+	goalRoundFrameBudget = 30
+	// goalRoundCollectTimeout 有界收集的墙钟上限
+	goalRoundCollectTimeout = 15 * time.Second
 )
