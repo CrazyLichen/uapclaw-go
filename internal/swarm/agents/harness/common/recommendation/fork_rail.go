@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -50,11 +51,25 @@ type maxIterationsProvider interface {
 	MaxIterations() int
 }
 
+// generationOptionsProvider 从 agent 取生成选项。
+// 独立窄接口的原因：AgentConfig 接口只暴露 ModelName()，这三项在具体配置类型上。
+type generationOptionsProvider interface {
+	GenerationOptions() sainterfaces.GenerationOptions
+}
+
 // planStateLoader 读取会话 plan 模式状态。
 // Python: self._load_state(ctx.session).plan_mode.mode == "plan"
+// Go 侧对应 DeepAgent.LoadState(sess SessionFacade) *hschema.DeepAgentState，
+// 参数与返回值都是具体类型，无需 any。
 type planStateLoader interface {
-	LoadState(sess any) any
+	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// planModeName 会话处于规划模式时的 Mode 取值。
+// Python: prompt_suggestion.py:561 的字面量 "plan"
+const planModeName = "plan"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -109,6 +124,7 @@ func (r *PromptSuggestionForkRail) AfterModelCall(
 		cbc.Session(),
 		fallbackSessionID(cbc),
 		cbc.Extra(),
+		resolveGenerationOptions(cbc.Agent()),
 	)
 	// Python: 4. forks.saw_main_call(session_id, _MainCall(...))
 	call := &MainCall{
@@ -138,9 +154,24 @@ func MainCallParameters(
 	sess sessioninterfaces.SessionFacade,
 	fallbackSessionID string,
 	extra map[string]any,
+	generationOptions sainterfaces.GenerationOptions,
 ) map[string]any {
 	// Python: 1. parameters: dict[str, Any] = {}
 	parameters := map[string]any{}
+	// Python: 2. if config is not None: 补 return_token_ids / logprobs / top_logprobs
+	// ★ 这三项必须在亲和 kwargs 之前写入，且重放必须带——否则请求体与父调用
+	//   不一致，provider 侧 prompt cache 命中失败（Python 同位置，:282-287）。
+	if generationOptions.ReturnTokenIDs {
+		parameters["return_token_ids"] = true
+	}
+	if generationOptions.Logprobs {
+		parameters["logprobs"] = true
+		parameters["top_logprobs"] = generationOptions.TopLogprobs
+	}
+	// Python: 3. hook / config 任一为 None 时返回已收集的 parameters
+	if hook == nil || llmModel == nil {
+		return parameters
+	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			// Python: except Exception: logger.debug("parent invoke kwargs unavailable")
@@ -148,29 +179,23 @@ func MainCallParameters(
 				Msg("parent invoke kwargs unavailable")
 		}
 	}()
-	if hook == nil || llmModel == nil {
-		return parameters
-	}
-	// Python: 2. 从 config 补 return_token_ids / logprobs / top_logprobs
-	//          （上游在 _main_call_parameters 之外由调用点补齐，此处保持同样职责分离：
-	//           这三项由 react_model_call 写入 extraKVPairs，不在此重复收集）
-	// Python: 3. runtime = hook.resolve_runtime(llm, config.kv_cache_affinity_config)
+	// Python: 4. runtime = hook.resolve_runtime(llm, config.kv_cache_affinity_config)
 	runtime := hook.ResolveRuntime(llmModel, affinityCfg)
-	// Python: 4. if not (enable_affinity and supports_affinity): return parameters
+	// Python: 5. if not (enable_affinity and supports_affinity): return parameters
 	if !runtime.EnableAffinity || !runtime.SupportsAffinity {
 		return parameters
 	}
-	// Python: 5. session_id, parent_session_id = hook.resolve_lineage(...)
+	// Python: 6. session_id, parent_session_id = hook.resolve_lineage(...)
 	kvSess := newRecommendationLineageSession(sess)
 	sessionID, parentSessionID := hook.ResolveLineage(runtime, kvSess, fallbackSessionID)
-	// Python: 6. turn_num = hook.resolve_turn_num(ctx.extra, ctx.session)
+	// Python: 7. turn_num = hook.resolve_turn_num(ctx.extra, ctx.session)
 	turnNum := hook.ResolveTurnNum(extra, kvSess)
-	// Python: 7. parameters.update(hook.build_invoke_kwargs(...))
+	// Python: 8. parameters.update(hook.build_invoke_kwargs(...))
 	for key, value := range hook.BuildInvokeKwargs(runtime, llmModel, kvSess,
 		sessionID, parentSessionID, turnNum) {
 		parameters[key] = value
 	}
-	// Python: 8. return parameters
+	// Python: 9. return parameters
 	return parameters
 }
 
@@ -199,6 +224,16 @@ func resolveAffinityConfig(agent sainterfaces.BaseAgent) *kv_cache.KVCacheAffini
 	return nil
 }
 
+// resolveGenerationOptions 从 agent 配置读生成选项。
+// Python: prompt_suggestion.py:282-287 getattr(config, "llm_return_token_ids") 等。
+func resolveGenerationOptions(agent sainterfaces.BaseAgent) sainterfaces.GenerationOptions {
+	provider, ok := agent.(generationOptionsProvider)
+	if !ok {
+		return sainterfaces.GenerationOptions{}
+	}
+	return provider.GenerationOptions()
+}
+
 // resolveModelName 取模型名。
 // Python: ctx.agent.config.model_name
 func resolveModelName(agent sainterfaces.BaseAgent) string {
@@ -224,11 +259,22 @@ func resolveMaxIterations(agent sainterfaces.BaseAgent) int {
 }
 
 // resolvePlanning 判断会话当前是否处于 plan 模式。
-// Python: self._load_state(ctx.session).plan_mode.mode == "plan"
+// Python: prompt_suggestion.py:561
+//
+//	planning = self._load_state is not None and
+//	           self._load_state(ctx.session).plan_mode.mode == "plan"
 func resolvePlanning(agent sainterfaces.BaseAgent, sess sessioninterfaces.SessionFacade) bool {
-	_ = agent
-	_ = sess
-	return false
+	// Python: self._load_state is not None and ...
+	loader, ok := agent.(planStateLoader)
+	if !ok || sess == nil {
+		return false
+	}
+	state := loader.LoadState(sess)
+	if state == nil {
+		return false
+	}
+	// Python: ... .plan_mode.mode == "plan"
+	return state.PlanMode.Mode == planModeName
 }
 
 // fallbackSessionID 取血缘解析的兜底会话标识。

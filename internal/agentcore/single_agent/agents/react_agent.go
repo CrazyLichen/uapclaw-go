@@ -165,3 +165,27 @@ func (a *ReActAgent) KVCacheModelCallHook() *kv_cache.KVCacheModelCallHook {
 func (a *ReActAgent) SetKVCacheAffinityConfig(cfg *kv_cache.KVCacheAffinityConfig) {
 	a.kvCacheAffinityCfg = cfg
 }
+
+// MaxIterations 返回 ReAct 循环最大迭代次数。
+// Python: ctx.agent.config.max_iterations（prompt_suggestion.py:564 读取）
+// 供 recommendation 的 _main_call_parameters 构造重放请求时使用。
+func (a *ReActAgent) MaxIterations() int {
+	if a.config == nil {
+		return 0
+	}
+	return a.config.MaxIterations
+}
+
+// GenerationOptions 返回父调用的生成选项。
+// Python: config.llm_return_token_ids / llm_logprobs / llm_top_logprobs
+// （prompt_suggestion.py:282-287 读取，用于让重放请求体与父调用一致）
+func (a *ReActAgent) GenerationOptions() interfaces.GenerationOptions {
+	if a.config == nil {
+		return interfaces.GenerationOptions{}
+	}
+	return interfaces.GenerationOptions{
+		ReturnTokenIDs: a.config.LLMReturnTokenIDs,
+		Logprobs:       a.config.LLMLogprobs,
+		TopLogprobs:    a.config.LLMTopLogprobs,
+	}
+}

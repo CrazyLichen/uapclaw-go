@@ -211,6 +211,22 @@ type InvokeInputs struct {
 	Extra map[string]any
 }
 
+// GenerationOptions 父调用的生成选项，用于让重放请求体与父调用一致。
+// Python: prompt_suggestion.py:282-287 从 config 读的
+// llm_return_token_ids / llm_logprobs / llm_top_logprobs 三元组。
+//
+// 定义在 interfaces 包的原因：agents 包（产出方）与 recommendation 包
+// （消费方）都依赖本包，放在此处可让两边共用同一类型，
+// 避免「两个同构类型导致类型断言静默失败」。
+type GenerationOptions struct {
+	// ReturnTokenIDs 是否请求 token IDs
+	ReturnTokenIDs bool
+	// Logprobs 是否请求 logprobs
+	Logprobs bool
+	// TopLogprobs top_logprobs 数量
+	TopLogprobs int
+}
+
 // ModelCallInputs BEFORE/AFTER_MODEL_CALL 事件输入。
 // Python: ModelCallInputs (openjiuwen/core/single_agent/rail/base.py L103-116)
 type ModelCallInputs struct {
