@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -4086,6 +4087,10 @@ func (d *DeepAgent) notifyWork() {
 // 转发器崩溃必须转成 execution.error(forwarder_crashed)，否则交互会静默卡死。
 // Python: _forward_session_stream (L4462)
 func (d *DeepAgent) forwardSessionStream(ctx context.Context) {
+	fmt.Fprintf(os.Stderr, "DIAG[%d] forwarder enter\n", time.Now().UnixNano()/1e6)
+	defer func() {
+		fmt.Fprintf(os.Stderr, "DIAG[%d] forwarder exit ctxErr=%v running=%v\n", time.Now().UnixNano()/1e6, ctx.Err() != nil, d.isInteractionRunning())
+	}()
 	sess := d.interactionSession
 	if sess == nil {
 		return
@@ -4253,7 +4258,11 @@ func (d *DeepAgent) startForwarder(ctx context.Context) {
 	if d.interactionForwarderDone != nil {
 		return
 	}
-	fctx, cancel := context.WithCancel(ctx)
+	// 转发器的生命周期归交互，**不继承调用方（请求/轮次）的取消**。
+	// Python: _forward_session_stream 是挂在事件循环上的 task，活到 stop()；
+	// 若继承请求 ctx，第一轮请求结束就退出，第 2 轮起租约拿到却 0 帧
+	//（流式只剩 keepalive）。停止由 stopForwarder 显式 cancel。
+	fctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	done := make(chan struct{})
 	d.interactionForwarderCancel = cancel
 	d.interactionForwarderDone = done
@@ -4293,7 +4302,9 @@ func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) <-chan struct{}
 	if d.interactionSupervisorRunning || !d.interactionStarted || d.interactionStopping {
 		return nil
 	}
-	sctx, cancel := context.WithCancel(ctx)
+	// 同上：supervisor 是交互级常驻循环，不随单次请求结束。
+	// Python: _ensure_supervisor_running 的 task 挂在事件循环上。
+	sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	done := make(chan struct{})
 	ready := make(chan struct{}, 1)
 	d.interactionSupervisorCancel = cancel
