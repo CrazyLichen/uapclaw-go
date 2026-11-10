@@ -371,6 +371,16 @@ func goalOpRequest(t *testing.T, sessionID string, params map[string]any) *schem
 	}
 }
 
+// TestBeginVisibleChatContent_同轮内不补 同一轮内连续内容不得反复切气泡。
+func TestBeginVisibleChatContent_同轮内不补(t *testing.T) {
+	d := newStartedGoalAdapter(t, "sess-bubble-same")
+	d.streamContentRunKind = "user"
+	d.streamRoundKindLatch = "user"
+
+	require.Nil(t, d.beginVisibleChatContent(nil, true))
+	require.Equal(t, "user", d.streamContentRunKind)
+}
+
 // TestOpenInteractionWithGoalOp_二次set未确认返回confirmRequired attach 后 dispatch，
 // confirm_required 提前结束且不投递输入。
 // Python: interface_deep.py:19823-19845
