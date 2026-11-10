@@ -5,8 +5,10 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -40,6 +42,37 @@ type AgentRuntimeDeps struct {
 	OnControlEvent func(*RuntimeEvent)
 	// Prepare 聊天轮次准备（nil 时用 PrepareChatTurn）
 	Prepare PrepareChatTurnFunc
+	// Coordinator 会话执行协调器（nil 时清理路径跳过关执行）
+	// Python: service.py:412 self._session_coordinator = session_coordinator or RuntimeSessionCoordinator()
+	Coordinator SessionCoordinatorPort
+	// ResetPlanSession 重置会话 plan 状态（nil 时跳过）
+	// Python: service.py:3070 self._plan_controller.reset_session(session_id)
+	ResetPlanSession func(sessionID string)
+	// IterManagers 遍历 host 事件可达的 manager（nil 时只用 Manager）
+	// Python: service.py:3060-3064 self._tenant.iter_managers_for_host_event() or [self.agent_manager]
+	IterManagers func() []AgentManagerPort
+}
+
+// SessionCoordinatorPort 清理路径需要的协调器能力。
+// Python: service.py:3052-3057 self._session_coordinator.close_session + :1235-1242 snapshot_session
+//
+// 窄接口而非具体类型：CleanupSession 只需关闭与快照两能力，避免把千行协调器
+// 的完整方法面拖进 service.go 依赖面（与 goalActivityChecker 同款约定）。
+type SessionCoordinatorPort interface {
+	// CloseSession 关闭某会话的运行中执行
+	CloseSession(sessionID string, generation *int, waitTimeout *time.Duration) (sessionpkg.CloseSessionResult, error)
+	// SnapshotSession 取会话快照（不存在返回 nil）
+	SnapshotSession(sessionID string) *sessionpkg.RuntimeSessionSnapshot
+}
+
+// sessionRuntimeCleaner 可清理会话内存运行时的 manager 能力。
+// Python: server/runtime/agent_manager.py:863 cleanup_session_runtime
+//
+// 匿名接口断言而非扩 AgentManagerPort：该能力只有清理一处使用，
+// 扩主端口会迫使全部测试替身各增一个方法（与 goalActivityChecker 同款取舍）。
+type sessionRuntimeCleaner interface {
+	// CleanupSessionRuntime 清理会话内存运行时，返回是否清理到内容
+	CleanupSessionRuntime(ctx context.Context, channelID, sessionID string) (bool, error)
 }
 
 // AgentRuntime 运行时编排：选 agent、同步 plan 状态、执行、下发控制事件。
@@ -67,6 +100,15 @@ type AgentRuntime struct {
 	//
 	// 读端也加锁：Python 单线程下同步读安全，Go map 并发读写会 panic（spec D-4）。
 	agentExecutionOwnerMu sync.Mutex
+	// coordinator 会话执行协调器（清理路径用）
+	// Python: service.py:412 self._session_coordinator
+	coordinator SessionCoordinatorPort
+	// resetPlanSession 重置会话 plan 状态（可注入）
+	// Python: service.py:3070 self._plan_controller.reset_session
+	resetPlanSession func(sessionID string)
+	// iterManagers 遍历 host 事件可达的 manager（可注入）
+	// Python: service.py:3060-3064 iter_managers_for_host_event
+	iterManagers func() []AgentManagerPort
 }
 
 // agentExecutionOwnerKey 执行 owner 表的键。
@@ -93,11 +135,80 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 		onControlEvent:       deps.OnControlEvent,
 		prepare:              deps.Prepare,
 		agentExecutionOwners: make(map[agentExecutionOwnerKey]*RuntimeAgentExecution),
+		coordinator:          deps.Coordinator,
+		resetPlanSession:     deps.ResetPlanSession,
+		iterManagers:         deps.IterManagers,
 	}
 }
 
-// PlanController 返回运行时持有的计划模式控制器。
-// Python: AgentRuntime.plan_controller
+// CleanupSession 释放一个 Runtime 会话占用的内存资源。
+// Python: service.py:3024-3071 cleanup_session（keyword-only 参数）
+//
+// 四步顺序不得调整（短路顺序即语义边界）：
+//  1. 若协调器仍持有该会话 → 关闭执行；超时则报错
+//  2. 逐 manager 清会话运行时（request 非 nil 用该 request 解析的 manager，
+//     否则扫 host 事件可达的池；单条失败只告警，spec D-2）
+//  3. 解绑 owner（无论前面成败，Python:3066）
+//  4. resetPlanState 为真时重置 plan（Python:3070）
+//
+// resetPlanState=false 支撑事务式 session.delete：Runtime 工作先排空，
+// plan 状态保留到下游删除步骤全部提交后才重置，以便回滚。
+func (r *AgentRuntime) CleanupSession(
+	ctx context.Context, channelID, sessionID string, resetPlanState bool,
+) (bool, error) {
+	// Python:3037 if self._closed: raise RuntimeStateError
+	r.mu.Lock()
+	closed := r.closed
+	r.mu.Unlock()
+	if closed {
+		return false, errors.New("runtime is already closed")
+	}
+
+	// Python:3052-3057 第 1 步：协调器仍持有该会话则关闭执行
+	if r.ownsSession(sessionID) {
+		result, err := r.coordinator.CloseSession(sessionID, nil, nil)
+		if err != nil {
+			return false, err
+		}
+		// Python:3056-3057 if result.timed_out: raise SessionCloseTimeoutError
+		if len(result.TimedOut) > 0 {
+			return false, &sessionCloseTimeoutError{
+				SessionID: sessionID, TimedOut: result.TimedOut,
+			}
+		}
+	}
+
+	// Python:3058-3064 第 2 步：确定要清理的 manager 集合
+	managers := r.managersForCleanup()
+	cleaned := false
+	for _, manager := range managers {
+		cleaner, ok := manager.(sessionRuntimeCleaner)
+		if !ok {
+			continue
+		}
+		result, err := cleaner.CleanupSessionRuntime(ctx, channelID, sessionID)
+		if err != nil {
+			// 上游是聚合后统一 raise；Go 侧只告警（spec D-2）：
+			// 删除事务其余步骤不该因一次清理失败整体回滚。
+			logger.Warn(logComponent).Err(err).
+				Str("channel_id", channelID).Str("session_id", sessionID).
+				Msg("session runtime cleanup failed")
+			continue
+		}
+		cleaned = result || cleaned
+	}
+
+	// Python:3066-3069 第 3 步：无条件解绑 owner（★R-4 清端）
+	r.forgetAgentExecutionOwner(channelID, sessionID)
+
+	// Python:3070-3071 第 4 步：按需重置 plan
+	if resetPlanState && r.resetPlanSession != nil {
+		r.resetPlanSession(sessionID)
+	}
+	return cleaned, nil
+}
+
+// PlanController 返回运行时持有的计划模式控制器。// Python: AgentRuntime.plan_controller
 func (r *AgentRuntime) PlanController() *PlanModeController { return r.planController }
 
 // Start 幂等启动（不接管 Runner/checkpointer 生命周期）。
@@ -589,4 +700,55 @@ func (r *AgentRuntime) hasAgentExecutionOwner(channelID, sessionID string) bool 
 	defer r.agentExecutionOwnerMu.Unlock()
 	_, exists := r.agentExecutionOwners[agentExecutionOwnerKey{ChannelID: channel, SessionID: session}]
 	return exists
+}
+
+// ──────────────────────────── 清理辅助 ────────────────────────────
+
+// sessionCloseTimeoutError 协调器关闭会话超时。
+// Python: service.py:3056-3057 raise SessionCloseTimeoutError(session_id, result.timed_out)
+type sessionCloseTimeoutError struct {
+	// SessionID 会话标识
+	SessionID string
+	// TimedOut 超时未停的执行标识
+	TimedOut []string
+}
+
+// Error 实现 error 接口。
+func (e *sessionCloseTimeoutError) Error() string {
+	return "session runtime executions have not stopped: " + e.SessionID
+}
+
+// ownsSession 协调器是否持有该会话的活跃代次。
+// Python: service.py:1235-1242 _owns_session
+//
+// snapshot_session(session_id) if session_id else None；
+// 仅当快照存在且 state 不为 CLOSED 时为真。
+func (r *AgentRuntime) ownsSession(sessionID string) bool {
+	if r.coordinator == nil || sessionID == "" {
+		return false
+	}
+	snapshot := r.coordinator.SnapshotSession(sessionID)
+	if snapshot == nil {
+		return false
+	}
+	return snapshot.State != sessionpkg.RuntimeSessionStateClosed
+}
+
+// managersForCleanup 返回清理要遍历的 manager 集合。
+// Python: service.py:3058-3064
+//
+// 上游分支：request 非 nil → [resolve_manager(request)]；
+// 否则 → iter_managers_for_host_event() or [self.agent_manager]。
+// Go 侧无 per-request resolve_manager（清理不接收 request），统一走
+// iterManagers()，未注入时退化为 [manager]（等价于上游 or 分支）。
+func (r *AgentRuntime) managersForCleanup() []AgentManagerPort {
+	if r.iterManagers != nil {
+		if managers := r.iterManagers(); len(managers) > 0 {
+			return managers
+		}
+	}
+	if r.manager == nil {
+		return nil
+	}
+	return []AgentManagerPort{r.manager}
 }
