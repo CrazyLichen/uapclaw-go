@@ -111,17 +111,18 @@ func isolateGoalDataDir(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // sendGoal 投递 command.goal，返回 request_id。
+// 只依赖 ServerEnv，派生 suite（BaseIntegrationSuite / AgentSuite）都能复用。
 // isStream=false 对应 webClient.ts:892 requestGoalAction（一元）；
 // isStream=true  对应 webClient.ts:916 sendGoalStreamCommand（流式且不等 res）。
 // Python: jiuwenswarm/server/agent_ws_server.py 的 ReqMethod.COMMAND_GOAL 分发。
-func sendGoal(s *goalContractSuite, sid string, params map[string]any, isStream bool) string {
+func sendGoal(env *testhelpers.ServerEnv, sid string, params map[string]any, isStream bool) string {
 	if params == nil {
 		params = map[string]any{}
 	}
 	if _, ok := params["mode"]; !ok {
 		params["mode"] = "agent"
 	}
-	return s.env.Send(string(schema.ReqMethodCommandGoal), params, sid, isStream)
+	return env.Send(string(schema.ReqMethodCommandGoal), params, sid, isStream)
 }
 
 // requireNumeric 接受 JSON 反序列化的 float64 与 Go 直构的 int 两种数值。
