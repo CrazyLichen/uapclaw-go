@@ -1,0 +1,10 @@
+# 内置技能资源标记为 vendored
+#
+# resources/agent/workspace/skills/ 是随发布包分发的内置技能内容
+# （34 个技能目录 / 415 文件 / 8.3MB，来自上游 Python 发行包，原封不动拷贝），
+# 不是本项目源码：
+#   - 其中 145 个 .py（约 42241 行）来自上游，本项目不改写
+#   - 若计入语言统计，会让 GitHub 把本仓库识别出约 4.2 万行 Python，
+#     与本项目「Go 实现」的定位不符
+# 故标记 linguist-vendored，从语言统计中排除；git diff / blame 不受影响。
+resources/agent/workspace/skills/** linguist-vendored

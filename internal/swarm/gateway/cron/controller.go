@@ -193,7 +193,7 @@ func (c *CronController) UpdateJob(jobID string, patch map[string]any) (map[stri
 	if _, ok := patch["session_id"]; ok {
 		patch["session_id"] = routingSessionID(finalTargets, patch["session_id"])
 	} else if _, ok := patch["targets"]; ok {
-		patch["session_id"] = routingSessionID(finalTargets, existing.SessionID)
+		patch["session_id"] = routingSessionID(finalTargets, stringFromOptional(existing.SessionID))
 	}
 
 	job, err := c.store.UpdateJob(jobID, patch)

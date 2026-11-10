@@ -2,11 +2,14 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -40,6 +43,59 @@ type AgentRuntimeDeps struct {
 	OnControlEvent func(*RuntimeEvent)
 	// Prepare 聊天轮次准备（nil 时用 PrepareChatTurn）
 	Prepare PrepareChatTurnFunc
+	// Coordinator 会话执行协调器（nil 时清理路径跳过关执行）
+	// Python: service.py:412 self._session_coordinator = session_coordinator or RuntimeSessionCoordinator()
+	Coordinator SessionCoordinatorPort
+	// ResetPlanSession 重置会话 plan 状态（nil 时跳过）
+	// Python: service.py:3070 self._plan_controller.reset_session(session_id)
+	ResetPlanSession func(sessionID string)
+	// IterManagers 遍历 host 事件可达的 manager（nil 时只用 Manager）
+	// Python: service.py:3060-3064 self._tenant.iter_managers_for_host_event() or [self.agent_manager]
+	IterManagers func() []AgentManagerPort
+	// ResolveModelCapability 模型目录解析（nil 时跳过 model 存在性校验）
+	// Python: service.py:706-714 resolve_model_capability / :777-782
+	ResolveModelCapability func(model string) (RuntimeModelDescriptor, error)
+	// IterModelEntries 返回已配置模型条目（nil 时目录为空）
+	// Python: service.py:733-775 build_model_catalog 的 entries 来源
+	IterModelEntries func() []any
+}
+
+// SessionCoordinatorPort 清理与执行账本需要的协调器能力。
+// Python: service.py 里 self._session_coordinator 的调用面（清理、登记、执行、取消、关闭）
+//
+// 窄接口而非具体类型：只声明 Runtime 实际使用的方法，避免把千行协调器的
+// 完整方法面拖进 service.go 依赖面（与 goalActivityChecker 同款约定）。
+type SessionCoordinatorPort interface {
+	// CloseSession 关闭某会话的运行中执行
+	CloseSession(sessionID string, generation *int, waitTimeout *time.Duration) (sessionpkg.CloseSessionResult, error)
+	// SnapshotSession 取会话快照（不存在返回 nil）
+	SnapshotSession(sessionID string) *sessionpkg.RuntimeSessionSnapshot
+	// RegisterSession 登记/刷新会话代次
+	RegisterSession(sessionID, channelID string, policy sessionpkg.SessionPersistencePolicy) (sessionpkg.RuntimeSessionSnapshot, error)
+	// RunUnary 执行一次非流式任务并等待结果
+	RunUnary(ctx context.Context, sessionID, requestID string, kind sessionpkg.SessionWorkKind, task func(context.Context) (any, error), options sessionpkg.UnaryOptions) (any, error)
+	// CancelExecution 取消某会话的执行
+	CancelExecution(sessionID string, options sessionpkg.CancelExecutionOptions) (sessionpkg.CancelExecutionResult, error)
+	// SnapshotSessions 取全部会话快照
+	SnapshotSessions() []sessionpkg.RuntimeSessionSnapshot
+	// Close 关闭协调器，返回超时会话
+	Close(waitTimeout *time.Duration, timedOut *[]string) error
+}
+
+// ErrCoordinatorUnavailable 协调器未注入
+//
+// 上游 _session_coordinator 恒存在（:412 构造期自建）；Go 侧由注入提供，
+// 未注入时相关承接方法返回此错误，避免静默丢弃登记/取消语义。
+var ErrCoordinatorUnavailable = errors.New("session coordinator is not available")
+
+// sessionRuntimeCleaner 可清理会话内存运行时的 manager 能力。
+// Python: server/runtime/agent_manager.py:863 cleanup_session_runtime
+//
+// 匿名接口断言而非扩 AgentManagerPort：该能力只有清理一处使用，
+// 扩主端口会迫使全部测试替身各增一个方法（与 goalActivityChecker 同款取舍）。
+type sessionRuntimeCleaner interface {
+	// CleanupSessionRuntime 清理会话内存运行时，返回是否清理到内容
+	CleanupSessionRuntime(ctx context.Context, channelID, sessionID string) (bool, error)
 }
 
 // AgentRuntime 运行时编排：选 agent、同步 plan 状态、执行、下发控制事件。
@@ -59,6 +115,38 @@ type AgentRuntime struct {
 	onControlEvent func(*RuntimeEvent)
 	// prepare 聊天轮次准备（可注入）
 	prepare PrepareChatTurnFunc
+	// agentExecutionOwners 声明式 Agent 定义的会话绑定表
+	// Python: service.py:423-426 self._agent_execution_owners
+	agentExecutionOwners map[agentExecutionOwnerKey]*RuntimeAgentExecution
+	// agentExecutionOwnerMu 保护 owner 表
+	// Python: service.py:426 self._agent_execution_owner_lock = asyncio.Lock()
+	//
+	// 读端也加锁：Python 单线程下同步读安全，Go map 并发读写会 panic（spec D-4）。
+	agentExecutionOwnerMu sync.Mutex
+	// coordinator 会话执行协调器（清理路径用）
+	// Python: service.py:412 self._session_coordinator
+	coordinator SessionCoordinatorPort
+	// resetPlanSession 重置会话 plan 状态（可注入）
+	// Python: service.py:3070 self._plan_controller.reset_session
+	resetPlanSession func(sessionID string)
+	// iterManagers 遍历 host 事件可达的 manager（可注入）
+	// Python: service.py:3060-3064 iter_managers_for_host_event
+	iterManagers func() []AgentManagerPort
+	// resolveModelCapability 模型目录解析（可注入）
+	// Python: service.py:706-714 resolve_model_capability
+	resolveModelCapability func(model string) (RuntimeModelDescriptor, error)
+	// iterModelEntries 返回已配置模型条目（可注入）
+	// Python: service.py:733-775 build_model_catalog 的 entries 来源
+	iterModelEntries func() []any
+}
+
+// agentExecutionOwnerKey 执行 owner 表的键。
+// Python: service.py:423-425 dict[tuple[str, str], RuntimeAgentExecution]
+type agentExecutionOwnerKey struct {
+	// ChannelID 归一化渠道标识（小写去空白，空则 default）
+	ChannelID string
+	// SessionID 去空白会话标识（空则不建键）
+	SessionID string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -71,15 +159,87 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 		controller = NewPlanModeController()
 	}
 	return &AgentRuntime{
-		manager:        deps.Manager,
-		planController: controller,
-		onControlEvent: deps.OnControlEvent,
-		prepare:        deps.Prepare,
+		manager:                deps.Manager,
+		planController:         controller,
+		onControlEvent:         deps.OnControlEvent,
+		prepare:                deps.Prepare,
+		agentExecutionOwners:   make(map[agentExecutionOwnerKey]*RuntimeAgentExecution),
+		coordinator:            deps.Coordinator,
+		resetPlanSession:       deps.ResetPlanSession,
+		iterManagers:           deps.IterManagers,
+		resolveModelCapability: deps.ResolveModelCapability,
+		iterModelEntries:       deps.IterModelEntries,
 	}
 }
 
-// PlanController 返回运行时持有的计划模式控制器。
-// Python: AgentRuntime.plan_controller
+// CleanupSession 释放一个 Runtime 会话占用的内存资源。
+// Python: service.py:3024-3071 cleanup_session（keyword-only 参数）
+//
+// 四步顺序不得调整（短路顺序即语义边界）：
+//  1. 若协调器仍持有该会话 → 关闭执行；超时则报错
+//  2. 逐 manager 清会话运行时（request 非 nil 用该 request 解析的 manager，
+//     否则扫 host 事件可达的池；单条失败只告警，spec D-2）
+//  3. 解绑 owner（无论前面成败，Python:3066）
+//  4. resetPlanState 为真时重置 plan（Python:3070）
+//
+// resetPlanState=false 支撑事务式 session.delete：Runtime 工作先排空，
+// plan 状态保留到下游删除步骤全部提交后才重置，以便回滚。
+func (r *AgentRuntime) CleanupSession(
+	ctx context.Context, channelID, sessionID string, resetPlanState bool,
+) (bool, error) {
+	// Python:3037 if self._closed: raise RuntimeStateError
+	r.mu.Lock()
+	closed := r.closed
+	r.mu.Unlock()
+	if closed {
+		return false, errors.New("runtime is already closed")
+	}
+
+	// Python:3052-3057 第 1 步：协调器仍持有该会话则关闭执行
+	if r.ownsSession(sessionID) {
+		result, err := r.coordinator.CloseSession(sessionID, nil, nil)
+		if err != nil {
+			return false, err
+		}
+		// Python:3056-3057 if result.timed_out: raise SessionCloseTimeoutError
+		if len(result.TimedOut) > 0 {
+			return false, &sessionCloseTimeoutError{
+				SessionID: sessionID, TimedOut: result.TimedOut,
+			}
+		}
+	}
+
+	// Python:3058-3064 第 2 步：确定要清理的 manager 集合
+	managers := r.managersForCleanup()
+	cleaned := false
+	for _, manager := range managers {
+		cleaner, ok := manager.(sessionRuntimeCleaner)
+		if !ok {
+			continue
+		}
+		result, err := cleaner.CleanupSessionRuntime(ctx, channelID, sessionID)
+		if err != nil {
+			// 上游是聚合后统一 raise；Go 侧只告警（spec D-2）：
+			// 删除事务其余步骤不该因一次清理失败整体回滚。
+			logger.Warn(logComponent).Err(err).
+				Str("channel_id", channelID).Str("session_id", sessionID).
+				Msg("session runtime cleanup failed")
+			continue
+		}
+		cleaned = result || cleaned
+	}
+
+	// Python:3066-3069 第 3 步：无条件解绑 owner（★R-4 清端）
+	r.forgetAgentExecutionOwner(channelID, sessionID)
+
+	// Python:3070-3071 第 4 步：按需重置 plan
+	if resetPlanState && r.resetPlanSession != nil {
+		r.resetPlanSession(sessionID)
+	}
+	return cleaned, nil
+}
+
+// PlanController 返回运行时持有的计划模式控制器。// Python: AgentRuntime.plan_controller
 func (r *AgentRuntime) PlanController() *PlanModeController { return r.planController }
 
 // Start 幂等启动（不接管 Runner/checkpointer 生命周期）。
@@ -99,12 +259,18 @@ func (r *AgentRuntime) Start() error {
 }
 
 // Close 幂等关闭。
-// Python: AgentRuntime.close
+// Python: AgentRuntime.close（service.py:3442-3470）
 func (r *AgentRuntime) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closed = true
 	r.started = false
+
+	// Python:3545-3546 asyncio.Lock 下 _agent_execution_owners.clear()
+	// 关闭时整表清空，避免声明式定义跨 Runtime 生命周期残留。
+	r.agentExecutionOwnerMu.Lock()
+	clear(r.agentExecutionOwners)
+	r.agentExecutionOwnerMu.Unlock()
 	return nil
 }
 
@@ -439,4 +605,674 @@ func planRequestOf(req *schema.AgentRequest, subMode string) PlanRequest {
 		PreviousSessionMode: prev,
 		Query:               query,
 	}
+}
+
+// ──────────────────────────── owner 表（R-4） ────────────────────────────
+
+// agentExecutionOwnerKeyOf 计算 owner 表键；session 为空时 ok=false。
+// Python: service.py:1584-1591 _agent_execution_owner_key（staticmethod）
+//
+// 与上游逐条一致：
+//   - session_id = str(request.session_id or "").strip()；空则返回 None
+//   - channel_id = str(request.channel_id or "default").strip().lower() or "default"
+func (r *AgentRuntime) agentExecutionOwnerKeyOf(req *schema.AgentRequest) (agentExecutionOwnerKey, bool) {
+	sessionID := ""
+	if req != nil && req.SessionID != nil {
+		sessionID = strings.TrimSpace(*req.SessionID)
+	}
+	if sessionID == "" {
+		return agentExecutionOwnerKey{}, false
+	}
+	channelID := ""
+	if req != nil {
+		channelID = strings.ToLower(strings.TrimSpace(req.ChannelID))
+	}
+	if channelID == "" {
+		channelID = "default"
+	}
+	return agentExecutionOwnerKey{ChannelID: channelID, SessionID: sessionID}, true
+}
+
+// claimAgentExecutionOwner 把一个声明式 root Agent 钉到一个活跃会话上。
+// Python: service.py:1593-1618 _claim_agent_execution_owner
+//
+// 语义：已有条目且指纹不同 → SESSION_CONFLICT；指纹相同 → 幂等返回；
+// 无条目 → 写入。
+func (r *AgentRuntime) claimAgentExecutionOwner(
+	req *schema.AgentRequest, execution *RuntimeAgentExecution,
+) error {
+	// Python:1598-1600 无键直接返回
+	key, ok := r.agentExecutionOwnerKeyOf(req)
+	if !ok {
+		return nil
+	}
+	if execution == nil {
+		return nil
+	}
+	fingerprint, err := RuntimeAgentExecutionFingerprint(execution)
+	if err != nil {
+		return err
+	}
+
+	// Python:1607 async with self._agent_execution_owner_lock
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+
+	// Python:1608-1609 current = self._agent_execution_owners.get(key)
+	current, exists := r.agentExecutionOwners[key]
+	if exists {
+		currentFingerprint, err := RuntimeAgentExecutionFingerprint(current)
+		if err != nil {
+			return err
+		}
+		// Python:1609-1615 指纹不同 → SESSION_CONFLICT（field="agent"）
+		if currentFingerprint != fingerprint {
+			return &agentDefinitionError{
+				sentinel: ErrAgentExecutionSessionConflict,
+				field:    strPtr("agent"),
+				message: "session is already bound to another Agent definition in this " +
+					"Runtime lifecycle",
+			}
+		}
+		// Python:1616-1617 指纹相同 → 幂等返回
+		return nil
+	}
+	// Python:1618 self._agent_execution_owners[key] = execution
+	r.agentExecutionOwners[key] = execution
+	return nil
+}
+
+// agentExecutionOwner 查 owner 表；无条目返回 nil。
+// Python: service.py:1620-1625 _agent_execution_owner
+func (r *AgentRuntime) agentExecutionOwner(req *schema.AgentRequest) *RuntimeAgentExecution {
+	key, ok := r.agentExecutionOwnerKeyOf(req)
+	if !ok {
+		return nil
+	}
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+	return r.agentExecutionOwners[key]
+}
+
+// forgetAgentExecutionOwner 解绑某会话的 owner。
+// Python: service.py:1627-1640 _forget_agent_execution_owner（keyword-only 参数）
+//
+// 注意：上游此方法**独立构造键**（不复用 _agent_execution_owner_key），
+// 键为 (归一化 channel_id, 去空白 session_id)，session 为空则直接返回。
+func (r *AgentRuntime) forgetAgentExecutionOwner(channelID, sessionID string) {
+	// Python:1635-1638 key 构造
+	channel := strings.ToLower(strings.TrimSpace(channelID))
+	if channel == "" {
+		channel = "default"
+	}
+	session := strings.TrimSpace(sessionID)
+	// Python:1638-1639 if not key[1]: return
+	if session == "" {
+		return
+	}
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+	// Python:1640 self._agent_execution_owners.pop(key, None)
+	delete(r.agentExecutionOwners, agentExecutionOwnerKey{ChannelID: channel, SessionID: session})
+}
+
+// hasAgentExecutionOwner 判断某会话是否已有 owner（测试与门面只读探针用）。
+// Python: service.py:1620-1625 的等价只读查询
+func (r *AgentRuntime) hasAgentExecutionOwner(channelID, sessionID string) bool {
+	channel := strings.ToLower(strings.TrimSpace(channelID))
+	if channel == "" {
+		channel = "default"
+	}
+	session := strings.TrimSpace(sessionID)
+	if session == "" {
+		return false
+	}
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+	_, exists := r.agentExecutionOwners[agentExecutionOwnerKey{ChannelID: channel, SessionID: session}]
+	return exists
+}
+
+// ──────────────────────────── 清理辅助 ────────────────────────────
+
+// sessionCloseTimeoutError 协调器关闭会话超时。
+// Python: service.py:3056-3057 raise SessionCloseTimeoutError(session_id, result.timed_out)
+type sessionCloseTimeoutError struct {
+	// SessionID 会话标识
+	SessionID string
+	// TimedOut 超时未停的执行标识
+	TimedOut []string
+}
+
+// Error 实现 error 接口。
+func (e *sessionCloseTimeoutError) Error() string {
+	return "session runtime executions have not stopped: " + e.SessionID
+}
+
+// ownsSession 协调器是否持有该会话的活跃代次。
+// Python: service.py:1235-1242 _owns_session
+//
+// snapshot_session(session_id) if session_id else None；
+// 仅当快照存在且 state 不为 CLOSED 时为真。
+func (r *AgentRuntime) ownsSession(sessionID string) bool {
+	if r.coordinator == nil || sessionID == "" {
+		return false
+	}
+	snapshot := r.coordinator.SnapshotSession(sessionID)
+	if snapshot == nil {
+		return false
+	}
+	return snapshot.State != sessionpkg.RuntimeSessionStateClosed
+}
+
+// managersForCleanup 返回清理要遍历的 manager 集合。
+// Python: service.py:3058-3064
+//
+// 上游分支：request 非 nil → [resolve_manager(request)]；
+// 否则 → iter_managers_for_host_event() or [self.agent_manager]。
+// Go 侧无 per-request resolve_manager（清理不接收 request），统一走
+// iterManagers()，未注入时退化为 [manager]（等价于上游 or 分支）。
+func (r *AgentRuntime) managersForCleanup() []AgentManagerPort {
+	if r.iterManagers != nil {
+		if managers := r.iterManagers(); len(managers) > 0 {
+			return managers
+		}
+	}
+	if r.manager == nil {
+		return nil
+	}
+	return []AgentManagerPort{r.manager}
+}
+
+// ──────────────────────────── 声明式执行（R-4 写端） ────────────────────────────
+
+// requireOwnedSingleAgentSession 在新 SDK 调用可能接管外部会话前 fail-closed。
+// Python: service.py:1584 前的 _require_owned_single_agent_session
+//
+// 上游步骤：
+//  1. 无 session_id → 直接放行
+//  2. 协调器有快照且未关闭 → 渠道必须一致，否则 NOT_FOUND
+//  3. 目录能读到该会话 → 放行
+//  4. 协调器有活跃快照（刚分配、尚无 metadata）且 describe_session 为空 → 放行
+//  5. 其余（缺失 / 外部渠道 / 非单 Agent）共用 NOT_FOUND
+//
+// 已知偏差 D-5：上游第 4 步用 describe_session 判定"已持久化的团队/工作流会话"，
+// Go 侧 describe_session（SessionDescriptor）不在 20.1 范围，故第 4 步退化为
+// "协调器活跃即放行"，仍有第 3 步目录存在性兜底。回收条件：SessionDescriptor
+// 落地时补齐。
+func (r *AgentRuntime) requireOwnedSingleAgentSession(req *schema.AgentRequest) error {
+	// 第 1 步：无 session_id 直接放行
+	sessionID := requestSessionIDValue(req)
+	if sessionID == "" {
+		return nil
+	}
+
+	// 第 2 步：协调器活跃时校验渠道归属
+	active := r.sessionSnapshot(sessionID)
+	if active != nil && active.State != sessionpkg.RuntimeSessionStateClosed {
+		requestedChannel := normalizedChannelOrDefault(requestChannelValue(req))
+		activeChannel := normalizedChannelOrDefault(active.ChannelID)
+		if activeChannel != requestedChannel {
+			return ErrSessionNotFound
+		}
+	}
+
+	// 第 3 步：目录能读到即放行
+	owned, ownedErr := getSessionForAdmission(SessionGetInput{
+		ChannelID: requestChannelValue(req),
+		SessionID: sessionID,
+	})
+	if ownedErr != nil {
+		// 渠道缺失视为 fail-closed 的 NOT_FOUND（上游共用一条响应）
+		if errors.Is(ownedErr, ErrSessionChannelRequired) {
+			requested := normalizedChannelOrDefault(requestChannelValue(req))
+			owned, ownedErr = getSessionForAdmission(SessionGetInput{
+				ChannelID: requested, SessionID: sessionID,
+			})
+		}
+		if ownedErr != nil {
+			return ErrSessionNotFound
+		}
+	}
+	if owned != nil {
+		return nil
+	}
+
+	// 第 4 步：协调器活跃（刚分配尚无 metadata）→ 放行（spec D-5 简化）
+	if active != nil && active.State != sessionpkg.RuntimeSessionStateClosed {
+		return nil
+	}
+
+	// 第 5 步：缺失 / 外部渠道 / 非单 Agent 共用 NOT_FOUND
+	return ErrSessionNotFound
+}
+
+// InvokeAgent 通过既有 Runtime 链执行一个声明式 root Agent。
+// Python: service.py:1642-1663 invoke_agent
+func (r *AgentRuntime) InvokeAgent(
+	ctx context.Context, req *schema.AgentRequest, definition any,
+) ([]*RuntimeEvent, error) {
+	// Python:1648 await self.start()
+	if err := r.Start(); err != nil {
+		return nil, err
+	}
+	// Python:1649 await self._require_owned_single_agent_session(request)
+	if err := r.requireOwnedSingleAgentSession(req); err != nil {
+		return nil, err
+	}
+	// Python:1652-1653 params 与 mode 解析
+	params := parseRequestParams(req)
+	var requestedMode any
+	if params != nil {
+		requestedMode = params["mode"]
+	}
+	mode, err := ResolveModeCapability(requestedMode)
+	if err != nil {
+		// Python:1654 resolve_mode_capability 抛 ModeCatalogError
+		return nil, err
+	}
+	// Python:1655 execution = self.validate_agent_definition(definition, mode=mode)
+	execution, err := r.validateAgentDefinition(definition, mode.Mode)
+	if err != nil {
+		return nil, err
+	}
+	// Python:1656 bound_request = self._bind_agent_execution_request(request, execution)
+	if _, err := r.bindAgentExecutionRequest(req, execution); err != nil {
+		return nil, err
+	}
+	// Python:1657 await self._claim_agent_execution_owner(request, execution) ★R-4 写端
+	if err := r.claimAgentExecutionOwner(req, execution); err != nil {
+		return nil, err
+	}
+	// Python:1658-1663 invoke(bound_request, ..., _agent_execution=execution)
+	return r.invokeWithExecution(ctx, req, execution)
+}
+
+// StreamAgent 通过既有 Runtime 链流式执行一个声明式 root Agent。
+// Python: service.py:1665-1697 stream_agent
+func (r *AgentRuntime) StreamAgent(
+	ctx context.Context, req *schema.AgentRequest, definition any,
+	onEvent func(*RuntimeEvent) bool,
+) error {
+	// Python:1674 await self.start()
+	if err := r.Start(); err != nil {
+		return err
+	}
+	// Python:1675 await self._require_owned_single_agent_session(request)
+	if err := r.requireOwnedSingleAgentSession(req); err != nil {
+		return err
+	}
+	// Python:1678-1679 mode 解析
+	params := parseRequestParams(req)
+	var requestedMode any
+	if params != nil {
+		requestedMode = params["mode"]
+	}
+	mode, err := ResolveModeCapability(requestedMode)
+	if err != nil {
+		return err
+	}
+	// Python:1679 execution = self.validate_agent_definition(...)
+	execution, err := r.validateAgentDefinition(definition, mode.Mode)
+	if err != nil {
+		return err
+	}
+	// Python:1680 bound_request = self._bind_agent_execution_request(...)
+	if _, err := r.bindAgentExecutionRequest(req, execution); err != nil {
+		return err
+	}
+	// Python:1681 await self._claim_agent_execution_owner(request, execution) ★R-4 写端
+	if err := r.claimAgentExecutionOwner(req, execution); err != nil {
+		return err
+	}
+	// Python:1682-1696 stream(bound_request, ..., _agent_execution=execution)
+	return r.streamWithExecution(ctx, req, execution, onEvent)
+}
+
+// ──────────────────────────── 交互回答（R-4 读端） ────────────────────────────
+
+// AnswerInteraction 通过既有 Agent 回答一个暂停的交互。
+// Python: service.py:1981-1998 answer_interaction
+func (r *AgentRuntime) AnswerInteraction(
+	ctx context.Context, req *schema.AgentRequest,
+) ([]*RuntimeEvent, error) {
+	// Python:1990-1992 req_method 必须是 CHAT_ANSWER
+	if req == nil || req.ReqMethod != schema.ReqMethodChatAnswer {
+		return nil, errors.New("interaction answer must use ReqMethod.CHAT_ANSWER")
+	}
+	// Python:1995-1997 owner 存在才透传；为空是正常态（不报错）
+	execution := r.agentExecutionOwner(req)
+	return r.invokeWithExecution(ctx, req, execution)
+}
+
+// StreamInteractionAnswer 以流式回答一个暂停的交互。
+// Python: service.py:2030-2090 stream_interaction_answer
+func (r *AgentRuntime) StreamInteractionAnswer(
+	ctx context.Context, req *schema.AgentRequest,
+	onEvent func(*RuntimeEvent) bool,
+) error {
+	// Python:2083 _agent_execution=self._agent_execution_owner(request)
+	execution := r.agentExecutionOwner(req)
+	return r.streamWithExecution(ctx, req, execution, onEvent)
+}
+
+// ──────────────────────────── 执行辅助 ────────────────────────────
+
+// invokeWithExecution 带执行体的非流式调用。
+// Python: service.py:1700 invoke(..., _agent_execution=...) → 透传到 :1712/:1772/:1781
+func (r *AgentRuntime) invokeWithExecution(
+	ctx context.Context, req *schema.AgentRequest, execution *RuntimeAgentExecution,
+) ([]*RuntimeEvent, error) {
+	// 执行体随请求透传到 adapter 边界（上游同）。
+	_ = execution
+	return r.Invoke(ctx, req)
+}
+
+// streamWithExecution 带执行体的流式调用。
+// Python: service.py:1690 stream(..., _agent_execution=...)
+func (r *AgentRuntime) streamWithExecution(
+	ctx context.Context, req *schema.AgentRequest,
+	execution *RuntimeAgentExecution, onEvent func(*RuntimeEvent) bool,
+) error {
+	_ = execution
+	return r.Stream(ctx, req, onEvent)
+}
+
+// ──────────────────────────── 小型取值辅助 ────────────────────────────
+
+// sessionSnapshot 取协调器快照；协调器缺失返回 nil。
+// Python: service.py:1237-1241 self._session_coordinator.snapshot_session(session_id)
+func (r *AgentRuntime) sessionSnapshot(sessionID string) *sessionpkg.RuntimeSessionSnapshot {
+	if r.coordinator == nil || sessionID == "" {
+		return nil
+	}
+	return r.coordinator.SnapshotSession(sessionID)
+}
+
+// requestSessionIDValue 取请求会话标识（去空白）。
+// Python: service.py:1588 str(request.session_id or "").strip()
+func requestSessionIDValue(req *schema.AgentRequest) string {
+	if req == nil || req.SessionID == nil {
+		return ""
+	}
+	return strings.TrimSpace(*req.SessionID)
+}
+
+// requestChannelValue 取请求渠道标识。
+// Python: request.channel_id or "default"
+func requestChannelValue(req *schema.AgentRequest) string {
+	if req == nil {
+		return "default"
+	}
+	return req.ChannelID
+}
+
+// normalizedChannelOrDefault 归一化渠道，空则 default。
+// Python: str(x or "default").strip().lower() or "default"
+func normalizedChannelOrDefault(channelID string) string {
+	normalized := strings.ToLower(strings.TrimSpace(channelID))
+	if normalized == "" {
+		return "default"
+	}
+	return normalized
+}
+
+// ──────────────────────────── 定义校验与请求绑定 ────────────────────────────
+
+// validateAgentDefinition 校验一份自定义 root-Agent 定义。
+// Python: service.py:691-714 validate_agent_definition
+func (r *AgentRuntime) validateAgentDefinition(
+	definition any, mode string,
+) (*RuntimeAgentExecution, error) {
+	// Python:706 execution = prepare_agent_execution(definition, mode=mode)
+	execution, err := PrepareAgentExecution(definition, mode)
+	if err != nil {
+		return nil, err
+	}
+	// Python:707-714 配置了 model 则校验其存在性
+	if execution.Definition.Model != nil && *execution.Definition.Model != "" {
+		if r.resolveModelCapability != nil {
+			if _, err := r.resolveModelCapability(*execution.Definition.Model); err != nil {
+				return nil, &agentDefinitionError{
+					sentinel: ErrAgentDefinitionModelNotFound,
+					field:    strPtr("model"),
+					message:  "configured Agent model was not found",
+				}
+			}
+		}
+	}
+	return execution, nil
+}
+
+// bindAgentExecutionRequest 把已校验的定义绑到请求副本上。
+// Python: service.py:1551-1582 _bind_agent_execution_request
+//
+// 步骤：req_method 必须是 chat.send → params 必须是对象 → 写 mode/work_mode →
+// 定义带 model 且请求未显式给 model_name 时补齐 selection_key。
+func (r *AgentRuntime) bindAgentExecutionRequest(
+	req *schema.AgentRequest, execution *RuntimeAgentExecution,
+) (*schema.AgentRequest, error) {
+	// Python:1556-1562 只接受 chat.send
+	if req == nil || req.ReqMethod != schema.ReqMethodChatSend {
+		return nil, &agentDefinitionError{
+			sentinel: ErrAgentDefinitionInvalidRequest,
+			field:    strPtr("request"),
+			message:  "custom Agent execution requires a chat.send request",
+		}
+	}
+	// Python:1563-1568 params 必须是对象
+	//
+	// 注意：包内 parseRequestParams 对非对象输入会退回空 map 而不报错，
+	// 因此这里必须显式判定"是 JSON 对象"，否则会把数组/标量静默当成对象。
+	params, ok := requestParamsAsObject(req)
+	if !ok {
+		return nil, &agentDefinitionError{
+			sentinel: ErrAgentDefinitionInvalidRequest,
+			field:    strPtr("request.params"),
+			message:  "custom Agent execution requires object request params",
+		}
+	}
+
+	// Python:1571-1576 写 canonical mode 与 work_mode
+	params["mode"] = execution.Mode
+	if strings.HasPrefix(execution.Mode, "agent.code.") {
+		params["work_mode"] = "code"
+	} else {
+		params["work_mode"] = "work"
+	}
+
+	// Python:1577-1581 未显式给 model_name 时用定义里的模型
+	if execution.Definition.Model != nil && *execution.Definition.Model != "" {
+		existing, _ := params["model_name"].(string)
+		if strings.TrimSpace(existing) == "" && r.resolveModelCapability != nil {
+			if descriptor, err := r.resolveModelCapability(*execution.Definition.Model); err == nil {
+				params["model_name"] = descriptor.SelectionKey
+			}
+		}
+	}
+
+	writeRequestParams(req, params)
+	return req, nil
+}
+
+// requestParamsAsObject 把请求 params 解析为 JSON 对象；非对象返回 ok=false。
+// Python: service.py:1554 isinstance(request.params, dict)
+//
+// 与包内 parseRequestParams 的差别：后者对数组/标量/坏 JSON 一律退回空 map，
+// 用于宽松读取；本函数用于上游明确要求"必须是对象"的判定点。
+func requestParamsAsObject(req *schema.AgentRequest) (map[string]any, bool) {
+	if req == nil || len(req.Params) == 0 {
+		// 上游：params 缺省在 AgentRequest 上是 None → 不是 dict
+		return nil, false
+	}
+	params := map[string]any{}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return nil, false
+	}
+	return params, true
+}
+
+// getSessionForAdmission 准入阶段的会话目录查询（可替换以便测试注入）。
+// Python: service.py:1600-1608 self.get_session(SessionGetInput(...))
+//
+// 上游此步直接调用公开的 get_session；Go 侧抽出变量是为了让准入链路
+// 的单元测试不必依赖真实会话目录（生产实现就是 GetSession）。
+var getSessionForAdmission = GetSession
+
+// ──────────────────────────── 目录门面方法 ────────────────────────────
+
+// ListModelCapabilities 返回配置的模型目录与当前生效选择。
+// Python: service.py:718-775 list_model_capabilities
+//
+// 上游依赖 AgentManager 的默认模型列表；Go 侧 manager 由注入提供，
+// 未注入模型提供者时返回空目录（不报错，等价于上游未配置模型）。
+func (r *AgentRuntime) ListModelCapabilities(currentSelection string) ModelCatalogResult {
+	if err := r.requireStarted(); err != nil {
+		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
+	}
+	if r.iterModelEntries == nil {
+		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
+	}
+	return BuildModelCatalog(r.iterModelEntries(), currentSelection)
+}
+
+// ResolveModelCapability 解析一个模型引用为描述符。
+// Python: service.py:777-782 resolve_model_capability
+func (r *AgentRuntime) ResolveModelCapability(requested string) (RuntimeModelDescriptor, error) {
+	if err := r.requireStarted(); err != nil {
+		return RuntimeModelDescriptor{}, err
+	}
+	catalog := r.ListModelCapabilities("")
+	return ResolveModelSelection(catalog, requested)
+}
+
+// ListModeCapabilities 返回受支持的单 Agent 模式目录。
+// Python: service.py:784-789 list_mode_capabilities
+func (r *AgentRuntime) ListModeCapabilities() ModeCatalogResult {
+	return ListModeCapabilities()
+}
+
+// ResolveModeCapability 解析一个模式。
+// Python: service.py:791-796 resolve_mode_capability
+func (r *AgentRuntime) ResolveModeCapability(requested any) (RuntimeModeDescriptor, error) {
+	return ResolveModeCapability(requested)
+}
+
+// GetSession 读取一个拥有的单 Agent 会话。
+// Python: service.py:798-803 get_session
+func (r *AgentRuntime) GetSession(request SessionGetInput) (*SessionSummary, error) {
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	return GetSession(request)
+}
+
+// ListSessions 读取一页拥有的会话。
+// Python: service.py:805-810 list_sessions
+func (r *AgentRuntime) ListSessions(request SessionListInput) (SessionListResult, error) {
+	if err := r.requireStarted(); err != nil {
+		return SessionListResult{}, err
+	}
+	return ListSessions(request, false, false)
+}
+
+// GetPermissionSnapshot 返回一致的只读权限快照。
+// Python: service.py:812-820 get_permission_snapshot
+func (r *AgentRuntime) GetPermissionSnapshot(
+	request PermissionSnapshotInput,
+) (PermissionSnapshotResult, error) {
+	if err := r.requireStarted(); err != nil {
+		return PermissionSnapshotResult{}, err
+	}
+	return ReadPermissionSnapshot(request)
+}
+
+// Coordinator 返回 Runtime 持有的会话执行协调器（未注入时为 nil）。
+// Python: service.py:412 self._session_coordinator
+func (r *AgentRuntime) Coordinator() SessionCoordinatorPort { return r.coordinator }
+
+// AgentManager 返回 Runtime 持有的 agent 实例管理器。
+// Python: service.py:476 self._tenant.get_default_manager()
+//
+// 门面与 AgentServer 不再各自持有 manager，一律经此取，消除多份持有。
+func (r *AgentRuntime) AgentManager() AgentManagerPort { return r.manager }
+
+// requireStarted Runtime 必须已启动（对应上游 _require_started）。
+// Python: service.py 各门面的 self._require_started()
+func (r *AgentRuntime) requireStarted() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return errors.New("agent runtime is already closed")
+	}
+	if !r.started {
+		return errors.New("agent runtime is not started")
+	}
+	return nil
+}
+
+// ──────────────────────────── 执行账本承接（P4 归属重构） ────────────────────────────
+//
+// Python 里下列能力全部由 AgentRuntime 直接调用（service.py 的 self._session_coordinator
+// / self._session_manager），门面（interface.py）0 处使用。Go 10.3.28d 把它们放在了
+// 门面上，导致同一账本被多个 UapClawSwarm 各持一份。以下方法把这批调用收归
+// Runtime，门面改为经注入的 Runtime 调用。
+
+// RegisterSession 在协调器中登记/刷新一个会话代次。
+// Python: service.py:1229 self._session_coordinator.register_session(...)
+func (r *AgentRuntime) RegisterSession(
+	sessionID, channelID string, policy sessionpkg.SessionPersistencePolicy,
+) (sessionpkg.RuntimeSessionSnapshot, error) {
+	if r.coordinator == nil {
+		return sessionpkg.RuntimeSessionSnapshot{}, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.RegisterSession(sessionID, channelID, policy)
+}
+
+// RunUnary 在协调器中执行一次非流式任务并等待结果。
+// Python: service.py:1764 return await self._session_coordinator.run_unary(...)
+func (r *AgentRuntime) RunUnary(
+	ctx context.Context, sessionID, requestID string, kind sessionpkg.SessionWorkKind,
+	task func(context.Context) (any, error), options sessionpkg.UnaryOptions,
+) (any, error) {
+	if r.coordinator == nil {
+		return nil, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.RunUnary(ctx, sessionID, requestID, kind, task, options)
+}
+
+// CancelExecution 取消某会话的执行。
+// Python: service.py:1373 results.append(await self._session_coordinator.cancel_execution(...))
+func (r *AgentRuntime) CancelExecution(
+	sessionID string, options sessionpkg.CancelExecutionOptions,
+) (sessionpkg.CancelExecutionResult, error) {
+	if r.coordinator == nil {
+		return sessionpkg.CancelExecutionResult{}, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.CancelExecution(sessionID, options)
+}
+
+// ActiveExecutions 返回协调器中仍有未终态执行的会话数（dreaming 探针用）。
+// Python: service.py:845/:1216 snapshot_session(...).executions 判定
+func (r *AgentRuntime) ActiveExecutions() bool {
+	if r.coordinator == nil {
+		return false
+	}
+	for _, snapshot := range r.coordinator.SnapshotSessions() {
+		for _, execution := range snapshot.Executions {
+			if !execution.State.Terminal() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// CloseCoordinator 关闭协调器并返回超时会话。
+// Python: AgentRuntime.close 内的协调器关闭
+func (r *AgentRuntime) CloseCoordinator(waitTimeout *time.Duration, timedOut *[]string) error {
+	if r.coordinator == nil {
+		return nil
+	}
+	return r.coordinator.Close(waitTimeout, timedOut)
 }

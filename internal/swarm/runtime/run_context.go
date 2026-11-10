@@ -3,8 +3,14 @@
 // 对应 Python 代码：jiuwenswarm/runtime/run_context.py（20 行）
 //
 // 语言差异：Python 用 ContextVar[RunContext | None] 隐式传递（default=None），
-// Go 用 context.Context 派生值显式传递。Python 的 `_cwd_state.set()/reset()`
-// 对应 Go 的 WithRunContext / ctx 派生。
+// Go 用 context.Context 派生值显式传递。Python 的
+// `CURRENT_RUN_CONTEXT.set()` / `.get()` 对应 Go 的 WithRunContext /
+// CurrentRunContext / ctx 派生。
+//
+// Python 的 dataclass(frozen=True) 自动生成 `__eq__`，其中 credential_context
+// 标了 `compare=False`（相等性判断时忽略）。Go struct 无内建相等语义，故由
+// RunContextEqual 显式实现同一规则；直接 `*a == *b` 不可用（含 slice/map 字段
+// 不可比较，且会把 credential_context 也算进去）。
 //
 // 本结构被 run_permissions.go 的兜底路径消费：当请求级 RUN_PERMISSIONS
 // 未绑定时，从 CURRENT_RUN_CONTEXT.tool_permissions 读取同一份选择。
@@ -12,7 +18,10 @@
 
 package runtime
 
-import "context"
+import (
+	"context"
+	"reflect"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -81,4 +90,103 @@ func CurrentRunContext(ctx context.Context) *RunContext {
 		return nil
 	}
 	return rc
+}
+
+// RunContextEqual 比较两个 RunContext 的相等性，**忽略 CredentialContext**。
+//
+// Python: dataclass(frozen=True) 自动生成的 __eq__，其中
+// `credential_context: Any = field(default=None, repr=False, compare=False)`
+// 明确豁免于相等性判断——凭证只影响"用哪个凭据"，不构成"是不是同一次调用选项"。
+//
+// Go struct 不能直接 `*a == *b`：HostTools（slice）与 ToolPermissions（slice）
+// 不可比较，编译期即失败。故逐字段比较，slice 按元素逐一比。
+//
+// nil 与 nil 相等；一 nil 一非 nil 不等。
+func RunContextEqual(a, b *RunContext) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	if a.RequestID != b.RequestID || a.SessionID != b.SessionID {
+		return false
+	}
+	if !optionalIntEqual(a.MaxTurns, b.MaxTurns) {
+		return false
+	}
+	if !optionalFloatEqual(a.MaxBudgetUSD, b.MaxBudgetUSD) {
+		return false
+	}
+	if !anySliceEqual(a.HostTools, b.HostTools) {
+		return false
+	}
+	if !toolPermissionLevelsEqual(a.ToolPermissions, b.ToolPermissions) {
+		return false
+	}
+	if a.SupportsPermissionApproval != b.SupportsPermissionApproval {
+		return false
+	}
+	// CredentialContext 按上游 compare=False 语义跳过。
+	return true
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// optionalIntEqual 比较两个可选整数。
+func optionalIntEqual(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+// optionalFloatEqual 比较两个可选浮点。
+func optionalFloatEqual(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+// anySliceEqual 按元素比较两个 any 切片（nil 与空切片视为不同，同 Python tuple 语义）。
+//
+// 元素用 == 比较；不可比较的元素类型（map/slice/func）会 panic，
+// 故用反射先判断可比性，不可比时退化为"同一指针视为相等"。
+func anySliceEqual(a, b []any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for index := range a {
+		if !equalAnyValue(a[index], b[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+// toolPermissionLevelsEqual 比较两个工具权限列表（顺序敏感，同 Python tuple 语义）。
+func toolPermissionLevelsEqual(a, b []ToolPermissionLevel) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for index := range a {
+		if a[index] != b[index] {
+			return false
+		}
+	}
+	return true
+}
+
+// equalAnyValue 比较两个 any 值，不可比较类型退化为恒不等（避免 panic）。
+func equalAnyValue(a, b any) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	leftType := reflect.TypeOf(a)
+	if leftType != reflect.TypeOf(b) {
+		return false
+	}
+	if !leftType.Comparable() {
+		// map / slice / func 等不可比较：按引用相等判定，不同实例即视为不等。
+		return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
+	}
+	return a == b
 }

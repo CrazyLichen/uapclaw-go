@@ -710,8 +710,8 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到技能: %s", safeName)}, nil
 	}
 
-	// 内置技能保护（对齐 Python: 检查 builtin 目录，不允许删除内置技能）
-	builtinDir := sm.getBuiltinSkillsDir()
+	// 内置技能保护（对齐 Python: SkillManager.is_builtin_skill，比较 dest 与内置源的物理路径）
+	builtinDir := getBuiltinSkillsDir()
 	if builtinDir != "" {
 		isBuiltin, builtinPath := sm.isBuiltinSkill(safeName, builtinDir)
 		if isBuiltin {
@@ -2427,16 +2427,6 @@ func (sm *SkillManager) getMirrorSkillsDirs() []string {
 	return []string{} // Go 二进制 = 包安装模式，无 mirror 目录
 }
 
-// getBuiltinSkillsDir 返回内置技能目录。
-func (sm *SkillManager) getBuiltinSkillsDir() string {
-	// Python: 检查 skills/builtin 目录
-	builtinDir := filepath.Join(sm.skillsDir, "builtin")
-	if dirExists(builtinDir) {
-		return builtinDir
-	}
-	return ""
-}
-
 // isBuiltinSkill 检查技能是否为内置技能。
 func (sm *SkillManager) isBuiltinSkill(skillName, builtinDir string) (bool, string) {
 	entries, err := os.ReadDir(builtinDir)
@@ -2978,14 +2968,34 @@ func logRejectedName(operation, label string, value any, exc error) {
 		Msg("rejected invalid name")
 }
 
-// getBuiltinSkillsDir 获取内置技能目录
-// Python: get_builtin_skills_dir()
+// getBuiltinSkillsDir 获取内置技能目录。
+//
+// 内置技能永远是「随发布包分发」的只读源目录，与 SkillManager 的 skillsDir
+// （可能是隔离 workspace）无关——两者只在 isBuiltinSkill 里做路径比较。
+//
+// Python: common/utils.py:2388 get_builtin_skills_dir()
+//
+//	primary  = package_root/resources/agent/workspace/skills
+//	fallback = package_root/resources/agent/skills   （不检查存在性，交由调用方判定）
+//
+// Go 二进制无 package_root 概念，用 pathutil.ResourcesDir() 的磁盘三级回退
+// （UAPCLAW_RESOURCES_DIR → 可执行文件同目录 → 当前工作目录）等价替代
+// Python 的 Path(__file__) 反推。BUILTIN_SKILLS_DIR 环境变量最高优先，供测试覆盖。
 func getBuiltinSkillsDir() string {
 	if dir := os.Getenv("BUILTIN_SKILLS_DIR"); dir != "" {
 		return dir
 	}
-	// 后续补充：从 package root 解析 resources/agent/workspace/skills
-	return ""
+	resDir, err := pathutil.ResourcesDir()
+	if err != nil {
+		return ""
+	}
+	// Python: primary_path = package_root / "resources" / "agent" / "workspace" / "skills"
+	primary := filepath.Join(resDir, "agent", "workspace", "skills")
+	if dirExists(primary) {
+		return primary
+	}
+	// Python: fallback_path = package_root / "resources" / "agent" / "skills"
+	return filepath.Join(resDir, "agent", "skills")
 }
 
 // dirExists 检查目录是否存在

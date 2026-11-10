@@ -95,10 +95,11 @@ func (s *CronJobStore) ListJobs() ([]*CronJob, error) {
 		jobs = append(jobs, job)
 	}
 	sort.Slice(jobs, func(i, j int) bool {
-		if jobs[i].UpdatedAt != jobs[j].UpdatedAt {
-			return jobs[i].UpdatedAt > jobs[j].UpdatedAt
+		left, right := jobTime(jobs[i]), jobTime(jobs[j])
+		if left != right {
+			return left > right
 		}
-		return jobs[i].CreatedAt > jobs[j].CreatedAt
+		return jobCreateTime(jobs[i]) > jobCreateTime(jobs[j])
 	})
 	return jobs, nil
 }
@@ -144,10 +145,10 @@ func (s *CronJobStore) CreateJob(params CreateJobParams) (*CronJob, error) {
 		WakeOffsetSeconds: wos,
 		Description:       params.Description,
 		Targets:           strings.TrimSpace(params.Targets),
-		SessionID:         strings.TrimSpace(params.SessionID),
-		CreatedAt:         now,
-		UpdatedAt:         now,
-		ChatType:          strings.TrimSpace(params.ChatType),
+		SessionID:         optionalStringPointer(params.SessionID),
+		CreatedAt:         &now,
+		UpdatedAt:         &now,
+		ChatType:          optionalStringPointer(params.ChatType),
 		Mode:              mode,
 		DeleteAfterRun:    dar,
 	}
@@ -218,10 +219,10 @@ func (s *CronJobStore) UpdateJob(jobID string, patch map[string]any) (*CronJob, 
 		existing.Targets = strings.TrimSpace(strAny(patch["targets"]))
 	}
 	if _, ok := patch["session_id"]; ok {
-		existing.SessionID = strings.TrimSpace(strAny(patch["session_id"]))
+		existing.SessionID = optionalStringPointer(strAny(patch["session_id"]))
 	}
 	if _, ok := patch["chat_type"]; ok {
-		existing.ChatType = strings.TrimSpace(strAny(patch["chat_type"]))
+		existing.ChatType = optionalStringPointer(strAny(patch["chat_type"]))
 	}
 	if _, ok := patch["expired"]; ok {
 		existing.Expired = boolAny(patch["expired"])
@@ -233,7 +234,8 @@ func (s *CronJobStore) UpdateJob(jobID string, patch map[string]any) (*CronJob, 
 		existing.DeleteAfterRun = boolAny(patch["delete_after_run"])
 	}
 
-	existing.UpdatedAt = nowTimestamp()
+	updated := nowTimestamp()
+	existing.UpdatedAt = &updated
 	// round-trip 校验
 	if _, err := FromCronJobDict(existing.ToDict()); err != nil {
 		return nil, err

@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
@@ -1921,11 +1923,116 @@ func TestLogRejectedName(t *testing.T) {
 	logRejectedName("test-op", "skill", "bad-name", fmt.Errorf("test error"))
 }
 
-// TestGetBuiltinSkillsDir 验证内置技能目录
-func TestGetBuiltinSkillsDir(t *testing.T) {
-	// 当前返回空字符串（后续补充）
-	dir := getBuiltinSkillsDir()
-	_ = dir // 不验证具体值
+// TestGetBuiltinSkillsDir_环境变量优先 BUILTIN_SKILLS_DIR 最高优先。
+// Python 无该环境变量，Go 侧为测试可覆盖性新增（对齐既有 envInt/env 覆盖惯例）。
+func TestGetBuiltinSkillsDir_环境变量优先(t *testing.T) {
+	want := t.TempDir()
+	t.Setenv("BUILTIN_SKILLS_DIR", want)
+	if got := getBuiltinSkillsDir(); got != want {
+		t.Errorf("内置技能目录 = %q, 期望 %q", got, want)
+	}
+}
+
+// TestGetBuiltinSkillsDir_primary存在 解析到 resources/agent/workspace/skills。
+// Python: common/utils.py:2392-2394 primary_path 存在则返回 primary_path
+func TestGetBuiltinSkillsDir_primary存在(t *testing.T) {
+	resDir := t.TempDir()
+	primary := filepath.Join(resDir, "agent", "workspace", "skills")
+	if err := os.MkdirAll(primary, 0o755); err != nil {
+		t.Fatalf("创建 primary 目录失败: %v", err)
+	}
+	t.Setenv("BUILTIN_SKILLS_DIR", "")
+	t.Setenv(pathutil.EnvResourcesDir, resDir)
+
+	if got := getBuiltinSkillsDir(); got != primary {
+		t.Errorf("内置技能目录 = %q, 期望 primary %q", got, primary)
+	}
+}
+
+// TestGetBuiltinSkillsDir_primary缺失回落fallback primary 不存在则回落 fallback，
+// 且**不检查 fallback 是否存在**（与 Python 一致，交由调用方判定）。
+// Python: common/utils.py:2395-2397 return fallback_path
+func TestGetBuiltinSkillsDir_primary缺失回落fallback(t *testing.T) {
+	resDir := t.TempDir()
+	fallback := filepath.Join(resDir, "agent", "skills")
+	t.Setenv("BUILTIN_SKILLS_DIR", "")
+	t.Setenv(pathutil.EnvResourcesDir, resDir)
+
+	got := getBuiltinSkillsDir()
+	if got != fallback {
+		t.Errorf("内置技能目录 = %q, 期望 fallback %q", got, fallback)
+	}
+	if dirExists(got) {
+		t.Error("fallback 目录不存在时函数仍应返回该路径（不检查存在性）")
+	}
+}
+
+// TestGetBuiltinSkillsDir_资源目录缺失 找不到 resources 时返回空串。
+// Python 无此分支（_find_package_root 恒有值），Go 侧因磁盘回退可能失败而新增。
+func TestGetBuiltinSkillsDir_资源目录缺失(t *testing.T) {
+	t.Setenv("BUILTIN_SKILLS_DIR", "")
+	t.Setenv(pathutil.EnvResourcesDir, filepath.Join(t.TempDir(), "not-exist"))
+
+	if got := getBuiltinSkillsDir(); got != "" {
+		t.Errorf("资源目录缺失时内置技能目录 = %q, 期望空串", got)
+	}
+}
+
+// TestGetBuiltinSkillsDir_真实资源仓库自带的 resources/agent/workspace/skills 可被解析到，
+// 且该目录下确有内置技能（拷贝自上游，34 个技能目录）。
+// 该用例保证「resources 目录布局」与「函数解析逻辑」两侧不会同时漂移。
+//
+// 注意：go test 的工作目录是包目录，而 resources/ 在仓库根；故从包目录向上回溯定位，
+// 不用 pathutil.ResourcesDir()（它只看可执行文件同目录与当前工作目录，包目录下都命中不到）。
+func TestGetBuiltinSkillsDir_真实资源(t *testing.T) {
+	resDir, ok := findRepoResourcesDir()
+	if !ok {
+		t.Skip("未找到仓库根 resources/ 目录，跳过")
+	}
+	primary := filepath.Join(resDir, "agent", "workspace", "skills")
+	if !dirExists(primary) {
+		t.Fatalf("resources/agent/workspace/skills 不存在: %s", primary)
+	}
+	t.Setenv("BUILTIN_SKILLS_DIR", "")
+	t.Setenv(pathutil.EnvResourcesDir, resDir)
+
+	got := getBuiltinSkillsDir()
+	if got != primary {
+		t.Fatalf("内置技能目录 = %q, 期望 %q", got, primary)
+	}
+	entries, err := os.ReadDir(got)
+	if err != nil {
+		t.Fatalf("读取内置技能目录失败: %v", err)
+	}
+	var skillCount int
+	for _, e := range entries {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), "_") {
+			skillCount++
+		}
+	}
+	if skillCount == 0 {
+		t.Error("内置技能目录下应有非下划线开头的技能目录")
+	}
+}
+
+// findRepoResourcesDir 从当前工作目录向上回溯定位仓库根的 resources/。
+// 用于单元测试断言仓库内资源布局，不参与生产逻辑。
+func findRepoResourcesDir() (string, bool) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	for {
+		candidate := filepath.Join(dir, "resources", "agent", "workspace", "skills")
+		if dirExists(candidate) {
+			return filepath.Join(dir, "resources"), true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
 }
 
 // TestRefreshAgentDataIndexes 验证刷新索引

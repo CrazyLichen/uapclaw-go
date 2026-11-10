@@ -15,12 +15,20 @@
 //	├── interrupt_resume.go     # 暂停调用应答判定
 //	├── interrupt_helpers.go    # 中断恢复载荷判定
 //	├── run_context.go          # RunContext 一次调用选项 + CURRENT_RUN_CONTEXT ctx 绑定
-//	└── run_permissions.go      # 请求级权限覆盖层（overlay_run_permissions）
+//	├── run_permissions.go      # 请求级权限覆盖层（overlay_run_permissions）
 //	├── session_provisioner.go  # 会话创建/删除/切换事务（RuntimeSessionProvisioner）
-//	└── team_session_lifecycle.go # 团队会话生命周期适配（TeamSessionLifecycleAdapter）
+//	├── team_session_lifecycle.go # 团队会话生命周期适配（TeamSessionLifecycleAdapter）
+//	├── agent_definition.go     # 声明式 root-Agent 定义/执行体/指纹（RuntimeAgentDefinition）
+//	├── mode_catalog.go         # 单 Agent 模式目录与解析（含遗留别名折叠）
+//	├── model_catalog.go        # 模型目录、选择与配置解析（含全局索引选择键）
+//	├── session_catalog.go      # 会话只读查询（get/list，含分页与搜索）
+//	├── permission_catalog.go   # 权限四层快照（global/user/session/effective）
+//	├── tool_allowlist.go       # 在最终能力边界收窄工具集
+//	└── cron/                   # 定时任务模型与持久化（文件 / etcd 双后端，10 文件）
 //
 // 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py /
-// run_context.py / run_permissions.py）
+// run_context.py / run_permissions.py / agent_definition.py / mode_catalog.py /
+// model_catalog.py / session_catalog.py / permission_catalog.py / tool_allowlist.py / cron/）
 //
 // # 请求级权限覆盖
 //

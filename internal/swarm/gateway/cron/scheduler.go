@@ -431,7 +431,8 @@ func (s *CronSchedulerService) handleEvent(ctx context.Context, ev *cronEvent) {
 		job = &CronJob{
 			ID: state.JobID, Name: state.JobName, Enabled: false, Expired: false,
 			CronExpr: "", Timezone: state.Timezone, Targets: state.Targets,
-			SessionID: state.SessionID, ChatType: state.ChatType,
+			SessionID: optionalStringPointer(state.SessionID),
+			ChatType:  optionalStringPointer(state.ChatType),
 		}
 		if job.Timezone == "" {
 			job.Timezone = "Asia/Shanghai"
@@ -723,7 +724,7 @@ func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, 
 	// 避免多群共用 bot 时误用 config 中的 last_*。Web/TUI：不绑定 session_id。
 	var metadata map[string]any
 	msgSessionID := ""
-	routingSID := strings.TrimSpace(job.SessionID)
+	routingSID := strings.TrimSpace(stringFromOptional(job.SessionID))
 	if routingSID != "" && channelID != "web" && channelID != "tui" {
 		msgSessionID = routingSID
 	}
@@ -779,7 +780,7 @@ func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, 
 
 	if groupDigitalAvatar && myUserID != "" {
 		// 判断定时任务是在群聊还是私聊中创建的（优先 job.chat_type）
-		if job.ChatType == "group" {
+		if stringFromOptional(job.ChatType) == "group" {
 			// 补充 outbound pipeline 所需的 metadata 前置条件
 			metadata["chat_type"] = "group"
 			if channelID == "wecom" {
@@ -796,7 +797,7 @@ func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, 
 				Msg("[Cron] job created in group chat, enabling IMOutboundPipeline routing")
 		} else {
 			logger.Info(logComponent).
-				Str("chat_type", job.ChatType).Str("channel", channelID).Str("job_id", job.ID).
+				Str("chat_type", stringFromOptional(job.ChatType)).Str("channel", channelID).Str("job_id", job.ID).
 				Msg("[Cron] job created in p2p chat, skipping IMOutboundPipeline routing")
 		}
 	}
@@ -1001,8 +1002,8 @@ func (s *CronSchedulerService) getOrCreateRun(job *CronJob, runID string) *CronR
 		Status:    "pending",
 		JobName:   job.Name,
 		Targets:   job.Targets,
-		SessionID: job.SessionID,
-		ChatType:  job.ChatType,
+		SessionID: stringFromOptional(job.SessionID),
+		ChatType:  stringFromOptional(job.ChatType),
 		Timezone:  job.Timezone,
 	}
 	s.runs[runID] = state

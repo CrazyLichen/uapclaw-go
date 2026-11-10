@@ -54,6 +54,11 @@ type UapClawSwarm struct {
 	// 走协调器的不再进门面队列（Python service.py:1873 同）。
 	sessionManager *swruntime.SessionManager
 
+	// agentRuntime 执行账本归属方（P4 收归）。
+	// Python: 门面不持有 Runtime；Go 侧为消除"每个 UapClawSwarm 各持一本账"，
+	// 由 AgentManager 创建后经 SetAgentRuntime 注入，账本调用一律经它转接。
+	agentRuntime *swruntime.AgentRuntime
+
 	// skilldevService SkillDev 服务（懒初始化，ensureSkillDevService 时创建）。
 	skilldevService *skilldev.SkillDevService
 
@@ -111,6 +116,9 @@ func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 
 // NewUapClaw 创建 UapClawSwarm 实例。
 // Python: JiuWenClaw.__init__()
+//
+// coordinator 保留为兜底：P4 之后账本调用经注入的 AgentRuntime 转接，
+// 未注入时（单测直接构造门面）仍需要可用账本，故照旧自建。
 func NewUapClaw() *UapClawSwarm {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	return &UapClawSwarm{
@@ -121,6 +129,27 @@ func NewUapClaw() *UapClawSwarm {
 		appCancel:          appCancel,
 		sessionManager:     swruntime.NewSessionManager(),
 	}
+}
+
+// SetAgentRuntime 注入执行账本归属方（P4）。
+// Python: 门面不持有 Runtime，账本调用在 Runtime 内完成
+//
+// Go 侧由 AgentManager 造出 UapClawSwarm 后注入，避免构造期
+// Runtime ↔ Manager ↔ 门面 三者互相引用成环。
+func (uc *UapClawSwarm) SetAgentRuntime(runtime *swruntime.AgentRuntime) {
+	uc.agentRuntime = runtime
+}
+
+// executionCoordinator 返回执行账本（经 Runtime，未注入时退回自身字段）。
+// Python: service.py 内 self._session_coordinator
+func (uc *UapClawSwarm) executionCoordinator() swruntime.SessionCoordinatorPort {
+	if uc.agentRuntime != nil {
+		return uc.agentRuntime.Coordinator()
+	}
+	if uc.coordinator != nil {
+		return uc.coordinator
+	}
+	return nil
 }
 
 // ProcessMessage 通过门面自有的会话调度器处理请求。
@@ -252,9 +281,33 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 
 	// 提交到会话协调器并等待结果
 	// Python: AgentRuntime 的 _session_coordinator.run_unary（10.3.28d 取代 sessionManager.SubmitAndWait）
-	_, _ = uc.coordinator.RegisterSession(sessionID, request.ChannelID,
+	if runtime := uc.agentRuntime; runtime != nil {
+		// P4：账本调用收归 Runtime（Python 门面不持有协调器）
+		_, _ = runtime.RegisterSession(sessionID, request.ChannelID,
+			swsession.SessionPersistencePolicyPersistent)
+		result, err := runtime.RunUnary(ctx, sessionID, request.RequestID,
+			swsession.SessionWorkKindChatStream,
+			func(taskCtx context.Context) (any, error) {
+				return a.ProcessMessageImpl(taskCtx, request, inputs)
+			},
+			swsession.UnaryOptions{})
+		if err != nil {
+			return nil, err
+		}
+		resp, ok := result.(*schema.AgentResponse)
+		if !ok || resp == nil {
+			return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+				schema.WithResponseOK(true)), nil
+		}
+		return resp, nil
+	}
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
+		return nil, swruntime.ErrCoordinatorUnavailable
+	}
+	_, _ = coordinator.RegisterSession(sessionID, request.ChannelID,
 		swsession.SessionPersistencePolicyPersistent)
-	result, err := uc.coordinator.RunUnary(ctx, sessionID, request.RequestID,
+	result, err := coordinator.RunUnary(ctx, sessionID, request.RequestID,
 		swsession.SessionWorkKindChatStream,
 		func(taskCtx context.Context) (any, error) {
 			return a.ProcessMessageImpl(taskCtx, request, inputs)
@@ -570,7 +623,13 @@ func (uc *UapClawSwarm) runMessageStreamDirect(ctx context.Context, request *sch
 		// ⤵️ 10.6.19-23: Team 后续请求绕过 Session 队列（等待 TeamManager）
 		// S09: 缺少 is_team_first_request 判断逻辑，Team 模式下后续请求会错误排队
 		// Python 通过 team_manager.active_session_id / pending_session_id / has_stream_task 判断首次/后续
-		_, _ = uc.coordinator.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
+		if runtime := uc.agentRuntime; runtime != nil {
+			_, _ = runtime.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
+		} else {
+			if coordinator := uc.executionCoordinator(); coordinator != nil {
+				_, _ = coordinator.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
+			}
+		}
 	}
 
 	return resultCh, nil
@@ -601,7 +660,7 @@ func (uc *UapClawSwarm) ProcessInterrupt(ctx context.Context, request *schema.Ag
 	// 补充信息
 	if intent == "supplement" {
 		resp, err := a.ProcessInterrupt(ctx, request)
-		_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
+		_, _ = uc.cancelExecution(sessionID, swsession.CancelExecutionOptions{
 			RequestID: &sessionID,
 		})
 		return resp, err
@@ -611,7 +670,7 @@ func (uc *UapClawSwarm) ProcessInterrupt(ctx context.Context, request *schema.Ag
 	resp, err := a.ProcessInterrupt(ctx, request)
 	uc.cancelTeamWorkForSession(sessionID, request.ChannelID, "interrupt(intent="+intent+"): ")
 	waitTimeout := 5 * time.Second
-	_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
+	_, _ = uc.cancelExecution(sessionID, swsession.CancelExecutionOptions{
 		RequestID:   &sessionID,
 		WaitTimeout: &waitTimeout,
 	})
@@ -699,7 +758,7 @@ func (uc *UapClawSwarm) CreateInstance(opts ...CreateInstanceOption) error {
 	if dreamer, ok := a.(adapter.DreamingController); ok {
 		go func() {
 			_ = dreamer.TryStartDreaming(uc.appCtx, func() bool {
-				return hasActiveExecutions(uc.coordinator)
+				return uc.hasActiveExecutions()
 			})
 		}()
 	}
@@ -726,7 +785,7 @@ func (uc *UapClawSwarm) ReloadAgentConfig(configBase map[string]any, envOverride
 	if dreamer, ok := a.(adapter.DreamingController); ok {
 		go func() {
 			_ = dreamer.TryStartDreaming(uc.appCtx, func() bool {
-				return hasActiveExecutions(uc.coordinator)
+				return uc.hasActiveExecutions()
 			})
 		}()
 	}
@@ -736,7 +795,7 @@ func (uc *UapClawSwarm) ReloadAgentConfig(configBase map[string]any, envOverride
 // CancelInflightWork 取消在途任务。
 // Python: JiuWenClaw.cancel_inflight_work(log_prefix)
 func (uc *UapClawSwarm) CancelInflightWork(reason string) error {
-	_ = uc.coordinator.Close(nil, nil)
+	_ = uc.closeCoordinator()
 	uc.adapterMu.Lock()
 	a := uc.adapter
 	uc.adapterMu.Unlock()
@@ -935,7 +994,7 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		// S10: cancelled 硬编码为 false，Team cancel 功能完全无效，依赖 TeamManager
 		cancelled := false
 		// Python: cancelled = teamManager.CancelSessionRuntime(ctx, sessionID, reason)
-		_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
+		_, _ = uc.cancelExecution(sessionID, swsession.CancelExecutionOptions{
 			RequestID: &sessionID,
 		})
 		message := "团队当前执行已结束"
@@ -1592,4 +1651,55 @@ func intField(params map[string]any, key string) int {
 func paramString(params map[string]any, key string) string {
 	value, _ := params[key].(string)
 	return value
+}
+
+// ──────────────────────────── 账本转接（P4） ────────────────────────────
+
+// cancelExecution 取消会话执行；账本经 Runtime（未注入时退回自身字段）。
+// Python: service.py 内 self._session_coordinator.cancel_execution
+func (uc *UapClawSwarm) cancelExecution(
+	sessionID string, options swsession.CancelExecutionOptions,
+) (swsession.CancelExecutionResult, error) {
+	if runtime := uc.agentRuntime; runtime != nil {
+		return runtime.CancelExecution(sessionID, options)
+	}
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
+		return swsession.CancelExecutionResult{}, swruntime.ErrCoordinatorUnavailable
+	}
+	return coordinator.CancelExecution(sessionID, options)
+}
+
+// hasActiveExecutions 是否存在未终态执行。
+// Python: service.py:845/:1216 snapshot 里的 executions 判定
+func (uc *UapClawSwarm) hasActiveExecutions() bool {
+	if runtime := uc.agentRuntime; runtime != nil {
+		return runtime.ActiveExecutions()
+	}
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
+		return false
+	}
+	// 与 hasActiveExecutions 同一判定：任一执行未终态即为真
+	for _, snapshot := range coordinator.SnapshotSessions() {
+		for _, execution := range snapshot.Executions {
+			if !execution.State.Terminal() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// closeCoordinator 关闭执行账本。
+// Python: Runtime close 内的协调器关闭
+func (uc *UapClawSwarm) closeCoordinator() error {
+	if runtime := uc.agentRuntime; runtime != nil {
+		return runtime.CloseCoordinator(nil, nil)
+	}
+	coordinator := uc.executionCoordinator()
+	if coordinator == nil {
+		return nil
+	}
+	return coordinator.Close(nil, nil)
 }
