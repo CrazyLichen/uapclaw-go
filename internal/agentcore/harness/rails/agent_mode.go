@@ -140,6 +140,9 @@ func NewAgentModeRail(allowedTools []string) *AgentModeRail {
 	}
 
 	r.WithPriority(agentModeRailPriority)
+	// 由受信任构造函数创建，供权限审查层的 Code 控制路由校验。
+	// 与 NewProgressiveToolRail 同一设计（已知偏差 V-4）。
+	r.MarkTrusted()
 	return r
 }
 

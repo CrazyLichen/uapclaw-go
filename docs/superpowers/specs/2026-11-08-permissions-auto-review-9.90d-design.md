@@ -2313,3 +2313,61 @@ Python 原文件 320 行覆盖 10+ 内置工具，依赖 V-6 前置件 ≥4,286 
 （这与规则 10.2 的窄接口不冲突：这里是「使用方依赖别人」，但签名不能放宽。）
 
 覆盖率：`readonly_tool_bindings.go` 88.7%，`auto_permission` 包 91.6%。
+
+### 12.34 `code_tool_bindings`：按 V-7 / D4 落地
+
+**落地**：`auto_permission/code_tool_bindings.go`（110 行 Python → 约 230 行 Go），
+覆盖率 **91.8%**，auto_permission 包 91.6%。
+
+#### V-7：只落 agent_mode 三工具，LSP 整层挂 ⤵️ 9.17
+
+计划 Task 39 早已约定：只实现 `enter_plan_mode` / `exit_plan_mode` /
+`switch_mode`；`lsp` 依赖 `LspRail` / `LspTool` / `LspToolInput` 等 Go 侧缺失的
+SDK 类型（约 1,239 行），一律返回空串。`RegisterLSPReadSemantics` 为空桩。
+
+#### 与计划骨架的签名差异（如实记录）
+
+计划里的骨架是 `TrustedCodeRoute(invocation, agent, sessionID) bool`，
+本实现按 **Python 原始签名**保留 `facts` / `path_requires_approval` /
+`owner_agent` 三个判定维度，返回字符串路由标识（Python 返回 `str | None`）：
+
+```go
+func TrustedCodeRoute(
+	invocation ToolInvocation,
+	facts permissions.ToolDecisionFacts,
+	pathRequiresApproval bool,
+	ownerAgent any,
+) string  // "code_plan_control" / ""
+```
+
+理由：规则 9/12 要求方法参数与返回结构可一眼对应 Python；计划骨架是
+当时为简化测试写的示意，不是上游签名。
+
+#### 三个偏差的延伸复用
+
+| 来源 | 在本文件的处置 |
+|---|---|
+| V-4（`_closure` 闭包链） | `_control_invoke_matches` 改用 `ResolveToolBinding` 精确类型 + 卡片同一性；并校验 `AgentModeRail.IsTrusted()` |
+| V-18（无导出具体类型） | `_CONTROL_TYPES` 类对象常量 → `SetCodeControlToolTypes` 装配期登记 |
+| V-17（非导出字段反射） | **本次不需要**——`uapswarmAdapterMode` 已有导出访问器 `UapswarmAdapterMode()`，直接调用，比反射更好 |
+
+#### 补上的第三个 MarkTrusted 接线点
+
+`NewAgentModeRail` 与 `NewProgressiveToolRail` 一样未调 `MarkTrusted()`，
+本批补上（spec:425「各受信任 rail 构造时调用」）。至此：
+
+```
+DeepAgentRail.MarkTrusted()/IsTrusted()   9.90d-1 Task 14 ✅
+NewProgressiveToolRail → MarkTrusted()     上一提交 ✅
+NewAgentModeRail → MarkTrusted()           本提交 ✅
+```
+
+#### D4 验收（本批测试兑现）
+
+| 用例 | 结果 |
+|---|---|
+| 三工具无真实绑定 → false | ✅ |
+| LSP → 空串（V-7） | ✅ |
+| 真实 `AgentModeRail` + 登记类型 → `code_plan_control` | ✅ |
+| 未 MarkTrusted（`&AgentModeRail{}`）→ 拒绝 | ✅ |
+| 适配器模式非 code / 多 rail / 未登记类型 / 参数非对象 | ✅ 各自拒绝 |
