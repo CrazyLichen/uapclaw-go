@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -4087,10 +4086,6 @@ func (d *DeepAgent) notifyWork() {
 // 转发器崩溃必须转成 execution.error(forwarder_crashed)，否则交互会静默卡死。
 // Python: _forward_session_stream (L4462)
 func (d *DeepAgent) forwardSessionStream(ctx context.Context) {
-	fmt.Fprintf(os.Stderr, "DIAG[%d] forwarder enter\n", time.Now().UnixNano()/1e6)
-	defer func() {
-		fmt.Fprintf(os.Stderr, "DIAG[%d] forwarder exit ctxErr=%v running=%v\n", time.Now().UnixNano()/1e6, ctx.Err() != nil, d.isInteractionRunning())
-	}()
 	sess := d.interactionSession
 	if sess == nil {
 		return
