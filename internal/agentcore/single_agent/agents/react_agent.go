@@ -6,6 +6,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
@@ -72,6 +73,12 @@ type ReActAgent struct {
 	// usageDepth 显式调用深度覆盖；nil 表示未提供（Python 侧无赋值点）
 	// Python: ReActAgent._usage_depth（react_agent.py L2919）
 	usageDepth *int
+	// kvCacheHook KV cache 亲和调用钩子（延迟初始化）
+	// Python: react_agent.py:591 self._kv_cache_model_call_hook
+	kvCacheHook *kv_cache.KVCacheModelCallHook
+	// kvCacheAffinityCfg KV cache 亲和开关；nil 等价默认 false
+	// Python: self._config.kv_cache_affinity_config
+	kvCacheAffinityCfg *kv_cache.KVCacheAffinityConfig
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -130,4 +137,31 @@ func (a *ReActAgent) PromptAttachments() *hprompts.Manager { return a.promptAtta
 // （deep_agent.py:851）。
 func (a *ReActAgent) SetPromptAttachmentManager(m *hprompts.Manager) {
 	a.promptAttachments = m
+}
+
+// kvCacheModelCallHook 返回本 agent 唯一的 KV 调用钩子（延迟初始化）。
+// Python: react_agent.py:591 self._kv_cache_model_call_hook = KVCacheModelCallHook()
+// ★ 必须与 recommendation 包重放侧共用同一实例，否则父子 kwargs 可能不一致。
+func (a *ReActAgent) kvCacheModelCallHook() *kv_cache.KVCacheModelCallHook {
+	if a.kvCacheHook == nil {
+		a.kvCacheHook = kv_cache.NewKVCacheModelCallHook()
+	}
+	return a.kvCacheHook
+}
+
+// kvCacheAffinityConfig 返回亲和开关配置；未配置时返回 nil（等价默认 false）。
+// Python: self._config.kv_cache_affinity_config
+func (a *ReActAgent) kvCacheAffinityConfig() *kv_cache.KVCacheAffinityConfig {
+	return a.kvCacheAffinityCfg
+}
+
+// KVCacheModelCallHook 导出访问器，供 recommendation 的 _main_call_parameters
+// 取同一 hook 实例（Python 侧直接 getattr(agent, "_kv_cache_model_call_hook")）。
+func (a *ReActAgent) KVCacheModelCallHook() *kv_cache.KVCacheModelCallHook {
+	return a.kvCacheModelCallHook()
+}
+
+// SetKVCacheAffinityConfig 注入亲和开关（由 DeepAgent 配置装配时调用）。
+func (a *ReActAgent) SetKVCacheAffinityConfig(cfg *kv_cache.KVCacheAffinityConfig) {
+	a.kvCacheAffinityCfg = cfg
 }
