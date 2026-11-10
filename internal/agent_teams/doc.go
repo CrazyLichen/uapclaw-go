@@ -17,6 +17,7 @@
 //	├── tracker/            # TeamContextTracker 团队状态增量宣告 + 任务通知三兄弟
 //	├── context.go          # SessionState 委托（定义已迁移至 sessionctx 包）
 //	├── i18n.go             # 多语言 i18n 支持
+//	├── id_generator.go     # 团队任务前缀 id 生成（async_tool/swarmflow/session_spawn）
 //	├── paths.go            # 团队路径工具
 //	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
