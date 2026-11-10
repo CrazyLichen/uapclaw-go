@@ -6,6 +6,82 @@ package harness_protocol
 // （有界缓冲与单消费者游标在 15.5 的 provider 基座落地，Python 依据
 // harness_providers/stream.py:19-155）。
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// HarnessEventPayload 一条观测事件的载荷标记接口。
+// Python: events.py:364-375 HarnessEventPayload（TypeAlias，10 分支 union）
+// Go 用接口 + 10 个具体结构体表达；分派一律走 type switch，
+// 顺序对齐 serialization.py:_payload_to_wire 的 isinstance 链。
+type HarnessEventPayload interface {
+	// payloadKind 返回线格式 discriminator（供 15.4 codec 使用）
+	payloadKind() string
+}
+
+// OutputEvent 一个稳定输出内容块的 provider-neutral 更新。
+// Python: events.py:141-160 OutputEvent
+type OutputEvent struct {
+	// OutputID 稳定的输出块标识
+	OutputID string
+	// Kind 内容表示（text / structured）
+	Kind OutputKind
+	// Content 内容（已冻结）
+	Content JsonValue
+	// Operation 更新方式（delta / snapshot / final）
+	Operation OutputOperation
+	// Channel 语义通道（answer / reasoning / system）
+	Channel OutputChannel
+	// ContentIndex 同一块内的内容序号
+	ContentIndex int
+	// ContentType MIME 提示（空串表示未提供）
+	ContentType string
+	// Data 附加数据（已冻结）
+	Data JsonObject
+}
+
+// ItemLifecycleEvent provider item（如工具调用）的生命周期更新。
+// Python: events.py:163-174 ItemLifecycleEvent
+type ItemLifecycleEvent struct {
+	// Kind item 生命周期转换
+	Kind ItemEventKind
+	// ItemType item 类别（"step" / "tool" / "command" / "file_change" / "subagent" …）
+	ItemType string
+	// Data item 的原生形状（已冻结）
+	Data JsonObject
+}
+
+// StateChangedEvent 一次高层 harness 状态转换。
+// Python: events.py:273-278 StateChangedEvent
+type StateChangedEvent struct {
+	// Old 转换前状态
+	Old HarnessState
+	// New 转换后状态
+	New HarnessState
+}
+
+// ProviderEvent 保留 provider 扩展而不改核心的命名空间事件。
+// Python: events.py:335-347 ProviderEvent
+type ProviderEvent struct {
+	// Provider provider 名
+	Provider string
+	// EventType provider 自有事件类型
+	EventType string
+	// SchemaVersion provider 自有 schema 版本
+	SchemaVersion string
+	// Payload 扩展载荷（已冻结）
+	Payload JsonObject
+}
+
+// DiagnosticEvent harness 实现发出的非输出诊断。
+// Python: events.py:321-332 DiagnosticEvent
+type DiagnosticEvent struct {
+	// Level 严重程度
+	Level DiagnosticLevel
+	// Message 诊断文案
+	Message string
+	// Data 附加数据（已冻结）
+	Data JsonObject
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // TurnEventKind 一轮外部输入驱动的轮次生命周期转换。
@@ -171,3 +247,125 @@ var TerminalTurnEventKinds = map[TurnEventKind]bool{
 func IsTerminalTurnEventKind(kind TurnEventKind) bool {
 	return TerminalTurnEventKinds[kind]
 }
+
+// NewOutputEvent 创建输出更新事件。
+// Python: events.py:154-160 OutputEvent.__post_init__
+func NewOutputEvent(
+	outputID string,
+	kind OutputKind,
+	content JsonValue,
+	operation OutputOperation,
+	channel OutputChannel,
+	contentIndex int,
+	contentType string,
+	data JsonObject,
+) (OutputEvent, error) {
+	// 步骤 1：output_id 非空
+	if outputID == "" {
+		return OutputEvent{}, &HarnessProtocolError{Msg: "output_id must not be empty"}
+	}
+	// 步骤 2：content_index 非负
+	if contentIndex < 0 {
+		return OutputEvent{}, &HarnessProtocolError{Msg: "output content_index must be non-negative"}
+	}
+	// 步骤 3：冻结 content
+	frozenContent, err := FreezeJsonValue(content)
+	if err != nil {
+		return OutputEvent{}, err
+	}
+	// 步骤 4：冻结 data
+	frozenData, err := FreezeJsonObject(data)
+	if err != nil {
+		return OutputEvent{}, err
+	}
+	return OutputEvent{
+		OutputID:     outputID,
+		Kind:         kind,
+		Content:      frozenContent,
+		Operation:    operation,
+		Channel:      channel,
+		ContentIndex: contentIndex,
+		ContentType:  contentType,
+		Data:         frozenData,
+	}, nil
+}
+
+// NewItemLifecycleEvent 创建 item 生命周期事件。
+// Python: events.py:171-174 ItemLifecycleEvent.__post_init__
+func NewItemLifecycleEvent(kind ItemEventKind, itemType string, data JsonObject) (ItemLifecycleEvent, error) {
+	// 步骤 1：item_type 非空
+	if itemType == "" {
+		return ItemLifecycleEvent{}, &HarnessProtocolError{Msg: "item_type must not be empty"}
+	}
+	// 步骤 2：冻结 data
+	frozenData, err := FreezeJsonObject(data)
+	if err != nil {
+		return ItemLifecycleEvent{}, err
+	}
+	return ItemLifecycleEvent{Kind: kind, ItemType: itemType, Data: frozenData}, nil
+}
+
+// NewStateChangedEvent 创建状态转换事件（上游无 __post_init__）。
+// Python: events.py:273-278
+func NewStateChangedEvent(old, newState HarnessState) (StateChangedEvent, error) {
+	return StateChangedEvent{Old: old, New: newState}, nil
+}
+
+// NewProviderEvent 创建 provider 扩展事件。
+// Python: events.py:344-347 ProviderEvent.__post_init__
+func NewProviderEvent(provider, eventType, schemaVersion string, payload JsonObject) (ProviderEvent, error) {
+	// 步骤 1：三个标识均非空
+	if provider == "" || eventType == "" || schemaVersion == "" {
+		return ProviderEvent{}, &HarnessProtocolError{
+			Msg: "provider event namespace, type, and schema version must not be empty",
+		}
+	}
+	// 步骤 2：冻结 payload
+	frozenPayload, err := FreezeJsonObject(payload)
+	if err != nil {
+		return ProviderEvent{}, err
+	}
+	return ProviderEvent{
+		Provider:      provider,
+		EventType:     eventType,
+		SchemaVersion: schemaVersion,
+		Payload:       frozenPayload,
+	}, nil
+}
+
+// NewDiagnosticEvent 创建诊断事件。
+// Python: events.py:329-332 DiagnosticEvent.__post_init__
+func NewDiagnosticEvent(level DiagnosticLevel, message string, data JsonObject) (DiagnosticEvent, error) {
+	// 步骤 1：message 非空
+	if message == "" {
+		return DiagnosticEvent{}, &HarnessProtocolError{Msg: "diagnostic message must not be empty"}
+	}
+	// 步骤 2：冻结 data
+	frozenData, err := FreezeJsonObject(data)
+	if err != nil {
+		return DiagnosticEvent{}, err
+	}
+	return DiagnosticEvent{Level: level, Message: message, Data: frozenData}, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:278-292（isinstance(event, OutputEvent) → "output"）
+func (OutputEvent) payloadKind() string { return "output" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:293-302（→ "item_lifecycle"）
+func (ItemLifecycleEvent) payloadKind() string { return "item_lifecycle" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:314-315（→ "state_changed"）
+func (StateChangedEvent) payloadKind() string { return "state_changed" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:346-356（→ "provider"）
+func (ProviderEvent) payloadKind() string { return "provider" }
+
+// payloadKind 返回线格式 discriminator。
+// Python: serialization.py:336-345（→ "diagnostic"）
+func (DiagnosticEvent) payloadKind() string { return "diagnostic" }
