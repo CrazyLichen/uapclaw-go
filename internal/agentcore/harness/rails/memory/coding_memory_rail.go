@@ -60,6 +60,9 @@ type CodingMemoryRail struct {
 	ownedToolNames map[string]struct{}
 	// ownedToolIDs 本 Rail 注册到 resource_mgr 的工具 ID 集合
 	ownedToolIDs map[string]struct{}
+	// attachmentManager 会话级动态提示词管理器（Init 时取一次）
+	// Python: self.attachment_manager（coding_memory_rail.py:92/105-107）
+	attachmentManager *hprompts.Manager
 }
 
 // recallResult 自动召回结果
@@ -124,6 +127,8 @@ func (r *CodingMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	// 获取 systemPromptBuilder
 	r.mu.Lock()
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
+	// Python: coding_memory_rail.py:105-107 self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	r.attachmentManager = hprompts.ManagerFor(agent)
 	r.mu.Unlock()
 
 	// 保存 agentID（仅在 Init 写入一次，后续只读）
@@ -391,25 +396,38 @@ func (r *CodingMemoryRail) upsertDynamicMemoryAttachment(cbc *agentinterfaces.Ag
 	if cbc == nil || content == "" {
 		return
 	}
-	sessionID := ""
-	if cbc.Session() != nil {
-		sessionID = cbc.Session().GetSessionID()
+	// Python: :369-370 manager is None → return（Go 加告警便于定位装配缺件，见 spec §7 K1）
+	if r.attachmentManager == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "coding_memory_attachment").
+			Msg("prompt attachment manager is unavailable; skip memory attachment")
+		return
 	}
-	hprompts.DeliverText(cbc.Agent(), sessionID, dynamicMemorySection, content,
-		hprompts.AttachmentMemory, dynamicMemorySource, dynamicMemoryPriority)
+	// Python: :381-382 会话缺失/写入失败只告警，不回落 system prompt
+	if _, err := r.attachmentManager.BindContext(cbc).AddSection(
+		dynamicMemorySection, content, hprompts.AttachmentMemory, dynamicMemorySource,
+		hprompts.WithAttachmentPriority(dynamicMemoryPriority),
+	); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "coding_memory_attachment").
+			Err(err).
+			Msg("skip memory attachment")
+	}
 }
 
 // clearDynamicMemoryAttachment 清除动态记忆附件。
 // Python: CodingMemoryRail._clear_dynamic_memory_attachment(ctx)
 func (r *CodingMemoryRail) clearDynamicMemoryAttachment(cbc *agentinterfaces.AgentCallbackContext) {
-	if cbc == nil {
+	// Python: :384-391 manager 缺失静默返回，清失败只告警
+	if cbc == nil || r.attachmentManager == nil {
 		return
 	}
-	sessionID := ""
-	if cbc.Session() != nil {
-		sessionID = cbc.Session().GetSessionID()
+	if _, err := r.attachmentManager.BindContext(cbc).ClearSection(dynamicMemorySection); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "coding_memory_attachment_clear").
+			Err(err).
+			Msg("skip clearing memory attachment")
 	}
-	hprompts.ClearDeliveredSection(cbc.Agent(), sessionID, dynamicMemorySection)
 }
 
 // registerCodingMemoryTools 注册编程记忆工具到 agent。

@@ -439,10 +439,17 @@ func (r *TeamPolicyRail) queueTeamContextAttachment(
 		// 车道拥有投递权，但无内容可送——不能落到兜底路径（否则会重复投递）
 		return true
 	}
-	if !hprompts.DeliverText(cbc.Agent(), sessionID, teamContextAttachmentSection, content,
-		hprompts.AttachmentRuntime, teamContextAttachmentSource, teamContextAttachmentPriority) {
+	// Python: team_policy_rail.py:418-441 writer.add_section(kind=RUNTIME, priority=80)
+	if _, err := manager.BindContext(cbc).AddSection(
+		teamContextAttachmentSection, content,
+		hprompts.AttachmentRuntime, teamContextAttachmentSource,
+		hprompts.WithAttachmentPriority(teamContextAttachmentPriority),
+		hprompts.WithAttachmentContentKind("text/markdown"),
+	); err != nil {
 		logger.Warn(logComponent).
+			Str("event_type", "team_context_attachment").
 			Str("member_name", r.memberName).
+			Err(err).
 			Msg("failed to queue team context attachment")
 		return false
 	}

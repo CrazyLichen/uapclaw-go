@@ -17,6 +17,7 @@
 //	├── attachment_store.go    # 会话级存储（归一化/过期/稳定排序/更新族）
 //	├── attachment_render.go   # snapshot/delta/removed 渲染与两级截断
 //	├── attachment_delivery.go # 历史同步（快照/增量/基线回退）
-//	├── attachment_rail.go     # 写历史前/建窗口前的同步装订点
+//	├── attachment_rail.go     # ManagerFor（getattr(agent, "prompt_attachment_manager") 等价物）
+//	├── attachment_writer.go   # 已绑定会话的附件写入器（bind_context 等价物）
 //	└── attachment_mutator.go  # provider 矩阵与窗口投影
 package prompts

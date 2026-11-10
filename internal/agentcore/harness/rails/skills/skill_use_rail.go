@@ -79,9 +79,9 @@ type SkillUseRail struct {
 	skills []*skillpkg.Skill
 	// systemPromptBuilder 系统提示词构建器引用（Init 中获取）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
-	// attachmentManagerFor 会话级附件管理器获取函数（Init 中从 agent 取）
+	// attachmentManager 会话级附件管理器（Init 中从 agent 取一次）
 	// Python: self.attachment_manager（DeepAgent 共享给内层 ReActAgent 与各 rail）
-	attachmentManagerFor func() *hprompts.Manager
+	attachmentManager *hprompts.Manager
 
 	// ── 缓存 ──
 	// skillCache 增量缓存 absPath → Skill
@@ -376,9 +376,7 @@ func (r *SkillUseRail) ClearSessionBaseline(sess sessioninterfaces.SessionFacade
 func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	// Python: self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
-	if provider, ok := agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
-		r.attachmentManagerFor = provider.PromptAttachments
-	}
+	r.attachmentManager = hprompts.ManagerFor(agent)
 
 	var language string
 	if r.systemPromptBuilder != nil {
@@ -925,15 +923,12 @@ func schemaVersion(v any) int {
 // updateRuntimeSkillAttachment 把技能新增/移除/进化经验写入变更附件。
 // Python: _update_runtime_skill_attachment (:752-781)
 func (r *SkillUseRail) updateRuntimeSkillAttachment(cbc *agentinterfaces.AgentCallbackContext, baseline []*skillpkg.Skill) error {
-	if r.attachmentManagerFor == nil || cbc == nil {
+	// Python: :757-766 manager 缺失/会话缺失静默返回
+	if r.attachmentManager == nil || cbc == nil {
 		return nil
 	}
-	mgr := r.attachmentManagerFor()
-	if mgr == nil || cbc.Session() == nil {
-		return nil
-	}
-	sessionID := cbc.Session().GetSessionID()
-	if sessionID == "" {
+	writer := r.attachmentManager.BindContext(cbc)
+	if writer.SessionID() == "" {
 		return nil
 	}
 
@@ -961,12 +956,13 @@ func (r *SkillUseRail) updateRuntimeSkillAttachment(cbc *agentinterfaces.AgentCa
 
 	content := r.buildRuntimeSkillChangeContent(additions, removals, baseline)
 	if content == "" {
-		if _, err := mgr.ClearSection(sessionID, runtimeSkillAttachmentSection); err != nil {
+		// Python: :772-774 内容为空清除附件
+		if _, err := writer.ClearSection(runtimeSkillAttachmentSection); err != nil {
 			return err
 		}
 		return nil
 	}
-	_, err := mgr.AddSection(sessionID, runtimeSkillAttachmentSection, content, hprompts.AttachmentSkill, runtimeSkillAttachmentSource)
+	_, err := writer.AddSection(runtimeSkillAttachmentSection, content, hprompts.AttachmentSkill, runtimeSkillAttachmentSource)
 	return err
 }
 

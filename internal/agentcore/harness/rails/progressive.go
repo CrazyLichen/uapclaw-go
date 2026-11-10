@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
@@ -58,32 +59,9 @@ type ProgressiveToolRail struct {
 	toolSearchIndexRevision int
 	// toolSearchRegistry 注册表引用（rail 自持，供索引与目录读取）
 	toolSearchRegistry agentinterfaces.AbilityManagerInterface
-}
-
-// promptAttachmentProvider 提供会话级动态提示词管理器。
-// 由 harness.DeepAgent 实现（PromptAttachments）。
-type promptAttachmentProvider interface {
-	// PromptAttachments 返回动态提示词管理器
-	PromptAttachments() *prompts.Manager
-}
-
-// attachmentManager 目录附件所需的最小能力。
-// Python: PromptAttachmentManager（add_section / list_by_filter / has_history_snapshot）
-type attachmentManager interface {
-	// AddSection 写入或覆盖附件
-	AddSection(sessionID, section, content string, kind prompts.AttachmentKind, source string, opts ...prompts.AttachmentOption) (*prompts.Attachment, error)
-	// Find 查询指定 section/source 的附件（无则 nil）
-	Find(sessionID, section, source string) *prompts.Attachment
-	// HasHistorySnapshot 判断会话历史是否已有完整快照
-	HasHistorySnapshot(sessionID string) bool
-}
-
-// managerAdapter 把 prompts.Manager 适配为 rail 需要的附件能力。
-type managerAdapter struct {
-	// manager 附件管理器
-	manager *prompts.Manager
-	// history 会话历史上下文（用于快照判定）
-	history prompts.HistoryContext
+	// attachmentManager 会话级附件管理器（Init 时取一次）
+	// Python: 每次 getattr(agent, "prompt_attachment_manager", None)（progressive_tool_rail.py:912）
+	attachmentManager *prompts.Manager
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -100,6 +78,13 @@ const (
 	discoveryTraceKey = "__progressive_tool_discovery_trace__"
 	// deferredToolCatalogStateKey 会话状态键：目录快照与版本
 	deferredToolCatalogStateKey = "__progressive_deferred_tool_catalog__"
+
+	// deferredToolCatalogFingerprintsStateKey 会话状态键：上次已发布的目录指纹
+	// Python: _DEFERRED_TOOL_CATALOG_FINGERPRINTS_STATE_KEY（:45）
+	deferredToolCatalogFingerprintsStateKey = "fingerprints"
+	// deferredToolCatalogInitialFingerprintsStateKey 会话状态键：初始目录指纹
+	// Python: _DEFERRED_TOOL_CATALOG_INITIAL_FINGERPRINTS_STATE_KEY（:44）
+	deferredToolCatalogInitialFingerprintsStateKey = "initial_fingerprints"
 
 	// deferredToolAttachmentSection 目录附件的 section 名
 	deferredToolAttachmentSection = "progressive_deferred_tools"
@@ -158,6 +143,7 @@ func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.Base
 	abilityManager := agent.AbilityManager()
 	r.mu.Lock()
 	r.toolSearchRegistry = abilityManager
+	r.attachmentManager = prompts.ManagerFor(agent)
 	r.mu.Unlock()
 
 	for _, card := range []*tool.ToolCard{searchTool.Card(), callTool.Card()} {
@@ -271,13 +257,16 @@ func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentint
 	initial := r.ensureInitialDeferredCatalog(cbc.Session(), abilityManager)
 	builder.AddSection(sections.BuildProgressiveToolRulesSection(initial))
 
-	if err := r.syncDeferredToolAttachment(
-		ctx,
-		cbc.Session(),
-		r.attachments(cbc),
-		r.collectDeferredToolDescriptions(abilityManager),
-	); err != nil {
-		return err
+	if r.attachmentManager != nil {
+		if err := r.syncDeferredToolAttachment(
+			ctx,
+			cbc.Session(),
+			r.attachmentManager.BindContext(cbc),
+			cbc.ModelContext(),
+			r.collectDeferredToolDescriptions(abilityManager),
+		); err != nil {
+			return err
+		}
 	}
 
 	inputs, ok := cbc.Inputs().(*agentinterfaces.ModelCallInputs)
@@ -845,22 +834,6 @@ func (r *ProgressiveToolRail) isCachedTool(name string) bool {
 	return false
 }
 
-// attachments 取会话级动态提示词管理器。
-func (r *ProgressiveToolRail) attachments(cbc *agentinterfaces.AgentCallbackContext) attachmentManager {
-	if cbc == nil || cbc.Agent() == nil {
-		return nil
-	}
-	provider, ok := cbc.Agent().(promptAttachmentProvider)
-	if !ok {
-		return nil
-	}
-	manager := provider.PromptAttachments()
-	if manager == nil {
-		return nil
-	}
-	return &managerAdapter{manager: manager, history: cbc.ModelContext()}
-}
-
 // catalogLanguage 解析目录语言（cn/en）。
 // Python: _resolve_catalog_language
 func (r *ProgressiveToolRail) catalogLanguage() string {
@@ -956,40 +929,21 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
-// AddSection 写入或覆盖附件。
-func (a *managerAdapter) AddSection(sessionID, section, content string, kind prompts.AttachmentKind, source string, opts ...prompts.AttachmentOption) (*prompts.Attachment, error) {
-	return a.manager.AddSection(sessionID, section, content, kind, source, opts...)
-}
-
-// Find 查询指定 section/source 的附件。
-func (a *managerAdapter) Find(sessionID, section, source string) *prompts.Attachment {
-	return a.manager.Find(sessionID, section, source)
-}
-
-// HasHistorySnapshot 判断会话历史是否已有完整快照。
-func (a *managerAdapter) HasHistorySnapshot(sessionID string) bool {
-	if a.history == nil {
-		return false
-	}
-	return a.manager.HasHistorySnapshot(a.history, sessionID)
-}
-
 // syncDeferredToolAttachment 计算目录差异并写入附件（delta / snapshot）。
 // 首轮未变化不写；无快照、语言变化或连续 delta 达上限时改发全量快照。
 // Python: _sync_deferred_tool_attachment
 func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 	_ context.Context,
 	sess sessioninterfaces.SessionFacade,
-	manager attachmentManager,
+	w *prompts.ContextWriter,
+	modelCtx ceinterface.ModelContext,
 	current map[string]string,
 ) error {
-	if sess == nil || manager == nil {
+	// Python: :907-909 session 为空直接返回
+	if sess == nil || w == nil || w.SessionID() == "" {
 		return nil
 	}
-	sessionID := sess.GetSessionID()
-	if sessionID == "" {
-		return nil
-	}
+	sessionID := w.SessionID()
 	language := r.catalogLanguage()
 	currentTools, _ := normalizeDeferredCatalog(current)
 	currentFingerprints := r.collectDeferredFingerprints()
@@ -997,18 +951,22 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 	catalogState := catalogStateOf(sess)
 	initialTools := initialStateTools(catalogState, currentTools)
 	previousTools := previousStateTools(catalogState)
+	// Python: :942-960 初版指纹缺失时用当前指纹播种
+	initialFingerprints := initialFingerprintsOf(catalogState, currentFingerprints)
+	previousFingerprints := previousFingerprintsOf(catalogState)
 	initialized := catalogState["initialized"] == true
 	previousLanguage := stringOf(catalogState["language"])
 	version := intOf(catalogState["version"], 1)
 	deltaCount := intOf(catalogState["delta_count"], 0)
 
 	// 热重载/新 Session：从附件 metadata 恢复上次目录，避免重复推送同一差异
-	if existing := manager.Find(sessionID, deferredToolAttachmentSection, deferredToolAttachmentSource); existing != nil {
+	if existing := firstAttachment(w, deferredToolAttachmentSection, deferredToolAttachmentSource); existing != nil {
 		if recovered, ok := normalizeDeferredCatalog(mapValueOf(existing.Metadata[deferredToolCatalogMetadataKey])); ok {
 			previousTools = recovered
 			initialized = true
+			// Python: :1000-1001 指纹真的赋值（原实现 `_ = fingerprints` 丢弃）
 			if fingerprints, ok := normalizeDeferredCatalog(mapValueOf(existing.Metadata[deferredToolCatalogFingerprintsMetadataKey])); ok {
-				_ = fingerprints
+				previousFingerprints = fingerprints
 			}
 			if value, ok := existing.Metadata["catalog_language"].(string); ok && value != "" {
 				previousLanguage = value
@@ -1016,15 +974,19 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 			if value, ok := existing.Metadata["catalog_version"].(int); ok && value > version {
 				version = value
 			}
-			if value, ok := existing.Metadata["delta_count"].(int); ok {
+			// Python: :1027-1028 非零才覆盖（0 表示刚发过 snapshot，不能清掉累积计数）
+			if value, ok := existing.Metadata["delta_count"].(int); ok && value != 0 {
 				deltaCount = value
 			}
 		}
 	}
 
+	// Python: :1042-1044 baseline 与基线指纹成对选择
 	baseline := initialTools
+	baselineFingerprints := initialFingerprints
 	if initialized {
 		baseline = previousTools
+		baselineFingerprints = previousFingerprints
 	}
 	added := make(map[string]string)
 	updated := make(map[string]string)
@@ -1035,6 +997,11 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 			continue
 		}
 		if existing != description {
+			updated[name] = description
+			continue
+		}
+		// Python: :1054-1055 指纹变化同样算 updated
+		if baselineFingerprints[name] != currentFingerprints[name] {
 			updated[name] = description
 		}
 	}
@@ -1066,19 +1033,24 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 	if !initialized {
 		// 稳定提示词里的初始目录就是基线；首轮未变化则不写附件
 		if !changed {
-			r.saveCatalogState(sess, initialTools, currentTools, currentFingerprints, version, 0, language)
+			r.saveCatalogState(sess, initialTools, currentTools, initialFingerprints, currentFingerprints, version, 0, language)
 			return nil
 		}
 		version = nextVersion
 		content := sections.RenderDeferredToolCatalogDelta(added, updated, removed, language, version)
-		if err := r.writeCatalogAttachment(manager, sessionID, language, version, "delta", content, currentTools, currentFingerprints, 1); err != nil {
+		if err := r.writeCatalogAttachment(w, language, version, "delta", content, currentTools, currentFingerprints, 1); err != nil {
 			return err
 		}
-		r.saveCatalogState(sess, initialTools, currentTools, currentFingerprints, version, 1, language)
+		r.saveCatalogState(sess, initialTools, currentTools, initialFingerprints, currentFingerprints, version, 1, language)
 		return nil
 	}
 
-	forceSnapshot := !manager.HasHistorySnapshot(sessionID) ||
+	// Python: :1031-1041 无历史上下文时跳过快照判定（has_snapshot=False）
+	hasHistorySnapshot := false
+	if modelCtx != nil && w.Manager() != nil {
+		hasHistorySnapshot = w.Manager().HasHistorySnapshot(modelCtx, sessionID)
+	}
+	forceSnapshot := !hasHistorySnapshot ||
 		previousLanguage != language ||
 		deltaCount >= fullSnapshotInterval
 	if !forceSnapshot && !changed {
@@ -1094,10 +1066,10 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 		nextDeltaCount = 0
 		content = sections.RenderDeferredToolCatalogSnapshot(currentTools, language, version)
 	}
-	if err := r.writeCatalogAttachment(manager, sessionID, language, version, mode, content, currentTools, currentFingerprints, nextDeltaCount); err != nil {
+	if err := r.writeCatalogAttachment(w, language, version, mode, content, currentTools, currentFingerprints, nextDeltaCount); err != nil {
 		return err
 	}
-	r.saveCatalogState(sess, initialTools, currentTools, currentFingerprints, version, nextDeltaCount, language)
+	r.saveCatalogState(sess, initialTools, currentTools, initialFingerprints, currentFingerprints, version, nextDeltaCount, language)
 	return nil
 }
 
@@ -1105,11 +1077,8 @@ func (r *ProgressiveToolRail) syncDeferredToolAttachment(
 // Python: _sync_deferred_tool_attachment 末尾的 session.update_state
 func (r *ProgressiveToolRail) saveCatalogState(
 	sess sessioninterfaces.SessionFacade,
-	initialTools map[string]string,
-	currentTools map[string]string,
-	fingerprints map[string]string,
-	version int,
-	deltaCount int,
+	initialTools, currentTools, initialFingerprints, currentFingerprints map[string]string,
+	version, deltaCount int,
 	language string,
 ) {
 	if sess == nil {
@@ -1122,7 +1091,8 @@ func (r *ProgressiveToolRail) saveCatalogState(
 		"language":                              language,
 		"initial_tools":                         initialTools,
 		"tools":                                 currentTools,
-		"fingerprints":                          fingerprints,
+		deferredToolCatalogInitialFingerprintsStateKey: initialFingerprints,
+		deferredToolCatalogFingerprintsStateKey:        currentFingerprints,
 		deferredToolRegistryRevisionMetadataKey: registryRevisionOf(r.abilityManager()),
 	}})
 }
@@ -1130,8 +1100,7 @@ func (r *ProgressiveToolRail) saveCatalogState(
 // writeCatalogAttachment 写入目录附件（priority 75）。
 // Python: add_section(section=progressive_deferred_tools, kind=TOOL, priority=75)
 func (r *ProgressiveToolRail) writeCatalogAttachment(
-	manager attachmentManager,
-	sessionID string,
+	w *prompts.ContextWriter,
 	language string,
 	version int,
 	mode string,
@@ -1140,8 +1109,7 @@ func (r *ProgressiveToolRail) writeCatalogAttachment(
 	fingerprints map[string]string,
 	deltaCount int,
 ) error {
-	_, err := manager.AddSection(
-		sessionID,
+	_, err := w.AddSection(
 		deferredToolAttachmentSection,
 		content,
 		prompts.AttachmentTool,
@@ -1178,6 +1146,40 @@ func catalogStateOf(sess sessioninterfaces.SessionFacade) map[string]any {
 		return map[string]any{}
 	}
 	return typed
+}
+
+// initialFingerprintsOf 读取初始指纹，缺失时用当前指纹播种。
+// Python: initial_fingerprints（progressive_tool_rail.py:942-946）
+func initialFingerprintsOf(catalogState map[string]any, current map[string]string) map[string]string {
+	if normalized, ok := normalizeDeferredCatalog(mapValueOf(catalogState[deferredToolCatalogInitialFingerprintsStateKey])); ok {
+		return normalized
+	}
+	normalized, _ := normalizeDeferredCatalog(current)
+	return normalized
+}
+
+// previousFingerprintsOf 读取上次已发布的指纹。
+// Python: previous_fingerprints（progressive_tool_rail.py:956-960）
+func previousFingerprintsOf(catalogState map[string]any) map[string]string {
+	if normalized, ok := normalizeDeferredCatalog(mapValueOf(catalogState[deferredToolCatalogFingerprintsStateKey])); ok {
+		return normalized
+	}
+	return map[string]string{}
+}
+
+// firstAttachment 取 section/source 下的首条附件（无则 nil）。
+// Python: _get_deferred_tool_attachment（list_by_filter 取首条）
+func firstAttachment(w *prompts.ContextWriter, section, source string) *prompts.Attachment {
+	if w == nil || w.Manager() == nil || w.SessionID() == "" {
+		return nil
+	}
+	items, err := w.Manager().ListByFilter(prompts.AttachmentFilter{
+		SessionID: w.SessionID(), Section: section, Source: source,
+	})
+	if err != nil || len(items) == 0 {
+		return nil
+	}
+	return items[0]
 }
 
 // initialStateTools 读取初始目录，缺失时用当前目录播种。

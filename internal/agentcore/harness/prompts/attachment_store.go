@@ -459,16 +459,9 @@ func (m *Manager) AddFromPromptSection(sessionID string, section *saprompt.Promp
 	if section == nil {
 		return nil, nil
 	}
-	content := strings.TrimSpace(section.Content[language])
-	if content == "" {
-		for _, v := range section.Content {
-			if strings.TrimSpace(v) != "" {
-				content = v
-				break
-			}
-		}
-	}
-	if content == "" {
+	// Python: content = render(language)（:241）；只取指定语言，不做跨语言兜底
+	content := section.Render(language)
+	if strings.TrimSpace(content) == "" {
 		return nil, nil
 	}
 	allOpts := opts

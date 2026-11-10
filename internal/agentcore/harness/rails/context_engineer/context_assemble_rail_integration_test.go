@@ -12,6 +12,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -278,10 +279,18 @@ func TestRailBeforeModelCall_心跳轻量上下文(t *testing.T) {
 	ctx := context.Background()
 	cbc := newCallbackContextWithMC(nil)
 	cbc.SetExtra("run_kind", string(sainterfaces.RunKindHeartbeat))
+	// 上游 heartbeat 上下文走历史附件（_ATTACHMENT_CONTEXT_SECTIONS），经 manager 读取
+	mgr := hprompts.NewManager()
+	rail.attachmentManager = mgr
 
 	require.NoError(t, rail.BeforeModelCall(ctx, cbc))
 
-	cnContent := renderSection(t, builder, sections.SectionContext)
+	_ = builder // 心跳断言语义已转为「附件承载，不进 system」
+	items, err := mgr.ListByFilter(hprompts.AttachmentFilter{SessionID: "test-session",
+		Section: sections.SectionContext})
+	require.NoError(t, err)
+	require.Len(t, items, 1, "heartbeat 上下文应投递为附件")
+	cnContent := items[0].Content
 	assert.Contains(t, cnContent, "## AGENT.md")
 	assert.Contains(t, cnContent, "# Agent Config")
 	assert.Contains(t, cnContent, "## SOUL.md")

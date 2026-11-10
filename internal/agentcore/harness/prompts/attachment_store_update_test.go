@@ -111,10 +111,12 @@ func TestManager_AddFromPromptSection(t *testing.T) {
 	require.Equal(t, 84, got.Priority)
 	require.Equal(t, "mode_instructions", got.Section)
 
+	// Python: content = render(language)（:241）；render 自身的回退链为
+	// 精确匹配 → 默认语言(cn) → 首个值（builder.py:41-47），故未知语言落到首个非空值
 	fallback := &saprompt.PromptSection{Name: "x", Content: map[string]string{"en": "EN only"}}
-	got, err = m.AddFromPromptSection("s1", fallback, AttachmentRuntime, "src", "cn")
+	got, err = m.AddFromPromptSection("s1", fallback, AttachmentRuntime, "src", "zz")
 	require.NoError(t, err)
-	require.Equal(t, "EN only", got.Content, "缺语言时回退首个非空值")
+	require.Equal(t, "EN only", got.Content, "未知语言回退首个非空值（对齐 render）")
 
 	empty := &saprompt.PromptSection{Name: "y", Content: map[string]string{"cn": "   "}}
 	got, err = m.AddFromPromptSection("s1", empty, AttachmentRuntime, "src", "cn")

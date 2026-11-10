@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -1036,3 +1038,17 @@ func (f *fakeProviderErrHandle) SyncTurn(_ context.Context, _, _ string, _ ...ex
 
 // TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
 func (f *fakeAbilityManager) TeardownTools() {}
+
+// TestExternalMemoryRail_无Manager时不写系统提示词 验证缺 manager 只告警跳过，
+// 不再回落 system prompt（对齐 external_memory_rail.py:181-200）。
+func TestExternalMemoryRail_无Manager时不写系统提示词(t *testing.T) {
+	builder := saprompt.NewSystemPromptBuilder()
+	rail := &ExternalMemoryRail{}
+	rail.systemPromptBuilder = builder
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, &fakeAttachmentSession{sessionID: "sess-x"})
+
+	rail.injectMemoryContext(cbc, "记忆上下文")
+
+	require.False(t, builder.HasSection(externalMemoryPrefetchSection),
+		"manager 缺失时不得回落到 system prompt")
+}

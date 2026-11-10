@@ -239,7 +239,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 		r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
 
 		mgr := prompts.NewManager()
-		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		r.attachmentManager = mgr
 
 		require.NoError(t, r.updateRuntimeSkillAttachment(newCBC(t, sess), r.loadSessionBaseline(sess)))
 
@@ -258,7 +258,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 		r.ensureSessionBaseline(sess)
 
 		mgr := prompts.NewManager()
-		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		r.attachmentManager = mgr
 		_, err := mgr.AddSection("s1", runtimeSkillAttachmentSection, "stale", prompts.AttachmentSkill, runtimeSkillAttachmentSource)
 		require.NoError(t, err)
 
@@ -269,7 +269,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 	t.Run("无会话时不panic", func(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
 		mgr := prompts.NewManager()
-		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		r.attachmentManager = mgr
 		assert.NoError(t, r.updateRuntimeSkillAttachment(nil, nil))
 	})
 }

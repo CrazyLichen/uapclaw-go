@@ -269,6 +269,7 @@ func TestCodingMemoryRail_BeforeModelCall_召回结果投递动态附件(t *test
 	rail := NewCodingMemoryRail("", nil, "cn")
 	builder := &recordingSystemPromptBuilder{}
 	rail.systemPromptBuilder = builder
+	rail.attachmentManager = manager
 	rail.recallResult = &recallResult{content: "记忆正文", totalMemories: 3}
 	rail.recallDone = make(chan struct{})
 	close(rail.recallDone)
@@ -302,6 +303,7 @@ func TestCodingMemoryRail_BeforeModelCall_无内容清除附件(t *testing.T) {
 
 	rail := NewCodingMemoryRail("", nil, "cn")
 	rail.systemPromptBuilder = &noopSystemPromptBuilder{}
+	rail.attachmentManager = manager
 
 	cbc := agentinterfaces.NewAgentCallbackContext(
 		&fakeAttachmentAgent{manager: manager},
@@ -325,6 +327,7 @@ func TestCodingMemoryRail_BeforeModelCall_只读模式清除附件(t *testing.T)
 
 	rail := NewCodingMemoryRail("", nil, "cn")
 	rail.systemPromptBuilder = &noopSystemPromptBuilder{}
+	rail.attachmentManager = manager
 
 	cbc := agentinterfaces.NewAgentCallbackContext(
 		&fakeAttachmentAgent{manager: manager},
@@ -363,3 +366,24 @@ func (f *fakeAttachmentSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 
 // GetParentSessionID 返回空父会话（测试替身）。
 func (f *fakeAttachmentSession) GetParentSessionID() string { return "" }
+
+// TestCodingMemoryRail_无Manager时告警跳过 验证缺 manager 不 panic 且不写附件。
+func TestCodingMemoryRail_无Manager时告警跳过(t *testing.T) {
+	rail := NewCodingMemoryRail("", nil, "cn")
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, &fakeAttachmentSession{sessionID: "s"})
+
+	require.NotPanics(t, func() { rail.upsertDynamicMemoryAttachment(cbc, "召回内容") })
+}
+
+// TestCodingMemoryRail_无会话时跳过投递 验证缺会话时附件数为 0（不回落 system prompt）。
+func TestCodingMemoryRail_无会话时跳过投递(t *testing.T) {
+	rail := NewCodingMemoryRail("", nil, "cn")
+	rail.attachmentManager = hprompts.NewManager()
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+
+	rail.upsertDynamicMemoryAttachment(cbc, "召回内容")
+
+	items, err := rail.attachmentManager.ListByFilter(hprompts.AttachmentFilter{})
+	require.NoError(t, err)
+	require.Empty(t, items)
+}

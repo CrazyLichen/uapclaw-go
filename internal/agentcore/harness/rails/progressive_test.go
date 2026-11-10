@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	tokeniface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
@@ -181,48 +182,6 @@ func (f *progressiveFakeSession) Interact(_ context.Context, _ any) error { retu
 // ClearSession 空实现。
 func (f *progressiveFakeSession) ClearSession(_ context.Context) {}
 
-// progressiveFakeAttachmentManager 测试用附件管理器。
-type progressiveFakeAttachmentManager struct {
-	// sections 已写入附件（按 section 名覆盖）
-	sections map[string]*prompts.Attachment
-	// snapshot 是否已有历史快照
-	snapshot bool
-}
-
-// newProgressiveFakeAttachmentManager 创建测试附件管理器。
-func newProgressiveFakeAttachmentManager() *progressiveFakeAttachmentManager {
-	return &progressiveFakeAttachmentManager{sections: make(map[string]*prompts.Attachment)}
-}
-
-// AddSection 写入附件。
-func (f *progressiveFakeAttachmentManager) AddSection(
-	sessionID, section, content string,
-	kind prompts.AttachmentKind,
-	source string,
-	opts ...prompts.AttachmentOption,
-) (*prompts.Attachment, error) {
-	item := &prompts.Attachment{
-		SessionID: sessionID,
-		Section:   section,
-		Content:   content,
-		Kind:      kind,
-		Source:    source,
-		Metadata:  make(map[string]any),
-	}
-	for _, opt := range opts {
-		opt(item)
-	}
-	f.sections[section] = item
-	return item, nil
-}
-
-// Find 查询附件。
-func (f *progressiveFakeAttachmentManager) Find(_, section, _ string) *prompts.Attachment {
-	return f.sections[section]
-}
-
-// HasHistorySnapshot 返回是否有历史快照。
-func (f *progressiveFakeAttachmentManager) HasHistorySnapshot(_ string) bool { return f.snapshot }
 
 // newRail 创建测试用 rail。
 func newProgressiveRail(progressive bool) *ProgressiveToolRail {
@@ -363,14 +322,16 @@ func TestSyncDeferredToolAttachment_首轮未变不发附件(t *testing.T) {
 	manager.cards["a"] = newProgressiveDeferredCard("a", "工具A")
 	rail.toolSearchRegistry = manager
 	session := newProgressiveFakeSession("s1")
-	attachments := newProgressiveFakeAttachmentManager()
+	attachments := prompts.NewManager()
+	writer := attachments.BindContextForSession("s1")
 
-	err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, map[string]string{"a": "工具A"})
+	err := rail.syncDeferredToolAttachment(context.Background(), session, writer, nil, map[string]string{"a": "工具A"})
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
-	if len(attachments.sections) != 0 {
-		t.Fatalf("首轮未变化不应写附件，got %d", len(attachments.sections))
+	written, _ := attachments.ListByFilter(prompts.AttachmentFilter{SessionID: "s1", Section: deferredToolAttachmentSection})
+	if len(written) != 0 {
+		t.Fatalf("首轮未变化不应写附件，got %d", len(written))
 	}
 }
 
@@ -382,19 +343,24 @@ func TestSyncDeferredToolAttachment_新增发delta(t *testing.T) {
 	manager.cards["b"] = newProgressiveDeferredCard("b", "工具B")
 	rail.toolSearchRegistry = manager
 	session := newProgressiveFakeSession("s1")
-	attachments := newProgressiveFakeAttachmentManager()
-	attachments.snapshot = true
+	attachments := prompts.NewManager()
+	writer := attachments.BindContextForSession("s1")
+	// Python: has_history_snapshot 为真才走 delta（否则强制全量快照）
+	history := newSnapshotHistory("s1")
 
 	rail.ensureInitialDeferredCatalog(session, manager)
-	if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, map[string]string{"a": "工具A"}); err != nil {
+	if err := rail.syncDeferredToolAttachment(context.Background(), session, writer, history, map[string]string{"a": "工具A"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments,
-		map[string]string{"a": "工具A", "b": "工具B"}); err != nil {
+	if err := rail.syncDeferredToolAttachment(context.Background(), session, writer, history, map[string]string{"a": "工具A", "b": "工具B"}); err != nil {
 		t.Fatal(err)
 	}
 
-	item := attachments.sections[deferredToolAttachmentSection]
+	items, _ := attachments.ListByFilter(prompts.AttachmentFilter{SessionID: "s1", Section: deferredToolAttachmentSection})
+	if len(items) == 0 {
+		t.Fatal("应写入附件")
+	}
+	item := items[0]
 	if item == nil {
 		t.Fatal("应写入附件")
 	}
@@ -412,21 +378,26 @@ func TestSyncDeferredToolAttachment_连续十次后发快照(t *testing.T) {
 	manager := newProgressiveFakeAbilityManager()
 	rail.toolSearchRegistry = manager
 	session := newProgressiveFakeSession("s1")
-	attachments := newProgressiveFakeAttachmentManager()
-	attachments.snapshot = true
+	attachments := prompts.NewManager()
+	writer := attachments.BindContextForSession("s1")
+	
 
 	catalog := map[string]string{"tool_0": "工具0"}
 	rail.ensureInitialDeferredCatalog(session, manager)
-	if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, catalog); err != nil {
+	if err := rail.syncDeferredToolAttachment(context.Background(), session, writer, nil, catalog); err != nil {
 		t.Fatal(err)
 	}
 	for i := 1; i <= fullSnapshotInterval; i++ {
 		catalog["tool_"+strconv.Itoa(i)] = "工具"
-		if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, catalog); err != nil {
+		if err := rail.syncDeferredToolAttachment(context.Background(), session, writer, nil, catalog); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if mode := attachments.sections[deferredToolAttachmentSection].Metadata["catalog_mode"]; mode != "snapshot" {
+	items, _ := attachments.ListByFilter(prompts.AttachmentFilter{SessionID: "s1", Section: deferredToolAttachmentSection})
+	if len(items) == 0 {
+		t.Fatal("应写入附件")
+	}
+	if mode := items[0].Metadata["catalog_mode"]; mode != "snapshot" {
 		t.Fatalf("连续 delta 达上限后应发快照，got %v", mode)
 	}
 }
@@ -670,11 +641,14 @@ func TestLifecycleHooks_注入规则与过滤(t *testing.T) {
 	if len(inputs.Tools) != 1 || inputs.Tools[0].GetName() != "read_file" {
 		t.Fatalf("顶层工具应只留 direct，got %v", inputs.Tools)
 	}
-	if rail.attachments(cbc) == nil {
+	if rail.attachmentManager == nil {
 		t.Fatal("应能从 agent 取得附件管理器")
 	}
-	if got := rail.attachments(nil); got != nil {
-		t.Fatal("nil 回调上下文应返回 nil 附件管理器")
+	if writer := rail.attachmentManager.BindContext(cbc); writer.SessionID() == "" {
+		t.Fatal("回调上下文应能解析出会话")
+	}
+	if writer := rail.attachmentManager.BindContext(nil); writer.SessionID() != "" {
+		t.Fatal("nil 回调上下文不应解析出会话")
 	}
 }
 
@@ -820,21 +794,6 @@ func TestCallDiscoveredTool_无执行结果(t *testing.T) {
 	}
 }
 
-// TestManagerAdapter_转发三方法 验证附件适配器。
-func TestManagerAdapter_转发三方法(t *testing.T) {
-	manager := prompts.NewManager()
-	adapter := &managerAdapter{manager: manager, history: nil}
-	if _, err := adapter.AddSection("s1", "sec", "内容", prompts.AttachmentTool, "src"); err != nil {
-		t.Fatalf("写入失败: %v", err)
-	}
-	if found := adapter.Find("s1", "sec", "src"); found == nil || found.Content != "内容" {
-		t.Fatalf("查询失败: %+v", found)
-	}
-	if adapter.HasHistorySnapshot("s1") {
-		t.Fatal("无历史上下文应返回 false")
-	}
-}
-
 // toolCallCtx 构造工具调用回调上下文（测试助手）。
 func toolCallCtx(agent agentinterfaces.BaseAgent, session sessioninterfaces.SessionFacade, toolName string) *agentinterfaces.AgentCallbackContext {
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ToolCallInputs{
@@ -855,3 +814,230 @@ func (f *progressiveFakeSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 
 // GetParentSessionID 返回空父会话（测试替身）。
 func (f *progressiveFakeSession) GetParentSessionID() string { return "" }
+
+// snapshotHistory 声明「已有历史快照」的 ModelContext 桩。
+// 只用于让 HasHistorySnapshot 返回 true（强制走 delta 而非全量快照）。
+type snapshotHistory struct {
+	// sessionID 会话标识
+	sessionID string
+	// messages 上下文消息
+	messages []llmschema.BaseMessage
+}
+
+// newSnapshotHistory 构造带 snapshot 标记的上下文桩。
+func newSnapshotHistory(sessionID string) *snapshotHistory {
+	msg := &llmschema.UserMessage{}
+	msg.SetMetadata(map[string]any{
+		prompts.MetadataKeyAttachmentHistory: true,
+		prompts.MetadataKeySessionID:         sessionID,
+		prompts.MetadataKeyMode:              prompts.ModeSnapshot,
+	})
+	return &snapshotHistory{sessionID: sessionID, messages: []llmschema.BaseMessage{msg}}
+}
+
+// Len 返回消息数量。
+func (h *snapshotHistory) Len() int { return len(h.messages) }
+
+// GetMessages 返回消息列表。
+func (h *snapshotHistory) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) {
+	return h.messages, nil
+}
+
+// SetMessages 替换消息列表。
+func (h *snapshotHistory) SetMessages(messages []llmschema.BaseMessage, _ bool) { h.messages = messages }
+
+// PopMessages 弹出消息。
+func (h *snapshotHistory) PopMessages(_ int, _ bool) []llmschema.BaseMessage {
+	popped := h.messages
+	h.messages = nil
+	return popped
+}
+
+// ClearMessages 清空消息。
+func (h *snapshotHistory) ClearMessages(_ context.Context, _ bool, _ ...ceinterface.Option) error {
+	h.messages = nil
+	return nil
+}
+
+// AddMessages 追加消息。
+func (h *snapshotHistory) AddMessages(_ context.Context, messages []llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
+	h.messages = append(h.messages, messages...)
+	return h.messages, nil
+}
+
+// GetContextWindow 空实现。
+func (h *snapshotHistory) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage, _ []cschema.ToolInfoInterface, _ int, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
+	return nil, nil
+}
+
+// Statistic 空实现。
+func (h *snapshotHistory) Statistic() *ceinterface.ContextStats { return nil }
+
+// SessionID 返回会话标识。
+func (h *snapshotHistory) SessionID() string { return h.sessionID }
+
+// ContextID 返回上下文标识。
+func (h *snapshotHistory) ContextID() string { return h.sessionID }
+
+// TokenCounter 空实现。
+func (h *snapshotHistory) TokenCounter() tokeniface.TokenCounter { return nil }
+
+// ReloaderTool 空实现。
+func (h *snapshotHistory) ReloaderTool() tool.Tool { return nil }
+
+// WorkspaceDir 空实现。
+func (h *snapshotHistory) WorkspaceDir() string { return "" }
+
+// SetSessionRef 空实现。
+func (h *snapshotHistory) SetSessionRef(_ sessioninterfaces.SessionFacade) {}
+
+// GetSessionRef 空实现。
+func (h *snapshotHistory) GetSessionRef() sessioninterfaces.SessionFacade { return nil }
+
+// OffloadMessages 空实现。
+func (h *snapshotHistory) OffloadMessages(_ string, _ []llmschema.BaseMessage) {}
+
+// CompressContext 空实现。
+func (h *snapshotHistory) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (*ceinterface.CompressContextResult, error) {
+	return nil, nil
+}
+
+// SaveState 空实现。
+func (h *snapshotHistory) SaveState() map[string]any { return nil }
+
+// LoadState 空实现。
+func (h *snapshotHistory) LoadState(_ map[string]any) {}
+
+// CreateContext 空实现。
+func (h *snapshotHistory) CreateContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...ceinterface.CreateContextOption) (ceinterface.ModelContext, error) {
+	return h, nil
+}
+
+// GetContext 空实现。
+func (h *snapshotHistory) GetContext(_ string, _ string) ceinterface.ModelContext { return nil }
+
+// UpdateModelContext 空实现。
+func (h *snapshotHistory) UpdateModelContext(_ string, _ int) {}
+
+// RecoverFromModelContextOverflow 空实现。
+func (h *snapshotHistory) RecoverFromModelContextOverflow(_ context.Context, _ sessioninterfaces.SessionFacade, _ string, _ bool, _ int) bool {
+	return false
+}
+
+// 编译期验证。
+var _ ceinterface.ModelContext = (*snapshotHistory)(nil)
+
+// TestSyncDeferredToolAttachment_DeltaCount零值不覆盖 验证附件 delta_count=0 不清掉累积计数。
+func TestSyncDeferredToolAttachment_DeltaCount零值不覆盖(t *testing.T) {
+	rail := newProgressiveRail(true)
+	abilityManager := newProgressiveFakeAbilityManager()
+	abilityManager.cards["a"] = newProgressiveDeferredCard("a", "工具A")
+	rail.toolSearchRegistry = abilityManager
+	attachments := prompts.NewManager()
+	_, err := attachments.AddSection("s1", deferredToolAttachmentSection, "prev", prompts.AttachmentTool,
+		deferredToolAttachmentSource, prompts.WithAttachmentMetadata(map[string]any{
+			deferredToolCatalogMetadataKey:             map[string]string{"a": "工具A"},
+			deferredToolCatalogFingerprintsMetadataKey: map[string]string{"a": "f1"},
+			"catalog_version":                          3,
+			"delta_count":                              0,
+			"catalog_language":                         "cn",
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := newProgressiveFakeSession("s1")
+	session.stateMap = map[string]any{
+		deferredToolCatalogStateKey: map[string]any{
+			"initialized":  true,
+			"version":      3,
+			"delta_count":  7,
+			"language":     "cn",
+			"tools":        map[string]any{"a": "工具A"},
+			"fingerprints": map[string]any{"a": "f1"},
+		},
+	}
+	// 沿用旧基线但新增一个工具，让本轮真的发 delta 并走 deltaCount+1
+	if err := rail.syncDeferredToolAttachment(context.Background(), session,
+		attachments.BindContextForSession("s1"), newSnapshotHistory("s1"),
+		map[string]string{"a": "工具A", "b": "工具B"}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, _ := session.stateMap[deferredToolCatalogStateKey].(map[string]any)
+	if state == nil {
+		t.Fatal("应写回目录状态")
+	}
+	if got := state["delta_count"]; got != 8 {
+		t.Fatalf("delta_count 应从 session 的 7 递增到 8（附件里的 0 不得覆盖），got %v", got)
+	}
+}
+
+// TestSyncDeferredToolAttachment_指纹恢复参与基线 验证 description 不变但指纹变化判 updated。
+func TestSyncDeferredToolAttachment_指纹恢复参与基线(t *testing.T) {
+	rail := newProgressiveRail(true)
+	abilityManager := newProgressiveFakeAbilityManager()
+	abilityManager.cards["a"] = newProgressiveDeferredCard("a", "工具A")
+	rail.toolSearchRegistry = abilityManager
+	attachments := prompts.NewManager()
+	_, err := attachments.AddSection("s2", deferredToolAttachmentSection, "prev", prompts.AttachmentTool,
+		deferredToolAttachmentSource, prompts.WithAttachmentMetadata(map[string]any{
+			deferredToolCatalogMetadataKey:             map[string]string{"a": "工具A"},
+			deferredToolCatalogFingerprintsMetadataKey: map[string]string{"a": "old-fingerprint"},
+			"catalog_version":                          2,
+			"catalog_language":                         "cn",
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := newProgressiveFakeSession("s2")
+	session.stateMap = map[string]any{
+		deferredToolCatalogStateKey: map[string]any{
+			"initialized": true,
+			"version":     2,
+			"language":    "cn",
+		},
+	}
+
+	if err := rail.syncDeferredToolAttachment(context.Background(), session,
+		attachments.BindContextForSession("s2"), newSnapshotHistory("s2"), map[string]string{"a": "工具A"}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, _ := attachments.ListByFilter(prompts.AttachmentFilter{SessionID: "s2", Section: deferredToolAttachmentSection})
+	if len(items) != 1 {
+		t.Fatalf("应只保留一条附件，got %d", len(items))
+	}
+	if mode := items[0].Metadata["catalog_mode"]; mode != "delta" {
+		t.Fatalf("指纹变化应判为 delta，got %v", mode)
+	}
+}
+
+// TestSyncDeferredToolAttachment_初始指纹播种 验证无状态时写入 initial_fingerprints。
+func TestSyncDeferredToolAttachment_初始指纹播种(t *testing.T) {
+	rail := newProgressiveRail(true)
+	abilityManager := newProgressiveFakeAbilityManager()
+	abilityManager.cards["a"] = newProgressiveDeferredCard("a", "工具A")
+	abilityManager.cards["b"] = newProgressiveDeferredCard("b", "工具B")
+	rail.toolSearchRegistry = abilityManager
+	attachments := prompts.NewManager()
+	session := newProgressiveFakeSession("s3")
+
+	rail.ensureInitialDeferredCatalog(session, abilityManager)
+	// 首轮注册新增 b，触发一次写入以落状态
+	if err := rail.syncDeferredToolAttachment(context.Background(), session,
+		attachments.BindContextForSession("s3"), newSnapshotHistory("s3"),
+		map[string]string{"a": "工具A", "b": "工具B"}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, ok := session.stateMap[deferredToolCatalogStateKey].(map[string]any)
+	if !ok {
+		t.Fatal("应写回目录状态")
+	}
+	if _, ok := state[deferredToolCatalogInitialFingerprintsStateKey]; !ok {
+		t.Fatal("应写入初始指纹键")
+	}
+	if _, ok := state[deferredToolCatalogFingerprintsStateKey]; !ok {
+		t.Fatal("应写入当前指纹键")
+	}
+}
