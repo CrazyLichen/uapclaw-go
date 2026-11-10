@@ -1237,3 +1237,140 @@ func TestEscalateAxisTowardAllow(t *testing.T) {
 		}
 	}
 }
+
+// ──────────────────────────── MergeFileGuardPathRule ────────────────────────────
+
+// TestMergeFileGuardPathRule_新建条目 测试首次写入 file_guard.paths。
+func TestMergeFileGuardPathRule_新建条目(t *testing.T) {
+	perms := map[string]any{}
+
+	merged, wrote := MergeFileGuardPathRule(perms, "/data/ws", "allow", "allow", "ask", "prefix")
+
+	if !wrote {
+		t.Fatal("wrote = false, want true")
+	}
+	fg, _ := merged["file_guard"].(map[string]any)
+	if fg == nil {
+		t.Fatal("file_guard missing")
+	}
+	if fg["enabled"] != true {
+		t.Errorf("enabled = %v, want true", fg["enabled"])
+	}
+	paths, _ := fg["paths"].([]any)
+	if len(paths) != 1 {
+		t.Fatalf("paths len = %d, want 1", len(paths))
+	}
+	entry, _ := paths[0].(map[string]any)
+	if entry["path"] != "/data/ws" {
+		t.Errorf("path = %v", entry["path"])
+	}
+	if entry["read"] != "allow" || entry["write"] != "allow" || entry["exec"] != "ask" {
+		t.Errorf("axes = %v/%v/%v", entry["read"], entry["write"], entry["exec"])
+	}
+	if entry["match"] != "prefix" {
+		t.Errorf("match = %v", entry["match"])
+	}
+}
+
+// TestMergeFileGuardPathRule_空路径不写入 测试归一化后为空则返回 false。
+func TestMergeFileGuardPathRule_空路径不写入(t *testing.T) {
+	perms := map[string]any{"file_guard": map[string]any{"enabled": false}}
+	merged, wrote := MergeFileGuardPathRule(perms, "", "allow", "allow", "ask", "prefix")
+	if wrote {
+		t.Error("wrote = true, want false（空路径）")
+	}
+	fg, _ := merged["file_guard"].(map[string]any)
+	if fg["enabled"] != false {
+		t.Error("空路径不应翻转 enabled")
+	}
+}
+
+// TestMergeFileGuardPathRule_同路径按轴升级 测试已有条目的轴升级。
+//
+// Python _escalate_axis_toward_allow：仅 new=="allow" 时抬升，否则保留 old。
+func TestMergeFileGuardPathRule_同路径按轴升级(t *testing.T) {
+	perms := map[string]any{
+		"file_guard": map[string]any{
+			"enabled": true,
+			"paths": []any{
+				map[string]any{
+					"path":  "/data/ws",
+					"read":  "ask",
+					"write": "ask",
+					"exec":  "ask",
+					"match": "prefix",
+					"note":  "保留我",
+				},
+			},
+		},
+	}
+
+	merged, wrote := MergeFileGuardPathRule(perms, "/data/ws", "allow", "ask", "ask", "prefix")
+
+	if !wrote {
+		t.Fatal("wrote = false, want true（read 轴从 ask 升到 allow）")
+	}
+	fg, _ := merged["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	if len(paths) != 1 {
+		t.Fatalf("paths len = %d, want 1（不应新增条目）", len(paths))
+	}
+	entry, _ := paths[0].(map[string]any)
+	if entry["read"] != "allow" {
+		t.Errorf("read = %v, want allow", entry["read"])
+	}
+	if entry["write"] != "ask" {
+		t.Errorf("write = %v, want ask（不降级）", entry["write"])
+	}
+	if entry["note"] != "保留我" {
+		t.Error("existing 其他字段必须保留（Python 的 **existing 展开）")
+	}
+}
+
+// TestMergeFileGuardPathRule_无变更返回false 测试幂等。
+func TestMergeFileGuardPathRule_无变更返回false(t *testing.T) {
+	perms := map[string]any{
+		"file_guard": map[string]any{
+			"enabled": true,
+			"paths": []any{
+				map[string]any{"path": "/data/ws", "read": "allow", "write": "allow", "exec": "ask", "match": "prefix"},
+			},
+		},
+	}
+
+	_, wrote := MergeFileGuardPathRule(perms, "/data/ws", "allow", "allow", "ask", "prefix")
+
+	if wrote {
+		t.Error("wrote = true, want false（完全一致时不应报告变更）")
+	}
+}
+
+// TestMergeFileGuardPathRule_不改动入参 测试深拷贝语义。
+func TestMergeFileGuardPathRule_不改动入参(t *testing.T) {
+	perms := map[string]any{}
+	_, _ = MergeFileGuardPathRule(perms, "/data/ws", "allow", "allow", "ask", "prefix")
+
+	if _, exists := perms["file_guard"]; exists {
+		t.Error("入参被修改，Python 用 deepcopy 不应改动原对象")
+	}
+}
+
+// TestMergeFileGuardPathRule_既有match优先 测试 existing.match 非空时以其为准。
+func TestMergeFileGuardPathRule_既有match优先(t *testing.T) {
+	perms := map[string]any{
+		"file_guard": map[string]any{
+			"enabled": true,
+			"paths": []any{
+				map[string]any{"path": "/data/ws", "read": "ask", "write": "ask", "exec": "ask", "match": "exact"},
+			},
+		},
+	}
+
+	merged, _ := MergeFileGuardPathRule(perms, "/data/ws", "allow", "ask", "ask", "prefix")
+	fg, _ := merged["file_guard"].(map[string]any)
+	paths, _ := fg["paths"].([]any)
+	entry, _ := paths[0].(map[string]any)
+	if entry["match"] != "exact" {
+		t.Errorf("match = %v, want exact（existing.get('match','prefix') or match）", entry["match"])
+	}
+}

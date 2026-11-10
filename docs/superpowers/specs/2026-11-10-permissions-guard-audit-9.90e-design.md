@@ -78,7 +78,7 @@ PermissionEngine 分层规则判定（纯规则，零 LLM）              ← 9.
 | `build_command_allow_pattern` | `permissions_persist.py:99` | 无 | 3 行 |
 | `_normalize_exact_accesses` | `permissions_persist.py:300` | 无 | 22 行 |
 | `PermissionApprovalInvalidated` | `permissions_persist.py:151` | 无 | Go 用 `error` 哨兵值 |
-| `merge_file_guard_path_rule` | `persist_rule_merge.py:259` | 无 | **隐藏前置件**，74 行 |
+| `merge_file_guard_path_rule` | `persist_rule_merge.py:259` | ⚠️ **已实现但未导出**（`patterns.go:953` 的 `mergeFileGuardPathRule`，仅同包 `MergeFileGuardAccessAllows` 调用，零测试） | **只需导出 + 补测试**，不需重写 |
 | `setup_permission_context` | `owner_scopes.py:61` | 名字被改为 `NewPermissionContextFromRequest` 且逻辑简化 | 本批改正 |
 | `cleanup_permission_context` | `owner_scopes.py:99` | 无 | 本批新增 |
 | `current_permission_owner_scope` | `owner_scopes.py:104` | 名字被改（拆成 `PermissionContextFromCtx` + `OwnerScopeKey`） | 本批改正 |

@@ -903,7 +903,7 @@ func MergeFileGuardAccessAllows(permissions map[string]any, accesses []PathActio
 		}
 		read, write, execP := axesForFileGuardAction(acc.Action)
 		var did bool
-		perms, did = mergeFileGuardPathRule(perms, pathNorm, read, write, execP, "prefix")
+		perms, did = MergeFileGuardPathRule(perms, pathNorm, read, write, execP, "prefix")
 		wrote = wrote || did
 	}
 	return perms, wrote
@@ -944,13 +944,13 @@ func escalateAxisTowardAllow(old any, newLevel string) string {
 	return newLevel
 }
 
-// mergeFileGuardPathRule 合并一条 file_guard.paths 规则。
+// MergeFileGuardPathRule 合并一条 file_guard.paths 规则。
 //
 // 同 path 已存在时按轴「仅向 allow 抬升」，不降级已有 allow/deny；
 // 已存在且结果无变化时返回 (perms, false)。
 //
 // Python: merge_file_guard_path_rule(permissions, path, *, read, write, exec_, match) (persist_rule_merge.py L259-329)
-func mergeFileGuardPathRule(perms map[string]any, pathNorm, read, write, execP, match string) (map[string]any, bool) {
+func MergeFileGuardPathRule(perms map[string]any, pathNorm, read, write, execP, match string) (map[string]any, bool) {
 	if pathNorm == "" {
 		return utils.DeepCopyMap(perms), false
 	}
