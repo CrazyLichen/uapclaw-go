@@ -609,13 +609,15 @@ func TestTaskManager_提交通知回调(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&called))
 }
 
-// TestTaskManager_GetTask_返回活引用 对齐上游 `list(self.tasks.values())`
-// （task_manager.py:362）：查询不拷贝，返回的就是内部对象。
+// TestTaskManager_GetTask_返回快照 查询返回指针级浅拷贝而非内部活引用。
 //
-// 这条契约是 goal 轮 run_context 能保真的前提：JSON 深拷贝会把 metadata 里的
-// *RunContext 降级成 map[string]any，executor 的类型断言取不到值。
+// 上游 `list(self.tasks.values())`（task_manager.py:362）返回活引用，但 Python 是
+// 单线程 asyncio；Go 的调度器在 goroutine 里并发写同一 *Task，调用方读活引用会
+// 触发 data race（CI -race 实测 task_manager.go:452 写 vs 调用方读）。
+// 因此 Go 侧返回标量快照、引用字段共享：既能安全并发读 Status，又保住
+// metadata 里 *RunContext 的原始类型（不经 JSON 往返）。
 // 写入必须走管理器的 Update* 方法，不得直接改返回的指针。
-func TestTaskManager_GetTask_返回活引用(t *testing.T) {
+func TestTaskManager_GetTask_返回快照(t *testing.T) {
 	tm := newTestTaskManager()
 	_ = tm.AddTask(context.Background(), newTestTask("sess1", "task1", "test", schema.TaskSubmitted))
 
@@ -623,11 +625,17 @@ func TestTaskManager_GetTask_返回活引用(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, tasks, 1)
 
-	// filter=nil 与过滤路径都返回同一批活对象
+	// filter=nil 与过滤路径各自返回独立的快照指针
 	all, err := tm.GetTask(context.Background(), nil)
 	assert.NoError(t, err)
 	assert.Len(t, all, 1)
-	assert.Same(t, tasks[0], all[0], "两条查询路径应指向同一个内部对象")
+	assert.NotSame(t, tasks[0], all[0], "每次查询都应返回独立快照，不暴露内部指针")
+
+	// 改快照的标量字段不得影响内部状态（内部仍为 SUBMITTED）
+	tasks[0].Status = schema.TaskCompleted
+	again, err := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
+	assert.NoError(t, err)
+	assert.Equal(t, schema.TaskSubmitted, again[0].Status, "快照写入不得穿透到内部任务")
 }
 
 // TestTaskManager_GetTask_metadata类型保真 GetTask 不做 JSON 往返，metadata 里的
@@ -652,6 +660,7 @@ func TestTaskManager_GetTask_metadata类型保真(t *testing.T) {
 
 // TestTaskManager_LoadState_浅拷贝 对齐上游 `self.tasks = state.tasks.copy()`
 // （task_manager.py:291）：只复制字典本身，任务对象仍与 state 共享。
+// 查询层返回快照，但快照的 Metadata 与 state 中的任务共享同一底层 map。
 func TestTaskManager_LoadState_浅拷贝(t *testing.T) {
 	tm := newTestTaskManager()
 	task := newTestTask("sess1", "task-ls", "test", schema.TaskSubmitted)
@@ -670,7 +679,10 @@ func TestTaskManager_LoadState_浅拷贝(t *testing.T) {
 	got, err := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task-ls"})
 	assert.NoError(t, err)
 	assert.Len(t, got, 1)
-	assert.Same(t, task, got[0], "LoadState 后任务对象应与 state 共享")
+	// 指针是查询层新分配的快照，但 Metadata 必须仍与 state 中的任务共享
+	assert.NotSame(t, task, got[0], "GetTask 返回快照，不暴露内部指针")
+	got[0].Metadata["shared_probe"] = true
+	assert.Equal(t, true, task.Metadata["shared_probe"], "LoadState 浅拷贝：Metadata 应与 state 共享底层 map")
 	gotRC, ok := got[0].Metadata["run_context"].(*struct{ GoalID string })
 	assert.True(t, ok, "LoadState 不得改变 metadata 里的类型")
 	assert.Equal(t, "goal-ls", gotRC.GoalID)
