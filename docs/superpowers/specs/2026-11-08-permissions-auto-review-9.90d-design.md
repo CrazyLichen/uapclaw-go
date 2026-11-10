@@ -2071,3 +2071,55 @@ artifact_authorization（132）
 
 已改为 `emitAudit(facts, auditRecord)`，`auditRecord` 含 4 个字段
 （Decision / Reason / Degraded / Extra）。桩体注释写明回填时的完整调用形态。
+
+### 12.29 Task 32 执行结论：`reviewer_execution`
+
+**落地**：`auto_permission/reviewer_execution.go`（389 行 Python → 约 480 行 Go /
+1 主方法 + 3 辅助），覆盖率 **85.5%**，auto_permission 包 91.3%。
+
+#### `maybeRunReviewer` 的 10 段判定链
+
+主入口把前面各文件的能力串成一条链，每段都以 `PermissionHandlingResult` 收尾：
+
+| # | 阶段 | 结论 |
+|---|---|---|
+| ① | 路由 | 调 `reviewerRoute` 得到 `DecisionRoute` |
+| ② | 硬拦截 | `IsHardBlock()` → 返回 deny（`hard_guard`） |
+| ③ | 人工转交三选一 | fail_closed → policy_evaluator；执行器契约 → execution_provider_contract；意图窗口 → intent_contract |
+| ④ | 确定性放行 | `maybeAllowDeterministicSandboxScope` 命中则直接返回 |
+| ⑤ | 审查器不可用 | 用户已确认则放行，否则转人工（`reviewer_unavailable`） |
+| ⑥ | 调审查器 | `BuildReviewerActionView` + `Assess`，组装 13 个审计字段 |
+| ⑦ | allow_once | 签发文件授权 → 记录成功元数据 → 发审计 → 返回 |
+| ⑧ | deny | `reviewerDenyResponse` |
+| ⑨ | 用户已单次放行 | 签发授权 → 记录 → 发审计 → 返回（`manual_approval`） |
+| ⑩ | 人工兜底 | 归一原因 → `withHostOwnedManualReviewDisplay` → `manualReviewerResponse` |
+
+#### 新增偏差 V-14：`manualFromAuthorization` 在当前实现中不可达
+
+Python 的三处 `if authorization_error:` 分支要求 `facts.tool_name == send_file_to_user`
+（否则 `_issue_send_file_authorization` 直接返回空串）。但 `send_file_to_user` 的
+`NoAutoAllowReason()` 恒为 `execution_provider_contract_unverified`，路由必为
+`manual_only`，在**第 ③ 步就被拦截**，永远走不到 ⑦ / ⑨ 的授权签发。
+
+因此 `manualFromAuthorization`（0% 覆盖）在当前实现里是**不可达防御代码**。
+保留原因：对齐 Python 的结构，且若将来放宽执行器契约检查（例如允许
+`send_file_to_user` 走 semantic_reviewer），该分支立即生效。
+
+测试改为验证实际行为：`TestMaybeRunReviewer_sendFile被契约检查提前拦截` /
+`TestMaybeRunReviewer_sendFile无审查器也被契约拦截` 断言 `decision_source`
+为 `execution_provider_contract` 而非 `send_file_authorization`。
+
+#### 测试中踩的坑：`ToolDecisionFacts` 的四个前置字段
+
+构造「路由应进 semantic_reviewer」的 facts 时，`structuralManualReason` 有四个
+早期返回，任一命中都会把路由压到 `manual_only`，导致 allow_once 被策略拒绝
+（`reviewer_outcome_not_allowed`）：
+
+| 字段 | 缺失时的原因码 |
+|---|---|
+| `ArgumentsValidObject` | `arguments_not_object` |
+| `AccessesKnown`（path/shell 类目） | `core_accesses_unknown` |
+| `Capability.FactsSource == "host_static"` | `facts_source_unverified` |
+| `Capability.OperationFamily != "unknown"` | `unknown_operation` |
+
+测试的 `execFacts()` 必须四项齐全才能走到审查器分支。
