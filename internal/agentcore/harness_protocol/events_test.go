@@ -755,3 +755,91 @@ func TestEventRetentionOf_五条规则(t *testing.T) {
 	// 规则 5：nil 兜底 required
 	assert.Equal(t, EventRetentionRequired, EventRetentionOf(nil))
 }
+
+// TestEventRetentionOf_值形态与指针形态结果一致 守护「传值不得静默降级」。
+//
+// 背景：Go 用 interface + 具体结构体表达 10 分支联合类型，值类型
+// （OutputEvent）与指针类型（*OutputEvent）是不同的动态类型。
+// 若 EventRetentionOf 只识别指针，调用方传值时会静默落入「其余」分支
+// 被误判为 required —— 背压会退化为全阻塞（snapshot 永不可合并、
+// cumulative 永不可合并、best_effort 永不丢弃），且**不产生任何报错**。
+// 本用例逐条比对两种形态，确保二者恒等。
+//
+// Python 侧无对应问题：isinstance 对同一实体的值/引用是一回事。
+func TestEventRetentionOf_值形态与指针形态结果一致(t *testing.T) {
+	snap, err := NewOutputEvent("a", OutputKindText, "cur", OutputOperationSnapshot, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+	delta, err := NewOutputEvent("a", OutputKindText, "next", OutputOperationDelta, OutputChannelAnswer, 0, "", nil)
+	require.NoError(t, err)
+
+	in := 1
+	usage, err := NewTurnUsage(&in, nil, nil, nil, nil, nil)
+	require.NoError(t, err)
+	cum, err := NewUsageUpdatedEvent(usage, UsageUpdateModeCumulative)
+	require.NoError(t, err)
+	udelta, err := NewUsageUpdatedEvent(usage, UsageUpdateModeDelta)
+	require.NoError(t, err)
+
+	hook, err := NewHookObservedEvent(HookEventPhaseStarted, "before_tool", "h1", nil)
+	require.NoError(t, err)
+	dbg, err := NewDiagnosticEvent(DiagnosticLevelDebug, "m", nil)
+	require.NoError(t, err)
+	warn, err := NewDiagnosticEvent(DiagnosticLevelWarning, "m", nil)
+	require.NoError(t, err)
+
+	item, err := NewItemLifecycleEvent(ItemEventKindStarted, "tool", nil)
+	require.NoError(t, err)
+	st, err := NewStateChangedEvent(HarnessStateIdle, HarnessStateRunning)
+	require.NoError(t, err)
+	tl, err := NewTurnLifecycleEvent(TurnEventKindStarted, nil)
+	require.NoError(t, err)
+	pe, err := NewProviderEvent("p", "e", "1", nil)
+	require.NoError(t, err)
+	unk, err := NewUnknownEvent("future", "2", nil)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		byPtr   HarnessEventPayload
+		byValue HarnessEventPayload
+		want    EventRetention
+	}{
+		{"snapshot输出", &snap, snap, EventRetentionCoalescible},
+		{"delta输出", &delta, delta, EventRetentionRequired},
+		{"cumulative用量", &cum, cum, EventRetentionCoalescible},
+		{"delta用量", &udelta, udelta, EventRetentionRequired},
+		{"钩子观测", &hook, hook, EventRetentionBestEffort},
+		{"debug诊断", &dbg, dbg, EventRetentionBestEffort},
+		{"warning诊断", &warn, warn, EventRetentionRequired},
+		{"item生命周期", &item, item, EventRetentionRequired},
+		{"状态变化", &st, st, EventRetentionRequired},
+		{"轮次生命周期", &tl, tl, EventRetentionRequired},
+		{"provider扩展", &pe, pe, EventRetentionRequired},
+		{"未知事件", &unk, unk, EventRetentionRequired},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, EventRetentionOf(c.byPtr), "指针形态")
+			assert.Equal(t, c.want, EventRetentionOf(c.byValue), "值形态")
+			assert.Equal(t, EventRetentionOf(c.byPtr), EventRetentionOf(c.byValue),
+				"值形态与指针形态必须恒等（否则传值静默降级）")
+		})
+	}
+}
+
+// TestEventRetentionOf_typedNil与nil接口 验证空值兜底为 required 且不 panic。
+//
+// Go 特有：typed-nil 指针（已转成接口的 (*OutputEvent)(nil)）与
+// nil 接口都要安全返回 required —— 绝不能因为解引用 nil 而 panic。
+// Python 侧无对应场景（None 由类型注解排除）。
+func TestEventRetentionOf_typedNil与nil接口(t *testing.T) {
+	var nilOutput *OutputEvent
+	var nilUsage *UsageUpdatedEvent
+	var nilHook *HookObservedEvent
+	var nilDiag *DiagnosticEvent
+
+	for _, p := range []HarnessEventPayload{nil, nilOutput, nilUsage, nilHook, nilDiag} {
+		assert.Equal(t, EventRetentionRequired, EventRetentionOf(p),
+			"空值必须兜底 required 且不 panic")
+	}
+}

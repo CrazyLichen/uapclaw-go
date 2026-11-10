@@ -443,26 +443,62 @@ func IsTerminalTurnEventKind(kind TurnEventKind) bool {
 
 // EventRetentionOf 返回生产者对 payload 唯一可用的保留类别。
 // 这是背压保留档位的唯一来源：生产者不得自行选择（SPEC.md 不变量 12）。
+//
+// 调用约定：payload 可传指针（*OutputEvent 等）或值（OutputEvent 等），
+// 两者结果一致。Go 侧用 interface + 10 个具体结构体表达联合类型，
+// 值类型与指针类型是不同的动态类型；本函数**两者都识别**，
+// 避免调用方传值时静默落入"其余"分支被误判为 required
+// （会造成 snapshot/cumulative 永不可合并、best_effort 永不丢弃，
+// 背压退化为全阻塞，但不会报错）。
+//
 // Python: events.py:378-389 event_retention（5 条 if 短路，顺序不可调）
 func EventRetentionOf(payload HarnessEventPayload) EventRetention {
+	switch p := payload.(type) {
+	// ── 指针形态（生产者常规写法）──────────────────────────────
 	// 规则 1：快照输出可合并（events.py:381-382）
-	if out, ok := payload.(*OutputEvent); ok && out.Operation == OutputOperationSnapshot {
-		return EventRetentionCoalescible
-	}
+	case *OutputEvent:
+		if p != nil && p.Operation == OutputOperationSnapshot {
+			return EventRetentionCoalescible
+		}
 	// 规则 2：累计用量可合并（events.py:383-384）
-	if usage, ok := payload.(*UsageUpdatedEvent); ok && usage.Mode == UsageUpdateModeCumulative {
-		return EventRetentionCoalescible
-	}
+	case *UsageUpdatedEvent:
+		if p != nil && p.Mode == UsageUpdateModeCumulative {
+			return EventRetentionCoalescible
+		}
 	// 规则 3：钩子观测只是镜像，可丢（events.py:385-386）
-	if _, ok := payload.(*HookObservedEvent); ok {
-		return EventRetentionBestEffort
-	}
+	case *HookObservedEvent:
+		if p != nil {
+			return EventRetentionBestEffort
+		}
 	// 规则 4：debug/info 级诊断可丢（events.py:387-388）
-	if diag, ok := payload.(*DiagnosticEvent); ok &&
-		(diag.Level == DiagnosticLevelDebug || diag.Level == DiagnosticLevelInfo) {
+	case *DiagnosticEvent:
+		if p != nil && (p.Level == DiagnosticLevelDebug || p.Level == DiagnosticLevelInfo) {
+			return EventRetentionBestEffort
+		}
+
+	// ── 值形态（直接传结构体）────────────────────────────────
+	// 规则 1'
+	case OutputEvent:
+		if p.Operation == OutputOperationSnapshot {
+			return EventRetentionCoalescible
+		}
+	// 规则 2'
+	case UsageUpdatedEvent:
+		if p.Mode == UsageUpdateModeCumulative {
+			return EventRetentionCoalescible
+		}
+	// 规则 3'
+	case HookObservedEvent:
 		return EventRetentionBestEffort
+	// 规则 4'
+	case DiagnosticEvent:
+		if p.Level == DiagnosticLevelDebug || p.Level == DiagnosticLevelInfo {
+			return EventRetentionBestEffort
+		}
 	}
 	// 规则 5：其余一律必需，永不丢弃（events.py:389）
+	// 含 nil interface、typed-nil 指针、Turn/State/Item 生命周期、
+	// delta/final 输出、warning/error 诊断、Provider/Unknown 事件。
 	return EventRetentionRequired
 }
 
