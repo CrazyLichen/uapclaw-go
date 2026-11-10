@@ -55,6 +55,9 @@ type AgentRuntimeDeps struct {
 	// ResolveModelCapability 模型目录解析（nil 时跳过 model 存在性校验）
 	// Python: service.py:706-714 resolve_model_capability / :777-782
 	ResolveModelCapability func(model string) (RuntimeModelDescriptor, error)
+	// IterModelEntries 返回已配置模型条目（nil 时目录为空）
+	// Python: service.py:733-775 build_model_catalog 的 entries 来源
+	IterModelEntries func() []any
 }
 
 // SessionCoordinatorPort 清理路径需要的协调器能力。
@@ -116,6 +119,9 @@ type AgentRuntime struct {
 	// resolveModelCapability 模型目录解析（可注入）
 	// Python: service.py:706-714 resolve_model_capability
 	resolveModelCapability func(model string) (RuntimeModelDescriptor, error)
+	// iterModelEntries 返回已配置模型条目（可注入）
+	// Python: service.py:733-775 build_model_catalog 的 entries 来源
+	iterModelEntries func() []any
 }
 
 // agentExecutionOwnerKey 执行 owner 表的键。
@@ -146,6 +152,7 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 		resetPlanSession:       deps.ResetPlanSession,
 		iterManagers:           deps.IterManagers,
 		resolveModelCapability: deps.ResolveModelCapability,
+		iterModelEntries:       deps.IterModelEntries,
 	}
 }
 
@@ -1095,3 +1102,95 @@ func requestParamsAsObject(req *schema.AgentRequest) (map[string]any, bool) {
 // 上游此步直接调用公开的 get_session；Go 侧抽出变量是为了让准入链路
 // 的单元测试不必依赖真实会话目录（生产实现就是 GetSession）。
 var getSessionForAdmission = GetSession
+
+// ──────────────────────────── 目录门面方法 ────────────────────────────
+
+// ListModelCapabilities 返回配置的模型目录与当前生效选择。
+// Python: service.py:718-775 list_model_capabilities
+//
+// 上游依赖 AgentManager 的默认模型列表；Go 侧 manager 由注入提供，
+// 未注入模型提供者时返回空目录（不报错，等价于上游未配置模型）。
+func (r *AgentRuntime) ListModelCapabilities(currentSelection string) ModelCatalogResult {
+	if err := r.requireStarted(); err != nil {
+		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
+	}
+	if r.iterModelEntries == nil {
+		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
+	}
+	return BuildModelCatalog(r.iterModelEntries(), currentSelection)
+}
+
+// ResolveModelCapability 解析一个模型引用为描述符。
+// Python: service.py:777-782 resolve_model_capability
+func (r *AgentRuntime) ResolveModelCapability(requested string) (RuntimeModelDescriptor, error) {
+	if err := r.requireStarted(); err != nil {
+		return RuntimeModelDescriptor{}, err
+	}
+	catalog := r.ListModelCapabilities("")
+	return ResolveModelSelection(catalog, requested)
+}
+
+// ListModeCapabilities 返回受支持的单 Agent 模式目录。
+// Python: service.py:784-789 list_mode_capabilities
+func (r *AgentRuntime) ListModeCapabilities() ModeCatalogResult {
+	return ListModeCapabilities()
+}
+
+// ResolveModeCapability 解析一个模式。
+// Python: service.py:791-796 resolve_mode_capability
+func (r *AgentRuntime) ResolveModeCapability(requested any) (RuntimeModeDescriptor, error) {
+	return ResolveModeCapability(requested)
+}
+
+// GetSession 读取一个拥有的单 Agent 会话。
+// Python: service.py:798-803 get_session
+func (r *AgentRuntime) GetSession(request SessionGetInput) (*SessionSummary, error) {
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	return GetSession(request)
+}
+
+// ListSessions 读取一页拥有的会话。
+// Python: service.py:805-810 list_sessions
+func (r *AgentRuntime) ListSessions(request SessionListInput) (SessionListResult, error) {
+	if err := r.requireStarted(); err != nil {
+		return SessionListResult{}, err
+	}
+	return ListSessions(request, false, false)
+}
+
+// GetPermissionSnapshot 返回一致的只读权限快照。
+// Python: service.py:812-820 get_permission_snapshot
+func (r *AgentRuntime) GetPermissionSnapshot(
+	request PermissionSnapshotInput,
+) (PermissionSnapshotResult, error) {
+	if err := r.requireStarted(); err != nil {
+		return PermissionSnapshotResult{}, err
+	}
+	return ReadPermissionSnapshot(request)
+}
+
+// Coordinator 返回 Runtime 持有的会话执行协调器（未注入时为 nil）。
+// Python: service.py:412 self._session_coordinator
+func (r *AgentRuntime) Coordinator() SessionCoordinatorPort { return r.coordinator }
+
+// AgentManager 返回 Runtime 持有的 agent 实例管理器。
+// Python: service.py:476 self._tenant.get_default_manager()
+//
+// 门面与 AgentServer 不再各自持有 manager，一律经此取，消除多份持有。
+func (r *AgentRuntime) AgentManager() AgentManagerPort { return r.manager }
+
+// requireStarted Runtime 必须已启动（对应上游 _require_started）。
+// Python: service.py 各门面的 self._require_started()
+func (r *AgentRuntime) requireStarted() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return errors.New("agent runtime is already closed")
+	}
+	if !r.started {
+		return errors.New("agent runtime is not started")
+	}
+	return nil
+}
