@@ -51,6 +51,11 @@ type AgentManager struct {
 	// createAgentFactory 创建 Agent 的工厂函数（默认 NewUapClaw + CreateInstance，测试可注入 mock）。
 	createAgentFactory AgentFactory
 
+	// runtimeProvider 提供执行账本归属方（P4：门面不自建账本）。
+	// Python: 门面不持有 coordinator，账本由 AgentRuntime 自建并唯一持有。
+	// Go 侧 AgentManager 创建门面时经此取 Runtime 注入，使所有门面共享同一本账。
+	runtimeProvider func() *swruntime.AgentRuntime
+
 	// mu 保护并发访问
 	mu sync.RWMutex
 }
@@ -661,10 +666,18 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 	// Python: L129-130: 3. 创建 UapClawSwarm + CreateInstance（通过工厂函数）
 	am.mu.RLock()
 	factory := am.createAgentFactory
+	runtimeProvider := am.runtimeProvider
 	am.mu.RUnlock()
 	agent, err := factory(config, modeKey, subModeKey)
 	if err != nil {
 		return nil, err
+	}
+	// P4：把执行账本归属方注入门面，使全部门面共享 Runtime 那一本账。
+	// Python 门面不持有 coordinator（interface.py 里 0 命中），账本只在 Runtime。
+	if runtimeProvider != nil {
+		if runtime := runtimeProvider(); runtime != nil {
+			agent.SetAgentRuntime(runtime)
+		}
 	}
 
 	// Python: L131-134: 4. setattr → agentEntry
@@ -873,4 +886,15 @@ func (am *AgentManager) HasActiveGoal(channelID, sessionID string) bool {
 		}
 	}
 	return false
+}
+
+// SetRuntimeProvider 注入执行账本归属方提供者。
+// Python: 门面不持有 coordinator，账本由 AgentRuntime 唯一持有。
+//
+// 装配顺序：AgentServer 先建 Runtime（Runtime 自建账本），再调本方法注册；
+// 此后每次 createAgent 都会把同一本账注入新建门面。
+func (am *AgentManager) SetRuntimeProvider(provider func() *swruntime.AgentRuntime) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+	am.runtimeProvider = provider
 }

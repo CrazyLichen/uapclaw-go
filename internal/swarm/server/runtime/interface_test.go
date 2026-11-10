@@ -153,7 +153,8 @@ func (f *fakeAdapter) GenerateRecap(_ context.Context, _ string) (map[string]any
 func TestNewUapClaw(t *testing.T) {
 	uc := NewUapClaw()
 	require.NotNil(t, uc)
-	require.NotNil(t, uc.coordinator)
+	require.NotNil(t, uc.agentRuntime)
+	require.NotNil(t, uc.agentRuntime.Coordinator())
 }
 
 func TestUapClaw_ensureAdapter_幂等(t *testing.T) {

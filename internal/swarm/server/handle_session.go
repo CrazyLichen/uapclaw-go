@@ -204,10 +204,11 @@ func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.A
 // spec §6.1：QuiesceSession 置 QUIESCING → CloseSession(带 generation) 逐条取消并等 Done。
 // 超时返回 SessionCloseTimeoutError，使删除事务判定为 DELETE_FAILED。
 func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, sessionID string) error {
-	if s.coordinator == nil {
+	// 账本经 Runtime（Python 门面不持有 coordinator）
+	if s.agentRuntime == nil {
 		return nil
 	}
-	lifecycleCtx, err := s.coordinator.QuiesceSession(sessionID, nil)
+	lifecycleCtx, err := s.agentRuntime.QuiesceSession(sessionID, nil)
 	if err != nil {
 		return err
 	}
@@ -216,7 +217,7 @@ func (s *AgentServer) quiesceSessionForDelete(ctx context.Context, channelID, se
 		return nil
 	}
 	timeout := 10 * time.Second
-	res, closeErr := s.coordinator.CloseSession(sessionID, &lifecycleCtx.Generation, &timeout)
+	res, closeErr := s.agentRuntime.CloseSessionGeneration(sessionID, &lifecycleCtx.Generation, &timeout)
 	if closeErr != nil {
 		return closeErr
 	}

@@ -78,6 +78,8 @@ type SessionCoordinatorPort interface {
 	CancelExecution(sessionID string, options sessionpkg.CancelExecutionOptions) (sessionpkg.CancelExecutionResult, error)
 	// SnapshotSessions 取全部会话快照
 	SnapshotSessions() []sessionpkg.RuntimeSessionSnapshot
+	// QuiesceSession 置会话为 QUIESCING 并返回生命周期上下文
+	QuiesceSession(sessionID string, generation *int) (*sessionpkg.SessionLifecycleContext, error)
 	// Close 关闭协调器，返回超时会话
 	Close(waitTimeout *time.Duration, timedOut *[]string) error
 }
@@ -87,6 +89,13 @@ type SessionCoordinatorPort interface {
 // 上游 _session_coordinator 恒存在（:412 构造期自建）；Go 侧由注入提供，
 // 未注入时相关承接方法返回此错误，避免静默丢弃登记/取消语义。
 var ErrCoordinatorUnavailable = errors.New("session coordinator is not available")
+
+// ErrModelCatalogUnavailable 模型目录未装配
+//
+// 上游 resolve_model_capability 恒可用（AgentRuntime 自持模型列表）；Go 侧由
+// 注入提供。**未装配时必须报错而不是静默跳过校验**：否则"配置了不存在的模型"
+// 会被放行到下游，变成运行期才暴露的失败，且错误信息指向不到配置问题。
+var ErrModelCatalogUnavailable = errors.New("model catalog is not available")
 
 // sessionRuntimeCleaner 可清理会话内存运行时的 manager 能力。
 // Python: server/runtime/agent_manager.py:863 cleanup_session_runtime
@@ -158,13 +167,21 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 	if controller == nil {
 		controller = NewPlanModeController()
 	}
+	// Python:414 self._session_coordinator = session_coordinator or RuntimeSessionCoordinator()
+	//
+	// 账本归属 Runtime：外部给就用，不给就自己造一本。这是"全局只有一本账"的
+	// 前提——任何创建 Runtime 的路径都自带账本，不需要调用方再配一次。
+	coordinator := deps.Coordinator
+	if coordinator == nil {
+		coordinator = sessionpkg.NewRuntimeSessionCoordinator(sessionpkg.DefaultCoordinatorOptions())
+	}
 	return &AgentRuntime{
 		manager:                deps.Manager,
 		planController:         controller,
 		onControlEvent:         deps.OnControlEvent,
 		prepare:                deps.Prepare,
 		agentExecutionOwners:   make(map[agentExecutionOwnerKey]*RuntimeAgentExecution),
-		coordinator:            deps.Coordinator,
+		coordinator:            coordinator,
 		resetPlanSession:       deps.ResetPlanSession,
 		iterManagers:           deps.IterManagers,
 		resolveModelCapability: deps.ResolveModelCapability,
@@ -945,6 +962,51 @@ func (r *AgentRuntime) AnswerInteraction(
 	return r.invokeWithExecution(ctx, req, execution)
 }
 
+// AnswerInteractionInput 通过一个类型化的输入回答任一交互协议。
+// Python: service.py:2000-2028 answer_interaction_input
+//
+// 这是三个读端里最上层的一个：调用方只需给出 InteractionAnswerInput，
+// 由它决定走 chat.answer（普通交互）还是 chat.send（续跑被中断的轮次），
+// 并统一完成准入校验与 owner 透传。
+//
+// 返回 []*RuntimeEvent 而非流：续跑路径要收齐全部事件（上游 :2028
+// `[event async for event in self.stream(...)]`）。
+func (r *AgentRuntime) AnswerInteractionInput(
+	ctx context.Context, answer *InteractionAnswerInput,
+) ([]*RuntimeEvent, error) {
+	// Python:2010-2011 类型守卫
+	if answer == nil {
+		return nil, errors.New("answer must be an InteractionAnswerInput")
+	}
+	// Python:2012 await self.start()
+	if err := r.Start(); err != nil {
+		return nil, err
+	}
+	// Python:2013 request = answer.to_agent_request()
+	request, err := answer.ToAgentRequest()
+	if err != nil {
+		return nil, err
+	}
+	// Python:2014 await self._require_owned_single_agent_session(request)
+	if err := r.requireOwnedSingleAgentSession(request); err != nil {
+		return nil, err
+	}
+	// Python:2015-2020 非续跑 → 直接转发给 answer_interaction
+	if !answer.ResumesInterruptedTurn() {
+		return r.AnswerInteraction(ctx, request)
+	}
+	// Python:2021-2028 续跑 → 收集流式事件
+	events := make([]*RuntimeEvent, 0)
+	execution := r.agentExecutionOwner(request)
+	if err := r.streamWithExecution(ctx, request, execution, func(event *RuntimeEvent) bool {
+		events = append(events, event)
+		return true
+	}); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
 // StreamInteractionAnswer 以流式回答一个暂停的交互。
 // Python: service.py:2030-2090 stream_interaction_answer
 func (r *AgentRuntime) StreamInteractionAnswer(
@@ -1031,13 +1093,16 @@ func (r *AgentRuntime) validateAgentDefinition(
 	}
 	// Python:707-714 配置了 model 则校验其存在性
 	if execution.Definition.Model != nil && *execution.Definition.Model != "" {
-		if r.resolveModelCapability != nil {
-			if _, err := r.resolveModelCapability(*execution.Definition.Model); err != nil {
-				return nil, &agentDefinitionError{
-					sentinel: ErrAgentDefinitionModelNotFound,
-					field:    strPtr("model"),
-					message:  "configured Agent model was not found",
-				}
+		// 未装配解析器 → 报错（fail-closed）。此处不能静默放行：校验点仍在，
+		// 但门必须真的关（见 ErrModelCatalogUnavailable 注释）。
+		if r.resolveModelCapability == nil {
+			return nil, ErrModelCatalogUnavailable
+		}
+		if _, err := r.resolveModelCapability(*execution.Definition.Model); err != nil {
+			return nil, &agentDefinitionError{
+				sentinel: ErrAgentDefinitionModelNotFound,
+				field:    strPtr("model"),
+				message:  "configured Agent model was not found",
 			}
 		}
 	}
@@ -1084,10 +1149,20 @@ func (r *AgentRuntime) bindAgentExecutionRequest(
 	// Python:1577-1581 未显式给 model_name 时用定义里的模型
 	if execution.Definition.Model != nil && *execution.Definition.Model != "" {
 		existing, _ := params["model_name"].(string)
-		if strings.TrimSpace(existing) == "" && r.resolveModelCapability != nil {
-			if descriptor, err := r.resolveModelCapability(*execution.Definition.Model); err == nil {
-				params["model_name"] = descriptor.SelectionKey
+		if strings.TrimSpace(existing) == "" {
+			// 同 validateAgentDefinition：未装配解析器即报错，不静默丢弃 selection_key。
+			if r.resolveModelCapability == nil {
+				return nil, ErrModelCatalogUnavailable
 			}
+			descriptor, err := r.resolveModelCapability(*execution.Definition.Model)
+			if err != nil {
+				return nil, &agentDefinitionError{
+					sentinel: ErrAgentDefinitionModelNotFound,
+					field:    strPtr("model"),
+					message:  "configured Agent model was not found",
+				}
+			}
+			params["model_name"] = descriptor.SelectionKey
 		}
 	}
 
@@ -1131,6 +1206,9 @@ func (r *AgentRuntime) ListModelCapabilities(currentSelection string) ModelCatal
 		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
 	}
 	if r.iterModelEntries == nil {
+		// 同上：空目录会让前端显示"没有任何模型"，是假成功；返回空 + 错误更诚实。
+		// 门面 ListModelCapabilities 无 error 返回值，故这里只能返回空并靠
+		// ResolveModelCapability 的 fail-closed 兜住实际调用。
 		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
 	}
 	return BuildModelCatalog(r.iterModelEntries(), currentSelection)
@@ -1275,4 +1353,32 @@ func (r *AgentRuntime) CloseCoordinator(waitTimeout *time.Duration, timedOut *[]
 		return nil
 	}
 	return r.coordinator.Close(waitTimeout, timedOut)
+}
+
+// QuiesceSession 把会话置 QUIESCING 并返回生命周期上下文。
+// Python: service.py 内 self._session_coordinator.quiesce_session(...)
+//
+// 供 session.delete 事务先清场再删：置 QUIESCING 阻止新准入，
+// 拿到 generation 后由调用方 CloseSession 逐条取消并等执行停下。
+func (r *AgentRuntime) QuiesceSession(
+	sessionID string, generation *int,
+) (*sessionpkg.SessionLifecycleContext, error) {
+	if r.coordinator == nil {
+		return nil, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.QuiesceSession(sessionID, generation)
+}
+
+// CloseSessionGeneration 按指定代次关闭某会话的执行并等待停止。
+// Python: service.py 内 self._session_coordinator.close_session(session_id, generation=..., wait_timeout=...)
+//
+// 与 CleanupSession 第 1 步的区别：那里不限定代次（generation=nil），本方法由
+// session.delete 事务传入 QuiesceSession 返回的代次，避免误关新代次。
+func (r *AgentRuntime) CloseSessionGeneration(
+	sessionID string, generation *int, waitTimeout *time.Duration,
+) (sessionpkg.CloseSessionResult, error) {
+	if r.coordinator == nil {
+		return sessionpkg.CloseSessionResult{}, ErrCoordinatorUnavailable
+	}
+	return r.coordinator.CloseSession(sessionID, generation, waitTimeout)
 }

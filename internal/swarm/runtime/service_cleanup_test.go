@@ -350,3 +350,12 @@ func (f *fakeCoordinator) Close(_ *time.Duration, _ *[]string) error {
 
 // 编译期断言：测试替身满足扩展后的端口
 var _ SessionCoordinatorPort = (*fakeCoordinator)(nil)
+
+// QuiesceSession 置会话 QUIESCING 并返回生命周期上下文。
+// Python: RuntimeSessionCoordinator.quiesce_session
+func (f *fakeCoordinator) QuiesceSession(
+	sessionID string, _ *int,
+) (*sessionpkg.SessionLifecycleContext, error) {
+	f.recorder.record("coordinator.QuiesceSession")
+	return &sessionpkg.SessionLifecycleContext{SessionID: sessionID}, nil
+}

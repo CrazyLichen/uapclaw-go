@@ -43,10 +43,6 @@ type UapClawSwarm struct {
 	// agentConfigService Agent 配置 CRUD 服务。
 	agentConfigService *AgentConfigService
 
-	// coordinator 会话执行协调器（Runtime 层的跨会话执行账本）
-	// Python: AgentRuntime._session_coordinator
-	coordinator *swsession.RuntimeSessionCoordinator
-
 	// sessionManager 门面自有的会话任务队列（同会话串行、跨会话并发）
 	// Python: self._session_manager = SessionManager()（interface.py:1574）
 	//
@@ -57,6 +53,9 @@ type UapClawSwarm struct {
 	// agentRuntime 执行账本归属方（P4 收归）。
 	// Python: 门面不持有 Runtime；Go 侧为消除"每个 UapClawSwarm 各持一本账"，
 	// 由 AgentManager 创建后经 SetAgentRuntime 注入，账本调用一律经它转接。
+	//
+	// 构造期即创建一本自有 Runtime（等价于 Python 的"Runtime 自带账本"）：
+	// 这样单测直接构造门面也能用，同时 AgentManager 会用共享那本覆盖它。
 	agentRuntime *swruntime.AgentRuntime
 
 	// skilldevService SkillDev 服务（懒初始化，ensureSkillDevService 时创建）。
@@ -117,12 +116,14 @@ func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 // NewUapClaw 创建 UapClawSwarm 实例。
 // Python: JiuWenClaw.__init__()
 //
-// coordinator 保留为兜底：P4 之后账本调用经注入的 AgentRuntime 转接，
-// 未注入时（单测直接构造门面）仍需要可用账本，故照旧自建。
+// 账本不再由门面持有：AgentRuntime 构造期自建（Python
+// `session_coordinator or RuntimeSessionCoordinator()`）。门面这里造一个自有
+// Runtime 只是为了让"直接构造门面"的单测也有可用账本；生产路径上
+// AgentManager 会用共享的那本覆盖（SetAgentRuntime）。
 func NewUapClaw() *UapClawSwarm {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	return &UapClawSwarm{
-		coordinator:        swsession.NewRuntimeSessionCoordinator(swsession.DefaultCoordinatorOptions()),
+		agentRuntime:       swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}),
 		skillManager:       skill.NewSkillManager(workspace.AgentWorkspaceDir()),
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
 		appCtx:             appCtx,
@@ -143,13 +144,10 @@ func (uc *UapClawSwarm) SetAgentRuntime(runtime *swruntime.AgentRuntime) {
 // executionCoordinator 返回执行账本（经 Runtime，未注入时退回自身字段）。
 // Python: service.py 内 self._session_coordinator
 func (uc *UapClawSwarm) executionCoordinator() swruntime.SessionCoordinatorPort {
-	if uc.agentRuntime != nil {
-		return uc.agentRuntime.Coordinator()
+	if uc.agentRuntime == nil {
+		return nil
 	}
-	if uc.coordinator != nil {
-		return uc.coordinator
-	}
-	return nil
+	return uc.agentRuntime.Coordinator()
 }
 
 // ProcessMessage 通过门面自有的会话调度器处理请求。
@@ -281,26 +279,10 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 
 	// 提交到会话协调器并等待结果
 	// Python: AgentRuntime 的 _session_coordinator.run_unary（10.3.28d 取代 sessionManager.SubmitAndWait）
-	if runtime := uc.agentRuntime; runtime != nil {
-		// P4：账本调用收归 Runtime（Python 门面不持有协调器）
-		_, _ = runtime.RegisterSession(sessionID, request.ChannelID,
-			swsession.SessionPersistencePolicyPersistent)
-		result, err := runtime.RunUnary(ctx, sessionID, request.RequestID,
-			swsession.SessionWorkKindChatStream,
-			func(taskCtx context.Context) (any, error) {
-				return a.ProcessMessageImpl(taskCtx, request, inputs)
-			},
-			swsession.UnaryOptions{})
-		if err != nil {
-			return nil, err
-		}
-		resp, ok := result.(*schema.AgentResponse)
-		if !ok || resp == nil {
-			return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-				schema.WithResponseOK(true)), nil
-		}
-		return resp, nil
-	}
+	//
+	// 账本一律经 Runtime 取（Python 门面不持有 coordinator，见 doc.go）。
+	// 注意：这里**不能提前 return**——后面的 assistant 历史与 MEMORY_AFTER_CHAT
+	// 钩子必须对所有执行路径生效（Python 只有一个出口）。
 	coordinator := uc.executionCoordinator()
 	if coordinator == nil {
 		return nil, swruntime.ErrCoordinatorUnavailable

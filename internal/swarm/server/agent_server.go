@@ -17,7 +17,6 @@ import (
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
-	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -55,9 +54,6 @@ type AgentServer struct {
 	// provisioner 会话供给事务编排器（10.3.28b/c）
 	// Python: AgentRuntime._session_provisioner
 	provisioner *swruntime.RuntimeSessionProvisioner
-	// coordinator 会话执行协调器（10.3.28d）
-	// Python: AgentRuntime._session_coordinator
-	coordinator *swsession.RuntimeSessionCoordinator
 	// agentConfigService Agent 配置 CRUD 服务
 	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
@@ -122,12 +118,11 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	}
 	// 控制事件走 push 通道（对齐 Python _send_runtime_event 的 plan_mode_exited 分支）
 	server.planController = swruntime.NewPlanModeController()
-	// 协调器由 Runtime 持有（Python: AgentRuntime._session_coordinator）
-	server.coordinator = swsession.NewRuntimeSessionCoordinator(swsession.DefaultCoordinatorOptions())
+	// 账本由 Runtime 构造期自建（Python: `session_coordinator or RuntimeSessionCoordinator()`），
+	// server 不再自己 new 一份——那是 P4 之前"两本账"的根源。
 	server.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
 		Manager:        agentManager,
 		PlanController: server.planController,
-		Coordinator:    server.coordinator,
 		ResetPlanSession: func(sessionID string) {
 			server.planController.ResetSession(sessionID)
 		},
@@ -145,6 +140,8 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 			}
 		},
 	})
+	// AgentManager 创建门面时把共享账本注入门面（P4：门面不自建账本）。
+	agentManager.SetRuntimeProvider(func() *swruntime.AgentRuntime { return server.agentRuntime })
 	server.provisioner = newSessionProvisioner(server.planController, server.agentManager, server.agentRuntime)
 	return server
 }

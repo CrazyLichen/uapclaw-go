@@ -2,10 +2,10 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 )
 
 // startedRuntime 构造并启动一个 Runtime。
@@ -166,10 +166,16 @@ func TestCoordinator_返回注入实例(t *testing.T) {
 	require.Same(t, coordinator, runtime.Coordinator())
 }
 
-// TestCoordinator_未注入返回nil 未注入时为 nil 不 panic。
-func TestCoordinator_未注入返回nil(t *testing.T) {
+// TestCoordinator_未注入时自建 未注入时 Runtime 自建一本账。
+// Python: service.py:414 session_coordinator = session_coordinator or RuntimeSessionCoordinator()
+//
+// 这是"全局只有一本账"的前提：任何创建 Runtime 的路径都自带账本。
+// 旧实现返回 nil（等外部注入），导致门面不得不自己再 new 一本 → 两本账。
+func TestCoordinator_未注入时自建(t *testing.T) {
 	runtime := NewAgentRuntime(AgentRuntimeDeps{})
-	require.Nil(t, runtime.Coordinator())
+	coordinator := runtime.Coordinator()
+	require.NotNil(t, coordinator, "未注入时应自建")
+	require.Same(t, coordinator, runtime.Coordinator(), "多次取同一本账")
 }
 
 // TestAgentManager_返回注入实例 多次取同一指针。
@@ -213,4 +219,55 @@ func TestRuntimeAccessor_清理路径可用(t *testing.T) {
 	_, err := runtime.CleanupSession(context.Background(), "web", "s1", false)
 	require.NoError(t, err)
 	require.Equal(t, []string{"coordinator.CloseSession", "manager.CleanupSessionRuntime"}, recorder.steps)
+}
+
+// ──────────────────────────── fail-closed 装配守卫 ────────────────────────────
+
+// TestValidateAgentDefinition_未装配模型解析器报错 不静默跳过校验。
+// Python: service.py:707-714 resolve_model_capability 恒可用
+func TestValidateAgentDefinition_未装配模型解析器报错(t *testing.T) {
+	runtime := NewAgentRuntime(AgentRuntimeDeps{})
+	definition := map[string]any{
+		"name": "abc", "instructions": "do it", "model": "m1",
+	}
+	_, err := runtime.validateAgentDefinition(definition, "agent.work.normal")
+	require.ErrorIs(t, err, ErrModelCatalogUnavailable,
+		"未装配时必须报错，不能放行不存在的模型")
+}
+
+// TestValidateAgentDefinition_已装配但模型不存在 报 MODEL_NOT_FOUND。
+func TestValidateAgentDefinition_已装配但模型不存在(t *testing.T) {
+	runtime := NewAgentRuntime(AgentRuntimeDeps{
+		ResolveModelCapability: func(model string) (RuntimeModelDescriptor, error) {
+			return RuntimeModelDescriptor{}, errors.New("not found")
+		},
+	})
+	definition := map[string]any{
+		"name": "abc", "instructions": "do it", "model": "m1",
+	}
+	_, err := runtime.validateAgentDefinition(definition, "agent.work.normal")
+	require.ErrorIs(t, err, ErrAgentDefinitionModelNotFound)
+}
+
+// TestValidateAgentDefinition_无model字段跳过校验 不配置模型时不要求解析器。
+func TestValidateAgentDefinition_无model字段跳过校验(t *testing.T) {
+	runtime := NewAgentRuntime(AgentRuntimeDeps{})
+	definition := map[string]any{"name": "abc", "instructions": "do it"}
+	execution, err := runtime.validateAgentDefinition(definition, "agent.work.normal")
+	require.NoError(t, err)
+	require.NotNil(t, execution)
+}
+
+// TestBindAgentExecutionRequest_未装配模型解析器报错 不静默丢弃 selection_key。
+// Python: service.py:1577-1581 resolve_model_capability(requested).selection_key
+func TestBindAgentExecutionRequest_未装配模型解析器报错(t *testing.T) {
+	runtime := NewAgentRuntime(AgentRuntimeDeps{})
+	execution, err := PrepareAgentExecution(map[string]any{
+		"name": "abc", "instructions": "do it", "model": "m1",
+	}, "agent.work.normal")
+	require.NoError(t, err)
+
+	req := declarativeChatRequest(t, "web", "sess-1", "")
+	_, err = runtime.bindAgentExecutionRequest(req, execution)
+	require.ErrorIs(t, err, ErrModelCatalogUnavailable)
 }
