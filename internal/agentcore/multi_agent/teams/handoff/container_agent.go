@@ -470,8 +470,8 @@ func (c *ContainerAgent) invokeTargetWithStream(
 	agentInput map[string]any,
 	teamSession *session.AgentTeamSession,
 ) (map[string]any, *HandoffSignal, error) {
-	// 创建子 AgentSession
-	agentSession := teamSession.CreateAgentSession(targetAgent.Card(), targetAgent.Card().ID, true)
+	// 创建子 AgentSession（handoff 不是团队成员，不传 member_name）
+	agentSession := teamSession.CreateAgentSession(targetAgent.Card(), targetAgent.Card().ID, true, "")
 
 	// 注入上下文历史
 	c.injectContextHistory(agentSession, teamSession)

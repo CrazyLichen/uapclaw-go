@@ -2,8 +2,11 @@ package session
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
@@ -50,6 +53,22 @@ type Session struct {
 	interaction *interaction.SimpleAgentInteraction
 	// sourceMetadata 流数据来源元数据
 	sourceMetadata map[string]any
+	// parentSessionID 拥有本子会话的产品会话标识（血缘，一经绑定不可改）
+	// Python: Session._parent_session_id（core/session/agent.py L62-66）
+	parentSessionID string
+	// teamCacheScope 团队成员的缓存作用域（team_id, agent_id）
+	// Python: Session._team_cache_scope（core/session/agent.py L67）
+	teamCacheScope *teamCacheScope
+}
+
+// teamCacheScope 团队成员缓存作用域：所有成员共享产品会话 id，
+// 必须靠 team_id + agent_id 才能推出各自的缓存身份。
+// Python: Session._team_cache_scope: tuple[str, str] | None（agent.py L67）
+type teamCacheScope struct {
+	// teamID 团队标识
+	teamID string
+	// agentID 成员 agent 标识
+	agentID string
 }
 
 // SessionOption Session 构造选项函数类型
@@ -182,6 +201,14 @@ func WithSourceMetadata(meta map[string]any) SessionOption {
 	}
 }
 
+// WithParentSessionID 设置产品侧父会话标识的选项。
+// Python: Session(parent_session_id=...)（core/session/agent.py L62-66）
+func WithParentSessionID(parentSessionID string) SessionOption {
+	return func(s *Session) {
+		s.parentSessionID = normalizeParentSessionID(parentSessionID)
+	}
+}
+
 // GetSessionID 返回会话唯一标识
 func (s *Session) GetSessionID() string {
 	return s.sessionID
@@ -215,6 +242,88 @@ func (s *Session) GetSourceMetadata() map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// GetParentSessionID 返回拥有本子会话的产品会话标识，无血缘返回空串。
+// Python: Session.get_parent_session_id (core/session/agent.py L73-75)
+func (s *Session) GetParentSessionID() string {
+	return s.parentSessionID
+}
+
+// BindParentSessionID 在会话开始运行前绑定产品侧父会话。
+// 血缘一经设定不可迁移：重复绑定同值幂等，改绑返回错误（调用方持有所有权）。
+// Python: Session.bind_parent_session_id (core/session/agent.py L77-100)
+func (s *Session) BindParentSessionID(parentSessionID string) error {
+	normalized := normalizeParentSessionID(parentSessionID)
+	if normalized == "" {
+		return nil
+	}
+	if s.parentSessionID == "" {
+		s.parentSessionID = normalized
+		return nil
+	}
+	if s.parentSessionID != normalized {
+		return fmt.Errorf("Session parent is already bound to %q; cannot rebind to %q",
+			s.parentSessionID, normalized)
+	}
+	return nil
+}
+
+// SetTeamCacheScope 绑定成员会话推导缓存身份所需的团队作用域。
+// 两个参数缺一即忽略（对齐 Python 的空值守卫）。
+// Python: Session.set_team_cache_scope (core/session/agent.py L120-124)
+func (s *Session) SetTeamCacheScope(teamID, agentID string) {
+	if teamID == "" || agentID == "" {
+		return
+	}
+	s.teamCacheScope = &teamCacheScope{teamID: teamID, agentID: agentID}
+}
+
+// GetCacheIdentity 返回本会话拥有的 provider 面向缓存身份。
+// 团队子会话必须带成员作用域——所有成员共享产品会话 id；独立子会话用运行时
+// 会话 id 作为 cache_id，并可指向显式的产品会话父级。
+// Python: Session.get_cache_identity (core/session/agent.py L126-174)
+func (s *Session) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
+	if s.teamCacheScope != nil {
+		cacheID, err := kv_cache.TeamMemberCacheIdentity(
+			s.sessionID, s.teamCacheScope.teamID, s.teamCacheScope.agentID)
+		if err != nil {
+			return kv_cache.KVCacheIdentity{}, err
+		}
+		parentCacheID := s.parentSessionID
+		if parentCacheID == "" {
+			parentCacheID = s.sessionID
+		}
+		return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: parentCacheID}, nil
+	}
+	sourceAgentID, _ := s.sourceMetadata["source_agent_id"].(string)
+	sourceTeamID, _ := s.sourceMetadata["source_team_id"].(string)
+	if sourceTeamID != "" && sourceAgentID != "" {
+		cacheID, err := kv_cache.TeamMemberCacheIdentity(s.sessionID, sourceTeamID, sourceAgentID)
+		if err != nil {
+			return kv_cache.KVCacheIdentity{}, err
+		}
+		return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: s.sessionID}, nil
+	}
+	cacheID, _ := s.GetEnv(kv_cache.KVCacheAffinitySessionIDEnv).(string)
+	parentCacheID, _ := s.GetEnv(kv_cache.KVCacheAffinityParentSessionIDEnv).(string)
+	hasCacheID := strings.TrimSpace(cacheID) != ""
+	hasParentCacheID := strings.TrimSpace(parentCacheID) != ""
+	if hasCacheID || hasParentCacheID || s.parentSessionID != "" {
+		resolvedCacheID := cacheID
+		if resolvedCacheID == "" {
+			resolvedCacheID = s.sessionID
+		}
+		resolvedParent := parentCacheID
+		if resolvedParent == "" {
+			resolvedParent = s.parentSessionID
+		}
+		if resolvedParent == "" {
+			resolvedParent = resolvedCacheID
+		}
+		return kv_cache.KVCacheIdentity{CacheID: resolvedCacheID, ParentCacheID: resolvedParent}, nil
+	}
+	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}, nil
 }
 
 // GetAgentID 返回 Agent ID
@@ -514,6 +623,12 @@ func init() {
 	controller.RegisterSessionCreator(func(sessionID string, card *agentschema.AgentCard, envs map[string]any) controller.StateAccessor {
 		return CreateAgentSession(sessionID, card, envs)
 	})
+}
+
+// normalizeParentSessionID 归一化父会话标识：去空白，空值视为未提供。
+// Python: parent_session_id.strip() if isinstance(str) and strip() else None（agent.py L62-66）
+func normalizeParentSessionID(parentSessionID string) string {
+	return strings.TrimSpace(parentSessionID)
 }
 
 // writeStream 写入标准输出流（内部实现）。

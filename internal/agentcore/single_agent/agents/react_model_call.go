@@ -54,16 +54,24 @@ func (a *ReActAgent) callModel(
 	// 但退出 rail 后 ctx.inputs 应恢复为调用前的类型，否则 reactLoop 中
 	// cbc.Inputs().(*InvokeInputs) 类型断言会失败）
 	savedInputs := cbc.Inputs()
-	cbc.SetInputs(&interfaces.ModelCallInputs{
+	modelCallInputs := &interfaces.ModelCallInputs{
 		Messages:     previewMsgs,
 		Tools:        tools,
 		ModelContext: modelCtx,
-	})
+	}
+	cbc.SetInputs(modelCallInputs)
 
 	var result *llmschema.AssistantMessage
-	// 归属随会话元数据变化（团队/成员可能在轮内被改写），每次模型调用前重新解析一次。
-	// Python: _report_context_usage 里重解析并回写 ctx.context_usage_attribution（react_agent.py L1477-1483）
-	cbc.SetContextUsageAttribution(a.resolveContextUsageAttribution(cbc))
+	// 归属随会话元数据变化（团队/成员可能在轮内被改写），每次模型调用前重新解析一次，
+	// 并同时挂到 ctx 与本次模型调用输入上（后者是上报侧读取面）。
+	// Python: _report_context_usage 里重解析并回写 ctx.context_usage_attribution
+	//         与 ctx.inputs.context_usage_attribution（react_agent.py L1477-1483）
+	usageAttribution := a.resolveContextUsageAttribution(cbc)
+	cbc.SetContextUsageAttribution(usageAttribution)
+	modelCallInputs.ContextUsageAttribution = usageAttribution
+	// 同步刷新 ctx 上的绑定盒：同一条 ctx 链上的子代理委派能读到完整 14 键。
+	// Python: ctx.context_usage_attribution.clear() + update(attribution)（react_agent.py L1478-1479）
+	rail.UpdateUsageAttribution(ctx, usageAttribution)
 	err := rail.ModelCallRail.Execute(ctx, cbc, func() error {
 		var e error
 		result, e = a.railedModelCall(ctx, cbc, sess)

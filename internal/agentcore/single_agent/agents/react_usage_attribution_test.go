@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -40,7 +41,9 @@ func (s *attributionSession) GetTeamID() string { return s.teamID }
 func (s *attributionSession) GetParentSessionID() string { return s.parentSessionID }
 
 // GetCacheIdentity 返回缓存身份
-func (s *attributionSession) GetCacheIdentity() (string, string) { return s.cacheID, s.parentCacheID }
+func (s *attributionSession) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
+	return kv_cache.KVCacheIdentity{CacheID: s.cacheID, ParentCacheID: s.parentCacheID}, nil
+}
 
 // GetEnv 返回环境变量
 func (s *attributionSession) GetEnv(key string, _ ...any) any { return s.env[key] }
@@ -89,7 +92,7 @@ func TestResolveContextUsageAttribution_无会话兜底(t *testing.T) {
 // TestResolveContextUsageAttribution_来源元数据与构建上下文 验证团队/成员来源。
 func TestResolveContextUsageAttribution_来源元数据与构建上下文(t *testing.T) {
 	a := newAttributionAgent(t, "agent-2")
-	a.SetUsageIdentity(&buildContextStub{memberName: "worker"}, "agent-2")
+	a.SetUsageBuildContext(&buildContextStub{memberName: "worker"})
 	sess := &attributionSession{
 		testSessionFacade: &testSessionFacade{id: "sess-2"},
 		sourceMetadata:    map[string]any{"source_team_id": "team-9", "source_member_name": "leader"},
@@ -107,7 +110,7 @@ func TestResolveContextUsageAttribution_来源元数据与构建上下文(t *tes
 // TestResolveContextUsageAttribution_归属值优先 验证 ctx 归属覆盖会话推断。
 func TestResolveContextUsageAttribution_归属值优先(t *testing.T) {
 	a := newAttributionAgent(t, "agent-3")
-	a.SetUsageIdentity(&buildContextStub{memberName: "worker"}, "agent-3")
+	a.SetUsageBuildContext(&buildContextStub{memberName: "worker"})
 	sess := &attributionSession{
 		testSessionFacade: &testSessionFacade{id: "sess-3"},
 		sourceMetadata:    map[string]any{"source_team_id": "team-x", "source_member_name": "leader"},

@@ -40,6 +40,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -400,6 +401,14 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 	}
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
+	// ownsSession 标记会话是否由本次调用创建：创建方负责 post_run 收尾。
+	// Python: owns_session = session is None（deep_agent.py L3355）
+	ownsSession := sess == nil
+	prepared, prepErr := d.prepareSingleRoundSession(ctx, invokeInputs, sess)
+	if prepErr != nil {
+		return nil, prepErr
+	}
+	sess = prepared
 
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
@@ -434,6 +443,11 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 		d.saveState(sess, nil)
 		d.clearState(sess, false)
 	}
+	// 自建会话由本次调用收尾（关流 + 提交），与 Python 的 owns_session 分支一致。
+	// Python: if owns_session and session is not None: await session.post_run()（deep_agent.py L3411-3412）
+	if ownsSession {
+		postRunOwnedSession(ctx, sess)
+	}
 	return result, nil
 }
 
@@ -467,6 +481,13 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 	streamModes := agentOpts.StreamModes
+	// Python: owns_session = session is None（deep_agent.py L3444）
+	ownsSession := sess == nil
+	prepared, prepErr := d.prepareSingleRoundSession(ctx, invokeInputs, sess)
+	if prepErr != nil {
+		return nil, prepErr
+	}
+	sess = prepared
 
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
@@ -538,9 +559,61 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 			d.saveState(sess, nil)
 			d.clearState(sess, false)
 		}
+		// 自建会话由本次调用收尾（与 Invoke 同一口径）。
+		// Python: if owns_session and session is not None: await session.post_run()（deep_agent.py L3528-3529）
+		if ownsSession {
+			postRunOwnedSession(ctx, sess)
+		}
 	}()
 
 	return outCh, nil
+}
+
+// prepareSingleRoundSession 在单轮模式下按 conversation_id 自建会话。
+// 任务循环模式（且非中断恢复）下会话归调用方所有，这里不建。
+// Python: DeepAgent._prepare_single_round_session (deep_agent.py L2053-2075)
+func (d *DeepAgent) prepareSingleRoundSession(
+	ctx context.Context,
+	inputs *agentinterfaces.InvokeInputs,
+	sess sessioninterfaces.SessionFacade,
+) (sessioninterfaces.SessionFacade, error) {
+	if sess != nil || inputs.ConversationID == "" {
+		return sess, nil
+	}
+	d.configMu.RLock()
+	deepConfig := d.deepConfig
+	d.configMu.RUnlock()
+	if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(inputs) {
+		return nil, nil // 任务循环会话由调用方持有
+	}
+	envs := make(map[string]any)
+	if inputs.ParentSessionID != "" {
+		envs[kv_cache.KVCacheAffinityParentSessionIDEnv] = inputs.ParentSessionID
+	}
+	newSess := session.NewSession(
+		session.WithSessionID(inputs.ConversationID),
+		session.WithCard(d.card),
+		session.WithEnvs(envs),
+	)
+	if err := newSess.PreRun(ctx, toEffectiveInputs(inputs)); err != nil {
+		return nil, err
+	}
+	return newSess, nil
+}
+
+// postRunOwnedSession 对本次调用自建的会话执行 post_run（关流 + 提交）。
+// 会话实现不提供 post_run 时静默跳过（Python 侧会话必有该方法）。
+func postRunOwnedSession(ctx context.Context, sess sessioninterfaces.SessionFacade) {
+	if sess == nil {
+		return
+	}
+	runner, ok := sess.(interface{ PostRun(context.Context) error })
+	if !ok {
+		return
+	}
+	if err := runner.PostRun(ctx); err != nil {
+		logger.Debug(logComponent).Err(err).Msg("owned session post_run failed")
+	}
 }
 
 // Card 返回 Agent 身份卡片。

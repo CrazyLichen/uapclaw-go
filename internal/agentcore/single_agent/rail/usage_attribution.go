@@ -11,14 +11,25 @@ package rail
 
 import (
 	"context"
+	"sync"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// attributionBox 请求级归属的可变载体。
+// Python 把同一个 dict 绑进 ContextVar，之后原地 clear()+update() 让读取方看到新值；
+// Go 的 ctx 值不可替换，所以绑一个加锁的盒子，刷新时原地更新。
+type attributionBox struct {
+	// mu 保护 data 的并发读写（模型调用刷新与并发工具读取）
+	mu sync.RWMutex
+	// data 当前归属
+	data map[string]any
+}
+
 // usageInvocationIDKey 当前调用标识的 ctx 键。
 type usageInvocationIDKey struct{}
 
-// usageAttributionKey 当前归属字典的 ctx 键。
+// usageAttributionKey 当前归属盒子的 ctx 键。
 type usageAttributionKey struct{}
 
 // usageDelegationKey 待启动子调用的委派归属 ctx 键。
@@ -50,16 +61,32 @@ func CurrentUsageAttribution(ctx context.Context) map[string]any {
 	if ctx == nil {
 		return map[string]any{}
 	}
-	if v, ok := ctx.Value(usageAttributionKey{}).(map[string]any); ok && v != nil {
-		return copyAttribution(v)
+	box, ok := ctx.Value(usageAttributionKey{}).(*attributionBox)
+	if !ok || box == nil {
+		return map[string]any{}
 	}
-	return map[string]any{}
+	return box.snapshot()
 }
 
 // BindUsageAttribution 绑定归属字典，返回派生 ctx。
 // Python: bind_usage_attribution (rail/base.py L106-108)
 func BindUsageAttribution(ctx context.Context, attribution map[string]any) context.Context {
-	return context.WithValue(ctx, usageAttributionKey{}, copyAttribution(attribution))
+	return context.WithValue(ctx, usageAttributionKey{}, &attributionBox{data: copyAttribution(attribution)})
+}
+
+// UpdateUsageAttribution 原地更新当前绑定的归属（不影响父 ctx）。
+// 刷新后的完整归属会立刻对同一条 ctx 链上的读取方可见，等价 Python 的
+// ctx.context_usage_attribution.clear() + update()。
+// Python: react_agent.py L1478-1479 / L1682-1683 / L1757-1758
+func UpdateUsageAttribution(ctx context.Context, attribution map[string]any) {
+	if ctx == nil {
+		return
+	}
+	box, ok := ctx.Value(usageAttributionKey{}).(*attributionBox)
+	if !ok || box == nil {
+		return
+	}
+	box.replace(attribution)
 }
 
 // CurrentUsageDelegation 返回为即将启动的子调用准备的委派归属，缺失返回空字典。
@@ -140,6 +167,20 @@ func BuildUsageDelegationAttribution(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// snapshot 返回归属副本（读取方改不到内部字典）。
+func (b *attributionBox) snapshot() map[string]any {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return copyAttribution(b.data)
+}
+
+// replace 整体替换归属。
+func (b *attributionBox) replace(data map[string]any) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.data = copyAttribution(data)
+}
 
 // copyAttribution 复制归属字典（对齐 Python 的 dict(...) 语义）。
 func copyAttribution(src map[string]any) map[string]any {

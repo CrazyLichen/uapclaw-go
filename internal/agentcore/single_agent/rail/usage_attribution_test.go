@@ -96,3 +96,36 @@ func TestBuildUsageDelegationAttribution_显式父调用标识优先(t *testing.
 
 	require.Equal(t, "inv-explicit", got["parent_invocation_id"])
 }
+
+// TestUpdateUsageAttribution_同链可见 验证原地刷新对同一 ctx 链的读取方立即可见。
+// Python: ctx.context_usage_attribution.clear() + update()（react_agent.py L1478-1479）
+func TestUpdateUsageAttribution_同链可见(t *testing.T) {
+	ctx := BindUsageAttribution(context.Background(), map[string]any{"invocation_id": "inv-1"})
+
+	UpdateUsageAttribution(ctx, map[string]any{
+		"invocation_id": "inv-1",
+		"team_id":       "team-1",
+		"member_name":   "worker",
+	})
+
+	got := CurrentUsageAttribution(ctx)
+	assert.Equal(t, "team-1", got["team_id"], "刷新后的键必须对同链可见")
+	assert.Equal(t, "worker", got["member_name"])
+}
+
+// TestUpdateUsageAttribution_父ctx不受影响 验证刷新不跨链泄漏。
+func TestUpdateUsageAttribution_父ctx不受影响(t *testing.T) {
+	parent := context.Background()
+	ctx := BindUsageAttribution(parent, map[string]any{"invocation_id": "inv-1"})
+
+	UpdateUsageAttribution(ctx, map[string]any{"team_id": "team-1"})
+
+	assert.Empty(t, CurrentUsageAttribution(parent), "父 ctx 不应看到子链刷新")
+}
+
+// TestUpdateUsageAttribution_未绑定为空操作 验证无绑定时不 panic。
+func TestUpdateUsageAttribution_未绑定为空操作(t *testing.T) {
+	UpdateUsageAttribution(context.Background(), map[string]any{"team_id": "team-1"})
+	//nolint:staticcheck // 显式验证 nil ctx 的兜底路径
+	UpdateUsageAttribution(nil, map[string]any{"team_id": "team-1"})
+}
