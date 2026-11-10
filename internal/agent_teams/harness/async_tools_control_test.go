@@ -55,8 +55,23 @@ func TestRuntime_Cancel与Wait(t *testing.T) {
 	assert.Equal(t, AsyncToolStatusCompleted, record.Status)
 	assert.Equal(t, "done", record.Result)
 
-	assert.True(t, rt.Cancel("w"), "已完成任务按 docstring 返回 true")
+	assert.False(t, rt.Cancel("w"), "已完成任务已从 _tasks 移除，cancel 返回 false")
 	assert.False(t, rt.Cancel("missing"))
+}
+
+// TestRuntime_Cancel运行中返回true 验证在飞任务可按 id 取消。
+func TestRuntime_Cancel运行中返回true(t *testing.T) {
+	rec := &injectionRecorder{}
+	rt := newTestRuntime(t, rec)
+	gate := make(chan struct{})
+	defer close(gate)
+	rt.Launch("c", func(ctx context.Context) (any, error) {
+		<-gate
+		return "x", nil
+	}, tools.AsyncToolLaunchOptions{ToolName: "demo"})
+	assert.True(t, rt.Cancel("c"))
+	waitStatus(t, rt, "c", AsyncToolStatusError)
+	assert.Equal(t, "cancelled", rt.Get("c").Error)
 }
 
 // TestRuntime_ListAll保序 验证 launch 顺序与未知 id。

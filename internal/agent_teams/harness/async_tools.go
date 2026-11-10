@@ -45,11 +45,15 @@ type AsyncToolRecord struct {
 	FormatFailed func(error) string
 }
 
-// asyncTask 在飞任务句柄。
+// asyncTask 在飞任务句柄（完成即从 tasks 删除，对齐上游 _tasks.pop）。
 type asyncTask struct {
 	// cancel 取消后台任务
 	cancel context.CancelFunc
-	// done 终态信号（sync.Once close）
+}
+
+// asyncEvent 任务终态信号（不随完成删除，对齐上游 _events）。
+type asyncEvent struct {
+	// done 终态信号
 	done chan struct{}
 	// once 保证 done 只关一次
 	once sync.Once
@@ -66,8 +70,10 @@ type AsyncToolRuntime struct {
 	registry map[string]*AsyncToolRecord
 	// order 启动顺序（ListAll 保序）
 	order []string
-	// tasks task_id → 在飞句柄
+	// tasks task_id → 在飞句柄（完成即删除，对齐上游 _tasks）
 	tasks map[string]*asyncTask
+	// events task_id → 终态信号（不删除，对齐上游 _events）
+	events map[string]*asyncEvent
 	// outputDirResolver 溢出目录解析器（rail init 注入）
 	outputDirResolver func() string
 	// spillThreshold 溢出阈值（字符数）
@@ -120,6 +126,7 @@ func NewAsyncToolRuntime(inject func(context.Context, string) error, opts ...Asy
 		inject:         inject,
 		registry:       make(map[string]*AsyncToolRecord),
 		tasks:          make(map[string]*asyncTask),
+		events:         make(map[string]*asyncEvent),
 		spillThreshold: defaultSpillThreshold,
 	}
 	for _, opt := range opts {
@@ -185,7 +192,8 @@ func (rt *AsyncToolRuntime) HasRunning(toolName string) bool {
 // Python: AsyncToolRuntime.launch (async_tools.py:193-225)
 func (rt *AsyncToolRuntime) Launch(taskID string, factory func(context.Context) (any, error), opts tools.AsyncToolLaunchOptions) {
 	ctx, cancel := context.WithCancel(context.Background())
-	task := &asyncTask{cancel: cancel, done: make(chan struct{})}
+	task := &asyncTask{cancel: cancel}
+	event := &asyncEvent{done: make(chan struct{})}
 	rt.mu.Lock()
 	if _, exists := rt.registry[taskID]; !exists {
 		rt.order = append(rt.order, taskID)
@@ -199,6 +207,7 @@ func (rt *AsyncToolRuntime) Launch(taskID string, factory func(context.Context) 
 		FormatFailed:    opts.FormatFailed,
 	}
 	rt.tasks[taskID] = task
+	rt.events[taskID] = event
 	rt.mu.Unlock()
 	go rt.run(ctx, taskID, factory, opts.ToolName)
 }
@@ -230,8 +239,9 @@ func (rt *AsyncToolRuntime) ListAll() []*AsyncToolRecord {
 	return out
 }
 
-// Cancel 取消一个任务；未知返回 false。
+// Cancel 取消一个任务；未知或已完成返回 false。
 // Python: AsyncToolRuntime.cancel (async_tools.py:375-393)
+// 上游 _tasks 在完成时被 add_done_callback pop，故已完成任务 cancel 返回 false。
 func (rt *AsyncToolRuntime) Cancel(taskID string) bool {
 	rt.mu.Lock()
 	task := rt.tasks[taskID]
@@ -261,15 +271,15 @@ func (rt *AsyncToolRuntime) Wait(ctx context.Context, taskID string, timeout tim
 		return rec
 	}
 	rt.mu.Lock()
-	task := rt.tasks[taskID]
+	event := rt.events[taskID]
 	rt.mu.Unlock()
-	if task == nil {
+	if event == nil {
 		return rec
 	}
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
-	case <-task.done:
+	case <-event.done:
 	case <-timer.C:
 	case <-ctx.Done():
 	}
@@ -357,6 +367,10 @@ func (rt *AsyncToolRuntime) run(ctx context.Context, taskID string, factory func
 		if r := recover(); r != nil {
 			rt.reportFailure(ctx, taskID, rec, toolName, fmt.Errorf("panic: %v", r))
 		}
+		// 完成即从 tasks 删除（对齐上游 add_done_callback 的 _tasks.pop）。
+		rt.mu.Lock()
+		delete(rt.tasks, taskID)
+		rt.mu.Unlock()
 	}()
 	result, err := factory(ctx)
 	switch {
@@ -424,12 +438,12 @@ func (rt *AsyncToolRuntime) reportCompleted(ctx context.Context, taskID string, 
 // Python: AsyncToolRuntime._signal (async_tools.py:318-322)
 func (rt *AsyncToolRuntime) signal(taskID string) {
 	rt.mu.Lock()
-	task := rt.tasks[taskID]
+	event := rt.events[taskID]
 	rt.mu.Unlock()
-	if task == nil {
+	if event == nil {
 		return
 	}
-	task.once.Do(func() { close(task.done) })
+	event.once.Do(func() { close(event.done) })
 }
 
 // injectText 尽力注入完成文本；停机竞态只记 Debug。
