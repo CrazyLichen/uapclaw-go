@@ -2123,3 +2123,67 @@ Python 的三处 `if authorization_error:` 分支要求 `facts.tool_name == send
 | `Capability.OperationFamily != "unknown"` | `unknown_operation` |
 
 测试的 `execFacts()` 必须四项齐全才能走到审查器分支。
+
+### 12.30 Task 33 执行结论：`reviewer_override_gate` + `reviewer_override_consume`
+
+**落地**：两个文件共 151 行 Python → 约 240 行 Go，覆盖率
+`reviewer_override_gate.go` **100%** / `reviewer_override_consume.go` **90.7%**，
+auto_permission 包 91.5%。
+
+#### `reviewer_override_gate.go`（67 行 / 1 方法）
+
+`allowOnceReviewerGateDecision` 的作用：用户点「允许一次」**不能绕过硬性禁止**。
+在单次放行路径上再跑一次路由，硬拦截仍然生效。
+
+返回值三态：
+
+| 返回 | 含义 |
+|---|---|
+| `(false, nil)` | 审查器未配置，或领域路由要求人工 → 交回后续流程 |
+| `(true, resp)` | 硬拦截生效，`resp` 为拒绝响应 |
+| `(true, nil)` | 闸门通过，继续走单次放行 |
+
+#### `reviewer_override_consume.go`（84 行 / 2 方法）
+
+`consumeSessionAutoConfirm` 识别并消费旧版 Core 写入 session state 的
+auto_confirm 标记。**不扩大适用范围**——`sessionAutoConfirmEligible` 有 9 个
+条件，比旧版 Core 更严：
+
+1. 有会话对象
+2. 无 `external_send` 副作用
+3. 参数是合法对象
+4. `FactsSource == "host_static"`
+5. 无别名冲突
+6. path/shell 类目下访问点已知
+7. `RequiresManualExecutionProviderReview` 为假
+8. 领域路由不要求人工
+9. 意图窗口未被阻断
+10. 自动确认键非空
+
+#### 新增偏差 V-15：`_is_auto_confirmed` 钩子缺失
+
+Python 用 `getattr(self.base_rail, "_is_auto_confirmed", None)` 调父类钩子；
+Go 的 `BasePermissionRail` 无此方法，改为本地 `isAutoConfirmed`：
+
+```go
+value, exists := config[key]
+if !exists { return false }
+boolean, ok := value.(bool)
+return ok && boolean
+```
+
+**比 Python 更严格**（仅显式 `bool true` 算确认，`"true"` / `1` 都不算）。
+方向正确——自动确认等于跳过审批，宁可少放行。
+
+已登记进 spec §12.27 的 9.90e 回填清单（与 `_skip_tool` / `_raise_interrupt` /
+`_get_auto_confirm_key` 同批）。
+
+#### 测试要点
+
+`SessionFacade` 接口很大（10+ 方法），但 `session.NewSession()` 无必填参数
+且 `*Session` 实现了该接口，测试直接用它构造真实会话 + `UpdateState` 注入
+`InterruptAutoConfirmKey`，无需写 fake。
+
+`fakeAutoConfirmRail` 嵌入 `fakePermissionRail` 并补 `AutoConfirmKey`，
+避免污染既有 fake（`lifecycle_test.go` 的 `TestRuntimeAutoConfirmKey_无能力`
+依赖 fake 无该方法）。

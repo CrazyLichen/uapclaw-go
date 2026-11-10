@@ -61,7 +61,9 @@
 //	├── manual_authorization.go # 需人工审批时的响应构造（9.90d-2 依赖前置）
 //	├── deterministic.go   # 确定性放行与路由包装（9.90d-2 依赖前置）
 //	├── artifact_authorization.go # 文件投递的精确授权（9.90d-2 依赖前置）
-//	└── reviewer_execution.go # 审查器执行编排：主入口 maybeRunReviewer（Task 32）
+//	├── reviewer_execution.go # 审查器执行编排：主入口 maybeRunReviewer（Task 32）
+//	├── reviewer_override_gate.go # 单次放行的审查器前置闸门（Task 33）
+//	└── reviewer_override_consume.go # 消费旧版 Core 会话级自动确认（Task 33）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）
