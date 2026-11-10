@@ -1,6 +1,8 @@
 package harness_protocol
 
 import (
+	"errors"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -183,3 +185,108 @@ func strPtr(s string) *string { return &s }
 
 // boolPtr 返回布尔指针。
 func boolPtr(b bool) *bool { return &b }
+
+// TestHarnessProtocolError_Error与Is 验证基类错误文案与哨兵归类。
+// Python: errors.py:21-22 HarnessProtocolError
+func TestHarnessProtocolError_Error与Is(t *testing.T) {
+	e := &HarnessProtocolError{Msg: "invariant broken"}
+	assert.Equal(t, "invariant broken", e.Error())
+	assert.True(t, errors.Is(e, ErrHarnessProtocol))
+	assert.True(t, errors.Is(e, ErrHarness))
+	assert.False(t, errors.Is(e, ErrEventStreamDone))
+}
+
+// TestNewTurnResult_providerData冻结 验证 provider_data 深拷贝。
+// Python: results.py:174
+func TestNewTurnResult_providerData冻结(t *testing.T) {
+	src := map[string]any{"k": []any{1}}
+	r, err := NewTurnResult(TurnStatusCompleted, ResultOptions{ProviderData: src})
+	require.NoError(t, err)
+	src["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, r.ProviderData["k"])
+}
+
+// TestNewTurnResult_非JSON输出报错 验证 final/structured 冻结失败上抛。
+// Python: results.py:172-173
+func TestNewTurnResult_非JSON输出报错(t *testing.T) {
+	_, err := NewTurnResult(TurnStatusCompleted, ResultOptions{FinalOutput: math.NaN()})
+	require.Error(t, err)
+
+	_, err = NewTurnResult(TurnStatusCompleted, ResultOptions{StructuredOutput: struct{}{}})
+	require.Error(t, err)
+}
+
+// TestNewTurnUsage_冻结providerData 验证 provider_data 深拷贝。
+// Python: results.py:129
+func TestNewTurnUsage_冻结providerData(t *testing.T) {
+	src := map[string]any{"k": []any{1}}
+	u, err := NewTurnUsage(nil, nil, nil, nil, nil, src)
+	require.NoError(t, err)
+	src["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, u.ProviderData["k"])
+}
+
+// TestNewTurnError_冻结providerData 验证 provider_data 深拷贝。
+// Python: results.py:145
+func TestNewTurnError_冻结providerData(t *testing.T) {
+	src := map[string]any{"k": []any{1}}
+	e, err := NewTurnError("boom", nil, nil, nil, src)
+	require.NoError(t, err)
+	src["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, e.ProviderData["k"])
+}
+
+// TestNewContentBlock_冻结data 验证 data 深拷贝。
+// Python: results.py:60
+func TestNewContentBlock_冻结data(t *testing.T) {
+	src := map[string]any{"k": []any{1}}
+	b, err := NewContentBlock("b1", "text", "hi", src)
+	require.NoError(t, err)
+	src["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, b.Data["k"])
+}
+
+// TestNewTurnMessage_冻结data 验证 data 深拷贝。
+// Python: results.py:76
+func TestNewTurnMessage_冻结data(t *testing.T) {
+	src := map[string]any{"k": []any{1}}
+	m, err := NewTurnMessage("m1", MessageRoleTool, nil, src)
+	require.NoError(t, err)
+	src["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, m.Data["k"])
+}
+
+// TestNewContentBlock_content非法 验证 content 冻结失败上抛。
+// Python: results.py:59
+func TestNewContentBlock_content非法(t *testing.T) {
+	_, err := NewContentBlock("b1", "text", math.NaN(), nil)
+	require.Error(t, err)
+}
+
+// TestNewTurnTermination_非法providerData 验证冻结失败上抛。
+// Python: results.py:89
+func TestNewTurnTermination_非法providerData(t *testing.T) {
+	_, err := NewTurnTermination(TurnTerminationKindTimeout, nil, nil, map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}
+
+// TestNewTurnError_非法providerData 验证冻结失败上抛。
+// Python: results.py:145
+func TestNewTurnError_非法providerData(t *testing.T) {
+	_, err := NewTurnError("boom", nil, nil, nil, map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}
+
+// TestNewTurnUsage_非法providerData 验证冻结失败上抛。
+// Python: results.py:129
+func TestNewTurnUsage_非法providerData(t *testing.T) {
+	_, err := NewTurnUsage(nil, nil, nil, nil, nil, map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}
+
+// TestNewTurnMessage_非法data 验证冻结失败上抛。
+// Python: results.py:76
+func TestNewTurnMessage_非法data(t *testing.T) {
+	_, err := NewTurnMessage("m1", MessageRoleUser, nil, map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}

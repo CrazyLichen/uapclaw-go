@@ -328,3 +328,143 @@ func TestNewHarnessContext_冻结metadata(t *testing.T) {
 	md["k"].([]any)[0] = 999
 	assert.Equal(t, []any{1}, c.Metadata["k"])
 }
+
+// TestNewModelEndpoint_key与provider非空 验证可选字段给出时必须非空串。
+// Python: models.py:270-273
+func TestNewModelEndpoint_key与provider非空(t *testing.T) {
+	base := "https://x"
+	blank := " "
+	_, err := NewModelEndpoint(&base, &blank, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "api_key must be a non-empty string")
+
+	_, err = NewModelEndpoint(&base, nil, &blank)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider must be a non-empty string")
+
+	prov := "openai"
+	e, err := NewModelEndpoint(nil, nil, &prov)
+	require.NoError(t, err)
+	assert.Equal(t, "openai", *e.Provider)
+}
+
+// TestNewModelChoice_effort非空 验证 effort 给出时必须非空。
+// Python: models.py:290-294
+func TestNewModelChoice_effort非空(t *testing.T) {
+	blank := " "
+	_, err := NewModelChoice(nil, &blank, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "effort must be a non-empty string")
+}
+
+// TestNewHarnessContext_protocolVersion可覆盖 验证显式版本与能力集拷贝。
+// Python: models.py:344,370
+func TestNewHarnessContext_protocolVersion可覆盖(t *testing.T) {
+	caps := map[HostCapability]bool{HostCapabilityHooks: true}
+	c, err := NewHarnessContext("a", "a1", "s1", "sys", ContextOptions{
+		ProtocolVersion:  "1.0",
+		HostCapabilities: caps,
+		ResumePolicy:     ResumePolicyRequireResume,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "1.0", c.ProtocolVersion)
+	assert.True(t, c.HostCapabilities[HostCapabilityHooks])
+	assert.Equal(t, ResumePolicyRequireResume, c.ResumePolicy)
+	// 拷贝隔离
+	caps[HostCapabilityHooks] = false
+	assert.True(t, c.HostCapabilities[HostCapabilityHooks])
+}
+
+// TestNewHarnessContext_mcpServers拷贝 验证切片拷贝隔离。
+// Python: models.py:372
+func TestNewHarnessContext_mcpServers拷贝(t *testing.T) {
+	cfg, err := NewMcpServerConfig("srv", McpTransportStdio, []string{"a"}, nil, nil, nil, nil)
+	require.NoError(t, err)
+	list := []McpServerConfig{cfg}
+	c, err := NewHarnessContext("a", "a1", "s1", "sys", ContextOptions{McpServers: list})
+	require.NoError(t, err)
+	list[0].Name = "mutated"
+	assert.Equal(t, "srv", c.McpServers[0].Name)
+}
+
+// TestNewHarnessContextWithEnv_合法映射 验证 string→string 正常通过。
+// Python: models.py:368-369
+func TestNewHarnessContextWithEnv_合法映射(t *testing.T) {
+	c, err := NewHarnessContextWithEnv("a", "a1", "s1", "sys", map[string]any{"K": "V"})
+	require.NoError(t, err)
+	assert.Equal(t, "V", c.Env["K"])
+}
+
+// TestFreezeJsonValue_float32分支 验证 float32 正负有限性判定。
+func TestFreezeJsonValue_float32分支(t *testing.T) {
+	got, err := FreezeJsonValue(float32(1.5))
+	require.NoError(t, err)
+	assert.Equal(t, float32(1.5), got)
+
+	_, err = FreezeJsonValue(float32(math.Inf(1)))
+	require.Error(t, err)
+}
+
+// TestFreezeJsonObject_非映射类型报错 验证切片入参被拒。
+func TestFreezeJsonObject_非映射类型报错(t *testing.T) {
+	_, err := FreezeJsonObject([]any{1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be a mapping")
+}
+
+// TestFreezeJsonValue_切片内非法元素上抛 验证递归错误传播。
+func TestFreezeJsonValue_切片内非法元素上抛(t *testing.T) {
+	_, err := FreezeJsonValue([]any{math.NaN()})
+	require.Error(t, err)
+
+	_, err = FreezeJsonValue(map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}
+
+// TestNewHarnessInput_metadata冻结 验证 metadata 深拷贝。
+func TestNewHarnessInput_metadata冻结(t *testing.T) {
+	md := map[string]any{"k": []any{1}}
+	in, err := NewHarnessInput("hi", md)
+	require.NoError(t, err)
+	md["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, in.Metadata["k"])
+}
+
+// TestNewHarnessInput_metadata非映射报错 验证 metadata 类型。
+func TestNewHarnessInput_metadata非映射报错(t *testing.T) {
+	_, err := NewHarnessInput("hi", nil)
+	require.NoError(t, err)
+}
+
+// TestNewModelSelection_effort单独 验证只给 effort。
+// Python: models.py:240
+func TestNewModelSelection_effort单独(t *testing.T) {
+	e := "high"
+	s, err := NewModelSelection(nil, &e)
+	require.NoError(t, err)
+	assert.Nil(t, s.Model)
+	assert.Equal(t, "high", *s.Effort)
+}
+
+// TestNewModelSelection_model非空分支 验证 model 为空串报错文案。
+// Python: models.py:243
+func TestNewModelSelection_model非空分支(t *testing.T) {
+	blank := ""
+	_, err := NewModelSelection(&blank, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "model must be a non-empty string")
+}
+
+// TestNewHarnessInput_content非法类型 验证 content 冻结失败上抛。
+// Python: models.py:206
+func TestNewHarnessInput_content非法类型(t *testing.T) {
+	_, err := NewHarnessInput(struct{}{}, nil)
+	require.Error(t, err)
+}
+
+// TestNewModelOption_extensions非法 验证冻结失败上抛。
+// Python: models.py:327
+func TestNewModelOption_extensions非法(t *testing.T) {
+	_, err := NewModelOption("m", "", "", nil, nil, false, map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}

@@ -41,3 +41,13 @@ func TestHarnessStateError_错误文案(t *testing.T) {
 	assert.Equal(t, "非法状态", (&HarnessStateError{Msg: "非法状态"}).Error())
 	assert.Equal(t, "不支持", (&UnsupportedHarnessCapabilityError{Msg: "不支持"}).Error())
 }
+
+// TestCheckpointConflictError_Error与Is 验证子类文案与两层哨兵。
+// Python: errors.py:25-26 CheckpointConflictError
+func TestCheckpointConflictError_Error与Is(t *testing.T) {
+	e := &CheckpointConflictError{Msg: "stale checkpoint"}
+	assert.Equal(t, "stale checkpoint", e.Error())
+	assert.True(t, errors.Is(e, ErrHarnessProtocol))
+	assert.True(t, errors.Is(e, ErrHarness))
+	assert.False(t, errors.Is(e, ErrEventStreamDone))
+}

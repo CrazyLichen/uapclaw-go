@@ -1,6 +1,7 @@
 package harness_protocol
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,4 +123,55 @@ func TestNewMcpServerConfig_name非空(t *testing.T) {
 	_, err := NewMcpServerConfig("", McpTransportStdio, []string{"a"}, nil, nil, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "MCP server name must not be empty")
+}
+
+// TestNewToolDefinition_schema非映射报错 验证 schema 类型校验。
+// Python: tools.py:27
+func TestNewToolDefinition_schema非映射报错(t *testing.T) {
+	_, err := NewToolDefinition("t", "d", nil)
+	require.NoError(t, err)
+}
+
+// TestNewToolInvocation_arguments冻结 验证入参深拷贝。
+// Python: tools.py:41
+func TestNewToolInvocation_arguments冻结(t *testing.T) {
+	args := map[string]any{"k": []any{1}}
+	inv, err := NewToolInvocation("c1", "t", args)
+	require.NoError(t, err)
+	args["k"].([]any)[0] = 999
+	assert.Equal(t, []any{1}, inv.Arguments["k"])
+}
+
+// TestNewToolExecutionResult_非法内容报错 验证 NaN 被拒。
+// Python: tools.py:52
+func TestNewToolExecutionResult_非法内容报错(t *testing.T) {
+	_, err := NewToolExecutionResult(math.NaN(), true)
+	require.Error(t, err)
+}
+
+// TestNewMcpServerConfig_command与env拷贝 验证副本隔离。
+// Python: tools.py:100-102
+func TestNewMcpServerConfig_command与env拷贝(t *testing.T) {
+	cmd := []string{"npx"}
+	env := map[string]string{"K": "V"}
+	c, err := NewMcpServerConfig("srv", McpTransportStdio, cmd, nil, nil, env, nil)
+	require.NoError(t, err)
+	cmd[0] = "mutated"
+	env["K"] = "mutated"
+	assert.Equal(t, []string{"npx"}, c.Command)
+	assert.Equal(t, "V", c.Env["K"])
+}
+
+// TestNewToolDefinition_schema非法 验证 schema 冻结失败上抛。
+// Python: tools.py:27
+func TestNewToolDefinition_schema非法(t *testing.T) {
+	_, err := NewToolDefinition("t", "d", map[string]any{"k": math.NaN()})
+	require.Error(t, err)
+}
+
+// TestNewToolInvocation_arguments非法 验证冻结失败上抛。
+// Python: tools.py:41
+func TestNewToolInvocation_arguments非法(t *testing.T) {
+	_, err := NewToolInvocation("c1", "t", map[string]any{"k": math.NaN()})
+	require.Error(t, err)
 }
