@@ -212,10 +212,17 @@ jobs:
             -min-assertions 2 \
             -min-effective-tests 1 \
             -defer-span \
-            -json > integration-audit-report.json
+            -json > integration-audit-report.json 2> integration-audit-stderr.txt
           AUDIT_EXIT=$?
+          # 失败时把 stderr 与报告尾部打出来：go run 编译不过时报告是空文件，
+          # 只有 stderr 能说明原因（否则 CI 日志只剩一句 exit status 1）。
+          if [ -s integration-audit-stderr.txt ]; then
+            echo "---- 审计进程 stderr ----"
+            cat integration-audit-stderr.txt
+          fi
           # 静态层不通过（含空壳目录、缺 build tag 等硬违规）直接失败
           if [ "$AUDIT_EXIT" -ne 0 ]; then
+            echo "---- 静态审计报告（未通过目录）----"
             cat integration-audit-report.json
             echo "::error::集成测试静态审计未通过（详见上方 JSON 报告），处置指引："
             echo "  1. 符号引用凑数（调用跨度不足）→ 补真实跨子系统调用断言，或迁回 internal 包单元测试"
