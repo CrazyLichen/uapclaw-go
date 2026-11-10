@@ -20,11 +20,21 @@ import (
 //
 // 按 query 前缀 /evolve* 分发到具体处理器。
 // ✅ 已回填：依赖 SkillEvolutionRail
-func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sessionID string, mode string) (map[string]any, error) {
+func (d *DeepAdapter) handleSlashCommand(
+	ctx context.Context, query string, sessionID string, mode string, channelID string,
+) (map[string]any, error) {
 	// Python: stripped = query.strip() 后按前缀匹配
 	stripped := strings.TrimSpace(query)
 	if stripped == "" || !strings.HasPrefix(stripped, "/") {
 		return nil, nil // 非 slash 命令
+	}
+
+	// Python: interface_deep.py:4321 —— goal 斜杠文本只是 TUI 便利，Web 等通道
+	// 必须走结构化 command.goal / attach_goal，普通聊天文本保持原义。
+	if strings.ToLower(strings.TrimSpace(channelID)) == "tui" {
+		if result := d.handleGoalSlashCommand(ctx, stripped, sessionID); result != nil {
+			return result, nil
+		}
 	}
 
 	// Python: 按 stripped 前缀分发（L4319-4348）。

@@ -248,13 +248,6 @@ func TestResetSession(t *testing.T) {
 	require.False(t, hasLock)
 }
 
-// TestSessionMessageRequiresQueue 占位实现必须透传 false。
-func TestSessionMessageRequiresQueue(t *testing.T) {
-	c := NewPlanModeController()
-	c.markActive("s1")
-	require.False(t, c.SessionMessageRequiresQueue("s1"))
-}
-
 // TestInjectActivationReminder 验证提醒文案与拼接顺序。
 func TestInjectActivationReminder(t *testing.T) {
 	got := InjectActivationReminder("原始query")

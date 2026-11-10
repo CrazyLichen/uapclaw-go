@@ -185,14 +185,25 @@ func TestAgentRuntime_Invoke_退出plan下发控制事件(t *testing.T) {
 	require.Equal(t, "agent.work.normal", parseRequestParams(exit)["mode"])
 }
 
-// TestAgentRuntime_Invoke_跳过矩阵 验证 team 与 resume 不参与 plan 同步。
-func TestAgentRuntime_Invoke_跳过矩阵(t *testing.T) {
+// TestAgentRuntime_Invoke_plan守卫两套语义 team 与中断续答只跳过 ensure_state，
+// check_post_process_exit 仍按上游执行——Python 该处只排除只读 goal 查询，
+// 不判 team、不判 resume。
+//
+// Python: service.py:1860（ensure_state 外层）+ plan.py:203 should_sync / is_interrupt_resume（内层）
+//
+//	service.py:1908（check_post_process_exit 外层）+ plan.py:127 is_team / is_plan（内层）
+func TestAgentRuntime_Invoke_plan守卫两套语义(t *testing.T) {
 	cases := []struct {
 		name   string
 		params map[string]any
+		// expect 调用序列：execute 为执行，load 为读 plan 状态
+		expect []string
 	}{
-		{"team 模式", map[string]any{"mode": "team.work.plan", "query": "x", "work_mode": "work"}},
-		{"中断续答", map[string]any{"mode": "agent.work.plan", "query": "x", "resume": true, "work_mode": "work"}},
+		// team：EnsureState 与 CheckPostProcessExit 都在各自内部 is_team 处早退，不碰状态
+		{"team 模式", map[string]any{"mode": "team.work.plan", "query": "x", "work_mode": "work"}, []string{"execute"}},
+		// 中断续答：EnsureState 内部 is_interrupt_resume 早退；CheckPostProcessExit 不判 resume，
+		// 因此仍在执行后读一次 plan 状态（与上游一致）
+		{"中断续答", map[string]any{"mode": "agent.work.plan", "query": "x", "resume": true, "work_mode": "work"}, []string{"execute", "load"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -204,13 +215,16 @@ func TestAgentRuntime_Invoke_跳过矩阵(t *testing.T) {
 			})
 			_, err := rt.Invoke(context.Background(), reqWithParams(t, tc.params))
 			require.NoError(t, err)
-			require.Equal(t, []string{"execute"}, agent.calls)
+			require.Equal(t, tc.expect, agent.calls)
 		})
 	}
 }
 
-// TestAgentRuntime_Invoke_非chat方法跳过 plan 同步。
-func TestAgentRuntime_Invoke_非chat方法跳过(t *testing.T) {
+// TestAgentRuntime_Invoke_非chat方法只跳过ensure_state 非 chat 方法在 EnsureState
+// 内部被 should_sync 拦下，但 check_post_process_exit 不判方法类型，仍会读一次
+// plan 状态（与上游一致）。
+// Python: service.py:1908 + plan.py:127
+func TestAgentRuntime_Invoke_非chat方法只跳过ensure_state(t *testing.T) {
 	agent := &fakePlanAgent{}
 	rt := NewAgentRuntime(AgentRuntimeDeps{
 		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
@@ -221,7 +235,7 @@ func TestAgentRuntime_Invoke_非chat方法跳过(t *testing.T) {
 	req.ReqMethod = schema.ReqMethodSessionList
 	_, err := rt.Invoke(context.Background(), req)
 	require.NoError(t, err)
-	require.Equal(t, []string{"execute"}, agent.calls)
+	require.Equal(t, []string{"execute", "load"}, agent.calls)
 }
 
 // TestAgentRuntime_Stream_逐块回传 验证流式 chunk 透传与控制事件。

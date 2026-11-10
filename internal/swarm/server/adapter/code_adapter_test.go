@@ -139,6 +139,9 @@ func TestCodeAdapter_HandleHeartbeat_委托(t *testing.T) {
 // TestCodeAdapter_ProcessMessageImpl_未初始化 测试未初始化时返回错误。
 func TestCodeAdapter_ProcessMessageImpl_未初始化(t *testing.T) {
 	c := NewCodeAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	c.deep.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	req := schema.NewAgentRequest("req-1", "ch-1", schema.ReqMethod("chat.send"), nil)
 	_, err := c.ProcessMessageImpl(ctx, req, nil)
@@ -150,6 +153,9 @@ func TestCodeAdapter_ProcessMessageImpl_未初始化(t *testing.T) {
 // TestCodeAdapter_ProcessMessageStreamImpl_未初始化 测试未初始化时返回错误。
 func TestCodeAdapter_ProcessMessageStreamImpl_未初始化(t *testing.T) {
 	c := NewCodeAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	c.deep.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	req := schema.NewAgentRequest("req-1", "ch-1", schema.ReqMethod("chat.send"), nil)
 	_, err := c.ProcessMessageStreamImpl(ctx, req, nil)
@@ -158,13 +164,24 @@ func TestCodeAdapter_ProcessMessageStreamImpl_未初始化(t *testing.T) {
 	}
 }
 
-// TestCodeAdapter_ReloadAgentConfig_未初始化 测试未初始化时返回错误。
-func TestCodeAdapter_ReloadAgentConfig_未初始化(t *testing.T) {
+// TestCodeAdapter_ReloadAgentConfig_根无instance不报错 与 DeepAdapter 同语义：
+// 根的 instance 为空时不报错也不惰建（上游 _reload_agent_config :13623-13630）。
+func TestCodeAdapter_ReloadAgentConfig_根无instance不报错(t *testing.T) {
 	c := NewCodeAdapter()
-	ctx := t.Context()
-	err := c.ReloadAgentConfig(ctx, nil, nil)
-	if err == nil {
-		t.Error("instance=nil 时应返回错误")
+	if err := c.ReloadAgentConfig(t.Context(), nil, nil); err != nil {
+		t.Errorf("根的 instance 为空时不应报错，实际 %v", err)
+	}
+	if c.deep.instance != nil {
+		t.Error("根不应因此惰建 instance")
+	}
+}
+
+// TestCodeAdapter_ReloadAgentConfig_child无instance报错 child 的 instance 为空时报错。
+func TestCodeAdapter_ReloadAgentConfig_child无instance报错(t *testing.T) {
+	c := NewCodeAdapter()
+	c.deep.MarkAsSessionScoped("s1")
+	if err := c.ReloadAgentConfig(t.Context(), nil, nil); err == nil {
+		t.Error("child 的 instance 为 nil 时应返回错误")
 	}
 }
 
@@ -184,6 +201,9 @@ func TestCodeAdapter_CompressContext_委托(t *testing.T) {
 // TestCodeAdapter_GetContextUsage_委托 测试 GetContextUsage 委托。
 func TestCodeAdapter_GetContextUsage_委托(t *testing.T) {
 	c := NewCodeAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	c.deep.MarkAsSessionScoped("test-session")
 	ctx := t.Context()
 	result, err := c.GetContextUsage(ctx, "s1")
 	if result != nil || err != nil {

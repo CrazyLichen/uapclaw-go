@@ -1425,6 +1425,19 @@ func (d *DeepAgent) LoopSession() *session.Session {
 	return d.loopSession
 }
 
+// InteractionSession 返回 start_interaction 绑定的长生命周期会话。
+// Python: DeepAgent._interaction_session
+// （interface_deep.py resolve_live_agent_session :1729 读它）
+//
+// 返回 nil 表示交互尚未启动。调用方需只读使用：该 Session 归 DeepAgent 所有。
+// 存在意义：会话状态（plan_mode 等）缓存在绑定的 Session 上，改运行态的
+// 调用方必须拿到这一个，用临时 Session 写入只会更新 checkpointer。
+func (d *DeepAgent) InteractionSession() *session.Session {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.interactionSession
+}
+
 // ReactConfig 返回内层 ReActAgent 配置（仅用于测试）。
 // Python: DeepAgent.react_config 属性 (line 894)
 func (d *DeepAgent) ReactConfig() agentinterfaces.AgentConfig {
@@ -4240,7 +4253,11 @@ func (d *DeepAgent) startForwarder(ctx context.Context) {
 	if d.interactionForwarderDone != nil {
 		return
 	}
-	fctx, cancel := context.WithCancel(ctx)
+	// 转发器的生命周期归交互，**不继承调用方（请求/轮次）的取消**。
+	// Python: _forward_session_stream 是挂在事件循环上的 task，活到 stop()；
+	// 若继承请求 ctx，第一轮请求结束就退出，第 2 轮起租约拿到却 0 帧
+	//（流式只剩 keepalive）。停止由 stopForwarder 显式 cancel。
+	fctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	done := make(chan struct{})
 	d.interactionForwarderCancel = cancel
 	d.interactionForwarderDone = done
@@ -4280,7 +4297,9 @@ func (d *DeepAgent) ensureSupervisorRunning(ctx context.Context) <-chan struct{}
 	if d.interactionSupervisorRunning || !d.interactionStarted || d.interactionStopping {
 		return nil
 	}
-	sctx, cancel := context.WithCancel(ctx)
+	// 同上：supervisor 是交互级常驻循环，不随单次请求结束。
+	// Python: _ensure_supervisor_running 的 task 挂在事件循环上。
+	sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	done := make(chan struct{})
 	ready := make(chan struct{}, 1)
 	d.interactionSupervisorCancel = cancel

@@ -126,6 +126,7 @@ func NewNativeHarness(spec atschema.DeepAgentSpec, buildCtx hschema.BuildContext
 		queue:    make(chan stream.Schema, outputQueueSize),
 		startMu:  sync.Mutex{},
 	}
+
 	// 相位跟踪 + 边界快照轨；add_rail 按事件路由：
 	// model/tool/react-iteration 桥到内层 ReActAgent，AFTER_TASK_ITERATION 留外层。
 	// Python: self.add_rail(self._snapshot_rail)（native_harness.py L229）

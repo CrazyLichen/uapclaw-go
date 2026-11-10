@@ -197,7 +197,6 @@ func WithTaskAssignee(assignee string) TaskAddOption {
 	return func(c *taskAddConfig) { c.assignee = &assignee }
 }
 
-// WithDependencies 设置任务依赖，对齐 Python: add(dependencies=...)
 func WithDependencies(deps []string) TaskAddOption {
 	return func(c *taskAddConfig) {
 		c.dependencies = deps

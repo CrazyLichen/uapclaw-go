@@ -137,6 +137,10 @@ func (s *CodeAdapterCodingMemorySuite) newCodeAdapter() *adapter.CodeAdapter {
 // _CODE_PLAN_ALLOWED_TOOLS 不含 coding_memory_write），写入类用例必须在 normal 模式跑。
 func (s *CodeAdapterCodingMemorySuite) newCodeAdapterWithMode(mode string) *adapter.CodeAdapter {
 	c := adapter.NewCodeAdapter()
+	// 10.3.28f：根 adapter 是纯 router（对齐 Python _skip_own_instance_build :13109），
+	// 不建 DeepAgent；本 suite 验证 CreateInstance 的 rail 装配结果，
+	// 标记为 session-scoped 与 child 同构，可直接断言自己的 DeepAgent。
+	c.MarkAsSessionScoped("itest-code-memory")
 	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{
 		"project_dir": filepath.Join(s.env.DataDir, "myproj"),
 	}, mode, ""))

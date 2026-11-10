@@ -111,7 +111,12 @@ func (s *TaskScheduler) Start(ctx context.Context) error {
 	}
 	s.running.Store(true)
 
-	schedCtx, cancel := context.WithCancel(ctx)
+	// 调度器的生命周期归控制器，**不继承调用方（轮次）的取消**。
+	// Python: Controller.start() 起的 asyncio task 挂在事件循环上，不随单轮结束；
+	// Go 侧若直接继承轮次 ctx，第一轮结束时调度循环就退出，而 Controller.started
+	// 仍为 true 使后续轮次不再 Start —— 后续轮次的任务提交后永远无人调度
+	//（表现为流式只发 keepalive，30s 后前端超时）。停止由 Stop() 显式触发。
+	schedCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	s.cancelFunc = cancel
 
 	// 注册 TaskManager 的 SUBMITTED 回调

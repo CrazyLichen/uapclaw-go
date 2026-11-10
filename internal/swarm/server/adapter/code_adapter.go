@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +40,7 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -152,6 +154,11 @@ func NewCodeAdapter() *CodeAdapter {
 	// 修复 S-17: 覆写 runtimeConfigUpdater 指向 CodeAdapter 的版本
 	// 对齐 Python 继承中 self._update_runtime_config() 的动态分派
 	deep.runtimeConfigUpdater = c.updateRuntimeConfig
+	// 会话子适配器必须是完整的 CodeAdapter（对齐 Python type(self)()）。
+	// 不能从 c.deep 提取：那样会丢掉 code 专属的 20+ 方法覆写，
+	// UpdateAgentRails 会跑 deep 版本、静默降级成 deep 模式且不报错。
+	deep.sessionChildFactory = func() (AgentAdapter, error) { return CreateAdapter("harness", "code") }
+	deep.childMode = "code"
 	return c
 }
 
@@ -512,6 +519,103 @@ func (c *CodeAdapter) Instance() *harness.DeepAgent {
 		return nil
 	}
 	return c.deep.Instance()
+}
+
+// IsSessionScoped 委托 DeepAdapter。
+// Python: JiuwenSwarmCodeAdapter 继承 JiuWenSwarmDeepAdapter，同理委托。
+func (c *CodeAdapter) IsSessionScoped() bool {
+	if c.deep == nil {
+		return false
+	}
+	return c.deep.IsSessionScoped()
+}
+
+// MarkAsSessionScoped 委托 DeepAdapter。
+func (c *CodeAdapter) MarkAsSessionScoped(sessionID string) {
+	if c.deep != nil {
+		c.deep.MarkAsSessionScoped(sessionID)
+	}
+}
+
+// GetLiveSessionInstance 委托 DeepAdapter。
+func (c *CodeAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.GetLiveSessionInstance(sessionID)
+}
+
+// StartInteraction 委托 DeepAdapter。
+func (c *CodeAdapter) StartInteraction(ctx context.Context, sessionID string) error {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.StartInteraction(ctx, sessionID)
+}
+
+// HasActiveGoal 委托 DeepAdapter。
+func (c *CodeAdapter) HasActiveGoal(sessionID string) bool {
+	if c.deep == nil {
+		return false
+	}
+	return c.deep.HasActiveGoal(sessionID)
+}
+
+// DispatchGoalControl 委托 DeepAdapter。
+func (c *CodeAdapter) DispatchGoalControl(
+	ctx context.Context, sessionID, action, objective string,
+	overwriteConfirmed bool, tokenBudget, maxAttempts int,
+) (map[string]any, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.DispatchGoalControl(ctx, sessionID, action, objective,
+		overwriteConfirmed, tokenBudget, maxAttempts)
+}
+
+// HandleSwarmflowReply 委托 DeepAdapter。
+func (c *CodeAdapter) HandleSwarmflowReply(
+	ctx context.Context, req *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	if c.deep == nil {
+		return nil, errors.New("code adapter deep is nil")
+	}
+	return c.deep.HandleSwarmflowReply(ctx, req)
+}
+
+// PendingInteractions 委托 DeepAdapter。
+// EnsureInstance 委托给内层 DeepAdapter。
+// Python: CodeAdapter 继承 JiuWenSwarmDeepAdapter，无需单独实现；
+// Go 侧是具名组合，必须显式委托（规则 10）。
+func (c *CodeAdapter) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.EnsureInstance(ctx)
+}
+
+// EnsureLiveSessionInstance 委托给内层 DeepAdapter。
+func (c *CodeAdapter) EnsureLiveSessionInstance(ctx context.Context, sessionID string) (*harness.DeepAgent, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.EnsureLiveSessionInstance(ctx, sessionID)
+}
+
+// PlanStateAccessor 委托给内层 DeepAdapter。
+// 缺了它 code 模式的 plan 状态读写会整体失效。
+func (c *CodeAdapter) PlanStateAccessor() swruntime.PlanStateAccessor {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.PlanStateAccessor()
+}
+
+func (c *CodeAdapter) PendingInteractions(sessionID string) ([]map[string]any, error) {
+	if c.deep == nil {
+		return nil, nil
+	}
+	return c.deep.PendingInteractions(sessionID)
 }
 
 // CompressContext 委托 DeepAdapter 的 ContextCompressor 接口。
@@ -1918,4 +2022,12 @@ func setCodingMemoryDirectory(agent *harness.DeepAgent, projectDir string) {
 			},
 		},
 	})
+}
+
+// stopInteraction 委托 DeepAdapter。
+func (c *CodeAdapter) stopInteraction() {
+	if c.deep == nil {
+		return
+	}
+	c.deep.stopInteraction()
 }

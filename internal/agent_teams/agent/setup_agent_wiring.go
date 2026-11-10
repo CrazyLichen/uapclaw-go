@@ -121,9 +121,7 @@ func buildTeamRailSpecInput(
 		// 产出的 team.<tool>.<session>.<member> id 与 teardown_tools 不匹配、
 		// 会跨 native 重建泄漏。
 		//
-		// Go 侧 TeamToolRail.Init 仍是那条 bespoke 路径（无 AddAbility），
-		// 打开后缀会让工具按限定 id 注册而按原名调用 → 结果为空。
-		// 故此处关闭，等 F-03 把注册改为 add_ability 后即可去掉本字段。
+		// F-03 已修：注册改走 ability_manager.add_ability，QualifyIDs 字段已删除。
 		ApprovalTools:         approvalTools,
 		SwarmflowEnabled:      spec.SwarmflowEnabled,
 		HasWorkspaceManager:   c.WorkspaceManager() != nil,

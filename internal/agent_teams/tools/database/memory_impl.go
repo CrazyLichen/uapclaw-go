@@ -353,6 +353,7 @@ func (db *InMemoryTeamDatabase) DeleteUnstartedMember(_ context.Context, memberN
 
 // UpdateMemberStatus 更新成员状态（含 FSM 校验）。对齐 Python: MemberDao.update_member_status()
 // 返回 true 表示成功，false 表示成员不存在或状态转换不合法
+
 func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName, teamName, status string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -525,6 +526,7 @@ func (db *InMemoryTeamDatabase) OpenTaskCountsByAssignee(_ context.Context, team
 
 // GetTasksByAssignee 查询成员的任务。对齐 Python: TaskDao.get_tasks_by_assignee()
 // status 为空字符串表示不过滤。
+
 func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()

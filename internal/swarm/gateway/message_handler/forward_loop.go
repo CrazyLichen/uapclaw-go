@@ -262,6 +262,8 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		// runtime fatal：concurrent map writes and map deletion）
 		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, entry,
 			emitProcessingStatus, mh.extractModeFromParams(msg))
+		// Python: message_handler.py:370 _stream_methods[request_id] = method
+		mh.markStreamMethod(streamRid, string(msg.ReqMethod))
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -941,6 +943,14 @@ func (mh *MessageHandler) unregisterStreamTask(requestID string) {
 	delete(mh.streamSessions, requestID)
 	delete(mh.streamMetadata, requestID)
 	delete(mh.streamModes, requestID)
+	delete(mh.streamMethods, requestID)
+}
+
+// markStreamMethod 记录流式任务的 RPC 方法名。
+func (mh *MessageHandler) markStreamMethod(requestID, method string) {
+	mh.streamMu.Lock()
+	defer mh.streamMu.Unlock()
+	mh.streamMethods[requestID] = method
 }
 
 // getStreamMetadata 获取流式任务的请求 metadata
@@ -982,10 +992,17 @@ func (mh *MessageHandler) hasActiveEmitProcessingStatusTaskForSession(sessionID 
 	mh.streamMu.RLock()
 	defer mh.streamMu.RUnlock()
 	for rid, sid := range mh.streamSessions {
-		if sid == sessionID {
-			if emits, ok := mh.streamEmitsProcessingStatus[rid]; ok && emits {
-				return true
-			}
+		if sid != sessionID {
+			continue
+		}
+		if emits, ok := mh.streamEmitsProcessingStatus[rid]; ok && emits {
+			return true
+		}
+		// command.goal 长流按上游 emit=False，但必须同样挡住 false：
+		// 否则「前端已结束、后端 Goal 还在跑、后续 delta 收不到」。
+		// Python: message_handler.py:4275-4310
+		if mh.streamMethods[rid] == string(schema.ReqMethodCommandGoal) {
+			return true
 		}
 	}
 	return false

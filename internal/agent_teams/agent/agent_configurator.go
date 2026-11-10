@@ -154,7 +154,6 @@ func WithBackendOnMemberStarted(cb func(ctx context.Context, memberName string) 
 	return func(cfg *setupTeamBackendConfig) { cfg.onMemberStarted = cb }
 }
 
-// WithBackendDB 设置数据库实例。
 func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.db = db }
 }

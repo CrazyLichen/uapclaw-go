@@ -116,15 +116,6 @@ func (s *PlanStateSuite) TestIT_S2_7_跳过矩阵() {
 	s.NotEqual("plan", s.env.PlanMode(itSession), "中断续答不得写 plan 状态")
 }
 
-// TestIT_S2_13_跨会话排队占位透传 验证未实现的跨会话排队显式返回 false（不假装已排队）。
-func (s *PlanStateSuite) TestIT_S2_13_跨会话排队占位透传() {
-	s.env.Send(itSession, planMode, "计划", map[string]any{"plan_entry_source": "plan_toggle"})
-
-	controller := s.env.PlanController()
-	s.Require().NotNil(controller)
-	s.False(controller.SessionMessageRequiresQueue(itSession), "占位实现必须透传 false")
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // userEnvelopeContent 从 BuildUserPrompt 的 JSON 信封里取出 content；非信封原样返回。

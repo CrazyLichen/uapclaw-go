@@ -10,6 +10,7 @@
 //
 //	server/
 //	├── doc.go                      # 包文档
+//	├── goal_dispatch_test.go       # command.goal 分发契约（不写历史/不调模型/未知 action）
 //	├── history_roundtrip_test.go   # 会话历史往返集成测试
 //	├── skill_manager_test.go       # SkillManager 集成测试（路径穿越/导入卸载/marketplace/团队共享/启停可见性）
 //	├── skilldev_pipeline_test.go   # SkillDev 流水线编排测试（挂起/恢复/检查点）

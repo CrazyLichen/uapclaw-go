@@ -49,6 +49,11 @@ func (s *DeepAdapterReloadSuite) SetupTest() {
 // newDeepAdapter 构造 DeepAdapter 并执行 CreateInstance 装配链，挂 Cleanup 收尾。
 func (s *DeepAdapterReloadSuite) newDeepAdapter() *adapter.DeepAdapter {
 	d := adapter.NewDeepAdapter()
+	// 10.3.28f：根 adapter 是纯 router（对齐 Python _skip_own_instance_build :13109），
+	// 不建 DeepAgent；本 suite 验证热重载后的 rail/工具装配结果，标记为
+	// session-scoped 与 child 同构，可直接断言自己的 DeepAgent。
+	// 根分流由 session_fork_test.go 覆盖。
+	d.MarkAsSessionScoped("itest-reload")
 	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
