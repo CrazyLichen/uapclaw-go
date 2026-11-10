@@ -59,7 +59,8 @@
 //	├── domain_manual.go   # 人工/拒绝路径共用的响应辅助（9.90d-2 依赖前置）
 //	├── deny_response.go   # 审查器拒绝响应构造（9.90d-2 依赖前置）
 //	├── manual_authorization.go # 需人工审批时的响应构造（9.90d-2 依赖前置）
-//	└── deterministic.go   # 确定性放行与路由包装（9.90d-2 依赖前置）
+//	├── deterministic.go   # 确定性放行与路由包装（9.90d-2 依赖前置）
+//	└── artifact_authorization.go # 文件投递的精确授权（9.90d-2 依赖前置）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）
