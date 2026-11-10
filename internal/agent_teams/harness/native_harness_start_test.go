@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -91,6 +93,59 @@ func TestStartRound_ResumeContinuation续用turn且带轮前基线(t *testing.T)
 	second := h.startRound(context.Background(), "任务", startModeResumeContinuation, nil)
 	assert.False(t, second.TurnOpened)
 	assert.Equal(t, first.Turn.TurnNumber, second.Turn.TurnNumber)
+}
+
+// TestStartRound_按启动模式决定是否新开turn 表驱动验证 keepsTurn 判定。
+// Python: keeps_turn = mode ∈ {CONTINUES_TURN, FAILURE_RETRY, RESUME_CONTINUATION}
+// or isinstance(query, InteractiveInput)（native_harness.py L1316-1325）
+func TestStartRound_按启动模式决定是否新开turn(t *testing.T) {
+	cases := []struct {
+		name       string
+		query      any
+		mode       startMode
+		wantOpened bool
+		wantNumber int
+	}{
+		{"空闲起轮开新turn", "q", startModeDefault, true, 2},
+		{"排队输入开新turn", "q", startModeFollowUp, true, 2},
+		{"崩溃重试续用", "q", startModeFailureRetry, false, 1},
+		{"暂停续跑续用", "q", startModeResumeContinuation, false, 1},
+		{"显式续用", "q", startModeContinuesTurn, false, 1},
+		{"中断应答续用", &interaction.InteractiveInput{}, startModeDefault, false, 1},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestNativeHarness(t)
+			h.sess = session.NewSession(session.WithSessionID(fmt.Sprintf("mode-sess-%d", i)))
+
+			first := h.startRound(context.Background(), "任务", startModeDefault, nil)
+			require.Equal(t, 1, first.Turn.TurnNumber)
+
+			second := h.startRound(context.Background(), tc.query, tc.mode, nil)
+			assert.Equal(t, tc.wantOpened, second.TurnOpened)
+			assert.Equal(t, tc.wantNumber, second.Turn.TurnNumber)
+			if tc.wantOpened {
+				assert.NotEqual(t, first.Turn.TurnID, second.Turn.TurnID, "新开 turn 必须换新工单号")
+			} else {
+				assert.Equal(t, first.Turn.TurnID, second.Turn.TurnID, "续用必须复用同一工单号")
+			}
+		})
+	}
+}
+
+// TestActiveRound_访问器反映在飞轮次 验证 rails 可经 harness 反向引用读到活轮。
+// Python: NativeHarness.active_round property（native_harness.py L268-275）
+func TestActiveRound_访问器反映在飞轮次(t *testing.T) {
+	h := newTestNativeHarness(t)
+	h.sess = session.NewSession(session.WithSessionID("active-round-sess"))
+
+	assert.Nil(t, h.ActiveRound(), "未起轮时无活轮")
+
+	active := h.startRound(context.Background(), "任务", startModeDefault, nil)
+
+	require.NotNil(t, h.ActiveRound())
+	assert.Equal(t, active.RoundID, h.ActiveRound().RoundID)
+	assert.Equal(t, active.Turn, h.ActiveRound().Turn)
 }
 
 // TestStop后Start重建运行期容器 回归 G-08：

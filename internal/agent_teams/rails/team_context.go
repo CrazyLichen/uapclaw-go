@@ -170,6 +170,20 @@ func GetTeamBackend(ctx hschema.BuildContextInterface) *tools.TeamBackend {
 	return nil
 }
 
+// GetAsyncToolHost 返回异步工具宿主句柄，缺失或类型不符返回 nil。
+// 25.1d：句柄键由 tools.TeamHandleAsyncToolHost 定义，这里收口 map[string]any 的类型断言；
+// 25.12 的 SwarmflowTool 通过它拿到 LaunchAsyncTool。
+func GetAsyncToolHost(ctx hschema.BuildContextInterface) tools.AsyncToolHost {
+	raw := getHandle(ctx, TeamHandleKey(tools.TeamHandleAsyncToolHost))
+	if raw == nil {
+		return nil
+	}
+	if v, ok := raw.(tools.AsyncToolHost); ok {
+		return v
+	}
+	return nil
+}
+
 // GetTeamWorkspaceManager 返回工作空间管理器，缺失返回 nil。
 // Python: get_workspace_manager
 func GetTeamWorkspaceManager(ctx hschema.BuildContextInterface) *team_workspace.TeamWorkspaceManager {

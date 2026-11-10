@@ -91,7 +91,7 @@ type DeepAgent struct {
 	// 设置后，CreateSubagent 将调用此函数而非工厂分派，
 	// 对齐 Python 测试中 agent.create_subagent = _factory 的替身能力。
 	createSubagentOverride func(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error)
-	// scheduleAutoInvokeOverride 自动 invoke 调度覆写函数（仅测试使用）。
+	// scheduleAutoInvokeOverride 自动 invoke 调度覆写函数（生产 NativeHarness 与测试共用）。
 	// 设置后，ScheduleAutoInvokeOnSpawnDone 将调用此函数而非延迟调度，
 	// 对齐 Python 测试中 agent.schedule_auto_invoke_on_spawn_done = noop 的替身能力。
 	scheduleAutoInvokeOverride func(ctx context.Context, steerText string, delay float64) error
@@ -750,7 +750,7 @@ func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText string, delay float64) error {
 	d.autoInvokeScheduled.Store(true)
 
-	// 测试覆写钩子：优先使用 scheduleAutoInvokeOverride（仅测试使用）
+	// 覆写钩子：优先使用 scheduleAutoInvokeOverride（生产 NativeHarness 与测试共用）
 	// 对齐 Python 测试 agent.schedule_auto_invoke_on_spawn_done = noop 的直接替换语义
 	d.configMu.RLock()
 	overrideFn := d.scheduleAutoInvokeOverride
@@ -996,7 +996,7 @@ func (d *DeepAgent) CreateSubagentOverride() func(ctx context.Context, subagentT
 	return d.createSubagentOverride
 }
 
-// SetScheduleAutoInvokeOverride 设置自动 invoke 调度覆写函数（仅测试使用）。
+// SetScheduleAutoInvokeOverride 设置自动 invoke 调度覆写函数（生产 NativeHarness 与测试共用）。
 // 对齐 Python 测试中 agent.schedule_auto_invoke_on_spawn_done = noop 的替身能力。
 func (d *DeepAgent) SetScheduleAutoInvokeOverride(fn func(ctx context.Context, steerText string, delay float64) error) {
 	d.configMu.Lock()
@@ -2750,12 +2750,58 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 				extra[k] = v2
 			}
 		}
+		// turn 号：只接受正整数，其余视为未提供。
+		// Python: raw_turn_number = inputs.get("_turn_number") → isinstance(int) and not bool and > 0（deep_agent.py L1878-1883）
+		var turnNumber int
+		switch tn := v["_turn_number"].(type) {
+		case int:
+			if tn > 0 {
+				turnNumber = tn
+			}
+		case int64:
+			if tn > 0 {
+				turnNumber = int(tn)
+			}
+		}
+		// 用量归属的调用血缘：由调度方（harness/任务调度器）随输入带下。
+		// Python: deep_agent.py L1871-1877（inputs.get 六键）+ L1877（depth = int(... or 0)）
+		parentSessionID, _ := v["parent_session_id"].(string)
+		invocationID, _ := v["invocation_id"].(string)
+		parentInvocationID, _ := v["parent_invocation_id"].(string)
+		delegationID, _ := v["delegation_id"].(string)
+		var agentPath []string
+		switch ap := v["agent_path"].(type) {
+		case []string:
+			agentPath = append([]string{}, ap...)
+		case []any:
+			for _, item := range ap {
+				if s, ok := item.(string); ok {
+					agentPath = append(agentPath, s)
+				}
+			}
+		}
+		var depth int
+		switch dv := v["depth"].(type) {
+		case int:
+			depth = dv
+		case int64:
+			depth = int(dv)
+		case float64:
+			depth = int(dv)
+		}
 		return &agentinterfaces.InvokeInputs{
-			Query:          query,
-			ConversationID: conversationID,
-			RunKind:        runKind,
-			RunContext:     runContext,
-			Extra:          extra,
+			Query:              query,
+			ConversationID:     conversationID,
+			RunKind:            runKind,
+			RunContext:         runContext,
+			ParentSessionID:    parentSessionID,
+			InvocationID:       invocationID,
+			ParentInvocationID: parentInvocationID,
+			DelegationID:       delegationID,
+			AgentPath:          agentPath,
+			Depth:              depth,
+			TurnNumber:         turnNumber,
+			Extra:              extra,
 		}, nil
 	case string:
 		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(v)}, nil
@@ -2780,6 +2826,31 @@ func toEffectiveInputs(invokeInputs *agentinterfaces.InvokeInputs) map[string]an
 	}
 	if invokeInputs.RunContext != nil {
 		result["run_context"] = invokeInputs.RunContext
+	}
+	// turn 号回写：ReActAgent 从 effective inputs 的 "_turn_number" 读。
+	// Python: if invoke_inputs.turn_number is not None → effective_inputs["_turn_number"]（deep_agent.py L2002-2003）
+	if invokeInputs.TurnNumber > 0 {
+		result["_turn_number"] = invokeInputs.TurnNumber
+	}
+	// 调用血缘回写：ReActAgent 从 effective inputs 读同样六个键。
+	// Python: _to_effective_inputs 逐键 if not None（deep_agent.py L1985-2001）
+	if invokeInputs.ParentSessionID != "" {
+		result["parent_session_id"] = invokeInputs.ParentSessionID
+	}
+	if invokeInputs.InvocationID != "" {
+		result["invocation_id"] = invokeInputs.InvocationID
+	}
+	if invokeInputs.ParentInvocationID != "" {
+		result["parent_invocation_id"] = invokeInputs.ParentInvocationID
+	}
+	if invokeInputs.DelegationID != "" {
+		result["delegation_id"] = invokeInputs.DelegationID
+	}
+	if invokeInputs.AgentPath != nil {
+		result["agent_path"] = append([]string{}, invokeInputs.AgentPath...)
+	}
+	if invokeInputs.Depth != 0 {
+		result["depth"] = invokeInputs.Depth
 	}
 	// 合并 Extra 字段（如 _steering_queue），对齐 Python dict 自然保留额外 key 的行为
 	for k, v := range invokeInputs.Extra {

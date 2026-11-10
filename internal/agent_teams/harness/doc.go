@@ -13,6 +13,7 @@
 //	├── control.go        # 控制命令（外部命令带应答通道）
 //	├── outputs.go        # 输出迭代器（单消费者 + END 哨兵）
 //	├── native_harness.go # NativeHarness 本体
+//	├── async_tools.go    # 两阶段异步工具运行时（AsyncToolRuntime / AsyncTool / spill）
 //	└── team_harness.go   # TeamHarness（团队对外窗口）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/harness/

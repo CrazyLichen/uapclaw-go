@@ -61,6 +61,9 @@ func (a *ReActAgent) callModel(
 	})
 
 	var result *llmschema.AssistantMessage
+	// 归属随会话元数据变化（团队/成员可能在轮内被改写），每次模型调用前重新解析一次。
+	// Python: _report_context_usage 里重解析并回写 ctx.context_usage_attribution（react_agent.py L1477-1483）
+	cbc.SetContextUsageAttribution(a.resolveContextUsageAttribution(cbc))
 	err := rail.ModelCallRail.Execute(ctx, cbc, func() error {
 		var e error
 		result, e = a.railedModelCall(ctx, cbc, sess)

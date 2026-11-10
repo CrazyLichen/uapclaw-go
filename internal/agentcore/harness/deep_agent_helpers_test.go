@@ -119,6 +119,66 @@ func TestNormalizeInputs(t *testing.T) {
 	})
 }
 
+// TestNormalizeInputs_用量归属血缘 验证六字段与 turn 号的解析与回写。
+// Python: deep_agent.py L1871-1883（解析）/ L1985-2003（_to_effective_inputs 回写）
+func TestNormalizeInputs_用量归属血缘(t *testing.T) {
+	d := newBareDeepAgent(t)
+
+	got, err := d.normalizeInputs(map[string]any{
+		"query":                "hi",
+		"parent_session_id":    "parent-1",
+		"invocation_id":        "inv-1",
+		"parent_invocation_id": "inv-parent",
+		"delegation_id":        "deleg-1",
+		"agent_path":           []string{"root", "child"},
+		"depth":                1,
+		"_turn_number":         3,
+	})
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if got.ParentSessionID != "parent-1" || got.InvocationID != "inv-1" ||
+		got.ParentInvocationID != "inv-parent" || got.DelegationID != "deleg-1" {
+		t.Fatalf("血缘字段解析错误: %+v", got)
+	}
+	if len(got.AgentPath) != 2 || got.AgentPath[1] != "child" {
+		t.Fatalf("AgentPath = %v, 期望 [root child]", got.AgentPath)
+	}
+	if got.Depth != 1 {
+		t.Fatalf("Depth = %d, 期望 1", got.Depth)
+	}
+	if got.TurnNumber != 3 {
+		t.Fatalf("TurnNumber = %d, 期望 3", got.TurnNumber)
+	}
+
+	effective := toEffectiveInputs(got)
+	if effective["_turn_number"] != 3 {
+		t.Fatalf("_turn_number 未回写: %v", effective["_turn_number"])
+	}
+	if effective["parent_session_id"] != "parent-1" || effective["invocation_id"] != "inv-1" ||
+		effective["parent_invocation_id"] != "inv-parent" || effective["delegation_id"] != "deleg-1" {
+		t.Fatalf("血缘字段未回写: %v", effective)
+	}
+	if effective["depth"] != 1 {
+		t.Fatalf("depth 未回写: %v", effective["depth"])
+	}
+}
+
+// TestNormalizeInputs_turn号非法值被忽略 验证非正整数一律视为未提供。
+func TestNormalizeInputs_turn号非法值被忽略(t *testing.T) {
+	d := newBareDeepAgent(t)
+
+	for _, raw := range []any{0, -1, "3", 3.0} {
+		got, err := d.normalizeInputs(map[string]any{"query": "hi", "_turn_number": raw})
+		if err != nil {
+			t.Fatalf("不应报错: %v", err)
+		}
+		if got.TurnNumber != 0 {
+			t.Fatalf("_turn_number=%v 应被忽略，实际 %d", raw, got.TurnNumber)
+		}
+	}
+}
+
 // assertNoPanicHarness 断言 fn 不 panic。
 func assertNoPanicHarness(t *testing.T, fn func()) {
 	t.Helper()

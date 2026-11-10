@@ -1312,6 +1312,16 @@ func (am *AbilityManager) executeAgent(
 
 	ag := ags[0]
 
+	// 委派归属：本次子 agent 调用的用量要归到父调用链上。
+	// Python: ability_manager.py L1659-1667（bind_usage_delegation(build_usage_delegation_attribution(...))）
+	parentSessionID := ""
+	if sess != nil {
+		parentSessionID = sess.GetSessionID()
+	}
+	parentInvocationID := rail.CurrentUsageInvocationID(ctx)
+	ctx = rail.BindUsageDelegation(ctx, rail.BuildUsageDelegationAttribution(
+		ctx, agentID, parentSessionID, toolCall.ID, nil, parentInvocationID))
+
 	// 步骤 4-7：子会话生命周期（仅当 sess 非 nil 时执行）
 	var childSession *session.Session
 	if sess != nil {

@@ -1,4 +1,4 @@
-// Package harness_test 覆盖 NativeHarness 生命周期契约集成测试。
+// Package harness 覆盖 NativeHarness 生命周期契约集成测试。
 //
 // 对齐 Python openjiuwen/agent_teams/harness/native_harness.py 的
 // start/send/outputs/subscribe/abort 生命周期：单 supervisor 串行化所有输入，
@@ -20,4 +20,4 @@
 //	└── pause_resume_test.go   # PauseResumeSuite：暂停/恢复/回滚（I-01/I-03/I-05）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/harness/native_harness.py
-package harness_test
+package harness

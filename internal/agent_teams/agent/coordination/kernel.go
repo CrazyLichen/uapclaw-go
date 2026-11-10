@@ -595,9 +595,16 @@ func (k *CoordinationKernel) EnqueueInitialTaskPoll(ctx context.Context) {
 // 而语义上应当每个 run cycle 一次（对齐上游 06def473）。
 // 不做 pause/stop/lifecycle 决策（由 Runner 层负责）。
 func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
-	// Python: host.stream_controller.stream_queue = None
-	sc := k.host.StreamController()
-	if sc != nil {
+	// 顺序对齐 Python finalize_round：先停 forwarder，再停成员脑，最后清队列。
+	if sc := k.host.StreamController(); sc != nil {
+		sc.Stop(ctx)
+	}
+	if h := k.host.HarnessAccessor(); h != nil {
+		if err := h.Stop(ctx); err != nil {
+			logger.Debug(logComponent).Err(err).Msg("finalize round: harness stop failed")
+		}
+	}
+	if sc := k.host.StreamController(); sc != nil {
 		sc.ResetStreamQueue()
 	}
 }

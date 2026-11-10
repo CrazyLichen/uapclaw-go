@@ -182,3 +182,69 @@ func TestRequestCacheFromUsage_新字段优先(t *testing.T) {
 		t.Fatalf("legacy: %+v", legacy)
 	}
 }
+
+// TestBuildSnapshot_归属字段覆盖 验证归属字典覆盖缺省值并补齐血缘字段。
+// Python: _attribution_fields（analyzer.py L357-380）
+func TestBuildSnapshot_归属字段覆盖(t *testing.T) {
+	snapshot := BuildSnapshot(SnapshotInput{
+		Phase:     PhasePostCall,
+		RequestID: "req-1",
+		SessionID: "sess-1",
+		Attribution: map[string]any{
+			"product_session_id":    "product-1",
+			"execution_session_id":  "exec-1",
+			"context_owner_id":      "team-1|worker|exec-1|ctx-1",
+			"agent_id":              "agent-1",
+			"team_id":               "team-1",
+			"member_name":           "worker",
+			"invocation_id":         "inv-1",
+			"parent_invocation_id":  "inv-parent",
+			"delegation_id":         "deleg-1",
+			"agent_path":            []string{"root", "worker"},
+			"depth":                 1,
+			"cache_identity":        "cache-1",
+			"parent_cache_identity": "cache-parent",
+			"cache_mode":            "provider",
+			"cache_scope":           "session",
+		},
+	})
+
+	if snapshot.ProductSessionID != "product-1" || snapshot.ExecutionSessionID != "exec-1" {
+		t.Fatalf("会话字段未覆盖: %+v", snapshot)
+	}
+	if snapshot.ContextOwnerID != "team-1|worker|exec-1|ctx-1" {
+		t.Fatalf("ContextOwnerID = %q", snapshot.ContextOwnerID)
+	}
+	if snapshot.AgentID != "agent-1" || snapshot.TeamID != "team-1" || snapshot.MemberName != "worker" {
+		t.Fatalf("身份字段未覆盖: %+v", snapshot)
+	}
+	if snapshot.InvocationID != "inv-1" || snapshot.ParentInvocationID != "inv-parent" || snapshot.DelegationID != "deleg-1" {
+		t.Fatalf("调用血缘未覆盖: %+v", snapshot)
+	}
+	if len(snapshot.AgentPath) != 2 || snapshot.AgentPath[1] != "worker" || snapshot.Depth != 1 {
+		t.Fatalf("路径/深度未覆盖: %+v", snapshot)
+	}
+	if snapshot.CacheIdentity != "cache-1" || snapshot.ParentCacheIdentity != "cache-parent" ||
+		snapshot.CacheMode != "provider" || snapshot.CacheScope != "session" {
+		t.Fatalf("缓存身份未覆盖: %+v", snapshot)
+	}
+}
+
+// TestBuildSnapshot_无归属保留缺省 验证没有归属时缺省值不被清空。
+func TestBuildSnapshot_无归属保留缺省(t *testing.T) {
+	snapshot := BuildSnapshot(SnapshotInput{
+		Phase:            PhasePostCall,
+		RequestID:        "req-2",
+		SessionID:        "sess-2",
+		ProductSessionID: "product-2",
+		AgentPath:        []string{"only"},
+		Depth:            2,
+	})
+
+	if snapshot.ProductSessionID != "product-2" || snapshot.Depth != 2 || len(snapshot.AgentPath) != 1 {
+		t.Fatalf("缺省值被改写: %+v", snapshot)
+	}
+	if snapshot.InvocationID != "" || snapshot.CacheMode != "" {
+		t.Fatalf("无归属时不应填血缘/缓存字段: %+v", snapshot)
+	}
+}

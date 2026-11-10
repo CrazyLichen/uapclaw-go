@@ -92,6 +92,9 @@ type StreamControllerAccessor interface {
 	// 对齐 Python: StreamController.start()（stream_controller.py:305-321）——
 	// kernel.start 在 harness.start 之后调用，controller 消费 runtime 输出。
 	Start(ctx context.Context)
+	// Stop 取消输出泵并等待其退出。
+	// 对齐 Python: StreamController.stop()（stream_controller.py:320-334）
+	Stop(ctx context.Context)
 	// PauseAgent 暂停在飞轮次到最近的内层迭代边界。
 	// 对齐 Python: StreamController.pause_agent()（stream_controller.py:711-720）
 	PauseAgent(ctx context.Context) error
@@ -113,6 +116,9 @@ type HarnessAccessor interface {
 	// 对齐 Python: TeamHarness.start(team_session=session)（team_harness.py:135-169）——
 	// kernel.start 在 bind_session 之后调用，先起 runtime 再让 controller 消费输出。
 	Start(ctx context.Context, teamSession any) error
+	// Stop 停成员脑并提交活跃会话。
+	// 对齐 Python: TeamHarness.stop()（team_harness.py:159-181）
+	Stop(ctx context.Context) error
 	// PausedQuery 返回暂停轮查询；ok=false 表示当前没有暂停轮。
 	// 对齐 Python: TeamHarness.paused_query（team_harness.py:402-406）
 	PausedQuery() (string, bool)

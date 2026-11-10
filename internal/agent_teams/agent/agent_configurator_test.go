@@ -689,8 +689,8 @@ func TestSetupAgent_声明驱动挂载团队rail(t *testing.T) {
 	assert.NotEmpty(t, h.FindRails(reflect.TypeOf(&rails.TeamToolRail{})), "tool rail 应已挂载")
 }
 
-// TestSetupAgent_InjectTeamHandles17键 装配后 buildCtx 的 Extras 有 17 个团队句柄键。
-func TestSetupAgent_InjectTeamHandles17键(t *testing.T) {
+// TestSetupAgent_InjectTeamHandles18键 装配后 buildCtx 的 Extras 有 18 个团队句柄键。
+func TestSetupAgent_InjectTeamHandles18键(t *testing.T) {
 	c, spec, ctx := newDeclarativeFixture(t)
 
 	_, err := c.SetupAgent(spec, ctx)
@@ -698,7 +698,8 @@ func TestSetupAgent_InjectTeamHandles17键(t *testing.T) {
 
 	buildCtx := c.lastBuildContext()
 	require.NotNil(t, buildCtx, "configurator 应保留 buildCtx 供断言")
-	assert.Len(t, buildCtx.GetExtras(), 17, "17 个团队句柄键全部写入")
+	assert.Len(t, buildCtx.GetExtras(), 18, "18 个团队句柄键全部写入")
+	assert.NotNil(t, buildCtx.GetExtras()[tools.TeamHandleAsyncToolHost], "异步工具宿主句柄必须写入")
 }
 
 // TestSetupAgent_tracker与harness共用实例 tracker 由 configurator 建，

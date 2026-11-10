@@ -245,6 +245,8 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 		ToolsTokens:        toolsTokens,
 		MessagesTokens:     messageTokens,
 		Usage:              usage,
+		// 归属：owner 与调用血缘由内层 ReActAgent 解析后挂在回调上下文上
+		Attribution: cbCtx.ContextUsageAttribution(),
 	})
 
 	// Payload 用 map 形态：ParseStreamChunk 只认 map[string]any（结构体会被断言丢弃），
