@@ -2222,3 +2222,39 @@ key 时返回 false），行为一致。
 
 测试 `TestAfterToolCall_清理执行域标记` 用断言锁住了当前行为：
 传入已设 `true` 的 ctx，调用后该 ctx 仍为 `true`（ctx 不可变）。
+
+### 12.32 Task 35 执行结论：`domain_grant_audit`
+
+**落地**：`auto_permission/domain_grant_audit.go`（162 行 Python → 约 270 行 Go /
+7 方法 + 1 辅助），覆盖率 **100%**，auto_permission 包 91.8%。
+
+#### 「固定路由表」的含义
+
+宿主写死的领域规则——**不走插件、不走注册表**。`evaluateDomainRoute` 直接调
+`DeterministicDomainRoute`，四个输入：facts、原始意图、近期 URL 来源、浏览器
+运行时安全档位。
+
+#### 7 个方法
+
+| Go | Python | 职责 |
+|---|---|---|
+| `evaluateDomainRoute` | `_evaluate_domain_route` | 算领域路由 |
+| `currentSandboxProfile` | `_current_sandbox_profile` | 有 sysOperation 时重建并缓存沙箱档位 |
+| `handleDomainRoute` | `_handle_domain_route` | 审查器路由 → 转发；否则落人工（`domain_policy`） |
+| `denyDomainRoute` | `_deny_domain_route` | 领域拒绝响应 |
+| `manualDomainRouteResponse` | `_manual_domain_route_response` | 领域人工响应 |
+| `domainRouteMetadata` | `_domain_route_metadata` | 10 字段元数据 |
+| `deny` | `_deny` | 通用拒绝响应 |
+
+#### 一个值得注意的设计：`hide_always_allow` 恒为 true
+
+`domainRouteMetadata` 固定写入 `hide_always_allow: true`。含义是：**领域规则
+命中的场景，UI 不提供「始终允许」按钮**——因为领域规则是宿主写死的策略，
+不该被用户的一次授权永久覆盖。
+
+#### 顺带收窄一处 `any`
+
+`AutoPermissionRail.browserRuntimeSecurityProfile` 与
+`AutoPermissionRailOptions.BrowserRuntimeSecurityProfile` 原为 `any`，
+而 `DeterministicDomainRoute` 需要 `*BrowserRuntimeSecurityProfile`。
+按实际用法收窄为具体类型（`any` 是 9.90d-2 早期未定型时的占位）。

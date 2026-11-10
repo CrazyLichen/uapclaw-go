@@ -54,7 +54,7 @@ type AutoPermissionRail struct {
 	// persistentAuditWriter 持久化审计写入器
 	persistentAuditWriter any
 	// browserRuntimeSecurityProfile 浏览器运行时安全档位
-	browserRuntimeSecurityProfile any
+	browserRuntimeSecurityProfile *permissions.BrowserRuntimeSecurityProfile
 	// ownerAgent 当前归属的 Agent（Init 后非 nil）
 	ownerAgent agentinterfaces.BaseAgent
 	// writtenPermissions 宿主已写权限的读取回调
@@ -87,7 +87,7 @@ type AutoPermissionRailOptions struct {
 	// PersistentAuditWriter 持久化审计写入器
 	PersistentAuditWriter any
 	// BrowserRuntimeSecurityProfile 浏览器运行时安全档位
-	BrowserRuntimeSecurityProfile any
+	BrowserRuntimeSecurityProfile *permissions.BrowserRuntimeSecurityProfile
 	// WrittenPermissions 宿主已写权限的读取回调
 	WrittenPermissions func() map[string]any
 }

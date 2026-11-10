@@ -65,7 +65,8 @@
 //	├── reviewer_override_gate.go # 单次放行的审查器前置闸门（Task 33）
 //	├── reviewer_override_consume.go # 消费旧版 Core 会话级自动确认（Task 33）
 //	├── artifact_declaration.go # send_file 参数辅助（Task 34）
-//	└── artifact_tracking_capture.go # 工具执行后捕获（Task 34）
+//	├── artifact_tracking_capture.go # 工具执行后捕获（Task 34）
+//	└── domain_grant_audit.go # 固定领域路由判定与响应（Task 35）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/agents/harness/common/rails/permissions/_auto_permission/models.py（101 行）
