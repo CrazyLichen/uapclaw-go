@@ -306,3 +306,11 @@ func TestManifest_json往返验证(t *testing.T) {
 	}
 	_ = json.Marshal // keep import
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *fakeWikiAgentClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *fakeWikiAgentClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

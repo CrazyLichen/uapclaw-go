@@ -1059,3 +1059,11 @@ func TestApply_resume_数字pendingID不匹配_审查偏差修复(t *testing.T) 
 	assert.Nil(t, msg.Metadata["interaction_context"])                    // 未落 interaction_context
 	require.NotNil(t, routing.LoadPendingInteraction("iact_ch_12345678")) // pending 未被消费
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *fakeLLMClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *fakeLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

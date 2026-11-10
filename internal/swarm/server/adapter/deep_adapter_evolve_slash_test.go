@@ -1272,3 +1272,11 @@ func TestEvolveRollback_空名列入0版本(t *testing.T) {
 		t.Errorf("result_type = %v, 期望 error", got)
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubEvolveLLMClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubEvolveLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

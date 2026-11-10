@@ -62,6 +62,16 @@ type BaseModelClient interface {
 	// 零副作用判断：仅 InferenceAffinity 返回 true，其他客户端返回 false。
 	// Python: Model.supports_kv_cache_release() 中 isinstance(self._client, InferenceAffinityModelClient)
 	SupportsKVCacheRelease() bool
+
+	// SupportsKVCacheAffinity 检查客户端是否支持 Ascend KV cache 亲和协议。
+	// 零副作用判断：仅 InferenceAffinity 客户端返回 true，其他返回 false。
+	// Python: ModelClient.supports_kv_cache_affinity()
+	SupportsKVCacheAffinity() bool
+
+	// BuildKVCacheAffinityInvokeKwargs 构造 agent_hint 亲和参数。
+	// 父调用与 prompt_suggestion 重放必须共用同一份结果，否则 cache key 失配。
+	// Python: ModelClient.build_kv_cache_affinity_invoke_kwargs()
+	BuildKVCacheAffinityInvokeKwargs(sess any, sessionID, parentSessionID string, turnNum int) map[string]any
 }
 
 // StreamParsedResult 流式解析结果。

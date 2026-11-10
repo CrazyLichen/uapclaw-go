@@ -897,3 +897,11 @@ func TestSimpleKB_ParseFiles异常吞(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, docs)
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubKBLlm) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubKBLlm) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

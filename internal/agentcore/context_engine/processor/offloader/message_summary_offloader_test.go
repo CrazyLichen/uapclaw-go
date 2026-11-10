@@ -1363,3 +1363,19 @@ func TestMessageSummaryOffloader_LoadState(t *testing.T) {
 	mso := msoNewForTest(cfg)
 	mso.LoadState(map[string]any{"key": "value"}) // 不 panic 即通过
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *msoFakeBaseModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *msoFakeBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *msoRetryFakeClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *msoRetryFakeClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

@@ -180,3 +180,11 @@ func (m *stubModelClient) SupportsKVCacheRelease() bool {
 
 // 编译时验证 stubModelClient 满足 BaseModelClient 接口
 var _ modelclients.BaseModelClient = (*stubModelClient)(nil)
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *stubModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *stubModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

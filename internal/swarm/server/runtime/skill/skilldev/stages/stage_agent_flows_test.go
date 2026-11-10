@@ -626,3 +626,11 @@ func TestDescOptimize_跑满最大迭代(t *testing.T) {
 		t.Error("应写入 DescOptimizeResult")
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *queueMockClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *queueMockClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

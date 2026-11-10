@@ -45,6 +45,10 @@ type mockModelClient struct {
 	releaseResult   bool
 	releaseErr      error
 	supportsKVCache bool
+	// affinitySupported 是否支持 KV 亲和（10.3.30）
+	affinitySupported bool
+	// affinityArgs 记录最近一次 BuildKVCacheAffinityInvokeKwargs 的入参
+	affinityArgs    string
 	genImageResult  *llmschema.ImageGenerationResponse
 	genImageErr     error
 	genSpeechResult *llmschema.AudioGenerationResponse
@@ -79,6 +83,25 @@ func (m *mockModelClient) Release(_ context.Context, _ ...model_clients.ReleaseO
 
 func (m *mockModelClient) SupportsKVCacheRelease() bool {
 	return m.supportsKVCache
+}
+
+func (m *mockModelClient) SupportsKVCacheAffinity() bool {
+	return m.affinitySupported
+}
+
+func (m *mockModelClient) BuildKVCacheAffinityInvokeKwargs(
+	_ any, sessionID, parentSessionID string, turnNum int,
+) map[string]any {
+	m.affinityArgs = sessionID + "|" + parentSessionID
+	if !m.affinitySupported {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"session_id":               sessionID,
+		"parent_session_id":        parentSessionID,
+		"turn_num":                 turnNum,
+		"enable_kv_cache_affinity": true,
+	}
 }
 
 func (m *mockModelClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {

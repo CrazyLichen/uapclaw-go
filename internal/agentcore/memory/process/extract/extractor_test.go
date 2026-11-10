@@ -450,3 +450,11 @@ func newFakeModelWithInvokeErr(invokeErr error) *llm.Model {
 	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
 	return model
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *mockLLMClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *mockLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

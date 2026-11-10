@@ -339,3 +339,11 @@ func TestGenerateImage工具_SaveDir搬移(t *testing.T) {
 		t.Errorf("搬移后文件不存在: %v", statErr)
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *fakeImageGenClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *fakeImageGenClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

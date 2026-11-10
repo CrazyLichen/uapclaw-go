@@ -3330,3 +3330,11 @@ func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
 
 // GetParentSessionID 返回空父会话（测试替身）。
 func (f *fakeSessionFacade) GetParentSessionID() string { return "" }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *fakeModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *fakeModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

@@ -332,3 +332,11 @@ func TestLLMCall_mime回落(t *testing.T) {
 		t.Errorf("无扩展名应回落 image/png，实际 %s", gotURL[:30])
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubCaptionClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubCaptionClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

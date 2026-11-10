@@ -452,3 +452,11 @@ func waitTCPReady(gw *gateway.AppGatewayServer, port int, timeout time.Duration)
 	}
 	return fmt.Errorf("端口 %d 在 %s 内未就绪", port, timeout)
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (c *slowStreamClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (c *slowStreamClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

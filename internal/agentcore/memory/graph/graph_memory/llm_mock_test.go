@@ -682,3 +682,11 @@ func TestHandleRelationDedupe_非StringTmpBuffer(t *testing.T) {
 	_, err := gm.handleRelationDedupe(context.Background(), "user1", "content", nil, state)
 	assert.NoError(t, err)
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *mutableMockLLMClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *mutableMockLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

@@ -1224,3 +1224,11 @@ func TestDescOptimize_applyDescription_无frontmatter(t *testing.T) {
 		t.Error("不应修改无 frontmatter 的文件")
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *stageMockLLMClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *stageMockLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}
