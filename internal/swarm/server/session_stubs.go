@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
+	lifecyclepkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -47,9 +48,9 @@ type noopTrajectoryHook struct{}
 // 与 R-1 同属"删除后置副作用"，spec §10 未单列编号）。
 type noopTeamBindingUnbinder struct{}
 
-// noopLifecycleJournal 生命周期日志桩。
-// spec §10 R-4：等 session/lifecycle.py 迁移后回填。
-type noopLifecycleJournal struct{}
+// lifecycleJournal 会话生命周期操作日志，数据源为 10.3.28e 的 lifecycle 包。
+// Python: server/runtime/session/lifecycle.py
+type lifecycleJournal struct{}
 
 // sessionCleanerAdapter 把 AgentManager 的会话清理适配到 provisioner 窄接口。
 // Python: runtime/service.py cleanup_session（:3024）的 AgentServer 侧传参
@@ -103,7 +104,7 @@ func newSessionProvisioner(
 		PlanController:          planController,
 		TrajectoryHook:          noopTrajectoryHook{},
 		TeamBinding:             noopTeamBindingUnbinder{},
-		LifecycleJournal:        noopLifecycleJournal{},
+		LifecycleJournal:        lifecycleJournal{},
 		ParticipantRegistry:     sessionpkg.NewRuntimeParticipantRegistry(),
 		PromptForks:             noopPromptSuggestionForks{},
 		SubagentStopper:         noopSubagentRuntimeStopper{},
@@ -349,12 +350,27 @@ func (noopSubagentRuntimeStopper) StopSubagentRuntimes(
 	return nil
 }
 
-// RecoveringDelete 桩：恒 false。
-// spec §10 R-4：会话生命周期日志未迁移，恢复中的删除无从判定。
-func (noopLifecycleJournal) RecoveringDelete(string) bool { return false }
+// RecoveringDelete 该会话是否处于未完成的删除操作中。
+// Python: lifecycle.py session_delete_pending（:142）
+//
+// 数据来自 10.3.28e 已落地的 lifecycle 包：operation.kind == "delete" 且
+// status != "completed"，同时 blocked 为真（上游同一组三个条件）。
+// 此前是恒 false 的桩，导致「删除中途崩溃 → 重启后无法识别恢复中的删除」。
+func (lifecycleJournal) RecoveringDelete(sessionID string) bool {
+	return lifecyclepkg.SessionDeletePending(sessionID)
+}
 
-// MarkCleanup 桩。
-func (noopLifecycleJournal) MarkCleanup(string) error { return nil }
+// MarkCleanup 标记该会话进入清理阶段。
+// Python: 由 lifecycle.MarkFinalizing 承载（operation.status → finalizing）。
+// 无待完成操作时为空操作（上游同样容忍：不是删除流程就无需标记）。
+func (lifecycleJournal) MarkCleanup(sessionID string) error {
+	if !lifecyclepkg.SessionDeletePending(sessionID) {
+		return nil
+	}
+	// deleted=false：清理阶段尚未落盘删除标记，deleted 由后续 committed 步骤置位。
+	_, err := lifecyclepkg.MarkFinalizing("session", sessionID, false, nil)
+	return err
+}
 
 // ──────────────────────────── 参数解析辅助（10.3.28b/c） ────────────────────────────
 
