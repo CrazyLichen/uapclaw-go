@@ -54,6 +54,9 @@ type AgentModeRail struct {
 	language string
 	// agentID Agent 标识
 	agentID string
+	// attachmentManager 会话级动态提示词管理器（Init 时取一次）
+	// Python: self.attachment_manager（agent_mode_rail.py:163/173）
+	attachmentManager *hprompts.Manager
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -171,6 +174,9 @@ func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 		r.agentID = card.ID
 	}
 
+	// Python: L163/173: self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	r.attachmentManager = hprompts.ManagerFor(agent)
+
 	// Python: L115-119: 创建 3 个模式切换工具
 	r.tools = []tool.Tool{
 		agent_mode.NewSwitchModeTool(deepAgent, r.language, r.agentID),
@@ -236,15 +242,6 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
-// attachmentManager 返回会话级动态提示词管理器（未注入时为 nil）。
-// Python: self.attachment_manager（DeepAgent 共享给内层 ReActAgent 与各 rail）
-func (r *AgentModeRail) attachmentManager() *hprompts.Manager {
-	if provider, ok := r.agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
-		return provider.PromptAttachments()
-	}
-	return nil
-}
-
 // BeforeModelCall 注入 MODE_INSTRUCTIONS 并在 plan 模式下过滤隐藏工具。
 // Python: AgentModeRail.before_model_call() L151-196
 func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
@@ -254,13 +251,18 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 
 	if planState.Mode != hschema.AgentModePlan.String() {
 		// 非 plan 模式
-		// Python: L162: 移除 MODE_INSTRUCTIONS 节（有管理器时清空附件，产生移除 delta）
-		if mgr := r.attachmentManager(); mgr != nil && sess != nil {
-			if _, err := mgr.ClearSection(sess.GetSessionID(), sections.SectionModeInstructions); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("clear mode_instructions attachment failed")
-			}
-		} else if r.systemPromptBuilder != nil {
+		// Python: L313/L368-370: 移除 system 节在 session 判空之前，顺序不可换
+		if r.systemPromptBuilder != nil {
 			r.systemPromptBuilder.RemoveSection(sections.SectionModeInstructions)
+		}
+		// Python: L314: 有管理器时清空附件（产生移除 delta），无管理器不回落
+		if r.attachmentManager != nil {
+			if _, err := r.attachmentManager.BindContext(cbc).ClearSection(sections.SectionModeInstructions); err != nil {
+				logger.Warn(logComponent).
+					Str("event_type", "agent_mode_attachment").
+					Err(err).
+					Msg("skip clearing mode_instructions attachment")
+			}
 		}
 
 		// Python: L163: 同步 task_tool 可见性
@@ -285,17 +287,26 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 	// Python: L176-182: 构建 plan 模式提示词节
 	section := sections.BuildPlanModeSection(planFilePath, planExists, r.language)
 
-	// Python: L183: 添加节（有管理器时投递为历史附件，无管理器回落 section）
-	if mgr := r.attachmentManager(); mgr != nil && sess != nil {
-		if _, err := mgr.AddFromPromptSection(sess.GetSessionID(), &section, hprompts.AttachmentRuntime,
-			"agent_core.agent_mode_rail", r.language, hprompts.WithAttachmentContentKind("text/markdown")); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("agent_mode attachment failed, fallback to section")
-			if r.systemPromptBuilder != nil {
-				r.systemPromptBuilder.AddSection(section)
-			}
+	// Python: L405: 追加前先移除旧节，避免 system 与附件并存
+	if r.systemPromptBuilder != nil {
+		r.systemPromptBuilder.RemoveSection(sections.SectionModeInstructions)
+	}
+	// Python: L407-429: 有管理器投递为历史附件，无管理器或投递失败回落 section
+	if r.attachmentManager == nil {
+		if r.systemPromptBuilder != nil {
+			r.systemPromptBuilder.AddSection(section)
 		}
-	} else if r.systemPromptBuilder != nil {
-		r.systemPromptBuilder.AddSection(section)
+	} else if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
+		&section, hprompts.AttachmentRuntime, "agent_core.agent_mode_rail",
+		hprompts.WithLanguage(r.language), hprompts.WithAttachmentContentKind("text/markdown"),
+	); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "agent_mode_attachment").
+			Err(err).
+			Msg("skip mode_instructions attachment, fallback to section")
+		if r.systemPromptBuilder != nil {
+			r.systemPromptBuilder.AddSection(section)
+		}
 	}
 
 	// Python: L186-187: 移除 Todo 和 SessionTools 节
