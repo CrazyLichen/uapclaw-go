@@ -199,6 +199,12 @@ func (h *NativeHarness) SessionID() string {
 // Python: NativeHarness.paused_query (native_harness.py L259-265)
 func (h *NativeHarness) PausedQuery() (string, bool) { return h.st.PausedQuery() }
 
+// ActiveRound 返回当前在飞的轮次，无轮次时为 nil。
+// rails 通过它读活轮：内层循环跑在 TaskScheduler 执行协程里，ContextVar 在那里取不到值，
+// 只有 harness 反向引用从任意 task 都有效。
+// Python: NativeHarness.active_round property (native_harness.py L268-275)
+func (h *NativeHarness) ActiveRound() *ActiveRound { return h.st.Active() }
+
 // DeepAgent 返回内层 DeepAgent（团队侧需要 rails/workspace 等能力时使用）。
 func (h *NativeHarness) DeepAgent() *agentcore.DeepAgent { return h.agent }
 

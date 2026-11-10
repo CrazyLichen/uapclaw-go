@@ -2737,11 +2737,25 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 				extra[k] = v2
 			}
 		}
+		// turn 号：只接受正整数，其余视为未提供。
+		// Python: raw_turn_number = inputs.get("_turn_number") → isinstance(int) and not bool and > 0（deep_agent.py L1878-1883）
+		var turnNumber int
+		switch tn := v["_turn_number"].(type) {
+		case int:
+			if tn > 0 {
+				turnNumber = tn
+			}
+		case int64:
+			if tn > 0 {
+				turnNumber = int(tn)
+			}
+		}
 		return &agentinterfaces.InvokeInputs{
 			Query:          query,
 			ConversationID: conversationID,
 			RunKind:        runKind,
 			RunContext:     runContext,
+			TurnNumber:     turnNumber,
 			Extra:          extra,
 		}, nil
 	case string:
@@ -2767,6 +2781,11 @@ func toEffectiveInputs(invokeInputs *agentinterfaces.InvokeInputs) map[string]an
 	}
 	if invokeInputs.RunContext != nil {
 		result["run_context"] = invokeInputs.RunContext
+	}
+	// turn 号回写：ReActAgent 从 effective inputs 的 "_turn_number" 读。
+	// Python: if invoke_inputs.turn_number is not None → effective_inputs["_turn_number"]（deep_agent.py L2002-2003）
+	if invokeInputs.TurnNumber > 0 {
+		result["_turn_number"] = invokeInputs.TurnNumber
 	}
 	// 合并 Extra 字段（如 _steering_queue），对齐 Python dict 自然保留额外 key 的行为
 	for k, v := range invokeInputs.Extra {

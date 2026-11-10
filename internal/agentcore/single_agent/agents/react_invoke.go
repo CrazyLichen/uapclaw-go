@@ -315,6 +315,39 @@ func applyInputPartsExtra(cbc *interfaces.AgentCallbackContext, inputs map[strin
 	cbc.SetExtra("_input_parts", parts)
 }
 
+// turnNumberFromInputs 读取并校验输入里的成员 turn 号。
+// 只接受正整数（int / int64），其余一律视为未提供——与上游
+// isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 同义。
+// Python: raw_turn_number = inputs.get("_turn_number")（react_agent.py L2879-2884）
+func turnNumberFromInputs(inputs map[string]any) int {
+	switch tn := inputs["_turn_number"].(type) {
+	case int:
+		if tn > 0 {
+			return tn
+		}
+	case int64:
+		if tn > 0 {
+			return int(tn)
+		}
+	}
+	return 0
+}
+
+// applyTurnNumberExtra 把成员 turn 号同时写入 cbc.extra 与 invokeInputs.Extra。
+// 两处都写：cbc.extra 是内层循环的读取面（与 _input_parts 同款），
+// invokeInputs.Extra 让 AFTER_INVOKE 侧经 Inputs() 也能看到同一个值。
+// Python: if invoke_inputs.turn_number is not None → ctx.extra["_turn_number"]（react_agent.py L2966-2967）
+func applyTurnNumberExtra(cbc *interfaces.AgentCallbackContext, invokeInputs *interfaces.InvokeInputs) {
+	if cbc == nil || invokeInputs == nil || invokeInputs.TurnNumber <= 0 {
+		return
+	}
+	cbc.SetExtra("_turn_number", invokeInputs.TurnNumber)
+	if invokeInputs.Extra == nil {
+		invokeInputs.Extra = make(map[string]any, 1)
+	}
+	invokeInputs.Extra["_turn_number"] = invokeInputs.TurnNumber
+}
+
 // extractUserParts 把本轮 query 归一成 ON_USER_MESSAGE 看到的输入列表。
 // 一轮可能由多条排队输入共同驱动，调用方把它们不 join 地交下来，rails
 // 才能看到接缝；其余情况下就是 query 本身这一个输入。
@@ -432,6 +465,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	invokeInputs := &interfaces.InvokeInputs{
 		Query:          invokeQuery,
 		ConversationID: sess.GetSessionID(),
+		TurnNumber:     turnNumberFromInputs(inputs),
 	}
 	cbc := interfaces.NewAgentCallbackContext(a, invokeInputs, sess)
 
@@ -450,6 +484,9 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	} else {
 		cbc.SetExtra("_streaming", false)
 	}
+	// 成员 turn 号：Team 成员本轮工作的轨迹身份，供观测层映射 span 属性。
+	// Python: if invoke_inputs.turn_number is not None → ctx.extra["_turn_number"]（react_agent.py L2966-2967）
+	applyTurnNumberExtra(cbc, invokeInputs)
 	if sq, ok := inputs["_steering_queue"]; ok {
 		if ch, ok2 := sq.(chan string); ok2 {
 			cbc.BindSteeringQueue(ch)
