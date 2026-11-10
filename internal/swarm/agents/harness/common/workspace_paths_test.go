@@ -19,7 +19,7 @@ func TestWorkspacePaths_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── normalize_workspace_root ────────────────────────────
+// ──────────────────────────── 用例：normalize workspace root ───────────────────────────────
 
 func TestNormalizeWorkspaceRoot_nil(t *testing.T) {
 	if got := NormalizeWorkspaceRoot(nil); got != nil {
@@ -35,7 +35,7 @@ func TestNormalizeWorkspaceRoot_绝对路径(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sandbox_artifact_session_root ────────────────────────────
+// ──────────────────────────── 用例：sandbox artifact session root ───────────────────────────────
 
 func TestSandboxArtifactSessionRoot_命中(t *testing.T) {
 	got := SandboxArtifactSessionRoot("/ws/.sandbox-artifacts/sess-1/out/file.txt")
@@ -61,7 +61,7 @@ func TestIsSandboxArtifactWorkspaceRoot(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── _normalize_path_text ────────────────────────────
+// ──────────────────────────── 用例： normalize path text ───────────────────────────────
 
 func TestNormalizePathText_转义与反斜杠(t *testing.T) {
 	// URL 解码 + NFKC + 反斜杠归一
@@ -80,7 +80,7 @@ func TestNormalizePathText_nil与空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolve_workspace_path ────────────────────────────
+// ──────────────────────────── 用例：resolve workspace path ───────────────────────────────
 
 func TestResolveWorkspacePath_URI(t *testing.T) {
 	root := t.TempDir()
@@ -160,7 +160,7 @@ func TestResolveWorkspacePath_空路径(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolve_workspace_path_details ────────────────────────────
+// ──────────────────────────── 用例：resolve workspace path details ───────────────────────────────
 
 func TestResolveWorkspacePathDetails_工作区内(t *testing.T) {
 	root := t.TempDir()
@@ -192,7 +192,7 @@ func TestResolveWorkspacePathDetails_无法解析(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── display_workspace_path ────────────────────────────
+// ──────────────────────────── 用例：display workspace path ───────────────────────────────
 
 func TestDisplayWorkspacePath_裸URI(t *testing.T) {
 	root := t.TempDir()
@@ -250,7 +250,7 @@ func TestDisplayWorkspacePath_空串(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sanitize_visible_text ────────────────────────────
+// ──────────────────────────── 用例：sanitize visible text ───────────────────────────────
 
 func TestSanitizeVisibleText_workspaceVisible(t *testing.T) {
 	in := "output at /ws/.sandbox-artifacts/sess-1/out.txt done"
@@ -289,7 +289,7 @@ func TestSanitizeVisibleText_reviewUI模式(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sanitize_visible_value ────────────────────────────
+// ──────────────────────────── 用例：sanitize visible value ───────────────────────────────
 
 func TestSanitizeVisibleValue_嵌套结构(t *testing.T) {
 	in := map[string]any{
@@ -328,7 +328,7 @@ func TestSanitizeReviewUIValue_转发(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolve_workspace_path_arguments ────────────────────────────
+// ──────────────────────────── 用例：resolve workspace path arguments ───────────────────────────────
 
 func TestResolveWorkspacePathArguments_路径键(t *testing.T) {
 	root := t.TempDir()

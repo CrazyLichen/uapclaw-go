@@ -13,7 +13,7 @@ func TestReviewerToolResultMetadataExtraKey(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Record ────────────────────────────
+// ──────────────────────────── 用例：Record ───────────────────────────────
 
 // TestRecordReviewerToolResultMetadata_写入 验证建桶并写入。
 func TestRecordReviewerToolResultMetadata_写入(t *testing.T) {
@@ -90,7 +90,7 @@ func TestRecordReviewerToolResultMetadata_多条目(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Consume ────────────────────────────
+// ──────────────────────────── 用例：Consume ───────────────────────────────
 
 // TestConsumeReviewerToolResultMetadata_取出并删除 验证消费语义。
 func TestConsumeReviewerToolResultMetadata_取出并删除(t *testing.T) {
@@ -166,7 +166,7 @@ func TestConsumeReviewerToolResultMetadata_深拷贝(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Peek ────────────────────────────
+// ──────────────────────────── 用例：Peek ───────────────────────────────
 
 // TestPeekReviewerToolResultMetadata_只读 验证不删除条目。
 func TestPeekReviewerToolResultMetadata_只读(t *testing.T) {

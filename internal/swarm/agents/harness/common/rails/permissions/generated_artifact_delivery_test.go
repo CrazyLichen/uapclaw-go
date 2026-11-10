@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── NormalizeSendFileTargetChannels ────────────────────────────
+// ──────────────────────────── 用例：NormalizeSendFileTargetChannels ───────────────────────────────
 
 func TestNormalizeSendFileTargetChannels_JSON数组(t *testing.T) {
 	got := NormalizeSendFileTargetChannels(`["web","cli"]`)
@@ -67,7 +67,7 @@ func TestNormalizeSendFileTargetChannels_空白元素被过滤(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeSendFilePaths ────────────────────────────
+// ──────────────────────────── 用例：NormalizeSendFilePaths ───────────────────────────────
 
 func TestNormalizeSendFilePaths_字符串JSON(t *testing.T) {
 	got := NormalizeSendFilePaths(`["/a/b.txt","/c/d.txt"]`)
@@ -116,7 +116,7 @@ func TestNormalizeSendFilePaths_非法JSON当单值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── CreateSendFileExecutionGrant ────────────────────────────
+// ──────────────────────────── 用例：CreateSendFileExecutionGrant ───────────────────────────────
 
 func TestCreateSendFileExecutionGrant_路径解析(t *testing.T) {
 	dir := t.TempDir()
@@ -156,7 +156,7 @@ func TestCreateSendFileExecutionGrant_nil目标渠道为空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Publish / Current / Clear / Consume ────────────────────────────
+// ──────────────────────────── 用例：Publish / Current / Clear / Consume ───────────────────────────────
 
 func TestPublishSendFileExecutionGrant_发布后可读(t *testing.T) {
 	dir := t.TempDir()

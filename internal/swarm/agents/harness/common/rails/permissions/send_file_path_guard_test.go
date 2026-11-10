@@ -27,7 +27,7 @@ func TestSendFilePathGuard_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── canonicalSendPaths ────────────────────────────
+// ──────────────────────────── 用例：canonicalSendPaths ───────────────────────────────
 
 func TestCanonicalSendPaths_单字符串(t *testing.T) {
 	paths, reason := canonicalSendPaths("/a/x.txt")
@@ -118,7 +118,7 @@ func TestCanonicalSendPaths_波浪线展开(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── canonicalWorkspace ────────────────────────────
+// ──────────────────────────── 用例：canonicalWorkspace ───────────────────────────────
 
 func TestCanonicalWorkspace_nil(t *testing.T) {
 	got, reason := canonicalWorkspace(nil)
@@ -135,7 +135,7 @@ func TestCanonicalWorkspace_正常(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── canonicalTrustedDirs ────────────────────────────
+// ──────────────────────────── 用例：canonicalTrustedDirs ───────────────────────────────
 
 func TestCanonicalTrustedDirs_nil(t *testing.T) {
 	got, reason := canonicalTrustedDirs(nil)
@@ -164,7 +164,7 @@ func TestCanonicalTrustedDirs_空列表(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── unevaluable ────────────────────────────
+// ──────────────────────────── 用例：unevaluable ───────────────────────────────
 
 func TestUnevaluable_字段(t *testing.T) {
 	got := unevaluable("permissions_missing", nil)
@@ -186,7 +186,7 @@ func TestUnevaluable_带路径(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionResultLevel ────────────────────────────
+// ──────────────────────────── 用例：permissionResultLevel ───────────────────────────────
 
 func TestPermissionResultLevel_nil(t *testing.T) {
 	if got := permissionResultLevel(nil); got != "" {
@@ -194,7 +194,7 @@ func TestPermissionResultLevel_nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SendFilePathGuardEvaluator ────────────────────────────
+// ──────────────────────────── 用例：SendFilePathGuardEvaluator ───────────────────────────────
 
 func TestSendFilePathGuardEvaluator_路径解析失败(t *testing.T) {
 	eval := NewSendFilePathGuardEvaluator()

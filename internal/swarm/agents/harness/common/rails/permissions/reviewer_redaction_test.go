@@ -33,7 +33,7 @@ func TestReviewerRedaction_常量值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_text ────────────────────────────
+// ──────────────────────────── 用例：redact text ───────────────────────────────
 
 // TestRedactText_路径与URI脱敏 验证 file:// 与绝对路径被替换为 [path]
 func TestRedactText_路径与URI脱敏(t *testing.T) {
@@ -90,7 +90,7 @@ func TestRedactText_小上限(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_secret_values ────────────────────────────
+// ──────────────────────────── 用例：redact secret values ───────────────────────────────
 
 // TestRedactSecretValues_赋值脱敏 验证 key=value 形态
 func TestRedactSecretValues_赋值脱敏(t *testing.T) {
@@ -111,7 +111,7 @@ func TestRedactSecretValues_保留路径(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_secret_values_preserve_format ────────────────────────────
+// ──────────────────────────── 用例：redact secret values preserve format ───────────────────────────────
 
 // TestRedactSecretValuesPreserveFormat_保留空白 验证与 redact_secret_values 的差异
 func TestRedactSecretValuesPreserveFormat_保留空白(t *testing.T) {
@@ -155,7 +155,7 @@ func TestRedactSecretValuesPreserveFormat_字面量校验(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_reviewable_payload_text ────────────────────────────
+// ──────────────────────────── 用例：redact reviewable payload text ───────────────────────────────
 
 // TestRedactReviewablePayloadText_路径脱敏 验证 6 类路径模式
 func TestRedactReviewablePayloadText_路径脱敏(t *testing.T) {
@@ -175,7 +175,7 @@ func TestRedactReviewablePayloadText_路径脱敏(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_url ────────────────────────────
+// ──────────────────────────── 用例：redact url ───────────────────────────────
 
 // TestRedactURL_凭据与query 验证 URL 重组
 func TestRedactURL_凭据与query(t *testing.T) {
@@ -207,7 +207,7 @@ func TestRedactURL_非URL退回redactText(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── reviewer_path_location ────────────────────────────
+// ──────────────────────────── 用例：reviewer path location ───────────────────────────────
 
 // TestReviewerPathLocation_工作区内 验证 base=workspace 与相对路径
 func TestReviewerPathLocation_工作区内(t *testing.T) {
@@ -237,7 +237,7 @@ func TestReviewerPathLocation_控制字符redacted(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_reviewer_value ────────────────────────────
+// ──────────────────────────── 用例：redact reviewer value ───────────────────────────────
 
 // TestRedactReviewerValue_密钥键脱敏 验证 secret key 的值被 [redacted] 替换
 func TestRedactReviewerValue_密钥键脱敏(t *testing.T) {
@@ -267,7 +267,7 @@ func TestRedactReviewerValue_递归结构(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── redact_json_value ────────────────────────────
+// ──────────────────────────── 用例：redact json value ───────────────────────────────
 
 // TestRedactJSONValue_结构与密钥 验证 JSON-safe 结构保留
 func TestRedactJSONValue_结构与密钥(t *testing.T) {
@@ -288,7 +288,7 @@ func TestRedactJSONValue_结构与密钥(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sanitize_permission_ui_payload ────────────────────────────
+// ──────────────────────────── 用例：sanitize permission ui payload ───────────────────────────────
 
 // TestSanitizePermissionUIPayload_基本 验证密钥键、深度、item 上限
 func TestSanitizePermissionUIPayload_基本(t *testing.T) {

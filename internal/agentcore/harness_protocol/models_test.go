@@ -96,7 +96,7 @@ func TestJsonValueToBuiltin_还原为可序列化容器(t *testing.T) {
 	assert.Equal(t, map[string]any{"a": []any{1, "b"}}, got)
 }
 
-// ──────────── HarnessCard ────────────
+// ──────────── 用例：HarnessCard（协议卡片） ────────────
 
 // TestNewHarnessCard_默认值 验证协议版本与兼容集默认取 PROTOCOL_VERSION，能力集为空。
 // Python: models.py:144-168（默认 protocol_version=PROTOCOL_VERSION, compatible 含自身）
@@ -177,7 +177,7 @@ func TestHarnessCard_ValidateHost(t *testing.T) {
 	require.NoError(t, c.ValidateHost(ProtocolVersion, map[HostCapability]bool{HostCapabilityToolApproval: true}))
 }
 
-// ──────────── HarnessInput / SendReceipt ────────────
+// ──────────── 用例：HarnessInput / SendReceipt（输入与发送回执） ────────────
 
 // TestNewHarnessInput_冻结content与metadata 验证两字段都被冻结。
 // Python: models.py:198-207
@@ -297,7 +297,7 @@ func TestNewModelOption_冻结extensions(t *testing.T) {
 	assert.Equal(t, []any{1}, o.Extensions["a"])
 }
 
-// ──────────── HarnessContext ────────────
+// ──────────── 用例：HarnessContext（运行上下文） ────────────
 
 // TestNewHarnessContext_必填与非空 验证 4 个必填字段。
 // Python: models.py:358-369

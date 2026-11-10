@@ -35,7 +35,7 @@ func TestLocalized(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── truncateUI ────────────────────────────
+// ──────────────────────────── 用例：truncateUI ───────────────────────────────
 
 // TestTruncateUI 验证词边界截断。
 func TestTruncateUI(t *testing.T) {
@@ -58,7 +58,7 @@ func TestTruncateUI(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── uiText ────────────────────────────
+// ──────────────────────────── 用例：uiText ───────────────────────────────
 
 // TestUIText_按序取首个非空 验证候选键顺序。
 func TestUIText_按序取首个非空(t *testing.T) {
@@ -85,7 +85,7 @@ func TestUIText_脱敏(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── reviewerStatus ────────────────────────────
+// ──────────────────────────── 用例：reviewerStatus ───────────────────────────────
 
 // TestReviewerStatus_各分支 验证状态归一。
 func TestReviewerStatus_各分支(t *testing.T) {
@@ -111,7 +111,7 @@ func TestReviewerStatus_各分支(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── hostDisplayReason ────────────────────────────
+// ──────────────────────────── 用例：hostDisplayReason ───────────────────────────────
 
 // TestHostDisplayReason_各分支 验证 16 个 key 的映射。
 func TestHostDisplayReason_各分支(t *testing.T) {
@@ -160,7 +160,7 @@ func TestHostDisplayReason_英文(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── reviewerActionSummary ────────────────────────────
+// ──────────────────────────── 用例：reviewerActionSummary ───────────────────────────────
 
 // TestReviewerActionSummary 验证动作摘要格式。
 func TestReviewerActionSummary(t *testing.T) {
@@ -170,7 +170,7 @@ func TestReviewerActionSummary(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── reviewerUIMetadata ────────────────────────────
+// ──────────────────────────── 用例：reviewerUIMetadata ───────────────────────────────
 
 // TestReviewerUIMetadata_补齐字段 验证输出字段齐全。
 func TestReviewerUIMetadata_补齐字段(t *testing.T) {
@@ -270,7 +270,7 @@ func TestReviewerUIMetadata_保留审查提示(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── withHostOwnedManualReviewDisplay ────────────────────────────
+// ──────────────────────────── 用例：withHostOwnedManualReviewDisplay ───────────────────────────────
 
 // TestWithHostOwnedManualReviewDisplay_非人工路由 验证直返副本。
 func TestWithHostOwnedManualReviewDisplay_非人工路由(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── switches ────────────────────────────
+// ──────────────────────────── 用例：switches ───────────────────────────────
 
 // TestPromptSuggestionEnabled_默认关闭
 // Python: common/recommendation_switches.py:79 + :26 DEFAULT=False
@@ -64,7 +64,7 @@ func TestConsentEpoch_关闭时为0(t *testing.T) {
 	assert.Equal(t, first, ConsentEpoch(enabled), "开启后 epoch 稳定")
 }
 
-// ──────────────────────────── Forks ────────────────────────────
+// ──────────────────────────── 用例：Forks ───────────────────────────────
 
 // enabledConfig 返回一份开启推荐的配置。
 func enabledConfig() map[string]any {

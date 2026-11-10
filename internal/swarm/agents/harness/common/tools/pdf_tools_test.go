@@ -32,7 +32,7 @@ func TestReadPdf_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── _parse_page_ranges ────────────────────────────
+// ──────────────────────────── 用例： parse page ranges ───────────────────────────────
 
 func TestParsePageRanges_nil与空(t *testing.T) {
 	if got := parsePageRanges(nil); got != nil {
@@ -132,7 +132,7 @@ func TestParsePageRanges_跳过空段(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── _format_page_list ────────────────────────────
+// ──────────────────────────── 用例： format page list ───────────────────────────────
 
 func TestFormatPageList(t *testing.T) {
 	cases := []struct {
@@ -154,7 +154,7 @@ func TestFormatPageList(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── _normalize_request ────────────────────────────
+// ──────────────────────────── 用例： normalize request ───────────────────────────────
 
 func TestNormalizeReadPdfRequest_默认(t *testing.T) {
 	req := normalizeReadPdfRequest(map[string]any{"pdf_path": "  /a/b.pdf  "})
@@ -205,7 +205,7 @@ func TestNormalizeReadPdfRequest_pages(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── _resolve_pdf_path ────────────────────────────
+// ──────────────────────────── 用例： resolve pdf path ───────────────────────────────
 
 func TestResolvePDFPath_绝对路径校验(t *testing.T) {
 	ctx := context.Background()

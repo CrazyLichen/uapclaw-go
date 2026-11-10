@@ -39,7 +39,7 @@ func TestTrustedSearchUrls_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── bind_session ────────────────────────────
+// ──────────────────────────── 用例：bind session ───────────────────────────────
 
 func TestSessionTrustedSearchUrls_构造即绑定(t *testing.T) {
 	ledger := NewSessionTrustedSearchUrls("sess-1")
@@ -99,7 +99,7 @@ func TestBindSession_已关闭报错(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── record_batch ────────────────────────────
+// ──────────────────────────── 用例：record batch ───────────────────────────────
 
 func TestRecordBatch_正常记录(t *testing.T) {
 	ledger := newTrustedLedger("sess-1")
@@ -276,7 +276,7 @@ func TestRecordBatch_非法URL跳过(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── contains / sources ────────────────────────────
+// ──────────────────────────── 用例：contains / sources ───────────────────────────────
 
 func TestContains_命中与未命中(t *testing.T) {
 	ledger := newTrustedLedger("sess-1")
@@ -357,7 +357,7 @@ func TestSources_已关闭返回空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── dispose / Len ────────────────────────────
+// ──────────────────────────── 用例：dispose / Len ───────────────────────────────
 
 func TestDispose_清空并关闭(t *testing.T) {
 	ledger := newTrustedLedger("sess-1")

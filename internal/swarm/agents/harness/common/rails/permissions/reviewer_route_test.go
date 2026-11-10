@@ -300,7 +300,7 @@ func TestFileDeliveryManualReason_自定义排除(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── searchQueryIsSecretLike ────────────────────────────
+// ──────────────────────────── 用例：searchQueryIsSecretLike ───────────────────────────────
 
 // TestSearchQueryIsSecretLike_各形态 验证密钥识别。
 func TestSearchQueryIsSecretLike_各形态(t *testing.T) {
@@ -351,7 +351,7 @@ func TestSearchQueryIsSecretLike_空白归一(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── pathMatchesExclusion ────────────────────────────
+// ──────────────────────────── 用例：pathMatchesExclusion ───────────────────────────────
 
 // TestPathMatchesExclusion_绝对路径 验证绝对排除项。
 func TestPathMatchesExclusion_绝对路径(t *testing.T) {

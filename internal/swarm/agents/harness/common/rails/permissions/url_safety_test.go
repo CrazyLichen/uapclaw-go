@@ -71,7 +71,7 @@ func TestURLSafety_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── UnsafePublicHTTPSURLReason ────────────────────────────
+// ──────────────────────────── 用例：UnsafePublicHTTPSURLReason ───────────────────────────────
 
 func TestUnsafePublicHTTPSURLReason_各类硬拦(t *testing.T) {
 	cases := []struct{ url, want string }{
@@ -118,7 +118,7 @@ func TestUnsafePublicHTTPSURLReason_单标签主机(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── AbsoluteURIHardBlockReason ────────────────────────────
+// ──────────────────────────── 用例：AbsoluteURIHardBlockReason ───────────────────────────────
 
 func TestAbsoluteURIHardBlockReason_各类(t *testing.T) {
 	cases := []struct {
@@ -148,7 +148,7 @@ func TestAbsoluteURIHardBlockReason_http密钥query不拦(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExtractURLsFromText ────────────────────────────
+// ──────────────────────────── 用例：ExtractURLsFromText ───────────────────────────────
 
 func TestExtractURLsFromText_基础(t *testing.T) {
 	got := ExtractURLsFromText("see https://example.com/a and http://foo.org/b")
@@ -183,7 +183,7 @@ func TestExtractURLsFromText_空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeURLForMatch ────────────────────────────
+// ──────────────────────────── 用例：NormalizeURLForMatch ───────────────────────────────
 
 func TestNormalizeURLForMatch_小写scheme与主机(t *testing.T) {
 	got := NormalizeURLForMatch("HTTPS://Example.COM/Path")
@@ -220,7 +220,7 @@ func TestNormalizeURLForMatch_非法端口返回空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RegistrableDomain ────────────────────────────
+// ──────────────────────────── 用例：RegistrableDomain ───────────────────────────────
 
 func TestRegistrableDomain(t *testing.T) {
 	cases := []struct{ in, want string }{
@@ -239,7 +239,7 @@ func TestRegistrableDomain(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── InspectAbsoluteUris ────────────────────────────
+// ──────────────────────────── 用例：InspectAbsoluteUris ───────────────────────────────
 
 func TestInspectAbsoluteUris_提取与去重(t *testing.T) {
 	args := map[string]any{
@@ -323,7 +323,7 @@ func TestInspectAbsoluteUris_fileURI带query(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── InspectNetworkScope ────────────────────────────
+// ──────────────────────────── 用例：InspectNetworkScope ───────────────────────────────
 
 func TestInspectNetworkScope_汇总(t *testing.T) {
 	subject := urlFactsSubject("web_fetch", []string{"network_read"}, map[string]any{
@@ -396,7 +396,7 @@ func TestNewReviewableURLDecision_合法组合(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RecentURLSource ────────────────────────────
+// ──────────────────────────── 用例：RecentURLSource ───────────────────────────────
 
 func TestRecentURLSource_ToJSONDict(t *testing.T) {
 	src := RecentURLSource{
@@ -415,7 +415,7 @@ func TestRecentURLSource_ToJSONDict(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EvaluateReviewableURLScope ────────────────────────────
+// ──────────────────────────── 用例：EvaluateReviewableURLScope ───────────────────────────────
 
 func TestEvaluateReviewableURLScope_externalSend拒绝(t *testing.T) {
 	subject := urlFactsSubject("web_fetch", []string{"external_send"}, map[string]any{

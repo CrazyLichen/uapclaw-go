@@ -27,7 +27,7 @@ func invokeTool(t *testing.T, tl tool.Tool, input map[string]any) map[string]any
 	return res
 }
 
-// ──────────────────────────── glob ────────────────────────────
+// ──────────────────────────── 用例：glob ───────────────────────────────
 
 // TestGlobTool_匹配文件 递归匹配指定模式。
 func TestGlobTool_匹配文件(t *testing.T) {
@@ -57,7 +57,7 @@ func TestGlobTool_缺少模式(t *testing.T) {
 	assert.Contains(t, fmt.Sprint(res["error"]), "pattern is required")
 }
 
-// ──────────────────────────── write_file ────────────────────────────
+// ──────────────────────────── 用例：write file ───────────────────────────────
 
 // TestWriteFileTool_创建新文件 新建文件返回 created=true。
 func TestWriteFileTool_创建新文件(t *testing.T) {
@@ -158,7 +158,7 @@ func TestWriteFileTool_内容超限(t *testing.T) {
 	assert.Contains(t, fmt.Sprint(res["error"]), "content is too large")
 }
 
-// ──────────────────────────── grep ────────────────────────────
+// ──────────────────────────── 用例：grep ───────────────────────────────
 
 // TestGrepTool_参数校验 缺少 pattern / 非法输出模式各自回错误。
 func TestGrepTool_参数校验(t *testing.T) {

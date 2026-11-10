@@ -14,7 +14,7 @@ import (
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── NormalizeInvocationToolArgs ────────────────────────────
+// ──────────────────────────── 用例：NormalizeInvocationToolArgs ───────────────────────────────
 
 // TestNormalizeInvocationToolArgs_map输入 验证直接透传。
 func TestNormalizeInvocationToolArgs_map输入(t *testing.T) {
@@ -63,7 +63,7 @@ func TestNormalizeInvocationToolArgs_sendFile归一(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RepairMalformedToolArguments ────────────────────────────
+// ──────────────────────────── 用例：RepairMalformedToolArguments ───────────────────────────────
 
 // TestRepairMalformedToolArguments 验证修复与失败返回 nil。
 func TestRepairMalformedToolArguments(t *testing.T) {
@@ -185,7 +185,7 @@ func TestHostToolCallID(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExtractInvocation ────────────────────────────
+// ──────────────────────────── 用例：ExtractInvocation ───────────────────────────────
 
 // TestExtractInvocation_从Inputs取 验证无 toolCall 时从 cbc 取。
 func TestExtractInvocation_从Inputs取(t *testing.T) {
@@ -229,7 +229,7 @@ func TestExtractInvocation_全空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── HostSessionID ────────────────────────────
+// ──────────────────────────── 用例：HostSessionID ───────────────────────────────
 
 // TestHostSessionID_nil安全 验证 nil 返回空。
 func TestHostSessionID_nil安全(t *testing.T) {
@@ -242,7 +242,7 @@ func TestHostSessionID_nil安全(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── CompatibilitySendMatchesHost ────────────────────────────
+// ──────────────────────────── 用例：CompatibilitySendMatchesHost ───────────────────────────────
 
 // TestCompatibilitySendMatchesHost_完全一致 验证通过。
 func TestCompatibilitySendMatchesHost_完全一致(t *testing.T) {
@@ -311,7 +311,7 @@ func TestCompatibilitySendMatchesHost_toolCall不符(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── validateSmartGlobPattern ────────────────────────────
+// ──────────────────────────── 用例：validateSmartGlobPattern ───────────────────────────────
 
 // TestValidateSmartGlobPattern_各拒绝分支 验证限制。
 func TestValidateSmartGlobPattern_各拒绝分支(t *testing.T) {
@@ -340,7 +340,7 @@ func TestValidateSmartGlobPattern_各拒绝分支(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SetNativePathExecutors ────────────────────────────
+// ──────────────────────────── 用例：SetNativePathExecutors ───────────────────────────────
 
 // TestSetNativePathExecutors_登记与读取 验证注入点。
 func TestSetNativePathExecutors_登记与读取(t *testing.T) {
@@ -611,7 +611,7 @@ func TestResolveNativePathArgument_glob非法模式(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── writeInvocationToolArgs ────────────────────────────
+// ──────────────────────────── 用例：writeInvocationToolArgs ───────────────────────────────
 
 // TestWriteInvocationToolArgs_写回Inputs 验证 SetInputs 替换。
 func TestWriteInvocationToolArgs_写回Inputs(t *testing.T) {
@@ -661,7 +661,7 @@ func TestReplaceInvocationToolArgs(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResolveTrustedSendIdentity ────────────────────────────
+// ──────────────────────────── 用例：ResolveTrustedSendIdentity ───────────────────────────────
 
 // TestResolveTrustedSendIdentity_非send工具 验证返回 nil。
 func TestResolveTrustedSendIdentity_非send工具(t *testing.T) {

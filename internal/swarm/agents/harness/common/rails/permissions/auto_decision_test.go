@@ -37,7 +37,7 @@ func withEffects(names ...string) map[string]struct{} {
 	return effects
 }
 
-// ──────────────────────────── DeterministicGuardRoute ────────────────────────────
+// ──────────────────────────── 用例：DeterministicGuardRoute ───────────────────────────────
 
 // TestDeterministicGuardRoute_searchSkill敏感查询 验证密钥特征硬拒绝。
 func TestDeterministicGuardRoute_searchSkill敏感查询(t *testing.T) {
@@ -86,7 +86,7 @@ func TestDeterministicGuardRoute_非字符串query(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GenericMCPEgressEvidence ────────────────────────────
+// ──────────────────────────── 用例：GenericMCPEgressEvidence ───────────────────────────────
 
 // TestGenericMCPEgressEvidence_上传字段 验证 generic_mcp_upload_like_payload。
 func TestGenericMCPEgressEvidence_上传字段(t *testing.T) {
@@ -155,7 +155,7 @@ func TestGenericMCPEgressEvidence_去重(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DeterministicDomainRoute ────────────────────────────
+// ──────────────────────────── 用例：DeterministicDomainRoute ───────────────────────────────
 
 // TestDeterministicDomainRoute_mcp 验证 mcp 一律 manual_only。
 func TestDeterministicDomainRoute_mcp(t *testing.T) {
@@ -288,7 +288,7 @@ func TestDeterministicDomainRoute_browser硬拦截(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ToolSearchArgsValid ────────────────────────────
+// ──────────────────────────── 用例：ToolSearchArgsValid ───────────────────────────────
 
 // TestToolSearchArgsValid_progressive 验证渐进模式的封闭契约。
 func TestToolSearchArgsValid_progressive(t *testing.T) {
@@ -352,7 +352,7 @@ func TestToolSearchArgsValid_nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SessionObservationArgsValid ────────────────────────────
+// ──────────────────────────── 用例：SessionObservationArgsValid ───────────────────────────────
 
 // TestSessionObservationArgsValid_五契约 验证五个封闭契约。
 func TestSessionObservationArgsValid_五契约(t *testing.T) {
@@ -385,7 +385,7 @@ func TestSessionObservationArgsValid_五契约(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── TerminalLowRiskRoute ────────────────────────────
+// ──────────────────────────── 用例：TerminalLowRiskRoute ───────────────────────────────
 
 // TestTerminalLowRiskRoute_低风险路径读 验证 allow。
 func TestTerminalLowRiskRoute_低风险路径读(t *testing.T) {
@@ -442,7 +442,7 @@ func TestTerminalLowRiskRoute_硬拒绝时返回nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── TerminalInternalRoute ────────────────────────────
+// ──────────────────────────── 用例：TerminalInternalRoute ───────────────────────────────
 
 // TestTerminalInternalRoute_规范内部动作 验证 allow。
 func TestTerminalInternalRoute_规范内部动作(t *testing.T) {
@@ -528,7 +528,7 @@ func TestTerminalInternalRoute_subagent需校验(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── PostPolicyRoute ────────────────────────────
+// ──────────────────────────── 用例：PostPolicyRoute ───────────────────────────────
 
 // TestPostPolicyRoute_非allow直接返回 验证只处理 allow。
 func TestPostPolicyRoute_非allow直接返回(t *testing.T) {

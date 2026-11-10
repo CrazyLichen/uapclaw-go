@@ -388,7 +388,7 @@ func TestSearchBing_默认verify校验证书(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeSearchMaxResults（9.90d-1 Task 11） ────────────────────────────
+// ──────────────────────────── 用例：NormalizeSearchMaxResults（9.90d-1 Task 11） ───────────────────────────────
 
 // TestNormalizeSearchMaxResults_纯钳制 验证与 clampInt 的零值语义不同。
 func TestNormalizeSearchMaxResults_纯钳制(t *testing.T) {

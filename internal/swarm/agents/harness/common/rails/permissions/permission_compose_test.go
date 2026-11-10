@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── ComposeHostEffectivePermissions ────────────────────────────
+// ──────────────────────────── 用例：ComposeHostEffectivePermissions ───────────────────────────────
 
 // TestCompose_整工具deny优先 验证任一层 deny 都不可放宽。
 func TestCompose_整工具deny优先(t *testing.T) {
@@ -138,7 +138,7 @@ func TestCompose_nil输入(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── packageBuiltinRulesEnabled ────────────────────────────
+// ──────────────────────────── 用例：packageBuiltinRulesEnabled ───────────────────────────────
 
 // TestPackageBuiltinRulesEnabled 验证三种输入形态。
 func TestPackageBuiltinRulesEnabled(t *testing.T) {
@@ -166,7 +166,7 @@ func TestPackageBuiltinRulesEnabled(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── namedLevels ────────────────────────────
+// ──────────────────────────── 用例：namedLevels ───────────────────────────────
 
 // TestNamedLevels_基础 验证 tools 与三列表键。
 func TestNamedLevels_基础(t *testing.T) {
@@ -210,7 +210,7 @@ func TestNamedLevels_跳过非法(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── pickLevel ────────────────────────────
+// ──────────────────────────── 用例：pickLevel ───────────────────────────────
 
 // TestPickLevel_各组合 验证优先级。
 func TestPickLevel_各组合(t *testing.T) {
@@ -238,7 +238,7 @@ func TestPickLevel_各组合(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── mergeListOfDicts ────────────────────────────
+// ──────────────────────────── 用例：mergeListOfDicts ───────────────────────────────
 
 // TestMergeListOfDicts 验证多层拼接与深拷贝。
 func TestMergeListOfDicts(t *testing.T) {
@@ -262,7 +262,7 @@ func TestMergeListOfDicts(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── applyProductP1RuleActions ────────────────────────────
+// ──────────────────────────── 用例：applyProductP1RuleActions ───────────────────────────────
 
 // TestApplyProductP1RuleActions_按严重度补动作 验证四级映射。
 func TestApplyProductP1RuleActions_按严重度补动作(t *testing.T) {
@@ -315,7 +315,7 @@ func TestApplyProductP1RuleActions_跳过非map(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── netAction ────────────────────────────
+// ──────────────────────────── 用例：netAction ───────────────────────────────
 
 // TestNetAction 验证各种输入形态。
 func TestNetAction(t *testing.T) {
@@ -344,7 +344,7 @@ func TestNetAction(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── mergeNetURLs ────────────────────────────
+// ──────────────────────────── 用例：mergeNetURLs ───────────────────────────────
 
 // TestMergeNetURLs_deny不可放宽 验证后续 allow 不能覆盖 deny。
 func TestMergeNetURLs_deny不可放宽(t *testing.T) {
@@ -379,7 +379,7 @@ func TestMergeNetURLs_跳过非法(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── composeShellGuard ────────────────────────────
+// ──────────────────────────── 用例：composeShellGuard ───────────────────────────────
 
 // TestComposeShellGuard_默认全开 验证缺失时 fail-closed 为 true。
 func TestComposeShellGuard_默认全开(t *testing.T) {
@@ -426,7 +426,7 @@ func TestComposeShellGuard_非法值忽略(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── composeNetGuard ────────────────────────────
+// ──────────────────────────── 用例：composeNetGuard ───────────────────────────────
 
 // TestComposeNetGuard_默认 验证缺失时 enabled=true/defaults=allow。
 func TestComposeNetGuard_默认(t *testing.T) {
@@ -484,7 +484,7 @@ func TestComposeNetGuard_urls合并(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── composeFileGuard ────────────────────────────
+// ──────────────────────────── 用例：composeFileGuard ───────────────────────────────
 
 // TestComposeFileGuard_默认空 验证无配置时返回空 map。
 func TestComposeFileGuard_默认空(t *testing.T) {
@@ -531,7 +531,7 @@ func TestComposeFileGuard_非dict层忽略(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── failClosed ────────────────────────────
+// ──────────────────────────── 用例：failClosed ───────────────────────────────
 
 // TestFailClosed 验证兜底配置的关键字段。
 func TestFailClosed(t *testing.T) {

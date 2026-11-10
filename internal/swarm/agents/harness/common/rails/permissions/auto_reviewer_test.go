@@ -81,7 +81,7 @@ func TestReviewerNaturalLanguageInstruction(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── decodeStrictResponse ────────────────────────────
+// ──────────────────────────── 用例：decodeStrictResponse ───────────────────────────────
 
 // TestDecodeStrictResponse 验证严格解析。
 func TestDecodeStrictResponse(t *testing.T) {
@@ -390,7 +390,7 @@ func TestSanitizeReasonSummary(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── modelVisibleValue ────────────────────────────
+// ──────────────────────────── 用例：modelVisibleValue ───────────────────────────────
 
 // TestModelVisibleValue_移除关联字段 验证 id/digest 被移除。
 func TestModelVisibleValue_移除关联字段(t *testing.T) {
@@ -453,7 +453,7 @@ func TestModelVisibleValue_标量透传(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── visibleReviewEvidence ────────────────────────────
+// ──────────────────────────── 用例：visibleReviewEvidence ───────────────────────────────
 
 // TestVisibleReviewEvidence_白名单过滤 验证只保留 7 个键。
 func TestVisibleReviewEvidence_白名单过滤(t *testing.T) {
@@ -707,7 +707,7 @@ func TestManualReasonCodeForFallback与Hint(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ToJSONDict ────────────────────────────
+// ──────────────────────────── 用例：ToJSONDict ───────────────────────────────
 
 // TestToJSONDict 验证模型可见载荷结构。
 func TestToJSONDict(t *testing.T) {
@@ -746,7 +746,7 @@ func TestToJSONDict(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BuildReviewerActionView ────────────────────────────
+// ──────────────────────────── 用例：BuildReviewerActionView ───────────────────────────────
 
 // TestBuildReviewerActionView_基本 验证摘要与证据结构。
 func TestBuildReviewerActionView_基本(t *testing.T) {
@@ -809,7 +809,7 @@ func TestBuildReviewerActionView_载荷缺失移除allow_once(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── completePayloadEvidence ────────────────────────────
+// ──────────────────────────── 用例：completePayloadEvidence ───────────────────────────────
 
 // TestCompletePayloadEvidence_shell缺命令 验证 reviewer_payload_missing。
 func TestCompletePayloadEvidence_shell缺命令(t *testing.T) {
@@ -872,7 +872,7 @@ func TestCompletePayloadEvidence_参数非对象(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── pathTargetView ────────────────────────────
+// ──────────────────────────── 用例：pathTargetView ───────────────────────────────
 
 // TestPathTargetView_accesses未知 验证返回 incomplete。
 func TestPathTargetView_accesses未知(t *testing.T) {
@@ -924,7 +924,7 @@ func TestPathTargetView_读写分离(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── intentView ────────────────────────────
+// ──────────────────────────── 用例：intentView ───────────────────────────────
 
 // TestIntentView_带Context 验证轮次与澄清投影。
 func TestIntentView_带Context(t *testing.T) {
@@ -984,7 +984,7 @@ func TestIntentView_空Context空Text(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── modelResultText ────────────────────────────
+// ──────────────────────────── 用例：modelResultText ───────────────────────────────
 
 // TestModelResultText 验证各输入形态。
 func TestModelResultText(t *testing.T) {

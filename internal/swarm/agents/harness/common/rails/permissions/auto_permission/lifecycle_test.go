@@ -237,7 +237,7 @@ func TestNewAutoPermissionRail_工作区归一(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Init / Uninit ────────────────────────────
+// ──────────────────────────── 用例：Init / Uninit ───────────────────────────────
 
 // TestInit_转发并置owner 验证生命周期转发。
 func TestInit_转发并置owner(t *testing.T) {
@@ -302,7 +302,7 @@ func TestUninit_始终清owner(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GetTools / InstalledPermissionConfig ────────────────────────────
+// ──────────────────────────── 用例：GetTools / InstalledPermissionConfig ───────────────────────────────
 
 // TestGetTools 验证工具集合转换与去重。
 func TestGetTools(t *testing.T) {
@@ -345,7 +345,7 @@ func TestInstalledPermissionConfig_深拷贝(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SetTrustedDirs ────────────────────────────
+// ──────────────────────────── 用例：SetTrustedDirs ───────────────────────────────
 
 // TestSetTrustedDirs_无平台根直接转发 验证直通。
 func TestSetTrustedDirs_无平台根直接转发(t *testing.T) {
@@ -376,7 +376,7 @@ func TestSetTrustedDirs_有平台根置首(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ReplaceInstalledGlobalPermissions ────────────────────────────
+// ──────────────────────────── 用例：ReplaceInstalledGlobalPermissions ───────────────────────────────
 
 // TestReplaceInstalledGlobalPermissions_转发 验证转发结果。
 func TestReplaceInstalledGlobalPermissions_转发(t *testing.T) {
@@ -408,7 +408,7 @@ func TestReplaceInstalledGlobalPermissions_无能力返回nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── UpdateConfig ────────────────────────────
+// ──────────────────────────── 用例：UpdateConfig ───────────────────────────────
 
 // TestUpdateConfig_转发与字段更新 验证配置同步。
 func TestUpdateConfig_转发与字段更新(t *testing.T) {

@@ -811,7 +811,7 @@ func TestAPIMode_零值语义(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeModelClientConfig ────────────────────────────
+// ──────────────────────────── 用例：NormalizeModelClientConfig ───────────────────────────────
 
 // TestNormalizeModelClientConfig_回填端点base 验证 endpoint_profile 回填。
 func TestNormalizeModelClientConfig_回填端点base(t *testing.T) {

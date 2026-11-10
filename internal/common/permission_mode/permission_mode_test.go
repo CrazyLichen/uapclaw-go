@@ -13,7 +13,7 @@ func TestModeConstants(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResolvePermissionRuntimeMode ────────────────────────────
+// ──────────────────────────── 用例：ResolvePermissionRuntimeMode ───────────────────────────────
 
 func TestResolvePermissionRuntimeMode_各输入(t *testing.T) {
 	cases := []struct {
@@ -41,7 +41,7 @@ func TestResolvePermissionRuntimeMode_各输入(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsAutoPermissionMode ────────────────────────────
+// ──────────────────────────── 用例：IsAutoPermissionMode ───────────────────────────────
 
 func TestIsAutoPermissionMode(t *testing.T) {
 	if !IsAutoPermissionMode(map[string]any{"mode": "auto"}) {
@@ -55,7 +55,7 @@ func TestIsAutoPermissionMode(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsPermissionBoundaryEnabled ────────────────────────────
+// ──────────────────────────── 用例：IsPermissionBoundaryEnabled ───────────────────────────────
 
 func TestIsPermissionBoundaryEnabled_严格判等true(t *testing.T) {
 	if !IsPermissionBoundaryEnabled(map[string]any{"enabled": true}) {
@@ -75,7 +75,7 @@ func TestIsPermissionBoundaryEnabled_严格判等true(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsAutoPermissionEnabled ────────────────────────────
+// ──────────────────────────── 用例：IsAutoPermissionEnabled ───────────────────────────────
 
 func TestIsAutoPermissionEnabled_需同时满足(t *testing.T) {
 	if !IsAutoPermissionEnabled(map[string]any{"mode": "auto", "enabled": true}) {

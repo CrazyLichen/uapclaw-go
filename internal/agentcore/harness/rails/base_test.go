@@ -84,7 +84,7 @@ func TestDeepAgentRail_GetCallbacks_合并taskIteration(t *testing.T) {
 	assert.Contains(t, callbacks, agentinterfaces.CallbackAfterTaskIteration)
 }
 
-// ──────────────────────────── MarkTrusted / IsTrusted（9.90d-1 Task 14） ────────────────────────────
+// ──────────────────────────── 用例：MarkTrusted / IsTrusted（9.90d-1 Task 14） ───────────────────────────────
 
 // TestDeepAgentRail_MarkTrusted 验证标记后 IsTrusted 为 true。
 func TestDeepAgentRail_MarkTrusted(t *testing.T) {

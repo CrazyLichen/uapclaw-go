@@ -23,7 +23,7 @@ func TestAutoPermissionDefaultOptions(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeAutoPermissionOptions ────────────────────────────
+// ──────────────────────────── 用例：NormalizeAutoPermissionOptions ───────────────────────────────
 
 // TestNormalizeAutoPermissionOptions_默认值 验证空输入返回默认。
 func TestNormalizeAutoPermissionOptions_默认值(t *testing.T) {
@@ -135,7 +135,7 @@ func TestNormalizeAutoPermissionOptions_未知键忽略(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeReviewerOutputFormat ────────────────────────────
+// ──────────────────────────── 用例：NormalizeReviewerOutputFormat ───────────────────────────────
 
 // TestNormalizeReviewerOutputFormat 验证白名单与回落。
 func TestNormalizeReviewerOutputFormat(t *testing.T) {
@@ -159,7 +159,7 @@ func TestNormalizeReviewerOutputFormat(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizePermissionsForRuntime ────────────────────────────
+// ──────────────────────────── 用例：NormalizePermissionsForRuntime ───────────────────────────────
 
 // TestNormalizePermissionsForRuntime_非auto原样 验证 manual 模式不改动。
 func TestNormalizePermissionsForRuntime_非auto原样(t *testing.T) {
@@ -455,7 +455,7 @@ func TestMergeStructuredRuleMap_同键取严格(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResolveDeclaredAutoWorkspace ────────────────────────────
+// ──────────────────────────── 用例：ResolveDeclaredAutoWorkspace ───────────────────────────────
 
 // TestResolveDeclaredAutoWorkspace_未声明 验证都空时返回 nil。
 func TestResolveDeclaredAutoWorkspace_未声明(t *testing.T) {
@@ -529,7 +529,7 @@ func TestResolveDeclaredAutoWorkspace_相同不报错(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SupportsPhaseAutoRoot ────────────────────────────
+// ──────────────────────────── 用例：SupportsPhaseAutoRoot ───────────────────────────────
 
 // TestSupportsPhaseAutoRoot 验证 team 排除与 mode 组合。
 func TestSupportsPhaseAutoRoot(t *testing.T) {

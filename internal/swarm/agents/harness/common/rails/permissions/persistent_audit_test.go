@@ -52,7 +52,7 @@ func TestPersistentAudit_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── build_sanitized_audit_fields ────────────────────────────
+// ──────────────────────────── 用例：build sanitized audit fields ───────────────────────────────
 
 func TestBuildSanitizedAuditFields_基础字段(t *testing.T) {
 	got := BuildSanitizedAuditFields(fakeFacts(), "allow", "policy_allow", false, "", "", nil)
@@ -125,7 +125,7 @@ func TestBuildSanitizedAuditFields_敏感reason脱敏(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sanitize_audit_value / field ────────────────────────────
+// ──────────────────────────── 用例：sanitize audit value / field ───────────────────────────────
 
 func TestSanitizeAuditValue_各类型(t *testing.T) {
 	if got := SanitizeAuditValue("safe_text"); got != "safe_text" {
@@ -180,7 +180,7 @@ func TestSanitizeNaturalLanguageAuditText_价格上下文(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── _sanitize_audit_text ────────────────────────────
+// ──────────────────────────── 用例： sanitize audit text ───────────────────────────────
 
 func TestSanitizeAuditText_绝对路径被脱敏(t *testing.T) {
 	for _, s := range []string{"/etc/passwd", "/home/user/a.txt", `C:\Users\a.txt`} {
@@ -263,7 +263,7 @@ func TestAuditTextContainsSensitiveContent(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolve_persistent_audit_root ────────────────────────────
+// ──────────────────────────── 用例：resolve persistent audit root ───────────────────────────────
 
 func TestResolvePersistentAuditRoot_配置优先(t *testing.T) {
 	t.Setenv(DataDirEnvName, "")
@@ -322,7 +322,7 @@ func TestResolvePersistentAuditRoot_非Mapping配置(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── PersistentAuditWriter ────────────────────────────
+// ──────────────────────────── 用例：PersistentAuditWriter ───────────────────────────────
 
 func TestPersistentAuditWriter_auditPath(t *testing.T) {
 	w := NewPersistentAuditWriter("/tmp/data")

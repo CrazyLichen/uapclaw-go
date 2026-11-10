@@ -46,7 +46,7 @@ func TestEmitPermissionResultObservation_桩不panic(t *testing.T) {
 	rail.emitPermissionResultObservation(permissions.ToolDecisionFacts{}, nil, "s1", "c1", "src", nil)
 }
 
-// ──────────────────────────── runtimeResult ────────────────────────────
+// ──────────────────────────── 用例：runtimeResult ───────────────────────────────
 
 // TestRuntimeResult_无上下文直返 验证无 cbc 时不产生副作用。
 func TestRuntimeResult_无上下文直返(t *testing.T) {
@@ -109,7 +109,7 @@ func TestRuntimeResult_用户拒绝跳过工具(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── prepareManualPendingInvocation ────────────────────────────
+// ──────────────────────────── 用例：prepareManualPendingInvocation ───────────────────────────────
 
 // TestPrepareManualPendingInvocation_无key直返 验证 key 缺失时不改。
 func TestPrepareManualPendingInvocation_无key直返(t *testing.T) {
@@ -129,7 +129,7 @@ func TestPrepareManualPendingInvocation_非map直返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── normalizeRuntimePermissionResult ────────────────────────────
+// ──────────────────────────── 用例：normalizeRuntimePermissionResult ───────────────────────────────
 
 // TestNormalizeRuntimePermissionResult_直返 验证 V-9 回填后的转换行为。
 //
@@ -146,7 +146,7 @@ func TestNormalizeRuntimePermissionResult_直返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── buildRuntimeInterruptRequest ────────────────────────────
+// ──────────────────────────── 用例：buildRuntimeInterruptRequest ───────────────────────────────
 
 // TestBuildRuntimeInterruptRequest_基本字段 验证中断请求构造。
 func TestBuildRuntimeInterruptRequest_基本字段(t *testing.T) {
@@ -192,7 +192,7 @@ func TestBuildRuntimeInterruptRequest_无message用默认(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── raiseRuntimeInterrupt ────────────────────────────
+// ──────────────────────────── 用例：raiseRuntimeInterrupt ───────────────────────────────
 
 // TestRaiseRuntimeInterrupt_返回error 验证 Go 侧用 error 而非 raise。
 func TestRaiseRuntimeInterrupt_返回error(t *testing.T) {
@@ -203,7 +203,7 @@ func TestRaiseRuntimeInterrupt_返回error(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── runtimeAutoConfirmKey ────────────────────────────
+// ──────────────────────────── 用例：runtimeAutoConfirmKey ───────────────────────────────
 
 // TestRuntimeAutoConfirmKey_nil调用 验证 nil 返回空串。
 func TestRuntimeAutoConfirmKey_nil调用(t *testing.T) {
@@ -222,7 +222,7 @@ func TestRuntimeAutoConfirmKey_无能力(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── callBaseRail / callBaseAfterRail ────────────────────────────
+// ──────────────────────────── 用例：callBaseRail / callBaseAfterRail ───────────────────────────────
 
 // TestCallBaseRail_转发父类 验证调用穿透。
 func TestCallBaseRail_转发父类(t *testing.T) {

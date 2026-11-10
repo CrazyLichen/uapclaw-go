@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
-// ──────────────────────────── resultFromBaseSideEffect ────────────────────────────
+// ──────────────────────────── 用例：resultFromBaseSideEffect ───────────────────────────────
 
 // TestResultFromBaseSideEffect_非nil直接返回 验证优先返回入参。
 func TestResultFromBaseSideEffect_非nil直接返回(t *testing.T) {
@@ -61,7 +61,7 @@ func TestResultFromBaseSideEffect_skipTool非true(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionToolResultText ────────────────────────────
+// ──────────────────────────── 用例：permissionToolResultText ───────────────────────────────
 
 // TestPermissionToolResultText_各形态 验证三级回落。
 func TestPermissionToolResultText_各形态(t *testing.T) {
@@ -83,7 +83,7 @@ func TestPermissionToolResultText_各形态(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionToolResultPayload ────────────────────────────
+// ──────────────────────────── 用例：permissionToolResultPayload ───────────────────────────────
 
 // TestPermissionToolResultPayload_拒绝类 验证结构化 payload。
 func TestPermissionToolResultPayload_拒绝类(t *testing.T) {
@@ -107,7 +107,7 @@ func TestPermissionToolResultPayload_非拒绝类(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isPermissionDeniedMetadataPayload ────────────────────────────
+// ──────────────────────────── 用例：isPermissionDeniedMetadataPayload ───────────────────────────────
 
 // TestIsPermissionDeniedMetadataPayload_三种判定 验证三个条件。
 func TestIsPermissionDeniedMetadataPayload_三种判定(t *testing.T) {
@@ -132,7 +132,7 @@ func TestIsPermissionDeniedMetadataPayload_三种判定(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionDeniedToolResultPayload ────────────────────────────
+// ──────────────────────────── 用例：permissionDeniedToolResultPayload ───────────────────────────────
 
 // TestPermissionDeniedToolResultPayload_固定字段 验证 7 个固定字段。
 func TestPermissionDeniedToolResultPayload_固定字段(t *testing.T) {
@@ -188,7 +188,7 @@ func TestPermissionDeniedToolResultPayload_空reason忽略(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionInterruptMessage ────────────────────────────
+// ──────────────────────────── 用例：permissionInterruptMessage ───────────────────────────────
 
 // TestPermissionInterruptMessage_四级回落 验证优先级。
 func TestPermissionInterruptMessage_四级回落(t *testing.T) {
@@ -216,7 +216,7 @@ func TestPermissionInterruptMessage_四级回落(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionInterruptExtraFields ────────────────────────────
+// ──────────────────────────── 用例：permissionInterruptExtraFields ───────────────────────────────
 
 // TestPermissionInterruptExtraFields_合并与排除 验证 metadata 全量 + value 排除两项。
 func TestPermissionInterruptExtraFields_合并与排除(t *testing.T) {
@@ -253,7 +253,7 @@ func TestPermissionInterruptExtraFields_非map(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionTerminalOutcome ────────────────────────────
+// ──────────────────────────── 用例：permissionTerminalOutcome ───────────────────────────────
 
 // TestPermissionTerminalOutcome_四类别 验证映射。
 func TestPermissionTerminalOutcome_四类别(t *testing.T) {
@@ -284,7 +284,7 @@ func TestPermissionTerminalOutcome_四类别(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionTerminalDecisionSource ────────────────────────────
+// ──────────────────────────── 用例：permissionTerminalDecisionSource ───────────────────────────────
 
 // TestPermissionTerminalDecisionSource 验证正则校验。
 func TestPermissionTerminalDecisionSource(t *testing.T) {
@@ -311,7 +311,7 @@ func TestPermissionTerminalDecisionSource(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── permissionFeedbackText ────────────────────────────
+// ──────────────────────────── 用例：permissionFeedbackText ───────────────────────────────
 
 // TestPermissionFeedbackText_三形态 验证字符串/map/对象。
 func TestPermissionFeedbackText_三形态(t *testing.T) {

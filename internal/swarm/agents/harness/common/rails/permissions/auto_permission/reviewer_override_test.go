@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
-// ──────────────────────────── allowOnceReviewerGateDecision ────────────────────────────
+// ──────────────────────────── 用例：allowOnceReviewerGateDecision ───────────────────────────────
 
 // TestAllowOnceReviewerGateDecision_无审查器 验证返回 (false, nil)。
 func TestAllowOnceReviewerGateDecision_无审查器(t *testing.T) {
@@ -64,7 +64,7 @@ func TestAllowOnceReviewerGateDecision_通过(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sessionAutoConfirmEligible ────────────────────────────
+// ──────────────────────────── 用例：sessionAutoConfirmEligible ───────────────────────────────
 
 // TestSessionAutoConfirmEligible_无会话 验证 nil 会话直接 false。
 func TestSessionAutoConfirmEligible_无会话(t *testing.T) {
@@ -86,7 +86,7 @@ func TestSessionAutoConfirmEligible_外部发送副作用(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isAutoConfirmed ────────────────────────────
+// ──────────────────────────── 用例：isAutoConfirmed ───────────────────────────────
 
 // TestIsAutoConfirmed 验证严格判定。
 func TestIsAutoConfirmed(t *testing.T) {
@@ -111,7 +111,7 @@ func TestIsAutoConfirmed(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── consumeSessionAutoConfirm ────────────────────────────
+// ──────────────────────────── 用例：consumeSessionAutoConfirm ───────────────────────────────
 
 // TestConsumeSessionAutoConfirm_有用户输入 验证直接未处理。
 func TestConsumeSessionAutoConfirm_有用户输入(t *testing.T) {

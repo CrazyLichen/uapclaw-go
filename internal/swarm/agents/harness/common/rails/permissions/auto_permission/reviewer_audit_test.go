@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
-// ──────────────────────────── ReviewerRouteAuditExtra ────────────────────────────
+// ──────────────────────────── 用例：ReviewerRouteAuditExtra ───────────────────────────────
 
 // TestReviewerRouteAuditExtra_基本 验证路由溯源投影。
 func TestReviewerRouteAuditExtra_基本(t *testing.T) {
@@ -68,7 +68,7 @@ func TestReviewerRouteAuditExtra_nil路由(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ParseConfirmationPayload ────────────────────────────
+// ──────────────────────────── 用例：ParseConfirmationPayload ───────────────────────────────
 
 // TestParseConfirmationPayload_map形态 验证直拷贝。
 func TestParseConfirmationPayload_map形态(t *testing.T) {
@@ -143,7 +143,7 @@ func TestParseConfirmationPayload_不支持类型(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsAllowOnceConfirmation ────────────────────────────
+// ──────────────────────────── 用例：IsAllowOnceConfirmation ───────────────────────────────
 
 // TestIsAllowOnceConfirmation_正常单次放行 验证基础通过。
 func TestIsAllowOnceConfirmation_正常单次放行(t *testing.T) {
@@ -224,7 +224,7 @@ func TestIsAllowOnceConfirmation_对象形态(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsRejectionConfirmation ────────────────────────────
+// ──────────────────────────── 用例：IsRejectionConfirmation ───────────────────────────────
 
 // TestIsRejectionConfirmation 验证拒绝判定。
 func TestIsRejectionConfirmation(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
-// ──────────────────────────── HasUserFileDeliveryProhibition ────────────────────────────
+// ──────────────────────────── 用例：HasUserFileDeliveryProhibition ───────────────────────────────
 
 // TestHasUserFileDeliveryProhibition_英文 验证英文禁止模式。
 func TestHasUserFileDeliveryProhibition_英文(t *testing.T) {
@@ -56,7 +56,7 @@ func TestHasUserFileDeliveryProhibition_非禁止(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsFileDeliveryAction ────────────────────────────
+// ──────────────────────────── 用例：IsFileDeliveryAction ───────────────────────────────
 
 // TestIsFileDeliveryAction_投递工具 验证三个工具直接命中。
 func TestIsFileDeliveryAction_投递工具(t *testing.T) {
@@ -122,7 +122,7 @@ func TestIsFileDeliveryAction_副作用(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── hasFileDeliveryField ────────────────────────────
+// ──────────────────────────── 用例：hasFileDeliveryField ───────────────────────────────
 
 // TestHasFileDeliveryField_递归 验证嵌套与列表。
 func TestHasFileDeliveryField_递归(t *testing.T) {
@@ -150,7 +150,7 @@ func TestHasFileDeliveryField_递归(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── hasDeliveryValue ────────────────────────────
+// ──────────────────────────── 用例：hasDeliveryValue ───────────────────────────────
 
 // TestHasDeliveryValue_各类型 验证值判定。
 func TestHasDeliveryValue_各类型(t *testing.T) {
@@ -181,7 +181,7 @@ func TestHasDeliveryValue_各类型(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── issueSendFileAuthorization ────────────────────────────
+// ──────────────────────────── 用例：issueSendFileAuthorization ───────────────────────────────
 
 // TestIssueSendFileAuthorization_非sendFile 验证直接返回空。
 func TestIssueSendFileAuthorization_非sendFile(t *testing.T) {

@@ -27,7 +27,7 @@ func newTestInterruptRail(t *testing.T, withCallback bool) *JiuwenSwarmPermissio
 		map[string]any{}, nil, nil, nil, "", nil, callback)
 }
 
-// ──────────────────────────── MarkPlanHardReject / PlanHardRejected ────────────────────────────
+// ──────────────────────────── 用例：MarkPlanHardReject / PlanHardRejected ───────────────────────────────
 
 func TestMarkPlanHardReject_往返(t *testing.T) {
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
@@ -53,7 +53,7 @@ func TestMarkPlanHardReject_nil不panic(t *testing.T) {
 	MarkPlanHardReject(nil)
 }
 
-// ──────────────────────────── ApprovalArgumentsDigest ────────────────────────────
+// ──────────────────────────── 用例：ApprovalArgumentsDigest ───────────────────────────────
 
 func TestApprovalArgumentsDigest_稳定性(t *testing.T) {
 	a := ApprovalArgumentsDigest(map[string]any{"b": 1, "a": 2})
@@ -109,7 +109,7 @@ func TestNewRail_有回调但无attempt时返回false(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── InstalledPermissionConfig ────────────────────────────
+// ──────────────────────────── 用例：InstalledPermissionConfig ───────────────────────────────
 
 func TestInstalledPermissionConfig_深拷贝(t *testing.T) {
 	cfg := map[string]any{"k": "v", "nested": map[string]any{"a": 1}}
@@ -126,7 +126,7 @@ func TestInstalledPermissionConfig_深拷贝(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── PermissionCheckContext ────────────────────────────
+// ──────────────────────────── 用例：PermissionCheckContext ───────────────────────────────
 
 func TestPermissionCheckContext_设置与清理(t *testing.T) {
 	rail := newTestInterruptRail(t, false)
@@ -155,7 +155,7 @@ func TestPermissionCheckContext_重入不重复读取(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GetPermissionSnapshot ────────────────────────────
+// ──────────────────────────── 用例：GetPermissionSnapshot ───────────────────────────────
 
 func TestGetPermissionSnapshot_钩子缺失报错(t *testing.T) {
 	rail := newTestInterruptRail(t, false)
@@ -181,7 +181,7 @@ func TestGetPermissionSnapshot_钩子返回值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── UpdateConfig / SetTrustedDirs ────────────────────────────
+// ──────────────────────────── 用例：UpdateConfig / SetTrustedDirs ───────────────────────────────
 
 func TestUpdateConfig_同步工作区并刷新投影(t *testing.T) {
 	host := &harnesssecurity.ToolPermissionHost{
@@ -201,7 +201,7 @@ func TestSetTrustedDirs_刷新投影(t *testing.T) {
 	// 不应 panic
 }
 
-// ──────────────────────────── BeforeToolCall ────────────────────────────
+// ──────────────────────────── 用例：BeforeToolCall ───────────────────────────────
 
 func TestBeforeToolCall_plan硬拒绝短路(t *testing.T) {
 	rail := newTestInterruptRail(t, true)
@@ -224,7 +224,7 @@ func TestBeforeToolCall_非权限续接短路(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── collectFileGuardPersistAccesses ────────────────────────────
+// ──────────────────────────── 用例：collectFileGuardPersistAccesses ───────────────────────────────
 
 func TestCollectFileGuardPersistAccesses_sendFile走专用评估器(t *testing.T) {
 	dir := t.TempDir()
@@ -273,7 +273,7 @@ func TestCollectFileGuardPersistAccesses_deny报错(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResolveInterrupt ────────────────────────────
+// ──────────────────────────── 用例：ResolveInterrupt ───────────────────────────────
 
 func TestResolveInterrupt_runPolicyDeny(t *testing.T) {
 	rail := newTestInterruptRail(t, true)
@@ -573,7 +573,7 @@ func TestPersistMergedAllow_run策略下拒绝(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── callExactPersist ────────────────────────────
+// ──────────────────────────── 用例：callExactPersist ───────────────────────────────
 
 // TestCallExactPersist_正常返回 验证回调结果透传。
 func TestCallExactPersist_正常返回(t *testing.T) {
@@ -638,7 +638,7 @@ func TestCallExactPersist_nilToolCall(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── removeExactAutoConfirm ────────────────────────────
+// ──────────────────────────── 用例：removeExactAutoConfirm ───────────────────────────────
 
 // recordingSession 记录 UpdateState 写入的会话替身。
 type recordingSession struct {
@@ -730,7 +730,7 @@ func TestRemoveExactAutoConfirm_各提前返回分支(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── bindApprovalOnInterrupt ────────────────────────────
+// ──────────────────────────── 用例：bindApprovalOnInterrupt ───────────────────────────────
 
 // TestBindApprovalOnInterrupt_正常登记 验证从 AbortError 提取请求并登记。
 func TestBindApprovalOnInterrupt_正常登记(t *testing.T) {

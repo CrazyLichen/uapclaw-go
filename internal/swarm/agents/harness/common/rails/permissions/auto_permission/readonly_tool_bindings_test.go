@@ -18,7 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
-// ──────────────────────────── trustedReadonlyBinding ────────────────────────────
+// ──────────────────────────── 用例：trustedReadonlyBinding ───────────────────────────────
 
 // TestTrustedReadonlyBinding_非toolSearch直接false 验证 D3 范围收窄。
 func TestTrustedReadonlyBinding_非toolSearch直接false(t *testing.T) {

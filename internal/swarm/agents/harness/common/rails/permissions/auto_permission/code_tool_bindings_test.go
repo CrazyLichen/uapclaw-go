@@ -31,7 +31,7 @@ func codeFacts() permissions.ToolDecisionFacts {
 	}
 }
 
-// ──────────────────────────── TrustedCodeRoute fail-closed ────────────────────────────
+// ──────────────────────────── 用例：TrustedCodeRoute fail-closed ───────────────────────────────
 
 // TestTrustedCodeRoute_三个控制工具无绑定时拒绝 验证 D4 基础。
 func TestTrustedCodeRoute_三个控制工具无绑定时拒绝(t *testing.T) {

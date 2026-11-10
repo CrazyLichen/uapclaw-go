@@ -29,7 +29,7 @@ func TestOpenJiuwenContract_常量(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── build_*_response ────────────────────────────
+// ──────────────────────────── 用例：build * response ───────────────────────────────
 
 func TestBuildDeniedPermissionResponse(t *testing.T) {
 	got := BuildDeniedPermissionResponse("路径越界")
@@ -141,7 +141,7 @@ func TestBuildManualApprovalRequiredResponse_优先级(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── classify_permission_result ────────────────────────────
+// ──────────────────────────── 用例：classify permission result ───────────────────────────────
 
 func TestClassifyPermissionResult_nil是allow(t *testing.T) {
 	if got := ClassifyPermissionResult(nil); got != PermissionResultAllow {
@@ -265,7 +265,7 @@ func TestClassifyPermissionResult_未知类型是interrupt(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── is_*_result ────────────────────────────
+// ──────────────────────────── 用例：is * result ───────────────────────────────
 
 func TestIsAllowResult(t *testing.T) {
 	if !IsAllowResult(nil) {
@@ -311,7 +311,7 @@ func TestIsUserRejectionResult(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── load_openjiuwen_permission_contract ────────────────────────────
+// ──────────────────────────── 用例：load openjiuwen permission contract ───────────────────────────────
 
 func TestLoadOpenJiuwenPermissionContract_返回契约(t *testing.T) {
 	got := LoadOpenJiuwenPermissionContract()
