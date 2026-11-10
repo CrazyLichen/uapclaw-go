@@ -964,12 +964,6 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 //	Python: 20. finally: 清理（取消标记活跃会话、重置上下文变量）
 //	Python: 21. return AgentResponse from result
 func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (*schema.AgentResponse, error) {
-	// query 的唯一事实源是 params（见下方步骤 5-6 注释）。直接调用方（测试、
-	// 内部复用）可能传 nil inputs，此时用 params 兜底，否则 send_input 会以
-	// "inputs['query'] must be a non-empty string" 拒绝，整个轮次不执行。
-	if inputs == nil {
-		inputs = parseParams(req.Params)
-	}
 	// 步骤 0: 根分流
 	// Python: process_message_impl :18175 → _get_session_adapter_for_request
 	//
@@ -1179,12 +1173,6 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 //	Python: 20. except asyncio.CancelledError: ...
 //	Python: 21. finally: 清理
 func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
-	// query 的唯一事实源是 params（见下方步骤 5-6 注释）。直接调用方（测试、
-	// 内部复用）可能传 nil inputs，此时用 params 兜底，否则 send_input 会以
-	// "inputs['query'] must be a non-empty string" 拒绝，整个轮次不执行。
-	if inputs == nil {
-		inputs = parseParams(req.Params)
-	}
 	// 步骤 0: 根分流
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {

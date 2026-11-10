@@ -43,10 +43,11 @@ func (s *RailRegistrationSuite) TestSlashFirstMessage_EvolutionRailRegistered() 
 	d := s.newAdapter("agent", evolutionExtra(true, false, false))
 	s.Require().Equal(1, s.countEvolutionRails(d), "CreateInstance 应按配置装配演进 rail")
 
+	inputs := map[string]any{"query": "/evolve_list", "mode": "agent.work.plan"}
 	req := schema.NewAgentRequest("req-slash", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "/evolve_list", "mode": "agent.work.plan"}),
+		s.jsonParams(inputs),
 		schema.WithAgentSessionID("itest-rail"))
-	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
 
 	s.Equal(1, s.countEvolutionRails(d), "首条 /evolve_list 之后演进 rail 必须已注册")
@@ -109,10 +110,11 @@ func (s *RailRegistrationSuite) TestPlanMessage_EvolutionRailRegistered() {
 	s.Require().Equal(1, s.countEvolutionRails(d), "CreateInstance 应按配置装配演进 rail")
 
 	for i := 0; i < 2; i++ {
+		inputs := map[string]any{"query": "你好", "mode": "agent.work.plan"}
 		req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-			s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
+			s.jsonParams(inputs),
 			schema.WithAgentSessionID("itest-rail"))
-		_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+		_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 		s.Require().NoError(err)
 		s.Equal(1, s.countEvolutionRails(d), "第 %d 条计划消息后应恰好注册 1 个", i+1)
 	}
@@ -142,10 +144,11 @@ func (s *RailRegistrationSuite) TestHotReload_EvolutionRailInPlace() {
 func (s *RailRegistrationSuite) TestHotReload_PreservesStatefulRails() {
 	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, false))
 
+	inputs := map[string]any{"query": "你好", "mode": "agent.work.plan"}
 	req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
+		s.jsonParams(inputs),
 		schema.WithAgentSessionID("itest-rail"))
-	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
 
 	planBefore := d.Instance().FindRailsByType(reflect.TypeOf(&rails.TaskPlanningRail{}))
@@ -177,10 +180,11 @@ func (s *RailRegistrationSuite) TestSkillCreate_DisabledThenHotEnabled() {
 	s.env.WriteConfigYAML(s.T(), evolutionExtra(true, false, true))
 	s.Require().NoError(d.ReloadAgentConfig(s.Ctx, nil, nil))
 
+	inputs := map[string]any{"query": "你好", "mode": "agent.work.plan"}
 	req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
+		s.jsonParams(inputs),
 		schema.WithAgentSessionID("itest-rail"))
-	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
 	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
 		"热重载打开 skill_create 后应注册")
