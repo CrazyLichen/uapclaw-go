@@ -10,6 +10,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	mcptool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -455,7 +456,20 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		if sessionID == "" {
 			sessionID = "default_session"
 		}
-		newSess := session.NewSession(session.WithSessionID(sessionID))
+		// 自建会话要带上父会话血缘的 env：后续读缓存身份/归属都靠它。
+		// Python: parent_session_id = inputs.get(...) or self._usage_parent_session_id
+		//         or current_usage_delegation().get(...) → envs（react_agent.py L2845-2856）
+		parentSessionID := firstNonEmptyString(
+			inputString(inputs, "parent_session_id"),
+			a.usageParentSessionID,
+			attributionString(rail.CurrentUsageDelegation(ctx), "parent_session_id"))
+		sessOpts := []session.SessionOption{session.WithSessionID(sessionID), session.WithCard(a.card)}
+		if parentSessionID != "" {
+			sessOpts = append(sessOpts, session.WithEnvs(map[string]any{
+				kv_cache.KVCacheAffinityParentSessionIDEnv: parentSessionID,
+			}))
+		}
+		newSess := session.NewSession(sessOpts...)
 		if err := newSess.PreRun(ctx, inputs); err != nil {
 			return nil, err
 		}
@@ -478,15 +492,21 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	}
 	parentSessionID := firstNonEmptyString(
 		inputString(inputs, "parent_session_id"),
+		a.usageParentSessionID,
 		attributionString(delegationAttribution, "parent_session_id"))
 	parentInvocationID := firstNonEmptyString(
 		inputString(inputs, "parent_invocation_id"),
+		a.usageParentInvocationID,
 		attributionString(delegationAttribution, "parent_invocation_id"),
 		rail.CurrentUsageInvocationID(ctx))
 	delegationID := firstNonEmptyString(
 		inputString(inputs, "delegation_id"),
+		a.usageDelegationID,
 		attributionString(delegationAttribution, "delegation_id"))
 	agentPath := inputStringSlice(inputs, "agent_path")
+	if len(agentPath) == 0 {
+		agentPath = a.usageAgentPath
+	}
 	if len(agentPath) == 0 {
 		agentPath = attributionStringSlice(delegationAttribution, "agent_path")
 	}
@@ -509,6 +529,8 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	if rawDepth, ok := inputs["depth"]; ok {
 		// Python: int(inputs.get("depth") or 0)——键存在即采用，0 是合法值
 		depth = attributionInt(map[string]any{"depth": rawDepth}, "depth")
+	} else if a.usageDepth != nil {
+		depth = *a.usageDepth
 	} else if rawDelegationDepth, ok := delegationAttribution["depth"]; ok {
 		depth = attributionInt(map[string]any{"depth": rawDelegationDepth}, "depth")
 	} else if len(attributionStringSlice(parentUsageAttribution, "agent_path")) > 0 {
@@ -770,6 +792,17 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 		if sessionID == "" {
 			sessionID = "default_session"
 		}
+		// stream 路径只认 inputs 里的父会话（Python 此处不回退 _usage_parent_session_id）
+		// Python: react_agent.py L3453-3466
+		baseOpts := []session.SessionOption{
+			session.WithSessionID(sessionID),
+			session.WithCard(a.card),
+		}
+		if parentSessionID := inputString(inputs, "parent_session_id"); parentSessionID != "" {
+			baseOpts = append(baseOpts, session.WithEnvs(map[string]any{
+				kv_cache.KVCacheAffinityParentSessionIDEnv: parentSessionID,
+			}))
+		}
 		// Python: stream_modes 传入 StreamWriterManager
 		agentOptsForModes := interfaces.NewAgentOptions(opts...)
 		modes := agentOptsForModes.StreamModes
@@ -778,12 +811,9 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 		if len(modes) > 0 {
 			emitter := stream.NewStreamEmitter()
 			mgr := stream.NewStreamWriterManager(emitter, modes...)
-			newSess = session.NewSession(
-				session.WithSessionID(sessionID),
-				session.WithStreamWriterManager(mgr),
-			)
+			newSess = session.NewSession(append(baseOpts, session.WithStreamWriterManager(mgr))...)
 		} else {
-			newSess = session.NewSession(session.WithSessionID(sessionID))
+			newSess = session.NewSession(baseOpts...)
 		}
 		if err := newSess.PreRun(ctx, inputs); err != nil {
 			return nil, err

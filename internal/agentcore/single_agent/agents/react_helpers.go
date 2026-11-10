@@ -54,13 +54,12 @@ func (a *ReActAgent) GetLLM() (*llm.Model, error) {
 	return a.getLLM()
 }
 
-// SetUsageIdentity 注入团队成员的构建上下文与 agent 标识。
-// 内层 ReActAgent 产生模型调用用量事件，这两个字段让用量归属能认出成员身份，
+// SetUsageBuildContext 注入团队成员的构建上下文（成员名来源）。
+// 内层 ReActAgent 产生模型调用用量事件，这个字段让用量归属能认出成员身份，
 // 而不必让核心用量代码依赖团队包。
-// Python: self._react_agent._usage_build_context / _usage_agent_id（native_harness.py L182-187）
-func (a *ReActAgent) SetUsageIdentity(buildContext UsageIdentityProvider, agentID string) {
+// Python: self._react_agent._usage_build_context = build_context（native_harness.py L186）
+func (a *ReActAgent) SetUsageBuildContext(buildContext UsageIdentityProvider) {
 	a.usageBuildContext = buildContext
-	a.usageAgentID = agentID
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

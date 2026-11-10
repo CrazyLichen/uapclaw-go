@@ -222,6 +222,9 @@ type ModelCallInputs struct {
 	ModelContext ceinterface.ModelContext
 	// Response LLM 响应（调用完成后填充）
 	Response *llmschema.AssistantMessage
+	// ContextUsageAttribution 本次上报的用量归属快照
+	// Python: ctx.inputs.context_usage_attribution（动态属性，react_agent.py L1483/L1703/L1779）
+	ContextUsageAttribution map[string]any
 }
 
 // SteeringDrainInputs BEFORE_STEERING_DRAIN 事件输入。

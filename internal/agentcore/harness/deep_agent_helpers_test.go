@@ -1,9 +1,14 @@
 package harness
 
 import (
+	"context"
 	"testing"
 
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -188,4 +193,72 @@ func assertNoPanicHarness(t *testing.T, fn func()) {
 		}
 	}()
 	fn()
+}
+
+// TestPrepareSingleRoundSession_按会话ID自建 验证单轮模式按 conversation_id 建会话并注 env。
+// Python: DeepAgent._prepare_single_round_session (deep_agent.py L2053-2075)
+func TestPrepareSingleRoundSession_按会话ID自建(t *testing.T) {
+	d := newBareDeepAgent(t)
+	inputs := &agentinterfaces.InvokeInputs{
+		Query:           agentinterfaces.InvokeQueryString("hi"),
+		ConversationID:  "conv-1",
+		ParentSessionID: "product-1",
+	}
+
+	sess, err := d.prepareSingleRoundSession(context.Background(), inputs, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess == nil {
+		t.Fatal("单轮模式应按 conversation_id 建会话")
+	}
+	if sess.GetSessionID() != "conv-1" {
+		t.Fatalf("SessionID = %q, 期望 conv-1", sess.GetSessionID())
+	}
+	if got := sess.GetEnv(kv_cache.KVCacheAffinityParentSessionIDEnv); got != "product-1" {
+		t.Fatalf("父会话 env 未注入: %v", got)
+	}
+}
+
+// TestPrepareSingleRoundSession_已有会话不动 验证外部传入会话时原样返回。
+func TestPrepareSingleRoundSession_已有会话不动(t *testing.T) {
+	d := newBareDeepAgent(t)
+	existing := session.NewSession(session.WithSessionID("given"))
+
+	sess, err := d.prepareSingleRoundSession(context.Background(),
+		&agentinterfaces.InvokeInputs{ConversationID: "conv-2"}, existing)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess != existing {
+		t.Fatal("已有会话必须原样返回")
+	}
+}
+
+// TestPrepareSingleRoundSession_无会话ID 验证缺 conversation_id 时不建会话。
+func TestPrepareSingleRoundSession_无会话ID(t *testing.T) {
+	d := newBareDeepAgent(t)
+
+	sess, err := d.prepareSingleRoundSession(context.Background(), &agentinterfaces.InvokeInputs{}, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess != nil {
+		t.Fatal("无 conversation_id 不应建会话")
+	}
+}
+
+// TestPrepareSingleRoundSession_任务循环跳过 验证任务循环模式下会话归调用方。
+func TestPrepareSingleRoundSession_任务循环跳过(t *testing.T) {
+	d := newBareDeepAgent(t)
+	d.deepConfig = &hschema.DeepAgentConfig{EnableTaskLoop: true}
+
+	sess, err := d.prepareSingleRoundSession(context.Background(),
+		&agentinterfaces.InvokeInputs{ConversationID: "conv-3"}, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess != nil {
+		t.Fatal("任务循环模式应由调用方持有会话")
+	}
 }

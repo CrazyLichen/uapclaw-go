@@ -8,7 +8,9 @@ package agents
 import (
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -45,7 +47,7 @@ type usageParentSessionIDProvider interface {
 // Python: getattr(session, "get_cache_identity", None)（react_agent.py L1385-1397）
 type usageCacheIdentityProvider interface {
 	// GetCacheIdentity 返回 provider 侧缓存身份
-	GetCacheIdentity() (cacheID string, parentCacheID string)
+	GetCacheIdentity() (kv_cache.KVCacheIdentity, error)
 }
 
 // usageContextUsageMetadataProvider 会话级用量元数据能力。
@@ -59,7 +61,7 @@ type usageContextUsageMetadataProvider interface {
 
 // kvCacheAffinityParentSessionIDEnv 子会话缓存亲和父会话的环境变量键。
 // Python: KV_CACHE_AFFINITY_PARENT_SESSION_ID_ENV（core/kv_cache/kv_cache_metadata.py L14）
-const kvCacheAffinityParentSessionIDEnv = "kv_cache_affinity_parent_session_id"
+const kvCacheAffinityParentSessionIDEnv = kv_cache.KVCacheAffinityParentSessionIDEnv
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -88,11 +90,9 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 		}
 	}
 
-	// agent id：ctx 归属 → 团队身份注入 → card.id → card.name
+	// agent id：ctx 归属 → card.id → card.name
+	// （Python 的 _usage_agent_id 与本 agent 的 card.id 恒等，Go 不重复保存）
 	agentID := attributionString(values, "agent_id")
-	if agentID == "" {
-		agentID = a.usageAgentID
-	}
 	if agentID == "" && a.card != nil {
 		agentID = a.card.ID
 		if agentID == "" {
@@ -142,12 +142,17 @@ func (a *ReActAgent) resolveContextUsageAttribution(cbc *interfaces.AgentCallbac
 	parentCacheIdentity := attributionString(values, "parent_cache_identity")
 	if cbc != nil {
 		if provider, ok := cbc.Session().(usageCacheIdentityProvider); ok {
-			cacheID, parentCacheID := provider.GetCacheIdentity()
-			if cacheIdentity == "" {
-				cacheIdentity = cacheID
-			}
-			if parentCacheIdentity == "" {
-				parentCacheIdentity = parentCacheID
+			// 遥测不得影响模型执行：取身份失败只记 debug，继续用兜底值。
+			// Python: try/except → logger.debug("Failed to resolve session cache identity ...")（react_agent.py L1393-1397）
+			if identity, err := provider.GetCacheIdentity(); err != nil {
+				logger.Debug(logComponent).Err(err).Msg("failed to resolve session cache identity for usage telemetry")
+			} else {
+				if cacheIdentity == "" {
+					cacheIdentity = identity.CacheID
+				}
+				if parentCacheIdentity == "" {
+					parentCacheIdentity = identity.ParentCacheID
+				}
 			}
 		}
 	}

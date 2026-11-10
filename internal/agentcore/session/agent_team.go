@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
@@ -160,6 +161,12 @@ func (s *AgentTeamSession) GetSessionID() string {
 // GetTeamID 返回团队唯一标识
 func (s *AgentTeamSession) GetTeamID() string {
 	return s.teamID
+}
+
+// GetCacheIdentity 返回团队会话共享的根缓存身份。
+// Python: AgentTeamSession.get_cache_identity (core/session/agent_team.py L61-66)
+func (s *AgentTeamSession) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
+	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}, nil
 }
 
 // UpdateState 更新全局状态，委托到 inner.State() 的 SessionState
@@ -353,11 +360,12 @@ func (s *AgentTeamSession) CloseStream() error {
 //   - agentID: Agent 标识
 //   - shareStreamWriter: 是否共享父会话的 StreamWriterManager（默认 Python 为 True）
 //
-// Python: Session.create_agent_session(card, agent_id, *, share_stream_writer=True)
+// Python: Session.create_agent_session(card, agent_id, *, share_stream_writer=True, member_name=None)
 func (s *AgentTeamSession) CreateAgentSession(
 	card *agentschema.AgentCard,
 	agentID string,
 	shareStreamWriter bool,
+	memberName string,
 ) *Session {
 	// card 为 nil 时用 agentID 构造默认 AgentCard
 	// Python: card = AgentCard(id=agent_id or "team_agent", name=agent_id or "team_agent")
@@ -372,11 +380,15 @@ func (s *AgentTeamSession) CreateAgentSession(
 		)
 	}
 
-	// 注入来源元数据
+	// 注入来源元数据（成员名非空时一并写入，供用量归属认出成员）
 	// Python: source_metadata={"source_agent_id": card.id, "source_team_id": team_id}
+	//         + source_member_name（agent_team.py L169-176）
 	sourceMetadata := map[string]any{
 		"source_agent_id": card.GetID(),
 		"source_team_id":  s.teamID,
+	}
+	if memberName != "" {
+		sourceMetadata["source_member_name"] = memberName
 	}
 
 	opts := []SessionOption{
@@ -392,7 +404,11 @@ func (s *AgentTeamSession) CreateAgentSession(
 		opts = append(opts, WithStreamWriterManager(s.inner.StreamWriterManager()))
 	}
 
-	return NewSession(opts...)
+	child := NewSession(opts...)
+	// 成员缓存作用域：所有成员共享产品会话 id，必须靠 team+agent 推出各自缓存身份
+	// Python: child.set_team_cache_scope(team_id=self._team_id, agent_id=card.id)（agent_team.py L187）
+	child.SetTeamCacheScope(s.teamID, card.GetID())
+	return child
 }
 
 // Inner 返回内部层 AgentTeamSession

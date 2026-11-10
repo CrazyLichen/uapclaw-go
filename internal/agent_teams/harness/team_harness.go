@@ -589,8 +589,8 @@ func sessionIDOf(teamSession any) string {
 func (h *TeamHarness) makeChildSession(teamSession any) *session.Session {
 	card := h.card()
 	if ts, ok := teamSession.(*session.AgentTeamSession); ok && ts != nil {
-		// Python: team_session.create_agent_session(card=card, share_stream_writer=False)
-		return ts.CreateAgentSession(card, "", false)
+		// Python: team_session.create_agent_session(card=card, share_stream_writer=False, member_name=self._member_name)
+		return ts.CreateAgentSession(card, "", false, h.MemberName())
 	}
 	// Python: create_agent_session(card=card)
 	return session.CreateAgentSession("", card, nil)
