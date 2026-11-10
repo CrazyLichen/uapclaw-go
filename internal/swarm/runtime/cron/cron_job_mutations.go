@@ -173,7 +173,9 @@ func BuildNewCronJob(input CreateJobInput) (*CronJob, error) {
 		jobID = newJobID()
 	}
 
-	// Python:165 mode 归一化（未指定用默认）
+	// Python:164-169 只在显式给了非空 mode 时才归一化；
+	// 未指定时**直接保留** CRON_JOB_DEFAULT_MODE（"agent"，不折叠为 canonical），
+	// 这样写入磁盘的 mode 与上游一致（读回时才由 coerce_cron_job_mode 折叠）。
 	mode := CronJobDefaultMode
 	if input.Mode != nil && strings.TrimSpace(*input.Mode) != "" {
 		normalized, err := NormalizeCronJobMode(*input.Mode, CronJobDefaultMode)

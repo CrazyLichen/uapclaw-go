@@ -382,7 +382,7 @@ func TestSchedulerPushToTargets渠道元数据(t *testing.T) {
 	})
 	pub := &fakePublisher{}
 	svc.publisher = pub
-	job := &CronJob{ID: "j", Name: "n", Targets: "feishu", ChatType: "group", Timezone: "UTC"}
+	job := &CronJob{ID: "j", Name: "n", Targets: "feishu", ChatType: ptrStr("group"), Timezone: "UTC"}
 	state := &CronRunState{RunID: "j:100", JobID: "j", PushAtISO: "2026-12-25T09:00:00Z", WakeAtISO: "2026-12-25T08:55:00Z"}
 	svc.pushToTargets(job, state, "hello", false)
 	msgs := pub.Messages()
@@ -416,7 +416,7 @@ func TestSchedulerPushToTargets企业飞书路由(t *testing.T) {
 	svc.publisher = pub
 	job := &CronJob{
 		ID: "j", Name: "n", Targets: "feishu_enterprise:cli_9",
-		SessionID: "feishu::oc_chat::bot_1::ou_open::x::y", Timezone: "UTC",
+		SessionID: ptrStr("feishu::oc_chat::bot_1::ou_open::x::y"), Timezone: "UTC",
 	}
 	state := &CronRunState{RunID: "j:100", JobID: "j", PushAtISO: "2026-12-25T09:00:00Z", WakeAtISO: "2026-12-25T08:55:00Z"}
 	svc.pushToTargets(job, state, "hi", false)
@@ -438,7 +438,7 @@ func TestSchedulerPushToTargetsWeb无session(t *testing.T) {
 	svc := NewCronSchedulerService(nil, nil, nil, nil)
 	pub := &fakePublisher{}
 	svc.publisher = pub
-	job := &CronJob{ID: "j", Name: "n", Targets: "web", SessionID: "some-sid", Timezone: "UTC"}
+	job := &CronJob{ID: "j", Name: "n", Targets: "web", SessionID: ptrStr("some-sid"), Timezone: "UTC"}
 	state := &CronRunState{RunID: "j:100", JobID: "j", PushAtISO: "2026-12-25T09:00:00Z", WakeAtISO: "2026-12-25T08:55:00Z"}
 	svc.pushToTargets(job, state, "x", false)
 	m := pub.Messages()[0]
@@ -466,7 +466,7 @@ func TestSchedulerPushToTargets钉钉兜底(t *testing.T) {
 	pub := &fakePublisher{}
 	svc.publisher = pub
 	// 无 config loader：metadata 走空 map，dingtalk 兜底补 sender_id/type
-	job := &CronJob{ID: "j", Name: "n", Targets: "dingtalk", SessionID: "sender-1", Timezone: "UTC"}
+	job := &CronJob{ID: "j", Name: "n", Targets: "dingtalk", SessionID: ptrStr("sender-1"), Timezone: "UTC"}
 	state := &CronRunState{RunID: "j:100", JobID: "j", PushAtISO: "2026-12-25T09:00:00Z", WakeAtISO: "2026-12-25T08:55:00Z"}
 	svc.pushToTargets(job, state, "x", false)
 	msgs := pub.Messages()
@@ -496,7 +496,7 @@ func TestSchedulerPushToTargets私聊跳过路由(t *testing.T) {
 	})
 	pub := &fakePublisher{}
 	svc.publisher = pub
-	job := &CronJob{ID: "j", Name: "n", Targets: "feishu", ChatType: "p2p", Timezone: "UTC"}
+	job := &CronJob{ID: "j", Name: "n", Targets: "feishu", ChatType: ptrStr("p2p"), Timezone: "UTC"}
 	state := &CronRunState{RunID: "j:100", JobID: "j", PushAtISO: "2026-12-25T09:00:00Z", WakeAtISO: "2026-12-25T08:55:00Z"}
 	svc.pushToTargets(job, state, "x", false)
 	msgs := pub.Messages()
@@ -945,3 +945,6 @@ func TestSchedulerPushToTargetsNilPublisher(t *testing.T) {
 		false,
 	)
 }
+
+// ptrStr 取字符串指针（测试辅助，用于 runtime 层指针字段）。
+func ptrStr(value string) *string { return &value }

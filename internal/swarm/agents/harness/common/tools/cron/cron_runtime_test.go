@@ -765,8 +765,11 @@ func TestBackendCreateJobMode兜底agent(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatalf("get = %v, err=%v", got, err)
 	}
+	// 落盘时未指定 mode → 写入 "agent"（CRON_JOB_DEFAULT_MODE，不折叠）；
+	// 读回经 coerce_cron_job_mode → deprecate_mode("agent") = "agent.work.normal"。
+	// Python 实测：models.py:155-166 coerce_cron_job_mode("agent") 返回 canonical 三段模式。
 	mode, _ := got["mode"].(string)
-	if mode != "agent" {
-		t.Errorf("stored mode = %q, want \"agent\" (store fallback, Python create_job drops mode)", mode)
+	if mode != "agent.work.normal" {
+		t.Errorf("stored mode = %q, want \"agent.work.normal\" (coerce_cron_job_mode 折叠)", mode)
 	}
 }
