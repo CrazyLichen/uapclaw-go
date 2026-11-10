@@ -1107,10 +1107,11 @@ func loadForkHistory(sessionsDir, sessionID string) ([]map[string]any, error) {
 //
 // 第二个返回值是跳过（不可重建）的记录数。
 //
-// ⚠️ 上游该函数约 300 行状态机（reasoning 缓冲 / tool_call 聚合 / tool_result
+// ⚠️ 上游该函数 297 行状态机（session_ops_service.py:1211-1508）（reasoning 缓冲 / tool_call 聚合 / tool_result
 // 配对 / chat.final 收口 / 未解析 tool_call 清理）。Go 侧历史上从未迁移，
-// 本轮先实现「user / assistant(final) / tool_result」三类主干记录的重建，
-// 完整状态机登记为遗留（保证 force_history 路径可跑通，不静默失败）。
+// 本轮先实现 `user` / `chat.final` 两类主干记录的重建，其余记录计入 skipped。
+// 后果：force_history 分支 fork 出的会话会丢失 tool_call / tool_result 与推理内容。
+// ⤵️ 完整状态机回填点：10.3.31f（IMPLEMENTATION_PLAN.md 已登记，含对拍用例要求）。
 func buildContextMessagesFromHistory(records []map[string]any) ([]llmschema.BaseMessage, int) {
 	messages := make([]llmschema.BaseMessage, 0, len(records))
 	skipped := 0
