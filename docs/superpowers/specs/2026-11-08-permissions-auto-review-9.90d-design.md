@@ -2011,3 +2011,63 @@ BasePermissionRail 提供: BeforeToolCall / UpdateConfig / SetTrustedDirs /
 | 第一类第 3 条 `setattr` | `reflect` 可写字段但要求可寻址、字段名硬编码，比「构造新对象 + `SetInputs`」更脆弱 |
 | 第一类第 4 条 `type(x) is Foo` | 需给 7 个工具加导出具体类型并改所有调用方；当前「装配期登记实例 + 指针相等」更严格（同一实例 vs 同一类） |
 | 第一类第 6 条 ContextVar | `context.WithValue` 即显式版 ContextVar，语义等价 |
+
+### 12.28 Task 32 前置件：`domain_manual` / `deny_response` / `manual_authorization`
+
+**背景**：`reviewer_execution.py`（Task 32）的 `_maybe_run_reviewer` 一个方法
+调了 8 个 mixin 方法，其中 6 个来自尚未落地的文件。硬做会留下 5 处 ⤵️ 占位，
+且 allow_once / deny / manual 三条主分支全部踩空。
+
+**处置（用户拍板「按依赖顺序做」）**：先落地被依赖的 4 个文件，再做 Task 32。
+依赖链比原计划多一层——`deny_response` 又依赖 `domain_manual`：
+
+```
+domain_manual（43）
+  └→ deny_response（86）
+  └→ manual_authorization（90）
+deterministic（131）
+artifact_authorization（132）
+  └→ 以上全部就绪后 → reviewer_execution（389）
+```
+
+#### `domain_manual.go`（43 行 / 2 函数，覆盖率 100%）
+
+| Go | Python | 职责 |
+|---|---|---|
+| `deniedPermissionResponse` | `_denied_permission_response` | 9 字段标准拒绝载荷；reason 空时回落 `permission_denied` |
+| `permissionPromptPayload` | `_permission_prompt_payload` | 权限卡提示载荷；`tool_call_id` 为空时**不写入**该键（对齐 Python 的 `if tool_call_id`） |
+
+#### `deny_response.go`（86 行 / 2 方法，覆盖率 96.2%）
+
+| Go | Python | 职责 |
+|---|---|---|
+| `reviewerDenyResponse` | `_reviewer_deny_response` | 归一元数据 → 发审计 → 构造拒绝 → 覆写 feedback |
+| `recordReviewerSuccessMetadata` | `_record_reviewer_success_metadata` | 元数据写入 `ctx.extra` 供后续投影消费 |
+
+`feedback` 覆写格式：
+`[PERMISSION_DENIED] reviewer_deny{": 摘要"} {ReviewerDenialGuidance}`，
+摘要取 `reviewer_reason_summary` 或 `evidence_summary`，为空时省略冒号段。
+
+#### `manual_authorization.go`（90 行 / 1 方法，覆盖率 90.3%）
+
+`manualReviewerResponse` 的 8 步顺序严格对齐 Python：
+
+1. 归一 `channel_kind`（**参数优先，回落 metadata**）
+2. metadata 补 `channel_kind` + `record_kind`
+3. 需要时构造 `prompt_payload`
+4. `session` + `request` + `tool_call` **三者齐备**才打 `auto_permission_manual`
+5. 归一 UI 元数据
+6. 发审计（ask 档、`degraded=true`）
+7. 可见原因四级回落：`display_reason` → `manual_reason_summary` →
+   `evidence_summary` → 本地化兜底
+8. 构造响应
+
+参数用 `manualReviewerResponseOptions` 结构体承载（Python 除 facts 外全是关键字参数）。
+
+#### 顺带修正：`emitAudit` 桩签名太窄
+
+原桩是 `emitAudit(facts, opts ...any)`——调用点传不进 `decision` / `reason` /
+`degraded`，9.90e 回填时这些信息就丢了。
+
+已改为 `emitAudit(facts, auditRecord)`，`auditRecord` 含 4 个字段
+（Decision / Reason / Degraded / Extra）。桩体注释写明回填时的完整调用形态。

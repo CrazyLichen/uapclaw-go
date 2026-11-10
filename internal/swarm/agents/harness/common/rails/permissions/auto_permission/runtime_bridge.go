@@ -53,14 +53,31 @@ const (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// auditRecord 一次审计记录的内容。
+//
+// Python 的 _emit_audit(facts, **kwargs) 用关键字参数传 decision / reason /
+// degraded / extra；Go 用结构体承载，保证调用点信息完整（回填时不丢字段）。
+type auditRecord struct {
+	// Decision 判定档位（allow / ask / deny）
+	Decision string
+	// Reason 原因码
+	Reason string
+	// Degraded 是否为降级判定
+	Degraded bool
+	// Extra 附加字段
+	Extra map[string]any
+}
+
 // emitAudit 发出一条权限审计记录。
 //
-// Python: AutoPermissionRuntimeBridgeMixin._emit_audit
+// Python: AutoPermissionRuntimeBridgeMixin._emit_audit(facts, **kwargs)
 //
 // ⤵️ 9.90e 回填：audit.py 本批不落地（D7 决策），此处为空实现。
 // 保留完整签名与全部调用点（before_tool 16 处 + domain_grant_audit 3 处），
-// 9.90e 只需把桩体换成真实 EmitPermissionAudit 调用。
-func (r *AutoPermissionRail) emitAudit(facts permissions.ToolDecisionFacts, opts ...any) any {
+// 9.90e 只需把桩体换成
+// EmitPermissionAudit(facts, record.Decision, record.Reason, record.Degraded,
+// record.Extra, r.persistentAuditWriter)。
+func (r *AutoPermissionRail) emitAudit(facts permissions.ToolDecisionFacts, record auditRecord) any {
 	return nil // ⤵️ 9.90e 回填
 }
 

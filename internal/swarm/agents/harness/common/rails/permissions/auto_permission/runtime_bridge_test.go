@@ -35,7 +35,7 @@ func bridgeInvocation(toolName string, cbc *agentinterfaces.AgentCallbackContext
 // TestEmitAudit_桩返回nil 验证 no-op 桩。
 func TestEmitAudit_桩返回nil(t *testing.T) {
 	rail := newBridgeRail(t)
-	if got := rail.emitAudit(permissions.ToolDecisionFacts{}); got != nil {
+	if got := rail.emitAudit(permissions.ToolDecisionFacts{}, auditRecord{}); got != nil {
 		t.Errorf("got %v, want nil（⤵️ 9.90e 回填）", got)
 	}
 }
