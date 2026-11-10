@@ -59,6 +59,23 @@ type AgentRuntime struct {
 	onControlEvent func(*RuntimeEvent)
 	// prepare 聊天轮次准备（可注入）
 	prepare PrepareChatTurnFunc
+	// agentExecutionOwners 声明式 Agent 定义的会话绑定表
+	// Python: service.py:423-426 self._agent_execution_owners
+	agentExecutionOwners map[agentExecutionOwnerKey]*RuntimeAgentExecution
+	// agentExecutionOwnerMu 保护 owner 表
+	// Python: service.py:426 self._agent_execution_owner_lock = asyncio.Lock()
+	//
+	// 读端也加锁：Python 单线程下同步读安全，Go map 并发读写会 panic（spec D-4）。
+	agentExecutionOwnerMu sync.Mutex
+}
+
+// agentExecutionOwnerKey 执行 owner 表的键。
+// Python: service.py:423-425 dict[tuple[str, str], RuntimeAgentExecution]
+type agentExecutionOwnerKey struct {
+	// ChannelID 归一化渠道标识（小写去空白，空则 default）
+	ChannelID string
+	// SessionID 去空白会话标识（空则不建键）
+	SessionID string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -71,10 +88,11 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 		controller = NewPlanModeController()
 	}
 	return &AgentRuntime{
-		manager:        deps.Manager,
-		planController: controller,
-		onControlEvent: deps.OnControlEvent,
-		prepare:        deps.Prepare,
+		manager:              deps.Manager,
+		planController:       controller,
+		onControlEvent:       deps.OnControlEvent,
+		prepare:              deps.Prepare,
+		agentExecutionOwners: make(map[agentExecutionOwnerKey]*RuntimeAgentExecution),
 	}
 }
 
@@ -99,12 +117,18 @@ func (r *AgentRuntime) Start() error {
 }
 
 // Close 幂等关闭。
-// Python: AgentRuntime.close
+// Python: AgentRuntime.close（service.py:3442-3470）
 func (r *AgentRuntime) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closed = true
 	r.started = false
+
+	// Python:3545-3546 asyncio.Lock 下 _agent_execution_owners.clear()
+	// 关闭时整表清空，避免声明式定义跨 Runtime 生命周期残留。
+	r.agentExecutionOwnerMu.Lock()
+	clear(r.agentExecutionOwners)
+	r.agentExecutionOwnerMu.Unlock()
 	return nil
 }
 
@@ -439,4 +463,130 @@ func planRequestOf(req *schema.AgentRequest, subMode string) PlanRequest {
 		PreviousSessionMode: prev,
 		Query:               query,
 	}
+}
+
+// ──────────────────────────── owner 表（R-4） ────────────────────────────
+
+// agentExecutionOwnerKeyOf 计算 owner 表键；session 为空时 ok=false。
+// Python: service.py:1584-1591 _agent_execution_owner_key（staticmethod）
+//
+// 与上游逐条一致：
+//   - session_id = str(request.session_id or "").strip()；空则返回 None
+//   - channel_id = str(request.channel_id or "default").strip().lower() or "default"
+func (r *AgentRuntime) agentExecutionOwnerKeyOf(req *schema.AgentRequest) (agentExecutionOwnerKey, bool) {
+	sessionID := ""
+	if req != nil && req.SessionID != nil {
+		sessionID = strings.TrimSpace(*req.SessionID)
+	}
+	if sessionID == "" {
+		return agentExecutionOwnerKey{}, false
+	}
+	channelID := ""
+	if req != nil {
+		channelID = strings.ToLower(strings.TrimSpace(req.ChannelID))
+	}
+	if channelID == "" {
+		channelID = "default"
+	}
+	return agentExecutionOwnerKey{ChannelID: channelID, SessionID: sessionID}, true
+}
+
+// claimAgentExecutionOwner 把一个声明式 root Agent 钉到一个活跃会话上。
+// Python: service.py:1593-1618 _claim_agent_execution_owner
+//
+// 语义：已有条目且指纹不同 → SESSION_CONFLICT；指纹相同 → 幂等返回；
+// 无条目 → 写入。
+func (r *AgentRuntime) claimAgentExecutionOwner(
+	req *schema.AgentRequest, execution *RuntimeAgentExecution,
+) error {
+	// Python:1598-1600 无键直接返回
+	key, ok := r.agentExecutionOwnerKeyOf(req)
+	if !ok {
+		return nil
+	}
+	if execution == nil {
+		return nil
+	}
+	fingerprint, err := RuntimeAgentExecutionFingerprint(execution)
+	if err != nil {
+		return err
+	}
+
+	// Python:1607 async with self._agent_execution_owner_lock
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+
+	// Python:1608-1609 current = self._agent_execution_owners.get(key)
+	current, exists := r.agentExecutionOwners[key]
+	if exists {
+		currentFingerprint, err := RuntimeAgentExecutionFingerprint(current)
+		if err != nil {
+			return err
+		}
+		// Python:1609-1615 指纹不同 → SESSION_CONFLICT（field="agent"）
+		if currentFingerprint != fingerprint {
+			return &agentDefinitionError{
+				sentinel: ErrAgentExecutionSessionConflict,
+				field:    strPtr("agent"),
+				message: "session is already bound to another Agent definition in this " +
+					"Runtime lifecycle",
+			}
+		}
+		// Python:1616-1617 指纹相同 → 幂等返回
+		return nil
+	}
+	// Python:1618 self._agent_execution_owners[key] = execution
+	r.agentExecutionOwners[key] = execution
+	return nil
+}
+
+// agentExecutionOwner 查 owner 表；无条目返回 nil。
+// Python: service.py:1620-1625 _agent_execution_owner
+func (r *AgentRuntime) agentExecutionOwner(req *schema.AgentRequest) *RuntimeAgentExecution {
+	key, ok := r.agentExecutionOwnerKeyOf(req)
+	if !ok {
+		return nil
+	}
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+	return r.agentExecutionOwners[key]
+}
+
+// forgetAgentExecutionOwner 解绑某会话的 owner。
+// Python: service.py:1627-1640 _forget_agent_execution_owner（keyword-only 参数）
+//
+// 注意：上游此方法**独立构造键**（不复用 _agent_execution_owner_key），
+// 键为 (归一化 channel_id, 去空白 session_id)，session 为空则直接返回。
+func (r *AgentRuntime) forgetAgentExecutionOwner(channelID, sessionID string) {
+	// Python:1635-1638 key 构造
+	channel := strings.ToLower(strings.TrimSpace(channelID))
+	if channel == "" {
+		channel = "default"
+	}
+	session := strings.TrimSpace(sessionID)
+	// Python:1638-1639 if not key[1]: return
+	if session == "" {
+		return
+	}
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+	// Python:1640 self._agent_execution_owners.pop(key, None)
+	delete(r.agentExecutionOwners, agentExecutionOwnerKey{ChannelID: channel, SessionID: session})
+}
+
+// hasAgentExecutionOwner 判断某会话是否已有 owner（测试与门面只读探针用）。
+// Python: service.py:1620-1625 的等价只读查询
+func (r *AgentRuntime) hasAgentExecutionOwner(channelID, sessionID string) bool {
+	channel := strings.ToLower(strings.TrimSpace(channelID))
+	if channel == "" {
+		channel = "default"
+	}
+	session := strings.TrimSpace(sessionID)
+	if session == "" {
+		return false
+	}
+	r.agentExecutionOwnerMu.Lock()
+	defer r.agentExecutionOwnerMu.Unlock()
+	_, exists := r.agentExecutionOwners[agentExecutionOwnerKey{ChannelID: channel, SessionID: session}]
+	return exists
 }
