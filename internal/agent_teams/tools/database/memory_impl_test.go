@@ -228,8 +228,8 @@ func TestCreateMember_成功(t *testing.T) {
 	if member.Prompt != "你是一个助手" {
 		t.Errorf("Prompt: got %q, want %q", member.Prompt, "你是一个助手")
 	}
-	if member.ModelRefJSON != `{"model_id":"qwen-max","model_name":"qwen-max"}` {
-		t.Errorf("ModelRefJSON: got %q, want %q", member.ModelRefJSON, `{"model_id":"qwen-max","model_name":"qwen-max"}`)
+	if member.Options != `{"model_id":"qwen-max","model_name":"qwen-max"}` {
+		t.Errorf("Options: got %q, want %q", member.Options, `{"model_id":"qwen-max","model_name":"qwen-max"}`)
 	}
 	if member.UpdatedAt == 0 {
 		t.Error("UpdatedAt 应非零")
@@ -1561,4 +1561,31 @@ func TestSetMemberMode_不存在成员(t *testing.T) {
 	db := NewInMemoryTeamDatabase()
 	// 不应 panic
 	db.SetMemberMode("nobody", "team1", "code")
+}
+
+// TestResetPausedMemberExecutionStatus_只复位暂停成员 验证批量复位的过滤条件。
+func TestResetPausedMemberExecutionStatus_只复位暂停成员(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+
+	db.CreateTeam(ctx, "team1", "Team1", "leader", "desc", "prompt", "autonomous", false)
+	// 已暂停且仍在 running：应复位
+	db.CreateMember(ctx, "alice", "team1", "Alice", "", "paused", "teammate", "desc", "running", "plan", "prompt", "")
+	// 已暂停但已 idle：不计数
+	db.CreateMember(ctx, "bob", "team1", "Bob", "", "paused", "teammate", "desc", "idle", "plan", "prompt", "")
+	// 未暂停：不动
+	db.CreateMember(ctx, "carol", "team1", "Carol", "", "active", "teammate", "desc", "running", "plan", "prompt", "")
+
+	reset := db.ResetPausedMemberExecutionStatus(ctx, "team1", []string{"alice", "bob", "carol"})
+	if reset != 1 {
+		t.Fatalf("reset = %d, want 1", reset)
+	}
+	alice, _ := db.GetMember(ctx, "alice", "team1")
+	if alice.ExecutionStatus != "idle" {
+		t.Errorf("alice execution_status = %q, want idle", alice.ExecutionStatus)
+	}
+	carol, _ := db.GetMember(ctx, "carol", "team1")
+	if carol.ExecutionStatus != "running" {
+		t.Errorf("carol execution_status = %q, want running（未暂停不应复位）", carol.ExecutionStatus)
+	}
 }

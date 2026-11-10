@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
@@ -13,7 +12,7 @@ import (
 
 // TestNewPromptReport 测试从构建器创建诊断报告
 func TestNewPromptReport(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeFull)
+	builder := NewSystemPromptBuilder("cn", PromptModeFull)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "身份信息"}, 10))
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionSafety, map[string]string{"cn": "安全规则"}, 20))
 
@@ -37,7 +36,7 @@ func TestNewPromptReport(t *testing.T) {
 
 // TestPromptReport_CN语言Token估算 测试中文 token 估算（每 token 约 2.5 字符）
 func TestPromptReport_CN语言Token估算(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeFull)
+	builder := NewSystemPromptBuilder("cn", PromptModeFull)
 	// 添加 25 个中文字符
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "一二三四五六七八九十一二三四五六七八九十一二三四五"}, 10))
 
@@ -50,7 +49,7 @@ func TestPromptReport_CN语言Token估算(t *testing.T) {
 
 // TestPromptReport_EN语言Token估算 测试英文 token 估算（每 token 约 4.0 字符）
 func TestPromptReport_EN语言Token估算(t *testing.T) {
-	builder := NewSystemPromptBuilder("en", hschema.PromptModeFull)
+	builder := NewSystemPromptBuilder("en", PromptModeFull)
 	// 添加 40 个英文字符
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"en": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, 10))
 
@@ -63,7 +62,7 @@ func TestPromptReport_EN语言Token估算(t *testing.T) {
 
 // TestPromptReport_Summary 测试摘要字符串
 func TestPromptReport_Summary(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeFull)
+	builder := NewSystemPromptBuilder("cn", PromptModeFull)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "身份"}, 10))
 
 	report := NewPromptReport(builder)
@@ -81,7 +80,7 @@ func TestPromptReport_Summary(t *testing.T) {
 
 // TestPromptReport_ToDict 测试字典序列化
 func TestPromptReport_ToDict(t *testing.T) {
-	builder := NewSystemPromptBuilder("cn", hschema.PromptModeFull)
+	builder := NewSystemPromptBuilder("cn", PromptModeFull)
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "身份"}, 10))
 
 	report := NewPromptReport(builder)

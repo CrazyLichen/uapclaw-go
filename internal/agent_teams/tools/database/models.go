@@ -64,8 +64,13 @@ type TeamMember struct {
 	Role string `json:"role"`
 	// Prompt 成员专属提示词
 	Prompt string `json:"prompt,omitempty"`
-	// ModelRefJSON 模型引用 JSON（{"model_id": str, "model_name": str}）
-	ModelRefJSON string `json:"model_ref_json,omitempty"`
+	// Options 成员可扩展配置 JSON（TeamMemberOptions 序列化）
+	//
+	// 承载模型引用、worktree 隔离、权限收窄、退役策略、专家模板等扩展配置；
+	// 读写走 tools.LoadMemberOptions / tools.DumpMemberOptions。
+	//
+	// Python: TeamMember.options (tools/member_options.py:80)
+	Options string `json:"options,omitempty"`
 	// UpdatedAt 更新时间（毫秒时间戳，仅 roster 变更时 bump，status 变更不 bump）
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
@@ -131,6 +136,12 @@ type NewTaskSpec struct {
 	Content string
 	// InitialStatus 初始状态
 	InitialStatus string
+	// Assignee 任务所有者（nil = 未指派）
+	//
+	// 调度式创建（create_task 带 member/assignee）在写图时就把 owner 落上，
+	// 任务停在 PENDING（有依赖则 BLOCKED）并带着 owner，由调度器交接启动。
+	// Python: NewTaskSpec.assignee
+	Assignee *string
 }
 
 // EdgeSpec 依赖边规范（管线输入）。
@@ -200,6 +211,14 @@ type CancelAllTasksResult struct {
 	// Unblocked 被解除阻塞的任务列表（从 BLOCKED→PENDING 的任务，对齐 Python: unblocked_tasks）
 	Unblocked []*TeamTaskBase
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// memberStatusUnstarted UNSTARTED 状态的字面值。
+//
+// 本包刻意不 import agent_teams/schema（会成环），故与上游 engine.py 同款：
+// 用字面量而非枚举值。若 TeamRole/Status 枚举取值变更需同步此处。
+const memberStatusUnstarted = "unstarted"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

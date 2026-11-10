@@ -276,6 +276,14 @@ type fakeAbilityMgrForFilter struct {
 	abilities []cschema.Ability
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityMgrForFilter) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (f *fakeAbilityMgrForFilter) Add(a cschema.Ability) agentschema.AddAbilityResult {
 	f.abilities = append(f.abilities, a)
 	return agentschema.AddAbilityResult{Added: true}

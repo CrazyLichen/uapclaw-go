@@ -1,9 +1,14 @@
 package harness
 
 import (
+	"context"
 	"testing"
 
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -119,6 +124,66 @@ func TestNormalizeInputs(t *testing.T) {
 	})
 }
 
+// TestNormalizeInputs_用量归属血缘 验证六字段与 turn 号的解析与回写。
+// Python: deep_agent.py L1871-1883（解析）/ L1985-2003（_to_effective_inputs 回写）
+func TestNormalizeInputs_用量归属血缘(t *testing.T) {
+	d := newBareDeepAgent(t)
+
+	got, err := d.normalizeInputs(map[string]any{
+		"query":                "hi",
+		"parent_session_id":    "parent-1",
+		"invocation_id":        "inv-1",
+		"parent_invocation_id": "inv-parent",
+		"delegation_id":        "deleg-1",
+		"agent_path":           []string{"root", "child"},
+		"depth":                1,
+		"_turn_number":         3,
+	})
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if got.ParentSessionID != "parent-1" || got.InvocationID != "inv-1" ||
+		got.ParentInvocationID != "inv-parent" || got.DelegationID != "deleg-1" {
+		t.Fatalf("血缘字段解析错误: %+v", got)
+	}
+	if len(got.AgentPath) != 2 || got.AgentPath[1] != "child" {
+		t.Fatalf("AgentPath = %v, 期望 [root child]", got.AgentPath)
+	}
+	if got.Depth != 1 {
+		t.Fatalf("Depth = %d, 期望 1", got.Depth)
+	}
+	if got.TurnNumber != 3 {
+		t.Fatalf("TurnNumber = %d, 期望 3", got.TurnNumber)
+	}
+
+	effective := toEffectiveInputs(got)
+	if effective["_turn_number"] != 3 {
+		t.Fatalf("_turn_number 未回写: %v", effective["_turn_number"])
+	}
+	if effective["parent_session_id"] != "parent-1" || effective["invocation_id"] != "inv-1" ||
+		effective["parent_invocation_id"] != "inv-parent" || effective["delegation_id"] != "deleg-1" {
+		t.Fatalf("血缘字段未回写: %v", effective)
+	}
+	if effective["depth"] != 1 {
+		t.Fatalf("depth 未回写: %v", effective["depth"])
+	}
+}
+
+// TestNormalizeInputs_turn号非法值被忽略 验证非正整数一律视为未提供。
+func TestNormalizeInputs_turn号非法值被忽略(t *testing.T) {
+	d := newBareDeepAgent(t)
+
+	for _, raw := range []any{0, -1, "3", 3.0} {
+		got, err := d.normalizeInputs(map[string]any{"query": "hi", "_turn_number": raw})
+		if err != nil {
+			t.Fatalf("不应报错: %v", err)
+		}
+		if got.TurnNumber != 0 {
+			t.Fatalf("_turn_number=%v 应被忽略，实际 %d", raw, got.TurnNumber)
+		}
+	}
+}
+
 // assertNoPanicHarness 断言 fn 不 panic。
 func assertNoPanicHarness(t *testing.T, fn func()) {
 	t.Helper()
@@ -128,4 +193,72 @@ func assertNoPanicHarness(t *testing.T, fn func()) {
 		}
 	}()
 	fn()
+}
+
+// TestPrepareSingleRoundSession_按会话ID自建 验证单轮模式按 conversation_id 建会话并注 env。
+// Python: DeepAgent._prepare_single_round_session (deep_agent.py L2053-2075)
+func TestPrepareSingleRoundSession_按会话ID自建(t *testing.T) {
+	d := newBareDeepAgent(t)
+	inputs := &agentinterfaces.InvokeInputs{
+		Query:           agentinterfaces.InvokeQueryString("hi"),
+		ConversationID:  "conv-1",
+		ParentSessionID: "product-1",
+	}
+
+	sess, err := d.prepareSingleRoundSession(context.Background(), inputs, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess == nil {
+		t.Fatal("单轮模式应按 conversation_id 建会话")
+	}
+	if sess.GetSessionID() != "conv-1" {
+		t.Fatalf("SessionID = %q, 期望 conv-1", sess.GetSessionID())
+	}
+	if got := sess.GetEnv(kv_cache.KVCacheAffinityParentSessionIDEnv); got != "product-1" {
+		t.Fatalf("父会话 env 未注入: %v", got)
+	}
+}
+
+// TestPrepareSingleRoundSession_已有会话不动 验证外部传入会话时原样返回。
+func TestPrepareSingleRoundSession_已有会话不动(t *testing.T) {
+	d := newBareDeepAgent(t)
+	existing := session.NewSession(session.WithSessionID("given"))
+
+	sess, err := d.prepareSingleRoundSession(context.Background(),
+		&agentinterfaces.InvokeInputs{ConversationID: "conv-2"}, existing)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess != existing {
+		t.Fatal("已有会话必须原样返回")
+	}
+}
+
+// TestPrepareSingleRoundSession_无会话ID 验证缺 conversation_id 时不建会话。
+func TestPrepareSingleRoundSession_无会话ID(t *testing.T) {
+	d := newBareDeepAgent(t)
+
+	sess, err := d.prepareSingleRoundSession(context.Background(), &agentinterfaces.InvokeInputs{}, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess != nil {
+		t.Fatal("无 conversation_id 不应建会话")
+	}
+}
+
+// TestPrepareSingleRoundSession_任务循环跳过 验证任务循环模式下会话归调用方。
+func TestPrepareSingleRoundSession_任务循环跳过(t *testing.T) {
+	d := newBareDeepAgent(t)
+	d.deepConfig = &hschema.DeepAgentConfig{EnableTaskLoop: true}
+
+	sess, err := d.prepareSingleRoundSession(context.Background(),
+		&agentinterfaces.InvokeInputs{ConversationID: "conv-3"}, nil)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if sess != nil {
+		t.Fatal("任务循环模式应由调用方持有会话")
+	}
 }

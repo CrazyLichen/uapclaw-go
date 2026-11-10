@@ -82,7 +82,7 @@ func nonzeroExit(value any) *bool {
 	return nil
 }
 
-// InferToolResultError 推断工具结果是否为错误，对齐 Python: _infer_tool_result_error
+// inferToolResultError 推断工具结果是否为错误，对齐 Python: _infer_tool_result_error
 func inferToolResultError(value any) *bool {
 	switch v := value.(type) {
 	case map[string]any:
@@ -108,7 +108,7 @@ func inferToolResultError(value any) *bool {
 	}
 }
 
-// StructuredToolResultPayload 提取结构化工具结果，对齐 Python: _structured_tool_result_payload
+// structuredToolResultPayload 提取结构化工具结果，对齐 Python: _structured_tool_result_payload
 func structuredToolResultPayload(result any) any {
 	if m, ok := result.(map[string]any); ok {
 		return m
@@ -127,7 +127,7 @@ func structuredToolResultPayload(result any) any {
 	return nil
 }
 
-// ParseToolCallArguments 解析工具调用参数为 map，对齐 Python: _parse_tool_call_arguments
+// parseToolCallArguments 解析工具调用参数为 map，对齐 Python: _parse_tool_call_arguments
 func parseToolCallArguments(tc *llmschema.ToolCall) map[string]any {
 	if tc == nil {
 		return map[string]any{}
@@ -143,7 +143,7 @@ func parseToolCallArguments(tc *llmschema.ToolCall) map[string]any {
 	return result
 }
 
-// ExtractToolInterrupt 递归查找 ToolInterruptException，对齐 Python: _extract_tool_interrupt
+// extractToolInterrupt 递归查找 ToolInterruptException，对齐 Python: _extract_tool_interrupt
 //
 // 入参为 any 因为调用来源（ToolResult、exception）类型不固定，对齐 Python result: Any；
 // 返回值为具体类型 *saschema.ToolInterruptException（Python 返回 Any 是因为鸭子类型，Go 应更严格）。
@@ -177,7 +177,7 @@ func extractToolInterrupt(value any) *saschema.ToolInterruptException {
 	return nil
 }
 
-// AskUserQuestionPayloadFromInterrupt 从中断构造 ask_user_question payload，对齐 Python: _ask_user_question_payload_from_interrupt
+// askUserQuestionPayloadFromInterrupt 从中断构造 ask_user_question payload，对齐 Python: _ask_user_question_payload_from_interrupt
 func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt *saschema.ToolInterruptException) map[string]any {
 	// 获取 request_id，对齐 Python: request_id = str(getattr(getattr(interrupt, "request", None), "tool_call_id", None) or getattr(tool_call, "id", "") or "")
 	var requestID string
@@ -218,7 +218,7 @@ func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt *sasc
 	return interruptHelpers.ConvertInteractionsToAskUserQuestion(interactions)
 }
 
-// TruncateString 截断字符串到指定最大 rune 长度，CJK 安全。
+// truncateString 截断字符串到指定最大 rune 长度，CJK 安全。
 // 对齐 Python: str(result)[:60000] — Python 按字符截断，Go 按 rune 截断以避免破坏多字节字符。
 func truncateString(s string, maxLen int) string {
 	if utf8.RuneCountInString(s) <= maxLen {
@@ -228,7 +228,7 @@ func truncateString(s string, maxLen int) string {
 	return string(runes[:maxLen])
 }
 
-// ToolCallName 安全获取 ToolCall 的 Name 字段
+// toolCallName 安全获取 ToolCall 的 Name 字段
 func toolCallName(tc *llmschema.ToolCall) string {
 	if tc == nil {
 		return ""
@@ -236,7 +236,7 @@ func toolCallName(tc *llmschema.ToolCall) string {
 	return tc.Name
 }
 
-// ToolCallID 安全获取 ToolCall 的 ID 字段
+// toolCallID 安全获取 ToolCall 的 ID 字段
 func toolCallID(tc *llmschema.ToolCall) string {
 	if tc == nil {
 		return ""
@@ -244,7 +244,7 @@ func toolCallID(tc *llmschema.ToolCall) string {
 	return tc.ID
 }
 
-// ToolCallArguments 安全获取 ToolCall 的 Arguments 字段
+// toolCallArguments 安全获取 ToolCall 的 Arguments 字段
 func toolCallArguments(tc *llmschema.ToolCall) any {
 	if tc == nil {
 		return map[string]any{}

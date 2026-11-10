@@ -1,15 +1,3 @@
-// Package gateway 提供 Gateway 服务端实现。
-// normalize.go 承载入站消息标准化与三层路由转发回调，
-// 对齐上游 app_gateway.py 中的 _normalize_gateway_message / _norm_and_forward。
-// 文件目录：
-//
-//	gateway/
-//	├── app_gateway.go            # HTTP/WS 服务入口与路由装配
-//	├── normalize.go              # 入站标准化 + 三层路由转发
-//	├── gateway_server.go         # GatewayServer 主体
-//	└── ...
-//
-// 对应 Python 代码：jiuwenswarm/gateway/app_gateway.py
 package gateway
 
 import (

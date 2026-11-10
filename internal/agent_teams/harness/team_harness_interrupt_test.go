@@ -32,14 +32,14 @@ func newHarnessWithInterruptSession(t *testing.T, entry *agentschema.ToolInterru
 			},
 		})
 	}
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	h.setActiveSession(sess)
 	return h, sess
 }
 
 // TestTeamHarness_HasPendingInterrupt_无会话 无会话时恒为 false（不 panic）。
 func TestTeamHarness_HasPendingInterrupt_无会话(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	assert.False(t, h.HasPendingInterrupt())
 }
 
@@ -120,7 +120,7 @@ func TestTeamHarness_IsPendingInterruptResumeValid_无待处理请求(t *testing
 func TestTeamHarness_RegisterRail_真实DeepAgent(t *testing.T) {
 	d := agentcore.NewDeepAgent(agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("agent-1")))
 	require.NotNil(t, d)
-	h := NewTeamHarness(d, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := NewTeamHarness(d, string(atschema.TeamRoleLeader), "leader_1", false)
 
 	rail := agentinterfaces.NewBaseRail()
 	require.NoError(t, h.RegisterRail(context.Background(), rail))
@@ -142,7 +142,7 @@ func TestTeamHarness_interruptSession_优先LoopSession(t *testing.T) {
 // S-02：字段原来是 any 且无锁，接口值的两字写入可能被读到撕裂值。
 // 本用例在 -race 下运行；不加 -race 时至少验证不会 panic。
 func TestTeamHarness_会话字段并发读写(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	sessions := make([]*session.Session, 4)
 	for i := range sessions {
 		sessions[i] = session.CreateAgentSession("sess-"+string(rune('a'+i)), nil, nil)
@@ -184,7 +184,7 @@ func TestTeamHarness_InitCwdForRound_每轮重置(t *testing.T) {
 	cfg.Workspace = &harnessworkspace.Workspace{RootPath: root}
 	require.NoError(t, d.ConfigureDeepConfig(context.Background(), cfg))
 
-	h := NewTeamHarness(d, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := NewTeamHarness(d, string(atschema.TeamRoleLeader), "leader_1", false)
 	round1 := h.InitCwdForRound(context.Background())
 	state := cwd.CwdStateFromCtx(round1)
 	require.NotNil(t, state, "本轮 ctx 必须携带新的 CwdState")
@@ -207,7 +207,7 @@ func TestTeamHarness_InitCwdForRound_每轮重置(t *testing.T) {
 
 // TestTeamHarness_InitCwdForRound_无工作空间 无 workspace 时原样返回 ctx。
 func TestTeamHarness_InitCwdForRound_无工作空间(t *testing.T) {
-	h := NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "leader_1", false)
 	ctx := context.Background()
 	assert.Equal(t, ctx, h.InitCwdForRound(ctx))
 }

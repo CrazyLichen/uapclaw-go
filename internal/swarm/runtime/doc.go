@@ -16,6 +16,8 @@
 //	├── interrupt_helpers.go    # 中断恢复载荷判定
 //	├── run_context.go          # RunContext 一次调用选项 + CURRENT_RUN_CONTEXT ctx 绑定
 //	└── run_permissions.go      # 请求级权限覆盖层（overlay_run_permissions）
+//	├── session_provisioner.go  # 会话创建/删除/切换事务（RuntimeSessionProvisioner）
+//	└── team_session_lifecycle.go # 团队会话生命周期适配（TeamSessionLifecycleAdapter）
 //
 // 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py /
 // run_context.py / run_permissions.py）

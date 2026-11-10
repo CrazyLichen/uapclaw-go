@@ -99,6 +99,39 @@ func (d *SQLTaskDao) GetTasksByAssignee(ctx context.Context, teamName, assignee,
 	return tasks, nil
 }
 
+// OpenTaskCountsByAssignee 按 assignee 统计非终态任务数。
+//
+// Python: open_task_counts_by_assignee (task_dao.py:685-705)
+func (d *SQLTaskDao) OpenTaskCountsByAssignee(ctx context.Context, teamName string) (map[string]int, error) {
+	table := d.taskTableName(ctx)
+	terminal := fsm.TerminalTaskStatuses()
+	rows, err := d.db.WithContext(ctx).Table(table).
+		Select("assignee, COUNT(*) AS cnt").
+		Where("team_name = ?", teamName).
+		Where("assignee IS NOT NULL").
+		Where("status NOT IN ?", terminal).
+		Group("assignee").
+		Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var assignee string
+		var cnt int
+		if scanErr := rows.Scan(&assignee, &cnt); scanErr != nil {
+			return nil, scanErr
+		}
+		counts[assignee] = cnt
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, rowsErr
+	}
+	return counts, nil
+}
+
 // GetUnseenEdits 查询成员名下非终态且 revision > observed_revision 的任务。
 //
 // 偏差 D-5：上游用 TASK_WORKING_STATUSES（planning / in_progress / in_review），
@@ -796,6 +829,7 @@ func stageNewTasksInTx(tx *gorm.DB, taskTable, teamName string, newTasks []NewTa
 			Title:     spec.Title,
 			Content:   spec.Content,
 			Status:    spec.InitialStatus,
+			Assignee:  spec.Assignee,
 			UpdatedAt: now,
 		}
 		if err := tx.Table(taskTable).Create(row).Error; err != nil {

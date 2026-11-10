@@ -499,7 +499,7 @@ func TestBuildTeamHITTSection_未知角色返回nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── dispatch ────────────────────────────
+// ──────────────────────────── dispatch 分发模式 ────────────────────────────
 
 // TestBuildTeamDispatchSection_角色分派 验证只有 leader/teammate/external_cli 有。
 // Python: _DISPATCH_ROLE_SLUGS (sections.py L370-375)
@@ -634,7 +634,7 @@ func TestBuildTeamDispatchSection_英文(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── task_state ────────────────────────────
+// ──────────────────────────── task_state 任务状态 ────────────────────────────
 
 // TestBuildTeamTaskStateSection_仅Leader 验证非 leader 返回 nil。
 func TestBuildTeamTaskStateSection_仅Leader(t *testing.T) {
@@ -689,7 +689,7 @@ func TestBuildTeamTaskStateSection_未知模式回落(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── bridge ────────────────────────────
+// ──────────────────────────── bridge 桥接 ────────────────────────────
 
 // TestBuildTeamBridgeSection_仅BridgeAgent 验证角色门控。
 func TestBuildTeamBridgeSection_仅BridgeAgent(t *testing.T) {
@@ -818,7 +818,7 @@ func TestBuildTeamStaticSections_Leader全套(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── policy disclosure ────────────────────────────
+// ──────────────────────────── policy disclosure 策略披露 ────────────────────────────
 
 // TestBuildLeaderPolicyDisclosure_含关键章节 验证披露含 dispatch/task_state。
 // Python: build_leader_policy_disclosure (sections.py L837-903)

@@ -180,6 +180,21 @@ var TaskTransitions = map[TaskStatus][]TaskStatus{
 	TaskStatusCancelled:    {},
 }
 
+// MemberDepartedStatuses 返回"leader 已释放该成员"的状态集合。
+//
+// 与 MemberUnreachableStatuses 不是一回事：保护成员在飞工作的守卫在这里解除
+// （在**请求**时而非终态），消息投递则要到 MemberUnreachableStatuses 才停——
+// shutdown_member 先写 SHUTDOWN_REQUESTED 再发通知，若在请求时就断投递，
+// 那条"你已被移除"的通知永远送不到。
+//
+// Python: MEMBER_DEPARTED_STATUSES (schema/status.py:84-89)
+func MemberDepartedStatuses() map[MemberStatus]struct{} {
+	return map[MemberStatus]struct{}{
+		MemberStatusShutdownRequested: {},
+		MemberStatusShutdown:          {},
+	}
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsValidMemberTransition 检查 MemberStatus 状态转换是否合法。

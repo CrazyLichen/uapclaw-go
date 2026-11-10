@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
@@ -182,6 +183,13 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 		Str("session_id", sessionIDForLog).
 		Msg("processing non-stream request")
 
+	// Python: interface.py:3408 —— COMMAND_GOAL 在无状态 RPC / skills 判定之前
+	// 单独处理，且不写 user 历史（:4205 的条件）。此前缺这段，导致
+	// command.goal 被当普通 chat 轮执行：写空 query 历史 + 调模型。
+	if request.ReqMethod == schema.ReqMethodCommandGoal {
+		return uc.processGoalCommand(ctx, request)
+	}
+
 	// 1. CANCEL 分支 → 委托 ProcessInterrupt
 	if request.ReqMethod == schema.ReqMethodChatCancel {
 		return uc.ProcessInterrupt(ctx, request)
@@ -319,6 +327,23 @@ func (uc *UapClawSwarm) ExecuteMessageStream(
 func (uc *UapClawSwarm) processMessageStreamInternal(
 	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
 ) (<-chan *schema.AgentResponseChunk, error) {
+	// Python: interface.py:4175 —— 流式 command.goal 的 get/pause/clear 在此单帧
+	// 短路（控制类流量不进会话队列）；set/resume 继续走下面的完整流式链
+	// （适配器的 attach→control 两段映射）。
+	if request.ReqMethod == schema.ReqMethodCommandGoal {
+		if action := goalActionOf(request); action != "set" && action != "resume" {
+			chunks, goalErr := uc.processGoalCommandStream(ctx, request)
+			if goalErr != nil {
+				return nil, goalErr
+			}
+			out := make(chan *schema.AgentResponseChunk, len(chunks))
+			for _, chunk := range chunks {
+				out <- chunk
+			}
+			close(out)
+			return out, nil
+		}
+	}
 	if !scheduleSession || uc.sessionManager == nil {
 		return uc.runMessageStreamDirect(ctx, request)
 	}
@@ -642,10 +667,12 @@ func (uc *UapClawSwarm) GenerateRecap(ctx context.Context, sessionID string) (ma
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
 func (uc *UapClawSwarm) SwitchMode(ctx context.Context, sessionID, subMode string) error {
-	if uc.adapter == nil {
+	// adapterSnapshot 加锁读：与 Cleanup 的 `uc.adapter = nil` 并发时不得裸读。
+	a := uc.adapterSnapshot()
+	if a == nil {
 		return nil
 	}
-	return uc.adapter.SwitchMode(ctx, sessionID, subMode)
+	return a.SwitchMode(ctx, sessionID, subMode)
 }
 
 // CreateInstance 创建 Agent 实例。
@@ -744,11 +771,70 @@ func (uc *UapClawSwarm) Cleanup() error {
 
 // GetInstance 获取底层 DeepAgent 实例。
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
+//
+// 10.3.28f 起根 adapter 是纯 router，不再持有自己的 DeepAgent，
+// 因此该方法在"该 agent 只有根、尚未发生任何会话"时返回 nil。
+// 需要"该会话正在跑的实例"请用 GetLiveSessionInstance。
 func (uc *UapClawSwarm) GetInstance() *harness.DeepAgent {
-	if uc == nil || uc.adapter == nil {
+	if uc == nil {
 		return nil
 	}
-	return uc.adapter.Instance()
+	a := uc.adapterSnapshot()
+	if a == nil {
+		return nil
+	}
+	return a.Instance()
+}
+
+// EnsureInstance 确保该 agent 的 DeepAgent 就绪并返回。
+// Python: interface.py ensure_instance（:5779-5793）
+//
+// 根的 DeepAgent 是惰建的（_skip_own_instance_build :12727）：
+// chat 路径只建会话 child，只有"需要 DeepAgent 句柄的非 chat 路径"
+// （plan 状态读写、harness 包装配、rewind 等）才会在这里把它建出来。
+func (uc *UapClawSwarm) EnsureInstance(ctx context.Context) (*harness.DeepAgent, error) {
+	if uc == nil {
+		return nil, nil
+	}
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return nil, err
+	}
+	// AgentAdapter 已是主接口方法，直接调用（规则 10）
+	return a.EnsureInstance(ctx)
+}
+
+// EnsureLiveSessionInstance 确保该会话的子适配器已启动，返回其 DeepAgent。
+// Python: interface.py ensure_live_session_instance（:5809-5821）
+//
+// 上游用途写明：plan 状态同步必须写进"即将承接 chat.send 的那个 Session"，
+// 而非临时 Session。与 EnsureInstance（建本适配器自己的 DeepAgent）是
+// 两个不同方法，不可互换。
+func (uc *UapClawSwarm) EnsureLiveSessionInstance(ctx context.Context, sessionID string) (*harness.DeepAgent, error) {
+	if live := uc.GetLiveSessionInstance(sessionID); live != nil {
+		return live, nil
+	}
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return nil, err
+	}
+	return a.EnsureLiveSessionInstance(ctx, sessionID)
+}
+
+// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent，没有则 nil。
+// Python: interface.py get_live_session_instance（:5795-5808）
+//
+// 会话分身后 DeepAgent 按会话各一份，plan 状态、上下文用量等运行态
+// 都挂在"那一个"上；取根的 instance 是错的。
+func (uc *UapClawSwarm) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
+	if uc == nil {
+		return nil
+	}
+	a := uc.adapterSnapshot()
+	if a == nil {
+		return nil
+	}
+	return a.GetLiveSessionInstance(sessionID)
 }
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
@@ -812,13 +898,24 @@ func (uc *UapClawSwarm) processTeamInterrupt(
 		), nil
 
 	case "pause":
-		// ⤵️ 10.6.19-23: team_manager.pause_session_runtime(sessionID, reason)
-		// S10: paused 硬编码为 false，Team pause 功能完全无效，依赖 TeamManager
+		// Python: paused = await team_manager.pause_session_runtime(session_id, reason=reason)
+		// 团队运行时由 Runner 池持有：pause 把运行时就地停住（可续跑），
+		// 随后取消前台业务流；runtime 保留纯观测订阅。
+		reason := "interrupt(intent=pause): "
 		paused := false
-		// Python: paused = teamManager.PauseSessionRuntime(ctx, sessionID, reason)
-		_, _ = uc.coordinator.CancelExecution(sessionID, swsession.CancelExecutionOptions{
-			RequestID: &sessionID,
-		})
+		if tm := team.GetTeamManager(request.ChannelID); tm != nil {
+			var pauseErr error
+			paused, pauseErr = tm.PauseSessionRuntime(ctx, sessionID, reason)
+			if pauseErr != nil {
+				logger.Warn(logComponent).Err(pauseErr).Str("session_id", sessionID).
+					Msg("team pause failed")
+			}
+		}
+		// Python: await self._session_manager.cancel_session_task(session_id, reason, wait_timeout=5.0)
+		if uc.sessionManager != nil {
+			timeout := 5.0
+			_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, reason, &timeout)
+		}
 		message := "团队已暂停"
 		if !paused {
 			message = "当前没有可暂停的团队任务"
@@ -1237,13 +1334,16 @@ func truncateStr(s string, maxLen int) string {
 
 // PlanStateAccessor 返回 plan 状态读写入口。
 func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
-	provider, ok := uc.adapter.(interface {
-		PlanStateAccessor() swruntime.PlanStateAccessor
-	})
-	if !ok {
+	// 加锁读：本方法在 chat 流 goroutine 里被调用，而 Cleanup 会并发
+	// 把 uc.adapter 置 nil（-race 实测：Cleanup vs checkPlanExit）。
+	a := uc.adapterSnapshot()
+	if a == nil {
 		return nil
 	}
-	return provider.PlanStateAccessor()
+	// AgentAdapter 已是主接口方法，直接调用（规则 10）。
+	// 之前靠匿名断言，CodeAdapter 因具名组合缺该方法而静默返回 nil，
+	// 导致 code 模式的 plan 状态读写整体失效。
+	return a.PlanStateAccessor()
 }
 
 // PlanModeSnapshot 只读当前会话 plan 模式（不做任何状态写入）。
@@ -1321,4 +1421,175 @@ func (uc *UapClawSwarm) adapterSnapshot() adapter.AgentAdapter {
 	uc.adapterMu.Lock()
 	defer uc.adapterMu.Unlock()
 	return uc.adapter
+}
+
+// processGoalCommand 处理非流式 command.goal 请求。
+// Python: interface.py:3408-3505 _process_message 的 COMMAND_GOAL 分支
+//
+// 非流式承担全部五个 action；set/resume 的真正执行仍走流式路径。
+func (uc *UapClawSwarm) processGoalCommand(
+	ctx context.Context, request *schema.AgentRequest,
+) (*schema.AgentResponse, error) {
+	params := parseRequestParams(request)
+	action := goalActionOf(request)
+	sessionID := swruntime.GetSessionID(request.SessionID)
+	logger.Info(logComponent).
+		Str("event_type", "goal_command").
+		Str("request_id", request.RequestID).
+		Str("action", action).
+		Str("session_id", sessionID).
+		Msg("command.goal received")
+
+	a, err := uc.goalAdapter(request)
+	if err != nil {
+		return nil, err
+	}
+	control, err := a.DispatchGoalControl(ctx, sessionID, action,
+		paramString(params, "objective"), boolField(params, "overwrite_confirmed"),
+		intField(params, "token_budget"), intField(params, "max_attempts"))
+	if err != nil {
+		// Python: except Exception → ok=False, {"error": f"Goal command error: {exc}"}
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "GOAL_COMMAND_FAILED").
+			Str("request_id", request.RequestID).
+			Msg("command.goal failed")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "Goal command error: " + err.Error(),
+			})), nil
+	}
+	if control == nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"error": "Goal command not handled"})), nil
+	}
+	return goalControlResponse(request, action, control), nil
+}
+
+// processGoalCommandStream 流式 command.goal 的 get/pause/clear 单帧短路。
+// Python: interface.py:4175-4235 —— action 不在 {set,resume} 时只发一帧即 return，
+// 不进入 attach_output；set/resume 由适配器流式主链路接管（attach→control 两段映射）。
+func (uc *UapClawSwarm) processGoalCommandStream(
+	ctx context.Context, request *schema.AgentRequest,
+) ([]*schema.AgentResponseChunk, error) {
+	params := parseRequestParams(request)
+	action := goalActionOf(request)
+	sessionID := swruntime.GetSessionID(request.SessionID)
+	a, err := uc.goalAdapter(request)
+	if err != nil {
+		return nil, err
+	}
+	control, err := a.DispatchGoalControl(ctx, sessionID, action,
+		paramString(params, "objective"), boolField(params, "overwrite_confirmed"),
+		intField(params, "token_budget"), intField(params, "max_attempts"))
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "GOAL_COMMAND_STREAM_FAILED").
+			Str("request_id", request.RequestID).
+			Msg("streaming command.goal failed")
+		return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+			request.RequestID, request.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"error":      "Goal command error: " + err.Error(),
+			}, schema.WithChunkIsComplete(true))}, nil
+	}
+	if control == nil {
+		return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+			request.RequestID, request.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"error":      "Goal command not handled",
+			}, schema.WithChunkIsComplete(true))}, nil
+	}
+	if resultType, _ := control["result_type"].(string); resultType == "goal_error" {
+		return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+			request.RequestID, request.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"code":       control["error_code"],
+				"error":      control["error"],
+				"goal":       control["goal"],
+			}, schema.WithChunkIsComplete(true))}, nil
+	}
+	return []*schema.AgentResponseChunk{schema.NewAgentResponseChunk(
+		request.RequestID, request.ChannelID, map[string]any{
+			"event_type":   "goal.snapshot",
+			"action":       control["action"],
+			"goal":         control["goal"],
+			"cleared_goal": control["cleared_goal"],
+			"message":      control["output"],
+		}, schema.WithChunkIsComplete(true))}, nil
+}
+
+// goalAdapter 按请求 mode 取适配器（goal 命令必须真实 adapter）。
+func (uc *UapClawSwarm) goalAdapter(request *schema.AgentRequest) (adapter.AgentAdapter, error) {
+	return uc.ensureAdapter(uc.adapterModeForRequest(request))
+}
+
+// goalControlResponse 把控制结果组装成 RPC payload。
+// Python: interface.py:3460-3485 —— message 与 error 双写，兼容 Gateway 顶层
+// error 转发与旧客户端；record 是 goal 的副本，保留给既有 TUI 命令面。
+func goalControlResponse(
+	request *schema.AgentRequest, action string, control map[string]any,
+) *schema.AgentResponse {
+	resultType, _ := control["result_type"].(string)
+	ok := resultType != "goal_error" && resultType != "goal_confirm_required"
+	human, _ := control["output"].(string)
+	if human == "" {
+		human, _ = control["error"].(string)
+	}
+	payload := map[string]any{
+		"action":              control["action"],
+		"message":             human,
+		"goal":                control["goal"],
+		"record":              control["goal"],
+		"cleared_goal":        control["cleared_goal"],
+		"existing_goal":       control["existing_goal"],
+		"requested_objective": control["requested_objective"],
+		"code":                control["error_code"],
+	}
+	if !ok && human != "" {
+		payload["error"] = human
+	}
+	if action == "" {
+		action = "get"
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(ok),
+		schema.WithPayload(payload))
+}
+
+// goalActionOf 取 command.goal 的 action（缺省 get）。
+// Python: str(params.get("action") or "get").strip().lower()
+func goalActionOf(request *schema.AgentRequest) string {
+	action := strings.ToLower(strings.TrimSpace(paramString(parseRequestParams(request), "action")))
+	if action == "" {
+		action = "get"
+	}
+	return action
+}
+
+// boolField 取布尔参数（非 bool 返回 false）。
+func boolField(params map[string]any, key string) bool {
+	value, _ := params[key].(bool)
+	return value
+}
+
+// intField 取整型参数（JSON 解出 float64；非数值返回 0）。
+func intField(params map[string]any, key string) int {
+	switch value := params[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+// paramString 取字符串参数（非字符串返回空串）。
+func paramString(params map[string]any, key string) string {
+	value, _ := params[key].(string)
+	return value
 }

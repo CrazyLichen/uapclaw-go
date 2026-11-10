@@ -150,3 +150,11 @@ func (s *stubTracerSession) AgentSpan() *tracer.TraceAgentSpan {
 
 // 确保 stubTracerSession 满足 decorator.TracerSession 接口
 var _ decorator.TracerSession = (*stubTracerSession)(nil)
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubBaseModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

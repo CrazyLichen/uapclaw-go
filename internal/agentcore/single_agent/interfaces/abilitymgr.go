@@ -5,6 +5,7 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -18,6 +19,14 @@ import (
 type AbilityManagerInterface interface {
 	// Add 添加单个能力。
 	Add(ability schema.Ability) agentschema.AddAbilityResult
+	// AddAbility 注册一个可执行的工具能力（card + 具体实例）。
+	//
+	// 单一入口，保证 ability-manager 的 card id 与 resource-manager 的注册 key
+	// 一致：有状态工具先限定 id 再 refresh 重绑，无状态工具保留裸 id 且
+	// skip_if_exists 幂等。
+	//
+	// Python: AbilityManager.add_ability (ability_manager.py:806)
+	AddAbility(card *tool.ToolCard, resource tool.Tool) agentschema.AddAbilityResult
 	// AddMany 批量添加能力。
 	AddMany(abilities []schema.Ability) []agentschema.AddAbilityResult
 	// Remove 移除指定名称的能力。
@@ -45,4 +54,8 @@ type AbilityManagerInterface interface {
 	SetContextEngine(ce ceinterface.ContextEngine)
 	// ReorderTools 重排工具顺序。
 	ReorderTools(orderedNames []string)
+	// TeardownTools 摘除本 owner 限定过的有状态工具（轮末拆除用）。
+	// 无状态共享单例不受影响（其他 agent 仍在用）。
+	// Python: AbilityManager.teardown_tools
+	TeardownTools()
 }

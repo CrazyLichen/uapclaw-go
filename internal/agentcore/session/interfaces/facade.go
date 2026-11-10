@@ -3,6 +3,7 @@ package interfaces
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -17,6 +18,13 @@ import (
 type SessionFacade interface {
 	// GetSessionID 获取会话唯一标识
 	GetSessionID() string
+	// GetCacheIdentity 返回 provider 侧缓存身份。
+	// Python: agent.py:126 / agent_team.py:61 get_cache_identity() -> KVCacheIdentity
+	// （无 raise，故 Go 无 error；消费点的防御性兜底由调用方负责）。
+	GetCacheIdentity() kv_cache.KVCacheIdentity
+	// GetParentSessionID 返回父会话标识，无父时返回空串。
+	// Python: agent.py:74 get_parent_session_id() -> str | None
+	GetParentSessionID() string
 	// UpdateState 更新会话状态
 	UpdateState(data map[string]any)
 	// GetState 获取会话状态值。

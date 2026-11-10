@@ -5,7 +5,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/locales"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -85,7 +92,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if !hasTool(tools, "build_team") || !hasTool(tools, "spawn_member") {
 			t.Fatalf("leader 应包含 build_team/spawn_member，实际 %v", namesOf(tools))
 		}
@@ -100,7 +107,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "plan_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if !hasTool(tools, "approve_plan") || !hasTool(tools, "approve_tool") {
 			t.Fatalf("plan_mode 应包含审批工具，实际 %v", namesOf(tools))
 		}
@@ -112,7 +119,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "persistent",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if hasTool(tools, "clean_team") {
 			t.Fatalf("persistent 不应包含 clean_team，实际 %v", namesOf(tools))
 		}
@@ -124,7 +131,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, map[string]struct{}{"spawn_member": {}})
+		}, nil, map[string]struct{}{"spawn_member": {}})
 		if hasTool(tools, "spawn_member") {
 			t.Fatalf("排除的 spawn_member 不应出现，实际 %v", namesOf(tools))
 		}
@@ -136,7 +143,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if len(tools) != 0 {
 			t.Fatalf("backend 为 nil 时应无工具，实际 %v", namesOf(tools))
 		}
@@ -148,7 +155,7 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if hasTool(tools, "build_team") {
 			t.Fatalf("member 不应包含 build_team，实际 %v", namesOf(tools))
 		}
@@ -163,70 +170,9 @@ func TestCreateTeamTools_角色过滤(t *testing.T) {
 			TeammateMode: "build_mode",
 			Lifecycle:    "ephemeral",
 			Language:     "cn",
-		}, nil, nil, nil)
+		}, nil, nil)
 		if hasTool(tools, "spawn_member") {
 			t.Fatalf("human_agent 不应包含 spawn_member，实际 %v", namesOf(tools))
-		}
-	})
-}
-
-// TestQualifyTeamToolIDs 验证工具 ID 加团队/成员后缀（改的是 Card.ID）与空值回退。
-func TestQualifyTeamToolIDs(t *testing.T) {
-	backend := newTestTeamBackend()
-
-	t.Run("空团队名回落 default", func(t *testing.T) {
-		cp := CreateTeamTools(backend, TeamToolOptions{
-			Role:         "leader",
-			TeammateMode: "build_mode",
-			Lifecycle:    "ephemeral",
-			Language:     "cn",
-		}, nil, nil, nil)
-		before := make([]string, len(cp))
-		for i, tl := range cp {
-			before[i] = tl.Card().ID
-		}
-		QualifyTeamToolIDs(cp, "", "m1")
-		for i, tl := range cp {
-			if want := before[i] + ".default.m1"; tl.Card().ID != want {
-				t.Fatalf("工具 %d ID = %q, 期望 %q", i, tl.Card().ID, want)
-			}
-		}
-	})
-
-	t.Run("成员名为空时用 unknown 占位", func(t *testing.T) {
-		cp := CreateTeamTools(backend, TeamToolOptions{
-			Role:         "leader",
-			TeammateMode: "build_mode",
-			Lifecycle:    "ephemeral",
-			Language:     "cn",
-		}, nil, nil, nil)
-		before := make([]string, len(cp))
-		for i, tl := range cp {
-			before[i] = tl.Card().ID
-		}
-		QualifyTeamToolIDs(cp, "t1", "")
-		for i, tl := range cp {
-			if want := before[i] + ".t1.unknown"; tl.Card().ID != want {
-				t.Fatalf("工具 %d ID = %q, 期望 %q", i, tl.Card().ID, want)
-			}
-		}
-	})
-
-	t.Run("空 ID 的卡片被跳过", func(t *testing.T) {
-		cp := CreateTeamTools(backend, TeamToolOptions{
-			Role:         "leader",
-			TeammateMode: "build_mode",
-			Lifecycle:    "ephemeral",
-			Language:     "cn",
-		}, nil, nil, nil)
-		for _, tl := range cp {
-			tl.Card().ID = ""
-		}
-		QualifyTeamToolIDs(cp, "t1", "m1")
-		for _, tl := range cp {
-			if tl.Card().ID != "" {
-				t.Fatalf("空 ID 不应被改写，实际 %q", tl.Card().ID)
-			}
 		}
 	})
 }
@@ -301,7 +247,7 @@ func TestTeamTools_StreamNotSupported(t *testing.T) {
 		TeammateMode: "plan_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 	for _, tl := range tools {
 		ch, err := tl.Stream(context.Background(), map[string]any{})
 		if err == nil || ch != nil {
@@ -319,20 +265,20 @@ func TestTeamTools_参数校验失败分支(t *testing.T) {
 		TeammateMode: "plan_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 	// claim_task / member_complete_task 分属成员集与 human_agent 集，leader 集合里没有
 	memberTools := CreateTeamTools(backend, TeamToolOptions{
 		Role:         "",
 		TeammateMode: "build_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 	humanTools := CreateTeamTools(backend, TeamToolOptions{
 		Role:         "human_agent",
 		TeammateMode: "build_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 
 	t.Run("spawn_member 成员名非法", func(t *testing.T) {
 		res := invokeByName(t, tools, "spawn_member", map[string]any{"member_name": "Dev_1"})
@@ -487,7 +433,7 @@ func TestTeamTools_后端交互分支(t *testing.T) {
 		TeammateMode: "plan_mode",
 		Lifecycle:    "ephemeral",
 		Language:     "cn",
-	}, nil, nil, nil)
+	}, nil, nil)
 
 	t.Run("list_members 空团队返回零成员", func(t *testing.T) {
 		res := invokeByName(t, tools, "list_members", map[string]any{})
@@ -566,4 +512,239 @@ func TestTeamTools_后端交互分支(t *testing.T) {
 			t.Fatalf("应报全部失败汇总，实际 %v", res)
 		}
 	})
+}
+
+// ──────────────────────────── 内联成员测试 ────────────────────────────
+
+// newInlineTaskTool 造一个可用的 create_task 工具（leader 视角）。
+func newInlineTaskTool(t *testing.T) (*TaskCreateTool, *TeamBackend) {
+	t.Helper()
+	backend := newTestTeamBackend()
+	backend.BuildTeam(context.Background(), "T", "d", "Leader", "ld", nil, nil)
+	return newTaskCreateTool(backend, locales.MakeTranslator(atschema.Language("cn"))), backend
+}
+
+// TestValidateInlineMembers_合法与冲突 覆盖各条拒绝分支。
+func TestValidateInlineMembers_合法与冲突(t *testing.T) {
+	okSpec := func() map[string]any {
+		return map[string]any{"title": "t", "content": "c", "member": map[string]any{
+			"member_name": "dev-1", "display_name": "Dev", "desc": "d", "lifetime": "shutdown",
+		}}
+	}
+	t.Run("合法通过", func(t *testing.T) {
+		if msg := validateInlineMembers([]map[string]any{okSpec()}, "leader"); msg != "" {
+			t.Fatalf("不应报错: %s", msg)
+		}
+	})
+	t.Run("member 非对象", func(t *testing.T) {
+		if msg := validateInlineMembers([]map[string]any{{"title": "t", "member": "x"}}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("assignee 与 member_name 冲突", func(t *testing.T) {
+		spec := okSpec()
+		spec["assignee"] = "other"
+		if msg := validateInlineMembers([]map[string]any{spec}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("member_name 非法", func(t *testing.T) {
+		spec := okSpec()
+		spec["member"] = map[string]any{"member_name": "Dev_1", "display_name": "D", "desc": "d", "lifetime": "shutdown"}
+		if msg := validateInlineMembers([]map[string]any{spec}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("批内重名", func(t *testing.T) {
+		if msg := validateInlineMembers([]map[string]any{okSpec(), okSpec()}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("是 leader", func(t *testing.T) {
+		if msg := validateInlineMembers([]map[string]any{okSpec()}, "dev-1"); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("lifetime 非法", func(t *testing.T) {
+		spec := okSpec()
+		spec["member"] = map[string]any{"member_name": "dev-1", "display_name": "D", "desc": "d", "lifetime": "forever"}
+		if msg := validateInlineMembers([]map[string]any{spec}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("isolation 非法", func(t *testing.T) {
+		spec := okSpec()
+		spec["member"] = map[string]any{"member_name": "dev-1", "display_name": "D", "desc": "d",
+			"lifetime": "shutdown", "isolation": "copy"}
+		if msg := validateInlineMembers([]map[string]any{spec}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("缺 display_name", func(t *testing.T) {
+		spec := okSpec()
+		spec["member"] = map[string]any{"member_name": "dev-1", "desc": "d", "lifetime": "shutdown"}
+		if msg := validateInlineMembers([]map[string]any{spec}, ""); msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+}
+
+// TestValidateAssignees_各分支 未知成员 / leader / 已关闭 / 批内成员免探测。
+func TestValidateAssignees_各分支(t *testing.T) {
+	ctx := context.Background()
+	tool, backend := newInlineTaskTool(t)
+	_ = tool
+
+	t.Run("未知成员", func(t *testing.T) {
+		msg := validateAssignees(ctx, backend, []map[string]any{{"title": "t", "assignee": "ghost"}}, false, nil)
+		if msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("assignee 是 leader", func(t *testing.T) {
+		msg := validateAssignees(ctx, backend, []map[string]any{{"title": "t", "assignee": "Leader"}}, false, nil)
+		if msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+	t.Run("批内成员免探测", func(t *testing.T) {
+		msg := validateAssignees(ctx, backend, []map[string]any{{"title": "t", "assignee": "dev-1"}}, false,
+			map[string]struct{}{"dev-1": {}})
+		if msg != "" {
+			t.Fatalf("批内成员应通过: %s", msg)
+		}
+	})
+	t.Run("required 但缺失", func(t *testing.T) {
+		msg := validateAssignees(ctx, backend, []map[string]any{{"title": "t"}}, true, nil)
+		if msg == "" {
+			t.Fatal("应报错")
+		}
+	})
+}
+
+// TestRetiredAssigneeError 已关闭拒绝、关闭中拒绝、其它放行。
+func TestRetiredAssigneeError(t *testing.T) {
+	if msg := retiredAssigneeError("t", "m", string(atschema.MemberStatusShutdown)); msg == "" {
+		t.Fatal("SHUTDOWN 应拒绝")
+	}
+	if msg := retiredAssigneeError("t", "m", string(atschema.MemberStatusShutdownRequested)); msg == "" {
+		t.Fatal("SHUTDOWN_REQUESTED 应拒绝")
+	}
+	if msg := retiredAssigneeError("t", "m", string(atschema.MemberStatusReady)); msg != "" {
+		t.Fatalf("READY 应放行: %s", msg)
+	}
+}
+
+// TestInlineBrief 只有内联成员才带 lifetime。
+func TestInlineBrief(t *testing.T) {
+	lifetimes := map[string]string{"dev-1": "shutdown"}
+	if b := inlineBrief("dev-1", lifetimes); b["lifetime"] != "shutdown" {
+		t.Fatalf("应带 lifetime，实际 %v", b)
+	}
+	if b := inlineBrief("other", lifetimes); b != nil {
+		t.Fatalf("非内联成员不应带 lifetime，实际 %v", b)
+	}
+}
+
+// TestCreateTask_内联成员端到端 建成员 + 绑 assignee + brief 带 lifetime。
+func TestCreateTask_内联成员端到端(t *testing.T) {
+	ctx := context.Background()
+	tool, backend := newInlineTaskTool(t)
+
+	res, err := tool.Invoke(ctx, map[string]any{"tasks": []any{
+		map[string]any{"title": "任务A", "content": "内容", "member": map[string]any{
+			"member_name": "dev-1", "display_name": "Dev", "desc": "开发", "lifetime": "shutdown",
+		}},
+	}})
+	require.NoError(t, err)
+	require.Equal(t, true, res["success"], "应成功: %v", res)
+
+	// 成员已注册且 lifetime 落在 options 里
+	member, getErr := backend.GetMember(ctx, "dev-1")
+	require.NoError(t, getErr)
+	require.NotNil(t, member, "内联成员应已注册")
+	lifetime := database.GetMemberLifetime(member)
+	require.NotNil(t, lifetime)
+	assert.Equal(t, database.MemberLifetimeShutdown, *lifetime)
+
+	// 任务已带 assignee
+	tasks, listErr := backend.TaskManager().ListTasks(ctx, "")
+	require.NoError(t, listErr)
+	require.Len(t, tasks, 1)
+	require.NotNil(t, tasks[0].Assignee)
+	assert.Equal(t, "dev-1", *tasks[0].Assignee)
+	assert.Equal(t, fsm.TaskStatusPending, tasks[0].Status, "调度式创建应停在 PENDING")
+}
+
+// TestCreateTask_内联成员校验失败不落库 校验失败时成员与任务都不应写入。
+func TestCreateTask_内联成员校验失败不落库(t *testing.T) {
+	ctx := context.Background()
+	tool, backend := newInlineTaskTool(t)
+
+	res, err := tool.Invoke(ctx, map[string]any{"tasks": []any{
+		map[string]any{"title": "任务A", "content": "内容", "member": map[string]any{
+			"member_name": "Dev_1", "display_name": "Dev", "desc": "开发", "lifetime": "shutdown",
+		}},
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, false, res["success"])
+
+	assert.False(t, backend.MemberExists(ctx, "Dev_1"), "校验失败不应写成员")
+	tasks, _ := backend.TaskManager().ListTasks(ctx, "")
+	assert.Empty(t, tasks, "校验失败不应写任务")
+}
+
+// TestDiscardInlineMembers 回滚只删 UNSTARTED 的行。
+func TestDiscardInlineMembers(t *testing.T) {
+	ctx := context.Background()
+	_, backend := newInlineTaskTool(t)
+	backend.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	discardInlineMembers(ctx, backend, []string{"dev-1"})
+	assert.False(t, backend.MemberExists(ctx, "dev-1"), "UNSTARTED 行应被删掉")
+
+	// 已启动的成员不应被回滚
+	backend.SpawnMember(ctx, "dev-2", "Dev2", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	backend.db.Member().UpdateMemberStatus(ctx, "dev-2", backend.teamName, string(atschema.MemberStatusReady))
+	discardInlineMembers(ctx, backend, []string{"dev-2"})
+	assert.True(t, backend.MemberExists(ctx, "dev-2"), "离开 UNSTARTED 的行不应被删")
+}
+
+// TestValidateAssignees_team为nil team 为 nil 时跳过存在性探测。
+func TestValidateAssignees_team为nil(t *testing.T) {
+	msg := validateAssignees(context.Background(), nil,
+		[]map[string]any{{"title": "t", "assignee": "anyone"}}, false, nil)
+	if msg != "" {
+		t.Fatalf("team 为 nil 应跳过探测: %s", msg)
+	}
+}
+
+// TestMaterializeInlineMembers_跳过非法member member 缺失或非对象时跳过该 spec。
+func TestMaterializeInlineMembers_跳过非法member(t *testing.T) {
+	ctx := context.Background()
+	_, backend := newInlineTaskTool(t)
+	specs := []map[string]any{
+		{"title": "无 member"},
+		{"title": "member 非对象", "member": "x"},
+	}
+	created, lifetimes := materializeInlineMembers(ctx, backend, specs)
+	assert.Empty(t, created)
+	assert.Empty(t, lifetimes)
+}
+
+// TestMaterializeInlineMembers_成员已存在时回滚 已存在的成员名导致整批回滚。
+func TestMaterializeInlineMembers_成员已存在时回滚(t *testing.T) {
+	ctx := context.Background()
+	_, backend := newInlineTaskTool(t)
+	// 预先占住 dev-1
+	backend.SpawnMember(ctx, "dev-1", "Old", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	specs := []map[string]any{
+		{"title": "t1", "member": map[string]any{"member_name": "dev-2", "display_name": "D2", "desc": "d", "lifetime": "shutdown"}},
+		{"title": "t2", "member": map[string]any{"member_name": "dev-1", "display_name": "D1", "desc": "d", "lifetime": "shutdown"}},
+	}
+	created, _ := materializeInlineMembers(ctx, backend, specs)
+	assert.Nil(t, created, "已存在成员应导致整批放弃")
+	assert.False(t, backend.MemberExists(ctx, "dev-2"), "先写入的成员应被回滚")
+	assert.True(t, backend.MemberExists(ctx, "dev-1"), "原有成员不应被删")
 }

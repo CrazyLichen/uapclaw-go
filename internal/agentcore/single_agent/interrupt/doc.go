@@ -23,7 +23,8 @@
 //	├── response.go      # InterruptRequest（中断请求） + ToolCallInterruptRequest（工具调用中断请求）（re-export 自 sa/schema）
 //	├── exception.go     # ToolInterruptException（工具中断异常）（re-export 自 sa/schema）
 //	├── state.go         # 常量 + 中断状态类型（re-export 自 sa/schema）
-//	└── handler.go       # ResumeContext（恢复上下文） + InterruptAgent（中断Agent） + ExecuteToolCallFunc（执行工具调用函数） + ToolInterruptHandler（工具中断处理器）
+//	├── handler.go       # ResumeContext（恢复上下文） + InterruptAgent（中断Agent） + ExecuteToolCallFunc（执行工具调用函数） + ToolInterruptHandler（工具中断处理器）
+//	└── answer_attribution.go # 恢复输入按 interrupt_id/owner 归属（_attribute_answers 等）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/interrupt/
 package interrupt

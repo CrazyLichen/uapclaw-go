@@ -454,7 +454,7 @@ func (c *FileGuardChecker) resolveOne(pathPosix string, action FileAction) (secu
 		}
 		prefix := strings.TrimSuffix(rule.Path, "/")
 		if pathPosix == prefix || strings.HasPrefix(pathPosix, prefix+"/") {
-			// also accept contains_path for Windows drive quirks
+			// Windows 盘符写法差异：额外用 contains_path 兜一层
 			if containsPath(prefix, pathPosix) || pathPosix == prefix || strings.HasPrefix(pathPosix, prefix+"/") {
 				if bestPrefixRule == nil || len(prefix) > bestPrefixLen {
 					bestPrefixLen = len(prefix)
@@ -540,7 +540,7 @@ func normalizeLegacy(ext any, workspaceRoot string, trustedDirs []string, fileGu
 			rules = append(rules, *rule)
 		}
 	}
-	// 2. trusted_dirs
+	// 2. trusted_dirs 可信目录
 	for _, td := range trustedDirs {
 		if rule := compilePathEntry(td, levelPtr("allow"), levelPtr("allow"), levelPtr("ask"), matchPrefix, security.PermissionLevelAsk); rule != nil {
 			rules = append(rules, *rule)
@@ -619,7 +619,7 @@ func normalizeNative(fg map[string]any, ext any, workspaceRoot string, trustedDi
 	}
 
 	rules := make([]FileGuardPathRule, 0, 4)
-	// 1. file_guard.paths
+	// 1. file_guard.paths 精确路径规则
 	for _, item := range pathListOf(fg["paths"]) {
 		pathV, ok := item["path"].(string)
 		if !ok || strings.TrimSpace(pathV) == "" {
@@ -645,7 +645,7 @@ func normalizeNative(fg map[string]any, ext any, workspaceRoot string, trustedDi
 	if rule := compileWorkspaceAxisRule(fg["workspace"], workspaceRoot); rule != nil {
 		rules = append(rules, *rule)
 	}
-	// 3. trusted_dirs
+	// 3. trusted_dirs 可信目录
 	for _, td := range trustedDirs {
 		if rule := compilePathEntry(td, levelPtr("allow"), levelPtr("allow"), levelPtr("ask"), matchPrefix, security.PermissionLevelAsk); rule != nil {
 			rules = append(rules, *rule)

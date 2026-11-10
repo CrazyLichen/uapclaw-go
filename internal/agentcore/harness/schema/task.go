@@ -404,7 +404,7 @@ func (tp *TaskPlan) lock() *sync.RWMutex {
 	return tp.mu
 }
 
-// allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）。
+// allDepsCompletedLocked 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）。
 // 调用方（GetNextTask）已持有读锁，此处直接遍历不加锁。
 func (tp *TaskPlan) allDepsCompletedLocked(task TodoItem) bool {
 	for _, depID := range task.DependsOn {

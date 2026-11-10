@@ -130,6 +130,8 @@ type TaskCreateTool struct {
 	TeamTool
 	// taskManager 任务管理器
 	taskManager *TeamTaskManager
+	// team 团队后端（内联成员注册与回滚需要）
+	team *TeamBackend
 }
 
 // ViewTaskTool 查看任务工具（V2 统一）。
@@ -180,8 +182,6 @@ type SendMessageTool struct {
 	messageManager *TeamMessageManager
 	// team 团队后端实例
 	team *TeamBackend
-	// onTeammateCreated 队友创建回调
-	onTeammateCreated func(ctx context.Context, memberName string) error
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -232,13 +232,11 @@ var memberSet = mergeSets(memberOnlySet, sharedSet)
 // 参数：
 //   - teamBackend: TeamBackend 门面实例
 //   - opts: 配置项（角色、模式、语言等）
-//   - onTeammateCreated: Teammate 创建回调（可选）
 //   - modelConfigAlloc: 模型配置分配器（可选）
 //   - excludeTools: 排除的工具名集合（可选）
 func CreateTeamTools(
 	teamBackend *TeamBackend,
 	opts TeamToolOptions,
-	onTeammateCreated func(ctx context.Context, memberName string) error,
 	modelConfigAlloc func(modelName string) *models.Allocation,
 	excludeTools map[string]struct{},
 ) []tool.Tool {
@@ -275,7 +273,7 @@ func CreateTeamTools(
 		allTools["member_complete_task"] = newMemberCompleteTaskTool(taskMgr, t)
 	}
 	if msgMgr != nil {
-		allTools["send_message"] = newSendMessageTool(msgMgr, t, teamBackend, onTeammateCreated)
+		allTools["send_message"] = newSendMessageTool(msgMgr, t, teamBackend)
 	}
 
 	// 角色过滤
@@ -321,29 +319,6 @@ func CreateTeamTools(
 	}
 
 	return result
-}
-
-// QualifyTeamToolIDs 为工具 ID 添加 team.member 后缀，避免 inprocess 模式下的 ID 冲突。
-// Python: qualify_team_tool_ids() (rails/team_tool_rail.py L174)
-func QualifyTeamToolIDs(tools []tool.Tool, teamName string, memberName string) {
-	teamKey := teamName
-	if teamKey == "" {
-		teamKey = "default"
-	}
-	memberKey := memberName
-	if memberKey == "" {
-		memberKey = "unknown"
-	}
-	for _, tl := range tools {
-		card := tl.Card()
-		if card == nil || card.ID == "" {
-			continue
-		}
-		qualifiedID := fmt.Sprintf("%s.%s.%s", card.ID, teamKey, memberKey)
-		if card.ID != qualifiedID {
-			card.ID = qualifiedID
-		}
-	}
 }
 
 // MemberNameRegexp 返回成员名校验正则（用于 SpawnMemberTool 校验）。
@@ -506,6 +481,8 @@ func newTaskCreateTool(agentTeam *TeamBackend, t locales.Translator) *TaskCreate
 				schema.NewStringParam("item", "", false)),
 			schema.NewArrayParam("depended_by", t("create_task", "task.depended_by"), false,
 				schema.NewStringParam("item", "", false)),
+			schema.NewStringParam("assignee", t("create_task", "task.assignee"), false),
+			inlineMemberParam(t),
 		},
 		AdditionalProperties: true,
 	}
@@ -515,6 +492,7 @@ func newTaskCreateTool(agentTeam *TeamBackend, t locales.Translator) *TaskCreate
 				schema.NewArrayParam("tasks", t("create_task", "tasks"), true, taskSchema),
 			}, nil)),
 		taskManager: agentTeam.TaskManager(),
+		team:        agentTeam,
 	}
 }
 
@@ -592,7 +570,7 @@ func newMemberCompleteTaskTool(taskManager *TeamTaskManager, t locales.Translato
 }
 
 // newSendMessageTool 创建 SendMessageTool 实例。
-func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *TeamBackend, onCreated func(ctx context.Context, memberName string) error) *SendMessageTool {
+func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *TeamBackend) *SendMessageTool {
 	toParam := &schema.Param{
 		Name: "to", Type: schema.ParamTypeString, Required: true,
 		Description: t("send_message", "to"),
@@ -609,9 +587,8 @@ func newSendMessageTool(msgMgr *TeamMessageManager, t locales.Translator, team *
 				schema.NewStringParam("content", t("send_message", "content"), true),
 				schema.NewStringParam("summary", t("send_message", "summary"), false),
 			}, nil)),
-		messageManager:    msgMgr,
-		team:              team,
-		onTeammateCreated: onCreated,
+		messageManager: msgMgr,
+		team:           team,
 	}
 }
 
@@ -831,7 +808,7 @@ func (t *ListMembersTool) Invoke(ctx context.Context, _ map[string]any, _ ...too
 			"mode":             m.Mode,
 			"role":             m.Role,
 			"prompt":           m.Prompt,
-			"model_ref_json":   m.ModelRefJSON,
+			"options":          m.Options,
 			"updated_at":       m.UpdatedAt,
 		}
 	}
@@ -850,6 +827,56 @@ func (t *TaskCreateTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 		return toolError("'tasks' is required")
 	}
 
+	// 步骤 1: 收集 spec（后续校验/建成员都在这份切片上做）
+	specs := make([]map[string]any, 0, len(tasksRaw))
+	for _, raw := range tasksRaw {
+		if spec, isMap := raw.(map[string]any); isMap {
+			specs = append(specs, spec)
+		}
+	}
+	if len(specs) == 0 {
+		return toolError("Invalid task spec")
+	}
+
+	// 步骤 2: 内联成员批量校验（任何写入之前）
+	leaderName := ""
+	if t.team != nil {
+		leaderName = t.team.ResolveLeaderMemberName(ctx)
+	}
+	if msg := validateInlineMembers(specs, leaderName); msg != "" {
+		return toolError(msg)
+	}
+
+	// 步骤 3: assignee 校验（内联成员名先算作合法 owner）
+	batchMembers := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		if member, isMap := spec["member"].(map[string]any); isMap {
+			if name := strings.TrimSpace(stringField(member, "member_name")); name != "" {
+				batchMembers[name] = struct{}{}
+			}
+		}
+	}
+	if msg := validateAssignees(ctx, t.team, specs, false, batchMembers); msg != "" {
+		return toolError(msg)
+	}
+
+	// 步骤 4: 物化内联成员（失败时内部已回滚此前写入的行）
+	var inlineLifetimes map[string]string
+	if t.team != nil {
+		created, lifetimes := materializeInlineMembers(ctx, t.team, specs)
+		inlineLifetimes = lifetimes
+		// 有任何内联成员没写成 → 整批拒绝（对齐上游"图没落地就撤成员"）
+		declared := 0
+		for _, spec := range specs {
+			if _, has := spec["member"]; has {
+				declared++
+			}
+		}
+		if len(created) != declared {
+			return toolError("create_task: failed to register inline member(s); no task was created")
+		}
+	}
+
 	// 单任务快速路径
 	if len(tasksRaw) == 1 {
 		spec, _ := tasksRaw[0].(map[string]any)
@@ -862,13 +889,21 @@ func (t *TaskCreateTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 			return toolError(fmt.Sprintf("Task %q missing required title/content", specLabel(spec)))
 		}
 		result, err := t.createOne(ctx, spec)
-		if err != nil {
-			return toolError(err.Error())
-		}
-		if !result.Ok() {
+		if err != nil || !result.Ok() {
+			// 任务没落地 → 把本批写入的内联成员撤掉（对齐上游补偿语义）
+			if t.team != nil {
+				discardInlineMembers(ctx, t.team, inlineMemberNames(specs))
+			}
+			if err != nil {
+				return toolError(err.Error())
+			}
 			return toolError(result.Reason)
 		}
-		return toolSuccess(taskBrief(result.Task))
+		brief := taskBrief(result.Task)
+		for k, v := range inlineBrief(assigneeOf(spec), inlineLifetimes) {
+			brief[k] = v
+		}
+		return toolSuccess(brief)
 	}
 
 	// 批量路径
@@ -913,6 +948,13 @@ func (t *TaskCreateTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 	briefs := make([]map[string]any, len(created))
 	for i, task := range created {
 		briefs[i] = taskBrief(task)
+		assignee := ""
+		if task.Assignee != nil {
+			assignee = *task.Assignee
+		}
+		for k, v := range inlineBrief(assignee, inlineLifetimes) {
+			briefs[i][k] = v
+		}
 	}
 	return toolSuccess(map[string]any{
 		"tasks":    briefs,
@@ -941,8 +983,11 @@ func (t *TaskCreateTool) createOne(ctx context.Context, spec map[string]any) (*T
 
 	// 普通路径
 	dependsOn := extractStringSlice(spec, "depends_on")
-	task, err := t.taskManager.Add(ctx, title, content,
-		WithTaskID(taskID), WithDependencies(dependsOn))
+	addOpts := []TaskAddOption{WithTaskID(taskID), WithDependencies(dependsOn)}
+	if assignee := assigneeOf(spec); assignee != "" {
+		addOpts = append(addOpts, WithTaskAssignee(assignee))
+	}
+	task, err := t.taskManager.Add(ctx, title, content, addOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1497,10 +1542,12 @@ func (t *SendMessageTool) multicast(ctx context.Context, targets []any, content,
 
 // autoStartMembers Leader 自动启动未启动的成员（对齐 Python SendMessageTool._auto_start_members）。
 func (t *SendMessageTool) autoStartMembers(ctx context.Context) {
-	if t.team == nil || t.onTeammateCreated == nil || !t.team.IsLeader() {
+	if t.team == nil {
 		return
 	}
-	started, err := t.team.Startup(ctx, t.onTeammateCreated)
+	// 回调与 leader 判定都在 AutostartUnstarted 内部（对齐上游 callback-gated）。
+	// 消息路径不是广播，task-scoped 且无开放任务的成员留到有活儿再叫。
+	started, err := t.team.AutostartUnstarted(ctx, false)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("auto_start_members failed")
 	}
@@ -1576,4 +1623,274 @@ func extractStringSlice(m map[string]any, key string) []string {
 		}
 		return result
 	}
+}
+
+// ──────────────────────────── 内联成员 ────────────────────────────
+
+// inlineMemberLifetimes 内联成员的合法退役策略。
+// Python: _MEMBER_LIFETIMES (tool_task.py:82)
+var inlineMemberLifetimes = []string{"shutdown", "dormant"}
+
+// inlineMemberParam 构造 create_task 的 member 对象 schema。
+//
+// ⤵️ 上游 member 还支持 expert / group / cli_agent / external_cli（模板成员与
+// 外部 CLI 成员）；Go 侧专家域与外部 CLI 域均未迁移，故不声明这些字段——
+// 声明了却没有实现会让模型以为可用。
+//
+// Python: _inline_member_schema (tool_task.py:85-141)
+func inlineMemberParam(t locales.Translator) *schema.Param {
+	lifetime := schema.NewStringParam("lifetime", t("create_task", "task.member.lifetime"), true)
+	lifetime.Enum = []any{inlineMemberLifetimes[0], inlineMemberLifetimes[1]}
+	isolation := schema.NewStringParam("isolation", t("create_task", "task.member.isolation"), false)
+	isolation.Enum = []any{"worktree"}
+	return &schema.Param{
+		Name: "member", Type: schema.ParamTypeObject,
+		Properties: []*schema.Param{
+			schema.NewStringParam("member_name", t("create_task", "task.member.member_name"), true),
+			schema.NewStringParam("display_name", t("create_task", "task.member.display_name"), false),
+			schema.NewStringParam("desc", t("create_task", "task.member.desc"), false),
+			schema.NewStringParam("prompt", t("create_task", "task.member.prompt"), false),
+			lifetime,
+			isolation,
+		},
+	}
+}
+
+// validateInlineMembers 对一批内联 member 做纯校验（任何写入之前）。
+//
+// 一条任务只有一个主人：与 member 同时出现的 assignee 必须重复该内联成员名
+// （冗余但无歧义，容忍）；写了别人就是冲突。此外 member_name 要合法、批内唯一、
+// 不能是 leader；普通内联成员必须给 display_name 与 desc；lifetime 必须已知。
+//
+// ⤵️ 上游还会校验 expert / group / cli_agent / external_cli 的交叉规则；
+// 这些域未迁移，schema 也不声明，故此处不做。
+//
+// Python: _validate_inline_members (tool_task.py:215-292)
+func validateInlineMembers(tasks []map[string]any, leaderMemberName string) string {
+	seen := make(map[string]struct{}, len(tasks))
+	for _, spec := range tasks {
+		rawMember, hasMember := spec["member"]
+		if !hasMember || rawMember == nil {
+			continue
+		}
+		member, ok := rawMember.(map[string]any)
+		if !ok {
+			return fmt.Sprintf("Task %q: 'member' must be an object", specLabel(spec))
+		}
+		name := strings.TrimSpace(stringField(member, "member_name"))
+		assignee := strings.TrimSpace(stringField(spec, "assignee"))
+		if assignee != "" && assignee != name {
+			return fmt.Sprintf(
+				"Task %q: 'assignee' %q conflicts with inline member %q — a task has one owner; "+
+					"keep only 'member' to create %q, or only 'assignee' to give it to %q",
+				specLabel(spec), assignee, name, name, assignee)
+		}
+		if name == "" || !memberNamePattern.MatchString(name) {
+			return fmt.Sprintf(
+				"Task %q: member.member_name %q must start with a lowercase ASCII letter (a-z), "+
+					"followed by lowercase letters, digits (0-9) or hyphen (-)",
+				specLabel(spec), name)
+		}
+		if _, dup := seen[name]; dup {
+			return fmt.Sprintf("Task %q: member.member_name %q is declared twice in this call",
+				specLabel(spec), name)
+		}
+		seen[name] = struct{}{}
+		if leaderMemberName != "" && name == leaderMemberName {
+			return fmt.Sprintf("Task %q: member.member_name %q is the team leader",
+				specLabel(spec), name)
+		}
+		isolation := strings.TrimSpace(stringField(member, "isolation"))
+		if isolation != "" && isolation != "worktree" {
+			return fmt.Sprintf("Task %q: member.isolation must be 'worktree' or omitted",
+				specLabel(spec))
+		}
+		for _, key := range []string{"display_name", "desc"} {
+			if strings.TrimSpace(stringField(member, key)) == "" {
+				return fmt.Sprintf("Task %q: member.%s is required", specLabel(spec), key)
+			}
+		}
+		lifetime := strings.TrimSpace(stringField(member, "lifetime"))
+		if !containsString(inlineMemberLifetimes, lifetime) {
+			return fmt.Sprintf("Task %q: member.lifetime must be one of %s",
+				specLabel(spec), strings.Join(inlineMemberLifetimes, ", "))
+		}
+	}
+	return ""
+}
+
+// validateAssignees 拒绝缺失、未知、已离开或指向 leader 的 assignee。
+//
+// SHUTDOWN 成员已永久离开团队：没有任何启动路径能把它叫回来，交给它的任务
+// 会烂在板上。正在关闭的（SHUTDOWN_REQUESTED）也拒绝——它可能落进 SHUTDOWN
+// （leader 强制关闭对 dormant 也生效），这段窗口里接受的任务会被起在一个已经
+// 不在的成员上。正在落进 DORMANT 的成员可以接，落定后就能干。
+//
+// batchMembers 是本次调用声明的内联成员名：它们在校验之后才写进名册，所以
+// assignee 指向它们时不必做存在性探测。
+//
+// Python: _validate_assignees (tool_task.py:455-501)
+func validateAssignees(
+	ctx context.Context,
+	team *TeamBackend,
+	tasks []map[string]any,
+	required bool,
+	batchMembers map[string]struct{},
+) string {
+	leaderMemberName := ""
+	if team != nil {
+		leaderMemberName = team.ResolveLeaderMemberName(ctx)
+	}
+	for _, spec := range tasks {
+		assignee := strings.TrimSpace(stringField(spec, "assignee"))
+		if assignee == "" {
+			if required {
+				return fmt.Sprintf("Task %q missing required 'assignee' — "+
+					"assigned tasks must name a non-leader team member", specLabel(spec))
+			}
+			continue
+		}
+		if leaderMemberName != "" && assignee == leaderMemberName {
+			return fmt.Sprintf("Task %q: assignee %q is the team leader; "+
+				"assign the task to a non-leader member", specLabel(spec), assignee)
+		}
+		if _, inline := batchMembers[assignee]; inline {
+			continue
+		}
+		if team == nil {
+			continue
+		}
+		status, found := team.GetMemberStatus(ctx, assignee)
+		if !found {
+			return fmt.Sprintf("Task %q: member %q not found in the team", specLabel(spec), assignee)
+		}
+		if msg := retiredAssigneeError(specLabel(spec), assignee, status); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}
+
+// retiredAssigneeError 拒绝把任务交给已离开或正在离开团队的成员。
+// Python: _retired_assignee_error (tool_task.py:509-545)
+func retiredAssigneeError(label, assignee, status string) string {
+	if _, departed := atschema.MemberDepartedStatuses()[atschema.MemberStatus(status)]; !departed {
+		return ""
+	}
+	if status == string(atschema.MemberStatusShutdown) {
+		return fmt.Sprintf("Task %q: member %q has shut down and cannot be started again; "+
+			"spawn a new member for this task or assign it to another live member", label, assignee)
+	}
+	return fmt.Sprintf("Task %q: member %q is shutting down and cannot take new work; "+
+		"assign it to another live member", label, assignee)
+}
+
+// materializeInlineMembers 为每个内联 member 写一条 UNSTARTED 名册行并绑为 assignee。
+//
+// 只做注册——走与 spawn_teammate 同一个 RegisterTeammate，因此"注册/启动分离"
+// 成立：任务上板后由调度器的交接把成员叫起来。返回已写入的名字（供任务失败时
+// 补偿）与每个成员的 lifetime（供 brief 渲染）。后续成员被拒时，此前写入的行
+// 在这里回滚。
+//
+// ⤵️ 上游的 expert / cli_agent 两条分支未实现（依赖未迁移的专家域与外部 CLI 域）。
+//
+// Python: _materialize_inline_members (tool_task.py:304-397)
+func materializeInlineMembers(ctx context.Context, team *TeamBackend, tasks []map[string]any) ([]string, map[string]string) {
+	created := make([]string, 0, len(tasks))
+	lifetimes := make(map[string]string, len(tasks))
+	for _, spec := range tasks {
+		rawMember, hasMember := spec["member"]
+		if !hasMember || rawMember == nil {
+			continue
+		}
+		member, ok := rawMember.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(stringField(member, "member_name"))
+		if team.MemberExists(ctx, name) {
+			discardInlineMembers(ctx, team, created)
+			return nil, lifetimes
+		}
+		displayName := strings.TrimSpace(stringField(member, "display_name"))
+		desc := strings.TrimSpace(stringField(member, "desc"))
+		var prompt *string
+		if p := strings.TrimSpace(stringField(member, "prompt")); p != "" {
+			prompt = &p
+		}
+		lifetime := strings.TrimSpace(stringField(member, "lifetime"))
+		opts := make([]SpawnMemberOption, 0, 2)
+		if lifetime != "" {
+			lt := database.MemberLifetime(lifetime)
+			opts = append(opts, WithLifetime(&lt))
+		}
+		if isolation := strings.TrimSpace(stringField(member, "isolation")); isolation != "" {
+			opts = append(opts, WithIsolation(isolation))
+		}
+		// allocation 传 nil：SpawnMember 内部会走 backend 的 modelConfigAllocator，
+		// 与上游 allocate(...) 回调同语义。
+		if result := RegisterTeammate(team, name, displayName, desc, prompt, nil, opts...); !result.OK {
+			discardInlineMembers(ctx, team, created)
+			return nil, lifetimes
+		}
+		created = append(created, name)
+		lifetimes[name] = lifetime
+		spec["assignee"] = name
+	}
+	return created, lifetimes
+}
+
+// discardInlineMembers 回滚任务批次没落地的内联成员行。
+// Python: _discard_inline_members (tool_task.py:443-451)
+func discardInlineMembers(ctx context.Context, team *TeamBackend, names []string) {
+	for _, name := range names {
+		if team.DeleteUnstartedMember(ctx, name) {
+			continue
+		}
+		logger.Warn(logComponent).Str("member_name", name).
+			Msg("create_task: inline member could not be rolled back")
+	}
+}
+
+// inlineBrief 给由内联成员担任 assignee 的 brief 标注其 lifetime。
+// Python: _inline_brief (tool_task.py:810-813)
+func inlineBrief(assignee string, lifetimes map[string]string) map[string]any {
+	if lifetime := lifetimes[assignee]; lifetime != "" {
+		return map[string]any{"lifetime": lifetime}
+	}
+	return nil
+}
+
+// inlineMemberNames 取出这批 spec 声明的内联成员名。
+func inlineMemberNames(specs []map[string]any) []string {
+	names := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		if member, isMap := spec["member"].(map[string]any); isMap {
+			if name := strings.TrimSpace(stringField(member, "member_name")); name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// assigneeOf 取 spec 的 assignee（内联成员物化后已写回该字段）。
+func assigneeOf(spec map[string]any) string {
+	return strings.TrimSpace(stringField(spec, "assignee"))
+}
+
+// containsString 判断切片是否含目标串。
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+// stringField 从 map 里取字符串字段（缺失或类型不符返回空串）。
+func stringField(m map[string]any, key string) string {
+	v, _ := m[key].(string)
+	return v
 }

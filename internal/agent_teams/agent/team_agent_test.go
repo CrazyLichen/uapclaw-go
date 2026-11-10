@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	harness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
@@ -592,13 +594,24 @@ func TestTeamAgent_Invoke(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestTeamAgent_Stream 测试流式调用
+// TestTeamAgent_Stream 未配置时返回**已关闭**的空流。
+//
+// 上游 team_agent.py:958-980 的 stream 是 async generator：无条件走流程，
+// generator 自然 return 等价于流立即结束，不存在「返回 nil 流」这一态。
+// Go 用 channel 表达流，返回 nil channel 会让下游 `for range agentCh`
+// 永久阻塞（连带 mergedCh 的 defer close 执行不到）。故返回已关闭通道。
 func TestTeamAgent_Stream(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(context.Background(), card)
 	result, err := a.Stream(context.Background(), map[string]any{"input": "hello"})
-	assert.Nil(t, result)
 	assert.NoError(t, err)
+	assert.NotNil(t, result, "不得返回 nil channel（下游 range 会永久阻塞）")
+	select {
+	case _, ok := <-result:
+		assert.False(t, ok, "通道必须已关闭")
+	case <-time.After(time.Second):
+		t.Fatal("未配置时通道应立即关闭")
+	}
 }
 
 // TestTeamAgent_属性代理_configurator为nil 测试 configurator 为 nil 时返回零值
@@ -804,4 +817,19 @@ func TestTeamAgent_Configure后markTeamCleaned(t *testing.T) {
 	err := a.markTeamCleaned(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, a.state.TeamCleaned)
+}
+
+// TestTeamAgent_AnnounceTaskRevisions_无harness返回nil 未装配 harness 时静默跳过。
+func TestTeamAgent_AnnounceTaskRevisions_无harness返回nil(t *testing.T) {
+	a := NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	assert.NoError(t, a.AnnounceTaskRevisions(context.Background()))
+}
+
+// TestTeamAgent_AnnounceTaskRevisions_转发到harness harness 就位后转发（harness 无 tracker 时静默）。
+func TestTeamAgent_AnnounceTaskRevisions_转发到harness(t *testing.T) {
+	a := NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	require.NotNil(t, a.configurator, "NewTeamAgent 应建出 configurator")
+	a.configurator.SetHarness(&harness.TeamHarness{})
+
+	assert.NoError(t, a.AnnounceTaskRevisions(context.Background()))
 }

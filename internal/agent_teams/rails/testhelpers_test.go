@@ -1,6 +1,7 @@
 package rails
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	"context"
@@ -13,7 +14,11 @@ import (
 // ──────────────────────────── 测试替身 ────────────────────────────
 
 // fakeTaskTracker 任务通知器的测试替身。
+//
+// 嵌入 tracker.UnimplementedTaskEventTracker 补齐 Announce/Wakes/Release
+// （规则 10：接口扩张时改替身，不改接口）。
 type fakeTaskTracker struct {
+	tracker.UnimplementedTaskEventTracker
 	// notice 待发的通知（取一次即清空，模拟真实 tracker 的「先 claim 先得」）
 	notice *tracker.ClaimedNotice
 	// persistCount persist 被调用次数
@@ -97,3 +102,11 @@ func newTestCallbackContextWithSession(
 
 // 确保导入被使用。
 var _ = testing.Short
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeSessionFacade) GetParentSessionID() string { return "" }

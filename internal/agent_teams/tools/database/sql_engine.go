@@ -411,6 +411,9 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 	// Python: await conn.run_sync(_ensure_team_member_role_column) — 迁移补 role 列
 	ensureTeamMemberRoleColumn(db)
 
+	// Python: await conn.run_sync(_ensure_team_member_options_column) — 补 options 列并合并 legacy
+	ensureTeamMemberOptionsColumn(db)
+
 	// Python: await conn.run_sync(_ensure_team_info_capability_columns) — 迁移补能力列
 	ensureTeamInfoCapabilityColumns(db)
 
@@ -435,6 +438,68 @@ func ensureTeamMemberRoleColumn(db *gorm.DB) {
 	// 补列：对齐 Python ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'
 	db.Exec("ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'")
 	logger.Info(logComponent).Msg("migrating team_member table: adding role column with default 'teammate'")
+}
+
+// ensureTeamMemberOptionsColumn 为已存在的 team_member 表补齐 options 列，
+// 把 legacy model_ref_json 的内容合并进 options，然后删除旧列。
+//
+// AutoMigrate 只建缺失的表、只加缺失的列，不会改存量行；因此升级上来的库里
+// options 列是新加的空列，而 model_ref 只存在于 model_ref_json。这里逐行合并，
+// 让老数据在新代码下仍能读到模型引用；合并完成后旧列即无用，一并删掉。
+//
+// Python: _ensure_team_member_options_column (database/engine.py L350-381)
+func ensureTeamMemberOptionsColumn(db *gorm.DB) {
+	columns, err := db.Migrator().ColumnTypes(&TeamMember{})
+	if err != nil {
+		return
+	}
+	hasOptions, hasLegacy := false, false
+	for _, col := range columns {
+		switch col.Name() {
+		case "options":
+			hasOptions = true
+		case "model_ref_json":
+			hasLegacy = true
+		}
+	}
+	if !hasOptions {
+		db.Exec("ALTER TABLE team_member ADD COLUMN options TEXT")
+		logger.Info(logComponent).Msg("migrating team_member table: adding options column")
+	}
+	if !hasLegacy {
+		return
+	}
+
+	// 合并阶段：用 row struct 读取（此时 ModelRefJSON 字段已删除，故走原生 SQL）
+	type legacyRow struct {
+		MemberName   string
+		TeamName     string
+		Options      string
+		ModelRefJSON string
+	}
+	var rows []legacyRow
+	if err := db.Table("team_member").
+		Select("member_name, team_name, options, model_ref_json").
+		Scan(&rows).Error; err != nil {
+		logger.Warn(logComponent).Err(err).Msg("migrating team_member options: read legacy rows failed")
+		return
+	}
+	for _, row := range rows {
+		merged := MergeLegacyMemberOptions(row.Options, nil, row.ModelRefJSON)
+		if merged == row.Options {
+			continue
+		}
+		db.Exec(
+			"UPDATE team_member SET options = ? WHERE member_name = ? AND team_name = ?",
+			merged, row.MemberName, row.TeamName,
+		)
+	}
+	if dropErr := db.Exec("ALTER TABLE team_member DROP COLUMN model_ref_json").Error; dropErr != nil {
+		logger.Warn(logComponent).Err(dropErr).
+			Msg("migrating team_member options: drop legacy model_ref_json failed")
+		return
+	}
+	logger.Info(logComponent).Msg("migrating team_member options: merged legacy model_ref_json and dropped the column")
 }
 
 // ensureTeamInfoCapabilityColumns 为已存在的 team_info 表补齐 F_62 能力列。

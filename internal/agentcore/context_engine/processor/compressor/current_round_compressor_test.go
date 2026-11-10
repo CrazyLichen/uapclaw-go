@@ -1892,3 +1892,11 @@ func TestCurrentRoundCompressorConfig_GetModel(t *testing.T) {
 		t.Errorf("GetModel 应返回已设置的 Model")
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *crcFakeBaseModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *crcFakeBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

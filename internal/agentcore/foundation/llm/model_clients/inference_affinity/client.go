@@ -758,3 +758,23 @@ func (c *InferenceAffinityModelClient) sanitizeToolCalls(messages []map[string]a
 		msg["tool_calls"] = cleaned
 	}
 }
+
+// SupportsKVCacheAffinity 本客户端支持 Ascend KV cache 亲和协议。
+// Python: InferenceAffinityModelClient.supports_kv_cache_affinity() -> True
+func (c *InferenceAffinityModelClient) SupportsKVCacheAffinity() bool { return true }
+
+// BuildKVCacheAffinityInvokeKwargs 构造 agent_hint 亲和参数。
+// 与 injectCacheOptions（:592）共用 cache_sharing/cache_salt 语义，不另造字段。
+// Python: InferenceAffinityModelClient.build_kv_cache_affinity_invoke_kwargs()
+func (c *InferenceAffinityModelClient) BuildKVCacheAffinityInvokeKwargs(
+	_ any, sessionID, parentSessionID string, turnNum int,
+) map[string]any {
+	return map[string]any{
+		"session_id":               sessionID,
+		"parent_session_id":        parentSessionID,
+		"turn_num":                 turnNum,
+		"enable_kv_cache_affinity": true,
+		"cache_sharing":            true,
+		"cache_salt":               sessionID,
+	}
+}

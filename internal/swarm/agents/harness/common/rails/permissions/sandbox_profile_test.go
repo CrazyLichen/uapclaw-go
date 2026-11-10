@@ -8,11 +8,11 @@ import (
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 )
 
-// ──────────────────────────── sandbox_profile ────────────────────────────
+// ──────────────────────────── sandbox_profile 沙箱描述符构建 ────────────────────────────
 
 // TestBuildSandboxProfile_三种形态 测试 nil / map / struct 三种输入
 func TestBuildSandboxProfile_三种形态(t *testing.T) {
-	// nil
+	// nil 空输入
 	if got := BuildSandboxProfile(nil); got != (SandboxDescriptor{}) {
 		t.Errorf("nil 应返回空描述符，got %+v", got)
 	}
@@ -75,7 +75,7 @@ func TestValueGet_各形态(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── native_path_context ────────────────────────────
+// ──────────────────────────── native_path_context 原生路径上下文 ────────────────────────────
 
 // TestNativeArgumentsJSON_ASCII转义 测试非 ASCII 被转义（对齐 ensure_ascii=True）
 //

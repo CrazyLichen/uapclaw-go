@@ -11,6 +11,7 @@
 //	tools/
 //	├── doc.go                    # 包文档
 //	├── team_tool.go              # TeamTool 团队工具基类 ✅ 9.66
+//	├── async_tool_host.go        # 异步工具宿主窄接口 + BuildContext 句柄键（25.1d）
 //	├── team_tool_map_result.go   # 14 个 TeamTool 子类的 MapResult 方法 ✅ 9.69
 //	├── team_tools.go             # BuildTeamTool 等 14 个 TeamTool 子类定义
 //	├── team_backend.go      # TeamBackend 门面（30+ 方法 + Functional Options） ✅ 9.65a-4

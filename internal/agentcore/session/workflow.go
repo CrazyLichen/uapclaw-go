@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -117,4 +118,19 @@ func (ws *WorkflowSession) Close() error {
 // Inner 返回内部 WorkflowSession 实例（用于高级场景）
 func (ws *WorkflowSession) Inner() *internal.WorkflowSession {
 	return ws.inner
+}
+
+// ──────────────────────────── 导出函数（续：KV 亲和访问器） ────────────────────────────
+
+// GetCacheIdentity 返回默认缓存身份（本类型无独立 cache identity，返回零值）。
+// Python: 各 Session 子类的 get_cache_identity；Go 侧未迁该能力时由
+// kv_cache.ResolveSessionLineage 的 fallback 链兜住。
+func (ws *WorkflowSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回父会话标识；本类型无父会话，返回空串。
+// Python: agent.py:74 get_parent_session_id() -> str | None
+func (ws *WorkflowSession) GetParentSessionID() string {
+	return ""
 }

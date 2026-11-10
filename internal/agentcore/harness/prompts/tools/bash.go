@@ -93,10 +93,7 @@ While the bash tool can do similar things, it is better to use the built-in tool
 
 // GetBashInputParams 构建 bash 工具的参数 Schema
 func GetBashInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"command":           {"cn": "要执行的命令", "en": "The command to execute"},
 		"timeout":           {"cn": "可选超时时间（秒），默认 300，上限 3600。对于长时间运行的任务，建议适当增大该值以避免任务被提前中断", "en": "Optional timeout in seconds, default 300, max 3600. For long-running tasks, it is recommended to increase this value to avoid premature termination"},
@@ -107,12 +104,7 @@ func GetBashInputParams(language string) map[string]any {
 		"shell_type":        {"cn": "指定 Shell 类型，可选值：auto/cmd/powershell/bash/sh，默认 auto。cmd/PowerShell 不支持 `mkdir -p`；需要该语法时保持 auto/bash/sh。", "en": "Shell to use: auto/cmd/powershell/bash/sh, default auto. cmd/PowerShell do not support `mkdir -p`; keep auto/bash/sh when you need that syntax."},
 	}
 
-	desc := func(key string) string {
-		if d, ok := p[key][lang]; ok {
-			return d
-		}
-		return p[key]["cn"]
-	}
+	desc := i18nPicker(p, lang)
 
 	return map[string]any{
 		"type": "object",

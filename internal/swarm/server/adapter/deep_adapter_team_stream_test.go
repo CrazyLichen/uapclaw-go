@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"testing"
+	"time"
 
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -41,8 +42,17 @@ func TestEnsureMonitorForActiveRuntime_无活跃运行时(t *testing.T) {
 	})
 }
 
-// TestProcessTeamMessageStream_非nil请求 验证正常请求下能拿到流并正常结束。
-// 无活跃团队时下游会走降级路径，这里只要求不 panic 且最终关闭通道。
+// TestProcessTeamMessageStream_非nil请求 验证请求被受理且取消后流能正常关闭。
+//
+// 契约说明（F-01，见 25.1b spec §7.1）：这条链路**不保证「流自己结束」**。
+// 上游的流由协调层事件驱动收尾——persistent 团队靠 `team.completion` 的
+// `is_team_completed` 上升沿（`team.py:1899-1900` 明确「无任务 → None」），
+// temporary 团队靠 leader 主动调 `clean_team` 工具。空 spec / 无模型的请求
+// 两边都不会自动收尾。
+//
+// 因此本用例断言真实契约：请求被受理、返回非 nil 流、**取消 ctx 后流关闭**
+// （`consumeStreamWithQuery` 的 ctx.Done 分支 → PopStreamTask → 主循环退出
+// → close(ch)）。这才是这条链路在任何输入下都成立的保证。
 func TestProcessTeamMessageStream_非nil请求(t *testing.T) {
 	d := NewDeepAdapter()
 	sessionID := "sess-stream-1"
@@ -52,19 +62,32 @@ func TestProcessTeamMessageStream_非nil请求(t *testing.T) {
 		ChannelID: channelID,
 	}
 
-	ch, err := d.processTeamMessageStream(context.Background(), req, map[string]any{"query": "hi"})
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := d.processTeamMessageStream(ctx, req, map[string]any{"query": "hi"})
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
 	if ch == nil {
 		t.Fatal("应返回非 nil 通道")
 	}
-	// 排空通道，直到关闭（防止 goroutine 阻塞在发送上）
+
+	// 取消请求：模拟客户端断连，这是流结束的确定性触发点。
+	cancel()
+
 	drained := 0
-	for range ch {
-		drained++
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				t.Logf("stream 在取消后关闭，共产出 %d 个 chunk", drained)
+				return
+			}
+			drained++
+		case <-timeout:
+			t.Fatalf("取消后流未在 10s 内关闭（已产出 %d 个 chunk）", drained)
+		}
 	}
-	t.Logf("stream 共产出 %d 个 chunk 后关闭", drained)
 }
 
 // assertNotPanicsAdapter 断言 fn 不 panic。

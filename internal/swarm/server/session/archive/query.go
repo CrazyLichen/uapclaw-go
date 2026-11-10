@@ -252,7 +252,7 @@ func listingArchivedAt(directory string, meta, value map[string]any) float64 {
 	return 0
 }
 
-// backfillArchiveTimes 启动时一次性回填历史会话的 archived_at。
+// BackfillArchiveTimes 启动时一次性回填历史会话的 archived_at。
 // Python: session_archive.py _backfill_archive_times（:1330）
 //
 // 列表只读解析 archived_at，因此字段出现之前归档的会话必须在这里补一次

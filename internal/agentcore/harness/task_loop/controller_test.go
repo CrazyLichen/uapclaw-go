@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	controllerschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -25,6 +26,14 @@ import (
 
 // mockAbilityMgr 简单的 AbilityManagerInterface mock
 type mockAbilityMgr struct{}
+
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (m *mockAbilityMgr) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
 
 func (m *mockAbilityMgr) Add(_ commonschema.Ability) agentschema.AddAbilityResult {
 	return agentschema.AddAbilityResult{}
@@ -469,4 +478,28 @@ func TestTaskLoopController_EnqueueSteer(t *testing.T) {
 	bare.Init(newTestCard(), config.DefaultControllerConfig(), &mockAbilityMgr{}, nil)
 	bare.EnqueueSteer("丢弃")
 	assert.Equal(t, 0, bare.SteerLen())
+}
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *mockAbilityMgr) TeardownTools() {}
+
+// TestSubmitRound_WithInputParts 验证批量输入的原始批次写入 metadata（ON_USER_MESSAGE 接缝）。
+func TestSubmitRound_WithInputParts(t *testing.T) {
+	tc := NewTaskLoopController()
+	tc.Init(newTestCard(), config.DefaultControllerConfig(), &mockAbilityMgr{}, nil)
+
+	handler := &capturingEventHandler{queues: NewLoopQueues(16)}
+	tc.SetEventHandler(handler)
+
+	require.NoError(t, tc.Start(context.Background()))
+	sess := session.NewSession()
+	require.NoError(t, tc.BindSession(context.Background(), sess))
+
+	require.NoError(t, tc.SubmitRound(context.Background(), sess, "a\nb", false, false,
+		agentinterfaces.RunKindNormal, nil, WithInputParts([]string{"a", "b"})))
+
+	require.Eventually(t, func() bool { return handler.Last() != nil }, time.Second, 5*time.Millisecond)
+	parts, ok := handler.Last().GetMetadata()["_input_parts"].([]string)
+	require.True(t, ok, "_input_parts 应以 []string 落在 metadata")
+	assert.Equal(t, []string{"a", "b"}, parts)
 }

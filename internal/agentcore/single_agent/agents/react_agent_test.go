@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"os"
 	"path/filepath"
 	"strings"
@@ -2835,6 +2836,14 @@ func (f *fakeModelContext) containsContent(substr string) bool {
 // 不触达真实工具与资源管理器。
 type stubAbilityManager struct{}
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (s *stubAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 // newStubAbilityManager 创建能力管理器桩。
 func newStubAbilityManager() *stubAbilityManager { return &stubAbilityManager{} }
 
@@ -3268,4 +3277,64 @@ func TestBuildMultimodal_缺source兜底tool(t *testing.T) {
 	if !strings.Contains(fmt.Sprint(msg), "Image loaded from tool: x.png") {
 		t.Fatalf("缺 source 应兜底为 tool，实际 %v", msg)
 	}
+}
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *stubAbilityManager) TeardownTools() {}
+
+// TestInvoke_ResumeContinuation不追加用户消息 验证续跑轮不把 query 写成新 user turn。
+// Python: react_agent.py L2976-2977 / L3081（_resume_continuation 跳过 _admit_user_message）
+func TestInvoke_ResumeContinuation不追加用户消息(t *testing.T) {
+	fmc := &fakeModelContext{}
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage("继续完成"),
+	}, 1)
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	sess := session.NewSession(session.WithSessionID("sess-resume-cont"))
+
+	_, err := agent.Invoke(context.Background(), map[string]any{
+		"query":                "原始任务",
+		"_resume_continuation": true,
+	}, interfaces.WithSession(sess))
+	if err != nil {
+		t.Fatalf("续跑轮不应报错: %v", err)
+	}
+	if fmc.containsContent("原始任务") {
+		t.Fatal("续跑轮不得把 query 追加成新的 UserMessage")
+	}
+}
+
+// TestInvoke_ResumeContinuation允许空query 验证续跑轮允许空查询。
+// Python: react_agent.py L2989-2991（not user_input and not resume_continuation 才报错）
+func TestInvoke_ResumeContinuation允许空query(t *testing.T) {
+	fmc := &fakeModelContext{}
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage("ok"),
+	}, 1)
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	sess := session.NewSession(session.WithSessionID("sess-resume-empty"))
+
+	_, err := agent.Invoke(context.Background(), map[string]any{
+		"query":                "",
+		"_resume_continuation": true,
+	}, interfaces.WithSession(sess))
+	if err != nil {
+		t.Fatalf("空 query 的续跑轮不应报错: %v", err)
+	}
+}
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeSessionFacade) GetParentSessionID() string { return "" }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *fakeModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *fakeModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
 }

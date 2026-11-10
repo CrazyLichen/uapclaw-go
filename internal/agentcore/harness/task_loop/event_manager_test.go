@@ -96,7 +96,7 @@ func TestEventManager_User优先于Goal(t *testing.T) {
 // TestEventManager_PushGoal去重_三态 验证 pending/dequeued/active 三态都去重
 // Python: EventManager.push_goal + has_goal_work (L33/L74)
 func TestEventManager_PushGoal去重_三态(t *testing.T) {
-	// ① pending
+	// ① pending 待取
 	m := NewEventManager()
 	pushed, err := m.PushGoal(newGoalWork("g1", 1))
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestEventManager_PushGoal去重_三态(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, pushed, "pending 同代际应去重")
 
-	// ② dequeued
+	// ② dequeued 已取出
 	m2 := NewEventManager()
 	_, err = m2.PushGoal(newGoalWork("g1", 1))
 	require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestEventManager_PushGoal去重_三态(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, pushed, "dequeued 同代际应去重")
 
-	// ③ active
+	// ③ active 执行中
 	m3 := NewEventManager()
 	work := newGoalWork("g1", 1)
 	_, err = m3.PushGoal(work)

@@ -342,12 +342,12 @@ func ClassifyTool(toolName string) ToolCapability {
 		}
 		return newCapability(resolution, category, "internal_readonly", "internal_state", nil, "low", false, true)
 	}
-	// 3. shell
+	// 3. shell 类工具
 	if _, hit := shellTools[lowered]; hit {
 		return newCapability(resolution, "shell", "dynamic_execution", "command",
 			toSet("dynamic_exec"), "high", true, true)
 	}
-	// 4. code
+	// 4. code 类工具
 	if _, hit := codeTools[lowered]; hit {
 		return newCapability(resolution, "code", "dynamic_execution", "code",
 			toSet("dynamic_exec"), "high", true, true)

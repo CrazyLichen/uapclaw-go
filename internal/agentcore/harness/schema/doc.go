@@ -9,10 +9,13 @@
 //	├── agent_mode.go    # AgentMode 枚举及 JSON 序列化
 //	├── build_context.go # BuildContext 构建上下文（provider 解析期载体，叶子包）
 //	├── construction_input.go # 元素双源构造输入（params/context 取值助手）
+//	├── agent_specs.go # 单角色规格类型（DeepAgentSpec/SubAgentSpec/WorkspaceSpec 等，上游同文件）
+//	├── deep_agent_parts.go # DeepAgentParts 装配产物（config + rails + tools）
+//	├── team_model_config.go # TeamModelConfig（可序列化模型配置，上游同文件）
 //	├── deep_agent_spec.go # RailSpec/BuiltinToolSpec 声明式规格 + Build（经 provider 注册表）
 //	├── rail_registry.go # rail provider 注册表（type 名 → 工厂，RWMutex 保护）
 //	├── rail_spec_support.go # rail 解析辅助（内置元素钩子 / 未知类型告警 / 最小上下文）
-//	├── prompt_mode.go   # PromptMode 枚举及 JSON 序列化
+//	├── prompt_mode.go   # PromptMode 类型别名（本体在 prompts 包，对齐上游归属）
 //	├── config.go        # DeepAgentConfig、SubagentSpec 及辅助类型（VisionModelConfig、AudioModelConfig、SubAgentConfig、ModelSelectionEntry）
 //	├── loop_event.go    # DeepLoopEventType 枚举及 DeepLoopEvent 结构体
 //	├── state.go         # PlanModeState、DeepAgentState 会话状态

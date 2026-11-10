@@ -344,6 +344,7 @@ func buildRgCommand(
 	showLineNumbers, caseInsensitive bool,
 	fileType string, multiline bool,
 ) string {
+	// 固定参数：包含隐藏文件、关闭颜色、限制单行最大列宽
 	parts := []string{
 		"rg",
 		"--hidden",
@@ -359,6 +360,7 @@ func buildRgCommand(
 		parts = append(parts, "-i")
 	}
 
+	// 输出模式决定文件名/计数/行号开关
 	switch outputMode {
 	case "files_with_matches":
 		parts = append(parts, "-l")
@@ -370,6 +372,7 @@ func buildRgCommand(
 		}
 	}
 
+	// content 模式下的上下文行参数
 	if outputMode == "content" {
 		if context != nil {
 			parts = append(parts, "-C", fmt.Sprintf("%d", *context))
@@ -385,6 +388,7 @@ func buildRgCommand(
 		}
 	}
 
+	// 排除版本控制目录，再叠加类型与 glob 过滤
 	for _, dir := range vcsDirectoriesToExclude {
 		parts = append(parts, "--glob", shellQuote("!"+dir))
 	}
@@ -397,6 +401,7 @@ func buildRgCommand(
 		parts = append(parts, "--glob", shellQuote(globPattern))
 	}
 
+	// 以 - 开头的模式必须用 -e 传入，避免被 rg 当成选项
 	if strings.HasPrefix(pattern, "-") {
 		parts = append(parts, "-e", shellQuote(pattern))
 	} else {

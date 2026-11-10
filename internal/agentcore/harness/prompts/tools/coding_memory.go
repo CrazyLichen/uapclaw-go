@@ -35,21 +35,13 @@ var codingMemoryEditDescription = map[string]string{
 
 // GetCodingMemoryReadMetadataProviderInputParams 构建 coding_memory_read 工具的参数 Schema
 func GetCodingMemoryReadMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":   {"cn": "coding_memory/ 下的目标文件路径（相对路径）", "en": "Target path under coding_memory/ (relative path)"},
 		"offset": {"cn": "从第几行开始读取（可选）", "en": "Line offset to start reading from (optional)"},
 		"limit":  {"cn": "最多读取多少行（可选）", "en": "Maximum number of lines to read (optional)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -63,20 +55,12 @@ func GetCodingMemoryReadMetadataProviderInputParams(language string) map[string]
 
 // GetCodingMemoryWriteMetadataProviderInputParams 构建 coding_memory_write 工具的参数 Schema
 func GetCodingMemoryWriteMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":    {"cn": "coding_memory/ 下的目标文件路径（相对路径）", "en": "Target path under coding_memory/ (relative path)"},
 		"content": {"cn": "要写入的内容（含 frontmatter）", "en": "Content to write (with frontmatter)"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -89,21 +73,13 @@ func GetCodingMemoryWriteMetadataProviderInputParams(language string) map[string
 
 // GetCodingMemoryEditMetadataProviderInputParams 构建 coding_memory_edit 工具的参数 Schema
 func GetCodingMemoryEditMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":     {"cn": "coding_memory/ 下的目标文件路径（相对路径）", "en": "Target path under coding_memory/ (relative path)"},
 		"old_text": {"cn": "要替换的原始文本", "en": "Original text to replace"},
 		"new_text": {"cn": "替换后的新文本", "en": "New replacement text"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

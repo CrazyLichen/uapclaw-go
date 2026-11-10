@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -321,6 +322,10 @@ func (k *CoordinationKernel) Start(ctx context.Context, session any) {
 	}
 
 	k.lifecycleState = kernelStateRunning
+
+	// 步骤 11: 续跑被生命周期暂停挂起的轮次（warm / cold）。
+	// Python: await self.resume_paused_round()（kernel.py L291）——内核完全就绪后最后执行。
+	k.resumePausedRound(ctx)
 }
 
 // Pause 暂停协调子系统（幂等）。
@@ -337,8 +342,15 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("lifecycle", k.host.Lifecycle()).Msg("coordination pausing (persistent)")
 
-	// 步骤 1: Drain agent task
-	k.host.DrainAgentTask(ctx)
+	// 步骤 1: 暂停在飞轮次（就地停车，不拆毁）。
+	// Python: await self.pause_agent_round()（kernel.py L343）
+	// 旧实现走 drain_agent_task → abort(immediate=True)，会丢掉被中断那一轮
+	// 已完成的工作；pause 必须停在干净边界且可续跑。
+	if sc := k.host.StreamController(); sc != nil {
+		if err := sc.PauseAgent(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("pause: pause_agent_round failed")
+		}
+	}
 
 	// 步骤 2: Persist allocator state
 	k.host.PersistAllocatorState()
@@ -354,27 +366,29 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 		}
 	}
 
-	// 步骤 4: [Leader] 标记活跃成员为 PAUSED
+	// 步骤 4-6: [Leader] 标记 PAUSED → 取消恢复任务 → 关闭句柄 →
+	// 复位暂停成员的执行状态 → 持久化生命周期与冷恢复标记。
+	// 顺序对齐 Python kernel.py:351-362：paused_teammates 必须在
+	// MarkLiveTeammates / ShutdownAllHandles 之前抓取，否则句柄已被关闭。
 	if k.host.Role() == schema.TeamRoleLeader {
+		pausedTeammates := k.host.SpawnedHandleNames()
 		_ = k.host.MarkLiveTeammates(ctx, string(schema.MemberStatusPaused))
-	}
-
-	// 步骤 4: [Leader] 取消恢复任务
-	// 修复 S-06: 对齐 Python: await host.spawn_manager.cancel_recovery_tasks()
-	if k.host.Role() == schema.TeamRoleLeader {
 		k.host.CancelRecoveryTasks()
-	}
-
-	// 步骤 5: [Leader] 关闭所有已生成句柄
-	// 修复 S-06: 对齐 Python: await host.spawn_manager.shutdown_all_handles()
-	if k.host.Role() == schema.TeamRoleLeader {
 		k.host.ShutdownAllHandles(ctx)
-	}
-
-	// 步骤 6: [Leader] 持久化生命周期状态 "paused"
-	// 修复 S-06: 对齐 Python: self._persist_team_lifecycle("paused")
-	if k.host.Role() == schema.TeamRoleLeader {
+		// 暂停后成员运行时已停，DB 里不能还留着 running 之类的执行状态：
+		// 否则列表/看板显示"还在跑"，且下次启动的 FSM 可能拒绝合法转换。
+		// Python: reset_paused_member_execution_status (kernel.py:355-357)
+		if backend := k.host.TeamBackendAccessor(); backend != nil && k.host.TeamName() != "" {
+			if reset := backend.DB().Member().ResetPausedMemberExecutionStatus(ctx, k.host.TeamName(), pausedTeammates); reset > 0 {
+				logger.Debug(logComponent).Int("reset", reset).
+					Str("team_name", k.host.TeamName()).
+					Msg("pause: reset paused member execution status")
+			}
+		}
 		k.persistTeamLifecycle(ctx, "paused")
+		// 记录冷恢复标记：让 pause → stop → start 等价于 pause → resume。
+		// Python: self._persist_pending_resume()（kernel.py L362）
+		k.persistPendingResume(ctx)
 	}
 
 	// 步骤 7: [Leader] 发布 TEAM_STANDBY 事件
@@ -464,6 +478,23 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 	// 步骤 9: Close stream
 	k.host.CloseStream()
 
+	// 步骤 9.5: 销毁原生运行时 + 停 messager。
+	// Python: kernel.py:590-593 —— close_stream 之后、release_session 之前。
+	// Dispose 是永久收尾（Stop 只做轮末拆除），不接这一步会让 supervisor/
+	// forwarder 持有会话继续跑、sys_operation 不从全局 ResourceMgr 摘除。
+	if harnessAcc := k.host.HarnessAccessor(); harnessAcc != nil {
+		if err := harnessAcc.Dispose(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("stop: harness dispose failed")
+		}
+	}
+	if infra := k.host.DispatcherInfra(); infra != nil {
+		if m := infra.Messager(); m != nil {
+			if err := m.Stop(ctx); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("stop: messager stop failed")
+			}
+		}
+	}
+
 	// 步骤 10: Release session
 	sessCtrl := k.host.SessionController()
 	if sessCtrl != nil {
@@ -517,32 +548,43 @@ func (k *CoordinationKernel) WakeMailboxIfInterruptCleared(ctx context.Context) 
 	return nil
 }
 
-// EnqueueMailboxAfterFirstIteration 等待首轮迭代门控后投递 POLL_MAILBOX 事件。
-// 对齐 Python: CoordinationKernel.enqueue_mailbox_after_first_iteration (kernel.py:391-401)
+// EnqueueMailboxAfterFirstIteration 首轮邮箱轮询。
 //
-// 仅 Teammate 使用（Leader 直接 return）。确保 Teammate 在首次迭代完成前
-// 不做邮箱 sweep，避免启动竞争。
+// 上游 kernel.py:701-711：leader 直接 return，成员直接 enqueue POLL_MAILBOX。
+// §3.4.2 决策 C7 已删除 FirstIterationGate（kernel.py:709 明确
+// "old FirstIterationGate wait is gone"），故这里不再等 gate。
 func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Context) {
-	// Python: if host.role == TeamRole.LEADER: return
 	if k.host.Role() == schema.TeamRoleLeader {
 		return
 	}
-	// Python: gate = host.resources.first_iter_gate
-	gate := k.host.FirstIterGate()
-	if gate == nil || k.eventBus == nil {
+	if k.eventBus == nil {
 		return
 	}
-	// Python: await gate.wait()
-	if err := gate.Wait(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("enqueueMailboxAfterFirstIteration: gate wait canceled")
-		return
-	}
-	// Python: await self._event_bus.enqueue(InnerEventMessage(event_type=InnerEventType.POLL_MAILBOX))
 	k.eventBus.Enqueue(types.CoordinationEvent{
 		Inner: &types.InnerEventMessage{
 			EventType: types.InnerEventTypePollMailbox,
 		},
 	})
+	_ = ctx
+}
+
+// EnqueueInitialTaskPoll 启动时的一次性任务板普查。
+//
+// 上游 kernel.py:714-730 / team_agent.py:975：不等 30s 周期 tick，
+// 立刻投一个 POLL_TASK，让 TeamCompletionHandler 有机会在首次流里
+// 判定完成（否则空团队只能等周期轮询，流永不结束）。
+//
+// Python: CoordinationKernel.enqueue_initial_task_poll
+func (k *CoordinationKernel) EnqueueInitialTaskPoll(ctx context.Context) {
+	if k.eventBus == nil {
+		return
+	}
+	k.eventBus.Enqueue(types.CoordinationEvent{
+		Inner: &types.InnerEventMessage{
+			EventType: types.InnerEventTypePollTask,
+		},
+	})
+	_ = ctx
 }
 
 // FinalizeRound 执行轮次结束清理：释放 streamQueue。
@@ -553,9 +595,16 @@ func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Conte
 // 而语义上应当每个 run cycle 一次（对齐上游 06def473）。
 // 不做 pause/stop/lifecycle 决策（由 Runner 层负责）。
 func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
-	// Python: host.stream_controller.stream_queue = None
-	sc := k.host.StreamController()
-	if sc != nil {
+	// 顺序对齐 Python finalize_round：先停 forwarder，再停成员脑，最后清队列。
+	if sc := k.host.StreamController(); sc != nil {
+		sc.Stop(ctx)
+	}
+	if h := k.host.HarnessAccessor(); h != nil {
+		if err := h.Stop(ctx); err != nil {
+			logger.Debug(logComponent).Err(err).Msg("finalize round: harness stop failed")
+		}
+	}
+	if sc := k.host.StreamController(); sc != nil {
 		sc.ResetStreamQueue()
 	}
 }
@@ -587,6 +636,110 @@ func (k *CoordinationKernel) persistTeamLifecycle(ctx context.Context, lifecycle
 	metadata.MergeTeamNamespace(teamSession, teamName, map[string]any{"lifecycle": lifecycle})
 	logger.Debug(logComponent).Str("team_name", teamName).Str("lifecycle", lifecycle).
 		Msg("persistTeamLifecycle completed")
+}
+
+// persistPendingResume 记录冷恢复标记（仅 leader 且确有暂停轮）。
+// Python: _persist_pending_resume (kernel.py L458-493)
+//
+// 记录的 query 不会重放进续跑轮上下文（上下文来自 checkpoint），
+// 它驱动的是**其后**的轮次：任务计划续跑或崩溃重试。
+func (k *CoordinationKernel) persistPendingResume(_ context.Context) {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return
+	}
+	harnessAcc := k.host.HarnessAccessor()
+	if harnessAcc == nil {
+		return
+	}
+	if harnessAcc.State() != harnessprotocol.HarnessStatePaused {
+		// 没有挂起的轮，无需记录
+		return
+	}
+	query, _ := harnessAcc.PausedQuery()
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return
+	}
+	metadata.MergePendingResume(teamSession, teamName, map[string]any{"query": query})
+	logger.Debug(logComponent).Str("team_name", teamName).Msg("pending resume persisted")
+}
+
+// resumePausedRound 续跑被生命周期暂停挂起的轮次。
+// Python: resume_paused_round (kernel.py L747-790)
+//
+// 两条路径：
+//   - warm：本进程仍 PAUSED，轮还在内存里，直接续跑。
+//   - cold：harness 被重建（IDLE），上下文来自会话 checkpoint，
+//     标记里的 query 驱动续跑。仅 leader（标记在团队共享桶里）。
+func (k *CoordinationKernel) resumePausedRound(ctx context.Context) {
+	harnessAcc := k.host.HarnessAccessor()
+	sc := k.host.StreamController()
+	if harnessAcc == nil || sc == nil {
+		return
+	}
+	if harnessAcc.State() == harnessprotocol.HarnessStatePaused {
+		logger.Info(logComponent).Str("member_name", k.host.MemberName()).
+			Msg("resuming the paused round in place")
+		if err := sc.ResumeAgent(ctx, nil); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("resume: warm resume failed")
+		}
+		k.clearPendingResume()
+		return
+	}
+	if k.host.Role() != schema.TeamRoleLeader {
+		return
+	}
+	pending, ok := k.readPendingResume()
+	if !ok {
+		return
+	}
+	logger.Info(logComponent).Str("member_name", k.host.MemberName()).
+		Msg("resuming the paused round from the session checkpoint")
+	query, _ := pending["query"].(string)
+	if err := sc.ResumeAgent(ctx, &query); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("resume: cold resume failed")
+		return
+	}
+	k.clearPendingResume()
+}
+
+// readPendingResume 读取冷恢复标记。
+func (k *CoordinationKernel) readPendingResume() (map[string]any, bool) {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return nil, false
+	}
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return nil, false
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return nil, false
+	}
+	return metadata.ReadPendingResume(teamSession, teamName)
+}
+
+// clearPendingResume 清除冷恢复标记。
+func (k *CoordinationKernel) clearPendingResume() {
+	teamName := k.host.TeamName()
+	if teamName == "" {
+		return
+	}
+	sessCtrl := k.host.SessionController()
+	if sessCtrl == nil {
+		return
+	}
+	teamSession := sessCtrl.TeamSession()
+	if teamSession == nil {
+		return
+	}
+	metadata.ClearPendingResume(teamSession, teamName)
 }
 
 // publishTeamStandby 发布 TEAM_STANDBY 事件。

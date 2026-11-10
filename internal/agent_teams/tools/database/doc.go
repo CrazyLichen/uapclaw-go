@@ -12,6 +12,7 @@
 //	├── doc.go               # 包文档
 //	├── config.go            # DatabaseConfig 配置结构体与构造函数
 //	├── models.go            # Team + TeamMember + TeamTaskBase + TeamMessageBase + MessageReadStatusBase 数据模型 + 辅助类型 + 动态表常量
+//	├── member_options.go    # TeamMember.options 结构化读写（模型引用/worktree/权限收窄/退役策略/专家模板）
 //	├── database.go          # TeamDatabase 门面接口 + TeamDao/MemberDao/TaskDao/MessageDao DAO 接口 + NewTeamDatabase 工厂
 //	├── fsm.go               # FSM 状态转换表（MemberTransitions/ExecutionTransitions/TaskTransitions）+ 校验函数
 //	├── engine.go            # GetCurrentTime / SanitizeSessionIDForTable 工具函数

@@ -109,6 +109,11 @@ var STRINGS = map[Language]map[string]string{
 		// ── workspace_meta 工作空间元数据 ──
 		"workspace_meta.action": "操作类型：lock（获取文件锁）、unlock（释放文件锁）、locks（列出所有活跃锁）、history（查看文件版本历史）",
 		"workspace_meta.path":   "目标文件的相对路径（lock/unlock/history 时必填）",
+		// ── 25.1d：异步后台任务反馈（async_tools.go）──
+		"async_tool.launched":       "[后台任务] {tool} 已启动（task_id={task_id}）。完成后结果会自动回灌给你，无需轮询；你可以继续处理其他输入。",
+		"async_tool.completed":      "[后台任务完成] 工具={tool}\n{result}",
+		"async_tool.failed":         "[后台任务失败] 工具={tool}，错误={error}",
+		"async_tool.spilled_notice": "[完整输出过大，已写入磁盘 {path}。调用 async_task_output(task_id='{task_id}') 取回全文。]",
 	},
 	LanguageEN: {
 		// Python: schema/blueprint.py
@@ -135,14 +140,14 @@ var STRINGS = map[Language]map[string]string{
 		"dispatcher.msg_type_broadcast": "broadcast",
 		"dispatcher.msg_type_direct":    "direct message",
 		"dispatcher.msg_received":       "[Received {msg_type}] message_id={message_id}, from: {sender}\ncontent: {content}\ntip: If the sender is asking or waiting for a reply, make sure to reply to {sender} via send_message",
-		// ── 25.0b: time rendering (timefmt.go) ──
+		// ── 25.0b: time rendering 时间渲染文案（timefmt.go） ──
 		"time.just_now":    "just now",
 		"time.seconds_ago": "{value}s ago",
 		"time.minutes_ago": "{value}m ago",
 		"time.hours_ago":   "{value}h ago",
 		"time.days_ago":    "{value}d ago",
 		"time.unknown":     "unknown time",
-		// ── 25.0b: note bodies for inbound XML tags ──
+		// ── 25.0b: note bodies for inbound XML tags 入站标签提示正文 ──
 		"dispatcher.reply_hint": "If the sender is asking or waiting for a reply, be sure to reply to {sender} via send_message.",
 		"dispatcher.reply_hint_user": "This message is from user — the **human outside the team** who commissioned this team's work. " +
 			"They are not a team member and do not appear in the roster. " +
@@ -163,10 +168,10 @@ var STRINGS = map[Language]map[string]string{
 			"Do **NOT** greet, check in with, or otherwise message a member just " +
 			"because the roster changed; message someone only when the work you " +
 			"are actually holding needs them.",
-		// team_context.py TaskOutcomeTracker (F_119)
+		// Python: team_context.py TaskOutcomeTracker (F_119)
 		"team_context.task_verified_intro": "These tasks you submitted earlier have passed review and are completed. " +
 			"Nothing more is needed — do not contact the leader about them:",
-		// team_context.py TaskRevisionTracker (F_129)
+		// Python: team_context.py TaskRevisionTracker (F_129)
 		"team_context.task_revised_intro": "These tasks of yours were edited after you last read them (they are still yours — no need to " +
 			"re-claim). Read the latest requirements with view_task(action='get', task_id=...), adjust as " +
 			"needed and continue; you must have read the latest revision before submitting:",
@@ -187,6 +192,11 @@ var STRINGS = map[Language]map[string]string{
 		// ── workspace_meta 工作空间元数据 ──
 		"workspace_meta.action": "Operation type: lock (acquire file lock), unlock (release file lock), locks (list active locks), history (view file version history)",
 		"workspace_meta.path":   "Relative path of the target file (required for lock/unlock/history)",
+		// ── 25.1d：async background-tool feedback (async_tools.go) ──
+		"async_tool.launched":       "[Background task] {tool} started (task_id={task_id}). The result will be fed back to you automatically on completion — do not poll; you may continue handling other input.",
+		"async_tool.completed":      "[Background task completed] tool={tool}\n{result}",
+		"async_tool.failed":         "[Background task failed] tool={tool}, error={error}",
+		"async_tool.spilled_notice": "[Full output was large and written to disk at {path}. Call async_task_output(task_id='{task_id}') to retrieve it.]",
 	},
 }
 

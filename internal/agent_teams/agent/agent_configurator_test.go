@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -307,7 +308,7 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 	})
 
 	t.Run("Harness设置后获取", func(t *testing.T) {
-		harness := harness.BuildTeamHarness(atschema.DeepAgentSpec{}, "leader", "l1", nil, nil, nil, nil, nil, nil, false)
+		harness := harness.TeamHarnessBuild(atschema.DeepAgentSpec{}, "leader", "l1", false, nil, nil)
 		c.SetHarness(harness)
 		assert.Equal(t, harness, c.Harness())
 	})
@@ -316,12 +317,6 @@ func TestAgentConfigurator_GetterSetter(t *testing.T) {
 		wtMgr := worktree.NewWorktreeManager(worktree.NewWorktreeConfig(), nil)
 		c.SetWorktreeManager(wtMgr)
 		assert.Equal(t, wtMgr, c.WorktreeManager())
-	})
-
-	t.Run("FirstIterGate设置后获取", func(t *testing.T) {
-		gate := rails.NewFirstIterationGate()
-		c.SetFirstIterGate(gate)
-		assert.Equal(t, gate, c.FirstIterGate())
 	})
 
 	t.Run("ModelAllocator设置后获取", func(t *testing.T) {
@@ -656,4 +651,83 @@ func TestTeamAgent_TaskEventTracker往返(t *testing.T) {
 	if a.configurator.TaskEventTracker() != fake {
 		t.Fatal("configurator 资源区未同步")
 	}
+}
+
+// ──────────────────────────── 25.1b Task13：声明式装配 ────────────────────────────
+
+// newDeclarativeFixture 造一个已完成 SetupInfra 的配置器与规格。
+//
+// 必须是 teammate 角色：任务通知器只在非 leader 上创建（leader 不需要）。
+// 必须先注入 Messager，否则 SetupInfra 不会建 TeamBackend，
+// 于是 TeamRailSpecs 的 HasTeamBackend 为假、所有团队 rail 都不声明。
+func newDeclarativeFixture(t *testing.T) (*AgentConfigurator, atschema.TeamAgentSpec, atschema.TeamRuntimeContext) {
+	t.Helper()
+	card := agentschema.NewAgentCard()
+	c := NewAgentConfigurator(card)
+	c.SetMessager(messager.NewInProcessMessager(atschema.NewMessagerTransportConfig()))
+
+	spec := atschema.NewTeamAgentSpec()
+	ctx := atschema.TeamRuntimeContext{
+		Role:       atschema.TeamRoleTeammate,
+		MemberName: "m1",
+		TeamSpec:   &atschema.TeamSpec{TeamName: "test_team"},
+	}
+	require.NoError(t, c.SetupInfra(spec, ctx))
+	require.NotNil(t, c.TeamBackend(), "fixture 需要 TeamBackend 才能声明团队 rail")
+	return c, spec, ctx
+}
+
+// TestSetupAgent_声明驱动挂载团队rail 步骤 9-15 产出的团队 rail 由 spec 声明解析后挂上。
+func TestSetupAgent_声明驱动挂载团队rail(t *testing.T) {
+	c, spec, ctx := newDeclarativeFixture(t)
+
+	h, err := c.SetupAgent(spec, ctx)
+	require.NoError(t, err)
+	require.NotNil(t, h)
+
+	assert.NotEmpty(t, h.FindRails(reflect.TypeOf(&rails.TeamPolicyRail{})), "policy rail 应已挂载")
+	assert.NotEmpty(t, h.FindRails(reflect.TypeOf(&rails.TeamToolRail{})), "tool rail 应已挂载")
+}
+
+// TestSetupAgent_InjectTeamHandles18键 装配后 buildCtx 的 Extras 有 18 个团队句柄键。
+func TestSetupAgent_InjectTeamHandles18键(t *testing.T) {
+	c, spec, ctx := newDeclarativeFixture(t)
+
+	_, err := c.SetupAgent(spec, ctx)
+	require.NoError(t, err)
+
+	buildCtx := c.lastBuildContext()
+	require.NotNil(t, buildCtx, "configurator 应保留 buildCtx 供断言")
+	assert.Len(t, buildCtx.GetExtras(), 18, "18 个团队句柄键全部写入")
+	assert.NotNil(t, buildCtx.GetExtras()[tools.TeamHandleAsyncToolHost], "异步工具宿主句柄必须写入")
+}
+
+// TestSetupAgent_tracker与harness共用实例 tracker 由 configurator 建，
+// 经句柄注入 buildCtx，harness 与 rail 拿到的是同一指针（共用基线）。
+func TestSetupAgent_tracker与harness共用实例(t *testing.T) {
+	c, spec, ctx := newDeclarativeFixture(t)
+
+	_, err := c.SetupAgent(spec, ctx)
+	require.NoError(t, err)
+
+	fromConfigurator := c.TaskEventTracker()
+	require.NotNil(t, fromConfigurator, "非 leader 应建出通知器")
+
+	extras := c.lastBuildContext().GetExtras()
+	injected, ok := extras[string(rails.TeamHandleTaskEventTracker)].(tracker.TaskEventTracker)
+	require.True(t, ok, "句柄里应注入 tracker")
+	assert.Equal(t, fromConfigurator, injected, "必须是同一实例（共用基线）")
+}
+
+// TestSetupAgent_tracker幂等 重复装配不重建已存在的通知器（重建会丢宣告基线）。
+func TestSetupAgent_tracker幂等(t *testing.T) {
+	c, spec, ctx := newDeclarativeFixture(t)
+
+	_, err := c.SetupAgent(spec, ctx)
+	require.NoError(t, err)
+	first := c.TaskEventTracker()
+
+	_, err = c.SetupAgent(spec, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, first, c.TaskEventTracker(), "重复装配应复用同一通知器")
 }

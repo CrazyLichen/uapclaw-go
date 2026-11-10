@@ -587,3 +587,13 @@ func (c *SiliconFlowModelClient) sanitizeToolCalls(messages []map[string]any) {
 		msg["tool_calls"] = cleaned
 	}
 }
+
+// SupportsKVCacheAffinity 本客户端不支持 Ascend KV cache 亲和。
+// Python: ModelClient.supports_kv_cache_affinity() 默认 False
+func (c *SiliconFlowModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 不支持亲和时返回空参数。
+// Python: ModelClient.build_kv_cache_affinity_invoke_kwargs() 默认返回 {}
+func (c *SiliconFlowModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

@@ -23,6 +23,7 @@
 //	├── web_file_download.go      # WebFileDownloadManager——HMAC 下载令牌+三级密钥（10.6.24b）
 //	├── send_file.go              # SendFileToolkit——chat.file 事件+双注入（10.6.24b）
 //	├── acp_output_tools.go       # AcpOutputManager+六 ACP 输出工具（10.6.24d）
+//	├── command_execution_context.go # 请求级命令执行归属绑定（sys operation 绑定）
 //	├── acp_chat/                 # acp_chat 子包——外部 ACP 子代理聊天（10.6.24d）
 //	├── multi_session_toolkits.go # MultiSessionToolkit——session_new/cancel/list（10.6.24c）
 //	├── user_todo_tool.go         # user_todos——按 channel 隔离用户待办（10.6.24c）

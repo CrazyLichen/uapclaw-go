@@ -280,22 +280,6 @@ func (c *PlanModeController) ActiveSessions() map[string]struct{} {
 	return out
 }
 
-// SessionMessageRequiresQueue 判断会话是否要求跨会话消息排队。
-// 上游 runtime/plan.py:252-261 的步骤（Go 侧尚无 cross-session 消息链路，暂不实现）：
-//  1. 读取该会话 plan 状态：state.plan_mode.mode == "plan" → is_plan = true
-//  2. 读取该会话 goal 状态：goal 活跃 → is_goal_active = true
-//  3. is_plan || is_goal_active → 跨会话消息必须排队，不得打断当前计划
-//  4. 否则直接透传（不需要排队）
-//
-// TODO(跨会话消息链路): runtime 的 session_message 通道落地后按上述 4 步复刻。
-func (c *PlanModeController) SessionMessageRequiresQueue(sessionID string) bool {
-	logger.Warn(logComponent).
-		Str("event_type", "plan_cross_session_queue_unimplemented").
-		Str("session_id", sessionID).
-		Msg("cross-session message queueing is not implemented; passing through")
-	return false
-}
-
 // InjectActivationReminder 给本轮 query 前置 plan 约束提醒。
 // Python: PlanModeController.inject_activation_reminder
 func InjectActivationReminder(query string) string {

@@ -58,6 +58,8 @@ type PlanEnv struct {
 	agentMu sync.Mutex
 	// lastMode 最近一轮解析出的一级模式
 	lastMode string
+	// lastSessionID 最近一轮请求的会话标识（用于取该会话的 live instance）
+	lastSessionID string
 	// lastSubMode 最近一轮解析出的子模式
 	lastSubMode string
 }
@@ -276,7 +278,7 @@ func (e *PlanEnv) CountAttachmentsContaining(substr string) int {
 // SeedState 预置会话 plan 状态（模拟历史残留 plan_slug / 已退出等场景）。
 func (e *PlanEnv) SeedState(sessionID, mode, planSlug string) {
 	e.T.Helper()
-	inst := e.inst()
+	inst := e.instForState()
 	sess := e.sessionFacade(sessionID)
 	state := inst.LoadState(sess)
 	state.PlanMode.Mode = mode
@@ -416,9 +418,6 @@ func newPlanEnvWithEnv(t *testing.T, env *AdapterTestEnv, mock *mockllm.MockMode
 		agentMode = "code"
 	}
 	planEnv.FactoryMode = agentMode
-	if workMode == "code" {
-		planEnv.FactoryMode = "agent"
-	}
 	if _, err := planEnv.Server.Server.AgentManager().GetAgent(
 		context.Background(), planEnvChannel, agentMode, projectDir, ""); err != nil {
 		t.Fatalf("预创建 agent 失败: %v", err)
@@ -446,6 +445,9 @@ func (e *PlanEnv) send(sessionID, mode, query string, extra map[string]any, isSt
 		params["work_mode"] = e.WorkMode
 	}
 	e.trackMode(params)
+	e.agentMu.Lock()
+	e.lastSessionID = sessionID
+	e.agentMu.Unlock()
 	return e.Server.Send(string(swarmschema.ReqMethodChatSend), params, sessionID, isStream)
 }
 
@@ -486,12 +488,66 @@ func (e *PlanEnv) agentRef() *srvruntime.UapClawSwarm {
 	return fallback
 }
 
+// instForState 返回可用于读写会话状态的 DeepAgent。
+//
+// 10.3.28f：首轮对话之前还没有 session child，此时按上游 plan.py:119 的
+// 回退顺序（get_live_session_instance 取不到 → ensure_live_session_instance）
+// 让根适配器惰建出自己的 DeepAgent。这与"根是纯 router"并不矛盾：
+// 只有需要会话态句柄的路径才会触发惰建，chat 路径永远只建 child。
+func (e *PlanEnv) instForState() *harness.DeepAgent {
+	e.T.Helper()
+	agent := e.agentRef()
+	if agent == nil {
+		e.T.Fatal("agent 未就绪")
+	}
+	e.agentMu.Lock()
+	sid := e.lastSessionID
+	e.agentMu.Unlock()
+	if sid != "" {
+		if live := agent.GetLiveSessionInstance(sid); live != nil {
+			return live
+		}
+	}
+	// 与上游同序：get_live_session_instance → ensure_live_session_instance
+	// （建会话 child），而不是 EnsureInstance（建本适配器自己的 DeepAgent）。
+	if sid != "" {
+		inst, err := agent.EnsureLiveSessionInstance(context.Background(), sid)
+		if err != nil {
+			e.T.Fatalf("确保会话 DeepAgent 实例失败: %v", err)
+		}
+		if inst != nil {
+			return inst
+		}
+	}
+	inst, err := agent.EnsureInstance(context.Background())
+	if err != nil {
+		e.T.Fatalf("确保 DeepAgent 实例失败: %v", err)
+	}
+	if inst == nil {
+		e.T.Fatal("实例未就绪")
+	}
+	return inst
+}
+
 // inst 返回装配后的 DeepAgent 实例。
+//
+// 10.3.28f：会话分身后根 adapter 是纯 router，不再持有 DeepAgent
+// （对齐 Python _skip_own_instance_build :13109）；真正跑对话的
+// DeepAgent 挂在各会话的 child 上。因此优先取"该会话的 live 实例"，
+// 取不到才回退根的 GetInstance（根此时通常为 nil）。
 func (e *PlanEnv) inst() *harness.DeepAgent {
 	e.T.Helper()
 	agent := e.agentRef()
 	if agent == nil {
 		return nil
+	}
+	e.agentMu.Lock()
+	sid := e.lastSessionID
+	e.agentMu.Unlock()
+	if sid != "" {
+		if live := agent.GetLiveSessionInstance(sid); live != nil {
+			return live
+		}
 	}
 	return agent.GetInstance()
 }
@@ -511,7 +567,7 @@ func (e *PlanEnv) planState(sessionID string) (string, string) {
 // sessionFacade 预置/复用会话门面（LoadState 需要）。
 func (e *PlanEnv) sessionFacade(sessionID string) *session.Session {
 	e.T.Helper()
-	inst := e.inst()
+	inst := e.instForState()
 	if inst == nil {
 		e.T.Fatal("实例未就绪")
 	}

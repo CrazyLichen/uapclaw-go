@@ -264,7 +264,7 @@ func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
 	return nil
 }
 
-// ListTools 列出 MCP 服务器提供的工具。
+// doListTools 列出 MCP 服务器提供的工具。
 func (c *StreamableHttpClient) doListTools(ctx context.Context) ([]*types.McpToolCard, error) {
 	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
@@ -303,7 +303,7 @@ func (c *StreamableHttpClient) doListTools(ctx context.Context) ([]*types.McpToo
 	return cards, nil
 }
 
-// CallTool 调用指定工具。
+// doCallTool 调用指定工具。
 func (c *StreamableHttpClient) doCallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
 	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
@@ -341,7 +341,7 @@ func (c *StreamableHttpClient) doCallTool(ctx context.Context, toolName string, 
 	return callToolResultToMap(result), nil
 }
 
-// GetToolInfo 获取指定工具信息。
+// doGetToolInfo 获取指定工具信息。
 func (c *StreamableHttpClient) doGetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
 	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
@@ -374,7 +374,7 @@ func (c *StreamableHttpClient) doGetToolInfo(ctx context.Context, toolName strin
 	)
 }
 
-// ListResources 列出 MCP 服务器提供的资源。
+// doListResources 列出 MCP 服务器提供的资源。
 func (c *StreamableHttpClient) doListResources(ctx context.Context) ([]map[string]any, error) {
 	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(
@@ -401,7 +401,7 @@ func (c *StreamableHttpClient) doListResources(ctx context.Context) ([]map[strin
 	return resources, nil
 }
 
-// ReadResource 读取指定资源。
+// doReadResource 读取指定资源。
 func (c *StreamableHttpClient) doReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	if !c.connected() || c.currentClient() == nil {
 		return nil, exception.BuildError(

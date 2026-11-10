@@ -2,8 +2,11 @@ package session
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
@@ -50,6 +53,22 @@ type Session struct {
 	interaction *interaction.SimpleAgentInteraction
 	// sourceMetadata 流数据来源元数据
 	sourceMetadata map[string]any
+	// parentSessionID 拥有本子会话的产品会话标识（血缘，一经绑定不可改）
+	// Python: Session._parent_session_id（core/session/agent.py L62-66）
+	parentSessionID string
+	// teamCacheScope 团队成员的缓存作用域（team_id, agent_id）
+	// Python: Session._team_cache_scope（core/session/agent.py L67）
+	teamCacheScope *teamCacheScope
+}
+
+// teamCacheScope 团队成员缓存作用域：所有成员共享产品会话 id，
+// 必须靠 team_id + agent_id 才能推出各自的缓存身份。
+// Python: Session._team_cache_scope: tuple[str, str] | None（agent.py L67）
+type teamCacheScope struct {
+	// teamID 团队标识
+	teamID string
+	// agentID 成员 agent 标识
+	agentID string
 }
 
 // SessionOption Session 构造选项函数类型
@@ -182,6 +201,14 @@ func WithSourceMetadata(meta map[string]any) SessionOption {
 	}
 }
 
+// WithParentSessionID 设置产品侧父会话标识的选项。
+// Python: Session(parent_session_id=...)（core/session/agent.py L62-66）
+func WithParentSessionID(parentSessionID string) SessionOption {
+	return func(s *Session) {
+		s.parentSessionID = normalizeParentSessionID(parentSessionID)
+	}
+}
+
 // GetSessionID 返回会话唯一标识
 func (s *Session) GetSessionID() string {
 	return s.sessionID
@@ -205,6 +232,113 @@ func (s *Session) GetEnvs() map[string]any {
 		return nil
 	}
 	return cfg.GetEnvs()
+}
+
+// GetSourceMetadata 返回描述会话归属方的元数据副本。
+// Python: Session.get_source_metadata (core/session/agent.py L116-118)
+func (s *Session) GetSourceMetadata() map[string]any {
+	out := make(map[string]any, len(s.sourceMetadata))
+	for k, v := range s.sourceMetadata {
+		out[k] = v
+	}
+	return out
+}
+
+// GetParentSessionID 返回拥有本子会话的产品会话标识，无血缘返回空串。
+// Python: Session.get_parent_session_id (core/session/agent.py L73-75)
+func (s *Session) GetParentSessionID() string {
+	return s.parentSessionID
+}
+
+// BindParentSessionID 在会话开始运行前绑定产品侧父会话。
+// 血缘一经设定不可迁移：重复绑定同值幂等，改绑返回错误（调用方持有所有权）。
+// Python: Session.bind_parent_session_id (core/session/agent.py L77-100)
+func (s *Session) BindParentSessionID(parentSessionID string) error {
+	normalized := normalizeParentSessionID(parentSessionID)
+	if normalized == "" {
+		return nil
+	}
+	if s.parentSessionID == "" {
+		s.parentSessionID = normalized
+		return nil
+	}
+	if s.parentSessionID != normalized {
+		return fmt.Errorf("Session parent is already bound to %q; cannot rebind to %q",
+			s.parentSessionID, normalized)
+	}
+	return nil
+}
+
+// SetTeamCacheScope 绑定成员会话推导缓存身份所需的团队作用域。
+// 两个参数缺一即忽略（对齐 Python 的空值守卫）。
+// Python: Session.set_team_cache_scope (core/session/agent.py L120-124)
+func (s *Session) SetTeamCacheScope(teamID, agentID string) {
+	if teamID == "" || agentID == "" {
+		return
+	}
+	s.teamCacheScope = &teamCacheScope{teamID: teamID, agentID: agentID}
+}
+
+// GetCacheIdentity 返回本会话拥有的 provider 面向缓存身份。
+// 团队子会话必须带成员作用域——所有成员共享产品会话 id；独立子会话用运行时
+// 会话 id 作为 cache_id，并可指向显式的产品会话父级。
+// Python: Session.get_cache_identity (core/session/agent.py L126-174)
+//
+// ★ 严格对齐：Python 签名 -> KVCacheIdentity（无 raise），Go 返回单个值。
+// 内部 team_member_cache_identity 缺参时 Python 会抛 ValueError 冒泡；Go 侧该
+// 错误由本方法按「外层防御性兜底」记 Debug 并回落自指身份（对齐
+// react_agent.py:1390-1393 的 try/except），不向外传播。
+func (s *Session) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	// Python: 1. if self._team_cache_scope is not None: return KVCacheIdentity(...)
+	if s.teamCacheScope != nil {
+		cacheID, err := kv_cache.TeamMemberCacheIdentity(
+			s.sessionID, s.teamCacheScope.teamID, s.teamCacheScope.agentID)
+		if err != nil {
+			logger.Debug(logComponent).Err(err).Str("session_id", s.sessionID).
+				Msg("team member cache identity failed, falling back to self identity")
+		} else {
+			parentCacheID := s.parentSessionID
+			if parentCacheID == "" {
+				parentCacheID = s.sessionID
+			}
+			return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: parentCacheID}
+		}
+	}
+	// Python: 2. source_agent_id/source_team_id = self._source_metadata.get(...)
+	sourceAgentID, _ := s.sourceMetadata["source_agent_id"].(string)
+	sourceTeamID, _ := s.sourceMetadata["source_team_id"].(string)
+	// Python: 3. if source_team_id and source_agent_id: return KVCacheIdentity(...)
+	if sourceTeamID != "" && sourceAgentID != "" {
+		cacheID, err := kv_cache.TeamMemberCacheIdentity(s.sessionID, sourceTeamID, sourceAgentID)
+		if err != nil {
+			logger.Debug(logComponent).Err(err).Str("session_id", s.sessionID).
+				Msg("source team cache identity failed, falling back to self identity")
+		} else {
+			return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: s.sessionID}
+		}
+	}
+	// Python: 4. cache_id/parent_cache_id = self.get_env(...)，并判断 strip 后非空
+	cacheID, _ := s.GetEnv(kv_cache.KVCacheAffinitySessionIDEnv).(string)
+	parentCacheID, _ := s.GetEnv(kv_cache.KVCacheAffinityParentSessionIDEnv).(string)
+	hasCacheID := strings.TrimSpace(cacheID) != ""
+	hasParentCacheID := strings.TrimSpace(parentCacheID) != ""
+	// Python: 5. if has_cache_id or has_parent_cache_id or self._parent_session_id: ...
+	if hasCacheID || hasParentCacheID || s.parentSessionID != "" {
+		resolvedCacheID := cacheID
+		if resolvedCacheID == "" {
+			resolvedCacheID = s.sessionID
+		}
+		resolvedParent := parentCacheID
+		if resolvedParent == "" {
+			resolvedParent = s.parentSessionID
+		}
+		if resolvedParent == "" {
+			resolvedParent = resolvedCacheID
+		}
+		return kv_cache.KVCacheIdentity{CacheID: resolvedCacheID, ParentCacheID: resolvedParent}
+	}
+	// Python: 6. return KVCacheIdentity(cache_id=self._session_id, parent_cache_id=self._session_id)
+	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}
 }
 
 // GetAgentID 返回 Agent ID
@@ -398,6 +532,18 @@ func (s *Session) Commit(ctx context.Context) error {
 	return nil
 }
 
+// CommitInterrupt 在轮次以中断（ask_user / 工具中断）收尾时落检查点。
+// Python: Session.commit_interrupt()（native_harness.py:1481 调用）
+//
+// 与 Commit 的区别：中断态需要 InterruptAgentExecute 这条专用入口，
+// 只写 PostAgentExecute 不会记录"这一轮停在哪个中断上"，冷恢复时无法续。
+func (s *Session) CommitInterrupt(ctx context.Context) error {
+	if cp := s.inner.Checkpointer(); cp != nil {
+		return cp.InterruptAgentExecute(ctx, s.inner)
+	}
+	return nil
+}
+
 // ClearSession 清空所有会话状态并重置生命周期标志。
 // 对齐 Python session.clear_session()：
 //   - 清除 globalState / agentState / traceState
@@ -492,6 +638,12 @@ func init() {
 	controller.RegisterSessionCreator(func(sessionID string, card *agentschema.AgentCard, envs map[string]any) controller.StateAccessor {
 		return CreateAgentSession(sessionID, card, envs)
 	})
+}
+
+// normalizeParentSessionID 归一化父会话标识：去空白，空值视为未提供。
+// Python: parent_session_id.strip() if isinstance(str) and strip() else None（agent.py L62-66）
+func normalizeParentSessionID(parentSessionID string) string {
+	return strings.TrimSpace(parentSessionID)
 }
 
 // writeStream 写入标准输出流（内部实现）。

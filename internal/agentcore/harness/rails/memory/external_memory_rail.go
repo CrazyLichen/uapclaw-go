@@ -58,6 +58,9 @@ type ExternalMemoryRail struct {
 	scopeID string
 	// sessionID 会话标识
 	sessionID string
+	// attachmentManager 会话级动态提示词管理器（Init 时取一次）
+	// Python: self.attachment_manager（external_memory_rail.py:57/69）
+	attachmentManager *hprompts.Manager
 	// initialized 是否已初始化
 	initialized bool
 	// prefetchCache 预取缓存（指针区分空串和未缓存）
@@ -144,6 +147,9 @@ func (r *ExternalMemoryRail) Init(ctx context.Context, agent agentinterfaces.Bas
 	if err := r.MemoryRail.Init(ctx, agent); err != nil {
 		return err
 	}
+
+	// Python: external_memory_rail.py:69 self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	r.attachmentManager = hprompts.ManagerFor(agent)
 
 	// 注册 Provider 工具
 	r.registerProviderTools(agent)
@@ -684,16 +690,22 @@ func (r *ExternalMemoryRail) injectMemoryContext(cbc *agentinterfaces.AgentCallb
 		Content:  map[string]string{lang: fenced},
 		Priority: 55,
 	}
-	sessionID := ""
-	var agentRef any
-	if cbc != nil {
-		agentRef = cbc.Agent()
-		if cbc.Session() != nil {
-			sessionID = cbc.Session().GetSessionID()
-		}
+	// Python: :181-184 manager 缺失只告警跳过，**不回落 system prompt**
+	if r.attachmentManager == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "external_memory_attachment").
+			Msg("prompt attachment manager is unavailable; skip prefetch attachment")
+		return
 	}
-	if !hprompts.Deliver(agentRef, sessionID, &section, hprompts.AttachmentMemory, "agent_core.external_memory_rail", lang) {
-		r.systemPromptBuilder.AddSection(section)
+	// Python: :198-201 会话缺失/写入失败只告警，**不回落 system prompt**
+	if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
+		&section, hprompts.AttachmentMemory, "agent_core.external_memory_rail", lang,
+		hprompts.WithAttachmentContentKind("text/markdown"),
+	); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "external_memory_attachment").
+			Err(err).
+			Msg("skip prefetch prompt attachment")
 	}
 }
 

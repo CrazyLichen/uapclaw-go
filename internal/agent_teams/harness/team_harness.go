@@ -8,15 +8,14 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	agentcore "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -29,32 +28,6 @@ import (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// MountedRails 已挂载的团队侧 Rails 句柄。
-// Python: _MountedRails (openjiuwen/agent_teams/harness.py)
-//
-// 保留为数据类使 Rails 阵容（及哪些是可选的）对读者和测试可见。
-// 字段顺序与 BuildTeamHarness 中 Rails 挂载顺序一致。
-type MountedRails struct {
-	// TeamTool 团队工具轨
-	// ⤴️ 9.68 回填完成：TeamToolRail 具体类型
-	TeamTool *rails.TeamToolRail
-	// TeamPolicy 团队策略轨
-	// ⤴️ 9.68 回填完成：TeamPolicyRail 具体类型
-	TeamPolicy *rails.TeamPolicyRail
-	// FirstIterGate 首轮迭代门控
-	// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
-	FirstIterGate *rails.FirstIterationGate
-	// TeamWorkspace 团队工作空间轨
-	// ⤴️ 9.66 回填完成：TeamWorkspaceRail 具体类型
-	TeamWorkspace *team_workspace.TeamWorkspaceRail
-	// ToolApproval 工具审批轨
-	// ⤴️ 9.68 回填完成：TeamToolApprovalRail 具体类型
-	ToolApproval *rails.TeamToolApprovalRail
-	// TeamPlanMode 团队计划模式轨
-	// ⤴️ 9.68 回填完成：TeamPlanModeRail 具体类型
-	TeamPlanMode *rails.TeamPlanModeRail
-}
 
 // AgentCustomizer 用户自定义钩子签名。
 // S-01: 全项目唯一类型定义在 agent_teams/schema 包，此处保留类型别名。
@@ -78,13 +51,15 @@ type TeamHarness struct {
 	// 调用方（InnerAgent）的向后访问；协议面方法（Start/Stop/Send/...）转 native。
 	native *NativeHarness
 	// rails 已挂载的 Rails 句柄
-	rails *MountedRails
 	// role 团队角色（对齐 Python TeamRole，底层为 string）
 	role string
 	// memberName 成员名
 	memberName string
 	// initialPlanMode 初始计划模式
 	initialPlanMode bool
+	// taskEventTracker 成员的任务通知器（上游 _task_event_tracker）
+	// Python: TeamHarness._task_event_tracker (team_harness.py:93-130)
+	taskEventTracker tracker.TaskEventTracker
 	// mu 保护 activeAgentSession 与 initialPlanModeSeeded。
 	// 写点在轮次 goroutine（prepareAgentSession），读点在消息处理 goroutine
 	// （interactLoop ← StreamController.Steer）与协调内核的邮箱轮询
@@ -101,6 +76,11 @@ type TeamHarness struct {
 	// nativeSessionID 当前 run cycle 对应的团队会话标识。
 	// Python: _native_session_id（start 时记录、stop 时清空）
 	nativeSessionID string
+	// agentSpec 构造 native 的规格；native 终止后按它重建。
+	// Python: TeamHarness._agent_spec（start 里 `if native is None or TERMINATED: rebuild`）
+	agentSpec atschema.DeepAgentSpec
+	// buildCtx native 重建时解析 rails 等部件所需的构建上下文。
+	buildCtx hschema.BuildContextInterface
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -125,14 +105,12 @@ var (
 // Python: TeamHarness.__init__(deep_agent, rails, ...)
 func NewTeamHarness(
 	deepAgent hinterfaces.DeepAgentInterface,
-	rails *MountedRails,
 	role string,
 	memberName string,
 	initialPlanMode bool,
 ) *TeamHarness {
 	return &TeamHarness{
 		deepAgent:       deepAgent,
-		rails:           rails,
 		role:            role,
 		memberName:      memberName,
 		initialPlanMode: initialPlanMode,
@@ -143,22 +121,22 @@ func NewTeamHarness(
 func newTeamHarnessWithNative(
 	native *NativeHarness,
 	deepAgent hinterfaces.DeepAgentInterface,
-	rails *MountedRails,
 	role string,
 	memberName string,
 	initialPlanMode bool,
+	taskEventTracker tracker.TaskEventTracker,
 ) *TeamHarness {
 	return &TeamHarness{
-		deepAgent:       deepAgent,
-		native:          native,
-		rails:           rails,
-		role:            role,
-		memberName:      memberName,
-		initialPlanMode: initialPlanMode,
+		deepAgent:        deepAgent,
+		native:           native,
+		role:             role,
+		memberName:       memberName,
+		initialPlanMode:  initialPlanMode,
+		taskEventTracker: taskEventTracker,
 	}
 }
 
-// BuildTeamHarness 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
+// TeamHarnessBuild 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
 // Python: TeamHarness.build(...)
 //
 // S-06: 对齐 Python deep_agent = agent_spec.build()——从 spec 构建 DeepAgent
@@ -166,73 +144,42 @@ func newTeamHarnessWithNative(
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
 // ⤴️ 9.68 回填完成：Rails 挂载逻辑已实现
-func BuildTeamHarness(
+// TeamHarnessBuild 前向构造团队线束（6 参数，对齐上游 TeamHarness.build）。
+//
+// 上游 team_harness.py:93-130：native 从 spec 物化自身，团队 rails 在
+// agent_spec.rails 里声明，经 spec build + ensure_initialized 统一挂载——
+// 这里不做手工挂载，也不建 throwaway 模板 DeepAgent。
+//
+// 前置：调用方（AgentConfigurator.SetupAgent）必须已经
+//
+//	① EnsureHarnessElementsRegistered()
+//	② InjectTeamHandles(memberBuildCtx, handles)
+//	③ 把 TeamRailSpecs 折进 agentSpec.Rails
+//
+// 否则 8 个 team rail provider 是死代码，声明会被静默跳过。
+//
+// Python: TeamHarness.build (team_harness.py:93-130)
+func TeamHarnessBuild(
 	agentSpec atschema.DeepAgentSpec,
 	role string,
 	memberName string,
-	teamToolRail *rails.TeamToolRail,
-	teamPolicyRail *rails.TeamPolicyRail,
-	firstIterGate *rails.FirstIterationGate,
-	teamWorkspaceRail *team_workspace.TeamWorkspaceRail, // ⤴️ 9.66: 团队工作空间Rail
-	toolApprovalRail *rails.TeamToolApprovalRail,
-	teamPlanModeRail *rails.TeamPlanModeRail,
 	initialPlanMode bool,
+	buildCtx hschema.BuildContextInterface,
+	taskEventTracker tracker.TaskEventTracker,
 ) *TeamHarness {
-	// S-06: 对齐 Python deep_agent = agent_spec.build()——物化 DeepAgent
-	agent := buildDeepAgentFromSpec(agentSpec)
-
-	// S-06: 对齐 Python build() 的 Rail 挂载顺序（L118-140）：
-	// deep_agent.add_rail(team_tool_rail) + 急切初始化（set_sys_operation/
-	// set_workspace/init），随后 team_policy、first_iter_gate、team_workspace、
-	// tool_approval、team_plan_mode 依次挂载。
-	// 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并急切初始化，
-	// 以便 LLM 看到的能力快照与测试观察到的一致（Init 幂等，延迟注册变为 no-op）。
-	if agent != nil {
-		if teamToolRail != nil {
-			agent.AddRail(teamToolRail)
-			// 急切初始化：rail 的延迟 init 在首次 invoke 时运行，
-			// 但在那之前获取的工具快照会遗漏团队工具
-			if dc := agent.DeepConfig(); dc != nil {
-				teamToolRail.SetSysOperation(dc.SysOperation)
-				teamToolRail.SetWorkspace(dc.Workspace)
-			}
-			if err := teamToolRail.Init(context.Background(), agent); err != nil {
-				logger.Warn(logComponent).Err(err).
-					Str("member_name", memberName).
-					Msg("BuildTeamHarness: TeamToolRail eager init failed")
-			}
-		}
-		if teamPolicyRail != nil {
-			agent.AddRail(teamPolicyRail)
-		}
-		if firstIterGate != nil {
-			agent.AddRail(firstIterGate)
-		}
-		if teamWorkspaceRail != nil {
-			agent.AddRail(teamWorkspaceRail)
-		}
-		if toolApprovalRail != nil {
-			agent.AddRail(toolApprovalRail)
-		}
-		if teamPlanModeRail != nil {
-			agent.AddRail(teamPlanModeRail)
-		}
+	native, err := NewNativeHarness(agentSpec, buildCtx)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("member_name", memberName).
+			Msg("TeamHarnessBuild: native construction failed")
+		return newTeamHarnessWithNative(nil, nil, role, memberName, initialPlanMode, taskEventTracker)
 	}
-
-	rails := &MountedRails{
-		TeamTool:      teamToolRail,
-		TeamPolicy:    teamPolicyRail,
-		FirstIterGate: firstIterGate,
-		TeamWorkspace: teamWorkspaceRail,
-		ToolApproval:  toolApprovalRail,
-		TeamPlanMode:  teamPlanModeRail,
-	}
-	if agent == nil {
-		return NewTeamHarness(nil, rails, role, memberName, initialPlanMode)
-	}
-	// ⤴️ 25.1a：把 DeepAgent 包成 NativeHarness，作为团队成员的协议面载体
-	native := NewNativeHarness(agent, agentSpec)
-	return newTeamHarnessWithNative(native, agent, rails, role, memberName, initialPlanMode)
+	h := newTeamHarnessWithNative(native, native.DeepAgent(), role, memberName,
+		initialPlanMode, taskEventTracker)
+	// 保存规格：native 在 Stop 后终止，下一个 run cycle 的 Start 需要按它重建。
+	h.agentSpec = agentSpec
+	h.buildCtx = buildCtx
+	return h
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
@@ -266,12 +213,6 @@ func (h *TeamHarness) RunAgentCustomizer(ctx context.Context, customizer AgentCu
 			Err(err).
 			Msg("agent_customizer failed")
 	}
-}
-
-// Rails 返回已挂载的团队侧 Rails 句柄。
-// Python: TeamHarness.rails property
-func (h *TeamHarness) Rails() *MountedRails {
-	return h.rails
 }
 
 // Role 返回团队角色。
@@ -446,12 +387,26 @@ func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
 
 // Start 绑定子会话并启动 native 的 supervisor（一个 run cycle 一次）。
 // Python: TeamHarness.start(team_session)（team_harness.py:135-169）
-// 步骤对齐上游 9 步；25.1a 阶段 native 由 BuildTeamHarness 物化且 fresh，
-// 故"重建 native / _remount_dynamic_tools / background_task_controller / kv_cache hook"
-// 四步在本阶段为 no-op（⤵️ 25.1b spec 驱动 + ⤵️ 25.1d 异步工具 + ⤵️ 25.6 会话钩子）。
+//
+// 步骤对齐上游 9 步。其中「重建 native」在本方法内实现：上一个 run cycle
+// 的 native 在 Stop 后处于 TERMINATED，必须按保存的 spec 重建，
+// 否则新 cycle 的 Send/Resume 会落到没有消费者的队列上。
+// 其余回填点：
+//   - _remount_dynamic_tools：随 native 重建由 EnsureInitialized 按 spec 自动重挂（25.1d 已覆盖）
+//   - background_task_controller：⤵️ 25.12（随 swarmflow 控制面）
+//   - kv_cache 会话生命周期钩子：⤵️ 25.6
 func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
+	// 步骤 1：native 缺失或已终止则重建（对齐上游 start 首步）
 	if h.native == nil {
-		return fmt.Errorf("team harness: 未构建 native（须经 BuildTeamHarness）")
+		return fmt.Errorf("team harness: 未构建 native（须经 TeamHarnessBuild）")
+	}
+	if h.native.State() == harnessprotocol.HarnessStateTerminated {
+		rebuilt, err := NewNativeHarness(h.agentSpec, h.buildCtx)
+		if err != nil {
+			return fmt.Errorf("team harness: 重建 native 失败: %w", err)
+		}
+		h.native = rebuilt
+		h.deepAgent = rebuilt.DeepAgent()
 	}
 
 	// 步骤 3：建子会话（对齐 _make_child_session）
@@ -482,9 +437,19 @@ func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
 // Stop 停止 native supervisor；保留（已终止的）native 供配置读取。
 // Python: TeamHarness.stop()（team_harness.py:171-199）
 func (h *TeamHarness) Stop(ctx context.Context) error {
-	if h.native != nil && h.native.State() != HarnessStateTerminated {
+	if h.native != nil && h.native.State() != harnessprotocol.HarnessStateTerminated {
 		if err := h.native.Stop(ctx); err != nil {
 			return err
+		}
+	}
+	// 提交子会话：跨 run cycle 的任务计划/历史/plan mode 依赖同一 session id 的
+	// checkpoint 恢复；注入会话的 ownSession=false，NativeHarness.Stop 不会 post_run。
+	// 失败只记 Debug（对齐上游 try/except Exception）。
+	if active := h.getActiveSession(); active != nil {
+		if err := active.Commit(ctx); err != nil {
+			logger.Debug(logComponent).Err(err).
+				Str("member_name", h.memberName).
+				Msg("TeamHarness.Stop: commit child session failed")
 		}
 	}
 	h.nativeSessionID = ""
@@ -496,7 +461,7 @@ func (h *TeamHarness) Stop(ctx context.Context) error {
 // Python: TeamHarness.run_once(content, team_session)（team_harness.py:201-250）
 func (h *TeamHarness) RunOnce(ctx context.Context, content any, teamSession any) (map[string]any, error) {
 	if h.native == nil {
-		return nil, fmt.Errorf("team harness: 未构建 native（须经 BuildTeamHarness）")
+		return nil, fmt.Errorf("team harness: 未构建 native（须经 TeamHarnessBuild）")
 	}
 	child := h.makeChildSession(teamSession)
 	if child == nil {
@@ -550,7 +515,7 @@ func (h *TeamHarness) Abort(ctx context.Context, immediate bool) error {
 	return h.native.Abort(ctx, immediate)
 }
 
-// Pause 暂停当前轮（25.1c 前返回哨兵错误）。
+// Pause 暂停当前轮到最近的内层迭代边界。
 // Python: TeamHarness.pause()（team_harness.py:383-390）
 func (h *TeamHarness) Pause(ctx context.Context) error {
 	if h.native == nil || h.getActiveSession() == nil {
@@ -559,7 +524,7 @@ func (h *TeamHarness) Pause(ctx context.Context) error {
 	return h.native.Pause(ctx)
 }
 
-// Resume 继续暂停的轮（25.1c 前返回哨兵错误）。
+// Resume 继续暂停的轮；query 非 nil 为冷恢复。
 // Python: TeamHarness.resume(query=...)（team_harness.py:392-400）
 func (h *TeamHarness) Resume(ctx context.Context, query any) error {
 	if h.native == nil || h.getActiveSession() == nil {
@@ -568,11 +533,20 @@ func (h *TeamHarness) Resume(ctx context.Context, query any) error {
 	return h.native.Resume(ctx, query)
 }
 
+// PausedQuery 返回暂停轮原始查询；ok=false 表示当前没有暂停轮。
+// Python: TeamHarness.paused_query (team_harness.py L402-406)
+func (h *TeamHarness) PausedQuery() (string, bool) {
+	if h.native == nil {
+		return "", false
+	}
+	return h.native.PausedQuery()
+}
+
 // State 返回 native 生命周期相位；无 native 时返回 idle。
 // Python: TeamHarness.state property（team_harness.py:327-331）
-func (h *TeamHarness) State() HarnessState {
+func (h *TeamHarness) State() harnessprotocol.HarnessState {
 	if h.native == nil {
-		return HarnessStateIdle
+		return harnessprotocol.HarnessStateIdle
 	}
 	return h.native.State()
 }
@@ -616,8 +590,8 @@ func sessionIDOf(teamSession any) string {
 func (h *TeamHarness) makeChildSession(teamSession any) *session.Session {
 	card := h.card()
 	if ts, ok := teamSession.(*session.AgentTeamSession); ok && ts != nil {
-		// Python: team_session.create_agent_session(card=card, share_stream_writer=False)
-		return ts.CreateAgentSession(card, "", false)
+		// Python: team_session.create_agent_session(card=card, share_stream_writer=False, member_name=self._member_name)
+		return ts.CreateAgentSession(card, "", false, h.MemberName())
 	}
 	// Python: create_agent_session(card=card)
 	return session.CreateAgentSession("", card, nil)
@@ -678,6 +652,18 @@ func (h *TeamHarness) FindRails(railType reflect.Type) []any {
 	return result
 }
 
+// FindRailsByType 按具体类型查 rail（FindRails 的类型安全包装）。
+//
+// 上游没有对应物：Go 侧 find_rails 收 reflect.Type，调用方写
+// FindRails(reflect.TypeOf(&X{})) 太啰嗦，故补一个收原型的薄封装。
+func (h *TeamHarness) FindRailsByType(prototype any) []any {
+	t := reflect.TypeOf(prototype)
+	if t == nil {
+		return nil
+	}
+	return h.FindRails(t)
+}
+
 // RegisterRail 在运行中的 Agent 上注册额外 Rail。
 // Python: TeamHarness.register_rail(rail) → await self._deep_agent.register_rail(rail)
 //
@@ -727,6 +713,34 @@ func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *mem
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// AnnounceTaskRevisions 立刻投递成员待发的任务编辑通知（F_129）。
+//
+// 通知的唯一来源是成员的任务通知器（TeamAgent 的那个实例，策略 rail 借用的
+// 是同一个）。轮次之外没有可认领的会话，因此什么都不会认领：rail 会在成员
+// 下一个输入时告诉它。通知会转向忙碌成员、并为空闲成员开一轮。
+//
+// Python: TeamHarness.announce_task_revisions (team_harness.py:291-304)
+func (h *TeamHarness) AnnounceTaskRevisions(ctx context.Context) error {
+	if h.taskEventTracker == nil {
+		return nil
+	}
+	sess := h.getActiveSession()
+	if sess == nil {
+		return nil
+	}
+	_, err := h.taskEventTracker.Announce(sess, func(text string) error {
+		return h.Send(ctx, text, true)
+	})
+	return err
+}
+
+// CurrentSession 返回当前活跃的子会话；harness 未运行时返回 nil。
+//
+// Python: TeamHarness.current_session (team_harness.py:306-308)
+func (h *TeamHarness) CurrentSession() *session.Session {
+	return h.getActiveSession()
+}
+
 // getActiveSession 读取最近一次轮次的 Agent 会话（并发安全）。
 func (h *TeamHarness) getActiveSession() *session.Session {
 	h.mu.RLock()
@@ -768,104 +782,4 @@ func interruptionStateOf(val any) *agentschema.ToolInterruptionState {
 		return nil
 	}
 	return st
-}
-
-// buildDeepAgentFromSpec 从 DeepAgentSpec 物化 DeepAgent 实例。
-// S-06: 对齐 Python DeepAgentSpec.build() (deep_agent_spec.py L461-515)
-//
-// Python 步骤：
-//
-//	Python: 1. llm_model = self.model.build()（TeamModelConfig → Model）
-//	Python: 2. language = resolve_language(self.language)
-//	3. vision_config / audio_config / workspace / rails / subagents / sys_operation 逐项 build
-//	Python: 4. create_deep_agent(...)
-//
-// Go 差异：团队 Rails（TeamToolRail 等 6 个）由调用方（AgentConfigurator）先构建、
-// 经 BuildTeamHarness 参数传入后挂载（挂载顺序有语义），不在此处从 RailSpec 构建；
-// subagents/sys_operation 等字段由 CreateDeepAgent 内部处理。
-// 构建失败时记日志并返回 nil（对齐 Python 异常向上传播由调用方兜底的容错语义，
-// 避免团队启动因单个成员物化失败而中断）。
-func buildDeepAgentFromSpec(spec atschema.DeepAgentSpec) *agentcore.DeepAgent {
-	// Python: llm_model = self.model.build() if self.model else None
-	var llmModel *llm.Model
-	if spec.Model != nil {
-		cfg := spec.Model.ModelClientConfig
-		m, err := llm.NewModel(&cfg, spec.Model.ModelRequestConfig)
-		if err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("member_card", spec.Card.GetName()).
-				Msg("buildDeepAgentFromSpec: model build failed, agent will have no model")
-		} else {
-			llmModel = m
-		}
-	}
-
-	// Python: workspace = self.workspace.build() if self.workspace else None
-	// Go 差异：WorkspaceSpec → workspace.Workspace 由 CreateDeepAgent 内部
-	// buildWorkspace 处理（harness_config.Params.Workspace 为 *Workspace），
-	// 此处传入 nil 让 factory 走默认构建。
-
-	params := hconfig.CreateDeepAgentParams{
-		Model:                  llmModel,
-		Card:                   spec.Card,
-		SystemPrompt:           spec.SystemPrompt,
-		ToolCards:              spec.ToolCards,
-		Mcps:                   spec.Mcps,
-		EnableTaskLoop:         true, // Python: enable_task_loop=True（build 中硬编码）
-		EnableAsyncSubagent:    spec.EnableAsyncSubagent,
-		AddGeneralPurposeAgent: spec.AddGeneralPurposeAgent,
-		MaxIterations:          spec.MaxIterations,
-		Skills:                 spec.Skills,
-		EnableSkillDiscovery:   spec.EnableSkillDiscovery,
-		Language:               spec.Language,
-		AutoCreateWorkspace:    spec.AutoCreateWorkspace,
-	}
-
-	// Python: vision_config = self.vision_model.build() if self.vision_model else None
-	if spec.VisionModel != nil {
-		params.VisionModelConfig = &hschema.VisionModelConfig{
-			APIKey:     spec.VisionModel.APIKey,
-			BaseURL:    spec.VisionModel.BaseURL,
-			Model:      spec.VisionModel.Model,
-			MaxRetries: spec.VisionModel.MaxRetries,
-		}
-	}
-	// Python: audio_config = self.audio_model.build() if self.audio_model else None
-	if spec.AudioModel != nil {
-		params.AudioModelConfig = &hschema.AudioModelConfig{
-			APIKey:             spec.AudioModel.APIKey,
-			BaseURL:            spec.AudioModel.BaseURL,
-			TranscriptionModel: spec.AudioModel.TranscriptionModel,
-			QAModel:            spec.AudioModel.QAModel,
-			MaxRetries:         spec.AudioModel.MaxRetries,
-		}
-	}
-	// Python: completion_timeout=self.completion_timeout
-	if spec.CompletionTimeout > 0 {
-		params.CompletionTimeout = spec.CompletionTimeout
-	}
-	// Python: enable_task_planning=self.enable_task_planning
-	params.EnableTaskPlanning = spec.EnableTaskPlanning
-	// Python: restrict_to_work_dir=self.restrict_to_sandbox（*bool，非零时设置）
-	if spec.RestrictToSandbox {
-		restrict := true
-		params.RestrictToWorkDir = &restrict
-	}
-	// Python: prompt_mode=self.prompt_mode（字符串解析，失败保持默认 Full）
-	if spec.PromptMode != "" {
-		if pm, err := hschema.ParsePromptMode(spec.PromptMode); err == nil {
-			params.PromptMode = pm
-		} else {
-			logger.Warn(logComponent).Err(err).Str("prompt_mode", spec.PromptMode).
-				Msg("buildDeepAgentFromSpec: invalid prompt_mode, using default")
-		}
-	}
-
-	agent, err := agentcore.CreateDeepAgent(context.Background(), params)
-	if err != nil {
-		logger.Error(logComponent).Err(err).
-			Msg("buildDeepAgentFromSpec: CreateDeepAgent failed")
-		return nil
-	}
-	return agent
 }

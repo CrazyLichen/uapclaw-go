@@ -62,10 +62,7 @@ var grepDescription = map[string]string{
 
 // GetReadFileMetadataProviderInputParams 构建 read_file 工具的参数 Schema
 func GetReadFileMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"file_path": {"cn": "要读取的绝对路径", "en": "Absolute path of the file to read"},
 		"offset":    {"cn": "要跳过的行数（0 表示从头读取）。仅在文件过大无法一次读完时提供", "en": "Number of lines to skip before reading (0 = start of file). Only provide when the file is too large to read at once"},
@@ -73,12 +70,7 @@ func GetReadFileMetadataProviderInputParams(language string) map[string]any {
 		"pages":     {"cn": "PDF 专属页码范围，例如 '1-5'、'3'、'10-20'。每次最多 20 页", "en": "PDF-only page range, e.g. '1-5', '3', '10-20'. Maximum 20 pages per request"},
 		"caption":   {"cn": "可选。读取 skills/… 下的图片时，填入 SKILL.md 中的图片说明文字（Markdown alt），用于多模态用户提示。", "en": "Optional. When reading an image under skills/, pass the figure caption (markdown alt text from SKILL.md) for the multimodal user prompt."},
 	}
-	dd := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	dd := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -94,20 +86,12 @@ func GetReadFileMetadataProviderInputParams(language string) map[string]any {
 
 // GetWriteFileMetadataProviderInputParams 构建 write_file 工具的参数 Schema
 func GetWriteFileMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"file_path": {"cn": "要写入的文件路径", "en": "Absolute path of the file to write"},
 		"content":   {"cn": "要写入的内容", "en": "Content to write"},
 	}
-	dd := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	dd := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -120,22 +104,14 @@ func GetWriteFileMetadataProviderInputParams(language string) map[string]any {
 
 // GetEditFileMetadataProviderInputParams 构建 edit_file 工具的参数 Schema
 func GetEditFileMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"file_path":   {"cn": "目标文件的绝对路径", "en": "Absolute path to the target file"},
 		"old_string":  {"cn": "要替换的原始文本（空字符串可用于创建新文件或向空文件写入内容）。必须在文件中唯一匹配，否则须设置 replace_all=true 或提供更多上下文", "en": "The text to replace (empty string creates a new file or writes to an empty file). Must match exactly once unless replace_all=true or more context is provided"},
 		"new_string":  {"cn": "替换后的文本，必须与 old_string 不同", "en": "The replacement text, must differ from old_string"},
 		"replace_all": {"cn": "是否替换文件中所有匹配项，默认 false", "en": "Replace all occurrences of old_string in the file, default false"},
 	}
-	dd := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	dd := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -150,20 +126,12 @@ func GetEditFileMetadataProviderInputParams(language string) map[string]any {
 
 // GetGlobMetadataProviderInputParams 构建 glob 工具的参数 Schema
 func GetGlobMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"pattern": {"cn": "glob 模式（如 *.py, **/*.js）", "en": "Glob pattern (e.g. *.py, **/*.js)"},
 		"path":    {"cn": "搜索目录，省略时默认当前工作目录", "en": "Directory to search. Defaults to the current working directory when omitted"},
 	}
-	dd := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	dd := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -176,20 +144,12 @@ func GetGlobMetadataProviderInputParams(language string) map[string]any {
 
 // GetListDirMetadataProviderInputParams 构建 list_files 工具的参数 Schema
 func GetListDirMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"path":        {"cn": "目录路径", "en": "Directory path"},
 		"show_hidden": {"cn": "显示隐藏文件", "en": "Show hidden files"},
 	}
-	dd := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	dd := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -202,10 +162,7 @@ func GetListDirMetadataProviderInputParams(language string) map[string]any {
 
 // GetGrepMetadataProviderInputParams 构建 grep 工具的参数 Schema
 func GetGrepMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"pattern":     {"cn": "搜索模式（正则表达式）", "en": "Search pattern (regular expression)"},
 		"path":        {"cn": "搜索路径（文件或目录），默认为当前工作目录", "en": "Search path (file or directory). Defaults to the current working directory"},
@@ -223,12 +180,7 @@ func GetGrepMetadataProviderInputParams(language string) map[string]any {
 		"offset":      {"cn": "先跳过前 N 条记录或行，再应用 head_limit，默认 0", "en": "Skip the first N entries or lines before applying head_limit. Defaults to 0"},
 		"multiline":   {"cn": "启用多行正则模式，需要 rg", "en": "Enable multiline regex mode. Requires rg"},
 	}
-	dd := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	dd := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

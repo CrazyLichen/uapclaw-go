@@ -1704,3 +1704,11 @@ func (d *dummyOperator) ApplyUpdate(target string, update schema.UpdateValue) sc
 }
 func (d *dummyOperator) LoadState(state map[string]any)                      {}
 func (d *dummyOperator) Execute(ctx context.Context, input any) (any, error) { return nil, nil }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *mockBaseModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *mockBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

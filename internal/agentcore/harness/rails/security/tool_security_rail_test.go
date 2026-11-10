@@ -3,6 +3,7 @@ package security
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -994,3 +995,12 @@ func TestHostPersistAllowRule_host无钩子(t *testing.T) {
 		t.Error("钩子为 nil 时应返回 nil")
 	}
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *mockSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSessionFacade) GetParentSessionID() string { return "" }

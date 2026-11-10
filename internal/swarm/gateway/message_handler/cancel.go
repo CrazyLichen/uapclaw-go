@@ -131,6 +131,73 @@ func (mh *MessageHandler) collectStreamTasksForSession(sessionID string) []strin
 	return requestIDs
 }
 
+// cancelStreamsForPausedSession 团队暂停后取消同 session 的流消费者。
+// Python: _cancel_streams_for_paused_session (message_handler.py L1309-1370)
+//
+// 团队暂停把 AgentServer 的轮次停住，其事件流不会发出线上终态帧，
+// 网关消费者会永远挂在接收队列上（僵尸注册，之后还会否决权威的
+// is_processing=false）。这里取消它们；每个被取消的 chat.send 消费者
+// 会在 process_stream 的 finally 里自行发 is_processing=false；
+// 若没有任何“会发状态”的受害者（空闲重复暂停、只挂观测的消费者），
+// 则显式补一条会话级 false。
+//
+// 单 agent（Deep adapter）暂停不同：它是可恢复 park，同一条流在 resume 后
+// 继续产出，取消消费者会丢掉续跑输出——非团队会话保持“暂停不动流”契约。
+func (mh *MessageHandler) cancelStreamsForPausedSession(
+	_ context.Context, msg *schema.Message, sessionMode string,
+) {
+	sessionID := msg.SessionID
+	if sessionID == "" {
+		return
+	}
+
+	mh.streamMu.Lock()
+	var victims []string
+	emitVictims := make(map[string]bool, 4)
+	for rid, sid := range mh.streamSessions {
+		if sid != sessionID {
+			continue
+		}
+		if !schema.IsTeamMode(mh.streamModes[rid]) {
+			continue
+		}
+		entry, ok := mh.streamTasks[rid]
+		if !ok || entry == nil {
+			continue
+		}
+		victims = append(victims, rid)
+		emitVictims[rid] = mh.streamEmitsProcessingStatus[rid]
+	}
+	mh.streamMu.Unlock()
+
+	if len(victims) == 0 {
+		if schema.IsTeamMode(sessionMode) {
+			mh.sendProcessingStatus("", sessionID, "", false)
+		}
+		return
+	}
+
+	logger.Info(logComponent).Str("event_type", "pause_stream_governance").
+		Str("session_id", sessionID).Strs("cancelled_rids", victims).
+		Msg("team pause: cancelling same-session stream consumers")
+
+	// 取消前已快照 emit 标记：cancelStreamTask 会 pop tracking，之后读不到。
+	anyEmit := false
+	for _, emit := range emitVictims {
+		if emit {
+			anyEmit = true
+			break
+		}
+	}
+	for _, rid := range victims {
+		mh.cancelStreamTask(rid)
+	}
+
+	if !anyEmit && schema.IsTeamMode(sessionMode) {
+		mh.sendProcessingStatus("", sessionID, "", false)
+	}
+}
+
 // cancelStreamTask 取消单个流式任务
 func (mh *MessageHandler) cancelStreamTask(requestID string) {
 	mh.streamMu.Lock()
@@ -140,6 +207,7 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 		delete(mh.streamSessions, requestID)
 		delete(mh.streamMetadata, requestID)
 		delete(mh.streamModes, requestID)
+		delete(mh.streamEmitsProcessingStatus, requestID)
 	}
 	mh.streamMu.Unlock()
 
@@ -179,7 +247,7 @@ func (mh *MessageHandler) buildCancelMessage(msg *schema.Message, sessionID stri
 	// 如果 params 中没有 mode，从 channelStates 补充
 	if _, hasMode := params["mode"]; !hasMode {
 		state := mh.GetOrCreateChannelState(msg)
-		params["mode"] = string(state.Mode)
+		params["mode"] = string(state.GetMode())
 	}
 
 	paramsJSON, _ := json.Marshal(params)
@@ -241,7 +309,9 @@ func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, msg *schema.
 
 // sendInterruptToAgentWithEnvelope 使用预构建的 E2A 信封发送中断请求。
 // Python: _send_interrupt_to_agent(env_interrupt) — 接收已包含 mode 注入的信封
-func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, envelope *e2a.E2AEnvelope, intent string) {
+func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(
+	ctx context.Context, envelope *e2a.E2AEnvelope, intent string,
+) (*schema.AgentResponse, error) {
 	// 在 params 中注入 intent
 	if envelope.Params != nil {
 		envelope.Params["intent"] = intent
@@ -256,13 +326,14 @@ func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, 
 			Err(err).
 			Str("session_id", envelope.SessionID).
 			Msg("AgentServer interrupt request failed (ignored)")
-		return
+		return nil, err
 	}
 	logger.Info(logComponent).
 		Str("event_type", "cancel_response_discarded").
 		Str("request_id", resp.RequestID).
 		Bool("ok", resp.OK).
 		Msg("AgentServer interrupt response (dropped)")
+	return resp, nil
 }
 
 // sendInterruptResultNotification 发送 interrupt_result 事件通知。

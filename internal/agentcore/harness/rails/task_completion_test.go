@@ -662,7 +662,7 @@ func TestValidateGoalState_各分支(t *testing.T) {
 	active.GoalID = "g1"
 	active.Revision = 2
 
-	// nil record
+	// nil record 空记录
 	assert.False(t, validateGoalState(nil, "g1", 2, false))
 	// status 不匹配
 	active.Status = goal.GoalStatusCompleted

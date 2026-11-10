@@ -17,10 +17,7 @@ var videoUnderstandingDescription = map[string]string{
 
 // GetVideoUnderstandingMetadataProviderInputParams 构建 video_understanding 工具的参数 Schema
 func GetVideoUnderstandingMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"query":            {"cn": "用户关于视频内容的问题", "en": "User query about the video content"},
 		"video_path":       {"cn": "本地视频路径或远程视频 URL", "en": "Local video path or remote video URL"},
@@ -30,12 +27,7 @@ func GetVideoUnderstandingMetadataProviderInputParams(language string) map[strin
 		"timeout_seconds":  {"cn": "可选，请求超时时间（秒）", "en": "Optional timeout in seconds"},
 		"thinking_enabled": {"cn": "可选，是否启用思维模式", "en": "Optional, enable thinking mode"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

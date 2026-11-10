@@ -2,6 +2,7 @@ package skills
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"os"
 	"path/filepath"
 	"testing"
@@ -238,7 +239,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 		r.skills = []*skillpkg.Skill{testSkill("alpha"), testSkill("beta")}
 
 		mgr := prompts.NewManager()
-		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		r.attachmentManager = mgr
 
 		require.NoError(t, r.updateRuntimeSkillAttachment(newCBC(t, sess), r.loadSessionBaseline(sess)))
 
@@ -257,7 +258,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 		r.ensureSessionBaseline(sess)
 
 		mgr := prompts.NewManager()
-		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		r.attachmentManager = mgr
 		_, err := mgr.AddSection("s1", runtimeSkillAttachmentSection, "stale", prompts.AttachmentSkill, runtimeSkillAttachmentSource)
 		require.NoError(t, err)
 
@@ -268,7 +269,7 @@ func TestUpdateRuntimeSkillAttachment(t *testing.T) {
 	t.Run("无会话时不panic", func(t *testing.T) {
 		r := newRailWithSkills(testSkill("alpha"))
 		mgr := prompts.NewManager()
-		r.attachmentManagerFor = func() *prompts.Manager { return mgr }
+		r.attachmentManager = mgr
 		assert.NoError(t, r.updateRuntimeSkillAttachment(nil, nil))
 	})
 }
@@ -425,3 +426,15 @@ func TestSkillsSignatureEquals(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "beta", "SKILL.md"), []byte("# beta"), 0o644))
 	assert.False(t, r.skillsSignatureEquals(), "新增技能目录应判为变化")
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *mockAbilityManager) TeardownTools() {}
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (f *skillFakeSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *skillFakeSession) GetParentSessionID() string { return "" }

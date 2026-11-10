@@ -29,6 +29,8 @@ type fakeHost struct {
 	shutdownCalled bool
 	cancelCalled   bool
 	deliverCalled  bool
+	// announceCalls AnnounceTaskRevisions 被调用的次数
+	announceCalls int
 }
 
 func (f *fakeHost) IsAgentReady() bool                  { return true }
@@ -41,6 +43,10 @@ func (f *fakeHost) DeliverInput(_ context.Context, _ any, _ bool) error {
 	return nil
 }
 func (f *fakeHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
+	return nil
+}
+func (f *fakeHost) AnnounceTaskRevisions(_ context.Context) error {
+	f.announceCalls++
 	return nil
 }
 func (f *fakeHost) ShutdownSelf(_ context.Context) error                     { f.shutdownCalled = true; return nil }

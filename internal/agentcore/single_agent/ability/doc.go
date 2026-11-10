@@ -8,7 +8,9 @@
 //	├── doc.go               # 包文档
 //	├── ability_manager.go   # AbilityManager（能力管理器） 核心结构 + 注册/查询/执行
 //	├── ability_types.go     # Ability（能力） 联合类型 + AddAbilityResult（添加能力结果） + AbilityExecutionError（能力执行错误）
-//	└── json_repair.go       # RepairToolArgumentsJSON（修复工具参数JSON） + ParseToolArguments（解析工具参数）
+//	├── json_repair.go       # RepairToolArgumentsJSON（修复工具参数JSON） + ParseToolArguments（解析工具参数）
+//	├── mcp_result.go        # MCP 工具结果解包与类型归一
+//	└── tool_timeout.go      # 工具调用超时解析（ToolCard 预算 → 实际超时）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/ability_manager.py
 package ability

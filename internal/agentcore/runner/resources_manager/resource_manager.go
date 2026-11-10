@@ -57,6 +57,14 @@ type resourceOptions struct {
 	Session decorator.TracerSession
 	// Refresh 是否刷新（Tool 专用）
 	Refresh bool
+	// SkipIfExists 同 id 已注册时保持原注册并幂等返回（Tool 专用）
+	//
+	// 与 Refresh 互斥语义：Refresh 是「用新实例替换旧的」（有状态工具，
+	// 绑定到具体 agent/session，重启时重绑）；SkipIfExists 是「保留旧的、
+	// 本次 add 变成 no-op」（无状态共享单例，多个 agent 用同一个裸 id）。
+	//
+	// Python: add_tool(..., skip_if_exists=True) (resource_manager.py:408-441)
+	SkipIfExists bool
 	// InterfaceURL 分布式接口 URL（Agent 专用，⤵️ 预留）
 	InterfaceURL string
 }
@@ -174,6 +182,16 @@ func WithSkipIfTagNotExists() ResourceOption {
 // WithSession 设置追踪会话。
 func WithSession(session decorator.TracerSession) ResourceOption {
 	return func(o *resourceOptions) { o.Session = session }
+}
+
+// WithSkipIfExists 设置「同 id 已存在则跳过」（Tool 专用）。
+//
+// 对齐上游 add_tool(skip_if_exists=True)：已存在时保留原注册并幂等返回，
+// 适用于无状态共享单例（模块级单例，多个 agent 共用裸 id）。
+//
+// Python: resource_manager.py:418-427
+func WithSkipIfExists() ResourceOption {
+	return func(o *resourceOptions) { o.SkipIfExists = true }
 }
 
 // WithRefresh 设置刷新标记（Tool 专用）。
@@ -383,6 +401,12 @@ func (m *ResourceMgr) AddTool(t tool.Tool, opts ...ResourceOption) error {
 
 	if err := m.innerValidateResourceID(toolID, "tool"); err != nil {
 		return err
+	}
+
+	// skip_if_exists 前置处理（与 Python _skip_existing_tool_if_needed 对齐）
+	// 已注册则保留原注册、本次 add 成为幂等 no-op。
+	if o.SkipIfExists && m.tagMgr.HasResource(toolID) {
+		return nil
 	}
 
 	// refresh 前置处理（与 Python _refresh_existing_tool_if_needed 对齐）

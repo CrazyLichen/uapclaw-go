@@ -43,10 +43,11 @@ func (s *RailRegistrationSuite) TestSlashFirstMessage_EvolutionRailRegistered() 
 	d := s.newAdapter("agent", evolutionExtra(true, false, false))
 	s.Require().Equal(1, s.countEvolutionRails(d), "CreateInstance 应按配置装配演进 rail")
 
+	inputs := map[string]any{"query": "/evolve_list", "mode": "agent.work.plan"}
 	req := schema.NewAgentRequest("req-slash", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "/evolve_list", "mode": "agent.work.plan"}),
+		s.jsonParams(inputs),
 		schema.WithAgentSessionID("itest-rail"))
-	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
 
 	s.Equal(1, s.countEvolutionRails(d), "首条 /evolve_list 之后演进 rail 必须已注册")
@@ -60,9 +61,16 @@ func (s *RailRegistrationSuite) SetupTest() {
 }
 
 // newAdapter 写入配置并装配 DeepAdapter。
+//
+// 10.3.28f：本 suite 断言的是"CreateInstance 装出了哪些 rail"与"热重载是否
+// 原地刷新 rail"，都是装配层行为，不涉及会话分流。根 adapter 现在是纯 router
+// （对齐 Python _skip_own_instance_build :13109），不建 DeepAgent，
+// 故标记为 session-scoped：装配逻辑与 child 完全一致，rail 挂在它自己的
+// DeepAgent 上，可直接断言。根分流本身由 session_fork_test.go 覆盖。
 func (s *RailRegistrationSuite) newAdapter(mode, reactExtra string) *adapter.DeepAdapter {
 	s.env.WriteConfigYAML(s.T(), reactExtra)
 	d := adapter.NewDeepAdapter()
+	d.MarkAsSessionScoped("itest-rail")
 	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, mode, ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
@@ -102,10 +110,11 @@ func (s *RailRegistrationSuite) TestPlanMessage_EvolutionRailRegistered() {
 	s.Require().Equal(1, s.countEvolutionRails(d), "CreateInstance 应按配置装配演进 rail")
 
 	for i := 0; i < 2; i++ {
+		inputs := map[string]any{"query": "你好", "mode": "agent.work.plan"}
 		req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-			s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
+			s.jsonParams(inputs),
 			schema.WithAgentSessionID("itest-rail"))
-		_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+		_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 		s.Require().NoError(err)
 		s.Equal(1, s.countEvolutionRails(d), "第 %d 条计划消息后应恰好注册 1 个", i+1)
 	}
@@ -135,10 +144,11 @@ func (s *RailRegistrationSuite) TestHotReload_EvolutionRailInPlace() {
 func (s *RailRegistrationSuite) TestHotReload_PreservesStatefulRails() {
 	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, false))
 
+	inputs := map[string]any{"query": "你好", "mode": "agent.work.plan"}
 	req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
+		s.jsonParams(inputs),
 		schema.WithAgentSessionID("itest-rail"))
-	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
 
 	planBefore := d.Instance().FindRailsByType(reflect.TypeOf(&rails.TaskPlanningRail{}))
@@ -170,10 +180,11 @@ func (s *RailRegistrationSuite) TestSkillCreate_DisabledThenHotEnabled() {
 	s.env.WriteConfigYAML(s.T(), evolutionExtra(true, false, true))
 	s.Require().NoError(d.ReloadAgentConfig(s.Ctx, nil, nil))
 
+	inputs := map[string]any{"query": "你好", "mode": "agent.work.plan"}
 	req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
+		s.jsonParams(inputs),
 		schema.WithAgentSessionID("itest-rail"))
-	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
+	_, err := d.ProcessMessageImpl(s.Ctx, req, inputs)
 	s.Require().NoError(err)
 	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
 		"热重载打开 skill_create 后应注册")

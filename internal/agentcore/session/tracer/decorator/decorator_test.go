@@ -863,3 +863,19 @@ func TestTracedModelClient_Stream_consumerAbandonDrains(t *testing.T) {
 		t.Fatal("tracer 包装层未在消费方放弃后排空内层（goroutine 泄漏）")
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *fakeModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *fakeModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (c *tracerRecordDataCapturingClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (c *tracerRecordDataCapturingClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

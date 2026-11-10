@@ -187,3 +187,22 @@ func sortedKeys(m map[string]struct{}) []string {
 	}
 	return keys
 }
+
+// normalizeToolLang 归一化工具元数据的语言标识，非法值回退中文。
+func normalizeToolLang(language string) string {
+	if language != "cn" && language != "en" {
+		return "cn"
+	}
+	return language
+}
+
+// i18nPicker 返回按语言取文案的函数；该语言缺失时回退中文。
+// 各工具的字段描述表结构一致，统一走这里避免逐文件重复闭包。
+func i18nPicker(table map[string]map[string]string, lang string) func(string) string {
+	return func(key string) string {
+		if v, ok := table[key][lang]; ok {
+			return v
+		}
+		return table[key]["cn"]
+	}
+}

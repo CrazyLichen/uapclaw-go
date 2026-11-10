@@ -17,6 +17,7 @@
 //	├── enter_worktree.go    # enter_worktree 工具
 //	├── exit_worktree.go     # exit_worktree 工具
 //	├── filesystem.go        # read_file / write_file / edit_file / glob / list_files / grep 工具
+//	├── goal.go              # submit_goal_report / get_current_goal 工具
 //	├── list_skill.go        # list_skill 工具
 //	├── lsp_tool.go          # lsp 工具
 //	├── mcp.go               # list_mcp_resources / read_mcp_resource 工具

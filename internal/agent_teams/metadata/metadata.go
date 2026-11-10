@@ -23,6 +23,9 @@ const (
 	// TeamDBStateCleaned DB 表已清理
 	// Python: TEAM_DB_STATE_CLEANED = "cleaned"
 	TeamDBStateCleaned = "cleaned"
+	// TeamPendingResumeKey 冷恢复标记在 per-team 命名空间中的键
+	// Python: TEAM_PENDING_RESUME_KEY = "pending_resume"（metadata.py L41）
+	TeamPendingResumeKey = "pending_resume"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -67,6 +70,43 @@ func ReadTeamNamesInSession(sess interfaces.SessionFacade) []string {
 		names = append(names, k)
 	}
 	return names
+}
+
+// ReadPendingResume 读取冷恢复标记；缺失/非 dict 返回不存在。
+// Python: read_pending_resume (metadata.py L102-110)
+func ReadPendingResume(sess interfaces.SessionFacade, teamName string) (map[string]any, bool) {
+	bucket := ReadTeamNamespace(sess, teamName)
+	if bucket == nil {
+		return nil, false
+	}
+	value, ok := bucket[TeamPendingResumeKey].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return copyMap(value), true
+}
+
+// MergePendingResume 记录冷恢复标记。
+// Python: merge_pending_resume (metadata.py L113-115)
+func MergePendingResume(sess interfaces.SessionFacade, teamName string, payload map[string]any) {
+	MergeTeamNamespace(sess, teamName, map[string]any{TeamPendingResumeKey: copyMap(payload)})
+}
+
+// ClearPendingResume 删除冷恢复标记，返回是否真的删掉。
+// Python: clear_pending_resume (metadata.py L118-125)
+func ClearPendingResume(sess interfaces.SessionFacade, teamName string) bool {
+	teams := ReadTeamsBucket(sess)
+	bucket, ok := teams[teamName]
+	if !ok {
+		return false
+	}
+	if _, exists := bucket[TeamPendingResumeKey]; !exists {
+		return false
+	}
+	delete(bucket, TeamPendingResumeKey)
+	teams[teamName] = bucket
+	sess.UpdateState(map[string]any{TeamsKey: teams})
+	return true
 }
 
 // ReadTeamDBState 读取 db_state 字段值，不存在时返回空字符串。

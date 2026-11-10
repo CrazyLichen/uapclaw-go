@@ -231,6 +231,17 @@ func (c *TracedModelClient) Release(ctx context.Context, opts ...model_clients.R
 }
 
 // SupportsKVCacheRelease 委托给底层客户端判断是否支持 KV Cache 释放。
+func (c *TracedModelClient) SupportsKVCacheAffinity() bool {
+	return c.inner.SupportsKVCacheAffinity()
+}
+
+// BuildKVCacheAffinityInvokeKwargs 委托底层客户端构造亲和参数。
+func (c *TracedModelClient) BuildKVCacheAffinityInvokeKwargs(
+	sess any, sessionID, parentSessionID string, turnNum int,
+) map[string]any {
+	return c.inner.BuildKVCacheAffinityInvokeKwargs(sess, sessionID, parentSessionID, turnNum)
+}
+
 func (c *TracedModelClient) SupportsKVCacheRelease() bool {
 	return c.inner.SupportsKVCacheRelease()
 }

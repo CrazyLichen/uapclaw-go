@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -70,7 +71,15 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 		}
 
 		// Python: L111-115: 调用子代理
-		result, err := subagent.Invoke(ctx, map[string]any{
+		// 委派归属：本次子代理调用的用量归到父调用链上。
+		// Python: task_tool.py L826-849（_invoke_with_usage_delegation）
+		delegationAgentID := ""
+		if delegationCard := subagent.Card(); delegationCard != nil {
+			delegationAgentID = delegationCard.ID
+		}
+		invokeCtx := rail.BindUsageDelegation(ctx, rail.BuildUsageDelegationAttribution(
+			ctx, delegationAgentID, parentSessionID, subSessionID, nil, rail.CurrentUsageInvocationID(ctx)))
+		result, err := subagent.Invoke(invokeCtx, map[string]any{
 			"query":           input.TaskDescription,
 			"conversation_id": subSessionID,
 		})

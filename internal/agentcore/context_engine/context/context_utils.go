@@ -356,6 +356,7 @@ func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id st
 // 同名别名冲突时丢弃该别名（避免把两家厂商的同名模型混为一谈）。
 // Python: ContextUtils.fetch_openrouter_model_context_window_tokens()
 func fetchOpenRouterContextWindows(timeoutSeconds float64) map[string]int {
+	// 缓存未过期直接返回副本
 	openRouterTokensMu.Lock()
 	if !openRouterTokensFetched.IsZero() && time.Since(openRouterTokensFetched) < openRouterCacheTTL {
 		cached := copyIntMap(openRouterTokens)
@@ -365,6 +366,7 @@ func fetchOpenRouterContextWindows(timeoutSeconds float64) map[string]int {
 	openRouterTokensFetched = time.Now()
 	openRouterTokensMu.Unlock()
 
+	// 拉取失败、状态异常或解析失败时一律回退到缓存/内置值
 	timeout := timeoutSeconds
 	if timeout <= 0 {
 		timeout = 3
@@ -395,6 +397,7 @@ func fetchOpenRouterContextWindows(timeoutSeconds float64) map[string]int {
 		return copyIntMap(openRouterTokens)
 	}
 
+	// 按 model id 建表，同时为去掉厂商前缀的别名建索引（重名别名丢弃）
 	parsed := make(map[string]int, len(payload.Data))
 	aliases := make(map[string]int, len(payload.Data))
 	ambiguous := make(map[string]struct{})
@@ -421,6 +424,7 @@ func fetchOpenRouterContextWindows(timeoutSeconds float64) map[string]int {
 		parsed[alias] = tokens
 	}
 
+	// 写回缓存并返回副本
 	openRouterTokensMu.Lock()
 	openRouterTokens = parsed
 	openRouterTokensMu.Unlock()

@@ -94,12 +94,14 @@ func ExtractMCPToolResultContent(toolResult any, includeImageContent bool, toolN
 	if !ok {
 		return preserveMCPToolResultStatus(toolResult, nil)
 	}
+	// 没有 content 列表时原样保留状态，交给上层按普通结果处理
 	contentRaw, hasContent := resultMap["content"]
 	contentList, _ := contentRaw.([]any)
 	if !hasContent || len(contentList) == 0 {
 		return preserveMCPToolResultStatus(toolResult, nil)
 	}
 
+	// 逐条提取：纯文本直接拼接，图片按开关内联或转成占位说明
 	var textParts []string
 	type imageBlock struct{ mimeType, data string }
 	var images []imageBlock

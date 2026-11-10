@@ -46,6 +46,11 @@ type TeamBackend struct {
 	isLeader bool
 	// leaderMemberName 领导者成员名称
 	leaderMemberName string
+	// leaderNameCache 从 team_info 行解析出的 leader 名（懒加载缓存）
+	//
+	// leader 是团队的持久属性，一个团队生命周期内不会变，故解析一次即可。
+	// Python: self._leader_name_cache (tools/team.py:1825)
+	leaderNameCache *string
 	// db 团队数据库
 	db database.TeamDatabase
 	// messager 消息发送器
@@ -68,6 +73,13 @@ type TeamBackend struct {
 	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建完成回调
 	onTeamBuilt func(ctx context.Context) error
+	// onMemberStarted 成员启动回调（spawn 落地）
+	//
+	// 存在 backend 上而不是每次 startup 传参：调用方（发消息、建任务）只需
+	// 表达"确保名册都起来了"，不必各自揣着 spawn 回调。
+	//
+	// Python: self._on_member_started (tools/team.py:348)
+	onMemberStarted func(ctx context.Context, memberName string) error
 	// planStorageDir 计划存储目录
 	planStorageDir string
 	// planID 当前计划标识
@@ -141,6 +153,20 @@ type spawnMemberConfig struct {
 	mode string
 	// allocation 模型配置分配（对齐 Python: allocation=None）
 	allocation *models.Allocation
+	// fallbackAllocation 外部 CLI 成员的认证兜底分配
+	fallbackAllocation *models.Allocation
+	// isolation 隔离模式（"worktree" 或空）
+	isolation string
+	// cliAgent 外部 CLI 后端名
+	cliAgent string
+	// builtinModel 外部 CLI 成员自带登录态使用的内置模型
+	builtinModel *database.MemberBuiltinModel
+	// permissionsOverride 成员级权限收窄
+	permissionsOverride map[string]string
+	// lifetime task-scoped 成员的退役策略（空 = 常驻）
+	lifetime *database.MemberLifetime
+	// agentTemplate 专家模板
+	agentTemplate *database.MemberAgentTemplate
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -234,6 +260,13 @@ func WithOnTeamBuilt(fn func(ctx context.Context) error) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.onTeamBuilt = fn }
 }
 
+// WithOnMemberStarted 设置成员启动回调（spawn 落地时由 TeamManager 通知）。
+//
+// Python: on_member_started 参数（tools/team.py:148）
+func WithOnMemberStarted(fn func(ctx context.Context, memberName string) error) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.onMemberStarted = fn }
+}
+
 // WithPlanStorageDir 设置计划文件存储目录。
 func WithPlanStorageDir(dir string) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.planStorageDir = dir }
@@ -282,6 +315,75 @@ func WithMode(m string) SpawnMemberOption {
 // WithAllocation 设置模型配置分配（对齐 Python: spawn_member(allocation=...)）。
 func WithAllocation(a *models.Allocation) SpawnMemberOption {
 	return func(c *spawnMemberConfig) { c.allocation = a }
+}
+
+// WithFallbackAllocation 设置认证兜底分配（对齐 Python: spawn_member(fallback_allocation=...)）。
+func WithFallbackAllocation(a *models.Allocation) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.fallbackAllocation = a }
+}
+
+// WithIsolation 设置隔离模式（对齐 Python: spawn_member(isolation=...)）。
+func WithIsolation(isolation string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.isolation = isolation }
+}
+
+// WithCLIAgent 设置外部 CLI 后端名（对齐 Python: spawn_member(cli_agent=...)）。
+func WithCLIAgent(name string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.cliAgent = name }
+}
+
+// WithBuiltinModel 设置内置 CLI 模型（对齐 Python: spawn_member(builtin_model=...)）。
+func WithBuiltinModel(m *database.MemberBuiltinModel) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.builtinModel = m }
+}
+
+// WithPermissionsOverride 设置成员级权限收窄（对齐 Python: spawn_member(permissions_override=...)）。
+func WithPermissionsOverride(o map[string]string) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.permissionsOverride = o }
+}
+
+// WithLifetime 设置退役策略（对齐 Python: spawn_member(lifetime=...)）。
+func WithLifetime(l *database.MemberLifetime) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.lifetime = l }
+}
+
+// WithAgentTemplate 设置专家模板（对齐 Python: spawn_member(agent_template=...)）。
+func WithAgentTemplate(t *database.MemberAgentTemplate) SpawnMemberOption {
+	return func(c *spawnMemberConfig) { c.agentTemplate = t }
+}
+
+// RegisterTeammate 注册一条普通 LLM 成员行（UNSTARTED）。
+//
+// 唯一知道"成员的 card 与 mode 怎么派生"的地方。spawn_teammate、
+// create_task 的内联 member、spawn_expert（带 agentTemplate）都走它，
+// 三处不会在 card id / mode / options 上漂移。
+//
+// Python: register_teammate (tools/tool_member.py:626-667)
+func RegisterTeammate(
+	team *TeamBackend,
+	memberName, displayName, desc string,
+	prompt *string,
+	allocation *models.Allocation,
+	opts ...SpawnMemberOption,
+) atschema.MemberOpResult {
+	if team == nil {
+		return atschema.NewMemberOpResultFail("team backend is nil")
+	}
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID(fmt.Sprintf("%s_%s", team.teamName, memberName)),
+		agentschema.WithAgentName(displayName),
+		agentschema.WithAgentDescription(desc),
+	)
+	promptText := ""
+	if prompt != nil {
+		promptText = *prompt
+	}
+	allOpts := append([]SpawnMemberOption{
+		WithMode(string(team.teammateMode)),
+		WithAllocation(allocation),
+	}, opts...)
+	return team.SpawnMember(context.Background(), memberName, displayName, card,
+		string(atschema.TeamRoleTeammate), desc, promptText, "", allOpts...)
 }
 
 // NewTeamBackend 创建团队后端门面。
@@ -538,20 +640,35 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 			Msg("SpawnMember: member already exists")
 		return atschema.NewMemberOpResultFail("成员 " + memberName + " 已存在于团队 " + tb.teamName)
 	}
-	// 步骤 2: 模型分配（优先使用 opts 中的 allocation，否则使用 modelConfigAllocator）
-	// Python: model_ref_json = _json.dumps(allocation.to_db_ref()) if allocation is not None else None
-	modelRefJSON := ""
-	if cfg.allocation != nil {
-		if data, err := json.Marshal(cfg.allocation.ToDBRef()); err == nil {
-			modelRefJSON = string(data)
-		}
-	} else if tb.modelConfigAllocator != nil {
-		if alloc := tb.modelConfigAllocator(modelName); alloc != nil {
-			if data, err := json.Marshal(alloc.ToDBRef()); err == nil {
-				modelRefJSON = string(data)
-			}
-		}
+	// 步骤 2: 模型分配 + options 构造
+	// Python: options = build_member_options(model_ref=allocation.to_db_ref() if ... else None, ...)
+	allocation := cfg.allocation
+	if allocation == nil && tb.modelConfigAllocator != nil {
+		allocation = tb.modelConfigAllocator(modelName)
 	}
+	var modelRef map[string]any
+	if allocation != nil {
+		modelRef = allocation.ToDBRef()
+	}
+	var fallbackRef map[string]any
+	if cfg.fallbackAllocation != nil {
+		fallbackRef = cfg.fallbackAllocation.ToDBRef()
+	}
+	var cliAgentPtr *string
+	if cfg.cliAgent != "" {
+		cliAgent := cfg.cliAgent
+		cliAgentPtr = &cliAgent
+	}
+	options := database.BuildMemberOptions(database.MemberOptionsInput{
+		ModelRef:            modelRef,
+		FallbackModelRef:    fallbackRef,
+		BuiltinModel:        cfg.builtinModel,
+		CLIAgent:            cliAgentPtr,
+		WorktreeIsolation:   cfg.isolation,
+		PermissionsOverride: cfg.permissionsOverride,
+		Lifetime:            cfg.lifetime,
+		AgentTemplate:       cfg.agentTemplate,
+	})
 	// 步骤 3: DB 写入（使用 cfg 中的状态值，对齐 Python: create_member(status=cfg.status, ...)）
 	// Python: agent_card.model_dump_json() — 将 AgentCard 序列化为 JSON 存入 DB
 	agentCardJSON := "{}"
@@ -562,7 +679,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 	}
 	ok := tb.db.Member().CreateMember(ctx, memberName, tb.teamName, displayName, agentCardJSON,
 		cfg.status, role, desc,
-		cfg.executionStatus, cfg.mode, prompt, modelRefJSON)
+		cfg.executionStatus, cfg.mode, prompt, options)
 	if !ok {
 		logger.Warn(logComponent).Str("member_name", memberName).Str("team_name", tb.teamName).
 			Msg("SpawnMember: database refused creation")
@@ -579,36 +696,150 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 	return atschema.NewMemberOpResultSuccess()
 }
 
-// Startup 启动所有 UNSTARTED 成员。
-// Python: TeamBackend.startup(on_created=...)
+// ResolveLeaderMemberName 返回团队的 leader 成员名（必要时查 DB 行）。
 //
-// Python 步骤：
+// leader 是团队的持久属性——build_team 把它写进 team_info 行，因此那一行是
+// 唯一真相，不必在 spawn / 描述符链路里层层传递。leader 自己（或构造时已拿到
+// 名字的 backend）直接返回；普通成员从行里解析一次并缓存。
+//
+// 团队行不存在时返回空串。
+//
+// Python: TeamBackend.resolve_leader_member_name (tools/team.py:1811-1829)
+func (tb *TeamBackend) ResolveLeaderMemberName(ctx context.Context) string {
+	if tb.leaderMemberName != "" {
+		return tb.leaderMemberName
+	}
+	if tb.leaderNameCache == nil {
+		team, err := tb.db.Team().GetTeam(ctx, tb.teamName)
+		if err != nil {
+			logger.Warn(logComponent).Str("team_name", tb.teamName).Err(err).
+				Msg("resolve_leader_member_name: read team row failed")
+			cached := ""
+			tb.leaderNameCache = &cached
+			return ""
+		}
+		cached := ""
+		if team != nil {
+			cached = team.LeaderMemberName
+		}
+		tb.leaderNameCache = &cached
+	}
+	return *tb.leaderNameCache
+}
+
+// GetMemberStatus 返回成员当前持久化状态；未知返回 ("", false)。
+//
+// 协调层 harness 输入门卫用的窄投影。
+//
+// Python: TeamBackend.get_member_status (tools/team.py:2684-2692)
+func (tb *TeamBackend) GetMemberStatus(ctx context.Context, memberName string) (string, bool) {
+	if tb.db == nil || tb.db.Member() == nil {
+		return "", false
+	}
+	return tb.db.Member().GetMemberStatus(ctx, tb.teamName, memberName)
+}
+
+// MemberExists 判断成员是否在团队名册里（不拉整行）。
+// Python: TeamBackend.member_exists (tools/team.py:1796)
+func (tb *TeamBackend) MemberExists(ctx context.Context, memberName string) bool {
+	member, err := tb.db.Member().GetMember(ctx, memberName, tb.teamName)
+	if err != nil {
+		logger.Warn(logComponent).Str("member_name", memberName).Err(err).Msg("member_exists probe failed")
+		return false
+	}
+	return member != nil
+}
+
+// DeleteUnstartedMember 回滚一个从未离开 UNSTARTED 的内联成员（F_118）。
+//
+// spawn_member 的精确逆操作：行删掉；开启可演进工作空间时，spawn_member
+// 准备过的成员工作空间与缓存条目也一并释放。文件系统清理是尽力而为，
+// 残留目录只告警不抛错。
+//
+// Python: TeamBackend.delete_unstarted_member (tools/team.py:2714-2741)
+func (tb *TeamBackend) DeleteUnstartedMember(ctx context.Context, memberName string) bool {
+	deleted := tb.db.Member().DeleteUnstartedMember(ctx, memberName, tb.teamName)
+	if !deleted {
+		return false
+	}
+	// ⤵️ 上游此处还有两件清理：①`self._external_cli_specs.pop(member_name)`
+	// （外部 CLI kind 映射）②释放 MemberWorkspaceBinder 并清理 workspace_cache
+	// 的 desc/prompt 字段。Go 侧外部 CLI 域、TeamWorkspaceBinder 与
+	// workspace_cache 均未迁移，登记为缺口，不在此臆造空实现。
+	return true
+}
+
+// Startup 启动所有"有活要干"的 UNSTARTED 成员。
+// Python: TeamBackend.startup(on_created=..., *, include_idle_task_scoped=False)
+//
+// 步骤：
 //
 //  1. 查询所有 UNSTARTED 成员
-//  2. 逐个调用 startup_member(member_name, on_created)
-//  3. 返回已启动的成员名列表
+//  2. task-scoped 成员（options.lifetime 非空）在没有开放任务时跳过——
+//     它只为任务而生，空板子上叫起来只会白跑一轮再被调度器退役
+//     （lifetime="shutdown" 是永久退役），把 leader 后续交给它的任务搁死。
+//     它仍可被指派；调度器的启动交接或指名消息（wake_member）会把它叫起来。
+//  3. 逐个调用 startup_member(member_name, on_created)
+//  4. 返回已启动的成员名列表
+//
+// 广播类路径传 includeIdleTaskScoped=true：广播也是发给它的，必须能读到。
 //
 // startup_member 失败时回滚 STARTING→UNSTARTED 并 re-raise，
 // Python 的 startup() 会在异常时中断循环。Go 也对齐此行为。
 func (tb *TeamBackend) Startup(
 	ctx context.Context,
 	onCreated func(ctx context.Context, memberName string) error,
+	includeIdleTaskScoped bool,
 ) ([]string, error) {
 	members, err := tb.db.Member().GetTeamMembers(ctx, tb.teamName, string(atschema.MemberStatusUnstarted))
 	if err != nil {
 		return nil, err
 	}
+	var openCounts map[string]int
 	var started []string
 	for _, m := range members {
-		ok, err := tb.StartupMember(ctx, m.MemberName, onCreated)
-		if err != nil {
-			return started, err
+		if !includeIdleTaskScoped && database.GetMemberLifetime(m) != nil {
+			if openCounts == nil {
+				counts, countsErr := tb.taskManager.OpenTaskCountsByAssignee(ctx)
+				if countsErr != nil {
+					return started, countsErr
+				}
+				openCounts = counts
+			}
+			if openCounts[m.MemberName] == 0 {
+				logger.Debug(logComponent).
+					Str("member_name", m.MemberName).
+					Msg("skip starting task-scoped member with no open task")
+				continue
+			}
+		}
+		ok, startErr := tb.StartupMember(ctx, m.MemberName, onCreated)
+		if startErr != nil {
+			return started, startErr
 		}
 		// Python: started.append(member.member_name) — 无条件 append
 		_ = ok
 		started = append(started, m.MemberName)
 	}
 	return started, nil
+}
+
+// AutostartUnstarted 用 backend 上注入的 spawn 回调启动所有 UNSTARTED 成员。
+//
+// 自动启动漏斗的唯一入口：即将交给成员的工作（一条消息、一个新任务）不能落到
+// 一个进程从未启动过的成员身上。调用方只表达"确保名册都起来了"，不必各自
+// 揣着 spawn 回调。
+//
+// 仅 leader 且回调已注入时才动作——teammate backend 或外部进程 backend
+// 返回空列表，而不是去 spawn 一个它管不了的东西。并发由 startup_member 的
+// UNSTARTED→STARTING CAS 在一层之下兜住，重复调用幂等。
+//
+// Python: TeamBackend.autostart_unstarted (tools/team.py:1034-1064)
+func (tb *TeamBackend) AutostartUnstarted(ctx context.Context, includeIdleTaskScoped bool) ([]string, error) {
+	if !tb.isLeader || tb.onMemberStarted == nil {
+		return nil, nil
+	}
+	return tb.Startup(ctx, tb.onMemberStarted, includeIdleTaskScoped)
 }
 
 // StartupMember CAS 启动单个成员（UNSTARTED→STARTING）。

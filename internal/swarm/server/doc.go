@@ -23,6 +23,7 @@
 //	├── handle_browser.go      # Browser（浏览器） handler（start/runtime_restart）
 //	├── handle_config.go       # Config（配置） handler（cache_clear/reload_config）
 //	├── handle_initialize.go   # Initialize（初始化）+ ACP handler（initialize/acp_tool_response）
+//	├── session_stubs.go       # 会话管理适配器与空实现桩
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
 //	├── runtime/               # Agent 运行时（AgentManager/UapClawSwarm）
 //	└── session/               # 会话管理子包（history/metadata/manager/rename/startup）

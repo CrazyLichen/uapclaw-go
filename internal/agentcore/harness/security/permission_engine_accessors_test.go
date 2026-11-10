@@ -11,7 +11,7 @@ func TestPermissionEngine_FileGuard往返(t *testing.T) {
 	engine := NewPermissionEngine(map[string]any{}, nil, "", "")
 	original := engine.FileGuard()
 
-	replacement := &stubFileGuard{enabled: true, mode: "native"}
+	replacement := &accessorStubFileGuard{enabled: true, mode: "native"}
 	engine.SetFileGuard(replacement)
 	if engine.FileGuard() != replacement {
 		t.Error("SetFileGuard should replace the evaluator")
@@ -39,7 +39,7 @@ func TestPermissionEngine_WorkspaceRoot往返(t *testing.T) {
 // TestPermissionEngine_RebuildFileGuard 验证重建走已注册的工厂。
 func TestPermissionEngine_RebuildFileGuard(t *testing.T) {
 	// 注册一个返回固定实例的工厂，让重建有可观测结果
-	sentinel := &stubFileGuard{enabled: true, mode: "rebuilt"}
+	sentinel := &accessorStubFileGuard{enabled: true, mode: "rebuilt"}
 	RegisterFileGuardFactory(func(map[string]any, string, []string) FileGuardEvaluator {
 		return sentinel
 	})
@@ -62,20 +62,22 @@ func TestPermissionEngine_RebuildFileGuard_无工厂(t *testing.T) {
 	}
 }
 
-// stubFileGuard 测试用路径判定器。
-type stubFileGuard struct {
+// accessorStubFileGuard 测试用路径判定器。
+//
+// 命名避开 guard_factory_test.go 的同名 stub（两处独立新增导致撞名）。
+type accessorStubFileGuard struct {
 	enabled bool
 	mode    string
 }
 
 // Enabled 实现 FileGuardEvaluator
-func (s *stubFileGuard) Enabled() bool { return s.enabled }
+func (s *accessorStubFileGuard) Enabled() bool { return s.enabled }
 
 // Mode 实现 FileGuardEvaluator
-func (s *stubFileGuard) Mode() string { return s.mode }
+func (s *accessorStubFileGuard) Mode() string { return s.mode }
 
 // Evaluate 实现 FileGuardEvaluator
-func (s *stubFileGuard) Evaluate(string, map[string]any) *PermissionResult { return nil }
+func (s *accessorStubFileGuard) Evaluate(string, map[string]any) *PermissionResult { return nil }
 
 // CollectAskAccesses 实现 FileGuardEvaluator
-func (s *stubFileGuard) CollectAskAccesses(string, map[string]any) []PathAction { return nil }
+func (s *accessorStubFileGuard) CollectAskAccesses(string, map[string]any) []PathAction { return nil }

@@ -60,6 +60,12 @@ type AbilityManager struct {
 	progressiveToolEnabled bool
 	// directToolNames 渐进模式下保持直接可调用的工具名集合
 	directToolNames map[string]struct{}
+	// ownerID 本 manager 的归属者 id（通常是 agent card id）。
+	//
+	// 有状态工具的注册 id 会被改写为 "{name}_{ownerID}"，TeardownTools 靠它
+	// 识别"哪些是我的"。空串表示不做限定（共享单例或未配置）。
+	// Python: AbilityManager._owner_id (ability_manager.py:195)
+	ownerID string
 }
 
 // toolItem 内部辅助类型，用于 prioritizePaidSearch 的输入。
@@ -159,6 +165,12 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 				Msg("duplicate tool ability detected, keeping existing, skipping add")
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_tool"}
 		}
+		// 有状态工具 id 限定为本 owner（无状态共享单例保持裸 id）
+		// Python: add_ability 里 `if self._owner_id: card.id = self.qualify_tool_id(...)`
+		// (ability_manager.py:837-838)
+		if !a.Stateless && am.ownerID != "" {
+			QualifyToolID(a, am.ownerID)
+		}
 		am.applyToolExposurePolicy(a)
 		am.tools[a.Name] = a
 		am.registryRevision++
@@ -215,6 +227,136 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 			Str("ability_type", fmt.Sprintf("%T", a)).
 			Msg("unknown ability type")
 		return agentschema.AddAbilityResult{Name: name, Added: false, Reason: "unknown_ability_type"}
+	}
+}
+
+// NewAbilityManagerWithOwner 创建带归属者 id 的 AbilityManager。
+//
+// ownerID 非空时，有状态工具的注册 id 会被改写为 "{name}_{ownerID}"，
+// 使 TeardownTools 能精确摘除本 agent 的工具而不误删其他 agent 的。
+//
+// Python: AbilityManager.__init__(owner_id=...) (ability_manager.py:195)
+func NewAbilityManagerWithOwner(resourceMgr *resourcesmanager.ResourceMgr, ownerID string) *AbilityManager {
+	mgr := NewAbilityManager(resourceMgr)
+	mgr.ownerID = ownerID
+	return mgr
+}
+
+// SetOwnerIDForTest 设置归属者 id（仅测试用）。
+func SetOwnerIDForTest(mgr *AbilityManager, ownerID string) {
+	mgr.ownerID = ownerID
+}
+
+// QualifyToolID 返回工具在本 owner 下的注册 id，并写回卡片。
+//
+// 无状态工具保持裸 id（跨 agent 共享单例）；有状态工具限定为
+// "{name}_{ownerID}"，使每个 agent 拥有独立注册。
+//
+// 两个回退（对齐上游 `return card.id or card.name`）：
+//   - card.id 为空时回退到 card.name
+//   - ownerID 为空时不做限定
+//
+// 从 Name 派生而非从 ID 追加：对已限定过的卡片再调用一次结果不变（幂等）。
+//
+// Python: AbilityManager.qualify_tool_id (ability_manager.py:793-804)
+func QualifyToolID(card *tool.ToolCard, ownerID string) *tool.ToolCard {
+	if card == nil {
+		return nil
+	}
+	if card.Stateless || ownerID == "" {
+		// Python: return card.id or card.name
+		if card.ID == "" {
+			card.ID = card.Name
+		}
+		return card
+	}
+	card.ID = card.Name + "_" + ownerID
+	return card
+}
+
+// AddAbility 注册一个可执行的工具能力（card + 具体实例）。
+//
+// 单一入口，保证 ability-manager 的 card id 与 resource-manager 的注册 key
+// 始终一致。按工具是否持有 per-agent 状态分支：
+//
+//   - 有状态（Stateless 为 false，默认）：工具归本 agent 独占。card id 被改写为
+//     `{name}_{owner_id}`（由 name 派生，因此已限定的 id 会被幂等地规范化），
+//     实例以 refresh 方式（重）绑定到资源管理器，让后一个持有同 id 的 owner 胜出。
+//   - 无状态（Stateless 为 true）：工具是共享的模块级单例。保留裸 id，
+//     资源管理器侧的 add 是幂等的 skip_if_exists no-op。
+//
+// 上游用这个入口取代了旧的「限定 id 后缀 + add_tool(refresh) + add」三件套：
+// 那条 bespoke 路径会让 resource-manager 的 key 与 ability-manager 的 card id
+// 不一致（前者用旧 id、后者被改写），teardown 时对不上。
+//
+// Python: AbilityManager.add_ability (ability_manager.py:806-840)
+func (am *AbilityManager) AddAbility(card *tool.ToolCard, resource tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	if am.resourceMgr != nil {
+		if card.Stateless {
+			// 共享单例：保留已有注册，本次 add 幂等跳过
+			if err := am.resourceMgr.AddTool(resource, resourcesmanager.WithSkipIfExists()); err != nil {
+				logger.Debug(logComponent).Err(err).Str("tool_name", card.Name).
+					Msg("add_ability: resource_mgr.add_tool(skip_if_exists) failed")
+			}
+		} else {
+			// 有状态：先限定 id，再以 refresh 重绑（顺序与上游一致）
+			if am.ownerID != "" {
+				QualifyToolID(card, am.ownerID)
+			}
+			if err := am.resourceMgr.AddTool(resource, resourcesmanager.WithRefresh()); err != nil {
+				logger.Debug(logComponent).Err(err).Str("tool_name", card.Name).
+					Msg("add_ability: resource_mgr.add_tool(refresh) failed")
+			}
+		}
+	}
+	return am.Add(card)
+}
+
+// TeardownTools 把本 owner 限定过的有状态工具从资源管理器里摘掉。
+//
+// 轮末拆除调用：停掉的 agent 不该把逐 agent（有状态）的工具实例留在进程级
+// 资源管理器里。否则下一个运行周期重建一个全新 agent 时会用同一个 id 重新
+// 注册，而 Add 的重复检测会为每个残留 id 记一条告警。
+//
+// 只移除本管理器用自己的 owner id 限定过的工具（id == "{name}_{ownerID}"）；
+// 无状态共享单例与外部作用域工具（如 MCP server 作用域的 id）保持不动——
+// 别的 agent 还在用。
+//
+// Python: AbilityManager.teardown_tools (ability_manager.py:860-883)
+func (am *AbilityManager) TeardownTools() {
+	if am.ownerID == "" {
+		return
+	}
+
+	// 先在本 manager 锁内筛出待删项
+	am.mu.Lock()
+	names := make([]string, 0, len(am.tools))
+	ids := make([]string, 0, len(am.tools))
+	for name, card := range am.tools {
+		if card == nil || card.Stateless {
+			continue
+		}
+		// 只摘本 owner 限定过的（防御：卡片来自别处时不误删）
+		if card.ID != name+"_"+am.ownerID {
+			continue
+		}
+		names = append(names, name)
+		ids = append(ids, card.ID)
+	}
+	for _, name := range names {
+		delete(am.tools, name)
+	}
+	if len(names) > 0 {
+		am.registryRevision++
+	}
+	am.mu.Unlock()
+
+	// 再摘资源管理器（锁外，避免与 ResourceMgr 内部锁交叉）
+	if len(ids) > 0 && am.resourceMgr != nil {
+		_, _ = am.resourceMgr.RemoveTool(ids)
 	}
 }
 
@@ -1169,6 +1311,16 @@ func (am *AbilityManager) executeAgent(
 	}
 
 	ag := ags[0]
+
+	// 委派归属：本次子 agent 调用的用量要归到父调用链上。
+	// Python: ability_manager.py L1659-1667（bind_usage_delegation(build_usage_delegation_attribution(...))）
+	parentSessionID := ""
+	if sess != nil {
+		parentSessionID = sess.GetSessionID()
+	}
+	parentInvocationID := rail.CurrentUsageInvocationID(ctx)
+	ctx = rail.BindUsageDelegation(ctx, rail.BuildUsageDelegationAttribution(
+		ctx, agentID, parentSessionID, toolCall.ID, nil, parentInvocationID))
 
 	// 步骤 4-7：子会话生命周期（仅当 sess 非 nil 时执行）
 	var childSession *session.Session

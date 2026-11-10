@@ -89,6 +89,12 @@ type ContextUsageSnapshot struct {
 	SessionID string `json:"session_id"`
 	// ProductSessionID 产品侧会话标识（前端靠它归属）
 	ProductSessionID string `json:"product_session_id"`
+	// ExecutionSessionID 执行侧会话标识（团队成员共享产品会话时用它区分）
+	// Python: ContextUsageSnapshot.execution_session_id（models.py L108）
+	ExecutionSessionID string `json:"execution_session_id,omitempty"`
+	// ContextOwnerID 上下文归属方（team|member|session|context 拼接）
+	// Python: ContextUsageSnapshot.context_owner_id（models.py L109）
+	ContextOwnerID string `json:"context_owner_id,omitempty"`
 	// AgentID agent 标识
 	AgentID string `json:"agent_id,omitempty"`
 	// TeamID 团队标识（无团队为空串）
@@ -97,10 +103,31 @@ type ContextUsageSnapshot struct {
 	MemberName string `json:"member_name"`
 	// Role 团队角色（leader / teammate，非团队为空）
 	Role string `json:"role,omitempty"`
+	// InvocationID 本次 agent 执行标识
+	// Python: ContextUsageSnapshot.invocation_id（models.py L111）
+	InvocationID string `json:"invocation_id,omitempty"`
+	// ParentInvocationID 父级执行标识
+	// Python: ContextUsageSnapshot.parent_invocation_id（models.py L112）
+	ParentInvocationID string `json:"parent_invocation_id,omitempty"`
+	// DelegationID 委派链上的任务标识
+	// Python: ContextUsageSnapshot.delegation_id（models.py L113）
+	DelegationID string `json:"delegation_id,omitempty"`
 	// AgentPath 调用链路径
 	AgentPath []string `json:"agent_path"`
 	// Depth 调用深度
 	Depth int `json:"depth"`
+	// CacheIdentity provider 侧缓存身份
+	// Python: ContextUsageSnapshot.cache_identity（models.py L116）
+	CacheIdentity string `json:"cache_identity,omitempty"`
+	// ParentCacheIdentity 父级缓存身份
+	// Python: ContextUsageSnapshot.parent_cache_identity（models.py L117）
+	ParentCacheIdentity string `json:"parent_cache_identity,omitempty"`
+	// CacheMode 缓存模式（provider / ...）
+	// Python: ContextUsageSnapshot.cache_mode（models.py L118）
+	CacheMode string `json:"cache_mode,omitempty"`
+	// CacheScope 缓存作用域（session / ...）
+	// Python: ContextUsageSnapshot.cache_scope（models.py L119）
+	CacheScope string `json:"cache_scope,omitempty"`
 	// ContextWindow 窗口用量
 	ContextWindow ContextWindowUsage `json:"context_window"`
 	// Parts 分类用量

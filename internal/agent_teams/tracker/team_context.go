@@ -666,7 +666,40 @@ type TaskEventTracker interface {
 	Claim(sess sessioninterfaces.SessionFacade) *ClaimedNotice
 	// Persist 把基线写进会话状态
 	Persist(sess sessioninterfaces.SessionFacade)
+	// Announce 把待发通知作为独立输入投递：Claim → send → persist。
+	// send 失败时归还认领（允许下次重发）。Wakes 为假时直接返回 false。
+	Announce(sess sessioninterfaces.SessionFacade, send func(text string) error) (bool, error)
+	// Wakes 该通知能否作为独立输入唤醒空闲成员（评审通过不得唤醒作者）
+	Wakes() bool
+	// Release 归还已认领条目（投递失败后调用）
+	Release(notice *ClaimedNotice)
 }
+
+// UnimplementedTaskEventTracker 空实现基类（测试替身嵌入用，对齐规则 10 的同款做法）。
+//
+// 生产实现不得用它。测试替身只需嵌入本类型，再覆写关心的那一个方法。
+type UnimplementedTaskEventTracker struct{}
+
+// Claim 空实现。
+func (UnimplementedTaskEventTracker) Claim(sessioninterfaces.SessionFacade) *ClaimedNotice {
+	return nil
+}
+
+// Persist 空实现。
+func (UnimplementedTaskEventTracker) Persist(sessioninterfaces.SessionFacade) {}
+
+// Announce 空实现。
+func (UnimplementedTaskEventTracker) Announce(
+	sessioninterfaces.SessionFacade, func(string) error,
+) (bool, error) {
+	return false, nil
+}
+
+// Wakes 空实现。
+func (UnimplementedTaskEventTracker) Wakes() bool { return false }
+
+// Release 空实现。
+func (UnimplementedTaskEventTracker) Release(*ClaimedNotice) {}
 
 // taskNoticeTracker 下一次输入的任务通知共享基线（F_119 / F_129）。
 //
@@ -1008,6 +1041,20 @@ func (t *TaskOutcomeTracker) Claim(sess sessioninterfaces.SessionFacade) *Claime
 	return t.claim(sess)
 }
 
+// Announce 见 taskNoticeTracker.announce。
+func (t *TaskOutcomeTracker) Announce(
+	sess sessioninterfaces.SessionFacade, send func(text string) error,
+) (bool, error) {
+	return t.announce(sess, send)
+}
+
+// Wakes 返回该通知器能否作为独立输入唤醒空闲成员。
+// Python: _TaskNoticeTracker.WAKES (team_context.py:749)
+func (t *TaskOutcomeTracker) Wakes() bool { return t.wakes }
+
+// Release 见 taskNoticeTracker.release。
+func (t *TaskOutcomeTracker) Release(notice *ClaimedNotice) { t.release(notice) }
+
 // Persist 见 taskNoticeTracker.persist。
 func (t *TaskOutcomeTracker) Persist(sess sessioninterfaces.SessionFacade) { t.persist(sess) }
 
@@ -1080,6 +1127,20 @@ func newTaskRevisionTracker(tb *tools.TeamBackend, memberName string) *TaskRevis
 func (t *TaskRevisionTracker) Claim(sess sessioninterfaces.SessionFacade) *ClaimedNotice {
 	return t.claim(sess)
 }
+
+// Announce 见 taskNoticeTracker.announce。
+func (t *TaskRevisionTracker) Announce(
+	sess sessioninterfaces.SessionFacade, send func(text string) error,
+) (bool, error) {
+	return t.announce(sess, send)
+}
+
+// Wakes 返回该通知器能否作为独立输入唤醒空闲成员。
+// Python: _TaskNoticeTracker.WAKES (team_context.py:749)
+func (t *TaskRevisionTracker) Wakes() bool { return t.wakes }
+
+// Release 见 taskNoticeTracker.release。
+func (t *TaskRevisionTracker) Release(notice *ClaimedNotice) { t.release(notice) }
 
 // Persist 见 taskNoticeTracker.persist。
 func (t *TaskRevisionTracker) Persist(sess sessioninterfaces.SessionFacade) { t.persist(sess) }

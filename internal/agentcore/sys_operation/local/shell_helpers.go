@@ -75,7 +75,7 @@ var posixCommands = map[string]bool{
 // 因此 Windows 路径归一化使用手动扫描实现，而非正则。
 // Python: _QUOTED_WINDOWS_PATH_PATTERN 和 _UNQUOTED_WINDOWS_PATH_PATTERN。
 
-// quotedWindowsPathPattern 带引号的 Windows 路径匹配（不使用反向引用，分别匹配单引号和双引号）。
+// quotedWindowsPathPatternSingle 单引号包裹的 Windows 路径匹配（不使用反向引用）。
 var quotedWindowsPathPatternSingle = regexp.MustCompile(`'([A-Za-z]:\\[^']+)'`)
 var quotedWindowsPathPatternDouble = regexp.MustCompile(`"([A-Za-z]:\\[^"]+)"`)
 

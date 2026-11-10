@@ -2,6 +2,7 @@ package metadata_test
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -208,3 +209,38 @@ func TestMergeTeamNamespace_不污染会话内桶(t *testing.T) {
 	after := metadata.ReadTeamNamespace(sess, "team1")
 	assert.Equal(t, 2, after["b"])
 }
+
+// TestPendingResume_读写清 验证冷恢复标记的写入、读取与清除。
+func TestPendingResume_读写清(t *testing.T) {
+	sess := newFakeSessionFacade()
+
+	_, ok := metadata.ReadPendingResume(sess, "team-a")
+	assert.False(t, ok)
+
+	metadata.MergePendingResume(sess, "team-a", map[string]any{"query": "任务"})
+	got, ok := metadata.ReadPendingResume(sess, "team-a")
+	assert.True(t, ok)
+	assert.Equal(t, "任务", got["query"])
+
+	assert.True(t, metadata.ClearPendingResume(sess, "team-a"))
+	_, ok = metadata.ReadPendingResume(sess, "team-a")
+	assert.False(t, ok)
+	assert.False(t, metadata.ClearPendingResume(sess, "team-a"))
+}
+
+// TestPendingResume_非dict视为不存在 验证坏数据退化为“没有标记”。
+func TestPendingResume_非dict视为不存在(t *testing.T) {
+	sess := newFakeSessionFacade()
+	metadata.MergeTeamNamespace(sess, "team-a", map[string]any{metadata.TeamPendingResumeKey: "bad"})
+	_, ok := metadata.ReadPendingResume(sess, "team-a")
+	assert.False(t, ok)
+}
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeSessionFacade) GetParentSessionID() string { return "" }

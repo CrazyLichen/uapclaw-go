@@ -408,6 +408,7 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodCommandContext,
 		ReqMethodCommandRecap,
 		ReqMethodCommandDiff,
+		ReqMethodCommandGoal,
 		ReqMethodCommandMCP,
 		ReqMethodCommandModel,
 		ReqMethodCommandResume,

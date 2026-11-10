@@ -175,7 +175,7 @@ func ShouldAttemptReconnect(client any, err error) bool {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// reconnectStatesKey 生成状态表的键。
+// reconnectStateOf 取出（必要时创建）客户端对应的重连状态。
 // 用「接口值本身」当键：同一指针必然命中同一状态；非指针实现（值类型
 // 客户端）拿不到稳定身份，返回 nil 由调用方降级为无状态处理。
 func reconnectStateOf(client any) *reconnectState {

@@ -121,10 +121,7 @@ func (p *AudioMetadataMetadataProvider) GetInputParams(language string) map[stri
 // props 为「参数名 → 双语描述」，required 为必填参数（顺序与 Python 声明一致）；
 // 非法语言回落到中文，某个参数缺该语言描述时同样回落中文。
 func buildAudioInputParams(language string, props map[string]map[string]string, required []any) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	properties := make(map[string]any, len(props))
 	for key, desc := range props {
 		text, ok := desc[lang]

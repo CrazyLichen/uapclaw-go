@@ -850,3 +850,27 @@ func (am *AgentManager) GetChatAgentNoWait(channelID, mode, projectDir, subMode 
 	}
 	return agent
 }
+
+// HasActiveGoal 检查某会话是否持有活跃 goal，不借出也不创建 agent。
+// Python: agent_manager.py:1423-1431
+//
+// 逐个询问已缓存的 channel agent：探针路径必须只读，否则一次准入判定就会
+// 凭空造出一个 agent（并触发模型初始化）。
+func (am *AgentManager) HasActiveGoal(channelID, sessionID string) bool {
+	am.mu.RLock()
+	channelAgents := am.agents[normalizeChannelID(channelID)]
+	candidates := make([]*UapClawSwarm, 0, len(channelAgents))
+	for _, entry := range channelAgents {
+		if entry != nil && entry.agent != nil {
+			candidates = append(candidates, entry.agent)
+		}
+	}
+	am.mu.RUnlock()
+
+	for _, agent := range candidates {
+		if checker := agent.adapterSnapshot(); checker != nil && checker.HasActiveGoal(sessionID) {
+			return true
+		}
+	}
+	return false
+}

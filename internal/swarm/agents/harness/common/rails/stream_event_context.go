@@ -24,7 +24,7 @@ type toolCacheEntry struct {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// EnsureJSONArguments 确保工具调用参数为合法 JSON 字符串，对齐 Python: _ensure_json_arguments
+// ensureJSONArguments 确保工具调用参数为合法 JSON 字符串，对齐 Python: _ensure_json_arguments
 //
 // 三阶段修复：
 // 1. 直接 json.Valid → 成功返回原文
@@ -76,7 +76,7 @@ func ensureJSONArguments(arguments string) string {
 	return "{}"
 }
 
-// FixMissingQuotes 尝试修复 JSON 中缺失的引号，对齐 Python: _fix_missing_quotes
+// fixMissingQuotes 尝试修复 JSON 中缺失的引号，对齐 Python: _fix_missing_quotes
 //
 // 三种修复模式：
 // 1. Windows 路径：{"path": D:/work/file.txt} → {"path": "D:/work/file.txt"}
@@ -137,7 +137,7 @@ func fixMissingQuotes(jsonStr string) string {
 	return s
 }
 
-// FixIncompleteToolContext 修复不完整的工具上下文，对齐 Python: _fix_incomplete_tool_context
+// fixIncompleteToolContext 修复不完整的工具上下文，对齐 Python: _fix_incomplete_tool_context
 //
 // 遍历消息列表，确保每个 tool_call 都有对应的 ToolMessage，
 // 缺失时插入占位 ToolMessage（内容为"工具执行被中断"）。

@@ -5,6 +5,7 @@ package rails
 import (
 	"context"
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -486,6 +487,14 @@ type fakeAbilityManager struct {
 	abilities map[string]schema.Ability
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func newFakeAbilityManager() *fakeAbilityManager {
 	return &fakeAbilityManager{abilities: make(map[string]schema.Ability)}
 }
@@ -557,3 +566,6 @@ func (f *fakeAbilityManager) Has(name string) bool {
 	_, ok := f.abilities[name]
 	return ok
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManager) TeardownTools() {}

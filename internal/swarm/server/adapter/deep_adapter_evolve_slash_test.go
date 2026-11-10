@@ -142,6 +142,11 @@ func newEvolveTestAdapter(t *testing.T, skillsDir string, stub *stubEvolveLLMCli
 		d.model = model
 		d.modelCache = map[string]*llm.Model{"test-model": model}
 	}
+	// 10.3.28f：本组用例手动装配 d.instance 后在 adapter 上直接调
+	// ProcessMessageImpl/StreamImpl，测的是方法体（slash / 审批块透传），
+	// 不是根分流。标记为 session-scoped 让分流头跳过，直达方法体；
+	// 根分流本身由 deep_adapter_sessions_test.go 的 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	return d
 }
 
@@ -920,6 +925,10 @@ func TestProcessMessageStreamImpl_team分支6步(t *testing.T) {
 	sessionID := "web_sess-team-sixstep-1"
 
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例手动装配 d.instance 后在 adapter 上直接调
+	// ProcessMessageStreamImpl，测的是 team 分支 6 步（方法体），不是根分流。
+	// 标记为 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped(sessionID)
 	card := newEvolveTestAgentCard("team-six-step-agent")
 	instance := harness.NewDeepAgent(card)
 	reactAgent := newEvolveTestReActAgent(t, card)
@@ -1262,4 +1271,12 @@ func TestEvolveRollback_空名列入0版本(t *testing.T) {
 	if got := resp["result_type"]; got != "error" {
 		t.Errorf("result_type = %v, 期望 error", got)
 	}
+}
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubEvolveLLMClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubEvolveLLMClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
 }

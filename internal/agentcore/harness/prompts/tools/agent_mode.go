@@ -59,19 +59,11 @@ var exitPlanModeDescription = map[string]string{
 
 // GetSwitchModeMetadataProviderInputParams 构建 switch_mode 工具的参数 Schema
 func GetSwitchModeMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"mode": {"cn": "目标模式：normal 或 plan", "en": "Target mode: normal or plan"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -83,10 +75,7 @@ func GetSwitchModeMetadataProviderInputParams(language string) map[string]any {
 
 // GetEnterPlanModeMetadataProviderInputParams 构建 enter_plan_mode 工具的参数 Schema
 func GetEnterPlanModeMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	_ = lang // 无参数工具，language 保留以备扩展
 	return map[string]any{
 		"type":       "object",
@@ -97,10 +86,7 @@ func GetEnterPlanModeMetadataProviderInputParams(language string) map[string]any
 
 // GetExitPlanModeMetadataProviderInputParams 构建 exit_plan_mode 工具的参数 Schema
 func GetExitPlanModeMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	_ = lang // 无参数工具，language 保留以备扩展
 	return map[string]any{
 		"type":       "object",

@@ -261,6 +261,18 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	if v, ok := metadata["_streaming"]; ok {
 		coreTask.Metadata["_streaming"] = v
 	}
+	// 透传成员 turn 号与续跑标志（controller.SubmitRound 写入 event metadata）。
+	// Python: task.metadata 直接携带 event.metadata 的同名键，
+	// executor 读 task.Metadata 后再转给 ReActAgent 的 effective inputs。
+	if v, ok := metadata["_turn_number"]; ok {
+		coreTask.Metadata["_turn_number"] = v
+	}
+	if v, ok := metadata["_resume_continuation"]; ok {
+		coreTask.Metadata["_resume_continuation"] = v
+	}
+	if v, ok := metadata["_input_parts"]; ok {
+		coreTask.Metadata["_input_parts"] = v
+	}
 
 	logger.Info(logComponent).
 		Str("task_id", taskID).

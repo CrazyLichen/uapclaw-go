@@ -53,6 +53,10 @@ func (s *CodeAdapterProjectMemorySuite) newCodeAdapterWithProject(env *testhelpe
 	s.Require().NoError(os.MkdirAll(projDir, 0o755))
 
 	c := adapter.NewCodeAdapter()
+	// 10.3.28f：根 adapter 是纯 router（对齐 Python _skip_own_instance_build :13109），
+	// 不建 DeepAgent；本 suite 验证 CreateInstance 的 rail 装配结果，
+	// 标记为 session-scoped 与 child 同构，可直接断言自己的 DeepAgent。
+	c.MarkAsSessionScoped("itest-code-project")
 	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{"project_dir": projDir}, "code", subMode))
 	s.T().Cleanup(func() { _ = c.Cleanup() })
 	return c, projDir

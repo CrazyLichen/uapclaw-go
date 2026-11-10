@@ -474,6 +474,8 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 			chunkSize = sysop.DefaultUploadStreamChunkSize
 		}
 		buf := make([]byte, chunkSize)
+		// nextBuf 独立缓冲：peek-ahead 读下一块时不能覆盖待写入的 chunk
+		nextBuf := make([]byte, chunkSize)
 		index := 0
 
 		// 读取第一个分块
@@ -482,7 +484,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 			chunk := buf[:n]
 
 			// 读取下一个分块判断是否是最后一块
-			nextN, _ := srcFile.Read(buf)
+			nextN, _ := srcFile.Read(nextBuf)
 			isLast := nextN == 0
 
 			// 写入目标
@@ -506,6 +508,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 
 			index++
 			n = nextN
+			buf, nextBuf = nextBuf, buf
 			if readErr != nil {
 				break
 			}
@@ -603,6 +606,8 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 			chunkSize = sysop.DefaultDownloadStreamChunkSize
 		}
 		buf := make([]byte, chunkSize)
+		// nextBuf 独立缓冲：peek-ahead 读下一块时不能覆盖待写入的 chunk
+		nextBuf := make([]byte, chunkSize)
 		index := 0
 
 		// 读取第一个分块
@@ -611,7 +616,7 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 			chunk := buf[:n]
 
 			// 读取下一个分块判断是否是最后一块
-			nextN, _ := srcFile.Read(buf)
+			nextN, _ := srcFile.Read(nextBuf)
 			isLast := nextN == 0
 
 			// 写入目标
@@ -635,6 +640,7 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 
 			index++
 			n = nextN
+			buf, nextBuf = nextBuf, buf
 			if readErr != nil {
 				break
 			}

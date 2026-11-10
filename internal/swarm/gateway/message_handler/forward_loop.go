@@ -262,6 +262,8 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		// runtime fatal：concurrent map writes and map deletion）
 		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, entry,
 			emitProcessingStatus, mh.extractModeFromParams(msg))
+		// Python: message_handler.py:370 _stream_methods[request_id] = method
+		mh.markStreamMethod(streamRid, string(msg.ReqMethod))
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -585,12 +587,16 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
 	// 确保 mode 信息存在，否则从 channelStates 注入
+	sessionMode := ""
 	if len(agentMsg.Params) > 0 {
 		var paramsMap map[string]any
 		if err := json.Unmarshal(agentMsg.Params, &paramsMap); err == nil {
-			if _, hasMode := paramsMap["mode"]; !hasMode {
+			if mode, hasMode := paramsMap["mode"].(string); hasMode {
+				sessionMode = mode
+			} else {
 				state := mh.GetOrCreateChannelState(msg)
-				paramsMap["mode"] = string(state.Mode)
+				sessionMode = string(state.GetMode())
+				paramsMap["mode"] = sessionMode
 				if updated, err := json.Marshal(paramsMap); err == nil {
 					agentMsg.Params = json.RawMessage(updated)
 				}
@@ -599,13 +605,47 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 	}
 
 	// Python: env_interrupt = message_to_e2a(agent_msg)
-	// 将 agentMsg（已注入 mode）转为 E2A 信封后传给 sendInterruptToAgent
 	envInterrupt := e2a.MessageToE2AOrFallback(agentMsg)
-	go mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
 
-	// 检查当前 session 是否有活跃流式任务
+	// 活跃流检查必须在治理之前：治理会清掉这些登记。
 	hasActiveTask := mh.hasActiveStreamTaskForSession(msg.SessionID)
+
+	if intent == "pause" {
+		// G2（issue 5448）：团队暂停后 AgentServer 的流不再发终态帧，
+		// 网关消费者必须同步退出；治理只在 AgentServer 确认暂停后执行，
+		// 否则轮次仍在产出，取消消费者会丢掉在飞输出。
+		//
+		// 等待放到独立协程并设短超时：forwardLoop 是串行消息循环，
+		// 而 AgentClient.SendRequest 的超时是 600s——同步等会让暂停期间
+		// 整条网关 10 分钟不处理任何消息（Python 同样用 create_task 异步发）。
+		go mh.sendPauseAndGovernStreams(ctx, envInterrupt, msg, sessionMode)
+	} else {
+		go func() { _, _ = mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent) }()
+	}
+
 	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, hasActiveTask)
+}
+
+// pauseGovernAckTimeout 暂停治理等待 AgentServer 应答的上限。
+// 超时只跳过流治理，不影响已发出的暂停请求本身。
+const pauseGovernAckTimeout = 5 * time.Second
+
+// sendPauseAndGovernStreams 转发暂停，并在 AgentServer 确认后治理同 session 流消费者。
+// Python: _send_pause_and_govern_streams (message_handler.py L1372-1394)
+func (mh *MessageHandler) sendPauseAndGovernStreams(
+	ctx context.Context, env *e2a.E2AEnvelope, msg *schema.Message, sessionMode string,
+) {
+	waitCtx, cancel := context.WithTimeout(ctx, pauseGovernAckTimeout)
+	defer cancel()
+	resp, err := mh.sendInterruptToAgentWithEnvelope(waitCtx, env, "pause")
+	if err != nil || resp == nil || !resp.OK {
+		logger.Warn(logComponent).
+			Str("event_type", "pause_governance_skipped").
+			Str("session_id", msg.SessionID).
+			Msg("AgentServer did not acknowledge pause; skip stream governance")
+		return
+	}
+	mh.cancelStreamsForPausedSession(ctx, msg, sessionMode)
 }
 
 // resolveInboundReferences 解析入站消息中的 @file/@agent 引用。
@@ -903,6 +943,14 @@ func (mh *MessageHandler) unregisterStreamTask(requestID string) {
 	delete(mh.streamSessions, requestID)
 	delete(mh.streamMetadata, requestID)
 	delete(mh.streamModes, requestID)
+	delete(mh.streamMethods, requestID)
+}
+
+// markStreamMethod 记录流式任务的 RPC 方法名。
+func (mh *MessageHandler) markStreamMethod(requestID, method string) {
+	mh.streamMu.Lock()
+	defer mh.streamMu.Unlock()
+	mh.streamMethods[requestID] = method
 }
 
 // getStreamMetadata 获取流式任务的请求 metadata
@@ -944,10 +992,17 @@ func (mh *MessageHandler) hasActiveEmitProcessingStatusTaskForSession(sessionID 
 	mh.streamMu.RLock()
 	defer mh.streamMu.RUnlock()
 	for rid, sid := range mh.streamSessions {
-		if sid == sessionID {
-			if emits, ok := mh.streamEmitsProcessingStatus[rid]; ok && emits {
-				return true
-			}
+		if sid != sessionID {
+			continue
+		}
+		if emits, ok := mh.streamEmitsProcessingStatus[rid]; ok && emits {
+			return true
+		}
+		// command.goal 长流按上游 emit=False，但必须同样挡住 false：
+		// 否则「前端已结束、后端 Goal 还在跑、后续 delta 收不到」。
+		// Python: message_handler.py:4275-4310
+		if mh.streamMethods[rid] == string(schema.ReqMethodCommandGoal) {
+			return true
 		}
 	}
 	return false
@@ -976,7 +1031,7 @@ func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap ma
 	// 从 channelStates 补充 mode
 	if _, hasMode := runtimeParams["mode"]; !hasMode {
 		state := mh.GetOrCreateChannelState(msg)
-		runtimeParams["mode"] = string(state.Mode)
+		runtimeParams["mode"] = string(state.GetMode())
 	}
 
 	return runtimeParams

@@ -63,13 +63,29 @@ type TeamDao interface {
 type MemberDao interface {
 	// CreateMember 创建成员。返回 true 表示成功，false 表示成员已存在（对齐 Python IntegrityError → False）。
 	// Python: create_member 的全部 11 参数。
-	CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool
+	CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool
 	// GetMember 获取成员信息。返回 nil 表示成员不存在（对齐 Python Optional[TeamMember]）。
 	// 参数顺序 (memberName, teamName) 对齐 Python。
 	GetMember(ctx context.Context, memberName, teamName string) (*TeamMember, error)
 	// GetTeamMembers 获取团队成员列表，可选按 status 过滤。
 	// Python: get_team_members(team, status=None)，空字符串 status 表示不过滤。
 	GetTeamMembers(ctx context.Context, teamName string, status string) ([]*TeamMember, error)
+	// GetMemberStatus 窄投影：只取成员当前持久化状态，未知返回 ("", false)。
+	//
+	// 协调层的 harness 输入门卫只需要状态，不需要拉整行（agent_card /
+	// prompt / options）。
+	//
+	// Python: get_member_status (member_dao.py)
+	GetMemberStatus(ctx context.Context, teamName, memberName string) (string, bool)
+	// DeleteUnstartedMember 删除一条尚未被触碰的成员行（status = UNSTARTED）。
+	//
+	// DAO 里唯一的成员删除路径，且带状态守卫：存在的意义是回滚 create_task
+	// 内联成员——任务图没落地时把刚写的成员行撤掉。离开 UNSTARTED 的行已经绑了
+	// 运行时/邮箱/任务，绝不在这里删。
+	//
+	// Python: delete_unstarted_member (member_dao.py:397-415)
+	DeleteUnstartedMember(ctx context.Context, memberName, teamName string) bool
+
 	// UpdateMemberStatus 更新成员状态（含 FSM 校验）。返回 true 表示成功，false 表示成员不存在或转换不合法。
 	// Python: update_member_status() → bool
 	UpdateMemberStatus(ctx context.Context, memberName, teamName, status string) bool
@@ -86,6 +102,14 @@ type MemberDao interface {
 	// UpdateMemberExecutionStatus 更新执行状态（含 FSM 校验）。
 	// Python: update_member_execution_status() → bool
 	UpdateMemberExecutionStatus(ctx context.Context, memberName, teamName, executionStatus string) bool
+	// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+	//
+	// 只用于生命周期收尾（暂停后成员运行时已停），不走轮次驱动的 FSM 校验；
+	// 与 Python reset_paused_member_execution_status 的条件一致：
+	// status=PAUSED 且 execution_status != IDLE。
+	//
+	// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+	ResetPausedMemberExecutionStatus(ctx context.Context, teamName string, memberNames []string) int
 }
 
 // TaskDao 任务 DAO 接口。
@@ -99,6 +123,14 @@ type TaskDao interface {
 	GetTeamTasks(ctx context.Context, teamName, status string) ([]*TeamTaskBase, error)
 	// GetTasksByAssignee 查询成员的任务。status 为空字符串表示不过滤。
 	GetTasksByAssignee(ctx context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error)
+	// OpenTaskCountsByAssignee 按 assignee 统计非终态任务数（一条分组查询）。
+	//
+	// 非终态 = TASK_TERMINAL_STATUSES 之外的全部状态（PENDING/BLOCKED/PLANNING/
+	// IN_PROGRESS/IN_REVIEW 都算）：任务在评审或依赖队列里，成员名下就还有活。
+	// 没有开放任务的成员不会出现在结果里。
+	//
+	// Python: open_task_counts_by_assignee (task_dao.py:685-705)
+	OpenTaskCountsByAssignee(ctx context.Context, teamName string) (map[string]int, error)
 	// GetUnseenEdits 查询成员名下「改过但未读」的任务（revision > observed_revision）。
 	// Python: get_unseen_edits(team_name, assignee) (task_dao.py L763-779)
 	// 只查非终态任务；正文可能被溢出占位符替代，调用方不应读 Content。

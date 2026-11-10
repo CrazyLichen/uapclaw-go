@@ -13,6 +13,7 @@
 //	├── powershell.go        # PowerShellTool：PowerShell 命令执行工具
 //	├── powershell_stream.go # PowerShellStreamTool：PowerShell 命令流式执行工具
 //	├── permission.go        # 权限配置、5层检查管道、管道拆分、命令提取
+//	├── call_timeout.go      # 调用超时解析（bash/PowerShell 输入 → 秒）
 //	├── security.go          # 注入检测（bash/PowerShell）和破坏性命令警告
 //	├── semantics.go         # 退出码语义解释、命令分类
 //	├── output.go            # 输出渲染、截断、大输出持久化

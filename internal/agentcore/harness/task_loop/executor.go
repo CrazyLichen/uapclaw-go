@@ -224,7 +224,17 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	// Python: if input_parts is not None and iter_inputs.query == query
 	// (task_loop_event_executor.py L216-219) —— parts 描述的是原始批次，
 	// rail 在 before_task_iteration 改写了 query 就以改写后的为准。
-	if parts := extractInputParts(inputEvt); parts != nil && iterInputs.Query == query {
+	parts := extractInputParts(inputEvt)
+	if parts == nil {
+		// 批量 follow-up：SubmitRound 以单条 join 文本建 event，原始批次经
+		// metadata 携带（Python 侧是多条 TextDataFrame，等价语义）。
+		if v, ok := task.Metadata["_input_parts"]; ok {
+			if ps, isParts := v.([]string); isParts && len(ps) > 1 {
+				parts = ps
+			}
+		}
+	}
+	if parts != nil && iterInputs.Query == query {
 		effective["_input_parts"] = parts
 	}
 	// Python: if cid: effective["conversation_id"] = cid
@@ -243,6 +253,15 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		// [Go 扩展] Go 特有 isStreaming 参数，用于区分 invoke/stream 调用模式，
 		if sv, ok := task.Metadata["_streaming"]; ok {
 			effective["_streaming"] = sv
+		}
+		if v, ok := task.Metadata["_turn_number"]; ok && v != nil {
+			effective["_turn_number"] = v
+		}
+		// 续跑轮：内层循环不得追加新的 user turn
+		if v, ok := task.Metadata["_resume_continuation"]; ok {
+			if b, isBool := v.(bool); isBool && b {
+				effective["_resume_continuation"] = true
+			}
 		}
 	}
 

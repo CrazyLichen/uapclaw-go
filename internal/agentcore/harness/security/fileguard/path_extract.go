@@ -570,6 +570,7 @@ func pathAwareOneSegment(segment, cwd string, includeCDReads bool) ([]FileAccess
 	if len(tokens) == 0 {
 		return nil, ""
 	}
+	// 只处理已知的路径相关命令，其余段落直接跳过
 	cmd0 := basenameLower(tokens[0])
 	if _, hit := pathAwareCommands[cmd0]; !hit {
 		return nil, ""
@@ -577,6 +578,7 @@ func pathAwareOneSegment(segment, cwd string, includeCDReads bool) ([]FileAccess
 	base := resolveExtractPath(cwd)
 	pathTokens := make([]string, 0, len(tokens))
 
+	// 逐个 token 归一化：去分隔符残留、跳过变量引用、展开 ~、相对路径按 cwd 解析
 	appendPathToken := func(tok string, requirePathShape bool) {
 		tok = stripSeparatorResidue(tok)
 		if tok == "" || unexpandedVarRe.MatchString(tok) {
@@ -612,6 +614,7 @@ func pathAwareOneSegment(segment, cwd string, includeCDReads bool) ([]FileAccess
 		}
 	}
 
+	// 按命令语义把路径归类为读、写或目录切换
 	var results []FileAccess
 	newCwd := ""
 

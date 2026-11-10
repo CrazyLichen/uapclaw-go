@@ -88,6 +88,14 @@ type fakeAbilityManager struct {
 	abilities map[string]commonschema.Ability
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) saschema.AddAbilityResult {
+	if card == nil {
+		return saschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return saschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (f *fakeAbilityManager) Add(commonschema.Ability) saschema.AddAbilityResult {
 	return saschema.AddAbilityResult{}
 }
@@ -371,3 +379,6 @@ func TestResolveToolBinding_非ToolCard但工具存在(t *testing.T) {
 		t.Fatalf("卡片非 *tool.ToolCard 时应返回 nil，实际 %v", got)
 	}
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManager) TeardownTools() {}

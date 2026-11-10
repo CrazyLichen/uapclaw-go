@@ -251,7 +251,7 @@ func coreAccesses(capability ToolCapability, args map[string]any, root string, s
 		}
 		return nil, []string{native.Path}, true
 	}
-	// 2. send_file_to_user
+	// 2. send_file_to_user 直接发送的文件
 	if capability.ToolName == "send_file_to_user" {
 		paths := dedupNonEmptyStrings(sendPaths)
 		return paths, nil, len(paths) > 0
@@ -264,7 +264,7 @@ func coreAccesses(capability ToolCapability, args map[string]any, root string, s
 	if root == "" {
 		return nil, nil, false
 	}
-	// 5. extract_accesses_native
+	// 5. extract_accesses_native 提取原生路径访问
 	accessArgs := args
 	// lsp + workspaceSymbol 把 root 当 file_path（Python 的 workaround）
 	if capability.ToolName == "lsp" {

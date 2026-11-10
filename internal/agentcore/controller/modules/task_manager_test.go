@@ -249,16 +249,14 @@ func TestTaskManager_UpdateTask_正常(t *testing.T) {
 	tm := newTestTaskManager()
 	_ = tm.AddTask(context.Background(), newTestTask("sess1", "task1", "test", schema.TaskSubmitted))
 
-	// 获取并修改
-	tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
-	task := tasks[0]
-	task.Status = schema.TaskWorking
-
+	// GetTask 返回活引用，不得直接改它（会绕过 UpdateTask 的索引维护）。
+	// 构造独立对象作为更新载荷。
+	task := newTestTask("sess1", "task1", "test", schema.TaskWorking)
 	updated := tm.UpdateTask(context.Background(), task)
 	assert.True(t, updated)
 
 	// 验证更新
-	tasks, _ = tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
+	tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
 	assert.Equal(t, schema.TaskWorking, tasks[0].Status)
 }
 
@@ -301,11 +299,13 @@ func TestTaskManager_UpdateTask_父任务变更更新层级(t *testing.T) {
 	_ = tm.AddTask(context.Background(), newTestTask("sess1", "parent", "test", schema.TaskSubmitted))
 	_ = tm.AddTask(context.Background(), newTestTask("sess1", "task1", "test", schema.TaskWorking))
 
-	// task1 原来没有父任务（根任务），现在设 parent 为父任务
-	tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
-	task := tasks[0]
-	task.ParentTaskID = "parent"
-	_ = tm.UpdateTask(context.Background(), task)
+	// task1 原来没有父任务（根任务），现在设 parent 为父任务。
+	// GetTask 返回活引用（对齐上游），不得直接改它再传给 UpdateTask ——
+	// 那会在 UpdateTask 之前就污染内部状态，oldTask 与新对象变成同一个，
+	// 层级索引的「旧→新」对比失效。构造一个独立对象作为更新载荷。
+	taskUpd := newTestTask("sess1", "task1", "test", schema.TaskWorking)
+	taskUpd.ParentTaskID = "parent"
+	_ = tm.UpdateTask(context.Background(), taskUpd)
 
 	// 验证 task1 不再是根任务
 	rootTasks, err := tm.GetTask(context.Background(), &TaskFilter{IsRoot: true})
@@ -609,23 +609,71 @@ func TestTaskManager_提交通知回调(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&called))
 }
 
-// TestTaskManager_GetTask_返回深拷贝 验证 GetTask 返回深拷贝，外部修改不影响内部状态
-func TestTaskManager_GetTask_返回深拷贝(t *testing.T) {
+// TestTaskManager_GetTask_返回活引用 对齐上游 `list(self.tasks.values())`
+// （task_manager.py:362）：查询不拷贝，返回的就是内部对象。
+//
+// 这条契约是 goal 轮 run_context 能保真的前提：JSON 深拷贝会把 metadata 里的
+// *RunContext 降级成 map[string]any，executor 的类型断言取不到值。
+// 写入必须走管理器的 Update* 方法，不得直接改返回的指针。
+func TestTaskManager_GetTask_返回活引用(t *testing.T) {
 	tm := newTestTaskManager()
 	_ = tm.AddTask(context.Background(), newTestTask("sess1", "task1", "test", schema.TaskSubmitted))
 
 	tasks, err := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
 	assert.NoError(t, err)
+	assert.Len(t, tasks, 1)
 
-	// 修改返回的任务
-	tasks[0].Status = schema.TaskFailed
-	tasks[0].Priority = 999
-
-	// 内部状态不应改变
-	internal, err := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task1"})
+	// filter=nil 与过滤路径都返回同一批活对象
+	all, err := tm.GetTask(context.Background(), nil)
 	assert.NoError(t, err)
-	assert.Equal(t, schema.TaskSubmitted, internal[0].Status)
-	assert.Equal(t, 0, internal[0].Priority)
+	assert.Len(t, all, 1)
+	assert.Same(t, tasks[0], all[0], "两条查询路径应指向同一个内部对象")
+}
+
+// TestTaskManager_GetTask_metadata类型保真 GetTask 不做 JSON 往返，metadata 里的
+// 类型化值必须原样返回（回归：曾因深拷贝把 *RunContext 变成 map 而使
+// max_attempts / token_budget 全部失效）。
+func TestTaskManager_GetTask_metadata类型保真(t *testing.T) {
+	tm := newTestTaskManager()
+	task := newTestTask("sess1", "task-rc", "test", schema.TaskSubmitted)
+	rc := &struct{ GoalID string }{GoalID: "goal-42"}
+	task.Metadata = map[string]any{"run_context": rc, "_turn_number": 7}
+	assert.NoError(t, tm.AddTask(context.Background(), task))
+
+	got, err := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task-rc"})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+
+	gotRC, ok := got[0].Metadata["run_context"].(*struct{ GoalID string })
+	assert.True(t, ok, "run_context 必须保留原始类型，实际 %T", got[0].Metadata["run_context"])
+	assert.Equal(t, "goal-42", gotRC.GoalID)
+	assert.Equal(t, 7, got[0].Metadata["_turn_number"], "int 不得被 JSON 往返降级成 float64")
+}
+
+// TestTaskManager_LoadState_浅拷贝 对齐上游 `self.tasks = state.tasks.copy()`
+// （task_manager.py:291）：只复制字典本身，任务对象仍与 state 共享。
+func TestTaskManager_LoadState_浅拷贝(t *testing.T) {
+	tm := newTestTaskManager()
+	task := newTestTask("sess1", "task-ls", "test", schema.TaskSubmitted)
+	rc := &struct{ GoalID string }{GoalID: "goal-ls"}
+	task.Metadata = map[string]any{"run_context": rc}
+
+	state := &TaskManagerState{
+		Tasks:            map[string]*schema.Task{"task-ls": task},
+		PriorityIndex:    map[int][]string{},
+		ParentToChildren: map[string]map[string]struct{}{},
+		ChildrenToParent: map[string]string{},
+		RootTasks:        map[string]struct{}{},
+	}
+	assert.NoError(t, tm.LoadState(context.Background(), state))
+
+	got, err := tm.GetTask(context.Background(), &TaskFilter{TaskID: "task-ls"})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Same(t, task, got[0], "LoadState 后任务对象应与 state 共享")
+	gotRC, ok := got[0].Metadata["run_context"].(*struct{ GoalID string })
+	assert.True(t, ok, "LoadState 不得改变 metadata 里的类型")
+	assert.Equal(t, "goal-ls", gotRC.GoalID)
 }
 
 // TestTaskManager_Config 验证 Config 和 SetConfig 正常工作
@@ -666,9 +714,9 @@ func TestTaskManager_UpdateTask_父任务ID从有到无(t *testing.T) {
 	child := newTestTaskWithParent("sess1", "child", "test", schema.TaskWorking, "parent")
 	_ = tm.AddTask(context.Background(), child)
 
-	// 将子任务的 parentTaskID 清空，变为根任务
-	tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: "child"})
-	task := tasks[0]
+	// 将子任务的 parentTaskID 清空，变为根任务。
+	// 同 UpdateTask_父任务变更：必须构造独立对象，不能改 GetTask 的活引用。
+	task := newTestTask("sess1", "child", "test", schema.TaskWorking)
 	task.ParentTaskID = ""
 	updated := tm.UpdateTask(context.Background(), task)
 	assert.True(t, updated)

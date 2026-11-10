@@ -33,6 +33,9 @@ type TeamPlanModeRail struct {
 	agent harnessinterfaces.DeepAgentInterface
 	// systemPromptBuilder 系统提示词构建器（Init 时缓存）
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
+	// attachmentManager 会话级附件管理器（Init 时取一次）
+	// Python: self.attachment_manager（team_plan_mode_rail.py:50/56）
+	attachmentManager *hprompts.Manager
 }
 
 // TeamPlanModeRailOption TeamPlanModeRail 构造选项。
@@ -77,6 +80,8 @@ func (r *TeamPlanModeRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		r.agent = dai
 	}
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
+	// Python: team_plan_mode_rail.py:56 self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	r.attachmentManager = hprompts.ManagerFor(agent)
 	return r.specializePlanAgent()
 }
 
@@ -88,6 +93,7 @@ func (r *TeamPlanModeRail) Uninit(_ agentinterfaces.BaseAgent) error {
 	}
 	r.agent = nil
 	r.systemPromptBuilder = nil
+	r.attachmentManager = nil
 	return nil
 }
 
@@ -107,18 +113,19 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 	//     return
 	sess := cbc.Session()
 	if sess == nil {
-		// 保守策略：无法确认 plan 模式则不注入 team.plan 指令，移除残留 section
-		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+		// 保守策略：无法确认 plan 模式则不注入 team.plan 指令，移除残留 section 与附件
+		r.clearModeInstructions(cbc)
 		return nil
 	}
 	state := r.agent.LoadState(sess)
 	if state == nil {
 		// 同上：state 不可用时保守不注入
-		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+		r.clearModeInstructions(cbc)
 		return nil
 	}
 	if state.PlanMode.Mode != "plan" {
-		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+		// Python: :87-92 非 plan 分支：移除 system 节 + 清附件
+		r.clearModeInstructions(cbc)
 		return nil
 	}
 
@@ -152,7 +159,23 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 	if err != nil {
 		return err
 	}
-	if section != nil {
+	if section == nil {
+		return nil
+	}
+	// Python: :106-117 先移除 system 节，再投附件；无 manager 或投递失败回落 section
+	r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+	if r.attachmentManager == nil {
+		r.systemPromptBuilder.AddSection(*section)
+		return nil
+	}
+	if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
+		section, hprompts.AttachmentRuntime, "agent_core.team_plan_mode_rail", language,
+		hprompts.WithAttachmentContentKind("text/markdown"),
+	); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "team_plan_mode_attachment").
+			Err(err).
+			Msg("failed to queue plan attachment")
 		r.systemPromptBuilder.AddSection(*section)
 	}
 
@@ -165,6 +188,23 @@ func WithLanguageOverride(lang string) TeamPlanModeRailOption {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// clearModeInstructions 移除 system 节并清空附件。
+// Python: _sync_plan_attachment 非 plan 分支（team_plan_mode_rail.py:87-92）
+func (r *TeamPlanModeRail) clearModeInstructions(cbc *agentinterfaces.AgentCallbackContext) {
+	if r.systemPromptBuilder != nil {
+		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+	}
+	if r.attachmentManager == nil || cbc == nil {
+		return
+	}
+	if _, err := r.attachmentManager.BindContext(cbc).ClearSection(harnesssections.SectionModeInstructions); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "team_plan_mode_attachment").
+			Err(err).
+			Msg("failed to clear mode_instructions attachment")
+	}
+}
 
 // fileExists 检查文件是否存在
 func fileExists(path string) bool {

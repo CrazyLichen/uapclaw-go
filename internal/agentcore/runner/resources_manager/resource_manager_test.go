@@ -5,8 +5,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
@@ -2053,4 +2056,47 @@ func TestResourceCardStr_card不为nil(t *testing.T) {
 	if result == "fallback-id" {
 		t.Fatal("card 不为 nil 时不应回退到 resourceID")
 	}
+}
+
+// TestAddTool_SkipIfExists幂等 同 id 已注册时保留原注册、add 变 no-op。
+func TestAddTool_SkipIfExists幂等(t *testing.T) {
+	rm := NewResourceMgr()
+	card := tool.NewToolCardWithID("skip_tool", "skip_tool", "测试", nil, nil)
+	tl, err := tool.NewTool(
+		func(_ context.Context, _ skipInput, _ ...tool.ToolOption) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+		tool.WithToolCard(card),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, rm.AddTool(tl))
+	// 第二次同 id + SkipIfExists：应幂等成功且不覆盖
+	require.NoError(t, rm.AddTool(tl, WithSkipIfExists()))
+
+	got, err := rm.GetTool([]string{"skip_tool"})
+	require.NoError(t, err)
+	assert.Len(t, got, 1, "skip_if_exists 不应产生重复注册")
+}
+
+// TestAddTool_无SkipIfExists时重复注册报错 严格「不重复」语义保持。
+func TestAddTool_无SkipIfExists时重复注册报错(t *testing.T) {
+	rm := NewResourceMgr()
+	card := tool.NewToolCardWithID("dup_tool", "dup_tool", "测试", nil, nil)
+	tl, err := tool.NewTool(
+		func(_ context.Context, _ skipInput, _ ...tool.ToolOption) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+		tool.WithToolCard(card),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, rm.AddTool(tl))
+	assert.Error(t, rm.AddTool(tl), "默认严格语义应拒绝重复注册")
+}
+
+// skipInput 最小工具入参（tool.NewTool 要求 struct）。
+type skipInput struct {
+	// Value 任意值
+	Value string
 }

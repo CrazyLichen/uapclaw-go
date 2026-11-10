@@ -4,6 +4,7 @@ package testhelpers
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -92,3 +93,11 @@ func NewTestContext(t *testing.T, sessionID string) ceiface.ModelContext {
 	require.Equal(t, sessionID, mc.SessionID())
 	return mc
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试/集成替身）。
+func (m *MockSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试/集成替身）。
+func (m *MockSessionFacade) GetParentSessionID() string { return "" }

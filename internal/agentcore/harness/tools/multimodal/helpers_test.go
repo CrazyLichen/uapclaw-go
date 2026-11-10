@@ -1245,3 +1245,19 @@ func TestParseWAVDuration_多声道(t *testing.T) {
 		t.Errorf("duration = %f, 期望约 2.0", duration)
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *mockVisionClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *mockVisionClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *mockAudioClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *mockAudioClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

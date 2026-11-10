@@ -2399,3 +2399,11 @@ func TestRoundLevelCompressorConfig_Validate_CompressionCallMaxTokens零(t *test
 		t.Error("CompressionCallMaxTokens=0 应报错")
 	}
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (f *rlcFakeBaseModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (f *rlcFakeBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

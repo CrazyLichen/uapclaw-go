@@ -2,6 +2,7 @@ package rails
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
@@ -169,3 +170,12 @@ var (
 	_ agentinterfaces.BaseAgent       = (*fakeBaseAgent)(nil)
 	_                                 = llmschema.RoleTypeUser
 )
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *mockSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSession) GetParentSessionID() string { return "" }

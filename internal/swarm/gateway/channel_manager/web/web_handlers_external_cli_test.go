@@ -26,7 +26,7 @@ func TestExternalCLI_注册齐全(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── detect ────────────────────────────
+// ──────────────────────────── detect 外部 CLI 探测 ────────────────────────────
 
 // TestExternalCLIDetect_参数校验 params 非对象 → BAD_REQUEST。
 func TestExternalCLIDetect_参数校验(t *testing.T) {
@@ -84,7 +84,7 @@ func TestExternalCLIDetect_解析版本(t *testing.T) {
 	assert.Equal(t, script, payload["path"])
 }
 
-// ──────────────────────────── validate_paths ────────────────────────────
+// ──────────────────────────── validate_paths 路径校验 ────────────────────────────
 
 // TestExternalCLIValidatePaths_参数校验 paths 非数组 → BAD_REQUEST。
 func TestExternalCLIValidatePaths_参数校验(t *testing.T) {
@@ -126,7 +126,7 @@ func TestExternalCLIValidatePaths_超过上限截断(t *testing.T) {
 	assert.Len(t, results, 50, "单次最多探测 50 条")
 }
 
-// ──────────────────────────── prune_path_histories ────────────────────────────
+// ──────────────────────────── prune_path_histories 路径历史裁剪 ────────────────────────────
 
 // TestExternalCLIPrune_参数校验 cli_agent 缺失 / remove_paths 非数组各自 BAD_REQUEST。
 func TestExternalCLIPrune_参数校验(t *testing.T) {

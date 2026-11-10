@@ -216,10 +216,7 @@ var todoGetDescription = map[string]string{
 
 // GetTodoCreateMetadataProviderInputParams 构建 todo_create 工具的参数 Schema
 func GetTodoCreateMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"tasks": {
 			"cn": "子任务列表，JSON 数组格式。每个元素为任务对象，必填字段：\n" +
@@ -248,12 +245,7 @@ func GetTodoCreateMetadataProviderInputParams(language string) map[string]any {
 		"status":            {"cn": "任务状态", "en": "Task status"},
 		"selected_model_id": {"cn": "执行此任务使用的模型 ID。见系统提示词「模型选择策略」。若任务结果不满意，可通过 todo_modify 更换更强的模型 ID 后重试。", "en": "Model ID for this task. See 'Model Selection Strategy' in system prompt. If task result is unsatisfactory, update via todo_modify and retry."},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -279,10 +271,7 @@ func GetTodoCreateMetadataProviderInputParams(language string) map[string]any {
 
 // GetTodoListMetadataProviderInputParams 构建 todo_list 工具的参数 Schema
 func GetTodoListMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	_ = lang
 	return map[string]any{
 		"type":       "object",
@@ -293,10 +282,7 @@ func GetTodoListMetadataProviderInputParams(language string) map[string]any {
 
 // GetTodoModifyMetadataProviderInputParams 构建 todo_modify 工具的参数 Schema
 func GetTodoModifyMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"action": {"cn": "要执行的操作类型", "en": "Operation type to perform"},
 		"ids":    {"cn": "要操作的任务 ID 列表", "en": "List of task IDs to operate on"},
@@ -320,12 +306,7 @@ func GetTodoModifyMetadataProviderInputParams(language string) map[string]any {
 		"status":            {"cn": "任务状态", "en": "Task status"},
 		"selected_model_id": {"cn": "执行此任务使用的模型 ID。见系统提示词「模型选择策略」。若任务结果不满意，可通过 todo_modify 更换更强的模型 ID 后重试。", "en": "Model ID for this task. See 'Model Selection Strategy' in system prompt. If task result is unsatisfactory, update via todo_modify and retry."},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	todoItemSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -360,19 +341,11 @@ func GetTodoModifyMetadataProviderInputParams(language string) map[string]any {
 
 // GetTodoGetMetadataProviderInputParams 构建 todo_get 工具的参数 Schema
 func GetTodoGetMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"id": {"cn": "任务唯一标识符", "en": "Unique task identifier"},
 	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
+	d := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

@@ -44,18 +44,18 @@ func TestGetChannelDefaultState_读配置(t *testing.T) {
 	}, func(string, map[string]any) {})
 
 	state := mh.getChannelDefaultState("feishu_test")
-	assert.Equal(t, "sid-from-config", state.SessionID)
-	assert.Equal(t, ChannelModeAgentCodeNormal, state.Mode)
+	assert.Equal(t, "sid-from-config", state.GetSessionID())
+	assert.Equal(t, ChannelModeAgentCodeNormal, state.GetMode())
 
 	// 配置里无 default_session_id → 返回空（0.2.5 起由 session.create 分配，不再本地生成）
 	state = mh.getChannelDefaultState("wecom_nosid")
-	assert.Empty(t, state.SessionID)
-	assert.Equal(t, ChannelModeTeamCodeNormal, state.Mode)
+	assert.Empty(t, state.GetSessionID())
+	assert.Equal(t, ChannelModeTeamCodeNormal, state.GetMode())
 
 	// 渠道不在配置中 → mode 兜底 "agent" → agent.work.normal，session 为空
 	state = mh.getChannelDefaultState("wecom_other")
-	assert.Empty(t, state.SessionID)
-	assert.Equal(t, ChannelModeAgentWorkNormal, state.Mode)
+	assert.Empty(t, state.GetSessionID())
+	assert.Equal(t, ChannelModeAgentWorkNormal, state.GetMode())
 }
 
 // TestSaveChannelStateToConfig 覆盖回调缺失/状态缺失/正常写回三条分支。

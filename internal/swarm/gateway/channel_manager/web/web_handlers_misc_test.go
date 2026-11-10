@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── connection.status ────────────────────────────
+// ──────────────────────────── connection.status 连接状态 ────────────────────────────
 
 // TestConnectionStatus_无AgentClient 未接 AgentClient 时 agent_ready=false，协议版本固定 1.0。
 func TestConnectionStatus_无AgentClient(t *testing.T) {
@@ -17,7 +17,7 @@ func TestConnectionStatus_无AgentClient(t *testing.T) {
 	assert.Equal(t, "1.0", payload["protocol_version"])
 }
 
-// ──────────────────────────── commands.list ────────────────────────────
+// ──────────────────────────── commands.list 命令列表 ────────────────────────────
 
 // TestCommandsList_五个内置命令 清单与上游 BUILTIN_COMMANDS_META 一致，description 取中文。
 func TestCommandsList_五个内置命令(t *testing.T) {
@@ -49,7 +49,7 @@ func TestCommandsList_带workMode(t *testing.T) {
 	assert.Len(t, payload["commands"].([]any), 5)
 }
 
-// ──────────────────────────── config.moa_status ────────────────────────────
+// ──────────────────────────── config.moa_status MoA 状态 ────────────────────────────
 
 // TestConfigMoaStatus_默认未配置 catalog 未移植期固定回 configured=false。
 func TestConfigMoaStatus_默认未配置(t *testing.T) {
@@ -58,7 +58,7 @@ func TestConfigMoaStatus_默认未配置(t *testing.T) {
 	assert.Equal(t, map[string]any{"configured": false}, payload)
 }
 
-// ──────────────────────────── chat.swarmflow_reply ────────────────────────────
+// ──────────────────────────── chat.swarmflow_reply swarmflow 回复 ────────────────────────────
 
 // TestChatSwarmflowReply_空ack 形状为 {accepted:true, session_id: 连接会话}。
 func TestChatSwarmflowReply_空ack(t *testing.T) {

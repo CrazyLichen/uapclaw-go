@@ -162,6 +162,14 @@ type fakeAbilityManagerForTools struct {
 	abilities []cschema.Ability
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (m *fakeAbilityManagerForTools) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (m *fakeAbilityManagerForTools) Add(ability cschema.Ability) agentschema.AddAbilityResult {
 	return agentschema.AddAbilityResult{Added: true}
 }
@@ -498,3 +506,6 @@ func TestSubagentRail_Uninit_同步模式不清理toolkit(t *testing.T) {
 	assert.Empty(t, r.tools, "Uninit 后 tools 应清空")
 	assert.Nil(t, agent.sessionToolkit, "同步模式 Uninit 不应设置 toolkit（保持 nil）")
 }
+
+// TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
+func (f *fakeAbilityManagerForTools) TeardownTools() {}

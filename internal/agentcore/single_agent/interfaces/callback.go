@@ -123,6 +123,10 @@ type AgentCallbackContext struct {
 	forceFinishRequest *ForceFinishRequest
 	// steeringQueue 外部注入的 steering 消息队列
 	steeringQueue chan string
+	// contextUsageAttribution 本次请求的用量归属（owner 与调用血缘）
+	// 由 extraMuPtr 一并保护：模型调用前刷新、rail 读取可能跨协程。
+	// Python: AgentCallbackContext.context_usage_attribution（rail/base.py L579）
+	contextUsageAttribution map[string]any
 }
 
 // AgentCallbackManager PerAgent 实例级回调管理器。
@@ -181,9 +185,46 @@ type InvokeInputs struct {
 	RunKind RunKind
 	// RunContext 结构化运行时上下文
 	RunContext *RunContext
+	// ParentSessionID 拥有本子会话的产品会话标识（血缘）
+	// Python: InvokeInputs.parent_session_id（rail/base.py L273）
+	ParentSessionID string
+	// InvocationID 本次 agent 执行标识
+	// Python: InvokeInputs.invocation_id（rail/base.py L274）
+	InvocationID string
+	// ParentInvocationID 父级执行标识
+	// Python: InvokeInputs.parent_invocation_id（rail/base.py L275）
+	ParentInvocationID string
+	// DelegationID 委派链上的任务标识
+	// Python: InvokeInputs.delegation_id（rail/base.py L276）
+	DelegationID string
+	// AgentPath 根到当前 agent 的路径
+	// Python: InvokeInputs.agent_path（rail/base.py L277）
+	AgentPath []string
+	// Depth 调用树深度
+	// Python: InvokeInputs.depth（rail/base.py L278）
+	Depth int
+	// TurnNumber 本轮所属的逻辑用户 turn 号（1-based）；0 表示未提供
+	// Python: InvokeInputs.turn_number（rail/base.py L279，Optional[int]）
+	TurnNumber int
 	// Extra 额外参数，透传到 ReActAgent inputs（如 _steering_queue）
 	// 对齐 Python: DeepAgent.invoke(inputs) 中 inputs 为 dict，额外 key 自然保留
 	Extra map[string]any
+}
+
+// GenerationOptions 父调用的生成选项，用于让重放请求体与父调用一致。
+// Python: prompt_suggestion.py:282-287 从 config 读的
+// llm_return_token_ids / llm_logprobs / llm_top_logprobs 三元组。
+//
+// 定义在 interfaces 包的原因：agents 包（产出方）与 recommendation 包
+// （消费方）都依赖本包，放在此处可让两边共用同一类型，
+// 避免「两个同构类型导致类型断言静默失败」。
+type GenerationOptions struct {
+	// ReturnTokenIDs 是否请求 token IDs
+	ReturnTokenIDs bool
+	// Logprobs 是否请求 logprobs
+	Logprobs bool
+	// TopLogprobs top_logprobs 数量
+	TopLogprobs int
 }
 
 // ModelCallInputs BEFORE/AFTER_MODEL_CALL 事件输入。
@@ -197,6 +238,9 @@ type ModelCallInputs struct {
 	ModelContext ceinterface.ModelContext
 	// Response LLM 响应（调用完成后填充）
 	Response *llmschema.AssistantMessage
+	// ContextUsageAttribution 本次上报的用量归属快照
+	// Python: ctx.inputs.context_usage_attribution（动态属性，react_agent.py L1483/L1703/L1779）
+	ContextUsageAttribution map[string]any
 }
 
 // SteeringDrainInputs BEFORE_STEERING_DRAIN 事件输入。
@@ -487,6 +531,39 @@ func (c *AgentCallbackContext) ModelContext() ceinterface.ModelContext { return 
 
 // SetModelContext 设置 ModelContext
 func (c *AgentCallbackContext) SetModelContext(mc ceinterface.ModelContext) { c.modelContext = mc }
+
+// ContextUsageAttribution 返回本次请求的用量归属（owner 与调用血缘）。
+// Python: AgentCallbackContext.context_usage_attribution（rail/base.py L579）
+func (c *AgentCallbackContext) ContextUsageAttribution() map[string]any {
+	mu := c.extraLock()
+	mu.RLock()
+	defer mu.RUnlock()
+	if c.contextUsageAttribution == nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(c.contextUsageAttribution))
+	for k, v := range c.contextUsageAttribution {
+		out[k] = v
+	}
+	return out
+}
+
+// SetContextUsageAttribution 替换本次请求的用量归属。
+// 内层 ReActAgent 在 invoke 起点与每次模型调用上报前各刷新一次。
+// Python: ctx.context_usage_attribution（rail/base.py L579）
+func (c *AgentCallbackContext) SetContextUsageAttribution(attribution map[string]any) {
+	mu := c.extraLock()
+	mu.Lock()
+	defer mu.Unlock()
+	if attribution == nil {
+		c.contextUsageAttribution = nil
+		return
+	}
+	c.contextUsageAttribution = make(map[string]any, len(attribution))
+	for k, v := range attribution {
+		c.contextUsageAttribution[k] = v
+	}
+}
 
 // Extra 返回 extra 通信字典。
 // Deprecated: S-24——返回的 map 引用绕过 extraMu 锁保护，并发读写有

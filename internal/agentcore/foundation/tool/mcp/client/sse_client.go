@@ -290,7 +290,7 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 	return nil
 }
 
-// ListTools 列出服务器提供的工具。
+// doListTools 列出服务器提供的工具。
 func (c *SseClient) doListTools(ctx context.Context) ([]*types.McpToolCard, error) {
 	if !c.connected() {
 		return nil, exception.BuildError(
@@ -326,7 +326,7 @@ func (c *SseClient) doListTools(ctx context.Context) ([]*types.McpToolCard, erro
 	return tools, nil
 }
 
-// CallTool 调用指定工具。
+// doCallTool 调用指定工具。
 func (c *SseClient) doCallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
 	if !c.connected() {
 		return nil, exception.BuildError(
@@ -358,7 +358,7 @@ func (c *SseClient) doCallTool(ctx context.Context, toolName string, arguments m
 	return callToolResultToMap(resp), nil
 }
 
-// GetToolInfo 获取指定工具信息。
+// doGetToolInfo 获取指定工具信息。
 func (c *SseClient) doGetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
 	if !c.connected() {
 		return nil, exception.BuildError(
@@ -386,7 +386,7 @@ func (c *SseClient) doGetToolInfo(ctx context.Context, toolName string) (*types.
 	)
 }
 
-// ListResources 列出服务器提供的资源。
+// doListResources 列出服务器提供的资源。
 func (c *SseClient) doListResources(ctx context.Context) ([]map[string]any, error) {
 	if !c.connected() {
 		return nil, exception.BuildError(
@@ -416,7 +416,7 @@ func (c *SseClient) doListResources(ctx context.Context) ([]map[string]any, erro
 	return result, nil
 }
 
-// ReadResource 读取指定资源。
+// doReadResource 读取指定资源。
 func (c *SseClient) doReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	if !c.connected() {
 		return nil, exception.BuildError(

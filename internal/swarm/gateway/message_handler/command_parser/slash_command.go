@@ -209,7 +209,6 @@ var ValidSwitchLines = buildValidSwitchLines()
 // ValidSwitchSubcommands 合法的切换子命令值集合
 var ValidSwitchSubcommands = buildSwitchSubcommandValues()
 
-// ControlMessageTexts 控制消息文本映射
 // builtinCommandsMeta 快捷面板展示的内置命令元数据（静态，无 IO）。
 // Python: BUILTIN_COMMANDS_META (gateway/message_handler/command_parser/slash_command.py:483-572)。
 // description 由 description_i18n["zh"] 派生（对齐 list_builtin_commands 的旧客户端兼容）。

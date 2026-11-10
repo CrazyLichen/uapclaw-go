@@ -4,6 +4,7 @@ import (
 	"context"
 
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -24,6 +25,9 @@ type ContextAssembleRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// abilityManager 能力管理器引用
 	abilityManager sainterfaces.AbilityManagerInterface
+	// attachmentManager 会话级附件管理器（Init 时取一次）
+	// Python: self.attachment_manager（context_assemble_rail.py:57/64）
+	attachmentManager *hprompts.Manager
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -32,6 +36,10 @@ const (
 	// contextAssembleRailPriority ContextAssembleRail 优先级
 	// Python: ContextAssembleRail.priority = 85
 	contextAssembleRailPriority = 85
+
+	// contextAssembleAttachmentSource 上下文附件来源标识
+	// Python: _ATTACHMENT_SOURCE（context_assemble_rail.py:82）
+	contextAssembleAttachmentSource = "agent_core.context_assemble_rail"
 
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
@@ -52,6 +60,8 @@ func NewContextAssembleRail() *ContextAssembleRail {
 func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	r.abilityManager = agent.AbilityManager()
+	// Python: context_assemble_rail.py:64 self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
+	r.attachmentManager = hprompts.ManagerFor(agent)
 
 	// Python: DeepAgentRail.set_sys_operation / set_workspace
 	// 同 HeartbeatRail 模式：类型断言到 DeepAgentInterface
@@ -166,20 +176,35 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 			}
 		}
 
-		if len(files) > 0 {
+		// Python: :143 先移除 system 里的 context 节
+		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+		if isHeartbeat && len(files) > 0 {
+			// Python: :31-33/79-85 heartbeat 上下文只走附件（_ATTACHMENT_CONTEXT_SECTIONS）
+			contextSection := sections.BuildContextSection(files, lang)
+			if r.attachmentManager == nil {
+				// Python: :108-109 manager 缺失只告警，heartbeat 内容不回落 system
+				logger.Warn(logComponent).
+					Str("event_type", "context_assemble_attachment").
+					Msg("prompt attachment manager is unavailable; skip attachment sections")
+			} else if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
+				&contextSection, hprompts.AttachmentFile, contextAssembleAttachmentSource, lang,
+				hprompts.WithAttachmentContentKind("text/markdown"),
+			); err != nil {
+				logger.Warn(logComponent).
+					Str("event_type", "context_assemble_attachment").
+					Err(err).
+					Msg("skip attachment section")
+			}
+		} else if len(files) > 0 {
 			contextSection := sections.BuildContextSection(files, lang)
 			r.systemPromptBuilder.AddSection(contextSection)
-		} else {
-			r.systemPromptBuilder.RemoveSection(sections.SectionContext)
 		}
 	} else {
 		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
 	}
 
 	// 注入节到系统提示词构建器
-	// 上游 context_assemble_rail.py 只把 context.heartbeat 投递为附件（_ATTACHMENT_CONTEXT_SECTIONS），
-	// workspace 节已改为「不注入提示词」，context 文件拆分为 system/disabled/attachment 三组；
-	// Go 侧仍是单一 context 节 + workspace 节的历史结构，故此处保持 add_section（结构差异见 S2 计划文档「已知缺口」）。
+	// 上游 context.heartbeat 已改走历史附件（见上），workspace 节的 system 注入仍是 Go 侧既有结构。
 	r.systemPromptBuilder.AddSection(workspaceSection)
 
 	if toolsSection != nil {

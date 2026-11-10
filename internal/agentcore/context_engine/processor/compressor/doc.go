@@ -15,6 +15,8 @@
 //	├── round_level_compressor.go       # RoundLevelCompressor 轮级渐进式压缩器
 //	├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
 //	├── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
+//	├── trigger_ratio.go                # 触发阈值与目标比例判定
+//	├── span.go                         # 压缩区间计算 + 工具边界/最近用户消息对齐
 //	└── recall/
 //	    ├── doc.go                      # recall 包文档
 //	    └── bm25.go                     # BM25Index + 中英混排分词

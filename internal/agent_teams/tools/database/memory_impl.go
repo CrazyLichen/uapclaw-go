@@ -265,7 +265,7 @@ func (db *InMemoryTeamDatabase) GetTeamUpdatedAt(_ context.Context, teamName str
 
 // CreateMember 创建成员。对齐 Python: MemberDao.create_member()
 // 成功返回 true，成员已存在返回 false（对齐 Python IntegrityError → False）
-func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool {
+func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	key := memberKey(memberName, teamName)
@@ -283,7 +283,7 @@ func (db *InMemoryTeamDatabase) CreateMember(_ context.Context, memberName, team
 		Mode:            mode,
 		Role:            role,
 		Prompt:          prompt,
-		ModelRefJSON:    modelRefJSON,
+		Options:         options,
 		UpdatedAt:       GetCurrentTime(), // Python: updated_at = get_current_time()
 	}
 	return true
@@ -325,8 +325,35 @@ func (db *InMemoryTeamDatabase) GetTeamMembers(_ context.Context, teamName strin
 	return result, nil
 }
 
+// GetMemberStatus 窄投影读取成员状态。
+// Python: get_member_status (member_dao.py)
+func (db *InMemoryTeamDatabase) GetMemberStatus(_ context.Context, teamName, memberName string) (string, bool) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	member, exists := db.members[memberKey(memberName, teamName)]
+	if !exists {
+		return "", false
+	}
+	return member.Status, true
+}
+
+// DeleteUnstartedMember 删除尚未离开 UNSTARTED 的成员行。
+// Python: delete_unstarted_member (member_dao.py:397-415)
+func (db *InMemoryTeamDatabase) DeleteUnstartedMember(_ context.Context, memberName, teamName string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	member, exists := db.members[key]
+	if !exists || member.Status != memberStatusUnstarted {
+		return false
+	}
+	delete(db.members, key)
+	return true
+}
+
 // UpdateMemberStatus 更新成员状态（含 FSM 校验）。对齐 Python: MemberDao.update_member_status()
 // 返回 true 表示成功，false 表示成员不存在或状态转换不合法
+
 func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName, teamName, status string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -414,6 +441,29 @@ func (db *InMemoryTeamDatabase) UpdateMemberExecutionStatus(_ context.Context, m
 	return true
 }
 
+// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+func (db *InMemoryTeamDatabase) ResetPausedMemberExecutionStatus(_ context.Context, teamName string, memberNames []string) int {
+	if len(memberNames) == 0 {
+		return 0
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	reset := 0
+	for _, name := range memberNames {
+		member, exists := db.members[memberKey(name, teamName)]
+		if !exists {
+			continue
+		}
+		if member.Status != "paused" || member.ExecutionStatus == "idle" {
+			continue
+		}
+		member.ExecutionStatus = "idle"
+		reset++
+	}
+	return reset
+}
+
 // CreateTask 创建单条任务。对齐 Python: TaskDao.create_task()
 // 成功返回 true，task_id 冲突返回 false（对齐 Python IntegrityError → False）
 func (db *InMemoryTeamDatabase) CreateTask(_ context.Context, task *TeamTaskBase) (bool, error) {
@@ -456,8 +506,27 @@ func (db *InMemoryTeamDatabase) GetTeamTasks(_ context.Context, teamName, status
 	return result, nil
 }
 
+// OpenTaskCountsByAssignee 按 assignee 统计非终态任务数。
+// Python: open_task_counts_by_assignee (task_dao.py:685-705)
+func (db *InMemoryTeamDatabase) OpenTaskCountsByAssignee(_ context.Context, teamName string) (map[string]int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	counts := make(map[string]int)
+	for _, task := range db.tasks {
+		if task.TeamName != teamName || task.Assignee == nil {
+			continue
+		}
+		if fsm.IsTaskTerminal(task.Status) {
+			continue
+		}
+		counts[*task.Assignee]++
+	}
+	return counts, nil
+}
+
 // GetTasksByAssignee 查询成员的任务。对齐 Python: TaskDao.get_tasks_by_assignee()
 // status 为空字符串表示不过滤。
+
 func (db *InMemoryTeamDatabase) GetTasksByAssignee(_ context.Context, teamName, assignee, status string) ([]*TeamTaskBase, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -1093,6 +1162,7 @@ func (mc *mutationContext) stageNewTasks() {
 			Title:     spec.Title,
 			Content:   spec.Content,
 			Status:    status,
+			Assignee:  spec.Assignee,
 			UpdatedAt: GetCurrentTime(),
 		}
 		mc.db.tasks[spec.TaskID] = task

@@ -583,12 +583,14 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	// 25.1a：改传会话对象（sessionFromOptsOrCtx），kernel 需对象启动 harness native supervisor。
 	a.coordination.Start(ctx, a.sessionFromOptsOrCtx(ctx, opts...))
 
-	// Python: try:
-	//   await self._coordination.enqueue_user_input(inputs)
-	//   await self._coordination.enqueue_mailbox_after_first_iteration()
-	// S-07: query 已在上方无条件覆盖处声明，与 Python inputs.get("query", "") 同源
+	// Python team_agent.py:970-976：
+	//   if raw_query: enqueue_user_input(inputs)
+	//   enqueue_initial_mailbox_poll()
+	//   enqueue_initial_task_poll()
+	// 两个初始 poll 是「流开始时立刻做一次完成判定」的源头，不等 30s 周期 tick。
 	a.coordination.EnqueueUserInput(query)
 	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
+	a.coordination.EnqueueInitialTaskPoll(ctx)
 
 	// Python: last_result = None
 	//   while True:
@@ -623,10 +625,18 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Stream started")
 
-	// 未配置时直接返回空流（对齐 Python：未 configure 的 TeamAgent 无法执行 stream）
+	// 未配置时返回**已关闭**的空流。
+	//
+	// 上游 team_agent.py:958-980 的 stream 是 async generator，无条件走流程；
+	// generator 自然 return 等价于流立即结束，不存在「返回 nil 流」这一态。
+	// Go 用 channel 表达流，返回 nil channel 会让下游 `for range agentCh`
+	// 永久阻塞（连带 mergedCh 的 defer close 执行不到）。故这里显式造一个
+	// 已关闭的通道，让 range 立即结束——这才是一比一等价。
 	if a.configurator == nil || a.configurator.Blueprint() == nil {
 		logger.Warn(logComponent).Msg("TeamAgent Stream: not configured, skipped")
-		return nil, nil
+		closed := make(chan stream.Schema)
+		close(closed)
+		return closed, nil
 	}
 
 	// Python: self._stream_controller.stream_queue = asyncio.Queue()
@@ -647,12 +657,14 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	// 25.1a：改传会话对象（sessionFromOptsOrCtx），kernel 需对象启动 harness native supervisor。
 	a.coordination.Start(ctx, a.sessionFromOptsOrCtx(ctx, opts...))
 
-	// Python: try:
-	//   await self._coordination.enqueue_user_input(inputs)
-	//   await self._coordination.enqueue_mailbox_after_first_iteration()
-	// S-07: query 已在上方无条件覆盖处声明，与 Python inputs.get("query", "") 同源
+	// Python team_agent.py:970-976：
+	//   if raw_query: enqueue_user_input(inputs)
+	//   enqueue_initial_mailbox_poll()
+	//   enqueue_initial_task_poll()
+	// 两个初始 poll 是「流开始时立刻做一次完成判定」的源头，不等 30s 周期 tick。
 	a.coordination.EnqueueUserInput(query)
 	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
+	a.coordination.EnqueueInitialTaskPoll(ctx)
 
 	// Python: while True:
 	//   chunk = await self._stream_controller.stream_queue.get()
@@ -930,16 +942,32 @@ func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool
 	return started
 }
 
+// AnnounceTaskRevisions 让成员运行时立刻投递待发任务编辑通知（F-129）。
+//
+// 通知的唯一来源是成员的任务通知器；TASK_UPDATED 事件只是"要求提前说"。
+// 运行时不支持则静默跳过——下一个输入会携带它。
+//
+// Python: TeamAgent.announce_task_revisions (team_agent.py:539-550)
+func (a *TeamAgent) AnnounceTaskRevisions(ctx context.Context) error {
+	h := a.Harness()
+	if h == nil {
+		return nil
+	}
+	return h.AnnounceTaskRevisions(ctx)
+}
+
 // AutoStartAll 启动所有 UNSTARTED 成员。
-// Python: TeamAgent.auto_start_all()
+//
+// 只有交互广播（@all / 未指名消息）会走到这里，所以 task-scoped 且没有开放
+// 任务的成员也要起来：广播同样是发给它的。
+//
+// Python: TeamAgent.auto_start_all (team_agent.py:1976-1997)
 func (a *TeamAgent) AutoStartAll(ctx context.Context) []string {
 	backend := a.TeamBackend()
 	if backend == nil || !backend.IsLeader() {
 		return nil
 	}
-	started, err := backend.Startup(ctx, func(ctx context.Context, name string) error {
-		return a.onTeammateCreated(ctx, name)
-	})
+	started, err := backend.AutostartUnstarted(ctx, true)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("AutoStartAll failed")
 		return nil
@@ -1276,17 +1304,10 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// degradeAtRoundBoundary 把"轮次刚结束、controller 已回收"的投递失败降级为排队。
-// M-02：`d.Steer/FollowUp` 现在会返回 ErrNoActiveLoop。这个错误出现在
-// "IsAgentRunning() 仍为真，但任务循环控制器已被 forceCleanupController 回收"
-// 的轮次切换窗口里——属正常竞态而非故障。Python 在同一窗口静默丢弃输入，
-// 这里改为降级投递到下一轮队列：消息不丢，也不给用户一个假错误。
-// 其余错误（会话缺失、发布失败）原样上抛，由调用方决定是否 failure。
-// sessionIDFromOptsOrCtx 解析本轮应绑定的 sessionID。
+// sessionFromOptsOrCtx 返回本轮应绑定的会话对象（any，nil 表示无会话）。
 // M-19: 对齐 Python invoke(inputs, session=None) / stream(inputs, session=None) 的
 // 显式 session 参数语义——优先取 opts 传入的 SessionFacade；
 // opts 未传时回退 ctx 中 SessionState 的 sessionID（对齐 Python contextvar 兜底）。
-// sessionFromOptsOrCtx 返回本轮应绑定的会话对象（any，nil 表示无会话）。
 // 25.1a 接线：CoordinationKernel.Start 需要 AgentTeamSession 对象来启动
 // harness 的 native supervisor（harness.Start(team_session=session) 会拿它建子会话）。
 // 旧实现 sessionIDFromOptsOrCtx 只提取 sessionID，把对象丢了——TeamSession 存 nil，
@@ -1464,16 +1485,6 @@ func (a *TeamAgent) HarnessAccessor() types.HarnessAccessor {
 		return h
 	}
 	return nil
-}
-
-// FirstIterGate 返回首轮迭代门控。
-// 满足 types.ResourceAccessor 接口。
-// 对齐 Python: host.resources.first_iter_gate
-func (a *TeamAgent) FirstIterGate() types.FirstIterGateAccessor {
-	if a.configurator == nil {
-		return nil
-	}
-	return a.configurator.FirstIterGate()
 }
 
 // SubscribeTransport 订阅团队传输主题。

@@ -27,6 +27,7 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -198,6 +199,13 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// Python: ExternalMemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
 	_ = d.buildExternalMemoryRail()
 
+	// promptSuggestionForkRail — 记下每轮最后一次主调用，供下一句建议重放。
+	// Python: interface_deep.py:11371-11377 在 observability rail 之前挂载。
+	// ★ 必须挂在 child 上（28f）：根是纯路由器，CreateInstance 早退后根上
+	//   没有可挂 rail 的 ReAct 图；child 才持有会话自己的 rails 表。
+	// priority = -1_000_000 由 rail 自身决定（Google「数值越大越先」→ 最后读）。
+	railsList = append(railsList, recommendation.NewPromptSuggestionForkRail())
+
 	// ─── 用户自定义 Hook Rail ───
 
 	// userHookRail — 用户配置的 hooks，对齐 Python interface_deep.py L2200-2211
@@ -269,7 +277,7 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 	return nil
 }
 
-// buildSkillRail 构建技能使用护栏（include_tools 由调用方在 filesystemRail
+// buildSkillRailWithIncludeTools 构建技能使用护栏（include_tools 由调用方在 filesystemRail
 // 赋值前求值后传入，见 buildAgentRails 步骤 3 注释）。
 // ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
 func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sainterfaces.AgentRail) {

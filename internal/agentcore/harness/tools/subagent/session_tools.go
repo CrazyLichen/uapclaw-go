@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -248,10 +249,20 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 			Description: input.TaskDescription,
 			Status:      cschema.TaskSubmitted,
 			Metadata: map[string]any{
-				"subagent_type":    input.SubagentType,
-				"task_description": input.TaskDescription,
-				"sub_session_id":   subSessionID,
+				"subagent_type":     input.SubagentType,
+				"task_description":  input.TaskDescription,
+				"sub_session_id":    subSessionID,
+				"parent_session_id": parentSessionID,
+				"delegation_id":     taskID,
 			},
+		}
+		// 用量归属血缘：调度器执行子任务时据此绑定委派归属。
+		// Python: session_tools.py L331-338
+		if parentInvocationID := rail.CurrentUsageInvocationID(ctx); parentInvocationID != "" {
+			coreTask.Metadata["parent_invocation_id"] = parentInvocationID
+		}
+		if parentAttribution := rail.CurrentUsageAttribution(ctx); len(parentAttribution) > 0 {
+			coreTask.Metadata["parent_usage_attribution"] = parentAttribution
 		}
 		if err := tm.AddTask(ctx, coreTask); err != nil {
 			return nil, exception.BuildError(

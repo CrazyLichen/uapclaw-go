@@ -54,6 +54,9 @@ func TestCompressContext_无实例返回noop(t *testing.T) {
 // TestGetContextUsage_降级路径 验证无实例时返回 (nil, nil)（对齐上游「无实例即无用量」）。
 func TestGetContextUsage_降级路径(t *testing.T) {
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	res, err := d.GetContextUsage(context.Background(), "s1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
@@ -66,6 +69,9 @@ func TestGetContextUsage_降级路径(t *testing.T) {
 // TestGenerateRecap_降级路径 验证无实例时的 recap 行为。
 func TestGenerateRecap_降级路径(t *testing.T) {
 	d := NewDeepAdapter()
+	// 10.3.28f：本用例测方法体（instance 为 nil 时的降级分支），不是根分流。
+	// 标记 session-scoped 让分流头跳过；根分流由 *分流到child 用例覆盖。
+	d.MarkAsSessionScoped("test-session")
 	res, err := d.GenerateRecap(context.Background(), "s1")
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)

@@ -20,7 +20,8 @@
 //	├── ctxutil.go        # 上下文判定：Canceled（只认 context.Canceled）
 //	├── pyjson.go         # Python json.dumps 语义对齐序列化：MarshalNoEscape + MarshalIndentNoEscape
 //	├── channel.go        # 通道工具：DrainWithTimeout（流异常路径排空 + 超时兜底）
-//	└── pystr.go          # 文本化：PyText（展示用紧凑 JSON）+ PyStr/PyFloatStr（Python str() 标量语义）
+//	├── pystr.go          # 文本化：PyText（展示用紧凑 JSON）+ PyStr/PyFloatStr（Python str() 标量语义）
+//	└── pyint.go          # Python int() 语义转换：PyInt（兼容 float64/字符串/JSON Number）
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/common/utils.py

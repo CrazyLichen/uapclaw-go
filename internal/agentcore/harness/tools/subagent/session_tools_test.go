@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"reflect"
 	"strings"
 	"sync"
@@ -867,3 +868,12 @@ func (f *fakeHandlerSess) ClearSession(_ context.Context) {}
 // 编译时接口检查
 var _ interfaces.DeepAgentInterface = (*fakeDeepAgentProvider)(nil)
 var _ controller.ControllerInterface = (*fakeController)(nil)
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (f *fakeHandlerSess) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeHandlerSess) GetParentSessionID() string { return "" }

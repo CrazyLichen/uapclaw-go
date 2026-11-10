@@ -8,9 +8,10 @@
 // 文件目录：
 //
 //	rail/
-//	├── doc.go          # 包文档
-//	├── executor.go     # RailExecutor（Rail执行器） 结构体（@rail 装饰器等价）+ ModelCallRail（模型调用Rail）/ToolCallRail（工具调用Rail）
-//	└── model_backup.go # ModelBackupRail（模型备份护栏）：LLM 调用异常时按序切换备用模型并请求重试
+//	├── doc.go              # 包文档
+//	├── executor.go         # RailExecutor（Rail执行器） 结构体（@rail 装饰器等价）+ ModelCallRail（模型调用Rail）/ToolCallRail（工具调用Rail）
+//	├── model_backup.go     # ModelBackupRail（模型备份护栏）：LLM 调用异常时按序切换备用模型并请求重试
+//	└── usage_attribution.go # 用量归属的请求级传递（ctx 绑定 + 委派归属构造）
 //
 // 核心类型索引：
 //
@@ -22,4 +23,5 @@
 // 对应 Python 代码：openjiuwen/core/single_agent/rail/base.py（RailExecutor 部分）
 //
 //	openjiuwen/core/single_agent/rail/model_backup.py（ModelBackupRail）
+//	openjiuwen/core/single_agent/rail/base.py L71-175（用量归属 contextvars）
 package rail

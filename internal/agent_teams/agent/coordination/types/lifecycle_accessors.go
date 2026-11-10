@@ -7,6 +7,7 @@ import (
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -76,21 +77,9 @@ type ResourceAccessor interface {
 	MemoryManager() *memory.TeamMemoryManager
 	// HarnessAccessor 返回 Harness 访问器
 	HarnessAccessor() HarnessAccessor
-	// FirstIterGate 返回首轮迭代门控（可能为 nil，HUMAN_AGENT 不设置）
-	// 对齐 Python: host.resources.first_iter_gate
-	FirstIterGate() FirstIterGateAccessor
 	// StreamController 返回流式控制器
 	// 对齐 Python: host.stream_controller
 	StreamController() StreamControllerAccessor
-}
-
-// FirstIterGateAccessor 首轮迭代门控窄接口。
-// 签名对齐 *rails.FirstIterationGate 具体类型。
-type FirstIterGateAccessor interface {
-	// Wait 阻塞直到首次迭代开始
-	Wait(ctx context.Context) error
-	// IsReady 门是否已打开
-	IsReady() bool
 }
 
 // StreamControllerAccessor 流式控制器窄接口。
@@ -103,6 +92,15 @@ type StreamControllerAccessor interface {
 	// 对齐 Python: StreamController.start()（stream_controller.py:305-321）——
 	// kernel.start 在 harness.start 之后调用，controller 消费 runtime 输出。
 	Start(ctx context.Context)
+	// Stop 取消输出泵并等待其退出。
+	// 对齐 Python: StreamController.stop()（stream_controller.py:320-334）
+	Stop(ctx context.Context)
+	// PauseAgent 暂停在飞轮次到最近的内层迭代边界。
+	// 对齐 Python: StreamController.pause_agent()（stream_controller.py:711-720）
+	PauseAgent(ctx context.Context) error
+	// ResumeAgent 就地续跑暂停轮；query 非 nil 为冷恢复。
+	// 对齐 Python: StreamController.resume_agent(query=...)（stream_controller.py:722-730）
+	ResumeAgent(ctx context.Context, query *string) error
 }
 
 // HarnessAccessor Harness 窄接口。
@@ -118,6 +116,18 @@ type HarnessAccessor interface {
 	// 对齐 Python: TeamHarness.start(team_session=session)（team_harness.py:135-169）——
 	// kernel.start 在 bind_session 之后调用，先起 runtime 再让 controller 消费输出。
 	Start(ctx context.Context, teamSession any) error
+	// Stop 停成员脑并提交活跃会话。
+	// 对齐 Python: TeamHarness.stop()（team_harness.py:159-181）
+	Stop(ctx context.Context) error
+	// PausedQuery 返回暂停轮查询；ok=false 表示当前没有暂停轮。
+	// 对齐 Python: TeamHarness.paused_query（team_harness.py:402-406）
+	PausedQuery() (string, bool)
+	// State 返回当前生命周期相位。
+	// 对齐 Python: TeamHarness.state property（team_harness.py:327-331）
+	State() harnessprotocol.HarnessState
+	// Dispose 永久收尾：停机 + 释放该成员的进程级资源（记忆索引、sys_operation）。
+	// Python: TeamHarness.dispose()（team_harness.py:201-230）；kernel.stop 尾部调用。
+	Dispose(ctx context.Context) error
 }
 
 // BlueprintAccessor 蓝图扩展接口。

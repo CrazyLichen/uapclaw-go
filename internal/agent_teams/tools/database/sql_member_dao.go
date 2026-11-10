@@ -22,7 +22,7 @@ type SQLMemberDao struct {
 
 // CreateMember 创建成员。返回 true 表示成功，false 表示成员已存在。
 // Python: create_member() → bool（IntegrityError → False）
-func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, modelRefJSON string) bool {
+func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, displayName, agentCard, status, role, desc, executionStatus, mode, prompt, options string) bool {
 	now := GetCurrentTime()
 	member := &TeamMember{
 		MemberName:      memberName,
@@ -35,7 +35,7 @@ func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, d
 		ExecutionStatus: executionStatus,
 		Mode:            mode,
 		Prompt:          prompt,
-		ModelRefJSON:    modelRefJSON,
+		Options:         options,
 		UpdatedAt:       now,
 	}
 	result := d.db.WithContext(ctx).Create(member)
@@ -81,8 +81,38 @@ func (d *SQLMemberDao) GetTeamMembers(ctx context.Context, teamName string, stat
 	return members, nil
 }
 
+// GetMemberStatus 窄投影读取成员状态。
+// Python: get_member_status (member_dao.py)
+func (d *SQLMemberDao) GetMemberStatus(ctx context.Context, teamName, memberName string) (string, bool) {
+	var status string
+	result := d.db.WithContext(ctx).Table("team_member").
+		Select("status").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Scan(&status)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return "", false
+	}
+	return status, true
+}
+
+// DeleteUnstartedMember 删除尚未离开 UNSTARTED 的成员行。
+// Python: delete_unstarted_member (member_dao.py:397-415)
+func (d *SQLMemberDao) DeleteUnstartedMember(ctx context.Context, memberName, teamName string) bool {
+	result := d.db.WithContext(ctx).
+		Where("member_name = ? AND team_name = ? AND status = ?",
+			memberName, teamName, memberStatusUnstarted).
+		Delete(&TeamMember{})
+	if result.Error != nil {
+		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).
+			Err(result.Error).Msg("delete unstarted member failed")
+		return false
+	}
+	return result.RowsAffected == 1
+}
+
 // UpdateMemberStatus 更新成员状态（含 FSM 校验）。
 // Python: update_member_status() → bool
+
 func (d *SQLMemberDao) UpdateMemberStatus(ctx context.Context, memberName, teamName, status string) bool {
 	// Python: 先查再改 + is_valid_transition 校验
 	var member TeamMember
@@ -169,6 +199,25 @@ func (d *SQLMemberDao) UpdateMemberExecutionStatus(ctx context.Context, memberNa
 		Where("member_name = ? AND team_name = ?", memberName, teamName).
 		Update("execution_status", executionStatus)
 	return true
+}
+
+// ResetPausedMemberExecutionStatus 批量把已暂停成员的非 IDLE 执行状态复位为 IDLE。
+// Python: reset_paused_member_execution_status (member_dao.py:649-681)
+func (d *SQLMemberDao) ResetPausedMemberExecutionStatus(ctx context.Context, teamName string, memberNames []string) int {
+	if len(memberNames) == 0 {
+		return 0
+	}
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("team_name = ? AND member_name IN ? AND status = ? AND (execution_status IS NULL OR execution_status <> ?)",
+			teamName, memberNames, "paused", "idle").
+		Update("execution_status", "idle")
+	if result.Error != nil {
+		logger.Error(logComponent).Err(result.Error).
+			Str("team_name", teamName).
+			Msg("reset paused member execution status failed")
+		return 0
+	}
+	return int(result.RowsAffected)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -19,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tracker"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -51,6 +52,8 @@ type AgentConfigurator struct {
 	leaderAllocation *models.Allocation
 	// onTeammateCreated 队友创建回调
 	onTeammateCreated func(ctx context.Context, memberName string) error
+	// lastBuildCtx 最近一次装配用的 BuildContext（诊断与测试断言用）
+	lastBuildCtx hschema.BuildContextInterface
 }
 
 // setupInfraConfig SetupInfra 可选参数配置
@@ -61,6 +64,9 @@ type setupInfraConfig struct {
 	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建回调
 	onTeamBuilt func(ctx context.Context) error
+	// onMemberStarted 成员启动回调（spawn 落地）
+	// Python: on_member_started 参数（tools/team.py:148）
+	onMemberStarted func(ctx context.Context, memberName string) error
 }
 
 // SetupInfraOption SetupInfra 的可选参数。
@@ -78,6 +84,9 @@ type setupTeamBackendConfig struct {
 	onTeamCleaned func(ctx context.Context) error
 	// onTeamBuilt 团队构建回调
 	onTeamBuilt func(ctx context.Context) error
+	// onMemberStarted 成员启动回调（spawn 落地）
+	// Python: on_member_started 参数（tools/team.py:148）
+	onMemberStarted func(ctx context.Context, memberName string) error
 }
 
 // SetupTeamBackendOption SetupTeamBackend 的可选参数。
@@ -139,7 +148,12 @@ func WithBackendOnTeamBuilt(cb func(ctx context.Context) error) SetupTeamBackend
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamBuilt = cb }
 }
 
-// WithBackendDB 设置数据库实例。
+// WithBackendOnMemberStarted 设置成员启动回调。
+// Python: setup_team_backend(on_member_started=...)（tools/team.py:148）
+func WithBackendOnMemberStarted(cb func(ctx context.Context, memberName string) error) SetupTeamBackendOption {
+	return func(cfg *setupTeamBackendConfig) { cfg.onMemberStarted = cb }
+}
+
 func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.db = db }
 }
@@ -240,7 +254,14 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	// ⤴️ 9.58 回填完成：团队后端
 	// 对齐 Python: self.setup_team_backend(spec, ctx, messager, ...)
 	if c.Messager() != nil {
-		c.SetupTeamBackend(spec, ctx, c.Messager())
+		// 三个生命周期回调都必须显式下传：上游 setup_team_backend 以关键字参数
+		// 接收 on_team_cleaned / on_team_built / on_member_started，
+		// 少传一个就会让对应能力在 backend 里恒为 nil（此前两者即漏传）。
+		c.SetupTeamBackend(spec, ctx, c.Messager(),
+			WithBackendOnTeamCleaned(cfg.onTeamCleaned),
+			WithBackendOnTeamBuilt(cfg.onTeamBuilt),
+			WithBackendOnMemberStarted(cfg.onTeammateCreated),
+		)
 	}
 
 	// 9. 工作树管理器（仅非 leader）
@@ -251,6 +272,14 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 		c.SetWorktreeManager(wtMgr)
 	}
 	return nil
+}
+
+// lastBuildContext 返回最近一次装配用的 BuildContext（测试与诊断用）。
+//
+// 上游没有对应物：上游 rail 直接从 build_context 取句柄，测试用 mock。
+// Go 侧需要它来断言"17 个团队句柄确实注入了本次装配的 ctx"。
+func (c *AgentConfigurator) lastBuildContext() hschema.BuildContextInterface {
+	return c.lastBuildCtx
 }
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。
@@ -322,114 +351,69 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 9-14. 构造 Rails
 	// ⤴️ 9.68 回填完成：Rails 挂载逻辑
 
-	// 步骤 9: TeamToolRail
-	teamMode := resolveTeamMode(spec)
-	var excludeTools map[string]struct{}
-	if teamMode == "predefined" {
-		excludeTools = map[string]struct{}{"spawn_member": {}}
-	}
-	var modelConfigAlloc func(modelName string) *models.Allocation
-	if c.resources.ModelAllocator != nil {
-		modelConfigAlloc = c.resources.ModelAllocator.Allocate
-	}
-	teamToolRail := rails.NewTeamToolRail(
-		rails.WithTeamBackend(c.TeamBackend()),
-		rails.WithRole(string(ctx.Role)),
-		rails.WithTeammateMode(string(spec.TeammateMode)),
-		rails.WithLifecycle(c.Lifecycle()),
-		rails.WithLanguage(resolvedLanguage),
-		rails.WithOnTeammateCreated(func(ctx context.Context, memberName string) error {
-			if c.onTeammateCreated != nil {
-				return c.onTeammateCreated(ctx, memberName)
-			}
-			return nil
-		}),
-		rails.WithModelConfigAllocator(modelConfigAlloc),
-		rails.WithExcludeTools(excludeTools),
-		rails.WithWorkspaceManager(c.WorkspaceManager()),
-		rails.WithWorktreeManager(c.WorktreeManager()),
-		rails.WithTeamName(c.TeamName()),
-		rails.WithMemberName(c.MemberName()),
-		rails.WithToolDispatchMode(resolveDispatchMode(spec)),
-		rails.WithToolTeamMode(teamMode),
-		rails.WithToolBootstrapMode(resolveBootstrapMode(spec)),
-		rails.WithToolSwarmflowEnabled(spec.SwarmflowEnabled),
-	)
+	// 步骤 9（25.1b）：TeamToolRail 改由 spec.Rails 声明驱动，
+	// 见下方 15a 的 TeamRailSpecs + InjectTeamHandles。原手工构造已删除。
 
-	// 步骤 10: TeamPolicyRail
-	// ⤴️ 25.0c：构造收敛到一个 helper，20 个参数集中一处；同时产出任务通知器
-	// （非 leader 才有），由 TeamAgent 持有、rail 借用。
-	teamPolicyRail, taskEventTracker, err := c.buildTeamPolicyRail(
-		ctx.Role, spec, agentSpec, resolveDispatchMode(spec), resolvedLanguage, teamMode,
-	)
-	if err != nil {
-		return nil, err
+	// 步骤 10（25.1b）：TeamPolicyRail 改由 spec.Rails 声明驱动，见 15a。
+	//
+	// 任务通知器仍在这里建：它由 TeamAgent 持有、被 policy rail 借用，
+	// 因此必须在 rail 解析之前就位，且与 harness 收到的是同一实例。
+	// 幂等：已存在就复用，不重建（重建会丢掉已推进的宣告基线）。
+	// Python: agent_configurator.py:901-908
+	taskEventTracker := c.TaskEventTracker()
+	if ctx.Role != atschema.TeamRoleLeader && taskEventTracker == nil {
+		taskEventTracker = tracker.BuildTaskEventTracker(
+			resolveDispatchMode(spec), c.TeamBackend(), c.MemberName(),
+		)
+		c.SetTaskEventTracker(taskEventTracker)
 	}
-	c.SetTaskEventTracker(taskEventTracker)
 
-	// 步骤 11: FirstIterationGate（非 HUMAN_AGENT 角色时创建）
-	var firstIterGate *rails.FirstIterationGate
-	if ctx.Role != atschema.TeamRoleHumanAgent {
-		firstIterGate = rails.NewFirstIterationGate()
-	}
-	c.SetFirstIterGate(firstIterGate)
+	// 步骤 11（25.1b）：FirstIterationGate 已按 §3.4.2 决策 C7 删除
+	// （上游 kernel.py:709 明确 "old FirstIterationGate wait is gone"）。
 
-	// 步骤 12: TeamWorkspaceRail（有 workspace_manager 时）
-	// ⤴️ 9.66 回填完成：已在下方传参
-
-	// 步骤 13: TeamToolApprovalRail（仅 TEAMMATE + 有审批工具时）
-	// S-11: 对齐 Python agent_configurator.py L404-418——
-	// is_coordinated_teammate = role==TEAMMATE and team_spec 存在；
-	// 且 team_backend/messager 可用且 agent_spec.approval_required_tools 非空时构造。
-	// 原实现 TODO 占位导致审批流在生产链路完全失效（Rail 实现已就绪但永不构造）。
-	var toolApprovalRail *rails.TeamToolApprovalRail
+	// 步骤 12-14（25.1b）：TeamWorkspaceRail / TeamToolApprovalRail /
+	// TeamPlanModeRail 改由 spec.Rails 声明驱动，见 15a。原手工构造已删除。
+	approvalTools := agentSpec.ApprovalRequiredTools
 	isCoordinatedTeammate := ctx.Role == atschema.TeamRoleTeammate && ctx.TeamSpec != nil
-	if isCoordinatedTeammate && c.TeamBackend() != nil && c.Messager() != nil {
-		approvalTools := agentSpec.ApprovalRequiredTools
-		if len(approvalTools) > 0 {
-			teamSpecForRail := ctx.TeamSpec
-			leaderMemberName := ""
-			if teamSpecForRail != nil {
-				leaderMemberName = teamSpecForRail.LeaderMemberName
-			}
-			toolApprovalRail = rails.NewTeamToolApprovalRail(
-				ctx.TeamSpec.TeamName,
-				ctx.MemberName,
-				c.TeamBackend().DB(),
-				c.Messager(),
-				leaderMemberName,
-				approvalTools,
-			)
-		}
-	}
-
-	// 步骤 14: TeamPlanModeRail（仅 LEADER + team.plan 启用时）
-	// S-11: 对齐 Python L420-425——is_team_plan_leader = role==LEADER and
-	// is_team_plan_enabled(spec)（enable_team_plan 字段，team_plan.py L25-27）。
-	// initial_plan_mode=is_team_plan_leader（Python TeamHarness.build L437）。
-	var teamPlanModeRail *rails.TeamPlanModeRail
 	isTeamPlanLeader := ctx.Role == atschema.TeamRoleLeader && spec.EnableTeamPlan
-	if isTeamPlanLeader {
-		teamPlanModeRail = rails.NewTeamPlanModeRail(rails.WithLanguageOverride(resolvedLanguage))
-	}
+
+	// ── 15a. spec 驱动装配接线（对齐上游 agent_configurator.py:706-940）──
+	//
+	// 四步，顺序与上游一致：
+	//   ① ensure_harness_elements_registered()（:711）
+	//   ② derive 每成员 build context + 重绑 extras（:835-852）
+	//   ③ inject_team_handles(extras, 17 个句柄)（:910-928）
+	//   ④ team_rail_specs 折进 build_spec.rails（:930-940）
+	//
+	// 不做这四步，8 个 team rail provider 与 TeamRailSpecs 全是死代码，
+	// 而 spec.Rails 里的声明会走"未知 type"分支被静默跳过。
+	rails.EnsureHarnessElementsRegistered()
+
+	memberBuildCtx := deriveMemberBuildContext(nil, ctx, resolvedLanguage, cardIDOf(c.card))
+
+	rails.InjectTeamHandles(memberBuildCtx, buildTeamHandles(c, ctx, agentSpec))
+	c.lastBuildCtx = memberBuildCtx
+
+	teamSpecs := rails.TeamRailSpecs(buildTeamRailSpecInput(
+		spec, ctx, agentSpec, resolvedLanguage, isTeamPlanLeader,
+		approvalTools, isCoordinatedTeammate, c,
+	))
+	// 上游："Fold the team rails into the spec rails (after the user rails)"
+	// 用户声明的 rails 在前，团队 rails 在后，保持既有挂载顺序语义。
+	agentSpec.Rails = append(agentSpec.Rails, teamSpecs...)
 
 	// 15. 构建团队线束
 	// ⤴️ 9.68 回填完成：Rail 实例传入
-	var wsRail *team_workspace.TeamWorkspaceRail
-	if c.WorkspaceManager() != nil {
-		wsRail = team_workspace.NewTeamWorkspaceRail(c.WorkspaceManager(), c.MemberName())
-	}
-	harness := harness.BuildTeamHarness(
+	// 上游 TeamHarness.build（team_harness.py:982-988）6 参数：
+	// agent_spec / role / member_name / initial_plan_mode / build_context /
+	// task_event_tracker。团队 rails 已在 15a 折进 agentSpec.Rails。
+	harness := harness.TeamHarnessBuild(
 		agentSpec,
 		string(ctx.Role),
 		ctx.MemberName,
-		teamToolRail,
-		teamPolicyRail,
-		firstIterGate,
-		wsRail,
-		toolApprovalRail,
-		teamPlanModeRail,
 		isTeamPlanLeader, // S-11: initial_plan_mode 对齐 Python（原 TODO 恒 false）
+		memberBuildCtx,
+		c.TaskEventTracker(),
 	)
 	c.SetHarness(harness)
 
@@ -523,6 +507,9 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	}
 	if cfg.onTeamBuilt != nil {
 		tbOpts = append(tbOpts, tools.WithOnTeamBuilt(cfg.onTeamBuilt))
+	}
+	if cfg.onMemberStarted != nil {
+		tbOpts = append(tbOpts, tools.WithOnMemberStarted(cfg.onMemberStarted))
 	}
 	if ctx.TeamSpec != nil && ctx.TeamSpec.LeaderMemberName != "" {
 		tbOpts = append(tbOpts, tools.WithLeaderMemberName(ctx.TeamSpec.LeaderMemberName))
@@ -882,66 +869,6 @@ func (c *AgentConfigurator) SetMemoryManager(v *memory.TeamMemoryManager) {
 	c.resources.MemoryManager = v
 }
 
-// FirstIterGate 返回首轮迭代门控。
-// Python: AgentConfigurator.first_iter_gate property
-// ⤴️ 9.68 回填完成：FirstIterationGate 具体类型
-func (c *AgentConfigurator) FirstIterGate() *rails.FirstIterationGate {
-	if c.resources == nil {
-		return nil
-	}
-	return c.resources.FirstIterGate
-}
-
-// buildTeamPolicyRail 构造 TeamPolicyRail（20 个构造参数集中一处）。
-//
-// 任务通知器在这里一并构造：非 leader 成员按 dispatch 模式取
-// TaskOutcomeTracker（scheduled）或 TaskRevisionTracker（autonomous）；
-// 它由 TeamAgent 持有、rail 只借用，因此基线超出 rail 生命周期。
-//
-// framework 建队的政策块由 TeamPolicyRail 构造期自行渲染（bootstrap_mode
-// 取自 spec），无需在此传入——25.0g 已闭环 25.0c 的 D-3。
-//
-// Python: agent_configurator.py 步骤 10
-func (c *AgentConfigurator) buildTeamPolicyRail(
-	role atschema.TeamRole,
-	spec atschema.TeamAgentSpec,
-	agentSpec atschema.DeepAgentSpec,
-	dispatchMode, resolvedLanguage, teamMode string,
-) (*rails.TeamPolicyRail, tracker.TaskEventTracker, error) {
-	var taskTracker tracker.TaskEventTracker
-	if role != atschema.TeamRoleLeader {
-		taskTracker = tracker.BuildTaskEventTracker(dispatchMode, c.TeamBackend(), c.MemberName())
-	}
-
-	opts := []rails.TeamPolicyRailOption{
-		rails.WithPolicyRole(role),
-		rails.WithPolicyMemberName(c.MemberName()),
-		rails.WithPolicyLifecycle(c.Lifecycle()),
-		rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
-		rails.WithPolicyLanguage(resolvedLanguage),
-		rails.WithPolicyTeamMode(teamMode),
-		rails.WithPolicyDispatchMode(dispatchMode),
-		rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
-		rails.WithPolicyTeamBackend(c.TeamBackend()),
-		rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
-		rails.WithPolicyTaskEventTracker(taskTracker),
-		rails.WithPolicyBootstrapMode(resolveBootstrapMode(spec)),
-		rails.WithPolicySwarmflowEnabled(spec.SwarmflowEnabled),
-		rails.WithPolicyBoundGroupName(spec.BoundGroupName),
-		rails.WithPolicyMemberMessaging(backendMemberMessaging(c.TeamBackend())),
-		rails.WithPolicyMemberSubtasks(backendMemberSubtasks(c.TeamBackend())),
-		rails.WithPolicyHittEnabled(backendHittEnabled(c.TeamBackend())),
-	}
-	if c.WorkspaceManager() != nil {
-		opts = append(opts,
-			rails.WithPolicyTeamWorkspaceMount("/.team/workspace"),
-			rails.WithPolicyTeamWorkspacePath(c.WorkspaceManager().WorkspacePath()),
-		)
-	}
-	rail, err := rails.NewTeamPolicyRail(opts...)
-	return rail, taskTracker, err
-}
-
 // resolveDispatchMode 解析本团队的调度模式。
 //
 // 空串与未知值一律回落 "autonomous"（上游默认值）。
@@ -1005,13 +932,6 @@ func (c *AgentConfigurator) TaskEventTracker() tracker.TaskEventTracker {
 		return nil
 	}
 	return c.resources.TaskEventTracker
-}
-
-// SetFirstIterGate 设置首轮迭代门控。
-func (c *AgentConfigurator) SetFirstIterGate(v *rails.FirstIterationGate) {
-	if c.resources != nil {
-		c.resources.FirstIterGate = v
-	}
 }
 
 // ModelAllocator 返回模型分配器。⤴️ 9.64 回填完成

@@ -3,7 +3,9 @@ package harness
 import (
 	"context"
 	"errors"
+	"sync"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
@@ -18,7 +20,7 @@ import (
 //  3. 订阅回调在 supervisor 协程内同步执行，必须便宜且不可阻塞。
 type HarnessProtocol interface {
 	// State 返回当前生命周期相位
-	State() HarnessState
+	State() harnessprotocol.HarnessState
 	// SessionID 返回拥有的会话标识（start 前为空串）
 	SessionID() string
 	// Start 初始化并启动 supervisor
@@ -31,9 +33,9 @@ type HarnessProtocol interface {
 	Send(ctx context.Context, content any, immediate bool) error
 	// Abort 中断；immediate=true 立即取消调度任务，false 让本轮自然收尾
 	Abort(ctx context.Context, immediate bool) error
-	// Pause 暂停到可恢复边界（25.1c 前返回 ErrPauseUnsupported）
+	// Pause 暂停到最近的内层迭代边界（可恢复）
 	Pause(ctx context.Context) error
-	// Resume 从暂停处继续（25.1c 前返回 ErrPauseUnsupported）
+	// Resume 就地续跑暂停轮；query 非 nil 为冷恢复
 	Resume(ctx context.Context, query any) error
 	// Subscribe 订阅生命周期事件
 	Subscribe(ctx context.Context, onState StateHandler, onRound RoundHandler) error
@@ -43,9 +45,9 @@ type HarnessProtocol interface {
 // Python: harness.state 事件载荷（kwargs old/new/session_id）
 type HarnessStateEvent struct {
 	// Old 变化前相位
-	Old HarnessState
+	Old harnessprotocol.HarnessState
 	// New 变化后相位
-	New HarnessState
+	New harnessprotocol.HarnessState
 	// SessionID 所属会话
 	SessionID string
 }
@@ -73,6 +75,8 @@ type RoundHandler func(ctx context.Context, ev HarnessRoundEvent)
 // （OnCustom/TriggerCustom），事件名用 "harness.state"/"harness.round"，
 // 命名空间 native_harness。上游的 metrics/logging 噪声开关在 Go 框架中不存在。
 type eventBus struct {
+	// mu 保护 fw：reset 与 emit/subscribe 可能来自不同协程
+	mu sync.RWMutex
 	// fw 底层回调框架
 	fw *callback.CallbackFramework
 }
@@ -91,8 +95,15 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ErrPauseUnsupported 暂停/继续尚未实现（⤵️ 25.1c 换真实现）。
-var ErrPauseUnsupported = errors.New("harness: pause/resume 尚未实现（25.1c）")
+// ErrTemplateUnsupported AgentTemplateSpec 热加载尚未实现。
+//
+// ⤵️ 15.7-15.9：AgentTemplateSpec 依赖链（manifest 加载 / extension_binder /
+// LoadRecord）体量约 2-3 倍，属模板与技能域。本版按 25.1a 的哨兵手法：
+// 接口面完整、调用链对齐、行为待补。
+//
+// Python: NativeHarness._prepare 里的 AgentTemplateSpec.model_validate +
+// load_agent_template_spec (native_harness.py:293-300)
+var ErrTemplateUnsupported = errors.New("harness: agent template hot-load is not supported yet")
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -103,8 +114,11 @@ func newEventBus() *eventBus {
 
 // subscribe 注册事件回调；回调在触发方协程内同步执行。
 func (b *eventBus) subscribe(_ context.Context, onState StateHandler, onRound RoundHandler) error {
+	b.mu.RLock()
+	fw := b.fw
+	b.mu.RUnlock()
 	if onState != nil {
-		b.fw.OnCustom(eventNameState, func(ctx context.Context, data map[string]any) any {
+		fw.OnCustom(eventNameState, func(ctx context.Context, data map[string]any) any {
 			onState(ctx, HarnessStateEvent{
 				Old:       toHarnessState(data["old"]),
 				New:       toHarnessState(data["new"]),
@@ -114,7 +128,7 @@ func (b *eventBus) subscribe(_ context.Context, onState StateHandler, onRound Ro
 		}, callback.WithNamespace(eventNamespace))
 	}
 	if onRound != nil {
-		b.fw.OnCustom(eventNameRound, func(ctx context.Context, data map[string]any) any {
+		fw.OnCustom(eventNameRound, func(ctx context.Context, data map[string]any) any {
 			onRound(ctx, HarnessRoundEvent{
 				Kind:    toString(data["kind"]),
 				RoundID: toInt(data["round_id"]),
@@ -126,9 +140,21 @@ func (b *eventBus) subscribe(_ context.Context, onState StateHandler, onRound Ro
 	return nil
 }
 
+// reset 丢弃当前命名空间的全部订阅者。
+// 等价上游 stop() 里的 _events.unregister_namespace(_EVENT_NAMESPACE)：
+// 断开消费者闭包引用，下一个 run cycle 的 Subscribe 会重新注册。
+func (b *eventBus) reset() {
+	b.mu.Lock()
+	b.fw = callback.NewCallbackFramework()
+	b.mu.Unlock()
+}
+
 // emitState 触发相位事件。
 func (b *eventBus) emitState(ctx context.Context, ev HarnessStateEvent) {
-	b.fw.TriggerCustom(ctx, eventNameState, map[string]any{
+	b.mu.RLock()
+	fw := b.fw
+	b.mu.RUnlock()
+	fw.TriggerCustom(ctx, eventNameState, map[string]any{
 		"old":        string(ev.Old),
 		"new":        string(ev.New),
 		"session_id": ev.SessionID,
@@ -137,7 +163,10 @@ func (b *eventBus) emitState(ctx context.Context, ev HarnessStateEvent) {
 
 // emitRound 触发轮次事件。
 func (b *eventBus) emitRound(ctx context.Context, ev HarnessRoundEvent) {
-	b.fw.TriggerCustom(ctx, eventNameRound, map[string]any{
+	b.mu.RLock()
+	fw := b.fw
+	b.mu.RUnlock()
+	fw.TriggerCustom(ctx, eventNameRound, map[string]any{
 		"kind":     ev.Kind,
 		"round_id": ev.RoundID,
 		"result":   ev.Result,
@@ -145,14 +174,14 @@ func (b *eventBus) emitRound(ctx context.Context, ev HarnessRoundEvent) {
 }
 
 // toHarnessState 载荷转相位。
-func toHarnessState(v any) HarnessState {
+func toHarnessState(v any) harnessprotocol.HarnessState {
 	if s, ok := v.(string); ok {
-		return HarnessState(s)
+		return harnessprotocol.HarnessState(s)
 	}
-	if st, ok := v.(HarnessState); ok {
+	if st, ok := v.(harnessprotocol.HarnessState); ok {
 		return st
 	}
-	return HarnessStateIdle
+	return harnessprotocol.HarnessStateIdle
 }
 
 // toString 载荷转字符串。

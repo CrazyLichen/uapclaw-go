@@ -77,7 +77,7 @@ func (f *fakePolicyRail) HasPermissionsSnapshot() bool { return f.hasSnapshot }
 // TrustedDirs 返回受信目录
 func (f *fakePolicyRail) TrustedDirs() []string { return f.trustedDirs }
 
-// ──────────────────────────── PolicyEvaluation / strictest ────────────────────────────
+// ──────────────────────────── PolicyEvaluation / strictest 策略求值与取严 ────────────────────────────
 
 // TestStrictestEvaluation_取最严 测试取 level 最严的那条
 func TestStrictestEvaluation_取最严(t *testing.T) {
@@ -161,7 +161,7 @@ func TestStrictestEvaluation_未知level按ask(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── validatedExternalPaths ────────────────────────────
+// ──────────────────────────── validatedExternalPaths 外部路径校验 ────────────────────────────
 
 // TestValidatedExternalPaths_合法 测试合法输入
 func TestValidatedExternalPaths_合法(t *testing.T) {
@@ -203,7 +203,7 @@ func TestValidatedExternalPaths_非法(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── evaluationFromEngine ────────────────────────────
+// ──────────────────────────── evaluationFromEngine 从引擎构造求值结果 ────────────────────────────
 
 // TestEvaluationFromEngine_三级别 测试 allow/ask/deny 直接透传
 func TestEvaluationFromEngine_三级别(t *testing.T) {
@@ -263,7 +263,7 @@ func TestEvaluationFromEngine_空reason回退level(t *testing.T) {
 	}
 }
 
-// TestEvaluationFromEngine_nil fail-closed
+// TestEvaluationFromEngine_nil 空引擎时失败关闭
 func TestEvaluationFromEngine_nil(t *testing.T) {
 	got := evaluationFromEngine(nil)
 	if got.Level != "ask" || got.Source != "fail_closed" {
@@ -271,7 +271,7 @@ func TestEvaluationFromEngine_nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── evaluationFromPathResult ────────────────────────────
+// ──────────────────────────── evaluationFromPathResult 从路径结果构造求值结果 ────────────────────────────
 
 // TestEvaluationFromPathResult_nil与neutral 测试 nil 与 neutral 返回 nil
 func TestEvaluationFromPathResult_nil与neutral(t *testing.T) {
@@ -301,7 +301,7 @@ func TestEvaluationFromPathResult_有意见(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── OpenJiuwenPolicyEvaluator ────────────────────────────
+// ──────────────────────────── OpenJiuwenPolicyEvaluator 上游策略求值器 ────────────────────────────
 
 // TestEvaluate_引擎不可用failClosed 测试无引擎时 ASK
 func TestEvaluate_引擎不可用failClosed(t *testing.T) {

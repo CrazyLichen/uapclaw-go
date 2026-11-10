@@ -13,6 +13,9 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -340,7 +343,7 @@ func TestStartup(t *testing.T) {
 	tb.SpawnMember(ctx, "teammate1", "T1", nil, string(atschema.TeamRoleTeammate), "", "", "")
 	tb.SpawnMember(ctx, "teammate2", "T2", nil, string(atschema.TeamRoleTeammate), "", "", "")
 
-	started, err := tb.Startup(ctx, nil)
+	started, err := tb.Startup(ctx, nil, false)
 	if err != nil {
 		t.Fatalf("Startup() error = %v", err)
 	}
@@ -856,13 +859,13 @@ func TestWithLeaderAllocation(t *testing.T) {
 
 	tb.BuildTeam(ctx, "Test Team", "desc", "Leader", "leader desc", nil, nil)
 
-	// 验证 Leader 有 model_ref_json
+	// 验证 Leader 的 options 里带 model_ref
 	leader, _ := tb.GetMember(ctx, "leader")
 	if leader == nil {
 		t.Fatal("Leader not found")
 	}
-	if leader.ModelRefJSON == "" {
-		t.Error("Leader ModelRefJSON is empty, want non-empty")
+	if database.GetMemberModelRef(leader) == nil {
+		t.Error("Leader options.model_ref is nil, want non-nil")
 	}
 }
 
@@ -1389,4 +1392,289 @@ func TestMemberMessagingAndSubtasksEnabled(t *testing.T) {
 	if tb0.MemberSubtasksEnabled() {
 		t.Fatal("MaxSubtaskDepth=0 时 MemberSubtasksEnabled 应为 false")
 	}
+}
+
+// ──────────────────────────── AutostartUnstarted 测试 ────────────────────────────
+
+// TestAutostartUnstarted_非Leader返回空 非 leader 不 spawn（它管不了）。
+func TestAutostartUnstarted_非Leader返回空(t *testing.T) {
+	called := false
+	tb := NewTeamBackend("t", "m", false, database.NewInMemoryTeamDatabase(), newTestMessager(),
+		WithOnMemberStarted(func(_ context.Context, _ string) error { called = true; return nil }))
+
+	started, err := tb.AutostartUnstarted(context.Background(), false)
+	require.NoError(t, err)
+	assert.Nil(t, started)
+	assert.False(t, called)
+}
+
+// TestAutostartUnstarted_回调nil返回空 没注入回调时不动作。
+func TestAutostartUnstarted_回调nil返回空(t *testing.T) {
+	tb := newTestTeamBackend()
+
+	started, err := tb.AutostartUnstarted(context.Background(), false)
+	require.NoError(t, err)
+	assert.Nil(t, started)
+}
+
+// TestAutostartUnstarted_启动成员 回调注入后启动 UNSTARTED 成员。
+func TestAutostartUnstarted_启动成员(t *testing.T) {
+	var got []string
+	tb := newTestTeamBackendWithOptions(
+		WithOnMemberStarted(func(_ context.Context, name string) error {
+			got = append(got, name)
+			return nil
+		}),
+	)
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "a1", "A1", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "a2", "A2", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	started, err := tb.AutostartUnstarted(ctx, false)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a1", "a2"}, started)
+	assert.ElementsMatch(t, []string{"a1", "a2"}, got)
+}
+
+// ──────────────────────────── Startup 的 task-scoped 筛选 ────────────────────────────
+
+// setMemberLifetime 直接把 lifetime 写进成员 options（内存实现返回指针，改动即生效）。
+func setMemberLifetime(t *testing.T, tb *TeamBackend, memberName string, lifetime database.MemberLifetime) {
+	t.Helper()
+	m, err := tb.db.Member().GetMember(context.Background(), memberName, tb.teamName)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	m.Options = database.BuildMemberOptions(database.MemberOptionsInput{Lifetime: &lifetime})
+}
+
+// TestStartup_taskScoped无开放任务时跳过 默认不叫醒没有活儿的 task-scoped 成员。
+func TestStartup_taskScoped无开放任务时跳过(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "resident", "R", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "scoped", "S", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	setMemberLifetime(t, tb, "scoped", database.MemberLifetimeShutdown)
+
+	started, err := tb.Startup(ctx, func(_ context.Context, _ string) error { return nil }, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"resident"}, started, "task-scoped 且无开放任务的成员应跳过")
+}
+
+// TestStartup_includeIdleTaskScoped启动全部 广播路径要连空闲的 task-scoped 成员一起叫醒。
+func TestStartup_includeIdleTaskScoped启动全部(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "resident", "R", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	tb.SpawnMember(ctx, "scoped", "S", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	setMemberLifetime(t, tb, "scoped", database.MemberLifetimeDormant)
+
+	started, err := tb.Startup(ctx, func(_ context.Context, _ string) error { return nil }, true)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"resident", "scoped"}, started)
+}
+
+// TestStartup_taskScoped有开放任务时启动 板子上有活儿就必须起来。
+func TestStartup_taskScoped有开放任务时启动(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "L", "ld", nil, nil)
+	tb.SpawnMember(ctx, "scoped", "S", nil, string(atschema.TeamRoleTeammate), "", "", "")
+	setMemberLifetime(t, tb, "scoped", database.MemberLifetimeShutdown)
+
+	// 给该成员挂一个非终态任务：先建任务再认领（认领即写入 assignee）
+	assignee := "scoped"
+	task, addErr := tb.taskManager.Add(ctx, "任务", "内容")
+	require.NoError(t, addErr)
+	ok, claimErr := tb.db.Task().ClaimTask(ctx, task.TaskID, assignee)
+	require.NoError(t, claimErr)
+	require.True(t, ok)
+
+	started, err := tb.Startup(ctx, func(_ context.Context, _ string) error { return nil }, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"scoped"}, started, "有开放任务的 task-scoped 成员必须启动")
+}
+
+// closedMemberDB 让 Member() 返回一个会报错的 DAO，用于覆盖错误分支。
+type closedMemberDB struct {
+	database.TeamDatabase
+}
+
+// Member 返回永远报错的 DAO。
+func (c closedMemberDB) Member() database.MemberDao { return errMemberDao{} }
+
+// errMemberDao 所有查询都报错的 MemberDao 替身。
+type errMemberDao struct {
+	database.MemberDao
+}
+
+// GetMember 恒返回错误。
+func (errMemberDao) GetMember(context.Context, string, string) (*database.TeamMember, error) {
+	return nil, errors.New("boom")
+}
+
+// GetMemberStatus 恒返回错误语义（未找到）。
+func (errMemberDao) GetMemberStatus(context.Context, string, string) (string, bool) {
+	return "", false
+}
+
+// ──────────────────────────── ResolveLeaderMemberName / MemberExists 测试 ────────────────────────────
+
+// TestResolveLeaderMemberName_构造期已知 构造时给了 leader 名就直接返回。
+func TestResolveLeaderMemberName_构造期已知(t *testing.T) {
+	tb := newTestTeamBackendWithOptions(WithLeaderMemberName("boss"))
+	assert.Equal(t, "boss", tb.ResolveLeaderMemberName(context.Background()))
+}
+
+// TestResolveLeaderMemberName_从DB行解析 leader 名来自 team_info 行，并缓存。
+func TestResolveLeaderMemberName_从DB行解析(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+
+	assert.Equal(t, "leader", tb.ResolveLeaderMemberName(ctx))
+	// 第二次走缓存（字段已填）
+	assert.Equal(t, "leader", tb.ResolveLeaderMemberName(ctx))
+}
+
+// TestResolveLeaderMemberName_团队行缺失返回空串 空团队返回空串而非报错。
+//
+// 用非 leader 的 backend：leader 在构造期就会把 memberName 回填成 leader 名，
+// 只有普通成员才会真的去查 team_info 行。
+func TestResolveLeaderMemberName_团队行缺失返回空串(t *testing.T) {
+	tb := NewTeamBackend("test-team", "member", false,
+		database.NewInMemoryTeamDatabase(), newTestMessager())
+	assert.Equal(t, "", tb.ResolveLeaderMemberName(context.Background()))
+}
+
+// TestMemberExists 在册返回 true，不在返回 false。
+func TestMemberExists(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	assert.True(t, tb.MemberExists(ctx, "dev-1"))
+	assert.False(t, tb.MemberExists(ctx, "ghost"))
+}
+
+// TestGetMemberStatus 未知成员返回 false。
+func TestGetMemberStatus(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	status, found := tb.GetMemberStatus(ctx, "dev-1")
+	assert.True(t, found)
+	assert.Equal(t, string(atschema.MemberStatusUnstarted), status)
+
+	_, found = tb.GetMemberStatus(ctx, "ghost")
+	assert.False(t, found)
+}
+
+// TestDeleteUnstartedMember_Backend 回滚未启动成员。
+func TestDeleteUnstartedMember_Backend(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "", "", "")
+
+	assert.True(t, tb.DeleteUnstartedMember(ctx, "dev-1"))
+	assert.False(t, tb.MemberExists(ctx, "dev-1"))
+	assert.False(t, tb.DeleteUnstartedMember(ctx, "ghost"))
+}
+
+// TestSpawnMember_Lifetime与Isolation 新选项落到 options 里。
+func TestSpawnMember_Lifetime与Isolation(t *testing.T) {
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+
+	lifetime := database.MemberLifetimeDormant
+	res := tb.SpawnMember(ctx, "dev-1", "Dev", nil, string(atschema.TeamRoleTeammate), "d", "", "",
+		WithLifetime(&lifetime), WithIsolation("worktree"), WithPermissionsOverride(map[string]string{"bash": "deny"}))
+	require.True(t, res.OK)
+
+	member, err := tb.GetMember(ctx, "dev-1")
+	require.NoError(t, err)
+	require.NotNil(t, member)
+
+	got := database.GetMemberLifetime(member)
+	require.NotNil(t, got)
+	assert.Equal(t, database.MemberLifetimeDormant, *got)
+
+	wt := database.GetMemberWorktree(member)
+	require.NotNil(t, wt)
+	require.NotNil(t, wt.Isolation)
+	assert.Equal(t, "worktree", *wt.Isolation)
+
+	assert.Equal(t, map[string]string{"bash": "deny"}, database.GetMemberPermissionsOverride(member))
+}
+
+// TestRegisterTeammate_边界 team 为 nil 时返回失败；prompt 为 nil 时不 panic。
+func TestRegisterTeammate_边界(t *testing.T) {
+	if res := RegisterTeammate(nil, "dev-1", "Dev", "d", nil, nil); res.OK {
+		t.Fatal("team 为 nil 应失败")
+	}
+
+	tb := newTestTeamBackend()
+	ctx := context.Background()
+	tb.BuildTeam(ctx, "T", "d", "Leader", "ld", nil, nil)
+	prompt := "干活"
+	res := RegisterTeammate(tb, "dev-1", "Dev", "d", &prompt, nil)
+	require.True(t, res.OK)
+	m, err := tb.GetMember(ctx, "dev-1")
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	assert.Equal(t, "干活", m.Prompt)
+	assert.Equal(t, string(atschema.TeamRoleTeammate), m.Role, "RegisterTeammate 固定 teammate 角色")
+}
+
+// TestMemberExists_查询失败返回false 底层报错时安全返回 false。
+func TestMemberExists_查询失败返回false(t *testing.T) {
+	db := database.NewInMemoryTeamDatabase()
+	tb := NewTeamBackend("t", "m", true, closedMemberDB{db}, newTestMessager())
+	assert.False(t, tb.MemberExists(context.Background(), "x"))
+}
+
+// nilMemberDB Member() 返回 nil 的 TeamDatabase 替身。
+type nilMemberDB struct {
+	database.TeamDatabase
+}
+
+// Member 恒返回 nil。
+func (nilMemberDB) Member() database.MemberDao { return nil }
+
+// errTeamDB Team() 返回错误的 TeamDatabase 替身。
+type errTeamDB struct {
+	database.TeamDatabase
+}
+
+// Team 返回永远报错的 TeamDao。
+func (errTeamDB) Team() database.TeamDao { return errTeamDao{} }
+
+// errTeamDao 所有查询都报错的 TeamDao 替身。
+type errTeamDao struct {
+	database.TeamDao
+}
+
+// GetTeam 恒返回错误。
+func (errTeamDao) GetTeam(context.Context, string) (*database.Team, error) {
+	return nil, errors.New("boom")
+}
+
+// TestGetMemberStatus_成员DAO为nil 缺 Member() 时返回 false。
+func TestGetMemberStatus_成员DAO为nil(t *testing.T) {
+	tb := NewTeamBackend("t", "m", false, nilMemberDB{}, newTestMessager())
+	_, found := tb.GetMemberStatus(context.Background(), "x")
+	assert.False(t, found)
+}
+
+// TestResolveLeaderMemberName_读团队行报错 读失败返回空串且不 panic。
+func TestResolveLeaderMemberName_读团队行报错(t *testing.T) {
+	tb := NewTeamBackend("t", "m", false, errTeamDB{}, newTestMessager())
+	assert.Equal(t, "", tb.ResolveLeaderMemberName(context.Background()))
 }

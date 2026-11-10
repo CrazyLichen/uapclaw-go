@@ -409,7 +409,7 @@ func (r *RemoteSkillUtil) listGitHubFiles(ctx context.Context, tree *GitHubTree,
 	return r.recursivelyListGitHubFiles(ctx, clone, "", token)
 }
 
-// fetchGitHubFiles 发送 GitHub Tree API GET 请求并解析 JSON 响应。
+// fetchGitHubTree 发送 GitHub Tree API GET 请求并解析 JSON 响应。
 func (r *RemoteSkillUtil) fetchGitHubTree(ctx context.Context, url string, token string, recursive bool) (*gitHubTreeResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

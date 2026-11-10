@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -30,7 +31,7 @@ import (
 //   - 重试逻辑（错误码 181001 最多重试 10 次）
 type StreamController struct {
 	// mu 保护并发访问的字段（cancelRequested, pendingInputs, pendingInterruptResumes, streamingActive, chunkObservers）
-	mu sync.Mutex
+	mu sync.RWMutex
 	// getBlueprint 蓝图获取器（延迟获取，configure 后才有值）
 	getBlueprint func() *TeamAgentBlueprint
 	// state 共享可变状态
@@ -52,6 +53,10 @@ type StreamController struct {
 	// streamQueue 流式分块队列（nil sentinel 关闭流）
 	// Python: self.stream_queue: Optional[asyncio.Queue] = None
 	streamQueue chan streambase.Schema
+	// forwardCancel 取消当前 cycle 的输出泵（S-01）
+	forwardCancel context.CancelFunc
+	// forwardDone 输出泵退出信号（S-01）
+	forwardDone chan struct{}
 	// retryAttempt 重试计数（Python self._retry_attempt，start 时清零）
 	retryAttempt int
 	// swallowFailedRound 是否吞掉失败轮剩余的 chunk（Python self._swallow_failed_round）
@@ -168,7 +173,7 @@ func (sc *StreamController) IsAgentRunning() bool {
 	if h == nil {
 		return false
 	}
-	return h.State() == harness.HarnessStateRunning
+	return h.State() == harnessprotocol.HarnessStateRunning
 }
 
 // HasInFlightRound 是否有飞行中的轮次。
@@ -215,10 +220,11 @@ func (sc *StreamController) CancelAgent(ctx context.Context) error {
 // CloseStream 关闭流（向 streamQueue 写入 nil sentinel）。
 // Python: StreamController.close_stream()
 func (sc *StreamController) CloseStream() {
-	if sc.streamQueue != nil {
+	q := sc.streamQueueSnapshot()
+	if q != nil {
 		// 非阻塞写入 nil sentinel
 		select {
-		case sc.streamQueue <- nil:
+		case q <- nil:
 		default:
 		}
 	}
@@ -227,7 +233,8 @@ func (sc *StreamController) CloseStream() {
 // EmitCompletionAndClose 发出 team.completed 标记块再关闭流。
 // Python: StreamController.emit_completion_and_close(member_count, task_count)
 func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
-	if sc.streamQueue == nil {
+	q := sc.streamQueueSnapshot()
+	if q == nil {
 		return
 	}
 	bp := sc.getBlueprint()
@@ -250,7 +257,7 @@ func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 	}
 	// marker 先入队，然后 nil sentinel 关闭流
 	select {
-	case sc.streamQueue <- marker:
+	case q <- marker:
 	default:
 	}
 	sc.CloseStream()
@@ -261,6 +268,30 @@ func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 // 队列语义已上收到 supervisor，此处只做取消。
 func (sc *StreamController) DrainAgentTask(ctx context.Context) error {
 	return sc.CancelAgent(ctx)
+}
+
+// PauseAgent 暂停在飞轮次到最近的内层迭代边界。
+// Python: StreamController.pause_agent (stream_controller.py L711-720)
+//
+// 与 CancelAgent 的区别：轮次被保留——停在模型调用上的轮被中断并回退到
+// 上一边界，正在跑工具的迭代则先跑完。ResumeAgent 从该边界继续。
+func (sc *StreamController) PauseAgent(ctx context.Context) error {
+	if sc.resources == nil || sc.resources.Harness == nil {
+		return nil
+	}
+	return sc.resources.Harness.Pause(ctx)
+}
+
+// ResumeAgent 就地续跑暂停轮；query 非 nil 为冷恢复。
+// Python: StreamController.resume_agent (stream_controller.py L722-730)
+func (sc *StreamController) ResumeAgent(ctx context.Context, query *string) error {
+	if sc.resources == nil || sc.resources.Harness == nil {
+		return nil
+	}
+	if query == nil {
+		return sc.resources.Harness.Resume(ctx, nil)
+	}
+	return sc.resources.Harness.Resume(ctx, *query)
 }
 
 // CooperativeCancel 协作取消（优雅中断）。
@@ -305,6 +336,15 @@ func (sc *StreamController) ResetStreamQueue() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	sc.streamQueue = nil
+}
+
+// streamQueueSnapshot 在读锁内取当前流队列快照。
+// 所有读路径（转发、关闭、观察者转发）都必须经此取值：
+// finalize_round 会在另一协程把 streamQueue 置 nil。
+func (sc *StreamController) streamQueueSnapshot() chan streambase.Schema {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	return sc.streamQueue
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -419,9 +459,36 @@ func (sc *StreamController) Start(ctx context.Context) {
 	sc.mu.Lock()
 	sc.retryAttempt = 0
 	sc.swallowFailedRound = false
+	fctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	sc.forwardCancel = cancel
+	sc.forwardDone = done
 	sc.mu.Unlock()
 	_ = h.Subscribe(ctx, sc.mapState, sc.mapRound)
-	go sc.forwardOutputs(ctx)
+	go func() {
+		defer close(done)
+		sc.forwardOutputs(fctx)
+	}()
+}
+
+// Stop 取消输出泵并等待其退出（一个 run cycle 一次）。
+// Python: StreamController.stop()（stream_controller.py:320-334）
+func (sc *StreamController) Stop(ctx context.Context) {
+	sc.mu.Lock()
+	cancel := sc.forwardCancel
+	done := sc.forwardDone
+	sc.forwardCancel = nil
+	sc.forwardDone = nil
+	sc.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+	}
 }
 
 // forwardOutputs 把 runtime.outputs() 泵入流队列 + 观察者（一个 cycle 一次）。
@@ -457,9 +524,9 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 			continue
 		}
 		tagged := sc.tagChunk(chunk)
-		if sc.streamQueue != nil {
+		if q := sc.streamQueueSnapshot(); q != nil {
 			select {
-			case sc.streamQueue <- tagged:
+			case q <- tagged:
 			case <-ctx.Done():
 				return
 			}
@@ -474,9 +541,9 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 // PAUSING/PAUSED/TERMINATED 留给生命周期层。
 func (sc *StreamController) mapState(ctx context.Context, ev harness.HarnessStateEvent) {
 	switch ev.New {
-	case harness.HarnessStateRunning:
+	case harnessprotocol.HarnessStateRunning:
 		_ = sc.updateStatus(ctx, atschema.MemberStatusBusy)
-	case harness.HarnessStateIdle:
+	case harnessprotocol.HarnessStateIdle:
 		_ = sc.updateStatus(ctx, atschema.MemberStatusReady)
 		sc.onIdleSettled(ctx)
 	}

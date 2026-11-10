@@ -22,7 +22,7 @@ func newBudgetTestOp() sys_operation.SysOperation {
 	))
 }
 
-// ──────────────────────────── tokenBudget ────────────────────────────
+// ──────────────────────────── tokenBudget token 预算 ────────────────────────────
 
 // TestTokenBudget_语义 验证预算累加与容纳判定
 func TestTokenBudget_语义(t *testing.T) {
@@ -179,7 +179,7 @@ func buildMinimalPDF(t *testing.T, pages int) []byte {
 			contentObj, len(stream), stream))
 	}
 
-	// xref
+	// xref 交叉引用表
 	xrefPos := sb.Len()
 	sb.WriteString(fmt.Sprintf("xref\n0 %d\n", len(offsets)+1))
 	sb.WriteString("0000000000 65535 f \n")

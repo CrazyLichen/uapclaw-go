@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,9 +14,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
+	lifecyclepkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -47,9 +51,9 @@ type noopTrajectoryHook struct{}
 // 与 R-1 同属"删除后置副作用"，spec §10 未单列编号）。
 type noopTeamBindingUnbinder struct{}
 
-// noopLifecycleJournal 生命周期日志桩。
-// spec §10 R-4：等 session/lifecycle.py 迁移后回填。
-type noopLifecycleJournal struct{}
+// lifecycleJournal 会话生命周期操作日志，数据源为 10.3.28e 的 lifecycle 包。
+// Python: server/runtime/session/lifecycle.py
+type lifecycleJournal struct{}
 
 // sessionCleanerAdapter 把 AgentManager 的会话清理适配到 provisioner 窄接口。
 // Python: runtime/service.py cleanup_session（:3024）的 AgentServer 侧传参
@@ -65,10 +69,6 @@ type sessionCleanerAdapter struct {
 // 未实现的动作记 Debug 并返回 nil——删除事务不能因为"团队体系还没迁移"
 // 而整体失败，否则 team.delete 仍然不可用。
 type teamExecutionControllerAdapter struct{}
-
-// noopPromptSuggestionForks 会话建议生成分支持有者桩。
-// spec §8 D-10：待 10.3.30 recommendation（43821 行）落地后回填。
-type noopPromptSuggestionForks struct{}
 
 // noopSubagentRuntimeStopper 子代理运行时停止器桩。
 // spec §8 D-9：待 25.8 subagent_runtime（3650 行）落地后回填。
@@ -103,9 +103,9 @@ func newSessionProvisioner(
 		PlanController:          planController,
 		TrajectoryHook:          noopTrajectoryHook{},
 		TeamBinding:             noopTeamBindingUnbinder{},
-		LifecycleJournal:        noopLifecycleJournal{},
+		LifecycleJournal:        lifecycleJournal{},
 		ParticipantRegistry:     sessionpkg.NewRuntimeParticipantRegistry(),
-		PromptForks:             noopPromptSuggestionForks{},
+		PromptForks:             recommendation.Forks,
 		SubagentStopper:         noopSubagentRuntimeStopper{},
 		TeamExecutionController: teamExecutionControllerAdapter{},
 	})
@@ -194,18 +194,57 @@ func (*sessionOpsAdapter) ForkSession(params swruntime.ForkSessionParams) (swrun
 	}, nil
 }
 
-// CopySessionContext 复制内存上下文。
-// spec §10 R-5：需要 DeepAgent 实例，当前 provisioner 拿不到（AgentManager
-// 返回 UapClawSwarm 不等于 SessionAgent），此桩为空实现，fork 只复制持久
-// 历史与 metadata，不复制内存上下文。
-func (*sessionOpsAdapter) CopySessionContext(context.Context, swruntime.SessionAgent, string, string, bool) error {
-	return nil
+// CopySessionContext 复制内存上下文（R-5 回填，10.3.30）。
+// Python: session_ops_service.py:2046 copy_session_context -> bool（无 raise）。
+// 通过 28f 的 GetLiveSessionInstance 取该会话正在跑的 DeepAgent 后转调真实实现。
+func (a *sessionOpsAdapter) CopySessionContext(
+	ctx context.Context, agent swruntime.SessionAgent, sourceID, targetID string, forceHistory bool,
+) bool {
+	deepAgent := liveDeepAgentOf(agent, sourceID)
+	if deepAgent == nil {
+		// Python: 无 agent 时记 warning 跳过（session_provisioner.py:1348-1352）
+		logger.Warn(logComponent).Str("source", sourceID).
+			Msg("copy_session_context: no live DeepAgent for session, skipping in-memory copy")
+		return false
+	}
+	if forceHistory {
+		return sessionops.CopySessionContextForceHistory(ctx, deepAgent,
+			sourceID, targetID, swarmsession.GetSessionsDir())
+	}
+	return sessionops.CopySessionContext(ctx, deepAgent, sourceID, targetID)
 }
 
-// CopySessionState 复制 checkpoint state。
-// spec §10 R-5：同 CopySessionContext，当前为空实现。
-func (*sessionOpsAdapter) CopySessionState(context.Context, string, string, any, swruntime.SessionAgent) error {
-	return nil
+// CopySessionState 复制 checkpoint state（R-5 回填，10.3.30）。
+// Python: session_ops_service.py:1903 copy_session_state -> bool（无 raise）。
+func (a *sessionOpsAdapter) CopySessionState(
+	ctx context.Context, sourceID, targetID string, card any, agent swruntime.SessionAgent,
+) bool {
+	return sessionops.CopySessionState(ctx, sourceID, targetID, toAgentCard(card),
+		liveDeepAgentOf(agent, sourceID))
+}
+
+// liveDeepAgentOf 取该会话正在跑的 DeepAgent（28f 提供的能力）。
+// SessionAgent 接口本身不含 GetLiveSessionInstance，故用类型断言而非扩接口。
+func liveDeepAgentOf(agent swruntime.SessionAgent, sessionID string) *harness.DeepAgent {
+	provider, ok := agent.(interface {
+		GetLiveSessionInstance(string) *harness.DeepAgent
+	})
+	if !ok {
+		return nil
+	}
+	return provider.GetLiveSessionInstance(sessionID)
+}
+
+// toAgentCard 把 card 断言为 AgentCard；失败时给默认卡（对齐 Python 的
+// AgentCard(id="jiuwenswarm", name="jiuwenswarm") 兜底）。
+func toAgentCard(card any) *singleagentschema.AgentCard {
+	if typed, ok := card.(*singleagentschema.AgentCard); ok && typed != nil {
+		return typed
+	}
+	return singleagentschema.NewAgentCard(
+		singleagentschema.WithAgentID("jiuwenswarm"),
+		singleagentschema.WithAgentName("jiuwenswarm"),
+	)
 }
 
 // GetSessionMetadata 读会话元数据。
@@ -334,12 +373,6 @@ func (teamExecutionControllerAdapter) DeleteCommitted(target sessionpkg.SessionL
 		Msg("team delete committed")
 }
 
-// SessionDeleted 桩：记 Debug 并返回。
-func (noopPromptSuggestionForks) SessionDeleted(sessionID string) {
-	logger.Debug(logComponent).Str("session_id", sessionID).
-		Msg("prompt suggestion forks session_deleted not implemented (see 10.3.28 spec D-10)")
-}
-
 // StopSubagentRuntimes 桩：记 Debug 并返回 nil。
 func (noopSubagentRuntimeStopper) StopSubagentRuntimes(
 	_ context.Context, sessionID, _ string,
@@ -349,12 +382,27 @@ func (noopSubagentRuntimeStopper) StopSubagentRuntimes(
 	return nil
 }
 
-// RecoveringDelete 桩：恒 false。
-// spec §10 R-4：会话生命周期日志未迁移，恢复中的删除无从判定。
-func (noopLifecycleJournal) RecoveringDelete(string) bool { return false }
+// RecoveringDelete 该会话是否处于未完成的删除操作中。
+// Python: lifecycle.py session_delete_pending（:142）
+//
+// 数据来自 10.3.28e 已落地的 lifecycle 包：operation.kind == "delete" 且
+// status != "completed"，同时 blocked 为真（上游同一组三个条件）。
+// 此前是恒 false 的桩，导致「删除中途崩溃 → 重启后无法识别恢复中的删除」。
+func (lifecycleJournal) RecoveringDelete(sessionID string) bool {
+	return lifecyclepkg.SessionDeletePending(sessionID)
+}
 
-// MarkCleanup 桩。
-func (noopLifecycleJournal) MarkCleanup(string) error { return nil }
+// MarkCleanup 标记该会话进入清理阶段。
+// Python: 由 lifecycle.MarkFinalizing 承载（operation.status → finalizing）。
+// 无待完成操作时为空操作（上游同样容忍：不是删除流程就无需标记）。
+func (lifecycleJournal) MarkCleanup(sessionID string) error {
+	if !lifecyclepkg.SessionDeletePending(sessionID) {
+		return nil
+	}
+	// deleted=false：清理阶段尚未落盘删除标记，deleted 由后续 committed 步骤置位。
+	_, err := lifecyclepkg.MarkFinalizing("session", sessionID, false, nil)
+	return err
+}
 
 // ──────────────────────────── 参数解析辅助（10.3.28b/c） ────────────────────────────
 

@@ -5,6 +5,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"strings"
 	"sync"
 	"testing"
@@ -719,3 +720,11 @@ func (s *DeepSearchE2ESuite) TestDeepSearch_TaskSchema验证() {
 	s.Equal(schema.TaskStatus("completed"), schema.TaskCompleted)
 	s.Equal(schema.TaskStatus("failed"), schema.TaskFailed)
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (m *mockSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSessionFacade) GetParentSessionID() string { return "" }

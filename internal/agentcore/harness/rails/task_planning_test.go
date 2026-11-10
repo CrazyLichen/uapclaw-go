@@ -3,6 +3,7 @@ package rails
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"reflect"
 	"testing"
 
@@ -1569,6 +1570,14 @@ type fakeAbilityManager struct {
 	removedAbilities []string
 }
 
+// AddAbility 空实现（接口扩张后补齐，规则 10）。
+func (f *fakeAbilityManager) AddAbility(card *tool.ToolCard, _ tool.Tool) agentschema.AddAbilityResult {
+	if card == nil {
+		return agentschema.AddAbilityResult{Added: false, Reason: "nil_card"}
+	}
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
+}
+
 func (f *fakeAbilityManager) Add(ability cschema2.Ability) agentschema.AddAbilityResult {
 	if ability != nil {
 		f.addedAbilities = append(f.addedAbilities, ability.AbilityName())
@@ -1674,3 +1683,12 @@ var _ agentinterfaces.BaseAgent = (*fakeModelSwitcherAgent)(nil)
 
 // 确保编译时 fakeDeepAgentForTaskPlanning 满足 BaseAgent
 var _ agentinterfaces.BaseAgent = (*fakeDeepAgentForTaskPlanning)(nil)
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (s *fakeSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (s *fakeSession) GetParentSessionID() string { return "" }

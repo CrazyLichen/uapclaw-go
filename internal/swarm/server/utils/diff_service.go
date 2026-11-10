@@ -74,7 +74,7 @@ type Hunk struct {
 	Lines []string `json:"lines"`
 }
 
-// TurnDiffStats 轮次统计信息。
+// TurnStats 轮次统计信息。
 type TurnStats struct {
 	// FilesChanged 变更文件数
 	FilesChanged int `json:"filesChanged"`

@@ -2,6 +2,7 @@ package modules
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1010,3 +1011,11 @@ func TestTaskScheduler_CancelRunningTasks(t *testing.T) {
 	// 手动释放剩余阻塞（ctx 已取消的会先退出）
 	close(releaseCh)
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (f *schedulerFakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *schedulerFakeSessionFacade) GetParentSessionID() string { return "" }

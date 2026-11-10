@@ -60,16 +60,8 @@ var toolSearchParams = map[string]map[string]string{
 // GetToolSearchInputParams 构建 tool_search 工具的参数 Schema。
 // Python: get_tool_search_input_params
 func GetToolSearchInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
-	describe := func(key string) string {
-		if value, ok := toolSearchParams[key][lang]; ok {
-			return value
-		}
-		return toolSearchParams[key]["cn"]
-	}
+	lang := normalizeToolLang(language)
+	describe := i18nPicker(toolSearchParams, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

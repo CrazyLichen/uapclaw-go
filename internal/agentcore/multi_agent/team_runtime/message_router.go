@@ -200,7 +200,9 @@ func (r *MessageRouter) buildAgentSession(sessionID, agentID string) *session.Se
 			Msg("failed to get AgentCard while building agent session")
 		return nil
 	}
-	return teamSession.CreateAgentSession(card, agentID, true)
+	// Python: team_session.create_agent_session(agent_id=..., share_stream_writer=False)
+	// 外部成员路径不传 member_name（对齐 external/runtime.py L242-245）
+	return teamSession.CreateAgentSession(card, agentID, true, "")
 }
 
 // toInputsMap 将消息内容转换为 map[string]any 类型以匹配 runner.RunAgent 签名。

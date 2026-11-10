@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -41,11 +41,18 @@ func TestNativeHarnessSuite(t *testing.T) {
 
 // newNativeHarness 构造一个带 MockLLM 的 NativeHarness（不 Start）。
 func (s *NativeHarnessSuite) newNativeHarness() *teamharness.NativeHarness {
+	// 25.1b：前向构造——spec 自己解析 parts。把 MockLLM 的 card + model
+	// 装进 spec，使物化出的 agent 与被替换的 agent 等价。
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
 		MaxIterations: 4,
 	})
 	s.Require().NoError(err)
-	return teamharness.NewNativeHarness(agent, atschema.DeepAgentSpec{})
+	_ = agent
+	spec, specErr := s.NewSpecWithMockLLM(4)
+	s.Require().NoError(specErr)
+	h, err := teamharness.NewNativeHarness(spec, nil)
+	s.Require().NoError(err, "NewNativeHarness")
+	return h
 }
 
 // newStartedHarness 构造并 Start 一个 NativeHarness，返回 harness + 会话。
@@ -68,9 +75,9 @@ func (s *NativeHarnessSuite) TestStart后Send一轮回到Idle() {
 
 	s.Require().NoError(h.Send(s.Ctx, "开始任务", false))
 
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateRunning },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond, "Send 后应进入 RUNNING")
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond, "一轮完成后应回到 IDLE")
 }
 
@@ -87,11 +94,11 @@ func (s *NativeHarnessSuite) Test连发两轮() {
 
 	s.Require().NoError(h.Send(s.Ctx, "任务一", false))
 	// 等第一轮结束回到 idle
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
 	s.Require().NoError(h.Send(s.Ctx, "任务二", false))
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
 	// MockLLM 至少被调用两次（两轮各一次）

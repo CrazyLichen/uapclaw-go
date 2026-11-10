@@ -227,17 +227,21 @@ func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
 	return nil
 }
 
-// GetTask 按条件查询任务，返回深拷贝。filter 为 nil 时返回全部。
+// GetTask 按条件查询任务，返回内部任务对象（活引用）。filter 为 nil 时返回全部。
 // Python: TaskManager.get_task
 func (tm *TaskManager) GetTask(_ context.Context, filter *TaskFilter) ([]*schema.Task, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
-	// filter 为 nil 时返回全部任务的深拷贝
+	// filter 为 nil 时返回全部任务。
+	// Python: `return list(self.tasks.values())`（task_manager.py:362）——上游**不拷贝**，
+	// 返回活引用。Go 曾在此深拷贝，但 JSON 往返会把 metadata 里的类型化值
+	// （*RunContext / chan）降级，导致 executor 取不到 run_context。
+	// 契约：调用方只读；写入一律走本管理器的 Update* 方法。
 	if filter == nil {
 		result := make([]*schema.Task, 0, len(tm.tasks))
 		for _, task := range tm.tasks {
-			result = append(result, tm.deepCopyTask(task))
+			result = append(result, task)
 		}
 		return result, nil
 	}
@@ -270,11 +274,9 @@ func (tm *TaskManager) GetTask(_ context.Context, filter *TaskFilter) ([]*schema
 		matched = tm.appendChildren(matched)
 	}
 
-	// 返回深拷贝
+	// 返回匹配任务（上游同样不拷贝，见上）
 	result := make([]*schema.Task, len(matched))
-	for i, task := range matched {
-		result[i] = tm.deepCopyTask(task)
-	}
+	copy(result, matched)
 
 	logger.Info(logComponent).
 		Int("matched_count", len(result)).
@@ -692,10 +694,11 @@ func (tm *TaskManager) LoadState(_ context.Context, state *TaskManagerState) err
 		)
 	}
 
-	// 恢复任务字典
+	// 恢复任务字典（浅拷贝，对齐 Python `self.tasks = state.tasks.copy()`，
+	// task_manager.py:291 —— 只复制字典本身，任务对象仍共享）
 	tm.tasks = make(map[string]*schema.Task, len(state.Tasks))
 	for id, task := range state.Tasks {
-		tm.tasks[id] = tm.deepCopyTask(task)
+		tm.tasks[id] = task
 	}
 
 	// 恢复优先级索引

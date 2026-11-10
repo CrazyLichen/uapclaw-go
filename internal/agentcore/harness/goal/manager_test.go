@@ -143,7 +143,7 @@ func TestGoalManager_Language(t *testing.T) {
 	assert.Equal(t, "cn", harness.manager.Language(), "未知语言回退中文")
 }
 
-// ──────────────────────────── Set ────────────────────────────
+// ──────────────────────────── Set 设置目标 ────────────────────────────
 
 // TestGoalManager_Set_空目标被拒 校验空目标与非法预算
 // Python: test_set_requires_a_non_empty_objective (test_goal_manager.py L96)
@@ -233,7 +233,7 @@ func TestGoalManager_Set_写库后立即提交(t *testing.T) {
 	assert.Equal(t, 1, harness.session.commits)
 }
 
-// ──────────────────────────── Pause / Resume ────────────────────────────
+// ──────────────────────────── Pause / Resume 暂停与恢复 ────────────────────────────
 
 // TestGoalManager_PauseResume_无目标时为noop 校验空记录语义
 // Python: test_pause_and_resume_are_noops_without_a_goal (L167) 的 pause/resume 部分
@@ -474,7 +474,7 @@ func TestGoalManager_Resume_不计空闲暂停(t *testing.T) {
 	assert.Equal(t, "1970-01-01T00:33:20+00:00", *resumed.ActiveStartedAt)
 }
 
-// ──────────────────────────── Clear ────────────────────────────
+// ──────────────────────────── Clear 清理目标 ────────────────────────────
 
 // TestGoalManager_Clear_清work取消并发快照 校验清除三件事
 // Python: test_clear_removes_goal_work_cancels_active_round_and_emits_snapshot (L513)

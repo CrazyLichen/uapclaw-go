@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
@@ -14,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -25,6 +28,18 @@ import (
 type fakeHarnessAccessor struct {
 	startCalled bool
 	startErr    error
+	// pausedQuery 暂停轮查询
+	pausedQuery string
+	// paused 是否存在暂停轮
+	paused bool
+	// state 当前生命周期相位
+	state harnessprotocol.HarnessState
+	// disposed 是否调用过 Dispose
+	disposed bool
+	// stopCalled 是否调用过 Stop
+	stopCalled bool
+	// stopErr Stop 返回值
+	stopErr error
 }
 
 func (f *fakeHarnessAccessor) RegisterMemberTools(_ *memory.TeamMemoryManager) {}
@@ -37,13 +52,57 @@ func (f *fakeHarnessAccessor) Start(_ context.Context, _ any) error {
 	return f.startErr
 }
 
+// Stop 实现 types.HarnessAccessor。
+func (f *fakeHarnessAccessor) Stop(_ context.Context) error {
+	f.stopCalled = true
+	return f.stopErr
+}
+
+// PausedQuery 实现 types.HarnessAccessor。
+func (f *fakeHarnessAccessor) PausedQuery() (string, bool) { return f.pausedQuery, f.paused }
+
+// State 实现 types.HarnessAccessor。
+func (f *fakeHarnessAccessor) State() harnessprotocol.HarnessState { return f.state }
+
+// Dispose 实现 types.HarnessAccessor（kernel.stop 尾部的永久收尾）。
+func (f *fakeHarnessAccessor) Dispose(_ context.Context) error {
+	f.disposed = true
+	return nil
+}
+
 // fakeStreamControllerAccessor 测试用 StreamControllerAccessor 实现。
 type fakeStreamControllerAccessor struct {
 	startCalled bool
+	// pauseCalled 是否调用过 PauseAgent
+	pauseCalled bool
+	// resumeCalled 是否调用过 ResumeAgent
+	resumeCalled bool
+	// resumeQuery 最近一次 ResumeAgent 的 query
+	resumeQuery *string
+	// stopCalled 是否调用过 Stop
+	stopCalled bool
+	// resetCalled 是否调用过 ResetStreamQueue
+	resetCalled bool
 }
 
-func (f *fakeStreamControllerAccessor) ResetStreamQueue()       {}
+func (f *fakeStreamControllerAccessor) ResetStreamQueue()       { f.resetCalled = true }
 func (f *fakeStreamControllerAccessor) Start(_ context.Context) { f.startCalled = true }
+
+// Stop 实现 types.StreamControllerAccessor。
+func (f *fakeStreamControllerAccessor) Stop(_ context.Context) { f.stopCalled = true }
+
+// PauseAgent 实现 types.StreamControllerAccessor。
+func (f *fakeStreamControllerAccessor) PauseAgent(_ context.Context) error {
+	f.pauseCalled = true
+	return nil
+}
+
+// ResumeAgent 实现 types.StreamControllerAccessor。
+func (f *fakeStreamControllerAccessor) ResumeAgent(_ context.Context, query *string) error {
+	f.resumeCalled = true
+	f.resumeQuery = query
+	return nil
+}
 
 // fakeDispatcherInfra S-32: 测试用 DispatcherInfra 实现（对齐 *TeamInfra 具体类型签名）
 type fakeDispatcherInfra struct{}
@@ -75,6 +134,7 @@ func (f *fakeKernelHost) IsAgentRunning() bool                                { 
 func (f *fakeKernelHost) HasInFlightRound() bool                              { return f.inFlight }
 func (f *fakeKernelHost) HasPendingInterrupt() bool                           { return f.pendingInt }
 func (f *fakeKernelHost) CancelAgent(_ context.Context) error                 { return nil }
+func (f *fakeKernelHost) AnnounceTaskRevisions(_ context.Context) error       { return nil }
 func (f *fakeKernelHost) DeliverInput(_ context.Context, _ any, _ bool) error { return nil }
 func (f *fakeKernelHost) ResumeInterrupt(_ context.Context, _ *interaction.InteractiveInput) error {
 	return nil
@@ -111,7 +171,6 @@ func (f *fakeKernelHost) Lifecycle() string                                     
 func (f *fakeKernelHost) CancelRecoveryTasks()                                      {}
 func (f *fakeKernelHost) ShutdownAllHandles(_ context.Context)                      {}
 func (f *fakeKernelHost) SpawnedHandleNames() []string                              { return nil }
-func (f *fakeKernelHost) FirstIterGate() types.FirstIterGateAccessor                { return nil }
 func (f *fakeKernelHost) StreamController() types.StreamControllerAccessor {
 	return f.streamControllerAccessor
 }
@@ -636,4 +695,43 @@ func verifyLifecyclePersisted(sess *session.AgentTeamSession, teamName, want str
 		return fmt.Errorf("lifecycle = %q, want %q", got, want)
 	}
 	return nil
+}
+
+// ──────────────────────────── Task14：门控删除后的回归保护 ────────────────────────────
+
+// TestEnqueueMailboxAfterFirstIteration_Leader跳过 Leader 不入队且不 panic。
+//
+// 上游 kernel.py:709：「成员运行时在 coordination 运行之前就由 start 启动了，
+// 所以首次邮箱轮询直接入队——旧的首轮迭代门控等待随单 supervisor 模型消失」。
+// FirstIterationGate 已按决策 C7 整类删除，此处只保证 leader 早退分支仍然成立。
+func TestEnqueueMailboxAfterFirstIteration_Leader跳过(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
+	k := NewCoordinationKernel(host)
+
+	assert.NotPanics(t, func() {
+		k.EnqueueMailboxAfterFirstIteration(context.Background())
+	})
+}
+
+// TestEnqueueMailboxAfterFirstIteration_eventBus为nil不panic 未 Setup 时安全返回。
+func TestEnqueueMailboxAfterFirstIteration_eventBus为nil不panic(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleTeammate, memberName: "m1"}
+	k := NewCoordinationKernel(host)
+
+	assert.NotPanics(t, func() {
+		k.EnqueueMailboxAfterFirstIteration(context.Background())
+	})
+}
+
+// TestStop_调用HarnessDispose 回归 G-06：
+// kernel.Stop 必须销毁原生运行时（Dispose），不能只停 stream 就释放会话。
+func TestStop_调用HarnessDispose(t *testing.T) {
+	acc := &fakeHarnessAccessor{}
+	host := &fakeKernelHost{harnessAccessor: acc}
+	k := NewCoordinationKernel(host)
+	k.lifecycleState = kernelStateRunning
+
+	k.Stop(context.Background())
+
+	assert.True(t, acc.disposed, "Stop 必须调用 HarnessAccessor.Dispose")
 }

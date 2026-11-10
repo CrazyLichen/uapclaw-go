@@ -1197,6 +1197,7 @@ func collectToolRounds(messages []llmschema.BaseMessage) []toolRound {
 			index++
 			continue
 		}
+		// 收集本条助手消息里待配对的 tool_call id
 		pending := make(map[string]bool, len(assistant.ToolCalls))
 		for _, call := range assistant.ToolCalls {
 			if call != nil && call.ID != "" {
@@ -1224,6 +1225,7 @@ func collectToolRounds(messages []llmschema.BaseMessage) []toolRound {
 			continue
 		}
 
+		// 紧随其后的工具结果消息必须与 pending 一一配对，否则不算完整轮次
 		cursor := index + 1
 		for cursor < total && len(pending) > 0 {
 			toolMessage, ok := messages[cursor].(*llmschema.ToolMessage)
@@ -1241,6 +1243,7 @@ func collectToolRounds(messages []llmschema.BaseMessage) []toolRound {
 			continue
 		}
 
+		// 指纹按名称+参数排序，保证同一组调用在不同轮次里可比
 		fingerprint := make([]toolFingerprintItem, 0, len(callByID))
 		for _, item := range callByID {
 			fingerprint = append(fingerprint, item)

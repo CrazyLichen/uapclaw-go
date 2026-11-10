@@ -25,10 +25,7 @@ FORBIDDEN: Adding 'Other', 'Custom' etc. as options — system provides this aut
 
 // GetAskUserMetadataProviderInputParams 构建 ask_user 工具的参数 Schema
 func GetAskUserMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
+	lang := normalizeToolLang(language)
 	p := map[string]map[string]string{
 		"questions":           {"cn": "向用户提出的问题列表（1-4个）", "en": "Questions to ask the user (1-4 questions)"},
 		"header":              {"cn": "问题的简短标题或标签", "en": "A short label or tag for the question (max 12 chars)"},
@@ -39,12 +36,7 @@ func GetAskUserMetadataProviderInputParams(language string) map[string]any {
 		"options_preview":     {"cn": "可选的预览内容，用于UI模型、代码片段或视觉比较。仅在单选问题中支持。", "en": "Optional preview content rendered when this option is focused. Use for mockups, code snippets, or visual comparisons. Only supported for single-select questions."},
 		"multi_select":        {"cn": "是否允许多选", "en": "Set to true to allow the user to select multiple options instead of just one."},
 	}
-	desc := func(key string) string {
-		if d, ok := p[key][lang]; ok {
-			return d
-		}
-		return p[key]["cn"]
-	}
+	desc := i18nPicker(p, lang)
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{

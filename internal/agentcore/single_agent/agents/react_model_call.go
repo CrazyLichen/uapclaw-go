@@ -54,13 +54,24 @@ func (a *ReActAgent) callModel(
 	// 但退出 rail 后 ctx.inputs 应恢复为调用前的类型，否则 reactLoop 中
 	// cbc.Inputs().(*InvokeInputs) 类型断言会失败）
 	savedInputs := cbc.Inputs()
-	cbc.SetInputs(&interfaces.ModelCallInputs{
+	modelCallInputs := &interfaces.ModelCallInputs{
 		Messages:     previewMsgs,
 		Tools:        tools,
 		ModelContext: modelCtx,
-	})
+	}
+	cbc.SetInputs(modelCallInputs)
 
 	var result *llmschema.AssistantMessage
+	// 归属随会话元数据变化（团队/成员可能在轮内被改写），每次模型调用前重新解析一次，
+	// 并同时挂到 ctx 与本次模型调用输入上（后者是上报侧读取面）。
+	// Python: _report_context_usage 里重解析并回写 ctx.context_usage_attribution
+	//         与 ctx.inputs.context_usage_attribution（react_agent.py L1477-1483）
+	usageAttribution := a.resolveContextUsageAttribution(cbc)
+	cbc.SetContextUsageAttribution(usageAttribution)
+	modelCallInputs.ContextUsageAttribution = usageAttribution
+	// 同步刷新 ctx 上的绑定盒：同一条 ctx 链上的子代理委派能读到完整 14 键。
+	// Python: ctx.context_usage_attribution.clear() + update(attribution)（react_agent.py L1478-1479）
+	rail.UpdateUsageAttribution(ctx, usageAttribution)
 	err := rail.ModelCallRail.Execute(ctx, cbc, func() error {
 		var e error
 		result, e = a.railedModelCall(ctx, cbc, sess)
@@ -166,8 +177,33 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	// Python: L730: log_llm_request
 	logLLMRequest(messages, contextTools)
 
-	// 构建 KV Cache extra kwargs（对应 Python L736-742）
-	extraKVPairs := llmModel.BuildKVCacheInvokeKwargs(sess, enableKVRelease)
+	// 构建 KV Cache extra kwargs（对齐 react_agent.py:1742-1830）。
+	// ① ResolveRuntime ② ResolveLineage ③ ResolveTurnNum ④ BuildInvokeKwargs。
+	// 第④步（Python 的 handle_context_window_change → _evict_changed_window →
+	// llm.evict_kvc）在 Go 侧由既有 KVCacheManager.Release 在
+	// SessionModelContext.GetContextWindow（session_model_context.go:592）中完成，
+	// 故此处不重复调用（spec §8 DEV-2）。
+	// ★ 与 recommendation 包的 _main_call_parameters 共用同一 hook 实例与同一份
+	//   参数，保证父请求与重放请求逐字一致（prompt cache 命中的唯一保障）。
+	kvHook := a.kvCacheModelCallHook()
+	kvRuntime := kvHook.ResolveRuntime(llmModel, a.kvCacheAffinityConfig())
+	kvSess := newKVCacheSessionAdapter(sess)
+	var extraKVPairs map[string]any
+	if kvRuntime.EnableAffinity && kvRuntime.SupportsAffinity {
+		// 亲和生效才解析血缘与轮次（Python 的 resolve_lineage/resolve_turn_num
+		// 在能力判定之外调用，关闭时直接返回 None，不读 session）。
+		fallbackSID := ""
+		if modelCtx != nil {
+			fallbackSID = modelCtx.SessionID()
+		}
+		affinitySID, affinityParentSID := kvHook.ResolveLineage(kvRuntime, kvSess, fallbackSID)
+		affinityTurnNum := kvHook.ResolveTurnNum(cbc.Extra(), kvSess)
+		extraKVPairs = kvHook.BuildInvokeKwargs(kvRuntime, llmModel, kvSess,
+			affinitySID, affinityParentSID, affinityTurnNum)
+	} else {
+		// 未开亲和：保留 KVCacheRelease 既有路径的行为
+		extraKVPairs = llmModel.BuildKVCacheInvokeKwargs(sess, enableKVRelease)
+	}
 
 	// 补充 llm_return_token_ids 和 llm_logprobs 配置（对齐 Python L744-749）
 	if a.config != nil {

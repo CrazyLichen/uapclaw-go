@@ -44,9 +44,6 @@ type streamTaskEntry struct {
 	wg sync.WaitGroup
 }
 
-// MessageHandler 消息处理器
-// 入站：Channel → MessageHandler → AgentClient → AgentServer
-// 出站：AgentServer → AgentClient → MessageHandler → ChannelManager → Channel
 // externalSessionAliasKey 外部会话别名的键：(channel_id, 外部 session_id)。
 // Python: _external_session_aliases 的 tuple 键 (message_handler.py:394)。
 type externalSessionAliasKey struct {
@@ -105,6 +102,11 @@ type MessageHandler struct {
 	// Python: _session_evolution_in_progress
 	sessionEvolutionInProgress map[string]bool
 
+	// streamMethods 流式方法名追踪：requestID → RPC 方法名。
+	// Python: _stream_methods（message_handler.py:370）
+	// 用于判断 command.goal 这类"按上游 emit=False 但必须挡住 processing_status=false"
+	// 的长流——否则前端已结束、后端 Goal 还在跑，后续 delta 收不到。
+	streamMethods map[string]string
 	// streamEmitsProcessingStatus 流式 processing_status 追踪：requestID → should emit
 	// Python: _stream_emits_processing_status
 	streamEmitsProcessingStatus map[string]bool
@@ -218,6 +220,7 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		queuedSupplementInput:       make(map[string]map[string]any),
 		sessionEvolutionInProgress:  make(map[string]bool),
 		streamEmitsProcessingStatus: make(map[string]bool),
+		streamMethods:               make(map[string]string),
 		sessionLastUserQuery:        make(map[string]string),
 		acpSessionAliases:           make(map[string]string),
 		acpSessionAliasInflight:     make(map[string]chan struct{}),
@@ -245,18 +248,21 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	}
 	// Python: handle_message：入队前记录用户查询上下文
 	mh.rememberUserQueryContext(msg)
+	// 入队后 msg 归 forwardLoop 所有（它会 ApplyChannelState 改写 session_id/mode），
+	// 生产侧不能在入队后再读其字段，否则与消费侧并发读写同一对象。
+	msgID, channelID, sessionID := msg.ID, msg.ChannelID, msg.SessionID
 	select {
 	case mh.userMessages <- msg:
 		logger.Info(logComponent).
 			Str("event_type", "handle_inbound").
-			Str("msg_id", msg.ID).
-			Str("channel_id", msg.ChannelID).
-			Str("session_id", msg.SessionID).
+			Str("msg_id", msgID).
+			Str("channel_id", channelID).
+			Str("session_id", sessionID).
 			Msg("inbound message enqueued")
 	default:
 		logger.Warn(logComponent).
 			Str("event_type", "handle_inbound_dropped").
-			Str("msg_id", msg.ID).
+			Str("msg_id", msgID).
 			Msg("inbound message queue full, dropping message")
 	}
 }
@@ -397,6 +403,7 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 	mh.streamMetadata = make(map[string]map[string]any)
 	mh.streamModes = make(map[string]string)
 	mh.streamEmitsProcessingStatus = make(map[string]bool)
+	mh.streamMethods = make(map[string]string)
 
 	// 清理 evolution 状态
 	mh.evolutionMu.Lock()

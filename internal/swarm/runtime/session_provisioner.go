@@ -126,10 +126,12 @@ type TeamSwitchPreparer interface {
 type SessionOps interface {
 	// ForkSession 复制持久历史与 metadata
 	ForkSession(params ForkSessionParams) (ForkSessionResult, error)
-	// CopySessionContext 复制内存上下文
-	CopySessionContext(ctx context.Context, agent SessionAgent, sourceID, targetID string, forceHistory bool) error
-	// CopySessionState 复制 checkpoint state
-	CopySessionState(ctx context.Context, sourceID, targetID string, card any, agent SessionAgent) error
+	// CopySessionContext 复制内存上下文。
+	// Python: session_ops_service.py:2046 -> bool（无 raise），故 Go 返回 bool。
+	CopySessionContext(ctx context.Context, agent SessionAgent, sourceID, targetID string, forceHistory bool) bool
+	// CopySessionState 复制 checkpoint state。
+	// Python: session_ops_service.py:1903 -> bool（无 raise），故 Go 返回 bool。
+	CopySessionState(ctx context.Context, sourceID, targetID string, card any, agent SessionAgent) bool
 	// GetSessionMetadata 读会话元数据
 	GetSessionMetadata(sessionID string) map[string]any
 	// SessionDirHasMetadata 会话目录下是否有 metadata.json
@@ -746,7 +748,6 @@ func (p *RuntimeSessionProvisioner) SetRemoveSessionDir(fn func(sessionDir strin
 	p.extra.RemoveSessionDir = fn
 }
 
-// SetTeamManagerProvider 注入团队管理器获取函数。
 // SetListTeamSessions 注入团队会话清单读取器（团队删除用）。
 // Python: session_provisioner.py _inventory_team_session_ids（:1873）
 func (p *RuntimeSessionProvisioner) SetListTeamSessions(fn func(teamName string) []string) {
@@ -1158,20 +1159,18 @@ func (p *RuntimeSessionProvisioner) PrepareSessionFork(
 			if _, ensureErr := agent.EnsureInstance(ctx); ensureErr != nil {
 				return ensureErr
 			}
-			if copyErr := p.extra.SessionOps.CopySessionContext(ctx, agent,
-				sourceSessionID, targetSessionID, hasCutoff); copyErr != nil {
-				return copyErr
-			}
+			// Python: session_provisioner.py:1338 裸 await，不接收返回值
+			p.extra.SessionOps.CopySessionContext(ctx, agent,
+				sourceSessionID, targetSessionID, hasCutoff)
 		}
 		if !hasCutoff {
 			var card any
 			if agent != nil {
 				card = agent.Card()
 			}
-			if stateErr := p.extra.SessionOps.CopySessionState(ctx,
-				sourceSessionID, targetSessionID, card, agent); stateErr != nil {
-				return stateErr
-			}
+			// Python: session_provisioner.py:1345 裸 await，不接收返回值
+			p.extra.SessionOps.CopySessionState(ctx,
+				sourceSessionID, targetSessionID, card, agent)
 		}
 		return nil
 	}()
@@ -1881,7 +1880,7 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 		return sessionpkg.SessionDeleteResultFailure(target, "NOT_FOUND", "session not found")
 	}
 
-	// metadata
+	// metadata 读取会话元数据
 	var metadata map[string]any
 	if p.extra.SessionOps != nil {
 		metadata = p.extra.SessionOps.GetSessionMetadata(target)
@@ -1919,7 +1918,7 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 		IsTeam: isTeamSession, TeamName: teamName,
 	}
 
-	// ① participant.BeforeDelete
+	// ① participant.BeforeDelete 删除前回调
 	participants := p.participants.SnapshotDelete()
 	entered := make([]sessionpkg.SessionDeleteParticipant, 0, len(participants))
 	for _, participant := range participants {
@@ -1991,7 +1990,7 @@ func (p *RuntimeSessionProvisioner) deleteSessionLocked(
 		p.notifyDeleteFailed(ctx, entered, deleteTarget, destructiveStarted)
 		return cleanupFailedResult(result, destructiveStarted)
 	}
-	// ⑦ rmtree
+	// ⑦ rmtree 删除会话目录
 	if dirExists && p.extra.RemoveSessionDir != nil {
 		if rmErr := p.extra.RemoveSessionDir(sessionDir); rmErr != nil {
 			p.abortDelete(ctx, result, trajectoryPrepared, lifecyclePrepared, lifecycle,
