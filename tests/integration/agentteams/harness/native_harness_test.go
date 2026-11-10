@@ -4,8 +4,10 @@ package harness_test
 
 import (
 	"context"
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/suite"
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -161,4 +163,12 @@ func (s *NativeHarnessSuite) Test订阅轮次事件() {
 	}
 	s.True(kinds["started"], "应收到 started 事件")
 	s.True(kinds["finished"], "应收到 finished 事件")
+}
+
+// TestNativeHarnessSuite 套件入口。
+//
+// 入口必须与套件定义同文件：集成审计按文件逐个检查「每个集成测试文件
+// 自带 suite.Run 调用」，入口一旦挪到别的文件，本文件即被判硬违规。
+func TestNativeHarnessSuite(t *testing.T) {
+	suite.Run(t, new(NativeHarnessSuite))
 }
