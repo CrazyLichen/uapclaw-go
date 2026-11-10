@@ -11,6 +11,7 @@ import (
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -76,16 +77,16 @@ func (s *PauseResumeSuite) TestI01_模型相位暂停后恢复不重复用户消
 	})
 
 	s.Require().NoError(h.Send(s.Ctx, "原始任务", false))
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateRunning },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond)
 	s.Require().NoError(h.Pause(s.Ctx))
-	s.Require().Equal(teamharness.HarnessStatePaused, h.State())
+	s.Require().Equal(harnessprotocol.HarnessStatePaused, h.State())
 
 	before := countContent(s.contextMessages(h, sess, true), "原始任务")
 
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("续跑完成"))
 	s.Require().NoError(h.Resume(s.Ctx, nil))
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
 	after := countContent(s.contextMessages(h, sess, true), "原始任务")
@@ -102,7 +103,7 @@ func (s *PauseResumeSuite) TestI03_立即中止回滚并投递marker() {
 		Chunks:      []*llmschema.AssistantMessageChunk{llmschema.NewAssistantMessageChunk("不该出现")},
 	})
 	s.Require().NoError(h.Send(s.Ctx, "长任务", false))
-	s.Require().Eventually(func() bool { return h.State() == teamharness.HarnessStateRunning },
+	s.Require().Eventually(func() bool { return h.State() == harnessprotocol.HarnessStateRunning },
 		5*time.Second, 20*time.Millisecond)
 	// 等到内层上下文已创建：否则 abort 可能落在 initContext 之前，
 	// 回滚无对象可回（不是行为缺陷，是测试时序）。
@@ -112,7 +113,7 @@ func (s *PauseResumeSuite) TestI03_立即中止回滚并投递marker() {
 	}, 5*time.Second, 20*time.Millisecond)
 
 	s.Require().NoError(h.Abort(s.Ctx, true))
-	s.Require().Equal(teamharness.HarnessStateIdle, h.State())
+	s.Require().Equal(harnessprotocol.HarnessStateIdle, h.State())
 
 	// marker 必须到达输出（本用例是唯一消费者）
 	readCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -148,7 +149,7 @@ func (s *PauseResumeSuite) TestI05_冷恢复续跑不追加用户消息() {
 
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("续跑完成"))
 	s.Require().NoError(h2.Resume(s.Ctx, "原始任务"))
-	s.Require().Eventually(func() bool { return h2.State() == teamharness.HarnessStateIdle },
+	s.Require().Eventually(func() bool { return h2.State() == harnessprotocol.HarnessStateIdle },
 		10*time.Second, 50*time.Millisecond)
 
 	s.Equal(0, countContent(s.contextMessages(h2, sess, true), "原始任务"),

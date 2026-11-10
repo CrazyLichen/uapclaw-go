@@ -3,11 +3,11 @@ package types
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -124,7 +124,7 @@ type HarnessAccessor interface {
 	PausedQuery() (string, bool)
 	// State 返回当前生命周期相位。
 	// 对齐 Python: TeamHarness.state property（team_harness.py:327-331）
-	State() harness.HarnessState
+	State() harnessprotocol.HarnessState
 	// Dispose 永久收尾：停机 + 释放该成员的进程级资源（记忆索引、sys_operation）。
 	// Python: TeamHarness.dispose()（team_harness.py:201-230）；kernel.stop 尾部调用。
 	Dispose(ctx context.Context) error

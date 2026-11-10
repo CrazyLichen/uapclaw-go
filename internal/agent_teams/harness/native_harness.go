@@ -15,6 +15,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
 	runner "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -192,7 +193,7 @@ func (h *NativeHarness) prepare(ctx context.Context) error {
 }
 
 // State 返回当前相位。
-func (h *NativeHarness) State() HarnessState { return h.st.Phase() }
+func (h *NativeHarness) State() harnessprotocol.HarnessState { return h.st.Phase() }
 
 // SessionID 返回绑定会话标识。
 // 注意：不加锁——sess 指针的读写都发生在持有 startMu 的 Start/Stop 内，
@@ -273,7 +274,7 @@ func (h *NativeHarness) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, query
 			}
 		}
 		h.agent.SetAutoInvokeScheduled(false)
-		if h.State() == HarnessStateTerminated {
+		if h.State() == harnessprotocol.HarnessStateTerminated {
 			return
 		}
 		h.startMu.Lock()
@@ -308,7 +309,7 @@ func (h *NativeHarness) Start(ctx context.Context, sess *session.Session) error 
 	// 已被消费（consumed=true），命令队列里可能残留未处理命令。
 	// 等价上游 TeamHarness.start 在 native 处于 TERMINATED 时重建 native
 	// （team_harness.py:147-151）。
-	if h.st.Phase() == HarnessStateTerminated {
+	if h.st.Phase() == harnessprotocol.HarnessStateTerminated {
 		h.st = newInternalState()
 		h.cmd = make(chan controlCmd, controlQueueSize)
 		h.queue = make(chan stream.Schema, outputQueueSize)
@@ -605,7 +606,7 @@ func (h *NativeHarness) Dispose(ctx context.Context) error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // transition 切相位并发事件（仅 supervisor 或 Start 内调用）。
-func (h *NativeHarness) transition(ctx context.Context, next HarnessState) {
+func (h *NativeHarness) transition(ctx context.Context, next harnessprotocol.HarnessState) {
 	old := h.st.Phase()
 	if old == next {
 		return
@@ -684,7 +685,7 @@ func (h *NativeHarness) dispatch(ctx context.Context, c controlCmd) bool {
 	switch cmd := c.(type) {
 	case *cmdStop:
 		h.stopping = true
-		h.transition(ctx, HarnessStateTerminated)
+		h.transition(ctx, harnessprotocol.HarnessStateTerminated)
 		h.hardCancelRound(h.st.Active())
 		h.st.SetActive(nil)
 		// 停止后暂停轮作废，避免 IDLE/终止态读到过期查询。
@@ -722,7 +723,7 @@ func (h *NativeHarness) enqueue(ctx context.Context, c controlCmd) error {
 	if !started {
 		return fmt.Errorf("harness: 尚未启动（须先 Start）")
 	}
-	if h.State() == HarnessStateTerminated {
+	if h.State() == harnessprotocol.HarnessStateTerminated {
 		return fmt.Errorf("harness: 已终止，拒绝新命令")
 	}
 	select {
@@ -748,21 +749,21 @@ func waitAck(ctx context.Context, reply chan error) error {
 func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 	phase := h.st.Phase()
 	switch phase {
-	case HarnessStateIdle:
+	case harnessprotocol.HarnessStateIdle:
 		active := h.startRound(ctx, msg.Content, startModeDefault, nil)
-		h.transition(ctx, HarnessStateRunning)
+		h.transition(ctx, harnessprotocol.HarnessStateRunning)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
-	case HarnessStateRunning:
+	case harnessprotocol.HarnessStateRunning:
 		if msg.Immediate && h.st.Active() != nil {
 			return h.steerActive(ctx, msg.Content)
 		}
 		h.enqueueInbox(*msg)
-	case HarnessStatePaused:
+	case harnessprotocol.HarnessStatePaused:
 		// InteractiveInput 自带单轮语义，不能被 steer 进续跑轮。
 		if _, isInteractive := msg.Content.(*interaction.InteractiveInput); isInteractive {
 			h.st.ClearPausedQuery()
 			active := h.startRound(ctx, msg.Content, startModeDefault, nil)
-			h.transition(ctx, HarnessStateRunning)
+			h.transition(ctx, harnessprotocol.HarnessStateRunning)
 			h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 			return nil
 		}
@@ -770,7 +771,7 @@ func (h *NativeHarness) onSend(ctx context.Context, msg *InboxMessage) error {
 		query, _ := h.st.PausedQuery()
 		h.st.ClearPausedQuery()
 		active := h.startRound(ctx, query, startModeResumeContinuation, nil)
-		h.transition(ctx, HarnessStateRunning)
+		h.transition(ctx, harnessprotocol.HarnessStateRunning)
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 		if err := h.steerActive(ctx, msg.Content); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("send while paused: steer failed")
@@ -954,14 +955,14 @@ func (h *NativeHarness) runRound(ctx context.Context, active *ActiveRound) {
 // 其余所有路径（含非 RUNNING 的幂等早退）都必须由调用方立即应答，
 // 对齐上游 `if phase is not RUNNING: self._ack(cmd.ack, None); return`。
 func (h *NativeHarness) onPause(cmd *cmdPause) (deferred bool, err error) {
-	if h.st.Phase() != HarnessStateRunning {
+	if h.st.Phase() != harnessprotocol.HarnessStateRunning {
 		// PAUSING：协作暂停已在飞；PAUSED/IDLE/TERMINATED：无可暂停。
 		// 本次调用必须立即应答，否则重复暂停会永久挂住调用方。
 		return false, nil
 	}
 	active := h.st.Active()
 	if active == nil {
-		h.transition(context.Background(), HarnessStatePaused)
+		h.transition(context.Background(), harnessprotocol.HarnessStatePaused)
 		return false, nil
 	}
 
@@ -980,13 +981,13 @@ func (h *NativeHarness) onPause(cmd *cmdPause) (deferred bool, err error) {
 		h.emitAborted(active.RoundID, "pause")
 		h.events.emitRound(context.Background(), HarnessRoundEvent{Kind: "paused", RoundID: active.RoundID})
 		h.st.SetActive(nil)
-		h.transition(context.Background(), HarnessStatePaused)
+		h.transition(context.Background(), harnessprotocol.HarnessStatePaused)
 		return false, nil
 	}
 
 	// 协作：让在飞迭代跑完，ack 由轮末结算（_on_round_done）兑现。
 	active.PauseAck = cmd.reply
-	h.transition(context.Background(), HarnessStatePausing)
+	h.transition(context.Background(), harnessprotocol.HarnessStatePausing)
 	return true, nil
 }
 
@@ -996,10 +997,10 @@ func (h *NativeHarness) onResume(cmd *cmdResume) error {
 	phase := h.st.Phase()
 	var query string
 	switch {
-	case phase == HarnessStatePaused:
+	case phase == harnessprotocol.HarnessStatePaused:
 		// warm：轮仍在内存里，用暂停时缓存的查询。
 		query, _ = h.st.PausedQuery()
-	case phase == HarnessStateIdle && cmd.query != nil:
+	case phase == harnessprotocol.HarnessStateIdle && cmd.query != nil:
 		// cold：harness 被重建，上下文来自会话 checkpoint，调用方提供查询。
 		query, _ = cmd.query.(string)
 	default:
@@ -1007,7 +1008,7 @@ func (h *NativeHarness) onResume(cmd *cmdResume) error {
 	}
 	h.st.ClearPausedQuery()
 	active := h.startRound(context.Background(), query, startModeResumeContinuation, nil)
-	h.transition(context.Background(), HarnessStateRunning)
+	h.transition(context.Background(), harnessprotocol.HarnessStateRunning)
 	h.events.emitRound(context.Background(), HarnessRoundEvent{Kind: "started", RoundID: active.RoundID})
 	return nil
 }
@@ -1016,17 +1017,17 @@ func (h *NativeHarness) onResume(cmd *cmdResume) error {
 // Python: _on_abort (native_harness.py L928-980)
 func (h *NativeHarness) onAbort(cmd *cmdAbort) error {
 	phase := h.st.Phase()
-	if phase == HarnessStateIdle {
+	if phase == harnessprotocol.HarnessStateIdle {
 		return nil
 	}
-	if phase == HarnessStatePaused {
+	if phase == harnessprotocol.HarnessStatePaused {
 		h.st.ClearPausedQuery()
-		h.transition(context.Background(), HarnessStateIdle)
+		h.transition(context.Background(), harnessprotocol.HarnessStateIdle)
 		return nil
 	}
 	active := h.st.Active()
 	if active == nil {
-		h.transition(context.Background(), HarnessStateIdle)
+		h.transition(context.Background(), harnessprotocol.HarnessStateIdle)
 		return nil
 	}
 
@@ -1043,14 +1044,14 @@ func (h *NativeHarness) onAbort(cmd *cmdAbort) error {
 		h.emitAborted(active.RoundID, "abort")
 		h.events.emitRound(context.Background(), HarnessRoundEvent{Kind: "aborted", RoundID: active.RoundID})
 		h.st.SetActive(nil)
-		h.transition(context.Background(), HarnessStateIdle)
+		h.transition(context.Background(), harnessprotocol.HarnessStateIdle)
 		return nil
 	}
 
 	// 优雅：由快照轨在模型调用边界强制收尾，轮末看到 graceful_abort 后 IDLE。
 	active.GracefulAbort.Store(true)
-	if phase == HarnessStatePausing {
-		h.transition(context.Background(), HarnessStateRunning)
+	if phase == harnessprotocol.HarnessStatePausing {
+		h.transition(context.Background(), harnessprotocol.HarnessStateRunning)
 	}
 	return nil
 }
@@ -1084,7 +1085,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	// 不丢排队 follow-up（它们属于 resume 续跑的那一轮）。
 	if active.PauseRequested.Load() && !runtimeCrashed && !taskFailed {
 		h.events.emitRound(ctx, HarnessRoundEvent{Kind: "paused", RoundID: cmd.roundID})
-		h.transition(ctx, HarnessStatePaused)
+		h.transition(ctx, harnessprotocol.HarnessStatePaused)
 		h.resolvePauseAck(active)
 		return
 	}
@@ -1101,7 +1102,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	}
 
 	if h.sess == nil || h.coordinator == nil {
-		h.transition(ctx, HarnessStateIdle)
+		h.transition(ctx, harnessprotocol.HarnessStateIdle)
 		return
 	}
 
@@ -1123,7 +1124,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	// 优雅中止：本轮已跑完，用户要求停止——丢弃排队 follow-up 后 IDLE。
 	if wasGraceful {
 		h.drainFollowUpsDiscard(ctx)
-		h.transition(ctx, HarnessStateIdle)
+		h.transition(ctx, harnessprotocol.HarnessStateIdle)
 		return
 	}
 
@@ -1141,7 +1142,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 		}
 		logger.Warn(logComponent).Err(cmd.err).Int("round_id", cmd.roundID).
 			Msg("round died abnormally; giving up on its query and going idle")
-		h.transition(ctx, HarnessStateIdle)
+		h.transition(ctx, harnessprotocol.HarnessStateIdle)
 		return
 	}
 
@@ -1152,7 +1153,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 		}
 	}
 	if resultType == "interrupt" || h.coordinator.IsAborted() {
-		h.transition(ctx, HarnessStateIdle)
+		h.transition(ctx, harnessprotocol.HarnessStateIdle)
 		return
 	}
 
@@ -1175,7 +1176,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 	// resume 单轮语义：不得用 InteractiveInput 查询去驱动任务计划续跑
 	// （那会重新恢复一个已被清除的中断）。
 	if isResume {
-		h.transition(ctx, HarnessStateIdle)
+		h.transition(ctx, harnessprotocol.HarnessStateIdle)
 		return
 	}
 
@@ -1186,7 +1187,7 @@ func (h *NativeHarness) settleRoundDone(ctx context.Context, cmd *cmdRoundFinish
 		return
 	}
 
-	h.transition(ctx, HarnessStateIdle)
+	h.transition(ctx, harnessprotocol.HarnessStateIdle)
 }
 
 // drainPendingFollowUps 排空内部 follow-up 并合成一批。

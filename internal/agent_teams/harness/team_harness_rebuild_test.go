@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -34,6 +35,6 @@ func TestTeamHarnessStart_第二轮重建native(t *testing.T) {
 	require.NoError(t, second.PreRun(context.Background(), map[string]any{}))
 	require.NoError(t, th.Start(context.Background(), second))
 	assert.NotSame(t, first, th.native, "第二轮必须重建 native")
-	assert.Equal(t, HarnessStateIdle, th.native.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, th.native.State())
 	require.NoError(t, th.Stop(context.Background()))
 }

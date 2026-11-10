@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -22,7 +23,7 @@ func TestNativeHarness_Send在Idle时开轮(t *testing.T) {
 	require.NoError(t, h.Send(context.Background(), "第一条", false))
 
 	require.Eventually(t, func() bool {
-		return h.State() == HarnessStateRunning
+		return h.State() == harnessprotocol.HarnessStateRunning
 	}, 2*time.Second, 10*time.Millisecond)
 }
 
@@ -32,7 +33,7 @@ func TestNativeHarness_Send在Idle时开轮(t *testing.T) {
 func TestNativeHarness_Send在Running时排队(t *testing.T) {
 	h := newTestNativeHarness(t)
 	// 手动把相位拨到 running 并挂一个活动轮，模拟"有轮在飞"
-	h.st.setPhase(HarnessStateRunning)
+	h.st.setPhase(harnessprotocol.HarnessStateRunning)
 	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "A"})
 
 	require.NoError(t, h.onSend(context.Background(), &InboxMessage{Content: "B", Immediate: false}))
@@ -46,7 +47,7 @@ func TestNativeHarness_Send在Running时排队(t *testing.T) {
 // TestNativeHarness_onSend在Running时立即输入转向 验证 immediate=true 走 steer（C1）。
 func TestNativeHarness_onSend在Running时立即输入转向(t *testing.T) {
 	h := newTestNativeHarness(t)
-	h.st.setPhase(HarnessStateRunning)
+	h.st.setPhase(harnessprotocol.HarnessStateRunning)
 	h.st.SetActive(&ActiveRound{RoundID: 1, TaskID: "t1", OriginalQuery: "A"})
 
 	// 无 controller 时 steerActive 返回错误（验证走的是 steer 分支而非排队）

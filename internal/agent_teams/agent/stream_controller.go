@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -172,7 +173,7 @@ func (sc *StreamController) IsAgentRunning() bool {
 	if h == nil {
 		return false
 	}
-	return h.State() == harness.HarnessStateRunning
+	return h.State() == harnessprotocol.HarnessStateRunning
 }
 
 // HasInFlightRound 是否有飞行中的轮次。
@@ -540,9 +541,9 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 // PAUSING/PAUSED/TERMINATED 留给生命周期层。
 func (sc *StreamController) mapState(ctx context.Context, ev harness.HarnessStateEvent) {
 	switch ev.New {
-	case harness.HarnessStateRunning:
+	case harnessprotocol.HarnessStateRunning:
 		_ = sc.updateStatus(ctx, atschema.MemberStatusBusy)
-	case harness.HarnessStateIdle:
+	case harnessprotocol.HarnessStateIdle:
 		_ = sc.updateStatus(ctx, atschema.MemberStatusReady)
 		sc.onIdleSettled(ctx)
 	}

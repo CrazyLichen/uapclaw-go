@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -652,7 +652,7 @@ func (k *CoordinationKernel) persistPendingResume(_ context.Context) {
 	if harnessAcc == nil {
 		return
 	}
-	if harnessAcc.State() != harness.HarnessStatePaused {
+	if harnessAcc.State() != harnessprotocol.HarnessStatePaused {
 		// 没有挂起的轮，无需记录
 		return
 	}
@@ -682,7 +682,7 @@ func (k *CoordinationKernel) resumePausedRound(ctx context.Context) {
 	if harnessAcc == nil || sc == nil {
 		return
 	}
-	if harnessAcc.State() == harness.HarnessStatePaused {
+	if harnessAcc.State() == harnessprotocol.HarnessStatePaused {
 		logger.Info(logComponent).Str("member_name", k.host.MemberName()).
 			Msg("resuming the paused round in place")
 		if err := sc.ResumeAgent(ctx, nil); err != nil {

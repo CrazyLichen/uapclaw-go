@@ -15,6 +15,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -399,7 +400,7 @@ func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
 	if h.native == nil {
 		return fmt.Errorf("team harness: 未构建 native（须经 TeamHarnessBuild）")
 	}
-	if h.native.State() == HarnessStateTerminated {
+	if h.native.State() == harnessprotocol.HarnessStateTerminated {
 		rebuilt, err := NewNativeHarness(h.agentSpec, h.buildCtx)
 		if err != nil {
 			return fmt.Errorf("team harness: 重建 native 失败: %w", err)
@@ -436,7 +437,7 @@ func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
 // Stop 停止 native supervisor；保留（已终止的）native 供配置读取。
 // Python: TeamHarness.stop()（team_harness.py:171-199）
 func (h *TeamHarness) Stop(ctx context.Context) error {
-	if h.native != nil && h.native.State() != HarnessStateTerminated {
+	if h.native != nil && h.native.State() != harnessprotocol.HarnessStateTerminated {
 		if err := h.native.Stop(ctx); err != nil {
 			return err
 		}
@@ -543,9 +544,9 @@ func (h *TeamHarness) PausedQuery() (string, bool) {
 
 // State 返回 native 生命周期相位；无 native 时返回 idle。
 // Python: TeamHarness.state property（team_harness.py:327-331）
-func (h *TeamHarness) State() HarnessState {
+func (h *TeamHarness) State() harnessprotocol.HarnessState {
 	if h.native == nil {
-		return HarnessStateIdle
+		return harnessprotocol.HarnessStateIdle
 	}
 	return h.native.State()
 }

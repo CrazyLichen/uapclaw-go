@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -29,7 +30,7 @@ func TestNativeHarness_RunOnce不启动supervisor(t *testing.T) {
 	require.NoError(t, sess.PreRun(context.Background(), map[string]any{}))
 
 	_, _ = h.RunOnce(context.Background(), "单次任务", sess)
-	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State())
 	assert.Nil(t, h.st.Active())
 }
 
@@ -40,5 +41,5 @@ func TestNativeHarness_Dispose后不可再用(t *testing.T) {
 	require.NoError(t, sess.PreRun(context.Background(), map[string]any{}))
 	require.NoError(t, h.Start(context.Background(), sess))
 	require.NoError(t, h.Dispose(context.Background()))
-	assert.Equal(t, HarnessStateTerminated, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateTerminated, h.State())
 }

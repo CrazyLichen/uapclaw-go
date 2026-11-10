@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -38,11 +39,11 @@ func TestNativeHarness_Start幂等(t *testing.T) {
 	require.NoError(t, h.Start(context.Background(), sess))
 	require.NoError(t, h.Start(context.Background(), sess))
 
-	assert.Equal(t, HarnessStateIdle, h.State(), "Start 后保持 idle，首条 send 才进入 running")
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State(), "Start 后保持 idle，首条 send 才进入 running")
 	assert.Equal(t, sess.GetSessionID(), h.SessionID())
 
 	require.NoError(t, h.Stop(context.Background()))
-	assert.Equal(t, HarnessStateTerminated, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateTerminated, h.State())
 }
 
 // TestNativeHarness_Start绑定不同会话报错 对齐上游"一个实例一个会话"约束。
@@ -61,7 +62,7 @@ func TestNativeHarness_Start绑定不同会话报错(t *testing.T) {
 // TestNativeHarness_InitialPhaseIsIdle 验证未启动即 idle。
 func TestNativeHarness_InitialPhaseIsIdle(t *testing.T) {
 	h := newTestNativeHarness(t)
-	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State())
 	assert.Empty(t, h.SessionID())
 }
 
@@ -157,9 +158,9 @@ func TestStop后Start重建运行期容器(t *testing.T) {
 
 	require.NoError(t, h.Start(context.Background(), sess))
 	require.NoError(t, h.Stop(context.Background()))
-	require.Equal(t, HarnessStateTerminated, h.State())
+	require.Equal(t, harnessprotocol.HarnessStateTerminated, h.State())
 
 	require.NoError(t, h.Start(context.Background(), sess))
-	assert.Equal(t, HarnessStateIdle, h.State(), "重建后应回到 IDLE 并接受新命令")
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State(), "重建后应回到 IDLE 并接受新命令")
 	require.NoError(t, h.Stop(context.Background()))
 }

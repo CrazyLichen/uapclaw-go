@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -30,13 +31,13 @@ func newTestTeamHarnessWithNative(t *testing.T) *TeamHarness {
 // TestTeamHarness_State无native返回Idle 验证 State 的 nil native 分支。
 func TestTeamHarness_State无native返回Idle(t *testing.T) {
 	h := NewTeamHarness(nil, string(atschema.TeamRoleLeader), "", false)
-	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State())
 }
 
 // TestTeamHarness_State转发native 验证 State 转调 native.State()。
 func TestTeamHarness_State转发native(t *testing.T) {
 	h := newTestTeamHarnessWithNative(t)
-	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State())
 }
 
 // TestTeamHarness_SessionID无native返回空 验证 SessionID 的 nil native 分支。
@@ -79,14 +80,14 @@ func TestTeamHarness_StartStop完整周期(t *testing.T) {
 
 	require.NoError(t, h.Start(context.Background(), teamSess))
 	// Start 后 native 相位保持 idle（对齐上游：第一条 send 才开轮）
-	assert.Equal(t, HarnessStateIdle, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State())
 	// nativeSessionID 记录团队会话标识
 	assert.Equal(t, "team-sess", h.nativeSessionID)
 	// SessionID 转发 native.SessionID()（已绑定子会话，继承团队会话 ID）
 	assert.Equal(t, "team-sess", h.SessionID())
 
 	require.NoError(t, h.Stop(context.Background()))
-	assert.Equal(t, HarnessStateTerminated, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateTerminated, h.State())
 	// Stop 清空 nativeSessionID
 	assert.Equal(t, "", h.nativeSessionID)
 }
@@ -190,7 +191,7 @@ func TestTeamHarness_Dispose转发native(t *testing.T) {
 	teamSess := session.CreateAgentSession("team-sess", h.Native().DeepAgent().Card(), nil)
 	require.NoError(t, h.Start(context.Background(), teamSess))
 	require.NoError(t, h.Dispose(context.Background()))
-	assert.Equal(t, HarnessStateTerminated, h.State())
+	assert.Equal(t, harnessprotocol.HarnessStateTerminated, h.State())
 }
 
 // TestSessionIDOf 验证 sessionIDOf 从团队会话提取标识。

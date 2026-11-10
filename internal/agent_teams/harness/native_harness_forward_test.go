@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 )
 
 // TestNewNativeHarness_从spec物化 构造器收 spec 而非已建好的 agent。
@@ -23,7 +24,7 @@ func TestNewNativeHarness_从spec物化(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, h)
-	assert.Equal(t, harness.HarnessStateIdle, h.State(), "构造后相位为 idle")
+	assert.Equal(t, harnessprotocol.HarnessStateIdle, h.State(), "构造后相位为 idle")
 	assert.NotNil(t, h.DeepAgent(), "构造期即完成 resolve，内层 agent 已就位")
 }
 

@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -33,7 +33,7 @@ type fakeHarnessAccessor struct {
 	// paused 是否存在暂停轮
 	paused bool
 	// state 当前生命周期相位
-	state harness.HarnessState
+	state harnessprotocol.HarnessState
 	// disposed 是否调用过 Dispose
 	disposed bool
 	// stopCalled 是否调用过 Stop
@@ -62,7 +62,7 @@ func (f *fakeHarnessAccessor) Stop(_ context.Context) error {
 func (f *fakeHarnessAccessor) PausedQuery() (string, bool) { return f.pausedQuery, f.paused }
 
 // State 实现 types.HarnessAccessor。
-func (f *fakeHarnessAccessor) State() harness.HarnessState { return f.state }
+func (f *fakeHarnessAccessor) State() harnessprotocol.HarnessState { return f.state }
 
 // Dispose 实现 types.HarnessAccessor（kernel.stop 尾部的永久收尾）。
 func (f *fakeHarnessAccessor) Dispose(_ context.Context) error {

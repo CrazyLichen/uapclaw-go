@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -18,7 +19,7 @@ func TestStreamController_mapState_RUNNING转BUSY(t *testing.T) {
 	var got atschema.MemberStatus
 	sc.updateStatus = func(ctx context.Context, s atschema.MemberStatus) error { got = s; return nil }
 
-	sc.mapState(context.Background(), harness.HarnessStateEvent{New: harness.HarnessStateRunning})
+	sc.mapState(context.Background(), harness.HarnessStateEvent{New: harnessprotocol.HarnessStateRunning})
 	if got != atschema.MemberStatusBusy {
 		t.Errorf("RUNNING 应映射为 BUSY，实际 %v", got)
 	}
@@ -32,7 +33,7 @@ func TestStreamController_mapState_IDLE转READY并触发onIdleSettled(t *testing
 	polled := 0
 	sc.requestCompletionPollCb = func(ctx context.Context) error { polled++; return nil }
 
-	sc.mapState(context.Background(), harness.HarnessStateEvent{New: harness.HarnessStateIdle})
+	sc.mapState(context.Background(), harness.HarnessStateEvent{New: harnessprotocol.HarnessStateIdle})
 	if got != atschema.MemberStatusReady {
 		t.Errorf("IDLE 应映射为 READY，实际 %v", got)
 	}
