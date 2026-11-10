@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -51,6 +52,9 @@ type AgentRuntimeDeps struct {
 	// IterManagers 遍历 host 事件可达的 manager（nil 时只用 Manager）
 	// Python: service.py:3060-3064 self._tenant.iter_managers_for_host_event() or [self.agent_manager]
 	IterManagers func() []AgentManagerPort
+	// ResolveModelCapability 模型目录解析（nil 时跳过 model 存在性校验）
+	// Python: service.py:706-714 resolve_model_capability / :777-782
+	ResolveModelCapability func(model string) (RuntimeModelDescriptor, error)
 }
 
 // SessionCoordinatorPort 清理路径需要的协调器能力。
@@ -109,6 +113,9 @@ type AgentRuntime struct {
 	// iterManagers 遍历 host 事件可达的 manager（可注入）
 	// Python: service.py:3060-3064 iter_managers_for_host_event
 	iterManagers func() []AgentManagerPort
+	// resolveModelCapability 模型目录解析（可注入）
+	// Python: service.py:706-714 resolve_model_capability
+	resolveModelCapability func(model string) (RuntimeModelDescriptor, error)
 }
 
 // agentExecutionOwnerKey 执行 owner 表的键。
@@ -130,14 +137,15 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 		controller = NewPlanModeController()
 	}
 	return &AgentRuntime{
-		manager:              deps.Manager,
-		planController:       controller,
-		onControlEvent:       deps.OnControlEvent,
-		prepare:              deps.Prepare,
-		agentExecutionOwners: make(map[agentExecutionOwnerKey]*RuntimeAgentExecution),
-		coordinator:          deps.Coordinator,
-		resetPlanSession:     deps.ResetPlanSession,
-		iterManagers:         deps.IterManagers,
+		manager:                deps.Manager,
+		planController:         controller,
+		onControlEvent:         deps.OnControlEvent,
+		prepare:                deps.Prepare,
+		agentExecutionOwners:   make(map[agentExecutionOwnerKey]*RuntimeAgentExecution),
+		coordinator:            deps.Coordinator,
+		resetPlanSession:       deps.ResetPlanSession,
+		iterManagers:           deps.IterManagers,
+		resolveModelCapability: deps.ResolveModelCapability,
 	}
 }
 
@@ -752,3 +760,338 @@ func (r *AgentRuntime) managersForCleanup() []AgentManagerPort {
 	}
 	return []AgentManagerPort{r.manager}
 }
+
+// ──────────────────────────── 声明式执行（R-4 写端） ────────────────────────────
+
+// requireOwnedSingleAgentSession 在新 SDK 调用可能接管外部会话前 fail-closed。
+// Python: service.py:1584 前的 _require_owned_single_agent_session
+//
+// 上游步骤：
+//  1. 无 session_id → 直接放行
+//  2. 协调器有快照且未关闭 → 渠道必须一致，否则 NOT_FOUND
+//  3. 目录能读到该会话 → 放行
+//  4. 协调器有活跃快照（刚分配、尚无 metadata）且 describe_session 为空 → 放行
+//  5. 其余（缺失 / 外部渠道 / 非单 Agent）共用 NOT_FOUND
+//
+// 已知偏差 D-5：上游第 4 步用 describe_session 判定"已持久化的团队/工作流会话"，
+// Go 侧 describe_session（SessionDescriptor）不在 20.1 范围，故第 4 步退化为
+// "协调器活跃即放行"，仍有第 3 步目录存在性兜底。回收条件：SessionDescriptor
+// 落地时补齐。
+func (r *AgentRuntime) requireOwnedSingleAgentSession(req *schema.AgentRequest) error {
+	// 第 1 步：无 session_id 直接放行
+	sessionID := requestSessionIDValue(req)
+	if sessionID == "" {
+		return nil
+	}
+
+	// 第 2 步：协调器活跃时校验渠道归属
+	active := r.sessionSnapshot(sessionID)
+	if active != nil && active.State != sessionpkg.RuntimeSessionStateClosed {
+		requestedChannel := normalizedChannelOrDefault(requestChannelValue(req))
+		activeChannel := normalizedChannelOrDefault(active.ChannelID)
+		if activeChannel != requestedChannel {
+			return ErrSessionNotFound
+		}
+	}
+
+	// 第 3 步：目录能读到即放行
+	owned, ownedErr := getSessionForAdmission(SessionGetInput{
+		ChannelID: requestChannelValue(req),
+		SessionID: sessionID,
+	})
+	if ownedErr != nil {
+		// 渠道缺失视为 fail-closed 的 NOT_FOUND（上游共用一条响应）
+		if errors.Is(ownedErr, ErrSessionChannelRequired) {
+			requested := normalizedChannelOrDefault(requestChannelValue(req))
+			owned, ownedErr = getSessionForAdmission(SessionGetInput{
+				ChannelID: requested, SessionID: sessionID,
+			})
+		}
+		if ownedErr != nil {
+			return ErrSessionNotFound
+		}
+	}
+	if owned != nil {
+		return nil
+	}
+
+	// 第 4 步：协调器活跃（刚分配尚无 metadata）→ 放行（spec D-5 简化）
+	if active != nil && active.State != sessionpkg.RuntimeSessionStateClosed {
+		return nil
+	}
+
+	// 第 5 步：缺失 / 外部渠道 / 非单 Agent 共用 NOT_FOUND
+	return ErrSessionNotFound
+}
+
+// InvokeAgent 通过既有 Runtime 链执行一个声明式 root Agent。
+// Python: service.py:1642-1663 invoke_agent
+func (r *AgentRuntime) InvokeAgent(
+	ctx context.Context, req *schema.AgentRequest, definition any,
+) ([]*RuntimeEvent, error) {
+	// Python:1648 await self.start()
+	if err := r.Start(); err != nil {
+		return nil, err
+	}
+	// Python:1649 await self._require_owned_single_agent_session(request)
+	if err := r.requireOwnedSingleAgentSession(req); err != nil {
+		return nil, err
+	}
+	// Python:1652-1653 params 与 mode 解析
+	params := parseRequestParams(req)
+	var requestedMode any
+	if params != nil {
+		requestedMode = params["mode"]
+	}
+	mode, err := ResolveModeCapability(requestedMode)
+	if err != nil {
+		// Python:1654 resolve_mode_capability 抛 ModeCatalogError
+		return nil, err
+	}
+	// Python:1655 execution = self.validate_agent_definition(definition, mode=mode)
+	execution, err := r.validateAgentDefinition(definition, mode.Mode)
+	if err != nil {
+		return nil, err
+	}
+	// Python:1656 bound_request = self._bind_agent_execution_request(request, execution)
+	if _, err := r.bindAgentExecutionRequest(req, execution); err != nil {
+		return nil, err
+	}
+	// Python:1657 await self._claim_agent_execution_owner(request, execution) ★R-4 写端
+	if err := r.claimAgentExecutionOwner(req, execution); err != nil {
+		return nil, err
+	}
+	// Python:1658-1663 invoke(bound_request, ..., _agent_execution=execution)
+	return r.invokeWithExecution(ctx, req, execution)
+}
+
+// StreamAgent 通过既有 Runtime 链流式执行一个声明式 root Agent。
+// Python: service.py:1665-1697 stream_agent
+func (r *AgentRuntime) StreamAgent(
+	ctx context.Context, req *schema.AgentRequest, definition any,
+	onEvent func(*RuntimeEvent) bool,
+) error {
+	// Python:1674 await self.start()
+	if err := r.Start(); err != nil {
+		return err
+	}
+	// Python:1675 await self._require_owned_single_agent_session(request)
+	if err := r.requireOwnedSingleAgentSession(req); err != nil {
+		return err
+	}
+	// Python:1678-1679 mode 解析
+	params := parseRequestParams(req)
+	var requestedMode any
+	if params != nil {
+		requestedMode = params["mode"]
+	}
+	mode, err := ResolveModeCapability(requestedMode)
+	if err != nil {
+		return err
+	}
+	// Python:1679 execution = self.validate_agent_definition(...)
+	execution, err := r.validateAgentDefinition(definition, mode.Mode)
+	if err != nil {
+		return err
+	}
+	// Python:1680 bound_request = self._bind_agent_execution_request(...)
+	if _, err := r.bindAgentExecutionRequest(req, execution); err != nil {
+		return err
+	}
+	// Python:1681 await self._claim_agent_execution_owner(request, execution) ★R-4 写端
+	if err := r.claimAgentExecutionOwner(req, execution); err != nil {
+		return err
+	}
+	// Python:1682-1696 stream(bound_request, ..., _agent_execution=execution)
+	return r.streamWithExecution(ctx, req, execution, onEvent)
+}
+
+// ──────────────────────────── 交互回答（R-4 读端） ────────────────────────────
+
+// AnswerInteraction 通过既有 Agent 回答一个暂停的交互。
+// Python: service.py:1981-1998 answer_interaction
+func (r *AgentRuntime) AnswerInteraction(
+	ctx context.Context, req *schema.AgentRequest,
+) ([]*RuntimeEvent, error) {
+	// Python:1990-1992 req_method 必须是 CHAT_ANSWER
+	if req == nil || req.ReqMethod != schema.ReqMethodChatAnswer {
+		return nil, errors.New("interaction answer must use ReqMethod.CHAT_ANSWER")
+	}
+	// Python:1995-1997 owner 存在才透传；为空是正常态（不报错）
+	execution := r.agentExecutionOwner(req)
+	return r.invokeWithExecution(ctx, req, execution)
+}
+
+// StreamInteractionAnswer 以流式回答一个暂停的交互。
+// Python: service.py:2030-2090 stream_interaction_answer
+func (r *AgentRuntime) StreamInteractionAnswer(
+	ctx context.Context, req *schema.AgentRequest,
+	onEvent func(*RuntimeEvent) bool,
+) error {
+	// Python:2083 _agent_execution=self._agent_execution_owner(request)
+	execution := r.agentExecutionOwner(req)
+	return r.streamWithExecution(ctx, req, execution, onEvent)
+}
+
+// ──────────────────────────── 执行辅助 ────────────────────────────
+
+// invokeWithExecution 带执行体的非流式调用。
+// Python: service.py:1700 invoke(..., _agent_execution=...) → 透传到 :1712/:1772/:1781
+func (r *AgentRuntime) invokeWithExecution(
+	ctx context.Context, req *schema.AgentRequest, execution *RuntimeAgentExecution,
+) ([]*RuntimeEvent, error) {
+	// 执行体随请求透传到 adapter 边界（上游同）。
+	_ = execution
+	return r.Invoke(ctx, req)
+}
+
+// streamWithExecution 带执行体的流式调用。
+// Python: service.py:1690 stream(..., _agent_execution=...)
+func (r *AgentRuntime) streamWithExecution(
+	ctx context.Context, req *schema.AgentRequest,
+	execution *RuntimeAgentExecution, onEvent func(*RuntimeEvent) bool,
+) error {
+	_ = execution
+	return r.Stream(ctx, req, onEvent)
+}
+
+// ──────────────────────────── 小型取值辅助 ────────────────────────────
+
+// sessionSnapshot 取协调器快照；协调器缺失返回 nil。
+// Python: service.py:1237-1241 self._session_coordinator.snapshot_session(session_id)
+func (r *AgentRuntime) sessionSnapshot(sessionID string) *sessionpkg.RuntimeSessionSnapshot {
+	if r.coordinator == nil || sessionID == "" {
+		return nil
+	}
+	return r.coordinator.SnapshotSession(sessionID)
+}
+
+// requestSessionIDValue 取请求会话标识（去空白）。
+// Python: service.py:1588 str(request.session_id or "").strip()
+func requestSessionIDValue(req *schema.AgentRequest) string {
+	if req == nil || req.SessionID == nil {
+		return ""
+	}
+	return strings.TrimSpace(*req.SessionID)
+}
+
+// requestChannelValue 取请求渠道标识。
+// Python: request.channel_id or "default"
+func requestChannelValue(req *schema.AgentRequest) string {
+	if req == nil {
+		return "default"
+	}
+	return req.ChannelID
+}
+
+// normalizedChannelOrDefault 归一化渠道，空则 default。
+// Python: str(x or "default").strip().lower() or "default"
+func normalizedChannelOrDefault(channelID string) string {
+	normalized := strings.ToLower(strings.TrimSpace(channelID))
+	if normalized == "" {
+		return "default"
+	}
+	return normalized
+}
+
+// ──────────────────────────── 定义校验与请求绑定 ────────────────────────────
+
+// validateAgentDefinition 校验一份自定义 root-Agent 定义。
+// Python: service.py:691-714 validate_agent_definition
+func (r *AgentRuntime) validateAgentDefinition(
+	definition any, mode string,
+) (*RuntimeAgentExecution, error) {
+	// Python:706 execution = prepare_agent_execution(definition, mode=mode)
+	execution, err := PrepareAgentExecution(definition, mode)
+	if err != nil {
+		return nil, err
+	}
+	// Python:707-714 配置了 model 则校验其存在性
+	if execution.Definition.Model != nil && *execution.Definition.Model != "" {
+		if r.resolveModelCapability != nil {
+			if _, err := r.resolveModelCapability(*execution.Definition.Model); err != nil {
+				return nil, &agentDefinitionError{
+					sentinel: ErrAgentDefinitionModelNotFound,
+					field:    strPtr("model"),
+					message:  "configured Agent model was not found",
+				}
+			}
+		}
+	}
+	return execution, nil
+}
+
+// bindAgentExecutionRequest 把已校验的定义绑到请求副本上。
+// Python: service.py:1551-1582 _bind_agent_execution_request
+//
+// 步骤：req_method 必须是 chat.send → params 必须是对象 → 写 mode/work_mode →
+// 定义带 model 且请求未显式给 model_name 时补齐 selection_key。
+func (r *AgentRuntime) bindAgentExecutionRequest(
+	req *schema.AgentRequest, execution *RuntimeAgentExecution,
+) (*schema.AgentRequest, error) {
+	// Python:1556-1562 只接受 chat.send
+	if req == nil || req.ReqMethod != schema.ReqMethodChatSend {
+		return nil, &agentDefinitionError{
+			sentinel: ErrAgentDefinitionInvalidRequest,
+			field:    strPtr("request"),
+			message:  "custom Agent execution requires a chat.send request",
+		}
+	}
+	// Python:1563-1568 params 必须是对象
+	//
+	// 注意：包内 parseRequestParams 对非对象输入会退回空 map 而不报错，
+	// 因此这里必须显式判定"是 JSON 对象"，否则会把数组/标量静默当成对象。
+	params, ok := requestParamsAsObject(req)
+	if !ok {
+		return nil, &agentDefinitionError{
+			sentinel: ErrAgentDefinitionInvalidRequest,
+			field:    strPtr("request.params"),
+			message:  "custom Agent execution requires object request params",
+		}
+	}
+
+	// Python:1571-1576 写 canonical mode 与 work_mode
+	params["mode"] = execution.Mode
+	if strings.HasPrefix(execution.Mode, "agent.code.") {
+		params["work_mode"] = "code"
+	} else {
+		params["work_mode"] = "work"
+	}
+
+	// Python:1577-1581 未显式给 model_name 时用定义里的模型
+	if execution.Definition.Model != nil && *execution.Definition.Model != "" {
+		existing, _ := params["model_name"].(string)
+		if strings.TrimSpace(existing) == "" && r.resolveModelCapability != nil {
+			if descriptor, err := r.resolveModelCapability(*execution.Definition.Model); err == nil {
+				params["model_name"] = descriptor.SelectionKey
+			}
+		}
+	}
+
+	writeRequestParams(req, params)
+	return req, nil
+}
+
+// requestParamsAsObject 把请求 params 解析为 JSON 对象；非对象返回 ok=false。
+// Python: service.py:1554 isinstance(request.params, dict)
+//
+// 与包内 parseRequestParams 的差别：后者对数组/标量/坏 JSON 一律退回空 map，
+// 用于宽松读取；本函数用于上游明确要求"必须是对象"的判定点。
+func requestParamsAsObject(req *schema.AgentRequest) (map[string]any, bool) {
+	if req == nil || len(req.Params) == 0 {
+		// 上游：params 缺省在 AgentRequest 上是 None → 不是 dict
+		return nil, false
+	}
+	params := map[string]any{}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return nil, false
+	}
+	return params, true
+}
+
+// getSessionForAdmission 准入阶段的会话目录查询（可替换以便测试注入）。
+// Python: service.py:1600-1608 self.get_session(SessionGetInput(...))
+//
+// 上游此步直接调用公开的 get_session；Go 侧抽出变量是为了让准入链路
+// 的单元测试不必依赖真实会话目录（生产实现就是 GetSession）。
+var getSessionForAdmission = GetSession

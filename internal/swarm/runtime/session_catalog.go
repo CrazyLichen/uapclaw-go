@@ -128,6 +128,12 @@ var (
 	// ErrSessionReadFailed 读取会话失败
 	// Python: session_catalog.py:235-237 / :288-290 code=READ_FAILED
 	ErrSessionReadFailed = errors.New("failed to read session")
+	// ErrSessionNotFound 会话不存在或非本渠道
+	// Python: service.py:1609 / :1612 code=NOT_FOUND
+	//
+	// 缺失、外部渠道与非单 Agent 会话故意共用同一条响应，避免 SDK 边界
+	// 泄露其它渠道的会话元数据。
+	ErrSessionNotFound = errors.New("session not found")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
