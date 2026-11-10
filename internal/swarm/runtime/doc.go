@@ -24,6 +24,10 @@
 //
 // run_permissions.go 把一次请求携带的临时工具权限选择叠加到已安装配置上，
 // 保留所有已装安全护栏；deny 不可放宽、三个桶同步、深拷贝、排序输出。
-// 请求入口的写入方（WithRunPermissions / WithRunContext 绑定）暂留
-// ⤵️ 9.90d-2 装配层。
+// 写入方现状：
+//   - `WithRunPermissions` 已由 `permission_interrupt_rail.go` 消费（9.90d-2 回填）
+//   - `WithRunContext` **尚无生产写入方**：Python 在
+//     `interface_deep.py`（请求入口）与 `channels/process_cli/machine.py`（CLI）
+//     两处绑定 `CURRENT_RUN_CONTEXT`，Go 侧对应入口尚未迁移（`service.go` 283 行
+//     vs Python 4000+ 行）。已登记 IMPLEMENTATION_PLAN 9.90e。
 package runtime

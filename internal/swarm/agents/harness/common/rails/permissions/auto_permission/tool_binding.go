@@ -21,7 +21,10 @@ import (
 // 返回 nil 表示工具不存在（Python 同样返回 None，不抛异常）。
 // 变量形式供测试注入，对齐 common/tools/send_file.go 的 SetXxxFunc 惯例。
 // Python: Runner.resource_mgr.get_tool(tool_id, session=None)
-var resolveToolByID = func(id string) tool.Tool {
+var resolveToolByID = defaultResolveToolByID
+
+// defaultResolveToolByID 默认的工具查找实现（走全局 ResourceMgr）。
+var defaultResolveToolByID = func(id string) tool.Tool {
 	tools, err := runner.GetResourceMgr().GetTool([]string{id})
 	if err != nil || len(tools) == 0 {
 		return nil
@@ -51,6 +54,14 @@ func MatchesBoundMethod(receiver any, method any, expectedOwner any, expectedFun
 		return false
 	}
 	return funcPtrEqual(method, expectedFunc)
+}
+
+// ResetResolveToolByIDFunc 恢复工具查找的默认实现（测试清理用）。
+//
+// 全局变量在测试间会互相污染：某个用例注入假实现后不清理，后续用例
+// 会走假实现导致 ResolveToolBinding 返回 nil。
+func ResetResolveToolByIDFunc() {
+	resolveToolByID = defaultResolveToolByID
 }
 
 // SetResolveToolByIDFunc 替换工具查找实现，仅供测试注入。

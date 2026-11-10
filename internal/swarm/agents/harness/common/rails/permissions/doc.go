@@ -92,7 +92,8 @@
 //	├── root_permission_queue.go           # RootPermissionQueue 串行化队列状态机（active/pending/resuming + quarantine）
 //	├── root_permission_queue_rail.go      # RootPermissionQueueRail 身份绑定与闩锁 + RootPermissionCompletionRail
 //	├── root_ask_user.go                   # 用户反问续接：冻结快照 / 还原澄清 / 追加意图窗口
-//	├── root_context_rail.go               # RootContextRail 上下文绑定 rail（随 9.90c 后续提交）
+//	├── root_context_rail.go               # RootContextRail 上下文绑定 rail
+//	├── permission_rail_group.go           # 权限 rail 组装配配方 + validate/verify
 //	└── auto_permission/                   # 自动权限审查层共享契约 + 身份原语（9.90a）
 //	    ├── models.go                     # ToolInvocation / PermissionHandlingResult / PermissionInterruptRequest + 11 常量
 //	    └── tool_binding.go               # MatchesBoundMethod / ResolveToolBinding——实现身份背书
