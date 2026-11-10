@@ -22,7 +22,7 @@ func ManagerFor(agent any) *Manager {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// 说明：历史上此处还有 Deliver / DeliverText / ClearDeliveredSection 三个助手，
-// 它们把「解析会话 + 投递」揉在一个 bool 返回值里，投递失败静默丢弃且各 rail 各写一套。
-// 2026-11-05 起统一由 ContextWriter（attachment_writer.go，对齐上游
-// PromptAttachmentContextWriter）承担，三个助手已删除，不得再引入同类包装。
+// 说明：历史上此处还有三个「bool 返回值」式的投递助手，把解析会话与投递揉在一起，
+// 投递失败静默丢弃且各 rail 各写一套。2026-11-05 起统一由 ContextWriter
+// （attachment_writer.go，对齐上游 PromptAttachmentContextWriter）承担，
+// 旧助手已删除，不得再引入同类包装。
