@@ -325,7 +325,6 @@ func ReviewerPathLocation(rawPath, workspaceRoot, platformTrustedRoot string) (*
 			merged[i] = "[redacted]"
 		}
 	}
-	safeTarget = strings.Join(merged, "/")
 
 	// 第四步：依次尝试工作区根、平台信任根，算出相对路径并记下用的是哪个根；
 	// 都不命中时退回卷根（Windows 是盘符，类 Unix 是 /）。

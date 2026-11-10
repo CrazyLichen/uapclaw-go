@@ -242,7 +242,11 @@ func (r *AutoPermissionRail) raiseRuntimeInterrupt(
 	if request == nil {
 		return &callback.AbortError{Reason: "permission_interrupt_request_invalid"}
 	}
-	permissions.MarkPermissionInterruptRequest(invocation.Ctx, request)
+	// 标记失败说明回调上下文与本次中断不匹配，此时抛中断只会让上层误判，直接报错返回。
+	// Python 侧该标记函数异常同样是往外抛，语义一致。
+	if err := permissions.MarkPermissionInterruptRequest(invocation.Ctx, request); err != nil {
+		return &callback.AbortError{Reason: err.Error(), Cause: err}
+	}
 	toolCall, _ := invocation.ToolCall.(*llmschema.ToolCall)
 	return &callback.AbortError{
 		Reason: "Tool execution interrupted: " + invocation.ToolName,

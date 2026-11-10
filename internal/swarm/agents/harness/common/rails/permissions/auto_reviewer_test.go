@@ -576,7 +576,7 @@ func TestCoreShellView(t *testing.T) {
 		t.Errorf("empty -> %v %v", ops, progs)
 	}
 	// 简单命令
-	ops, progs = coreShellView("ls -la")
+	_, progs = coreShellView("ls -la")
 	if len(progs) != 1 || progs[0] != "ls" {
 		t.Errorf("progs = %v", progs)
 	}

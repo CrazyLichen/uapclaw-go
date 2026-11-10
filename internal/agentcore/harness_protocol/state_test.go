@@ -30,6 +30,6 @@ func TestHarnessState_被团队层复用为同一类型(t *testing.T) {
 	// 本用例的守护作用在于：若团队层重新引入本地 HarnessState 类型，
 	// 全仓裸符号 grep 会再次命中，由锚点检查拦截。
 	// 此处做编译期等价断言：本包导出的常量可被直接赋给本包类型。
-	var s HarnessState = HarnessStateIdle
+	s := HarnessStateIdle
 	assert.Equal(t, "idle", string(s))
 }

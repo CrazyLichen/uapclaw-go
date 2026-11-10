@@ -173,14 +173,16 @@ func NormalizeAutoPermissionOptions(rawOptions any) map[string]any {
 		case int:
 			normalized[key] = positiveInt(rawValue, typed)
 		default:
-			if key == "reviewer_output_format" {
+			// 默认值既不是布尔也不是整数的两个键有专门归一动作，其余原样保留。
+			switch key {
+			case "reviewer_output_format":
 				normalized[key] = NormalizeReviewerOutputFormat(rawValue)
-			} else if key == "bounded_write_excluded_paths" {
+			case "bounded_write_excluded_paths":
 				normalized[key] = MergeProtectedWritePaths(
 					anyToStringSlice(defaultValue),
 					normalizeStringTuple(rawValue, nil),
 				)
-			} else {
+			default:
 				normalized[key] = rawValue
 			}
 		}

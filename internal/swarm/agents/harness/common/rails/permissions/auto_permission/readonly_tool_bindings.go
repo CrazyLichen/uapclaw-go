@@ -177,7 +177,7 @@ func deepAgentBridgeMatches(
 // Go 侧无导出访问器，用反射读非导出字段（偏差 V-17，见 spec）。
 func boundSessionIDOf(ownerAgent any) string {
 	value := reflect.ValueOf(ownerAgent)
-	if value.Kind() == reflect.Ptr {
+	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
 	if value.Kind() != reflect.Struct {

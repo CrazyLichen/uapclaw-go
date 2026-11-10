@@ -38,7 +38,7 @@ func TestToolRegistration_ProgressiveRail真实装配(t *testing.T) {
 		observed := ObservedToolTypes()
 		t.Fatalf("tool_search 类型应已自动登记，实际观察表: %v", observed)
 	}
-	if got.Kind() != reflect.Ptr {
+	if got.Kind() != reflect.Pointer {
 		t.Errorf("应为指针类型，实际 %v", got.Kind())
 	}
 }

@@ -340,13 +340,13 @@ func minimalPDFWithText(pageCount int, textForPage func(int) string) []byte {
 		buf.WriteString(obj)
 	}
 	xref := buf.Len()
-	buf.WriteString(fmt.Sprintf("xref\n0 %d\n", len(objects)+1))
+	fmt.Fprintf(&buf, "xref\n0 %d\n", len(objects)+1)
 	buf.WriteString("0000000000 65535 f \n")
 	for i := 1; i <= len(objects); i++ {
-		buf.WriteString(fmt.Sprintf("%010d 00000 n \n", offsets[i]))
+		fmt.Fprintf(&buf, "%010d 00000 n \n", offsets[i])
 	}
-	buf.WriteString(fmt.Sprintf("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n",
-		len(objects)+1, xref))
+	fmt.Fprintf(&buf, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n",
+		len(objects)+1, xref)
 	return buf.Bytes()
 }
 

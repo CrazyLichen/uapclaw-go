@@ -197,9 +197,8 @@ func TestVerify_数量不符(t *testing.T) {
 
 // TestRootPermissionQueue_标记接口 验证队列实现窄接口。
 func TestRootPermissionQueue_标记接口(t *testing.T) {
-	queue := NewRootPermissionQueue(nil)
-	var accessor interface{ IsRootPermissionQueue() } = queue
-	if accessor == nil {
+	var accessor interface{} = NewRootPermissionQueue(nil)
+	if _, ok := accessor.(interface{ IsRootPermissionQueue() }); !ok {
 		t.Error("queue should implement the marker")
 	}
 }

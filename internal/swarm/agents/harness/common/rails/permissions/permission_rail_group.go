@@ -234,7 +234,7 @@ func nilIfNilRail(rail agentinterfaces.AgentRail) agentinterfaces.AgentRail {
 		return nil
 	}
 	value := reflect.ValueOf(rail)
-	if value.Kind() == reflect.Ptr && value.IsNil() {
+	if value.Kind() == reflect.Pointer && value.IsNil() {
 		return nil
 	}
 	return rail
