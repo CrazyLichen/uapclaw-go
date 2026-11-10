@@ -113,6 +113,8 @@ func (d *SQLMemberDao) DeleteUnstartedMember(ctx context.Context, memberName, te
 // UpdateMemberStatus 更新成员状态（含 FSM 校验）。
 // Python: update_member_status() → bool
 
+// UpdateMemberStatus SQL 实现：先按主键取出成员，校验状态流转后再写回。
+// 成员不存在或流转非法时返回 false。
 func (d *SQLMemberDao) UpdateMemberStatus(ctx context.Context, memberName, teamName, status string) bool {
 	// Python: 先查再改 + is_valid_transition 校验
 	var member TeamMember

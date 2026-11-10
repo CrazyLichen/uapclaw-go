@@ -242,6 +242,7 @@ func (c *TracedModelClient) BuildKVCacheAffinityInvokeKwargs(
 	return c.inner.BuildKVCacheAffinityInvokeKwargs(sess, sessionID, parentSessionID, turnNum)
 }
 
+// SupportsKVCacheRelease 委托底层客户端，表示其是否支持主动释放 KV 缓存。
 func (c *TracedModelClient) SupportsKVCacheRelease() bool {
 	return c.inner.SupportsKVCacheRelease()
 }

@@ -613,6 +613,8 @@ func (c *CodeAdapter) PlanStateAccessor() swruntime.PlanStateAccessor {
 	return c.deep.PlanStateAccessor()
 }
 
+// PendingInteractions 委托给内层 DeepAdapter，返回会话里待处理的交互项。
+// 内层缺失（未装配）时返回空结果，不报错。
 func (c *CodeAdapter) PendingInteractions(sessionID string) ([]map[string]any, error) {
 	if c.deep == nil {
 		return nil, nil

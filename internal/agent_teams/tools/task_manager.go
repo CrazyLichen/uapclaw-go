@@ -197,6 +197,10 @@ func WithTaskAssignee(assignee string) TaskAddOption {
 	return func(c *taskAddConfig) { c.assignee = &assignee }
 }
 
+// WithDependencies 指定新任务依赖的任务标识列表。
+//
+// 有依赖的任务创建后进入 BLOCKED，等上游任务全部完成才转 PENDING。
+// Python: NewTaskSpec.dependencies（add_graph 时一并写入）
 func WithDependencies(deps []string) TaskAddOption {
 	return func(c *taskAddConfig) {
 		c.dependencies = deps

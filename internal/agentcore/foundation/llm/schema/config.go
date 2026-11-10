@@ -445,6 +445,7 @@ func NormalizeModelClientConfig(config *ModelClientConfig) *ModelClientConfig {
 	return out
 }
 
+// Validate 就地归一配置后校验必填项，返回第一个不合法的原因。
 func (c *ModelClientConfig) Validate() error {
 	// 归一 provider / auth_mode / api_base（与 NormalizeModelClientConfig 共用）
 	if err := c.normalize(); err != nil {

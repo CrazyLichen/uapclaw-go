@@ -154,6 +154,8 @@ func WithBackendOnMemberStarted(cb func(ctx context.Context, memberName string) 
 	return func(cfg *setupTeamBackendConfig) { cfg.onMemberStarted = cb }
 }
 
+// WithBackendDB 设置团队后端使用的任务/成员存储。
+// 不设置时由 setup_team_backend 自行创建默认存储。
 func WithBackendDB(db database.TeamDatabase) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.db = db }
 }
