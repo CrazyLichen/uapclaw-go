@@ -4,8 +4,10 @@ package harness_test
 
 import (
 	"context"
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/suite"
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -34,4 +36,13 @@ func (s *NativeHarnessSuite) TestAsyncToolCompletion回灌新一轮() {
 	s.Require().Eventually(func() bool {
 		return s.MockLLM.InvokeCallCount() > before
 	}, 10*time.Second, 50*time.Millisecond, "完成回灌应触发新一轮模型调用")
+}
+
+// TestNativeHarnessSuite 套件入口。
+//
+// 本目录所有用例都挂在 NativeHarnessSuite 上，由这个入口统一注册；
+// 入口放在本文件而不放 native_harness_test.go，是静态审计「每个集成测试文件
+// 必须自带 suite.Run 调用」的硬性要求。
+func TestNativeHarnessSuite(t *testing.T) {
+	suite.Run(t, new(NativeHarnessSuite))
 }

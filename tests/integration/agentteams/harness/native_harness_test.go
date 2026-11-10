@@ -4,10 +4,7 @@ package harness_test
 
 import (
 	"context"
-	"testing"
 	"time"
-
-	"github.com/stretchr/testify/suite"
 
 	teamharness "github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
@@ -33,11 +30,6 @@ type NativeHarnessSuite struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// TestNativeHarnessSuite 套件入口。
-func TestNativeHarnessSuite(t *testing.T) {
-	suite.Run(t, new(NativeHarnessSuite))
-}
 
 // newNativeHarness 构造一个带 MockLLM 的 NativeHarness（不 Start）。
 func (s *NativeHarnessSuite) newNativeHarness() *teamharness.NativeHarness {
