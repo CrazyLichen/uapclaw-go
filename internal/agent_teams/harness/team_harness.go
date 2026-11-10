@@ -390,9 +390,10 @@ func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
 // 步骤对齐上游 9 步。其中「重建 native」在本方法内实现：上一个 run cycle
 // 的 native 在 Stop 后处于 TERMINATED，必须按保存的 spec 重建，
 // 否则新 cycle 的 Send/Resume 会落到没有消费者的队列上。
-// 其余三步仍是明确登记的回填点：
-//   - _remount_dynamic_tools / background_task_controller → 25.1d / 25.6
-//   - kv_cache 会话生命周期钩子 → 25.6
+// 其余回填点：
+//   - _remount_dynamic_tools：随 native 重建由 EnsureInitialized 按 spec 自动重挂（25.1d 已覆盖）
+//   - background_task_controller：⤵️ 25.12（随 swarmflow 控制面）
+//   - kv_cache 会话生命周期钩子：⤵️ 25.6
 func (h *TeamHarness) Start(ctx context.Context, teamSession any) error {
 	// 步骤 1：native 缺失或已终止则重建（对齐上游 start 首步）
 	if h.native == nil {

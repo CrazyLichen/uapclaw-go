@@ -337,6 +337,9 @@ func (t *AsyncTool) MapResult(output map[string]any) string {
 // Parent 返回宿主（子类需要自定义 formatter 时使用）。
 func (t *AsyncTool) Parent() tools.AsyncToolHost { return t.parent }
 
+// Language 返回模型可见文案语言（子类自定义文案时使用）。
+func (t *AsyncTool) Language() atschema.Language { return t.language }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getRecord 返回内部活指针（仅 runtime 内部写路径使用）。

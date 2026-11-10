@@ -64,12 +64,13 @@ func TestAsyncTool_Stream不支持(t *testing.T) {
 	require.ErrorIs(t, err, tool.ErrStreamNotSupported)
 }
 
-// TestAsyncTool_Parent 验证 Parent 返回宿主。
+// TestAsyncTool_Parent 验证 Parent / Language 访问器。
 func TestAsyncTool_Parent(t *testing.T) {
 	host := &fakeHost{}
 	base := NewAsyncTool(tool.NewToolCardWithID("team.demo", "demo", "d", nil, nil),
 		host, schema.LanguageCN, &fakeWorker{})
 	assert.Same(t, host, base.Parent())
+	assert.Equal(t, schema.LanguageCN, base.Language())
 }
 
 // TestAsyncTool_Invoke启动失败 验证 launch 失败时返回 success=false 且 MapResult 透传错误。
