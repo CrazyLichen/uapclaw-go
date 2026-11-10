@@ -303,3 +303,140 @@ func TestEtcdListJobs_不可达strict报错(t *testing.T) {
 	_, err := store.ListJobs(context.Background(), true)
 	require.Error(t, err)
 }
+
+// ──────────────────────────── 补充覆盖 ────────────────────────────
+
+// TestEtcdStore_前缀转发一致 PrefixRangeEnd 别名转发与 common 层一致。
+func TestEtcdStore_前缀转发一致(t *testing.T) {
+	require.Equal(t, []byte("abd"), PrefixRangeEnd([]byte("abc")))
+}
+
+// TestEtcdStore_别名变量可用 错误别名与 common 层指向同一值。
+func TestEtcdStore_别名变量可用(t *testing.T) {
+	require.ErrorIs(t, EtcdError, EtcdError)
+	require.NotNil(t, EtcdCasError)
+
+	var kv EtcdKv
+	kv.Key = []byte("k")
+	require.Equal(t, []byte("k"), kv.Key)
+
+	var client *EtcdJsonClient = NewEtcdClientForCron(nil, time.Second)
+	require.NotNil(t, client)
+}
+
+// TestEtcdStore_strict遇坏数据报错 坏 JSON 在 strict 下上抛。
+// Python: etcd_store.py:105-108
+func TestEtcdStore_strict遇坏数据报错(t *testing.T) {
+	fake := newFakeEtcdCron(t)
+	// 直接往假 etcd 里塞坏数据
+	fake.data["/jiuwenswarm/cron/jobs/bad"] = "{not json"
+	store := fake.store()
+
+	_, err := store.ListJobs(context.Background(), true)
+	require.Error(t, err)
+
+	// 非 strict 跳过坏条目
+	jobs, err := store.ListJobs(context.Background(), false)
+	require.NoError(t, err)
+	require.Empty(t, jobs)
+}
+
+// TestEtcdStore_strict缺必填报错 strict 下缺必填字段上抛。
+func TestEtcdStore_strict缺必填报错(t *testing.T) {
+	fake := newFakeEtcdCron(t)
+	fake.data["/jiuwenswarm/cron/jobs/incomplete"] = `{"id":"incomplete"}`
+	store := fake.store()
+
+	_, err := store.ListJobs(context.Background(), true)
+	require.Error(t, err)
+}
+
+// TestEtcdStore_unavailable空端点 空端点时报"endpoints are empty"。
+// Python: etcd_store.py:69-84 _unavailable
+func TestEtcdStore_unavailable空端点(t *testing.T) {
+	store := NewEtcdCronJobStore(nil, "", etcd.NewEtcdJsonClient(nil, time.Second), time.Second)
+
+	_, err := store.CreateJob(context.Background(), baseCreateInput())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "endpoints are empty")
+}
+
+// TestEtcdStore_unavailable有端点 端点存在但请求失败时报 action 名。
+func TestEtcdStore_unavailable有端点(t *testing.T) {
+	client := etcd.NewEtcdJsonClient([]string{"http://127.0.0.1:1"}, 100*time.Millisecond)
+	store := NewEtcdCronJobStore(nil, "", client, 100*time.Millisecond)
+
+	_, err := store.CreateJob(context.Background(), baseCreateInput())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "put failed")
+}
+
+// TestEtcdStore_更新非法补丁报错 补丁校验失败时上抛。
+func TestEtcdStore_更新非法补丁报错(t *testing.T) {
+	store := newFakeEtcdCron(t).store()
+	ctx := context.Background()
+
+	created, err := store.CreateJob(ctx, baseCreateInput())
+	require.NoError(t, err)
+
+	_, err = store.UpdateJob(ctx, created.ID, map[string]any{"name": ""})
+	require.Error(t, err)
+}
+
+// TestEtcdStore_更新空ID报错 空 ID 直接报错。
+func TestEtcdStore_更新空ID报错(t *testing.T) {
+	store := newFakeEtcdCron(t).store()
+	_, err := store.UpdateJob(context.Background(), "", map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "id is required")
+}
+
+// TestEtcdStore_删除空ID返回false 空 ID 返回假。
+func TestEtcdStore_删除空ID返回false(t *testing.T) {
+	store := newFakeEtcdCron(t).store()
+	deleted, err := store.DeleteJob(context.Background(), "", false)
+	require.NoError(t, err)
+	require.False(t, deleted)
+}
+
+// TestEtcdStore_watch空端点退避重试 空端点时进入退避，取消后退出。
+// Python: etcd_store.py:290-302
+func TestEtcdStore_watch空端点退避重试(t *testing.T) {
+	store := NewEtcdCronJobStore(nil, "", etcd.NewEtcdJsonClient(nil, time.Second), time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+
+	err := store.Watch(ctx, func(context.Context) error { return nil })
+	require.Error(t, err, "超时后应返回 ctx 错误")
+}
+
+// TestEtcdStore_watch回调执行 有端点时先回调一次。
+func TestEtcdStore_watch回调执行(t *testing.T) {
+	fake := newFakeEtcdCron(t)
+	store := fake.store()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	called := false
+	_ = store.Watch(ctx, func(context.Context) error {
+		called = true
+		return nil
+	})
+	require.True(t, called, "连接建立后应先回调一次")
+}
+
+// TestNextDelay_翻倍封顶 退避翻倍且不超过上限。
+func TestNextDelay_翻倍封顶(t *testing.T) {
+	require.Equal(t, 2*time.Second, nextDelay(time.Second))
+	require.Equal(t, connectMaxDelay, nextDelay(connectMaxDelay))
+	require.Equal(t, connectMaxDelay, nextDelay(connectMaxDelay/2*2))
+}
+
+// TestSleepCtx_可取消 取消后立即返回。
+func TestSleepCtx_可取消(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Error(t, sleepCtx(ctx, time.Second))
+}

@@ -459,6 +459,9 @@ func sortJobsByTimes(jobs []*CronJob) {
 
 // jobSortTime 取排序用时间（updated_at 优先，退到 created_at）。
 func jobSortTime(job *CronJob) float64 {
+	if job == nil {
+		return 0
+	}
 	if job.UpdatedAt != nil {
 		return *job.UpdatedAt
 	}
