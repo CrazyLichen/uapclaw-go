@@ -111,6 +111,12 @@ func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
 // Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
 func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {
 	req = NormalizeRequest(req)
+	// 会话补充输入的准入段（同 Stream）。
+	if r.isSessionInputRequest(req) {
+		if err := r.validateSessionInputRequest(req); err != nil {
+			return nil, err
+		}
+	}
 	_, subMode, agent, err := r.prepareTurn(ctx, req)
 	if err != nil {
 		return nil, err
@@ -147,6 +153,14 @@ func (r *AgentRuntime) Stream(
 	onEvent func(*RuntimeEvent) bool,
 ) error {
 	req = NormalizeRequest(req)
+	// 会话补充输入的准入段（Python: service.py:2232-2249）。
+	// 必须在 prepareTurn 之前：跨会话消息在 plan/goal 活跃时要被拒收排队，
+	// 不能先建 agent 再拒。
+	if r.isSessionInputRequest(req) {
+		if err := r.validateSessionInputRequest(req); err != nil {
+			return err
+		}
+	}
 	_, subMode, agent, err := r.prepareTurn(ctx, req)
 	if err != nil {
 		return err
@@ -198,6 +212,111 @@ func (r *AgentRuntime) prepareTurn(
 	// command.goal get 不得兜底新建 session metadata（否则一次状态查询就凭空写出
 	// metadata.json）。
 	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID, !isReadonlyGoalGetRequest(req))
+}
+
+// isSessionInputRequest 是否为会话补充输入请求。
+// Python: service.py:3852 _is_session_input_request
+//
+// 三个条件缺一不可：chat 轮方法、params 里能解析出 input_mode（或遗留别名
+// runtime_mode）、且不是 interrupt 恢复载荷。
+func (r *AgentRuntime) isSessionInputRequest(req *schema.AgentRequest) bool {
+	if req == nil || !isChatTurnMethod(req.ReqMethod) {
+		return false
+	}
+	params := parseRequestParams(req)
+	return ResolveSessionInputMode(params) != nil && !IsInterruptResumeRequest(params)
+}
+
+// teamSessionMessageID 跨会话消息的 message_id（非 dict 或缺 id 返回空串）。
+// Python: service.py:3938 _team_session_message_id
+func teamSessionMessageID(params map[string]any) string {
+	message, ok := params[sessionMessageInternalKey].(map[string]any)
+	if !ok {
+		return ""
+	}
+	id, _ := message["message_id"].(string)
+	return strings.TrimSpace(id)
+}
+
+// sessionMessageRequiresQueue 跨会话消息是否必须排队。
+// Python: service.py:513-518 session_message_requires_queue
+//
+// plan 活跃或 goal 活跃时都不得打断当前工作：goal 是会话级持久目标，
+// 被跨会话消息打断会让生产者死掉、该会话后端冻结。
+func (r *AgentRuntime) sessionMessageRequiresQueue(sessionID string) bool {
+	if r.planController != nil {
+		if _, ok := r.planController.ActiveSessions()[sessionID]; ok {
+			return true
+		}
+	}
+	return r.sessionMessageGoalBusy(sessionID)
+}
+
+// sessionMessageGoalBusy 会话是否持有活跃 goal。
+// Python: service.py:532-549 _session_message_goal_busy
+//
+// [Go 偏差] 上游前半段遍历 session_coordinator 的执行快照，筛
+// GOAL_STREAM/GOAL_ATTACH 且未终止的执行；Go 侧没有该快照结构，只保留
+// manager.HasActiveGoal 这一路——它按 adapter 的 GoalRecord 判定，已覆盖
+// 「goal 记录仍 ACTIVE」的情形。回收条件：session coordinator 落地后补齐。
+func (r *AgentRuntime) sessionMessageGoalBusy(sessionID string) bool {
+	checker, ok := r.manager.(interface {
+		HasActiveGoal(channelID, sessionID string) bool
+	})
+	if !ok {
+		return false
+	}
+	return checker.HasActiveGoal("", sessionID)
+}
+
+// requireCrossSessionInputAdmission 跨会话补充输入的准入校验。
+// Python: service.py:520-530 _require_cross_session_input_admission
+func (r *AgentRuntime) requireCrossSessionInputAdmission(req *schema.AgentRequest) error {
+	params := parseRequestParams(req)
+	if !isSessionMessageParams(params) {
+		return nil
+	}
+	mode, _ := params["mode"].(string)
+	if schema.IsPlanMode(mode) || r.sessionMessageRequiresQueue(requestSessionID(req)) {
+		return &SessionInputQueueRequiredError{
+			Message: "cross-session messages must queue while a plan or goal is active",
+		}
+	}
+	return nil
+}
+
+// validateSessionInputRequest 会话补充输入的准入段。
+// Python: service.py:2232-2249（_stream_under_tenant 的 session input 分支）
+//
+// [Go 偏差] 上游还有两项此处未复刻：
+//   - background 投递必须走前台（Go 的 Stream/Invoke 无 background 形参）
+//   - 会话归属与关闭态校验（Go 无 session_coordinator 快照）
+//
+// 回收条件同上：session coordinator 落地后补齐。
+func (r *AgentRuntime) validateSessionInputRequest(req *schema.AgentRequest) error {
+	params := parseRequestParams(req)
+	// 团队会话消息走团队链路，不做单 agent 会话输入校验
+	if requestTargetsTeam(req, params) && teamSessionMessageID(params) != "" {
+		return nil
+	}
+	if err := ValidateSessionInput(params); err != nil {
+		return err
+	}
+	if err := r.requireCrossSessionInputAdmission(req); err != nil {
+		return err
+	}
+	if requestSessionID(req) == "" || !isSingleAgentSessionMode(params) {
+		return errors.New("session input requires a supported single-agent Session")
+	}
+	return nil
+}
+
+// requestSessionID 取请求的会话标识（空串表示未指定）。
+func requestSessionID(req *schema.AgentRequest) string {
+	if req == nil || req.SessionID == nil {
+		return ""
+	}
+	return strings.TrimSpace(*req.SessionID)
 }
 
 // isReadonlyGoalGetRequest 是否为只读的持续目标状态查询。
