@@ -215,17 +215,12 @@ func TestIsAllowOnceConfirmation_对象形态(t *testing.T) {
 	}) {
 		t.Error("AutoConfirm response should not be allow-once")
 	}
-	// PersistScope=session → 排除
-	if IsAllowOnceConfirmation(hsecurity.PermissionConfirmResponse{
-		Approved: true, PersistScope: persistScopeSession,
+	// PersistScope 不参与判定（Python 的 PermissionConfirmResponse 无
+	// persist_allow 属性，getattr 恒取默认 False）→ 仍算 allow-once
+	if !IsAllowOnceConfirmation(hsecurity.PermissionConfirmResponse{
+		Approved: true, PersistScope: "session",
 	}) {
-		t.Error("session persist should not be allow-once")
-	}
-	// PersistScope=permanent → 排除
-	if IsAllowOnceConfirmation(hsecurity.PermissionConfirmResponse{
-		Approved: true, PersistScope: persistScopePermanent,
-	}) {
-		t.Error("permanent persist should not be allow-once")
+		t.Error("PersistScope should not affect allow-once（对齐 Python）")
 	}
 }
 
@@ -254,29 +249,6 @@ func TestIsRejectionConfirmation(t *testing.T) {
 }
 
 // ──────────────────────────── 辅助 ────────────────────────────
-
-// TestHasPersistIntent 验证持久化意图判定。
-func TestHasPersistIntent(t *testing.T) {
-	cases := []struct {
-		name     string
-		response *hsecurity.PermissionConfirmResponse
-		want     bool
-	}{
-		{"nil", nil, false},
-		{"无意图", &hsecurity.PermissionConfirmResponse{}, false},
-		{"session", &hsecurity.PermissionConfirmResponse{PersistScope: persistScopeSession}, true},
-		{"permanent", &hsecurity.PermissionConfirmResponse{PersistScope: persistScopePermanent}, true},
-		{"autoConfirm", &hsecurity.PermissionConfirmResponse{AutoConfirm: true}, true},
-		{"未知scope", &hsecurity.PermissionConfirmResponse{PersistScope: "other"}, false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := hasPersistIntent(c.response); got != c.want {
-				t.Errorf("got %v, want %v", got, c.want)
-			}
-		})
-	}
-}
 
 // TestIsStrictTrue 验证严格 true 判定。
 func TestIsStrictTrue(t *testing.T) {

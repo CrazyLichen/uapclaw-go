@@ -8,18 +8,18 @@
 //   - 按状态决定人工提示文案（manual_reason_code / user_review_hint）
 //   - 中英双语展示文案
 //
-// ## 偏差 V-10：显示语言读取方式
+// ## 显示语言读取：与 Python 一致
 //
-// Python 用 `get_config()` 全局单例读 `preferred_language`；Go 的 config 包
-// 只有 `New(path)`、无全局单例。改为包级变量 + `SetReviewerDisplayLanguage`
-// 注入点（装配期接线），默认 "zh"（等价 Python 的 except 分支回落）。
+// Python 用 `get_config().get("preferred_language")`；Go 侧无全局单例，
+// 但可用 `configutil.New("").Load()` 每次加载配置——与同仓库
+// `team_manager_spec.go` 的 `configPreferredLanguage` 同一做法。
 
 package auto_permission
 
 import (
 	"strings"
-	"sync"
 
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
@@ -52,13 +52,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// reviewerDisplayLanguage 审查器展示语言（"zh" / "en"）。
-	//
-	// Python: _configured_reviewer_display_language() 读 get_config()
-	// Go 侧无全局 config 单例，由 SetReviewerDisplayLanguage 注入。
-	reviewerDisplayLanguageMu sync.RWMutex
-	reviewerDisplayLanguage   = "zh"
-
 	// manualStatuses 需要人工介入的状态集合。
 	//
 	// Python: _MANUAL_STATUSES
@@ -179,29 +172,38 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// SetReviewerDisplayLanguage 注入审查器展示语言（"en" 或其余→中文）。
-//
-// 对应 Python 从 get_config() 读 preferred_language；Go 侧无全局 config
-// 单例，改由装配期注入。
-func SetReviewerDisplayLanguage(language string) {
-	reviewerDisplayLanguageMu.Lock()
-	defer reviewerDisplayLanguageMu.Unlock()
-	if strings.ToLower(strings.TrimSpace(language)) == "en" {
-		reviewerDisplayLanguage = "en"
-		return
-	}
-	reviewerDisplayLanguage = "zh"
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// configuredReviewerDisplayLanguage 返回当前展示语言。
+// configuredReviewerDisplayLanguage 读取配置里的展示语言（默认 "zh"）。
 //
 // Python: _configured_reviewer_display_language()
+//
+//	try:
+//	    config = get_config()
+//	    if isinstance(config, Mapping):
+//	        return "en" if str(config.get("preferred_language") or "").strip().lower() == "en" else "zh"
+//	except Exception:
+//	    return "zh"
+//	return "zh"
+//
+// Go 侧无全局 config 单例，改为每次加载配置文件——与同仓库
+// `team_manager_spec.go` 的 configPreferredLanguage 同一做法。
+// 任一环节失败一律回落 "zh"（对齐 Python 的 except 分支）。
 func configuredReviewerDisplayLanguage() string {
-	reviewerDisplayLanguageMu.RLock()
-	defer reviewerDisplayLanguageMu.RUnlock()
-	return reviewerDisplayLanguage
+	loaded, err := configutil.New("", configutil.WithNormalize(configutil.NormalizeConfig))
+	if err != nil {
+		return "zh"
+	}
+	cfgMap, err := loaded.Load()
+	if err != nil {
+		return "zh"
+	}
+	if language, ok := cfgMap["preferred_language"].(string); ok {
+		if strings.ToLower(strings.TrimSpace(language)) == "en" {
+			return "en"
+		}
+	}
+	return "zh"
 }
 
 // localized 从双语对里取对应语言文案。

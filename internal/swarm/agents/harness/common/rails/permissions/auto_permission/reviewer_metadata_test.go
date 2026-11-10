@@ -23,29 +23,6 @@ func metaFacts() permissions.ToolDecisionFacts {
 
 // ──────────────────────────── 语言注入 ────────────────────────────
 
-// TestSetReviewerDisplayLanguage 验证语言注入与归一。
-func TestSetReviewerDisplayLanguage(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
-
-	SetReviewerDisplayLanguage("en")
-	if got := configuredReviewerDisplayLanguage(); got != "en" {
-		t.Errorf("got %q", got)
-	}
-	SetReviewerDisplayLanguage("EN")
-	if got := configuredReviewerDisplayLanguage(); got != "en" {
-		t.Errorf("uppercase EN -> %q", got)
-	}
-	SetReviewerDisplayLanguage("zh")
-	if got := configuredReviewerDisplayLanguage(); got != "zh" {
-		t.Errorf("got %q", got)
-	}
-	// 非法值回落 zh
-	SetReviewerDisplayLanguage("fr")
-	if got := configuredReviewerDisplayLanguage(); got != "zh" {
-		t.Errorf("invalid -> %q", got)
-	}
-}
-
 // TestLocalized 验证双语选择。
 func TestLocalized(t *testing.T) {
 	pair := [2]string{"中文", "English"}
@@ -196,7 +173,6 @@ func TestReviewerActionSummary(t *testing.T) {
 
 // TestReviewerUIMetadata_补齐字段 验证输出字段齐全。
 func TestReviewerUIMetadata_补齐字段(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := reviewerUIMetadata(metaFacts(), "reason", map[string]any{})
 
 	for _, key := range []string{
@@ -214,7 +190,6 @@ func TestReviewerUIMetadata_补齐字段(t *testing.T) {
 
 // TestReviewerUIMetadata_剔除敏感字段 验证黑名单生效。
 func TestReviewerUIMetadata_剔除敏感字段(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := reviewerUIMetadata(metaFacts(), "reason", map[string]any{
 		"user_authorization":   "secret",
 		"decision_digest":      "hash",
@@ -234,7 +209,6 @@ func TestReviewerUIMetadata_剔除敏感字段(t *testing.T) {
 
 // TestReviewerUIMetadata_人工状态补提示 验证 manual 状态的 hint。
 func TestReviewerUIMetadata_人工状态补提示(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := reviewerUIMetadata(metaFacts(), "reason", map[string]any{
 		"final_reviewer_status": "manual",
 	})
@@ -244,14 +218,15 @@ func TestReviewerUIMetadata_人工状态补提示(t *testing.T) {
 	if got["user_review_hint"] == nil {
 		t.Error("user_review_hint should be set")
 	}
-	if got["user_review_hint"] != manualHints["default"][0] {
+	// 语言取决于真实配置，断言中英任一（避免测试依赖环境）
+	hint, _ := got["user_review_hint"].(string)
+	if hint != manualHints["default"][0] && hint != manualHints["default"][1] {
 		t.Errorf("hint = %v", got["user_review_hint"])
 	}
 }
 
 // TestReviewerUIMetadata_非人工状态清提示 验证非 manual 状态剔除提示字段。
 func TestReviewerUIMetadata_非人工状态清提示(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := reviewerUIMetadata(metaFacts(), "reason", map[string]any{
 		"final_reviewer_status": "approved",
 		"manual_reason_code":    "leftover",
@@ -269,7 +244,6 @@ func TestReviewerUIMetadata_非人工状态清提示(t *testing.T) {
 
 // TestReviewerUIMetadata_降级放行用宿主摘要 验证 downgraded_allow 分支。
 func TestReviewerUIMetadata_降级放行用宿主摘要(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := reviewerUIMetadata(metaFacts(), "reason", map[string]any{
 		"final_reviewer_status":      "manual",
 		"host_manual_reason_summary": "宿主摘要",
@@ -285,7 +259,6 @@ func TestReviewerUIMetadata_降级放行用宿主摘要(t *testing.T) {
 
 // TestReviewerUIMetadata_保留审查提示 验证 preserve 标记生效。
 func TestReviewerUIMetadata_保留审查提示(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := reviewerUIMetadata(metaFacts(), "reason", map[string]any{
 		"final_reviewer_status":              "manual",
 		"preserve_reviewer_user_review_hint": true,
@@ -324,7 +297,6 @@ func TestWithHostOwnedManualReviewDisplay_nil路由(t *testing.T) {
 
 // TestWithHostOwnedManualReviewDisplay_代码解析错误 验证专用文案。
 func TestWithHostOwnedManualReviewDisplay_代码解析错误(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	route := &permissions.DecisionRoute{
 		Level: "ask", Reason: "code_parse_error", Source: permissions.ManualReviewSource,
 	}
@@ -332,7 +304,8 @@ func TestWithHostOwnedManualReviewDisplay_代码解析错误(t *testing.T) {
 	if summary == nil {
 		t.Fatal("summary should be set")
 	}
-	if !strings.Contains(*summary, "代码无法解析") {
+	if !strings.Contains(*summary, "代码无法解析") &&
+		!strings.Contains(*summary, "could not be parsed") {
 		t.Errorf("summary = %q", *summary)
 	}
 	if got["host_manual_reason_code"] != "code_parse_error" {
@@ -345,19 +318,18 @@ func TestWithHostOwnedManualReviewDisplay_代码解析错误(t *testing.T) {
 
 // TestWithHostOwnedManualReviewDisplay_载荷缺失 验证第二类专用文案。
 func TestWithHostOwnedManualReviewDisplay_载荷缺失(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	route := &permissions.DecisionRoute{
 		Level: "ask", Reason: "code_payload_missing", Source: permissions.ManualReviewSource,
 	}
 	_, summary := withHostOwnedManualReviewDisplay(metaFacts(), route, map[string]any{})
-	if summary == nil || !strings.Contains(*summary, "可执行代码内容缺失") {
+	if summary == nil || (!strings.Contains(*summary, "可执行代码内容缺失") &&
+		!strings.Contains(*summary, "executable code payload is missing")) {
 		t.Errorf("summary = %v", summary)
 	}
 }
 
 // TestWithHostOwnedManualReviewDisplay_browser覆盖 验证 browser 特殊原因码。
 func TestWithHostOwnedManualReviewDisplay_browser覆盖(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	facts := metaFacts()
 	facts.Capability.Category = "browser"
 	route := &permissions.DecisionRoute{
@@ -389,9 +361,8 @@ func TestDecisionRouteNoAutoAllowReason(t *testing.T) {
 
 // TestLocalizedHostDisplayReason 验证语言回落。
 func TestLocalizedHostDisplayReason(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	got := localizedHostDisplayReason("x", map[string]any{}, "manual")
-	if got != displayMessages["manual_required"][0] {
+	if got != displayMessages["manual_required"][0] && got != displayMessages["manual_required"][1] {
 		t.Errorf("got %q", got)
 	}
 }
@@ -411,7 +382,6 @@ func TestHasKey(t *testing.T) {
 
 // TestNormalizeRuntimePermissionResult_用户拒绝转denied 验证 V-9 回填。
 func TestNormalizeRuntimePermissionResult_用户拒绝转denied(t *testing.T) {
-	defer SetReviewerDisplayLanguage("zh")
 	result := map[string]any{"feedback": "[permission_rejected] user said no"}
 	got := normalizeRuntimePermissionResult(
 		bridgeInvocation("bash", nil), result, metaFacts(), manualApprovalDecisionSource)

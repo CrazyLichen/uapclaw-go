@@ -1836,12 +1836,33 @@ feedback 里的标记：
 `_DISPLAY_MESSAGES`（15 项）与 `_MANUAL_HINTS`（3 项）是「中文, 英文」双语对，
 **逐字复制**上游文案，未翻译未改写（符合「提示词一比一同步 Python」纪律）。
 
-#### 新增偏差 V-10：显示语言读取方式
+#### V-12 已消除：显示语言读取与 Python 一致
 
-Python 用 `get_config()` 全局单例读 `preferred_language`；Go 的 `config` 包
-只有 `New(path)`、**无全局单例**。改为包级变量 + `SetReviewerDisplayLanguage`
-注入点（装配期由 Task 42 接线），默认 `"zh"`——等价 Python 的
-`except Exception: return "zh"` 回落分支。
+初版曾以「Go 无全局 config 单例」为由，改为包级变量 +
+`SetReviewerDisplayLanguage` 注入点。该结论**不成立**——同仓库
+`team_manager_spec.go` 的 `configPreferredLanguage` 早已用
+`configutil.New("").Load()` 每次加载配置文件读同一项。
+
+已改为直接加载配置：
+
+```go
+func configuredReviewerDisplayLanguage() string {
+	loaded, err := configutil.New("", configutil.WithNormalize(configutil.NormalizeConfig))
+	if err != nil { return "zh" }
+	cfgMap, err := loaded.Load()
+	if err != nil { return "zh" }
+	if language, ok := cfgMap["preferred_language"].(string); ok {
+		if strings.ToLower(strings.TrimSpace(language)) == "en" { return "en" }
+	}
+	return "zh"
+}
+```
+
+包级变量、注入点、装配期接线全部删除。任一环节失败回落 `"zh"`，
+对齐 Python 的 `except Exception: return "zh"`。
+
+**测试影响**：语言现在取决于真实配置，硬断言中文文案的用例已改为
+「中英任一」，避免测试依赖运行环境。
 
 #### `DecisionRoute.no_auto_allow_reason` 是 property 而非字段
 
@@ -1899,17 +1920,24 @@ user_rejection 分支：
 3. 有持久化意图（`auto_confirm` 或 `persist_allow` 为严格 true）
 4. 含退役任务级键，或含 `reviewer_override_token`
 
-#### 新增偏差 V-11：`persist_allow` 的 Go 映射
+#### V-11 已消除：`persist_allow` 不做额外映射
 
-Python 的确认对象有 `persist_allow: bool`；Go 的
-`security.PermissionConfirmResponse` 用 `PersistScope string`
-（`"session"` / `"permanent"` / 空串）+ `AutoConfirm bool` 表达。
+初版把 Go 的 `PersistScope` 映射成「有持久化意图」赋给 `persist_allow`。
+这是**凭空造出的行为**：
 
-映射为「有持久化意图」：`PersistScope ∈ {session, permanent} || AutoConfirm`。
+Python 的对象分支是 `getattr(user_input, "persist_allow", False)`，而
+openjiuwen 的 `PermissionConfirmResponse` **没有** `persist_allow` 属性
+（它提供的是 `wants_session_persist()` / `wants_permanent_persist()` 方法），
+因此对确认响应对象该值**恒为默认 `False`**。
 
-这与 `permission_interrupt_rail.go` 的 `wantsSessionPersist` /
-`wantsPermanentPersist` 判定口径一致（都是「PersistScope 优先，空串回退
-AutoConfirm」）。
+Go 侧已改为恒 `False`，`hasPersistIntent` 映射函数与两个 scope 常量一并删除。
+`PersistScope` 字段本身保留——它服务于 9.90d-1 的持久化落盘逻辑
+（`wantsSessionPersist` / `wantsPermanentPersist`），与本文件的 allow-once
+判定无关。
+
+**行为变化**：`PermissionConfirmResponse{Approved: true, PersistScope: "session"}`
+现在会被判为 allow-once（此前被判为否）。这与 Python 一致；真实场景下
+「会话级允许」必然同时带 `AutoConfirm: true`，仍会被第三个条件拦下。
 
 #### 严格判等而非 truthy
 

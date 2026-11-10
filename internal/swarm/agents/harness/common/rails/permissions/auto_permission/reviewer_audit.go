@@ -13,12 +13,15 @@
 // 是已退役的任务级授权拼写。识别它们的目的**不是**兼容，而是**拒绝**——
 // 让旧载荷无法被当作「单次放行」而绕过后续审查。
 //
-// ## 偏差 V-11：`persist_allow` 的 Go 映射
+// ## `persist_allow`：与 Python 一致（不做额外映射）
 //
-// Python 的确认对象有 `persist_allow: bool` 字段；Go 的
-// `security.PermissionConfirmResponse` 用 `PersistScope string`
-// （"session" / "permanent" / 空串）+ `AutoConfirm bool` 表达。
-// 映射为「有持久化意图」：`PersistScope != "" || AutoConfirm`。
+// Python 的对象分支用 `getattr(user_input, "persist_allow", False)`。
+// openjiuwen 的 `PermissionConfirmResponse` **没有** `persist_allow` 属性
+// （它提供的是 `wants_session_persist()` / `wants_permanent_persist()` 方法），
+// 因此对确认响应对象该值恒为默认 `False`。
+//
+// Go 侧照此实现：`persist_allow` 恒 `False`，不把 `PersistScope` 映射进来。
+// `PersistScope` 字段本身服务于 9.90d-1 的持久化逻辑，与本文件的判定无关。
 
 package auto_permission
 
@@ -34,13 +37,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// persistScopeSession 会话级持久化
-	persistScopeSession = "session"
-	// persistScopePermanent 永久持久化
-	persistScopePermanent = "permanent"
-)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -158,8 +154,8 @@ func ParseConfirmationPayload(userInput any) map[string]any {
 
 // confirmResponsePayload 把确认响应对象投影成载荷 map。
 //
-// Python 的 persist_allow 在 Go 侧映射为「有持久化意图」：
-// PersistScope 非空或 AutoConfirm 为真（见文件头偏差 V-11）。
+// Python: getattr(user_input, "persist_allow", False)
+// PermissionConfirmResponse 无该属性，故恒为 False——不把 PersistScope 映射进来。
 func confirmResponsePayload(response *hsecurity.PermissionConfirmResponse) map[string]any {
 	if response == nil {
 		return nil
@@ -167,21 +163,9 @@ func confirmResponsePayload(response *hsecurity.PermissionConfirmResponse) map[s
 	return map[string]any{
 		"approved":      response.Approved,
 		"auto_confirm":  response.AutoConfirm,
-		"persist_allow": hasPersistIntent(response),
+		"persist_allow": false,
 		"feedback":      response.Feedback,
 	}
-}
-
-// hasPersistIntent 确认响应是否带持久化意图。
-func hasPersistIntent(response *hsecurity.PermissionConfirmResponse) bool {
-	if response == nil {
-		return false
-	}
-	switch response.PersistScope {
-	case persistScopeSession, persistScopePermanent:
-		return true
-	}
-	return response.AutoConfirm
 }
 
 // containsRetiredTaskScopeConfirmation 载荷是否含已退役的任务级授权键。
