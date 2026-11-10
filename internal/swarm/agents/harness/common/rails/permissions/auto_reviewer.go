@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -1185,19 +1186,25 @@ func sanitizeReasonSummary(rawRationale any) string {
 // Python: _truncate_at_word_boundary(value, *, max_length)
 func truncateAtWordBoundary(value string, maxLength int) string {
 	text := strings.TrimSpace(value)
-	if len(text) <= maxLength {
+	// Python 的 len() / 切片都是字符语义，Go 需用 rune 数避免切坏多字节字符
+	runes := []rune(text)
+	if len(runes) <= maxLength {
 		return text
 	}
 	if maxLength <= 3 {
-		return text[:maxLength]
+		return string(runes[:maxLength])
 	}
-	candidate := strings.TrimRight(text[:maxLength-3], " \t")
-	boundary := strings.LastIndex(candidate, " ")
-	if tabBoundary := strings.LastIndex(candidate, "\t"); tabBoundary > boundary {
-		boundary = tabBoundary
+	candidate := strings.TrimRight(string(runes[:maxLength-3]), " \t")
+	byteBoundary := strings.LastIndex(candidate, " ")
+	if tabBoundary := strings.LastIndex(candidate, "\t"); tabBoundary > byteBoundary {
+		byteBoundary = tabBoundary
 	}
-	if boundary >= maxLength/2 {
-		candidate = strings.TrimRight(candidate[:boundary], " \t")
+	// boundary 需换算成字符位置再与 maxLength/2 比较（Python 是字符索引）
+	if byteBoundary >= 0 {
+		runeBoundary := utf8.RuneCountInString(candidate[:byteBoundary])
+		if runeBoundary >= maxLength/2 {
+			candidate = strings.TrimRight(candidate[:byteBoundary], " \t")
+		}
 	}
 	return candidate + "..."
 }

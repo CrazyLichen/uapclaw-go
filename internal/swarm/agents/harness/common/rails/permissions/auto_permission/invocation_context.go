@@ -36,6 +36,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -717,7 +718,8 @@ func resolveNativePathArgument(
 // Python: _validate_smart_glob_pattern(pattern)
 func validateSmartGlobPattern(pattern any) string {
 	text, ok := pattern.(string)
-	if !ok || text == "" || len(text) > smartGlobMaxLength {
+	// Python 的 len() 是字符数，Go 用 rune 数对齐
+	if !ok || text == "" || utf8.RuneCountInString(text) > smartGlobMaxLength {
 		return "native_glob_expansion_limit"
 	}
 	if strings.Count(text, "{") > smartGlobMaxGroups ||

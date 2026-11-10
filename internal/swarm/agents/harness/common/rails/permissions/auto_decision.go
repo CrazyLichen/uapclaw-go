@@ -19,6 +19,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -672,13 +673,14 @@ func textArg(args map[string]any, keys ...string) string {
 // boundedText 是否为有界且无 NUL 的字符串。
 //
 // Python: _bounded_text(value, limit, *, empty=False)
-// 偏差：Python 的 len() 是字符数，Go 用字节数（更严格，登记在 spec）。
+// 长度按字符数判定（utf8.RuneCountInString），与 Python 的 len() 一致。
 func boundedText(value any, limit int, allowEmpty bool) bool {
 	text, ok := value.(string)
 	if !ok {
 		return false
 	}
-	if len(text) > limit {
+	// Python 的 len() 是字符数，Go 的 len() 是字节数——用 rune 数对齐
+	if utf8.RuneCountInString(text) > limit {
 		return false
 	}
 	if strings.ContainsRune(text, 0) {

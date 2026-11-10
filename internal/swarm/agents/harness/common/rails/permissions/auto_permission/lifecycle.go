@@ -345,8 +345,10 @@ func sortedEffectNames(effects map[string]struct{}) []string {
 // 为什么需要适配器：Python 的 policy_eval.py 对 base_rail 全部用
 // `getattr(self._base_rail, "_xxx", None)` 容忍能力缺失（缺失时用默认值），
 // 是鸭子类型；而 Go 的 PolicyBaseRail（9.90b 落地）是强类型接口，要求 9 个
-// 方法全部实现。BasePermissionRail（9.90d-1）只有 7 个方法且
-// UpdateConfig 签名不同（多 toolNames 参数），两者无法由同一类型满足。
+// 方法全部实现。BasePermissionRail（9.90d-1）只有 7 个方法，缺其中的
+// 6 个能力（Engine / StaticConfig / ParseToolArgs / PermissionSceneHook /
+// PermissionsSnapshot / HasPermissionsSnapshot / TrustedDirs），
+// 故仍需适配器补齐；UpdateConfig 的签名冲突已通过改名 UpdatePolicyConfig 消除。
 //
 // 本适配器用类型断言复刻 Python 的鸭子类型语义：能力存在则转发，
 // 缺失则返回 Python 的默认值。这样既不破坏两个既有接口，
@@ -395,8 +397,8 @@ func (a *policySurfaceAdapter) StaticConfig() map[string]any {
 	return nil
 }
 
-// UpdateConfig 转发配置热更新（补 nil toolNames 以匹配 BasePermissionRail 签名）。
-func (a *policySurfaceAdapter) UpdateConfig(config map[string]any) {
+// UpdatePolicyConfig 转发配置热更新（补 nil toolNames 以匹配 BasePermissionRail 签名）。
+func (a *policySurfaceAdapter) UpdatePolicyConfig(config map[string]any) {
 	a.base.UpdateConfig(config, nil)
 }
 

@@ -114,8 +114,8 @@ func (f *fakePermissionRail) Engine() permissions.PolicyEngine { return nil }
 // StaticConfig 实现 PolicyBaseRail
 func (f *fakePermissionRail) StaticConfig() map[string]any { return f.config }
 
-// UpdateConfigOnly 实现 PolicyBaseRail 的单参 UpdateConfig（与 Base 版签名不同）
-func (f *fakePermissionRail) policyUpdateConfig(config map[string]any) { f.config = config }
+// UpdatePolicyConfig 实现 PolicyBaseRail 的单参配置更新（与 Base 版签名不同）
+func (f *fakePermissionRail) UpdatePolicyConfig(config map[string]any) { f.config = config }
 
 // PermissionSceneHook 实现 PolicyBaseRail
 func (f *fakePermissionRail) PermissionSceneHook() permissions.PolicySceneHookFn { return nil }
@@ -583,7 +583,7 @@ func TestPolicySurfaceAdapter_能力存在时转发(t *testing.T) {
 	if got := adapter.StaticConfig(); got["k"] != "v" {
 		t.Errorf("StaticConfig = %v", got)
 	}
-	adapter.UpdateConfig(map[string]any{"new": true})
+	adapter.UpdatePolicyConfig(map[string]any{"new": true})
 	if len(base.updateConfigs) != 1 {
 		t.Errorf("UpdateConfig should forward, got %d calls", len(base.updateConfigs))
 	}
@@ -632,14 +632,14 @@ func TestPolicySurfaceAdapter_能力缺失时默认值(t *testing.T) {
 		t.Errorf("TrustedDirs = %v", got)
 	}
 	// UpdateConfig 始终可用（走 BasePermissionRail 的 2 参数版，补 nil toolNames）
-	adapter.UpdateConfig(map[string]any{"x": 1}) // 不 panic 即可
+	adapter.UpdatePolicyConfig(map[string]any{"x": 1}) // 不 panic 即可
 }
 
 // TestPolicySurfaceAdapter_UpdateConfig补nil 验证 1→2 参数桥接。
 func TestPolicySurfaceAdapter_UpdateConfig补nil(t *testing.T) {
 	base := &fakePermissionRail{}
 	adapter := newPolicySurfaceAdapter(base)
-	adapter.UpdateConfig(map[string]any{"mode": "auto"})
+	adapter.UpdatePolicyConfig(map[string]any{"mode": "auto"})
 	if len(base.updateConfigs) != 1 {
 		t.Fatalf("calls = %d", len(base.updateConfigs))
 	}

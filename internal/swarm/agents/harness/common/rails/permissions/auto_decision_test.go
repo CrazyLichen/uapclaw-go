@@ -1,6 +1,7 @@
 package permissions
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -1294,5 +1295,27 @@ func TestTerminalInternalRoute_内部URI阻断(t *testing.T) {
 	})
 	if got := TerminalInternalRoute(facts, false, true); got != nil {
 		t.Errorf("uri in args should block, got %+v", got)
+	}
+}
+
+// TestBoundedText_中文按字符数 验证长度判定用 rune 数（对齐 Python len()）。
+//
+// 改动前用字节数：128 的上限下中文只能放 42 个字符（3 字节/字），
+// 而 Python 允许 128 个字符——属于误拒。
+func TestBoundedText_中文按字符数(t *testing.T) {
+	// 100 个中文字符 = 300 字节，但字符数 100 < 128
+	chinese := strings.Repeat("中", 100)
+	if !boundedText(chinese, 128, false) {
+		t.Error("100 个中文字符应通过 128 字符上限（Python len()=100）")
+	}
+	// 超过上限
+	tooLong := strings.Repeat("中", 129)
+	if boundedText(tooLong, 128, false) {
+		t.Error("129 个中文字符应被拒绝")
+	}
+	// 边界：正好 128
+	exact := strings.Repeat("中", 128)
+	if !boundedText(exact, 128, false) {
+		t.Error("正好 128 个中文字符应通过")
 	}
 }

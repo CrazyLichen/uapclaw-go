@@ -79,8 +79,11 @@ type PolicyBaseRail interface {
 	Engine() PolicyEngine
 	// StaticConfig 返回静态配置
 	StaticConfig() map[string]any
-	// UpdateConfig 热更新配置
-	UpdateConfig(config map[string]any)
+	// UpdatePolicyConfig 热更新配置。
+	//
+	// 不叫 UpdateConfig：BasePermissionRail.UpdateConfig 带 toolNames 参数，
+	// Go 不允许同名不同签名共存，改名后同一类型才能同时满足两个接口。
+	UpdatePolicyConfig(config map[string]any)
 	// PermissionSceneHook 返回场景钩子（可为 nil）
 	PermissionSceneHook() PolicySceneHookFn
 	// PermissionsSnapshot 返回宿主配置快照（可为 nil）
@@ -412,7 +415,7 @@ func (e *OpenJiuwenPolicyEvaluator) effectivePermissionConfig(ctx context.Contex
 // Python: OpenJiuwenPolicyEvaluator._apply_config(engine, config)
 func (e *OpenJiuwenPolicyEvaluator) applyConfig(engine PolicyEngine, config map[string]any) error {
 	if e.baseRail != nil {
-		e.baseRail.UpdateConfig(config)
+		e.baseRail.UpdatePolicyConfig(config)
 		return nil
 	}
 	if engine != nil {

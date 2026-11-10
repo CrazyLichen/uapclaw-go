@@ -1944,3 +1944,70 @@ Go 侧已改为恒 `False`，`hasPersistIntent` 映射函数与两个 scope 常�
 Python 用 `is True` / `is False`（严格判等），Go 用 `value.(bool)` 断言后
 再判值。`isStrictTrue` 与 `ParseConfirmationPayload` 的 `approved` 处理都
 遵循此口径——`map{"approved": "true"}` 不算批准，`map{"approved": 1}` 也不算。
+
+### 12.27 偏差清理与 9.90e 回填清单
+
+用户要求对第一类/第二类偏差逐项对齐。本节记录处置结果与遗留项。
+
+#### 已消除
+
+| 偏差 | 原问题 | 处置 |
+|---|---|---|
+| V-11 | 把 Go 的 `PersistScope` 映射成 `persist_allow`，凭空造出 Python 没有的行为 | 改为恒 `False`（对齐 `getattr(..., False)`），删 `hasPersistIntent` 与两个 scope 常量 |
+| V-12 | 以「Go 无全局 config 单例」为由改用注入点 | 改为 `configutil.New("").Load()` 直接读配置，删包级变量与注入点 |
+| 第一类第 5 条 | `boundedText` / `truncate*` 用 `len()`（字节数），Python 是字符数 | 全部改 `utf8.RuneCountInString` + `[]rune` 切片 |
+| 第二类① | `PolicyBaseRail.UpdateConfig` 与 `BasePermissionRail.UpdateConfig` 同名不同签名，同一类型无法同时实现 | `PolicyBaseRail` 的改名为 `UpdatePolicyConfig` |
+
+#### 第 5 条的额外发现：字节切片会切坏中文
+
+`truncateAtWordBoundary` / `truncateUI` 原用 `text[:maxLength-3]` 做**字节**切片。
+含中文时若切点落在多字节字符中间，会产生 `\uFFFD` 乱码。已改为 `[]rune` 切片，
+并把 `boundary >= maxLength/2` 的比较换算成字符索引（Python 是字符索引）。
+
+新增三个测试锁住该行为：`TestBoundedText_中文按字符数` /
+`TestTruncateAtWordBoundary_中文不切坏` / `TestTruncateUI_中文不切坏`。
+
+#### 第二类①的收益边界（如实记录）
+
+改名**只消除了签名冲突**，`policySurfaceAdapter` 仍必须保留：
+
+```
+PolicyBaseRail 需要: NormalizeToolName / ParseToolArgs / Engine / StaticConfig /
+                     UpdatePolicyConfig / PermissionSceneHook / PermissionsSnapshot /
+                     HasPermissionsSnapshot / TrustedDirs
+BasePermissionRail 提供: BeforeToolCall / UpdateConfig / SetTrustedDirs /
+                        InstalledPermissionConfig / GetPermissionSnapshot /
+                        PermissionCheckContext / BindApprovalRequest
+```
+
+两个方法集**交集为零**——`BasePermissionRail` 连一个都不满足。适配器的职责
+从「补签名冲突 + 补能力缺失」变成「纯补能力缺失」。
+
+改名的真实价值：为「`BasePermissionRail` 补齐 9 个方法后直接满足
+`PolicyBaseRail`」铺路（否则即使补齐也无法实现，因为签名打架）。
+
+#### ⤵️ 9.90e 回填清单
+
+以下各项依赖 `audit.py` 或需要动 9.90d-1 的接口，统一留到 9.90e：
+
+| 项 | 位置 | 现状 | 回填动作 |
+|---|---|---|---|
+| `emitAudit` | `runtime_bridge.go` | 空实现，返回 nil | 换成 `EmitPermissionAudit(facts, persistentWriter, opts...)` |
+| `emitPermissionResultObservation` | `runtime_bridge.go` | 空实现 | 同上，按 `permission_terminal` / `permission_pending` 两类记录 |
+| `_skip_tool` 钩子 | `runtime_bridge.go: skipRuntimeTool` | 直接 `SetExtra` + 写 `inputs` | 给 `BasePermissionRail` 加 `SkipTool(ctx, toolCall, result, msg)`，改为优先调用 |
+| `_raise_interrupt` 钩子 | `runtime_bridge.go: raiseRuntimeInterrupt` | 返回 `*callback.AbortError` | 给 `BasePermissionRail` 加 `RaiseInterrupt(toolName, toolCall, request)`，改为优先调用 |
+| `_get_auto_confirm_key` 钩子 | `runtime_bridge.go: runtimeAutoConfirmKey` | 类型断言 `AutoConfirmKey(toolCall)`，缺失返回空串 | 给 `BasePermissionRail` 加同名方法，去掉断言降级 |
+
+**回填时的注意点**：给 `BasePermissionRail` 加这三个方法属于**接口扩张**，
+所有实现者（`JiuwenSwarmPermissionInterruptRail` 等）都要补齐；
+按规则 10.1，接口扩张必须同改动内改完所有实现者，不得靠构建标签或空实现糊过去。
+
+#### 明确不消除的偏差（附理由）
+
+| 偏差 | 理由 |
+|---|---|
+| 第一类第 1 条 `inspect.signature` | Go 的 `reflect` **能**读函数签名（实测 `NumIn` / `In(i)`），但 Go 接口签名静态固定，无需动态适配 |
+| 第一类第 2 条 `*args, **kwargs` | 已用 `map[string]any` 模拟，`CompatibilitySendMatchesHost` 的「key 存在性」语义完整保留 |
+| 第一类第 3 条 `setattr` | `reflect` 可写字段但要求可寻址、字段名硬编码，比「构造新对象 + `SetInputs`」更脆弱 |
+| 第一类第 4 条 `type(x) is Foo` | 需给 7 个工具加导出具体类型并改所有调用方；当前「装配期登记实例 + 指针相等」更严格（同一实例 vs 同一类） |
+| 第一类第 6 条 ContextVar | `context.WithValue` 即显式版 ContextVar，语义等价 |

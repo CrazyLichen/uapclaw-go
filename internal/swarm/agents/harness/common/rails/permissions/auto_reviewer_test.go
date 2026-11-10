@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -1443,5 +1444,26 @@ func TestFormatResponseFormat_空apiMode视为Chat(t *testing.T) {
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
 	if got := client.formatResponseFormat(); got == nil {
 		t.Error("empty api_mode should be treated as Chat Completions")
+	}
+}
+
+// TestTruncateAtWordBoundary_中文不切坏 验证 rune 语义（对齐 Python 字符切片）。
+func TestTruncateAtWordBoundary_中文不切坏(t *testing.T) {
+	// 20 个中文字符，截到 10 —— 不得产生乱码（\ufffd）
+	text := strings.Repeat("中", 20)
+	got := truncateAtWordBoundary(text, 10)
+	if strings.ContainsRune(got, '\uFFFD') {
+		t.Errorf("切坏多字节字符：%q", got)
+	}
+	if utf8.ValidString(got) == false {
+		t.Errorf("输出不是合法 UTF-8：%q", got)
+	}
+	// 字符数应为 10 - 3 + 3（省略号）= 10
+	if utf8.RuneCountInString(got) != 10 {
+		t.Errorf("字符数 = %d, want 10（got %q）", utf8.RuneCountInString(got), got)
+	}
+	// 短文本原样返回
+	if got := truncateAtWordBoundary("中文短", 10); got != "中文短" {
+		t.Errorf("got %q", got)
 	}
 }

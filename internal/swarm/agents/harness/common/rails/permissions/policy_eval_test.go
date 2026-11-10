@@ -61,7 +61,7 @@ func (f *fakePolicyRail) Engine() PolicyEngine { return f.engine }
 func (f *fakePolicyRail) StaticConfig() map[string]any { return f.staticConfig }
 
 // UpdateConfig 记录调用
-func (f *fakePolicyRail) UpdateConfig(cfg map[string]any) {
+func (f *fakePolicyRail) UpdatePolicyConfig(cfg map[string]any) {
 	f.updateCalls = append(f.updateCalls, cfg)
 }
 

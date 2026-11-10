@@ -3,6 +3,7 @@ package auto_permission
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
@@ -430,5 +431,20 @@ func TestNormalizeRuntimePermissionResult_非用户拒绝直返(t *testing.T) {
 	// denied 不走 user_rejection 转换
 	if mapping["reason"] != nil {
 		t.Errorf("should return original, got %v", mapping)
+	}
+}
+
+// TestTruncateUI_中文不切坏 验证 rune 语义（对齐 Python 字符切片）。
+func TestTruncateUI_中文不切坏(t *testing.T) {
+	text := strings.Repeat("中", 20)
+	got := truncateUI(text, 10)
+	if strings.ContainsRune(got, '\uFFFD') {
+		t.Errorf("切坏多字节字符：%q", got)
+	}
+	if !utf8.ValidString(got) {
+		t.Errorf("输出不是合法 UTF-8：%q", got)
+	}
+	if utf8.RuneCountInString(got) != 10 {
+		t.Errorf("字符数 = %d, want 10（got %q）", utf8.RuneCountInString(got), got)
 	}
 }
