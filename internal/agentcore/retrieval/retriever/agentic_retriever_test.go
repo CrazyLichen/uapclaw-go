@@ -1081,3 +1081,11 @@ func TestRead_jsonrepair空串(t *testing.T) {
 	r := newGenericRetriever(t, llm)
 	assert.Empty(t, r.read(context.Background(), "q", []common.RetrievalResult{{Text: "d"}}, nil))
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubAgenticLLM) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubAgenticLLM) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

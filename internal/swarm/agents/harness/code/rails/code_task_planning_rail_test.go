@@ -3,6 +3,7 @@ package rails
 import (
 	"context"
 	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -554,3 +555,11 @@ func TestCodeTaskPlanningRail_OnUserMessage仍生效(t *testing.T) {
 		require.NoError(t, env.rail.OnUserMessage(context.Background(), env.context(inputs)))
 	})
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (f *fakeRailSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeRailSession) GetParentSessionID() string { return "" }

@@ -283,32 +283,46 @@ func (s *Session) SetTeamCacheScope(teamID, agentID string) {
 // 团队子会话必须带成员作用域——所有成员共享产品会话 id；独立子会话用运行时
 // 会话 id 作为 cache_id，并可指向显式的产品会话父级。
 // Python: Session.get_cache_identity (core/session/agent.py L126-174)
-func (s *Session) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
+//
+// ★ 严格对齐：Python 签名 -> KVCacheIdentity（无 raise），Go 返回单个值。
+// 内部 team_member_cache_identity 缺参时 Python 会抛 ValueError 冒泡；Go 侧该
+// 错误由本方法按「外层防御性兜底」记 Debug 并回落自指身份（对齐
+// react_agent.py:1390-1393 的 try/except），不向外传播。
+func (s *Session) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	// Python: 1. if self._team_cache_scope is not None: return KVCacheIdentity(...)
 	if s.teamCacheScope != nil {
 		cacheID, err := kv_cache.TeamMemberCacheIdentity(
 			s.sessionID, s.teamCacheScope.teamID, s.teamCacheScope.agentID)
 		if err != nil {
-			return kv_cache.KVCacheIdentity{}, err
+			logger.Debug(logComponent).Err(err).Str("session_id", s.sessionID).
+				Msg("team member cache identity failed, falling back to self identity")
+		} else {
+			parentCacheID := s.parentSessionID
+			if parentCacheID == "" {
+				parentCacheID = s.sessionID
+			}
+			return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: parentCacheID}
 		}
-		parentCacheID := s.parentSessionID
-		if parentCacheID == "" {
-			parentCacheID = s.sessionID
-		}
-		return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: parentCacheID}, nil
 	}
+	// Python: 2. source_agent_id/source_team_id = self._source_metadata.get(...)
 	sourceAgentID, _ := s.sourceMetadata["source_agent_id"].(string)
 	sourceTeamID, _ := s.sourceMetadata["source_team_id"].(string)
+	// Python: 3. if source_team_id and source_agent_id: return KVCacheIdentity(...)
 	if sourceTeamID != "" && sourceAgentID != "" {
 		cacheID, err := kv_cache.TeamMemberCacheIdentity(s.sessionID, sourceTeamID, sourceAgentID)
 		if err != nil {
-			return kv_cache.KVCacheIdentity{}, err
+			logger.Debug(logComponent).Err(err).Str("session_id", s.sessionID).
+				Msg("source team cache identity failed, falling back to self identity")
+		} else {
+			return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: s.sessionID}
 		}
-		return kv_cache.KVCacheIdentity{CacheID: cacheID, ParentCacheID: s.sessionID}, nil
 	}
+	// Python: 4. cache_id/parent_cache_id = self.get_env(...)，并判断 strip 后非空
 	cacheID, _ := s.GetEnv(kv_cache.KVCacheAffinitySessionIDEnv).(string)
 	parentCacheID, _ := s.GetEnv(kv_cache.KVCacheAffinityParentSessionIDEnv).(string)
 	hasCacheID := strings.TrimSpace(cacheID) != ""
 	hasParentCacheID := strings.TrimSpace(parentCacheID) != ""
+	// Python: 5. if has_cache_id or has_parent_cache_id or self._parent_session_id: ...
 	if hasCacheID || hasParentCacheID || s.parentSessionID != "" {
 		resolvedCacheID := cacheID
 		if resolvedCacheID == "" {
@@ -321,9 +335,10 @@ func (s *Session) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
 		if resolvedParent == "" {
 			resolvedParent = resolvedCacheID
 		}
-		return kv_cache.KVCacheIdentity{CacheID: resolvedCacheID, ParentCacheID: resolvedParent}, nil
+		return kv_cache.KVCacheIdentity{CacheID: resolvedCacheID, ParentCacheID: resolvedParent}
 	}
-	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}, nil
+	// Python: 6. return KVCacheIdentity(cache_id=self._session_id, parent_cache_id=self._session_id)
+	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}
 }
 
 // GetAgentID 返回 Agent ID

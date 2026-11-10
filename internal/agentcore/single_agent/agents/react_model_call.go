@@ -177,8 +177,33 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	// Python: L730: log_llm_request
 	logLLMRequest(messages, contextTools)
 
-	// 构建 KV Cache extra kwargs（对应 Python L736-742）
-	extraKVPairs := llmModel.BuildKVCacheInvokeKwargs(sess, enableKVRelease)
+	// 构建 KV Cache extra kwargs（对齐 react_agent.py:1742-1830）。
+	// ① ResolveRuntime ② ResolveLineage ③ ResolveTurnNum ④ BuildInvokeKwargs。
+	// 第④步（Python 的 handle_context_window_change → _evict_changed_window →
+	// llm.evict_kvc）在 Go 侧由既有 KVCacheManager.Release 在
+	// SessionModelContext.GetContextWindow（session_model_context.go:592）中完成，
+	// 故此处不重复调用（spec §8 DEV-2）。
+	// ★ 与 recommendation 包的 _main_call_parameters 共用同一 hook 实例与同一份
+	//   参数，保证父请求与重放请求逐字一致（prompt cache 命中的唯一保障）。
+	kvHook := a.kvCacheModelCallHook()
+	kvRuntime := kvHook.ResolveRuntime(llmModel, a.kvCacheAffinityConfig())
+	kvSess := newKVCacheSessionAdapter(sess)
+	var extraKVPairs map[string]any
+	if kvRuntime.EnableAffinity && kvRuntime.SupportsAffinity {
+		// 亲和生效才解析血缘与轮次（Python 的 resolve_lineage/resolve_turn_num
+		// 在能力判定之外调用，关闭时直接返回 None，不读 session）。
+		fallbackSID := ""
+		if modelCtx != nil {
+			fallbackSID = modelCtx.SessionID()
+		}
+		affinitySID, affinityParentSID := kvHook.ResolveLineage(kvRuntime, kvSess, fallbackSID)
+		affinityTurnNum := kvHook.ResolveTurnNum(cbc.Extra(), kvSess)
+		extraKVPairs = kvHook.BuildInvokeKwargs(kvRuntime, llmModel, kvSess,
+			affinitySID, affinityParentSID, affinityTurnNum)
+	} else {
+		// 未开亲和：保留 KVCacheRelease 既有路径的行为
+		extraKVPairs = llmModel.BuildKVCacheInvokeKwargs(sess, enableKVRelease)
+	}
 
 	// 补充 llm_return_token_ids 和 llm_logprobs 配置（对齐 Python L744-749）
 	if a.config != nil {

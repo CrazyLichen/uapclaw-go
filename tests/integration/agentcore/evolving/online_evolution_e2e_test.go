@@ -748,3 +748,11 @@ func (s *OnlineEvolutionE2ESuite) TestOnlineEvolution_EvolutionStore并发追加
 	s.Require().NoError(err)
 	s.Equal(5, len(evoLog.Entries), "并发追加后应有 5 条记录")
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *mockBaseModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *mockBaseModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

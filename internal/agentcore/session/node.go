@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -256,4 +257,19 @@ func (f *NodeSessionFacade) ClearSession(ctx context.Context) {
 		Str("action", "node_session_clear").
 		Str("node_id", f.inner.NodeID()).
 		Msg("NodeSession cleared")
+}
+
+// ──────────────────────────── 导出函数（续：KV 亲和访问器） ────────────────────────────
+
+// GetCacheIdentity 返回默认缓存身份（本类型无独立 cache identity，返回零值）。
+// Python: 各 Session 子类的 get_cache_identity；Go 侧未迁该能力时由
+// kv_cache.ResolveSessionLineage 的 fallback 链兜住。
+func (f *NodeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回父会话标识；本类型无父会话，返回空串。
+// Python: agent.py:74 get_parent_session_id() -> str | None
+func (f *NodeSessionFacade) GetParentSessionID() string {
+	return ""
 }

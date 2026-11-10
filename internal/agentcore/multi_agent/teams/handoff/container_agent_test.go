@@ -3,6 +3,7 @@ package handoff
 import (
 	"context"
 	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"sync"
 	"testing"
 
@@ -1336,3 +1337,12 @@ var _ sessioninterfaces.SessionFacade = (*mockContainerSessionFacade)(nil)
 
 // 确保 HandoffTool 的 Card() 返回 *tool.ToolCard
 var _ tool.Tool = (*HandoffTool)(nil)
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *mockContainerSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockContainerSessionFacade) GetParentSessionID() string { return "" }

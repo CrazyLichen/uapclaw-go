@@ -468,6 +468,21 @@ func (m *Model) SupportsKVCacheRelease() bool {
 	return m.client.SupportsKVCacheRelease()
 }
 
+// SupportsKVCacheAffinity 检查底层客户端是否支持 KV cache 亲和协议。
+// 零副作用判断：委托给底层 client。
+// Python: Model.supports_kv_cache_affinity()
+func (m *Model) SupportsKVCacheAffinity() bool {
+	return m.client.SupportsKVCacheAffinity()
+}
+
+// BuildKVCacheAffinityInvokeKwargs 构造父调用与重放共用的 affinity kwargs。
+// Python: Model.build_kv_cache_affinity_invoke_kwargs()
+func (m *Model) BuildKVCacheAffinityInvokeKwargs(
+	sess any, sessionID, parentSessionID string, turnNum int,
+) map[string]any {
+	return m.client.BuildKVCacheAffinityInvokeKwargs(sess, sessionID, parentSessionID, turnNum)
+}
+
 // BuildKVCacheInvokeKwargs 为 InferenceAffinity 客户端构建额外参数。
 // 仅当底层客户端支持 KV Cache 释放时才构建 kwargs，
 // 其他客户端直接返回空 map，避免向 API 请求注入无意义参数。

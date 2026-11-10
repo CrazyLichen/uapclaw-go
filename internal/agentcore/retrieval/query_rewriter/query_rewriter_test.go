@@ -623,3 +623,11 @@ func TestMsg2Text_多模态content(t *testing.T) {
 	assert.Contains(t, text, "user: ")
 	assert.Contains(t, text, "图片描述")
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (s *stubQRClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (s *stubQRClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

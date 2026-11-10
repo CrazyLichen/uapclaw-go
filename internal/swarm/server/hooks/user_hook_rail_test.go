@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"strings"
 	"testing"
 
@@ -404,3 +405,12 @@ func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
 		t.Errorf("_stop_hook_feedback length = %d, want %d (full reason, no truncation)", len(feedbackStr), len(longReason))
 	}
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (m *mockSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (m *mockSessionFacade) GetParentSessionID() string { return "" }

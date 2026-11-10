@@ -405,3 +405,11 @@ func (s *SkillDevPipelineSuite) loadState() *skilldev.SkillDevState {
 	s.Require().NoError(json.Unmarshal(data, &raw))
 	return skilldev.FromCheckpointDict(raw)
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (m *pipelineMockClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (m *pipelineMockClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

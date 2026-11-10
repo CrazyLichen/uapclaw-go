@@ -4,6 +4,7 @@ package skills_test
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"os"
 	"path/filepath"
 	"testing"
@@ -259,3 +260,11 @@ func newSkillTool(rail *skillrails.SkillUseRail) *skilltools.SkillTool {
 		"cn", "it-agent", true,
 	)
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+func (sess *itSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (sess *itSession) GetParentSessionID() string { return "" }

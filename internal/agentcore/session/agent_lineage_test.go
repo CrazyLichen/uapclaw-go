@@ -34,8 +34,7 @@ func TestSession_ParentSessionID绑定(t *testing.T) {
 func TestSession_GetCacheIdentity_自指(t *testing.T) {
 	s := NewSession(WithSessionID("solo"))
 
-	identity, err := s.GetCacheIdentity()
-	require.NoError(t, err)
+	identity := s.GetCacheIdentity()
 	assert.Equal(t, kv_cache.KVCacheIdentity{CacheID: "solo", ParentCacheID: "solo"}, identity)
 }
 
@@ -45,14 +44,12 @@ func TestSession_GetCacheIdentity_团队作用域(t *testing.T) {
 	s := NewSession(WithSessionID("team-sess"))
 	s.SetTeamCacheScope("team-1", "worker")
 
-	identity, err := s.GetCacheIdentity()
-	require.NoError(t, err)
+	identity := s.GetCacheIdentity()
 	assert.Equal(t, "team:team-sess:team:team-1:member:worker", identity.CacheID)
 	assert.Equal(t, "team-sess", identity.ParentCacheID, "无父会话时回落自身")
 
 	require.NoError(t, s.BindParentSessionID("product-1"))
-	identity, err = s.GetCacheIdentity()
-	require.NoError(t, err)
+	identity = s.GetCacheIdentity()
 	assert.Equal(t, "product-1", identity.ParentCacheID, "有父会话时用父会话")
 }
 
@@ -64,8 +61,7 @@ func TestSession_GetCacheIdentity_来源元数据(t *testing.T) {
 		WithSourceMetadata(map[string]any{"source_team_id": "team-9", "source_agent_id": "worker"}),
 	)
 
-	identity, err := s.GetCacheIdentity()
-	require.NoError(t, err)
+	identity := s.GetCacheIdentity()
 	assert.Equal(t, "team:member-sess:team:team-9:member:worker", identity.CacheID)
 	assert.Equal(t, "member-sess", identity.ParentCacheID, "来源元数据分支父级取自身")
 }
@@ -81,8 +77,7 @@ func TestSession_GetCacheIdentity_环境变量(t *testing.T) {
 		}),
 	)
 
-	identity, err := s.GetCacheIdentity()
-	require.NoError(t, err)
+	identity := s.GetCacheIdentity()
 	assert.Equal(t, "cache-env", identity.CacheID)
 	assert.Equal(t, "parent-env", identity.ParentCacheID)
 }
@@ -100,8 +95,7 @@ func TestAgentTeamSession_CreateAgentSession_成员身份(t *testing.T) {
 	assert.Equal(t, "team-1", meta["source_team_id"])
 	assert.Equal(t, "worker-name", meta["source_member_name"])
 
-	identity, err := child.GetCacheIdentity()
-	require.NoError(t, err)
+	identity := child.GetCacheIdentity()
 	assert.Equal(t, "team:team-sess:team:team-1:member:worker", identity.CacheID,
 		"子会话必须带团队缓存作用域")
 }

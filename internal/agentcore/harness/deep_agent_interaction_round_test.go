@@ -189,3 +189,11 @@ func TestRunOneRound_打断恢复走单轮invoke(t *testing.T) {
 	outcome := agent.RunOneRound(ctx, work, "task-resume", sess)
 	assert.Equal(t, "", outcome.ErrorCode, "打断恢复不应返回错误码")
 }
+
+// SupportsKVCacheAffinity 测试替身：不支持 KV 亲和。
+func (c *roundModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试替身：返回空亲和参数。
+func (c *roundModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}

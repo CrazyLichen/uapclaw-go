@@ -3,8 +3,10 @@ package sessionops
 import (
 	"context"
 	"encoding/json"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -772,5 +774,62 @@ func TestCopySessionContext_nilAgent(t *testing.T) {
 	result := CopySessionContext(context.Background(), nil, "source", "target")
 	if result {
 		t.Error("nil DeepAgent 应返回 false")
+	}
+}
+
+// ──────────────────────────── 分叉溯源标记测试 ────────────────────────────
+
+// TestMarkForkContext_加标记并去重 对齐 session_ops_service.py:174-199。
+func TestMarkForkContext_加标记并去重(t *testing.T) {
+	source := []llmschema.BaseMessage{llmschema.NewUserMessage("inherited")}
+	marked := markForkContext(source, "src-1")
+	if len(marked) != 2 {
+		t.Fatalf("头部应加一条 SystemMessage，得到 %d 条", len(marked))
+	}
+	if !strings.Contains(marked[0].GetContent().Text(), "forked from chat src-1") {
+		t.Fatalf("溯源标记文案不符: %q", marked[0].GetContent().Text())
+	}
+	// 再次标记：已有 marker 的消息被剔除，不重复叠加
+	again := markForkContext(marked, "src-2")
+	if len(again) != 2 {
+		t.Fatalf("重复标记不应叠加，得到 %d 条", len(again))
+	}
+	if !strings.Contains(again[0].GetContent().Text(), "forked from chat src-2") {
+		t.Fatalf("新标记应替换旧标记: %q", again[0].GetContent().Text())
+	}
+}
+
+// TestMarkForkContext_保留非标记消息 验证普通消息不被误删。
+func TestMarkForkContext_保留非标记消息(t *testing.T) {
+	source := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("a"),
+		llmschema.NewAssistantMessage("b"),
+	}
+	marked := markForkContext(source, "src")
+	if len(marked) != 3 {
+		t.Fatalf("应保留两条原消息并加一条标记，得到 %d 条", len(marked))
+	}
+	if marked[1].GetContent().Text() != "a" || marked[2].GetContent().Text() != "b" {
+		t.Fatal("原消息顺序必须保持")
+	}
+}
+
+// TestBuildContextMessagesFromHistory_主干三类记录 验证 user/chat.final 重建。
+func TestBuildContextMessagesFromHistory_主干三类记录(t *testing.T) {
+	records := []map[string]any{
+		{"event_type": "user", "content": "hello"},
+		{"event_type": "chat.reasoning", "content": "thinking"},
+		{"event_type": "chat.final", "content": "world"},
+		{"event_type": "chat.usage_metadata"},
+	}
+	messages, skipped := buildContextMessagesFromHistory(records)
+	if len(messages) != 2 {
+		t.Fatalf("应重建 2 条消息，得到 %d", len(messages))
+	}
+	if skipped != 2 {
+		t.Fatalf("应跳过 2 条，得到 %d", skipped)
+	}
+	if messages[0].GetContent().Text() != "hello" || messages[1].GetContent().Text() != "world" {
+		t.Fatal("重建顺序或内容不符")
 	}
 }

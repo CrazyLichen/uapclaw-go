@@ -3,6 +3,7 @@ package skills
 import (
 	"context"
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"os"
 	"path/filepath"
 	"strings"
@@ -756,3 +757,12 @@ func TestListSkillTool_路由调用失败(t *testing.T) {
 	assert.Equal(t, false, got["success"])
 	assert.Contains(t, got["error"], "LLM 路由调用失败")
 }
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (f *fakeSkillSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (f *fakeSkillSession) GetParentSessionID() string { return "" }

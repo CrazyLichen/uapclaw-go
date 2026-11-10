@@ -42,6 +42,7 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
@@ -1066,6 +1067,11 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 
 	// 步骤 14: mark_session_active
 	d.markSessionActive(sessionID)
+	// 步骤 14b: 建议生成记账起点（对齐 interface.py:3544 forks.request_started）。
+	// 非流式入口同样要登记，否则非流式轮的 turn_ended 永远拿不到 _turns 记录。
+	recommendation.Forks.RequestStarted(sessionID,
+		personDroveTurn(params, req.ChannelID, string(req.ReqMethod), req.Metadata,
+			schema.IsTeamMode(mode)))
 
 	// 步骤 15: streamEventRail.reset_abort(sessionID)
 	if d.streamEventRail != nil {
@@ -1101,6 +1107,12 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 			// Go ctx values 不可变值模式：_reset_runtime_cron_context 语义天然满足
 			// （绑定后的 ctx 只在本次请求闭包内传递，函数返回即失效，无需显式 reset）
 			d.unmarkSessionActive(sessionID)
+			// 步骤 20b: 轮结束（对齐 interface.py:3569 forks.turn_ended）。
+			// 终态在 runErr 上体现；非流式无"等待用户"概念，恒 false。
+			recommendation.Forks.TurnEnded(sessionID, req.RequestID, recommendation.TurnEndOptions{
+				Status:         terminalStatusOf(runErr),
+				WaitingForUser: false,
+			})
 		}()
 		// 步骤 18: 抢租约 + 投递输入，把租约帧聚合成响应载荷。
 		// Python: interface_deep.py:18457-18560 —— 非流式同样先 attach 再 send_input。
@@ -1350,6 +1362,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
+	// 步骤 15b: 建议生成记账起点（对齐 interface.py:3906 / :4292 的 forks.request_started）。
+	recommendation.Forks.RequestStarted(sessionID,
+		personDroveTurn(params, req.ChannelID, string(req.ReqMethod), req.Metadata,
+			schema.IsTeamMode(mode)))
 
 	// 修复 S-18: 对齐 Python process_message_stream_impl 中的 reset_abort
 	// Python: if self._stream_event_rail: self._stream_event_rail.reset_abort(session_id)
@@ -1423,7 +1439,15 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 		}()
 		defer close(outCh)
-		defer d.unmarkSessionActive(sessionID)
+		defer func() {
+			d.unmarkSessionActive(sessionID)
+			// 轮结束（对齐 interface.py:3957 / :4348 forks.turn_ended）。
+			// 流式终态由流内事件决定，此处按是否已产出内容与错误归类。
+			recommendation.Forks.TurnEnded(sessionID, req.RequestID, recommendation.TurnEndOptions{
+				Status:         terminalStatusOf(nil),
+				WaitingForUser: false,
+			})
+		}()
 
 		// usage 累加器
 		usage := &utils.UsageAccumulator{}

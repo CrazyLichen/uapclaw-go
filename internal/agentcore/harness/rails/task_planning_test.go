@@ -3,6 +3,7 @@ package rails
 import (
 	"context"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"reflect"
 	"testing"
 
@@ -1682,3 +1683,12 @@ var _ agentinterfaces.BaseAgent = (*fakeModelSwitcherAgent)(nil)
 
 // 确保编译时 fakeDeepAgentForTaskPlanning 满足 BaseAgent
 var _ agentinterfaces.BaseAgent = (*fakeDeepAgentForTaskPlanning)(nil)
+
+// GetCacheIdentity 返回零值缓存身份（测试替身，不参与 KV 亲和）。
+// Python: SessionFacade.get_cache_identity 的测试替身实现。
+func (s *fakeSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+
+// GetParentSessionID 返回空父会话（测试替身）。
+func (s *fakeSession) GetParentSessionID() string { return "" }

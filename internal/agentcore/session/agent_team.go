@@ -164,9 +164,16 @@ func (s *AgentTeamSession) GetTeamID() string {
 }
 
 // GetCacheIdentity 返回团队会话共享的根缓存身份。
-// Python: AgentTeamSession.get_cache_identity (core/session/agent_team.py L61-66)
-func (s *AgentTeamSession) GetCacheIdentity() (kv_cache.KVCacheIdentity, error) {
-	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}, nil
+// Python: AgentTeamSession.get_cache_identity -> KVCacheIdentity（无 raise）
+// (core/session/agent_team.py L61-66)
+func (s *AgentTeamSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{CacheID: s.sessionID, ParentCacheID: s.sessionID}
+}
+
+// GetParentSessionID 返回父会话标识；团队根会话无父，返回空串。
+// Python: agent_team.py 未覆写 get_parent_session_id，基类 agent.py:74 返回 str | None
+func (s *AgentTeamSession) GetParentSessionID() string {
+	return ""
 }
 
 // UpdateState 更新全局状态，委托到 inner.State() 的 SessionState
