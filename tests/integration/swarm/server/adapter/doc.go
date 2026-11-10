@@ -23,6 +23,8 @@
 //	├── code_adapter_project_memory_test.go     # ProjectMemoryRail + explore/plan 子代理装配级集成测试
 //	├── deep_adapter_evolution_test.go          # 演进进度事件推送
 //	├── deep_adapter_reload_test.go             # 热重载后 DeepAgent 装配完整性（workspace/sys_operation/fs 工具）
+//	├── goal_control_plane_test.go              # goal 控制面五 action 状态往返
+//	├── goal_interaction_test.go                # goal 交互链路对照基线（无目标不产生分气泡 final）
 //	├── model_token_config_test.go              # max_input/output_tokens 配置到运行时装配
 //	└── session_usage_isolation_test.go         # 跨会话 usage_summary 数值与 prompt 历史隔离（A→B→A 三轮）
 //
