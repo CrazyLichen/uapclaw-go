@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -328,9 +328,9 @@ func RuntimeAgentExecutionToDict(e *RuntimeAgentExecution) (map[string]any, erro
 		return nil, err
 	}
 	return map[string]any{
-		"agent":           RuntimeAgentDefinitionToDict(e.Definition),
+		"agent":             RuntimeAgentDefinitionToDict(e.Definition),
 		"agent_fingerprint": fingerprint,
-		"mode":            mode,
+		"mode":              mode,
 	}, nil
 }
 

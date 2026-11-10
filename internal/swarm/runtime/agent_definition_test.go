@@ -414,9 +414,9 @@ func TestRuntimeAgentExecutionToDict_三字段(t *testing.T) {
 // 关键坑：Go 的 json.Encoder 追加 '\n'，必须 TrimSuffix，否则 sha256 不同。
 func TestRuntimeAgentDefinitionFingerprint_PythonGolden(t *testing.T) {
 	cases := []struct {
-		name      string
+		name       string
 		definition map[string]any
-		want      string
+		want       string
 	}{
 		{
 			name:       "最小定义",
