@@ -494,3 +494,11 @@ func maxInt(a, b int) int {
 	}
 	return b
 }
+
+// InFlightCount 返回在飞生成任务数（运维与集成测试用）。
+// Python: prompt_suggestion.py:417 in_flight 的计数等价物。
+func (f *PromptSuggestionForks) InFlightCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.tasks)
+}

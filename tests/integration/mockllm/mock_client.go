@@ -516,3 +516,11 @@ func runStreamScript(ctx context.Context, script StreamChunkScript) <-chan *llms
 	}()
 	return ch
 }
+
+// SupportsKVCacheAffinity 测试/集成替身：不支持 KV 亲和。
+func (m *MockModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 测试/集成替身：返回空亲和参数。
+func (m *MockModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
+}
