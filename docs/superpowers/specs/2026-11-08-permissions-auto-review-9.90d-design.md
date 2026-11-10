@@ -2707,3 +2707,45 @@ swarm → agentcore，单向外。
 `TestToolRegistration_AgentModeRail真实装配`：三个控制工具类型全部自动登记。
 
 覆盖率：`tool_registration.go` **96.7%**。
+
+### 12.39 `any` 审查结论与两处收窄
+
+**背景**：审查「是否有为破循环依赖而用 `any`」的情况。
+
+#### 循环依赖破环：四处全部用接口/回调，无 `any`
+
+| 破环点 | 手法 |
+|---|---|
+| `permissions` ↔ `rails` | 标记接口 `RootPermissionQueueAccessor` + `IsRootPermissionQueue()` |
+| `permissions` ↔ `auto_permission` | 标记接口 `PermissionRailMarker` / `AutoPermissionRailMarker`（定义在 `harnesssecurity`） |
+| `rails` → 权限层 | 观察者回调 `SetToolInstanceObserver`（反向依赖改为回调注入） |
+| `policy_eval` → rail | 接口 `PolicyBaseRail` |
+
+**结论：不存在「用 `any` 绕循环依赖」。**
+
+#### 两处收窄（用户拍板）
+
+**B. `PersistentAuditWriter any` → `*persistent.PersistentAuditWriter`**
+
+原 `lifecycle.go` 里存 `any`、用时再断言 `.(*permissions.PersistentAuditWriter)`。
+类型本身在本包可达，**断言纯属多余**。已改具体类型，断言删除。
+
+**C. `SysOperation any` → `sysop.SysOperation`**
+
+三处（`AutoPermissionRail.sysOperation` 字段、`AutoPermissionRailOptions.SysOperation`、
+`BuildSandboxProfile` 参数）全部收窄为具体接口。调用方
+（`deep_adapter.sysOperation` / `code_adapter.sysOpInstance`）持有的本就是该接口，
+编译期可校验。
+
+#### 保留 `any` 的一处（有据）
+
+`BuildSandboxProfile` 内部仍走反射 `valueGet`，因为上游
+`sandbox_execution_workspace_root` / `sandbox_python_package_venv_root`
+两个属性**从未定义**——Python `sandbox_profile.py:27-31` 只是 `getattr`，
+全仓无人赋值，`getattr` 恒返回 `None`，`build_sandbox_profile` 恒定返回空
+`SandboxDescriptor{}`。
+
+收窄参数后该行为不变（Go 侧同样恒空），但**编译期约束了调用方**。
+测试相应改为「带 json tag 的结构体替身」驱动反射路径。
+
+验证：gofmt / go build ./... / go vet ./... / 全量回归全绿。

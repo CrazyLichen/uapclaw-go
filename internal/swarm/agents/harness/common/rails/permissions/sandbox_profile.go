@@ -3,6 +3,8 @@ package permissions
 import (
 	"reflect"
 	"strings"
+
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -23,11 +25,16 @@ type SandboxDescriptor struct {
 
 // BuildSandboxProfile 从 sys_operation 提取解析根，不解释沙箱能力。
 //
+// 参数收具体接口而非 any（编译期约束调用方）；内部仍走反射取值——
+// 上游 `sandbox_execution_workspace_root` / `sandbox_python_package_venv_root`
+// 在 SysOperation 接口上**不存在**，Python 侧也只是 getattr（永远 None），
+// 故当前恒返回空 SandboxDescriptor。
+//
 // sys_operation 支持三种形态：nil、map[string]any（按蛇形键取）、任意 struct
 // （按字段名或 json tag 取）。
 //
 // Python: build_sandbox_profile(sys_operation=None)
-func BuildSandboxProfile(sysOperation any) SandboxDescriptor {
+func BuildSandboxProfile(sysOperation sysop.SysOperation) SandboxDescriptor {
 	if sysOperation == nil {
 		return SandboxDescriptor{}
 	}

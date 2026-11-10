@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
@@ -97,7 +98,7 @@ func TestCurrentSandboxProfile_nilSysOperation(t *testing.T) {
 // TestCurrentSandboxProfile_有SysOperation 验证重建并缓存。
 func TestCurrentSandboxProfile_有SysOperation(t *testing.T) {
 	rail := newBridgeRail(t)
-	rail.sysOperation = struct{}{}
+	rail.sysOperation = &sysop.BaseSysOperation{}
 	got := rail.currentSandboxProfile()
 	if got == nil {
 		t.Fatal("should build a profile")

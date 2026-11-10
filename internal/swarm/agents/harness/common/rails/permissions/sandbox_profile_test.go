@@ -6,21 +6,29 @@ import (
 	"testing"
 
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── sandbox_profile 沙箱描述符构建 ────────────────────────────
 
-// TestBuildSandboxProfile_三种形态 测试 nil / map / struct 三种输入
+// TestBuildSandboxProfile_三种形态 测试 nil / 实现接口的结构体两种输入。
+//
+// 参数已从 any 收窄为 sysop.SysOperation（编译期约束），
+// map 形态不再是入口——Python 的 Mapping 分支在本 Go 契约下不可达。
 func TestBuildSandboxProfile_三种形态(t *testing.T) {
 	// nil 空输入
 	if got := BuildSandboxProfile(nil); got != (SandboxDescriptor{}) {
 		t.Errorf("nil 应返回空描述符，got %+v", got)
 	}
 
-	// map 形态
-	got := BuildSandboxProfile(map[string]any{
-		"sandbox_execution_workspace_root": "/ws",
-		"sandbox_python_package_venv_root": "/venv",
+	// 无 sandbox 属性的实现 → 空描述符（上游属性未定义，恒为此结果）
+	if got := BuildSandboxProfile(&sysop.BaseSysOperation{}); got != (SandboxDescriptor{}) {
+		t.Errorf("无属性应返回空描述符，got %+v", got)
+	}
+
+	// 带 sandbox 属性的实现（按 json tag 匹配的反射路径）
+	got := BuildSandboxProfile(&fakeSysOpWithRoots{
+		Root: "/ws", Venv: "/venv",
 	})
 	if got.ExecutionWorkspaceRoot != "/ws" {
 		t.Errorf("ExecutionWorkspaceRoot = %q, want /ws", got.ExecutionWorkspaceRoot)
@@ -28,23 +36,20 @@ func TestBuildSandboxProfile_三种形态(t *testing.T) {
 	if got.PythonPackageVenvRoot != "/venv" {
 		t.Errorf("PythonPackageVenvRoot = %q, want /venv", got.PythonPackageVenvRoot)
 	}
+}
 
-	// struct 形态（按 json tag 匹配）
-	type fakeSysOp struct {
-		Root string `json:"sandbox_execution_workspace_root"`
-	}
-	got2 := BuildSandboxProfile(fakeSysOp{Root: "/s"})
-	if got2.ExecutionWorkspaceRoot != "/s" {
-		t.Errorf("struct 形态 ExecutionWorkspaceRoot = %q, want /s", got2.ExecutionWorkspaceRoot)
-	}
+// fakeSysOpWithRoots 带沙箱根部属性的 SysOperation 替身。
+type fakeSysOpWithRoots struct {
+	sysop.BaseSysOperation
+	// Root 沙箱执行工作区根
+	Root string `json:"sandbox_execution_workspace_root"`
+	// Venv Python 包虚拟环境根
+	Venv string `json:"sandbox_python_package_venv_root"`
 }
 
 // TestBuildSandboxProfile_空白与非字符串回落 测试空白与非字符串返回空串
 func TestBuildSandboxProfile_空白与非字符串回落(t *testing.T) {
-	got := BuildSandboxProfile(map[string]any{
-		"sandbox_execution_workspace_root": "   ",
-		"sandbox_python_package_venv_root": 123,
-	})
+	got := BuildSandboxProfile(&fakeSysOpWithRoots{Root: "   "})
 	if got.ExecutionWorkspaceRoot != "" {
 		t.Errorf("空白应回落空串，got %q", got.ExecutionWorkspaceRoot)
 	}

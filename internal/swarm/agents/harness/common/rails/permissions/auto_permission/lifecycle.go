@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
@@ -41,8 +42,11 @@ type AutoPermissionRail struct {
 	platformTrustedRoot string
 	// sandbox 沙箱描述符
 	sandbox *permissions.SandboxDescriptor
-	// sysOperation 系统操作接口
-	sysOperation any
+	// sysOperation 系统操作实例（可为 nil）
+	//
+	// 用具体接口而非 any：调用方持有的就是 sysop.SysOperation，编译期可校验。
+	// 沙箱根部仍走反射读取（上游 sandbox_* 属性未定义，见 sandbox_profile.go）。
+	sysOperation sysop.SysOperation
 	// policyEvaluator 策略评估器
 	policyEvaluator *permissions.OpenJiuwenPolicyEvaluator
 	// autoOptions 归一后的 auto 段选项
@@ -52,7 +56,7 @@ type AutoPermissionRail struct {
 	// trustedSearchUrls 会话可信搜索 URL 台账
 	trustedSearchUrls *permissions.SessionTrustedSearchUrls
 	// persistentAuditWriter 持久化审计写入器
-	persistentAuditWriter any
+	persistentAuditWriter *permissions.PersistentAuditWriter
 	// browserRuntimeSecurityProfile 浏览器运行时安全档位
 	browserRuntimeSecurityProfile *permissions.BrowserRuntimeSecurityProfile
 	// ownerAgent 当前归属的 Agent（Init 后非 nil）
@@ -76,8 +80,8 @@ type AutoPermissionRailOptions struct {
 	PlatformTrustedRoot string
 	// Sandbox 沙箱描述符
 	Sandbox *permissions.SandboxDescriptor
-	// SysOperation 系统操作接口
-	SysOperation any
+	// SysOperation 系统操作实例
+	SysOperation sysop.SysOperation
 	// PolicyEvaluator 策略评估器（nil 时自动构造）
 	PolicyEvaluator *permissions.OpenJiuwenPolicyEvaluator
 	// AutoReviewer LLM 审查器
@@ -85,7 +89,7 @@ type AutoPermissionRailOptions struct {
 	// TrustedSearchUrls 会话可信搜索 URL 台账
 	TrustedSearchUrls *permissions.SessionTrustedSearchUrls
 	// PersistentAuditWriter 持久化审计写入器
-	PersistentAuditWriter any
+	PersistentAuditWriter *permissions.PersistentAuditWriter
 	// BrowserRuntimeSecurityProfile 浏览器运行时安全档位
 	BrowserRuntimeSecurityProfile *permissions.BrowserRuntimeSecurityProfile
 	// WrittenPermissions 宿主已写权限的读取回调
@@ -294,11 +298,11 @@ func (r *AutoPermissionRail) UpdateConfig(config map[string]any, toolNames []str
 	autoOptions := permissions.NormalizeAutoPermissionOptions(permissionConfig["auto"])
 	timeoutMs := permissions.AutoOptionTimeoutMs(autoOptions)
 
-	var auditWriter any
+	var auditWriter *permissions.PersistentAuditWriter
 	if enabled, _ := autoOptions["persistent_audit_enabled"].(bool); enabled {
 		auditRoot := permissions.ResolvePersistentAuditRoot(config)
-		if current, ok := r.persistentAuditWriter.(*permissions.PersistentAuditWriter); ok &&
-			current != nil && sameAuditRoot(current.DataRoot(), auditRoot) {
+		if current := r.persistentAuditWriter; current != nil &&
+			sameAuditRoot(current.DataRoot(), auditRoot) {
 			auditWriter = current
 		} else {
 			auditWriter = permissions.NewPersistentAuditWriter(auditRoot)
