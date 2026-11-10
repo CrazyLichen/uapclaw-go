@@ -7,13 +7,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // goalFrames 收集一次流式请求的全部帧，供顺序与形状断言复用。
 type goalFrames []*schema.AgentResponseChunk
+
+// goalContractSuite 所有 G1-G4 suite 的公共基类：进程内 AgentServer + 每用例隔离数据目录。
+type goalContractSuite struct {
+	isuite.BaseIntegrationSuite
+	// env 进程内 AgentServer 环境（E2A 信封投递 + 帧收集）
+	env *testhelpers.ServerEnv
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -74,7 +86,43 @@ func countEvent(frames goalFrames, event string) int {
 	return n
 }
 
+// newGoalContractEnv 启动进程内 AgentServer。
+// 签名只依赖 *testing.T，不绑定具体 suite —— G3 R1 用 AgentSuite 派生
+// 的 suite 也能复用，避免后半程改签名波及所有调用点。
+// Python: 进程内 AgentServer 等价于 tests/system_tests 的 conftest fixture。
+// Go 先例: tests/integration/swarm/server/goal_dispatch_test.go:40-45
+func newGoalContractEnv(t *testing.T) *testhelpers.ServerEnv {
+	t.Helper()
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	return testhelpers.NewServerEnv(t, cfg, nil)
+}
+
+// isolateGoalDataDir 每个用例隔离 UAPCLAW_DATA_DIR 与会话缓存。
+// 同样只依赖 *testing.T，供 BaseIntegrationSuite / AgentSuite 派生的套件共用。
+// Go 先例: goal_dispatch_test.go:48-60（TearDown 先 FlushMetadataQueue 再清缓存）
+func isolateGoalDataDir(t *testing.T) {
+	t.Helper()
+	t.Setenv(pathutil.EnvDataDir, t.TempDir())
+	pathutil.ResetCache()
+	sessionpkg.ClearAllSessionMetadataCache()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// sendGoal 投递 command.goal，返回 request_id。
+// isStream=false 对应 webClient.ts:892 requestGoalAction（一元）；
+// isStream=true  对应 webClient.ts:916 sendGoalStreamCommand（流式且不等 res）。
+// Python: jiuwenswarm/server/agent_ws_server.py 的 ReqMethod.COMMAND_GOAL 分发。
+func sendGoal(s *goalContractSuite, sid string, params map[string]any, isStream bool) string {
+	if params == nil {
+		params = map[string]any{}
+	}
+	if _, ok := params["mode"]; !ok {
+		params["mode"] = "agent"
+	}
+	return s.env.Send(string(schema.ReqMethodCommandGoal), params, sid, isStream)
+}
 
 // requireNumeric 接受 JSON 反序列化的 float64 与 Go 直构的 int 两种数值。
 // Python: GoalRecord.to_dict 的数值字段经 WS JSON 后统一变成 number。
@@ -159,7 +207,7 @@ func TestGoalContractHelpersSuite(t *testing.T) {
 		"goal_id": "abc123def456", "session_id": "s1", "objective": "修完测试",
 		"status": "active", "created_at": "2026-11-09T00:00:00+00:00",
 		"updated_at": "2026-11-09T00:00:00+00:00",
-		"revision": float64(0), "attempt_count": float64(1), "time_used_seconds": float64(3),
+		"revision":   float64(0), "attempt_count": float64(1), "time_used_seconds": float64(3),
 		"token_usage": map[string]any{
 			"input_tokens": float64(10), "output_tokens": float64(5),
 			"cached_input_tokens": float64(0), "total_tokens": float64(15),
