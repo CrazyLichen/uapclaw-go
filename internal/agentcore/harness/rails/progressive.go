@@ -136,6 +136,10 @@ func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail
 		ownedToolCards: make(map[string]*tool.ToolCard),
 	}
 	rail.WithPriority(progressiveToolRailPriority)
+	// 由受信任构造函数创建，供权限审查层的只读快速路径校验。
+	// Python 侧靠 readonly_tool_bindings._closure 闭包链反射证明身份，
+	// Go 无 __code__.co_freevars / __closure__，改用 MarkTrusted（已知偏差 V-4）。
+	rail.MarkTrusted()
 	return rail
 }
 

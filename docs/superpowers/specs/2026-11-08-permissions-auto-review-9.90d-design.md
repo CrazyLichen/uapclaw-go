@@ -2258,3 +2258,58 @@ key 时返回 false），行为一致。
 `AutoPermissionRailOptions.BrowserRuntimeSecurityProfile` 原为 `any`，
 而 `DeterministicDomainRoute` 需要 `*BrowserRuntimeSecurityProfile`。
 按实际用法收窄为具体类型（`any` 是 9.90d-2 早期未定型时的占位）。
+
+### 12.33 `readonly_tool_bindings`：按 V-4 / D3 / D5 落地（非恒 false）
+
+**重要更正**：本轮曾提出「整文件标 ⏵、恒返回 false」的方案 (b)，
+**该方案被用户指出与既有决策冲突**。查证后确认：spec §五 V-4 / §7.1 D3+D5
+早已拍板用 `MarkTrusted()` 替代闭包链内省，且 9.90d-1 Task 14 已落地
+`MarkTrusted()` / `IsTrusted()`（100% 覆盖），消费方正是本文件。
+
+#### V-4 的实际处置
+
+Python 的 `_closure` 逐层剥开 SDK 装饰器闭包，比对
+`__code__` / `__closure__.cell_contents` / `__globals__`。Go 无此机制。
+
+替代链（本批补齐最后一环）：
+
+```
+9.90d-1 Task 14: DeepAgentRail.MarkTrusted() / IsTrusted()   ✅ 已落地
+本批:            NewProgressiveToolRail() 末尾调 MarkTrusted()  ✅ 补上
+本批:            trustedReadonlyBinding 用 IsTrusted() 校验      ✅ 落地
+```
+
+残余风险（绕过构造函数后手工 MarkTrusted 无法检测）按 V-4 接受并登记。
+
+#### D3 范围：只覆盖 ProgressiveToolRail
+
+Python 原文件 320 行覆盖 10+ 内置工具，依赖 V-6 前置件 ≥4,286 行
+（spec §5.1，Go 侧全部 0 命中）。按 D3 只实现 `tool_search` +
+`ProgressiveToolRail` 一条路径，其余工具名一律 false（走正常审批链）。
+
+#### D5 验收（本批测试兑现）
+
+| 用例 | 结果 |
+|---|---|
+| 真实 `NewProgressiveToolRail` + `MarkTrusted` → 通过 | ✅ `TestTrustedToolSearchBinding_成功路径` |
+| 未 MarkTrusted（`&ProgressiveToolRail{}`） → 拒绝 | ✅ `TestTrustedToolSearchBinding_未MarkTrusted` |
+| 同类型不同实例 / 多 rail / 无 rail → 拒绝 | ✅ 三个 fail-closed 用例 |
+| 类型不符 / session 不符 / 终止阶段 → 拒绝 | ✅ 各自用例 |
+
+#### 新增偏差 V-17 / V-18
+
+| 偏差 | 内容 |
+|---|---|
+| V-17 | `agent._bound_session_id` 在 Go 侧无导出访问器，用 `reflect` 读非导出字段；测试因反射只读限制改用 `unsafe.Pointer` 设置 |
+| V-18 | Python 的 `ToolSearchTool` 等类对象常量，Go 侧工具为函数式实现无导出具体类型，改用 `SetReadonlyToolTypes` 装配期登记 + `ResolveToolBinding` 精确类型比对（与 `SetNativePathExecutors` 同一设计） |
+
+#### 一个实施中的坑（值得记）
+
+初版用窄接口 `readonlyOwnerContract` 描述 owner agent，把
+`ReactAgent()` 写成返回 `any`。Go 的接口方法签名**必须逐字相同**，
+而 `DeepAgent.ReactAgent()` 返回 `*agents.ReActAgent`——导致真实
+`DeepAgent` 根本不满足该接口，成功路径永远走不到。
+改为直接断言 `*harness.DeepAgent` 具体类型后通过。
+（这与规则 10.2 的窄接口不冲突：这里是「使用方依赖别人」，但签名不能放宽。）
+
+覆盖率：`readonly_tool_bindings.go` 88.7%，`auto_permission` 包 91.6%。
