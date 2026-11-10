@@ -70,9 +70,9 @@ type TaskCompletionRail struct {
 	// currentAttemptMessages 本轮捕获的模型上下文
 	// Python: self._current_attempt_messages (L141)
 	currentAttemptMessages []llmschema.BaseMessage
-	// attachmentManagerFor 附件管理器访问器（对齐 SkillUseRail 的注入）
+	// attachmentManager 会话级附件管理器（Init 中从 agent 取一次）
 	// Python: self.attachment_manager (L142)
-	attachmentManagerFor func() *hprompts.Manager
+	attachmentManager *hprompts.Manager
 }
 
 // goalManagerProvider 提供 Goal 能力面的 Agent 能力。
@@ -218,9 +218,7 @@ func (r *TaskCompletionRail) GoalReportSink() *goaltools.GoalReportSink {
 // Python: TaskCompletionRail.init (task_completion_rail.py L218)
 func (r *TaskCompletionRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// Python: self.attachment_manager = getattr(agent, "prompt_attachment_manager", None)
-	if provider, ok := agent.(promptAttachmentProvider); ok {
-		r.attachmentManagerFor = provider.PromptAttachments
-	}
+	r.attachmentManager = hprompts.ManagerFor(agent)
 	// Python: if self._goal_manager is None: 从 agent.goal_manager 继承兜底 (L238-241)
 	if r.goalManager == nil {
 		if provider, ok := agent.(goalManagerProvider); ok {
@@ -305,7 +303,7 @@ func (r *TaskCompletionRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 	r.goalTools = nil
-	r.attachmentManagerFor = nil
+	r.attachmentManager = nil
 	return nil
 }
 
@@ -588,35 +586,39 @@ func (r *TaskCompletionRail) syncGoalProtocolPrompt(_ context.Context, cbc *agen
 	wantGoal := runKind == string(agentinterfaces.RunKindGoal) && r.goalManager != nil
 	language := r.resolveGoalLanguage(builder)
 
-	managerFn := r.attachmentManagerFor
-	if managerFn == nil {
+	// Python: :341-347 manager 缺失时仅 goal 轮告警，非 goal 静默
+	if r.attachmentManager == nil {
+		if wantGoal {
+			logger.Warn(logComponent).
+				Str("event_type", "task_completion_attachment").
+				Msg("prompt attachment manager is unavailable; skip goal protocol attachment")
+		}
 		return
 	}
-	manager := managerFn()
-	if manager == nil {
+	writer := r.attachmentManager.BindContext(cbc)
+	if writer.SessionID() == "" {
 		return
-	}
-
-	sessionID := ""
-	if sess := cbc.Session(); sess != nil {
-		sessionID = sess.GetSessionID()
 	}
 
 	if wantGoal {
 		section := sections.BuildGoalProtocolSection(language)
-		if _, err := manager.AddFromPromptSection(
-			sessionID, &section, hprompts.AttachmentRuntime,
-			"agent_core.task_completion_rail", language,
+		if _, err := writer.AddFromPromptSection(
+			&section, hprompts.AttachmentRuntime,
+			"agent_core.task_completion_rail",
+			hprompts.WithLanguage(language), hprompts.WithAttachmentContentKind("text/markdown"),
 		); err != nil {
 			logger.Warn(logComponent).
+				Str("event_type", "task_completion_attachment").
 				Err(err).
 				Msg("TaskCompletionRail: skip goal protocol prompt attachment")
 		}
 		return
 	}
 
-	if _, err := manager.ClearSection(sessionID, sections.SectionGoalProtocol); err != nil {
+	// Python: :369-370 非 goal 轮清除协议附件
+	if _, err := writer.ClearSection(sections.SectionGoalProtocol); err != nil {
 		logger.Warn(logComponent).
+			Str("event_type", "task_completion_attachment_clear").
 			Err(err).
 			Msg("TaskCompletionRail: skip clearing goal protocol prompt attachment")
 	}
