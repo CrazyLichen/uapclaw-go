@@ -615,16 +615,16 @@ func (f *fakeSessionOps) ForkSession(params ForkSessionParams) (ForkSessionResul
 }
 
 // CopySessionContext 记录调用。
-func (f *fakeSessionOps) CopySessionContext(_ context.Context, _ SessionAgent, _, _ string, forceHistory bool) error {
+func (f *fakeSessionOps) CopySessionContext(_ context.Context, _ SessionAgent, _, _ string, forceHistory bool) bool {
 	f.copyContextCalled = true
 	f.forceHistory = forceHistory
-	return nil
+	return true
 }
 
 // CopySessionState 记录调用。
-func (f *fakeSessionOps) CopySessionState(context.Context, string, string, any, SessionAgent) error {
+func (f *fakeSessionOps) CopySessionState(context.Context, string, string, any, SessionAgent) bool {
 	f.copyStateCalled = true
-	return nil
+	return true
 }
 
 // GetSessionMetadata 返回预置 metadata。

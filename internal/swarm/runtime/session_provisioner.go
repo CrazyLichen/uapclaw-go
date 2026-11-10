@@ -126,10 +126,12 @@ type TeamSwitchPreparer interface {
 type SessionOps interface {
 	// ForkSession 复制持久历史与 metadata
 	ForkSession(params ForkSessionParams) (ForkSessionResult, error)
-	// CopySessionContext 复制内存上下文
-	CopySessionContext(ctx context.Context, agent SessionAgent, sourceID, targetID string, forceHistory bool) error
-	// CopySessionState 复制 checkpoint state
-	CopySessionState(ctx context.Context, sourceID, targetID string, card any, agent SessionAgent) error
+	// CopySessionContext 复制内存上下文。
+	// Python: session_ops_service.py:2046 -> bool（无 raise），故 Go 返回 bool。
+	CopySessionContext(ctx context.Context, agent SessionAgent, sourceID, targetID string, forceHistory bool) bool
+	// CopySessionState 复制 checkpoint state。
+	// Python: session_ops_service.py:1903 -> bool（无 raise），故 Go 返回 bool。
+	CopySessionState(ctx context.Context, sourceID, targetID string, card any, agent SessionAgent) bool
 	// GetSessionMetadata 读会话元数据
 	GetSessionMetadata(sessionID string) map[string]any
 	// SessionDirHasMetadata 会话目录下是否有 metadata.json
@@ -1157,20 +1159,18 @@ func (p *RuntimeSessionProvisioner) PrepareSessionFork(
 			if _, ensureErr := agent.EnsureInstance(ctx); ensureErr != nil {
 				return ensureErr
 			}
-			if copyErr := p.extra.SessionOps.CopySessionContext(ctx, agent,
-				sourceSessionID, targetSessionID, hasCutoff); copyErr != nil {
-				return copyErr
-			}
+			// Python: session_provisioner.py:1338 裸 await，不接收返回值
+			p.extra.SessionOps.CopySessionContext(ctx, agent,
+				sourceSessionID, targetSessionID, hasCutoff)
 		}
 		if !hasCutoff {
 			var card any
 			if agent != nil {
 				card = agent.Card()
 			}
-			if stateErr := p.extra.SessionOps.CopySessionState(ctx,
-				sourceSessionID, targetSessionID, card, agent); stateErr != nil {
-				return stateErr
-			}
+			// Python: session_provisioner.py:1345 裸 await，不接收返回值
+			p.extra.SessionOps.CopySessionState(ctx,
+				sourceSessionID, targetSessionID, card, agent)
 		}
 		return nil
 	}()

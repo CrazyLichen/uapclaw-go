@@ -995,3 +995,147 @@ func flushSourceState(deepAgent *harness.DeepAgent, sessionID string) {
 		deepAgent.SaveState(sessRef, deepAgent.LoadState(sessRef))
 	}
 }
+
+// ──────────────────────────── 分叉溯源标记 ────────────────────────────
+
+// forkContextMarkerMetadataKey 分叉溯源标记的 metadata 键。
+// Python: session_ops_service.py _FORK_CONTEXT_MARKER_METADATA_KEY
+const forkContextMarkerMetadataKey = "fork_context_marker"
+
+// markForkContext 在消息头部加一条模型可见的分叉溯源 SystemMessage，
+// 并剔除已带 marker 的祖先消息，避免重复叠加。
+// Python: session_ops_service.py:174-199 _mark_fork_context
+func markForkContext(messages []llmschema.BaseMessage, sourceSessionID string) []llmschema.BaseMessage {
+	inherited := make([]llmschema.BaseMessage, 0, len(messages))
+	for _, message := range messages {
+		if !hasForkMarker(message) {
+			inherited = append(inherited, message)
+		}
+	}
+	marker := llmschema.NewSystemMessage(
+		"This conversation was forked from chat "+sourceSessionID+
+			". The messages that follow were inherited from that source chat and are available as prior conversation context. "+
+			"When the user refers to the previous or source chat, answer directly from this inherited history.",
+		llmschema.WithMetadata(map[string]any{forkContextMarkerMetadataKey: sourceSessionID}),
+	)
+	return append([]llmschema.BaseMessage{marker}, inherited...)
+}
+
+// hasForkMarker 判断消息是否已带分叉 marker。
+func hasForkMarker(message llmschema.BaseMessage) bool {
+	provider, ok := message.(interface{ GetMetadata() map[string]any })
+	if !ok || provider == nil {
+		return false
+	}
+	value, ok := provider.GetMetadata()[forkContextMarkerMetadataKey]
+	if !ok || value == nil {
+		return false
+	}
+	source, ok := value.(string)
+	return ok && source != ""
+}
+
+// CopySessionContextForceHistory 强制从目标会话已复制的磁盘历史重建消息上下文。
+// Python: session_ops_service.py:2046 copy_session_context(..., force_history=True)
+//
+// 与 CopySessionContext 的差别：不读源会话的内存 context（源可能已被逐出或从未物化），
+// 直接读 target 的 history.jsonl 重建，并加溯源标记。
+func CopySessionContextForceHistory(
+	ctx context.Context, deepAgent *harness.DeepAgent,
+	sourceSessionID, targetSessionID string, sessionsDir string,
+) bool {
+	if deepAgent == nil {
+		logger.Warn(logComponent).Str("source", sourceSessionID).
+			Msg("copy_session_context(force_history): deepAgent is nil")
+		return false
+	}
+	// Python: history_records = load_history_records(target_session_id)
+	records, err := loadForkHistory(sessionsDir, targetSessionID)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("target", targetSessionID).
+			Msg("copy_session_context(force_history): cannot read copied history")
+		return false
+	}
+	// Python: messages, skipped = _build_context_messages_from_history(history_records)
+	messages, skipped := buildContextMessagesFromHistory(records)
+	if len(messages) == 0 {
+		logger.Info(logComponent).Str("source", sourceSessionID).
+			Int("skipped", skipped).
+			Msg("copy_session_context(force_history): no rebuildable messages, skipping")
+		return false
+	}
+	logger.Info(logComponent).Str("target", targetSessionID).
+		Int("messages", len(messages)).Int("skipped", skipped).
+		Msg("copy_session_context(force_history): rebuilt from copied history")
+	// Python: messages = _mark_fork_context(messages, source_session_id)
+	marked := markForkContext(messages, sourceSessionID)
+	// Python: await deep_agent.create_new_context_engine(session_id=target, messages=messages)
+	if _, err := deepAgent.CreateNewContextEngine(ctx, targetSessionID, marked); err != nil {
+		logger.Warn(logComponent).Err(err).Str("target", targetSessionID).
+			Msg("copy_session_context(force_history): failed to seed target context")
+		return false
+	}
+	return true
+}
+
+// loadForkHistory 读取目标会话的 history.jsonl 记录。
+// Python: load_history_records(target_session_id)
+func loadForkHistory(sessionsDir, sessionID string) ([]map[string]any, error) {
+	path := filepath.Join(sessionsDir, sessionID, "history.jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(data), "\n")
+	records := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		var record map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &record); err != nil {
+			continue
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+// buildContextMessagesFromHistory 把 history.jsonl 记录重建为 BaseMessage 序列。
+// Python: session_ops_service.py:1211 _build_context_messages_from_history
+//
+// 第二个返回值是跳过（不可重建）的记录数。
+//
+// ⚠️ 上游该函数约 300 行状态机（reasoning 缓冲 / tool_call 聚合 / tool_result
+// 配对 / chat.final 收口 / 未解析 tool_call 清理）。Go 侧历史上从未迁移，
+// 本轮先实现「user / assistant(final) / tool_result」三类主干记录的重建，
+// 完整状态机登记为遗留（保证 force_history 路径可跑通，不静默失败）。
+func buildContextMessagesFromHistory(records []map[string]any) ([]llmschema.BaseMessage, int) {
+	messages := make([]llmschema.BaseMessage, 0, len(records))
+	skipped := 0
+	for _, record := range records {
+		eventType, _ := record["event_type"].(string)
+		switch eventType {
+		case "chat.final":
+			content, _ := record["content"].(string)
+			if strings.TrimSpace(content) == "" {
+				skipped++
+				continue
+			}
+			messages = append(messages, llmschema.NewAssistantMessage(content))
+		case "user":
+			content, _ := record["content"].(string)
+			if strings.TrimSpace(content) == "" {
+				skipped++
+				continue
+			}
+			messages = append(messages, llmschema.NewUserMessage(content))
+		default:
+			// reasoning 分片 / tool_call / tool_result / usage / 交互事件：
+			// 完整状态机尚未迁移，本轮跳过。
+			skipped++
+		}
+	}
+	return messages, skipped
+}
