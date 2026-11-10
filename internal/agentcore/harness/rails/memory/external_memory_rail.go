@@ -699,8 +699,8 @@ func (r *ExternalMemoryRail) injectMemoryContext(cbc *agentinterfaces.AgentCallb
 	}
 	// Python: :198-201 会话缺失/写入失败只告警，**不回落 system prompt**
 	if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
-		&section, hprompts.AttachmentMemory, "agent_core.external_memory_rail",
-		hprompts.WithLanguage(lang), hprompts.WithAttachmentContentKind("text/markdown"),
+		&section, hprompts.AttachmentMemory, "agent_core.external_memory_rail", lang,
+		hprompts.WithAttachmentContentKind("text/markdown"),
 	); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "external_memory_attachment").

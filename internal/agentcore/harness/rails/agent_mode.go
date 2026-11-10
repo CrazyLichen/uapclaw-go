@@ -297,8 +297,8 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 			r.systemPromptBuilder.AddSection(section)
 		}
 	} else if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
-		&section, hprompts.AttachmentRuntime, "agent_core.agent_mode_rail",
-		hprompts.WithLanguage(r.language), hprompts.WithAttachmentContentKind("text/markdown"),
+		&section, hprompts.AttachmentRuntime, "agent_core.agent_mode_rail", r.language,
+		hprompts.WithAttachmentContentKind("text/markdown"),
 	); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "agent_mode_attachment").

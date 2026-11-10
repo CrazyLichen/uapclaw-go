@@ -52,7 +52,7 @@ func TestBindContext_三个方法在缺会话时返错(t *testing.T) {
 
 	_, err = w.AddFromPromptSection(&saprompt.PromptSection{
 		Name: "sec", Content: map[string]string{"cn": "正文"},
-	}, AttachmentRuntime, "src")
+	}, AttachmentRuntime, "src", "cn")
 	require.ErrorIs(t, err, ErrSessionRequired)
 
 	_, err = w.ClearSection("sec")
@@ -85,7 +85,7 @@ func TestContextWriter_AddFromPromptSection渲染(t *testing.T) {
 		Priority: 84,
 	}
 
-	got, err := m.BindContext(cbc).AddFromPromptSection(section, AttachmentRuntime, "src", WithLanguage("cn"))
+	got, err := m.BindContext(cbc).AddFromPromptSection(section, AttachmentRuntime, "src", "cn")
 	require.NoError(t, err)
 	require.Equal(t, "中文内容", got.Content)
 	require.Equal(t, 84, got.Priority)
@@ -96,12 +96,12 @@ func TestContextWriter_AddFromPromptSection空内容短路(t *testing.T) {
 	m := NewManager()
 	w := m.BindContext(interfaces.NewAgentCallbackContext(nil, nil, newStubSession("s")))
 
-	got, err := w.AddFromPromptSection(nil, AttachmentRuntime, "src")
+	got, err := w.AddFromPromptSection(nil, AttachmentRuntime, "src", "cn")
 	require.NoError(t, err)
 	require.Nil(t, got)
 
 	got, err = w.AddFromPromptSection(&saprompt.PromptSection{Name: "x", Content: map[string]string{"cn": "   "}},
-		AttachmentRuntime, "src", WithLanguage("cn"))
+		AttachmentRuntime, "src", "cn")
 	require.NoError(t, err)
 	require.Nil(t, got)
 }

@@ -604,8 +604,8 @@ func (r *TaskCompletionRail) syncGoalProtocolPrompt(_ context.Context, cbc *agen
 		section := sections.BuildGoalProtocolSection(language)
 		if _, err := writer.AddFromPromptSection(
 			&section, hprompts.AttachmentRuntime,
-			"agent_core.task_completion_rail",
-			hprompts.WithLanguage(language), hprompts.WithAttachmentContentKind("text/markdown"),
+			"agent_core.task_completion_rail", language,
+			hprompts.WithAttachmentContentKind("text/markdown"),
 		); err != nil {
 			logger.Warn(logComponent).
 				Str("event_type", "task_completion_attachment").

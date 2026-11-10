@@ -193,6 +193,21 @@ grep -n "agent_manager.go#L802-L815" .integration-coverage-exempt
 | K2 | 会话解析用 `ManagerFor` 类型断言取 manager | `getattr(agent, "prompt_attachment_manager", None)` | `RailAttachmentProvider` + 类型断言 | `BaseAgent` 声明 `PromptAttachments()` 会让 `single_agent/interfaces` ↔ `harness/prompts` 成环（`go list -deps` 已双向验证） | 附件类型下沉到 `foundation/` 后 |
 | K3 | 一个 Python 文件对应 8 个 Go 文件 | `prompt_attachment_manager.py`（923 行）单文件 | `attachment_types/digest/store/render/delivery/mutator/rail` + 新 `writer` | S1 地基时的拆法，本轮不重排 | 后续单独做文件合并 |
 | K4 | `team_plan_mode_rail` 的 `mode_instructions` 与 `agent_mode_rail` 同 section 名 | 两边都是 `SectionName.MODE_INSTRUCTIONS` | 同 | 无偏差，仅记录共享 section 的语义 | — |
+| K5 | ~~`WithLanguage` 用 `Metadata["render_language"]` 传渲染语言~~ **已消除** | `add_from_prompt_section(..., language: str = "cn")`（`:231`）是显式关键字参数 | `ContextWriter.AddFromPromptSection(section, kind, source, language, opts...)`，`language` 为形参 | 原实现把语言塞进选项再剥离，同一语义两套通道且 `AddSection` 路径会泄漏 metadata 键 | 已按上游改回形参，`WithLanguage`/`render_language` 零残留 |
+
+## 7.1 附件快照基线的时序约束（实现期核实）
+
+`Sync` 在 ReAct 内层 `before_model_call` 里执行（`react_model_call.go:156`），晚于 rail 的
+`BeforeModelCall`。首轮目录无变化时 rail 不写附件，`Sync` 遇到空集合直接返回
+（`attachment_delivery.go:48-50`，与上游 `sync_to_context` 同为「空集不建快照」），
+于是**首轮不会产生历史快照**；第二轮 `has_history_snapshot` 仍为 false，按上游语义
+补发一次全量 snapshot，第三轮起才稳定。
+
+因此「同会话复用不重复推送」的验收前提是**先有快照基线**：
+`tests/integration/agentcore/harness/rails/progressive/progressive_rail_test.go` 的
+`TestProgressive_SessionReuseNoDuplicate` 在首轮后手动注册一个无关 section 触发首次同步，
+再断言第二轮 catalog 附件为空——与上游 `test_deferred_catalog_does_not_repeat_after_session_state_reset`
+（`tests/unit_tests/harness/test_progressive_tool_rail.py:285`）的写法一致。
 
 ## 8. 测试矩阵
 

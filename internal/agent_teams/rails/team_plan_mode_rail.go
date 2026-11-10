@@ -169,8 +169,8 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 		return nil
 	}
 	if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
-		section, hprompts.AttachmentRuntime, "agent_core.team_plan_mode_rail",
-		hprompts.WithLanguage(language), hprompts.WithAttachmentContentKind("text/markdown"),
+		section, hprompts.AttachmentRuntime, "agent_core.team_plan_mode_rail", language,
+		hprompts.WithAttachmentContentKind("text/markdown"),
 	); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "team_plan_mode_attachment").

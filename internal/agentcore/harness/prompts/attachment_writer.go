@@ -7,16 +7,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// renderLanguageMetadataKey 选项携带渲染语言的 metadata 键（仅在 AddFromPromptSection 内部使用）
-	renderLanguageMetadataKey = "render_language"
-	// defaultRenderLanguage 未指定渲染语言时的缺省值
-	// Python: add_from_prompt_section(language="cn")（:231）
-	defaultRenderLanguage = "cn"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextWriter 已绑定会话的附件写入器。
@@ -98,7 +88,7 @@ func (w *ContextWriter) AddSection(
 func (w *ContextWriter) AddFromPromptSection(
 	section *saprompt.PromptSection,
 	kind AttachmentKind,
-	source string,
+	source, language string,
 	opts ...AttachmentOption,
 ) (*Attachment, error) {
 	if section == nil {
@@ -107,8 +97,8 @@ func (w *ContextWriter) AddFromPromptSection(
 	if w == nil || w.manager == nil || w.sessionID == "" {
 		return nil, ErrSessionRequired
 	}
-	allOpts := withSectionPriority(opts, section.Priority)
-	return w.manager.AddFromPromptSection(w.sessionID, section, kind, source, writerLanguage(opts), allOpts...)
+	return w.manager.AddFromPromptSection(w.sessionID, section, kind, source, language,
+		withSectionPriority(opts, section.Priority)...)
 }
 
 // ClearSection 删除绑定会话里的指定 section。
@@ -119,20 +109,6 @@ func (w *ContextWriter) ClearSection(section string) (int, error) {
 		return 0, ErrSessionRequired
 	}
 	return w.manager.ClearSection(w.sessionID, section)
-}
-
-// WithLanguage 指定 PromptSection 渲染语言。
-//
-// Python: add_from_prompt_section(..., language=...)（:231）
-// Go 的选项函数无法携带非 Attachment 字段，故借 Metadata["render_language"] 传递；
-// 该键在 AddFromPromptSection 内被剥离，不写入附件 metadata。
-func WithLanguage(language string) AttachmentOption {
-	return func(a *Attachment) {
-		if a.Metadata == nil {
-			a.Metadata = map[string]any{}
-		}
-		a.Metadata[renderLanguageMetadataKey] = language
-	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -175,35 +151,14 @@ func extraSessionID(values map[string]any) string {
 	return ""
 }
 
-// writerLanguage 从选项里读渲染语言（未指定时用 cn）。
-func writerLanguage(opts []AttachmentOption) string {
-	probe := &Attachment{}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(probe)
-		}
-	}
-	if v, ok := probe.Metadata[renderLanguageMetadataKey].(string); ok && v != "" {
-		return v
-	}
-	return defaultRenderLanguage
-}
-
-// withSectionPriority 追加 section 优先级，并剥离渲染语言键。
+// withSectionPriority 追加 section 优先级（0 表示未设置，由 Manager 用默认值）。
+//
+// Python: priority=getattr(prompt_section, "priority", 100) if priority is None else priority（:250）
 func withSectionPriority(opts []AttachmentOption, priority int) []AttachmentOption {
-	cleaned := make([]AttachmentOption, 0, len(opts)+2)
-	cleaned = append(cleaned, opts...)
-	if priority != 0 {
-		cleaned = append(cleaned, WithAttachmentPriority(priority))
+	if priority == 0 {
+		return opts
 	}
-	cleaned = append(cleaned, stripRenderLanguage)
-	return cleaned
-}
-
-// stripRenderLanguage 从附件 metadata 里移除渲染语言键。
-func stripRenderLanguage(a *Attachment) {
-	if a.Metadata == nil {
-		return
-	}
-	delete(a.Metadata, renderLanguageMetadataKey)
+	all := make([]AttachmentOption, 0, len(opts)+1)
+	all = append(all, opts...)
+	return append(all, WithAttachmentPriority(priority))
 }

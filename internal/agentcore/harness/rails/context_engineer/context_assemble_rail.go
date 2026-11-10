@@ -187,8 +187,8 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 					Str("event_type", "context_assemble_attachment").
 					Msg("prompt attachment manager is unavailable; skip attachment sections")
 			} else if _, err := r.attachmentManager.BindContext(cbc).AddFromPromptSection(
-				&contextSection, hprompts.AttachmentFile, contextAssembleAttachmentSource,
-				hprompts.WithLanguage(lang), hprompts.WithAttachmentContentKind("text/markdown"),
+				&contextSection, hprompts.AttachmentFile, contextAssembleAttachmentSource, lang,
+				hprompts.WithAttachmentContentKind("text/markdown"),
 			); err != nil {
 				logger.Warn(logComponent).
 					Str("event_type", "context_assemble_attachment").

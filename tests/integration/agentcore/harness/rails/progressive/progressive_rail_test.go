@@ -11,6 +11,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -167,9 +168,21 @@ func (s *ProgressiveToolRailSuite) TestProgressive_CatalogDeltaPushed() {
 	s.NotEmpty(items[0].Content, "附件内容不应为空")
 }
 
-// TestProgressive_SessionReuseNoDuplicate 验证同会话复用不重复推送同一差异。
+// TestProgressive_SessionReuseNoDuplicate 验证同会话复用时目录未变不重复推送。
+//
+// 时序说明（对齐 Python test_deferred_catalog_does_not_repeat_after_session_state_reset）：
+// 首轮目录无变化时 rail 不写附件，Sync 也不会为空的附件集合建历史快照；
+// 因此第二轮 has_history_snapshot 仍为 false，按上游逻辑会补发一次全量 snapshot。
+// 要验证「不重复」必须先有快照基线——这里在第一轮之后手动注册一个无关 section
+// 并触发一次同步（等同 Python 用例里 add_section + sync_to_context 那两步）。
+//
+// 必须显式传同一个 session：Invoke 不传 session 时 deep_agent 会为每轮
+// prepareSingleRoundSession 造新会话（owns_session），测的就不是「复用」了。
 func (s *ProgressiveToolRailSuite) TestProgressive_SessionReuseNoDuplicate() {
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
+
+	sess := s.NewTestSession("progressive-reuse")
+	s.Require().NoError(sess.PreRun(s.Ctx, nil))
 
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
 		ToolInstances:          []tool.Tool{s.newCountingTool("xlsx_read", "读取 Excel 表格", nil)},
@@ -178,16 +191,30 @@ func (s *ProgressiveToolRailSuite) TestProgressive_SessionReuseNoDuplicate() {
 	})
 	s.Require().NoError(err)
 
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第一轮"})
+	// 第一轮：目录无变化，不写 catalog 附件
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第一轮"}, agentinterfaces.WithSession(sess))
 	s.Require().NoError(err)
+	manager := agent.PromptAttachments()
+	s.Require().NotNil(manager)
+	first, err := manager.ListByFilter(prompts.AttachmentFilter{Section: "progressive_deferred_tools"})
+	s.Require().NoError(err)
+	s.Empty(first, "首轮目录无变化不应写附件")
+
+	// 建立快照基线：注册一个无关 section，让下一次同步把历史快照写出来
+	// Python: await manager.add_section(section="runtime", ...) + sync_to_context
+	created, err := manager.AddSection(sess.GetSessionID(), "runtime", "runtime state",
+		prompts.AttachmentRuntime, "test.runtime")
+	s.Require().NoError(err)
+	s.Require().NotNil(created)
+
+	// 第二轮：此时已有快照基线，目录仍未变化 → 不重复推送
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第二轮"})
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第二轮"}, agentinterfaces.WithSession(sess))
 	s.Require().NoError(err)
 
-	manager := agent.PromptAttachments()
 	items, err := manager.ListByFilter(prompts.AttachmentFilter{Section: "progressive_deferred_tools"})
 	s.Require().NoError(err)
-	s.Empty(items, "目录未变化时不应重复推送")
+	s.Empty(items, "目录未变化且已有快照基线时不应重复推送")
 }
 
 // TestProgressive_SchemaChangedRequiresResearch 验证 schema 变更后旧授权失效。
