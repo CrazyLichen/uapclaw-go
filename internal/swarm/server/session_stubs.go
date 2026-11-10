@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
@@ -67,10 +68,6 @@ type sessionCleanerAdapter struct {
 // 而整体失败，否则 team.delete 仍然不可用。
 type teamExecutionControllerAdapter struct{}
 
-// noopPromptSuggestionForks 会话建议生成分支持有者桩。
-// spec §8 D-10：待 10.3.30 recommendation（43821 行）落地后回填。
-type noopPromptSuggestionForks struct{}
-
 // noopSubagentRuntimeStopper 子代理运行时停止器桩。
 // spec §8 D-9：待 25.8 subagent_runtime（3650 行）落地后回填。
 type noopSubagentRuntimeStopper struct{}
@@ -106,7 +103,7 @@ func newSessionProvisioner(
 		TeamBinding:             noopTeamBindingUnbinder{},
 		LifecycleJournal:        lifecycleJournal{},
 		ParticipantRegistry:     sessionpkg.NewRuntimeParticipantRegistry(),
-		PromptForks:             noopPromptSuggestionForks{},
+		PromptForks:             recommendation.Forks,
 		SubagentStopper:         noopSubagentRuntimeStopper{},
 		TeamExecutionController: teamExecutionControllerAdapter{},
 	})
@@ -333,12 +330,6 @@ func (teamExecutionControllerAdapter) DeleteAborted(target sessionpkg.SessionLif
 func (teamExecutionControllerAdapter) DeleteCommitted(target sessionpkg.SessionLifecycleTarget) {
 	logger.Debug(logComponent).Str("team_name", target.TeamName).
 		Msg("team delete committed")
-}
-
-// SessionDeleted 桩：记 Debug 并返回。
-func (noopPromptSuggestionForks) SessionDeleted(sessionID string) {
-	logger.Debug(logComponent).Str("session_id", sessionID).
-		Msg("prompt suggestion forks session_deleted not implemented (see 10.3.28 spec D-10)")
 }
 
 // StopSubagentRuntimes 桩：记 Debug 并返回 nil。

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	"strings"
 	"sync"
 	"time"
@@ -204,6 +205,11 @@ func (s *AgentServer) Stop() error {
 
 	// 2. 取消所有进行中的任务（对齐 Python agent_ws_server.py L726）
 	s.cancelAllInflightWork()
+
+	// 2b. 取消在飞的建议生成（对齐 agent_ws_server.py:2259 forks.shutdown()）。
+	// 上游用 try/except 包住，失败不得阻断后续服务关闭；Go 侧 Shutdown 无 error。
+	recommendation.Forks.Shutdown()
+	logger.Debug(logComponent).Msg("prompt suggestion forks shut down")
 
 	// 3. 停止调度器（对齐 Python agent_ws_server.py L732）
 	s.stopScheduler()
