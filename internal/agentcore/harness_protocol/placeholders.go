@@ -77,27 +77,7 @@ const (
 // Python: checkpoints.py:15 MAX_CHECKPOINT_BYTES
 const MaxCheckpointBytes = 4 * 1024 * 1024
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ErrEventStreamDone 观测游标到达末尾的哨兵，等价 Python 的 StopAsyncIteration。
-//
-// ⤵️ 15.2 回填：游标语义（单消费者租约 / 提前 Close 释放）留 15.2。
-var ErrEventStreamDone = errEventStreamDone{}
-
 // ──────────────────────────── 结构体（接口定义）────────────────────────────
-
-// HarnessEventCursor 可提前释放消费者租约的有序观测游标。
-//
-// ⤵️ 15.2 回填：租约与并发保护语义留 15.2（Python: stream.py:9-22）。
-// Python: stream.py:9-22 HarnessEventCursor（3 方法）
-type HarnessEventCursor interface {
-	// Iter 返回本游标（对齐 __aiter__）
-	Iter() HarnessEventCursor
-	// Next 返回下一条有序事件；耗尽时返回 ErrEventStreamDone（对齐 __anext__）
-	Next(ctx context.Context) (*HarnessEvent, error)
-	// Close 幂等释放观测消费者租约（对齐 aclose）
-	Close(ctx context.Context) error
-}
 
 // HarnessCheckpointSink 宿主侧主动发布 checkpoint 的持久化目标。
 //
@@ -133,11 +113,3 @@ type HarnessInteractionHandler interface {
 	// Pending 返回当前未应答的交互请求数量
 	Pending() int
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// errEventStreamDone 观测游标耗尽的哨兵类型。
-type errEventStreamDone struct{}
-
-// Error 实现 error 接口。
-func (errEventStreamDone) Error() string { return "harness event stream exhausted" }
