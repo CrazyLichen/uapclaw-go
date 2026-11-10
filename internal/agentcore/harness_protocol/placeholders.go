@@ -70,21 +70,6 @@ type CheckpointSaveReceipt struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// EventOverflowPolicy 有界观测缓冲满时允许的行为。
-//
-// ⤵️ 15.2 回填：取值已与上游一致，event_retention 推导留 15.2。
-// Python: events.py:87-95 EventOverflowPolicy（3 项）
-type EventOverflowPolicy string
-
-const (
-	// EventOverflowPolicyBlock 阻塞等待
-	EventOverflowPolicyBlock EventOverflowPolicy = "block"
-	// EventOverflowPolicyCoalesceOrBlock 可合并则合并，否则阻塞
-	EventOverflowPolicyCoalesceOrBlock EventOverflowPolicy = "coalesce_or_block"
-	// EventOverflowPolicyDropBestEffortOrBlock 可丢尽力而为类，否则阻塞
-	EventOverflowPolicyDropBestEffortOrBlock EventOverflowPolicy = "drop_best_effort_or_block"
-)
-
 // CheckpointReason 实现方发布 checkpoint 的原因。
 //
 // ⤵️ 15.4 回填：取值已与上游一致。
