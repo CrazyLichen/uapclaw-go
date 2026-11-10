@@ -470,6 +470,10 @@ func (r *AutoPermissionRail) handleReviewerUnavailable(
 // manualFromAuthorization 文件授权失败时转人工。
 //
 // Python: 三处 `if authorization_error:` 分支的共用形态
+//
+// ⚠️ 偏差 V-14：该路径当前**不可达**——要求 tool_name == send_file_to_user，
+// 但该工具 NoAutoAllowReason 恒为 execution_provider_contract_unverified，
+// 在第 ③ 步即被拦截。保留以对齐 Python 结构。
 func (r *AutoPermissionRail) manualFromAuthorization(
 	facts permissions.ToolDecisionFacts,
 	opts reviewerExecutionOptions,

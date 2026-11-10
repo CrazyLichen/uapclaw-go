@@ -13,7 +13,7 @@
 // 是已退役的任务级授权拼写。识别它们的目的**不是**兼容，而是**拒绝**——
 // 让旧载荷无法被当作「单次放行」而绕过后续审查。
 //
-// ## `persist_allow`：与 Python 一致（不做额外映射）
+// ## `persist_allow`：与 Python 一致（不做额外映射，已消除的偏差 V-11）
 //
 // Python 的对象分支用 `getattr(user_input, "persist_allow", False)`。
 // openjiuwen 的 `PermissionConfirmResponse` **没有** `persist_allow` 属性

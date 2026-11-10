@@ -430,19 +430,77 @@ func (r *DeepAgentRail) IsTrusted() bool {
 
 ## 五、已知偏差（规则 9.6 / 12.3 / 13.2，全部经用户确认）
 
-| 编号 | 偏差 | Python 位置 | Go 位置 | 性质 | 理由 | 回收条件 | 计划表 ⤴️ |
+> **台账维护说明（2026-11 整理）**
+>
+> 本表是全仓**唯一权威**的偏差清单，编号连续、无重复。代码注释里写的
+> `偏差 V-N` 必须能在本表查到同号条目。
+>
+> 状态列取值：
+> - **有效** —— 当前仍存在，按回收条件处理
+> - **已消除** —— 已按上游对齐，条目保留供追溯（不再计入存量偏差）
+> - **不可达** —— 代码存在但当前调用路径走不到
+>
+> 编号历史：原 §12.24 的「V-9：`_reviewer_ui_metadata` 未落地」与表格
+> V-9（`NATIVE_PATH_ACCESS`）**撞号**，前者已改号为 **V-13**（原 V-13
+> `grant 读取需要显式 ctx` 顺延为 V-13b）。§12.25 初版曾把「显示语言」误编
+> 为 V-10，已更正为 V-12。V-20 / V-21 为起草中撤销的编号，**不再使用**。
+
+| 编号 | 偏差 | Python 位置 | Go 位置 | 性质 | 理由 | 回收条件 | 状态 |
 |---|---|---|---|---|---|---|---|
-| **V-1** | `auto_permission_rail.go` 目录归属漂移 | `permissions/auto_permission_rail.py` | `permissions/auto_permission/auto_permission_rail.go` | 目录层级 | 避免 `permissions` ↔ `auto_permission` 循环依赖 | Go 支持子包回引父包类型时回收 | 9.90d-2 行内说明 |
-| **V-2** | 12 个 mixin 合并为单结构体 | 12 个 `*Mixin` 类 | `AutoPermissionRail` 单类型 + 方法分文件 | 类型归属 | Go 无多继承；12 mixin 共享同一 `self` 状态 | 不回收（语言限制） | 9.90d-2 行内说明 |
-| **V-3** | 5 个反射适配函数不实现 | `runtime_result.py:20/46/79/96/132` | 无 | 方法缺失 | Go 签名静态固定，无 `inspect.signature` 需求 | 不回收（语言限制） | 9.90d-2 行内说明 |
-| **V-3b** | `load_openjiuwen_permission_contract` 的三项运行时探测退化为常量 | `openjiuwen_contract.py:36-47`（`inspect.iscoroutinefunction` / `hasattr` / `callable`） | `openjiuwen_contract.go` 常量 `true` + 文件底部编译期断言 `var _ = (*secrail.PermissionInterruptRail).UpdateConfig` 等 | 校验机制 | Go 无 async 概念，方法/工厂的存在性由类型系统在**编译期**保证，运行时探测无意义 | 不回收（语言限制） | 9.90d-1 Task 12 行内说明 |
-| **V-4** | `_closure` 闭包链校验 → `MarkTrusted()` | `readonly_tool_bindings.py:44` | `rails/base.go` `MarkTrusted()` | 校验机制 | Go 无 `__code__.co_freevars` / `__closure__` 反射 | 不回收（语言限制），残余风险登记 | 9.90d-2 行内说明 |
-| **V-5** | `_methods_match` 反射方法归属 → 接口断言 | `readonly_tool_bindings.py:65` | 同上 | 校验机制 | Go 方法值无法还原 `__self__`/`__func__` | 同上 | 9.90d-2 行内说明 |
-| **V-6** | `readonly_tool_bindings` 只覆盖 `ProgressiveToolRail` | 覆盖 5 类 rail（`ProgressiveToolRail` / `ToolRetrievalPromptRail`+`ToolRetrievalToolkit` / `SkillRetrievalPromptRail`+`SkillRetrievalToolkit` / `HeartbeatRuntimeBridge` / `_RestrictedCronBackend`） | 仅 `ProgressiveToolRail` | 功能范围 | 4 类 rail/toolkit 在 Go 侧不存在 | **9.11b 落地后回填** | **🔴 新增 `9.11b` 行，标 ☐ + ⤴️ 指向 9.90d-2** |
-| **V-7** | `code_tool_bindings` 不含 LSP | 含 `LspRail` + `lsp_tool/*`（约 1,239 行） | 仅 `agent_mode` 三工具 | 功能范围 | Go 侧 LSP 整层未实现 | **9.17 LSPRail 落地后回填** | **✅ 9.17 行追加 ⤴️** |
-| **V-8** | `_emit_audit` / `_emit_permission_result_observation` 空实现 | `runtime_bridge.py:62/69` | no-op 桩（保留完整签名与 31 个调用点） | 功能缺失 | `audit.py` 留 9.90e | **9.90e 回填** | **✅ 9.90e 行追加 ⤴️** |
-| **V-9** | `NATIVE_PATH_ACCESS` 由 task-local 降级为全局单例 | `ContextVar`（按 asyncio task 隔离） | `native_path_context.go:130` 全局变量 + `sync.Mutex` | 并发语义 | Go 无 task-local 存储；9.90b 落地时即采用全局变量式 | 改用 ctx 派生式重写 `native_path_context.go` 时回收 | 9.90d-2 行内说明（本批是首个并发消费者） |
-| **V-10** | `get_cwd()` 的隐式异常改为显式 error 分支 | `openjiuwen/core/sys_operation/cwd.py:81` `get_cwd()` 抛 `OSError`；33 处调用方**全部不捕获**，异常自然上冒 | `cwd.GetCwd(ctx) (string, error)`；13 个生产文件 18 处调用点显式 `if err != nil { return err }` | 代码形状 / 调用方职责 | Go 无隐式异常，唯一等价物是返回 error 并由调用方传播；用户拍板「方案 1 全做」接受形状差异 | Go 引入异常机制时回收（不回收） | 9.90d-1 行内说明 + `cwd/doc.go` |
+| **V-1** | `auto_permission_rail.go` 目录归属漂移 | `permissions/auto_permission_rail.py` | `permissions/auto_permission/auto_permission_rail.go` | 目录层级 | 避免 `permissions` ↔ `auto_permission` 循环依赖 | Go 支持子包回引父包类型时回收 | 有效 |
+| **V-2** | 12 个 mixin 合并为单结构体 | 12 个 `*Mixin` 类 | `AutoPermissionRail` 单类型 + 方法分文件 | 类型归属 | Go 无多继承；12 mixin 共享同一 `self` 状态 | 不回收（语言限制） | 有效 |
+| **V-3** | 5 个反射适配函数不实现 | `runtime_result.py:20/46/79/96/132` | 无 | 方法缺失 | Go 签名静态固定，无 `inspect.signature` 需求 | 不回收（语言限制） | 有效 |
+| **V-3b** | `load_openjiuwen_permission_contract` 的三项运行时探测退化为常量 | `openjiuwen_contract.py:36-47`（`inspect.iscoroutinefunction` / `hasattr` / `callable`） | `openjiuwen_contract.go` 常量 `true` + 文件底部编译期断言 `var _ = (*secrail.PermissionInterruptRail).UpdateConfig` 等 | 校验机制 | Go 无 async 概念，方法/工厂的存在性由类型系统在**编译期**保证，运行时探测无意义 | 不回收（语言限制） | 有效 |
+| **V-4** | `_closure` 闭包链校验 → `MarkTrusted()` | `readonly_tool_bindings.py:44` | `rails/base.go` `MarkTrusted()` | 校验机制 | Go 无 `__code__.co_freevars` / `__closure__` 反射 | 不回收（语言限制），残余风险登记 | 有效 |
+| **V-5** | `_methods_match` 反射方法归属 → 接口断言 | `readonly_tool_bindings.py:65` | 同上 | 校验机制 | Go 方法值无法还原 `__self__`/`__func__` | 同上 | 有效 |
+| **V-6** | `readonly_tool_bindings` 只覆盖 `ProgressiveToolRail` | 覆盖 5 类 rail（`ProgressiveToolRail` / `ToolRetrievalPromptRail`+`ToolRetrievalToolkit` / `SkillRetrievalPromptRail`+`SkillRetrievalToolkit` / `HeartbeatRuntimeBridge` / `_RestrictedCronBackend`） | 仅 `ProgressiveToolRail` | 功能范围 | 4 类 rail/toolkit 在 Go 侧不存在 | **9.11b 落地后回填** | 有效 |
+| **V-7** | `code_tool_bindings` 不含 LSP | 含 `LspRail` + `lsp_tool/*`（约 1,239 行） | 仅 `agent_mode` 三工具 | 功能范围 | Go 侧 LSP 整层未实现 | **9.17 LSPRail 落地后回填** | 有效 |
+| **V-8** | `_emit_audit` / `_emit_permission_result_observation` 空实现 | `runtime_bridge.py:62/69` | no-op 桩（保留完整签名与 31 个调用点） | 功能缺失 | `audit.py` 留 9.90e | **9.90e 回填** | 有效 |
+| **V-9** | `NATIVE_PATH_ACCESS` 由 task-local 降级为全局单例 | `ContextVar`（按 asyncio task 隔离） | `native_path_context.go:130` 全局变量 + `sync.Mutex` | 并发语义 | Go 无 task-local 存储；9.90b 落地时即采用全局变量式 | 改用 ctx 派生式重写 `native_path_context.go` 时回收 | 有效 |
+| **V-10** | `get_cwd()` 的隐式异常改为显式 error 分支 | `openjiuwen/core/sys_operation/cwd.py:81` `get_cwd()` 抛 `OSError`；33 处调用方**全部不捕获**，异常自然上冒 | `cwd.GetCwd(ctx) (string, error)`；13 个生产文件 18 处调用点显式 `if err != nil { return err }` | 代码形状 / 调用方职责 | Go 无隐式异常，唯一等价物是返回 error 并由调用方传播；用户拍板「方案 1 全做」接受形状差异 | Go 引入异常机制时回收（不回收） | 有效 |
+
+#### 5.0.1 9.90d-2 阶段新增（V-11 ~ V-22）
+
+| 编号 | 偏差 | Python 位置 | Go 位置 | 性质 | 理由 | 回收条件 | 状态 |
+|---|---|---|---|---|---|---|---|
+| **V-11** | `persist_allow` 字段无对应属性 | `reviewer_audit.py` 用 `getattr(user_input, "persist_allow", False)`；`PermissionConfirmResponse` **本无该属性**，取值恒为 `False` | `reviewer_audit.go` `confirmResponsePayload` 写入 `"persist_allow": false` | 行为对齐修正 | 初版曾把 Go 的 `PersistScope` 映射为「有持久化意图」赋给它——**凭空造出 Python 没有的行为**。改为恒 `False` 后 `hasPersistIntent` 与两个 scope 常量一并删除 | 已消除 | **已消除** |
+| **V-12** | 显示语言读取方式 | `reviewer_metadata.py` 用 `get_config().get("preferred_language")` | `reviewer_metadata.go` `configuredReviewerDisplayLanguage` 用 `configutil.New("").Load()` 每次加载配置 | 实现方式 | 初版以「Go 无全局 config 单例」为由改用包级变量 + `SetReviewerDisplayLanguage` 注入点，该前提**不成立**——同仓库 `team_manager_spec.go` 早用 `configutil.New("").Load()` 读同一项。已删除注入点，任一环节失败回落 `"zh"` 对齐 Python 的 `except` 分支 | 已消除 | **已消除** |
+| **V-13** | `_reviewer_ui_metadata` 未落地 | `reviewer_metadata.py` | Task 30 前由 `runtime_bridge.go` 空实现 | 临时缺失 | 该偏差原编号为 V-9，与表格 V-9（`NATIVE_PATH_ACCESS`）**撞号**，本次整理改号为 V-13 | Task 30 已回填 | **已消除** |
+| **V-13b** | `send_file` 授权读写需要显式 ctx | `current_send_file_execution_grant()` / `publish_...` 走 ContextVar 隐式生效，调用方无需接收返回值 | `CurrentSendFileExecutionGrant(ctx)` / `PublishSendFileExecutionGrant(ctx, grant)` 均需显式 ctx；后者返回派生 ctx，**调用方必须继续使用**否则授权丢失，故 `issueSendFileAuthorization` 返回 `(原因码, 派生ctx)` | 并发语义 | Go 无 ContextVar；context 不可变，派生结果必须逐层回传 | 若改用可变 ctx 承载（不推荐）时回收；否则不回收 | 有效 |
+| **V-14** | `manualFromAuthorization` 不可达 | `reviewer_execution.py` 三处 `if authorization_error:` 分支 | `reviewer_execution.go` 同名函数 | 不可达代码 | 该分支要求 `tool_name == send_file_to_user`，但该工具 `NoAutoAllowReason()` 恒为 `execution_provider_contract_unverified`，路由必为 `manual_only`，在判定链第 ③ 步就被拦截 | 若放宽执行器契约检查（允许 `send_file_to_user` 走 `semantic_reviewer`）立即生效 | **不可达** |
+| **V-15** | `_is_auto_confirmed` 钩子缺失 | `getattr(self.base_rail, "_is_auto_confirmed", None)` | `reviewer_override_consume.go` `isAutoConfirmed` 本地实现 | 校验机制 | Go 的 `BasePermissionRail` 无此方法。本地判定**比 Python 更严格**：仅显式 `bool true` 算确认，`"true"` / `1` 都不算。自动确认等于跳过审批，宁可少放行 | 9.90e 给 `BasePermissionRail` 补三个钩子（`_skip_tool` / `_raise_interrupt` / `_get_auto_confirm_key`）时一并处理 | 有效 |
+| **V-16** | `clear_no_host_fallback` 的清除无法回传 | `clear_no_host_fallback()` 写 ContextVar（任务级全局） | `ClearNoHostFallback(ctx)` 返回派生 ctx，而 `AfterToolCall(ctx, cbc)` 的 ctx 是入参、`AgentCallbackContext` 无 ctx 设置器 | 并发语义 | 派生结果无法回传给调用方。若上游 ctx 已设 `true`，本次清除**不生效**；默认情形（上游未设）下清除值与默认值等价，行为一致 | 给 `AgentCallbackContext` 增加 ctx 设置器，或改由调用方接收派生 ctx | 有效 |
+| **V-17** | `agent._bound_session_id` 无导出访问器 | `agent._bound_session_id` | `readonly_tool_bindings.go` `boundSessionIDOf` 用 `reflect` 读非导出字段；测试因反射只读限制改用 `unsafe.Pointer` 设置 | 封装缺失 | Go 侧 `DeepAgent.boundSessionID` 为私有字段，仅 `PrepareInteractionTaskLoop` / `LoadState` 内部设置 | `DeepAgent` 增加 `BoundSessionID()` 导出访问器后回收 | 有效 |
+| **V-18** | 类对象常量 → 装配期类型登记 | `_CONTROL_TYPES` / `_TOOL_TYPES` 等 `Type[XxxTool]` 类对象常量 | `SetReadonlyToolTypes` / `SetCodeControlToolTypes` / `SetSubagentRuntimeControlToolTypes` + `ResolveToolBinding` 精确类型比对 | 校验机制 | Go 的工具为**函数式实现**（`NewXxxTool(...) tool.Tool`），无导出具体类型可供 `reflect.TypeOf` 做常量比对。用「装配期登记 + 运行期类型/卡片同一性」替代，与 `SetNativePathExecutors` 同一设计 | 各工具包导出具体类型后可回收 | 有效 |
+| **V-19** | `NATIVE_PATH_ACCESS` 复位方式 | `NATIVE_PATH_ACCESS.set(None)` / `reset(token)` | `permissions.SetNativePathAccess(nil)` + `defer` 再清一次 | 并发语义 | Go 侧是包级全局（见 V-9），无 token 可 reset；用 `defer` 显式清 nil。多会话并发时存在串扰风险（本批 `before_tool` 是首个并发消费者） | 与 V-9 同批回收（改用 ctx 派生式重写 `native_path_context.go`） | 有效 |
+| **V-22** | 六个 `subagent_*` 工具 → 三个 `sessions_*` | `_SUBAGENT_RUNTIME_CONTROL_TYPES` 六个类：`SubagentSpawnTool` / `Wait` / `List` / `SendInput` / `Close` / `Resume`；身份校验读 `resource._parent_agent` | `deep_agent.go:312` 已登记：合并注册为 `sessions_spawn` / `sessions_list` / `sessions_cancel`。身份校验改为 `SetSubagentRuntimeControlToolTypes` 装配期登记 + `ResolveToolBinding` | 命名 + 数量 + 校验机制 | 六个 `SubagentXxxTool` 类在 Go 侧不存在；补出来会与既有合并决策制造双份实现（违反规则 8）。`NewSessions*Tool` 把 `provider` 捕获进闭包、无导出访问器，做不了 `_parent_agent` 归属校验 | `SessionToolkit` 增加导出 parent 访问器后可补回归属校验 | 有效 |
+
+
+### 5.0.2 偏差存量统计（截至 9.90d-2 收官）
+
+| 状态 | 编号 | 数量 |
+|---|---|---|
+| **有效** | V-1 V-2 V-3 V-3b V-4 V-5 V-6 V-7 V-8 V-9 V-10 V-13b V-15 V-16 V-17 V-18 V-19 V-22 | **18** |
+| **已消除** | V-11 V-12 V-13 | 3 |
+| **不可达** | V-14 | 1 |
+| **撤销未用** | V-20 V-21 | 2（编号不再分配） |
+
+按性质分类（18 项有效）：
+
+| 性质 | 编号 | 说明 |
+|---|---|---|
+| 语言限制（不回收） | V-2 V-3 V-3b V-4 V-5 | Go 无多继承 / `inspect.signature` / async 探测 / `__code__` 反射 |
+| 并发语义 | V-9 V-13b V-16 V-19 | Go 无 ContextVar / task-local，改用全局或 ctx 派生 |
+| 校验机制 | V-18 V-22 | 类对象常量 → 装配期类型登记 |
+| 功能范围（待前置件） | V-6 V-7 | 等 9.11b / 9.17 |
+| 功能缺失（待回填） | V-8 V-15 | 等 9.90e |
+| 目录 / 封装 | V-1 V-17 | 循环依赖规避 / 缺导出访问器 |
+| 代码形状 | V-10 | `get_cwd()` 异常改 error |
+
+**9.90e 回填清单**（V-8 / V-15 及其关联项）：`audit.py` 落地后换掉
+`emitAudit` / `emitPermissionResultObservation` 空桩；`BasePermissionRail`
+补 `_skip_tool` / `_raise_interrupt` / `_get_auto_confirm_key` 三个钩子；
+`AgentCallbackContext` 补 ctx 设置器（V-16）。详见 §12.27。
 
 ### 5.1 V-6 的前置件规模（新增 9.11b）
 
@@ -1797,7 +1855,9 @@ feedback 里的标记：
 本批保留完整签名与全部调用点，函数体为空并标 `⤵️ 9.90e 回填`。
 9.90e 只需把桩体换成真实 `EmitPermissionAudit` 调用。
 
-#### 新增偏差 V-9：`_reviewer_ui_metadata` 未落地（⤵️ Task 30）
+#### 新增偏差 V-13：`_reviewer_ui_metadata` 未落地（⤵️ Task 30）
+
+> 原编号为 V-9，与表格 V-9（`NATIVE_PATH_ACCESS`）撞号，已改号为 **V-13**。
 
 `normalizeRuntimePermissionResult` 的 user_rejection 分支在 Python 里会构造
 含 `_reviewer_ui_metadata` 的标准 denied payload。该函数属
@@ -1826,7 +1886,7 @@ feedback 里的标记：
 返回 `*ToolInvocationKeyV1`——测试通过 `SetExtra` 注入完整 key 后，
 `prepareManualPendingInvocation` 的 value/metadata 双段注入路径即可覆盖。
 
-### 12.25 Task 30 执行结论：`reviewer_metadata`（并回填 V-9）
+### 12.25 Task 30 执行结论：`reviewer_metadata`（并回填 V-13）
 
 **落地**：`auto_permission/reviewer_metadata.go`（401 行 Python → 约 560 行 Go /
 11 函数 + 1 注入点），覆盖率 **97.9%**，auto_permission 包 91.2%。
@@ -1877,7 +1937,7 @@ def no_auto_allow_reason(self) -> str:
 即「source == manual_only 时返回 reason」。Go 侧无需扩展 `DecisionRoute`
 结构体，用 `decisionRouteNoAutoAllowReason(route)` 函数等价实现。
 
-#### V-9 已回填
+#### V-13 已回填
 
 `runtime_bridge.go` 的 `normalizeRuntimePermissionResult` 补全了
 user_rejection 分支：
@@ -2296,7 +2356,7 @@ Python 原文件 320 行覆盖 10+ 内置工具，依赖 V-6 前置件 ≥4,286 
 | 同类型不同实例 / 多 rail / 无 rail → 拒绝 | ✅ 三个 fail-closed 用例 |
 | 类型不符 / session 不符 / 终止阶段 → 拒绝 | ✅ 各自用例 |
 
-#### 新增偏差 V-17 / V-18
+#### 新增偏差 V-17 / V-18（台账同号）
 
 | 偏差 | 内容 |
 |---|---|

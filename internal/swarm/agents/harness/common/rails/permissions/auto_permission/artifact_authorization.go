@@ -7,7 +7,7 @@
 //  2. 对已放行的 send_file_to_user 签发精确授权（grant），保证「批准的文件集合」
 //     与「实际发送的文件集合」完全一致
 //
-// ## 偏差 V-13：grant 读取需要显式 ctx
+// ## 偏差 V-13b：grant 读取需要显式 ctx
 //
 // Python 的 `current_send_file_execution_grant()` 从 ContextVar 隐式取；
 // Go 的 `CurrentSendFileExecutionGrant(ctx)` / `PublishSendFileExecutionGrant(ctx, grant)`
@@ -219,7 +219,7 @@ func sendFileExecutionGrantForAllow(
 // Python: AutoPermissionArtifactAuthorizationMixin._issue_send_file_authorization(facts)
 // 返回 (失败原因码, 派生 ctx)。原因码为空表示成功或无需授权。
 //
-// 与 Python 的签名差异（偏差 V-13 的延伸）：Python 的
+// 与 Python 的签名差异（偏差 V-13b 的延伸）：Python 的
 // `publish_send_file_execution_grant` 写 ContextVar 全局生效，调用方无需接收
 // 返回值；Go 的 `PublishSendFileExecutionGrant` 返回携带授权的新 ctx，
 // **必须由调用方继续使用**，否则授权丢失。故多返回一个 ctx。
