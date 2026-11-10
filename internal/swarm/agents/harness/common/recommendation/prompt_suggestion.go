@@ -2,6 +2,9 @@ package recommendation
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -343,9 +346,8 @@ func uncachedTokens(answer *llmschema.AssistantMessage) int {
 	return usage.InputTokens - usage.CacheTokens + usage.OutputTokens
 }
 
-// runFork 重放父调用并解析建议（Task 8 补全模型重放与窄接口落库）。
+// runFork 重放父调用并解析建议；落库与推帧经窄接口，未注入则丢弃。
 // Python: prompt_suggestion.py:447 _fork
-// 本 Task 先落「取消即退出」的最小真实实现，Task 8 在其内部补重放。
 func (f *PromptSuggestionForks) runFork(
 	ctx context.Context, sessionID, requestID string, call *MainCall, epoch int64,
 ) {
@@ -358,12 +360,137 @@ func (f *PromptSuggestionForks) runFork(
 		delete(f.tasks, sessionID)
 		f.mu.Unlock()
 	}()
-	if epoch == 0 || ConsentEpoch(f.config) != epoch {
+	// Python: 1. suggestion_id = uuid.uuid4().hex
+	suggestionID := newSuggestionID()
+	// Python: 2. messages = [*call.messages, call.answer, UserMessage(SUGGESTION_PROMPT)]
+	// ★ 前缀必须逐字不变，否则服务商侧 prompt cache 无法命中。
+	messages := make([]llmschema.BaseMessage, 0, len(call.Messages)+2)
+	messages = append(messages, call.Messages...)
+	if call.Answer != nil {
+		messages = append(messages, call.Answer)
+	}
+	messages = append(messages, llmschema.NewUserMessage(SuggestionPrompt))
+
+	// Python: 3. for _ in range(call.max_iterations): 重放，遇无 tool_calls 即停
+	var replies []*llmschema.AssistantMessage
+	for iteration := 0; iteration < maxInt(call.MaxIterations, 1); iteration++ {
+		// Python: if consent_epoch() != epoch: return
+		if ConsentEpoch(f.config) != epoch {
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		reply, err := invokeMainCall(ctx, call, messages)
+		if err != nil {
+			// Python: except Exception: logger.warning("[PromptSuggestion] fork failed: ...")
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+				Msg("prompt suggestion fork failed")
+			return
+		}
+		replies = append(replies, reply)
+		// Python: if not reply.tool_calls: break
+		if !hasToolCalls(reply) {
+			break
+		}
+		// Python: messages.extend([reply, *ToolMessage(...)])——生成建议不需要工具
+		messages = append(messages, reply)
+		for _, toolCall := range reply.ToolCalls {
+			messages = append(messages, llmschema.NewToolMessage("生成建议无需使用工具", toolCall.ID))
+		}
+	}
+
+	// Python: 4. text = 首个非空字符串 reply 的内容
+	text := firstNonEmptyContent(replies)
+	// Python: 5. suggestions, outcome, reason = select_suggestions(text)
+	suggestions, outcome, reason := SelectSuggestions(text)
+	logger.Debug(logComponent).Str("session_id", sessionID).
+		Str("outcome", outcome).Str("reason", reason).
+		Int("suggestions", len(suggestions)).Msg("prompt suggestion fork finished")
+	// Python: 6. if not suggestions: _record(...) 后 return
+	if len(suggestions) == 0 {
 		return
 	}
-	select {
-	case <-ctx.Done():
-		return
-	default:
+
+	// Python: 7. 逐条记录 candidate 并推送——本轮只留窄接口（spec DEV-10）
+	result := ForkResult{
+		SuggestionID:         suggestionID,
+		SessionID:            sessionID,
+		RequestID:            requestID,
+		Text:                 suggestions[0],
+		Model:                call.Model,
+		ParentUncachedTokens: uncachedTokens(call.Answer),
+		AnswerTokens:         answerTokens(call.Answer),
 	}
+	f.mu.Lock()
+	publisher, pusher := f.publisher, f.readyPusher
+	f.mu.Unlock()
+	if publisher == nil {
+		// 对齐「落库失败不伤主流程」：未注入时只记 Debug，结果丢弃。
+		logger.Debug(logComponent).Str("session_id", sessionID).
+			Msg("fork result discarded: no publisher")
+		return
+	}
+	// Python: _record 内部吞异常并 Warn，不向上传播
+	publisher.PublishForkResult(ctx, result)
+	// Python: 落库成功后才推送 ready 事件
+	if pusher != nil {
+		pusher.PushReady(ctx, SuggestionReadyEvent{
+			SessionID:    sessionID,
+			RequestID:    requestID,
+			SuggestionID: suggestionID,
+			Text:         result.Text,
+		})
+	}
+}
+
+// invokeMainCall 用父调用的模型、工具与全部参数重放一次。
+// Python: prompt_suggestion.py:258 _MainCall.invoke
+func invokeMainCall(
+	ctx context.Context, call *MainCall, messages []llmschema.BaseMessage,
+) (*llmschema.AssistantMessage, error) {
+	options := []model_clients.InvokeOption{
+		model_clients.WithInvokeModel(call.Model),
+	}
+	// Python: tools=call.tools or None
+	if len(call.Tools) > 0 {
+		options = append(options, model_clients.WithTools(call.Tools...))
+	}
+	// Python: **call.parameters —— 父调用的全部非默认 kwarg
+	if len(call.Parameters) > 0 {
+		options = append(options, model_clients.WithInvokeExtra(call.Parameters))
+	}
+	return call.LLM.Invoke(ctx, model_clients.NewMessagesParam(messages...), options...)
+}
+
+// firstNonEmptyContent 返回首个非空回答正文。
+// Python: next((r.content.strip() for r in replies if isinstance(r.content, str) and r.content.strip()), "")
+func firstNonEmptyContent(replies []*llmschema.AssistantMessage) string {
+	for _, reply := range replies {
+		if reply == nil {
+			continue
+		}
+		if text := reply.GetContent().Text(); strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
+}
+
+// newSuggestionID 生成 32 位十六进制建议标识。
+// Python: uuid.uuid4().hex
+func newSuggestionID() string {
+	buffer := make([]byte, 16)
+	if _, err := rand.Read(buffer); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(buffer)
+}
+
+// maxInt 返回两者较大值。
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
