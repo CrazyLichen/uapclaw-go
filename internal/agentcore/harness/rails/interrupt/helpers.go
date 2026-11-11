@@ -170,6 +170,11 @@ func extractInteractionParts(interaction map[string]any) (string, any) {
 	}
 	requestID := utils.StrValFromMap(interaction, "id")
 	valueObj := interaction["value"]
+	if valueObj == nil {
+		// Python: interaction.get("value", {}) —— 缺省是空 dict 而非 None，
+		// 下游（如 question_interactions）会直接对 value 取字段。
+		valueObj = map[string]any{}
+	}
 	return strings.TrimSpace(requestID), valueObj
 }
 

@@ -217,8 +217,35 @@ func readValueField(valueObj any, fieldName string) string {
 	return raw
 }
 
-// extractInterruptMetadata 从 dict 形态 value 中取 metadata。
+// iterInteractions 从列表或完整 SDK 状态 schema 中展开出交互对象。
 //
+// Python: _iter_interactions(state_outputs) (interrupt_helpers.py L1361-1373)
+//
+// 三种展开规则（顺序即优先级）：
+//  1. 元素本身是 list/tuple → 递归展开
+//  2. 元素是 {"type": "__interaction__", "payload": X} → 递归展开 X
+//  3. 其余原样产出
+func iterInteractions(stateOutputs []any) []any {
+	result := make([]any, 0, len(stateOutputs))
+	for _, interaction := range stateOutputs {
+		switch typed := interaction.(type) {
+		case []any:
+			result = append(result, iterInteractions(typed)...)
+		case map[string]any:
+			if typed["type"] == "__interaction__" {
+				payload := typed["payload"]
+				result = append(result, iterInteractions([]any{payload})...)
+				continue
+			}
+			result = append(result, typed)
+		default:
+			result = append(result, interaction)
+		}
+	}
+	return result
+}
+
+// extractInterruptMetadata 从 dict 形态 value 中取 metadata。//
 // Python: _extract_interrupt_metadata(value_obj)
 func extractInterruptMetadata(valueObj any) map[string]any {
 	mapping, ok := valueObj.(map[string]any)
