@@ -195,3 +195,322 @@ func TestParseXxx_非法值(t *testing.T) {
 		assert.Contains(t, err.Error(), "unknown output.kind: ''")
 	})
 }
+
+// TestErrorFromDict_前缀来自实参 验证 errorFromDict 在不同调用点
+// 产出不同前缀（模型请求 vs 轮次结果 vs 终止原因）。
+// Python: serialization.py:126-134 _error_from_dict（f"{field_name}.code"）
+func TestErrorFromDict_前缀来自实参(t *testing.T) {
+	t.Run("model_request.error", func(t *testing.T) {
+		_, err := errorFromDict(map[string]any{"message": "boom", "code": 1}, "model_request.error")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "model_request.error.code")
+	})
+
+	t.Run("turn_result.error", func(t *testing.T) {
+		_, err := errorFromDict(map[string]any{"message": "boom", "code": 1}, "turn_result.error")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "turn_result.error.code")
+	})
+
+	t.Run("turn_result.termination", func(t *testing.T) {
+		_, err := errorFromDict(map[string]any{"message": "boom", "category": 1}, "turn_result.termination")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "turn_result.termination.category")
+	})
+}
+
+// TestBlockFromDict_前缀硬编码 验证 blockFromDict 无论调用点都是 content_block. 前缀。
+// Python: serialization.py:88-94 _block_from_dict（硬编码 "content_block.data"）
+func TestBlockFromDict_前缀硬编码(t *testing.T) {
+	_, err := blockFromDict(map[string]any{"block_id": "b", "kind": "text", "data": []any{}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "content_block.data",
+		"前缀必须硬编码为 content_block.，不得随调用点变化")
+}
+
+// TestMessageFromDict_前缀硬编码 验证 messageFromDict 前缀是 turn_message.。
+// Python: serialization.py:106-113 _message_from_dict
+func TestMessageFromDict_前缀硬编码(t *testing.T) {
+	_, err := messageFromDict(map[string]any{"message_id": "m", "role": "user", "content": map[string]any{}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "turn_message.content")
+
+	_, err = messageFromDict(map[string]any{"message_id": "m", "role": "bogus", "content": []any{}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "turn_message.role")
+}
+
+// TestUsageFromDict_前缀硬编码 验证 usage 前缀。
+// Python: serialization.py:68-76 _usage_from_dict（"usage.provider_data"）
+func TestUsageFromDict_前缀硬编码(t *testing.T) {
+	_, err := usageFromDict(map[string]any{"provider_data": []any{}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "usage.provider_data")
+}
+
+// TestUsageRoundTrip 验证 usage 往返。
+// Python: serialization.py:57-76
+func TestUsageRoundTrip(t *testing.T) {
+	in, out := 30, 5
+	cached := 10
+	usage := TurnUsage{
+		InputTokens:       &in,
+		OutputTokens:      &out,
+		CachedInputTokens: &cached,
+		ProviderData:      map[string]any{"vendor": "a"},
+	}
+	d := usageToDict(usage)
+	assert.Equal(t, 30, d["input_tokens"])
+	assert.Equal(t, map[string]any{"vendor": "a"}, d["provider_data"])
+
+	back, err := usageFromDict(d)
+	require.NoError(t, err)
+	assert.Equal(t, 30, *back.InputTokens)
+	assert.Equal(t, 5, *back.OutputTokens)
+	assert.Equal(t, 10, *back.CachedInputTokens)
+	assert.Nil(t, back.ReasoningOutputTokens)
+}
+
+// TestBlockRoundTrip 验证内容块往返。
+// Python: serialization.py:79-94
+func TestBlockRoundTrip(t *testing.T) {
+	block := ContentBlock{
+		BlockID: "block-1",
+		Kind:    "text",
+		Content: "partial",
+		Data:    map[string]any{},
+	}
+	d := blockToDict(block)
+	assert.Equal(t, "block-1", d["block_id"])
+	assert.Equal(t, "partial", d["content"])
+
+	back, err := blockFromDict(d)
+	require.NoError(t, err)
+	assert.Equal(t, "partial", back.Content)
+}
+
+// TestMessageRoundTrip 验证消息往返。
+// Python: serialization.py:97-113
+func TestMessageRoundTrip(t *testing.T) {
+	msg := TurnMessage{
+		MessageID: "message-1",
+		Role:      MessageRoleAssistant,
+		Content: []ContentBlock{
+			{BlockID: "block-1", Kind: "text", Content: "hi", Data: map[string]any{}},
+		},
+		Data: map[string]any{"origin": "external"},
+	}
+	d := messageToDict(msg)
+	assert.Equal(t, "assistant", d["role"])
+
+	back, err := messageFromDict(d)
+	require.NoError(t, err)
+	require.Len(t, back.Content, 1)
+	assert.Equal(t, "hi", back.Content[0].Content)
+	assert.Equal(t, "external", back.Data["origin"])
+}
+
+// TestErrorRoundTrip 验证错误往返与可空字段。
+// Python: serialization.py:116-134
+func TestErrorRoundTrip(t *testing.T) {
+	code := "E1"
+	category := "sdk_error"
+	retryable := true
+	e := TurnError{Message: "boom", Code: &code, Category: &category, Retryable: &retryable}
+	d := errorToDict(e)
+	assert.Equal(t, "boom", d["message"])
+	assert.Equal(t, "E1", d["code"])
+
+	back, err := errorFromDict(d, "turn_result.error")
+	require.NoError(t, err)
+	assert.Equal(t, "E1", *back.Code)
+	assert.True(t, *back.Retryable)
+
+	// nil 可空字段
+	minimal := TurnError{Message: "boom"}
+	d2 := errorToDict(minimal)
+	assert.Nil(t, d2["code"])
+}
+
+// newTestModelRequestEvent 构造 spec 里的标准 ModelRequestEvent。
+// Python: tests/unit_tests/harness_protocol/test_protocol.py:749-785
+func newTestModelRequestEvent(t *testing.T) ModelRequestEvent {
+	t.Helper()
+	usageIn, usageOut, usageCached := 30, 5, 10
+	ev, err := NewModelRequestEvent(ModelRequestOptions{
+		RequestID:    "request-1",
+		Status:       ModelRequestStatusCompleted,
+		StartedAt:    10.0,
+		EndedAt:      12.5,
+		Model:        "model-a",
+		ProviderName: "vendor-a",
+		SystemInstructions: []ContentBlock{
+			{BlockID: "system-0", Kind: "text", Content: "be brief", Data: map[string]any{}},
+		},
+		InputMessages: []TurnMessage{
+			{
+				MessageID: "user-1",
+				Role:      MessageRoleUser,
+				Content: []ContentBlock{
+					{BlockID: "user-1:0", Kind: "text", Content: "list files", Data: map[string]any{}},
+				},
+				Data: map[string]any{"origin": "external_user"},
+			},
+		},
+		InputObserved: true,
+		OutputMessage: &TurnMessage{
+			MessageID: "assistant-1",
+			Role:      MessageRoleAssistant,
+			Content: []ContentBlock{
+				{BlockID: "assistant-1:0", Kind: "reasoning", Content: "look first", Data: map[string]any{}},
+			},
+		},
+		ToolDefinitions:   []any{map[string]any{"name": "ls"}},
+		RequestParameters: map[string]any{},
+		Usage:             &TurnUsage{InputTokens: &usageIn, OutputTokens: &usageOut, CachedInputTokens: &usageCached},
+		Data:              map[string]any{"vendor-a": map[string]any{"ttft_ms": 120}},
+	})
+	require.NoError(t, err)
+	return ev
+}
+
+// TestModelRequestRoundTrip 验证最复杂载荷的往返。
+// Python: serialization.py:137-197
+func TestModelRequestRoundTrip(t *testing.T) {
+	ev := newTestModelRequestEvent(t)
+	d := modelRequestToDict(ev)
+	assert.Equal(t, "request-1", d["request_id"])
+	assert.Equal(t, "completed", d["status"])
+
+	back, err := modelRequestFromDict(d)
+	require.NoError(t, err)
+	assert.Equal(t, ev.RequestID, back.RequestID)
+	assert.Equal(t, ev.Status, back.Status)
+	assert.Equal(t, ev.StartedAt, back.StartedAt)
+	assert.Equal(t, ev.EndedAt, back.EndedAt)
+	assert.Equal(t, ev.Model, back.Model)
+	require.Len(t, back.SystemInstructions, 1)
+	require.Len(t, back.InputMessages, 1)
+	require.NotNil(t, back.OutputMessage)
+	require.NotNil(t, back.Usage)
+	assert.Equal(t, 30, *back.Usage.InputTokens)
+}
+
+// TestModelRequestFromDict_字段路径 验证悬空字段的错误前缀。
+// Python: serialization.py:161-197（前缀 "model_request."）
+func TestModelRequestFromDict_字段路径(t *testing.T) {
+	base := func() map[string]any {
+		return modelRequestToDict(newTestModelRequestEvent(t))
+	}
+
+	t.Run("cost 结构错误", func(t *testing.T) {
+		d := base()
+		d["cost"] = []any{}
+		_, err := modelRequestFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "model_request.cost")
+	})
+
+	t.Run("usage 结构错误", func(t *testing.T) {
+		d := base()
+		d["usage"] = []any{}
+		_, err := modelRequestFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "model_request.usage")
+	})
+
+	t.Run("request_parameters 非对象", func(t *testing.T) {
+		d := base()
+		d["request_parameters"] = []any{}
+		_, err := modelRequestFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "model_request.request_parameters")
+	})
+}
+
+// TestTurnResultRoundTrip 验证终态结果往返（含 termination / cost 两可选）。
+// Python: serialization.py:200-274
+func TestTurnResultRoundTrip(t *testing.T) {
+	micros := int64(125000)
+	code := "E1"
+	termMsg := "cancelled by user"
+	completed, err := NewTurnResult(TurnStatusCompleted, ResultOptions{
+		Messages: []TurnMessage{
+			{MessageID: "m1", Role: MessageRoleAssistant, Content: []ContentBlock{}, Data: map[string]any{}},
+		},
+		FinalOutput: "partial",
+		Cost:        &MonetaryAmount{Micros: micros, Currency: "USD"},
+	})
+	require.NoError(t, err)
+
+	d := resultToDict(completed)
+	assert.Equal(t, "completed", d["status"])
+	assert.Equal(t, "partial", d["final_output"])
+
+	back, err := resultFromDict(d)
+	require.NoError(t, err)
+	assert.Equal(t, TurnStatusCompleted, back.Status)
+	require.NotNil(t, back.Cost)
+	assert.Equal(t, micros, back.Cost.Micros)
+	assert.Equal(t, "USD", back.Cost.Currency)
+
+	// interrupted 带 termination
+	interrupted, err := NewTurnResult(TurnStatusInterrupted, ResultOptions{
+		Termination: &TurnTermination{
+			Kind:    TurnTerminationKindUserAbort,
+			Message: &termMsg,
+			Code:    &code,
+		},
+	})
+	require.NoError(t, err)
+	d2 := resultToDict(interrupted)
+	term, ok := d2["termination"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "user_abort", term["kind"])
+
+	back2, err := resultFromDict(d2)
+	require.NoError(t, err)
+	require.NotNil(t, back2.Termination)
+	assert.Equal(t, TurnTerminationKindUserAbort, back2.Termination.Kind)
+	assert.Equal(t, "cancelled by user", *back2.Termination.Message)
+}
+
+// TestTurnResultFromDict_字段路径 验证 turn_result 前缀。
+// Python: serialization.py:230-274
+func TestTurnResultFromDict_字段路径(t *testing.T) {
+	completed, err := NewTurnResult(TurnStatusCompleted, ResultOptions{})
+	require.NoError(t, err)
+	base := func() map[string]any { return resultToDict(completed) }
+
+	t.Run("termination 结构错误", func(t *testing.T) {
+		d := base()
+		d["termination"] = []any{}
+		_, err := resultFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "turn_result.termination")
+	})
+
+	t.Run("termination.kind 非法", func(t *testing.T) {
+		d := base()
+		d["termination"] = map[string]any{"kind": "bogus"}
+		_, err := resultFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "turn_result.termination.kind")
+	})
+
+	t.Run("messages 非数组", func(t *testing.T) {
+		d := base()
+		d["messages"] = map[string]any{}
+		_, err := resultFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "turn_result.messages")
+	})
+
+	t.Run("status 非法", func(t *testing.T) {
+		d := base()
+		d["status"] = "bogus"
+		_, err := resultFromDict(d)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "turn_result.status")
+	})
+}

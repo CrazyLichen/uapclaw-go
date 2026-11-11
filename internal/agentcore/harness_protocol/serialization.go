@@ -497,3 +497,688 @@ func optionalStrOrEmpty(p *string) string {
 	}
 	return *p
 }
+
+// ──────────────────────────── 非导出函数（值对象编解码）────────────────────────────
+
+// 7 对 to/from 按上游函数出现顺序排列。前缀约定分两类，不可统一：
+//   - errorFromDict 的前缀来自**实参** fieldName（同一函数产出
+//     model_request.error.* / turn_result.error.* / turn_result.termination.* 三种）
+//   - usageFromDict / blockFromDict / messageFromDict 的前缀**硬编码**
+//
+// Python: serialization.py:57-134
+
+// usageToDict 编码归一化 token 用量。
+// Python: serialization.py:57-65 _usage_to_dict
+func usageToDict(usage TurnUsage) map[string]any {
+	return map[string]any{
+		"input_tokens":            intPtrToAny(usage.InputTokens),
+		"output_tokens":           intPtrToAny(usage.OutputTokens),
+		"cached_input_tokens":     intPtrToAny(usage.CachedInputTokens),
+		"reasoning_output_tokens": intPtrToAny(usage.ReasoningOutputTokens),
+		"total_tokens":            intPtrToAny(usage.TotalTokens),
+		"provider_data":           JsonValueToBuiltin(usage.ProviderData),
+	}
+}
+
+// usageFromDict 解码归一化 token 用量。
+// Python: serialization.py:68-76 _usage_from_dict
+func usageFromDict(data map[string]any) (TurnUsage, error) {
+	// 步骤 1：5 个可空整数字段
+	inputTokens, err := optInteger(data["input_tokens"], "usage.input_tokens")
+	if err != nil {
+		return TurnUsage{}, err
+	}
+	outputTokens, err := optInteger(data["output_tokens"], "usage.output_tokens")
+	if err != nil {
+		return TurnUsage{}, err
+	}
+	cachedInputTokens, err := optInteger(data["cached_input_tokens"], "usage.cached_input_tokens")
+	if err != nil {
+		return TurnUsage{}, err
+	}
+	reasoningOutputTokens, err := optInteger(data["reasoning_output_tokens"], "usage.reasoning_output_tokens")
+	if err != nil {
+		return TurnUsage{}, err
+	}
+	totalTokens, err := optInteger(data["total_tokens"], "usage.total_tokens")
+	if err != nil {
+		return TurnUsage{}, err
+	}
+
+	// 步骤 2：provider_data 缺省为空对象
+	// Python: serialization.py:75 data.get("provider_data", {})
+	providerData := map[string]any{}
+	if raw, present := data["provider_data"]; present && raw != nil {
+		providerData, err = asJsonObject(raw, "usage.provider_data")
+		if err != nil {
+			return TurnUsage{}, err
+		}
+	}
+
+	return TurnUsage{
+		InputTokens:           inputTokens,
+		OutputTokens:          outputTokens,
+		CachedInputTokens:     cachedInputTokens,
+		ReasoningOutputTokens: reasoningOutputTokens,
+		TotalTokens:           totalTokens,
+		ProviderData:          providerData,
+	}, nil
+}
+
+// blockToDict 编码内容块。
+// Python: serialization.py:79-85 _block_to_dict
+func blockToDict(block ContentBlock) map[string]any {
+	return map[string]any{
+		"block_id": block.BlockID,
+		"kind":     block.Kind,
+		"content":  JsonValueToBuiltin(block.Content),
+		"data":     JsonValueToBuiltin(block.Data),
+	}
+}
+
+// blockFromDict 解码内容块。
+// Python: serialization.py:88-94 _block_from_dict
+func blockFromDict(data map[string]any) (ContentBlock, error) {
+	// 步骤 1：block_id 与 kind 必填
+	blockID, err := asString(data, "block_id")
+	if err != nil {
+		return ContentBlock{}, err
+	}
+	kind, err := asString(data, "kind")
+	if err != nil {
+		return ContentBlock{}, err
+	}
+	// 步骤 2：data 缺省为空对象，前缀硬编码 content_block.
+	dataObj := map[string]any{}
+	if raw, present := data["data"]; present && raw != nil {
+		dataObj, err = asJsonObject(raw, "content_block.data")
+		if err != nil {
+			return ContentBlock{}, err
+		}
+	}
+	return ContentBlock{
+		BlockID: blockID,
+		Kind:    kind,
+		Content: data["content"],
+		Data:    dataObj,
+	}, nil
+}
+
+// messageToDict 编码归一化消息。
+// Python: serialization.py:97-103 _message_to_dict
+func messageToDict(message TurnMessage) map[string]any {
+	blocks := make([]any, len(message.Content))
+	for i, block := range message.Content {
+		blocks[i] = blockToDict(block)
+	}
+	return map[string]any{
+		"message_id": message.MessageID,
+		"role":       string(message.Role),
+		"content":    blocks,
+		"data":       JsonValueToBuiltin(message.Data),
+	}
+}
+
+// messageFromDict 解码归一化消息。
+// Python: serialization.py:106-113 _message_from_dict
+func messageFromDict(data map[string]any) (TurnMessage, error) {
+	// 步骤 1：message_id 必填
+	messageID, err := asString(data, "message_id")
+	if err != nil {
+		return TurnMessage{}, err
+	}
+	// 步骤 2：role 必须是合法枚举
+	role, err := parseMessageRole(data["role"], "turn_message.role")
+	if err != nil {
+		return TurnMessage{}, err
+	}
+	// 步骤 3：content 数组，前缀硬编码 turn_message.
+	contentRaw := []any{}
+	if raw, present := data["content"]; present && raw != nil {
+		contentRaw, err = asList(raw, "turn_message.content")
+		if err != nil {
+			return TurnMessage{}, err
+		}
+	}
+	blocks := make([]ContentBlock, len(contentRaw))
+	for i, item := range contentRaw {
+		obj, err := asMapping(item, "content_block")
+		if err != nil {
+			return TurnMessage{}, err
+		}
+		block, err := blockFromDict(obj)
+		if err != nil {
+			return TurnMessage{}, err
+		}
+		blocks[i] = block
+	}
+	// 步骤 4：data 缺省为空对象
+	dataObj := map[string]any{}
+	if raw, present := data["data"]; present && raw != nil {
+		dataObj, err = asJsonObject(raw, "turn_message.data")
+		if err != nil {
+			return TurnMessage{}, err
+		}
+	}
+	return TurnMessage{
+		MessageID: messageID,
+		Role:      role,
+		Content:   blocks,
+		Data:      dataObj,
+	}, nil
+}
+
+// errorToDict 编码轮次失败信息。
+// Python: serialization.py:116-123 _error_to_dict
+func errorToDict(turnError TurnError) map[string]any {
+	return map[string]any{
+		"message":       turnError.Message,
+		"code":          strPtrToAny(turnError.Code),
+		"category":      strPtrToAny(turnError.Category),
+		"retryable":     boolPtrToAny(turnError.Retryable),
+		"provider_data": JsonValueToBuiltin(turnError.ProviderData),
+	}
+}
+
+// errorFromDict 解码轮次失败信息。前缀来自实参 fieldName。
+// Python: serialization.py:126-134 _error_from_dict
+func errorFromDict(data any, fieldName string) (TurnError, error) {
+	// 步骤 1：必须是对象
+	obj, err := asMapping(data, fieldName)
+	if err != nil {
+		return TurnError{}, err
+	}
+	// 步骤 2：message 必填
+	message, err := asString(obj, "message")
+	if err != nil {
+		return TurnError{}, err
+	}
+	// 步骤 3：code 与 category 可空，但前缀用实参
+	code, err := asOptionalString(obj["code"], fieldName+".code")
+	if err != nil {
+		return TurnError{}, err
+	}
+	category, err := asOptionalString(obj["category"], fieldName+".category")
+	if err != nil {
+		return TurnError{}, err
+	}
+	// 步骤 4：retryable 可空布尔
+	var retryable *bool
+	if raw, present := obj["retryable"]; present && raw != nil {
+		b, ok := raw.(bool)
+		if !ok {
+			return TurnError{}, &HarnessProtocolError{Msg: fieldName + ".retryable must be a boolean"}
+		}
+		retryable = &b
+	}
+	// 步骤 5：provider_data 缺省为空对象
+	providerData := map[string]any{}
+	if raw, present := obj["provider_data"]; present && raw != nil {
+		providerData, err = asJsonObject(raw, fieldName+".provider_data")
+		if err != nil {
+			return TurnError{}, err
+		}
+	}
+	return TurnError{
+		Message:      message,
+		Code:         code,
+		Category:     category,
+		Retryable:    retryable,
+		ProviderData: providerData,
+	}, nil
+}
+
+// modelRequestToDict 编码物理模型请求事件。
+// 19 个字段与上游顺序一致。
+// Python: serialization.py:137-158 _model_request_to_dict
+func modelRequestToDict(event ModelRequestEvent) map[string]any {
+	// 步骤 1：内容块与消息序列
+	systemInstructions := make([]any, len(event.SystemInstructions))
+	for i, block := range event.SystemInstructions {
+		systemInstructions[i] = blockToDict(block)
+	}
+	inputMessages := make([]any, len(event.InputMessages))
+	for i, message := range event.InputMessages {
+		inputMessages[i] = messageToDict(message)
+	}
+	// 步骤 2：output_message 可空
+	var outputMessage any
+	if event.OutputMessage != nil {
+		outputMessage = messageToDict(*event.OutputMessage)
+	}
+	// 步骤 3：usage 可空
+	var usage any
+	if event.Usage != nil {
+		usage = usageToDict(*event.Usage)
+	}
+	// 步骤 4：cost 可空，只暴露 micros 与 currency
+	var cost any
+	if event.Cost != nil {
+		cost = map[string]any{"micros": event.Cost.Micros, "currency": event.Cost.Currency}
+	}
+	// 步骤 5：error 可空
+	var errPayload any
+	if event.Error != nil {
+		errPayload = errorToDict(*event.Error)
+	}
+	// 步骤 6：finish_reasons 转 []any
+	finishReasons := make([]any, len(event.FinishReasons))
+	for i, reason := range event.FinishReasons {
+		finishReasons[i] = reason
+	}
+	return map[string]any{
+		"request_id":          event.RequestID,
+		"status":              string(event.Status),
+		"started_at":          event.StartedAt,
+		"ended_at":            event.EndedAt,
+		"model":               optionalStrPtr(event.Model),
+		"provider_name":       optionalStrPtr(event.ProviderName),
+		"system_instructions": systemInstructions,
+		"input_messages":      inputMessages,
+		"input_observed":      event.InputObserved,
+		"output_message":      outputMessage,
+		"tool_definitions":    JsonValueToBuiltin(event.ToolDefinitions),
+		"request_parameters":  JsonValueToBuiltin(event.RequestParameters),
+		"response_id":         optionalStrPtr(event.ResponseID),
+		"time_to_first_chunk": floatPtrToAny(event.TimeToFirstChunk),
+		"finish_reasons":      finishReasons,
+		"usage":               usage,
+		"cost":                cost,
+		"error":               errPayload,
+		"data":                JsonValueToBuiltin(event.Data),
+	}
+}
+
+// modelRequestFromDict 解码物理模型请求事件。
+// Python: serialization.py:161-197 _model_request_from_dict
+func modelRequestFromDict(data map[string]any) (ModelRequestEvent, error) {
+	// 步骤 1：request_id 必填
+	requestID, err := asString(data, "request_id")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	// 步骤 2：status 枚举
+	status, err := parseModelRequestStatus(data["status"], "model_request.status")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	// 步骤 3：两个时间戳必填
+	startedAt, err := asNumberFromKey(data, "started_at")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	endedAt, err := asNumberFromKey(data, "ended_at")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	// 步骤 4：可空字符串
+	modelValue, err := asOptionalString(data["model"], "model_request.model")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	providerName, err := asOptionalString(data["provider_name"], "model_request.provider_name")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	responseID, err := asOptionalString(data["response_id"], "model_request.response_id")
+	if err != nil {
+		return ModelRequestEvent{}, err
+	}
+	// 步骤 5：system_instructions 数组
+	systemRaw := []any{}
+	if raw, present := data["system_instructions"]; present && raw != nil {
+		systemRaw, err = asList(raw, "model_request.system_instructions")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+	}
+	systemInstructions := make([]ContentBlock, len(systemRaw))
+	for i, item := range systemRaw {
+		obj, err := asMapping(item, "content_block")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		block, err := blockFromDict(obj)
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		systemInstructions[i] = block
+	}
+	// 步骤 6：input_messages 数组
+	inputRaw := []any{}
+	if raw, present := data["input_messages"]; present && raw != nil {
+		inputRaw, err = asList(raw, "model_request.input_messages")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+	}
+	inputMessages := make([]TurnMessage, len(inputRaw))
+	for i, item := range inputRaw {
+		obj, err := asMapping(item, "turn_message")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		message, err := messageFromDict(obj)
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		inputMessages[i] = message
+	}
+	// 步骤 7：input_observed 缺省 false
+	inputObserved := false
+	if raw, present := data["input_observed"]; present && raw != nil {
+		b, ok := raw.(bool)
+		if !ok {
+			return ModelRequestEvent{}, &HarnessProtocolError{Msg: "model_request.input_observed must be a boolean"}
+		}
+		inputObserved = b
+	}
+	// 步骤 8：output_message 可空
+	var outputMessage *TurnMessage
+	if raw, present := data["output_message"]; present && raw != nil {
+		obj, err := asMapping(raw, "model_request.output_message")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		message, err := messageFromDict(obj)
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		outputMessage = &message
+	}
+	// 步骤 9：request_parameters 缺省为空对象
+	requestParameters := map[string]any{}
+	if raw, present := data["request_parameters"]; present && raw != nil {
+		requestParameters, err = asJsonObject(raw, "model_request.request_parameters")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+	}
+	// 步骤 10：time_to_first_chunk 可空
+	var timeToFirstChunk *float64
+	if raw, present := data["time_to_first_chunk"]; present && raw != nil {
+		f, err := asNumber(raw, "model_request.time_to_first_chunk")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		timeToFirstChunk = &f
+	}
+	// 步骤 11：finish_reasons 每项必须非空字符串
+	finishReasons := []string{}
+	if raw, present := data["finish_reasons"]; present && raw != nil {
+		arr, err := asList(raw, "model_request.finish_reasons")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		finishReasons = make([]string, len(arr))
+		for i, item := range arr {
+			s, err := asRequiredString(item, "model_request.finish_reason")
+			if err != nil {
+				return ModelRequestEvent{}, err
+			}
+			finishReasons[i] = s
+		}
+	}
+	// 步骤 12：usage 可空
+	var usage *TurnUsage
+	if raw, present := data["usage"]; present && raw != nil {
+		obj, err := asMapping(raw, "model_request.usage")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		u, err := usageFromDict(obj)
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		usage = &u
+	}
+	// 步骤 13：cost 可空
+	var cost *MonetaryAmount
+	if raw, present := data["cost"]; present && raw != nil {
+		obj, err := asMapping(raw, "model_request.cost")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		micros, err := asIntegerFromKey(obj, "micros")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		currency, err := asString(obj, "currency")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		cost = &MonetaryAmount{Micros: int64(micros), Currency: currency}
+	}
+	// 步骤 14：error 可空，前缀 model_request.error
+	var turnErr *TurnError
+	if raw, present := data["error"]; present && raw != nil {
+		e, err := errorFromDict(raw, "model_request.error")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+		turnErr = &e
+	}
+	// 步骤 15：data 缺省为空对象
+	dataObj := map[string]any{}
+	if raw, present := data["data"]; present && raw != nil {
+		dataObj, err = asJsonObject(raw, "model_request.data")
+		if err != nil {
+			return ModelRequestEvent{}, err
+		}
+	}
+	// 步骤 16：交给构造器做不变量校验（时间顺序、status/error 一致性等）
+	return NewModelRequestEvent(ModelRequestOptions{
+		RequestID:          requestID,
+		Status:             status,
+		StartedAt:          startedAt,
+		EndedAt:            endedAt,
+		Model:              optionalStrOrEmpty(modelValue),
+		ProviderName:       optionalStrOrEmpty(providerName),
+		SystemInstructions: systemInstructions,
+		InputMessages:      inputMessages,
+		InputObserved:      inputObserved,
+		OutputMessage:      outputMessage,
+		ToolDefinitions:    data["tool_definitions"],
+		RequestParameters:  requestParameters,
+		ResponseID:         optionalStrOrEmpty(responseID),
+		TimeToFirstChunk:   timeToFirstChunk,
+		FinishReasons:      finishReasons,
+		Usage:              usage,
+		Cost:               cost,
+		Error:              turnErr,
+		Data:               dataObj,
+	})
+}
+
+// resultToDict 编码轮次终态结果。
+// Python: serialization.py:200-227 _result_to_dict
+func resultToDict(result TurnResult) map[string]any {
+	// 步骤 1：messages 数组
+	messages := make([]any, len(result.Messages))
+	for i, message := range result.Messages {
+		messages[i] = messageToDict(message)
+	}
+	// 步骤 2：termination 可空
+	var termination any
+	if result.Termination != nil {
+		termination = map[string]any{
+			"kind":          string(result.Termination.Kind),
+			"message":       strPtrToAny(result.Termination.Message),
+			"code":          strPtrToAny(result.Termination.Code),
+			"provider_data": JsonValueToBuiltin(result.Termination.ProviderData),
+		}
+	}
+	// 步骤 3：cost 可空
+	var cost any
+	if result.Cost != nil {
+		cost = map[string]any{"micros": result.Cost.Micros, "currency": result.Cost.Currency}
+	}
+	// 步骤 4：error 可空
+	var errPayload any
+	if result.Error != nil {
+		errPayload = errorToDict(*result.Error)
+	}
+	// 步骤 5：usage 可空
+	var usage any
+	if result.Usage != nil {
+		usage = usageToDict(*result.Usage)
+	}
+	return map[string]any{
+		"status":            string(result.Status),
+		"messages":          messages,
+		"final_output":      JsonValueToBuiltin(result.FinalOutput),
+		"structured_output": JsonValueToBuiltin(result.StructuredOutput),
+		"stop_reason":       strPtrToAny(result.StopReason),
+		"termination":       termination,
+		"error":             errPayload,
+		"usage":             usage,
+		"cost":              cost,
+		"started_at":        floatPtrToAny(result.StartedAt),
+		"completed_at":      floatPtrToAny(result.CompletedAt),
+		"duration_ms":       intPtrToAny(result.DurationMS),
+		"provider_data":     JsonValueToBuiltin(result.ProviderData),
+	}
+}
+
+// resultFromDict 解码轮次终态结果。
+// Python: serialization.py:230-274 _result_from_dict
+func resultFromDict(data map[string]any) (TurnResult, error) {
+	// 步骤 1：status 枚举
+	status, err := parseTurnStatus(data["status"], "turn_result.status")
+	if err != nil {
+		return TurnResult{}, err
+	}
+	// 步骤 2：messages 数组
+	messagesRaw := []any{}
+	if raw, present := data["messages"]; present && raw != nil {
+		messagesRaw, err = asList(raw, "turn_result.messages")
+		if err != nil {
+			return TurnResult{}, err
+		}
+	}
+	messages := make([]TurnMessage, len(messagesRaw))
+	for i, item := range messagesRaw {
+		obj, err := asMapping(item, "turn_message")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		message, err := messageFromDict(obj)
+		if err != nil {
+			return TurnResult{}, err
+		}
+		messages[i] = message
+	}
+	// 步骤 3：stop_reason 可空
+	stopReason, err := asOptionalString(data["stop_reason"], "turn_result.stop_reason")
+	if err != nil {
+		return TurnResult{}, err
+	}
+	// 步骤 4：termination 可空
+	var termination *TurnTermination
+	if raw, present := data["termination"]; present && raw != nil {
+		obj, err := asMapping(raw, "turn_result.termination")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		kind, err := parseTurnTerminationKind(obj["kind"], "turn_result.termination.kind")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		message, err := asOptionalString(obj["message"], "turn_result.termination.message")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		code, err := asOptionalString(obj["code"], "turn_result.termination.code")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		providerData := map[string]any{}
+		if rawPD, present := obj["provider_data"]; present && rawPD != nil {
+			providerData, err = asJsonObject(rawPD, "turn_result.termination.provider_data")
+			if err != nil {
+				return TurnResult{}, err
+			}
+		}
+		termination = &TurnTermination{
+			Kind:         kind,
+			Message:      message,
+			Code:         code,
+			ProviderData: providerData,
+		}
+	}
+	// 步骤 5：error 可空
+	var turnErr *TurnError
+	if raw, present := data["error"]; present && raw != nil {
+		e, err := errorFromDict(raw, "turn_result.error")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		turnErr = &e
+	}
+	// 步骤 6：usage 可空
+	var usage *TurnUsage
+	if raw, present := data["usage"]; present && raw != nil {
+		obj, err := asMapping(raw, "turn_result.usage")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		u, err := usageFromDict(obj)
+		if err != nil {
+			return TurnResult{}, err
+		}
+		usage = &u
+	}
+	// 步骤 7：cost 可空
+	var cost *MonetaryAmount
+	if raw, present := data["cost"]; present && raw != nil {
+		obj, err := asMapping(raw, "turn_result.cost")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		micros, err := asIntegerFromKey(obj, "micros")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		currency, err := asString(obj, "currency")
+		if err != nil {
+			return TurnResult{}, err
+		}
+		cost = &MonetaryAmount{Micros: int64(micros), Currency: currency}
+	}
+	// 步骤 8：三个可空标量
+	startedAt, err := optFloat(data["started_at"], "turn_result.started_at")
+	if err != nil {
+		return TurnResult{}, err
+	}
+	completedAt, err := optFloat(data["completed_at"], "turn_result.completed_at")
+	if err != nil {
+		return TurnResult{}, err
+	}
+	durationMS, err := optInteger(data["duration_ms"], "turn_result.duration_ms")
+	if err != nil {
+		return TurnResult{}, err
+	}
+	// 步骤 9：provider_data 缺省为空对象
+	providerData := map[string]any{}
+	if raw, present := data["provider_data"]; present && raw != nil {
+		providerData, err = asJsonObject(raw, "turn_result.provider_data")
+		if err != nil {
+			return TurnResult{}, err
+		}
+	}
+	// 步骤 10：交给构造器校验终态与 termination/error 的一致性
+	return NewTurnResult(status, ResultOptions{
+		Messages:         messages,
+		FinalOutput:      data["final_output"],
+		StructuredOutput: data["structured_output"],
+		StopReason:       stopReason,
+		Termination:      termination,
+		Error:            turnErr,
+		Usage:            usage,
+		Cost:             cost,
+		StartedAt:        startedAt,
+		CompletedAt:      completedAt,
+		DurationMS:       durationMS,
+		ProviderData:     providerData,
+	})
+}
