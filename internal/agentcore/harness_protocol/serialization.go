@@ -22,6 +22,139 @@ const EventWireSchemaVersion = "1"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// HarnessEventToDict 把一条事件编码成带 discriminator 的 JSON 对象。
+//
+// 键集合固定 12 个：schema_version / event_type / sequence / timestamp /
+// host_session_id / agent_id / provider_session_id / turn_id / item_id /
+// correlation_id / causation_ids / payload。
+// 不含 team 私名（team_session_id / member_agent_id / session_id）。
+// Python: serialization.py:362-379 harness_event_to_dict
+func HarnessEventToDict(event HarnessEvent) map[string]any {
+	// 步骤 1：编码载荷三元组
+	// Python: serialization.py:365
+	eventType, schemaVersion, payload, err := payloadToWire(event.Event)
+	if err != nil {
+		// 上游此处抛异常；Go 侧无法在签名上返回 error（对齐上游无 error 返回值），
+		// 故降级为空 payload 并把诊断写入 _codec_error 键。合法载荷均由构造器
+		// 校验过，此分支仅在调用方塞入自定义 HarnessEventPayload 实现时触发。
+		payload = map[string]any{}
+	}
+	// 步骤 2：组装 12 键信封
+	// Python: serialization.py:366-379
+	wire := map[string]any{
+		"schema_version":      schemaVersion,
+		"event_type":          eventType,
+		"sequence":            event.Sequence,
+		"timestamp":           event.Timestamp,
+		"host_session_id":     event.HostSessionID,
+		"agent_id":            event.AgentID,
+		"provider_session_id": optionalStrPtr(event.ProviderSessionID),
+		"turn_id":             optionalStrPtr(event.TurnID),
+		"item_id":             optionalStrPtr(event.ItemID),
+		"correlation_id":      optionalStrPtr(event.CorrelationID),
+		"causation_ids":       causationIDsToAny(event.CausationIDs),
+		"payload":             payload,
+	}
+	if err != nil {
+		wire["_codec_error"] = err.Error()
+	}
+	return wire
+}
+
+// HarnessEventFromDict 解码一条事件，未知事件类型与 schema 版本无损保留。
+// Python: serialization.py:445-467 harness_event_from_dict
+func HarnessEventFromDict(data map[string]any) (HarnessEvent, error) {
+	// 步骤 1：event_type 与 schema_version 必填
+	// Python: serialization.py:449-450
+	eventType, err := asString(data, "event_type")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	schemaVersion, err := asString(data, "schema_version")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	// 步骤 2：payload 必须是对象
+	// Python: serialization.py:451
+	payloadObj, err := asMapping(data["payload"], "payload")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	// 步骤 3：causation_ids 每项非空
+	// Python: serialization.py:452-453
+	causationIDs := []string{}
+	if raw, present := data["causation_ids"]; present && raw != nil {
+		arr, err := asList(raw, "causation_ids")
+		if err != nil {
+			return HarnessEvent{}, err
+		}
+		causationIDs = make([]string, len(arr))
+		for i, item := range arr {
+			s, err := asRequiredString(item, "causation_id")
+			if err != nil {
+				return HarnessEvent{}, err
+			}
+			causationIDs[i] = s
+		}
+	}
+	// 步骤 4：解码载荷
+	// Python: serialization.py:457
+	payload, err := payloadFromWire(eventType, schemaVersion, payloadObj)
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	// 步骤 5：必填标量
+	// Python: serialization.py:455-459
+	sequence, err := asIntegerFromKey(data, "sequence")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	timestamp, err := asNumberFromKey(data, "timestamp")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	hostSessionID, err := asString(data, "host_session_id")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	agentID, err := asString(data, "agent_id")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	// 步骤 6：可空 ID
+	// Python: serialization.py:460-463
+	providerSessionID, err := asOptionalString(data["provider_session_id"], "provider_session_id")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	turnID, err := asOptionalString(data["turn_id"], "turn_id")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	itemID, err := asOptionalString(data["item_id"], "item_id")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	correlationID, err := asOptionalString(data["correlation_id"], "correlation_id")
+	if err != nil {
+		return HarnessEvent{}, err
+	}
+	// 步骤 7：交给构造器做 9 步不变量校验
+	// Python: serialization.py:454-465
+	return NewHarnessEvent(HarnessEventOptions{
+		Sequence:          sequence,
+		Timestamp:         timestamp,
+		Event:             payload,
+		HostSessionID:     hostSessionID,
+		AgentID:           agentID,
+		ProviderSessionID: optionalStrOrEmpty(providerSessionID),
+		TurnID:            optionalStrOrEmpty(turnID),
+		ItemID:            optionalStrOrEmpty(itemID),
+		CorrelationID:     optionalStrOrEmpty(correlationID),
+		CausationIDs:      causationIDs,
+	})
+}
+
 // ──────────────────────────── 非导出函数（基础助手）────────────────────────────
 
 // asMapping 校验并返回 JSON 对象（所有 key 必须是 string）。
@@ -1181,4 +1314,416 @@ func resultFromDict(data map[string]any) (TurnResult, error) {
 		DurationMS:       durationMS,
 		ProviderData:     providerData,
 	})
+}
+
+// ──────────────────────────── 非导出函数（载荷分派）────────────────────────────
+
+// payloadToWire 把载荷编码成 (event_type, schema_version, payload) 三元组。
+//
+// 双形态约定：HarnessEventPayload 是接口，10 个载荷各有值与指针两种动态类型。
+// 漏掉任一形态会落兜底抛错，编解码直接失败（比 EventRetentionOf 的降级更严重）。
+//
+// UnknownEvent 必须在最前特判：它的线格式 event_type 取自自身 EventType，
+// 而 payloadKind() 返回的是内部标记 "unknown"，不能用于 wire 映射。
+// Python: serialization.py:277-359 _payload_to_wire（9 条 isinstance if + UnknownEvent）
+func payloadToWire(event HarnessEventPayload) (string, string, map[string]any, error) {
+	// 步骤 0：UnknownEvent 特判（值 + 指针）
+	// Python: serialization.py:357-358
+	// 注：Payload 的静态类型是 JsonObject（= map[string]JsonValue 别名），
+	// 经 JsonValueToBuiltin 后必为 map[string]any，无需类型断言守卫。
+	switch unknown := event.(type) {
+	case UnknownEvent:
+		builtin, _ := JsonValueToBuiltin(unknown.Payload).(map[string]any)
+		return unknown.EventType, unknown.SchemaVersion, builtin, nil
+	case *UnknownEvent:
+		if unknown != nil {
+			builtin, _ := JsonValueToBuiltin(unknown.Payload).(map[string]any)
+			return unknown.EventType, unknown.SchemaVersion, builtin, nil
+		}
+	}
+
+	// 步骤 1：OutputEvent
+	// Python: serialization.py:278-292
+	outputBody := func(e OutputEvent) map[string]any {
+		return map[string]any{
+			"output_id":     e.OutputID,
+			"kind":          string(e.Kind),
+			"content":       JsonValueToBuiltin(e.Content),
+			"operation":     string(e.Operation),
+			"channel":       string(e.Channel),
+			"content_index": e.ContentIndex,
+			"content_type":  optionalStrPtr(e.ContentType),
+			"data":          JsonValueToBuiltin(e.Data),
+		}
+	}
+	switch e := event.(type) {
+	case OutputEvent:
+		return "output", EventWireSchemaVersion, outputBody(e), nil
+	case *OutputEvent:
+		if e != nil {
+			return "output", EventWireSchemaVersion, outputBody(*e), nil
+		}
+	}
+
+	// 步骤 2：ItemLifecycleEvent
+	// Python: serialization.py:293-302
+	itemBody := func(e ItemLifecycleEvent) map[string]any {
+		return map[string]any{
+			"kind":      string(e.Kind),
+			"item_type": e.ItemType,
+			"data":      JsonValueToBuiltin(e.Data),
+		}
+	}
+	switch e := event.(type) {
+	case ItemLifecycleEvent:
+		return "item_lifecycle", EventWireSchemaVersion, itemBody(e), nil
+	case *ItemLifecycleEvent:
+		if e != nil {
+			return "item_lifecycle", EventWireSchemaVersion, itemBody(*e), nil
+		}
+	}
+
+	// 步骤 3：UsageUpdatedEvent
+	// Python: serialization.py:303-311
+	usageBody := func(e UsageUpdatedEvent) map[string]any {
+		return map[string]any{
+			"usage": usageToDict(e.Usage),
+			"mode":  string(e.Mode),
+		}
+	}
+	switch e := event.(type) {
+	case UsageUpdatedEvent:
+		return "usage_updated", EventWireSchemaVersion, usageBody(e), nil
+	case *UsageUpdatedEvent:
+		if e != nil {
+			return "usage_updated", EventWireSchemaVersion, usageBody(*e), nil
+		}
+	}
+
+	// 步骤 4：ModelRequestEvent
+	// Python: serialization.py:312-313
+	switch e := event.(type) {
+	case ModelRequestEvent:
+		return "model_request", EventWireSchemaVersion, modelRequestToDict(e), nil
+	case *ModelRequestEvent:
+		if e != nil {
+			return "model_request", EventWireSchemaVersion, modelRequestToDict(*e), nil
+		}
+	}
+
+	// 步骤 5：StateChangedEvent
+	// Python: serialization.py:314-315
+	stateBody := func(e StateChangedEvent) map[string]any {
+		return map[string]any{
+			"old": string(e.Old),
+			"new": string(e.New),
+		}
+	}
+	switch e := event.(type) {
+	case StateChangedEvent:
+		return "state_changed", EventWireSchemaVersion, stateBody(e), nil
+	case *StateChangedEvent:
+		if e != nil {
+			return "state_changed", EventWireSchemaVersion, stateBody(*e), nil
+		}
+	}
+
+	// 步骤 6：TurnLifecycleEvent
+	// Python: serialization.py:316-324
+	turnBody := func(e TurnLifecycleEvent) map[string]any {
+		var result any
+		if e.Result != nil {
+			result = resultToDict(*e.Result)
+		}
+		return map[string]any{
+			"kind":   string(e.Kind),
+			"result": result,
+		}
+	}
+	switch e := event.(type) {
+	case TurnLifecycleEvent:
+		return "turn_lifecycle", EventWireSchemaVersion, turnBody(e), nil
+	case *TurnLifecycleEvent:
+		if e != nil {
+			return "turn_lifecycle", EventWireSchemaVersion, turnBody(*e), nil
+		}
+	}
+
+	// 步骤 7：HookObservedEvent
+	// Python: serialization.py:325-335
+	hookBody := func(e HookObservedEvent) map[string]any {
+		return map[string]any{
+			"phase":     string(e.Phase),
+			"hook_name": e.HookName,
+			"hook_id":   e.HookID,
+			"data":      JsonValueToBuiltin(e.Data),
+		}
+	}
+	switch e := event.(type) {
+	case HookObservedEvent:
+		return "hook_observed", EventWireSchemaVersion, hookBody(e), nil
+	case *HookObservedEvent:
+		if e != nil {
+			return "hook_observed", EventWireSchemaVersion, hookBody(*e), nil
+		}
+	}
+
+	// 步骤 8：DiagnosticEvent
+	// Python: serialization.py:336-345
+	diagBody := func(e DiagnosticEvent) map[string]any {
+		return map[string]any{
+			"level":   string(e.Level),
+			"message": e.Message,
+			"data":    JsonValueToBuiltin(e.Data),
+		}
+	}
+	switch e := event.(type) {
+	case DiagnosticEvent:
+		return "diagnostic", EventWireSchemaVersion, diagBody(e), nil
+	case *DiagnosticEvent:
+		if e != nil {
+			return "diagnostic", EventWireSchemaVersion, diagBody(*e), nil
+		}
+	}
+
+	// 步骤 9：ProviderEvent
+	// Python: serialization.py:346-356
+	providerBody := func(e ProviderEvent) map[string]any {
+		return map[string]any{
+			"provider":       e.Provider,
+			"event_type":     e.EventType,
+			"schema_version": e.SchemaVersion,
+			"payload":        JsonValueToBuiltin(e.Payload),
+		}
+	}
+	switch e := event.(type) {
+	case ProviderEvent:
+		return "provider", EventWireSchemaVersion, providerBody(e), nil
+	case *ProviderEvent:
+		if e != nil {
+			return "provider", EventWireSchemaVersion, providerBody(*e), nil
+		}
+	}
+
+	// 兜底：不支持的载荷类型
+	// Python: serialization.py:359
+	return "", "", nil, &HarnessProtocolError{
+		Msg: "unsupported event payload type: " + payloadTypeName(event),
+	}
+}
+
+// payloadFromWire 把 (event_type, schema_version, payload) 解码成载荷。
+//
+// 11 条出口：schema_version 不匹配早退（1）+ 9 个已知 event_type + 未知兜底（1）。
+// 后两条是「未知字段保留」的全部实现——新 provider 发来旧宿主不认识的
+// 事件类型或提高 schema 版本时，宿主原样保留，不崩不丢。
+// Python: serialization.py:382-442 _payload_from_wire
+func payloadFromWire(eventType, schemaVersion string, data map[string]any) (HarnessEventPayload, error) {
+	// 出口 1：schema 版本不匹配 → 原样保留
+	// Python: serialization.py:383-384
+	if schemaVersion != EventWireSchemaVersion {
+		frozen, err := FreezeJsonObject(data)
+		if err != nil {
+			return nil, err
+		}
+		return UnknownEvent{EventType: eventType, SchemaVersion: schemaVersion, Payload: frozen}, nil
+	}
+
+	// 出口 2：output
+	// Python: serialization.py:385-395
+	if eventType == "output" {
+		outputID, err := asString(data, "output_id")
+		if err != nil {
+			return nil, err
+		}
+		kind, err := parseOutputKind(data["kind"], "output.kind")
+		if err != nil {
+			return nil, err
+		}
+		operation, err := parseOutputOperation(data["operation"], "output.operation")
+		if err != nil {
+			return nil, err
+		}
+		channel, err := parseOutputChannel(data["channel"], "output.channel")
+		if err != nil {
+			return nil, err
+		}
+		contentIndex, err := asIntegerFromKey(data, "content_index")
+		if err != nil {
+			return nil, err
+		}
+		contentType, err := asOptionalString(data["content_type"], "output.content_type")
+		if err != nil {
+			return nil, err
+		}
+		dataObj := map[string]any{}
+		if raw, present := data["data"]; present && raw != nil {
+			dataObj, err = asJsonObject(raw, "output.data")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return NewOutputEvent(outputID, kind, data["content"], operation, channel,
+			contentIndex, optionalStrOrEmpty(contentType), dataObj)
+	}
+
+	// 出口 3：item_lifecycle
+	// Python: serialization.py:396-401
+	if eventType == "item_lifecycle" {
+		kind, err := parseItemEventKind(data["kind"], "item.kind")
+		if err != nil {
+			return nil, err
+		}
+		itemType, err := asString(data, "item_type")
+		if err != nil {
+			return nil, err
+		}
+		dataObj := map[string]any{}
+		if raw, present := data["data"]; present && raw != nil {
+			dataObj, err = asJsonObject(raw, "item.data")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return NewItemLifecycleEvent(kind, itemType, dataObj)
+	}
+
+	// 出口 4：usage_updated
+	// Python: serialization.py:402-406
+	if eventType == "usage_updated" {
+		usageObj, err := asMapping(data["usage"], "usage_updated.usage")
+		if err != nil {
+			return nil, err
+		}
+		usage, err := usageFromDict(usageObj)
+		if err != nil {
+			return nil, err
+		}
+		mode, err := parseUsageUpdateMode(data["mode"], "usage_updated.mode")
+		if err != nil {
+			return nil, err
+		}
+		return NewUsageUpdatedEvent(usage, mode)
+	}
+
+	// 出口 5：model_request
+	// Python: serialization.py:407-408
+	if eventType == "model_request" {
+		return modelRequestFromDict(data)
+	}
+
+	// 出口 6：state_changed
+	// Python: serialization.py:409-413
+	if eventType == "state_changed" {
+		oldState, err := parseHarnessState(data["old"], "state_changed.old")
+		if err != nil {
+			return nil, err
+		}
+		newState, err := parseHarnessState(data["new"], "state_changed.new")
+		if err != nil {
+			return nil, err
+		}
+		return NewStateChangedEvent(oldState, newState)
+	}
+
+	// 出口 7：turn_lifecycle
+	// Python: serialization.py:414-421
+	if eventType == "turn_lifecycle" {
+		kind, err := parseTurnEventKind(data["kind"], "turn_lifecycle.kind")
+		if err != nil {
+			return nil, err
+		}
+		var result *TurnResult
+		if raw, present := data["result"]; present && raw != nil {
+			obj, err := asMapping(raw, "turn_lifecycle.result")
+			if err != nil {
+				return nil, err
+			}
+			r, err := resultFromDict(obj)
+			if err != nil {
+				return nil, err
+			}
+			result = &r
+		}
+		return NewTurnLifecycleEvent(kind, result)
+	}
+
+	// 出口 8：hook_observed
+	// Python: serialization.py:422-428
+	if eventType == "hook_observed" {
+		phase, err := parseHookEventPhase(data["phase"], "hook.phase")
+		if err != nil {
+			return nil, err
+		}
+		hookName, err := asString(data, "hook_name")
+		if err != nil {
+			return nil, err
+		}
+		hookID, err := asString(data, "hook_id")
+		if err != nil {
+			return nil, err
+		}
+		dataObj := map[string]any{}
+		if raw, present := data["data"]; present && raw != nil {
+			dataObj, err = asJsonObject(raw, "hook.data")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return NewHookObservedEvent(phase, hookName, hookID, dataObj)
+	}
+
+	// 出口 9：diagnostic
+	// Python: serialization.py:429-434
+	if eventType == "diagnostic" {
+		level, err := parseDiagnosticLevel(data["level"], "diagnostic.level")
+		if err != nil {
+			return nil, err
+		}
+		message, err := asString(data, "message")
+		if err != nil {
+			return nil, err
+		}
+		dataObj := map[string]any{}
+		if raw, present := data["data"]; present && raw != nil {
+			dataObj, err = asJsonObject(raw, "diagnostic.data")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return NewDiagnosticEvent(level, message, dataObj)
+	}
+
+	// 出口 10：provider
+	// Python: serialization.py:435-441
+	if eventType == "provider" {
+		providerName, err := asString(data, "provider")
+		if err != nil {
+			return nil, err
+		}
+		innerType, err := asString(data, "event_type")
+		if err != nil {
+			return nil, err
+		}
+		innerSchema, err := asString(data, "schema_version")
+		if err != nil {
+			return nil, err
+		}
+		payloadObj := map[string]any{}
+		if raw, present := data["payload"]; present && raw != nil {
+			payloadObj, err = asJsonObject(raw, "provider.payload")
+			if err != nil {
+				return nil, err
+			}
+		}
+		return NewProviderEvent(providerName, innerType, innerSchema, payloadObj)
+	}
+
+	// 出口 11：未知 event_type → 原样保留
+	// Python: serialization.py:442
+	frozen, err := FreezeJsonObject(data)
+	if err != nil {
+		return nil, err
+	}
+	return UnknownEvent{EventType: eventType, SchemaVersion: schemaVersion, Payload: frozen}, nil
 }
