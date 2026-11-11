@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
@@ -23,6 +24,8 @@ type historyWriteItem struct {
 	record map[string]any
 	// flushDone 哨兵项专用：FlushHistoryQueue 发送后 worker 确认的通道
 	flushDone chan struct{}
+	// writeDone 单条写入回执：worker 写完即 close（nil 表示不需要回执）
+	writeDone chan struct{}
 }
 
 // TruncateResult 截断结果，对齐 Python truncate_history_records 返回 dict
@@ -100,6 +103,49 @@ func ResetHistoryWorker() {
 	// 重置 Once，使下次 ensureHistoryWorker 重新创建队列和 worker
 	historyWorkerOnce = sync.Once{}
 	historyWriteQueue = nil
+}
+
+// sessionRequestTerminalStatuses 请求终态白名单。
+// Python: session_history.py:40 SESSION_REQUEST_TERMINAL_STATUSES
+var sessionRequestTerminalStatuses = map[string]bool{
+	"success": true, "error": true, "cancelled": true,
+	"failed": true, "waiting_user": true, "unknown": true,
+}
+
+// EnqueueHistoryRequestCompletion 在此前已入队的 history 之后追加一条请求终态完成行，
+// 返回落盘回执（worker 写完即 close）。rid 为空或心跳前缀会话不入队（回执 nil）。
+// Python: session_history.py:1592 enqueue_history_request_completion
+func EnqueueHistoryRequestCompletion(sessionID, requestID, terminalStatus string) (<-chan struct{}, error) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		sid = "default"
+	}
+	rid := strings.TrimSpace(requestID)
+	if rid == "" || strings.HasPrefix(sid, heartbeatSessionPrefix) {
+		return nil, nil
+	}
+	status := strings.ToLower(strings.TrimSpace(terminalStatus))
+	if !sessionRequestTerminalStatuses[status] {
+		return nil, fmt.Errorf("unsupported request terminal status: %q", terminalStatus)
+	}
+	ensureHistoryWorker()
+	receipt := make(chan struct{}, 1)
+	historyWriteQueue <- historyWriteItem{
+		sessionID: sid,
+		record: map[string]any{
+			"id":         rid + ":request_completed",
+			"role":       "assistant",
+			"request_id": rid,
+			"channel_id": "",
+			"timestamp":  float64(time.Now().UnixNano()) / 1e9,
+			"content":    "",
+			"event_type": string(schema.EventTypeSessionRequestCompleted),
+			"feedback_only": true,
+			"status":     status,
+		},
+		writeDone: receipt,
+	}
+	return receipt, nil
 }
 
 // AppendHistoryRecord 向指定 session 的 history.json 异步追加一条记录。
@@ -374,12 +420,16 @@ func historyWorker() {
 	for item := range historyWriteQueue {
 		// 哨兵项：FlushHistoryQueue 发送的空项，跳过写入但确认完成
 		if item.sessionID == "" && item.record == nil {
-			if item.flushDone != nil {
-				item.flushDone <- struct{}{}
-			}
-			continue
+		if item.flushDone != nil {
+			item.flushDone <- struct{}{}
 		}
-		writeHistoryItem(item.sessionID, item.record)
+		continue
+	}
+	writeHistoryItem(item.sessionID, item.record)
+	// 10.7.2: 单条落盘回执（fork 推送前等待完成行写盘）
+	if item.writeDone != nil {
+		close(item.writeDone)
+	}
 	}
 }
 
