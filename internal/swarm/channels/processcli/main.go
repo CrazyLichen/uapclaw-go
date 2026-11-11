@@ -1,6 +1,8 @@
 package processcli
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -136,6 +138,9 @@ const (
 	exitArgError = 2
 )
 
+// errHelpRequested --help 触发的正常退出标记（非错误）。
+var errHelpRequested = errors.New("help requested")
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // argparse 五条错误消息的等价正则。
@@ -147,6 +152,8 @@ var (
 	argErrUnrecognized = regexp.MustCompile(`^unrecognized arguments: (.+)$`)
 	argErrExpectedOne  = regexp.MustCompile(`^(?:argument|参数) (\S+): expected one argument$`)
 	argErrInvalidValue = regexp.MustCompile(`^(?:argument|参数) (\S+): invalid (\S+) value: (.+)$`)
+	// cobra 独有：未知 flag 用 "unknown flag: --x"，等价 argparse 的 unrecognized arguments
+	argErrUnknownFlag = regexp.MustCompile(`^unknown flag: (.+)$`)
 )
 
 // usageTemplate 中文 usage 模板（对齐 ChineseArgumentParser.format_help 的四项替换）。
@@ -181,6 +188,10 @@ const usageTemplate = `用法：
 // Python: main.py:340-474 main
 func RunMain(argv []string) int {
 	args, err := parseArgs(argv)
+	if errors.Is(err, errHelpRequested) {
+		// 帮助已由 cobra 打印；按上游 argparse 的 action="help" 语义退出 0
+		return 0
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "uapclaw-process: 错误：%s\n", translateArgError(err.Error()))
 		return exitArgError
@@ -216,6 +227,9 @@ func translateArgError(message string) string {
 		return "缺少必需参数：" + m[1]
 	}
 	if m := argErrUnrecognized.FindStringSubmatch(message); m != nil {
+		return "无法识别的参数：" + m[1]
+	}
+	if m := argErrUnknownFlag.FindStringSubmatch(message); m != nil {
 		return "无法识别的参数：" + m[1]
 	}
 	if m := argErrExpectedOne.FindStringSubmatch(message); m != nil {
@@ -394,12 +408,15 @@ func parseArgs(argv []string) (*AppArgs, error) {
 		Output:    defaultOutput,
 		Operation: operationChat,
 	}
+	// ran 标记 RunE 是否真的执行过；--help / -h 时 cobra 打印帮助后不调 RunE。
+	ran := false
 	root := &cobra.Command{
 		Use:           "uapclaw-process [prompt]",
 		Short:         "在独立的本地 Runtime 进程中运行 UAPClaw 指令",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, positional []string) error {
+			ran = true
 			switch len(positional) {
 			case 0:
 			case 1:
@@ -420,7 +437,16 @@ func parseArgs(argv []string) (*AppArgs, error) {
 
 	root.SetArgs(argv)
 	if err := root.Execute(); err != nil {
+		// --help / -h 由 cobra 以 flag.ErrHelp 返回，属于正常退出而非参数错误
+		if errors.Is(err, flag.ErrHelp) {
+			return nil, errHelpRequested
+		}
 		return nil, err
+	}
+
+	if !ran {
+		// cobra 已处理（--help / -h）：按上游 action="help" 语义退出 0
+		return nil, errHelpRequested
 	}
 
 	// Python: :126 namespace._output_explicit = True（仅真实指定时置位）

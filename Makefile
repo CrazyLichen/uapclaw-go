@@ -29,6 +29,7 @@ LDFLAGS = -X github.com/uapclaw/uapclaw-go/internal/common/version.Version=$(VER
 build:
 	@echo "Building $(BINARY_NAME) (version=$(VERSION), commit=$(GIT_COMMIT))..."
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/uapclaw-process ./cmd/uapclaw-process/
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/jiuwenbox ./cmd/jiuwenbox/
 
 # 构建前端产物（对齐 Python `npm run build`，产物经 go:embed 进二进制）
@@ -44,6 +45,7 @@ web-build:
 # 仅构建主程序
 build-cli:
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/uapclaw-process ./cmd/uapclaw-process/
 
 # 运行测试
 test:
@@ -70,8 +72,12 @@ release: web-build
 	mkdir -p $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/third_party/sqlite-vec/windows-amd64
 	CGO_ENABLED=1 $(GOBUILD) -tags sqlite_fts5 -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
 		-o $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/uapclaw ./cmd/uapclaw/
+	CGO_ENABLED=1 $(GOBUILD) -tags sqlite_fts5 -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
+		-o $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/uapclaw-process ./cmd/uapclaw-process/
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=$(WIN_CC) $(GOBUILD) -tags sqlite_fts5 -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
 		-o $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/uapclaw.exe ./cmd/uapclaw/
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=$(WIN_CC) $(GOBUILD) -tags sqlite_fts5 -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
+		-o $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/uapclaw-process.exe ./cmd/uapclaw-process/
 	cp -r resources $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/
 	cp -r resources $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/
 	cp third_party/sqlite-vec/linux-amd64/vec0.so \
