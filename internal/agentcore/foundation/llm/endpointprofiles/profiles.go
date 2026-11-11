@@ -124,7 +124,7 @@ func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) (*llmschema
 	// 协议为 anthropic_messages 且 provider 在 anthropic 兼容集合内 → 改用 Anthropic 客户端。
 	// 这是 Anthropic 兼容网关的入口，无视原 provider 的别名档案。
 	// Python: endpoint_profiles.py:203-205
-	if out.APIMode == "anthropic_messages" {
+	if out.APIMode == llmschema.APIModeAnthropicMessages {
 		if _, compat := anthropicCompatibleProviders[provider]; compat {
 			out.ClientProvider = "Anthropic"
 			setLegacyProvider(&out, provider)

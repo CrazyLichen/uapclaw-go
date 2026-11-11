@@ -905,3 +905,10 @@ func TestValidate_与normalize行为一致(t *testing.T) {
 		t.Errorf("Validate should still backfill APIBase, got %q", config.APIBase)
 	}
 }
+
+// TestAPIModeAnthropicMessages 常量值与 Python LLMApiMode.AnthropicMessages 逐字一致。
+func TestAPIModeAnthropicMessages(t *testing.T) {
+	if APIModeAnthropicMessages != "anthropic_messages" {
+		t.Fatalf("APIModeAnthropicMessages = %q, want anthropic_messages", APIModeAnthropicMessages)
+	}
+}

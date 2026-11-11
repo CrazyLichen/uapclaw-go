@@ -151,7 +151,7 @@ func ImplementationProvider(cfg *llmschema.ModelClientConfig) string {
 	if cfg == nil {
 		return ""
 	}
-	if cfg.APIMode == "anthropic_messages" {
+	if cfg.APIMode == llmschema.APIModeAnthropicMessages {
 		return "Anthropic"
 	}
 	if cfg.ClientProvider != "OpenAI" {

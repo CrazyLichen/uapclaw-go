@@ -209,6 +209,9 @@ const (
 	APIModeChatCompletions APIMode = "chat_completions"
 	// APIModeResponses Responses API 协议（/v1/responses）
 	APIModeResponses APIMode = "responses"
+	// APIModeAnthropicMessages Anthropic Messages 协议（/v1/messages）。
+	// Python: schema/config.py:37 LLMApiMode.AnthropicMessages
+	APIModeAnthropicMessages APIMode = "anthropic_messages"
 )
 
 // topLevelAPIKeyProviders 要求顶层 api_key 的 provider 白名单。
