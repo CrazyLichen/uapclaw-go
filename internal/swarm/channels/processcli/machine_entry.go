@@ -58,8 +58,19 @@ func PrepareWorkspace(runInput *protocol.OneShotRunInput) (*protocol.OneShotRunI
 	if runInput.Workspace == nil {
 		return runInput, nil
 	}
-	workspace := runInput.Workspace
+	resolved, err := prepareWorkspaceSpec(runInput.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	// Python: :106 return replace(run_input, workspace=resolved)
+	copied := *runInput
+	copied.Workspace = resolved
+	return &copied, nil
+}
 
+// prepareWorkspaceSpec 解析 workspace 三段路径并 chdir 到 cwd。
+// Python: machine_entry.py:87-106 prepare_workspace（run 与 query 输入共用）
+func prepareWorkspaceSpec(workspace *protocol.WorkspaceSpec) (*protocol.WorkspaceSpec, error) {
 	resolvedCwd, err := absolutePathOptional(workspace.Cwd)
 	if err != nil {
 		return nil, err
@@ -84,14 +95,11 @@ func PrepareWorkspace(runInput *protocol.OneShotRunInput) (*protocol.OneShotRunI
 			return nil, &MachineInputError{Message: "Cannot access the requested workspace."}
 		}
 	}
-	// Python: :106 return replace(run_input, workspace=resolved)
-	copied := *runInput
-	copied.Workspace = &protocol.WorkspaceSpec{
+	return &protocol.WorkspaceSpec{
 		Cwd:         resolvedCwd,
 		ProjectDir:  resolvedProjectDir,
 		TrustedDirs: resolvedTrusted,
-	}
-	return &copied, nil
+	}, nil
 }
 
 // ExecuteSource 只读一份请求然后退出；绝不进入 REPL 或不启动 worker。

@@ -336,3 +336,31 @@ func runeLen(s string) int {
 func TrimSpaceAny(value any) string {
 	return strings.TrimSpace(asString(value))
 }
+
+// ──────────────────────────── 协议目录查询结果 ────────────────────────────
+
+// NewProtocolCapabilitiesResult 构造 protocol.capabilities 的成功结果。
+// Python: query_entry.py:82-90（不起 Runtime，直接返回协议目录）
+func NewProtocolCapabilitiesResult(requestID string) *OneShotQueryResult {
+	operation := "protocol.capabilities"
+	return &OneShotQueryResult{
+		RequestID: requestID,
+		Operation: &operation,
+		Status:    string(StatusCompleted),
+		ExitCode:  0,
+		Data:      ProtocolCapabilities(),
+	}
+}
+
+// NewProtocolSchemaResult 构造 protocol.schema 的成功结果。
+// Python: query_entry.py:82-90（不起 Runtime，直接返回协议 schema）
+func NewProtocolSchemaResult(requestID string) *OneShotQueryResult {
+	operation := "protocol.schema"
+	return &OneShotQueryResult{
+		RequestID: requestID,
+		Operation: &operation,
+		Status:    string(StatusCompleted),
+		ExitCode:  0,
+		Data:      ProtocolSchema(),
+	}
+}
