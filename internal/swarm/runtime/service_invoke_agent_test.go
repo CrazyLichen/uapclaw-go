@@ -71,7 +71,7 @@ func declarativeDefinition(instructions string) RuntimeAgentDefinition {
 func preparedRuntime(t *testing.T, agent ChatAgentPort) *AgentRuntime {
 	t.Helper()
 	return NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(context.Context, *schema.AgentRequest, string) (string, string, ChatAgentPort, error) {
+		Prepare: func(context.Context, *schema.AgentRequest, string, map[string]any, string) (string, string, ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 	})
@@ -150,7 +150,7 @@ func TestInvokeAgent_非chatSend被拒(t *testing.T) {
 func TestInvokeAgent_模型不存在被拒(t *testing.T) {
 	stubAdmissionSession(t)
 	runtime := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(context.Context, *schema.AgentRequest, string) (string, string, ChatAgentPort, error) {
+		Prepare: func(context.Context, *schema.AgentRequest, string, map[string]any, string) (string, string, ChatAgentPort, error) {
 			return "agent", "", &fakePlanAgent{}, nil
 		},
 		ResolveModelCapability: func(string) (RuntimeModelDescriptor, error) {

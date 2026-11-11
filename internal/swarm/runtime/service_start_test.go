@@ -37,7 +37,7 @@ func (s *startTestChatAgent) PlanStateAccessor() PlanStateAccessor { return nil 
 // startTestManager 最小 AgentManagerPort 实现。
 type startTestManager struct{ agent ChatAgentPort }
 
-func (m *startTestManager) GetChatAgent(context.Context, string, string, string, string) (ChatAgentPort, error) {
+func (m *startTestManager) GetChatAgent(context.Context, string, string, string, string, map[string]any, string) (ChatAgentPort, error) {
 	return m.agent, nil
 }
 

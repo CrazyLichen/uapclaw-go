@@ -196,7 +196,8 @@ func NewCodeAdapter() *CodeAdapter {
 //	Python: 22. self._registered_mcp_server_ids.clear()
 //	Python: 23. await self._register_mcp_servers_from_config(config_base, tag="code")
 //	Python: 24. await self.load_user_rails()
-func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string) error {
+func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string,
+	agentDefinition map[string]any) error {
 	// 步骤 11: dreaming_mode = "code"（Python 中在步骤 11，此处提前设置，其余步骤仍按 Python 编号）
 	c.deep.dreamingMode = "code"
 

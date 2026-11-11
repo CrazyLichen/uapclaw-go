@@ -224,7 +224,9 @@ func (d *DeepAdapter) getOrCreateSessionAdapter(
 	// ⤵️ R-2 的 external_harness 分支（:4254-4282，只装 binding 不建 instance）
 	//    与下面这段互斥，随 R-2 回填时插在其前。
 	cfg := d.instanceOverridesSnapshot()
-	if err := child.CreateInstance(ctx, cfg, d.mode, d.subMode); err != nil {
+	// Python: :4310 await adapter.create_instance(config, mode=..., sub_mode=...)
+	// child 不接收 agent_definition：声明式定义固化在根上，child 继承根的装配结果
+	if err := child.CreateInstance(ctx, cfg, d.mode, d.subMode, nil); err != nil {
 		return nil, fmt.Errorf("会话子适配器 CreateInstance 失败: %w", err)
 	}
 
@@ -805,7 +807,8 @@ func (d *DeepAdapter) EnsureInstance(ctx context.Context) (*harness.DeepAgent, e
 
 	// 步骤 4: 复用 create_instance
 	// Python: :12838-12843
-	if err := d.CreateInstance(ctx, d.sessionInstanceConfig, mode, d.sessionInstanceSubMode); err != nil {
+	if err := d.CreateInstance(ctx, d.sessionInstanceConfig, mode, d.sessionInstanceSubMode,
+		d.sessionInstanceAgentDefinition); err != nil {
 		// 建失败要撤销标记，否则下次 create_instance 会跳过且 instance 永远为空
 		d.rootInstanceRequested = false
 		return nil, err

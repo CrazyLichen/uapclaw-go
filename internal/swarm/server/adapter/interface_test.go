@@ -16,7 +16,7 @@ type stubAdapter struct{}
 
 var _ AgentAdapter = (*stubAdapter)(nil)
 
-func (s *stubAdapter) CreateInstance(_ context.Context, _ map[string]any, _ string, _ string) error {
+func (s *stubAdapter) CreateInstance(_ context.Context, _ map[string]any, _ string, _ string, _ map[string]any) error {
 	return nil
 }
 

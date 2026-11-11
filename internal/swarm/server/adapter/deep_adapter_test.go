@@ -306,7 +306,7 @@ func TestDeepAdapter_CreateInstance_默认值(t *testing.T) {
 	ctx := t.Context()
 
 	// 不传 config，mode="agent.work.plan"
-	err := d.CreateInstance(ctx, nil, "agent.work.plan", "")
+	err := d.CreateInstance(ctx, nil, "agent.work.plan", "", nil)
 	if err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestDeepAdapter_CreateInstance_dreamingMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("mode=%s", tt.mode), func(t *testing.T) {
 			d := NewDeepAdapter()
-			err := d.CreateInstance(ctx, nil, tt.mode, "")
+			err := d.CreateInstance(ctx, nil, tt.mode, "", nil)
 			if err != nil {
 				t.Fatalf("CreateInstance error: %v", err)
 			}
@@ -356,7 +356,7 @@ func TestDeepAdapter_CreateInstance_config覆盖(t *testing.T) {
 		"agent_name":  "custom_agent",
 		"project_dir": "/tmp/project",
 	}
-	err := d.CreateInstance(ctx, config, "agent.work.plan", "")
+	err := d.CreateInstance(ctx, config, "agent.work.plan", "", nil)
 	if err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}

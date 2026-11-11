@@ -20,10 +20,17 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PrepareChatTurnFunc 选 agent 并返回 (mode, subMode, agent)，测试可注入。
+// agentDefinition / agentDefinitionFingerprint 来自 _agent_execution，
+// 供 manager 建声明式 agent（name/instructions/tools/skills）。
+// Python: service.py:1279-1283
+//
+//	prepare_kwargs.update(agent_definition=..., agent_definition_fingerprint=...)
 type PrepareChatTurnFunc func(
 	ctx context.Context,
 	req *schema.AgentRequest,
 	channelID string,
+	agentDefinition map[string]any,
+	agentDefinitionFingerprint string,
 ) (mode, subMode string, agent ChatAgentPort, err error)
 
 // streamOptions Stream/Invoke 的可选参数。
@@ -337,9 +344,12 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest, opt
 	if err := r.Start(); err != nil {
 		return nil, err
 	}
-	// ⤵️ R-3 透传点：Task 8 把 opts 里的 agentExecution 拆成
-	// agentDefinition + fingerprint 传给 prepareTurn。
-	_ = applyStreamOptions(opts)
+	// Python: service.py:1712 _agent_execution 一路下传到 prepare_chat_turn，
+	// 再拆成 agent_definition + agent_definition_fingerprint（:1279-1283）
+	agentDefinition, agentDefinitionFingerprint, defErr := splitAgentExecution(opts)
+	if defErr != nil {
+		return nil, defErr
+	}
 	req = NormalizeRequest(req)
 	// 会话补充输入的准入段（同 Stream）。
 	if r.isSessionInputRequest(req) {
@@ -347,7 +357,7 @@ func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest, opt
 			return nil, err
 		}
 	}
-	_, subMode, agent, err := r.prepareTurn(ctx, req)
+	_, subMode, agent, err := r.prepareTurn(ctx, req, agentDefinition, agentDefinitionFingerprint)
 	if err != nil {
 		return nil, err
 	}
@@ -387,8 +397,11 @@ func (r *AgentRuntime) Stream(
 	if err := r.Start(); err != nil {
 		return err
 	}
-	// ⤵️ R-2/R-3 透传点：Task 8 透传 agentExecution，Task 11 透传 onAgentReady。
-	_ = applyStreamOptions(opts)
+	// Python: service.py:2371 _agent_execution 下传；:1279-1283 拆成 definition + fingerprint
+	agentDefinition, agentDefinitionFingerprint, defErr := splitAgentExecution(opts)
+	if defErr != nil {
+		return defErr
+	}
 	req = NormalizeRequest(req)
 	// 会话补充输入的准入段（Python: service.py:2232-2249）。
 	// 必须在 prepareTurn 之前：跨会话消息在 plan/goal 活跃时要被拒收排队，
@@ -398,7 +411,7 @@ func (r *AgentRuntime) Stream(
 			return err
 		}
 	}
-	_, subMode, agent, err := r.prepareTurn(ctx, req)
+	_, subMode, agent, err := r.prepareTurn(ctx, req, agentDefinition, agentDefinitionFingerprint)
 	if err != nil {
 		return err
 	}
@@ -445,13 +458,39 @@ func applyStreamOptions(opts []StreamOption) *streamOptions {
 	return o
 }
 
+// splitAgentExecution 把 _agent_execution 拆成 (definition dict, fingerprint)。
+// Python: service.py:1279-1283
+//
+//	prepare_kwargs.update(
+//	    agent_definition=agent_execution.definition.to_dict(),
+//	    agent_definition_fingerprint=agent_execution.fingerprint,
+//	)
+//
+// 无 execution 时返回 (nil, "", nil)，普通聊天路径不受影响。
+func splitAgentExecution(opts []StreamOption) (map[string]any, string, error) {
+	exec := applyStreamOptions(opts).agentExecution
+	if exec == nil {
+		return nil, "", nil
+	}
+	// Python: agent_execution.definition.to_dict()
+	definition := RuntimeAgentDefinitionToDict(exec.Definition)
+	// Python: agent_execution.fingerprint
+	fingerprint, err := RuntimeAgentExecutionFingerprint(exec)
+	if err != nil {
+		return nil, "", err
+	}
+	return definition, fingerprint, nil
+}
+
 // prepareTurn 选 agent（对齐 _prepare_chat_turn + prepare_chat_turn）。
 func (r *AgentRuntime) prepareTurn(
 	ctx context.Context,
 	req *schema.AgentRequest,
+	agentDefinition map[string]any,
+	agentDefinitionFingerprint string,
 ) (mode, subMode string, agent ChatAgentPort, err error) {
 	if r.prepare != nil {
-		return r.prepare(ctx, req, req.ChannelID)
+		return r.prepare(ctx, req, req.ChannelID, agentDefinition, agentDefinitionFingerprint)
 	}
 	if r.manager == nil {
 		return "", "", nil, errors.New("agent runtime manager is nil")
@@ -459,7 +498,8 @@ func (r *AgentRuntime) prepareTurn(
 	// Python: service.py:1848 `"sync_metadata": not readonly_goal_get` —— 只读的
 	// command.goal get 不得兜底新建 session metadata（否则一次状态查询就凭空写出
 	// metadata.json）。
-	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID, !isReadonlyGoalGetRequest(req))
+	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID,
+		!isReadonlyGoalGetRequest(req), agentDefinition, agentDefinitionFingerprint)
 }
 
 // isSessionInputRequest 是否为会话补充输入请求。

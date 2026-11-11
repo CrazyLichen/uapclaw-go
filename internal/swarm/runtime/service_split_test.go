@@ -63,7 +63,7 @@ func (a *recordingChatAgent) PlanStateAccessor() PlanStateAccessor { return nil 
 // newSplitRuntime 构造带固定 agent 的 runtime。
 func newSplitRuntime(agent ChatAgentPort) *AgentRuntime {
 	return NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(context.Context, *schema.AgentRequest, string) (string, string, ChatAgentPort, error) {
+		Prepare: func(context.Context, *schema.AgentRequest, string, map[string]any, string) (string, string, ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 	})
@@ -179,7 +179,7 @@ func TestInvoke_无sessionID走ProcessMessage(t *testing.T) {
 // TestInvoke_执行错误仍透传 分流不影响错误传播。
 func TestInvoke_执行错误仍透传(t *testing.T) {
 	rt := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(context.Context, *schema.AgentRequest, string) (string, string, ChatAgentPort, error) {
+		Prepare: func(context.Context, *schema.AgentRequest, string, map[string]any, string) (string, string, ChatAgentPort, error) {
 			return "", "", nil, errors.New("prepare failed")
 		},
 	})

@@ -86,11 +86,17 @@ type agentCreateParamsEntry struct {
 	config map[string]any
 	// cacheKey 缓存键
 	cacheKey string
+	// agentDefinition 声明式 root-Agent 定义（可为 nil）
+	// Python: agent_manager.py:765 create_params["agent_definition"]
+	agentDefinition map[string]any
+	// agentDefinitionFingerprint 定义指纹
+	// Python: agent_manager.py:766-767 create_params["agent_definition_fingerprint"]
+	agentDefinitionFingerprint string
 }
 
 // AgentFactory 创建 Agent 实例的工厂函数，返回 (*UapClawSwarm, error)。
 // 生产环境使用默认的 NewUapClaw + CreateInstance；测试环境可注入 mock 工厂跳过真实 LLM 初始化。
-type AgentFactory func(config map[string]any, mode, subMode string) (*UapClawSwarm, error)
+type AgentFactory func(config map[string]any, mode, subMode string, agentDefinition map[string]any) (*UapClawSwarm, error)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -177,9 +183,22 @@ func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClawSw
 	am.agents[channelKey][cacheKey] = entry
 }
 
-// GetAgent 获取 Agent 实例，不存在则自动创建。
+// GetAgent 获取 Agent 实例，不存在则自动创建（无声明式定义）。
 // Python: AgentManager.get_agent：异步，自动创建。
 func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDir, subMode string) (*UapClawSwarm, error) {
+	return am.GetAgentWithDefinition(ctx, channelID, mode, projectDir, subMode, nil, "")
+}
+
+// GetAgentWithDefinition 获取（必要时创建）Agent 实例，可携带声明式 root-Agent 定义。
+// Python: AgentManager.get_agent_for_request（agent_manager.py:2056-2060）
+//
+// agentDefinition 只在「createAgent」时传给 adapter（Python :719-726 create_kwargs），
+// 不进 cacheKey —— 上游 _make_agent_cache_key 用 (mode, sub_mode, project_dir)，
+// 定义不参与缓存分桶。
+func (am *AgentManager) GetAgentWithDefinition(
+	ctx context.Context, channelID, mode, projectDir, subMode string,
+	agentDefinition map[string]any, agentDefinitionFingerprint string,
+) (*UapClawSwarm, error) {
 	// Python: L238-242: normalize → cacheKey → 查找
 	channelKey := normalizeChannelID(channelID)
 	modeKey := normalizeMode(mode)
@@ -209,7 +228,8 @@ func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDi
 		config = mergeAcpAgentConfig(config, nil)
 	}
 
-	return am.createAgent(ctx, channelKey, modeKey, config, subModeKey, cacheKey)
+	return am.createAgent(ctx, channelKey, modeKey, config, subModeKey, cacheKey,
+		agentDefinition, agentDefinitionFingerprint)
 }
 
 // GetAgentNoWait 获取已有 Agent 实例，不自动创建。
@@ -304,7 +324,8 @@ func (am *AgentManager) Initialize(ctx context.Context, channelID string, extraC
 	}
 	// Python L178-179: config + _create_agent("acp", "code", config)
 	config := mergeAcpAgentConfig(nil, extraConfig)
-	if _, err := am.createAgent(ctx, "acp", "code", config, "", ""); err != nil {
+	// ACP 路径不带声明式定义
+	if _, err := am.createAgent(ctx, "acp", "code", config, "", "", nil, ""); err != nil {
 		return nil, err
 	}
 	// Python L181: return ACP_DEFAULT_CAPABILITIES.copy()
@@ -540,7 +561,8 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 
 	// Python: L406-426: 3. 立即按原参数重建
 	for cacheKey, params := range backupParams {
-		_, err := am.createAgent(ctx, channelKey, params.mode, copyMap(params.config), params.subMode, cacheKey)
+		_, err := am.createAgent(ctx, channelKey, params.mode, copyMap(params.config), params.subMode, cacheKey,
+			params.agentDefinition, params.agentDefinitionFingerprint)
 		if err != nil {
 			// Python: L416-421: rebuild failed → error log but continue
 			logger.Error(logComponent).
@@ -610,12 +632,13 @@ func (am *AgentManager) Cleanup() error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultAgentFactory 默认 Agent 工厂：NewUapClaw + CreateInstance。
-func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClawSwarm, error) {
+func defaultAgentFactory(config map[string]any, mode, subMode string, agentDefinition map[string]any) (*UapClawSwarm, error) {
 	agent := NewUapClaw()
 	if err := agent.CreateInstance(
 		WithCreateInstanceConfig(config),
 		WithCreateInstanceMode(mode),
 		WithCreateInstanceSubMode(subMode),
+		WithCreateInstanceAgentDefinition(agentDefinition),
 	); err != nil {
 		return nil, fmt.Errorf("[AgentManager] 创建 Agent 实例失败: %w", err)
 	}
@@ -624,7 +647,8 @@ func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClawS
 
 // createAgent 创建 Agent 实例。
 // Python: AgentManager._create_agent
-func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string, config map[string]any, subMode, cacheKey string) (*UapClawSwarm, error) {
+func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string, config map[string]any, subMode, cacheKey string,
+	agentDefinition map[string]any, agentDefinitionFingerprint string) (*UapClawSwarm, error) {
 	// Python: L108-113: 1. 注入最新 env overrides
 	am.mu.RLock()
 	envOverrides := am.latestEnvOverrides
@@ -668,7 +692,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 	factory := am.createAgentFactory
 	runtimeProvider := am.runtimeProvider
 	am.mu.RUnlock()
-	agent, err := factory(config, modeKey, subModeKey)
+	agent, err := factory(config, modeKey, subModeKey, agentDefinition)
 	if err != nil {
 		return nil, err
 	}
@@ -701,10 +725,12 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 		am.agentCreateParams[channelKey] = make(map[string]*agentCreateParamsEntry)
 	}
 	am.agentCreateParams[channelKey][cacheKey] = &agentCreateParamsEntry{
-		mode:     modeKey,
-		subMode:  subModeKey,
-		config:   copyMap(config),
-		cacheKey: cacheKey,
+		mode:                       modeKey,
+		subMode:                    subModeKey,
+		config:                     copyMap(config),
+		cacheKey:                   cacheKey,
+		agentDefinition:            copyMap(agentDefinition),
+		agentDefinitionFingerprint: agentDefinitionFingerprint,
 	}
 	am.mu.Unlock()
 
@@ -845,9 +871,11 @@ func resolveWorkspaceDirFromRequest(request *schema.AgentRequest) string {
 
 // GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（runtime.AgentManagerPort 实现）。
 // Python: runtime/request.py prepare_chat_turn 中的 get_agent_for_request（简化版，无原子准入）。
-// GetChatAgent 返回按 mode/subMode/projectDir 选中（必要时创建）的聊天 agent。
-func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (swruntime.ChatAgentPort, error) {
-	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, subMode)
+// agentDefinition / fingerprint 非空时用于创建声明式 root agent。
+func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string,
+	agentDefinition map[string]any, agentDefinitionFingerprint string) (swruntime.ChatAgentPort, error) {
+	agent, err := am.GetAgentWithDefinition(ctx, channelID, mode, projectDir, subMode,
+		agentDefinition, agentDefinitionFingerprint)
 	if err != nil {
 		return nil, err
 	}

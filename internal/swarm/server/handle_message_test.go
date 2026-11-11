@@ -37,7 +37,7 @@ func newTestServer() (*AgentServer, *transport.ChannelTransport) {
 	am := runtime.NewAgentManager()
 	// 注入 mock Agent 工厂，避免 createAgent → CreateInstance → LLM nil panic
 	// mock 工厂创建一个未初始化的 UapClawSwarm（adapter 为 nil），ProcessMessage 会走 sessionManager 队列路径
-	am.SetAgentFactory(func(config map[string]any, mode, subMode string) (*runtime.UapClawSwarm, error) {
+	am.SetAgentFactory(func(config map[string]any, mode, subMode string, _ map[string]any) (*runtime.UapClawSwarm, error) {
 		return runtime.NewUapClaw(), nil
 	})
 	server.agentManager = am

@@ -94,7 +94,7 @@ func (a *fakePlanAccessor) CommitSession(_ context.Context, _ string) error {
 type fakeManager struct{}
 
 // GetChatAgent 返回错误（测试一律注入 Prepare）
-func (fakeManager) GetChatAgent(context.Context, string, string, string, string) (ChatAgentPort, error) {
+func (fakeManager) GetChatAgent(context.Context, string, string, string, string, map[string]any, string) (ChatAgentPort, error) {
 	return nil, context.Canceled
 }
 
@@ -108,7 +108,7 @@ func TestAgentRuntime_Invoke_步骤顺序(t *testing.T) {
 	agent := &fakePlanAgent{}
 	var events []*RuntimeEvent
 	rt := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, ChatAgentPort, error) {
 			return "agent", "plan", agent, nil
 		},
 		OnControlEvent: func(ev *RuntimeEvent) { events = append(events, ev) },
@@ -132,7 +132,7 @@ func TestAgentRuntime_Invoke_步骤顺序(t *testing.T) {
 func TestAgentRuntime_Invoke_进入plan注入提醒(t *testing.T) {
 	agent := &fakePlanAgent{}
 	rt := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, ChatAgentPort, error) {
 			return "agent", "plan", agent, nil
 		},
 	})
@@ -157,7 +157,7 @@ func TestAgentRuntime_Invoke_退出plan下发控制事件(t *testing.T) {
 	agent := &fakePlanAgent{}
 	var events []*RuntimeEvent
 	rt := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 		OnControlEvent: func(ev *RuntimeEvent) { events = append(events, ev) },
@@ -209,7 +209,7 @@ func TestAgentRuntime_Invoke_plan守卫两套语义(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			agent := &fakePlanAgent{}
 			rt := NewAgentRuntime(AgentRuntimeDeps{
-				Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
+				Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, ChatAgentPort, error) {
 					return "agent", "plan", agent, nil
 				},
 			})
@@ -227,7 +227,7 @@ func TestAgentRuntime_Invoke_plan守卫两套语义(t *testing.T) {
 func TestAgentRuntime_Invoke_非chat方法只跳过ensure_state(t *testing.T) {
 	agent := &fakePlanAgent{}
 	rt := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, ChatAgentPort, error) {
 			return "agent", "plan", agent, nil
 		},
 	})
@@ -243,7 +243,7 @@ func TestAgentRuntime_Stream_逐块回传(t *testing.T) {
 	agent := &fakePlanAgent{}
 	var seen []*RuntimeEvent
 	rt := NewAgentRuntime(AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 		OnControlEvent: func(ev *RuntimeEvent) { seen = append(seen, ev) },

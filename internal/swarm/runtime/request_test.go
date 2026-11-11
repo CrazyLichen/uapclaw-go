@@ -389,7 +389,7 @@ type stubManager struct {
 }
 
 // GetChatAgent 记录创建次数并返回 agent
-func (m *stubManager) GetChatAgent(_ context.Context, _, _, _, _ string) (ChatAgentPort, error) {
+func (m *stubManager) GetChatAgent(_ context.Context, _, _, _, _ string, _ map[string]any, _ string) (ChatAgentPort, error) {
 	m.created++
 	return m.agent, m.agentErr
 }
@@ -421,7 +421,7 @@ func TestPrepareChatTurn_默认work_mode与元数据回写(t *testing.T) {
 	mgr := &stubManager{agent: agent}
 	req := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal"})
 
-	mode, subMode, got, err := PrepareChatTurn(context.Background(), mgr, req, "tui", true)
+	mode, subMode, got, err := PrepareChatTurn(context.Background(), mgr, req, "tui", true, nil, "")
 	require.NoError(t, err)
 	require.Equal(t, "agent", mode)
 	require.Equal(t, "", subMode)
@@ -446,7 +446,7 @@ func TestPrepareChatTurn_persistSession锁定告警(t *testing.T) {
 
 	// 首轮不带 persist 标记，锁定为 false
 	first := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal"})
-	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, first, "web", true)
+	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, first, "web", true, nil, "")
 	require.NoError(t, err)
 	session.FlushMetadataQueue(5.0)
 
@@ -456,7 +456,7 @@ func TestPrepareChatTurn_persistSession锁定告警(t *testing.T) {
 		"persist_session":              true,
 		"eternal_conversation_enabled": true,
 	})
-	_, _, _, err = PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, second, "web", true)
+	_, _, _, err = PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, second, "web", true, nil, "")
 	require.NoError(t, err)
 	require.Equal(t, false, parseRequestParams(second)["eternal_conversation_enabled"],
 		"persist_session 为会话创建期身份，本轮值仅告警")
@@ -475,7 +475,7 @@ func TestPrepareChatTurn_继承会话锁定的mode(t *testing.T) {
 
 	req := chatSendRequest(t, sid, map[string]any{})
 	req.ReqMethod = schema.ReqMethodHeartbeatGetConf
-	_, _, agent, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false)
+	_, _, agent, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false, nil, "")
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 
@@ -494,7 +494,7 @@ func TestPrepareChatTurn_不同步元数据回落锁定工程(t *testing.T) {
 	session.FlushMetadataQueue(5.0)
 
 	req := chatSendRequest(t, sid, map[string]any{})
-	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false)
+	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false, nil, "")
 	require.NoError(t, err)
 	require.Equal(t, "/tmp/locked", parseRequestParams(req)["project_dir"])
 }
@@ -503,7 +503,7 @@ func TestPrepareChatTurn_不同步元数据回落锁定工程(t *testing.T) {
 func TestPrepareChatTurn_请求work_mode优先(t *testing.T) {
 	setupRuntimeSessionDir(t)
 	req := chatSendRequest(t, "sess-prepare-4", map[string]any{"mode": "agent", "work_mode": "work"})
-	mode, subMode, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "tui", false)
+	mode, subMode, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "tui", false, nil, "")
 	require.NoError(t, err)
 	require.Equal(t, "agent", mode)
 	require.Equal(t, "", subMode)
@@ -516,7 +516,7 @@ func TestPrepareChatTurn_取agent失败(t *testing.T) {
 	mgr := &stubManager{agentErr: errors.New("boom")}
 	req := chatSendRequest(t, "sess-prepare-5", map[string]any{"mode": "agent"})
 
-	_, _, _, err := PrepareChatTurn(context.Background(), mgr, req, "web", false)
+	_, _, _, err := PrepareChatTurn(context.Background(), mgr, req, "web", false, nil, "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "boom")
 }

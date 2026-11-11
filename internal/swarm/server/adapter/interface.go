@@ -25,7 +25,11 @@ import (
 type AgentAdapter interface {
 	// CreateInstance 初始化底层 SDK Agent。
 	// 启动时调用一次，skill install/uninstall 后再次调用。
-	CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string) error
+	// agentDefinition 非空时用于声明式 root agent
+	// （name/description/instructions/tools/skills）。
+	// Python: interface.py:1764 create_instance(..., agent_definition=...)
+	CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string,
+		agentDefinition map[string]any) error
 
 	// ReloadAgentConfig 热重载配置，不重启进程。
 	// configBase: 完整配置快照，若提供则不再读 config.yaml。

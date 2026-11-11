@@ -69,7 +69,7 @@ func TestHandleUnaryImpl_走runtime并发帧(t *testing.T) {
 	s, tr := newTestServer()
 	agent := &stubChatAgent{}
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 	})
@@ -93,7 +93,7 @@ func TestHandleStreamImpl_逐帧带sequence(t *testing.T) {
 	}}
 	s.streamKeepaliveInterval = 0 // 覆盖心跳间隔缺省回落分支
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 	})
@@ -329,7 +329,7 @@ func TestHandleUnaryImpl_特殊方法错误写错误帧(t *testing.T) {
 func TestHandleUnaryImpl_空负载事件跳过(t *testing.T) {
 	s, tr := newTestServer()
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", &nilPayloadAgent{}, nil
 		},
 	})
@@ -343,7 +343,7 @@ func TestHandleUnaryImpl_空负载事件跳过(t *testing.T) {
 func TestHandleUnaryImpl_发送失败不阻断(t *testing.T) {
 	s, tr := newTestServer()
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", &stubChatAgent{}, nil
 		},
 	})
@@ -362,7 +362,7 @@ func TestHandleStreamImpl_发送失败停止流(t *testing.T) {
 	ch <- &schema.AgentResponseChunk{Payload: map[string]any{"event_type": "chat.final"}, IsComplete: true}
 	close(ch)
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", &chunkHolderAgent{ch: ch}, nil
 		},
 	})
@@ -378,7 +378,7 @@ func TestHandleStreamImpl_发送失败停止流(t *testing.T) {
 func TestHandleStreamImpl_流错误写错误帧(t *testing.T) {
 	s, tr := newTestServer()
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", &errStreamAgent{}, nil
 		},
 	})
@@ -454,7 +454,7 @@ func TestHandleStreamImpl_空闲发心跳(t *testing.T) {
 	agent := &blockingStreamAgent{release: make(chan struct{})}
 	s.streamKeepaliveInterval = 10 * time.Millisecond
 	s.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string) (string, string, swruntime.ChatAgentPort, error) {
+		Prepare: func(_ context.Context, _ *schema.AgentRequest, _ string, _ map[string]any, _ string) (string, string, swruntime.ChatAgentPort, error) {
 			return "agent", "", agent, nil
 		},
 	})
@@ -479,7 +479,7 @@ func TestHandleStreamImpl_空闲发心跳(t *testing.T) {
 func TestHandleCancel_取消链路报错(t *testing.T) {
 	s, tr := newTestServer()
 	// 预创建 agent：取消链路会命中既有实例并驱动它处理取消请求
-	_, err := s.agentManager.GetChatAgent(context.Background(), "web", "agent", "", "")
+	_, err := s.agentManager.GetChatAgent(context.Background(), "web", "agent", "", "", nil, "")
 	require.NoError(t, err)
 
 	sid := "sess-cancel-err"

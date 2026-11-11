@@ -62,7 +62,7 @@ func newFakeAdapter() *fakeAdapter {
 	}
 }
 
-func (f *fakeAdapter) CreateInstance(_ context.Context, _ map[string]any, _, _ string) error {
+func (f *fakeAdapter) CreateInstance(_ context.Context, _ map[string]any, _, _ string, _ map[string]any) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.instanceCreated = true

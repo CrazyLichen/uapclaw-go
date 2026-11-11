@@ -60,7 +60,7 @@ type fakeCleaner struct {
 }
 
 // GetChatAgent 端口实现（清理用例不用）。
-func (fakeCleaner) GetChatAgent(context.Context, string, string, string, string) (ChatAgentPort, error) {
+func (fakeCleaner) GetChatAgent(context.Context, string, string, string, string, map[string]any, string) (ChatAgentPort, error) {
 	return nil, context.Canceled
 }
 
@@ -77,7 +77,7 @@ func (f fakeCleaner) CleanupSessionRuntime(context.Context, string, string) (boo
 type plainManager struct{}
 
 // GetChatAgent 端口实现。
-func (plainManager) GetChatAgent(context.Context, string, string, string, string) (ChatAgentPort, error) {
+func (plainManager) GetChatAgent(context.Context, string, string, string, string, map[string]any, string) (ChatAgentPort, error) {
 	return nil, context.Canceled
 }
 

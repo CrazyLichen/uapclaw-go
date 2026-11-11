@@ -19,8 +19,13 @@ import (
 
 // AgentManagerPort 运行时需要的 manager 能力（由 server 层实现，避免反向依赖）。
 type AgentManagerPort interface {
-	// GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（不存在时创建）
-	GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (ChatAgentPort, error)
+	// GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（不存在时创建）。
+	// agentDefinition / agentDefinitionFingerprint 非空时用于创建声明式 agent
+	// （name/description/instructions/tools/skills）。
+	// Python: agent_manager.py:658-659 get_agent_for_request(
+	//           agent_definition=..., agent_definition_fingerprint=...)
+	GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string,
+		agentDefinition map[string]any, agentDefinitionFingerprint string) (ChatAgentPort, error)
 	// GetChatAgentNoWait 非阻塞取已有 agent（不存在时返回 nil，不创建）
 	GetChatAgentNoWait(channelID, mode, projectDir, subMode string) ChatAgentPort
 }
@@ -389,6 +394,8 @@ func PrepareChatTurn(
 	req *schema.AgentRequest,
 	channelID string,
 	syncMetadata bool,
+	agentDefinition map[string]any,
+	agentDefinitionFingerprint string,
 ) (mode, subMode string, agent ChatAgentPort, err error) {
 	params := parseRequestParams(req)
 	rawMode, _ := params["mode"].(string)
@@ -499,7 +506,10 @@ func PrepareChatTurn(
 	writeRequestParams(req, params)
 
 	// 9. 取 agent（⤵️ 上游为 get_agent_for_request 原子准入 + 预热等待）
-	agent, err = mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir)
+	// Python: request.py:534-537 agent_kwargs["agent_definition"] /
+	//         ["agent_definition_fingerprint"] → get_agent_for_request
+	agent, err = mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir,
+		agentDefinition, agentDefinitionFingerprint)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -624,7 +634,8 @@ func CancelRequest(
 		if agentMode == "auto_harness" {
 			agentMode = "agent"
 		}
-		created, err := mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir)
+		// 取消路径不需要声明式定义：只取已有 agent 打断执行
+		created, err := mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir, nil, "")
 		if err != nil {
 			return nil, err
 		}

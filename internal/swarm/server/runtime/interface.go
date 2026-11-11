@@ -86,6 +86,9 @@ type createInstanceConfig struct {
 	config  map[string]any
 	mode    string
 	subMode string
+	// agentDefinition 声明式 root-Agent 定义（可为 nil）
+	// Python: interface.py:1764 create_instance(..., agent_definition=...)
+	agentDefinition map[string]any
 }
 
 // CreateInstanceOption CreateInstance 的可选参数。
@@ -111,6 +114,12 @@ func WithCreateInstanceMode(mode string) CreateInstanceOption {
 // WithCreateInstanceSubMode 设置 CreateInstance 子模式。
 func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 	return func(c *createInstanceConfig) { c.subMode = subMode }
+}
+
+// WithCreateInstanceAgentDefinition 设置声明式 root-Agent 定义。
+// Python: interface.py:1786 create_kwargs["agent_definition"] = dict(agent_definition)
+func WithCreateInstanceAgentDefinition(agentDefinition map[string]any) CreateInstanceOption {
+	return func(c *createInstanceConfig) { c.agentDefinition = agentDefinition }
 }
 
 // NewUapClaw 创建 UapClawSwarm 实例。
@@ -730,7 +739,7 @@ func (uc *UapClawSwarm) CreateInstance(opts ...CreateInstanceOption) error {
 		return err
 	}
 	ctx := context.Background()
-	if err := a.CreateInstance(ctx, cfg.config, cfg.mode, cfg.subMode); err != nil {
+	if err := a.CreateInstance(ctx, cfg.config, cfg.mode, cfg.subMode, cfg.agentDefinition); err != nil {
 		return err
 	}
 	logger.Info(logComponent).

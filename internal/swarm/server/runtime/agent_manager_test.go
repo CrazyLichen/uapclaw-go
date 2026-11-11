@@ -602,7 +602,7 @@ func TestAgentManager_GetAgentChatNoWait(t *testing.T) {
 
 	assert.Nil(t, am.GetChatAgentNoWait("web", "agent", "", ""), "未创建时应返回 nil")
 
-	created, err := am.GetChatAgent(context.Background(), "web", "agent", "", "")
+	created, err := am.GetChatAgent(context.Background(), "web", "agent", "", "", nil, "")
 	require.NoError(t, err)
 	require.NotNil(t, created)
 
