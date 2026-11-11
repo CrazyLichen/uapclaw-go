@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"os"
 	"strings"
 
@@ -395,7 +396,7 @@ func (s *AgentServer) handleCommandModel(ctx context.Context, request *schema.Ag
 
 		// Python: await reload_agents_config(None, env_updates)（失败仅 debug）
 		if s.agentManager != nil {
-			if err := s.agentManager.ReloadAgentsConfig(ctx, nil, stringEnvMap(params.EnvUpdates)); err != nil {
+			if err := s.agentManager.ReloadAgentsConfig(ctx, nil, stringEnvMap(params.EnvUpdates), serverruntime.ReloadOptions{}); err != nil {
 				logger.Debug(logComponent).
 					Err(err).
 					Msg("command.model reload_agents_config skipped")

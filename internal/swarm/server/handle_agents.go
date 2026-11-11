@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
@@ -122,9 +122,9 @@ type agentsDisableParams struct {
 // getAgentConfigService 获取 AgentConfigService 实例。
 // Python: service = AgentConfigService(workspace_dir)
 // 如果请求参数中指定了 workspace_dir，则创建临时 service，否则使用 server 级别的 service。
-func (s *AgentServer) getAgentConfigService(workspaceDir string) *runtime.AgentConfigService {
+func (s *AgentServer) getAgentConfigService(workspaceDir string) *rt.AgentConfigService {
 	if workspaceDir != "" {
-		return runtime.NewAgentConfigService(workspaceDir)
+		return rt.NewAgentConfigService(workspaceDir)
 	}
 	return s.agentConfigService
 }
@@ -142,7 +142,7 @@ func (s *AgentServer) reloadAgentsConfig(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
-	return s.agentManager.ReloadAgentsConfig(ctx, configData, nil)
+	return s.agentManager.ReloadAgentsConfig(ctx, configData, nil, rt.ReloadOptions{})
 }
 
 // handleAgentsList 处理 agents.list 请求。
@@ -231,7 +231,7 @@ func (s *AgentServer) handleAgentsCreate(ctx context.Context, request *schema.Ag
 	// Python: if generate: llm_result = await self._generate_agent_with_llm(name, description)
 	generated := false
 	if params.Generate && params.Name != "" && params.Description != "" {
-		llmResult := runtime.GenerateAgentWithLLM(ctx, s.resolveModel(), params.Name, params.Description)
+		llmResult := rt.GenerateAgentWithLLM(ctx, s.resolveModel(), params.Name, params.Description)
 		if llmResult != nil {
 			params.WhenToUse = llmResult.WhenToUse
 			params.Prompt = llmResult.SystemPrompt
@@ -245,7 +245,7 @@ func (s *AgentServer) handleAgentsCreate(ctx context.Context, request *schema.Ag
 	if location == "" {
 		location = types.AgentSourceLocal
 	}
-	createParams := &runtime.CreateAgentParams{
+	createParams := &rt.CreateAgentParams{
 		Name:            params.Name,
 		Description:     params.Description,
 		Prompt:          params.Prompt,
@@ -275,7 +275,7 @@ func (s *AgentServer) handleAgentsCreate(ctx context.Context, request *schema.Ag
 	// Python: upsert_subagent_in_config(agent.name, enabled=True)
 	applied := true
 	reloadError := ""
-	if err := runtime.UpsertSubagentInConfig(agent.Name, true); err != nil {
+	if err := rt.UpsertSubagentInConfig(agent.Name, true); err != nil {
 		applied = false
 		reloadError = err.Error()
 		logger.Warn(logComponent).Err(err).Str("agent_name", agent.Name).Msg("agents.create update config failed")
@@ -323,7 +323,7 @@ func (s *AgentServer) handleAgentsUpdate(ctx context.Context, request *schema.Ag
 	// 步骤 1: 如果 generate=true 且有 description，使用 LLM 生成
 	generated := false
 	if params.Generate && name != "" && params.Description != nil && *params.Description != "" {
-		llmResult := runtime.GenerateAgentWithLLM(ctx, s.resolveModel(), name, *params.Description)
+		llmResult := rt.GenerateAgentWithLLM(ctx, s.resolveModel(), name, *params.Description)
 		if llmResult != nil {
 			params.WhenToUse = &llmResult.WhenToUse
 			params.Prompt = &llmResult.SystemPrompt
@@ -332,7 +332,7 @@ func (s *AgentServer) handleAgentsUpdate(ctx context.Context, request *schema.Ag
 	}
 
 	// 步骤 2: 更新 agent
-	updateParams := &runtime.UpdateAgentParams{
+	updateParams := &rt.UpdateAgentParams{
 		Description:     params.Description,
 		WhenToUse:       params.WhenToUse,
 		Prompt:          params.Prompt,
@@ -415,7 +415,7 @@ func (s *AgentServer) handleAgentsDelete(ctx context.Context, request *schema.Ag
 	// Python: remove_subagent_from_config(name)
 	applied := true
 	reloadError := ""
-	if _, rmErr := runtime.RemoveSubagentFromConfig(name); rmErr != nil {
+	if _, rmErr := rt.RemoveSubagentFromConfig(name); rmErr != nil {
 		applied = false
 		reloadError = rmErr.Error()
 		logger.Warn(logComponent).Err(rmErr).Str("agent_name", name).Msg("agents.delete delete config failed")
@@ -511,7 +511,7 @@ func (s *AgentServer) handleAgentsSetEnabled(ctx context.Context, request *schem
 	// Python: upsert_subagent_in_config(name, enabled=enabled)
 	applied := true
 	reloadError := ""
-	if err := runtime.UpsertSubagentInConfig(name, enabled); err != nil {
+	if err := rt.UpsertSubagentInConfig(name, enabled); err != nil {
 		applied = false
 		reloadError = err.Error()
 		logger.Warn(logComponent).Err(err).Str("agent_name", name).Bool("enabled", enabled).Msg("agents set enabled state failed")

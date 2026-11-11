@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	rt "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -24,11 +26,14 @@ func (s *AgentServer) handleConfigCacheClear(_ context.Context, request *schema.
 }
 
 // handleAgentReloadConfig 处理 agent.reload_config 请求。
-// 从 request.Params 提取 config 和 env，调用 AgentManager.ReloadAgentsConfig。
-// Python: _handle_agent_reload_config (agent_ws_server.py L4147-4171)
+// 从 request.Params 提取 config / env / target_channel_id / target_session_id /
+// reload_scopes，调用 AgentManager.ReloadAgentsConfig。
+// Python: agent_ws_server.py:12860-12889 _handle_agent_reload_config
+// （reload_scopes 只接受字符串列表；合法域校验在 AgentManager 侧按交集判断）。
 func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var configPayload map[string]any
 	var envOverrides map[string]string
+	opts := rt.ReloadOptions{}
 
 	if len(request.Params) > 0 {
 		var params map[string]any
@@ -43,10 +48,31 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 					envOverrides = anyMapToStringMap(m)
 				}
 			}
+			// Python: agent_ws_server.py:12866-12878 target/scope 解析
+			//（scope 合法域 {model, multimodal, search, team, permissions, agent_runtime}）
+			if tc, ok := params["target_channel_id"]; ok {
+				opts.TargetChannelID = strings.TrimSpace(fmt.Sprintf("%v", tc))
+				if opts.TargetChannelID == "<nil>" {
+					opts.TargetChannelID = ""
+				}
+			}
+			if ts, ok := params["target_session_id"]; ok {
+				opts.TargetSessionID = strings.TrimSpace(fmt.Sprintf("%v", ts))
+				if opts.TargetSessionID == "<nil>" {
+					opts.TargetSessionID = ""
+				}
+			}
+			if rawScopes, ok := params["reload_scopes"].([]any); ok {
+				for _, scope := range rawScopes {
+					if str, isStr := scope.(string); isStr && str != "" {
+						opts.ReloadScopes = append(opts.ReloadScopes, str)
+					}
+				}
+			}
 		}
 	}
 
-	if err := s.agentManager.ReloadAgentsConfig(ctx, configPayload, envOverrides); err != nil {
+	if err := s.agentManager.ReloadAgentsConfig(ctx, configPayload, envOverrides, opts); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
