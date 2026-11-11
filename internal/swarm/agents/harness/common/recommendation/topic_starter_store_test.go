@@ -1,6 +1,7 @@
 package recommendation
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -47,10 +48,39 @@ func TestPyStr_Python的str语义(t *testing.T) {
 	assert.Equal(t, "abc", pyStr("abc"))
 	assert.Equal(t, "1", pyStr(1))
 	assert.Equal(t, "1", pyStr(int64(1)))
-	assert.Equal(t, "1", pyStr(float64(1)))
+	// Python str(1.0) 是 "1.0" 而非 "1"（float 走 repr 语义，整值补 .0）
+	assert.Equal(t, "1.0", pyStr(float64(1)))
 	assert.Equal(t, "1.5", pyStr(1.5))
 	assert.Equal(t, "True", pyStr(true))
 	assert.Equal(t, "False", pyStr(false))
+}
+
+// TestPyStr_浮点格式化与Python逐字一致
+// Python: str(float) 用最短往返表示，整值补 ".0"，指数至少两位，负零为 "-0.0"
+func TestPyStr_浮点格式化与Python逐字一致(t *testing.T) {
+	a, b := 0.1, 0.2
+	negativeZero := math.Copysign(0, -1)
+	cases := []struct {
+		value float64
+		want  string
+	}{
+		{3.0, "3.0"},
+		{0.25, "0.25"},
+		{1e16, "1e+16"},
+		{1e17, "1e+17"},
+		{1e20, "1e+20"}, // 曾因 int64 转换溢出成 -9223372036854775808
+		{1.5e-10, "1.5e-10"},
+		{a + b, "0.30000000000000004"},
+		{1.2345678901234568e17, "1.2345678901234568e+17"},
+		{1e-7, "1e-07"},
+		{negativeZero, "-0.0"},
+		{math.Inf(1), "inf"},
+		{math.Inf(-1), "-inf"},
+		{math.NaN(), "nan"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, pyStr(c.value), "值 %v", c.value)
+	}
 }
 
 // TestMarshalNoEscape_不转义HTML且无尾换行

@@ -218,10 +218,39 @@ func pyStr(value any) string {
 	case int64:
 		return strconv.FormatInt(v, 10)
 	case float64:
-		if v == math.Trunc(v) && !math.IsInf(v, 0) {
-			return strconv.FormatInt(int64(v), 10)
+		// Python str(float) 用最短往返表示：整值补 ".0"，其余按 %g 风格
+		if math.IsInf(v, 1) {
+			return "inf"
 		}
-		return strconv.FormatFloat(v, 'g', -1, 64)
+		if math.IsInf(v, -1) {
+			return "-inf"
+		}
+		if math.IsNaN(v) {
+			return "nan"
+		}
+		formatted := strconv.FormatFloat(v, 'g', -1, 64)
+		// Go 把负零格式化为 "-0"，Python 给 "-0.0"
+		if formatted == "-0" {
+			formatted = "-0.0"
+		}
+		// 非指数形式且无小数点时补 ".0"（Python str(3.0) == "3.0"）
+		if !strings.ContainsAny(formatted, ".eE") {
+			formatted += ".0"
+		}
+		// Python 指数至少两位：1e-07 而非 1e-7
+		if index := strings.IndexAny(formatted, "eE"); index >= 0 {
+			mantissa, exponent := formatted[:index], formatted[index+1:]
+			sign := ""
+			if len(exponent) > 0 && (exponent[0] == '+' || exponent[0] == '-') {
+				sign, exponent = exponent[:1], exponent[1:]
+			}
+			// 指数已带前导零时保持；否则补齐到两位
+			if len(exponent) < 2 {
+				exponent = "0" + exponent
+			}
+			formatted = mantissa + "e" + sign + exponent
+		}
+		return formatted
 	default:
 		return fmt.Sprintf("%v", v)
 	}
@@ -260,6 +289,17 @@ func ensureParentDir(path string) error {
 
 // sortedKeys 取 map 键并排序，用于稳定的错误消息。
 func sortedKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// sortedStringSet 取字符串集合的元素并排序，用于稳定的错误消息。
+// 对齐 Python 侧 payload_fields 的 set 语义（只有键有意义）。
+func sortedStringSet(values map[string]struct{}) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
@@ -457,7 +497,8 @@ func (s *TopicStarterStore) QueryEvents(opts QueryEventsOptions) ([]map[string]a
 		return nil, nil
 	}
 
-	touched := make(map[string]any, len(opts.PayloadEquals)+3)
+	// Python 侧 payload_fields 是 set（只有键有意义），这里用 struct{} 集合表达
+	touched := make(map[string]struct{}, len(opts.PayloadEquals)+3)
 	for field := range opts.PayloadEquals {
 		touched[field] = struct{}{}
 	}
@@ -471,7 +512,7 @@ func (s *TopicStarterStore) QueryEvents(opts QueryEventsOptions) ([]map[string]a
 		touched[*opts.OrderByPayloadIntegerDesc] = struct{}{}
 	}
 	unknown := make([]string, 0)
-	for _, field := range sortedKeys(touched) {
+	for _, field := range sortedStringSet(touched) {
 		if _, ok := eventPayloadQueryFields[field]; !ok {
 			unknown = append(unknown, field)
 		}
