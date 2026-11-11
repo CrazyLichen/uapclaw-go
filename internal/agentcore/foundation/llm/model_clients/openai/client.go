@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/utils/providererror"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/reasoning"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -606,7 +607,11 @@ func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 
 	return exception.NewBaseError(
 		exception.StatusModelCallFailed,
-		exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s", resp.StatusCode, string(body))),
+		// Python: openai_model_client.py:594 summarize_provider_error_text(body, status_code)。
+		// 只折叠 msg 文案；params 结构化字段（http_status/provider_code/retry_after）是
+		// ModelAnomalyDetectionRail.classifyTransientFailure 的契约，一字不动。
+		exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s",
+			resp.StatusCode, providererror.SummarizeProviderErrorText(string(body), resp.StatusCode))),
 		exception.WithParams(params),
 	)
 }
