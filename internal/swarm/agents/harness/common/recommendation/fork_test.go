@@ -2,9 +2,11 @@ package recommendation
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,15 +25,23 @@ type capturingLLM struct {
 	captured [][]llmschema.BaseMessage
 	// replyText 返回的回答正文
 	replyText string
+	// blockUntilCtxCancel 为真时 Invoke 阻塞至 ctx 取消（测 cancelled 事件路径）
+	blockUntilCtxCancel bool
 }
 
 // Invoke 记录入参并返回一条回答。
 func (c *capturingLLM) Invoke(
-	_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption,
+	ctx context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption,
 ) (*llmschema.AssistantMessage, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.captured = append(c.captured, messages.Messages())
+	c.mu.Unlock()
+	if c.blockUntilCtxCancel {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return llmschema.NewAssistantMessage(c.replyText), nil
 }
 
@@ -105,17 +115,6 @@ func (c *capturingLLM) capturedAt(index int) []llmschema.BaseMessage {
 	return c.captured[index]
 }
 
-// capturingPublisher 记录落库结果。
-type capturingPublisher struct {
-	// results 收到的结果列表
-	results []ForkResult
-}
-
-// PublishForkResult 记录一次落库。
-func (p *capturingPublisher) PublishForkResult(_ context.Context, result ForkResult) {
-	p.results = append(p.results, result)
-}
-
 // capturingPusher 记录推帧事件。
 type capturingPusher struct {
 	// events 收到的事件列表
@@ -161,8 +160,8 @@ func TestRunFork_前缀逐字一致(t *testing.T) {
 		"追加的必须是上游原文，禁止本地化")
 }
 
-// TestRunFork_未注入publisher时结果丢弃且无error 对齐 spec DEV-10。
-func TestRunFork_未注入publisher时结果丢弃且无error(t *testing.T) {
+// TestRunFork_未注入pusher时candidate只落库不推 推送通道未接线则不推，账本仍可用。
+func TestRunFork_未注入pusher时candidate只落库不推(t *testing.T) {
 	resetWorkspaceForTest(t)
 	client := &capturingLLM{replyText: "继续下一步的实现"}
 	f := newEnabledForks()
@@ -170,28 +169,14 @@ func TestRunFork_未注入publisher时结果丢弃且无error(t *testing.T) {
 		f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config), nil)
 	})
 	assert.Equal(t, 1, client.capturedCount(), "重放仍然发生")
-}
-
-// TestRunFork_注入publisher收到结果 为 10.7 铺路。
-func TestRunFork_注入publisher收到结果(t *testing.T) {
-	resetWorkspaceForTest(t)
-
-	client := &capturingLLM{replyText: "继续下一步的实现"}
-	publisher := &capturingPublisher{}
-	pusher := &capturingPusher{}
-	f := newEnabledForks()
-	f.SetForkResultPublisher(publisher)
-	f.SetSuggestionReadyPusher(pusher)
-
-	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config), nil)
-
-	require.Len(t, publisher.results, 1)
-	assert.Equal(t, "s1", publisher.results[0].SessionID)
-	assert.Equal(t, "req-1", publisher.results[0].RequestID)
-	assert.Equal(t, "继续下一步的实现", publisher.results[0].Text)
-	assert.NotEmpty(t, publisher.results[0].SuggestionID)
-	require.Len(t, pusher.events, 1, "落库成功后推送 ready")
-	assert.Equal(t, publisher.results[0].SuggestionID, pusher.events[0].SuggestionID)
+	// candidate 已落账本
+	store, err := NewTopicStarterStore(filepath.Join(workspaceDirForTest(), ConsentDBName))
+	require.NoError(t, err)
+	defer store.Close()
+	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_generation", Limit: 5})
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "candidate", payload["outcome"])
 }
 
 // TestRunFork_推荐关闭即退出 对齐 :466 if consent_epoch() != epoch: return
@@ -205,14 +190,189 @@ func TestRunFork_推荐关闭即退出(t *testing.T) {
 	assert.Equal(t, 0, client.capturedCount(), "epoch 不符不得发起重放")
 }
 
-// TestRunFork_模型返回null不落库 对齐 :498 select_suggestions 返回空即返回。
+// TestRunFork_模型返回null不落库 对齐 :498 select_suggestions 返回空即记账 suppressed/filtered。
 func TestRunFork_模型返回null不落库(t *testing.T) {
 	resetWorkspaceForTest(t)
 
 	client := &capturingLLM{replyText: "null"}
-	publisher := &capturingPublisher{}
 	f := newEnabledForks()
-	f.SetForkResultPublisher(publisher)
 	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config), nil)
-	assert.Empty(t, publisher.results, "null 视为无建议")
+	store, err := NewTopicStarterStore(filepath.Join(workspaceDirForTest(), ConsentDBName))
+	require.NoError(t, err)
+	defer store.Close()
+	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_generation", Limit: 5})
+	require.Len(t, rows, 1, "无建议也记账（outcome != candidate）")
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.NotEqual(t, "candidate", payload["outcome"])
 }
+
+// waitForInFlightZero 轮询等待在飞任务清零。
+func waitForInFlightZero(t *testing.T, f *PromptSuggestionForks, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for f.InFlightCount() > 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("在飞任务超时未清零")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// ledgerRows 打开账本库并返回 generation 事件行。
+func ledgerRows(t *testing.T) []map[string]any {
+	t.Helper()
+	store, err := NewTopicStarterStore(filepath.Join(workspaceDirForTest(), ConsentDBName))
+	require.NoError(t, err)
+	defer store.Close()
+	rows, err := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_generation", Limit: 5})
+	require.NoError(t, err)
+	return rows
+}
+
+// TestTurnEnded_抑制路径落库 status=cancelled → suppressed(aborted) 落库。
+func TestTurnEnded_抑制路径落库(t *testing.T) {
+	f := newLedgerTestForks(t)
+	f.RequestStarted("s-sup", true)
+	f.SawMainCall("s-sup", minimalCall(&capturingLLM{replyText: "x"}))
+	f.TurnEnded("s-sup", "r1", TurnEndOptions{Status: "cancelled"})
+
+	rows := ledgerRows(t)
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "suppressed", payload["outcome"])
+	assert.Equal(t, "aborted", payload["reason"])
+}
+
+// TestRunFork_candidate推送成功 成功轮 → candidate 落库 + 等 completion + 推送。
+func TestRunFork_candidate推送成功(t *testing.T) {
+	f := newLedgerTestForks(t)
+	pusher := &capturingPusher{}
+	f.SetSuggestionReadyPusher(pusher)
+	f.RequestStarted("s-ok", true)
+	f.SawMainCall("s-ok", minimalCall(&capturingLLM{replyText: "试试 git push"}))
+	completionRow(t, "s-ok", "r1") // 真实完成行落盘（StageDelivery 保鲜闸要读它）
+	f.TurnEnded("s-ok", "r1", TurnEndOptions{Status: "success"})
+
+	waitForInFlightZero(t, f, 5*time.Second)
+	rows := ledgerRows(t)
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "candidate", payload["outcome"])
+	assert.Equal(t, "试试 git push", payload["text"])
+	require.Len(t, pusher.events, 1)
+	assert.Equal(t, "试试 git push", pusher.events[0].Text)
+}
+
+// TestRunFork_等completion后才推 完成行未落盘 → 不推；落盘后推。
+func TestRunFork_等completion后才推(t *testing.T) {
+	f := newLedgerTestForks(t)
+	pusher := &capturingPusher{}
+	f.SetSuggestionReadyPusher(pusher)
+	f.RequestStarted("s-wait", true)
+	f.SawMainCall("s-wait", minimalCall(&capturingLLM{replyText: "ok"}))
+	completionRow(t, "s-wait", "r1")
+	// 回执延迟 close：fork 必须等到 close 才推（对齐 asyncio.shield 等完成行落盘）
+	receipt := make(chan struct{})
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		close(receipt)
+	}()
+	f.TurnEnded("s-wait", "r1", TurnEndOptions{Status: "success", Completion: receipt})
+	time.Sleep(150 * time.Millisecond)
+	assert.Empty(t, pusher.events, "回执未关闭不得推送")
+	waitForInFlightZero(t, f, 5*time.Second)
+	require.Len(t, pusher.events, 1)
+}
+
+// TestRunFork_cancelled落库 ctx 取消 → cancelled 事件落库。
+func TestRunFork_cancelled落库(t *testing.T) {
+	f := newLedgerTestForks(t)
+	f.RequestStarted("s-cancel", true)
+	f.SawMainCall("s-cancel", minimalCall(&capturingLLM{
+		replyText:           "x",
+		blockUntilCtxCancel: true,
+	}))
+	f.TurnEnded("s-cancel", "r1", TurnEndOptions{Status: "success"})
+	f.CancelSuggestion("s-cancel")
+	// Cancel 先删任务表，InFlightCount 提前归零；改为轮询账本行（cancelled 记账在 goroutine 内）
+	var rows []map[string]any
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		rows = ledgerRows(t)
+		if len(rows) > 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "cancelled", payload["outcome"])
+}
+
+// TestRunFork_失败落库 LLM 报错 → failed 事件落库（reason 为错误类型名）。
+func TestRunFork_失败落库(t *testing.T) {
+	f := newLedgerTestForks(t)
+	f.RequestStarted("s-fail", true)
+	f.SawMainCall("s-fail", minimalCall(&failingLLM{}))
+	f.TurnEnded("s-fail", "r1", TurnEndOptions{Status: "success"})
+	waitForInFlightZero(t, f, 5*time.Second)
+	rows := ledgerRows(t)
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "failed", payload["outcome"])
+	assert.Equal(t, "*recommendation.failingLLMError", payload["reason"])
+}
+
+// failingLLM 每次调用返回固定错误的替身。
+type failingLLM struct{}
+
+func (c *failingLLM) Invoke(
+	context.Context, model_clients.MessagesParam, ...model_clients.InvokeOption,
+) (*llmschema.AssistantMessage, error) {
+	return nil, &failingLLMError{}
+}
+
+func (c *failingLLM) Stream(
+	context.Context, model_clients.MessagesParam, ...model_clients.StreamOption,
+) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, nil
+}
+
+func (c *failingLLM) GenerateImage(
+	context.Context, []*llmschema.UserMessage, ...model_clients.GenerateImageOption,
+) (*llmschema.ImageGenerationResponse, error) {
+	return nil, nil
+}
+
+func (c *failingLLM) GenerateSpeech(
+	context.Context, []*llmschema.UserMessage, ...model_clients.GenerateSpeechOption,
+) (*llmschema.AudioGenerationResponse, error) {
+	return nil, nil
+}
+
+func (c *failingLLM) GenerateVideo(
+	context.Context, []*llmschema.UserMessage, ...model_clients.GenerateVideoOption,
+) (*llmschema.VideoGenerationResponse, error) {
+	return nil, nil
+}
+
+func (c *failingLLM) TranscribeAudio(
+	context.Context, string, ...llmschema.TranscribeAudioOption,
+) (*llmschema.TranscriptionResponse, error) {
+	return nil, nil
+}
+
+func (c *failingLLM) Release(context.Context, ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+
+func (c *failingLLM) SupportsKVCacheRelease() bool                        { return false }
+func (c *failingLLM) SupportsKVCacheAffinity() bool                       { return false }
+func (c *failingLLM) BuildKVCacheAffinityInvokeKwargs(any, string, string, int) map[string]any {
+	return map[string]any{}
+}
+
+// failingLLMError 固定错误类型（reason 断言用其类型名）。
+type failingLLMError struct{}
+
+func (e *failingLLMError) Error() string { return "boom" }

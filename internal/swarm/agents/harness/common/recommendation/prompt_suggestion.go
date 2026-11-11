@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"math"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -21,35 +22,10 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ForkResultPublisher 建议结果落库口，10.7 实现并注入。
-// Python: prompt_suggestion.py:326 _record（内部 TopicStarterStore.record_event）
-type ForkResultPublisher interface {
-	PublishForkResult(ctx context.Context, result ForkResult)
-}
-
 // SuggestionReadyPusher 建议就绪推帧口，10.7 / 网关章节实现并注入。
 // Python: prompt_suggestion.py READY_EVENT 推送
 type SuggestionReadyPusher interface {
 	PushReady(ctx context.Context, event SuggestionReadyEvent)
-}
-
-// ForkResult 一次重放的结果（未注入 publisher 时仅记 Debug）。
-// Python: prompt_suggestion.py:447 _fork 里的 record 字典
-type ForkResult struct {
-	// SuggestionID 建议唯一标识（uuid4().hex 等价）
-	SuggestionID string
-	// SessionID 会话标识
-	SessionID string
-	// RequestID 产生该建议的请求标识
-	RequestID string
-	// Text 建议文本；空串表示模型返回 null
-	Text string
-	// Model 父调用使用的模型名
-	Model string
-	// ParentUncachedTokens 父调用新增（未命中缓存）的 token 数
-	ParentUncachedTokens int
-	// AnswerTokens 父调用回答的 token 数
-	AnswerTokens int
 }
 
 // SuggestionReadyEvent 推给网关的建议就绪载荷。
@@ -93,6 +69,8 @@ type TurnEndOptions struct {
 	Status string
 	// WaitingForUser 该轮在等用户回答（交互事件）
 	WaitingForUser bool
+	// Completion 完成行落盘回执（nil 表示无回执；fork 推送前等待）
+	Completion <-chan struct{}
 }
 
 // answeredCall 会话最近一次成功轮与其主调用。
@@ -115,8 +93,6 @@ type PromptSuggestionForks struct {
 	tasks map[string]context.CancelFunc
 	// answered 会话标识 → 最近一次成功轮的主调用
 	answered map[string]answeredCall
-	// publisher 结果落库口；nil 时丢弃（spec DEV-10）
-	publisher ForkResultPublisher
 	// readyPusher 就绪推帧口；nil 时不推送（spec DEV-10）
 	readyPusher SuggestionReadyPusher
 	// config 推荐开关配置（nil 表示默认关闭）
@@ -475,17 +451,28 @@ func (f *PromptSuggestionForks) TurnEnded(sessionID, requestID string, opts Turn
 	// Python: 5. 判定抑制原因；有原因则记 suppressed 并返回
 	reason := suppressReason(call, opts)
 	f.lastSuppressedReason = reason
+	completion := opts.Completion
 	if reason != "" {
+		var uncached, answer any
+		if call != nil {
+			uncached = nullableTokens(uncachedTokens(call.Answer))
+			answer = nullableTokens(answerTokens(call.Answer))
+		}
+		f.mu.Unlock()
 		logger.Debug(logComponent).Str("session_id", sessionID).
 			Str("reason", reason).Msg("prompt suggestion generation suppressed")
-		f.mu.Unlock()
+		f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
+			newSuggestionID(), map[string]any{
+				"outcome": "suppressed", "reason": reason,
+				"parent_uncached_tokens": uncached, "answer_tokens": answer,
+			})
 		return
 	}
 	// Python: 6. task = asyncio.create_task(self._fork(...)); self._tasks[session_id] = task
 	ctx, cancel := context.WithCancel(context.Background())
 	f.tasks[sessionID] = cancel
 	f.mu.Unlock()
-	go f.runFork(ctx, sessionID, requestID, call, epoch, nil)
+	go f.runFork(ctx, sessionID, requestID, call, epoch, completion)
 }
 
 // AnsweredCall 返回某 requestID 的最近成功主调用，不是最近一轮则返回 nil。
@@ -544,13 +531,6 @@ func (f *PromptSuggestionForks) Shutdown() {
 	for _, cancel := range cancels {
 		cancel()
 	}
-}
-
-// SetForkResultPublisher 注入结果落库口（10.7 调用）。
-func (f *PromptSuggestionForks) SetForkResultPublisher(publisher ForkResultPublisher) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.publisher = publisher
 }
 
 // SetSuggestionReadyPusher 注入就绪推帧口（10.7 / 网关章节调用）。
@@ -687,8 +667,16 @@ func uncachedTokens(answer *llmschema.AssistantMessage) int {
 	return usage.InputTokens - usage.CacheTokens + usage.OutputTokens
 }
 
-// runFork 重放父调用并解析建议；落库与推帧经窄接口，未注入则丢弃。
-// Python: prompt_suggestion.py:447 _fork
+// nullableTokens 无用量信息（-1 哨兵）转 nil，对齐 Python 的 None。
+func nullableTokens(tokens int) any {
+	if tokens < 0 {
+		return nil
+	}
+	return tokens
+}
+
+// runFork 重放父调用并解析建议；全量记账后经三道闸推送。
+// Python: prompt_suggestion.py:447-536 _fork
 func (f *PromptSuggestionForks) runFork(
 	ctx context.Context, sessionID, requestID string, call *MainCall, epoch ConsentEpochValue,
 	completion <-chan struct{},
@@ -702,8 +690,23 @@ func (f *PromptSuggestionForks) runFork(
 		delete(f.tasks, sessionID)
 		f.mu.Unlock()
 	}()
-	// Python: 1. suggestion_id = uuid.uuid4().hex
+
+	// Python: 1. suggestion_id = uuid.uuid4().hex; record 初始结构
 	suggestionID := newSuggestionID()
+	started := time.Now()
+	totalUsage := map[string]any{
+		"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+		"prompt_tokens_details":     map[string]any{"cached_tokens": 0},
+		"completion_tokens_details": map[string]any{"reasoning_tokens": 0},
+	}
+	receipts := make([]map[string]any, 0)
+	record := map[string]any{
+		"model": call.Model, "parent_uncached_tokens": nullableTokens(uncachedTokens(call.Answer)),
+		"answer_tokens": nullableTokens(answerTokens(call.Answer)), "provider_receipts": receipts,
+		"provider_response_id": nil, "usage": nil, "total_usage": totalUsage,
+		"missing_provider_receipts": 0, "usage_complete": true,
+	}
+
 	// Python: 2. messages = [*call.messages, call.answer, UserMessage(SUGGESTION_PROMPT)]
 	// ★ 前缀必须逐字不变，否则服务商侧 prompt cache 无法命中。
 	messages := make([]llmschema.BaseMessage, 0, len(call.Messages)+2)
@@ -715,74 +718,216 @@ func (f *PromptSuggestionForks) runFork(
 
 	// Python: 3. for _ in range(call.max_iterations): 重放，遇无 tool_calls 即停
 	var replies []*llmschema.AssistantMessage
+	countedIDs := map[string]bool{}
+	var forkErr error
 	for iteration := 0; iteration < maxInt(call.MaxIterations, 1); iteration++ {
 		// Python: if consent_epoch() != epoch: return
 		if !ConsentEpoch(f.config).Equal(epoch) {
 			return
 		}
 		if ctx.Err() != nil {
+			f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
+				suggestionID, ledgerPayload(record, map[string]any{
+					"outcome": "cancelled",
+					"latency_ms": time.Since(started).Milliseconds(),
+				}))
 			return
 		}
+		callStarted := time.Now()
+		record["missing_provider_receipts"] = record["missing_provider_receipts"].(int) + 1
+		record["usage_complete"] = false
 		reply, err := invokeMainCall(ctx, call, messages)
 		if err != nil {
 			// Python: except Exception: logger.warning("[PromptSuggestion] fork failed: ...")
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
 				Msg("prompt suggestion fork failed")
-			return
+			forkErr = err
+			break
 		}
 		replies = append(replies, reply)
+		// Python: receipts.append + usage 记账
+		usage := usagePayload(reply)
+		receipts = append(receipts, map[string]any{
+			"model": call.Model, "provider_response_id": reply.ResponseID,
+			"usage": usage, "latency_ms": time.Since(callStarted).Milliseconds(),
+		})
+		record["provider_receipts"] = receipts
+		record["missing_provider_receipts"] = record["missing_provider_receipts"].(int) - 1
+		complete := true
+		for _, item := range receipts {
+			id, _ := item["provider_response_id"].(string)
+			if id == "" || item["usage"] == nil {
+				complete = false
+			}
+		}
+		record["usage_complete"] = complete
+		if len(replies) == 1 {
+			record["provider_response_id"] = reply.ResponseID
+			record["usage"] = usage
+		}
+		// Python: total_usage 按 response_id 去重累加
+		if usage != nil && (reply.ResponseID == "" || !countedIDs[reply.ResponseID]) {
+			totalUsage["prompt_tokens"] = totalUsage["prompt_tokens"].(int) + usage["prompt_tokens"].(int)
+			totalUsage["completion_tokens"] = totalUsage["completion_tokens"].(int) + usage["completion_tokens"].(int)
+			totalUsage["total_tokens"] = totalUsage["total_tokens"].(int) + usage["total_tokens"].(int)
+			cached := totalUsage["prompt_tokens_details"].(map[string]any)
+			if usageDetails, ok := usage["prompt_tokens_details"].(map[string]any); ok {
+				if add, ok := usageDetails["cached_tokens"].(int); ok {
+					cached["cached_tokens"] = cached["cached_tokens"].(int) + add
+				}
+			}
+			reasoning := totalUsage["completion_tokens_details"].(map[string]any)
+			if usageDetails, ok := usage["completion_tokens_details"].(map[string]any); ok {
+				if add, ok := usageDetails["reasoning_tokens"].(int); ok {
+					reasoning["reasoning_tokens"] = reasoning["reasoning_tokens"].(int) + add
+				}
+			}
+			if reply.ResponseID != "" {
+				countedIDs[reply.ResponseID] = true
+			}
+		}
 		// Python: if not reply.tool_calls: break
 		if !hasToolCalls(reply) {
 			break
 		}
-		// Python: messages.extend([reply, *ToolMessage(...)])——生成建议不需要工具
+		// Python: messages.extend([reply, *ToolMessage("生成建议无需使用工具", tool_call_id)])
 		messages = append(messages, reply)
 		for _, toolCall := range reply.ToolCalls {
 			messages = append(messages, llmschema.NewToolMessage("生成建议无需使用工具", toolCall.ID))
 		}
 	}
+	if forkErr != nil {
+		f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
+			suggestionID, ledgerPayload(record, map[string]any{
+				"outcome": "failed", "reason": errorTypeName(forkErr),
+				"latency_ms": time.Since(started).Milliseconds(),
+			}))
+		return
+	}
 
-	// Python: 4. text = 首个非空字符串 reply 的内容
+	// Python: 4-5. text = 首个非空回答正文 → select_suggestions
 	text := firstNonEmptyContent(replies)
-	// Python: 5. suggestions, outcome, reason = select_suggestions(text)
 	suggestions, outcome, reason := SelectSuggestions(text)
+	latencyMS := time.Since(started).Milliseconds()
 	logger.Debug(logComponent).Str("session_id", sessionID).
 		Str("outcome", outcome).Str("reason", reason).
 		Int("suggestions", len(suggestions)).Msg("prompt suggestion fork finished")
-	// Python: 6. if not suggestions: _record(...) 后 return
 	if len(suggestions) == 0 {
+		f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
+			suggestionID, ledgerPayload(record, map[string]any{
+				"outcome": outcome, "reason": reasonOrNil(reason),
+				"text": textOrNil(text), "latency_ms": latencyMS,
+			}))
 		return
 	}
 
-	// Python: 7. 逐条记录 candidate 并推送——本轮只留窄接口（spec DEV-10）
-	result := ForkResult{
-		SuggestionID:         suggestionID,
-		SessionID:            sessionID,
-		RequestID:            requestID,
-		Text:                 suggestions[0],
-		Model:                call.Model,
-		ParentUncachedTokens: uncachedTokens(call.Answer),
-		AnswerTokens:         answerTokens(call.Answer),
+	// Python: 6. 逐条 candidate（MAX_SUGGESTIONS=1，实际一条）
+	suggestionIDs := make([]string, 0, len(suggestions))
+	suggestionIDs = append(suggestionIDs, suggestionID)
+	for range suggestions[1:] {
+		suggestionIDs = append(suggestionIDs, newSuggestionID())
 	}
-	f.mu.Lock()
-	publisher, pusher := f.publisher, f.readyPusher
-	f.mu.Unlock()
-	if publisher == nil {
-		// 对齐「落库失败不伤主流程」：未注入时只记 Debug，结果丢弃。
-		logger.Debug(logComponent).Str("session_id", sessionID).
-			Msg("fork result discarded: no publisher")
+	for i, shownText := range suggestions {
+		f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
+			suggestionIDs[i], ledgerPayload(record, map[string]any{
+				"outcome": "candidate", "reason": nil, "text": shownText, "latency_ms": latencyMS,
+			}))
+	}
+
+	// Python: await asyncio.shield(wrap_future(completion)) —— 完成行先落盘（三道闸之一）
+	if completion != nil {
+		select {
+		case <-completion:
+		case <-ctx.Done():
+			f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
+				suggestionID, ledgerPayload(record, map[string]any{
+					"outcome": "cancelled", "latency_ms": time.Since(started).Milliseconds(),
+				}))
+			return
+		}
+	}
+	if !ConsentEpoch(f.config).Equal(epoch) {
 		return
 	}
-	// Python: _record 内部吞异常并 Warn，不向上传播
-	publisher.PublishForkResult(ctx, result)
-	// Python: 落库成功后才推送 ready 事件
-	if pusher != nil {
-		pusher.PushReady(ctx, SuggestionReadyEvent{
-			SessionID:    sessionID,
-			RequestID:    requestID,
-			SuggestionID: suggestionID,
-			Text:         result.Text,
-		})
+
+	f.mu.Lock()
+	pusher := f.readyPusher
+	f.mu.Unlock()
+	if pusher == nil {
+		// 未接线（server 未装配）则不推；candidate 已在账本，回读可用
+		return
+	}
+	store, err := NewTopicStarterStore(filepath.Join(workspace.AgentWorkspaceDir(), ConsentDBName))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion push store open failed")
+		return
+	}
+	defer store.Close()
+	f.pushCheckedSuggestions(ctx, pusher, store, sessionID, requestID, suggestionIDs, suggestions)
+}
+
+// ledgerPayload record 字典与本次终局字段合并（Python 的 **record 展开等价）。
+func ledgerPayload(record map[string]any, extra map[string]any) map[string]any {
+	full := make(map[string]any, len(record)+len(extra))
+	for key, value := range record {
+		full[key] = value
+	}
+	for key, value := range extra {
+		full[key] = value
+	}
+	return full
+}
+
+// errorTypeName 对齐 Python type(exc).__name__ 的近似：取错误类型名。
+func errorTypeName(err error) string {
+	if err == nil {
+		return ""
+	}
+	return reflect.TypeOf(err).String()
+}
+
+// reasonOrNil 空串转 nil（Python 的 reason=None）。
+func reasonOrNil(reason string) any {
+	if reason == "" {
+		return nil
+	}
+	return reason
+}
+
+// textOrNil 空文本转 nil（Python 的 text or None）。
+func textOrNil(text string) any {
+	if text == "" {
+		return nil
+	}
+	return text
+}
+
+// pushCheckedSuggestions 逐条过保鲜闸后推送；单条失败不影响其余。
+// Python: prompt_suggestion.py:639-670 _push_checked_suggestions
+func (f *PromptSuggestionForks) pushCheckedSuggestions(ctx context.Context, pusher SuggestionReadyPusher,
+	store *TopicStarterStore, sessionID, requestID string, suggestionIDs, suggestions []string,
+) {
+	for i, shownText := range suggestions {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					logger.Warn(logComponent).Any("recover", recovered).
+						Str("session_id", sessionID).Str("suggestion_id", suggestionIDs[i]).
+						Msg("prompt suggestion delivery failed")
+				}
+			}()
+			shown := StageDelivery(f, store, sessionID, requestID, map[string]any{
+				"suggestion_id": suggestionIDs[i], "text": shownText,
+			})
+			if shown == nil {
+				return
+			}
+			pusher.PushReady(ctx, SuggestionReadyEvent{
+				SessionID: sessionID, RequestID: requestID,
+				SuggestionID: suggestionIDs[i], Text: shownText,
+			})
+		}()
 	}
 }
 
