@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 )
 
 // ──────────────────────────── 替身 ────────────────────────────
@@ -647,7 +647,7 @@ func TestEvaluate_叠加请求级权限_静态配置路径(t *testing.T) {
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
 
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
 	got := evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
 
 	if got.Level != "allow" {
@@ -676,7 +676,7 @@ func TestEvaluate_叠加请求级权限_运行时getter路径(t *testing.T) {
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, getter, "")
 
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "deny"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "deny"})
 	_ = evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
 
 	if len(rail.updateCalls) == 0 {
@@ -699,7 +699,7 @@ func TestEvaluate_叠加请求级权限_快照路径(t *testing.T) {
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
 
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
 	_ = evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
 
 	if len(rail.updateCalls) == 0 {
@@ -751,7 +751,7 @@ func TestEvaluate_Ctx字段与GoContext互不干扰(t *testing.T) {
 	}
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
 
-	goCtx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
+	goCtx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "allow"})
 	inv := PolicyInvocation{ToolName: "bash", Ctx: "host-callback-context"}
 	got := evaluator.Evaluate(goCtx, inv, false)
 	if got.Level != "allow" {
@@ -770,13 +770,13 @@ func TestEvaluate_叠加歧义failClosed(t *testing.T) {
 	evaluator := NewOpenJiuwenPolicyEvaluator(rail, nil, "")
 
 	// 通过 CURRENT_RUN_CONTEXT 兜底路径构造歧义（别名 + 本名归一撞车）
-	rc := &runtime.RunContext{
-		ToolPermissions: []runtime.ToolPermissionLevel{
+	rc := &runtimectx.RunContext{
+		ToolPermissions: []runtimectx.ToolPermissionLevel{
 			{Name: "exec_command", Level: "allow"},
 			{Name: "mcp_exec_command", Level: "deny"},
 		},
 	}
-	ctx := runtime.WithRunContext(context.Background(), rc)
+	ctx := runtimectx.WithRunContext(context.Background(), rc)
 
 	got := evaluator.Evaluate(ctx, PolicyInvocation{ToolName: "bash"}, false)
 	if got.Source != "fail_closed" {
@@ -786,13 +786,13 @@ func TestEvaluate_叠加歧义failClosed(t *testing.T) {
 
 // TestEffectivePermissionConfig_三条路径叠加失败 覆盖三个 error 分支
 func TestEffectivePermissionConfig_三条路径叠加失败(t *testing.T) {
-	rc := &runtime.RunContext{
-		ToolPermissions: []runtime.ToolPermissionLevel{
+	rc := &runtimectx.RunContext{
+		ToolPermissions: []runtimectx.ToolPermissionLevel{
 			{Name: "exec_command", Level: "allow"},
 			{Name: "mcp_exec_command", Level: "deny"},
 		},
 	}
-	ctx := runtime.WithRunContext(context.Background(), rc)
+	ctx := runtimectx.WithRunContext(context.Background(), rc)
 
 	cases := []struct {
 		name   string

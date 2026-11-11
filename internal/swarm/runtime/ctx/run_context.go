@@ -16,7 +16,7 @@
 // 未绑定时，从 CURRENT_RUN_CONTEXT.tool_permissions 读取同一份选择。
 // 其余 7 个字段由后续章节（请求入口装配）消费，本批按规则 9 全量落地。
 
-package runtime
+package ctx
 
 import (
 	"context"

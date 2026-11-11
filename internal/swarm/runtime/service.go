@@ -55,9 +55,6 @@ type AgentRuntimeDeps struct {
 	// ResolveModelCapability 模型目录解析（nil 时跳过 model 存在性校验）
 	// Python: service.py:706-714 resolve_model_capability / :777-782
 	ResolveModelCapability func(model string) (RuntimeModelDescriptor, error)
-	// IterModelEntries 返回已配置模型条目（nil 时目录为空）
-	// Python: service.py:733-775 build_model_catalog 的 entries 来源
-	IterModelEntries func() []any
 }
 
 // SessionCoordinatorPort 清理与执行账本需要的协调器能力。
@@ -144,9 +141,6 @@ type AgentRuntime struct {
 	// resolveModelCapability 模型目录解析（可注入）
 	// Python: service.py:706-714 resolve_model_capability
 	resolveModelCapability func(model string) (RuntimeModelDescriptor, error)
-	// iterModelEntries 返回已配置模型条目（可注入）
-	// Python: service.py:733-775 build_model_catalog 的 entries 来源
-	iterModelEntries func() []any
 }
 
 // agentExecutionOwnerKey 执行 owner 表的键。
@@ -185,7 +179,6 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 		resetPlanSession:       deps.ResetPlanSession,
 		iterManagers:           deps.IterManagers,
 		resolveModelCapability: deps.ResolveModelCapability,
-		iterModelEntries:       deps.IterModelEntries,
 	}
 }
 
@@ -1199,19 +1192,25 @@ var getSessionForAdmission = GetSession
 // ListModelCapabilities 返回配置的模型目录与当前生效选择。
 // Python: service.py:718-775 list_model_capabilities
 //
-// 上游依赖 AgentManager 的默认模型列表；Go 侧 manager 由注入提供，
-// 未注入模型提供者时返回空目录（不报错，等价于上游未配置模型）。
+// ⤵️ **待回填（模型路由子系统）**：上游此方法的 entries 来自
+// `get_default_models()`，且中间有一道"用 build_model_from_entry 验证条目
+// 可执行、剔除不可执行者"的过滤步骤（service.py:733-758）。该验证函数目前在
+// Go 侧只存在于 DeepAdapter 的未导出方法上（deep_adapter.go:2583），而
+// server/adapter 包已反向依赖 swarm/runtime，runtime 不能 import 它。
+//
+// 本批按用户决策登记待回填，**不保留空桩注入链**（规则 8）：此前有个
+// `IterModelEntries func() []any` 注入点，生产零装配且类型被擦成 any，
+// 属于"看着有线其实没接"。等模型路由子系统落地时，按真实类型重建：
+// 入口应是 config.GetDefaultModels(cfg) 得到的 []map[string]any 经
+// buildModelFromEntry 过滤后的结果。
+//
+// 当前返回空目录（未配置模型的上游等价态）；ResolveModelCapability 因此
+// 必然解析失败，这是诚实的失败而非假成功。
 func (r *AgentRuntime) ListModelCapabilities(currentSelection string) ModelCatalogResult {
 	if err := r.requireStarted(); err != nil {
 		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
 	}
-	if r.iterModelEntries == nil {
-		// 同上：空目录会让前端显示"没有任何模型"，是假成功；返回空 + 错误更诚实。
-		// 门面 ListModelCapabilities 无 error 返回值，故这里只能返回空并靠
-		// ResolveModelCapability 的 fail-closed 兜住实际调用。
-		return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
-	}
-	return BuildModelCatalog(r.iterModelEntries(), currentSelection)
+	return ModelCatalogResult{Models: []RuntimeModelDescriptor{}}
 }
 
 // ResolveModelCapability 解析一个模型引用为描述符。

@@ -20,7 +20,7 @@
 // Python 的歧义检查抛 ValueError，Go 返回 error 由调用方传播
 //（与 9.90d-1 的 cwd.GetCwd 同一口径，见偏差 V-10）。
 
-package runtime
+package ctx
 
 import (
 	"context"

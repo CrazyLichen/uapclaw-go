@@ -3,6 +3,8 @@ package runtime
 import (
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -245,11 +247,11 @@ func TestRequireOwnedSession_空渠道报错(t *testing.T) {
 // ──────────────────────────── 快照读取 ────────────────────────────
 
 // stubCapturePermissionLayers 用固定四层替换真实捕获，测试期间还原。
-func stubCapturePermissionLayers(t *testing.T, layers PermissionLayers) {
+func stubCapturePermissionLayers(t *testing.T, layers permissions.PermissionLayers) {
 	t.Helper()
 	original := capturePermissionLayers
 	t.Cleanup(func() { capturePermissionLayers = original })
-	capturePermissionLayers = func(string) (PermissionLayers, error) {
+	capturePermissionLayers = func(string) (permissions.PermissionLayers, error) {
 		return layers, nil
 	}
 }
@@ -259,15 +261,15 @@ func stubCapturePermissionLayersError(t *testing.T, err error) {
 	t.Helper()
 	original := capturePermissionLayers
 	t.Cleanup(func() { capturePermissionLayers = original })
-	capturePermissionLayers = func(string) (PermissionLayers, error) {
-		return PermissionLayers{}, err
+	capturePermissionLayers = func(string) (permissions.PermissionLayers, error) {
+		return permissions.PermissionLayers{}, err
 	}
 }
 
 // TestReadPermissionSnapshot_宿主快照 无会话时 scope=host，四层全部投影。
 // Python: permission_catalog.py:276-283
 func TestReadPermissionSnapshot_宿主快照(t *testing.T) {
-	stubCapturePermissionLayers(t, PermissionLayers{
+	stubCapturePermissionLayers(t, permissions.PermissionLayers{
 		Global: map[string]any{
 			"enabled": true,
 			"tools":   map[string]any{"read_file": "allow"},

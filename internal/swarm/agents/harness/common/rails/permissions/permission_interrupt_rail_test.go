@@ -11,7 +11,7 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 )
 
 // ──────────────────────────── 辅助 ────────────────────────────
@@ -277,7 +277,7 @@ func TestCollectFileGuardPersistAccesses_deny报错(t *testing.T) {
 
 func TestResolveInterrupt_runPolicyDeny(t *testing.T) {
 	rail := newTestInterruptRail(t, true)
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "deny"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "deny"})
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
 
 	got := rail.ResolveInterrupt(ctx, cbc, nil, nil, nil)
@@ -555,7 +555,7 @@ func TestPersistAllowAlways_run策略下拒绝(t *testing.T) {
 		t.Error("without run policy should persist via callback")
 	}
 	// 有 run 策略 → 直接拒绝
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
 	rail.currentAttempt = &exactPersistAttempt{Approved: true}
 	if got := rail.PersistAllowAlways(ctx, "bash", map[string]any{}); got {
 		t.Error("with run policy should refuse to persist")
@@ -567,7 +567,7 @@ func TestPersistAllowAlways_run策略下拒绝(t *testing.T) {
 // Python: _persist_merged_allow 开头同样的 RUN_PERMISSIONS 检查。
 func TestPersistMergedAllow_run策略下拒绝(t *testing.T) {
 	rail := newTestInterruptRail(t, true)
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"bash": "ask"})
 	if got := rail.PersistMergedAllow(ctx, "bash", map[string]any{}, nil, true); got {
 		t.Error("with run policy merged persist should be refused")
 	}
@@ -838,7 +838,7 @@ func TestResolveInterrupt_runPolicyAsk(t *testing.T) {
 	rail := NewJiuwenSwarmPermissionInterruptRail(
 		map[string]any{}, nil, nil, nil, "", host, nil)
 
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"read_file": "ask"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"read_file": "ask"})
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
 	toolCall := &llmschema.ToolCall{ID: "c1", Name: "read_file", Arguments: `{}`}
 
@@ -854,7 +854,7 @@ func TestResolveInterrupt_runPolicyAsk(t *testing.T) {
 // TestResolveInterrupt_runPolicyAllow 覆盖非 deny/ask 的 level。
 func TestResolveInterrupt_runPolicyAllow(t *testing.T) {
 	rail := newTestInterruptRail(t, false)
-	ctx := runtime.WithRunPermissions(context.Background(), map[string]string{"read_file": "allow"})
+	ctx := runtimectx.WithRunPermissions(context.Background(), map[string]string{"read_file": "allow"})
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
 	toolCall := &llmschema.ToolCall{ID: "c1", Name: "read_file", Arguments: `{}`}
 

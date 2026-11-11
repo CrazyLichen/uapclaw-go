@@ -53,7 +53,7 @@ import (
 	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
-	runpermissions "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	runpermissions "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 	schemaswarm "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	runtimesandbox "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )

@@ -38,7 +38,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -260,8 +260,8 @@ func (r *JiuwenSwarmPermissionInterruptRail) ResolveInterrupt(
 	userInput any,
 	autoConfirmConfig map[string]any,
 ) interrupt.InterruptDecision {
-	levels := runtime.RunPermissionsFromCtx(ctx)
-	runCtx := runtime.WithRunPermissions(ctx, levels)
+	levels := runtimectx.RunPermissionsFromCtx(ctx)
+	runCtx := runtimectx.WithRunPermissions(ctx, levels)
 
 	normalizedName := ""
 	if toolCall != nil {
@@ -284,7 +284,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) ResolveInterrupt(
 		originalHook = r.Host().PermissionSceneHook
 	}
 	if originalConfig != nil {
-		if overlaid, err := runtime.OverlayRunPermissions(runCtx, originalConfig); err == nil && overlaid != nil {
+		if overlaid, err := runtimectx.OverlayRunPermissions(runCtx, originalConfig); err == nil && overlaid != nil {
 			r.UpdateConfig(overlaid, nil)
 		}
 	}
@@ -389,7 +389,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) installOverride() {
 			persistHook func(map[string]any) bool, writeYAMLFallback bool,
 		) (bool, bool) {
 			// 子类不覆写 merged：run 策略下拒绝，其余回落父类默认
-			if runtime.RunPermissionsFromCtx(ctx) != nil {
+			if runtimectx.RunPermissionsFromCtx(ctx) != nil {
 				return false, true
 			}
 			return false, false
@@ -549,7 +549,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) invokePermissionsHook(
 	}
 	if r.exactPersistCallback == nil {
 		if snapshot != nil {
-			overlaid, err := runtime.OverlayRunPermissions(context.Background(), snapshot)
+			overlaid, err := runtimectx.OverlayRunPermissions(context.Background(), snapshot)
 			if err == nil {
 				return overlaid
 			}
@@ -559,7 +559,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) invokePermissionsHook(
 	if snapshot == nil {
 		return nil
 	}
-	overlaid, err := runtime.OverlayRunPermissions(context.Background(), snapshot)
+	overlaid, err := runtimectx.OverlayRunPermissions(context.Background(), snapshot)
 	if err != nil {
 		return nil
 	}
@@ -595,7 +595,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) resolveInterruptWithRunPolicy(
 	defer func() { r.currentAttempt = previousAttempt }()
 
 	if payload != nil && payload.Approved {
-		if payload.AutoConfirm && runtime.RunPermissionsFromCtx(ctx) != nil {
+		if payload.AutoConfirm && runtimectx.RunPermissionsFromCtx(ctx) != nil {
 			return r.Reject("[PERMISSION_DENIED] run_policy_remember_unsupported")
 		}
 		request := approvalRequestFromContext(cbc)
@@ -634,7 +634,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) persistAllowAlways(
 	toolArgs map[string]any,
 ) bool {
 	// Python: if RUN_PERMISSIONS.get() is not None: return False
-	if runtime.RunPermissionsFromCtx(ctx) != nil {
+	if runtimectx.RunPermissionsFromCtx(ctx) != nil {
 		return false
 	}
 	attempt := r.currentAttempt

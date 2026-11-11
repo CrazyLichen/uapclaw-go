@@ -6,30 +6,10 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// PermissionLayers 权限四层快照（global / user / session / effective）。
-//
-// 为什么在本包定义而不复用 rails/permissions.PermissionLayers：
-// rails/permissions 反向依赖本包（permission_interrupt_rail.go 与
-// policy_eval.go 消费 WithRunPermissions / RunContext），本包再正向 import
-// 它即构成循环。此处只承载四层 map 的**数据形状**，真实捕获函数由
-// AgentRuntimeDeps.CapturePermissionLayers 注入（装配层在 server 侧接入
-// rails/permissions.CapturePermissionLayers），字段与上游四层一一对应。
-//
-// Python: permission_catalog.py:206-211 _capture_permission_layers 返回的四层
-type PermissionLayers struct {
-	// Global 全局层
-	Global map[string]any
-	// User 用户层
-	User map[string]any
-	// Session 会话层
-	Session map[string]any
-	// Effective 合成后的生效配置
-	Effective map[string]any
-}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -435,13 +415,19 @@ func permissionLayerSnapshot(layer map[string]any) PermissionLayerSnapshot {
 // capturePermissionLayers 一次加锁读取并合成四层。
 // Python: permission_catalog.py:206-211 _capture_permission_layers
 //
-// 真实实现由装配层注入（server 侧接 rails/permissions.CapturePermissionLayers，
-// 本包不能 import 它——见 PermissionLayers 注释的循环依赖说明）。未注入时
-// 返回 ErrPermissionReadFailed，与上游"捕获失败即 READ_FAILED"一致：
-// 宁可报错也不返回空快照（空快照会让 UI 显示"无任何权限"，是危险的假成功）。
-var capturePermissionLayers = func(sessionID string) (PermissionLayers, error) {
-	_ = sessionID
-	return PermissionLayers{}, ErrPermissionReadFailed
+// 直接调用 rails/permissions 的实现（上游亦如此）。此前因为
+// permissions 反向依赖 runtime 而成环，才退化为"注入点 + 报错默认值"；
+// 把 RunContext / run_permissions 下沉到 runtime/ctx 后，两边都单向依赖
+// 该子包，本包可正常 import permissions。
+//
+// 保留变量形态仅为测试可替换（与上游函数内 import 等价）。
+var capturePermissionLayers = func(sessionID string) (permissions.PermissionLayers, error) {
+	layers, err := permissions.CapturePermissionLayers(sessionID)
+	if err != nil {
+		// Python:268-274 非目录错误统一为 READ_FAILED
+		return permissions.PermissionLayers{}, ErrPermissionReadFailed
+	}
+	return layers, nil
 }
 
 // normalizePermissionSessionID 归一化并校验会话标识。

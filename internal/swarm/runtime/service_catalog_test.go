@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+
 	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -79,44 +81,44 @@ func TestFacadeListModelCapabilities_未注入返回空(t *testing.T) {
 	require.Empty(t, runtime.ListModelCapabilities("").Models)
 }
 
-// TestFacadeListModelCapabilities_注入后构建目录 条目经目录构建产出选择键。
-// Python: service.py:769 return build_model_catalog(...)
-func TestFacadeListModelCapabilities_注入后构建目录(t *testing.T) {
-	runtime := startedRuntime(t, AgentRuntimeDeps{
-		IterModelEntries: func() []any {
-			return []any{
-				map[string]any{
-					"model_client_config": map[string]any{"model_name": "m1"},
-					"is_default":          true,
-				},
-			}
-		},
-	})
+// TestFacadeListModelCapabilities_待回填返回空 模型目录来源未接线时返回空。
+// Python: service.py:718-775（entries 来自 get_default_models + 可执行性过滤）
+//
+// ⤵️ 待回填：模型路由子系统落地后，此处应产出真实目录。当前返回空是
+// 诚实的"未配置模型"态，不是假成功——解析必然失败而不是悄悄放行。
+func TestFacadeListModelCapabilities_待回填返回空(t *testing.T) {
+	runtime := startedRuntime(t, AgentRuntimeDeps{})
 	got := runtime.ListModelCapabilities("")
-	require.Len(t, got.Models, 1)
-	require.Equal(t, "m1#0", got.CurrentSelection)
+	require.Empty(t, got.Models)
+	require.Empty(t, got.CurrentSelection)
 }
 
-// TestFacadeResolveModelCapability_命中与未命中 目录解析成功与失败。
-// Python: service.py:777-782
-func TestFacadeResolveModelCapability_命中与未命中(t *testing.T) {
-	runtime := startedRuntime(t, AgentRuntimeDeps{
-		IterModelEntries: func() []any {
-			return []any{
-				map[string]any{
-					"model_client_config": map[string]any{"model_name": "m1"},
-					"is_default":          true,
-				},
-			}
+// TestBuildModelCatalog_目录构建与解析 底层目录函数本身完整可用。
+// Python: service.py:769 return build_model_catalog(...)
+func TestBuildModelCatalog_目录构建与解析(t *testing.T) {
+	catalog := BuildModelCatalog([]any{
+		map[string]any{
+			"model_client_config": map[string]any{"model_name": "m1"},
+			"is_default":          true,
 		},
-	})
+	}, "")
+	require.Len(t, catalog.Models, 1)
+	require.Equal(t, "m1#0", catalog.CurrentSelection)
 
-	got, err := runtime.ResolveModelCapability("m1#0")
+	got, err := ResolveModelSelection(catalog, "m1#0")
 	require.NoError(t, err)
 	require.Equal(t, "m1", got.ModelName)
 
-	_, err = runtime.ResolveModelCapability("ghost")
+	_, err = ResolveModelSelection(catalog, "ghost")
 	require.ErrorIs(t, err, ErrModelNotFound)
+}
+
+// TestFacadeResolveModelCapability_目录为空时解析失败 未接线不静默放行。
+// Python: service.py:777-782
+func TestFacadeResolveModelCapability_目录为空时解析失败(t *testing.T) {
+	runtime := startedRuntime(t, AgentRuntimeDeps{})
+	_, err := runtime.ResolveModelCapability("m1#0")
+	require.Error(t, err)
 }
 
 // ──────────────────────────── 会话门面 ────────────────────────────
@@ -195,8 +197,8 @@ func TestAgentManager_未注入返回nil(t *testing.T) {
 }
 
 // permissionsLayers 构造一个最小四层结果供权限门面测试。
-func permissionsLayers() PermissionLayers {
-	return PermissionLayers{
+func permissionsLayers() permissions.PermissionLayers {
+	return permissions.PermissionLayers{
 		Global:    map[string]any{"enabled": true},
 		User:      map[string]any{},
 		Session:   map[string]any{},

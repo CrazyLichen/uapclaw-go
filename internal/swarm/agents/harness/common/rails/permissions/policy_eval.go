@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -394,17 +394,17 @@ func (e *OpenJiuwenPolicyEvaluator) evaluateSceneHook(
 func (e *OpenJiuwenPolicyEvaluator) effectivePermissionConfig(ctx context.Context) (map[string]any, error) {
 	if e.permissionConfigGetter != nil {
 		if cfg := e.permissionConfigGetter(); cfg != nil {
-			return runtime.OverlayRunPermissions(ctx, cfg)
+			return runtimectx.OverlayRunPermissions(ctx, cfg)
 		}
 	}
 	if e.baseRail != nil {
 		if snap := e.baseRail.PermissionsSnapshot(); snap != nil {
-			return runtime.OverlayRunPermissions(ctx, snap)
+			return runtimectx.OverlayRunPermissions(ctx, snap)
 		}
 	}
 	if e.baseRail != nil {
 		if staticCfg := e.baseRail.StaticConfig(); staticCfg != nil {
-			return runtime.OverlayRunPermissions(ctx, staticCfg)
+			return runtimectx.OverlayRunPermissions(ctx, staticCfg)
 		}
 	}
 	return nil, nil
