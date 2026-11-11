@@ -398,15 +398,15 @@ func compressHistoryIn(sessionsDir, sessionID string, maxRounds int) string {
 	for _, entry := range records {
 		role := stringField(entry, "role")
 		eventType := stringField(entry, "event_type")
-		switch {
-		case role == "user":
+		switch role {
+		case "user":
 			if currentUser != nil && len(assistantBuffer) > 0 {
 				rounds = append(rounds, round{user: *currentUser, assistant: strings.Join(assistantBuffer, "")})
 			}
 			text := extractContentText(entry["content"])
 			currentUser = &text
 			assistantBuffer = nil
-		case role == "assistant":
+		case "assistant":
 			if _, accepted := acceptedEventTypes[eventType]; !accepted {
 				continue
 			}

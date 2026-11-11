@@ -320,7 +320,7 @@ func TestEtcdStore_别名变量可用(t *testing.T) {
 	kv.Key = []byte("k")
 	require.Equal(t, []byte("k"), kv.Key)
 
-	var client *EtcdJsonClient = NewEtcdClientForCron(nil, time.Second)
+	client := NewEtcdClientForCron(nil, time.Second)
 	require.NotNil(t, client)
 }
 

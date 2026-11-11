@@ -1013,12 +1013,18 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 // waitAllTasksComplete 取消所有运行中任务并等待退出。
 // Python: TaskScheduler._wait_all_tasks_complete（使用 asyncio.gather 等待）
 func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
-	// 取消所有运行中任务
+	// 等待所有任务 goroutine 退出（对齐 Python: asyncio.gather）。
+	// 不复用 s.wg.Wait：counter 清零瞬间若有新任务 wg.Add(1) 与 Wait 返回
+	// 并发，会触发 "WaitGroup is reused before previous Wait has returned"
+	// panic（CI 实证）。改为快照 done 通道逐一等待，done 由
+	// executeTaskWrapper 在退出时 close，语义与 gather 等价。
 	s.mu.Lock()
+	doneChans := make([]chan struct{}, 0, len(s.runningTasks))
 	for id, entry := range s.runningTasks {
 		if entry.cancel != nil {
 			entry.cancel()
 		}
+		doneChans = append(doneChans, entry.done)
 		logger.Info(logComponent).
 			Str("event_type", "task_cancel_on_stop").
 			Str("task_id", id).
@@ -1026,10 +1032,13 @@ func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 	}
 	s.mu.Unlock()
 
-	// 等待所有任务 goroutine 退出（对齐 Python: asyncio.gather）
 	done := make(chan struct{})
 	go func() {
-		s.wg.Wait()
+		for _, ch := range doneChans {
+			if ch != nil {
+				<-ch
+			}
+		}
 		close(done)
 	}()
 	select {
