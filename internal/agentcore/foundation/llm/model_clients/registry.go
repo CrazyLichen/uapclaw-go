@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/endpointprofiles"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -137,16 +138,41 @@ func (r *ClientRegistry) ListClients() []string {
 	return r.listClientsLocked()
 }
 
-// CreateModelClient 根据配置创建对应的模型客户端实例。
-// Python: openjiuwen/core/foundation/llm/model_clients/__init__.py (create_model_client)
+// ImplementationProvider 返回实际承接请求的客户端实现名。
 //
-// ⚠️ 后续注册点（2.7-2.12 节实现时修改）：
-//   - 2.7 OpenAI 客户端：注册 "llm_OpenAI" + "llm_OpenRouter"
-//   - 2.8 DashScope 客户端：注册 "llm_DashScope"
-//   - 2.9 DeepSeek 客户端：注册 "llm_DeepSeek"
-//   - 2.10 SiliconFlow 客户端：注册 "llm_SiliconFlow"
-//   - 2.11 InferenceAffinity 客户端：注册 "llm_InferenceAffinity"
-//   - 2.12 IntelliRouter 客户端：注册 "llm_intelli_router"
+// 规则（顺序敏感）：
+//  1. anthropic_messages 协议 → 一律 Anthropic（Anthropic 兼容网关入口，无视原 provider）
+//  2. 非 OpenAI → 原样返回（如 intelli_router 有自己的实现）
+//  3. OpenAI + openai_account_oauth → OpenAIAccount
+//  4. 其余 → OpenAI
+//
+// Python: model_clients/__init__.py:24-38 _implementation_provider
+func ImplementationProvider(cfg *llmschema.ModelClientConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	if cfg.APIMode == "anthropic_messages" {
+		return "Anthropic"
+	}
+	if cfg.ClientProvider != "OpenAI" {
+		return cfg.ClientProvider
+	}
+	if cfg.AuthMode == llmschema.AuthModeOpenAIAccountOAuth {
+		return "OpenAIAccount"
+	}
+	return "OpenAI"
+}
+
+// CreateModelClient 根据配置创建对应的模型客户端实例。
+//
+// 与上游一致的三步：
+//  1. 归一：provider 别名 → client_provider=OpenAI + endpoint_profile（保留原名到 Extra）
+//  2. 分派：按 ImplementationProvider 得实现名
+//  3. 创建：从注册表取工厂
+//
+// 归一返回副本，不修改入参；归一失败（如 kv_cache.mode 非法）原样上抛。
+//
+// Python: openjiuwen/core/foundation/llm/model_clients/__init__.py create_model_client
 func CreateModelClient(clientConfig *llmschema.ModelClientConfig, modelConfig *llmschema.ModelRequestConfig) (BaseModelClient, error) {
 	if clientConfig.ClientProvider == "" {
 		return nil, exception.NewBaseError(
@@ -161,8 +187,17 @@ func CreateModelClient(clientConfig *llmschema.ModelClientConfig, modelConfig *l
 		)
 	}
 
-	provider := clientConfig.ClientProvider
-	return GetClientRegistry().GetClient(provider, clientTypeLLM, modelConfig, clientConfig)
+	// 1. 别名归一（返回副本，不改入参）
+	normalized, err := endpointprofiles.NormalizeModelClientConfig(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 实现名分派
+	dispatchProvider := ImplementationProvider(normalized)
+
+	// 3. 创建
+	return GetClientRegistry().GetClient(dispatchProvider, clientTypeLLM, modelConfig, normalized)
 }
 
 // ValidateProvider 验证 provider 是否已在注册表中注册。

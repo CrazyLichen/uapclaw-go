@@ -1,4 +1,13 @@
-package dashscope
+package openai
+
+// 本文件由 dashscope 包迁移而来：DashScope 原生化多模态生成能力（图片/语音/视频）。
+//
+// 迁移理由：上游只有 1 个 OpenAIModelClient，DashScope 通过别名归一 +
+// endpoint_profile 区分方言，不存在独立客户端包。三生成方法上游内联在
+// OpenAIModelClient（openai_model_client.py:2241/2301/2379）。
+//
+// 与 dashscope 原实现的唯一差异：接收者从 *DashScopeModelClient 改为
+// *OpenAIModelClient（偏差 D-8：同包另文件，不合并进 client.go）。
 
 import (
 	"context"
@@ -7,59 +16,12 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// DashScopeModelClient 阿里云百炼 DashScope 模型客户端。
-// 嵌入 OpenAIModelClient 复用 Invoke/Stream（通义千问兼容 OpenAI Chat Completion 协议），
-// 仅覆写 GenerateImage/GenerateSpeech/GenerateVideo 三个多模态方法。
-// 不依赖 dashscope-go SDK，自行实现 DashScope 原生 API 的 HTTP 调用
-// （与 OpenAI 客户端不依赖 openai-go SDK 的设计一致）。
-// Python: openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py (DashScopeModelClient)
-type DashScopeModelClient struct {
-	openai.OpenAIModelClient
-}
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent dashscope 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// NewDashScopeModelClient 创建 DashScope 客户端。
-// 构造流程与 OpenAI 客户端一致，仅覆盖 clientName 为 "DashScope client"。
-// 使用 NewOpenAIModelClient 构造嵌入实例，确保 baseHeaders 等私有字段正确初始化。
-// Python: DashScopeModelClient.__init__(model_config, model_client_config)
-func NewDashScopeModelClient(
-	modelConfig *llmschema.ModelRequestConfig,
-	clientConfig *llmschema.ModelClientConfig,
-) (*DashScopeModelClient, error) {
-	openaiClient, err := openai.NewOpenAIModelClient(modelConfig, clientConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// 覆盖 clientName 为 DashScope（OpenAI 构造函数设置的是 "OpenAI client"）
-	embed, err := model_clients.NewBaseClientEmbed(
-		modelConfig,
-		clientConfig,
-		model_clients.WithClientName("DashScope client"),
-	)
-	if err != nil {
-		return nil, err
-	}
-	openaiClient.BaseClientEmbed = *embed
-
-	return &DashScopeModelClient{
-		OpenAIModelClient: *openaiClient,
-	}, nil
-}
 
 // GenerateImage 实现 DashScope 万相文生图。
 // 调用 DashScope 多模态 API（MultiModalConversation），支持文生图和图生图。
@@ -69,7 +31,7 @@ func NewDashScopeModelClient(
 //   - content 中 image_count ≤ 3
 //
 // Python: DashScopeModelClient.generate_image()
-func (c *DashScopeModelClient) GenerateImage(
+func (c *OpenAIModelClient) GenerateImage(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
 	opts ...model_clients.GenerateImageOption,
@@ -156,8 +118,15 @@ func (c *DashScopeModelClient) GenerateImage(
 //   - 恰好 1 条 UserMessage
 //   - content 非空
 //
+
+// GenerateSpeech 实现 DashScope Cosyvoice 语音合成。
+// 调用 DashScope 多模态 API（MultiModalConversation），支持文字转语音。
+// 参数验证规则（与 Python 端一致）：
+//   - 恰好 1 条 UserMessage
+//   - content 非空
+//
 // Python: DashScopeModelClient.generate_speech()
-func (c *DashScopeModelClient) GenerateSpeech(
+func (c *OpenAIModelClient) GenerateSpeech(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
 	opts ...model_clients.GenerateSpeechOption,
@@ -266,8 +235,16 @@ func (c *DashScopeModelClient) GenerateSpeech(
 //   - content 非空
 //   - ImgURL 存在时为图生视频 (i2v)，否则为文生视频 (t2v)
 //
+
+// GenerateVideo 实现 DashScope 视频生成。
+// 调用 DashScope 视频生成 API（VideoSynthesis），支持文生视频和图生视频。
+// 参数验证规则（与 Python 端一致）：
+//   - 恰好 1 条 UserMessage
+//   - content 非空
+//   - ImgURL 存在时为图生视频 (i2v)，否则为文生视频 (t2v)
+//
 // Python: DashScopeModelClient.generate_video()
-func (c *DashScopeModelClient) GenerateVideo(
+func (c *OpenAIModelClient) GenerateVideo(
 	ctx context.Context,
 	messages []*llmschema.UserMessage,
 	opts ...model_clients.GenerateVideoOption,
@@ -425,51 +402,8 @@ func (c *DashScopeModelClient) GenerateVideo(
 }
 
 // Release 释放模型缓存（当前不支持）。
-// DashScope API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
-func (c *DashScopeModelClient) Release(
-	_ context.Context,
-	_ ...model_clients.ReleaseOption,
-) (bool, error) {
-	return false, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("DashScope client does not support KV cache release"),
-	)
-}
-
-// SupportsKVCacheRelease DashScope 客户端不支持 KV Cache 释放。
-func (c *DashScopeModelClient) SupportsKVCacheRelease() bool {
-	return false
-}
-
-// TranscribeAudio 音频转写（当前不支持）。
-// 后续由 Task 5 添加 DashScope 音频转写的真实实现。
-func (c *DashScopeModelClient) TranscribeAudio(
-	_ context.Context,
-	_ string,
-	_ ...llmschema.TranscribeAudioOption,
-) (*llmschema.TranscriptionResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("DashScope client does not support audio transcription"),
-	)
-}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-func init() {
-	// 注册 DashScope 客户端到全局注册表（2.6 回填点）
-	registry := model_clients.GetClientRegistry()
-
-	dashScopeFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
-		client, err := NewDashScopeModelClient(mc, cc)
-		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("create DashScope client failed")
-			return nil, err
-		}
-		return client, nil
-	}
-
-	registry.Register("DashScope", "llm", dashScopeFactory)
-}
 
 // validateImageMessages 验证图片生成的消息参数。
 // 验证规则（与 Python 端一致）：
@@ -735,14 +669,4 @@ func extractVideoInfo(resp *DashScopeResponse) (videoURL string, videoDuration f
 	}
 
 	return output.VideoURL, videoDuration, videoResolution, nil
-}
-
-// SupportsKVCacheAffinity 本客户端不支持 Ascend KV cache 亲和。
-// Python: ModelClient.supports_kv_cache_affinity() 默认 False
-func (c *DashScopeModelClient) SupportsKVCacheAffinity() bool { return false }
-
-// BuildKVCacheAffinityInvokeKwargs 不支持亲和时返回空参数。
-// Python: ModelClient.build_kv_cache_affinity_invoke_kwargs() 默认返回 {}
-func (c *DashScopeModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
-	return map[string]any{}
 }
