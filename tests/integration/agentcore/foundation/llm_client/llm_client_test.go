@@ -164,7 +164,7 @@ func (s *LLMClientSuite) TestStreamUsageEndToEnd_持续输出与缓存用量() {
 	s.Equal(1, session.CallsObserved, "应统计为「已观测」而非「未上报」")
 
 	// 4) C-14：同一 (verify_ssl, ssl_cert) 复用同一 Transport 实例
-	shared := model_clients.GetSharedTransport(false, "")
+	shared := model_clients.GetSharedTransport(llmschema.AuthModeAPIKey, "test-key", "https://api.test", false, "")
 	s.NotNil(shared)
 	s.Equal(1, int(atomic.LoadInt32(&reqCount)), "单次流式请求")
 }
@@ -217,7 +217,7 @@ func (s *LLMClientSuite) TestSharedTransportAcrossClients() {
 		s.Equal("ok", strings.TrimSpace(resp.Content.Text()))
 	}
 	// 三次独立客户端仍走同一分桶（verify_ssl=false, 无证书）
-	s.NotNil(model_clients.GetSharedTransport(false, ""))
+	s.NotNil(model_clients.GetSharedTransport(llmschema.AuthModeAPIKey, "test-key", "https://api.test", false, ""))
 }
 
 // TestStreamAcrossProviders 验证 C-A2/C-D2 在四个独立 Stream 实现上的一致语义：

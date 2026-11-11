@@ -184,3 +184,6 @@ func CloseConnections(configs []*llmschema.ModelClientConfig) int {
 	}
 	return closed
 }
+
+// SharedTransport 共享池 Transport 的导出别名（集成测试断言实例同一性用）。
+type SharedTransport = http.Transport
