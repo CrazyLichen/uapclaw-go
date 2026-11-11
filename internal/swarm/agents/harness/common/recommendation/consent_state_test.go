@@ -14,11 +14,15 @@ import (
 )
 
 // resetWorkspaceForTest 重定向工作区到临时目录（对照 session 包既有写法）。
+// 注意 Cleanup 顺序：t.Setenv 注册的还原先注册、后执行（cleanup 是 LIFO），
+// 因此本助手必须在 Setenv 之后注册 path.ResetCache，确保 env 还原后再复位缓存，
+// 否则缓存会残留临时目录，污染同包后续读工作区的测试（situation 在飞共享实测踩坑）。
 func resetWorkspaceForTest(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
 	path.ResetCache()
+	t.Cleanup(path.ResetCache)
 	return tmpDir
 }
 
