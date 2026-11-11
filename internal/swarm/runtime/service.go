@@ -297,6 +297,10 @@ func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
 // Invoke 执行非流式 chat turn。
 // Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
 func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {
+	// Python: service.py:1707 await self.start()（幂等）
+	if err := r.Start(); err != nil {
+		return nil, err
+	}
 	req = NormalizeRequest(req)
 	// 会话补充输入的准入段（同 Stream）。
 	if r.isSessionInputRequest(req) {
@@ -339,6 +343,10 @@ func (r *AgentRuntime) Stream(
 	req *schema.AgentRequest,
 	onEvent func(*RuntimeEvent) bool,
 ) error {
+	// Python: service.py:2194 await self.start()（幂等）
+	if err := r.Start(); err != nil {
+		return err
+	}
 	req = NormalizeRequest(req)
 	// 会话补充输入的准入段（Python: service.py:2232-2249）。
 	// 必须在 prepareTurn 之前：跨会话消息在 plan/goal 活跃时要被拒收排队，
