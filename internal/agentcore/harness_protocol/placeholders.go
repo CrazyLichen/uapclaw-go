@@ -94,17 +94,7 @@ type HarnessCheckpointSink interface {
 	) (CheckpointSaveReceipt, error)
 }
 
-// HarnessHookDispatcher 生命周期策略回调分发器。
-//
-// ⤵️ 15.3 回填：BeforeTool/AfterTool/BeforePrompt/Stop 等回调与决策语义留 15.3
-// （Python: hooks.py）。此处只保留让 HarnessContext 字段有类型的最小方法集。
-// Python: hooks.py HarnessHookDispatcher
-type HarnessHookDispatcher interface {
-	// Enabled 返回是否注册了任何钩子
-	Enabled() bool
-}
-
-// HarnessInteractionHandler 需要应答的控制面（审批 / 用户输入 / MCP elicitation 等）。
+// HarnessInteractionHandler 需要应答的控制面（审批 / 用户提问 / MCP elicitation 等）。
 //
 // ⤵️ 15.3 回填：按 kind 的请求-应答与「应答只回给发起方」语义留 15.3
 // （Python: interactions.py）。此处只保留让 HarnessContext 字段有类型的最小方法集。
