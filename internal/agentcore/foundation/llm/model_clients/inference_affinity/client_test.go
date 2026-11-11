@@ -228,12 +228,21 @@ func TestInvoke_带缓存共享(t *testing.T) {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
 
-	// 验证 cache 参数已注入
-	if capturedBody["cache_sharing"] != true {
-		t.Errorf("cache_sharing = %v, 期望 true", capturedBody["cache_sharing"])
+	// cache_sharing / cache_salt 属于上游 _OPENAI_EXTRA_BODY_EXTENSION_FIELDS，
+	// 必须搬进 extra_body 而非留在顶层（否则厂商插件读不到）。
+	// Python: openai_model_client.py:120-131 + :1149-1157
+	extraBody, ok := capturedBody["extra_body"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra_body = %#v，期望存在（cache 字段应被搬入）", capturedBody["extra_body"])
 	}
-	if capturedBody["cache_salt"] != "session-123" {
-		t.Errorf("cache_salt = %v, 期望 session-123", capturedBody["cache_salt"])
+	if extraBody["cache_sharing"] != true {
+		t.Errorf("extra_body.cache_sharing = %v, 期望 true", extraBody["cache_sharing"])
+	}
+	if extraBody["cache_salt"] != "session-123" {
+		t.Errorf("extra_body.cache_salt = %v, 期望 session-123", extraBody["cache_salt"])
+	}
+	if _, leaked := capturedBody["cache_sharing"]; leaked {
+		t.Error("cache_sharing 不应残留在顶层")
 	}
 }
 
@@ -337,11 +346,24 @@ func TestStream_带缓存共享(t *testing.T) {
 	for range chunkChan {
 	}
 
-	if capturedBody["cache_sharing"] != true {
-		t.Errorf("cache_sharing = %v, 期望 true", capturedBody["cache_sharing"])
+	// cache_sharing / cache_salt 属于上游 _OPENAI_EXTRA_BODY_EXTENSION_FIELDS，
+	// 必须搬进 extra_body 而非留在顶层（否则厂商插件读不到）。
+	// Python: openai_model_client.py:120-131 + :1149-1157
+	extraBody, ok := capturedBody["extra_body"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra_body = %#v，期望存在（cache 字段应被搬入）", capturedBody["extra_body"])
 	}
-	if capturedBody["cache_salt"] != "session-456" {
-		t.Errorf("cache_salt = %v, 期望 session-456", capturedBody["cache_salt"])
+	if extraBody["cache_sharing"] != true {
+		t.Errorf("extra_body.cache_sharing = %v, 期望 true", extraBody["cache_sharing"])
+	}
+	if extraBody["cache_salt"] != "session-456" {
+		t.Errorf("extra_body.cache_salt = %v, 期望 session-456", extraBody["cache_salt"])
+	}
+	if _, leaked := capturedBody["cache_sharing"]; leaked {
+		t.Error("cache_sharing 不应残留在顶层")
+	}
+	if _, leaked := capturedBody["cache_salt"]; leaked {
+		t.Error("cache_salt 不应残留在顶层")
 	}
 }
 

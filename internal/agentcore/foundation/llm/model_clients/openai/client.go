@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/reasoning"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -26,6 +27,9 @@ type OpenAIModelClient struct {
 	model_clients.BaseClientEmbed
 	// baseHeaders 预构建的配置级请求头
 	baseHeaders map[string]string
+	// rejectingDisabledThinking 进程内已知拒绝「关闭思考」的模型名集合。
+	// Python: openai_model_client.py:456 self._models_rejecting_disabled_thinking
+	rejectingDisabledThinking *rejectingThinkingSet
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -66,8 +70,9 @@ func NewOpenAIModelClient(
 		Msg("Before create openai client, model client config params ready.")
 
 	return &OpenAIModelClient{
-		BaseClientEmbed: *embed,
-		baseHeaders:     baseHeaders,
+		BaseClientEmbed:           *embed,
+		baseHeaders:               baseHeaders,
+		rejectingDisabledThinking: newRejectingThinkingSet(),
 	}, nil
 }
 
@@ -92,39 +97,58 @@ func (c *OpenAIModelClient) Invoke(
 		return nil, err
 	}
 
-	// 3. OpenAI 特有参数调整
-	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+	// 2.5 reasoning plan 接入
+	// Python: openai_model_client.py:1002-1016（_build_request_params 内的 apply_reasoning_plan）
+	c.applyReasoningPlan(reqParams, params)
 
-	// 4. 合并 headers
+	// 3. 合并 headers
 	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
 
-	// 5. 处理 extra_body
+	// 3.5 模型特有参数（MiniMax reasoning_split）
+	// Python: openai_model_client.py:1914 _apply_model_specific_params
+	ApplyModelSpecificParams(defaultModelParamRules, modelNameOf(reqParams), reqParams)
+
+	// 4. 厂商私有字段搬进 extra_body（7 键）
+	// Python: openai_model_client.py:1915 _move_openai_extra_body_extensions
 	HandleExtraBody(reqParams)
 
-	// 5.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
-	// 请求发送前调用 tracer_record_data 回调，记录请求参数
+	// 4.5 已知拒绝 disabled thinking 的模型先剥离（仅回退作用域内）
+	// Python: openai_model_client.py:1916-1917
+	if reasoning.IsDisabledThinkingFallbackAllowed(ctx) {
+		reqParams = c.applyDisabledThinkingCache(reqParams)
+	}
+
+	// 5. OpenAI 特有参数调整（openai.com 的 temperature/top_p 互斥）
+	// Python: openai_model_client.py:1025-1035（在 _build_request_params 内，plan 之后）
+	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+
+	// 6. tracer 回调（对齐上游 :1918，位于 disabled cache 之后）
 	if params.TracerRecordData != nil {
 		params.TracerRecordData(map[string]any{"llm_params": reqParams})
 	}
 
-	// 6. 构建 HTTP 请求
+	// 7. 构建 HTTP 请求
 	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
-	req, client, err := BuildHTTPRequestWithAuth(
-		ctx,
-		c.ClientConfig.APIBase,
-		c.ClientConfig.APIKey,
-		reqParams,
-		httpHeaders,
-		c.RequestTimeout(params.Timeout),
-		c.ClientConfig.VerifySSL,
-		c.ClientConfig.SSLCert,
-		false,
-		c.ClientConfig.AuthMode,
-	)
-	if err != nil {
+	buildReq := func(sendParams map[string]any) (*http.Request, *http.Client, error) {
+		return BuildHTTPRequestWithAuth(
+			ctx,
+			c.ClientConfig.APIBase,
+			c.ClientConfig.APIKey,
+			sendParams,
+			httpHeaders,
+			c.RequestTimeout(params.Timeout),
+			c.ClientConfig.VerifySSL,
+			c.ClientConfig.SSLCert,
+			false,
+			c.ClientConfig.AuthMode,
+		)
+	}
+
+	// 先做一次构建以尽早暴露编码错误（不实际发送；发送在 step 8 由 send 重建）
+	if _, _, err := buildReq(reqParams); err != nil {
 		// 请求编码错误原样上抛（不包 MODEL_CALL_FAILED，跳过瞬时失败重试）
 		// Python: openai_model_client.py:2011/2228 details=={"stage":"request_encoding"} 时 raise
 		if IsRequestEncodingErr(err) {
@@ -141,17 +165,42 @@ func (c *OpenAIModelClient) Invoke(
 		IsStream:      false,
 	})
 
-	resp, err := client.Do(req)
-	if err != nil {
+	// 8. 发送（含 disabled-thinking 回退）
+	// Python: openai_model_client.py:1941 _create_chat_completion_with_disabled_thinking_fallback
+	var resp *http.Response
+	sendErr := c.doWithDisabledThinkingFallback(ctx, reqParams, func(sendParams map[string]any) error {
+		// 重试时用剥离后的参数重建请求
+		sendReq, sendClient, buildErr := buildReq(sendParams)
+		if buildErr != nil {
+			return buildErr
+		}
+		httpResp, doErr := sendClient.Do(sendReq)
+		if doErr != nil {
+			return doErr
+		}
+		if httpResp.StatusCode != http.StatusOK {
+			// 非 200 交给 HandleHTTPError 转成带状态码的错误，
+			// 使 disabled-thinking 判据能读到 status。
+			defer func() { _ = httpResp.Body.Close() }()
+			return c.HandleHTTPError(httpResp)
+		}
+		resp = httpResp
+		return nil
+	})
+	if sendErr != nil {
 		// Python: P4: Invoke 错误记录完整上下文
 		_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     reqParams["model"].(string),
 			ModelProvider: c.ClientConfig.ClientProvider,
 			IsStream:      false,
-			Error:         err,
+			Error:         sendErr,
 		})
-		return nil, c.WrapError("invoke", err)
+		// 编码错误原样上抛；其余按 MODEL_CALL_FAILED 包装
+		if IsRequestEncodingErr(sendErr) {
+			return nil, sendErr
+		}
+		return nil, c.WrapError("invoke", sendErr)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -241,39 +290,56 @@ func (c *OpenAIModelClient) Stream(
 	streamOptions["include_usage"] = true
 	reqParams["stream_options"] = streamOptions
 
-	// 4. OpenAI 特有参数调整
-	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+	// 3.5 reasoning plan 接入
+	// Python: openai_model_client.py:1002-1016（_build_request_params 内）
+	c.applyReasoningPlan(reqParams, params.ToStreamParams())
 
-	// 5. 合并 headers
+	// 4. 合并 headers
 	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
 
-	// 6. 处理 extra_body
+	// 4.5 模型特有参数（MiniMax reasoning_split）
+	// Python: openai_model_client.py:2106 _apply_model_specific_params
+	ApplyModelSpecificParams(defaultModelParamRules, modelNameOf(reqParams), reqParams)
+
+	// 5. 厂商私有字段搬进 extra_body（7 键）
+	// Python: openai_model_client.py:2107 _move_openai_extra_body_extensions
 	HandleExtraBody(reqParams)
 
-	// 6.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
-	// 请求发送前调用 tracer_record_data 回调，记录请求参数
+	// 5.5 已知拒绝 disabled thinking 的模型先剥离（仅回退作用域内）
+	// Python: openai_model_client.py:2108-2109
+	if reasoning.IsDisabledThinkingFallbackAllowed(ctx) {
+		reqParams = c.applyDisabledThinkingCache(reqParams)
+	}
+
+	// 6. OpenAI 特有参数调整
+	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+
+	// 6.5 tracer 回调（对齐上游 :2110，位于 disabled cache 之后）
 	if params.TracerRecordData != nil {
 		params.TracerRecordData(map[string]any{"llm_params": reqParams})
 	}
 
 	// 7. 构建 HTTP 请求
 	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
-	req, client, err := BuildHTTPRequestWithAuth(
-		ctx,
-		c.ClientConfig.APIBase,
-		c.ClientConfig.APIKey,
-		reqParams,
-		httpHeaders,
-		c.RequestTimeout(params.Timeout),
-		c.ClientConfig.VerifySSL,
-		c.ClientConfig.SSLCert,
-		true,
-		c.ClientConfig.AuthMode,
-	)
-	if err != nil {
+	buildReq := func(sendParams map[string]any) (*http.Request, *http.Client, error) {
+		return BuildHTTPRequestWithAuth(
+			ctx,
+			c.ClientConfig.APIBase,
+			c.ClientConfig.APIKey,
+			sendParams,
+			httpHeaders,
+			c.RequestTimeout(params.Timeout),
+			c.ClientConfig.VerifySSL,
+			c.ClientConfig.SSLCert,
+			true,
+			c.ClientConfig.AuthMode,
+		)
+	}
+	// 先做一次构建以尽早暴露编码错误（不实际发送；发送在 step 8 由 send 重建）
+	if _, _, err := buildReq(reqParams); err != nil {
 		// 请求编码错误原样上抛（不包 MODEL_CALL_FAILED，跳过瞬时失败重试）
 		// Python: openai_model_client.py:2011/2228 details=={"stage":"request_encoding"} 时 raise
 		if IsRequestEncodingErr(err) {
@@ -290,24 +356,39 @@ func (c *OpenAIModelClient) Stream(
 		IsStream:      true,
 	})
 
-	// 8. 发送请求
-	resp, err := client.Do(req)
-	if err != nil {
+	// 8. 发送请求（含 disabled-thinking 回退）
+	// Python: openai_model_client.py:2152 _create_chat_completion_with_disabled_thinking_fallback
+	var resp *http.Response
+	sendErr := c.doWithDisabledThinkingFallback(ctx, reqParams, func(sendParams map[string]any) error {
+		// 每次都用当前参数重建请求（与 Invoke 一致；确保重试时用的是剥离后的参数）
+		sendReq, sendClient, buildErr := buildReq(sendParams)
+		if buildErr != nil {
+			return buildErr
+		}
+		httpResp, doErr := sendClient.Do(sendReq)
+		if doErr != nil {
+			return doErr
+		}
+		if httpResp.StatusCode != http.StatusOK {
+			defer func() { _ = httpResp.Body.Close() }()
+			return c.HandleHTTPError(httpResp)
+		}
+		resp = httpResp
+		return nil
+	})
+	if sendErr != nil {
 		// Python: P5: Stream 错误记录完整上下文
 		_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     reqParams["model"].(string),
 			ModelProvider: c.ClientConfig.ClientProvider,
 			IsStream:      true,
-			Error:         err,
+			Error:         sendErr,
 		})
-		return nil, c.WrapError("stream", err)
-	}
-
-	// 9. 检查 HTTP 状态码
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		return nil, c.HandleHTTPError(resp)
+		if IsRequestEncodingErr(sendErr) {
+			return nil, sendErr
+		}
+		return nil, c.WrapError("stream", sendErr)
 	}
 
 	// 10. 创建 SSE 读取器和 chunk channel
@@ -547,6 +628,12 @@ func (c *OpenAIModelClient) FailStream(
 
 // HandleHTTPError 处理非 200 HTTP 响应。
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
+//
+// HTTP 状态码通过 BaseError.Params()["http_status"] 携带（不改变错误具体类型，
+// 避免破坏全仓 10+ 处 `err.(*exception.BaseError)` 类型断言）。
+// disabled-thinking 判据从 params 读该键。
+//
+// Python: openai_model_client.py:1349-1370 依赖 status_code 做四层过滤
 func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 	params := httpErrorParams(resp)
 
