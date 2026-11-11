@@ -63,6 +63,25 @@ func (s *AgentServer) handleUnaryImpl(ctx context.Context, request *schema.Agent
 		}
 		s.writeResponse(request.RequestID, request.ChannelID, resp)
 		return
+	case schema.ReqMethodProactiveTick:
+		// Python: server/dispatch.py:157 PROACTIVE_TICK → handlers/ops.py:handle_proactive_tick。
+		// payload 里的 error（引擎未初始化/参数非法）由前端据此报错，故始终 Ok 透传外层。
+		resp, err := s.handleProactiveTick(ctx, request)
+		if err != nil {
+			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "PROACTIVE_TICK_ERROR")
+			return
+		}
+		s.writeResponse(request.RequestID, request.ChannelID, resp)
+		return
+	case schema.ReqMethodProactiveFeedback:
+		// Python: server/dispatch.py PROACTIVE_FEEDBACK → handlers/ops.py:handle_proactive_feedback
+		resp, err := s.handleProactiveFeedback(request)
+		if err != nil {
+			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "PROACTIVE_FEEDBACK_ERROR")
+			return
+		}
+		s.writeResponse(request.RequestID, request.ChannelID, resp)
+		return
 	}
 
 	// 2-6. 交给 AgentRuntime（选 agent → ensure_state → 执行 → check_exit → 控制事件）

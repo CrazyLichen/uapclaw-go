@@ -94,6 +94,12 @@ const (
 	// ReqMethodSessionRestoreFiles 恢复会话文件
 	ReqMethodSessionRestoreFiles ReqMethod = "session.restore_files"
 
+	// ReqMethodProactiveTick 触发一次主动推荐 tick
+	// Python: ReqMethod.PROACTIVE_TICK（server/dispatch.py:157 映射到 handlers/ops.py）
+	ReqMethodProactiveTick ReqMethod = "proactive.tick"
+	// ReqMethodProactiveFeedback 记录对一条主动推荐的赞/踩
+	ReqMethodProactiveFeedback ReqMethod = "proactive.feedback"
+
 	// ─── 历史 ───
 
 	// ReqMethodHistoryGet 获取历史

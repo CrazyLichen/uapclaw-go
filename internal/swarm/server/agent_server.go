@@ -74,6 +74,9 @@ type AgentServer struct {
 	agentFactoryOverride runtime.AgentFactory
 	// streamKeepaliveInterval 流式心跳间隔（默认 keepaliveInterval，测试可缩短）
 	streamKeepaliveInterval time.Duration
+	// proactiveEngine 主动推荐引擎；未注入时 proactive.tick 返回「not initialized」
+	// Python: services.proactive_engine
+	proactiveEngine *recommendation.ProactiveEngine
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
