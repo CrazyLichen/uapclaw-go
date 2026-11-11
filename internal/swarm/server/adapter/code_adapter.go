@@ -1219,6 +1219,11 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	// 注入同一个队列，供中断快照投影与清理范围校验使用
 	if se := c.deep.buildStreamEventRail(); se != nil {
 		se.SetRootPermissionQueue(permissionQueue)
+		// 中断投影实现由 permissions 包提供：rails ↔ permissions 有环
+		// （permissions 已 import rails），故用回调桥接，此处负责接线。
+		se.SetInterruptionProjectionDeps(commonrails.InterruptionProjectionDeps{
+			ProjectCompleteInterruption: permissionsrails.ProjectCompleteInterruption,
+		})
 		c.deep.streamEventRail = se
 		railsList = append(railsList, se)
 	}

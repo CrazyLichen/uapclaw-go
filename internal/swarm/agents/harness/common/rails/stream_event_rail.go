@@ -64,6 +64,9 @@ type JiuClawStreamEventRail struct {
 	// 在它所属的会话被销毁前不再接受任何新工作。
 	quarantinedSessions map[string]bool
 
+	// projectionDeps 中断投影实现（装配期注入，见 InterruptionProjectionDeps）
+	projectionDeps InterruptionProjectionDeps
+
 	// todoTool 共享 TodoTool 实例，对齐 Python: _main_todo_tool
 	todoTool todoToolLoader
 
@@ -101,14 +104,34 @@ type deepConfigProvider interface {
 //
 // 只列举 stream rail 真正需要的方法，避免引入整个 RootPermissionQueue
 // （同时打破 rails ↔ rails/permissions 的循环依赖）。
-//
-// ⚠️ 当前无消费方：4 个 queue 消费函数（_project_complete_interruption /
-// _project_ordinary_interruption / _trusted_cleanup_scope /
-// _discard_permission_records）的前置件 permission_interaction.py 属 9.90e，
-// 故本接口暂只作接线占位，待 9.90e 补齐后启用。
 type RootPermissionQueueAccessor interface {
 	// IsRootPermissionQueue 标识该值是可用的根权限队列
 	IsRootPermissionQueue()
+}
+
+// InterruptionProjectionDeps 中断投影的外部实现（装配期注入）。
+//
+// # 为什么用回调而不是直接调方法
+//
+// Python 的 stream_event_rail.py 直接 import root_permission_queue，两边是平铺
+// 模块，互引没有约束。Go 里 permissions 包已经 import rails（root_ask_user.go /
+// permission_interrupt_rail.go），rails 反向 import permissions 就成环。
+//
+// 但投影函数（_project_complete_interruption 等）必须碰 RootPermissionQueue /
+// RootPermissionSnapshot / RootPermissionCard 这些具体类型。解法：rail 只声明
+// 函数签名，由 permissions 包提供实现，装配层（code_adapter）负责接线。
+//
+// 偏差登记：Python 这 4 个是 rail 的方法，Go 是 permissions 包的包级函数 +
+// 本结构体的回调字段。
+type InterruptionProjectionDeps struct {
+	// ProjectCompleteInterruption 中断结束后投影「已完成的权限审批」。
+	//
+	// Python: JiuSwarmStreamEventRail._project_complete_interruption(ctx)
+	ProjectCompleteInterruption func(ctx context.Context, rail *JiuClawStreamEventRail, cbc *sainterfaces.AgentCallbackContext) error
+	// OrdinaryInterruptionRetryMessage 返回中断恢复失败时给用户的提示文案。
+	//
+	// Python: JiuSwarmStreamEventRail._interruption_retry_message()
+	OrdinaryInterruptionRetryMessage func(rail *JiuClawStreamEventRail) string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -140,6 +163,23 @@ func (r *JiuClawStreamEventRail) RootPermissionQueue() RootPermissionQueueAccess
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.rootPermissionQueue
+}
+
+// SetInterruptionProjectionDeps 注入中断投影实现（装配期调用）。
+//
+// 见 InterruptionProjectionDeps 的类型注释：Go 用回调绕开 rails ↔ permissions
+// 的循环依赖。
+func (r *JiuClawStreamEventRail) SetInterruptionProjectionDeps(deps InterruptionProjectionDeps) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.projectionDeps = deps
+}
+
+// ProjectionDeps 返回已注入的中断投影实现。
+func (r *JiuClawStreamEventRail) ProjectionDeps() InterruptionProjectionDeps {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.projectionDeps
 }
 
 // Priority 返回执行优先级，对齐 Python: priority = 80
@@ -538,6 +578,32 @@ func (r *JiuClawStreamEventRail) AfterToolCall(ctx context.Context, cbc *sainter
 	return nil
 }
 
+// AfterInvoke 中断结束后的投影钩子。
+//
+// Python: after_invoke(ctx) (stream_event_rail.py L792-809)
+//
+// 只做一件事：若是正常 invoke 且会话存在，投影「已完成的权限审批」。
+// 投影实现由 permissions 包提供（见 InterruptionProjectionDeps）。
+//
+// Python 的 finally 里还有 reset_shell_session_id(token) —— Go 侧无对应逻辑：
+// Python 用全局 registry 的栈式 token（set 返回 token，reset 弹栈）；Go 的
+// SetShellSessionID 是 context.WithValue 派生新 ctx（不可变），没有跨调用
+// 残留的全局状态要清，故此处不做 reset。
+func (r *JiuClawStreamEventRail) AfterInvoke(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
+	if _, ok := cbc.Inputs().(*sainterfaces.InvokeInputs); !ok {
+		return nil
+	}
+	if cbc.Session() == nil {
+		return nil
+	}
+
+	deps := r.ProjectionDeps()
+	if deps.ProjectCompleteInterruption == nil {
+		return nil
+	}
+	return deps.ProjectCompleteInterruption(ctx, r, cbc)
+}
+
 // OnModelException LLM 调用异常：上下文修复，对齐 Python: on_model_exception
 func (r *JiuClawStreamEventRail) OnModelException(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if cbc.ModelContext() != nil {
@@ -553,6 +619,7 @@ func (r *JiuClawStreamEventRail) OnModelException(ctx context.Context, cbc *sain
 func (r *JiuClawStreamEventRail) GetCallbacks() map[sainterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return r.BuildCallbacks(
 		r.CallbackFrom(sainterfaces.CallbackBeforeInvoke, r.wrapBeforeInvoke),
+		r.CallbackFrom(sainterfaces.CallbackAfterInvoke, r.wrapAfterInvoke),
 		r.CallbackFrom(sainterfaces.CallbackBeforeModelCall, r.wrapBeforeModelCall),
 		r.CallbackFrom(sainterfaces.CallbackAfterModelCall, r.wrapAfterModelCall),
 		r.CallbackFrom(sainterfaces.CallbackBeforeToolCall, r.wrapBeforeToolCall),
@@ -668,6 +735,23 @@ func resolveSessionID(sessionID string) string {
 	return sessionID
 }
 
+// ResolveSID 解析跨 Rail 传递的 session ID（对外访问器）。
+//
+// 供 permissions 包的中断投影回调使用：投影需要判断当前会话键以定位队列范围。
+func (r *JiuClawStreamEventRail) ResolveSID(
+	cbc *sainterfaces.AgentCallbackContext,
+	session sessioninterfaces.SessionFacade,
+) string {
+	return r.resolveSID(cbc, session)
+}
+
+// PromptLanguage 返回当前提示词语言（"cn" / "en"）。
+//
+// 供 permissions 包生成中断恢复提示文案使用。
+func (r *JiuClawStreamEventRail) PromptLanguage() string {
+	return r.getPromptLanguage()
+}
+
 // resolveSID 解析跨 Rail 传递的 session ID，对齐 Python: _resolve_sid
 //
 // 大多数回调从 before_invoke 继承 ctx.extra，但工具回调可能缺少该值。
@@ -757,6 +841,15 @@ func (r *JiuClawStreamEventRail) getPromptLanguage() string {
 // ── GetCallbacks 包装方法 ──
 // PerAgentCallbackFunc 签名为 func(ctx context.Context, agentCallbackContext any) error
 // 需要将 any 断言为 *AgentCallbackContext
+
+// wrapAfterInvoke 适配通用回调签名，把入参断言成具体上下文后转调 AfterInvoke。
+func (r *JiuClawStreamEventRail) wrapAfterInvoke(ctx context.Context, cbcAny any) error {
+	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
+	if !ok {
+		return nil
+	}
+	return r.AfterInvoke(ctx, cbc)
+}
 
 // wrapBeforeInvoke 适配通用回调签名，把入参断言成具体上下文后转调 BeforeInvoke。
 func (r *JiuClawStreamEventRail) wrapBeforeInvoke(ctx context.Context, cbcAny any) error {

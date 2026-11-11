@@ -439,6 +439,8 @@ func TestJiuClawStreamEventRail_GetCallbacks(t *testing.T) {
 		sainterfaces.CallbackBeforeToolCall,
 		sainterfaces.CallbackAfterToolCall,
 		sainterfaces.CallbackOnModelException,
+		// 9.90e 8b：after_invoke 中断投影钩子
+		sainterfaces.CallbackAfterInvoke,
 	}
 
 	for _, event := range expectedEvents {
