@@ -93,7 +93,7 @@ func ResolveModeCapability(requested any) (RuntimeModeDescriptor, error) {
 	// 步骤 1-2：deprecate_mode + 取字符串并去空白
 	normalized := ""
 	if raw, ok := requested.(string); ok {
-		normalized = schema.CanonicalizeMode(raw)
+		normalized = schema.DeprecateMode(raw)
 	}
 	target := strings.TrimSpace(normalized)
 

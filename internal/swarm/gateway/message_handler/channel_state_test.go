@@ -389,3 +389,14 @@ func TestGetOrCreateChannelState_首次创建sessionMap覆盖(t *testing.T) {
 		t.Errorf("首次创建应被 SessionMap 覆盖 config 默认，实际 %q", state.SessionID)
 	}
 }
+
+// TestChannelModeFromStr_走DeprecateMode code.normal 必须映射到 agent.code.normal。
+// 上游 message_handler.py:242 是 deprecate_mode，不是 canonicalize_mode_text。
+func TestChannelModeFromStr_走DeprecateMode(t *testing.T) {
+	if got := channelModeFromStr("code.normal"); got != ChannelModeAgentCodeNormal {
+		t.Errorf("channelModeFromStr(code.normal) = %q, 期望 agent.code.normal", got)
+	}
+	if got := channelModeFromStr("agent"); got != ChannelModeAgentWorkNormal {
+		t.Errorf("channelModeFromStr(agent) = %q, 期望 agent.work.normal", got)
+	}
+}
