@@ -156,7 +156,9 @@ func TestContainsPermissionInteraction_空容器不命中(t *testing.T) {
 // TestPermissionRuntimeQuarantinedKey_字面量 测试键名与 Python 一字不差。
 //
 // Python: PERMISSION_RUNTIME_QUARANTINED_KEY =
-//   "_jiuwenswarm_permission_runtime_quarantined_v1"
+//
+//	"_jiuwenswarm_permission_runtime_quarantined_v1"
+//
 // 品牌前缀 jiuwenswarm 不映射为 uapclawswarm——它是已落盘的持久化键名。
 func TestPermissionRuntimeQuarantinedKey_字面量(t *testing.T) {
 	want := "_jiuwenswarm_permission_runtime_quarantined_v1"
