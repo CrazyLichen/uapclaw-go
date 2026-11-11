@@ -3,6 +3,7 @@ package recommendation
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -628,4 +629,155 @@ func TestLoadLatestSnapshot_跳过v4行(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, "v3-readable", got["mark"], "应跳过 v4 行")
+}
+
+// TestPrune_最小间隔节流
+// Python: topic_starter.py:245-252 —— 20 小时内只清一次
+func TestPrune_最小间隔节流(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	first, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Empty(t, first, "首次无过期数据，removed 应为空")
+
+	second, err := store.Prune(now + 60)
+	require.NoError(t, err)
+	assert.Empty(t, second, "20 小时内第二次应被节流")
+
+	third, err := store.Prune(now + 21*60*60)
+	require.NoError(t, err)
+	assert.NotNil(t, third, "超过 20 小时应放行")
+}
+
+// TestPrune_必写store_pruned事件
+func TestPrune_必写store_pruned事件(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+	_, err := store.Prune(now)
+	require.NoError(t, err)
+
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "store_pruned", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "maintenance", got[0]["session_id"])
+	assert.Equal(t, "maintenance", got[0]["slate_id"])
+	assert.Equal(t, "recommendation-retention-v1", got[0]["policy_id"])
+	assert.Equal(t, "usage_retention", got[0]["selection_mode"])
+	assert.Equal(t, "not_applicable", got[0]["propensity_reason"])
+	assert.Equal(t, "maintenance:10000000", got[0]["topic_id"])
+}
+
+// TestPrune_按TTL删除
+func TestPrune_按TTL删除(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	// dynamic_exposure TTL 30 天：一条过期、一条新鲜
+	_, err := store.RecordEventsAtomic([]map[string]any{
+		{"session_id": "s", "slate_id": "old", "event_type": "dynamic_exposure", "topic_id": "t1",
+			"created_at": now - 31*daySeconds},
+		{"session_id": "s", "slate_id": "new", "event_type": "dynamic_exposure", "topic_id": "t2",
+			"created_at": now - 1*daySeconds},
+		// provider_invocation TTL 180 天：31 天前不过期
+		{"session_id": "s", "slate_id": "pi", "event_type": "provider_invocation", "topic_id": "t3",
+			"created_at": now - 31*daySeconds},
+	})
+	require.NoError(t, err)
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed["dynamic_exposure"])
+	assert.NotContains(t, removed, "provider_invocation")
+
+	left, err := store.QueryEvents(QueryEventsOptions{EventType: "dynamic_exposure", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, left, 1)
+	assert.Equal(t, "t2", left[0]["topic_id"])
+}
+
+// TestPrune_会话摘要保最新两条
+// Python: topic_starter.py:290 _prune_superseded_summaries
+func TestPrune_会话摘要保最新两条(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	events := make([]map[string]any, 0, 4)
+	for i := 0; i < 4; i++ {
+		events = append(events, map[string]any{
+			"session_id": "s", "slate_id": "sl" + strconv.Itoa(i), "event_type": "session_summary",
+			"topic_id":   "t" + strconv.Itoa(i),
+			"payload":    map[string]any{"session_id": "sess-x"},
+			"created_at": now - float64(i)*10,
+		})
+	}
+	_, err := store.RecordEventsAtomic(events)
+	require.NoError(t, err)
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed["session_summary_superseded"], "4 条会话摘要应删掉 2 条，保留最新 2 条")
+
+	left, err := store.QueryEvents(QueryEventsOptions{EventType: "session_summary", Limit: 10})
+	require.NoError(t, err)
+	assert.Len(t, left, 2)
+}
+
+// TestPrune_画像快照保留前两版
+// Python: topic_starter.py:316 _prune_profile_snapshots
+func TestPrune_画像快照保留前两版(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	// 造 4 版快照，全部超过 90 天
+	db, err := store.connect()
+	require.NoError(t, err)
+	for version := 1; version <= 4; version++ {
+		_, insertErr := db.Exec(
+			"INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(?, ?, ?, ?)",
+			version, now-200*daySeconds, now-200*daySeconds, `{"mark":"old"}`,
+		)
+		require.NoError(t, insertErr)
+	}
+	require.NoError(t, db.Close())
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed["profile_snapshot"], "4 版中保留最新 2 版，删掉 2 版")
+
+	var count int
+	db2, err := store.connect()
+	require.NoError(t, err)
+	require.NoError(t, db2.QueryRow("SELECT COUNT(*) FROM profile_snapshot").Scan(&count))
+	require.NoError(t, db2.Close())
+	assert.Equal(t, 2, count)
+}
+
+// TestPrune_短意图表不存在时不报错
+// Python: topic_starter.py:339 _prune_short_intent
+func TestPrune_短意图表不存在时不报错(t *testing.T) {
+	store := newTestStore(t)
+	removed, err := store.Prune(10_000_000.0)
+	require.NoError(t, err)
+	assert.NotContains(t, removed, "short_intent_state")
+}
+
+// TestPrune_短意图表存在时按龄清理
+func TestPrune_短意图表存在时按龄清理(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE short_intent_state(session_id TEXT, evaluated_at REAL)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO short_intent_state VALUES('old', ?)", now-100*daySeconds)
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO short_intent_state VALUES('new', ?)", now-1*daySeconds)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed["short_intent_state"])
 }

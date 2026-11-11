@@ -622,6 +622,105 @@ func (s *TopicStarterStore) LoadLatestSnapshot() (map[string]any, error) {
 	return nil, nil
 }
 
+// Prune 按分层 TTL 清理缓存与收据，返回各类删除条数。
+// Python: topic_starter.py:233 prune
+//
+// 20 小时内只执行一次（由 store_pruned 事件的时间戳节流）。
+// 点击/绑定/否定/会话摘要/同意记录/训练数据不在 retentionDays 内，永不按龄删除；
+// 过期的会话摘要另由 pruneSupersededSummaries 按"每会话保最新 2 条"裁剪。
+// 无论是否删到东西，末尾都会写一条 store_pruned 事件。
+func (s *TopicStarterStore) Prune(now float64) (map[string]int, error) {
+	recent, err := s.QueryEvents(QueryEventsOptions{
+		EventType:   pruneEventType,
+		Limit:       1,
+		NewestFirst: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(recent) > 0 {
+		createdAt, _ := recent[0]["created_at"].(float64)
+		if createdAt > now-pruneMinIntervalSeconds {
+			return map[string]int{}, nil
+		}
+	}
+
+	removed := map[string]int{}
+	db, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	for eventType, days := range retentionDays {
+		result, execErr := tx.Exec(
+			"DELETE FROM recommendation_event WHERE event_type = ? AND created_at < ?",
+			eventType, now-float64(days)*daySeconds,
+		)
+		if execErr != nil {
+			_ = tx.Rollback()
+			return nil, execErr
+		}
+		if affected, rowsErr := result.RowsAffected(); rowsErr == nil && affected > 0 {
+			removed[eventType] = int(affected)
+		}
+	}
+	superseded, err := pruneSupersededSummaries(tx)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	if superseded > 0 {
+		removed["session_summary_superseded"] = int(superseded)
+	}
+	snapshots, err := pruneProfileSnapshots(tx, now)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	if snapshots > 0 {
+		removed["profile_snapshot"] = int(snapshots)
+	}
+	shortIntent, err := pruneShortIntent(tx, now)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	if shortIntent > 0 {
+		removed["short_intent_state"] = int(shortIntent)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	// VACUUM 不能在事务内执行：必须在 Commit 之后单独发出
+	if len(removed) > 0 {
+		if _, err := db.Exec("VACUUM"); err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := s.RecordEvent(map[string]any{
+		"session_id":        "maintenance",
+		"slate_id":          "maintenance",
+		"event_type":        pruneEventType,
+		"topic_id":          fmt.Sprintf("maintenance:%d", int(now)),
+		"policy_id":         "recommendation-retention-v1",
+		"selection_mode":    "usage_retention",
+		"propensity_reason": "not_applicable",
+		"payload":           removed,
+		"created_at":        now,
+	}); err != nil {
+		return nil, err
+	}
+	return removed, nil
+}
+
 // ListEvents 按写入顺序返回全部事件。
 // Python: topic_starter.py:566 list_events
 func (s *TopicStarterStore) ListEvents() ([]map[string]any, error) {
@@ -939,4 +1038,119 @@ func scanEventRows(rows *sql.Rows) ([]map[string]any, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// pruneSupersededSummaries 每个会话只保留最新 supersededSummaryKeep 条会话摘要。
+// Python: topic_starter.py:290 _prune_superseded_summaries
+func pruneSupersededSummaries(tx *sql.Tx) (int64, error) {
+	rows, err := tx.Query(
+		`SELECT event_key, payload_json FROM recommendation_event
+		 WHERE event_type = 'session_summary'
+		 ORDER BY json_extract(payload_json, '$.session_id'), created_at DESC, event_key DESC`,
+	)
+	if err != nil {
+		return 0, err
+	}
+	type doomedRow struct {
+		sessionID string
+		eventKey  string
+	}
+	ordered := make([]doomedRow, 0)
+	for rows.Next() {
+		var eventKey string
+		var payloadJSON []byte
+		if err := rows.Scan(&eventKey, &payloadJSON); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		sessionID := ""
+		decoded := map[string]any{}
+		if len(payloadJSON) > 0 && json.Unmarshal(payloadJSON, &decoded) == nil {
+			sessionID = pyStr(decoded["session_id"])
+		}
+		ordered = append(ordered, doomedRow{sessionID: sessionID, eventKey: eventKey})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	seen := map[string]int{}
+	var removed int64
+	for _, row := range ordered {
+		if seen[row.sessionID] >= supersededSummaryKeep {
+			if _, err := tx.Exec("DELETE FROM recommendation_event WHERE event_key = ?", row.eventKey); err != nil {
+				return 0, err
+			}
+			removed++
+		}
+		seen[row.sessionID]++
+	}
+	return removed, nil
+}
+
+// pruneProfileSnapshots 删除除最新两版外、超过留存期的画像快照。
+// Python: topic_starter.py:316 _prune_profile_snapshots
+func pruneProfileSnapshots(tx *sql.Tx, now float64) (int64, error) {
+	cutoff := now - float64(profileSnapshotRetentionDays)*daySeconds
+	rows, err := tx.Query("SELECT version, created_at FROM profile_snapshot ORDER BY version DESC")
+	if err != nil {
+		return 0, err
+	}
+	type snapshotRow struct {
+		version   int64
+		createdAt float64
+	}
+	ordered := make([]snapshotRow, 0)
+	for rows.Next() {
+		var row snapshotRow
+		if err := rows.Scan(&row.version, &row.createdAt); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ordered = append(ordered, row)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	var removed int64
+	for index, row := range ordered {
+		// 最新两版无条件保留：读取总是从最新版本开始
+		if index < 2 {
+			continue
+		}
+		if row.createdAt >= cutoff {
+			continue
+		}
+		if _, err := tx.Exec("DELETE FROM profile_snapshot WHERE version = ?", row.version); err != nil {
+			return 0, err
+		}
+		removed++
+	}
+	return removed, nil
+}
+
+// pruneShortIntent 清理过期的短期意图状态；表不存在时返回 0。
+// Python: topic_starter.py:339 _prune_short_intent
+func pruneShortIntent(tx *sql.Tx, now float64) (int64, error) {
+	var probe int
+	err := tx.QueryRow(
+		"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'short_intent_state'",
+	).Scan(&probe)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	result, err := tx.Exec(
+		"DELETE FROM short_intent_state WHERE evaluated_at < ?",
+		now-float64(shortIntentRetentionDays)*daySeconds,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
