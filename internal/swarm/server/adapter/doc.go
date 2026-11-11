@@ -49,6 +49,8 @@
 //	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
 //	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
 //	├── deep_adapter_acp.go       # ACP 运行时工具刷新（10.6.24d：能力装卸+快照日志）
+//	├── deep_adapter_session_request.go # 外层会话选择：getSessionAdapterForRequest + isHostPermissionUpdateInput（20.2 R-9）
+//	├── deep_adapter_process_cli.go     # configureProcessCliRun + ProcessCliRunOptions（20.2 R-10）
 //	├── evolution/                # Evolution 事件分类/状态提取/推送辅助（10.3.9）
 //	│   ├── doc.go                # 包文档
 //	│   └── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数

@@ -102,7 +102,7 @@ func (s *GoalInteractionSuite) TestGoalRound_用户轮后接goal轮并分气泡(
 // newGoalAdapter 建根适配器并 CreateInstance（child 尾段自动 start_interaction）。
 func (s *GoalInteractionSuite) newGoalAdapter() *adapter.DeepAdapter {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }

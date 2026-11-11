@@ -381,18 +381,24 @@ func ClearAllSessionMetadataCache() {
 	deliveryContextMu.Unlock()
 }
 
-// FlushMetadataQueue 等待 metadata 异步写入队列刷盘（供测试使用）。
-// 发送一个哨兵项并等待其被消费，确保之前所有写入已完成且 worker 不再活跃。
-func FlushMetadataQueue() {
+// FlushMetadataQueue 等待 metadata 异步写入队列刷盘。
+// timeoutSeconds 为等待上限；返回是否在超时前全部写完。
+// Python: session_metadata.py:945 flush_pending_writes(timeout: float = 10) -> bool
+func FlushMetadataQueue(timeoutSeconds float64) bool {
 	ensureMetadataWorker()
 	// 发送哨兵项，worker 处理后会向 flushDone 发送确认
 	flushDone := make(chan struct{})
 	metadataQueue <- metadataWriteItem{sessionID: "", metadata: nil, flushDone: flushDone}
 	// 等待 worker 确认，确保所有之前的写入已完成
+	timer := time.NewTimer(time.Duration(timeoutSeconds * float64(time.Second)))
+	defer timer.Stop()
 	select {
 	case <-flushDone:
-	case <-time.After(5 * time.Second):
-		logger.Warn(logComponent).Msg("FlushMetadataQueue timed out")
+		return true
+	case <-timer.C:
+		logger.Warn(logComponent).Float64("timeout_seconds", timeoutSeconds).
+			Msg("FlushMetadataQueue timed out")
+		return false
 	}
 }
 

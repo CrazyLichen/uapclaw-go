@@ -46,6 +46,7 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -146,6 +147,15 @@ type DeepAdapter struct {
 	// sessionInstanceSubMode 惰建时使用的 sub_mode。
 	// Python: interface_deep.py _session_instance_sub_mode
 	sessionInstanceSubMode string
+	// sessionInstanceAgentDefinition 声明式 root-Agent 定义快照，供重建时复用。
+	// Python: interface_deep.py:13022-13023 self._session_instance_agent_definition
+	sessionInstanceAgentDefinition map[string]any
+	// channelID 本适配器所属渠道。
+	// Python: interface_deep.py:13030-13033 self._channel_id
+	channelID string
+	// processCliRunOptions 根暂存的一次性 Process CLI 选项，等 child 消费。
+	// Python: interface_deep.py:12436 self._process_cli_run_options
+	processCliRunOptions *ProcessCliRunOptions
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -476,7 +486,8 @@ func NewDeepAdapter() *DeepAdapter {
 //	Python: 23. self._registered_mcp_server_ids.clear()
 //	Python: 24. await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
 //	Python: 25. await self.load_user_rails()
-func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]any, mode string, subMode string) error {
+func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]any, mode string, subMode string,
+	agentDefinition map[string]any) error {
 	// 步骤 1: set_checkpoint
 	if err := d.setCheckpoint(ctx); err != nil {
 		return fmt.Errorf("set_checkpoint 失败: %w", err)
@@ -546,6 +557,14 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 			d.agentName = s
 		}
 	}
+	// 步骤 9b: 声明式 root-Agent 的 name 覆盖上面两步
+	// Python: interface_deep.py:13096-13097
+	//   if agent_definition is not None: self._agent_name = agent_definition["name"]
+	if agentDefinition != nil {
+		if name, ok := agentDefinition["name"].(string); ok && strings.TrimSpace(name) != "" {
+			d.agentName = strings.TrimSpace(name)
+		}
+	}
 
 	// 步骤 10: projectDir
 	if v, ok := d.instanceOverrides["project_dir"]; ok {
@@ -602,6 +621,14 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.sessionInstanceConfig = configMap
 	d.sessionInstanceMode = mode
 	d.sessionInstanceSubMode = subMode
+	// Python: interface_deep.py:13022-13023
+	//   self._session_instance_agent_definition = deepcopy(agent_definition)
+	d.sessionInstanceAgentDefinition = copyMap(agentDefinition)
+	// Python: interface_deep.py:13030-13033
+	//   self._channel_id = str(config.get("channel_id") or "").strip() or getattr(self, "_channel_id", "")
+	if v, ok := config["channel_id"].(string); ok && strings.TrimSpace(v) != "" {
+		d.channelID = strings.TrimSpace(v)
+	}
 	if d.skipOwnInstanceBuild() {
 		logger.Info(logComponent).
 			Str("mode", mode).
@@ -619,10 +646,17 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
 	// Python: agent_card = AgentCard(name=self._agent_name, id='uapclaw')
-	agentCard := agentschema.NewAgentCard(
+	// Python: interface_deep.py:13132-13133 —— 声明式定义时带 description
+	cardOpts := []agentschema.AgentCardOption{
 		agentschema.WithAgentName(d.agentName),
 		agentschema.WithAgentID("uapclaw"),
-	)
+	}
+	if agentDefinition != nil {
+		if desc, ok := agentDefinition["description"].(string); ok && strings.TrimSpace(desc) != "" {
+			cardOpts = append(cardOpts, agentschema.WithAgentDescription(strings.TrimSpace(desc)))
+		}
+	}
+	agentCard := agentschema.NewAgentCard(cardOpts...)
 
 	// 步骤 15: tool_cards = await self._get_tool_cards(agent_card.id)
 	// Python: tool_cards = await self._get_tool_cards(agent_card.id)
@@ -645,6 +679,15 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// Python: _build_configured_subagents(model, config, configBase)
 	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, configBase)
 
+	// Python: interface_deep.py:13163-13165
+	//   if agent_definition is not None and agent_definition.get("tools") != "*":
+	//       # Do not build delegates with a broader tool set than the root.
+	//       configured_subagents = []
+	// 显式工具白名单的声明式 root 不允许派生更宽工具集的子代理
+	if agentDefinition != nil && !isWildcardTools(agentDefinition["tools"]) {
+		subagentSpecs = nil
+	}
+
 	// Python: L2575-2577: should_enable_general_agent = should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
 	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
 
@@ -654,6 +697,22 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// Python: self._instance = create_deep_agent(**common_kwargs, ...)
 	resolvedLanguage := d.resolveRuntimeLanguage()
 	systemPrompt := commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage())
+	// Python: interface_deep.py:13184-13193 —— 声明式定义的 instructions 追加进 system prompt
+	//   if agent_definition is not None:
+	//       system_prompt = (f"{system_prompt.rstrip()}\n\n# Agent Instructions\n"
+	//                        f"{agent_definition['instructions'].strip()}")
+	//       system_prompt = apply_tool_policy_prompt(system_prompt, agent_definition.get("tools", "*"))
+	var declaredSkills []string
+	if agentDefinition != nil {
+		instructions, _ := agentDefinition["instructions"].(string)
+		systemPrompt = strings.TrimRight(systemPrompt, " \t\n") +
+			"\n\n# Agent Instructions\n" + strings.TrimSpace(instructions)
+		// 注意：上游传的是原始 tools 值（可能是 "*"），不是过滤后的名单
+		systemPrompt = swruntime.ApplyToolPolicyPrompt(systemPrompt, toolsFromDefinition(agentDefinition))
+		// Python: interface_deep.py:13200
+		//   skills=list(agent_definition.get("skills") or ()) if agent_definition else None
+		declaredSkills = stringSliceOf(agentDefinition["skills"])
+	}
 
 	params := harness_config.CreateDeepAgentParams{
 		Model:                  d.modelSnapshot(),
@@ -667,12 +726,15 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		AddGeneralPurposeAgent: shouldEnableGeneralAgent,
 		MaxIterations:          paramsInt(config, "max_iterations", 15),
 		Workspace:              hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
-		Skills:                 nil, // ⤵️ P1: skills 预留功能，对齐 Python create_instance 不传 skills
-		Language:               resolvedLanguage,
-		PromptMode:             d.resolvePromptMode(configBase),
-		VisionModelConfig:      d.visionModelConfig,
-		AudioModelConfig:       d.audioModelConfig,
-		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
+		// Python: interface_deep.py:13200
+		//   skills=list(agent_definition.get("skills") or ()) if agent_definition else None
+		// 无声明式定义时保持 nil（对齐 Python create_instance 不传 skills）
+		Skills:             declaredSkills,
+		Language:           resolvedLanguage,
+		PromptMode:         d.resolvePromptMode(configBase),
+		VisionModelConfig:  d.visionModelConfig,
+		AudioModelConfig:   d.audioModelConfig,
+		EnableTaskPlanning: d.resolveEnableTaskPlanning(config, configBase),
 		// 开关与 builder 必须成对：builder 已构建时工厂不再补默认，反之亦然
 		EnableModelAnomalyDetectionRail: &anomalyEnabled,
 		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）
@@ -972,16 +1034,20 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
-		reserve := !isAttachOnlySubscription(req.Params)
-		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
-			ReserveActivity: reserve,
-			RequestID:       req.RequestID,
+		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
+			ReserveActivity: !isAttachOnlySubscription(req.Params),
 		})
 		if err != nil {
 			return nil, err
 		}
 		defer d.evictIdleSessionAdapters(ctx)
 		defer d.unregisterSessionAgentTask(sid, req.RequestID)
+		// Python: :18987-18993（非流式入口同样消费 run options）
+		if options := child.TakeProcessCliRunOptions(); options != nil {
+			if cfgErr := child.ConfigureProcessCliRun(ctx, options.MaxTurns, options.HostTools); cfgErr != nil {
+				return nil, cfgErr
+			}
+		}
 		return child.ProcessMessageImpl(ctx, req, inputs)
 	}
 
@@ -1189,10 +1255,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
-		reserve := !isAttachOnlySubscription(req.Params)
-		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
-			ReserveActivity: reserve,
-			RequestID:       req.RequestID,
+		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
+			ReserveActivity: !isAttachOnlySubscription(req.Params),
 		})
 		if err != nil {
 			ch := make(chan *schema.AgentResponseChunk)
@@ -1202,6 +1266,14 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		// 流式不能 defer 淘汰：淘汰必须在流消费完之后，而调用方持有 channel。
 		// 用转接 goroutine 在流关闭后触发（对齐 Python 的 finally 在 generator 结束时执行）。
 		return d.streamThroughChild(ctx, sid, req.RequestID, func() (<-chan *schema.AgentResponseChunk, error) {
+			// Python: :18987-18993 取用并应用 run options（取用即清空，失败运行不泄漏）
+			if options := child.TakeProcessCliRunOptions(); options != nil {
+				if cfgErr := child.ConfigureProcessCliRun(ctx, options.MaxTurns, options.HostTools); cfgErr != nil {
+					ch := make(chan *schema.AgentResponseChunk)
+					close(ch)
+					return ch, cfgErr
+				}
+			}
 			return child.ProcessMessageStreamImpl(ctx, req, inputs)
 		})
 	}
@@ -3602,4 +3674,55 @@ func (d *DeepAdapter) HasSessionRuntime(sessionID string) bool {
 		return true
 	}
 	return d.hasRegisteredSessionTasks(sid)
+}
+
+// isWildcardTools 该 tools 值是否为通配 "*"。
+// Python: agent_definition.get("tools") != "*"（interface_deep.py:13164/13193）
+//
+// 注意上游 RuntimeAgentDefinition 已把 "*" 归一化为 ToolsWildcard 标志，
+// 但 adapter 拿到的是 to_dict() 结果，仍以 "*" 字符串或单元素列表形式出现。
+func isWildcardTools(value any) bool {
+	switch v := value.(type) {
+	case nil:
+		// 缺省即 "*"（Python agent_definition.get("tools", "*")）
+		return true
+	case string:
+		return v == "*"
+	case []string:
+		return len(v) == 1 && v[0] == "*"
+	case []any:
+		return len(v) == 1 && v[0] == "*"
+	}
+	return false
+}
+
+// toolsFromDefinition 取 definition 的 tools 值，缺省为 "*"。
+// Python: agent_definition.get("tools", "*")
+func toolsFromDefinition(definition map[string]any) []string {
+	if definition == nil {
+		return nil
+	}
+	return stringSliceOf(definition["tools"])
+}
+
+// stringSliceOf 把 definition 里的 []string / []any 统一成 []string。
+// Python: list(agent_definition.get("skills") or ())
+func stringSliceOf(value any) []string {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		return []string{v}
+	}
+	return nil
 }

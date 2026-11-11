@@ -34,14 +34,14 @@ func newAgentsTestServer(t *testing.T) *AgentServer {
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
 
 	// 先刷盘并停掉上一个用例遗留的异步 worker，避免 ResetCache 与 worker 读路径缓存并发。
-	session.FlushMetadataQueue()
-	session.FlushHistoryQueue()
+	session.FlushMetadataQueue(5.0)
+	session.FlushHistoryQueue(5.0)
 	session.ResetHistoryWorker()
 	session.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
 	t.Cleanup(func() {
-		session.FlushMetadataQueue()
-		session.FlushHistoryQueue()
+		session.FlushMetadataQueue(5.0)
+		session.FlushHistoryQueue(5.0)
 		session.ResetHistoryWorker()
 		session.ClearAllSessionMetadataCache()
 		pathutil.ResetCache()

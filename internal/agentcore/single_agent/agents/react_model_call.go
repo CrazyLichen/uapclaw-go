@@ -58,6 +58,8 @@ func (a *ReActAgent) callModel(
 		Messages:     previewMsgs,
 		Tools:        tools,
 		ModelContext: modelCtx,
+		// Python: react_agent.py:1043 react_iteration=int(ctx.extra.get("_react_iteration", 0) or 0)
+		ReactIteration: extraInt(cbc, "_react_iteration"),
 	}
 	cbc.SetInputs(modelCallInputs)
 
@@ -780,4 +782,31 @@ func buildImageInputUnsupportedMessage() *llmschema.AssistantMessage {
 		"3. If the task absolutely requires vision, configure a `vision_model_config` " +
 		"with a vision-capable endpoint.\n" +
 		"   如果任务必须依赖视觉，请配置支持视觉输入的模型。")
+}
+
+// extraInt 从回调上下文 extra 里取正整数，缺失或类型不符返回 0。
+// Python: int(ctx.extra.get(key, 0) or 0)（react_agent.py:1043）
+func extraInt(cbc *interfaces.AgentCallbackContext, key string) int {
+	if cbc == nil {
+		return 0
+	}
+	raw, ok := cbc.GetExtra(key)
+	if !ok {
+		return 0
+	}
+	switch v := raw.(type) {
+	case int:
+		if v > 0 {
+			return v
+		}
+	case int64:
+		if v > 0 {
+			return int(v)
+		}
+	case float64:
+		if v > 0 {
+			return int(v)
+		}
+	}
+	return 0
 }

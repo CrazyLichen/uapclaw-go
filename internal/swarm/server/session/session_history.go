@@ -65,21 +65,27 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// FlushHistoryQueue 等待 history 异步写入队列刷盘（供测试使用）。
-// 发送哨兵项到队列，等待 worker 确认所有之前的写入已完成。
-func FlushHistoryQueue() {
+// FlushHistoryQueue 等待 history 异步写入队列刷盘。
+// timeoutSeconds 为等待上限；返回是否在超时前全部写完。
+// Python: session_history.py:1384 flush_pending_writes(timeout: float = 10) -> bool
+func FlushHistoryQueue(timeoutSeconds float64) bool {
 	// 如果 worker 还没启动，无需等待
 	if historyWriteQueue == nil {
-		return
+		return true
 	}
 	// 发送哨兵项，worker 处理后会向 flushDone 发送确认
 	flushDone := make(chan struct{})
 	historyWriteQueue <- historyWriteItem{sessionID: "", record: nil, flushDone: flushDone}
 	// 等待 worker 确认，确保所有之前的写入已完成
+	timer := time.NewTimer(time.Duration(timeoutSeconds * float64(time.Second)))
+	defer timer.Stop()
 	select {
 	case <-flushDone:
-	case <-time.After(5 * time.Second):
-		logger.Warn(logComponent).Msg("FlushHistoryQueue timed out")
+		return true
+	case <-timer.C:
+		logger.Warn(logComponent).Float64("timeout_seconds", timeoutSeconds).
+			Msg("FlushHistoryQueue timed out")
+		return false
 	}
 }
 
@@ -245,7 +251,8 @@ func ReadHistoryRecords(sessionID string) ([]map[string]any, error) {
 // 先等异步队列刷盘（FlushHistoryQueue 哨兵机制等价 Python _WRITE_QUEUE.join()），再截断到 cutIndex。
 func TruncateHistoryRecords(sessionID string, cutIndex int) (TruncateResult, error) {
 	// Python: _WRITE_QUEUE.join()，先等异步队列刷盘再截断
-	FlushHistoryQueue()
+	// 上游 join() 无超时上限；Go 保留 5 秒有界等待（既有行为，不因签名改造而变更）
+	FlushHistoryQueue(5.0)
 
 	sid := NormalizeSessionID(sessionID)
 	fpath := historyFilePath(sid)

@@ -96,8 +96,8 @@ type fakeGuardAgentManager struct {
 
 // GetChatAgent 返回预置 agent。
 func (m *fakeGuardAgentManager) GetChatAgent(
-	context.Context, string, string, string, string,
-) (ChatAgentPort, error) {
+	_ context.Context, _, _, _, _ string,
+	_ map[string]any, _ string) (ChatAgentPort, error) {
 	return m.agent, nil
 }
 
@@ -128,7 +128,7 @@ func TestPrepareTurn_走回退路径时按只读goal查询决定metadata同步(t
 			})
 			req.SessionID = &sid
 
-			mode, _, got, err := rt.prepareTurn(context.Background(), req)
+			mode, _, got, err := rt.prepareTurn(context.Background(), req, nil, "")
 			require.NoError(t, err)
 			require.Equal(t, "agent", mode)
 			require.Same(t, agent, got)

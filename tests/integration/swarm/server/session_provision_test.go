@@ -47,7 +47,7 @@ func (s *SessionProvisionSuite) SetupTest() {
 
 // TearDownTest 刷盘并还原环境。
 func (s *SessionProvisionSuite) TearDownTest() {
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	session.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
 }

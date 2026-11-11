@@ -86,6 +86,9 @@ type createInstanceConfig struct {
 	config  map[string]any
 	mode    string
 	subMode string
+	// agentDefinition 声明式 root-Agent 定义（可为 nil）
+	// Python: interface.py:1764 create_instance(..., agent_definition=...)
+	agentDefinition map[string]any
 }
 
 // CreateInstanceOption CreateInstance 的可选参数。
@@ -111,6 +114,12 @@ func WithCreateInstanceMode(mode string) CreateInstanceOption {
 // WithCreateInstanceSubMode 设置 CreateInstance 子模式。
 func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 	return func(c *createInstanceConfig) { c.subMode = subMode }
+}
+
+// WithCreateInstanceAgentDefinition 设置声明式 root-Agent 定义。
+// Python: interface.py:1786 create_kwargs["agent_definition"] = dict(agent_definition)
+func WithCreateInstanceAgentDefinition(agentDefinition map[string]any) CreateInstanceOption {
+	return func(c *createInstanceConfig) { c.agentDefinition = agentDefinition }
 }
 
 // NewUapClaw 创建 UapClawSwarm 实例。
@@ -156,9 +165,9 @@ func (uc *UapClawSwarm) executionCoordinator() swruntime.SessionCoordinatorPort 
 // 与 ExecuteMessage 的唯一区别是调度归属：本方法把执行排进门面会话队列
 // （同会话串行），适用于不归 Runtime 协调器管的零碎 RPC。
 func (uc *UapClawSwarm) ProcessMessage(
-	ctx context.Context, request *schema.AgentRequest,
+	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
 ) (*schema.AgentResponse, error) {
-	return uc.processMessageInternal(ctx, request, true)
+	return uc.processMessageInternal(ctx, request, true, opts...)
 }
 
 // ExecuteMessage 执行一次由 AgentRuntime 拥有调度的请求。
@@ -167,9 +176,9 @@ func (uc *UapClawSwarm) ProcessMessage(
 // 不排门面队列：Runtime 协调器已经为它分配了执行与代次，再排一次会把
 // 同一请求调度两遍。
 func (uc *UapClawSwarm) ExecuteMessage(
-	ctx context.Context, request *schema.AgentRequest,
+	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
 ) (*schema.AgentResponse, error) {
-	return uc.processMessageInternal(ctx, request, false)
+	return uc.processMessageInternal(ctx, request, false, opts...)
 }
 
 // processMessageInternal 处理非流式请求的公共实现。
@@ -179,6 +188,7 @@ func (uc *UapClawSwarm) ExecuteMessage(
 // 为假时直接执行（Runtime 协调器已负责调度）。
 func (uc *UapClawSwarm) processMessageInternal(
 	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
+	opts ...swruntime.ExecuteOption,
 ) (*schema.AgentResponse, error) {
 	if !scheduleSession || uc.sessionManager == nil {
 		return uc.runMessageDirect(ctx, request)
@@ -340,17 +350,17 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 // 与 ExecuteMessageStream 的唯一区别是调度归属；流式请求一旦排进队列，
 // 返回的 channel 由队列内的执行协程生产，调用方照常消费。
 func (uc *UapClawSwarm) ProcessMessageStream(
-	ctx context.Context, request *schema.AgentRequest,
+	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
 ) (<-chan *schema.AgentResponseChunk, error) {
-	return uc.processMessageStreamInternal(ctx, request, true)
+	return uc.processMessageStreamInternal(ctx, request, true, opts...)
 }
 
 // ExecuteMessageStream 执行一次由 AgentRuntime 拥有调度的流式请求。
 // Python: interface.py execute_message_stream（schedule_session=False）
 func (uc *UapClawSwarm) ExecuteMessageStream(
-	ctx context.Context, request *schema.AgentRequest,
+	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
 ) (<-chan *schema.AgentResponseChunk, error) {
-	return uc.processMessageStreamInternal(ctx, request, false)
+	return uc.processMessageStreamInternal(ctx, request, false, opts...)
 }
 
 // processMessageStreamInternal 流式请求的公共实现。
@@ -361,6 +371,7 @@ func (uc *UapClawSwarm) ExecuteMessageStream(
 // 外层 channel，保证调用方拿到的仍是连续流。
 func (uc *UapClawSwarm) processMessageStreamInternal(
 	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
+	opts ...swruntime.ExecuteOption,
 ) (<-chan *schema.AgentResponseChunk, error) {
 	// Python: interface.py:4175 —— 流式 command.goal 的 get/pause/clear 在此单帧
 	// 短路（控制类流量不进会话队列）；set/resume 继续走下面的完整流式链
@@ -728,7 +739,7 @@ func (uc *UapClawSwarm) CreateInstance(opts ...CreateInstanceOption) error {
 		return err
 	}
 	ctx := context.Background()
-	if err := a.CreateInstance(ctx, cfg.config, cfg.mode, cfg.subMode); err != nil {
+	if err := a.CreateInstance(ctx, cfg.config, cfg.mode, cfg.subMode, cfg.agentDefinition); err != nil {
 		return err
 	}
 	logger.Info(logComponent).

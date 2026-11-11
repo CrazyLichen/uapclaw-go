@@ -22,8 +22,8 @@ func isolateDataDir(t *testing.T) {
 	dataDir := t.TempDir()
 	t.Cleanup(func() {
 		// LIFO：先 flush，后恢复环境与清缓存，避免异步队列写到已删除目录
-		sessionpkg.FlushMetadataQueue()
-		sessionpkg.FlushHistoryQueue()
+		sessionpkg.FlushMetadataQueue(5.0)
+		sessionpkg.FlushHistoryQueue(5.0)
 		if had {
 			_ = os.Setenv(pathutil.EnvDataDir, orig)
 		} else {
@@ -38,7 +38,7 @@ func isolateDataDir(t *testing.T) {
 // historyRecords 读取会话历史（先 flush 异步队列，避免假空）。
 func historyRecords(t *testing.T, sessionID string) []map[string]any {
 	t.Helper()
-	sessionpkg.FlushHistoryQueue()
+	sessionpkg.FlushHistoryQueue(5.0)
 	records, err := sessionpkg.ReadHistoryRecords(sessionID)
 	require.NoError(t, err)
 	return records

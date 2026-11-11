@@ -71,7 +71,7 @@ func (s *RailRegistrationSuite) newAdapter(mode, reactExtra string) *adapter.Dee
 	s.env.WriteConfigYAML(s.T(), reactExtra)
 	d := adapter.NewDeepAdapter()
 	d.MarkAsSessionScoped("itest-rail")
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, mode, ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, mode, "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }

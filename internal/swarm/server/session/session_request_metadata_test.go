@@ -31,7 +31,7 @@ func TestSyncSessionRequestMetadata_新建会话(t *testing.T) {
 		WorkMode:              "code",
 		PersistSession:        &persist,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, "/tmp/p1", locked)
 
 	meta := GetSessionMetadata(sid)
@@ -57,7 +57,7 @@ func TestSyncSessionRequestMetadata_锁定语义(t *testing.T) {
 		ProjectID: "proj-1", CronID: "cron-1", UserID: "u1",
 		WorkMode: "work", Mode: "agent.work.plan", ExplicitModeProvided: true,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, "/tmp/p1", first)
 
 	// 第二次：不同 project_dir/project_id/cron_id/user_id/work_mode 均不得覆盖
@@ -66,7 +66,7 @@ func TestSyncSessionRequestMetadata_锁定语义(t *testing.T) {
 		ProjectID: "proj-2", CronID: "cron-2", UserID: "u2",
 		WorkMode: "code", Mode: "agent.work.normal", ExplicitModeProvided: true,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, "/tmp/p1", second, "已锁定的 project_dir 优先返回")
 
 	meta := GetSessionMetadata(sid)
@@ -86,7 +86,7 @@ func TestSyncSessionRequestMetadata_既有会话逐字段首次锁定(t *testing
 
 	// 先建一个只有 session_id 的骨架（create 分支不写这些字段）
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{SessionID: sid})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 
 	stamp := 999.25
 	locked := SyncSessionRequestMetadata(SessionRequestMetadataSync{
@@ -95,7 +95,7 @@ func TestSyncSessionRequestMetadata_既有会话逐字段首次锁定(t *testing
 		WorkMode: "code", Model: "m-x", ExplicitModelProvided: true,
 		IsChatTurn: true, LastUserMessageAt: &stamp,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, "/tmp/pl", locked)
 
 	meta := GetSessionMetadata(sid)
@@ -114,7 +114,7 @@ func TestSyncSessionRequestMetadata_既有会话逐字段首次锁定(t *testing
 		SessionID: sid, ChannelID: "tui", ProjectDir: "/tmp/other",
 		ProjectID: "proj-y", CronID: "cron-y", UserID: "user-y", WorkMode: "work",
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, "/tmp/pl", locked2)
 	meta2 := GetSessionMetadata(sid)
 	require.Equal(t, "proj-x", meta2["project_id"])
@@ -132,13 +132,13 @@ func TestSyncSessionRequestMetadata_非显式不覆盖mode与model(t *testing.T)
 		SessionID: sid, Mode: "team.work.plan", ExplicitModeProvided: true,
 		Model: "m1", ExplicitModelProvided: true,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{
 		SessionID: sid, Mode: "agent.work.normal", ExplicitModeProvided: false,
 		Model: "m2", ExplicitModelProvided: false,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 
 	meta := GetSessionMetadata(sid)
 	require.Equal(t, "team.work.plan", meta["mode"])
@@ -150,18 +150,18 @@ func TestSyncSessionRequestMetadata_时间戳语义(t *testing.T) {
 	setupSyncTestDir(t)
 	sid := "sess-sync-time"
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{SessionID: sid, IsChatTurn: true})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	before := GetSessionMetadata(sid)["last_message_at"]
 
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{SessionID: sid, IsChatTurn: false})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, before, GetSessionMetadata(sid)["last_message_at"], "非 chat 轮次不刷新 last_message_at")
 
 	stamp := 12345.5
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{
 		SessionID: sid, LastUserMessageAt: &stamp, IsChatTurn: false,
 	})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, stamp, GetSessionMetadata(sid)["last_user_message_at"], "last_user_message_at 覆盖式")
 }
 
@@ -172,12 +172,12 @@ func TestSyncSessionRequestMetadata_persistSession锁定(t *testing.T) {
 	enabled := true
 	disabled := false
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{SessionID: sid, PersistSession: &enabled})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, true, GetSessionMetadata(sid)["persist_session"])
 
 	// 已锁定 true，请求 false → 只告警不覆盖
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{SessionID: sid, PersistSession: &disabled})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, true, GetSessionMetadata(sid)["persist_session"])
 
 	// 历史脏值（非布尔）→ 失败关闭为 false
@@ -187,7 +187,7 @@ func TestSyncSessionRequestMetadata_persistSession锁定(t *testing.T) {
 	RemoveSessionMetadataCache(sid)
 
 	SyncSessionRequestMetadata(SessionRequestMetadataSync{SessionID: sid, PersistSession: &enabled})
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	require.Equal(t, false, GetSessionMetadata(sid)["persist_session"])
 }
 
@@ -219,7 +219,7 @@ func setupSyncTestDir(t *testing.T) {
 	pathutil.ResetCache()
 	ClearAllSessionMetadataCache()
 	t.Cleanup(func() {
-		FlushMetadataQueue()
+		FlushMetadataQueue(5.0)
 		ClearAllSessionMetadataCache()
 		pathutil.ResetCache()
 	})

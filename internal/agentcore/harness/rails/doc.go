@@ -27,6 +27,7 @@
 //	├── agent_mode.go       # AgentModeRail plan 模式约束（3个钩子）
 //	├── heartbeat.go        # HeartbeatRail 心跳护栏（3个钩子）
 //	├── mcp_rail.go         # McpRail MCP 资源浏览工具注册（2个钩子：Init/Uninit）
+//	├── process_cli_iteration_limit.go # ProcessCliIterationLimitRail 迭代上限护栏（按事件分档优先级，20.2 R-11）
 //	├── interrupt/          # 中断-恢复（HITL）Rail 子包
 //	│   ├── doc.go              # 包文档
 //	│   ├── interrupt_base.go   # BaseInterruptRail + 决策类型

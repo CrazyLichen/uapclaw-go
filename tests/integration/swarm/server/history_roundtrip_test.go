@@ -65,7 +65,7 @@ func (s *HistoryRoundtripSuite) TestToolCallRestorable() {
 		}, nil, "agent")
 	session.AppendHistoryRecord(s.sessionID, "req-1", "web", "assistant", "最终答复",
 		1.2, "chat.final", nil, nil, "agent")
-	session.FlushHistoryQueue()
+	session.FlushHistoryQueue(5.0)
 
 	messages := s.historyGet(s.sessionID, 1)
 	s.Require().NotEmpty(messages, "history.get 应返回记录")
@@ -108,7 +108,7 @@ func (s *HistoryRoundtripSuite) TestTeamEventShape() {
 			extra["member_id"] = "m1"
 			return extra
 		}(), nil, "team")
-	session.FlushHistoryQueue()
+	session.FlushHistoryQueue(5.0)
 
 	messages := s.historyGet(s.sessionID, 1)
 	s.Require().Len(messages, 1)
@@ -136,8 +136,8 @@ func (s *HistoryRoundtripSuite) SetupTest() {
 
 // TearDownTest 刷盘并还原环境，避免污染后续用例。
 func (s *HistoryRoundtripSuite) TearDownTest() {
-	session.FlushMetadataQueue()
-	session.FlushHistoryQueue()
+	session.FlushMetadataQueue(5.0)
+	session.FlushHistoryQueue(5.0)
 	s.restoreEnv()
 	pathutil.ResetCache()
 }

@@ -388,7 +388,7 @@ func newPlanEnvWithEnv(t *testing.T, env *AdapterTestEnv, mock *mockllm.MockMode
 		T: t, Env: env, Mock: mock,
 		ChannelID: planEnvChannel, ProjectDir: projectDir, WorkMode: workMode,
 	}
-	planEnv.Server = NewServerEnv(t, cfg, func(agentConfig map[string]any, mode, subMode string) (*srvruntime.UapClawSwarm, error) {
+	planEnv.Server = NewServerEnv(t, cfg, func(agentConfig map[string]any, mode, subMode string, _ map[string]any) (*srvruntime.UapClawSwarm, error) {
 		merged := map[string]any{}
 		for k, v := range agentConfig {
 			merged[k] = v

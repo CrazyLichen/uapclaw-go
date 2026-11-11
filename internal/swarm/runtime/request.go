@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -18,28 +19,69 @@ import (
 
 // AgentManagerPort 运行时需要的 manager 能力（由 server 层实现，避免反向依赖）。
 type AgentManagerPort interface {
-	// GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（不存在时创建）
-	GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (ChatAgentPort, error)
+	// GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（不存在时创建）。
+	// agentDefinition / agentDefinitionFingerprint 非空时用于创建声明式 agent
+	// （name/description/instructions/tools/skills）。
+	// Python: agent_manager.py:658-659 get_agent_for_request(
+	//           agent_definition=..., agent_definition_fingerprint=...)
+	GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string,
+		agentDefinition map[string]any, agentDefinitionFingerprint string) (ChatAgentPort, error)
 	// GetChatAgentNoWait 非阻塞取已有 agent（不存在时返回 nil，不创建）
 	GetChatAgentNoWait(channelID, mode, projectDir, subMode string) ChatAgentPort
 }
 
 // ChatAgentPort 运行时需要的 agent 能力。
+//
+// 4 个执行方法统一带 opts ...ExecuteOption，用于透传"本次调用专属"的钩子与执行体
+// （on_agent_ready / _agent_execution）。Python 用关键字参数，Go 用 Functional Option（D-7）。
 type ChatAgentPort interface {
 	// ProcessMessage 通过门面会话队列非流式执行
 	// Python: interface.py process_message（schedule_session=True）
-	ProcessMessage(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
+	ProcessMessage(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (*schema.AgentResponse, error)
 	// ProcessMessageStream 通过门面会话队列流式执行
 	// Python: interface.py process_message_stream（schedule_session=True）
-	ProcessMessageStream(ctx context.Context, req *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error)
+	ProcessMessageStream(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error)
 	// ExecuteMessage 由 Runtime 持有调度的非流式执行
 	// Python: interface.py execute_message（schedule_session=False）
-	ExecuteMessage(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
+	ExecuteMessage(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (*schema.AgentResponse, error)
 	// ExecuteMessageStream 由 Runtime 持有调度的流式执行
 	// Python: interface.py execute_message_stream（schedule_session=False）
-	ExecuteMessageStream(ctx context.Context, req *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error)
+	ExecuteMessageStream(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error)
 	// PlanStateAccessor 返回 plan 状态读写入口
 	PlanStateAccessor() PlanStateAccessor
+}
+
+// executeOptions ChatAgentPort 执行方法的可选参数。
+// Python: stream/invoke 的 on_agent_ready 与 _agent_execution 关键字参数
+type executeOptions struct {
+	// onAgentReady agent 就绪回调，首次模型调用前触发
+	onAgentReady func(ctx context.Context, agent harnessinterfaces.DeepAgentInterface) error
+	// agentExecution 声明式 agent 执行体
+	agentExecution *RuntimeAgentExecution
+}
+
+// ExecuteOption ChatAgentPort 执行方法的可选参数函数。
+type ExecuteOption func(*executeOptions)
+
+// WithExecuteOnAgentReady 设置 agent 就绪回调。
+func WithExecuteOnAgentReady(fn func(ctx context.Context, agent harnessinterfaces.DeepAgentInterface) error) ExecuteOption {
+	return func(o *executeOptions) { o.onAgentReady = fn }
+}
+
+// WithExecuteAgentExecution 携带声明式 agent 执行体。
+func WithExecuteAgentExecution(exec *RuntimeAgentExecution) ExecuteOption {
+	return func(o *executeOptions) { o.agentExecution = exec }
+}
+
+// applyExecuteOptions 折叠可选参数。
+func applyExecuteOptions(opts []ExecuteOption) *executeOptions {
+	o := &executeOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	return o
 }
 
 // ResolvedMode 请求模式解析结果。
@@ -352,6 +394,8 @@ func PrepareChatTurn(
 	req *schema.AgentRequest,
 	channelID string,
 	syncMetadata bool,
+	agentDefinition map[string]any,
+	agentDefinitionFingerprint string,
 ) (mode, subMode string, agent ChatAgentPort, err error) {
 	params := parseRequestParams(req)
 	rawMode, _ := params["mode"].(string)
@@ -462,7 +506,10 @@ func PrepareChatTurn(
 	writeRequestParams(req, params)
 
 	// 9. 取 agent（⤵️ 上游为 get_agent_for_request 原子准入 + 预热等待）
-	agent, err = mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir)
+	// Python: request.py:534-537 agent_kwargs["agent_definition"] /
+	//         ["agent_definition_fingerprint"] → get_agent_for_request
+	agent, err = mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir,
+		agentDefinition, agentDefinitionFingerprint)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -587,7 +634,8 @@ func CancelRequest(
 		if agentMode == "auto_harness" {
 			agentMode = "agent"
 		}
-		created, err := mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir)
+		// 取消路径不需要声明式定义：只取已有 agent 打断执行
+		created, err := mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir, nil, "")
 		if err != nil {
 			return nil, err
 		}

@@ -382,7 +382,7 @@ func (s *SystemPromptCaptureSuite) runLiveCapture(skillMode string) (string, *pr
 	ctx, cancel := context.WithTimeout(s.Ctx, 180*time.Second)
 	defer cancel()
 
-	if err := adapterInst.CreateInstance(ctx, nil, "agent.work.plan", ""); err != nil {
+	if err := adapterInst.CreateInstance(ctx, nil, "agent.work.plan", "", nil); err != nil {
 		t.Fatalf("CreateInstance 失败: %v", err)
 	}
 	resp, err := adapterInst.ProcessMessageImpl(ctx, req, inputs)

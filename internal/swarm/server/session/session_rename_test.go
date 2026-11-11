@@ -16,9 +16,9 @@ func setupRenameTest(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
 	path.ResetCache()
 	ClearAllSessionMetadataCache()
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	t.Cleanup(func() {
-		FlushMetadataQueue()
+		FlushMetadataQueue(5.0)
 		ClearAllSessionMetadataCache()
 		path.ResetCache()
 	})
@@ -41,7 +41,7 @@ func TestApplySessionRename_查询标题(t *testing.T) {
 	if result["previous_title"] != "当前标题" {
 		t.Errorf("previous_title = %v, want 当前标题", result["previous_title"])
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestApplySessionRename_设置标题 验证 title=非空 设置模式
@@ -61,7 +61,7 @@ func TestApplySessionRename_设置标题(t *testing.T) {
 	if result["previous_title"] != "旧标题" {
 		t.Errorf("previous_title = %v, want 旧标题", result["previous_title"])
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestApplySessionRename_清除标题 验证 title=空串 清除模式
@@ -78,7 +78,7 @@ func TestApplySessionRename_清除标题(t *testing.T) {
 	if result["title"] != "" {
 		t.Errorf("title = %v, want 空串（已清除）", result["title"])
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestApplySessionRename_标题截断 验证超过 200 字符截断
@@ -96,7 +96,7 @@ func TestApplySessionRename_标题截断(t *testing.T) {
 	if utf8.RuneCountInString(title) > renameTitleMaxLen {
 		t.Errorf("title 字符数 = %d, want <= %d", utf8.RuneCountInString(title), renameTitleMaxLen)
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestApplySessionRename_空SessionID 验证空 session_id 返回错误 payload
@@ -124,5 +124,5 @@ func TestApplySessionRename_初始化新会话(t *testing.T) {
 	if result["title"] != "全新会话" {
 		t.Errorf("title = %v, want 全新会话", result["title"])
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }

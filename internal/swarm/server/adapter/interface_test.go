@@ -16,9 +16,15 @@ type stubAdapter struct{}
 
 var _ AgentAdapter = (*stubAdapter)(nil)
 
-func (s *stubAdapter) CreateInstance(_ context.Context, _ map[string]any, _ string, _ string) error {
+func (s *stubAdapter) CreateInstance(_ context.Context, _ map[string]any, _ string, _ string, _ map[string]any) error {
 	return nil
 }
+
+// ConfigureProcessCliRun 空实现。
+func (s *stubAdapter) ConfigureProcessCliRun(context.Context, *int, []any) error { return nil }
+
+// TakeProcessCliRunOptions 空实现。
+func (s *stubAdapter) TakeProcessCliRunOptions() *ProcessCliRunOptions { return nil }
 
 func (s *stubAdapter) ReloadAgentConfig(_ context.Context, _ map[string]any, _ map[string]any) error {
 	return nil

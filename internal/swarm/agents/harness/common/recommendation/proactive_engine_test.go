@@ -16,6 +16,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -507,7 +508,7 @@ type mockMainAgentHandle struct {
 }
 
 // ProcessMessageStream 返回预定 chunk 序列。
-func (m *mockMainAgentHandle) ProcessMessageStream(_ context.Context, _ *swarmschema.AgentRequest) (<-chan *swarmschema.AgentResponseChunk, error) {
+func (m *mockMainAgentHandle) ProcessMessageStream(_ context.Context, _ *swarmschema.AgentRequest, _ ...swruntime.ExecuteOption) (<-chan *swarmschema.AgentResponseChunk, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

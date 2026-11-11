@@ -121,8 +121,8 @@ func TestAppendHistoryRecord_ChannelMetadata(t *testing.T) {
 	// 之后写文件，报 "directory not empty" 假红）。
 	dataDir := t.TempDir()
 	t.Cleanup(func() {
-		session.FlushMetadataQueue()
-		session.FlushHistoryQueue()
+		session.FlushMetadataQueue(5.0)
+		session.FlushHistoryQueue(5.0)
 		if hadDataDir {
 			_ = os.Setenv(pathutil.EnvDataDir, origDataDir)
 		} else {
@@ -138,7 +138,7 @@ func TestAppendHistoryRecord_ChannelMetadata(t *testing.T) {
 	sid := "sess-meta-test"
 	session.AppendHistoryRecord(sid, "req-1", "web", "user", "你好", 1.0,
 		"", nil, map[string]any{"chat_id": "c1"}, "agent")
-	session.FlushHistoryQueue()
+	session.FlushHistoryQueue(5.0)
 
 	records, err := session.ReadHistoryRecords(sid)
 	if err != nil {

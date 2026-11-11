@@ -246,7 +246,7 @@ func (s *ReasoningStreamSuite) TestReasoning_规划模式界面事件_产出chat
 		attemptInputs["conversation_id"] = attemptSession
 
 		d := adapter.NewDeepAdapter()
-		s.Require().NoError(d.CreateInstance(ctx, nil, "agent.work.plan", "plan"),
+		s.Require().NoError(d.CreateInstance(ctx, nil, "agent.work.plan", "plan", nil),
 			"CreateInstance 失败（attempt=%d）", attempt)
 		// 对齐界面：先切到 plan 子模式（写会话级 PlanModeState），再发消息
 		s.Require().NoError(d.SwitchMode(ctx, attemptSession, "plan"),

@@ -250,7 +250,7 @@ func TestSetSessionDeliveryContext_基本设置(t *testing.T) {
 		t.Errorf("route_metadata = %v, want {key: val}", dc["route_metadata"])
 	}
 
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestSetSessionDeliveryContext_空metadata创建 验证空 metadata 时创建新的
@@ -268,7 +268,7 @@ func TestSetSessionDeliveryContext_空metadata创建(t *testing.T) {
 		t.Errorf("delivery_kind = %v, want server_push", dc["delivery_kind"])
 	}
 
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestGetSessionDeliveryContext_从缓存读取 验证缓存优先
@@ -283,7 +283,7 @@ func TestGetSessionDeliveryContext_从缓存读取(t *testing.T) {
 	if result["channel_id"] != "ch1" {
 		t.Errorf("channel_id = %v, want ch1", result["channel_id"])
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestGetSessionDeliveryContext_不存在 验证无 delivery context 时返回 nil
@@ -318,7 +318,7 @@ func TestBuildServerPushMessage_基本构造(t *testing.T) {
 	if !ok || rm["model"] != "qwen" {
 		t.Errorf("metadata = %v, want {model: qwen}", msg["metadata"])
 	}
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }
 
 // TestBuildServerPushMessage_fallbackChannelID 验证 fallback 逻辑
@@ -375,7 +375,7 @@ func TestIncrementSessionRoundCount_递增(t *testing.T) {
 		t.Errorf("newRound = %d, want 1", newRound)
 	}
 
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 
 	// 再次递增
 	newRound2, err := IncrementSessionRoundCount("sess_round")
@@ -409,6 +409,6 @@ func TestClearAllSessionMetadataCache(t *testing.T) {
 // TestFlushMetadataQueue 验证刷盘哨兵项被消费
 func TestFlushMetadataQueue(t *testing.T) {
 	// 确保初始化 worker
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 	// 无 panic 或 error 即通过
 }

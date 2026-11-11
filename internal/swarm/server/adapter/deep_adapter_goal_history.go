@@ -211,7 +211,7 @@ func goalCompletedHistoryExists(sessionID, goalID string) bool {
 	// Go 的历史写入是异步队列，Python 是同步 append。读之前必须 flush，
 	// 否则同一 goal 的第二次 goal.updated 会看不到第一次的记录而重复落盘
 	// （前端会出两张完成卡片）。该路径只在目标完成时走一次，flush 代价可接受。
-	sessionpkg.FlushHistoryQueue()
+	sessionpkg.FlushHistoryQueue(5.0)
 	records, err := sessionpkg.ReadHistoryRecords(sessionID)
 	if err != nil {
 		return false

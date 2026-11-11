@@ -54,7 +54,7 @@ func (s *DeepAdapterReloadSuite) newDeepAdapter() *adapter.DeepAdapter {
 	// session-scoped 与 child 同构，可直接断言自己的 DeepAgent。
 	// 根分流由 session_fork_test.go 覆盖。
 	d.MarkAsSessionScoped("itest-reload")
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }

@@ -196,7 +196,8 @@ func NewCodeAdapter() *CodeAdapter {
 //	Python: 22. self._registered_mcp_server_ids.clear()
 //	Python: 23. await self._register_mcp_servers_from_config(config_base, tag="code")
 //	Python: 24. await self.load_user_rails()
-func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string) error {
+func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string,
+	agentDefinition map[string]any) error {
 	// 步骤 11: dreaming_mode = "code"（Python 中在步骤 11，此处提前设置，其余步骤仍按 Python 编号）
 	c.deep.dreamingMode = "code"
 
@@ -537,6 +538,24 @@ func (c *CodeAdapter) MarkAsSessionScoped(sessionID string) {
 	if c.deep != nil {
 		c.deep.MarkAsSessionScoped(sessionID)
 	}
+}
+
+// ConfigureProcessCliRun 委托给内嵌 DeepAdapter。
+// Python: interface_deep.py:12421-12470 configure_process_cli_run
+func (c *CodeAdapter) ConfigureProcessCliRun(ctx context.Context, maxTurns *int, hostTools []any) error {
+	if c.deep == nil {
+		return errors.New("code adapter is not initialized")
+	}
+	return c.deep.ConfigureProcessCliRun(ctx, maxTurns, hostTools)
+}
+
+// TakeProcessCliRunOptions 委托给内嵌 DeepAdapter。
+// Python: interface_deep.py:18989-18992 取用即清空
+func (c *CodeAdapter) TakeProcessCliRunOptions() *ProcessCliRunOptions {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.TakeProcessCliRunOptions()
 }
 
 // GetLiveSessionInstance 委托 DeepAdapter。

@@ -60,7 +60,7 @@ func (s *PromptSuggestionSuite) TearDownTest() {
 // Test同会话两轮命中同一child且记账隔离 会话级 child 与 forks 表都按 sid 隔离。
 func (s *PromptSuggestionSuite) Test同会话两轮命中同一child且记账隔离() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.runOneTurn(d, "integration-clean-a", "req-ps-a1", "第一问")
@@ -79,7 +79,7 @@ func (s *PromptSuggestionSuite) Test同会话两轮命中同一child且记账隔
 // Test不同会话独立child且记账不串味 两个会话的 turn 记录互不影响。
 func (s *PromptSuggestionSuite) Test不同会话独立child且记账不串味() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.runOneTurn(d, "integration-clean-a", "req-ps-b1", "会话A问")
@@ -100,7 +100,7 @@ func (s *PromptSuggestionSuite) Test不同会话独立child且记账不串味() 
 // Test推荐关闭时轮结束不生成 默认配置下 turn_ended 不产生建议。
 func (s *PromptSuggestionSuite) Test推荐关闭时轮结束不生成() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	// 确认全局 Forks 未开启推荐
@@ -116,7 +116,7 @@ func (s *PromptSuggestionSuite) Test推荐关闭时轮结束不生成() {
 // Test会话删除触发forks清表 provisioner 的 dispose 第①步接的是真实现。
 func (s *PromptSuggestionSuite) Test会话删除触发forks清表() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.runOneTurn(d, "integration-clean-a", "req-ps-d1", "一问")

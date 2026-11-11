@@ -25,7 +25,11 @@ import (
 type AgentAdapter interface {
 	// CreateInstance 初始化底层 SDK Agent。
 	// 启动时调用一次，skill install/uninstall 后再次调用。
-	CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string) error
+	// agentDefinition 非空时用于声明式 root agent
+	// （name/description/instructions/tools/skills）。
+	// Python: interface.py:1764 create_instance(..., agent_definition=...)
+	CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string,
+		agentDefinition map[string]any) error
 
 	// ReloadAgentConfig 热重载配置，不重启进程。
 	// configBase: 完整配置快照，若提供则不再读 config.yaml。
@@ -79,6 +83,16 @@ type AgentAdapter interface {
 	// MarkAsSessionScoped 把本适配器标记为指定会话的子适配器。
 	// Python: interface_deep.py mark_as_session_scoped（:2711）
 	MarkAsSessionScoped(sessionID string)
+
+	// ConfigureProcessCliRun 应用一次性的 Process CLI 限制与宿主工具到本子适配器。
+	// Python: interface_deep.py:12421-12470 configure_process_cli_run
+	// 根适配器会把选项暂存起来等 child 消费；child 直接应用。
+	ConfigureProcessCliRun(ctx context.Context, maxTurns *int, hostTools []any) error
+
+	// TakeProcessCliRunOptions 取出并清空暂存的一次性运行选项（取用即清空）。
+	// Python: interface_deep.py:18989-18992（取用前先置 None）
+	// 无待消费选项时返回 nil。
+	TakeProcessCliRunOptions() *ProcessCliRunOptions
 
 	// GetLiveSessionInstance 返回正在跑该会话的 DeepAgent；该会话未启动时返回 nil。
 	// Python: interface_deep.py get_live_session_instance（:12744）

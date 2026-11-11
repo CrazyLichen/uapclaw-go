@@ -700,7 +700,7 @@ func TestEnsureInstance_并发双检(t *testing.T) {
 // TestCreateInstance_根跳过建instance 根的 CreateInstance 不建 DeepAgent。
 func TestCreateInstance_根跳过建instance(t *testing.T) {
 	root := NewDeepAdapter()
-	if err := root.CreateInstance(context.Background(), map[string]any{}, "agent", ""); err != nil {
+	if err := root.CreateInstance(context.Background(), map[string]any{}, "agent", "", nil); err != nil {
 		t.Fatalf("CreateInstance 失败: %v", err)
 	}
 	if root.Instance() != nil {
