@@ -1,9 +1,12 @@
 package recommendation
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestPythonTruthy_Python真值语义
@@ -165,4 +168,91 @@ func TestInterestEntropy_均匀分布最大(t *testing.T) {
 	assert.InDelta(t, 2.0, interestEntropy(map[string]float64{"a": .25, "b": .25, "c": .25, "d": .25}), 1e-12)
 	assert.Equal(t, 0.0, interestEntropy(map[string]float64{"a": 1.0}))
 	assert.Equal(t, 0.0, interestEntropy(nil))
+}
+
+// newTestStore 建一个落在临时目录的 store。
+func newTestStore(t *testing.T) *TopicStarterStore {
+	t.Helper()
+	store, err := NewTopicStarterStore(filepath.Join(t.TempDir(), "recommendation.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	return store
+}
+
+// TestNewTopicStarterStore_父目录自动创建
+// Python: topic_starter.py:183 mkdir(parents=True, exist_ok=True)
+func TestNewTopicStarterStore_父目录自动创建(t *testing.T) {
+	nested := filepath.Join(t.TempDir(), "a", "b", "c", "recommendation.db")
+	store, err := NewTopicStarterStore(nested)
+	require.NoError(t, err)
+	defer store.Close()
+
+	_, statErr := os.Stat(nested)
+	assert.NoError(t, statErr, "数据库文件应已创建")
+}
+
+// TestNewTopicStarterStore_建表幂等
+func TestNewTopicStarterStore_建表幂等(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "recommendation.db")
+
+	first, err := NewTopicStarterStore(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	second, err := NewTopicStarterStore(path)
+	require.NoError(t, err)
+	defer second.Close()
+
+	// 表结构仍可读写即证明未被损坏（此处直接用底层连接，不依赖 Task 4 的 RecordEvent）
+	db, err := second.connect()
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(
+		"INSERT INTO recommendation_event(event_key, session_id, slate_id, event_type, policy_id, selection_mode, propensity_reason, payload_json, created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+		"s1|sl1|e1|", "s1", "sl1", "e1", "p", "unknown", "not_estimated", "{}", 1.0,
+	)
+	assert.NoError(t, err)
+}
+
+// TestCreateTables_两表四索引齐备
+// Python: topic_starter.py:361 _create_tables
+func TestCreateTables_两表四索引齐备(t *testing.T) {
+	store := newTestStore(t)
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows, err := db.Query("SELECT name, type FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' ORDER BY name")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	found := map[string]string{}
+	for rows.Next() {
+		var name, kind string
+		require.NoError(t, rows.Scan(&name, &kind))
+		found[name] = kind
+	}
+	require.NoError(t, rows.Err())
+
+	assert.Equal(t, "table", found["profile_snapshot"])
+	assert.Equal(t, "table", found["recommendation_event"])
+	assert.Equal(t, "index", found["idx_recommendation_event_lookup"])
+	assert.Equal(t, "index", found["idx_recommendation_event_topic_lookup"])
+	assert.Equal(t, "index", found["idx_recommendation_event_manifest_compat"])
+	assert.Equal(t, "index", found["idx_recommendation_event_manifest_trigger"])
+}
+
+// TestConnect_busyTimeout生效
+// Python: topic_starter.py:355 _connect（PRAGMA busy_timeout = 5000）
+func TestConnect_busyTimeout生效(t *testing.T) {
+	store := newTestStore(t)
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	defer db.Close()
+
+	var timeout int
+	require.NoError(t, db.QueryRow("PRAGMA busy_timeout").Scan(&timeout))
+	assert.Equal(t, 5000, timeout)
 }

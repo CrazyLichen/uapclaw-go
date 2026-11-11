@@ -13,6 +13,7 @@ package recommendation
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -22,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,6 +41,13 @@ type InterestDrift struct {
 	Score float64
 	// ShouldUpdate Score 超过阈值（严格大于 0.8）时为真。
 	ShouldUpdate bool
+}
+
+// TopicStarterStore topic 推荐的本地单用户事件账本（对齐 topic_starter.py:178）。
+// 两张表：profile_snapshot（画像快照，版本自增）与 recommendation_event（事件账本）。
+type TopicStarterStore struct {
+	// path 数据库文件路径。
+	path string
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -293,6 +303,31 @@ func jsDivergence(previous, current map[string]float64) float64 {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewTopicStarterStore 打开（或创建）事件账本库并确保表结构存在。
+// Python: topic_starter.py:181 __init__
+func NewTopicStarterStore(path string) (*TopicStarterStore, error) {
+	if err := ensureParentDir(path); err != nil {
+		return nil, fmt.Errorf("创建推荐库父目录失败: %w", err)
+	}
+	store := &TopicStarterStore{path: path}
+	if err := store.createTables(); err != nil {
+		return nil, fmt.Errorf("创建推荐库表结构失败: %w", err)
+	}
+	return store, nil
+}
+
+// Path 返回数据库文件路径（测试与诊断用）。
+func (s *TopicStarterStore) Path() string {
+	return s.path
+}
+
+// Close 关闭底层连接池。
+// 每次 connect() 新建的 *sql.DB 由各方法自行关闭；本方法保留为对称 API，
+// 与上游 `with self._connect()` 的用后即关语义一致。
+func (s *TopicStarterStore) Close() error {
+	return nil
+}
+
 // ComputeInterestDrift 计算前后两批兴趣标签的漂移度。
 // Python: topic_starter.py:142 compute_interest_drift
 //
@@ -343,4 +378,80 @@ func ComputeInterestDrift(previousLabels, currentLabels []string) InterestDrift 
 		Score:           round12(score),
 		ShouldUpdate:    score > driftThreshold,
 	}
+}
+
+// connect 打开一条数据库连接。
+// Python: topic_starter.py:355 _connect —— 只设 busy_timeout，不设 WAL，不加 MaxOpenConns 限制。
+func (s *TopicStarterStore) connect() (*sql.DB, error) {
+	dsn := s.path + "?_busy_timeout=" + strconv.Itoa(int(sqliteBusyTimeoutSeconds*1000))
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return nil, err
+	}
+	// Python 每次 with self._connect() 新开连接、用后即关；这里不限制池容量（spec D-2）
+	db.SetMaxOpenConns(0)
+	return db, nil
+}
+
+// createTables 建两表四索引（幂等）。
+// Python: topic_starter.py:361 _create_tables
+func (s *TopicStarterStore) createTables() error {
+	db, err := s.connect()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS profile_snapshot (
+			version INTEGER PRIMARY KEY,
+			created_at REAL NOT NULL,
+			evidence_until REAL NOT NULL,
+			snapshot_json TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS recommendation_event (
+			event_key TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			slate_id TEXT NOT NULL,
+			event_type TEXT NOT NULL,
+			topic_id TEXT,
+			position INTEGER,
+			profile_version INTEGER,
+			policy_id TEXT NOT NULL,
+			selection_mode TEXT NOT NULL,
+			propensity REAL,
+			propensity_reason TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			created_at REAL NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_event_lookup
+			ON recommendation_event(event_type, slate_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_event_topic_lookup
+			ON recommendation_event(event_type, topic_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_event_manifest_compat
+			ON recommendation_event(
+				event_type,
+				policy_id,
+				json_extract(payload_json, '$.serving_compatibility_key'),
+				json_extract(payload_json, '$.context_scope'),
+				json_extract(payload_json, '$.project_id'),
+				CAST(json_extract(payload_json, '$.negative_preference_version') AS INTEGER) DESC,
+				created_at DESC,
+				event_key DESC
+			)`,
+		`CREATE INDEX IF NOT EXISTS idx_recommendation_event_manifest_trigger
+			ON recommendation_event(
+				event_type,
+				policy_id,
+				json_extract(payload_json, '$.generation_trigger_key'),
+				created_at DESC,
+				event_key DESC
+			)`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			return fmt.Errorf("执行 DDL 失败: %w", err)
+		}
+	}
+	return nil
 }
