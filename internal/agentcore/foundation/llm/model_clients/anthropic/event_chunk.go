@@ -56,9 +56,10 @@ func EventToChunk(event map[string]any, toolUseAcc map[int]map[string]any) *llms
 			toolUseAcc[idx] = map[string]any{
 				"type": "redacted_thinking", "data": strArg(block, "data"),
 			}
-			return llmschema.NewAssistantMessageChunk("",
-				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull),
-			)
+			chunk := llmschema.NewAssistantMessageChunk("",
+				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull))
+			chunk.Metadata = StreamBlocksMetadata(toolUseAcc)
+			return chunk
 		case "text":
 			toolUseAcc[idx] = map[string]any{"type": "text", "text": strArg(block, "text")}
 		}
@@ -83,9 +84,10 @@ func EventToChunk(event map[string]any, toolUseAcc map[int]map[string]any) *llms
 			} else {
 				toolUseAcc[idx] = map[string]any{"type": "text", "text": text}
 			}
-			return llmschema.NewAssistantMessageChunk(text,
-				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull),
-			)
+			chunk := llmschema.NewAssistantMessageChunk(text,
+				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull))
+			chunk.Metadata = StreamBlocksMetadata(toolUseAcc)
+			return chunk
 		}
 		if dtype == "thinking_delta" {
 			thinking := strArg(delta, "thinking")
@@ -98,10 +100,11 @@ func EventToChunk(event map[string]any, toolUseAcc map[int]map[string]any) *llms
 				toolUseAcc[idx] = state
 			}
 			state["thinking"] = strOrEmpty(state["thinking"]) + thinking
-			return llmschema.NewAssistantMessageChunk("",
+			chunk := llmschema.NewAssistantMessageChunk("",
 				llmschema.WithChunkReasoningContent(thinking),
-				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull),
-			)
+				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull))
+			chunk.Metadata = StreamBlocksMetadata(toolUseAcc)
+			return chunk
 		}
 		if dtype == "signature_delta" {
 			signature := strArg(delta, "signature")
@@ -114,9 +117,10 @@ func EventToChunk(event map[string]any, toolUseAcc map[int]map[string]any) *llms
 				toolUseAcc[idx] = state
 			}
 			state["signature"] = strOrEmpty(state["signature"]) + signature
-			return llmschema.NewAssistantMessageChunk("",
-				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull),
-			)
+			chunk := llmschema.NewAssistantMessageChunk("",
+				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull))
+			chunk.Metadata = StreamBlocksMetadata(toolUseAcc)
+			return chunk
 		}
 		// input_json_delta：累积进 args_str，块结束时整体产出
 		if isToolInputJSONDelta(dtype, idx, toolUseAcc) {
@@ -133,9 +137,10 @@ func EventToChunk(event map[string]any, toolUseAcc map[int]map[string]any) *llms
 			return nil
 		}
 		if block["type"] != "tool_use" {
-			return llmschema.NewAssistantMessageChunk("",
-				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull),
-			)
+			chunk := llmschema.NewAssistantMessageChunk("",
+				llmschema.WithChunkFinishReason(llmschema.FinishReasonNull))
+			chunk.Metadata = StreamBlocksMetadata(toolUseAcc)
+			return chunk
 		}
 		argsStr := strOrEmpty(block["args_str"])
 		if argsStr == "" {
