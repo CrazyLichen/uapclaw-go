@@ -2,8 +2,10 @@ package harness_protocol
 
 import (
 	"context"
+	"errors"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -231,21 +233,45 @@ func TestRequestKindName_五种已知加未知(t *testing.T) {
 	}
 }
 
-// TestValidateInteractionResponse_nil不panic于步骤1 nil 请求/应答在 Python 侧
-// 会抛 AttributeError（response.request_id 取 None 的属性），Go 侧对应
-// 「id 均取不到 → 空串相等 → 走到步骤 2 解引用」的 panic。两端都是异常，
-// 上游不为此加守卫，故 Go 侧不加 nil 守卫（规则 12：不得私自增加上游没有的校验）。
-// 本用例只钉住「nil 请求 + 非 nil 应答」在两个 nil id 相等时确实走步骤 2 报错。
-func TestValidateInteractionResponse_nil请求走步骤2报错(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("nil 请求触发 panic（与 Python AttributeError 等价）: %v", r)
-		}
-	}()
+// TestValidateInteractionResponse_nil入参返回error nil 请求/应答在 Python 侧会抛
+// `AttributeError: 'NoneType' object has no attribute 'request_id'`（2026-11-11 实测），
+// Go 侧不加守卫则是 nil 接口方法调用 panic —— 同为异常但不可被 errors.Is 捕获，
+// 排查困难。用户 2026-11-11 决策：**加前置 nil 判断并返回 error 对应 Python**，
+// 外部判断方式（判 err 非 nil）与 Python 的 try/except 一致。
+func TestValidateInteractionResponse_nil入参返回error(t *testing.T) {
 	resp := mustToolApprovalResp(t) // request_id = "r1"
-	// nil 请求 → requestIDOf 返回 ""，与 "r1" 不等 → 步骤 1 直接报错，不会 panic
-	if _, err := ValidateInteractionResponse(nil, resp); err == nil {
-		t.Fatal("nil 请求应报 id 不匹配")
+	req := mustToolApprovalReq(t)
+
+	cases := []struct {
+		name string
+		req  HarnessInteractionRequest
+		resp HarnessInteractionResponse
+		want string
+	}{
+		{"nil请求", nil, resp, "interaction request must not be nil"},
+		{"nil应答", req, nil, "interaction response must not be nil"},
+		{"双nil", nil, nil, "interaction request must not be nil"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("不应 panic: %v", r)
+				}
+			}()
+			_, err := ValidateInteractionResponse(c.req, c.resp)
+			if err == nil {
+				t.Fatal("nil 入参应返回 error（对齐 Python AttributeError）")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("错误文案 = %q，期望含 %q", err.Error(), c.want)
+			}
+			// 必须是 HarnessProtocolError，外部可按协议错误统一处理
+			var protoErr *HarnessProtocolError
+			if !errors.As(err, &protoErr) {
+				t.Errorf("应为 *HarnessProtocolError，实际 %T", err)
+			}
+		})
 	}
 }
 

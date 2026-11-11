@@ -767,10 +767,23 @@ func NewCancelOption(reason InteractionCancelReason) CancelOption {
 //
 // Q5 决策改选 3 + Q5b 决策 3-a：应答配对关系由请求自身的
 // expectedResponseKind() 声明，比较 kind 字符串。
+//
+// nil 入参：Python 侧传 None 会在 `response.request_id` 处抛
+// `AttributeError: 'NoneType' object has no attribute 'request_id'`
+// （2026-11-11 实测）。Go 侧不加守卫时是 nil 接口方法调用 panic，
+// 排查困难且不可被 errors.Is 捕获；故此处前置 nil 判断并统一返回
+// HarnessProtocolError，**语义等价**（同为异常拒绝，外部判断方式一致）。
 func ValidateInteractionResponse(
 	request HarnessInteractionRequest,
 	response HarnessInteractionResponse,
 ) (HarnessInteractionResponse, error) {
+	// 步骤 0（nil 守卫，Python AttributeError 的 error 化等价物）
+	if request == nil {
+		return nil, &HarnessProtocolError{Msg: "interaction request must not be nil"}
+	}
+	if response == nil {
+		return nil, &HarnessProtocolError{Msg: "interaction response must not be nil"}
+	}
 	reqID := requestIDOf(request)
 	respID := responseIDOf(response)
 	// 步骤 1：request_id 必须一致（Python :279-282）
