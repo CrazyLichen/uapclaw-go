@@ -174,11 +174,20 @@ func requestTargetsTeam(request *schema.AgentRequest, params map[string]any) boo
 }
 
 // isSingleAgentSessionMode 是否为单 agent 会话模式。
-// Python: runtime/service.py _is_single_agent_session_mode
+// Python: runtime/service.py:1245-1265 _is_single_agent_session_mode
+//
+// 上游先 deprecate_mode(canonical) 再与两个 NEW_*_NORMAL 常量比对
+// （只认 normal 两值，不含 plan）。canonicalize 只查别名，必须显式
+// 再叠一层弃用映射，否则旧串（code.normal）判不出来。
 func isSingleAgentSessionMode(params map[string]any) bool {
 	_, _, canonical := ResolveAgentRequestMode(
 		stringParam(params, "mode"), stringParam(params, "work_mode"))
-	return schema.IsSingleAgentMode(canonical)
+	switch schema.DeprecateMode(canonical) {
+	case string(schema.ModeAgentWorkNormal), string(schema.ModeAgentCodeNormal):
+		return true
+	default:
+		return false
+	}
 }
 
 // isSessionMessageParams 参数里是否带跨会话消息载荷。

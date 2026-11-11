@@ -84,22 +84,6 @@ func applyExecuteOptions(opts []ExecuteOption) *executeOptions {
 	return o
 }
 
-// ResolvedMode 请求模式解析结果。
-type ResolvedMode struct {
-	// ManagerMode 选 agent 用的一级模式（agent / code / team / auto_harness）
-	ManagerMode string
-	// SubMode 子模式（normal / plan / team，可能为空）
-	SubMode string
-	// CanonicalMode 权威模式串
-	CanonicalMode string
-	// IsPlan 是否规划模式
-	IsPlan bool
-	// IsTeam 是否团队模式
-	IsTeam bool
-	// NormalMode 退出 plan 后应回到的普通模式
-	NormalMode string
-}
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -156,7 +140,7 @@ var planEntrySources = map[string]struct{}{
 // Python: jiuwenswarm/runtime/request.py resolve_request_runtime_mode。
 // 三段 canonical 直接按串语义解析（见 schema.ResolveNewCanonicalMode）；
 // 其余走归一并按后缀判定 plan/team。
-func ResolveRequestRuntimeMode(mode, subMode string) ResolvedMode {
+func ResolveRequestRuntimeMode(mode, subMode string) schema.ResolvedMode {
 	raw := strings.TrimSpace(mode)
 	if raw == "" {
 		if sub := strings.TrimSpace(subMode); sub != "" {
@@ -164,26 +148,16 @@ func ResolveRequestRuntimeMode(mode, subMode string) ResolvedMode {
 		}
 	}
 	canonical := string(schema.NormalizeMode(raw))
-	resolved := ResolvedMode{
+	resolved := schema.ResolvedMode{
 		CanonicalMode: canonical,
 		IsPlan:        schema.IsPlanMode(canonical),
 		IsTeam:        schema.IsTeamMode(canonical),
-		NormalMode:    baseModeWithoutPlan(canonical),
+		NormalMode:    schema.BaseModeWithoutPlan(canonical),
 	}
 	if m, s, _, ok := schema.ResolveNewCanonicalMode(canonical); ok {
 		resolved.ManagerMode, resolved.SubMode = m, s
 	}
 	return resolved
-}
-
-// baseModeWithoutPlan 返回退出 plan 后应回到的普通模式。
-// Python: mode_matrix.base_mode_without_plan / _PLAN_EXIT_MODES
-// 新三段命名下 `x.y.plan` → `x.y.normal`；非 plan 串原样返回。
-func baseModeWithoutPlan(canonical string) string {
-	if strings.HasSuffix(canonical, ".plan") {
-		return strings.TrimSuffix(canonical, ".plan") + ".normal"
-	}
-	return canonical
 }
 
 // ShouldSync 判断请求是否参与 plan 状态同步。
@@ -213,7 +187,7 @@ func ResolveAgentRequestMode(rawMode any, workMode string) (mode, subMode, canon
 	if text == "auto_harness" {
 		return "auto_harness", "auto_harness", "auto_harness"
 	}
-	normalizedWork := normalizeWorkMode(workMode)
+	normalizedWork := schema.NormalizeWorkMode(workMode)
 	if text == "plan" || text == "fast" {
 		if normalizedWork == "code" {
 			return "code", "normal", "code.normal"
@@ -290,7 +264,7 @@ func ApplyResolvedModeToRequest(req *schema.AgentRequest, workMode string) (mode
 
 // ResolveRequestRuntimeModeFromRequest 从请求解析权威运行时模式。
 // Python: jiuwenswarm/runtime/request.py resolve_request_runtime_mode（L331-342）。
-func ResolveRequestRuntimeModeFromRequest(req *schema.AgentRequest) ResolvedMode {
+func ResolveRequestRuntimeModeFromRequest(req *schema.AgentRequest) schema.ResolvedMode {
 	params := parseRequestParams(req)
 	workMode, _ := params["work_mode"].(string)
 	return resolveRequestMode(params["mode"], workMode)
@@ -420,7 +394,7 @@ func PrepareChatTurn(
 			}
 		}
 		if wm, ok := sessionMetadata["work_mode"].(string); ok {
-			if n := normalizeWorkMode(wm); n != "" {
+			if n := schema.NormalizeWorkMode(wm); n != "" {
 				runtimeWorkMode = n
 			}
 		}
@@ -428,7 +402,7 @@ func PrepareChatTurn(
 	// 2. 请求自带 work_mode
 	if runtimeWorkMode == "" {
 		if wm, ok := params["work_mode"].(string); ok {
-			runtimeWorkMode = normalizeWorkMode(wm)
+			runtimeWorkMode = schema.NormalizeWorkMode(wm)
 		}
 	}
 	// 3. 渠道默认（Python: default_work_mode_for_channel —— tui→code，其余 work）
@@ -649,48 +623,24 @@ func CancelRequest(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 // resolveRequestMode 解析请求 mode：先 Web 组合，再 legacy 解析。
-// Python: resolve_request_mode（gateway/common/mode_matrix.py）——只有 work_mode
-// 合法且 mode 属于 Web 组合集合时才走组合表，其余一律交给 legacy 解析器。
-func resolveRequestMode(rawMode any, workMode string) ResolvedMode {
-	text := schema.CanonicalizeModeText(rawModeText(rawMode))
-	if wm := normalizeWorkMode(workMode); wm != "" && schema.IsWebComposableMode(text) {
-		if m, s, c, ok := schema.ComposeWebMode(text, wm); ok {
-			return newResolvedMode(m, s, c)
-		}
+// Python: resolve_request_mode（gateway/common/mode_matrix.py:413-489）
+//
+// 薄转发：解析细节全部在 schema.ResolveRequestMode，legacy 解析器传
+// ResolveAgentRequestMode（对应上游 legacy_resolver 参数）。
+func resolveRequestMode(rawMode any, workMode string) schema.ResolvedMode {
+	params := map[string]any{"mode": rawMode, "work_mode": workMode}
+	// ResolveAgentRequestMode 的第一参是 any（兼容 Mode 枚举与裸字符串），
+	// schema.ResolveRequestMode 的 legacyResolver 收 string，故包一层适配。
+	legacy := func(mode, work string) (string, string, string) {
+		return ResolveAgentRequestMode(mode, work)
 	}
-	mode, subMode, canonical := ResolveAgentRequestMode(rawMode, workMode)
-	return newResolvedMode(mode, subMode, canonical)
-}
-
-// newResolvedMode 由三元组构造完整视图。
-func newResolvedMode(managerMode, subMode, canonical string) ResolvedMode {
-	return ResolvedMode{
-		ManagerMode:   managerMode,
-		SubMode:       subMode,
-		CanonicalMode: canonical,
-		IsPlan:        schema.IsPlanMode(canonical),
-		IsTeam:        schema.IsTeamMode(canonical),
-		NormalMode:    baseModeWithoutPlan(canonical),
-	}
+	return schema.ResolveRequestMode(params, legacy, workMode)
 }
 
 // rawModeText 取出 mode 的字符串形式（非字符串按空串处理）。
 func rawModeText(rawMode any) string {
 	s, _ := rawMode.(string)
 	return s
-}
-
-// normalizeWorkMode 把 work_mode 归一为 code / work，非法时返回空串。
-// Python: mode_matrix.normalize_work_mode
-func normalizeWorkMode(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "code":
-		return "code"
-	case "work":
-		return "work"
-	default:
-		return ""
-	}
 }
 
 // defaultWorkModeForChannel 按渠道推断默认 work_mode（tui → code，其余 work）。
