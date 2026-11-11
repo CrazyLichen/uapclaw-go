@@ -50,18 +50,27 @@ func TestResolveRecommendationSwitch_四写法与回落(t *testing.T) {
 	assert.True(t, ResolveRecommendationSwitch(nil, true), "null 回落传入的默认值")
 }
 
-// TestConsentEpoch_关闭时为0
-// Python: prompt_suggestion.py:130 consent_epoch -> None when off
-func TestConsentEpoch_关闭时为0(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
-	assert.Equal(t, int64(0), ConsentEpoch(nil))
-	assert.Equal(t, int64(0), ConsentEpoch(map[string]any{}))
+// TestConsentEpoch_关闭时不活跃 None 等价：开关关 → Active=false，值不消费。
+// Python: prompt_suggestion.py:150-160 consent_epoch -> None when off
+func TestConsentEpoch_关闭时不活跃(t *testing.T) {
+	assert.False(t, ConsentEpoch(nil).Active)
+	assert.False(t, ConsentEpoch(map[string]any{}).Active)
+}
 
-	enabled := map[string]any{"recommendation": map[string]any{"prompt_enabled": true}}
-	first := ConsentEpoch(enabled)
-	require.NotZero(t, first)
-	assert.Equal(t, first, ConsentEpoch(enabled), "开启后 epoch 稳定")
+// TestConsentEpoch_开启且无consent记录 开启 + 无 consent 表 → epoch=0.0（Python 的 or 0.0）。
+func TestConsentEpoch_开启且无consent记录(t *testing.T) {
+	resetWorkspaceForTest(t)
+	epoch := ConsentEpoch(map[string]any{"recommendation": map[string]any{"prompt_enabled": true}})
+	assert.True(t, epoch.Active)
+	assert.Equal(t, 0.0, epoch.Value)
+}
+
+// TestConsentEpochValue_Equal None 与值不等；值按相等比较；两个 None 相等。
+func TestConsentEpochValue_Equal(t *testing.T) {
+	assert.True(t, ConsentEpochValue{}.Equal(ConsentEpochValue{}))
+	assert.False(t, ConsentEpochValue{}.Equal(ConsentEpochValue{Value: 1.0, Active: true}))
+	assert.False(t, ConsentEpochValue{Value: 0.0, Active: true}.Equal(ConsentEpochValue{Value: 1.0, Active: true}))
+	assert.True(t, ConsentEpochValue{Value: 0.0, Active: true}.Equal(ConsentEpochValue{Value: 0.0, Active: true}))
 }
 
 // ──────────────────────────── 用例：Forks ───────────────────────────────
@@ -170,8 +179,7 @@ func TestForks_TurnEnded_七条抑制原因(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ResetConsentEpoch()
-			defer ResetConsentEpoch()
+			resetWorkspaceForTest(t)
 			f := newEnabledForks()
 			f.RequestStarted("s1", true)
 			if c.call != nil {
@@ -187,8 +195,7 @@ func TestForks_TurnEnded_七条抑制原因(t *testing.T) {
 
 // TestForks_TurnEnded_成功分支起任务并收敛 对齐 :404-408。
 func TestForks_TurnEnded_成功分支起任务并收敛(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 	f := newEnabledForks()
 	f.RequestStarted("s1", true)
 	f.SawMainCall("s1", &MainCall{Model: "m", Answer: answerWithOutputTokens(20)})
@@ -200,7 +207,7 @@ func TestForks_TurnEnded_成功分支起任务并收敛(t *testing.T) {
 
 // TestForks_TurnEnded_推荐关闭时不起任务 对齐 :386-388。
 func TestForks_TurnEnded_推荐关闭时不起任务(t *testing.T) {
-	ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 	f := NewPromptSuggestionForks() // 未注入配置 = 默认关闭
 	f.RequestStarted("s1", true)
 	f.SawMainCall("s1", &MainCall{Model: "m"})

@@ -46,7 +46,6 @@ func (s *PromptSuggestionSuite) SetupTest() {
 	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_prompt_suggestion")
 	s.env.WriteConfigYAML(s.T(), "")
 	// 每个用例从干净 epoch 与空表开始，避免跨用例污染
-	recommendation.ResetConsentEpoch()
 	recommendation.Forks.SessionDeleted("integration-clean-a")
 	recommendation.Forks.SessionDeleted("integration-clean-b")
 }
@@ -54,7 +53,6 @@ func (s *PromptSuggestionSuite) SetupTest() {
 // TearDownTest 清理全局单例，避免后面的用例继承在飞任务。
 func (s *PromptSuggestionSuite) TearDownTest() {
 	recommendation.Forks.Shutdown()
-	recommendation.ResetConsentEpoch()
 }
 
 // Test同会话两轮命中同一child且记账隔离 会话级 child 与 forks 表都按 sid 隔离。
@@ -104,7 +102,7 @@ func (s *PromptSuggestionSuite) Test推荐关闭时轮结束不生成() {
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	// 确认全局 Forks 未开启推荐
-	s.Equal(int64(0), recommendation.ConsentEpoch(nil), "默认应关闭")
+	s.False(recommendation.ConsentEpoch(nil).Active, "默认应关闭")
 
 	s.runOneTurn(d, "integration-clean-a", "req-ps-c1", "一问")
 

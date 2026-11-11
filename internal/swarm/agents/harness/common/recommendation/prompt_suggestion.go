@@ -189,7 +189,7 @@ func (f *PromptSuggestionForks) TurnEnded(sessionID, requestID string, opts Turn
 	}
 	// Python: 4. epoch = consent_epoch(); if epoch is None: return
 	epoch := ConsentEpoch(f.config)
-	if epoch == 0 {
+	if !epoch.Active {
 		f.mu.Unlock()
 		return
 	}
@@ -206,7 +206,7 @@ func (f *PromptSuggestionForks) TurnEnded(sessionID, requestID string, opts Turn
 	ctx, cancel := context.WithCancel(context.Background())
 	f.tasks[sessionID] = cancel
 	f.mu.Unlock()
-	go f.runFork(ctx, sessionID, requestID, call, epoch)
+	go f.runFork(ctx, sessionID, requestID, call, epoch, nil)
 }
 
 // AnsweredCall 返回某 requestID 的最近成功主调用，不是最近一轮则返回 nil。
@@ -349,7 +349,8 @@ func uncachedTokens(answer *llmschema.AssistantMessage) int {
 // runFork 重放父调用并解析建议；落库与推帧经窄接口，未注入则丢弃。
 // Python: prompt_suggestion.py:447 _fork
 func (f *PromptSuggestionForks) runFork(
-	ctx context.Context, sessionID, requestID string, call *MainCall, epoch int64,
+	ctx context.Context, sessionID, requestID string, call *MainCall, epoch ConsentEpochValue,
+	completion <-chan struct{},
 ) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -375,7 +376,7 @@ func (f *PromptSuggestionForks) runFork(
 	var replies []*llmschema.AssistantMessage
 	for iteration := 0; iteration < maxInt(call.MaxIterations, 1); iteration++ {
 		// Python: if consent_epoch() != epoch: return
-		if ConsentEpoch(f.config) != epoch {
+		if !ConsentEpoch(f.config).Equal(epoch) {
 			return
 		}
 		if ctx.Err() != nil {

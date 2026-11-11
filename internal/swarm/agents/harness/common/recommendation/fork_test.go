@@ -146,13 +146,12 @@ func minimalCall(client model_clients.BaseModelClient) *MainCall {
 // TestRunFork_前缀逐字一致 重放 = 原 messages + 原 answer + 一句 SUGGESTION_PROMPT。
 // Python: prompt_suggestion.py:459 messages = [*call.messages, call.answer, UserMessage(...)]
 func TestRunFork_前缀逐字一致(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 
 	client := &capturingLLM{replyText: "继续下一步的实现"}
 	call := minimalCall(client)
 	f := newEnabledForks()
-	f.runFork(context.Background(), "s1", "req-1", call, ConsentEpoch(f.config))
+	f.runFork(context.Background(), "s1", "req-1", call, ConsentEpoch(f.config), nil)
 
 	require.Equal(t, 1, client.capturedCount())
 	sent := client.capturedAt(0)
@@ -164,20 +163,18 @@ func TestRunFork_前缀逐字一致(t *testing.T) {
 
 // TestRunFork_未注入publisher时结果丢弃且无error 对齐 spec DEV-10。
 func TestRunFork_未注入publisher时结果丢弃且无error(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 	client := &capturingLLM{replyText: "继续下一步的实现"}
 	f := newEnabledForks()
 	assert.NotPanics(t, func() {
-		f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config))
+		f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config), nil)
 	})
 	assert.Equal(t, 1, client.capturedCount(), "重放仍然发生")
 }
 
 // TestRunFork_注入publisher收到结果 为 10.7 铺路。
 func TestRunFork_注入publisher收到结果(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 
 	client := &capturingLLM{replyText: "继续下一步的实现"}
 	publisher := &capturingPublisher{}
@@ -186,7 +183,7 @@ func TestRunFork_注入publisher收到结果(t *testing.T) {
 	f.SetForkResultPublisher(publisher)
 	f.SetSuggestionReadyPusher(pusher)
 
-	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config))
+	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config), nil)
 
 	require.Len(t, publisher.results, 1)
 	assert.Equal(t, "s1", publisher.results[0].SessionID)
@@ -199,25 +196,23 @@ func TestRunFork_注入publisher收到结果(t *testing.T) {
 
 // TestRunFork_推荐关闭即退出 对齐 :466 if consent_epoch() != epoch: return
 func TestRunFork_推荐关闭即退出(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 
 	client := &capturingLLM{replyText: "继续下一步的实现"}
 	f := newEnabledForks()
 	// 传一个与当前 epoch 不同的值，模拟「跑起来后同意被撤销」
-	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), 12345)
+	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpochValue{Value: 12345, Active: true}, nil)
 	assert.Equal(t, 0, client.capturedCount(), "epoch 不符不得发起重放")
 }
 
 // TestRunFork_模型返回null不落库 对齐 :498 select_suggestions 返回空即返回。
 func TestRunFork_模型返回null不落库(t *testing.T) {
-	ResetConsentEpoch()
-	defer ResetConsentEpoch()
+	resetWorkspaceForTest(t)
 
 	client := &capturingLLM{replyText: "null"}
 	publisher := &capturingPublisher{}
 	f := newEnabledForks()
 	f.SetForkResultPublisher(publisher)
-	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config))
+	f.runFork(context.Background(), "s1", "req-1", minimalCall(client), ConsentEpoch(f.config), nil)
 	assert.Empty(t, publisher.results, "null 视为无建议")
 }
