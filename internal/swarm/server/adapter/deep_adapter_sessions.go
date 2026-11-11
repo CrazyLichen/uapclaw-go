@@ -61,6 +61,12 @@ type sessionAdapterOptions struct {
 	ReserveActivity bool
 	// RequestID 在飞任务标识（ReserveActivity 为真时必填）
 	RequestID string
+	// ExternalHarnessBinding 外部 harness 绑定（非 nil 时走 external_harness 分支）
+	// Python: :3829-3837 external_harness_binding
+	ExternalHarnessBinding map[string]any
+	// HostExternalInput 宿主外部输入（安全边界发布路径）
+	// Python: :3878 host_external_input=True
+	HostExternalInput bool
 }
 
 // sessionAdapterCache 会话级子适配器缓存。
