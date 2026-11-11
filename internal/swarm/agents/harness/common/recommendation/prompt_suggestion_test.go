@@ -1,11 +1,17 @@
 package recommendation
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 用例：switches ───────────────────────────────
@@ -216,4 +222,59 @@ func TestForks_TurnEnded_推荐关闭时不起任务(t *testing.T) {
 	// 关键：Python 的 _answered 写入在 consent_epoch 检查之前（:382-385 → :386），
 	// 所以推荐关闭时仍保留 answered 记录，只是不生成建议。
 	require.NotNil(t, f.AnsweredCall("s1", "req-1"), "关闭时仍记录 answered（对齐 :382-385）")
+}
+
+// ──────────────────────────── 用例：LatestCompletedRequest ───────────────────────────────
+
+// writeHistoryRows 测试助手：同步写若干行（读改写 history.json，不经异步队列）。
+func writeHistoryRows(t *testing.T, sid string, rows ...map[string]any) {
+	t.Helper()
+	dir := filepath.Join(session.GetSessionsDir(), sid)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	existing, _ := session.ReadHistoryRecords(sid)
+	data, err := utils.MarshalIndentNoEscape(append(existing, rows...))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "history.json"), data, 0o644))
+}
+
+// TestLatestCompletedRequest_末尾成功行 末尾完成行 success 且其后无他轮 → 返回该 rid。
+func TestLatestCompletedRequest_末尾成功行(t *testing.T) {
+	resetWorkspaceForTest(t)
+	sid := "ps-latest-1"
+	writeHistoryRows(t, sid,
+		map[string]any{"role": "user", "request_id": "r1", "content": "hi"},
+		map[string]any{"role": "assistant", "request_id": "r1", "content": "yo"},
+		map[string]any{"role": "assistant", "request_id": "r1", "content": "",
+			"event_type": string(swarmschema.EventTypeSessionRequestCompleted), "status": "success", "feedback_only": true},
+	)
+	assert.Equal(t, "r1", LatestCompletedRequest(sid))
+}
+
+// TestLatestCompletedRequest_其后有新轮 完成行之后又出现别的 request → 过期返回空。
+func TestLatestCompletedRequest_其后有新轮(t *testing.T) {
+	resetWorkspaceForTest(t)
+	sid := "ps-latest-2"
+	writeHistoryRows(t, sid,
+		map[string]any{"role": "assistant", "request_id": "r1", "content": "",
+			"event_type": string(swarmschema.EventTypeSessionRequestCompleted), "status": "success", "feedback_only": true},
+		map[string]any{"role": "user", "request_id": "r2", "content": "next"},
+	)
+	assert.Equal(t, "", LatestCompletedRequest(sid))
+}
+
+// TestLatestCompletedRequest_末尾非success 末尾完成行 error → 空。
+func TestLatestCompletedRequest_末尾非success(t *testing.T) {
+	resetWorkspaceForTest(t)
+	sid := "ps-latest-3"
+	writeHistoryRows(t, sid,
+		map[string]any{"role": "assistant", "request_id": "r1", "content": "",
+			"event_type": string(swarmschema.EventTypeSessionRequestCompleted), "status": "error", "feedback_only": true},
+	)
+	assert.Equal(t, "", LatestCompletedRequest(sid))
+}
+
+// TestLatestCompletedRequest_无完成行 空历史 → 空。
+func TestLatestCompletedRequest_无完成行(t *testing.T) {
+	resetWorkspaceForTest(t)
+	assert.Equal(t, "", LatestCompletedRequest("ps-latest-4"))
 }

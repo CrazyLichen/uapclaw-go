@@ -11,6 +11,8 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -130,7 +132,51 @@ const logComponent = logger.ComponentAgentCore
 // Python: prompt_suggestion.py:535 forks = PromptSuggestionForks()
 var Forks = NewPromptSuggestionForks()
 
+// UserInteractionEvents 让轮停在等用户回答的宿主事件。
+// Python: prompt_suggestion.py:50 USER_INTERACTION_EVENTS
+var UserInteractionEvents = map[string]bool{
+	"chat.ask_user_question":       true,
+	"harness.activate_interaction": true,
+	"plan.approval_required":       true,
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// LatestCompletedRequest 会话历史里最后一条完成行所指的请求，且它仍是会话最新轮。
+// 语义：完成行 status=success 且其后所有行的 request_id 都等于它；否则返回空串。
+// Python: prompt_suggestion.py:562-578 _latest_completed_request
+func LatestCompletedRequest(sessionID string) string {
+	records, err := session.ReadHistoryRecords(sessionID)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion: history unreadable")
+		return ""
+	}
+	for index := len(records) - 1; index >= 0; index-- {
+		row := records[index]
+		if et, _ := row["event_type"].(string); et != string(swarmschema.EventTypeSessionRequestCompleted) {
+			continue
+		}
+		requestID, _ := row["request_id"].(string)
+		status, _ := row["status"].(string)
+		later := map[string]struct{}{}
+		for _, laterRow := range records[index+1:] {
+			if rid, _ := laterRow["request_id"].(string); rid != "" {
+				later[rid] = struct{}{}
+			}
+		}
+		// Python: later <= {request_id}——后续行的 request_id 集合是 {request_id} 的子集
+		onlySelf := len(later) == 0 || (len(later) == 1 && requestID != "")
+		if _, hasSelf := later[requestID]; len(later) == 1 && !hasSelf {
+			onlySelf = false
+		}
+		if status == "success" && onlySelf {
+			return requestID
+		}
+		return ""
+	}
+	return ""
+}
 
 // NewPromptSuggestionForks 创建空的 forks 登记台。
 func NewPromptSuggestionForks() *PromptSuggestionForks {
