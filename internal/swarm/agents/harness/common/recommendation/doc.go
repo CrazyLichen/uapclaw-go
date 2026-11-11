@@ -10,11 +10,11 @@
 // 两个子系统：
 //   - 提示词建议（10.3.30 已交付）：switches.go / prompt_suggestion.go /
 //     suggestion_filter.go / fork_rail.go —— 每个成功轮结束后预测下一条用户输入。
-//   - 主动引擎（10.3.31a 第 1/2 段已交付）：profile_extractor.go /
-//     proactive_prompts.go / proactive_actions.go / situation_report.go ——
+//   - 主动引擎（10.3.31a 第 1/2 段及第 3 段前半已交付）：profile_extractor.go /
+//     proactive_prompts.go / proactive_actions.go / situation_report.go /
+//     calendar_source.go / gradient_updater.go / feedback_collector.go ——
 //     定时 tick 聚合情境 → 单轮 LLM 决策 → 让主 agent 生成推荐话术。
-//     第 3 段（calendar_source / gradient_updater / feedback_collector /
-//     proactive_engine / proactive_adapter）尚未落地。
+//     第 3 段后半（proactive_engine / proactive_adapter + 两个 RPC）尚未落地。
 //
 // 内置技能源目录不在本包，而在发布包资源
 // resources/agent/workspace/skills/（10.3.31a-pre 原封拷贝上游 34 目录 /
@@ -31,7 +31,10 @@
 //	├── profile_extractor.go            # RecommendationState 持久化（recommendation.json）
 //	├── proactive_prompts.go            # 决策/话术 prompt 模板（zh/en，逐字复刻上游）
 //	├── proactive_actions.go            # 决策类型/限流/技能发现/LLM 分析/触发主 agent
-//	└── situation_report.go             # 情境报告（多会话扫描/历史压缩/渲染）
+//	├── situation_report.go             # 情境报告（多会话扫描/历史压缩/渲染）
+//	├── calendar_source.go              # MCP 日历事件拉取与归一化
+//	├── gradient_updater.go             # 策略梯度更新（显式/隐式反馈 → target/relation/tone/structure）
+//	└── feedback_collector.go           # 反馈采集（buffer / 显隐式去重 / 关联最近推荐）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/recommendation/
 //
