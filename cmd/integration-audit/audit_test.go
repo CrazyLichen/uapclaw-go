@@ -499,3 +499,23 @@ tests/integration/fake/exempt
 	empty := loadExemptFile(filepath.Join(t.TempDir(), "nope"))
 	assert.Empty(t, empty)
 }
+
+// TestAudit_命名逃逸警告 itest 命名的非 _test.go 文件产生警告且不判失败
+//（2026-11-12 23.1 两个套件静默失效的防护）。
+// 带 integration 标签的非测试源文件（doc.go/suite/testhelpers）是合法形态，不告警。
+func TestAudit_命名逃逸警告(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "agentcore/x/escape_itest.go",
+		"//go:build integration\n\npackage x\n\n// 套件体省略\n")
+	// 合法形态：suite 基类（带标签非测试源文件，由 _test.go 导入）
+	writeFixture(t, root, "agentcore/x/suite/base_suite.go",
+		"//go:build integration\n\npackage suite\n\n// 基类\n")
+	writeFixture(t, root, "agentcore/x/normal.go",
+		"package x\n\n// 普通文件，不应告警\n")
+
+	result, err := Audit(&AuditConfig{RootDir: root})
+	require.NoError(t, err)
+	require.Len(t, result.Warnings, 1, "仅 escape_itest.go 告警")
+	require.True(t, result.Passed, "警告不判失败")
+	require.Contains(t, result.Warnings[0], "*_test.go", "警告文案应给改名指引")
+}

@@ -163,6 +163,14 @@ func printReport(result *AuditResult, failFast bool) {
 	fmt.Printf("目录总计 %d：通过 %d，违规 %d，豁免 %d\n",
 		len(result.Dirs), passing, violators, exempted)
 
+	if len(result.Warnings) > 0 {
+		fmt.Println()
+		fmt.Printf("⚠️  命名逃逸警告 %d 条（不判失败，但套件不会被运行）：\n", len(result.Warnings))
+		for _, w := range result.Warnings {
+			fmt.Printf("  - %s\n", w)
+		}
+	}
+
 	if !result.Passed {
 		fmt.Println()
 		fmt.Println("处置指引：")

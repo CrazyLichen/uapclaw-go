@@ -12,7 +12,6 @@ package llm_client
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -364,5 +363,3 @@ func (s *AnthropicSuite) TestInvoke_reasoning接线() {
 	s.Require().Equal(float64(6024), body["max_tokens"], "max_tokens 应抬升为 budget+1024")
 }
 
-// fmt 引用保持。
-var _ = fmt.Sprintf

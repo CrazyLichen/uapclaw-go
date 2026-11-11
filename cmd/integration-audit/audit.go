@@ -89,6 +89,10 @@ type AuditResult struct {
 	Dirs []*DirAudit
 	// Passed 是否整体通过（无目录级违规）
 	Passed bool
+	// Warnings 命名逃逸警告（疑似集成测试文件但非 *_test.go，go test 不收集、
+	// 本审计也不扫描——2026-11-12 的 23.1 两个集成套件因此从未运行）。
+	// 警告不判失败，但必须在报告里显式提示改名。
+	Warnings []string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -114,8 +118,9 @@ func Audit(cfg *AuditConfig) (*AuditResult, error) {
 		return nil, fmt.Errorf("RootDir 不能为空")
 	}
 
-	// 收集所有测试文件，按目录分组
+	// 收集所有测试文件，按目录分组；同时收集命名逃逸警告
 	dirFiles := make(map[string][]string)
+	var warnings []string
 	err := filepath.Walk(cfg.RootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -124,6 +129,9 @@ func Audit(cfg *AuditConfig) (*AuditResult, error) {
 			return nil
 		}
 		if !strings.HasSuffix(path, "_test.go") {
+			if w := suspectIntegrationFileName(cfg.RootDir, path); w != "" {
+				warnings = append(warnings, w)
+			}
 			return nil
 		}
 		rel, relErr := filepath.Rel(cfg.RootDir, path)
@@ -141,7 +149,7 @@ func Audit(cfg *AuditConfig) (*AuditResult, error) {
 		return nil, fmt.Errorf("遍历 %s 失败: %w", cfg.RootDir, err)
 	}
 
-	result := &AuditResult{Passed: true}
+	result := &AuditResult{Passed: true, Warnings: warnings}
 	for _, dir := range sortedKeys(dirFiles) {
 		da := auditDir(cfg, dir, dirFiles[dir])
 		if len(da.Violations) > 0 {
@@ -153,6 +161,27 @@ func Audit(cfg *AuditConfig) (*AuditResult, error) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// suspectIntegrationFileName 检测集成测试文件的命名逃逸：文件名含 itest
+//（如 *_itest.go）却非 *_test.go —— go test 不收集、本审计不扫描，集成套件
+// 静默失效（2026-11-12 23.1 两个套件因此从未运行）。
+// 只按命名检测：带 integration 标签的非测试源文件是合法形态
+//（doc.go 包文档 / suite 基类 / testhelpers 助手，均由 _test.go 导入编译），
+// 按标签告警会误报 14+ 个既有文件。返回警告文案，无嫌疑返回空串。
+func suspectIntegrationFileName(rootDir, path string) string {
+	if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		return ""
+	}
+	base := filepath.Base(path)
+	if !strings.Contains(strings.ToLower(base), "itest") {
+		return ""
+	}
+	rel, err := filepath.Rel(rootDir, path)
+	if err != nil {
+		rel = path
+	}
+	return fmt.Sprintf("%s 疑似集成测试文件但非 *_test.go——go test 不收集、审计不扫描，请改名 *_test.go", rel)
+}
 
 // firstBuildTagLine 提取文件头第一个 //go:build 行（package 声明前的注释区）。
 // 返回空串表示无 build 约束。
