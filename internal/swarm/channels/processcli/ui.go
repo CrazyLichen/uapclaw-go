@@ -787,6 +787,15 @@ func isTerminalWriter(stream io.Writer) bool {
 	return isTerminal(file)
 }
 
+// isTerminalReader 判断 reader 是否连到终端（stdin 侧判定）。
+func isTerminalReader(stream io.Reader) bool {
+	file, ok := stream.(*os.File)
+	if !ok {
+		return false
+	}
+	return isTerminal(file)
+}
+
 // terminalColumns 取终端宽度（兜底 80）。
 func terminalColumns() int {
 	if width, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && width > 0 {
