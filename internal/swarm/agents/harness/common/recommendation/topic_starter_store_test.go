@@ -52,7 +52,8 @@ func TestPyStr_Python的str语义(t *testing.T) {
 	assert.Equal(t, "1.0", pyStr(float64(1)))
 	assert.Equal(t, "1.5", pyStr(1.5))
 	assert.Equal(t, "True", pyStr(true))
-	assert.Equal(t, "False", pyStr(false))
+	// str(x or "") 语义：false 为假值 → 空串
+	assert.Equal(t, "", pyStr(false))
 }
 
 // TestPyStr_浮点格式化与Python逐字一致
@@ -73,7 +74,8 @@ func TestPyStr_浮点格式化与Python逐字一致(t *testing.T) {
 		{a + b, "0.30000000000000004"},
 		{1.2345678901234568e17, "1.2345678901234568e+17"},
 		{1e-7, "1e-07"},
-		{negativeZero, "-0.0"},
+		// str(x or "") 语义：负零为假值，先被 or "" 兜成空串（非纯 str(-0.0) 的 "-0.0"）
+		{negativeZero, ""},
 		{math.Inf(1), "inf"},
 		{math.Inf(-1), "-inf"},
 		{math.NaN(), "nan"},
@@ -965,7 +967,8 @@ func TestPythonTruthy_覆盖全部数值类型(t *testing.T) {
 
 // TestPyStr_覆盖整型与特殊浮点
 func TestPyStr_覆盖整型与特殊浮点(t *testing.T) {
-	assert.Equal(t, "0", pyStr(0))
+	// str(x or "") 语义：0 为假值 → 空串（非纯 str(0) 的 "0"）
+	assert.Equal(t, "", pyStr(0))
 	assert.Equal(t, "42", pyStr(int64(42)))
 	assert.Equal(t, "0.25", pyStr(0.25))
 	// PyStr 对非数值非字符串走 fmt 默认分支

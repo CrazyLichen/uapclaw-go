@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -200,60 +202,19 @@ func pythonTruthy(value any) bool {
 	}
 }
 
-// pyStr 复刻 Python str() 语义（topic_starter.py:483 的 `str(x or "")`）。
-// nil 与空串都得到空串；bool 得到 "True"/"False"；数值按 Python 排版。
+// pyStr 复刻 Python 的 `str(x or "")` 语义（topic_starter.py:483/488 等调用点的真实形态）。
+//
+// 上游每个调用点都是 `str(... or "")`：None/空串/0/false 先被 `or ""` 兜成空串，
+// 因此这里必须先判真值再格式化——直接调 utils.PyStr 会把 None 变成 "None"，
+// 导致 event_key_of 主键多出 "None" 段、5 层默认值兜底的 `if == ""` 永不命中。
+//
+// 真值分支委托 utils.PyStr 复用项目既有的 Python str() 实现
+// （浮点按 CPython float_repr 的 [1e-4, 1e16) 定点区间判定），不在此重复维护。
 func pyStr(value any) string {
-	switch v := value.(type) {
-	case nil:
+	if !pythonTruthy(value) {
 		return ""
-	case string:
-		return v
-	case bool:
-		if v {
-			return "True"
-		}
-		return "False"
-	case int:
-		return strconv.Itoa(v)
-	case int64:
-		return strconv.FormatInt(v, 10)
-	case float64:
-		// Python str(float) 用最短往返表示：整值补 ".0"，其余按 %g 风格
-		if math.IsInf(v, 1) {
-			return "inf"
-		}
-		if math.IsInf(v, -1) {
-			return "-inf"
-		}
-		if math.IsNaN(v) {
-			return "nan"
-		}
-		formatted := strconv.FormatFloat(v, 'g', -1, 64)
-		// Go 把负零格式化为 "-0"，Python 给 "-0.0"
-		if formatted == "-0" {
-			formatted = "-0.0"
-		}
-		// 非指数形式且无小数点时补 ".0"（Python str(3.0) == "3.0"）
-		if !strings.ContainsAny(formatted, ".eE") {
-			formatted += ".0"
-		}
-		// Python 指数至少两位：1e-07 而非 1e-7
-		if index := strings.IndexAny(formatted, "eE"); index >= 0 {
-			mantissa, exponent := formatted[:index], formatted[index+1:]
-			sign := ""
-			if len(exponent) > 0 && (exponent[0] == '+' || exponent[0] == '-') {
-				sign, exponent = exponent[:1], exponent[1:]
-			}
-			// 指数已带前导零时保持；否则补齐到两位
-			if len(exponent) < 2 {
-				exponent = "0" + exponent
-			}
-			formatted = mantissa + "e" + sign + exponent
-		}
-		return formatted
-	default:
-		return fmt.Sprintf("%v", v)
 	}
+	return utils.PyStr(value)
 }
 
 // marshalNoEscape 序列化为紧凑 JSON，不转义 HTML 且不追加换行。
