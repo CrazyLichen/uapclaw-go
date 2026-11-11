@@ -22,6 +22,10 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// streamDriver 驱动一次事件流：内部的 handler 返回 false 即停流。
+// Python: machine.py:348-363 self.stream（async generator，consumer 用 async for 驱动）
+type streamDriver func(handler func(*swruntime.RuntimeEvent) bool) error
+
 // MachineRunError 非交互执行边界的稳定失败。
 // Python: machine.py:63-75 MachineRunError
 type MachineRunError struct {
@@ -349,27 +353,33 @@ func (m *MachineRun) Execute(
 		}
 	}
 
-	// 步骤 21: 选择 stream / stream_agent
+	// 步骤 21: 选择 stream / stream_agent，得到一个「可被驱动的流函数」
 	// Python: :348-363
-	events := make([]*swruntime.RuntimeEvent, 0, 64)
-	collect := func(event *swruntime.RuntimeEvent) bool {
-		events = append(events, event)
-		return true
-	}
+	//
+	// Python 的 stream() 返回 async generator，此处对应为「接受 handler 并驱动它」的函数：
+	// 调用方（consumeNoninteractive）决定何时消费、何时停流。
+	var streamFn streamDriver
 	if m.runInput.Agent == nil {
-		if streamErr := m.client.Stream(ctx, m.request, collect, onAgentReady); streamErr != nil {
-			return streamErr
+		streamFn = func(handler func(*swruntime.RuntimeEvent) bool) error {
+			return m.client.Stream(ctx, m.request, handler, onAgentReady)
 		}
 	} else {
-		if streamErr := m.client.StreamAgent(
-			ctx, m.request, m.runInput.Agent.ToDict(), collect, onAgentReady); streamErr != nil {
-			return streamErr
+		definition := m.runInput.Agent.ToDict()
+		streamFn = func(handler func(*swruntime.RuntimeEvent) bool) error {
+			return m.client.StreamAgent(ctx, m.request, definition, handler, onAgentReady)
 		}
 	}
 
 	// 步骤 22: 消费事件流（非交互路径）
 	// Python: :364-372 if control is not None: control.consume(...) else consume_noninteractive()
-	completed, consumeErr := m.consumeEvents(events)
+	if m.control != nil {
+		// ⤵️ 回填 20.4：DuplexController.consume 未实现（control 恒 nil，不会进此分支）
+		return &MachineRunError{
+			Message: "Interactive mode is not supported yet (see 20.4).",
+			Code:    "INTERACTION_REQUIRED",
+		}
+	}
+	completed, consumeErr := m.consumeNoninteractive(streamFn)
 	if consumeErr != nil {
 		return consumeErr
 	}
@@ -636,9 +646,15 @@ func (m *MachineRun) classifyFailure(err error, writer *OneShotWriter) {
 			string(protocol.StatusCancelled), 130)
 		return
 	}
-	// Python: :562-565 OSError → OUTPUT_CLOSED（流坏了）或 RUNTIME_FAILED
+	// Python: :562-565 except OSError → OUTPUT_CLOSED（流坏了）或 RUNTIME_FAILED
+	//
+	// 上游 OSError 覆盖两类：写入/刷出失败（machine_io.py:229,231）。Go 侧统一由
+	// OutputError 承载，故用 errors.As 识别；不能只靠 *os.PathError——
+	// 「写入长度不足」那条走的是自定义错误，不是 os 包类型。
+	var outputErr *OutputError
+	// 同时保留 os.PathError 识别：Runtime 侧自己的 I/O 失败也属上游的 OSError 范畴
 	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
+	if errors.As(err, &outputErr) || errors.As(err, &pathErr) {
 		code := "RUNTIME_FAILED"
 		if writer.Broken {
 			code = "OUTPUT_CLOSED"
@@ -705,30 +721,42 @@ var _ = swruntime.RuntimeEvent{}
 
 // consumeEvents 非交互消费：写事件、归约、计量、检查交互与完成。
 // Python: machine.py:420-436 _MachineRun.consume_noninteractive
-func (m *MachineRun) consumeEvents(events []*swruntime.RuntimeEvent) (bool, error) {
+func (m *MachineRun) consumeNoninteractive(streamFn streamDriver) (bool, error) {
 	completed := false
-	for _, event := range events {
+	var consumeErr error
+	// Python: :425 async for event in stream: —— 逐条消费，不是先攒完再处理
+	handler := func(event *swruntime.RuntimeEvent) bool {
 		// Python: :426 self.observe(event)
 		if observeErr := m.Observe(event); observeErr != nil {
-			return completed, observeErr
+			consumeErr = observeErr
+			return false
 		}
 		// Python: :427-428 if self.summary.error is not None: return False
 		if m.summary.Error() != nil {
-			return false, nil
+			return false
 		}
 		// Python: :429-430 if event.ok and (event.is_complete or event_type == "chat.final")
 		if event.OK && (event.IsComplete || event.EventType() == "chat.final") {
 			completed = true
 		}
-		// Python: :431-435 交互事件在非交互模式下直接失败
+		// Python: :431-435 交互事件在非交互模式下直接失败（立刻中止整个运行）
 		if _, needsInteraction := interactionEvents[event.EventType()]; needsInteraction {
-			return completed, &MachineRunError{
+			consumeErr = &MachineRunError{
 				Message: "This command cannot answer interactions; no approval was granted.",
 				Code:    "INTERACTION_REQUIRED",
 			}
+			return false
+		}
+		return true
+	}
+	if streamErr := streamFn(handler); streamErr != nil {
+		// handler 主动停流时引擎可能返回取消类错误，此时以 consumeErr 为准
+		if consumeErr == nil {
+			return completed, streamErr
 		}
 	}
-	return completed, nil
+	// Python: :436 return completed
+	return completed, consumeErr
 }
 
 // Observe 消费一条事件：写输出、归约、计量限额。

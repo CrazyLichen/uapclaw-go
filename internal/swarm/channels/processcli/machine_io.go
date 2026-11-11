@@ -27,6 +27,16 @@ type MachineInputError struct {
 	Details map[string]any
 }
 
+// OutputError 机器输出流写入失败（对齐 Python 的 OSError）。
+// Python: machine_io.py:229 raise OSError("machine output write was incomplete")
+//
+// 单独成类型的原因：run_machine 用 `except OSError` 把它分流成 OUTPUT_CLOSED；
+// Go 侧若直接返回 fmt.Errorf，errors.As 无法识别，会掉进兜底的 RUNTIME_FAILED。
+type OutputError struct {
+	// Err 底层错误
+	Err error
+}
+
 // OneShotWriter 立即写出每条事件，其后最多一条终态结果。
 // Python: machine_io.py:197-266 OneShotWriter
 //
@@ -83,6 +93,22 @@ var schemaFields = []string{
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// Error 实现 error 接口。
+func (e *OutputError) Error() string {
+	if e == nil || e.Err == nil {
+		return "machine output write failed"
+	}
+	return e.Err.Error()
+}
+
+// Unwrap 暴露底层错误。
+func (e *OutputError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // Error 实现 error 接口。
 func (e *MachineInputError) Error() string { return e.Message }
@@ -473,17 +499,17 @@ func (w *OneShotWriter) write(record any) error {
 	if writeErr != nil {
 		// Python: :231-233 except (OSError, ValueError): self.broken = True
 		w.Broken = true
-		return writeErr
+		return &OutputError{Err: writeErr}
 	}
 	if written != len(line) {
 		w.Broken = true
-		return fmt.Errorf("machine output write was incomplete")
+		return &OutputError{Err: errors.New("machine output write was incomplete")}
 	}
 	// Python: :230 self._stdout.flush()
 	if flusher, ok := w.stdout.(interface{ Flush() error }); ok {
 		if flushErr := flusher.Flush(); flushErr != nil {
 			w.Broken = true
-			return flushErr
+			return &OutputError{Err: flushErr}
 		}
 	}
 	// Python: :234 self.sequence += 1

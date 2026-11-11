@@ -200,3 +200,51 @@ func (errWriter) Write(p []byte) (int, error) { return 0, os.ErrClosed }
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// TestOutputError_写入失败是OutputError
+// Python: machine_io.py:229 raise OSError("machine output write was incomplete")
+//
+// 两条失败路径（write 报错、写入长度不足）都必须可被 errors.As 识别，
+// 否则 machine.go 的 `except OSError` 等价分支会落空。
+func TestOutputError_写入失败是OutputError(t *testing.T) {
+	w, err := NewOneShotWriter(errWriter{}, "req-1")
+	require.NoError(t, err)
+	ev, err := protocol.NewOneShotEvent(protocol.OneShotEventParams{
+		Sequence: 0, RequestID: "req-1", EventType: "chat.delta",
+	})
+	require.NoError(t, err)
+
+	writeErr := w.WriteEvent(ev)
+	require.Error(t, writeErr)
+	var outputErr *OutputError
+	require.ErrorAs(t, writeErr, &outputErr, "写失败必须包成 OutputError")
+	require.True(t, w.Broken)
+}
+
+// shortWriter 声称写成功但长度不足。
+type shortWriter struct{}
+
+func (shortWriter) Write(p []byte) (int, error) { return len(p) / 2, nil }
+
+// TestOutputError_写入长度不足也是OutputError
+// Python: machine_io.py:228-229 if written != len(line): raise OSError(...)
+func TestOutputError_写入长度不足也是OutputError(t *testing.T) {
+	w, err := NewOneShotWriter(shortWriter{}, "req-1")
+	require.NoError(t, err)
+	ev, err := protocol.NewOneShotEvent(protocol.OneShotEventParams{
+		Sequence: 0, RequestID: "req-1", EventType: "chat.delta",
+	})
+	require.NoError(t, err)
+
+	writeErr := w.WriteEvent(ev)
+	require.Error(t, writeErr)
+	var outputErr *OutputError
+	require.ErrorAs(t, writeErr, &outputErr, "长度不足也必须包成 OutputError")
+}
+
+// TestOutputError_Unwrap保留底层
+func TestOutputError_Unwrap保留底层(t *testing.T) {
+	wrapped := &OutputError{Err: os.ErrClosed}
+	require.ErrorIs(t, wrapped, os.ErrClosed)
+	require.NotEmpty(t, wrapped.Error())
+}

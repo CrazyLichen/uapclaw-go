@@ -2,6 +2,7 @@ package processcli
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -180,32 +181,93 @@ func TestCleanupStep_失败只记录不阻断(t *testing.T) {
 	require.Nil(t, run.err, "非取消错误不置终态")
 }
 
-// TestConsumeEvents_交互事件报错
+// fixedStream 构造一个按序触发 handler 的 streamDriver。
+// 返回的 drove 记录实际被消费到第几条（用于验证「提前停流」）。
+func fixedStream(events ...*swruntime.RuntimeEvent) (streamDriver, *int) {
+	drove := 0
+	driver := func(handler func(*swruntime.RuntimeEvent) bool) error {
+		for _, event := range events {
+			drove++
+			if !handler(event) {
+				return nil
+			}
+		}
+		return nil
+	}
+	return driver, &drove
+}
+
+// TestConsumeNoninteractive_交互事件报错
 // Python: machine.py:431-435 event_type in _INTERACTION_EVENTS → INTERACTION_REQUIRED
-func TestConsumeEvents_交互事件报错(t *testing.T) {
+func TestConsumeNoninteractive_交互事件报错(t *testing.T) {
 	run := newMachineRunFixture(t)
-	_, err := run.consumeEvents([]*swruntime.RuntimeEvent{asEvent("chat.ask_user_question")})
+	driver, _ := fixedStream(asEvent("chat.ask_user_question"))
+	_, err := run.consumeNoninteractive(driver)
 	require.Error(t, err)
 	var runErr *MachineRunError
 	require.ErrorAs(t, err, &runErr)
 	require.Equal(t, "INTERACTION_REQUIRED", runErr.Code)
 }
 
-// TestConsumeEvents_final标记完成
-// Python: machine.py:429-430 event.ok and (is_complete or event_type == "chat.final")
-func TestConsumeEvents_final标记完成(t *testing.T) {
+// TestConsumeNoninteractive_交互事件立刻停流
+// Python: machine.py:425 async for 里 raise → 后续事件不再被消费
+//
+// 这是「边收边处理」的核心不变量：不能先把流攒完再判。
+func TestConsumeNoninteractive_交互事件立刻停流(t *testing.T) {
 	run := newMachineRunFixture(t)
-	completed, err := run.consumeEvents([]*swruntime.RuntimeEvent{asEvent("chat.final")})
+	driver, drove := fixedStream(
+		asEvent("chat.delta"),
+		asEvent("chat.ask_user_question"),
+		asEvent("chat.delta"),
+		asEvent("chat.final"),
+	)
+	_, err := run.consumeNoninteractive(driver)
+	require.Error(t, err)
+	require.Equal(t, 2, *drove, "交互事件后必须立刻停流，不得继续消费")
+}
+
+// TestConsumeNoninteractive_final标记完成
+// Python: machine.py:429-430 event.ok and (is_complete or event_type == "chat.final")
+func TestConsumeNoninteractive_final标记完成(t *testing.T) {
+	run := newMachineRunFixture(t)
+	driver, _ := fixedStream(asEvent("chat.final"))
+	completed, err := run.consumeNoninteractive(driver)
 	require.NoError(t, err)
 	require.True(t, completed)
 }
 
-// TestConsumeEvents_无完成事件返回false
-func TestConsumeEvents_无完成事件返回false(t *testing.T) {
+// TestConsumeNoninteractive_无完成事件返回false
+func TestConsumeNoninteractive_无完成事件返回false(t *testing.T) {
 	run := newMachineRunFixture(t)
-	completed, err := run.consumeEvents([]*swruntime.RuntimeEvent{asEvent("chat.delta")})
+	driver, _ := fixedStream(asEvent("chat.delta"))
+	completed, err := run.consumeNoninteractive(driver)
 	require.NoError(t, err)
 	require.False(t, completed)
+}
+
+// TestConsumeNoninteractive_写失败立刻停流
+// Python: machine.py:426 observe 抛 OSError → 流中断
+func TestConsumeNoninteractive_写失败立刻停流(t *testing.T) {
+	writer, err := NewOneShotWriter(errWriter{}, "r1")
+	require.NoError(t, err)
+	run := NewMachineRun(&protocol.OneShotRunInput{Input: "hi"}, writer, nil)
+
+	driver, drove := fixedStream(asEvent("chat.delta"), asEvent("chat.final"))
+	_, consumeErr := run.consumeNoninteractive(driver)
+	require.Error(t, consumeErr)
+	require.Equal(t, 1, *drove, "写失败后不再消费")
+	var outputErr *OutputError
+	require.ErrorAs(t, consumeErr, &outputErr, "写失败必须是 OutputError")
+}
+
+// TestConsumeNoninteractive_流错误上抛
+// 流本身返回错误且 handler 未判定失败时，以流错误为准
+func TestConsumeNoninteractive_流错误上抛(t *testing.T) {
+	run := newMachineRunFixture(t)
+	streamErr := errors.New("stream broke")
+	driver := func(func(*swruntime.RuntimeEvent) bool) error { return streamErr }
+	_, got := run.consumeNoninteractive(driver)
+	require.ErrorIs(t, got, streamErr)
 }
 
 // asEvent 构造一条最小 Runtime 事件。
@@ -233,4 +295,56 @@ func TestValidateHostToolsForRun_本批拒绝(t *testing.T) {
 	require.ErrorAs(t, err, &runErr)
 	require.Equal(t, "INVALID_HOST_TOOL", runErr.Code)
 	require.Contains(t, runErr.Message, "20.6")
+}
+
+// TestClassifyFailure_输出关闭时报OUTPUT_CLOSED
+// Python: machine.py:562-564 code = "OUTPUT_CLOSED" if writer.broken else "RUNTIME_FAILED"
+func TestClassifyFailure_输出关闭时报OUTPUT_CLOSED(t *testing.T) {
+	writer, err := NewOneShotWriter(errWriter{}, "r1")
+	require.NoError(t, err)
+	run := NewMachineRun(&protocol.OneShotRunInput{Input: "hi"}, writer, nil)
+
+	// 先触发一次写失败，把 writer.Broken 置真
+	ev, err := protocol.NewOneShotEvent(protocol.OneShotEventParams{
+		Sequence: 0, RequestID: "r1", EventType: "chat.delta",
+	})
+	require.NoError(t, err)
+	writeErr := writer.WriteEvent(ev)
+	require.Error(t, writeErr)
+
+	run.classifyFailure(writeErr, writer)
+	require.NotNil(t, run.err)
+	require.Equal(t, "OUTPUT_CLOSED", run.err.Code)
+	require.Equal(t, "Command I/O failed.", run.err.Message)
+	require.Equal(t, string(protocol.StatusFailed), run.status)
+}
+
+// TestClassifyFailure_非输出错误仍是RUNTIME_FAILED
+// Python: machine.py:563 writer.broken 为假时用 RUNTIME_FAILED
+func TestClassifyFailure_非输出错误仍是RUNTIME_FAILED(t *testing.T) {
+	writer, err := NewOneShotWriter(discardWriter{}, "r1")
+	require.NoError(t, err)
+	run := NewMachineRun(&protocol.OneShotRunInput{Input: "hi"}, writer, nil)
+
+	run.classifyFailure(&OutputError{Err: errors.New("io")}, writer)
+	require.NotNil(t, run.err)
+	require.Equal(t, "RUNTIME_FAILED", run.err.Code)
+}
+
+// TestClassifyFailure_超时与取消优先
+// Python: machine.py:540-561 两个分支在 OSError 之前
+func TestClassifyFailure_超时与取消优先(t *testing.T) {
+	writer, err := NewOneShotWriter(discardWriter{}, "r1")
+	require.NoError(t, err)
+
+	timeoutRun := NewMachineRun(&protocol.OneShotRunInput{Input: "hi"}, writer, nil)
+	timeoutRun.classifyFailure(context.DeadlineExceeded, writer)
+	require.Equal(t, "TIMEOUT", timeoutRun.err.Code)
+	require.Equal(t, string(protocol.StatusTimedOut), timeoutRun.status)
+	require.Equal(t, 124, timeoutRun.exitCode)
+
+	cancelRun := NewMachineRun(&protocol.OneShotRunInput{Input: "hi"}, writer, nil)
+	cancelRun.classifyFailure(context.Canceled, writer)
+	require.Equal(t, "CANCELLED", cancelRun.err.Code)
+	require.Equal(t, 130, cancelRun.exitCode)
 }
