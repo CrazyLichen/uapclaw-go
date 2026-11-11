@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -814,10 +817,8 @@ func (r *AgentRuntime) managersForCleanup() []AgentManagerPort {
 //  4. 协调器有活跃快照（刚分配、尚无 metadata）且 describe_session 为空 → 放行
 //  5. 其余（缺失 / 外部渠道 / 非单 Agent）共用 NOT_FOUND
 //
-// 已知偏差 D-5：上游第 4 步用 describe_session 判定"已持久化的团队/工作流会话"，
-// Go 侧 describe_session（SessionDescriptor）不在 20.1 范围，故第 4 步退化为
-// "协调器活跃即放行"，仍有第 3 步目录存在性兜底。回收条件：SessionDescriptor
-// 落地时补齐。
+// D-5 已于 20.2（R-5）回收：DescribeSession 落地，第 4 步按上游原序判定，
+// 不再退化为「协调器活跃即放行」。
 func (r *AgentRuntime) requireOwnedSingleAgentSession(req *schema.AgentRequest) error {
 	// 第 1 步：无 session_id 直接放行
 	sessionID := requestSessionIDValue(req)
@@ -856,9 +857,21 @@ func (r *AgentRuntime) requireOwnedSingleAgentSession(req *schema.AgentRequest) 
 		return nil
 	}
 
-	// 第 4 步：协调器活跃（刚分配尚无 metadata）→ 放行（spec D-5 简化）
+	// 第 4 步：协调器有活跃快照（刚分配、尚无 metadata）且 describe_session 为空 → 放行
+	// Python: :860-869
+	//   if active is not None and active.state is not CLOSED:
+	//       descriptor = await self.describe_session(session_id=session_id)
+	//       if descriptor is None: return
+	// D-5 已回收（20.2 R-5）：describe_session 落地后按上游原序判定，
+	// 不再退化为「协调器活跃即放行」。
 	if active != nil && active.State != sessionpkg.RuntimeSessionStateClosed {
-		return nil
+		descriptor, dErr := r.DescribeSession(sessionID)
+		if dErr != nil {
+			return dErr
+		}
+		if descriptor == nil {
+			return nil
+		}
 	}
 
 	// 第 5 步：缺失 / 外部渠道 / 非单 Agent 共用 NOT_FOUND
@@ -1259,6 +1272,58 @@ func (r *AgentRuntime) ListSessions(request SessionListInput) (SessionListResult
 		return SessionListResult{}, err
 	}
 	return ListSessions(request, false, false)
+}
+
+// DescribeSession 返回持久化会话的路由事实，不暴露存储内部细节。
+// Python: service.py:917-955 describe_session
+//
+// 传输无关的查找口：本地 Runtime 客户端据此校验显式续聊目标，
+// 无需 import 存储助手，也不必走 AgentServer 的 session.list handler。
+func (r *AgentRuntime) DescribeSession(sessionID string) (*sessionpkg.SessionDescriptor, error) {
+	// 1. Python: self._require_started()
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	// 2. Python: target = str(session_id or "").strip(); if not target: return None
+	target := strings.TrimSpace(sessionID)
+	if target == "" {
+		return nil, nil
+	}
+	// 3. Python: resolve_session_dir(target, sessions_root=get_agent_sessions_dir())
+	sessionDir, exists, err := common.ResolveSessionDir(target, session.GetSessionsDir())
+	// 4. Python: if session_dir is None or not session_dir.is_dir(): return None
+	//    注：ResolveSessionDir 的 bool 表示「目录存在」，第二值 false 即回退 None
+	if err != nil || !exists || sessionDir == "" {
+		return nil, nil
+	}
+	if info, statErr := os.Stat(sessionDir); statErr != nil || !info.IsDir() {
+		return nil, nil
+	}
+	// 5. Python: metadata = get_session_metadata(target, cache_bust=True, enable_writeback=False)
+	//    Go 的 GetSessionMetadata 是纯读路径，等价 enable_writeback=False（已有偏差登记）
+	metadata := session.GetSessionMetadata(target)
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	// 6. Python: SessionDescriptor 七字段，全部 strip()，work_mode 额外 lower()
+	return &sessionpkg.SessionDescriptor{
+		SessionID:  target,
+		ChannelID:  strings.TrimSpace(metadataString(metadata, "channel_id")),
+		Mode:       strings.TrimSpace(metadataString(metadata, "mode")),
+		WorkMode:   strings.ToLower(strings.TrimSpace(metadataString(metadata, "work_mode"))),
+		ProjectID:  strings.TrimSpace(metadataString(metadata, "project_id")),
+		ProjectDir: strings.TrimSpace(metadataString(metadata, "project_dir")),
+		UserID:     strings.TrimSpace(metadataString(metadata, "user_id")),
+	}, nil
+}
+
+// metadataString 安全取 metadata 里的字符串字段。
+// Python: str(metadata.get(key) or "").strip() 的前半段（strip 由调用方做）
+func metadataString(metadata map[string]any, key string) string {
+	if v, ok := metadata[key].(string); ok {
+		return v
+	}
+	return ""
 }
 
 // GetPermissionSnapshot 返回一致的只读权限快照。
