@@ -410,3 +410,156 @@ func TestRecordEventsAtomic_跨组重复整组回滚(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, stored, 1, "整组回滚，只保留原有 1 条")
 }
+
+// seedQueryEvents 造一批带 payload 的事件。
+func seedQueryEvents(t *testing.T, store *TopicStarterStore) {
+	t.Helper()
+	events := []map[string]any{
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "topic_click", "topic_id": "t1",
+			"payload":    map[string]any{"context_scope": "global_new_chat", "negative_preference_version": 3},
+			"created_at": 100.0},
+		{"session_id": "s2", "slate_id": "sl2", "event_type": "topic_click", "topic_id": "t2",
+			"payload":    map[string]any{"context_scope": "project", "negative_preference_version": 1},
+			"created_at": 200.0},
+		{"session_id": "s3", "slate_id": "sl3", "event_type": "session_bound", "topic_id": "t3",
+			"payload":    map[string]any{"context_scope": "global_new_chat"},
+			"created_at": 300.0},
+		{"session_id": "s4", "slate_id": "sl4", "event_type": "topic_click", "topic_id": "t4",
+			"payload":    map[string]any{"context_scope": nil, "status": "ok"},
+			"created_at": 400.0},
+	}
+	ok, err := store.RecordEventsAtomic(events)
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+// TestQueryEvents_四条守卫
+// Python: topic_starter.py:590-601
+func TestQueryEvents_四条守卫(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "", Limit: 10})
+	require.NoError(t, err)
+	assert.Nil(t, got, "event_type 为空返回 nil")
+
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 0})
+	require.NoError(t, err)
+	assert.Nil(t, got, "limit < 1 返回 nil")
+
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: -1})
+	require.NoError(t, err)
+	assert.Nil(t, got, "limit 负数返回 nil")
+
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 10, Offset: -1})
+	require.NoError(t, err)
+	assert.Nil(t, got, "offset 负数返回 nil")
+
+	_, err = store.QueryEvents(QueryEventsOptions{
+		EventType:     "topic_click",
+		Limit:         10,
+		PayloadEquals: map[string]any{"not_a_whitelisted_field": 1},
+	})
+	require.Error(t, err, "白名单外字段应报错")
+	assert.Contains(t, err.Error(), "not_a_whitelisted_field")
+}
+
+// TestQueryEvents_按类型与slate过滤
+func TestQueryEvents_按类型与slate过滤(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 100})
+	require.NoError(t, err)
+	assert.Len(t, got, 3)
+
+	slate := "sl2"
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", SlateID: &slate, Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+}
+
+// TestQueryEvents_payloadEquals匹配JSONnull
+// Python: topic_starter.py:626 `json_extract(...) IS json_extract(?, '$')`
+func TestQueryEvents_payloadEquals匹配JSONnull(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{
+		EventType:     "topic_click",
+		PayloadEquals: map[string]any{"context_scope": nil},
+		Limit:         100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 1, "IS 语义应能匹配 JSON null")
+	assert.Equal(t, "t4", got[0]["topic_id"])
+}
+
+// TestQueryEvents_payload整数上界与存在性
+func TestQueryEvents_payload整数上界与存在性(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{
+		EventType:         "topic_click",
+		PayloadIntegerLTE: &PayloadIntegerLTE{Field: "negative_preference_version", Value: 1},
+		Limit:             100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+
+	present := "status"
+	got, err = store.QueryEvents(QueryEventsOptions{
+		EventType:      "topic_click",
+		PayloadPresent: &present,
+		Limit:          100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t4", got[0]["topic_id"])
+}
+
+// TestQueryEvents_排序与分页
+func TestQueryEvents_排序与分页(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	// 默认升序
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, "t1", got[0]["topic_id"])
+
+	// 最新优先
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 100, NewestFirst: true})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, "t4", got[0]["topic_id"])
+
+	// 分页
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 1, Offset: 1})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+}
+
+// TestQueryEvents_按payload整数降序排序
+// Python: topic_starter.py:645-652 order_by_payload_integer_desc 前缀
+func TestQueryEvents_按payload整数降序排序(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	field := "negative_preference_version"
+	got, err := store.QueryEvents(QueryEventsOptions{
+		EventType:                 "topic_click",
+		OrderByPayloadIntegerDesc: &field,
+		Limit:                     100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	// version 3 > 1 > NULL
+	assert.Equal(t, "t1", got[0]["topic_id"], "version=3 应排最前")
+	assert.Equal(t, "t2", got[1]["topic_id"], "version=1 次之")
+}

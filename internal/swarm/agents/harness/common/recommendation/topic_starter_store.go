@@ -51,6 +51,41 @@ type TopicStarterStore struct {
 	path string
 }
 
+// PayloadIntegerLTE payload 整数上界过滤条件。
+type PayloadIntegerLTE struct {
+	// Field payload 内字段名（须在白名单内）。
+	Field string
+	// Value 上界值（含）。
+	Value int
+}
+
+// QueryEventsOptions query_events 的查询条件。
+// Python: topic_starter.py:578-592 的 keyword-only 参数与其默认值。
+type QueryEventsOptions struct {
+	// EventType 事件类型，必填；空串直接返回 nil。
+	EventType string
+	// SlateID 迭代批次过滤，nil 表示不加条件。
+	SlateID *string
+	// TopicID 单个话题过滤，nil 表示不加条件。
+	TopicID *string
+	// PolicyID 策略过滤，nil 表示不加条件。
+	PolicyID *string
+	// PayloadEquals payload 等值过滤（用 SQL IS 语义，可匹配 JSON null）。
+	PayloadEquals map[string]any
+	// PayloadIntegerLTE payload 整数上界过滤。
+	PayloadIntegerLTE *PayloadIntegerLTE
+	// PayloadPresent 要求 payload 内该键非 SQL NULL。
+	PayloadPresent *string
+	// OrderByPayloadIntegerDesc 按该 payload 字段的整数降序作为主排序前缀。
+	OrderByPayloadIntegerDesc *string
+	// Limit 返回条数上限，默认 100；小于 1 返回 nil。
+	Limit int
+	// Offset 跳过条数，负数返回 nil。
+	Offset int
+	// NewestFirst 为真时按 created_at/event_key 降序。
+	NewestFirst bool
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -404,6 +439,104 @@ func (s *TopicStarterStore) RecordEventsAtomic(events []map[string]any) (bool, e
 		return false, err
 	}
 	return true, nil
+}
+
+// QueryEvents 按条件读取有界事件切片，不做全表扫描。
+// Python: topic_starter.py:578 query_events
+//
+// 四条守卫按上游顺序提前返回：event_type 为空、limit<1、offset<0 均返回 nil；
+// payload 查询字段不在白名单内返回 error（字段名会被拼进 SQL，必须先校验）。
+func (s *TopicStarterStore) QueryEvents(opts QueryEventsOptions) ([]map[string]any, error) {
+	if opts.EventType == "" {
+		return nil, nil
+	}
+	if opts.Limit < 1 {
+		return nil, nil
+	}
+	if opts.Offset < 0 {
+		return nil, nil
+	}
+
+	touched := make(map[string]any, len(opts.PayloadEquals)+3)
+	for field := range opts.PayloadEquals {
+		touched[field] = struct{}{}
+	}
+	if opts.PayloadPresent != nil {
+		touched[*opts.PayloadPresent] = struct{}{}
+	}
+	if opts.PayloadIntegerLTE != nil {
+		touched[opts.PayloadIntegerLTE.Field] = struct{}{}
+	}
+	if opts.OrderByPayloadIntegerDesc != nil {
+		touched[*opts.OrderByPayloadIntegerDesc] = struct{}{}
+	}
+	unknown := make([]string, 0)
+	for _, field := range sortedKeys(touched) {
+		if _, ok := eventPayloadQueryFields[field]; !ok {
+			unknown = append(unknown, field)
+		}
+	}
+	if len(unknown) > 0 {
+		return nil, fmt.Errorf("unsupported event payload query fields: %v", unknown)
+	}
+
+	clauses := []string{"event_type = ?"}
+	values := []any{opts.EventType}
+	if opts.SlateID != nil {
+		clauses = append(clauses, "slate_id = ?")
+		values = append(values, *opts.SlateID)
+	}
+	if opts.TopicID != nil {
+		clauses = append(clauses, "topic_id = ?")
+		values = append(values, *opts.TopicID)
+	}
+	if opts.PolicyID != nil {
+		clauses = append(clauses, "policy_id = ?")
+		values = append(values, *opts.PolicyID)
+	}
+	for _, field := range sortedKeys(opts.PayloadEquals) {
+		clauses = append(clauses, "json_extract(payload_json, '$."+field+"') IS json_extract(?, '$')")
+		encoded, err := marshalNoEscape(opts.PayloadEquals[field])
+		if err != nil {
+			return nil, fmt.Errorf("序列化 payload 等值条件失败: %w", err)
+		}
+		values = append(values, string(encoded))
+	}
+	if opts.PayloadIntegerLTE != nil {
+		clauses = append(clauses, "CAST(json_extract(payload_json, '$."+opts.PayloadIntegerLTE.Field+"') AS INTEGER) <= ?")
+		values = append(values, opts.PayloadIntegerLTE.Value)
+	}
+	if opts.PayloadPresent != nil {
+		clauses = append(clauses, "json_extract(payload_json, '$."+*opts.PayloadPresent+"') IS NOT NULL")
+	}
+
+	direction := "ASC"
+	if opts.NewestFirst {
+		direction = "DESC"
+	}
+	ordering := ""
+	if opts.OrderByPayloadIntegerDesc != nil {
+		ordering = "CAST(json_extract(payload_json, '$." + *opts.OrderByPayloadIntegerDesc + "') AS INTEGER) DESC, "
+	}
+
+	values = append(values, opts.Limit, opts.Offset)
+	statement := "SELECT * FROM recommendation_event WHERE " +
+		strings.Join(clauses, " AND ") +
+		" ORDER BY " + ordering + "created_at " + direction + ", event_key " + direction +
+		" LIMIT ? OFFSET ?"
+
+	db, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query(statement, values...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEventRows(rows)
 }
 
 // ListEvents 按写入顺序返回全部事件。
