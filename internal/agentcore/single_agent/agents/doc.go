@@ -13,6 +13,7 @@
 //	├── react_prompt.go           # 系统提示词构建（AddPromptBuilderSection/Configure/updateSkillPromptBuilderSection）
 //	├── react_attachment.go       # 提示词附件同步 + 按 provider 注册窗口投影（对齐 ReActAgent._sync_prompt_attachments）
 //	├── react_usage_attribution.go # 用量归属解析（owner/血缘字段，对齐 ReActAgent._context_usage_attribution）
+//	├── react_kv_cache_adapter.go  # kvCacheSessionAdapter：SessionFacade → kv_cache 窄接口适配器
 //	└── react_helpers.go          # 内部辅助函数（initContext/getLLM/getTools/saveContexts 等）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/agents/

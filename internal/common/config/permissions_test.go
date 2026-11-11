@@ -429,7 +429,7 @@ func TestUpdatePermissionsOwnerScopesInConfig(t *testing.T) {
 			"u1": map[string]any{"tools": map[string]any{"bash": "allow"}},
 		},
 	}
-	if err := UpdatePermissionsOwnerScopesInConfig(scopes); err != nil {
+	if err := UpdatePermissionsOwnerScopesInConfig(scopes, nil); err != nil {
 		t.Fatalf("err = %v", err)
 	}
 	data := readConfigFile(t, path)
@@ -547,7 +547,7 @@ func TestDeletePermissionsApprovalOverrideInConfig_perms为空(t *testing.T) {
 // TestUpdatePermissionsOwnerScopesInConfig_无permissions节 测试自动建节。
 func TestUpdatePermissionsOwnerScopesInConfig_无permissions节(t *testing.T) {
 	path := setupPermissionsConfig(t, "other: 1\n")
-	if err := UpdatePermissionsOwnerScopesInConfig(map[string]any{"web": map[string]any{}}); err != nil {
+	if err := UpdatePermissionsOwnerScopesInConfig(map[string]any{"web": map[string]any{}}, nil); err != nil {
 		t.Fatalf("err = %v", err)
 	}
 	data := readConfigFile(t, path)

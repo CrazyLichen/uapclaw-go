@@ -51,6 +51,11 @@
 //	├── deep_adapter_acp.go       # ACP 运行时工具刷新（10.6.24d：能力装卸+快照日志）
 //	├── deep_adapter_session_request.go # 外层会话选择：getSessionAdapterForRequest + isHostPermissionUpdateInput（20.2 R-9）
 //	├── deep_adapter_process_cli.go     # configureProcessCliRun + ProcessCliRunOptions（20.2 R-10）
+//	├── deep_adapter_goal.go            # Goal 控制 RPC 分发（dispatchGoalControl + 记录 payload 组装）
+//	├── deep_adapter_goal_history.go     # Goal 目标历史延迟落库（pendingGoalHistory + flush）
+//	├── deep_adapter_interaction.go      # 交互会话生命周期（StartInteraction + 输出交接 handoff）
+//	├── goal_events.go                   # Goal 事件常量与工具定义（59 行）
+//	├── person_drove_turn.go             # 判定本轮是否由真人用户驱动（personDroveTurn + 终态归因）
 //	├── evolution/                # Evolution 事件分类/状态提取/推送辅助（10.3.9）
 //	│   ├── doc.go                # 包文档
 //	│   └── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数

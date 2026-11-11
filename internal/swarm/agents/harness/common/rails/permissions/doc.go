@@ -74,6 +74,10 @@
 //	├── policy_eval.go                     # 只做策略评估、不进入人工确认流程（9.90b）
 //	├── persistent_audit.go                # 追加式持久化审计（9.90d-1 Task 7）
 //	├── url_safety.go                      # 只读网络/浏览器 URL 审查助手（9.90d-1 Task 8）
+//	├── audit.go                           # 审计旁路实现（observe-only 边界，对齐 audit.py）
+//	├── interruption_projection.go         # 中断快照投影（对齐 stream_event_rail.py 4 个 queue 消费函数）
+//	├── permission_interaction.go          # 权限交互判据（对齐 permission_interaction.py）
+//	├── tool_invocation_locator.go         # 工具调用定位（locator 解析辅助）
 //	├── generated_artifact_delivery.go     # send_file 单次调用的任务级授权租约（9.90d-1 Task 9）
 //	├── send_file_path_guard.go            # send_file 多路径 file_guard 读判定聚合（9.90d-1 Task 10）
 //	├── trusted_search_urls.go             # 会话可信搜索 URL 台账 + Host producer 租约（9.90d-1 Task 11）

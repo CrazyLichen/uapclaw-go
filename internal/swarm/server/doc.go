@@ -24,6 +24,8 @@
 //	├── handle_config.go       # Config（配置） handler（cache_clear/reload_config）
 //	├── handle_initialize.go   # Initialize（初始化）+ ACP handler（initialize/acp_tool_response）
 //	├── session_stubs.go       # 会话管理适配器与空实现桩
+//	├── handle_proactive.go   # 主动推荐 RPC handler（注入引擎 + 未初始化守卫）
+//	├── proactive_host.go     # proactiveHost：MainAgentHost 适配器（依赖倒置给 recommendation）
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
 //	├── runtime/               # Agent 运行时（AgentManager/UapClawSwarm）
 //	└── session/               # 会话管理子包（history/metadata/manager/rename/startup）

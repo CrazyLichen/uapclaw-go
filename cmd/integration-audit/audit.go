@@ -163,10 +163,10 @@ func Audit(cfg *AuditConfig) (*AuditResult, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // suspectIntegrationFileName 检测集成测试文件的命名逃逸：文件名含 itest
-//（如 *_itest.go）却非 *_test.go —— go test 不收集、本审计不扫描，集成套件
+// （如 *_itest.go）却非 *_test.go —— go test 不收集、本审计不扫描，集成套件
 // 静默失效（2026-11-12 23.1 两个套件因此从未运行）。
 // 只按命名检测：带 integration 标签的非测试源文件是合法形态
-//（doc.go 包文档 / suite 基类 / testhelpers 助手，均由 _test.go 导入编译），
+// （doc.go 包文档 / suite 基类 / testhelpers 助手，均由 _test.go 导入编译），
 // 按标签告警会误报 14+ 个既有文件。返回警告文案，无嫌疑返回空串。
 func suspectIntegrationFileName(rootDir, path string) string {
 	if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {

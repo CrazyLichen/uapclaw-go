@@ -13,6 +13,7 @@
 //	├── store_base.go         # CronJobStoreBackend 协议
 //	├── store.go              # 文件存储（JSON + 原子写 + CAS 修订号）
 //	├── etcd_store.go         # etcd 存储（前缀 watch + CAS）
+//	├── etcd_client.go        # etcd 客户端同名转发（实体在 internal/common/etcd，对齐上游兼容导入层）
 //	├── cron_job_mutations.go # 任务变更（创建/更新/删除的字段归一与校验）
 //	├── factory.go            # 按配置产出文件或 etcd 存储
 //	└── dingtalk_routing.go   # 钉钉目标路由解析

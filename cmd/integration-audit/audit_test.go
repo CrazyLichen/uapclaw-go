@@ -501,7 +501,7 @@ tests/integration/fake/exempt
 }
 
 // TestAudit_命名逃逸警告 itest 命名的非 _test.go 文件产生警告且不判失败
-//（2026-11-12 23.1 两个套件静默失效的防护）。
+// （2026-11-12 23.1 两个套件静默失效的防护）。
 // 带 integration 标签的非测试源文件（doc.go/suite/testhelpers）是合法形态，不告警。
 func TestAudit_命名逃逸警告(t *testing.T) {
 	root := t.TempDir()

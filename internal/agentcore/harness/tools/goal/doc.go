@@ -9,8 +9,7 @@
 //
 //	goal/
 //	├── doc.go      # 包文档
-//	├── goal.go     # GoalReportSink + SubmitGoalReportTool + GetCurrentGoalTool
-//	└── goal_test.go # 工具单测
+//	└── goal.go     # GoalReportSink + SubmitGoalReportTool + GetCurrentGoalTool
 //
 // 对应 Python 代码：openjiuwen/harness/tools/goal.py
 package goal

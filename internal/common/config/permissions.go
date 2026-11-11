@@ -42,6 +42,8 @@ const (
 	approvalOverridesSectionKey = "approval_overrides"
 	// ownerScopesSectionKey owner_scopes 子节键
 	ownerScopesSectionKey = "owner_scopes"
+	// denyGuidanceMessageSectionKey deny_guidance_message 子节键
+	denyGuidanceMessageSectionKey = "deny_guidance_message"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -340,10 +342,11 @@ func DeletePermissionsApprovalOverrideInConfig(overrideID string) (bool, error) 
 	return true, nil
 }
 
-// UpdatePermissionsOwnerScopesInConfig 更新 permissions.owner_scopes。
+// UpdatePermissionsOwnerScopesInConfig 更新 permissions.owner_scopes（及可选 deny_guidance_message）并写回。
 //
-// Python: update_permissions_owner_scopes_in_config (config.py L1199-1237)
-func UpdatePermissionsOwnerScopesInConfig(ownerScopes map[string]any) error {
+// Python: update_permissions_owner_scopes_in_config (config.py L1199-1212)
+// denyGuidanceMessage 为 nil 时不改动该键（对应 Python 的 None 缺省）。
+func UpdatePermissionsOwnerScopesInConfig(ownerScopes, denyGuidanceMessage any) error {
 	data := readPermissionsConfigFile()
 	perms, _ := data[permissionsSectionKey].(map[string]any)
 	if perms == nil {
@@ -351,6 +354,9 @@ func UpdatePermissionsOwnerScopesInConfig(ownerScopes map[string]any) error {
 		data[permissionsSectionKey] = perms
 	}
 	perms[ownerScopesSectionKey] = ownerScopes
+	if denyGuidanceMessage != nil {
+		perms[denyGuidanceMessageSectionKey] = denyGuidanceMessage
+	}
 	return writePermissionsConfigFile(data)
 }
 

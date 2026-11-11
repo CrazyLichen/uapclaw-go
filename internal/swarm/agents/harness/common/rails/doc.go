@@ -16,6 +16,7 @@
 //	├── structured_ask_user_rail.go    # StructuredAskUserRail + StructuredAskUserPayload
 //	├── structured_ask_user_tool.go    # StructuredAskUserTool + 扩展 schema
 //	├── ask_user_contract.go           # 结构化 ask_user 的共享有界契约（字段上限/校验）
+//	├── structured_ask_user_validation.go # 结构化 ask_user 的 questions 严格校验（对齐 resolve_interrupt 校验段）
 //	├── project_memory/               # 项目记忆文件发现/加载/缓存/合并
 //	│   ├── doc.go                    # 子包文档
 //	│   ├── files.go                  # 文件发现/加载/缓存/合并

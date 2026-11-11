@@ -362,4 +362,3 @@ func (s *AnthropicSuite) TestInvoke_reasoning接线() {
 	// budget 抬升：2000 <= 5000 → 6024
 	s.Require().Equal(float64(6024), body["max_tokens"], "max_tokens 应抬升为 budget+1024")
 }
-

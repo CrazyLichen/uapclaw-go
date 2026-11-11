@@ -18,10 +18,7 @@
 //	├── kv_cache_types.go               # KVCacheIdentity（provider 侧缓存身份）
 //	├── kv_cache_metadata.go            # env 键 + LineageSession 窄接口 + 7 函数
 //	├── kv_cache_config.go              # KVCacheAffinityConfig + 5 常量 + 超时解析
-//	├── hook.go                         # KVCacheModelCallHook（ReAct 钩子，10.3.30 补）
-//	├── kv_cache_metadata_test.go       # metadata 既有 2 例
-//	├── kv_cache_metadata_extra_test.go # metadata 补齐 5 函数用例
-//	└── kv_cache_config_test.go         # config 用例
+//	└── hook.go                         # KVCacheModelCallHook（ReAct 钩子，10.3.30 补）
 //
 // 对应 Python 代码：openjiuwen/core/kv_cache/{kv_cache_types,kv_cache_metadata,
 //

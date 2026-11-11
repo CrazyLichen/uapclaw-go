@@ -10,8 +10,7 @@
 //
 //	heartbeat/
 //	├── doc.go           # 包文档
-//	├── heartbeat.go     # 常量 + HeartbeatConfig + 接口 + GatewayHeartbeatService
-//	└── heartbeat_test.go
+//	└── heartbeat.go     # 常量 + HeartbeatConfig + 接口 + GatewayHeartbeatService
 //
 // 对应 Python 代码：jiuwenswarm/gateway/heartbeat/heartbeat.py
 package heartbeat

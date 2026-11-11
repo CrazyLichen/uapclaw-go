@@ -1773,7 +1773,7 @@ func permissionsOwnerScopesSet(wc *WebChannel) methodHandler {
 			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
 			return
 		}
-		if err := config.UpdatePermissionsOwnerScopesInConfig(params); err != nil {
+		if err := config.UpdatePermissionsOwnerScopesInConfig(params["owner_scopes"], params["deny_guidance_message"]); err != nil {
 			wc.sendResponse(ws, reqID, false, nil, fmt.Sprintf("更新 owner_scopes 配置失败: %v", err), WsErrInternalError)
 			return
 		}

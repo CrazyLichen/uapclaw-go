@@ -39,6 +39,7 @@
 //	├── guard_factory.go      # FileGuardEvaluator/NetGuardEvaluator 接口与工厂
 //	├── suggestions.go        # 权限建议构建
 //	├── permission_engine.go  # PermissionEngine 权限引擎（A/B/C 三段）
+//	├── permission_engine_accessors.go # PermissionEngine 内部状态访问器与重建入口（9.90d-1 Task 13 前置）
 //	├── factory.go            # BuildPermissionInterruptRail 工厂函数
 //	├── fileguard/            # Pipeline B：路径防护判定器
 //	├── netguard/             # Pipeline C：网络防护判定器

@@ -12,9 +12,7 @@
 //	im_pipeline/
 //	├── doc.go               # 包文档
 //	├── im_inbound.go        # 入站管线：IMPlatformAdapter 接口 + IMConversationProcessor + IMInboundPipeline + 包级 helpers
-//	├── im_inbound_test.go   # 入站单元测试（fakeAdapter/fakeLLMClient 共享辅助）
-//	├── im_outbound.go       # 出站管线：IMOutboundPipeline（路由决策 + 追问前缀 + PendingInteraction 创建）
-//	└── im_outbound_test.go  # 出站单元测试
+//	└── im_outbound.go       # 出站管线：IMOutboundPipeline（路由决策 + 追问前缀 + PendingInteraction 创建）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/im_pipeline/
 package im_pipeline

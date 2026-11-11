@@ -18,6 +18,7 @@
 //	cron/
 //	├── doc.go           # 包文档
 //	├── models.go        # CronJob/CronRunState 模型 + 渠道校验归一化
+//	├── models_compat.go # gateway 侧 CronJobMetadata 兼容常量（5 个对外契约键）
 //	├── cron_expr.go     # 表达式归一化 + dow 变换 + NextFireTime
 //	├── store.go         # CronJobStore JSON 持久化
 //	├── scheduler.go     # CronSchedulerService 事件堆调度器

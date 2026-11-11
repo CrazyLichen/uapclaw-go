@@ -16,6 +16,7 @@
 //	├── build_user_prompt.go  # BuildUserPrompt 用户 prompt 包装
 //	├── build_inputs.go       # BuildInputs adapter 输入构建
 //	├── agent_manager.go      # AgentManager Agent 实例管理器（10.3.12 已实现）
+//	├── agent_manager_evict.go # 连接差异驱逐判定（connDiffKey 八元组，对齐 _ConnDiffKey）
 //	├── agent_config.go       # AgentConfigService 配置 CRUD（10.3.13）
 //	├── agent_config_yaml.go  # config.yaml react.subagents 联动
 //	├── agent_config_llm.go   # LLM 生成 whenToUse + systemPrompt

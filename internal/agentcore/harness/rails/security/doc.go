@@ -11,7 +11,8 @@
 //	├── doc.go                   # 包文档
 //	├── base_security_rail.go    # BaseSecurityRail + 决策类型 + apply 逻辑
 //	├── prompt_security_rail.go  # SafetyPromptRail（别名 SecurityRail）
-//	└── tool_security_rail.go    # PermissionInterruptRail
+//	├── tool_security_rail.go    # PermissionInterruptRail
+//	└── tool_security_rail_override.go # PermissionInterruptRail 可注入派发点与导出访问器（9.90d-1 Task 13 前置）
 //
 // 对应 Python 代码：openjiuwen/harness/rails/security/
 package security
