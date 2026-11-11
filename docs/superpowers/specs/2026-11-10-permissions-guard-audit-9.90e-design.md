@@ -79,9 +79,9 @@ PermissionEngine 分层规则判定（纯规则，零 LLM）              ← 9.
 | `_normalize_exact_accesses` | `permissions_persist.py:300` | 无 | 22 行 |
 | `PermissionApprovalInvalidated` | `permissions_persist.py:151` | 无 | Go 用 `error` 哨兵值 |
 | `merge_file_guard_path_rule` | `persist_rule_merge.py:259` | ⚠️ **已实现但未导出**（`patterns.go:953` 的 `mergeFileGuardPathRule`，仅同包 `MergeFileGuardAccessAllows` 调用，零测试） | **只需导出 + 补测试**，不需重写 |
-| `setup_permission_context` | `owner_scopes.py:61` | 名字被改为 `NewPermissionContextFromRequest` 且逻辑简化 | 本批改正 |
-| `cleanup_permission_context` | `owner_scopes.py:99` | 无 | 本批新增 |
-| `current_permission_owner_scope` | `owner_scopes.py:104` | 名字被改（拆成 `PermissionContextFromCtx` + `OwnerScopeKey`） | 本批改正 |
+| `setup_permission_context` | `owner_scopes.py:61` | 名字被改为 `NewPermissionContextFromRequest` 且逻辑简化 | **本批改正**：改名 `SetupPermissionContext` + 补 `principal_user_id` 分支 + 不再丢字段 |
+| `cleanup_permission_context` | `owner_scopes.py:99` | 无 | **不新增**：Python 用于 reset ContextVar token，Go 的 `WithPermissionContextValue` 是 `context.WithValue` 派生不可变 ctx，无全局状态需清理 |
+| `current_permission_owner_scope` | `owner_scopes.py:104` | 名字被改（拆成 `PermissionContextFromCtx` + `OwnerScopeKey`） | **本批新增** `CurrentPermissionOwnerScope`；Python 全仓零调用，照抄保留待接线 |
 | `dispatch_permissions_config_request` | `permissions_config_rpc.py:58` | 拆成 23 函数 | 本批收敛 |
 
 ### 3.2 部分对齐

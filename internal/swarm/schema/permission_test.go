@@ -418,10 +418,10 @@ func TestPermissionContextFromCtx_空值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NewPermissionContextFromRequest 测试 ────────────────────────────
+// ──────────────────────────── SetupPermissionContext 测试 ────────────────────────────
 
-// TestNewPermissionContextFromRequest_数字分身模式 验证 avatar_mode 场景
-func TestNewPermissionContextFromRequest_数字分身模式(t *testing.T) {
+// TestSetupPermissionContext_数字分身模式 验证 avatar_mode 场景
+func TestSetupPermissionContext_数字分身模式(t *testing.T) {
 	metadata := map[string]any{
 		"avatar_mode":           true,
 		"group_digital_avatar":  true,
@@ -429,7 +429,7 @@ func TestNewPermissionContextFromRequest_数字分身模式(t *testing.T) {
 		"triggering_user_id":    "sender_456",
 		"avatar_principal_name": "助手A",
 	}
-	pc := NewPermissionContextFromRequest("feishu_ch1", metadata)
+	pc := SetupPermissionContext("feishu_ch1", metadata)
 	if pc == nil {
 		t.Fatal("数字分身模式应返回非 nil")
 	}
@@ -444,12 +444,12 @@ func TestNewPermissionContextFromRequest_数字分身模式(t *testing.T) {
 	}
 }
 
-// TestNewPermissionContextFromRequest_非数字分身_禁用记忆 验证 enable_memory=false 场景
-func TestNewPermissionContextFromRequest_非数字分身_禁用记忆(t *testing.T) {
+// TestSetupPermissionContext_非数字分身_禁用记忆 验证 enable_memory=false 场景
+func TestSetupPermissionContext_非数字分身_禁用记忆(t *testing.T) {
 	metadata := map[string]any{
 		"enable_memory": false,
 	}
-	pc := NewPermissionContextFromRequest("web", metadata)
+	pc := SetupPermissionContext("web", metadata)
 	if pc == nil {
 		t.Fatal("禁用记忆应返回非 nil")
 	}
@@ -464,36 +464,198 @@ func TestNewPermissionContextFromRequest_非数字分身_禁用记忆(t *testing
 	}
 }
 
-// TestNewPermissionContextFromRequest_无metadata返回nil 验证无 avatar_mode 且非禁用记忆时返回 nil
-func TestNewPermissionContextFromRequest_无metadata返回nil(t *testing.T) {
-	pc := NewPermissionContextFromRequest("web", nil)
+// TestSetupPermissionContext_无metadata返回nil 验证无 avatar_mode 且非禁用记忆时返回 nil
+func TestSetupPermissionContext_无metadata返回nil(t *testing.T) {
+	pc := SetupPermissionContext("web", nil)
 	if pc != nil {
 		t.Fatal("无 avatar_mode 且非禁用记忆时应返回 nil")
 	}
 
-	pc = NewPermissionContextFromRequest("web", map[string]any{})
+	pc = SetupPermissionContext("web", map[string]any{})
 	if pc != nil {
 		t.Fatal("空 metadata 应返回 nil")
 	}
 
-	pc = NewPermissionContextFromRequest("web", map[string]any{"enable_memory": true})
+	pc = SetupPermissionContext("web", map[string]any{"enable_memory": true})
 	if pc != nil {
 		t.Fatal("enable_memory=true 非 avatar_mode 时应返回 nil")
 	}
 }
 
-// TestNewPermissionContextFromRequest_channelID回填 验证 metadata 无 channel_id 时使用参数
-func TestNewPermissionContextFromRequest_channelID回填(t *testing.T) {
+// TestSetupPermissionContext_channelID回填 验证 metadata 无 channel_id 时使用参数
+func TestSetupPermissionContext_channelID回填(t *testing.T) {
 	metadata := map[string]any{
 		"avatar_mode":          true,
 		"group_digital_avatar": true,
 		"principal_user_id":    "user_123",
 	}
-	pc := NewPermissionContextFromRequest("feishu_ch1", metadata)
+	pc := SetupPermissionContext("feishu_ch1", metadata)
 	if pc == nil {
 		t.Fatal("数字分身模式应返回非 nil")
 	}
 	if pc.ChannelID != "feishu_ch1" {
 		t.Fatalf("metadata 无 channel_id 时应使用参数，得到 %s", pc.ChannelID)
+	}
+}
+
+// ──────────────────────────── principal_user_id 分支（9.90e Task 9）────────────────────────────
+
+// TestSetupPermissionContext_非数字分身有principal_user_id 验证新增分支。
+//
+// Python: if principal_user_id or meta.get("enable_memory") is False:
+//
+// Go 原实现只检查了后半句，漏掉 principal_user_id——会导致非 avatar 模式下
+// workspace provenance 与 owner_scopes 查找拿不到 owner token。
+func TestSetupPermissionContext_非数字分身有principal_user_id(t *testing.T) {
+	metadata := map[string]any{
+		"principal_user_id":  "user_abc",
+		"triggering_user_id": "sender_def",
+	}
+	pc := SetupPermissionContext("feishu_ch1", metadata)
+	if pc == nil {
+		t.Fatal("有 principal_user_id 时应返回非 nil（原实现漏此分支）")
+	}
+	if pc.PrincipalUserID != "user_abc" {
+		t.Errorf("PrincipalUserID = %q, want user_abc", pc.PrincipalUserID)
+	}
+	if pc.TriggeringUserID != "sender_def" {
+		t.Errorf("TriggeringUserID = %q, want sender_def（原实现丢弃该字段）", pc.TriggeringUserID)
+	}
+	if pc.ChannelID != "feishu_ch1" {
+		t.Errorf("ChannelID = %q, want feishu_ch1", pc.ChannelID)
+	}
+	if pc.AvatarMode {
+		t.Error("AvatarMode 应为 false")
+	}
+	if !pc.EnableMemory {
+		t.Error("未显式禁用时 EnableMemory 应为 true")
+	}
+}
+
+// TestSetupPermissionContext_非数字分身带完整字段 验证不丢字段。
+func TestSetupPermissionContext_非数字分身带完整字段(t *testing.T) {
+	metadata := map[string]any{
+		"principal_user_id":     "user_abc",
+		"triggering_user_id":    "sender_def",
+		"avatar_principal_name": "助手B",
+		"group_digital_avatar":  true,
+	}
+	pc := SetupPermissionContext("feishu_ch1", metadata)
+	if pc == nil {
+		t.Fatal("应返回非 nil")
+	}
+	if pc.AvatarPrincipalName != "助手B" {
+		t.Errorf("AvatarPrincipalName = %q，原实现丢弃该字段", pc.AvatarPrincipalName)
+	}
+	if pc.AvatarMode {
+		t.Error("AvatarMode 应为 false（metadata 未声明 avatar_mode）")
+	}
+}
+
+// TestSetupPermissionContext_principal为空白串仍返回nil 验证 trim 后判定。
+//
+// Python: principal_user_id = str(meta.get("principal_user_id", "")).strip()
+//
+//	if principal_user_id or ... → 空白串 falsy
+func TestSetupPermissionContext_principal为空白串仍返回nil(t *testing.T) {
+	pc := SetupPermissionContext("web", map[string]any{
+		"principal_user_id": "   ",
+	})
+	if pc != nil {
+		t.Fatal("principal_user_id 为空白串时应返回 nil")
+	}
+}
+
+// TestSetupPermissionContext_principal与非禁用记忆并存 验证两条件互不干扰。
+func TestSetupPermissionContext_principal与非禁用记忆并存(t *testing.T) {
+	pc := SetupPermissionContext("web", map[string]any{
+		"principal_user_id": "user_abc",
+		"enable_memory":     true,
+	})
+	if pc == nil {
+		t.Fatal("有 principal_user_id 时应返回非 nil，即使 enable_memory=true")
+	}
+	if !pc.EnableMemory {
+		t.Error("enable_memory=true 应保留")
+	}
+}
+
+// ──────────────────────────── CurrentPermissionOwnerScope（9.90e Task 9）────────────────────────────
+
+// TestCurrentPermissionOwnerScope_标准三段 验证正常格式。
+func TestCurrentPermissionOwnerScope_标准三段(t *testing.T) {
+	ctx := WithPermissionContextValue(context.Background(), NewPermissionContext(
+		WithPermissionChannelID("feishu_ch1"),
+		WithPermissionPrincipalUserID("user_abc"),
+	))
+	if got := CurrentPermissionOwnerScope(ctx); got != "principal:feishu_ch1:user_abc" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// TestCurrentPermissionOwnerScope_空channel用default 验证占位。
+//
+// Python: f"principal:{channel_id or 'default'}:{principal_user_id}"
+func TestCurrentPermissionOwnerScope_空channel用default(t *testing.T) {
+	ctx := WithPermissionContextValue(context.Background(), NewPermissionContext(
+		WithPermissionPrincipalUserID("user_abc"),
+	))
+	if got := CurrentPermissionOwnerScope(ctx); got != "principal:default:user_abc" {
+		t.Errorf("got %q, want principal:default:user_abc", got)
+	}
+}
+
+// TestCurrentPermissionOwnerScope_空白channel用default 验证 trim 后占位。
+func TestCurrentPermissionOwnerScope_空白channel用default(t *testing.T) {
+	ctx := WithPermissionContextValue(context.Background(), NewPermissionContext(
+		WithPermissionChannelID("   "),
+		WithPermissionPrincipalUserID("user_abc"),
+	))
+	if got := CurrentPermissionOwnerScope(ctx); got != "principal:default:user_abc" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// TestCurrentPermissionOwnerScope_无principal返回空 验证空串。
+func TestCurrentPermissionOwnerScope_无principal返回空(t *testing.T) {
+	ctx := WithPermissionContextValue(context.Background(), NewPermissionContext(
+		WithPermissionChannelID("feishu_ch1"),
+	))
+	if got := CurrentPermissionOwnerScope(ctx); got != "" {
+		t.Errorf("got %q, want 空串", got)
+	}
+}
+
+// TestCurrentPermissionOwnerScope_空白principal返回空 验证 trim 后判定。
+func TestCurrentPermissionOwnerScope_空白principal返回空(t *testing.T) {
+	ctx := WithPermissionContextValue(context.Background(), NewPermissionContext(
+		WithPermissionChannelID("feishu_ch1"),
+		WithPermissionPrincipalUserID("   "),
+	))
+	if got := CurrentPermissionOwnerScope(ctx); got != "" {
+		t.Errorf("got %q, want 空串", got)
+	}
+}
+
+// TestCurrentPermissionOwnerScope_无上下文返回空 验证 nil 上下文。
+func TestCurrentPermissionOwnerScope_无上下文返回空(t *testing.T) {
+	if got := CurrentPermissionOwnerScope(context.Background()); got != "" {
+		t.Errorf("got %q, want 空串", got)
+	}
+}
+
+// TestStringFieldOf_nil与类型不符 验证辅助函数兜底。
+func TestStringFieldOf_nil与类型不符(t *testing.T) {
+	if got := stringFieldOf(nil, "k"); got != "" {
+		t.Errorf("nil map got %q", got)
+	}
+	if got := stringFieldOf(map[string]any{"k": 42}, "k"); got != "" {
+		t.Errorf("非字符串 got %q", got)
+	}
+	if got := stringFieldOf(map[string]any{"k": "v"}, "k"); got != "v" {
+		t.Errorf("got %q, want v", got)
+	}
+	if got := stringFieldOf(map[string]any{}, "missing"); got != "" {
+		t.Errorf("缺键 got %q", got)
 	}
 }

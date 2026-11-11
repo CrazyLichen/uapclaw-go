@@ -1053,7 +1053,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 10-11: 权限上下文设置
 	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
-	permCtx := schema.NewPermissionContextFromRequest(req.ChannelID, req.Metadata)
+	permCtx := schema.SetupPermissionContext(req.ChannelID, req.Metadata)
 	if permCtx != nil {
 		ctx = schema.WithPermissionContextValue(ctx, permCtx)
 	} else if req.PermissionContext != nil {
@@ -1348,7 +1348,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 10-11: 权限上下文设置
 	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
-	permCtx := schema.NewPermissionContextFromRequest(req.ChannelID, req.Metadata)
+	permCtx := schema.SetupPermissionContext(req.ChannelID, req.Metadata)
 	if permCtx != nil {
 		ctx = schema.WithPermissionContextValue(ctx, permCtx)
 	} else if req.PermissionContext != nil {

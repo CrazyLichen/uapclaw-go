@@ -271,12 +271,42 @@ func PermissionContextFromCtx(ctx context.Context) *PermissionContext {
 	return nil
 }
 
-// NewPermissionContextFromRequest 从 AgentRequest 的 metadata 构造 PermissionContext。
+// CurrentPermissionOwnerScope 返回可信的请求 owner token，供 workspace provenance 使用。
+//
+// Python: current_permission_owner_scope() (owner_scopes.py L104-114)
+//
+// 无权限上下文、或无 principal_user_id 时返回空串（调用方据此视为「无归属」）。
+// channel_id 缺失时用 "default" 占位，保证 token 始终可解析成三段。
+//
+// ⚠️ 当前无调用方：Python 全仓同样只有定义（零调用），此处按规则 9.2-4 照抄
+// 保留，待 workspace provenance 接线时启用。
+func CurrentPermissionOwnerScope(ctx context.Context) string {
+	permCtx := PermissionContextFromCtx(ctx)
+	if permCtx == nil {
+		return ""
+	}
+	channelID := strings.TrimSpace(permCtx.ChannelID)
+	principalUserID := strings.TrimSpace(permCtx.PrincipalUserID)
+	if principalUserID == "" {
+		return ""
+	}
+	if channelID == "" {
+		channelID = "default"
+	}
+	return "principal:" + channelID + ":" + principalUserID
+}
+
+// SetupPermissionContext 从请求的 channel_id 与 metadata 构造权限上下文。
+//
 // Python: setup_permission_context(request) (owner_scopes.py L61-88)
 //
-// 返回 nil 表示无需设置权限上下文（非数字分身且非禁用记忆场景）。
-// Go 端不需要 Python 的 ContextVar token/reset，使用 context.WithValue 不可变模式。
-func NewPermissionContextFromRequest(channelID string, metadata map[string]any) *PermissionContext {
+// 返回 nil 表示无需设置权限上下文（非数字分身、且既无 principal_user_id
+// 也未显式禁用记忆）。
+//
+// ⚠️ 命名对齐说明：Python 的 setup_ 前缀来自 ContextVar.set() 的副作用语义。
+// Go 侧这里**没有副作用**——它是纯构造函数，调用方拿返回值自行
+// WithPermissionContextValue 注入；也不需要有配对的 cleanup（context 不可变）。
+func SetupPermissionContext(channelID string, metadata map[string]any) *PermissionContext {
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
@@ -287,16 +317,25 @@ func NewPermissionContextFromRequest(channelID string, metadata map[string]any) 
 	}
 
 	if !avatarMode {
-		// 非 avatar_mode：仅当 enable_memory=false 时才设置上下文（用于禁用记忆）
-		// Python: if meta.get("enable_memory") is False
+		// 非 avatar_mode：满足以下任一条件才设置上下文
+		//   1. 存在 principal_user_id —— workspace authority 需要
+		//   2. enable_memory 显式为 false —— 用于禁用记忆
+		// 两者都不满足时返回 nil（原有行为不受影响）。
+		// Python: if principal_user_id or meta.get("enable_memory") is False:
+		principalUserID := strings.TrimSpace(stringFieldOf(metadata, "principal_user_id"))
+		enableMemoryExplicitFalse := false
 		if v, ok := metadata["enable_memory"].(bool); ok && !v {
-			return NewPermissionContext(
-				WithPermissionChannelID(channelID),
-				WithPermissionEnableMemory(false),
-				WithPermissionAvatarMode(false),
-			)
+			enableMemoryExplicitFalse = true
 		}
-		return nil
+		if principalUserID == "" && !enableMemoryExplicitFalse {
+			return nil
+		}
+		pc := NewPermissionContextFromDict(metadata)
+		pc.AvatarMode = false
+		if strings.TrimSpace(pc.ChannelID) == "" {
+			pc.ChannelID = channelID
+		}
+		return pc
 	}
 
 	// avatar_mode=True → 从 metadata 构建完整 PermissionContext
@@ -306,4 +345,20 @@ func NewPermissionContextFromRequest(channelID string, metadata map[string]any) 
 		pc.ChannelID = channelID
 	}
 	return pc
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// stringFieldOf 读取 map 里的字符串字段，非字符串或缺失返回空串。
+//
+// Python: str(meta.get(key, "") or "").strip()
+func stringFieldOf(data map[string]any, key string) string {
+	if data == nil {
+		return ""
+	}
+	text, ok := data[key].(string)
+	if !ok {
+		return ""
+	}
+	return text
 }
