@@ -8,9 +8,15 @@
 // 文件目录：
 //
 //	reasoning/
-//	├── doc.go       # 包文档
-//	├── profiles.go  # 42 条 provider profile + 23 条 model fallback + 能力查询
-//	└── protocol.go  # 协议标识常量
+//	├── doc.go            # 包文档
+//	├── profiles.go       # 42 条 provider profile + 23 条 model fallback + 能力查询
+//	├── plan.go           # ReasoningPlan + resolve/apply + 22 个 wire 编码器
+//	├── protocol.go       # 协议标识与 25 个 wire 名常量
+//	└── requestcontext.go # disabled-thinking 回退作用域
 //
-// 对应 Python 代码：openjiuwen/core/foundation/llm/reasoning_profiles.py
+// 对应 Python 代码：
+//
+//	openjiuwen/core/foundation/llm/reasoning_profiles.py
+//	openjiuwen/core/foundation/llm/reasoning.py
+//	openjiuwen/core/foundation/llm/request_context.py
 package reasoning
