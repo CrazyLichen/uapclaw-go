@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestAllEventTypes 验证 AllEventTypes 返回全部 26 个枚举值
+// TestAllEventTypes 验证 AllEventTypes 返回全部 27 个枚举值
 func TestAllEventTypes(t *testing.T) {
 	events := AllEventTypes()
-	if len(events) != 26 {
-		t.Fatalf("AllEventTypes() 返回 %d 个事件，want 26", len(events))
+	if len(events) != 27 {
+		t.Fatalf("AllEventTypes() 返回 %d 个事件，want 27", len(events))
 	}
 
 	// 验证无重复
@@ -184,14 +184,24 @@ func TestEventType常量值与Python对齐(t *testing.T) {
 		{EventTypeTeamMessage, "team.message"},
 		{EventTypeHeartbeatRelay, "heartbeat.relay"},
 		{EventTypeHistoryGet, "history.message"},
+		{EventTypeSessionRequestCompleted, "chat.request_completed"},
 	}
 	for _, tt := range tests {
 		if string(tt.got) != tt.want {
 			t.Errorf("常量值 = %q, want %q", tt.got, tt.want)
 		}
 	}
-	// 验证测试覆盖全部 26 个常量
-	if len(tests) != 26 {
-		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 26", len(tests))
+	// 验证测试覆盖全部 27 个常量（26 + 10.7.2 新增 1）
+	if len(tests) != 27 {
+		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 27", len(tests))
+	}
+}
+
+// TestEventType_SessionRequestCompleted 完成行事件字面值。
+// Python: SESSION_REQUEST_COMPLETED_EVENT；字面值实测自上游测试 test_prompt_suggestion.py:554
+func TestEventType_SessionRequestCompleted(t *testing.T) {
+	if string(EventTypeSessionRequestCompleted) != "chat.request_completed" {
+		t.Errorf("EventTypeSessionRequestCompleted = %q, want chat.request_completed",
+			string(EventTypeSessionRequestCompleted))
 	}
 }
