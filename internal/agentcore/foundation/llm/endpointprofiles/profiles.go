@@ -99,10 +99,16 @@ var anthropicCompatibleProviders = map[string]struct{}{
 
 // NormalizeModelClientConfig 返回携带协议/档案/鉴权/协议模式元数据的归一化配置副本。
 // 不修改入参；未知 provider 原样返回。
+//
+// 返回 error 的原因：上游函数末尾 `return ModelClientConfig(**data)` 会触发 Pydantic
+// 构造期校验（如 KVCacheExtensionConfig.mode 的 Literal["none","affinity"]）。
+// 别名表给 InferenceAffinity 注入 mode="release" 不在该集合内，上游因此**抛 ValidationError**。
+// Go 无构造期钩子，在返回前用同一套约束显式校验，保证行为一致。
+//
 // Python: endpoint_profiles.py:192-232 normalize_model_client_config
-func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) *llmschema.ModelClientConfig {
+func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) (*llmschema.ModelClientConfig, error) {
 	if config == nil {
-		return nil
+		return nil, nil
 	}
 	// 浅拷贝后对 Extensions/Extra 深拷贝，避免与入参共享可变状态
 	out := *config
@@ -112,7 +118,7 @@ func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) *llmschema.
 	provider := config.ClientProvider
 	alias, ok := legacyProviderAliases[provider]
 	if !ok {
-		return &out
+		return &out, nil
 	}
 
 	// 协议为 anthropic_messages 且 provider 在 anthropic 兼容集合内 → 改用 Anthropic 客户端。
@@ -122,7 +128,7 @@ func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) *llmschema.
 		if _, compat := anthropicCompatibleProviders[provider]; compat {
 			out.ClientProvider = "Anthropic"
 			setLegacyProvider(&out, provider)
-			return &out
+			return &out, nil
 		}
 	}
 
@@ -154,7 +160,15 @@ func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) *llmschema.
 		}
 	}
 	setLegacyProvider(&out, provider)
-	return &out
+	// 上游末尾 `return ModelClientConfig(**data)` 的构造期校验。
+	// 注意：别名表给 InferenceAffinity 注入 kv_cache.mode="release"，而
+	// KVCacheExtensionConfig.mode 的 Literal 只允许 none/affinity —— 上游此处
+	// 会抛 ValidationError。Go 严格跟随（不修正上游缺陷），让该 provider 同样不可用。
+	// Python: endpoint_profiles.py:232 + schema/config.py:48
+	if err := validateExtensions(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // LegacyProvider 返回归一前的 provider 原名（provenance）。
@@ -190,6 +204,15 @@ func ResolveEndpointProfile(config *llmschema.ModelClientConfig) (EndpointProfil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// validateExtensions 校验 extensions 取值，对齐上游 ModelClientConfig 构造期约束。
+// Python: schema/config.py:47-49 KVCacheExtensionConfig.mode: Literal["none","affinity"]
+func validateExtensions(c *llmschema.ModelClientConfig) error {
+	if c == nil || c.Extensions == nil {
+		return nil
+	}
+	return llmschema.ValidateKVCacheMode(c.Extensions.KVCache.Mode)
+}
 
 // setLegacyProvider 记录归一前的 provider 原名。
 func setLegacyProvider(config *llmschema.ModelClientConfig, provider string) {

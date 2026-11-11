@@ -30,7 +30,10 @@ func TestNormalizeModelClientConfig_DashScope归一(t *testing.T) {
 		APIKey:         "sk-test",
 		APIBase:        "https://dashscope.aliyuncs.com/compatible-mode/v1",
 	}
-	out := NormalizeModelClientConfig(in)
+	out, err := NormalizeModelClientConfig(in)
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.ClientProvider != "OpenAI" {
 		t.Errorf("ClientProvider = %q, want OpenAI", out.ClientProvider)
 	}
@@ -52,28 +55,29 @@ func TestNormalizeModelClientConfig_DashScope归一(t *testing.T) {
 
 // TestNormalizeModelClientConfig_InferenceAffinity注入KVCache 验证 extensions 注入。
 // Python: endpoint_profiles.py:132-138
-func TestNormalizeModelClientConfig_InferenceAffinity注入KVCache(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
+// TestNormalizeModelClientConfig_InferenceAffinity被拒 严格对齐上游：别名注入的
+// mode="release" 不在 KVCacheExtensionConfig 的 Literal["none","affinity"] 内，
+// 上游在函数末尾 ModelClientConfig(**data) 处抛 ValidationError。
+// Python: endpoint_profiles.py:128 注入 release + schema/config.py:48 Literal 不含它
+func TestNormalizeModelClientConfig_InferenceAffinity被拒(t *testing.T) {
+	_, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
 		ClientProvider: "InferenceAffinity",
 		APIBase:        "http://127.0.0.1:8000/v1",
 	})
-	if out.ClientProvider != "OpenAI" {
-		t.Errorf("ClientProvider = %q, want OpenAI", out.ClientProvider)
-	}
-	if out.EndpointProfile != "openai_compatible" {
-		t.Errorf("EndpointProfile = %q", out.EndpointProfile)
-	}
-	if out.Extensions == nil || out.Extensions.KVCache.Mode != "release" {
-		t.Errorf("kv_cache.mode = %+v", out.Extensions)
+	if err == nil {
+		t.Fatal("InferenceAffinity 应因 kv_cache.mode=release 被拒（上游 Literal 只允许 none/affinity）")
 	}
 }
 
 // TestNormalizeModelClientConfig_AscendAffinity 验证 auth_mode 与 affinity 注入。
 // Python: endpoint_profiles.py:139-147
 func TestNormalizeModelClientConfig_AscendAffinity(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
+	out, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
 		ClientProvider: "AscendAffinity",
 	})
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.AuthMode != llmschema.AuthModeCustomHeaders {
 		t.Errorf("AuthMode = %q, want custom_headers", out.AuthMode)
 	}
@@ -85,9 +89,12 @@ func TestNormalizeModelClientConfig_AscendAffinity(t *testing.T) {
 // TestNormalizeModelClientConfig_OpenAIAccount 验证 responses 与 oauth 注入。
 // Python: endpoint_profiles.py:148-155
 func TestNormalizeModelClientConfig_OpenAIAccount(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
+	out, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
 		ClientProvider: "OpenAIAccount",
 	})
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.APIMode != llmschema.APIModeResponses {
 		t.Errorf("APIMode = %q, want responses", out.APIMode)
 	}
@@ -98,7 +105,10 @@ func TestNormalizeModelClientConfig_OpenAIAccount(t *testing.T) {
 
 // TestNormalizeModelClientConfig_OpenAI不动 验证无别名 provider 原样返回。
 func TestNormalizeModelClientConfig_OpenAI不动(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{ClientProvider: "OpenAI"})
+	out, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{ClientProvider: "OpenAI"})
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.ClientProvider != "OpenAI" || out.EndpointProfile != "" {
 		t.Errorf("out = %+v", out)
 	}
@@ -109,10 +119,13 @@ func TestNormalizeModelClientConfig_OpenAI不动(t *testing.T) {
 
 // TestNormalizeModelClientConfig_显式endpoint不覆盖 验证用户显式配置优先。
 func TestNormalizeModelClientConfig_显式endpoint不覆盖(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
+	out, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
 		ClientProvider:  "DashScope",
 		EndpointProfile: "vllm",
 	})
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.EndpointProfile != "vllm" {
 		t.Errorf("EndpointProfile = %q, want vllm（显式配置应保留）", out.EndpointProfile)
 	}
@@ -122,10 +135,13 @@ func TestNormalizeModelClientConfig_显式endpoint不覆盖(t *testing.T) {
 // 验证 anthropic_messages 协议下兼容 provider 改用 Anthropic 客户端。
 // Python: endpoint_profiles.py:203-205
 func TestNormalizeModelClientConfig_Anthropic协议改走Anthropic客户端(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
+	out, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{
 		ClientProvider: "DashScope",
 		APIMode:        "anthropic_messages",
 	})
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.ClientProvider != "Anthropic" {
 		t.Errorf("ClientProvider = %q, want Anthropic", out.ClientProvider)
 	}
@@ -136,8 +152,9 @@ func TestNormalizeModelClientConfig_Anthropic协议改走Anthropic客户端(t *t
 
 // TestNormalizeModelClientConfig_nil 验证 nil 安全。
 func TestNormalizeModelClientConfig_nil(t *testing.T) {
-	if got := NormalizeModelClientConfig(nil); got != nil {
-		t.Errorf("got %+v, want nil", got)
+	got, err := NormalizeModelClientConfig(nil)
+	if got != nil || err != nil {
+		t.Errorf("got=%+v err=%v, want nil/nil", got, err)
 	}
 }
 
@@ -204,7 +221,10 @@ func TestNormalizeModelClientConfig_深拷贝(t *testing.T) {
 			KVCache:     llmschema.KVCacheExtensionConfig{Mode: "affinity"},
 		},
 	}
-	out := NormalizeModelClientConfig(in)
+	out, err := NormalizeModelClientConfig(in)
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	// 改动出参不应影响入参
 	out.Extra["k"] = "changed"
 	out.Extensions.PromptCache["p"] = 2
@@ -230,7 +250,10 @@ func TestNormalizeModelClientConfig_用户显式kvMode优先(t *testing.T) {
 			KVCache: llmschema.KVCacheExtensionConfig{Mode: "none"},
 		},
 	}
-	out := NormalizeModelClientConfig(in)
+	out, err := NormalizeModelClientConfig(in)
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.Extensions.KVCache.Mode != "none" {
 		t.Errorf("Mode = %q, want none（用户显式值必须保留，不得被别名覆盖）", out.Extensions.KVCache.Mode)
 	}
@@ -238,7 +261,10 @@ func TestNormalizeModelClientConfig_用户显式kvMode优先(t *testing.T) {
 
 // TestNormalizeModelClientConfig_kvMode空缺时填别名值 验证「别名只补空缺」。
 func TestNormalizeModelClientConfig_kvMode空缺时填别名值(t *testing.T) {
-	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{ClientProvider: "AscendAffinity"})
+	out, err := NormalizeModelClientConfig(&llmschema.ModelClientConfig{ClientProvider: "AscendAffinity"})
+	if err != nil {
+		t.Fatalf("归一失败: %v", err)
+	}
 	if out.Extensions == nil || out.Extensions.KVCache.Mode != "affinity" {
 		t.Errorf("Mode = %+v, want affinity", out.Extensions)
 	}
