@@ -539,6 +539,89 @@ func (s *TopicStarterStore) QueryEvents(opts QueryEventsOptions) ([]map[string]a
 	return scanEventRows(rows)
 }
 
+// SaveSnapshot 保存一版画像快照，版本号在库内自增并回写到存储内容。
+// Python: topic_starter.py:437 save_snapshot
+func (s *TopicStarterStore) SaveSnapshot(snapshot map[string]any, evidenceUntil float64) (map[string]any, error) {
+	db, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	var version int
+	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) + 1 FROM profile_snapshot").Scan(&version); err != nil {
+		return nil, err
+	}
+
+	createdAt := nowSeconds()
+	stored := make(map[string]any, len(snapshot)+3)
+	for key, value := range snapshot {
+		stored[key] = value
+	}
+	stored["version"] = version
+	stored["updated_at"] = createdAt
+	stored["evidence_until"] = evidenceUntil
+
+	encoded, err := marshalNoEscape(stored)
+	if err != nil {
+		return nil, fmt.Errorf("序列化画像快照失败: %w", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(?, ?, ?, ?)",
+		version, createdAt, evidenceUntil, string(encoded),
+	); err != nil {
+		return nil, err
+	}
+	return stored, nil
+}
+
+// LoadLatestSnapshot 读取最新的 v3 可读快照，跳过显式 v4 行。
+// Python: topic_starter.py:469 load_latest_snapshot
+func (s *TopicStarterStore) LoadLatestSnapshot() (map[string]any, error) {
+	db, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT snapshot_json FROM profile_snapshot ORDER BY version DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var raw any
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		text := ""
+		switch value := raw.(type) {
+		case []byte:
+			text = string(value)
+		case string:
+			text = value
+		default:
+			continue
+		}
+		if text == "" {
+			continue
+		}
+		decoded := map[string]any{}
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			continue
+		}
+		if schema, ok := decoded["schema_version"]; ok && pyStr(schema) == v4SnapshotSchema {
+			continue
+		}
+		return decoded, nil
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
 // ListEvents 按写入顺序返回全部事件。
 // Python: topic_starter.py:566 list_events
 func (s *TopicStarterStore) ListEvents() ([]map[string]any, error) {

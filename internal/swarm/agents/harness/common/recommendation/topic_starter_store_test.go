@@ -563,3 +563,69 @@ func TestQueryEvents_按payload整数降序排序(t *testing.T) {
 	assert.Equal(t, "t1", got[0]["topic_id"], "version=3 应排最前")
 	assert.Equal(t, "t2", got[1]["topic_id"], "version=1 次之")
 }
+
+// TestSaveSnapshot_版本自增并回写字段
+// Python: topic_starter.py:437 save_snapshot
+func TestSaveSnapshot_版本自增并回写字段(t *testing.T) {
+	store := newTestStore(t)
+
+	first, err := store.SaveSnapshot(map[string]any{"interests": []any{"a"}}, 1000.0)
+	require.NoError(t, err)
+	assert.Equal(t, 1, first["version"])
+	assert.Equal(t, 1000.0, first["evidence_until"])
+	assert.Greater(t, first["updated_at"].(float64), 0.0)
+	assert.Equal(t, []any{"a"}, first["interests"])
+
+	second, err := store.SaveSnapshot(map[string]any{"interests": []any{"b"}}, 2000.0)
+	require.NoError(t, err)
+	assert.Equal(t, 2, second["version"])
+
+	third, err := store.SaveSnapshot(map[string]any{}, 3000.0)
+	require.NoError(t, err)
+	assert.Equal(t, 3, third["version"])
+}
+
+// TestLoadLatestSnapshot_取最新
+func TestLoadLatestSnapshot_取最新(t *testing.T) {
+	store := newTestStore(t)
+
+	got, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	assert.Nil(t, got, "空表返回 nil")
+
+	_, err = store.SaveSnapshot(map[string]any{"mark": "v1"}, 1.0)
+	require.NoError(t, err)
+	_, err = store.SaveSnapshot(map[string]any{"mark": "v2"}, 2.0)
+	require.NoError(t, err)
+
+	got, err = store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v2", got["mark"])
+	// 从库里读回来的是 JSON 数字，encoding/json 解成 float64（不是 SaveSnapshot 返回的 int）
+	assert.Equal(t, float64(2), got["version"])
+}
+
+// TestLoadLatestSnapshot_跳过v4行
+// Python: topic_starter.py:469-484 —— schema_version == "topic-starter-v4" 的跳过
+func TestLoadLatestSnapshot_跳过v4行(t *testing.T) {
+	store := newTestStore(t)
+
+	_, err := store.SaveSnapshot(map[string]any{"mark": "v3-readable"}, 1.0)
+	require.NoError(t, err)
+
+	// 直接插一条 v4 快照（模拟另一套格式）
+	db, err := store.connect()
+	require.NoError(t, err)
+	_, err = db.Exec(
+		"INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(?, ?, ?, ?)",
+		99, 1.0, 1.0, `{"schema_version":"topic-starter-v4","mark":"v4-only"}`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	got, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v3-readable", got["mark"], "应跳过 v4 行")
+}
