@@ -2708,24 +2708,34 @@ func TestHandleSkillsUninstall_普通技能可删(t *testing.T) {
 	}
 }
 
-// TestIsBuiltinSkill_内置技能 验证内置技能返回 true
+// TestIsBuiltinSkill_内置技能 复制安装的内置技能不算内置（个人版可卸载）。
+// Python: 内置「仅企业版不可卸载（个人版与 develop 一致）」，见 handle_skills_uninstall:4781-4782。
+// 内置技能安装走 copyDir 复制，用户目录与内置源是两份不同实体，
+// resolve() 后不等 → IsBuiltinSkill 返回 false。
 func TestIsBuiltinSkill_内置技能(t *testing.T) {
-	tmpDir := t.TempDir()
 	builtinDir := setupBuiltinSkillsDir(t)
-	skillDir := filepath.Join(builtinDir, "my-skill")
-	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+	builtinSkill := filepath.Join(builtinDir, "my-skill")
+	if err := os.MkdirAll(builtinSkill, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(builtinSkill, "SKILL.md"),
+		[]byte("---\nname: my-skill\ndescription: d\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// 在 skillsDir 下创建同名的符号链接
-	sm := NewSkillManager(tmpDir)
-	linkPath := filepath.Join(sm.skillsDir, "my-skill")
-	if err := os.Symlink(skillDir, linkPath); err != nil {
+	// 用户目录：复制一份（与内置源不同实体）
+	sm := NewSkillManager(t.TempDir())
+	userSkill := filepath.Join(sm.skillsDir, "my-skill")
+	if err := os.MkdirAll(userSkill, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(userSkill, "SKILL.md"),
+		[]byte("---\nname: my-skill\ndescription: d\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if !sm.IsBuiltinSkill("my-skill") {
-		t.Error("内置技能应返回 true")
+	if sm.IsBuiltinSkill("my-skill") {
+		t.Error("复制安装的内置技能两侧实体不同，个人版应可卸载（返回 false）")
 	}
 }
 

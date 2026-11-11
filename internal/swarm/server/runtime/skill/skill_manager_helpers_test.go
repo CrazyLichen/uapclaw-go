@@ -185,73 +185,115 @@ func TestSafeExtractZIPBytesToDir(t *testing.T) {
 
 // ──────────────────────────── 导出函数补充测试 ────────────────────────────
 
-// TestIsBuiltinSkill 验证内置技能判定（按 SKILL.md 的 name 匹配）。
+// TestIsBuiltinSkill 验证内置技能判定。
+// Python: SkillManager._uninstall_skill_body 内置保护段（skill_manager.py:4855-4874）
+//
+// 判据是「内置源中能定位到同名技能」且「skillsDir/<name> 与它 resolve() 后为同一物理路径」。
+// 由于内置技能安装走**复制**（copyDir）而非软链，两侧是不同实体，resolve 后不等，
+// 故个人版下已安装的内置技能判定为**非内置、可卸载**——与 Python 注释
+// 「内置：仅企业版不可卸载（个人版与 develop 一致）」一致。
 func TestIsBuiltinSkill(t *testing.T) {
-	sm := NewSkillManager(t.TempDir())
+	t.Run("空名称返回 false", func(t *testing.T) {
+		sm := NewSkillManager(t.TempDir())
+		ok, dir := sm.isBuiltinSkill("", t.TempDir())
+		if ok || dir != "" {
+			t.Fatalf("应返回 (false, \"\")，实际 (%v, %q)", ok, dir)
+		}
+	})
 
-	t.Run("目录不存在返回 false", func(t *testing.T) {
+	t.Run("内置目录为空返回 false", func(t *testing.T) {
+		sm := NewSkillManager(t.TempDir())
+		ok, dir := sm.isBuiltinSkill("any", "")
+		if ok || dir != "" {
+			t.Fatalf("应返回 (false, \"\")，实际 (%v, %q)", ok, dir)
+		}
+	})
+
+	t.Run("内置目录不存在返回 false", func(t *testing.T) {
+		sm := NewSkillManager(t.TempDir())
 		ok, dir := sm.isBuiltinSkill("any", filepath.Join(t.TempDir(), "missing"))
 		if ok || dir != "" {
 			t.Fatalf("应返回 (false, \"\")，实际 (%v, %q)", ok, dir)
 		}
 	})
 
-	t.Run("按 name 命中内置技能", func(t *testing.T) {
-		root := t.TempDir()
-		skillDir := filepath.Join(root, "builtin-one", "skill")
-		if err := os.MkdirAll(skillDir, 0o755); err != nil {
-			t.Fatalf("创建目录失败: %v", err)
+	t.Run("复制安装的内置技能不算内置", func(t *testing.T) {
+		// 内置源：<builtinRoot>/<name>（单层，与真实内置技能结构一致）
+		builtinRoot := t.TempDir()
+		builtinSkill := filepath.Join(builtinRoot, "builtin-one")
+		if err := os.MkdirAll(builtinSkill, 0o755); err != nil {
+			t.Fatalf("创建内置技能目录失败: %v", err)
 		}
-		content := "---\nname: builtin-one\ndescription: d\n---\nbody"
-		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(builtinSkill, "SKILL.md"),
+			[]byte("---\nname: builtin-one\ndescription: d\n---\nbody"), 0o644); err != nil {
 			t.Fatalf("写入 SKILL.md 失败: %v", err)
 		}
 
-		ok, got := sm.isBuiltinSkill("builtin-one", root)
-		if !ok {
-			t.Fatal("应命中内置技能")
+		// 用户目录：复制一份（不同实体）
+		sm := NewSkillManager(t.TempDir())
+		userSkill := filepath.Join(sm.skillsDir, "builtin-one")
+		if err := os.MkdirAll(userSkill, 0o755); err != nil {
+			t.Fatalf("创建用户技能目录失败: %v", err)
 		}
-		if got != skillDir {
-			t.Fatalf("目录 = %q, 期望 %q", got, skillDir)
-		}
-	})
-
-	t.Run("name 不匹配返回 false", func(t *testing.T) {
-		root := t.TempDir()
-		skillDir := filepath.Join(root, "builtin-two", "skill")
-		if err := os.MkdirAll(skillDir, 0o755); err != nil {
-			t.Fatalf("创建目录失败: %v", err)
-		}
-		content := "---\nname: builtin-two\ndescription: d\n---\nbody"
-		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(userSkill, "SKILL.md"),
+			[]byte("---\nname: builtin-one\ndescription: d\n---\nbody"), 0o644); err != nil {
 			t.Fatalf("写入 SKILL.md 失败: %v", err)
 		}
 
-		ok, dir := sm.isBuiltinSkill("other-name", root)
+		ok, dir := sm.isBuiltinSkill("builtin-one", builtinRoot)
 		if ok || dir != "" {
-			t.Fatalf("应返回 (false, \"\")，实际 (%v, %q)", ok, dir)
+			t.Fatalf("复制安装的内置技能两侧实体不同，不应判为内置，实际 (%v, %q)", ok, dir)
 		}
 	})
 
-	t.Run("目录下缺少 SKILL.md 时跳过", func(t *testing.T) {
-		root := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(root, "empty-skill", "skill"), 0o755); err != nil {
+	t.Run("内置源无同名技能返回 false", func(t *testing.T) {
+		builtinRoot := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(builtinRoot, "other-skill"), 0o755); err != nil {
+			t.Fatalf("创建内置技能目录失败: %v", err)
+		}
+		sm := NewSkillManager(t.TempDir())
+		if err := os.MkdirAll(filepath.Join(sm.skillsDir, "my-skill"), 0o755); err != nil {
+			t.Fatalf("创建用户技能目录失败: %v", err)
+		}
+
+		ok, dir := sm.isBuiltinSkill("my-skill", builtinRoot)
+		if ok || dir != "" {
+			t.Fatalf("内置源无此技能不应判为内置，实际 (%v, %q)", ok, dir)
+		}
+	})
+
+	t.Run("目录名与SKILL.md的name不一致时按name命中", func(t *testing.T) {
+		// 内置源目录名是 dir-slug，但 SKILL.md 里 name 是 logical-name
+		builtinRoot := t.TempDir()
+		dirSlug := filepath.Join(builtinRoot, "dir-slug")
+		if err := os.MkdirAll(dirSlug, 0o755); err != nil {
+			t.Fatalf("创建内置技能目录失败: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dirSlug, "SKILL.md"),
+			[]byte("---\nname: logical-name\ndescription: d\n---\nbody"), 0o644); err != nil {
+			t.Fatalf("写入 SKILL.md 失败: %v", err)
+		}
+
+		// 第二段查找应能按 SKILL.md 的 name 定位到 dir-slug
+		sm := NewSkillManager(t.TempDir())
+		if got := sm.resolveBuiltinSkillPath("logical-name", builtinRoot); got != dirSlug {
+			t.Fatalf("resolveBuiltinSkillPath = %q, 期望 %q", got, dirSlug)
+		}
+	})
+
+	t.Run("下划线开头的内置目录被跳过", func(t *testing.T) {
+		builtinRoot := t.TempDir()
+		hidden := filepath.Join(builtinRoot, "_hidden")
+		if err := os.MkdirAll(hidden, 0o755); err != nil {
 			t.Fatalf("创建目录失败: %v", err)
 		}
-		ok, _ := sm.isBuiltinSkill("empty-skill", root)
-		if ok {
-			t.Fatal("缺少 SKILL.md 不应命中")
+		if err := os.WriteFile(filepath.Join(hidden, "SKILL.md"),
+			[]byte("---\nname: hidden-name\ndescription: d\n---\n"), 0o644); err != nil {
+			t.Fatalf("写入 SKILL.md 失败: %v", err)
 		}
-	})
-
-	t.Run("普通文件被跳过", func(t *testing.T) {
-		root := t.TempDir()
-		if err := os.WriteFile(filepath.Join(root, "not-a-dir.txt"), []byte("x"), 0o644); err != nil {
-			t.Fatalf("写入文件失败: %v", err)
-		}
-		ok, _ := sm.isBuiltinSkill("not-a-dir", root)
-		if ok {
-			t.Fatal("普通文件不应命中")
+		sm := NewSkillManager(t.TempDir())
+		if got := sm.resolveBuiltinSkillPath("hidden-name", builtinRoot); got != "" {
+			t.Fatalf("下划线目录应被跳过，实际返回 %q", got)
 		}
 	})
 }

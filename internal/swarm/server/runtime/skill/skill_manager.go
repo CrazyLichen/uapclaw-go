@@ -710,16 +710,13 @@ func (sm *SkillManager) HandleSkillsUninstall(ctx context.Context, params map[st
 		return map[string]any{"success": false, "detail": fmt.Sprintf("未找到技能: %s", safeName)}, nil
 	}
 
-	// 内置技能保护（对齐 Python: SkillManager.is_builtin_skill，比较 dest 与内置源的物理路径）
+	// 内置技能保护（对齐 Python SkillManager.handle_skills_uninstall 的 is_builtin_skill 检查，
+	// skill_manager.py:9599-9616）：isBuiltinSkill 内部已做 resolve() 后同一物理路径判定，
+	// 此处不需再比一次 Abs——Abs 不解析软链，反而会漏判软链形式的内置技能。
 	builtinDir := getBuiltinSkillsDir()
 	if builtinDir != "" {
-		isBuiltin, builtinPath := sm.isBuiltinSkill(safeName, builtinDir)
-		if isBuiltin {
-			destAbs, _ := filepath.Abs(dest)
-			builtinAbs, _ := filepath.Abs(builtinPath)
-			if destAbs == builtinAbs {
-				return map[string]any{"success": false, "detail": "内置技能不允许删除"}, nil
-			}
+		if isBuiltin, _ := sm.isBuiltinSkill(safeName, builtinDir); isBuiltin {
+			return map[string]any{"success": false, "detail": "内置技能不允许删除"}, nil
 		}
 	}
 
@@ -2287,9 +2284,11 @@ func (sm *SkillManager) GetSkillMeta(name string) map[string]any {
 	return meta
 }
 
-// IsBuiltinSkill 判断技能是否为内置技能
-// Python: SkillManager.is_builtin_skill(skill_name)
-// 比较用户 skills 目录中的技能与内置目录中的技能是否指向同一物理路径
+// IsBuiltinSkill 判断技能是否为内置技能。
+// Python: SkillManager.is_builtin_skill(skill_name) (skill_manager.py:9599)
+//
+// 与内部 isBuiltinSkill 同一语义（skillsDir/<name> 与 builtinDir/<name> 指向同一实体），
+// 此处只做参数取值，判定逻辑收敛到一处。
 func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 	if name == "" {
 		return false
@@ -2298,23 +2297,8 @@ func (sm *SkillManager) IsBuiltinSkill(name string) bool {
 	if builtinDir == "" {
 		return false
 	}
-	// 安全校验路径名称
-	if _, err := safePathName(name, "skill"); err != nil {
-		return false
-	}
-	// 用户 skills 目录下的技能路径
-	userSkillPath := filepath.Join(sm.skillsDir, name)
-	userInfo, err := os.Stat(userSkillPath)
-	if err != nil {
-		return false
-	}
-	// 内置目录下的技能路径
-	builtinSkillPath := filepath.Join(builtinDir, name)
-	builtinInfo, err := os.Stat(builtinSkillPath)
-	if err != nil {
-		return false
-	}
-	return os.SameFile(userInfo, builtinInfo)
+	isBuiltin, _ := sm.isBuiltinSkill(name, builtinDir)
+	return isBuiltin
 }
 
 // GetSkillEnabled 读取技能的 enabled 标志，默认为 true（向后兼容）。
@@ -2427,29 +2411,71 @@ func (sm *SkillManager) getMirrorSkillsDirs() []string {
 	return []string{} // Go 二进制 = 包安装模式，无 mirror 目录
 }
 
-// isBuiltinSkill 检查技能是否为内置技能。
-func (sm *SkillManager) isBuiltinSkill(skillName, builtinDir string) (bool, string) {
+// resolveBuiltinSkillPath 定位内置源目录中对应 name 的技能目录，返回空串表示未找到。
+//
+// 两段式查找（对齐 Python SkillManager._uninstall_skill_body，skill_manager.py:4855-4872）：
+//  1. 先按名直接拼 `<builtinDir>/<name>`，存在即命中（覆盖目录名与技能名一致的常态）；
+//  2. 否则遍历 `<builtinDir>` 的子目录，解析每个技能的 SKILL.md 取 name 字段比对
+//     （覆盖目录名与 SKILL.md 里 name 不一致的情况）。
+//
+// `"skill"` 在 Python `_safe_child_path(base, name, label)` 里是 **label** 参数，不是路径段。
+// Go 侧早期实现误当路径段拼成 `<entry>/skill/SKILL.md`，导致真实内置技能（单层
+// `<name>/SKILL.md`）永远匹配不上。
+func (sm *SkillManager) resolveBuiltinSkillPath(name, builtinDir string) string {
+	// ① Python: direct_builtin = _safe_child_path(builtin_dir, name, "skill")
+	if direct, err := safeChildPath(builtinDir, name, "skill"); err == nil && dirExists(direct) {
+		return direct
+	}
+	// ② Python: for child in builtin_dir.iterdir() ... _try_find_skill_file(child)
 	entries, err := os.ReadDir(builtinDir)
 	if err != nil {
-		return false, ""
+		return ""
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
 			continue
 		}
-		skillDir := filepath.Join(builtinDir, entry.Name(), "skill")
-		skillMd := filepath.Join(skillDir, "SKILL.md")
-		if _, err := os.Stat(skillMd); err == nil {
-			// 解析 SKILL.md 检查技能名
-			meta, _ := parseSKILLMd(skillMd)
-			if meta != nil {
-				if name, ok := meta["name"].(string); ok && name == skillName {
-					return true, skillDir
-				}
-			}
+		child := filepath.Join(builtinDir, entry.Name())
+		// Python: md = self._try_find_skill_file(child) —— 目录内递归找 SKILL.md
+		mdPath := sm.tryFindSkillFile(child)
+		if mdPath == "" {
+			continue
+		}
+		meta, _ := parseSKILLMd(mdPath)
+		if meta == nil {
+			continue
+		}
+		if metaName, ok := meta["name"].(string); ok && metaName == name {
+			return child
 		}
 	}
-	return false, ""
+	return ""
+}
+
+// isBuiltinSkill 检查技能是否为内置技能，返回 (是否内置, 内置源中的技能目录)。
+//
+// 对齐 Python SkillManager._uninstall_skill_body 的内置保护段（skill_manager.py:4855-4874）：
+// 先在内置源中定位同名技能（resolveBuiltinSkillPath），再比较 `skillsDir/<name>` 与
+// 该内置目录 resolve() 后是否为**同一物理路径**——即只有内置技能被软链/安装到用户目录、
+// 两边指向同一实体时才认定为内置。
+func (sm *SkillManager) isBuiltinSkill(skillName, builtinDir string) (bool, string) {
+	if skillName == "" || builtinDir == "" {
+		return false, ""
+	}
+	builtinPath := sm.resolveBuiltinSkillPath(skillName, builtinDir)
+	if builtinPath == "" {
+		return false, ""
+	}
+	// Python: dest = self._resolve_local_skill_dir(name)
+	dest, destErr := safeChildPath(sm.skillsDir, skillName, "skill")
+	if destErr != nil || !dirExists(dest) {
+		return false, ""
+	}
+	// Python: if dest.resolve() == builtin_skill_path.resolve()
+	if pathutil.ResolveSymlinksLenient(dest) != pathutil.ResolveSymlinksLenient(builtinPath) {
+		return false, ""
+	}
+	return true, builtinPath
 }
 
 // parseSKILLMd 解析 SKILL.md 文件返回元数据（包级函数，用于内置技能检查等场景）。

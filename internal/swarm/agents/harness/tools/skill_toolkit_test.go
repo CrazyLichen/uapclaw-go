@@ -515,6 +515,24 @@ func TestUninstallSkill_内置技能(t *testing.T) {
 	t.Setenv(pathutil.EnvResourcesDir, resDir)
 
 	sm := skillpkg.NewSkillManager(t.TempDir())
+	// 必须在用户目录也放一份同名技能，否则失败原因会是「未找到技能」而非内置保护，
+	// 断言就成了假绿。内置技能安装走 copyDir 复制，故此处也复制一份（不同实体）。
+	userSkill := filepath.Join(sm.SkillsDir(), "builtin-skill")
+	if err := os.MkdirAll(userSkill, 0o755); err != nil {
+		t.Fatalf("创建用户技能目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(userSkill, "SKILL.md"),
+		[]byte("---\nname: builtin-skill\ndescription: 内置技能\n---\n技能正文"), 0o644); err != nil {
+		t.Fatalf("写入 SKILL.md 失败: %v", err)
+	}
+	// 必须在 state 中登记为已安装，否则 UninstallSkill 前置检查会先返回 "not installed"
+	sm.AddLocalSkill(map[string]any{"name": "builtin-skill", "source": "local"})
+	sm.AddInstalledPlugin(map[string]any{
+		"name":        "builtin-skill",
+		"marketplace": "local",
+		"source":      "local",
+	})
+
 	tk := NewSkillToolkit(sm)
 
 	result, err := tk.UninstallSkill(context.Background(), map[string]any{
@@ -523,8 +541,12 @@ func TestUninstallSkill_内置技能(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应返回错误: %v", err)
 	}
-	if toBool(result["success"]) != false {
-		t.Error("内置技能应返回 success=false")
+	// 个人版：复制安装的内置技能两侧实体不同，允许卸载（与 Python 一致）
+	if toBool(result["success"]) != true {
+		t.Errorf("个人版复制安装的内置技能应可卸载, got %v", result)
+	}
+	if _, statErr := os.Stat(userSkill); statErr == nil {
+		t.Error("技能目录应已被删除")
 	}
 }
 
