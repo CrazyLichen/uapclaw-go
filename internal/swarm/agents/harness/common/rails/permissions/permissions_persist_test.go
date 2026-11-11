@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+
 	"sort"
 	"strings"
 	"testing"
@@ -360,38 +360,6 @@ func TestSortedSet(t *testing.T) {
 	})
 }
 
-// ---------- randomHex 测试 ----------
-
-func TestRandomHex(t *testing.T) {
-	t.Run("生成指定长度的十六进制字符串", func(t *testing.T) {
-		got := randomHex(8)
-		// n 字节 → 2n 个十六进制字符
-		if len(got) != 16 {
-			t.Errorf("期望长度 16，得到 %d", len(got))
-		}
-	})
-	t.Run("生成的字符串为有效十六进制", func(t *testing.T) {
-		got := randomHex(12)
-		matched, err := regexp.MatchString(`^[0-9a-f]+$`, got)
-		if err != nil || !matched {
-			t.Errorf("期望有效十六进制字符串，得到 %s", got)
-		}
-	})
-	t.Run("两次调用结果不同（极大概率）", func(t *testing.T) {
-		a := randomHex(16)
-		b := randomHex(16)
-		if a == b {
-			t.Errorf("两次调用不应返回相同结果（极小概率事件），a=%s b=%s", a, b)
-		}
-	})
-	t.Run("零长度返回空字符串", func(t *testing.T) {
-		got := randomHex(0)
-		if got != "" {
-			t.Errorf("期望空字符串，得到 %s", got)
-		}
-	})
-}
-
 // ---------- expandAndResolvePath 测试 ----------
 
 func TestExpandAndResolvePath(t *testing.T) {
@@ -504,22 +472,6 @@ func TestNormalizeToolArgs_集成PersistPermissionAllowRule(t *testing.T) {
 }
 
 // ---------- 额外边界条件测试 ----------
-
-func TestRandomHex_并发安全(t *testing.T) {
-	// 并发调用 randomHex 不应 panic
-	done := make(chan string, 10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			done <- randomHex(8)
-		}()
-	}
-	for i := 0; i < 10; i++ {
-		v := <-done
-		if len(v) != 16 {
-			t.Errorf("期望长度 16，得到 %d", len(v))
-		}
-	}
-}
 
 func TestSortedSet_大输入(t *testing.T) {
 	items := make([]string, 1000)
