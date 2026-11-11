@@ -78,6 +78,11 @@ type ModelRequestConfig struct {
 	ResponseFormat map[string]any `json:"response_format,omitempty"`
 	// ContextWindow 模型支持的上下文窗口总长（token），内部元数据，不参与厂商请求
 	ContextWindow *int `json:"context_window,omitempty"`
+	// Reasoning 思考/推理请求意图。
+	// 可能是 *ReasoningConfig（代码内构造，对应 Python isinstance 分支），
+	// 也可能是 map[string]any（从 JSON/YAML 反序列化，键集合决定新式或遗留）。
+	// Python: ModelRequestConfig.reasoning: Optional[Union[ReasoningConfig, dict[str, Any]]]
+	Reasoning any `json:"reasoning,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
 	Extra map[string]any `json:"-"`
 }
@@ -700,5 +705,8 @@ func init() {
 		"max_tokens":      {},
 		"stop":            {},
 		"response_format": {},
+		// reasoning 必须是已知键：否则会落进 Extra，被 BuildRequestParams
+		// 平铺进请求参数误发给厂商（Python 侧 model_dump 显式 exclude 它）。
+		"reasoning": {},
 	}
 }
