@@ -186,6 +186,118 @@ func (c *InProcessRuntimeClient) DescribeSession(sessionID string) (*sessionpkg.
 	return descriptor, nil
 }
 
+// PrepareSessionCreate 准备一次会话创建（含渠道守卫）。
+// Python: client.py:168-173 prepare_session_create
+func (c *InProcessRuntimeClient) PrepareSessionCreate(
+	ctx context.Context, input swruntime.SessionCreateInput,
+) (*swruntime.PreparedSessionProvision, error) {
+	if err := requireProcessCliChannel(input.ChannelID); err != nil {
+		return nil, err
+	}
+	return c.runtime.PrepareSessionCreate(ctx, input)
+}
+
+// PrepareSessionSwitch 准备一次会话切换（含渠道守卫）。
+// Python: client.py:175-180 prepare_session_switch
+func (c *InProcessRuntimeClient) PrepareSessionSwitch(
+	ctx context.Context, input swruntime.SessionSwitchInput,
+) (*swruntime.PreparedSessionProvision, error) {
+	if err := requireProcessCliChannel(input.ChannelID); err != nil {
+		return nil, err
+	}
+	return c.runtime.PrepareSessionSwitch(ctx, input)
+}
+
+// PrepareSessionFork 准备一次会话分叉（含渠道守卫）。
+// Python: client.py:182-187 prepare_session_fork
+func (c *InProcessRuntimeClient) PrepareSessionFork(
+	ctx context.Context, input swruntime.SessionForkInput,
+) (*swruntime.PreparedSessionProvision, error) {
+	if err := requireProcessCliChannel(input.ChannelID); err != nil {
+		return nil, err
+	}
+	return c.runtime.PrepareSessionFork(ctx, input)
+}
+
+// CommitSessionProvision 提交一次已准备的会话操作。
+// Python: client.py:189-203 commit_session_provision
+//
+// 渠道守卫读的是 prepared.result.channel_id（Python :196-198 的
+// getattr(getattr(prepared, "result", None), "channel_id", None)）。
+func (c *InProcessRuntimeClient) CommitSessionProvision(
+	prepared *swruntime.PreparedSessionProvision,
+	timing swruntime.SessionProvisionCommitTiming,
+	commitContext *swruntime.SessionProvisionCommitContext,
+) (any, error) {
+	if err := requireProcessCliChannel(preparedChannelID(prepared)); err != nil {
+		return nil, err
+	}
+	return c.runtime.CommitSessionProvision(prepared, timing, commitContext)
+}
+
+// AbortSessionProvision 放弃一次已准备的会话操作。
+// Python: client.py:205-212 abort_session_provision
+func (c *InProcessRuntimeClient) AbortSessionProvision(prepared *swruntime.PreparedSessionProvision) error {
+	if err := requireProcessCliChannel(preparedChannelID(prepared)); err != nil {
+		return err
+	}
+	return c.runtime.AbortSessionProvision(prepared)
+}
+
+// DeleteSession 删除一个已持久化的会话（含渠道守卫）。
+// Python: client.py:214-224 delete_session
+func (c *InProcessRuntimeClient) DeleteSession(
+	ctx context.Context, channelID, sessionID string,
+) (sessionpkg.SessionDeleteResult, error) {
+	if err := requireProcessCliChannel(channelID); err != nil {
+		return sessionpkg.SessionDeleteResult{}, err
+	}
+	return c.runtime.DeleteSession(ctx, swruntime.DeleteSessionOptions{
+		ChannelID: channelID,
+		SessionID: sessionID,
+	})
+}
+
+// AnswerInteraction 回答一次交互请求（含渠道守卫）。
+// Python: client.py:257-262 answer_interaction
+func (c *InProcessRuntimeClient) AnswerInteraction(
+	ctx context.Context, request *schema.AgentRequest,
+) ([]*swruntime.RuntimeEvent, error) {
+	if err := requireProcessCliChannel(request.ChannelID); err != nil {
+		return nil, err
+	}
+	return c.runtime.AnswerInteraction(ctx, request)
+}
+
+// AnswerInteractionInput 用类型化输入回答交互（含渠道守卫）。
+// Python: client.py:264-269 answer_interaction_input
+func (c *InProcessRuntimeClient) AnswerInteractionInput(
+	ctx context.Context, answer *swruntime.InteractionAnswerInput,
+) ([]*swruntime.RuntimeEvent, error) {
+	if err := requireProcessCliChannel(answer.ChannelID); err != nil {
+		return nil, err
+	}
+	return c.runtime.AnswerInteractionInput(ctx, answer)
+}
+
+// StreamInteractionAnswer 转发类型化回答并保留增量观测（含渠道守卫）。
+// Python: client.py:271-277 stream_interaction_answer
+func (c *InProcessRuntimeClient) StreamInteractionAnswer(
+	ctx context.Context,
+	answer *swruntime.InteractionAnswerInput,
+	onEvent func(*swruntime.RuntimeEvent) bool,
+) error {
+	if err := requireProcessCliChannel(answer.ChannelID); err != nil {
+		return err
+	}
+	// Python: :2050 request = answer.to_agent_request()
+	request, err := answer.ToAgentRequest()
+	if err != nil {
+		return err
+	}
+	return c.runtime.StreamInteractionAnswer(ctx, request, onEvent)
+}
+
 // Stream 跑一轮流式请求（含渠道守卫）。
 // Python: client.py:226-230 stream → runtime.stream(request, on_agent_ready=...)
 //
@@ -341,4 +453,18 @@ func modeOf(request *schema.AgentRequest) string {
 		return mode
 	}
 	return ""
+}
+
+// preparedChannelID 取已准备会话操作的目标渠道。
+// Python: client.py:196-198 getattr(getattr(prepared, "result", None), "channel_id", None)
+func preparedChannelID(prepared *swruntime.PreparedSessionProvision) string {
+	if prepared == nil {
+		return ""
+	}
+	_, channelID, _, _, ok := swruntime.CommittedSessionIdentity(prepared.Result())
+	if !ok {
+		// 结果类型不在 create/switch 范围内时不拦截，交由 Runtime 判定
+		return ""
+	}
+	return channelID
 }

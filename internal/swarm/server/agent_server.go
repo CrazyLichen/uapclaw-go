@@ -146,6 +146,10 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	// AgentManager 创建门面时把共享账本注入门面（P4：门面不自建账本）。
 	agentManager.SetRuntimeProvider(func() *swruntime.AgentRuntime { return server.agentRuntime })
 	server.provisioner = newSessionProvisioner(server.planController, server.agentManager, server.agentRuntime)
+	// provisioner 回注 Runtime：Runtime 的 6 个会话开通委托（prepare_* / commit / abort /
+	// delete）都要经它。Python service.py:403-409 由 __init__ 自造；Go 侧依赖方向相反
+	// （provisioner 的依赖在 server 层），故改为构造后注入。
+	server.agentRuntime.SetSessionProvisioner(server.provisioner)
 	return server
 }
 

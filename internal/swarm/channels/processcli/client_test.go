@@ -186,3 +186,83 @@ func TestDescribeSession_渠道不符返回nil(t *testing.T) {
 func testRequest(channelID string) *swschema.AgentRequest {
 	return &swschema.AgentRequest{RequestID: "r1", ChannelID: channelID}
 }
+
+// TestPrepareSessionCreate_渠道守卫
+// Python: client.py:168-173 prepare_session_create
+func TestPrepareSessionCreate_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	_, err := c.PrepareSessionCreate(t.Context(), swruntime.SessionCreateInput{ChannelID: "web"})
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestPrepareSessionSwitch_渠道守卫
+// Python: client.py:175-180 prepare_session_switch
+func TestPrepareSessionSwitch_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	_, err := c.PrepareSessionSwitch(t.Context(), swruntime.SessionSwitchInput{ChannelID: "web"})
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestPrepareSessionFork_渠道守卫
+// Python: client.py:182-187 prepare_session_fork
+func TestPrepareSessionFork_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	_, err := c.PrepareSessionFork(t.Context(), swruntime.SessionForkInput{ChannelID: "web"})
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestDeleteSession_渠道守卫
+// Python: client.py:214-224 delete_session
+func TestDeleteSession_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	_, err := c.DeleteSession(t.Context(), "web", "s1")
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestAnswerInteraction_渠道守卫
+// Python: client.py:257-262 answer_interaction
+func TestAnswerInteraction_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	_, err := c.AnswerInteraction(t.Context(), testRequest("web"))
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestAnswerInteractionInput_渠道守卫
+// Python: client.py:264-269 answer_interaction_input
+func TestAnswerInteractionInput_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	_, err := c.AnswerInteractionInput(t.Context(), &swruntime.InteractionAnswerInput{
+		RequestID: "r1", ChannelID: "web", SessionID: "s1", InteractionID: "i1",
+	})
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestStreamInteractionAnswer_渠道守卫
+// Python: client.py:271-277 stream_interaction_answer
+func TestStreamInteractionAnswer_渠道守卫(t *testing.T) {
+	c := NewInProcessRuntimeClient(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	err := c.StreamInteractionAnswer(t.Context(), &swruntime.InteractionAnswerInput{
+		RequestID: "r1", ChannelID: "web", SessionID: "s1", InteractionID: "i1",
+	}, func(*swruntime.RuntimeEvent) bool { return false })
+	require.Error(t, err)
+	var boundary *ProcessCliBoundaryError
+	require.ErrorAs(t, err, &boundary)
+}
+
+// TestPreparedChannelID_nil返回空
+// Python: client.py:196-198 getattr 链对 None 返回 None
+func TestPreparedChannelID_nil返回空(t *testing.T) {
+	require.Equal(t, "", preparedChannelID(nil))
+}

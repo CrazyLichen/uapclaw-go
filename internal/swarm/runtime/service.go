@@ -84,6 +84,10 @@ type AgentRuntimeDeps struct {
 	ResolveModelCapability func(model string) (RuntimeModelDescriptor, error)
 }
 
+// ErrProvisionerUnavailable 会话开通器未注入。
+// Python: 无对应（__init__ 必造 provisioner）；Go 注入式装配的防御性错误。
+var ErrProvisionerUnavailable = errors.New("session provisioner is not configured")
+
 // SessionCoordinatorPort 清理与执行账本需要的协调器能力。
 // Python: service.py 里 self._session_coordinator 的调用面（清理、登记、执行、取消、关闭）
 //
@@ -159,6 +163,13 @@ type AgentRuntime struct {
 	// coordinator 会话执行协调器（清理路径用）
 	// Python: service.py:412 self._session_coordinator
 	coordinator SessionCoordinatorPort
+	// provisioner 会话开通器（创建/切换/分叉/删除的唯一出口）
+	// Python: service.py:403-409 self._session_provisioner = RuntimeSessionProvisioner(...)
+	//
+	// 字段由 server 层注入而非 Runtime 自造：provisioner 的依赖（runner / adapter /
+	// recommendation）都在 server 层，runtime 不得反向依赖。注入点见
+	// internal/swarm/server/agent_server.go 的 newSessionProvisioner 调用处。
+	provisioner *RuntimeSessionProvisioner
 	// resetPlanSession 重置会话 plan 状态（可注入）
 	// Python: service.py:3070 self._plan_controller.reset_session
 	resetPlanSession func(sessionID string)
@@ -1499,6 +1510,192 @@ func (r *AgentRuntime) Coordinator() SessionCoordinatorPort { return r.coordinat
 //
 // 门面与 AgentServer 不再各自持有 manager，一律经此取，消除多份持有。
 func (r *AgentRuntime) AgentManager() AgentManagerPort { return r.manager }
+
+// SetSessionProvisioner 注入会话开通器（server 层构造后调用一次）。
+// Python: service.py:403-409 __init__ 里自造；Go 侧依赖方向相反（server → runtime），
+// 故改为注入。必须在 Start() 之前调用。
+func (r *AgentRuntime) SetSessionProvisioner(provisioner *RuntimeSessionProvisioner) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.provisioner = provisioner
+}
+
+// PrepareSessionFork 在本 Runtime 上准备一次传输无关的会话分叉。
+// Python: service.py:1086-1103 Runtime.prepare_session_fork
+func (r *AgentRuntime) PrepareSessionFork(
+	ctx context.Context, input SessionForkInput,
+) (*PreparedSessionProvision, error) {
+	// Python: :1091-1094 async with self._lifecycle_lock: self._require_started()
+	//                          self._session_provision_prepares += 1
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	// Python: :1099 prepared = await self._session_provisioner.prepare_session_fork(input)
+	//         finally: if prepared is not None: self._pending_session_provisions.add(prepared)
+	provisioner := r.provisionerFor()
+	if provisioner == nil {
+		return nil, ErrProvisionerUnavailable
+	}
+	return provisioner.PrepareSessionFork(ctx, input)
+}
+
+// PrepareSessionCreate 在本 Runtime 上准备一次传输无关的会话创建。
+// Python: service.py:1106-1123 Runtime.prepare_session_create
+func (r *AgentRuntime) PrepareSessionCreate(
+	ctx context.Context, input SessionCreateInput,
+) (*PreparedSessionProvision, error) {
+	// Python: :1111-1115 lifecycle_lock + require_started + prepares += 1
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	provisioner := r.provisionerFor()
+	if provisioner == nil {
+		return nil, ErrProvisionerUnavailable
+	}
+	return provisioner.PrepareSessionCreate(ctx, input)
+}
+
+// PrepareSessionSwitch 在本 Runtime 上准备一次传输无关的会话切换。
+// Python: service.py:1126-1143 Runtime.prepare_session_switch
+func (r *AgentRuntime) PrepareSessionSwitch(
+	ctx context.Context, input SessionSwitchInput,
+) (*PreparedSessionProvision, error) {
+	// Python: :1131-1135 lifecycle_lock + require_started + prepares += 1
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	provisioner := r.provisionerFor()
+	if provisioner == nil {
+		return nil, ErrProvisionerUnavailable
+	}
+	return provisioner.PrepareSessionSwitch(ctx, input)
+}
+
+// CommitSessionProvision 在 Runtime 关闭前提交一次已准备的会话操作。
+// Python: service.py:1146-1180 Runtime.commit_session_provision
+func (r *AgentRuntime) CommitSessionProvision(
+	prepared *PreparedSessionProvision,
+	timing SessionProvisionCommitTiming,
+	commitContext *SessionProvisionCommitContext,
+) (any, error) {
+	// Python: :1152-1153 async with self._lifecycle_lock: self._require_started()
+	if err := r.requireStarted(); err != nil {
+		return nil, err
+	}
+	// Python: :1155-1162 result = await provisioner.commit_session_provision(...)
+	provisioner := r.provisionerFor()
+	if provisioner == nil {
+		return nil, ErrProvisionerUnavailable
+	}
+	result, err := provisioner.CommitSessionProvision(prepared, timing, commitContext)
+	// Python: :1163-1175 单 Agent 会话模式时登记会话
+	if err == nil {
+		if regErr := r.registerCommittedSession(result); regErr != nil {
+			return result, regErr
+		}
+	}
+	// Python: :1176-1177 finally: self._discard_finalized_session_provision(prepared)
+	// ⤵️ 回填 20.5：_pending_session_provisions 集合与 _discard_finalized_session_provision
+	// 尚未实现（Go 侧 provisioner 内部已按 owner token 管理租约）。
+	return result, err
+}
+
+// AbortSessionProvision 在 Runtime 关闭前放弃一次已准备的会话操作。
+// Python: service.py:1183-1194 Runtime.abort_session_provision
+func (r *AgentRuntime) AbortSessionProvision(prepared *PreparedSessionProvision) error {
+	// Python: :1188-1189 async with self._lifecycle_lock: self._require_started()
+	if err := r.requireStarted(); err != nil {
+		return err
+	}
+	// Python: :1191 await provisioner.abort_session_provision(prepared)
+	provisioner := r.provisionerFor()
+	if provisioner == nil {
+		return ErrProvisionerUnavailable
+	}
+	return provisioner.AbortSessionProvision(prepared)
+}
+
+// DeleteSession 通过共享 Runtime 边界删除一个已持久化的会话。
+// Python: service.py:3361-3376 Runtime.delete_session
+func (r *AgentRuntime) DeleteSession(
+	ctx context.Context, opts DeleteSessionOptions,
+) (sessionpkg.SessionDeleteResult, error) {
+	// Python: :3369-3370 if self._closed: raise RuntimeStateError
+	r.mu.Lock()
+	closed := r.closed
+	r.mu.Unlock()
+	if closed {
+		return sessionpkg.SessionDeleteResult{}, errors.New("runtime is already closed")
+	}
+	// Python: :3371-3375 await self._session_provisioner.delete_session(...)
+	provisioner := r.provisionerFor()
+	if provisioner == nil {
+		return sessionpkg.SessionDeleteResult{}, ErrProvisionerUnavailable
+	}
+	return provisioner.DeleteSession(ctx, opts)
+}
+
+// provisionerFor 取 provisioner；未注入时返回 nil。
+// Python: 不存在该路径（__init__ 必造 provisioner）；Go 侧因注入式装配需要防御。
+func (r *AgentRuntime) provisionerFor() *RuntimeSessionProvisioner {
+	r.mu.Lock()
+	provisioner := r.provisioner
+	r.mu.Unlock()
+	// 未注入时返回 nil，调用方必须判空（见 requireProvisioner）
+	return provisioner
+}
+
+// registerCommittedSession 把已提交的单 Agent 会话登记进协调器。
+// Python: service.py:1163-1175 commit_session_provision 里按结果类型取 mode/work_mode
+//
+//	then if self._is_single_agent_session_mode(mode, work_mode=work_mode):
+//	         await self._register_session(session_id=..., channel_id=...)
+func (r *AgentRuntime) registerCommittedSession(result any) error {
+	sessionID, channelID, mode, workMode, ok := CommittedSessionIdentity(result)
+	if !ok || mode == "" {
+		return nil
+	}
+	// Python: _is_single_agent_session_mode(mode, work_mode=work_mode)
+	params := map[string]any{"mode": mode}
+	if workMode != "" {
+		params["work_mode"] = workMode
+	}
+	if !isSingleAgentSessionMode(params) {
+		return nil
+	}
+	// Python: await self._register_session(session_id=..., channel_id=...)
+	if _, err := r.RegisterSession(sessionID, channelID, sessionpkg.SessionPersistencePolicyPersistent); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CommittedSessionIdentity 从提交结果里取 (sessionID, channelID, mode, workMode)。
+// Python: service.py:1163-1172
+//
+//	if isinstance(result, SessionCreateResult): mode = result.canonical_mode; work_mode = result.work_mode
+//	elif isinstance(result, SessionSwitchResult): mode = result.mode; work_mode = None
+//	else: mode = None; work_mode = None
+func CommittedSessionIdentity(result any) (string, string, string, string, bool) {
+	switch typed := result.(type) {
+	case SessionCreateResult:
+		return typed.SessionID, typed.ChannelID, typed.CanonicalMode, typed.WorkMode, true
+	case *SessionCreateResult:
+		if typed == nil {
+			return "", "", "", "", false
+		}
+		return typed.SessionID, typed.ChannelID, typed.CanonicalMode, typed.WorkMode, true
+	case SessionSwitchResult:
+		return typed.SessionID, typed.ChannelID, typed.Mode, "", true
+	case *SessionSwitchResult:
+		if typed == nil {
+			return "", "", "", "", false
+		}
+		return typed.SessionID, typed.ChannelID, typed.Mode, "", true
+	default:
+		return "", "", "", "", false
+	}
+}
 
 // requireStarted Runtime 必须已启动（对应上游 _require_started）。
 // Python: service.py 各门面的 self._require_started()
