@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -159,24 +160,122 @@ func BuildHTTPRequestWithAuth(
 	return req, client, nil
 }
 
-// HandleExtraBody 将 params 中的 return_token_ids 移入 extra_body。
-// OpenAI SDK 会丢弃未知的顶级参数，vLLM 需要 return_token_ids 在 JSON body 中，
-// 因此将其移入 extra_body 字段。
-// Python: OpenAIModelClient.invoke() 中的 return_token_ids 处理
+// openaiExtraBodyExtensionFields 必须搬进 extra_body 的厂商私有字段。
+//
+// 上游注释：Vendor thinking flags must ride in extra_body; OpenAI SDK rejects them
+// as top-level chat.completions.create kwargs. Go 虽不走 SDK，仍保持同一语义
+// （厂商只从 extra_body 读这些键）。
+//
+// Python: openai_model_client.py:120-131 _OPENAI_EXTRA_BODY_EXTENSION_FIELDS（7 个）
+var openaiExtraBodyExtensionFields = []string{
+	"agent_hint",
+	"cache_salt",
+	"cache_sharing",
+	"return_token_ids",
+	"enable_thinking",
+	"thinking",
+	"chat_template_kwargs",
+}
+
+// HandleExtraBody 将 params 中的厂商私有字段移入 extra_body。
+//
+// 上游对 7 个键做统一搬移（循环 _OPENAI_EXTRA_BODY_EXTENSION_FIELDS）：
+// 这些键放顶层时厂商插件读不到，必须进 JSON body 的 extra_body。
+//
+// Python: openai_model_client.py:1149-1157 _move_openai_extra_body_extensions
 func HandleExtraBody(params map[string]any) {
-	tokenIDs, ok := params["return_token_ids"]
-	if !ok {
+	var moved map[string]any
+	for _, key := range openaiExtraBodyExtensionFields {
+		v, ok := params[key]
+		if !ok {
+			continue
+		}
+		if moved == nil {
+			moved = make(map[string]any, len(openaiExtraBodyExtensionFields))
+		}
+		moved[key] = v
+		delete(params, key)
+	}
+	if len(moved) == 0 {
 		return
 	}
-	delete(params, "return_token_ids")
-
-	// 获取或创建 extra_body
 	extraBody, _ := params["extra_body"].(map[string]any)
 	if extraBody == nil {
-		extraBody = make(map[string]any)
+		extraBody = make(map[string]any, len(moved))
 	}
-	extraBody["return_token_ids"] = tokenIDs
+	for k, v := range moved {
+		extraBody[k] = v
+	}
 	params["extra_body"] = extraBody
+}
+
+// DropOrphanToolCalls 删除历史消息中既无 id 又无 function.name 的 tool_call。
+//
+// 这类条目是流式碎片聚合失败或上游写入残缺留下的，发给厂商会 400。
+// 某条消息的 tool_calls 被删空时，连带删除该键。
+// 返回新切片，不就地修改入参元素（与上游 list(messages) 后替换元素一致）。
+//
+// Python: llm_provider_compat_patch.py:148-167 _drop_orphan_tool_calls
+func DropOrphanToolCalls(messages []map[string]any) []map[string]any {
+	var repaired []map[string]any
+	for pos, msg := range messages {
+		calls, ok := msg["tool_calls"].([]any)
+		if !ok {
+			continue
+		}
+		kept := make([]any, 0, len(calls))
+		for _, call := range calls {
+			if !isOrphanToolCall(call) {
+				kept = append(kept, call)
+			}
+		}
+		if len(kept) == len(calls) {
+			continue
+		}
+		// 首处改动时整体浅拷贝，避免就地修改调用方切片
+		if repaired == nil {
+			repaired = make([]map[string]any, len(messages))
+			copy(repaired, messages)
+		}
+		fixed := make(map[string]any, len(msg))
+		for k, v := range msg {
+			fixed[k] = v
+		}
+		if len(kept) == 0 {
+			delete(fixed, "tool_calls")
+		} else {
+			fixed["tool_calls"] = kept
+		}
+		repaired[pos] = fixed
+		logger.Warn(logComponent).
+			Int("dropped", len(calls)-len(kept)).
+			Int("position", pos).
+			Msg("Dropped tool call(s) without id and name from history message.")
+	}
+	if repaired == nil {
+		return messages
+	}
+	return repaired
+}
+
+// isOrphanToolCall 判定 tool_call 是否既无 id 又无 function.name。
+// 非 map 的条目不算孤儿（保留原样，交给厂商报错更易定位）。
+//
+// Python: llm_provider_compat_patch.py:142-145 _is_orphan_tool_call
+func isOrphanToolCall(call any) bool {
+	m, ok := call.(map[string]any)
+	if !ok {
+		return false
+	}
+	if id, _ := m["id"].(string); id != "" {
+		return false
+	}
+	fn, _ := m["function"].(map[string]any)
+	if fn == nil {
+		return true
+	}
+	name, _ := fn["name"].(string)
+	return name == ""
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

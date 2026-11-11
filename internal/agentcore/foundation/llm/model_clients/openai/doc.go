@@ -14,7 +14,8 @@
 //	├── doc.go              # 包文档
 //	├── types.go            # OpenAI API 响应 JSON 结构体定义
 //	├── sse_reader.go       # SSE 流读取器
-//	├── request_builder.go  # 请求构建（headers、参数调整、SSL/代理）
+//	├── request_builder.go  # 请求构建（headers、参数调整、extra_body 7 键搬移、孤儿 tool_call 裁剪）
+//	├── param_rules.go      # ModelParamRule + MiniMax reasoning_split
 //	├── parse_response.go   # 非流式响应解析
 //	├── parse_stream_chunk.go # 流式块解析
 //	├── transcription.go    # 音频转写（Whisper API）
