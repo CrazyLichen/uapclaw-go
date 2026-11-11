@@ -507,61 +507,6 @@ func (c *OpenAIModelClient) Stream(
 	return chunkChan, nil
 }
 
-// GenerateImage 生成图片（当前不支持）。
-// OpenAI Chat Completion API 不支持图片生成，图片生成走独立的 API 接口。
-// 后续由 2.8 DashScope 等客户端各自实现。
-func (c *OpenAIModelClient) GenerateImage(
-	_ context.Context,
-	_ []*llmschema.UserMessage,
-	_ ...model_clients.GenerateImageOption,
-) (*llmschema.ImageGenerationResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("OpenAI client does not support image generation"),
-	)
-}
-
-// GenerateSpeech 生成语音（当前不支持）。
-func (c *OpenAIModelClient) GenerateSpeech(
-	_ context.Context,
-	_ []*llmschema.UserMessage,
-	_ ...model_clients.GenerateSpeechOption,
-) (*llmschema.AudioGenerationResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("OpenAI client does not support speech generation"),
-	)
-}
-
-// GenerateVideo 生成视频（当前不支持）。
-func (c *OpenAIModelClient) GenerateVideo(
-	_ context.Context,
-	_ []*llmschema.UserMessage,
-	_ ...model_clients.GenerateVideoOption,
-) (*llmschema.VideoGenerationResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("OpenAI client does not support video generation"),
-	)
-}
-
-// Release 释放模型缓存（当前不支持）。
-// OpenAI API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
-func (c *OpenAIModelClient) Release(
-	_ context.Context,
-	_ ...model_clients.ReleaseOption,
-) (bool, error) {
-	return false, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("OpenAI client does not support KV cache release"),
-	)
-}
-
-// SupportsKVCacheRelease OpenAI 客户端不支持 KV Cache 释放。
-func (c *OpenAIModelClient) SupportsKVCacheRelease() bool {
-	return false
-}
-
 // TranscribeAudio 实际实现已移至 transcription.go 文件。
 // 参见 OpenAIModelClient.TranscribeAudio 方法。
 
@@ -730,4 +675,104 @@ func (c *OpenAIModelClient) SupportsKVCacheAffinity() bool { return false }
 // Python: ModelClient.build_kv_cache_affinity_invoke_kwargs() 默认返回 {}
 func (c *OpenAIModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
 	return map[string]any{}
+}
+
+// ──────────────────────────── KV cache 能力 ────────────────────────────
+
+// kvCacheMode 读取 KV cache 模式。
+// Python: openai_model_client.py:533-539 _kv_cache_mode
+func (c *OpenAIModelClient) kvCacheMode() string {
+	if c.ClientConfig == nil || c.ClientConfig.Extensions == nil {
+		return "none"
+	}
+	mode := c.ClientConfig.Extensions.KVCache.Mode
+	if mode == "" {
+		return "none"
+	}
+	return mode
+}
+
+// SupportsKVCacheRelease 判定是否支持 KV cache 释放。
+//
+// 上游通过 extensions.kv_cache.mode 判断：只有 affinity 模式（vLLM 亲和部署）
+// 支持 release。原先由独立的 inference_affinity 包提供该能力，别名归一后
+// InferenceAffinity 已并入本客户端，故能力改由配置驱动。
+//
+// Python: openai_model_client.py:542 supports_kv_cache_affinity
+func (c *OpenAIModelClient) SupportsKVCacheRelease() bool {
+	return c.kvCacheMode() == "affinity"
+}
+
+// ──────────────────────────── 工具调用清洗 ────────────────────────────
+
+// sanitizeToolCalls 清洗消息中的 tool_calls，只保留 OpenAI 标准字段。
+// SiliconFlow API 对请求中的非标准字段严格，遇到不认识的字段会报错。
+// 本函数对每个 assistant 消息的 tool_calls 做清洗：
+//   - 只保留标准字段：id、type、index、function.name、function.arguments
+//   - 强制 type 为 "function"（某些 LLM 返回的 type 可能为空或其他值）
+//   - 移除非标准扩展字段（LLM 返回的原始 tool_calls 可能包含额外字段）
+//
+// 原地修改 messages 中的 tool_calls 字段。
+// Python: SiliconFlowModelClient._sanitize_tool_calls()
+func (c *OpenAIModelClient) sanitizeToolCalls(messages []map[string]any) {
+	for _, msg := range messages {
+		// 仅处理 assistant 消息
+		if role, ok := msg["role"].(string); !ok || role != "assistant" {
+			continue
+		}
+
+		// 获取 tool_calls 列表（支持 []map[string]any 和 []any 两种类型）
+		// Go 中 map[string]any 存储的 slice 可能是 []map[string]any（如 ToOpenAIFormat 输出）
+		// 或 []any（如 JSON 反序列化或 Dicts 模式手动构造），两种都需要处理
+		var toolCalls []map[string]any
+		switch tc := msg["tool_calls"].(type) {
+		case []map[string]any:
+			toolCalls = tc
+		case []any:
+			for _, item := range tc {
+				if dict, ok := item.(map[string]any); ok {
+					toolCalls = append(toolCalls, dict)
+				}
+			}
+		default:
+			continue
+		}
+		if len(toolCalls) == 0 {
+			continue
+		}
+
+		cleaned := make([]map[string]any, 0, len(toolCalls))
+		for _, tcDict := range toolCalls {
+			// 跳过非 map 类型的 tool_call
+			if tcDict == nil {
+				continue
+			}
+
+			// 提取 function 部分
+			funcPart, _ := tcDict["function"].(map[string]any)
+			if funcPart == nil {
+				funcPart = make(map[string]any)
+			}
+			name, _ := funcPart["name"].(string)
+			args, _ := funcPart["arguments"].(string)
+
+			// 只保留标准字段，强制 type="function"
+			cleanedTC := map[string]any{
+				"id":   tcDict["id"],
+				"type": "function",
+				"function": map[string]any{
+					"name":      name,
+					"arguments": args,
+				},
+			}
+
+			// 保留 index（如果存在）
+			if idx, ok := tcDict["index"]; ok {
+				cleanedTC["index"] = idx
+			}
+
+			cleaned = append(cleaned, cleanedTC)
+		}
+		msg["tool_calls"] = cleaned
+	}
 }
