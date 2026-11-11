@@ -60,10 +60,12 @@ func (s *LLMEvictSuite) TestReload驱逐_移除模型() {
 			"api_key": "kB", "api_base": "https://evict-b.test",
 		},
 	}
+	// VerifySSL=true 对齐 evict 链路：NewModelClientConfig 默认 true（schema/config.go:460），
+	// 池 key 不一致会导致驱逐永远 miss。
 	cfgA := &llmschema.ModelClientConfig{ClientID: "tA", ClientProvider: "Anthropic",
-		AuthMode: llmschema.AuthModeAPIKey, APIKey: "kA", APIBase: "https://evict-a.test"}
+		AuthMode: llmschema.AuthModeAPIKey, APIKey: "kA", APIBase: "https://evict-a.test", VerifySSL: true}
 	cfgB := &llmschema.ModelClientConfig{ClientID: "tB", ClientProvider: "OpenAI",
-		AuthMode: llmschema.AuthModeAPIKey, APIKey: "kB", APIBase: "https://evict-b.test"}
+		AuthMode: llmschema.AuthModeAPIKey, APIKey: "kB", APIBase: "https://evict-b.test", VerifySSL: true}
 
 	// 两个 key 各建一条池连接
 	ta := poolInstance(cfgA)
@@ -100,7 +102,7 @@ func (s *LLMEvictSuite) TestReload驱逐_换凭证() {
 		},
 	}
 	cfgPool := &llmschema.ModelClientConfig{ClientID: "t", ClientProvider: "Anthropic",
-		AuthMode: llmschema.AuthModeAPIKey, APIKey: "k-old", APIBase: "https://rotate.test"}
+		AuthMode: llmschema.AuthModeAPIKey, APIKey: "k-old", APIBase: "https://rotate.test", VerifySSL: true}
 	tOld := poolInstance(cfgPool)
 
 	am.EvictStaleLLMClients(map[string]any{"models": map[string]any{"defaults": []any{cfgOld}}})
@@ -124,7 +126,7 @@ func (s *LLMEvictSuite) TestReloadOptions_scopes链路() {
 	}
 	effective := map[string]any{"models": map[string]any{"defaults": []any{cfgEntry}}}
 	cfgPool := &llmschema.ModelClientConfig{ClientID: "t", ClientProvider: "Anthropic",
-		AuthMode: llmschema.AuthModeAPIKey, APIKey: "k-scope", APIBase: "https://scope.test"}
+		AuthMode: llmschema.AuthModeAPIKey, APIKey: "k-scope", APIBase: "https://scope.test", VerifySSL: true}
 	tBefore := poolInstance(cfgPool)
 
 	// reload 1（model 域）：登记快照（首次只登记不关闭）

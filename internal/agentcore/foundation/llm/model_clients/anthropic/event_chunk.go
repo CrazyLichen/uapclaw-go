@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -189,8 +188,10 @@ func EventToChunk(event map[string]any, toolUseAcc map[int]map[string]any) *llms
 
 // ReadStreamBody 逐事件读取 SSE 流（Anthropic data: 行承载 JSON）。
 // 返回解析后的事件 map；流结束返回 errStreamDone。
-func readStreamEvent(body io.Reader) (map[string]any, error) {
-	reader := bufio.NewReader(body)
+// reader 由调用方创建一次并复用：bufio.Reader 有预读缓冲，若每事件新建
+// Reader，首个 Reader 会把后续整个流吞进缓冲，下一个 Reader 直接读到 EOF，
+// 流式内容全部丢失。
+func readStreamEvent(reader *bufio.Reader) (map[string]any, error) {
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {

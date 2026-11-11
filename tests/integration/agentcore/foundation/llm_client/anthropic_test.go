@@ -71,16 +71,21 @@ func TestAnthropicSuite(t *testing.T) {
 // capture 记录请求体与关键头，供断言缓存断点与鉴权。
 type fakeAnthropicServer struct {
 	*httptest.Server
-	mu           sync.Mutex
-	lastBody     map[string]any
-	lastAPIKey   string
-	lastVersion  string
-	lastPath     string
-	responses    []string // 依次返回（invoke 单条 / stream SSE 多段）
-	contentType  string
+	mu          sync.Mutex
+	lastBody    map[string]any
+	lastAPIKey  string
+	lastVersion string
+	lastPath    string
+	responses   []string // 依次返回（invoke 单条 / stream SSE 多段）
+	contentType string
 }
 
 func newFakeAnthropicServer(responses []string, contentType string) *fakeAnthropicServer {
+	return newFakeAnthropicServerStatus(responses, contentType, http.StatusOK)
+}
+
+// newFakeAnthropicServerStatus 可指定 HTTP 状态码（502 折叠场景）。
+func newFakeAnthropicServerStatus(responses []string, contentType string, status int) *fakeAnthropicServer {
 	fake := &fakeAnthropicServer{responses: responses, contentType: contentType}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +105,7 @@ func newFakeAnthropicServer(responses []string, contentType string) *fakeAnthrop
 		fake.mu.Unlock()
 
 		w.Header().Set("Content-Type", contentType)
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(status)
 		_, _ = w.Write([]byte(resp))
 	})
 	fake.Server = httptest.NewServer(mux)
@@ -148,7 +153,11 @@ func (s *AnthropicSuite) TestInvoke_全链路() {
 	}()
 
 	model := s.newAnthropicModel(fake.URL)
-	msg, err := model.Invoke(context.Background(), model_clients.NewTextMessagesParam("hi"))
+	msgs := []llmschema.BaseMessage{
+		llmschema.NewSystemMessage("be nice"),
+		llmschema.NewUserMessage("hi"),
+	}
+	msg, err := model.Invoke(context.Background(), model_clients.NewMessagesParam(msgs...))
 	s.Require().NoError(err)
 	s.Require().Equal("hello", msg.Content.Text())
 	s.Require().Equal("msg_1", msg.ResponseID)
@@ -226,7 +235,9 @@ func (s *AnthropicSuite) TestStream_思考块往返() {
 	}
 	s.Require().Equal("answer", final.Content.Text())
 	s.Require().Equal("let me think", final.ReasoningContent)
-	s.Require().Equal("end_turn", final.FinishReason)
+	// Python: anthropic_model_client.py:1547-1553 message_delta 把
+	// end_turn/stop_sequence/max_tokens 统一映射为 "stop"，tool_use → "tool_calls"
+	s.Require().Equal("stop", final.FinishReason)
 	// 回放块：thinking 带 signature 原样保留（供下一轮 assistant 消息回放）
 	replay, ok := final.Metadata[anthropic.AnthropicContentBlocksMetadataKey].([]map[string]any)
 	s.Require().True(ok, "metadata 应含回放块")
@@ -315,9 +326,9 @@ func (s *AnthropicSuite) TestInvoke_缓存断点() {
 
 // IT-5 错误折叠：502 HTML 网关页 → 错误消息不含 <html>、含摘要、params.http_status=502。
 func (s *AnthropicSuite) TestInvoke_502HTML折叠() {
-	fake := newFakeAnthropicServer([]string{
+	fake := newFakeAnthropicServerStatus([]string{
 		"<html><head><title>502 Bad Gateway</title></head><body><h1>502 Bad Gateway</h1></body></html>",
-	}, "text/html")
+	}, "text/html", http.StatusBadGateway)
 	defer fake.Close()
 
 	model := s.newAnthropicModel(fake.URL)

@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -232,8 +233,11 @@ func (c *AnthropicModelClient) Stream(
 		finalStopReason := ""
 		accumulatedForParser := ""
 
+		// SSE 读取器整个流共享一个 bufio.Reader（预读缓冲语义，见 readStreamEvent 注释）
+		reader := bufio.NewReader(resp.Body)
+
 		for {
-			event, readErr := readStreamEvent(resp.Body)
+			event, readErr := readStreamEvent(reader)
 			if readErr != nil {
 				if readErr == errStreamDone {
 					break
