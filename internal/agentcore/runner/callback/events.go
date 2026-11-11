@@ -45,6 +45,10 @@ type LLMCallEventData struct {
 	Usage *llmschema.UsageMetadata
 	// Error 错误信息
 	Error error
+	// RetryCount 传输层在本次响应前完成的重试次数（nil=未知）。
+	// Go 无 SDK 内重试（spec P-2 偏差），手写 HTTP 路径恒 nil。
+	// Python: AsyncCallbackFramework.trigger 的 retry_count kwarg。
+	RetryCount *int
 	// Extra 额外数据（如 model_config, model_client_config, session_id 等）
 	Extra map[string]any
 }
@@ -341,6 +345,19 @@ const (
 	LLMInput LLMCallEventType = "_framework:llm_input"
 	// LLMOutput 响应后触发（含 response/usage），细粒度事件
 	LLMOutput LLMCallEventType = "_framework:llm_output"
+	// LLMResponseStarted 流式请求响应头到达时触发（body chunk 前），
+	// 承载 retry_count（传输层在本次响应前的重试次数，未知为 nil）并标记 TTFB。
+	// Python: events.py:175 LLM_RESPONSE_STARTED
+	LLMResponseStarted LLMCallEventType = "_framework:llm_response_started"
+	// LLMStreamCompleted Model.stream 自然耗尽后触发一次，携带完整累计 AssistantMessage。
+	// Python: events.py:181 LLM_STREAM_COMPLETED（消费 handler ⤵️ 22.5）
+	LLMStreamCompleted LLMCallEventType = "_framework:llm_stream_completed"
+	// LLMRoute 模型组路由器选定最终路由或耗尽全部路由时触发（23.4 消费）。
+	// Python: events.py:182 LLM_ROUTE
+	LLMRoute LLMCallEventType = "_framework:llm_route"
+	// LLMRouteAttempt 路由器每次向某路由发请求时触发（成功失败都发，23.4 消费）。
+	// Python: events.py:183 LLM_ROUTE_ATTEMPT
+	LLMRouteAttempt LLMCallEventType = "_framework:llm_route_attempt"
 )
 
 const (
