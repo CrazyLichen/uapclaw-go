@@ -12,21 +12,21 @@ import (
 // startTestChatAgent 最小 ChatAgentPort 实现，供 R-1 测试用。
 type startTestChatAgent struct{}
 
-func (s *startTestChatAgent) ProcessMessage(context.Context, *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *startTestChatAgent) ProcessMessage(_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption) (*schema.AgentResponse, error) {
 	return &schema.AgentResponse{}, nil
 }
 
-func (s *startTestChatAgent) ProcessMessageStream(context.Context, *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+func (s *startTestChatAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error) {
 	ch := make(chan *schema.AgentResponseChunk)
 	close(ch)
 	return ch, nil
 }
 
-func (s *startTestChatAgent) ExecuteMessage(context.Context, *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *startTestChatAgent) ExecuteMessage(_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption) (*schema.AgentResponse, error) {
 	return &schema.AgentResponse{}, nil
 }
 
-func (s *startTestChatAgent) ExecuteMessageStream(context.Context, *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+func (s *startTestChatAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error) {
 	ch := make(chan *schema.AgentResponseChunk)
 	close(ch)
 	return ch, nil

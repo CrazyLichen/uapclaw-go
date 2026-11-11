@@ -23,7 +23,7 @@ type recordingChatAgent struct {
 
 // ProcessMessage 记录并返回固定响应。
 func (a *recordingChatAgent) ProcessMessage(
-	context.Context, *schema.AgentRequest,
+	_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption,
 ) (*schema.AgentResponse, error) {
 	a.processCalls++
 	return schema.NewAgentResponse("r1", "ch-1"), nil
@@ -31,7 +31,7 @@ func (a *recordingChatAgent) ProcessMessage(
 
 // ProcessMessageStream 记录按流式处理。
 func (a *recordingChatAgent) ProcessMessageStream(
-	context.Context, *schema.AgentRequest,
+	_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption,
 ) (<-chan *schema.AgentResponseChunk, error) {
 	a.processCalls++
 	ch := make(chan *schema.AgentResponseChunk)
@@ -41,7 +41,7 @@ func (a *recordingChatAgent) ProcessMessageStream(
 
 // ExecuteMessage 记录并返回固定响应。
 func (a *recordingChatAgent) ExecuteMessage(
-	context.Context, *schema.AgentRequest,
+	_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption,
 ) (*schema.AgentResponse, error) {
 	a.executeCalls++
 	return schema.NewAgentResponse("r1", "ch-1"), nil
@@ -49,7 +49,7 @@ func (a *recordingChatAgent) ExecuteMessage(
 
 // ExecuteMessageStream 记录按流式处理。
 func (a *recordingChatAgent) ExecuteMessageStream(
-	context.Context, *schema.AgentRequest,
+	_ context.Context, _ *schema.AgentRequest, _ ...ExecuteOption,
 ) (<-chan *schema.AgentResponseChunk, error) {
 	a.executeCalls++
 	ch := make(chan *schema.AgentResponseChunk)

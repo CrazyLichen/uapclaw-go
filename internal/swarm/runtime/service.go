@@ -11,6 +11,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -24,6 +25,22 @@ type PrepareChatTurnFunc func(
 	req *schema.AgentRequest,
 	channelID string,
 ) (mode, subMode string, agent ChatAgentPort, err error)
+
+// streamOptions Stream/Invoke 的可选参数。
+// Python: stream(request, *, trigger_hook, on_control_event, background,
+// on_agent_ready, _agent_execution)
+// 偏差 D-7：Python 用关键字参数，Go 无此能力，用 Functional Option。
+type streamOptions struct {
+	// onAgentReady agent 就绪回调，首次模型调用前触发。
+	// Python: on_agent_ready: Callable[[Any], Any] | None
+	onAgentReady func(ctx context.Context, agent harnessinterfaces.DeepAgentInterface) error
+	// agentExecution 声明式 agent 执行体（携带 definition 与 mode，指纹由 definition 计算）。
+	// Python: _agent_execution: RuntimeAgentExecution | None
+	agentExecution *RuntimeAgentExecution
+}
+
+// StreamOption Stream/Invoke 的可选参数函数。
+type StreamOption func(*streamOptions)
 
 // goalActivityChecker 协作方（AgentManager）的 goal 活跃判定能力。
 // Python: service.py:545-548 `checker = getattr(manager, "has_active_goal", None)`
@@ -156,6 +173,22 @@ type agentExecutionOwnerKey struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithOnAgentReady 设置 agent 就绪回调（首次模型调用前触发）。
+// Python: stream(request, on_agent_ready=fn)
+//
+// 偏差 D-8：Python 传 child adapter 对象（Any），Go 传 DeepAgentInterface。
+// 理由：configure_process_cli_run 的实质只用到 react_agent 与 ability_manager，
+// 二者 DeepAgentInterface 都有。
+func WithOnAgentReady(fn func(ctx context.Context, agent harnessinterfaces.DeepAgentInterface) error) StreamOption {
+	return func(o *streamOptions) { o.onAgentReady = fn }
+}
+
+// WithAgentExecution 携带声明式 agent 执行体。
+// Python: stream(request, _agent_execution=execution)
+func WithAgentExecution(exec *RuntimeAgentExecution) StreamOption {
+	return func(o *streamOptions) { o.agentExecution = exec }
+}
 
 // NewAgentRuntime 创建运行时。
 // Python: AgentRuntime.__init__
@@ -299,11 +332,14 @@ func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
 
 // Invoke 执行非流式 chat turn。
 // Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
-func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {
+func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest, opts ...StreamOption) ([]*RuntimeEvent, error) {
 	// Python: service.py:1707 await self.start()（幂等）
 	if err := r.Start(); err != nil {
 		return nil, err
 	}
+	// ⤵️ R-3 透传点：Task 8 把 opts 里的 agentExecution 拆成
+	// agentDefinition + fingerprint 传给 prepareTurn。
+	_ = applyStreamOptions(opts)
 	req = NormalizeRequest(req)
 	// 会话补充输入的准入段（同 Stream）。
 	if r.isSessionInputRequest(req) {
@@ -345,11 +381,14 @@ func (r *AgentRuntime) Stream(
 	ctx context.Context,
 	req *schema.AgentRequest,
 	onEvent func(*RuntimeEvent) bool,
+	opts ...StreamOption,
 ) error {
 	// Python: service.py:2194 await self.start()（幂等）
 	if err := r.Start(); err != nil {
 		return err
 	}
+	// ⤵️ R-2/R-3 透传点：Task 8 透传 agentExecution，Task 11 透传 onAgentReady。
+	_ = applyStreamOptions(opts)
 	req = NormalizeRequest(req)
 	// 会话补充输入的准入段（Python: service.py:2232-2249）。
 	// 必须在 prepareTurn 之前：跨会话消息在 plan/goal 活跃时要被拒收排队，
@@ -394,6 +433,17 @@ func (r *AgentRuntime) Stream(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// applyStreamOptions 折叠可选参数；nil option 跳过。
+func applyStreamOptions(opts []StreamOption) *streamOptions {
+	o := &streamOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	return o
+}
 
 // prepareTurn 选 agent（对齐 _prepare_chat_turn + prepare_chat_turn）。
 func (r *AgentRuntime) prepareTurn(
@@ -881,7 +931,7 @@ func (r *AgentRuntime) requireOwnedSingleAgentSession(req *schema.AgentRequest) 
 // InvokeAgent 通过既有 Runtime 链执行一个声明式 root Agent。
 // Python: service.py:1642-1663 invoke_agent
 func (r *AgentRuntime) InvokeAgent(
-	ctx context.Context, req *schema.AgentRequest, definition any,
+	ctx context.Context, req *schema.AgentRequest, definition any, opts ...StreamOption,
 ) ([]*RuntimeEvent, error) {
 	// Python:1648 await self.start()
 	if err := r.Start(); err != nil {
@@ -923,7 +973,7 @@ func (r *AgentRuntime) InvokeAgent(
 // Python: service.py:1665-1697 stream_agent
 func (r *AgentRuntime) StreamAgent(
 	ctx context.Context, req *schema.AgentRequest, definition any,
-	onEvent func(*RuntimeEvent) bool,
+	onEvent func(*RuntimeEvent) bool, opts ...StreamOption,
 ) error {
 	// Python:1674 await self.start()
 	if err := r.Start(); err != nil {
@@ -1039,9 +1089,8 @@ func (r *AgentRuntime) StreamInteractionAnswer(
 func (r *AgentRuntime) invokeWithExecution(
 	ctx context.Context, req *schema.AgentRequest, execution *RuntimeAgentExecution,
 ) ([]*RuntimeEvent, error) {
-	// 执行体随请求透传到 adapter 边界（上游同）。
-	_ = execution
-	return r.Invoke(ctx, req)
+	// Python: service.py:1712 _agent_execution=execution 一路下传到 prepare_chat_turn
+	return r.Invoke(ctx, req, WithAgentExecution(execution))
 }
 
 // streamWithExecution 带执行体的流式调用。
@@ -1050,8 +1099,8 @@ func (r *AgentRuntime) streamWithExecution(
 	ctx context.Context, req *schema.AgentRequest,
 	execution *RuntimeAgentExecution, onEvent func(*RuntimeEvent) bool,
 ) error {
-	_ = execution
-	return r.Stream(ctx, req, onEvent)
+	// Python: service.py:2371 stream(..., _agent_execution=execution)
+	return r.Stream(ctx, req, onEvent, WithAgentExecution(execution))
 }
 
 // ──────────────────────────── 小型取值辅助 ────────────────────────────
