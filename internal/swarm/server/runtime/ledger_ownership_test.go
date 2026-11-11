@@ -18,8 +18,8 @@ import (
 // Python: AgentRuntime.__init__ `session_coordinator or RuntimeSessionCoordinator()`
 func TestNewUapClaw_自带账本(t *testing.T) {
 	uc := NewUapClaw()
-	require.NotNil(t, uc.agentRuntime, "门面应持有 Runtime")
-	require.NotNil(t, uc.agentRuntime.Coordinator(), "Runtime 应自建账本")
+	require.NotNil(t, uc.agentRuntime.Load(), "门面应持有 Runtime")
+	require.NotNil(t, uc.agentRuntime.Load().Coordinator(), "Runtime 应自建账本")
 	require.NotNil(t, uc.executionCoordinator(), "门面经 Runtime 取账本")
 }
 

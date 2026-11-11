@@ -413,7 +413,7 @@ func (s *TopicStarterStore) RecordEventsAtomic(events []map[string]any) (bool, e
 	if err != nil {
 		return false, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -531,13 +531,13 @@ func (s *TopicStarterStore) QueryEvents(opts QueryEventsOptions) ([]map[string]a
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rows, err := db.Query(statement, values...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanEventRows(rows)
 }
 
@@ -548,7 +548,7 @@ func (s *TopicStarterStore) SaveSnapshot(snapshot map[string]any, evidenceUntil 
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var version int
 	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) + 1 FROM profile_snapshot").Scan(&version); err != nil {
@@ -584,13 +584,13 @@ func (s *TopicStarterStore) LoadLatestSnapshot() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rows, err := db.Query("SELECT snapshot_json FROM profile_snapshot ORDER BY version DESC")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var raw any
@@ -652,7 +652,7 @@ func (s *TopicStarterStore) Prune(now float64) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -779,15 +779,15 @@ func (s *TopicStarterStore) DeleteRecommendationData() error {
 		return err
 	}
 	if _, err := db.Exec("PRAGMA secure_delete = ON"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return err
 	}
 	if _, err := db.Exec("DELETE FROM profile_snapshot"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return err
 	}
 	if _, err := db.Exec("DELETE FROM recommendation_event"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return err
 	}
 	var probe int
@@ -796,14 +796,14 @@ func (s *TopicStarterStore) DeleteRecommendationData() error {
 	).Scan(&probe)
 	if probeErr == nil {
 		if _, err := db.Exec("DELETE FROM short_intent_state"); err != nil {
-			db.Close()
+			_ = db.Close()
 			return err
 		}
 	} else if !errors.Is(probeErr, sql.ErrNoRows) {
-		db.Close()
+		_ = db.Close()
 		return probeErr
 	}
-	db.Close()
+	_ = db.Close()
 
 	for attempt, item := range receipts {
 		if _, err := s.RecordEvent(map[string]any{
@@ -843,7 +843,7 @@ func (s *TopicStarterStore) DeleteRecommendationData() error {
 	if err != nil {
 		return err
 	}
-	defer vacuumDB.Close()
+	defer func() { _ = vacuumDB.Close() }()
 	_, err = vacuumDB.Exec("VACUUM")
 	return err
 }
@@ -891,13 +891,13 @@ func (s *TopicStarterStore) ListEvents() ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rows, err := db.Query("SELECT * FROM recommendation_event ORDER BY created_at, event_key")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanEventRows(rows)
 }
 
@@ -973,7 +973,7 @@ func (s *TopicStarterStore) createTables() error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS profile_snapshot (
@@ -1139,7 +1139,7 @@ func (s *TopicStarterStore) insertEvent(eventKey string, event map[string]any, i
 	if err != nil {
 		return false, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	verb := "INSERT"
 	if ignoreConflict {
@@ -1223,7 +1223,7 @@ func pruneSupersededSummaries(tx *sql.Tx) (int64, error) {
 		var eventKey string
 		var payloadJSON []byte
 		if err := rows.Scan(&eventKey, &payloadJSON); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, err
 		}
 		sessionID := ""
@@ -1233,7 +1233,7 @@ func pruneSupersededSummaries(tx *sql.Tx) (int64, error) {
 		}
 		ordered = append(ordered, doomedRow{sessionID: sessionID, eventKey: eventKey})
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
@@ -1268,12 +1268,12 @@ func pruneProfileSnapshots(tx *sql.Tx, now float64) (int64, error) {
 	for rows.Next() {
 		var row snapshotRow
 		if err := rows.Scan(&row.version, &row.createdAt); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, err
 		}
 		ordered = append(ordered, row)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}

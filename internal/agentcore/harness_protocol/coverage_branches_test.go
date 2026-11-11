@@ -290,7 +290,7 @@ func TestHarnessInteractionHandler_Handle错误透传(t *testing.T) {
 func reflectNew(t *testing.T, v any) any {
 	t.Helper()
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		return v
 	}
 	ptr := reflect.New(rv.Type())

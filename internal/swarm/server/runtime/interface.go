@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
@@ -56,7 +57,10 @@ type UapClawSwarm struct {
 	//
 	// 构造期即创建一本自有 Runtime（等价于 Python 的"Runtime 自带账本"）：
 	// 这样单测直接构造门面也能用，同时 AgentManager 会用共享那本覆盖它。
-	agentRuntime *swruntime.AgentRuntime
+	//
+	// SetAgentRuntime 在 createAgent goroutine 注入，读取方在请求/建实例
+	// goroutine（如 TryStartDreaming），必须经 atomics 同步（CI race 实证）。
+	agentRuntime atomic.Pointer[swruntime.AgentRuntime]
 
 	// skilldevService SkillDev 服务（懒初始化，ensureSkillDevService 时创建）。
 	skilldevService *skilldev.SkillDevService
@@ -131,14 +135,15 @@ func WithCreateInstanceAgentDefinition(agentDefinition map[string]any) CreateIns
 // AgentManager 会用共享的那本覆盖（SetAgentRuntime）。
 func NewUapClaw() *UapClawSwarm {
 	appCtx, appCancel := context.WithCancel(context.Background())
-	return &UapClawSwarm{
-		agentRuntime:       swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}),
+	uc := &UapClawSwarm{
 		skillManager:       skill.NewSkillManager(workspace.AgentWorkspaceDir()),
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
 		appCtx:             appCtx,
 		appCancel:          appCancel,
 		sessionManager:     swruntime.NewSessionManager(),
 	}
+	uc.agentRuntime.Store(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	return uc
 }
 
 // SetAgentRuntime 注入执行账本归属方（P4）。
@@ -147,16 +152,16 @@ func NewUapClaw() *UapClawSwarm {
 // Go 侧由 AgentManager 造出 UapClawSwarm 后注入，避免构造期
 // Runtime ↔ Manager ↔ 门面 三者互相引用成环。
 func (uc *UapClawSwarm) SetAgentRuntime(runtime *swruntime.AgentRuntime) {
-	uc.agentRuntime = runtime
+	uc.agentRuntime.Store(runtime)
 }
 
 // executionCoordinator 返回执行账本（经 Runtime，未注入时退回自身字段）。
 // Python: service.py 内 self._session_coordinator
 func (uc *UapClawSwarm) executionCoordinator() swruntime.SessionCoordinatorPort {
-	if uc.agentRuntime == nil {
-		return nil
+	if runtime := uc.agentRuntime.Load(); runtime != nil {
+		return runtime.Coordinator()
 	}
-	return uc.agentRuntime.Coordinator()
+	return nil
 }
 
 // ProcessMessage 通过门面自有的会话调度器处理请求。
@@ -616,7 +621,7 @@ func (uc *UapClawSwarm) runMessageStreamDirect(ctx context.Context, request *sch
 		// ⤵️ 10.6.19-23: Team 后续请求绕过 Session 队列（等待 TeamManager）
 		// S09: 缺少 is_team_first_request 判断逻辑，Team 模式下后续请求会错误排队
 		// Python 通过 team_manager.active_session_id / pending_session_id / has_stream_task 判断首次/后续
-		if runtime := uc.agentRuntime; runtime != nil {
+		if runtime := uc.agentRuntime.Load(); runtime != nil {
 			_, _ = runtime.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
 		} else {
 			if coordinator := uc.executionCoordinator(); coordinator != nil {
@@ -1653,7 +1658,7 @@ func paramString(params map[string]any, key string) string {
 func (uc *UapClawSwarm) cancelExecution(
 	sessionID string, options swsession.CancelExecutionOptions,
 ) (swsession.CancelExecutionResult, error) {
-	if runtime := uc.agentRuntime; runtime != nil {
+	if runtime := uc.agentRuntime.Load(); runtime != nil {
 		return runtime.CancelExecution(sessionID, options)
 	}
 	coordinator := uc.executionCoordinator()
@@ -1666,7 +1671,7 @@ func (uc *UapClawSwarm) cancelExecution(
 // hasActiveExecutions 是否存在未终态执行。
 // Python: service.py:845/:1216 snapshot 里的 executions 判定
 func (uc *UapClawSwarm) hasActiveExecutions() bool {
-	if runtime := uc.agentRuntime; runtime != nil {
+	if runtime := uc.agentRuntime.Load(); runtime != nil {
 		return runtime.ActiveExecutions()
 	}
 	coordinator := uc.executionCoordinator()
@@ -1687,7 +1692,7 @@ func (uc *UapClawSwarm) hasActiveExecutions() bool {
 // closeCoordinator 关闭执行账本。
 // Python: Runtime close 内的协调器关闭
 func (uc *UapClawSwarm) closeCoordinator() error {
-	if runtime := uc.agentRuntime; runtime != nil {
+	if runtime := uc.agentRuntime.Load(); runtime != nil {
 		return runtime.CloseCoordinator(nil, nil)
 	}
 	coordinator := uc.executionCoordinator()
