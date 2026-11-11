@@ -797,6 +797,11 @@ func init() {
 		"max_tokens":      {},
 		"stop":            {},
 		"response_format": {},
+		// context_window 必须是已知键：它是内部上下文元数据，由 context engine
+		// 消费，绝不能作为厂商请求参数下发。若落进 Extra，会被
+		// BaseClientEmbed.BuildRequestParams 平铺进请求体误发给厂商。
+		// Python: base_model_client.py:631-633 model_dump(exclude={"context_window"})
+		"context_window": {},
 		// reasoning 必须是已知键：否则会落进 Extra，被 BuildRequestParams
 		// 平铺进请求参数误发给厂商（Python 侧 model_dump 显式 exclude 它）。
 		"reasoning": {},

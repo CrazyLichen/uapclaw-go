@@ -112,5 +112,35 @@ func TestReasoningIntent_区分未传与显式nil(t *testing.T) {
 	}
 }
 
+// TestModelRequestConfig_ContextWindow反序列化进字段不进Extra 验证 knownKeys 含 context_window。
+// 缺陷背景：ContextWindow 有结构体字段但曾漏在 knownKeys 之外，导致
+// ①字段永远 nil（成了死字段）②值落进 Extra 后经 BuildRequestParams 平铺误发给厂商。
+// Python 侧靠 model_dump(exclude={"context_window"}) 排除，Go 侧靠 knownKeys 分流。
+// Python: base_model_client.py:624-637
+func TestModelRequestConfig_ContextWindow反序列化进字段不进Extra(t *testing.T) {
+	var c ModelRequestConfig
+	if err := json.Unmarshal([]byte(`{"model":"m1","context_window":200000}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.ContextWindow == nil || *c.ContextWindow != 200000 {
+		t.Fatalf("ContextWindow = %v, want 200000（knownKeys 漏了 context_window）", c.ContextWindow)
+	}
+	if _, leaked := c.Extra["context_window"]; leaked {
+		t.Fatal("context_window 泄漏进了 Extra，会被平铺发给厂商")
+	}
+}
+
+// TestModelRequestConfig_ContextWindow不发给厂商 端到端验证 BuildRequestParams 不含该键。
+// Python: base_model_client.py:631-633「must never be sent as a provider SDK request parameter」
+func TestModelRequestConfig_ContextWindow不发给厂商(t *testing.T) {
+	var c ModelRequestConfig
+	if err := json.Unmarshal([]byte(`{"model":"m1","context_window":200000}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := c.Extra["context_window"]; exists {
+		t.Fatal("context_window 进了 Extra，BuildRequestParams 会平铺它")
+	}
+}
+
 // strPtr 返回字符串指针（测试辅助）。
 func strPtr(s string) *string { return &s }
