@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -390,5 +391,32 @@ func TestAssistantMessage_WithLogprobs(t *testing.T) {
 	}
 	if _, exists := lp["top_logprobs"]; !exists {
 		t.Error("Logprobs 应包含 top_logprobs 字段")
+	}
+}
+
+// TestAssistantMessage_providerMetadata_omitempty 对齐 Python message.py:74-77。
+func TestAssistantMessage_providerMetadata_omitempty(t *testing.T) {
+	m := &AssistantMessage{
+		ResponseID:       "msg_01",
+		ResponseModel:    "claude-sonnet-4-5",
+		ProviderMetadata: map[string]any{"stop_reason": "end_turn"},
+	}
+	data, _ := json.Marshal(m)
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["response_id"] != "msg_01" {
+		t.Fatalf("response_id 缺失: %s", data)
+	}
+	pm, _ := out["provider_metadata"].(map[string]any)
+	if pm == nil || pm["stop_reason"] != "end_turn" {
+		t.Fatalf("provider_metadata 缺失: %s", data)
+	}
+	// nil 与空 map 等价：均不输出
+	m2 := &AssistantMessage{ResponseID: "x"}
+	data2, _ := json.Marshal(m2)
+	if strings.Contains(string(data2), "provider_metadata") {
+		t.Fatalf("空 provider_metadata 不应输出: %s", data2)
 	}
 }

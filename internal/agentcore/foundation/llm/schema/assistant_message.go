@@ -34,6 +34,17 @@ type AssistantMessage struct {
 	CompletionTokenIDs []int `json:"completion_token_ids,omitempty"`
 	// Logprobs 对数概率信息（vLLM 等推理引擎返回）
 	Logprobs any `json:"logprobs,omitempty"`
+	// ResponseID 响应 ID（Anthropic message.id / Responses response.id）。
+	// Python: message.py:74 response_id
+	ResponseID string `json:"response_id,omitempty"`
+	// ResponseModel 实际服务模型名（网关会改写）。Python: message.py:75 response_model
+	ResponseModel string `json:"response_model,omitempty"`
+	// ProviderMetadata provider 私有元数据（Anthropic: stop_reason/stop_sequence）。
+	// nil 与空 map 等价（对齐 Python default_factory=dict + if self.provider_metadata 真值判断）。
+	// Python: message.py:76 provider_metadata
+	ProviderMetadata map[string]any `json:"provider_metadata,omitempty"`
+	// ProviderContent provider 原始内容（23.2 Responses API 使用）。Python: message.py:77
+	ProviderContent any `json:"provider_content,omitempty"`
 }
 
 // AssistantMessageOption AssistantMessage 构造选项函数。
@@ -76,6 +87,26 @@ func WithParserContent(content any) AssistantMessageOption {
 // WithPromptTokenIDs 设置输入 token ID 列表。
 func WithPromptTokenIDs(ids []int) AssistantMessageOption {
 	return func(m *AssistantMessage) { m.PromptTokenIDs = ids }
+}
+
+// WithResponseID 设置响应 ID。
+func WithResponseID(id string) AssistantMessageOption {
+	return func(m *AssistantMessage) { m.ResponseID = id }
+}
+
+// WithResponseModel 设置实际服务模型名。
+func WithResponseModel(model string) AssistantMessageOption {
+	return func(m *AssistantMessage) { m.ResponseModel = model }
+}
+
+// WithProviderMetadata 设置 provider 私有元数据。
+func WithProviderMetadata(pm map[string]any) AssistantMessageOption {
+	return func(m *AssistantMessage) { m.ProviderMetadata = pm }
+}
+
+// WithProviderContent 设置 provider 原始内容。
+func WithProviderContent(pc any) AssistantMessageOption {
+	return func(m *AssistantMessage) { m.ProviderContent = pc }
 }
 
 // WithCompletionTokenIDs 设置输出 token ID 列表。
