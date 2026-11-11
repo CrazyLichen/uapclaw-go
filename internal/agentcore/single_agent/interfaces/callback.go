@@ -245,6 +245,10 @@ type ModelCallInputs struct {
 	// ContextUsageAttribution 本次上报的用量归属快照
 	// Python: ctx.inputs.context_usage_attribution（动态属性，react_agent.py L1483/L1703/L1779）
 	ContextUsageAttribution map[string]any
+	// ReactIteration 内层 ReAct 循环的当前轮次（1-based）。
+	// Python: rail/base.py:319 react_iteration: int = 0
+	// 来源：cbc.extra["_react_iteration"]（由 ReAct 循环写入）
+	ReactIteration int
 }
 
 // SteeringDrainInputs BEFORE_STEERING_DRAIN 事件输入。
