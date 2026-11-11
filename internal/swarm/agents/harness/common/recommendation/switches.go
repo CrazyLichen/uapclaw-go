@@ -2,6 +2,8 @@ package recommendation
 
 import (
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -101,6 +103,27 @@ func (e ConsentEpochValue) Equal(other ConsentEpochValue) bool {
 		return false
 	}
 	return !e.Active || e.Value == other.Value
+}
+
+// TopicRecommendationEnabled 读 topic 推荐开关；未配置时取默认值 false。
+// Python: common/recommendation_switches.py is_topic_recommendation_enabled
+func TopicRecommendationEnabled(cfg *config.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	full, err := cfg.Load()
+	if err != nil || full == nil {
+		return false
+	}
+	section, ok := full["recommendation"].(map[string]any)
+	if !ok {
+		return false
+	}
+	value, ok := section["topic_enabled"]
+	if !ok {
+		return false
+	}
+	return ResolveRecommendationSwitch(value, false)
 }
 
 // ConsentEpoch 返回当前同意 epoch。

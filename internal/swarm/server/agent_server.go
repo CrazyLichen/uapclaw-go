@@ -177,6 +177,8 @@ func (s *AgentServer) Start(ctx context.Context) error {
 
 	// 注入默认 SendPush 到 adapter 包，避免 adapter→server→adapter 循环依赖
 	adapter.SetDefaultSendPushFunc(s.SendPush)
+	// 10.7.2: 建议就绪推送经 SendPush 通道（对齐 Python _fork 内即时构造 transport）
+	WireSuggestionReadyPusher()
 
 	// 11.10 已回填：注入 E2A push 到 cronbridge（对齐 Python WebSocketGatewayPushTransport 注入）
 	// Agent 侧 CronTools.SendSplit 经此通道转发 cron 请求到 Gateway
