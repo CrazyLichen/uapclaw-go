@@ -139,11 +139,19 @@ func NormalizeModelClientConfig(config *llmschema.ModelClientConfig) *llmschema.
 	if alias.AuthMode != "" && (out.AuthMode == "" || out.AuthMode == llmschema.AuthModeAPIKey) {
 		out.AuthMode = alias.AuthMode
 	}
+	// extensions 走 deep_merge_defaults 语义：别名值只作默认，用户显式值优先。
+	// Python: endpoint_profiles.py:220-230（deep_merge_defaults(explicit, normalized)）
+	//   merged = deepcopy(defaults); merged.update(target) —— target 即显式值，最终胜出
+	//
+	// Go 无 model_fields_set，用「零值即未设置」近似：KVCache.Mode 空串时填别名值，
+	// 非空则保留用户显式设置。AffinityField 同理由结构体默认值承担。
 	if alias.KVCacheMode != "" {
 		if out.Extensions == nil {
 			out.Extensions = &llmschema.LLMExtensionsConfig{}
 		}
-		out.Extensions.KVCache.Mode = alias.KVCacheMode
+		if out.Extensions.KVCache.Mode == "" {
+			out.Extensions.KVCache.Mode = alias.KVCacheMode
+		}
 	}
 	setLegacyProvider(&out, provider)
 	return &out

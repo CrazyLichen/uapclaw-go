@@ -1,5 +1,14 @@
 package schema
 
+import (
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// logComponent schema 包日志组件标识（对齐项目组件选择规则）。
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ReasoningConfig 厂商中立的思考/推理请求意图。
@@ -28,7 +37,26 @@ type ReasoningIntent struct {
 // Python: schema/config.py:62 Field(default="auto")
 const reasoningModeAuto = "auto"
 
+// 合法思考模式取值。
+// Python: schema/config.py:62 mode: Literal["auto","enabled","disabled"]
+const (
+	// ReasoningModeAuto 跟随厂商默认
+	ReasoningModeAuto = "auto"
+	// ReasoningModeEnabled 强制开启思考
+	ReasoningModeEnabled = "enabled"
+	// ReasoningModeDisabled 强制关闭思考
+	ReasoningModeDisabled = "disabled"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// validReasoningModes 合法 mode 集合。
+// Python: schema/config.py:62 Literal["auto","enabled","disabled"]
+var validReasoningModes = map[string]struct{}{
+	ReasoningModeAuto:     {},
+	ReasoningModeEnabled:  {},
+	ReasoningModeDisabled: {},
+}
 
 // newReasoningKeys 新式 reasoning 配置允许的键集合。
 // Python: reasoning.py:35 _NEW_REASONING_KEYS
@@ -71,7 +99,15 @@ func CoerceReasoningConfig(value any) (cfg *ReasoningConfig, raw map[string]any)
 			return nil, m
 		}
 	}
-	return reasoningConfigFromMap(m), nil
+	cfg = reasoningConfigFromMap(m)
+	// Python: reasoning.py:264 ReasoningConfig(**raw) —— Pydantic 在此校验，
+	// 非法 mode / 负 budget 抛 ValidationError。Go 无构造期钩子，在此显式校验；
+	// 校验失败按「未设置」处理（不降级为遗留 raw，因为形态本身就是新式）。
+	if err := cfg.Validate(); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("Invalid reasoning config ignored.")
+		return nil, nil
+	}
+	return cfg, nil
 }
 
 // IsReasoningConfigIntent 判定是否为「新式配置意图」。
@@ -79,6 +115,32 @@ func CoerceReasoningConfig(value any) (cfg *ReasoningConfig, raw map[string]any)
 func IsReasoningConfigIntent(value any) bool {
 	cfg, _ := CoerceReasoningConfig(value)
 	return cfg != nil
+}
+
+// Validate 校验字段取值，对齐 Pydantic 构造期约束。
+//
+// 上游 ReasoningConfig 是 BaseModel：
+//
+//	mode: Literal["auto","enabled","disabled"]
+//	budget_tokens: Optional[int] = Field(default=None, ge=0)
+//
+// 非法值在构造（含 ReasoningConfig(**raw)）时抛 ValidationError。Go 无构造期钩子，
+// 故由 CoerceReasoningConfig 在 map 分支显式调用本方法，调用方构造结构体时也可自行调用。
+// Mode 为空视为未设置（Go 零值），不算非法。
+// Python: schema/config.py:59-66
+func (c *ReasoningConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+	if c.Mode != "" {
+		if _, ok := validReasoningModes[c.Mode]; !ok {
+			return fmt.Errorf("reasoning.mode 必须是 auto/enabled/disabled 之一，收到 %q", c.Mode)
+		}
+	}
+	if c.BudgetTokens != nil && *c.BudgetTokens < 0 {
+		return fmt.Errorf("reasoning.budget_tokens 必须 >= 0，收到 %d", *c.BudgetTokens)
+	}
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

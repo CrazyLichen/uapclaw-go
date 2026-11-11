@@ -15,6 +15,65 @@ func TestNewReasoningConfig_默认mode为auto(t *testing.T) {
 	}
 }
 
+// TestReasoningConfig_Validate 对齐 Pydantic 构造期校验。
+// 实测上游行为：mode 非三值、budget_tokens 为负均抛 ValidationError。
+// Python: schema/config.py:59-66
+//   mode: Literal["auto","enabled","disabled"]
+//   budget_tokens: Optional[int] = Field(default=None, ge=0)
+func TestReasoningConfig_Validate(t *testing.T) {
+	cases := []struct {
+		name    string
+		cfg     *ReasoningConfig
+		wantErr bool
+	}{
+		{"空mode视为未设置", &ReasoningConfig{Mode: ""}, false},
+		{"auto", &ReasoningConfig{Mode: "auto"}, false},
+		{"enabled", &ReasoningConfig{Mode: "enabled"}, false},
+		{"disabled", &ReasoningConfig{Mode: "disabled"}, false},
+		{"非法mode", &ReasoningConfig{Mode: "bogus"}, true},
+		{"on不是合法mode", &ReasoningConfig{Mode: "on"}, true},
+		{"budget为0", &ReasoningConfig{Mode: "enabled", BudgetTokens: intPtr(0)}, false},
+		{"budget为负", &ReasoningConfig{Mode: "enabled", BudgetTokens: intPtr(-1)}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.cfg.Validate()
+			if (err != nil) != c.wantErr {
+				t.Fatalf("Validate() err = %v, wantErr = %v", err, c.wantErr)
+			}
+		})
+	}
+}
+
+// TestCoerceReasoningConfig_map分支校验失败 验证 map 输入也走校验。
+// Python: reasoning.py:264 ReasoningConfig(**raw) —— Pydantic 在此抛 ValidationError
+func TestCoerceReasoningConfig_map分支校验失败(t *testing.T) {
+	cases := []map[string]any{
+		{"mode": "bogus"},
+		{"mode": "enabled", "budget_tokens": float64(-1)},
+	}
+	for _, in := range cases {
+		cfg, raw := CoerceReasoningConfig(in)
+		if cfg != nil || raw != nil {
+			t.Errorf("输入 %v 应被拒绝，got cfg=%v raw=%v", in, cfg, raw)
+		}
+	}
+}
+
+// TestCoerceReasoningConfig_map分支合法通过 验证合法输入正常转换。
+func TestCoerceReasoningConfig_map分支合法通过(t *testing.T) {
+	cfg, raw := CoerceReasoningConfig(map[string]any{"mode": "enabled", "budget_tokens": float64(2048)})
+	if raw != nil || cfg == nil {
+		t.Fatalf("cfg=%v raw=%v", cfg, raw)
+	}
+	if cfg.Mode != "enabled" || cfg.BudgetTokens == nil || *cfg.BudgetTokens != 2048 {
+		t.Fatalf("cfg=%+v", cfg)
+	}
+}
+
+// intPtr 返回整型指针（测试辅助）。
+func intPtr(n int) *int { return &n }
+
 // TestCoerceReasoningConfig_五分支 逐条覆盖 Python _coerce_reasoning_config。
 // Python: reasoning.py:255-265
 func TestCoerceReasoningConfig_五分支(t *testing.T) {
@@ -58,12 +117,14 @@ func TestCoerceReasoningConfig_五分支(t *testing.T) {
 	})
 }
 
-// TestCoerceReasoningConfig_budget负数不校验 验证 coerce 阶段不做取值校验
-// （Python ReasoningConfig 的 ge=0 由 Pydantic 在构造时校验，coerce 只做形态判定）。
-func TestCoerceReasoningConfig_budget负数不校验(t *testing.T) {
-	cfg, _ := CoerceReasoningConfig(map[string]any{"budget_tokens": float64(-1)})
-	if cfg == nil || cfg.BudgetTokens == nil || *cfg.BudgetTokens != -1 {
-		t.Fatalf("cfg = %+v", cfg)
+// TestCoerceReasoningConfig_budget负数被拒 验证 coerce 阶段执行取值校验。
+// 实测上游：ReasoningConfig(**{"budget_tokens": -1}) 在 Pydantic 构造期抛
+// ValidationError（budget_tokens 有 ge=0），不是延后到 resolve 阶段。
+// Python: schema/config.py:64 Field(default=None, ge=0) + reasoning.py:264 ReasoningConfig(**raw)
+func TestCoerceReasoningConfig_budget负数被拒(t *testing.T) {
+	cfg, raw := CoerceReasoningConfig(map[string]any{"budget_tokens": float64(-1)})
+	if cfg != nil || raw != nil {
+		t.Fatalf("负数 budget 应被拒绝，got cfg=%+v raw=%v", cfg, raw)
 	}
 }
 

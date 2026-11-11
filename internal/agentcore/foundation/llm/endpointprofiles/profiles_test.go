@@ -215,3 +215,31 @@ func TestNormalizeModelClientConfig_深拷贝(t *testing.T) {
 		t.Error("PromptCache 与入参共享")
 	}
 }
+
+// TestNormalizeModelClientConfig_用户显式kvMode优先 验证 extensions 走
+// deep_merge_defaults 语义：别名值只作默认，用户显式值胜出。
+// Python: endpoint_profiles.py:159-169 deep_merge_defaults(target, defaults)
+//
+//	merged = deepcopy(defaults); merged[key] = target[key]  ← target 即显式值
+//
+// 调用侧 :220-230 是 deep_merge_defaults(explicit_extensions, normalized_extensions)。
+func TestNormalizeModelClientConfig_用户显式kvMode优先(t *testing.T) {
+	in := &llmschema.ModelClientConfig{
+		ClientProvider: "InferenceAffinity",
+		Extensions: &llmschema.LLMExtensionsConfig{
+			KVCache: llmschema.KVCacheExtensionConfig{Mode: "none"},
+		},
+	}
+	out := NormalizeModelClientConfig(in)
+	if out.Extensions.KVCache.Mode != "none" {
+		t.Errorf("Mode = %q, want none（用户显式值必须保留，不得被别名覆盖）", out.Extensions.KVCache.Mode)
+	}
+}
+
+// TestNormalizeModelClientConfig_kvMode空缺时填别名值 验证「别名只补空缺」。
+func TestNormalizeModelClientConfig_kvMode空缺时填别名值(t *testing.T) {
+	out := NormalizeModelClientConfig(&llmschema.ModelClientConfig{ClientProvider: "AscendAffinity"})
+	if out.Extensions == nil || out.Extensions.KVCache.Mode != "affinity" {
+		t.Errorf("Mode = %+v, want affinity", out.Extensions)
+	}
+}
