@@ -11,6 +11,7 @@ import (
 	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -142,4 +143,44 @@ func maskAPIKey(k string) string {
 		return "****"
 	}
 	return k[:4]
+}
+
+// CloseConnections 按 connection_key 精确驱逐池中连接，返回关闭数。
+// Python: anthropic_model_client.py:795-821 aclose_connections（delta 驱逐：
+// 只关匹配身份的连接，在途请求表现为一次正常模型调用失败，可被
+// ModelAnomalyDetectionRail 重试；误伤连接下次调用自愈重建）。
+// 仅用于配置热重载的增量驱逐，绝不调用在请求热路径。
+func CloseConnections(configs []*llmschema.ModelClientConfig) int {
+	keys := make(map[transportPoolKey]struct{}, len(configs))
+	for _, cfg := range configs {
+		if cfg == nil {
+			continue
+		}
+		keys[transportPoolKey{
+			authMode:  cfg.AuthMode,
+			apiKey:    cfg.APIKey,
+			baseURL:   cfg.APIBase,
+			verifySSL: cfg.VerifySSL,
+			sslCert:   cfg.SSLCert,
+		}] = struct{}{}
+	}
+	if len(keys) == 0 {
+		return 0
+	}
+	transportPoolMu.Lock()
+	closed := 0
+	for key := range keys {
+		if tr, ok := transportPool[key]; ok {
+			tr.CloseIdleConnections()
+			delete(transportPool, key)
+			closed++
+		}
+	}
+	transportPoolMu.Unlock()
+	if closed > 0 {
+		logger.Info(logComponent).
+			Int("closed", closed).
+			Msg("Closed shared LLM transports for removed/updated model config")
+	}
+	return closed
 }

@@ -126,3 +126,34 @@ func TestGetSharedTransport_按五元组分桶(t *testing.T) {
 		t.Fatal("不同 base_url 不应共享")
 	}
 }
+
+// TestCloseConnections_精确驱逐 指定 key 的池被关闭重建，无关 key 不受影响。
+func TestCloseConnections_精确驱逐(t *testing.T) {
+	ResetSharedTransports()
+	cfgA := &llmschema.ModelClientConfig{ClientProvider: "Anthropic", AuthMode: llmschema.AuthModeAPIKey,
+		APIKey: "kA", APIBase: "https://a", VerifySSL: false}
+	cfgB := &llmschema.ModelClientConfig{ClientProvider: "Anthropic", AuthMode: llmschema.AuthModeAPIKey,
+		APIKey: "kB", APIBase: "https://a", VerifySSL: false}
+	ta := GetSharedTransport(cfgA.AuthMode, cfgA.APIKey, cfgA.APIBase, cfgA.VerifySSL, cfgA.SSLCert)
+	tb := GetSharedTransport(cfgB.AuthMode, cfgB.APIKey, cfgB.APIBase, cfgB.VerifySSL, cfgB.SSLCert)
+
+	if n := CloseConnections([]*llmschema.ModelClientConfig{cfgA}); n != 1 {
+		t.Fatalf("closed = %d, want 1", n)
+	}
+	// 幂等：A 不在池中（未被重建前）再驱逐返回 0
+	if n := CloseConnections([]*llmschema.ModelClientConfig{cfgA}); n != 0 {
+		t.Fatalf("重复驱逐应 0, got %d", n)
+	}
+	ta2 := GetSharedTransport(cfgA.AuthMode, cfgA.APIKey, cfgA.APIBase, cfgA.VerifySSL, cfgA.SSLCert)
+	if ta2 == ta {
+		t.Fatal("A 的 transport 应被重建（新实例）")
+	}
+	if GetSharedTransport(cfgB.AuthMode, cfgB.APIKey, cfgB.APIBase, cfgB.VerifySSL, cfgB.SSLCert) != tb {
+		t.Fatal("B 不应受影响")
+	}
+	// nil 安全
+	if n := CloseConnections([]*llmschema.ModelClientConfig{nil}); n != 0 {
+		t.Fatalf("nil 配置应跳过, got %d", n)
+	}
+	ResetSharedTransports()
+}
