@@ -15,7 +15,7 @@ import "math"
 // Go 用接口 + 10 个具体结构体表达；分派一律走 type switch，
 // 顺序对齐 serialization.py:_payload_to_wire 的 isinstance 链。
 type HarnessEventPayload interface {
-	// payloadKind 返回线格式 discriminator（供 15.4 codec 使用）
+	// payloadKind 返回线格式 discriminator（serialization.go 的 payloadToWire 使用）
 	payloadKind() string
 }
 
@@ -164,7 +164,7 @@ type ModelRequestOptions struct {
 // UnknownEvent 本消费者不认识的新 schema 共享事件，解码时无损保留。
 // Python: events.py:350-361 UnknownEvent
 // 注：它的线格式 event_type 取自自身 EventType（serialization.py:357-358），
-// 15.4 codec 必须特判 *UnknownEvent，不得依赖 payloadKind()。
+// serialization.go 的 payloadToWire 特判 UnknownEvent 取自身 EventType，不依赖 payloadKind()。
 type UnknownEvent struct {
 	// EventType 未知事件类型
 	EventType string
@@ -860,6 +860,6 @@ func (TurnLifecycleEvent) payloadKind() string { return "turn_lifecycle" }
 func (ModelRequestEvent) payloadKind() string { return "model_request" }
 
 // payloadKind 返回内部标记（该类型不进 wire discriminator 映射，
-// 15.4 codec 必须特判 *UnknownEvent 取自身 EventType）。
+// serialization.go 的 payloadToWire 特判 UnknownEvent 取自身 EventType）。
 // Python: serialization.py:357-358
 func (UnknownEvent) payloadKind() string { return "unknown" }
