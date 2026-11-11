@@ -328,6 +328,47 @@ func (s *TopicStarterStore) Close() error {
 	return nil
 }
 
+// EventKeyOf 计算事件主键：session_id|slate_id|event_type|topic_id[|feedback_record_id]。
+// Python: topic_starter.py:486 event_key_of
+//
+// 第五段按 Python 真值语义判定：feedback_record_id 为假（nil/空串/0/false）时不追加，
+// 因为同一张卡上的反馈可以重复发生，需要用反馈记录 ID 区分。
+func (s *TopicStarterStore) EventKeyOf(event map[string]any) string {
+	parts := []string{
+		pyStr(event["session_id"]),
+		pyStr(event["slate_id"]),
+		pyStr(event["event_type"]),
+		pyStr(event["topic_id"]),
+	}
+	if pythonTruthy(event["feedback_record_id"]) {
+		parts = append(parts, pyStr(event["feedback_record_id"]))
+	}
+	return strings.Join(parts, "|")
+}
+
+// RecordEvent 追加一条事件，幂等（同 key 已存在则返回 false）。
+// Python: topic_starter.py:498 record_event
+func (s *TopicStarterStore) RecordEvent(event map[string]any) (bool, error) {
+	return s.insertEvent(s.EventKeyOf(event), event, true)
+}
+
+// ListEvents 按写入顺序返回全部事件。
+// Python: topic_starter.py:566 list_events
+func (s *TopicStarterStore) ListEvents() ([]map[string]any, error) {
+	db, err := s.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT * FROM recommendation_event ORDER BY created_at, event_key")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEventRows(rows)
+}
+
 // ComputeInterestDrift 计算前后两批兴趣标签的漂移度。
 // Python: topic_starter.py:142 compute_interest_drift
 //
@@ -454,4 +495,178 @@ func (s *TopicStarterStore) createTables() error {
 		}
 	}
 	return nil
+}
+
+// insertEventKeyColumns recommendation_event 的写入列顺序。
+const insertEventKeyColumns = `event_key, session_id, slate_id, event_type, topic_id,
+	position, profile_version, policy_id, selection_mode,
+	propensity, propensity_reason, payload_json, created_at`
+
+// eventArgs 把事件 map 展开为与 insertEventKeyColumns 对应的 13 个参数。
+// Python: topic_starter.py:501-512 的默认值兜底链。
+func eventArgs(eventKey string, event map[string]any) ([]any, error) {
+	payloadMap, ok := event["payload"].(map[string]any)
+	if !ok || payloadMap == nil {
+		payloadMap = map[string]any{}
+	}
+	payloadJSON, err := marshalNoEscape(payloadMap)
+	if err != nil {
+		return nil, fmt.Errorf("序列化 payload 失败: %w", err)
+	}
+
+	policyID := pyStr(event["policy_id"])
+	if policyID == "" {
+		policyID = "topic-starter-mvp-v1"
+	}
+	selectionMode := pyStr(event["selection_mode"])
+	if selectionMode == "" {
+		selectionMode = "unknown"
+	}
+	propensityReason := pyStr(event["propensity_reason"])
+	if propensityReason == "" {
+		propensityReason = "not_estimated"
+	}
+	createdAt := 0.0
+	switch raw := event["created_at"].(type) {
+	case float64:
+		createdAt = raw
+	case int64:
+		createdAt = float64(raw)
+	case int:
+		createdAt = float64(raw)
+	}
+	if !pythonTruthy(createdAt) {
+		createdAt = nowSeconds()
+	}
+
+	return []any{
+		eventKey,
+		pyStr(event["session_id"]),
+		pyStr(event["slate_id"]),
+		pyStr(event["event_type"]),
+		nullableString(event["topic_id"]),
+		nullableInt(event["position"]),
+		nullableInt(event["profile_version"]),
+		policyID,
+		selectionMode,
+		nullableFloat(event["propensity"]),
+		propensityReason,
+		string(payloadJSON),
+		createdAt,
+	}, nil
+}
+
+// nullableString nil 转 SQL NULL，其余转字符串。
+func nullableString(value any) any {
+	if value == nil {
+		return nil
+	}
+	return pyStr(value)
+}
+
+// nullableInt nil 转 SQL NULL，其余转 int64。
+func nullableInt(value any) any {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	default:
+		return nil
+	}
+}
+
+// nullableFloat nil 转 SQL NULL，其余转 float64。
+func nullableFloat(value any) any {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	default:
+		return nil
+	}
+}
+
+// insertEvent 单条写入。ignoreConflict 为 true 时用 INSERT OR IGNORE（record_event），
+// 为 false 时用普通 INSERT（record_events_atomic 需要唯一约束错误传播）。
+func (s *TopicStarterStore) insertEvent(eventKey string, event map[string]any, ignoreConflict bool) (bool, error) {
+	args, err := eventArgs(eventKey, event)
+	if err != nil {
+		return false, err
+	}
+	db, err := s.connect()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	verb := "INSERT"
+	if ignoreConflict {
+		verb = "INSERT OR IGNORE"
+	}
+	result, err := db.Exec(verb+" INTO recommendation_event("+insertEventKeyColumns+") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args...)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected == 1, nil
+}
+
+// scanEventRows 把结果集转为 []map[string]any，payload_json 解回 payload。
+// Python: topic_starter.py:562-565 的 `item["payload"] = json.loads(item.pop("payload_json"))`
+func scanEventRows(rows *sql.Rows) ([]map[string]any, error) {
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]map[string]any, 0)
+	for rows.Next() {
+		values := make([]any, len(columns))
+		pointers := make([]any, len(columns))
+		for i := range values {
+			pointers[i] = &values[i]
+		}
+		if err := rows.Scan(pointers...); err != nil {
+			return nil, err
+		}
+		item := make(map[string]any, len(columns))
+		for i, column := range columns {
+			item[column] = values[i]
+		}
+		item["payload"] = map[string]any{}
+		if raw, ok := item["payload_json"]; ok {
+			text := ""
+			switch value := raw.(type) {
+			case []byte:
+				text = string(value)
+			case string:
+				text = value
+			}
+			if text != "" {
+				decoded := map[string]any{}
+				if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+					return nil, fmt.Errorf("解析 payload_json 失败: %w", err)
+				}
+				item["payload"] = decoded
+			}
+		}
+		delete(item, "payload_json")
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

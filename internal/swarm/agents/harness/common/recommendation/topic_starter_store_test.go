@@ -256,3 +256,94 @@ func TestConnect_busyTimeout生效(t *testing.T) {
 	require.NoError(t, db.QueryRow("PRAGMA busy_timeout").Scan(&timeout))
 	assert.Equal(t, 5000, timeout)
 }
+
+// TestEventKeyOf_五段拼接
+// Python: topic_starter.py:486 event_key_of
+func TestEventKeyOf_五段拼接(t *testing.T) {
+	store := newTestStore(t)
+
+	assert.Equal(t, "s|sl|e|", store.EventKeyOf(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e",
+	}))
+	assert.Equal(t, "s|sl|e|t", store.EventKeyOf(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t",
+	}))
+}
+
+// TestEventKeyOf_feedbackRecordId为truthy才追加
+func TestEventKeyOf_feedbackRecordId为truthy才追加(t *testing.T) {
+	store := newTestStore(t)
+	base := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t"}
+	want := "s|sl|e|t"
+
+	for _, falsy := range []any{nil, "", 0, 0.0, false} {
+		event := map[string]any{}
+		for k, v := range base {
+			event[k] = v
+		}
+		event["feedback_record_id"] = falsy
+		assert.Equal(t, want, store.EventKeyOf(event), "falsy 值 %#v 不应追加", falsy)
+	}
+
+	event := map[string]any{}
+	for k, v := range base {
+		event[k] = v
+	}
+	event["feedback_record_id"] = "fb-1"
+	assert.Equal(t, "s|sl|e|t|fb-1", store.EventKeyOf(event))
+}
+
+// TestRecordEvent_首次成功二次返回假
+// Python: topic_starter.py:498 record_event（INSERT OR IGNORE + rowcount == 1）
+func TestRecordEvent_首次成功二次返回假(t *testing.T) {
+	store := newTestStore(t)
+	event := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t"}
+
+	first, err := store.RecordEvent(event)
+	require.NoError(t, err)
+	assert.True(t, first)
+
+	second, err := store.RecordEvent(event)
+	require.NoError(t, err)
+	assert.False(t, second, "同 key 重复写入应返回 false")
+}
+
+// TestRecordEvent_五层默认值兜底
+// Python: topic_starter.py:507-512 —— policy_id/selection_mode/propensity_reason/payload/created_at
+func TestRecordEvent_五层默认值兜底(t *testing.T) {
+	store := newTestStore(t)
+	ok, err := store.RecordEvent(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e",
+	})
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+
+	assert.Equal(t, "topic-starter-mvp-v1", events[0]["policy_id"])
+	assert.Equal(t, "unknown", events[0]["selection_mode"])
+	assert.Equal(t, "not_estimated", events[0]["propensity_reason"])
+	assert.Equal(t, map[string]any{}, events[0]["payload"])
+	assert.Greater(t, events[0]["created_at"].(float64), 0.0)
+	assert.Nil(t, events[0]["topic_id"])
+	assert.Nil(t, events[0]["position"])
+	assert.Nil(t, events[0]["profile_version"])
+	assert.Nil(t, events[0]["propensity"])
+}
+
+// TestRecordEvent_非ASCII原样存储
+func TestRecordEvent_非ASCII原样存储(t *testing.T) {
+	store := newTestStore(t)
+	_, err := store.RecordEvent(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e",
+		"payload": map[string]any{"title": "中文标题 & <tag>"},
+	})
+	require.NoError(t, err)
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "中文标题 & <tag>", events[0]["payload"].(map[string]any)["title"])
+}
