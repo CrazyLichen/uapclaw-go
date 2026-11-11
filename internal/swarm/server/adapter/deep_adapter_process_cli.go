@@ -12,13 +12,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// processCliRunOptions 根 adapter 暂存、child 消费的一次性执行选项。
+// ProcessCliRunOptions 根 adapter 暂存、child 消费的一次性执行选项。
 // Python: interface_deep.py:12436 self._process_cli_run_options = RunContext(...)
-type processCliRunOptions struct {
+type ProcessCliRunOptions struct {
 	// maxTurns 本次运行的迭代上限
-	maxTurns *int
-	// hostTools 宿主工具（⤵️ 20.6）
-	hostTools []any
+	MaxTurns *int
+	// HostTools 宿主工具（⤵️ 20.6）
+	HostTools []any
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -44,7 +44,7 @@ func (d *DeepAdapter) configureProcessCliRun(ctx context.Context, maxTurns *int,
 	// 步骤 2: 根是 router → 暂存选项，等 child 消费
 	// Python: :12432-12437
 	if !d.isSessionScoped {
-		d.processCliRunOptions = &processCliRunOptions{maxTurns: maxTurns, hostTools: hostTools}
+		d.processCliRunOptions = &ProcessCliRunOptions{MaxTurns: maxTurns, HostTools: hostTools}
 		return nil
 	}
 	// 步骤 3: child 直接应用
@@ -110,9 +110,9 @@ func (d *DeepAdapter) applyMaxTurns(ctx context.Context, maxTurns int) error {
 	return nil
 }
 
-// takeProcessCliRunOptions 取出一次性的 run 选项并立即清空。
+// TakeProcessCliRunOptions 取出一次性的 run 选项并立即清空。
 // Python: interface_deep.py:18989-18992（取用前先置 None，失败运行不泄漏回调）
-func (d *DeepAdapter) takeProcessCliRunOptions() *processCliRunOptions {
+func (d *DeepAdapter) TakeProcessCliRunOptions() *ProcessCliRunOptions {
 	opts := d.processCliRunOptions
 	d.processCliRunOptions = nil
 	return opts

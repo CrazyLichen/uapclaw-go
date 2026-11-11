@@ -52,13 +52,13 @@ func TestConfigureProcessCliRun_hostTools未实现报错(t *testing.T) {
 // Python: interface_deep.py:18989-18992 取用前先置 None
 func TestTakeProcessCliRunOptions_取一次即清空(t *testing.T) {
 	maxTurns := 5
-	d := &DeepAdapter{processCliRunOptions: &processCliRunOptions{maxTurns: &maxTurns}}
+	d := &DeepAdapter{processCliRunOptions: &ProcessCliRunOptions{MaxTurns: &maxTurns}}
 
-	first := d.takeProcessCliRunOptions()
+	first := d.TakeProcessCliRunOptions()
 	require.NotNil(t, first)
-	require.Equal(t, 5, *first.maxTurns)
+	require.Equal(t, 5, *first.MaxTurns)
 
-	second := d.takeProcessCliRunOptions()
+	second := d.TakeProcessCliRunOptions()
 	require.Nil(t, second, "取过一次后必须清空，避免失败请求泄漏回调")
 }
 

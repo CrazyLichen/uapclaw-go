@@ -540,6 +540,24 @@ func (c *CodeAdapter) MarkAsSessionScoped(sessionID string) {
 	}
 }
 
+// ConfigureProcessCliRun 委托给内嵌 DeepAdapter。
+// Python: interface_deep.py:12421-12470 configure_process_cli_run
+func (c *CodeAdapter) ConfigureProcessCliRun(ctx context.Context, maxTurns *int, hostTools []any) error {
+	if c.deep == nil {
+		return errors.New("code adapter is not initialized")
+	}
+	return c.deep.ConfigureProcessCliRun(ctx, maxTurns, hostTools)
+}
+
+// TakeProcessCliRunOptions 委托给内嵌 DeepAdapter。
+// Python: interface_deep.py:18989-18992 取用即清空
+func (c *CodeAdapter) TakeProcessCliRunOptions() *ProcessCliRunOptions {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.TakeProcessCliRunOptions()
+}
+
 // GetLiveSessionInstance 委托 DeepAdapter。
 func (c *CodeAdapter) GetLiveSessionInstance(sessionID string) *harness.DeepAgent {
 	if c.deep == nil {

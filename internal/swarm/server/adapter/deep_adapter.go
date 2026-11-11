@@ -155,7 +155,7 @@ type DeepAdapter struct {
 	channelID string
 	// processCliRunOptions 根暂存的一次性 Process CLI 选项，等 child 消费。
 	// Python: interface_deep.py:12436 self._process_cli_run_options
-	processCliRunOptions *processCliRunOptions
+	processCliRunOptions *ProcessCliRunOptions
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -1034,16 +1034,20 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 在 child 上执行，d.instance / d.rails / d.contextEngine 自然都是 child 的。
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
-		reserve := !isAttachOnlySubscription(req.Params)
-		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
-			ReserveActivity: reserve,
-			RequestID:       req.RequestID,
+		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
+			ReserveActivity: !isAttachOnlySubscription(req.Params),
 		})
 		if err != nil {
 			return nil, err
 		}
 		defer d.evictIdleSessionAdapters(ctx)
 		defer d.unregisterSessionAgentTask(sid, req.RequestID)
+		// Python: :18987-18993（非流式入口同样消费 run options）
+		if options := child.TakeProcessCliRunOptions(); options != nil {
+			if cfgErr := child.ConfigureProcessCliRun(ctx, options.MaxTurns, options.HostTools); cfgErr != nil {
+				return nil, cfgErr
+			}
+		}
 		return child.ProcessMessageImpl(ctx, req, inputs)
 	}
 
@@ -1251,10 +1255,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// Python: process_message_stream_impl :18963 → _get_session_adapter_for_request
 	if !d.isSessionScoped {
 		sid := sessionAdapterKey(req.SessionID)
-		reserve := !isAttachOnlySubscription(req.Params)
-		child, err := d.getOrCreateSessionAdapter(ctx, sid, sessionAdapterOptions{
-			ReserveActivity: reserve,
-			RequestID:       req.RequestID,
+		child, err := d.getSessionAdapterForRequest(ctx, req, sessionAdapterRequestOptions{
+			ReserveActivity: !isAttachOnlySubscription(req.Params),
 		})
 		if err != nil {
 			ch := make(chan *schema.AgentResponseChunk)
@@ -1264,6 +1266,14 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		// 流式不能 defer 淘汰：淘汰必须在流消费完之后，而调用方持有 channel。
 		// 用转接 goroutine 在流关闭后触发（对齐 Python 的 finally 在 generator 结束时执行）。
 		return d.streamThroughChild(ctx, sid, req.RequestID, func() (<-chan *schema.AgentResponseChunk, error) {
+			// Python: :18987-18993 取用并应用 run options（取用即清空，失败运行不泄漏）
+			if options := child.TakeProcessCliRunOptions(); options != nil {
+				if cfgErr := child.ConfigureProcessCliRun(ctx, options.MaxTurns, options.HostTools); cfgErr != nil {
+					ch := make(chan *schema.AgentResponseChunk)
+					close(ch)
+					return ch, cfgErr
+				}
+			}
 			return child.ProcessMessageStreamImpl(ctx, req, inputs)
 		})
 	}
