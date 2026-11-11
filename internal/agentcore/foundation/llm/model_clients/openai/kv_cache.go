@@ -81,7 +81,7 @@ func (c *OpenAIModelClient) Release(
 	req.Header.Set("Authorization", "Bearer "+c.ClientConfig.APIKey)
 
 	// 3. 共享 Transport（C-A/C-14 收敛）
-	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
+	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.AuthMode, c.ClientConfig.APIKey, c.ClientConfig.APIBase, c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
 
 	// 4. 发送请求（对齐 Python: release 使用 llm_logger，非回调）
 	logger.Info(logComponent).

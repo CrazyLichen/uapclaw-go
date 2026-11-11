@@ -83,6 +83,7 @@ func (c *OpenAIModelClient) GenerateImage(
 		ctx, c.ClientConfig.APIBase, c.ClientConfig.APIKey,
 		multiModalPath, reqBody,
 		params.Timeout, c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert,
+		c.ClientConfig.AuthMode,
 	)
 	if err != nil {
 		return nil, err
@@ -188,6 +189,7 @@ func (c *OpenAIModelClient) GenerateSpeech(
 		ctx, c.ClientConfig.APIBase, c.ClientConfig.APIKey,
 		multiModalPath, reqBody,
 		params.Timeout, c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert,
+		c.ClientConfig.AuthMode,
 	)
 	if err != nil {
 		return nil, err
@@ -357,6 +359,7 @@ func (c *OpenAIModelClient) GenerateVideo(
 		ctx, c.ClientConfig.APIBase, c.ClientConfig.APIKey,
 		videoSynthesisPath, reqBody,
 		params.Timeout, c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert,
+		c.ClientConfig.AuthMode,
 	)
 	if err != nil {
 		return nil, err

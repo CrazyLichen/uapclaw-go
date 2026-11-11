@@ -3,11 +3,14 @@ package model_clients
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -37,13 +40,21 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GetSharedTransport 获取按 (verify_ssl, ssl_cert) 分桶的共享 Transport。
-// Go 的 Transport host 无关（URL/鉴权头 per-request），按安全形态分桶即可最大化复用；
-// 上游按 connection_key（含 api_base）分桶——见设计文档偏差 D-1。
+// GetSharedTransport 获取按五元组分桶的共享 Transport。
+// Python: anthropic_model_client.py:655-673 connection_key
+// (auth_mode, api_key, normalized_base_url, verify_ssl, ssl_cert)——api_key 入桶
+// 保证租户隔离（同一 base 上不同 key 不共用连接池）；normalized_base_url 决定代理。
+// spec D-1 偏差回收：原 (verify_ssl, ssl_cert) 二元桶升级为五元桶。
 // 证书读取失败时退化为系统信任库形态并照常入池：前置校验（ValidateConfig）
 // 已在配置层拦截不可读证书，此处不重复报错。
-func GetSharedTransport(verifySSL bool, sslCert string) *http.Transport {
-	key := transportPoolKey{verifySSL: verifySSL, sslCert: sslCert}
+func GetSharedTransport(authMode llmschema.AuthMode, apiKey, baseURL string, verifySSL bool, sslCert string) *http.Transport {
+	key := transportPoolKey{
+		authMode:  authMode,
+		apiKey:    apiKey,
+		baseURL:   baseURL,
+		verifySSL: verifySSL,
+		sslCert:   sslCert,
+	}
 	transportPoolMu.Lock()
 	defer transportPoolMu.Unlock()
 	if tr, ok := transportPool[key]; ok {
@@ -105,8 +116,30 @@ func ResetSharedTransports() {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// transportPoolKey Transport 池分桶键（安全形态）。
+// transportPoolKey Transport 池分桶键（连接身份五元组）。
+// api_key 明文入 key（用户裁决，与 Python connection_key 同构）；
+// 由 String/GoString 脱敏堵住 %v/%+v/%#v 泄漏面。
 type transportPoolKey struct {
+	authMode  llmschema.AuthMode
+	apiKey    string
+	baseURL   string
 	verifySSL bool
 	sslCert   string
+}
+
+// String 脱敏输出：api_key 只显示长度与前 4 位。
+func (k transportPoolKey) String() string {
+	return fmt.Sprintf("transport{auth=%s,key=len:%d/%s...,base=%s,verify=%v,cert=%s}",
+		k.authMode, len(k.apiKey), maskAPIKey(k.apiKey), k.baseURL, k.verifySSL, k.sslCert)
+}
+
+// GoString 同 String，堵住 %#v。
+func (k transportPoolKey) GoString() string { return k.String() }
+
+// maskAPIKey 返回前 4 位（不足 4 位全遮）。
+func maskAPIKey(k string) string {
+	if len(k) <= 4 {
+		return "****"
+	}
+	return k[:4]
 }

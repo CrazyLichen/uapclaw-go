@@ -152,7 +152,7 @@ func BuildHTTPRequestWithAuth(
 
 	// 共享 Transport 池（C-14）：按安全形态分桶复用连接。
 	// Client 是每请求新建的轻对象——共享的是 Transport，因此 Client.Timeout 只作用于本请求。
-	client := &http.Client{Transport: model_clients.GetSharedTransport(verifySSL, sslCert)}
+	client := &http.Client{Transport: model_clients.GetSharedTransport(authMode, apiKey, NormalizeAPIBase(apiBase), verifySSL, sslCert)}
 	if !streaming {
 		client.Timeout = time.Duration(effectiveTimeout * float64(time.Second))
 	}

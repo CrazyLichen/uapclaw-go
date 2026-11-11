@@ -134,7 +134,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 	}
 
 	// 6. 共享 Transport（C-A/C-14 收敛）
-	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
+	client := &http.Client{Transport: model_clients.GetSharedTransport(c.ClientConfig.AuthMode, c.ClientConfig.APIKey, c.ClientConfig.APIBase, c.ClientConfig.VerifySSL, c.ClientConfig.SSLCert)}
 
 	// 7. 日志记录（对齐 Python: llm_logger.info 事件记录）
 	logger.Info(logComponent).
