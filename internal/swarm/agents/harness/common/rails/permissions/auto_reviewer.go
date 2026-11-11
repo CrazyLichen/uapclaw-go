@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/endpointprofiles"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
@@ -304,7 +305,11 @@ func (c *IsolatedModelReviewerClient) Assess(
 		model_clients.WithInvokeTemperature(0.0),
 		model_clients.WithInvokeTopP(1.0),
 	}
-	if formatSchema := c.formatResponseFormat(); formatSchema != nil {
+	formatSchema, err := c.formatResponseFormat()
+	if err != nil {
+		return nil, err
+	}
+	if formatSchema != nil {
 		opts = append(opts, model_clients.WithResponseFormat(formatSchema))
 	}
 	result, err := c.Model.Invoke(ctx, model_clients.NewDictsMessagesParam(messages), opts...)
@@ -536,34 +541,38 @@ func (c *IsolatedModelReviewerClient) displayLanguage() (language string) {
 //  5. api_mode 非空且非 ChatCompletions → 不注入（Responses 协议参数不同）
 //  6. auth_mode == OpenAIAccountOAuth → 不注入（OAuth 账号模式不认）
 //  7. model_config.response_format 已设置 → 不注入（不覆盖用户配置）
-func (c *IsolatedModelReviewerClient) formatResponseFormat() map[string]any {
+func (c *IsolatedModelReviewerClient) formatResponseFormat() (map[string]any, error) {
 	// 关卡 1 + 2
 	if c.OutputFormat == "prompt" || c.Model == nil {
-		return nil
+		return nil, nil
 	}
 	// 关卡 3
 	if c.Model.ClientConfig == nil {
-		return nil
+		return nil, nil
 	}
 	// Python 在这里先 normalize_model_client_config 再判断：
 	// 归一后 provider 名才是权威值（endpoint_profile 可能影响 api_base，
-	// 但 provider 名归一同样必要，例如小写 "openai" → "OpenAI"）
-	config := llmschema.NormalizeModelClientConfig(c.Model.ClientConfig)
+	// 但 provider 名归一同样必要，例如小写 "openai" → "OpenAI"）。
+	// 归一失败（如 kv_cache.mode 非法）按 Python ValidationError 语义上抛。
+	config, err := endpointprofiles.NormalizeModelClientConfig(c.Model.ClientConfig)
+	if err != nil {
+		return nil, err
+	}
 	if config == nil {
-		return nil
+		return nil, nil
 	}
 	// 关卡 4 + 5 + 6
 	apiModeOK := config.APIMode == "" || config.APIMode == llmschema.APIModeChatCompletions
 	if config.ClientProvider != llmschema.ProviderTypeOpenAI.String() ||
 		!apiModeOK ||
 		config.AuthMode == llmschema.AuthModeOpenAIAccountOAuth {
-		return nil
+		return nil, nil
 	}
 	// 关卡 7：用户已设 response_format 时不覆盖
 	if c.Model.ModelConfig != nil && c.Model.ModelConfig.ResponseFormat != nil {
-		return nil
+		return nil, nil
 	}
-	return map[string]any{"type": "json_object"}
+	return map[string]any{"type": "json_object"}, nil
 }
 
 // visibleReviewEvidence 过滤出模型可见的证据字段。
