@@ -644,6 +644,12 @@ func WithRequestExtra(extra map[string]any) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.Extra = extra }
 }
 
+// WithReasoning 设置思考/推理请求意图。
+// Python: ModelRequestConfig.reasoning: Optional[Union[ReasoningConfig, dict[str, Any]]]
+func WithReasoning(reasoning any) ModelRequestConfigOption {
+	return func(c *ModelRequestConfig) { c.Reasoning = reasoning }
+}
+
 // NewModelRequestConfig 创建模型请求配置，默认温度 0.95、TopP 0.1（对齐 Python）。
 func NewModelRequestConfig(opts ...ModelRequestConfigOption) *ModelRequestConfig {
 	// 采样参数默认 nil（未设置不下发）——Python: schema/config.py:262-266
