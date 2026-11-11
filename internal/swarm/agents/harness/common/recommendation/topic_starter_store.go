@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -24,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -350,6 +351,59 @@ func (s *TopicStarterStore) EventKeyOf(event map[string]any) string {
 // Python: topic_starter.py:498 record_event
 func (s *TopicStarterStore) RecordEvent(event map[string]any) (bool, error) {
 	return s.insertEvent(s.EventKeyOf(event), event, true)
+}
+
+// RecordEventsAtomic 整组写入或整组不写。
+// Python: topic_starter.py:527 record_events_atomic
+//
+// 三条短路：空列表 → false；组内 event_key 重复 → false（写库前拦截）；
+// 落库撞唯一约束 → 回滚并返回 false（IntegrityError 不向上抛）。
+func (s *TopicStarterStore) RecordEventsAtomic(events []map[string]any) (bool, error) {
+	if len(events) == 0 {
+		return false, nil
+	}
+	keys := make([]string, 0, len(events))
+	seen := make(map[string]struct{}, len(events))
+	for _, event := range events {
+		key := s.EventKeyOf(event)
+		if _, duplicate := seen[key]; duplicate {
+			return false, nil
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+
+	db, err := s.connect()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return false, err
+	}
+	statement := "INSERT INTO recommendation_event(" + insertEventKeyColumns + ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	for index, event := range events {
+		args, argErr := eventArgs(keys[index], event)
+		if argErr != nil {
+			_ = tx.Rollback()
+			return false, argErr
+		}
+		if _, execErr := tx.Exec(statement, args...); execErr != nil {
+			_ = tx.Rollback()
+			// Python 只捕 sqlite3.IntegrityError；Go 侧对应约束类错误
+			var sqliteErr sqlite3.Error
+			if errors.As(execErr, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint {
+				return false, nil
+			}
+			return false, execErr
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ListEvents 按写入顺序返回全部事件。

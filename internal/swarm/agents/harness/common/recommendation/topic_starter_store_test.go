@@ -347,3 +347,66 @@ func TestRecordEvent_非ASCII原样存储(t *testing.T) {
 	require.Len(t, events, 1)
 	assert.Equal(t, "中文标题 & <tag>", events[0]["payload"].(map[string]any)["title"])
 }
+
+// TestRecordEventsAtomic_正常写入整组
+// Python: topic_starter.py:527 record_events_atomic
+func TestRecordEventsAtomic_正常写入整组(t *testing.T) {
+	store := newTestStore(t)
+	events := []map[string]any{
+		{"session_id": "s", "slate_id": "sl", "event_type": "e1", "topic_id": "t1"},
+		{"session_id": "s", "slate_id": "sl", "event_type": "e2", "topic_id": "t2"},
+		{"session_id": "s", "slate_id": "sl", "event_type": "e3", "topic_id": "t3"},
+	}
+	ok, err := store.RecordEventsAtomic(events)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	stored, err := store.ListEvents()
+	require.NoError(t, err)
+	assert.Len(t, stored, 3)
+}
+
+// TestRecordEventsAtomic_空列表返回假
+func TestRecordEventsAtomic_空列表返回假(t *testing.T) {
+	store := newTestStore(t)
+	ok, err := store.RecordEventsAtomic(nil)
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = store.RecordEventsAtomic([]map[string]any{})
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+// TestRecordEventsAtomic_组内重复返回假且不写库
+func TestRecordEventsAtomic_组内重复返回假且不写库(t *testing.T) {
+	store := newTestStore(t)
+	same := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t"}
+	ok, err := store.RecordEventsAtomic([]map[string]any{same, same})
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	stored, err := store.ListEvents()
+	require.NoError(t, err)
+	assert.Empty(t, stored, "组内重复应整组拒绝，不写任何行")
+}
+
+// TestRecordEventsAtomic_跨组重复整组回滚
+func TestRecordEventsAtomic_跨组重复整组回滚(t *testing.T) {
+	store := newTestStore(t)
+	existing := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t0"}
+	ok, err := store.RecordEvent(existing)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	ok, err = store.RecordEventsAtomic([]map[string]any{
+		{"session_id": "s", "slate_id": "sl", "event_type": "e2", "topic_id": "t2"},
+		existing,
+	})
+	assert.False(t, ok, "跨组重复应返回 false")
+	assert.NoError(t, err, "唯一约束错误应转为 false 而非 error")
+
+	stored, err := store.ListEvents()
+	require.NoError(t, err)
+	assert.Len(t, stored, 1, "整组回滚，只保留原有 1 条")
+}
