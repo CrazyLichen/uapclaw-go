@@ -97,8 +97,8 @@ PermissionEngine 分层规则判定（纯规则，零 LLM）              ← 9.
 |---|---|---|---|
 | `GetPermissionsTools` / `ReplacePermissionsToolsInConfig` / `UpdatePermissionsToolInConfig` / `DeletePermissionsToolInConfig` / `GetPermissionsRules` / `GetPermissionsApprovalOverrides` / `CreatePermissionsRuleInConfig` / `UpdatePermissionsRuleInConfig` / `DeletePermissionsRuleInConfig` / `DeletePermissionsApprovalOverrideInConfig` / `UpdatePermissionsOwnerScopesInConfig` | `permissions_config_rpc.go` | Python 同名函数全在 `common/config.py` | 迁到 config 层后删除 |
 | `loadLiveConfig` / `readYAMLData` / `writeYAMLData` | `permissions_config_rpc.go` | Python 配置读写全在 `common/config` | 迁到 config 层后删除 |
-| `WithAgentPermissionContext` + `AgentRequest.PermissionContext` 字段 | `schema/agent.go:45,190` | **全仓零调用**（只有定义） | 删除 |
-| `req.PermissionContext` 的 `else if` 分支 | `deep_adapter.go:1059,1354` | Python 无 | 删除 |
+| `WithAgentPermissionContext` + `AgentRequest.PermissionContext` 字段 | `schema/agent.go:45,190` | **生产零调用**（仅测试引用）。⚠️ 执行时发现 spec 原判「全仓零调用」不准确：`e2a/agent_compat.go:47,104` 曾写入该字段、`server/session_stubs.go:445` 曾读取 | **已删除**：E2A 改为只写 metadata（Python 的 `e2a_to_agent_request` 本就无此参数，`agent_compat.py:62-63` 只有 `metadata = ctx`）；`session_stubs.requestUserID` 改为 metadata 优先、params 兜底（与 `runtime.requestUserID` 同源） |
+| `req.PermissionContext` 的 `else if` 分支 | `deep_adapter.go:1059,1354` | Python 无（只有 `token_perm = setup_permission_context(request)` 一句） | **已删除**（2 处） |
 | `OwnerScopesPermissionContext` + `permissionContextKey` + `NewOwnerScopesPermissionContextFromDict` + `Scene()`/`OwnerScopeKey()` 方法 | `owner_scopes.go:15-38,51-77,313-329` | 与 `swarm/schema.PermissionContext` **字段、逻辑完全相同**（同一 Python 类 `owner_scopes.PermissionContext` 的两次 Go 实现）；本包那份**生产零使用**（仅测试 + doc.go 引用） | **已删除**：`schema` 版是生产权威实现（adapter 装配 + root_context_rail 读写）；`Scene`/`OwnerScopeKey` 的 trim 用例已迁到 `schema/permission_test.go`；同步更新 2 处 doc.go |
 
 ### 3.4 明确保留（经查证 Python 有对应）
@@ -511,10 +511,10 @@ func permissionsConfigMethods() []string                        // → get_permi
 | 操作 | Python | Go 位置 |
 |---|---|---|
 | 新增 | `setup_permission_context(request) → Token` | `swarm/schema/permission.go`：`SetupPermissionContext(ctx context.Context, request *AgentRequest) (context.Context, func())` |
-| 新增 | `cleanup_permission_context(token)` | `swarm/schema/permission.go`：`CleanupPermissionContext(cleanup func())` |
+| ~~新增~~ | `cleanup_permission_context(token)` | **不实现**：Python 用于 `TOOL_PERMISSION_CONTEXT.reset(token)`；Go 的 `WithPermissionContextValue` 是 `context.WithValue` 派生不可变 ctx，无全局栈需弹。空函数只会制造「需要配对调用」的假信号 |
 | 新增 | `current_permission_owner_scope() → str` | `swarm/schema/permission.go`：`CurrentPermissionOwnerScope(ctx context.Context) string` |
 | 删除 | — | `NewPermissionContextFromRequest` |
-| 删除 | — | `PermissionContextFromCtx`（调用方改用 `CurrentPermissionOwnerScope` 或直接读 ctx） |
+| 保留 | — | `PermissionContextFromCtx`（**不删**：3 处生产调用方 `avatar_rail.go:106,180` / `deep_adapter_rails.go:1430`，且 `CurrentPermissionOwnerScope` 内部正是调它读上下文） |
 | 删除 | — | `WithAgentPermissionContext`（零调用） |
 | 删除 | — | `AgentRequest.PermissionContext` 字段 |
 
@@ -591,7 +591,7 @@ Go 现状把 `get_permissions_tools` 等 11 个函数**实现在 permissions 包
 | `loadLiveConfig` / `readYAMLData` / `writeYAMLData` | `:617/628/638` | 迁 config 层 |
 | `validateToolsMap` / `normalizeRuleTools` / `normalizeRuleSeverityAction` / `randomHex` | `:660/697/725/741` | 迁 config 层 |
 | `NewPermissionContextFromRequest` | `swarm/schema/permission.go:279` | 改名 `SetupPermissionContext` |
-| `PermissionContextFromCtx` | `swarm/schema/permission.go:267` | 改名为 `CurrentPermissionOwnerScope`（语义不同，见 §4.9） |
+| `PermissionContextFromCtx` | `swarm/schema/permission.go:267` | **保留不改名**。`CurrentPermissionOwnerScope` 是新增函数（推导 owner token），内部调用本函数；两者语义不同，非改名关系 |
 | `WithAgentPermissionContext` | `swarm/schema/agent.go:190` | 全仓零调用 |
 | `AgentRequest.PermissionContext` 字段 | `swarm/schema/agent.go:45` | 同上 |
 | `req.PermissionContext` 的 `else if` 分支 | `deep_adapter.go:1059,1354` | Python 无此路径 |
@@ -609,7 +609,7 @@ Go 现状把 `get_permissions_tools` 等 11 个函数**实现在 permissions 包
 ```bash
 grep -rn "⤵️ 9.90e" --include=*.go internal/          # 0 命中
 grep -rn "NewPermissionContextFromRequest" --include=*.go internal/ tests/ cmd/   # 0 命中
-grep -rn "PermissionContextFromCtx" --include=*.go internal/ tests/ cmd/          # 0 命中
+grep -rn "NewPermissionContextFromRequest" --include=*.go internal/ tests/ cmd/   # 0 命中（PermissionContextFromCtx 保留）
 grep -rn "WithAgentPermissionContext" --include=*.go internal/ tests/ cmd/        # 0 命中
 grep -rn "func GetPermissionsTools" --include=*.go internal/swarm/   # 0 命中（已迁 config）
 ```
@@ -709,15 +709,15 @@ Task 11 集成测试 · Task 12 doc.go/计划表回填
 
 ## 十一、验收清单
 
-- [ ] `grep -rn "⤵️ 9.90e" --include=*.go internal/` = 0
-- [ ] `grep -rn "NewPermissionContextFromRequest\|PermissionContextFromCtx\|WithAgentPermissionContext" --include=*.go internal/ tests/ cmd/` = 0
-- [ ] `func GetPermissionsTools` 只在 `internal/common/config/` 出现
-- [ ] `GetPermissionsTools` 单测返回非空 tools（bug 回归）
-- [ ] `principal_user_id` 非空时 `SetupPermissionContext` 返回非 nil ctx（缺口回归）
-- [ ] 会话隔离双写测试通过（含重启恢复场景）
-- [ ] `audit.go` / `permission_interaction.go` / config 层 / persist 新增函数 / `stream_event_rail` 隔离 覆盖率均 ≥85%
-- [ ] `go build ./...` / `go vet ./...` 通过
-- [ ] 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL
-- [ ] 集成审计 `go run ./cmd/integration-audit -verify` 通过
-- [ ] `IMPLEMENTATION_PLAN.md` 9.90e 行标 ✅ 并回填摘要
-- [ ] 三处 `doc.go` 文件树同步
+- [x] `grep -rn "⤵️ 9.90e" --include=*.go internal/` = 0
+- [x] `grep -rn "NewPermissionContextFromRequest\|WithAgentPermissionContext" --include=*.go internal/ tests/ cmd/` = 0（`PermissionContextFromCtx` 保留，不在此列）
+- [x] `func GetPermissionsTools` 只在 `internal/common/config/` 出现
+- [x] `GetPermissionsTools` 单测返回非空 tools（bug 回归）
+- [x] `principal_user_id` 非空时 `SetupPermissionContext` 返回非 nil ctx（缺口回归）
+- [x] 会话隔离双写测试通过（含重启恢复场景）
+- [x] `audit.go`(90.6%) / `permission_interaction.go`(91.2%) / config 层 / persist 新增函数 / `stream_event_rail` 隔离（本批 8 个新函数均 100%）覆盖率均 ≥85%
+- [x] `go build ./...` / `go vet ./...` 通过
+- [ ] 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL（Task 12 执行）
+- [x] 集成审计通过（`swarm/permissions` 由违规转通过：跨度 2→3，有效测试 7→11）
+- [ ] `IMPLEMENTATION_PLAN.md` 9.90e 行标 ✅ 并回填摘要（Task 11 执行）
+- [x] 三处 `doc.go` 文件树同步
