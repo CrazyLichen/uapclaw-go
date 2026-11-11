@@ -14,6 +14,19 @@ import (
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
+const (
+	// PermissionRuntimeQuarantinedKey 会话隔离标记在 session state 中的键。
+	//
+	// Python: PERMISSION_RUNTIME_QUARANTINED_KEY (permission_interaction.py L10-12)
+	//
+	// 键名含 v1 后缀用于将来语义变更时平滑迁移；字面量必须与 Python 一字不差，
+	// 否则跨语言共享的会话状态读不到。品牌前缀 jiuwenswarm 不映射。
+	//
+	// 放在本包而非 permissions 包：rails 包（stream_event_rail）需要读写这个键，
+	// 但 rails → rails/permissions 会成环（permissions → rails 已存在）。
+	PermissionRuntimeQuarantinedKey = "_jiuwenswarm_permission_runtime_quarantined_v1"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (

@@ -16,6 +16,8 @@ package permissions
 import (
 	"reflect"
 	"strings"
+
+	interruptrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -25,9 +27,9 @@ const (
 	//
 	// Python: PERMISSION_RUNTIME_QUARANTINED_KEY (permission_interaction.py L10-12)
 	//
-	// 键名含 v1 后缀用于将来语义变更时平滑迁移；字面量必须与 Python 一字不差，
-	// 否则跨语言共享的会话状态读不到。品牌前缀 jiuwenswarm 不映射。
-	PermissionRuntimeQuarantinedKey = "_jiuwenswarm_permission_runtime_quarantined_v1"
+	// 定义已下沉到 interrupt 包（rails 包读写该键时不能让
+	// rails → rails/permissions 成环），这里转发以保持既有调用点不变。
+	PermissionRuntimeQuarantinedKey = interruptrail.PermissionRuntimeQuarantinedKey
 
 	// permissionInteractionScanLimit 扫描循环硬上限。
 	// Python: permission_interaction.py L20 `for _ in range(128)`

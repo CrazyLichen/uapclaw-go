@@ -6,11 +6,13 @@ import (
 	"sync"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	interruptrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -55,6 +57,12 @@ type JiuClawStreamEventRail struct {
 	inflightToolCalls map[string]inflightToolCallInfo
 	// cancelledToolResults 取消的工具结果，对齐 Python: _cancelled_tool_results
 	cancelledToolResults map[string][]map[string]any
+
+	// quarantinedSessions 已隔离的会话集合，对齐 Python: _quarantined_sessions
+	//
+	// 隔离是永久的：一旦会话的运行时被判定损坏（fail-closed 清理失败），
+	// 在它所属的会话被销毁前不再接受任何新工作。
+	quarantinedSessions map[string]bool
 
 	// todoTool 共享 TodoTool 实例，对齐 Python: _main_todo_tool
 	todoTool todoToolLoader
@@ -114,6 +122,7 @@ func NewJiuClawStreamEventRail() *JiuClawStreamEventRail {
 		mainSessions:         make(map[string]sessioninterfaces.SessionFacade),
 		inflightToolCalls:    make(map[string]inflightToolCallInfo),
 		cancelledToolResults: make(map[string][]map[string]any),
+		quarantinedSessions:  make(map[string]bool),
 	}
 }
 
@@ -183,6 +192,69 @@ func (r *JiuClawStreamEventRail) Abort(sessionID string) {
 	sid := resolveSessionID(sessionID)
 	r.abortRequested[sid] = true
 	r.getPauseCond(sid).Resume() // 恢复暂停以便 checkpoint 可以检查 abort 标记
+}
+
+// QuarantineSession 永久隔离一个损坏的运行时，直到其所属会话被销毁。
+//
+// Python: quarantine_session(session_id, session=None) (stream_event_rail.py L675-684)
+//
+// 三步：
+//  1. 记入隔离集合
+//  2. 有 session 时把隔离标记写进会话状态（跨进程重启后仍生效）
+//  3. 终止该会话
+//
+// 注意：Abort 自己加锁，这里不能持锁调用它——Python 的 abort 同样只是往
+// dict 里写标记，没有独立的锁语义。为避免死锁，第 3 步在锁外做。
+func (r *JiuClawStreamEventRail) QuarantineSession(
+	sessionID string,
+	session sessioninterfaces.SessionFacade,
+) {
+	sid := resolveSessionID(sessionID)
+	r.mu.Lock()
+	r.quarantinedSessions[sid] = true
+	r.mu.Unlock()
+
+	if session != nil {
+		session.UpdateState(map[string]any{
+			interruptrail.PermissionRuntimeQuarantinedKey: true,
+		})
+	}
+	r.Abort(sid)
+}
+
+// RaiseIfQuarantined 在 fail-closed 中断清理失败后拒绝新工作。
+//
+// Python: raise_if_quarantined(session_id, session=None) (stream_event_rail.py L686-701)
+//
+// 两个来源任一命中即视为隔离：
+//   - 内存中的隔离集合
+//   - 会话状态里持久化的隔离标记（跨进程重启后仍生效）
+//
+// 命中时把 sid 补写进内存集合（内存态可能因重启丢失），再返回错误。
+func (r *JiuClawStreamEventRail) RaiseIfQuarantined(
+	sessionID string,
+	session sessioninterfaces.SessionFacade,
+) error {
+	sid := resolveSessionID(sessionID)
+
+	persisted := false
+	if session != nil {
+		if value, err := session.GetState(state.StringKey(interruptrail.PermissionRuntimeQuarantinedKey)); err == nil {
+			persisted = value == true
+		}
+	}
+
+	r.mu.Lock()
+	quarantined := r.quarantinedSessions[sid]
+	if quarantined || persisted {
+		r.quarantinedSessions[sid] = true
+	}
+	r.mu.Unlock()
+
+	if quarantined || persisted {
+		return fmt.Errorf("session_runtime_quarantined")
+	}
+	return nil
 }
 
 // ResetAbort 清除终止标记，对齐 Python: reset_abort(session_id)
@@ -337,6 +409,16 @@ func (r *JiuClawStreamEventRail) BeforeInvoke(ctx context.Context, cbc *sainterf
 	if sid == "" {
 		sid = defaultSessionID
 	}
+
+	// 隔离检查：fail-closed 中断清理失败后，该会话不再接受任何新工作。
+	// Python: raise_if_quarantined(session_id, session) (stream_event_rail.py L686-701)
+	if err := r.RaiseIfQuarantined(sid, session); err != nil {
+		logger.Warn(logComponent).
+			Str("session_id", sid).
+			Msg("[StreamEventRail] reject work for quarantined session")
+		return err
+	}
+
 	r.mu.Lock()
 	if rawConvID != "" {
 		r.conversationIDs[sid] = rawConvID
