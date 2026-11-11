@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -335,6 +338,68 @@ func (f *PromptSuggestionForks) SetConfig(config map[string]any) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// recordLedgerEvent 在 epoch 有效期内追加账本事件；写失败仅 Warn，不影响会话。
+// Python: prompt_suggestion.py:322-345 _record（try/except + Warn）
+func (f *PromptSuggestionForks) recordLedgerEvent(
+	epoch ConsentEpochValue, eventType, sessionID, requestID, suggestionID string,
+	payload map[string]any,
+) {
+	if !ConsentEpoch(f.config).Equal(epoch) {
+		return
+	}
+	full := map[string]any{
+		"suggestion_id":  suggestionID,
+		"session_id":     sessionID,
+		"request_id":     requestID,
+		"prompt_version": PromptVersion,
+	}
+	for key, value := range payload {
+		full[key] = value
+	}
+	store, err := NewTopicStarterStore(filepath.Join(workspace.AgentWorkspaceDir(), ConsentDBName))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion ledger write failed")
+		return
+	}
+	defer store.Close()
+	event := map[string]any{
+		"session_id":        sessionID,
+		"slate_id":          "prompt-suggestion:" + requestID,
+		"event_type":        eventType,
+		"topic_id":          "prompt-suggestion:" + suggestionID,
+		"policy_id":         PolicyID,
+		"selection_mode":    "prompt_suggestion",
+		"propensity_reason": "not_estimated",
+		"created_at":        float64(time.Now().UnixNano()) / 1e9,
+		"payload":           full,
+	}
+	if _, err := store.RecordEvent(event); err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion ledger write failed")
+	}
+}
+
+// usagePayload 回复用量在账本里的形状；无用量信息返回 nil。
+// Python: prompt_suggestion.py:312-320 usage_payload
+func usagePayload(reply *llmschema.AssistantMessage) map[string]any {
+	if reply == nil || reply.UsageMetadata == nil {
+		return nil
+	}
+	usage := reply.UsageMetadata
+	var reasoning any
+	if usage.ReasoningTokens != nil {
+		reasoning = *usage.ReasoningTokens
+	}
+	return map[string]any{
+		"prompt_tokens":             usage.InputTokens,
+		"completion_tokens":         usage.OutputTokens,
+		"total_tokens":              usage.TotalTokens,
+		"prompt_tokens_details":     map[string]any{"cached_tokens": usage.CacheTokens},
+		"completion_tokens_details": map[string]any{"reasoning_tokens": reasoning},
+	}
+}
 
 // suppressReason 逐条对齐 prompt_suggestion.py:390-408 的 7 个 reason。
 func suppressReason(call *MainCall, opts TurnEndOptions) string {

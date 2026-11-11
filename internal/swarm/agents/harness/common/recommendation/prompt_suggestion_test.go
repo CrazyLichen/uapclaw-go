@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -277,4 +279,87 @@ func TestLatestCompletedRequest_末尾非success(t *testing.T) {
 func TestLatestCompletedRequest_无完成行(t *testing.T) {
 	resetWorkspaceForTest(t)
 	assert.Equal(t, "", LatestCompletedRequest("ps-latest-4"))
+}
+
+// ──────────────────────────── 用例：recordLedgerEvent / usagePayload ───────────────────────────────
+
+// TestRecordLedgerEvent_落库与公共字段 epoch 有效时写入，公共字段齐全。
+func TestRecordLedgerEvent_落库与公共字段(t *testing.T) {
+	resetWorkspaceForTest(t)
+	f := newEnabledForks()
+	epoch := ConsentEpoch(f.config)
+
+	f.recordLedgerEvent(epoch, "prompt_suggestion_generation", "s1", "r1", "sug1",
+		map[string]any{"outcome": "candidate", "text": "hi"})
+
+	store, err := NewTopicStarterStore(filepath.Join(workspaceDirForTest(), ConsentDBName))
+	require.NoError(t, err)
+	defer store.Close()
+	rows, err := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_generation", Limit: 5})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "s1", rows[0]["session_id"])
+	assert.Equal(t, "prompt-suggestion:r1", rows[0]["slate_id"])
+	assert.Equal(t, "prompt-suggestion:sug1", rows[0]["topic_id"])
+	assert.Equal(t, PolicyID, rows[0]["policy_id"])
+	assert.Equal(t, "prompt_suggestion", rows[0]["selection_mode"])
+	assert.Equal(t, "not_estimated", rows[0]["propensity_reason"])
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "sug1", payload["suggestion_id"])
+	assert.Equal(t, "s1", payload["session_id"])
+	assert.Equal(t, "r1", payload["request_id"])
+	assert.Equal(t, PromptVersion, payload["prompt_version"])
+	assert.Equal(t, "candidate", payload["outcome"])
+	assert.Equal(t, "hi", payload["text"])
+}
+
+// TestRecordLedgerEvent_epoch失效不写 epoch 变化后静默不写。
+func TestRecordLedgerEvent_epoch失效不写(t *testing.T) {
+	resetWorkspaceForTest(t)
+	f := newEnabledForks()
+	stale := ConsentEpoch(f.config)
+	stale.Value = 999.0 // 模拟 epoch 已变
+
+	f.recordLedgerEvent(stale, "prompt_suggestion_generation", "s1", "r1", "sug1",
+		map[string]any{"outcome": "candidate"})
+
+	store, err := NewTopicStarterStore(filepath.Join(workspaceDirForTest(), ConsentDBName))
+	require.NoError(t, err)
+	defer store.Close()
+	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_generation", Limit: 5})
+	assert.Empty(t, rows)
+}
+
+// TestRecordLedgerEvent_写失败不炸 坏路径只 Warn 不 panic（账本失败不伤主流程）。
+func TestRecordLedgerEvent_写失败不炸(t *testing.T) {
+	f := NewPromptSuggestionForks()
+	f.SetConfig(enabledConfig())
+	epoch := ConsentEpoch(f.config)
+	// 注入一个不存在的目录作工作区，NewTopicStarterStore 报错路径
+	t.Setenv("UAPCLAW_DATA_DIR", filepath.Join(t.TempDir(), "no-such", "deep"))
+	path.ResetCache()
+	t.Cleanup(path.ResetCache)
+	assert.NotPanics(t, func() {
+		f.recordLedgerEvent(epoch, "prompt_suggestion_generation", "s1", "r1", "sug1",
+			map[string]any{"outcome": "candidate"})
+	})
+}
+
+// TestUsagePayload_形状 有用量时字段齐全；无用量 nil。
+func TestUsagePayload_形状(t *testing.T) {
+	reasoning := 3
+	msg := &llmschema.AssistantMessage{UsageMetadata: &llmschema.UsageMetadata{
+		InputTokens: 10, OutputTokens: 4, TotalTokens: 14, CacheTokens: 8, ReasoningTokens: &reasoning,
+	}}
+	payload := usagePayload(msg)
+	require.NotNil(t, payload)
+	assert.Equal(t, 10, payload["prompt_tokens"])
+	assert.Equal(t, 4, payload["completion_tokens"])
+	assert.Equal(t, 14, payload["total_tokens"])
+	details, _ := payload["prompt_tokens_details"].(map[string]any)
+	assert.Equal(t, 8, details["cached_tokens"])
+	compDetails, _ := payload["completion_tokens_details"].(map[string]any)
+	assert.Equal(t, 3, compDetails["reasoning_tokens"])
+	assert.Nil(t, usagePayload(&llmschema.AssistantMessage{}))
+	assert.Nil(t, usagePayload(nil))
 }
