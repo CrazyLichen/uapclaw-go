@@ -967,7 +967,6 @@ func TestUpdateSendFileTools_instance未初始化(t *testing.T) {
 // custom_headers 此前仅列入 knownKeys 排除 extra 却无映射分支，静默丢弃。
 // 对齐 Python ModelClientConfig(**model_client_config) 全字段透传。
 func TestBuildModelFromEntry_customHeaders透传(t *testing.T) {
-	d := NewDeepAdapter()
 	mcc := map[string]any{
 		"client_provider": "OpenAI",
 		"api_key":         "k",
@@ -980,7 +979,7 @@ func TestBuildModelFromEntry_customHeaders透传(t *testing.T) {
 			"X-Org":          "org-9",
 		},
 	}
-	m, err := d.buildModelFromEntry(mcc, map[string]any{})
+	m, err := BuildModelFromEntry(mcc, map[string]any{})
 	if err != nil {
 		t.Fatalf("构造失败: %v", err)
 	}
