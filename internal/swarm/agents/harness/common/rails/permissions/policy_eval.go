@@ -243,9 +243,8 @@ func (e *OpenJiuwenPolicyEvaluator) Evaluate(
 		engineDecision = evaluationFromEngine(engine.CheckPermission(normalizedToolName, toolArgs))
 	}
 
-	// send_file 路径守卫：⤵️ 9.90e 回填
-	// SendFilePathGuardEvaluator 未实现，path_result 恒 nil。
-	// 9.90e 落地 send_file_path_guard.py（315 行）后在此构造并调用。
+	// send_file 路径守卫：send_file_path_guard.py（315 行）已在 9.90d-1 落地，
+	// 这里对 send_file 单独跑一遍路径判定，结果参与 strictest 合并。
 	var pathResult *SendFilePathGuardResult
 	if normalizedToolName == SendFileToolName {
 		pathResult = e.sendFilePathGuardResult(effectiveConfig, toolArgs, engine)

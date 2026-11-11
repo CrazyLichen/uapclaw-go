@@ -71,21 +71,33 @@ type auditRecord struct {
 // emitAudit 发出一条权限审计记录。
 //
 // Python: AutoPermissionRuntimeBridgeMixin._emit_audit(facts, **kwargs)
+// （_auto_permission/runtime_bridge.py L62-67）
 //
-// ⤵️ 9.90e 回填：audit.py 本批不落地（D7 决策），此处为空实现。
-// 保留完整签名与全部调用点（before_tool 16 处 + domain_grant_audit 3 处），
-// 9.90e 只需把桩体换成
-// EmitPermissionAudit(facts, record.Decision, record.Reason, record.Degraded,
-// record.Extra, r.persistentAuditWriter)。
-func (r *AutoPermissionRail) emitAudit(facts permissions.ToolDecisionFacts, record auditRecord) any {
-	return nil // ⤵️ 9.90e 回填
+// 审计是 observe-only：EmitPermissionAudit 内部两段异常都已吞掉，
+// 不会影响权限判定结果。
+func (r *AutoPermissionRail) emitAudit(
+	facts permissions.ToolDecisionFacts,
+	record auditRecord,
+) *permissions.PersistentAuditWriteResult {
+	return permissions.EmitPermissionAudit(facts, permissions.AuditOptions{
+		Decision: record.Decision,
+		Reason:   record.Reason,
+		Degraded: record.Degraded,
+		Extra:    record.Extra,
+	}, r.persistentAuditWriter)
 }
 
 // emitPermissionResultObservation 观测一次「等待人工」或「最终终态」。
 //
 // Python: AutoPermissionRuntimeBridgeMixin._emit_permission_result_observation
+// （_auto_permission/runtime_bridge.py L69-110）
 //
-// ⤵️ 9.90e 回填：与 emitAudit 同批落地。
+// 两类记录：
+//   - outcome 为空：permission_pending（等待人工审批）
+//   - outcome 非空：permission_terminal（最终终态），带 authorization_outcome
+//
+// 观测失败必须不影响授权结果，故整体包在 recover 里（对齐 Python 的
+// `except Exception: logger.exception(...)`）。
 func (r *AutoPermissionRail) emitPermissionResultObservation(
 	facts permissions.ToolDecisionFacts,
 	result any,
@@ -94,7 +106,47 @@ func (r *AutoPermissionRail) emitPermissionResultObservation(
 	decisionSource string,
 	ctx *agentinterfaces.AgentCallbackContext,
 ) {
-	// ⤵️ 9.90e 回填
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			// Python: logger.exception("permission_terminal observation failed ...")
+			_ = recovered
+		}
+	}()
+
+	outcome := permissionTerminalOutcome(result)
+	source := permissionTerminalDecisionSource(decisionSource)
+
+	if outcome == "" {
+		r.emitAudit(facts, auditRecord{
+			Decision: permissions.AutoDecisionAskLevel,
+			Reason:   "permission_manual_wait",
+			Degraded: false,
+			Extra: map[string]any{
+				"record_kind":         "permission_pending",
+				"decision_source":     source,
+				"authorization_stage": "manual_approval",
+				"stage_outcome":       "manual_wait",
+			},
+		})
+		return
+	}
+
+	extra := map[string]any{
+		"record_kind":           "permission_terminal",
+		"authorization_outcome": outcome,
+		"decision_source":       source,
+	}
+	if failure := permissions.RootContextFailureFromContext(ctx); failure != "" {
+		extra["host_context_failure"] = failure
+	}
+	r.emitAudit(facts, auditRecord{
+		Decision: outcome,
+		Reason:   "permission_terminal",
+		Degraded: false,
+		Extra:    extra,
+	})
+	_ = sessionID
+	_ = toolCallID
 }
 
 // runtimeResult 把判定结果翻译成运行时动作并返回（可能改写）结果。

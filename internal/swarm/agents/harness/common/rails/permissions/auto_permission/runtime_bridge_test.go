@@ -30,18 +30,40 @@ func bridgeInvocation(toolName string, cbc *agentinterfaces.AgentCallbackContext
 	return ToolInvocation{Ctx: cbc, ToolName: toolName, ToolArgs: map[string]any{}}
 }
 
-// ──────────────────────────── V-8 桩 ────────────────────────────
+// ──────────────────────────── 审计（9.90e 回填后）────────────────────────────
 
-// TestEmitAudit_桩返回nil 验证 no-op 桩。
-func TestEmitAudit_桩返回nil(t *testing.T) {
+// TestEmitAudit_无写入器返回nil 验证未配置持久化写入器时不落盘。
+//
+// 9.90e 前这里是 no-op 桩恒返回 nil；回填后语义变为：
+// persistentAuditWriter 为 nil 时 EmitPermissionAudit 直接返回 nil。
+func TestEmitAudit_无写入器返回nil(t *testing.T) {
 	rail := newBridgeRail(t)
 	if got := rail.emitAudit(permissions.ToolDecisionFacts{}, auditRecord{}); got != nil {
-		t.Errorf("got %v, want nil（⤵️ 9.90e 回填）", got)
+		t.Errorf("got %v, want nil（未配置持久化写入器）", got)
 	}
 }
 
-// TestEmitPermissionResultObservation_桩不panic 验证 no-op 桩。
-func TestEmitPermissionResultObservation_桩不panic(t *testing.T) {
+// TestEmitAudit_有写入器返回结果 验证配置写入器后真实落盘。
+func TestEmitAudit_有写入器返回结果(t *testing.T) {
+	dir := t.TempDir()
+	rail := newBridgeRail(t)
+	rail.persistentAuditWriter = permissions.NewPersistentAuditWriter(dir)
+
+	got := rail.emitAudit(permissions.ToolDecisionFacts{}, auditRecord{
+		Decision: "allow",
+		Reason:   "test_reason",
+	})
+
+	if got == nil {
+		t.Fatal("got = nil, want 写入结果")
+	}
+	if !got.Persisted {
+		t.Errorf("Persisted = false, reason = %s", got.Reason)
+	}
+}
+
+// TestEmitPermissionResultObservation_不panic 验证观测不因缺上下文崩溃。
+func TestEmitPermissionResultObservation_不panic(t *testing.T) {
 	rail := newBridgeRail(t)
 	rail.emitPermissionResultObservation(permissions.ToolDecisionFacts{}, nil, "s1", "c1", "src", nil)
 }

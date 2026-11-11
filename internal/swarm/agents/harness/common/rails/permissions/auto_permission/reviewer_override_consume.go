@@ -77,7 +77,7 @@ func (r *AutoPermissionRail) consumeSessionAutoConfirm(
 		Reason:   sessionAutoConfirmDecisionSource,
 		Degraded: false,
 		Extra:    map[string]any{"decision_source": sessionAutoConfirmDecisionSource},
-	}) // ⤵️ 9.90e 回填桩体
+	})
 	result, _ := NewPermissionHandlingResult(true, nil, sessionAutoConfirmDecisionSource)
 	return result
 }

@@ -105,7 +105,7 @@ func (r *AutoPermissionRail) manualReviewerResponse(
 		Reason:   opts.Reason,
 		Degraded: true,
 		Extra:    normalized,
-	}) // ⤵️ 9.90e 回填桩体
+	})
 
 	visibleReason := ""
 	if opts.DisplayReason != nil && strings.TrimSpace(*opts.DisplayReason) != "" {

@@ -183,7 +183,7 @@ func (r *AutoPermissionRail) maybeRunReviewer(
 			Reason:   route.Reason,
 			Degraded: false,
 			Extra:    metadata,
-		}) // ⤵️ 9.90e 回填桩体
+		})
 		result, _ := NewPermissionHandlingResult(
 			true, permissions.BuildDeniedPermissionResponse(route.Reason), "hard_guard")
 		return result, ctx
@@ -291,7 +291,7 @@ func (r *AutoPermissionRail) maybeRunReviewer(
 			Reason:   "reviewer_allow_once",
 			Degraded: false,
 			Extra:    auditExtra,
-		}) // ⤵️ 9.90e 回填桩体
+		})
 
 		decisionSource := "auto_reviewer"
 		if IsAllowOnceConfirmation(opts.UserInput) {
@@ -323,7 +323,7 @@ func (r *AutoPermissionRail) maybeRunReviewer(
 			Reason:   "user_allow_once_after_reviewer_manual",
 			Degraded: false,
 			Extra:    auditExtra,
-		}) // ⤵️ 9.90e 回填桩体
+		})
 		result, _ := NewPermissionHandlingResult(true, nil, manualApprovalDecisionSource)
 		return result, ctx
 	}
@@ -449,7 +449,7 @@ func (r *AutoPermissionRail) handleReviewerUnavailable(
 			Reason:   "user_allow_once_after_reviewer_unavailable",
 			Degraded: false,
 			Extra:    metadata,
-		}) // ⤵️ 9.90e 回填桩体
+		})
 		result, _ := NewPermissionHandlingResult(true, nil, manualApprovalDecisionSource)
 		return result, ctx
 	}

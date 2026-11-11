@@ -42,12 +42,16 @@ import (
 // AfterToolCall 工具执行后的钩子：清理执行域标记后转发给被包装的权限轨。
 //
 // Python: AutoPermissionArtifactCaptureMixin.after_tool_call(*args, **kwargs)
+// （_auto_permission/artifact_tracking_capture.py L18-23）
+//
+// 偏差 V-16 已消除：Python 的 clear_no_host_fallback() 改的是 ContextVar（隐式
+// 生效）；Go 的 ClearNoHostFallback 是 context.WithValue 派生新 ctx（不可变），
+// 必须把派生结果传给下游才能真正生效——直接丢弃返回值等于没清。
 func (r *AutoPermissionRail) AfterToolCall(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
 ) error {
-	// ⤵️ 9.90e 回填（偏差 V-16）：派生 ctx 需回传给调用方才能真正生效
-	_ = runtimesandbox.ClearNoHostFallback(ctx)
+	ctx = runtimesandbox.ClearNoHostFallback(ctx)
 
 	invocation := ExtractInvocation(cbc, nil, map[string]any{})
 	_, err := r.callBaseAfterRail(ctx, cbc, invocation)

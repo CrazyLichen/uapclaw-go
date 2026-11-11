@@ -153,7 +153,7 @@ func (r *AutoPermissionRail) denyDomainRoute(
 		Reason:   routeReason(route),
 		Degraded: false,
 		Extra:    metadata,
-	}) // ⤵️ 9.90e 回填桩体
+	})
 	return deniedPermissionResponse(routeReason(route), metadata)
 }
 
@@ -170,7 +170,7 @@ func (r *AutoPermissionRail) manualDomainRouteResponse(
 		Reason:   routeReason(route),
 		Degraded: true,
 		Extra:    metadata,
-	}) // ⤵️ 9.90e 回填桩体
+	})
 	return permissions.BuildManualApprovalRequiredResponse(routeReason(route), metadata, nil)
 }
 
@@ -222,7 +222,7 @@ func (r *AutoPermissionRail) deny(
 		Decision: permissions.AutoDecisionDenyLevel,
 		Reason:   reason,
 		Degraded: false,
-	}) // ⤵️ 9.90e 回填桩体
+	})
 	return deniedPermissionResponse(reason, metadata)
 }
 

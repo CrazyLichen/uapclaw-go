@@ -125,7 +125,7 @@ func (r *AutoPermissionRail) maybeAllowDeterministicSandboxScope(
 		Reason:   deterministicReason,
 		Degraded: false,
 		Extra:    metadata,
-	}) // ⤵️ 9.90e 回填桩体
+	})
 
 	result, _ := NewPermissionHandlingResult(true, nil, decisionSource)
 	return result

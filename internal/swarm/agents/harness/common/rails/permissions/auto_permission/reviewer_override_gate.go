@@ -68,7 +68,7 @@ func (r *AutoPermissionRail) allowOnceReviewerGateDecision(
 			Reason:   route.Reason,
 			Degraded: false,
 			Extra:    metadata,
-		}) // ⤵️ 9.90e 回填桩体
+		})
 		return true, permissions.BuildDeniedPermissionResponse(route.Reason)
 	}
 	// 领域路由要求人工时，交回既有人工单次放行路径处理

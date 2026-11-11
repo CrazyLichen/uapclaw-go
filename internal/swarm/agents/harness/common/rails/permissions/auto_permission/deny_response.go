@@ -59,7 +59,7 @@ func (r *AutoPermissionRail) reviewerDenyResponse(
 		Reason:   reviewerDenyReason,
 		Degraded: false,
 		Extra:    normalized,
-	}) // ⤵️ 9.90e 回填桩体
+	})
 
 	response := deniedPermissionResponse(reviewerDenyReason, normalized)
 
