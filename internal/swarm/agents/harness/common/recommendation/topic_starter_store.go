@@ -20,8 +20,25 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// InterestDrift 兴趣漂移三信号结果（对齐 topic_starter.py:100）。
+type InterestDrift struct {
+	// EntropyDelta 前后熵差的绝对值。
+	EntropyDelta float64
+	// JaccardDistance 1 - 交集/并集，完全重叠为 0、完全不重叠为 1。
+	JaccardDistance float64
+	// JSDivergence 两分布的 Jensen-Shannon 散度。
+	JSDivergence float64
+	// Score 三信号加权和（0.4/0.3/0.3）。
+	Score float64
+	// ShouldUpdate Score 超过阈值（严格大于 0.8）时为真。
+	ShouldUpdate bool
+}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -208,4 +225,122 @@ func sortedKeys(values map[string]any) []string {
 // nowSeconds 当前时间的 Unix 秒浮点（对齐 Python time.time()）。
 func nowSeconds() float64 {
 	return float64(time.Now().UnixNano()) / 1e9
+}
+
+// interestDistribution 把标签列表归一化为概率分布。
+// Python: topic_starter.py:113 _distribution（先 strip 再过滤空串）。
+func interestDistribution(labels []string) map[string]float64 {
+	counts := make(map[string]float64)
+	total := 0.0
+	for _, label := range labels {
+		trimmed := strings.TrimSpace(label)
+		if trimmed == "" {
+			continue
+		}
+		counts[trimmed]++
+		total++
+	}
+	if total == 0 {
+		return map[string]float64{}
+	}
+	for label, count := range counts {
+		counts[label] = count / total
+	}
+	return counts
+}
+
+// interestEntropy 计算香农熵（底 2）。
+// Python: topic_starter.py:118 _entropy
+func interestEntropy(distribution map[string]float64) float64 {
+	entropy := 0.0
+	for _, probability := range distribution {
+		if probability <= 0 {
+			continue
+		}
+		entropy -= probability * math.Log2(probability)
+	}
+	return entropy
+}
+
+// jsDivergence 计算两分布的 Jensen-Shannon 散度。
+// Python: topic_starter.py:122 _js_divergence
+func jsDivergence(previous, current map[string]float64) float64 {
+	labels := make(map[string]struct{}, len(previous)+len(current))
+	for label := range previous {
+		labels[label] = struct{}{}
+	}
+	for label := range current {
+		labels[label] = struct{}{}
+	}
+	if len(labels) == 0 {
+		return 0.0
+	}
+	midpoint := make(map[string]float64, len(labels))
+	for label := range labels {
+		midpoint[label] = (previous[label] + current[label]) / 2
+	}
+	kl := func(source map[string]float64) float64 {
+		sum := 0.0
+		for label, probability := range source {
+			if probability > 0 && midpoint[label] > 0 {
+				sum += probability * math.Log2(probability/midpoint[label])
+			}
+		}
+		return sum
+	}
+	return (kl(previous) + kl(current)) / 2
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ComputeInterestDrift 计算前后两批兴趣标签的漂移度。
+// Python: topic_starter.py:142 compute_interest_drift
+//
+// 注意 ShouldUpdate 比较的是 round 之前的原始 score（:173 读局部变量），
+// 而返回的 Score 字段是 round 到 12 位的值；两者不可混用。
+func ComputeInterestDrift(previousLabels, currentLabels []string) InterestDrift {
+	previous := interestDistribution(previousLabels)
+	current := interestDistribution(currentLabels)
+
+	entropyDelta := math.Abs(interestEntropy(current) - interestEntropy(previous))
+
+	previousSet := make(map[string]struct{}, len(previous))
+	for label := range previous {
+		previousSet[label] = struct{}{}
+	}
+	currentSet := make(map[string]struct{}, len(current))
+	for label := range current {
+		currentSet[label] = struct{}{}
+	}
+	union := make(map[string]struct{}, len(previousSet)+len(currentSet))
+	for label := range previousSet {
+		union[label] = struct{}{}
+	}
+	for label := range currentSet {
+		union[label] = struct{}{}
+	}
+	jaccardDistance := 0.0
+	if len(union) > 0 {
+		intersection := 0
+		for label := range previousSet {
+			if _, ok := currentSet[label]; ok {
+				intersection++
+			}
+		}
+		jaccardDistance = 1 - float64(intersection)/float64(len(union))
+	}
+
+	divergence := jsDivergence(previous, current)
+
+	score := driftWeights[0]*entropyDelta +
+		driftWeights[1]*jaccardDistance +
+		driftWeights[2]*divergence
+
+	return InterestDrift{
+		EntropyDelta:    round12(entropyDelta),
+		JaccardDistance: round12(jaccardDistance),
+		JSDivergence:    round12(divergence),
+		Score:           round12(score),
+		ShouldUpdate:    score > driftThreshold,
+	}
 }
