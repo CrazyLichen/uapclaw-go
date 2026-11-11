@@ -27,6 +27,10 @@ import (
 type AgentRail interface {
 	// Priority 返回执行优先级（数值越大越先执行）
 	Priority() int
+	// CallbackPriorityFor 返回本 rail 在指定事件上的优先级（数值越大越先执行）。
+	// Python: AgentRail.callback_priority(event)
+	// 默认实现由 BaseRail 转发 Priority()，既有 rail 无需改动。
+	CallbackPriorityFor(event AgentCallbackEvent) int
 	// Init Rail 初始化钩子（注册时调用，用于工具自注册等）
 	Init(ctx context.Context, agent BaseAgent) error
 	// Uninit Rail 注销钩子（注销时调用，用于工具清理等）
@@ -901,14 +905,15 @@ func (m *AgentCallbackManager) RegisterCallback(ctx context.Context, event Agent
 // Python: AgentCallbackManager.register_rail(rail)
 func (m *AgentCallbackManager) RegisterRail(ctx context.Context, r AgentRail, opts ...cb.CallbackOption) error {
 	callbacks := r.GetCallbacks()
-	priorityOpt := cb.WithPriority(r.Priority())
-	allOpts := append([]cb.CallbackOption{priorityOpt}, opts...)
 	for event, fn := range callbacks {
+		// Python: priority = rail.callback_priority(event)，每事件单独取
+		priority := r.CallbackPriorityFor(event)
+		allOpts := append([]cb.CallbackOption{cb.WithPriority(priority)}, opts...)
 		m.RegisterCallback(ctx, event, fn, allOpts...)
 		logger.Debug(logComponent).
 			Str("event_type", "rail_register_callback").
 			Str("event", string(event)).
-			Int("priority", r.Priority()).
+			Int("priority", priority).
 			Msg("Rail hook registered to callback framework")
 	}
 	return nil
@@ -969,6 +974,12 @@ func NewBaseRail() *BaseRail {
 // Priority 返回优先级。
 func (r *BaseRail) Priority() int {
 	return r.priority
+}
+
+// CallbackPriorityFor 默认返回 Priority()，使既有 rail 保持全事件统一优先级。
+// Python: AgentRail.callback_priority(event)（基类默认返回 self.priority）
+func (r *BaseRail) CallbackPriorityFor(_ AgentCallbackEvent) int {
+	return r.Priority()
 }
 
 // WithPriority 设置优先级（Functional Options 模式）。

@@ -3000,10 +3000,12 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces
 	// 「TaskPlanningRail(90) 先注入、本 Rail 后移除其节」，优先级丢失后
 	// 后注册的 TaskPlanningRail（如模式切回 plan 时的重注册）会跑到
 	// AgentModeRail 之后，todo 节加了没人删（2026-11-03）。
-	// Python: register_rail → register_callback(callback, priority=rail.priority)
-	priorityOpt := cb.WithPriority(r.Priority())
+	// Python: register_rail → register_callback(callback, priority=rail.callback_priority(event))
+	// 每事件单独取：上游 AgentRail.callback_priority(event) 允许按事件分档
+	// （如 ProcessCliIterationLimitRail 在 AFTER_REACT_ITERATION 上是 -1000、其余 1000）。
 
 	for event, callback := range callbacks {
+		priorityOpt := cb.WithPriority(r.CallbackPriorityFor(event))
 		if bridgeEvents[event] {
 			// 桥接事件 → 注册到内层 ReActAgent
 			d.configMu.RLock()
