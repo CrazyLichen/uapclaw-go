@@ -363,3 +363,177 @@ func TestUsagePayload_形状(t *testing.T) {
 	assert.Nil(t, usagePayload(&llmschema.AssistantMessage{}))
 	assert.Nil(t, usagePayload(nil))
 }
+
+// ──────────────────────────── 用例：StageDelivery / RecordPageOutcome ───────────────────────────────
+
+// newLedgerTestForks 建一个开启推荐 + 临时工作区的 forks。
+func newLedgerTestForks(t *testing.T) *PromptSuggestionForks {
+	t.Helper()
+	resetWorkspaceForTest(t)
+	f := NewPromptSuggestionForks()
+	f.SetConfig(enabledConfig())
+	return f
+}
+
+// openTestStore 打开工作区内的账本库。
+func openTestStore(t *testing.T) *TopicStarterStore {
+	t.Helper()
+	store, err := NewTopicStarterStore(filepath.Join(workspaceDirForTest(), ConsentDBName))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	return store
+}
+
+// seedGeneration 写一条 candidate generation 事件。
+func seedGeneration(t *testing.T, store *TopicStarterStore, sessionID, requestID, suggestionID, text string) {
+	t.Helper()
+	ok, err := store.RecordEvent(map[string]any{
+		"session_id": sessionID, "slate_id": "prompt-suggestion:" + requestID,
+		"event_type": "prompt_suggestion_generation", "topic_id": "prompt-suggestion:" + suggestionID,
+		"policy_id": PolicyID, "selection_mode": "prompt_suggestion",
+		"propensity_reason": "not_estimated", "created_at": float64(time.Now().UnixNano()) / 1e9,
+		"payload": map[string]any{"suggestion_id": suggestionID, "session_id": sessionID,
+			"request_id": requestID, "outcome": "candidate", "text": text},
+	})
+	require.True(t, ok)
+	require.NoError(t, err)
+}
+
+// completionRow 测试助手：经真实队列写一条完成行并等落盘。
+func completionRow(t *testing.T, sid, rid string) {
+	t.Helper()
+	receipt, err := session.EnqueueHistoryRequestCompletion(sid, rid, "success")
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+	select {
+	case <-receipt:
+	case <-time.After(5 * time.Second):
+		t.Fatal("完成行 5s 未落盘")
+	}
+}
+
+// TestStageDelivery_新鲜请求 记 delivery:pushed 并返回页面载荷。
+func TestStageDelivery_新鲜请求(t *testing.T) {
+	f := newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "试试 git push")
+	completionRow(t, "s1", "r1")
+
+	shown := StageDelivery(f, store, "s1", "r1", map[string]any{"suggestion_id": "sug1", "text": "试试 git push"})
+	require.NotNil(t, shown)
+	assert.Equal(t, ReadyEvent, shown["event_type"])
+	assert.Equal(t, "s1", shown["session_id"])
+	assert.Equal(t, "r1", shown["request_id"])
+	assert.Equal(t, "sug1", shown["suggestion_id"])
+	assert.Equal(t, "试试 git push", shown["text"])
+
+	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_delivery", Limit: 5})
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "pushed", payload["status"])
+	assert.Nil(t, payload["reason"])
+}
+
+// TestStageDelivery_过期请求 完成行不是该请求 → delivery:suppressed 且返回 nil。
+func TestStageDelivery_过期请求(t *testing.T) {
+	f := newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "text")
+	completionRow(t, "s1", "r2") // 会话最新完成行是 r2
+
+	shown := StageDelivery(f, store, "s1", "r1", map[string]any{"suggestion_id": "sug1", "text": "text"})
+	assert.Nil(t, shown)
+	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_delivery", Limit: 5})
+	require.Len(t, rows, 1)
+	payload, _ := rows[0]["payload"].(map[string]any)
+	assert.Equal(t, "suppressed", payload["status"])
+	assert.Equal(t, "stale_request", payload["reason"])
+}
+
+// TestStageDelivery_推荐关闭 什么都不记。
+func TestStageDelivery_推荐关闭(t *testing.T) {
+	resetWorkspaceForTest(t)
+	f := NewPromptSuggestionForks()
+	store := openTestStore(t)
+	assert.Nil(t, StageDelivery(f, store, "s1", "r1", map[string]any{"suggestion_id": "sug1", "text": "t"}))
+	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "prompt_suggestion_delivery", Limit: 5})
+	assert.Empty(t, rows)
+}
+
+// TestRecordPageOutcome_四类合法路径 shown/accepted/ignored/suppressed 各落一条。
+func TestRecordPageOutcome_四类合法路径(t *testing.T) {
+	f := newLedgerTestForks(t)
+	_ = f
+	store := openTestStore(t)
+	for _, sug := range []string{"a", "b", "c", "d"} {
+		seedGeneration(t, store, "s1", "r1", sug, "text")
+	}
+	cases := []struct {
+		eventType string
+		params    map[string]any
+	}{
+		{"shown", map[string]any{}},
+		{"accepted", map[string]any{"method": "click", "time_to_accept_ms": 120}},
+		{"ignored", map[string]any{"reason": "dismissed"}},
+		{"suppressed", map[string]any{"reason": "timing"}},
+	}
+	for i, tc := range cases {
+		sug := []string{"a", "b", "c", "d"}[i]
+		params := map[string]any{"session_id": "s1", "suggestion_id": sug, "event_type": tc.eventType}
+		for k, v := range tc.params {
+			params[k] = v
+		}
+		recorded := RecordPageOutcome(store, params)
+		require.NotNil(t, recorded, tc.eventType)
+		assert.True(t, *recorded, tc.eventType)
+	}
+	for _, et := range []string{"prompt_suggestion_shown", "prompt_suggestion_accepted",
+		"prompt_suggestion_ignored", "prompt_suggestion_suppressed"} {
+		rows, _ := store.QueryEvents(QueryEventsOptions{EventType: et, Limit: 5})
+		assert.Len(t, rows, 1, et)
+	}
+}
+
+// TestRecordPageOutcome_非法路径校验矩阵 每条非法输入返回 nil 且不写库。
+func TestRecordPageOutcome_非法路径校验矩阵(t *testing.T) {
+	newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "text")
+	invalids := []map[string]any{
+		{"session_id": "s1", "suggestion_id": "sug1", "event_type": "unknown"},
+		{"session_id": "s1", "suggestion_id": "sug1", "event_type": "accepted", "method": "swipe", "time_to_accept_ms": 5},
+		{"session_id": "s1", "suggestion_id": "sug1", "event_type": "accepted", "method": "click", "time_to_accept_ms": "120"},
+		{"session_id": "s1", "suggestion_id": "sug1", "event_type": "accepted", "method": "click", "time_to_accept_ms": -1},
+		{"session_id": "s1", "suggestion_id": "sug1", "event_type": "ignored", "reason": "whatever"},
+		{"session_id": "s1", "suggestion_id": "sug1", "event_type": "suppressed", "reason": "stale"},
+		{"session_id": "s1", "suggestion_id": "", "event_type": "shown"},
+		{"session_id": "s2", "suggestion_id": "sug1", "event_type": "shown"}, // session 不符
+	}
+	for i, params := range invalids {
+		assert.Nil(t, RecordPageOutcome(store, params), "case %d", i)
+	}
+	// 非候选 outcome 的 generation 也不收
+	_, err := store.RecordEvent(map[string]any{
+		"session_id": "s1", "slate_id": "prompt-suggestion:r9", "event_type": "prompt_suggestion_generation",
+		"topic_id": "prompt-suggestion:sug9", "policy_id": PolicyID, "selection_mode": "prompt_suggestion",
+		"propensity_reason": "not_estimated", "created_at": float64(time.Now().UnixNano()) / 1e9,
+		"payload": map[string]any{"suggestion_id": "sug9", "session_id": "s1", "request_id": "r9", "outcome": "suppressed"},
+	})
+	require.NoError(t, err)
+	assert.Nil(t, RecordPageOutcome(store, map[string]any{"session_id": "s1", "suggestion_id": "sug9", "event_type": "shown"}))
+}
+
+// TestRecordPageOutcome_幂等 同一建议重复 accepted 只落一条。
+func TestRecordPageOutcome_幂等(t *testing.T) {
+	newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "text")
+	params := map[string]any{"session_id": "s1", "suggestion_id": "sug1", "event_type": "accepted",
+		"method": "tab", "time_to_accept_ms": 30}
+	first := RecordPageOutcome(store, params)
+	require.NotNil(t, first)
+	assert.True(t, *first)
+	second := RecordPageOutcome(store, params)
+	require.NotNil(t, second)
+	assert.False(t, *second)
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"math"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -144,6 +145,173 @@ var UserInteractionEvents = map[string]bool{
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// StageDelivery 记录送达并返回页面载荷；请求已过期则记 suppressed 且不推。
+// 推荐关闭时什么都不记（Python: consent_epoch() is None → None）。
+// Python: prompt_suggestion.py:672-700 stage_delivery
+func StageDelivery(f *PromptSuggestionForks, store *TopicStarterStore, sessionID, requestID string,
+	payload map[string]any,
+) map[string]any {
+	if !ConsentEpoch(f.config).Active {
+		return nil
+	}
+	suggestionID, _ := payload["suggestion_id"].(string)
+	stale := LatestCompletedRequest(sessionID) != requestID
+	var reason any
+	status := "pushed"
+	if stale {
+		reason = "stale_request"
+		status = "suppressed"
+	}
+	if _, err := store.RecordEvent(map[string]any{
+		"session_id":        sessionID,
+		"slate_id":          "prompt-suggestion:" + requestID,
+		"event_type":        "prompt_suggestion_delivery",
+		"topic_id":          "prompt-suggestion:" + suggestionID,
+		"policy_id":         PolicyID,
+		"selection_mode":    "prompt_suggestion",
+		"propensity_reason": "not_estimated",
+		"created_at":        float64(time.Now().UnixNano()) / 1e9,
+		"payload": map[string]any{
+			"suggestion_id": suggestionID, "session_id": sessionID,
+			"request_id": requestID, "status": status, "reason": reason,
+		},
+	}); err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion delivery record failed")
+		return nil
+	}
+	if stale {
+		return nil
+	}
+	text, _ := payload["text"].(string)
+	return map[string]any{
+		"event_type":    ReadyEvent,
+		"session_id":    sessionID,
+		"request_id":    requestID,
+		"suggestion_id": suggestionID,
+		"text":          text,
+	}
+}
+
+// RecordPageOutcome 记录页面对建议的处置（shown/accepted/ignored/suppressed），
+// 每条建议每类各记一次（主键幂等）。无效输入返回 nil，有效返回写入结果。
+// Python: prompt_suggestion.py:605-637 record_page_outcome（返回 bool | None）
+func RecordPageOutcome(store *TopicStarterStore, params map[string]any) *bool {
+	sessionID, _ := params["session_id"].(string)
+	suggestionID, _ := params["suggestion_id"].(string)
+	eventType, _ := params["event_type"].(string)
+	var outcome map[string]any
+	switch eventType {
+	case "shown":
+		outcome = map[string]any{}
+	case "accepted":
+		method, _ := params["method"].(string)
+		elapsed := params["time_to_accept_ms"]
+		outcome = map[string]any{"method": method, "time_to_accept_ms": elapsed}
+		if method != "click" && method != "tab" {
+			return nil
+		}
+		// Python: _plain_int 且 >= 0。已知偏差 D-6：Go JSON 解码统一 float64，
+		// 整值 float64 视为 int；bool 显式排除。
+		if !plainInt(elapsed) {
+			return nil
+		}
+		if elapsedInt(elapsed) < 0 {
+			return nil
+		}
+	case "ignored":
+		reason, _ := params["reason"].(string)
+		outcome = map[string]any{"reason": reason}
+		switch reason {
+		case "dismissed", "sent_other", "left_session", "typed":
+		default:
+			return nil
+		}
+	case "suppressed":
+		reason, _ := params["reason"].(string)
+		outcome = map[string]any{"reason": reason}
+		if reason != "timing" {
+			return nil
+		}
+	default:
+		return nil
+	}
+	var generated []map[string]any
+	if suggestionID != "" {
+		topicID := "prompt-suggestion:" + suggestionID
+		policyID := PolicyID
+		rows, err := store.QueryEvents(QueryEventsOptions{
+			EventType: "prompt_suggestion_generation", PolicyID: &policyID,
+			TopicID: &topicID, Limit: 1,
+		})
+		if err != nil {
+			return nil
+		}
+		generated = rows
+	}
+	if len(generated) == 0 {
+		return nil
+	}
+	if sid, _ := generated[0]["session_id"].(string); sid != sessionID {
+		return nil
+	}
+	genPayload, _ := generated[0]["payload"].(map[string]any)
+	if genPayload == nil || genPayload["outcome"] != "candidate" {
+		return nil
+	}
+	requestID, _ := genPayload["request_id"].(string)
+	full := map[string]any{"suggestion_id": suggestionID, "session_id": sessionID, "request_id": requestID}
+	for key, value := range outcome {
+		full[key] = value
+	}
+	recorded, err := store.RecordEvent(map[string]any{
+		"session_id":        sessionID,
+		"slate_id":          "prompt-suggestion:" + requestID,
+		"event_type":        "prompt_suggestion_" + eventType,
+		"topic_id":          "prompt-suggestion:" + suggestionID,
+		"policy_id":         PolicyID,
+		"selection_mode":    "prompt_suggestion",
+		"propensity_reason": "not_estimated",
+		"created_at":        float64(time.Now().UnixNano()) / 1e9,
+		"payload":           full,
+	})
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion page outcome record failed")
+		return nil
+	}
+	return &recorded
+}
+
+// elapsedInt 把 plainInt 通过的值还原成 int64（D-6：int/int64/整值 float64 三态）。
+func elapsedInt(value any) int64 {
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	}
+	return 0
+}
+
+// plainInt Python isinstance(x, int) and not isinstance(x, bool) 的等价判定。
+// JSON 数字在 Go 侧统一为 float64（偏差 D-6）：整值视为 int，非整值与 bool 为假。
+func plainInt(value any) bool {
+	switch v := value.(type) {
+	case int:
+		return true
+	case int64:
+		return true
+	case float64:
+		return v == math.Trunc(v)
+	case bool:
+		return false
+	}
+	return false
+}
 
 // LatestCompletedRequest 会话历史里最后一条完成行所指的请求，且它仍是会话最新轮。
 // 语义：完成行 status=success 且其后所有行的 request_id 都等于它；否则返回空串。
