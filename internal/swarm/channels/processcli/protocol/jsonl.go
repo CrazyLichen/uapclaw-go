@@ -201,6 +201,9 @@ func recordDict(record any) (map[string]any, bool) {
 		return v.ToDict(), true
 	case *OneShotRunResult:
 		return v.ToDict(), true
+	case *OneShotQueryResult:
+		// Python: query_entry.py:112-140 逐条写出的 query_result 也是 JSONL 记录
+		return v.ToDict(), true
 	default:
 		return nil, false
 	}
