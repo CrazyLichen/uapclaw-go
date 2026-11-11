@@ -907,3 +907,214 @@ func TestIntervenedPrompts_仅收已绑定slate的点击(t *testing.T) {
 	_, ok := got[[2]string{"s1", "帮我看看这个"}]
 	assert.True(t, ok)
 }
+
+// TestPythonTruthy_覆盖全部数值类型
+// 补齐 nil/string/bool/容器之外的类型分支（int8~uint64、float32、默认分支）
+func TestPythonTruthy_覆盖全部数值类型(t *testing.T) {
+	assert.False(t, pythonTruthy(int8(0)))
+	assert.True(t, pythonTruthy(int8(1)))
+	assert.False(t, pythonTruthy(int16(0)))
+	assert.True(t, pythonTruthy(int16(1)))
+	assert.False(t, pythonTruthy(int32(0)))
+	assert.True(t, pythonTruthy(int32(1)))
+	assert.False(t, pythonTruthy(uint(0)))
+	assert.True(t, pythonTruthy(uint(1)))
+	assert.False(t, pythonTruthy(uint8(0)))
+	assert.True(t, pythonTruthy(uint8(1)))
+	assert.False(t, pythonTruthy(uint16(0)))
+	assert.True(t, pythonTruthy(uint16(1)))
+	assert.False(t, pythonTruthy(uint32(0)))
+	assert.True(t, pythonTruthy(uint32(1)))
+	assert.False(t, pythonTruthy(uint64(0)))
+	assert.True(t, pythonTruthy(uint64(1)))
+	assert.False(t, pythonTruthy(float32(0)))
+	assert.True(t, pythonTruthy(float32(0.5)))
+	// 默认分支：未列出的类型一律为真
+	assert.True(t, pythonTruthy(struct{ X int }{X: 1}))
+}
+
+// TestPyStr_覆盖整型与特殊浮点
+func TestPyStr_覆盖整型与特殊浮点(t *testing.T) {
+	assert.Equal(t, "0", pyStr(0))
+	assert.Equal(t, "42", pyStr(int64(42)))
+	assert.Equal(t, "0.25", pyStr(0.25))
+	// PyStr 对非数值非字符串走 fmt 默认分支
+	assert.Equal(t, "[1 2]", pyStr([]int{1, 2}))
+}
+
+// TestInterestEntropy_零概率跳过
+func TestInterestEntropy_零概率跳过(t *testing.T) {
+	assert.Equal(t, 0.0, interestEntropy(map[string]float64{"a": 0.0, "b": 1.0}))
+}
+
+// TestNewTopicStarterStore_父目录创建失败返回错误
+func TestNewTopicStarterStore_父目录创建失败返回错误(t *testing.T) {
+	// 用一个已存在的普通文件当父目录，mkdir 必然失败
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o644))
+
+	_, err := NewTopicStarterStore(filepath.Join(blocker, "recommendation.db"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "创建推荐库父目录失败")
+}
+
+// TestNewTopicStarterStore_建表失败返回错误
+func TestNewTopicStarterStore_建表失败返回错误(t *testing.T) {
+	// 指向一个目录路径，sqlite 打开会失败
+	dir := t.TempDir()
+	_, err := NewTopicStarterStore(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "创建推荐库表结构失败")
+}
+
+// TestPath_返回构造时的路径
+func TestPath_返回构造时的路径(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "recommendation.db")
+	store, err := NewTopicStarterStore(path)
+	require.NoError(t, err)
+	defer store.Close()
+	assert.Equal(t, path, store.Path())
+}
+
+// TestNullable_各类型转换
+func TestNullable_各类型转换(t *testing.T) {
+	assert.Nil(t, nullableString(nil))
+	assert.Equal(t, "42", nullableString(42))
+
+	assert.Nil(t, nullableInt(nil))
+	assert.Equal(t, int64(7), nullableInt(7))
+	assert.Equal(t, int64(7), nullableInt(int64(7)))
+	assert.Equal(t, int64(7), nullableInt(float64(7)))
+	assert.Nil(t, nullableInt("not-a-number"))
+
+	assert.Nil(t, nullableFloat(nil))
+	assert.Equal(t, 1.5, nullableFloat(1.5))
+	assert.Equal(t, 2.0, nullableFloat(2))
+	assert.Equal(t, 3.0, nullableFloat(int64(3)))
+	assert.Nil(t, nullableFloat("not-a-number"))
+}
+
+// TestEventArgs_createdAt多类型与序列化失败
+func TestEventArgs_createdAt多类型与序列化失败(t *testing.T) {
+	// int64 / int 两种 createdAt 都应被接受
+	args, err := eventArgs("k", map[string]any{"created_at": int64(123)})
+	require.NoError(t, err)
+	assert.Equal(t, 123.0, args[12])
+
+	args, err = eventArgs("k", map[string]any{"created_at": 456})
+	require.NoError(t, err)
+	assert.Equal(t, 456.0, args[12])
+
+	// payload 不是 map 时退化为空 map（对齐 Python `event.get("payload") or {}`）
+	args, err = eventArgs("k", map[string]any{"payload": "not-a-map"})
+	require.NoError(t, err)
+	assert.Equal(t, "{}", args[11])
+
+	// payload 含不可序列化的值 → 返回错误
+	_, err = eventArgs("k", map[string]any{"payload": map[string]any{"fn": func() {}}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "序列化 payload 失败")
+}
+
+// TestSaveSnapshot_序列化失败返回错误
+func TestSaveSnapshot_序列化失败返回错误(t *testing.T) {
+	store := newTestStore(t)
+	_, err := store.SaveSnapshot(map[string]any{"fn": func() {}}, 1.0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "序列化画像快照失败")
+}
+
+// TestLoadLatestSnapshot_容忍坏JSON与非标量行
+func TestLoadLatestSnapshot_容忍坏JSON与非标量行(t *testing.T) {
+	store := newTestStore(t)
+	db, err := store.connect()
+	require.NoError(t, err)
+	// 版本 3：坏 JSON（应被跳过）；版本 2：空串（应被跳过）；版本 1：正常
+	_, err = db.Exec("INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(3, 1, 1, 'not-json')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(2, 1, 1, '')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(1, 1, 1, '{\"mark\":\"good\"}')")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	got, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "good", got["mark"])
+}
+
+// TestPrune_无删除时不执行VACUUM但写事件
+func TestPrune_无删除时不执行VACUUM但写事件(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Empty(t, removed)
+
+	// 即使没删东西，store_pruned 也必须写
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "store_pruned", Limit: 10})
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+}
+
+// TestDeleteRecommendationData_无数据时也能跑通
+func TestDeleteRecommendationData_无数据时也能跑通(t *testing.T) {
+	store := newTestStore(t)
+	require.NoError(t, store.DeleteRecommendationData())
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1, "只有删除记录")
+	assert.Equal(t, "recommendation_data_deleted", events[0]["event_type"])
+
+	payload := events[0]["payload"].(map[string]any)
+	assert.Equal(t, float64(0), payload["exposures_removed"])
+	assert.Equal(t, float64(0), payload["cards_removed"])
+}
+
+// TestDeleteRecommendationData_无attempt_id的调用不入收据
+func TestDeleteRecommendationData_无attempt_id的调用不入收据(t *testing.T) {
+	store := newTestStore(t)
+	_, err := store.RecordEvent(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "provider_invocation",
+		"payload": map[string]any{"status": "ok"},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteRecommendationData())
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1, "attempt_id 为空的调用不保留收据")
+	assert.Equal(t, "recommendation_data_deleted", events[0]["event_type"])
+}
+
+// TestQueryEvents_按topicId与policyId过滤
+// 补齐 TopicID / PolicyID 两个分支（topic_starter.py:610-618）
+func TestQueryEvents_按topicId与policyId过滤(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	topic := "t2"
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "topic_click", TopicID: &topic, Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+
+	policy := "topic-starter-mvp-v1"
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", PolicyID: &policy, Limit: 100})
+	require.NoError(t, err)
+	assert.Len(t, got, 3, "默认 policy_id 全部匹配")
+
+	missing := "no-such-policy"
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", PolicyID: &missing, Limit: 100})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+// TestEnsureParentDir_无父目录时直接通过
+func TestEnsureParentDir_无父目录时直接通过(t *testing.T) {
+	require.NoError(t, ensureParentDir("recommendation.db"))
+}

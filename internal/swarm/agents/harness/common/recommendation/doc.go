@@ -5,7 +5,8 @@
 // calendar_source.py、profile_extractor.py、gradient_updater.py、
 // feedback_collector.py，以及 jiuwenswarm/common/recommendation_switches.py。
 // 完整的 topic 流水线（35 文件 / 43821 行）不在本包，由 10.3.31b~d 单独排期；
-// _fork 的结果落库与 ready 推送由窄接口预留，待 10.7 的 TopicStarterStore 注入。
+// 存储地基（TopicStarterStore 事件账本）已随 10.7.1 交付于 topic_starter_store.go，
+// _fork 的结果落库与 ready 推送由窄接口预留，待 10.7.2 接通。
 //
 // 两个子系统：
 //   - 提示词建议（10.3.30 已交付）：switches.go / prompt_suggestion.go /
@@ -37,7 +38,11 @@
 //	├── gradient_updater.go             # 策略梯度更新（显式/隐式反馈 → target/relation/tone/structure）
 //	├── feedback_collector.go           # 反馈采集（buffer / 显隐式去重 / 关联最近推荐）
 //	├── proactive_engine.go             # 引擎主体（tick 全流程 / 每日限流 / 生命周期）
-//	└── proactive_adapter.go            # 主 agent 触发（chunk 打标 / 送达判定 / 引擎装配）
+//	├── proactive_adapter.go            # 主 agent 触发（chunk 打标 / 送达判定 / 引擎装配）
+//	└── topic_starter_store.go          # topic 事件账本（InterestDrift + TopicStarterStore，2 表 4 索引）
+//
+// topic_starter_service.go（TopicStarterService + 画像证据收集，上游 topic_starter.py:515-1953）
+// ⤵️ 10.3.31d；本节只交付存储层。
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/recommendation/
 //
