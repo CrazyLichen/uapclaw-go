@@ -60,6 +60,26 @@ func WithChunkReasoningContent(content string) AssistantMessageChunkOption {
 	return func(c *AssistantMessageChunk) { c.ReasoningContent = content }
 }
 
+// WithChunkResponseID 设置流式消息块的响应 ID。
+func WithChunkResponseID(id string) AssistantMessageChunkOption {
+	return func(c *AssistantMessageChunk) { c.ResponseID = id }
+}
+
+// WithChunkResponseModel 设置流式消息块的实际服务模型名。
+func WithChunkResponseModel(model string) AssistantMessageChunkOption {
+	return func(c *AssistantMessageChunk) { c.ResponseModel = model }
+}
+
+// WithChunkProviderMetadata 设置流式消息块的 provider 私有元数据。
+func WithChunkProviderMetadata(pm map[string]any) AssistantMessageChunkOption {
+	return func(c *AssistantMessageChunk) { c.ProviderMetadata = pm }
+}
+
+// WithChunkProviderContent 设置流式消息块的 provider 原始内容。
+func WithChunkProviderContent(pc any) AssistantMessageChunkOption {
+	return func(c *AssistantMessageChunk) { c.ProviderContent = pc }
+}
+
 // WithChunkPromptTokenIDs 设置流式消息块的输入 token ID 列表。
 func WithChunkPromptTokenIDs(ids []int) AssistantMessageChunkOption {
 	return func(c *AssistantMessageChunk) { c.PromptTokenIDs = ids }
@@ -200,6 +220,34 @@ func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMe
 		mergedStreamError = other.StreamError
 	}
 
+	// provider_metadata: 按 key 覆盖合并 {**self.provider_metadata, **other.provider_metadata}
+	// Python: message_chunk.py:234
+	mergedProviderMetadata := c.ProviderMetadata
+	if len(other.ProviderMetadata) > 0 {
+		merged := make(map[string]any, len(c.ProviderMetadata)+len(other.ProviderMetadata))
+		for k, v := range c.ProviderMetadata {
+			merged[k] = v
+		}
+		for k, v := range other.ProviderMetadata {
+			merged[k] = v
+		}
+		mergedProviderMetadata = merged
+	}
+
+	// response_id / response_model / provider_content: 取非空侧，优先右侧
+	mergedResponseID := c.ResponseID
+	if mergedResponseID == "" {
+		mergedResponseID = other.ResponseID
+	}
+	mergedResponseModel := c.ResponseModel
+	if mergedResponseModel == "" {
+		mergedResponseModel = other.ResponseModel
+	}
+	mergedProviderContent := c.ProviderContent
+	if mergedProviderContent == nil {
+		mergedProviderContent = other.ProviderContent
+	}
+
 	return &AssistantMessageChunk{
 		AssistantMessage: AssistantMessage{
 			DefaultMessage: DefaultMessage{
@@ -216,6 +264,10 @@ func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMe
 			PromptTokenIDs:     mergedPromptTokenIDs,
 			CompletionTokenIDs: mergedCompletionTokenIDs,
 			Logprobs:           mergedLogprobs,
+			ResponseID:         mergedResponseID,
+			ResponseModel:      mergedResponseModel,
+			ProviderMetadata:   mergedProviderMetadata,
+			ProviderContent:    mergedProviderContent,
 		},
 		StreamError: mergedStreamError,
 	}

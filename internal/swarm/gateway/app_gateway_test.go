@@ -419,6 +419,5 @@ func TestNewAppGatewayServer_Nil配置(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gs)
 	assert.NotNil(t, gs.router, "空配置也应完成路由装配")
-	assert.Nil(t, gs.reloader, "空配置不创建热重载器")
 	require.NoError(t, gs.Stop())
 }

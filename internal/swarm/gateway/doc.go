@@ -4,7 +4,6 @@
 // 位于 channels/web（对齐 Python channels/web/app_web.py），本包只做挂载。
 // 配置热重载机制：
 //   - API 触发：WebHandler config.set/config.save_all → NotifyConfigSavedOnce → onConfigSavedImpl
-//   - fsnotify 触发：reloader 监听 config.yaml 变更 → onConfigSavedImpl
 //   - onConfigSavedImpl 构造 agent.reload_config E2A 请求 → AgentServer 热更新
 //   - 条件触发 browser.runtime_restart（browserRuntimeKeys 匹配）
 //
@@ -14,7 +13,7 @@
 //
 //	gateway/
 //	├── doc.go              # 包文档
-//	├── app_gateway.go      # AppGatewayServer 启动入口（对应 Python _run() 组装），chi router 组装，reloader 管理
+//	├── app_gateway.go      # AppGatewayServer 启动入口（对应 Python _run() 组装），chi router 组装，
 //	├── gateway_server.go   # GatewayServer 多路由 WS 服务器本体（对齐 Python app_gateway.py GatewayServer 类 L240-720）
 //	├── acp_bridge.go       # AcpGatewayBridge /acp 路由协议对端（11.25：六方法分派 + 三拦截器 + SendMessage 出站链）
 //	├── res_frame.go        # SendResFrame：res 帧写入的导出入口（供通道包本地 handler 注入使用）

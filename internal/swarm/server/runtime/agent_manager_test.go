@@ -275,7 +275,7 @@ func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 
 func TestAgentManager_ReloadAgentsConfig(t *testing.T) {
 	am := NewAgentManager()
-	err := am.ReloadAgentsConfig(context.Background(), nil, nil)
+	err := am.ReloadAgentsConfig(context.Background(), nil, nil, ReloadOptions{})
 	assert.NoError(t, err)
 }
 
@@ -287,7 +287,7 @@ func TestReloadAgentsConfig_环境变量注入(t *testing.T) {
 		"MODEL_NAME":     "gpt-4",
 	}
 
-	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
+	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides, ReloadOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "openai", os.Getenv("MODEL_PROVIDER"))
@@ -307,7 +307,7 @@ func TestReloadAgentsConfig_空字符串Unsetenv(t *testing.T) {
 		"TEST_RELOAD_KEY": "",
 	}
 
-	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
+	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides, ReloadOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "", os.Getenv("TEST_RELOAD_KEY"))
@@ -323,7 +323,7 @@ func TestReloadAgentsConfig_nil值Unsetenv(t *testing.T) {
 		"TEST_RELOAD_NIL": "",
 	}
 
-	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
+	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides, ReloadOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "", os.Getenv("TEST_RELOAD_NIL"))
@@ -335,7 +335,7 @@ func TestReloadAgentsConfig_保存latestEnvOverrides(t *testing.T) {
 		"TEST_KEY": "test_value",
 	}
 
-	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
+	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides, ReloadOptions{})
 	require.NoError(t, err)
 
 	am.mu.RLock()
@@ -354,7 +354,7 @@ func TestReloadAgentsConfig_nil值时清空latestEnvOverrides(t *testing.T) {
 	envOverrides := map[string]string{
 		"TEST_KEY_A": "value_a",
 	}
-	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
+	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides, ReloadOptions{})
 	require.NoError(t, err)
 
 	am.mu.RLock()
@@ -364,7 +364,7 @@ func TestReloadAgentsConfig_nil值时清空latestEnvOverrides(t *testing.T) {
 	assert.Equal(t, "value_a", val)
 
 	// Python: env 为 nil 时清空 latestEnvOverrides
-	err = am.ReloadAgentsConfig(context.Background(), nil, nil)
+	err = am.ReloadAgentsConfig(context.Background(), nil, nil, ReloadOptions{})
 	require.NoError(t, err)
 
 	am.mu.RLock()
@@ -586,7 +586,7 @@ func TestReloadAgentsConfig_单Agent失败返回错误(t *testing.T) {
 	uc.adapter = &fakeReloadAdapter{err: errors.New("reload boom")}
 	am.PreSetAgent("web", "agent.work.plan", uc, "agent", "plan", "")
 
-	err := am.ReloadAgentsConfig(context.Background(), map[string]any{}, nil)
+	err := am.ReloadAgentsConfig(context.Background(), map[string]any{}, nil, ReloadOptions{})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reload boom")

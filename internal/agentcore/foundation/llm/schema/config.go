@@ -209,6 +209,9 @@ const (
 	APIModeChatCompletions APIMode = "chat_completions"
 	// APIModeResponses Responses API 协议（/v1/responses）
 	APIModeResponses APIMode = "responses"
+	// APIModeAnthropicMessages Anthropic Messages 协议（/v1/messages）。
+	// Python: schema/config.py:37 LLMApiMode.AnthropicMessages
+	APIModeAnthropicMessages APIMode = "anthropic_messages"
 )
 
 // topLevelAPIKeyProviders 要求顶层 api_key 的 provider 白名单。
@@ -493,52 +496,6 @@ func (c *ModelClientConfig) normalize() error {
 		}
 	}
 	return nil
-}
-
-// NormalizeModelClientConfig 返回归一化后的配置副本（不修改入参、不校验必填）。
-//
-// Python: openjiuwen/core/foundation/llm/utils/endpoint_profiles.py
-//
-//	normalize_model_client_config(config)
-//
-// 与 Validate 的区别：只做 provider / auth_mode / api_base 归一，
-// 不因缺 api_key、缺 api_base 或 timeout 非法而报错——调用方通常只想
-// 拿到「归一后的 client_provider」做判断。
-func NormalizeModelClientConfig(config *ModelClientConfig) *ModelClientConfig {
-	if config == nil {
-		return nil
-	}
-	out := &ModelClientConfig{
-		ClientID:                config.ClientID,
-		ClientProvider:          config.ClientProvider,
-		APIKey:                  config.APIKey,
-		APIBase:                 config.APIBase,
-		Timeout:                 config.Timeout,
-		AuthMode:                config.AuthMode,
-		APIMode:                 config.APIMode,
-		EndpointProfile:         config.EndpointProfile,
-		StreamFirstChunkTimeout: config.StreamFirstChunkTimeout,
-		StreamIdleTimeout:       config.StreamIdleTimeout,
-		MaxRetries:              config.MaxRetries,
-		VerifySSL:               config.VerifySSL,
-		SSLCert:                 config.SSLCert,
-		Extensions:              config.Extensions,
-	}
-	if config.CustomHeaders != nil {
-		out.CustomHeaders = make(map[string]string, len(config.CustomHeaders))
-		for key, value := range config.CustomHeaders {
-			out.CustomHeaders[key] = value
-		}
-	}
-	if config.Extra != nil {
-		out.Extra = make(map[string]any, len(config.Extra))
-		for key, value := range config.Extra {
-			out.Extra[key] = value
-		}
-	}
-	// 归一失败时保留原值（不因未知 provider 阻断调用方）
-	_ = out.normalize()
-	return out
 }
 
 // Validate 就地归一配置后校验必填项，返回第一个不合法的原因。

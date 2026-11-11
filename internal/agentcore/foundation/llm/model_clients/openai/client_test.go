@@ -524,8 +524,13 @@ func TestHandleHTTPError_非标准格式(t *testing.T) {
 	if !strings.Contains(baseErr.Error(), "502") {
 		t.Errorf("错误消息应包含 502, got %q", baseErr.Error())
 	}
-	if !strings.Contains(baseErr.Error(), "Bad Gateway") {
-		t.Errorf("错误消息应包含响应体内容, got %q", baseErr.Error())
+	// 2026-11-11 S0-4b 行为更新：错误体走 summarize_provider_error_text（Python
+	// openai_model_client.py:594 同），HTML 错误页折叠为一行摘要而非透传原文。
+	if !strings.Contains(baseErr.Error(), "HTML error page") {
+		t.Errorf("错误消息应含折叠摘要, got %q", baseErr.Error())
+	}
+	if strings.Contains(baseErr.Error(), "<html") {
+		t.Errorf("错误消息不应含原始 HTML 标签, got %q", baseErr.Error())
 	}
 }
 
@@ -1211,5 +1216,31 @@ func TestInvoke_编码错误原样上抛(t *testing.T) {
 	var base *exception.BaseError
 	if !errors.As(err, &base) || base.Code() != 181004 {
 		t.Fatalf("错误码应为 181004，实际 %v", err)
+	}
+}
+
+// TestHandleHTTPError_HTML网关页折叠 502 整页 HTML 应折叠为一行摘要，params 契约不变。
+// Python: openai_model_client.py:594 summarize_provider_error_text(body, status_code)。
+func TestHandleHTTPError_HTML网关页折叠(t *testing.T) {
+	body := "<html><head><title>502 Bad Gateway</title></head><body><h1>502 Bad Gateway</h1></body></html>"
+	resp := &http.Response{
+		StatusCode: 502,
+		Header:     http.Header{"Retry-After": []string{"30"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+	c, err := NewOpenAIModelClient(
+		&llmschema.ModelRequestConfig{ModelName: "gpt-test"},
+		&llmschema.ModelClientConfig{ClientID: "c1", ClientProvider: "OpenAI",
+			APIKey: "k", APIBase: "https://x", Timeout: 60},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := c.HandleHTTPError(resp).Error()
+	if strings.Contains(msg, "<html") {
+		t.Fatalf("错误消息不应含原始 HTML: %q", msg)
+	}
+	if !strings.Contains(msg, "HTTP 502") {
+		t.Fatalf("应含 HTTP 502: %q", msg)
 	}
 }

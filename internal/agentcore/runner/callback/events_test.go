@@ -428,3 +428,31 @@ func TestLLMCallEventData_NilString(t *testing.T) {
 		t.Errorf("nil String() = %q, want nil", d.String())
 	}
 }
+
+// TestLLMCallEventType_13种枚举 事件名与 Python LLMCallEvents 逐字一致。
+func TestLLMCallEventType_13种枚举(t *testing.T) {
+	cases := map[string]LLMCallEventType{
+		"_framework:llm_response_started": LLMResponseStarted,
+		"_framework:llm_stream_completed": LLMStreamCompleted,
+		"_framework:llm_route":            LLMRoute,
+		"_framework:llm_route_attempt":    LLMRouteAttempt,
+	}
+	for want, ev := range cases {
+		if string(ev) != want {
+			t.Fatalf("%s != %s", ev, want)
+		}
+	}
+}
+
+// TestLLMCallEventData_RetryCount RetryCount 指针语义 nil=未知。
+func TestLLMCallEventData_RetryCount(t *testing.T) {
+	data := &LLMCallEventData{Event: LLMResponseStarted}
+	if data.RetryCount != nil {
+		t.Fatalf("默认应为 nil")
+	}
+	rc := 2
+	data.RetryCount = &rc
+	if *data.RetryCount != 2 {
+		t.Fatal("取值失败")
+	}
+}

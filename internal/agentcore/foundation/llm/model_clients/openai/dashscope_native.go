@@ -8,8 +8,7 @@ package openai
 //
 // Python: openai_model_client.py:2241-2437（generate_image/speech/video）
 
-import (
-	"bytes"
+import (	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -183,6 +183,7 @@ func CallDashScopeAPI(
 	timeout *float64,
 	verifySSL bool,
 	sslCert string,
+	authMode llmschema.AuthMode,
 ) (*DashScopeResponse, error) {
 	// 1. 推导原生 API base URL
 	nativeBase := ResolveDashScopeBaseURL(apiBase)
@@ -221,7 +222,7 @@ func CallDashScopeAPI(
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	// 6. 共享 Transport（C-A/C-14 收敛）
-	client := &http.Client{Transport: model_clients.GetSharedTransport(verifySSL, sslCert)}
+	client := &http.Client{Transport: model_clients.GetSharedTransport(authMode, apiKey, apiBase, verifySSL, sslCert)}
 
 	// 7. 发送请求（对齐 Python: DashScope 多模态 API 使用 logger，非回调）
 	logger.Info(logComponent).

@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
@@ -40,6 +42,14 @@ type AgentManager struct {
 	// Python: self._client_capabilities_by_channel
 	// ⤵️ ACP 章节：等 ACP 实现后 initialize() 写入数据
 	clientCapabilitiesByChannel map[string]map[string]any
+
+	// lastModelConnConfigs 上一次模型连接快照（diff 驱逐用）
+	// Python: self._last_model_conn_configs
+	lastModelConnConfigs map[connDiffKey]*llmschema.ModelClientConfig
+
+	// lastReloadFingerprint 上次 reload 指纹（去重）
+	// Python: self._last_reload_fingerprint
+	lastReloadFingerprint string
 
 	// latestEnvOverrides 最近一次 env 覆盖
 	// Python: self._latest_env_overrides
@@ -108,6 +118,7 @@ func NewAgentManager() *AgentManager {
 		agentCreateParams:           make(map[string]map[string]*agentCreateParamsEntry),
 		clientCapabilitiesByChannel: make(map[string]map[string]any),
 		latestEnvOverrides:          make(map[string]string),
+		lastModelConnConfigs:        make(map[connDiffKey]*llmschema.ModelClientConfig),
 		createAgentFactory:          defaultAgentFactory,
 	}
 }
@@ -420,9 +431,42 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 	return agent.ProcessMessageStream(ctx, request)
 }
 
+// ReloadOptions 重载范围选项，对齐 Python reload_agents_config 的 4 个 keyword-only 参数。
+// Python: jiuwenswarm/server/runtime/agent_manager.py:1750-1757。
+type ReloadOptions struct {
+	// TargetChannelID 窄化目标渠道（全局域 scopes 时忽略）。
+	TargetChannelID string
+	// TargetSessionID 窄化目标会话。
+	TargetSessionID string
+	// ReloadScopes 变更域；空集=全量。合法域 {model, multimodal, search, team,
+	// permissions, agent_runtime}。Python: agent_ws_server.py:12889 agent_reload_scopes。
+	ReloadScopes []string
+	// PermissionNotification 权限通知模式（走 reload_permissions_config 分支）。
+	PermissionNotification bool
+}
+
 // ReloadAgentsConfig 重载 Agent 配置。
-// Python: AgentManager.reload_agents_config (agent_manager.py L308-340)。
-func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload map[string]any, envOverrides map[string]string) error {
+// Python: AgentManager.reload_agents_config (agent_manager.py L1750-1881)。
+// 使用 reload 锁串行化的语义由调用方保证（Python _reload_lock；
+// Go 侧 ReloadAgentsConfig 经 mu 保护快照与 fan-out）。
+func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload map[string]any, envOverrides map[string]string, opts ReloadOptions) error {
+	// Python: L1781 scope_set = set(reload_scopes)
+	scopeSet := make(map[string]struct{}, len(opts.ReloadScopes))
+	for _, scope := range opts.ReloadScopes {
+		scopeSet[scope] = struct{}{}
+	}
+	// Python: L1783-1786 search_changed（BOCHA/PERPLEXITY/SERPER/JINA 四 env 前缀检测）
+	searchChanged := false
+	for _, provider := range []string{"BOCHA", "PERPLEXITY", "SERPER", "JINA"} {
+		if _, ok := envOverrides[provider+"_API_KEY"]; ok {
+			searchChanged = true
+			break
+		}
+	}
+	// Python: L1789-1791 model_scope / global_scope（全局域 fan-out 全部 channel）
+	modelScope := containsScope(scopeSet, "model")
+	globalScope := searchChanged || containsScope(scopeSet, "model") ||
+		containsScope(scopeSet, "multimodal") || containsScope(scopeSet, "search")
 	// Python: L310-316: 1. 保存最新 env overrides + 注入 os.environ
 	// Python: L310: self._latest_env_overrides = dict(env) if isinstance(env, dict) else {}
 	am.mu.Lock()
@@ -442,6 +486,19 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 	}
 
 	// Python: L318-326: 2. 遍历所有 agent 调用 reload_agent_config
+	// Python: L1815-1823 fingerprint 去重——config+env+target+scopes 未变直接跳过
+	fingerprint := reloadFingerprint(configPayload, envOverrides,
+		opts.TargetChannelID, opts.TargetSessionID, opts.ReloadScopes)
+	am.mu.RLock()
+	unchanged := fingerprint == am.lastReloadFingerprint
+	am.mu.RUnlock()
+	if unchanged {
+		logger.Info(logComponent).
+			Str("target_channel", opts.TargetChannelID).
+			Msg("[AgentManager] reload agent config skipped: unchanged scope/config/env")
+		return nil
+	}
+
 	am.mu.RLock()
 	agentsSnapshot := make(map[string]map[string]*agentEntry)
 	for chKey, chAgents := range am.agents {
@@ -452,7 +509,15 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 	}
 	am.mu.RUnlock()
 
+	// Python: L1824-1828 fan-out：全局域或无 target 时遍历全部 channel，否则仅 target
+	targetChannel := opts.TargetChannelID
+	if globalScope {
+		targetChannel = ""
+	}
 	for chKey, chAgents := range agentsSnapshot {
+		if targetChannel != "" && chKey != targetChannel {
+			continue
+		}
 		for _, entry := range chAgents {
 			// Python: L327-330: await agent.reload_agent_config(config_base=config, env_overrides=env)
 			// 将 map[string]string 转为 map[string]any 以匹配 adapter 接口签名
@@ -494,7 +559,39 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 			Msg("[AgentManager] channel reloaded agent config successfully")
 	}
 
+	// Python: L1871-1875 fingerprint/快照登记
+	am.mu.Lock()
+	am.lastReloadFingerprint = fingerprint
+	am.mu.Unlock()
+
+	// Python: L1877-1881 模型配置变更时，关闭已被删除/改掉凭证的旧 LLM 连接（增量关闭）
+	if modelScope {
+		am.EvictStaleLLMClients(configPayload)
+	}
+
 	return nil
+}
+
+// containsScope 判断 scope 集是否含指定域。
+func containsScope(set map[string]struct{}, scope string) bool {
+	_, ok := set[scope]
+	return ok
+}
+
+// reloadFingerprint 计算 reload 指纹（config+env+target+scopes）。
+// Python: agent_manager.py _reload_fingerprint 的 Go 近似（JSON 稳定序列化 + 哈希）。
+func reloadFingerprint(configPayload map[string]any, envOverrides map[string]string,
+	targetChannelID, targetSessionID string, scopes []string) string {
+	h := sha256.New()
+	configJSON, _ := json.Marshal(configPayload)
+	h.Write(configJSON)
+	envJSON, _ := json.Marshal(envOverrides)
+	h.Write(envJSON)
+	h.Write([]byte(targetChannelID))
+	h.Write([]byte(targetSessionID))
+	scopesJSON, _ := json.Marshal(scopes)
+	h.Write(scopesJSON)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // RecreateAgent 重建 Agent 实例。

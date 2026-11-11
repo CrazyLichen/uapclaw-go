@@ -10,6 +10,8 @@
 package llm
 
 import (
+	// 23.1：Anthropic Messages 客户端（api_mode=anthropic_messages 或 provider=Anthropic 时分派）
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/anthropic"
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/intellirouter"
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 )

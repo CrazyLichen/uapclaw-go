@@ -20,7 +20,6 @@ import (
 //   - 环境变量解析（${VAR:-default} 语法）
 //   - 敏感字段自动解密（通过 DecryptFunc 钩子）
 //   - 配置后处理（通过 NormalizeFunc 钩子）
-//   - 热重载（通过 Reloader）
 //   - 并发安全（sync.RWMutex）
 type Config struct {
 	path      string         // 配置文件路径

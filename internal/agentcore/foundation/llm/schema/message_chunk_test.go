@@ -1070,3 +1070,25 @@ func TestAssistantMessageChunk_CarriesOutputToken(t *testing.T) {
 		}
 	}
 }
+
+// TestChunkMerge_providerMetadata覆盖合并 对齐 Python message_chunk.py:234 {**self, **other}。
+func TestChunkMerge_providerMetadata覆盖合并(t *testing.T) {
+	a := &AssistantMessageChunk{AssistantMessage: AssistantMessage{
+		ProviderMetadata: map[string]any{"k1": "a"}}}
+	b := &AssistantMessageChunk{AssistantMessage: AssistantMessage{
+		ProviderMetadata: map[string]any{"stop_reason": "end_turn"}}}
+	merged := a.Merge(b)
+	if merged.ProviderMetadata["stop_reason"] != "end_turn" || merged.ProviderMetadata["k1"] != "a" {
+		t.Fatalf("合并语义 {**self, **other} 失效: %v", merged.ProviderMetadata)
+	}
+}
+
+// TestChunkMerge_responseID取非空侧 响应头先到、usage 尾块后到的场景。
+func TestChunkMerge_responseID取非空侧(t *testing.T) {
+	a := &AssistantMessageChunk{AssistantMessage: AssistantMessage{ResponseID: "m1"}}
+	b := &AssistantMessageChunk{}
+	merged := a.Merge(b)
+	if merged.ResponseID != "m1" {
+		t.Fatalf("ResponseID 丢失: %q", merged.ResponseID)
+	}
+}

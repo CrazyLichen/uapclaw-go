@@ -9,26 +9,38 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// TestUsesSystemAttachmentRole_矩阵 覆盖上游 4 个判定字段的组合。
-// Python: _uses_system_attachment_role
+// TestUsesSystemAttachmentRole_矩阵 覆盖上游 4 个判定字段的组合（单参 cfg 形态）。
+// Python: _uses_system_attachment_role(model_client_config)
 func TestUsesSystemAttachmentRole_矩阵(t *testing.T) {
+	mk := func(provider, legacy, endpoint, apiMode string) *llmschema.ModelClientConfig {
+		cfg := &llmschema.ModelClientConfig{
+			ClientProvider:  provider,
+			EndpointProfile: endpoint,
+			APIMode:         llmschema.APIMode(apiMode),
+		}
+		if legacy != "" {
+			cfg.Extra = map[string]any{"legacy_client_provider": legacy}
+		}
+		return cfg
+	}
 	cases := []struct {
-		name                                string
-		provider, legacy, endpoint, apiMode string
-		want                                bool
+		name string
+		cfg  *llmschema.ModelClientConfig
+		want bool
 	}{
-		{"anthropic 保持 user", "anthropic", "", "", "", false},
-		{"anthropic api_mode", "", "", "", "anthropic-messages", false},
-		{"messages api_mode", "", "", "", "messages", false},
-		{"百炼 endpoint", "", "", "bailian", "", true},
-		{"dashscope provider", "dashscope", "", "", "", true},
-		{"openai 兼容回落 legacy", "", "bailian", "openai", "", true},
-		{"普通 openai", "openai", "", "", "", false},
-		{"空全部", "", "", "", "", false},
+		{"anthropic 保持 user", mk("anthropic", "", "", ""), false},
+		{"anthropic api_mode", mk("", "", "", "anthropic-messages"), false},
+		{"messages api_mode", mk("", "", "", "messages"), false},
+		{"api_mode 常量 anthropic_messages", mk("OpenAI", "", "", string(llmschema.APIModeAnthropicMessages)), false},
+		{"百炼 endpoint", mk("", "", "bailian", ""), true},
+		{"dashscope provider", mk("dashscope", "", "", ""), true},
+		{"openai 兼容回落 legacy", mk("", "bailian", "openai", ""), true},
+		{"普通 openai", mk("openai", "", "", ""), false},
+		{"空全部", mk("", "", "", ""), false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			require.Equal(t, c.want, UsesSystemAttachmentRole(c.provider, c.legacy, c.endpoint, c.apiMode))
+			require.Equal(t, c.want, UsesSystemAttachmentRole(c.cfg))
 		})
 	}
 }

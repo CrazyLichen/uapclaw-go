@@ -1105,7 +1105,10 @@ func newTestModel(t *testing.T, provider string, authMode llmschema.AuthMode) *l
 func TestFormatResponseFormat_OpenAI注入(t *testing.T) {
 	model := newTestModel(t, llmschema.ProviderTypeOpenAI.String(), llmschema.AuthModeAPIKey)
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	got := client.formatResponseFormat()
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
 	if got == nil || got["type"] != "json_object" {
 		t.Errorf("got %v", got)
 	}
@@ -1115,17 +1118,29 @@ func TestFormatResponseFormat_OpenAI注入(t *testing.T) {
 func TestFormatResponseFormat_prompt模式不注入(t *testing.T) {
 	model := newTestModel(t, llmschema.ProviderTypeOpenAI.String(), llmschema.AuthModeAPIKey)
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "prompt"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
 
 // TestFormatResponseFormat_非OpenAI不注入 验证其他 provider。
+// 2026-11-11 S0-2 行为更新：endpointprofiles 归一将 DeepSeek 别名归一为
+// client_provider="OpenAI"（Python LEGACY_PROVIDER_ALIASES 同），故 DeepSeek
+// 会走到注入分支——与 Python _format_kwargs 行为一致；旧断言（不注入）基于
+// 旧归一不别名，属过时行为。
 func TestFormatResponseFormat_非OpenAI不注入(t *testing.T) {
 	model := newTestModel(t, "DeepSeek", llmschema.AuthModeAPIKey)
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
-		t.Errorf("got %v, want nil", got)
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got == nil || got["type"] != "json_object" {
+		t.Errorf("DeepSeek 归一为 OpenAI 后应注入 json_object, got %v", got)
 	}
 }
 
@@ -1133,7 +1148,11 @@ func TestFormatResponseFormat_非OpenAI不注入(t *testing.T) {
 func TestFormatResponseFormat_OAuth不注入(t *testing.T) {
 	model := newTestModel(t, llmschema.ProviderTypeOpenAI.String(), llmschema.AuthModeOpenAIAccountOAuth)
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
@@ -1141,7 +1160,11 @@ func TestFormatResponseFormat_OAuth不注入(t *testing.T) {
 // TestFormatResponseFormat_nil模型 验证 nil 安全。
 func TestFormatResponseFormat_nil模型(t *testing.T) {
 	client := &IsolatedModelReviewerClient{OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v", got)
 	}
 }
@@ -1344,7 +1367,11 @@ func TestFormatResponseFormat_关卡1_prompt模式(t *testing.T) {
 		Model:        newGateModel(t, nil),
 		OutputFormat: "prompt",
 	}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
@@ -1352,7 +1379,11 @@ func TestFormatResponseFormat_关卡1_prompt模式(t *testing.T) {
 // TestFormatResponseFormat_关卡2_nil模型 验证 nil 模型不注入。
 func TestFormatResponseFormat_关卡2_nil模型(t *testing.T) {
 	client := &IsolatedModelReviewerClient{OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
@@ -1363,7 +1394,11 @@ func TestFormatResponseFormat_关卡3_nil配置(t *testing.T) {
 		Model:        &llm.Model{},
 		OutputFormat: "json_object",
 	}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
@@ -1375,8 +1410,13 @@ func TestFormatResponseFormat_关卡4_非OpenAI(t *testing.T) {
 		c.APIBase = "https://api.deepseek.com"
 	})
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
-		t.Errorf("got %v, want nil", got)
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	// S0-2 行为更新：别名归一后 DeepSeek → OpenAI，关卡 4 不再拦下（对齐 Python）。
+	if got == nil || got["type"] != "json_object" {
+		t.Errorf("DeepSeek 归一为 OpenAI 后应注入 json_object, got %v", got)
 	}
 }
 
@@ -1386,7 +1426,11 @@ func TestFormatResponseFormat_关卡5_Responses协议(t *testing.T) {
 		c.APIMode = llmschema.APIModeResponses
 	})
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil（Responses 协议参数不同）", got)
 	}
 }
@@ -1397,7 +1441,10 @@ func TestFormatResponseFormat_关卡5_ChatCompletions协议(t *testing.T) {
 		c.APIMode = llmschema.APIModeChatCompletions
 	})
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	got := client.formatResponseFormat()
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
 	if got == nil || got["type"] != "json_object" {
 		t.Errorf("got %v", got)
 	}
@@ -1409,7 +1456,11 @@ func TestFormatResponseFormat_关卡6_OAuth(t *testing.T) {
 		c.AuthMode = llmschema.AuthModeOpenAIAccountOAuth
 	})
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
@@ -1420,7 +1471,11 @@ func TestFormatResponseFormat_关卡7_用户已设responseFormat(t *testing.T) {
 		m.ResponseFormat = map[string]any{"type": "json_schema"}
 	})
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got != nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got != nil {
 		t.Errorf("got %v, want nil（不覆盖用户配置）", got)
 	}
 }
@@ -1431,7 +1486,10 @@ func TestFormatResponseFormat_全通过(t *testing.T) {
 		Model:        newGateModel(t, nil),
 		OutputFormat: "json_object",
 	}
-	got := client.formatResponseFormat()
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
 	if got == nil || got["type"] != "json_object" {
 		t.Errorf("got %v", got)
 	}
@@ -1443,7 +1501,11 @@ func TestFormatResponseFormat_空apiMode视为Chat(t *testing.T) {
 		c.APIMode = "" // 显式零值
 	})
 	client := &IsolatedModelReviewerClient{Model: model, OutputFormat: "json_object"}
-	if got := client.formatResponseFormat(); got == nil {
+	got, errNF := client.formatResponseFormat()
+	if errNF != nil {
+		t.Fatalf("normalize 失败: %v", errNF)
+	}
+	if got == nil {
 		t.Error("empty api_mode should be treated as Chat Completions")
 	}
 }
@@ -1467,4 +1529,26 @@ func TestTruncateAtWordBoundary_中文不切坏(t *testing.T) {
 	if got := truncateAtWordBoundary("中文短", 10); got != "中文短" {
 		t.Errorf("got %q", got)
 	}
+}
+
+// TestAutoReviewer_anthropic_messages不注入JSON模式 对齐 Python：归一后 provider 非 OpenAI 走不到注入分支。
+// 23.3 后归一走 endpointprofiles 版（S0-2），anthropic_messages 模式下 formatResponseFormat 返回 nil。
+func TestAutoReviewer_anthropic_messages不注入JSON模式(t *testing.T) {
+	c := &IsolatedModelReviewerClient{OutputFormat: "prompt"}
+	c.Model = newTestModelWithAPIMode(t, llmschema.APIModeAnthropicMessages)
+	got, err := c.formatResponseFormat()
+	if err != nil {
+		t.Fatalf("normalize 不应失败: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("anthropic_messages 模式不应注入 response_format, got %v", got)
+	}
+}
+
+// newTestModelWithAPIMode 构造指定 api_mode 的评审模型（复用 newTestModel 的最小配置）。
+func newTestModelWithAPIMode(t *testing.T, apiMode llmschema.APIMode) *llm.Model {
+	t.Helper()
+	m := newTestModel(t, llmschema.ProviderTypeOpenAI.String(), llmschema.AuthModeAPIKey)
+	m.ClientConfig.APIMode = apiMode
+	return m
 }

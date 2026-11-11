@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/utils/providererror"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/reasoning"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -209,6 +210,16 @@ func (c *OpenAIModelClient) Invoke(
 		return nil, c.HandleHTTPError(resp)
 	}
 
+	// Python: openai_model_client.py:2162 trigger(LLM_RESPONSE_STARTED,
+	// retry_count=_sdk_retry_count(...))——响应头到达即触发，标记 TTFB。
+	// Go 无 SDK 重试，retry_count 恒 nil（spec P-2）。
+	_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMResponseStarted,
+		ModelName:     reqParams["model"].(string),
+		ModelProvider: c.ClientConfig.ClientProvider,
+		IsStream:      false,
+	})
+
 	// 9. 解析响应
 	var completionResp ChatCompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&completionResp); err != nil {
@@ -390,6 +401,15 @@ func (c *OpenAIModelClient) Stream(
 		}
 		return nil, c.WrapError("stream", sendErr)
 	}
+
+	// Python: openai_model_client.py:2162 trigger(LLM_RESPONSE_STARTED)——
+	// SSE 连接建立（响应头到达）即触发，标记 TTFB；retry_count 恒 nil（P-2）。
+	_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMResponseStarted,
+		ModelName:     reqParams["model"].(string),
+		ModelProvider: c.ClientConfig.ClientProvider,
+		IsStream:      true,
+	})
 
 	// 10. 创建 SSE 读取器和 chunk channel
 	sseReader := NewSSEReader(resp.Body)
@@ -606,7 +626,11 @@ func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 
 	return exception.NewBaseError(
 		exception.StatusModelCallFailed,
-		exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s", resp.StatusCode, string(body))),
+		// Python: openai_model_client.py:594 summarize_provider_error_text(body, status_code)。
+		// 只折叠 msg 文案；params 结构化字段（http_status/provider_code/retry_after）是
+		// ModelAnomalyDetectionRail.classifyTransientFailure 的契约，一字不动。
+		exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s",
+			resp.StatusCode, providererror.SummarizeProviderErrorText(string(body), resp.StatusCode))),
 		exception.WithParams(params),
 	)
 }
