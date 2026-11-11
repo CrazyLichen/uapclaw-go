@@ -728,14 +728,6 @@ func renderGradients(gradients []map[string]any) string {
 	return strings.Join(lines, "\n")
 }
 
-// extractGradientOutputText 从 agent invoke 结果中提取文本。
-// 与 proactive_actions 的 ExtractOutputText 同语义，但**本文件独立持有**——
-// Python 侧两个文件各有一份同名实现，对齐时不得合并。
-// Python: gradient_updater.py:188 _extract_output_text
-func extractGradientOutputText(result map[string]any) string {
-	return ExtractOutputText(result)
-}
-
 // extractGradientJSON 从 LLM 响应中提取 JSON（支持 markdown 代码块）。
 //
 // fallback 用逐字符解析一段合法 JSON（等价 Python `json.JSONDecoder().raw_decode`），
@@ -786,7 +778,7 @@ func invokeGradientAgent(
 		logger.Warn(logComponent).Err(err).Msg("gradient update llm call failed")
 		return "", false
 	}
-	content := extractGradientOutputText(result)
+	content := ExtractOutputText(result)
 	jsonStr := extractGradientJSON(content)
 	if jsonStr == "" {
 		return "", false

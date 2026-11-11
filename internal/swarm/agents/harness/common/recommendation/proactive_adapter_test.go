@@ -167,7 +167,7 @@ func TestPushProactiveChunks_source打标(t *testing.T) {
 	for _, p := range host.Pushed() {
 		payload, _ := p["payload"].(map[string]any)
 		require.NotNil(t, payload)
-		assert.Equal(t, proactiveSourceSource, payload["source"], "话术轮 chunk 应打 source 标记")
+		assert.Equal(t, ProactiveSourceSource, payload["source"], "话术轮 chunk 应打 source 标记")
 		assert.Equal(t, "skill_recommend", payload["proactive_type"])
 		assert.Equal(t, "翻译技能", payload["proactive_target"])
 		assert.Equal(t, "rec_1_abcdef01", payload["proactive_rec_id"])

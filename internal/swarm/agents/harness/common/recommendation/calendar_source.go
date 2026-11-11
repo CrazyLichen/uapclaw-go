@@ -145,7 +145,7 @@ func findCalendarServerEntry() map[string]any {
 	if mcpCfg == nil {
 		return nil
 	}
-	return pickCalendarServerEntry(toMapList(mcpCfg["servers"]))
+	return pickCalendarServerEntry(asMapSlice(mcpCfg["servers"]))
 }
 
 // pickCalendarServerEntry 从候选列表里挑第一个「启用且名字含 calendar」的条目。
@@ -334,22 +334,4 @@ func loadRecommendationConfigOrNil() map[string]any {
 		return nil
 	}
 	return cfgMap
-}
-
-// toMapList 把配置里的列表统一成 []map[string]any。
-func toMapList(value any) []map[string]any {
-	switch typed := value.(type) {
-	case []map[string]any:
-		return typed
-	case []any:
-		result := make([]map[string]any, 0, len(typed))
-		for _, item := range typed {
-			if m, ok := item.(map[string]any); ok {
-				result = append(result, m)
-			}
-		}
-		return result
-	default:
-		return nil
-	}
 }

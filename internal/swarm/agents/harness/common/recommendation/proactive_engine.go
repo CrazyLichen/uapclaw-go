@@ -336,7 +336,7 @@ func (e *ProactiveEngine) tick(ctx context.Context, proactiveAgent *harness.Deep
 
 	// Step 1：构建情境报告
 	_, availableSkills := DetectAllSkills()
-	report := BuildSituationReport(ctx, maxRounds, availableSkills, defaultScanModePrefix, nil)
+	report := BuildSituationReport(ctx, maxRounds, availableSkills, defaultScanModePrefix)
 	if report.IsEmpty() {
 		logger.Debug(logComponent).Msg("situation report empty, skipping tick")
 		e.markTickNow()

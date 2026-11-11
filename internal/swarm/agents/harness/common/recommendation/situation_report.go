@@ -434,19 +434,22 @@ func compressHistoryIn(sessionsDir, sessionID string, maxRounds int) string {
 
 // BuildSituationReport 从会话与 profile 的当前状态构建情境报告。
 //
-// calendarEvents 由调用方（第 3 段的 calendar_source）拉取后传入——
-// 拉取失败在那边被吞成空列表，故本函数不会因日历不可用而阻塞 tick。
+// 日历事件在**函数内部**拉取（MCP 日历服务，网络/子进程往返）。
+// 拉取失败在 FetchCalendarEvents 内部被吞成空列表，故本函数不会因日历不可用而阻塞 tick。
 //
 // modePrefix 透传给 ScanSessions，按会话 mode 前缀过滤。默认 "agent" 只扫
 // agent 类会话，避免 code/team 会话的技术语境污染推荐决策；空串扫全部。
 //
 // Python: situation_report.py:434 build_situation_report
+//
+// Python 侧是 async 且**无 ctx 参数**——异步只为 await fetch_calendar_events。
+// Go 用显式 ctx 传递取消信号（同包其它函数亦然），这是唯一的签名差异，
+// 已登记在 spec 的已知偏差中。
 func BuildSituationReport(
 	ctx context.Context,
 	maxRounds int,
 	skills []map[string]any,
 	modePrefix string,
-	calendarEvents []map[string]any,
 ) *SituationReport {
 	report := readLocalReportWithDeadline(ctx, maxRounds, modePrefix)
 	if report == nil {
@@ -454,16 +457,18 @@ func BuildSituationReport(
 		return &SituationReport{}
 	}
 
+	// Python: skills_summary = _format_skills_for_llm(skills) if skills else ""
 	skillsSummary := ""
 	if len(skills) > 0 {
 		skillsSummary = FormatSkillsForLLM(skills)
 	}
 
+	// Python: calendar_events = await fetch_calendar_events()
 	return &SituationReport{
 		Sessions:                     report.Sessions,
 		RecommendationHistorySummary: report.RecommendationHistorySummary,
 		SkillsSummary:                skillsSummary,
-		CalendarEvents:               calendarEvents,
+		CalendarEvents:               FetchCalendarEvents(ctx, maxCalendarEvents, calendarLookaheadHours),
 	}
 }
 

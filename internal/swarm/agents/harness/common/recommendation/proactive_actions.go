@@ -355,7 +355,10 @@ func detectAllSkillsIn(agentSkillsDir, builtinDir string) (map[string]struct{}, 
 // 严格只读 output；缺失或类型不符返回空串，让调用方当作「无决策」，
 // 而不是误读 result_type（"answer"）当作输出导致 JSON 解析失败。
 //
-// Python: proactive_actions.py:202 _extract_output_text
+// 上游有两份同名实现，**逻辑完全相同**（gradient 版只是 docstring 更简），
+// 故 Go 侧合并为一份：
+//   - proactive_actions.py:202 _extract_output_text
+//   - gradient_updater.py:188 _extract_output_text
 func ExtractOutputText(invokeResult map[string]any) string {
 	if invokeResult == nil {
 		return ""

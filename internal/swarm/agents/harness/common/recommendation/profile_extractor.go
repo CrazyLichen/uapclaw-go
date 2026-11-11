@@ -95,9 +95,9 @@ func LoadRecommendationState(path string) *RecommendationState {
 	}
 	// Python: 三个列表字段各自做 isinstance(x, list) 守卫，类型不符回落空列表
 	return &RecommendationState{
-		RecommendationHistory: toMapSlice(raw["recommendation_history"]),
-		FeedbackBuffer:        toMapSlice(raw["feedback_buffer"]),
-		StrategyGradients:     toMapSlice(raw["strategy_gradients"]),
+		RecommendationHistory: asMapSlice(raw["recommendation_history"]),
+		FeedbackBuffer:        asMapSlice(raw["feedback_buffer"]),
+		StrategyGradients:     asMapSlice(raw["strategy_gradients"]),
 		LastUpdated:           toStringValue(raw["last_updated"]),
 	}
 }
@@ -135,9 +135,16 @@ func SaveRecommendationState(state *RecommendationState, path string) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// toMapSlice 把 JSON 解出的值转成 []map[string]any。
-// 非数组或元素非对象时按 Python 的 isinstance 守卫语义回落为空切片。
-func toMapSlice(value any) []map[string]any {
+// asMapSlice 把 JSON 解出的值转成 []map[string]any。
+//
+// 严格对齐 Python `x if isinstance(x, list) else []`（profile_extractor.py:81-94）：
+// **只判断是不是数组，不校验元素类型**。非数组回落 nil（对应 `else []`）。
+//
+// 元素不是对象时**跳过**——这是 Go 与 Python 的必要差异：Python 的 list 可以
+// 混装任意类型，Go 的 []map[string]any 装不下。Python 侧混入的非对象元素会原样
+// 保留，直到后续 `.get()` 抛 AttributeError 被外层 except 吞掉（功能静默失效）；
+// Go 侧在此提前跳过，等价于"该条记录不可用"。方向一致，已登记 spec 已知偏差。
+func asMapSlice(value any) []map[string]any {
 	list, ok := value.([]any)
 	if !ok {
 		return nil

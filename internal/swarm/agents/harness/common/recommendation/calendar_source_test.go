@@ -446,24 +446,23 @@ func TestResolveEventTool_公开入口(t *testing.T) {
 	})
 }
 
-// TestToMapList 配置列表归一化。
-func TestToMapList(t *testing.T) {
-	t.Run("直接是map切片", func(t *testing.T) {
-		input := []map[string]any{{"a": 1}, {"b": 2}}
-		assert.Equal(t, input, toMapList(input))
-	})
-
+// TestAsMapSlice 配置列表归一化。
+//
+// YAML/JSON 解出的列表必然是 []any，故只需覆盖该形态。
+// （曾有一个"直接传 []map[string]any"的用例，对应对齐 Python 时并不存在的输入形态，
+// 已删除——Python 的 get_mcp_servers() 返回 list[dict]，Go 侧对应 []any。）
+func TestAsMapSlice(t *testing.T) {
 	t.Run("any切片过滤非对象", func(t *testing.T) {
 		input := []any{map[string]any{"a": 1}, "字符串", 123, map[string]any{"b": 2}}
-		got := toMapList(input)
+		got := asMapSlice(input)
 		require.Len(t, got, 2)
 		assert.Equal(t, 1, got[0]["a"])
 	})
 
 	t.Run("非切片返回nil", func(t *testing.T) {
-		assert.Nil(t, toMapList("not-a-list"))
-		assert.Nil(t, toMapList(nil))
-		assert.Nil(t, toMapList(123))
+		assert.Nil(t, asMapSlice("not-a-list"))
+		assert.Nil(t, asMapSlice(nil))
+		assert.Nil(t, asMapSlice(123))
 	})
 }
 

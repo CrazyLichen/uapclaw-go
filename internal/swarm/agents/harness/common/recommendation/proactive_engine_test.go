@@ -3,6 +3,7 @@ package recommendation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -371,7 +372,7 @@ func TestBuildProactiveAgentRequest(t *testing.T) {
 	params := decodeParamsForTest(t, got.Params)
 	assert.Equal(t, "指令内容", params["query"])
 	assert.Equal(t, "agent", params["mode"])
-	assert.Equal(t, proactiveSourceSource, params["source"],
+	assert.Equal(t, ProactiveSourceSource, params["source"],
 		"source 标记用于 process_message_stream 跳过写 user history")
 	assert.Equal(t, "skill_recommend", params["proactive_type"])
 	assert.Equal(t, "翻译技能", params["proactive_target"])
@@ -464,12 +465,15 @@ func (m *mockMainAgentHost) GetAgentNoWait(_, _, _, _ string) MainAgentHandle {
 	return m.agent
 }
 
-// SendPush 记录推送。
-func (m *mockMainAgentHost) SendPush(payload map[string]any) bool {
+// SendPush 记录推送；pushResult=false 时返回错误（模拟 ws 未送达）。
+func (m *mockMainAgentHost) SendPush(_ context.Context, payload map[string]any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.pushed = append(m.pushed, payload)
-	return m.pushResult
+	if !m.pushResult {
+		return errors.New("push not delivered")
+	}
+	return nil
 }
 
 // Pushed 返回推送快照。

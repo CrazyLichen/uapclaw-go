@@ -33,8 +33,9 @@ type MainAgentHost interface {
 	// tick 不应替用户建 agent——自动建时 cache_key 可能与用户对话用的不一致，
 	// 会建出第二个 agent，导致推荐进的不是用户对话的 context。
 	GetAgentNoWait(channelID, mode, projectDir, subMode string) MainAgentHandle
-	// SendPush 推一个 chunk 到前端，返回是否成功送达。
-	SendPush(payload map[string]any) bool
+	// SendPush 推一个 chunk 到前端。
+	// 签名与 AgentServer.SendPush 一致（ctx + payload → error），失败返回 error。
+	SendPush(ctx context.Context, payload map[string]any) error
 	// IsSessionExecuting 目标会话是否正在跑（避让检查，同 session 不支持并发 stream）。
 	IsSessionExecuting(sessionID string) bool
 }
@@ -48,13 +49,17 @@ type MainAgentHandle interface {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// proactiveSourceSource 推荐指令的来源标记
+	// ProactiveSourceSource 推荐指令的来源标记。
 	//
 	// process_message_stream 写 user history 时据此跳过——否则刷新页面会看到
 	// 「[主动推荐指令] xxx」这条用户没说过的消息。
+	// 隐式反馈采集也据此排除（系统指令不是用户说的话）。
+	//
+	// 导出是因为 server 侧的隐式反馈采集要读同一协议值——
+	// 前端按此字符串做分支，两侧必须同源，不得各写一份字面量。
 	//
 	// Python: proactive_adapter.py:196 "source": "proactive_recommendation"
-	proactiveSourceSource = "proactive_recommendation"
+	ProactiveSourceSource = "proactive_recommendation"
 	// notificationSource 系统通知的来源标记（前端据此走顶部弹窗，不进会话历史）
 	// Python: proactive_adapter.py:418 "source": "proactive_notification"
 	notificationSource = "proactive_notification"
@@ -216,7 +221,7 @@ func InitProactiveEngine(ctx context.Context, host MainAgentHost, cfg map[string
 		if host == nil {
 			return fmt.Errorf("no host")
 		}
-		host.SendPush(map[string]any{
+		return host.SendPush(context.Background(), map[string]any{
 			"request_id": fmt.Sprintf("proactive_notification_%d", time.Now().UnixMilli()),
 			"channel_id": cid,
 			"payload": map[string]any{
@@ -226,7 +231,6 @@ func InitProactiveEngine(ctx context.Context, host MainAgentHost, cfg map[string
 				"source":     notificationSource,
 			},
 		})
-		return nil
 	})
 
 	// 触发主 agent 回调：tick 决策后，TriggerMainAgent 已把决策包成指令式 query
@@ -341,7 +345,7 @@ func pushProactiveChunks(
 			// chat.error 不打标：错误 chunk 带 source 会被前端当推荐卡片渲染，
 			// 应让用户看到错误提示而非异常卡片。错误 chunk 仍透传前端（无 source）。
 			if _, exists := chunkPayload["source"]; !exists {
-				chunkPayload["source"] = proactiveSourceSource
+				chunkPayload["source"] = ProactiveSourceSource
 			}
 			if _, exists := chunkPayload["proactive_type"]; !exists {
 				chunkPayload["proactive_type"] = request.Decision.Type
@@ -376,9 +380,9 @@ func pushProactiveChunks(
 		if pushPayload["request_id"] == "" {
 			pushPayload["request_id"] = agentRequest.RequestID
 		}
-		if !host.SendPush(pushPayload) {
+		if pushErr := host.SendPush(ctx, pushPayload); pushErr != nil {
 			pushFailed = true
-			logger.Debug(logComponent).Msg("send_push reported not-pushed")
+			logger.Debug(logComponent).Err(pushErr).Msg("send_push failed")
 		}
 	}
 
@@ -404,7 +408,7 @@ func buildProactiveAgentRequest(request *ProactiveTriggerRequest, cid string) (*
 		"query": request.Query,
 		"mode":  "agent",
 		// source 标记这是系统触发的推荐指令，不是用户说的话
-		"source": proactiveSourceSource,
+		"source": ProactiveSourceSource,
 		// proactive_type/target 给 assistant 写 history 时透传用
 		"proactive_type":   request.Decision.Type,
 		"proactive_target": request.Decision.Target,

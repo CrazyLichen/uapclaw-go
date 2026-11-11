@@ -201,6 +201,13 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	// AgentWebSocketServer.get_instance() 单例直取——Go 同 24b/24c 启动接线。
 	swarmtools.GetAcpOutputManager().SetSendPushFunc(s.SendPush)
 
+	// 10.3.31a 已接线：主动推荐引擎（proactive.tick / proactive.feedback 两个 RPC 的服务端）。
+	// Python: server/worker/capabilities.py:73 prepare_proactive →
+	// await init_proactive_engine(server, proactive_config)。
+	// Go 无 worker.bootstrap 阶段，等价机制为启动接线（与上行 24b/24c/24d 同款）。
+	// 装配失败只告警不阻断启动（Python 侧 signals.degraded 后继续）。
+	s.initProactiveEngine(ctx)
+
 	ctx, s.cancel = context.WithCancel(ctx)
 	go s.run(ctx)
 

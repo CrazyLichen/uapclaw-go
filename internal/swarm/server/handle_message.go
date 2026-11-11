@@ -86,6 +86,16 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 	// 绝大多数方法统一由具体 handler 返回 (resp, err)，最后一段再统一写回响应；
 	// 少数 handler（取消、流式、非流式聊天）自己负责写回，走完即 return，
 	// 因此那一组 case 不做赋值。下面每个内容分组前的注释标出该组的功能归类。
+
+	// 3b. chat.send 入口采集隐式反馈：用户在推荐后的文本回复关联到最近推荐。
+	// best-effort，失败绝不影响主 chat 流（见 tryRecordImplicitFeedback 实现）。
+	// 位置对齐 Python agent_ws_server.py:3353-3355（before_chat_request hook 之后、
+	// 流式分发之前）。
+	// Python: if request.req_method == ReqMethod.CHAT_SEND: await self._try_record_implicit_feedback(request)
+	if request.ReqMethod == schema.ReqMethodChatSend {
+		s.tryRecordImplicitFeedback(request)
+	}
+
 	var resp *schema.AgentResponse
 	switch request.ReqMethod {
 	// Session 管理

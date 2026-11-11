@@ -633,7 +633,7 @@ func TestBuildSituationReport_技能摘要(t *testing.T) {
 	// 用真实 workspace 目录（读不到内容时返回空报告，但技能段仍应拼上）
 	report := BuildSituationReport(context.Background(), 20, []map[string]any{
 		{"name": "翻译技能", "description": "翻文档", "installed": true},
-	}, defaultScanModePrefix, nil)
+	}, defaultScanModePrefix)
 
 	require.NotNil(t, report)
 	assert.Contains(t, report.SkillsSummary, "翻译技能")
@@ -642,18 +642,23 @@ func TestBuildSituationReport_技能摘要(t *testing.T) {
 
 // TestBuildSituationReport_无技能 空技能列表时不渲染技能段。
 func TestBuildSituationReport_无技能(t *testing.T) {
-	report := BuildSituationReport(context.Background(), 20, nil, defaultScanModePrefix, nil)
+	report := BuildSituationReport(context.Background(), 20, nil, defaultScanModePrefix)
 	require.NotNil(t, report)
 	assert.Empty(t, report.SkillsSummary)
 }
 
-// TestBuildSituationReport_日历透传 日历事件原样带入报告。
-func TestBuildSituationReport_日历透传(t *testing.T) {
-	events := []map[string]any{{"title": "周会", "start": "10:00", "end": "11:00"}}
-	report := BuildSituationReport(context.Background(), 20, nil, defaultScanModePrefix, events)
-	require.NotNil(t, report)
-	require.Len(t, report.CalendarEvents, 1)
-	assert.Equal(t, "周会", report.CalendarEvents[0]["title"])
+// TestBuildSituationReport_日历内部拉取 日历由函数内部从 MCP 拉取，不由调用方传入。
+//
+// Python: situation_report.py:463 calendar_events = await fetch_calendar_events()
+// 无日历 MCP 配置时得空列表，不报错（可选能力不阻断 tick）。
+func TestBuildSituationReport_日历内部拉取(t *testing.T) {
+	report := BuildSituationReport(context.Background(), 20, nil, defaultScanModePrefix)
+	require.NotNil(t, report, "无日历配置也应返回非 nil 报告")
+	// 未配置日历 MCP 时为空；配了则应是归一化后的事件（都有 title 键）
+	for _, ev := range report.CalendarEvents {
+		_, hasTitle := ev["title"]
+		assert.True(t, hasTitle, "日历事件应已归一化（必有 title 键）")
+	}
 }
 
 // TestBuildSituationReport_ctx取消 ctx 已取消时返回空报告不阻塞。
@@ -661,7 +666,7 @@ func TestBuildSituationReport_ctx取消(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	report := BuildSituationReport(ctx, 20, nil, defaultScanModePrefix, nil)
+	report := BuildSituationReport(ctx, 20, nil, defaultScanModePrefix)
 	require.NotNil(t, report, "ctx 取消也应返回非 nil 报告")
 }
 
