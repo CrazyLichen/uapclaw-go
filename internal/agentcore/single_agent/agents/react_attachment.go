@@ -74,30 +74,13 @@ func runOneCommitCallback(fn func() error) {
 	}
 }
 
-// extraString 从配置 Extra 中取字符串（缺失或类型不符返回空串）。
-func extraString(extra map[string]any, key string) string {
-	if extra == nil {
-		return ""
-	}
-	if v, ok := extra[key].(string); ok {
-		return v
-	}
-	return ""
-}
-
 // attachmentWindowOptions 构建附件窗口投影选项；未注入 manager 或缺少客户端配置时返回空。
 // Python: _build_model_context_window 中按 provider 选择 use_system_role 后注册 mutator。
 func attachmentWindowOptions(m *prompts.Manager, model *llm.Model, sessionID string) []ceiface.Option {
 	if m == nil || model == nil || model.ClientConfig == nil {
 		return nil
 	}
-	cfg := model.ClientConfig
-	useSystemRole := prompts.UsesSystemAttachmentRole(
-		cfg.ClientProvider,
-		extraString(cfg.Extra, "legacy_client_provider"),
-		extraString(cfg.Extra, "endpoint_profile"),
-		extraString(cfg.Extra, "api_mode"),
-	)
+	useSystemRole := prompts.UsesSystemAttachmentRole(model.ClientConfig)
 	return []ceiface.Option{
 		ceiface.WithWindowMutators(prompts.BuildWindowMutator(sessionID, useSystemRole)),
 	}
