@@ -8,6 +8,9 @@ const (
 	// CurrentSchemaVersion 当前实现的机器协议 schema 版本。
 	// Python: version.py:10 CURRENT_SCHEMA_VERSION = "0.1"
 	CurrentSchemaVersion = "0.1"
+	// MaxRunInputBytes 单份机器文档的字节上限（1 MiB）。
+	// Python: machine_io.py:27 MAX_RUN_INPUT_BYTES = 1024 * 1024
+	MaxRunInputBytes = 1024 * 1024
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
