@@ -44,8 +44,8 @@ func TestGoalCommand_真实LLM冒烟(t *testing.T) {
 	pathutil.ResetCache()
 	sessionpkg.ClearAllSessionMetadataCache()
 	t.Cleanup(func() {
-		sessionpkg.FlushMetadataQueue()
-		sessionpkg.FlushHistoryQueue()
+		sessionpkg.FlushMetadataQueue(5.0)
+		sessionpkg.FlushHistoryQueue(5.0)
 		sessionpkg.ClearAllSessionMetadataCache()
 		pathutil.ResetCache()
 	})

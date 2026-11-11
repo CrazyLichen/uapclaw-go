@@ -21,8 +21,8 @@ func isolateGoalHistoryDataDir(t *testing.T) {
 	orig, had := os.LookupEnv(pathutil.EnvDataDir)
 	dataDir := t.TempDir()
 	t.Cleanup(func() {
-		sessionpkg.FlushMetadataQueue()
-		sessionpkg.FlushHistoryQueue()
+		sessionpkg.FlushMetadataQueue(5.0)
+		sessionpkg.FlushHistoryQueue(5.0)
 		if had {
 			_ = os.Setenv(pathutil.EnvDataDir, orig)
 		} else {
@@ -37,7 +37,7 @@ func isolateGoalHistoryDataDir(t *testing.T) {
 // goalHistoryRecords 读取会话历史（先 flush 异步队列，避免假空）。
 func goalHistoryRecords(t *testing.T, sessionID string) []map[string]any {
 	t.Helper()
-	sessionpkg.FlushHistoryQueue()
+	sessionpkg.FlushHistoryQueue(5.0)
 	records, err := sessionpkg.ReadHistoryRecords(sessionID)
 	require.NoError(t, err)
 	return records

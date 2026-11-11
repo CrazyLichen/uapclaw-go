@@ -41,8 +41,8 @@ func (s *GoalRPCContractSuite) SetupTest() {
 
 // TearDownTest 刷盘并还原环境，避免污染后续用例。
 func (s *GoalRPCContractSuite) TearDownTest() {
-	sessionpkg.FlushMetadataQueue()
-	sessionpkg.FlushHistoryQueue()
+	sessionpkg.FlushMetadataQueue(5.0)
+	sessionpkg.FlushHistoryQueue(5.0)
 	sessionpkg.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
 }

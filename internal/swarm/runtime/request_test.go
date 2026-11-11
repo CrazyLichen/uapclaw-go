@@ -258,7 +258,7 @@ func setupRuntimeSessionDir(t *testing.T) {
 	pathutil.ResetCache()
 	session.ClearAllSessionMetadataCache()
 	t.Cleanup(func() {
-		session.FlushMetadataQueue()
+		session.FlushMetadataQueue(5.0)
 		session.ClearAllSessionMetadataCache()
 		pathutil.ResetCache()
 	})
@@ -275,7 +275,7 @@ func TestSyncChatRequestMetadata_首次锁定(t *testing.T) {
 
 	locked := SyncChatRequestMetadata(req, "/tmp/p1", "agent.work.plan", true, "u1")
 	require.Equal(t, "/tmp/p1", locked)
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	meta := session.GetSessionMetadata(sid)
 	require.Equal(t, "agent.work.plan", meta["mode"])
@@ -288,7 +288,7 @@ func TestSyncChatRequestMetadata_首次锁定(t *testing.T) {
 	req2 := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal", "project_dir": "/tmp/p2"})
 	req2.ReqMethod = schema.ReqMethodChatSend
 	locked2 := SyncChatRequestMetadata(req2, "/tmp/p2", "agent.work.normal", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	require.Equal(t, "/tmp/p1", locked2)
 
 	meta2 := session.GetSessionMetadata(sid)
@@ -304,13 +304,13 @@ func TestSyncChatRequestMetadata_非显式mode不覆盖(t *testing.T) {
 	seed := chatSendRequest(t, sid, map[string]any{"mode": "team.work.plan"})
 	seed.ReqMethod = schema.ReqMethodChatSend
 	SyncChatRequestMetadata(seed, "", "team.work.plan", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	// 未显式携带 mode：传入推断值也不得写盘
 	ro := chatSendRequest(t, sid, map[string]any{})
 	ro.ReqMethod = schema.ReqMethodSessionList
 	SyncChatRequestMetadata(ro, "", "agent.work.normal", false, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	require.Equal(t, "team.work.plan", session.GetSessionMetadata(sid)["mode"])
 }
@@ -322,13 +322,13 @@ func TestSyncChatRequestMetadata_attachOnly只读(t *testing.T) {
 	seed := chatSendRequest(t, sid, map[string]any{"project_dir": "/tmp/locked"})
 	seed.ReqMethod = schema.ReqMethodChatSend
 	SyncChatRequestMetadata(seed, "/tmp/locked", "agent.work.normal", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	before := session.GetSessionMetadata(sid)["last_message_at"]
 
 	attach := chatSendRequest(t, sid, map[string]any{TeamAttachOnlyParam: true, "project_dir": "/tmp/other"})
 	attach.ReqMethod = schema.ReqMethodChatSend
 	locked := SyncChatRequestMetadata(attach, "/tmp/other", "agent.work.normal", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	require.Equal(t, "/tmp/locked", locked)
 	require.Equal(t, before, session.GetSessionMetadata(sid)["last_message_at"])
@@ -341,13 +341,13 @@ func TestSyncChatRequestMetadata_只读方法不刷新时间戳(t *testing.T) {
 	seed := chatSendRequest(t, sid, map[string]any{})
 	seed.ReqMethod = schema.ReqMethodChatSend
 	SyncChatRequestMetadata(seed, "", "agent.work.normal", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	before := session.GetSessionMetadata(sid)["last_message_at"]
 
 	ro := chatSendRequest(t, sid, map[string]any{})
 	ro.ReqMethod = schema.ReqMethodSessionList
 	SyncChatRequestMetadata(ro, "", "agent.work.normal", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	require.Equal(t, before, session.GetSessionMetadata(sid)["last_message_at"])
 }
@@ -433,7 +433,7 @@ func TestPrepareChatTurn_默认work_mode与元数据回写(t *testing.T) {
 	require.Equal(t, "agent.work.normal", params["mode"])
 	require.NotContains(t, params, "project_dir", "无工程目录时应清除 params 中的键")
 
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	meta := session.GetSessionMetadata(sid)
 	require.Equal(t, "agent.work.normal", meta["mode"])
 	require.Equal(t, "code", meta["work_mode"])
@@ -448,7 +448,7 @@ func TestPrepareChatTurn_persistSession锁定告警(t *testing.T) {
 	first := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal"})
 	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, first, "web", true)
 	require.NoError(t, err)
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	// 第二轮请求要求开启：仅告警，params 以锁定的 false 为准
 	second := chatSendRequest(t, sid, map[string]any{
@@ -461,7 +461,7 @@ func TestPrepareChatTurn_persistSession锁定告警(t *testing.T) {
 	require.Equal(t, false, parseRequestParams(second)["eternal_conversation_enabled"],
 		"persist_session 为会话创建期身份，本轮值仅告警")
 
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	require.NotEqual(t, true, session.GetSessionMetadata(sid)["persist_session"])
 }
 
@@ -471,7 +471,7 @@ func TestPrepareChatTurn_继承会话锁定的mode(t *testing.T) {
 	sid := "sess-prepare-2"
 	seed := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.plan", "work_mode": "work"})
 	SyncChatRequestMetadata(seed, "", "agent.work.plan", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	req := chatSendRequest(t, sid, map[string]any{})
 	req.ReqMethod = schema.ReqMethodHeartbeatGetConf
@@ -491,7 +491,7 @@ func TestPrepareChatTurn_不同步元数据回落锁定工程(t *testing.T) {
 	sid := "sess-prepare-3"
 	seed := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal", "project_dir": "/tmp/locked"})
 	SyncChatRequestMetadata(seed, "/tmp/locked", "agent.work.normal", true, "")
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 
 	req := chatSendRequest(t, sid, map[string]any{})
 	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false)
@@ -602,6 +602,6 @@ func TestSyncChatRequestMetadata_attachOnly无锁定目录(t *testing.T) {
 	req := chatSendRequest(t, "sess-attach-new", map[string]any{TeamAttachOnlyParam: true})
 
 	require.Equal(t, "/tmp/fallback", SyncChatRequestMetadata(req, "/tmp/fallback", "agent.work.normal", true, ""))
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	require.Empty(t, session.GetSessionMetadata("sess-attach-new"), "attach-only 不写任何元数据")
 }

@@ -157,8 +157,8 @@ func setupHistoryTest(t *testing.T, sessionID string, history []any) string {
 	// 本包其它用例跑真实消息流程会拉起 metadata worker，队列里可能留残留项，
 	// 不排空就会与 ResetCache 撞车（CI run 41509845639 报 DATA RACE：
 	// path.ResetCache 写 vs metadataWriteWorker→AgentSessionsDir 读）。
-	session.FlushMetadataQueue()
-	session.FlushHistoryQueue()
+	session.FlushMetadataQueue(5.0)
+	session.FlushHistoryQueue(5.0)
 	session.ResetHistoryWorker()
 	path.ResetCache()
 

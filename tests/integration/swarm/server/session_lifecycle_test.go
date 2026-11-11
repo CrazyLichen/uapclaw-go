@@ -47,7 +47,7 @@ func (s *SessionLifecycleSuite) SetupTest() {
 
 // TearDownTest 刷盘并还原环境，避免污染后续用例。
 func (s *SessionLifecycleSuite) TearDownTest() {
-	session.FlushMetadataQueue()
+	session.FlushMetadataQueue(5.0)
 	session.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
 }

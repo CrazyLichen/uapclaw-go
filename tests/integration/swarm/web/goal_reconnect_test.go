@@ -51,8 +51,8 @@ func (s *GoalReconnectSuite) SetupTest() {
 
 // TearDownTest 刷盘并还原环境，避免污染后续用例。
 func (s *GoalReconnectSuite) TearDownTest() {
-	sessionpkg.FlushMetadataQueue()
-	sessionpkg.FlushHistoryQueue()
+	sessionpkg.FlushMetadataQueue(5.0)
+	sessionpkg.FlushHistoryQueue(5.0)
 	sessionpkg.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
 }

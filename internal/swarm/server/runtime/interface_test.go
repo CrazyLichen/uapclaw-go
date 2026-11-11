@@ -545,8 +545,8 @@ func setupCloudMemoryEnv(t *testing.T) func() {
 	t.Helper()
 	// 先排干包内更早测试遗留的异步写入队列（哨兵确认后 worker 阻塞在接收上
 	// 不再读路径缓存），再重置缓存注入环境——避免与遗留 worker 的读竞争
-	session.FlushMetadataQueue()
-	session.FlushHistoryQueue()
+	session.FlushMetadataQueue(5.0)
+	session.FlushHistoryQueue(5.0)
 
 	// 创建临时工作区：<tmp>/.uapclaw 结构（WorkspaceDir 即 UAPCLAW_DATA_DIR 本身）
 	// ConfigDir = WorkspaceDir()/config，需存在 config/config.yaml 才走"已初始化"分支
@@ -574,8 +574,8 @@ func setupCloudMemoryEnv(t *testing.T) func() {
 		// 先等待异步写入队列刷盘（metadata + history），再重置路径缓存。
 		// 哨兵确认后 worker 阻塞在 channel 接收上不再读路径缓存，
 		// 与 ResetCache 形成 happens-before，避免 race（paths.go ResetCache 注释要求）。
-		session.FlushMetadataQueue()
-		session.FlushHistoryQueue()
+		session.FlushMetadataQueue(5.0)
+		session.FlushHistoryQueue(5.0)
 		session.ResetHistoryWorker()
 		_ = os.Unsetenv(pathutil.EnvDataDir)
 		_ = os.Unsetenv(pathutil.EnvHome)

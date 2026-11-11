@@ -211,7 +211,7 @@ func TestReadTeamHistoryRecords_过滤team记录(t *testing.T) {
 func TestAppendCompactHistoryRecords_基本写入(t *testing.T) {
 	resetHistoryWorkspaceCache()
 	ClearAllSessionMetadataCache()
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 
 	sessionsDir := GetSessionsDir()
 	sid := MakeSessionID()
@@ -232,7 +232,7 @@ func TestAppendCompactHistoryRecords_基本写入(t *testing.T) {
 func TestAppendCompactHistoryFromPayload_从payload写入(t *testing.T) {
 	resetHistoryWorkspaceCache()
 	ClearAllSessionMetadataCache()
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 
 	sessionsDir := GetSessionsDir()
 	os.MkdirAll(filepath.Join(sessionsDir, "sess-compact-test2"), 0o755)
@@ -306,7 +306,7 @@ func TestTruncateHistoryRecords_异步写入后截断不被覆盖(t *testing.T) 
 	assert.Equal(t, "第一条", records[0]["content"])
 
 	// 清理：刷盘 + 关闭 worker，释放目录锁，允许 t.TempDir() 清理
-	FlushHistoryQueue()
+	FlushHistoryQueue(5.0)
 	ResetHistoryWorker()
-	FlushMetadataQueue()
+	FlushMetadataQueue(5.0)
 }

@@ -39,8 +39,8 @@ func setupTestSessionsDir(t *testing.T) (sessionsDir string, cleanup func()) {
 	session.ClearAllSessionMetadataCache()
 
 	cleanup = func() {
-		session.FlushMetadataQueue()
-		session.FlushHistoryQueue()
+		session.FlushMetadataQueue(5.0)
+		session.FlushHistoryQueue(5.0)
 		session.ResetHistoryWorker()
 		session.ClearAllSessionMetadataCache()
 		path.ResetCache()

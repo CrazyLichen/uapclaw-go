@@ -142,7 +142,7 @@ func (s *SupplementInterruptSuite) TestSupplement_SlowRoundInterrupted_NewRoundC
 	s.True(sawNewRound, "打断后新一轮应跑完并产出「第二轮完成」")
 
 	// 防 D2 回归：取消不得写入 chat.error 历史记录
-	session.FlushHistoryQueue()
+	session.FlushHistoryQueue(5.0)
 	records, recErr := session.ReadHistoryRecords(sessionID)
 	s.Require().NoError(recErr)
 	for _, r := range records {
