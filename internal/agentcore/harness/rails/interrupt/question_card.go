@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/planapproval"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
-	planrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -100,7 +100,7 @@ func FormatQuestionFromInteraction(input QuestionCardInput) map[string]any {
 					toolArgs = args
 				}
 			}
-			message = planrails.BuildConfirmInterruptMessage(toolName, toolArgs)
+			message = planapproval.BuildConfirmInterruptMessage(toolName, toolArgs)
 		} else if message == "" {
 			message = fmt.Sprintf(fallbackPermissionMessageFormat, toolName)
 		}
@@ -111,7 +111,7 @@ func FormatQuestionFromInteraction(input QuestionCardInput) map[string]any {
 
 	if options := planApprovalInterruptOptions(input.Source, toolName, message); options != nil {
 		header = planApprovalHeader
-		question = strings.TrimRight(planrails.StripInlinePlanApprovalChoices(message), " \t\r\n")
+		question = strings.TrimRight(planapproval.StripInlinePlanApprovalChoices(message), " \t\r\n")
 	} else if input.Source == confirmInterruptSource {
 		if toolName != "" {
 			header = fmt.Sprintf(confirmApprovalHeaderFormat, toolName)

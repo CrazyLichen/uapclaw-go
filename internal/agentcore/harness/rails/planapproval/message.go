@@ -1,4 +1,4 @@
-// Package rails 的计划审批消息解析。
+// 计划审批文案的解析。
 //
 // 本文件对齐 Python jiuwenswarm/agents/harness/code/rails/code_plan_approval_interrupt_rail.py
 // 中与「计划审批文案」相关的四个纯字符串函数（L93-190）。
@@ -9,8 +9,8 @@
 // message 后要判断「这是否是计划审批」，并把它渲染成结构化卡片而非普通确认框：
 // 剥离原生附带的文字版选项列表，抽出计划正文与语言，再生成前端可用的选项。
 //
-// 这些函数是纯字符串处理，不依赖 rail 生命周期，故独立成文件。
-package rails
+// 这些函数是纯字符串处理，不依赖 rail 生命周期，故独立成包。
+package planapproval
 
 import (
 	"strings"

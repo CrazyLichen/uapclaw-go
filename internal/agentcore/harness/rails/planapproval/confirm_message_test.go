@@ -1,4 +1,4 @@
-package rails
+package planapproval
 
 import (
 	"strings"

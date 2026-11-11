@@ -17,7 +17,7 @@ package interrupt
 import (
 	"strings"
 
-	planrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/planapproval"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -48,10 +48,10 @@ const (
 func planApprovalInterruptOptions(source string, toolName string, message string) []map[string]any {
 	if source != confirmInterruptSource ||
 		toolName != exitPlanModeToolName ||
-		!planrails.IsPlanApprovalMessage(message) {
+		!planapproval.IsPlanApprovalMessage(message) {
 		return nil
 	}
-	return planrails.BuildPlanApprovalOptionsFromMessage(message)
+	return planapproval.BuildPlanApprovalOptionsFromMessage(message)
 }
 
 // fallbackInterruptOptions 返回兜底选项：计划审批专用，否则四档权限选项。

@@ -1,4 +1,4 @@
-// Package rails 的确认中断文案构建。
+// 确认中断文案的构建。
 //
 // 本文件对齐 Python jiuwenswarm/agents/harness/code/rails/code_confirm_interrupt_rail.py
 // 的 build_confirm_interrupt_message（L37-76）与 _format_args_preview（L28-34）。
@@ -8,7 +8,7 @@
 // agent-core 的 ConfirmInterruptRail 只给一句通用问句。code 模式下用户需要
 // 看到「要做什么、参数是什么」，尤其是 switch_mode 这类模式切换必须说清
 // 是进 plan 还是退 plan，否则用户不知道批准后会发生什么。
-package rails
+package planapproval
 
 import (
 	"encoding/json"
