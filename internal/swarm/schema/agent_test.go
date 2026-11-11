@@ -43,9 +43,6 @@ func TestNewAgentRequest(t *testing.T) {
 	if req.EnableMemory != nil {
 		t.Error("EnableMemory 默认应为 nil（三态未设置）")
 	}
-	if req.PermissionContext != nil {
-		t.Error("PermissionContext 默认应为 nil")
-	}
 }
 
 // TestNewAgentRequest_使用Option 验证通过 Option 设置各字段
@@ -53,14 +50,12 @@ func TestNewAgentRequest_使用Option(t *testing.T) {
 	sessionID := "sess-1"
 	chatID := "chat-1"
 	params := json.RawMessage(`{}`)
-	pc := NewPermissionContext(WithPermissionPrincipalUserID("user-1"))
 	req := NewAgentRequest("req-1", "web", ReqMethodChatSend, params,
 		WithAgentSessionID(sessionID),
 		WithAgentChatID(chatID),
 		WithAgentIsStream(true),
 		WithAgentMetadata(map[string]any{"key": "val"}),
 		WithAgentEnableMemory(true),
-		WithAgentPermissionContext(pc),
 	)
 
 	if req.SessionID == nil || *req.SessionID != "sess-1" {
@@ -77,9 +72,6 @@ func TestNewAgentRequest_使用Option(t *testing.T) {
 	}
 	if req.EnableMemory == nil || !*req.EnableMemory {
 		t.Error("EnableMemory 应为 *true")
-	}
-	if req.PermissionContext == nil || req.PermissionContext.PrincipalUserID != "user-1" {
-		t.Error("PermissionContext.PrincipalUserID 期望 \"user-1\"")
 	}
 }
 
@@ -135,11 +127,6 @@ func TestAgentRequest_JSON往返(t *testing.T) {
 		Timestamp:    1712345678.123,
 		Metadata:     map[string]any{"method": "chat.send"},
 		EnableMemory: &enableMemory,
-		PermissionContext: &PermissionContext{
-			PrincipalUserID:  "user-1",
-			TriggeringUserID: "sender-1",
-			ChannelID:        "web",
-		},
 	}
 
 	data, err := json.Marshal(original)
@@ -178,9 +165,6 @@ func TestAgentRequest_JSON往返(t *testing.T) {
 	}
 	if decoded.EnableMemory == nil || !*decoded.EnableMemory {
 		t.Errorf("EnableMemory 往返不一致")
-	}
-	if decoded.PermissionContext == nil || decoded.PermissionContext.PrincipalUserID != "user-1" {
-		t.Errorf("PermissionContext 往返不一致")
 	}
 }
 

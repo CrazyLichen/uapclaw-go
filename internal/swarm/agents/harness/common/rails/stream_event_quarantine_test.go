@@ -242,3 +242,160 @@ func TestBeforeInvoke_正常会话放行(t *testing.T) {
 		t.Errorf("err = %v, want nil", err)
 	}
 }
+
+// ──────────────────────────── AfterInvoke 与投影回调 ────────────────────────────
+
+// TestAfterInvoke_未注入回调时无操作 验证装配前的安全空转。
+func TestAfterInvoke_未注入回调时无操作(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	session := newStatefulSession()
+	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.InvokeInputs{ConversationID: "c1"}, session)
+
+	if err := rail.AfterInvoke(context.Background(), cbc); err != nil {
+		t.Errorf("err = %v, want nil（未注入回调应空转）", err)
+	}
+}
+
+// TestAfterInvoke_非InvokeInputs跳过 验证 inputs 类型判据。
+func TestAfterInvoke_非InvokeInputs跳过(t *testing.T) {
+	called := false
+	rail := NewJiuClawStreamEventRail()
+	rail.SetInterruptionProjectionDeps(InterruptionProjectionDeps{
+		ProjectCompleteInterruption: func(context.Context, *JiuClawStreamEventRail, *sainterfaces.AgentCallbackContext) error {
+			called = true
+			return nil
+		},
+	})
+
+	cbc := sainterfaces.NewAgentCallbackContext(nil, nil, newStatefulSession())
+	if err := rail.AfterInvoke(context.Background(), cbc); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if called {
+		t.Error("inputs 不是 InvokeInputs 时不应调用投影回调")
+	}
+}
+
+// TestAfterInvoke_无会话跳过 验证 session 为空时跳过。
+func TestAfterInvoke_无会话跳过(t *testing.T) {
+	called := false
+	rail := NewJiuClawStreamEventRail()
+	rail.SetInterruptionProjectionDeps(InterruptionProjectionDeps{
+		ProjectCompleteInterruption: func(context.Context, *JiuClawStreamEventRail, *sainterfaces.AgentCallbackContext) error {
+			called = true
+			return nil
+		},
+	})
+
+	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.InvokeInputs{}, nil)
+	if err := rail.AfterInvoke(context.Background(), cbc); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if called {
+		t.Error("无会话时不应调用投影回调")
+	}
+}
+
+// TestAfterInvoke_调用投影回调 验证正常路径。
+func TestAfterInvoke_调用投影回调(t *testing.T) {
+	called := false
+	rail := NewJiuClawStreamEventRail()
+	rail.SetInterruptionProjectionDeps(InterruptionProjectionDeps{
+		ProjectCompleteInterruption: func(_ context.Context, got *JiuClawStreamEventRail, _ *sainterfaces.AgentCallbackContext) error {
+			called = true
+			if got != rail {
+				t.Error("回调应收到同一个 rail 实例")
+			}
+			return nil
+		},
+	})
+
+	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.InvokeInputs{}, newStatefulSession())
+	if err := rail.AfterInvoke(context.Background(), cbc); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !called {
+		t.Error("应调用投影回调")
+	}
+}
+
+// TestAfterInvoke_回调错误透传 验证错误不被吞掉。
+func TestAfterInvoke_回调错误透传(t *testing.T) {
+	sentinel := context.DeadlineExceeded
+	rail := NewJiuClawStreamEventRail()
+	rail.SetInterruptionProjectionDeps(InterruptionProjectionDeps{
+		ProjectCompleteInterruption: func(context.Context, *JiuClawStreamEventRail, *sainterfaces.AgentCallbackContext) error {
+			return sentinel
+		},
+	})
+
+	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.InvokeInputs{}, newStatefulSession())
+	if err := rail.AfterInvoke(context.Background(), cbc); err != sentinel {
+		t.Errorf("err = %v, want 透传 %v", err, sentinel)
+	}
+}
+
+// TestProjectionDeps_存取一致 验证 Set/Get 配对。
+func TestProjectionDeps_存取一致(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	if deps := rail.ProjectionDeps(); deps.ProjectCompleteInterruption != nil {
+		t.Error("初始应为零值")
+	}
+
+	rail.SetInterruptionProjectionDeps(InterruptionProjectionDeps{
+		ProjectCompleteInterruption: func(context.Context, *JiuClawStreamEventRail, *sainterfaces.AgentCallbackContext) error {
+			return nil
+		},
+	})
+	if rail.ProjectionDeps().ProjectCompleteInterruption == nil {
+		t.Error("注入后应能取回")
+	}
+}
+
+// TestResolveSID_导出访问器 验证对外可用且与内部一致。
+func TestResolveSID_导出访问器(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	session := newStatefulSession()
+	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.InvokeInputs{ConversationID: "conv-x"}, session)
+
+	// 未走 BeforeInvoke，回退到 defaultSessionID
+	if got := rail.ResolveSID(cbc, session); got != defaultSessionID {
+		t.Errorf("got %q, want %q", got, defaultSessionID)
+	}
+}
+
+// TestPromptLanguage_无Agent返回cn 验证兜底语言。
+func TestPromptLanguage_无Agent返回cn(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	if got := rail.PromptLanguage(); got != "cn" {
+		t.Errorf("got %q, want cn", got)
+	}
+}
+
+// TestWrapAfterInvoke_类型不符返回nil 验证回调适配器兜底。
+func TestWrapAfterInvoke_类型不符返回nil(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	if err := rail.wrapAfterInvoke(context.Background(), "not-a-context"); err != nil {
+		t.Errorf("err = %v, want nil", err)
+	}
+}
+
+// TestWrapAfterInvoke_正常转调 验证适配器转发。
+func TestWrapAfterInvoke_正常转调(t *testing.T) {
+	called := false
+	rail := NewJiuClawStreamEventRail()
+	rail.SetInterruptionProjectionDeps(InterruptionProjectionDeps{
+		ProjectCompleteInterruption: func(context.Context, *JiuClawStreamEventRail, *sainterfaces.AgentCallbackContext) error {
+			called = true
+			return nil
+		},
+	})
+
+	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.InvokeInputs{}, newStatefulSession())
+	if err := rail.wrapAfterInvoke(context.Background(), cbc); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !called {
+		t.Error("适配器应转调到 AfterInvoke")
+	}
+}

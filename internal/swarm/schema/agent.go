@@ -41,8 +41,11 @@ type AgentRequest struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableMemory 是否启用记忆（三态：nil/true/false，对齐 Python bool | None）
 	EnableMemory *bool `json:"enable_memory,omitempty"`
-	// PermissionContext 权限上下文
-	PermissionContext *PermissionContext `json:"permission_context,omitempty"`
+	//
+	// 9.90e：原 PermissionContext 字段及其 Option 已删除（规则 8）。
+	// Python 的 AgentRequest 不含该字段——权限上下文只从 metadata 构建后注入
+	// ContextVar/ctx，不随请求序列化。Go 侧该字段生产写入仅 E2A 一处
+	// （已改为只写 metadata），其余为测试引用，属重复通道。
 }
 
 // AgentResponse Agent 响应（AgentServer → Gateway，非流式完整响应）。
@@ -183,11 +186,6 @@ func WithAgentMetadata(m map[string]any) AgentRequestOption {
 // WithAgentEnableMemory 设置是否启用记忆（三态：nil=未设置，true/false=显式设置）。
 func WithAgentEnableMemory(v bool) AgentRequestOption {
 	return func(req *AgentRequest) { req.EnableMemory = &v }
-}
-
-// WithAgentPermissionContext 设置权限上下文。
-func WithAgentPermissionContext(pc *PermissionContext) AgentRequestOption {
-	return func(req *AgentRequest) { req.PermissionContext = pc }
 }
 
 // WithResponseOK 设置是否成功。

@@ -1053,12 +1053,12 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 10-11: 权限上下文设置
 	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
-	permCtx := schema.SetupPermissionContext(req.ChannelID, req.Metadata)
-	if permCtx != nil {
+	// Python 只有这一句：token_perm = setup_permission_context(request)
+	// 原先的「req.PermissionContext 非 nil 则回退」分支已删除（9.90e）：
+	// Python 的 AgentRequest 不含 permission_context 字段，
+	// 权限上下文只从 metadata 构建后注入 ctx。
+	if permCtx := schema.SetupPermissionContext(req.ChannelID, req.Metadata); permCtx != nil {
 		ctx = schema.WithPermissionContextValue(ctx, permCtx)
-	} else if req.PermissionContext != nil {
-		// 回退：使用请求中已携带的 PermissionContext
-		ctx = schema.WithPermissionContextValue(ctx, req.PermissionContext)
 	}
 
 	// 步骤 12-13: 模型选择 + 应用到 ReActAgent
@@ -1348,12 +1348,12 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 10-11: 权限上下文设置
 	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
 	ctx = schema.WithToolPermissionChannelID(ctx, req.ChannelID)
-	permCtx := schema.SetupPermissionContext(req.ChannelID, req.Metadata)
-	if permCtx != nil {
+	// Python 只有这一句：token_perm = setup_permission_context(request)
+	// 原先的「req.PermissionContext 非 nil 则回退」分支已删除（9.90e）：
+	// Python 的 AgentRequest 不含 permission_context 字段，
+	// 权限上下文只从 metadata 构建后注入 ctx。
+	if permCtx := schema.SetupPermissionContext(req.ChannelID, req.Metadata); permCtx != nil {
 		ctx = schema.WithPermissionContextValue(ctx, permCtx)
-	} else if req.PermissionContext != nil {
-		// 回退：使用请求中已携带的 PermissionContext
-		ctx = schema.WithPermissionContextValue(ctx, req.PermissionContext)
 	}
 
 	// 步骤 12-13: 模型选择 + 应用到 ReActAgent

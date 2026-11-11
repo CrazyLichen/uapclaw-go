@@ -35,16 +35,16 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		}
 	}
 
-	// 渠道上下文整体作为元数据透传（权限上下文也从这里取）
+	// 渠道上下文整体作为元数据透传。
+	//
+	// 权限上下文**不在这里构造**：Python 的 e2a_to_agent_request 只设
+	// metadata = ctx（agent_compat.py L62-63），PermissionContext 由
+	// adapter 侧 setup_permission_context(request) 从 metadata 统一构建。
+	// Go 原先在此额外构造一份并塞进 req.PermissionContext，是重复通道，
+	// 且用的是无判据的 FromDict（Python 有 avatar/principal/memory 三条件）。
 	var metadata map[string]any
 	if len(ctx) > 0 {
 		metadata = ctx
-	}
-
-	// Python: setup_permission_context — 从 metadata 构建 PermissionContext
-	var permCtx *schema.PermissionContext
-	if len(metadata) > 0 {
-		permCtx = schema.NewPermissionContextFromDict(metadata)
 	}
 
 	// 方法名必须是已知的请求方法，否则直接报错（不做猜测）
@@ -92,16 +92,15 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 	}
 
 	return &schema.AgentRequest{
-		RequestID:         env.RequestID,
-		ChannelID:         channelID,
-		SessionID:         sessionID,
-		ChatID:            chatID,
-		ReqMethod:         reqMethod,
-		Params:            params,
-		IsStream:          env.IsStream,
-		Timestamp:         e2aTimestampToFloat(env.Timestamp),
-		Metadata:          metadata,
-		PermissionContext: permCtx,
+		RequestID: env.RequestID,
+		ChannelID: channelID,
+		SessionID: sessionID,
+		ChatID:    chatID,
+		ReqMethod: reqMethod,
+		Params:    params,
+		IsStream:  env.IsStream,
+		Timestamp: e2aTimestampToFloat(env.Timestamp),
+		Metadata:  metadata,
 	}, nil
 }
 

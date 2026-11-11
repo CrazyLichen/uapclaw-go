@@ -447,13 +447,25 @@ func paramString(params map[string]any, key string) string {
 	return strings.TrimSpace(v)
 }
 
-// requestUserID 取请求的 principal 用户标识（缺省空串）。
-// Python 侧 user_id 由鉴权层透传；Go 放在 PermissionContext.PrincipalUserID。
+// requestUserID 取请求的 user_id（缺省空串）。
+//
+// Python 侧 user_id 由鉴权层透传，落在请求 metadata 上。Go 原先读
+// req.PermissionContext.PrincipalUserID，但该字段 9.90e 已删除——
+// 权限上下文由 adapter 从 metadata 构建后注入 ctx，不随请求传递。
+// 这里改为与 runtime.requestUserID 同源的读取顺序：metadata 优先，params 兜底。
 func requestUserID(request *schema.AgentRequest) string {
-	if request == nil || request.PermissionContext == nil {
+	if request == nil {
 		return ""
 	}
-	return strings.TrimSpace(request.PermissionContext.PrincipalUserID)
+	if request.Metadata != nil {
+		if v, ok := request.Metadata["user_id"].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	if v, ok := parseSessionParams(request)["user_id"].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
 }
 
 // paramBool 取布尔参数（缺失或类型不符返回 false）。
