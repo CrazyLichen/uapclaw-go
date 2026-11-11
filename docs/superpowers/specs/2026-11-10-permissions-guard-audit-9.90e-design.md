@@ -717,7 +717,7 @@ Task 11 集成测试 · Task 12 doc.go/计划表回填
 - [x] 会话隔离双写测试通过（含重启恢复场景）
 - [x] `audit.go`(90.6%) / `permission_interaction.go`(91.2%) / config 层 / persist 新增函数 / `stream_event_rail` 隔离（本批 8 个新函数均 100%）覆盖率均 ≥85%
 - [x] `go build ./...` / `go vet ./...` 通过
-- [ ] 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL（Task 12 执行）
+- [x] 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...`：仅 `swarm/gateway/channel_manager/web` 的 `TestPermissionsOwnerScopesSet_写入成功` FAIL，**基线 `dd636c70a` 同样失败**（非本批引入）
 - [x] 集成审计通过（`swarm/permissions` 由违规转通过：跨度 2→3，有效测试 7→11）
-- [ ] `IMPLEMENTATION_PLAN.md` 9.90e 行标 ✅ 并回填摘要（Task 11 执行）
+- [x] `IMPLEMENTATION_PLAN.md` 9.90e 行标 🔄 并回填摘要（R-4 遗留，故非 ✅）
 - [x] 三处 `doc.go` 文件树同步
