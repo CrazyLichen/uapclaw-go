@@ -4,7 +4,7 @@ import "context"
 
 // 本文件提供「protocol.go 签名需要、但归属后续章节实现」的最小形状占位。
 // 占位只保证签名可编译，**不含任何行为**（校验 / 租约 / 持久化语义全部留待回填章节）。
-// 每个占位注明 Python 依据、回填章节与回收条件；15.3 / 15.4 落地时
+// 每个占位注明 Python 依据、回填章节与回收条件；15.4 落地时
 // 在本包原地补全，**不得**回头修改 protocol.go 或 models.go 的 HarnessContext。
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -92,14 +92,4 @@ type HarnessCheckpointSink interface {
 		reason CheckpointReason,
 		expectedStorageRevision *string,
 	) (CheckpointSaveReceipt, error)
-}
-
-// HarnessInteractionHandler 需要应答的控制面（审批 / 用户提问 / MCP elicitation 等）。
-//
-// ⤵️ 15.3 回填：按 kind 的请求-应答与「应答只回给发起方」语义留 15.3
-// （Python: interactions.py）。此处只保留让 HarnessContext 字段有类型的最小方法集。
-// Python: interactions.py HarnessInteractionHandler
-type HarnessInteractionHandler interface {
-	// Pending 返回当前未应答的交互请求数量
-	Pending() int
 }
