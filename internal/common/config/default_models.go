@@ -50,17 +50,22 @@ func GetDefaultModels(cfg map[string]any) []map[string]any {
 			log.Printf("[config] GetDefaultModels: skipped %d non-dict entries in models.defaults", skipped)
 		}
 		if len(entries) > 0 {
-			return decryptModelEntries(entries)
+			// 先解密 defaults，再追加 agentos（Python 顺序：_decrypt_model_entries
+			// 之后 entries.extend(get_agentos_models(config))；agentos 不参与解密
+			// 与 is_default 推断）。Python: common/config.py:2104
+			return append(decryptModelEntries(entries), GetAgentosModels(configMap)...)
 		}
 	}
 
 	// 旧格式：单个 default 对象 → 包装为列表
 	if defaultEntry, ok := models["default"].(map[string]any); ok {
-		return decryptModelEntries([]map[string]any{defaultEntry})
+		// 先解密 default，再追加 agentos（Python: common/config.py:2110）。
+		return append(decryptModelEntries([]map[string]any{defaultEntry}), GetAgentosModels(configMap)...)
 	}
 
 	// 回退：从环境变量构造（env var 已在 ResolveEnvVars 中解密）
-	return buildEnvFallbackModelEntry()
+	// Python: common/config.py:2132 entries.extend(get_agentos_models(config))
+	return append(buildEnvFallbackModelEntry(), GetAgentosModels(configMap)...)
 }
 
 // InferIsDefault 为模型条目列表推断 is_default 字段。
@@ -202,4 +207,101 @@ func loadDefaultConfigMap() (map[string]any, error) {
 		return nil, err
 	}
 	return c.Load()
+}
+
+// ──────────────────────────── 导出函数（agentos）────────────────────────────
+
+// RecoverModelFields 修复持久化模型条目的类型错乱，返回是否发生非空修复。
+// Python: jiuwenswarm/common/config.py:1643-1669 _recover_model_fields(entry)。
+// 三键一体：model_client_config / model_config_obj / model_detail 的非 dict 值
+// 重置为 {}；client 四个字符串字段与 detail 两个字符串字段非字符串值重置为 ""。
+func RecoverModelFields(entry map[string]any) bool {
+	recovered := false
+	for _, key := range []string{"model_client_config", "model_config_obj", "model_detail"} {
+		value, exists := entry[key]
+		if exists {
+			if _, ok := value.(map[string]any); !ok {
+				entry[key] = map[string]any{}
+				recovered = recovered || value != nil
+			}
+		}
+	}
+	client, ok := entry["model_client_config"].(map[string]any)
+	if ok {
+		for _, key := range []string{"model_name", "api_base", "api_key", "client_provider"} {
+			value, exists := client[key]
+			if exists && value != nil {
+				if _, isStr := value.(string); !isStr {
+					client[key] = ""
+					recovered = true
+				}
+			}
+		}
+		if headers, exists := client["custom_headers"]; exists && headers != nil {
+			switch headers.(type) {
+			case string, map[string]any:
+			default:
+				client["custom_headers"] = map[string]any{}
+				recovered = true
+			}
+		}
+	}
+	if detail, ok := entry["model_detail"].(map[string]any); ok {
+		for _, key := range []string{"fallback_tag", "model_description"} {
+			value, exists := detail[key]
+			if exists && value != nil {
+				if _, isStr := value.(string); !isStr {
+					detail[key] = ""
+					recovered = true
+				}
+			}
+		}
+	}
+	return recovered
+}
+
+// GetAgentosModels 读取 models.agentos 备份模型列表，返回带标记的条目。
+// Python: jiuwenswarm/common/config.py:1728-1799 get_agentos_models。
+// 与 defaults 并列、同等可选可切换，但 is_default=false 绝不抢启动主对话默认
+// （_create_model 选默认时只取 is_default=true 条目）；model_config_obj._source=
+// "agentos" 仅供前端 is_agentos 置灰只读展示。仅当 models.agentos 是 list 且每条
+// model_client_config.model_name 非空（用户已手动填入凭证）才追加；非 list 视为
+// 未配置返回空。agentos 条目不做 api_key 解密（Python _decrypt_model_entries 只作用于
+// defaults，agentos 走 recover 不解密）。
+func GetAgentosModels(cfg map[string]any) []map[string]any {
+	configMap := cfg
+	if configMap == nil {
+		loaded, err := loadDefaultConfigMap()
+		if err != nil {
+			configMap = map[string]any{}
+		} else {
+			configMap = loaded
+		}
+	}
+	models, _ := configMap["models"].(map[string]any)
+	agentosRaw, _ := models["agentos"].([]any)
+	entries := make([]map[string]any, 0, len(agentosRaw))
+	for _, block := range agentosRaw {
+		blockMap, ok := block.(map[string]any)
+		if !ok {
+			continue
+		}
+		mcc, _ := blockMap["model_client_config"].(map[string]any)
+		if name, _ := mcc["model_name"].(string); name == "" {
+			// model_name 为空 = 该条未配置，跳过不入缓存
+			continue
+		}
+		agentosEntry := utils.DeepCopyMap(blockMap)
+		RecoverModelFields(agentosEntry)
+		agentosEntry["is_default"] = false
+		// _source 注入到 model_config_obj 内部，仅供前端 is_agentos 置灰只读展示。
+		mco, _ := agentosEntry["model_config_obj"].(map[string]any)
+		if mco == nil {
+			mco = map[string]any{}
+		}
+		mco["_source"] = "agentos"
+		agentosEntry["model_config_obj"] = mco
+		entries = append(entries, agentosEntry)
+	}
+	return entries
 }

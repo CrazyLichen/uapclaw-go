@@ -219,3 +219,110 @@ func TestDecryptModelEntries_解密失败保留原值(t *testing.T) {
 		t.Errorf("api_key = %v, 期望解密失败时保留原值", got)
 	}
 }
+
+// TestGetAgentosModels_追加备份模型 对齐 Python get_agentos_models。
+func TestGetAgentosModels_追加备份模型(t *testing.T) {
+	cfg := map[string]any{
+		"models": map[string]any{
+			"defaults": []any{
+				map[string]any{"model_client_config": map[string]any{"model_name": "m1"}},
+			},
+			"agentos": []any{
+				map[string]any{
+					"model_client_config": map[string]any{"model_name": "backup-1", "api_key": "k2"},
+					"model_config_obj":    nil, // 类型错乱，RecoverModelFields 应修复为 {}
+				},
+				map[string]any{"model_client_config": map[string]any{}}, // model_name 空，跳过
+				"not-a-dict", // 非 dict，跳过
+			},
+		},
+	}
+	entries := GetDefaultModels(cfg)
+	if len(entries) != 2 {
+		t.Fatalf("defaults 1 + agentos 1 = 2, got %d: %v", len(entries), entries)
+	}
+	agentos := entries[1]
+	if b, _ := agentos["is_default"].(bool); b {
+		t.Fatalf("agentos 条目 is_default 必须为 false")
+	}
+	mco, _ := agentos["model_config_obj"].(map[string]any)
+	if mco == nil || mco["_source"] != "agentos" {
+		t.Fatalf("model_config_obj._source = %v, want agentos", mco)
+	}
+	mcc := agentos["model_client_config"].(map[string]any)
+	if mcc["model_name"] != "backup-1" {
+		t.Fatalf("agentos 条目内容丢失: %v", mcc)
+	}
+	// agentos 条目不做 api_key 解密：无 crypto provider 时原样保留
+	if mcc["api_key"] != "k2" {
+		t.Fatalf("api_key 应原样保留（不解密）: %v", mcc["api_key"])
+	}
+}
+
+// TestRecoverModelFields_三键类型修复 对齐 Python _recover_model_fields。
+func TestRecoverModelFields_三键类型修复(t *testing.T) {
+	entry := map[string]any{
+		"model_client_config": map[string]any{"model_name": 123, "api_key": nil},
+		"model_config_obj":    "broken",
+		"model_detail":        map[string]any{"fallback_tag": 456, "model_description": true},
+	}
+	recovered := RecoverModelFields(entry)
+	if !recovered {
+		t.Fatalf("应有非空修复")
+	}
+	mcc := entry["model_client_config"].(map[string]any)
+	if mcc["model_name"] != "" {
+		t.Fatalf("model_name 非字符串应重置: %v", mcc)
+	}
+	if _, ok := entry["model_config_obj"].(map[string]any); !ok {
+		t.Fatalf("model_config_obj 应重置为 {}")
+	}
+	detail := entry["model_detail"].(map[string]any)
+	if detail["fallback_tag"] != "" || detail["model_description"] != "" {
+		t.Fatalf("model_detail 修复不符: %v", detail)
+	}
+}
+
+// TestRecoverModelFields_干净条目零修复 干净条目返回 false 且不改内容。
+func TestRecoverModelFields_干净条目零修复(t *testing.T) {
+	entry := map[string]any{
+		"model_client_config": map[string]any{"model_name": "m", "api_key": "k"},
+	}
+	if RecoverModelFields(entry) {
+		t.Fatal("干净条目不应报告修复")
+	}
+}
+
+// TestGetDefaultModels_旧格式default也追加agentos 对齐 Python:2110。
+func TestGetDefaultModels_旧格式default也追加agentos(t *testing.T) {
+	cfg := map[string]any{
+		"models": map[string]any{
+			"default": map[string]any{"model_client_config": map[string]any{"model_name": "old"}},
+			"agentos": []any{map[string]any{"model_client_config": map[string]any{"model_name": "bak"}}},
+		},
+	}
+	entries := GetDefaultModels(cfg)
+	if len(entries) != 2 {
+		t.Fatalf("default 1 + agentos 1 = 2, got %d", len(entries))
+	}
+}
+
+// TestGetDefaultModels_env回退也追加agentos 对齐 Python:2132。
+func TestGetDefaultModels_env回退也追加agentos(t *testing.T) {
+	cfg := map[string]any{
+		"models": map[string]any{
+			"agentos": []any{map[string]any{"model_client_config": map[string]any{"model_name": "bak"}}},
+		},
+	}
+	entries := GetDefaultModels(cfg)
+	// env 回退 1 条 + agentos 1 条（CI 无 API_KEY 等 env 时 fallback 条目仍存在）
+	found := false
+	for _, e := range entries {
+		if mcc, ok := e["model_client_config"].(map[string]any); ok && mcc["model_name"] == "bak" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("env 回退分支应追加 agentos 条目: %v", entries)
+	}
+}
