@@ -420,15 +420,15 @@ func GenerateChannelSessionID(channelID string) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // channelModeFromStr 把任意 mode 字符串归一到 ChannelMode。
-// Python: channel_mode_from_str (L233-263)：
-//  1. deprecate_mode 先把旧 canonical 静默映射到新 canonical（Go 等价物 CanonicalizeMode）
+// Python: message_handler.py:233-263 channel_mode_from_str：
+//  1. deprecate_mode 先把旧 canonical 静默映射到新 canonical（Go 等价物 schema.DeprecateMode）
 //  2. 命中 NEW_CANONICAL_MODES → 直接构造
 //  3. 未命中 → 兜底 ChannelMode.AGENT，并按"是否发生归一"分别记 Debug 日志
 //
 // 与 Python 的差异仅在日志级别映射：Python 的 `except ValueError` 分支在 Go 的
 // 字符串枚举下不可达（值即字符串，不存在构造失败），故 Warn 只在兜底时记录。
 func channelModeFromStr(modeStr string) ChannelMode {
-	newModeStr := schema.CanonicalizeMode(modeStr)
+	newModeStr := schema.DeprecateMode(modeStr)
 	if schema.IsNewCanonicalMode(newModeStr) {
 		if channelModeMembers[ChannelMode(newModeStr)] {
 			logger.Debug(logComponent).

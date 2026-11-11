@@ -236,7 +236,7 @@ func NormalizeCronJobMode(raw string, defaultMode string) (string, error) {
 	if alias, ok := cronJobModeAliases[value]; ok {
 		value = alias
 	}
-	canonical := schema.CanonicalizeMode(value)
+	canonical := schema.DeprecateMode(value)
 	if canonical == "" {
 		return value, nil
 	}
@@ -336,7 +336,7 @@ func NormalizeWorkMode(raw string, defaultMode string) string {
 // IsTeamCronMode 是否为团队模式。
 // Python: models.py:352-355 is_team_cron_mode
 func IsTeamCronMode(mode string) bool {
-	return schema.IsTeamMode(schema.CanonicalizeMode(mode))
+	return schema.IsTeamMode(mode)
 }
 
 // CronJobMetadata 定时任务工具元数据。
