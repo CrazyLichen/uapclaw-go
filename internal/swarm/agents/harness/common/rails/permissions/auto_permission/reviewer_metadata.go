@@ -20,6 +20,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
 	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
@@ -261,8 +262,8 @@ func uiText(metadata map[string]any, keys []string, defaultValue string, maxLeng
 		value = candidate
 		break
 	}
-	redacted := permissions.RedactText(value,
-		permissions.WithRedactTextMaxLength(maxLength*2))
+	redacted := redaction.RedactText(value,
+		redaction.WithRedactTextMaxLength(maxLength*2))
 	return truncateUI(redacted, maxLength)
 }
 

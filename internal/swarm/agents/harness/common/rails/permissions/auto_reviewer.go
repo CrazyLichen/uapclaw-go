@@ -25,6 +25,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 )
 
@@ -379,7 +380,7 @@ func BuildReviewerActionView(
 	}
 	redactedURLs := make([]string, 0, len(urls))
 	for _, rawURL := range urls {
-		redactedURLs = append(redactedURLs, RedactURL(rawURL))
+		redactedURLs = append(redactedURLs, redaction.RedactURL(rawURL))
 	}
 
 	// 第四步：组装审查证据；有领域路由时附上路由结论，供审查器参考。
@@ -659,10 +660,10 @@ func completePayloadEvidence(facts ToolDecisionFacts, evidence map[string]any) s
 // redactReviewerValueStrict 脱敏并保留「不完整」错误。
 //
 // Python 的 redact_reviewer_value 在 require_literal_values 失败时抛
-// ValueError("reviewer_redaction_incomplete")；Go 的 RedactReviewerValue
+// ValueError("reviewer_redaction_incomplete")；Go 的 redaction.RedactReviewerValue
 // 吞掉该错误，这里用 E 变体重新实现以保留错误语义。
 func redactReviewerValueStrict(value any) (any, error) {
-	return redactJSONValueStrict(value, DefaultMaxRedactedTextLength, DefaultMaxRedactedItems)
+	return redactJSONValueStrict(value, redaction.DefaultMaxRedactedTextLength, redaction.DefaultMaxRedactedItems)
 }
 
 // pathTargetView 暴露 Core 提取访问的有界标签，绝不暴露原始路径。
@@ -698,7 +699,7 @@ func pathTargetView(facts ToolDecisionFacts, policyLevel string) ([]any, bool) {
 			scope := pathScope(rawPath, facts.WorkspaceRoot, facts.PlatformTrustedRoot,
 				facts.ExternalPaths, policyLevel)
 			label := pathLabel(rawPath)
-			location, status := ReviewerPathLocation(
+			location, status := redaction.ReviewerPathLocation(
 				rawPath, facts.WorkspaceRoot, facts.PlatformTrustedRoot)
 			if location != nil {
 				label = truncateTextByRunes(lastPathSegment(location.RelativePath), AutoReviewPathLabelLimit)
@@ -775,7 +776,7 @@ func pathScope(
 //
 // Python: _path_label(raw_path)
 func pathLabel(rawPath string) string {
-	safe := RedactSecretValuesPreserveFormatNoLimit(rawPath)
+	safe := redaction.RedactSecretValuesPreserveFormatNoLimit(rawPath)
 	basename := lastPathSegment(safe)
 	if len(basename) > AutoReviewPathLabelLimit {
 		basename = truncateTextByRunes(basename, AutoReviewPathLabelLimit)
@@ -802,7 +803,7 @@ func commandView(facts ToolDecisionFacts) map[string]any {
 	return map[string]any{
 		"operators": operatorList,
 		"programs":  programList,
-		"summary":   RedactSecretValuesPreserveFormat(facts.Command, 1024),
+		"summary":   redaction.RedactSecretValuesPreserveFormat(facts.Command, 1024),
 	}
 }
 
@@ -1187,8 +1188,8 @@ func sanitizeReasonCode(rawReasonCode any) string {
 //
 // Python: _sanitize_reason_summary(raw_rationale)
 func sanitizeReasonSummary(rawRationale any) string {
-	normalized := RedactText(rawRationale,
-		WithRedactTextMaxLength(AutoReviewReasonSummaryLimit*2))
+	normalized := redaction.RedactText(rawRationale,
+		redaction.WithRedactTextMaxLength(AutoReviewReasonSummaryLimit*2))
 	return truncateAtWordBoundary(normalized, AutoReviewReasonSummaryLimit)
 }
 
@@ -1368,14 +1369,14 @@ func deepCopyModelRequestConfig(source *llmschema.ModelRequestConfig) *llmschema
 // Python: redact_reviewer_value(value) 内部对字符串调
 // redact_secret_values_preserve_format(..., require_literal_values=True)，
 // 失败时抛 ValueError("reviewer_redaction_incomplete")。
-// 9.90d-1 的 RedactReviewerValue 吞掉了该错误，本函数保留错误语义。
+// 9.90d-1 的 redaction.RedactReviewerValue 吞掉了该错误，本函数保留错误语义。
 func redactJSONValueStrict(value any, maxLength, maxItems int) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(typed))
 		for key, nested := range typed {
 			keyText := anyToStringValue(key)
-			if regexp2Match(secretKeyPattern, strings.TrimSpace(keyText)) {
+			if redaction.IsSecretKeyName(keyText) {
 				out[keyText] = "[redacted]"
 				continue
 			}
@@ -1387,10 +1388,10 @@ func redactJSONValueStrict(value any, maxLength, maxItems int) (any, error) {
 		}
 		return out, nil
 	case string:
-		if isAbsoluteURL(typed) {
-			return RedactURL(typed, WithRedactTextMaxLength(maxLength)), nil
+		if redaction.IsAbsoluteURL(typed) {
+			return redaction.RedactURL(typed, redaction.WithRedactTextMaxLength(maxLength)), nil
 		}
-		return RedactSecretValuesPreserveFormatE(typed, true)
+		return redaction.RedactSecretValuesPreserveFormatE(typed, true)
 	case bool, int, int64, float64, nil:
 		return value, nil
 	case float32:
@@ -1410,6 +1411,6 @@ func redactJSONValueStrict(value any, maxLength, maxItems int) (any, error) {
 		}
 		return out, nil
 	default:
-		return RedactText(value, WithRedactTextMaxLength(maxLength)), nil
+		return redaction.RedactText(value, redaction.WithRedactTextMaxLength(maxLength)), nil
 	}
 }

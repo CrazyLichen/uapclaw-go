@@ -1,4 +1,4 @@
-package permissions
+package redaction
 
 import (
 	"fmt"

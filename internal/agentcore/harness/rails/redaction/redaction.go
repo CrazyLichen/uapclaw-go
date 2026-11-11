@@ -14,7 +14,7 @@
 //   - Python (?P=quote) → .NET \k<quote>
 //   - Python re.DOTALL → regexp2.Singleline
 
-package permissions
+package redaction
 
 import (
 	"encoding/json"
@@ -427,6 +427,23 @@ func RedactSecretValuesPreserveFormat(value any, maxLength ...int) string {
 func RedactSecretValuesPreserveFormatNoLimit(value any) string {
 	got, _ := redactSecretValuesPreserveFormatE(stringify(value), nil, false)
 	return got
+}
+
+// IsSecretKeyName 判断一个键名是否属于密钥键（匹配到即整键脱敏）。
+//
+// 用于调用方需要自行遍历映射、决定哪些键的值必须整体替换成 [redacted] 的场景
+// （如 auto_reviewer 的严格 JSON 脱敏需要保留错误语义，不能直接用
+// RedactJSONValue 的吞错版本）。
+func IsSecretKeyName(key string) bool {
+	return regexp2Match(secretKeyPattern, strings.TrimSpace(key))
+}
+
+// IsAbsoluteURL 判断字符串是否为绝对 URL（含 scheme:// 前缀）。
+//
+// 用于调用方需要在脱敏前分流：URL 走 RedactURL（保结构），
+// 其余走 RedactSecretValuesPreserveFormatE（保格式）。
+func IsAbsoluteURL(value string) bool {
+	return isAbsoluteURL(value)
 }
 
 // RedactSecretValuesPreserveFormatE 同 RedactSecretValuesPreserveFormat，

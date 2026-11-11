@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
 )
 
 // ──────────────────────────── 辅助 ────────────────────────────
@@ -1045,7 +1046,7 @@ func TestRedactJSONValueStrict_基本(t *testing.T) {
 	got, err := redactJSONValueStrict(map[string]any{
 		"api_key": "secret",
 		"normal":  "value",
-	}, DefaultMaxRedactedTextLength, DefaultMaxRedactedItems)
+	}, redaction.DefaultMaxRedactedTextLength, redaction.DefaultMaxRedactedItems)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}

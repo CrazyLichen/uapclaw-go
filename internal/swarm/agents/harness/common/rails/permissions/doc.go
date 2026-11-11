@@ -51,8 +51,10 @@
 // 而是上游从未接入：ShellDisplayPathPattern / ShellDisplayPreSplitPathPattern /
 // SensitiveDisplayPathPattern / DeterministicReadonlyPublicWebFetchSourceKinds /
 // ReviewerActionTargetMaxLength。按规则 9.2-4 照抄保留。
-// 9.90d-1 已落地 reviewer_redaction.go，该文件并未消费上述三个正则，
-// 后续不要凭旧注释臆断「接上」它们。
+// 脱敏能力（reviewer_redaction.go）已于 9.90e 下沉到
+// internal/agentcore/harness/rails/redaction 独立包——因为 9.90e 的 interrupt
+// 包也要用它渲染审批卡片，而本包已 import interrupt，反向依赖会成环。
+// 原文件并未消费上述三个正则，后续不要凭旧注释臆断「接上」它们。
 // 其余常量的消费方在 9.90d-2 的 reviewer_metadata / deny_response /
 // before_tool / deterministic。
 //
@@ -70,7 +72,6 @@
 //	├── network_scope.go                   # 网络授权域原语（9.90b：host 归一 / is_global / 敏感查询键）
 //	├── permissions_layers.go              # Global/User/Session 三层覆盖读写 + 跨进程文件锁（9.90b）
 //	├── policy_eval.go                     # 只做策略评估、不进入人工确认流程（9.90b）
-//	├── reviewer_redaction.go              # AutoReviewer 证据脱敏（689 行 / 20 函数，原属 9.90d-2，因 workspace_paths 依赖提前到 9.90d-1）
 //	├── persistent_audit.go                # 追加式持久化审计（9.90d-1 Task 7）
 //	├── url_safety.go                      # 只读网络/浏览器 URL 审查助手（9.90d-1 Task 8）
 //	├── generated_artifact_delivery.go     # send_file 单次调用的任务级授权租约（9.90d-1 Task 9）

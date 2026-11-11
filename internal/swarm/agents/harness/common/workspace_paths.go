@@ -6,8 +6,8 @@
 // 作用：把模型可见路径解析为规范化绝对路径，并在 UI / reviewer / 模型可见的
 // 工具消息里脱敏沙箱产物路径与绝对路径前缀。
 //
-// 依赖：review_ui 模式末尾调用 permissions.RedactSecretValuesPreserveFormat
-// （reviewer_redaction.go，原属 9.90d-2，本批用户拍板提前落地）。
+// 依赖：review_ui 模式末尾调用 redaction.RedactSecretValuesPreserveFormat
+// （redaction 包，原属 9.90d-2 落地，9.90e 下沉到 agentcore 公共位置）。
 //
 // 正则说明：Python re 的 lookbehind / lookahead 在 RE2 不支持，统一用
 // 项目已引入的 github.com/dlclark/regexp2。
@@ -25,7 +25,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -603,7 +603,7 @@ func reviewUIPathReplacement(matched string, workspaceRoot any) string {
 //
 // Python: _redact_review_ui_secrets(value, *, max_length)
 func redactReviewUISecrets(value string, maxLength int) string {
-	return permissions.RedactSecretValuesPreserveFormat(value, maxLength)
+	return redaction.RedactSecretValuesPreserveFormat(value, maxLength)
 }
 
 // ──────────────────────────── 辅助函数 ────────────────────────────

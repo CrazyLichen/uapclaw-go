@@ -4,7 +4,7 @@
 // 这些用例的期望值都是从 Python 源码真实跑出来的（不是推断），
 // 用于防止后续改动悄悄偏离上游语义。
 
-package permissions
+package redaction
 
 import "testing"
 
