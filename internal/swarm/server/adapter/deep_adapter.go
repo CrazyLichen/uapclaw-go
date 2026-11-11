@@ -150,6 +150,12 @@ type DeepAdapter struct {
 	// sessionInstanceAgentDefinition 声明式 root-Agent 定义快照，供重建时复用。
 	// Python: interface_deep.py:13022-13023 self._session_instance_agent_definition
 	sessionInstanceAgentDefinition map[string]any
+	// channelID 本适配器所属渠道。
+	// Python: interface_deep.py:13030-13033 self._channel_id
+	channelID string
+	// processCliRunOptions 根暂存的一次性 Process CLI 选项，等 child 消费。
+	// Python: interface_deep.py:12436 self._process_cli_run_options
+	processCliRunOptions *processCliRunOptions
 	// sessionMu 保护 activeSessionIDs。
 	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
 	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
@@ -618,6 +624,11 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// Python: interface_deep.py:13022-13023
 	//   self._session_instance_agent_definition = deepcopy(agent_definition)
 	d.sessionInstanceAgentDefinition = copyMap(agentDefinition)
+	// Python: interface_deep.py:13030-13033
+	//   self._channel_id = str(config.get("channel_id") or "").strip() or getattr(self, "_channel_id", "")
+	if v, ok := config["channel_id"].(string); ok && strings.TrimSpace(v) != "" {
+		d.channelID = strings.TrimSpace(v)
+	}
 	if d.skipOwnInstanceBuild() {
 		logger.Info(logComponent).
 			Str("mode", mode).
