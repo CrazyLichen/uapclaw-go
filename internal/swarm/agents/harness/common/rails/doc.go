@@ -22,7 +22,7 @@
 //	│   └── section.go                # PromptSection 工厂
 //	└── permissions/
 //	    ├── doc.go                    # 包文档
-//	    └── owner_scopes.go           # OwnerScopesPermissionContext 权限上下文
+//	    └── owner_scopes.go           # owner_scopes 权限判定（CheckAvatarPermission/ResolveOwnerScopeLevel/MatchArgs/PersistToOwnerScope）
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/
 package rails

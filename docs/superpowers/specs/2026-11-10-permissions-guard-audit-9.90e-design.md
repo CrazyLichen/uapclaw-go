@@ -99,6 +99,7 @@ PermissionEngine 分层规则判定（纯规则，零 LLM）              ← 9.
 | `loadLiveConfig` / `readYAMLData` / `writeYAMLData` | `permissions_config_rpc.go` | Python 配置读写全在 `common/config` | 迁到 config 层后删除 |
 | `WithAgentPermissionContext` + `AgentRequest.PermissionContext` 字段 | `schema/agent.go:45,190` | **全仓零调用**（只有定义） | 删除 |
 | `req.PermissionContext` 的 `else if` 分支 | `deep_adapter.go:1059,1354` | Python 无 | 删除 |
+| `OwnerScopesPermissionContext` + `permissionContextKey` + `NewOwnerScopesPermissionContextFromDict` + `Scene()`/`OwnerScopeKey()` 方法 | `owner_scopes.go:15-38,51-77,313-329` | 与 `swarm/schema.PermissionContext` **字段、逻辑完全相同**（同一 Python 类 `owner_scopes.PermissionContext` 的两次 Go 实现）；本包那份**生产零使用**（仅测试 + doc.go 引用） | **已删除**：`schema` 版是生产权威实现（adapter 装配 + root_context_rail 读写）；`Scene`/`OwnerScopeKey` 的 trim 用例已迁到 `schema/permission_test.go`；同步更新 2 处 doc.go |
 
 ### 3.4 明确保留（经查证 Python 有对应）
 

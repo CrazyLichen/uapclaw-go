@@ -659,3 +659,44 @@ func TestStringFieldOf_nil与类型不符(t *testing.T) {
 		t.Errorf("缺键 got %q", got)
 	}
 }
+
+// ──────────────────────────── Scene/OwnerScopeKey 的 trim 语义（从 owner_scopes 迁移）────────────────────────────
+
+// TestPermissionContext_Scene_空格channelID 验证 TrimSpace 对齐 Python strip()。
+//
+// Python: if self.channel_id.strip() == "web": return "web"
+// 原 owner_scopes 包同名用例，随重复结构体删除迁到此处。
+func TestPermissionContext_Scene_空格channelID(t *testing.T) {
+	pc := NewPermissionContext(WithPermissionChannelID("  web  "))
+	if got := pc.Scene(); got != "web" {
+		t.Errorf("Scene() = %q, 期望 \"web\"（应 trim 后判定）", got)
+	}
+}
+
+// TestPermissionContext_Scene_空格channelID数字分身仍优先 验证空格不影响优先级。
+func TestPermissionContext_Scene_空格channelID数字分身仍优先(t *testing.T) {
+	pc := NewPermissionContext(
+		WithPermissionChannelID("  web  "),
+		WithPermissionGroupDigitalAvatar(true),
+	)
+	if got := pc.Scene(); got != "group_digital_avatar" {
+		t.Errorf("Scene() = %q, 期望 \"group_digital_avatar\"", got)
+	}
+}
+
+// TestPermissionContext_OwnerScopeKey_两侧trim 验证两字段都按 strip 处理。
+//
+// Python: return self.channel_id.strip(), self.principal_user_id.strip()
+func TestPermissionContext_OwnerScopeKey_两侧trim(t *testing.T) {
+	pc := NewPermissionContext(
+		WithPermissionPrincipalUserID("  user-1  "),
+		WithPermissionChannelID("  feishu  "),
+	)
+	key := pc.OwnerScopeKey()
+	if key[0] != "feishu" {
+		t.Errorf("OwnerScopeKey()[0] = %q, 期望 feishu（应 trim）", key[0])
+	}
+	if key[1] != "user-1" {
+		t.Errorf("OwnerScopeKey()[1] = %q, 期望 user-1（应 trim）", key[1])
+	}
+}

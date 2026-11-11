@@ -62,7 +62,7 @@
 //
 //	permissions/
 //	├── doc.go                            # 包文档
-//	├── owner_scopes.go                    # OwnerScopesPermissionContext + CheckAvatarPermission/ResolveOwnerScopeLevel/MatchArgs/PersistToOwnerScope
+//	├── owner_scopes.go                    # owner_scopes 权限判定（CheckAvatarPermission/ResolveOwnerScopeLevel/MatchArgs/PersistToOwnerScope）
 //	├── permissions_config_rpc.go          # 10 个权限配置 RPC 分发 + config CRUD 辅助函数
 //	├── permissions_persist.go             # 权限配置落盘 helper（PersistPermissionAllowRule/PersistExternalDirectoryAllow/PersistCliTrustedDirectoryWithOverrides）
 //	├── protected_paths.go                 # 默认保护写入路径 + MergeProtectedWritePaths
