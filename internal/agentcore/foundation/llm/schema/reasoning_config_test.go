@@ -18,8 +18,9 @@ func TestNewReasoningConfig_默认mode为auto(t *testing.T) {
 // TestReasoningConfig_Validate 对齐 Pydantic 构造期校验。
 // 实测上游行为：mode 非三值、budget_tokens 为负均抛 ValidationError。
 // Python: schema/config.py:59-66
-//   mode: Literal["auto","enabled","disabled"]
-//   budget_tokens: Optional[int] = Field(default=None, ge=0)
+//
+//	mode: Literal["auto","enabled","disabled"]
+//	budget_tokens: Optional[int] = Field(default=None, ge=0)
 func TestReasoningConfig_Validate(t *testing.T) {
 	cases := []struct {
 		name    string

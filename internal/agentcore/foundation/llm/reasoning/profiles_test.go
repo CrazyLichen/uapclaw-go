@@ -24,9 +24,9 @@ func TestModelReasoningFallbacks_条数与上游一致(t *testing.T) {
 // Python: reasoning_profiles.py:41-91（TOGGLE/ALWAYS_ON/UNSUPPORTED/... 共 15 个）
 func TestProviderCaps_十五个能力常量(t *testing.T) {
 	cases := []struct {
-		name     string
-		cap      ReasoningCapability
-		options  []string
+		name      string
+		cap       ReasoningCapability
+		options   []string
 		recommend string
 	}{
 		{"toggle", toggleCapability, []string{"off", "on"}, "on"},
