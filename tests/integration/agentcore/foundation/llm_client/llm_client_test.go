@@ -18,11 +18,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/usage"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/dashscope"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/inference_affinity"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/intellirouter"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/siliconflow"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -253,10 +250,10 @@ func (s *LLMClientSuite) TestStreamAcrossProviders() {
 		newCli   func(*llmschema.ModelClientConfig) (model_clients.BaseModelClient, error)
 	}{
 		{"siliconflow", "SiliconFlow", func(cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
-			return siliconflow.NewSiliconFlowModelClient(mc, cc)
+			return openai.NewOpenAIModelClient(mc, cc)
 		}},
 		{"inference_affinity", "InferenceAffinity", func(cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
-			return inferenceaffinity.NewInferenceAffinityModelClient(mc, cc)
+			return openai.NewOpenAIModelClient(mc, cc)
 		}},
 	}
 	for _, p := range providers {
@@ -400,7 +397,7 @@ func (s *LLMClientSuite) TestDashScopeNativeImage() {
 	s.Equal(srv.URL, strings.TrimRight(cc.APIBase, "/")[:len(srv.URL)],
 		"api_base 保留原样（归一发生在使用点）")
 
-	cli, err := dashscope.NewDashScopeModelClient(
+	cli, err := openai.NewOpenAIModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("wanx-v1")), cc)
 	s.Require().NoError(err)
 
@@ -428,7 +425,12 @@ func (s *LLMClientSuite) TestReleaseKVCache() {
 		llmschema.WithVerifySSL(false),
 		llmschema.WithTimeout(5))
 	s.Require().NoError(err)
-	cli, err := inferenceaffinity.NewInferenceAffinityModelClient(
+	// 别名归一后 InferenceAffinity 并入 OpenAIModelClient，KV 释放能力由
+	// extensions.kv_cache.mode=affinity 驱动（原 inference_affinity 包已删除）。
+	cc.Extensions = &llmschema.LLMExtensionsConfig{
+		KVCache: llmschema.KVCacheExtensionConfig{Mode: "affinity"},
+	}
+	cli, err := openai.NewOpenAIModelClient(
 		llmschema.NewModelRequestConfig(llmschema.WithModelName("m")), cc)
 	s.Require().NoError(err)
 

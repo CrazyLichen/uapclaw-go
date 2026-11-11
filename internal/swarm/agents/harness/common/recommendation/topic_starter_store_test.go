@@ -1,0 +1,1150 @@
+package recommendation
+
+import (
+	"math"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestPythonTruthy_Python真值语义
+// Python: topic_starter.py:486 event_key_of 的 `if event.get("feedback_record_id"):`
+func TestPythonTruthy_Python真值语义(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+		want  bool
+	}{
+		{"nil", nil, false},
+		{"空串", "", false},
+		{"非空串", "x", true},
+		{"零整数", 0, false},
+		{"非零整数", 1, true},
+		{"零浮点", 0.0, false},
+		{"非零浮点", 0.5, true},
+		{"false", false, false},
+		{"true", true, true},
+		{"空切片", []any{}, false},
+		{"非空切片", []any{1}, true},
+		{"空 map", map[string]any{}, false},
+		{"非空 map", map[string]any{"a": 1}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, pythonTruthy(c.value))
+		})
+	}
+}
+
+// TestPyStr_Python的str语义
+// Python: topic_starter.py:483 `str(event.get("session_id") or "")`
+func TestPyStr_Python的str语义(t *testing.T) {
+	assert.Equal(t, "", pyStr(nil))
+	assert.Equal(t, "", pyStr(""))
+	assert.Equal(t, "abc", pyStr("abc"))
+	assert.Equal(t, "1", pyStr(1))
+	assert.Equal(t, "1", pyStr(int64(1)))
+	// Python str(1.0) 是 "1.0" 而非 "1"（float 走 repr 语义，整值补 .0）
+	assert.Equal(t, "1.0", pyStr(float64(1)))
+	assert.Equal(t, "1.5", pyStr(1.5))
+	assert.Equal(t, "True", pyStr(true))
+	assert.Equal(t, "False", pyStr(false))
+}
+
+// TestPyStr_浮点格式化与Python逐字一致
+// Python: str(float) 用最短往返表示，整值补 ".0"，指数至少两位，负零为 "-0.0"
+func TestPyStr_浮点格式化与Python逐字一致(t *testing.T) {
+	a, b := 0.1, 0.2
+	negativeZero := math.Copysign(0, -1)
+	cases := []struct {
+		value float64
+		want  string
+	}{
+		{3.0, "3.0"},
+		{0.25, "0.25"},
+		{1e16, "1e+16"},
+		{1e17, "1e+17"},
+		{1e20, "1e+20"}, // 曾因 int64 转换溢出成 -9223372036854775808
+		{1.5e-10, "1.5e-10"},
+		{a + b, "0.30000000000000004"},
+		{1.2345678901234568e17, "1.2345678901234568e+17"},
+		{1e-7, "1e-07"},
+		{negativeZero, "-0.0"},
+		{math.Inf(1), "inf"},
+		{math.Inf(-1), "-inf"},
+		{math.NaN(), "nan"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, pyStr(c.value), "值 %v", c.value)
+	}
+}
+
+// TestMarshalNoEscape_不转义HTML且无尾换行
+// Python: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+func TestMarshalNoEscape_不转义HTML且无尾换行(t *testing.T) {
+	out, err := marshalNoEscape(map[string]any{"k": "<中文&>"})
+	assert.NoError(t, err)
+	assert.Equal(t, `{"k":"<中文&>"}`, string(out))
+	assert.NotContains(t, string(out), "\n")
+}
+
+// TestRetentionDays_16项与上游一致
+// Python: topic_starter.py:80-95 _RETENTION_DAYS
+func TestRetentionDays_16项与上游一致(t *testing.T) {
+	assert.Len(t, retentionDays, 16)
+	assert.Equal(t, 30, retentionDays["dynamic_exposure"])
+	assert.Equal(t, 45, retentionDays["starter_slate_manifest"])
+	assert.Equal(t, 45, retentionDays["starter_card"])
+	assert.Equal(t, 180, retentionDays["provider_invocation"])
+	assert.Equal(t, 90, retentionDays["session_summary_coverage"])
+	assert.Equal(t, 30, retentionDays["store_pruned"])
+	// session_summary 不在表内，永不按龄删除
+	_, has := retentionDays["session_summary"]
+	assert.False(t, has)
+}
+
+// TestEventPayloadQueryFields_13项与上游一致
+// Python: topic_starter.py:57-71 _EVENT_PAYLOAD_QUERY_FIELDS
+func TestEventPayloadQueryFields_13项与上游一致(t *testing.T) {
+	assert.Len(t, eventPayloadQueryFields, 13)
+	for _, field := range []string{
+		"card_id", "context_scope", "generation_trigger_key", "negative_preference_version",
+		"project_id", "serving_compatibility_key", "short_intent_version", "source_starter_id",
+		"model", "provider_response_id", "status",
+		"generation_trigger_key.context_scope", "generation_trigger_key.model",
+	} {
+		_, ok := eventPayloadQueryFields[field]
+		assert.True(t, ok, "缺少字段 %s", field)
+	}
+}
+
+// TestComputeInterestDrift_空输入全零
+// Python: topic_starter.py:142 compute_interest_drift
+func TestComputeInterestDrift_空输入全零(t *testing.T) {
+	drift := ComputeInterestDrift(nil, nil)
+	assert.Equal(t, 0.0, drift.EntropyDelta)
+	assert.Equal(t, 0.0, drift.JaccardDistance)
+	assert.Equal(t, 0.0, drift.JSDivergence)
+	assert.Equal(t, 0.0, drift.Score)
+	assert.False(t, drift.ShouldUpdate)
+}
+
+// TestComputeInterestDrift_完全一致全零
+func TestComputeInterestDrift_完全一致全零(t *testing.T) {
+	labels := []string{"考研", "数学", "英语"}
+	drift := ComputeInterestDrift(labels, labels)
+	assert.Equal(t, 0.0, drift.EntropyDelta)
+	assert.Equal(t, 0.0, drift.JaccardDistance)
+	assert.Equal(t, 0.0, drift.JSDivergence)
+	assert.Equal(t, 0.0, drift.Score)
+	assert.False(t, drift.ShouldUpdate)
+}
+
+// TestComputeInterestDrift_完全不重叠Jaccard为一
+func TestComputeInterestDrift_完全不重叠Jaccard为一(t *testing.T) {
+	drift := ComputeInterestDrift([]string{"a", "b"}, []string{"c", "d"})
+	assert.Equal(t, 1.0, drift.JaccardDistance)
+	// 0.4*熵差 + 0.3*1 + 0.3*JS；两分布都是均匀二点，熵相等 → 熵差 0
+	assert.Equal(t, 0.0, drift.EntropyDelta)
+	assert.InDelta(t, 0.6, drift.Score, 1e-9)
+	assert.False(t, drift.ShouldUpdate, "0.6 未超过阈值 0.8")
+}
+
+// TestComputeInterestDrift_标签先strip再判空
+// Python: topic_starter.py:113 `str(label).strip() for label in labels if str(label).strip()`
+func TestComputeInterestDrift_标签先strip再判空(t *testing.T) {
+	withSpace := ComputeInterestDrift([]string{" a ", "b"}, []string{"a", "b"})
+	assert.Equal(t, 0.0, withSpace.Score, "空格应先 strip 后视为同一标签")
+
+	withBlank := ComputeInterestDrift([]string{"a", "", "  ", "b"}, []string{"a", "b"})
+	assert.Equal(t, 0.0, withBlank.Score, "空与纯空白标签应被过滤")
+}
+
+// TestComputeInterestDrift_漂移触发更新
+func TestComputeInterestDrift_漂移触发更新(t *testing.T) {
+	// 单标签 → 多标签：熵显著上升，集合完全不重叠
+	drift := ComputeInterestDrift([]string{"a"}, []string{"b", "c", "d", "e"})
+	assert.True(t, drift.ShouldUpdate, "score=%v 应超过 0.8", drift.Score)
+	assert.Greater(t, drift.Score, 0.8)
+}
+
+// TestComputeInterestDrift_阈值用round前的score
+// Python: topic_starter.py:172-173 —— should_update 读局部变量 score（未 round），
+// 返回的 score 字段是 round(score, 12)。
+func TestComputeInterestDrift_阈值用round前的score(t *testing.T) {
+	drift := ComputeInterestDrift([]string{"a", "b"}, []string{"c", "d"})
+	assert.InDelta(t, 0.6, drift.Score, 1e-9)
+	assert.False(t, drift.ShouldUpdate)
+
+	// round12 不改变已 round 值的稳定性
+	assert.Equal(t, round12(drift.Score), drift.Score)
+}
+
+// TestInterestDistribution_归一化
+func TestInterestDistribution_归一化(t *testing.T) {
+	dist := interestDistribution([]string{"a", "a", "b"})
+	assert.InDelta(t, 2.0/3.0, dist["a"], 1e-12)
+	assert.InDelta(t, 1.0/3.0, dist["b"], 1e-12)
+	assert.Empty(t, interestDistribution(nil))
+	assert.Empty(t, interestDistribution([]string{"", "  "}))
+}
+
+// TestInterestEntropy_均匀分布最大
+func TestInterestEntropy_均匀分布最大(t *testing.T) {
+	assert.InDelta(t, 1.0, interestEntropy(map[string]float64{"a": 0.5, "b": 0.5}), 1e-12)
+	assert.InDelta(t, 2.0, interestEntropy(map[string]float64{"a": .25, "b": .25, "c": .25, "d": .25}), 1e-12)
+	assert.Equal(t, 0.0, interestEntropy(map[string]float64{"a": 1.0}))
+	assert.Equal(t, 0.0, interestEntropy(nil))
+}
+
+// newTestStore 建一个落在临时目录的 store。
+func newTestStore(t *testing.T) *TopicStarterStore {
+	t.Helper()
+	store, err := NewTopicStarterStore(filepath.Join(t.TempDir(), "recommendation.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	return store
+}
+
+// TestNewTopicStarterStore_父目录自动创建
+// Python: topic_starter.py:183 mkdir(parents=True, exist_ok=True)
+func TestNewTopicStarterStore_父目录自动创建(t *testing.T) {
+	nested := filepath.Join(t.TempDir(), "a", "b", "c", "recommendation.db")
+	store, err := NewTopicStarterStore(nested)
+	require.NoError(t, err)
+	defer store.Close()
+
+	_, statErr := os.Stat(nested)
+	assert.NoError(t, statErr, "数据库文件应已创建")
+}
+
+// TestNewTopicStarterStore_建表幂等
+func TestNewTopicStarterStore_建表幂等(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "recommendation.db")
+
+	first, err := NewTopicStarterStore(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Close())
+
+	second, err := NewTopicStarterStore(path)
+	require.NoError(t, err)
+	defer second.Close()
+
+	// 表结构仍可读写即证明未被损坏（此处直接用底层连接，不依赖 Task 4 的 RecordEvent）
+	db, err := second.connect()
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(
+		"INSERT INTO recommendation_event(event_key, session_id, slate_id, event_type, policy_id, selection_mode, propensity_reason, payload_json, created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+		"s1|sl1|e1|", "s1", "sl1", "e1", "p", "unknown", "not_estimated", "{}", 1.0,
+	)
+	assert.NoError(t, err)
+}
+
+// TestCreateTables_两表四索引齐备
+// Python: topic_starter.py:361 _create_tables
+func TestCreateTables_两表四索引齐备(t *testing.T) {
+	store := newTestStore(t)
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows, err := db.Query("SELECT name, type FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' ORDER BY name")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	found := map[string]string{}
+	for rows.Next() {
+		var name, kind string
+		require.NoError(t, rows.Scan(&name, &kind))
+		found[name] = kind
+	}
+	require.NoError(t, rows.Err())
+
+	assert.Equal(t, "table", found["profile_snapshot"])
+	assert.Equal(t, "table", found["recommendation_event"])
+	assert.Equal(t, "index", found["idx_recommendation_event_lookup"])
+	assert.Equal(t, "index", found["idx_recommendation_event_topic_lookup"])
+	assert.Equal(t, "index", found["idx_recommendation_event_manifest_compat"])
+	assert.Equal(t, "index", found["idx_recommendation_event_manifest_trigger"])
+}
+
+// TestConnect_busyTimeout生效
+// Python: topic_starter.py:355 _connect（PRAGMA busy_timeout = 5000）
+func TestConnect_busyTimeout生效(t *testing.T) {
+	store := newTestStore(t)
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	defer db.Close()
+
+	var timeout int
+	require.NoError(t, db.QueryRow("PRAGMA busy_timeout").Scan(&timeout))
+	assert.Equal(t, 5000, timeout)
+}
+
+// TestEventKeyOf_五段拼接
+// Python: topic_starter.py:486 event_key_of
+func TestEventKeyOf_五段拼接(t *testing.T) {
+	store := newTestStore(t)
+
+	assert.Equal(t, "s|sl|e|", store.EventKeyOf(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e",
+	}))
+	assert.Equal(t, "s|sl|e|t", store.EventKeyOf(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t",
+	}))
+}
+
+// TestEventKeyOf_feedbackRecordId为truthy才追加
+func TestEventKeyOf_feedbackRecordId为truthy才追加(t *testing.T) {
+	store := newTestStore(t)
+	base := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t"}
+	want := "s|sl|e|t"
+
+	for _, falsy := range []any{nil, "", 0, 0.0, false} {
+		event := map[string]any{}
+		for k, v := range base {
+			event[k] = v
+		}
+		event["feedback_record_id"] = falsy
+		assert.Equal(t, want, store.EventKeyOf(event), "falsy 值 %#v 不应追加", falsy)
+	}
+
+	event := map[string]any{}
+	for k, v := range base {
+		event[k] = v
+	}
+	event["feedback_record_id"] = "fb-1"
+	assert.Equal(t, "s|sl|e|t|fb-1", store.EventKeyOf(event))
+}
+
+// TestRecordEvent_首次成功二次返回假
+// Python: topic_starter.py:498 record_event（INSERT OR IGNORE + rowcount == 1）
+func TestRecordEvent_首次成功二次返回假(t *testing.T) {
+	store := newTestStore(t)
+	event := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t"}
+
+	first, err := store.RecordEvent(event)
+	require.NoError(t, err)
+	assert.True(t, first)
+
+	second, err := store.RecordEvent(event)
+	require.NoError(t, err)
+	assert.False(t, second, "同 key 重复写入应返回 false")
+}
+
+// TestRecordEvent_五层默认值兜底
+// Python: topic_starter.py:507-512 —— policy_id/selection_mode/propensity_reason/payload/created_at
+func TestRecordEvent_五层默认值兜底(t *testing.T) {
+	store := newTestStore(t)
+	ok, err := store.RecordEvent(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e",
+	})
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+
+	assert.Equal(t, "topic-starter-mvp-v1", events[0]["policy_id"])
+	assert.Equal(t, "unknown", events[0]["selection_mode"])
+	assert.Equal(t, "not_estimated", events[0]["propensity_reason"])
+	assert.Equal(t, map[string]any{}, events[0]["payload"])
+	assert.Greater(t, events[0]["created_at"].(float64), 0.0)
+	assert.Nil(t, events[0]["topic_id"])
+	assert.Nil(t, events[0]["position"])
+	assert.Nil(t, events[0]["profile_version"])
+	assert.Nil(t, events[0]["propensity"])
+}
+
+// TestRecordEvent_非ASCII原样存储
+func TestRecordEvent_非ASCII原样存储(t *testing.T) {
+	store := newTestStore(t)
+	_, err := store.RecordEvent(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "e",
+		"payload": map[string]any{"title": "中文标题 & <tag>"},
+	})
+	require.NoError(t, err)
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "中文标题 & <tag>", events[0]["payload"].(map[string]any)["title"])
+}
+
+// TestRecordEventsAtomic_正常写入整组
+// Python: topic_starter.py:527 record_events_atomic
+func TestRecordEventsAtomic_正常写入整组(t *testing.T) {
+	store := newTestStore(t)
+	events := []map[string]any{
+		{"session_id": "s", "slate_id": "sl", "event_type": "e1", "topic_id": "t1"},
+		{"session_id": "s", "slate_id": "sl", "event_type": "e2", "topic_id": "t2"},
+		{"session_id": "s", "slate_id": "sl", "event_type": "e3", "topic_id": "t3"},
+	}
+	ok, err := store.RecordEventsAtomic(events)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	stored, err := store.ListEvents()
+	require.NoError(t, err)
+	assert.Len(t, stored, 3)
+}
+
+// TestRecordEventsAtomic_空列表返回假
+func TestRecordEventsAtomic_空列表返回假(t *testing.T) {
+	store := newTestStore(t)
+	ok, err := store.RecordEventsAtomic(nil)
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = store.RecordEventsAtomic([]map[string]any{})
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+// TestRecordEventsAtomic_组内重复返回假且不写库
+func TestRecordEventsAtomic_组内重复返回假且不写库(t *testing.T) {
+	store := newTestStore(t)
+	same := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t"}
+	ok, err := store.RecordEventsAtomic([]map[string]any{same, same})
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	stored, err := store.ListEvents()
+	require.NoError(t, err)
+	assert.Empty(t, stored, "组内重复应整组拒绝，不写任何行")
+}
+
+// TestRecordEventsAtomic_跨组重复整组回滚
+func TestRecordEventsAtomic_跨组重复整组回滚(t *testing.T) {
+	store := newTestStore(t)
+	existing := map[string]any{"session_id": "s", "slate_id": "sl", "event_type": "e", "topic_id": "t0"}
+	ok, err := store.RecordEvent(existing)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	ok, err = store.RecordEventsAtomic([]map[string]any{
+		{"session_id": "s", "slate_id": "sl", "event_type": "e2", "topic_id": "t2"},
+		existing,
+	})
+	assert.False(t, ok, "跨组重复应返回 false")
+	assert.NoError(t, err, "唯一约束错误应转为 false 而非 error")
+
+	stored, err := store.ListEvents()
+	require.NoError(t, err)
+	assert.Len(t, stored, 1, "整组回滚，只保留原有 1 条")
+}
+
+// seedQueryEvents 造一批带 payload 的事件。
+func seedQueryEvents(t *testing.T, store *TopicStarterStore) {
+	t.Helper()
+	events := []map[string]any{
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "topic_click", "topic_id": "t1",
+			"payload":    map[string]any{"context_scope": "global_new_chat", "negative_preference_version": 3},
+			"created_at": 100.0},
+		{"session_id": "s2", "slate_id": "sl2", "event_type": "topic_click", "topic_id": "t2",
+			"payload":    map[string]any{"context_scope": "project", "negative_preference_version": 1},
+			"created_at": 200.0},
+		{"session_id": "s3", "slate_id": "sl3", "event_type": "session_bound", "topic_id": "t3",
+			"payload":    map[string]any{"context_scope": "global_new_chat"},
+			"created_at": 300.0},
+		{"session_id": "s4", "slate_id": "sl4", "event_type": "topic_click", "topic_id": "t4",
+			"payload":    map[string]any{"context_scope": nil, "status": "ok"},
+			"created_at": 400.0},
+	}
+	ok, err := store.RecordEventsAtomic(events)
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+// TestQueryEvents_四条守卫
+// Python: topic_starter.py:590-601
+func TestQueryEvents_四条守卫(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "", Limit: 10})
+	require.NoError(t, err)
+	assert.Nil(t, got, "event_type 为空返回 nil")
+
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 0})
+	require.NoError(t, err)
+	assert.Nil(t, got, "limit < 1 返回 nil")
+
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: -1})
+	require.NoError(t, err)
+	assert.Nil(t, got, "limit 负数返回 nil")
+
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 10, Offset: -1})
+	require.NoError(t, err)
+	assert.Nil(t, got, "offset 负数返回 nil")
+
+	_, err = store.QueryEvents(QueryEventsOptions{
+		EventType:     "topic_click",
+		Limit:         10,
+		PayloadEquals: map[string]any{"not_a_whitelisted_field": 1},
+	})
+	require.Error(t, err, "白名单外字段应报错")
+	assert.Contains(t, err.Error(), "not_a_whitelisted_field")
+}
+
+// TestQueryEvents_按类型与slate过滤
+func TestQueryEvents_按类型与slate过滤(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 100})
+	require.NoError(t, err)
+	assert.Len(t, got, 3)
+
+	slate := "sl2"
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", SlateID: &slate, Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+}
+
+// TestQueryEvents_payloadEquals匹配JSONnull
+// Python: topic_starter.py:626 `json_extract(...) IS json_extract(?, '$')`
+func TestQueryEvents_payloadEquals匹配JSONnull(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{
+		EventType:     "topic_click",
+		PayloadEquals: map[string]any{"context_scope": nil},
+		Limit:         100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 1, "IS 语义应能匹配 JSON null")
+	assert.Equal(t, "t4", got[0]["topic_id"])
+}
+
+// TestQueryEvents_payload整数上界与存在性
+func TestQueryEvents_payload整数上界与存在性(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	got, err := store.QueryEvents(QueryEventsOptions{
+		EventType:         "topic_click",
+		PayloadIntegerLTE: &PayloadIntegerLTE{Field: "negative_preference_version", Value: 1},
+		Limit:             100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+
+	present := "status"
+	got, err = store.QueryEvents(QueryEventsOptions{
+		EventType:      "topic_click",
+		PayloadPresent: &present,
+		Limit:          100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t4", got[0]["topic_id"])
+}
+
+// TestQueryEvents_排序与分页
+func TestQueryEvents_排序与分页(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	// 默认升序
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, "t1", got[0]["topic_id"])
+
+	// 最新优先
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 100, NewestFirst: true})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, "t4", got[0]["topic_id"])
+
+	// 分页
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", Limit: 1, Offset: 1})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+}
+
+// TestQueryEvents_按payload整数降序排序
+// Python: topic_starter.py:645-652 order_by_payload_integer_desc 前缀
+func TestQueryEvents_按payload整数降序排序(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	field := "negative_preference_version"
+	got, err := store.QueryEvents(QueryEventsOptions{
+		EventType:                 "topic_click",
+		OrderByPayloadIntegerDesc: &field,
+		Limit:                     100,
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	// version 3 > 1 > NULL
+	assert.Equal(t, "t1", got[0]["topic_id"], "version=3 应排最前")
+	assert.Equal(t, "t2", got[1]["topic_id"], "version=1 次之")
+}
+
+// TestSaveSnapshot_版本自增并回写字段
+// Python: topic_starter.py:437 save_snapshot
+func TestSaveSnapshot_版本自增并回写字段(t *testing.T) {
+	store := newTestStore(t)
+
+	first, err := store.SaveSnapshot(map[string]any{"interests": []any{"a"}}, 1000.0)
+	require.NoError(t, err)
+	assert.Equal(t, 1, first["version"])
+	assert.Equal(t, 1000.0, first["evidence_until"])
+	assert.Greater(t, first["updated_at"].(float64), 0.0)
+	assert.Equal(t, []any{"a"}, first["interests"])
+
+	second, err := store.SaveSnapshot(map[string]any{"interests": []any{"b"}}, 2000.0)
+	require.NoError(t, err)
+	assert.Equal(t, 2, second["version"])
+
+	third, err := store.SaveSnapshot(map[string]any{}, 3000.0)
+	require.NoError(t, err)
+	assert.Equal(t, 3, third["version"])
+}
+
+// TestLoadLatestSnapshot_取最新
+func TestLoadLatestSnapshot_取最新(t *testing.T) {
+	store := newTestStore(t)
+
+	got, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	assert.Nil(t, got, "空表返回 nil")
+
+	_, err = store.SaveSnapshot(map[string]any{"mark": "v1"}, 1.0)
+	require.NoError(t, err)
+	_, err = store.SaveSnapshot(map[string]any{"mark": "v2"}, 2.0)
+	require.NoError(t, err)
+
+	got, err = store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v2", got["mark"])
+	// 从库里读回来的是 JSON 数字，encoding/json 解成 float64（不是 SaveSnapshot 返回的 int）
+	assert.Equal(t, float64(2), got["version"])
+}
+
+// TestLoadLatestSnapshot_跳过v4行
+// Python: topic_starter.py:469-484 —— schema_version == "topic-starter-v4" 的跳过
+func TestLoadLatestSnapshot_跳过v4行(t *testing.T) {
+	store := newTestStore(t)
+
+	_, err := store.SaveSnapshot(map[string]any{"mark": "v3-readable"}, 1.0)
+	require.NoError(t, err)
+
+	// 直接插一条 v4 快照（模拟另一套格式）
+	db, err := store.connect()
+	require.NoError(t, err)
+	_, err = db.Exec(
+		"INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(?, ?, ?, ?)",
+		99, 1.0, 1.0, `{"schema_version":"topic-starter-v4","mark":"v4-only"}`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	got, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v3-readable", got["mark"], "应跳过 v4 行")
+}
+
+// TestPrune_最小间隔节流
+// Python: topic_starter.py:245-252 —— 20 小时内只清一次
+func TestPrune_最小间隔节流(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	first, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Empty(t, first, "首次无过期数据，removed 应为空")
+
+	second, err := store.Prune(now + 60)
+	require.NoError(t, err)
+	assert.Empty(t, second, "20 小时内第二次应被节流")
+
+	third, err := store.Prune(now + 21*60*60)
+	require.NoError(t, err)
+	assert.NotNil(t, third, "超过 20 小时应放行")
+}
+
+// TestPrune_必写store_pruned事件
+func TestPrune_必写store_pruned事件(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+	_, err := store.Prune(now)
+	require.NoError(t, err)
+
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "store_pruned", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "maintenance", got[0]["session_id"])
+	assert.Equal(t, "maintenance", got[0]["slate_id"])
+	assert.Equal(t, "recommendation-retention-v1", got[0]["policy_id"])
+	assert.Equal(t, "usage_retention", got[0]["selection_mode"])
+	assert.Equal(t, "not_applicable", got[0]["propensity_reason"])
+	assert.Equal(t, "maintenance:10000000", got[0]["topic_id"])
+}
+
+// TestPrune_按TTL删除
+func TestPrune_按TTL删除(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	// dynamic_exposure TTL 30 天：一条过期、一条新鲜
+	_, err := store.RecordEventsAtomic([]map[string]any{
+		{"session_id": "s", "slate_id": "old", "event_type": "dynamic_exposure", "topic_id": "t1",
+			"created_at": now - 31*daySeconds},
+		{"session_id": "s", "slate_id": "new", "event_type": "dynamic_exposure", "topic_id": "t2",
+			"created_at": now - 1*daySeconds},
+		// provider_invocation TTL 180 天：31 天前不过期
+		{"session_id": "s", "slate_id": "pi", "event_type": "provider_invocation", "topic_id": "t3",
+			"created_at": now - 31*daySeconds},
+	})
+	require.NoError(t, err)
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed["dynamic_exposure"])
+	assert.NotContains(t, removed, "provider_invocation")
+
+	left, err := store.QueryEvents(QueryEventsOptions{EventType: "dynamic_exposure", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, left, 1)
+	assert.Equal(t, "t2", left[0]["topic_id"])
+}
+
+// TestPrune_会话摘要保最新两条
+// Python: topic_starter.py:290 _prune_superseded_summaries
+func TestPrune_会话摘要保最新两条(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	events := make([]map[string]any, 0, 4)
+	for i := 0; i < 4; i++ {
+		events = append(events, map[string]any{
+			"session_id": "s", "slate_id": "sl" + strconv.Itoa(i), "event_type": "session_summary",
+			"topic_id":   "t" + strconv.Itoa(i),
+			"payload":    map[string]any{"session_id": "sess-x"},
+			"created_at": now - float64(i)*10,
+		})
+	}
+	_, err := store.RecordEventsAtomic(events)
+	require.NoError(t, err)
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed["session_summary_superseded"], "4 条会话摘要应删掉 2 条，保留最新 2 条")
+
+	left, err := store.QueryEvents(QueryEventsOptions{EventType: "session_summary", Limit: 10})
+	require.NoError(t, err)
+	assert.Len(t, left, 2)
+}
+
+// TestPrune_画像快照保留前两版
+// Python: topic_starter.py:316 _prune_profile_snapshots
+func TestPrune_画像快照保留前两版(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	// 造 4 版快照，全部超过 90 天
+	db, err := store.connect()
+	require.NoError(t, err)
+	for version := 1; version <= 4; version++ {
+		_, insertErr := db.Exec(
+			"INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(?, ?, ?, ?)",
+			version, now-200*daySeconds, now-200*daySeconds, `{"mark":"old"}`,
+		)
+		require.NoError(t, insertErr)
+	}
+	require.NoError(t, db.Close())
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed["profile_snapshot"], "4 版中保留最新 2 版，删掉 2 版")
+
+	var count int
+	db2, err := store.connect()
+	require.NoError(t, err)
+	require.NoError(t, db2.QueryRow("SELECT COUNT(*) FROM profile_snapshot").Scan(&count))
+	require.NoError(t, db2.Close())
+	assert.Equal(t, 2, count)
+}
+
+// TestPrune_短意图表不存在时不报错
+// Python: topic_starter.py:339 _prune_short_intent
+func TestPrune_短意图表不存在时不报错(t *testing.T) {
+	store := newTestStore(t)
+	removed, err := store.Prune(10_000_000.0)
+	require.NoError(t, err)
+	assert.NotContains(t, removed, "short_intent_state")
+}
+
+// TestPrune_短意图表存在时按龄清理
+func TestPrune_短意图表存在时按龄清理(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE short_intent_state(session_id TEXT, evaluated_at REAL)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO short_intent_state VALUES('old', ?)", now-100*daySeconds)
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO short_intent_state VALUES('new', ?)", now-1*daySeconds)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed["short_intent_state"])
+}
+
+// TestDeleteRecommendationData_清空两表并保留使用流水
+// Python: topic_starter.py:186 delete_recommendation_data
+func TestDeleteRecommendationData_清空两表并保留使用流水(t *testing.T) {
+	store := newTestStore(t)
+
+	_, err := store.SaveSnapshot(map[string]any{"mark": "will-be-deleted"}, 1.0)
+	require.NoError(t, err)
+
+	_, err = store.RecordEventsAtomic([]map[string]any{
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "dynamic_exposure", "topic_id": "t1",
+			"payload": map[string]any{"card_revision_ids": []any{"c1", "c2"}}},
+		{"session_id": "s2", "slate_id": "sl2", "event_type": "dynamic_exposure", "topic_id": "t2",
+			"payload": map[string]any{"card_revision_ids": []any{"c3"}}},
+		{"session_id": "s3", "slate_id": "sl3", "event_type": "provider_invocation", "topic_id": "att-1",
+			"payload": map[string]any{
+				"attempt_id": "att-1", "provider_response_id": "resp-1", "status": "ok",
+				"stage": "rank", "provider": "ark", "model": "m1", "latency_ms": 120,
+				"usage":              map[string]any{"total_tokens": 10},
+				"failure_reason":     nil,
+				"some_private_field": "must-be-dropped",
+			}},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteRecommendationData())
+
+	// 快照全清
+	snapshot, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	assert.Nil(t, snapshot)
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+
+	// 只剩 1 条保留的 provider_invocation 收据 + 1 条删除记录
+	require.Len(t, events, 2)
+
+	var receipt, deletion map[string]any
+	for _, event := range events {
+		switch event["event_type"] {
+		case "provider_invocation":
+			receipt = event
+		case "recommendation_data_deleted":
+			deletion = event
+		}
+	}
+	require.NotNil(t, receipt)
+	require.NotNil(t, deletion)
+
+	assert.Equal(t, "usage", receipt["session_id"])
+	assert.Equal(t, "usage", receipt["slate_id"])
+	assert.Equal(t, "att-1", receipt["topic_id"])
+	assert.Equal(t, "topic-starter-provider-invocation-v1", receipt["policy_id"])
+	assert.Equal(t, "usage_retention", receipt["selection_mode"])
+	assert.Equal(t, "not_applicable", receipt["propensity_reason"])
+
+	payload := receipt["payload"].(map[string]any)
+	assert.Equal(t, "att-1", payload["attempt_id"])
+	assert.Equal(t, "resp-1", payload["provider_response_id"])
+	assert.Equal(t, "ok", payload["status"])
+	assert.NotContains(t, payload, "some_private_field", "只保留 9 个键")
+
+	assert.Equal(t, "deletion", deletion["session_id"])
+	assert.Equal(t, "recommendation-consent-v1", deletion["policy_id"])
+	assert.Equal(t, "exclusion", deletion["selection_mode"])
+	assert.Equal(t, "user_deletion", deletion["propensity_reason"])
+
+	deletionPayload := deletion["payload"].(map[string]any)
+	// 从库里读回的是 JSON 数字，encoding/json 解成 float64
+	assert.Equal(t, float64(2), deletionPayload["exposures_removed"])
+	assert.Equal(t, float64(3), deletionPayload["cards_removed"], "c1+c2+c3 共 3 张卡")
+}
+
+// TestDeleteRecommendationData_短意图表存在则清空
+func TestDeleteRecommendationData_短意图表存在则清空(t *testing.T) {
+	store := newTestStore(t)
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE short_intent_state(session_id TEXT, evaluated_at REAL)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO short_intent_state VALUES('s', 1.0)")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	require.NoError(t, store.DeleteRecommendationData())
+
+	db2, err := store.connect()
+	require.NoError(t, err)
+	var count int
+	require.NoError(t, db2.QueryRow("SELECT COUNT(*) FROM short_intent_state").Scan(&count))
+	require.NoError(t, db2.Close())
+	assert.Equal(t, 0, count)
+}
+
+// TestIntervenedPrompts_仅收已绑定slate的点击
+// Python: topic_starter.py:673 intervened_prompts
+func TestIntervenedPrompts_仅收已绑定slate的点击(t *testing.T) {
+	store := newTestStore(t)
+
+	// 无绑定：全部为空
+	got, err := store.IntervenedPrompts()
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	_, err = store.RecordEventsAtomic([]map[string]any{
+		// sl1 已绑定到 s1
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "session_bound"},
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "topic_click", "topic_id": "card-1",
+			"payload": map[string]any{"prompt": "帮我看看这个"}},
+		// sl2 未绑定，点击应被忽略
+		{"session_id": "s2", "slate_id": "sl2", "event_type": "topic_click", "topic_id": "card-2",
+			"payload": map[string]any{"prompt": "不该出现"}},
+		// sl1 上无 prompt 的点击应被忽略（用不同 topic_id 避免与上面那条 event_key 冲突）
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "topic_click", "topic_id": "card-3",
+			"payload": map[string]any{}},
+	})
+	require.NoError(t, err)
+
+	got, err = store.IntervenedPrompts()
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+	_, ok := got[[2]string{"s1", "帮我看看这个"}]
+	assert.True(t, ok)
+}
+
+// TestPythonTruthy_覆盖全部数值类型
+// 补齐 nil/string/bool/容器之外的类型分支（int8~uint64、float32、默认分支）
+func TestPythonTruthy_覆盖全部数值类型(t *testing.T) {
+	assert.False(t, pythonTruthy(int8(0)))
+	assert.True(t, pythonTruthy(int8(1)))
+	assert.False(t, pythonTruthy(int16(0)))
+	assert.True(t, pythonTruthy(int16(1)))
+	assert.False(t, pythonTruthy(int32(0)))
+	assert.True(t, pythonTruthy(int32(1)))
+	assert.False(t, pythonTruthy(uint(0)))
+	assert.True(t, pythonTruthy(uint(1)))
+	assert.False(t, pythonTruthy(uint8(0)))
+	assert.True(t, pythonTruthy(uint8(1)))
+	assert.False(t, pythonTruthy(uint16(0)))
+	assert.True(t, pythonTruthy(uint16(1)))
+	assert.False(t, pythonTruthy(uint32(0)))
+	assert.True(t, pythonTruthy(uint32(1)))
+	assert.False(t, pythonTruthy(uint64(0)))
+	assert.True(t, pythonTruthy(uint64(1)))
+	assert.False(t, pythonTruthy(float32(0)))
+	assert.True(t, pythonTruthy(float32(0.5)))
+	// 默认分支：未列出的类型一律为真
+	assert.True(t, pythonTruthy(struct{ X int }{X: 1}))
+}
+
+// TestPyStr_覆盖整型与特殊浮点
+func TestPyStr_覆盖整型与特殊浮点(t *testing.T) {
+	assert.Equal(t, "0", pyStr(0))
+	assert.Equal(t, "42", pyStr(int64(42)))
+	assert.Equal(t, "0.25", pyStr(0.25))
+	// PyStr 对非数值非字符串走 fmt 默认分支
+	assert.Equal(t, "[1 2]", pyStr([]int{1, 2}))
+}
+
+// TestInterestEntropy_零概率跳过
+func TestInterestEntropy_零概率跳过(t *testing.T) {
+	assert.Equal(t, 0.0, interestEntropy(map[string]float64{"a": 0.0, "b": 1.0}))
+}
+
+// TestNewTopicStarterStore_父目录创建失败返回错误
+func TestNewTopicStarterStore_父目录创建失败返回错误(t *testing.T) {
+	// 用一个已存在的普通文件当父目录，mkdir 必然失败
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o644))
+
+	_, err := NewTopicStarterStore(filepath.Join(blocker, "recommendation.db"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "创建推荐库父目录失败")
+}
+
+// TestNewTopicStarterStore_建表失败返回错误
+func TestNewTopicStarterStore_建表失败返回错误(t *testing.T) {
+	// 指向一个目录路径，sqlite 打开会失败
+	dir := t.TempDir()
+	_, err := NewTopicStarterStore(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "创建推荐库表结构失败")
+}
+
+// TestPath_返回构造时的路径
+func TestPath_返回构造时的路径(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "recommendation.db")
+	store, err := NewTopicStarterStore(path)
+	require.NoError(t, err)
+	defer store.Close()
+	assert.Equal(t, path, store.Path())
+}
+
+// TestNullable_各类型转换
+func TestNullable_各类型转换(t *testing.T) {
+	assert.Nil(t, nullableString(nil))
+	assert.Equal(t, "42", nullableString(42))
+
+	assert.Nil(t, nullableInt(nil))
+	assert.Equal(t, int64(7), nullableInt(7))
+	assert.Equal(t, int64(7), nullableInt(int64(7)))
+	assert.Equal(t, int64(7), nullableInt(float64(7)))
+	assert.Nil(t, nullableInt("not-a-number"))
+
+	assert.Nil(t, nullableFloat(nil))
+	assert.Equal(t, 1.5, nullableFloat(1.5))
+	assert.Equal(t, 2.0, nullableFloat(2))
+	assert.Equal(t, 3.0, nullableFloat(int64(3)))
+	assert.Nil(t, nullableFloat("not-a-number"))
+}
+
+// TestEventArgs_createdAt多类型与序列化失败
+func TestEventArgs_createdAt多类型与序列化失败(t *testing.T) {
+	// int64 / int 两种 createdAt 都应被接受
+	args, err := eventArgs("k", map[string]any{"created_at": int64(123)})
+	require.NoError(t, err)
+	assert.Equal(t, 123.0, args[12])
+
+	args, err = eventArgs("k", map[string]any{"created_at": 456})
+	require.NoError(t, err)
+	assert.Equal(t, 456.0, args[12])
+
+	// payload 不是 map 时退化为空 map（对齐 Python `event.get("payload") or {}`）
+	args, err = eventArgs("k", map[string]any{"payload": "not-a-map"})
+	require.NoError(t, err)
+	assert.Equal(t, "{}", args[11])
+
+	// payload 含不可序列化的值 → 返回错误
+	_, err = eventArgs("k", map[string]any{"payload": map[string]any{"fn": func() {}}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "序列化 payload 失败")
+}
+
+// TestSaveSnapshot_序列化失败返回错误
+func TestSaveSnapshot_序列化失败返回错误(t *testing.T) {
+	store := newTestStore(t)
+	_, err := store.SaveSnapshot(map[string]any{"fn": func() {}}, 1.0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "序列化画像快照失败")
+}
+
+// TestLoadLatestSnapshot_容忍坏JSON与非标量行
+func TestLoadLatestSnapshot_容忍坏JSON与非标量行(t *testing.T) {
+	store := newTestStore(t)
+	db, err := store.connect()
+	require.NoError(t, err)
+	// 版本 3：坏 JSON（应被跳过）；版本 2：空串（应被跳过）；版本 1：正常
+	_, err = db.Exec("INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(3, 1, 1, 'not-json')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(2, 1, 1, '')")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(1, 1, 1, '{\"mark\":\"good\"}')")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	got, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "good", got["mark"])
+}
+
+// TestPrune_无删除时不执行VACUUM但写事件
+func TestPrune_无删除时不执行VACUUM但写事件(t *testing.T) {
+	store := newTestStore(t)
+	now := 10_000_000.0
+
+	removed, err := store.Prune(now)
+	require.NoError(t, err)
+	assert.Empty(t, removed)
+
+	// 即使没删东西，store_pruned 也必须写
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "store_pruned", Limit: 10})
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+}
+
+// TestDeleteRecommendationData_无数据时也能跑通
+func TestDeleteRecommendationData_无数据时也能跑通(t *testing.T) {
+	store := newTestStore(t)
+	require.NoError(t, store.DeleteRecommendationData())
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1, "只有删除记录")
+	assert.Equal(t, "recommendation_data_deleted", events[0]["event_type"])
+
+	payload := events[0]["payload"].(map[string]any)
+	assert.Equal(t, float64(0), payload["exposures_removed"])
+	assert.Equal(t, float64(0), payload["cards_removed"])
+}
+
+// TestDeleteRecommendationData_无attempt_id的调用不入收据
+func TestDeleteRecommendationData_无attempt_id的调用不入收据(t *testing.T) {
+	store := newTestStore(t)
+	_, err := store.RecordEvent(map[string]any{
+		"session_id": "s", "slate_id": "sl", "event_type": "provider_invocation",
+		"payload": map[string]any{"status": "ok"},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteRecommendationData())
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+	require.Len(t, events, 1, "attempt_id 为空的调用不保留收据")
+	assert.Equal(t, "recommendation_data_deleted", events[0]["event_type"])
+}
+
+// TestQueryEvents_按topicId与policyId过滤
+// 补齐 TopicID / PolicyID 两个分支（topic_starter.py:610-618）
+func TestQueryEvents_按topicId与policyId过滤(t *testing.T) {
+	store := newTestStore(t)
+	seedQueryEvents(t, store)
+
+	topic := "t2"
+	got, err := store.QueryEvents(QueryEventsOptions{EventType: "topic_click", TopicID: &topic, Limit: 100})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t2", got[0]["topic_id"])
+
+	policy := "topic-starter-mvp-v1"
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", PolicyID: &policy, Limit: 100})
+	require.NoError(t, err)
+	assert.Len(t, got, 3, "默认 policy_id 全部匹配")
+
+	missing := "no-such-policy"
+	got, err = store.QueryEvents(QueryEventsOptions{EventType: "topic_click", PolicyID: &missing, Limit: 100})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+// TestEnsureParentDir_无父目录时直接通过
+func TestEnsureParentDir_无父目录时直接通过(t *testing.T) {
+	require.NoError(t, ensureParentDir("recommendation.db"))
+}

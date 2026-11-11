@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -214,27 +215,39 @@ func TestInitModel_BlankImportRegistersProviders(t *testing.T) {
 	registry := model_clients.GetClientRegistry()
 	clients := registry.ListClients()
 
-	// 期望的内置 provider 注册键名
+	// 23.3 起只有 4 个实现类注册；其余 11 个别名 provider 由
+	// CreateModelClient 先归一为 OpenAI 再分派（对齐上游 _implementation_provider），
+	// 因此注册表里不含 llm_DashScope / llm_SiliconFlow / llm_InferenceAffinity 等键。
 	expectedProviders := []string{
 		"llm_OpenAI",
 		"llm_OpenRouter",
-		"llm_DashScope",
 		"llm_DeepSeek",
-		"llm_SiliconFlow",
-		"llm_InferenceAffinity",
 		"llm_intelli_router",
 	}
 
 	for _, expected := range expectedProviders {
-		found := false
-		for _, name := range clients {
-			if name == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(clients, expected) {
 			t.Errorf("注册表中未找到 %q，已注册: %v", expected, clients)
+		}
+	}
+
+	// 别名 provider 虽不注册独立键，但必须能通过 CreateModelClient 创建成功
+	for _, provider := range []string{
+		"DashScope", "SiliconFlow", "Moonshot", "MiniMax", "ModelArts",
+		"VolcEngine", "Qianfan", "Zhipu", "MiMo",
+	} {
+		client, err := model_clients.CreateModelClient(&llmschema.ModelClientConfig{
+			ClientID:       "cid",
+			ClientProvider: provider,
+			APIKey:         "sk-test",
+			APIBase:        "https://example.com/v1",
+		}, &llmschema.ModelRequestConfig{ModelName: "m"})
+		if err != nil {
+			t.Errorf("别名 provider %s 创建失败: %v", provider, err)
+			continue
+		}
+		if client == nil {
+			t.Errorf("别名 provider %s 返回 nil", provider)
 		}
 	}
 }
