@@ -20,6 +20,7 @@
 //	├── machine_signals.go          # 信号归属
 //	├── persistence.go              # 退出前落盘
 //	├── client.go                   # InProcessRuntimeClient
+//	├── query.go                    # 10 个只读查询的执行层（dispatch/run/failure）
 //	├── machine_entry.go            # 一次性入口
 //	└── machine.go                  # 编排核心
 //

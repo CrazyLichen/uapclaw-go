@@ -36,8 +36,8 @@
 // 保留所有已装安全护栏；deny 不可放宽、三个桶同步、深拷贝、排序输出。
 // 写入方现状：
 //   - `WithRunPermissions` 已由 `permission_interrupt_rail.go` 消费（9.90d-2 回填）
-//   - `WithRunContext` **尚无生产写入方**：Python 在
-//     `interface_deep.py`（请求入口）与 `channels/process_cli/machine.py`（CLI）
-//     两处绑定 `CURRENT_RUN_CONTEXT`，Go 侧对应入口尚未迁移（`service.go` 283 行
-//     vs Python 4000+ 行）。已登记 IMPLEMENTATION_PLAN 9.90e。
+//   - `WithRunContext` 已由 `channels/processcli/machine.go` 的 `RunMachine` 写入
+//     （20.2 回填）。Python 在 `interface_deep.py`（请求入口）与
+//     `channels/process_cli/machine.py`（CLI）两处绑定 `CURRENT_RUN_CONTEXT`；
+//     CLI 侧已对齐（`machine.py:532-533`），`interface_deep.py` 侧仍待 20.3 迁移。
 package runtime
