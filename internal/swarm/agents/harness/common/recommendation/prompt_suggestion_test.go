@@ -12,8 +12,8 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 用例：switches ───────────────────────────────

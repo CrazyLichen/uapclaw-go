@@ -366,8 +366,8 @@ func (c *failingLLM) Release(context.Context, ...model_clients.ReleaseOption) (b
 	return false, nil
 }
 
-func (c *failingLLM) SupportsKVCacheRelease() bool                        { return false }
-func (c *failingLLM) SupportsKVCacheAffinity() bool                       { return false }
+func (c *failingLLM) SupportsKVCacheRelease() bool  { return false }
+func (c *failingLLM) SupportsKVCacheAffinity() bool { return false }
 func (c *failingLLM) BuildKVCacheAffinityInvokeKwargs(any, string, string, int) map[string]any {
 	return map[string]any{}
 }

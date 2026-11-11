@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -133,15 +133,15 @@ func EnqueueHistoryRequestCompletion(sessionID, requestID, terminalStatus string
 	historyWriteQueue <- historyWriteItem{
 		sessionID: sid,
 		record: map[string]any{
-			"id":         rid + ":request_completed",
-			"role":       "assistant",
-			"request_id": rid,
-			"channel_id": "",
-			"timestamp":  float64(time.Now().UnixNano()) / 1e9,
-			"content":    "",
-			"event_type": string(schema.EventTypeSessionRequestCompleted),
+			"id":            rid + ":request_completed",
+			"role":          "assistant",
+			"request_id":    rid,
+			"channel_id":    "",
+			"timestamp":     float64(time.Now().UnixNano()) / 1e9,
+			"content":       "",
+			"event_type":    string(schema.EventTypeSessionRequestCompleted),
 			"feedback_only": true,
-			"status":     status,
+			"status":        status,
 		},
 		writeDone: receipt,
 	}
@@ -420,16 +420,16 @@ func historyWorker() {
 	for item := range historyWriteQueue {
 		// 哨兵项：FlushHistoryQueue 发送的空项，跳过写入但确认完成
 		if item.sessionID == "" && item.record == nil {
-		if item.flushDone != nil {
-			item.flushDone <- struct{}{}
+			if item.flushDone != nil {
+				item.flushDone <- struct{}{}
+			}
+			continue
 		}
-		continue
-	}
-	writeHistoryItem(item.sessionID, item.record)
-	// 10.7.2: 单条落盘回执（fork 推送前等待完成行写盘）
-	if item.writeDone != nil {
-		close(item.writeDone)
-	}
+		writeHistoryItem(item.sessionID, item.record)
+		// 10.7.2: 单条落盘回执（fork 推送前等待完成行写盘）
+		if item.writeDone != nil {
+			close(item.writeDone)
+		}
 	}
 }
 

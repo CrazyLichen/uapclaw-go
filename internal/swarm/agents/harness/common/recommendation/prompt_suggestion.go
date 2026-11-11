@@ -16,8 +16,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -728,7 +728,7 @@ func (f *PromptSuggestionForks) runFork(
 		if ctx.Err() != nil {
 			f.recordLedgerEvent(epoch, "prompt_suggestion_generation", sessionID, requestID,
 				suggestionID, ledgerPayload(record, map[string]any{
-					"outcome": "cancelled",
+					"outcome":    "cancelled",
 					"latency_ms": time.Since(started).Milliseconds(),
 				}))
 			return

@@ -13,11 +13,11 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
