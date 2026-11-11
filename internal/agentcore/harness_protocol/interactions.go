@@ -383,7 +383,7 @@ const (
 // HarnessInteractionRequest provider 在活跃轮内发起、必须等待回答的请求。
 // Python: interactions.py:252-254 HarnessInteractionRequest（TypeAlias，5 分支 union）
 type HarnessInteractionRequest interface {
-	// requestKind 返回请求的线格式 discriminator（供 15.4 codec 使用）
+	// requestKind 返回请求的判别字面量（供 ValidateInteractionResponse 判型；交互不过 wire codec）
 	requestKind() string
 	// expectedResponseKind 返回与之配对的应答 discriminator。
 	// ⚠️ Go 专有成员：Python 用 _EXPECTED_RESPONSE_TYPE 字典表达
@@ -394,7 +394,7 @@ type HarnessInteractionRequest interface {
 // HarnessInteractionResponse 宿主对请求的应答。
 // Python: interactions.py:255-261 HarnessInteractionResponse（TypeAlias，5 分支 union）
 type HarnessInteractionResponse interface {
-	// responseKind 返回应答的线格式 discriminator（供 15.4 codec 使用）
+	// responseKind 返回应答的判别字面量（供 ValidateInteractionResponse 判型；交互不过 wire codec）
 	responseKind() string
 }
 

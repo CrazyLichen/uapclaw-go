@@ -25,10 +25,13 @@
 //	├── protocol.go       # 4 个协议接口（HarnessProtocol/HarnessModelControl/HarnessProvider/ModelConfigProvider）
 //	├── interactions.go   # 控制面请求-应答（3 枚举 + 10 值对象 + 2 标记接口 + ValidateInteractionResponse + CancelOption）
 //	├── hooks.go          # 生命周期钩子（1 枚举 + 7 值对象 + HarnessHookDispatcher 4 方法）
-//	└── placeholders.go   # 检查点占位（⤵️ 15.4）
+//	├── checkpoints.go    # 检查点通道（1 枚举 5 值 + 2 值对象 + Sink 契约 + 2 构造器 + 4MiB 上限）
+//	└── serialization.go  # 事件线格式 codec（2 导出 + 13 枚举解析 + 8 基础助手 + 7 对编解码 + 载荷分派）
 //
 // 对应 Python 代码：openjiuwen/harness_protocol/
-// （models/tools/results/state/errors/events/stream/protocol/interactions/hooks.py）
+// （models/tools/results/state/errors/events/stream/protocol/interactions/hooks/
+//
+//	checkpoints/serialization.py）
 //
 // 核心类型索引：
 //
@@ -44,7 +47,8 @@
 //	         ToolApprovalResponse / UserInputResponse / McpElicitationResponse /
 //	         DynamicToolCallResponse / ProviderInteractionResponse /
 //	         BeforePromptContext / BeforePromptResult / BeforeToolContext / ToolDecision /
-//	         AfterToolContext / AfterToolResult / StopHookContext
+//	         AfterToolContext / AfterToolResult / StopHookContext /
+//	         HarnessCheckpoint / CheckpointSaveReceipt
 //	枚举：  HarnessState / HarnessCapability / HostCapability / DeliveryMode / AbortMode /
 //	         ResumePolicy / McpTransport / TurnStatus / MessageRole / TurnTerminationKind /
 //	         TurnEventKind / OutputKind / OutputChannel / OutputOperation / UsageUpdateMode /
@@ -59,11 +63,5 @@
 //	构造：  全部 NewXxx(...) (Xxx, error)，校验顺序与上游 __post_init__ 一致
 //	助手：  FreezeJsonValue / FreezeJsonObject / JsonValueToBuiltin /
 //	         EventRetentionOf / IsTerminalTurnEventKind / ValidateInteractionResponse
-//
-// 未落地的占位（⤵️ 回填后消除标注）：
-//
-//	HarnessCheckpoint            ⤵️ 15.4（checkpoints.py:28-45，5 必填 + 4MiB 校验）
-//	CheckpointReason             ⤵️ 15.4（checkpoints.py:18-26）
-//	CheckpointSaveReceipt        ⤵️ 15.4（checkpoints.py:66-79）
-//	HarnessCheckpointSink        ⤵️ 15.4（checkpoints.py:79-111，幂等 + CAS）
+//	序列化：HarnessEventToDict / HarnessEventFromDict / EventWireSchemaVersion
 package harness_protocol

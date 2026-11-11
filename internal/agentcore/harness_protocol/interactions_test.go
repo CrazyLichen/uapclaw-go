@@ -74,7 +74,7 @@ func TestInteractions_枚举成员总数(t *testing.T) {
 	}
 }
 
-// TestInteractionDiscriminators_字面量守护 10 个 kind 字面量不得被改（15.4 codec 依赖）
+// TestInteractionDiscriminators_字面量守护 10 个 kind 字面量不得被改（ValidateInteractionResponse 判型依赖）
 // Q3 决策 1 + Q5b 决策 3-a
 func TestInteractionDiscriminators_字面量守护(t *testing.T) {
 	reqs := []struct {

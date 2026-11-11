@@ -198,7 +198,7 @@ func TestDiagnosticEvent_message非空(t *testing.T) {
 }
 
 // TestPayloadKind_线格式字面量 守护 10 个 payload 的 discriminator，
-// 15.4 的 serialization 依赖这些字面量与 Python 一致。
+// serialization.go 的 payloadToWire 依赖这些字面量与 Python 一致。
 // Python: serialization.py:_payload_to_wire（"output"/"item_lifecycle"/"usage_updated"/
 // "model_request"/"state_changed"/"turn_lifecycle"/"hook_observed"/"diagnostic"/"provider"）
 func TestPayloadKind_线格式字面量(t *testing.T) {
@@ -653,7 +653,7 @@ func TestHarnessEvent_causation深拷贝(t *testing.T) {
 }
 
 // TestUnknownEvent_形状 验证未知事件保留 event_type 与 schema_version。
-// Python: events.py:350-361 UnknownEvent（codec 行为留 15.4）
+// Python: events.py:350-361 UnknownEvent（codec 见 serialization.go）
 func TestUnknownEvent_形状(t *testing.T) {
 	ev, err := NewUnknownEvent("future_event", "2", map[string]any{"k": 1})
 	require.NoError(t, err)
