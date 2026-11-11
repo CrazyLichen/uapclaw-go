@@ -32,8 +32,9 @@ func TestReviewerUIMetadata_从valueMetadata取(t *testing.T) {
 // TestReviewerUIMetadata_从value顶层取 测试第三层来源。
 //
 // Python: for key in _AUTO_REVIEWER_UI_METADATA_KEYS:
-//             value = _read_value_field(value_obj, key, None)
-//             if value not in (None, ""): metadata[key] = value
+//
+//	value = _read_value_field(value_obj, key, None)
+//	if value not in (None, ""): metadata[key] = value
 func TestReviewerUIMetadata_从value顶层取(t *testing.T) {
 	value := map[string]any{"decision_source": "auto_reviewer"}
 	got := reviewerUIMetadataFromInteraction(map[string]any{}, value)
