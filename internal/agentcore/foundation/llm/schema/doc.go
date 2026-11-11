@@ -25,7 +25,7 @@
 //
 // 配置与模型信息体系：
 //
-//	ProviderType       — 模型服务提供商标识枚举（OpenAI/DashScope/DeepSeek 等 7 种）
+//	ProviderType       — 模型服务提供商标识枚举（OpenAI/DashScope/DeepSeek 等 17 种，对齐上游 schema/config.py:13-31）
 //	ModelClientConfig  — 模型客户端配置（provider/api_key/api_base/timeout 等，支持 Extra 字段）
 //	ModelRequestConfig — 模型请求配置（model/temperature/top_p 等，支持 Extra 字段）
 //	BaseModelInfo      — 模型基础信息（合并连接信息+请求参数，支持 model/stream 别名和 Extra 字段）
@@ -53,6 +53,7 @@
 //	├── generation_response.go # 多模态生成响应（图片/音频/视频）
 //	├── transcription.go    # 音频转写响应模型
 //	├── config.go            # ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
+//	├── reasoning_config.go  # ReasoningConfig + CoerceReasoningConfig + ReasoningIntent（23.3）
 //	└── model_info.go        # BaseModelInfo + ModelConfig
 //
 // 对应 Python 代码路径：
@@ -62,5 +63,6 @@
 //	openjiuwen/core/foundation/llm/schema/message_chunk.py — 流式消息块（2.3 节）
 //	openjiuwen/core/foundation/llm/schema/generation_response.py — 多模态生成响应（2.4 节）
 //	openjiuwen/core/foundation/llm/schema/config.py       — ProviderType/ModelClientConfig/ModelRequestConfig（2.5 节）
+//	openjiuwen/core/foundation/llm/reasoning.py:255-306   — CoerceReasoningConfig/ReasoningIntent（23.3）
 //	openjiuwen/core/foundation/llm/schema/mode_info.py    — BaseModelInfo/ModelConfig（2.5 节）
 package schema

@@ -56,8 +56,33 @@ type ModelClientConfig struct {
 	SSLCert string `json:"ssl_cert,omitempty"`
 	// CustomHeaders 开发者自定义请求头，每次 LLM 调用时合并
 	CustomHeaders map[string]string `json:"custom_headers,omitempty"`
+	// Extensions 模型客户端扩展配置（KV cache / prompt cache 等）。
+	// Python: schema/config.py ModelClientConfig.extensions: Optional[LLMExtensionsConfig]
+	Extensions *LLMExtensionsConfig `json:"extensions,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
 	Extra map[string]any `json:"-"`
+}
+
+// KVCacheExtensionConfig KV cache 扩展配置。
+// Python: schema/config.py:47-49 KVCacheExtensionConfig（mode 是 Literal["none","affinity"]）
+type KVCacheExtensionConfig struct {
+	// Mode KV cache 模式，none/affinity
+	Mode string `json:"mode,omitempty"`
+	// AffinityField 亲和字段名，默认 agent_hint
+	AffinityField string `json:"affinity_field,omitempty"`
+}
+
+// LLMExtensionsConfig 模型客户端扩展配置。
+// Python: schema/config.py:52-56 LLMExtensionsConfig
+type LLMExtensionsConfig struct {
+	// PromptCache 提示词缓存配置
+	PromptCache map[string]any `json:"prompt_cache,omitempty"`
+	// KVCache KV cache 配置
+	KVCache KVCacheExtensionConfig `json:"kv_cache,omitempty"`
+	// ResponseFields 响应字段配置
+	ResponseFields map[string]any `json:"response_fields,omitempty"`
+	// RequestExtraBody 请求额外体
+	RequestExtraBody map[string]any `json:"request_extra_body,omitempty"`
 }
 
 // ModelRequestConfig 模型请求配置。
@@ -115,7 +140,39 @@ const (
 	ProviderTypeInferenceAffinity
 	// ProviderTypeIntelliRouter IntelliRouter 服务商
 	ProviderTypeIntelliRouter
+
+	// ── 以下 10 个值为 23.3 补齐（对齐上游 schema/config.py:13-31 共 17 个）──
+	// 新值一律追加末尾、不按上游顺序重排：providerTypeStrings 按下标索引，
+	// 中间插入会让既有常量数值整体位移。Go 侧 MarshalJSON 输出字符串，
+	// 数值顺序与上游不一致无外部可见影响。
+
+	// ProviderTypeOpenAIAccount OpenAI 账号 OAuth 服务商
+	ProviderTypeOpenAIAccount
+	// ProviderTypeAnthropic Anthropic 服务商
+	ProviderTypeAnthropic
+	// ProviderTypeMoonshot 月之暗面服务商
+	ProviderTypeMoonshot
+	// ProviderTypeMiniMax MiniMax 服务商
+	ProviderTypeMiniMax
+	// ProviderTypeModelArts 华为云 ModelArts 服务商
+	ProviderTypeModelArts
+	// ProviderTypeVolcEngine 火山引擎服务商
+	ProviderTypeVolcEngine
+	// ProviderTypeQianfan 百度千帆服务商
+	ProviderTypeQianfan
+	// ProviderTypeZhipu 智谱服务商
+	ProviderTypeZhipu
+	// ProviderTypeMiMo 小米 MiMo 服务商
+	ProviderTypeMiMo
+	// ProviderTypeAscendAffinity 昇腾亲和服务商（上游有枚举、无客户端、不在 api_key 白名单）
+	ProviderTypeAscendAffinity
 )
+
+// kvCacheModeNone 不启用 KV cache。
+const kvCacheModeNone = "none"
+
+// kvCacheModeAffinity KV cache 亲和模式。
+const kvCacheModeAffinity = "affinity"
 
 // defaultClientTimeoutSeconds 默认请求超时（秒）。
 // Python: schema/config.py:145 timeout default=360.0, gt=0——注释明文约定
@@ -189,6 +246,17 @@ var providerTypeStrings = [...]string{
 	"DeepSeek",
 	"InferenceAffinity",
 	"intelli_router",
+	// 23.3 补齐（顺序与上面常量一一对应）
+	"OpenAIAccount",
+	"Anthropic",
+	"Moonshot",
+	"MiniMax",
+	"ModelArts",
+	"VolcEngine",
+	"Qianfan",
+	"Zhipu",
+	"MiMo",
+	"AscendAffinity",
 }
 
 // modelClientConfigKnownKeys ModelClientConfig 已知 JSON 键名集合。
@@ -199,6 +267,13 @@ var modelRequestConfigKnownKeys map[string]struct{}
 
 // providerTypeMap 服务商名称到枚举值的映射表（精确匹配+小写匹配）。
 var providerTypeMap map[string]ProviderType
+
+// kvCacheModeSet KV cache 合法模式集合。
+// Python: schema/config.py:48 Literal["none","affinity"]
+var kvCacheModeSet = map[string]struct{}{
+	kvCacheModeNone:     {},
+	kvCacheModeAffinity: {},
+}
 
 // globalProviderValidator 全局服务商验证器。
 var globalProviderValidator ProviderValidator
@@ -243,6 +318,21 @@ func ParseProviderType(s string) (ProviderType, bool) {
 		return pt, true
 	}
 	return 0, false
+}
+
+// ValidateKVCacheMode 校验 KV cache 模式是否合法。
+// 上游 LEGACY_PROVIDER_ALIASES 给 InferenceAffinity 注入 mode="release"，但
+// KVCacheExtensionConfig 的 Literal 不含它、下游也无 release 分支——Go 跟随
+// 上游拒绝（偏差 D-10），不自行放宽。
+// Python: schema/config.py:48 Literal["none","affinity"]
+func ValidateKVCacheMode(mode string) error {
+	if mode == "" {
+		return nil
+	}
+	if _, ok := kvCacheModeSet[mode]; !ok {
+		return fmt.Errorf("kv_cache.mode 必须是 none 或 affinity，收到 %q", mode)
+	}
+	return nil
 }
 
 // ValidateAndNormalizeProvider 验证并规范化服务商名称，依次尝试枚举匹配、大小写不敏感匹配和全局验证器。
@@ -432,6 +522,7 @@ func NormalizeModelClientConfig(config *ModelClientConfig) *ModelClientConfig {
 		MaxRetries:              config.MaxRetries,
 		VerifySSL:               config.VerifySSL,
 		SSLCert:                 config.SSLCert,
+		Extensions:              config.Extensions,
 	}
 	if config.CustomHeaders != nil {
 		out.CustomHeaders = make(map[string]string, len(config.CustomHeaders))
@@ -695,6 +786,7 @@ func init() {
 		"verify_ssl":                 {},
 		"ssl_cert":                   {},
 		"custom_headers":             {},
+		"extensions":                 {},
 	}
 
 	// 初始化 ModelRequestConfig 已知 JSON 键名集合

@@ -2282,16 +2282,18 @@ var configYAMLKeys = map[string]bool{
 }
 
 // availableModelProviders 可用的模型服务商列表。
-// Python: [provider.value for provider in ProviderType]。
-var availableModelProviders = []string{
-	"OpenAI",
-	"OpenRouter",
-	"SiliconFlow",
-	"DashScope",
-	"DeepSeek",
-	"InferenceAffinity",
-	"intelli_router",
-}
+// Python: [provider.value for provider in ProviderType]
+//
+// 23.3 起由枚举生成而非字面量：ProviderType 扩到 17 值与上游 schema/config.py:13-31
+// 对齐，前端下拉框随枚举自动同步。注意 OpenAIAscendAffinity 是上游为昇腾预留的枚举
+// （无客户端实现、不在 api_key 白名单），选中会在创建客户端时报未注册。
+var availableModelProviders = func() []string {
+	out := make([]string, 0, int(llmSchema.ProviderTypeAscendAffinity)+1)
+	for p := llmSchema.ProviderTypeOpenAI; p <= llmSchema.ProviderTypeAscendAffinity; p++ {
+		out = append(out, p.String())
+	}
+	return out
+}()
 
 // channelConfPlatforms IM 平台配置族覆盖的平台清单（注册处逐条字面量、见 registerChannelConfFamily）。
 // Python: app_web_handlers.py:5844-5863 的 9 组 channel.<p>.get_conf / set_conf 注册。
