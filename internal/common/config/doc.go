@@ -17,7 +17,6 @@
 //	├── envvar.go         # 环境变量解析：ResolveEnvVars + DecryptFunc
 //	├── normalize.go      # 配置后处理：NormalizeConfig + ParseCustomHeaders
 //	├── sections.go       # 专用分段方法：Server/Logging/Workspace
-//	├── reloader.go       # fsnotify 热重载：Reloader/OnReload/Start/Stop
 //	├── merge.go          # 配置迁移：DeepMerge/MigrateFromTemplate
 //	├── default_models.go # 默认模型列表：GetDefaultModels/InferIsDefault
 //	├── values.go         # 数值读取：Float/Int（兼容 YAML int 与 JSON float64）

@@ -51,8 +51,6 @@ type AppGatewayServer struct {
 	agentClient *routing.AgentClient
 	// httpServer HTTP 服务器
 	httpServer *http.Server
-	// reloader 配置热重载监听器
-	reloader *config.Reloader
 	// gwServer 多路由 WS 服务器（11.9，对齐 Python GatewayServer 类）；
 	// Start 内装配（对齐 Python run() 启动序），gwServerMu 保护装配窗口的并发读
 	// （生产路径 Start→Stop 串行，锁为测试/外部观测读取的并发安全兜底）
@@ -134,18 +132,6 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 		channelMgr:  channelMgr,
 		msgHandler:  msgHandler,
 		agentClient: agentClient,
-	}
-
-	// 创建配置热重载器（对齐 Python 无 fsnotify，Go 补充）
-	// 监听 config.yaml 变更，触发 onConfigSavedImpl
-	if cfg != nil {
-		if reloader, err := config.NewReloader(cfg); err != nil {
-			logger.Warn(logComponent).
-				Err(err).
-				Msg("failed to create config hot-reloader, fsnotify trigger path unavailable")
-		} else {
-			s.reloader = reloader
-		}
 	}
 
 	// 步骤3：创建 WebChannel（对齐 Python WebChannel(config, on_config_saved)）
@@ -519,25 +505,6 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 		logger.Error(logComponent).Err(err).Msg("failed to start GatewayServer (19001)")
 	}
 
-	// 启动配置热重载监听（对齐 Python 无 fsnotify，Go 补充）
-	if s.reloader != nil {
-		s.reloader.OnReload(func(data map[string]any) {
-			// fsnotify 检测到 config.yaml 变更，用最新配置快照调用 onConfigSaved
-			configData, _ := s.config.Raw()
-			if configData == nil {
-				configData = make(map[string]any)
-			}
-			_ = s.onConfigSavedImpl(nil, BuildEnvMap(), configData)
-		})
-		if err := s.reloader.Start(); err != nil {
-			logger.Warn(logComponent).
-				Err(err).
-				Msg("failed to start config hot-reload listener")
-		} else {
-			logger.Info(logComponent).Msg("config hot-reload listener started")
-		}
-	}
-
 	// 启动 HTTP 服务器
 	addr := s.webChannel.Addr()
 	s.httpServer = &http.Server{
@@ -665,15 +632,6 @@ func (s *AppGatewayServer) Stop() error {
 	// 断开 AgentClient
 	if s.agentClient != nil {
 		s.agentClient.Disconnect()
-	}
-
-	// 停止配置热重载监听
-	if s.reloader != nil {
-		if err := s.reloader.Stop(); err != nil {
-			logger.Warn(logComponent).
-				Err(err).
-				Msg("failed to stop config hot-reload listener")
-		}
 	}
 
 	// 关闭 HTTP 服务器
