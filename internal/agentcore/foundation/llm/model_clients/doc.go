@@ -54,13 +54,20 @@
 //	openjiuwen/core/common/clients/client_registry.py                 — ClientRegistry
 //	openjiuwen/core/foundation/llm/output_parsers/output_parser.py    — BaseOutputParser (2.16 节)
 //
-// # 后续注册点（2.7-2.12 节实现时修改）
-// ⚠️ 以下位置需要在各节实现时添加 init() 注册调用：
+// # 客户端注册（对齐上游 4 个实现类）
 //
-//	2.7  OpenAIModelClient      → Register("OpenAI", "llm", ...) + Register("OpenRouter", "llm", ...)
-//	2.8  DashScopeModelClient   → Register("DashScope", "llm", ...)
-//	     DeepSeekModelClient    → 已并入 OpenAI 客户端（Register("DeepSeek", "llm", openAIFactory)）
-//	2.10 SiliconFlowModelClient → Register("SiliconFlow", "llm", ...)
-//	2.11 InferenceAffinity      → Register("InferenceAffinity", "llm", ...)
-//	2.12 IntelliRouter          → Register("intelli_router", "llm", ...)
+// 上游 openjiuwen/core/foundation/llm/model_clients/__init__.py:24-38 的
+// _implementation_provider 只分派到 4 个实现，其余 provider 全部经别名归一
+// （llm/endpointprofiles）落到 OpenAI 客户端，靠 endpoint_profile 区分方言：
+//
+//	OpenAI        → Register("OpenAI" / "OpenRouter" / "DeepSeek" / "DashScope" /
+//	                "SiliconFlow" / "Moonshot" / "MiniMax" / "ModelArts" /
+//	                "VolcEngine" / "Qianfan" / "Zhipu" / "MiMo" / "InferenceAffinity"
+//	                / "AscendAffinity", "llm", openAIFactory)
+//	intelli_router → Register("intelli_router", "llm", ...)（独立实现）
+//	Anthropic / OpenAIAccount → ⤵️ 23.1 / 23.2 落地
+//
+// 23.3 已删除 dashscope / siliconflow / inference_affinity 三个独立客户端包：
+// 其能力（DashScope 原生多模态三方法、SiliconFlow 工具清洗、KV cache 释放）
+// 全部迁入 openai 包，由 endpoint_profile 与 extensions.kv_cache.mode 驱动。
 package model_clients
