@@ -76,19 +76,19 @@ var (
 	// eventPayloadQueryFields query_events 允许过滤的 payload 字段白名单（:57-71，13 项）。
 	// 字段名会被直接拼进 SQL，必须先经此白名单校验。
 	eventPayloadQueryFields = map[string]struct{}{
-		"card_id":                             {},
-		"context_scope":                       {},
-		"generation_trigger_key":              {},
-		"negative_preference_version":         {},
-		"project_id":                          {},
-		"serving_compatibility_key":           {},
-		"short_intent_version":                {},
-		"source_starter_id":                   {},
-		"model":                               {},
-		"provider_response_id":                {},
-		"status":                              {},
+		"card_id":                              {},
+		"context_scope":                        {},
+		"generation_trigger_key":               {},
+		"negative_preference_version":          {},
+		"project_id":                           {},
+		"serving_compatibility_key":            {},
+		"short_intent_version":                 {},
+		"source_starter_id":                    {},
+		"model":                                {},
+		"provider_response_id":                 {},
+		"status":                               {},
 		"generation_trigger_key.context_scope": {},
-		"generation_trigger_key.model":        {},
+		"generation_trigger_key.model":         {},
 	}
 )
 
