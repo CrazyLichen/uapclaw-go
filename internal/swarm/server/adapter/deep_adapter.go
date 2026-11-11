@@ -2650,112 +2650,6 @@ func (d *DeepAdapter) setCheckpoint(ctx context.Context) error {
 	return EnsurePersistentCheckpointer(ctx)
 }
 
-// buildModelFromEntry 根据单个模型条目的 model_client_config / model_config_obj 构建 Model 实例。
-// Python: JiuWenClawDeepAdapter._build_model_from_entry() (line 1483-1493)
-func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any) (*llm.Model, error) {
-	name, _ := mcc["model_name"].(string)
-
-	// 构建 ModelRequestConfig
-	// 数值字段统一走 config.Float：YAML 把 `temperature: 1` / `top_p: 1` 解成 int，
-	// 只认 float64 会把整数写法静默丢掉（历史坑，见 config/values.go）。
-	temperature := 0.95
-	if f, ok := config.Float(mco, "temperature"); ok {
-		temperature = f
-	}
-	// Python: 只在配置中有 top_p 时才设置，不设默认值
-	mConfigOpts := []llmschema.ModelRequestConfigOption{
-		llmschema.WithModelName(name),
-		llmschema.WithTemperatureValue(temperature),
-	}
-	if f, ok := config.Float(mco, "top_p"); ok {
-		mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
-	}
-	// model_config_obj.max_tokens → 生成上限默认值。请求级显式传值时优先（base_client.go:320-342），
-	// 因此这里只作为"模型级默认值"，不覆盖调用方的 WithInvokeMaxTokens。
-	if n, ok := toPositiveInt(mco["max_tokens"]); ok {
-		mConfigOpts = append(mConfigOpts, llmschema.WithMaxTokens(n))
-	}
-	// model_config_obj.context_window → 模型上下文窗口元数据（内部用，不外发）
-	if n, ok := config.ParsePositiveTokens(mco["context_window"]); ok {
-		mConfigOpts = append(mConfigOpts, llmschema.WithContextWindow(n))
-	}
-	mConfig := llmschema.NewModelRequestConfig(mConfigOpts...)
-
-	// 构建 ModelClientConfig：从 mcc 提取字段
-	provider, _ := mcc["client_provider"].(string)
-	if provider == "" {
-		provider = "OpenAI"
-	}
-	apiKey, _ := mcc["api_key"].(string)
-	apiBase, _ := mcc["api_base"].(string)
-
-	clientConfigOpts := make([]llmschema.ModelClientConfigOption, 0)
-	// timeout 必须双类型兼容：YAML `timeout: 1800` 解出 int，只认 float64 会
-	// 静默回落到 ModelClientConfig 默认 60s，长流式生成会被 http.Client 硬切断。
-	if f, ok := config.Float(mcc, "timeout"); ok && f > 0 {
-		clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(f))
-	}
-	if v, ok := mcc["max_retries"]; ok {
-		switch n := v.(type) {
-		case float64:
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(int(n)))
-		case int:
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(n))
-		}
-	}
-	if v, ok := mcc["verify_ssl"]; ok {
-		if b, ok := v.(bool); ok {
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithVerifySSL(b))
-		}
-	}
-	if v, ok := mcc["ssl_cert"]; ok {
-		if s, ok := v.(string); ok {
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(s))
-		}
-	}
-	// custom_headers 透传：此前仅列入 knownKeys 排除 extra 却无映射分支，静默丢弃
-	// （2026-10-28 审查 M-01 越界发现顺手修）。对齐 BuildEvolutionLLM 的收敛模式。
-	if v, ok := mcc["custom_headers"]; ok {
-		if m, ok := v.(map[string]any); ok && len(m) > 0 {
-			headers := make(map[string]string, len(m))
-			for k, hv := range m {
-				if s, ok := hv.(string); ok {
-					headers[k] = s
-				}
-			}
-			if len(headers) > 0 {
-				clientConfigOpts = append(clientConfigOpts, llmschema.WithCustomHeaders(headers))
-			}
-		}
-	}
-
-	// 提取 extra 字段（排除已知字段）
-	extra := make(map[string]any)
-	knownKeys := map[string]struct{}{
-		"model_name": {}, "client_provider": {}, "api_key": {}, "api_base": {},
-		"timeout": {}, "max_retries": {}, "verify_ssl": {}, "ssl_cert": {},
-		"custom_headers": {}, "client_id": {},
-		// 输入/输出上限由本层显式消费（max_output_tokens→MaxTokens、max_input_tokens→窗口映射），
-		// 不能落进 client 的 Extra（设计 D5）
-		"max_input_tokens": {}, "max_output_tokens": {},
-	}
-	for k, v := range mcc {
-		if _, ok := knownKeys[k]; !ok {
-			extra[k] = v
-		}
-	}
-	if len(extra) > 0 {
-		clientConfigOpts = append(clientConfigOpts, llmschema.WithConfigExtra(extra))
-	}
-
-	clientConfig, cfgErr := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
-	if cfgErr != nil {
-		return nil, fmt.Errorf("创建 ModelClientConfig 失败: %w", cfgErr)
-	}
-
-	return llm.NewModel(clientConfig, mConfig)
-}
-
 // buildModelCacheFromDefaults 从 models.defaults 列表构建模型缓存。
 // Python: JiuWenClawDeepAdapter._build_model_cache_from_defaults() (line 1495-1533)
 //
@@ -2794,7 +2688,7 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(
 		if mco == nil {
 			mco = make(map[string]any)
 		}
-		m, err := d.buildModelFromEntry(mcc, mco)
+		m, err := BuildModelFromEntry(mcc, mco)
 		if err != nil {
 			logger.Warn(logComponent).
 				Err(err).
@@ -2876,7 +2770,7 @@ func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any, cache map
 		mco = make(map[string]any)
 	}
 
-	m, err := d.buildModelFromEntry(mcc, mco)
+	m, err := BuildModelFromEntry(mcc, mco)
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).
