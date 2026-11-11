@@ -1326,6 +1326,70 @@ func metadataString(metadata map[string]any, key string) string {
 	return ""
 }
 
+// sessionCreator AgentManager 的建会话能力（Python manager.create_session）。
+// Python: jiuwenswarm/server/runtime/agent_manager.py AgentManager.create_session
+type sessionCreator interface {
+	// CreateSession 有显式 ID 时原样返回，否则按渠道规则分配
+	CreateSession(channelID, sessionID string) (string, error)
+}
+
+// CreateOrResumeSession 分配一个新的 Runtime 会话 ID，或保留显式给出的持久化 ID。
+// Python: service.py:874-909 create_or_resume_session
+//
+// 偏差 D-12：上游 resolve_manager(request) 按租户分槽，Go 侧只有
+// AgentRuntimeDeps.Manager 单槽（无多租户池，IterManagers 仅用于 host 事件遍历），
+// 故此处固定使用单槽。
+func (r *AgentRuntime) CreateOrResumeSession(channelID, sessionID string) (string, error) {
+	// 1. Python: self._require_started()
+	if err := r.requireStarted(); err != nil {
+		return "", err
+	}
+	requested := strings.TrimSpace(sessionID)
+
+	// 2. Python: if requested: ...（校验 ID + 渠道归属）
+	if requested != "" {
+		// 2a. Python: if not is_valid_session_id(requested): raise ValueError
+		if !common.IsValidSessionID(requested) {
+			return "", errors.New("invalid session_id")
+		}
+		// 2b. Python: descriptor = await self.describe_session(session_id=requested)
+		descriptor, err := r.DescribeSession(requested)
+		if err != nil {
+			return "", err
+		}
+		// 2c. Python: 渠道不一致 -> SessionCatalogError("session not found")
+		//     不泄露「存在但属于别人」
+		if descriptor != nil {
+			requestedChannel := normalizedChannelOrDefault(channelID)
+			persistedChannel := normalizedChannelOrDefault(descriptor.ChannelID)
+			if persistedChannel != requestedChannel {
+				return "", ErrSessionNotFound
+			}
+		}
+	}
+
+	// 3. Python: manager = await self.resolve_manager(request)（Go 单槽，见偏差 D-12）
+	if r.manager == nil {
+		return "", errors.New("agent runtime manager is nil")
+	}
+
+	// 4. Python: resolved = await manager.create_session(channel_id, session_id=requested or None)
+	creator, ok := r.manager.(sessionCreator)
+	if !ok {
+		return "", errors.New("agent manager does not implement CreateSession")
+	}
+	resolved, err := creator.CreateSession(channelID, requested)
+	if err != nil {
+		return "", err
+	}
+
+	// 5. Python: await self._register_session(session_id=resolved, channel_id=channel_id)
+	if _, err := r.RegisterSession(resolved, channelID, sessionpkg.SessionPersistencePolicyPersistent); err != nil {
+		return "", err
+	}
+	return resolved, nil
+}
+
 // GetPermissionSnapshot 返回一致的只读权限快照。
 // Python: service.py:812-820 get_permission_snapshot
 func (r *AgentRuntime) GetPermissionSnapshot(
