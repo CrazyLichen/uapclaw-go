@@ -119,6 +119,11 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		resp, err = s.handleHistoryListTurns(ctx, request)
 	case schema.ReqMethodSessionRestoreFiles:
 		resp, err = s.handleSessionRestoreFiles(ctx, request)
+	// 推荐面板（10.7.2）
+	case schema.ReqMethodRecommendation:
+		resp, err = s.handleRecommendation(ctx, request)
+	case schema.ReqMethodPromptSuggestionCancel:
+		resp, err = s.handlePromptSuggestionCancel(ctx, request)
 	// 团队
 	case schema.ReqMethodTeamDelete:
 		resp, err = s.handleTeamDelete(ctx, request)

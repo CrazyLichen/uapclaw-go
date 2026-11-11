@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // resetWorkspaceCache 重置 workspace 路径缓存，确保 t.Setenv 生效。
@@ -309,4 +310,53 @@ func TestTruncateHistoryRecords_异步写入后截断不被覆盖(t *testing.T) 
 	FlushHistoryQueue(5.0)
 	ResetHistoryWorker()
 	FlushMetadataQueue(5.0)
+}
+
+// TestEnqueueHistoryRequestCompletion_落盘回执 写入后回执关闭、行在盘上。
+func TestEnqueueHistoryRequestCompletion_落盘回执(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	resetHistoryWorkspaceCache()
+	sid := "it-completion-s1"
+
+	receipt, err := EnqueueHistoryRequestCompletion(sid, "rid-1", "success")
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+	select {
+	case <-receipt:
+	case <-time.After(5 * time.Second):
+		t.Fatal("回执 5s 未关闭")
+	}
+
+	records, err := ReadHistoryRecords(sid)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	row := records[0]
+	assert.Equal(t, "rid-1:request_completed", row["id"])
+	assert.Equal(t, "assistant", row["role"])
+	assert.Equal(t, "rid-1", row["request_id"])
+	assert.Equal(t, string(schema.EventTypeSessionRequestCompleted), row["event_type"])
+	assert.Equal(t, true, row["feedback_only"])
+	assert.Equal(t, "success", row["status"])
+}
+
+// TestEnqueueHistoryRequestCompletion_非法终态 非白名单终态报错。
+func TestEnqueueHistoryRequestCompletion_非法终态(t *testing.T) {
+	_, err := EnqueueHistoryRequestCompletion("s", "rid-2", "boom")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported request terminal status")
+}
+
+// TestEnqueueHistoryRequestCompletion_空requestID 返回 nil 回执不写行。
+func TestEnqueueHistoryRequestCompletion_空requestID(t *testing.T) {
+	receipt, err := EnqueueHistoryRequestCompletion("s", "  ", "success")
+	assert.NoError(t, err)
+	assert.Nil(t, receipt)
+}
+
+// TestEnqueueHistoryRequestCompletion_心跳会话 前缀会话不入队。
+func TestEnqueueHistoryRequestCompletion_心跳会话(t *testing.T) {
+	receipt, err := EnqueueHistoryRequestCompletion("heartbeat_abc", "rid-3", "success")
+	assert.NoError(t, err)
+	assert.Nil(t, receipt)
 }

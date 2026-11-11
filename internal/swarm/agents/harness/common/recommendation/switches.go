@@ -2,8 +2,8 @@ package recommendation
 
 import (
 	"strings"
-	"sync/atomic"
-	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -54,9 +54,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// consentEpochValue 当前同意 epoch（0 = 推荐关闭），原子读写。
-var consentEpochValue atomic.Int64
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PromptSuggestionEnabled 读推荐开关；未配置时取默认值 false。
@@ -90,27 +87,59 @@ func ResolveRecommendationSwitch(value any, defaultValue bool) bool {
 	return defaultValue
 }
 
-// ConsentEpoch 返回当前同意 epoch；推荐关闭时返回 0（等价 Python 的 None）。
-// Python: prompt_suggestion.py:130 consent_epoch
-// ★ 上游的 epoch 来自 topic_controls.load_recommendation_controls()["deleted_at"]，
-// 属 10.7 范围；本轮以进程内时间戳占位（推荐开启后保持稳定），
-// 待 10.7 注入真实控制面（spec DEV-10）。
-func ConsentEpoch(config map[string]any) int64 {
-	if !PromptSuggestionEnabled(config) {
-		return 0
-	}
-	value := consentEpochValue.Load()
-	if value == 0 {
-		value = time.Now().UnixNano()
-		consentEpochValue.Store(value)
-	}
-	return value
+// ConsentEpochValue 当前同意 epoch。Active=false 等价 Python 的 None。
+// Python: prompt_suggestion.py:150-160 consent_epoch —— None 只由 prompt 开关决定；
+// deleted_at 走 or 0.0，0.0 是合法 epoch（从未删除）。
+type ConsentEpochValue struct {
+	// Value epoch 值（consent 表 deleted_at，缺失为 0.0）
+	Value float64
+	// Active 是否有效（prompt 开关开）
+	Active bool
 }
 
-// ResetConsentEpoch 复位 epoch。
-// Python 无对应符号：仅在测试与配置重载时使用（非导出助手在 _test.go 里，
-// 此处导出供跨包重载调用）。
-func ResetConsentEpoch() { consentEpochValue.Store(0) }
+// Equal 对齐 Python 的 ==：None 与值不等；同为值时按数值相等。
+func (e ConsentEpochValue) Equal(other ConsentEpochValue) bool {
+	if e.Active != other.Active {
+		return false
+	}
+	return !e.Active || e.Value == other.Value
+}
+
+// TopicRecommendationEnabled 读 topic 推荐开关；未配置时取默认值 false。
+// Python: common/recommendation_switches.py is_topic_recommendation_enabled
+func TopicRecommendationEnabled(cfg *config.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	full, err := cfg.Load()
+	if err != nil || full == nil {
+		return false
+	}
+	section, ok := full["recommendation"].(map[string]any)
+	if !ok {
+		return false
+	}
+	value, ok := section["topic_enabled"]
+	if !ok {
+		return false
+	}
+	return ResolveRecommendationSwitch(value, false)
+}
+
+// ConsentEpoch 返回当前同意 epoch。
+// Python: prompt_suggestion.py:150 consent_epoch
+// epoch 值来自 consent 只读探测（consent_state.go），写侧 ⤵️ 10.3.31d（spec 10.7.2 D-1）。
+func ConsentEpoch(config map[string]any) ConsentEpochValue {
+	if !PromptSuggestionEnabled(config) {
+		return ConsentEpochValue{}
+	}
+	row := readConsentState()
+	value := 0.0
+	if row.deletedAt != nil {
+		value = *row.deletedAt
+	}
+	return ConsentEpochValue{Value: value, Active: true}
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

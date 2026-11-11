@@ -5,8 +5,10 @@
 // calendar_source.py、profile_extractor.py、gradient_updater.py、
 // feedback_collector.py，以及 jiuwenswarm/common/recommendation_switches.py。
 // 完整的 topic 流水线（35 文件 / 43821 行）不在本包，由 10.3.31b~d 单独排期；
-// 存储地基（TopicStarterStore 事件账本）已随 10.7.1 交付于 topic_starter_store.go，
-// _fork 的结果落库与 ready 推送由窄接口预留，待 10.7.2 接通。
+// 存储地基（TopicStarterStore 事件账本）已随 10.7.1 交付于 topic_starter_store.go；
+// 10.7.2 已接通建议链路闭环：_fork 的结果落库（recordLedgerEvent）、ready 推送
+// （窄接口 SuggestionReadyPusher，由 internal/swarm/server/handle_recommendation.go
+// 装配注入）、页面回执（RecordPageOutcome）与回读（CurrentSuggestions）。
 //
 // 两个子系统：
 //   - 提示词建议（10.3.30 已交付）：switches.go / prompt_suggestion.go /
@@ -27,6 +29,7 @@
 //	recommendation/
 //	├── doc.go                          # 包文档
 //	├── switches.go                     # 推荐开关与同意 epoch
+//	├── consent_state.go                # consent 同意状态只读探测（topic_controls.py 只读切片，写入 ⤵️ 10.3.31d）
 //	├── prompt_suggestion.go            # MainCall / PromptSuggestionForks / _fork
 //	├── suggestion_filter.go            # 建议过滤
 //	├── fork_rail.go                    # PromptSuggestionForkRail

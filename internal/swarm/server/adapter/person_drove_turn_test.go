@@ -48,3 +48,15 @@ func TestPersonDroveTurn_嵌套metadata也拦(t *testing.T) {
 func TestTerminalStatusOf(t *testing.T) {
 	assert.Equal(t, "success", terminalStatusOf(nil))
 }
+
+// TestSessionMessageOwnsCompletion 内部键为 dict 时真；无键/非 dict 假。
+// Python: interface.py:273-279 _session_message_owns_completion
+func TestSessionMessageOwnsCompletion(t *testing.T) {
+	assert.True(t, sessionMessageOwnsCompletion(map[string]any{
+		"_jiuwenswarm_cross_session": map[string]any{"target": "s2"},
+	}))
+	assert.False(t, sessionMessageOwnsCompletion(map[string]any{
+		"_jiuwenswarm_cross_session": "s2",
+	}))
+	assert.False(t, sessionMessageOwnsCompletion(map[string]any{}))
+}

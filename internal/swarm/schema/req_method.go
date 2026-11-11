@@ -99,6 +99,12 @@ const (
 	ReqMethodProactiveTick ReqMethod = "proactive.tick"
 	// ReqMethodProactiveFeedback 记录对一条主动推荐的赞/踩
 	ReqMethodProactiveFeedback ReqMethod = "proactive.feedback"
+	// ReqMethodRecommendation 推荐面板 RPC（AgentServer 执行，网关仅转发）
+	// Python: message.py:60 RECOMMENDATION = "recommendation.job"
+	ReqMethodRecommendation ReqMethod = "recommendation.job"
+	// ReqMethodPromptSuggestionCancel 取消一条正在生成的建议
+	// Python: message.py:59 PROMPT_SUGGESTION_CANCEL = "prompt_suggestion.cancel"
+	ReqMethodPromptSuggestionCancel ReqMethod = "prompt_suggestion.cancel"
 
 	// ─── 历史 ───
 
@@ -572,6 +578,9 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodScheduleLogs,
 		ReqMethodScheduleCancel,
 		ReqMethodScheduleDelete,
+		// 推荐面板（10.7.2）
+		ReqMethodRecommendation,
+		ReqMethodPromptSuggestionCancel,
 	}
 }
 

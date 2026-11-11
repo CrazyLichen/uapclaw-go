@@ -49,6 +49,7 @@ import (
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
+	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
@@ -1173,11 +1174,24 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 			// Go ctx values 不可变值模式：_reset_runtime_cron_context 语义天然满足
 			// （绑定后的 ctx 只在本次请求闭包内传递，函数返回即失效，无需显式 reset）
 			d.unmarkSessionActive(sessionID)
-			// 步骤 20b: 轮结束（对齐 interface.py:3569 forks.turn_ended）。
+			// 步骤 20b: 轮结束。先写完成行（Python: _complete_history_request），
+			// 回执交给 fork 在推送前等待（广播 ⤵️ spec 10.7.2 D-3）。
 			// 终态在 runErr 上体现；非流式无"等待用户"概念，恒 false。
+			status := terminalStatusOf(runErr)
+			var completionReceipt <-chan struct{}
+			if !sessionMessageOwnsCompletion(params) {
+				receipt, rcptErr := sessionmd.EnqueueHistoryRequestCompletion(sessionID, req.RequestID, status)
+				if rcptErr != nil {
+					logger.Warn(logComponent).Err(rcptErr).Str("request_id", req.RequestID).
+						Msg("request completion row enqueue failed")
+				} else {
+					completionReceipt = receipt
+				}
+			}
 			recommendation.Forks.TurnEnded(sessionID, req.RequestID, recommendation.TurnEndOptions{
-				Status:         terminalStatusOf(runErr),
+				Status:         status,
 				WaitingForUser: false,
+				Completion:     completionReceipt,
 			})
 		}()
 		// 步骤 18: 抢租约 + 投递输入，把租约帧聚合成响应载荷。
@@ -1511,13 +1525,31 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 		}()
 		defer close(outCh)
+		// 轮终态与"等待用户"检测（Python: interface.py:3926-3928 的流式循环）。
+		// 声明在 defer 之前：Go 词法作用域要求闭包引用的变量先声明。
+		status := "success"
+		waitingForUser := false
 		defer func() {
 			d.unmarkSessionActive(sessionID)
 			// 轮结束（对齐 interface.py:3957 / :4348 forks.turn_ended）。
-			// 流式终态由流内事件决定，此处按是否已产出内容与错误归类。
+			// 流式终态由流内事件决定：chat.error → error、ctx 取消 → cancelled。
+			if ctx.Err() != nil {
+				status = "cancelled"
+			}
+			var completionReceipt <-chan struct{}
+			if !sessionMessageOwnsCompletion(params) {
+				receipt, rcptErr := sessionmd.EnqueueHistoryRequestCompletion(sessionID, req.RequestID, status)
+				if rcptErr != nil {
+					logger.Warn(logComponent).Err(rcptErr).Str("request_id", req.RequestID).
+						Msg("request completion row enqueue failed")
+				} else {
+					completionReceipt = receipt
+				}
+			}
 			recommendation.Forks.TurnEnded(sessionID, req.RequestID, recommendation.TurnEndOptions{
-				Status:         terminalStatusOf(nil),
-				WaitingForUser: false,
+				Status:         status,
+				WaitingForUser: waitingForUser,
+				Completion:     completionReceipt,
 			})
 		}()
 
@@ -1554,6 +1586,17 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			// payloadToMap 桥接 map 与 *cschema.ControllerOutputPayload 两种形态
 			// （task_loop 产出结构体指针，只断言 map 会让整块 chunk 不可读）
 			payload := payloadToMap(output.Payload)
+
+			// 10.7.2: 交互事件 → waitingForUser；chat.error → 终态 error
+			// （Python: interface.py:3926-3928 waiting_for_user = ... or payload.get("event_type") in USER_INTERACTION_EVENTS）
+			if eventType, _ := payload["event_type"].(string); eventType != "" {
+				if recommendation.UserInteractionEvents[eventType] {
+					waitingForUser = true
+				}
+				if eventType == "chat.error" {
+					status = "error"
+				}
+			}
 
 			switch chunkType {
 			case "llm_usage":
@@ -1637,6 +1680,14 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					}
 					// 目标完成卡片幂等落盘（覆盖所有 goal.updated 来源）。
 					// Python: interface_deep.py:17677 _record_goal_completed_history_if_needed
+					if eventType, _ := adapted["event_type"].(string); eventType != "" {
+						if recommendation.UserInteractionEvents[eventType] {
+							waitingForUser = true
+						}
+						if eventType == "chat.error" {
+							status = "error"
+						}
+					}
 					if eventType, _ := adapted["event_type"].(string); eventType == goalUpdatedEventType {
 						if goalPayload, ok := adapted["goal"].(map[string]any); ok {
 							sid := "default"
@@ -1687,6 +1738,14 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 					}
 					// 目标完成卡片幂等落盘（覆盖所有 goal.updated 来源）。
 					// Python: interface_deep.py:17677 _record_goal_completed_history_if_needed
+					if eventType, _ := adapted["event_type"].(string); eventType != "" {
+						if recommendation.UserInteractionEvents[eventType] {
+							waitingForUser = true
+						}
+						if eventType == "chat.error" {
+							status = "error"
+						}
+					}
 					if eventType, _ := adapted["event_type"].(string); eventType == goalUpdatedEventType {
 						if goalPayload, ok := adapted["goal"].(map[string]any); ok {
 							sid := "default"

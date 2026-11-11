@@ -90,6 +90,13 @@ const (
 
 	// EventTypeHistoryGet 历史消息
 	EventTypeHistoryGet EventType = "history.message"
+
+	// ─── 推荐账本（10.7.2） ───
+
+	// EventTypeSessionRequestCompleted 请求终态完成行事件
+	// Python: SESSION_REQUEST_COMPLETED_EVENT（openjiuwen_protocol.message）
+	// 字面值实测：上游测试 test_prompt_suggestion.py:554 断言 "chat.request_completed"
+	EventTypeSessionRequestCompleted EventType = "chat.request_completed"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -138,6 +145,8 @@ func AllEventTypes() []EventType {
 		EventTypeHeartbeatRelay,
 		// 历史
 		EventTypeHistoryGet,
+		// 推荐账本（10.7.2）
+		EventTypeSessionRequestCompleted,
 	}
 }
 

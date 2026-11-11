@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestAllReqMethods 验证 AllReqMethods 返回全部 151 个枚举值
+// TestAllReqMethods 验证 AllReqMethods 返回全部 153 个枚举值
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 151 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 151", len(methods))
+	if len(methods) != 153 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 153", len(methods))
 	}
 
 	// 验证无重复
@@ -309,14 +309,35 @@ func TestReqMethod常量值与Python对齐(t *testing.T) {
 		{ReqMethodScheduleLogs, "schedule.logs"},
 		{ReqMethodScheduleCancel, "schedule.cancel"},
 		{ReqMethodScheduleDelete, "schedule.delete"},
+		{ReqMethodRecommendation, "recommendation.job"},
+		{ReqMethodPromptSuggestionCancel, "prompt_suggestion.cancel"},
 	}
 	for _, tt := range tests {
 		if string(tt.got) != tt.want {
 			t.Errorf("常量值 = %q, want %q", tt.got, tt.want)
 		}
 	}
-	// 验证测试覆盖全部 149 个常量
-	if len(tests) != 149 {
+	// 验证测试覆盖全部 151 个常量（149 + 10.7.2 新增 2）
+	if len(tests) != 151 {
 		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 149", len(tests))
+	}
+}
+
+// TestReqMethod_推荐面板两方法 10.7.2 新增两方法的值与解析。
+// Python: message.py:59-60
+func TestReqMethod_推荐面板两方法(t *testing.T) {
+	if string(ReqMethodRecommendation) != "recommendation.job" {
+		t.Errorf("ReqMethodRecommendation = %q, want recommendation.job", string(ReqMethodRecommendation))
+	}
+	if string(ReqMethodPromptSuggestionCancel) != "prompt_suggestion.cancel" {
+		t.Errorf("ReqMethodPromptSuggestionCancel = %q, want prompt_suggestion.cancel", string(ReqMethodPromptSuggestionCancel))
+	}
+	m, err := ParseReqMethod("recommendation.job")
+	if err != nil || m != ReqMethodRecommendation {
+		t.Errorf("ParseReqMethod(recommendation.job) = %q, %v", string(m), err)
+	}
+	m, err = ParseReqMethod("prompt_suggestion.cancel")
+	if err != nil || m != ReqMethodPromptSuggestionCancel {
+		t.Errorf("ParseReqMethod(prompt_suggestion.cancel) = %q, %v", string(m), err)
 	}
 }
