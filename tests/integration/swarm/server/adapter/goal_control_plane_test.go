@@ -36,7 +36,7 @@ func (s *GoalControlPlaneSuite) newGoalAdapter(sessionID string) *adapter.DeepAd
 	// 按 sessionID 造 child，child 的 CreateInstance 尾段自动 start_interaction。
 	// 因此这里**不**标会话级，直接用根驱动（与 session_usage_isolation_test 一致）。
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""),
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil),
 		"CreateInstance 失败")
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d

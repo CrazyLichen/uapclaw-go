@@ -117,7 +117,7 @@ func (s *SessionUsageIsolationSuite) TestSwitchSession_UsageSummary与会话隔�
 	registry.Register(s.env.Provider, "llm", client.Factory())
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	// 1) 会话 A 首轮：usage_summary 必须存在且取到真实 token 数

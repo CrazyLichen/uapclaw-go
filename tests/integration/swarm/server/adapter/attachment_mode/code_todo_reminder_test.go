@@ -268,7 +268,7 @@ func newCodeEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *cod
 	d.MarkAsSessionScoped(codeSession)
 	if err := d.CreateInstance(context.Background(), map[string]any{
 		"project_dir": filepath.Join(env.DataDir, "myproj"),
-	}, "agent", ""); err != nil {
+	}, "agent", "", nil); err != nil {
 		t.Fatalf("创建 CodeAdapter 失败: %v", err)
 	}
 	t.Cleanup(func() { _ = d.Cleanup() })

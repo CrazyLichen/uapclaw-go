@@ -43,15 +43,15 @@ func ProtocolCapabilities() map[string]any {
 	queryOperations := schemaQueryOperations(schema)
 
 	return map[string]any{
-		"schema_version":           CurrentSchemaVersion,
+		"schema_version":            CurrentSchemaVersion,
 		"supported_schema_versions": stringSliceAny(SupportedSchemaVersions),
-		"protocol_revision":        ProtocolRevision,
-		"features":                 features,
-		"run_fields":               runFields,
-		"query_operations":         queryOperations,
+		"protocol_revision":         ProtocolRevision,
+		"features":                  features,
+		"run_fields":                runFields,
+		"query_operations":          queryOperations,
 		// Python: :45-47
-		"control_types":       stringSliceAny([]string{"answer", "tool_result", "cancel"}),
-		"stable_event_types":  stringSliceAny(StableEventTypes),
+		"control_types":      stringSliceAny([]string{"answer", "tool_result", "cancel"}),
+		"stable_event_types": stringSliceAny(StableEventTypes),
 		// Python: :48-51
 		"input_encoding":  "utf-8",
 		"output_encoding": "utf-8",

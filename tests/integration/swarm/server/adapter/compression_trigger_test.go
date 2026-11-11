@@ -103,7 +103,7 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	s.setScript(scriptStep{text: "用户在打招呼"})
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	states := s.runTurn(d, "sess_compress_262", "req-c-1", "你好")
@@ -150,7 +150,7 @@ func (s *CompressionTriggerSuite) TestAddMessages路径_Dialogue与当轮压缩�
 	s.setScript(scriptStep{text: "用户在打招呼"})
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	states := s.runTurn(d, "sess_compress_add", "req-c-2", "你好")
@@ -172,7 +172,7 @@ func (s *CompressionTriggerSuite) TestToolResultBudget触发() {
 	)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	states := s.runTurn(d, "sess_compress_trb", "req-c-3", "看看任务列表")

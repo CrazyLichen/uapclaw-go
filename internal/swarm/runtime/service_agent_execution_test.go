@@ -31,7 +31,8 @@ func (m *defRecordingManager) GetChatAgentNoWait(channelID, mode, projectDir, su
 
 // TestStream_把definition传给manager 验证 _agent_execution 不再被丢弃。
 // Python: service.py:1688 -> :2561 prepare_kwargs["agent_execution"]
-//         -> :1279-1283 agent_definition + agent_definition_fingerprint
+//
+//	-> :1279-1283 agent_definition + agent_definition_fingerprint
 func TestStream_把definition传给manager(t *testing.T) {
 	mgr := &defRecordingManager{agent: &startTestChatAgent{}}
 	rt := NewAgentRuntime(AgentRuntimeDeps{Manager: mgr})

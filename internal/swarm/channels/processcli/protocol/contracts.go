@@ -163,10 +163,10 @@ func contractQuestions(interaction map[string]any) []any {
 		questionText := firstNonEmptyString(
 			asString(question["question"]), asString(question["title"]))
 		result = append(result, map[string]any{
-			"question_id":       fmt.Sprintf("q%d", index),
-			"question":          questionText,
-			"options":           options,
-			"card_id":           cardID,
+			"question_id":        fmt.Sprintf("q%d", index),
+			"question":           questionText,
+			"options":            options,
+			"card_id":            cardID,
 			"allow_custom_input": allowCustom,
 		})
 	}

@@ -93,7 +93,7 @@ func (s *TodoPanelSuite) TestTodoPanel_任务栏展示既有待办() {
 	)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.normal", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.normal", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	todos, toolResult := s.runAndCollectTodos(d, "req-todo-panel-1", "请把任务拆成待办：完成需求分析。")

@@ -47,7 +47,7 @@ func (s *SessionForkSuite) SetupTest() {
 // Test同会话两轮命中同一child 同一 sessionID 的两次请求复用同一 child 实例。
 func (s *SessionForkSuite) Test同会话两轮命中同一child() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	// 根不自建 DeepAgent（spec DEC-6 / D-6）
@@ -64,7 +64,7 @@ func (s *SessionForkSuite) Test同会话两轮命中同一child() {
 // Test不同会话各自独立child 两个会话得到独立 child，清理一个不影响另一个。
 func (s *SessionForkSuite) Test不同会话各自独立child() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.runOneTurn(d, "fork-a", "req-fork-a", "会话A的问")
@@ -82,7 +82,7 @@ func (s *SessionForkSuite) Test不同会话各自独立child() {
 // TestGetLiveSessionInstance_返回该会话的DeepAgent 25.8 的 per-session 句柄。
 func (s *SessionForkSuite) TestGetLiveSessionInstance_返回该会话的DeepAgent() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	// 无 child 时应返回 nil
@@ -102,7 +102,7 @@ func (s *SessionForkSuite) TestGetLiveSessionInstance_返回该会话的DeepAgen
 // TestAttachOnly_创建child但不登记在飞任务 被动订阅语义。
 func (s *SessionForkSuite) TestAttachOnly_创建child但不登记在飞任务() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	params, err := json.Marshal(map[string]any{

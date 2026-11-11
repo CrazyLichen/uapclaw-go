@@ -43,7 +43,7 @@ func (s *RootInstanceLazySuite) SetupTest() {
 // TestCreateInstance后根无instance 根的 CreateInstance 不建 DeepAgent。
 func (s *RootInstanceLazySuite) TestCreateInstance后根无instance() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.Nil(d.Instance(), "根 CreateInstance 后不应有 instance（router only）")
@@ -52,7 +52,7 @@ func (s *RootInstanceLazySuite) TestCreateInstance后根无instance() {
 // TestEnsureInstance触发惰建 显式调用 EnsureInstance 才建。
 func (s *RootInstanceLazySuite) TestEnsureInstance触发惰建() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.Nil(d.Instance(), "初始不应有 instance")
@@ -66,7 +66,7 @@ func (s *RootInstanceLazySuite) TestEnsureInstance触发惰建() {
 // TestSwitchMode触发惰建 非 chat RPC 走 EnsureInstance 而非假设根已有实例。
 func (s *RootInstanceLazySuite) TestSwitchMode触发惰建() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.Nil(d.Instance(), "初始不应有 instance")
@@ -78,7 +78,7 @@ func (s *RootInstanceLazySuite) TestSwitchMode触发惰建() {
 // TestChild不建根instance chat 首轮只建 child，不建根。
 func (s *RootInstanceLazySuite) TestChild不建根instance() {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	s.runOneTurn(d, "lazy-child-only", "req-lazy-child", "一问")

@@ -431,23 +431,23 @@ func (in *OneShotRunInput) ToDict() map[string]any {
 		hostTools = append(hostTools, in.HostTools[i].ToDict())
 	}
 	return map[string]any{
-		"schema_version":   in.SchemaVersion,
-		"type":             "run",
-		"request_id":       optionalStringValue(in.RequestID),
-		"session_id":       optionalStringValue(in.SessionID),
-		"input":            in.Input,
-		"agent":            in.Agent.ToDict(),
-		"mode":             optionalStringValue(in.Mode),
-		"model":            optionalStringValue(in.Model),
-		"skills":           optionalStringSliceValue(in.Skills),
-		"mcp":              optionalStringSliceValue(in.Mcp),
-		"permissions":      optionalJsonValue(in.Permissions),
-		"output_schema":    optionalJsonValue(in.OutputSchema),
-		"max_turns":        optionalIntValue(in.MaxTurns),
-		"max_budget_usd":   optionalFloatValue(in.MaxBudgetUSD),
-		"host_tools":       hostTools,
-		"workspace":        in.Workspace.ToDict(),
-		"timeout_seconds":  optionalFloatValue(in.TimeoutSeconds),
+		"schema_version":  in.SchemaVersion,
+		"type":            "run",
+		"request_id":      optionalStringValue(in.RequestID),
+		"session_id":      optionalStringValue(in.SessionID),
+		"input":           in.Input,
+		"agent":           in.Agent.ToDict(),
+		"mode":            optionalStringValue(in.Mode),
+		"model":           optionalStringValue(in.Model),
+		"skills":          optionalStringSliceValue(in.Skills),
+		"mcp":             optionalStringSliceValue(in.Mcp),
+		"permissions":     optionalJsonValue(in.Permissions),
+		"output_schema":   optionalJsonValue(in.OutputSchema),
+		"max_turns":       optionalIntValue(in.MaxTurns),
+		"max_budget_usd":  optionalFloatValue(in.MaxBudgetUSD),
+		"host_tools":      hostTools,
+		"workspace":       in.Workspace.ToDict(),
+		"timeout_seconds": optionalFloatValue(in.TimeoutSeconds),
 	}
 }
 
@@ -877,7 +877,8 @@ func (s *AgentSpec) validate() error {
 		return err
 	}
 	// 6. if "*" in tools and tools != ("*",): raise ValueError
-	if containsString(tools, "*") && !(len(tools) == 1 && tools[0] == "*") {
+	starAlone := len(tools) == 1 && tools[0] == "*"
+	if containsString(tools, "*") && !starAlone {
 		return fmt.Errorf("'*' must be the only tools entry when used")
 	}
 	s.Tools = tools

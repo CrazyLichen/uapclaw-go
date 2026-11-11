@@ -124,7 +124,7 @@ func (s *DeepAdapterEvolutionSuite) newAdapterWithEvolution(enabled bool) *adapt
 	s.env.WriteConfigYAML(s.T(), reactExtra)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }

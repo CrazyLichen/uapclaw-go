@@ -729,12 +729,12 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		// Python: interface_deep.py:13200
 		//   skills=list(agent_definition.get("skills") or ()) if agent_definition else None
 		// 无声明式定义时保持 nil（对齐 Python create_instance 不传 skills）
-		Skills: declaredSkills,
-		Language:               resolvedLanguage,
-		PromptMode:             d.resolvePromptMode(configBase),
-		VisionModelConfig:      d.visionModelConfig,
-		AudioModelConfig:       d.audioModelConfig,
-		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
+		Skills:             declaredSkills,
+		Language:           resolvedLanguage,
+		PromptMode:         d.resolvePromptMode(configBase),
+		VisionModelConfig:  d.visionModelConfig,
+		AudioModelConfig:   d.audioModelConfig,
+		EnableTaskPlanning: d.resolveEnableTaskPlanning(config, configBase),
 		// 开关与 builder 必须成对：builder 已构建时工厂不再补默认，反之亦然
 		EnableModelAnomalyDetectionRail: &anomalyEnabled,
 		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）

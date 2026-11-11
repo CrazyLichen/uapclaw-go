@@ -153,7 +153,7 @@ func (s *ModelTokenConfigSuite) newSessionScopedAdapterForTest() *adapter.DeepAd
 	d := adapter.NewDeepAdapter()
 	// 标记为 session-scoped：create_instance 不会走根的早退分支
 	d.MarkAsSessionScoped("model-token-cfg-session")
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", "", nil))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }

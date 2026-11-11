@@ -42,7 +42,7 @@ func TestPlanMode_真实LLM_写入非Plan文件被拒(t *testing.T) {
 	writeRealConfigYAML(t, env.DataDir, apiKey, apiBase, modelName)
 
 	d := adapter.NewDeepAdapter()
-	if err := d.CreateInstance(t.Context(), map[string]any{}, "agent.work.plan", ""); err != nil {
+	if err := d.CreateInstance(t.Context(), map[string]any{}, "agent.work.plan", "", nil); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 	t.Cleanup(func() { _ = d.Cleanup() })

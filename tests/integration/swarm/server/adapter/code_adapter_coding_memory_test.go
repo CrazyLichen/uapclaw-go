@@ -143,7 +143,7 @@ func (s *CodeAdapterCodingMemorySuite) newCodeAdapterWithMode(mode string) *adap
 	c.MarkAsSessionScoped("itest-code-memory")
 	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{
 		"project_dir": filepath.Join(s.env.DataDir, "myproj"),
-	}, mode, ""))
+	}, mode, "", nil))
 	s.T().Cleanup(func() { _ = c.Cleanup() })
 	return c
 }

@@ -89,7 +89,7 @@ func (s *StartWiringSuite) TestWiring_CodeAdapter真跑后启动Dreaming() {
 	}
 
 	codeAdapter := adapter.NewCodeAdapter()
-	s.Require().NoError(codeAdapter.CreateInstance(s.Ctx, map[string]any{"project_dir": filepath.Join(env.DataDir, "project")}, "code", ""))
+	s.Require().NoError(codeAdapter.CreateInstance(s.Ctx, map[string]any{"project_dir": filepath.Join(env.DataDir, "project")}, "code", "", nil))
 	s.Require().NoError(codeAdapter.TryStartDreaming(s.Ctx, func() bool { return false }))
 
 	orch := swarmdreaming.GetDreamingOrchestrator("code")
@@ -121,7 +121,7 @@ func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
 	}
 
 	deepAdapter := adapter.NewDeepAdapter()
-	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent", ""))
+	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent", "", nil))
 	s.Require().NoError(deepAdapter.TryStartDreaming(s.Ctx, func() bool { return false }))
 
 	orch := swarmdreaming.GetDreamingOrchestrator("agent")

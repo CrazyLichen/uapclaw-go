@@ -70,7 +70,7 @@ func (f *fakeAdapter) CreateInstance(_ context.Context, _ map[string]any, _, _ s
 	return f.createErr
 }
 func (f *fakeAdapter) ReloadAgentConfig(_ context.Context, _, _ map[string]any) error { return nil }
-func (f *fakeAdapter) ConfigureProcessCliRun(context.Context, *int, []any) error { return nil }
+func (f *fakeAdapter) ConfigureProcessCliRun(context.Context, *int, []any) error      { return nil }
 func (f *fakeAdapter) TakeProcessCliRunOptions() *adapter.ProcessCliRunOptions {
 	return nil
 }
