@@ -721,6 +721,167 @@ func (s *TopicStarterStore) Prune(now float64) (map[string]int, error) {
 	return removed, nil
 }
 
+// DeleteRecommendationData 清空本地派生内容，只保留非个人化的用量事实。
+// Python: topic_starter.py:186 delete_recommendation_data
+//
+// 步骤：先把 provider_invocation 压成 9 键收据 → PRAGMA secure_delete 后清两表
+// （short_intent_state 存在才清）→ 以 session_id="usage" 回填收据 →
+// 写 recommendation_data_deleted 记录 exposures/cards 计数 → VACUUM。
+func (s *TopicStarterStore) DeleteRecommendationData() error {
+	type receipt struct {
+		createdAt float64
+		payload   map[string]any
+	}
+	receipts := map[string]receipt{}
+	exposuresRemoved := 0
+	cardsRemoved := 0
+
+	events, err := s.ListEvents()
+	if err != nil {
+		return err
+	}
+	keyItems := []string{
+		"attempt_id", "provider_response_id", "usage", "status", "stage",
+		"provider", "model", "latency_ms", "failure_reason",
+	}
+	for _, event := range events {
+		payload, _ := event["payload"].(map[string]any)
+		if payload == nil {
+			payload = map[string]any{}
+		}
+		if pyStr(event["event_type"]) == "dynamic_exposure" {
+			exposuresRemoved++
+			if raw, ok := payload["card_revision_ids"].([]any); ok {
+				cardsRemoved += len(raw)
+			}
+		}
+		if pyStr(event["event_type"]) != "provider_invocation" {
+			continue
+		}
+		attempt := pyStr(payload["attempt_id"])
+		if !pythonTruthy(attempt) {
+			continue
+		}
+		createdAt, _ := event["created_at"].(float64)
+		trimmed := map[string]any{}
+		for _, key := range keyItems {
+			if value, ok := payload[key]; ok {
+				trimmed[key] = value
+			}
+		}
+		receipts[attempt] = receipt{createdAt: createdAt, payload: trimmed}
+	}
+
+	db, err := s.connect()
+	if err != nil {
+		return err
+	}
+	if _, err := db.Exec("PRAGMA secure_delete = ON"); err != nil {
+		db.Close()
+		return err
+	}
+	if _, err := db.Exec("DELETE FROM profile_snapshot"); err != nil {
+		db.Close()
+		return err
+	}
+	if _, err := db.Exec("DELETE FROM recommendation_event"); err != nil {
+		db.Close()
+		return err
+	}
+	var probe int
+	probeErr := db.QueryRow(
+		"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'short_intent_state'",
+	).Scan(&probe)
+	if probeErr == nil {
+		if _, err := db.Exec("DELETE FROM short_intent_state"); err != nil {
+			db.Close()
+			return err
+		}
+	} else if !errors.Is(probeErr, sql.ErrNoRows) {
+		db.Close()
+		return probeErr
+	}
+	db.Close()
+
+	for attempt, item := range receipts {
+		if _, err := s.RecordEvent(map[string]any{
+			"session_id":        "usage",
+			"slate_id":          "usage",
+			"event_type":        "provider_invocation",
+			"topic_id":          attempt,
+			"policy_id":         "topic-starter-provider-invocation-v1",
+			"selection_mode":    "usage_retention",
+			"propensity_reason": "not_applicable",
+			"payload":           item.payload,
+			"created_at":        item.createdAt,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if _, err := s.RecordEvent(map[string]any{
+		"session_id":        "deletion",
+		"slate_id":          "deletion",
+		"topic_id":          "deletion",
+		"event_type":        "recommendation_data_deleted",
+		"policy_id":         "recommendation-consent-v1",
+		"selection_mode":    "exclusion",
+		"propensity_reason": "user_deletion",
+		"created_at":        nowSeconds(),
+		"payload": map[string]any{
+			"exposures_removed": exposuresRemoved,
+			"cards_removed":     cardsRemoved,
+		},
+	}); err != nil {
+		return err
+	}
+
+	// VACUUM 不能在事务内执行，这里连接已全部关闭
+	vacuumDB, err := s.connect()
+	if err != nil {
+		return err
+	}
+	defer vacuumDB.Close()
+	_, err = vacuumDB.Exec("VACUUM")
+	return err
+}
+
+// IntervenedPrompts 返回"已绑定会话 + 有点击提示词"的 (session_id, prompt) 集合。
+// Python: topic_starter.py:673 intervened_prompts
+//
+// 用于后续历史扫描时区分"入库卡片注入的提示词"与"用户自己说的话"。
+func (s *TopicStarterStore) IntervenedPrompts() (map[[2]string]struct{}, error) {
+	events, err := s.ListEvents()
+	if err != nil {
+		return nil, err
+	}
+
+	boundSessions := map[string]string{}
+	for _, event := range events {
+		if pyStr(event["event_type"]) == "session_bound" {
+			boundSessions[pyStr(event["slate_id"])] = pyStr(event["session_id"])
+		}
+	}
+
+	result := make(map[[2]string]struct{})
+	for _, event := range events {
+		if pyStr(event["event_type"]) != "topic_click" {
+			continue
+		}
+		slateID := pyStr(event["slate_id"])
+		payload, _ := event["payload"].(map[string]any)
+		prompt := ""
+		if payload != nil {
+			prompt = strings.TrimSpace(pyStr(payload["prompt"]))
+		}
+		sessionID, bound := boundSessions[slateID]
+		if bound && prompt != "" {
+			result[[2]string{sessionID, prompt}] = struct{}{}
+		}
+	}
+	return result, nil
+}
+
 // ListEvents 按写入顺序返回全部事件。
 // Python: topic_starter.py:566 list_events
 func (s *TopicStarterStore) ListEvents() ([]map[string]any, error) {

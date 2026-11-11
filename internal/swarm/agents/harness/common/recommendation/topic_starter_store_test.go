@@ -781,3 +781,129 @@ func TestPrune_短意图表存在时按龄清理(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, removed["short_intent_state"])
 }
+
+// TestDeleteRecommendationData_清空两表并保留使用流水
+// Python: topic_starter.py:186 delete_recommendation_data
+func TestDeleteRecommendationData_清空两表并保留使用流水(t *testing.T) {
+	store := newTestStore(t)
+
+	_, err := store.SaveSnapshot(map[string]any{"mark": "will-be-deleted"}, 1.0)
+	require.NoError(t, err)
+
+	_, err = store.RecordEventsAtomic([]map[string]any{
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "dynamic_exposure", "topic_id": "t1",
+			"payload": map[string]any{"card_revision_ids": []any{"c1", "c2"}}},
+		{"session_id": "s2", "slate_id": "sl2", "event_type": "dynamic_exposure", "topic_id": "t2",
+			"payload": map[string]any{"card_revision_ids": []any{"c3"}}},
+		{"session_id": "s3", "slate_id": "sl3", "event_type": "provider_invocation", "topic_id": "att-1",
+			"payload": map[string]any{
+				"attempt_id": "att-1", "provider_response_id": "resp-1", "status": "ok",
+				"stage": "rank", "provider": "ark", "model": "m1", "latency_ms": 120,
+				"usage":              map[string]any{"total_tokens": 10},
+				"failure_reason":     nil,
+				"some_private_field": "must-be-dropped",
+			}},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteRecommendationData())
+
+	// 快照全清
+	snapshot, err := store.LoadLatestSnapshot()
+	require.NoError(t, err)
+	assert.Nil(t, snapshot)
+
+	events, err := store.ListEvents()
+	require.NoError(t, err)
+
+	// 只剩 1 条保留的 provider_invocation 收据 + 1 条删除记录
+	require.Len(t, events, 2)
+
+	var receipt, deletion map[string]any
+	for _, event := range events {
+		switch event["event_type"] {
+		case "provider_invocation":
+			receipt = event
+		case "recommendation_data_deleted":
+			deletion = event
+		}
+	}
+	require.NotNil(t, receipt)
+	require.NotNil(t, deletion)
+
+	assert.Equal(t, "usage", receipt["session_id"])
+	assert.Equal(t, "usage", receipt["slate_id"])
+	assert.Equal(t, "att-1", receipt["topic_id"])
+	assert.Equal(t, "topic-starter-provider-invocation-v1", receipt["policy_id"])
+	assert.Equal(t, "usage_retention", receipt["selection_mode"])
+	assert.Equal(t, "not_applicable", receipt["propensity_reason"])
+
+	payload := receipt["payload"].(map[string]any)
+	assert.Equal(t, "att-1", payload["attempt_id"])
+	assert.Equal(t, "resp-1", payload["provider_response_id"])
+	assert.Equal(t, "ok", payload["status"])
+	assert.NotContains(t, payload, "some_private_field", "只保留 9 个键")
+
+	assert.Equal(t, "deletion", deletion["session_id"])
+	assert.Equal(t, "recommendation-consent-v1", deletion["policy_id"])
+	assert.Equal(t, "exclusion", deletion["selection_mode"])
+	assert.Equal(t, "user_deletion", deletion["propensity_reason"])
+
+	deletionPayload := deletion["payload"].(map[string]any)
+	// 从库里读回的是 JSON 数字，encoding/json 解成 float64
+	assert.Equal(t, float64(2), deletionPayload["exposures_removed"])
+	assert.Equal(t, float64(3), deletionPayload["cards_removed"], "c1+c2+c3 共 3 张卡")
+}
+
+// TestDeleteRecommendationData_短意图表存在则清空
+func TestDeleteRecommendationData_短意图表存在则清空(t *testing.T) {
+	store := newTestStore(t)
+
+	db, err := store.connect()
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE short_intent_state(session_id TEXT, evaluated_at REAL)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO short_intent_state VALUES('s', 1.0)")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	require.NoError(t, store.DeleteRecommendationData())
+
+	db2, err := store.connect()
+	require.NoError(t, err)
+	var count int
+	require.NoError(t, db2.QueryRow("SELECT COUNT(*) FROM short_intent_state").Scan(&count))
+	require.NoError(t, db2.Close())
+	assert.Equal(t, 0, count)
+}
+
+// TestIntervenedPrompts_仅收已绑定slate的点击
+// Python: topic_starter.py:673 intervened_prompts
+func TestIntervenedPrompts_仅收已绑定slate的点击(t *testing.T) {
+	store := newTestStore(t)
+
+	// 无绑定：全部为空
+	got, err := store.IntervenedPrompts()
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	_, err = store.RecordEventsAtomic([]map[string]any{
+		// sl1 已绑定到 s1
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "session_bound"},
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "topic_click", "topic_id": "card-1",
+			"payload": map[string]any{"prompt": "帮我看看这个"}},
+		// sl2 未绑定，点击应被忽略
+		{"session_id": "s2", "slate_id": "sl2", "event_type": "topic_click", "topic_id": "card-2",
+			"payload": map[string]any{"prompt": "不该出现"}},
+		// sl1 上无 prompt 的点击应被忽略（用不同 topic_id 避免与上面那条 event_key 冲突）
+		{"session_id": "s1", "slate_id": "sl1", "event_type": "topic_click", "topic_id": "card-3",
+			"payload": map[string]any{}},
+	})
+	require.NoError(t, err)
+
+	got, err = store.IntervenedPrompts()
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+	_, ok := got[[2]string{"s1", "帮我看看这个"}]
+	assert.True(t, ok)
+}
