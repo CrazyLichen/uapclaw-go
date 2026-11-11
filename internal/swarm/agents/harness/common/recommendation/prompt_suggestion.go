@@ -146,6 +146,68 @@ var UserInteractionEvents = map[string]bool{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// CurrentSuggestions 回收会话最新成功请求下未消费的建议。
+// Python: prompt_suggestion.py:583-604 current_suggestions
+// 末尾双复查：epoch 或最新完成请求在中途变化 → 整批作废。
+func CurrentSuggestions(f *PromptSuggestionForks, store *TopicStarterStore, sessionID string) map[string]any {
+	empty := func(enabled bool) map[string]any {
+		return map[string]any{"enabled": enabled, "suggestions": []map[string]any{}}
+	}
+	epoch := ConsentEpoch(f.config)
+	if !epoch.Active {
+		return empty(false)
+	}
+	requestID := LatestCompletedRequest(sessionID)
+	if requestID == "" {
+		return empty(true)
+	}
+	slateID := "prompt-suggestion:" + requestID
+	policyID := PolicyID
+	rows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: "prompt_suggestion_generation", PolicyID: &policyID,
+		SlateID: &slateID, Limit: 2,
+	})
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("prompt suggestion: suggestion query failed")
+		return empty(true)
+	}
+	suggestions := make([]map[string]any, 0)
+	for _, row := range rows {
+		payload, _ := row["payload"].(map[string]any)
+		rowSession, _ := row["session_id"].(string)
+		createdAt, _ := row["created_at"].(float64)
+		if rowSession != sessionID || createdAt < epoch.Value || payload == nil || payload["outcome"] != "candidate" {
+			continue
+		}
+		topicID, _ := row["topic_id"].(string)
+		consumed := false
+		for _, outcome := range []string{"accepted", "ignored", "suppressed"} {
+			outcomeEventType := "prompt_suggestion_" + outcome
+			consumedRows, err := store.QueryEvents(QueryEventsOptions{
+				EventType: outcomeEventType, PolicyID: &policyID, TopicID: &topicID, Limit: 1,
+			})
+			if err == nil && len(consumedRows) > 0 {
+				consumed = true
+				break
+			}
+		}
+		if consumed {
+			continue
+		}
+		suggestions = append(suggestions, map[string]any{
+			"session_id":    payload["session_id"],
+			"request_id":    payload["request_id"],
+			"suggestion_id": payload["suggestion_id"],
+			"text":          payload["text"],
+		})
+	}
+	if !ConsentEpoch(f.config).Equal(epoch) || LatestCompletedRequest(sessionID) != requestID {
+		return empty(ConsentEpoch(f.config).Active)
+	}
+	return map[string]any{"enabled": true, "suggestions": suggestions}
+}
+
 // StageDelivery 记录送达并返回页面载荷；请求已过期则记 suppressed 且不推。
 // 推荐关闭时什么都不记（Python: consent_epoch() is None → None）。
 // Python: prompt_suggestion.py:672-700 stage_delivery

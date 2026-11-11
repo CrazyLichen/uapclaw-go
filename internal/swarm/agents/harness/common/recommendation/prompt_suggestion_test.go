@@ -537,3 +537,81 @@ func TestRecordPageOutcome_幂等(t *testing.T) {
 	require.NotNil(t, second)
 	assert.False(t, *second)
 }
+
+// ──────────────────────────── 用例：CurrentSuggestions ───────────────────────────────
+
+// TestCurrentSuggestions_全链路命中 candidate 未消费 → 返回建议。
+func TestCurrentSuggestions_全链路命中(t *testing.T) {
+	f := newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "试试 git push")
+	completionRow(t, "s1", "r1")
+
+	got := CurrentSuggestions(f, store, "s1")
+	assert.Equal(t, true, got["enabled"])
+	suggestions, _ := got["suggestions"].([]map[string]any)
+	require.Len(t, suggestions, 1)
+	assert.Equal(t, "sug1", suggestions[0]["suggestion_id"])
+	assert.Equal(t, "试试 git push", suggestions[0]["text"])
+	assert.Equal(t, "r1", suggestions[0]["request_id"])
+	assert.Equal(t, "s1", suggestions[0]["session_id"])
+}
+
+// TestCurrentSuggestions_已消费 accepted 后回读为空。
+func TestCurrentSuggestions_已消费(t *testing.T) {
+	f := newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "text")
+	completionRow(t, "s1", "r1")
+	recorded := RecordPageOutcome(store, map[string]any{"session_id": "s1", "suggestion_id": "sug1",
+		"event_type": "accepted", "method": "click", "time_to_accept_ms": 10})
+	require.NotNil(t, recorded)
+
+	got := CurrentSuggestions(f, store, "s1")
+	assert.Equal(t, true, got["enabled"])
+	suggestions, _ := got["suggestions"].([]map[string]any)
+	assert.Empty(t, suggestions)
+}
+
+// TestCurrentSuggestions_过期请求 最新完成行不是该请求 → 空建议。
+func TestCurrentSuggestions_过期请求(t *testing.T) {
+	f := newLedgerTestForks(t)
+	store := openTestStore(t)
+	seedGeneration(t, store, "s1", "r1", "sug1", "text")
+	completionRow(t, "s1", "r2")
+
+	got := CurrentSuggestions(f, store, "s1")
+	assert.Equal(t, true, got["enabled"])
+	suggestions, _ := got["suggestions"].([]map[string]any)
+	assert.Empty(t, suggestions)
+}
+
+// TestCurrentSuggestions_推荐关闭 开关关 → enabled=false。
+func TestCurrentSuggestions_推荐关闭(t *testing.T) {
+	resetWorkspaceForTest(t)
+	f := NewPromptSuggestionForks() // 未开开关
+	store := openTestStore(t)
+	got := CurrentSuggestions(f, store, "s1")
+	assert.Equal(t, false, got["enabled"])
+	suggestions, _ := got["suggestions"].([]map[string]any)
+	assert.Empty(t, suggestions)
+}
+
+// TestCurrentSuggestions_非candidate过滤 outcome 非 candidate → 跳过。
+func TestCurrentSuggestions_非candidate过滤(t *testing.T) {
+	f := newLedgerTestForks(t)
+	store := openTestStore(t)
+	_, err := store.RecordEvent(map[string]any{
+		"session_id": "s1", "slate_id": "prompt-suggestion:r1", "event_type": "prompt_suggestion_generation",
+		"topic_id": "prompt-suggestion:sug9", "policy_id": PolicyID, "selection_mode": "prompt_suggestion",
+		"propensity_reason": "not_estimated", "created_at": float64(time.Now().UnixNano()) / 1e9,
+		"payload": map[string]any{"suggestion_id": "sug9", "session_id": "s1",
+			"request_id": "r1", "outcome": "suppressed", "reason": "plan_mode"},
+	})
+	require.NoError(t, err)
+	completionRow(t, "s1", "r1")
+
+	got := CurrentSuggestions(f, store, "s1")
+	suggestions, _ := got["suggestions"].([]map[string]any)
+	assert.Empty(t, suggestions)
+}
