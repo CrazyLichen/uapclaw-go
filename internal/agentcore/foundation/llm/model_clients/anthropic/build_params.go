@@ -169,17 +169,14 @@ func (c *AnthropicModelClient) BuildAnthropicParams(
 	thinkingRestrictsSampling := thinkingType == "enabled" || thinkingType == "adaptive"
 	samplingAllowed := !samplingForbidden && !thinkingRestrictsSampling
 
-	if !samplingAllowed {
-		if temperatureExplicit || topPExplicit || openaiParams["top_k"] != nil {
-			// Python: llm_logger.debug("Anthropic: dropping sampling overrides ...")
-		}
-	} else {
+	// Python: !samplingAllowed 分支仅 llm_logger.debug("Anthropic: dropping sampling overrides ...")，
+	// Go 侧无对应日志字段，仅注释记录；行为上与 else 分支互斥。
+	if samplingAllowed {
 		if temperature != nil {
 			if temperatureExplicit {
 				extraBody["temperature"] = temperature
-				if topPExplicit && topP != nil {
-					// Python: dropping top_p because temperature is set (API forbids both)
-				}
+				// Python: dropping top_p because temperature is set (API forbids both)
+				// （top_pExplicit 且 top_p != nil 时不写入 top_p，仅注释记录）
 			}
 		} else if topP != nil && topPExplicit {
 			if floatOf(topP) != 1.0 {

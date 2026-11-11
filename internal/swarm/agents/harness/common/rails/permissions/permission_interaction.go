@@ -95,9 +95,7 @@ func ContainsPermissionInteraction(value any) bool {
 				pending = append(pending, nested)
 			}
 		case []any:
-			for _, nested := range typed {
-				pending = append(pending, nested)
-			}
+			pending = append(pending, typed...)
 		default:
 			if mappingHasPermissionKey(readObjectField(item, "metadata")) {
 				return true
@@ -139,7 +137,7 @@ func readObjectField(item any, name string) any {
 		return nil
 	}
 	value := reflect.ValueOf(item)
-	if value.Kind() == reflect.Ptr {
+	if value.Kind() == reflect.Pointer {
 		if value.IsNil() {
 			return nil
 		}
@@ -183,7 +181,7 @@ func valueIdentity(value any) (uintptr, bool) {
 	}
 	reflected := reflect.ValueOf(value)
 	switch reflected.Kind() {
-	case reflect.Map, reflect.Slice, reflect.Ptr:
+	case reflect.Map, reflect.Slice, reflect.Pointer:
 		if reflected.IsNil() {
 			return 0, false
 		}

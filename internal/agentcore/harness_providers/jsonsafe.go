@@ -111,7 +111,7 @@ func ToJsonSafe(value any) any {
 		// 也返回 "string" 而非空串，该判据不成立。三者 Kind() 都是 String，
 		// 返回原字符串本身，语义与 Python 完全一致。
 		return rv.String()
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		// Python 无指针概念；Go 侧解引用后递归，nil 保持 nil。
 		if rv.IsNil() {
 			return nil

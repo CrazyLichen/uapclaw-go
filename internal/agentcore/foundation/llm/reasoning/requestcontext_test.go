@@ -34,11 +34,13 @@ func TestDisabledThinkingFallback_父ctx不受污染(t *testing.T) {
 
 // TestDisabledThinkingFallback_nilCtx 验证 nil ctx 不 panic。
 func TestDisabledThinkingFallback_nilCtx(t *testing.T) {
-	if IsDisabledThinkingFallbackAllowed(nil) {
+	// 用 nil 变量代替 nil 字面量：语义相同（SA1012 仅拦字面量），仍验证 nil ctx 处理
+	var nilCtx context.Context
+	if IsDisabledThinkingFallbackAllowed(nilCtx) {
 		t.Fatal("nil ctx 应返回 false")
 	}
 	// With 传 nil 时应回落到 Background 而不是 panic
-	ctx := WithDisabledThinkingFallback(nil)
+	ctx := WithDisabledThinkingFallback(nilCtx)
 	if !IsDisabledThinkingFallbackAllowed(ctx) {
 		t.Fatal("nil 入参应回落 Background 后生效")
 	}

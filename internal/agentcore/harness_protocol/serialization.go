@@ -326,7 +326,7 @@ func payloadTypeName(event HarnessEventPayload) string {
 		return "None"
 	}
 	rv := reflect.ValueOf(event)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		return "*" + rv.Type().Elem().Name()
 	}
 	return rv.Type().Name()

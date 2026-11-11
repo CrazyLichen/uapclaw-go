@@ -172,7 +172,7 @@ func TestMarshalSortedCompact_键有序(t *testing.T) {
 	alphaIdx := strings.Index(got, "alpha")
 	mikeIdx := strings.Index(got, "mike")
 	zebraIdx := strings.Index(got, "zebra")
-	if !(alphaIdx < mikeIdx && mikeIdx < zebraIdx) {
+	if alphaIdx >= mikeIdx || mikeIdx >= zebraIdx {
 		t.Errorf("键未按字典序输出: %s", got)
 	}
 }
