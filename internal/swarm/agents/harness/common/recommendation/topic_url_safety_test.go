@@ -8,8 +8,8 @@ func TestNormalizeFetchHost_各类输入(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"Example.COM.", "example.com"}, // 对齐 :36 rstrip(".").lower()
-		{"[::1]", "::1"},                // 剥离方括号
+		{"Example.COM.", "example.com"},    // 对齐 :36 rstrip(".").lower()
+		{"[::1]", "::1"},                   // 剥离方括号
 		{"192.168.001.1", "192.168.001.1"}, // 前导零非法地址 → 走 idna 路径原样返回（对齐 Python ipaddress 3.9.5+ 拒绝前导零）
 		{"", ""},
 		{"  ", ""},
@@ -27,8 +27,8 @@ func TestPublicFetchURLRejectionReasonSync_拒绝矩阵(t *testing.T) {
 		url  string
 		want string
 	}{
-		{"http://192.168.1.1/x", "network_host_not_public"},     // 私网字面量
-		{"http://127.0.0.1/x", "network_host_not_public"},       // 回环
+		{"http://192.168.1.1/x", "network_host_not_public"},      // 私网字面量
+		{"http://127.0.0.1/x", "network_host_not_public"},        // 回环
 		{"http://169.254.169.254/meta", "network_metadata_host"}, // 云 metadata（链路本地）
 		{"http://metadata/v1", "network_metadata_host"},          // metadata 主机名
 		{"http://metadata.google.internal/v1", "network_metadata_host"},

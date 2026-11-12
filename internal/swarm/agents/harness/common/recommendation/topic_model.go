@@ -35,8 +35,10 @@ func BackgroundConfigurationStatus(config *ArkBackgroundConfig, environ map[stri
 	}
 	context := 0
 	if raw := get("ARK_CONTEXT_WINDOW_TOKENS"); raw != "" {
-		if _, err := strconv.Atoi(raw); err != nil {
+		if parsed, err := strconv.Atoi(raw); err != nil {
 			context = 0
+		} else {
+			context = parsed
 		}
 	}
 	if context <= 0 {
@@ -159,8 +161,10 @@ func FromEnviron(environ map[string]string) *ArkBackgroundConfig {
 	baseURL := get("ARK_BASE_URL")
 	contextWindowTokens := 0
 	if raw := get("ARK_CONTEXT_WINDOW_TOKENS"); raw != "" {
-		if _, err := strconv.Atoi(raw); err != nil {
+		if parsed, err := strconv.Atoi(raw); err != nil {
 			contextWindowTokens = 0
+		} else {
+			contextWindowTokens = parsed
 		}
 	}
 	if apiKey == "" || model == "" || baseURL == "" {
