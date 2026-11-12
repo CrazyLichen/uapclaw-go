@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -64,25 +66,11 @@ var (
 	ErrToolAllowlistDenied = errors.New("Agent tool allowlist denied")
 )
 
-// disabledToolsPrompt 白名单为空时追加给模型的说明。
-// Python: tool_allowlist.py:22-26
-const disabledToolsPrompt = "\n\nAll tools are disabled for this Agent. Do not call or claim access " +
-	"to tools, files, shell commands, network resources, or delegates. " +
-	"Answer using only the conversation and your knowledge."
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ApplyToolPolicyPrompt 向模型同时描述并强制"显式空能力集"。
+// ApplyToolPolicyPrompt 工具策略提示（定义在 schema 包，见 schema/interrupt_payload.go）。
 // Python: tool_allowlist.py:16-26 apply_tool_policy_prompt
-//
-// 语义与直觉相反：**名单为空**才追加"工具已全部禁用"的说明；
-// 名单非空时原样返回（收窄由 install_tool_allowlist 在边界执行）。
-func ApplyToolPolicyPrompt(systemPrompt string, toolNames []string) string {
-	if len(toolNames) > 0 {
-		return systemPrompt
-	}
-	return systemPrompt + disabledToolsPrompt
-}
+var ApplyToolPolicyPrompt = schema.ApplyToolPolicyPrompt
 
 // InstallToolAllowlist 收窄一个 Agent 面向模型的发现与执行能力。
 // Python: tool_allowlist.py:29-61 install_tool_allowlist

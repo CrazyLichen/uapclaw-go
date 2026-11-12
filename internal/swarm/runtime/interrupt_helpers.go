@@ -1,57 +1,24 @@
 package runtime
 
-import "strings"
+import "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// LegacySkillEvolutionApprovalSource 老式技能演进审批的 chat.send source 取值。
-	// Python: agents/harness/common/rails/interrupt/interrupt_helpers.py
-	//         LEGACY_SKILL_EVOLUTION_APPROVAL_SOURCE（:57）
-	LegacySkillEvolutionApprovalSource = "skill_evolution_approval"
-)
+// LegacySkillEvolutionApprovalSource 老式技能演进审批的 chat.send source 取值。
+// Python: agents/harness/common/rails/interrupt/interrupt_helpers.py
+//
+//	LEGACY_SKILL_EVOLUTION_APPROVAL_SOURCE（:57）
+const LegacySkillEvolutionApprovalSource = schema.LegacySkillEvolutionApprovalSource
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HasInterruptResumePayload 载荷是否带 request_id 与非空 answers。
 // Python: interrupt_helpers.py has_interrupt_resume_payload（:151）
-func HasInterruptResumePayload(params map[string]any) bool {
-	if params == nil {
-		return false
-	}
-	requestID, _ := params["request_id"].(string)
-	if strings.TrimSpace(requestID) == "" {
-		return false
-	}
-	answers, ok := params["answers"].([]any)
-	return ok && len(answers) > 0
-}
+var HasInterruptResumePayload = schema.HasInterruptResumePayload
 
 // IsInterruptResumePayload 载荷是否在回答一个被暂停的轮次。
 // Python: interrupt_helpers.py is_interrupt_resume_payload（:160）
-//
-// 三条路径，顺序不得调整（短路顺序会影响副作用边界）：
-//  1. answers_paused_calls 命中即为 true
-//  2. 不是标准 resume 载荷则 false
-//  3. source 必须是 legacy 技能演进审批，且 evolution_meta.approval_transport == "interrupt"
-func IsInterruptResumePayload(params map[string]any) bool {
-	if AnswersPausedCalls(params) {
-		return true
-	}
-	if !HasInterruptResumePayload(params) {
-		return false
-	}
-	source, _ := params["source"].(string)
-	if strings.TrimSpace(source) != LegacySkillEvolutionApprovalSource {
-		return false
-	}
-	evolutionMeta, ok := params["evolution_meta"].(map[string]any)
-	if !ok {
-		return false
-	}
-	transport, _ := evolutionMeta["approval_transport"].(string)
-	return transport == "interrupt"
-}
+var IsInterruptResumePayload = schema.IsInterruptResumePayload
 
 // IsInterruptResumeRequest 请求是否为中断续答。
 // Python: runtime/service.py _is_interrupt_resume_request（:3601）

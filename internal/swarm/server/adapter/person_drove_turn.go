@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -35,7 +35,7 @@ func personDroveTurn(
 		return false
 	}
 	// Python: 2. if is_interrupt_resume_payload(request.params): return True
-	if swruntime.IsInterruptResumePayload(params) {
+	if schema.IsInterruptResumePayload(params) {
 		return true
 	}
 	// Python: 3. return is_external_user_authored_dispatch(...)
@@ -92,7 +92,7 @@ func isExternalUserAuthoredDispatch(
 		return false
 	}
 	// Python: 5. if is_interrupt_resume_payload(params): return False
-	if swruntime.IsInterruptResumePayload(params) {
+	if schema.IsInterruptResumePayload(params) {
 		return false
 	}
 	// Python: 6. if request_method == ReqMethod.COMMAND_GOAL: return False

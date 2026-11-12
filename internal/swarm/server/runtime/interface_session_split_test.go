@@ -16,31 +16,6 @@ func TestExecuteMessage_签名存在(t *testing.T) {
 	var _ = facade.ProcessMessage
 }
 
-// TestFacadeUsesSessionRuntime_分流判定 门面暴露的判定与 runtime 包一致。
-func TestFacadeUsesSessionRuntime_分流判定(t *testing.T) {
-	sessionID := "s1"
-	chat := &schema.AgentRequest{
-		RequestID: "r1",
-		ChannelID: "ch-1",
-		SessionID: &sessionID,
-		ReqMethod: schema.ReqMethodChatSend,
-		IsStream:  true,
-	}
-	if !facadeUsesSessionRuntime(chat) {
-		t.Error("聊天请求应归 Runtime 调度")
-	}
-
-	rename := &schema.AgentRequest{
-		RequestID: "r2",
-		ChannelID: "ch-1",
-		SessionID: &sessionID,
-		ReqMethod: schema.ReqMethodSessionRename,
-	}
-	if facadeUsesSessionRuntime(rename) {
-		t.Error("session.rename 应走门面队列")
-	}
-}
-
 // TestProcessMessageInternal_调度关闭直跑 scheduleSession=false 不碰队列。
 func TestProcessMessageInternal_调度关闭直跑(t *testing.T) {
 	uc := &UapClawSwarm{sessionManager: session.NewSessionManager()}

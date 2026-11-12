@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
@@ -18,7 +17,6 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
@@ -29,6 +27,13 @@ import (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// agentRuntimeHandle 门面需要的 Runtime 能力（与 AgentRuntimeHandle 同形）。
+//
+// 上游 interface.py 的门面对 Runtime 只用到 coordinator 相关能力（账本登记、
+// 取消、关协调器、活跃判定），没有一处需要 Runtime 的完整方法面。Go 侧用窄接口
+// 代替 *swruntime.AgentRuntime，使本文件不 import swarm/runtime 的具体类型。
+type agentRuntimeHandle = AgentRuntimeHandle
 
 // UapClawSwarm Agent 统一门面。
 // 提供：SDK 适配器路由、统一对外 API、公共编排
@@ -60,7 +65,8 @@ type UapClawSwarm struct {
 	//
 	// SetAgentRuntime 在 createAgent goroutine 注入，读取方在请求/建实例
 	// goroutine（如 TryStartDreaming），必须经 atomics 同步（CI race 实证）。
-	agentRuntime atomic.Pointer[swruntime.AgentRuntime]
+	agentRuntimeMu sync.RWMutex
+	agentRuntime   agentRuntimeHandle
 
 	// skilldevService SkillDev 服务（懒初始化，ensureSkillDevService 时创建）。
 	skilldevService *skilldev.SkillDevService
@@ -142,7 +148,6 @@ func NewUapClaw() *UapClawSwarm {
 		appCancel:          appCancel,
 		sessionManager:     session.NewSessionManager(),
 	}
-	uc.agentRuntime.Store(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
 	return uc
 }
 
@@ -151,14 +156,23 @@ func NewUapClaw() *UapClawSwarm {
 //
 // Go 侧由 AgentManager 造出 UapClawSwarm 后注入，避免构造期
 // Runtime ↔ Manager ↔ 门面 三者互相引用成环。
-func (uc *UapClawSwarm) SetAgentRuntime(runtime *swruntime.AgentRuntime) {
-	uc.agentRuntime.Store(runtime)
+func (uc *UapClawSwarm) SetAgentRuntime(runtime agentRuntimeHandle) {
+	uc.agentRuntimeMu.Lock()
+	defer uc.agentRuntimeMu.Unlock()
+	uc.agentRuntime = runtime
+}
+
+// currentAgentRuntime 读当前 Runtime 归属方（nil 表示未注入）。
+func (uc *UapClawSwarm) currentAgentRuntime() agentRuntimeHandle {
+	uc.agentRuntimeMu.RLock()
+	defer uc.agentRuntimeMu.RUnlock()
+	return uc.agentRuntime
 }
 
 // executionCoordinator 返回执行账本（经 Runtime，未注入时退回自身字段）。
 // Python: service.py 内 self._session_coordinator
-func (uc *UapClawSwarm) executionCoordinator() swruntime.SessionCoordinatorPort {
-	if runtime := uc.agentRuntime.Load(); runtime != nil {
+func (uc *UapClawSwarm) executionCoordinator() swsession.CoordinatorPort {
+	if runtime := uc.currentAgentRuntime(); runtime != nil {
 		return runtime.Coordinator()
 	}
 	return nil
@@ -170,9 +184,9 @@ func (uc *UapClawSwarm) executionCoordinator() swruntime.SessionCoordinatorPort 
 // 与 ExecuteMessage 的唯一区别是调度归属：本方法把执行排进门面会话队列
 // （同会话串行），适用于不归 Runtime 协调器管的零碎 RPC。
 func (uc *UapClawSwarm) ProcessMessage(
-	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
+	ctx context.Context, request *schema.AgentRequest,
 ) (*schema.AgentResponse, error) {
-	return uc.processMessageInternal(ctx, request, true, opts...)
+	return uc.processMessageInternal(ctx, request, true)
 }
 
 // ExecuteMessage 执行一次由 AgentRuntime 拥有调度的请求。
@@ -181,9 +195,9 @@ func (uc *UapClawSwarm) ProcessMessage(
 // 不排门面队列：Runtime 协调器已经为它分配了执行与代次，再排一次会把
 // 同一请求调度两遍。
 func (uc *UapClawSwarm) ExecuteMessage(
-	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
+	ctx context.Context, request *schema.AgentRequest,
 ) (*schema.AgentResponse, error) {
-	return uc.processMessageInternal(ctx, request, false, opts...)
+	return uc.processMessageInternal(ctx, request, false)
 }
 
 // processMessageInternal 处理非流式请求的公共实现。
@@ -193,7 +207,6 @@ func (uc *UapClawSwarm) ExecuteMessage(
 // 为假时直接执行（Runtime 协调器已负责调度）。
 func (uc *UapClawSwarm) processMessageInternal(
 	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
-	opts ...swruntime.ExecuteOption,
 ) (*schema.AgentResponse, error) {
 	if !scheduleSession || uc.sessionManager == nil {
 		return uc.runMessageDirect(ctx, request)
@@ -300,7 +313,7 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 	// 钩子必须对所有执行路径生效（Python 只有一个出口）。
 	coordinator := uc.executionCoordinator()
 	if coordinator == nil {
-		return nil, swruntime.ErrCoordinatorUnavailable
+		return nil, swsession.ErrCoordinatorUnavailable
 	}
 	_, _ = coordinator.RegisterSession(sessionID, request.ChannelID,
 		swsession.SessionPersistencePolicyPersistent)
@@ -355,17 +368,17 @@ func (uc *UapClawSwarm) runMessageDirect(ctx context.Context, request *schema.Ag
 // 与 ExecuteMessageStream 的唯一区别是调度归属；流式请求一旦排进队列，
 // 返回的 channel 由队列内的执行协程生产，调用方照常消费。
 func (uc *UapClawSwarm) ProcessMessageStream(
-	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
+	ctx context.Context, request *schema.AgentRequest,
 ) (<-chan *schema.AgentResponseChunk, error) {
-	return uc.processMessageStreamInternal(ctx, request, true, opts...)
+	return uc.processMessageStreamInternal(ctx, request, true)
 }
 
 // ExecuteMessageStream 执行一次由 AgentRuntime 拥有调度的流式请求。
 // Python: interface.py execute_message_stream（schedule_session=False）
 func (uc *UapClawSwarm) ExecuteMessageStream(
-	ctx context.Context, request *schema.AgentRequest, opts ...swruntime.ExecuteOption,
+	ctx context.Context, request *schema.AgentRequest,
 ) (<-chan *schema.AgentResponseChunk, error) {
-	return uc.processMessageStreamInternal(ctx, request, false, opts...)
+	return uc.processMessageStreamInternal(ctx, request, false)
 }
 
 // processMessageStreamInternal 流式请求的公共实现。
@@ -376,7 +389,6 @@ func (uc *UapClawSwarm) ExecuteMessageStream(
 // 外层 channel，保证调用方拿到的仍是连续流。
 func (uc *UapClawSwarm) processMessageStreamInternal(
 	ctx context.Context, request *schema.AgentRequest, scheduleSession bool,
-	opts ...swruntime.ExecuteOption,
 ) (<-chan *schema.AgentResponseChunk, error) {
 	// Python: interface.py:4175 —— 流式 command.goal 的 get/pause/clear 在此单帧
 	// 短路（控制类流量不进会话队列）；set/resume 继续走下面的完整流式链
@@ -621,12 +633,8 @@ func (uc *UapClawSwarm) runMessageStreamDirect(ctx context.Context, request *sch
 		// ⤵️ 10.6.19-23: Team 后续请求绕过 Session 队列（等待 TeamManager）
 		// S09: 缺少 is_team_first_request 判断逻辑，Team 模式下后续请求会错误排队
 		// Python 通过 team_manager.active_session_id / pending_session_id / has_stream_task 判断首次/后续
-		if runtime := uc.agentRuntime.Load(); runtime != nil {
-			_, _ = runtime.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
-		} else {
-			if coordinator := uc.executionCoordinator(); coordinator != nil {
-				_, _ = coordinator.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
-			}
+		if coordinator := uc.executionCoordinator(); coordinator != nil {
+			_, _ = coordinator.RegisterSession(sessionID, "", swsession.SessionPersistencePolicyPersistent)
 		}
 	}
 
@@ -1390,7 +1398,7 @@ func truncateStr(s string, maxLen int) string {
 }
 
 // PlanStateAccessor 返回 plan 状态读写入口。
-func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
+func (uc *UapClawSwarm) PlanStateAccessor() schema.PlanStateAccessor {
 	// 加锁读：本方法在 chat 流 goroutine 里被调用，而 Cleanup 会并发
 	// 把 uc.adapter 置 nil（-race 实测：Cleanup vs checkPlanExit）。
 	a := uc.adapterSnapshot()
@@ -1428,12 +1436,6 @@ func hasActiveExecutions(c *swsession.RuntimeSessionCoordinator) bool {
 		}
 	}
 	return false
-}
-
-// facadeUsesSessionRuntime 门面侧判定这次请求是否归 Runtime 调度。
-// 委托 runtime 包的 UsesSessionRuntime（上游 uses_session_runtime）。
-func facadeUsesSessionRuntime(request *schema.AgentRequest) bool {
-	return swruntime.UsesSessionRuntime(request, false)
 }
 
 // HasSessionRuntime 门面是否还持有该会话运行时。
@@ -1658,12 +1660,9 @@ func paramString(params map[string]any, key string) string {
 func (uc *UapClawSwarm) cancelExecution(
 	sessionID string, options swsession.CancelExecutionOptions,
 ) (swsession.CancelExecutionResult, error) {
-	if runtime := uc.agentRuntime.Load(); runtime != nil {
-		return runtime.CancelExecution(sessionID, options)
-	}
 	coordinator := uc.executionCoordinator()
 	if coordinator == nil {
-		return swsession.CancelExecutionResult{}, swruntime.ErrCoordinatorUnavailable
+		return swsession.CancelExecutionResult{}, swsession.ErrCoordinatorUnavailable
 	}
 	return coordinator.CancelExecution(sessionID, options)
 }
@@ -1671,7 +1670,7 @@ func (uc *UapClawSwarm) cancelExecution(
 // hasActiveExecutions 是否存在未终态执行。
 // Python: service.py:845/:1216 snapshot 里的 executions 判定
 func (uc *UapClawSwarm) hasActiveExecutions() bool {
-	if runtime := uc.agentRuntime.Load(); runtime != nil {
+	if runtime := uc.currentAgentRuntime(); runtime != nil {
 		return runtime.ActiveExecutions()
 	}
 	coordinator := uc.executionCoordinator()
@@ -1692,9 +1691,6 @@ func (uc *UapClawSwarm) hasActiveExecutions() bool {
 // closeCoordinator 关闭执行账本。
 // Python: Runtime close 内的协调器关闭
 func (uc *UapClawSwarm) closeCoordinator() error {
-	if runtime := uc.agentRuntime.Load(); runtime != nil {
-		return runtime.CloseCoordinator(nil, nil)
-	}
 	coordinator := uc.executionCoordinator()
 	if coordinator == nil {
 		return nil

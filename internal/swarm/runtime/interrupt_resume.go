@@ -1,31 +1,22 @@
 package runtime
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// ClientToolInterruptSource 客户端自己执行了工具、回来交结果的 chat.send 来源。
-	// Python: gateway/common/interrupt_resume.py CLIENT_TOOL_INTERRUPT_SOURCE
-	ClientToolInterruptSource = "client_tool_interrupt"
-)
+// ClientToolInterruptSource 客户端自己执行了工具、回来交结果的 chat.send 来源。
+// Python: gateway/common/interrupt_resume.py CLIENT_TOOL_INTERRUPT_SOURCE
+const ClientToolInterruptSource = schema.ClientToolInterruptSource
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var (
-	// InterruptResumeSources 回答被暂停工具调用的 chat.send 来源集合。
-	// Python: interrupt_resume.py INTERRUPT_RESUME_SOURCES（5 项 frozenset）
-	//
-	// 这类发送是"接着被打断的轮次跑"，而不是新起一轮：Gateway 保留运行中的
-	// 流，Runtime 把它路由到暂停的执行，adapter 把 answers 转成 InteractiveInput。
-	InterruptResumeSources = map[string]struct{}{
-		"permission_interrupt":    {},
-		"confirm_interrupt":       {},
-		"ask_user_interrupt":      {},
-		"evolution_interrupt":     {},
-		ClientToolInterruptSource: {},
-	}
-)
+// InterruptResumeSources 回答被暂停工具调用的 chat.send 来源集合。
+// Python: gateway/common/interrupt_resume.py INTERRUPT_RESUME_SOURCES
+var InterruptResumeSources = schema.InterruptResumeSources
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

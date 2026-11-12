@@ -7,7 +7,6 @@ import (
 
 	permissionmode "github.com/uapclaw/uapclaw-go/internal/common/permission_mode"
 	permissionsrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -115,7 +114,7 @@ func (d *DeepAdapter) getSessionAdapterForRequest(
 
 	// 步骤 4: 智能审批启用 + 审批恢复请求 + child 不存在 → 报错
 	// Python: :3846-3850
-	if smartLifecycle && swruntime.IsInterruptResumePayload(parseParams(request.Params)) && cached == nil {
+	if smartLifecycle && schema.IsInterruptResumePayload(parseParams(request.Params)) && cached == nil {
 		return nil, errPermissionResumeOwnerMissing
 	}
 

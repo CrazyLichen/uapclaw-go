@@ -13,6 +13,8 @@
 //	├── message.go       # MessageType 枚举 + Message 模型 + 工厂函数 + Validate
 //	├── agent.go         # AgentRequest/AgentResponse/AgentResponseChunk 模型 + 工厂函数 + Validate + IsTerminal/NewTerminalChunk
 //	├── event_base.go    # HookEventBase 钩子事件基类 + BuildEventName/ParseEventName
+//	├── agent_port.go    # ChatAgentPort/PlanStateAccessor 执行能力契约 + PlanState
+//	├── interrupt_payload.go # 工具策略提示与中断续答载荷判定（无状态纯函数）
 //	└── permission.go    # PermissionContext 权限上下文 + 派生方法 + 序列化 + 工厂函数 + Validate
 //
 // 对应 Python 代码：jiuwenswarm/common/schema/

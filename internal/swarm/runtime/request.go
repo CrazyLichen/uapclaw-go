@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -30,59 +29,12 @@ type AgentManagerPort interface {
 	GetChatAgentNoWait(channelID, mode, projectDir, subMode string) ChatAgentPort
 }
 
-// ChatAgentPort 运行时需要的 agent 能力。
+// ChatAgentPort agent 执行能力面（契约定义在 schema 包）。
 //
-// 4 个执行方法统一带 opts ...ExecuteOption，用于透传"本次调用专属"的钩子与执行体
-// （on_agent_ready / _agent_execution）。Python 用关键字参数，Go 用 Functional Option（D-7）。
-type ChatAgentPort interface {
-	// ProcessMessage 通过门面会话队列非流式执行
-	// Python: interface.py process_message（schedule_session=True）
-	ProcessMessage(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (*schema.AgentResponse, error)
-	// ProcessMessageStream 通过门面会话队列流式执行
-	// Python: interface.py process_message_stream（schedule_session=True）
-	ProcessMessageStream(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error)
-	// ExecuteMessage 由 Runtime 持有调度的非流式执行
-	// Python: interface.py execute_message（schedule_session=False）
-	ExecuteMessage(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (*schema.AgentResponse, error)
-	// ExecuteMessageStream 由 Runtime 持有调度的流式执行
-	// Python: interface.py execute_message_stream（schedule_session=False）
-	ExecuteMessageStream(ctx context.Context, req *schema.AgentRequest, opts ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error)
-	// PlanStateAccessor 返回 plan 状态读写入口
-	PlanStateAccessor() PlanStateAccessor
-}
-
-// executeOptions ChatAgentPort 执行方法的可选参数。
-// Python: stream/invoke 的 on_agent_ready 与 _agent_execution 关键字参数
-type executeOptions struct {
-	// onAgentReady agent 就绪回调，首次模型调用前触发
-	onAgentReady func(ctx context.Context, agent harnessinterfaces.DeepAgentInterface) error
-	// agentExecution 声明式 agent 执行体
-	agentExecution *RuntimeAgentExecution
-}
-
-// ExecuteOption ChatAgentPort 执行方法的可选参数函数。
-type ExecuteOption func(*executeOptions)
-
-// WithExecuteOnAgentReady 设置 agent 就绪回调。
-func WithExecuteOnAgentReady(fn func(ctx context.Context, agent harnessinterfaces.DeepAgentInterface) error) ExecuteOption {
-	return func(o *executeOptions) { o.onAgentReady = fn }
-}
-
-// WithExecuteAgentExecution 携带声明式 agent 执行体。
-func WithExecuteAgentExecution(exec *RuntimeAgentExecution) ExecuteOption {
-	return func(o *executeOptions) { o.agentExecution = exec }
-}
-
-// applyExecuteOptions 折叠可选参数。
-func applyExecuteOptions(opts []ExecuteOption) *executeOptions {
-	o := &executeOptions{}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(o)
-		}
-	}
-	return o
-}
+// 放 schema 而非本包：它的实现在 server/runtime（上层），若契约留在 runtime，
+// 上层实现它就得 import runtime，而 runtime 又要用上层实例——成环。
+// 详见 schema/agent_port.go。
+type ChatAgentPort = schema.ChatAgentPort
 
 // ──────────────────────────── 常量 ────────────────────────────
 

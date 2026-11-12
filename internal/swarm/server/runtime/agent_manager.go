@@ -19,7 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -64,10 +64,27 @@ type AgentManager struct {
 	// runtimeProvider 提供执行账本归属方（P4：门面不自建账本）。
 	// Python: 门面不持有 coordinator，账本由 AgentRuntime 自建并唯一持有。
 	// Go 侧 AgentManager 创建门面时经此取 Runtime 注入，使所有门面共享同一本账。
-	runtimeProvider func() *swruntime.AgentRuntime
+	//
+	// 返回窄接口而非 *AgentRuntime：上游 agent_manager.py 对 AgentRuntime 零依赖，
+	// Go 侧用本包自定义的 agentRuntimePort 代替具体类型，使 agent_manager.go
+	// 不必 import swarm/runtime 即可完成注入（P-7 前置）。
+	runtimeProvider func() AgentRuntimeHandle
 
 	// mu 保护并发访问
 	mu sync.RWMutex
+}
+
+// AgentRuntimeHandle AgentManager 需要的 Runtime 能力。
+//
+// 上游 agent_manager.py 对 AgentRuntime 零依赖（全文件 grep 0 命中）：
+// 门面通过 runtime/context.py 的 get_current_runtime() 运行时取值，不需要注入。
+// Go 侧没有等价的无副作用传递手段，故用窄接口注入——只声明 Manager 实际用到的
+// 两个方法，既保留类型安全，又让本文件不 import swarm/runtime。
+type AgentRuntimeHandle interface {
+	// Coordinator 返回执行账本（门面与 Manager 共享同一本账）
+	Coordinator() swsession.CoordinatorPort
+	// ActiveExecutions 是否有活跃执行（清理前判定）
+	ActiveExecutions() bool
 }
 
 // agentEntry Agent 实例条目，记录元数据。
@@ -391,7 +408,7 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 	// Python: L439-456: 从 request 解析 channel_id/mode/workspace_dir → get_agent → agent.process_message
 	// Python: L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
-	mode, _ := swruntime.ResolveAgentRequestModeFromRequest(request)
+	mode, _ := resolveRequestOwnerMode(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
@@ -415,7 +432,7 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 	// Python: L468-487: 同 process_message 但流式
 	// Python: L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
-	mode, _ := swruntime.ResolveAgentRequestModeFromRequest(request)
+	mode, _ := resolveRequestOwnerMode(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
@@ -966,11 +983,59 @@ func resolveWorkspaceDirFromRequest(request *schema.AgentRequest) string {
 	return ""
 }
 
+// resolveRequestOwnerMode 解析请求的 manager owner 模式（不依赖 runtime 层）。
+// Python: agent_manager.py:101-127 _resolve_request_owner_mode
+//
+// 上游 AgentManager 对 jiuwenswarm.runtime.* 零依赖——本函数就是那份自包含解析：
+// 只经 gateway.common.mode_matrix 的纯函数（Go 侧在 schema 包）算 (managerMode, subMode)，
+// 不走 runtime.ResolveAgentRequestModeFromRequest 那套完整 ResolvedMode 组装。
+//
+// 与 runtime 版的差别只在返回面：本函数只取「找 agent 实例需要的两个值」，
+// 不产出 canonical / isPlan / normalMode 等运行期字段。
+func resolveRequestOwnerMode(request *schema.AgentRequest) (mode, subMode string) {
+	params := parseRequestParams(request)
+	modeText := schema.CanonicalizeModeText(stringParamOrEmpty(params, "mode", "agent"))
+
+	// ① 新三段 canonical 直接命中
+	if managerMode, managerSubMode, _, ok := schema.ResolveNewCanonicalModeText(modeText); ok {
+		return managerMode, managerSubMode
+	}
+	// ② Web 组合：base mode + work_mode
+	if workMode := schema.NormalizeWorkMode(params["work_mode"]); workMode != "" {
+		if managerMode, managerSubMode, _, ok := schema.ComposeWebMode(modeText, workMode); ok {
+			return managerMode, managerSubMode
+		}
+	}
+	// ③ 裸基础模式原样
+	switch modeText {
+	case "agent", "code", "team":
+		return modeText, ""
+	}
+	// ④ 旧 canonical 经 deprecate 后再试
+	if managerMode, managerSubMode, _, ok := schema.ResolveNewCanonicalModeText(
+		schema.DeprecateMode(modeText)); ok {
+		return managerMode, managerSubMode
+	}
+	// ⑤ 兜底：按第一个点切一级模式
+	if idx := strings.Index(modeText, "."); idx >= 0 {
+		return modeText[:idx], ""
+	}
+	return modeText, ""
+}
+
+// stringParamOrEmpty 取字符串参数，缺失或非字符串时用兜底值。
+func stringParamOrEmpty(params map[string]any, key, fallback string) string {
+	if v, ok := params[key].(string); ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return fallback
+}
+
 // GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（runtime.AgentManagerPort 实现）。
 // Python: runtime/request.py prepare_chat_turn 中的 get_agent_for_request（简化版，无原子准入）。
 // agentDefinition / fingerprint 非空时用于创建声明式 root agent。
 func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string,
-	agentDefinition map[string]any, agentDefinitionFingerprint string) (swruntime.ChatAgentPort, error) {
+	agentDefinition map[string]any, agentDefinitionFingerprint string) (schema.ChatAgentPort, error) {
 	agent, err := am.GetAgentWithDefinition(ctx, channelID, mode, projectDir, subMode,
 		agentDefinition, agentDefinitionFingerprint)
 	if err != nil {
@@ -981,7 +1046,7 @@ func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMo
 
 // GetChatAgentNoWait 非阻塞返回符合条件的既有 agent（不存在时返回 nil）。
 // Python: AgentManager.get_agent_nowait
-func (am *AgentManager) GetChatAgentNoWait(channelID, mode, projectDir, subMode string) swruntime.ChatAgentPort {
+func (am *AgentManager) GetChatAgentNoWait(channelID, mode, projectDir, subMode string) schema.ChatAgentPort {
 	agent := am.GetAgentNoWait(channelID, mode, projectDir, subMode)
 	if agent == nil {
 		return nil
@@ -1018,7 +1083,7 @@ func (am *AgentManager) HasActiveGoal(channelID, sessionID string) bool {
 //
 // 装配顺序：AgentServer 先建 Runtime（Runtime 自建账本），再调本方法注册；
 // 此后每次 createAgent 都会把同一本账注入新建门面。
-func (am *AgentManager) SetRuntimeProvider(provider func() *swruntime.AgentRuntime) {
+func (am *AgentManager) SetRuntimeProvider(provider func() AgentRuntimeHandle) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 	am.runtimeProvider = provider

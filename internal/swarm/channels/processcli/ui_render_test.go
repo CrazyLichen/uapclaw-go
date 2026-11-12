@@ -100,10 +100,10 @@ func TestHumanRunUI_Completed(t *testing.T) {
 // Python: ui.py:541-570
 func TestHumanRunUI_SessionEvent四种(t *testing.T) {
 	cases := map[string]string{
-		"session.created": "已创建并切换到会话",
+		"session.created":  "已创建并切换到会话",
 		"session.switched": "已恢复会话",
-		"session.forked":  "已创建并切换到会话分支",
-		"session.deleted": "已删除会话",
+		"session.forked":   "已创建并切换到会话分支",
+		"session.deleted":  "已删除会话",
 	}
 	for eventType, want := range cases {
 		ui, out, _ := newEnhancedHumanUI()
@@ -488,4 +488,3 @@ func TestProcessCliUI_Styled颜色开关(t *testing.T) {
 		t.Errorf("有色应包转义：%q", got)
 	}
 }
-

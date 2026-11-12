@@ -11,13 +11,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// PlanState plan 状态快照（只取控制器关心的字段）。
-type PlanState struct {
-	// Mode 当前 plan 模式："plan" | "normal"
-	Mode string
-	// PlanSlug 活跃计划文件短名
-	PlanSlug string
-}
+// PlanState plan 状态快照（定义在 schema 包，见 schema/agent_port.go）。
+type PlanState = schema.PlanState
 
 // PlanRequest 控制器需要的请求视图。
 type PlanRequest struct {
@@ -63,16 +58,7 @@ type PlanStateResult struct {
 
 // PlanStateAccessor plan 状态读写入口（运行期由调用方传入，对齐上游
 // ensure_state(request, mode, sub_mode, agent) 的 agent 参数）。
-type PlanStateAccessor interface {
-	// LoadPlanState 读取会话 plan 状态
-	LoadPlanState(ctx context.Context, sessionID string) (PlanState, error)
-	// SavePlanState 保存会话 plan 状态
-	SavePlanState(ctx context.Context, sessionID string, st PlanState) error
-	// SwitchPlanMode 切 plan 模式
-	SwitchPlanMode(ctx context.Context, sessionID, mode string) error
-	// CommitSession 提交会话
-	CommitSession(ctx context.Context, sessionID string) error
-}
+type PlanStateAccessor = schema.PlanStateAccessor
 
 // PlanModeController 计划模式状态机守门人。
 // Python: jiuwenswarm/runtime/plan.py PlanModeController

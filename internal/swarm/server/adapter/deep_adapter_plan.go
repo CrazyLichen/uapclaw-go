@@ -6,7 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -21,7 +21,7 @@ type planStateStore struct {
 
 // PlanStateAccessor 返回 plan 状态读写入口（由 AgentRuntime 调用控制器时传入）。
 // Python: PlanModeController.open_state_session(agent, session_id) 的 Go 侧适配。
-func (d *DeepAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return &planStateStore{d: d} }
+func (d *DeepAdapter) PlanStateAccessor() schema.PlanStateAccessor { return &planStateStore{d: d} }
 
 // openPlanSession 打开用于 plan 状态读写的 agent 与 Session。
 // Python: jiuwenswarm/runtime/plan.py open_state_session（:85-140）
@@ -91,17 +91,17 @@ func (s *planStateStore) openPlanSession(ctx context.Context, sessionID string) 
 }
 
 // LoadPlanState 读取会话 plan 状态
-func (s *planStateStore) LoadPlanState(ctx context.Context, sessionID string) (swruntime.PlanState, error) {
+func (s *planStateStore) LoadPlanState(ctx context.Context, sessionID string) (schema.PlanState, error) {
 	inst, sess, err := s.openPlanSession(ctx, sessionID)
 	if err != nil {
-		return swruntime.PlanState{}, err
+		return schema.PlanState{}, err
 	}
 	state := inst.LoadState(sess)
-	return swruntime.PlanState{Mode: state.PlanMode.Mode, PlanSlug: state.PlanMode.PlanSlug}, nil
+	return schema.PlanState{Mode: state.PlanMode.Mode, PlanSlug: state.PlanMode.PlanSlug}, nil
 }
 
 // SavePlanState 保存会话 plan 状态
-func (s *planStateStore) SavePlanState(ctx context.Context, sessionID string, ps swruntime.PlanState) error {
+func (s *planStateStore) SavePlanState(ctx context.Context, sessionID string, ps schema.PlanState) error {
 	inst, sess, err := s.openPlanSession(ctx, sessionID)
 	if err != nil {
 		return err

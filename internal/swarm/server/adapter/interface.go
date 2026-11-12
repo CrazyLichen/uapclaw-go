@@ -5,7 +5,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -142,7 +141,7 @@ type AgentAdapter interface {
 	// 放在主接口而非匿名断言：CodeAdapter 是具名组合（deep *DeepAdapter），
 	// 不写委托就拿不到该方法，用断言会静默退化为 nil —— 那会让 code 模式
 	// 的 plan 状态读写整体失效（checkPlanExit 直接跳过）。
-	PlanStateAccessor() swruntime.PlanStateAccessor
+	PlanStateAccessor() schema.PlanStateAccessor
 }
 
 // ContextCompressor 上下文压缩可选接口。

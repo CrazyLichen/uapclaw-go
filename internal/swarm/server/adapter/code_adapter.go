@@ -42,7 +42,6 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -625,7 +624,7 @@ func (c *CodeAdapter) EnsureLiveSessionInstance(ctx context.Context, sessionID s
 
 // PlanStateAccessor 委托给内层 DeepAdapter。
 // 缺了它 code 模式的 plan 状态读写会整体失效。
-func (c *CodeAdapter) PlanStateAccessor() swruntime.PlanStateAccessor {
+func (c *CodeAdapter) PlanStateAccessor() schema.PlanStateAccessor {
 	if c.deep == nil {
 		return nil
 	}

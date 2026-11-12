@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -88,35 +89,15 @@ type AgentRuntimeDeps struct {
 // Python: 无对应（__init__ 必造 provisioner）；Go 注入式装配的防御性错误。
 var ErrProvisionerUnavailable = errors.New("session provisioner is not configured")
 
-// SessionCoordinatorPort 清理与执行账本需要的协调器能力。
-// Python: service.py 里 self._session_coordinator 的调用面（清理、登记、执行、取消、关闭）
+// SessionCoordinatorPort 协调器能力接口别名（定义在 runtime/session 包）。
 //
-// 窄接口而非具体类型：只声明 Runtime 实际使用的方法，避免把千行协调器的
-// 完整方法面拖进 service.go 依赖面（与 goalActivityChecker 同款约定）。
-type SessionCoordinatorPort interface {
-	// CloseSession 关闭某会话的运行中执行
-	CloseSession(sessionID string, generation *int, waitTimeout *time.Duration) (sessionpkg.CloseSessionResult, error)
-	// SnapshotSession 取会话快照（不存在返回 nil）
-	SnapshotSession(sessionID string) *sessionpkg.RuntimeSessionSnapshot
-	// RegisterSession 登记/刷新会话代次
-	RegisterSession(sessionID, channelID string, policy sessionpkg.SessionPersistencePolicy) (sessionpkg.RuntimeSessionSnapshot, error)
-	// RunUnary 执行一次非流式任务并等待结果
-	RunUnary(ctx context.Context, sessionID, requestID string, kind sessionpkg.SessionWorkKind, task func(context.Context) (any, error), options sessionpkg.UnaryOptions) (any, error)
-	// CancelExecution 取消某会话的执行
-	CancelExecution(sessionID string, options sessionpkg.CancelExecutionOptions) (sessionpkg.CancelExecutionResult, error)
-	// SnapshotSessions 取全部会话快照
-	SnapshotSessions() []sessionpkg.RuntimeSessionSnapshot
-	// QuiesceSession 置会话为 QUIESCING 并返回生命周期上下文
-	QuiesceSession(sessionID string, generation *int) (*sessionpkg.SessionLifecycleContext, error)
-	// Close 关闭协调器，返回超时会话
-	Close(waitTimeout *time.Duration, timedOut *[]string) error
-}
+// 搬到 runtime/session 的原因：它描述的是协调器自身的能力边界，与
+// RuntimeSessionCoordinator 同包；server 侧需要它时只 import runtime/session，
+// 不必为一个接口 import 整个 runtime（P-7 前置）。
+type SessionCoordinatorPort = sessionpkg.CoordinatorPort
 
-// ErrCoordinatorUnavailable 协调器未注入
-//
-// 上游 _session_coordinator 恒存在（:412 构造期自建）；Go 侧由注入提供，
-// 未注入时相关承接方法返回此错误，避免静默丢弃登记/取消语义。
-var ErrCoordinatorUnavailable = errors.New("session coordinator is not available")
+// ErrCoordinatorUnavailable 协调器未注入（定义在 runtime/session 包）。
+var ErrCoordinatorUnavailable = sessionpkg.ErrCoordinatorUnavailable
 
 // ErrModelCatalogUnavailable 模型目录未装配
 //
@@ -430,6 +411,15 @@ func (r *AgentRuntime) Stream(
 	if r.shouldSyncPlanState(req) {
 		r.ensurePlanState(ctx, req, subMode, agent)
 	}
+	// agent 就绪回调：plan 同步之后、启动 stream 之前。
+	// Python: service.py:2587-2590 —— `if on_agent_ready is not None: await on_agent_ready(agent)`
+	// 位置不得前移（上游在 ensure_state 之后）也不得后移（必须在 process_message_stream 之前）。
+	if readyErr := applyStreamOptions(opts).notifyAgentReady(ctx, agent); readyErr != nil {
+		if r.shouldCheckPlanExit(req) {
+			r.checkPlanExit(ctx, req, subMode, agent)
+		}
+		return readyErr
+	}
 
 	var ch <-chan *schema.AgentResponseChunk
 	var streamErr error
@@ -457,6 +447,39 @@ func (r *AgentRuntime) Stream(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// notifyAgentReady 触发 agent 就绪回调；未设置时返回 nil。
+//
+// Python: service.py:2587-2590
+//
+//	if on_agent_ready is not None:
+//	    ready_result = on_agent_ready(agent)
+//	    if inspect.isawaitable(ready_result):
+//	        await ready_result
+//
+// 上游用 inspect.isawaitable 兼容同步/异步回调；Go 回调签名自带 ctx 且返回 error，
+// 天然是同步阻塞语义，无需再分辨可等待性。
+func (o *streamOptions) notifyAgentReady(
+	ctx context.Context, agent ChatAgentPort,
+) error {
+	if o == nil || o.onAgentReady == nil {
+		return nil
+	}
+	// DeepAgentInterface 由门面实现自身满足；agent 是 ChatAgentPort 窄接口，
+	// 其实现（UapClawSwarm）同时满足 DeepAgentInterface（D-8 的收窄依据）。
+	// 上游 on_agent_ready 的实参恒为门面（agent_manager.py:2060 返回 JiuWenSwarm，
+	// service.py:2588 原样传入），Go 收窄为 DeepAgentInterface（D-8）后门面必然满足。
+	// 不满足只可能是测试替身或装配错误：记 Warn 并跳过，不阻断主流程
+	//（上游也不会因回调参数类型问题中断 chat turn）。
+	deepAgent, ok := agent.(harnessinterfaces.DeepAgentInterface)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("agent_type", fmt.Sprintf("%T", agent)).
+			Msg("on_agent_ready: agent does not implement DeepAgentInterface, skipped")
+		return nil
+	}
+	return o.onAgentReady(ctx, deepAgent)
+}
 
 // applyStreamOptions 折叠可选参数；nil option 跳过。
 func applyStreamOptions(opts []StreamOption) *streamOptions {

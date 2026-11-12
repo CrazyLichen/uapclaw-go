@@ -46,7 +46,6 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -709,7 +708,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		systemPrompt = strings.TrimRight(systemPrompt, " \t\n") +
 			"\n\n# Agent Instructions\n" + strings.TrimSpace(instructions)
 		// 注意：上游传的是原始 tools 值（可能是 "*"），不是过滤后的名单
-		systemPrompt = swruntime.ApplyToolPolicyPrompt(systemPrompt, toolsFromDefinition(agentDefinition))
+		systemPrompt = schema.ApplyToolPolicyPrompt(systemPrompt, toolsFromDefinition(agentDefinition))
 		// Python: interface_deep.py:13200
 		//   skills=list(agent_definition.get("skills") or ()) if agent_definition else None
 		declaredSkills = stringSliceOf(agentDefinition["skills"])

@@ -22,19 +22,19 @@ type fakePlanAgent struct {
 }
 
 // ProcessMessage 非流式执行
-func (f *fakePlanAgent) ProcessMessage(_ context.Context, _ *schema.AgentRequest, opts ...ExecuteOption) (*schema.AgentResponse, error) {
+func (f *fakePlanAgent) ProcessMessage(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
 	f.calls = append(f.calls, "execute")
 	return &schema.AgentResponse{OK: true, Payload: map[string]any{"event_type": "chat.final"}}, nil
 }
 
 // ExecuteMessage 由 Runtime 持有调度的非流式执行（与 ProcessMessage 同行为）。
-func (f *fakePlanAgent) ExecuteMessage(_ context.Context, _ *schema.AgentRequest, opts ...ExecuteOption) (*schema.AgentResponse, error) {
+func (f *fakePlanAgent) ExecuteMessage(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
 	f.calls = append(f.calls, "execute")
 	return &schema.AgentResponse{OK: true, Payload: map[string]any{"event_type": "chat.final"}}, nil
 }
 
 // ExecuteMessageStream 由 Runtime 持有调度的流式执行（与 ProcessMessageStream 同行为）。
-func (f *fakePlanAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest, opts ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error) {
+func (f *fakePlanAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	f.calls = append(f.calls, "stream")
 	ch := make(chan *schema.AgentResponseChunk, 2)
 	ch <- &schema.AgentResponseChunk{Payload: map[string]any{"event_type": "chat.delta", "content": "a"}}
@@ -44,7 +44,7 @@ func (f *fakePlanAgent) ExecuteMessageStream(_ context.Context, _ *schema.AgentR
 }
 
 // ProcessMessageStream 流式执行
-func (f *fakePlanAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest, opts ...ExecuteOption) (<-chan *schema.AgentResponseChunk, error) {
+func (f *fakePlanAgent) ProcessMessageStream(_ context.Context, _ *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	f.calls = append(f.calls, "stream")
 	ch := make(chan *schema.AgentResponseChunk, 2)
 	ch <- &schema.AgentResponseChunk{Payload: map[string]any{"event_type": "chat.delta", "content": "a"}}

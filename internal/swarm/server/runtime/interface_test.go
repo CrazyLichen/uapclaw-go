@@ -158,8 +158,11 @@ func (f *fakeAdapter) GenerateRecap(_ context.Context, _ string) (map[string]any
 func TestNewUapClaw(t *testing.T) {
 	uc := NewUapClaw()
 	require.NotNil(t, uc)
-	require.NotNil(t, uc.agentRuntime.Load())
-	require.NotNil(t, uc.agentRuntime.Load().Coordinator())
+	// 门面不自建 Runtime（Python: 门面不持有 coordinator），账本由 AgentManager
+	// 创建门面后经 SetAgentRuntime 注入；未注入时 executionCoordinator 返回 nil，
+	// 调用方按 ErrCoordinatorUnavailable 处理。
+	require.Nil(t, uc.currentAgentRuntime())
+	require.Nil(t, uc.executionCoordinator())
 }
 
 func TestUapClaw_ensureAdapter_幂等(t *testing.T) {
@@ -199,7 +202,7 @@ func TestUapClaw_ProcessMessage_heartbeat分支(t *testing.T) {
 }
 
 func TestUapClaw_ProcessMessage_常规对话(t *testing.T) {
-	uc := NewUapClaw()
+	uc := newUapClawWithLedger()
 	fa := newFakeAdapter()
 	uc.adapter = fa
 
@@ -546,6 +549,16 @@ func TestUapClaw_ensureAdapter_创建真实Adapter(t *testing.T) {
 
 // setupCloudMemoryEnv 注入 UAPCLAW_DATA_DIR 指向含 memory_mode: cloud 的临时工作区。
 // 返回恢复函数（重置路径缓存 + 还原环境变量）。
+// newUapClawWithLedger 构造带账本的门面（测试用）。
+//
+// 门面不自建 Runtime（Python: 门面不持有 coordinator），需由创建方注入；
+// 生产路径由 AgentManager 创建门面时注入，测试里显式构造一本即可。
+func newUapClawWithLedger() *UapClawSwarm {
+	uc := NewUapClaw()
+	uc.SetAgentRuntime(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	return uc
+}
+
 func setupCloudMemoryEnv(t *testing.T) func() {
 	t.Helper()
 	// 先排干包内更早测试遗留的异步写入队列（哨兵确认后 worker 阻塞在接收上
@@ -668,7 +681,7 @@ func TestUapClaw_ProcessMessage_AfterChat钩子双条件(t *testing.T) {
 				return nil
 			}, 100)
 
-			uc := NewUapClaw()
+			uc := newUapClawWithLedger()
 			fa := newFakeAdapter()
 			fa.processResp = schema.NewAgentResponse("req-1", "web",
 				schema.WithResponseOK(tc.ok),

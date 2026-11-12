@@ -76,7 +76,6 @@ func TestReadPrompt_空stdin返回EOF(t *testing.T) {
 
 // ──────────────────────────── readPromptFrom 边界 ────────────────────────────
 
-
 // TestReadPromptFrom_多行只读第一行 一次只读一条指令。
 func TestReadPromptFrom_多行只读第一行(t *testing.T) {
 	got, err := readPromptFrom(nil, promptText, strings.NewReader("first\nsecond\n"))
@@ -101,7 +100,6 @@ func TestReadPromptFrom_空白行返回空串(t *testing.T) {
 
 // ──────────────────────────── slashCompleter ────────────────────────────
 
-
 // TestSlashCompleterText_参数段替换范围 "/mode ag" 只替换 "ag" 段。
 func TestSlashCompleterText_参数段替换范围(t *testing.T) {
 	_, start, end := slashCompleterText("/mode ag")
@@ -109,7 +107,6 @@ func TestSlashCompleterText_参数段替换范围(t *testing.T) {
 		t.Errorf("替换范围 = %d..%d, 期望 6..8", start, end)
 	}
 }
-
 
 // TestSlashCompleterText_中文前缀 中文输入不 panic 且返回空。
 func TestSlashCompleterText_中文前缀(t *testing.T) {

@@ -15,7 +15,6 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -44,9 +43,9 @@ type MainAgentHost interface {
 // MainAgentHandle 主 agent 的窄接口面（只暴露触发推荐需要的方法）。
 type MainAgentHandle interface {
 	// ProcessMessageStream 跑一轮并返回 chunk 通道。
-	// opts 是调用方专属钩子（on_agent_ready / _agent_execution），本接口只透传不使用；
-	// 加可变参数是为了保持与 ChatAgentPort 的方法签名一致（20.2 D-7）。
-	ProcessMessageStream(ctx context.Context, request *swarmschema.AgentRequest, opts ...swruntime.ExecuteOption) (<-chan *swarmschema.AgentResponseChunk, error)
+	// 签名与 ChatAgentPort.ProcessMessageStream 一致（上游 interface.py:4147
+	// 只收 (self, request)；20.2 D-7 的可变参数已按规则 8 删除）。
+	ProcessMessageStream(ctx context.Context, request *swarmschema.AgentRequest) (<-chan *swarmschema.AgentResponseChunk, error)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
