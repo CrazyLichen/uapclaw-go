@@ -49,6 +49,8 @@ type metadataWriteItem struct {
 	metadata map[string]any
 	// flushDone 刷盘确认通道（非 nil 时，worker 处理完此条目后发送信号）
 	flushDone chan struct{}
+	// processed worker 处理完此条目（无论是否写盘）后关闭，供重置流程等待旧 worker 退出
+	processed chan struct{}
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -60,6 +62,8 @@ const (
 	deliveryContextKind = "server_push"
 	// metadataQueueSize 异步写入队列大小，对齐 Python _METADATA_QUEUE maxsize=5000
 	metadataQueueSize = 5000
+	// resetDrainTimeout 重置 worker 前等待已入队条目处理完的上限
+	resetDrainTimeout = time.Second
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -72,9 +76,12 @@ var (
 	// Python: _CACHE_LOCK
 	deliveryContextMu sync.RWMutex
 	// metadataQueue 异步写入队列，对齐 Python _METADATA_QUEUE
-	metadataQueue chan metadataWriteItem
+	metadataQueue chan *metadataWriteItem
 	// metadataQueueOnce 确保 worker 只启动一次
 	metadataQueueOnce sync.Once
+	// metadataWorkerMu 保护队列指针与 Once 的读写；
+	// worker goroutine 也持锁读取队列指针，重置（ResetMetadataWorker）不会与它竞争
+	metadataWorkerMu sync.RWMutex
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -381,14 +388,51 @@ func ClearAllSessionMetadataCache() {
 	deliveryContextMu.Unlock()
 }
 
+// ResetMetadataWorker 关闭并重置 metadata worker（供测试使用）。
+//
+// 重置前先把已入队的条目处理完（不足 1 秒），避免它们被丢掉——用例之间
+// 共享包级 worker 时，上一个用例的写入若被丢弃，下一个用例可能读到旧目录。
+// 随后关闭队列并等旧 worker 真正退出，保证同一时刻只有一个 worker 消费。
+// 重置后下一次 metadata 写入会重新启动 worker。
+func ResetMetadataWorker() {
+	metadataWorkerMu.Lock()
+	queue := metadataQueue
+	// 先清指针，防止重置期间又有新条目入队后又随旧队列一起被关闭
+	metadataQueue = nil
+	metadataQueueOnce = sync.Once{}
+	metadataWorkerMu.Unlock()
+	if queue == nil {
+		return
+	}
+
+	// 排空已入队条目：哨兵排在队尾，处理到它就说明前面的都写完了
+	drained := make(chan struct{}, 1)
+	select {
+	case queue <- &metadataWriteItem{flushDone: drained, processed: make(chan struct{})}:
+		timer := time.NewTimer(resetDrainTimeout)
+		select {
+		case <-drained:
+		case <-timer.C:
+		}
+		timer.Stop()
+	default:
+		// 队列已满（极端情况）：直接关，不排空
+	}
+
+	// 关闭队列，worker 处理完剩余条目后退出 range 循环
+	close(queue)
+}
+
 // FlushMetadataQueue 等待 metadata 异步写入队列刷盘。
 // timeoutSeconds 为等待上限；返回是否在超时前全部写完。
 // Python: session_metadata.py:945 flush_pending_writes(timeout: float = 10) -> bool
 func FlushMetadataQueue(timeoutSeconds float64) bool {
-	ensureMetadataWorker()
-	// 发送哨兵项，worker 处理后会向 flushDone 发送确认
-	flushDone := make(chan struct{})
-	metadataQueue <- metadataWriteItem{sessionID: "", metadata: nil, flushDone: flushDone}
+	// 取队列快照：重置（测试用）可能把队列指针置空，不能直接用全局变量发送
+	queue := metadataWorkerQueue()
+	// 发送哨兵项，worker 处理后会向 flushDone 发送确认。
+	// 容量 1：worker 用非阻塞投递确认，无缓冲时若确认先于等待方进入 select 就会丢
+	flushDone := make(chan struct{}, 1)
+	queue <- &metadataWriteItem{flushDone: flushDone, processed: make(chan struct{})}
 	// 等待 worker 确认，确保所有之前的写入已完成
 	timer := time.NewTimer(time.Duration(timeoutSeconds * float64(time.Second)))
 	defer timer.Stop()
@@ -491,9 +535,9 @@ func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
 	deliveryContextCache[sessionID] = DeepCopyMap(metadata)
 	deliveryContextMu.Unlock()
 
-	ensureMetadataWorker()
+	queue := metadataWorkerQueue()
 	select {
-	case metadataQueue <- metadataWriteItem{sessionID: sessionID, metadata: metadata}:
+	case queue <- &metadataWriteItem{sessionID: sessionID, metadata: metadata, processed: make(chan struct{})}:
 	default:
 		// 队列满，退化为同步写入
 		logger.Warn(logComponent).
@@ -505,31 +549,57 @@ func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// metadataWorkerQueue 启动（如尚未启动）并返回当前写入队列。
+func metadataWorkerQueue() chan *metadataWriteItem {
+	ensureMetadataWorker()
+	metadataWorkerMu.RLock()
+	defer metadataWorkerMu.RUnlock()
+	return metadataQueue
+}
+
 // ensureMetadataWorker 确保 metadata 异步写入 worker 已启动。
 // Python: _ensure_worker_started()，懒启动后台 goroutine
 func ensureMetadataWorker() {
+	metadataWorkerMu.Lock()
+	defer metadataWorkerMu.Unlock()
 	metadataQueueOnce.Do(func() {
-		metadataQueue = make(chan metadataWriteItem, metadataQueueSize)
-		go metadataWriteWorker()
+		metadataQueue = make(chan *metadataWriteItem, metadataQueueSize)
+		// 队列以参数传入，worker 不再读全局变量，重置后不会与新队列混淆
+		go metadataWriteWorker(metadataQueue)
 	})
 }
 
 // metadataWriteWorker 异步写入 worker，消费队列并写入磁盘。
 // Python: _worker() 后台线程
-func metadataWriteWorker() {
-	for item := range metadataQueue {
-		// 哨兵项：FlushMetadataQueue 发送的空项，跳过写入但消费了队列位置
-		if item.sessionID == "" || item.metadata == nil {
-			if item.flushDone != nil {
-				item.flushDone <- struct{}{}
-			}
-			continue
+func metadataWriteWorker(queue chan *metadataWriteItem) {
+	for item := range queue {
+		// 无论走哪条分支，处理完都要通知"本条目已处理"（重置流程据此等待 worker 收尾）
+		func() {
+			defer close(item.processed)
+			metadataWorkerHandle(item)
+		}()
+	}
+}
+
+// metadataWorkerHandle 处理队列中的一条：哨兵只回执刷盘确认，普通条目写盘。
+func metadataWorkerHandle(item *metadataWriteItem) {
+	// 哨兵项：FlushMetadataQueue 发送的空项，跳过写入但消费了队列位置。
+	// 判据只看 flushDone 字段：普通写入即使 metadata 为 nil（如会话元数据被清空）也必须落盘。
+	if item.flushDone != nil {
+		// flushDone 由 FlushMetadataQueue 创建：无缓冲，且等待方有超时。
+		// 等待方超时后无人接收，直接发送会让整个 worker 永久阻塞、
+		// 后续所有 metadata 写入与 flush 全部失效，故用非阻塞投递（语义等价：
+		// 有等待方则收到，无等待方则丢弃确认）。
+		select {
+		case item.flushDone <- struct{}{}:
+		default:
 		}
-		if err := WriteSessionMetadata(GetSessionsDir(), item.sessionID, item.metadata); err != nil {
-			logger.Warn(logComponent).
-				Str("session_id", item.sessionID).
-				Err(err).
-				Msg("metadata async write failed")
-		}
+		return
+	}
+	if err := WriteSessionMetadata(GetSessionsDir(), item.sessionID, item.metadata); err != nil {
+		logger.Warn(logComponent).
+			Str("session_id", item.sessionID).
+			Err(err).
+			Msg("metadata async write failed")
 	}
 }

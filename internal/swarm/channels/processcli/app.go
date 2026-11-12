@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
@@ -95,9 +96,42 @@ func Run(args *AppArgs, stdout, stderr io.Writer) int {
 	)
 	renderer.Start()
 
-	var request *swschema.AgentRequest
+	// cancelRequest 取消请求快照：建请求时一并生成，超时分支直接用它。
+	//
+	// 不能把原始 request 交给超时分支去读 Params：执行体在 consume 期间会
+	// 不断改写同一对象的 Params（NormalizeRequest / ApplyResolvedModeToRequest），
+	// 跨 goroutine 读写同一字段即数据竞争。上游 _cancel_request 只需
+	// mode/work_mode/project_dir 三个字段，而这三个在建请求时就已定型
+	// （resolve 之后不会再变），因此在入队时快照一次即可，语义与上游一致。
+	var cancelRequest *swschema.AgentRequest
 	var runErr error
 	var exitCode int
+
+	// 执行体在独立 goroutine 里写，超时分支在主 goroutine 里读，用互斥锁保护。
+	var stateMu sync.Mutex
+
+	// writeExecutionState 在持锁下更新执行状态字段。
+	writeExecutionState := func(update func()) {
+		stateMu.Lock()
+		defer stateMu.Unlock()
+		update()
+	}
+	// markRequest 记录本轮请求对应的取消快照。
+	markRequest := func(req *swschema.AgentRequest) {
+		var cancel *swschema.AgentRequest
+		if req != nil {
+			cancel = appCancelRequest(req)
+		}
+		writeExecutionState(func() { cancelRequest = cancel })
+	}
+	// markSession 记录本轮会话 ID。
+	markSession := func(sid string) {
+		writeExecutionState(func() { sessionID = sid })
+	}
+	// markRunErr 记录执行错误（清理路径据此渲染 chat.error）。
+	markRunErr := func(err error) {
+		writeExecutionState(func() { runErr = err })
+	}
 
 	execute := func() int {
 		if err := client.Start(); err != nil {
@@ -106,7 +140,8 @@ func Run(args *AppArgs, stdout, stderr io.Writer) int {
 		// Python: :774-781 无状态技能查询
 		if operation == skillsListOperation {
 			code, req, sid := invokeSkillsList(client, args, renderer, requestID)
-			request, sessionID = req, sid
+			markRequest(req)
+			markSession(sid)
 			return code
 		}
 		// Python: :782-812 四个会话操作
@@ -125,35 +160,36 @@ func Run(args *AppArgs, stdout, stderr io.Writer) int {
 				sid, err = deleteSession(client, args, renderer, requestID)
 			}
 			if err != nil {
-				runErr = err
+				markRunErr(err)
 				return exitFailure
 			}
-			sessionID = sid
+			markSession(sid)
 			return 0
 		}
 		// Python: :813-814 未支持的操作
 		if operation != operationChat {
-			runErr = fmt.Errorf("unsupported process CLI operation: %s", operation)
+			markRunErr(fmt.Errorf("unsupported process CLI operation: %s", operation))
 			return exitFailure
 		}
 		// Python: :815-831 普通 chat：开通会话 + 组请求
 		resolved, err := client.CreateOrResumeSession(processCliChannelID, optionalString(args.Session))
 		if err != nil {
-			runErr = err
+			markRunErr(err)
 			return exitFailure
 		}
-		sessionID = resolved
-		_ = writeWorkerResult(args, operation, sessionID, args.Mode, args.WorkMode, args.ProjectDir)
+		markSession(resolved)
+		// 后续一律用局部变量，不再读写共享的 sessionID/request（超时分支也在读它们）。
+		_ = writeWorkerResult(args, operation, resolved, args.Mode, args.WorkMode, args.ProjectDir)
 
-		req, err := buildRequest(args, sessionID, requestID)
+		req, err := buildRequest(args, resolved, requestID)
 		if err != nil {
-			runErr = err
+			markRunErr(err)
 			return exitFailure
 		}
-		request = req
+		markRequest(req)
 		renderer.Working()
 		// Python: :833-868 消费事件流
-		return consume(client, request, renderer, args, sessionID, requestID)
+		return consume(client, req, renderer, args, resolved, requestID)
 	}
 
 	// Python: :870-875 超时包裹执行
@@ -166,20 +202,28 @@ func Run(args *AppArgs, stdout, stderr io.Writer) int {
 		select {
 		case exitCode = <-done:
 		case <-ctx.Done():
-			// Python: :882-898 超时：先取消请求再收敛
-			if request != nil && operation == operationChat {
-				boundedCleanup(func() error { return client.Cancel(context.Background(), request) })
+			// 只取快照字段：取消用的 cancelRequest 已在建请求时生成，
+			// 此处不触碰执行体的请求对象（它仍在被改写 Params）。
+			stateMu.Lock()
+			timedOutSession := sessionID
+			abandoned := cancelRequest
+			stateMu.Unlock()
+			// Python: :882-898 超时：先取消请求再收敛。
+			// 超时不等待执行体收敛（上游 asyncio.timeout 同样立即抛出），
+			// 否则执行体卡死时超时形同虚设。
+			if abandoned != nil && operation == operationChat {
+				boundedCleanup(func() error { return client.Cancel(context.Background(), abandoned) })
 			}
 			renderer.Render(&swruntime.RuntimeEvent{
-				RequestID: requestID, ChannelID: processCliChannelID, SessionID: sessionID,
+				RequestID: requestID, ChannelID: processCliChannelID, SessionID: timedOutSession,
 				Payload: map[string]any{
 					"event_type": "chat.error",
 					"error":      "process CLI execution timed out",
 				},
 				OK: false,
 			}, "")
-			renderer.Finish(sessionID, requestID, operation == operationChat)
-			cleanupClient(client, sessionID, operation)
+			renderer.Finish(timedOutSession, requestID, operation == operationChat)
+			cleanupClient(client, timedOutSession, operation)
 			return exitTimeout
 		}
 	} else {

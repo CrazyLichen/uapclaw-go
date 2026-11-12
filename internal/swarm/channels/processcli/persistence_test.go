@@ -5,11 +5,23 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // TestFlushSessionWrites_正常返回nil
 // Python: persistence.py:10-25 两个屏障都成功时不报错
+//
+// 用例边界重置包级常驻的异步写入 worker，把自己造出来的会话与落盘任务
+// 收拾干净，避免后续用例读到或写到前一个用例的临时目录。
 func TestFlushSessionWrites_正常返回nil(t *testing.T) {
+	session.ResetDrainedQueues()
+	path.ResetCache()
+	t.Cleanup(func() {
+		session.ResetDrainedQueues()
+		path.ResetCache()
+	})
 	require.NoError(t, FlushSessionWrites(5.0))
 }
 

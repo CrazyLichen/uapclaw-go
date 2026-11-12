@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 
@@ -67,6 +68,13 @@ func NewAdapterTestEnv(t *testing.T, mock *mockllm.MockModelClient, prefix strin
 	}
 
 	t.Cleanup(func() {
+		// 先把会话历史/元数据的异步写队列排空，再让 TempDir 被删除。
+		// 队列 worker 是包级懒启动、常驻的；若用例结束时仍有记录在排队，
+		// 它们会在 t.TempDir() 清理后继续往已删除目录写，
+		// 表现为 "TempDir RemoveAll cleanup: directory not empty"。
+		// t.Cleanup 后进先出，本回调早于 TempDir 清理执行，顺序正确。
+		session.ResetDrainedQueues()
+
 		_ = model_clients.GetClientRegistry().Unregister(env.Provider, "llm")
 		// ResourceMgr 释放（对齐 Python Runner.stop() 语义）：
 		// rail 注册逻辑含 get_tool 查重，命中时跳过 add_tool，后续测试会拿到

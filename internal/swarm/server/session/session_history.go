@@ -43,6 +43,8 @@ const (
 	historyQueueSize = 20000
 	// teamHistoryReadMaxRetries 读取重试次数，对齐 Python read_team_history_records 最多 5 次
 	teamHistoryReadMaxRetries = 5
+	// flushDrainTimeoutSeconds 重置 worker 后等待残留写入收尾的上限（秒）
+	flushDrainTimeoutSeconds = 1.0
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -54,6 +56,9 @@ var (
 	historyFileMu sync.Mutex
 	// historyWorkerOnce 保证 worker 只启动一次。
 	historyWorkerOnce sync.Once
+	// historyWorkerMu 保护队列指针与 Once 的读写；
+	// worker goroutine 也只读队列参数，重置不会与它竞争
+	historyWorkerMu sync.RWMutex
 	// teamRelevantEventTypes team 相关事件类型集合
 	// Python: _TEAM_RELEVANT_EVENT_TYPES
 	teamRelevantEventTypes = map[string]bool{
@@ -73,12 +78,15 @@ var (
 // Python: session_history.py:1384 flush_pending_writes(timeout: float = 10) -> bool
 func FlushHistoryQueue(timeoutSeconds float64) bool {
 	// 如果 worker 还没启动，无需等待
-	if historyWriteQueue == nil {
+	queue := historyWorkerQueue()
+	if queue == nil {
 		return true
 	}
-	// 发送哨兵项，worker 处理后会向 flushDone 发送确认
-	flushDone := make(chan struct{})
-	historyWriteQueue <- historyWriteItem{sessionID: "", record: nil, flushDone: flushDone}
+	// 发送哨兵项，worker 处理后会向 flushDone 发送确认。
+	// 容量 1：worker 用非阻塞投递确认，无缓冲时若确认先于等待方进入 select 就会丢，
+	// 表现为偶发"队列空却刷盘超时"（-race 下放大）
+	flushDone := make(chan struct{}, 1)
+	queue <- historyWriteItem{flushDone: flushDone}
 	// 等待 worker 确认，确保所有之前的写入已完成
 	timer := time.NewTimer(time.Duration(timeoutSeconds * float64(time.Second)))
 	defer timer.Stop()
@@ -93,16 +101,52 @@ func FlushHistoryQueue(timeoutSeconds float64) bool {
 }
 
 // ResetHistoryWorker 关闭并重置 history worker（供测试使用）。
-// 调用前应先调用 FlushHistoryQueue 确保所有写入已完成。
-// 重置后下一个 AppendHistoryRecord 调用会重新启动 worker。
+//
+// 重置前先把已入队的记录写完（不足 1 秒），避免它们随旧队列一起被丢弃：
+// 用例之间共享包级 worker，上一个用例的写入若被丢弃，下一个用例可能读到旧目录。
+// 关闭队列后旧 worker 处理完剩余记录自行退出，重置后下一次写入会重启 worker。
 func ResetHistoryWorker() {
-	// 关闭队列，worker goroutine 会退出 range 循环
-	if historyWriteQueue != nil {
-		close(historyWriteQueue)
-	}
-	// 重置 Once，使下次 ensureHistoryWorker 重新创建队列和 worker
-	historyWorkerOnce = sync.Once{}
+	historyWorkerMu.Lock()
+	queue := historyWriteQueue
+	// 先清指针，防止重置期间又有新记录入队后又随旧队列一起被关闭
 	historyWriteQueue = nil
+	historyWorkerOnce = sync.Once{}
+	historyWorkerMu.Unlock()
+	if queue == nil {
+		return
+	}
+
+	// 排空已入队记录：哨兵排在队尾，收到确认就说明前面的都写完了
+	drained := make(chan struct{}, 1)
+	select {
+	case queue <- historyWriteItem{flushDone: drained}:
+		timer := time.NewTimer(resetDrainTimeout)
+		select {
+		case <-drained:
+		case <-timer.C:
+		}
+		timer.Stop()
+	default:
+		// 队列已满（极端情况）：直接关，不排空
+	}
+
+	// 关闭队列，worker 处理完剩余记录后退出 range 循环
+	close(queue)
+}
+
+// ResetDrainedQueues 排空并重置包内两个异步写入 worker。
+// 仅供测试使用：用例开始/结束时调用，保证下一个用例看到空的队列与新的 worker，
+// 且不会有遗留写入落在已删除的临时目录上。
+//
+// 顺序不可颠倒：必须先 Flush 把已入队记录写完，再 Reset 关队列。
+// 先 Reset 会把排队项连同旧队列一起丢弃，随后的 Flush 只是对新队列
+// 立即返回，等于没排空。
+func ResetDrainedQueues() {
+	// 排空：哨兵排在已入队条目之后，收到确认即说明前面的都写完了
+	FlushHistoryQueue(flushDrainTimeoutSeconds)
+	FlushMetadataQueue(flushDrainTimeoutSeconds)
+	ResetHistoryWorker()
+	ResetMetadataWorker()
 }
 
 // sessionRequestTerminalStatuses 请求终态白名单。
@@ -128,9 +172,10 @@ func EnqueueHistoryRequestCompletion(sessionID, requestID, terminalStatus string
 	if !sessionRequestTerminalStatuses[status] {
 		return nil, fmt.Errorf("unsupported request terminal status: %q", terminalStatus)
 	}
-	ensureHistoryWorker()
+	// 取队列快照：重置（测试用）可能把队列指针置空
+	queue := historyWorkerQueue()
 	receipt := make(chan struct{}, 1)
-	historyWriteQueue <- historyWriteItem{
+	queue <- historyWriteItem{
 		sessionID: sid,
 		record: map[string]any{
 			"id":            rid + ":request_completed",
@@ -192,12 +237,12 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 		item["mode"] = mode
 	}
 
-	// 确保 worker 已启动
-	ensureHistoryWorker()
+	// 取队列快照（启动 worker 后取，重置期间为空不会 panic）
+	queue := historyWorkerQueue()
 
 	// 尝试入队
 	select {
-	case historyWriteQueue <- historyWriteItem{sessionID: sid, record: item}:
+	case queue <- historyWriteItem{sessionID: sid, record: item}:
 	default:
 		// 队列满时退化为同步写，避免丢失记录
 		writeHistoryItem(sid, item)
@@ -407,21 +452,38 @@ func ReadTeamHistoryRecords(sessionID string) ([]map[string]any, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// historyWorkerQueue 启动（如尚未启动）并返回当前写入队列。
+func historyWorkerQueue() chan historyWriteItem {
+	ensureHistoryWorker()
+	historyWorkerMu.RLock()
+	defer historyWorkerMu.RUnlock()
+	return historyWriteQueue
+}
+
 // ensureHistoryWorker 启动异步写入 worker（单 goroutine，sync.Once 保证）。
 func ensureHistoryWorker() {
+	historyWorkerMu.Lock()
+	defer historyWorkerMu.Unlock()
 	historyWorkerOnce.Do(func() {
 		historyWriteQueue = make(chan historyWriteItem, historyQueueSize)
-		go historyWorker()
+		// 队列以参数传入，worker 不再读全局变量，重置后不会与新队列混淆
+		go historyWorker(historyWriteQueue)
 	})
 }
 
 // historyWorker 写入队列消费者。
-func historyWorker() {
-	for item := range historyWriteQueue {
+func historyWorker(queue chan historyWriteItem) {
+	for item := range queue {
 		// 哨兵项：FlushHistoryQueue 发送的空项，跳过写入但确认完成
 		if item.sessionID == "" && item.record == nil {
 			if item.flushDone != nil {
-				item.flushDone <- struct{}{}
+				// flushDone 由 FlushHistoryQueue 创建：无缓冲，且等待方有超时。
+				// 等待方超时后无人接收，直接发送会让整个 worker 永久阻塞，
+				// 故用非阻塞投递（有等待方则收到，无等待方则丢弃确认）。
+				select {
+				case item.flushDone <- struct{}{}:
+				default:
+				}
 			}
 			continue
 		}
