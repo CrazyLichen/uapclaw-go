@@ -42,7 +42,25 @@
 //	├── feedback_collector.go           # 反馈采集（buffer / 显隐式去重 / 关联最近推荐）
 //	├── proactive_engine.go             # 引擎主体（tick 全流程 / 每日限流 / 生命周期）
 //	├── proactive_adapter.go            # 主 agent 触发（chunk 打标 / 送达判定 / 引擎装配）
-//	└── topic_starter_store.go          # topic 事件账本（InterestDrift + TopicStarterStore，2 表 4 索引）
+//	├── topic_starter_store.go          # topic 事件账本（InterestDrift + TopicStarterStore，2 表 4 索引）
+//	├── topic_url_safety.go             # SSRF 公网校验（topic_url_safety.py，10.3.31c）
+//	├── topic_model.go                  # Ark JSON 后台模型适配器 fail-closed（topic_model.py，10.3.31c）
+//	├── history_state_store.go          # topic 历史状态快照接口 ⤴️ 10.3.31d 过渡（topic_history.py 4 函数切片）
+//	├── topic_audit.go                  # 外部调用审计计数（topic_audit.py，10.3.31c）
+//	├── topic_sources.go                # 内置语料包 + 现场检索准入（topic_sources.py，10.3.31c）
+//	├── topic_search.go                 # native/Ark 双搜索适配器（topic_search.py，10.3.31c）
+//	├── topic_news.go                   # Bing News RSS + 热搜榜（topic_news.py，10.3.31c）
+//	├── topic_page_fetch.go             # 网页正文与发布时间抓取（topic_page_fetch.py，10.3.31c）
+//	├── topic_terminal.go               # 终局组件契约 + RID API 蒸馏（topic_terminal.py，10.3.31c）
+//	├── topic_rid.go                    # RID MATCH/NO_MATCH 配对裁判（topic_rid.py，10.3.31c）
+//	├── topic_feedback.go               # 上下文反馈投影（topic_feedback.py，10.3.31c）
+//	├── topic_outcomes.go               # 曝光/点击 outcome 记账（topic_outcomes.py，10.3.31c）
+//	└── topic_product.go               # 池组成契约/终局卡/小票校验/曝光选卡（topic_product.py，10.3.31c）
+//
+// 10.3.31c「topic 产物与呈现」切片：12 文件 / 13811 行（wc -l 实测，原登记 9 文件
+// / 12889 口径过时）。依赖：⤴️ 10.3.31b（topic_selection / topic_retrieval /
+// topic_pool / topic_starter 符号）；⤴️ 10.3.31d（topic_history 4 函数 →
+// history_state_store.go 过渡接口，31d 落地后改真实类型并删 fake）。
 //
 // topic_starter_service.go（TopicStarterService + 画像证据收集，上游 topic_starter.py:515-1953）
 // ⤵️ 10.3.31d；本节只交付存储层。
