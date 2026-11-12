@@ -87,6 +87,15 @@ func (c *OpenAIModelClient) Invoke(
 ) (*llmschema.AssistantMessage, error) {
 	params := model_clients.NewInvokeParams(opts...)
 
+	// Python: openai_model_client.py:1876-1880 Responses 分支优先于 chat-completions SDK 路径
+	if c.usesResponsesAPI() {
+		messagesDict, convErr := c.ConvertMessagesToDict(messages)
+		if convErr != nil {
+			return nil, convErr
+		}
+		return c.invokeResponsesAPI(ctx, messagesDict, params)
+	}
+
 	// 1. 转换消息格式
 	messagesDict, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
@@ -286,6 +295,15 @@ func (c *OpenAIModelClient) Stream(
 	opts ...model_clients.StreamOption,
 ) (<-chan *llmschema.AssistantMessageChunk, error) {
 	params := model_clients.NewStreamParams(opts...)
+
+	// Python: openai_model_client.py:2058-2062 Responses 分支优先于 chat-completions SDK 路径
+	if c.usesResponsesAPI() {
+		messagesDict, convErr := c.ConvertMessagesToDict(messages)
+		if convErr != nil {
+			return nil, convErr
+		}
+		return c.streamResponsesAPI(ctx, messagesDict, params)
+	}
 
 	// 1. 转换消息格式
 	messagesDict, err := c.ConvertMessagesToDict(messages)
