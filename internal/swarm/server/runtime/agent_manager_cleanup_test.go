@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // TestAgentManager_CleanupSessionRuntime_空会话ID 返回 false。
@@ -53,7 +53,7 @@ func TestFacadeHasSessionRuntime_无会话运行时(t *testing.T) {
 
 // TestFacadeHasSessionRuntime_队列有运行时 会话队列存在即为真。
 func TestFacadeHasSessionRuntime_队列有运行时(t *testing.T) {
-	uc := &UapClawSwarm{sessionManager: swruntime.NewSessionManager()}
+	uc := &UapClawSwarm{sessionManager: session.NewSessionManager()}
 	sid := "s1"
 	_, _ = uc.sessionManager.SubmitAndWait(context.Background(), sid,
 		func(context.Context) (any, error) { return nil, nil })
@@ -65,7 +65,7 @@ func TestFacadeHasSessionRuntime_队列有运行时(t *testing.T) {
 
 // TestFacadeCleanupSessionRuntime_关门面队列 清理后队列状态消失。
 func TestFacadeCleanupSessionRuntime_关门面队列(t *testing.T) {
-	manager := swruntime.NewSessionManager()
+	manager := session.NewSessionManager()
 	uc := &UapClawSwarm{sessionManager: manager}
 	sid := "s1"
 	_, _ = manager.SubmitAndWait(context.Background(), sid,
@@ -91,7 +91,7 @@ func TestFacadeCleanupSessionRuntime_无adapter不panic(t *testing.T) {
 func TestAgentManager_CleanupSessionRuntime_有缓存agent且清理成功(t *testing.T) {
 	manager := NewAgentManager()
 	sid := "s1"
-	uc := &UapClawSwarm{sessionManager: swruntime.NewSessionManager()}
+	uc := &UapClawSwarm{sessionManager: session.NewSessionManager()}
 	// 先在门面队列里留下该会话的运行时，使 HasSessionRuntime 为真
 	_, _ = uc.sessionManager.SubmitAndWait(context.Background(), sid,
 		func(context.Context) (any, error) { return nil, nil })

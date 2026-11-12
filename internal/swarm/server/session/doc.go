@@ -11,6 +11,7 @@
 //	├── session_request_metadata.go # 请求级参数 → 会话级元数据同步（字段语义：首次锁定/显式覆盖）
 //	├── session_rename.go   # 会话重命名三种语义
 //	├── session_startup.go  # 启动清理 + 分页查询
+//	├── session_manager.go  # 会话任务队列（同会话串行 LIFO、跨会话并发）+ GetSessionID
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/session/
 package session

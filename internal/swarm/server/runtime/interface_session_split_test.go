@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	runtimepkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // TestExecuteMessage_签名存在 编译期确认双入口都在。
@@ -43,7 +43,7 @@ func TestFacadeUsesSessionRuntime_分流判定(t *testing.T) {
 
 // TestProcessMessageInternal_调度关闭直跑 scheduleSession=false 不碰队列。
 func TestProcessMessageInternal_调度关闭直跑(t *testing.T) {
-	uc := &UapClawSwarm{sessionManager: runtimepkg.NewSessionManager()}
+	uc := &UapClawSwarm{sessionManager: session.NewSessionManager()}
 	sessionID := "s1"
 	func() {
 		defer func() { _ = recover() }()
@@ -62,7 +62,7 @@ func TestProcessMessageInternal_调度关闭直跑(t *testing.T) {
 // TestProcessMessageInternal_调度开启入队 scheduleSession=true 时任务进门面队列。
 func TestProcessMessageInternal_调度开启入队(t *testing.T) {
 	sessionID := "s1"
-	uc := &UapClawSwarm{sessionManager: runtimepkg.NewSessionManager()}
+	uc := &UapClawSwarm{sessionManager: session.NewSessionManager()}
 	request := &schema.AgentRequest{
 		RequestID: "r1",
 		ChannelID: "ch-1",

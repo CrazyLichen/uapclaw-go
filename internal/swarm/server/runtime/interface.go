@@ -49,7 +49,7 @@ type UapClawSwarm struct {
 	//
 	// 与 coordinator 是**互斥**关系而非串联：一次请求按 uses_session_runtime 二选一，
 	// 走协调器的不再进门面队列（Python service.py:1873 同）。
-	sessionManager *swruntime.SessionManager
+	sessionManager *session.SessionManager
 
 	// agentRuntime 执行账本归属方（P4 收归）。
 	// Python: 门面不持有 Runtime；Go 侧为消除"每个 UapClawSwarm 各持一本账"，
@@ -140,7 +140,7 @@ func NewUapClaw() *UapClawSwarm {
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
 		appCtx:             appCtx,
 		appCancel:          appCancel,
-		sessionManager:     swruntime.NewSessionManager(),
+		sessionManager:     session.NewSessionManager(),
 	}
 	uc.agentRuntime.Store(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
 	return uc
@@ -198,7 +198,7 @@ func (uc *UapClawSwarm) processMessageInternal(
 	if !scheduleSession || uc.sessionManager == nil {
 		return uc.runMessageDirect(ctx, request)
 	}
-	sessionID := swruntime.GetSessionID(request.SessionID)
+	sessionID := session.GetSessionID(request.SessionID)
 	value, err := uc.sessionManager.SubmitAndWait(ctx, sessionID,
 		func(taskCtx context.Context) (any, error) {
 			return uc.runMessageDirect(taskCtx, request)
@@ -398,7 +398,7 @@ func (uc *UapClawSwarm) processMessageStreamInternal(
 	if !scheduleSession || uc.sessionManager == nil {
 		return uc.runMessageStreamDirect(ctx, request)
 	}
-	sessionID := swruntime.GetSessionID(request.SessionID)
+	sessionID := session.GetSessionID(request.SessionID)
 	inner := make(chan *schema.AgentResponseChunk)
 	ready := make(chan error, 1)
 	uc.sessionManager.SubmitTask(ctx, sessionID, func(taskCtx context.Context) (any, error) {
@@ -1489,7 +1489,7 @@ func (uc *UapClawSwarm) processGoalCommand(
 ) (*schema.AgentResponse, error) {
 	params := parseRequestParams(request)
 	action := goalActionOf(request)
-	sessionID := swruntime.GetSessionID(request.SessionID)
+	sessionID := session.GetSessionID(request.SessionID)
 	logger.Info(logComponent).
 		Str("event_type", "goal_command").
 		Str("request_id", request.RequestID).
@@ -1532,7 +1532,7 @@ func (uc *UapClawSwarm) processGoalCommandStream(
 ) ([]*schema.AgentResponseChunk, error) {
 	params := parseRequestParams(request)
 	action := goalActionOf(request)
-	sessionID := swruntime.GetSessionID(request.SessionID)
+	sessionID := session.GetSessionID(request.SessionID)
 	a, err := uc.goalAdapter(request)
 	if err != nil {
 		return nil, err
