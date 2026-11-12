@@ -407,6 +407,8 @@ func mergeToolCalls(left, right []*ToolCall) []*ToolCall {
 					Name:      mergedName,
 					Arguments: last.Arguments + incoming.Arguments,
 					Index:     last.Index,
+					// response_item_id: 取非空侧，优先右侧（Responses API item id 跨帧保持）
+					ResponseItemID: lastOrRight(last.ResponseItemID, incoming.ResponseItemID),
 				}
 				continue
 			}
@@ -416,6 +418,14 @@ func mergeToolCalls(left, right []*ToolCall) []*ToolCall {
 	}
 
 	return merged
+}
+
+// lastOrRight 取非空字符串，右侧优先（mergeToolCalls 内 response_item_id 合并用）。
+func lastOrRight(left, right string) string {
+	if right != "" {
+		return right
+	}
+	return left
 }
 
 // mergeContent 合并两个 MessageContent。

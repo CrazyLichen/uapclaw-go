@@ -327,6 +327,10 @@ func BaseMessageToMap(msg BaseMessage) map[string]any {
 			if tc.Index > 0 {
 				tcMap["index"] = tc.Index
 			}
+			// Python: message.py:101 扁平格式含 response_item_id
+			if tc.ResponseItemID != "" {
+				tcMap["response_item_id"] = tc.ResponseItemID
+			}
 			calls = append(calls, tcMap)
 		}
 		result["tool_calls"] = calls

@@ -204,3 +204,52 @@ func TestToolCall_RoundTrip(t *testing.T) {
 		t.Errorf("Index: got %d, want %d", restored.Index, original.Index)
 	}
 }
+
+// TestToolCall_ResponseItemID 验证 Responses API item id 的选项与序列化回放。
+// Python: tool_call.py:25 response_item_id + message.py:130 非 None 才输出
+func TestToolCall_ResponseItemID(t *testing.T) {
+	tc := NewToolCall("call_1", "read_file", "{}",
+		WithToolCallType("function"), WithToolCallResponseItemID("item_9"))
+	if tc.ResponseItemID != "item_9" {
+		t.Fatalf("ResponseItemID = %q", tc.ResponseItemID)
+	}
+	dumped := tc.ToOpenAIFormat()
+	if dumped["response_item_id"] != "item_9" {
+		t.Fatalf("ToOpenAIFormat 缺 response_item_id: %v", dumped)
+	}
+	plain := NewToolCall("call_2", "ls", "{}")
+	if _, ok := plain.ToOpenAIFormat()["response_item_id"]; ok {
+		t.Fatal("空 ResponseItemID 不应输出")
+	}
+	// JSON round-trip：嵌套 OpenAI 格式解析进扁平字段
+	raw := []byte(`{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"},"response_item_id":"item_3"}`)
+	var parsed ToolCall
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	if parsed.ResponseItemID != "item_3" {
+		t.Fatalf("UnmarshalJSON 未读入 response_item_id: %+v", parsed)
+	}
+}
+
+// TestToolCallMerge_ResponseItemID 合并时取非空侧、优先右侧。
+func TestToolCallMerge_ResponseItemID(t *testing.T) {
+	a := NewAssistantMessageChunk("", WithChunkToolCalls([]*ToolCall{
+		NewToolCall("call_1", "f", `{"a":`, WithToolCallResponseItemID("item_1")),
+	}))
+	b := NewAssistantMessageChunk("", WithChunkToolCalls([]*ToolCall{
+		NewToolCall("call_1", "", `"b":1}`),
+	}))
+	m := a.Merge(b)
+	if len(m.ToolCalls) != 1 || m.ToolCalls[0].ResponseItemID != "item_1" {
+		t.Fatalf("合并后 ResponseItemID 丢失: %+v", m.ToolCalls)
+	}
+	// 右侧有值时优先右侧
+	c := NewAssistantMessageChunk("", WithChunkToolCalls([]*ToolCall{
+		NewToolCall("call_1", "", `"b":1}`, WithToolCallResponseItemID("item_2")),
+	}))
+	m2 := a.Merge(c)
+	if m2.ToolCalls[0].ResponseItemID != "item_2" {
+		t.Fatalf("右侧应优先: %q", m2.ToolCalls[0].ResponseItemID)
+	}
+}

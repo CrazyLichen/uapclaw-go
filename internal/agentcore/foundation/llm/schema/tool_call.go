@@ -25,6 +25,10 @@ type ToolCall struct {
 	Arguments string `json:"arguments"`
 	// Index 工具调用索引，用于区分同一消息中的多个工具调用
 	Index int `json:"index,omitempty"`
+	// ResponseItemID provider 侧响应条目 ID（Responses API function_call item id），
+	// 用于跨轮按 Responses 语义重建 function_call 历史。
+	// Python: openjiuwen/core/foundation/llm/schema/tool_call.py:25 response_item_id
+	ResponseItemID string `json:"response_item_id,omitempty"`
 }
 
 // ToolCallOption ToolCall 构造选项函数。
@@ -35,6 +39,11 @@ type ToolCallOption func(*ToolCall)
 // WithToolCallIndex 设置工具调用索引。
 func WithToolCallIndex(index int) ToolCallOption {
 	return func(tc *ToolCall) { tc.Index = index }
+}
+
+// WithToolCallResponseItemID 设置 provider 响应条目 ID。
+func WithToolCallResponseItemID(id string) ToolCallOption {
+	return func(tc *ToolCall) { tc.ResponseItemID = id }
 }
 
 // WithToolCallType 设置工具调用类型。
@@ -88,6 +97,10 @@ func (tc *ToolCall) ToOpenAIFormat() map[string]any {
 	}
 	if tc.Index > 0 {
 		result["index"] = tc.Index
+	}
+	// Python: message.py:130 if call.response_item_id is not None（非 None 才输出）
+	if tc.ResponseItemID != "" {
+		result["response_item_id"] = tc.ResponseItemID
 	}
 	return result
 }
