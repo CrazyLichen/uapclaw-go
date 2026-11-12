@@ -18,6 +18,12 @@ tests/integration/external/spawn
 # import 的 runner/session 仅用于编译期包引用验证
 tests/integration/cmd
 
+# 真跨进程：uapclaw-process 二进制构建 + exec.Command 子进程执行（真实 stdin/stdout/
+# stderr/退出码），进程边界即集成边界。用例覆盖 argparse 五分支与 JSON 契约，
+# 装配链缺陷（如 P-7 的 manager 未注入）只在真进程下暴露，故不做 in-process import；
+# 已用「注入 manager=nil 回归」验证该用例确实能抓到该缺陷。
+tests/integration/swarm/processcli
+
 # GitHub 远程技能：被测边界为外部 GitHub API（Trees/Contents），跨度天然为
 # agentcore/single_agent 单子系统；用例由 RUN_GITHUB_TEST=1 守卫，CI 注入令牌与 tree ref
 tests/integration/external/github
