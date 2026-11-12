@@ -506,7 +506,7 @@ func isTypedNil(v any) bool {
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Func:
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func:
 		return rv.IsNil()
 	}
 	return false

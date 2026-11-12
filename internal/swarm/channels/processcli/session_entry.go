@@ -216,8 +216,8 @@ func renderSessions(result swruntime.SessionListResult) string {
 		builder.WriteString(strings.Join(cells, "  "))
 		builder.WriteString("\n")
 	}
-	builder.WriteString(fmt.Sprintf(
+	fmt.Fprintf(&builder,
 		"本页 %d 条；匹配共 %d 条；offset=%d；limit=%d\n",
-		len(result.Sessions), result.Total, result.Offset, result.Limit))
+		len(result.Sessions), result.Total, result.Offset, result.Limit)
 	return builder.String()
 }

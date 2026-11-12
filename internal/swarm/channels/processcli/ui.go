@@ -761,10 +761,7 @@ func resolvedCwd(value string) string {
 // Python: ui.py:73-80 _supports_unicode
 func supportsUnicode(stream io.Writer) bool {
 	probe := "╭─╮│╰╯✓×⠋…"
-	if validUTF8(probe) {
-		return true
-	}
-	return false
+	return validUTF8(probe)
 }
 
 // supportsColor 判断是否启用 ANSI 着色。

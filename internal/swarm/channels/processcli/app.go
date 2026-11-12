@@ -14,7 +14,6 @@ import (
 
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	swschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -96,7 +95,7 @@ func Run(args *AppArgs, stdout, stderr io.Writer) int {
 	)
 	renderer.Start()
 
-	var request *schema.AgentRequest
+	var request *swschema.AgentRequest
 	var runErr error
 	var exitCode int
 
@@ -256,7 +255,7 @@ func boundedCleanup(step func() error) {
 //
 // 关键不变量：supports_user_interaction 只取决于 InteractiveWorker——
 // 非 worker 的普通命令即使 stdin 是 TTY 也必须为 false。
-func buildRequest(args *AppArgs, sessionID, requestID string) (*schema.AgentRequest, error) {
+func buildRequest(args *AppArgs, sessionID, requestID string) (*swschema.AgentRequest, error) {
 	cwd, projectDir := resolvedWorkspace(args)
 	trustedDirs := make([]string, 0, len(args.TrustedDirs))
 	for _, path := range args.TrustedDirs {
@@ -291,11 +290,11 @@ func buildRequest(args *AppArgs, sessionID, requestID string) (*schema.AgentRequ
 		return nil, fmt.Errorf("请求参数序列化失败: %w", err)
 	}
 	sid := sessionID
-	return &schema.AgentRequest{
+	return &swschema.AgentRequest{
 		RequestID: requestID,
 		ChannelID: processCliChannelID,
 		SessionID: &sid,
-		ReqMethod: schema.ReqMethodChatSend,
+		ReqMethod: swschema.ReqMethodChatSend,
 		IsStream:  true,
 		Params:    encoded,
 	}, nil
@@ -357,7 +356,7 @@ func writeWorkerResult(
 // consume 消费一轮事件流并处理交互。
 // Python: app.py:611-718 _consume
 func consume(
-	client *InProcessRuntimeClient, request *schema.AgentRequest,
+	client *InProcessRuntimeClient, request *swschema.AgentRequest,
 	renderer *EventRenderer, args *AppArgs, sessionID, requestID string,
 ) int {
 	interactive, _ := requestParamsBool(request, "supports_user_interaction")
@@ -396,7 +395,7 @@ func consume(
 // handleInteraction 处理一次交互请求。
 // Python: app.py:620-692 handle_interaction
 func handleInteraction(
-	client *InProcessRuntimeClient, original *schema.AgentRequest,
+	client *InProcessRuntimeClient, original *swschema.AgentRequest,
 	interaction *swruntime.RuntimeEvent, renderer *EventRenderer,
 	interactive bool, requestID string,
 ) int {
@@ -457,8 +456,8 @@ func handleInteraction(
 //
 // resume 判定：source ∈ INTERRUPT_RESUME_SOURCES 且 request_id 非空。
 func answerRequest(
-	original *schema.AgentRequest, interaction *swruntime.RuntimeEvent, answers []map[string]any,
-) (*schema.AgentRequest, bool) {
+	original *swschema.AgentRequest, interaction *swruntime.RuntimeEvent, answers []map[string]any,
+) (*swschema.AgentRequest, bool) {
 	payload := interaction.Payload
 	if payload == nil {
 		payload = map[string]any{}
@@ -496,12 +495,12 @@ func answerRequest(
 	}
 
 	encoded, _ := json.Marshal(params)
-	reqMethod := schema.ReqMethodChatAnswer
+	reqMethod := swschema.ReqMethodChatAnswer
 	if resume {
-		reqMethod = schema.ReqMethodChatSend
+		reqMethod = swschema.ReqMethodChatSend
 	}
 	sid := eventSessionID(original)
-	return &schema.AgentRequest{
+	return &swschema.AgentRequest{
 		RequestID: newRequestIDWithPrefix("answer"),
 		ChannelID: original.ChannelID,
 		SessionID: &sid,
@@ -515,7 +514,7 @@ func answerRequest(
 // Python: app.py:577-593 _cancel_request
 //
 // request_id 沿用原请求（CHAT_CANCEL 要指向在飞执行本身，不能换新 id）。
-func appCancelRequest(original *schema.AgentRequest) *schema.AgentRequest {
+func appCancelRequest(original *swschema.AgentRequest) *swschema.AgentRequest {
 	originalParams := map[string]any{}
 	if original.Params != nil {
 		_ = json.Unmarshal(original.Params, &originalParams)
@@ -528,11 +527,11 @@ func appCancelRequest(original *schema.AgentRequest) *schema.AgentRequest {
 		"project_dir":       originalParams["project_dir"],
 	})
 	sid := eventSessionID(original)
-	return &schema.AgentRequest{
+	return &swschema.AgentRequest{
 		RequestID: original.RequestID,
 		ChannelID: original.ChannelID,
 		SessionID: &sid,
-		ReqMethod: schema.ReqMethodChatCancel,
+		ReqMethod: swschema.ReqMethodChatCancel,
 		Params:    encoded,
 	}
 }
@@ -571,7 +570,7 @@ func isTeamModeText(mode string) bool {
 func invokeSkillsList(
 	client *InProcessRuntimeClient, args *AppArgs,
 	renderer *EventRenderer, requestID string,
-) (int, *schema.AgentRequest, string) {
+) (int, *swschema.AgentRequest, string) {
 	sessionID := args.Session
 	request := buildSkillsListRequest(args, requestID)
 	renderer.Working()
@@ -590,11 +589,11 @@ func invokeSkillsList(
 
 // buildSkillsListRequest 组技能查询请求。
 // Python: app.py:111-124 _build_skills_list_request
-func buildSkillsListRequest(args *AppArgs, requestID string) *schema.AgentRequest {
-	req := &schema.AgentRequest{
+func buildSkillsListRequest(args *AppArgs, requestID string) *swschema.AgentRequest {
+	req := &swschema.AgentRequest{
 		RequestID: requestID,
 		ChannelID: processCliChannelID,
-		ReqMethod: schema.ReqMethodSkillsList,
+		ReqMethod: swschema.ReqMethodSkillsList,
 		IsStream:  false,
 		Params:    []byte("{}"),
 	}
@@ -614,7 +613,7 @@ func paramBoolOr(params map[string]any, key string, fallback bool) bool {
 }
 
 // requestParamsBool 解析请求参数中的 bool。
-func requestParamsBool(request *schema.AgentRequest, key string) (bool, bool) {
+func requestParamsBool(request *swschema.AgentRequest, key string) (bool, bool) {
 	params := map[string]any{}
 	if request.Params != nil {
 		_ = json.Unmarshal(request.Params, &params)
@@ -624,7 +623,7 @@ func requestParamsBool(request *schema.AgentRequest, key string) (bool, bool) {
 }
 
 // eventSessionID 取请求的会话 ID（nil 返回空串）。
-func eventSessionID(request *schema.AgentRequest) string {
+func eventSessionID(request *swschema.AgentRequest) string {
 	if request == nil || request.SessionID == nil {
 		return ""
 	}

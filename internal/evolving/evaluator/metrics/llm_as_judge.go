@@ -34,8 +34,6 @@ type LLMAsJudgeMetric struct {
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
-const ()
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLLMAsJudgeMetric 创建 LLMAsJudgeMetric 实例。

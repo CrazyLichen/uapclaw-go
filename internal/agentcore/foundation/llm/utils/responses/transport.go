@@ -162,7 +162,7 @@ func (t *Transport) StreamResponse(ctx context.Context, req StreamRequest) (<-ch
 		return nil, &ResponsesError{Message: fmt.Sprintf("send request failed: %v", err)}
 	}
 	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		body, _ := io.ReadAll(resp.Body)
 		return nil, raiseForHTTPError(resp.StatusCode, body)
 	}
@@ -178,7 +178,7 @@ func (t *Transport) StreamResponse(ctx context.Context, req StreamRequest) (<-ch
 	ch := make(chan *llmschema.AssistantMessageChunk)
 	go func() {
 		defer close(ch)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		parser := NewStreamParser(effectiveModel)
 		var buffer []string
 		scanner := bufio.NewScanner(resp.Body)

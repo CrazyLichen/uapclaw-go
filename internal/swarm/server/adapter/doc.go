@@ -33,6 +33,7 @@
 //	├── doc.go                    # 包文档
 //	├── interface.go              # AgentAdapter 接口（含会话分身 5 方法）+ 3 个可选接口
 //	├── factory.go                # CreateAdapter 工厂 + ResolveSDKChoice
+//	├── model_entry.go            # BuildModelFromEntry：单个模型条目 → 模型客户端实例
 //	├── deep_adapter.go           # DeepAdapter 核心结构体 + 8 接口方法 + 模型构建 + CWD 种子
 //	├── deep_adapter_sessions.go  # 会话分身：child 工厂 + 缓存/锁/TTL 淘汰 + 清理 + 根 instance 惰建 + 分流辅助
 //	├── deep_adapter_rails.go     # ~20 个 rail builder + buildAgentRails + 幂等 UpdateAgentRails

@@ -35,10 +35,6 @@ type LocalFsOperation struct {
 	runConfig *sysop.LocalWorkConfig
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const ()
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 LocalFsOperation 满足 FsOperation 接口

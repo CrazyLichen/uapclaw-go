@@ -43,8 +43,6 @@ type HierarchicalToolsTeam struct {
 // logComponent 日志组件标识
 const logComponent = logger.ComponentChannel
 
-const ()
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 HierarchicalToolsTeam 满足 BaseTeam 接口

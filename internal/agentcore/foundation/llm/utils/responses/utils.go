@@ -148,10 +148,8 @@ func ExpandNestedExtraBody(extraBody map[string]any) map[string]any {
 	delete(pending, "extra_body")
 
 	expanded := map[string]any{}
-	if nested != nil {
-		for k, v := range nested {
-			expanded[k] = v
-		}
+	for k, v := range nested {
+		expanded[k] = v
 	}
 	// 外层键覆盖嵌套键（Python expanded.update(pending)）
 	for k, v := range pending {
@@ -477,7 +475,7 @@ func isNilValue(value any) bool {
 	}
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
-	case reflect.Map, reflect.Slice, reflect.Ptr, reflect.Func, reflect.Interface, reflect.Chan:
+	case reflect.Map, reflect.Slice, reflect.Pointer, reflect.Func, reflect.Interface, reflect.Chan:
 		return v.IsNil()
 	}
 	return false

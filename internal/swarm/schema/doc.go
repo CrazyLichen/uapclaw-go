@@ -10,6 +10,9 @@
 //	├── req_method.go    # ReqMethod 枚举（142 个 RPC 方法名）
 //	├── event_type.go    # EventType 枚举（26 个事件类型）
 //	├── mode.go          # Mode 枚举（6 个运行模式）
+//	├── mode_matrix.go   # 运行模式别名表与归一化函数（CanonicalizeMode/DeprecateMode/ResolvedMode）
+//	├── reasoning_config.go # 思考档位归一（ReasoningLevel/NormalizeReasoningLevel/采样覆盖）
+//	├── reasoning_injector.go # 思考参数注入（InjectReasoningParams/BuildReasoningModelRequestKwargs）
 //	├── message.go       # MessageType 枚举 + Message 模型 + 工厂函数 + Validate
 //	├── agent.go         # AgentRequest/AgentResponse/AgentResponseChunk 模型 + 工厂函数 + Validate + IsTerminal/NewTerminalChunk
 //	├── event_base.go    # HookEventBase 钩子事件基类 + BuildEventName/ParseEventName
