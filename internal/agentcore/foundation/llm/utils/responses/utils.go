@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/utils/requestsanitizer"
 )
 
@@ -504,4 +506,322 @@ func trimSpace(s string) string {
 // isSpaceByte ASCII 空白判断。
 func isSpaceByte(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v' || b == '\f'
+}
+
+// ParseResponse 把完整 Responses payload 转为 AssistantMessage。
+// Python: responses_utils.py:190 parse_response
+func ParseResponse(payload map[string]any, modelName string) (*llmschema.AssistantMessage, error) {
+	contentParts, reasoningParts, toolCalls := readOutputItems(payload["output"])
+	// output_text 兜底（Python :193-194）
+	if len(contentParts) == 0 {
+		if outputText, ok := payload["output_text"]; ok && outputText != nil {
+			contentParts = append(contentParts, fmt.Sprintf("%v", outputText))
+		}
+	}
+
+	finishReason := finishReasonFromPayload(payload, len(toolCalls) > 0)
+	msg := llmschema.NewAssistantMessage(strings.Join(contentParts, ""),
+		llmschema.WithToolCalls(toolCalls),
+		llmschema.WithFinishReason(finishReason),
+		llmschema.WithReasoningContent(strings.Join(reasoningParts, "\n")),
+		llmschema.WithResponseID(stringOrEmpty(payload["id"])),
+		llmschema.WithResponseModel(orModelFallback(stringOrEmpty(payload["model"]), modelName)),
+		llmschema.WithProviderMetadata(responseProviderMetadata(payload)),
+	)
+	msg.UsageMetadata = usageFromPayload(payload["usage"], modelName)
+	return msg, nil
+}
+
+// MessageFromStreamChunk 把累积的流式 chunk 转为完整 AssistantMessage。
+// nil → 空 stop 消息；finish_reason 归一：有 tool_calls → tool_calls、null → stop。
+// Python: responses_utils.py:403 message_from_stream_chunk
+func MessageFromStreamChunk(chunk *llmschema.AssistantMessageChunk) *llmschema.AssistantMessage {
+	if chunk == nil {
+		return llmschema.NewAssistantMessage("", llmschema.WithFinishReason("stop"))
+	}
+	finishReason := chunk.FinishReason
+	if len(chunk.ToolCalls) > 0 {
+		finishReason = "tool_calls"
+	}
+	if finishReason == "null" {
+		finishReason = "stop"
+	}
+	msg := chunk.ToAssistantMessage()
+	msg.FinishReason = finishReason
+	return msg
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// readOutputItems 遍历 output items，产出 content/reasoning 文本与 tool_calls。
+// Python: responses_utils.py:557 _read_output_items
+func readOutputItems(output any) (contentParts []string, reasoningParts []string, toolCalls []*llmschema.ToolCall) {
+	items, ok := output.([]any)
+	if !ok {
+		return nil, nil, nil
+	}
+	for _, item := range items {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		itemType, _ := itemMap["type"].(string)
+		switch itemType {
+		case "message":
+			contentParts = append(contentParts, messageContentText(itemMap)...)
+		case "reasoning":
+			reasoningParts = append(reasoningParts, reasoningText(itemMap)...)
+		case "function_call":
+			toolCalls = append(toolCalls, toolCallFromResponseItem(itemMap, len(toolCalls)))
+		}
+	}
+	return contentParts, reasoningParts, toolCalls
+}
+
+// messageContentText 读 message item 的 output_text/text 部分。
+// Python: responses_utils.py:580 _message_content_text
+func messageContentText(item map[string]any) []string {
+	content, ok := item["content"].([]any)
+	if !ok {
+		return nil
+	}
+	texts := []string{}
+	for _, part := range content {
+		partMap, ok := part.(map[string]any)
+		if !ok {
+			continue
+		}
+		partType, _ := partMap["type"].(string)
+		if (partType == "output_text" || partType == "text") && partMap["text"] != nil {
+			texts = append(texts, fmt.Sprintf("%v", partMap["text"]))
+		}
+	}
+	return texts
+}
+
+// reasoningText 读 reasoning item 的 summary 与 text。
+// Python: responses_utils.py:594 _reasoning_text
+func reasoningText(item map[string]any) []string {
+	texts := []string{}
+	if summary, ok := item["summary"].([]any); ok {
+		for _, part := range summary {
+			if s, ok := part.(string); ok {
+				texts = append(texts, s)
+				continue
+			}
+			if partMap, ok := part.(map[string]any); ok && partMap["text"] != nil {
+				texts = append(texts, fmt.Sprintf("%v", partMap["text"]))
+			}
+		}
+	}
+	if item["text"] != nil {
+		texts = append(texts, fmt.Sprintf("%v", item["text"]))
+	}
+	return texts
+}
+
+// toolCallFromResponseItem 从 function_call item 构造 ToolCall。
+// call_id 兜底 item id；response_item_id 单独保留。
+// Python: responses_utils.py:610 _tool_call_from_response_item
+func toolCallFromResponseItem(item map[string]any, index int) *llmschema.ToolCall {
+	responseItemID := trimSpace(stringOrEmpty(item["id"]))
+	callID := stringOrEmpty(item["call_id"])
+	if callID == "" {
+		callID = responseItemID
+	}
+	return llmschema.NewToolCall(callID, stringOrEmpty(item["name"]),
+		jsonArgumentString(orDefaultArgs(item["arguments"])),
+		llmschema.WithToolCallIndex(index),
+		llmschema.WithToolCallResponseItemID(responseItemID))
+}
+
+// orDefaultArgs arguments 兜底 "{}"。
+func orDefaultArgs(value any) any {
+	if value == nil {
+		return "{}"
+	}
+	return value
+}
+
+// usageFromPayload 用量归一：input/output tokens、cache 三态、reasoning_tokens。
+// Python: responses_utils.py:677 _usage_from_payload
+func usageFromPayload(usage any, modelName string) *llmschema.UsageMetadata {
+	usageMap, ok := usage.(map[string]any)
+	if !ok {
+		return nil
+	}
+	inputTokens := intOrZero(firstPresent(usageMap, "input_tokens", "prompt_tokens"))
+	outputTokens := intOrZero(firstPresent(usageMap, "output_tokens", "completion_tokens"))
+	totalTokens := optionalInt(usageMap["total_tokens"])
+	if totalTokens == nil {
+		total := inputTokens + outputTokens
+		totalTokens = &total
+	}
+
+	cacheTokens := 0
+	var cacheCreationTokens *int
+	var tokenDetails map[string]any
+	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok {
+		tokenDetails = details
+	} else if details, ok := usageMap["prompt_tokens_details"].(map[string]any); ok {
+		tokenDetails = details
+	}
+	if tokenDetails != nil {
+		cacheTokens = intOrZero(tokenDetails["cached_tokens"])
+		cacheCreationTokens = optionalInt(firstPresent(tokenDetails, "cache_creation_tokens", "cache_write_tokens"))
+	}
+
+	reasoningTokens := 0
+	var outputDetails map[string]any
+	if details, ok := usageMap["output_tokens_details"].(map[string]any); ok {
+		outputDetails = details
+	} else if details, ok := usageMap["completion_tokens_details"].(map[string]any); ok {
+		outputDetails = details
+	}
+	if outputDetails != nil {
+		reasoningTokens = intOrZero(outputDetails["reasoning_tokens"])
+	}
+
+	u := llmschema.NewUsageMetadata()
+	u.ModelName = modelName
+	u.InputTokens = inputTokens
+	u.OutputTokens = outputTokens
+	u.TotalTokens = *totalTokens
+	u.CacheTokens = cacheTokens
+	if tokenDetails != nil {
+		u.CacheReadTokens = &cacheTokens
+		u.CacheStatus = "observed"
+		u.CacheSource = "provider_usage"
+		u.CacheAuthoritative = true
+	}
+	u.CacheCreationTokens = cacheCreationTokens
+	if outputDetails != nil {
+		u.ReasoningTokens = &reasoningTokens
+	}
+	return u
+}
+
+// responseProviderMetadata 只保留非敏感 Responses 状态元数据。
+// Python: responses_utils.py:716 _response_provider_metadata
+func responseProviderMetadata(payload map[string]any) map[string]any {
+	metadata := map[string]any{}
+	for _, key := range []string{"status", "service_tier"} {
+		if value, ok := payload[key]; ok && isScalar(value) && fmt.Sprintf("%v", value) != "" {
+			metadata[key] = value
+		}
+	}
+	if incomplete, ok := payload["incomplete_details"].(map[string]any); ok {
+		clone := map[string]any{}
+		for k, v := range incomplete {
+			clone[k] = v
+		}
+		metadata["incomplete_details"] = clone
+	}
+	return metadata
+}
+
+// finishReasonFromPayload 终态归因：tool_calls 优先，incomplete → length，否则 stop。
+// Python: responses_utils.py:729 _finish_reason
+func finishReasonFromPayload(payload map[string]any, hasToolCalls bool) string {
+	if hasToolCalls {
+		return "tool_calls"
+	}
+	if status, _ := payload["status"].(string); status == "incomplete" {
+		return "length"
+	}
+	return "stop"
+}
+
+// httpErrorMessage 解析 HTTP 错误体的 error.message / detail。
+// Python: responses_utils.py:737 _http_error_message（输入为响应体字节）
+func httpErrorMessage(body []byte) (string, bool) {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", false
+	}
+	if errorObj, ok := payload["error"].(map[string]any); ok {
+		if msg, _ := errorObj["message"].(string); msg != "" {
+			return msg, true
+		}
+	}
+	if msg, ok := payload["error"].(string); ok && msg != "" {
+		return msg, true
+	}
+	if msg, _ := payload["detail"].(string); msg != "" {
+		return msg, true
+	}
+	return "", false
+}
+
+// firstPresent 依次取首个非 nil 的键值。
+// Python: responses_utils.py:760 _first_present
+func firstPresent(payload map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if payload[key] != nil {
+			return payload[key]
+		}
+	}
+	return nil
+}
+
+// intOrZero 转 int，失败为 0。
+// Python: responses_utils.py:773 _int_or_zero
+func intOrZero(value any) int {
+	parsed := optionalInt(value)
+	if parsed == nil {
+		return 0
+	}
+	return *parsed
+}
+
+// optionalInt 转 int 指针，nil/bool/非数值返回 nil。
+// Python: responses_utils.py:778 _optional_int
+func optionalInt(value any) *int {
+	if value == nil {
+		return nil
+	}
+	if _, isBool := value.(bool); isBool {
+		return nil
+	}
+	switch v := value.(type) {
+	case int:
+		return &v
+	case int64:
+		i := int(v)
+		return &i
+	case float64:
+		i := int(v)
+		return &i
+	case json.Number:
+		i, err := v.Int64()
+		if err != nil {
+			return nil
+		}
+		out := int(i)
+		return &out
+	case string:
+		var i int
+		if _, err := fmt.Sscanf(v, "%d", &i); err != nil {
+			return nil
+		}
+		return &i
+	}
+	return nil
+}
+
+// isScalar 是否 Python 意义下的标量（str/int/float/bool）。
+func isScalar(value any) bool {
+	switch value.(type) {
+	case string, int, int64, float64, bool:
+		return true
+	}
+	return false
+}
+
+// orModelFallback 服务模型名兜底。
+func orModelFallback(model, fallback string) string {
+	if model != "" {
+		return model
+	}
+	return fallback
 }
