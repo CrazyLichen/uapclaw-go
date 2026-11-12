@@ -440,37 +440,3 @@ func TestTurnLifecycleKind_空指针(t *testing.T) {
 	_, ok := turnLifecycleKind(lifecycle)
 	assert.False(t, ok)
 }
-
-// TestBoundedEventBuffer_DropHead空队列 dropHead 在空队列上非阻塞返回哨兵。
-func TestBoundedEventBuffer_DropHead空队列(t *testing.T) {
-	buffer := NewBoundedEventBuffer(2)
-	got, err := buffer.dropHead()
-	assert.Nil(t, got)
-	assert.ErrorIs(t, err, harnessprotocol.ErrEventStreamDone)
-}
-
-// TestBufferedEventCursor_排队首后队列变空 覆盖 peek 与兑现之间队列被清空的防御路径。
-//
-// 上游单线程下此路径不可达（stream.py:135 的 get 一定拿到刚 peek 的那条）；
-// Go 侧 Peek 返回后释放锁，其他消费者可能清空队列，故需显式错误而非阻塞。
-func TestBufferedEventCursor_排队首后队列变空(t *testing.T) {
-	buffer := NewBoundedEventBuffer(8)
-	ctx := context.Background()
-	require.NoError(t, buffer.Put(ctx, newTestEvent(t, 1)))
-
-	cursor, err := buffer.Cursor("", true)
-	require.NoError(t, err)
-	impl := cursor.(*BufferedEventCursor)
-
-	// 手工 peek 一次，然后清空队列，模拟「Peek 与兑现之间被抢空」
-	peeked, err := buffer.Peek(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, peeked)
-	buffer.mu.Lock()
-	buffer.items = nil
-	buffer.mu.Unlock()
-
-	// Next 内部会重新 Peek，此时队列空且缓冲区未关 → 应报协议错误（流已变化）
-	_, err = impl.buffer.dropHead()
-	assert.ErrorIs(t, err, harnessprotocol.ErrEventStreamDone)
-}

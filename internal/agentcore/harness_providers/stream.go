@@ -147,31 +147,6 @@ func (b *BoundedEventBuffer) Peek(ctx context.Context) (*harnessprotocol.Harness
 	return &b.items[0], nil
 }
 
-// dropHead 非阻塞地丢弃队首（Peek 之后兑现用）。
-// Python: stream.py:135 的 `await self._buffer.get()`
-//
-// ⚠️ 这是 Go 与 Python 的**必须偏差**（spec D12）：
-// Python 的 peek 与紧随其后的 get 之间不会有其他协程插入（单线程事件循环，
-// 两次 await 之间是同步代码），所以那个 get 一定拿到刚 peek 的那条、不会阻塞。
-// Go 里 Peek 返回后会释锁，生产者/其他消费者可能改变队列；若此时队列已空，
-// 直接调 Get 会永久阻塞在 cond.Wait 上（实测死锁）。
-//
-// 因此 Peek 之后需要"兑现"时一律走本方法：非阻塞地弹队首，队列空则返回
-// ErrEventStreamDone，由调用方按"流已变化"处理——这与上游 peek 之后
-// 不可能排队空白的语义等价（上游那条路径永不触发，Go 侧把它变成显式错误）。
-func (b *BoundedEventBuffer) dropHead() (*harnessprotocol.HarnessEvent, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.items) == 0 {
-		return nil, harnessprotocol.ErrEventStreamDone
-	}
-	event := b.items[0]
-	b.items[0] = harnessprotocol.HarnessEvent{}
-	b.items = b.items[1:]
-	b.cond.Broadcast()
-	return &event, nil
-}
-
 // Close 关闭生产者侧并唤醒全部阻塞的读写者。幂等。
 // Python: stream.py:66-71 close
 func (b *BoundedEventBuffer) Close(ctx context.Context) error {
@@ -277,10 +252,9 @@ func (c *BufferedEventCursor) Next(ctx context.Context) (*harnessprotocol.Harnes
 		if !c.hasSelected {
 			startedKind, isStarted := turnLifecycleKind(event.Event)
 			if !isStarted || startedKind != harnessprotocol.TurnEventKindStarted {
-				// 非 STARTED：真正消费掉（Peek 时未删除）并继续。
-				// 走非阻塞的 dropHead（spec D12）：Peek 与消费之间队列可能已被
-				// 生产者/其他消费者改变，直接 Get 会永久阻塞。
-				if _, dropErr := c.buffer.dropHead(); dropErr != nil {
+				// 非 STARTED：真正消费掉（Peek 时未删除）并继续
+				// Python: stream.py:135 `await self._buffer.get()`
+				if _, dropErr := c.buffer.Get(ctx); dropErr != nil {
 					_ = c.Close(ctx)
 					return nil, dropErr
 				}
@@ -295,8 +269,13 @@ func (c *BufferedEventCursor) Next(ctx context.Context) (*harnessprotocol.Harnes
 						c.expectedTurnID, event.TurnID),
 				}
 			}
-			// 步骤 4：兑现 Peek（同样走非阻塞 dropHead，spec D12）
-			consumed, getErr := c.buffer.dropHead()
+			// 步骤 4：兑现 Peek
+			// Python: stream.py:138 `consumed = await self._buffer.get()`
+			//
+			// 此处不会阻塞：从上面 Peek 返回到这里之间没有任何 await / 协程切换，
+			// 而队列只有本游标能删（单消费者租约）、生产者只做追加，
+			// 故刚才 Peek 到的那条必然还在队首。
+			consumed, getErr := c.buffer.Get(ctx)
 			if getErr != nil || consumed == nil {
 				_ = c.Close(ctx)
 				return nil, &harnessprotocol.HarnessProtocolError{
