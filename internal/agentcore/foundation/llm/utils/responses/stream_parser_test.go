@@ -126,7 +126,10 @@ func TestStreamParser_FunctionCallLifecycle(t *testing.T) {
 	if done.FinishReason != "tool_calls" || done.ToolCalls[0].Name != "" {
 		t.Fatalf("done finish/name: %q/%q", done.FinishReason, done.ToolCalls[0].Name)
 	}
-	// done 带未流出尾部 → 只补 remainder
+	// done 带未流出尾部 → 只补 remainder（重新登记 item_2）
+	_, _ = p.Parse(map[string]any{"type": "response.output_item.added", "item": map[string]any{
+		"type": "function_call", "id": "item_2", "call_id": "call_1", "name": "f1", "arguments": `{"a":"b":1}`,
+	}})
 	done2, err := p.Parse(map[string]any{"type": "response.output_item.done", "item": map[string]any{
 		"type": "function_call", "id": "item_2", "call_id": "call_1", "name": "f1", "arguments": `{"a":"b":1}tail`,
 	}})
