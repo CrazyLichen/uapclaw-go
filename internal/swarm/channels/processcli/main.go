@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -104,6 +105,10 @@ type AppArgs struct {
 }
 
 // mainDeps 分派依赖，测试注入用。
+//
+// 全部字段必须是可空接口的函数类型：RunMain 填真实实现，测试填替身。
+// Stdout/Stderr 用 io.Writer 而非 any——写成 any 会让 RunApp 的签名无法
+// 指向真实的 Run(args, stdout, stderr io.Writer)，最终在分派处 nil 调用 panic。
 type mainDeps struct {
 	// ExecuteQuerySource --query-json 分支
 	ExecuteQuerySource func(QueryEntryOptions) int
@@ -112,13 +117,13 @@ type mainDeps struct {
 	// ExecuteSessionQuery 会话查询分支
 	ExecuteSessionQuery func(*AppArgs) int
 	// RunApp 单命令生命周期
-	RunApp func(*AppArgs, any, any) int
+	RunApp func(*AppArgs, io.Writer, io.Writer) int
 	// RunRepl 交互外壳
 	RunRepl func(*AppArgs) int
 	// Stdout 用户可见输出
-	Stdout any
+	Stdout io.Writer
 	// Stderr 用户可见错误
-	Stderr any
+	Stderr io.Writer
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -200,6 +205,8 @@ func RunMain(argv []string) int {
 		ExecuteQuerySource:  ExecuteQuerySource,
 		ExecuteSource:       ExecuteSource,
 		ExecuteSessionQuery: ExecuteSessionQuery,
+		RunApp:              Run,
+		RunRepl:             RunRepl,
 		Stdout:              os.Stdout,
 		Stderr:              os.Stderr,
 	}
@@ -329,7 +336,15 @@ func dispatchBranch(args *AppArgs, deps *mainDeps) int {
 
 	// Python: :424-428 分派
 	if args.Prompt == "" {
+		if deps.RunRepl == nil {
+			fmt.Fprintln(deps.Stderr, "uapclaw-process: 错误：REPL 依赖未装配")
+			return exitArgError
+		}
 		return deps.RunRepl(args)
+	}
+	if deps.RunApp == nil {
+		fmt.Fprintln(deps.Stderr, "uapclaw-process: 错误：执行依赖未装配")
+		return exitArgError
 	}
 	return deps.RunApp(args, deps.Stdout, deps.Stderr)
 }

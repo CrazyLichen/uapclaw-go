@@ -65,3 +65,53 @@ func TestDisplayTime_非法值(t *testing.T) {
 		t.Error("合法时间戳不应返回 -")
 	}
 }
+
+// TestExecuteSessionQuery_latest退出码语义
+// 上游 session_entry.py:117-120：--latest-session 有匹配时输出完整 ID 并退出 0，
+// 无匹配时退出 1。本机可能已有真实会话，故按结果动态断言两条互斥分支。
+func TestExecuteSessionQuery_latest退出码语义(t *testing.T) {
+	var stdout, stderr strings.Builder
+	code := executeSessionQueryWith(&AppArgs{LatestSession: true}, &stdout, &stderr)
+
+	switch code {
+	case 0:
+		// 有匹配：stdout 恰好一行完整会话 ID，stderr 为空
+		if stderr.Len() != 0 {
+			t.Errorf("成功时 stderr 应为空，得 %q", stderr.String())
+		}
+		lines := strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n")
+		if len(lines) != 1 {
+			t.Fatalf("应只输出一行 ID，得 %d 行：%q", len(lines), stdout.String())
+		}
+		if strings.TrimSpace(lines[0]) == "" {
+			t.Error("ID 不应为空")
+		}
+	case 1:
+		// 无匹配：stderr 提示，stdout 为空
+		if !strings.Contains(stderr.String(), "未找到匹配") {
+			t.Errorf("stderr = %q, 期望含「未找到匹配」", stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Errorf("无匹配时 stdout 应为空，得 %q", stdout.String())
+		}
+	default:
+		t.Errorf("退出码 = %d, 期望 0 或 1", code)
+	}
+}
+
+// TestExecuteSessionQuery_list退出码恒为0
+// 上游 session_entry.py:122-131：--list-sessions 无论有无结果都退出 0。
+func TestExecuteSessionQuery_list退出码恒为0(t *testing.T) {
+	var stdout, stderr strings.Builder
+	code := executeSessionQueryWith(&AppArgs{ListSessions: true}, &stdout, &stderr)
+	if code != 0 {
+		t.Errorf("退出码 = %d, 期望 0", code)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr 应为空，得 %q", stderr.String())
+	}
+	text := stdout.String()
+	if !strings.Contains(text, "会话ID") && !strings.Contains(text, "没有匹配") {
+		t.Errorf("stdout 应为表格表头或空结果提示，得 %q", text)
+	}
+}

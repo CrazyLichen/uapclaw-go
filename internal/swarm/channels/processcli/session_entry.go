@@ -75,23 +75,29 @@ func ValidateSessionQuery(args *AppArgs) error {
 //
 // 返回进程退出码。全程不启动 Runtime。
 func ExecuteSessionQuery(args *AppArgs) int {
-	if err := ValidateSessionQuery(args); err != nil {
-		fmt.Fprintf(os.Stderr, "uapclaw-process: 错误：%v\n", err)
-		return exitArgError
-	}
-
 	streams, restore, diagErr := CaptureDiagnostics(true, false)
 	if diagErr == nil && restore != nil {
 		defer restore()
 	}
 	stdout := io.Writer(os.Stdout)
 	stderr := io.Writer(os.Stderr)
-	logPath := ""
 	if streams != nil {
 		stdout = streams.Stdout
 		stderr = streams.Stderr
-		logPath = streams.LogPath
 	}
+	return executeSessionQueryWith(args, stdout, stderr)
+}
+
+// executeSessionQueryWith 可注入输出流的会话查询实现（测试用）。
+//
+// 与 ExecuteSessionQuery 的差别只在输出目标：诊断捕获由调用方负责，
+// 本函数不碰 fd，便于用 strings.Builder 断言 stdout/stderr 的分流。
+func executeSessionQueryWith(args *AppArgs, stdout, stderr io.Writer) int {
+	if err := ValidateSessionQuery(args); err != nil {
+		fmt.Fprintf(stderr, "uapclaw-process: 错误：%v\n", err)
+		return exitArgError
+	}
+	logPath := ""
 
 	limit := 20
 	if args.LimitSet {

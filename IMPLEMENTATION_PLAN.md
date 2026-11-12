@@ -1126,7 +1126,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 20.7 | ☐ | 权限与策略 | machine_policy、非交互拒绝授权、shell 不得绕过文件授权、运行级能力控制 | 同上 ← `channels/process_cli/{permissions,machine_policy}.py` |
 | 20.8 | ☐ | SDK | Python SDK + TypeScript SDK（会话/模型/规划/状态/权限命令、事件流） | `sdks/` ← `jiuwenswarm/sdks/` |
 | 20.9 | ☐ | 诊断与输出 | 收缩为纯呈现验收项：非交互输出精简、思考分段不重复；`diagnostics.py`(143) 已整体移入 20.3（`main.go` 每个分支都包在 `CaptureDiagnostics` 里） | 同上 ← `channels/process_cli/diagnostics.py` |
-| 20.10 | ☐ | 测试 | 一次性执行端到端（真子进程）、跨进程续聊、并发拒绝、退出码断言 | `tests/integration/swarm/processcli/` |
+| 20.10 | ☐ | 测试 | 一次性执行端到端（真子进程）、跨进程续聊、并发拒绝、退出码断言。⤴️ **必须一并回填 20.3 遗留的 P-7**：`uapclaw-process "任务"` 实际不可用——`Run` 内 `NewInProcessRuntimeClient(nil)` → `NewAgentRuntime(AgentRuntimeDeps{})` 导致 `manager == nil`，任何真实执行都报 "agent runtime manager is nil"。上游 `AgentRuntime()` 无参构造会自装配 manager，Go 侧 `NewAgentRuntime` 不装配，`processcli` 又无法自己构造 `AgentManagerPort`（属 `swarm/server` 侧），**须由 `cmd/uapclaw-process` 装配完整 Runtime 后经 clientFactory 注入 `Run`**（20.3 已为 `RunQuery`/`RunMachine` 建立 `clientFactory` 注入先例，`Run` 需补齐同一形态） | `tests/integration/swarm/processcli/` |
 
 **验证点**：`uapclaw exec --json` 可一次性完成单 agent 任务并输出结构化结果，SDK 可复用同一会话续聊。
 

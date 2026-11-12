@@ -1,6 +1,9 @@
 package processcli
 
-import "testing"
+import (
+	"io"
+	"testing"
+)
 
 // TestTranslateArgError_五条规则 逐条对齐 main.py:84-120。
 func TestTranslateArgError_五条规则(t *testing.T) {
@@ -65,7 +68,7 @@ func TestDispatchBranch_查询分支优先(t *testing.T) {
 	var called []string
 	deps := &mainDeps{
 		ExecuteSessionQuery: func(*AppArgs) int { called = append(called, "session"); return 0 },
-		RunApp:              func(*AppArgs, any, any) int { called = append(called, "app"); return 0 },
+		RunApp:              func(*AppArgs, io.Writer, io.Writer) int { called = append(called, "app"); return 0 },
 		RunRepl:             func(*AppArgs) int { called = append(called, "repl"); return 0 },
 	}
 	args := &AppArgs{ListSessions: true, Prompt: "ignored"}
@@ -79,7 +82,7 @@ func TestDispatchBranch_查询分支优先(t *testing.T) {
 func TestDispatchBranch_无prompt走REPL(t *testing.T) {
 	var called []string
 	deps := &mainDeps{
-		RunApp:  func(*AppArgs, any, any) int { called = append(called, "app"); return 0 },
+		RunApp:  func(*AppArgs, io.Writer, io.Writer) int { called = append(called, "app"); return 0 },
 		RunRepl: func(*AppArgs) int { called = append(called, "repl"); return 0 },
 	}
 	args := &AppArgs{Mode: defaultMode, Output: defaultOutput}
@@ -93,7 +96,7 @@ func TestDispatchBranch_无prompt走REPL(t *testing.T) {
 func TestDispatchBranch_有prompt走App(t *testing.T) {
 	var called []string
 	deps := &mainDeps{
-		RunApp:  func(*AppArgs, any, any) int { called = append(called, "app"); return 0 },
+		RunApp:  func(*AppArgs, io.Writer, io.Writer) int { called = append(called, "app"); return 0 },
 		RunRepl: func(*AppArgs) int { called = append(called, "repl"); return 0 },
 	}
 	args := &AppArgs{Prompt: "hello", Mode: defaultMode, Output: defaultOutput}
