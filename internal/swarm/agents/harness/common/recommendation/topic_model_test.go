@@ -266,8 +266,9 @@ func TestBackgroundConfigurationStatus_状态机(t *testing.T) {
 		t.Fatalf("全配置但无搜索开关应 native_search_unconfigured: %v", st["status"])
 	}
 	withSearch := map[string]string{
-		"ARK_API_KEY": "k", "ARK_MODEL": "m", "ARK_CONTEXT_WINDOW_TOKENS": "128",
-		"FREE_SEARCH_DDG_ENABLED": "true", "FREE_SEARCH_BING_ENABLED": "true",
+		"ARK_API_KEY": "k", "ARK_MODEL": "m", "ARK_BASE_URL": "u",
+		"ARK_CONTEXT_WINDOW_TOKENS": "128",
+		"FREE_SEARCH_DDG_ENABLED":   "true", "FREE_SEARCH_BING_ENABLED": "true",
 	}
 	st = BackgroundConfigurationStatus(FromEnviron(withSearch), withSearch)
 	if st["status"] != "ready" {
