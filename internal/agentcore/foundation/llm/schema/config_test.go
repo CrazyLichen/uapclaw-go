@@ -810,3 +810,16 @@ func TestAPIMode_零值语义(t *testing.T) {
 		t.Errorf("APIModeResponses = %q", APIModeResponses)
 	}
 }
+
+// TestWithReasoning 设置 ModelRequestConfig.Reasoning 字段。
+func TestWithReasoning(t *testing.T) {
+	reasoning := map[string]string{"mode": "enabled", "effort": "high"}
+	cfg := NewModelRequestConfig(WithReasoning(reasoning))
+	if cfg.Reasoning == nil {
+		t.Fatal("Reasoning 未设置")
+	}
+	got, ok := cfg.Reasoning.(map[string]string)
+	if !ok || got["effort"] != "high" {
+		t.Errorf("Reasoning = %#v", cfg.Reasoning)
+	}
+}

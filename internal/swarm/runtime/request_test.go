@@ -605,3 +605,21 @@ func TestSyncChatRequestMetadata_attachOnly无锁定目录(t *testing.T) {
 	session.FlushMetadataQueue(5.0)
 	require.Empty(t, session.GetSessionMetadata("sess-attach-new"), "attach-only 不写任何元数据")
 }
+
+// TestResolveRequestModeWrapper 私有转发必须与 schema 语义一致。
+func TestResolveRequestModeWrapper(t *testing.T) {
+	got := resolveRequestMode("code.normal", "code")
+	if got.CanonicalMode != "code.normal" {
+		t.Errorf("CanonicalMode = %q, 期望 code.normal", got.CanonicalMode)
+	}
+	if got.WorkMode != "code" {
+		t.Errorf("WorkMode = %q, 期望 code", got.WorkMode)
+	}
+}
+
+// TestNormalizeWorkModeUsesSchema 私有函数已删除，包内引用改 schema.NormalizeWorkMode。
+func TestNormalizeWorkModeUsesSchema(t *testing.T) {
+	if schema.NormalizeWorkMode("CODE") != "code" {
+		t.Error("schema.NormalizeWorkMode(CODE) 应为 code")
+	}
+}

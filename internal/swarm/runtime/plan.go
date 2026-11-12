@@ -212,7 +212,7 @@ func (c *PlanModeController) MayHoldState(sessionID, previousSessionMode string)
 	if c.IsActive(sessionID) {
 		return true
 	}
-	return schema.IsPlanMode(schema.CanonicalizeMode(previousSessionMode))
+	return schema.IsPlanMode(previousSessionMode)
 }
 
 // IsExited 会话是否刚显式退出过 plan（退出记忆仍未被消费）。
@@ -331,7 +331,7 @@ func isSingleAgentMode(canonical string) bool {
 // blockEntry 阻断进入：清 slug、发退出事件。
 // Python: ensure_state 的 blocked 分支——此时状态已是 normal，只需清 slug、
 // 回写 params.mode 为退出模式并下发退出事件。
-func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved ResolvedMode, res PlanStateResult, acc PlanStateAccessor) (PlanStateResult, error) {
+func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved schema.ResolvedMode, res PlanStateResult, acc PlanStateAccessor) (PlanStateResult, error) {
 	st, err := acc.LoadPlanState(ctx, sessionID)
 	if err != nil {
 		return res, err

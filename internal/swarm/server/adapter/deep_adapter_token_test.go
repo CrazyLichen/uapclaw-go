@@ -8,7 +8,6 @@ import (
 
 // TestBuildModelFromEntry_输出上限 验证 max_output_tokens 落成 ModelRequestConfig.MaxTokens 且不进 Extra
 func TestBuildModelFromEntry_输出上限(t *testing.T) {
-	d := &DeepAdapter{}
 
 	mcc := map[string]any{
 		"model_name":      "qwen3-coder",
@@ -19,7 +18,7 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 	}
 	mco := map[string]any{"temperature": 0.95, "context_window": "32k", "max_tokens": 8192}
 
-	m, err := d.buildModelFromEntry(mcc, mco)
+	m, err := BuildModelFromEntry(mcc, mco)
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}
@@ -44,7 +43,7 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 		"model_name": "qwen3-coder", "api_base": "https://example.com/v1",
 		"api_key": "sk-test", "client_provider": "OpenAI", "verify_ssl": false,
 	}
-	m2, err := d.buildModelFromEntry(mcc2, map[string]any{"temperature": 0.95})
+	m2, err := BuildModelFromEntry(mcc2, map[string]any{"temperature": 0.95})
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}
@@ -59,7 +58,6 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 // 默认 60s，长流式生成（写整页 HTML 之类）会被 http.Client.Timeout 硬切断，
 // 表现为工具参数 JSON 半截。temperature/top_p 同为该坑。
 func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
-	d := &DeepAdapter{}
 
 	base := func() map[string]any {
 		return map[string]any{
@@ -74,7 +72,7 @@ func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
 	// YAML 整数形态
 	intMCC := base()
 	intMCC["timeout"] = 1800
-	m, err := d.buildModelFromEntry(intMCC, map[string]any{"temperature": 1, "top_p": 1})
+	m, err := BuildModelFromEntry(intMCC, map[string]any{"temperature": 1, "top_p": 1})
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}
@@ -91,7 +89,7 @@ func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
 	// float64 形态（JSON 来源）
 	floatMCC := base()
 	floatMCC["timeout"] = 900.5
-	m2, err := d.buildModelFromEntry(floatMCC, map[string]any{"temperature": 0.3})
+	m2, err := BuildModelFromEntry(floatMCC, map[string]any{"temperature": 0.3})
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}
@@ -101,7 +99,7 @@ func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
 
 	// 未配置 → 保持 ModelClientConfig 默认 360s
 	// （Python: schema/config.py:145 默认 360，且须 >= stream_first_chunk_timeout=300）
-	m3, err := d.buildModelFromEntry(base(), map[string]any{})
+	m3, err := BuildModelFromEntry(base(), map[string]any{})
 	if err != nil {
 		t.Fatalf("构建失败: %v", err)
 	}

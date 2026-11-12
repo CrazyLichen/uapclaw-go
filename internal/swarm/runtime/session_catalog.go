@@ -372,7 +372,7 @@ func singleAgentMode(value any) string {
 	if !ok {
 		return ""
 	}
-	normalized := schema.CanonicalizeMode(raw)
+	normalized := schema.DeprecateMode(raw)
 	mode := strings.TrimSpace(normalized)
 	if mode == "" {
 		return ""
@@ -396,7 +396,7 @@ func projectSession(metadata map[string]any, channelID string, includeTeam bool)
 	mode := singleAgentMode(metadata["mode"])
 	if mode == "" && includeTeam {
 		if raw, ok := metadata["mode"].(string); ok {
-			normalized := schema.CanonicalizeMode(raw)
+			normalized := schema.DeprecateMode(raw)
 			if schema.IsTeamMode(normalized) {
 				mode = strings.TrimSpace(normalized)
 			}
