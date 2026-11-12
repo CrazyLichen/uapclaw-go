@@ -344,6 +344,7 @@ func ApplyAskUserResume(prepared *RootAskUserResume) *RootDecisionContext {
 // Python: _questions(tool_args)
 func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 	switch typed := toolArgs.(type) {
+	// 入参是 JSON 字符串时先解析再看结构（解析失败按"没有问题"处理）
 	case string:
 		var parsed any
 		if err := json.Unmarshal([]byte(typed), &parsed); err != nil {
@@ -351,6 +352,7 @@ func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 		}
 		return questionsOf(parsed)
 	case map[string]any:
+		// 没有 questions 字段时退回旧形态：单个 query 字符串算一个问题
 		rawQuestions, exists := typed["questions"]
 		if !exists || rawQuestions == nil {
 			query, ok := typed["query"].(string)
@@ -360,11 +362,13 @@ func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 			return nil, nil
 		}
 
+		// 问题列表必须是数组，且条数在上限之内
 		list, ok := rawQuestions.([]any)
 		if !ok || len(list) < 1 || len(list) > rails.MaxStructuredQuestions {
 			return nil, nil
 		}
 
+		// 逐条解析：题干非空、多选开关是布尔、选项结构合法，任一不满足即视为无问题
 		result := make([]AskUserQuestionReference, 0, len(list))
 		for _, item := range list {
 			asMap, ok := item.(map[string]any)
@@ -394,6 +398,7 @@ func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 			})
 		}
 
+		// 题干去重：同一个问题出现两次按非法处理
 		seen := make(map[string]struct{}, len(result))
 		for _, item := range result {
 			if _, dup := seen[item.Question]; dup {

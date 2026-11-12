@@ -20,7 +20,8 @@ import (
 // 挂载要求（两条硬约束）：
 //  1. priority 必须是 -1_000_000：Go 的 callback.go「数值越大越先执行」，
 //     极小值才是「最后读」，保证抄到 provider 实际收到的最终请求
-//     （Python: "Read the call after every rail that rewrites it"）。
+//     （上游原话：要在所有会改写请求的 rail 之后读取，见
+//     Python: "Read the call after every rail that rewrites it"）。
 //  2. 必须挂在会话级 child 上（28f），根是纯路由器不挂 rail。
 type PromptSuggestionForkRail struct {
 	// BaseRail 提供其余回调的默认空实现
@@ -86,7 +87,8 @@ func (r *PromptSuggestionForkRail) Priority() int { return -1_000_000 }
 
 // AfterModelCall 抄下 provider 实际收到的最终请求。
 // Python: prompt_suggestion.py:555 after_model_call
-// ★ 恒返回 nil：返回 error 会让刚拿到的回答整体失败（上游注释明确警告
+// ★ 恒返回 nil：返回 error 会让刚拿到的回答整体失败（上游注释明确警告：
+// 这里报错会把模型刚给出的回答一起废掉，见
 // "An error here would fail the answer the call just gave"）。
 func (r *PromptSuggestionForkRail) AfterModelCall(
 	_ context.Context, cbc *sainterfaces.AgentCallbackContext,

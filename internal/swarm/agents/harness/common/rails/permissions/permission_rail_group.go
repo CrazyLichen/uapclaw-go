@@ -98,8 +98,9 @@ type StructuredAskUserRailBridge struct {
 // Python: build_permission_group(config, *, permission_builder, permission_inputs,
 // queue, answer_claimed, sandboxed, language)
 //
-// 只返回候选，注册与发布由调用方负责（对齐 Python 的
-// "Return candidates only; the caller owns registration and publication"）。
+// 只返回候选，注册与发布由调用方负责（上游原话：本函数只产出候选，
+// 注册与对外发布都归调用方，见
+// Python 的 "Return candidates only; the caller owns registration and publication"）。
 func NewPermissionRailGroup(opts PermissionRailGroupOptions) *PermissionRailGroup {
 	return &PermissionRailGroup{
 		PermissionRail:               opts.PermissionRail,
