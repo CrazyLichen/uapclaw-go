@@ -39,5 +39,7 @@
 //   - `WithRunContext` 已由 `channels/processcli/machine.go` 的 `RunMachine` 写入
 //     （20.2 回填）。Python 在 `interface_deep.py`（请求入口）与
 //     `channels/process_cli/machine.py`（CLI）两处绑定 `CURRENT_RUN_CONTEXT`；
-//     CLI 侧已对齐（`machine.py:532-533`），`interface_deep.py` 侧仍待 20.3 迁移。
+//     CLI 侧已对齐（`machine.py:532-533`）。`interface_deep.py` 侧的请求入口
+//     绑定**不属于 20.3**（20.3 的 17 个文件无任何 interface_deep 绑定点），
+//     需单独立项处理。
 package runtime
