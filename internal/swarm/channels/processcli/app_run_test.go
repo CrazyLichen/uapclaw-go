@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 )
 
 // ──────────────────────────── Run 主流程 ────────────────────────────
@@ -76,8 +78,13 @@ func TestRun_jsonl输出逐行(t *testing.T) {
 	}
 }
 
-// TestRun_chat错误事件 空 Runtime 的启动失败被转成 chat.error 事件。
+// TestRun_chat错误事件 模型不可用时的失败被转成 chat.error 事件。
 // Python: app.py:904-916 异常转事件
+//
+// 注意 ok 不可作为判据：流事件的 ok 来自 from_agent_message 的默认 True
+// （上游 events.py:117-121 注释），chat.error 这类终态错误会以 ok=True 到达。
+// 上游口径是「同时看 event_type」——见 events.py:127-133
+// TERMINAL_ERROR_EVENT_TYPES，Go 侧对应 runtime.TerminalErrorEventTypes。
 func TestRun_chat错误事件(t *testing.T) {
 	var out, errOut strings.Builder
 	args := &AppArgs{
@@ -96,8 +103,13 @@ func TestRun_chat错误事件(t *testing.T) {
 	if payload["event_type"] != "chat.error" {
 		t.Errorf("event_type = %v, 期望 chat.error", payload["event_type"])
 	}
-	if first["ok"] != false {
-		t.Errorf("ok = %v, 期望 false", first["ok"])
+	// 终态错误事件必须被识别为失败（不能只看 ok 字段）。
+	eventType, _ := payload["event_type"].(string)
+	if _, isTerminal := swruntime.TerminalErrorEventTypes[eventType]; !isTerminal {
+		t.Errorf("event_type %q 应在 TerminalErrorEventTypes 内", eventType)
+	}
+	if payload["error"] == nil || payload["error"] == "" {
+		t.Errorf("chat.error 应带 error 文本，实际 %v", payload["error"])
 	}
 }
 

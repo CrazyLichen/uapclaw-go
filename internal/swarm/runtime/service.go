@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
@@ -204,8 +205,18 @@ func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
 	if coordinator == nil {
 		coordinator = sessionpkg.NewRuntimeSessionCoordinator(sessionpkg.DefaultCoordinatorOptions())
 	}
+	// manager 归属：外部给就用，不给就自建。
+	// Python: plane.py:155 `SingleTenantStrategy(agent_manager or AgentManager())`
+	// —— 上游 AgentRuntime() 无参调用时正是在这里 new 出 AgentManager，因此
+	// process_cli/client.py:80 的 `AgentRuntime()` 一行即可用。
+	// Go 侧能这样写依赖两点：server/runtime 已不 import swarm/runtime（无环），
+	// 且 AgentManager 实现 AgentManagerPort（接口定义在本包）。
+	manager := deps.Manager
+	if manager == nil {
+		manager = srvruntime.NewAgentManager()
+	}
 	return &AgentRuntime{
-		manager:                deps.Manager,
+		manager:                manager,
 		planController:         controller,
 		onControlEvent:         deps.OnControlEvent,
 		prepare:                deps.Prepare,

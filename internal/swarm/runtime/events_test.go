@@ -90,3 +90,45 @@ func TestRuntimeEvent_EventType_空负载(t *testing.T) {
 	var nilEv *RuntimeEvent
 	require.Equal(t, "", nilEv.EventType())
 }
+
+// TestTerminalErrorEventTypes_成员齐全 集合与上游 events.py:127-133 一致。
+func TestTerminalErrorEventTypes_成员齐全(t *testing.T) {
+	want := []string{"chat.error", "runtime.error", "execution.error", "team.error", "error"}
+	require.Len(t, TerminalErrorEventTypes, len(want))
+	for _, name := range want {
+		_, ok := TerminalErrorEventTypes[name]
+		require.True(t, ok, "%q 应在集合内", name)
+	}
+}
+
+// TestIsTerminalErrorEvent_按类型判定 ok=True 的错误事件仍判为失败。
+// Python: events.py:117-121 —— from_agent_message 的 ok 默认 True，
+// 消费方必须同时看 event_type。
+func TestIsTerminalErrorEvent_按类型判定(t *testing.T) {
+	cases := []struct {
+		name      string
+		eventType string
+		want      bool
+	}{
+		{"chat.error", "chat.error", true},
+		{"runtime.error", "runtime.error", true},
+		{"execution.error", "execution.error", true},
+		{"team.error", "team.error", true},
+		{"error", "error", true},
+		{"chat.final 非错误", "chat.final", false},
+		{"plan_mode_exited 非错误", "plan_mode_exited", false},
+		{"空类型", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := &RuntimeEvent{Payload: map[string]any{"event_type": tc.eventType}, OK: true}
+			require.Equal(t, tc.want, IsTerminalErrorEvent(ev))
+		})
+	}
+}
+
+// TestIsTerminalErrorEvent_nil 与空负载不 panic。
+func TestIsTerminalErrorEvent_nil(t *testing.T) {
+	require.False(t, IsTerminalErrorEvent(nil))
+	require.False(t, IsTerminalErrorEvent(&RuntimeEvent{}))
+}

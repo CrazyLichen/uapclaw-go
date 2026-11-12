@@ -17,7 +17,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	swsession "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -140,7 +140,7 @@ func (f *fakeAdapter) EnsureLiveSessionInstance(context.Context, string) (*harne
 }
 
 // PlanStateAccessor 桩：恒 nil。
-func (f *fakeAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return nil }
+func (f *fakeAdapter) PlanStateAccessor() schema.PlanStateAccessor { return nil }
 
 // ContextCompressor 接口实现
 func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {
@@ -555,8 +555,30 @@ func TestUapClaw_ensureAdapter_创建真实Adapter(t *testing.T) {
 // 生产路径由 AgentManager 创建门面时注入，测试里显式构造一本即可。
 func newUapClawWithLedger() *UapClawSwarm {
 	uc := NewUapClaw()
-	uc.SetAgentRuntime(swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{}))
+	uc.SetAgentRuntime(newTestRuntimeHandle())
 	return uc
+}
+
+// testRuntimeHandle 门面所需 Runtime 能力的最小替身。
+//
+// 不用 runtime 包的真实 AgentRuntime：本包已被 runtime 反向依赖，
+// 测试内再 import 它会成环。门面只用到 Coordinator/ActiveExecutions
+// 两个方法（见 AgentRuntimeHandle），替身足够。
+type testRuntimeHandle struct {
+	coordinator swsession.CoordinatorPort
+}
+
+// Coordinator 返回执行账本。
+func (h *testRuntimeHandle) Coordinator() swsession.CoordinatorPort { return h.coordinator }
+
+// ActiveExecutions 是否有活跃执行。
+func (h *testRuntimeHandle) ActiveExecutions() bool { return false }
+
+// newTestRuntimeHandle 构造带真实协调器的替身（门面用例需要可用账本）。
+func newTestRuntimeHandle() *testRuntimeHandle {
+	return &testRuntimeHandle{
+		coordinator: swsession.NewRuntimeSessionCoordinator(swsession.DefaultCoordinatorOptions()),
+	}
 }
 
 func setupCloudMemoryEnv(t *testing.T) func() {

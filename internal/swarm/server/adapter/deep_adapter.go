@@ -2261,6 +2261,19 @@ func (d *DeepAdapter) Instance() *harness.DeepAgent {
 	return d.instance
 }
 
+// SetInstanceForTest 注入底层 DeepAgent 实例（仅测试用）。
+//
+// 生产路径由 CreateInstance 内部装配 instance；集成测试要验证
+// 「PlanModeController 经 PlanStateAccessor 读写真实 adapter 状态」这条
+// 跨层链路，必须能替换 instance 而不能走完整 CreateInstance（需要模型）。
+// 与 markIdleForTest 同类：仅测试使用的导出钩子，生产代码不调用。
+func (d *DeepAdapter) SetInstanceForTest(agent *harness.DeepAgent) {
+	if d == nil {
+		return
+	}
+	d.instance = agent
+}
+
 // IsSessionScoped 是否为会话级子适配器。
 // Python: interface_deep.py _is_session_scoped_adapter（:2110）
 func (d *DeepAdapter) IsSessionScoped() bool {

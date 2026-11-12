@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -99,7 +98,7 @@ func (s *stubAdapter) EnsureLiveSessionInstance(context.Context, string) (*harne
 }
 
 // PlanStateAccessor 桩：恒 nil。
-func (s *stubAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return nil }
+func (s *stubAdapter) PlanStateAccessor() schema.PlanStateAccessor { return nil }
 
 // TestAgentAdapter_编译期接口检查 验证 stubAdapter 满足 AgentAdapter 接口。
 func TestAgentAdapter_编译期接口检查(t *testing.T) {
@@ -147,7 +146,7 @@ func TestAgentAdapter_接口含会话分身方法(t *testing.T) {
 		t.Error("AgentAdapter 应含 EnsureLiveSessionInstance(Context, string)")
 	}
 	if _, ok := a.(interface {
-		PlanStateAccessor() swruntime.PlanStateAccessor
+		PlanStateAccessor() schema.PlanStateAccessor
 	}); !ok {
 		t.Error("AgentAdapter 应含 PlanStateAccessor()")
 	}
@@ -172,7 +171,7 @@ func TestCodeAdapter_实现门面所需的运行态方法(t *testing.T) {
 		t.Error("CodeAdapter 应实现 EnsureLiveSessionInstance")
 	}
 	if _, ok := a.(interface {
-		PlanStateAccessor() swruntime.PlanStateAccessor
+		PlanStateAccessor() schema.PlanStateAccessor
 	}); !ok {
 		t.Error("CodeAdapter 应实现 PlanStateAccessor（缺失会让 code 模式 plan 状态失效）")
 	}

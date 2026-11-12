@@ -1006,21 +1006,53 @@ func resolveRequestOwnerMode(request *schema.AgentRequest) (mode, subMode string
 			return managerMode, managerSubMode
 		}
 	}
-	// ③ 裸基础模式原样
-	switch modeText {
-	case "agent", "code", "team":
-		return modeText, ""
-	}
-	// ④ 旧 canonical 经 deprecate 后再试
+	// ③ 旧 canonical 经 deprecate 后再试
 	if managerMode, managerSubMode, _, ok := schema.ResolveNewCanonicalModeText(
 		schema.DeprecateMode(modeText)); ok {
 		return managerMode, managerSubMode
 	}
-	// ⑤ 兜底：按第一个点切一级模式
-	if idx := strings.Index(modeText, "."); idx >= 0 {
-		return modeText[:idx], ""
+	// ④ 按点切分并推导 subMode。
+	// Python: request.py:305-330 —— 裸 mode 的 subMode 由 default_sub_modes 给出，
+	// 其中 code 默认 "normal"（:318）；team 的 subMode 恒为空（:311-314）；
+	// code 的 subMode 不在 {plan,normal,team} 时回落 "normal"（:320-321）。
+	parts := strings.Split(modeText, ".")
+	baseMode := parts[0]
+	if baseMode == "" {
+		baseMode = "agent"
 	}
-	return modeText, ""
+	if baseMode == "agent" {
+		if schema.NormalizeWorkMode(params["work_mode"]) == "code" {
+			return "code", "normal"
+		}
+		return "agent", ""
+	}
+	if baseMode == "team" {
+		return "team", ""
+	}
+	derivedSub := ""
+	if len(parts) > 1 && parts[1] != "" {
+		derivedSub = parts[1]
+	} else if baseMode == "code" {
+		derivedSub = "normal"
+	}
+	if baseMode == "code" && derivedSub != "plan" && derivedSub != "normal" && derivedSub != "team" {
+		derivedSub = "normal"
+	}
+	// ⑤ 末尾按 work_mode 重折算 agent/code 的等价形态
+	// Python: request.py:322-327
+	canonical := baseMode
+	if derivedSub != "" {
+		canonical = baseMode + "." + derivedSub
+	}
+	if canonical == "agent" || canonical == "code" || canonical == "code.normal" {
+		switch schema.NormalizeWorkMode(params["work_mode"]) {
+		case "code":
+			return "code", "normal"
+		case "work":
+			return "agent", ""
+		}
+	}
+	return baseMode, derivedSub
 }
 
 // stringParamOrEmpty 取字符串参数，缺失或非字符串时用兜底值。

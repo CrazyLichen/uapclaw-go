@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 )
 
 // ──────────────────────────── 账本归属（P4） ────────────────────────────
@@ -25,7 +23,7 @@ func TestNewUapClaw_不自建Runtime(t *testing.T) {
 // TestSetAgentRuntime_全部门面共享同一本账 注入后覆盖自有账本。
 // Python: 门面不持有 coordinator，账本只在 Runtime。
 func TestSetAgentRuntime_全部门面共享同一本账(t *testing.T) {
-	shared := swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{})
+	shared := newTestRuntimeHandle()
 
 	first := NewUapClaw()
 	second := NewUapClaw()
@@ -40,7 +38,7 @@ func TestSetAgentRuntime_全部门面共享同一本账(t *testing.T) {
 // TestAgentManager_注册Runtime提供者 提供者被保存并可取用。
 // Python: 门面不自建账本，由创建方传入 Runtime。
 func TestAgentManager_注册Runtime提供者(t *testing.T) {
-	shared := swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{})
+	shared := newTestRuntimeHandle()
 
 	manager := NewAgentManager()
 	manager.SetRuntimeProvider(func() AgentRuntimeHandle { return shared })

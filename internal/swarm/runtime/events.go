@@ -21,7 +21,34 @@ type RuntimeEvent struct {
 	OK bool
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// TerminalErrorEventTypes 终态错误事件类型集合：模型/agent/runtime 失败以
+// 流事件形式出现，而不是抛出异常。
+// Python: events.py:127-133 TERMINAL_ERROR_EVENT_TYPES
+//
+// 这类事件可能带 ok=True —— RuntimeEvent.from_agent_message 的 ok 默认 True，
+// 所以消费方必须同时看 event_type，只看 event.ok 会把失败的运行判成成功
+// （上游注释记录的真实缺陷：心跳任务显示「上次运行成功」而每次模型调用都失败）。
+//
+// 各消费方（AgentServer 心跳/会话消息执行器、cron 调度、turn 确认）共用本集合，
+// 新增终态错误类型只改这一处。
+var TerminalErrorEventTypes = map[string]struct{}{
+	"chat.error":      {},
+	"runtime.error":   {},
+	"execution.error": {},
+	"team.error":      {},
+	"error":           {},
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// IsTerminalErrorEvent 事件是否为终态错误（ok 不可信，按 event_type 判定）。
+// Python: `event.event_type in TERMINAL_ERROR_EVENT_TYPES`
+func IsTerminalErrorEvent(ev *RuntimeEvent) bool {
+	_, ok := TerminalErrorEventTypes[ev.EventType()]
+	return ok
+}
 
 // Control 构造控制事件。
 // Python: RuntimeEvent.control(request_id=..., channel_id=..., session_id=..., payload=...)

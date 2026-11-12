@@ -191,9 +191,19 @@ func TestAgentManager_返回注入实例(t *testing.T) {
 }
 
 // TestAgentManager_未注入返回nil 未注入 manager 时为 nil。
-func TestAgentManager_未注入返回nil(t *testing.T) {
+// TestAgentManager_未注入时自建 AgentRuntime 无 manager 时自建一个。
+// Python: plane.py:155 `SingleTenantStrategy(agent_manager or AgentManager())`
+// —— 上游 AgentRuntime() 无参调用即自建，故此处不能再返回 nil。
+func TestAgentManager_未注入时自建(t *testing.T) {
 	runtime := NewAgentRuntime(AgentRuntimeDeps{})
-	require.Nil(t, runtime.AgentManager())
+	require.NotNil(t, runtime.AgentManager(), "未注入时应自建 manager")
+}
+
+// TestAgentManager_注入时用注入值 外部提供 manager 时不自建。
+func TestAgentManager_注入时用注入值(t *testing.T) {
+	given := &startTestManager{agent: &startTestChatAgent{}}
+	runtime := NewAgentRuntime(AgentRuntimeDeps{Manager: given})
+	require.Same(t, given, runtime.AgentManager())
 }
 
 // permissionsLayers 构造一个最小四层结果供权限门面测试。
