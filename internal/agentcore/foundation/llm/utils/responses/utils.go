@@ -227,7 +227,7 @@ func ConvertMessages(messages any) (string, []map[string]any, error) {
 					},
 				})
 			}
-			calls, _ := message["tool_calls"].([]any)
+			calls := toolCallsOfMessage(message["tool_calls"])
 			for _, callItem := range calls {
 				inputs = append(inputs, responseInputToolCall(callItem, fallbackToolCallIndex))
 				fallbackToolCallIndex++
@@ -297,6 +297,23 @@ func messageDicts(messages any) ([]map[string]any, error) {
 		return nil, &ResponsesError{Message: "OpenAI account Responses request requires at least one message."}
 	}
 	return dicts, nil
+}
+
+// toolCallsOfMessage 归一 tool_calls 形态（Go 上游产物 []map[string]any，
+// JSON round-trip 产物 []any，两者都收）。
+func toolCallsOfMessage(value any) []any {
+	switch v := value.(type) {
+	case []any:
+		return v
+	case []map[string]any:
+		out := make([]any, len(v))
+		for i, m := range v {
+			out[i] = m
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 // contentAsText 消息 content 归一为纯文本。
