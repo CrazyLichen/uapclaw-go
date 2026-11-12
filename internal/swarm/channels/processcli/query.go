@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/processcli/protocol"
@@ -245,9 +246,11 @@ func errorCodeOf(err error) string {
 		return boundary.Code()
 	}
 	// Python: getattr(error, "code", "RUNTIME_FAILED")，非空字符串才采用
+	//
+	// 上游判据是 `not code.strip()`——纯空白也算无效，必须回落。
 	if coder, ok := err.(interface{ Code() string }); ok {
-		if code := coder.Code(); code != "" {
-			return code
+		if code := strings.TrimSpace(coder.Code()); code != "" {
+			return coder.Code()
 		}
 	}
 	return "RUNTIME_FAILED"
