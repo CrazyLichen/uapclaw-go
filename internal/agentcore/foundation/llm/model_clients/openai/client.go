@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/reasoning"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/utils/providererror"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/utils/requestsanitizer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -125,6 +126,11 @@ func (c *OpenAIModelClient) Invoke(
 	// 5. OpenAI 特有参数调整（openai.com 的 temperature/top_p 互斥）
 	// Python: openai_model_client.py:1025-1035（在 _build_request_params 内，plan 之后）
 	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+
+	// 5.5 请求边界归一化（孤立代理位清洗 + tool_calls arguments 转 JSON 字符串）
+	// Python: openai_model_client.py:1085 return sanitize_chat_request(params)
+	//（_build_request_params 的最后一行，位于模型特有参数/extra_body 搬移之前）
+	reqParams = requestsanitizer.SanitizeChatRequest(reqParams)
 
 	// 6. tracer 回调（对齐上游 :1918，位于 disabled cache 之后）
 	if params.TracerRecordData != nil {
@@ -327,6 +333,10 @@ func (c *OpenAIModelClient) Stream(
 
 	// 6. OpenAI 特有参数调整
 	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+
+	// 6.3 请求边界归一化
+	// Python: openai_model_client.py:1085（_build_request_params 最后一行）
+	reqParams = requestsanitizer.SanitizeChatRequest(reqParams)
 
 	// 6.5 tracer 回调（对齐上游 :2110，位于 disabled cache 之后）
 	if params.TracerRecordData != nil {
