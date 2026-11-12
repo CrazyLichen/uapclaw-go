@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/utils/requestsanitizer"
 )
@@ -824,4 +826,330 @@ func orModelFallback(model, fallback string) string {
 		return model
 	}
 	return fallback
+}
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// StreamParser 把一次 Responses 流的 SSE 事件逐个转为 chunk。
+//
+// function-call arguments 随生成流式交付（response.output_item.added 命名调用，
+// 每个 response.function_call_arguments.delta 扩展它），长工具调用有进度而非
+// 等 item 完成一次性到达——该进度正是 TTFT 与流空闲超时观测的对象。
+// response.output_item.done 会重复完整 arguments，而流式 chunk 在下游拼接，
+// 因此 parser 按 item 记住已流出的部分，done 只贡献未流出的 remainder；
+// 后端若跳过 delta 事件也能由 done 交付完整调用。
+//
+// 一个 parser 实例只服务一条响应流。
+//
+// Python: responses_utils.py:208 ResponsesStreamParser
+type StreamParser struct {
+	modelName string
+	// streamedCalls item id → (tool call id, 已流出的 arguments)。
+	streamedCalls map[string]streamedCall
+}
+
+// streamedCall 已登记的流式工具调用状态。
+type streamedCall struct {
+	callID     string
+	emitted    string
+	hasEmitted bool
+}
+
+// StreamEvent 迭代交付的单个事件（Event=nil 时 Err 携带解析失败）。
+type StreamEvent struct {
+	// Event 解析后的事件 dict（[DONE]/空块为 nil）
+	Event map[string]any
+	// Err 块解析失败
+	Err error
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewStreamParser 创建流式解析器。
+// Python: ResponsesStreamParser.__init__(model_name)
+func NewStreamParser(modelName string) *StreamParser {
+	return &StreamParser{
+		modelName:     modelName,
+		streamedCalls: map[string]streamedCall{},
+	}
+}
+
+// Parse 把一个 Responses SSE 事件转为 AssistantMessageChunk。
+// event 为 nil（空块）时返回 nil。
+// Python 抛 OpenAIAccountResponsesError 的分支改为返回 error（Go 无异常，
+// 行为等价：调用方在流循环里终止）。
+// Python: responses_utils.py:230 parse
+func (p *StreamParser) Parse(event map[string]any) (*llmschema.AssistantMessageChunk, error) {
+	if event == nil {
+		return nil, nil
+	}
+
+	eventType, _ := event["type"].(string)
+	if eventType == "" {
+		eventType, _ = event["event"].(string)
+	}
+	switch eventType {
+	case "response.output_text.delta", "response.refusal.delta":
+		return textDeltaChunk(event), nil
+	case "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
+		return reasoningDeltaChunk(event), nil
+	case "response.output_item.added":
+		return p.addedFunctionCallChunk(event), nil
+	case "response.function_call_arguments.delta":
+		return p.functionCallArgumentsDeltaChunk(event), nil
+	case "response.output_item.done":
+		return p.doneOutputItemChunk(event), nil
+	case "response.completed", "response.incomplete":
+		return terminalStreamChunk(event, eventType, p.modelName), nil
+	case "response.failed", "error":
+		return nil, &ResponsesError{Message: streamErrorMessage(event)}
+	default:
+		return nil, nil
+	}
+}
+
+// IterSSEEvents 从原始 SSE 行产出解码后的事件 dict。
+// Python: responses_utils.py:330 iter_sse_events
+func IterSSEEvents(lines []string) <-chan StreamEvent {
+	out := make(chan StreamEvent)
+	go func() {
+		defer close(out)
+		var block []string
+		for _, line := range lines {
+			if line != "" {
+				block = append(block, line)
+				continue
+			}
+			event, err := ParseSSEBlock(block)
+			block = nil
+			if err != nil {
+				out <- StreamEvent{Err: err}
+				return
+			}
+			if event != nil {
+				out <- StreamEvent{Event: event}
+			}
+		}
+		if len(block) > 0 {
+			event, err := ParseSSEBlock(block)
+			if err != nil {
+				out <- StreamEvent{Err: err}
+				return
+			}
+			if event != nil {
+				out <- StreamEvent{Event: event}
+			}
+		}
+	}()
+	return out
+}
+
+// ParseSSEBlock 解码单个 SSE 块。
+// event/data 字段解析、[DONE] → (nil, nil)、非法 JSON 报 ResponsesError。
+// Python: responses_utils.py:349 parse_sse_block
+func ParseSSEBlock(lines []string) (map[string]any, error) {
+	eventType := ""
+	dataParts := []string{}
+
+	for _, rawLine := range lines {
+		line := strings.TrimRight(rawLine, "\r")
+		if line == "" || strings.HasPrefix(line, ":") {
+			continue
+		}
+		field, value, found := cutColon(line)
+		if !found {
+			continue
+		}
+		value = strings.TrimPrefix(value, " ")
+
+		switch field {
+		case "event":
+			eventType = trimSpace(value)
+		case "data":
+			dataParts = append(dataParts, trimSpace(value))
+		}
+	}
+
+	if len(dataParts) == 0 {
+		if eventType == "" {
+			return nil, nil
+		}
+		return map[string]any{"type": eventType}, nil
+	}
+
+	rawData := strings.Join(dataParts, "\n")
+	if rawData == "[DONE]" {
+		return nil, nil
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(rawData), &parsed); err != nil {
+		return nil, &ResponsesError{
+			Message: fmt.Sprintf("Invalid OpenAI account SSE JSON: %s", rawData),
+		}
+	}
+	if _, ok := parsed["type"]; !ok {
+		fallback := eventType
+		if fallback == "" {
+			fallback, _ = parsed["event"].(string)
+		}
+		if fallback != "" {
+			parsed["type"] = fallback
+		}
+	}
+	return parsed, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// addedFunctionCallChunk 处理 output_item.added（function_call 起帧）。
+// 登记 item_id → (call_id, 初始 arguments)，交付带完整初始 arguments 的帧；
+// 无 item id 时跳过（done 事件兜底交付完整调用）。
+// Python: responses_utils.py:262 _added_function_call_chunk
+func (p *StreamParser) addedFunctionCallChunk(event map[string]any) *llmschema.AssistantMessageChunk {
+	item, ok := event["item"].(map[string]any)
+	if !ok || item["type"] != "function_call" {
+		return nil
+	}
+	itemID := trimSpace(stringOrEmpty(item["id"]))
+	if itemID == "" {
+		return nil
+	}
+	toolCall := toolCallFromResponseItem(item, 0)
+	initialArguments := jsonArgumentString(orDefaultArgs(item["arguments"]))
+	toolCall.Arguments = initialArguments
+	p.streamedCalls[itemID] = streamedCall{callID: toolCall.ID, emitted: initialArguments, hasEmitted: true}
+	return llmschema.NewAssistantMessageChunk("", llmschema.WithChunkToolCalls([]*llmschema.ToolCall{toolCall}))
+}
+
+// functionCallArgumentsDeltaChunk 处理 arguments 增量。
+// Python: responses_utils.py:277 _function_call_arguments_delta_chunk
+func (p *StreamParser) functionCallArgumentsDeltaChunk(event map[string]any) *llmschema.AssistantMessageChunk {
+	itemID := trimSpace(stringOrEmpty(event["item_id"]))
+	delta, _ := event["delta"].(string)
+	streamed, ok := p.streamedCalls[itemID]
+	if !ok || delta == "" {
+		return nil
+	}
+	p.streamedCalls[itemID] = streamedCall{callID: streamed.callID, emitted: streamed.emitted + delta, hasEmitted: true}
+	return llmschema.NewAssistantMessageChunk("", llmschema.WithChunkToolCalls([]*llmschema.ToolCall{
+		llmschema.NewToolCall(streamed.callID, "", delta,
+			llmschema.WithToolCallResponseItemID(itemID)),
+	}))
+}
+
+// doneOutputItemChunk 处理 output_item.done（function_call 收尾）。
+// done 参数以已流出为前缀时只补 remainder；分歧时保已流出（不可撤回）并 Warn。
+// Python: responses_utils.py:300 _done_output_item_chunk
+func (p *StreamParser) doneOutputItemChunk(event map[string]any) *llmschema.AssistantMessageChunk {
+	item, ok := event["item"].(map[string]any)
+	if !ok || item["type"] != "function_call" {
+		return nil
+	}
+
+	toolCall := toolCallFromResponseItem(item, 0)
+	itemID := trimSpace(stringOrEmpty(item["id"]))
+	streamed, hadStreamed := p.streamedCalls[itemID]
+	if hadStreamed {
+		delete(p.streamedCalls, itemID)
+		remainder := ""
+		if strings.HasPrefix(toolCall.Arguments, streamed.emitted) {
+			remainder = toolCall.Arguments[len(streamed.emitted):]
+		} else {
+			// 流出的碎片已在下游拼接、无法撤回，保留它们而非重复
+			logWarn("Responses function call %s arguments diverged from the streamed deltas; keeping the streamed arguments.", itemID)
+		}
+		toolCall.Name = ""
+		toolCall.Arguments = remainder
+	}
+	return llmschema.NewAssistantMessageChunk("", llmschema.WithChunkToolCalls([]*llmschema.ToolCall{toolCall}),
+		llmschema.WithChunkFinishReason("tool_calls"))
+}
+
+// textDeltaChunk 文本/refusal delta。
+// Python: responses_utils.py:623 _text_delta_chunk
+func textDeltaChunk(event map[string]any) *llmschema.AssistantMessageChunk {
+	delta, _ := event["delta"].(string)
+	if delta == "" {
+		return nil
+	}
+	return llmschema.NewAssistantMessageChunk(delta)
+}
+
+// reasoningDeltaChunk 推理 delta。
+// Python: responses_utils.py:630 _reasoning_delta_chunk
+func reasoningDeltaChunk(event map[string]any) *llmschema.AssistantMessageChunk {
+	delta, _ := event["delta"].(string)
+	if delta == "" {
+		return nil
+	}
+	return llmschema.NewAssistantMessageChunk("",
+		llmschema.WithChunkReasoningContent(delta))
+}
+
+// terminalStreamChunk completed/incomplete 终帧（usage 归一 + 元数据）。
+// Python: responses_utils.py:637 _terminal_stream_chunk
+func terminalStreamChunk(event map[string]any, eventType string, modelName string) *llmschema.AssistantMessageChunk {
+	responsePayload, _ := event["response"].(map[string]any)
+	var usage any
+	if responsePayload != nil {
+		usage = responsePayload["usage"]
+	} else {
+		usage = event["usage"]
+	}
+	finishReason := "stop"
+	if eventType == "response.incomplete" {
+		finishReason = "length"
+	}
+	opts := []llmschema.AssistantMessageChunkOption{
+		llmschema.WithChunkFinishReason(finishReason),
+	}
+	if u := usageFromPayload(usage, modelName); u != nil {
+		opts = append(opts, llmschema.WithChunkUsageMetadata(u))
+	}
+	if responsePayload != nil {
+		if id := stringOrEmpty(responsePayload["id"]); id != "" {
+			opts = append(opts, llmschema.WithChunkResponseID(id))
+		}
+		if model := orModelFallback(stringOrEmpty(responsePayload["model"]), modelName); model != "" {
+			opts = append(opts, llmschema.WithChunkResponseModel(model))
+		}
+		opts = append(opts, llmschema.WithChunkProviderMetadata(responseProviderMetadata(responsePayload)))
+	} else {
+		if modelName != "" {
+			opts = append(opts, llmschema.WithChunkResponseModel(modelName))
+		}
+	}
+	return llmschema.NewAssistantMessageChunk("", opts...)
+}
+
+// streamErrorMessage 流内失败文案。
+// Python: responses_utils.py:668 _stream_error_message
+func streamErrorMessage(event map[string]any) string {
+	if msg, _ := event["message"].(string); msg != "" {
+		return msg
+	}
+	if errorObj, ok := event["error"].(map[string]any); ok {
+		if msg, _ := errorObj["message"].(string); msg != "" {
+			return msg
+		}
+	}
+	return "OpenAI account Responses stream failed."
+}
+
+// cutColon 按第一个冒号切分（SSE 字段解析）。
+func cutColon(line string) (string, string, bool) {
+	for i := 0; i < len(line); i++ {
+		if line[i] == ':' {
+			return line[:i], line[i+1:], true
+		}
+	}
+	return line, "", false
+}
+
+// logWarn 包级告警日志。
+// Python: responses_utils.py:313 logger.warning（llm_logger）
+func logWarn(format string, args ...any) {
+	logger.Warn(logger.ComponentAgentCore).
+		Msgf(format, args...)
 }
