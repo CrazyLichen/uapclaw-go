@@ -622,10 +622,12 @@ func WithMaxTokens(maxTokens int) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.MaxTokens = &maxTokens }
 }
 
-// WithContextWindow 设置模型上下文窗口（内部元数据，不随请求下发）。
-// 对齐上游 ModelRequestConfig.context_window：请求参数组装时显式排除。
-// 本仓请求参数由 base_client 以 map 拼装且只合并 Extra，该字段不进 Extra 即天然不外发
-// （由 config_window_test.go 固化）。
+// WithContextWindow 设置模型上下文窗口（内部元数据）。
+// 对齐上游 ModelRequestConfig.context_window。下发行为分路径：
+// chat-completions 路请求参数由 base_client 以 map 拼装且只合并 Extra，该字段不进
+// Extra 即天然不外发（config_window_test.go 固化）；Responses 路（23.2）按 Python
+// model_dump 语义（openai_model_client.py:1585-1589，context_window 不在 6 个排除键）
+// 会随请求体下发——Python 上游同样如此，见 responses_api.go modelDumpExtra。
 func WithContextWindow(tokens int) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) {
 		if tokens > 0 {

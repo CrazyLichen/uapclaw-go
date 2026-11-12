@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -69,8 +70,10 @@ func (c *OpenAIModelClient) buildResponsesRequestBody(messages []map[string]any,
 		stop = *c.ModelConfig.Stop
 	}
 
-	// kwargs 弹出（Python :1579-1583）
-	reasoning, _ := extra["reasoning"].(map[string]any)
+	// kwargs 弹出（Python :1579-1583）。reasoning 形态不校验、any 直通——
+	// Python 接受 Union[ReasoningConfig, dict]，build_request_body 仅判 None（:70-79），
+	// 形态合法性由服务端校验。
+	reasoning := extra["reasoning"]
 	delete(extra, "reasoning")
 	extraBody, _ := extra["extra_body"].(map[string]any)
 	delete(extra, "extra_body")
@@ -80,7 +83,11 @@ func (c *OpenAIModelClient) buildResponsesRequestBody(messages []map[string]any,
 
 	// model_dump 余量：排除 6 键后的 model_config 字段并入 request_extra（Python :1585-1589）
 	requestExtra := modelDumpExtra(c.ModelConfig)
-	// 余量再被 kwargs 覆盖（Python request_extra.update(kwargs)）
+	// 余量再被 kwargs 覆盖（Python request_extra.update(kwargs)）：kwargs reasoning
+	// 后写覆盖 config 值；其余弹出键（tool_choice 等）经合并顺序最终取值与 Python 一致
+	if reasoning != nil {
+		requestExtra["reasoning"] = reasoning
+	}
 	nonInternal := map[string]bool{
 		"output_parser": true, "tracer_record_data": true, "custom_headers": true,
 		"session_id": true, "request_purpose": true, "context_operation_id": true,
@@ -464,12 +471,20 @@ func topPOrNull(param *float64, config *llmschema.ModelRequestConfig, enabled bo
 }
 
 // modelDumpExtra 模拟 model_dump 排除 6 键后的余量（Python :1585-1589）。
-// Go 侧 model_config 的结构化字段不在 Extra 内，排除键本身也不会出现；
-// 只取 ModelConfig.Extra 中非排除键。
+// Python model_dump(exclude={model_name,model,temperature,top_p,max_tokens,stop},
+// exclude_none=True) 会带上 ModelRequestConfig 其余类型化字段：context_window 与
+// reasoning（config.py:269-274，二者均不在排除名单）；extra="allow" 的动态字段
+// 对应 Go 的 config.Extra。reasoning 形态不校验，any 直通（含 ReasoningConfig 指针）。
 func modelDumpExtra(config *llmschema.ModelRequestConfig) map[string]any {
 	extra := map[string]any{}
 	if config == nil {
 		return extra
+	}
+	if config.ContextWindow != nil {
+		extra["context_window"] = *config.ContextWindow
+	}
+	if config.Reasoning != nil && !isTypedNil(config.Reasoning) {
+		extra["reasoning"] = config.Reasoning
 	}
 	excluded := map[string]bool{
 		"model_name": true, "model": true, "temperature": true,
@@ -481,6 +496,20 @@ func modelDumpExtra(config *llmschema.ModelRequestConfig) map[string]any {
 		}
 	}
 	return extra
+}
+
+// isTypedNil 判断 any 承载的指针/map/slice 是否为类型化 nil（避免序列化成 null）。
+// 对齐 responses.isNilValue 语义（跨包不可引用，本地等价实现）。
+func isTypedNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Func:
+		return rv.IsNil()
+	}
+	return false
 }
 
 // stringArgOf 从 body 取 string 字段。

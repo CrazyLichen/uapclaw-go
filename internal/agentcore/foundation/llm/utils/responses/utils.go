@@ -49,8 +49,9 @@ type BuildRequestBodyInput struct {
 	MaxTokens any
 	// Stop 停止序列
 	Stop any
-	// Reasoning 推理参数（Responses reasoning 字段）
-	Reasoning map[string]any
+	// Reasoning 推理参数（Responses reasoning 字段）。形态不校验 any 直通：
+	// Python 接受 Union[ReasoningConfig, dict]，仅判 None（:70-79），合法性由服务端校验。
+	Reasoning any
 	// IncludeReasoningEncryptedContent 是否回传 reasoning.encrypted_content
 	IncludeReasoningEncryptedContent bool
 	// ToolChoice 工具选择策略（默认 "auto"）

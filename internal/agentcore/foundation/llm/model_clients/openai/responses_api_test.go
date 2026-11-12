@@ -13,9 +13,12 @@ import (
 )
 
 // newResponsesTestClient 构造指向 httptest 服务端的 Responses 模式客户端。
-func newResponsesTestClient(t *testing.T, serverURL string) *OpenAIModelClient {
+func newResponsesTestClient(t *testing.T, serverURL string, reqOpts ...llmschema.ModelRequestConfigOption) *OpenAIModelClient {
 	t.Helper()
-	modelConfig := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-5"), llmschema.WithTemperatureValue(0.5))
+	modelConfig := llmschema.NewModelRequestConfig(
+		append([]llmschema.ModelRequestConfigOption{
+			llmschema.WithModelName("gpt-5"), llmschema.WithTemperatureValue(0.5),
+		}, reqOpts...)...)
 	clientConfig := &llmschema.ModelClientConfig{
 		ClientProvider: "OpenAI",
 		APIBase:        serverURL,
@@ -120,6 +123,55 @@ func TestBuildResponsesRequestBody(t *testing.T) {
 	// max_tokens 双侧均缺省 → 不进 body（Python: configured_max_tokens 为 None）
 	if _, ok := body2["max_output_tokens"]; ok {
 		t.Fatalf("max_output_tokens 双侧缺省不应进 body: %v", body2["max_output_tokens"])
+	}
+}
+
+// TestBuildResponsesRequestBody_ConfigLevelDump config 级 reasoning/context_window 经
+// model_dump 并入 request_extra；kwargs reasoning 覆盖 config 值（Python :1585-1589 update(kwargs)）。
+func TestBuildResponsesRequestBody_ConfigLevelDump(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+
+	// config 级 reasoning（map 形态）+ context_window：均进 body
+	c := newResponsesTestClient(t, srv.URL,
+		llmschema.WithReasoning(map[string]any{"effort": "low"}),
+		llmschema.WithContextWindow(128000))
+	params := &model_clients.InvokeParams{}
+	body, err := c.buildResponsesRequestBody([]map[string]any{{"role": "user", "content": "hi"}}, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflectDeepEqual(body["reasoning"], map[string]any{"effort": "low"}) {
+		t.Fatalf("config 级 reasoning 应进 body: %v", body["reasoning"])
+	}
+	if body["context_window"] != 128000 {
+		t.Fatalf("context_window 应进 body（对齐 Python model_dump）: %v", body["context_window"])
+	}
+
+	// kwargs reasoning 覆盖 config reasoning（Python request_extra.update(kwargs)）
+	c2 := newResponsesTestClient(t, srv.URL,
+		llmschema.WithReasoning(map[string]any{"effort": "low"}))
+	params2 := &model_clients.InvokeParams{
+		Extra: map[string]any{"reasoning": map[string]any{"effort": "high"}},
+	}
+	body2, err := c2.buildResponsesRequestBody([]map[string]any{{"role": "user", "content": "hi"}}, params2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflectDeepEqual(body2["reasoning"], map[string]any{"effort": "high"}) {
+		t.Fatalf("kwargs reasoning 应覆盖 config 值: %v", body2["reasoning"])
+	}
+
+	// 非直通形态（ReasoningConfig 指针）不再被裸断言吞掉，any 直通进 body
+	c3 := newResponsesTestClient(t, srv.URL,
+		llmschema.WithReasoning(llmschema.NewReasoningConfig()))
+	params3 := &model_clients.InvokeParams{}
+	body3, err := c3.buildResponsesRequestBody([]map[string]any{{"role": "user", "content": "hi"}}, params3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body3["reasoning"] == nil {
+		t.Fatal("ReasoningConfig 形态不应被静默丢弃")
 	}
 }
 
