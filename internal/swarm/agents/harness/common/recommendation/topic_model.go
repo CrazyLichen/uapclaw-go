@@ -175,15 +175,19 @@ func FromEnviron(environ map[string]string) *ArkBackgroundConfig {
 	}
 	temperature := 0.0
 	if raw := get("ARK_TEMPERATURE"); raw != "" {
-		if _, err := strconv.ParseFloat(raw, 64); err != nil {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
 			return nil
 		}
+		temperature = parsed
 	}
 	topP := 1.0
 	if raw := get("ARK_TOP_P"); raw != "" {
-		if _, err := strconv.ParseFloat(raw, 64); err != nil {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
 			return nil
 		}
+		topP = parsed
 	}
 	expectedModel := get("ARK_EXPECTED_MODEL")
 	return &ArkBackgroundConfig{

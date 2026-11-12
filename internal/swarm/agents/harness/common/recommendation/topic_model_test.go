@@ -257,7 +257,8 @@ func TestFromEnviron_SafeProvenance不泄密(t *testing.T) {
 
 func TestBackgroundConfigurationStatus_状态机(t *testing.T) {
 	full := map[string]string{
-		"ARK_API_KEY": "k", "ARK_MODEL": "m", "ARK_CONTEXT_WINDOW_TOKENS": "128",
+		"ARK_API_KEY": "k", "ARK_MODEL": "m", "ARK_BASE_URL": "u",
+		"ARK_CONTEXT_WINDOW_TOKENS": "128",
 	}
 	// 对齐 :118-162：未设 FREE_SEARCH_* 开关 → native_search_unconfigured（搜索通道未配置）
 	st := BackgroundConfigurationStatus(FromEnviron(full), full)
