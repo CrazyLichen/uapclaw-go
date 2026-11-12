@@ -23,6 +23,7 @@
 //	├── parse_response.go    # 非流式响应解析
 //	├── parse_stream_chunk.go # 流式块解析
 //	├── transcription.go     # 音频转写（Whisper API）
+//	├── responses_api.go     # Responses API 分流与调用（api_mode=responses，Python :1540-1841）
 //	└── client.go            # OpenAIModelClient 主结构体 + Invoke/Stream + init 注册
 //
 // # 注册

@@ -65,7 +65,9 @@
 //	                "VolcEngine" / "Qianfan" / "Zhipu" / "MiMo" / "InferenceAffinity"
 //	                / "AscendAffinity", "llm", openAIFactory)
 //	intelli_router → Register("intelli_router", "llm", ...)（独立实现）
-//	Anthropic / OpenAIAccount → ⤵️ 23.1 / 23.2 落地
+//	Anthropic / OpenAIAccount → 23.1 已落地（Anthropic）；23.2 已落地 Responses
+//	（api_mode=responses 走 openai 包 responses_api.go 分流）；OpenAI 账号 OAuth
+//	客户端本体仍 ⤵️ 23.6
 //
 // 23.3 已删除 dashscope / siliconflow / inference_affinity 三个独立客户端包：
 // 其能力（DashScope 原生多模态三方法、SiliconFlow 工具清洗、KV cache 释放）

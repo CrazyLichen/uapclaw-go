@@ -43,7 +43,7 @@ func TestUsesResponsesAPI(t *testing.T) {
 	} {
 		c, err := NewOpenAIModelClient(modelConfig, &llmschema.ModelClientConfig{
 			ClientProvider: "OpenAI", APIMode: tc.apiMode, APIKey: "sk-test",
-			APIBase:        "https://api.openai.com/v1",
+			APIBase: "https://api.openai.com/v1",
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -64,7 +64,7 @@ func TestBuildResponsesRequestBody(t *testing.T) {
 		Temperature: floatPtr(0.7),
 		TopP:        floatPtr(0.9),
 		MaxTokens:   newIntPtr(64),
-		
+
 		Extra: map[string]any{
 			// 开关关闭：temperature/top_p 不进 body
 			"send_sampling_params":   false,

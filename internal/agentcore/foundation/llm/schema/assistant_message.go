@@ -43,7 +43,7 @@ type AssistantMessage struct {
 	// nil 与空 map 等价（对齐 Python default_factory=dict + if self.provider_metadata 真值判断）。
 	// Python: message.py:76 provider_metadata
 	ProviderMetadata map[string]any `json:"provider_metadata,omitempty"`
-	// ProviderContent provider 原始内容（23.2 Responses API 使用）。Python: message.py:77
+	// ProviderContent provider 原始内容（23.2 Responses API 已消费：Go 侧暂未填充，字段对齐保留）。Python: message.py:77
 	ProviderContent any `json:"provider_content,omitempty"`
 }
 
