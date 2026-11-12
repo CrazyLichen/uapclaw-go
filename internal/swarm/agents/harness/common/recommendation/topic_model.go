@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ func BackgroundConfigurationStatus(config *ArkBackgroundConfig, environ map[stri
 	}
 	context := 0
 	if raw := get("ARK_CONTEXT_WINDOW_TOKENS"); raw != "" {
-		if _, err := fmt.Sscanf(raw, "%d", &context); err != nil {
+		if _, err := strconv.Atoi(raw); err != nil {
 			context = 0
 		}
 	}
@@ -158,7 +159,7 @@ func FromEnviron(environ map[string]string) *ArkBackgroundConfig {
 	baseURL := get("ARK_BASE_URL")
 	contextWindowTokens := 0
 	if raw := get("ARK_CONTEXT_WINDOW_TOKENS"); raw != "" {
-		if _, err := fmt.Sscanf(raw, "%d", &contextWindowTokens); err != nil {
+		if _, err := strconv.Atoi(raw); err != nil {
 			contextWindowTokens = 0
 		}
 	}
@@ -170,13 +171,13 @@ func FromEnviron(environ map[string]string) *ArkBackgroundConfig {
 	}
 	temperature := 0.0
 	if raw := get("ARK_TEMPERATURE"); raw != "" {
-		if _, err := fmt.Sscanf(raw, "%g", &temperature); err != nil {
+		if _, err := strconv.ParseFloat(raw, 64); err != nil {
 			return nil
 		}
 	}
 	topP := 1.0
 	if raw := get("ARK_TOP_P"); raw != "" {
-		if _, err := fmt.Sscanf(raw, "%g", &topP); err != nil {
+		if _, err := strconv.ParseFloat(raw, 64); err != nil {
 			return nil
 		}
 	}
