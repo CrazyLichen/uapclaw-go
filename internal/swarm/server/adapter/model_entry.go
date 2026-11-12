@@ -97,8 +97,12 @@ func newModelRequestConfigFromKwargs(kwargs map[string]any) *llmschema.ModelRequ
 	}
 
 	// max_tokens：存在即设，含 0（0 在 OpenAI 语义里是合法的「不限制」）
+	//
+	// 走 config.IntValue（而非私有严格版）：上游 ModelRequestConfig(max_tokens=...)
+	// 由 pydantic Optional[int] 负责强制转换，字符串 "128000" 在 lax 模式下
+	// 会转换成功；config.IntValue 同样接受纯数字字符串，行为更贴上游。
 	if raw, ok := kwargs["max_tokens"]; ok {
-		if n, valid := toIntStrict(raw); valid {
+		if n, valid := config.IntValue(raw); valid {
 			opts = append(opts, llmschema.WithMaxTokens(n))
 		}
 	}
@@ -217,23 +221,6 @@ func collectUnknownClientKeys(mcc map[string]any) map[string]any {
 		}
 	}
 	return extra
-}
-
-// toIntStrict 严格转 int（bool 与非整数浮点判失败）。
-func toIntStrict(raw any) (int, bool) {
-	switch v := raw.(type) {
-	case int:
-		return v, true
-	case int64:
-		return int(v), true
-	case float64:
-		if v != float64(int64(v)) {
-			return 0, false
-		}
-		return int(v), true
-	default:
-		return 0, false
-	}
 }
 
 // firstNonEmpty 返回第一个非空字符串。

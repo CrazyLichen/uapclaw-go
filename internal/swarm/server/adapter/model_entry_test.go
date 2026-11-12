@@ -55,6 +55,25 @@ func TestBuildModelFromEntry_maxTokens为零不丢(t *testing.T) {
 	}
 }
 
+// TestBuildModelFromEntry_maxTokens字符串形态 走 config.IntValue，
+// 与 pydantic Optional[int] 的 lax 强制转换一致（"128000" → 128000）。
+func TestBuildModelFromEntry_maxTokens字符串形态(t *testing.T) {
+	model, err := BuildModelFromEntry(
+		map[string]any{"model_name": "gpt-4", "api_key": "sk-test", "api_base": "https://api.openai.com/v1"},
+		map[string]any{"max_tokens": "128000"},
+	)
+	if err != nil {
+		t.Fatalf("构建失败: %v", err)
+	}
+	maxTokens := model.ModelConfig.MaxTokens
+	if maxTokens == nil {
+		t.Fatal("字符串形态的 max_tokens 被丢弃（config.IntValue 应接受纯数字字符串）")
+	}
+	if *maxTokens != 128000 {
+		t.Errorf("MaxTokens = %d, 期望 128000", *maxTokens)
+	}
+}
+
 // TestBuildModelFromEntry_reasoning注入 reasoning_level 生效。
 func TestBuildModelFromEntry_reasoning注入(t *testing.T) {
 	model, err := BuildModelFromEntry(
