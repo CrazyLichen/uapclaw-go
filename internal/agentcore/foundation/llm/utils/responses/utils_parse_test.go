@@ -54,8 +54,9 @@ func TestParseResponse(t *testing.T) {
 	if u.CacheTokens != 6 {
 		t.Fatalf("legacy cache_tokens: %d", u.CacheTokens)
 	}
-	if len(msg.ProviderMetadata) != 0 {
-		t.Fatalf("completed 无 provider_metadata 非敏感字段时不该有内容: %v", msg.ProviderMetadata)
+	// provider_metadata 白名单：payload["status"] 进入
+	if msg.ProviderMetadata["status"] != "completed" {
+		t.Fatalf("provider_metadata: %v", msg.ProviderMetadata)
 	}
 }
 
