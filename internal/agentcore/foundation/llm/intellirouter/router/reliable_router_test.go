@@ -1209,8 +1209,9 @@ func TestRouterHelpers_PureFunctions(t *testing.T) {
 	// usageToMetadata：空 usage → nil
 	require.Nil(t, usageToMetadata(map[string]any{}, nil))
 
-	// emitChunk：ctx 已取消 → false（消费者中断不阻塞）
-	out := make(chan StreamChunk, 1)
+	// emitChunk：ctx 已取消 → false（消费者中断不阻塞）。
+	// 无缓冲 channel：发送方无接收者必不 ready，select 只剩 ctx.Done，断言确定
+	out := make(chan StreamChunk)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	require.False(t, emitChunk(out, ctx, map[string]any{}))
