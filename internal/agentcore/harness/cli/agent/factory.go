@@ -326,6 +326,7 @@ func CreateAgent(ctx context.Context, cfg CLIConfig) (*harness.DeepAgent, *clira
 		SystemPrompt:       systemPrompt,
 		ToolInstances:      webTools,
 		Mcps:               mcps,
+		Rails:              agentRails,
 		EnableTaskLoop:     true,
 		EnableTaskPlanning: true,
 		MaxIterations:      cfg.MaxIterations,
@@ -454,6 +455,8 @@ type LocalBackend struct {
 	// Python: agent.load_plugin(path)（deep_agent.py:2232）。
 	// 偏差 D-LP：DeepAgent.LoadPlugin 未迁移，挂 ⏵ 15.15；默认桩报未实现。
 	loadPlugin func(path string) (labels []string, err error)
+	// abortCount 累计 Abort 调用次数
+	abortCount int
 }
 
 // NewLocalBackend 构造本地后端。
@@ -550,9 +553,13 @@ func (b *LocalBackend) Agent() *harness.DeepAgent { return b.agent }
 func (b *LocalBackend) Abort(ctx context.Context) error {
 	if b.agent != nil {
 		b.agent.Abort(ctx)
+		b.abortCount++
 	}
 	return nil
 }
+
+// AbortCount 返回累计 Abort 调用次数（测试与诊断用）。
+func (b *LocalBackend) AbortCount() int { return b.abortCount }
 
 // SessionID 返回后端会话标识。
 func (b *LocalBackend) SessionID() string { return b.sessionID }
@@ -631,15 +638,29 @@ func CreateBackend(cfg CLIConfig) (*LocalBackend, error) {
 
 // decodeMcpConfig 把 LoadMcpConfigs 产出的 map 转成 McpServerConfig。
 // Python: _load_mcp_configs 直接构造 McpServerConfig；Go 侧 map → 结构体
-// 的换形集中在此。
+// 的换形集中在此（McpServerConfig 无 JSON tag，须显式映射 snake_case 键）。
 func decodeMcpConfig(raw map[string]any) (*mcpTypes.McpServerConfig, error) {
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return nil, err
-	}
 	cfg := &mcpTypes.McpServerConfig{}
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, err
+	if v, ok := raw["server_name"].(string); ok {
+		cfg.ServerName = v
+	}
+	if v, ok := raw["server_path"].(string); ok {
+		cfg.ServerPath = v
+	}
+	if v, ok := raw["client_type"].(string); ok {
+		cfg.ClientType = v
+	}
+	if v, ok := raw["params"].(map[string]any); ok {
+		cfg.Params = v
+	}
+	if v, ok := raw["auth_headers"].(map[string]any); ok {
+		headers := map[string]string{}
+		for k, hv := range v {
+			if s, ok := hv.(string); ok {
+				headers[k] = s
+			}
+		}
+		cfg.AuthHeaders = headers
 	}
 	return cfg, nil
 }

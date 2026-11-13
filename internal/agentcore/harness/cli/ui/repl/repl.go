@@ -146,6 +146,17 @@ func RegisterSkillCommand(name, description string) {
 	skillCommands[name] = description
 }
 
+// RegisterSkillMDPath 登记技能命令对应的 SKILL.md 路径。
+// Python: _SKILL_COMMANDS[cmd] = skill_md
+func RegisterSkillMDPath(name, path string) {
+	skillMDPaths[name] = path
+}
+
+// ResetSkillMDPaths 清空技能路径表（测试隔离用）。
+func ResetSkillMDPaths() {
+	skillMDPaths = map[string]string{}
+}
+
 // ResetSkillCommands 清空技能命令（测试隔离用）。
 func ResetSkillCommands() {
 	skillCommands = map[string]string{}

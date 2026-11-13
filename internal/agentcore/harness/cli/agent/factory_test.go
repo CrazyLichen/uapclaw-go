@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // newFakeOpenAI 起一个最小 OpenAI 兼容 SSE 端点。
@@ -225,4 +226,67 @@ func TestLoadPlugin_默认桩未实现(t *testing.T) {
 	_, err := backend.loadPluginFn()(context.Background(), "x")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not yet ported")
+}
+
+// TestGetCliContentBaseDir_路径语义 返回约定的基目录。
+func TestGetCliContentBaseDir_路径语义(t *testing.T) {
+	assert.Equal(t, filepath.Join("prompts", "workspace_content"), GetCliContentBaseDir())
+}
+
+// TestTracker_Abort_OutputSchema换形 Tracker 访问器 / Abort 真身 /
+// outputSchemaOf 各分支（TraceSchema、CustomSchema 降级）。
+func TestTracker_Abort_OutputSchema换形(t *testing.T) {
+	srv := newFakeOpenAI(t)
+	defer srv.Close()
+	backend, err := CreateBackend(fakeCLIConfig(t, srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, backend.Start(context.Background()))
+	defer func() { _ = backend.Stop(context.Background()) }()
+
+	require.NotNil(t, backend.Tracker())
+	require.NoError(t, backend.Abort(context.Background()))
+	assert.Greater(t, backend.AbortCount(), 0)
+}
+
+// TestDecodeMcpConfig_往返 map → McpServerConfig 字段保真。
+func TestDecodeMcpConfig_往返(t *testing.T) {
+	cfg, err := decodeMcpConfig(map[string]any{
+		"server_name": "fs",
+		"server_path": "/x",
+		"client_type": "stdio",
+		"params":      map[string]any{"command": "npx"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "fs", cfg.ServerName)
+}
+
+// TestOutputSchemaOf_降级分支 Trace / Custom 帧换形。
+func TestOutputSchemaOf_降级分支(t *testing.T) {
+	os := outputSchemaOf(&stream.OutputSchema{Type: "llm_output", Index: 3})
+	assert.Equal(t, 3, os.Index)
+
+	trace := outputSchemaOf(&stream.TraceSchema{Type: "trace"})
+	assert.Equal(t, "trace", trace.Type)
+
+	custom := outputSchemaOf(stream.CustomSchema{Type: "custom", Data: map[string]any{"payload": "p1"}})
+	assert.Equal(t, "custom", custom.Type)
+}
+
+// TestLoadVisionAudioConfig_Env分支 设 VISION_API_KEY / AUDIO_API_KEY 走 FromEnv。
+func TestLoadVisionAudioConfig_Env分支(t *testing.T) {
+	t.Setenv("VISION_API_KEY", "vk")
+	t.Setenv("AUDIO_API_KEY", "ak")
+	vision := LoadVisionConfig(CLIConfig{})
+	require.NotNil(t, vision)
+	audio := LoadAudioConfig(CLIConfig{})
+	require.NotNil(t, audio)
+}
+
+// TestDecodeMcpConfig_authHeaders 认证头 map 换形分支。
+func TestDecodeMcpConfig_authHeaders(t *testing.T) {
+	cfg, err := decodeMcpConfig(map[string]any{
+		"auth_headers": map[string]any{"Authorization": "Bearer x", "bad": 42},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"Authorization": "Bearer x"}, cfg.AuthHeaders)
 }

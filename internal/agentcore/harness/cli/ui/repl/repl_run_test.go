@@ -15,6 +15,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/agent"
+	clirails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/storage"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
@@ -376,3 +377,141 @@ func requireWrite(t *testing.T, path, content string) {
 // 防止 interruptpkg 未使用
 var _ = interruptpkg.IsApprovalKind
 var _ = time.Now
+
+// TestRunREPL_shell与技能命令 shell 透传 + 技能命令展开成 query 转发。
+func TestRunREPL_shell与技能命令(t *testing.T) {
+	ResetSkillCommands()
+	defer ResetSkillCommands()
+	ResetSkillMDPaths()
+	defer ResetSkillMDPaths()
+
+	skillMd := t.TempDir() + "/SKILL.md"
+	requireWrite(t, skillMd, "# 技能\n做某事")
+	RegisterSkillCommand("/my-skill", "做某事")
+	RegisterSkillMDPath("/my-skill", skillMd)
+
+	backend := &fakeBackend{responses: [][]stream.OutputSchema{
+		{{Type: "llm_output", IsLastSchema: true, Payload: map[string]any{"content": "技能结果"}}},
+	}}
+	store, err := storage.NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+	store.NewSession("sess", "m")
+
+	input := strings.Join([]string{"!true", "/my-skill 参数A", "/exit"}, "\n") + "\n"
+	var out bytes.Buffer
+	r := &REPL{Backend: backend, Cfg: agent.CLIConfig{}, Store: store,
+		In: strings.NewReader(input), Out: &out}
+	require.NoError(t, r.RunREPL(context.Background()))
+
+	got := out.String()
+	assert.Contains(t, got, "技能结果")
+	require.Len(t, backend.queries, 1)
+	forwarded, _ := backend.queries[0].(string)
+	assert.Contains(t, forwarded, "<skill-instructions>")
+	assert.Contains(t, forwarded, "User request: 参数A")
+}
+
+// TestRunREPL_未启动后端报错 RunStreaming 报错时打印 ✗ Error。
+func TestRunREPL_未启动后端报错(t *testing.T) {
+	// fakeBackend.RunStreaming 总成功；用 errBackend 模拟 RunStreaming 失败
+	be := &errBackend{}
+	store, err := storage.NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+	var out bytes.Buffer
+	r := &REPL{Backend: be, Cfg: agent.CLIConfig{}, Store: store,
+		In: strings.NewReader("查询\n/exit\n"), Out: &out}
+	require.NoError(t, r.RunREPL(context.Background()))
+	assert.Contains(t, out.String(), "✗ Error:")
+}
+
+// errBackend RunStreaming 必失败的替身。
+type errBackend struct {
+	fakeBackend
+}
+
+func (e *errBackend) RunStreaming(context.Context, any, *string) (<-chan stream.OutputSchema, error) {
+	return nil, errExitREPL
+}
+
+// TestCmdHandlers_带数据分支 tracker / store 有数据的展示分支 + 小助手。
+func TestCmdHandlers_带数据分支(t *testing.T) {
+	var out bytes.Buffer
+
+	// /clear
+	cmdClear(&out)
+	assert.Contains(t, out.String(), "\x1b[2J")
+
+	// cmdStatus + cmdCost 带真实 tracker 数据
+	tracker := clirails.NewTokenTrackingRail()
+	cmdStatus(&out, tracker, agent.CLIConfig{})
+	assert.Contains(t, out.String(), "Input tokens:")
+	cmdCost(&out, tracker)
+	assert.Contains(t, out.String(), "Calls:")
+
+	// cmdSessions 带持久化会话
+	store, err := storage.NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+	store.NewSession("s-1", "gpt-4o")
+	store.AddMessage("user", "hi")
+	cmdSessions(&out, store)
+	assert.Contains(t, out.String(), "s-1")
+	assert.Contains(t, out.String(), "gpt-4o")
+
+	// cmdHelp 带技能命令
+	ResetSkillCommands()
+	defer ResetSkillCommands()
+	RegisterSkillCommand("/zz-skill", "技能描述")
+	cmdHelp(&out)
+	assert.Contains(t, out.String(), "/zz-skill")
+
+	// toString / printArgs / formatInt 边界
+	assert.Equal(t, "", toString(nil))
+	assert.Equal(t, "5", toString(5))
+	printArgs(nil, &out)
+	printArgs(`{"tool":"write_file","path":"`+strings.Repeat("x", 250)+`"}`, &out)
+	assert.Contains(t, out.String(), "tool: write_file")
+	assert.Contains(t, out.String(), "...")
+	printArgs(map[string]any{"k": "v"}, &out)
+	assert.Contains(t, out.String(), "k: v")
+
+	// askQuestions 无 questions → 单个 Answer 提示
+	r := &REPL{}
+	promptFn := func(string) (string, error) { return "自由答案", nil }
+	noQ := &askUserRequestAlias{}
+	noQ.InterruptKind = saschema.InterruptKindAskUser
+	noQ.InterruptID = "int-9"
+	ans, err := r.answerQuestions(saschema.NewToolCallInterruptRequest(noQ, &llmschema.ToolCall{ID: "c9", Name: "ask_user"}), promptFn)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"answer": "自由答案"}, ans)
+
+	// answerQuestions prompt 报错
+	_, err = r.answerQuestions(askRequest("q"), func(string) (string, error) {
+		return "", context.Canceled
+	})
+	assert.Error(t, err)
+}
+
+// TestHandleSlash_全内置分派 逐个内置命令走一遍。
+func TestHandleSlash_全内置分派(t *testing.T) {
+	store, err := storage.NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+	r := &REPL{Cfg: agent.CLIConfig{Model: "m"}, Store: store, Tracker: clirails.NewTokenTrackingRail()}
+	var out bytes.Buffer
+	for _, cmd := range []string{"/help", "/clear", "/status", "/cost", "/compact", "/sessions", "/auto-harness history"} {
+		skill, herr := r.handleSlash(context.Background(), cmd, &out)
+		require.NoError(t, herr, cmd)
+		assert.Empty(t, skill, cmd)
+	}
+}
+
+// TestKindOf_默认未声明 非标准请求形态走默认分支。
+func TestKindOf_默认未声明(t *testing.T) {
+	req := &saschema.InterruptRequest{}
+	tcReq := saschema.NewToolCallInterruptRequest(req, &llmschema.ToolCall{ID: "c", Name: "t"})
+	assert.Equal(t, saschema.InterruptKindUndeclared, kindOf(tcReq))
+	assert.Equal(t, "", interruptIDOf(tcReq))
+
+	// AskUserRequest 路径的 interruptIDOf
+	ask := askRequest("q")
+	assert.Equal(t, "int-1", interruptIDOf(ask))
+}
