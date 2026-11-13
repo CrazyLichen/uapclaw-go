@@ -132,3 +132,33 @@ func captureStderrCode(t *testing.T, fn func() int) int {
 	assert.Contains(t, buf.String(), "Unknown output format")
 	return code
 }
+
+// TestOutputText_委托renderer 对齐 runner.py:79-84。
+func TestOutputText_委托renderer(t *testing.T) {
+	chunks := []stream.OutputSchema{
+		{Type: "llm_output", Payload: map[string]any{"content": "回答"}},
+	}
+	got := captureStdout(t, func() {
+		require.Equal(t, 0, outputText(chunks))
+	})
+	assert.Contains(t, got, "回答")
+}
+
+// TestRunOnce_本地骨架成功 MVP 骨架后端：空流 + json 格式。
+func TestRunOnce_本地骨架成功(t *testing.T) {
+	cfg := agent.CLIConfig{Model: "m"}
+	got := captureStdout(t, func() {
+		require.Equal(t, 0, RunOnce(cfg, "查询", "json"))
+	})
+	assert.Contains(t, got, `"chunks": 0`)
+}
+
+// TestRunOnce_启动失败后端 CreateBackend 错误路径已由 agent 包覆盖；
+// 这里补 Start 失败传播的退出码路径（用远程 url 触发 CreateBackend 失败）。
+func TestRunOnce_CreateBackend失败(t *testing.T) {
+	got := captureStderr(t, func() {
+		code := RunOnce(agent.CLIConfig{ServerURL: "http://x"}, "查询", "json")
+		assert.Equal(t, 1, code)
+	})
+	assert.Contains(t, got, "not supported in the MVP")
+}
