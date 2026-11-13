@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -218,4 +219,92 @@ func TestLoadConfig_坏类型int传播(t *testing.T) {
 	_, err := LoadConfig(LoadConfigOptions{})
 	// Python 注释明言：裸 TypeError 曾绕过 Click 的错误行打出 traceback
 	require.ErrorContains(t, err, "max_tokens must be an integer")
+}
+
+// ──────────────────────────── factory.go 核心 ────────────────────────────
+
+// TestDefaultSkillDirs_顺序与优先级 对齐 factory.py:49-55。
+func TestDefaultSkillDirs_顺序与优先级(t *testing.T) {
+	dirs := DefaultSkillDirsSnapshot()
+	require.Len(t, dirs, 4)
+	assert.Equal(t, "~/.openjiuwen/workspace/skills", dirs[0])
+	assert.Equal(t, "~/.claude/skills", dirs[1])
+	assert.Equal(t, "~/.codex/skills", dirs[2])
+	assert.Equal(t, "~/.jiuwenclaw/workspace/skills", dirs[3])
+	// 快照是副本，改快照不影响常量
+	dirs[0] = "x"
+	assert.Equal(t, "~/.openjiuwen/workspace/skills", DefaultSkillDirs[0])
+}
+
+// TestLoadMcpConfigs_正常读取 对齐 factory.py:334-396。
+func TestLoadMcpConfigs_正常读取(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	mcpDir := filepath.Join(home, ".openjiuwen")
+	require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(mcpDir, "mcp.json"), []byte(`{
+		"mcpServers": {
+			"fs": {"transport": "stdio", "command": "npx", "args": ["-y", "@mcp/fs"], "env": {"K": "V"}},
+			"api": {"url": "https://x/mcp", "auth_headers": {"H": "v"}},
+			"legacy": {"client_type": "sse", "server_path": "https://y"}
+		}
+	}`), 0o644))
+
+	configs := LoadMcpConfigs()
+	require.Len(t, configs, 3)
+	byName := map[string]map[string]any{}
+	for _, cfg := range configs {
+		byName[cfg["server_name"].(string)] = cfg
+	}
+	fs := byName["fs"]
+	assert.Equal(t, "stdio", fs["client_type"])
+	params := fs["params"].(map[string]any)
+	assert.Equal(t, "npx", params["command"])
+	assert.Equal(t, "https://x/mcp", byName["api"]["server_path"])
+	assert.Equal(t, "sse", byName["legacy"]["client_type"])
+}
+
+// TestLoadMcpConfigs_缺失与坏文件 静默返回空。
+func TestLoadMcpConfigs_缺失与坏文件(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	assert.Empty(t, LoadMcpConfigs())
+
+	mcpDir := filepath.Join(home, ".openjiuwen")
+	require.NoError(t, os.MkdirAll(mcpDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(mcpDir, "mcp.json"), []byte("{bad"), 0o644))
+	assert.Empty(t, LoadMcpConfigs())
+}
+
+// TestFilterNoneValues 剔除 nil。
+func TestFilterNoneValues(t *testing.T) {
+	filtered := filterNoneValues(map[string]any{"a": 1, "b": nil})
+	assert.Equal(t, map[string]any{"a": 1}, filtered)
+}
+
+// TestCreateBackend_远程未实现 对齐 factory.py:769-773。
+func TestCreateBackend_远程未实现(t *testing.T) {
+	_, err := CreateBackend(CLIConfig{ServerURL: "http://x"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported in the MVP")
+}
+
+// TestCreateBackend_本地模式 MVP 默认路径。
+func TestCreateBackend_本地模式(t *testing.T) {
+	backend, err := CreateBackend(CLIConfig{})
+	require.NoError(t, err)
+	require.NotEmpty(t, backend.SessionID())
+	assert.Contains(t, backend.SessionID(), "cli-")
+}
+
+// TestLocalBackend_空流 MVP 骨架的流为空。
+func TestLocalBackend_空流(t *testing.T) {
+	backend := NewLocalBackend(CLIConfig{})
+	require.NoError(t, backend.Start(context.Background()))
+	ch, err := backend.RunStreaming(context.Background(), "查询", nil)
+	require.NoError(t, err)
+	_, open := <-ch
+	assert.False(t, open, "骨架后端的流立即关闭")
+	require.NoError(t, backend.Stop(context.Background()))
+	require.NoError(t, backend.Abort(context.Background()))
 }
