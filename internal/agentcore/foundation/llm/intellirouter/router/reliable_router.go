@@ -1111,9 +1111,9 @@ func (r *ReliableRouter) routeMetadata(deployment *intelliroutercore.Deployment,
 			delete(metadata, k) // ← py:257 剔除 None
 		}
 	}
-	if r.BaseRouter.hookRouteMetadata != nil {
+	if r.BaseRouter.HookRouteMetadata != nil {
 		// Python: _RoutedModelRouterMixin._route_metadata（py:150-156）补 routed_model
-		metadata = r.BaseRouter.hookRouteMetadata(deployment, metadata)
+		metadata = r.BaseRouter.HookRouteMetadata(deployment, metadata)
 	}
 	return metadata
 }

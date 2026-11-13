@@ -132,6 +132,12 @@ func ResetFailureRecords() {
 	lastFailures = map[[2]string]*RouteFailure{}
 }
 
+// RoutingLoadFailure 读取进程级失败记录（23.4b 客户端事件桥测试消费）。
+// Python 侧无独立导出（_load_failure 包内私有），Go 导出仅供同链路测试。
+func RoutingLoadFailure(modelGroupID, deploymentID string) *RouteFailure {
+	return loadFailure(modelGroupID, deploymentID)
+}
+
 // RecordRoutingEvent 用路由器事件保持 deployment 失败记录同步。
 // REQUEST_RETRIED 携带路由器切离的失败；ALL_DEPLOYMENTS_EXHAUSTED 携带一次
 // 调用的最后失败；成功事件清记录，避免修好的 deployment 带着旧原因上报。
