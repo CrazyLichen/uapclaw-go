@@ -40,8 +40,14 @@ const logComponent = logger.ComponentAgentCore
 // providerHooks provider 定制钩子集合。
 //
 // 这是基座**向内**调用 provider 的唯一扩展面（对应 Python 的 ABC 抽象方法
-// 与可覆盖方法）。3 个 required 必须实现；8 个 optional 由
-// defaultProviderHooks 提供默认体。
+// 与可覆盖方法）。3 个 required 与 8 个 optional 全部由 provider 自己实现。
+//
+// ⚠️ 为什么没有「默认实现集合」可嵌入（spec Q3 实施修正 / 偏差 D14）：
+// optional 的某个方法（如 ListModels）与 SerializedTurnHarness 的公开方法
+// 同名，provider 同时嵌入基座与默认实现结构体会被判为歧义、编译失败。
+// 因此每个 provider 自己写满 8 个 optional；不需要的能力按
+// UnsupportedHarnessCapabilityError 报「不支持」，错误消息中的 provider 名
+// 由 provider 自己填（与 Python f-string 逐字一致）。
 type providerHooks interface {
 	// ── required（对应 base.py 的 @abstractmethod，3 个）──
 
@@ -92,20 +98,6 @@ type providerHooks interface {
 	// ApplyModelSelection 把活跃会话切到 selection。
 	// Python: base.py:258-265 _apply_model_selection
 	ApplyModelSelection(ctx context.Context, selection harnessprotocol.ModelSelection) error
-}
-
-// defaultProviderHooks providerHooks 的 8 个 optional 默认实现。
-//
-// provider 构造时嵌入它（值嵌入，非指针），只覆盖自己需要的 optional 方法。
-// 对应 Python 基类同名方法的默认体：报「不支持该能力」或 no-op。
-//
-// providerName 用于拼错误消息，必须与 Python 逐字一致
-// （`f"{self.card.name} does not support steering"`）。用字段而非反向引用
-// 基座的 Card()，是为了让本结构体不依赖基座类型——否则「默认实现集合」
-// 反依赖基座，形成类型层耦合（spec Q3）。
-type defaultProviderHooks struct {
-	// providerName provider 名（如 "claudecode"）
-	providerName string
 }
 
 // PendingTurn 一个已接受、等待或正在执行的输入。
@@ -342,73 +334,6 @@ func (t TurnTiming) DurationMs() int {
 // unixSeconds 当前 Unix 秒（浮点，与 Python time.time() 一致）。
 func unixSeconds() float64 {
 	return float64(time.Now().UnixNano()) / 1e9
-}
-
-// ──────────────────────────── defaultProviderHooks 方法 ────────────────────────────
-
-// ValidateContext 默认不追加校验。
-// Python: base.py:191-196 _validate_context（默认体是 card.validate_host）
-//
-// 基座的 validateContext 在调用本方法前已做 card.ValidateHost，
-// 故默认体为空；provider 需要追加 SDK 限制时覆盖本方法。
-func (d defaultProviderHooks) ValidateContext(
-	ctx context.Context, harnessContext harnessprotocol.HarnessContext) error {
-	return nil
-}
-
-// Steer 默认报「不支持转向」。
-// Python: base.py:210-218 _steer
-func (d defaultProviderHooks) Steer(ctx context.Context, turn *PendingTurn,
-	content harnessprotocol.HarnessInput, messageID string) error {
-	return &harnessprotocol.UnsupportedHarnessCapabilityError{
-		Msg: d.providerName + " does not support steering",
-	}
-}
-
-// InterruptTurn 默认报「不支持中止」。
-// Python: base.py:220-223 _interrupt_turn
-func (d defaultProviderHooks) InterruptTurn(
-	ctx context.Context, turn *PendingTurn, mode harnessprotocol.AbortMode) error {
-	return &harnessprotocol.UnsupportedHarnessCapabilityError{
-		Msg: d.providerName + " does not support turn abort",
-	}
-}
-
-// ListModels 默认报「不支持模型发现」。
-// Python: base.py:225-227 _list_models
-func (d defaultProviderHooks) ListModels(ctx context.Context) ([]harnessprotocol.ModelOption, error) {
-	return nil, &harnessprotocol.UnsupportedHarnessCapabilityError{
-		Msg: d.providerName + " does not support model discovery",
-	}
-}
-
-// AuthFallbackPayload 默认无回退模型。
-// Python: base.py:229-239 _auth_fallback_payload
-func (d defaultProviderHooks) AuthFallbackPayload() (harnessprotocol.JsonObject, bool) {
-	return nil, false
-}
-
-// ReconnectForAuth 默认报「没有认证回退」。
-// Python: base.py:241-252 _reconnect_for_auth
-func (d defaultProviderHooks) ReconnectForAuth(ctx context.Context, fallback bool) error {
-	return &harnessprotocol.HarnessProtocolError{
-		Msg: d.providerName + " has no authentication fallback",
-	}
-}
-
-// OnAuthEndpointChanged 默认 no-op。
-// Python: base.py:254-256 _on_auth_endpoint_changed
-func (d defaultProviderHooks) OnAuthEndpointChanged(ctx context.Context, fallback bool) error {
-	return nil
-}
-
-// ApplyModelSelection 默认报「不支持模型选择」。
-// Python: base.py:258-265 _apply_model_selection
-func (d defaultProviderHooks) ApplyModelSelection(
-	ctx context.Context, selection harnessprotocol.ModelSelection) error {
-	return &harnessprotocol.UnsupportedHarnessCapabilityError{
-		Msg: d.providerName + " does not support model selection",
-	}
 }
 
 // ──────────────────────────── 导出函数：只读面 ────────────────────────────

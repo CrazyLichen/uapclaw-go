@@ -633,60 +633,6 @@ func TestSerializedTurnHarness_Stop后Send与Start均被拒(t *testing.T) {
 	require.NoError(t, harness.Stop(ctx))
 }
 
-// ──────────────────────────── defaultProviderHooks 默认体 ────────────────────────────
-
-// TestDefaultProviderHooks_八个默认体 逐条验证默认行为与错误消息字面量。
-//
-// 错误消息必须与 Python f-string 逐字一致（base.py:218/223/227/252/265）。
-func TestDefaultProviderHooks_八个默认体(t *testing.T) {
-	hooks := defaultProviderHooks{providerName: "claudecode"}
-	ctx := context.Background()
-	turn := &PendingTurn{MessageID: "m1", TurnID: "t1"}
-	input := harnessprotocol.HarnessInput{}
-
-	t.Run("ValidateContext 默认通过", func(t *testing.T) {
-		assert.NoError(t, hooks.ValidateContext(ctx, harnessprotocol.HarnessContext{}))
-	})
-	t.Run("Steer 不支持转向", func(t *testing.T) {
-		err := hooks.Steer(ctx, turn, input, "m2")
-		var unsupported *harnessprotocol.UnsupportedHarnessCapabilityError
-		require.ErrorAs(t, err, &unsupported)
-		assert.Equal(t, "claudecode does not support steering", unsupported.Msg)
-	})
-	t.Run("InterruptTurn 不支持中止", func(t *testing.T) {
-		err := hooks.InterruptTurn(ctx, turn, harnessprotocol.AbortModeGraceful)
-		var unsupported *harnessprotocol.UnsupportedHarnessCapabilityError
-		require.ErrorAs(t, err, &unsupported)
-		assert.Equal(t, "claudecode does not support turn abort", unsupported.Msg)
-	})
-	t.Run("ListModels 不支持模型发现", func(t *testing.T) {
-		_, err := hooks.ListModels(ctx)
-		var unsupported *harnessprotocol.UnsupportedHarnessCapabilityError
-		require.ErrorAs(t, err, &unsupported)
-		assert.Equal(t, "claudecode does not support model discovery", unsupported.Msg)
-	})
-	t.Run("AuthFallbackPayload 无回退", func(t *testing.T) {
-		payload, ok := hooks.AuthFallbackPayload()
-		assert.False(t, ok)
-		assert.Nil(t, payload)
-	})
-	t.Run("ReconnectForAuth 无回退", func(t *testing.T) {
-		err := hooks.ReconnectForAuth(ctx, true)
-		var protoErr *harnessprotocol.HarnessProtocolError
-		require.ErrorAs(t, err, &protoErr)
-		assert.Equal(t, "claudecode has no authentication fallback", protoErr.Msg)
-	})
-	t.Run("OnAuthEndpointChanged no-op", func(t *testing.T) {
-		assert.NoError(t, hooks.OnAuthEndpointChanged(ctx, true))
-	})
-	t.Run("ApplyModelSelection 不支持", func(t *testing.T) {
-		err := hooks.ApplyModelSelection(ctx, harnessprotocol.ModelSelection{})
-		var unsupported *harnessprotocol.UnsupportedHarnessCapabilityError
-		require.ErrorAs(t, err, &unsupported)
-		assert.Equal(t, "claudecode does not support model selection", unsupported.Msg)
-	})
-}
-
 // ──────────────────────────── 只读访问器 ────────────────────────────
 
 // TestSerializedTurnHarness_只读访问器 五个访问器在启动前后的取值。
