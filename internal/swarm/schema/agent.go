@@ -85,6 +85,10 @@ type AgentResponseChunk struct {
 	Payload map[string]any `json:"payload,omitempty"`
 	// IsComplete 是否为最后一个片段
 	IsComplete bool `json:"is_complete"`
+	// RuntimeCompletion 完成态标记（"completed"/"suspended"/""）。
+	// Python: external_harness_helpers.py _response_chunk 与
+	// interface_deep.py _stream_completion_state 同款；默认空串。
+	RuntimeCompletion string `json:"runtime_completion,omitempty"`
 }
 
 // AgentRequestOption Agent 请求可选配置函数。
