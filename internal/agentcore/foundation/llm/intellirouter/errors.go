@@ -287,6 +287,20 @@ func NewDeploymentServerError(deploymentID string, statusCode int, responseBody 
 	}}
 }
 
+// NewDeploymentGenericError 构造基类部署错误（非专属类别的 HTTP 错误）。
+// ← base_router.py:217-224 直接 raise DeploymentError(message=..., details=...)
+func NewDeploymentGenericError(deploymentID string, statusCode int, responseBody string) error {
+	return &IRBase{
+		message: fmt.Sprintf("Deployment '%s' returned HTTP %d", deploymentID, statusCode),
+		details: map[string]any{
+			"deployment_id": deploymentID,
+			"status_code":   statusCode,
+			"response_body": responseBody,
+		},
+		kinds: []errorKind{kindDeploymentError, kindIntelliRouterError},
+	}
+}
+
 // NewDeploymentNetworkError 构造网络连接错误。← exceptions.py:155-167
 func NewDeploymentNetworkError(deploymentID, reason string) *DeploymentNetworkError {
 	// deployment_id 传空串时不渲染 "Deployment ''" 前缀，由 reason 自足表达 ← py:162-164
@@ -370,6 +384,11 @@ func StatusCodeOf(err error) int {
 	return 500
 }
 
+// NewRouterError 构造路由器基础错误。← exceptions.py:52 RouterError（base_router.py:437 直接 raise）
+func NewRouterError(strategy, message string) *StrategyError {
+	return NewStrategyError(strategy, message)
+}
+
 // IsRouterError 判型：路由器错误。← exceptions.py:52 RouterError
 func IsRouterError(err error) bool { return hasKind(err, kindRouterError) }
 
@@ -387,6 +406,30 @@ func IsConfigError(err error) bool { return hasKind(err, kindConfigError) }
 
 // IsIntelliRouterError 判型：基类。← exceptions.py:30 IntelliRouterError
 func IsIntelliRouterError(err error) bool { return hasKind(err, kindIntelliRouterError) }
+
+// IsDeploymentNetworkError 判型：网络错误。← exceptions.py:155
+func IsDeploymentNetworkError(err error) bool { return hasKind(err, kindDeploymentNetworkError) }
+
+// IsDeploymentRateLimitError 判型：限流。← exceptions.py:134
+func IsDeploymentRateLimitError(err error) bool { return hasKind(err, kindDeploymentRateLimitError) }
+
+// IsDeploymentServerError 判型：服务器错误。← exceptions.py:146
+func IsDeploymentServerError(err error) bool { return hasKind(err, kindDeploymentServerError) }
+
+// IsDeploymentTimeoutError 判型：超时。← exceptions.py:116
+func IsDeploymentTimeoutError(err error) bool { return hasKind(err, kindDeploymentTimeoutError) }
+
+// AsIRBase 导出判型提取（router 层 isRequestSideError 读 details 用）。
+func AsIRBase(err error, target **IRBase) bool { return asIRBase(err, target) }
+
+// ErrorTypeName 错误种类名（fallbackReasonFromError 的类名口径 ← py:291 type(error).__name__）。
+func ErrorTypeName(err error) string {
+	var base *IRBase
+	if !asIRBase(err, &base) || base == nil {
+		return "Exception"
+	}
+	return kindName(base.kinds[0])
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
