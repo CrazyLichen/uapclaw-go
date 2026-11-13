@@ -87,14 +87,20 @@ func (s *CLISuite) TestRunJSON_未配模型() {
 
 	s.Equal(1, res.exitCode, "运行失败应退出 1")
 	records := decodeJSONLines(s.T(), res.stdout)
-	s.Require().Len(records, 2, "应输出 event + result 两条记录")
+	// 20.4 起 --run-json 走 unattended DuplexController：consume 先发
+	// run.started 通知（Python machine_entry.py:171 同款），记录数为 3。
+	s.Require().Len(records, 3, "应输出 run.started + chat.error + result 三条记录")
 
 	event := records[0]
 	s.Equal("event", event["type"])
-	s.Equal("chat.error", event["event_type"], "未配模型应产出 chat.error")
-	s.Contains(dumpJSON(event), "模型未正确配置", "事件应带模型未配置的说明")
+	s.Equal("run.started", event["event_type"], "unattended consume 先发 run.started")
 
-	result := records[1]
+	errEvent := records[1]
+	s.Equal("event", errEvent["type"])
+	s.Equal("chat.error", errEvent["event_type"], "未配模型应产出 chat.error")
+	s.Contains(dumpJSON(errEvent), "模型未正确配置", "事件应带模型未配置的说明")
+
+	result := records[2]
 	s.Equal("result", result["type"])
 	s.Equal("failed", result["status"])
 	s.Equal(float64(1), result["exit_code"], "result 的 exit_code 应与进程退出码一致")

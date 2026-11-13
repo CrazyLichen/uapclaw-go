@@ -1,6 +1,7 @@
 package processcli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -347,4 +348,75 @@ func TestClassifyFailure_超时与取消优先(t *testing.T) {
 	cancelRun.classifyFailure(context.Canceled, writer)
 	require.Equal(t, "CANCELLED", cancelRun.err.Code)
 	require.Equal(t, 130, cancelRun.exitCode)
+}
+
+// TestRunMachine_cleanupControlSteps control 非 nil 时 cleanup 走
+// control_input / control_streams 两步。
+// Python: machine.py:457-458, 472-473。
+func TestRunMachine_cleanupControlSteps(t *testing.T) {
+	out := &bytes.Buffer{}
+	writer, err := NewOneShotWriter(out, "r1")
+	require.NoError(t, err)
+	ctrl := NewDuplexController(nil, writer, true)
+	run := &MachineRun{
+		writer:  writer,
+		control: ctrl,
+		client:  nil, // client 为 nil 时只记录清理错误（Python :459-464）
+	}
+	run.Cleanup(context.Background())
+	// control_input 步骤成功执行（无错误不留 cleanup 记录）
+	require.True(t, ctrl.stoppingInput)
+}
+
+// TestRunMachine_cleanupControlStreams client 非 nil 时 control_streams 也执行。
+// Python: machine.py:472-473。
+func TestRunMachine_cleanupControlStreams(t *testing.T) {
+	out := &bytes.Buffer{}
+	writer, err := NewOneShotWriter(out, "r1")
+	require.NoError(t, err)
+	sid := "s1"
+	writer.SessionID = &sid
+	ctrl := NewDuplexController(nil, writer, true)
+	client := NewInProcessRuntimeClient(nil)
+	run := &MachineRun{
+		writer:  writer,
+		control: ctrl,
+		client:  client,
+	}
+	run.Cleanup(context.Background())
+	require.True(t, ctrl.stoppingStreams)
+}
+
+// TestRunMachine_control消费路径 control 非 nil 时走 DuplexController.Consume。
+// Python: machine.py:364-372。
+func TestRunMachine_control消费路径(t *testing.T) {
+	out := &bytes.Buffer{}
+	writer, err := NewOneShotWriter(out, "r1")
+	require.NoError(t, err)
+	sid := "s1"
+	writer.SessionID = &sid
+	ctrl := NewDuplexController(nil, writer, true)
+	sidReq := "s1"
+	request := &schema.AgentRequest{RequestID: "r1", ChannelID: "process_cli", SessionID: &sidReq}
+	run := &MachineRun{
+		writer:  writer,
+		summary: NewRunSummary(),
+		control: ctrl,
+		client:  NewInProcessRuntimeClient(nil),
+		request: request,
+	}
+	emit := []*swruntime.RuntimeEvent{
+		{Payload: map[string]any{"event_type": "chat.final", "content": "done"}, OK: true, IsComplete: true},
+	}
+	idx := 0
+	streamFn := streamDriver(func(handler func(*swruntime.RuntimeEvent) bool) error {
+		if idx < len(emit) {
+			handler(emit[idx])
+			idx++
+		}
+		return nil
+	})
+	completed, consumeErr := run.executeConsumeStep(context.Background(), streamFn)
+	require.NoError(t, consumeErr)
+	require.True(t, completed)
 }

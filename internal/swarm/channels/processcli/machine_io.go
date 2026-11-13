@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sync"
 	"os"
 	"strings"
 
@@ -44,6 +45,10 @@ type OutputError struct {
 // Runtime 事件自身的身份永远不替换外部命令身份。
 // 一旦写出失败，broken 禁止后续写入或重试——记录可能已部分投递。
 type OneShotWriter struct {
+	// writeMu 写出互斥。Python 由 asyncio 事件循环串行化全部写出
+	// （consume/notice/observe 同一线程）；Go 侧 duplex 的泵/控制/
+	// 宿主工具 goroutine 并发写，须显式加锁保序。
+	writeMu sync.Mutex
 	// stdout 输出目标
 	stdout io.Writer
 	// RequestID 外部命令身份（已 strip）
@@ -279,6 +284,10 @@ func NewOneShotWriter(stdout io.Writer, requestID string) (*OneShotWriter, error
 // WriteEvent 渲染一条观测，不改动 Runtime 拥有的数据。
 // Python: machine_io.py:236-253 write_event
 func (w *OneShotWriter) WriteEvent(event *protocol.OneShotEvent) error {
+	// 写出互斥：duplex 泵/控制/宿主工具 goroutine 并发到达
+	// （Python 由事件循环串行化同段代码）。
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
 	// Python: :239 self._check_writable()
 	if err := w.checkWritable(); err != nil {
 		return err
@@ -306,6 +315,8 @@ func (w *OneShotWriter) WriteEvent(event *protocol.OneShotEvent) error {
 // WriteResult 用本命令的序号与身份渲染终态。
 // Python: machine_io.py:255-266 write_result
 func (w *OneShotWriter) WriteResult(result *protocol.OneShotRunResult) error {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
 	// Python: :258 self._check_writable()
 	if err := w.checkWritable(); err != nil {
 		return err
@@ -487,6 +498,7 @@ func (w *OneShotWriter) checkWritable() error {
 }
 
 // write 编码并写出单条记录，成功后序号递增。
+// 调用方（WriteEvent/WriteResult）必须已持有 writeMu。
 // Python: machine_io.py:224-234 _write
 func (w *OneShotWriter) write(record any) error {
 	// Python: :225 line = encode_jsonl_record(record)

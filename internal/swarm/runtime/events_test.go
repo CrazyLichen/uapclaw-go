@@ -132,3 +132,25 @@ func TestIsTerminalErrorEvent_nil(t *testing.T) {
 	require.False(t, IsTerminalErrorEvent(nil))
 	require.False(t, IsTerminalErrorEvent(&RuntimeEvent{}))
 }
+
+// TestFromAgentResponseChunk_RuntimeCompletion透传 验证 runtime_completion
+// 经 chunk → RuntimeEvent 透传（默认空串）。Python: events.py:23/:75。
+func TestFromAgentResponseChunk_RuntimeCompletion透传(t *testing.T) {
+	// 默认无标记
+	ev := FromAgentResponseChunk(&schema.AgentResponseChunk{
+		Payload: map[string]any{"event_type": "chat.delta"}, IsComplete: false,
+	})
+	require.Empty(t, ev.RuntimeCompletion)
+
+	// chunk 携带标记（Python external_harness_helpers.py:_response_chunk 同款）
+	ev2 := FromAgentResponseChunk(&schema.AgentResponseChunk{
+		Payload:           map[string]any{"event_type": "chat.ask_user_question"},
+		IsComplete:        true,
+		RuntimeCompletion: "suspended",
+	})
+	require.Equal(t, "suspended", ev2.RuntimeCompletion)
+
+	// 非流式响应不携带该字段（Python AgentResponse 无 runtime_completion）
+	ev3 := FromAgentResponse(&schema.AgentResponse{OK: true})
+	require.Empty(t, ev3.RuntimeCompletion)
+}

@@ -27,6 +27,12 @@
 //	├── query_entry.go              # --query-json 外层入口
 //	├── machine_entry.go            # 一次性入口
 //	├── machine.go                  # 编排核心
+//	├── duplex_protocol.go          # 控制帧解码 DuplexControl/DecodeControl（duplex_protocol.py）
+//	├── duplex_input.go              # 有界行读取器 DuplexLineReader（duplex_input.py）
+//	├── duplex_input_unix.go         # POSIX 描述符读源（select 探测）
+//	├── duplex_input_select.go       # !windows 管道工厂占位
+//	├── duplex_input_windows.go      # Windows 管道读源（PeekNamedPipe）
+//	├── duplex_control.go            # 双工路由控制器 DuplexController（duplex_control.py）
 //	├── main.go                     # 参数层（五分支分派）
 //	├── diagnostics.go              # 诊断流捕获（跨平台主体）
 //	├── diagnostics_unix.go         # POSIX dup 实现

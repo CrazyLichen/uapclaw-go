@@ -19,6 +19,9 @@ type RuntimeEvent struct {
 	IsComplete bool
 	// OK 执行是否成功
 	OK bool
+	// RuntimeCompletion 完成态标记（"completed"/"suspended"/""）。
+	// Python: runtime/events.py:23 runtime_completion；duplex_control 完成判定依赖。
+	RuntimeCompletion string
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -85,11 +88,12 @@ func FromAgentResponseChunk(chunk *schema.AgentResponseChunk) *RuntimeEvent {
 		return &RuntimeEvent{OK: true, IsComplete: true}
 	}
 	return &RuntimeEvent{
-		RequestID:  chunk.RequestID,
-		ChannelID:  chunk.ChannelID,
-		Payload:    chunk.Payload,
-		IsComplete: chunk.IsComplete,
-		OK:         true,
+		RequestID:         chunk.RequestID,
+		ChannelID:         chunk.ChannelID,
+		Payload:           chunk.Payload,
+		IsComplete:        chunk.IsComplete,
+		OK:                true,
+		RuntimeCompletion: chunk.RuntimeCompletion,
 	}
 }
 
