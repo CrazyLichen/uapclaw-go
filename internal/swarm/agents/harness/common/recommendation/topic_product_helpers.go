@@ -1061,3 +1061,590 @@ func copyMapAny(source map[string]any) map[string]any {
 	}
 	return result
 }
+
+// ──────────────────────────── ⤴️ 31c 契约切片 B：摘要/grounding 辅助校验（topic_product.py:921-950/:961-1109/:1885-2022/:2412-2425/:3392-3458/:1578-1620） ────────────────────────────
+
+// receiptFields / bindingFields / publicationDateProvenanceFields
+// 字段集（topic_product.py:243-256/:254-262/:434-443）。
+var (
+	receiptFields = []string{"receipt_version", "binding", "input_snapshot_id",
+		"request_id", "score_semantics", "output_status", "fallback_reason"}
+	bindingFields = []string{"component_id", "contract_version", "provider_id",
+		"provider_version", "config_version"}
+	publicationDateProvenanceFields = []string{"source_type", "source_field",
+		"raw_value", "search_provider_id", "search_receipt_id", "search_result_url"}
+)
+
+// UniqueNonEmptyStrings 全部非空且唯一（topic_product.py:2412-2420）。
+func UniqueNonEmptyStrings(value any) bool {
+	items, isList := value.([]any)
+	if !isList {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, item := range items {
+		if !nonEmptyStr(item) {
+			return false
+		}
+		text := pyStr(item)
+		if seen[text] {
+			return false
+		}
+		seen[text] = true
+	}
+	return true
+}
+
+// ValidNullableFiniteNumber 可空有限数（topic_product.py:2421-2426）。
+func ValidNullableFiniteNumber(value any) bool {
+	if value == nil {
+		return true
+	}
+	return finiteTimestamp(value)
+}
+
+// ValidReceipt 组件小票校验（topic_product.py:3392-3417 _valid_receipt）。
+func ValidReceipt(receipt any, componentID, inputSnapshotID string) bool {
+	root, isMap := receipt.(map[string]any)
+	if !isMap || !mapKeysEqual(root, receiptFields) {
+		return false
+	}
+	binding, bindingIsMap := root["binding"].(map[string]any)
+	if !bindingIsMap || !mapKeysEqual(binding, bindingFields) ||
+		pyStr(binding["component_id"]) != componentID {
+		return false
+	}
+	for _, field := range []string{"contract_version", "provider_id", "provider_version", "config_version"} {
+		if !nonEmptyStr(binding[field]) {
+			return false
+		}
+	}
+	return pyStr(root["input_snapshot_id"]) == inputSnapshotID &&
+		nonEmptyStr(root["receipt_version"]) && nonEmptyStr(root["request_id"]) &&
+		pyStr(root["output_status"]) == "success" &&
+		pyStr(root["score_semantics"]) == "uncalibrated_api_proxy" &&
+		root["fallback_reason"] == nil
+}
+
+// ValidReceipts 组件小票表校验（topic_product.py:3419-3457 _valid_receipts；
+// global 分支按 corpus_lineage/host_evidence/news_lead 裁剪期望集）。
+func ValidReceipts(receipts any, inputSnapshotID, contextScope, category string,
+	corpusLineage, hostEvidence, newsLead bool) bool {
+	root, isMap := receipts.(map[string]any)
+	if !isMap {
+		return false
+	}
+	expected := map[string]bool{}
+	for id := range TerminalComponentIds {
+		expected[id] = true
+	}
+	if contextScope == GlobalNewChatScope {
+		if !corpusLineage {
+			delete(expected, "pa_bridge_fixed_retriever")
+		}
+		if hostEvidence {
+			delete(expected, "verbatim_web_evidence")
+		}
+		if newsLead {
+			// 新闻卡领衔池但不在多样性判定中占位
+			delete(expected, "diversity_scorer")
+		}
+	} else {
+		expected = map[string]bool{}
+		base := TerminalComponentIds
+		if category == "project_continuation" {
+			for id := range base {
+				if id != "pa_bridge_fixed_retriever" {
+					expected[id] = true
+				}
+			}
+		} else {
+			for id := range base {
+				if id != "pa_bridge_fixed_retriever" && id != "verbatim_web_evidence" {
+					expected[id] = true
+				}
+			}
+		}
+	}
+	if len(root) != len(expected) {
+		return false
+	}
+	for componentID := range root {
+		if !expected[componentID] {
+			return false
+		}
+		if !ValidReceipt(root[componentID], componentID, inputSnapshotID) {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidSessionSummaryArtifacts 摘要工件表校验
+// （topic_product.py:921-950 _valid_session_summary_artifacts）。
+func ValidSessionSummaryArtifacts(manifest map[string]any) bool {
+	raw, isList := manifest["session_summary_artifacts"].([]any)
+	if !isList {
+		return false
+	}
+	var summaries []*SessionSummaryArtifact
+	for _, item := range raw {
+		summary, err := SessionSummaryArtifactFromPayload(item)
+		if err != nil {
+			return false
+		}
+		summaries = append(summaries, summary)
+	}
+	summaryIDs := map[string]bool{}
+	sessionIDs := map[string]bool{}
+	for _, summary := range summaries {
+		if summaryIDs[summary.SessionSummaryID] || sessionIDs[summary.SessionID] {
+			return false
+		}
+		summaryIDs[summary.SessionSummaryID] = true
+		sessionIDs[summary.SessionID] = true
+	}
+	contextScope := pyStr(manifest["context_scope"])
+	for _, summary := range summaries {
+		prefix := fmt.Sprintf("summary:%s:", summary.SessionID)
+		if summary.ContextScope != contextScope ||
+			!strings.HasPrefix(summary.SessionSummaryID, prefix) {
+			return false
+		}
+		digest := strings.TrimPrefix(summary.SessionSummaryID, prefix)
+		if utf8.RuneCountInString(digest) != 64 {
+			return false
+		}
+		for _, r := range digest {
+			isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')
+			if !isHex {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// ValidSessionSummaryCoverageReceipt 摘要覆盖小票校验
+// （topic_product.py:961-1030；allow_legacy 对齐上游参数）。
+func ValidSessionSummaryCoverageReceipt(manifest map[string]any, allowLegacySummaryCoverage bool) bool {
+	receipt, isMap := manifest["session_summary_coverage_receipt"].(map[string]any)
+	if !isMap {
+		return false
+	}
+	rawArtifacts, artifactsIsList := manifest["session_summary_artifacts"].([]any)
+	if pyStr(receipt["input_snapshot_id"]) != pyStr(manifest["generation_input_snapshot_id"]) {
+		return false
+	}
+	if pyStr(receipt["context_scope"]) != pyStr(manifest["context_scope"]) {
+		return false
+	}
+	if anyListOf(receipt["sessions"]) == nil {
+		return false
+	}
+	if !artifactsIsList {
+		return false
+	}
+	schemaVersion := pyStr(receipt["schema_version"])
+	switch schemaVersion {
+	case LegacySessionSummaryCoverageReceiptVersion:
+		if !allowLegacySummaryCoverage {
+			return false
+		}
+		if !mapKeysEqual(receipt, []string{"schema_version", "input_snapshot_id", "context_scope", "sessions"}) {
+			return false
+		}
+		if manifest["session_summary_materialization_receipt"] != nil {
+			return false
+		}
+	case SessionSummaryCoverageReceiptVersion:
+		if !mapKeysEqual(receipt, []string{"schema_version", "input_snapshot_id", "context_scope", "summary_config_version", "sessions"}) ||
+			!nonEmptyStr(receipt["summary_config_version"]) {
+			return false
+		}
+	default:
+		return false
+	}
+	var summaries []*SessionSummaryArtifact
+	for _, item := range rawArtifacts {
+		summary, err := SessionSummaryArtifactFromPayload(item)
+		if err != nil {
+			return false
+		}
+		summaries = append(summaries, summary)
+	}
+	for _, summary := range summaries {
+		if schemaVersion == SessionSummaryCoverageReceiptVersion &&
+			summary.SummaryConfigVersion != pyStr(receipt["summary_config_version"]) {
+			return false
+		}
+	}
+	expected := make([]any, 0, len(summaries))
+	for _, summary := range summaries {
+		var exclusionReason any
+		if !summary.NaturalRevisitEligible() {
+			exclusionReason = "non_natural_or_assisted_input"
+		}
+		expected = append(expected, map[string]any{
+			"session_id":           summary.SessionID,
+			"session_summary_id":   summary.SessionSummaryID,
+			"input_origin":         summary.InputOrigin,
+			"assistance_origin":    summary.AssistanceOrigin,
+			"rid_eligible":         summary.NaturalRevisitEligible(),
+			"rid_exclusion_reason": exclusionReason,
+		})
+	}
+	return anyEqual(receipt["sessions"], expected)
+}
+
+// ValidSessionSummaryMaterializationReceipt 摘要物化小票校验
+// （topic_product.py:1032-1109）。
+func ValidSessionSummaryMaterializationReceipt(manifest map[string]any) bool {
+	receiptValue := manifest["session_summary_materialization_receipt"]
+	if receiptValue == nil {
+		return true
+	}
+	receipt, isMap := receiptValue.(map[string]any)
+	if !isMap {
+		return false
+	}
+	rawArtifacts, artifactsIsList := manifest["session_summary_artifacts"].([]any)
+	if !mapKeysEqual(receipt, []string{"schema_version", "input_snapshot_id",
+		"context_scope", "summary_config_version",
+		"generated_session_summary_ids", "reused_session_summary_ids"}) {
+		return false
+	}
+	if pyStr(receipt["schema_version"]) != SessionSummaryMaterializationReceiptVersion {
+		return false
+	}
+	if pyStr(receipt["input_snapshot_id"]) != pyStr(manifest["generation_input_snapshot_id"]) {
+		return false
+	}
+	if pyStr(receipt["context_scope"]) != pyStr(manifest["context_scope"]) {
+		return false
+	}
+	if !nonEmptyStr(receipt["summary_config_version"]) {
+		return false
+	}
+	coverage := mapAnyOf(manifest["session_summary_coverage_receipt"])
+	if pyStr(receipt["summary_config_version"]) != pyStr(coverage["summary_config_version"]) {
+		return false
+	}
+	if !artifactsIsList {
+		return false
+	}
+	var artifactIDs []string
+	for _, item := range rawArtifacts {
+		summary, err := SessionSummaryArtifactFromPayload(item)
+		if err != nil {
+			return false
+		}
+		if summary.SummaryConfigVersion != pyStr(receipt["summary_config_version"]) {
+			return false
+		}
+		artifactIDs = append(artifactIDs, summary.SessionSummaryID)
+	}
+	generated, genIsList := receipt["generated_session_summary_ids"].([]any)
+	reused, reuseIsList := receipt["reused_session_summary_ids"].([]any)
+	if !genIsList || !reuseIsList {
+		return false
+	}
+	genSet := map[string]bool{}
+	for _, id := range generated {
+		if !nonEmptyStr(id) || genSet[pyStr(id)] {
+			return false
+		}
+		genSet[pyStr(id)] = true
+	}
+	reuseSet := map[string]bool{}
+	for _, id := range reused {
+		if !nonEmptyStr(id) || reuseSet[pyStr(id)] {
+			return false
+		}
+		reuseSet[pyStr(id)] = true
+	}
+	for id := range genSet {
+		if reuseSet[id] {
+			return false
+		}
+	}
+	artifactIDSet := map[string]bool{}
+	for _, id := range artifactIDs {
+		artifactIDSet[id] = true
+	}
+	if len(genSet)+len(reuseSet) != len(artifactIDs) {
+		return false
+	}
+	for id := range genSet {
+		if !artifactIDSet[id] {
+			return false
+		}
+	}
+	for id := range reuseSet {
+		if !artifactIDSet[id] {
+			return false
+		}
+	}
+	// 顺序必须与工件表一致
+	var generatedInOrder []string
+	var reusedInOrder []string
+	for _, id := range artifactIDs {
+		if genSet[id] {
+			generatedInOrder = append(generatedInOrder, id)
+		}
+		if reuseSet[id] {
+			reusedInOrder = append(reusedInOrder, id)
+		}
+	}
+	if !anyEqual(receipt["generated_session_summary_ids"], stringsToAny(generatedInOrder)) {
+		return false
+	}
+	return anyEqual(receipt["reused_session_summary_ids"], stringsToAny(reusedInOrder))
+}
+
+// ValidGroundingPublicationDateProvenance 发布日期溯源校验
+// （topic_product.py:1885-1939；linked_document_metadata 分支经
+// topic_retrieval.valid_linked_date_page，Go 已有 ValidLinkedDatePage）。
+func ValidGroundingPublicationDateProvenance(value any, sourceURL string, publishedAt any) bool {
+	if value == nil {
+		return true
+	}
+	root, isMap := value.(map[string]any)
+	if isMap && pyStr(root["source_type"]) == "linked_document_metadata" {
+		if publishedAt == nil {
+			return false
+		}
+		expected := append(append([]string{}, publicationDateProvenanceFields...), "linked_page")
+		if !mapKeysEqual(root, expected) {
+			return false
+		}
+		for _, key := range []string{"source_field", "raw_value"} {
+			if !nonEmptyStr(root[key]) {
+				return false
+			}
+		}
+		return ValidLinkedDatePage(root["linked_page"], sourceURL)
+	}
+	if publishedAt == nil {
+		return false
+	}
+	if !isMap {
+		return false
+	}
+	// set(value) - {listed_at, page_published_at, api_url} == 基础六字段
+	extra := map[string]bool{"listed_at": true, "page_published_at": true, "api_url": true}
+	count := 0
+	for key := range root {
+		if !extra[key] {
+			count++
+		}
+	}
+	if count != len(publicationDateProvenanceFields) {
+		return false
+	}
+	for _, field := range publicationDateProvenanceFields {
+		if _, present := root[field]; !present {
+			return false
+		}
+	}
+	if _, present := root["listed_at"]; present &&
+		(pyStr(root["source_type"]) != "page_explicit_metadata" || !nonEmptyStr(root["listed_at"])) {
+		return false
+	}
+	if _, present := root["api_url"]; present &&
+		(pyStr(root["source_type"]) != "page_explicit_metadata" || !ValidHTTPURL(root["api_url"])) {
+		return false
+	}
+	if _, present := root["page_published_at"]; present &&
+		(pyStr(root["source_type"]) != "structured_search_result" || !nonEmptyStr(root["page_published_at"])) {
+		return false
+	}
+	for _, field := range []string{"source_type", "source_field", "raw_value"} {
+		if !nonEmptyStr(root[field]) {
+			return false
+		}
+	}
+	searchProviderID := root["search_provider_id"]
+	searchReceiptID := root["search_receipt_id"]
+	searchResultURL := root["search_result_url"]
+	if pyStr(root["source_type"]) == "page_explicit_metadata" {
+		return searchProviderID == nil && searchReceiptID == nil && searchResultURL == nil
+	}
+	if pyStr(root["source_type"]) != "structured_search_result" {
+		return false
+	}
+	return nonEmptyStr(searchProviderID) && nonEmptyStr(searchReceiptID) &&
+		nonEmptyStr(searchResultURL) && pyStr(searchResultURL) == sourceURL &&
+		ValidHTTPURL(searchResultURL)
+}
+
+// ValidGroundingComponentReceipt grounding 组件小票校验
+// （topic_product.py:1941-1979；成功走 ValidReceipt，失败走显式契约）。
+func ValidGroundingComponentReceipt(receipt any, inputSnapshotID, requestID,
+	auditStatus string, failureReason any) bool {
+	if auditStatus == "success" {
+		root, isMap := receipt.(map[string]any)
+		return isMap && ValidReceipt(receipt, "verbatim_web_evidence", inputSnapshotID) &&
+			pyStr(root["request_id"]) == requestID
+	}
+	root, isMap := receipt.(map[string]any)
+	if !isMap {
+		return false
+	}
+	if !mapKeysEqual(root, receiptFields) {
+		return false
+	}
+	if pyStr(root["input_snapshot_id"]) != inputSnapshotID {
+		return false
+	}
+	if pyStr(root["request_id"]) != requestID {
+		return false
+	}
+	if !nonEmptyStr(root["receipt_version"]) {
+		return false
+	}
+	if pyStr(root["score_semantics"]) != "not_scored" {
+		return false
+	}
+	if pyStr(root["output_status"]) != "failed" {
+		return false
+	}
+	if !anyEqual(root["fallback_reason"], failureReason) {
+		return false
+	}
+	binding, bindingIsMap := root["binding"].(map[string]any)
+	return bindingIsMap && mapKeysEqual(binding, bindingFields) &&
+		pyStr(binding["component_id"]) == "verbatim_web_evidence" &&
+		nonEmptyStr(binding["provider_id"]) && nonEmptyStr(binding["provider_version"])
+}
+
+// GroundingSearchResultUrls 小票 → 结果 URL 表
+// （topic_product.py:1981-2021 _grounding_search_result_urls）。
+func GroundingSearchResultUrls(receipt any, requestedQuery, providerID string) []string {
+	root, isMap := receipt.(map[string]any)
+	if !isMap || hasSecretField(root) {
+		return nil
+	}
+	version := pyStr(root["receipt_version"])
+	nativeVersions := map[string]bool{
+		OpenjiuwenNativeSearchReceiptVersion:       true,
+		LegacyOpenjiuwenNativeSearchReceiptVersion: true,
+		NewsFeedReceiptVersion:                     true,
+	}
+	if nativeVersions[version] {
+		if !ValidSearchReceipt(receipt) {
+			return nil
+		}
+		if pyStr(root["requested_query"]) != requestedQuery ||
+			pyStr(root["provider_id"]) != providerID {
+			return nil
+		}
+		var urls []string
+		for _, urlValue := range anyListOf(root["result_urls"]) {
+			urls = append(urls, pyStr(urlValue))
+		}
+		return urls
+	}
+	if version != ArkWebSearchReceiptVersion {
+		return nil
+	}
+	// Ark 分支多一个 result_urls 字段
+	arkFields := append(append([]string{}, arkSearchReceiptFields...), "result_urls")
+	if !mapKeysEqual(root, arkFields) {
+		return nil
+	}
+	resultURLs, isList := root["result_urls"].([]any)
+	if !isList {
+		return nil
+	}
+	baseReceipt := map[string]any{}
+	for key, value := range root {
+		baseReceipt[key] = value
+	}
+	delete(baseReceipt, "result_urls")
+	if !ValidSearchReceipt(baseReceipt) {
+		return nil
+	}
+	if pyStr(root["requested_query"]) != requestedQuery ||
+		pyStr(root["provider_id"]) != providerID {
+		return nil
+	}
+	seen := map[string]bool{}
+	var urls []string
+	for _, urlValue := range resultURLs {
+		text := pyStr(urlValue)
+		if seen[text] || !ValidHTTPURL(text) {
+			return nil
+		}
+		seen[text] = true
+		urls = append(urls, text)
+	}
+	if intOf(root["result_count"]) < len(urls) {
+		return nil
+	}
+	return urls
+}
+
+// ExternalOperationCoversCandidate 共享抓取保留物理所有者小票与一致页面元数据
+// （topic_product.py:1578-1604）。
+func ExternalOperationCoversCandidate(manifest, audit map[string]any,
+	key [3]string, candidateID string) bool {
+	ownerID := pyStr(audit["candidate_id"])
+	if ownerID == candidateID {
+		return true
+	}
+	if key[0] != "fetch" {
+		return false
+	}
+	receipt, isMap := manifest["grounding_evidence_receipt"].(map[string]any)
+	if !isMap {
+		return false
+	}
+	candidates, isList := receipt["candidates"].([]any)
+	if !isList {
+		return false
+	}
+	fetches := map[string][3]string{}
+	for _, candidateValue := range candidates {
+		candidate, isMap := candidateValue.(map[string]any)
+		if !isMap {
+			return false
+		}
+		id := pyStr(candidate["candidate_id"])
+		if id != ownerID && id != candidateID {
+			continue
+		}
+		fetchList, isList := candidate["fetches"].([]any)
+		if !isList {
+			return false
+		}
+		for _, fetchValue := range fetchList {
+			fetch, isMap := fetchValue.(map[string]any)
+			if !isMap {
+				continue
+			}
+			if key[0] == "fetch" && pyStr(fetch["operation_id"]) == key[1] &&
+				pyStr(fetch["request_id"]) == key[2] {
+				fetches[id] = [3]string{pyStr(fetch["requested_url"]),
+					pyStr(fetch["final_url"]), pyStr(fetch["http_status_code"])}
+			}
+		}
+	}
+	_, ownerOK := fetches[ownerID]
+	_, candidateOK := fetches[candidateID]
+	return ownerOK && candidateOK && fetches[ownerID] == fetches[candidateID]
+}
+
+// TerminalStageMatchesOperations 记录的操作是否终止于决策所述阶段
+// （topic_product.py:1606-1619）。
+func TerminalStageMatchesOperations(terminalStage string, operationNames []string) bool {
+	switch terminalStage {
+	case "search":
+		return len(operationNames) == 1 && operationNames[0] == "search"
+	case "fetch":
+		return len(operationNames) > 0 && operationNames[len(operationNames)-1] == "fetch"
+	case "extraction", "offset_validation":
+		return len(operationNames) > 0 && operationNames[len(operationNames)-1] == "extractor"
+	}
+	return true
+}
