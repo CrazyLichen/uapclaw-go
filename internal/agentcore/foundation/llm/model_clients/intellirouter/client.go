@@ -1,462 +1,586 @@
+// Package intellirouter IntelliRouter 模型客户端 —— 包装
+// intellirouter.ReliableRouter（23.4a 移植的 PyPI intelli-router），提供
+// API 池化、智能路由、自动重试、流式与多模态生成。
+//
+// 对应 Python 代码：openjiuwen/core/foundation/llm/model_clients/intelli_router_model_client.py
+// （1415 行，单文件按语义拆为：client.go 主客户端、client_config.go 配置、
+// router_cache.go 路由缓存与 D-5 钩子、routed_model.go 占位符回填、
+// event_bridge.go 事件桥、dashscope_gen.go 多模态三件套——拆分边界在
+// 各文件头标注 Python 行段）。
+//
+// 已知偏差（总设计 D-3/D-4/D-5）：web_dashboard/metrics/logging_hook 不移植；
+// asyncio loop 绑定防御不移植（net/http.Client 并发安全）；动态类继承
+// （_RoutedModelRouterMixin）改构造期函数指针注入。
 package intellirouter
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
+	"net/url"
+	"strings"
 
+	intelliroutertypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter"
+	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/core"
+	llmrouter "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/router"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/strategy"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// logComponent 组件级日志常量。
+const logComponent = logger.ComponentAgentCore
+
+// clientName 注册名（Python: :441 __client_name__ = "intelli_router"）。
+const clientName = "intelli_router"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// IntelliRouterModelClient IntelliRouter 智能路由模型客户端。
-// 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
-// 覆写 Invoke/Stream，在调用时通过路由器选择部署端点，
-// 动态替换 api_key/api_base 为选中端点的配置。
-// Stream 独立实现（不委托 OpenAI.Stream），对齐 Python IntelliRouter 无 _astream_with_parser
-// （OutputParser 传 nil，不支持 parser）。
-// Invoke 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
-// Stream 不做重试（流一旦开始无法重试）。
-// Python: IntelliRouterModelClient（intelli_router_model_client.py）
+// IntelliRouterModelClient 包装 ReliableRouter 的模型客户端。
+// Python: intelli_router_model_client.py:434-460 IntelliRouterModelClient
 type IntelliRouterModelClient struct {
-	openai.OpenAIModelClient
-	// router 智能路由器实例
-	router *ReliableRouter
-	// config IntelliRouter 路由配置
-	config *IntelliRouterClientConfig
+	// BaseClientEmbed 基座（消息/工具转换、配置持有）
+	model_clients.BaseClientEmbed
+	// routerConfig 提取的配置（注入 router 时为 nil，Python: :444-447）
+	routerConfig *IntelliRouterClientConfig
+	// router 路由器实例
+	Router *llmrouter.ReliableRouter
+	// routerKey 缓存键（注入 router 时为 nil）
+	routerKey string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewIntelliRouterModelClient 创建 IntelliRouter 智能路由客户端。
-// 构造流程：
-//  1. 从 ModelClientConfig.Extra 提取 IntelliRouter 配置
-//  2. 校验至少有一个 deployment
-//  3. 获取或创建路由器（缓存共享）
-//  4. 构造 BaseClientEmbed（intelli_router 不在 api_key/api_base 白名单，
-//     凭据在 deployment 级别配置，故 ValidateConfig 不强制——见偏差 D-3）
-//  5. 构造 OpenAI 客户端（placeholder 配置，实际调用时动态替换）
-//
-// Python: IntelliRouterModelClient.__init__(model_config, model_client_config)
+// NewIntelliRouterModelClient 创建客户端。
+// Python: intelli_router_model_client.py:443-459 __init__
 func NewIntelliRouterModelClient(
 	modelConfig *llmschema.ModelRequestConfig,
 	clientConfig *llmschema.ModelClientConfig,
 ) (*IntelliRouterModelClient, error) {
-	// 1. 提取 IntelliRouter 配置
-	irConfig := FromModelClientConfig(clientConfig)
-
-	// 2. 校验至少有一个 deployment
-	if len(irConfig.Deployments) == 0 {
-		return nil, exception.NewBaseError(
-			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg("IntelliRouter requires at least one deployment in intelli_router_deployments"),
-		)
-	}
-
-	// 3. 获取或创建路由器（缓存共享）
-	router := GetOrCreateRouter(irConfig)
-
-	// 4. 构造 BaseClientEmbed（intelli_router 不在白名单，不要求 api_key/api_base）
 	embed, err := model_clients.NewBaseClientEmbed(
-		modelConfig,
-		clientConfig,
+		modelConfig, clientConfig,
 		model_clients.WithClientName("IntelliRouter client"),
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	// 5. 构造 OpenAI 客户端（placeholder 配置，实际调用时动态替换 api_key/api_base）
-	placeholderConfig := &llmschema.ModelClientConfig{
-		ClientID:       clientConfig.ClientID,
-		ClientProvider: clientConfig.ClientProvider,
-		APIKey:         "placeholder",
-		APIBase:        "http://placeholder",
-		Timeout:        clientConfig.Timeout,
-		MaxRetries:     clientConfig.MaxRetries,
-		VerifySSL:      clientConfig.VerifySSL,
-		SSLCert:        clientConfig.SSLCert,
-		CustomHeaders:  clientConfig.CustomHeaders,
-	}
-	openaiClient, err := openai.NewOpenAIModelClient(modelConfig, placeholderConfig)
+	c := &IntelliRouterModelClient{BaseClientEmbed: *embed}
+	cfg := FromModelClientConfig(clientConfig)
+	r, err := GetOrCreateRouter(cfg)
 	if err != nil {
 		return nil, err
 	}
-	openaiClient.BaseClientEmbed = *embed
-
-	// Python: IntelliRouter 构造使用 llm_logger.info，非回调
-	logger.Info(logComponent).
-		Str("model_name", "IntelliRouter").
-		Str("client_name", "IntelliRouter client").
-		Int("num_deployments", len(irConfig.Deployments)).
-		Str("strategy", irConfig.Strategy).
-		Msg("IntelliRouter client created.")
-
-	return &IntelliRouterModelClient{
-		OpenAIModelClient: *openaiClient,
-		router:            router,
-		config:            irConfig,
-	}, nil
+	c.routerConfig = cfg
+	c.Router = r
+	c.routerKey = MakeRouterKey(cfg)
+	return c, nil
 }
 
-// Invoke 非流式调用 IntelliRouter API。
-// 覆写 OpenAI 客户端的 Invoke，通过路由器选择部署端点，
-// 动态替换 api_key/api_base 后委托给 OpenAI.Invoke()。
-// 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
-// Python: IntelliRouterModelClient.invoke()
-func (c *IntelliRouterModelClient) Invoke(
-	ctx context.Context,
-	messages model_clients.MessagesParam,
-	opts ...model_clients.InvokeOption,
-) (*llmschema.AssistantMessage, error) {
+// Invoke 非流式调用。Python: intelli_router_model_client.py:702-757 invoke
+func (c *IntelliRouterModelClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	params := model_clients.NewInvokeParams(opts...)
-	modelName := params.Model
-	if modelName == "" && c.ModelConfig != nil {
-		modelName = c.ModelConfig.ModelName
-	}
-
-	var lastErr error
-	maxRetries := c.router.numRetries
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// 1. 通过路由器选择部署端点
-		dep, err := c.router.SelectDeployment(modelName)
-		if err != nil {
-			return nil, err
-		}
-
-		// 2. 动态替换 OpenAI 客户端的 api_key/api_base
-		c.ClientConfig.APIKey = dep.APIKey
-		c.ClientConfig.APIBase = dep.APIBase
-
-		// Python: 路由选择是内部逻辑，使用日志记录，非回调
-		logger.Info(logComponent).
-			Str("model_name", modelName).
-			Str("model_provider", "IntelliRouter").
-			Str("deployment_id", dep.ID).
-			Str("api_base", dep.APIBase).
-			Int("attempt", attempt).
-			Msg("IntelliRouter invoking deployment.")
-
-		// 3. 委托给 OpenAI.Invoke()
-		start := time.Now()
-		result, err := c.OpenAIModelClient.Invoke(ctx, messages, opts...)
-		if err != nil {
-			c.router.RecordFailure(dep)
-			lastErr = err
-
-			logger.Error(logComponent).
-				Str("model_name", modelName).
-				Str("model_provider", "IntelliRouter").
-				Str("deployment_id", dep.ID).
-				Int("attempt", attempt).
-				Err(err).
-				Msg("IntelliRouter deployment invoke failed.")
-
-			continue // 重试下一个 deployment
-		}
-
-		c.router.RecordSuccess(dep, time.Since(start))
-		return result, nil
-	}
-
-	// 所有重试都失败
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg(fmt.Sprintf("IntelliRouter: 所有部署端点均失败 (model=%s, retries=%d, last_error=%v)", modelName, maxRetries, lastErr)),
-	)
-}
-
-// Stream 流式调用 IntelliRouter API。
-// 独立实现 Stream，不委托给 OpenAI 客户端。
-// Python: IntelliRouterModelClient：IntelliRouter 没有 _astream_with_parser，
-// 因此不支持 OutputParser。使用自己的 convertChunk 只提取 content。
-// 与 OpenAI 的行为差异（对齐 Python）：
-//   - convertChunk 只提取 content（不提取 reasoning_content / tool_calls / usage_metadata / finish_reason）
-//   - 不使用 OutputParser（对齐 Python IntelliRouter 无 _astream_with_parser）
-//
-// Stream 不做重试（流一旦开始无法重试）。
-// Python: IntelliRouterModelClient.stream()
-func (c *IntelliRouterModelClient) Stream(
-	ctx context.Context,
-	messages model_clients.MessagesParam,
-	opts ...model_clients.StreamOption,
-) (<-chan *llmschema.AssistantMessageChunk, error) {
-	params := model_clients.NewStreamParams(opts...)
-	modelName := params.Model
-	if modelName == "" && c.ModelConfig != nil {
-		modelName = c.ModelConfig.ModelName
-	}
-
-	// 1. 通过路由器选择部署端点
-	dep, err := c.router.SelectDeployment(modelName)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. 动态替换 api_key/api_base
-	c.ClientConfig.APIKey = dep.APIKey
-	c.ClientConfig.APIBase = dep.APIBase
-
-	// Python: 路由选择是内部逻辑，使用日志记录，非回调
-	logger.Info(logComponent).
-		Str("model_name", modelName).
-		Str("model_provider", "IntelliRouter").
-		Str("deployment_id", dep.ID).
-		Str("api_base", dep.APIBase).
-		Msg("IntelliRouter streaming deployment.")
-
-	// 3. 构建请求参数
 	messagesDict, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
 		return nil, err
 	}
-	reqParams, err := c.BuildRequestParams(ctx, messagesDict, params.ToStreamParams(), true)
+	modelName := c.resolveModelName(params.Model)
+	tools := c.ConvertToolsToDict(params.Tools)
+
+	result, err := c.Router.Invoke(ctx, messagesDict, llmrouter.InvokeParams{
+		Tools:       toAnySlice(tools),
+		Temperature: c.effectiveTemperature(params.Temperature),
+		TopP:        c.effectiveTopP(params.TopP),
+		MaxTokens:   c.effectiveMaxTokens(params.MaxTokens),
+		Stop:        c.effectiveStop(params.Stop),
+		Model:       modelName,
+		Kwargs:      map[string]any{},
+	})
+	if err != nil {
+		// Python: :729-748 先触发 LLM_CALL_ERROR 事件，再翻译路由错误
+		c.triggerCallError(ctx, modelName, err, false)
+		return nil, routing.ToModelError(err, routerViewOf(c.Router), modelName, false)
+	}
+	// Python: :751 _to_ow_assistant_message
+	return c.toOwAssistantMessage(result, params.OutputParser)
+}
+
+// Stream 流式调用。Python: intelli_router_model_client.py:759-825 stream
+func (c *IntelliRouterModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	sopts := model_clients.NewStreamParams(opts...)
+	messagesDict, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
 		return nil, err
 	}
+	modelName := c.resolveModelName(sopts.Model)
+	tools := c.ConvertToolsToDict(sopts.Tools)
 
-	// 4. 设置 stream_options.include_usage = true
-	streamOptions, _ := reqParams["stream_options"].(map[string]any)
-	if streamOptions == nil {
-		streamOptions = make(map[string]any)
+	invParams := llmrouter.InvokeParams{
+		Tools:       toAnySlice(tools),
+		Temperature: c.effectiveTemperature(sopts.Temperature),
+		TopP:        c.effectiveTopP(sopts.TopP),
+		MaxTokens:   c.effectiveMaxTokens(sopts.MaxTokens),
+		Stop:        c.effectiveStop(sopts.Stop),
+		Model:       modelName,
+		Kwargs:      map[string]any{},
 	}
-	streamOptions["include_usage"] = true
-	reqParams["stream_options"] = streamOptions
-
-	// 5. OpenAI 特有参数调整
-	openai.AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
-
-	// 6. 合并 headers
-	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
-	if len(effectiveHeaders) > 0 {
-		reqParams["extra_headers"] = effectiveHeaders
-	}
-
-	// 7. 处理 extra_body
-	openai.HandleExtraBody(reqParams)
-
-	// 8. 构建 HTTP 请求
-	httpHeaders := openai.ExtractHTTPHeaders(effectiveHeaders)
-	req, client, err := openai.BuildHTTPRequestWithAuth(
-		ctx,
-		c.ClientConfig.APIBase,
-		c.ClientConfig.APIKey,
-		reqParams,
-		httpHeaders,
-		c.RequestTimeout(params.Timeout),
-		c.ClientConfig.VerifySSL,
-		c.ClientConfig.SSLCert,
-		true, // Stream 路径：无总超时（C-A2 超时语义）
-		c.ClientConfig.AuthMode,
-	)
-	if err != nil {
-		return nil, c.WrapError("stream", err)
-	}
-
-	// 9. 发送请求
-	start := time.Now()
-	resp, err := client.Do(req)
-	if err != nil {
-		c.router.RecordFailure(dep)
-		// Python: 路由层错误走日志，非回调
-		logger.Error(logComponent).
-			Str("model_name", modelName).
-			Str("model_provider", "IntelliRouter").
-			Str("deployment_id", dep.ID).
-			Err(err).
-			Msg("IntelliRouter stream request failed.")
-		return nil, c.WrapError("stream", err)
-	}
-
-	// 10. 检查 HTTP 状态码
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		c.router.RecordFailure(dep)
-		return nil, c.HandleHTTPError(resp)
-	}
-
-	// 11. 创建 SSE 读取器和 chunk channel
-	sseReader := openai.NewSSEReader(resp.Body)
-	chunkChan := make(chan *llmschema.AssistantMessageChunk, 64)
-
-	// 12. 启动 goroutine 消费 SSE 流
-	//     对齐 Python：IntelliRouter 无 _astream_with_parser，不使用 OutputParser
-	//     使用自己的 convertChunk（只提取 content）
+	out := make(chan *llmschema.AssistantMessageChunk)
+	chunkChan := c.Router.Stream(ctx, messagesDict, invParams)
+	outputEmitted := false
+	accumulatedForParser := ""
 	go func() {
-		defer close(chunkChan)
-		defer func() { _ = resp.Body.Close() }()
-
-		for {
-			data, err := sseReader.ReadEvent()
-			if err == io.EOF {
+		defer close(out)
+		for result := range chunkChan {
+			if result.Err != nil {
+				// Python: :796-820 先触发事件再按 output_emitted 翻译
+				c.triggerCallError(ctx, modelName, result.Err, true)
+				for chunk := range chunkChan { // 排空残余
+					_ = chunk
+				}
+				modelErr := routing.ToModelError(result.Err, routerViewOf(c.Router), modelName, outputEmitted)
+				// channel 装不下 error，用 StreamError 哨兵 chunk 承载（对齐 openai 客户端口径）
+				out <- llmschema.NewAssistantMessageChunk("", llmschema.WithChunkStreamError(modelErr))
 				return
 			}
-			if err != nil {
-				// 中断必须上抛（Python: 生成器 raise MODEL_CALL_FAILED），
-				// FailStream 内部已记录 Error 日志，不再重复打点。
-				c.FailStream(ctx, chunkChan, modelName, err)
-				return
+			converted := toOwChunk(result.Chunk)
+			if converted.CarriesOutputToken() {
+				outputEmitted = true // Python: :785-786
 			}
-
-			var chunkResp openai.ChatCompletionChunkResponse
-			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				// Python: JSON 解析错误走日志，非回调
-				logger.Error(logComponent).
-					Str("model_name", modelName).
-					Str("model_provider", "IntelliRouter").
-					Err(err).
-					Msg("IntelliRouter stream JSON parse error.")
-				continue
+			if sopts.OutputParser != nil && chunkContent(converted) != "" {
+				// Python: :787-796 流式解析器增量解析
+				accumulatedForParser += chunkContent(converted)
+				parsed, perr := sopts.OutputParser.Parse(accumulatedForParser)
+				if perr != nil {
+					logDebug(fmt.Sprintf("stream parser attempt failed: %s", perr))
+				} else if parsed != nil {
+					converted.ParserContent = parsed
+					accumulatedForParser = ""
+				}
 			}
-
-			chunk := c.convertChunk(&chunkResp)
-			if chunk == nil {
-				continue
-			}
-
-			select {
-			case chunkChan <- chunk:
-			case <-ctx.Done():
-				logger.Error(logComponent).
-					Str("model_name", modelName).
-					Str("model_provider", "IntelliRouter").
-					Msg("IntelliRouter stream context cancelled.")
-				return
-			}
+			out <- converted
 		}
 	}()
-
-	c.router.RecordSuccess(dep, time.Since(start))
-	return chunkChan, nil
+	return out, nil
 }
 
-// GenerateImage 生成图片（当前不支持）。
-// IntelliRouter 仅支持 Chat Completion，不支持图片生成。
-func (c *IntelliRouterModelClient) GenerateImage(
-	_ context.Context,
-	_ []*llmschema.UserMessage,
-	_ ...model_clients.GenerateImageOption,
-) (*llmschema.ImageGenerationResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("IntelliRouter client does not support image generation"),
-	)
+// GenerateImage 图片生成（DashScope 直调）。Python: :827-851 generate_image
+func (c *IntelliRouterModelClient) GenerateImage(ctx context.Context, messages []*llmschema.UserMessage, opts ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	gopts := model_clients.NewGenerateImageParams(opts...)
+	provider := c.resolveGenerationProvider(gopts.Model)
+	if !generationSupports(provider, "image") {
+		return nil, fmt.Errorf("Provider '%s' does not support image generation. Supported: %v", provider, generationSupport)
+	}
+	return c.generateImageDashscope(ctx, messages, gopts)
 }
 
-// GenerateSpeech 生成语音（当前不支持）。
-func (c *IntelliRouterModelClient) GenerateSpeech(
-	_ context.Context,
-	_ []*llmschema.UserMessage,
-	_ ...model_clients.GenerateSpeechOption,
-) (*llmschema.AudioGenerationResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("IntelliRouter client does not support speech generation"),
-	)
+// GenerateSpeech 语音生成（DashScope 直调）。Python: :853-871 generate_speech
+func (c *IntelliRouterModelClient) GenerateSpeech(ctx context.Context, messages []*llmschema.UserMessage, opts ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	gopts := model_clients.NewGenerateSpeechParams(opts...)
+	provider := c.resolveGenerationProvider(gopts.Model)
+	if !generationSupports(provider, "speech") {
+		return nil, fmt.Errorf("Provider '%s' does not support speech generation.Supported: %v", provider, generationSupport)
+	}
+	return c.generateSpeechDashscope(ctx, messages, gopts)
 }
 
-// GenerateVideo 生成视频（当前不支持）。
-func (c *IntelliRouterModelClient) GenerateVideo(
-	_ context.Context,
-	_ []*llmschema.UserMessage,
-	_ ...model_clients.GenerateVideoOption,
-) (*llmschema.VideoGenerationResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("IntelliRouter client does not support video generation"),
-	)
+// GenerateVideo 视频生成（DashScope 直调）。Python: :873-905 generate_video
+func (c *IntelliRouterModelClient) GenerateVideo(ctx context.Context, messages []*llmschema.UserMessage, opts ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	gopts := model_clients.NewGenerateVideoParams(opts...)
+	provider := c.resolveGenerationProvider(gopts.Model)
+	if !generationSupports(provider, "video") {
+		return nil, fmt.Errorf("Provider '%s' does not support video generation.Supported: %v", provider, generationSupport)
+	}
+	return c.generateVideoDashscope(ctx, messages, gopts)
 }
 
-// Release 释放模型缓存（当前不支持）。
-// IntelliRouter 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
-func (c *IntelliRouterModelClient) Release(
-	_ context.Context,
-	_ ...model_clients.ReleaseOption,
-) (bool, error) {
-	return false, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("IntelliRouter client does not support KV cache release"),
-	)
+// TranscribeAudio 音频转写（本客户端不支持）。Python: BaseModelClient 默认。
+func (c *IntelliRouterModelClient) TranscribeAudio(ctx context.Context, audioPath string, opts ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, exception.BuildError(exception.StatusModelInvokeParamError,
+		exception.WithMsg("IntelliRouter client does not support audio transcription"))
 }
 
-// SupportsKVCacheRelease IntelliRouter 客户端不支持 KV Cache 释放。
-func (c *IntelliRouterModelClient) SupportsKVCacheRelease() bool {
-	return false
+// Release 释放资源（无持久资源）。Python: 默认 release。
+func (c *IntelliRouterModelClient) Release(ctx context.Context, opts ...model_clients.ReleaseOption) (bool, error) {
+	return false, fmt.Errorf("IntelliRouter client does not support KV cache release")
 }
 
-// TranscribeAudio 音频转写（当前不支持）。
-func (c *IntelliRouterModelClient) TranscribeAudio(
-	_ context.Context,
-	_ string,
-	_ ...llmschema.TranscribeAudioOption,
-) (*llmschema.TranscriptionResponse, error) {
-	return nil, exception.NewBaseError(
-		exception.StatusModelCallFailed,
-		exception.WithMsg("IntelliRouter client does not support audio transcription"),
-	)
-}
+// SupportsKVCacheRelease 本客户端不支持 KV cache 释放（对齐旧测试口径，
+// Python: InferenceAffinityModelClient 才有 release 实现）。
+func (c *IntelliRouterModelClient) SupportsKVCacheRelease() bool { return false }
 
-// GetRouterStats 获取路由器统计信息。
-// 便捷方法，暴露内部路由器的统计信息供监控和调试使用。
-func (c *IntelliRouterModelClient) GetRouterStats() map[string]any {
-	return c.router.GetStats()
+// SupportsKVCacheAffinity 本客户端不支持 Ascend KV cache 亲和。
+func (c *IntelliRouterModelClient) SupportsKVCacheAffinity() bool { return false }
+
+// BuildKVCacheAffinityInvokeKwargs 不支持亲和时返回空参数。
+func (c *IntelliRouterModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
+	return map[string]any{}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// convertChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
-// Python: IntelliRouterModelClient._convert_chunk()：
-// 只提取 content，不提取 reasoning_content / tool_calls / usage_metadata / finish_reason。
-// IntelliRouter 不使用 OutputParser（无 _astream_with_parser）。
-func (c *IntelliRouterModelClient) convertChunk(
-	chunkResp *openai.ChatCompletionChunkResponse,
-) *llmschema.AssistantMessageChunk {
-	choices := chunkResp.Choices
-	if len(choices) == 0 {
-		return nil
+// resolveModelName 模型名解析（Python: :711/:768 model or
+// self.model_config.model_name or "*"）。
+func (c *IntelliRouterModelClient) resolveModelName(model string) string {
+	if model != "" {
+		return model
 	}
-
-	delta := choices[0].Delta
-	content := ""
-	if delta != nil && delta.Content != nil {
-		content = *delta.Content
+	if c.ModelConfig != nil && c.ModelConfig.ModelName != "" {
+		return c.ModelConfig.ModelName
 	}
-
-	// Python: 空 content 也返回 chunk（Python 原样返回 content="" 的 chunk）
-	return llmschema.NewAssistantMessageChunk(content)
+	return "*"
 }
 
-// init 注册 IntelliRouter 客户端到全局注册表（2.6 回填点）。
+// effectiveTemperature 调用参数优先于模型配置（Python: :645-659
+// _build_call_params：None 剔除）。
+func (c *IntelliRouterModelClient) effectiveTemperature(v *float64) *float64 {
+	if v != nil {
+		return v
+	}
+	return c.ModelConfig.Temperature
+}
+
+func (c *IntelliRouterModelClient) effectiveTopP(v *float64) *float64 {
+	if v != nil {
+		return v
+	}
+	return c.ModelConfig.TopP
+}
+
+func (c *IntelliRouterModelClient) effectiveMaxTokens(v *int) *int {
+	if v != nil {
+		return v
+	}
+	return c.ModelConfig.MaxTokens
+}
+
+func (c *IntelliRouterModelClient) effectiveStop(v *string) any {
+	if v != nil {
+		return *v
+	}
+	if c.ModelConfig.Stop != nil {
+		return *c.ModelConfig.Stop
+	}
+	return nil
+}
+
+// triggerCallError 触发 LLM_CALL_ERROR 回调（Python: :729-746/:796-814；
+// 触发失败不吞模型错误）。
+func (c *IntelliRouterModelClient) triggerCallError(ctx context.Context, modelName string, callErr error, isStream bool) {
+	defer func() { _ = recover() }()
+	callback.Trigger(ctx, string(callback.LLMCallError), map[string]any{
+		"model_name":     modelName,
+		"model_provider": c.ClientConfig.ClientProvider,
+		"is_stream":      isStream,
+		"error":          callErr,
+		"error_message":  callErr.Error(),
+	})
+}
+
+// toOwAssistantMessage intelli_router AssistantMessage → openjiuwen。
+// Python: intelli_router_model_client.py:907-961 _to_ow_assistant_message。
+func (c *IntelliRouterModelClient) toOwAssistantMessage(msg *intelliroutertypes.AssistantMessage, outputParser model_clients.BaseOutputParser) (*llmschema.AssistantMessage, error) {
+	originalContent := msg.Content
+	content := originalContent
+	parserContent := msg.ParserContent
+
+	if outputParser != nil && content != "" {
+		// Python: :917-927 应用 openjiuwen 输出解析器
+		parsed, perr := outputParser.Parse(content)
+		if perr != nil {
+			logError("parse content failed: " + perr.Error())
+		} else if parsed != nil {
+			parserContent = parsed
+			if s, ok := parsed.(string); ok {
+				content = s
+			} else {
+				content = fmt.Sprintf("%v", parsed)
+			}
+		}
+	}
+
+	var toolCalls []*llmschema.ToolCall
+	for i := range msg.ToolCalls {
+		tc := &msg.ToolCalls[i]
+		idx := 0
+		if tc.Index != nil {
+			idx = *tc.Index
+		}
+		toolCalls = append(toolCalls, &llmschema.ToolCall{
+			ID: tc.ID, Type: tc.Type, Name: tc.Name, Arguments: tc.Arguments, Index: idx,
+		})
+	}
+
+	finishReason := msg.FinishReason
+	if finishReason == "" {
+		finishReason = "stop"
+	}
+	responseID := ""
+	if msg.ResponseID != nil {
+		responseID = *msg.ResponseID
+	}
+	responseModel := ""
+	if msg.ResponseModel != nil {
+		responseModel = *msg.ResponseModel
+	}
+	reasoningContent := ""
+	if msg.ReasoningContent != nil {
+		reasoningContent = *msg.ReasoningContent
+	}
+
+	// Python: :943-951 provider_content 兜底链
+	providerContent := msg.ProviderContent
+	if providerContent == nil {
+		if outputParser != nil && originalContent != content {
+			providerContent = originalContent
+		}
+	}
+
+	out := &llmschema.AssistantMessage{
+		ToolCalls:          toolCalls,
+		UsageMetadata:      toOwUsageMetadata(msg.UsageMetadata),
+		FinishReason:       finishReason,
+		ParserContent:      parserContent,
+		ReasoningContent:   reasoningContent,
+		PromptTokenIDs:     msg.PromptTokenIDs,
+		CompletionTokenIDs: msg.CompletionTokenIDs,
+		Logprobs:           msg.Logprobs,
+		ResponseID:         responseID,
+		ResponseModel:      responseModel,
+		ProviderMetadata:   providerMetadata(msg.ProviderMetadata),
+		ProviderContent:    providerContent,
+	}
+	out.SetContent(llmschema.NewTextContent(content))
+	return out, nil
+}
+
+// toOwChunk intelli_router chunk → openjiuwen chunk（静态方法口径）。
+// Python: intelli_router_model_client.py:963-988 _to_ow_chunk
+func toOwChunk(chunk intelliroutertypes.AssistantMessageChunk) *llmschema.AssistantMessageChunk {
+	var toolCalls []*llmschema.ToolCall
+	for i := range chunk.ToolCalls {
+		tc := &chunk.ToolCalls[i]
+		idx := 0
+		if tc.Index != nil {
+			idx = *tc.Index
+		}
+		toolCalls = append(toolCalls, &llmschema.ToolCall{
+			ID: tc.ID, Type: tc.Type, Name: tc.Name, Arguments: tc.Arguments, Index: idx,
+		})
+	}
+	finishReason := "null"
+	if chunk.FinishReason != nil && *chunk.FinishReason != "" {
+		finishReason = *chunk.FinishReason
+	}
+	responseID := ""
+	if chunk.ResponseID != nil {
+		responseID = *chunk.ResponseID
+	}
+	responseModel := ""
+	if chunk.ResponseModel != nil {
+		responseModel = *chunk.ResponseModel
+	}
+	reasoningContent := ""
+	if chunk.ReasoningContent != nil {
+		reasoningContent = *chunk.ReasoningContent
+	}
+	out := llmschema.NewAssistantMessageChunk(chunk.Content)
+	out.ToolCalls = toolCalls
+	out.FinishReason = finishReason
+	out.UsageMetadata = toOwUsageMetadata(chunk.UsageMetadata)
+	out.ParserContent = chunk.ParserContent
+	out.ReasoningContent = reasoningContent
+	out.PromptTokenIDs = chunk.PromptTokenIDs
+	out.CompletionTokenIDs = chunk.CompletionTokenIDs
+	out.Logprobs = chunk.Logprobs
+	out.ResponseID = responseID
+	out.ResponseModel = responseModel
+	out.ProviderMetadata = providerMetadata(chunk.ProviderMetadata)
+	out.ProviderContent = chunk.ProviderContent
+	return out
+}
+
+// chunkContent 取 chunk 文本内容（MessageContent → string）。
+func chunkContent(c *llmschema.AssistantMessageChunk) string {
+	if c == nil {
+		return ""
+	}
+	return c.Content.Text()
+}
+
+// toOwUsageMetadata intelli_router 用量 → openjiuwen 用量。
+// Python: intelli_router_model_client.py:990-1049 _to_ow_usage_metadata
+// （_int_value/_optional_int/_float_value 三类归一；23.4a 类型已归一，
+// Go 侧直接字段搬运 + reasoning_tokens 0 → nil 未上报）。
+func toOwUsageMetadata(source *intelliroutertypes.UsageMetadata) *llmschema.UsageMetadata {
+	if source == nil {
+		return nil
+	}
+	out := llmschema.NewUsageMetadata()
+	out.ModelName = derefStr(source.ModelName)
+	out.InputTokens = source.InputTokens
+	out.OutputTokens = source.OutputTokens
+	out.TotalTokens = source.TotalTokens
+	out.CacheTokens = source.CacheTokens
+	if source.CacheReadTokens != nil {
+		out.CacheReadTokens = source.CacheReadTokens
+	}
+	if source.CacheMissTokens != nil {
+		out.CacheMissTokens = source.CacheMissTokens
+	}
+	if source.CacheWriteTokens != nil {
+		out.CacheWriteTokens = source.CacheWriteTokens
+	}
+	if source.CacheCreationInputTokens != nil {
+		out.CacheCreationTokens = source.CacheCreationInputTokens
+	}
+	out.CacheStatus = derefStr(source.CacheStatus)
+	out.CacheSource = derefStr(source.CacheSource)
+	out.CacheAuthoritative = source.CacheAuthoritative
+	out.InputCost = source.InputCost
+	out.OutputCost = source.OutputCost
+	if source.ReasoningTokens > 0 {
+		// Python: :1033 reasoning_tokens 提取
+		n := source.ReasoningTokens
+		out.ReasoningTokens = &n
+	}
+	return out
+}
+
+// providerMetadata provider 私有元数据白名单过滤。
+// Python: intelli_router_model_client.py:1051-1067 _provider_metadata
+func providerMetadata(source map[string]any) map[string]any {
+	if source == nil {
+		return map[string]any{}
+	}
+	allowed := []string{"system_fingerprint", "service_tier", "status", "stop_reason", "stop_sequence", "incomplete_details"}
+	out := map[string]any{}
+	for _, key := range allowed {
+		if v, exists := source[key]; exists {
+			out[key] = v
+		}
+	}
+	return out
+}
+
+// resolveGenerationProvider 生成 API 的 provider 解析。
+// Python: intelli_router_model_client.py:1069-1075 _resolve_generation_provider
+func (c *IntelliRouterModelClient) resolveGenerationProvider(model string) string {
+	for _, dep := range c.Router.Deployments {
+		if model != "" && dep.ModelName != model {
+			continue
+		}
+		return dep.Provider
+	}
+	return "unknown"
+}
+
+// apiBaseForProvider 第一个匹配 provider 的 deployment api_base。
+// Python: :1084-1093 _get_api_base_for_provider
+func (c *IntelliRouterModelClient) apiBaseForProvider(providerName string) string {
+	for _, dep := range c.Router.Deployments {
+		if dep.Provider == providerName {
+			return dep.APIBase
+		}
+	}
+	return ""
+}
+
+// apiKeyForProvider 第一个匹配 provider 的 deployment api_key。
+// Python: :1077-1082 _get_api_key_for_provider
+func (c *IntelliRouterModelClient) apiKeyForProvider(providerName string) string {
+	for _, dep := range c.Router.Deployments {
+		if dep.Provider == providerName {
+			return dep.APIKey
+		}
+	}
+	return ""
+}
+
+// derefStr 指针字符串（nil → ""）。
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// toAnySlice map 列表 → any 列表（router Tools 字段类型 []any）。
+func toAnySlice(maps []map[string]any) []any {
+	out := make([]any, 0, len(maps))
+	for _, m := range maps {
+		out = append(out, m)
+	}
+	return out
+}
+
+// routerViewOf ReliableRouter → routing.RouterView 适配。
+// （Python 鸭子类型直读；Go 显式适配器，Python 侧无对应类型。）
+func routerViewOf(r *llmrouter.ReliableRouter) routing.RouterView {
+	return &reliableRouterView{r: r}
+}
+
+// reliableRouterView routing.RouterView 实现。
+type reliableRouterView struct {
+	r *llmrouter.ReliableRouter
+}
+
+func (v *reliableRouterView) Deployments() []*intelliroutercore.Deployment { return v.r.Deployments }
+func (v *reliableRouterView) ModelGroupID() string                         { return derefStr(v.r.ModelGroupID) }
+func (v *reliableRouterView) PinnedRouteTag() string {
+	if v.r.Strategy == nil {
+		return ""
+	}
+	if tf, ok := v.r.Strategy.(*strategy.TagFiltered); ok {
+		return derefStr(tf.FallbackTag)
+	}
+	return ""
+}
+func (v *reliableRouterView) State() *intelliroutercore.LocalRouterState { return v.r.State }
+
+// generationSupport 生成能力支持表。
+// Python: intelli_router_model_client.py:219-222 _GENERATION_SUPPORT
+// （dashscope 支持 image/speech/video；其余 provider 均不支持）。
+var generationSupport = map[string]map[string]struct{}{
+	"dashscope": {"image": {}, "speech": {}, "video": {}},
+}
+
+// generationSupports provider 是否支持某生成能力。
+func generationSupports(providerName, kind string) bool {
+	support, ok := generationSupport[providerName]
+	if !ok {
+		return false
+	}
+	_, enabled := support[kind]
+	return enabled
+}
+
+// logWarn/logInfo/logDebug/logError 组件级日志包装。
+func logWarn(msg string)  { logger.Warn(logComponent).Msg(msg) }
+func logInfo(msg string)  { logger.Info(logComponent).Msg(msg) }
+func logDebug(msg string) { logger.Debug(logComponent).Msg(msg) }
+func logError(msg string) { logger.Error(logComponent).Msg(msg) }
+
+// urlHost 提取 URL 主机名（非法/无主机时回退原串去协议头）。
+func urlHost(apiBase string) string {
+	u, err := url.Parse(apiBase)
+	if err != nil || u.Host == "" {
+		return strings.TrimPrefix(strings.TrimPrefix(apiBase, "https://"), "http://")
+	}
+	return u.Host
+}
+
+// init 注册 IntelliRouter 客户端到全局注册表。
+// Python: __client_name__ = "intelli_router"（:441）经 ClientRegistry 注册。
 func init() {
 	registry := model_clients.GetClientRegistry()
-
-	intelliRouterFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+	registry.Register(clientName, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewIntelliRouterModelClient(mc, cc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("create IntelliRouter client failed")
 			return nil, err
 		}
 		return client, nil
-	}
-
-	registry.Register("intelli_router", "llm", intelliRouterFactory)
-}
-
-// SupportsKVCacheAffinity 本客户端不支持 Ascend KV cache 亲和。
-// Python: ModelClient.supports_kv_cache_affinity() 默认 False
-func (c *IntelliRouterModelClient) SupportsKVCacheAffinity() bool { return false }
-
-// BuildKVCacheAffinityInvokeKwargs 不支持亲和时返回空参数。
-// Python: ModelClient.build_kv_cache_affinity_invoke_kwargs() 默认返回 {}
-func (c *IntelliRouterModelClient) BuildKVCacheAffinityInvokeKwargs(_ any, _, _ string, _ int) map[string]any {
-	return map[string]any{}
+	})
 }

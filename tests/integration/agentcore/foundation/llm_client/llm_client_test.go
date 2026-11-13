@@ -339,10 +339,10 @@ func (s *LLMClientSuite) TestStreamIntelliRouter() {
 	_ = usageMeta
 	s.GreaterOrEqual(atomic.LoadInt32(&tokenCount), int32(1))
 
-	// C-G：驱逐入口可用且幂等（缓存键不导出，故此处只验证不 panic 与重复调用安全）
+	// C-G：路由器缓存键确定性（23.4b 新实现：MakeRouterKey 同配置同键）
 	irCfg := intellirouter.FromModelClientConfig(cc)
 	s.NotNil(irCfg)
-	s.NotPanics(func() { intellirouter.ResetRouterCache("") })
+	s.Equal(intellirouter.MakeRouterKey(irCfg), intellirouter.MakeRouterKey(irCfg))
 }
 
 // TestTranscribeAudio 验证 C-A2 改造后的 transcription 路径：共享 Transport +

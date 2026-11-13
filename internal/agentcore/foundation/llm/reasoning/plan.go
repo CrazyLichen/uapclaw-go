@@ -236,6 +236,13 @@ func providerKeyOf(clientConfig *llmschema.ModelClientConfig) string {
 	return ProviderKey(ProviderIdentity(clientConfig), clientConfig.EndpointProfile, clientConfig.APIBase)
 }
 
+// ProviderKeyOf 返回客户端配置的生效 provider key。
+// Python: reasoning/_provider_key（compiler.py:137 _provider_key(client_config) 引用；
+// Python 侧以下划线导出于 reasoning/__init__，Go 侧补导出包装）。
+func ProviderKeyOf(clientConfig *llmschema.ModelClientConfig) string {
+	return providerKeyOf(clientConfig)
+}
+
 // legacyProviderName 读取归一前的 provider 原名（存于 Extra）。
 func legacyProviderName(clientConfig *llmschema.ModelClientConfig) string {
 	if clientConfig == nil || clientConfig.Extra == nil {
