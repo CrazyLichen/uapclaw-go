@@ -849,6 +849,7 @@ func TestStream_CancelledConsumer(t *testing.T) {
 		EventBus:     bus,
 	})
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	count := 0
 	for range r.Stream(ctx, nil, InvokeParams{Model: "m"}) {
 		count++
