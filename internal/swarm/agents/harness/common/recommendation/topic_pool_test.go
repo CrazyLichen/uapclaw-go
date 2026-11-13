@@ -53,15 +53,15 @@ func poolTestCard(rank int, manifest map[string]any) map[string]any {
 	corpusVersion := str(triggerKey["corpus_version"])
 	retrievalVersion := str(triggerKey["retrieval_config_version"])
 	provenance := map[string]any{
-		"model":                    triggerKey["ark_model"],
-		"base_url":                 triggerKey["ark_base_url"],
-		"effective_temperature":    triggerKey["effective_temperature"],
-		"effective_top_p":          triggerKey["effective_top_p"],
-		"context_window_tokens":    triggerKey["context_window_tokens"],
-		"context_window_source":    "ARK_CONTEXT_WINDOW_TOKENS",
+		"model":                     triggerKey["ark_model"],
+		"base_url":                  triggerKey["ark_base_url"],
+		"effective_temperature":     triggerKey["effective_temperature"],
+		"effective_top_p":           triggerKey["effective_top_p"],
+		"context_window_tokens":     triggerKey["context_window_tokens"],
+		"context_window_source":     "ARK_CONTEXT_WINDOW_TOKENS",
 		"decoding_parameter_source": "request_parameters",
-		"requested_temperature":    triggerKey["effective_temperature"],
-		"requested_top_p":          triggerKey["effective_top_p"],
+		"requested_temperature":     triggerKey["effective_temperature"],
+		"requested_top_p":           triggerKey["effective_top_p"],
 	}
 	// 修订 ID 与清单 card_revision_ids[0] 对齐，保证成批一致
 	revision := "rev-1"
@@ -101,17 +101,17 @@ func poolTestCard(rank int, manifest map[string]any) map[string]any {
 func poolTestManifest(revisionIDs ...string) map[string]any {
 	triggerKey := poolTestTriggerKey()
 	return map[string]any{
-		"manifest_id":                   "man-1",
-		"generation_batch_id":           "batch-1",
-		"card_revision_ids":             toAnySlice(revisionIDs),
-		"trigger_origin":                "lazy_seed",
-		"local_date":                    triggerKey["local_date"],
-		"generation_trigger_key":        triggerKey,
-		"generation_input_snapshot":     map[string]any{},
-		"serving_compatibility_key":     BuildServingCompatibilityKey(triggerKey),
-		"negative_preference_version":   triggerKey["negative_preference_version"],
-		"policy_id":                     POLICY_ID,
-		"payload_version":               PAYLOAD_VERSION,
+		"manifest_id":                 "man-1",
+		"generation_batch_id":         "batch-1",
+		"card_revision_ids":           toAnySlice(revisionIDs),
+		"trigger_origin":              "lazy_seed",
+		"local_date":                  triggerKey["local_date"],
+		"generation_trigger_key":      triggerKey,
+		"generation_input_snapshot":   map[string]any{},
+		"serving_compatibility_key":   BuildServingCompatibilityKey(triggerKey),
+		"negative_preference_version": triggerKey["negative_preference_version"],
+		"policy_id":                   POLICY_ID,
+		"payload_version":             PAYLOAD_VERSION,
 	}
 }
 
