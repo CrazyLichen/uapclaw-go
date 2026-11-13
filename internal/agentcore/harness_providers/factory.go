@@ -372,7 +372,9 @@ func CreateHarness(manifest any, opts CreateHarnessOptions) (harnessprotocol.Har
 	if err != nil {
 		return nil, err
 	}
-	jsonConfig, err := harnessprotocol.FreezeJsonObject(valuesToJsonValue(providerConfig))
+	// FreezeJsonValue 内部用 reflect 递归，能处理配置里混入的
+	// []map[string]any / []string 等具体类型，无需预归一化。
+	jsonConfig, err := harnessprotocol.FreezeJsonObject(providerConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -618,12 +620,4 @@ func expandHome(path string) (string, error) {
 		return filepath.Join(home, path[2:]), nil
 	}
 	return path, nil
-}
-
-// valuesToJsonValue 把配置 map 转成可冻结的 JSON 值。
-//
-// 配置里可能混入 []map[string]any / []string 等具体类型，
-// FreezeJsonObject 要求纯 JSON 形态；经一次 JSON 往返归一化最稳妥。
-func valuesToJsonValue(values map[string]any) harnessprotocol.JsonValue {
-	return map[string]any(values)
 }
