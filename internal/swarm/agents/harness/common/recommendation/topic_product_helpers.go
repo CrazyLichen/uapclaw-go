@@ -12,6 +12,7 @@ package recommendation
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"sort"
@@ -1647,4 +1648,552 @@ func TerminalStageMatchesOperations(terminalStage string, operationNames []strin
 		return len(operationNames) > 0 && operationNames[len(operationNames)-1] == "extractor"
 	}
 	return true
+}
+
+// ──────────────────────────── ⤴️ 31c 契约切片 C：RID 系校验器（topic_product.py:1111-1245/:1247-1527/:3053-3067） ────────────────────────────
+
+// ridResultSchemaVersion RID 结果版本（topic_terminal.py:22）。
+const ridResultSchemaVersion = RID_RESULT_SCHEMA_VERSION
+
+// ridDecisionFields RID 决策字段集（topic_product.py:537-551）。
+var ridDecisionFields = []string{"interest_summary_id", "source_kind",
+	"source_session_summary_ids", "source_profile_interest_ids",
+	"source_profile_unit_ids", "source_event_ids", "source_locators",
+	"selected", "rank", "resonance_score_nullable", "score_semantics"}
+
+// RetainedCandidateIds 本池从前任携带的候选（topic_product.py:3053-3067）。
+func RetainedCandidateIds(manifest any) map[string]bool {
+	root, isMap := manifest.(map[string]any)
+	if !isMap {
+		return map[string]bool{}
+	}
+	retained, isMap := root["retained_candidates"].(map[string]any)
+	if !isMap {
+		return map[string]bool{}
+	}
+	result := map[string]bool{}
+	for candidateID := range retained {
+		result[candidateID] = true
+	}
+	return result
+}
+
+// ExternalInvocationAuditIndex 审计小票 → (operation, operation_id, request_id) 索引
+// （topic_product.py:1111-1245 _external_invocation_audit_index；nil 表示契约失败）。
+func ExternalInvocationAuditIndex(manifest map[string]any) map[[3]string]map[string]any {
+	audit, isMap := manifest["external_invocation_audit"].(map[string]any)
+	if !isMap {
+		return nil
+	}
+	if !mapKeysEqual(audit, []string{"schema_version", "input_snapshot_id",
+		"context_scope", "invocations", "counters"}) {
+		return nil
+	}
+	if pyStr(audit["schema_version"]) != EXTERNAL_INVOCATION_AUDIT_SCHEMA_VERSION {
+		return nil
+	}
+	if pyStr(audit["input_snapshot_id"]) != pyStr(manifest["generation_input_snapshot_id"]) {
+		return nil
+	}
+	if pyStr(audit["context_scope"]) != pyStr(manifest["context_scope"]) {
+		return nil
+	}
+	invocations, isList := audit["invocations"].([]any)
+	if !isList {
+		return nil
+	}
+	invocationFields := []string{"sequence", "input_snapshot_id", "context_scope",
+		"operation", "operation_id", "provider_id", "candidate_id", "status",
+		"request_id", "result_id", "latency_ms", "failure_reason"}
+	index := map[[3]string]map[string]any{}
+	usedOperationIDs := map[string]bool{}
+	for sequence, invocationValue := range invocations {
+		invocation, invocationIsMap := invocationValue.(map[string]any)
+		if !invocationIsMap || !mapKeysEqual(invocation, invocationFields) {
+			return nil
+		}
+		if intOf(invocation["sequence"]) != sequence+1 {
+			return nil
+		}
+		if pyStr(invocation["input_snapshot_id"]) != pyStr(manifest["generation_input_snapshot_id"]) {
+			return nil
+		}
+		if pyStr(invocation["context_scope"]) != pyStr(manifest["context_scope"]) {
+			return nil
+		}
+		operation := pyStr(invocation["operation"])
+		if operation != "search" && operation != "fetch" && operation != "extractor" {
+			return nil
+		}
+		for _, field := range []string{"operation_id", "provider_id", "candidate_id", "request_id"} {
+			if !nonEmptyStr(invocation[field]) {
+				return nil
+			}
+		}
+		status := pyStr(invocation["status"])
+		if status != "success" && status != "failure" {
+			return nil
+		}
+		switch latency := invocation["latency_ms"].(type) {
+		case int:
+			if float64(latency) < 0 {
+				return nil
+			}
+		case float64:
+			if math.IsInf(latency, 0) || math.IsNaN(latency) || latency < 0 {
+				return nil
+			}
+		default:
+			return nil
+		}
+		if status == "success" {
+			if !nonEmptyStr(invocation["result_id"]) || invocation["failure_reason"] != nil {
+				return nil
+			}
+		} else if invocation["result_id"] != nil || !nonEmptyStr(invocation["failure_reason"]) {
+			return nil
+		}
+		key := [3]string{operation, pyStr(invocation["operation_id"]), pyStr(invocation["request_id"])}
+		if _, exists := index[key]; exists || usedOperationIDs[key[1]] {
+			return nil
+		}
+		usedOperationIDs[key[1]] = true
+		index[key] = invocation
+	}
+	counters, countersIsMap := audit["counters"].(map[string]any)
+	if !countersIsMap || !mapKeysEqual(counters, []string{"total", "success", "failure", "by_operation"}) {
+		return nil
+	}
+	byOperation, byIsMap := counters["by_operation"].(map[string]any)
+	if !byIsMap || !mapKeysEqual(byOperation, []string{"search", "fetch", "extractor"}) {
+		return nil
+	}
+	successCount := 0
+	failureCount := 0
+	perOperation := map[string][3]int{}
+	for key, invocation := range index {
+		if mapAnyOf(invocation)["status"] == "success" {
+			successCount++
+		} else {
+			failureCount++
+		}
+		stats := perOperation[key[0]]
+		if mapAnyOf(invocation)["status"] == "success" {
+			stats[1]++
+		} else {
+			stats[2]++
+		}
+		stats[0]++
+		perOperation[key[0]] = stats
+	}
+	expectedByOperation := map[string]any{}
+	for _, operation := range []string{"search", "fetch", "extractor"} {
+		stats := perOperation[operation]
+		expectedByOperation[operation] = map[string]any{
+			"total": stats[0], "success": stats[1], "failure": stats[2],
+		}
+	}
+	expectedCounters := map[string]any{
+		"total": len(index), "success": successCount, "failure": failureCount,
+		"by_operation": expectedByOperation,
+	}
+	if !anyEqual(counters, expectedCounters) {
+		return nil
+	}
+	return index
+}
+
+// ridResultRejectionReason RID 结果校验
+// （topic_product.py:1247-1390 _rid_result_rejection_reason；分支顺序逐条对应）。
+func ridResultRejectionReason(manifest map[string]any, newsOnly bool) string {
+	rawArtifacts, _ := manifest["session_summary_artifacts"].([]any)
+	ridResult, ridIsMap := manifest["rid_result"].(map[string]any)
+	if !ridIsMap {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	if rawArtifacts == nil {
+		if _, isList := manifest["session_summary_artifacts"].([]any); !isList {
+			return "manifest_field_rid_result_contract_failed"
+		}
+	}
+	if !mapKeysEqual(ridResult, []string{"rid_result_version", "context_scope",
+		"activity_group", "threshold_version", "component_receipt",
+		"trigger_interests", "rejected_interests"}) {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	if pyStr(ridResult["rid_result_version"]) != ridResultSchemaVersion {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	if pyStr(ridResult["context_scope"]) != pyStr(manifest["context_scope"]) {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	if pyStr(ridResult["activity_group"]) != "active" && pyStr(ridResult["activity_group"]) != "steady" {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	if !nonEmptyStr(ridResult["threshold_version"]) {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	componentReceipts := mapAnyOf(manifest["component_receipts"])
+	if !anyEqual(ridResult["component_receipt"], componentReceipts["icebreaker_rid"]) {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	triggerInterests, triggerIsList := ridResult["trigger_interests"].([]any)
+	if !triggerIsList {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	if len(triggerInterests) == 0 && !newsOnly {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	rejectedInterests, rejectedIsList := ridResult["rejected_interests"].([]any)
+	if !rejectedIsList {
+		return "manifest_field_rid_result_contract_failed"
+	}
+	var artifacts []*SessionSummaryArtifact
+	for _, item := range rawArtifacts {
+		summary, err := SessionSummaryArtifactFromPayload(item)
+		if err != nil {
+			return "manifest_field_rid_result_contract_failed"
+		}
+		artifacts = append(artifacts, summary)
+	}
+	artifactByID := map[string]*SessionSummaryArtifact{}
+	naturalSummaryIDs := map[string]bool{}
+	for _, artifact := range artifacts {
+		artifactByID[artifact.SessionSummaryID] = artifact
+		if artifact.NaturalRevisitEligible() {
+			naturalSummaryIDs[artifact.SessionSummaryID] = true
+		}
+	}
+	seenIDs := map[string]bool{}
+	consumedNaturalSummaryIDs := map[string]bool{}
+	var selectedRanks []int
+	for _, pair := range []struct {
+		selected bool
+		rawItems []any
+	}{
+		{true, triggerInterests},
+		{false, rejectedInterests},
+	} {
+		for _, rawValue := range pair.rawItems {
+			raw, rawIsMap := rawValue.(map[string]any)
+			if !rawIsMap || !mapKeysEqual(raw, ridDecisionFields) {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			interestID := pyStr(raw["interest_summary_id"])
+			if !nonEmptyStr(raw["interest_summary_id"]) || seenIDs[interestID] {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			sourceKind := pyStr(raw["source_kind"])
+			if sourceKind != "session_summary" && sourceKind != "long_term_profile" {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			if !raw["selected"].(bool) && truthy(raw["selected"]) == pair.selected && raw["selected"] == nil {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			selectedBool, isBool := raw["selected"].(bool)
+			if !isBool || selectedBool != pair.selected {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			if pyStr(raw["score_semantics"]) != "uncalibrated_api_proxy" {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			rank := raw["rank"]
+			if pair.selected {
+				if !plainInt(rank) || intOf(rank) < 1 {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				selectedRanks = append(selectedRanks, intOf(rank))
+			} else if rank != nil {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			if raw["resonance_score_nullable"] != nil {
+				return "manifest_field_rid_result_contract_failed"
+			}
+			for _, field := range []string{"source_session_summary_ids", "source_profile_interest_ids",
+				"source_profile_unit_ids", "source_event_ids", "source_locators"} {
+				if anyListOf(raw[field]) == nil {
+					if _, isList := raw[field].([]any); !isList {
+						return "manifest_field_rid_result_contract_failed"
+					}
+				}
+			}
+			if sourceKind == "session_summary" {
+				artifact, exists := artifactByID[interestID]
+				if !exists || !artifact.NaturalRevisitEligible() {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				if !anyEqual(raw["source_session_summary_ids"], []any{interestID}) {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				if len(anyListOf(raw["source_profile_interest_ids"])) != 0 ||
+					len(anyListOf(raw["source_profile_unit_ids"])) != 0 {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				var eventIDs []any
+				for _, eventID := range artifact.SourceEventIDs {
+					eventIDs = append(eventIDs, eventID)
+				}
+				if !anyEqual(raw["source_event_ids"], eventIDs) {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				var locatorPayloads []any
+				for _, locator := range artifact.SourceLocators {
+					locatorPayloads = append(locatorPayloads, locator.AsPayload())
+				}
+				if !anyEqual(raw["source_locators"], locatorPayloads) {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				consumedNaturalSummaryIDs[interestID] = true
+			} else {
+				if len(anyListOf(raw["source_session_summary_ids"])) != 0 ||
+					len(anyListOf(raw["source_event_ids"])) != 0 ||
+					len(anyListOf(raw["source_locators"])) != 0 {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				if !anyEqual(raw["source_profile_interest_ids"], []any{interestID}) {
+					return "manifest_field_rid_result_contract_failed"
+				}
+				if !UniqueNonEmptyStrings(raw["source_profile_unit_ids"]) {
+					return "manifest_field_rid_result_contract_failed"
+				}
+			}
+			seenIDs[interestID] = true
+		}
+	}
+	// RID 决定每个自然摘要，但全局页不读否定扣留的会话
+	sortedRanks := append([]int{}, selectedRanks...)
+	sort.Ints(sortedRanks)
+	for i, rank := range sortedRanks {
+		if rank != i+1 {
+			return "manifest_field_rid_result_contract_failed"
+		}
+	}
+	if pyStr(manifest["context_scope"]) != GlobalNewChatScope {
+		for id := range naturalSummaryIDs {
+			if !consumedNaturalSummaryIDs[id] {
+				return "manifest_field_rid_result_contract_failed"
+			}
+		}
+	}
+	return ""
+}
+
+// ridInterestSelectionRejectionReason RID 兴趣选择校验
+// （topic_product.py:1392-1527；分支顺序逐条对应）。
+func ridInterestSelectionRejectionReason(manifest map[string]any, cards []map[string]any, persisted bool) string {
+	const reason = "manifest_field_rid_interest_selection_contract_failed"
+	ridResult, ridIsMap := manifest["rid_result"].(map[string]any)
+	if !ridIsMap {
+		return reason
+	}
+	accepted, acceptedIsList := ridResult["trigger_interests"].([]any)
+	if !acceptedIsList || (len(accepted) == 0 && !NewsOnlyPool(manifest, cards)) {
+		return reason
+	}
+	var acceptedIDs []string
+	for _, item := range accepted {
+		if m, isMap := item.(map[string]any); isMap {
+			acceptedIDs = append(acceptedIDs, pyStr(m["interest_summary_id"]))
+		} else {
+			acceptedIDs = append(acceptedIDs, "")
+		}
+	}
+	if len(acceptedIDs) != len(accepted) {
+		return reason
+	}
+	scope := pyStr(manifest["context_scope"])
+	selection, selectionIsMap := manifest["rid_interest_selection"].(map[string]any)
+	if scope != GlobalNewChatScope {
+		if selectionIsMap {
+			return reason
+		}
+		selectedIDs := map[string]bool{}
+		for _, id := range acceptedIDs {
+			selectedIDs[id] = true
+		}
+		for _, card := range cards {
+			if !selectedIDs[pyStr(card["interest_summary_id"])] {
+				return reason
+			}
+		}
+		return ""
+	}
+	expectedFields := []string{"policy", "selected_interest_summary_ids",
+		"original_rid_ranks", "delta_linked_interest_summary_id",
+		"short_trigger_delta_event_ids", "extra_recent_slot_interest_summary_id",
+		"direction_withheld_candidates", "restated_offered_candidates"}
+	// 第四近槽写出前的池继续服役
+	if persisted && selectionIsMap {
+		if _, present := selection["extra_recent_slot_interest_summary_id"]; !present {
+			expectedFields = removeString(expectedFields, "extra_recent_slot_interest_summary_id")
+		}
+		if _, present := selection["direction_withheld_candidates"]; !present {
+			expectedFields = removeString(expectedFields, "direction_withheld_candidates")
+		}
+		if _, present := selection["restated_offered_candidates"]; !present {
+			expectedFields = removeString(expectedFields, "restated_offered_candidates")
+		}
+	}
+	if !selectionIsMap || !mapKeysEqual(selection, expectedFields) {
+		return reason
+	}
+	withheld, withheldIsList := selection["direction_withheld_candidates"].([]any)
+	if !withheldIsList {
+		return reason
+	}
+	for _, item := range withheld {
+		entry, isMap := item.(map[string]any)
+		if !isMap || !mapKeysEqual(entry, []string{"candidate_id", "interest_summary_id", "direction", "title"}) {
+			return reason
+		}
+		for key, value := range entry {
+			if _, isString := value.(string); !isString {
+				return reason
+			}
+			_ = key
+		}
+	}
+	restated, restatedIsList := selection["restated_offered_candidates"].([]any)
+	if !restatedIsList {
+		return reason
+	}
+	for _, item := range restated {
+		entry, isMap := item.(map[string]any)
+		if !isMap || !mapKeysEqual(entry, []string{"candidate_id", "interest_summary_id",
+			"direction", "title", "offered_title", "similarity"}) {
+			return reason
+		}
+		for key, value := range entry {
+			if key == "similarity" {
+				sim, isFloat := value.(float64)
+				if !isFloat || sim < 0.0 || sim > 1.0 {
+					return reason
+				}
+			} else if _, isString := value.(string); !isString {
+				return reason
+			}
+		}
+	}
+	selectedIDs, selectedIsList := selection["selected_interest_summary_ids"].([]any)
+	extraSlotID := selection["extra_recent_slot_interest_summary_id"]
+	if extraSlotID != nil && (!selectedIsList || !anyListContains(selectedIDs, extraSlotID)) {
+		return reason
+	}
+	ranks, ranksIsMap := selection["original_rid_ranks"].(map[string]any)
+	deltaID := selection["delta_linked_interest_summary_id"]
+	shortDeltaIDs, shortDeltaIsList := selection["short_trigger_delta_event_ids"].([]any)
+	// 唯一非空，或显式空表且无接受兴趣
+	if !selectedIsList {
+		return reason
+	}
+	uniqueSelected := true
+	seenSelected := map[string]bool{}
+	for _, id := range selectedIDs {
+		if !nonEmptyStr(id) || seenSelected[pyStr(id)] {
+			uniqueSelected = false
+		}
+		seenSelected[pyStr(id)] = true
+	}
+	if !uniqueSelected && !(len(selectedIDs) == 0 && len(accepted) == 0) {
+		return reason
+	}
+	if !ranksIsMap {
+		return reason
+	}
+	if len(ranks) != len(seenSelected) {
+		return reason
+	}
+	for id := range seenSelected {
+		if _, present := ranks[id]; !present {
+			return reason
+		}
+	}
+	for i, id := range acceptedIDs {
+		if seenSelected[pyStr(id)] && !anyEqual(ranks[pyStr(id)], mapAnyOf(accepted[i])["rank"]) {
+			return reason
+		}
+	}
+	for id := range seenSelected {
+		if !acceptedIDContains(acceptedIDs, id) {
+			return reason
+		}
+	}
+	if deltaID != nil && !acceptedIDContains(acceptedIDs, pyStr(deltaID)) {
+		return reason
+	}
+	if !shortDeltaIsList {
+		return reason
+	}
+	for _, eventID := range shortDeltaIDs {
+		if !nonEmptyStr(eventID) {
+			return reason
+		}
+	}
+	seenDelta := map[string]bool{}
+	for _, eventID := range shortDeltaIDs {
+		if seenDelta[pyStr(eventID)] {
+			return reason
+		}
+		seenDelta[pyStr(eventID)] = true
+	}
+	if pyStr(selection["policy"]) != "all_rid_selected_v1" ||
+		!anyEqual(selectedIDs, stringsToAny(acceptedIDs)) {
+		return reason
+	}
+	// 携带卡可以保留本轮被称重但未释放的兴趣
+	retainedIDs := RetainedCandidateIds(manifest)
+	weighedIDs := map[string]bool{}
+	for _, item := range anyListOf(ridResult["rejected_interests"]) {
+		if m, isMap := item.(map[string]any); isMap {
+			weighedIDs[pyStr(m["interest_summary_id"])] = true
+		}
+	}
+	newsLeadID := NewsLeadCardId(manifest)
+	for _, card := range cards {
+		interestID := card["interest_summary_id"]
+		cardID := card["card_id"]
+		if seenSelected[pyStr(interestID)] {
+			continue
+		}
+		if truthy(retainedIDs[pyStr(cardID)]) && weighedIDs[pyStr(interestID)] {
+			continue
+		}
+		if anyEqual(cardID, newsLeadID) &&
+			(interestID == nil || weighedIDs[pyStr(interestID)]) {
+			continue
+		}
+		return reason
+	}
+	return ""
+}
+
+// removeString 移除首个匹配元素。
+func removeString(values []string, target string) []string {
+	result := []string{}
+	for _, value := range values {
+		if value != target {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+// anyListContains any 列表包含（anyEqual 深比较）。
+func anyListContains(values []any, target any) bool {
+	for _, value := range values {
+		if anyEqual(value, target) {
+			return true
+		}
+	}
+	return false
+}
+
+// acceptedIDContains 接受 ID 表包含。
+func acceptedIDContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
