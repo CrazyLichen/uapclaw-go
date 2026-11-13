@@ -60,13 +60,11 @@ func TestSessionSummaryMaterializationReceipt(t *testing.T) {
 	// 摘要 config 不一致 → 拒绝
 	other := summaryForTests(t, "summary:s2:bbb", "s2", 20.0)
 	other.SummaryConfigVersion = "cfg-v2"
-	mismatchErr, err := SessionSummaryMaterializationReceipt(snapshot, []*SessionSummaryArtifact{summary, other},
-		nil, "cfg-v1")
-	if err == nil {
+	if _, mismatchErr := SessionSummaryMaterializationReceipt(snapshot, []*SessionSummaryArtifact{summary, other},
+		nil, "cfg-v1"); mismatchErr == nil {
 		t.Fatalf("config mismatch should reject")
-	}
-	if reason, ok := mismatchErr.(*TerminalGenerationRejection); !ok || reason.Reason != "session_summary_materialization_contract_failed" {
-		t.Fatalf("rejection type: %v", err)
+	} else if reason, ok := mismatchErr.(*TerminalGenerationRejection); !ok || reason.Reason != "session_summary_materialization_contract_failed" {
+		t.Fatalf("rejection type: %v", mismatchErr)
 	}
 }
 
