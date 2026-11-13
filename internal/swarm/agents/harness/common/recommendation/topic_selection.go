@@ -251,26 +251,26 @@ type HierarchicalPreferencePair struct {
 // AsPayload 序列化（对齐 :319-331）。
 func (p *HierarchicalPreferencePair) AsPayload() map[string]any {
 	return map[string]any{
-		"pair_id":                p.PairID,
-		"preferred_candidate_ids": copyStringSlice(p.PreferredCandidateIDs),
-		"negative_candidate_ids":  copyStringSlice(p.NegativeCandidateIDs),
-		"negative_type":           p.NegativeType,
-		"source_trace_index":      p.SourceTraceIndex,
-		"failure_reasons":         copyStringSlice(p.FailureReasons),
-		"utility_scorer_version":  p.UtilityScorerVersion,
+		"pair_id":                  p.PairID,
+		"preferred_candidate_ids":  copyStringSlice(p.PreferredCandidateIDs),
+		"negative_candidate_ids":   copyStringSlice(p.NegativeCandidateIDs),
+		"negative_type":            p.NegativeType,
+		"source_trace_index":       p.SourceTraceIndex,
+		"failure_reasons":          copyStringSlice(p.FailureReasons),
+		"utility_scorer_version":   p.UtilityScorerVersion,
 		"diversity_scorer_version": p.DiversityScorerVersion,
-		"search_version":          p.SearchVersion,
-		"pair_version":            p.PairVersion,
+		"search_version":           p.SearchVersion,
+		"pair_version":             p.PairVersion,
 	}
 }
 
 // listMetrics 列表指标（对齐 :732 _ListMetrics）。
 type listMetrics struct {
-	meanUtility             *float64
-	meanDiversity           *float64
+	meanUtility              *float64
+	meanDiversity            *float64
 	minimumPairwiseDiversity *float64
-	pairwiseCount           int
-	objective               *float64
+	pairwiseCount            int
+	objective                *float64
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -306,9 +306,9 @@ const globalScope = "global_new_chat"
 
 // selectionGlobalQuotas 全局配额（对齐 :40-45，偏好语义：只排序不裁剪）。
 var selectionGlobalQuotas = map[string]int{
-	"profile_recent_progress":      3,
-	"adjacent_explanation":         2,
-	"broad_timely_practical":       2,
+	"profile_recent_progress":       3,
+	"adjacent_explanation":          2,
+	"broad_timely_practical":        2,
 	"profile_interest_continuation": GLOBAL_POOL_TARGET_SIZE,
 }
 

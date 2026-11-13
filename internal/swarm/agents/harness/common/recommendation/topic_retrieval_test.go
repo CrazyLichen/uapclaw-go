@@ -651,14 +651,14 @@ func TestValidLinkedDatePageFullPath(t *testing.T) {
 	dateURL := "https://arxiv.org/html/2501.12345v3"
 	// date 页正文引用 arXiv:2501.12345v3，使其与 body 身份一致
 	page := map[string]any{
-		"date_page_url":      dateURL,
-		"body_url":           bodyURL,
-		"document_id":        "arxiv:2501.12345",
-		"version":            "v3",
-		"date_page_excerpt":  "updated listing arXiv:2501.12345v3",
-		"operation_id":       "op-1",
-		"request_id":         "req-1",
-		"http_status_code":   200.0,
+		"date_page_url":     dateURL,
+		"body_url":          bodyURL,
+		"document_id":       "arxiv:2501.12345",
+		"version":           "v3",
+		"date_page_excerpt": "updated listing arXiv:2501.12345v3",
+		"operation_id":      "op-1",
+		"request_id":        "req-1",
+		"http_status_code":  200.0,
 	}
 	// date 页 URL 必须带版本且与 body 身份一致——这里是同一篇 v3
 	assert.True(t, ValidLinkedDatePage(page, bodyURL))
@@ -737,7 +737,7 @@ func TestEvidenceBundleAndHelpers(t *testing.T) {
 	bundle := &EvidenceBundle{
 		CandidateID: "c", ContextScope: "global_new_chat", Category: "cat",
 		FreshnessClass: "current_event", SnapshotDate: "d", SnapshotVersion: "v",
-		Spans: []ExactEvidenceSpan{{CandidateID: "c", Start: 0, End: 1}},
+		Spans:          []ExactEvidenceSpan{{CandidateID: "c", Start: 0, End: 1}},
 		SourceGateMode: "single_primary_source",
 	}
 	payload := bundle.AsPayload()
@@ -871,7 +871,9 @@ type recordingRetriever struct {
 	outcomes []string
 }
 
-func (r *recordingRetriever) RecordValidation(response any, outcome string) { r.outcomes = append(r.outcomes, outcome) }
+func (r *recordingRetriever) RecordValidation(response any, outcome string) {
+	r.outcomes = append(r.outcomes, outcome)
+}
 func (r *recordingRetriever) Invoke(ctx context.Context, payload map[string]any) (any, error) {
 	return map[string]any{"hits": []any{}}, nil
 }

@@ -575,8 +575,8 @@ const (
 var (
 	// globalFixedCategories 全局固定类别集合（对齐 :45-47 frozenset）
 	globalFixedCategories = map[string]struct{}{
-		"adjacent_explanation":    {},
-		"broad_timely_practical":  {},
+		"adjacent_explanation":   {},
+		"broad_timely_practical": {},
 	}
 	// ignoredProviderTextFields 被忽略的厂商文本字段（对齐 :48）
 	ignoredProviderTextFields = map[string]struct{}{
@@ -644,15 +644,15 @@ func (e *PATrainingExample) ArtifactID() string {
 // AsPayload 序列化（对齐 :166-177）。
 func (e *PATrainingExample) AsPayload() map[string]any {
 	return map[string]any{
-		"user_state_snapshot_id": e.UserStateSnapshotID,
-		"query_text_locator":     optionalString(e.QueryTextLocator),
+		"user_state_snapshot_id":  e.UserStateSnapshotID,
+		"query_text_locator":      optionalString(e.QueryTextLocator),
 		"query_source_starter_id": optionalString(e.QuerySourceStarterID),
-		"domain":                 e.Domain,
-		"positive_label":         e.PositiveLabel,
-		"event_time":             e.EventTime,
-		"context_scope":          e.ContextScope,
-		"source_artifact_id":     e.SourceArtifactID,
-		"schema_version":         e.SchemaVersion,
+		"domain":                  e.Domain,
+		"positive_label":          e.PositiveLabel,
+		"event_time":              e.EventTime,
+		"context_scope":           e.ContextScope,
+		"source_artifact_id":      e.SourceArtifactID,
+		"schema_version":          e.SchemaVersion,
 	}
 }
 
@@ -1052,9 +1052,9 @@ func NewPublicationDateProvenance(sourceType, sourceField, rawValue string, sear
 // AsPayload 序列化（对齐 :580-592，None 字段不落键）。
 func (p *PublicationDateProvenance) AsPayload() map[string]any {
 	payload := map[string]any{
-		"source_type":   p.SourceType,
-		"source_field":  p.SourceField,
-		"raw_value":     p.RawValue,
+		"source_type":        p.SourceType,
+		"source_field":       p.SourceField,
+		"raw_value":          p.RawValue,
 		"search_provider_id": optionalStringFromEmpty(p.SearchProviderID),
 		"search_receipt_id":  optionalStringFromEmpty(p.SearchReceiptID),
 		"search_result_url":  optionalStringFromEmpty(p.SearchResultURL),
@@ -1468,18 +1468,18 @@ func ExtractCandidateEvidence(
 		snapshotRevisionIDs = append(snapshotRevisionIDs, frozenDocuments.Documents[i].DocumentRevisionID)
 	}
 	requestPayload := map[string]any{
-		"contract_version":     EvidenceContractVersionStr,
-		"request_id":           requestID,
-		"input_snapshot_id":    inputSnapshotID,
-		"candidate_id":         frozenCandidate.CandidateID,
-		"candidate":            frozenCandidate.AsPayload(),
-		"snapshot_date":        frozenDocuments.SnapshotDate,
-		"snapshot_version":     frozenDocuments.SnapshotVersion,
+		"contract_version":               EvidenceContractVersionStr,
+		"request_id":                     requestID,
+		"input_snapshot_id":              inputSnapshotID,
+		"candidate_id":                   frozenCandidate.CandidateID,
+		"candidate":                      frozenCandidate.AsPayload(),
+		"snapshot_date":                  frozenDocuments.SnapshotDate,
+		"snapshot_version":               frozenDocuments.SnapshotVersion,
 		"snapshot_document_revision_ids": snapshotRevisionIDs,
 		"document_revision_ids":          ids,
-		"required_source_gate_mode": RequiredSourceGateMode(frozenCandidate, allowedDocuments),
-		"documents":                 documents,
-		"provider_binding":          providerBinding.AsProvenance(),
+		"required_source_gate_mode":      RequiredSourceGateMode(frozenCandidate, allowedDocuments),
+		"documents":                      documents,
+		"provider_binding":               providerBinding.AsProvenance(),
 	}
 	// 对齐 :1131-1141 调用与失败包装
 	response, err := invokeExtractor(context.Background(), requestPayload)
@@ -1581,19 +1581,19 @@ func ExtractCandidateEvidence(
 			return nil, invokedFailure("empty_evidence_span")
 		}
 		spans = append(spans, ExactEvidenceSpan{
-			CandidateID:         frozenCandidate.CandidateID,
-			DocumentRevisionID:  document.DocumentRevisionID,
-			SourceURL:           document.SourceURL,
-			Publisher:           document.Publisher,
-			SourceKind:          document.SourceKind,
-			PublishedAt:         document.PublishedAt,
-			FetchedAt:           document.FetchedAt,
-			SnapshotDate:        document.SnapshotDate,
-			SnapshotVersion:     document.SnapshotVersion,
-			Start:               start,
-			End:                 end,
-			ExactText:           exactText,
-			RetrievedAt:         retrievedAt,
+			CandidateID:               frozenCandidate.CandidateID,
+			DocumentRevisionID:        document.DocumentRevisionID,
+			SourceURL:                 document.SourceURL,
+			Publisher:                 document.Publisher,
+			SourceKind:                document.SourceKind,
+			PublishedAt:               document.PublishedAt,
+			FetchedAt:                 document.FetchedAt,
+			SnapshotDate:              document.SnapshotDate,
+			SnapshotVersion:           document.SnapshotVersion,
+			Start:                     start,
+			End:                       end,
+			ExactText:                 exactText,
+			RetrievedAt:               retrievedAt,
 			PublicationDateProvenance: document.PublicationDateProvenance,
 		})
 	}
@@ -1861,16 +1861,16 @@ func RetrieveFixedStarters(
 		})
 	}
 	requestPayload := map[string]any{
-		"contract_version":     PARetrievalContractVersion,
-		"request_id":           requestID,
-		"input_snapshot_id":    userStateSnapshotID,
+		"contract_version":       PARetrievalContractVersion,
+		"request_id":             requestID,
+		"input_snapshot_id":      userStateSnapshotID,
 		"user_state_snapshot_id": userStateSnapshotID,
-		"context_scope":        contextScope,
-		"corpus_version":       corpusVersion,
-		"provider_binding":     providerBinding.AsProvenance(),
-		"top_k":                topK,
-		"ranked_interests":     interestRows,
-		"corpus":               corpusRows,
+		"context_scope":          contextScope,
+		"corpus_version":         corpusVersion,
+		"provider_binding":       providerBinding.AsProvenance(),
+		"top_k":                  topK,
+		"ranked_interests":       interestRows,
+		"corpus":                 corpusRows,
 	}
 	response, err := invokeRetriever(context.Background(), requestPayload)
 	if err != nil {
@@ -2404,7 +2404,9 @@ func recordProviderValidationOn(invoker any, response any, outcome string) {
 }
 
 // isSpaceRune Python str.isspace 的等价判定（对齐 :929/:941 isspace）。
-func isSpaceRune(r rune) bool { return strings.ContainsRune(" \t\n\r\v\f\x1c\x1d\x1e\x1f\x85", r) || r == 0x20 }
+func isSpaceRune(r rune) bool {
+	return strings.ContainsRune(" \t\n\r\v\f\x1c\x1d\x1e\x1f\x85", r) || r == 0x20
+}
 
 // isConsecutiveRanks 名次必须是 1..n 的排列（对齐 :1510-1512 sorted(ranks) == range(1,n+1)）。
 func isConsecutiveRanks(ranks []int) bool {

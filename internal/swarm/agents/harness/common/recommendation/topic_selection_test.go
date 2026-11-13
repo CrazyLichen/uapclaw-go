@@ -40,7 +40,7 @@ func selectionTestUtility(t *testing.T, receipt *LearnedComponentReceipt, ids []
 			CandidateID: id, Admitted: true, Reason: "ok",
 			ClickScoreNullable: &scoreValue, DepthScoreNullable: &scoreValue,
 			CombinedUtilityNullable: &scoreValue,
-			GivenConditions: []map[string]string{},
+			GivenConditions:         []map[string]string{},
 		})
 	}
 	return &UtilityScoringResult{Scores: scores, ScorerVersion: receipt.Binding.ConfigVersion, Receipt: receipt}
@@ -455,10 +455,10 @@ func TestMineHierarchicalPairs(t *testing.T) {
 	passTrue := true
 	passFalse := false
 	trace := &BoundedBeamTrace{
-		PreferredCandidateIDs: []string{"c1", "c2"},
-		UtilityScorerVersion:  "u1",
+		PreferredCandidateIDs:  []string{"c1", "c2"},
+		UtilityScorerVersion:   "u1",
 		DiversityScorerVersion: "d1",
-		SearchVersion:         LIST_SEARCH_VERSION,
+		SearchVersion:          LIST_SEARCH_VERSION,
 		Entries: []BeamTraceEntry{
 			{TraceIndex: 1, CandidateIDs: []string{"c1", "c2"}, FailureReasons: []string{}},
 			{TraceIndex: 2, CandidateIDs: []string{"c3", "c4"}, HardConstraintsPass: true,
