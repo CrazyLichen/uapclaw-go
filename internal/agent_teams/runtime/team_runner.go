@@ -43,10 +43,6 @@ type RuntimeGetter interface {
 	GetRuntime() *team_runtime.TeamRuntime
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const ()
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RunTeamAgent TeamAgent 路径（非流式）——统一团队执行入口。

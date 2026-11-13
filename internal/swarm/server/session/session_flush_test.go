@@ -16,10 +16,13 @@ import (
 func TestFlushHistoryQueue_队列空时返回true(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	resetHistoryWorkspaceCache()
-	ResetHistoryWorker()
+	// 先清掉上一个用例可能留在共享队列里的记录，再换一个空队列起跑：
+	// 只 ResetHistoryWorker 会把残留记录一起丢弃，但 worker 已是新起的，
+	// 本用例断言"队列空 → 立即确认"才成立
+	ResetDrainedQueues()
 	ClearAllSessionMetadataCache()
 	t.Cleanup(func() {
-		ResetHistoryWorker()
+		ResetDrainedQueues()
 		ClearAllSessionMetadataCache()
 	})
 
@@ -32,8 +35,14 @@ func TestFlushHistoryQueue_队列空时返回true(t *testing.T) {
 func TestFlushMetadataQueue_队列空时返回true(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	resetHistoryWorkspaceCache()
+	// 与 history 侧对称：先把两个队列排空再换新 worker，
+	// 避免上一个用例残留的条目或超时哨兵顶掉本次确认
+	ResetDrainedQueues()
 	ClearAllSessionMetadataCache()
-	t.Cleanup(ClearAllSessionMetadataCache)
+	t.Cleanup(func() {
+		ResetDrainedQueues()
+		ClearAllSessionMetadataCache()
+	})
 
 	ok := FlushMetadataQueue(2.0)
 	require.True(t, ok, "队列空时应立即返回 true")
@@ -58,8 +67,13 @@ func TestFlushHistoryQueue_极小超时不panic(t *testing.T) {
 func TestFlushMetadataQueue_超时有界(t *testing.T) {
 	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
 	resetHistoryWorkspaceCache()
+	// 同上一例：用例独占 worker，且排空残留后再起，超时哨兵不跨用例残留
+	ResetDrainedQueues()
 	ClearAllSessionMetadataCache()
-	t.Cleanup(ClearAllSessionMetadataCache)
+	t.Cleanup(func() {
+		ResetDrainedQueues()
+		ClearAllSessionMetadataCache()
+	})
 
 	start := time.Now()
 	_ = FlushMetadataQueue(0.001)

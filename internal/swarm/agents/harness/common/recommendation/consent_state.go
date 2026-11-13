@@ -57,7 +57,7 @@ func readConsentState() consentStateRow {
 		logger.Warn(logComponent).Err(err).Str("path", path).Msg("recommendation consent state unreadable")
 		return consentStateRow{}
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	row := db.QueryRow("SELECT history_after, deleted_at FROM " + consentTableName + " WHERE id = 1")
 	var history, deleted sql.NullFloat64

@@ -573,7 +573,7 @@ func (f *PromptSuggestionForks) recordLedgerEvent(
 			Msg("prompt suggestion ledger write failed")
 		return
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	event := map[string]any{
 		"session_id":        sessionID,
 		"slate_id":          "prompt-suggestion:" + requestID,
@@ -863,7 +863,7 @@ func (f *PromptSuggestionForks) runFork(
 			Msg("prompt suggestion push store open failed")
 		return
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	f.pushCheckedSuggestions(ctx, pusher, store, sessionID, requestID, suggestionIDs, suggestions)
 }
 

@@ -82,7 +82,8 @@ func RunPermissionsFromCtx(ctx context.Context) map[string]string {
 func OverlayRunPermissions(ctx context.Context, config map[string]any) (map[string]any, error) {
 	levels := RunPermissionsFromCtx(ctx)
 	if levels == nil {
-		// Runtime workers can predate the request's RUN_PERMISSIONS binding.
+		// 运行时 worker 可能早于本次请求的 RUN_PERMISSIONS 绑定（老 worker 没有该信息），
+		// 此时回落到运行上下文中记录的权限表。
 		// ⚠️ 写入方（请求入口）暂留 ⤵️：见 9.90d-2 装配层 / 10.3.x 章节。
 		if rc := CurrentRunContext(ctx); rc != nil && rc.ToolPermissions != nil {
 			levels = make(map[string]string)

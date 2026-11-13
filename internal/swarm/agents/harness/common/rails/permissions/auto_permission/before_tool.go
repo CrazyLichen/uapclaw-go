@@ -809,8 +809,6 @@ func (r *AutoPermissionRail) beforeToolCallImpl(
 // 这些是 Python 模块级函数 / 常量在 Go 侧的等价物，仅供本文件的单方法使用，
 // 不参与七步编排（规则 9.3 禁止拆的是「方法内步骤」，不是模块级常量）。
 
-const ()
-
 // buildToolDecisionFactsForBeforeTool 构造当前调用的判定事实。
 //
 // Python: build_tool_decision_facts(...)

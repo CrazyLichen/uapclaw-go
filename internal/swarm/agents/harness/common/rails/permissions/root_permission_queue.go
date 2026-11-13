@@ -386,6 +386,7 @@ func (q *RootPermissionQueue) ReserveAnswer(
 	rawInputs map[string]any,
 	userInputs map[string]any,
 ) (RootPermissionAnswer, error) {
+	// ① 校验入参：会话 ID 有界、不接受原始输入、必须恰好一张卡片一条回答
 	rootSessionID, err := rootQueueText("root_session_id", rootSessionID, 512)
 	if err != nil {
 		return RootPermissionAnswer{}, err
@@ -397,6 +398,7 @@ func (q *RootPermissionQueue) ReserveAnswer(
 		return RootPermissionAnswer{}, &RootPermissionQueueError{"permission_queue_one_answer_required"}
 	}
 
+	// ② 从唯一的回答里取出卡片 ID 与回答内容，并校验结构
 	var rawCardID string
 	var rawPayload any
 	for id, payload := range userInputs {
@@ -411,13 +413,16 @@ func (q *RootPermissionQueue) ReserveAnswer(
 		return RootPermissionAnswer{}, &RootPermissionQueueError{"permission_queue_payload_invalid"}
 	}
 
+	// ③ 入队锁：整段判定与状态改写必须原子，避免与出队/隔离并发
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	// ④ 隔离态的会话不得再接受回答
 	if err := q.raiseIfQuarantinedLocked(rootSessionID); err != nil {
 		return RootPermissionAnswer{}, err
 	}
 
+	// ⑤ 只允许回答队首那张仍在等待的卡片（不能插队、不能重复回答）
 	order := q.order[rootSessionID]
 	if len(order) == 0 {
 		return RootPermissionAnswer{}, &RootPermissionQueueError{"permission_queue_empty"}
@@ -430,15 +435,18 @@ func (q *RootPermissionQueue) ReserveAnswer(
 		return RootPermissionAnswer{}, &RootPermissionQueueError{"permission_queue_non_head_answer"}
 	}
 
+	// ⑥ 归一化回答内容
 	payload, err := normalizeRootPermissionAnswer(payloadMap)
 	if err != nil {
 		return RootPermissionAnswer{}, err
 	}
 
+	// ⑦ 占位：队首卡片由待回答改为恢复中，防止同一张卡被再次认领
 	reserved := card
 	reserved.State = RootPermissionCardStateResuming
 	q.cards[card.Key.InvocationID] = reserved
 
+	// ⑧ 组装返回：卡片副本 + 单条交互输入 + 归一化后的回答
 	sparse := map[string]any{card.Key.ToolCallID: cloneMap(payload)}
 
 	return RootPermissionAnswer{

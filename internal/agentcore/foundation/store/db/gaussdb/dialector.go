@@ -34,9 +34,6 @@ type GaussDialector struct {
 	postgres.Dialector // 值嵌入；所有方法使用值接收者，与 postgres.Dialector 一致
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-const ()
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件标识

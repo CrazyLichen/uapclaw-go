@@ -39,8 +39,6 @@ type BrowserAgentRuntime struct {
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
 
-const ()
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBrowserAgentRuntime 创建新的浏览器运行时内核。
