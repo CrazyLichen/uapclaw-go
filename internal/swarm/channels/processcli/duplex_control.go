@@ -28,6 +28,9 @@ type DuplexControlError struct {
 // Error 实现 error 接口。
 func (e *DuplexControlError) Error() string { return e.Message }
 
+// CodeValue 错误码提取（machine.go exceptionInfo 的错误分流面）。
+func (e *DuplexControlError) CodeValue() string { return e.Code }
+
 // streamItem 输出队列条目。
 // Python: duplex_control.py:41-46 _StreamItem
 type streamItem struct {

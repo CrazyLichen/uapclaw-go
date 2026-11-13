@@ -67,10 +67,9 @@ type MachineRun struct {
 	exitCode int
 	// cleanupErrors 清理步骤失败名列表
 	cleanupErrors []string
-	// control 双工控制器
-	// ⤵️ 回填 20.4：DuplexController 未实现（用户决策），本批恒 nil，只走非交互分支。
-	// 上游类型 Python: machine.py:153 control: DuplexController | None
-	control any
+	// control 双工控制器；nil 表示非交互模式。
+	// Python: machine.py:153 control: DuplexController | None
+	control *DuplexController
 	// sessionLease 会话互斥租约
 	// ⤵️ 回填 20.5：SessionLease 未实现（用户决策），本批恒 nil，
 	// acquire/release 全部跳过（D-4 静默放行）。
@@ -112,7 +111,7 @@ func (e *MachineRunError) CodeValue() string { return e.Code }
 // NewMachineRun 构造一次机器运行。
 // Python: machine.py:148-178 _MachineRun.__init__
 func NewMachineRun(
-	runInput *protocol.OneShotRunInput, writer *OneShotWriter, control any,
+	runInput *protocol.OneShotRunInput, writer *OneShotWriter, control *DuplexController,
 ) *MachineRun {
 	// Python: :156-162 RunContext(request_id=writer.request_id, max_turns=...,
 	//                            max_budget_usd=..., host_tools=..., tool_permissions=...)
@@ -370,16 +369,8 @@ func (m *MachineRun) Execute(
 		}
 	}
 
-	// 步骤 22: 消费事件流（非交互路径）
-	// Python: :364-372 if control is not None: control.consume(...) else consume_noninteractive()
-	if m.control != nil {
-		// ⤵️ 回填 20.4：DuplexController.consume 未实现（control 恒 nil，不会进此分支）
-		return &MachineRunError{
-			Message: "Interactive mode is not supported yet (see 20.4).",
-			Code:    "INTERACTION_REQUIRED",
-		}
-	}
-	completed, consumeErr := m.consumeNoninteractive(streamFn)
+	// 步骤 22: 消费事件流
+	completed, consumeErr := m.executeConsumeStep(ctx, streamFn)
 	if consumeErr != nil {
 		return consumeErr
 	}
@@ -417,7 +408,12 @@ func (m *MachineRun) Execute(
 // Python: machine.py:456-488 _MachineRun.cleanup
 func (m *MachineRun) Cleanup(ctx context.Context) {
 	// Python: :457-458 if control is not None: cleanup_step("control_input", control.stop_input)
-	// ⤵️ 回填 20.4：DuplexController 未实现（control 恒 nil）
+	if m.control != nil {
+		m.cleanupStep(ctx, "control_input", func(_ context.Context) error {
+			m.control.StopInput()
+			return nil
+		})
+	}
 
 	// Python: :459-464 client is None 时只记录已有清理错误
 	if m.client == nil {
@@ -432,8 +428,12 @@ func (m *MachineRun) Cleanup(ctx context.Context) {
 			return m.client.Cancel(stepCtx, cancelRequest(m.request, m.control != nil))
 		})
 	}
-	// Python: :472-473 if control is not None: cleanup_step("control_streams", ...)
-	// ⤵️ 回填 20.4
+	// Python: :472-473 if control is not None: cleanup_step("control_streams", control.close_streams)
+	if m.control != nil {
+		m.cleanupStep(ctx, "control_streams", func(stepCtx context.Context) error {
+			return m.control.CloseStreams()
+		})
+	}
 
 	// Python: :474-476 关闭事件流（Go 的 Stream 是回调式，无需 aclose）
 	//
@@ -559,7 +559,7 @@ func RunMachine(
 	ctx context.Context,
 	runInput *protocol.OneShotRunInput,
 	writer *OneShotWriter,
-	control any,
+	control *DuplexController,
 	clientFactory func() *InProcessRuntimeClient,
 ) *protocol.OneShotRunResult {
 	run := NewMachineRun(runInput, writer, control)
@@ -592,7 +592,7 @@ func RunWithSignals(
 	ctx context.Context,
 	runInput *protocol.OneShotRunInput,
 	writer *OneShotWriter,
-	control any,
+	control *DuplexController,
 ) *protocol.OneShotRunResult {
 	if ctx == nil {
 		ctx = context.Background()
@@ -693,6 +693,9 @@ func exceptionInfo(err error) *protocol.RuntimeErrorInfo {
 		}
 	} else if boundary, isBoundary := err.(*ProcessCliBoundaryError); isBoundary {
 		message = boundary.Message
+	} else if ctlErr, isCtrl := err.(*DuplexControlError); isCtrl {
+		// Python: :84-88 isinstance 集合里的 DuplexControlError——回显原文
+		message = ctlErr.Message
 	}
 	info := &protocol.RuntimeErrorInfo{Code: code, Message: message}
 	if len(details) > 0 {
@@ -718,6 +721,17 @@ func describeError(err error) string {
 }
 
 var _ = swruntime.RuntimeEvent{}
+
+// executeConsumeStep 步骤 22：按 control 有无分流消费事件流。
+// Python: machine.py:364-372 if control is not None: control.consume(
+//     stream, client=self.client, request=self.request, observe=self.observe)
+// else consume_noninteractive()
+func (m *MachineRun) executeConsumeStep(ctx context.Context, streamFn streamDriver) (bool, error) {
+	if m.control != nil {
+		return m.control.Consume(ctx, streamFn, m.client, m.request, m.Observe)
+	}
+	return m.consumeNoninteractive(streamFn)
+}
 
 // consumeEvents 非交互消费：写事件、归约、计量、检查交互与完成。
 // Python: machine.py:420-436 _MachineRun.consume_noninteractive
