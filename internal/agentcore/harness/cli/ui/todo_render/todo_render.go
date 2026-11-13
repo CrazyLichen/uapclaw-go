@@ -40,7 +40,7 @@ var sdkIconToStatus = map[string]string{
 // 两个解析正则（RE2 语法，与 Python re 等价）。
 // Python: todo_render.py:176-178 create_pattern、:199-201 section_pattern
 var (
-	createPattern = regexp.MustCompile(`\[([>√× ])\]\s+task_id:\s*\S+\s*,\s*content:\s*(.+)`)
+	createPattern  = regexp.MustCompile(`\[([>√× ])\]\s+task_id:\s*\S+\s*,\s*content:\s*(.+)`)
 	sectionPattern = regexp.MustCompile(`^\[([>√× ])\]\s+(?:In Progress|Pending|Completed|Cancelled)`)
 	itemPattern    = regexp.MustCompile(`^\s+\[[\w-]+\]\s+(.+)`)
 )
