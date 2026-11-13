@@ -21,10 +21,10 @@ func TestDeployment_Validate(t *testing.T) {
 	// 必填字段非空（py:57-68）
 	_, err := NewDeployment(DeploymentParams{Provider: "openai"}) // 缺 model_name
 	require.ErrorContains(t, err, "must be a non-empty string")
-	_, err = NewDeployment(DeploymentParams{ModelName: "m", APIBase: "u", Provider: "p"})
-	require.ErrorContains(t, err, "Deployment.api_key")
-	_, err = NewDeployment(DeploymentParams{ModelName: "m", APIKey: "k"})
-	require.ErrorContains(t, err, "Deployment.provider")
+	_, err = NewDeployment(DeploymentParams{ModelName: "m", APIKey: "k", Provider: "p"}) // 缺 api_base
+	require.ErrorContains(t, err, "Deployment.api_base")
+	// provider 有默认值 "openai"（py:40），dataclass 构造路径下不可能为空，
+	// 不存在「缺 provider」用例——与 Python 行为一致
 
 	// 全缺省时 provider 默认 openai（py:40）、id 自动生成 uuid[:8]（py:28）
 	d, err := NewDeployment(validParams())

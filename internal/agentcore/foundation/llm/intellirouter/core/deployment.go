@@ -174,15 +174,19 @@ func NewDeployment(p DeploymentParams) (*Deployment, error) {
 
 // Validate 字段类型与数值校验。← deployment.py:56-97 __post_init__
 func (d *Deployment) Validate() error {
-	// ← py:57-68 四个必填字符串非空（bedrock 豁免分支裁剪，见 NewDeployment 注释）
-	for name, value := range map[string]string{
-		"model_name": d.ModelName,
-		"api_key":    d.APIKey,
-		"api_base":   d.APIBase,
-		"provider":   d.Provider,
+	// ← py:57-68 四个必填字符串非空（bedrock 豁免分支裁剪，见 NewDeployment 注释）；
+	// 按 Python 固定检查顺序 model_name → api_key → api_base → provider
+	for _, item := range []struct {
+		name  string
+		value string
+	}{
+		{"model_name", d.ModelName},
+		{"api_key", d.APIKey},
+		{"api_base", d.APIBase},
+		{"provider", d.Provider},
 	} {
-		if value == "" {
-			return fmt.Errorf("Deployment.%s must be a non-empty string, got %q", name, value)
+		if item.value == "" {
+			return fmt.Errorf("Deployment.%s must be a non-empty string, got %q", item.name, item.value)
 		}
 	}
 
@@ -246,49 +250,40 @@ func DeploymentFromDict(data map[string]any) (*Deployment, error) {
 		Provider:            strFrom(data["provider"]),
 	}
 	if v, ok := data["status"]; ok {
-		status, err := DeploymentStatusFrom(strFrom(v))
+		var status DeploymentStatus
+		var err error
+		switch t := v.(type) {
+		case DeploymentStatus:
+			status = t
+		case string:
+			status, err = DeploymentStatusFrom(t)
+		default:
+			status, err = DeploymentStatusFrom(strFrom(v))
+		}
 		if err != nil {
 			return nil, err
 		}
 		p.Status = status
 	}
-	if v, ok := data["cooldown_until"].(float64); ok {
-		p.CooldownUntil = &v
-	}
-	if v, ok := data["tags"].([]any); ok {
-		for _, item := range v {
-			p.Tags = append(p.Tags, strFrom(item))
-		}
-	}
-	if v, ok := data["tpm"].(float64); ok {
-		i := int(v)
-		p.TPM = &i
-	}
-	if v, ok := data["rpm"].(float64); ok {
-		i := int(v)
-		p.RPM = &i
-	}
-	if v, ok := data["timeout"].(float64); ok {
-		p.Timeout = &v
-	}
-	if v, ok := data["endpoint_profile"].(string); ok {
-		p.EndpointProfile = &v
-	}
+	p.CooldownUntil = floatPtrFrom(data["cooldown_until"])
+	p.Tags = strSliceFrom(data["tags"])
+	p.TPM = intPtrFrom(data["tpm"])
+	p.RPM = intPtrFrom(data["rpm"])
+	p.Timeout = floatPtrFrom(data["timeout"])
+	p.EndpointProfile = strPtrFrom(data["endpoint_profile"])
 	if v, ok := data["request_defaults"].(map[string]any); ok {
 		p.RequestDefaults = v
 	}
-	if v, ok := data["custom_headers"].(map[string]any); ok {
+	if v, ok := data["custom_headers"].(map[string]string); ok {
+		p.CustomHeaders = v
+	} else if v, ok := data["custom_headers"].(map[string]any); ok {
 		p.CustomHeaders = make(map[string]string, len(v))
 		for k, item := range v {
 			p.CustomHeaders[k] = strFrom(item)
 		}
 	}
-	if v, ok := data["fallback_tag"].(string); ok {
-		p.FallbackTag = &v
-	}
-	if v, ok := data["model_description"].(string); ok {
-		p.ModelDescription = &v
-	}
+	p.FallbackTag = strPtrFrom(data["fallback_tag"])
+	p.ModelDescription = strPtrFrom(data["model_description"])
 	return NewDeployment(p)
 }
 
@@ -316,4 +311,62 @@ func boolFrom(v any, def bool) bool {
 		return b
 	}
 	return def
+}
+
+// ptrFrom any → *int：ToDict（内存 *int）与 JSON roundtrip（float64）双形态。
+func intPtrFrom(v any) *int {
+	switch t := v.(type) {
+	case *int:
+		return t
+	case int:
+		return &t
+	case float64:
+		i := int(t)
+		return &i
+	default:
+		return nil
+	}
+}
+
+// floatPtrFrom any → *float64：双形态同上。
+func floatPtrFrom(v any) *float64 {
+	switch t := v.(type) {
+	case *float64:
+		return t
+	case float64:
+		return &t
+	case int:
+		f := float64(t)
+		return &f
+	default:
+		return nil
+	}
+}
+
+// strPtrFrom any → *string：双形态同上。
+func strPtrFrom(v any) *string {
+	switch t := v.(type) {
+	case *string:
+		return t
+	case string:
+		return &t
+	default:
+		return nil
+	}
+}
+
+// strSliceFrom any → []string：双形态同上。
+func strSliceFrom(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		result := make([]string, 0, len(t))
+		for _, item := range t {
+			result = append(result, strFrom(item))
+		}
+		return result
+	default:
+		return nil
+	}
 }
