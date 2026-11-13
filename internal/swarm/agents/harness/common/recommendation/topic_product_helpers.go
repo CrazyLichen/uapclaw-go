@@ -2197,3 +2197,804 @@ func acceptedIDContains(values []string, target string) bool {
 	}
 	return false
 }
+
+// ──────────────────────────── ⤴️ 31c 契约切片 D：grounding 系校验器（topic_product.py:1621-1876/:2023-2410） ────────────────────────────
+
+// grounding 字段集（topic_product.py:395-467）。
+var (
+	groundingDecisionFields = []string{"candidate_id", "interest_summary_id",
+		"category", "decision", "terminal_stage", "reason", "external_operations"}
+	groundingExternalOperationFields = []string{"operation", "operation_id", "request_id"}
+	groundingEvidenceFields          = []string{"schema_version", "input_snapshot_id",
+		"context_scope", "document_snapshot", "candidates"}
+	groundingDocumentSnapshotFields = []string{"snapshot_date", "snapshot_version",
+		"document_revision_ids", "documents"}
+	groundingDocumentFields = []string{"document_revision_id", "source_url", "publisher",
+		"source_kind", "published_at", "publication_date_provenance",
+		"fetched_at", "snapshot_date", "snapshot_version"}
+	groundingEvidenceCandidateFields = []string{"candidate_id", "search", "fetches", "extractor"}
+	groundingSearchEvidenceFields    = []string{"operation_id", "request_id", "requested_query", "provider_receipt"}
+	groundingFetchEvidenceFields     = []string{"operation_id", "request_id", "requested_url",
+		"final_url", "http_status_code", "document_revision_id"}
+	groundingExtractorEvidenceFields = []string{"operation_id", "request_id",
+		"input_document_revision_ids", "component_receipt"}
+	groundingAdmissionRejectionReasons = map[string]bool{
+		"provider_low_relevance": true, "provider_timeout": true,
+		"provider_http_status": true, "provider_challenge": true,
+		"provider_proxy": true, "provider_transport": true,
+		"provider_unknown": true, "provider_all_engines_failed": true,
+		"private_query": true, "extraction_failed": true,
+		"insufficient_evidence": true, "no_eligible_document": true,
+	}
+)
+
+// hostEvidenceDecision 宿主证据决策判定（topic_product.py:3519-3529）。
+func hostEvidenceDecision(decision map[string]any) bool {
+	category := pyStr(decision["category"])
+	if category == "project_continuation" || category == ProfileInterestCategory {
+		return true
+	}
+	terminalStage := pyStr(decision["terminal_stage"])
+	return (terminalStage == "fixed_corpus" && fixedCorpusCategoriesOf[category]) ||
+		(terminalStage == "hot_list" && category == "profile_recent_progress")
+}
+
+// fixedCorpusCategoriesOf 固定语料两类目集合。
+var fixedCorpusCategoriesOf = map[string]bool{fixedCorpusCategoryA: true, fixedCorpusCategoryB: true}
+
+// searchReceiptRequestId 搜索小票请求 ID（topic_product.py:877-881）。
+func searchReceiptRequestId(receipt map[string]any) string {
+	if pyStr(receipt["provider_id"]) == ArkWebSearchProviderID {
+		return pyStr(receipt["provider_response_id"])
+	}
+	return pyStr(receipt["host_request_id"])
+}
+
+// groundingDecisionRejectionReason grounding 决策小票校验
+// （topic_product.py:1621-1876；分支顺序逐条对应）。
+func groundingDecisionRejectionReason(manifest map[string]any, cards []map[string]any) string {
+	const reason = "manifest_field_grounding_decision_receipt_contract_failed"
+	receipt, isMap := manifest["grounding_decision_receipt"].(map[string]any)
+	if !isMap {
+		return reason
+	}
+	if !mapKeysEqual(receipt, []string{"schema_version", "input_snapshot_id",
+		"context_scope", "decision", "candidate_decisions"}) {
+		return reason
+	}
+	if pyStr(receipt["schema_version"]) != GroundingDecisionReceiptVersion {
+		return reason
+	}
+	if pyStr(receipt["input_snapshot_id"]) != pyStr(manifest["generation_input_snapshot_id"]) {
+		return reason
+	}
+	if pyStr(receipt["context_scope"]) != pyStr(manifest["context_scope"]) {
+		return reason
+	}
+	candidateDecisions, isList := receipt["candidate_decisions"].([]any)
+	if !isList || len(candidateDecisions) == 0 {
+		return reason
+	}
+	auditIndex := ExternalInvocationAuditIndex(manifest)
+	if auditIndex == nil {
+		return "manifest_field_external_invocation_audit_contract_failed"
+	}
+	referencedExternalOperations := map[[3]string]bool{}
+	operationOwner := map[[3]string]string{}
+	decisions := map[string]map[string]any{}
+	admittedCount := 0
+	for _, rawValue := range candidateDecisions {
+		raw, rawIsMap := rawValue.(map[string]any)
+		if !rawIsMap || !mapKeysEqual(raw, groundingDecisionFields) {
+			return reason
+		}
+		candidateID := pyStr(raw["candidate_id"])
+		if !nonEmptyStr(raw["candidate_id"]) || decisions[candidateID] != nil {
+			return reason
+		}
+		if raw["interest_summary_id"] != nil && !nonEmptyStr(raw["interest_summary_id"]) {
+			return reason
+		}
+		if !nonEmptyStr(raw["category"]) {
+			return reason
+		}
+		if pyStr(raw["decision"]) != "admit" && pyStr(raw["decision"]) != "reject" {
+			return reason
+		}
+		if !nonEmptyStr(raw["terminal_stage"]) || !nonEmptyStr(raw["reason"]) {
+			return reason
+		}
+		operations, opsIsList := raw["external_operations"].([]any)
+		if !opsIsList {
+			return reason
+		}
+		var operationKeys [][3]string
+		for _, operationValue := range operations {
+			operation, opIsMap := operationValue.(map[string]any)
+			if !opIsMap || !mapKeysEqual(operation, groundingExternalOperationFields) {
+				return reason
+			}
+			operationName := pyStr(operation["operation"])
+			if operationName != "search" && operationName != "fetch" && operationName != "extractor" {
+				return reason
+			}
+			if !nonEmptyStr(operation["operation_id"]) || !nonEmptyStr(operation["request_id"]) {
+				return reason
+			}
+			key := [3]string{operationName, pyStr(operation["operation_id"]), pyStr(operation["request_id"])}
+			if containsKey(operationKeys, key) || auditIndex[key] == nil {
+				return reason
+			}
+			if !ExternalOperationCoversCandidate(manifest, auditIndex[key], key, candidateID) {
+				return reason
+			}
+			if _, owned := operationOwner[key]; owned && key[0] != "fetch" {
+				return reason
+			}
+			operationKeys = append(operationKeys, key)
+			operationOwner[key] = candidateID
+		}
+		var operationNames []string
+		for _, key := range operationKeys {
+			operationNames = append(operationNames, key[0])
+		}
+		hostDecision := hostEvidenceDecision(raw)
+		terminalStage := pyStr(raw["terminal_stage"])
+		searchCount := 0
+		extractorCount := 0
+		for _, name := range operationNames {
+			if name == "search" {
+				searchCount++
+			}
+			if name == "extractor" {
+				extractorCount++
+			}
+		}
+		chainTailValid := true
+		for _, name := range operationNames[minInt(1, len(operationNames)):] {
+			if name != "fetch" && name != "extractor" {
+				chainTailValid = false
+			}
+		}
+		externalChainInvalid := len(operationNames) == 0 ||
+			operationNames[0] != "search" || searchCount != 1 ||
+			extractorCount > 1 ||
+			(extractorCount == 1 && operationNames[len(operationNames)-1] != "extractor") ||
+			!chainTailValid
+		if hostDecision {
+			// 宿主证据（兴趣/项目/语料/热榜）不做自有检索，因此不带外部操作
+			if len(operationNames) > 0 {
+				return reason
+			}
+		} else if externalChainInvalid {
+			return reason
+		}
+		if !TerminalStageMatchesOperations(terminalStage, operationNames) {
+			return reason
+		}
+		for _, key := range operationKeys {
+			referencedExternalOperations[key] = true
+		}
+		var auditEntries []map[string]any
+		for _, key := range operationKeys {
+			auditEntries = append(auditEntries, auditIndex[key])
+		}
+		validBeforeTerminal := func(entry map[string]any) bool {
+			return pyStr(entry["status"]) == "success" ||
+				(pyStr(entry["operation"]) == "fetch" &&
+					pyStr(entry["status"]) == "failure" &&
+					pyStr(entry["failure_reason"]) == "provider_invocation_failed")
+		}
+		decision := pyStr(raw["decision"])
+		if decision == "admit" {
+			var expectedStage, expectedReason string
+			switch {
+			case pyStr(raw["category"]) == "project_continuation":
+				expectedStage, expectedReason = "project_history", "project_history_exact_locator"
+			case pyStr(raw["category"]) == ProfileInterestCategory:
+				expectedStage, expectedReason = "profile_interest", "profile_interest_exact_summary"
+			case terminalStage == "hot_list":
+				expectedStage, expectedReason = "hot_list", "hot_list_entry"
+			case hostDecision:
+				expectedStage, expectedReason = "fixed_corpus", "fixed_corpus_entry"
+			default:
+				expectedStage, expectedReason = "admission", "admitted"
+			}
+			if terminalStage != expectedStage || pyStr(raw["reason"]) != expectedReason {
+				return reason
+			}
+			hasFetchSuccess := false
+			for _, entry := range auditEntries {
+				if pyStr(entry["operation"]) == "fetch" && pyStr(entry["status"]) == "success" {
+					hasFetchSuccess = true
+				}
+			}
+			failed := !hostDecision && (!hasFetchSuccess ||
+				len(auditEntries) == 0 ||
+				pyStr(auditEntries[len(auditEntries)-1]["operation"]) != "extractor" ||
+				pyStr(auditEntries[len(auditEntries)-1]["status"]) != "success" ||
+				anyEntryInvalid(auditEntries, validBeforeTerminal))
+			if failed {
+				return reason
+			}
+			admittedCount++
+		} else if terminalStage == "search" || terminalStage == "fetch" ||
+			terminalStage == "extraction" || terminalStage == "offset_validation" {
+			expectedOperation := map[string]string{
+				"search": "search", "fetch": "fetch",
+				"extraction": "extractor", "offset_validation": "extractor",
+			}[terminalStage]
+			if len(auditEntries) == 0 {
+				return reason
+			}
+			if pyStr(auditEntries[len(auditEntries)-1]["operation"]) != expectedOperation {
+				return reason
+			}
+			if terminalStage == "fetch" {
+				matchFailure := false
+				for _, entry := range auditEntries {
+					if pyStr(entry["operation"]) == "fetch" && pyStr(entry["status"]) == "failure" &&
+						pyStr(entry["failure_reason"]) == pyStr(raw["reason"]) {
+						matchFailure = true
+					}
+				}
+				if !matchFailure || anyEntryInvalid(auditEntries, validBeforeTerminal) {
+					return reason
+				}
+			} else {
+				invalidPrefix := false
+				for _, entry := range auditEntries[:len(auditEntries)-1] {
+					if !validBeforeTerminal(entry) {
+						invalidPrefix = true
+					}
+				}
+				hasFetchSuccess := false
+				for _, entry := range auditEntries[:len(auditEntries)-1] {
+					if pyStr(entry["operation"]) == "fetch" && pyStr(entry["status"]) == "success" {
+						hasFetchSuccess = true
+					}
+				}
+				failed := terminalStage != "fetch" && (invalidPrefix ||
+					pyStr(auditEntries[len(auditEntries)-1]["status"]) != "failure" ||
+					pyStr(auditEntries[len(auditEntries)-1]["failure_reason"]) != pyStr(raw["reason"]) ||
+					((terminalStage == "extraction" || terminalStage == "offset_validation") && !hasFetchSuccess))
+				if failed {
+					return reason
+				}
+			}
+		} else if terminalStage == "admission" {
+			if anyEntryInvalid(auditEntries, validBeforeTerminal) {
+				return reason
+			}
+			if !groundingAdmissionRejectionReasons[pyStr(raw["reason"])] {
+				return reason
+			}
+			if len(operationNames) > 0 && operationNames[len(operationNames)-1] == "extractor" {
+				lastSuccess := pyStr(auditEntries[len(auditEntries)-1]["status"]) == "success"
+				hasFetchSuccess := false
+				for _, entry := range auditEntries[:len(auditEntries)-1] {
+					if pyStr(entry["operation"]) == "fetch" && pyStr(entry["status"]) == "success" {
+						hasFetchSuccess = true
+					}
+				}
+				if !lastSuccess || !hasFetchSuccess {
+					return reason
+				}
+			}
+		} else {
+			return reason
+		}
+		decisions[candidateID] = raw
+	}
+	if len(referencedExternalOperations) != len(auditIndex) {
+		return reason
+	}
+	expectedDecision := "partial"
+	if admittedCount == len(decisions) {
+		expectedDecision = "admit"
+	} else if admittedCount == 0 {
+		expectedDecision = "abstain"
+	}
+	if pyStr(receipt["decision"]) != expectedDecision {
+		return reason
+	}
+	for _, card := range cards {
+		decision := decisions[pyStr(card["card_id"])]
+		if decision == nil {
+			return reason
+		}
+		if pyStr(decision["decision"]) != "admit" ||
+			pyStr(decision["category"]) != pyStr(card["category"]) ||
+			!anyEqual(decision["interest_summary_id"], card["interest_summary_id"]) {
+			return reason
+		}
+	}
+	return ""
+}
+
+// containsKey 键表包含。
+func containsKey(keys [][3]string, target [3]string) bool {
+	for _, key := range keys {
+		if key == target {
+			return true
+		}
+	}
+	return false
+}
+
+// anyEntryInvalid 任一条目校验失败。
+func anyEntryInvalid(entries []map[string]any, valid func(map[string]any) bool) bool {
+	for _, entry := range entries {
+		if !valid(entry) {
+			return true
+		}
+	}
+	return false
+}
+
+// GroundingEvidenceReceiptRejectionReason grounding 证据小票校验
+// （topic_product.py:2023-2410；分支顺序逐条对应）。
+func GroundingEvidenceReceiptRejectionReason(manifest any, cards []map[string]any) string {
+	const failure = "manifest_field_grounding_evidence_receipt_contract_failed"
+	root, manifestIsMap := manifest.(map[string]any)
+	if !manifestIsMap {
+		return failure
+	}
+	receipt, isMap := root["grounding_evidence_receipt"].(map[string]any)
+	decisionReceipt, drIsMap := root["grounding_decision_receipt"].(map[string]any)
+	var rawDecisions []any
+	if drIsMap {
+		rawDecisions, _ = decisionReceipt["candidate_decisions"].([]any)
+	}
+	if !isMap {
+		return failure
+	}
+	if !mapKeysEqual(receipt, groundingEvidenceFields) {
+		return failure
+	}
+	if pyStr(receipt["schema_version"]) != GroundingEvidenceReceiptVersion {
+		return failure
+	}
+	if pyStr(receipt["input_snapshot_id"]) != pyStr(root["generation_input_snapshot_id"]) {
+		return failure
+	}
+	if pyStr(receipt["context_scope"]) != pyStr(root["context_scope"]) {
+		return failure
+	}
+	if rawDecisions == nil {
+		if _, isList := decisionReceipt["candidate_decisions"].([]any); !isList {
+			return failure
+		}
+	}
+	if len(rawDecisions) == 0 {
+		return failure
+	}
+	decisions := map[string]map[string]any{}
+	for _, decisionValue := range rawDecisions {
+		decision, isMap := decisionValue.(map[string]any)
+		candidateID := ""
+		if isMap {
+			candidateID = pyStr(decision["candidate_id"])
+		}
+		if candidateID == "" || decisions[candidateID] != nil {
+			return failure
+		}
+		if _, isList := decision["external_operations"].([]any); !isList {
+			return failure
+		}
+		decisions[candidateID] = decision
+	}
+
+	// 文档快照
+	snapshot, snapIsMap := receipt["document_snapshot"].(map[string]any)
+	if !snapIsMap || !mapKeysEqual(snapshot, groundingDocumentSnapshotFields) {
+		return failure
+	}
+	if !nonEmptyStr(snapshot["snapshot_date"]) || !nonEmptyStr(snapshot["snapshot_version"]) {
+		return failure
+	}
+	documentIDs, idsIsList := snapshot["document_revision_ids"].([]any)
+	documentsRaw, docsIsList := snapshot["documents"].([]any)
+	if !idsIsList || !docsIsList {
+		return failure
+	}
+	seenDocIDs := map[string]bool{}
+	for _, id := range documentIDs {
+		if !nonEmptyStr(id) || seenDocIDs[pyStr(id)] {
+			return failure
+		}
+		seenDocIDs[pyStr(id)] = true
+	}
+	documents := map[string]map[string]any{}
+	var documentOrder []string
+	for _, documentValue := range documentsRaw {
+		document, docIsMap := documentValue.(map[string]any)
+		if !docIsMap || !mapKeysEqual(document, groundingDocumentFields) {
+			return failure
+		}
+		documentID := pyStr(document["document_revision_id"])
+		publishedAt := document["published_at"]
+		if documentID == "" || documents[documentID] != nil {
+			return failure
+		}
+		if !ValidHTTPURL(document["source_url"]) ||
+			!nonEmptyStr(document["publisher"]) || !nonEmptyStr(document["source_kind"]) {
+			return failure
+		}
+		if publishedAt != nil && !nonEmptyStr(publishedAt) {
+			return failure
+		}
+		switch fetchedAt := document["fetched_at"].(type) {
+		case int:
+			if float64(fetchedAt) < 0 {
+				return failure
+			}
+		case float64:
+			if math.IsInf(fetchedAt, 0) || math.IsNaN(fetchedAt) || fetchedAt < 0 {
+				return failure
+			}
+		default:
+			return failure
+		}
+		if pyStr(document["snapshot_date"]) != pyStr(snapshot["snapshot_date"]) ||
+			pyStr(document["snapshot_version"]) != pyStr(snapshot["snapshot_version"]) {
+			return failure
+		}
+		if !ValidGroundingPublicationDateProvenance(document["publication_date_provenance"],
+			pyStr(document["source_url"]), publishedAt) {
+			return failure
+		}
+		documents[documentID] = document
+		documentOrder = append(documentOrder, documentID)
+	}
+	if !anyEqual(documentIDs, stringsToAny(documentOrder)) {
+		return failure
+	}
+	if ds, present := root["document_snapshot"]; present && !anyEqual(ds, snapshot) {
+		return failure
+	}
+
+	auditIndex := ExternalInvocationAuditIndex(root)
+	rawCandidates, candidatesIsList := receipt["candidates"].([]any)
+	if auditIndex == nil || !candidatesIsList {
+		return failure
+	}
+	cardsByID := map[string]map[string]any{}
+	for _, card := range cards {
+		if card != nil {
+			cardsByID[pyStr(card["card_id"])] = card
+		}
+	}
+	for _, candidateValue := range rawCandidates {
+		candidate, candIsMap := candidateValue.(map[string]any)
+		candidateID := ""
+		if candIsMap {
+			candidateID = pyStr(candidate["candidate_id"])
+		}
+		if candidateID == "" || evidenceCandidateSeen(candidateID, rawCandidates) {
+			return failure
+		}
+		if !mapKeysEqual(candidate, groundingEvidenceCandidateFields) {
+			return failure
+		}
+		decision := decisions[candidateID]
+		if decision == nil {
+			return failure
+		}
+		fetches, fetchesIsList := candidate["fetches"].([]any)
+		if !fetchesIsList {
+			return failure
+		}
+		expectedOperations, _ := decision["external_operations"].([]any)
+		if hostEvidenceDecision(decision) {
+			if candidate["search"] != nil || len(fetches) > 0 || candidate["extractor"] != nil {
+				return failure
+			}
+			if len(expectedOperations) > 0 {
+				return failure
+			}
+			continue
+		}
+		// 搜索证据
+		search, searchIsMap := candidate["search"].(map[string]any)
+		if !searchIsMap || !mapKeysEqual(search, groundingSearchEvidenceFields) {
+			return failure
+		}
+		for _, field := range []string{"operation_id", "request_id", "requested_query"} {
+			if !nonEmptyStr(search[field]) {
+				return failure
+			}
+		}
+		searchKey := [3]string{"search", pyStr(search["operation_id"]), pyStr(search["request_id"])}
+		searchAudit := auditIndex[searchKey]
+		if searchAudit == nil || pyStr(searchAudit["candidate_id"]) != candidateID {
+			return failure
+		}
+		providerReceipt := search["provider_receipt"]
+		var resultURLs []string
+		if pyStr(searchAudit["status"]) == "failure" {
+			failureReason := searchAudit["failure_reason"]
+			nativeFailure := openjiuwenProviderIDs[pyStr(searchAudit["provider_id"])] &&
+				nativeFailureReasons[pyStr(failureReason)]
+			validFailureReceipt := false
+			if pr, prIsMap := providerReceipt.(map[string]any); prIsMap &&
+				pyStr(searchAudit["provider_id"]) == pyStr(pr["provider_id"]) &&
+				ValidNativeSearchFailureReceipt(pr, failureReason) {
+				validFailureReceipt = true
+			}
+			if (nativeFailure && !validFailureReceipt) || (!nativeFailure && providerReceipt != nil) {
+				return failure
+			}
+			resultURLs = []string{}
+		} else {
+			pr, prIsMap := providerReceipt.(map[string]any)
+			if !prIsMap {
+				return failure
+			}
+			validated := GroundingSearchResultUrls(pr, pyStr(search["requested_query"]),
+				pyStr(searchAudit["provider_id"]))
+			if validated == nil {
+				return failure
+			}
+			resultURLs = validated
+		}
+		var operationKeys [][3]string
+		operationKeys = append(operationKeys, searchKey)
+		for _, fetchValue := range fetches {
+			fetch, fetchIsMap := fetchValue.(map[string]any)
+			if !fetchIsMap || !mapKeysEqual(fetch, groundingFetchEvidenceFields) {
+				return failure
+			}
+			for _, field := range []string{"operation_id", "request_id"} {
+				if !nonEmptyStr(fetch[field]) {
+					return failure
+				}
+			}
+			if !ValidHTTPURL(fetch["requested_url"]) ||
+				!stringListContains(resultURLs, pyStr(fetch["requested_url"])) {
+				return failure
+			}
+			fetchKey := [3]string{"fetch", pyStr(fetch["operation_id"]), pyStr(fetch["request_id"])}
+			fetchAudit := auditIndex[fetchKey]
+			if fetchAudit == nil || !ExternalOperationCoversCandidate(root, fetchAudit, fetchKey, candidateID) {
+				return failure
+			}
+			finalURL := fetch["final_url"]
+			statusCode := fetch["http_status_code"]
+			documentID := fetch["document_revision_id"]
+			if pyStr(fetchAudit["status"]) == "failure" {
+				if finalURL != nil || statusCode != nil || documentID != nil {
+					return failure
+				}
+			} else {
+				if !ValidHTTPURL(finalURL) {
+					return failure
+				}
+				if statusCode != nil && (!plainInt(statusCode) || intOf(statusCode) < 0) {
+					return failure
+				}
+				if documentID != nil {
+					if !nonEmptyStr(documentID) || documents[pyStr(documentID)] == nil {
+						return failure
+					}
+					doc := documents[pyStr(documentID)]
+					if pyStr(doc["source_url"]) != pyStr(finalURL) {
+						return failure
+					}
+					if provenance, provIsMap := doc["publication_date_provenance"].(map[string]any); provIsMap &&
+						pyStr(provenance["source_type"]) == "structured_search_result" {
+						pr, prIsMap := providerReceipt.(map[string]any)
+						if !prIsMap ||
+							pyStr(provenance["search_provider_id"]) != pyStr(searchAudit["provider_id"]) ||
+							pyStr(provenance["search_receipt_id"]) != searchReceiptRequestId(pr) ||
+							!stringListContains(resultURLs, pyStr(provenance["search_result_url"])) {
+							return failure
+						}
+					}
+				}
+			}
+			operationKeys = append(operationKeys, fetchKey)
+		}
+		// linked_page 必须指向本候选的一次实际抓取
+		for _, fetchValue := range fetches {
+			fetched, _ := fetchValue.(map[string]any)
+			document := documents[pyStr(fetched["document_revision_id"])]
+			provenance := mapAnyOf(document["publication_date_provenance"])
+			if pyStr(provenance["source_type"]) != "linked_document_metadata" {
+				continue
+			}
+			linked := mapAnyOf(provenance["linked_page"])
+			matched := false
+			for _, otherValue := range fetches {
+				other, _ := otherValue.(map[string]any)
+				if pyStr(other["final_url"]) == pyStr(linked["date_page_url"]) &&
+					pyStr(other["operation_id"]) == pyStr(linked["operation_id"]) &&
+					pyStr(other["request_id"]) == pyStr(linked["request_id"]) &&
+					anyEqual(other["http_status_code"], linked["http_status_code"]) {
+					matched = true
+				}
+			}
+			if !matched {
+				return failure
+			}
+		}
+		// 提取器证据
+		var extractor map[string]any
+		if candidate["extractor"] != nil {
+			extractor, _ = candidate["extractor"].(map[string]any)
+			if extractor == nil || !mapKeysEqual(extractor, groundingExtractorEvidenceFields) {
+				return failure
+			}
+			for _, field := range []string{"operation_id", "request_id"} {
+				if !nonEmptyStr(extractor[field]) {
+					return failure
+				}
+			}
+			if !UniqueNonEmptyStrings(extractor["input_document_revision_ids"]) {
+				return failure
+			}
+			for _, id := range anyListOf(extractor["input_document_revision_ids"]) {
+				if documents[pyStr(id)] == nil {
+					return failure
+				}
+			}
+			extractorKey := [3]string{"extractor", pyStr(extractor["operation_id"]), pyStr(extractor["request_id"])}
+			extractorAudit := auditIndex[extractorKey]
+			if extractorAudit == nil || pyStr(extractorAudit["candidate_id"]) != candidateID {
+				return failure
+			}
+			componentReceipt := extractor["component_receipt"]
+			if componentReceipt == nil {
+				if !(pyStr(extractorAudit["status"]) == "failure" &&
+					pyStr(decision["reason"]) == "extraction_failed") {
+					return failure
+				}
+			} else if !ValidGroundingComponentReceipt(componentReceipt,
+				pyStr(root["generation_input_snapshot_id"]),
+				pyStr(extractor["request_id"]),
+				pyStr(extractorAudit["status"]),
+				extractorAudit["failure_reason"]) {
+				return failure
+			}
+			operationKeys = append(operationKeys, extractorKey)
+		}
+		var expectedKeys [][3]string
+		for _, operationValue := range expectedOperations {
+			operation, _ := operationValue.(map[string]any)
+			expectedKeys = append(expectedKeys, [3]string{
+				pyStr(operation["operation"]), pyStr(operation["operation_id"]), pyStr(operation["request_id"])})
+		}
+		if len(operationKeys) != len(expectedKeys) {
+			return failure
+		}
+		for i, key := range operationKeys {
+			if key != expectedKeys[i] {
+				return failure
+			}
+		}
+		// 卡片小票一致
+		card := cardsByID[candidateID]
+		if card != nil {
+			cardReceipt := card["search_receipt"]
+			evidenceSearchReceipt := map[string]any{}
+			if pr, prIsMap := providerReceipt.(map[string]any); prIsMap {
+				for key, value := range pr {
+					evidenceSearchReceipt[key] = value
+				}
+			}
+			delete(evidenceSearchReceipt, "result_urls")
+			if pyStr(evidenceSearchReceipt["provider_id"]) == ArkWebSearchProviderID {
+				delete(evidenceSearchReceipt, "result_urls")
+			}
+			if !anyEqual(evidenceSearchReceipt, cardReceipt) {
+				return failure
+			}
+			cardDocumentID := mapAnyOf(card["evidence_bundle"])["document_revision_id"]
+			if documents[pyStr(cardDocumentID)] == nil {
+				return failure
+			}
+			if extractor == nil {
+				return failure
+			}
+			if !anyListContains(anyListOf(extractor["input_document_revision_ids"]), cardDocumentID) {
+				return failure
+			}
+		}
+	}
+	// 决策与证据候选集合恰等
+	decisionCount := 0
+	for _, decisionValue := range rawDecisions {
+		decision, _ := decisionValue.(map[string]any)
+		if decision != nil && decisions[pyStr(decision["candidate_id"])] != nil {
+			decisionCount++
+		}
+	}
+	evidenceCount := 0
+	seenEvidence := map[string]bool{}
+	for _, candidateValue := range rawCandidates {
+		candidate, _ := candidateValue.(map[string]any)
+		if candidate != nil {
+			id := pyStr(candidate["candidate_id"])
+			if !seenEvidence[id] {
+				seenEvidence[id] = true
+				evidenceCount++
+			}
+		}
+	}
+	if decisionCount != evidenceCount {
+		return failure
+	}
+	return ""
+}
+
+// evidenceCandidateSeen 候选是否重复出现（Python candidate_id in evidence_candidates 守卫）。
+func evidenceCandidateSeen(candidateID string, rawCandidates []any) bool {
+	seen := 0
+	for _, candidateValue := range rawCandidates {
+		candidate, _ := candidateValue.(map[string]any)
+		if candidate != nil && pyStr(candidate["candidate_id"]) == candidateID {
+			seen++
+		}
+	}
+	return seen > 1
+}
+
+// openjiuwenProviderIDs 原生搜索提供方集合（topic_product.py:228-233）。
+var openjiuwenProviderIDs = map[string]bool{
+	OpenjiuwenNativeSearchProviderID: true, LegacyOpenjiuwenNativeSearchProviderID: true,
+}
+
+// nativeFailureReasons 原生失败原因值集合。
+var nativeFailureReasons = func() map[string]bool {
+	result := map[string]bool{}
+	for _, reason := range OpenjiuwenNativeSearchFailureReasonByKind {
+		result[reason] = true
+	}
+	return result
+}()
+
+// stringListContains 字符串表包含。
+func stringListContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+// TerminalLearningLineageRejectionReason 串联宿主 grounding/摘要/RID 生产血缘校验
+// （topic_product.py:1529-1576 terminal_learning_lineage_rejection_reason）。
+func TerminalLearningLineageRejectionReason(manifest any, cards []map[string]any,
+	allowLegacySummaryCoverage bool) string {
+	root, isMap := manifest.(map[string]any)
+	if !isMap {
+		return "manifest_type_contract_failed"
+	}
+	for _, field := range []string{"grounding_decision_receipt",
+		"grounding_evidence_receipt", "session_summary_artifacts",
+		"session_summary_coverage_receipt", "rid_result", "rid_interest_selection"} {
+		if _, present := root[field]; !present {
+			return fmt.Sprintf("manifest_required_field_%s_missing", field)
+		}
+	}
+	if reason := groundingDecisionRejectionReason(root, cards); reason != "" {
+		return reason
+	}
+	if reason := GroundingEvidenceReceiptRejectionReason(root, cards); reason != "" {
+		return reason
+	}
+	if !ValidSessionSummaryArtifacts(root) {
+		return "manifest_field_session_summary_artifacts_contract_failed"
+	}
+	if !ValidSessionSummaryCoverageReceipt(root, allowLegacySummaryCoverage) {
+		return "manifest_field_session_summary_coverage_receipt_contract_failed"
+	}
+	if !ValidSessionSummaryMaterializationReceipt(root) {
+		return "manifest_field_session_summary_materialization_receipt_contract_failed"
+	}
+	if reason := ridResultRejectionReason(root, NewsOnlyPool(root, cards)); reason != "" {
+		return reason
+	}
+	return ridInterestSelectionRejectionReason(root, cards, allowLegacySummaryCoverage)
+}
