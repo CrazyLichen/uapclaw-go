@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -130,8 +131,11 @@ type AgentBackend interface {
 	Start(ctx context.Context) error
 	// Stop 释放资源（停止 Runner / 断开）
 	Stop(ctx context.Context) error
-	// RunStreaming 执行 query 并流式吐 OutputSchema 块
-	RunStreaming(ctx context.Context, query any, sessionID *string) (<-chan any, error)
+	// RunStreaming 执行 query 并流式吐 OutputSchema 块。
+	// 通道元素具体化为 stream.OutputSchema（曾用 any，2026-11-27 审查
+	// 裁决具体化：实际承载的就是块类型，any 会逼消费者做类型断言并
+	// 静默丢弃非块项）。
+	RunStreaming(ctx context.Context, query any, sessionID *string) (<-chan stream.OutputSchema, error)
 	// Abort 中止当前运行中的查询
 	Abort(ctx context.Context) error
 }
@@ -178,8 +182,8 @@ func (b *LocalBackend) Stop(_ context.Context) error {
 //
 // query 可以是普通字符串（普通轮次）或 InteractiveInput（中断恢复）。
 // ⏵ Runner.run_agent_streaming 回填后接通；当前返回空流。
-func (b *LocalBackend) RunStreaming(_ context.Context, _ any, sessionID *string) (<-chan any, error) {
-	ch := make(chan any)
+func (b *LocalBackend) RunStreaming(_ context.Context, _ any, sessionID *string) (<-chan stream.OutputSchema, error) {
+	ch := make(chan stream.OutputSchema)
 	close(ch)
 	return ch, nil
 }

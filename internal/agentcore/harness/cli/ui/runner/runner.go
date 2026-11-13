@@ -61,7 +61,10 @@ func RunOnce(cfg agent.CLIConfig, prompt string, outputFormat string) int {
 		_ = backend.Stop(contextBackground())
 		return 1
 	}
-	chunks := drainChunks(ch)
+	var chunks []stream.OutputSchema
+	for schema := range ch {
+		chunks = append(chunks, schema)
+	}
 
 	var exitCode int
 	switch outputFormat {
@@ -158,17 +161,6 @@ func writeTerminal(text string) {
 
 // contextBackground 便捷上下文。
 func contextBackground() context.Context { return context.Background() }
-
-// drainChunks 把后端通道读成块切片。
-func drainChunks(ch <-chan any) []stream.OutputSchema {
-	var chunks []stream.OutputSchema
-	for item := range ch {
-		if schema, ok := item.(stream.OutputSchema); ok {
-			chunks = append(chunks, schema)
-		}
-	}
-	return chunks
-}
 
 // containsAny 任一子串命中。
 func containsAny(message string, substrings ...string) bool {

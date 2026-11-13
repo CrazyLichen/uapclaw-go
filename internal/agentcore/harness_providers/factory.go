@@ -195,24 +195,20 @@ func ResolveProvider(provider string) (harnessprotocol.HarnessProvider, error) {
 
 // ──────────────────────────── 导出函数：manifest 转换 ────────────────────────────
 
-// LoadManifest 把清单统一成 AgentTemplateSpec。
-// Python: factory.py:226-234 load_manifest
+// ManifestSourceFromPath 从模板包目录（或其 manifest.json）加载 spec。
+// Python: factory.py:234 load_manifest 的路径分支
 //
-// 参数可为 AgentTemplateSpec（直通）或路径（指向模板包目录或它的 manifest.json）。
-func LoadManifest(manifest any) (hschema.AgentTemplateSpec, error) {
-	switch typed := manifest.(type) {
-	case hschema.AgentTemplateSpec:
-		return typed, nil
-	case string:
-		manifestPath, err := hresources.FindAgentTemplateManifest(typed)
-		if err != nil {
-			return hschema.AgentTemplateSpec{}, err
-		}
-		return hresources.LoadAgentTemplatePackage(manifestPath)
-	default:
-		return hschema.AgentTemplateSpec{}, fmt.Errorf(
-			"unsupported manifest type %T", manifest)
+// ⚠️ 与上游的偏差（规则 9 登记）：上游 load_manifest 是
+// `AgentTemplateSpec | str | Path` 的 union——spec 直通或路径加载两态。
+// Go 侧把 union 在 API 层拆开：本函数只管路径加载；spec 对象由调用方
+// 直接传给 CreateHarness / BuildHarnessContext（编译期类型安全，
+// 上游的 any 运行时报错形态不复制）。路径形态的调用方先走这里。
+func ManifestSourceFromPath(manifestPath string) (hschema.AgentTemplateSpec, error) {
+	manifest, err := hresources.FindAgentTemplateManifest(manifestPath)
+	if err != nil {
+		return hschema.AgentTemplateSpec{}, err
 	}
+	return hresources.LoadAgentTemplatePackage(manifest)
 }
 
 // ManifestMcpServers 把清单的 MCP 声明翻译成协议 MCP 服务器配置。
@@ -355,15 +351,13 @@ func ProviderModelConfig(provider string, choice harnessprotocol.ModelChoice,
 
 // CreateHarness 为 manifest 在 provider 上创建一个未启动的协议 harness。
 // Python: factory.py:369-396 create_harness
-func CreateHarness(manifest any, opts CreateHarnessOptions) (harnessprotocol.HarnessProtocol, error) {
+func CreateHarness(manifest hschema.AgentTemplateSpec,
+	opts CreateHarnessOptions) (harnessprotocol.HarnessProtocol, error) {
 	providerImpl, err := ResolveProvider(opts.Provider)
 	if err != nil {
 		return nil, err
 	}
-	template, err := LoadManifest(manifest)
-	if err != nil {
-		return nil, err
-	}
+	template := manifest
 	providerConfig, err := ManifestProviderConfig(template, ManifestProviderConfigOptions{
 		Provider: opts.Provider,
 		Config:   opts.Config,
@@ -387,15 +381,13 @@ func CreateHarness(manifest any, opts CreateHarnessOptions) (harnessprotocol.Har
 // 对 native / native_v2：模板由 harness 自己加载，只有 extraSystemPrompt
 // 进 context；对第三方 provider：persona 提示词段落渲染进 systemPrompt，
 // 清单的 MCP 服务器变成 mcpServers。
-func BuildHarnessContext(manifest any,
+func BuildHarnessContext(manifest hschema.AgentTemplateSpec,
 	opts BuildHarnessContextOptions) (harnessprotocol.HarnessContext, error) {
-	template, err := LoadManifest(manifest)
-	if err != nil {
-		return harnessprotocol.HarnessContext{}, err
-	}
+	template := manifest
 	card := template.AgentCard
 	var promptParts []string
 	var mcpServers []harnessprotocol.McpServerConfig
+	var err error
 
 	if !nativeProviders[opts.Provider] {
 		language := opts.Language

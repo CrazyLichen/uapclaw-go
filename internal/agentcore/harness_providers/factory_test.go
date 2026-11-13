@@ -172,36 +172,23 @@ func TestResolveProvider_工厂返回nil(t *testing.T) {
 
 // ──────────────────────────── manifest 转换 ────────────────────────────
 
-// TestLoadManifest_结构体直通 对齐 factory.py:232-233。
-func TestLoadManifest_结构体直通(t *testing.T) {
-	original := hschema.AgentTemplateSpec{
-		AgentCard: mustCard(t, "a1", "expert", "描述"),
-	}
-	got, err := LoadManifest(original)
-	require.NoError(t, err)
-	assert.Equal(t, "a1", got.AgentCard.ID)
-	assert.Equal(t, "expert", got.AgentCard.Name)
-}
-
-// TestLoadManifest_路径 从目录或 manifest.json 加载。
-func TestLoadManifest_路径(t *testing.T) {
+// TestManifestSourceFromPath_路径加载 对齐 factory.py:234 的路径分支
+//（union 已在 API 层拆开：spec 由调用方直传，本函数只管路径）。
+func TestManifestSourceFromPath_路径加载(t *testing.T) {
 	dir := t.TempDir()
 	writeValidManifest(t, dir)
 
-	byDir, err := LoadManifest(dir)
+	byDir, err := ManifestSourceFromPath(dir)
 	require.NoError(t, err)
 	assert.Equal(t, "expert", byDir.AgentCard.Name)
 
-	byFile, err := LoadManifest(filepath.Join(dir, "manifest.json"))
+	byFile, err := ManifestSourceFromPath(filepath.Join(dir, "manifest.json"))
 	require.NoError(t, err)
 	assert.Equal(t, "expert", byFile.AgentCard.Name)
-}
 
-// TestLoadManifest_不支持的类型 报错。
-func TestLoadManifest_不支持的类型(t *testing.T) {
-	_, err := LoadManifest(42)
+	// 不存在的路径
+	_, err = ManifestSourceFromPath(filepath.Join(t.TempDir(), "nope"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported manifest type")
 }
 
 // TestManifestMcpServers_stdio 对齐 factory.py:247-255。
@@ -852,19 +839,6 @@ func TestHasDeepAgentSection_未知段(t *testing.T) {
 	assert.False(t, hasDeepAgentSection(manifest, "rails"))
 	assert.False(t, hasDeepAgentSection(manifest, "subagents"))
 	assert.False(t, hasDeepAgentSection(manifest, "unknown-section"))
-}
-
-// TestCreateHarness_路径清单 从 manifest 路径创建。
-func TestCreateHarness_路径清单(t *testing.T) {
-	provider := newFakeProvider("ch-path")
-	registerFake(t, "ch-path", provider)
-
-	dir := t.TempDir()
-	writeValidManifest(t, dir)
-
-	_, err := CreateHarness(dir, CreateHarnessOptions{Provider: "ch-path"})
-	require.Error(t, err) // fakeProvider.Create 返回 assert.AnError
-	require.Len(t, provider.configs, 1)
 }
 
 // TestCreateHarness_native系带模板 native provider 收到 agent_template。

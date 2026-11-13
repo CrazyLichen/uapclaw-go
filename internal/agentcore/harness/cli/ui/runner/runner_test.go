@@ -162,15 +162,3 @@ func TestRunOnce_CreateBackend失败(t *testing.T) {
 	})
 	assert.Contains(t, got, "not supported in the MVP")
 }
-
-// TestDrainChunks_非OutputSchema跳过 非块项丢弃。
-func TestDrainChunks_非OutputSchema跳过(t *testing.T) {
-	ch := make(chan any, 3)
-	ch <- stream.OutputSchema{Type: "llm_output"}
-	ch <- "不是块"
-	ch <- 42
-	close(ch)
-	chunks := drainChunks(ch)
-	require.Len(t, chunks, 1)
-	assert.Equal(t, "llm_output", chunks[0].Type)
-}
