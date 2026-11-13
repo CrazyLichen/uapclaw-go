@@ -57,6 +57,21 @@ var (
 	StatusModelClientConfigInvalid = NewStatusCode(
 		"MODEL_CLIENT_CONFIG_INVALID", 181005,
 		"model client_config is invalid, reason: {error_msg}")
+	// StatusModelGroupInvalid 模型组无效
+	// Python: codes.py:870 MODEL_GROUP_INVALID = (181009, ...)
+	StatusModelGroupInvalid = NewStatusCode(
+		"MODEL_GROUP_INVALID", 181009,
+		"model group is invalid, reason: {error_msg}")
+	// StatusModelGroupNoAvailableRoute 模型组无可用路由
+	// Python: codes.py:871 MODEL_GROUP_NO_AVAILABLE_ROUTE = (181010, ...)
+	StatusModelGroupNoAvailableRoute = NewStatusCode(
+		"MODEL_GROUP_NO_AVAILABLE_ROUTE", 181010,
+		"model group has no available route, reason: {error_msg}")
+	// StatusModelRequestConfigInvalid 模型请求配置无效
+	// Python: codes.py:872 MODEL_REQUEST_CONFIG_INVALID = (181011, ...)
+	StatusModelRequestConfigInvalid = NewStatusCode(
+		"MODEL_REQUEST_CONFIG_INVALID", 181011,
+		"model request config is invalid, reason: {error_msg}")
 
 	// 183. 基础层 — 日志 183000–183999
 

@@ -202,6 +202,32 @@ type ModelGroupModelCandidate struct {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// UnmarshalJSON 反序列化 ResolvedRoute，enabled 缺省 true
+// （对应 Python schema.py:41 enabled: bool = True 的 pydantic 缺省语义）。
+func (r *ResolvedRoute) UnmarshalJSON(data []byte) error {
+	type Alias ResolvedRoute
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if _, exists := raw["enabled"]; !exists {
+		raw["enabled"] = true
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	var alias Alias
+	if err := json.Unmarshal(b, &alias); err != nil {
+		return err
+	}
+	*r = ResolvedRoute(alias)
+	if r.RequestOverrides == nil {
+		r.RequestOverrides = map[string]any{}
+	}
+	return nil
+}
+
 // UnmarshalJSON 反序列化 ResolvedRoutingConfig，多余键保留进 Extra
 // （对应 Python model_config = {"extra": "allow"}）。
 func (c *ResolvedRoutingConfig) UnmarshalJSON(data []byte) error {
