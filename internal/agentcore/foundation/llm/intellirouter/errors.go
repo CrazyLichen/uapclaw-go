@@ -58,6 +58,10 @@ type IRBase struct {
 // Error 实现 error 接口。
 func (e *IRBase) Error() string { return e.message }
 
+// irBase 提取内嵌基址：具体错误类型内嵌 IRBase（值或指针）后，该方法被
+// 提升进方法集，asIRBase 借此完成判型（对齐 Python type(error).__mro__）。
+func (e *IRBase) irBase() *IRBase { return e }
+
 // Message 错误消息。← exceptions.py:33 self.message
 func (e *IRBase) Message() string { return e.message }
 
@@ -386,9 +390,14 @@ func IsIntelliRouterError(err error) bool { return hasKind(err, kindIntelliRoute
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// asIRBase 从 error 链中提取 IRBase（errors.As 包装）。
+// asIRBase 从 error 链中提取 IRBase：先试提升方法 irBase()（内嵌载体），
+// 再直接断言 *IRBase，最后沿 Unwrap 链下探。
 func asIRBase(err error, target **IRBase) bool {
 	for err != nil {
+		if b, ok := err.(interface{ irBase() *IRBase }); ok {
+			*target = b.irBase()
+			return true
+		}
 		if b, ok := err.(*IRBase); ok {
 			*target = b
 			return true
