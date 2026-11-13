@@ -3,6 +3,7 @@
 package processcli
 
 import (
+	"io"
 	"os"
 	"syscall"
 )
@@ -66,6 +67,16 @@ func (s *descriptorSource) readAvailable(size int) ([]byte, error) {
 func blockingRead(fd, size int) ([]byte, error) {
 	src := &blockingFileSource{fd: uintptr(fd)}
 	return src.readAvailable(size)
+}
+
+// syscallRead 同步读 fd（裸 syscall，不经 os.File 包装——重复 NewFile
+// 同一 fd 会反复注册 netpoller 并触发终局器，读会间歇失败）。
+func syscallRead(fd int, buf []byte) (int, error) {
+	n, err := syscall.Read(fd, buf)
+	if err != nil && err == io.EOF {
+		return n, nil
+	}
+	return n, err
 }
 
 // selectReadable 零超时 select 探测 fd 是否可读。

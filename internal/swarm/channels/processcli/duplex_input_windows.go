@@ -3,6 +3,7 @@
 package processcli
 
 import (
+	"io"
 	"os"
 	"syscall"
 	"unsafe"
@@ -19,6 +20,15 @@ type windowsPipeSource struct {
 // Python: duplex_input.py:101-102 os.name == "nt" and not regular → _WindowsPipe
 func newPipeSource(fd int) (duplexSource, error) {
 	return &windowsPipeSource{fd: fd}, nil
+}
+
+// syscallRead Windows 同步读（裸 HANDLE，不经 os.File 包装）。
+func syscallRead(fd int, buf []byte) (int, error) {
+	n, err := syscall.Read(syscall.Handle(fd), buf)
+	if err != nil && err == io.EOF {
+		return n, nil
+	}
+	return n, err
 }
 
 // readAvailable 探测可用字节后再读；EOF 错误码返回空切片，其余报错。
@@ -52,7 +62,7 @@ func (s *windowsPipeSource) readAvailable(size int) ([]byte, error) {
 		size = int(available)
 	}
 	buf := make([]byte, size)
-	n, err := syscall.Read(syscall.Handle(handle), buf)
+	n, err := syscallRead(s.fd, buf)
 	if err != nil {
 		return nil, &DuplexInputError{Message: "duplex input could not be read"}
 	}

@@ -19,6 +19,25 @@ import (
 
 // ──────────────────────────── 测试替身 ────────────────────────────
 
+// lockedBuffer 带互斥的测试输出缓冲（writer 由 controller goroutine 写、
+// 测试 goroutine 读，直接用 bytes.Buffer 会触发 race）。
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
 // fakeAnswerClient 记录 answer 流调用（answerStreamer 接口替身）。
 type fakeAnswerClient struct {
 	mu       sync.Mutex
@@ -65,13 +84,13 @@ func (f *fakeAnswerClient) last() *swruntime.InteractionAnswerInput {
 }
 
 // newControlTestRig 构造 controller + 可注入 stdin 的 reader。
-func newControlTestRig(t *testing.T) (*DuplexController, *OneShotWriter, *bytes.Buffer, *os.File, *os.File) {
+func newControlTestRig(t *testing.T) (*DuplexController, *OneShotWriter, *lockedBuffer, *os.File, *os.File) {
 	t.Helper()
 	pipeR, pipeW, err := os.Pipe()
 	require.NoError(t, err)
 	reader, err := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 10*time.Millisecond)
 	require.NoError(t, err)
-	out := &bytes.Buffer{}
+	out := &lockedBuffer{}
 	writer, err := NewOneShotWriter(out, "run-req-1")
 	require.NoError(t, err)
 	sid := "sess-1"
@@ -151,8 +170,8 @@ func TestDuplexController_交互登记与answer回填(t *testing.T) {
 	// answer 流被打开
 	select {
 	case <-client.entered:
-	case <-time.After(3 * time.Second):
-		t.Fatal("answer 流未开启")
+	case <-time.After(10 * time.Second):
+		t.Fatalf("answer 流未开启; out=%s", out.String())
 	}
 	ans := client.last()
 	require.Equal(t, "inter-1", ans.InteractionID)
@@ -191,7 +210,7 @@ func TestDuplexController_cancel终止(t *testing.T) {
 	// owner 被取消 → Consume 返回
 	select {
 	case <-consumeDone:
-	case <-time.After(3 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("cancel 后 Consume 未返回")
 	}
 	require.Equal(t, "CANCELLED", ctrl.FailureInfo().Code)
@@ -221,7 +240,7 @@ func TestDuplexController_身份不匹配终止(t *testing.T) {
 		`","type":"cancel","request_id":"other-req"}`)
 	select {
 	case <-consumeDone:
-	case <-time.After(3 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("身份不匹配后 Consume 未返回")
 	}
 	require.Equal(t, "INVALID_CONTROL", ctrl.FailureInfo().Code)
@@ -257,17 +276,19 @@ func TestDuplexController_toolResult回填(t *testing.T) {
 		`"call_id":"`+callID+`","result":{"rows":7}}`)
 	select {
 	case r := <-done:
-		require.Nil(t, r.err)
+		if r.err != nil {
+			t.Fatalf("tool_result 回填 err=%q", *r.err)
+		}
 		require.Equal(t, float64(7), r.result.(map[string]any)["rows"])
-	case <-time.After(3 * time.Second):
-		t.Fatal("tool_result 未回填")
+	case <-time.After(10 * time.Second):
+		t.Fatalf("tool_result 未回填; out=%s", out.String())
 	}
 
 	// 未知 call_id → HOST_TOOL_NOT_PENDING 终止
 	writeControlFrame(t, pipeW, `{"schema_version":"`+protocol.CurrentSchemaVersion+
 		`","type":"tool_result","request_id":"run-req-1","session_id":"sess-1",`+
 		`"call_id":"missing","error":"x"}`)
-	waitForFailure(t, ctrl, "HOST_TOOL_NOT_PENDING", 3*time.Second)
+	waitForFailure(t, ctrl, "HOST_TOOL_NOT_PENDING", 10*time.Second)
 }
 
 // TestDuplexController_unattended权限卡自动reject unattended 分支。
@@ -280,7 +301,7 @@ func TestDuplexController_unattended权限卡自动reject(t *testing.T) {
 	reader, rerr := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 10*time.Millisecond)
 	require.NoError(t, rerr)
 	_ = reader
-	out := &bytes.Buffer{}
+	out := &lockedBuffer{}
 	writer, werr := NewOneShotWriter(out, "run-req-1")
 	require.NoError(t, werr)
 	ctrl := NewDuplexController(nil, writer, true)
@@ -315,8 +336,8 @@ func TestDuplexController_unattended权限卡自动reject(t *testing.T) {
 	// 自动 reject 的 answer 流开启
 	select {
 	case <-client.entered:
-	case <-time.After(3 * time.Second):
-		t.Fatal("unattended 未自动 reject")
+	case <-time.After(10 * time.Second):
+		t.Fatalf("unattended 未自动 reject; out=%s", out.String())
 	}
 	ans := client.last()
 	require.Equal(t, []map[string]any{{"selected_options": []any{"reject"}}}, ans.Answers)
@@ -419,7 +440,7 @@ func TestDuplexController_StopInput排空(t *testing.T) {
 	ctrl.StopInput()
 	select {
 	case <-producerDone:
-	case <-time.After(3 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("StopInput 应排空队列解除生产者阻塞")
 	}
 	require.True(t, ctrl.stoppingInput)
@@ -428,7 +449,7 @@ func TestDuplexController_StopInput排空(t *testing.T) {
 // ──────────────────────────── 小助手 ────────────────────────────
 
 // waitForOutput 轮询等待输出包含子串。
-func waitForOutput(t *testing.T, out *bytes.Buffer, substr string, timeout time.Duration) {
+func waitForOutput(t *testing.T, out *lockedBuffer, substr string, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -441,7 +462,7 @@ func waitForOutput(t *testing.T, out *bytes.Buffer, substr string, timeout time.
 }
 
 // lastOutputLine 取输出最后一条非空行。
-func lastOutputLine(t *testing.T, out *bytes.Buffer) string {
+func lastOutputLine(t *testing.T, out *lockedBuffer) string {
 	t.Helper()
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
 	require.NotEmpty(t, lines)

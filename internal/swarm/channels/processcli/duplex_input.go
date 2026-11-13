@@ -337,11 +337,12 @@ func (r *DuplexLineReader) waitLocked() {
 	r.mu.Lock()
 }
 
-// readAvailable 供测试与平台源共用的常规文件同步读。
+// readAvailable 常规文件同步读（裸 syscall，不经 os.File 包装——
+// 重复 NewFile 同一 fd 会反复注册 netpoller 并触发终局器，读会间歇失败）。
 func (s *blockingFileSource) readAvailable(size int) ([]byte, error) {
 	buf := make([]byte, size)
-	n, err := os.NewFile(s.fd, "").Read(buf)
-	if err != nil && err != io.EOF {
+	n, err := syscallRead(int(s.fd), buf)
+	if err != nil {
 		return nil, err
 	}
 	// Python: os.read 在 EOF 返回 b''；0 字节即 EOF 三态
