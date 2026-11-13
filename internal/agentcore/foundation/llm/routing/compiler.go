@@ -40,39 +40,62 @@ var coreOnlyRequestKeys = map[string]struct{}{"context_window": {}}
 // CompileModelSelection 把解析后的模型/模型组编译为运行时 LLM 配置。
 // 权限、归属与持久化仍由上层负责；本函数只校验载荷并转换为
 // ModelClientConfig / ModelRequestConfig 对。
-// Python: compiler.py:91-113 compile_model_selection
+// Python: compiler.py:91-113 compile_model_selection。
+// 归一（py:_coerce_selection）内联为本函数入口的显式双入口分派：
+// DTO 直传，map 走 JSON round-trip 校验（pydantic model_validate 由
+// JSON round-trip + 枚举校验模拟）——消除 any 中转（实现记录 R-3）。
 func CompileModelSelection(selection any) (*CompiledModelSelection, error) {
-	resolved, err := coerceSelection(selection)
+	switch s := selection.(type) {
+	case *ResolvedModel:
+		return compileCompiledModel(s)
+	case *ResolvedModelGroup:
+		return compileCompiledGroup(s)
+	case map[string]any:
+		if _, hasRoutes := s["routes"]; hasRoutes {
+			group, err := coerceGroup(s)
+			if err != nil {
+				return nil, err
+			}
+			return compileCompiledGroup(group)
+		}
+		model, err := coerceModel(s)
+		if err != nil {
+			return nil, err
+		}
+		return compileCompiledModel(model)
+	}
+	return nil, exception.BuildError(exception.StatusModelRequestConfigInvalid,
+		exception.WithMsg("model selection payload must be a mapping or resolved model object"))
+}
+
+// compileCompiledModel 编译单模型并打包 CompiledModelSelection。
+// Python: compiler.py:99-106。
+func compileCompiledModel(resolved *ResolvedModel) (*CompiledModelSelection, error) {
+	clientConfig, requestConfig, err := compileModel(resolved)
 	if err != nil {
 		return nil, err
 	}
-	switch r := resolved.(type) {
-	case *ResolvedModel:
-		clientConfig, requestConfig, err := compileModel(r)
-		if err != nil {
-			return nil, err
-		}
-		return &CompiledModelSelection{
-			ModelClientConfig:  clientConfig,
-			ModelRequestConfig: requestConfig,
-			SelectedType:       "model",
-			SelectedID:         r.ModelID,
-		}, nil
-	case *ResolvedModelGroup:
-		clientConfig, requestConfig, err := compileModelGroup(r)
-		if err != nil {
-			return nil, err
-		}
-		return &CompiledModelSelection{
-			ModelClientConfig:  clientConfig,
-			ModelRequestConfig: requestConfig,
-			SelectedType:       "model_group",
-			SelectedID:         r.ModelGroupID,
-		}, nil
+	return &CompiledModelSelection{
+		ModelClientConfig:  clientConfig,
+		ModelRequestConfig: requestConfig,
+		SelectedType:       "model",
+		SelectedID:         resolved.ModelID,
+	}, nil
+}
+
+// compileCompiledGroup 编译模型组并打包 CompiledModelSelection。
+// Python: compiler.py:107-113。
+func compileCompiledGroup(resolved *ResolvedModelGroup) (*CompiledModelSelection, error) {
+	clientConfig, requestConfig, err := compileModelGroup(resolved)
+	if err != nil {
+		return nil, err
 	}
-	// Python 侧无对应分支（coerceSelection 只可能返回两种类型）
-	return nil, exception.BuildError(exception.StatusModelRequestConfigInvalid,
-		exception.WithMsg("model selection payload must be a mapping or resolved model object"))
+	return &CompiledModelSelection{
+		ModelClientConfig:  clientConfig,
+		ModelRequestConfig: requestConfig,
+		SelectedType:       "model_group",
+		SelectedID:         resolved.ModelGroupID,
+	}, nil
 }
 
 // GetModelGroupModels 从模型组的启用路由构建可调用模型候选。
@@ -110,25 +133,6 @@ func GetModelGroupModels(modelGroup *ResolvedModelGroup) ([]*ModelGroupModelCand
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// coerceSelection 归一选择载荷：DTO 直传，map 走 JSON round-trip 校验。
-// Python: compiler.py:145-162 _coerce_selection（pydantic model_validate
-// 由 JSON round-trip + 枚举校验模拟）。
-func coerceSelection(selection any) (any, error) {
-	switch s := selection.(type) {
-	case *ResolvedModel:
-		return s, nil
-	case *ResolvedModelGroup:
-		return s, nil
-	case map[string]any:
-		if _, hasRoutes := s["routes"]; hasRoutes {
-			return coerceGroup(s)
-		}
-		return coerceModel(s)
-	}
-	return nil, exception.BuildError(exception.StatusModelRequestConfigInvalid,
-		exception.WithMsg("model selection payload must be a mapping or resolved model object"))
-}
 
 // coerceModel map → ResolvedModel（JSON round-trip 模拟 pydantic 校验）。
 func coerceModel(data map[string]any) (*ResolvedModel, error) {
