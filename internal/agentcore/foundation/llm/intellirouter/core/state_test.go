@@ -185,3 +185,78 @@ func TestCleanupDeployments(t *testing.T) {
 	require.NotContains(t, s.ConsecutiveFailures, "d1")
 	require.NotContains(t, s.TotalTokens, "d3")
 }
+
+// TestState_导出方法面 补齐 ResetDeployment/HealthStateOf/DeploymentAvailable 直测。
+func TestState_导出方法面(t *testing.T) {
+	s, c := newTestState(t, 60.0)
+	// ResetDeployment 空部署也安全（未登记 → 状态写入 HEALTHY）
+	s.ResetDeployment("none")
+	require.Equal(t, DeploymentStatusHealthy, s.DeploymentStatuses["none"])
+	// DeploymentAvailable 默认 HEALTHY（py:236 get(id, HEALTHY)）
+	require.True(t, s.DeploymentAvailable("unregistered", c.now()))
+	// 冷却未过期不可用、过期可用（py:237-239）
+	s.OnFailure("d1", nil, 60.0)
+	require.False(t, s.DeploymentAvailable("d1", c.now()))
+	require.False(t, s.HealthStateOf("d1")) // py:220 health_state=false
+	// HealthStateOf 未登记默认 true（py:163 get(id, True)）
+	require.True(t, s.HealthStateOf("unregistered"))
+	// health 通过加速恢复（py:152-154）
+	s.UpdateHealth("d1", true)
+	require.True(t, s.DeploymentAvailable("d1", c.now()))
+	require.Equal(t, DeploymentStatusHealthy, s.DeploymentStatuses["d1"])
+}
+
+// TestDeploymentFromDict_双形态 补 dict 解析分支（内存 ToDict 与 JSON 两形态）。
+func TestDeploymentFromDict_双形态(t *testing.T) {
+	// JSON 形态（float64 / []any / map[string]any）
+	jsonShape := map[string]any{
+		"id": "x1", "model_name": "m", "api_key": "k", "api_base": "u",
+		"provider": "openai", "status": "cooldown",
+		"cooldown_until": 99.0, "tags": []any{"t1", "t2"},
+		"tpm": float64(10), "rpm": float64(5), "timeout": float64(2.5),
+		"endpoint_profile": "dashscope", "fallback_tag": "q",
+		"model_description": "d", "request_defaults": map[string]any{"a": 1.0},
+		"custom_headers": map[string]any{"H": "v"}, "consecutive_failures": float64(2),
+	}
+	d, err := DeploymentFromDict(jsonShape)
+	require.NoError(t, err)
+	require.Equal(t, DeploymentStatusCooldown, d.Status)
+	require.Equal(t, 99.0, *d.CooldownUntil)
+	require.Equal(t, []string{"t1", "t2"}, d.Tags)
+	require.Equal(t, 10, *d.TPM)
+	require.Equal(t, 5, *d.RPM)
+	require.Equal(t, 2.5, *d.Timeout)
+	require.Equal(t, "q", *d.FallbackTag)
+	require.Equal(t, 2, d.ConsecutiveFailures)
+	require.Equal(t, "v", d.CustomHeaders["H"])
+	// 非法 status 报错（DeploymentStatusFrom）
+	bad := map[string]any{"model_name": "m", "api_key": "k", "api_base": "u", "provider": "p", "status": "bogus"}
+	_, err = DeploymentFromDict(bad)
+	require.Error(t, err)
+	// verify_ssl 缺省 true（py 默认 true）
+	require.True(t, d.VerifySSL)
+}
+
+// TestIntPtrFrom_分支 补 dict 双形态助手分支。
+func TestIntPtrFrom_分支(t *testing.T) {
+	i := 3
+	require.Equal(t, 3, *intPtrFrom(&i))
+	require.Equal(t, 4, *intPtrFrom(4))
+	require.Equal(t, 5, *intPtrFrom(float64(5)))
+	require.Nil(t, intPtrFrom("x"))
+	require.Nil(t, intPtrFrom(nil))
+	f := 1.5
+	require.Equal(t, 1.5, *floatPtrFrom(&f))
+	require.Equal(t, 2.0, *floatPtrFrom(2))
+	require.Equal(t, 3.5, *floatPtrFrom(float64(3.5)))
+	require.Nil(t, floatPtrFrom("x"))
+	require.Equal(t, "s", *strPtrFrom("s"))
+	sp := "sp"
+	require.Equal(t, "sp", *strPtrFrom(&sp))
+	require.Nil(t, strPtrFrom(1))
+	require.Equal(t, []string{"a"}, strSliceFrom([]string{"a"}))
+	require.Equal(t, []string{"b"}, strSliceFrom([]any{"b"}))
+	require.Nil(t, strSliceFrom(1))
+	require.True(t, boolFrom("x", true))
+	require.False(t, boolFrom(false, true))
+}

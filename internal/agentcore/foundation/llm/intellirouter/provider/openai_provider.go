@@ -34,19 +34,16 @@ func (a *OpenAIAdapter) GetHeaders(deployment *intelliroutercore.Deployment) map
 		"Content-Type":  "application/json",
 	}
 	if len(deployment.CustomHeaders) > 0 {
-		// ← py:36-45 custom_headers 覆盖 Authorization（告警 + 移除默认头）
-		if _, has := deployment.CustomHeaders["Authorization"]; has {
-			hasLower := false
-			for name := range deployment.CustomHeaders {
-				if strings.EqualFold(name, "authorization") {
-					hasLower = true
-				}
-			}
-			if hasLower {
-				for name := range headers {
-					if strings.EqualFold(name, "authorization") { // ← py:41-43
-						delete(headers, name)
-					}
+		// ← py:36-45 custom_headers 覆盖 Authorization（告警 + 移除默认头）：
+		// custom_header_names = {name.lower()}，大小写不敏感检测
+		customNames := make(map[string]bool, len(deployment.CustomHeaders))
+		for name := range deployment.CustomHeaders {
+			customNames[strings.ToLower(name)] = true // ← py:37
+		}
+		if customNames["authorization"] {
+			for name := range headers {
+				if strings.EqualFold(name, "authorization") { // ← py:41-43
+					delete(headers, name)
 				}
 			}
 		}

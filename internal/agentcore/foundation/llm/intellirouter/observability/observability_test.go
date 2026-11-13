@@ -90,3 +90,40 @@ func TestRequestID(t *testing.T) {
 	require.Len(t, id, 12) // uuid hex[:12]
 	require.NotEqual(t, id, NewRequestID())
 }
+
+// TestRoutingEvent_ToDict_全字段 补齐 optional 字段输出（events.py:82-97）。
+func TestRoutingEvent_ToDict_全字段(t *testing.T) {
+	e := NewRoutingEvent(EventTypeStreamSucceeded, "r", "m")
+	depID := "d1"
+	prov := "openai"
+	lat := 0.5
+	pt := 1
+	ct := 2
+	tt := 3
+	et := "E"
+	em := "msg"
+	cc := 9
+	e.DeploymentID = &depID
+	e.Provider = &prov
+	e.Latency = &lat
+	e.PromptTokens = &pt
+	e.CompletionTokens = &ct
+	e.TotalTokens = &tt
+	e.ErrorType = &et
+	e.ErrorMessage = &em
+	e.ChunkCount = &cc
+	d := e.ToDict()
+	require.Equal(t, "d1", d["deployment_id"])
+	require.Equal(t, "openai", d["provider"])
+	require.Equal(t, 0.5, d["latency"])
+	require.Equal(t, 1, d["prompt_tokens"])
+	require.Equal(t, 2, d["completion_tokens"])
+	require.Equal(t, 3, d["total_tokens"])
+	require.Equal(t, "E", d["error_type"])
+	require.Equal(t, "msg", d["error_message"])
+	require.Equal(t, 9, d["chunk_count"])
+	// Unregister 未注册 handler 为 no-op（Go 语义登记）
+	b := &EventBus{}
+	b.Unregister(&captureHandler{name: "ghost"})
+	require.Empty(t, b.Handlers())
+}

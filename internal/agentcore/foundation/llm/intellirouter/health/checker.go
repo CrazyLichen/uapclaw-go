@@ -221,6 +221,11 @@ func (c *SDKHealthChecker) GetUnhealthyIDs() map[string]bool {
 	return result
 }
 
+// Close 关闭底层资源（Python close() 关闭全部 verify 分组的 httpx 客户端；
+// Go 客户端由注入方管理，保留空实现占位以维持方法面对齐）。
+// ← checker.py:71 close
+func (c *SDKHealthChecker) Close() {}
+
 // StartBackgroundCheck 启动后台健康检查。← checker.py:197 start_background_check
 func (c *SDKHealthChecker) StartBackgroundCheck() {
 	c.mu.Lock()

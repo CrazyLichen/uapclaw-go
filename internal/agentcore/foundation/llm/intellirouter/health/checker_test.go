@@ -140,3 +140,24 @@ func stateNow() float64 {
 func timeNowMs() int64 {
 	return time.Now().UnixMilli()
 }
+
+// TestClose_UnhealthyIDs Close 与不健康集合（checker.py:71/188-193）。
+func TestClose_UnhealthyIDs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+	state := intelliroutercore.NewLocalRouterState()
+	c := NewSDKHealthChecker([]*intelliroutercore.Deployment{newDep(t, "d", srv.URL)}, state, 0, 0, nil, 0, srv.Client())
+	c.CheckAllDeployments() // 500 → health_state=false
+	require.Contains(t, c.GetUnhealthyIDs(), "d")
+	c.Close() // ← py:71 close（Go 客户端由注入方管理，方法面对齐）
+	// BackgroundCheck 未启动时 Stop 幂等（py:206-210）
+	c.StopBackgroundCheck()
+	c.StopBackgroundCheck()
+	// CheckDeployment 网络错误路径（py:128-132 except Exception）
+	badDep := newDep(t, "bad", "http://127.0.0.1:1") // 连接拒绝
+	res := c.CheckDeployment(badDep)
+	require.False(t, res.IsHealthy)
+	require.NotNil(t, res.Error)
+}

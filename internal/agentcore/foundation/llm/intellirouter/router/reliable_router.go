@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"sync"
 
 	intellirouter "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/core"
@@ -150,6 +151,10 @@ func NewReliableRouter(p RouterParams) *ReliableRouter {
 	}
 	// 把部署声明的 tpm/rpm 配额接入 state ← py:90-96
 	r.syncQuotaState(p.Deployments)
+
+	// 注入 _available_deployments_for_model 覆写钩子（py:206-212 review 16：
+	// Python 子类覆写，Go 无虚方法派发，必须构造期注入）
+	r.hookAvailableDeploymentsForModel = r.availableDeploymentsForModel
 
 	// 健康检查（可选，用于加速恢复）← py:96-101
 	if p.EnableHealthCheck {
@@ -829,6 +834,62 @@ func (r *ReliableRouter) Stream(ctx context.Context, messages []map[string]any, 
 type ChunkResult struct {
 	Chunk intellirouter.AssistantMessageChunk
 	Err   error
+}
+
+// BatchRequest 批量请求项（py:1050 每个 req 含 model/messages/**kwargs）。
+type BatchRequest struct {
+	// Model 模型名
+	Model string
+	// Messages 消息列表
+	Messages []map[string]any
+	// Kwargs 其他参数
+	Kwargs map[string]any
+}
+
+// BatchCompletion 批量 completion。← reliable_router.py:1044-1062
+// （asyncio.Semaphore(max_concurrent) → 有界并发 goroutine；
+// gather(return_exceptions=True) → 结果含 error 不中断整批）
+func (r *ReliableRouter) BatchCompletion(ctx context.Context, requests []BatchRequest, maxConcurrent int) []BatchResult {
+	if maxConcurrent <= 0 {
+		maxConcurrent = 10 // ← py:1045 max_concurrent: int = 10
+	}
+	results := make([]BatchResult, len(requests))
+	sem := make(chan struct{}, maxConcurrent)
+	var wg sync.WaitGroup
+	for i, req := range requests {
+		wg.Add(1)
+		go func(i int, req BatchRequest) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			resp, err := r.Completion(ctx, req.Model, req.Messages, nil, req.Kwargs)
+			results[i] = BatchResult{Response: resp, Err: err}
+		}(i, req)
+	}
+	wg.Wait()
+	return results
+}
+
+// BatchResult 单条批量结果（异常折叠为 Err，不中断整批 ← py:1059 return_exceptions=True）。
+type BatchResult struct {
+	Response map[string]any
+	Err      error
+}
+
+// StartBackgroundCheck 启动后台健康检查（async 上下文入口 __aenter__ 的等价面）。
+// ← reliable_router.py:105-109 __aenter__
+func (r *ReliableRouter) StartBackgroundCheck() {
+	if r.HealthChecker != nil {
+		r.HealthChecker.StartBackgroundCheck()
+	}
+}
+
+// StopBackgroundCheck 停止后台健康检查（__aexit__ 等价面）。
+// ← reliable_router.py:111-116 __aexit__
+func (r *ReliableRouter) StopBackgroundCheck() {
+	if r.HealthChecker != nil {
+		r.HealthChecker.StopBackgroundCheck()
+	}
 }
 
 // GetStats 获取统计信息。← reliable_router.py:1701-1731

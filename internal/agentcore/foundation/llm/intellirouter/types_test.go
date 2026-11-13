@@ -2,6 +2,8 @@ package intellirouter
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -192,4 +194,25 @@ func assertRoundtrip(t *testing.T, v any) {
 	require.NotEmpty(t, data)
 	var back map[string]any
 	require.NoError(t, json.Unmarshal(data, &back))
+}
+
+// TestMediaHelpers media.go 与 ErrorTypeName 分支。
+func TestMediaHelpers(t *testing.T) {
+	// IsDataURI / ParseDataURI（utils/media.py）
+	require.True(t, IsDataURI("data:text/plain,hi"))
+	require.False(t, IsDataURI("http://x"))
+	mime, data, err := ParseDataURI("data:image/jpeg;base64,QUJD")
+	require.NoError(t, err)
+	require.Equal(t, "image/jpeg", mime)
+	require.Equal(t, "QUJD", data)
+	_, _, err = ParseDataURI("nota:data")
+	require.ErrorContains(t, err, "Not a data URI")
+	_, _, err = ParseDataURI("data:nocomma")
+	require.ErrorContains(t, err, "no comma")
+	// truncate rune 截断（py 切片 [:50] 字符语义）
+	require.Len(t, []rune(truncate(strings.Repeat("中", 60), 50)), 50)
+	// ErrorTypeName 类名口径（py:291 type(error).__name__）
+	require.Equal(t, "DeploymentServerError", ErrorTypeName(NewDeploymentServerError("d", 500, "")))
+	require.Equal(t, "Exception", ErrorTypeName(nil))
+	require.Equal(t, "Exception", ErrorTypeName(errors.New("plain")))
 }

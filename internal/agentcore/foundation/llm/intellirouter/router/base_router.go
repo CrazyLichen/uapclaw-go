@@ -53,6 +53,11 @@ type BaseRouter struct {
 	httpClient *http.Client
 	// adapterCache provider 适配器缓存 ← py:62
 	adapterCache map[string]provider.BaseProviderAdapter
+	// hookAvailableDeploymentsForModel 可覆写钩子（py:370-378
+	// _available_deployments_for_model：Python 子类覆写，Go 经构造期注入
+	// 函数指针实现——嵌入方法静态绑定不会派发到「子类」版本）。
+	// nil 时用 BaseRouter 默认实现（返回全部部署）。
+	hookAvailableDeploymentsForModel func(model string) []*intelliroutercore.Deployment
 	// deploymentsLock 保护 deployments/modelIndices 的热替换（读多写少）← py:64
 	deploymentsLock sync.RWMutex
 }
@@ -244,6 +249,15 @@ func (r *BaseRouter) MakeRequest(ctx context.Context, deployment *intellirouterc
 	return result, nil
 }
 
+// Close 释放底层资源（Python close 关闭 httpx 客户端连接池；Go 的
+// http.Client 由注入方管理生命周期，此处关闭空闲连接保持语义对齐）。
+// ← base_router.py:254-259 close
+func (r *BaseRouter) Close() {
+	if tr, ok := r.httpClient.Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+}
+
 // Completion 发送 completion 请求。← py:254-290 completion
 func (r *BaseRouter) Completion(ctx context.Context, model string, messages []map[string]any, deployment *intelliroutercore.Deployment, kwargs map[string]any) (map[string]any, error) {
 	if deployment == nil {
@@ -373,7 +387,12 @@ func (r *BaseRouter) CompletionWithFallback(ctx context.Context, model string, m
 	var errors []depErr
 	for _, m := range modelsToTry {
 		// 候选部署经钩子获取：ReliableRouter 覆写为 state 过滤版 ← py:410-413
-		deployments := r.availableDeploymentsForModel(m)
+		var deployments []*intelliroutercore.Deployment
+		if r.hookAvailableDeploymentsForModel != nil {
+			deployments = r.hookAvailableDeploymentsForModel(m)
+		} else {
+			deployments = r.availableDeploymentsForModel(m)
+		}
 		for _, dep := range deployments {
 			resp, err := r.Completion(ctx, m, messages, dep, kwargs)
 			if err == nil {

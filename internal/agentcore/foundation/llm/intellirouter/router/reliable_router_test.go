@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,10 +11,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
+	intellirouter "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/core"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/health"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/observability"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/provider"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/strategy"
+	"time"
 )
 
 // sseResponse OpenAI 兼容 SSE 响应体。
@@ -495,4 +499,547 @@ func TestSessionIdNotLeaked(t *testing.T) {
 	require.False(t, hasTags)
 	require.Equal(t, 0.5, body["temperature"]) // 普通参数透传
 	_ = strategy.NewOrderedFailover
+}
+
+// TestBatchCompletion 批量并发与异常折叠（py:1044-1062）。
+func TestBatchCompletion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("ok", 1)))
+	}))
+	defer srv.Close()
+	srvBad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer srvBad.Close()
+	r := NewReliableRouter(RouterParams{
+		Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)},
+		Strategy:    &seqStrategy{order: []string{"A"}},
+	})
+	results := r.BatchCompletion(context.Background(), []BatchRequest{
+		{Model: "m", Messages: []map[string]any{{"role": "user", "content": "1"}}},
+		{Model: "m", Messages: []map[string]any{{"role": "user", "content": "2"}}, Kwargs: map[string]any{}},
+	}, 2)
+	require.Len(t, results, 2)
+	require.NoError(t, results[0].Err)
+	// 另一路由单部署打满后不判异常——两条都成功
+	require.NoError(t, results[1].Err)
+	// 失败折叠为 Err 不中断整批
+	rBad := NewReliableRouter(RouterParams{
+		Deployments: []*intelliroutercore.Deployment{dep(t, "A", srvBad.URL)},
+		Strategy:    &seqStrategy{order: []string{"A"}},
+		NumRetries:  0,
+	})
+	resultsBad := rBad.BatchCompletion(context.Background(), []BatchRequest{
+		{Model: "m", Messages: nil},
+		{Model: "m", Messages: nil},
+	}, 2)
+	require.Error(t, resultsBad[0].Err)
+	require.Error(t, resultsBad[1].Err) // 整批继续（return_exceptions=True）
+}
+
+// TestBackgroundCheckStartStop 后台健康检查启停（py:105-116）。
+func TestBackgroundCheckStartStop(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("ok", 1)))
+	}))
+	defer srv.Close()
+	state := intelliroutercore.NewLocalRouterState()
+	hc := health.NewSDKHealthChecker([]*intelliroutercore.Deployment{dep(t, "A", srv.URL)}, state, 0, 0, nil, 0, srv.Client())
+	r := NewReliableRouter(RouterParams{
+		Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)},
+		Strategy:    &seqStrategy{order: []string{"A"}},
+	})
+	require.Nil(t, r.HealthChecker)
+	r.HealthChecker = hc
+	r.StartBackgroundCheck()
+	require.Eventually(t, func() bool { return state.HealthStateOf("A") }, 2e9, 1e7)
+	r.StopBackgroundCheck()
+}
+
+// TestAnthropicRouteViaRouter anthropic provider 经路由的 wire 验证。
+func TestAnthropicRouteViaRouter(t *testing.T) {
+	var gotBody map[string]any
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/messages", r.URL.Path)
+		require.Equal(t, "sk-1", r.Header.Get("x-api-key"))
+		gotAuth = r.Header.Get("anthropic-version")
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		// 返回 Anthropic 原生响应 → adapter.TransformResponse 归一
+		w.Write([]byte(`{"id":"m1","stop_reason":"end_turn","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":1,"output_tokens":2}}`))
+	}))
+	defer srv.Close()
+	d, _ := intelliroutercore.NewDeployment(intelliroutercore.DeploymentParams{
+		ModelName: "c", APIKey: "sk-1", APIBase: srv.URL, ID: "A", Provider: "anthropic",
+	})
+	r := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{d}, Strategy: &seqStrategy{order: []string{"A"}}})
+	resp, err := r.Completion(context.Background(), "c", []map[string]any{{"role": "user", "content": "q"}}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "2023-06-01", gotAuth)
+	// system 提取到顶层（py:108-110）；max_tokens 默认 4096（py:51）
+	_, hasSystem := gotBody["system"]
+	_ = hasSystem
+	require.InDelta(t, float64(provider.DefaultMaxTokens), gotBody["max_tokens"], 0) // JSON 解码后为 float64
+	// 原生响应归一为 OpenAI 格式（py:117-157）
+	require.Equal(t, "hi", resp["choices"].([]any)[0].(map[string]any)["message"].(map[string]any)["content"])
+	require.Equal(t, 2, resp["usage"].(map[string]any)["completion_tokens"])
+}
+
+// TestBaseRouterConfigsAndHelpers 配置详情/超时/状态过滤/HTTP 映射。
+func TestBaseRouterConfigsAndHelpers(t *testing.T) {
+	tag := "qwen-plus"
+	desc := "desc"
+	d1, errD1 := intelliroutercore.NewDeployment(intelliroutercore.DeploymentParams{
+		ModelName: "m", APIKey: "k1", APIBase: "http://a", ID: "A", Provider: "openai",
+		FallbackTag: &tag, ModelDescription: &desc,
+	})
+	require.NoError(t, errD1)
+	// api_key 必填（py:57-68），has_api_key=false 是防御分支（Python 同样不可达）
+	d2, errD2 := intelliroutercore.NewDeployment(intelliroutercore.DeploymentParams{
+		ModelName: "m2", APIKey: "k2", APIBase: "http://b", ID: "B", Provider: "openai",
+	})
+	require.NoError(t, errD2)
+	r := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{d1, d2}, Strategy: &seqStrategy{}})
+
+	// GetDeploymentConfigs / ByModel（py:99-133）：has_api_key 不回传明文
+	configs := r.GetDeploymentConfigs()
+	require.Len(t, configs, 2)
+	require.True(t, configs[0].HasAPIKey)
+	require.True(t, configs[1].HasAPIKey)
+	require.Equal(t, "qwen-plus", *configs[0].FallbackTag)
+	byModel := r.GetDeploymentConfigByModel("m2")
+	require.Len(t, byModel, 1)
+	require.Equal(t, "B", byModel[0].ID)
+
+	// RequestTimeout：deployment 显式优先（py:157-161）
+	t5 := 5.0
+	d1.Timeout = &t5
+	require.Equal(t, 5.0, r.RequestTimeout(d1))
+	d1.Timeout = nil
+	require.Equal(t, 30.0, r.RequestTimeout(d1))
+
+	// stateAvailableDeployments（py:266-292）：冷却未过期跳过、过期可用
+	r.State.OnFailure("A", nil, 60.0)
+	require.Empty(t, r.stateAvailableDeployments([]*intelliroutercore.Deployment{d1}))
+	// 未登记默认 HEALTHY
+	require.Len(t, r.stateAvailableDeployments([]*intelliroutercore.Deployment{d2}), 1)
+
+	// mapHTTPStatus 四分支（py:190-229）
+	auth := mapHTTPStatus(d1, 401, "", "", 30)
+	require.Equal(t, 401, intellirouter.StatusCodeOf(auth))
+	ra := mapHTTPStatus(d1, 429, "", "2.5", 30)
+	require.Equal(t, 429, intellirouter.StatusCodeOf(ra))
+	srv := mapHTTPStatus(d1, 503, "body", "", 30)
+	require.Equal(t, 502, intellirouter.StatusCodeOf(srv))
+	gen := mapHTTPStatus(d1, 400, "bad", "", 30)
+	require.Equal(t, 500, intellirouter.StatusCodeOf(gen)) // 基类 DeploymentError → 500
+	require.Contains(t, gen.Error(), "returned HTTP 400")
+
+	// parseRetryAfter（py:202-205）：非法值忽略
+	f, err := parseRetryAfter("3")
+	require.NoError(t, err)
+	require.Equal(t, 3.0, f)
+	_, err = parseRetryAfter("bad")
+	require.Error(t, err)
+	_, err = parseRetryAfter("")
+	require.Error(t, err)
+
+	// CompletionWithFallback：fallback 模型映射（py:394-439）
+	srvOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("fb", 1)))
+	}))
+	defer srvOK.Close()
+	_, err = r.CompletionWithFallback(context.Background(), "nope", nil,
+		map[string]string{"nope": "fb2"}, nil)
+	require.Error(t, err) // 模型名无部署 → RouterError All deployments failed
+	_ = srvOK
+	r.Close() // py:254-259
+}
+
+// TestReliableRouter_CompletionOnDeployment 显式点名部署直通（py:631-728）。
+func TestReliableRouter_CompletionOnDeployment(t *testing.T) {
+	var calls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Write([]byte(completionJSON("direct", 2)))
+	}))
+	defer srv.Close()
+	bus := &observability.EventBus{}
+	handler := &captureEmitHandler{}
+	bus.Register(handler)
+	d := dep(t, "A", srv.URL)
+	r := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{d}, Strategy: &seqStrategy{order: []string{"A"}}, EventBus: bus})
+	// 显式 deployment：跳过选路与重试，不参与 state 记账（py:417-422）
+	resp, err := r.Completion(context.Background(), "m", nil, d, nil)
+	require.NoError(t, err)
+	require.Equal(t, "direct", resp["choices"].([]any)[0].(map[string]any)["message"].(map[string]any)["content"])
+	require.Equal(t, 1, int(calls.Load()))
+	// 不参与 state 记账（py:418-420 注释）
+	require.Equal(t, 0, r.State.TotalRequests["A"])
+	// 事件成对：STARTED → SUCCEEDED（py:424-428）
+	require.Equal(t, []string{"request_started", "request_succeeded"}, eventTypes(handler))
+}
+
+// TestInvokeOutputParser invoke 解析器降级路径（py:1160-1176）。
+func TestInvokeOutputParser(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("raw", 1)))
+	}))
+	defer srv.Close()
+	r := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)}, Strategy: &seqStrategy{order: []string{"A"}}})
+	// 解析成功：dict → json dumps（py:1166-1167）
+	msg, err := r.Invoke(context.Background(), nil, InvokeParams{
+		Model: "m",
+		OutputParser: func(m *intellirouter.AssistantMessage) (any, error) {
+			return map[string]any{"k": "v"}, nil
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, `{"k":"v"}`, msg.Content)
+	// 解析失败：降级保留原始 content（py:1170-1176）
+	msg, err = r.Invoke(context.Background(), nil, InvokeParams{
+		Model: "m",
+		OutputParser: func(m *intellirouter.AssistantMessage) (any, error) {
+			return nil, context.DeadlineExceeded
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "raw", msg.Content)
+	// Model 缺省取首个部署 model_name（py:1117-1125）
+	msg, err = r.Invoke(context.Background(), nil, InvokeParams{})
+	require.NoError(t, err)
+	require.Equal(t, "raw", msg.Content)
+	// 无部署时 Model 缺省报错（py:1120-1123）
+	rEmpty := NewReliableRouter(RouterParams{Deployments: nil, Strategy: &seqStrategy{}})
+	_, err = rEmpty.Invoke(context.Background(), nil, InvokeParams{})
+	require.ErrorContains(t, err, "No model specified and no deployments configured")
+}
+
+// TestReliableRouter_StreamTyped Stream 类型化流（py:1188-1511）。
+func TestReliableRouter_StreamTyped(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("data: " + chunkJSON(map[string]any{"role": "assistant"}) + "\n\n")
+	b.WriteString("data: " + chunkJSON(map[string]any{"content": "hey"}) + "\n\n")
+	b.WriteString(`data: {"id":"c1","model":"m","choices":[],"usage":{"prompt_tokens":1,"completion_tokens":3}}` + "\n\n")
+	b.WriteString("data: " + chunkJSON(map[string]any{}, "stop") + "\n\n")
+	b.WriteString("data: [DONE]\n\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(b.String()))
+	}))
+	defer srv.Close()
+	bus := &observability.EventBus{}
+	handler := &captureEmitHandler{}
+	bus.Register(handler)
+	r := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)}, Strategy: &seqStrategy{order: []string{"A"}}, EventBus: bus})
+	var chunks []intellirouter.AssistantMessageChunk
+	for cr := range r.Stream(context.Background(), nil, InvokeParams{Model: "m"}) {
+		require.NoError(t, cr.Err)
+		chunks = append(chunks, cr.Chunk)
+	}
+	// STREAM_STARTED → ROUTE_SELECTED → SUCCEEDED
+	require.Equal(t, []string{"stream_started", "stream_route_selected", "stream_succeeded"}, eventTypes(handler))
+	// 类型化层空过滤：role-only chunk 在 py:1668-1675 判 None 不产出
+	//（Python 同行为）；产出序列 = [content, usage-only, finish]
+	require.Len(t, chunks, 3)
+	require.Equal(t, "hey", chunks[0].Content)
+	require.NotNil(t, chunks[1].UsageMetadata)
+	require.NotNil(t, chunks[2].FinishReason)
+	require.Equal(t, 3, r.State.TotalTokens["A"]) // review 8 流式 usage 记账
+}
+
+// TestHelpers 补助手函数分支。
+func TestHelpers(t *testing.T) {
+	// truthy 各类型分支（helpers.go）
+	require.False(t, truthy(nil))
+	require.False(t, truthy(""))
+	require.True(t, truthy("x"))
+	require.False(t, truthy(false))
+	require.True(t, truthy(true))
+	require.False(t, truthy(0))
+	require.True(t, truthy(1))
+	require.True(t, truthy(1.5))
+	require.False(t, truthy([]any{}))
+	require.True(t, truthy([]any{1}))
+	require.False(t, truthy(map[string]any{}))
+	require.True(t, truthy(map[string]any{"a": 1}))
+	// toFloat64 字符串分支
+	f, err := toFloat64("2.5")
+	require.NoError(t, err)
+	require.Equal(t, 2.5, f)
+	_, err = toFloat64("bad")
+	require.Error(t, err)
+	_, err = toFloat64(struct{}{})
+	require.Error(t, err)
+	require.Equal(t, 2.5, toFloatMust("2.5"))
+	require.Equal(t, 0.0, toFloatMust("bad"))
+	// minInt 双分支
+	require.Equal(t, 1, minInt(1, 2))
+	require.Equal(t, 1, minInt(2, 1))
+	// orAny/orDefault/orDefaultAny
+	require.Equal(t, "b", orAny(nil, "b"))
+	require.Equal(t, "a", orAny("a", "b"))
+	require.Equal(t, "def", orDefault("", "def"))
+	require.Equal(t, "x", orDefault("x", "def"))
+	require.Equal(t, "b", orDefaultAny(nil, "b"))
+	require.Equal(t, "a", orDefaultAny("a", "b"))
+	// contextErrMsg 双分支
+	c := intelliroutercore.NewRoutingContext("m", nil, nil)
+	require.Nil(t, contextErrMsg(c))
+	c.SetFailure(context.Canceled)
+	require.NotNil(t, contextErrMsg(c))
+	// round4 / floatInf / floatPtrOf
+	require.Equal(t, 1.2346, round4(1.23456))
+	require.Equal(t, math.Inf(1), floatInf())
+	require.Equal(t, 1.5, *floatPtrOf(1.5))
+}
+
+// TestReliableRouter_StreamWithFallback Stream 的 fallback 与取消路径（py:1188-1511）。
+func TestReliableRouter_StreamWithFallback(t *testing.T) {
+	srvA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(503)
+	}))
+	defer srvA.Close()
+	srvB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(sseResponse("b-answer")))
+	}))
+	defer srvB.Close()
+	bus := &observability.EventBus{}
+	handler := &captureEmitHandler{}
+	bus.Register(handler)
+	r := NewReliableRouter(RouterParams{
+		Deployments:  []*intelliroutercore.Deployment{dep(t, "A", srvA.URL), dep(t, "B", srvB.URL)},
+		StrategyType: "ordered-failover",
+		NumRetries:   3,
+		EventBus:     bus,
+	})
+	var contents []string
+	for cr := range r.Stream(context.Background(), nil, InvokeParams{Model: "m"}) {
+		require.NoError(t, cr.Err)
+		if cr.Chunk.Content != "" {
+			contents = append(contents, cr.Chunk.Content)
+		}
+	}
+	require.Equal(t, []string{"b-answer"}, contents)
+	require.Equal(t, 1, r.State.ConsecutiveFailures["A"]) // 503 冷却
+	// 事件含 RETRIED（py:1445-1456）
+	types := eventTypes(handler)
+	require.Contains(t, types, "request_retried")
+	require.Contains(t, types, "stream_succeeded")
+}
+
+// TestStream_CancelledConsumer 消费者中断 → STREAM_CANCELLED（py:1462-1506）。
+func TestStream_CancelledConsumer(t *testing.T) {
+	// 慢流：足够 chunk 让消费者中断发生在可见输出后
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher := w.(http.Flusher)
+		for i := 0; i < 50; i++ {
+			w.Write([]byte("data: " + chunkJSON(map[string]any{"content": "x"}) + "\n\n"))
+			flusher.Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+		w.Write([]byte("data: " + chunkJSON(map[string]any{}, "stop") + "\n\ndata: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+	bus := &observability.EventBus{}
+	handler := &captureEmitHandler{}
+	bus.Register(handler)
+	r := NewReliableRouter(RouterParams{
+		Deployments:  []*intelliroutercore.Deployment{dep(t, "A", srv.URL)},
+		StrategyType: "ordered-failover",
+		EventBus:     bus,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	count := 0
+	for range r.Stream(ctx, nil, InvokeParams{Model: "m"}) {
+		count++
+		if count == 3 {
+			cancel() // 消费者提前中断（GeneratorExit 等价，py:1462）
+			break
+		}
+	}
+	// STREAM_CANCELLED 终态投递（goroutine 异步，轮询等待）
+	require.Eventually(t, func() bool {
+		for _, e := range handler.events {
+			if e.EventType == observability.EventTypeStreamCancelled {
+				return true
+			}
+		}
+		return false
+	}, 2e9, 1e7)
+	// 取消路径既不 on_success 也不 on_failure（py:1479-1484 注释）
+	require.Equal(t, 0, r.State.TotalRequests["A"])
+	require.NotContains(t, r.State.ConsecutiveFailures, "A")
+}
+
+// TestSelectDeployment_FallbackToFirst 空选回退首部署（py:380-381）。
+func TestSelectDeployment_FallbackToFirst(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("x", 1)))
+	}))
+	defer srv.Close()
+	// tag-filtered 且 tag 不匹配任何部署 → 过滤后空 → fallback_to_first_on_empty_selection=False → nil（py:26）
+	tag := "no-match"
+	dA, _ := intelliroutercore.NewDeployment(intelliroutercore.DeploymentParams{
+		ModelName: "m", APIKey: "k", APIBase: srv.URL, ID: "A", Provider: "openai",
+	})
+	r := NewReliableRouter(RouterParams{
+		Deployments:    []*intelliroutercore.Deployment{dA},
+		StrategyType:   "tag-filtered",
+		StrategyKwargs: map[string]any{"fallback_tag": tag},
+	})
+	_, err := r.Completion(context.Background(), "m", nil, nil, nil)
+	require.Error(t, err) // NoDeploymentAvailable（策略返回 nil，无回退）
+	require.Contains(t, err.Error(), "No deployment matched routing strategy")
+	require.False(t, r.Strategy.FallbackToFirstOnEmptySelection()) // py:26 = False
+	// simple-shuffle 默认 True（router:243 getattr 默认）
+	r2 := NewReliableRouter(RouterParams{
+		Deployments:  []*intelliroutercore.Deployment{dA},
+		StrategyType: "simple-shuffle",
+	})
+	require.True(t, r2.Strategy.FallbackToFirstOnEmptySelection())
+	require.False(t, r2.Strategy.StrictFallbackErrors())
+}
+
+// TestResponseToMessage_分支 补 message 转换分支（py:1586-1632）。
+func TestResponseToMessage_分支(t *testing.T) {
+	// 空 choices → 空 content（py:1590-1592）
+	msg := responseToMessage(map[string]any{})
+	require.Equal(t, "", msg.Content)
+	// tool_calls 解析（py:1603-1619）
+	raw := map[string]any{
+		"id": "r1", "model": "m",
+		"choices": []any{map[string]any{
+			"finish_reason": "tool_calls",
+			"message": map[string]any{"role": "assistant", "content": nil,
+				"reasoning_content": "think",
+				"tool_calls": []any{map[string]any{"id": "t1", "type": "function",
+					"function": map[string]any{"name": "f", "arguments": "{}"}}},
+			},
+		}},
+		"usage":              map[string]any{"prompt_tokens": 1, "completion_tokens": 2},
+		"system_fingerprint": "fp",
+	}
+	msg = responseToMessage(raw)
+	require.NotNil(t, msg.ToolCalls)
+	require.Equal(t, "f", msg.ToolCalls[0].Name)
+	// index 缺省取数组下标（py:1614 tc.get("index", idx)）
+	require.Equal(t, 0, *msg.ToolCalls[0].Index)
+	require.Equal(t, "tool_calls", msg.FinishReason) // _response_to_message 直取 finish_reason（py:1597），映射只在 anthropic adapter
+	require.Equal(t, "think", *msg.ReasoningContent)
+	pm := msg.ProviderMetadata
+	require.Equal(t, "fp", pm["system_fingerprint"]) // 白名单（py:1512-1522）
+}
+
+// TestCreateStrategy_Kwargs 策略工厂 kwargs 分支。
+func TestCreateStrategy_Kwargs(t *testing.T) {
+	s, err := createStrategy("simple-shuffle", map[string]any{
+		"weights": map[string]any{"A": 2.0}, "default_weight": 3.0,
+	})
+	require.NoError(t, err)
+	ss := s.(*strategy.SimpleShuffle)
+	require.Equal(t, 2.0, ss.Weights["A"])
+	require.Equal(t, 3.0, ss.DefaultWeight)
+	// tag-filtered 带固定 tag
+	tag := "qwen"
+	s2, err := createStrategy("tag-filtered", map[string]any{"fallback_tag": tag})
+	require.NoError(t, err)
+	tf := s2.(*strategy.TagFiltered)
+	require.NotNil(t, tf.FallbackTag)
+	require.Equal(t, "qwen", *tf.FallbackTag)
+	// weights 缺省 → 空 map、default 1.0（py:28-29）
+	s3, _ := createStrategy("simple-shuffle", nil)
+	ss3 := s3.(*strategy.SimpleShuffle)
+	require.Empty(t, ss3.Weights)
+	require.Equal(t, 1.0, ss3.DefaultWeight)
+}
+
+// TestFallbackHookOverride 钩子注入验证：fallback 循环走 state 过滤版（py:206-212）。
+func TestFallbackHookOverride(t *testing.T) {
+	srvA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(500) }))
+	defer srvA.Close()
+	srvB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("b", 1)))
+	}))
+	defer srvB.Close()
+	r := NewReliableRouter(RouterParams{
+		Deployments:  []*intelliroutercore.Deployment{dep(t, "A", srvA.URL), dep(t, "B", srvB.URL)},
+		StrategyType: "ordered-failover",
+		NumRetries:   3,
+	})
+	require.NotNil(t, r.hookAvailableDeploymentsForModel) // 构造期注入
+	// 预置 A 冷却：fallback 循环不应尝试冷却中的 A（py:206-212 review 16）
+	r.State.OnFailure("A", nil, 60.0)
+	resp, err := r.CompletionWithFallback(context.Background(), "m", nil, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "B", resp["deployment_id"])
+	// 显式点名路径不参与 state 记账（py:631-728）→ A 冷却计数不变
+	require.Equal(t, 1, r.State.ConsecutiveFailures["A"])
+	// 全冷却时 fallback 无候选 → RouterError（py:437）
+	r.State.OnFailure("B", nil, 60.0)
+	_, err = r.CompletionWithFallback(context.Background(), "m", nil, nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "All deployments failed")
+}
+
+// TestRouterRemaining 分支补齐：BaseRouter 直通/超时取消/事件异步投递。
+func TestRouterRemaining(t *testing.T) {
+	// Close 双分支：Transport 注入/默认（base_router.go Close）
+	r1 := NewReliableRouter(RouterParams{Deployments: nil, Strategy: &seqStrategy{},
+		HTTPClient: &http.Client{Transport: &http.Transport{}}})
+	r1.Close()
+	r2 := NewReliableRouter(RouterParams{Deployments: nil, Strategy: &seqStrategy{}})
+	r2.Close() // 默认 Transport 非 *http.Transport 分支
+	// availableDeploymentsForModel 直调（py:206-212）
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(completionJSON("x", 1)))
+	}))
+	defer srv.Close()
+	r3 := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)}, Strategy: &seqStrategy{order: []string{"A"}}})
+	require.Len(t, r3.availableDeploymentsForModel("m"), 1)
+	// emitEventWithoutAwait goroutine 投递（py:259-290）
+	bus := &observability.EventBus{}
+	handler := &captureEmitHandler{}
+	bus.Register(handler)
+	r3.EventBus = bus
+	r3.emitEventWithoutAwait(routingEvent(observability.EventTypeRequestStarted, "r", "m", map[string]any{}))
+	require.Eventually(t, func() bool { return len(handler.events) == 1 }, 2e9, 1e7)
+	// BaseRouter.Completion 无可用部署分支（py:271-273 NoDeploymentAvailable）
+	rBad := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)}, Strategy: &seqStrategy{order: []string{"A"}}})
+	rBad.State.OnFailure("A", nil, 60.0)
+	// Completion(显式 dep) 绕过可用性检查（py:274-279 显式指定不检查）
+	d := dep(t, "A", srv.URL)
+	resp, err := rBad.Completion(context.Background(), "m", nil, d, nil)
+	require.NoError(t, err) // 冷却中的部署显式点名仍直通
+	require.Equal(t, "A", resp["deployment_id"])
+	// GetModelList（py:95-97）
+	require.Contains(t, r3.GetModelList(), "m")
+	// syncQuotaState 热更新 limit 保留累计（py:155-159）
+	tpm1, tpm2 := 100, 200
+	dq, _ := intelliroutercore.NewDeployment(intelliroutercore.DeploymentParams{
+		ModelName: "q", APIKey: "k", APIBase: srv.URL, ID: "Q", Provider: "openai", TPM: &tpm1})
+	rq := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dq}, Strategy: &seqStrategy{order: []string{"Q"}}})
+	rq.State.TokenUsage["Q"] = &intelliroutercore.TokenUsage{Used: 50, Limit: 100}
+	dq2, _ := intelliroutercore.NewDeployment(intelliroutercore.DeploymentParams{
+		ModelName: "q", APIKey: "k", APIBase: srv.URL, ID: "Q", Provider: "openai", TPM: &tpm2})
+	rq.syncQuotaState([]*intelliroutercore.Deployment{dq2})
+	require.Equal(t, 200, rq.State.TokenUsage["Q"].Limit) // 只改 limit
+	require.Equal(t, 50, rq.State.TokenUsage["Q"].Used)   // 保留累计 used
+}
+
+// TestBaseRouterCompletion_NoDeployments BaseRouter 直通无部署分支（py:271-273）。
+func TestBaseRouterCompletion_NoDeployments(t *testing.T) {
+	// BaseRouter.Completion（nil deployment）无可用 → NoDeploymentAvailable
+	b := NewBaseRouter([]*intelliroutercore.Deployment{dep(t, "A", "http://127.0.0.1:1")}, 0, 0, nil)
+	b.State.OnFailure("A", nil, 60.0)
+	_, err := b.Completion(context.Background(), "m", nil, nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "No deployment")
+	// BaseRouter.CompletionStream 同分支（py:296-300）
+	ch := b.CompletionStream(context.Background(), "m", nil, nil, nil)
+	sc := <-ch
+	require.Error(t, sc.Err)
+	// ReliableRouter.availableDeploymentsForModel 直调（py:206-212）
+	r := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dep(t, "A", "http://x")}, Strategy: &seqStrategy{}})
+	r.State.OnFailure("A", nil, 60.0)
+	require.Empty(t, r.availableDeploymentsForModel("m")) // 冷却剔除
 }

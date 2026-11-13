@@ -343,3 +343,163 @@ func TestMediaHelpers(t *testing.T) {
 	_ = io.Discard
 	_ = json.Marshal
 }
+
+// TestAnthropicAdapter_ContentBlocks content block 转换分支（py:340-397）。
+func TestAnthropicAdapter_ContentBlocks(t *testing.T) {
+	a := NewAnthropicAdapter()
+	// 非 dict block → 文本化（py:341-343）
+	messages := []map[string]any{{"role": "user", "content": []any{
+		"plain",
+		map[string]any{"type": "text", "text": "t"},
+		map[string]any{"type": "image_url", "image_url": map[string]any{"url": "data:image/png;base64,AA"}},
+		map[string]any{"type": "image_url", "image_url": map[string]any{"url": "https://x/i.png"}},
+		map[string]any{"type": "image_url", "image_url": map[string]any{"url": "http://x/i.png"}},
+		map[string]any{"type": "file", "file": map[string]any{"file_data": "data:application/pdf;base64,QQ"}},
+		map[string]any{"type": "file", "file": map[string]any{"file_id": "https://x/f"}},
+		map[string]any{"type": "file", "file": map[string]any{"file_id": "file-1"}},
+		map[string]any{"type": "file", "file": map[string]any{}},
+		map[string]any{"type": "input_audio", "input_audio": map[string]any{}},
+		map[string]any{"type": "video_url"},
+		map[string]any{"type": "unknown_custom"},
+	}}}
+	body := a.TransformRequest("c", messages, nil, map[string]any{"max_tokens": 10})
+	blocks := body["messages"].([]map[string]any)[0]["content"].([]any)
+	require.Len(t, blocks, 9) // audio/video/无 file_id 的 file 被跳过（py:384-390/380）：12-3=9
+	require.Equal(t, "text", blocks[0].(map[string]any)["type"])
+	img := blocks[2].(map[string]any)["source"].(map[string]any)
+	require.Equal(t, "base64", img["type"]) // data URI → base64（py:353-357）
+	img2 := blocks[3].(map[string]any)["source"].(map[string]any)
+	require.Equal(t, "url", img2["type"])
+	doc := blocks[5].(map[string]any)["source"].(map[string]any)
+	require.Equal(t, "base64", doc["type"])
+	doc2 := blocks[6].(map[string]any)["source"].(map[string]any)
+	require.Equal(t, "url", doc2["type"]) // http file_id（py:375-376）
+	doc3 := blocks[7].(map[string]any)["source"].(map[string]any)
+	require.Equal(t, "file", doc3["type"])
+	// unknown 透传（py:393）
+	require.Equal(t, "unknown_custom", blocks[8].(map[string]any)["type"])
+}
+
+// TestConvertToolChoice 分支覆盖（py:410-428）。
+func TestConvertToolChoice(t *testing.T) {
+	require.Equal(t, map[string]any{"type": "any"}, convertToolChoice("any"))
+	require.Equal(t, map[string]any{"type": "none"}, convertToolChoice("none"))
+	require.Equal(t, map[string]any{"type": "auto"}, convertToolChoice("auto"))
+	require.Equal(t, map[string]any{"type": "auto"}, convertToolChoice("other"))
+	require.Equal(t, map[string]any{"type": "tool", "name": "f"},
+		convertToolChoice(map[string]any{"type": "function", "function": map[string]any{"name": "f"}}))
+	require.Equal(t, map[string]any{"type": "any"}, convertToolChoice(map[string]any{"type": "any"}))
+	require.Equal(t, map[string]any{"type": "auto"}, convertToolChoice(map[string]any{"type": "bogus"}))
+	require.Equal(t, map[string]any{"type": "auto"}, convertToolChoice(42))
+}
+
+// TestKwargsPops pop 助手分支。
+func TestKwargsPops(t *testing.T) {
+	kw := map[string]any{"stream": true, "max_tokens": 7, "tools": "x", "tool_choice": "any", "temperature": 0.5}
+	require.True(t, popBool(kw, "stream", false))
+	require.False(t, popBool(kw, "missing", false))
+	require.Equal(t, 7, popInt(kw, "max_tokens", 0))
+	require.Equal(t, 9, popInt(kw, "missing", 9))
+	require.Equal(t, "x", popAny(kw, "tools"))
+	require.Nil(t, popAny(kw, "missing"))
+	_, ok := kw["stream"]
+	require.False(t, ok) // pop 即删除（py kwargs.pop）
+	require.Equal(t, 0.5, kw["temperature"])
+	// toFloat 分支
+	f, err := toFloat(3)
+	require.NoError(t, err)
+	require.Equal(t, 3.0, f)
+	_, err = toFloat("bad")
+	require.Error(t, err)
+	// joinOrNil
+	require.Nil(t, joinOrNil(nil))
+	require.Equal(t, "ab", joinOrNil([]string{"a", "b"}))
+}
+
+// TestAdapters_ValidateAndSign 校验/签名/流迭代默认实现（py:57-106/143）。
+func TestAdapters_ValidateAndSign(t *testing.T) {
+	oa := NewOpenAIAdapter()
+	aa := NewAnthropicAdapter()
+	d := testDep(t, "openai", "https://x")
+	// 默认无校验、不签名（py:57-66/95-106）
+	oa.ValidateRequestConfig(d, nil)
+	aa.ValidateRequestConfig(d, nil)
+	h := map[string]string{"A": "1"}
+	require.Equal(t, h, oa.SignRequest("POST", "u", h, nil, d))
+	require.Equal(t, h, aa.SignRequest("POST", "u", h, nil, d))
+	// openai TransformResponse/StreamChunk 透传（py:73-95）
+	raw := map[string]any{"k": 1}
+	require.Equal(t, raw, oa.TransformResponse(raw, "m", d))
+	require.Equal(t, raw, oa.TransformStreamChunk(raw, "m", d))
+	// IterStreamEvents 默认 SSE
+	it, err := oa.IterStreamEvents(strings.NewReader("data: [DONE]\n"), "")
+	require.NoError(t, err)
+	_, ok, err := it.Next()
+	require.NoError(t, err)
+	require.False(t, ok) // [DONE] 直接结束
+}
+
+// TestOpenAIHeaders_小写覆盖 custom_headers 小写 authorization 覆盖（py:36-45）。
+func TestOpenAIHeaders_小写覆盖(t *testing.T) {
+	a := NewOpenAIAdapter()
+	d := testDep(t, "openai", "https://x")
+	d.CustomHeaders = map[string]string{"authorization": "Bearer lower", "X-Custom": "v"}
+	h := a.GetHeaders(d)
+	require.Equal(t, "Bearer lower", h["authorization"]) // 原键名保留
+	_, hasUpper := h["Authorization"]
+	require.False(t, hasUpper) // 默认头被移除（py:41-43）
+	require.Equal(t, "v", h["X-Custom"])
+}
+
+// TestRegistry_重复注册 RegisterProvider 覆盖同名（py:13-15 dict 赋值语义）。
+func TestRegistry_重复注册(t *testing.T) {
+	RegisterProvider("openai", NewOpenAIAdapter())
+	a, err := GetProviderAdapter("openai")
+	require.NoError(t, err)
+	require.IsType(t, &OpenAIAdapter{}, a)
+}
+
+// TestThreeAdapters_TransformRequest deepseek/siliconflow/inference-affinity 差异面。
+func TestThreeAdapters_TransformRequest(t *testing.T) {
+	d := testDep(t, "openai", "https://x")
+	messages := []map[string]any{
+		{"role": "assistant", "content": "", "tool_calls": []any{
+			map[string]any{"id": "t1", "index": 0, "function": map[string]any{"name": "f", "arguments": "{}", "extra": "x"}}}},
+	}
+	// DeepSeek：assistant 缺 reasoning_content 补空串（deepseek_provider.py:28-31）
+	ds := NewDeepSeekAdapter()
+	body := ds.TransformRequest("m", messages, d, nil)
+	msgs := body["messages"].([]map[string]any)
+	rc, has := msgs[0]["reasoning_content"]
+	require.True(t, has)
+	require.Equal(t, "", rc)
+	// 已有 reasoning_content 不覆盖
+	messages2 := []map[string]any{{"role": "assistant", "content": "", "reasoning_content": "keep"}}
+	body2 := ds.TransformRequest("m", messages2, d, nil)
+	require.Equal(t, "keep", body2["messages"].([]map[string]any)[0]["reasoning_content"])
+
+	// SiliconFlow：tool_calls 清洗（siliconflow_provider.py:23）
+	sf := NewSiliconFlowAdapter()
+	body3 := sf.TransformRequest("m", messages, d, nil)
+	calls := body3["messages"].([]map[string]any)[0]["tool_calls"].([]any)
+	_, hasIndex := calls[0].(map[string]any)["index"]
+	require.False(t, hasIndex)
+
+	// InferenceAffinity：清洗 + cache_sharing + return_token_ids（py:22-34）
+	ia := NewInferenceAffinityAdapter()
+	body4 := ia.TransformRequest("m", messages, d, map[string]any{
+		"session_id": "s1", "enable_cache_sharing": true,
+		"return_token_ids": []any{1, 2}, "temperature": 0.3,
+	})
+	require.Equal(t, true, body4["cache_sharing"])
+	require.Equal(t, "s1", body4["cache_salt"])
+	require.Equal(t, []any{1, 2}, body4["return_token_ids"])
+	// enable_cache_sharing 无 session_id → 不注入（py:28 条件）
+	body5 := ia.TransformRequest("m", messages, d, map[string]any{"enable_cache_sharing": true})
+	_, hasCache := body5["cache_sharing"]
+	require.False(t, hasCache)
+	// 三个 adapter 的 URL/头继承 openai（py:9 继承 OpenAIProviderAdapter）
+	require.Equal(t, "https://x/chat/completions", ds.GetAPIURL(d, false))
+	h := ia.GetHeaders(d)
+	require.Equal(t, "Bearer sk-1", h["Authorization"])
+}

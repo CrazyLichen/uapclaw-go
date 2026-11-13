@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -77,4 +78,40 @@ func TestStatusCodeOf_回退500(t *testing.T) {
 	// ← exceptions.py:275 未命中回落 500；包装链穿透后按映射值返回
 	require.Equal(t, 500, StatusCodeOf(errors.New("plain")))
 	require.Equal(t, 503, StatusCodeOf(fmt.Errorf("wrapped: %w", NewDeploymentFailed("d", 1))))
+}
+
+// TestErrors_余下分支 补齐判型/构造/详情访问分支。
+func TestErrors_余下分支(t *testing.T) {
+	// Message/Details 访问器（← py:33-34）
+	e := NewDeploymentFailed("d", 2)
+	require.Equal(t, "Deployment 'd' has failed 2 times", e.Message())
+	require.Equal(t, 2, e.Details()["consecutive_failures"])
+	// NewDeploymentInCooldownAt（真实时钟路径）
+	cd := NewDeploymentInCooldownAt("d", float64(time.Now().UnixMilli())/1000+100)
+	require.Contains(t, cd.Error(), "is in cooldown for")
+	// NewDeploymentGenericError（base_router.py:217-224 直抛分支）
+	gen := NewDeploymentGenericError("d", 400, "body")
+	require.Contains(t, gen.Error(), "returned HTTP 400")
+	var genBase *IRBase
+	require.True(t, AsIRBase(gen, &genBase))
+	require.Equal(t, "body", genBase.Details()["response_body"])
+	// NewRouterError（base_router.py:437）
+	re := NewRouterError("s", "All deployments failed: []")
+	require.True(t, IsRouterError(re))
+	// 判型分支
+	require.True(t, IsCacheError(NewCacheKeyNotFound("k")))
+	require.True(t, IsHealthCheckError(NewHealthCheckFailed("d", "x")))
+	require.True(t, IsConfigError(NewMissingRequiredField("f", "ctx")))
+	require.True(t, IsIntelliRouterError(NewDeploymentFailed("d", 1)))
+	require.True(t, IsDeploymentNetworkError(NewDeploymentNetworkError("d", "x")))
+	require.True(t, IsDeploymentRateLimitError(NewDeploymentRateLimitError("d", nil)))
+	require.True(t, IsDeploymentServerError(NewDeploymentServerError("d", 502, "")))
+	require.True(t, IsDeploymentTimeoutError(NewDeploymentTimeoutError("d", 3)))
+	require.False(t, IsRouterError(NewCacheKeyNotFound("k")))
+	require.False(t, IsIntelliRouterError(nil))
+	require.Equal(t, 500, StatusCodeOf(nil))
+	// ToDict 未映射种类回退（kindName fallback）——GenericError 走 kindName 表
+	var gBase *IRBase
+	require.True(t, AsIRBase(NewDeploymentGenericError("d", 1, ""), &gBase))
+	require.Equal(t, "DeploymentError", gBase.ToDict()["error_type"])
 }
