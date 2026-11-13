@@ -3940,7 +3940,7 @@ func matchType(r agentinterfaces.AgentRail, types []reflect.Type) bool {
 
 // permissionsSectionToMap 将 PermissionsSection 转换为 map[string]any 供 PermissionEngine 使用。
 // Python: config = cast(dict[str, Any], config)
-func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any {
+func permissionsSectionToMap(perm *hschema.PermissionsSection) map[string]any {
 	if perm == nil {
 		return make(map[string]any)
 	}

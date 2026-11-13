@@ -50,45 +50,6 @@ type PermissionConfirmResponse struct {
 	PersistScope string `json:"persist_scope,omitempty"`
 }
 
-// ApprovalOverrideEntry 用户/CLI 覆盖条目
-//
-// match_type 表示 pattern 作用在哪种输入上（如 path 对路径参数、command 对命令文本）；
-// pattern 则是该维度上的具体表达式（re:… 正则或路径/通配写法）。
-type ApprovalOverrideEntry struct {
-	// ID 覆盖条目标识
-	ID string `json:"id,omitempty" yaml:"id,omitempty"`
-	// Tools 适用的工具列表
-	Tools []string `json:"tools,omitempty" yaml:"tools,omitempty"`
-	// MatchType 匹配类型（如 path、command）
-	MatchType string `json:"match_type,omitempty" yaml:"match_type,omitempty"`
-	// Pattern 匹配模式（正则或通配）
-	Pattern string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
-	// Action 执行动作（allow/ask/deny）
-	Action string `json:"action,omitempty" yaml:"action,omitempty"`
-}
-
-// PermissionsSection 权限配置段
-//
-// 与 agent YAML 中 permissions: 段落常见字段对齐。
-// schema（可选）：建议写 tiered_policy 等，便于人类阅读或与旧文档对齐；
-// 引擎不根据该字段切换实现路径。
-type PermissionsSection struct {
-	// Enabled 是否启用权限系统
-	Enabled bool `json:"enabled" yaml:"enabled"`
-	// Schema 权限策略模式名称
-	Schema string `json:"schema,omitempty" yaml:"schema,omitempty"`
-	// Defaults 默认权限策略
-	Defaults map[string]any `json:"defaults,omitempty" yaml:"defaults,omitempty"`
-	// Tools 工具级权限策略
-	Tools map[string]any `json:"tools,omitempty" yaml:"tools,omitempty"`
-	// Rules 权限规则列表
-	Rules []map[string]any `json:"rules,omitempty" yaml:"rules,omitempty"`
-	// ApprovalOverrides 用户/CLI 覆盖条目
-	ApprovalOverrides []ApprovalOverrideEntry `json:"approval_overrides,omitempty" yaml:"approval_overrides,omitempty"`
-	// ExternalDirectory 外部目录权限映射
-	ExternalDirectory map[string]string `json:"external_directory,omitempty" yaml:"external_directory,omitempty"`
-}
-
 // PermissionSceneHookInput 传给 PermissionSceneHook 的入参。
 //
 // Python: PermissionSceneHookInput (host.py L15-23)

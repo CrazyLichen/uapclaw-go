@@ -10,7 +10,6 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	workspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	schema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -263,7 +262,7 @@ type DeepAgentConfig struct {
 	// DefaultMode 默认 Agent 执行模式
 	DefaultMode AgentMode `json:"default_mode,omitempty"`
 	// Permissions 权限策略配置
-	Permissions *security.PermissionsSection `json:"permissions,omitempty"`
+	Permissions *PermissionsSection `json:"permissions,omitempty"`
 	// PermissionHost 权限宿主回调（any 占位，⤵️ 9.1 回填为 PermissionHostCallback 接口）
 	PermissionHost any `json:"-"`
 }

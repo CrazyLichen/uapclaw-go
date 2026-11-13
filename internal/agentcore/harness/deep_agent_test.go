@@ -21,7 +21,6 @@ import (
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -1627,7 +1626,7 @@ func TestDeepAgent_queuePendingRails_各种配置(t *testing.T) {
 	cfg := schema.NewDeepAgentConfig()
 	cfg.ProgressiveToolEnabled = true
 	cfg.EnableTaskLoop = true
-	cfg.Permissions = &security.PermissionsSection{}
+	cfg.Permissions = &schema.PermissionsSection{}
 	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
