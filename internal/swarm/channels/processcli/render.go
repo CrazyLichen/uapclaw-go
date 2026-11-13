@@ -23,7 +23,7 @@ import (
 // EventRenderer 渲染事件而不影响 Runtime 执行。
 // Python: render.py:56-208 EventRenderer
 type EventRenderer struct {
-	// outputFormat human / json / jsonl
+	// outputFormat è¾åºæ ¼å¼ï¼human / json / jsonl
 	outputFormat string
 	// stdout 用户可见输出
 	stdout io.Writer

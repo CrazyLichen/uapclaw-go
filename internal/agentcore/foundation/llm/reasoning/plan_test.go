@@ -94,7 +94,7 @@ func TestResolve_通用openai_auto无控制为空plan(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DashScope ────────────────────────────
+// ──────────────────────────── DashScope 测试分组 ────────────────────────────
 
 // TestResolve_dashscope_qwen走extra_body
 // Python: test_reasoning_resolver.py:128 test_dashscope_qwen_reasoning_uses_extra_body_not_sdk_kwargs
@@ -141,7 +141,7 @@ func TestResolve_dashscope_qwen38_budget优先(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DeepSeek ────────────────────────────
+// ──────────────────────────── DeepSeek 测试分组 ────────────────────────────
 
 // TestResolve_deepseek_关闭用thinking_disabled
 // Python: test_reasoning_resolver.py:530 test_deepseek_profile_disabled_sends_thinking_disabled_not_effort_off
@@ -211,7 +211,7 @@ func TestResolve_deepseek判定看api_base(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Anthropic ────────────────────────────
+// ──────────────────────────── Anthropic 测试分组 ────────────────────────────
 
 // TestResolve_anthropic_启用自适应
 // Python: test_reasoning_resolver.py:647 test_anthropic_enabled_maps_effort_to_output_config
@@ -294,7 +294,7 @@ func TestResolve_anthropic_plainEnabled用medium预算(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Responses ────────────────────────────
+// ──────────────────────────── Responses 测试分组 ────────────────────────────
 
 // TestResolve_responses_effort映射
 // Python: test_reasoning_resolver.py:856 test_openai_account_responses_reasoning_effort_maps_to_reasoning_body
@@ -385,7 +385,7 @@ func TestResolve_显式nil不回落modelConfig(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── apply / controls ────────────────────────────
+// ──────────────────────────── apply / controls 测试分组 ────────────────────────────
 
 // TestApplyReasoningPlan_不覆盖已有键
 // Python: reasoning.py:935-962

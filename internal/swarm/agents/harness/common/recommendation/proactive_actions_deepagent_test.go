@@ -285,7 +285,7 @@ func messagesToText(messages model_clients.MessagesParam) string {
 	return strings.Join(parts, "\n")
 }
 
-// ──────────────────────────── TriggerMainAgent ────────────────────────────
+// ──────────────────────────── TriggerMainAgent 测试分组 ────────────────────────────
 
 // TestTriggerMainAgent_构造指令并透传 指令由 directive prompt 渲染后填入 request.Query。
 // Python: proactive_actions.py:398

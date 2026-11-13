@@ -185,7 +185,6 @@ func (r *BaseRouter) GetAdapter(deployment *intelliroutercore.Deployment) (provi
 	if err != nil {
 		return nil, err
 	}
-	r.adapterCache[p] = a
 	return a, nil
 }
 
@@ -235,7 +234,7 @@ func (r *BaseRouter) MakeRequest(ctx context.Context, deployment *intellirouterc
 		// httpx.ConnectError / RemoteProtocolError → DeploymentNetworkError（py:230-237）
 		return nil, intellirouter.NewDeploymentNetworkError(deployment.ID, err.Error())
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
 		return nil, mapHTTPStatus(deployment, resp.StatusCode, string(body), resp.Header.Get("Retry-After"), requestTimeout)
@@ -343,7 +342,7 @@ func (r *BaseRouter) CompletionStream(ctx context.Context, model string, message
 			}
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		// ← py:330-334 非 2xx 读出 body 再报错，避免隐藏真实状态码
 		if resp.StatusCode >= 400 {
 			body, _ := io.ReadAll(resp.Body)

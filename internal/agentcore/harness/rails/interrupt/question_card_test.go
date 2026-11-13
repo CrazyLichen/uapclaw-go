@@ -205,7 +205,7 @@ func TestFormatQuestion_确认类不带审查器字段(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BuildVerified ────────────────────────────
+// ──────────────────────────── BuildVerified 测试分组 ────────────────────────────
 
 // TestBuildVerified_request_id匹配 测试正常渲染。
 func TestBuildVerified_request_id匹配(t *testing.T) {

@@ -4,7 +4,7 @@ import "testing"
 
 // TestHistoryStateStore_接口契约 过渡接口 4 方法契约（⤴️ 31d 替换真实实现）。
 func TestHistoryStateStore_接口契约(t *testing.T) {
-	var store HistoryStateStore = NewInMemoryHistoryStateStore()
+	store := NewInMemoryHistoryStateStore()
 	if _, ok := store.LoadLatestHistoryState(); ok {
 		t.Fatal("空库应无快照")
 	}

@@ -449,7 +449,7 @@ func TestChunkConverters(t *testing.T) {
 	require.NotNil(t, got)
 	require.NotNil(t, got.UsageMetadata)
 	require.Equal(t, 3, got.UsageMetadata.TotalTokens)
-	// content chunk
+	// content chunk åå®¹ååæ¯
 	got = chunkToAssistantMessageChunk(map[string]any{
 		"id": "c1", "model": "m",
 		"choices": []any{map[string]any{"delta": map[string]any{"content": "x"}, "finish_reason": nil}},
@@ -791,7 +791,7 @@ func TestHelpers(t *testing.T) {
 	// minInt 双分支
 	require.Equal(t, 1, minInt(1, 2))
 	require.Equal(t, 1, minInt(2, 1))
-	// orAny/orDefault/orDefaultAny
+	// orAny/orDefault/orDefaultAny ä¸ä¸ªå©æå½æ°
 	require.Equal(t, "b", orAny(nil, "b"))
 	require.Equal(t, "a", orAny("a", "b"))
 	require.Equal(t, "def", orDefault("", "def"))
@@ -803,7 +803,7 @@ func TestHelpers(t *testing.T) {
 	require.Nil(t, contextErrMsg(c))
 	c.SetFailure(context.Canceled)
 	require.NotNil(t, contextErrMsg(c))
-	// round4 / floatInf / floatPtrOf
+	// round4 / floatInf / floatPtrOf æ°å¼å©æå½æ°
 	require.Equal(t, 1.2346, round4(1.23456))
 	require.Equal(t, math.Inf(1), floatInf())
 	require.Equal(t, 1.5, *floatPtrOf(1.5))
@@ -874,7 +874,7 @@ func TestStream_CancelledConsumer(t *testing.T) {
 			break
 		}
 	}
-	// STREAM_CANCELLED 终态投递（goroutine 异步，轮询等待）
+	// STREAM_CANCELLED 终态投递（goroutine 异步，轮询等待；经持锁访问器读取）
 	require.Eventually(t, func() bool {
 		for _, e := range handler.snapshot() {
 			if e.EventType == observability.EventTypeStreamCancelled {

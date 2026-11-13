@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── IsPlanApprovalMessage ────────────────────────────
+// ──────────────────────────── IsPlanApprovalMessage 测试分组 ────────────────────────────
 
 // TestIsPlanApprovalMessage_中文标题 测试中文计划审批标题。
 func TestIsPlanApprovalMessage_中文标题(t *testing.T) {
@@ -35,7 +35,7 @@ func TestIsPlanApprovalMessage_空串(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── StripInlinePlanApprovalChoices ────────────────────────────
+// ──────────────────────────── StripInlinePlanApprovalChoices 测试分组 ────────────────────────────
 
 // TestStripInlinePlanApprovalChoices_中文分隔 测试剥离中文选择行。
 func TestStripInlinePlanApprovalChoices_中文分隔(t *testing.T) {
@@ -77,7 +77,7 @@ func TestStripInlinePlanApprovalChoices_尾部rstrip(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExtractPlanApprovalContent ────────────────────────────
+// ──────────────────────────── ExtractPlanApprovalContent 测试分组 ────────────────────────────
 
 // TestExtractPlanApprovalContent_中文正文 测试中文正文提取。
 func TestExtractPlanApprovalContent_中文正文(t *testing.T) {
@@ -132,7 +132,7 @@ func TestExtractPlanApprovalContent_空计划英文(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BuildPlanApprovalOptionsFromMessage ────────────────────────────
+// ──────────────────────────── BuildPlanApprovalOptionsFromMessage 测试分组 ────────────────────────────
 
 // TestBuildPlanApprovalOptionsFromMessage_中文 测试中文批准/拒绝。
 func TestBuildPlanApprovalOptionsFromMessage_中文(t *testing.T) {

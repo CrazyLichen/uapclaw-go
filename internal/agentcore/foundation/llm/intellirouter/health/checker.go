@@ -154,7 +154,7 @@ func (c *SDKHealthChecker) CheckDeployment(deployment *intelliroutercore.Deploym
 		msg := err.Error()
 		return result(false, nil, &msg) // ← py:128-132 except Exception
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == 200 {
 		latency := time.Since(start).Seconds() // ← py:109 latency = time.time() - start
 		return result(true, &latency, nil)     // ← py:110-114

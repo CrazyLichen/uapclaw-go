@@ -164,7 +164,7 @@ func BuildJiuwenMemoryRail(cfg CLIConfig) *memory.MemoryRail {
 func BuildSubagents(model *llm.Model) []*hschema.SubAgentConfig {
 	var specs []*hschema.SubAgentConfig
 
-	// --- code_agent ---
+	// --- code_agent ç¼ç  Agent ---
 	codeSpec := hschema.NewSubAgentConfig()
 	codeSpec.AgentCard = agentschema.NewAgentCard(
 		agentschema.WithAgentName("code_agent"),
@@ -176,7 +176,7 @@ func BuildSubagents(model *llm.Model) []*hschema.SubAgentConfig {
 	codeSpec.Language = "en"
 	specs = append(specs, codeSpec)
 
-	// --- research_agent ---
+	// --- research_agent ç ç©¶ Agent ---
 	researchSpec := hschema.NewSubAgentConfig()
 	researchSpec.AgentCard = agentschema.NewAgentCard(
 		agentschema.WithAgentName("research_agent"),
@@ -188,7 +188,7 @@ func BuildSubagents(model *llm.Model) []*hschema.SubAgentConfig {
 	researchSpec.Language = "en"
 	specs = append(specs, researchSpec)
 
-	// --- browser_agent ---
+	// --- browser_agent æµè§å¨ Agent ---
 	browserSpec := subagents.BuildBrowserAgentConfig(model, &hschema.SubagentCreateParams{
 		Model:    model,
 		Language: "en",
@@ -209,7 +209,7 @@ func LoadVisionConfig(cfg CLIConfig) *hschema.VisionModelConfig {
 	if os.Getenv("VISION_API_KEY") != "" {
 		return ptr(hschema.VisionModelConfig{}.FromEnv())
 	}
-	// Fallback: reuse main model credentials
+	// ååºï¼å¤ç¨ä¸»æ¨¡åå­æ®
 	visionCfg = hschema.VisionModelConfig{APIKey: cfg.APIKey, BaseURL: cfg.APIBase}
 	return &visionCfg
 }
@@ -223,7 +223,7 @@ func LoadAudioConfig(cfg CLIConfig) *hschema.AudioModelConfig {
 	if os.Getenv("AUDIO_API_KEY") != "" {
 		return ptr(hschema.AudioModelConfig{}.FromEnv())
 	}
-	// Fallback: reuse main model credentials
+	// ååºï¼å¤ç¨ä¸»æ¨¡åå­æ®
 	audioCfg = hschema.AudioModelConfig{APIKey: cfg.APIKey, BaseURL: cfg.APIBase}
 	return &audioCfg
 }
@@ -280,20 +280,20 @@ func CreateAgent(ctx context.Context, cfg CLIConfig) (*harness.DeepAgent, *clira
 		context_engineer.NewContextProcessorRail(context_engineer.WithPreset(true)),
 		context_engineer.NewContextAssembleRail())
 
-	// --- MemoryRail ---
+	// --- MemoryRail è®°å¿ rail ---
 	// embedding 配置可用时集成向量记忆工具。
 	if memoryRail := BuildMemoryRail(cfg); memoryRail != nil {
 		agentRails = append(agentRails, memoryRail)
 	}
 
-	// --- JiuwenMemoryRail ---
+	// --- JiuwenMemoryRail ä¹æè®°å¿ rail ---
 	// 外部 JiuwenMemory（agent-memory）服务集成，JIUWEN_MEMORY_ENABLED
 	// 门卫（默认关）。偏差 D-JM：Go 侧恒 nil。
 	if jiuwenRail := BuildJiuwenMemoryRail(cfg); jiuwenRail != nil {
 		agentRails = append(agentRails, jiuwenRail)
 	}
 
-	// --- SessionRail ---
+	// --- SessionRail ä¼è¯ rail ---
 	// 异步子 Agent 后台任务能力：subagents 存在且
 	// enable_async_subagent=True 时由 create_deep_agent 自动注入，
 	// 此处不手动添加（对齐 Python 注释）。
@@ -418,7 +418,7 @@ func LoadMcpConfigs() []map[string]any {
 	return configs
 }
 
-// ──────────────────────────── AgentBackend ────────────────────────────
+// ──────────────────────────── AgentBackend 后端接口 ────────────────────────────
 
 // AgentBackend 本地 / 远程 agent 执行的抽象。
 // Python: factory.py:463-484 AgentBackend（Protocol，4 方法）
@@ -436,7 +436,7 @@ type AgentBackend interface {
 	Abort(ctx context.Context) error
 }
 
-// ──────────────────────────── LocalBackend ────────────────────────────
+// ──────────────────────────── LocalBackend 本地后端实现 ────────────────────────────
 
 // LocalBackend 直接调 SDK Runner 的后端（MVP）。
 // Python: factory.py:664-748 LocalBackend

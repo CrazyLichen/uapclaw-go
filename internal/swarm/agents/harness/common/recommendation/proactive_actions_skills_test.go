@@ -11,7 +11,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
-// ──────────────────────────── DetectAllSkills ────────────────────────────
+// ──────────────────────────── DetectAllSkills 测试分组 ────────────────────────────
 
 // TestDetectAllSkills_只返回已安装技能 内置未安装的剔除，候选池只剩 local。
 // Python: proactive_actions.py:133 _get_all_skills
@@ -151,7 +151,7 @@ func TestDefaultRecommendationStatePath(t *testing.T) {
 	assert.Contains(t, path, "agent")
 }
 
-// ──────────────────────────── parseSimpleYAMLMap ────────────────────────────
+// ──────────────────────────── parseSimpleYAMLMap 测试分组 ────────────────────────────
 
 // TestParseSimpleYAMLMap 扁平结构成功；嵌套/列表结构降级为 false。
 func TestParseSimpleYAMLMap(t *testing.T) {

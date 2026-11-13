@@ -79,7 +79,7 @@ func BuildModelFromEntry(mcc, mco map[string]any) (*llm.Model, error) {
 func newModelRequestConfigFromKwargs(kwargs map[string]any) *llmschema.ModelRequestConfig {
 	opts := make([]llmschema.ModelRequestConfigOption, 0, 8)
 
-	// model
+	// model å­æ®µæåï¼å¶ä½ kwargs è½ RequestExtraï¼
 	if name, ok := kwargs["model"].(string); ok && name != "" {
 		opts = append(opts, llmschema.WithModelName(name))
 	}

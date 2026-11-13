@@ -1481,7 +1481,7 @@ func errorTypeName(err error) string {
 	if typed == nil {
 		return ""
 	}
-	if typed.Kind() == reflect.Ptr {
+	if typed.Kind() == reflect.Pointer {
 		typed = typed.Elem()
 	}
 	return typed.Name()

@@ -52,7 +52,7 @@ type ExternalInvocationAudit struct {
 	generationAttemptID string
 	// snapshotSequence 快照序号
 	snapshotSequence int
-	// attempts operation_id → (operation, request_id, candidate_id)
+	// attempts operation_id → (operation, request_id, candidate_id) 的登记映射
 	attempts map[string][3]string
 	// completedOperationIds 已完结 operation 集合
 	completedOperationIds map[string]bool

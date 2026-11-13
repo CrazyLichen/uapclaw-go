@@ -411,7 +411,7 @@ func TestKwargsPops(t *testing.T) {
 	require.Equal(t, 3.0, f)
 	_, err = toFloat("bad")
 	require.Error(t, err)
-	// joinOrNil
+	// joinOrNil ç©ºåè¡¨è¿å nil
 	require.Nil(t, joinOrNil(nil))
 	require.Equal(t, "ab", joinOrNil([]string{"a", "b"}))
 }

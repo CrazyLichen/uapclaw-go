@@ -185,7 +185,7 @@ func TestCleanupClient_空会话跳过清理(t *testing.T) {
 	cleanupClient(client, "", operationChat)
 }
 
-// ──────────────────────────── consume ────────────────────────────
+// ──────────────────────────── consume 测试分组 ────────────────────────────
 
 // TestConsume_空流转失败 无 client 运行时 consume 不得 panic。
 func TestConsume_空流转失败(t *testing.T) {

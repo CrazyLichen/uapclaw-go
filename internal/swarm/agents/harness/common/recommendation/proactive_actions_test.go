@@ -81,7 +81,7 @@ func TestPrompts_逐字复刻关键段落(t *testing.T) {
 	assert.Contains(t, zhDirective, `directive 指令本身不进历史`)
 }
 
-// ──────────────────────────── RenderPromptTemplate ────────────────────────────
+// ──────────────────────────── RenderPromptTemplate 测试分组 ────────────────────────────
 
 // TestRenderPromptTemplate_占位替换 命名占位符被替换，未提供的保持不变。
 func TestRenderPromptTemplate_占位替换(t *testing.T) {
@@ -123,7 +123,7 @@ func TestRenderPromptTemplate_真实决策prompt(t *testing.T) {
 	assert.NotContains(t, got, "}}", "渲染后不应残留双花括号")
 }
 
-// ──────────────────────────── SafeUrgency ────────────────────────────
+// ──────────────────────────── SafeUrgency 测试分组 ────────────────────────────
 
 // TestSafeUrgency 各种异常输入回落默认值，正常输入夹到 [0,1]。
 // Python: proactive_actions.py:73 _safe_urgency
@@ -162,7 +162,7 @@ func TestSafeUrgency_NaN(t *testing.T) {
 	assert.Equal(t, 0.5, SafeUrgency(nan, 0.5), "NaN 应回落默认值")
 }
 
-// ──────────────────────────── ExtractJSONFromResponse ────────────────────────────
+// ──────────────────────────── ExtractJSONFromResponse 测试分组 ────────────────────────────
 
 // TestExtractJSONFromResponse 三种形态：fence / 裸花括号 / 尾部脏文本。
 // 注意本函数用贪婪正则，与 gradient_updater 的 raw_decode 版本语义不同。
@@ -203,7 +203,7 @@ func TestExtractJSONFromResponse(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── ExtractOutputText ────────────────────────────
+// ──────────────────────────── ExtractOutputText 测试分组 ────────────────────────────
 
 // TestExtractOutputText 严格只读 output，缺失/类型不符返回空串。
 // Python: proactive_actions.py:202
@@ -231,7 +231,7 @@ func TestExtractOutputText(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── ParseProactiveSkillMd ────────────────────────────
+// ──────────────────────────── ParseProactiveSkillMd 测试分组 ────────────────────────────
 
 // TestParseProactiveSkillMd_三种frontmatter 覆盖标准 YAML / 非标准行 / 无 frontmatter。
 // Python: proactive_actions.py:100
@@ -293,7 +293,7 @@ func writeTempSkillMd(t *testing.T, dirName, content string) string {
 	return path
 }
 
-// ──────────────────────────── RecommendationState ────────────────────────────
+// ──────────────────────────── RecommendationState 测试分组 ────────────────────────────
 
 // TestRecommendationState_AddRecommendation 追加记录并截断到 20 条。
 // Python: profile_extractor.py:48
@@ -473,7 +473,7 @@ func TestTodayKey(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// ──────────────────────────── SafeProactiveInt ────────────────────────────
+// ──────────────────────────── SafeProactiveInt 测试分组 ────────────────────────────
 
 // TestSafeProactiveInt 合法区间 [1,50]，非数字/越界回落默认值。
 // Python: proactive_engine.py:52

@@ -657,7 +657,7 @@ func TestSerializedTurnHarness_只读访问器(t *testing.T) {
 	assert.Nil(t, harness.ActiveTurn())
 }
 
-// ──────────────────────────── checkpoint ────────────────────────────
+// ──────────────────────────── checkpoint 测试分组 ────────────────────────────
 
 // fakeSink 记录收到的 checkpoint。
 type fakeSink struct {

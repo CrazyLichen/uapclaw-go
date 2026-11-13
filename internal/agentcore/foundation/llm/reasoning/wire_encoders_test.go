@@ -12,7 +12,7 @@ import (
 // intPtr 返回整型指针（测试辅助）。
 func intPtr(n int) *int { return &n }
 
-// ──────────────────────────── Moonshot / Kimi ────────────────────────────
+// ──────────────────────────── Moonshot / Kimi 测试分组 ────────────────────────────
 
 // TestMoonshot_K26_chat_关闭
 // Python: test_reasoning_resolver.py:723 test_moonshot_k26_chat_disabled_sends_thinking_type
@@ -110,7 +110,7 @@ func TestMoonshot_K3_anthropic_关闭不发thinking(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── MiniMax ────────────────────────────
+// ──────────────────────────── MiniMax 测试分组 ────────────────────────────
 
 // TestMinimax_M27_保留reasoning_split不发明开关
 // Python: test_reasoning_resolver.py:1054 test_minimax_m27_keeps_reasoning_split_but_does_not_send_disable_toggle
@@ -159,7 +159,7 @@ func TestMinimax_M3_anthropic_自适应(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── OpenRouter ────────────────────────────
+// ──────────────────────────── OpenRouter 测试分组 ────────────────────────────
 
 // TestOpenRouter_关闭用effort_none
 // Python: test_reasoning_resolver.py:1099 test_openrouter_uses_effort_none_for_disabled_reasoning
@@ -210,7 +210,7 @@ func TestOpenRouter_budget映射max_tokens(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── vLLM ────────────────────────────
+// ──────────────────────────── vLLM 测试分组 ────────────────────────────
 
 // TestVLLM_关闭双字段
 // Python: reasoning.py:782-788 _vllm_enable_thinking_plan
@@ -272,7 +272,7 @@ func TestVolcengineSeed_档位映射(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GLM / Qwen38 Anthropic ────────────────────────────
+// ──────────────────────────── GLM / Qwen38 Anthropic 测试分组 ────────────────────────────
 
 // TestGlm_anthropic走output_config
 // Python: test_reasoning_resolver.py:967 test_modelarts_anthropic_glm52_effort_goes_through_extra_body
@@ -366,7 +366,7 @@ func TestDashscopeAnthropic_plainEnabled不发budget(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ModelArts ────────────────────────────
+// ──────────────────────────── ModelArts 测试分组 ────────────────────────────
 
 // TestModelarts_openpangu走thinking开关
 // Python: test_reasoning_resolver.py:929 test_modelarts_openpangu_uses_thinking_toggle_from_api_base

@@ -77,7 +77,7 @@ func preparedRuntime(t *testing.T, agent ChatAgentPort) *AgentRuntime {
 	})
 }
 
-// ──────────────────────────── InvokeAgent ────────────────────────────
+// ──────────────────────────── InvokeAgent 测试分组 ────────────────────────────
 
 // TestInvokeAgent_写入owner表 执行成功后该会话进入 owner 表。
 // Python: service.py:1657 _claim_agent_execution_owner
@@ -188,7 +188,7 @@ func TestInvokeAgent_无会话放行(t *testing.T) {
 	require.Empty(t, runtime.agentExecutionOwners, "无 session 不建 owner")
 }
 
-// ──────────────────────────── StreamAgent ────────────────────────────
+// ──────────────────────────── StreamAgent 测试分组 ────────────────────────────
 
 // TestStreamAgent_写入owner表 流式执行同样写 owner 表。
 // Python: service.py:1681

@@ -358,11 +358,7 @@ func CreateHarness(manifest hschema.AgentTemplateSpec,
 		return nil, err
 	}
 	template := manifest
-	providerConfig, err := ManifestProviderConfig(template, ManifestProviderConfigOptions{
-		Provider: opts.Provider,
-		Config:   opts.Config,
-		Language: opts.Language,
-	})
+	providerConfig, err := ManifestProviderConfig(template, ManifestProviderConfigOptions(opts))
 	if err != nil {
 		return nil, err
 	}

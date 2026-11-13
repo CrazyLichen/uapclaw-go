@@ -11,7 +11,7 @@ func newTestUI() (*ProcessCliUI, *strings.Builder) {
 	return NewProcessCliUI(out, 100), out
 }
 
-// ──────────────────────────── handleSimpleSlashCommand ────────────────────────────
+// ──────────────────────────── handleSimpleSlashCommand 测试分组 ────────────────────────────
 
 // TestHandleSimpleSlashCommand_exit 退出命令返回 true。
 // Python: repl.py:943-944
@@ -73,7 +73,7 @@ func TestHandleSimpleSlashCommand_带参数报用法(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── handleModeCommand ────────────────────────────
+// ──────────────────────────── handleModeCommand 测试分组 ────────────────────────────
 
 // TestHandleModeCommand_无参数查当前 空参数只展示当前模式。
 // Python: repl.py:498-500

@@ -320,7 +320,7 @@ func TestStdioCommand_无cwd(t *testing.T) {
 	assert.Equal(t, []string{"node", "x.js"}, command)
 }
 
-// ──────────────────────────── BuildHarnessContext ────────────────────────────
+// ──────────────────────────── BuildHarnessContext 测试分组 ────────────────────────────
 
 // TestBuildHarnessContext_native只带extraSystemPrompt 对齐 factory.py:429-435。
 //
@@ -466,7 +466,7 @@ func TestBuildHarnessContext_语言默认cn(t *testing.T) {
 	assert.Equal(t, "中文", harnessContext.SystemPrompt)
 }
 
-// ──────────────────────────── ManifestProviderConfig ────────────────────────────
+// ──────────────────────────── ManifestProviderConfig 测试分组 ────────────────────────────
 
 // TestManifestProviderConfig_native带模板 对齐 factory.py:297-301。
 func TestManifestProviderConfig_native带模板(t *testing.T) {
@@ -582,7 +582,7 @@ func writeValidManifest(t *testing.T, dir string) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(content), 0o600))
 }
 
-// ──────────────────────────── ProviderModelConfig ────────────────────────────
+// ──────────────────────────── ProviderModelConfig 测试分组 ────────────────────────────
 
 // modelConfigProvider 实现 ModelConfigProvider 的测试 provider。
 type modelConfigProvider struct {
@@ -675,7 +675,7 @@ func TestProviderModelConfig_无端点能力报错(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not take endpoint models")
 }
 
-// ──────────────────────────── CreateHarness ────────────────────────────
+// ──────────────────────────── CreateHarness 测试分组 ────────────────────────────
 
 // TestCreateHarness_转发配置 对齐 factory.py:393-396。
 func TestCreateHarness_转发配置(t *testing.T) {
@@ -715,7 +715,7 @@ func TestCreateHarness_DeepAgent段被拒(t *testing.T) {
 	assert.Contains(t, err.Error(), "depends on the DeepAgent framework")
 }
 
-// ──────────────────────────── manifestModelChoice ────────────────────────────
+// ──────────────────────────── manifestModelChoice 测试分组 ────────────────────────────
 
 // TestManifestProviderConfig_模型无端点 只有 model_name 时不带端点。
 func TestManifestProviderConfig_模型无端点(t *testing.T) {

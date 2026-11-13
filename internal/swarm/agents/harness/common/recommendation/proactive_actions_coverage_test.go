@@ -135,7 +135,7 @@ func TestBuildDecision_reason非字符串(t *testing.T) {
 	assert.Empty(t, d.Reason)
 }
 
-// ──────────────────────────── PreferredLanguage ────────────────────────────
+// ──────────────────────────── PreferredLanguage 测试分组 ────────────────────────────
 
 // TestPreferredLanguage_默认中文 config 无 preferred_language 时返回 zh。
 func TestPreferredLanguage_默认中文(t *testing.T) {

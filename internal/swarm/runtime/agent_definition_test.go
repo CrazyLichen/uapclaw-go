@@ -402,7 +402,7 @@ func TestRuntimeAgentExecutionToDict_三字段(t *testing.T) {
 	require.Equal(t, wantFingerprint, got["agent_fingerprint"])
 }
 
-// ──────────────────────────── fingerprint golden ────────────────────────────
+// ──────────────────────────── fingerprint golden 测试分组 ────────────────────────────
 
 // TestRuntimeAgentDefinitionFingerprint_PythonGolden 与 Python 实算值逐字节一致。
 // Python: agent_definition.py:224-238 fingerprint

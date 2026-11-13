@@ -30,7 +30,7 @@ const validManifest = `{
 	"agent_card": {"id": "a1", "name": "expert", "description": "领域专家"}
 }`
 
-// ──────────────────────────── FindAgentTemplateManifest ────────────────────────────
+// ──────────────────────────── FindAgentTemplateManifest 测试分组 ────────────────────────────
 
 // TestFindAgentTemplateManifest_传目录 返回目录下的 manifest.json 绝对路径。
 func TestFindAgentTemplateManifest_传目录(t *testing.T) {
@@ -71,7 +71,7 @@ func TestFindAgentTemplateManifest_文件名不符(t *testing.T) {
 	assert.Contains(t, err.Error(), "manifest.json not found")
 }
 
-// ──────────────────────────── LoadAgentTemplatePackage ────────────────────────────
+// ──────────────────────────── LoadAgentTemplatePackage 测试分组 ────────────────────────────
 
 // TestLoadAgentTemplatePackage_正常读取 完整字段解析。
 func TestLoadAgentTemplatePackage_正常读取(t *testing.T) {
@@ -148,7 +148,7 @@ func TestLoadAgentTemplatePackage_非法JSON(t *testing.T) {
 	require.Error(t, err)
 }
 
-// ──────────────────────────── RenderAgentTemplateSystemPrompt ────────────────────────────
+// ──────────────────────────── RenderAgentTemplateSystemPrompt 测试分组 ────────────────────────────
 
 // TestRenderAgentTemplateSystemPrompt_按priority排序 对齐
 // extension_resolver.py:254 sorted(spec.prompt_sections, key=priority)。

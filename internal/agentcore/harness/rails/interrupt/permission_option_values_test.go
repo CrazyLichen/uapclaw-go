@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── NormalizeOptionValue ────────────────────────────
+// ──────────────────────────── NormalizeOptionValue 测试分组 ────────────────────────────
 
 // TestNormalizeOptionValue_分隔符归一 测试空格/下划线/连字符混用视为同一取值。
 func TestNormalizeOptionValue_分隔符归一(t *testing.T) {
@@ -36,7 +36,7 @@ func TestNormalizeOptionValue_空值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResolvePermissionAction ────────────────────────────
+// ──────────────────────────── ResolvePermissionAction 测试分组 ────────────────────────────
 
 // TestResolvePermissionAction_四档别名 测试四档动作的全部别名。
 func TestResolvePermissionAction_四档别名(t *testing.T) {
@@ -91,7 +91,7 @@ func TestResolvePermissionAction_大小写与分隔符(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsKeepPlanningValue ────────────────────────────
+// ──────────────────────────── IsKeepPlanningValue 测试分组 ────────────────────────────
 
 // TestIsKeepPlanningValue_三个取值 测试继续规划类取值。
 func TestIsKeepPlanningValue_三个取值(t *testing.T) {
@@ -111,7 +111,7 @@ func TestIsKeepPlanningValue_普通拒绝不是继续规划(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsEnterprise ────────────────────────────
+// ──────────────────────────── IsEnterprise 测试分组 ────────────────────────────
 
 // TestIsEnterprise_未设置按个人版 测试默认值。
 func TestIsEnterprise_未设置按个人版(t *testing.T) {

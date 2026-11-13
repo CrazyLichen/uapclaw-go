@@ -1238,7 +1238,7 @@ func TestEscalateAxisTowardAllow(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── MergeFileGuardPathRule ────────────────────────────
+// ──────────────────────────── MergeFileGuardPathRule 测试分组 ────────────────────────────
 
 // TestMergeFileGuardPathRule_新建条目 测试首次写入 file_guard.paths。
 func TestMergeFileGuardPathRule_新建条目(t *testing.T) {

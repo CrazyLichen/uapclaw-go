@@ -3,6 +3,8 @@ package tool_display
 import (
 	"encoding/json"
 	"fmt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +62,9 @@ func TodoTools() map[string]bool {
 	return todoTools
 }
 
+// caser 标题化工具（strings.Title 弃用替代，Unicode 语义安全）。
+var caser = cases.Title(language.Und, cases.NoLower)
+
 // GetDisplayName 内部工具名映射为友好展示名。
 // Python: tool_display.py:45-56 get_display_name
 //
@@ -68,7 +73,8 @@ func GetDisplayName(toolName string) string {
 	if display, exists := toolDisplayNames[toolName]; exists {
 		return display
 	}
-	return strings.Title(strings.ReplaceAll(toolName, "_", " "))
+	// 未登记名回退：下划线转空格后首字母大写（strings.Title 已弃用，改 cases.Title）
+	return strings.TrimSpace(caser.String(strings.ReplaceAll(toolName, "_", " ")))
 }
 
 // FormatToolArgs 格式化工具参数供展示。

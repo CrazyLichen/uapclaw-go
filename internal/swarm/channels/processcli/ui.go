@@ -149,7 +149,7 @@ func isEastAsianWide(r rune) bool {
 	return false
 }
 
-// ──────────────────────────── ProcessCliUI ────────────────────────────
+// ──────────────────────────── ProcessCliUI 界面实现 ────────────────────────────
 
 // ProcessCliUI 渲染 REPL 外壳而不持有任何 Runtime 行为。
 // Python: ui.py:110-330 ProcessCliUI
@@ -442,7 +442,7 @@ func (u *ProcessCliUI) styled(value, style string) string {
 	return style + value + ansiReset
 }
 
-// ──────────────────────────── HumanRunUI ────────────────────────────
+// ──────────────────────────── HumanRunUI 人类交互界面实现 ────────────────────────────
 
 // HumanRunUI 单次人类可读 Runtime 执行的 TTY 装饰。
 // Python: ui.py:388-570 HumanRunUI

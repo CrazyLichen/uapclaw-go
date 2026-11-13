@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── parseArgs ────────────────────────────
+// ──────────────────────────── parseArgs 测试分组 ────────────────────────────
 
 // TestParseArgs_位置参数 单个位置参数进 Prompt。
 // Python: main.py:174-178
@@ -237,7 +237,7 @@ func TestParseArgs_未知参数报错(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── activateRequestedCwd ────────────────────────────
+// ──────────────────────────── activateRequestedCwd 测试分组 ────────────────────────────
 
 // TestActivateRequestedCwd_空值不动作 空 cwd 直接返回 nil。
 // Python: main.py:310-312
@@ -305,7 +305,7 @@ func TestActivateRequestedCwd_指向文件报错(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── expandHome ────────────────────────────
+// ──────────────────────────── expandHome 测试分组 ────────────────────────────
 
 // TestExpandHome_无波浪号 原样返回。
 func TestExpandHome_无波浪号(t *testing.T) {
@@ -347,7 +347,7 @@ func TestExpandHome_用户前缀不展开(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── hasLegacyArguments / standalone ────────────────────────────
+// ──────────────────────────── hasLegacyArguments / standalone 测试分组 ────────────────────────────
 
 // TestHasLegacyArguments_默认值不算混用 纯默认参数返回 false。
 // Python: main.py:353-356 standalone 判定

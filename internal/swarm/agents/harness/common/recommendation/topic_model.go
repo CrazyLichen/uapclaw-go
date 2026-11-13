@@ -584,7 +584,8 @@ func PersistProviderInvocation(store *TopicStarterStore, receipt map[string]any)
 	if sessionID == "" {
 		sessionID = anyToString(receipt["attempt_id"])
 	}
-	store.RecordEvent(map[string]any{
+	// Python: persist_provider_invocation 对返回值不校验（记录失败不影响主流程）
+	_, _ = store.RecordEvent(map[string]any{
 		"session_id":        sessionID,
 		"slate_id":          receipt["attempt_id"],
 		"event_type":        PROVIDER_INVOCATION_EVENT_TYPE,
@@ -693,7 +694,7 @@ func resultIdentity(result any) (uintptr, bool) {
 	}
 	v := reflect.ValueOf(result)
 	switch v.Kind() {
-	case reflect.Map, reflect.Slice, reflect.Ptr:
+	case reflect.Map, reflect.Slice, reflect.Pointer:
 		if v.IsNil() {
 			return 0, false
 		}

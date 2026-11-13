@@ -141,9 +141,7 @@ func ParseTodoResult(toolResult string) []map[string]any {
 	// 解析前清理尾部的 dict repr 残留（如 "'}"）。
 	cleaned := strings.TrimRight(toolResult, " \t\n\r")
 	for _, suffix := range []string{"'}", `"}`, "}", "'", `"`} {
-		if strings.HasSuffix(cleaned, suffix) {
-			cleaned = strings.TrimSuffix(cleaned, suffix)
-		}
+		cleaned = strings.TrimSuffix(cleaned, suffix)
 	}
 	return parseTodoText(cleaned)
 }

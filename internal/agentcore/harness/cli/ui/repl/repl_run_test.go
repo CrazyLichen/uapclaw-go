@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,14 +26,28 @@ import (
 
 // fakeBackend 可编程后端：RunStreaming 返回预设帧。
 type fakeBackend struct {
+	// mu 保护以下字段的并发访问（Abort/Stop 由后台 goroutine 调用，CI race 实证）
+	mu sync.Mutex
 	// responses 每次 RunStreaming 弹出的帧组
 	responses [][]stream.OutputSchema
 	// queries 收到的 query
 	queries []any
 	// aborted 是否被 Abort（atomic：Abort 由 Handle 异步 goroutine 调用，测试侧并发读取）
 	aborted atomic.Int32
-	// started / stopped
+	// started / stopped 启停标记
 	started, stopped bool
+}
+
+// abortedCount 读取 aborted 计数（atomic，无需加锁）。
+func (f *fakeBackend) abortedCount() int {
+	return int(f.aborted.Load())
+}
+
+// queriesSnapshot 持锁拷贝 queries。
+func (f *fakeBackend) queriesSnapshot() []any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]any(nil), f.queries...)
 }
 
 func (f *fakeBackend) Start(_ context.Context) error {
@@ -41,12 +56,16 @@ func (f *fakeBackend) Start(_ context.Context) error {
 }
 
 func (f *fakeBackend) Stop(_ context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.stopped = true
 	return nil
 }
 
 func (f *fakeBackend) RunStreaming(_ context.Context, query any, _ *string) (<-chan stream.OutputSchema, error) {
+	f.mu.Lock()
 	f.queries = append(f.queries, query)
+	f.mu.Unlock()
 	ch := make(chan stream.OutputSchema)
 	var frames []stream.OutputSchema
 	if len(f.responses) > 0 {
@@ -92,7 +111,7 @@ func TestInterruptManager_三层与窗口(t *testing.T) {
 	mgr := &InterruptManager{now: func() float64 { clock += 0.1; return clock }}
 
 	assert.Equal(t, "abort", mgr.Handle(backend))
-	assert.Eventually(t, func() bool { return backend.aborted.Load() == 1 }, time.Second, 10*time.Millisecond,
+	assert.Eventually(t, func() bool { return backend.abortedCount() == 1 }, time.Second, 10*time.Millisecond,
 		"第一次触发即中止后端（ensure_future 语义，异步执行）")
 	assert.Equal(t, "warn", mgr.Handle(backend))
 	assert.Equal(t, "exit", mgr.Handle(backend))
@@ -288,8 +307,9 @@ func TestRunREPL_主循环_slash与查询(t *testing.T) {
 	assert.Contains(t, got, "/help")
 	assert.Contains(t, got, "你好！")
 	assert.Contains(t, got, "Goodbye!")
-	require.Len(t, backend.queries, 1)
-	assert.Equal(t, "查询一下", backend.queries[0])
+	qs := backend.queriesSnapshot()
+	require.Len(t, qs, 1)
+	assert.Equal(t, "查询一下", qs[0])
 	// 会话记录：user + assistant 各一条
 	messages := store.ListSessions()
 	require.Len(t, messages, 1)
@@ -305,7 +325,7 @@ func TestRunREPL_EOF退出(t *testing.T) {
 		In: strings.NewReader(""), Out: &out}
 	require.NoError(t, r.RunREPL(context.Background()))
 	assert.Contains(t, out.String(), "Welcome to OpenJiuWen")
-	assert.Empty(t, backend.queries)
+	assert.Empty(t, backend.queriesSnapshot())
 }
 
 // TestRunREPL_中断恢复循环 第一轮挂起交互 → 应答 → 第二轮恢复。
@@ -339,8 +359,9 @@ func TestRunREPL_中断恢复循环(t *testing.T) {
 	assert.Contains(t, got, "Agent needs your input")
 	assert.Contains(t, got, "好的")
 	// 两次 RunStreaming：首轮 + InteractiveInput 恢复轮
-	require.Len(t, backend.queries, 2)
-	ii, ok := backend.queries[1].(*interactiveInputAlias)
+	qs := backend.queriesSnapshot()
+	require.Len(t, qs, 2)
+	ii, ok := qs[1].(*interactiveInputAlias)
 	require.True(t, ok, "恢复轮 query 应是 *InteractiveInput")
 	assert.Equal(t, map[string]any{"answers": map[string]any{"叫什么": "张三"}}, ii.InterruptAnswers["int-1"])
 }
@@ -406,7 +427,7 @@ func TestRunREPL_shell与技能命令(t *testing.T) {
 
 	got := out.String()
 	assert.Contains(t, got, "技能结果")
-	require.Len(t, backend.queries, 1)
+	require.Len(t, backend.queriesSnapshot(), 1)
 	forwarded, _ := backend.queries[0].(string)
 	assert.Contains(t, forwarded, "<skill-instructions>")
 	assert.Contains(t, forwarded, "User request: 参数A")
@@ -438,7 +459,7 @@ func (e *errBackend) RunStreaming(context.Context, any, *string) (<-chan stream.
 func TestCmdHandlers_带数据分支(t *testing.T) {
 	var out bytes.Buffer
 
-	// /clear
+	// /clear æ¸å±å½ä»¤åºæ¯
 	cmdClear(&out)
 	assert.Contains(t, out.String(), "\x1b[2J")
 

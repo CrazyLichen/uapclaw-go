@@ -201,7 +201,7 @@ func TestSituationReport_RenderForLLM_降级(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── CompressHistoryForProfile ────────────────────────────
+// ──────────────────────────── CompressHistoryForProfile 测试分组 ────────────────────────────
 
 // TestCompressHistoryForProfile 按 [User]/[Assistant] 轮次压缩。
 // Python: situation_report.py:262
@@ -309,7 +309,7 @@ func TestCompressHistoryForProfile(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── ScanSessions ────────────────────────────
+// ──────────────────────────── ScanSessions 测试分组 ────────────────────────────
 
 // TestScanSessionsIn 扫描、过滤、排序、截断。
 // Python: situation_report.py:158
@@ -461,7 +461,7 @@ func TestScanSessionsIn(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── FormatSkillsForLLM ────────────────────────────
+// ──────────────────────────── FormatSkillsForLLM 测试分组 ────────────────────────────
 
 // TestFormatSkillsForLLM 三种安装状态与描述截断。
 // Python: situation_report.py:328
@@ -496,7 +496,7 @@ func TestFormatSkillsForLLM(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── FormatRecommendationHistory ────────────────────────────
+// ──────────────────────────── FormatRecommendationHistory 测试分组 ────────────────────────────
 
 // TestFormatRecommendationHistory 按类型决定是否带话术摘要。
 // Python: situation_report.py:353
@@ -559,7 +559,7 @@ func TestFormatRecommendationHistory(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── matchSessionMode ────────────────────────────
+// ──────────────────────────── matchSessionMode 测试分组 ────────────────────────────
 
 // TestMatchSessionMode 前缀匹配语义。
 // Python: situation_report.py:139
@@ -626,7 +626,7 @@ func TestStringFieldHelpers(t *testing.T) {
 	assert.Equal(t, "d", stringFieldDefault(map[string]any{"s": ""}, "s", "d"))
 }
 
-// ──────────────────────────── BuildSituationReport ────────────────────────────
+// ──────────────────────────── BuildSituationReport 测试分组 ────────────────────────────
 
 // TestBuildSituationReport_技能摘要 技能列表被渲染进报告。
 func TestBuildSituationReport_技能摘要(t *testing.T) {

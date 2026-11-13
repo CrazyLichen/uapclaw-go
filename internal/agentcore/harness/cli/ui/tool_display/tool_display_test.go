@@ -41,7 +41,7 @@ func TestFormatToolArgs_各工具(t *testing.T) {
 	// read_file 不带 limit
 	assert.Equal(t, "src/main.py", FormatToolArgs("read_file",
 		map[string]any{"file_path": inside}))
-	// write_file / edit_file
+	// write_file / edit_file åºæ¯
 	assert.Equal(t, "src/main.py", FormatToolArgs("write_file", args))
 	assert.Equal(t, "src/main.py", FormatToolArgs("edit_file", args))
 	// bash 短命令
@@ -49,7 +49,7 @@ func TestFormatToolArgs_各工具(t *testing.T) {
 	// bash 长命令截断
 	long := strings.Repeat("x", 70)
 	assert.Equal(t, long[:57]+"...", FormatToolArgs("bash", map[string]any{"command": long}))
-	// grep
+	// grep åºæ¯
 	assert.Equal(t, `"TODO" src/`, FormatToolArgs("grep", args))
 	// glob
 	assert.Equal(t, "**/*.go", FormatToolArgs("glob", map[string]any{"pattern": "**/*.go"}))
@@ -58,7 +58,7 @@ func TestFormatToolArgs_各工具(t *testing.T) {
 	assert.Equal(t, ".", FormatToolArgs("ls", map[string]any{}))
 	// todo 工具省略参数
 	assert.Equal(t, "", FormatToolArgs("todo_create", args))
-	// web
+	// web åºæ¯
 	assert.Equal(t, "天气", FormatToolArgs("web_search", args))
 	assert.Equal(t, "https://x", FormatToolArgs("web_fetch", args))
 	// 未知工具回退第一个参数
@@ -99,7 +99,7 @@ func TestFormatToolResult_各工具(t *testing.T) {
 	assert.Equal(t, "ok", FormatToolResult("bash", "ok", nil, nil))
 	// bash 多行
 	assert.Equal(t, "l1... (+2 lines)", FormatToolResult("bash", "l1\nl2\nl3", nil, nil))
-	// grep
+	// grep åºæ¯
 	assert.Equal(t, "Found 3 matches", FormatToolResult("grep", "a\nb\nc", nil, nil))
 	assert.Equal(t, "No matches found", FormatToolResult("grep", "\n\n", nil, nil))
 	// glob

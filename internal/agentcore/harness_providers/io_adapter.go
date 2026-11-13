@@ -528,7 +528,7 @@ func (a *HarnessIOAdapter) Resume(ctx context.Context, query any) error {
 	return a.harness.Resume(ctx, externalQuery)
 }
 
-// ──────────────────────────── HarnessInteractionHandler ────────────────────────────
+// ──────────────────────────── HarnessInteractionHandler 交互处理器适配 ────────────────────────────
 
 // Handle 实现宿主交互处理器。
 // Python: io_adapter.py:353-410 handle

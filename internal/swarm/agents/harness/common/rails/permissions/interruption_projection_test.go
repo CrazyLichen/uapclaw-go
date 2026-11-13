@@ -77,7 +77,7 @@ func newProjectionRail(t *testing.T, result map[string]any) (*rails.JiuClawStrea
 	return rail, cbc, session
 }
 
-// ──────────────────────────── InterruptionRetryMessage ────────────────────────────
+// ──────────────────────────── InterruptionRetryMessage 测试分组 ────────────────────────────
 
 // TestInterruptionRetryMessage_默认中文 测试默认语言。
 func TestInterruptionRetryMessage_默认中文(t *testing.T) {
@@ -87,7 +87,7 @@ func TestInterruptionRetryMessage_默认中文(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResolveRootPermissionQueue ────────────────────────────
+// ──────────────────────────── ResolveRootPermissionQueue 测试分组 ────────────────────────────
 
 // TestResolveRootPermissionQueue_未注入返回nil 测试未注入。
 func TestResolveRootPermissionQueue_未注入返回nil(t *testing.T) {
@@ -107,7 +107,7 @@ func TestResolveRootPermissionQueue_已注入(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ProjectOrdinaryInterruption ────────────────────────────
+// ──────────────────────────── ProjectOrdinaryInterruption 测试分组 ────────────────────────────
 
 // TestProjectOrdinaryInterruption_非中断结果无操作 测试 result_type 不是 interrupt。
 func TestProjectOrdinaryInterruption_非中断结果无操作(t *testing.T) {
@@ -155,7 +155,7 @@ func TestProjectOrdinaryInterruption_转换失败发重试提示(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ProjectCompleteInterruption ────────────────────────────
+// ──────────────────────────── ProjectCompleteInterruption 测试分组 ────────────────────────────
 
 // TestProjectCompleteInterruption_无权限交互走普通投影 测试队列缺失且无权限交互。
 func TestProjectCompleteInterruption_无权限交互走普通投影(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── newPromptSession ────────────────────────────
+// ──────────────────────────── newPromptSession 测试分组 ────────────────────────────
 
 // TestNewPromptSession_非TTY返回nil strings.Builder 不是终端，返回 nil。
 // Python: prompt.py:88-106 isatty 双条件不满足即返回 None
@@ -30,7 +30,7 @@ func TestNewPromptSession_非文件writer返回nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── readPrompt ────────────────────────────
+// ──────────────────────────── readPrompt 测试分组 ────────────────────────────
 
 // TestReadPrompt_读stdin一行 非 TTY 时逐行读 os.Stdin（重定向验证）。
 // Python: prompt.py:123-131 read_prompt 降级到 input()
@@ -98,7 +98,7 @@ func TestReadPromptFrom_空白行返回空串(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── slashCompleter ────────────────────────────
+// ──────────────────────────── slashCompleter 测试分组 ────────────────────────────
 
 // TestSlashCompleterText_参数段替换范围 "/mode ag" 只替换 "ag" 段。
 func TestSlashCompleterText_参数段替换范围(t *testing.T) {

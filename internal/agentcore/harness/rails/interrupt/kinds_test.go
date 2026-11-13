@@ -6,7 +6,7 @@ import (
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── InterruptKind / Source ────────────────────────────
+// ──────────────────────────── InterruptKind / Source 测试分组 ────────────────────────────
 
 // TestInterruptKindOfValue_permission 测试 permission 类型直接读出。
 func TestInterruptKindOfValue_permission(t *testing.T) {
@@ -135,7 +135,7 @@ func TestResolveInterruptSource_askUser不映射表(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── InterruptIdentity ────────────────────────────
+// ──────────────────────────── InterruptIdentity 测试分组 ────────────────────────────
 
 // TestInterruptIdentity_两字段 测试返回 interrupt_id + kind。
 func TestInterruptIdentity_两字段(t *testing.T) {
@@ -163,7 +163,7 @@ func TestInterruptIdentity_空值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── QuestionInteractions ────────────────────────────
+// ──────────────────────────── QuestionInteractions 测试分组 ────────────────────────────
 
 // TestQuestionInteractions_过滤clientTool 测试 client_tool 被排除。
 //

@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── proactive.tick ────────────────────────────
+// ──────────────────────────── proactive.tick 测试分组 ────────────────────────────
 
 // TestHandleProactiveTick_引擎未初始化 未注入引擎时返回 error，不 panic。
 // Python: handlers/ops.py:61-67
@@ -108,7 +108,7 @@ func TestHandleProactiveTick_无params(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── proactive.feedback ────────────────────────────
+// ──────────────────────────── proactive.feedback 测试分组 ────────────────────────────
 
 // TestHandleProactiveFeedback_缺rec_id rec_id 缺失时返回 Invalid params。
 // Python: handlers/ops.py:103-116

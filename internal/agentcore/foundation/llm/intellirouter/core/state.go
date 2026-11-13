@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -305,9 +306,10 @@ func (s *LocalRouterState) GetAvailableDeployments(now float64) []string {
 	defer s.mu.Unlock()
 	var available []string
 	for depID, status := range s.DeploymentStatuses {
-		if status == DeploymentStatusHealthy {
+		switch status {
+		case DeploymentStatusHealthy:
 			available = append(available, depID)
-		} else if status == DeploymentStatusCooldown {
+		case DeploymentStatusCooldown:
 			// ← py:262-264 冷却到期则软恢复并计入可用
 			until := s.cooldownUntilOf(depID)
 			if until <= now {
@@ -417,6 +419,8 @@ func (s *LocalRouterState) CleanupDeployments(keepIDs []string) []string {
 	}
 	s.mu.Unlock()
 	// 去重保序 ← py:342
+	// 已知偏差：Python dict 保插入序，Go map 无序——这里改为排序输出以保证
+	// 确定性（返回值仅用于日志/测试观测，无顺序依赖消费方）。
 	seen := map[string]bool{}
 	var result []string
 	for _, id := range removed {
@@ -425,6 +429,7 @@ func (s *LocalRouterState) CleanupDeployments(keepIDs []string) []string {
 			result = append(result, id)
 		}
 	}
+	sort.Strings(result)
 	return result
 }
 
@@ -495,6 +500,100 @@ func (s *LocalRouterState) HealthStateOf(deploymentID string) bool {
 		return v
 	}
 	return true
+}
+
+// StatusOf 持锁读部署状态；未登记返回 (DeploymentStatusHealthy, false)。
+// Python 同包直读 + with self.state.lock；Go 跨包访问必须经持锁方法
+// （CI race 实证：BatchCompletion 并发 goroutine 与 OnSuccess 写并发）。
+// Python 侧无对应实现，属 asyncio 单线程 → Go 并发的移植性适配。
+func (s *LocalRouterState) StatusOf(deploymentID string) (DeploymentStatus, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	status, ok := s.DeploymentStatuses[deploymentID]
+	if !ok {
+		return DeploymentStatusHealthy, false
+	}
+	return status, true
+}
+
+// CooldownUntilAt 持锁读冷却时间戳；未设置返回 0（py:190 get(dep_id, 0)）。
+func (s *LocalRouterState) CooldownUntilAt(deploymentID string) float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cooldownUntilOf(deploymentID)
+}
+
+// TotalTokensOf 持锁读累计 token 数；未登记返回 0。
+func (s *LocalRouterState) TotalTokensOf(deploymentID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.TotalTokens[deploymentID]
+}
+
+// TotalRequestsOf 持锁读累计请求数；未登记返回 0。
+func (s *LocalRouterState) TotalRequestsOf(deploymentID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.TotalRequests[deploymentID]
+}
+
+// ConsecutiveFailuresSnapshot 持锁拷贝连续失败计数。
+func (s *LocalRouterState) ConsecutiveFailuresSnapshot() map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]int, len(s.ConsecutiveFailures))
+	for k, v := range s.ConsecutiveFailures {
+		out[k] = v
+	}
+	return out
+}
+
+// EnsureTokenUsage 持锁确保 TokenUsage 条目存在并把 limit 同步到 dep 声明值。
+// 返回当前条目（可能为 nil）与是否存在。Python: reliable_router.py:151-161。
+func (s *LocalRouterState) EnsureTokenUsage(deploymentID string, limit int) (*TokenUsage, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	usage, ok := s.TokenUsage[deploymentID]
+	if !ok {
+		usage = &TokenUsage{Limit: limit}
+		s.TokenUsage[deploymentID] = usage
+		return usage, false
+	}
+	if usage.Limit != limit {
+		usage.Limit = limit // 热更新配额值：只改 limit，保留累计 used
+	}
+	return usage, true
+}
+
+// RemoveTokenUsage 持锁删除 TokenUsage 条目（配额被移除：回到 inf 语义）。
+func (s *LocalRouterState) RemoveTokenUsage(deploymentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.TokenUsage, deploymentID)
+}
+
+// EnsureRPMTracker 持锁确保 RPMTracker 条目存在并把 limit 同步到 dep 声明值。
+// Python: reliable_router.py:163-175。
+func (s *LocalRouterState) EnsureRPMTracker(deploymentID string, limit int) (*RPMTracker, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tracker, ok := s.RPMTrackers[deploymentID]
+	if !ok {
+		tracker = &RPMTracker{RPMLimit: limit}
+		s.RPMTrackers[deploymentID] = tracker
+		return tracker, false
+	}
+	if tracker.RPMLimit != limit {
+		tracker.RPMLimit = limit
+	}
+	return tracker, true
+}
+
+// RemoveRPMTracker 持锁删除 RPMTracker 条目（配额被移除：回到 inf 语义）。
+func (s *LocalRouterState) RemoveRPMTracker(deploymentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.RPMTrackers, deploymentID)
 }
 
 // DeploymentAvailable 按 RouterState 判定部署运行期是否可用。

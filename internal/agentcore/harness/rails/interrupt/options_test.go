@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── extractUIOptions ────────────────────────────
+// ──────────────────────────── extractUIOptions 测试分组 ────────────────────────────
 
 // TestExtractUIOptions_取dict项 测试只保留 dict 元素。
 func TestExtractUIOptions_取dict项(t *testing.T) {
@@ -41,7 +41,7 @@ func TestExtractUIOptions_非map输入(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── normalizeQuestionOption ────────────────────────────
+// ──────────────────────────── normalizeQuestionOption 测试分组 ────────────────────────────
 
 // TestNormalizeQuestionOption_label优先 测试 label 字段优先。
 func TestNormalizeQuestionOption_label优先(t *testing.T) {
@@ -96,7 +96,7 @@ func TestNormalizeQuestionOption_空白preview不保留(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── defaultInterruptOptions ────────────────────────────
+// ──────────────────────────── defaultInterruptOptions 测试分组 ────────────────────────────
 
 // TestDefaultInterruptOptions_个人版四档 测试个人版含「永久记住」。
 func TestDefaultInterruptOptions_个人版四档(t *testing.T) {
@@ -150,7 +150,7 @@ func TestDefaultInterruptOptions_选项值可被解析(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isAlwaysAllowOption ────────────────────────────
+// ──────────────────────────── isAlwaysAllowOption 测试分组 ────────────────────────────
 
 // TestIsAlwaysAllowOption_永久记住 测试 always 档识别。
 func TestIsAlwaysAllowOption_永久记住(t *testing.T) {
@@ -175,7 +175,7 @@ func TestIsAlwaysAllowOption_其它档(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── stripPermanentRememberHint ────────────────────────────
+// ──────────────────────────── stripPermanentRememberHint 测试分组 ────────────────────────────
 
 // TestStripPermanentRememberHint_去掉提示 测试正则剥离。
 func TestStripPermanentRememberHint_去掉提示(t *testing.T) {

@@ -57,7 +57,7 @@ func TestReadProactiveRecommendationConfig(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── proactiveHost ────────────────────────────
+// ──────────────────────────── proactiveHost 测试分组 ────────────────────────────
 
 // TestProactiveHost_GetAgentNoWait 无 agent 时返回 nil，不 panic。
 func TestProactiveHost_GetAgentNoWait(t *testing.T) {

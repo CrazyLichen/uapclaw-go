@@ -39,7 +39,7 @@ type AgentTemplateSpec struct {
 	Mcps []McpServerSpec `json:"mcps,omitempty"`
 	// Rails rail 声明
 	Rails []map[string]any `json:"rails,omitempty"`
-	// Skills portable skills
+	// Skills å¯ç§»æ¤æè½å£°æ
 	Skills []SkillSpec `json:"skills,omitempty"`
 	// Memories 共享记忆（经验、约定、排障知识）
 	Memories []map[string]any `json:"memories,omitempty"`

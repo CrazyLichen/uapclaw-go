@@ -226,7 +226,7 @@ func TestStringSliceToAny(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── errorCodeOf ────────────────────────────
+// ──────────────────────────── errorCodeOf 测试分组 ────────────────────────────
 
 // TestErrorCodeOf_优先Code方法 实现了 Code() 的错误取其码。
 func TestErrorCodeOf_优先Code方法(t *testing.T) {
@@ -260,7 +260,7 @@ func (e *emptyCodeError) Error() string { return "empty code" }
 // Code 返回空串（触发回落）。
 func (e *emptyCodeError) Code() string { return "   " }
 
-// ──────────────────────────── clientFactoryOrDefault ────────────────────────────
+// ──────────────────────────── clientFactoryOrDefault 测试分组 ────────────────────────────
 
 // TestClientFactoryOrDefault_注入优先 传入工厂时原样返回。
 func TestClientFactoryOrDefault_注入优先(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── RecordFeedback ────────────────────────────
+// ──────────────────────────── RecordFeedback 测试分组 ────────────────────────────
 
 // TestRecordFeedback_显式反馈 写入 buffer，含 rec 元数据。
 // Python: feedback_collector.py:47
@@ -156,7 +156,7 @@ func TestRecordFeedback_更新时间戳(t *testing.T) {
 	assert.NotEmpty(t, state.LastUpdated)
 }
 
-// ──────────────────────────── ConsumeFeedbackBuffer ────────────────────────────
+// ──────────────────────────── ConsumeFeedbackBuffer 测试分组 ────────────────────────────
 
 // TestConsumeFeedbackBuffer 取出全部并清空。
 // Python: feedback_collector.py:172
@@ -187,7 +187,7 @@ func TestConsumeFeedbackBuffer(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── FindLatestRecommendation ────────────────────────────
+// ──────────────────────────── FindLatestRecommendation 测试分组 ────────────────────────────
 
 // TestFindLatestRecommendation 按会话找最近一条推荐。
 // Python: feedback_collector.py:199

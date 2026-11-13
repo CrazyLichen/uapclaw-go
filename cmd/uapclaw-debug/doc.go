@@ -8,4 +8,11 @@
 // 与已交付的 processcli 功能重叠）。
 //
 // 对应 Python 代码：openjiuwen/harness/cli/__main__.py（5 行）
+//
+// 文件目录：
+//
+//	uapclaw-debug/
+//	├── doc.go           # 包文档
+//	├── main.go          # main 入口（仅 Execute() + main()，build tag 隔离）
+//	└── cmd.go           # 可测试的命令树构建逻辑（--query 单命令 / chat REPL）
 package main

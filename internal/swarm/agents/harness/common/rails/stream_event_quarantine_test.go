@@ -64,7 +64,7 @@ func (s *statefulSession) GetEnv(_ string, _ ...any) any           { return nil 
 func (s *statefulSession) Interact(_ context.Context, _ any) error { return nil }
 func (s *statefulSession) ClearSession(_ context.Context)          {}
 
-// ──────────────────────────── QuarantineSession ────────────────────────────
+// ──────────────────────────── QuarantineSession 测试分组 ────────────────────────────
 
 // TestQuarantineSession_写入会话状态 测试持久化隔离标记。
 //
@@ -134,7 +134,7 @@ func TestQuarantineSession_空sessionID走默认(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RaiseIfQuarantined ────────────────────────────
+// ──────────────────────────── RaiseIfQuarantined 测试分组 ────────────────────────────
 
 // TestRaiseIfQuarantined_未隔离返回nil 测试正常会话。
 func TestRaiseIfQuarantined_未隔离返回nil(t *testing.T) {

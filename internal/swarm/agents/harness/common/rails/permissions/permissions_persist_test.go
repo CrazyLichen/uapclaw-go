@@ -532,7 +532,7 @@ func init() {
 	_, _ = rand.Read(make([]byte, 1))
 }
 
-// ──────────────────────────── BuildCommandAllowPattern ────────────────────────────
+// ──────────────────────────── BuildCommandAllowPattern 测试分组 ────────────────────────────
 
 // TestBuildCommandAllowPattern 测试命令通配符构造。
 //
@@ -554,7 +554,7 @@ func TestBuildCommandAllowPattern(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeExactAccesses ────────────────────────────
+// ──────────────────────────── NormalizeExactAccesses 测试分组 ────────────────────────────
 
 // TestNormalizeExactAccesses_合法输入 测试归一化与去重保序。
 func TestNormalizeExactAccesses_合法输入(t *testing.T) {
@@ -607,7 +607,7 @@ func TestNormalizeExactAccesses_空切片(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── MergeFileGuardPathIntoPermissions ────────────────────────────
+// ──────────────────────────── MergeFileGuardPathIntoPermissions 测试分组 ────────────────────────────
 
 // TestMergeFileGuardPathIntoPermissions 测试原地改写语义。
 //
@@ -644,7 +644,7 @@ func TestMergeFileGuardPathIntoPermissions_保留已有键(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ErrPermissionApprovalInvalidated ────────────────────────────
+// ──────────────────────────── ErrPermissionApprovalInvalidated 测试分组 ────────────────────────────
 
 // TestErrPermissionApprovalInvalidated_errorsIs识别 测试哨兵语义。
 func TestErrPermissionApprovalInvalidated_errorsIs识别(t *testing.T) {
@@ -654,7 +654,7 @@ func TestErrPermissionApprovalInvalidated_errorsIs识别(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── CheckApprovalAccesses ────────────────────────────
+// ──────────────────────────── CheckApprovalAccesses 测试分组 ────────────────────────────
 
 // TestCheckApprovalAccesses_deny抛错 测试策略 deny 时抛哨兵。
 func TestCheckApprovalAccesses_deny抛错(t *testing.T) {
@@ -707,7 +707,7 @@ func TestCheckApprovalAccesses_sendFile不可评估抛错(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── PersistExactPermissionAllowRule ────────────────────────────
+// ──────────────────────────── PersistExactPermissionAllowRule 测试分组 ────────────────────────────
 
 // TestPersistExactPermissionAllowRule_非法scope 测试空 name 抛错。
 func TestPersistExactPermissionAllowRule_非法scope(t *testing.T) {

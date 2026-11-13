@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"io"
 	"strings"
 
@@ -501,6 +502,10 @@ func convertContentBlock(block map[string]any) []any {
 		}
 		if strings.HasPrefix(url, "http://") {
 			// ← py:360-362 HTTPS 警告（日志语义，warn 级别）
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event_type", "ANTHROPIC_INSECURE_IMAGE_URL").
+				Str("url", url).
+				Msg("image url uses insecure http scheme")
 		}
 		return []any{map[string]any{"type": "image", "source": map[string]any{"type": "url", "url": url}}}
 

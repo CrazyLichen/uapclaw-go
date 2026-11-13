@@ -24,7 +24,7 @@ type CLIConfig struct {
 	Provider string `json:"provider"`
 	// Model 模型名（如 "gpt-4o"）
 	Model string `json:"model"`
-	// APIKey provider API key
+	// APIKey provider ç API å¯é¥
 	APIKey string `json:"api_key"`
 	// APIBase provider API 基础 URL
 	APIBase string `json:"api_base"`

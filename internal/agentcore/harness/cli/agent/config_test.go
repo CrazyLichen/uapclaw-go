@@ -20,7 +20,7 @@ func writeSettings(t *testing.T, dir, content string) string {
 	return path
 }
 
-// ──────────────────────────── settings.json ────────────────────────────
+// ──────────────────────────── settings.json 测试分组 ────────────────────────────
 
 // TestLoadSettingsJSON_正常 对齐 config.py:22-44。
 func TestLoadSettingsJSON_正常(t *testing.T) {
@@ -70,7 +70,7 @@ func TestSaveSettingsJSON_自动建目录(t *testing.T) {
 	assert.NotEmpty(t, LoadSettingsJSON(filepath.Join(nested, "settings.json")))
 }
 
-// ──────────────────────────── CLIConfig.Validate ────────────────────────────
+// ──────────────────────────── CLIConfig.Validate 测试分组 ────────────────────────────
 
 // TestCLIConfig_Validate 对齐 config.py:90-110。
 func TestCLIConfig_Validate(t *testing.T) {
@@ -92,7 +92,7 @@ func TestCLIConfig_Validate(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── intSetting ────────────────────────────
+// ──────────────────────────── intSetting 测试分组 ────────────────────────────
 
 // TestIntSetting_各形态 对齐 config.py:112-122。
 func TestIntSetting_各形态(t *testing.T) {

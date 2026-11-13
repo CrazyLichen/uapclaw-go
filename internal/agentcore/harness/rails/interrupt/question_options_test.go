@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── planApprovalInterruptOptions ────────────────────────────
+// ──────────────────────────── planApprovalInterruptOptions 测试分组 ────────────────────────────
 
 // TestPlanApprovalInterruptOptions_三条件满足 测试计划审批选项。
 func TestPlanApprovalInterruptOptions_三条件满足(t *testing.T) {
@@ -41,7 +41,7 @@ func TestPlanApprovalInterruptOptions_文案不符返回nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── fallbackInterruptOptions ────────────────────────────
+// ──────────────────────────── fallbackInterruptOptions 测试分组 ────────────────────────────
 
 // TestFallbackInterruptOptions_计划审批优先 测试计划审批时用专用选项。
 func TestFallbackInterruptOptions_计划审批优先(t *testing.T) {
@@ -65,7 +65,7 @@ func TestFallbackInterruptOptions_普通工具四档(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── questionOptionsFromUIOptions ────────────────────────────
+// ──────────────────────────── questionOptionsFromUIOptions 测试分组 ────────────────────────────
 
 // TestQuestionOptions_CLI单次允许只留两档 测试第一步短路。
 //

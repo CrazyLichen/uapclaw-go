@@ -35,7 +35,7 @@ func TestPrefixRangeEnd_全FF返零(t *testing.T) {
 	require.Equal(t, []byte{0x00}, PrefixRangeEnd(nil))
 }
 
-// ──────────────────────────── base64 ────────────────────────────
+// ──────────────────────────── base64 测试分组 ────────────────────────────
 
 // TestB64往返 编解码可逆，空串解码为空字节。
 // Python: client.py:28-35 _b64 / _unb64
@@ -114,7 +114,7 @@ func (f *fakeEtcd) client() *EtcdJsonClient {
 	return NewEtcdJsonClient([]string{f.server.URL}, 5*time.Second)
 }
 
-// ──────────────────────────── Range ────────────────────────────
+// ──────────────────────────── Range 测试分组 ────────────────────────────
 
 // TestRange_解析结果 base64 解码与版本号解析。
 // Python: client.py:163-180 range + :75-87 _parse_kv
@@ -170,7 +170,7 @@ func TestRange_空结果(t *testing.T) {
 	require.Equal(t, int64(0), result.Revision)
 }
 
-// ──────────────────────────── Put / Delete ────────────────────────────
+// ──────────────────────────── Put / Delete 测试分组 ────────────────────────────
 
 // TestPut_返回版本 请求体含 base64 键值，返回 header.revision。
 // Python: client.py:182-187 put
@@ -199,7 +199,7 @@ func TestDelete_走deleterange(t *testing.T) {
 	require.Equal(t, "/v3/kv/deleterange", fake.paths[0])
 }
 
-// ──────────────────────────── CAS ────────────────────────────
+// ──────────────────────────── CAS 测试分组 ────────────────────────────
 
 // TestPutIfModRevision_成功 请求体是 compare/success/failure 五段式。
 // Python: client.py:207-224
@@ -295,7 +295,7 @@ func TestPostJSON_端点全空(t *testing.T) {
 	require.ErrorIs(t, err, ErrEtcd)
 }
 
-// ──────────────────────────── Watch ────────────────────────────
+// ──────────────────────────── Watch 测试分组 ────────────────────────────
 
 // TestWatchPrefix_流式解析 连续 JSON 对象逐个解析并回调。
 // Python: client.py:267-305 _iter_watch_events / _extract_watch_kvs

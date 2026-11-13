@@ -277,7 +277,7 @@ func TestBufferedEventCursor_单轮游标在终态自动关闭(t *testing.T) {
 	cursor, err := buffer.Cursor("", true)
 	require.NoError(t, err)
 
-	// STARTED
+	// STARTED èµ·å§å¸§
 	got, err := cursor.Next(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Sequence)

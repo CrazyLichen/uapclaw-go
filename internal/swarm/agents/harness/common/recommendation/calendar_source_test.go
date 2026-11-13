@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 )
 
-// ──────────────────────────── findCalendarServerEntry ────────────────────────────
+// ──────────────────────────── findCalendarServerEntry 测试分组 ────────────────────────────
 
 // TestFindCalendarServerEntry_无mcp配置 配置里没有 mcp 段时返回 nil。
 func TestFindCalendarServerEntry_无mcp配置(t *testing.T) {
@@ -55,7 +55,7 @@ func TestPickCalendarServerEntry_按名字识别(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── extractCalendarEvents ────────────────────────────
+// ──────────────────────────── extractCalendarEvents 测试分组 ────────────────────────────
 
 // TestExtractCalendarEvents 各种 MCP 返回形态。
 // Python: calendar_source.py:133
@@ -121,7 +121,7 @@ func TestExtractCalendarEvents(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── normalizeCalendarEvent ────────────────────────────
+// ──────────────────────────── normalizeCalendarEvent 测试分组 ────────────────────────────
 
 // TestNormalizeCalendarEvent 候选键归一。
 // Python: calendar_source.py:172
@@ -189,7 +189,7 @@ func TestNormalizeCalendarEvent(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── firstPresent ────────────────────────────
+// ──────────────────────────── firstPresent 测试分组 ────────────────────────────
 
 // TestFirstPresent 候选键探测。
 // Python: calendar_source.py:184
@@ -232,7 +232,7 @@ func TestFirstPresent(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── FetchCalendarEvents ────────────────────────────
+// ──────────────────────────── FetchCalendarEvents 测试分组 ────────────────────────────
 
 // TestFetchCalendarEvents_无日历服务返回空 没配日历 MCP 时返回 nil，不报错。
 // Python: calendar_source.py:59
@@ -252,7 +252,7 @@ func TestFetchCalendarEvents_参数归一(t *testing.T) {
 
 // ──────────────────────────── 辅助 ────────────────────────────
 
-// ──────────────────────────── mock tool ────────────────────────────
+// ──────────────────────────── mock tool 测试分组 ────────────────────────────
 
 // mockCalendarTool 测试用 MCP 工具替身（MCP 属外部协议边界，允许 mock）。
 type mockCalendarTool struct {
@@ -392,7 +392,7 @@ func TestFetchCalendarEvents_maxEvents截断(t *testing.T) {
 	assert.Len(t, got, 5, "应按 maxEvents 截断")
 }
 
-// ──────────────────────────── resolveEventToolWith ────────────────────────────
+// ──────────────────────────── resolveEventToolWith 测试分组 ────────────────────────────
 
 // TestResolveEventToolWith_首个候选命中 第一个候选名能解析即返回。
 func TestResolveEventToolWith_首个候选命中(t *testing.T) {

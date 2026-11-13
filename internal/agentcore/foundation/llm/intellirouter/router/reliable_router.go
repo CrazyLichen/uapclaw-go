@@ -912,20 +912,20 @@ func (r *ReliableRouter) GetStats() map[string]any {
 		latencyStats[dep.ID] = map[string]any{
 			"avg_latency":            avgRaw,  // ← py:1715 真实延迟，无记录 None
 			"avg_normalized_latency": avgNorm, // ← py:1722 归一化延迟
-			"total_tokens":           r.State.TotalTokens[dep.ID],
-			"total_requests":         r.State.TotalRequests[dep.ID],
+			"total_tokens":           r.State.TotalTokensOf(dep.ID),
+			"total_requests":         r.State.TotalRequestsOf(dep.ID),
 		}
 	}
 	deploymentStatus := map[string]any{}
 	for _, dep := range r.Deployments {
-		status, ok := r.State.DeploymentStatuses[dep.ID]
+		status, ok := r.State.StatusOf(dep.ID)
 		if !ok {
 			status = intelliroutercore.DeploymentStatusHealthy
 		}
 		deploymentStatus[dep.ID] = status.String()
 	}
 	consecutiveFailures := map[string]any{}
-	for k, v := range r.State.ConsecutiveFailures {
+	for k, v := range r.State.ConsecutiveFailuresSnapshot() {
 		consecutiveFailures[k] = v
 	}
 	return map[string]any{
@@ -997,15 +997,12 @@ func (r *ReliableRouter) getAvailableDeployments(model string) []*intellirouterc
 	r.deploymentsLock.RUnlock()
 	var available []*intelliroutercore.Deployment
 	for _, dep := range allDeployments {
-		status, ok := r.State.DeploymentStatuses[dep.ID]
+		status, ok := r.State.StatusOf(dep.ID)
 		if !ok {
 			status = intelliroutercore.DeploymentStatusHealthy
 		}
 		if status == intelliroutercore.DeploymentStatusCooldown {
-			until := 0.0
-			if u, ok := r.State.CooldownUntil[dep.ID]; ok && u != nil {
-				until = *u
-			}
+			until := r.State.CooldownUntilAt(dep.ID)
 			if now < until {
 				continue
 			}
@@ -1030,25 +1027,15 @@ func (r *ReliableRouter) syncQuotaState(deployments []*intelliroutercore.Deploym
 	for _, dep := range deployments {
 		// Token (tpm) ← py:151-161
 		if dep.TPM != nil {
-			usage, ok := r.State.TokenUsage[dep.ID]
-			if !ok {
-				r.State.TokenUsage[dep.ID] = &intelliroutercore.TokenUsage{Limit: *dep.TPM}
-			} else if usage.Limit != *dep.TPM {
-				usage.Limit = *dep.TPM // 热更新配额值：只改 limit，保留累计 used
-			}
-		} else if _, exists := r.State.TokenUsage[dep.ID]; exists {
-			delete(r.State.TokenUsage, dep.ID) // 配额被移除：回到 inf 语义
+			r.State.EnsureTokenUsage(dep.ID, *dep.TPM)
+		} else {
+			r.State.RemoveTokenUsage(dep.ID) // 配额被移除：回到 inf 语义
 		}
 		// RPM (rpm) ← py:163-175
 		if dep.RPM != nil {
-			tracker, ok := r.State.RPMTrackers[dep.ID]
-			if !ok {
-				r.State.RPMTrackers[dep.ID] = &intelliroutercore.RPMTracker{RPMLimit: *dep.RPM}
-			} else if tracker.RPMLimit != *dep.RPM {
-				tracker.RPMLimit = *dep.RPM
-			}
-		} else if _, exists := r.State.RPMTrackers[dep.ID]; exists {
-			delete(r.State.RPMTrackers, dep.ID)
+			r.State.EnsureRPMTracker(dep.ID, *dep.RPM)
+		} else {
+			r.State.RemoveRPMTracker(dep.ID) // 配额被移除：回到 inf 语义
 		}
 	}
 }

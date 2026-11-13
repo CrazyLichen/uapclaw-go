@@ -24,7 +24,7 @@ import (
 // LiveInputReceipt 一次本地投递结果；永不改变根命令结果。
 // Python: live_input.py:52-57 LiveInputReceipt
 type LiveInputReceipt struct {
-	// Status accepted / rejected / unknown
+	// Status æéç¶æï¼accepted / rejected / unknown
 	Status string
 	// Message 人类可读说明
 	Message string

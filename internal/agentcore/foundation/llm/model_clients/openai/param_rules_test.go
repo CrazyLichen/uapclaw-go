@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── ModelParamRule ────────────────────────────
+// ──────────────────────────── ModelParamRule 测试分组 ────────────────────────────
 
 // TestApplyModelSpecificParams_MiniMax注入reasoning_split
 // Python: test_openai_model_client.py:211 test_minimax_m_injects_reasoning_split

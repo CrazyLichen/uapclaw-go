@@ -150,7 +150,7 @@ func TestClose(t *testing.T) {
 	engine.Close(context.Background())
 }
 
-// ──────────────────────────── TickNow ────────────────────────────
+// ──────────────────────────── TickNow 测试分组 ────────────────────────────
 
 // TestTickNow_未启用跳过 enabled=false 时直接返回 false。
 // Python: proactive_engine.py:325
@@ -236,7 +236,7 @@ func TestTickNow_触发回调缺失(t *testing.T) {
 	assert.False(t, engine.TickNow(context.Background(), "web"))
 }
 
-// ──────────────────────────── ensureProactiveAgent ────────────────────────────
+// ──────────────────────────── ensureProactiveAgent 测试分组 ────────────────────────────
 
 // TestEnsureProactiveAgent_builder构造 首次调用触发 builder。
 func TestEnsureProactiveAgent_builder(t *testing.T) {
@@ -282,7 +282,7 @@ func TestEnsureProactiveAgent_已关闭(t *testing.T) {
 	assert.Equal(t, 0, built, "已关闭时不应构造")
 }
 
-// ──────────────────────────── RunMaintenance ────────────────────────────
+// ──────────────────────────── RunMaintenance 测试分组 ────────────────────────────
 
 // TestRunMaintenance 清理过期每日计数。
 // Python: proactive_engine.py:607
@@ -303,7 +303,7 @@ func TestRunMaintenance(t *testing.T) {
 	assert.False(t, staleExists, "过期 key 应被清理")
 }
 
-// ──────────────────────────── newRecommendationID ────────────────────────────
+// ──────────────────────────── newRecommendationID 测试分组 ────────────────────────────
 
 // TestNewRecommendationID 格式为 rec_<毫秒>_<8位hex>，且不重复。
 // Python: proactive_engine.py:543
@@ -338,7 +338,7 @@ func TestNewRecommendationID_并发不重复(t *testing.T) {
 	assert.Len(t, seen, n)
 }
 
-// ──────────────────────────── nowUnixSeconds ────────────────────────────
+// ──────────────────────────── nowUnixSeconds 测试分组 ────────────────────────────
 
 // TestNowUnixSeconds 返回合理范围的 Unix 秒。
 func TestNowUnixSeconds(t *testing.T) {

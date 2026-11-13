@@ -23,7 +23,7 @@ import (
 type Supplement struct {
 	// Text 输入原文
 	Text string
-	// Status pending / accepted / rejected / unknown
+	// Status æéç¶æï¼pending / accepted / rejected / unknown
 	Status string
 }
 

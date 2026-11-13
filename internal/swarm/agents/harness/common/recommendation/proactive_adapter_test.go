@@ -327,7 +327,7 @@ func TestPushProactiveChunks_onDelivered_panic(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── InitProactiveEngine ────────────────────────────
+// ──────────────────────────── InitProactiveEngine 测试分组 ────────────────────────────
 
 // TestInitProactiveEngine 装配后三个回调都已设置。
 // Python: proactive_adapter.py:393
@@ -397,7 +397,7 @@ func TestInitProactiveEngine_nil_host(t *testing.T) {
 	assert.Error(t, send("web", "msg"))
 }
 
-// ──────────────────────────── BuildProactiveAgent ────────────────────────────
+// ──────────────────────────── BuildProactiveAgent 测试分组 ────────────────────────────
 
 // TestBuildProactiveAgent_无模型配置 无 default models 时返回 nil（不 panic）。
 // Python: proactive_adapter.py:95-99

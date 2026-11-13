@@ -371,7 +371,7 @@ type SessionSourceLocator struct {
 // NewSessionSourceLocator 构造并校验（对齐 :281-290 __post_init__）。
 func NewSessionSourceLocator(sessionID string, ordinal int, eventID string) (*SessionSourceLocator, error) {
 	l := &SessionSourceLocator{SessionID: sessionID, Ordinal: ordinal, EventID: eventID}
-	if terminalNonempty(l.SessionID) == false || l.Ordinal < 0 || terminalNonempty(l.EventID) == false {
+	if !terminalNonempty(l.SessionID) || l.Ordinal < 0 || !terminalNonempty(l.EventID) {
 		return nil, fmt.Errorf("invalid session source locator")
 	}
 	return l, nil
@@ -433,7 +433,7 @@ func NewSessionSummaryArtifact(sessionSummaryID, sessionID, contextScope, summar
 	}
 	// 对齐 :351-356 scope
 	if a.ContextScope != "global_new_chat" &&
-		!(strings.HasPrefix(a.ContextScope, "project:") && strings.TrimSpace(strings.TrimPrefix(a.ContextScope, "project:")) != "") {
+		(!strings.HasPrefix(a.ContextScope, "project:") || strings.TrimSpace(strings.TrimPrefix(a.ContextScope, "project:")) == "") {
 		return nil, fmt.Errorf("context_scope must be global_new_chat or project:<id>")
 	}
 	// 对齐 :357-363 source_event_ids 非空且唯一

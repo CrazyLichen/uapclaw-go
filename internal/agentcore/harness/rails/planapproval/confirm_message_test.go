@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── formatArgsPreview ────────────────────────────
+// ──────────────────────────── formatArgsPreview 测试分组 ────────────────────────────
 
 // TestFormatArgsPreview_空参数返回空串 测试空 map。
 func TestFormatArgsPreview_空参数返回空串(t *testing.T) {

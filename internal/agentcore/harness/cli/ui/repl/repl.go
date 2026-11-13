@@ -276,11 +276,12 @@ func (m *InterruptManager) Handle(backend agent.AgentBackend) string {
 	m.count++
 	m.lastTime = now
 
-	if m.count == 1 {
+	switch m.count {
+	case 1:
 		// Python: asyncio.ensure_future(backend.abort())——异步触发
 		go func() { _ = backend.Abort(context.Background()) }()
 		return "abort"
-	} else if m.count == 2 {
+	case 2:
 		return "warn"
 	}
 	return "exit"

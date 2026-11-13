@@ -20,7 +20,7 @@ import (
 // StoredMessage 会话里的一条消息。
 // Python: session_store.py:19-31 StoredMessage
 type StoredMessage struct {
-	// Role "user" / "assistant" / "system"
+	// Role 消息角色："user" / "assistant" / "system"
 	Role string `json:"role"`
 	// Content 消息文本
 	Content string `json:"content"`

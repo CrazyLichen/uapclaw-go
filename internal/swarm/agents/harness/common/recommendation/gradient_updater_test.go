@@ -54,7 +54,7 @@ func TestGradientPrompts_逐字复刻关键段落(t *testing.T) {
 	assert.Contains(t, implicitGradientPromptEN, "⚠️ Relevance check (paired with the removed time window):")
 }
 
-// ──────────────────────────── ApplyOperations ────────────────────────────
+// ──────────────────────────── ApplyOperations 测试分组 ────────────────────────────
 
 // TestApplyOperations_add 新增梯度，空 rule 被过滤。
 // Python: gradient_updater.py:229
@@ -203,7 +203,7 @@ func TestApplyOperations_输入项缺ID(t *testing.T) {
 	assert.Equal(t, "g1", got[0]["gradient_id"])
 }
 
-// ──────────────────────────── AttributeGradients ────────────────────────────
+// ──────────────────────────── AttributeGradients 测试分组 ────────────────────────────
 
 // TestAttributeGradients 决策层/话术层归类，未知分类归决策层。
 // Python: gradient_updater.py:621
@@ -236,7 +236,7 @@ func TestAttributeGradients_空(t *testing.T) {
 	assert.Empty(t, style)
 }
 
-// ──────────────────────────── RenderDecisionRules / RenderStyleRules ────────────────────────────
+// ──────────────────────────── RenderDecisionRules / RenderStyleRules 测试分组 ────────────────────────────
 
 // TestRenderDecisionRules 只含决策层规则，留最新 10 条。
 // Python: gradient_updater.py:646
@@ -304,7 +304,7 @@ func TestRenderStyleRules(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── renderFeedbacks / renderGradients ────────────────────────────
+// ──────────────────────────── renderFeedbacks / renderGradients 测试分组 ────────────────────────────
 
 // TestRenderFeedbacks 双语标签与空值省略。
 // Python: gradient_updater.py:143
@@ -365,7 +365,7 @@ func TestRenderGradients(t *testing.T) {
 	})
 }
 
-// ──────────────────────────── extractGradientJSON ────────────────────────────
+// ──────────────────────────── extractGradientJSON 测试分组 ────────────────────────────
 
 // TestExtractGradientJSON 用 raw_decode 语义：解析首个合法 JSON 后忽略尾部文本。
 // 与 proactive_actions 的贪婪正则版本行为不同（这是本函数存在的理由）。
@@ -405,7 +405,7 @@ func TestExtractGradientJSON_vs_贪婪正则(t *testing.T) {
 		"贪婪正则版与 raw_decode 版在同一输入下结果不同，证明必须各自独立实现")
 }
 
-// ──────────────────────────── parseGradientOperations ────────────────────────────
+// ──────────────────────────── parseGradientOperations 测试分组 ────────────────────────────
 
 // TestParseGradientOperations 解析 operations 数组。
 func TestParseGradientOperations(t *testing.T) {

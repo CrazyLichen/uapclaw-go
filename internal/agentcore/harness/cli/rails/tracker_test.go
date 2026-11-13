@@ -53,7 +53,7 @@ func asChunk(t *testing.T, chunk any, chunkType string) map[string]any {
 	return payload
 }
 
-// ──────────────────────────── TokenTrackingRail ────────────────────────────
+// ──────────────────────────── TokenTrackingRail 测试分组 ────────────────────────────
 
 // TestTokenTrackingRail_累计用量 对齐 token_tracker.py:30-55。
 func TestTokenTrackingRail_累计用量(t *testing.T) {
@@ -96,7 +96,7 @@ func TestTokenTrackingRail_非ModelCall输入(t *testing.T) {
 	assert.Equal(t, 0, rail.GetSummary()["input_tokens"])
 }
 
-// ──────────────────────────── ToolTrackingRail ────────────────────────────
+// ──────────────────────────── ToolTrackingRail 测试分组 ────────────────────────────
 
 // TestToolTrackingRail_优先级最低 对齐 tool_tracker.py `priority = 5`。
 func TestToolTrackingRail_优先级最低(t *testing.T) {
@@ -157,7 +157,7 @@ func TestBuildToolResultPayload_readFile特例(t *testing.T) {
 	require.Contains(t, plain, "tool_result")
 	assert.NotContains(t, plain, "line_count")
 
-	// read_file + content + line_count
+	// read_file + content + line_count åºæ¯
 	file := buildToolResultPayload("read_file", map[string]any{
 		"content": "第一行", "line_count": 2,
 	})
