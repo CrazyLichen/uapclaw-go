@@ -486,6 +486,44 @@ func (s *LocalRouterState) cooldownUntilOf(deploymentID string) float64 {
 	return 0
 }
 
+// HealthStateOf 读健康状态；未登记默认 true。
+// ← health/checker.py:163 state.health_state.get(id, True)
+func (s *LocalRouterState) HealthStateOf(deploymentID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if v, ok := s.HealthStates[deploymentID]; ok {
+		return v
+	}
+	return true
+}
+
+// DeploymentAvailable 按 RouterState 判定部署运行期是否可用。
+// ← health/checker.py:231 _is_state_available（跨包访问 state 内部 map
+// 必须经导出方法持锁读取——Python 同包直读 + with self.state.lock）
+//
+// 与 ReliableRouter._get_available_deployments 同口径：
+// state.deployment_status 非 COOLDOWN 即可用；COOLDOWN 但 cooldown_until
+// 已过期也视为可用（DeploymentStatus 枚举只有 HEALTHY/COOLDOWN，
+// 不存在 UNHEALTHY 成员）。
+//
+// 这里只做判定、不做 reset_deployment 软恢复——软恢复是 router
+// 调度路径的职责，查询方法不应有写副作用。（py:240-242 原文）
+func (s *LocalRouterState) DeploymentAvailable(deploymentID string, now float64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	status, ok := s.DeploymentStatuses[deploymentID]
+	if !ok {
+		status = DeploymentStatusHealthy // ← py:236 get(id, HEALTHY)
+	}
+	if status == DeploymentStatusCooldown {
+		until := s.cooldownUntilOf(deploymentID) // ← py:238 get(id, 0)
+		if now < until {
+			return false
+		}
+	}
+	return true
+}
+
 // removeFromRegistriesExcept 删除除 keep 外的全部注册表条目。
 func (s *LocalRouterState) removeFromRegistriesExcept(keep map[string]bool) {
 	for id := range s.DeploymentStatuses {
