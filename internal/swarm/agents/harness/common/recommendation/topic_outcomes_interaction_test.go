@@ -3,10 +3,7 @@ package recommendation
 // topic_outcomes_interaction_test.go 对齐 tests/unit_tests/test_topic_recommendation.py
 // 中交互记录半区用例（shown card 门 / 点击 / 否定 / 联接 / sink / 被动 outcome）。
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
 // arkReceiptMap 合法 Ark Web Search 小票（topic_product.py:715-775）。
 func arkReceiptMap() map[string]any {
@@ -20,19 +17,15 @@ func arkReceiptMap() map[string]any {
 	}
 }
 
-// poolFixtureForInteraction 写入清单 + 卡片 + 曝光，返回标识。
+// poolFixtureForInteraction 直写 v6 产物面事件（清单/卡/曝光）。
+// Python 中该面由 topic_pipeline（31b Task 6）以 topic_product POLICY_ID（v6）
+// 产出；v5 池（topic_pool.write_starter_pool）是另一条 lane，此处模拟 v6 事件形态。
 func poolFixtureForInteraction(t *testing.T, store *TopicStarterStore,
 	manifestID, batchID, exposureID, revisionID string) map[string]any {
 	t.Helper()
 	config := &ArkBackgroundConfig{Model: "m", BaseURL: "https://ark",
 		ContextWindowTokens: 128, Temperature: 0.3, TopP: 0.7}
-	svc := NewTopicPrepareService(store,
-		func(context.Context, map[string]any, string, *ArkBackgroundConfig) (*BackgroundGenerationResult, error) {
-			return &BackgroundGenerationResult{}, nil
-		}, nil, func() *ArkBackgroundConfig { return config },
-		func() float64 { return 500.0 }, nil)
-	_ = svc
-	triggerKey := svc.triggerKey()
+	prov := config.SafeProvenance()
 	card := map[string]any{
 		"card_id": "card-1", "card_revision_id": revisionID, "generation_batch_id": batchID,
 		"selector_rank": 1, "source_starter_id": "starter-1", "interest_summary_id": "i1",
@@ -48,9 +41,9 @@ func poolFixtureForInteraction(t *testing.T, store *TopicStarterStore,
 		},
 		"source_memory_unit_ids": []any{"i1"}, "source_locators": []any{[]any{"s", 0}},
 		"identity_anchor": "", "context_anchors": []any{},
-		"model_provenance": config.SafeProvenance(),
-		"prompt_versions":  mapAnyOf(triggerKey["prompt_versions"]),
-		"policy_id":        POLICY_ID, "payload_version": PAYLOAD_VERSION,
+		"model_provenance": prov,
+		"prompt_versions":  map[string]any{"i1": "p1", "i2": "p2", "i3": "p3", "i4": "p4", "i5": "p5"},
+		"policy_id":        ProductPolicyID, "payload_version": ProductPayloadVersion,
 		"retrieval_config_version": RetrievalConfigVersion, "corpus_version": CorpusVersion,
 		"profile_semantic_version": 1,
 		"provider_invocation_receipts": []any{
@@ -68,23 +61,34 @@ func poolFixtureForInteraction(t *testing.T, store *TopicStarterStore,
 	manifest := map[string]any{
 		"manifest_id": manifestID, "generation_batch_id": batchID,
 		"card_revision_ids": []any{revisionID}, "trigger_origin": "lazy_seed",
-		"context_scope": GlobalNewChatScope, "project_id": nil,
-		"local_date":                  triggerKey["local_date"],
-		"generation_trigger_key":      triggerKey,
+		"local_date": "2026-01-01", "context_scope": GlobalNewChatScope, "project_id": nil,
+		"generation_trigger_key": map[string]any{
+			"policy_id": ProductPolicyID, "payload_version": ProductPayloadVersion,
+		},
 		"generation_input_snapshot":   map[string]any{},
-		"serving_compatibility_key":   BuildServingCompatibilityKey(triggerKey),
-		"negative_preference_version": triggerKey["negative_preference_version"],
-		"policy_id":                   POLICY_ID,
-		"payload_version":             PAYLOAD_VERSION,
+		"serving_compatibility_key":   map[string]any{},
+		"negative_preference_version": 0,
+		"policy_id":                   ProductPolicyID,
+		"payload_version":             ProductPayloadVersion,
 		"profile_semantic_version":    1,
 	}
-	if !WriteStarterPool(store, []map[string]any{card}, manifest, 500.0,
-		map[string]string{"starter-1": "hello"}, "") {
-		t.Fatalf("pool write failed")
+	if _, err := store.RecordEvent(map[string]any{
+		"session_id": "sess", "slate_id": manifestID, "event_type": "starter_slate_manifest",
+		"topic_id": manifestID, "policy_id": ProductPolicyID,
+		"payload": manifest, "created_at": 550.0,
+	}); err != nil {
+		t.Fatalf("manifest event: %v", err)
 	}
-	_, _ = store.RecordEvent(map[string]any{
+	if _, err := store.RecordEvent(map[string]any{
+		"session_id": "sess", "slate_id": manifestID, "event_type": "starter_card",
+		"topic_id": revisionID, "policy_id": ProductPolicyID,
+		"payload": card, "created_at": 550.0,
+	}); err != nil {
+		t.Fatalf("card event: %v", err)
+	}
+	if _, err := store.RecordEvent(map[string]any{
 		"session_id": "sess", "slate_id": exposureID, "event_type": "dynamic_exposure",
-		"topic_id": manifestID, "policy_id": POLICY_ID,
+		"topic_id": manifestID, "policy_id": ProductPolicyID,
 		"payload": map[string]any{
 			"manifest_id": manifestID, "generation_batch_id": batchID,
 			"context_scope": GlobalNewChatScope, "project_id": nil,
@@ -95,7 +99,9 @@ func poolFixtureForInteraction(t *testing.T, store *TopicStarterStore,
 			},
 		},
 		"created_at": 600.0,
-	})
+	}); err != nil {
+		t.Fatalf("exposure event: %v", err)
+	}
 	return card
 }
 
@@ -251,7 +257,7 @@ func TestTopicStarterStoreOutcomeSink(t *testing.T) {
 	}
 	// 点击已由 sink 记录
 	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "topic_click",
-		PolicyID: &poolPolicyIDPtr, Limit: 8})
+		PolicyID: &productPolicyIDPtr, Limit: 8})
 	if len(rows) != 1 {
 		t.Fatalf("clicks=%d", len(rows))
 	}
@@ -412,7 +418,7 @@ func TestMigrateDismissalRecords(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	rows, _ := store.QueryEvents(QueryEventsOptions{
-		EventType: DismissalMigrationEventType, PolicyID: &poolPolicyIDPtr, Limit: 1})
+		EventType: DismissalMigrationEventType, PolicyID: &productPolicyIDPtr, Limit: 1})
 	if len(rows) != 1 {
 		t.Fatalf("marker event missing")
 	}
@@ -421,7 +427,7 @@ func TestMigrateDismissalRecords(t *testing.T) {
 		t.Fatalf("second migrate: %v", err)
 	}
 	rows2, _ := store.QueryEvents(QueryEventsOptions{
-		EventType: DismissalMigrationEventType, PolicyID: &poolPolicyIDPtr, Limit: 8})
+		EventType: DismissalMigrationEventType, PolicyID: &productPolicyIDPtr, Limit: 8})
 	if len(rows2) != 1 {
 		t.Fatalf("marker should be once, got %d", len(rows2))
 	}

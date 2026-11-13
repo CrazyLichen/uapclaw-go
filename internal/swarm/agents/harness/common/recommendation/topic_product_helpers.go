@@ -21,6 +21,13 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// ProductPolicyID v6 产物/结果面策略 ID（topic_product.py:76；注意与
+	// topic_pool.py:27 的 v5 POLICY_ID 是两个策略面，outcomes 从 product 导入）
+	ProductPolicyID = "topic-starter-mvp-v6"
+	// ProductPayloadVersion v6 池 payload 版本（topic_product.py:77）
+	ProductPayloadVersion = "topic-starter-pool-v2"
+	// GenerationConfigVersionV6 v6 生成配置版本（topic_product.py:78）
+	GenerationConfigVersionV6 = "topic-starter-market-generation-v19"
 	// HotListSourceKind 热榜条目来源（topic_product.py:86）
 	HotListSourceKind = "hot_list_entry"
 	// FixedCorpusCategoryA/B 固定语料两类目（:101）
@@ -69,6 +76,9 @@ var (
 		"input_tokens": true, "output_tokens": true, "total_tokens": true, "tool_usage": true,
 	}
 )
+
+// productPolicyIDPtr v6 策略指针（QueryEventsOptions 载体）。
+var productPolicyIDPtr = ProductPolicyID
 
 // ProjectSessionMetadataLoader 会话元数据加载器（⤴️31c 会话域接线）。
 // nil/返回 nil 表示会话不可读（对齐 Python metadata 为空时跳过）。
@@ -443,7 +453,7 @@ func LoadHotListPull(store *TopicStarterStore, receiptID any) (*HotListPull, err
 		return nil, nil
 	}
 	rows, err := store.QueryEvents(QueryEventsOptions{
-		EventType: HotListPullEventType, TopicID: &id, PolicyID: &poolPolicyIDPtr, Limit: 1,
+		EventType: HotListPullEventType, TopicID: &id, PolicyID: &productPolicyIDPtr, Limit: 1,
 	})
 	if err != nil {
 		return nil, err
@@ -524,7 +534,7 @@ func FindExactTerminalCard(store *TopicStarterStore, manifestID, cardRevisionID,
 	}
 	manifestRows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: "starter_slate_manifest", SlateID: &manifestID,
-		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 2, NewestFirst: true,
 	})
 	if err != nil || len(manifestRows) != 1 {
 		return nil
@@ -539,7 +549,7 @@ func FindExactTerminalCard(store *TopicStarterStore, manifestID, cardRevisionID,
 	}
 	cardRows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: "starter_card", SlateID: &manifestID, TopicID: &cardRevisionID,
-		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 2, NewestFirst: true,
 	})
 	if err != nil || len(cardRows) != 1 {
 		return nil

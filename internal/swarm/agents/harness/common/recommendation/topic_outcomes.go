@@ -303,7 +303,7 @@ func PersistOutcomeArtifact(store *TopicStarterStore, artifact any, createdAt fl
 		"slate_id":          slateID,
 		"event_type":        eventType,
 		"topic_id":          artifactID,
-		"policy_id":         POLICY_ID,
+		"policy_id":         ProductPolicyID,
 		"selection_mode":    "training_data_plane",
 		"propensity_reason": "not_applicable",
 		"payload":           payload,
@@ -346,7 +346,7 @@ func RecordTerminalConversationDepth(store *TopicStarterStore, manifestID, expos
 		"slate_id":          exposureID,
 		"event_type":        "conversation_depth",
 		"topic_id":          cardRevisionID,
-		"policy_id":         POLICY_ID,
+		"policy_id":         ProductPolicyID,
 		"selection_mode":    "unknown",
 		"propensity_reason": "not_estimated",
 		"payload":           payload,
@@ -401,7 +401,7 @@ func RecordTerminalFutureActivity(store *TopicStarterStore, manifestID, exposure
 		"slate_id":          exposureID,
 		"event_type":        "future_activity",
 		"topic_id":          cardRevisionID,
-		"policy_id":         POLICY_ID,
+		"policy_id":         ProductPolicyID,
 		"selection_mode":    "unknown",
 		"propensity_reason": "not_estimated",
 		"payload":           payload,
@@ -489,7 +489,7 @@ func exactOutcomeEvent(store *TopicStarterStore, eventType, manifestID, exposure
 		EventType: eventType,
 		SlateID:   &exposureID,
 		TopicID:   &cardRevisionID,
-		PolicyID:  &poolPolicyIDPtr,
+		PolicyID:  &productPolicyIDPtr,
 		Limit:     8,
 	})
 	if err != nil {
@@ -1564,7 +1564,7 @@ var TerminalInteractionEventTypes = map[string]bool{"topic_click": true, "not_in
 func exactExposure(store *TopicStarterStore, manifestID, exposureID string) map[string]any {
 	rows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: "dynamic_exposure", SlateID: &exposureID,
-		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 2, NewestFirst: true,
 	})
 	if err != nil {
 		return nil
@@ -1705,7 +1705,7 @@ func RecordTerminalInteraction(store *TopicStarterStore, eventType, manifestID,
 	event := map[string]any{
 		"session_id": pyStr(exposure["session_id"]), "slate_id": exposureID,
 		"event_type": eventType, "topic_id": cardRevisionID,
-		"profile_version": card["profile_semantic_version"], "policy_id": POLICY_ID,
+		"profile_version": card["profile_semantic_version"], "policy_id": ProductPolicyID,
 		"selection_mode": "unknown", "propensity_reason": "not_estimated",
 		"payload": eventPayload, "created_at": createdAt,
 	}
@@ -1719,7 +1719,7 @@ func RecordTerminalInteraction(store *TopicStarterStore, eventType, manifestID,
 	// 否定可在否定可撤销之前记录，即永久成立
 	previous, _ := store.QueryEvents(QueryEventsOptions{
 		EventType: eventType, SlateID: &exposureID, TopicID: &cardRevisionID,
-		PolicyID: &poolPolicyIDPtr, Limit: 1,
+		PolicyID: &productPolicyIDPtr, Limit: 1,
 	})
 	for _, row := range previous {
 		if _, present := mapAnyOf(row["payload"])["dismissal_record_id"]; !present {
@@ -1893,7 +1893,7 @@ func sortStrings(values []string) {
 func manifestPayloadOf(store *TopicStarterStore, manifestID string) map[string]any {
 	rows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: "starter_slate_manifest", SlateID: &manifestID,
-		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 1, NewestFirst: true,
 	})
 	if err != nil || len(rows) == 0 {
 		return map[string]any{}
@@ -1936,7 +1936,7 @@ var writtenDismissalFields = []string{"context_scope", "project_id", "direction"
 func MigrateDismissalRecords(store *TopicStarterStore, now float64) error {
 	marker := DismissalMigrationEventType
 	rows, err := store.QueryEvents(QueryEventsOptions{
-		EventType: marker, PolicyID: &poolPolicyIDPtr, Limit: 1,
+		EventType: marker, PolicyID: &productPolicyIDPtr, Limit: 1,
 	})
 	if err != nil {
 		return err
@@ -1948,7 +1948,7 @@ func MigrateDismissalRecords(store *TopicStarterStore, now float64) error {
 		return err
 	}
 	_, _ = store.RecordEvent(map[string]any{
-		"event_type": marker, "policy_id": POLICY_ID, "created_at": now,
+		"event_type": marker, "policy_id": ProductPolicyID, "created_at": now,
 	})
 	return nil
 }
@@ -1986,7 +1986,7 @@ func timeDismissalRecords(store *TopicStarterStore, now float64) error {
 	claimed := map[int]bool{}
 	var repeated []any
 	events, err := store.QueryEvents(QueryEventsOptions{
-		EventType: "not_interested", PolicyID: &poolPolicyIDPtr, Limit: 100000,
+		EventType: "not_interested", PolicyID: &productPolicyIDPtr, Limit: 100000,
 	})
 	if err != nil {
 		return err
@@ -2000,7 +2000,7 @@ func timeDismissalRecords(store *TopicStarterStore, now float64) error {
 		revisionID := pyStr(payload["card_revision_id"])
 		cardRows, queryErr := store.QueryEvents(QueryEventsOptions{
 			EventType: "starter_card", SlateID: &manifestID, TopicID: &revisionID,
-			PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+			PolicyID: &productPolicyIDPtr, Limit: 1, NewestFirst: true,
 		})
 		if queryErr != nil {
 			return queryErr
@@ -2095,7 +2095,7 @@ func RecordTerminalSessionStart(store *TopicStarterStore, manifestID, generation
 	recorded, _ := store.RecordEvent(map[string]any{
 		"session_id": startedSessionID, "slate_id": exposureID,
 		"event_type": "session_bound", "topic_id": cardRevisionID,
-		"profile_version": card["profile_semantic_version"], "policy_id": POLICY_ID,
+		"profile_version": card["profile_semantic_version"], "policy_id": ProductPolicyID,
 		"selection_mode": "unknown", "propensity_reason": "not_estimated",
 		"payload": map[string]any{
 			"manifest_id": manifestID, "generation_batch_id": generationBatchID,
@@ -2114,7 +2114,7 @@ func outcomeEvents(store *TopicStarterStore, eventType, exposureID, manifestID s
 	exposedAt, labelHorizon float64) []map[string]any {
 	rows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: eventType, SlateID: &exposureID,
-		PolicyID: &poolPolicyIDPtr, Limit: 64,
+		PolicyID: &productPolicyIDPtr, Limit: 64,
 	})
 	if err != nil {
 		return nil
@@ -2352,21 +2352,21 @@ func NewTopicStarterStoreOutcomeSink(store *TopicStarterStore) *TopicStarterStor
 func (s *TopicStarterStoreOutcomeSink) Apply(signal *NewPageOutcomeSignal) bool {
 	manifestRows, err := s.store.QueryEvents(QueryEventsOptions{
 		EventType: "starter_slate_manifest", SlateID: &signal.ManifestID,
-		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 1, NewestFirst: true,
 	})
 	if err != nil || len(manifestRows) == 0 {
 		return false
 	}
 	cardRows, err := s.store.QueryEvents(QueryEventsOptions{
 		EventType: "starter_card", SlateID: &signal.ManifestID, TopicID: &signal.CardRevisionID,
-		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 1, NewestFirst: true,
 	})
 	if err != nil || len(cardRows) == 0 {
 		return false
 	}
 	exposureRows, err := s.store.QueryEvents(QueryEventsOptions{
 		EventType: "dynamic_exposure", SlateID: &signal.ExposureID, TopicID: &signal.ManifestID,
-		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 1, NewestFirst: true,
 	})
 	if err != nil || len(exposureRows) == 0 {
 		return false
@@ -2511,14 +2511,14 @@ func RecordTerminalSlateOutcome(store *TopicStarterStore, eventType, manifestID,
 	}
 	manifestRows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: "starter_slate_manifest", SlateID: &manifestID,
-		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 2, NewestFirst: true,
 	})
 	if err != nil {
 		return false
 	}
 	exposureRows, err := store.QueryEvents(QueryEventsOptions{
 		EventType: "dynamic_exposure", SlateID: &exposureID, TopicID: &manifestID,
-		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+		PolicyID: &productPolicyIDPtr, Limit: 2, NewestFirst: true,
 	})
 	if err != nil {
 		return false
@@ -2544,7 +2544,7 @@ func RecordTerminalSlateOutcome(store *TopicStarterStore, eventType, manifestID,
 	recorded, _ := store.RecordEvent(map[string]any{
 		"session_id": pyStr(exposureRows[0]["session_id"]), "slate_id": exposureID,
 		"event_type": eventType, "topic_id": manifestID,
-		"profile_version": manifest["profile_semantic_version"], "policy_id": POLICY_ID,
+		"profile_version": manifest["profile_semantic_version"], "policy_id": ProductPolicyID,
 		"selection_mode": "unknown", "propensity_reason": "not_estimated",
 		"payload": map[string]any{
 			"manifest_id": manifestID, "generation_batch_id": generationBatchID,

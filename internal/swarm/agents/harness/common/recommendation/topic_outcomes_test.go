@@ -214,7 +214,7 @@ func TestPersistOutcomeArtifact(t *testing.T) {
 		t.Fatalf("identity=%s/%s", eventType, artifactID)
 	}
 	rows, err := store.QueryEvents(QueryEventsOptions{
-		EventType: eventType, PolicyID: &poolPolicyIDPtr, Limit: 8,
+		EventType: eventType, PolicyID: &productPolicyIDPtr, Limit: 8,
 	})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
@@ -243,7 +243,7 @@ func TestRecordTerminalConversationDepth(t *testing.T) {
 	}
 	_, _ = store.RecordEvent(map[string]any{
 		"session_id": "s1", "slate_id": "e", "event_type": "session_bound",
-		"topic_id": "r", "policy_id": POLICY_ID, "payload": startPayload,
+		"topic_id": "r", "policy_id": ProductPolicyID, "payload": startPayload,
 		"created_at": 50.0,
 	})
 	if !RecordTerminalConversationDepth(store, "m", "e", "r", "s1", 3, 100.0) {
@@ -259,7 +259,7 @@ func TestRecordTerminalConversationDepth(t *testing.T) {
 	}
 	// 深度事件落库
 	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "conversation_depth",
-		PolicyID: &poolPolicyIDPtr, Limit: 8})
+		PolicyID: &productPolicyIDPtr, Limit: 8})
 	if len(rows) != 1 || intOf(mapAnyOf(rows[0]["payload"])["conversation_depth"]) != 3 {
 		t.Fatalf("depth payload wrong: %v", rows)
 	}
@@ -270,7 +270,7 @@ func TestRecordTerminalFutureActivity(t *testing.T) {
 	store := newTestStore(t)
 	_, _ = store.RecordEvent(map[string]any{
 		"session_id": "s1", "slate_id": "e", "event_type": "session_bound",
-		"topic_id": "r", "policy_id": POLICY_ID,
+		"topic_id": "r", "policy_id": ProductPolicyID,
 		"payload": map[string]any{
 			"manifest_id": "m", "exposure_id": "e", "card_revision_id": "r",
 			"started_session_id": "s1", "context_scope": GlobalNewChatScope,
@@ -290,7 +290,7 @@ func TestRecordTerminalFutureActivity(t *testing.T) {
 		t.Fatalf("assisted activity should still record (with exclusion)")
 	}
 	rows, _ := store.QueryEvents(QueryEventsOptions{EventType: "future_activity",
-		PolicyID: &poolPolicyIDPtr, Limit: 8})
+		PolicyID: &productPolicyIDPtr, Limit: 8})
 	if len(rows) != 2 {
 		t.Fatalf("rows=%d", len(rows))
 	}
