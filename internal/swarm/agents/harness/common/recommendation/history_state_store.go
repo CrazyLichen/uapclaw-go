@@ -1,6 +1,7 @@
 package recommendation
 
 import (
+	"encoding/json"
 	"strings"
 )
 
@@ -244,4 +245,263 @@ func FilterDistinctPersonalizedCandidates(candidates []map[string]any, targetCou
 		}
 	}
 	return kept
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// v4 侧常量（topic_history.py:43/44/75/76）
+const (
+	// v4HistoryPolicyID v4 历史状态策略 ID
+	v4HistoryPolicyID = "topic-starter-mvp-v4"
+	// v4TaxonomyVersion 行为映射分类法版本
+	v4TaxonomyVersion = "v4-conversation-taxonomy-1"
+	// v4MappingPromptVersion 行为映射提示词版本
+	v4MappingPromptVersion = "v4-mapping-prompt-3"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// HistoryEmptyV4State 全新空白 v4 状态（⤴️ 31d：随 topic_history.py 整体落地后
+// 归位 topic_history.go 并由真实引擎消费）。
+// Python: topic_history.py:2016 empty_history_state + :253 _empty_ledger
+func HistoryEmptyV4State() map[string]any {
+	return map[string]any{
+		"schema_version": v4SnapshotSchema,
+		"policy_id":      v4HistoryPolicyID,
+		"history_ledger": map[string]any{
+			"history_revision":    0,
+			"next_behavior_index": 1,
+			"sessions":            map[string]any{},
+		},
+		"behavior_mapping": map[string]any{
+			"taxonomy_version": v4TaxonomyVersion,
+			"prompt_version":   v4MappingPromptVersion,
+			"entries":          map[string]any{},
+		},
+		"memory": map[string]any{
+			"initialized":    false,
+			"semantic_version": 0,
+			"unit_counter":   0,
+			"units":          []any{},
+		},
+		"memory_sidecar": map[string]any{
+			"negative_preferences": []any{},
+			"explicit_corrections": []any{},
+		},
+		"memory_cursor": map[string]any{
+			"last_success_at":                    nil,
+			"consumed_through_behavior_index":    0,
+			"pending_unmatched_behavior_indices": []any{},
+			"origin":                             "",
+		},
+		"mobile_trigger": map[string]any{
+			"reference_status":           "uninitialized_empty",
+			"reference_tags":             []any{},
+			"reference_locators":         []any{},
+			"reference_behavior_indices": []any{},
+		},
+	}
+}
+
+// HistoryLoadLatestV4 从事件账本读最新 v4 快照（仅 schema_version=v4 的行）。
+// Python: topic_history.py:2500 load_latest_history_state
+func HistoryLoadLatestV4(store *TopicStarterStore) (map[string]any, bool) {
+	db, err := store.connect()
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query("SELECT snapshot_json FROM profile_snapshot ORDER BY version DESC")
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var raw any
+		if err := rows.Scan(&raw); err != nil {
+			continue
+		}
+		text := ""
+		switch value := raw.(type) {
+		case []byte:
+			text = string(value)
+		case string:
+			text = value
+		default:
+			continue
+		}
+		if text == "" {
+			continue
+		}
+		decoded := map[string]any{}
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			continue
+		}
+		if pyStr(decoded["schema_version"]) != v4SnapshotSchema {
+			continue
+		}
+		return decoded, true
+	}
+	return nil, false
+}
+
+// HistorySaveV4State 单事务提交一次 v4 成功：新快照插入、被顶替快照的见证剥离、
+// 成功事件写入同生共死。
+// Python: topic_history.py:2520 save_history_state（事件 INSERT 镜像 record_event，
+// 与 TopicStarterStore.event_key_of 共享去重键）
+func HistorySaveV4State(store *TopicStarterStore, state map[string]any,
+	events []map[string]any, now float64) (map[string]any, error) {
+	db, err := store.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = db.Close() }()
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// 步骤 1：previous = 最新 v4 快照（_latest_v4_row；逐行解析过滤 schema）
+	var previousVersion int
+	previous := map[string]any{}
+	hasPrevious := false
+	prevRows, err := tx.Query("SELECT snapshot_json, version FROM profile_snapshot ORDER BY version DESC")
+	if err != nil {
+		return nil, err
+	}
+	for prevRows.Next() {
+		var rawJSON string
+		var rowVersion int
+		if err := prevRows.Scan(&rawJSON, &rowVersion); err != nil {
+			continue
+		}
+		candidate := map[string]any{}
+		if json.Unmarshal([]byte(rawJSON), &candidate) != nil {
+			continue
+		}
+		if pyStr(candidate["schema_version"]) != v4SnapshotSchema {
+			continue
+		}
+		previous = candidate
+		previousVersion = rowVersion
+		hasPrevious = true
+		break
+	}
+	_ = prevRows.Close()
+	_ = prevRows.Err()
+
+	var version int
+	if err := tx.QueryRow("SELECT COALESCE(MAX(version), 0) + 1 FROM profile_snapshot").Scan(&version); err != nil {
+		return nil, err
+	}
+	stored := map[string]any{}
+	for key, value := range state {
+		stored[key] = value
+	}
+	stored["version"] = version
+	stored["updated_at"] = now
+	stored["evidence_until"] = 0.0
+	encoded, err := marshalNoEscape(stored)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(
+		"INSERT INTO profile_snapshot(version, created_at, evidence_until, snapshot_json) VALUES(?, ?, ?, ?)",
+		version, now, 0.0, string(encoded),
+	); err != nil {
+		return nil, err
+	}
+	if hasPrevious {
+		// D7：见证内容只随活跃注册保留，被顶替快照剥离 witness
+		stripHistoryWitness(previous)
+		encodedPrevious, err := marshalNoEscape(previous)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(
+			"UPDATE profile_snapshot SET snapshot_json = ? WHERE version = ?",
+			string(encodedPrevious), previousVersion,
+		); err != nil {
+			return nil, err
+		}
+	}
+	for _, event := range events {
+		if _, err := tx.Exec(
+			"INSERT OR IGNORE INTO recommendation_event(event_key, session_id, slate_id, event_type, topic_id, position, profile_version, policy_id, selection_mode, propensity, propensity_reason, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			store.EventKeyOf(event),
+			pyStr(event["session_id"]),
+			pyStr(event["slate_id"]),
+			pyStr(event["event_type"]),
+			event["topic_id"],
+			event["position"],
+			event["profile_version"],
+			pyStrOr(event["policy_id"], v4HistoryPolicyID),
+			pyStrOr(event["selection_mode"], "state_maintenance"),
+			event["propensity"],
+			pyStrOr(event["propensity_reason"], "not_estimated"),
+			string(mustMarshalNoEscape(event["payload"])),
+			toFloatOr(event["created_at"], now),
+		); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return stored, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// stripHistoryWitness 剥离被顶替快照中全部 witness 字段
+// （Python save_history_state 内联双层循环 :2567-2575）
+func stripHistoryWitness(previous map[string]any) {
+	ledger, ok := previous["history_ledger"].(map[string]any)
+	if !ok {
+		return
+	}
+	sessions, ok := ledger["sessions"].(map[string]any)
+	if !ok {
+		return
+	}
+	for _, sessionState := range sessions {
+		sessionMap, ok := sessionState.(map[string]any)
+		if !ok {
+			continue
+		}
+		entries, ok := sessionMap["entries"].([]any)
+		if !ok {
+			continue
+		}
+		for _, entry := range entries {
+			entryMap, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			delete(entryMap, "witness")
+		}
+	}
+}
+
+func mustMarshalNoEscape(value any) []byte {
+	data, err := marshalNoEscape(value)
+	if err != nil {
+		return []byte("{}")
+	}
+	return data
+}
+
+func pyStrOr(value any, fallback string) string {
+	if text := pyStr(value); text != "" {
+		return text
+	}
+	return fallback
+}
+
+func toFloatOr(value any, fallback float64) float64 {
+	if f, ok := toFloat(value); ok {
+		return f
+	}
+	return fallback
 }
