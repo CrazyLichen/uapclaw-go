@@ -72,11 +72,18 @@ func blockingRead(fd, size int) ([]byte, error) {
 // syscallRead 同步读 fd（裸 syscall，不经 os.File 包装——重复 NewFile
 // 同一 fd 会反复注册 netpoller 并触发终局器，读会间歇失败）。
 func syscallRead(fd int, buf []byte) (int, error) {
-	n, err := syscall.Read(fd, buf)
-	if err != nil && err == io.EOF {
-		return n, nil
+	for {
+		n, err := syscall.Read(fd, buf)
+		if err == syscall.EINTR {
+			// Go 运行时异步抢占信号会打断慢系统调用（race 检测器下高频），
+			// 与 Python os.read 的自动重试语义对齐
+			continue
+		}
+		if err != nil && err == io.EOF {
+			return n, nil
+		}
+		return n, err
 	}
-	return n, err
 }
 
 // selectReadable 零超时 select 探测 fd 是否可读。
