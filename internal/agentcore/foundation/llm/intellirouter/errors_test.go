@@ -74,7 +74,7 @@ func TestToDict(t *testing.T) {
 
 // TestStatusCodeOf_回退500 验证非 IRBase 错误与未映射种类回落 500。
 func TestStatusCodeOf_回退500(t *testing.T) {
-	// ← exceptions.py:275 return 500
+	// ← exceptions.py:275 未命中回落 500；包装链穿透后按映射值返回
 	require.Equal(t, 500, StatusCodeOf(errors.New("plain")))
-	require.Equal(t, 500, StatusCodeOf(fmt.Errorf("wrapped: %w", NewDeploymentFailed("d", 1))))
+	require.Equal(t, 503, StatusCodeOf(fmt.Errorf("wrapped: %w", NewDeploymentFailed("d", 1))))
 }
