@@ -263,4 +263,3 @@ func TestPermissionConfirmResponse_序列化(t *testing.T) {
 		t.Errorf("AutoConfirm = %v，期望 %v", decoded.AutoConfirm, resp.AutoConfirm)
 	}
 }
-
