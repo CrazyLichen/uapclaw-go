@@ -43,11 +43,11 @@ func TestNewIntelliRouterModelClient_结构化配置(t *testing.T) {
 	if client.routerConfig == nil || client.routerKey == "" {
 		t.Fatal("routerConfig/routerKey 应已填充")
 	}
-	if len(client.router.Deployments) != 1 {
-		t.Fatalf("deployment 应为 1，得 %d", len(client.router.Deployments))
+	if len(client.Router.Deployments) != 1 {
+		t.Fatalf("deployment 应为 1，得 %d", len(client.Router.Deployments))
 	}
 	// 注入 router 时 routerConfig/routerKey 为 nil（Python: :444-447）
-	client2 := &IntelliRouterModelClient{router: client.router}
+	client2 := &IntelliRouterModelClient{router: client.Router}
 	if client2.routerConfig != nil || client2.routerKey != "" {
 		t.Fatal("注入路径不应填充缓存键")
 	}

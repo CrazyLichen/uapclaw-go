@@ -47,7 +47,7 @@ type IntelliRouterModelClient struct {
 	// routerConfig 提取的配置（注入 router 时为 nil，Python: :444-447）
 	routerConfig *IntelliRouterClientConfig
 	// router 路由器实例
-	router *llmrouter.ReliableRouter
+	Router *llmrouter.ReliableRouter
 	// routerKey 缓存键（注入 router 时为 nil）
 	routerKey string
 }
@@ -74,7 +74,7 @@ func NewIntelliRouterModelClient(
 		return nil, err
 	}
 	c.routerConfig = cfg
-	c.router = r
+	c.Router = r
 	c.routerKey = MakeRouterKey(cfg)
 	return c, nil
 }
@@ -89,7 +89,7 @@ func (c *IntelliRouterModelClient) Invoke(ctx context.Context, messages model_cl
 	modelName := c.resolveModelName(params.Model)
 	tools := c.ConvertToolsToDict(params.Tools)
 
-	result, err := c.router.Invoke(ctx, messagesDict, llmrouter.InvokeParams{
+	result, err := c.Router.Invoke(ctx, messagesDict, llmrouter.InvokeParams{
 		Tools:       toAnySlice(tools),
 		Temperature: c.effectiveTemperature(params.Temperature),
 		TopP:        c.effectiveTopP(params.TopP),
@@ -101,7 +101,7 @@ func (c *IntelliRouterModelClient) Invoke(ctx context.Context, messages model_cl
 	if err != nil {
 		// Python: :729-748 先触发 LLM_CALL_ERROR 事件，再翻译路由错误
 		c.triggerCallError(ctx, modelName, err, false)
-		return nil, routing.ToModelError(err, routerViewOf(c.router), modelName, false)
+		return nil, routing.ToModelError(err, routerViewOf(c.Router), modelName, false)
 	}
 	// Python: :751 _to_ow_assistant_message
 	return c.toOwAssistantMessage(result, params.OutputParser)
@@ -127,7 +127,7 @@ func (c *IntelliRouterModelClient) Stream(ctx context.Context, messages model_cl
 		Kwargs:      map[string]any{},
 	}
 	out := make(chan *llmschema.AssistantMessageChunk)
-	chunkChan := c.router.Stream(ctx, messagesDict, invParams)
+	chunkChan := c.Router.Stream(ctx, messagesDict, invParams)
 	outputEmitted := false
 	accumulatedForParser := ""
 	go func() {
@@ -139,7 +139,7 @@ func (c *IntelliRouterModelClient) Stream(ctx context.Context, messages model_cl
 				for chunk := range chunkChan { // 排空残余
 					_ = chunk
 				}
-				modelErr := routing.ToModelError(result.Err, routerViewOf(c.router), modelName, outputEmitted)
+				modelErr := routing.ToModelError(result.Err, routerViewOf(c.Router), modelName, outputEmitted)
 				// channel 装不下 error，用 StreamError 哨兵 chunk 承载（对齐 openai 客户端口径）
 				out <- llmschema.NewAssistantMessageChunk("", llmschema.WithChunkStreamError(modelErr))
 				return
@@ -467,7 +467,7 @@ func providerMetadata(source map[string]any) map[string]any {
 // resolveGenerationProvider 生成 API 的 provider 解析。
 // Python: intelli_router_model_client.py:1069-1075 _resolve_generation_provider
 func (c *IntelliRouterModelClient) resolveGenerationProvider(model string) string {
-	for _, dep := range c.router.Deployments {
+	for _, dep := range c.Router.Deployments {
 		if model != "" && dep.ModelName != model {
 			continue
 		}
@@ -479,7 +479,7 @@ func (c *IntelliRouterModelClient) resolveGenerationProvider(model string) strin
 // apiBaseForProvider 第一个匹配 provider 的 deployment api_base。
 // Python: :1084-1093 _get_api_base_for_provider
 func (c *IntelliRouterModelClient) apiBaseForProvider(providerName string) string {
-	for _, dep := range c.router.Deployments {
+	for _, dep := range c.Router.Deployments {
 		if dep.Provider == providerName {
 			return dep.APIBase
 		}
@@ -490,7 +490,7 @@ func (c *IntelliRouterModelClient) apiBaseForProvider(providerName string) strin
 // apiKeyForProvider 第一个匹配 provider 的 deployment api_key。
 // Python: :1077-1082 _get_api_key_for_provider
 func (c *IntelliRouterModelClient) apiKeyForProvider(providerName string) string {
-	for _, dep := range c.router.Deployments {
+	for _, dep := range c.Router.Deployments {
 		if dep.Provider == providerName {
 			return dep.APIKey
 		}

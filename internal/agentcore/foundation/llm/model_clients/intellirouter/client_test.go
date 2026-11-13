@@ -433,7 +433,7 @@ func newTestClient(t *testing.T, apiBase string, modelNames ...string) *IntelliR
 	if err != nil {
 		t.Fatalf("embed: %v", err)
 	}
-	return &IntelliRouterModelClient{BaseClientEmbed: *embed, router: r}
+	return &IntelliRouterModelClient{BaseClientEmbed: *embed, Router: r}
 }
 
 // fakeProviderAdapter 测试桩适配器（内嵌 OpenAI 适配器补齐其余方法）。
