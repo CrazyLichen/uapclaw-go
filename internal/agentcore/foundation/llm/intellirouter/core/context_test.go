@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testDeployment(id string) *Deployment {
+func testDeployment(t *testing.T, id string) *Deployment {
+	t.Helper()
 	d, err := NewDeployment(DeploymentParams{ModelName: "m", APIKey: "k", APIBase: "u", ID: id, Provider: "openai"})
 	require.NoError(t, err)
 	return d
@@ -16,8 +17,8 @@ func testDeployment(id string) *Deployment {
 // TestRoutingContext_MarkAttempt 验证尝试链追加（py:50）。
 func TestRoutingContext_MarkAttempt(t *testing.T) {
 	ctx := NewRoutingContext("m", nil, nil)
-	ctx.MarkAttempt(testDeployment("d1"))
-	ctx.MarkAttempt(testDeployment("d2"))
+	ctx.MarkAttempt(testDeployment(t, "d1"))
+	ctx.MarkAttempt(testDeployment(t, "d2"))
 	require.Equal(t, []string{"d1", "d2"}, ctx.AttemptedDeployments)
 }
 
@@ -26,7 +27,7 @@ func TestRoutingContext_SetSuccessFailure(t *testing.T) {
 	ctx := NewRoutingContext("m", nil, nil)
 	require.Equal(t, 0.0, ctx.Latency()) // end_time 为 nil → 0.0（py:66-68）
 	resp := map[string]any{"ok": true}
-	ctx.SetSuccess(testDeployment("d1"), resp)
+	ctx.SetSuccess(testDeployment(t, "d1"), resp)
 	require.Same(t, ctx.SelectedDeployment, ctx.SelectedDeployment)
 	require.Equal(t, "d1", ctx.SelectedDeployment.ID)
 	require.Equal(t, resp, ctx.Response)
@@ -42,8 +43,8 @@ func TestRoutingContext_SetSuccessFailure(t *testing.T) {
 // TestRoutingContext_ToLogDict 验证日志字典字段（py:70-78）。
 func TestRoutingContext_ToLogDict(t *testing.T) {
 	ctx := NewRoutingContext("m", nil, nil)
-	ctx.MarkAttempt(testDeployment("d1"))
-	ctx.SetSuccess(testDeployment("d2"), nil)
+	ctx.MarkAttempt(testDeployment(t, "d1"))
+	ctx.SetSuccess(testDeployment(t, "d2"), nil)
 	d := ctx.ToLogDict()
 	require.Equal(t, "m", d["model"])
 	require.Equal(t, "d2", d["selected_deployment"])
