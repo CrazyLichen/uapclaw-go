@@ -327,7 +327,7 @@ func NewHealthCheckFailed(deploymentID, errText string) *HealthCheckFailed {
 // NewHealthCheckTimeout 构造健康检查超时错误。← exceptions.py:207-214
 func NewHealthCheckTimeout(deploymentID string, timeout float64) *HealthCheckTimeout {
 	return &HealthCheckTimeout{IRBase{
-		message: fmt.Sprintf("Health check timed out for deployment '%s' after %gs", deploymentID, timeout),
+		message: fmt.Sprintf("Health check timed out for deployment '%s' after %ss", deploymentID, utils.PyFloatStr(timeout)),
 		details: map[string]any{"deployment_id": deploymentID, "timeout": timeout},
 		kinds:   []errorKind{kindHealthCheckTimeout, kindHealthCheckError, kindIntelliRouterError},
 	}}
