@@ -193,8 +193,10 @@ type SerializedTurnHarness struct {
 	sessionID *string
 	// eventBuffer 观测缓冲（Python: _event_buffer）
 	eventBuffer *BoundedEventBuffer
-	// sequence 事件序号自增（Python: _sequence）
-	sequence int64
+	// sequence 事件序号自增（Python: _sequence）。
+	// atomic：Emit 可从监督协程与 teardown 协程并发调用（race 实测），
+	// Python 侧由 asyncio 单线程保护。
+	sequence atomic.Int64
 	// pending 待决轮次队列（Python: deque[PendingTurn]）
 	pending []*PendingTurn
 	// activeTurn 正在执行的轮次（Python: _active_turn）
@@ -409,7 +411,7 @@ func (h *SerializedTurnHarness) Emit(ctx context.Context,
 			Msg: "cannot emit a " + h.card.Name + " event outside an active cycle",
 		}
 	}
-	h.sequence++
+	h.sequence.Add(1)
 
 	// causes = (turn.message_id,) + 去重后的 causation_ids
 	// Python: base.py:700-702
@@ -437,7 +439,7 @@ func (h *SerializedTurnHarness) Emit(ctx context.Context,
 	}
 
 	event, err := harnessprotocol.NewHarnessEvent(harnessprotocol.HarnessEventOptions{
-		Sequence:          int(h.sequence),
+		Sequence:          int(h.sequence.Load()),
 		Timestamp:         timestamp,
 		Event:             payload,
 		HostSessionID:     harnessContext.HostSessionID,
@@ -525,7 +527,7 @@ func (h *SerializedTurnHarness) Start(
 	// 步骤 3：重置 13 项状态（base.py:278-291）
 	h.harnessContext = &harnessContext
 	h.eventBuffer = NewBoundedEventBuffer(h.bufferConfig.Capacity)
-	h.sequence = 0
+	h.sequence.Store(0)
 	h.pending = nil
 	h.activeTurn = nil
 	h.supervisor = nil

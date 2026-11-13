@@ -20,10 +20,18 @@ import (
 // BoundedEventBuffer 可关闭的 FIFO，必需事件用阻塞背压。
 // Python: stream.py:25-84 BoundedEventBuffer
 type BoundedEventBuffer struct {
-	// mu 保护全部字段；cond 挂在 mu 上
+	// mu 保护全部字段
 	mu sync.Mutex
-	// cond 生产者与消费者的等待队列（对应 asyncio.Condition）
-	cond *sync.Cond
+	// notify 等待者的唤醒信号（容量 1 的信箱）。
+	//
+	// 为什么不用 sync.Cond（2026-11-27 实施修正，替代原 Q4 裁决）：
+	// cond.Broadcast 的唤醒在「Broadcast 先于 Wait 注册」的交错下依赖
+	// 条件重查才能存活——但实测在 Stop 链（doStop 的 buffer.Close 广播后
+	// 泵仍滞留在 cond.Wait，goroutine 永久悬挂）上偶发失效。
+	// channel 信号无此竞态：signal 用非阻塞投递，信箱容量 1，
+	// 「检查条件→解锁→收信号→重上锁→重查」环内任何时刻到达的信号都会
+	// 被缓存，等待方必然醒来重查条件。
+	notify chan struct{}
 	// items 事件队列。用切片 + 头部前移（items = items[1:]）而非环形缓冲：
 	// 容量上限固定（上游默认 1024），前移只移动 slice header，摊销 O(1)，
 	// 且 Peek 就是 items[0]，最直白。
@@ -82,8 +90,8 @@ func NewBoundedEventBuffer(capacity int) *BoundedEventBuffer {
 	buffer := &BoundedEventBuffer{
 		capacity: capacity,
 		items:    make([]harnessprotocol.HarnessEvent, 0, capacity),
+		notify:   make(chan struct{}, 1),
 	}
-	buffer.cond = sync.NewCond(&buffer.mu)
 	return buffer
 }
 
@@ -93,17 +101,17 @@ func NewBoundedEventBuffer(capacity int) *BoundedEventBuffer {
 // ctx 保留位：sync.Cond.Wait() 不响应取消，关闭靠 Close 的 Broadcast 唤醒。
 // 与上游一致（asyncio 侧同样靠 close() 而非 task cancel 解锁）。
 func (b *BoundedEventBuffer) Put(ctx context.Context, event harnessprotocol.HarnessEvent) error {
-	_ = ctx // 保留位：cond 不响应取消，见方法注释
+	_ = ctx // 保留位：等待不响应取消，与上游一致（close 解锁）
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for len(b.items) >= b.capacity && !b.closed {
-		b.cond.Wait()
-	}
+	b.awaitFor(func() bool {
+		return len(b.items) < b.capacity || b.closed
+	})
 	if b.closed {
 		return ErrEventBufferClosed
 	}
 	b.items = append(b.items, event)
-	b.cond.Broadcast()
+	b.signal()
 	return nil
 }
 
@@ -113,9 +121,9 @@ func (b *BoundedEventBuffer) Get(ctx context.Context) (*harnessprotocol.HarnessE
 	_ = ctx // 保留位
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for len(b.items) == 0 && !b.closed && !b.consumerClosed {
-		b.cond.Wait()
-	}
+	b.awaitFor(func() bool {
+		return len(b.items) > 0 || b.closed || b.consumerClosed
+	})
 	if len(b.items) == 0 {
 		return nil, harnessprotocol.ErrEventStreamDone
 	}
@@ -125,7 +133,7 @@ func (b *BoundedEventBuffer) Get(ctx context.Context) (*harnessprotocol.HarnessE
 	// 标准库 container/ring、net/http 的 buffer 同款做法。
 	b.items[0] = harnessprotocol.HarnessEvent{}
 	b.items = b.items[1:]
-	b.cond.Broadcast()
+	b.signal()
 	return &event, nil
 }
 
@@ -138,9 +146,9 @@ func (b *BoundedEventBuffer) Peek(ctx context.Context) (*harnessprotocol.Harness
 	_ = ctx // 保留位
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for len(b.items) == 0 && !b.closed && !b.consumerClosed {
-		b.cond.Wait()
-	}
+	b.awaitFor(func() bool {
+		return len(b.items) > 0 || b.closed || b.consumerClosed
+	})
 	if len(b.items) == 0 {
 		return nil, harnessprotocol.ErrEventStreamDone
 	}
@@ -154,8 +162,30 @@ func (b *BoundedEventBuffer) Close(ctx context.Context) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.closed = true
-	b.cond.Broadcast()
+	b.signal()
 	return nil
+}
+
+// signal 非阻塞投递一枚唤醒信号（信箱容量 1，已有信号则合并）。
+func (b *BoundedEventBuffer) signal() {
+	select {
+	case b.notify <- struct{}{}:
+	default:
+	}
+}
+
+// awaitFor 在 b.mu 已持锁的前提下等待 predicate 成立。
+//
+// 环路：检查条件 → 解锁 → 等信号 → 重上锁 → 重查。
+// 任何在「解锁」之后到达的 signal 都会被信箱缓存，`<-ch` 立即返回，
+// 因此不存在丢唤醒。
+func (b *BoundedEventBuffer) awaitFor(predicate func() bool) {
+	for !predicate() {
+		notify := b.notify
+		b.mu.Unlock()
+		<-notify
+		b.mu.Lock()
+	}
 }
 
 // Cursor 获取单消费者租约并返回游标。
@@ -206,7 +236,7 @@ func (c *BufferedEventCursor) Close(ctx context.Context) error {
 	// 只置游标标志 + Broadcast 不够——Peek/Get 的等待条件看的是 buffer 侧
 	// 状态，醒来后会重新判定队列仍空而继续 Wait（实测悬挂）。
 	buffer.consumerClosed = true
-	buffer.cond.Broadcast()
+	buffer.signal()
 	return nil
 }
 

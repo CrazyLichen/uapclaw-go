@@ -1362,9 +1362,9 @@ func TestSerializedTurnHarness_Transition同相位不发射(t *testing.T) {
 	defer func() { _ = harness.Stop(context.Background()) }()
 
 	// 已 IDLE，再转 IDLE 不应产生事件
-	before := harness.sequence
+	before := harness.sequence.Load()
 	require.NoError(t, harness.transition(ctx, harnessprotocol.HarnessStateIdle))
-	assert.Equal(t, before, harness.sequence, "同相位转移不应自增事件序号")
+	assert.Equal(t, before, harness.sequence.Load(), "同相位转移不应自增事件序号")
 }
 
 // TestAbort_未声明能力时报错 对齐 base.py:432-434。
