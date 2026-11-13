@@ -58,6 +58,18 @@ type BaseRouter struct {
 	// 函数指针实现——嵌入方法静态绑定不会派发到「子类」版本）。
 	// nil 时用 BaseRouter 默认实现（返回全部部署）。
 	hookAvailableDeploymentsForModel func(model string) []*intelliroutercore.Deployment
+	// ── 23.4b 注入的 D-5 钩子（Python: intelli_router_model_client.py:130-221
+	// _RoutedModelRouterMixin 的子类覆写；Go 构造期函数指针，偏差 D-5）──
+	// hookGetAdapter 包装 provider 适配器（py:144-148 _get_adapter：
+	// _RoutedModelAdapter 注入占位符回填）。nil 时不包装。
+	hookGetAdapter func(deployment *intelliroutercore.Deployment, inner provider.BaseProviderAdapter) provider.BaseProviderAdapter
+	// hookRouteMetadata 附加路由元数据（py:150-156 _route_metadata：补
+	// routed_model）。nil 时不附加。
+	hookRouteMetadata func(deployment *intelliroutercore.Deployment, metadata map[string]any) map[string]any
+	// hookAnnounceRouteAttempt 每次尝试发送前的通告（py:157-197
+	// _announce_route_attempt + _make_request/acompletion_stream 两个接入点）。
+	// nil 时不通告。
+	hookAnnounceRouteAttempt func(deployment *intelliroutercore.Deployment)
 	// deploymentsLock 保护 deployments/modelIndices 的热替换（读多写少）← py:64
 	deploymentsLock sync.RWMutex
 }
@@ -180,6 +192,10 @@ func (r *BaseRouter) GetAdapter(deployment *intelliroutercore.Deployment) (provi
 	if err != nil {
 		return nil, err
 	}
+	if r.hookGetAdapter != nil {
+		// Python: _RoutedModelRouterMixin._get_adapter（py:144-148）包装适配器
+		a = r.hookGetAdapter(deployment, a)
+	}
 	r.adapterCache[p] = a
 	return a, nil
 }
@@ -271,6 +287,10 @@ func (r *BaseRouter) Completion(ctx context.Context, model string, messages []ma
 	if err != nil {
 		return nil, err
 	}
+	if r.hookAnnounceRouteAttempt != nil {
+		// Python: _RoutedModelRouterMixin._make_request（py:199-201）先通告再发
+		r.hookAnnounceRouteAttempt(deployment)
+	}
 	adapter.ValidateRequestConfig(deployment, kwargs)                            // ← py:281
 	requestBody := adapter.TransformRequest(model, messages, deployment, kwargs) // ← py:282-287
 	return r.MakeRequest(ctx, deployment, requestBody)
@@ -297,6 +317,11 @@ func (r *BaseRouter) CompletionStream(ctx context.Context, model string, message
 				return
 			}
 			deployment = deployments[0]
+		}
+		if r.hookAnnounceRouteAttempt != nil {
+			// Python: _RoutedModelRouterMixin.acompletion_stream（py:203-206）
+			// deployment 非空即通告
+			r.hookAnnounceRouteAttempt(deployment)
 		}
 		adapter, err := r.GetAdapter(deployment)
 		if err != nil {
