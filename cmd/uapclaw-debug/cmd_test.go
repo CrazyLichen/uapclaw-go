@@ -58,3 +58,15 @@ func TestRun_无参数走REPL骨架(t *testing.T) {
 	exitCode := Run(nil, strings.NewReader(""), &stdout, &stderr)
 	assert.Contains(t, []int{0, 1}, exitCode)
 }
+
+// TestParseArgs_直接覆盖 拉满解析分支。
+func TestParseArgs_直接覆盖(t *testing.T) {
+	// stream-json 白名单
+	parsed, err := parseArgs([]string{"--output", "stream-json"})
+	require.NoError(t, err)
+	assert.Equal(t, "stream-json", parsed.output)
+	// 位置参数（非 -- 开头）被忽略
+	parsed, err = parseArgs([]string{"自由文本"})
+	require.NoError(t, err)
+	assert.Equal(t, "", parsed.query)
+}
