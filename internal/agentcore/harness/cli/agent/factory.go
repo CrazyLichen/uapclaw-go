@@ -5,11 +5,30 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	mcpTypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	cliprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/prompts"
+	clirails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/rails"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/web_tools"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -18,12 +37,21 @@ import (
 //
 // Python: openjiuwen/harness/cli/agent/factory.py（774 行）
 //
-// ⏵ 实施范围（2026-11-27）：本文件先落低依赖部分——MCP 配置加载、默认
-// skill 目录、CLI workspace 内容、AgentBackend 接口、LocalBackend 骨架、
-// CreateBackend 工厂。create_agent 的全量 rails 装配（AskUserRail /
-// ConfirmInterruptRail / SkillUseRail / ContextProcessorRail / MemoryRail /
-// JiuwenMemoryRail / subagents / vision / audio / runtime_extensions 热加载）
-// ⤵️ 15.6-15.9 内置 provider 落地后回填（它们依赖 provider 化的模型构造）。
+// 全量符号：CreateAgent 全量 rails 装配（AskUserRail / ConfirmInterruptRail /
+// SkillUseRail / ContextProcessorRail / MemoryRail / subagents / vision /
+// audio / runtime_extensions 热加载）+ LocalBackend 真身 + CreateBackend 工厂。
+//
+// 已知偏差（对应 spec 已登记或本批新增登记）：
+//   - D-JM（本批新增）：JiuwenMemoryRail 未迁移（Python
+//     harness/rails/memory/jiuwen_memory_rail.py 690 行），且其 provider 来自
+//     外部依赖包 jiuwen_memory_adapter——Python 侧 import 失败也返回 None。
+//     Go 侧 buildJiuwenMemoryRail 保留环境开关门卫，恒返回 nil。
+//     回收条件：领域九/后续补 JiuwenMemoryRail + adapter 后回填。
+//   - D-LP（本批新增）：DeepAgent.LoadPlugin 热加载链（deep_agent.py:2232）
+//     未迁移，挂 ⏵ 15.15 templates & plugins；LocalBackend.loadPlugin 为
+//     注入点，默认桩返回未实现，热加载扫描与去重逻辑已按 Python 原样落地。
+//   - D-embed：workspace 内容资源以 //go:embed 打包（prompts/content.go），
+//     替代 Python 的文件系统路径读取。
 
 // logComponent 本包的日志组件。
 const logComponent = logger.ComponentAgentCore
@@ -46,6 +74,297 @@ var DefaultSkillDirs = []string{
 // Python: factory.py:112-127 _default_skill_dirs
 func DefaultSkillDirsSnapshot() []string {
 	return append([]string(nil), DefaultSkillDirs...)
+}
+
+// GetCliContentBaseDir CLI 专属 workspace 内容文件的基目录。
+// Python: factory.py:57-59 _get_cli_content_base_dir（prompts/workspace_content）
+//
+// Go 侧内容以 //go:embed 打包在 prompts 包内（偏差 D-embed），此函数保留
+// 路径语义供日志与测试引用。
+func GetCliContentBaseDir() string {
+	return filepath.Join("prompts", "workspace_content")
+}
+
+// LoadCliContent 加载 CLI 专属 workspace 内容。
+// Python: factory.py:62-79 _load_cli_content
+//
+// 文件不存在时返回空串；实际读取走 prompts 包的嵌入资源（偏差 D-embed）。
+func LoadCliContent(language, filePath string) string {
+	return cliprompts.LoadWorkspaceContent(language, filePath)
+}
+
+// BuildCliWorkspace 构建带 CLI 身份覆写的 Workspace。
+// Python: factory.py:81-109 _build_cli_workspace
+//
+// 从默认 schema 出发，用预定义的编码助手身份替换 IDENTITY.md
+// （而不是通用的"自行填写"模板）。
+func BuildCliWorkspace(cfg CLIConfig, language string) (*workspace.Workspace, error) {
+	ws := workspace.NewWorkspace(cfg.Workspace, language)
+
+	cliIdentity := LoadCliContent(language, "IDENTITY.md")
+	if cliIdentity != "" {
+		if err := ws.SetDirectory(map[string]any{
+			"name":            "IDENTITY.md",
+			"description":     "Identity credentials and permissions",
+			"path":            "IDENTITY.md",
+			"is_file":         true,
+			"children":        []any{},
+			"default_content": cliIdentity,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return ws, nil
+}
+
+// BuildMemoryRail 在 embedding 配置可用时构建 MemoryRail。
+// Python: factory.py:128-166 _build_memory_rail
+//
+// embedding 设置读环境变量（EMBEDDING_MODEL_NAME / EMBEDDING_BASE_URL /
+// EMBEDDING_API_KEY，后两者回退 cfg 的 api_base / api_key）；
+// 解析不出配置时返回 nil（对齐 Python 的 except 分支 Debug 日志）。
+func BuildMemoryRail(cfg CLIConfig) *memory.MemoryRail {
+	embeddingConfig := lite.ResolveEmbeddingConfigFromEnv(
+		"text-embedding-3-small", cfg.APIBase, cfg.APIKey)
+	if embeddingConfig == nil {
+		logger.Debug(logComponent).Msg("MemoryRail not available")
+		return nil
+	}
+	// Python: MemoryRail(embedding_config=...)，is_proactive 取默认 True
+	// （memory_rail.py:50 is_proactive: bool = True）。
+	return memory.NewMemoryRail(embeddingConfig, true)
+}
+
+// BuildJiuwenMemoryRail 在显式启用时构建 JiuwenMemoryRail。
+// Python: factory.py:168-224 _build_jiuwen_memory_rail
+//
+// 门卫：JIUWEN_MEMORY_ENABLED 必须为真值（1/true/yes/on）。
+//
+// 偏差 D-JM：Python 的 provider 来自外部依赖包 jiuwen_memory_adapter
+// （import 失败时返回 None），且 Go 侧尚未迁移 JiuwenMemoryRail 本体
+// （harness/rails/memory/jiuwen_memory_rail.py，690 行）。此处保留开关
+// 门卫与 Debug 日志，恒返回 nil；回收条件为该 rail 与 adapter 的对齐落地。
+func BuildJiuwenMemoryRail(cfg CLIConfig) *memory.MemoryRail {
+	_ = cfg
+	enabled := strings.ToLower(strings.TrimSpace(os.Getenv("JIUWEN_MEMORY_ENABLED")))
+	if enabled != "1" && enabled != "true" && enabled != "yes" && enabled != "on" {
+		return nil
+	}
+	logger.Debug(logComponent).Msg("JiuwenMemoryRail not available")
+	return nil
+}
+
+// BuildSubagents 构建 CLI agent 的子 Agent 规格列表。
+// Python: factory.py:226-320 _build_subagents
+//
+// code_agent / research_agent 直接构造 SubAgentConfig（language="en"，
+// rails=[SysOperationRail()]）；browser_agent 走 BuildBrowserAgentConfig，
+// 失败时 Debug 日志后跳过。
+func BuildSubagents(model *llm.Model) []*hschema.SubAgentConfig {
+	var specs []*hschema.SubAgentConfig
+
+	// --- code_agent ---
+	codeSpec := hschema.NewSubAgentConfig()
+	codeSpec.AgentCard = agentschema.NewAgentCard(
+		agentschema.WithAgentName("code_agent"),
+		agentschema.WithAgentDescription(subagents.DefaultCodeAgentDescription("en")),
+	)
+	codeSpec.SystemPrompt = subagents.DefaultCodeAgentSystemPrompt("en")
+	codeSpec.Model = model
+	codeSpec.Rails = []sainterfaces.AgentRail{rails.NewSysOperationRail()}
+	codeSpec.Language = "en"
+	specs = append(specs, codeSpec)
+
+	// --- research_agent ---
+	researchSpec := hschema.NewSubAgentConfig()
+	researchSpec.AgentCard = agentschema.NewAgentCard(
+		agentschema.WithAgentName("research_agent"),
+		agentschema.WithAgentDescription(subagents.DefaultResearchAgentDescription("en")),
+	)
+	researchSpec.SystemPrompt = subagents.DefaultResearchAgentSystemPrompt("en")
+	researchSpec.Model = model
+	researchSpec.Rails = []sainterfaces.AgentRail{rails.NewSysOperationRail()}
+	researchSpec.Language = "en"
+	specs = append(specs, researchSpec)
+
+	// --- browser_agent ---
+	browserSpec := subagents.BuildBrowserAgentConfig(model, &hschema.SubagentCreateParams{
+		Model:    model,
+		Language: "en",
+	})
+	if browserSpec != nil {
+		specs = append(specs, browserSpec)
+	}
+
+	return specs
+}
+
+// LoadVisionConfig 加载视觉模型配置。
+// Python: factory.py:398-426 _load_vision_config
+//
+// VISION_API_KEY 已设置时用 FromEnv；否则回退主模型的 api_key / api_base。
+func LoadVisionConfig(cfg CLIConfig) *hschema.VisionModelConfig {
+	var visionCfg hschema.VisionModelConfig
+	if os.Getenv("VISION_API_KEY") != "" {
+		return ptr(hschema.VisionModelConfig{}.FromEnv())
+	}
+	// Fallback: reuse main model credentials
+	visionCfg = hschema.VisionModelConfig{APIKey: cfg.APIKey, BaseURL: cfg.APIBase}
+	return &visionCfg
+}
+
+// LoadAudioConfig 加载音频模型配置。
+// Python: factory.py:428-456 _load_audio_config
+//
+// AUDIO_API_KEY 已设置时用 FromEnv；否则回退主模型的 api_key / api_base。
+func LoadAudioConfig(cfg CLIConfig) *hschema.AudioModelConfig {
+	var audioCfg hschema.AudioModelConfig
+	if os.Getenv("AUDIO_API_KEY") != "" {
+		return ptr(hschema.AudioModelConfig{}.FromEnv())
+	}
+	// Fallback: reuse main model credentials
+	audioCfg = hschema.AudioModelConfig{APIKey: cfg.APIKey, BaseURL: cfg.APIBase}
+	return &audioCfg
+}
+
+// CreateAgent 创建 DeepAgent 及其 TokenTrackingRail。
+// Python: factory.py:492-656 create_agent
+//
+// 用 harness 的 SysOperationRail 自动注册文件系统工具（BashTool、
+// ReadFileTool 等），SecurityRail 由 create_deep_agent 自动挂载；Web 工具
+// 手动加入（不属于 SysOperationRail）。另集成 ToolTrackingRail /
+// AskUserRail / ConfirmInterruptRail / ContextProcessorRail /
+// ContextAssembleRail / MemoryRail / SessionRail（subagents 存在时由工厂
+// 自动注入，不手动加）/ 子 Agent / MCP / 视听多模态。
+func CreateAgent(ctx context.Context, cfg CLIConfig) (*harness.DeepAgent, *clirails.TokenTrackingRail, error) {
+	model, err := llm.InitModel(
+		cfg.Provider,
+		cfg.Model,
+		cfg.APIKey,
+		cfg.APIBase,
+		llm.WithInitMaxTokens(cfg.MaxTokens),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	systemPrompt := cliprompts.BuildSystemPrompt(cfg.Cwd, cfg.Model, cfg.Provider, "en")
+
+	tracker := clirails.NewTokenTrackingRail()
+	toolTracker := clirails.NewToolTrackingRail()
+	fsRail := rails.NewSysOperationRail()
+
+	// 构建 rails 列表
+	agentRails := []sainterfaces.AgentRail{tracker, toolTracker, fsRail}
+
+	// --- 中断 rails ---
+	// AskUserRail：拦截 ask_user 工具调用，经中断流把问题呈现给用户。
+	agentRails = append(agentRails, interrupt.NewAskUserRail())
+
+	// ConfirmInterruptRail：潜在危险文件变更工具的人工确认门。
+	agentRails = append(agentRails,
+		interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file", "edit_file")))
+
+	// 默认 skill 目录——SkillUseRail 在扫描时静默跳过不存在的目录。
+	skillRail := skills.NewSkillUseRail(
+		DefaultSkillDirsSnapshot(),
+		skills.WithSkillMode("all"),
+		skills.WithIncludeTools(false),
+	)
+	agentRails = append(agentRails, skillRail)
+
+	// ContextProcessorRail + ContextAssembleRail——上下文窗口管理
+	//（含 /compact 用的 DialogueCompressor）。
+	agentRails = append(agentRails,
+		context_engineer.NewContextProcessorRail(context_engineer.WithPreset(true)),
+		context_engineer.NewContextAssembleRail())
+
+	// --- MemoryRail ---
+	// embedding 配置可用时集成向量记忆工具。
+	if memoryRail := BuildMemoryRail(cfg); memoryRail != nil {
+		agentRails = append(agentRails, memoryRail)
+	}
+
+	// --- JiuwenMemoryRail ---
+	// 外部 JiuwenMemory（agent-memory）服务集成，JIUWEN_MEMORY_ENABLED
+	// 门卫（默认关）。偏差 D-JM：Go 侧恒 nil。
+	if jiuwenRail := BuildJiuwenMemoryRail(cfg); jiuwenRail != nil {
+		agentRails = append(agentRails, jiuwenRail)
+	}
+
+	// --- SessionRail ---
+	// 异步子 Agent 后台任务能力：subagents 存在且
+	// enable_async_subagent=True 时由 create_deep_agent 自动注入，
+	// 此处不手动添加（对齐 Python 注释）。
+
+	// Web 工具不属于 SysOperationRail
+	webTools := web_tools.CreateWebTools("en", "", true, true, true)
+
+	// ~/.openjiuwen/mcp.json 的 MCP 服务器
+	mcpConfigs := LoadMcpConfigs()
+
+	// 多模态配置（回退主模型凭据）
+	visionConfig := LoadVisionConfig(cfg)
+	audioConfig := LoadAudioConfig(cfg)
+
+	// --- 子 Agent ---
+	subagentList := BuildSubagents(model)
+
+	// create_deep_agent 额外参数
+	var mcps []*mcpTypes.McpServerConfig
+	for _, raw := range mcpConfigs {
+		decoded, err := decodeMcpConfig(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		mcps = append(mcps, decoded)
+	}
+
+	params := hconfig.CreateDeepAgentParams{
+		Model:              model,
+		SystemPrompt:       systemPrompt,
+		ToolInstances:      webTools,
+		Mcps:               mcps,
+		EnableTaskLoop:     true,
+		EnableTaskPlanning: true,
+		MaxIterations:      cfg.MaxIterations,
+		Language:           "en",
+	}
+	if len(subagentList) > 0 {
+		for _, spec := range subagentList {
+			params.Subagents = append(params.Subagents, spec)
+		}
+		params.EnableAsyncSubagent = true
+	}
+	if visionConfig != nil {
+		params.VisionModelConfig = visionConfig
+	}
+	if audioConfig != nil {
+		params.AudioModelConfig = audioConfig
+	}
+
+	// 构建 CLI 专属 workspace（覆写 IDENTITY.md）
+	ws, err := BuildCliWorkspace(cfg, "en")
+	if err != nil {
+		return nil, nil, err
+	}
+	params.Workspace = ws
+
+	agent, err := harness.CreateDeepAgent(ctx, params)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 覆写 workspace root_path，绕开工厂自动加的 {agent_id}_workspace 后缀。
+	// 这是安全的：restrict_to_work_dir=False 使 SysOperation 的作用域与
+	// workspace 路径无关，rails 在首次 invoke() 时才惰性读
+	// deep_config.workspace。
+	if dc := agent.DeepConfig(); dc != nil && dc.Workspace != nil {
+		dc.Workspace.RootPath = cfg.Workspace
+	}
+
+	return agent, tracker, nil
 }
 
 // LoadMcpConfigs 从 ~/.openjiuwen/mcp.json 加载 MCP 服务器配置。
@@ -98,30 +417,6 @@ func LoadMcpConfigs() []map[string]any {
 	return configs
 }
 
-// GetCliContentBaseDir CLI 专属 workspace 内容文件的基目录。
-// Python: factory.py:57-59 _get_cli_content_base_dir
-// （__file__/prompts/workspace_content；Go 以源码目录定位）
-func GetCliContentBaseDir() string {
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "prompts", "workspace_content")
-}
-
-// LoadCliContent 加载 CLI 专属 workspace 内容。
-// Python: factory.py:62-79 _load_cli_content
-//
-// 文件不存在时返回空串。
-func LoadCliContent(language, filePath string) string {
-	fullPath := filepath.Join(GetCliContentBaseDir(), language, filePath)
-	content, err := os.ReadFile(fullPath)
-	if err != nil {
-		return ""
-	}
-	return string(content)
-}
-
 // ──────────────────────────── AgentBackend ────────────────────────────
 
 // AgentBackend 本地 / 远程 agent 执行的抽象。
@@ -140,17 +435,25 @@ type AgentBackend interface {
 	Abort(ctx context.Context) error
 }
 
+// ──────────────────────────── LocalBackend ────────────────────────────
+
 // LocalBackend 直接调 SDK Runner 的后端（MVP）。
 // Python: factory.py:664-748 LocalBackend
 type LocalBackend struct {
 	// cfg CLI 配置
 	cfg CLIConfig
+	// agent 当前 agent（Python: self.agent，create_agent 产物）
+	agent *harness.DeepAgent
+	// tracker token 跟踪 rail（Python: self.tracker）
+	tracker *clirails.TokenTrackingRail
 	// sessionID 会话标识（cli- + 8 位随机）
 	sessionID string
 	// loadedExtensions 已热加载的运行时扩展（Python: _loaded_extensions）
 	loadedExtensions map[string]bool
-	// agent / tracker 由 Start 装配（⤵️ create_agent 回填后接通）
-	agent any
+	// loadPlugin 插件热加载注入点。
+	// Python: agent.load_plugin(path)（deep_agent.py:2232）。
+	// 偏差 D-LP：DeepAgent.LoadPlugin 未迁移，挂 ⏵ 15.15；默认桩报未实现。
+	loadPlugin func(path string) (labels []string, err error)
 }
 
 // NewLocalBackend 构造本地后端。
@@ -163,39 +466,153 @@ func NewLocalBackend(cfg CLIConfig) *LocalBackend {
 	}
 }
 
+// SetLoadPlugin 覆写插件热加载实现（测试或后续 15.15 回填时使用）。
+func (b *LocalBackend) SetLoadPlugin(fn func(path string) (labels []string, err error)) {
+	b.loadPlugin = fn
+}
+
 // Start 创建 agent 并启动 Runner。
 // Python: factory.py:674-677 start
-//
-// ⏵ create_agent 回填后把 agent/tracker 装配上。
-func (b *LocalBackend) Start(_ context.Context) error {
-	return nil
+func (b *LocalBackend) Start(ctx context.Context) error {
+	agent, tracker, err := CreateAgent(ctx, b.cfg)
+	if err != nil {
+		return err
+	}
+	b.agent = agent
+	b.tracker = tracker
+	return runner.Start(ctx)
 }
 
 // Stop 停止 Runner。
 // Python: factory.py:679-681 stop
-func (b *LocalBackend) Stop(_ context.Context) error {
-	return nil
+func (b *LocalBackend) Stop(ctx context.Context) error {
+	return runner.Stop(ctx)
 }
 
 // RunStreaming 流式执行查询。
 // Python: factory.py:683-701 run_streaming
 //
 // query 可以是普通字符串（普通轮次）或 InteractiveInput（中断恢复）。
-// ⏵ Runner.run_agent_streaming 回填后接通；当前返回空流。
-func (b *LocalBackend) RunStreaming(_ context.Context, _ any, sessionID *string) (<-chan stream.OutputSchema, error) {
-	ch := make(chan stream.OutputSchema)
-	close(ch)
-	return ch, nil
+func (b *LocalBackend) RunStreaming(ctx context.Context, query any, sessionID *string) (<-chan stream.OutputSchema, error) {
+	// agent 未装配时不能进 Runner（nil 实例会 panic）；Python 侧此处
+	// 由 Runner 内部对 None agent 抛错，Go 以显式守卫等价。
+	if b.agent == nil {
+		return nil, errNotImplemented("LocalBackend is not started; call Start before RunStreaming")
+	}
+	if err := b.loadRuntimeExtensions(ctx); err != nil {
+		return nil, err
+	}
+	sid := b.sessionID
+	if sessionID != nil {
+		sid = *sessionID
+	}
+	schemaCh, err := runner.RunAgentStreaming(ctx, runner.ByAgent(b.agent), map[string]any{"query": query}, runner.BySessionID(sid), nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make(chan stream.OutputSchema)
+	go func() {
+		defer close(out)
+		for chunk := range schemaCh {
+			out <- outputSchemaOf(chunk)
+		}
+	}()
+	return out, nil
 }
+
+// outputSchemaOf 把通用 Schema 帧换形为 OutputSchema。
+// runner 输出的帧绝大多数本身就是 *OutputSchema / OutputSchema；
+// 其余类型（TraceSchema / CustomSchema）按 Python「chunk 原样透传」的
+// 语义降级为 type+payload 两字段（payload 取 ToMap 的 payload 键）。
+func outputSchemaOf(chunk stream.Schema) stream.OutputSchema {
+	switch value := chunk.(type) {
+	case *stream.OutputSchema:
+		return *value
+	case stream.OutputSchema:
+		return value
+	default:
+		payload := any(nil)
+		if m := value.ToMap(); m != nil {
+			payload = m["payload"]
+		}
+		return stream.OutputSchema{Type: value.SchemaType(), Payload: payload}
+	}
+}
+
+// Tracker 返回 token 跟踪 rail（/cost、/status 数据源）。
+func (b *LocalBackend) Tracker() *clirails.TokenTrackingRail { return b.tracker }
+
+// Agent 返回当前 agent（REPL 交互面 / interrupt 恢复使用）。
+func (b *LocalBackend) Agent() *harness.DeepAgent { return b.agent }
 
 // Abort 请求 agent 中止当前任务循环。
 // Python: factory.py:703-709 abort（失败吞掉）
-func (b *LocalBackend) Abort(_ context.Context) error {
+func (b *LocalBackend) Abort(ctx context.Context) error {
+	if b.agent != nil {
+		b.agent.Abort(ctx)
+	}
 	return nil
 }
 
 // SessionID 返回后端会话标识。
 func (b *LocalBackend) SessionID() string { return b.sessionID }
+
+// loadRuntimeExtensions 扫描 runtime_extensions/ 并热加载新配置。
+// Python: factory.py:711-749 _load_runtime_extensions
+//
+// agent 为 nil 时直接返回；目录不存在直接返回；每个子目录找
+// harness_config.yaml，已加载过的跳过；加载成功记录 Info 日志（含
+// kind:identity 标签），失败记录 Warning。
+func (b *LocalBackend) loadRuntimeExtensions(ctx context.Context) error {
+	if b.agent == nil {
+		return nil
+	}
+	extRoot := filepath.Join(b.cfg.Workspace, "auto_harness", "runtime_extensions")
+	entries, err := os.ReadDir(extRoot)
+	if err != nil {
+		return nil
+	}
+	// Python: sorted(ext_root.iterdir())——按名字排序保证确定性
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	for _, child := range entries {
+		if !child.IsDir() {
+			continue
+		}
+		configPath := filepath.Join(extRoot, child.Name(), "harness_config.yaml")
+		if info, err := os.Stat(configPath); err != nil || info.IsDir() {
+			continue
+		}
+		extKey := configPath
+		if b.loadedExtensions[extKey] {
+			continue
+		}
+		labels, err := b.loadPluginFn()(ctx, extKey)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Str("config_path", configPath).
+				Msg("Failed to load runtime extension")
+			continue
+		}
+		b.loadedExtensions[extKey] = true
+		if len(labels) > 0 {
+			logger.Info(logComponent).
+				Str("labels", strings.Join(labels, ", ")).
+				Msg("Hot-loaded runtime extension")
+		}
+	}
+	return nil
+}
+
+// loadPluginFn 返回当前生效的插件加载函数（nil 时用未实现桩）。
+// 偏差 D-LP：默认桩对应 ⏵ 15.15 的 DeepAgent.LoadPlugin 回填点。
+func (b *LocalBackend) loadPluginFn() func(ctx context.Context, path string) (labels []string, err error) {
+	if b.loadPlugin != nil {
+		return func(ctx context.Context, path string) ([]string, error) { return b.loadPlugin(path) }
+	}
+	return func(_ context.Context, _ string) ([]string, error) {
+		return nil, errNotImplemented(
+			"DeepAgent.LoadPlugin is not yet ported (pending 15.15 templates & plugins)")
+	}
+}
 
 // CreateBackend 选择并实例化后端。
 // Python: factory.py:756-774 create_backend
@@ -211,6 +628,21 @@ func CreateBackend(cfg CLIConfig) (*LocalBackend, error) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// decodeMcpConfig 把 LoadMcpConfigs 产出的 map 转成 McpServerConfig。
+// Python: _load_mcp_configs 直接构造 McpServerConfig；Go 侧 map → 结构体
+// 的换形集中在此。
+func decodeMcpConfig(raw map[string]any) (*mcpTypes.McpServerConfig, error) {
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	cfg := &mcpTypes.McpServerConfig{}
+	if err := json.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
 
 // mcpParams 收集 command/args/env/cwd 四键（缺失跳过）。
 // Python: factory.py:373-378 的 params 字典
@@ -242,6 +674,9 @@ func filterNoneValues(data map[string]any) map[string]any {
 func randomID8() string {
 	return strings.ReplaceAll(uuid.NewString(), "-", "")[:8]
 }
+
+// ptr 返回值指针（FromEnv 值类型的便利包装）。
+func ptr[T any](value T) *T { return &value }
 
 // errNotImplemented 远程模式未实现的错误。
 func errNotImplemented(message string) error {

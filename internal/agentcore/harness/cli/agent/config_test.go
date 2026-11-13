@@ -297,14 +297,20 @@ func TestCreateBackend_本地模式(t *testing.T) {
 	assert.Contains(t, backend.SessionID(), "cli-")
 }
 
-// TestLocalBackend_空流 MVP 骨架的流为空。
-func TestLocalBackend_空流(t *testing.T) {
+// TestLocalBackend_Start缺模型报错 Start 真实装配时缺 provider 直接报错。
+func TestLocalBackend_Start缺模型报错(t *testing.T) {
 	backend := NewLocalBackend(CLIConfig{})
-	require.NoError(t, backend.Start(context.Background()))
-	ch, err := backend.RunStreaming(context.Background(), "查询", nil)
-	require.NoError(t, err)
-	_, open := <-ch
-	assert.False(t, open, "骨架后端的流立即关闭")
+	err := backend.Start(context.Background())
+	require.Error(t, err)
+	assert.Nil(t, backend.Agent())
+	// agent 为 nil 时 Stop / Abort / RunStreaming 静默安全
 	require.NoError(t, backend.Stop(context.Background()))
 	require.NoError(t, backend.Abort(context.Background()))
+}
+
+// TestLocalBackend_空流_未启动 RunStreaming 在 agent 未装配时报错。
+func TestLocalBackend_空流_未启动(t *testing.T) {
+	backend := NewLocalBackend(CLIConfig{})
+	_, err := backend.RunStreaming(context.Background(), "查询", nil)
+	require.Error(t, err, "未启动时 RunStreaming 必须报错而非 panic")
 }
