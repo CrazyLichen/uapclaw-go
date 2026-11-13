@@ -40,7 +40,7 @@ func NewToolTrackingRail() *ToolTrackingRail {
 
 // Callbacks 返回本 rail 挂接的回调集合。
 // Python: tool_tracker.py before_tool_call / after_tool_call
-func (r *ToolTrackingRail) Callbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+func (r *ToolTrackingRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.BaseRail.GetCallbacks()
 	callbacks[agentinterfaces.CallbackBeforeToolCall] = r.beforeToolCall
 	callbacks[agentinterfaces.CallbackAfterToolCall] = r.afterToolCall

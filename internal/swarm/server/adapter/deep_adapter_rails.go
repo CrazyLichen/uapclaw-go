@@ -22,6 +22,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/permission_mode"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
@@ -151,6 +152,21 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	railsList = append(railsList, cp)
 
 	// ─── Go 独有 Rail（Python 中不存在或不同） ───
+
+	// structuredAskUserRail — 结构化询问护栏（ask_user 工具 + 中断）
+	// Python: interface_deep.py:11597 rail_infos.append(
+	//   _RailBuildInfo("_ask_user_rail", self._build_structured_ask_user_rail))
+	// 上游按「agent 族」注册（mode.startswith("agent")），与 agentModeRail 同条件。
+	// 2026-11-13 缺口修复：此前 deep 路径未注册，--run-jsonl 默认 agent 运行中
+	// ask_user 工具调用不产生中断（duplex 链路级集成用例暴露）。
+	if sschema.IsAgentMode(mode) {
+		rail := commrails.NewStructuredAskUserRail(d.resolveRuntimeLanguage())
+		// Python: StructuredAskUserRail(language=..., strict_continuation_contract=smart)
+		// smart 即启用自动权限（AutoPermissionRail 在场）时为 true（interface_deep.py:5568）
+		rail.SetStrictContinuationContract(
+			permission_mode.IsAutoPermissionEnabled(permowner.DeepCopyPermissionConfig(config)))
+		railsList = append(railsList, rail)
+	}
 
 	// agentModeRail — plan 模式约束（Go 独有）
 	// 上游按「agent 族」注册（mode.startswith("agent")）：plan 是会话运行期状态，

@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/agent"
-	clirails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/rails"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/storage"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/cli/ui/repl"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -113,19 +113,16 @@ func (s *CLIBackendSuite) TestLocalBackend_端到端流式() {
 	s.Assert().Greater(count, 0)
 	s.Assert().Equal("集成你好", lastText)
 
-	// TokenTrackingRail 经 rails 链路累计了 usage
+	// TokenTrackingRail 经 rails 链路累计了 usage。
+	// 回归锚点（2026-11-28 修复）：CLI 两个 tracker rail 曾把回调方法定义成
+	// Callbacks()，而注册链路调用的是接口方法 GetCallbacks()——回调从未注册，
+	// model_calls 恒 0。修复后流式路径的 AfterModelCall 必须真实触达。
 	tracker := backend.Tracker()
 	s.Require().NotNil(tracker)
 	summary := tracker.GetSummary()
-	s.T().Logf("summary=%v", summary)
-	// 回归锚点：tracker rail 经 CreateAgent → params.Rails → Stream 的
-	// ensureInitialized 完成注册（曾因漏传 params.Rails 归零）。
-	found := backend.Agent().FindRailsByType(reflect.TypeOf(&clirails.TokenTrackingRail{}))
-	s.Assert().Equal(1, len(found), "TokenTrackingRail 应已注册")
-	// ⚠️ 已登记缺口（见 spec/汇报）：流式路径 AfterModelCall 回调未触达
-	// TokenTrackingRail（model_calls 恒 0），/cost 与 /status 的用量恒零。
-	// 本用例只断言 rail 注册与流式链路，不锁用量数字。
-	_ = summary
+	s.Assert().GreaterOrEqual(summary["model_calls"], 1, "AfterModelCall 回调应已触达 TokenTrackingRail")
+	s.Assert().GreaterOrEqual(summary["input_tokens"], 10, "usage 应从 SSE 帧累计")
+	s.Assert().GreaterOrEqual(summary["output_tokens"], 5, "usage 应从 SSE 帧累计")
 }
 
 // TestCLIBackendSuite_TestREPL_端到端会话 REPL 主循环整链路：

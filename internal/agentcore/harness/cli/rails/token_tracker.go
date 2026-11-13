@@ -47,9 +47,9 @@ func NewTokenTrackingRail() *TokenTrackingRail {
 	return r
 }
 
-// Callbacks 返回本 rail 挂接的回调集合。
+// GetCallbacks 返回本 rail 挂接的回调集合（覆盖 AgentRail.GetCallbacks）。
 // Python: token_tracker.py after_model_call
-func (r *TokenTrackingRail) Callbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+func (r *TokenTrackingRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.BaseRail.GetCallbacks()
 	callbacks[agentinterfaces.CallbackAfterModelCall] = r.afterModelCall
 	return callbacks

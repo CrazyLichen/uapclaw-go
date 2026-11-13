@@ -241,11 +241,11 @@ func TestBuildToolResultPayload_contentBytes(t *testing.T) {
 // TestCallbacks_两rail的挂接 回调 map 装配正确。
 func TestCallbacks_两rail的挂接(t *testing.T) {
 	token := NewTokenTrackingRail()
-	tokenCallbacks := token.Callbacks()
+	tokenCallbacks := token.GetCallbacks()
 	assert.Contains(t, tokenCallbacks, agentinterfaces.CallbackAfterModelCall)
 
 	tool := NewToolTrackingRail()
-	toolCallbacks := tool.Callbacks()
+	toolCallbacks := tool.GetCallbacks()
 	assert.Contains(t, toolCallbacks, agentinterfaces.CallbackBeforeToolCall)
 	assert.Contains(t, toolCallbacks, agentinterfaces.CallbackAfterToolCall)
 }

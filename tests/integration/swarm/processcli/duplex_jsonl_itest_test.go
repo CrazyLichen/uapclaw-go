@@ -3,12 +3,17 @@
 package processcli
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -125,6 +130,148 @@ func (s *DuplexJSONLSuite) TestRunJsonl_cancel取消() {
 	s.Equal("result", last["type"])
 	s.Equal("cancelled", last["status"], "status 应为 cancelled")
 	s.Equal("CANCELLED", digString(last, "error", "code"))
+}
+
+// TestRunJsonl_问答闭环 链路级集成（2026-11-13 补）：脚本化假模型第一轮返回
+// ask_user 工具调用 → StructuredAskUserRail 中断 → chat.ask_user_question 事件
+// → duplex 路由 interaction.requested → 宿主（本测试）回 answer 帧
+// → stream_interaction_answer 恢复 → 第二轮假模型返回文本 → 终态 success/0。
+//
+// 覆盖整条宿主↔子进程双工链路：stdin 控制帧（DuplexLineReader→DecodeControl
+// →readControls→InteractionAnswerInput）↔ stdout 事件流（OneShotWriter
+// ←consume/notice）↔ Runtime（StreamInteractionAnswer 恢复中断轮）。
+// Python: machine_entry.py:122-146 _execute_duplex +
+// duplex_control.py:315-381 consume 交互分支 + :144-154 answer 路由。
+func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
+	// 脚本化假模型：第 1 次请求返回 ask_user 工具调用，其后每次返回文本。
+	var reqCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, ok := w.(http.Flusher)
+		s.Require().True(ok)
+		if reqCount.Add(1) == 1 {
+			askArgs := strings.ReplaceAll(`{"query":"继续吗"}`, `"`, `\"`)
+			for _, frame := range []string{
+				`data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`,
+				`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-ask","type":"function","function":{"name":"ask_user","arguments":"` + askArgs + `"}}}],"finish_reason":null}]}`,
+				`data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
+				"data: [DONE]",
+			} {
+				_, _ = fmt.Fprintln(w, frame)
+				flusher.Flush()
+			}
+			return
+		}
+		for _, frame := range []string{
+			`data: {"choices":[{"index":0,"delta":{"content":"已回答"},"finish_reason":null}]}`,
+			`data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
+			"data: [DONE]",
+		} {
+			_, _ = fmt.Fprintln(w, frame)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	// 与 cancel 用例相同的隔离 dataDir + config.yaml（模型指向假服务）
+	dataDir := s.T().TempDir()
+	modelBlock := "    - name: \"test-model\"\n" +
+		"      model_client_config:\n" +
+		"        client_provider: \"OpenAI\"\n" +
+		"        api_base: \"" + server.URL + "\"\n" +
+		"        api_key: \"test-key\"\n" +
+		"        model_name: \"test-model\"\n" +
+		"        verify_ssl: false\n" +
+		"      is_default: true\n"
+	configYaml := "models:\n" +
+		"  defaults:\n" + modelBlock +
+		"  default:\n" +
+		"    model_client_config:\n" +
+		"      client_provider: \"OpenAI\"\n" +
+		"      api_base: \"" + server.URL + "\"\n" +
+		"      api_key: \"test-key\"\n" +
+		"      model_name: \"test-model\"\n" +
+		"      verify_ssl: false\n"
+	s.Require().NoError(os.MkdirAll(filepath.Join(dataDir, "config"), 0o755))
+	s.Require().NoError(os.WriteFile(filepath.Join(dataDir, "config", "config.yaml"), []byte(configYaml), 0o600))
+
+	// 交互式运行：stdout 逐行读，见到 interaction.requested 后回 answer 帧
+	cmd := exec.Command(s.binPath, "--run-jsonl")
+	env := append(os.Environ(),
+		"UAPCLAW_CONFIG=",
+		"UAPCLAW_DATA_DIR="+dataDir,
+		"UAPCLAW_CONFIG_YAML="+filepath.Join(dataDir, "config", "config.yaml"),
+	)
+	cmd.Env = env
+	stdin, stdinErr := cmd.StdinPipe()
+	s.Require().NoError(stdinErr)
+	stdout, stdoutErr := cmd.StdoutPipe()
+	s.Require().NoError(stdoutErr)
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
+	s.Require().NoError(cmd.Start())
+
+	writeLine := func(line string) {
+		_, werr := io.WriteString(stdin, line+"\n")
+		s.Require().NoError(werr)
+	}
+	writeLine(`{"schema_version":"0.1","type":"run","input":"hi","request_id":"req-qa"}`)
+
+	// 读 stdout：找 interaction.requested（含 interaction_id 与 session_id）
+	var records []map[string]any
+	var rawLines []string
+	var interactionID, sessionID string
+	found := false
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 1024*1024), 4*1024*1024)
+	deadline := time.Now().Add(60 * time.Second)
+	for !found && scanner.Scan() && time.Now().Before(deadline) {
+		line := scanner.Text()
+		rawLines = append(rawLines, line)
+		if !strings.Contains(line, "interaction.requested") {
+			continue
+		}
+		var record map[string]any
+		if jsonErr := json.Unmarshal([]byte(line), &record); jsonErr != nil {
+			continue
+		}
+		records = append(records, record)
+		interactionID = digString(record, "payload", "interaction_id")
+		sessionID = digString(record, "session_id")
+		found = interactionID != ""
+	}
+	s.Require().True(found, "60s 内未收到 interaction.requested；stderr=%s；已读 stdout 行：\n%s",
+		stderrBuf.String(), strings.Join(rawLines, "\n"))
+
+	// 宿主回答：answer 帧（request_id 与 run 记录一致；session_id 取自事件流）
+	answer := fmt.Sprintf(`{"schema_version":"0.1","type":"answer","request_id":"req-qa","session_id":%q,"interaction_id":%q,"answers":[{"selected_options":["continue"]}]}`,
+		sessionID, interactionID)
+	writeLine(answer)
+
+	// 等终态 result
+	var last map[string]any
+	for scanner.Scan() {
+		var record map[string]any
+		if jsonErr := json.Unmarshal(scanner.Bytes(), &record); jsonErr != nil {
+			continue
+		}
+		records = append(records, record)
+		if record["type"] == "result" {
+			last = record
+		}
+	}
+	waitErr := cmd.Wait()
+	exitCode := 0
+	if waitErr != nil {
+		exitErr, ok := waitErr.(*exec.ExitError)
+		s.Require().True(ok, "非退出码错误: %v", waitErr)
+		exitCode = exitErr.ExitCode()
+	}
+
+	s.Require().NotNil(last, "未收到终态 result；stdout 记录=%d", len(records))
+	s.Equal(0, exitCode, "问答闭环应正常退出 0")
+	s.Equal("success", last["status"])
+	s.Equal(2, int(reqCount.Load()), "假模型应被调用两次（提问轮 + 应答轮）")
 }
 
 // runWithEnv 在 CLISuite.run 基础上叠加环境变量（隔离 dataDir 用）。
