@@ -396,3 +396,10 @@ internal/agent_teams/agent/stream_controller.go#L278-L280
 # resources.go 仅改 import 行 + 字段类型引用（TeamHarness 父包→harness 子包），
 # 纯类型声明改动，无可执行语句、无覆盖块。行级豁免对声明行无效，须整文件豁免。
 internal/agent_teams/agent/resources.go
+
+# ── 15.5 CLI 入口层 ──
+# harness/cli/commands/root.go — cobra 命令树装配：runChat / runOnce 的
+# 错误分支全部 os.Exit(1)（进程级退出无法在测试中回收），TTY 分派经
+# isTerminalFn 可注入后已测。可测部分覆盖 70%（成功骨架 / 管道报错 /
+# help / auto-harness 骨架拒绝），剩余 30% 是 os.Exit 分支。
+internal/agentcore/harness/cli/commands/root.go
