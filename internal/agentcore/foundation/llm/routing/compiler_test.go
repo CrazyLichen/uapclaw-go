@@ -81,9 +81,9 @@ func TestCompileSingleModel_IgnoresModelRequestDefaultAliases(t *testing.T) {
 // （no-routing 短路，compiler.py:188-189）。
 func TestCompileModelGroup_WithoutStrategy_UsesFirstEnabledRoute(t *testing.T) {
 	compiled, err := CompileModelSelection(map[string]any{
-		"model_group_id":            "group-1",
-		"request_config":            map[string]any{"max_tokens": 1024},
-		"routes":                    groupTwoRoutesFixture(),
+		"model_group_id": "group-1",
+		"request_config": map[string]any{"max_tokens": 1024},
+		"routes":         groupTwoRoutesFixture(),
 	})
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -343,8 +343,8 @@ func TestGetModelGroupModels_BuildsCallableCandidates(t *testing.T) {
 				"model": map[string]any{
 					"model_id": "m1", "model_name": "deepseek-chat", "provider": "openai",
 					"api_key": "sk-a", "api_base": "https://api.deepseek.com",
-					"endpoint_profile": "deepseek",
-					"fallback_tag":     "general",
+					"endpoint_profile":  "deepseek",
+					"fallback_tag":      "general",
 					"model_description": "general model",
 					"request_defaults": map[string]any{
 						"temperature": 0.2,
