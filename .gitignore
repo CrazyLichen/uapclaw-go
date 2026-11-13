@@ -47,3 +47,4 @@ tests/integration/agentcore/harness/rails/memory/memory/
 tests/integration/swarm/server/adapter/memory.db
 internal/agent_teams/tools/index.json
 internal/agentcore/retrieval/indexing/processor/parser/images/
+tests/integration/cmd/memory.db

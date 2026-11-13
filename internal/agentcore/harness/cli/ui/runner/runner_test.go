@@ -3,6 +3,8 @@ package runner
 import (
 	"bytes"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -110,10 +112,46 @@ type errorStub struct{ message string }
 
 func (e errorStub) Error() string { return e.message }
 
+// newFakeOpenAI 起一个最小 OpenAI 兼容 SSE 端点（一轮文本后 stop）。
+func newFakeOpenAI(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"你好\"},\"finish_reason\":null}]}\n\n"))
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+}
+
+// testCLIConfig 假端点 + 临时工作区的最小可装配配置。
+func testCLIConfig(t *testing.T, srvURL string) agent.CLIConfig {
+	return agent.CLIConfig{
+		Provider:  "OpenAI",
+		Model:     "gpt-4o",
+		APIKey:    "k",
+		APIBase:   srvURL,
+		MaxTokens: 8192,
+		Workspace: t.TempDir(),
+		Cwd:       t.TempDir(),
+	}
+}
+
+// TestRunOnce_本地后端成功 CreateAgent 装配 + 假端点整链路真跑。
+func TestRunOnce_本地后端成功(t *testing.T) {
+	srv := newFakeOpenAI(t)
+	defer srv.Close()
+	got := captureStdout(t, func() {
+		require.Equal(t, 0, RunOnce(testCLIConfig(t, srv.URL), "查询", "json"))
+	})
+	assert.Contains(t, got, `"result": "你好"`)
+}
+
 // TestRunOnce_未知格式 对齐 runner.py:70-73。
 func TestRunOnce_未知格式(t *testing.T) {
+	srv := newFakeOpenAI(t)
+	defer srv.Close()
 	code := captureStderrCode(t, func() int {
-		return RunOnce(agent.CLIConfig{}, "查询", "yaml")
+		return RunOnce(testCLIConfig(t, srv.URL), "查询", "yaml")
 	})
 	assert.Equal(t, 1, code)
 }
@@ -144,17 +182,7 @@ func TestOutputText_委托renderer(t *testing.T) {
 	assert.Contains(t, got, "回答")
 }
 
-// TestRunOnce_本地骨架成功 MVP 骨架后端：空流 + json 格式。
-func TestRunOnce_本地骨架成功(t *testing.T) {
-	cfg := agent.CLIConfig{Model: "m"}
-	got := captureStdout(t, func() {
-		require.Equal(t, 0, RunOnce(cfg, "查询", "json"))
-	})
-	assert.Contains(t, got, `"chunks": 0`)
-}
-
-// TestRunOnce_启动失败后端 CreateBackend 错误路径已由 agent 包覆盖；
-// 这里补 Start 失败传播的退出码路径（用远程 url 触发 CreateBackend 失败）。
+// TestRunOnce_CreateBackend失败 用远程 url 触发 CreateBackend 失败路径。
 func TestRunOnce_CreateBackend失败(t *testing.T) {
 	got := captureStderr(t, func() {
 		code := RunOnce(agent.CLIConfig{ServerURL: "http://x"}, "查询", "json")
