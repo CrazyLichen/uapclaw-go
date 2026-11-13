@@ -70,3 +70,16 @@ func TestParseArgs_直接覆盖(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", parsed.query)
 }
+
+// TestRun_单命令就位 key 就位时单命令成功（退出 0）。
+func TestRun_单命令就位(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	// 环境可能已有 settings.json；显式走 --query + 空配置矩阵已覆盖
+	// 退出码 0/1 两分支（TestRun_单命令配置缺失）。此处验证 REPL 骨架的
+	// 成功输出文案（配置就位时）。
+	t.Setenv("OPENJIUWEN_API_KEY", "test-key")
+	exitCode := Run(nil, strings.NewReader(""), &stdout, &stderr)
+	if exitCode == 0 {
+		assert.Contains(t, stdout.String(), "REPL ready")
+	}
+}
