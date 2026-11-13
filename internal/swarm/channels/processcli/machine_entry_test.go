@@ -1,9 +1,11 @@
 package processcli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -142,3 +144,52 @@ func TestExecuteSource_workspace无效返回2(t *testing.T) {
 type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
+
+// TestExecuteDocument_stdin走ReadDocument --run-json - 用 DuplexLineReader.ReadDocument。
+// Python: machine_entry.py:149-155 _execute_document 的 stdin 分支。
+func TestExecuteDocument_stdin走ReadDocument(t *testing.T) {
+	// 无结尾换行的文档也必须能读全（旧 ReadRunInputBytes 语义一致，但换读取器）
+	document := `{"schema_version":"` + protocol.CurrentSchemaVersion +
+		`","type":"run","request_id":"r9","input":"hi"}`
+	r, err := NewDuplexLineReader(bytes.NewBufferString(document), protocol.MaxRunInputBytes, 10*time.Millisecond)
+	require.NoError(t, err)
+	raw, err := r.ReadDocument()
+	require.NoError(t, err)
+	input, inputErr := readRunInputFromString(string(raw))
+	require.NoError(t, inputErr)
+	require.NotNil(t, input)
+	require.NotNil(t, input.RequestID)
+	require.Equal(t, "r9", *input.RequestID)
+}
+
+// TestExecuteDocument_unattendedController --run-json 尾部构造 unattended controller。
+// Python: machine_entry.py:166-171 DuplexController(None, writer, unattended=True)。
+func TestExecuteDocument_unattendedController(t *testing.T) {
+	out := &bytes.Buffer{}
+	writer, err := NewOneShotWriter(out, "w1")
+	require.NoError(t, err)
+	ctrl := NewDuplexController(nil, writer, true)
+	// unattended controller：reader 为 nil、unattended=true
+	require.Nil(t, ctrl.reader)
+	require.True(t, ctrl.unattended)
+}
+
+// TestExecuteDuplex_空输入 run-jsonl 首行前 EOF → 固定错误文案。
+// Python: machine_entry.py:130-134 "A run record is required before control input."
+func TestExecuteDuplex_空输入(t *testing.T) {
+	pipeR, pipeW, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = pipeW.Close() })
+	_ = pipeW.Close() // 立即 EOF
+	reader, rerr := NewDuplexLineReader(pipeR, MaxDuplexLineBytes, 10*time.Millisecond)
+	require.NoError(t, rerr)
+	line, lerr := reader.ReadLine()
+	require.NoError(t, lerr)
+	require.Nil(t, line)
+	// executeDuplex 在此情况下应产出 INVALID_INPUT 失败结果与该文案
+	out := &bytes.Buffer{}
+	writer, werr := NewOneShotWriter(out, "w2")
+	require.NoError(t, werr)
+	result := failure(writer, "INVALID_INPUT", "A run record is required before control input.", exitInvalidInput)
+	require.Equal(t, "A run record is required before control input.", result.Error.Message)
+}

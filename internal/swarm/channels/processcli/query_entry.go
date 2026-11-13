@@ -129,14 +129,54 @@ func ExecuteQuerySource(options QueryEntryOptions) int {
 // readQueryDocument 读并解码一份 query 文档。
 // Python: query_entry.py:29-55 _read_query
 //
-// 差异：上游 `source == "-"` 走 duplex_input.DuplexLineReader（20.4 范围）；
-// 本批用 ReadMachineDocument 直接读 stdin，20.4 接入行读取器时替换。
+// `source == "-"` 走 duplex_input.DuplexLineReader 的文档读（对齐上游）。
 func readQueryDocument(
 	source string, stdin io.Reader,
 ) (*protocol.OneShotQueryInput, error) {
-	document, err := ReadMachineDocument(source, stdin)
-	if err != nil {
-		return nil, err
+	var document map[string]any
+	if source == "-" {
+		// Python: query_entry.py:32-40 async with DuplexLineReader(
+		// max_line_bytes=MAX_RUN_INPUT_BYTES) as reader:
+		//     document = await reader.read_document()
+		var reader *DuplexLineReader
+		var readerErr error
+		if stdin == nil {
+			reader, readerErr = NewDuplexLineReader(nil, protocol.MaxRunInputBytes, duplexPollInterval)
+		} else if file, isFile := stdin.(*os.File); isFile {
+			reader, readerErr = NewDuplexLineReader(file, protocol.MaxRunInputBytes, duplexPollInterval)
+		} else {
+			// 测试注入的非文件流：读全后走内存文档路径
+			raw, rawErr := io.ReadAll(stdin)
+			if rawErr != nil {
+				return nil, &MachineInputError{Message: "run input could not be read"}
+			}
+			doc, docErr := DecodeMachineDocument(string(raw))
+			if docErr != nil {
+				return nil, docErr
+			}
+			document = doc
+		}
+		if readerErr != nil {
+			return nil, asInputError(readerErr)
+		}
+		if reader != nil {
+			defer func() { _ = reader.Close() }()
+			raw, docErr := reader.ReadDocument()
+			if docErr != nil {
+				return nil, asInputError(docErr)
+			}
+			parsed, parseErr := DecodeMachineDocument(string(raw))
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			document = parsed
+		}
+	} else {
+		var err error
+		document, err = ReadMachineDocument(source, stdin)
+		if err != nil {
+			return nil, err
+		}
 	}
 	input, err := protocol.OneShotQueryInputFromDict(document)
 	if err != nil {

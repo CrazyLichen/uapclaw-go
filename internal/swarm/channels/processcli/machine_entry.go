@@ -142,7 +142,12 @@ func ExecuteSource(options ExecuteOptions) int {
 			Message: option + " cannot be combined with legacy execution arguments.",
 		}, exitInvalidInput)
 	default:
-		result = executeDocument(options, writer)
+		// Python: :229-231 json_lines ? _execute_duplex(writer) : _execute_document(source, writer)
+		if options.JSONLines {
+			result = executeDuplex(writer)
+		} else {
+			result = executeDocument(options, writer)
+		}
 	}
 
 	// Python: :256 result = signals.finalize(result)
@@ -168,22 +173,28 @@ func ExecuteSource(options ExecuteOptions) int {
 // executeDocument 读一份文档并跑一次 Runtime。
 // Python: machine_entry.py:147-171 _execute_document
 func executeDocument(options ExecuteOptions, writer *OneShotWriter) *protocol.OneShotRunResult {
-	// Python: :148-159 source == "-" 走 stdin
+	// Python: :148-159 source == "-" 走 stdin 的 DuplexLineReader 读文档
 	source := options.Source
 	if source == "-" {
-		// ⤵️ 回填 20.4：Python 用 DuplexLineReader(max_line_bytes=MAX_RUN_INPUT_BYTES)
-		// 按行读一份文档；Go 侧先直接用 ReadRunInputBytes 读到 EOF，
-		// 单文档语义一致（本批不含 JSONL 多行模式）。
 		stdin := options.Stdin
-		if stdin == nil {
-			stdin = os.Stdin
+		var reader *DuplexLineReader
+		var readerErr error
+		if stdin != nil {
+			reader, readerErr = NewDuplexLineReader(stdin, protocol.MaxRunInputBytes, duplexPollInterval)
+		} else {
+			reader, readerErr = NewDuplexLineReader(nil, protocol.MaxRunInputBytes, duplexPollInterval)
 		}
-		// Python: :159 run_input = read_run_input("-", stdin=io.BytesIO(document))
-		document, err := ReadRunInputBytes(stdin)
+		if readerErr != nil {
+			return failureFromInputError(writer, asInputError(readerErr), exitInvalidInput)
+		}
+		defer func() { _ = reader.Close() }()
+		// Python: :155 document = await reader.read_document()
+		document, err := reader.ReadDocument()
 		if err != nil {
 			return failureFromInputError(writer, asInputError(err), exitInvalidInput)
 		}
-		input, inputErr := readRunInputFromString(document)
+		// Python: :159 run_input = read_run_input("-", stdin=io.BytesIO(document))
+		input, inputErr := readRunInputFromString(string(document))
 		if inputErr != nil {
 			return failureFromInputError(writer, asInputError(inputErr), exitInvalidInput)
 		}
@@ -211,15 +222,11 @@ func runPreparedInput(
 	if err != nil {
 		return failureFromInputError(writer, asInputError(err), exitInvalidInput)
 	}
-	// Python: :169-171 run_with_signals(run_input, writer, control=DuplexController(None, writer, unattended=True))
-	//
-	// ⤵️ 回填 20.4：DuplexController 未实现（用户决策：control 恒 nil，只走非交互分支）。
-	// unattended=True 在语义上就是「没有 reader、不回答交互」——与 nil 等价。
-	runFunc := options.RunFunc
-	if runFunc == nil {
-		runFunc = runWithSignalsDefault
-	}
-	return runFunc(prepared, writer)
+	// Python: :166-171 control=DuplexController(None, writer, unattended=True)
+	// ——controller 非 None：supports_user_interaction=True，
+	// 权限卡经 unattended 分支自动 reject。
+	control := NewDuplexController(nil, writer, true)
+	return RunWithSignals(context.Background(), prepared, writer, control)
 }
 
 // failure 构造失败结果。
@@ -313,10 +320,45 @@ func newRequestID() string {
 
 // runWithSignalsDefault 默认执行体：包一层信号归属后调用 RunMachine。
 // Python: machine_entry.py:169 run_with_signals(run_input, writer, control=...)
-//
-// ⤵️ 回填 20.4：control 恒 nil（用户决策），只走非交互分支。
 func runWithSignalsDefault(
 	runInput *protocol.OneShotRunInput, writer *OneShotWriter,
 ) *protocol.OneShotRunResult {
 	return RunWithSignals(context.Background(), runInput, writer, nil)
+}
+
+// executeDuplex --run-jsonl：行读取器读首条 run 记录 + 真 DuplexController。
+// Python: machine_entry.py:122-146 _execute_duplex
+func executeDuplex(writer *OneShotWriter) *protocol.OneShotRunResult {
+	// Python: :129 async with DuplexLineReader() as reader
+	reader, readerErr := NewDuplexLineReader(nil, MaxDuplexLineBytes, duplexPollInterval)
+	if readerErr != nil {
+		return failure(writer, "INVALID_INPUT", readerErr.Error(), exitInvalidInput)
+	}
+	defer func() { _ = reader.Close() }()
+	// Python: :130-135 line = await reader.read_line()；None → 固定文案
+	line, lineErr := reader.ReadLine()
+	if lineErr != nil {
+		return failure(writer, "INVALID_INPUT", lineErr.Error(), exitInvalidInput)
+	}
+	if line == nil {
+		return failure(writer, "INVALID_INPUT",
+			"A run record is required before control input.", exitInvalidInput)
+	}
+	// Python: :133-134 run_input = read_run_input("-", stdin=io.BytesIO(line))
+	input, inputErr := readRunInputFromString(string(line))
+	if inputErr != nil {
+		return failureFromInputError(writer, asInputError(inputErr), exitInvalidInput)
+	}
+	// Python: :135-136 writer.request_id = run_input.request_id or writer.request_id
+	if input.RequestID != nil && strings.TrimSpace(*input.RequestID) != "" {
+		writer.RequestID = strings.TrimSpace(*input.RequestID)
+	}
+	// Python: :137 run_input = prepare_workspace(run_input)
+	prepared, prepErr := PrepareWorkspace(input)
+	if prepErr != nil {
+		return failureFromInputError(writer, asInputError(prepErr), exitInvalidInput)
+	}
+	// Python: :140-143 control = DuplexController(reader, writer)（attended）
+	control := NewDuplexController(reader, writer, false)
+	return RunWithSignals(context.Background(), prepared, writer, control)
 }
