@@ -574,7 +574,18 @@ func RunMachine(
 	}
 
 	// Python: :536-539 if control is not None: control.start(); async with deadline: await run.execute(...)
-	if err := run.Execute(ctx, clientFactory, deadline); err != nil {
+	//
+	// control.start() 登记当前任务，cancel 控制帧经 owner.cancel 取消执行——
+	// Go 用 controlCtx 承载：Consume/流调用都在它之下，terminate 时整个
+	// execute 子树被取消，cleanup 仍走原 ctx（Python 清理在 finally 里）。
+	executeCtx := ctx
+	if control != nil {
+		var controlCancel context.CancelFunc
+		executeCtx, controlCancel = context.WithCancel(ctx)
+		defer controlCancel()
+		control.Start(executeCtx, controlCancel)
+	}
+	if err := run.Execute(executeCtx, clientFactory, deadline); err != nil {
 		run.classifyFailure(err, writer)
 	}
 
