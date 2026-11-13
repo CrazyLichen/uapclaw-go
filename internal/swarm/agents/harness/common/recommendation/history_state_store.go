@@ -1,5 +1,9 @@
 package recommendation
 
+import (
+	"strings"
+)
+
 // HistoryStateStore topic 历史状态快照读写窄接口。
 //
 // ⤴️ 10.3.31d 过渡接口（spec 2026-11-12 D-c-5）：10.3.31c 的
@@ -75,4 +79,169 @@ func (s *inMemoryHistoryStateStore) EmptyHistoryState() map[string]any {
 		"policy_id":      "",
 		"history_ledger": map[string]any{},
 	}
+}
+
+// ──────────────────────────── ⤴️ 31d 过渡函数（topic_history.py 切片） ────────────────────────────
+
+// 以下三个函数来自上游 topic_history.py / topic_starter.py，被 topic_pool（10.3.31b）
+// 依赖；31d 落地 topic_history.go 后改为真实实现并删除本段（规则 8）。
+
+// ApplyNegativePreferences D20 检索前负偏好比较器（对齐 topic_history.py:1904-1955）。
+// 逐字复用 v3 的 _keyword_matches（ASCII 词边界、CJK 子串），作用于被否定方向、
+// 冻结别名/锚点与来源 ID 对候选的来源、意图/人设、查询与锚点。只拒绝被否定的
+// 具体方向，同领域其他方向不受影响（D20，无通用语义裁判）。
+func ApplyNegativePreferences(candidates []map[string]any, negativePreferences []map[string]any) ([]map[string]any, []map[string]any) {
+	survivors := []map[string]any{}
+	rejected := []map[string]any{}
+	for _, candidate := range candidates {
+		surfaces := []string{
+			str(candidate["intent"]),
+			str(candidate["persona"]),
+			str(candidate["primary_query"]),
+			str(candidate["fallback_query"]),
+			str(candidate["identity_anchor"]),
+		}
+		for _, anchor := range anySliceToStrings(candidate["context_anchors"]) {
+			surfaces = append(surfaces, anchor)
+		}
+		sourceIDs := map[string]struct{}{}
+		for _, unitID := range anySliceToStrings(candidate["source_memory_unit_ids"]) {
+			sourceIDs[unitID] = struct{}{}
+		}
+		hit := false
+		for _, preference := range negativePreferences {
+			sourceID := strings.TrimSpace(str(preference["source_id"]))
+			if sourceID != "" {
+				if _, known := sourceIDs[sourceID]; known {
+					hit = true
+					break
+				}
+			}
+			terms := negativePreferenceTerms(preference)
+			for _, surface := range surfaces {
+				if surface == "" {
+					continue
+				}
+				for _, term := range terms {
+					if keywordMatches(surface, term) {
+						hit = true
+						break
+					}
+				}
+				if hit {
+					break
+				}
+			}
+			if hit {
+				break
+			}
+		}
+		if hit {
+			rejected = append(rejected, map[string]any{
+				"candidate_id": candidate["candidate_id"],
+				"reason":       "negative_preference_contract_failed",
+			})
+		} else {
+			survivors = append(survivors, candidate)
+		}
+	}
+	return survivors, rejected
+}
+
+// negativePreferenceTerms 负偏好词条（对齐 topic_history.py:1895-1902 _negative_preference_terms）。
+func negativePreferenceTerms(preference map[string]any) []string {
+	terms := []string{strings.TrimSpace(str(preference["direction"]))}
+	for _, key := range []string{"aliases", "anchors"} {
+		for _, term := range anySliceToStrings(preference[key]) {
+			if strings.TrimSpace(term) != "" {
+				terms = append(terms, strings.TrimSpace(term))
+			}
+		}
+	}
+	out := []string{}
+	for _, term := range terms {
+		if term != "" {
+			out = append(out, term)
+		}
+	}
+	return out
+}
+
+// keywordMatches v3 关键词匹配（对齐 topic_starter.py:844-851 _keyword_matches）。
+// ASCII 词边界，CJK 子串。RE2 无 lookaround，以手工边界检查等价实现
+// （Python: (?<![A-Za-z0-9_])kw(?![A-Za-z0-9_])）。
+func keywordMatches(text, keyword string) bool {
+	if !isASCII(keyword) {
+		return strings.Contains(text, keyword)
+	}
+	isWordByte := func(b byte) bool {
+		return b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '_'
+	}
+	for start := 0; ; {
+		idx := strings.Index(text[start:], keyword)
+		if idx < 0 {
+			return false
+		}
+		pos := start + idx
+		prevOK := pos == 0 || !isWordByte(text[pos-1])
+		end := pos + len(keyword)
+		nextOK := end >= len(text) || !isWordByte(text[end])
+		if prevOK && nextOK {
+			return true
+		}
+		start = pos + 1
+	}
+}
+
+// isASCII 全 ASCII 判定（对齐 Python str.isascii）。
+func isASCII(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] > 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// FilterDistinctPersonalizedCandidates R4 两条硬冲突下去重保序（对齐 topic_history.py:1809-1838）。
+// 这是终局清单助手而非专家池过滤器：过采样合法地含同桶多个替代；泛化/趋势卡
+// 既无来源桶也无身份锚，不占个性化去重槽位。
+func FilterDistinctPersonalizedCandidates(candidates []map[string]any, targetCount int) []map[string]any {
+	kept := []map[string]any{}
+	usedBuckets := map[string]struct{}{}
+	usedAnchors := map[string]struct{}{}
+	for _, candidate := range candidates {
+		if len(kept) >= targetCount {
+			break
+		}
+		buckets := map[string]struct{}{}
+		for _, unitID := range anySliceToStrings(candidate["source_memory_unit_ids"]) {
+			if unitID != "" {
+				buckets[unitID] = struct{}{}
+			}
+		}
+		anchor := str(candidate["identity_anchor"])
+		personalized := len(buckets) > 0 || anchor != ""
+		bucketClash := false
+		for bucket := range buckets {
+			if _, used := usedBuckets[bucket]; used {
+				bucketClash = true
+				break
+			}
+		}
+		_, anchorClash := usedAnchors[anchor]
+		if personalized && (bucketClash || anchorClash) {
+			continue
+		}
+		kept = append(kept, candidate)
+		if personalized {
+			for bucket := range buckets {
+				usedBuckets[bucket] = struct{}{}
+			}
+			if anchor != "" {
+				usedAnchors[anchor] = struct{}{}
+			}
+		}
+	}
+	return kept
 }
