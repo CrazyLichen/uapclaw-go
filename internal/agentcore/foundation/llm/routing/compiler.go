@@ -287,7 +287,18 @@ func routingConfigData(routingConfig *ResolvedRoutingConfig) (string, *int, map[
 			return "", nil, nil, nil, false, err
 		}
 	}
-	numRetries, _ := routing["num_retries"].(*int)
+	// routingConfigMapping 产物为 int/float64 值；pydantic 路径（JSON round-trip
+	// 后 ResolvedRoutingConfig.NumRetries 已是 *int，经 mapping 转为值）。
+	var numRetries *int
+	switch v := routing["num_retries"].(type) {
+	case *int:
+		numRetries = v
+	case int:
+		numRetries = &v
+	case float64:
+		n := int(v)
+		numRetries = &n
+	}
 	nestedKwargs, ok := routing["strategy_kwargs"].(map[string]any)
 	if routing["strategy_kwargs"] == nil {
 		nestedKwargs = map[string]any{}

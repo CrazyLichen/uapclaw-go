@@ -276,7 +276,7 @@ func newTestClientWithDeployments(t *testing.T, deps []map[string]any) *IntelliR
 	if err != nil {
 		t.Fatalf("embed: %v", err)
 	}
-	return &IntelliRouterModelClient{BaseClientEmbed: *embed, router: r}
+	return &IntelliRouterModelClient{BaseClientEmbed: *embed, Router: r}
 }
 
 func containsStr(s, sub string) bool {

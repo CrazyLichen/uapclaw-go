@@ -470,3 +470,259 @@ func assertBaseError(t *testing.T, err error, status exception.StatusCode) {
 			status.Name(), status.Code(), base.Status().Name(), base.Status().Code())
 	}
 }
+
+// ──────────────────────────── 覆盖率补充（spec §9 ≥85%）────────────────────────────
+
+// coerceSelection typed DTO 直传路径（compiler.py:146-148）。
+func TestCompileModelSelection_TypedDTO直传(t *testing.T) {
+	model := NewResolvedModel()
+	model.ModelID = "m1"
+	model.ModelName = "qwen-plus"
+	model.Provider = "openai"
+	compiled, err := CompileModelSelection(model)
+	if err != nil {
+		t.Fatalf("typed model: %v", err)
+	}
+	if compiled.SelectedID != "m1" || compiled.SelectedType != "model" {
+		t.Fatalf("selected 错误：%+v", compiled)
+	}
+	group := NewResolvedModelGroup()
+	group.ModelGroupID = "g1"
+	route := NewResolvedRoute()
+	route.Model = NewResolvedModel()
+	route.Model.ModelID = "m1"
+	route.Model.ModelName = "qwen-plus"
+	route.Model.Provider = "openai"
+	group.Routes = []*ResolvedRoute{route}
+	compiled, err = CompileModelSelection(group)
+	if err != nil {
+		t.Fatalf("typed group: %v", err)
+	}
+	if compiled.SelectedID != "g1" || compiled.SelectedType != "model_group" {
+		t.Fatalf("selected 错误：%+v", compiled)
+	}
+	// 非 map 非 DTO → MODEL_REQUEST_CONFIG_INVALID
+	if _, err := CompileModelSelection(42); err == nil {
+		t.Fatal("非法载荷应报错")
+	}
+}
+
+// GetModelGroupModels 错误路径（nil / 空 enabled）。
+func TestGetModelGroupModels_错误路径(t *testing.T) {
+	if _, err := GetModelGroupModels(nil); err == nil {
+		t.Fatal("nil group 应报错")
+	}
+	group := NewResolvedModelGroup()
+	group.ModelGroupID = "g1"
+	route := NewResolvedRoute()
+	route.Enabled = false
+	route.Model = NewResolvedModel()
+	route.Model.ModelID = "m1"
+	group.Routes = []*ResolvedRoute{route}
+	if _, err := GetModelGroupModels(group); err == nil {
+		t.Fatal("无启用路由应报错")
+	}
+}
+
+// applyRouterOptions / routingConfigMapping 全字段（compiler.py:277-301）。
+func TestRouterOptions_全字段(t *testing.T) {
+	strategy := RoutingStrategyOrderedFailover
+	retries := 2
+	timeoutSec := 12.0
+	health := true
+	interval := 60.0
+	obs := true
+	cfg := &ResolvedRoutingConfig{
+		Strategy:                   &strategy,
+		NumRetries:                 &retries,
+		StrategyKwargs:             map[string]any{"fallback_tag": "fast"},
+		TimeoutSeconds:             &timeoutSec,
+		EnableHealthCheck:          &health,
+		HealthCheckIntervalSeconds: &interval,
+		EnableObservability:        &obs,
+		Extra:                      map[string]any{"custom": 1},
+	}
+	// routingConfigMapping：DTO → map 逐键
+	m := routingConfigMapping(cfg)
+	if m["strategy"] != "ordered-failover" || m["custom"] != 1 {
+		t.Fatalf("mapping 错误：%v", m)
+	}
+	// routerOptionsData → applyRouterOptions：全部四键生效
+	_, _, _, options, _, err := routingConfigData(cfg)
+	if err != nil {
+		t.Fatalf("routingConfigData: %v", err)
+	}
+	if options["timeout"].(float64) != 12.0 || options["enable_health_check"] != true ||
+		options["health_check_interval"].(float64) != 60.0 || options["enable_observability"] != true {
+		t.Fatalf("options 错误：%v", options)
+	}
+	group := NewResolvedModelGroup()
+	group.ModelGroupID = "g1"
+	group.Routing = cfg
+	route := NewResolvedRoute()
+	route.Model = NewResolvedModel()
+	route.Model.ModelID = "m1"
+	route.Model.ModelName = "qwen-plus"
+	route.Model.Provider = "openai"
+	group.Routes = []*ResolvedRoute{route}
+	compiled, err := CompileModelSelection(group)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	routerCfg := compiled.ModelClientConfig.IntelliRouter
+	if routerCfg.Timeout != 12.0 || !routerCfg.EnableHealthCheck ||
+		routerCfg.HealthCheckInterval != 60.0 || !routerCfg.EnableObservability {
+		t.Fatalf("router options 未生效：%+v", routerCfg)
+	}
+	if routerCfg.NumRetries == nil || *routerCfg.NumRetries != 2 {
+		t.Fatal("num_retries 应透传")
+	}
+	if routerCfg.StrategyKwargs["fallback_tag"] != "fast" {
+		t.Fatal("strategy_kwargs 应透传")
+	}
+}
+
+// validateModel 错误分支（compiler.py:308-318）。
+func TestValidateModel_错误分支(t *testing.T) {
+	model := NewResolvedModel()
+	model.ModelID = "m1"
+	model.ModelName = "qwen-plus"
+	model.Provider = "openai"
+	if err := validateModel(model); err != nil {
+		t.Fatalf("合法模型不应报错：%v", err)
+	}
+	model.ModelName = "  "
+	if err := validateModel(model); err == nil ||
+		!containsSubstring(err.Error(), "has empty model_name") {
+		t.Fatalf("空 model_name 应报错：%v", err)
+	}
+	model.ModelName = "qwen-plus"
+	model.Provider = ""
+	if err := validateModel(model); err == nil ||
+		!containsSubstring(err.Error(), "has empty provider") {
+		t.Fatalf("空 provider 应报错：%v", err)
+	}
+}
+
+// compileModel 构造错误包装（compiler.py:174-178 configInvalidError）。
+func TestCompileModel_构造错误包装(t *testing.T) {
+	model := NewResolvedModel()
+	model.ModelID = "m1"
+	model.ModelName = "qwen-plus"
+	model.Provider = "openai"
+	// 非法 client_options（client_provider 类型错误）→ JSON 转换失败
+	model.ClientOptions = map[string]any{"timeout": make(chan int)}
+	_, _, err := compileModel(model)
+	if err == nil {
+		t.Fatal("非法 client_options 应报错")
+	}
+}
+
+// strategy_kwargs 非 map 报错（compiler.py:259-263，经 JSON round-trip
+// 进 ResolvedRoutingConfig.Extra 的非法形状）。
+func TestRoutingConfigData_StrategyKwargs非Map(t *testing.T) {
+	if _, err := coerceGroup(map[string]any{
+		"model_group_id":  "g1",
+		"strategy_kwargs": 42,
+		"routes":          []any{},
+	}); err != nil {
+		t.Fatalf("coerceGroup: %v", err)
+	}
+	// 直接构造非法形状：Extra 携带非 map strategy_kwargs
+	bad := &ResolvedRoutingConfig{StrategyKwargs: nil, Extra: map[string]any{"strategy_kwargs": 42}}
+	_, _, _, _, _, err := routingConfigData(bad)
+	if err == nil || !containsSubstring(err.Error(), "routing.strategy_kwargs must be a mapping") {
+		t.Fatalf("非 map strategy_kwargs 应报错：%v", err)
+	}
+}
+
+func containsSubstring(s, sub string) bool {
+	return len(s) >= len(sub) && (func() bool {
+		for i := 0; i+len(sub) <= len(s); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	})()
+}
+
+// flattenExtraBody 非 map 分支 + deepMergeDicts 嵌套合并（compiler.py:431-466）。
+func TestFlattenExtraBody_与深度合并(t *testing.T) {
+	// 非 map extra_body 原样保留
+	params := map[string]any{"extra_body": "raw-string"}
+	flattenExtraBody(params)
+	if params["extra_body"] != "raw-string" {
+		t.Fatalf("非 map extra_body 应原样保留：%v", params)
+	}
+	// nil extra_body 删除
+	params2 := map[string]any{"extra_body": nil}
+	flattenExtraBody(params2)
+	if _, exists := params2["extra_body"]; exists {
+		t.Fatal("nil extra_body 应删除")
+	}
+	// deepMergeDicts：嵌套 map 递归 + None 跳过
+	merged := deepMergeDicts(
+		map[string]any{"a": map[string]any{"x": 1, "y": nil}, "keep": 1},
+		map[string]any{"a": map[string]any{"y": 2}, "z": nil},
+	)
+	inner := merged["a"].(map[string]any)
+	// deepCopyMap 经 JSON round-trip，整型归一为 float64（Python deepcopy
+	// 保留 int；数值语义等价，登记为已知归一差异）
+	if inner["x"] != float64(1) || inner["y"] != 2 {
+		t.Fatalf("嵌套合并错误：%v", inner)
+	}
+	if merged["keep"] != float64(1) {
+		t.Fatal("左侧非嵌套键保留")
+	}
+	if _, exists := merged["z"]; exists {
+		t.Fatal("右侧 None 不覆盖")
+	}
+	// mergeRequestDefaults：嵌套 map 深合并路径
+	out := mergeRequestDefaults(
+		map[string]any{"opts": map[string]any{"temperature": 0.1}},
+		map[string]any{"opts": map[string]any{"top_p": 0.9}},
+	)
+	opts := out["opts"].(map[string]any)
+	if opts["temperature"] != 0.1 || opts["top_p"] != 0.9 {
+		t.Fatalf("深合并错误：%v", opts)
+	}
+}
+
+// deploymentData tpm/rpm/timeout + client_options 三键透传（compiler.py:338-348）。
+func TestDeploymentData_路由级字段与三键(t *testing.T) {
+	groupCfg := map[string]any{}
+	route := NewResolvedRoute()
+	route.RouteID = "r1"
+	route.TPM = ptrInt(1000)
+	route.RPM = ptrInt(10)
+	route.Timeout = ptrFloat(15)
+	route.Model = NewResolvedModel()
+	route.Model.ModelID = "m1"
+	route.Model.ModelName = "m"
+	route.Model.Provider = "openai"
+	route.Model.ClientOptions = map[string]any{
+		"endpoint_profile": "siliconflow",
+		"custom_headers":   map[string]any{"X-A": "b"},
+		"verify_ssl":       false,
+		"api_key":          "ignored",
+	}
+	data, err := deploymentData(route, groupCfg)
+	if err != nil {
+		t.Fatalf("deploymentData: %v", err)
+	}
+	if data["tpm"] != 1000 || data["rpm"] != 10 || data["timeout"] != float64(15) {
+		t.Fatalf("路由级字段错误：%v", data)
+	}
+	if data["endpoint_profile"] != "siliconflow" || data["custom_headers"] == nil || data["verify_ssl"] != false {
+		t.Fatalf("client_options 三键错误：%v", data)
+	}
+	// api_key 属于 client_options 过滤键，不得透传到 deployment 顶层覆盖
+	if data["api_key"] != "" {
+		// route.model.api_key 空串 → data["api_key"] 为 ""
+		t.Fatalf("api_key 应取 model 字段：%v", data["api_key"])
+	}
+}
+
+func ptrInt(i int) *int           { return &i }
+func ptrFloat(f float64) *float64 { return &f }

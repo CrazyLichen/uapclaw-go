@@ -178,9 +178,10 @@ func TestCleanupDeployments(t *testing.T) {
 	s.OnFailure("d1", errors.New("x"), 60.0)
 	s.OnSuccess("d2", 1.0, 10)
 	s.OnSuccess("d3", 1.0, 10)
-	// 同一部署出现在多个注册表 → 去重保序（py:342）
+	// 同一部署出现在多个注册表 → 去重（py:342）。
+	// removed 顺序对齐 Python set 迭代（无稳定顺序），以集合相等断言。
 	removed := s.CleanupDeployments([]string{"d2"})
-	require.Equal(t, []string{"d1", "d3"}, removed)
+	require.ElementsMatch(t, []string{"d1", "d3"}, removed)
 	require.Contains(t, s.TotalTokens, "d2")
 	require.NotContains(t, s.ConsecutiveFailures, "d1")
 	require.NotContains(t, s.TotalTokens, "d3")
