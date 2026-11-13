@@ -19,6 +19,113 @@ type ProviderValidator interface {
 	ValidateProvider(provider string) string
 }
 
+// IntelliRouterDeploymentConfig 模型组内一个 deployment 候选。
+// Python: schema/config.py:68-87 IntelliRouterDeploymentConfig（extra="forbid"）
+type IntelliRouterDeploymentConfig struct {
+	// RouteID 模型组内稳定的路由 ID
+	// Python: schema/config.py:69 route_id
+	RouteID string `json:"route_id"`
+	// ModelID JiuwenSwarm 解析出的业务模型 ID（可选）
+	// Python: schema/config.py:70 model_id: Optional[str]
+	ModelID string `json:"model_id"`
+	// ModelName 面向 provider 的模型名
+	// Python: schema/config.py:71 model_name
+	ModelName string `json:"model_name"`
+	// Provider intelli_router 使用的 provider 适配器名
+	// Python: schema/config.py:72 provider
+	Provider string `json:"provider"`
+	// APIKey 解析后的 API 密钥，缺省空串
+	// Python: schema/config.py:73 api_key
+	APIKey string `json:"api_key"`
+	// APIBase provider API 基础 URL，缺省空串
+	// Python: schema/config.py:74 api_base
+	APIBase string `json:"api_base"`
+	// EndpointProfile provider 端点方言（可选）
+	// Python: schema/config.py:75 endpoint_profile: Optional[str]
+	EndpointProfile string `json:"endpoint_profile"`
+	// CustomHeaders 路由级自定义请求头（可选）
+	// Python: schema/config.py:76 custom_headers: Optional[dict[str, str]]
+	CustomHeaders map[string]string `json:"custom_headers"`
+	// VerifySSL 路由级 TLS 校验覆盖（可选；nil 表示未设置）
+	// Python: schema/config.py:77 verify_ssl: Optional[bool]
+	VerifySSL *bool `json:"verify_ssl"`
+	// FallbackTag tag-filtered 路由使用的正式模型名（可选）
+	// Python: schema/config.py:78 fallback_tag: Optional[str]
+	FallbackTag *string `json:"fallback_tag"`
+	// ModelDescription 用户提供的模型能力描述（可选）
+	// Python: schema/config.py:79 model_description: Optional[str]
+	ModelDescription *string `json:"model_description"`
+	// RequestDefaults 请求默认参数
+	// Python: schema/config.py:80 request_defaults: dict[str, Any]
+	RequestDefaults map[string]any `json:"request_defaults"`
+	// TPM 每分钟 token 容量提示（可选）
+	// Python: schema/config.py:81 tpm: Optional[int]
+	TPM *int `json:"tpm"`
+	// RPM 每分钟请求容量提示（可选）
+	// Python: schema/config.py:82 rpm: Optional[int]
+	RPM *int `json:"rpm"`
+	// Timeout 路由级超时（秒，可选）
+	// Python: schema/config.py:83 timeout: Optional[float]
+	Timeout *float64 `json:"timeout"`
+}
+
+// NewIntelliRouterDeploymentConfig 创建 deployment 配置并对齐 Python 缺省值
+// （request_defaults 默认空 dict；其余 Optional 字段零值即未设置）。
+// Python: schema/config.py:68-87（Field default_factory/default）
+func NewIntelliRouterDeploymentConfig() IntelliRouterDeploymentConfig {
+	return IntelliRouterDeploymentConfig{RequestDefaults: map[string]any{}}
+}
+
+// IntelliRouterConfig IntelliRouter 模型客户端的结构化配置。
+// Python: schema/config.py:90-113 IntelliRouterConfig（extra="forbid"）
+type IntelliRouterConfig struct {
+	// ModelGroupID 业务模型组 ID（可选）
+	// Python: schema/config.py:91 model_group_id: Optional[str]
+	ModelGroupID *string `json:"model_group_id"`
+	// Deployments deployment 候选列表
+	// Python: schema/config.py:92 deployments: list[IntelliRouterDeploymentConfig]
+	Deployments []IntelliRouterDeploymentConfig `json:"deployments"`
+	// Strategy 路由策略名，缺省 ordered-failover
+	// Python: schema/config.py:93 strategy: str = "ordered-failover"
+	Strategy string `json:"strategy"`
+	// StrategyKwargs 策略参数（如 tag-filtered 的 fallback_tag）
+	// Python: schema/config.py:94 strategy_kwargs: dict[str, Any]
+	StrategyKwargs map[string]any `json:"strategy_kwargs"`
+	// NumRetries fallback 重试预算（可选；nil 由编译器/客户端兜底 max(len-1,0)）
+	// Python: schema/config.py:95 num_retries: Optional[int]
+	NumRetries *int `json:"num_retries"`
+	// Timeout 路由器请求超时（秒），缺省 30.0
+	// Python: schema/config.py:96 timeout: float = 30.0
+	Timeout float64 `json:"timeout"`
+	// EnableHealthCheck 是否启用路由器健康检查，缺省 false
+	// Python: schema/config.py:97 enable_health_check: bool = False
+	EnableHealthCheck bool `json:"enable_health_check"`
+	// HealthCheckInterval 健康检查间隔（秒），缺省 300.0
+	// Python: schema/config.py:98 health_check_interval: float = 300.0
+	HealthCheckInterval float64 `json:"health_check_interval"`
+	// EnableObservability 是否启用路由器可观测钩子，缺省 false
+	// Python: schema/config.py:99 enable_observability: bool = False
+	EnableObservability bool `json:"enable_observability"`
+	// WebDashboardPort 指标 web 面板端口，缺省 0（Go 侧不移植面板，仅保留配置字段，偏差 D-3）
+	// Python: schema/config.py:100 web_dashboard_port: int = 0
+	WebDashboardPort int `json:"web_dashboard_port"`
+	// RouterScope 路由器缓存作用域；不同 scope 的客户端永不共享路由器状态（如冷却）
+	// Python: schema/config.py:101-105 router_scope: Optional[str]
+	RouterScope *string `json:"router_scope"`
+}
+
+// NewDefaultIntelliRouterConfig 创建对齐 Python 字段缺省值的 IntelliRouterConfig。
+// Python: schema/config.py:90-113（Field default）
+func NewDefaultIntelliRouterConfig() IntelliRouterConfig {
+	return IntelliRouterConfig{
+		Strategy:            "ordered-failover",
+		Timeout:             30.0,
+		HealthCheckInterval: 300.0,
+		Deployments:         []IntelliRouterDeploymentConfig{},
+		StrategyKwargs:      map[string]any{},
+	}
+}
+
 // ModelClientConfig 模型客户端配置。
 type ModelClientConfig struct {
 	// ClientID 客户端唯一标识，用于 Runner 注册，默认自动生成 UUID
@@ -59,6 +166,9 @@ type ModelClientConfig struct {
 	// Extensions 模型客户端扩展配置（KV cache / prompt cache 等）。
 	// Python: schema/config.py ModelClientConfig.extensions: Optional[LLMExtensionsConfig]
 	Extensions *LLMExtensionsConfig `json:"extensions,omitempty"`
+	// IntelliRouter 结构化 IntelliRouter 配置，client_provider=intelli_router 时使用。
+	// Python: schema/config.py intelli_router: Optional[IntelliRouterConfig]
+	IntelliRouter *IntelliRouterConfig `json:"intelli_router,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
 	Extra map[string]any `json:"-"`
 }
@@ -752,6 +862,8 @@ func init() {
 		"ssl_cert":                   {},
 		"custom_headers":             {},
 		"extensions":                 {},
+		// Python: schema/config.py ModelClientConfig.intelli_router
+		"intelli_router": {},
 	}
 
 	// 初始化 ModelRequestConfig 已知 JSON 键名集合
