@@ -31,8 +31,11 @@ func (s *AgentServer) handleSessionPlanStatus(ctx context.Context, request *sche
 	}
 
 	// Python: get_session_metadata(cache_bust=True, enable_writeback=False)。
-	// 先强制读盘（避免用本进程陈旧缓存覆盖 Gateway 刚写入的状态）；磁盘尚无文件时
-	// 回退内存缓存——元数据写入是异步队列，同一轮 chat 刚结束时存在短暂未落盘窗口。
+	// cache_bust 的语义是「读取当前真相」：本进程的元数据写入是异步队列，
+	// 同一轮 chat 刚结束时 mode 更新可能尚未落盘——不排空队列就会从磁盘
+	// 读到陈旧 mode（实测：退出 plan 后 plan_status 偶发返回 in_plan=true）。
+	// 先 flush 再强制读盘（磁盘尚无文件时回退内存缓存）。
+	_ = session.FlushMetadataQueue(2.0)
 	meta := session.ReadSessionMetadata(session.GetSessionsDir(), sid)
 	if len(meta) == 0 {
 		meta = session.GetSessionMetadata(sid)
@@ -43,7 +46,12 @@ func (s *AgentServer) handleSessionPlanStatus(ctx context.Context, request *sche
 	metadataMode, _ := meta["mode"].(string)
 	livePlanMode := ""
 	if !schema.IsTeamMode(metadataMode) {
-		if agent := s.agentManager.GetAgentNoWait(request.ChannelID, "", "", ""); agent != nil {
+		// GetAgentNoWait 全空参在多 agent 渠道按 map 遍历返回任意一个
+		// （Python dict 是插入序，Go map 无序），拿到的不一定是承接本会话
+		// 的 agent——读到的 plan 状态可能是另一个实例的陈旧快照（实测：
+		// 退出 plan 后 plan_status 偶发返回 in_plan=true）。只有该 agent
+		// 真持有该会话的运行时才采信 live 快照，否则回退 metadata/active。
+		if agent := s.agentManager.GetAgentNoWait(request.ChannelID, "", "", ""); agent != nil && agent.HasSessionRuntime(sid) {
 			if snapshot, ok := agent.PlanModeSnapshot(ctx, sid); ok {
 				livePlanMode = snapshot
 			}
@@ -75,7 +83,15 @@ func combineSessionInPlan(livePlanMode string, active bool, metadataMode string)
 		return schema.IsPlanMode(metadataMode)
 	}
 	if strings.TrimSpace(livePlanMode) != "" {
-		return strings.TrimSpace(livePlanMode) == "plan"
+		live := strings.TrimSpace(livePlanMode)
+		// live=plan 与 metadata=normal 矛盾且无 active 标记：live 快照可能来自
+		// 未承接本会话的 agent（GetAgentNoWait 全空参多 agent 渠道按 map 遍历
+		// 返回任意一个，Go map 无序），metadata mode 由每轮 chat 显式同步且
+		// 读取前已 flush，取值更新，以 metadata 为准。
+		if live == "plan" && !schema.IsPlanMode(metadataMode) && !active {
+			return false
+		}
+		return live == "plan"
 	}
 	if active {
 		return true

@@ -76,7 +76,11 @@ func TestCombineSessionInPlan(t *testing.T) {
 	require.False(t, combineSessionInPlan("plan", false, "team.work.normal"))
 	// 非 team：live 优先
 	require.False(t, combineSessionInPlan("normal", true, "agent.work.plan"))
-	require.True(t, combineSessionInPlan("plan", false, "agent.work.normal"))
+	// live=plan 与 metadata=normal 矛盾且无 active 标记：live 快照可能来自
+	// 未承接本会话的 agent（GetAgentNoWait 全空参按 map 遍历返回任意一个），
+	// metadata mode 由每轮 chat 显式同步且读取前已 flush，取值更新，以 metadata 为准。
+	// （旧行为 live 无条件优先，是集成用例 TestIT_S3_3 偶发 in_plan=true 的根因）
+	require.False(t, combineSessionInPlan("plan", false, "agent.work.normal"))
 	// 无 live 时 active 兜底
 	require.True(t, combineSessionInPlan("", true, "agent.work.normal"))
 	require.False(t, combineSessionInPlan("", false, "agent.work.normal"))
