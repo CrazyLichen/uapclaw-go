@@ -179,6 +179,12 @@ func (l *OptionalLanes) Finish(lane string, done <-chan struct{}, cancel context
 		<-done
 		return true
 	}
+	// 对齐 asyncio.wait：任务已完成立即成功，与 deadline 无关
+	select {
+	case <-done:
+		return true
+	default:
+	}
 	remaining := time.Until(*deadline)
 	if remaining <= 0 {
 		cancel()
