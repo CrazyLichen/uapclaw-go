@@ -1551,3 +1551,1022 @@ func (q *NewPageOutcomeQueue) AttachSink(sink func(*NewPageOutcomeSignal) bool) 
 	}
 	return results
 }
+
+// ──────────────────────────── 交互记录半区（topic_outcomes.py:955-1916 + 2024-2230） ────────────────────────────
+//
+// 依赖的 topic_product/news 符号已随 topic_product_helpers.go 落地
+// （⤴️31c 归位搬移），本段不再是交点桩。
+
+// TerminalInteractionEventTypes 终局交互事件类型（:1282）。
+var TerminalInteractionEventTypes = map[string]bool{"topic_click": true, "not_interested": true}
+
+// exactExposure 精确曝光行（:955-978 _exact_exposure）。
+func exactExposure(store *TopicStarterStore, manifestID, exposureID string) map[string]any {
+	rows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: "dynamic_exposure", SlateID: &exposureID,
+		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+	})
+	if err != nil {
+		return nil
+	}
+	var matches []map[string]any
+	for _, row := range rows {
+		if pyStr(row["topic_id"]) != manifestID {
+			continue
+		}
+		payload, isMap := row["payload"].(map[string]any)
+		if !isMap {
+			continue
+		}
+		if pyStr(payload["manifest_id"]) != manifestID {
+			continue
+		}
+		matches = append(matches, row)
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return nil
+}
+
+// shownCard 精确可见修订三元组（:1228-1279 _shown_card）。
+func shownCard(store *TopicStarterStore, manifestID, generationBatchID, exposureID,
+	cardRevisionID, contextScope string, projectID any) (map[string]any, map[string]any, int, bool) {
+	exposure := exactExposure(store, manifestID, exposureID)
+	if exposure == nil {
+		return nil, nil, 0, false
+	}
+	payload := mapAnyOf(exposure["payload"])
+	revisionIDs, isList := payload["card_revision_ids"].([]any)
+	if !isList {
+		return nil, nil, 0, false
+	}
+	if !anyEqual(payload["generation_batch_id"], generationBatchID) ||
+		!anyEqual(payload["context_scope"], contextScope) ||
+		!anyEqual(payload["project_id"], projectID) {
+		return nil, nil, 0, false
+	}
+	revisionIndex := -1
+	for i, revision := range revisionIDs {
+		if anyEqual(revision, cardRevisionID) {
+			revisionIndex = i
+			break
+		}
+	}
+	if revisionIndex < 0 {
+		return nil, nil, 0, false
+	}
+	card := FindExactTerminalCard(store, manifestID, cardRevisionID,
+		generationBatchID, contextScope, projectID)
+	if card == nil {
+		return nil, nil, 0, false
+	}
+	searchReceipt := CardSearchReceipt(card)
+	if CardUsesHostEvidence(card) || IsColdStartCard(card) {
+		if card["search_receipt"] != nil {
+			return nil, nil, 0, false
+		}
+	} else if searchReceipt == nil {
+		return nil, nil, 0, false
+	}
+	exposureReceipts, isMap := payload["search_receipts_by_card_revision"].(map[string]any)
+	if !isMap || !anyEqual(exposureReceipts[cardRevisionID], searchReceipt) {
+		return nil, nil, 0, false
+	}
+	return exposure, card, revisionIndex + 1, true
+}
+
+// standingRecord 未被撤回命名的该展示卡最新否定记录
+// （:1285-1305 _standing_record）。
+func standingRecord(preferences []any, exposureID, cardRevisionID string) map[string]any {
+	withdrawn := map[string]bool{}
+	for _, recordValue := range preferences {
+		record, isMap := recordValue.(map[string]any)
+		if isMap && pyStr(record["reason"]) == "withdrawn" {
+			withdrawn[pyStr(record["withdraws"])] = true
+		}
+	}
+	for i := len(preferences) - 1; i >= 0; i-- {
+		record, isMap := preferences[i].(map[string]any)
+		if !isMap {
+			continue
+		}
+		if pyStr(record["exposure_id"]) != exposureID {
+			continue
+		}
+		if pyStr(record["card_revision_id"]) != cardRevisionID {
+			continue
+		}
+		// 旧版兴趣暂停不是卡片否定，即使同一修订
+		if pyStr(record["dismissal_kind"]) == "pause" {
+			continue
+		}
+		if withdrawn[pyStr(record["record_id"])] {
+			continue
+		}
+		return record
+	}
+	return nil
+}
+
+// RecordTerminalInteraction 仅为精确可见修订记录点击或卡片否定
+// （:1308-1422 record_terminal_interaction）。
+func RecordTerminalInteraction(store *TopicStarterStore, eventType, manifestID,
+	generationBatchID, exposureID, cardRevisionID, contextScope string,
+	projectID any, createdAt float64) bool {
+	if !TerminalInteractionEventTypes[eventType] || !finiteTimestamp(createdAt) {
+		return false
+	}
+	exposure, card, position, ok := shownCard(store, manifestID, generationBatchID,
+		exposureID, cardRevisionID, contextScope, projectID)
+	if !ok {
+		return false
+	}
+	if createdAt < toFloatOr(exposure["created_at"], 0) {
+		return false
+	}
+	providerResponseIDs := CardProviderResponseIds(card)
+	componentRequestIDs := componentRequestIDsOf(card)
+	if !IsColdStartCard(card) && (len(providerResponseIDs) == 0 || len(componentRequestIDs) == 0) {
+		return false
+	}
+	eventPayload := map[string]any{
+		"manifest_id": manifestID, "generation_batch_id": generationBatchID,
+		"exposure_id": exposureID, "exposure_position": position,
+		"card_revision_id": cardRevisionID, "card_id": card["card_id"],
+		"source_starter_id": card["source_starter_id"],
+		"context_scope":     contextScope, "project_id": projectID,
+		"user_state_snapshot_id": card["generation_input_snapshot_id"],
+		"version_refs":           versionRefsOf(card),
+		"component_request_ids":  componentPairsPayload(componentRequestIDs),
+		"provider_response_ids":  stringsToAny(providerResponseIDs),
+		"search_receipt":         CardSearchReceipt(card),
+	}
+	event := map[string]any{
+		"session_id": pyStr(exposure["session_id"]), "slate_id": exposureID,
+		"event_type": eventType, "topic_id": cardRevisionID,
+		"profile_version": card["profile_semantic_version"], "policy_id": POLICY_ID,
+		"selection_mode": "unknown", "propensity_reason": "not_estimated",
+		"payload": eventPayload, "created_at": createdAt,
+	}
+	if eventType == "topic_click" {
+		recorded, _ := store.RecordEvent(event)
+		return recorded
+	}
+	if eventType != "not_interested" {
+		return false
+	}
+	// 否定可在否定可撤销之前记录，即永久成立
+	previous, _ := store.QueryEvents(QueryEventsOptions{
+		EventType: eventType, SlateID: &exposureID, TopicID: &cardRevisionID,
+		PolicyID: &poolPolicyIDPtr, Limit: 1,
+	})
+	for _, row := range previous {
+		if _, present := mapAnyOf(row["payload"])["dismissal_record_id"]; !present {
+			return false
+		}
+	}
+	state := jsonRoundTripOrEmpty(loadLatestHistoryStateV4(store))
+	sidecar := mapAnyOf(state["memory_sidecar"])
+	state["memory_sidecar"] = sidecar
+	preferences := anyListOf(sidecar["negative_preferences"])
+	// 已成立的否定不重复记录
+	if standingRecord(preferences, exposureID, cardRevisionID) != nil {
+		return false
+	}
+	record := cardDismissalRecord(store, card, manifestID, contextScope, projectID, createdAt)
+	record["record_id"] = fmt.Sprintf("dismissal-%s", newUUIDHex())
+	record["exposure_id"] = exposureID
+	record["card_revision_id"] = cardRevisionID
+	eventPayload["dismissal_record_id"] = record["record_id"]
+	eventPayload["reason"] = "explicit_not_interested"
+	event["feedback_record_id"] = record["record_id"]
+	preferences = append(preferences, record)
+	sidecar["negative_preferences"] = preferences
+	if _, present := sidecar["explicit_corrections"]; !present {
+		sidecar["explicit_corrections"] = []any{}
+	}
+	negativeVersion := intOf(sidecar["negative_preference_version"]) + 1
+	sidecar["negative_preference_version"] = negativeVersion
+	eventPayload["negative_preference_version"] = negativeVersion
+	_, saveErr := HistorySaveV4State(store, state, []map[string]any{event}, createdAt)
+	return saveErr == nil
+}
+
+// loadLatestHistoryStateV4 最新状态或空（None → empty_history_state 语义）。
+func loadLatestHistoryStateV4(store *TopicStarterStore) map[string]any {
+	state, ok := HistoryLoadLatestV4(store)
+	if !ok {
+		return HistoryEmptyV4State()
+	}
+	return state
+}
+
+// jsonRoundTripOrEmpty 空输入回空状态。
+func jsonRoundTripOrEmpty(state map[string]any) map[string]any {
+	if state == nil {
+		return HistoryEmptyV4State()
+	}
+	return jsonRoundTrip(state)
+}
+
+// componentPairsPayload 组件对 → 载荷。
+func componentPairsPayload(pairs [][2]string) []any {
+	result := make([]any, 0, len(pairs))
+	for _, pair := range pairs {
+		result = append(result, []any{pair[0], pair[1]})
+	}
+	return result
+}
+
+// deduplicatedText 去重文本（:1019-1025 _deduplicated_text）。
+func deduplicatedText(values []any) []string {
+	var result []string
+	for _, value := range values {
+		text := strings.TrimSpace(pyStr(value))
+		if text != "" && !containsString(result, text) {
+			result = append(result, text)
+		}
+	}
+	return result
+}
+
+// negativePreference 方向级负偏好（:1028-1057 _negative_preference）。
+func negativePreference(card map[string]any, contextScope string, projectID any, dismissedAt float64) map[string]any {
+	var sourceIDs []string
+	for _, id := range anyListOf(card["source_memory_unit_ids"]) {
+		sourceIDs = append(sourceIDs, pyStr(id))
+	}
+	preference := map[string]any{
+		"context_scope": contextScope, "project_id": projectID,
+		"direction": strings.TrimSpace(pyStr(card["intent"])),
+		"source_id": firstOrEmpty(sourceIDs),
+		"aliases":   deduplicatedText([]any{card["title"], card["prompt"]}),
+		"anchors": deduplicatedText(append([]any{card["identity_anchor"]},
+			anyListOf(card["context_anchors"])...)),
+		"reason":       "explicit_not_interested",
+		"dismissed_at": dismissedAt,
+	}
+	if CardIsNews(card) {
+		bundle := mapAnyOf(card["evidence_bundle"])
+		preference["news_source_url"] = pyStr(bundle["source_url"])
+		if card["news_match"] != nil {
+			preference["news_match"] = card["news_match"]
+		}
+	}
+	if contextScope == GlobalNewChatScope && card["direction"] != nil {
+		directionAnchor := strings.TrimSpace(pyStr(card["direction"]))
+		preference["direction_anchor"] = directionAnchor
+		preference["direction"] = directionAnchor
+		preference["anchors"] = []any{directionAnchor}
+	}
+	return preference
+}
+
+// firstOrEmpty 首元素或空串。
+func firstOrEmpty(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+// dismissalRecord 该状态下的否定记录及其方向的会话（:1060-1106）。
+func dismissalRecord(store *TopicStarterStore, state, card map[string]any,
+	manifestID, contextScope string, projectID any, dismissedAt float64) map[string]any {
+	preference := negativePreference(card, contextScope, projectID, dismissedAt)
+	// 方向现有会话：重建后的画像在持有其大多数会话的单元里重新找到该方向；
+	// 画像重建前写入池的卡自己说出其单元的会话。
+	sessions := map[string]bool{}
+	for sessionID := range MemorySessionsByUnit(state)[pyStr(preference["source_id"])] {
+		sessions[sessionID] = true
+	}
+	if len(sessions) == 0 && pyStr(preference["source_id"]) != "" {
+		for _, locator := range anyListOf(card["source_locators"]) {
+			pair, isList := locator.([]any)
+			if isList && len(pair) > 0 {
+				sessions[pyStr(pair[0])] = true
+			}
+		}
+	}
+	if contextScope == GlobalNewChatScope &&
+		(CardIsNews(card) || pyStr(preference["source_id"]) == "") {
+		manifest := manifestPayloadOf(store, manifestID)
+		// 新闻卡的事件是它为之生成的热榜词条，无论哪个站点报道
+		if CardIsNews(card) {
+			newsEvent, err := NewsCardEvent(store, manifest, card["card_id"])
+			if err == nil && newsEvent != "" {
+				preference["news_event"] = newsEvent
+			}
+		}
+		if pyStr(preference["source_id"]) == "" {
+			// 由会话构建的全局卡改说其会话事件；项目卡只延续自己的会话
+			interestID := pyStr(card["interest_summary_id"])
+			events := InterestEvidenceIds(manifest)[interestID]
+			if len(events) > 0 {
+				preference["source_event_ids"] = stringsToAny(events)
+			}
+			for sessionID := range InterestSessionIds(manifest)[interestID] {
+				sessions[sessionID] = true
+			}
+		}
+	}
+	sessionList := make([]string, 0, len(sessions))
+	for sessionID := range sessions {
+		sessionList = append(sessionList, sessionID)
+	}
+	sortStrings(sessionList)
+	preference["evidence_session_ids"] = stringsToAny(sessionList)
+	return preference
+}
+
+// sortStrings 排序。
+func sortStrings(values []string) {
+	for i := 1; i < len(values); i++ {
+		for j := i; j > 0 && values[j] < values[j-1]; j-- {
+			values[j], values[j-1] = values[j-1], values[j]
+		}
+	}
+}
+
+// manifestPayloadOf 清单载荷。
+func manifestPayloadOf(store *TopicStarterStore, manifestID string) map[string]any {
+	rows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: "starter_slate_manifest", SlateID: &manifestID,
+		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+	})
+	if err != nil || len(rows) == 0 {
+		return map[string]any{}
+	}
+	if payload, isMap := rows[0]["payload"].(map[string]any); isMap {
+		return payload
+	}
+	return map[string]any{}
+}
+
+// cardDismissalRecord 卡片级否定记录（:1109-1145）。
+func cardDismissalRecord(store *TopicStarterStore, card map[string]any,
+	manifestID, contextScope string, projectID any, dismissedAt float64) map[string]any {
+	record := map[string]any{
+		"context_scope": contextScope, "project_id": projectID,
+		"dismissal_kind": "card", "card_id": pyStr(card["card_id"]),
+		"aliases": deduplicatedText([]any{card["title"], card["prompt"]}),
+		"reason":  "explicit_not_interested", "dismissed_at": dismissedAt,
+	}
+	if CardIsNews(card) {
+		bundle := mapAnyOf(card["evidence_bundle"])
+		record["news_source_url"] = pyStr(bundle["source_url"])
+		manifest := manifestPayloadOf(store, manifestID)
+		newsEvent, err := NewsCardEvent(store, manifest, card["card_id"])
+		if err == nil && newsEvent != "" {
+			record["news_event"] = newsEvent
+		}
+	}
+	return record
+}
+
+// DismissalMigrationEventType 迁移标记事件类型（:1149）。
+const DismissalMigrationEventType = "dismissal_records_migrated"
+
+// writtenDismissalFields 迁移匹配字段（:1148）。
+var writtenDismissalFields = []string{"context_scope", "project_id", "direction", "source_id", "aliases", "anchors"}
+
+// MigrateDismissalRecords 一次性为计数 strikes 前写下的否定补时间与会话
+// （:1152-1168 migrate_dismissal_records）。
+func MigrateDismissalRecords(store *TopicStarterStore, now float64) error {
+	marker := DismissalMigrationEventType
+	rows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: marker, PolicyID: &poolPolicyIDPtr, Limit: 1,
+	})
+	if err != nil {
+		return err
+	}
+	if len(rows) > 0 {
+		return nil
+	}
+	if err := timeDismissalRecords(store, now); err != nil {
+		return err
+	}
+	_, _ = store.RecordEvent(map[string]any{
+		"event_type": marker, "policy_id": POLICY_ID, "created_at": now,
+	})
+	return nil
+}
+
+// timeDismissalRecords 记账否定的时间与会话补齐（:1171-1225）。
+func timeDismissalRecords(store *TopicStarterStore, now float64) error {
+	state, ok := HistoryLoadLatestV4(store)
+	if !ok {
+		return nil
+	}
+	sidecar, isMap := state["memory_sidecar"].(map[string]any)
+	if !isMap {
+		return nil
+	}
+	var preferences []any
+	for _, item := range anyListOf(sidecar["negative_preferences"]) {
+		if m, isMap := item.(map[string]any); isMap {
+			preferences = append(preferences, jsonRoundTrip(m))
+		}
+	}
+	var untimed []int
+	for index, item := range preferences {
+		record := mapAnyOf(item)
+		reason := pyStr(record["reason"])
+		if reason == "" {
+			reason = "explicit_not_interested"
+		}
+		if reason == "explicit_not_interested" && record["dismissed_at"] == nil {
+			untimed = append(untimed, index)
+		}
+	}
+	if len(untimed) == 0 {
+		return nil
+	}
+	claimed := map[int]bool{}
+	var repeated []any
+	events, err := store.QueryEvents(QueryEventsOptions{
+		EventType: "not_interested", PolicyID: &poolPolicyIDPtr, Limit: 100000,
+	})
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		payload, isMap := event["payload"].(map[string]any)
+		if !isMap {
+			continue
+		}
+		manifestID := pyStr(payload["manifest_id"])
+		revisionID := pyStr(payload["card_revision_id"])
+		cardRows, queryErr := store.QueryEvents(QueryEventsOptions{
+			EventType: "starter_card", SlateID: &manifestID, TopicID: &revisionID,
+			PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+		})
+		if queryErr != nil {
+			return queryErr
+		}
+		at := toFloatOr(event["created_at"], 0.0)
+		if len(cardRows) == 0 {
+			continue
+		}
+		card, isMap := cardRows[0]["payload"].(map[string]any)
+		if !isMap {
+			continue
+		}
+		historyAt, _ := HistoryLoadLatestV4(store)
+		written := dismissalRecord(store, historyAt, card, manifestID,
+			pyStr(payload["context_scope"]), payload["project_id"], at)
+		var matches []int
+		for _, index := range untimed {
+			matched := true
+			for _, field := range writtenDismissalFields {
+				if !anyEqual(mapAnyOf(preferences[index])[field], written[field]) {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				matches = append(matches, index)
+			}
+		}
+		if len(matches) == 0 {
+			continue
+		}
+		timed := map[string]any{}
+		for _, key := range []string{"dismissed_at", "evidence_session_ids", "news_source_url"} {
+			if value, present := written[key]; present {
+				timed[key] = value
+			}
+		}
+		var unclaimed []int
+		for _, index := range matches {
+			if !claimed[index] {
+				unclaimed = append(unclaimed, index)
+			}
+		}
+		if len(unclaimed) > 0 {
+			claimed[unclaimed[0]] = true
+			target := mapAnyOf(preferences[unclaimed[0]])
+			for key, value := range timed {
+				target[key] = value
+			}
+		} else {
+			merged := jsonRoundTrip(mapAnyOf(preferences[matches[0]]))
+			for key, value := range timed {
+				merged[key] = value
+			}
+			repeated = append(repeated, merged)
+		}
+	}
+	if len(claimed) == 0 {
+		return nil
+	}
+	preferences = append(preferences, repeated...)
+	sidecar["negative_preferences"] = preferences
+	version := intOf(sidecar["negative_preference_version"])
+	if len(preferences) > version {
+		version = len(preferences)
+	}
+	sidecar["negative_preference_version"] = version
+	_, err = HistorySaveV4State(store, state, nil, now)
+	return err
+}
+
+// RecordTerminalSessionStart 绑定点击修订到其启动的精确会话（:1457-1528）。
+func RecordTerminalSessionStart(store *TopicStarterStore, manifestID, generationBatchID,
+	exposureID, cardRevisionID, contextScope string, projectID any,
+	startedSessionID string, createdAt float64) bool {
+	if strings.TrimSpace(startedSessionID) == "" || !finiteTimestamp(createdAt) {
+		return false
+	}
+	_, card, position, ok := shownCard(store, manifestID, generationBatchID,
+		exposureID, cardRevisionID, contextScope, projectID)
+	if !ok {
+		return false
+	}
+	click := exactOutcomeEvent(store, "topic_click", manifestID, exposureID, cardRevisionID)
+	existingStart := exactOutcomeEvent(store, "session_bound", manifestID, exposureID, cardRevisionID)
+	if click == nil || existingStart != nil {
+		return false
+	}
+	if createdAt < toFloatOr(click["created_at"], 0) {
+		return false
+	}
+	recorded, _ := store.RecordEvent(map[string]any{
+		"session_id": startedSessionID, "slate_id": exposureID,
+		"event_type": "session_bound", "topic_id": cardRevisionID,
+		"profile_version": card["profile_semantic_version"], "policy_id": POLICY_ID,
+		"selection_mode": "unknown", "propensity_reason": "not_estimated",
+		"payload": map[string]any{
+			"manifest_id": manifestID, "generation_batch_id": generationBatchID,
+			"exposure_id": exposureID, "exposure_position": position,
+			"card_revision_id": cardRevisionID, "context_scope": contextScope,
+			"project_id": projectID, "started_session_id": startedSessionID,
+			"search_receipt": CardSearchReceipt(card),
+		},
+		"created_at": createdAt,
+	})
+	return recorded
+}
+
+// outcomeEvents 窗口内精确事件（:1676-1704 _outcome_events）。
+func outcomeEvents(store *TopicStarterStore, eventType, exposureID, manifestID string,
+	exposedAt, labelHorizon float64) []map[string]any {
+	rows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: eventType, SlateID: &exposureID,
+		PolicyID: &poolPolicyIDPtr, Limit: 64,
+	})
+	if err != nil {
+		return nil
+	}
+	var matches []map[string]any
+	for _, event := range rows {
+		createdAt := toFloatOr(event["created_at"], 0)
+		if !(exposedAt <= createdAt && createdAt <= labelHorizon) {
+			continue
+		}
+		payload, isMap := event["payload"].(map[string]any)
+		if !isMap {
+			continue
+		}
+		if pyStr(payload["manifest_id"]) != manifestID {
+			continue
+		}
+		if pyStr(payload["exposure_id"]) != exposureID {
+			continue
+		}
+		matches = append(matches, event)
+	}
+	return matches
+}
+
+// JoinStarterOutcomes 一次曝光与后续信号的联接，不做标题/文本匹配
+// （:1707-1916 join_starter_outcomes）。
+func JoinStarterOutcomes(store *TopicStarterStore, manifestID, exposureID string,
+	labelHorizon float64, deepConversationMinDepth int) ([]*StarterOutcome, error) {
+	if strings.TrimSpace(manifestID) == "" || strings.TrimSpace(exposureID) == "" {
+		return nil, nil
+	}
+	if !finiteTimestamp(labelHorizon) {
+		return nil, nil
+	}
+	if deepConversationMinDepth < 1 {
+		return nil, nil
+	}
+	exposure := exactExposure(store, manifestID, exposureID)
+	if exposure == nil || toFloatOr(exposure["created_at"], 0) > labelHorizon {
+		return nil, nil
+	}
+	payload := mapAnyOf(exposure["payload"])
+	revisionIDs, isList := payload["card_revision_ids"].([]any)
+	exposureReceipts, receiptsIsMap := payload["search_receipts_by_card_revision"].(map[string]any)
+	if !isList || len(revisionIDs) == 0 || !receiptsIsMap {
+		return nil, nil
+	}
+	if len(exposureReceipts) != len(revisionIDs) {
+		return nil, nil
+	}
+	contextScope := pyStr(payload["context_scope"])
+	projectID := payload["project_id"]
+	batchID := pyStr(payload["generation_batch_id"])
+	exposedAt := toFloatOr(exposure["created_at"], 0)
+	eventTypes := []string{"topic_click", "not_interested", "not_interested_undone",
+		"post_exposure_direct", "page_left", "session_bound",
+		"conversation_depth", "future_activity"}
+	eventsByType := map[string][]map[string]any{}
+	for _, eventType := range eventTypes {
+		eventsByType[eventType] = outcomeEvents(store, eventType, exposureID, manifestID, exposedAt, labelHorizon)
+	}
+	directInput := len(eventsByType["post_exposure_direct"]) > 0
+	passiveIgnored := len(eventsByType["page_left"]) > 0
+
+	var result []*StarterOutcome
+	for position, revisionValue := range revisionIDs {
+		revisionID := pyStr(revisionValue)
+		card := FindExactTerminalCard(store, manifestID, revisionID, batchID, contextScope, projectID)
+		if card == nil {
+			return nil, nil
+		}
+		providerResponseIDs := CardProviderResponseIds(card)
+		componentRequestIDs := componentRequestIDsOf(card)
+		if len(providerResponseIDs) == 0 || len(componentRequestIDs) == 0 {
+			return nil, nil
+		}
+		searchReceipt := CardSearchReceipt(card)
+		if (!CardUsesHostEvidence(card) && searchReceipt == nil) ||
+			!anyEqual(exposureReceipts[revisionID], searchReceipt) {
+			return nil, nil
+		}
+		cardEvents := map[string][]map[string]any{}
+		for _, eventType := range eventTypes {
+			var typed []map[string]any
+			for _, event := range eventsByType[eventType] {
+				if pyStr(event["topic_id"]) != revisionID {
+					continue
+				}
+				eventPayload, isMap := event["payload"].(map[string]any)
+				if !isMap {
+					continue
+				}
+				if pyStr(eventPayload["card_revision_id"]) != revisionID {
+					continue
+				}
+				typed = append(typed, event)
+			}
+			cardEvents[eventType] = typed
+		}
+		clicks := cardEvents["topic_click"]
+		// 视界前撤回的否定不再是负样本
+		undone := map[string]bool{}
+		for _, event := range cardEvents["not_interested_undone"] {
+			if id := pyStr(mapAnyOf(event["payload"])["withdrawn_record_id"]); id != "" {
+				undone[id] = true
+			}
+		}
+		var negatives []map[string]any
+		for _, event := range cardEvents["not_interested"] {
+			if !undone[pyStr(mapAnyOf(event["payload"])["dismissal_record_id"])] {
+				negatives = append(negatives, event)
+			}
+		}
+		starts := cardEvents["session_bound"]
+		var start map[string]any
+		if len(starts) > 0 {
+			start = starts[0]
+		}
+		var startedSessionID string
+		if start != nil {
+			startedSessionID = pyStr(start["session_id"])
+		}
+		var depths []map[string]any
+		if startedSessionID != "" {
+			for _, event := range cardEvents["conversation_depth"] {
+				if pyStr(event["session_id"]) == startedSessionID {
+					depths = append(depths, event)
+				}
+			}
+		}
+		conversationDepth := 0
+		for _, event := range depths {
+			value := mapAnyOf(event["payload"])["conversation_depth"]
+			if plainInt(value) && intOf(value) > conversationDepth {
+				conversationDepth = intOf(value)
+			}
+		}
+		var future []map[string]any
+		if startedSessionID != "" {
+			for _, event := range cardEvents["future_activity"] {
+				if pyStr(mapAnyOf(event["payload"])["started_session_id"]) == startedSessionID {
+					future = append(future, event)
+				}
+			}
+		}
+		futureNatural := false
+		futurePAActive := false
+		var exclusions []string
+		for _, event := range future {
+			eventPayload := mapAnyOf(event["payload"])
+			if eventPayload["natural_revisit_eligible"] == true {
+				futureNatural = true
+			}
+			if eventPayload["pa_active_eligible"] == true {
+				futurePAActive = true
+			}
+			if reason := pyStr(eventPayload["exclusion_reason"]); reason != "" {
+				if !containsString(exclusions, reason) {
+					exclusions = append(exclusions, reason)
+				}
+			}
+		}
+		clicked := len(clicks) > 0
+		negative := len(negatives) > 0
+		started := start != nil
+		outcomeLabel := "shown_only"
+		if futureNatural {
+			outcomeLabel = "future_revisit"
+		} else if started && conversationDepth >= deepConversationMinDepth {
+			outcomeLabel = "started_deep"
+		} else if started {
+			outcomeLabel = "started_shallow"
+		} else if clicked {
+			outcomeLabel = "clicked_no_start"
+		} else if negative {
+			outcomeLabel = "not_interested"
+		} else if directInput {
+			outcomeLabel = "direct_input"
+		} else if passiveIgnored {
+			outcomeLabel = "passive_ignored"
+		}
+		var startedSessionIDValue any
+		if startedSessionID != "" {
+			startedSessionIDValue = startedSessionID
+		}
+		outcome := &StarterOutcome{
+			OutcomeID:           fmt.Sprintf("outcome:%s:%s:h%.6f", exposureID, revisionID, labelHorizon),
+			UserStateSnapshotID: pyStr(card["generation_input_snapshot_id"]),
+			ManifestID:          manifestID, GenerationBatchID: batchID, ExposureID: exposureID,
+			ExposurePosition: position + 1, CardRevisionID: revisionID,
+			ContextScope: contextScope, ProjectID: projectID,
+			Shown: true, Clicked: clicked, NotInterested: negative, Started: started,
+			StartedSessionID:       startedSessionIDValue,
+			ConversationDepth:      conversationDepth,
+			FutureActivityObserved: len(future) > 0,
+			FutureNaturalActivity:  futureNatural, FuturePAActiveActivity: futurePAActive,
+			FutureActivityExclusionReasons: exclusions, OutcomeLabel: outcomeLabel,
+			ExposedAt: exposedAt, LabelHorizon: labelHorizon,
+			VersionRefs:         versionRefsOf(card),
+			ComponentRequestIDs: componentRequestIDs,
+			ProviderResponseIDs: providerResponseIDs,
+			SearchReceipt:       searchReceipt,
+			SchemaVersion:       StarterOutcomeSchemaVersion,
+		}
+		if len(clicks) > 0 {
+			outcome.ClickedAt = toFloatOr(clicks[0]["created_at"], 0)
+		}
+		if len(negatives) > 0 {
+			outcome.NotInterestedAt = toFloatOr(negatives[0]["created_at"], 0)
+		}
+		if start != nil {
+			outcome.StartedAt = toFloatOr(start["created_at"], 0)
+		}
+		if err := outcome.validate(); err != nil {
+			return nil, err
+		}
+		result = append(result, outcome)
+	}
+	return result, nil
+}
+
+// TopicStarterStoreOutcomeSink 仅在精确展示血缘匹配时持久化接受/否定信号
+// （:2024-2145）。
+type TopicStarterStoreOutcomeSink struct {
+	store *TopicStarterStore
+}
+
+// NewTopicStarterStoreOutcomeSink 构造。
+func NewTopicStarterStoreOutcomeSink(store *TopicStarterStore) *TopicStarterStoreOutcomeSink {
+	return &TopicStarterStoreOutcomeSink{store: store}
+}
+
+// Apply 持久化信号（对齐 __call__）。
+func (s *TopicStarterStoreOutcomeSink) Apply(signal *NewPageOutcomeSignal) bool {
+	manifestRows, err := s.store.QueryEvents(QueryEventsOptions{
+		EventType: "starter_slate_manifest", SlateID: &signal.ManifestID,
+		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+	})
+	if err != nil || len(manifestRows) == 0 {
+		return false
+	}
+	cardRows, err := s.store.QueryEvents(QueryEventsOptions{
+		EventType: "starter_card", SlateID: &signal.ManifestID, TopicID: &signal.CardRevisionID,
+		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+	})
+	if err != nil || len(cardRows) == 0 {
+		return false
+	}
+	exposureRows, err := s.store.QueryEvents(QueryEventsOptions{
+		EventType: "dynamic_exposure", SlateID: &signal.ExposureID, TopicID: &signal.ManifestID,
+		PolicyID: &poolPolicyIDPtr, Limit: 1, NewestFirst: true,
+	})
+	if err != nil || len(exposureRows) == 0 {
+		return false
+	}
+	manifest, mOK := manifestRows[0]["payload"].(map[string]any)
+	card, cOK := cardRows[0]["payload"].(map[string]any)
+	exposure, eOK := exposureRows[0]["payload"].(map[string]any)
+	if !mOK || !cOK || !eOK {
+		return false
+	}
+	for _, check := range []struct {
+		source map[string]any
+		keys   []string
+	}{
+		{manifest, []string{"manifest_id", "generation_batch_id", "context_scope", "project_id"}},
+		{exposure, []string{"manifest_id", "generation_batch_id", "context_scope", "project_id"}},
+	} {
+		for _, key := range check.keys {
+			expected := expectedSignalValue(signal, key)
+			if !anyEqual(check.source[key], expected) {
+				return false
+			}
+		}
+	}
+	for _, key := range []string{"generation_batch_id", "context_scope", "project_id"} {
+		if !anyEqual(card[key], expectedSignalValue(signal, key)) {
+			return false
+		}
+	}
+	if !manifestContainsRevision(manifest, signal.CardRevisionID) {
+		return false
+	}
+	if !anyEqual(card["card_revision_id"], signal.CardRevisionID) {
+		return false
+	}
+	if !manifestContainsRevision(exposure, signal.CardRevisionID) {
+		return false
+	}
+	receipts, isMap := card["component_receipts"].(map[string]any)
+	if !isMap {
+		return false
+	}
+	if !IsColdStartCard(card) {
+		storedRequestIDs := map[string]any{}
+		for componentID, receiptValue := range receipts {
+			receipt, isMap := receiptValue.(map[string]any)
+			if !isMap || strings.TrimSpace(componentID) == "" {
+				continue
+			}
+			requestID := pyStr(receipt["request_id"])
+			if strings.TrimSpace(requestID) == "" {
+				continue
+			}
+			storedRequestIDs[componentID] = requestID
+		}
+		if len(storedRequestIDs) != len(signal.ComponentRequestIDs) {
+			return false
+		}
+		for _, pair := range signal.ComponentRequestIDs {
+			if !anyEqual(storedRequestIDs[pair[0]], pair[1]) {
+				return false
+			}
+		}
+		storedProviderIDs := CardProviderResponseIds(card)
+		if len(storedProviderIDs) != len(signal.ProviderResponseIDs) {
+			return false
+		}
+		for i, id := range storedProviderIDs {
+			if id != signal.ProviderResponseIDs[i] {
+				return false
+			}
+		}
+		storedSearchReceipt := CardSearchReceipt(card)
+		if !anyEqual(card["search_receipt"], signal.SearchReceipt) {
+			return false
+		}
+		exposureProviderIDs, isMap := exposure["provider_response_ids_by_card_revision"].(map[string]any)
+		if !isMap {
+			return false
+		}
+		var expectedProviderList []any
+		for _, id := range storedProviderIDs {
+			expectedProviderList = append(expectedProviderList, id)
+		}
+		if !anyEqual(exposureProviderIDs[signal.CardRevisionID], expectedProviderList) {
+			return false
+		}
+		exposureReceipts, isMap := exposure["search_receipts_by_card_revision"].(map[string]any)
+		if !isMap || !anyEqual(exposureReceipts[signal.CardRevisionID], storedSearchReceipt) {
+			return false
+		}
+	}
+	eventType := signal.Outcome
+	if signal.Outcome == "accepted" {
+		eventType = "topic_click"
+	}
+	return RecordTerminalInteraction(s.store, eventType, signal.ManifestID,
+		signal.GenerationBatchID, signal.ExposureID, signal.CardRevisionID,
+		signal.ContextScope, signal.ProjectID, signal.OccurredAt)
+}
+
+// expectedSignalValue 信号期望值四键。
+func expectedSignalValue(signal *NewPageOutcomeSignal, key string) any {
+	switch key {
+	case "manifest_id":
+		return signal.ManifestID
+	case "generation_batch_id":
+		return signal.GenerationBatchID
+	case "context_scope":
+		return signal.ContextScope
+	case "project_id":
+		return signal.ProjectID
+	}
+	return nil
+}
+
+// RecordTerminalSlateOutcome 对一次精确展示持久化被动/直接 outcome
+// （:2148-2230 record_terminal_slate_outcome）。
+func RecordTerminalSlateOutcome(store *TopicStarterStore, eventType, manifestID,
+	generationBatchID, exposureID, contextScope string, projectID any, createdAt float64) bool {
+	if eventType != "post_exposure_direct" && eventType != "page_left" {
+		return false
+	}
+	if math.IsInf(createdAt, 0) || math.IsNaN(createdAt) {
+		return false
+	}
+	for _, value := range []string{manifestID, generationBatchID, exposureID, contextScope} {
+		if strings.TrimSpace(value) == "" {
+			return false
+		}
+	}
+	expectedProjectID, err := ProjectIDForScope(contextScope)
+	if err != nil {
+		return false
+	}
+	var expectedValue any
+	if expectedProjectID != "" {
+		expectedValue = expectedProjectID
+	}
+	if !anyEqual(projectID, expectedValue) {
+		return false
+	}
+	manifestRows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: "starter_slate_manifest", SlateID: &manifestID,
+		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+	})
+	if err != nil {
+		return false
+	}
+	exposureRows, err := store.QueryEvents(QueryEventsOptions{
+		EventType: "dynamic_exposure", SlateID: &exposureID, TopicID: &manifestID,
+		PolicyID: &poolPolicyIDPtr, Limit: 2, NewestFirst: true,
+	})
+	if err != nil {
+		return false
+	}
+	if len(manifestRows) != 1 || len(exposureRows) != 1 {
+		return false
+	}
+	manifest, mOK := manifestRows[0]["payload"].(map[string]any)
+	exposure, eOK := exposureRows[0]["payload"].(map[string]any)
+	if !mOK || !eOK {
+		return false
+	}
+	for _, key := range []string{"manifest_id", "generation_batch_id", "context_scope", "project_id"} {
+		expected := expectedSlateValue(manifestID, generationBatchID, contextScope, projectID, key)
+		if !anyEqual(manifest[key], expected) || !anyEqual(exposure[key], expected) {
+			return false
+		}
+	}
+	exposedAt := toFloatOr(exposureRows[0]["created_at"], 0.0)
+	if createdAt < exposedAt {
+		return false
+	}
+	recorded, _ := store.RecordEvent(map[string]any{
+		"session_id": pyStr(exposureRows[0]["session_id"]), "slate_id": exposureID,
+		"event_type": eventType, "topic_id": manifestID,
+		"profile_version": manifest["profile_semantic_version"], "policy_id": POLICY_ID,
+		"selection_mode": "unknown", "propensity_reason": "not_estimated",
+		"payload": map[string]any{
+			"manifest_id": manifestID, "generation_batch_id": generationBatchID,
+			"context_scope": contextScope, "project_id": projectID,
+			"exposure_id": exposureID, "negative_feedback": false,
+		},
+		"created_at": createdAt,
+	})
+	return recorded
+}
+
+// expectedSlateValue 被动 outcome 期望值。
+func expectedSlateValue(manifestID, generationBatchID, contextScope string, projectID any, key string) any {
+	switch key {
+	case "manifest_id":
+		return manifestID
+	case "generation_batch_id":
+		return generationBatchID
+	case "context_scope":
+		return contextScope
+	case "project_id":
+		return projectID
+	}
+	return nil
+}
