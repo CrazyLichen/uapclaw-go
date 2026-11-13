@@ -33,7 +33,7 @@ func TestDuplexLineReader_逐行读取(t *testing.T) {
 }
 
 // TestDuplexLineReader_空行透传 空行原样返回空字节，交由协议层拒绝。
-// Python: duplex_input.py:130 Empty lines remain b''
+// Python: duplex_input.py:130 Empty lines remain b”
 func TestDuplexLineReader_空行透传(t *testing.T) {
 	r := newTestReader(t, "\n")
 	line, err := r.ReadLine()

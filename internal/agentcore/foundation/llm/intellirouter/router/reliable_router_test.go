@@ -1,14 +1,15 @@
 package router
 
 import (
-	"errors"
-	"io"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -63,18 +64,31 @@ func dep(t *testing.T, id, url string) *intelliroutercore.Deployment {
 }
 
 // captureEmitHandler 捕获事件的 handler。
+// emitEventWithoutAwait 异步调用 HandleEvent，须加锁保护 events。
 type captureEmitHandler struct {
+	mu     sync.Mutex
 	events []observability.RoutingEvent
 }
 
 func (h *captureEmitHandler) HandleEvent(e observability.RoutingEvent) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.events = append(h.events, e)
 }
+
+// snapshot 返回当前已捕获事件列表（供测试侧并发读取）。
+func (h *captureEmitHandler) snapshot() []observability.RoutingEvent {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]observability.RoutingEvent(nil), h.events...)
+}
+
 func (h *captureEmitHandler) Name() string { return "capture" }
 
 func eventTypes(h *captureEmitHandler) []string {
-	types := make([]string, len(h.events))
-	for i, e := range h.events {
+	events := h.snapshot()
+	types := make([]string, len(events))
+	for i, e := range events {
 		types[i] = string(e.EventType)
 	}
 	return types
@@ -862,7 +876,7 @@ func TestStream_CancelledConsumer(t *testing.T) {
 	}
 	// STREAM_CANCELLED 终态投递（goroutine 异步，轮询等待）
 	require.Eventually(t, func() bool {
-		for _, e := range handler.events {
+		for _, e := range handler.snapshot() {
 			if e.EventType == observability.EventTypeStreamCancelled {
 				return true
 			}
@@ -1005,7 +1019,7 @@ func TestRouterRemaining(t *testing.T) {
 	bus.Register(handler)
 	r3.EventBus = bus
 	r3.emitEventWithoutAwait(routingEvent(observability.EventTypeRequestStarted, "r", "m", map[string]any{}))
-	require.Eventually(t, func() bool { return len(handler.events) == 1 }, 2e9, 1e7)
+	require.Eventually(t, func() bool { return len(handler.snapshot()) == 1 }, 2e9, 1e7)
 	// BaseRouter.Completion 无可用部署分支（py:271-273 NoDeploymentAvailable）
 	rBad := NewReliableRouter(RouterParams{Deployments: []*intelliroutercore.Deployment{dep(t, "A", srv.URL)}, Strategy: &seqStrategy{order: []string{"A"}}})
 	rBad.State.OnFailure("A", nil, 60.0)

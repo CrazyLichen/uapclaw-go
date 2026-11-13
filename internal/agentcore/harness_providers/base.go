@@ -371,7 +371,14 @@ func (h *SerializedTurnHarness) Context() *harnessprotocol.HarnessContext {
 
 // ActiveTurn 返回正在执行的轮次（若有）。
 // Python: base.py:182-185 active_turn
-func (h *SerializedTurnHarness) ActiveTurn() *PendingTurn { return h.activeTurn }
+//
+// activeTurn 的写路径均在 commandLock 内（监督协程 / Stop），读取也须加锁，
+// 否则与监督协程的并发写入构成 data race。
+func (h *SerializedTurnHarness) ActiveTurn() *PendingTurn {
+	h.commandLock.Lock()
+	defer h.commandLock.Unlock()
+	return h.activeTurn
+}
 
 // FallbackActivated 认证回退模型是否服务本会话。
 // Python: base.py:160-163 fallback_activated
@@ -953,6 +960,7 @@ func (h *SerializedTurnHarness) superviseTurns(ctx context.Context, handle *supe
 		h.commandLock.Lock()
 		h.activeTurn = nil
 		needIdle := false
+		stoppingNow := h.stopping // 锁内快照，锁外读会与 Stop() 写构成 race
 		queued = nil
 		if h.stopping {
 			queued = h.pending
@@ -974,7 +982,7 @@ func (h *SerializedTurnHarness) superviseTurns(ctx context.Context, handle *supe
 			h.abortQueuedTurns(ctx, queued)
 			return
 		}
-		if h.stopping {
+		if stoppingNow {
 			return
 		}
 	}

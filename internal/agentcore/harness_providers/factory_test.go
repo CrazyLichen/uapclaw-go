@@ -173,7 +173,7 @@ func TestResolveProvider_工厂返回nil(t *testing.T) {
 // ──────────────────────────── manifest 转换 ────────────────────────────
 
 // TestManifestSourceFromPath_路径加载 对齐 factory.py:234 的路径分支
-//（union 已在 API 层拆开：spec 由调用方直传，本函数只管路径）。
+// （union 已在 API 层拆开：spec 由调用方直传，本函数只管路径）。
 func TestManifestSourceFromPath_路径加载(t *testing.T) {
 	dir := t.TempDir()
 	writeValidManifest(t, dir)

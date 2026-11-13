@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,8 +29,8 @@ type fakeBackend struct {
 	responses [][]stream.OutputSchema
 	// queries 收到的 query
 	queries []any
-	// aborted 是否被 Abort
-	aborted int
+	// aborted 是否被 Abort（atomic：Abort 由 Handle 异步 goroutine 调用，测试侧并发读取）
+	aborted atomic.Int32
 	// started / stopped
 	started, stopped bool
 }
@@ -62,7 +63,7 @@ func (f *fakeBackend) RunStreaming(_ context.Context, query any, _ *string) (<-c
 }
 
 func (f *fakeBackend) Abort(_ context.Context) error {
-	f.aborted++
+	f.aborted.Add(1)
 	return nil
 }
 
@@ -91,7 +92,7 @@ func TestInterruptManager_三层与窗口(t *testing.T) {
 	mgr := &InterruptManager{now: func() float64 { clock += 0.1; return clock }}
 
 	assert.Equal(t, "abort", mgr.Handle(backend))
-	assert.Eventually(t, func() bool { return backend.aborted == 1 }, time.Second, 10*time.Millisecond,
+	assert.Eventually(t, func() bool { return backend.aborted.Load() == 1 }, time.Second, 10*time.Millisecond,
 		"第一次触发即中止后端（ensure_future 语义，异步执行）")
 	assert.Equal(t, "warn", mgr.Handle(backend))
 	assert.Equal(t, "exit", mgr.Handle(backend))

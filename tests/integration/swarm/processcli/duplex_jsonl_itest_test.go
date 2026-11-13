@@ -5,8 +5,8 @@ package processcli
 import (
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,7 +114,7 @@ func (s *DuplexJSONLSuite) TestRunJsonl_cancel取消() {
 
 	// 与 s.run 相同的进程装配，但 dataDir 指向带模型配置的隔离目录
 	res := s.runWithEnv(map[string]string{
-		"UAPCLAW_DATA_DIR":     dataDir,
+		"UAPCLAW_DATA_DIR":    dataDir,
 		"UAPCLAW_CONFIG_YAML": filepath.Join(dataDir, "config", "config.yaml"),
 	}, strings.NewReader(input), "--run-jsonl")
 

@@ -293,6 +293,10 @@ func TestAdapter_中止轮次保留终止类别(t *testing.T) {
 	waitForState(t, harness, harnessprotocol.HarnessStateRunning)
 	require.NoError(t, adapter.Abort(ctx, false))
 	waitForState(t, harness, harnessprotocol.HarnessStateIdle)
+	// 终止类别事件在 Idle 转移后异步发射（偏差 D4），须等 started+aborted=2 条
+	require.Eventually(t, func() bool {
+		return adapter.OutputCount() >= 2
+	}, 3*time.Second, 10*time.Millisecond)
 
 	chunks := snapshotOutputs(t, adapter)
 	lifecycles := chunksByType(chunks, TurnLifecycleChunkType)

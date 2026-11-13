@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/processcli/protocol"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -433,7 +433,7 @@ func (c *DuplexController) FailureExitCode() int {
 // Python: duplex_control.py:107-161 _read_controls
 //
 // 循环读行 → 解码 → 身份校验 → 按 kind 分流；任何错误终止整个 run
-//（control 输入不可恢复）。
+// （control 输入不可恢复）。
 func (c *DuplexController) readControls(inputCtx context.Context) {
 	defer close(c.inputDone)
 	// Python: :109-110 reader is None → RuntimeError（构造已保证非 nil）
@@ -579,10 +579,10 @@ func (c *DuplexController) answerInput(payload map[string]any, answers []map[str
 	// Python: :179-196 字段来源一比一
 	input := swruntime.InteractionAnswerInput{
 		// Python: :179 request_id=f"answer_{uuid4().hex}"
-		RequestID: "answer_" + newRequestIDWithPrefix(""),
-		ChannelID: request.ChannelID,
-		SessionID: derefTextPtr(request.SessionID),
-		InteractionID: textOr(payload, "request_id", textOr(payload, "interaction_id", "")),
+		RequestID:      "answer_" + newRequestIDWithPrefix(""),
+		ChannelID:      request.ChannelID,
+		SessionID:      derefTextPtr(request.SessionID),
+		InteractionID:  textOr(payload, "request_id", textOr(payload, "interaction_id", "")),
 		Answers:        answers,
 		Source:         textOr(payload, "source", ""),
 		InterruptID:    textOr(payload, "interrupt_id", ""),

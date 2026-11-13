@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"sync"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/processcli/protocol"
 )

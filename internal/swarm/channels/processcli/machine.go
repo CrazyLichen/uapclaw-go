@@ -735,7 +735,9 @@ var _ = swruntime.RuntimeEvent{}
 
 // executeConsumeStep 步骤 22：按 control 有无分流消费事件流。
 // Python: machine.py:364-372 if control is not None: control.consume(
-//     stream, client=self.client, request=self.request, observe=self.observe)
+//
+//	stream, client=self.client, request=self.request, observe=self.observe)
+//
 // else consume_noninteractive()
 func (m *MachineRun) executeConsumeStep(ctx context.Context, streamFn streamDriver) (bool, error) {
 	if m.control != nil {

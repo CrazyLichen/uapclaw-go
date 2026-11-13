@@ -52,7 +52,10 @@ type BaseRouter struct {
 	// Go net/http.Client TLS 配置由调用方注入，单客户端等价）
 	httpClient *http.Client
 	// adapterCache provider 适配器缓存 ← py:62
+	// BatchCompletion 并发调用 Completion→GetAdapter 惰性建缓存，读写均需加锁
 	adapterCache map[string]provider.BaseProviderAdapter
+	// adapterCacheLock 保护 adapterCache 的并发读写
+	adapterCacheLock sync.Mutex
 	// hookAvailableDeploymentsForModel 可覆写钩子（py:370-378
 	// _available_deployments_for_model：Python 子类覆写，Go 经构造期注入
 	// 函数指针实现——嵌入方法静态绑定不会派发到「子类」版本）。
@@ -173,6 +176,8 @@ func (r *BaseRouter) GetDeploymentConfigByModel(model string) []DeploymentConfig
 // GetAdapter 获取 provider adapter（带缓存）。← py:135-142 _get_adapter
 func (r *BaseRouter) GetAdapter(deployment *intelliroutercore.Deployment) (provider.BaseProviderAdapter, error) {
 	p := deployment.Provider
+	r.adapterCacheLock.Lock()
+	defer r.adapterCacheLock.Unlock()
 	if a, ok := r.adapterCache[p]; ok {
 		return a, nil
 	}
