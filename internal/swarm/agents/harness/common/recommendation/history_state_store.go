@@ -279,10 +279,10 @@ func HistoryEmptyV4State() map[string]any {
 			"entries":          map[string]any{},
 		},
 		"memory": map[string]any{
-			"initialized":    false,
+			"initialized":      false,
 			"semantic_version": 0,
-			"unit_counter":   0,
-			"units":          []any{},
+			"unit_counter":     0,
+			"units":            []any{},
 		},
 		"memory_sidecar": map[string]any{
 			"negative_preferences": []any{},
