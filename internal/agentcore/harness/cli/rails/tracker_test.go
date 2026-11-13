@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	kvcache "github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // recordingSession 记录写进流的块。
@@ -23,19 +23,21 @@ type recordingSession struct {
 
 func newRecordingSession() *recordingSession { return &recordingSession{sessionID: "s-1"} }
 
-func (s *recordingSession) GetSessionID() string { return s.sessionID }
-func (s *recordingSession) UpdateState(_ map[string]any) {}
+func (s *recordingSession) GetSessionID() string                   { return s.sessionID }
+func (s *recordingSession) UpdateState(_ map[string]any)           {}
 func (s *recordingSession) GetState(_ state.StateKey) (any, error) { return nil, nil }
-func (s *recordingSession) DumpState() map[string]any { return nil }
+func (s *recordingSession) DumpState() map[string]any              { return nil }
 func (s *recordingSession) WriteStream(_ context.Context, data any) error {
 	s.chunks = append(s.chunks, data)
 	return nil
 }
 func (s *recordingSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (s *recordingSession) GetEnv(_ string, _ ...any) any { return nil }
-func (s *recordingSession) Interact(_ context.Context, _ any) error { return nil }
-func (s *recordingSession) ClearSession(_ context.Context) {}
-func (s *recordingSession) GetCacheIdentity() kvcache.KVCacheIdentity { return kvcache.KVCacheIdentity{} }
+func (s *recordingSession) GetEnv(_ string, _ ...any) any                    { return nil }
+func (s *recordingSession) Interact(_ context.Context, _ any) error          { return nil }
+func (s *recordingSession) ClearSession(_ context.Context)                   {}
+func (s *recordingSession) GetCacheIdentity() kvcache.KVCacheIdentity {
+	return kvcache.KVCacheIdentity{}
+}
 func (s *recordingSession) GetParentSessionID() string { return "" }
 
 var _ sessioninterfaces.SessionFacade = (*recordingSession)(nil)
@@ -184,4 +186,81 @@ func TestStringifyResult_各形态(t *testing.T) {
 	assert.Contains(t, stringifyResult([]byte("字节")), "字节")
 	assert.Contains(t, stringifyResult(map[string]any{"k": "v"}), "k")
 	assert.Equal(t, "42", stringifyResult(42))
+}
+
+// TestToInt_各形态 宽松整数转换的各分支。
+func TestToInt_各形态(t *testing.T) {
+	n, ok := toInt(7)
+	assert.True(t, ok)
+	assert.Equal(t, 7, n)
+	n, ok = toInt(int64(9))
+	assert.True(t, ok)
+	assert.Equal(t, 9, n)
+	n, ok = toInt(2.0)
+	assert.True(t, ok)
+	assert.Equal(t, 2, n)
+	n, ok = toInt("12")
+	assert.True(t, ok)
+	assert.Equal(t, 12, n)
+	_, ok = toInt("abc")
+	assert.False(t, ok)
+	_, ok = toInt([]any{1})
+	assert.False(t, ok)
+}
+
+// TestTokenTrackingRail_非cbc输入 railCtx 不是 cbc 时忽略。
+func TestTokenTrackingRail_非cbc输入(t *testing.T) {
+	rail := NewTokenTrackingRail()
+	require.NoError(t, rail.afterModelCall(context.Background(), "not-a-cbc"))
+	assert.Equal(t, 1, rail.GetSummary()["model_calls"])
+}
+
+// TestToolTrackingRail_非cbc输入 railCtx 不是 cbc 时忽略。
+func TestToolTrackingRail_非cbc输入(t *testing.T) {
+	rail := NewToolTrackingRail()
+	require.NoError(t, rail.beforeToolCall(context.Background(), "not-a-cbc"))
+	require.NoError(t, rail.afterToolCall(context.Background(), "not-a-cbc"))
+}
+
+// TestBuildToolResultPayload_非map结果 read_file 但结果非 map。
+func TestBuildToolResultPayload_非map结果(t *testing.T) {
+	payload := buildToolResultPayload("read_file", "纯文本结果")
+	assert.Equal(t, "纯文本结果", payload["tool_result"])
+	assert.NotContains(t, payload, "line_count")
+}
+
+// TestBuildToolResultPayload_contentBytes read_file 的 content 是字节。
+func TestBuildToolResultPayload_contentBytes(t *testing.T) {
+	payload := buildToolResultPayload("read_file", map[string]any{
+		"content": []byte("字节内容"), "line_count": int64(4),
+	})
+	assert.Equal(t, "字节内容", payload["tool_result"])
+	assert.Equal(t, 4, payload["line_count"])
+}
+
+// TestCallbacks_两rail的挂接 回调 map 装配正确。
+func TestCallbacks_两rail的挂接(t *testing.T) {
+	token := NewTokenTrackingRail()
+	tokenCallbacks := token.Callbacks()
+	assert.Contains(t, tokenCallbacks, agentinterfaces.CallbackAfterModelCall)
+
+	tool := NewToolTrackingRail()
+	toolCallbacks := tool.Callbacks()
+	assert.Contains(t, toolCallbacks, agentinterfaces.CallbackBeforeToolCall)
+	assert.Contains(t, toolCallbacks, agentinterfaces.CallbackAfterToolCall)
+}
+
+// TestExtractRendered_各分支 rendered 字段与字符串投影。
+func TestExtractRendered_各分支(t *testing.T) {
+	// 有 rendered_result 字段
+	text, ok := extractRendered(map[string]any{"rendered_result": "渲染文本"})
+	assert.True(t, ok)
+	assert.Equal(t, "渲染文本", text)
+	// rendered_result 为空串 → 回落字符串投影
+	text, ok = extractRendered(map[string]any{"rendered_result": ""})
+	assert.True(t, ok)
+	assert.NotEqual(t, "", text)
+	// nil 结果
+	_, ok = extractRendered(nil)
+	assert.False(t, ok)
 }
