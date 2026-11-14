@@ -466,6 +466,24 @@ func ReadSessionMetadata(sessionsDir, sessionID string) map[string]any {
 	return meta
 }
 
+// UpdateSessionModelSelection 只更新 model_selection 字段（合并式，其余字段不动）。
+// Python: session_metadata.py:801-810 update_session_model_selection —— 经共享的
+// 生命周期/原子写边界 _write_metadata_sync（merge_fields={"model_selection"}），
+// 写后清除该会话的元数据缓存。selection 为 nil 表示清除选择。
+func UpdateSessionModelSelection(sessionID string, selection map[string]any) error {
+	sessionsDir := GetSessionsDir()
+	current := ReadSessionMetadata(sessionsDir, sessionID)
+	if current == nil {
+		current = map[string]any{"session_id": sessionID}
+	}
+	current["model_selection"] = selection
+	if err := WriteSessionMetadata(sessionsDir, sessionID, current); err != nil {
+		return err
+	}
+	RemoveSessionMetadataCache(sessionID)
+	return nil
+}
+
 // WriteSessionMetadata 写入会话元数据文件。
 func WriteSessionMetadata(sessionsDir, sessionID string, meta map[string]any) error {
 	sessionDir := filepath.Join(sessionsDir, sessionID)
