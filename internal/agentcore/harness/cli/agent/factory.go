@@ -620,7 +620,7 @@ func (b *LocalBackend) loadPluginFn() func(ctx context.Context, path string) (la
 		if b.agent == nil {
 			return nil, errNotImplemented("agent not started; cannot load plugin")
 		}
-		record, err := b.agent.LoadPlugin(ctx, path)
+		record, err := b.agent.LoadPlugin(ctx, path, nil)
 		if err != nil {
 			return nil, err
 		}

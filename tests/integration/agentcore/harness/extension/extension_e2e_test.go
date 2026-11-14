@@ -126,7 +126,7 @@ func (s *ExtensionSuite) Test插件热绑skill_存活于adapter技能刷新() {
 		ID:     "skill-plugin",
 		Skills: []hschema.SkillSpec{{Dir: leaf, Mode: "all"}},
 	}
-	record, err := agent.LoadPluginSpec(ctx, spec)
+	record, err := agent.LoadPluginSpec(ctx, spec, nil)
 	require.NoError(s.T(), err)
 	require.Len(s.T(), record.Refs, 1)
 	assert.Equal(s.T(), hres.ResourceKindSkill, record.Refs[0].Kind)
@@ -150,11 +150,11 @@ func (s *ExtensionSuite) Test失败回滚端到端() {
 
 	// 第一次加载成功
 	dir := s.writePluginFixture(s.T())
-	first, err := agent.LoadPlugin(ctx, dir)
+	first, err := agent.LoadPlugin(ctx, dir, nil)
 	require.NoError(s.T(), err)
 
 	// 第二次加载同包：同段名（ReplaceExisting=false）冲突 → 整批失败
-	_, err = agent.LoadPlugin(ctx, dir)
+	_, err = agent.LoadPlugin(ctx, dir, nil)
 	require.Error(s.T(), err)
 
 	// 第一次的绑定不受影响；失败批不入账
@@ -176,7 +176,7 @@ func (s *ExtensionSuite) TestUnloadHarnessConfig_按路径卸载() {
 	require.NoError(s.T(), err)
 
 	dir := s.writePluginFixture(s.T())
-	_, err = agent.LoadHarnessConfig(ctx, dir)
+	_, err = agent.LoadHarnessConfig(ctx, dir, nil)
 	require.NoError(s.T(), err)
 	assert.NotNil(s.T(), agent.SystemPromptBuilder().GetSection("sops"))
 
@@ -206,7 +206,7 @@ func (s *ExtensionSuite) TestLoadAgentTemplateSpec_subagent物化与卸载() {
 		}},
 	}
 	// 父模型取 agent 的 deep_config.model（LoadAgentTemplateSpec 内部注入）
-	record, err := agent.LoadAgentTemplateSpec(ctx, spec)
+	record, err := agent.LoadAgentTemplateSpec(ctx, spec, nil)
 	require.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), record.LoadID)
 

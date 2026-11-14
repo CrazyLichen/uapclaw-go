@@ -3756,7 +3756,7 @@ func (d *DeepAgent) drainPendingHarnessConfigs(ctx context.Context) error {
 	d.railsMu.Unlock()
 
 	for _, path := range configs {
-		loaded, err := d.LoadHarnessConfig(ctx, path)
+		loaded, err := d.LoadHarnessConfig(ctx, path, nil)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("path", path).Msg("Failed to auto-load harness config")
 			continue
@@ -5089,7 +5089,7 @@ func deepCopyLoadRecord(record hres.LoadRecord) hres.LoadRecord {
 // harness_config.yaml / expert_harness.yaml / harness.yaml 包（见
 // FindPluginManifest 的查找序）；两者都映射为 PluginSpec。
 // Python: DeepAgent.load_plugin (deep_agent.py:2232-2257)
-func (d *DeepAgent) LoadPlugin(ctx context.Context, path string) (*hres.LoadRecord, error) {
+func (d *DeepAgent) LoadPlugin(ctx context.Context, path string, context hschema.BuildContextInterface) (*hres.LoadRecord, error) {
 	manifestPath, spec, err := func() (string, hschema.PluginSpec, error) {
 		manifestPath, findErr := hres.FindPluginManifest(path)
 		if findErr != nil {
@@ -5105,7 +5105,7 @@ func (d *DeepAgent) LoadPlugin(ctx context.Context, path string) (*hres.LoadReco
 		return nil, exception.BuildError(exception.StatusDeepagentLoadPluginError,
 			exception.WithMsg(err.Error()), exception.WithCause(err))
 	}
-	buildCtx := d.newExtensionContext(nil)
+	buildCtx := d.newExtensionContext(context)
 	buildCtx.Extras["source_root"] = filepath.Dir(manifestPath)
 	parts, err := hres.ResolvePluginParts(spec, buildCtx)
 	if err == nil {
@@ -5122,8 +5122,8 @@ func (d *DeepAgent) LoadPlugin(ctx context.Context, path string) (*hres.LoadReco
 // LoadPluginSpec 热加载内存 PluginSpec（经 resolve Parts + apply_hot）。
 // 与 LoadPlugin 不同：没有包根，spec 上所有带路径字段必须是绝对路径，否则 resolve 拒绝。
 // Python: DeepAgent.load_plugin_spec (deep_agent.py:2259-2279)
-func (d *DeepAgent) LoadPluginSpec(ctx context.Context, spec hschema.PluginSpec) (*hres.LoadRecord, error) {
-	buildCtx := d.newExtensionContext(nil)
+func (d *DeepAgent) LoadPluginSpec(ctx context.Context, spec hschema.PluginSpec, context hschema.BuildContextInterface) (*hres.LoadRecord, error) {
+	buildCtx := d.newExtensionContext(context)
 	parts, err := hres.ResolvePluginParts(spec, buildCtx)
 	if err == nil {
 		var record *hres.LoadRecord
@@ -5140,7 +5140,7 @@ func (d *DeepAgent) LoadPluginSpec(ctx context.Context, spec hschema.PluginSpec)
 // 保持本 agent 的 agent_card / model 不变，覆盖根模板的 persona/能力，
 // 并把直接 subagents 物化为运行时 SubAgentConfig。
 // Python: DeepAgent.load_agent_template (deep_agent.py:2281-2308)
-func (d *DeepAgent) LoadAgentTemplate(ctx context.Context, path string) (*hres.LoadRecord, error) {
+func (d *DeepAgent) LoadAgentTemplate(ctx context.Context, path string, context hschema.BuildContextInterface) (*hres.LoadRecord, error) {
 	manifestPath, spec, err := func() (string, hschema.AgentTemplateSpec, error) {
 		manifestPath, findErr := hres.FindAgentTemplateManifest(path)
 		if findErr != nil {
@@ -5156,7 +5156,7 @@ func (d *DeepAgent) LoadAgentTemplate(ctx context.Context, path string) (*hres.L
 		return nil, exception.BuildError(exception.StatusDeepagentLoadAgentTemplateError,
 			exception.WithMsg(err.Error()), exception.WithCause(err))
 	}
-	buildCtx := d.newExtensionContext(nil)
+	buildCtx := d.newExtensionContext(context)
 	buildCtx.Extras["source_root"] = filepath.Dir(manifestPath)
 	buildCtx.Extras[hres.ParentModelExtrasKeyRes] = d.deepConfigModel()
 	parts, err := hres.ResolveAgentTemplateParts(spec, buildCtx)
@@ -5180,8 +5180,8 @@ func (d *DeepAgent) LoadAgentTemplate(ctx context.Context, path string) (*hres.L
 // 与 LoadAgentTemplate 不同：不读包 manifest，spec 上所有带路径字段必须已绝对化。
 // 适合跨团队成员构建边界携带的序列化 spec。
 // Python: DeepAgent.load_agent_template_spec (deep_agent.py:2310-2335)
-func (d *DeepAgent) LoadAgentTemplateSpec(ctx context.Context, spec hschema.AgentTemplateSpec) (*hres.LoadRecord, error) {
-	buildCtx := d.newExtensionContext(nil)
+func (d *DeepAgent) LoadAgentTemplateSpec(ctx context.Context, spec hschema.AgentTemplateSpec, context hschema.BuildContextInterface) (*hres.LoadRecord, error) {
+	buildCtx := d.newExtensionContext(context)
 	buildCtx.Extras[hres.ParentModelExtrasKeyRes] = d.deepConfigModel()
 	parts, err := hres.ResolveAgentTemplateParts(spec, buildCtx)
 	if err == nil {
@@ -5258,8 +5258,8 @@ func (d *DeepAgent) UnloadExtension(ctx context.Context, record hres.LoadRecord)
 //
 // Deprecated: 改用 LoadPlugin；语义为同参转调（偏差 D-15a：Python 的
 // DeprecationWarning 在 Go 以 // Deprecated: 标记表达）。
-func (d *DeepAgent) LoadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
-	record, err := d.LoadPlugin(ctx, configPath)
+func (d *DeepAgent) LoadHarnessConfig(ctx context.Context, configPath string, context hschema.BuildContextInterface) ([]string, error) {
+	record, err := d.LoadPlugin(ctx, configPath, context)
 	if err != nil {
 		return nil, err
 	}

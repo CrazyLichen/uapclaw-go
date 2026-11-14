@@ -57,7 +57,7 @@ func TestLoadPlugin_文件包端到端(t *testing.T) {
 	dir := t.TempDir()
 	manifest := writePromptOnlyPlugin(t, dir)
 
-	record, err := agent.LoadPlugin(ctx, dir)
+	record, err := agent.LoadPlugin(ctx, dir, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, record.LoadID)
 	assert.Equal(t, manifest, record.SourceURI)
@@ -79,9 +79,9 @@ func TestLoadPlugin_重复加载同名段落报错(t *testing.T) {
 	dir := t.TempDir()
 	writePromptOnlyPlugin(t, dir)
 
-	_, err := agent.LoadPlugin(ctx, dir)
+	_, err := agent.LoadPlugin(ctx, dir, nil)
 	require.NoError(t, err)
-	_, err = agent.LoadPlugin(ctx, dir)
+	_, err = agent.LoadPlugin(ctx, dir, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Prompt section already bound")
 }
@@ -95,7 +95,7 @@ func TestLoadPluginSpec_路径非绝对报错(t *testing.T) {
 		ID:     "p-rel",
 		Skills: []hschema.SkillSpec{{Dir: "relative/skills/a"}},
 	}
-	_, err := agent.LoadPluginSpec(ctx, spec)
+	_, err := agent.LoadPluginSpec(ctx, spec, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "absolute")
 }
@@ -107,7 +107,7 @@ func TestLoadAgentTemplateSpec_activeTemplate记账(t *testing.T) {
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("tpl-root"))
 	spec := hschema.AgentTemplateSpec{AgentCard: *card}
 
-	record, err := agent.LoadAgentTemplateSpec(ctx, spec)
+	record, err := agent.LoadAgentTemplateSpec(ctx, spec, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, record.LoadID)
 
@@ -140,7 +140,7 @@ func TestUnloadExtension_卸载闭环(t *testing.T) {
 	dir := t.TempDir()
 	writePromptOnlyPlugin(t, dir)
 
-	record, err := agent.LoadPlugin(ctx, dir)
+	record, err := agent.LoadPlugin(ctx, dir, nil)
 	require.NoError(t, err)
 
 	labels, err := agent.UnloadExtension(ctx, *record)
@@ -163,7 +163,7 @@ func TestLoadHarnessConfig_deprecated转调(t *testing.T) {
 	dir := t.TempDir()
 	writePromptOnlyPlugin(t, dir)
 
-	labels, err := agent.LoadHarnessConfig(ctx, dir)
+	labels, err := agent.LoadHarnessConfig(ctx, dir, nil)
 	require.NoError(t, err)
 	require.Len(t, labels, 1)
 	assert.NotNil(t, agent.SystemPromptBuilder().GetSection("sops"))
@@ -176,7 +176,7 @@ func TestUnloadHarnessConfig_按sourceURI找账(t *testing.T) {
 	dir := t.TempDir()
 	writePromptOnlyPlugin(t, dir)
 
-	_, err := agent.LoadHarnessConfig(ctx, dir)
+	_, err := agent.LoadHarnessConfig(ctx, dir, nil)
 	require.NoError(t, err)
 	labels, err := agent.UnloadHarnessConfig(ctx, dir)
 	require.NoError(t, err)
@@ -205,4 +205,33 @@ func TestLoadPluginAbility_预构建能力(t *testing.T) {
 	_, err = agent.UnloadExtension(ctx, *record)
 	require.NoError(t, err)
 	assert.Nil(t, agent.AbilityManager().Get("ability_tool"))
+}
+
+// TestLoadAgentTemplateSpec_context透传 传入的 BuildContext 参与 resolve：
+// {{ language }} 占位符取 context.Language（nil 时回落 deep config / "cn"）。
+// Python: load_agent_template_spec(spec, *, context=None) 的 context 形参
+// 与 _new_extension_context(context)（deep_agent.py:2324）。
+func TestLoadAgentTemplateSpec_context透传(t *testing.T) {
+	ctx := context.Background()
+	agent := newFullTestAgent(t)
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("tpl-ctx"))
+	spec := hschema.AgentTemplateSpec{
+		AgentCard: *card,
+		PromptSections: []hschema.PromptSectionSpec{{
+			Name: "sops", Content: map[string]string{"cn": "lang={{ language }}"}, Priority: 20,
+		}},
+	}
+
+	_, err := agent.LoadAgentTemplateSpec(ctx, spec, &hschema.BuildContext{Language: "en"})
+	require.NoError(t, err)
+	section := agent.SystemPromptBuilder().GetSection("sops")
+	require.NotNil(t, section)
+	assert.Equal(t, "lang=en", section.Content["cn"])
+
+	agent2 := newFullTestAgent(t)
+	_, err = agent2.LoadAgentTemplateSpec(ctx, spec, nil)
+	require.NoError(t, err)
+	section2 := agent2.SystemPromptBuilder().GetSection("sops")
+	require.NotNil(t, section2)
+	assert.Equal(t, "lang=cn", section2.Content["cn"])
 }

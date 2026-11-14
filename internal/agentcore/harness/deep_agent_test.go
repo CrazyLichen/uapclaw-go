@@ -1029,7 +1029,7 @@ func TestDeepAgent_DrainPendingHarnessConfigs(t *testing.T) {
 // 15.15 起真实现：路径存在则走 LoadPlugin（见 deep_agent_extension_test.go）。
 func TestDeepAgent_LoadHarnessConfig(t *testing.T) {
 	d := newTestDeepAgent()
-	_, err := d.LoadHarnessConfig(context.Background(), "/path/to/config.yaml")
+	_, err := d.LoadHarnessConfig(context.Background(), "/path/to/config.yaml", nil)
 	if err == nil {
 		t.Fatal("LoadHarnessConfig manifest 不存在时应返回错误")
 	}
@@ -3011,7 +3011,7 @@ func TestDeepAgent_上下文引擎方法(t *testing.T) {
 func TestDeepAgent_LoadHarnessConfig_Stub(t *testing.T) {
 	card := makeTestCard("deep-1", "test-deep")
 	agent := NewDeepAgent(card)
-	_, err := agent.LoadHarnessConfig(context.Background(), "/path/to/config.yaml")
+	_, err := agent.LoadHarnessConfig(context.Background(), "/path/to/config.yaml", nil)
 	assert.Error(t, err)
 }
 
