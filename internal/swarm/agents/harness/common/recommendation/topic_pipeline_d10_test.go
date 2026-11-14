@@ -5,6 +5,7 @@ package recommendation
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 )
 
@@ -65,10 +66,10 @@ func TestUtilityInvoker_Batching(t *testing.T) {
 	plans := []map[string]any{
 		d10Plan("c-1", 1), d10Plan("c-2", 1), d10Plan("c-3", 1), d10Plan("c-4", 1),
 	}
-	calls := 0
+	var calls atomic.Int64
 	invoke := &fakeTopicStageInvoker{invoke: func(ctx context.Context, stage,
 		systemPrompt, payload string) (any, error) {
-		calls++
+		calls.Add(1)
 		ids := []any{}
 		for _, raw := range pyListMaps(payloadMapOrEmpty(parseJSONForTest(payload))["candidates"]) {
 			ids = append(ids, raw["candidate_id"])
@@ -99,8 +100,8 @@ func TestUtilityInvoker_Batching(t *testing.T) {
 		t.Fatalf("invoke: %v", err)
 	}
 	// 4 候选 / 批 3 → 2 批
-	if calls != 2 {
-		t.Fatalf("calls: %d", calls)
+	if calls.Load() != 2 {
+		t.Fatalf("calls: %d", calls.Load())
 	}
 	scores := pyListMaps(payloadMapOrEmpty(result)["scores"])
 	if len(scores) != 4 {
