@@ -184,7 +184,7 @@ func TestArkSpecificInterestMatcher_小票契约失败(t *testing.T) {
 		"operation_id":   "op-1", "request_id": requestID,
 		"matcher_id": RidSummaryPairMatcherID, "matcher_version": RidSummaryPairMatcherVersion,
 		"request_schema_version": RidSummaryPairMatchRequestSchemaVersion,
-		"earlier_summary_id": earlier.SessionSummaryID, "later_summary_id": later.SessionSummaryID,
+		"earlier_summary_id":     earlier.SessionSummaryID, "later_summary_id": later.SessionSummaryID,
 		"provider_id": "ark", "model": "m-1", "match_label": true,
 		"provider_config": ridTestConfig().SafeProvenance(), "provider_receipt": receipt,
 	}

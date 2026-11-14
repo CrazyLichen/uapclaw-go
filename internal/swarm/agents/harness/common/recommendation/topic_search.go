@@ -128,7 +128,6 @@ var defaultResponsesClientFactory ResponsesClientFactory = func(config *ArkBackg
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-
 // BuildOpenjiuwenNativeSearch 构造原生自由搜索门面（:317-330）。
 func BuildOpenjiuwenNativeSearch(environ map[string]string, searchRunner SearchRunner,
 	requestIDFactory func() string) (*OpenJiuwenNativeSearch, error) {
@@ -339,10 +338,10 @@ func NewOpenJiuwenNativeSearch(searchRunner SearchRunner, requestIDFactory func(
 		requestIDFactory = newNativeRequestID
 	}
 	return &OpenJiuwenNativeSearch{
-		ProviderId:       OpenjiuwenNativeSearchProviderId,
-		searchRunner:     searchRunner,
-		requestIDFactory: requestIDFactory,
-		searchSemaphore:  make(chan struct{}, OpenjiuwenNativeSearchMaxConcurrency),
+		ProviderId:         OpenjiuwenNativeSearchProviderId,
+		searchRunner:       searchRunner,
+		requestIDFactory:   requestIDFactory,
+		searchSemaphore:    make(chan struct{}, OpenjiuwenNativeSearchMaxConcurrency),
 		invocationReceipts: []map[string]any{},
 	}
 }
@@ -451,15 +450,15 @@ func (s *ArkResponsesWebSearch) Search(ctx context.Context, query string, maxRes
 		return nil, &ArkWebSearchContractError{Reason: "search_request_contract_failed"}
 	}
 	request := map[string]any{
-		"model":         s.config.Model,
-		"input":         query,
-		"instructions":  SearchInstructions,
-		"tools":         []map[string]any{{"type": "web_search", "max_keyword": 1, "limit": maxResults}},
-		"tool_choice":   "required",
+		"model":          s.config.Model,
+		"input":          query,
+		"instructions":   SearchInstructions,
+		"tools":          []map[string]any{{"type": "web_search", "max_keyword": 1, "limit": maxResults}},
+		"tool_choice":    "required",
 		"max_tool_calls": 1,
-		"store":         false,
-		"temperature":   s.config.EffectiveTemperature(),
-		"top_p":         s.config.EffectiveTopP(),
+		"store":          false,
+		"temperature":    s.config.EffectiveTemperature(),
+		"top_p":          s.config.EffectiveTopP(),
 	}
 	callCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
@@ -533,15 +532,15 @@ func toolNotOpenReceipt(statusErr *providerStatusError, actualModel string) map[
 		return nil
 	}
 	return map[string]any{
-		"receipt_version":      ArkWebSearchEntitlementReceiptVersion,
-		"provider_id":          ArkWebSearchProviderID,
-		"actual_model":         actualModel,
-		"operation":            "responses.create",
-		"tool_type":            "web_search",
-		"provider_error_code":  "ToolNotOpen",
-		"http_status":          statusErr.StatusCode,
-		"provider_request_id":  requestID,
-		"observed_at":          time.Now().UTC().Format("2006-01-02T15:04:05.000000Z07:00"),
+		"receipt_version":     ArkWebSearchEntitlementReceiptVersion,
+		"provider_id":         ArkWebSearchProviderID,
+		"actual_model":        actualModel,
+		"operation":           "responses.create",
+		"tool_type":           "web_search",
+		"provider_error_code": "ToolNotOpen",
+		"http_status":         statusErr.StatusCode,
+		"provider_request_id": requestID,
+		"observed_at":         time.Now().UTC().Format("2006-01-02T15:04:05.000000Z07:00"),
 	}
 }
 
@@ -775,4 +774,3 @@ func (c *arkResponsesHTTPClient) ResponsesCreate(ctx context.Context, request ma
 
 // Close 关闭客户端。
 func (c *arkResponsesHTTPClient) Close() error { return nil }
-

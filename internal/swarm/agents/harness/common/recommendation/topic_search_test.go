@@ -71,8 +71,8 @@ func TestOpenJiuwenNativeSearch_成功(t *testing.T) {
 // TestOpenJiuwenNativeSearch_厂商失败 失败小票分类（对齐 :96-147）。
 func TestOpenJiuwenNativeSearch_厂商失败(t *testing.T) {
 	cases := []struct {
-		err  error
-		kind string
+		err    error
+		kind   string
 		reason string
 	}{
 		{&nativeProviderAPIError{Code: openjiuwenWebSearchAllEnginesFailedCode}, "all_engines_failed", "provider_all_engines_failed"},
@@ -125,7 +125,7 @@ func TestOpenJiuwenNativeSearch_结果契约(t *testing.T) {
 
 // fakeResponsesClient 可注入的假 Responses 客户端。
 type fakeResponsesClient struct {
-	payload  map[string]any
+	payload   map[string]any
 	statusErr error
 }
 
