@@ -123,36 +123,6 @@ func emitToolUpdate(ctx context.Context, session sessioninterfaces.SessionFacade
 	}
 }
 
-// emitAskUserQuestionIfInterrupted 当 ask_user 工具被中断时发送 chat.ask_user_question 事件，
-// 对齐 Python: _emit_ask_user_question_if_interrupted
-func emitAskUserQuestionIfInterrupted(ctx context.Context, session sessioninterfaces.SessionFacade, toolCall *llmschema.ToolCall, toolName string, result any, exception error) {
-	if session == nil {
-		return
-	}
-	if strings.TrimSpace(toolName) != "ask_user" {
-		return
-	}
-	interrupt := extractToolInterrupt(result)
-	if interrupt == nil {
-		interrupt = extractToolInterrupt(exception)
-	}
-	if interrupt == nil {
-		return
-	}
-	payload := askUserQuestionPayloadFromInterrupt(toolCall, interrupt)
-	if payload == nil {
-		logger.Debug(logComponent).Msg("ask_user interrupt payload unavailable")
-		return
-	}
-	if err := session.WriteStream(ctx, &stream.OutputSchema{
-		Type:    "chat.ask_user_question",
-		Index:   0,
-		Payload: payload,
-	}); err != nil {
-		logger.Debug(logComponent).Err(err).Msg("ask_user question emit failed")
-	}
-}
-
 // emitTodoUpdated 加载主 Agent 的 todo 列表并推送 todo.updated 事件，对齐 Python: _emit_todo_updated
 func emitTodoUpdated(ctx context.Context, session sessioninterfaces.SessionFacade, todoTool todoToolLoader, sessionID string) {
 	if session == nil || todoTool == nil {

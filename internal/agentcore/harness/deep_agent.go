@@ -3145,6 +3145,12 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfac
 
 	effectiveInputs := toEffectiveInputs(modified)
 
+	// Python: run_one_round 的恢复分支固定传 streaming=True →
+	// react_agent.invoke(effective_inputs, session, _streaming=True)。
+	// ReActAgent.Invoke 读 inputs["_streaming"] 决定流式/非流式模型调用，
+	// 缺失时恢复轮会走非流式 Invoke（2026-11-14 问答闭环实锤）。
+	effectiveInputs["_streaming"] = true
+
 	// 测试覆写优先
 	if invokeOverride != nil {
 		return invokeOverride(ctx, effectiveInputs, agentinterfaces.WithSession(sess))

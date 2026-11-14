@@ -278,7 +278,7 @@ func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
 	fmt.Println("DEBUG final result:", string(dbg))
 	fmt.Println("DEBUG stderr:", stderrBuf.String())
 	s.Equal(0, exitCode, "问答闭环应正常退出 0")
-	s.Equal("success", last["status"])
+	s.Equal("completed", last["status"], "终态 status 对齐 Python RunStatus.COMPLETED")
 	s.Equal(2, int(reqCount.Load()), "假模型应被调用两次（提问轮 + 应答轮）")
 }
 
