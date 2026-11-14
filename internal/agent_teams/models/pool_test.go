@@ -820,3 +820,56 @@ func TestModelGroupLabel(t *testing.T) {
 		t.Fatal("无 display_name → model_group_id")
 	}
 }
+
+// TestEntrySignature_ClientIdExcluded client_id 不参与签名：两条仅 client_id
+// 不同的条目签名相同（pool.py:556-559 上游教训——计入会让暂停团队每次请求
+// 被拆建重盘）。
+// Python: _entry_signature (pool.py:544)
+func TestEntrySignature_ClientIdExcluded(t *testing.T) {
+	meta := func(clientID string) map[string]any {
+		return map[string]any{"client": map[string]any{"client_id": clientID, "timeout": 30}}
+	}
+	e1 := NewModelPoolEntry("m", "k", "b", "p", WithMetadata(meta("uuid-1")))
+	e2 := NewModelPoolEntry("m", "k", "b", "p", WithMetadata(meta("uuid-2")))
+	if entrySignature(*e1) != entrySignature(*e2) {
+		t.Fatal("仅 client_id 不同 → 签名必须相同")
+	}
+	// 其余 metadata 变化仍影响签名
+	e3 := NewModelPoolEntry("m", "k2", "b", "p", WithMetadata(meta("uuid-1")))
+	if entrySignature(*e1) == entrySignature(*e3) {
+		t.Fatal("api_key 不同 → 签名必须不同")
+	}
+}
+
+// TestInheritPoolIDs_对齐复刻 Python inherit_pool_ids：bit-exact 继承、
+// 重排序对齐、重复签名按池序一对一、新条目保留自生成 ID。
+// Python: inherit_pool_ids (pool.py:566)
+func TestInheritPoolIDs_对齐(t *testing.T) {
+	meta := map[string]any{"client": map[string]any{"client_id": "uuid-x"}}
+	old := []ModelPoolEntry{*NewModelPoolEntry("a", "k1", "b1", "p", WithModelID("id-a"), WithMetadata(meta)),
+		*NewModelPoolEntry("b", "k2", "b2", "p", WithModelID("id-b"))}
+	// 重排序但内容相同 → 全对齐（顺序无关）
+	newPool := []ModelPoolEntry{*NewModelPoolEntry("b", "k2", "b2", "p", WithMetadata(meta)),
+		*NewModelPoolEntry("a", "k1", "b1", "p", WithMetadata(meta))}
+	got := InheritPoolIDs(old, newPool)
+	if got[0].ModelID != "id-b" || got[1].ModelID != "id-a" {
+		t.Fatalf("重排序应全继承: %s/%s", got[0].ModelID, got[1].ModelID)
+	}
+	// api_key 轮换 → 不继承
+	rotated := []ModelPoolEntry{*NewModelPoolEntry("a", "k1-rotated", "b1", "p", WithMetadata(meta))}
+	if got2 := InheritPoolIDs(old, rotated); got2[0].ModelID == "id-a" {
+		t.Fatal("api_key 轮换不应继承")
+	}
+	// 重复签名按池序一对一
+	oldDup := []ModelPoolEntry{*NewModelPoolEntry("a", "k", "b", "p", WithModelID("id-1")),
+		*NewModelPoolEntry("a", "k", "b", "p", WithModelID("id-2"))}
+	newDup := []ModelPoolEntry{*NewModelPoolEntry("a", "k", "b", "p"), *NewModelPoolEntry("a", "k", "b", "p")}
+	got3 := InheritPoolIDs(oldDup, newDup)
+	if got3[0].ModelID == got3[1].ModelID {
+		t.Fatal("重复签名应一对一配对")
+	}
+	ids := map[string]bool{got3[0].ModelID: true, got3[1].ModelID: true}
+	if !ids["id-1"] || !ids["id-2"] {
+		t.Fatalf("应继承 id-1/id-2: %v", ids)
+	}
+}

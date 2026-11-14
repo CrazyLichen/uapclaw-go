@@ -680,7 +680,16 @@ func entrySignature(entry ModelPoolEntry) string {
 		sig["description"] = entry.Description
 	}
 	if len(entry.Metadata) > 0 {
-		sig["metadata"] = entry.Metadata
+		meta := utils.DeepCopyMap(entry.Metadata)
+		// client 身份不是配置：model_id 与 metadata.client.client_id 都不计入签名。
+		// 宿主常把整个 ModelClientConfig dump 进 metadata.client，其 client_id
+		// 每次都是新 uuid；计入签名会让同一选型的两次构建看起来像模型变更，
+		// 暂停的团队因此在每次请求时被拆建重盘（pool.py:556-559 原文教训）。
+		// 【23.4c 修复】此前 Go 实现漏了 client_id 剔除。
+		if client, ok := meta["client"].(map[string]any); ok {
+			delete(client, "client_id")
+		}
+		sig["metadata"] = meta
 	}
 
 	data, err := json.Marshal(sig)
