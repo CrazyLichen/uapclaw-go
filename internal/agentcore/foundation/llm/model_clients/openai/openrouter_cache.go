@@ -1,9 +1,12 @@
 package openai
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // OpenRouter 显式 prompt 缓存（cache_control 注入）写链。
@@ -40,6 +43,67 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// applyOpenrouterProfile OpenRouter 显式缓存注入主入口。仅在 endpoint profile 为
+// openrouter 时生效；步骤与 Python :1088-1161 逐条对应（方法体内步骤注释带行号）。
+func (c *OpenAIModelClient) applyOpenrouterProfile(params map[string]any, modelName string) {
+	// Python :1088-1090 非 openrouter profile 直接 return（不重置 previous）
+	profile := strings.ToLower(strings.TrimSpace(c.ClientConfig.EndpointProfile))
+	if profile != "openrouter" {
+		return
+	}
+	// Python :1091-1095 总开关关：重置 previous 并 return
+	if !c.enableOpenrouterExplicitCaching {
+		c.previousOpenrouterPromptCacheMessages = nil
+		return
+	}
+	// Python :1096-1105 模型不支持显式缓存：warning +（1h 开启时补 warning）+ 重置 previous + return
+	if !supportsOpenrouterExplicitPromptCaching(modelName, c.openrouterCacheProviders) {
+		logger.Warn(logComponent).
+			Str("model_name", modelName).
+			Msg("OpenRouter explicit prompt caching is enabled but unsupported for model; skipping cache_control markers.")
+		if c.enableOpenrouter1HPromptCacheTTL {
+			logger.Warn(logComponent).
+				Str("model_name", modelName).
+				Msg("OpenRouter 1h prompt-cache TTL is enabled but unsupported for model; the ttl flag will not be added.")
+		}
+		c.previousOpenrouterPromptCacheMessages = nil
+		return
+	}
+	// Python :1106-1122 prefix matching：取上一轮做基线并保存本轮深拷贝；
+	// messages / tools 深拷贝后改写（避免污染调用方结构）
+	var previous []any
+	currentMessages, _ := params["messages"].([]any)
+	if c.enableOpenrouterPromptCachePrefixMatching {
+		previous = c.previousOpenrouterPromptCacheMessages
+		if currentMessages != nil {
+			c.previousOpenrouterPromptCacheMessages = deepCopyMessages(currentMessages)
+		} else {
+			c.previousOpenrouterPromptCacheMessages = nil
+		}
+	} else {
+		previous = nil
+		c.previousOpenrouterPromptCacheMessages = nil
+	}
+	if currentMessages != nil {
+		params["messages"] = deepCopyMessages(currentMessages)
+	}
+	if tools, ok := params["tools"].([]any); ok && len(tools) > 0 {
+		params["tools"] = deepCopyMessages(tools)
+	}
+	// Python :1123-1136 enable1HTTL 计算 + 开启但不支持时 warning
+	enable1HTTL := c.enableOpenrouter1HPromptCacheTTL &&
+		supportsOpenrouter1HPromptCacheTTL(modelName, c.openrouter1HTTLProviders)
+	if c.enableOpenrouter1HPromptCacheTTL && !enable1HTTL {
+		logger.Warn(logComponent).
+			Str("model_name", modelName).
+			Msg("OpenRouter 1h prompt-cache TTL is enabled but unsupported for model; using default ephemeral cache_control markers.")
+	}
+	// Python :1137-1141 打标记
+	applyOpenrouterPromptCacheControl(params, previous, enable1HTTL)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseOpenrouterCacheConfigExtra 解析 Extra 中的 5 个配置键。
 // 布尔值对齐 Python truthiness：bool 原样；字符串 "true"/"false" 等兼容；未知形态回落默认。
@@ -80,7 +144,19 @@ func parseOpenrouterCacheConfigExtra(extra map[string]any) openrouterCacheConfig
 	return cfg
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// deepCopyMessages 任意 JSON 树的 []any 深拷贝（对齐 Python deepcopy，走 JSON 往返）。
+// 仅在 profile 方法内对 messages/tools 使用，二者恒为 JSON 可序列化树。
+func deepCopyMessages(value []any) []any {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return value
+	}
+	var out []any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return value
+	}
+	return out
+}
 
 // openrouterModelProvider 从 "provider/model" 形态取 provider 前缀，剥 "~" 并小写；
 // 无 "/" 或空串返回空串（对应 Python None）。

@@ -139,6 +139,11 @@ func (c *OpenAIModelClient) Invoke(
 	// Python: openai_model_client.py:1002-1016（_build_request_params 内的 apply_reasoning_plan）
 	c.applyReasoningPlan(reqParams, params)
 
+	// 2.6 OpenRouter 显式缓存注入
+	// Python: openai_model_client.py:1083 _apply_openrouter_profile（_build_request_params 末尾、
+	// sanitize 之前；Invoke 与 Stream 共用该方法，此处为 Invoke 链接入位）
+	c.applyOpenrouterProfile(reqParams, modelNameOf(reqParams))
+
 	// 3. 合并 headers
 	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
@@ -355,6 +360,10 @@ func (c *OpenAIModelClient) Stream(
 	// 3.5 reasoning plan 接入
 	// Python: openai_model_client.py:1002-1016（_build_request_params 内）
 	c.applyReasoningPlan(reqParams, params.ToStreamParams())
+
+	// 3.6 OpenRouter 显式缓存注入
+	// Python: openai_model_client.py:1083（Stream 与 Invoke 共用 _build_request_params，接入位相同）
+	c.applyOpenrouterProfile(reqParams, modelNameOf(reqParams))
 
 	// 4. 合并 headers
 	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)

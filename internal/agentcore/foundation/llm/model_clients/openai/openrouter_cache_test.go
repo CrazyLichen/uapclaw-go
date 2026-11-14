@@ -271,3 +271,107 @@ func TestNewOpenAIModelClient_OpenrouterCacheDefaults(t *testing.T) {
 		t.Errorf("构造期应解析 provider 集合: %v", c.openrouterCacheProviders)
 	}
 }
+
+func newProfileTestClient(t *testing.T, extra map[string]any) *OpenAIModelClient {
+	t.Helper()
+	c, err := NewOpenAIModelClient(
+		&llmschema.ModelRequestConfig{ModelName: "anthropic/claude-4"},
+		&llmschema.ModelClientConfig{ClientProvider: "OpenRouter", APIBase: "https://openrouter.ai/api/v1",
+			APIKey: "k", Extra: extra},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func baseProfileMsgs() []any {
+	return []any{
+		map[string]any{"role": "system", "content": "sys"},
+		map[string]any{"role": "user", "content": "q"},
+	}
+}
+
+func TestApplyOpenrouterProfile_矩阵(t *testing.T) {
+	prev := baseProfileMsgs()
+	// ① 非 openrouter profile：不打标记、不重置 previous
+	c := newProfileTestClient(t, nil)
+	c.ClientConfig.EndpointProfile = ""
+	c.previousOpenrouterPromptCacheMessages = prev
+	params := map[string]any{"messages": baseProfileMsgs()}
+	c.applyOpenrouterProfile(params, "gpt-4")
+	if containsCacheControl(params) {
+		t.Error("非 openrouter 不应打标记")
+	}
+	if c.previousOpenrouterPromptCacheMessages == nil {
+		t.Error("非 openrouter 不应重置 previous（Python :1088-1090 无重置）")
+	}
+	// ② 开关关：重置 previous、不打标记
+	c = newProfileTestClient(t, map[string]any{"openrouter_enable_explicit_prompt_caching": false})
+	c.ClientConfig.EndpointProfile = "openrouter"
+	c.previousOpenrouterPromptCacheMessages = prev
+	params = map[string]any{"messages": baseProfileMsgs()}
+	c.applyOpenrouterProfile(params, "anthropic/claude-4")
+	if c.previousOpenrouterPromptCacheMessages != nil {
+		t.Error("开关关应重置 previous")
+	}
+	// ③ 不支持的 provider：不打标记 + 重置 previous
+	c = newProfileTestClient(t, nil)
+	c.ClientConfig.EndpointProfile = "openrouter"
+	c.previousOpenrouterPromptCacheMessages = prev
+	params = map[string]any{"messages": baseProfileMsgs()}
+	c.applyOpenrouterProfile(params, "openai/gpt-4")
+	if containsCacheControl(params) {
+		t.Error("不支持的 provider 不应打标记")
+	}
+	if c.previousOpenrouterPromptCacheMessages != nil {
+		t.Error("不支持应重置 previous")
+	}
+	// ④ 正常路径：打标记 + previous 保存本轮深拷贝 + 入参不被污染
+	c = newProfileTestClient(t, nil)
+	c.ClientConfig.EndpointProfile = "openrouter"
+	c.previousOpenrouterPromptCacheMessages = prev
+	params = map[string]any{
+		"tools":    []any{map[string]any{"type": "function", "function": map[string]any{"name": "f"}}},
+		"messages": baseProfileMsgs(),
+	}
+	c.applyOpenrouterProfile(params, "anthropic/claude-4")
+	if _, ok := params["messages"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["cache_control"]; !ok {
+		t.Error("正常路径应打标记")
+	}
+	params["messages"].([]any)[0].(map[string]any)["content"] = "MUTATED"
+	if c.previousOpenrouterPromptCacheMessages[0].(map[string]any)["content"] == "MUTATED" {
+		t.Error("previous 应是深拷贝，不受后续污染")
+	}
+	// previous 深拷贝保存于打标记之前（Python :1117 deepcopy 先于 :1119-1121 改写），
+	// content 仍是原始字符串形态且无 cache_control
+	prevContent := c.previousOpenrouterPromptCacheMessages[0].(map[string]any)["content"]
+	if prevContent != "sys" || containsCacheControl(c.previousOpenrouterPromptCacheMessages[0]) {
+		t.Errorf("previous 深拷贝应保存未打标记的原始形态: %#v", prevContent)
+	}
+	// ⑤ 1h TTL：anthropic 支持 → ttl 出现
+	c = newProfileTestClient(t, map[string]any{"openrouter_enable_1h_prompt_cache_ttl": true})
+	c.ClientConfig.EndpointProfile = "openrouter"
+	params = map[string]any{"messages": baseProfileMsgs()}
+	c.applyOpenrouterProfile(params, "anthropic/claude-4")
+	blk := params["messages"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["cache_control"].(map[string]any)
+	if blk["ttl"] != "1h" {
+		t.Errorf("anthropic 应带 ttl=1h: %v", blk)
+	}
+	// ⑥ qwen + 1h 开关：不支持 → 无 ttl
+	params = map[string]any{"messages": []any{map[string]any{"role": "user", "content": "q"}}}
+	c.applyOpenrouterProfile(params, "qwen/qwen-max")
+	blk = params["messages"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["cache_control"].(map[string]any)
+	if _, has := blk["ttl"]; has {
+		t.Errorf("qwen 不应带 ttl: %v", blk)
+	}
+	// ⑦ prefix matching 关：previous 重置、不打 prefix 位
+	c = newProfileTestClient(t, map[string]any{"openrouter_enable_prompt_cache_prefix_matching": false})
+	c.ClientConfig.EndpointProfile = "openrouter"
+	c.previousOpenrouterPromptCacheMessages = prev
+	params = map[string]any{"messages": baseProfileMsgs()}
+	c.applyOpenrouterProfile(params, "anthropic/claude-4")
+	if c.previousOpenrouterPromptCacheMessages != nil {
+		t.Error("prefix matching 关应重置 previous（Python :1121-1122）")
+	}
+}
