@@ -145,8 +145,10 @@ type TurnTiming struct {
 type ProviderStartupError struct {
 	// Msg 错误消息
 	Msg string
-	// Error 与 provider 无关的失败
-	Error harnessprotocol.TurnError
+	// Err 与 provider 无关的失败。
+	// （Python: base.py:76-85 ProviderStartupError.error 字段；Go 侧字段
+	// 名不能叫 Error——与 error 接口方法冲突，改名 Err 并保留语义。）
+	Err harnessprotocol.TurnError
 }
 
 // supervisorHandle 一个异步 teardown/监督协程的完成信号。
@@ -305,10 +307,10 @@ func (t *PendingTurn) requestStop() {
 }
 
 // abortRequested 读中断标记（provider 的 ExecuteTurn 用，无锁）。
-func (t *PendingTurn) abortRequested() bool { return t.currentFlags().abortRequested }
+func (t *PendingTurn) AbortRequested() bool { return t.currentFlags().abortRequested }
 
 // stopRequested 读 stop 标记（无锁）。
-func (t *PendingTurn) stopRequested() bool { return t.currentFlags().stopRequested }
+func (t *PendingTurn) StopRequested() bool { return t.currentFlags().stopRequested }
 
 // NewTurnTiming 捕获当前时刻作为轮次起点。
 // Python: base.py:105-106 的 field(default_factory=time.time/monotonic)
@@ -633,7 +635,7 @@ func (h *SerializedTurnHarness) Abort(ctx context.Context, mode harnessprotocol.
 	// 原子置标记（偏差 D7）：锁外写，避免持锁等待
 	active.requestAbort(mode)
 
-	if err := h.cancelPendingInteractions(ctx, harnessprotocol.InteractionCancelReasonTurnAborted); err != nil {
+	if err := h.CancelPendingInteractions(ctx, harnessprotocol.InteractionCancelReasonTurnAborted); err != nil {
 		return err
 	}
 	return h.hooks.InterruptTurn(ctx, active, mode)
@@ -860,7 +862,7 @@ func (h *SerializedTurnHarness) rollbackStart(ctx context.Context) {
 // FAILED，而上游意图是让轮次自然收敛后再关流。
 func (h *SerializedTurnHarness) doStop(ctx context.Context) {
 	// 步骤 1：取消全部挂起交互（base.py:328）
-	_ = h.cancelPendingInteractions(ctx, harnessprotocol.InteractionCancelReasonHarnessStopped)
+	_ = h.CancelPendingInteractions(ctx, harnessprotocol.InteractionCancelReasonHarnessStopped)
 	// 步骤 2：关 provider 会话，失败仅记录继续（base.py:329-332）
 	if err := h.hooks.CloseSession(ctx); err != nil {
 		logger.Error(logComponent).Str("provider", h.card.Name).Err(err).
@@ -1036,9 +1038,9 @@ func (h *SerializedTurnHarness) abortQueuedTurns(ctx context.Context, queued []*
 // Python: base.py:634-648 _crash_result
 func (h *SerializedTurnHarness) crashResult(turn *PendingTurn, err error) (
 	harnessprotocol.TurnEventKind, harnessprotocol.TurnResult) {
-	if turn.abortRequested() {
+	if turn.AbortRequested() {
 		kind := harnessprotocol.TurnTerminationKindUserAbort
-		if turn.stopRequested() {
+		if turn.StopRequested() {
 			kind = harnessprotocol.TurnTerminationKindHarnessStop
 		}
 		message := h.card.Name + " turn was interrupted"
@@ -1101,7 +1103,7 @@ func (h *SerializedTurnHarness) activateAuthFallback(ctx context.Context,
 		return false, nil
 	}
 	// 门卫 2（base.py:567-568）
-	if h.fallbackActivated || turn.abortRequested() {
+	if h.fallbackActivated || turn.AbortRequested() {
 		return false, nil
 	}
 	// 门卫 3（base.py:569-571）
@@ -1182,13 +1184,14 @@ func (h *SerializedTurnHarness) applyDeferredModelSelection(ctx context.Context,
 
 // hasHostInteractions 宿主是否提供了交互处理器。
 // Python: base.py:722-724 _has_host_interactions
-func (h *SerializedTurnHarness) hasHostInteractions() bool {
+func (h *SerializedTurnHarness) HasHostInteractions() bool {
 	return h.harnessContext != nil && h.harnessContext.Interactions != nil
 }
 
-// requestInteraction 等待宿主对 request 的应答；无处理器时返回 nil。
+// RequestInteraction 等待宿主对 request 的应答；无处理器时返回 nil。
+// （Python 下划线方法的 "protected" 语义由导出表达：子包 provider 需调用。）
 // Python: base.py:726-738 _request_interaction
-func (h *SerializedTurnHarness) requestInteraction(ctx context.Context,
+func (h *SerializedTurnHarness) RequestInteraction(ctx context.Context,
 	request harnessprotocol.HarnessInteractionRequest) (harnessprotocol.HarnessInteractionResponse, error) {
 	harnessContext := h.harnessContext
 	if harnessContext == nil || harnessContext.Interactions == nil {
@@ -1245,7 +1248,7 @@ func (h *SerializedTurnHarness) confirmProviderExtension(ctx context.Context,
 	if err != nil {
 		return false, err
 	}
-	response, err := h.requestInteraction(ctx, &request)
+	response, err := h.RequestInteraction(ctx, &request)
 	if err != nil {
 		return false, err
 	}
@@ -1257,7 +1260,7 @@ func (h *SerializedTurnHarness) confirmProviderExtension(ctx context.Context,
 
 // cancelPendingInteractions 批量撤销挂起交互；返回首个错误。
 // Python: base.py:767-774 _cancel_pending_interactions
-func (h *SerializedTurnHarness) cancelPendingInteractions(ctx context.Context,
+func (h *SerializedTurnHarness) CancelPendingInteractions(ctx context.Context,
 	reason harnessprotocol.InteractionCancelReason) error {
 	h.commandLock.Lock()
 	pending := make(map[string]harnessprotocol.HarnessInteractionHandler, len(h.pendingInteractions))
@@ -1415,7 +1418,7 @@ type InterruptedResultOptions struct {
 func InterruptedResult(turn *PendingTurn, opts InterruptedResultOptions) harnessprotocol.TurnResult {
 	kind := harnessprotocol.TurnTerminationKindUserAbort
 	message := opts.ProviderName + " turn was aborted"
-	if turn.stopRequested() {
+	if turn.StopRequested() {
 		kind = harnessprotocol.TurnTerminationKindHarnessStop
 		message = opts.ProviderName + " stopped before the turn completed"
 	}
@@ -1545,3 +1548,11 @@ func isCheckpointConflict(err error) bool {
 	var conflict *harnessprotocol.CheckpointConflictError
 	return errors.As(err, &conflict)
 }
+
+// Error 实现 error 接口。
+// Python: base.py:76-85 ProviderStartupError(HarnessError) 的异常语义；
+// 15.6 起子包 provider 构造本类型需要 error 实现。
+func (e *ProviderStartupError) Error() string { return e.Msg }
+
+// StartupError 与 provider 无关的失败（Python .error 字段访问）。
+func (e *ProviderStartupError) StartupError() harnessprotocol.TurnError { return e.Err }

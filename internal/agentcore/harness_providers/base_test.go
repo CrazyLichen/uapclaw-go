@@ -137,7 +137,7 @@ func (s *scriptedHarness) ExecuteTurn(ctx context.Context,
 		return harnessprotocol.TurnEventKindFailed, harnessprotocol.TurnResult{}, err
 	}
 	<-s.release
-	if turn.abortRequested() {
+	if turn.AbortRequested() {
 		result := InterruptedResult(turn, InterruptedResultOptions{
 			ProviderName: "scripted",
 			Timing:       timing,
@@ -1540,9 +1540,9 @@ func TestEmptyCursor_Iter与Close(t *testing.T) {
 // TestSerializedTurnHarness_HasHostInteractions 宿主是否提供交互处理器。
 func TestSerializedTurnHarness_HasHostInteractions(t *testing.T) {
 	harness := newScriptedHarness(t)
-	assert.False(t, harness.hasHostInteractions(), "未启动时无上下文")
+	assert.False(t, harness.HasHostInteractions(), "未启动时无上下文")
 
 	require.NoError(t, harness.Start(context.Background(), testHarnessContext()))
 	defer func() { _ = harness.Stop(context.Background()) }()
-	assert.False(t, harness.hasHostInteractions(), "上下文未带处理器")
+	assert.False(t, harness.HasHostInteractions(), "上下文未带处理器")
 }
