@@ -33,6 +33,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
+	hres "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hsecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
@@ -216,6 +217,25 @@ type DeepAgent struct {
 
 	// configMu 配置读写锁
 	configMu sync.RWMutex
+
+	// loadRecords 插件/模板热加载台账（load_id → LoadRecord 深拷贝）。
+	// Python: DeepAgent._load_records（deep_agent.py:333 附近）；Go 加锁对齐
+	// asyncio→Go 并发移植惯例（偏差 D-15c，见 spec）。
+	loadRecords map[string]hres.LoadRecord
+	// loadRecordsMu 保护 loadRecords（activeAgentTemplate 复用既有字段）
+	loadRecordsMu sync.Mutex
+}
+
+// LoadRecordsSnapshot 返回台账的快照副本（调用方可安全遍历）。
+// Python: getattr(agent, "_load_records", None) or {}（extension_binder.py:250）
+func (d *DeepAgent) LoadRecordsSnapshot() map[string]hres.LoadRecord {
+	d.loadRecordsMu.Lock()
+	defer d.loadRecordsMu.Unlock()
+	out := make(map[string]hres.LoadRecord, len(d.loadRecords))
+	for id, record := range d.loadRecords {
+		out[id] = record
+	}
+	return out
 }
 
 // roundBoundaryFrame 内部轮边界哨兵帧。
@@ -1128,6 +1148,64 @@ func (d *DeepAgent) FindRailsByType(railTypes ...reflect.Type) []agentinterfaces
 		}
 	}
 	return result
+}
+
+// FindRailByName 按物化类名返回排队或已注册中的第一个 Rail。
+// Python: DeepAgent.find_rail_by_name(name) (line 2108-2114)
+func (d *DeepAgent) FindRailByName(name string) agentinterfaces.AgentRail {
+	d.railsMu.Lock()
+	defer d.railsMu.Unlock()
+	for _, rail := range d.pendingRails {
+		if railTypeName(rail) == name {
+			return rail
+		}
+	}
+	for _, rail := range d.registeredRails {
+		if railTypeName(rail) == name {
+			return rail
+		}
+	}
+	return nil
+}
+
+// IsRegisteredRail 返回 rail 是否已在运行时注册。
+// Python: DeepAgent.is_registered_rail(rail) (line 2127-2129)
+func (d *DeepAgent) IsRegisteredRail(rail agentinterfaces.AgentRail) bool {
+	d.railsMu.Lock()
+	defer d.railsMu.Unlock()
+	for _, registered := range d.registeredRails {
+		if registered == rail {
+			return true
+		}
+	}
+	return false
+}
+
+// RemovePendingRail 按对象同一性从排队队列摘除指定 Rail。
+// Python: DeepAgent.remove_pending_rail(rail) (line 2131-2134)
+func (d *DeepAgent) RemovePendingRail(rail agentinterfaces.AgentRail) {
+	d.railsMu.Lock()
+	defer d.railsMu.Unlock()
+	kept := d.pendingRails[:0]
+	for _, queued := range d.pendingRails {
+		if queued != rail {
+			kept = append(kept, queued)
+		}
+	}
+	d.pendingRails = kept
+}
+
+// railTypeName 返回 rail 的物化类名（对齐 Python type(rail).__name__）。
+func railTypeName(rail agentinterfaces.AgentRail) string {
+	t := reflect.TypeOf(rail)
+	if t == nil {
+		return ""
+	}
+	// 接口持有的多为指针，取元素类型名与 Python __name__ 一致
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Name()
 }
 
 // StripRailsByType 按类型移除排队 Rail 并将已注册 Rail 标记为废弃。
