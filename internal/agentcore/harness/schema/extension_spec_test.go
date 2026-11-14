@@ -19,7 +19,7 @@ func TestAgentTemplateSpec_JSON往返(t *testing.T) {
 		"agent_card": {"id": "a1", "name": "expert", "description": "领域专家"},
 		"model": {
 			"model_client_config": {"api_base": "https://llm/v1", "api_key": "k", "client_provider": "openai"},
-			"model_request_config": {"model_name": "gpt-x"}
+			"model_request_config": {"model": "gpt-x"}
 		},
 		"prompt_sections": [
 			{"name": "identity", "content": {"cn": "你是专家。", "en": "You are an expert."}, "priority": 10}
