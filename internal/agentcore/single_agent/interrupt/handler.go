@@ -1,3 +1,4 @@
+
 package interrupt
 
 import (
@@ -223,6 +224,7 @@ func (h *ToolInterruptHandler) HandleResume(
 ) (map[string]any, error) {
 	intState := resumeCtx.State
 	userInput := resumeCtx.UserInput
+	qaP("HandleResume 进入 userInput=%T %v", userInput, userInput)
 	cbc := resumeCtx.Ctx
 	modelCtx := resumeCtx.ModelContext
 	sess := resumeCtx.Session
@@ -245,10 +247,12 @@ func (h *ToolInterruptHandler) HandleResume(
 
 	// 按 call_id → owner 重排，供重放期间的 rail 读取
 	// Python: call_answers = self._call_answers(state, fresh_answers)
+	qaP("HandleResume: attributeAnswers完成", freshAnswers)
 	callAnswersMap := callAnswers(intState, freshAnswers)
 
 	// 本轮没答到的中断，commit 时沿用其 id
 	// Python: unanswered = self._unanswered_interrupts(state, fresh_answers)
+	qaP("HandleResume: callAnswers/unanswered", len(freshAnswers))
 	unanswered := unansweredInterrupts(intState, freshAnswers)
 
 	// 设置恢复用户输入到 ctx.extra
@@ -262,6 +266,7 @@ func (h *ToolInterruptHandler) HandleResume(
 
 	// 构建需要重执行的工具调用列表
 	// Python: copy.deepcopy(entry.tool_call) + 子 Agent 注入 query
+	qaP("HandleResume: extras已设置")
 	toolsToExecute := make([]*llmschema.ToolCall, 0)
 	for _, entry := range intState.InterruptedTools {
 		tc := deepCopyToolCall(entry.ToolCall)
@@ -274,6 +279,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	// 重执行工具调用
 	// Python: results = await execute_tool_call(ctx, tools_to_execute, session, context)
 	// Python 中 execute_tool_call 失败时异常直接传播给调用方
+	qaP("HandleResume: toolsToExecute", len(toolsToExecute))
 	var results []saschema.ExecuteResult
 	if len(toolsToExecute) > 0 && resumeCtx.ExecuteToolCall != nil {
 		var err error
@@ -284,11 +290,13 @@ func (h *ToolInterruptHandler) HandleResume(
 		}
 	}
 
+	qaP("HandleResume: ExecuteToolCall完成", len(results))
 	// 清除恢复用户输入与答案归属表
 	// Python: finally 块里 pop 掉 RESUME_USER_INPUT_KEY / RESUME_INTERRUPT_ANSWERS_KEY
 	cbc.DeleteExtra(ResumeUserInputKey)
 	cbc.DeleteExtra(saschema.ResumeInterruptAnswersKey)
 
+	qaP("HandleResume: extras已清除")
 	// 重新收集中断
 	newInterruptedTools, subAgentOutputs, autoConfirmMapping := h.collectInterrupts(results, toolsToExecute, unanswered)
 
@@ -297,6 +305,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	// Python: self._carry_answers(new_interrupted_tools, call_answers)
 	carryAnswers(newInterruptedTools, callAnswersMap)
 
+	qaP("HandleResume: collectInterrupts完成", len(newInterruptedTools))
 	intState.InterruptedTools = newInterruptedTools
 	intState.AutoConfirmMapping = autoConfirmMapping
 

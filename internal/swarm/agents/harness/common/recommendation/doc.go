@@ -53,6 +53,7 @@
 //	├── topic_page_fetch.go             # 网页正文与发布时间抓取（topic_page_fetch.py，10.3.31c）
 //	├── topic_terminal.go               # 终局组件契约 + RID API 蒸馏（topic_terminal.py，10.3.31c）
 //	├── topic_rid.go                    # RID MATCH/NO_MATCH 配对裁判（topic_rid.py，10.3.31c）
+//	├── topic_product_pool.go          # 池写入/冷启动/曝光选卡收口（topic_product.py :4390-4551/:4635-5175/:5286-5465，10.3.31c）
 //	├── topic_feedback.go               # 上下文反馈投影（topic_feedback.py，10.3.31c）
 //	├── topic_outcomes.go               # 曝光/点击 outcome 记账（topic_outcomes.py，10.3.31c）
 //	├── topic_pipeline_d1.go           # TopicPipeline 类骨架（topic_pipeline.py:4481-4622，10.3.31b）

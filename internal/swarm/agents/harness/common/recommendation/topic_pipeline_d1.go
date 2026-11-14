@@ -38,10 +38,13 @@ const LegacyOpenjiuwenNativeSearchProviderId = "openjiuwen-native-search"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// OpenJiuwenNativeSearchContractError 原生搜索契约错误（topic_search.py:79）。
+// OpenJiuwenNativeSearchContractError 原生搜索契约错误（topic_search.py:79-86；
+// HostRequestID 字段随 31c topic_search.go 归位补齐）。
 type OpenJiuwenNativeSearchContractError struct {
 	// Reason 契约失败码
 	Reason string
+	// HostRequestID 宿主请求 ID（对齐 host_request_id）
+	HostRequestID string
 }
 
 // Error 实现 error 接口。

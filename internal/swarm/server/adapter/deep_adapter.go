@@ -1586,6 +1586,20 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			// （task_loop 产出结构体指针，只断言 map 会让整块 chunk 不可读）
 			payload := payloadToMap(output.Payload)
 
+			// Python: interface_deep.py:20088-20108 —— project_interruption_snapshots
+			// 开启（本路径恒真：快照投影由 ProjectOrdinaryInterruption 负责）时，
+			// 根流跳过 __interaction__ 原始帧；问题卡片只由快照投影发布一份，
+			// raw/controller 副本不得替换其 locator。activate_confirm 与客户端
+			// 工具调用（自带 chat.client_tool_request 事件）除外。
+			// 缺此步时 ask_user 交互会出两张卡 → duplex 侧登记两个 pending →
+			// 恢复后终态判定 pending==0 永不成立（2026-11-14 问答闭环实锤）。
+			if chunkType == "__interaction__" {
+				interactionType, _ := payload["interaction_type"].(string)
+				if interactionType != "activate_confirm" && clientToolRequestEventOf(payload) == nil {
+					continue
+				}
+			}
+
 			// 10.7.2: 交互事件 → waitingForUser；chat.error → 终态 error
 			// （Python: interface.py:3926-3928 waiting_for_user = ... or payload.get("event_type") in USER_INTERACTION_EVENTS）
 			if eventType, _ := payload["event_type"].(string); eventType != "" {
@@ -3690,4 +3704,28 @@ func stringSliceOf(value any) []string {
 		return []string{v}
 	}
 	return nil
+}
+
+// clientToolRequestEventOf 从 __interaction__ 载荷提取客户端工具调用事件。
+// Python: jiuwenswarm/runtime/client_tools.py:34 client_tool_request_event——
+// value 的 interrupt_kind 为 client_tool 时返回 chat.client_tool_request 事件，
+// 否则 nil。value 支持 map 与结构体（payloadToMap 已桥接）两种形态。
+func clientToolRequestEventOf(payload map[string]any) map[string]any {
+	requestID, _ := payload["id"].(string)
+	if requestID == "" {
+		return nil
+	}
+	value := payloadToMap(payload["value"])
+	if kind, _ := value["interrupt_kind"].(string); kind != "client_tool" {
+		return nil
+	}
+	return map[string]any{
+		"event_type":  "chat.client_tool_request",
+		"request_id":  requestID,
+		"interrupt_id": value["interrupt_id"],
+		"source":      schema.ClientToolInterruptSource,
+		"tool_name":   value["tool_name"],
+		"arguments":   value["arguments"],
+		"client_tool": value["client_request"],
+	}
 }

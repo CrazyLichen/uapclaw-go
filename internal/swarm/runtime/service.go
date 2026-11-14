@@ -1162,6 +1162,7 @@ func (r *AgentRuntime) StreamInteractionAnswer(
 	ctx context.Context, req *schema.AgentRequest,
 	onEvent func(*RuntimeEvent) bool,
 ) error {
+	qaProbe("StreamInteractionAnswer进入", "method", req.ReqMethod, "session", req.SessionID, "params", string(req.Params))
 	// Python:2083 _agent_execution=self._agent_execution_owner(request)
 	execution := r.agentExecutionOwner(req)
 	return r.streamWithExecution(ctx, req, execution, onEvent)

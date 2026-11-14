@@ -251,25 +251,6 @@ func TestEmitToolUpdate_NilSession(t *testing.T) {
 	emitToolUpdate(context.Background(), nil, tc, "completed")
 }
 
-// ──────────────────────────── emitAskUserQuestionIfInterrupted 中断时询问问题发射 ────────────────────────────
-
-func TestEmitAskUserQuestionIfInterrupted_非AskUser工具(t *testing.T) {
-	sess := &fakeSession{}
-	tc := llmschema.NewToolCall("tc-9", "read_file", `{}`)
-
-	emitAskUserQuestionIfInterrupted(context.Background(), sess, tc, "read_file", nil, nil)
-
-	if len(sess.written) != 0 {
-		t.Error("非 ask_user 工具不应发送事件")
-	}
-}
-
-func TestEmitAskUserQuestionIfInterrupted_NilSession(t *testing.T) {
-	tc := llmschema.NewToolCall("tc-10", "ask_user", `{}`)
-	// 不 panic 即通过
-	emitAskUserQuestionIfInterrupted(context.Background(), nil, tc, "ask_user", nil, nil)
-}
-
 // ──────────────────────────── emitTodoUpdated Todo 更新事件发射 ────────────────────────────
 
 func TestEmitTodoUpdated_正常发送(t *testing.T) {

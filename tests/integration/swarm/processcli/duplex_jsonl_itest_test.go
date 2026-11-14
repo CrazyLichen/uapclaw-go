@@ -174,7 +174,8 @@ func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
 	defer server.Close()
 
 	// 与 cancel 用例相同的隔离 dataDir + config.yaml（模型指向假服务）
-	dataDir := s.T().TempDir()
+	dataDir := "/tmp/qa-dbg-dataDir" // 临时调试：固定目录看 full.log
+	_ = os.RemoveAll(dataDir)
 	modelBlock := "    - name: \"test-model\"\n" +
 		"      model_client_config:\n" +
 		"        client_provider: \"OpenAI\"\n" +
@@ -208,7 +209,9 @@ func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
 	stdout, stdoutErr := cmd.StdoutPipe()
 	s.Require().NoError(stdoutErr)
 	var stderrBuf strings.Builder
-	cmd.Stderr = &stderrBuf
+	dbgF, _ := os.OpenFile("/tmp/pqa-child-stderr.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644) // 临时调试
+	defer dbgF.Close()
+	cmd.Stderr = io.MultiWriter(&stderrBuf, dbgF)
 	s.Require().NoError(cmd.Start())
 
 	writeLine := func(line string) {
@@ -270,8 +273,12 @@ func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
 	}
 
 	s.Require().NotNil(last, "未收到终态 result；stdout 记录=%d", len(records))
+	// 临时调试：打印终态记录全文
+	dbg, _ := json.MarshalIndent(last, "", "  ")
+	fmt.Println("DEBUG final result:", string(dbg))
+	fmt.Println("DEBUG stderr:", stderrBuf.String())
 	s.Equal(0, exitCode, "问答闭环应正常退出 0")
-	s.Equal("success", last["status"])
+	s.Equal("completed", last["status"], "终态 status 对齐 Python RunStatus.COMPLETED")
 	s.Equal(2, int(reqCount.Load()), "假模型应被调用两次（提问轮 + 应答轮）")
 }
 

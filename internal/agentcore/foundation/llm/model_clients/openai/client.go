@@ -32,6 +32,25 @@ type OpenAIModelClient struct {
 	// rejectingDisabledThinking 进程内已知拒绝「关闭思考」的模型名集合。
 	// Python: openai_model_client.py:456 self._models_rejecting_disabled_thinking
 	rejectingDisabledThinking *rejectingThinkingSet
+	// enableOpenrouterExplicitCaching OpenRouter 显式缓存总开关。
+	// Python: openai_model_client.py:436-439 self._enable_openrouter_explicit_caching
+	enableOpenrouterExplicitCaching bool
+	// enableOpenrouterPromptCachePrefixMatching 跨轮最长前缀匹配开关。
+	// Python: openai_model_client.py:439-443
+	enableOpenrouterPromptCachePrefixMatching bool
+	// enableOpenrouter1HPromptCacheTTL 1h TTL 开关。
+	// Python: openai_model_client.py:443-446
+	enableOpenrouter1HPromptCacheTTL bool
+	// openrouterCacheProviders 显式缓存 provider 集合（构造期归一）。
+	// Python: openai_model_client.py:447-450
+	openrouterCacheProviders map[string]struct{}
+	// openrouter1HTTLProviders 1h TTL provider 集合（构造期归一）。
+	// Python: openai_model_client.py:451-454
+	openrouter1HTTLProviders map[string]struct{}
+	// previousOpenrouterPromptCacheMessages 上一轮 messages 深拷贝（前缀 diff 基线）。
+	// Python: openai_model_client.py:455；读写只在请求构建期，Python 亦非线程安全，
+	// 并发保证由调用方承担（同 rejectingDisabledThinking 偏差 D-4 的登记惯例，见 spec §9）。
+	previousOpenrouterPromptCacheMessages []any
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -71,10 +90,18 @@ func NewOpenAIModelClient(
 		Int("max_retries", clientConfig.MaxRetries).
 		Msg("Before create openai client, model client config params ready.")
 
+	// Python: openai_model_client.py:436-453 五个 extra 配置键构造期解析
+	cacheCfg := parseOpenrouterCacheConfigExtra(clientConfig.Extra)
+
 	return &OpenAIModelClient{
-		BaseClientEmbed:           *embed,
-		baseHeaders:               baseHeaders,
-		rejectingDisabledThinking: newRejectingThinkingSet(),
+		BaseClientEmbed:                           *embed,
+		baseHeaders:                               baseHeaders,
+		rejectingDisabledThinking:                 newRejectingThinkingSet(),
+		enableOpenrouterExplicitCaching:           cacheCfg.enableExplicitCaching,
+		enableOpenrouterPromptCachePrefixMatching: cacheCfg.enablePrefixMatching,
+		enableOpenrouter1HPromptCacheTTL:          cacheCfg.enable1HTTL,
+		openrouterCacheProviders:                  cacheCfg.explicitProviders,
+		openrouter1HTTLProviders:                  cacheCfg.ttl1hProviders,
 	}, nil
 }
 
@@ -111,6 +138,11 @@ func (c *OpenAIModelClient) Invoke(
 	// 2.5 reasoning plan 接入
 	// Python: openai_model_client.py:1002-1016（_build_request_params 内的 apply_reasoning_plan）
 	c.applyReasoningPlan(reqParams, params)
+
+	// 2.6 OpenRouter 显式缓存注入
+	// Python: openai_model_client.py:1083 _apply_openrouter_profile（_build_request_params 末尾、
+	// sanitize 之前；Invoke 与 Stream 共用该方法，此处为 Invoke 链接入位）
+	c.applyOpenrouterProfile(reqParams, modelNameOf(reqParams))
 
 	// 3. 合并 headers
 	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
@@ -328,6 +360,10 @@ func (c *OpenAIModelClient) Stream(
 	// 3.5 reasoning plan 接入
 	// Python: openai_model_client.py:1002-1016（_build_request_params 内）
 	c.applyReasoningPlan(reqParams, params.ToStreamParams())
+
+	// 3.6 OpenRouter 显式缓存注入
+	// Python: openai_model_client.py:1083（Stream 与 Invoke 共用 _build_request_params，接入位相同）
+	c.applyOpenrouterProfile(reqParams, modelNameOf(reqParams))
 
 	// 4. 合并 headers
 	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)

@@ -8,9 +8,7 @@ import (
 	"unicode/utf8"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	interruptHelpers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-)
+		)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -143,80 +141,6 @@ func parseToolCallArguments(tc *llmschema.ToolCall) map[string]any {
 	return result
 }
 
-// extractToolInterrupt 递归查找 ToolInterruptException，对齐 Python: _extract_tool_interrupt
-//
-// 入参为 any 因为调用来源（ToolResult、exception）类型不固定，对齐 Python result: Any；
-// 返回值为具体类型 *saschema.ToolInterruptException（Python 返回 Any 是因为鸭子类型，Go 应更严格）。
-func extractToolInterrupt(value any) *saschema.ToolInterruptException {
-	if value == nil {
-		return nil
-	}
-	// 直接匹配 ToolInterruptException
-	if exc, ok := value.(*saschema.ToolInterruptException); ok {
-		return exc
-	}
-	// 通过 Unwrap 链递归查找（对齐 Python: cause / __cause__）
-	if unwrapper, ok := value.(interface{ Unwrap() error }); ok {
-		if cause := unwrapper.Unwrap(); cause != nil {
-			if result := extractToolInterrupt(cause); result != nil {
-				return result
-			}
-		}
-	}
-	// errors.Join 等多错误包装（Go 特有形态）
-	if multi, ok := value.(interface{ Unwrap() []error }); ok {
-		for _, cause := range multi.Unwrap() {
-			if cause == nil {
-				continue
-			}
-			if result := extractToolInterrupt(cause); result != nil {
-				return result
-			}
-		}
-	}
-	return nil
-}
-
-// askUserQuestionPayloadFromInterrupt 从中断构造 ask_user_question payload，对齐 Python: _ask_user_question_payload_from_interrupt
-func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt *saschema.ToolInterruptException) map[string]any {
-	// 获取 request_id，对齐 Python: request_id = str(getattr(getattr(interrupt, "request", None), "tool_call_id", None) or getattr(tool_call, "id", "") or "")
-	var requestID string
-	if interrupt != nil && interrupt.Request != nil {
-		// 尝试从 Request 获取 tool_call_id
-		if accessor, ok := interrupt.Request.(interface{ GetToolCallID() string }); ok {
-			requestID = strings.TrimSpace(accessor.GetToolCallID())
-		}
-	}
-	if requestID == "" && tc != nil {
-		requestID = strings.TrimSpace(tc.ID)
-	}
-	if requestID == "" {
-		return nil
-	}
-
-	// 构造 value_obj，对齐 Python: value_obj = getattr(interrupt, "request", None)
-	var valueObj any
-	if interrupt != nil && interrupt.Request != nil {
-		valueObj = interrupt.Request
-	}
-	if valueObj == nil {
-		args := parseToolCallArguments(tc)
-		if len(args) == 0 {
-			return nil
-		}
-		valueObj = map[string]any{
-			"tool_args": args,
-			"questions": args["questions"],
-		}
-	}
-
-	// 使用已有的 ConvertInteractionsToAskUserQuestion，对齐 Python: convert_interactions_to_ask_user_question([{"id": request_id, "value": value_obj}])
-	interactions := []map[string]any{{
-		"id":    requestID,
-		"value": valueObj,
-	}}
-	return interruptHelpers.ConvertInteractionsToAskUserQuestion(interactions)
-}
 
 // truncateString 截断字符串到指定最大 rune 长度，CJK 安全。
 // 对齐 Python: str(result)[:60000] — Python 按字符截断，Go 按 rune 截断以避免破坏多字节字符。
