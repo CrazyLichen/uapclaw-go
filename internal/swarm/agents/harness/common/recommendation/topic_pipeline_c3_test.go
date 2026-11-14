@@ -15,9 +15,9 @@ func snapshotForC3Tests() *V6ContextSnapshot {
 		State:           map[string]any{},
 		ContextScope:    GlobalNewChatScope,
 		InputSnapshotID: "snap-1",
-		ShortIntentState: map[string]any{
-			"trigger_reasons":         []any{},
-			"reason_evidence_lineage": []any{},
+		ShortIntentState: &ShortIntentState{
+			TriggerReasons:        []string{},
+			ReasonEvidenceLineage: []map[string]any{},
 		},
 	}
 }
@@ -206,8 +206,8 @@ func TestShortTriggerNaturalDeltaEventIDs(t *testing.T) {
 	}
 	// pending nil + 有触发原因 → 回落状态血缘
 	snapshot.PendingShortIntentTriggerLineage = nil
-	snapshot.ShortIntentState["trigger_reasons"] = []any{"why"}
-	snapshot.ShortIntentState["reason_evidence_lineage"] = []any{
+	snapshot.ShortIntentState.TriggerReasons = []string{"why"}
+	snapshot.ShortIntentState.ReasonEvidenceLineage = []map[string]any{
 		lineageFixture([]string{"e2"}, nil, nil),
 	}
 	got2 := ShortTriggerNaturalDeltaEventIDs(snapshot)
@@ -215,7 +215,7 @@ func TestShortTriggerNaturalDeltaEventIDs(t *testing.T) {
 		t.Fatalf("non-natural e2 should drop: %v", got2)
 	}
 	// 无触发原因且无 pending → 空
-	snapshot.ShortIntentState["trigger_reasons"] = []any{}
+	snapshot.ShortIntentState.TriggerReasons = []string{}
 	if got3 := ShortTriggerNaturalDeltaEventIDs(snapshot); len(got3) != 0 {
 		t.Fatalf("no reasons: %v", got3)
 	}

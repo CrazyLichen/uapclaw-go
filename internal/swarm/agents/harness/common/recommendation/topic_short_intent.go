@@ -40,6 +40,9 @@ const MinDriftSamples = 3
 // ShortIntentPipelineReceiptVersion 流水线读取小票版本（:26）
 const ShortIntentPipelineReceiptVersion = "topic-starter-v6-short-intent-read-v1"
 
+// SHORT_INTENT_SNAPSHOT_PREFIX 短意图快照 ID 前缀（topic_pipeline.py:205）
+const SHORT_INTENT_SNAPSHOT_PREFIX = "v6-short"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ShortIntentBehavior 冻结输入快照里的一条上游已分类行为

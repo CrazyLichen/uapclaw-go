@@ -172,9 +172,8 @@ func ShortTriggerEvidenceEventIDs(reasonEvidenceLineage []map[string]any) map[st
 func ShortTriggerNaturalDeltaEventIDs(snapshot *V6ContextSnapshot) map[string]bool {
 	lineage := snapshot.PendingShortIntentTriggerLineage
 	if lineage == nil {
-		reasons, _ := snapshot.ShortIntentState["trigger_reasons"].([]any)
-		if len(reasons) > 0 {
-			lineage = mapListOrNone(snapshot.ShortIntentState["reason_evidence_lineage"])
+		if snapshot.ShortIntentState != nil && len(snapshot.ShortIntentState.TriggerReasons) > 0 {
+			lineage = snapshot.ShortIntentState.ReasonEvidenceLineage
 		}
 	}
 	shortEventIDs := ShortTriggerEvidenceEventIDs(lineage)

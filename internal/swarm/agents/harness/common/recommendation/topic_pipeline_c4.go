@@ -198,7 +198,7 @@ func ProjectUnitGlobalDiscussion(store *TopicStarterStore, state map[string]any,
 		}
 	}
 	if len(projectUnits) == 0 {
-		return nil, nil
+		return []map[string]any{}, nil
 	}
 	opened := map[string]bool{}
 	offset := 0
