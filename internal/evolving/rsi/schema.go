@@ -80,16 +80,16 @@ var validRsiStatuses = map[RsiStatus]bool{
 // RsiTaskCreateRequest harness 与 artifact 场景共享的公开任务创建请求。
 // Python: RsiTaskCreateRequest
 type RsiTaskCreateRequest struct {
-	scenario                RsiScenario       `json:"scenario"`
-	artifactType            *ArtifactType     `json:"artifact_type"`
-	name                    string            `json:"name"`
-	artifactPath            *string           `json:"artifact_path"`
-	optimizationInstruction *string           `json:"optimization_instruction"`
-	datasetFile             *string           `json:"dataset_file"`
-	searchWidth             *int              `json:"search_width"`
-	modelRefs               map[string]string `json:"model_refs"`
-	maxIterations           int               `json:"max_iterations"`
-	webProxy                *string           `json:"web_proxy"`
+	scenario                RsiScenario
+	artifactType            *ArtifactType
+	name                    string
+	artifactPath            *string
+	optimizationInstruction *string
+	datasetFile             *string
+	searchWidth             *int
+	modelRefs               map[string]string
+	maxIterations           int
+	webProxy                *string
 }
 
 // NewRsiTaskCreateRequest 构造任务创建请求。
@@ -152,10 +152,10 @@ func (r *RsiTaskCreateRequest) WebProxy() *string { return r.webProxy }
 // RsiTaskEnvelope AgentServer 为单个 RSI 任务持有的身份与配置。
 // Python: RsiTaskEnvelope
 type RsiTaskEnvelope struct {
-	taskID       string                `json:"task_id"`
-	runDir       string                `json:"run_dir"`
-	artifactType *ArtifactType         `json:"artifact_type"`
-	config       *RsiTaskCreateRequest `json:"config"`
+	taskID       string
+	runDir       string
+	artifactType *ArtifactType
+	config       *RsiTaskCreateRequest
 }
 
 // NewRsiTaskEnvelope 构造任务信封。
@@ -178,8 +178,8 @@ func (e *RsiTaskEnvelope) Config() *RsiTaskCreateRequest { return e.config }
 // ArtifactValidationResult 提供方专属的输入校验结果。
 // Python: ArtifactValidationResult
 type ArtifactValidationResult struct {
-	valid  bool                `json:"valid"`
-	errors []map[string]string `json:"errors"`
+	valid  bool
+	errors []map[string]string
 }
 
 // NewArtifactValidationResult 构造校验结果。
@@ -196,9 +196,9 @@ func (v *ArtifactValidationResult) Errors() []map[string]string { return v.error
 // RsiUsageTokens 提供方 token 计数器；nil 表示该计数器未被上报（不得估算）。
 // Python: RsiUsageTokens
 type RsiUsageTokens struct {
-	input    *int `json:"input"`
-	output   *int `json:"output"`
-	cacheHit *int `json:"cache_hit"`
+	input    *int
+	output   *int
+	cacheHit *int
 }
 
 // NewRsiUsageTokens 构造 token 计数器。
@@ -227,9 +227,9 @@ func (t *RsiUsageTokens) MarshalJSON() ([]byte, error) {
 // RsiUsage 模型与优化引擎的累计用量。
 // Python: RsiUsage
 type RsiUsage struct {
-	tokens       *RsiUsageTokens `json:"tokens"`
-	costEstimate *float64        `json:"cost_estimate"`
-	callCount    int             `json:"call_count"`
+	tokens       *RsiUsageTokens
+	costEstimate *float64
+	callCount    int
 }
 
 // NewRsiUsage 构造累计用量。
@@ -258,11 +258,11 @@ func (u *RsiUsage) MarshalJSON() ([]byte, error) {
 // RsiModelCall 一次已完成的模型请求（不含提示词与凭据）。
 // Python: RsiModelCall；status 默认 "succeeded"（空串入参时取默认）。
 type RsiModelCall struct {
-	model      string          `json:"model"`
-	callCount  int             `json:"call_count"`
-	tokens     *RsiUsageTokens `json:"tokens"`
-	status     ModelCallStatus `json:"status"`
-	durationMs *int            `json:"duration_ms"`
+	model      string
+	callCount  int
+	tokens     *RsiUsageTokens
+	status     ModelCallStatus
+	durationMs *int
 }
 
 // NewRsiModelCall 构造模型调用记录；status 为空串时取 Python 默认值 succeeded。
@@ -302,11 +302,11 @@ func (m *RsiModelCall) MarshalJSON() ([]byte, error) {
 // RsiChange 单个树节点所代表变更的意图级摘要。
 // Python: RsiChange
 type RsiChange struct {
-	group     string  `json:"group"`
-	operation string  `json:"operation"`
-	function  *string `json:"function"`
-	target    *string `json:"target"`
-	summary   string  `json:"summary"`
+	group     string
+	operation string
+	function  *string
+	target    *string
+	summary   string
 }
 
 // NewRsiChange 构造变更摘要。
@@ -332,18 +332,18 @@ func (c *RsiChange) Summary() string { return c.summary }
 // RsiTreeNode 树查询与节点事件共用的节点投影。
 // Python: RsiTreeNode
 type RsiTreeNode struct {
-	nodeID             string         `json:"node_id"`
-	iteration          int            `json:"iteration"`
-	parentID           *string        `json:"parent_id"`
-	nodeType           string         `json:"type"`
-	adopted            bool           `json:"adopted"`
-	score              *float64       `json:"score"`
-	summary            *string        `json:"summary"`
-	snapshotArtifactID *string        `json:"snapshot_artifact_id"`
-	reason             *string        `json:"reason"`
-	failureClass       *string        `json:"failure_class"`
-	changes            []RsiChange    `json:"changes"`
-	extra              map[string]any `json:"extra"`
+	nodeID             string
+	iteration          int
+	parentID           *string
+	nodeType           string
+	adopted            bool
+	score              *float64
+	summary            *string
+	snapshotArtifactID *string
+	reason             *string
+	failureClass       *string
+	changes            []RsiChange
+	extra              map[string]any
 }
 
 // NewRsiTreeNode 构造树节点投影。
@@ -416,9 +416,9 @@ func (n *RsiTreeNode) Extra() map[string]any { return n.extra }
 // TreeResponse 完整持久化 RSI 树（含根与全部分支）。
 // Python: TreeResponse
 type TreeResponse struct {
-	nodes     []RsiTreeNode `json:"nodes"`
-	depth     int           `json:"depth"`
-	iteration int           `json:"iteration"`
+	nodes     []RsiTreeNode
+	depth     int
+	iteration int
 }
 
 // NewTreeResponse 构造树响应。
@@ -438,11 +438,11 @@ func (t *TreeResponse) Iteration() int { return t.iteration }
 // EngineResult 执行控制操作的结果。
 // Python: EngineResult
 type EngineResult struct {
-	taskID       string    `json:"task_id"`
-	status       RsiStatus `json:"status"`
-	finalNodeID  *string   `json:"final_node_id"`
-	errorCode    *string   `json:"error_code"`
-	errorMessage *string   `json:"error_message"`
+	taskID       string
+	status       RsiStatus
+	finalNodeID  *string
+	errorCode    *string
+	errorMessage *string
 }
 
 // NewEngineResult 构造执行控制结果。
@@ -468,17 +468,17 @@ func (r *EngineResult) ErrorMessage() *string { return r.errorMessage }
 // EngineState 单个 RSI 引擎任务的持久化当前状态。
 // Python: EngineState
 type EngineState struct {
-	taskID          string    `json:"task_id"`
-	status          RsiStatus `json:"status"`
-	iteration       int       `json:"iteration"`
-	totalIterations int       `json:"total_iterations"`
-	bestNodeID      *string   `json:"best_node_id"`
-	score           *float64  `json:"score"`
-	baseline        *float64  `json:"baseline"`
-	usage           *RsiUsage `json:"usage"`
-	updatedAt       string    `json:"updated_at"`
-	errorCode       *string   `json:"error_code"`
-	errorMessage    *string   `json:"error_message"`
+	taskID          string
+	status          RsiStatus
+	iteration       int
+	totalIterations int
+	bestNodeID      *string
+	score           *float64
+	baseline        *float64
+	usage           *RsiUsage
+	updatedAt       string
+	errorCode       *string
+	errorMessage    *string
 }
 
 // NewEngineState 构造引擎状态。
@@ -543,13 +543,13 @@ func (s *EngineState) ErrorMessage() *string { return s.errorMessage }
 // ArtifactRef 提供方侧可下载的任务或节点 artifact 引用。
 // Python: ArtifactRef
 type ArtifactRef struct {
-	artifactID  string  `json:"artifact_id"`
-	nodeID      *string `json:"node_id"`
-	name        string  `json:"name"`
-	kind        string  `json:"kind"`
-	path        string  `json:"path"`
-	sha256      *string `json:"sha256"`
-	downloadURL *string `json:"download_url"`
+	artifactID  string
+	nodeID      *string
+	name        string
+	kind        string
+	path        string
+	sha256      *string
+	downloadURL *string
 }
 
 // NewArtifactRef 构造 artifact 引用。
@@ -583,15 +583,15 @@ func (a *ArtifactRef) DownloadURL() *string { return a.downloadURL }
 // 兼容字段：把当前最优与初始基线暴露给 AgentServer 以便在任务/报告响应中
 // 渲染相同分数；默认值保持旧的 program 提供方与持久化报告兼容。
 type EngineReport struct {
-	taskID        string         `json:"task_id"`
-	status        RsiStatus      `json:"status"`
-	bestNodeID    *string        `json:"best_node_id"`
-	usage         *RsiUsage      `json:"usage"`
-	artifactIndex []ArtifactRef  `json:"artifact_index"`
-	summary       *string        `json:"summary"`
-	bestScore     *float64       `json:"best_score"`
-	baseline      *float64       `json:"baseline"`
-	scoreDetails  map[string]any `json:"score_details"`
+	taskID        string
+	status        RsiStatus
+	bestNodeID    *string
+	usage         *RsiUsage
+	artifactIndex []ArtifactRef
+	summary       *string
+	bestScore     *float64
+	baseline      *float64
+	scoreDetails  map[string]any
 }
 
 // NewEngineReport 构造引擎报告。

@@ -181,7 +181,56 @@ func TestNewRsiTaskEnvelope_访问器(t *testing.T) {
 	}
 }
 
-func intPtr(v int) *int                            { return &v }
 func floatPtr(v float64) *float64                  { return &v }
 func strPtr(v string) *string                      { return &v }
 func artifactTypePtr(v ArtifactType) *ArtifactType { return &v }
+
+// TestSchemaAccessors_全覆盖 补齐各契约剩余访问器分支（覆盖率门禁）
+func TestSchemaAccessors_全覆盖(t *testing.T) {
+	// RsiTaskCreateRequest 剩余字段
+	req := NewRsiTaskCreateRequest(RsiScenarioHarness, nil, "n", strPtr("a"), strPtr("o"), strPtr("d"), intPtr(2), map[string]string{"k": "v"}, 9, nil)
+	if req.Name() != "n" || req.ArtifactPath() == nil || req.OptimizationInstruction() == nil ||
+		req.DatasetFile() == nil || req.SearchWidth() == nil || *req.SearchWidth() != 2 ||
+		req.ModelRefs()["k"] != "v" || req.MaxIterations() != 9 {
+		t.Fatal("请求剩余访问器不符")
+	}
+	// RsiModelCall 剩余访问器 + MarshalJSON
+	mc := NewRsiModelCall("m", 1, NewRsiUsageTokens(intPtr(1), intPtr(2), intPtr(3)), ModelCallStatusFailed, intPtr(50))
+	if mc.Model() != "m" || mc.CallCount() != 1 || mc.DurationMs() == nil || *mc.DurationMs() != 50 {
+		t.Fatal("model call 剩余访问器不符")
+	}
+	if _, err := mc.MarshalJSON(); err != nil {
+		t.Fatal(err)
+	}
+	// RsiChange 剩余访问器
+	ch := NewRsiChange("g", "op", nil, strPtr("t"), "s")
+	if ch.Group() != "g" || ch.Operation() != "op" || ch.Function() != nil || ch.Target() == nil || ch.Summary() != "s" {
+		t.Fatal("change 剩余访问器不符")
+	}
+	// RsiTreeNode 剩余访问器
+	node := NewRsiTreeNode("n", 1, nil, "leaf", true, nil, strPtr("s"), strPtr("a"), strPtr("r"), strPtr("f"), nil, nil)
+	if node.Type() != "leaf" || !node.Adopted() || node.Summary() == nil || node.SnapshotArtifactID() == nil ||
+		node.Reason() == nil || node.FailureClass() == nil {
+		t.Fatal("节点剩余访问器不符")
+	}
+	// EngineResult 剩余访问器
+	r := NewEngineResult("t", RsiStatusCompleted, nil, nil, nil)
+	if r.TaskID() != "t" || r.Status() != RsiStatusCompleted || r.FinalNodeID() != nil || r.ErrorCode() != nil || r.ErrorMessage() != nil {
+		t.Fatal("result 剩余访问器不符")
+	}
+	// EngineState 剩余访问器
+	st := NewEngineState("t", RsiStatusPaused, 0, 1, nil, floatPtr(0.1), floatPtr(0.2), nil, "u", nil, nil)
+	if st.Score() == nil || *st.Score() != 0.1 || st.Baseline() == nil || *st.Baseline() != 0.2 || st.Usage() != nil {
+		t.Fatal("state 剩余访问器不符")
+	}
+	// ArtifactRef 剩余访问器
+	ref := NewArtifactRef("a", nil, "nm", "kd", "p", nil, nil)
+	if ref.Name() != "nm" || ref.Kind() != "kd" || ref.Path() != "p" || ref.Sha256() != nil || ref.DownloadURL() != nil {
+		t.Fatal("ref 剩余访问器不符")
+	}
+	// TreeResponse/ArtifactValidation/Usage/EventUsage.Ts 已测部分之外的分支
+	tr := NewTreeResponse(nil, 0, 0)
+	if tr.Nodes() != nil && len(tr.Nodes()) != 0 {
+		t.Fatal("树节点空列表")
+	}
+}

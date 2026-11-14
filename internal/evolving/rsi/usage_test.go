@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // TestUsageTokens_多键回退 归一化按 Python 键序回退且不估算
@@ -255,7 +258,6 @@ func TestObserverCheckDelivery_无错误为nil(t *testing.T) {
 	}
 }
 
-
 // firstJSONLine 取数据中第一个非空行。
 func firstJSONLine(t *testing.T, data []byte) []byte {
 	t.Helper()
@@ -266,4 +268,169 @@ func firstJSONLine(t *testing.T, data []byte) []byte {
 	}
 	t.Fatal("无 JSON 行")
 	return nil
+}
+
+// ──────────────────────────── Task 5：ctx 标签/公共钩子/observe ────────────────────────────
+
+// TestSetUsageNode_无观察者忽略 无 observer 时 set_usage_node 静默不改 ctx
+func TestSetUsageNode_无观察者忽略(t *testing.T) {
+	ctx := context.Background()
+	got := SetUsageNode(ctx, "h0")
+	if NodeRefFromContext(got) != nil {
+		t.Fatal("无 observer 时不得设置节点标签")
+	}
+}
+
+// TestSetUsageNode_有观察者生效 observer 在场时节点标签生效
+func TestSetUsageNode_有观察者生效(t *testing.T) {
+	o := NewModelUsageObserver(nil)
+	ctx := withObserverTag(context.Background(), o)
+	got := SetUsageNode(ctx, "h1")
+	if NodeRefFromContext(got) == nil || *NodeRefFromContext(got) != "h1" {
+		t.Fatal("节点标签应生效")
+	}
+}
+
+// TestRecordModelUsage_无活动运行无操作 未挂 observer 时公共钩子 no-op
+func TestRecordModelUsage_无活动运行无操作(t *testing.T) {
+	if err := RecordModelUsage(context.Background(), "m", "c", nil, "succeeded", nil, nil); err != nil {
+		t.Fatal("无活动 run 应 no-op")
+	}
+}
+
+// TestRecordModelUsage_经钩子入账 observer 在场时公共钩子正常入账（带 ctx 节点归属）
+func TestRecordModelUsage_经钩子入账(t *testing.T) {
+	dir := t.TempDir()
+	o := NewModelUsageObserver(nil)
+	if err := o.Bind(map[string]any{"task_id": "t1"}, dir); err != nil {
+		t.Fatal(err)
+	}
+	ctx := withObserverTag(context.Background(), o)
+	ctx = SetUsageNode(ctx, "h2")
+	if err := RecordModelUsage(ctx, "m1", "c9", map[string]any{"input_tokens": 4}, "succeeded", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if o.Totals().CallCount() != 1 {
+		t.Fatal("钩子应入账")
+	}
+	// 幂等：同 call_id 重复导入不再计
+	if err := RecordModelUsage(ctx, "m1", "c9", map[string]any{"input_tokens": 4}, "succeeded", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if o.Totals().CallCount() != 1 {
+		t.Fatal("钩子重复导入应幂等")
+	}
+}
+
+// TestModelUsageStage_阶段归属 阶段作用域进出场（Python model_usage_stage 装饰器）
+func TestModelUsageStage_阶段归属(t *testing.T) {
+	ctx, done := ModelUsageStage(context.Background(), "stage1")
+	if StageRefFromContext(ctx) == nil || *StageRefFromContext(ctx) != "stage1" {
+		t.Fatal("阶段 ctx 应携带 stage_ref")
+	}
+	done()
+	if StageRefFromContext(context.Background()) != nil {
+		t.Fatal("外层不应携带 stage_ref")
+	}
+	// 无 observer 时不覆盖节点（Python: 装饰器只归属操作，节点仍由 set_usage_node 管理）
+	if NodeRefFromContext(ctx) != nil {
+		t.Fatal("阶段作用域不得设置节点")
+	}
+}
+
+// TestObserverObserve_回调记账闭环 五类 LLM 事件经回调框架触发后全部入账
+func TestObserverObserve_回调记账闭环(t *testing.T) {
+	fw := callback.GetCallbackFramework()
+	o := NewModelUsageObserver(nil)
+	if err := o.Bind(map[string]any{"task_id": "t1"}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := o.Observe(context.Background())
+	defer cancel()
+	// 真实链路中 Model.Invoke 已开调用作用域（17.1a），测试同构
+	ctx, _ = llm.EnterCallScope(ctx, true)
+	// ① invoke input（进 pending）② invoke output（完成，usage 来自 UsageMetadata）
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMInvokeInput, ModelName: "m1"})
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMInvokeOutput, ModelName: "m1", Response: invokeResultWithUsage()})
+	if o.Totals().CallCount() != 1 {
+		t.Fatalf("invoke 链应记 1 笔: %d", o.Totals().CallCount())
+	}
+	if o.Totals().Tokens().Input() == nil || *o.Totals().Tokens().Input() != 11 {
+		t.Fatalf("invoke 链 input 计数不符: %+v", o.Totals())
+	}
+	// ③ error 链：新一次 invoke 有新 call_id（Python LlmCallScope 每次生成新 uuid）
+	ctx2, _ := llm.EnterCallScope(ctx, true)
+	fw.TriggerLLM(ctx2, &callback.LLMCallEventData{Event: callback.LLMInvokeInput, ModelName: "m1"})
+	fw.TriggerLLM(ctx2, &callback.LLMCallEventData{Event: callback.LLMCallError, ModelName: "m1", Error: context.DeadlineExceeded})
+	if o.Totals().CallCount() != 2 {
+		t.Fatal("error 链应补记 1 笔")
+	}
+	if err := o.CheckDelivery(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestObserverObserve_LLMOutput链 output 事件（usage 直接在 data.Usage）与去重
+func TestObserverObserve_LLMOutput链(t *testing.T) {
+	fw := callback.GetCallbackFramework()
+	o := NewModelUsageObserver(nil)
+	if err := o.Bind(map[string]any{"task_id": "t1"}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := o.Observe(context.Background())
+	defer cancel()
+	ctx, _ = llm.EnterCallScope(ctx, true)
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMStreamInput, ModelName: "m1"})
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMOutput, ModelName: "m1", Usage: usageMetadataOf(6, 2)})
+	// 重复回调（native 客户端 + Model 包装双触发）被 seen 去重吸收
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMOutput, ModelName: "m1", Usage: usageMetadataOf(6, 2)})
+	if o.Totals().CallCount() != 1 {
+		t.Fatalf("output 链应记 1 笔: %d", o.Totals().CallCount())
+	}
+}
+
+// TestObserverFinishPending_中断补记 未完成调用补记 incomplete（不编造成功）
+func TestObserverFinishPending_中断补记(t *testing.T) {
+	fw := callback.GetCallbackFramework()
+	o := NewModelUsageObserver(nil)
+	if err := o.Bind(map[string]any{"task_id": "t1"}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := o.Observe(context.Background())
+	ctx, _ = llm.EnterCallScope(ctx, true)
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMStreamInput, ModelName: "m1"})
+	if err := o.FinishPending(); err != nil {
+		t.Fatal(err)
+	}
+	if o.Totals().CallCount() != 1 {
+		t.Fatal("finish_pending 应补记中断调用")
+	}
+	cancel()
+}
+
+// TestObserve_注销后不再记账 cancel 后触发事件不入账（Python finally unregister）
+func TestObserve_注销后不再记账(t *testing.T) {
+	fw := callback.GetCallbackFramework()
+	o := NewModelUsageObserver(nil)
+	if err := o.Bind(map[string]any{"task_id": "t1"}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := o.Observe(context.Background())
+	cancel()
+	fw.TriggerLLM(ctx, &callback.LLMCallEventData{Event: callback.LLMInvokeOutput, ModelName: "m1", Response: invokeResultWithUsage()})
+	if o.Totals().CallCount() != 0 {
+		t.Fatal("注销后不得记账")
+	}
+}
+
+// invokeResultWithUsage 构造带用量元数据的 AssistantMessage（invoke output 载荷）。
+func invokeResultWithUsage() *llmschema.AssistantMessage {
+	msg := &llmschema.AssistantMessage{}
+	msg.UsageMetadata = usageMetadataOf(11, 4)
+	return msg
+}
+
+// usageMetadataOf 构造指定计数的用量元数据。
+func usageMetadataOf(input, output int) *llmschema.UsageMetadata {
+	return &llmschema.UsageMetadata{InputTokens: input, OutputTokens: output}
 }

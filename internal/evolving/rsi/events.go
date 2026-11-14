@@ -16,7 +16,7 @@ import (
 // EventStatus 已持久化的任务状态流转。
 // Python: EventStatus
 type EventStatus struct {
-	status RsiStatus `json:"status"`
+	status RsiStatus
 }
 
 // NewEventStatus 构造状态事件。
@@ -31,11 +31,11 @@ func (e *EventStatus) EventType() string { return "status" }
 // EventProgress 已持久化的累计进度快照。
 // Python: EventProgress
 type EventProgress struct {
-	iteration       int       `json:"iteration"`
-	totalIterations int       `json:"total_iterations"`
-	score           *float64  `json:"score"`
-	baseline        *float64  `json:"baseline"`
-	usage           *RsiUsage `json:"usage"`
+	iteration       int
+	totalIterations int
+	score           *float64
+	baseline        *float64
+	usage           *RsiUsage
 }
 
 // NewEventProgress 构造进度事件。
@@ -64,8 +64,8 @@ func (e *EventProgress) EventType() string { return "progress" }
 // EventNode 已持久化的完整树节点快照。
 // Python: EventNode；artifacts 缺省空列表（Python default_factory=list）。
 type EventNode struct {
-	node      *RsiTreeNode        `json:"node"`
-	artifacts []map[string]string `json:"artifacts"`
+	node      *RsiTreeNode
+	artifacts []map[string]string
 }
 
 // NewEventNode 构造节点事件；artifacts 传 nil 时取空列表。
@@ -89,13 +89,13 @@ func (e *EventNode) EventType() string { return "node" }
 // Python: EventUsage——call_id 在本地账本中保持稳定供服务端去重；
 // 既有事件变体的线上形态保持不变。
 type EventUsage struct {
-	eventID   int           `json:"event_id"`
-	taskID    string        `json:"task_id"`
-	ts        string        `json:"ts"`
-	callID    string        `json:"call_id"`
-	modelCall *RsiModelCall `json:"model_call"`
-	nodeRef   *string       `json:"node_ref"`
-	stageRef  *string       `json:"stage_ref"`
+	eventID   int
+	taskID    string
+	ts        string
+	callID    string
+	modelCall *RsiModelCall
+	nodeRef   *string
+	stageRef  *string
 }
 
 // NewEventUsage 构造用量事件。
@@ -156,9 +156,9 @@ func (e *EventUsage) MarshalJSON() ([]byte, error) {
 // Python: NodeStageEvent——stage 是有意保留的 JSON 透传对象：阶段分类由
 // 引擎持有，AgentServer 只转发不解释其取值。
 type NodeStageEvent struct {
-	nodeRef string         `json:"node_ref"`
-	stage   map[string]any `json:"stage"`
-	note    *string        `json:"note"`
+	nodeRef string
+	stage   map[string]any
+	note    *string
 }
 
 // NewNodeStageEvent 构造节点阶段事件。

@@ -14,6 +14,9 @@ import (
 	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // usage.go —— 运行级模型用量观察与持久化、无内容的调用账本。
@@ -30,7 +33,7 @@ import (
 // 旧 cache_tokens 可能指缓存写入，不得标为命中。
 func UsageTokens(raw any) *RsiUsageTokens {
 	// Python: usage.model_dump(exclude_unset=True) 分支 → *UsageMetadata 归一
-	if md, ok := raw.(*llmschema.UsageMetadata); ok {
+	if md, ok := raw.(*llmschema.UsageMetadata); ok && md != nil {
 		raw = usageMetadataToMap(md)
 	}
 	// 非 Mapping 输入：计数器全缺失（Python getattr 路径在 Go 侧仅覆盖
@@ -385,3 +388,234 @@ const (
 func withoutObserverTag(ctx context.Context) context.Context {
 	return context.WithValue(ctx, usageCtxKeyObserver, nil)
 }
+
+// ──────────────────────────── 导出函数（ctx 标签与公共钩子） ────────────────────────────
+
+// SetUsageNode 选择活动 run 内的当前迭代节点。
+// Python: set_usage_node()——无活动观察者时静默忽略。
+func SetUsageNode(ctx context.Context, nodeRef string) context.Context {
+	if observerFromContext(ctx) == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, usageCtxKeyNode, nodeRef)
+}
+
+// NodeRefFromContext 读取当前节点归属（无标签时为 nil）。
+func NodeRefFromContext(ctx context.Context) *string {
+	if v, ok := ctx.Value(usageCtxKeyNode).(string); ok {
+		return &v
+	}
+	return nil
+}
+
+// StageRefFromContext 读取当前阶段归属（无标签时为 nil）。
+func StageRefFromContext(ctx context.Context) *string {
+	if v, ok := ctx.Value(usageCtxKeyStage).(string); ok {
+		return &v
+	}
+	return nil
+}
+
+// ModelUsageStage 把异步引擎操作发起的调用归属到其公开阶段。
+// Python: model_usage_stage 装饰器 → 包装函数：进入时设置 stage 标签，
+// 退出还原（Go ctx 不可变，还原表现为调用方改用外层 ctx，spec P1）。
+func ModelUsageStage(ctx context.Context, stageRef string) (context.Context, func()) {
+	next := context.WithValue(ctx, usageCtxKeyStage, stageRef)
+	return next, func() { _ = ctx.Value(usageCtxKeyStage) }
+}
+
+// RecordModelUsage 公共钩子：core Model 之外的调用（含子进程）记账入口。
+// Python: record_model_usage()——在父 run 中以外部调用的稳定 id 与提供方
+// usage 调用；禁止把试验聚合总量当作单笔传入；恢复时重复导入幂等；
+// 无活动 run 为 no-op。
+func RecordModelUsage(ctx context.Context, model, callID string, usage any, status string, durationMs *int, stageRef *string) error {
+	observer := observerFromContext(ctx)
+	if observer == nil {
+		return nil
+	}
+	// Python: stage_ref or _stage.get()；node 取 _node.get()
+	if stageRef == nil {
+		stageRef = StageRefFromContext(ctx)
+	}
+	return observer.Record(ctx, model, callID, usage, status, durationMs, NodeRefFromContext(ctx), stageRef)
+}
+
+// ──────────────────────────── 导出函数（observe 订阅） ────────────────────────────
+
+// Observe 安装作用域订阅，取消时即使有并发触发也移除（Python: observe()
+// asynccontextmanager——注册五回调 + ctx 绑 observer 与 node="h0"；
+// finally 注销 + 还原标签）。
+// 注册侧投递失败经 CheckDelivery 在观察周期外暴露。
+func (o *ModelUsageObserver) Observe(ctx context.Context) (context.Context, context.CancelFunc) {
+	framework := callback.GetCallbackFramework()
+	// Python: bindings = ((LLM_INVOKE_INPUT, _input), (LLM_STREAM_INPUT, _input),
+	// (LLM_OUTPUT, _complete), (LLM_INVOKE_OUTPUT, _invoke_output), (LLM_CALL_ERROR, _complete))
+	bindings := []struct {
+		event callback.LLMCallEventType
+		fn    callback.LLMCallbackFunc
+	}{
+		{callback.LLMInvokeInput, o.inputCallback},
+		{callback.LLMStreamInput, o.inputCallback},
+		{callback.LLMOutput, o.completeCallback},
+		{callback.LLMInvokeOutput, o.invokeOutputCallback},
+		{callback.LLMCallError, o.completeCallback},
+	}
+	scoped := context.WithValue(
+		context.WithValue(ctx, usageCtxKeyObserver, o),
+		usageCtxKeyNode, "h0", // Python: node_token = _node.set("h0")
+	)
+	for _, b := range bindings {
+		framework.OnLLM(b.event, b.fn)
+	}
+	return scoped, func() {
+		// Python: finally——逐对注销 + 还原标签（Go ctx 不可变，调用方回到外层 ctx）
+		for _, b := range bindings {
+			framework.OffLLM(b.event, b.fn)
+		}
+	}
+}
+
+// FinishPending 把中断/未上报的请求计为 incomplete（不编造成功或 token）。
+// Python: finish_pending()——遍历 pending 逐笔记账后清空。
+func (o *ModelUsageObserver) FinishPending() error {
+	o.lock.Lock()
+	pending := make(map[string]*pendingCall, len(o.pending))
+	for k, v := range o.pending {
+		pending[k] = v
+	}
+	o.lock.Unlock()
+	for callID, p := range pending {
+		durationMs := intPtr(elapsedMs(p.started))
+		// Python: record(model, call_id, None, "incomplete", elapsed, node, stage)
+		if err := o.Record(context.Background(), p.model, callID, nil, string(ModelCallStatusIncomplete), durationMs, p.node, p.stage); err != nil {
+			return err
+		}
+		o.lock.Lock()
+		delete(o.pending, callID)
+		o.lock.Unlock()
+	}
+	return nil
+}
+
+// ──────────────────────────── 非导出函数（回调实现） ────────────────────────────
+
+// observerFromContext 读取 ctx 上的活动观察者标签。
+func observerFromContext(ctx context.Context) *ModelUsageObserver {
+	o, _ := ctx.Value(usageCtxKeyObserver).(*ModelUsageObserver)
+	return o
+}
+
+// withObserverTag 测试与钩子侧装配观察者标签。
+func withObserverTag(ctx context.Context, o *ModelUsageObserver) context.Context {
+	return context.WithValue(ctx, usageCtxKeyObserver, o)
+}
+
+// inputCallback 发起侧回调：登记在途请求。
+// Python: _input()——observer 标签非本实例即返回；call_id 缺失不登记；
+// model 取事件模型名，缺省 unknown。
+func (o *ModelUsageObserver) inputCallback(ctx context.Context, data *callback.LLMCallEventData) any {
+	if observerFromContext(ctx) != o {
+		return nil
+	}
+	callID := llm.GetCurrentLLMCallID(ctx)
+	if callID == "" {
+		return nil
+	}
+	o.lock.Lock()
+	defer o.lock.Unlock()
+	// Python: model = kwargs.get("model") or _field(model_config, "model_name") or "unknown"
+	model := data.ModelName
+	if model == "" {
+		model = "unknown"
+	}
+	o.pending[callID] = &pendingCall{
+		model:   model,
+		started: time.Now(),
+		node:    NodeRefFromContext(ctx),
+		stage:   StageRefFromContext(ctx),
+	}
+	return nil
+}
+
+// completeCallback 完成侧回调：出账。
+// Python: _complete()——observer 标签校验；call_id 缺失或已 seen 返回；
+// pending 存在时才计算耗时；错误转 deliveryError 不吞。
+func (o *ModelUsageObserver) completeCallback(ctx context.Context, data *callback.LLMCallEventData) any {
+	if observerFromContext(ctx) != o {
+		return nil
+	}
+	callID := llm.GetCurrentLLMCallID(ctx)
+	if callID == "" || o.seen[callID] {
+		return nil
+	}
+	pending := o.popPending(callID)
+	// Python: model, started, node, stage = pending or (model_name or "unknown", now, node, stage)
+	model := data.ModelName
+	node := NodeRefFromContext(ctx)
+	stage := StageRefFromContext(ctx)
+	var durationMs *int
+	if pending != nil {
+		if model == "" {
+			model = pending.model
+		}
+		if node == nil {
+			node = pending.node
+		}
+		if stage == nil {
+			stage = pending.stage
+		}
+		durationMs = intPtr(elapsedMs(pending.started))
+	}
+	if model == "" {
+		model = "unknown"
+	}
+	// Python: "failed" if error is not None else "succeeded"
+	status := string(ModelCallStatusSucceeded)
+	if data.Error != nil {
+		status = string(ModelCallStatusFailed)
+	}
+	// Python: try: await self.record(...) except Exception as exc: self.delivery_error = exc
+	if err := o.Record(ctx, model, callID, data.Usage, status, durationMs, node, stage); err != nil {
+		o.deliveryError = err
+	}
+	return nil
+}
+
+// invokeOutputCallback 自定义客户端缺 LLM_OUTPUT 时的兜底：从 invocation
+// 结果取用量后转完成链。Python: _invoke_output()。
+func (o *ModelUsageObserver) invokeOutputCallback(ctx context.Context, data *callback.LLMCallEventData) any {
+	usage := data.Usage
+	if usage == nil {
+		// Python: usage = _field(result, "usage_metadata")；native 客户端的
+		// 重复回调由 seen 去重吸收
+		if msg, ok := data.Response.(*llmschema.AssistantMessage); ok {
+			usage = msg.UsageMetadata
+		} else if chunk, ok := data.Response.(*llmschema.AssistantMessageChunk); ok {
+			usage = chunk.UsageMetadata
+		}
+	}
+	// Python: await self._complete(usage=...)——无 error 信息
+	shallow := &callback.LLMCallEventData{ModelName: data.ModelName, Usage: usage, Response: data.Response}
+	return o.completeCallback(ctx, shallow)
+}
+
+// popPending 弹出在途登记（Python: self.pending.pop(call_id, None)）。
+func (o *ModelUsageObserver) popPending(callID string) *pendingCall {
+	o.lock.Lock()
+	defer o.lock.Unlock()
+	p := o.pending[callID]
+	delete(o.pending, callID)
+	return p
+}
+
+// elapsedMs 计算自 started 起的毫秒数，钳制非负（Python: max(0, round(...))）。
+func elapsedMs(started time.Time) int {
+	ms := int(time.Since(started).Milliseconds())
+	if ms < 0 {
+		return 0
+	}
+	return ms
+}
+
+// intPtr 整数指针助手（pending 计时与测试共用）。
+func intPtr(v int) *int { return &v }
