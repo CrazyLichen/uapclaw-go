@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"os"
 	"context"
 	"path/filepath"
 
@@ -76,19 +77,22 @@ func (d *DeepAdapter) skillScanDirs() []string {
 		dirs = append(dirs, raw)
 	}
 
-	// 绑定包目录优先于同名 workspace 技能（Python: bound package dirs prepend）
-	switch bound := d.instanceOverrides["skills"].(type) {
-	case string:
-		appendDir(bound)
-	case []string:
-		for _, item := range bound {
-			appendDir(item)
-		}
-	case []any:
-		for _, item := range bound {
-			if text, ok := item.(string); ok {
-				appendDir(text)
+	// 绑定包目录优先于同名 workspace 技能（Python: bound package dirs prepend）。
+	// 数据源（D-5 回填）：15.15 扩展热绑后由 extension_binder 把包根提交到
+	// DeepAgentConfig.Skills（extension_binder.py:272-277），adapter 从该处
+	// 读取；leaf 目录取父目录归一（extension_binder.py:186-202 同源逻辑），
+	// 原先错误来源的 instanceOverrides["skills"] 分支已删除。
+	if d.instance != nil && d.instance.DeepConfig() != nil {
+		for _, raw := range d.instance.DeepConfig().Skills {
+			path := raw
+			if abs, err := filepath.Abs(raw); err == nil {
+				path = abs
 			}
+			if info, err := os.Stat(filepath.Join(path, "SKILL.md")); err == nil && !info.IsDir() {
+				// leaf 目录：取父目录作挂载根，与 binder 的 rail mount 同源
+				path = filepath.Dir(path)
+			}
+			appendDir(path)
 		}
 	}
 	if ws := workspace.AgentSkillsDir(); ws != "" {
