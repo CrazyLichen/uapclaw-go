@@ -85,6 +85,9 @@ type TopicPipeline struct {
 
 	// OnCandidatesReady 候选就绪回调（对齐 :4532 公开属性）
 	OnCandidatesReady func(scope string)
+	// StageTokenCounterFactory token 计数工厂（⤴️31d：真实 StageTokenCounter
+	// 随 topic_history.go 落地；nil 时摘要预算 fail-closed）
+	StageTokenCounterFactory func(string) (*StageTokenCounter, error)
 
 	statePipeline *TopicPreparePipeline
 }
