@@ -455,6 +455,17 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodConfigGet,
 		ReqMethodConfigSet,
 		ReqMethodChannelGet,
+		// 模型目录（23.4d）
+		ReqMethodModelsGet,
+		ReqMethodModelsUpsert,
+		ReqMethodModelsDelete,
+		ReqMethodModelsReferences,
+		ReqMethodModelGroupsList,
+		ReqMethodModelGroupsUpsert,
+		ReqMethodModelGroupsDelete,
+		ReqMethodVendorsList,
+		ReqMethodVendorsFetchModels,
+		ReqMethodSessionSelectionSet,
 		// 会话
 		ReqMethodSessionList,
 		ReqMethodSessionCreate,

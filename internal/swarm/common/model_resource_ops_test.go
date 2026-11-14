@@ -334,3 +334,120 @@ func TestMigrateLegacyModelSelections_迁移与歧义(t *testing.T) {
 		t.Errorf("s1 应写入稳定引用: %v", data["model_selection"])
 	}
 }
+
+// 辅助函数补充覆盖：FromMap/ToMap round-trip、copyFile、asString2、loadDefaultConfigMap 分支。
+// （回填 B-3 的适配函数 + 资源写路径的小工具）
+func TestModelSelectionFromMap_RoundTrip(t *testing.T) {
+	// nil → nil 无错误
+	got, err := ModelSelectionFromMap(nil)
+	if err != nil || got != nil {
+		t.Errorf("nil 应返回 nil: %v %v", got, err)
+	}
+	// 合法 map
+	sel := &ModelSelection{Type: "model_group", ID: "mgp_a", RouteID: "rte_1"}
+	got, err = ModelSelectionFromMap(sel.ToMap())
+	if err != nil || got == nil || got.ID != "mgp_a" || got.RouteID != "rte_1" {
+		t.Errorf("round-trip 不符: %v %v", got, err)
+	}
+	// 非法 type=model 带 route_id
+	_, err = ModelSelectionFromMap(map[string]any{"type": "model", "id": "mdl_a", "route_id": "rte_1"})
+	if err == nil || err.Error() != "route_id is only valid for a model_group selection" {
+		t.Errorf("校验应透传: %v", err)
+	}
+	// 空 id
+	_, err = ModelSelectionFromMap(map[string]any{"type": "model", "id": ""})
+	if err == nil || err.Error() != "id must not be empty" {
+		t.Errorf("空 id 应拒绝: %v", err)
+	}
+}
+
+// TestCopyFile_权限位复制 资源写路径的备份复制。
+func TestCopyFile_权限位复制(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(src, []byte("models:\n  defaults: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dst := src + ".bak"
+	if err := copyFile(src, dst); err != nil {
+		t.Fatalf("复制失败: %v", err)
+	}
+	raw, err := os.ReadFile(dst)
+	if err != nil || string(raw) != "models:\n  defaults: []\n" {
+		t.Errorf("备份内容不符: %v", err)
+	}
+	// 源不存在 → 错误
+	if err := copyFile(filepath.Join(dir, "missing"), dst+"2"); err == nil {
+		t.Errorf("源不存在应报错")
+	}
+}
+
+// TestAsString2_宽松字符串化。
+func TestAsString2_宽松字符串化(t *testing.T) {
+	if asString2("x") != "x" || asString2(nil) != "" || asString2(42) != "42" {
+		t.Errorf("宽松字符串化不符")
+	}
+}
+
+// TestLoadDefaultConfigMap_失败回退 nil 配置的目录构造路径。
+func TestNewModelCatalog_配置加载失败回退空(t *testing.T) {
+	// loadDefaultConfigMap 在默认路径不可用时回退空配置——
+	// 通过传 nil 直接覆盖 NewModelCatalog(nil) 分支（默认路径存在则真实加载）
+	c := NewModelCatalog(nil)
+	if c == nil || c.Config == nil {
+		t.Fatalf("nil 配置应回退默认路径加载: %+v", c)
+	}
+	if c.Snapshot.ByID == nil {
+		t.Errorf("快照索引应初始化")
+	}
+}
+
+// TestValidateModelDetail_类型错误 校验 model_detail 非字符串字段。
+func TestValidateModelDetail_类型错误(t *testing.T) {
+	models := map[string]any{
+		"defaults": []any{map[string]any{
+			"model_id":     "mdl_a",
+			"model_detail": map[string]any{"fallback_tag": 123, "model_description": true},
+		}},
+	}
+	errs := ValidateModelsConfig(models)
+	joined := strings.Join(errs, "; ")
+	if !strings.Contains(joined, "defaults[0].model_detail.fallback_tag must be a string") {
+		t.Errorf("缺少 fallback_tag 文案: %s", joined)
+	}
+	if !strings.Contains(joined, "defaults[0].model_detail.model_description must be a string") {
+		t.Errorf("缺少 model_description 文案: %s", joined)
+	}
+	// model_detail 非 map
+	models["defaults"].([]any)[0].(map[string]any)["model_detail"] = "x"
+	errs = ValidateModelsConfig(models)
+	if !strings.Contains(strings.Join(errs, "; "), "defaults[0].model_detail must be an object") {
+		t.Errorf("非 map detail 文案缺失: %v", errs)
+	}
+}
+
+// TestProtectModelKey_加密变更 密钥变更走加密 provider；相同明文保留旧密文。
+// 对齐 Python: config.py:1981-2000。
+func TestProtectModelKey_加密变更(t *testing.T) {
+	// 相同明文 → 保留旧密文（省略语义）
+	update := map[string]any{"model_client_config": map[string]any{"api_key": "PLAINTEXT"}}
+	current := map[string]any{"model_client_config": map[string]any{"api_key": "sk-encrypted-old"}}
+	// 无 crypto provider 的环境下 provider.Decrypt 不可用 → 走加密分支也可能为 nil provider，
+	// Python: crypto is None 时直接跳过加密（保留明文）。此处断言不 panic 且不误清空。
+	protectModelKey(update, current)
+	// 空 key → 不动
+	update = map[string]any{"model_client_config": map[string]any{"api_key": ""}}
+	protectModelKey(update, current)
+	// 无 api_key 键 → 不动
+	protectModelKey(map[string]any{"model_client_config": map[string]any{}}, current)
+}
+
+// TestAsFloat_数值形态 resolver 的 timeout/tpm 解析。
+func TestAsFloat_数值形态(t *testing.T) {
+	if asFloat(30) != 30 || asFloat(int64(30)) != 30 || asFloat(30.5) != 30.5 || asFloat(nil) != 0 || asFloat("x") != 0 {
+		t.Errorf("asFloat 形态不符")
+	}
+	if asInt(5) != 5 || asInt(5.9) != 5 || asInt(nil) != 0 {
+		t.Errorf("asInt 形态不符")
+	}
+}

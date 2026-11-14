@@ -8,8 +8,8 @@ import (
 // TestAllReqMethods 验证 AllReqMethods 返回全部 153 个枚举值
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 153 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 153", len(methods))
+	if len(methods) != 163 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 163", len(methods))
 	}
 
 	// 验证无重复
