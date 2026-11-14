@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi"
 )
 
 // newTestModel 构造测试用空 Model（仅占位，契约层不调用其方法）。
@@ -129,6 +130,9 @@ func TestValidateArtifactTaskRequest_逐条规则(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := validProgram()
+			if tc.name == "paper两者皆缺" {
+				req = validPaper()
+			}
 			tc.mut(req)
 			expectCodes(t, ValidateArtifactTaskRequest(req), tc.want...)
 		})
