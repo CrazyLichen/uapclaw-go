@@ -19,6 +19,7 @@ import (
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 	lifecyclepkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
+	modelcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -303,8 +304,15 @@ func (*sessionOpsAdapter) InitSessionMetadata(params swruntime.InitMetadataParam
 }
 
 // SetSessionModelSelection 写会话模型选择。
-// spec §10 R-5：当前无对应持久化接口，空实现（模型选择存储未迁移）。
-func (*sessionOpsAdapter) SetSessionModelSelection(string, map[string]any) error { return nil }
+// 回填 B-3（spec §4，原 spec §10 R-5 第三项）：经 swarm/common 的 store 落盘
+// （Python: model_selection_store.py set_session_model_selection）。
+func (*sessionOpsAdapter) SetSessionModelSelection(sessionID string, selection map[string]any) error {
+	sel, err := modelcommon.ModelSelectionFromMap(selection)
+	if err != nil {
+		return err
+	}
+	return modelcommon.SetSessionModelSelection(sessionID, sel)
+}
 
 // HistoryExists 判定 history 文件是否存在。
 func (*sessionOpsAdapter) HistoryExists(sessionID string) bool {

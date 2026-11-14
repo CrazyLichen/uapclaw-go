@@ -102,3 +102,27 @@ func (s *ModelSelection) Validate() error {
 	}
 	return nil
 }
+
+// ModelSelectionFromMap 从 map 还原 ModelSelection 并校验。
+// Python: ModelSelection.model_validate(raw)（pydantic 入口）。
+// raw 为 nil 返回 nil 无错误（Python None 语义）。
+func ModelSelectionFromMap(raw map[string]any) (*ModelSelection, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	selection := &ModelSelection{
+		Type:    asString(raw["type"]),
+		ID:      asString(raw["id"]),
+		RouteID: asString(raw["route_id"]),
+	}
+	if err := selection.Validate(); err != nil {
+		return nil, err
+	}
+	return selection, nil
+}
+
+// ToMap 序列化为 RPC/store 载荷。
+// Python: selection.model_dump()。
+func (s *ModelSelection) ToMap() map[string]any {
+	return map[string]any{"type": s.Type, "id": s.ID, "route_id": s.RouteID}
+}

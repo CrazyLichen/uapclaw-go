@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	modelcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session"
 )
 
@@ -1427,6 +1428,26 @@ func (p *RuntimeSessionProvisioner) PrepareSessionCreate(
 		var resolvedTeam bool
 		canonicalMode, resolvedTeam = p.extra.ResolveCanonicalMode(params, finalWorkMode)
 		isSwarm = isSwarm || resolvedTeam
+	}
+
+	// Python: session_provisioner.py:780-791 —— cron 会话的 model_selection 仅支持
+	// 单模型；cron + selection 时经 ModelSelectionResolver().restore 回落已删除的引用
+	// （回落到当前默认，防止定时任务起不来）。非 cron 会话不做 restore。
+	if input.CronID != "" && input.ModelSelection != nil {
+		selection, selErr := modelcommon.ModelSelectionFromMap(input.ModelSelection)
+		if selErr != nil {
+			return nil, &SessionProvisionError{Message: selErr.Error(), Code: "BAD_REQUEST"}
+		}
+		if selection != nil && selection.Type != "model" {
+			// Python: session_provisioner.py:784-786 raise ValueError("Scheduled task sessions only support a single model")
+			return nil, &SessionProvisionError{Message: "Scheduled task sessions only support a single model", Code: "BAD_REQUEST"}
+		}
+		resolver := modelcommon.NewModelSelectionResolver(nil)
+		restored, restoreErr := resolver.Restore(selection)
+		if restoreErr != nil {
+			return nil, &SessionProvisionError{Message: restoreErr.Error(), Code: "BAD_REQUEST"}
+		}
+		input.ModelSelection = restored.ToMap()
 	}
 
 	// 12-13. MOA 解析

@@ -155,7 +155,9 @@ func (s *ModelGroupSuite) TestRosterShowsModelGroupAndModelsUsed() {
 }
 
 // IT-MG-5 编译器产物物化：23.4b CompiledModelSelection → 单条组池条目 →
-// 分配器可用（23.4d resolver 接入前的编译产物构造路径）。
+// 分配器可用（23.4d resolver 已交付，本用例保留编译产物构造路径作为
+// 23.4b 编译器的直接回归；端到端 resolver→编译器→池链路由
+// tests/integration/swarm/web 的 models RPC 套件覆盖）。
 // Python: materialize_model_group + test_model_group_contract.py
 func (s *ModelGroupSuite) TestMaterializeCompiledSelectionIntoAllocator() {
 	routerCfg := llmschema.NewDefaultIntelliRouterConfig()
