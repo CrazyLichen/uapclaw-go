@@ -98,6 +98,11 @@ func (w *auditedStageInvoker) RecordValidation(response any, outcome string) {
 	w.base.RecordValidation(response, outcome)
 }
 
+// AppendInvocationReceipt 透传追加。
+func (w *v6ArkStageInvoker) AppendInvocationReceipt(receipt map[string]any) {
+	w.base.AppendInvocationReceipt(receipt)
+}
+
 // InvocationReceipts 调用小票透传（对齐 setattr(invocation_receipts, ...)）。
 func (w *auditedStageInvoker) InvocationReceipts() []map[string]any {
 	return w.base.InvocationReceipts()
@@ -153,6 +158,11 @@ func BuildV6ArkStageInvoker(config *ArkBackgroundConfig, clientFactory ChatClien
 // AuditedArkStageInvoker 在进入 Ark 适配器前落宿主请求身份（:1067-1103）。
 func AuditedArkStageInvoker(invokeStage *ArkStageInvoker, audit *ExternalInvocationAudit) *auditedStageInvoker {
 	return &auditedStageInvoker{base: invokeStage, audit: audit}
+}
+
+// AppendInvocationReceipt 透传追加。
+func (w *auditedStageInvoker) AppendInvocationReceipt(receipt map[string]any) {
+	w.base.AppendInvocationReceipt(receipt)
 }
 
 // HostEvidence 宿主自有证据（topic_pipeline.py:1105-1113）。

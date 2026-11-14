@@ -268,6 +268,29 @@ const (
 	v4MappingPromptVersion = "v4-mapping-prompt-3"
 )
 
+// TaxonomyTags 项目适配的冻结会话域分类法（topic_history.py:86-105）。
+// 扩展只能通过 provisional 标签加显式协议版本升级。
+var TaxonomyTags = map[string]string{
+	"tech-ai-ml":                 "人工智能与机器学习",
+	"tech-software-dev":          "软件开发与工程",
+	"tech-hardware-devices":      "硬件与智能设备",
+	"science-math-research":      "数学与基础科学研究",
+	"science-life-medicine":      "生命科学与医学健康",
+	"finance-investment":         "金融与投资理财",
+	"business-career":            "商业与职业发展",
+	"education-learning":         "学习方法与教育",
+	"culture-history-humanities": "历史与人文",
+	"arts-media-entertainment":   "文艺与影音娱乐",
+	"gaming-interactive":         "游戏与互动娱乐",
+	"sports-fitness":             "体育运动与健身",
+	"travel-outdoor":             "旅行与户外",
+	"food-cooking":               "美食与烹饪",
+	"home-lifestyle":             "生活方式与家庭",
+	"society-news-current":       "社会时事与新闻",
+	"language-writing":           "语言与写作表达",
+	"psychology-self":            "心理与自我成长",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HistoryEmptyV4State 全新空白 v4 状态（⤴️ 31d：随 topic_history.py 整体落地后

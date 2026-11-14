@@ -627,8 +627,8 @@ type V6ContextSnapshot struct {
 	Messages []*V6SourceMessage
 	// DeltaEventIds 增量事件 ID
 	DeltaEventIDs []string
-	// ShortIntentState 短意图状态
-	ShortIntentState map[string]any
+	// ShortIntentState 短意图状态（topic_short_intent.py ShortIntentState）
+	ShortIntentState *ShortIntentState
 	// InputSnapshotId 输入快照 ID
 	InputSnapshotID string
 	// ProfileProjection 画像投影

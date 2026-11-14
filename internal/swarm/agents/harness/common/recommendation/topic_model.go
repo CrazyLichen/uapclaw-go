@@ -262,6 +262,21 @@ type ChatClientFactory func(apiKey, baseURL string) (ChatClient, error)
 // Python 以闭包 + setattr 附加 record_validation/invocation_receipts/aclose
 // （:387-389）；Go 侧用结构体承载三者，属等价转换。
 // 对齐 Python topic_model.py:195-390 build_ark_stage_invoker。
+
+// TopicStageInvoker 阶段调用器消费面（TopicPipeline/TopicPreparePipeline
+// 共用；*ArkStageInvoker 与 *v6ArkStageInvoker 均满足）。
+type TopicStageInvoker interface {
+	// Invoke 套系统提示词后调用阶段模型
+	Invoke(ctx context.Context, stage, systemPrompt, payload string) (any, error)
+	// RecordValidation 透传校验记录
+	RecordValidation(response any, outcome string)
+	// InvocationReceipts 调用小票
+	InvocationReceipts() []map[string]any
+	// AppendInvocationReceipt 追加一条调用小票（对齐 Python 对
+	// invocation_receipts 列表的就地 append）
+	AppendInvocationReceipt(receipt map[string]any)
+}
+
 type ArkStageInvoker struct {
 	// client 聊天客户端
 	client ChatClient
@@ -326,6 +341,11 @@ func BuildArkStageInvoker(
 // InvocationReceipts 调用小票（对齐 setattr(invoke, "invocation_receipts", ...)）。
 func (inv *ArkStageInvoker) InvocationReceipts() []map[string]any {
 	return inv.invocationReceipts
+}
+
+// AppendInvocationReceipt 就地追加调用小票。
+func (inv *ArkStageInvoker) AppendInvocationReceipt(receipt map[string]any) {
+	inv.invocationReceipts = append(inv.invocationReceipts, receipt)
 }
 
 // Invoke 执行一次后台阶段调用。对齐闭包内 invoke(:214-377)：

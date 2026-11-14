@@ -62,7 +62,7 @@ type TopicPreparePipeline struct {
 	now                 func() float64
 	recordsLoader       func() map[string][]map[string]any
 	inputLoader         func() *V5GenerationInputs
-	stageInvokerFactory func(*ArkBackgroundConfig) *ArkStageInvoker
+	stageInvokerFactory func(*ArkBackgroundConfig) TopicStageInvoker
 	search              SearchFn
 	fetch               FetchFn
 	classifySource      SourceClassifier
@@ -157,7 +157,7 @@ var PromptVersions = map[string]string{
 func NewTopicPreparePipeline(store *TopicStarterStore,
 	inputLoader func() *V5GenerationInputs,
 	recordsLoader func() map[string][]map[string]any,
-	stageInvokerFactory func(*ArkBackgroundConfig) *ArkStageInvoker,
+	stageInvokerFactory func(*ArkBackgroundConfig) TopicStageInvoker,
 	search SearchFn, fetch FetchFn, classifySource SourceClassifier,
 	now func() float64, historyEngine HistoryEngine) *TopicPreparePipeline {
 	if now == nil {
@@ -175,7 +175,7 @@ func NewTopicPreparePipeline(store *TopicStarterStore,
 	if stageInvokerFactory == nil {
 		// Python: partial(build_ark_stage_invoker, receipt_sink=partial(persist_provider_invocation, store))（:596-600）
 		sink := func(receipt map[string]any) { PersistProviderInvocation(store, receipt) }
-		stageInvokerFactory = func(config *ArkBackgroundConfig) *ArkStageInvoker {
+		stageInvokerFactory = func(config *ArkBackgroundConfig) TopicStageInvoker {
 			return BuildArkStageInvoker(config, NewDefaultChatClientFactory(), nil, false, sink, nil, nil, nil, false)
 		}
 	}
@@ -742,7 +742,7 @@ func (p *TopicPreparePipeline) refreshState(ctx context.Context, config *ArkBack
 }
 
 // safeStageInvokerFactory 工厂异常 fail-closed（对齐 :619-622）。
-func (p *TopicPreparePipeline) safeStageInvokerFactory(config *ArkBackgroundConfig) (inv *ArkStageInvoker, err error) {
+func (p *TopicPreparePipeline) safeStageInvokerFactory(config *ArkBackgroundConfig) (inv TopicStageInvoker, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			inv, err = nil, fmt.Errorf("stage invoker factory failed")
