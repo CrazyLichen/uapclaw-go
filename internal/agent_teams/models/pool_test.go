@@ -847,7 +847,7 @@ func TestEntrySignature_ClientIdExcluded(t *testing.T) {
 func TestInheritPoolIDs_对齐(t *testing.T) {
 	meta := map[string]any{"client": map[string]any{"client_id": "uuid-x"}}
 	old := []ModelPoolEntry{*NewModelPoolEntry("a", "k1", "b1", "p", WithModelID("id-a"), WithMetadata(meta)),
-		*NewModelPoolEntry("b", "k2", "b2", "p", WithModelID("id-b"))}
+		*NewModelPoolEntry("b", "k2", "b2", "p", WithModelID("id-b"), WithMetadata(meta))}
 	// 重排序但内容相同 → 全对齐（顺序无关）
 	newPool := []ModelPoolEntry{*NewModelPoolEntry("b", "k2", "b2", "p", WithMetadata(meta)),
 		*NewModelPoolEntry("a", "k1", "b1", "p", WithMetadata(meta))}
