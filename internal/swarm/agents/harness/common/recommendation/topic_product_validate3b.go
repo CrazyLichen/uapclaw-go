@@ -314,7 +314,13 @@ func ListSearchRejectionReason(manifest map[string]any, cards []map[string]any) 
 		if len(preferredIDs) != 0 {
 			return failure
 		}
-	} else if !uniqueNonemptyStrings(toAnySlice(preferredIDs)) {
+	} else if !func() bool {
+		anyIDs := make([]any, 0, len(preferredIDs))
+		for _, id := range preferredIDs {
+			anyIDs = append(anyIDs, id)
+		}
+		return uniqueNonemptyStrings(anyIDs)
+	}() {
 		return failure
 	}
 
@@ -414,7 +420,13 @@ func ListSearchRejectionReason(manifest map[string]any, cards []map[string]any) 
 			return failure
 		}
 		entryCandidateIDs := pyListStrings(entry["candidate_ids"])
-		if !uniqueNonemptyStrings(toAnySlice(entryCandidateIDs)) {
+		if !func() bool {
+			anyIDs := make([]any, 0, len(entryCandidateIDs))
+			for _, id := range entryCandidateIDs {
+				anyIDs = append(anyIDs, id)
+			}
+			return uniqueNonemptyStrings(anyIDs)
+		}() {
 			return failure
 		}
 		for _, candidateID := range entryCandidateIDs {
