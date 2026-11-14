@@ -152,6 +152,16 @@ func UnregisterHarnessProvider(name string) {
 	delete(registeredProviders, name)
 }
 
+// RegisterBuiltinProvider 内置 provider 的注册通道：绕过内置名守卫，
+// 供 15.6-15.9 各 provider 包在 init() 里自注册。
+// Python: factory.py:199-224 _resolve_builtin 的惰性 import 直构造——Go 侧
+// 以「导入 provider 包触发 init 注册」等价（惰性 import 的链接副作用）。
+func RegisterBuiltinProvider(name string, factory ProviderFactory) {
+	registeredProvidersMu.Lock()
+	defer registeredProvidersMu.Unlock()
+	registeredProviders[name] = factory
+}
+
 // AvailableProviders 返回每个可解析的 provider 名：内置、注册、已安装。
 // Python: factory.py:103-109 available_providers
 //

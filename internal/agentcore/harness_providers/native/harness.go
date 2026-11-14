@@ -286,6 +286,71 @@ func (h *DeepAgentHarness) Agent() *harness.DeepAgent { return h.agent }
 // Card 返回 provider 卡片。
 func (h *DeepAgentHarness) Card() hp.HarnessCard { return h.base.Card() }
 
+// 协议面（HarnessProtocol）：Python 由 SerializedTurnHarness 继承获得，
+// Go 以显式委托等价（base 为组合字段；hooks 已构造期注入，无虚派发问题）。
+// Python: base.py SerializedTurnHarness 的对应公开方法。
+
+// State 当前生命周期相位。
+// Python: base.py SerializedTurnHarness.state
+func (h *DeepAgentHarness) State() hp.HarnessState { return h.base.State() }
+
+// ProviderSessionID provider 原生会话标识。
+// Python: base.py provider_session_id
+func (h *DeepAgentHarness) ProviderSessionID() *string { return h.base.ProviderSessionID() }
+
+// EventBufferConfig 观测的有界背压策略。
+// Python: base.py event_buffer_config
+func (h *DeepAgentHarness) EventBufferConfig() hp.EventBufferConfig { return h.base.EventBufferConfig() }
+
+// Start 校验宿主兼容性并开启一次周期。
+// Python: base.py SerializedTurnHarness.start
+func (h *DeepAgentHarness) Start(ctx context.Context, harnessContext hp.HarnessContext) error {
+	return h.base.Start(ctx, harnessContext)
+}
+
+// Stop 停止周期并稳定在 terminated。
+// Python: base.py SerializedTurnHarness.stop
+func (h *DeepAgentHarness) Stop(ctx context.Context) error { return h.base.Stop(ctx) }
+
+// Events 周期级有序观测流。
+// Python: base.py SerializedTurnHarness.events
+func (h *DeepAgentHarness) Events() hp.HarnessEventCursor { return h.base.Events() }
+
+// TurnEvents 单轮有限观测流。
+// Python: base.py SerializedTurnHarness.turn_events
+func (h *DeepAgentHarness) TurnEvents(turnID *string) hp.HarnessEventCursor {
+	return h.base.TurnEvents(turnID)
+}
+
+// Send 接受输入并返回 message→turn 关联。
+// Python: base.py SerializedTurnHarness.send
+func (h *DeepAgentHarness) Send(ctx context.Context, content hp.HarnessInput,
+	mode hp.DeliveryMode) (hp.SendReceipt, error) {
+	return h.base.Send(ctx, content, mode)
+}
+
+// Abort 中止在飞轮次。
+// Python: base.py SerializedTurnHarness.abort
+func (h *DeepAgentHarness) Abort(ctx context.Context, mode hp.AbortMode) error {
+	return h.base.Abort(ctx, mode)
+}
+
+// Pause 暂停在飞轮次（native 未声明 pause_resume，走基座守卫）。
+// Python: base.py SerializedTurnHarness.pause
+func (h *DeepAgentHarness) Pause(ctx context.Context) error { return h.base.Pause(ctx) }
+
+// Resume 恢复暂停轮次（同上）。
+// Python: base.py SerializedTurnHarness.resume
+func (h *DeepAgentHarness) Resume(ctx context.Context, query *hp.HarnessInput) error {
+	return h.base.Resume(ctx, query)
+}
+
+// ExportCheckpoint 最新带版本 provider 快照。
+// Python: base.py SerializedTurnHarness.export_checkpoint
+func (h *DeepAgentHarness) ExportCheckpoint(ctx context.Context) (*hp.HarnessCheckpoint, error) {
+	return h.base.ExportCheckpoint(ctx)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // appendContextPrompt 把宿主 system prompt 追加为 harness_context 段落。
@@ -576,23 +641,60 @@ const logComponent = logger.ComponentAgentCore
 // newDeepAgentHarness 构造并接线基座（Go embedding 无虚派发，
 // 基座经 hooks 回调本结构——构造期注入）。
 // Python: harness.py:231-258 DeepAgentHarness.__init__
-func newDeepAgentHarness(
-	agentFactory AgentFactory,
-	agentTemplate *hschema.AgentTemplateSpec,
-	sessionID string,
-	language string,
-	eventBufferCapacity int,
-) *DeepAgentHarness {
+// HarnessOption DeepAgentHarness 的函数式选项。
+// Python: harness.py:231-252 __init__ 的 keyword-only 参数。
+type HarnessOption func(*harnessOptions)
+
+type harnessOptions struct {
+	agentTemplate       *hschema.AgentTemplateSpec
+	sessionIDOverride   string
+	language            string
+	eventBufferCapacity int
+}
+
+// WithAgentTemplate 首轮前热加载到 agent 上的 manifest 模板。
+// Python: harness.py:235 agent_template 形参。
+func WithAgentTemplate(spec *hschema.AgentTemplateSpec) HarnessOption {
+	return func(o *harnessOptions) { o.agentTemplate = spec }
+}
+
+// WithSessionID 显式 DeepAgent 会话 id；缺省为宿主会话 id 与 agent id 连接。
+// Python: harness.py:236 session_id 形参。
+func WithSessionID(sessionID string) HarnessOption {
+	return func(o *harnessOptions) { o.sessionIDOverride = sessionID }
+}
+
+// WithLanguage 解析模板用的语言。
+// Python: harness.py:237 language 形参。
+func WithLanguage(language string) HarnessOption {
+	return func(o *harnessOptions) { o.language = language }
+}
+
+// WithEventBufferCapacity 有界观测缓冲容量（缺省 1024）。
+// Python: harness.py:238 event_buffer_capacity 形参。
+func WithEventBufferCapacity(capacity int) HarnessOption {
+	return func(o *harnessOptions) { o.eventBufferCapacity = capacity }
+}
+
+// NewDeepAgentHarness 构造绑定 agent 构建配方的协议适配器；agent 在 start 时构建。
+// Python: harness.py:231-258 DeepAgentHarness.__init__
+func NewDeepAgentHarness(agentFactory AgentFactory, opts ...HarnessOption) *DeepAgentHarness {
+	o := harnessOptions{eventBufferCapacity: 1024}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&o)
+		}
+	}
 	h := &DeepAgentHarness{
 		agentFactory:      agentFactory,
-		agentTemplate:     agentTemplate,
-		sessionIDOverride: sessionID,
-		language:          language,
+		agentTemplate:     o.agentTemplate,
+		sessionIDOverride: o.sessionIDOverride,
+		language:          o.language,
 	}
 	h.base = harness_providers.NewSerializedTurnHarness(harness_providers.HarnessOptions{
 		Card:                AgentFactoryCard(),
 		Hooks:               h,
-		EventBufferCapacity: eventBufferCapacity,
+		EventBufferCapacity: o.eventBufferCapacity,
 	})
 	return h
 }
