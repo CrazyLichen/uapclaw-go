@@ -26,7 +26,7 @@ import (
 const (
 	// NewsPreferredWindowHours 首选时间窗小时数（topic_news.py:40）。
 	NewsPreferredWindowHours = 24
-	feedURL = "https://www.bing.com/news/search"
+	feedURL                  = "https://www.bing.com/news/search"
 	// userAgent 抓取 UA（:43-45）。
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
 		"(KHTML, like Gecko) Chrome/128.0 Safari/537.36"
@@ -76,7 +76,6 @@ func FeedURL(query string, windowHours int) string {
 	return fmt.Sprintf("%s?q=%s&format=rss&qft=sortbydate%%3D%%221%%22+interval%%3D%%22%s%%22",
 		feedURL, url.QueryEscape(query), interval)
 }
-
 
 // ParseNewsFeed RSS 解析为搜索行：url、title、date（ISO）、publisher、snippet
 // （对齐 :82-112 parse_news_feed）。
@@ -198,11 +197,11 @@ func ParseWeiboHotBand(text string) ([]*HotListEntry, error) {
 		}
 		listedAt := anyFloat(item["onboard_time"])
 		entries = append(entries, &HotListEntry{
-			EntryID:  fmt.Sprintf("%s:%d", WeiboProviderID, rank),
+			EntryID:    fmt.Sprintf("%s:%d", WeiboProviderID, rank),
 			ProviderID: WeiboProviderID,
-			Rank:     rank,
-			Word:     word,
-			ListedAt: listedAt,
+			Rank:       rank,
+			Word:       word,
+			ListedAt:   listedAt,
 		})
 	}
 	return entries, nil
@@ -424,7 +423,7 @@ func (f *HotListFeed) Pull(ctx context.Context) *HotListPull {
 
 // feedEnvelope/feedItem RSS 解析结构（等价 ElementTree ./channel/item）。
 type feedEnvelope struct {
-	XMLName xml.Name  `xml:"rss"`
+	XMLName xml.Name    `xml:"rss"`
 	Channel feedChannel `xml:"channel"`
 }
 
@@ -572,9 +571,9 @@ func (f *HotListFeed) record(rec hotListPullRecord) {
 // recentPull 复用窗口内的最近成功拉取（对齐 :449-459 _recent_pull）。
 func (f *HotListFeed) recentPull(now float64) *HotListPull {
 	rows, err := f.store.QueryEvents(QueryEventsOptions{
-		EventType: HotListPullEventType,
-		PolicyID:  &[]string{ProductPolicyID}[0],
-		Limit:     10,
+		EventType:   HotListPullEventType,
+		PolicyID:    &[]string{ProductPolicyID}[0],
+		Limit:       10,
 		NewestFirst: true,
 	})
 	if err != nil {
@@ -597,7 +596,6 @@ func (f *HotListFeed) recentPull(now float64) *HotListPull {
 	}
 	return nil
 }
-
 
 // feedHTTPGet 底层 GET（等价 aiohttp session.get 的被使用面）。
 func feedHTTPGet(urlText string, timeoutSeconds int, headers map[string]string) (*fetchedResponse, error) {
@@ -643,4 +641,3 @@ func newsNilIfEmpty(value string) any {
 func roundOne(value float64) float64 {
 	return float64(int(value*10+0.5)) / 10
 }
-

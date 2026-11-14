@@ -8,17 +8,17 @@ import (
 // poolCSTriggerKey 合法触发键（冷启动卡字段来源）。
 func poolCSTriggerKey() map[string]any {
 	return map[string]any{
-		"local_date":                 "2026-11-12",
-		"search_provider_id":         OpenjiuwenNativeSearchProviderId,
-		"profile_semantic_version":   "profile-v1",
-		"short_intent_version":       "short-v1",
+		"local_date":                  "2026-11-12",
+		"search_provider_id":          OpenjiuwenNativeSearchProviderId,
+		"profile_semantic_version":    "profile-v1",
+		"short_intent_version":        "short-v1",
 		"negative_preference_version": "neg-v1",
-		"generation_config_version":  "gen-v19",
-		"corpus_version":             CorpusVersion,
-		"document_snapshot_version":  "doc-v1",
-		"retrieval_config_version":   "ret-v1",
-		"evidence_extractor_version": "ev-v1",
-		"input_revision_receipt":     map[string]any{"receipt_id": "snap-1"},
+		"generation_config_version":   "gen-v19",
+		"corpus_version":              CorpusVersion,
+		"document_snapshot_version":   "doc-v1",
+		"retrieval_config_version":    "ret-v1",
+		"evidence_extractor_version":  "ev-v1",
+		"input_revision_receipt":      map[string]any{"receipt_id": "snap-1"},
 	}
 }
 
@@ -104,15 +104,15 @@ func TestWriteTerminalPool_拒绝路径(t *testing.T) {
 		"card_id": "c-1", "card_revision_id": "r-1", "generation_batch_id": "b-1",
 		"selector_rank": 1, "category": "profile_recent_progress",
 		"title": "标题", "prompt": "提示", "context_scope": GlobalNewChatScope,
-		"evidence_bundle": map[string]any{},
+		"evidence_bundle":    map[string]any{},
 		"search_provider_id": OpenjiuwenNativeSearchProviderId, "search_receipt": nil,
 	}
 	manifest := map[string]any{
 		"manifest_id": "m-1", "generation_batch_id": "b-1",
 		"card_revision_ids": []any{"r-1"}, "context_scope": GlobalNewChatScope,
-		"generation_trigger_key": map[string]any{"search_provider_id": OpenjiuwenNativeSearchProviderId},
-		"search_provider_id":     OpenjiuwenNativeSearchProviderId,
-		"search_receipts":        map[string]any{"c-1": nil},
+		"generation_trigger_key":     map[string]any{"search_provider_id": OpenjiuwenNativeSearchProviderId},
+		"search_provider_id":         OpenjiuwenNativeSearchProviderId,
+		"search_receipts":            map[string]any{"c-1": nil},
 		"grounding_evidence_receipt": map[string]any{"candidates": []any{}},
 		"external_invocation_audit":  map[string]any{"invocations": []any{}},
 		"profile_semantic_version":   "profile-v1",
@@ -132,7 +132,7 @@ func TestSelectRegularExposure(t *testing.T) {
 			"selector_rank": rank, "direction": "",
 		}
 		if news {
-			card["evidence_bundle"] = map[string]any{"source_kind": "news_report", "published_at": isoTime(now-1800)}
+			card["evidence_bundle"] = map[string]any{"source_kind": "news_report", "published_at": isoTime(now - 1800)}
 		} else {
 			card["evidence_bundle"] = map[string]any{"source_kind": "stable"}
 		}
@@ -198,7 +198,7 @@ func TestIsColdStartManifest(t *testing.T) {
 func TestShortDeltaSuccessorRejectionReason(t *testing.T) {
 	store := newTestStore(t)
 	manifest := map[string]any{
-		"context_scope": "project",
+		"context_scope":            "project",
 		"short_interest_selection": map[string]any{"interest_id": "int-1"},
 		"supersedes_manifest_id":   "m-0",
 	}
