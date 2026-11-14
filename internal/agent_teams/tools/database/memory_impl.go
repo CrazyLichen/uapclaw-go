@@ -371,6 +371,28 @@ func (db *InMemoryTeamDatabase) UpdateMemberStatus(_ context.Context, memberName
 	return true
 }
 
+// UpdateMemberServedModel 记录模型组把成员路由到 servedModel（内存实现）。
+// Python: update_member_served_model (member_dao.py:807-843)
+func (db *InMemoryTeamDatabase) UpdateMemberServedModel(_ context.Context, memberName, teamName, servedModel string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := memberKey(memberName, teamName)
+	member, exists := db.members[key]
+	if !exists {
+		// leader 在 build_team 写入成员行之前就可能完成首次路由
+		return false // Python: member not found → False
+	}
+	now := GetCurrentTime()
+	options := AppendMemberServedModel(member.Options, servedModel, now)
+	if options == member.Options {
+		return true
+	}
+	member.Options = options
+	// served models 渲染在 leader 名册，新条目即名册变更：bump 名册探针监视的列
+	member.UpdatedAt = now
+	return true
+}
+
 // SetMemberMode 设置成员模式（仅用于测试）。
 // 绕过 FSM 校验，直接修改成员的 Mode 字段。
 func (db *InMemoryTeamDatabase) SetMemberMode(memberName, teamName, mode string) {

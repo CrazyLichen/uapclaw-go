@@ -138,6 +138,33 @@ func (d *SQLMemberDao) UpdateMemberStatus(ctx context.Context, memberName, teamN
 	return true
 }
 
+// UpdateMemberServedModel 记录模型组把成员路由到 servedModel。
+// 仅在 served_models 有变化时写库；新条目会渲染在 leader 名册，属名册变更：
+// bump 名册探针监视的 updated_at 列。
+// Python: update_member_served_model (member_dao.py:807-843)
+func (d *SQLMemberDao) UpdateMemberServedModel(ctx context.Context, memberName, teamName, servedModel string) bool {
+	var member TeamMember
+	result := d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).First(&member)
+	if result.Error != nil {
+		// leader 在 build_team 写入成员行之前就可能完成首次路由
+		logger.Debug(logComponent).
+			Str("member_name", memberName).
+			Str("team_name", teamName).
+			Msg("member not found for served-model record; will retry on next routing")
+		return false
+	}
+	now := GetCurrentTime()
+	options := AppendMemberServedModel(member.Options, servedModel, now)
+	if options == member.Options {
+		return true
+	}
+	d.db.WithContext(ctx).Table("team_member").
+		Where("member_name = ? AND team_name = ?", memberName, teamName).
+		Updates(map[string]any{"options": options, "updated_at": now})
+	return true
+}
+
 // TryTransitionMemberStatus CAS 原子状态转换。
 // Python: try_transition_member_status() → bool
 // 仅当当前状态 == fromStatus 时才更新为 toStatus，否则返回 false。

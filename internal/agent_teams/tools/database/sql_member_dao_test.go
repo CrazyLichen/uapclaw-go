@@ -129,3 +129,52 @@ func TestSQLMemberDao_UpdateMemberExecutionStatus(t *testing.T) {
 	ok = dao.UpdateMemberExecutionStatus(context.Background(), "nonexist", "t1", fsm.ExecutionStatusStarting)
 	assert.False(t, ok)
 }
+
+// TestUpdateMemberServedModel_三态 记账：幽灵成员 false、写入+bump updated_at、
+// 同模型不变更不 bump。
+// Python: member_dao.py:807-843 update_member_served_model
+func TestUpdateMemberServedModel_三态(t *testing.T) {
+	db := newTestSqlDB(t)
+	dao := db.Member()
+	db.Team().CreateTeam(context.Background(), "team1", "Team1", "leader", "", "", "autonomous", false)
+	if !dao.CreateMember(context.Background(), "alice", "team1", "Alice", "{}", "UNSTARTED", "agent", "", "", "build_mode", "", "") {
+		t.Fatal("建成员失败")
+	}
+	// 1. 幽灵成员 → false
+	if dao.UpdateMemberServedModel(context.Background(), "ghost", "team1", "m1") {
+		t.Fatal("幽灵成员应返回 false")
+	}
+	// 2. 行存在 → 写入 served_models + bump updated_at
+	if !dao.UpdateMemberServedModel(context.Background(), "alice", "team1", "m1") {
+		t.Fatal("正常记账应返回 true")
+	}
+	row, err := dao.GetMember(context.Background(), "alice", "team1")
+	if err != nil || row == nil {
+		t.Fatalf("读回失败: %v", err)
+	}
+	opts := LoadMemberOptions(row.Options)
+	if len(opts.ServedModels) != 1 || opts.ServedModels[0].Model != "m1" {
+		t.Fatalf("served_models: %+v", opts.ServedModels)
+	}
+	first := row.UpdatedAt
+	// 3. 同模型重复记账 → true 但不 bump
+	if !dao.UpdateMemberServedModel(context.Background(), "alice", "team1", "m1") {
+		t.Fatal("同模型应返回 true")
+	}
+	row2, _ := dao.GetMember(context.Background(), "alice", "team1")
+	if row2.UpdatedAt != first {
+		t.Fatal("同模型记账不应 bump updated_at")
+	}
+	// 4. 换模型 → 第二条记录 + bump
+	if !dao.UpdateMemberServedModel(context.Background(), "alice", "team1", "m2") {
+		t.Fatal("换模型应返回 true")
+	}
+	row3, _ := dao.GetMember(context.Background(), "alice", "team1")
+	opts3 := LoadMemberOptions(row3.Options)
+	if len(opts3.ServedModels) != 2 || opts3.ServedModels[1].Model != "m2" {
+		t.Fatalf("换模型后: %+v", opts3.ServedModels)
+	}
+	if row3.UpdatedAt < first {
+		t.Fatal("换模型应 bump updated_at（毫秒粒度下允许同值；名册探针只要求不回退）")
+	}
+}
