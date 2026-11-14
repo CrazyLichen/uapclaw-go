@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -152,7 +153,7 @@ func (h *outputHandoff) markDrained(closeErr error) {
 	h.once.Do(func() { close(h.drained) })
 }
 
-// attachAndSendInputs 抢输出租约并投递输入，返回流句柄与权限是否已派发。
+// attachAndSendInputs 抢输出租约并投递输入，返回流句柄、本轮 handoff 与权限是否已派发。
 // Python: interface_deep.py:16008-16085 _attach_and_send_inputs
 //
 // sendWithoutOutput 为真（steer / follow_up / 中断恢复）时即使拿不到租约
@@ -160,26 +161,35 @@ func (h *outputHandoff) markDrained(closeErr error) {
 func (d *DeepAdapter) attachAndSendInputs(
 	ctx context.Context, req *schema.AgentRequest, inputs map[string]any,
 	sendWithoutOutput bool,
-) (*hschema.InteractionOutputStream, bool, error) {
+) (*hschema.InteractionOutputStream, *outputHandoff, bool, error) {
 	// 普通中断轮先等前一个读者释放：ACK-only 注入到已排队 EOF 的租约上
 	// 会丢掉全部恢复输出。
+	// Python: :16027-16036 previous.wait()——上一轮读者的 finally close 置位 drained。
+	// TEMP-PROBE
+	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil { fmt.Fprintf(f, "PROBE attach: beforeWaitCheck\n"); f.Close() }
+
 	if prev := d.interactionOutputHandoff; prev != nil {
 		if d.isInterruptResumeDispatch(req.Params) && !d.goalRecordIsActive() {
 			if err := prev.Wait(ctx); err != nil {
-				return nil, false, err
+				return nil, nil, false, err
 			}
 		}
 	}
 
 	stream, err := d.instance.AttachOutput(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
+	// TEMP-PROBE
+	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil { fmt.Fprintf(f, "PROBE attach: afterWait beforeAttachOutput\n"); f.Close() }
+
 	if stream == nil && !sendWithoutOutput {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
+	var handoff *outputHandoff
 	if stream != nil {
-		d.interactionOutputHandoff = newOutputHandoff(d.instance, stream)
+		handoff = newOutputHandoff(d.instance, stream)
+		d.interactionOutputHandoff = handoff
 	}
 
 	sendReq := hschema.SendInputRequest{
@@ -188,13 +198,19 @@ func (d *DeepAdapter) attachAndSendInputs(
 		Mode:      resolveInputDispatchMode(req.Params),
 	}
 	if sendErr := d.instance.SendInput(ctx, sendReq); sendErr != nil {
+	// TEMP-PROBE
+	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil { fmt.Fprintf(f, "PROBE attach: beforeSendInput\n"); f.Close() }
+
 		if stream != nil {
 			stream.Close(ctx, false)
+			if handoff != nil {
+				handoff.markDrained(nil)
+			}
 			d.interactionOutputHandoff = nil
 		}
-		return nil, false, sendErr
+		return nil, nil, false, sendErr
 	}
-	return stream, false, nil
+	return stream, handoff, false, nil
 }
 
 // openInteractionStream 启动交互、抢租约、投递输入，返回租约帧通道。
@@ -215,14 +231,14 @@ func (d *DeepAdapter) openInteractionStream(
 	}
 
 	inject := d.shouldInjectIntoExistingInteraction(req.Params)
-	interactionStream, _, attachErr := d.attachAndSendInputs(ctx, req, inputs, inject)
+	interactionStream, handoff, _, attachErr := d.attachAndSendInputs(ctx, req, inputs, inject)
 	if attachErr != nil {
 		return interactionOpenResult{}, attachErr
 	}
 	if interactionStream == nil {
 		return interactionOpenResult{accepted: true}, nil
 	}
-	return interactionOpenResult{rawCh: d.drainInteractionStream(ctx, interactionStream)}, nil
+	return interactionOpenResult{rawCh: d.drainInteractionStream(ctx, interactionStream, handoff)}, nil
 }
 
 // openInteractionWithGoalOp attach→control 两段映射。
@@ -238,8 +254,10 @@ func (d *DeepAdapter) openInteractionWithGoalOp(
 	if attachErr != nil {
 		return interactionOpenResult{}, attachErr
 	}
+	var goalHandoff *outputHandoff
 	if interactionStream != nil {
-		d.interactionOutputHandoff = newOutputHandoff(d.instance, interactionStream)
+		goalHandoff = newOutputHandoff(d.instance, interactionStream)
+		d.interactionOutputHandoff = goalHandoff
 	}
 
 	action, _ := op["action"].(string)
@@ -250,21 +268,21 @@ func (d *DeepAdapter) openInteractionWithGoalOp(
 	control, controlErr := d.dispatchGoalControl(ctx, sessionID, action, objective,
 		overwrite, budget, attempts)
 	if controlErr != nil {
-		d.closeInteractionStream(ctx, interactionStream)
+		d.closeInteractionStream(ctx, interactionStream, goalHandoff)
 		return interactionOpenResult{}, controlErr
 	}
 
 	resultType, _ := control["result_type"].(string)
 	switch resultType {
 	case goalResultConfirmRequired:
-		d.closeInteractionStream(ctx, interactionStream)
+		d.closeInteractionStream(ctx, interactionStream, goalHandoff)
 		return interactionOpenResult{controlFrame: map[string]any{
 			"event_type":          goalConfirmRequiredEventType,
 			"existing_goal":       control["existing_goal"],
 			"requested_objective": control["requested_objective"],
 		}}, nil
 	case goalResultError:
-		d.closeInteractionStream(ctx, interactionStream)
+		d.closeInteractionStream(ctx, interactionStream, goalHandoff)
 		return interactionOpenResult{controlFrame: map[string]any{
 			"event_type": "chat.error",
 			"code":       control["error_code"],
@@ -287,25 +305,37 @@ func (d *DeepAdapter) openInteractionWithGoalOp(
 		Mode:      resolveInputDispatchMode(req.Params),
 	}
 	if sendErr := d.instance.SendInput(ctx, sendReq); sendErr != nil {
-		d.closeInteractionStream(ctx, interactionStream)
+		d.closeInteractionStream(ctx, interactionStream, goalHandoff)
 		return interactionOpenResult{}, sendErr
 	}
-	return interactionOpenResult{rawCh: d.drainInteractionStream(ctx, interactionStream)}, nil
+	return interactionOpenResult{rawCh: d.drainInteractionStream(ctx, interactionStream, goalHandoff)}, nil
 }
 
 // closeInteractionStream 关闭租约并清掉排空屏障。
+// handoff 非空时同步置位排空屏障（对齐 Python close → drained.set()）。
 func (d *DeepAdapter) closeInteractionStream(
 	ctx context.Context, interactionStream *hschema.InteractionOutputStream,
+	handoff *outputHandoff,
 ) {
 	if interactionStream != nil {
 		interactionStream.Close(ctx, false)
 	}
-	d.interactionOutputHandoff = nil
+	if handoff != nil {
+		handoff.markDrained(nil)
+	}
+	if d.interactionOutputHandoff == handoff {
+		d.interactionOutputHandoff = nil
+	}
 }
 
 // drainInteractionStream 把租约帧转发到返回通道，结束时释放租约。
+// Python: 读者循环退出时的 finally → interaction_stream.close() → drained.set()
+// （output_handoff.py close：无论正常 EOF 还是异常退出都必须置位排空屏障，
+// 否则下一轮中断恢复的 previous.wait() 会永久阻塞——2026-11-14 duplex 问答
+// 死锁实锤：markDrained 此前全仓零调用，drained 通道永不关闭）。
 func (d *DeepAdapter) drainInteractionStream(
 	ctx context.Context, interactionStream *hschema.InteractionOutputStream,
+	handoff *outputHandoff,
 ) <-chan stream.Schema {
 	out := make(chan stream.Schema, 64)
 	go func() {
@@ -313,7 +343,17 @@ func (d *DeepAdapter) drainInteractionStream(
 		defer func() {
 			// 结束时释放租约；不连带取消在飞轮（abort=false）。
 			interactionStream.Close(context.Background(), false)
-			d.interactionOutputHandoff = nil
+			// TEMP-PROBE
+			if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
+				fmt.Fprintf(f, "PROBE drainExit markDrained\n")
+				f.Close()
+			}
+			if handoff != nil {
+				handoff.markDrained(nil)
+			}
+			if d.interactionOutputHandoff == handoff {
+				d.interactionOutputHandoff = nil
+			}
 		}()
 		for frame := range interactionStream.All(ctx) {
 			select {
