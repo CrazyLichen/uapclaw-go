@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -1187,7 +1188,16 @@ func isRequestSideError(err error) bool {
 	// 归部署侧（py:361）——Go 侧 200 非 JSON 已折为 DeploymentNetworkError，
 	// 不属于 ValueError 通道，无需特判
 	if intellirouter.IsDeploymentError(err) {
-		// 401/403（Auth）与 429（RateLimit）专属类型 → 部署侧（py:362-363）
+		// 先排除认证/限流专属类型：401/403（Auth）与 429（RateLimit）是部署侧
+		// 问题（换部署可恢复），由专属异常类型表达，不算请求侧（py:364-366）。
+		// 【23.4a 移植缺陷修复，23.4c 裁决】此前漏掉本排除，401 被判请求侧
+		// 不冷却 → 单 deployment 组 usable 恒非空 → 无限 switchable 1s 重试，
+		// 永远到不了 exhausted_user_action。wheel 0.1.0b1 原文复核确认。
+		var auth *intellirouter.DeploymentAuthError
+		var rate *intellirouter.DeploymentRateLimitError
+		if errors.As(err, &auth) || errors.As(err, &rate) {
+			return false
+		}
 		var base *intellirouter.IRBase
 		if intellirouter.AsIRBase(err, &base) && base != nil {
 			if sc, ok := base.Details()["status_code"].(int); ok && sc >= 400 && sc < 500 {

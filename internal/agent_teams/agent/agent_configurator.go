@@ -264,6 +264,15 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 			WithBackendOnTeamBuilt(cfg.onTeamBuilt),
 			WithBackendOnMemberStarted(cfg.onTeammateCreated),
 		)
+		// Python: blueprint.py:922-949 attach_model_allocator——分配器与活跃池
+		// 一起挂到 backend，供 is_model_group_pool / list_route_tags 探针读取
+		if c.ModelAllocator() != nil {
+			c.TeamBackend().UpdateModelAllocator(c.ModelAllocator())
+		}
+		if ctx.TeamSpec != nil && len(ctx.TeamSpec.ModelPool) > 0 {
+			pool := ctx.TeamSpec.ModelPool
+			c.TeamBackend().UpdateModelPoolProvider(func() []models.ModelPoolEntry { return pool })
+		}
 	}
 
 	// 9. 工作树管理器（仅非 leader）

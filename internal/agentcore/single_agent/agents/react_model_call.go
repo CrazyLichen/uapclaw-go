@@ -11,6 +11,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/support"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -229,6 +230,16 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 
 	var aiMsg *llmschema.AssistantMessage
 	overflowRecovered := false
+	// Python: model.py:30-56 write_llm_route——框架 register_sync 注册的流桥
+	// 在 LLM_ROUTE 事件触发时把 route_metadata 写成 llm_route chunk（session
+	// 由 contextvar get_current_session 注入）。Go 无 contextvar：改为在模型
+	// 调用期间注册临时 OnCustom(LLMRoute) 处理器，闭包捕获 sess（处理器在
+	// 路由器选路时同步触发、与调用同 goroutine），写入体内一比一复刻
+	// write_llm_route（payload 拷贝 + result_type 兜底 answer + index 0）。
+	// 结构偏差 D-7：注册点从「全局一次性注册」改为「每次调用临时注册」，
+	// 会话注入从 contextvar 改为闭包——写入时机、chunk 形状、消费方完全一致。
+	routeWriteOff := writeLLMRouteDuring(sess)
+	defer routeWriteOff()
 	for {
 		var err error
 		if isStreaming {
@@ -809,4 +820,41 @@ func extraInt(cbc *interfaces.AgentCallbackContext, key string) int {
 		}
 	}
 	return 0
+}
+
+// writeLLMRouteDuring 在模型调用期间注册临时 LLM_ROUTE 流桥，返回注销函数。
+// 处理器体一比一复刻 Python write_llm_route（model.py:42-54）：payload 取
+// route_metadata 拷贝、result_type 缺省 "answer"，写入
+// OutputSchema{type="llm_route", index=0, payload}；session 为 nil 时跳过
+//（对齐 Python session is None → return）。
+// Python: model.py:30-56 _ensure_llm_route_stream_writer_registered
+// 结构偏差 D-7：Python 全局注册一次 + contextvar 注入 session；Go 无
+// contextvar，改为每次模型调用临时注册、闭包捕获 sess——触发时机（路由器
+// 选路时同步触发）与 chunk 形状一致。
+func writeLLMRouteDuring(sess sessioninterfaces.SessionFacade) func() {
+	if sess == nil {
+		return func() {}
+	}
+	handler := func(ctx context.Context, data map[string]any) any {
+		metadata, _ := data["route_metadata"].(map[string]any)
+		if len(metadata) == 0 {
+			return nil
+		}
+		payload := make(map[string]any, len(metadata)+1)
+		for k, v := range metadata {
+			payload[k] = v
+		}
+		if _, ok := payload["result_type"]; !ok {
+			payload["result_type"] = "answer"
+		}
+		_ = sess.WriteStream(ctx, &stream.OutputSchema{
+			Type:    "llm_route",
+			Index:   0,
+			Payload: payload,
+		})
+		return nil
+	}
+	fw := callback.GetCallbackFramework()
+	fw.OnCustom(string(callback.LLMRoute), handler)
+	return func() { fw.OffCustom(string(callback.LLMRoute), handler) }
 }

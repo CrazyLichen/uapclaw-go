@@ -164,7 +164,7 @@ func TestOpenInteractionStream_inject模式无租约投递但不读输出(t *tes
 
 	// 直接验证 attachAndSendInputs：inject 模式在租约被占时仍不报错（SendInput 已执行），
 	// 而非 inject 模式会静默放弃。
-	_, _, injectErr := d.attachAndSendInputs(context.Background(), req,
+	_, _, _, injectErr := d.attachAndSendInputs(context.Background(), req,
 		map[string]any{"query": "转向"}, true)
 	require.NoError(t, injectErr)
 }

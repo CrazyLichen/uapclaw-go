@@ -3,6 +3,9 @@ package models
 import (
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -578,5 +581,295 @@ func TestEntrySignature(t *testing.T) {
 	sig2 := entrySignature(e2)
 	if sig2 == "" {
 		t.Error("有 Metadata 时 entrySignature 不应为空")
+	}
+}
+
+// TestIntelliRouterDeployment_ToDeploymentDict_可选字段省略 可选字段 omit 非 null、tags[0] 填 fallback_tag。
+// Python: pool.py:297-326 to_deployment_dict
+func TestIntelliRouterDeployment_ToDeploymentDict_可选字段省略(t *testing.T) {
+	id := "d1"
+	dep := &IntelliRouterDeployment{
+		ModelName: "deepseek-chat", APIKey: "sk-1", APIBase: "https://api.deepseek.com",
+		Provider: "deepseek", ID: id, Tags: []string{"deepseek"},
+	}
+	got := dep.ToDeploymentDict()
+	// 必填四键恒在
+	if got["model_name"] != "deepseek-chat" || got["provider"] != "deepseek" ||
+		got["api_key"] != "sk-1" || got["api_base"] != "https://api.deepseek.com" {
+		t.Fatalf("必填键缺失: %v", got)
+	}
+	// tags 非空 → fallback_tag 用 tags[0]；id 保留
+	if got["fallback_tag"] != "deepseek" || got["id"] != "d1" {
+		t.Fatalf("tags/id 处理错误: %v", got)
+	}
+	// 未设置的可选键不得出现（verify_ssl 缺省时由客户端层回退路由器级）
+	for _, k := range []string{"endpoint_profile", "custom_headers", "model_description", "tpm", "rpm", "timeout", "verify_ssl", "model_id", "request_defaults"} {
+		if _, ok := got[k]; ok {
+			t.Fatalf("可选键 %s 不应出现", k)
+		}
+	}
+	// 空 tags 时保留显式 fallback_tag
+	dep2 := &IntelliRouterDeployment{ModelName: "m", APIKey: "k", APIBase: "b", Provider: "p", FallbackTag: "ft"}
+	if dep2.ToDeploymentDict()["fallback_tag"] != "ft" {
+		t.Fatal("空 tags 时应保留显式 fallback_tag")
+	}
+	// 指针可选字段：显式设置才下发
+	ssl := false
+	dep3 := &IntelliRouterDeployment{ModelName: "m", APIKey: "k", APIBase: "b", Provider: "p", VerifySSL: &ssl, TPM: intPtrOf(1000)}
+	got3 := dep3.ToDeploymentDict()
+	if got3["verify_ssl"] != false || got3["tpm"] != 1000 {
+		t.Fatalf("指针字段下发错误: %v", got3)
+	}
+}
+
+// TestIntelliRouterDeployment_APIBase注释锚点 api_base 不带 /v1 的坑以字段注释承载（pool.py:262-276 原文），此处仅防回退改语义。
+func TestIntelliRouterDeployment_必填Provider(t *testing.T) {
+	dep := &IntelliRouterDeployment{ModelName: "m", APIKey: "k", APIBase: "b"}
+	got := dep.ToDeploymentDict()
+	if got["provider"] != "" {
+		t.Fatal("provider 空值应原样下发（校验由 Config/Allocator 构造期做）")
+	}
+}
+
+func intPtrOf(v int) *int { return &v }
+
+// TestIntelliRouterConfig_ToPoolEntries 单条 "*" entry、client 快照、遗留键清理、缺省值。
+// Python: pool.py:329-455 IntelliRouterConfig + to_pool_entries + _client_extra
+func TestIntelliRouterConfig_ToPoolEntries(t *testing.T) {
+	cfg := NewIntelliRouterConfig([]*IntelliRouterDeployment{{
+		ModelName: "m1", APIKey: "k1", APIBase: "https://a.com", Provider: "deepseek",
+	}})
+	entries := cfg.ToPoolEntries()
+	if len(entries) != 1 {
+		t.Fatalf("必须展开为单条 entry，got %d", len(entries))
+	}
+	e := entries[0]
+	if e.ModelName != INTELLI_ROUTER_UNIFIED_MODEL || e.APIProvider != INTELLI_ROUTER_PROVIDER {
+		t.Fatalf("形状错误: %s/%s", e.ModelName, e.APIProvider)
+	}
+	if e.APIKey != "" || e.APIBaseURL != "" {
+		t.Fatal("顶层凭证必须为空（凭证在 deployment 内）")
+	}
+	if e.Description != "IntelliRouter unified routing across 1 deployment(s)" {
+		t.Fatalf("description 文案不匹配: %q", e.Description)
+	}
+	client := e.Metadata["client"].(map[string]any)
+	router := client["intelli_router"].(map[string]any)
+	// 路由器级缺省值（pool.py:359-375 Field defaults）
+	if router["strategy"] != "simple-shuffle" {
+		t.Fatalf("strategy 缺省: %v", router["strategy"])
+	}
+	if router["num_retries"] != 3 {
+		t.Fatalf("num_retries 缺省: %v", router["num_retries"])
+	}
+	if router["timeout"] != float64(30.0) {
+		t.Fatalf("timeout 缺省: %v", router["timeout"])
+	}
+	if client["verify_ssl"] != true {
+		t.Fatalf("verify_ssl 缺省 true: %v", client["verify_ssl"])
+	}
+	deps := router["deployments"].([]any)
+	d0 := deps[0].(map[string]any)
+	if d0["route_id"] != "route_0" {
+		t.Fatalf("route_id 缺省应为 route_{index}: %v", d0)
+	}
+	if d0["model_name"] != "m1" {
+		t.Fatalf("deployment 键错误: %v", d0)
+	}
+	// 遗留 intelli_router_* 键被清理（pool.py:444-448）
+	cfg2 := NewIntelliRouterConfig([]*IntelliRouterDeployment{cfg.Deployments[0]})
+	cfg2.Metadata = map[string]any{
+		"client": map[string]any{"intelli_router_api_key": "legacy", "timeout": 99},
+	}
+	c2 := cfg2.ToPoolEntries()[0].Metadata["client"].(map[string]any)
+	if _, ok := c2["intelli_router_api_key"]; ok {
+		t.Fatal("遗留 intelli_router_* 键应被丢弃")
+	}
+	if c2["timeout"] != 99 {
+		t.Fatal("非遗留的 client 键应保留")
+	}
+	// 显式 Strategy 覆盖缺省
+	cfg3 := NewIntelliRouterConfig([]*IntelliRouterDeployment{cfg.Deployments[0]})
+	cfg3.Strategy = "ordered-failover"
+	r3 := cfg3.ToPoolEntries()[0].Metadata["client"].(map[string]any)["intelli_router"].(map[string]any)
+	if r3["strategy"] != "ordered-failover" {
+		t.Fatalf("显式 strategy 应生效: %v", r3["strategy"])
+	}
+}
+
+// TestIntelliRouterConfig_ValidateModelNames model_names 只能是 ["*"]。
+// Python: _validate_model_names (pool.py:387-393)
+func TestIntelliRouterConfig_ValidateModelNames(t *testing.T) {
+	cfg := NewIntelliRouterConfig([]*IntelliRouterDeployment{{ModelName: "m", APIKey: "k", APIBase: "b", Provider: "p"}})
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("model_names 缺省应通过: %v", err)
+	}
+	cfg.ModelNames = []string{"x"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "exactly one logical") {
+		t.Fatalf("非 [\"*\"] 应报错: %v", err)
+	}
+	cfg.ModelNames = []string{INTELLI_ROUTER_UNIFIED_MODEL}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("[\"*\"] 应通过: %v", err)
+	}
+	// ResolvedModelNames 恒 ["*"]（pool.py:395-398）
+	if got := cfg.ResolvedModelNames(); len(got) != 1 || got[0] != "*" {
+		t.Fatalf("ResolvedModelNames: %v", got)
+	}
+}
+
+// TestMaterializeModelGroup 校验序、metadata 形状、request pop model/model_name。
+// Python: pool.py:460-516
+func TestMaterializeModelGroup(t *testing.T) {
+	routerCfg := llmschema.NewDefaultIntelliRouterConfig()
+	gid := "grp-1"
+	routerCfg.ModelGroupID = &gid
+	routerCfg.Deployments = []llmschema.IntelliRouterDeploymentConfig{{
+		ModelName: "m1", APIKey: "k1", APIBase: "https://a.com", Provider: "deepseek", RouteID: "r1",
+	}}
+	client := &llmschema.ModelClientConfig{ClientProvider: "intelli_router", IntelliRouter: &routerCfg}
+	compiled := &routing.CompiledModelSelection{
+		ModelClientConfig:  client,
+		ModelRequestConfig: &llmschema.ModelRequestConfig{ModelName: "x", Temperature: func() *float64 { v := 0.7; return &v }()},
+		SelectedType:       "model_group",
+		SelectedID:         "grp-1",
+	}
+	entries, err := MaterializeModelGroup(compiled, nil)
+	if err != nil {
+		t.Fatalf("物化失败: %v", err)
+	}
+	e := entries[0]
+	if e.ModelName != INTELLI_ROUTER_UNIFIED_MODEL || e.APIProvider != INTELLI_ROUTER_PROVIDER {
+		t.Fatalf("形状错误: %s/%s", e.ModelName, e.APIProvider)
+	}
+	if e.Description != "IntelliRouter model group grp-1" {
+		t.Fatalf("description: %q", e.Description)
+	}
+	clientMeta := e.Metadata["client"].(map[string]any)
+	router, _ := clientMeta["intelli_router"].(map[string]any)
+	if router == nil || router["model_group_id"] != "grp-1" {
+		t.Fatalf("router 快照缺 model_group_id: %v", router)
+	}
+	deps := router["deployments"].([]any)
+	if len(deps) != 1 || deps[0].(map[string]any)["route_id"] != "r1" {
+		t.Fatalf("deployments 快照: %v", deps)
+	}
+	// request dump：pop model/model_name，其余保留
+	req := e.Metadata["request"].(map[string]any)
+	if _, ok := req["model"]; ok {
+		t.Fatal("request.model 必须被 pop（'*' 是团队逻辑名，不得覆盖 deployment 默认值）")
+	}
+	if _, ok := req["model_name"]; ok {
+		t.Fatal("request.model_name 必须被 pop")
+	}
+	if req["temperature"] != 0.7 {
+		t.Fatalf("其余 request 键保留: %v", req)
+	}
+	// 校验序五连（py:468-490）
+	if _, err = MaterializeModelGroup(nil, nil); err == nil || !strings.Contains(err.Error(), "compiled model selection is required") {
+		t.Fatalf("nil compiled: %v", err)
+	}
+	if _, err = MaterializeModelGroup(compiled, &routing.ModelSelection{Type: "model", ID: "m1"}); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("selection 不匹配: %v", err)
+	}
+	wrongType := *compiled
+	wrongType.SelectedType = "model"
+	if _, err = MaterializeModelGroup(&wrongType, nil); err == nil || !strings.Contains(err.Error(), "selected_type='model_group'") {
+		t.Fatalf("非 model_group: %v", err)
+	}
+	wrongProvider := *compiled
+	wrongProvider.ModelClientConfig = &llmschema.ModelClientConfig{ClientProvider: "openai"}
+	if _, err = MaterializeModelGroup(&wrongProvider, nil); err == nil || !strings.Contains(err.Error(), "client_provider='intelli_router'") {
+		t.Fatalf("provider 错误: %v", err)
+	}
+	noDep := *compiled
+	rd := routerCfg
+	rd.Deployments = nil
+	noDep.ModelClientConfig = &llmschema.ModelClientConfig{ClientProvider: "intelli_router", IntelliRouter: &rd}
+	if _, err = MaterializeModelGroup(&noDep, nil); err == nil || !strings.Contains(err.Error(), "deployments") {
+		t.Fatalf("空 deployments: %v", err)
+	}
+}
+
+// TestModelGroupLabel 回退序 display_name → model_group_id → "*"；非组池空串。
+// Python: model_group_label (pool.py:519)
+func TestModelGroupLabel(t *testing.T) {
+	if ModelGroupLabel(nil) != "" || ModelGroupLabel([]ModelPoolEntry{{}, {}}) != "" {
+		t.Fatal("空池/多条目 → 空串")
+	}
+	plain := NewModelPoolEntry("m", "k", "b", "openai")
+	if ModelGroupLabel([]ModelPoolEntry{*plain}) != "" {
+		t.Fatal("非 intelli_router 条目 → 空串")
+	}
+	entry := NewModelPoolEntry(INTELLI_ROUTER_UNIFIED_MODEL, "", "", INTELLI_ROUTER_PROVIDER,
+		WithMetadata(map[string]any{"client": map[string]any{"intelli_router": map[string]any{}}}))
+	if ModelGroupLabel([]ModelPoolEntry{*entry}) != INTELLI_ROUTER_UNIFIED_MODEL {
+		t.Fatal("无 display_name 且无 model_group_id → '*'")
+	}
+	entry2 := NewModelPoolEntry(INTELLI_ROUTER_UNIFIED_MODEL, "", "", INTELLI_ROUTER_PROVIDER,
+		WithMetadata(map[string]any{
+			"client":      map[string]any{"intelli_router": map[string]any{"model_group_id": "g1"}},
+			"model_group": map[string]any{"display_name": "显示名"},
+		}))
+	if ModelGroupLabel([]ModelPoolEntry{*entry2}) != "显示名" {
+		t.Fatal("display_name 优先")
+	}
+	entry3 := NewModelPoolEntry(INTELLI_ROUTER_UNIFIED_MODEL, "", "", INTELLI_ROUTER_PROVIDER,
+		WithMetadata(map[string]any{"client": map[string]any{"intelli_router": map[string]any{"model_group_id": "g1"}}}))
+	if ModelGroupLabel([]ModelPoolEntry{*entry3}) != "g1" {
+		t.Fatal("无 display_name → model_group_id")
+	}
+}
+
+// TestEntrySignature_ClientIdExcluded client_id 不参与签名：两条仅 client_id
+// 不同的条目签名相同（pool.py:556-559 上游教训——计入会让暂停团队每次请求
+// 被拆建重盘）。
+// Python: _entry_signature (pool.py:544)
+func TestEntrySignature_ClientIdExcluded(t *testing.T) {
+	meta := func(clientID string) map[string]any {
+		return map[string]any{"client": map[string]any{"client_id": clientID, "timeout": 30}}
+	}
+	e1 := NewModelPoolEntry("m", "k", "b", "p", WithMetadata(meta("uuid-1")))
+	e2 := NewModelPoolEntry("m", "k", "b", "p", WithMetadata(meta("uuid-2")))
+	if entrySignature(*e1) != entrySignature(*e2) {
+		t.Fatal("仅 client_id 不同 → 签名必须相同")
+	}
+	// 其余 metadata 变化仍影响签名
+	e3 := NewModelPoolEntry("m", "k2", "b", "p", WithMetadata(meta("uuid-1")))
+	if entrySignature(*e1) == entrySignature(*e3) {
+		t.Fatal("api_key 不同 → 签名必须不同")
+	}
+}
+
+// TestInheritPoolIDs_对齐复刻 Python inherit_pool_ids：bit-exact 继承、
+// 重排序对齐、重复签名按池序一对一、新条目保留自生成 ID。
+// Python: inherit_pool_ids (pool.py:566)
+func TestInheritPoolIDs_对齐(t *testing.T) {
+	meta := map[string]any{"client": map[string]any{"client_id": "uuid-x"}}
+	old := []ModelPoolEntry{*NewModelPoolEntry("a", "k1", "b1", "p", WithModelID("id-a"), WithMetadata(meta)),
+		*NewModelPoolEntry("b", "k2", "b2", "p", WithModelID("id-b"), WithMetadata(meta))}
+	// 重排序但内容相同 → 全对齐（顺序无关）
+	newPool := []ModelPoolEntry{*NewModelPoolEntry("b", "k2", "b2", "p", WithMetadata(meta)),
+		*NewModelPoolEntry("a", "k1", "b1", "p", WithMetadata(meta))}
+	got := InheritPoolIDs(old, newPool)
+	if got[0].ModelID != "id-b" || got[1].ModelID != "id-a" {
+		t.Fatalf("重排序应全继承: %s/%s", got[0].ModelID, got[1].ModelID)
+	}
+	// api_key 轮换 → 不继承
+	rotated := []ModelPoolEntry{*NewModelPoolEntry("a", "k1-rotated", "b1", "p", WithMetadata(meta))}
+	if got2 := InheritPoolIDs(old, rotated); got2[0].ModelID == "id-a" {
+		t.Fatal("api_key 轮换不应继承")
+	}
+	// 重复签名按池序一对一
+	oldDup := []ModelPoolEntry{*NewModelPoolEntry("a", "k", "b", "p", WithModelID("id-1")),
+		*NewModelPoolEntry("a", "k", "b", "p", WithModelID("id-2"))}
+	newDup := []ModelPoolEntry{*NewModelPoolEntry("a", "k", "b", "p"), *NewModelPoolEntry("a", "k", "b", "p")}
+	got3 := InheritPoolIDs(oldDup, newDup)
+	if got3[0].ModelID == got3[1].ModelID {
+		t.Fatal("重复签名应一对一配对")
+	}
+	ids := map[string]bool{got3[0].ModelID: true, got3[1].ModelID: true}
+	if !ids["id-1"] || !ids["id-2"] {
+		t.Fatalf("应继承 id-1/id-2: %v", ids)
 	}
 }

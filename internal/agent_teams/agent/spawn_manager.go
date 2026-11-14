@@ -485,8 +485,12 @@ func resolveMemberModelFromDB(configurator *AgentConfigurator, ref *database.Mem
 	if ref.ModelIndex != nil {
 		modelIndex = *ref.ModelIndex
 	}
+	routeTag := ""
+	if ref.RouteTag != nil {
+		routeTag = *ref.RouteTag
+	}
 	// Python: resolve_member_model(team_spec, model_name=..., model_index=..., route_tag=...)
-	return models.ResolveMemberModelFromPool(teamSpec.ModelPool, modelName, modelIndex)
+	return models.ResolveMemberModelFromPool(teamSpec.ModelPool, modelName, modelIndex, routeTag)
 }
 
 // spawnInprocess 以 inprocess 模式生成 teammate。

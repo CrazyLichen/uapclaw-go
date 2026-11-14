@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/harness"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
@@ -63,6 +64,18 @@ type StreamController struct {
 	swallowFailedRound bool
 	// chunkObservers 分块观察者列表（SpawnManager 注册，用于 Teammate chunk 转发到 Leader）
 	chunkObservers []atschema.ChunkObserver
+	// modelGroupLabelGetter 模型组名访问器（模型组池外返回空串）。
+	// Python: stream_controller.py:165 model_group_label_getter
+	modelGroupLabelGetter func() string
+	// servedModelRecorder 路由记账回调（写 member DB 行，返回行是否存在）。
+	// Python: stream_controller.py:166 served_model_recorder
+	servedModelRecorder func(modelName string) bool
+	// pendingRoute 最近一次 selected 的 llm_route 载荷（py: _pending_route，mu 保护）
+	pendingRoute map[string]any
+	// recordedModel 最近已记账的模型（py: _recorded_model，mu 保护）
+	recordedModel string
+	// servedModelWG 在途记账任务集合（asyncio task 集合的 Go 等价，防泄漏观察）
+	servedModelWG sync.WaitGroup
 }
 
 // taskFailedError task_failed 错误，携带 errorCode 和 errorText。
@@ -115,6 +128,18 @@ func WithWakeMailbox(cb func(ctx context.Context) error) StreamControllerOption 
 // WithRequestCompletionPoll 设置轮次干净结束后的完成轮询回调
 func WithRequestCompletionPoll(cb func(ctx context.Context) error) StreamControllerOption {
 	return func(sc *StreamController) { sc.requestCompletionPollCb = cb }
+}
+
+// WithModelGroupLabelGetter 设置模型组名访问器。
+// Python: StreamController.__init__ 的 model_group_label_getter 参数（py:165）
+func WithModelGroupLabelGetter(getter func() string) StreamControllerOption {
+	return func(sc *StreamController) { sc.modelGroupLabelGetter = getter }
+}
+
+// WithServedModelRecorder 设置路由记账回调。
+// Python: StreamController.__init__ 的 served_model_recorder 参数（py:166）
+func WithServedModelRecorder(recorder func(modelName string) bool) StreamControllerOption {
+	return func(sc *StreamController) { sc.servedModelRecorder = recorder }
 }
 
 // NewStreamController 创建新的流式控制器。
@@ -523,6 +548,9 @@ func (sc *StreamController) forwardOutputs(ctx context.Context) {
 		if swallow {
 			continue
 		}
+		// Python: py:350 —— chunk = await self._name_model_group_model(chunk)
+		// 在 tagChunk 之前执行：模型组成员把 "*" 改名为实际路由到的模型
+		chunk = sc.nameModelGroupModel(chunk)
 		tagged := sc.tagChunk(chunk)
 		if q := sc.streamQueueSnapshot(); q != nil {
 			select {
@@ -740,4 +768,131 @@ func newTaskFailedErrorFromText(text string) error {
 // Python: error_code in _RETRYABLE_ERROR_CODES
 func isRetryableErrorCode(code int) bool {
 	return retryableErrorCodes[code]
+}
+
+// llmRouteChunkType 路由通告 chunk 类型。
+// Python: _LLM_ROUTE_CHUNK_TYPE (stream_controller.py:70)
+const llmRouteChunkType = "llm_route"
+
+// contextUsageChunkType 上下文用量快照 chunk 类型。
+// Python: _CONTEXT_USAGE_CHUNK_TYPE (stream_controller.py:71)
+// 取值与 usage_snapshot.EventTypeContextUsage 相同（"context.usage"），本地
+// 常量避免 agent 包引入 context_engine 依赖。
+const contextUsageChunkType = "context.usage"
+
+// nameModelGroupModel 把逻辑 "*" 模型改名为模型组实际运行的模型。
+// 仅在模型组池上生效。selected 的 llm_route 事件被记住（路由模型变化时
+// 持久化）；紧随该次调用的 post-call context.usage 快照——同一次调用的
+// 那份——用它的 model 与 route 命名。其它 "*" 快照（未选路由、或背后没有
+// 模型调用）改用模型组名命名。其余 chunk 原样透传。
+// Python: _name_model_group_model (stream_controller.py:233-283)
+func (sc *StreamController) nameModelGroupModel(chunk streambase.Schema) streambase.Schema {
+	output, ok := chunk.(*streambase.OutputSchema)
+	if !ok {
+		return chunk
+	}
+	if output.Type != llmRouteChunkType && output.Type != contextUsageChunkType {
+		return chunk
+	}
+	payload, _ := output.Payload.(map[string]any)
+	if payload == nil || sc.modelGroupLabelGetter == nil {
+		return chunk
+	}
+	label := sc.modelGroupLabelGetter()
+	if label == "" {
+		return chunk
+	}
+	if output.Type == llmRouteChunkType {
+		if status, _ := payload["status"].(string); status == "selected" {
+			if modelName, _ := payload["model_name"].(string); modelName != "" {
+				sc.mu.Lock()
+				sc.pendingRoute = payload
+				sc.mu.Unlock()
+				// 名册里模型按组对外提供的名字书写（即路由提示词收到的名字），
+				// 不是 provider 名。成员行写入走后台任务：用户正在读的流绝不等待它。
+				name, _ := payload["routed_model"].(string)
+				if name == "" {
+					name = modelName
+				}
+				sc.recordServedModelSoon(name)
+			}
+		}
+		return chunk
+	}
+	// context.usage：model 非 "*" 才继续
+	if model, _ := payload["model"].(string); model != models.INTELLI_ROUTER_UNIFIED_MODEL {
+		return chunk
+	}
+	sc.mu.Lock()
+	var route map[string]any
+	if _, ok := payload["phase"].(string); ok && payload["phase"] == "post_call" {
+		route = sc.pendingRoute
+		sc.pendingRoute = nil
+	}
+	sc.mu.Unlock()
+	// 用组对外提供的名字（路由提示词本身收到的名字）；provider 名兜底
+	name := label
+	if route != nil {
+		routed, _ := route["routed_model"].(string)
+		if routed == "" {
+			routed, _ = route["model_name"].(string)
+		}
+		if routed != "" {
+			name = routed
+		}
+	}
+	named := renameLogicalModel(payload, name)
+	if route != nil {
+		if routeID, _ := route["route_id"].(string); routeID != "" {
+			if _, has := named["deployment"]; !has {
+				named["deployment"] = routeID
+			}
+		}
+	}
+	output.Payload = named
+	return output
+}
+
+// renameLogicalModel 拷贝 payload 并把逻辑模型名改为实际模型名。
+// Python: _rename_logical_model（同文件；只改 model/model_name 键，浅拷贝防共享 map）
+func renameLogicalModel(payload map[string]any, name string) map[string]any {
+	copied := make(map[string]any, len(payload)+2)
+	for k, v := range payload {
+		copied[k] = v
+	}
+	copied["model"] = name
+	copied["model_name"] = name
+	return copied
+}
+
+// recordServedModelSoon 把模型记账移出流。
+// 写目标是团队 DB 的成员行，绝不能阻塞用户正在读的分块流。任务引用被
+// 保留，失败会被观察到而不是在途被回收。
+// Python: _record_served_model_soon (stream_controller.py:274-281)
+func (sc *StreamController) recordServedModelSoon(modelName string) {
+	sc.mu.RLock()
+	recorder := sc.servedModelRecorder
+	last := sc.recordedModel
+	sc.mu.RUnlock()
+	if recorder == nil || modelName == last {
+		return
+	}
+	sc.servedModelWG.Add(1)
+	go func() {
+		defer sc.servedModelWG.Done()
+		// Python: _record_served_model——同模型短路已在上方判定；这里调用并
+		// 仅在确认持久化成功后更新去重标记（成员行未建时下次路由再试）
+		if recorder(modelName) {
+			sc.mu.Lock()
+			sc.recordedModel = modelName
+			sc.mu.Unlock()
+		} else {
+			// 成员行未建（leader 首次路由早于 build_team 写行）→ 下次路由再试
+			logEvt := logger.Debug(logComponent).Str("model", modelName)
+			if sc.getBlueprint != nil {
+				logEvt = logEvt.Str("member_name", sc.memberName())
+			}
+			logEvt.Msg("served-model record deferred: member row not present yet")
+		}
+	}()
 }

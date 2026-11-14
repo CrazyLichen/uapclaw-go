@@ -96,6 +96,12 @@ type MemberDao interface {
 	// ListHumanAgentNames 获取 human_agent 角色的成员名列表（HITT 名册重建）。
 	// Python: list_human_agent_names()
 	ListHumanAgentNames(ctx context.Context, teamName string) ([]string, error)
+	// UpdateMemberServedModel 记录模型组把成员路由到 servedModel。
+	// 仅当模型与最新一条不同才追加（AppendMemberServedModel 语义）。
+	// 返回行是否存在（false 让调用方下次路由再试——leader 的首次路由可能
+	// 发生在 build_team 写入成员行之前）。
+	// Python: update_member_served_model (member_dao.py:807)
+	UpdateMemberServedModel(ctx context.Context, memberName, teamName, servedModel string) bool
 	// GetMembersMaxUpdatedAt 获取 MAX(updated_at)（成员变更检测）。
 	// Python: get_members_max_updated_at() → int
 	GetMembersMaxUpdatedAt(ctx context.Context, teamName string) int64

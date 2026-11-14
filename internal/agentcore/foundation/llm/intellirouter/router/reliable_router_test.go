@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	intellirouter "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
 	intelliroutercore "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/core"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/health"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/intellirouter/observability"
@@ -1229,4 +1230,98 @@ func TestRouterHelpers_PureFunctions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	require.False(t, emitChunk(out, ctx, map[string]any{}))
+}
+
+// ──────────────────────────── 23.4c isRequestSideError 修复回归 ────────────────────────────
+
+// routerViewForTest 测试用 RouterView 适配（与 model_clients.reliableRouterView 同形）。
+type routerViewForTest struct{ r *ReliableRouter }
+
+func (v *routerViewForTest) Deployments() []*intelliroutercore.Deployment { return v.r.Deployments }
+func (v *routerViewForTest) ModelGroupID() string {
+	if v.r.ModelGroupID == nil {
+		return ""
+	}
+	return *v.r.ModelGroupID
+}
+func (v *routerViewForTest) PinnedRouteTag() string { return "" }
+func (v *routerViewForTest) State() *intelliroutercore.LocalRouterState {
+	return v.r.State
+}
+
+// TestIsRequestSideError_AuthAndRateLimitAreDeploymentSide 401/403/429 专属类型
+// 是部署侧（进冷却）。Python: reliable_router.py:364-366——isinstance 排除
+// DeploymentAuthError/DeploymentRateLimitError 在 status_code 判断之前。
+// 【23.4a 移植缺陷修复，23.4c 裁决】此前漏排除，401 被判请求侧不冷却。
+func TestIsRequestSideError_AuthAndRateLimitAreDeploymentSide(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{"auth-401", intellirouter.NewDeploymentAuthError("d1", 401), 401},
+		{"auth-403", intellirouter.NewDeploymentAuthError("d1", 403), 403},
+		{"rate-429", intellirouter.NewDeploymentRateLimitError("d1", nil), 429},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if isRequestSideError(tc.err) {
+				t.Fatalf("%s 应为部署侧（进冷却）", tc.name)
+			}
+		})
+	}
+}
+
+// TestIsRequestSideError_Plain4xxAreRequestSide 非 Auth/RateLimit 的 4xx 是请求侧。
+// Python: reliable_router.py:367-369
+func TestIsRequestSideError_Plain4xxAreRequestSide(t *testing.T) {
+	for _, code := range []int{400, 404, 413, 422} {
+		err := intellirouter.NewDeploymentGenericError("d1", code, "bad request")
+		if !isRequestSideError(err) {
+			t.Fatalf("status_code=%d 应为请求侧", code)
+		}
+	}
+	if isRequestSideError(intellirouter.NewDeploymentServerError("d1", 500, "boom")) {
+		t.Fatal("5xx 应为部署侧")
+	}
+}
+
+// TestSingleDeployment401_ClassifiesUserAction 单 deployment 组 401：
+// 进冷却 + 分类 exhausted_user_action（reason=all_deterministic + fix_hint），
+// 不再 switchable 无限 1s 重试。
+func TestSingleDeployment401_ClassifiesUserAction(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"invalid api key"}}`))
+	}))
+	defer server.Close()
+
+	r := NewReliableRouter(RouterParams{
+		Deployments:  []*intelliroutercore.Deployment{dep(t, "d1", server.URL)},
+		StrategyType: "ordered-failover",
+	})
+	_, err := r.Invoke(context.Background(), []map[string]any{{"role": "user", "content": "q"}}, InvokeParams{Model: "m"})
+	if err == nil {
+		t.Fatal("应失败")
+	}
+	// 部署侧 → 已进冷却
+	if r.State.CooldownUntilAt("d1") == 0 {
+		t.Fatal("401 应进冷却（部署侧）")
+	}
+	// 分类：usable 空 → exhausted_user_action
+		modelErr := routing.ToModelError(err, &routerViewForTest{r: r}, "*", false)
+	if modelErr == nil {
+		t.Fatal("应产出 model error")
+	}
+	msg := modelErr.Error()
+	if !strings.Contains(msg, "No model in the group is available") &&
+		!strings.Contains(msg, "check the API key") {
+		t.Fatalf("应走 exhausted_user_action 文案: %s", msg)
+	}
+	detailsMap, _ := modelErr.Details().(map[string]any)
+	if detailsMap == nil || detailsMap["route_case"] != "exhausted_user_action" {
+		t.Fatalf("route_case: %v", detailsMap["route_case"])
+	}
+	if detailsMap["reason"] != "all_deterministic" {
+		t.Fatalf("reason: %v", detailsMap["reason"])
+	}
 }

@@ -577,6 +577,16 @@ func (c *DuplexController) answerInput(payload map[string]any, answers []map[str
 		_ = json.Unmarshal(request.Params, &params)
 	}
 	// Python: :179-196 字段来源一比一
+	// source 兜底：Python 的 pending payload 是原始交互卡片（source 在顶层）；
+	// Go 的 interaction.requested 契约把卡片收进 payload["interaction"] 子对象，
+	// 顶层无 source——不兜底会让 ask_user 恢复被判为普通输入（非 InteractiveInput），
+	// 走 follow-up 入队而非打断恢复（2026-11-14 问答闭环实锤）。
+	answerSource := textOr(payload, "source", "")
+	if answerSource == "" {
+		if interaction, ok := payload["interaction"].(map[string]any); ok {
+			answerSource = textOr(interaction, "source", "")
+		}
+	}
 	input := swruntime.InteractionAnswerInput{
 		// Python: :179 request_id=f"answer_{uuid4().hex}"
 		RequestID:      "answer_" + newRequestIDWithPrefix(""),
@@ -584,7 +594,7 @@ func (c *DuplexController) answerInput(payload map[string]any, answers []map[str
 		SessionID:      derefTextPtr(request.SessionID),
 		InteractionID:  textOr(payload, "request_id", textOr(payload, "interaction_id", "")),
 		Answers:        answers,
-		Source:         textOr(payload, "source", ""),
+		Source:         answerSource,
 		InterruptID:    textOr(payload, "interrupt_id", ""),
 		ApprovalSchema: textOr(payload, "approval_schema", ""),
 		Mode:           textOr(params, "mode", ""),
