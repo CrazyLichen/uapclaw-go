@@ -887,9 +887,12 @@ func (sc *StreamController) recordServedModelSoon(modelName string) {
 			sc.recordedModel = modelName
 			sc.mu.Unlock()
 		} else {
-			logger.Debug(logComponent).Str("member_name", sc.memberName()).
-				Str("model", modelName).
-				Msg("served-model record deferred: member row not present yet")
+			// 成员行未建（leader 首次路由早于 build_team 写行）→ 下次路由再试
+			logEvt := logger.Debug(logComponent).Str("model", modelName)
+			if sc.getBlueprint != nil {
+				logEvt = logEvt.Str("member_name", sc.memberName())
+			}
+			logEvt.Msg("served-model record deferred: member row not present yet")
 		}
 	}()
 }
