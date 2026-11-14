@@ -22,6 +22,9 @@
 //	├── machine_policy.go           # 输出 schema / 用量限额
 //	├── machine_signals.go          # 信号归属
 //	├── persistence.go              # 退出前落盘
+//	├── session_guard.go           # 会话租约 + Agent 绑定（session_guard.py）
+//	├── session_guard_unix.go      # POSIX flock 非阻塞排它锁
+//	├── session_guard_windows.go   # Windows LockFileEx 非阻塞排它锁
 //	├── client.go                   # InProcessRuntimeClient
 //	├── query.go                    # 只读查询的执行层（dispatch/run/failure）
 //	├── query_entry.go              # --query-json 外层入口

@@ -71,10 +71,8 @@ type MachineRun struct {
 	// Python: machine.py:153 control: DuplexController | None
 	control *DuplexController
 	// sessionLease 会话互斥租约
-	// ⤵️ 回填 20.5：SessionLease 未实现（用户决策），本批恒 nil，
-	// acquire/release 全部跳过（D-4 静默放行）。
-	// 上游类型 Python: machine.py:178 session_lease: SessionLease | None
-	sessionLease any
+	// Python: machine.py:178 session_lease: SessionLease | None
+	sessionLease *SessionLease
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -168,7 +166,12 @@ func (m *MachineRun) Execute(
 	}
 	// 步骤 3: 会话租约（显式 session_id 时先占）
 	// Python: :234-236 if session_id is not None: SessionLease(session_id).acquire()
-	// ⤵️ 回填 20.5：SessionLease 未实现（用户决策：sessionLease 恒 nil）
+	if m.runInput.SessionID != nil && strings.TrimSpace(*m.runInput.SessionID) != "" {
+		m.sessionLease = NewSessionLease(*m.runInput.SessionID)
+		if leaseErr := m.sessionLease.Acquire(); leaseErr != nil {
+			return leaseErr
+		}
+	}
 	//
 	// 步骤 4: 启动客户端
 	// Python: :237-238 self.client = client_factory(); await self.client.start()
@@ -255,13 +258,23 @@ func (m *MachineRun) Execute(
 
 	// 步骤 11: 会话租约（新建会话后补占）
 	// Python: :273-275 if self.session_lease is None: SessionLease(session_id).acquire()
-	// ⤵️ 回填 20.5：SessionLease 未实现（sessionLease 恒 nil）
+	if m.sessionLease == nil {
+		m.sessionLease = NewSessionLease(sessionID)
+		if leaseErr := m.sessionLease.Acquire(); leaseErr != nil {
+			return leaseErr
+		}
+	}
 
 	// 步骤 12: 绑定声明式 Agent 到会话
 	// Python: :276-282 bind_agent(session_id, agent.to_dict() if agent else None,
 	//                             resumed=descriptor is not None)
-	// ⤵️ 回填 20.5：bind_agent 未实现（用户决策）。声明式 Agent 的定义仍经
-	// stream_agent 的 PrepareAgentExecution 传递，只是不写入会话绑定表。
+	var definition map[string]any
+	if m.runInput.Agent != nil {
+		definition = m.runInput.Agent.ToDict()
+	}
+	if bindErr := BindAgent(sessionID, definition, descriptor != nil); bindErr != nil {
+		return bindErr
+	}
 
 	// 步骤 13: workspace 参数
 	// Python: :283 params = _workspace_params(run_input, resumed=descriptor is not None)
@@ -593,7 +606,10 @@ func RunMachine(
 	//                              session_lease.release(); CURRENT_RUN_CONTEXT.reset(token)
 	DeferCommandSignals(nil)
 	run.Cleanup(ctx)
-	// ⤵️ 回填 20.5：sessionLease.release()（本批恒 nil）
+	// Python: :576-583 finally: ... session_lease.release()
+	if run.sessionLease != nil {
+		run.sessionLease.Release()
+	}
 	return run.Result()
 }
 
@@ -707,8 +723,16 @@ func exceptionInfo(err error) *protocol.RuntimeErrorInfo {
 	} else if ctlErr, isCtrl := err.(*DuplexControlError); isCtrl {
 		// Python: :84-88 isinstance 集合里的 DuplexControlError——回显原文
 		message = ctlErr.Message
+	} else if guardErr, isGuard := err.(*SessionGuardError); isGuard {
+		// Python: :86-88 isinstance 集合里的 SessionGuardError——回显原文
+		message = guardErr.Message
 	}
 	info := &protocol.RuntimeErrorInfo{Code: code, Message: message}
+	// Python: :93 retryable=getattr(error, "retryable", False) is True
+	// 鸭子式属性提取 → 接口断言；SessionGuardError 的 SESSION_BUSY 携带 retryable=true。
+	if retrier, isRetrier := err.(interface{ RetryableValue() bool }); isRetrier {
+		info.Retryable = retrier.RetryableValue()
+	}
 	if len(details) > 0 {
 		info.Details = details
 	}

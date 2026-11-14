@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/processcli/protocol"
@@ -419,4 +421,29 @@ func TestRunMachine_control消费路径(t *testing.T) {
 	completed, consumeErr := run.executeConsumeStep(context.Background(), streamFn)
 	require.NoError(t, consumeErr)
 	require.True(t, completed)
+}
+
+func TestMachineRun_同会话并发互斥(t *testing.T) {
+	isolateSessionDir(t)
+	// 先占住锁，模拟另一进程正在执行
+	holder := NewSessionLease("sess-machine")
+	require.NoError(t, holder.Acquire())
+	defer holder.Release()
+
+	writer, err := NewOneShotWriter(discardWriter{}, "r1")
+	require.NoError(t, err)
+	run := NewMachineRun(&protocol.OneShotRunInput{
+		Input:     "hi",
+		SessionID: ptrString("sess-machine"),
+	}, writer, nil)
+	err = run.Execute(context.Background(),
+		func() *InProcessRuntimeClient { return NewInProcessRuntimeClient(nil) },
+		time.Now().Add(time.Minute))
+	var guardErr *SessionGuardError
+	require.ErrorAs(t, err, &guardErr)
+	assert.Equal(t, "SESSION_BUSY", guardErr.Code)
+	assert.True(t, guardErr.Retryable)
+	// Python machine.py:93 retryable=getattr(error,"retryable",False) is True
+	// 经 exceptionInfo 提取后须传导到 RuntimeErrorInfo。
+	assert.True(t, exceptionInfo(guardErr).Retryable, "SESSION_BUSY 的 retryable 应回显")
 }
