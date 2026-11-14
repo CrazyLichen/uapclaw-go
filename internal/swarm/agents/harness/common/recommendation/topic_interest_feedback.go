@@ -1315,18 +1315,21 @@ func sortedSet(values map[string]bool) []string {
 func sortedSetKeys(values map[string]bool) []string { return sortedSet(values) }
 
 // pyListMaps 映射列表（非列表返回 nil）。
+// 同时接受 []any（JSON 解出）与 []map[string]any（Go 直接构造的载荷）。
 func pyListMaps(value any) []map[string]any {
-	items, ok := value.([]any)
-	if !ok {
-		return nil
-	}
-	var out []map[string]any
-	for _, item := range items {
-		if m, ok := item.(map[string]any); ok {
-			out = append(out, m)
+	switch items := value.(type) {
+	case []any:
+		var out []map[string]any
+		for _, item := range items {
+			if m, ok := item.(map[string]any); ok {
+				out = append(out, m)
+			}
 		}
+		return out
+	case []map[string]any:
+		return items
 	}
-	return out
+	return nil
 }
 
 // toOpenedCards 打开卡四元组列表转换。
