@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -43,7 +45,7 @@ func TestConfigure热换模型_插件工具与rail保留(t *testing.T) {
 
 	// 绑定一个插件工具 + 一个非 model 相关 rail
 	card := newTestToolCard("keep_tool")
-	_, err := agent.LoadPluginAbility(ctx, []any{card}, nil, nil)
+	_, err := agent.LoadPluginAbility(ctx, []tool.ToolResource{{Card: card}}, nil, nil)
 	require.NoError(t, err)
 	stub := &stubRail{name: "keep-rail"}
 	require.NoError(t, agent.RegisterRail(ctx, stub))

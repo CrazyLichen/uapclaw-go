@@ -3,24 +3,24 @@ package harness
 import (
 	"context"
 	"os"
-	"reflect"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	subagentrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	toolskillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
+	subagentrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hres "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 辅助构造 ────────────────────────────
@@ -71,7 +71,7 @@ func TestBindTool_ToolCard绑定与config记账(t *testing.T) {
 	agent := newBoundTestAgent(t)
 	card := newTestToolCard("ext_tool")
 
-	ref, err := bindTool(agent, card)
+	ref, err := bindTool(agent, tool.ToolResource{Card: card})
 	require.NoError(t, err)
 	assert.Equal(t, hres.ResourceKindTool, ref.Kind)
 	assert.NotEmpty(t, ref.Identity)
@@ -85,9 +85,9 @@ func TestBindTool_ToolCard绑定与config记账(t *testing.T) {
 func TestBindTool_同名冲突报错(t *testing.T) {
 	agent := newBoundTestAgent(t)
 	card := newTestToolCard("dup_tool")
-	_, err := bindTool(agent, card)
+	_, err := bindTool(agent, tool.ToolResource{Card: card})
 	require.NoError(t, err)
-	_, err = bindTool(agent, card)
+	_, err = bindTool(agent, tool.ToolResource{Card: card})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Tool already bound")
 }
@@ -95,7 +95,7 @@ func TestBindTool_同名冲突报错(t *testing.T) {
 // TestBindTool_非法资源类型报错 对齐 Python :93-94。
 func TestBindTool_非法资源类型报错(t *testing.T) {
 	agent := newBoundTestAgent(t)
-	_, err := bindTool(agent, "not-a-tool")
+	_, err := bindTool(agent, tool.ToolResource{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Unsupported tool resource")
 }
@@ -176,7 +176,7 @@ func TestApplyExtensionHot_回滚(t *testing.T) {
 	card := newTestToolCard("rollback_tool")
 
 	parts := hres.NewExtensionParts()
-	parts.Tools = append(parts.Tools, card)
+	parts.Tools = append(parts.Tools, tool.ToolResource{Card: card})
 	// 第二步放同名 rail 冲突资源：先绑一次制造冲突
 	conflict := &stubRail{name: "stub-conflict"}
 	require.NoError(t, agent.RegisterRail(ctx, conflict))
@@ -194,7 +194,7 @@ func TestApplyExtensionHot_回滚(t *testing.T) {
 func TestUnbindTool(t *testing.T) {
 	agent := newBoundTestAgent(t)
 	card := newTestToolCard("unbind_tool")
-	ref, err := bindTool(agent, card)
+	ref, err := bindTool(agent, tool.ToolResource{Card: card})
 	require.NoError(t, err)
 
 	require.NoError(t, unbind(context.Background(), agent, ref))

@@ -5166,17 +5166,18 @@ func (d *DeepAgent) LoadAgentTemplateSpec(ctx context.Context, spec hschema.Agen
 
 // LoadPluginAbility 热挂载预构建的 tools / rails / skills。
 // Python: DeepAgent.load_plugin_ability (deep_agent.py:2337-2365)
+// tools 为 ToolResource union 替身（Tool→Instance / *ToolCard→Card，外层二选一构造）。
 func (d *DeepAgent) LoadPluginAbility(
 	ctx context.Context,
-	tools []any,
+	tools []tool.ToolResource,
 	rails []agentinterfaces.AgentRail,
 	skills []hres.ResolvedSkill,
 ) (*hres.LoadRecord, error) {
 	// Python: _as_ability_list —— None → 空列表；单值包一元列表（Go 由调用方
-	// 传切片，此处仅过滤 nil 元素保持等价）
+	// 传切片，此处仅过滤零值元素保持等价）
 	parts := hres.NewExtensionParts()
 	for _, item := range tools {
-		if item != nil {
+		if item.Instance != nil || item.Card != nil {
 			parts.Tools = append(parts.Tools, item)
 		}
 	}

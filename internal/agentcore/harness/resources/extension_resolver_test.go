@@ -8,8 +8,8 @@ import (
 
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // TestResolvedPromptSection 等用例引用 single_agent/prompts 的 PromptSection。

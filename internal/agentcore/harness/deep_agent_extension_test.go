@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+
 	toolskillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	hres "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -193,7 +195,7 @@ func TestLoadPluginAbility_预构建能力(t *testing.T) {
 	agent := newFullTestAgent(t)
 	card := newTestToolCard("ability_tool")
 
-	record, err := agent.LoadPluginAbility(ctx, []any{card}, nil, nil)
+	record, err := agent.LoadPluginAbility(ctx, []tool.ToolResource{{Card: card}}, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, record.Refs, 1)
 	assert.Equal(t, hres.ResourceKindTool, record.Refs[0].Kind)

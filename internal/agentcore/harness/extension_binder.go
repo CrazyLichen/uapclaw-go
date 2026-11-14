@@ -158,12 +158,14 @@ func toolIdentity(agent *DeepAgent, card *tool.ToolCard) string {
 	return card.Name
 }
 
-// bindTool 绑定单个工具能力（Tool 实例或 ToolCard）。
+// bindTool 绑定单个工具能力（Tool 实例或 ToolCard，经 ToolResource union 替身）。
 // Python: extension_binder.py:89-109 _bind_tool
-func bindTool(agent *DeepAgent, resource any) (hres.ResourceRef, error) {
+// 归一校验已在 resolver 侧（toolResourceOf）前置；此处 Instance 优先。
+func bindTool(agent *DeepAgent, resource tool.ToolResource) (hres.ResourceRef, error) {
 	ref := hres.NewResourceRef(hres.ResourceKindTool, "")
-	switch typed := resource.(type) {
-	case tool.Tool:
+	switch {
+	case resource.Instance != nil:
+		typed := resource.Instance
 		card := typed.Card()
 		if agent.AbilityManager().Get(card.Name) != nil {
 			return ref, fmt.Errorf("Tool already bound: %s", card.Name)
@@ -179,8 +181,8 @@ func bindTool(agent *DeepAgent, resource any) (hres.ResourceRef, error) {
 		ref.Identity = identity
 		ref.Extra["ability_names"] = []string{card.Name}
 		return ref, nil
-	case *tool.ToolCard:
-		card := typed
+	case resource.Card != nil:
+		card := resource.Card
 		if agent.AbilityManager().Get(card.Name) != nil {
 			return ref, fmt.Errorf("Tool already bound: %s", card.Name)
 		}
@@ -194,7 +196,7 @@ func bindTool(agent *DeepAgent, resource any) (hres.ResourceRef, error) {
 		ref.Extra["ability_names"] = []string{card.Name}
 		return ref, nil
 	default:
-		return ref, fmt.Errorf("Unsupported tool resource: %T", resource)
+		return ref, fmt.Errorf("Unsupported tool resource: empty ToolResource")
 	}
 }
 

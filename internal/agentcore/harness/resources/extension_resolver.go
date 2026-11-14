@@ -10,6 +10,7 @@ import (
 	"time"
 
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mtypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -249,8 +250,9 @@ type ResolvedPromptSection struct {
 // ExtensionParts 一次 Plugin / AgentTemplate 热加载的 resolve→apply 交接载体。
 // Python: extension_resolver.py:91-100 ExtensionParts（dataclass）
 type ExtensionParts struct {
-	// Tools 预构建的工具或工具卡片
-	Tools []any
+	// Tools 预构建的工具或工具卡片（Python Tool | ToolCard union 的
+	// ToolResource 具体替身，外层二选一构造）
+	Tools []tool.ToolResource
 	// Mcps MCP 服务器配置
 	Mcps []mtypes.McpServerConfig
 	// Rails rail 实例
@@ -282,7 +284,7 @@ func NewLoadRecord() LoadRecord {
 // Python: dataclass field(default_factory=list)
 func NewExtensionParts() ExtensionParts {
 	return ExtensionParts{
-		Tools:          []any{},
+		Tools:          []tool.ToolResource{},
 		Mcps:           []mtypes.McpServerConfig{},
 		Rails:          []agentinterfaces.AgentRail{},
 		PromptSections: []ResolvedPromptSection{},
@@ -456,16 +458,37 @@ func adaptAgentTemplateToSubagentSpec(
 // resolveTools 逐条构建工具声明为实例（或卡片）列表。
 // Python: extension_resolver.py:175-180 _resolve_tools
 // （上游不传 tool_id；Go 签名要求，传空串保持同语义。）
-func resolveTools(specs []hschema.BuiltinToolSpec, language string, ctx hschema.BuildContextInterface) ([]any, error) {
-	tools := []any{}
+// build 产物在此归一为 ToolResource（Tool→Instance / *ToolCard→Card），
+// 其他类型在 resolver 侧报错（Python 的 TypeError 校验等价前置）。
+func resolveTools(specs []hschema.BuiltinToolSpec, language string, ctx hschema.BuildContextInterface) ([]tool.ToolResource, error) {
+	tools := []tool.ToolResource{}
 	for i := range specs {
 		built, err := specs[i].Build(language, "", ctx)
 		if err != nil {
 			return nil, err
 		}
-		tools = append(tools, asBuiltList(built)...)
+		for _, item := range asBuiltList(built) {
+			res, err := toolResourceOf(item)
+			if err != nil {
+				return nil, fmt.Errorf("tool spec[%d]: %w", i, err)
+			}
+			tools = append(tools, res)
+		}
 	}
 	return tools, nil
+}
+
+// toolResourceOf 把 build 产物归一为 ToolResource。
+// Python: extension_binder.py:91-92 isinstance(resource, (Tool, ToolCard)) 校验
+func toolResourceOf(built any) (tool.ToolResource, error) {
+	switch typed := built.(type) {
+	case tool.Tool:
+		return tool.ToolResource{Instance: typed}, nil
+	case *tool.ToolCard:
+		return tool.ToolResource{Card: typed}, nil
+	default:
+		return tool.ToolResource{}, fmt.Errorf("unsupported tool resource: %T", built)
+	}
 }
 
 // resolveRails 逐条构建 rail 声明为实例列表。

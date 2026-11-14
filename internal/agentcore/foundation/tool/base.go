@@ -61,6 +61,17 @@ type ToolCard struct {
 	exposureDeclaredSet bool
 }
 
+// ToolResource Python “Tool | ToolCard“ union 类型的具体替身，外层二选一构造。
+// Python: extension_binder.py:89-109 _bind_tool 的 resource 参数类型。
+// Instance 非 nil 走实例语义（ability_manager.add_ability），否则 Card 走卡片
+// 语义（ability_manager.add）；两者语义差异必须保留，故不用 any 分派。
+type ToolResource struct {
+	// Instance 实例形态（与 Card 二选一）
+	Instance Tool
+	// Card 卡片形态（与 Instance 二选一）
+	Card *ToolCard
+}
+
 // ToolCallOptions 工具调用的扩展选项。
 // Python: Tool.invoke/Stream 中的 **kwargs 参数集合
 type ToolCallOptions struct {
