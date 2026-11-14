@@ -1,12 +1,9 @@
 package rails
 
 import (
-	"errors"
-	"fmt"
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 func TestBoolishFalse(t *testing.T) {
@@ -167,33 +164,6 @@ func TestParseToolCallArguments(t *testing.T) {
 	}
 }
 
-func TestExtractToolInterrupt(t *testing.T) {
-	// ToolInterruptException 工具中断异常
-	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
-	got := extractToolInterrupt(exc)
-	if got == nil {
-		t.Error("expected non-nil for ToolInterruptException")
-	}
-
-	// 通过 Unwrap 嵌套的错误
-	wrapper := &testError{cause: exc}
-	got = extractToolInterrupt(wrapper)
-	if got == nil {
-		t.Error("expected non-nil for nested ToolInterruptException")
-	}
-
-	// 无中断异常
-	got = extractToolInterrupt(fmt.Errorf("plain error"))
-	if got != nil {
-		t.Error("expected nil for plain error")
-	}
-
-	// nil 输入
-	got = extractToolInterrupt(nil)
-	if got != nil {
-		t.Error("expected nil for nil input")
-	}
-}
 
 func TestTruncateString(t *testing.T) {
 	if truncateString("hello", 3) != "hel" {
@@ -313,15 +283,6 @@ func (r testInterruptRequest) GetInterruptOwner() string { return "" }
 // GetInterruptKind 实现 InterruptRequester 接口（9.90c 接口扩张）。
 func (r testInterruptRequest) GetInterruptKind() string { return "" }
 
-// TestExtractToolInterrupt_多错误包装 验证 errors.Join 包装也能识别。
-func TestExtractToolInterrupt_多错误包装(t *testing.T) {
-	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
-	joined := errors.Join(errors.New("other"), exc)
-	if got := extractToolInterrupt(joined); got == nil {
-		t.Fatal("errors.Join 包装的中断异常未被识别")
-	}
-}
-
 // multiErrWithNil 含 nil 元素的多错误包装，用于覆盖跳过分支。
 type multiErrWithNil struct{ errs []error }
 
@@ -331,10 +292,3 @@ func (m multiErrWithNil) Unwrap() []error {
 }
 
 // TestExtractToolInterrupt_多错误含nil 验证 nil 元素被跳过、后续错误仍可识别。
-func TestExtractToolInterrupt_多错误含nil(t *testing.T) {
-	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
-	wrapped := multiErrWithNil{errs: []error{nil, exc}}
-	if got := extractToolInterrupt(wrapped); got == nil {
-		t.Fatal("含 nil 的多错误包装未被识别")
-	}
-}

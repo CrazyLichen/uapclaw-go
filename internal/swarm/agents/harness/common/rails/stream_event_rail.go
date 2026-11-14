@@ -539,7 +539,7 @@ func (r *JiuClawStreamEventRail) BeforeToolCall(ctx context.Context, cbc *sainte
 	return nil
 }
 
-// AfterToolCall 工具执行后：发送 tool_result + ask_user_question + todo.updated，对齐 Python: after_tool_call
+// AfterToolCall 工具执行后：发送 tool_result + todo.updated，对齐 Python: after_tool_call
 func (r *JiuClawStreamEventRail) AfterToolCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	session := cbc.Session()
 	if session == nil {
@@ -561,9 +561,6 @@ func (r *JiuClawStreamEventRail) AfterToolCall(ctx context.Context, cbc *sainter
 
 	// 发送 tool_result 事件
 	emitToolResult(ctx, session, tc, inputs.ToolResult)
-
-	// 发送 ask_user_question 事件
-	emitAskUserQuestionIfInterrupted(ctx, session, tc, inputs.ToolName, inputs.ToolResult, cbc.Exception())
 
 	// 检查是否为 TODO 工具，对齐 Python: if tool_name in _TODO_TOOL_NAMES
 	sid := r.resolveSID(cbc, session)

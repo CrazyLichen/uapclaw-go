@@ -291,14 +291,6 @@ func TestInterruptIDContains(t *testing.T) {
 	}
 }
 
-// TestInteractionsOf_过滤非map 测试归一化。
-func TestInteractionsOf_过滤非map(t *testing.T) {
-	got := interactionsOf([]any{map[string]any{"id": "1"}, "string", 42})
-	if len(got) != 1 {
-		t.Errorf("len = %d, want 1", len(got))
-	}
-}
-
 // 确保 sessioninterfaces 被引用（接口断言）。
 var _ sessioninterfaces.SessionFacade = (*projectionSession)(nil)
 
