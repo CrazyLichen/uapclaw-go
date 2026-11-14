@@ -163,3 +163,139 @@ func TestAgentTemplateSpec_ModelDump零值(t *testing.T) {
 	// agent_card 是必填字段（无 omitempty），零值也序列化成空对象
 	assert.Contains(t, dumped, "agent_card")
 }
+
+// ──────────────────────────── 15.15a 全量 schema ────────────────────────────
+
+// TestPluginSpec_JSON往返 对齐 Python extension_spec.py:174-198 PluginSpec。
+func TestPluginSpec_JSON往返(t *testing.T) {
+	raw := `{
+		"id": "p1", "name": "插件", "description": "功能包",
+		"prompt_sections": [{"name": "sops", "content": {"cn": "守则"}}],
+		"tools": [{"type": "harness.tool.file", "params": {"file_path": "/abs/tool.py"}}],
+		"mcps": [{"server_name": "fs", "type": "stdio", "command": "node"}],
+		"rails": [{"type": "core.ask_user", "params": {}}],
+		"skills": [{"dir": "/abs/skills/a", "mode": "all"}],
+		"metadata": {"publisher": "ops"}
+	}`
+	var spec PluginSpec
+	require.NoError(t, json.Unmarshal([]byte(raw), &spec))
+	assert.Equal(t, "p1", spec.ID)
+	assert.Equal(t, "插件", spec.Name)
+	assert.Equal(t, "功能包", spec.Description)
+	require.Len(t, spec.PromptSections, 1)
+	require.Len(t, spec.Tools, 1)
+	assert.Equal(t, "harness.tool.file", spec.Tools[0].Type)
+	assert.Equal(t, "/abs/tool.py", spec.Tools[0].Params["file_path"])
+	require.Len(t, spec.Mcps, 1)
+	require.Len(t, spec.Rails, 1)
+	require.Len(t, spec.Skills, 1)
+	assert.Equal(t, "ops", spec.Metadata["publisher"])
+}
+
+// TestPluginSpec_ID必填 对齐 pydantic 必填字段：id 缺失时报错。
+// Python 侧由 BaseModel 校验；Go 侧 JSON 解码无必填概念，由 ValidatePluginSpec 补。
+func TestPluginSpec_ID必填(t *testing.T) {
+	err := ValidatePluginSpec(PluginSpec{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "id")
+}
+
+// TestMcpDirSpec_JSON 对齐 Python extension_spec.py:70-74。
+func TestMcpDirSpec_JSON(t *testing.T) {
+	var spec McpDirSpec
+	require.NoError(t, json.Unmarshal([]byte(`{"dir": "mcp/"}`), &spec))
+	assert.Equal(t, "mcp/", spec.Dir)
+}
+
+// TestRubricSpec_未知字段保留 extra="allow" 语义：任意字段原样保留。
+// Python: extension_spec.py:123-126 RubricSpec
+func TestRubricSpec_未知字段保留(t *testing.T) {
+	var spec RubricSpec
+	require.NoError(t, json.Unmarshal([]byte(`{"name":"质量","score":5,"nested":{"k":"v"}}`), &spec))
+	assert.Equal(t, "质量", spec["name"])
+	assert.Equal(t, float64(5), spec["score"])
+	assert.Equal(t, map[string]any{"k": "v"}, spec["nested"])
+}
+
+// TestMemorySpec_未知字段保留 extra="allow" 语义。
+// Python: extension_spec.py:129-132 MemorySpec
+func TestMemorySpec_未知字段保留(t *testing.T) {
+	var spec MemorySpec
+	require.NoError(t, json.Unmarshal([]byte(`{"name":"约定","content":"永不删除测试"}`), &spec))
+	assert.Equal(t, "约定", spec["name"])
+}
+
+// TestValidatePluginPaths_相对路径报错 对齐 Python :208-236 validate_plugin_paths。
+func TestValidatePluginPaths_相对路径报错(t *testing.T) {
+	cases := []struct {
+		name  string
+		spec  PluginSpec
+		field string
+	}{
+		{"tools.params.file_path", PluginSpec{Tools: []BuiltinToolSpec{
+			{Type: "harness.tool.file", Params: map[string]any{"file_path": "rel/tool.py"}}}}, "tools.params.file_path"},
+		{"rails.params.file_path", PluginSpec{Rails: []RailSpec{
+			{Type: "harness.rail.file", Params: map[string]any{"file_path": "rel/rail.py"}}}}, "rails.params.file_path"},
+		{"mcps.cwd", PluginSpec{Mcps: []McpServerSpec{{Cwd: "rel/dir"}}}, "mcps.cwd"},
+		{"skills.dir", PluginSpec{Skills: []SkillSpec{{Dir: "rel/skill"}}}, "skills.dir"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := ValidatePluginPaths(testCase.spec)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), testCase.field)
+			assert.Contains(t, err.Error(), "absolute")
+		})
+	}
+}
+
+// TestValidatePluginPaths_绝对路径与空值通过 空字段跳过、绝对路径放行、~ 展开判绝对。
+func TestValidatePluginPaths_绝对路径与空值通过(t *testing.T) {
+	spec := PluginSpec{
+		Tools:  []BuiltinToolSpec{{Type: "harness.tool.file", Params: map[string]any{"file_path": "/abs/t.py"}}},
+		Rails:  []RailSpec{{Type: "harness.rail.file", Params: map[string]any{"file_path": "/abs/r.py"}}},
+		Mcps:   []McpServerSpec{{Cwd: "/abs/dir"}},
+		Skills: []SkillSpec{{Dir: "/abs/skill"}},
+	}
+	require.NoError(t, ValidatePluginPaths(spec))
+
+	// 空字符串跳过（Python: if file_path / if mcp.cwd）
+	spec2 := PluginSpec{Mcps: []McpServerSpec{{Cwd: ""}}}
+	assert.NoError(t, ValidatePluginPaths(spec2))
+}
+
+// TestValidatePluginPaths_runtimeSdkPaths 对齐 Python :231-234。
+func TestValidatePluginPaths_runtimeSdkPaths(t *testing.T) {
+	spec := PluginSpec{} // PluginSpec 无 runtime；AgentTemplateSpec 才有
+	tpl := AgentTemplateSpec{Runtime: &AgentRuntimeSpec{ProviderName: "claude-code", SdkPaths: []string{"rel/sdk"}}}
+	err := ValidatePluginPaths(tpl)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "runtime.sdk_paths")
+
+	assert.NoError(t, ValidatePluginPaths(spec))
+}
+
+// TestValidatePluginPaths_subagent递归 对齐 Python :235-236 直接子模板递归。
+func TestValidatePluginPaths_subagent递归(t *testing.T) {
+	tpl := AgentTemplateSpec{Subagents: []AgentTemplateSpec{{
+		Skills: []SkillSpec{{Dir: "rel/sub-skill"}},
+	}}}
+	err := ValidatePluginPaths(tpl)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "skills.dir")
+}
+
+// TestValidatePlainMapping_拒绝非字符串键 对齐 Python :17-30 _plain_data。
+func TestValidatePlainMapping_拒绝非字符串键(t *testing.T) {
+	bad := map[string]any{"k": map[any]any{1: "x"}}
+	err := ValidatePlainMapping(bad)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "strings")
+}
+
+// TestValidatePlainMapping_标量与列表通过 JSON/YAML 可序列化数据放行。
+func TestValidatePlainMapping_标量与列表通过(t *testing.T) {
+	assert.NoError(t, ValidatePlainMapping(map[string]any{
+		"a": 1, "b": []any{"x", 2.5, true, nil}, "c": map[string]any{"d": "e"},
+	}))
+}
