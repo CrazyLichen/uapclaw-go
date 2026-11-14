@@ -682,7 +682,7 @@ func TestIntelliRouterConfig_ToPoolEntries(t *testing.T) {
 	if _, ok := c2["intelli_router_api_key"]; ok {
 		t.Fatal("遗留 intelli_router_* 键应被丢弃")
 	}
-	if c2["timeout"] != float64(99) {
+	if c2["timeout"] != 99 {
 		t.Fatal("非遗留的 client 键应保留")
 	}
 	// 显式 Strategy 覆盖缺省
