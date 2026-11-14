@@ -63,6 +63,175 @@ type ModelRouterConfig struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// IntelliRouterConfig 整个团队的多部署可靠路由配置（team 侧 DTO）。
+// ModelRouterConfig 描述「单端点服务多模型名」，这里描述「单客户端路由器背后
+// 的多端点」：IntelliRouterModelClient 包装 intelli_router.ReliableRouter，
+// 由后者负责重试、换台、健康检查与限流感知负载均衡。
+// 两者处于不同层且相互组合。团队级分配仍决定成员请求哪个模型名；
+// 路由器决定哪个物理部署服务每个请求以及失败时的行为。所以本配置展开的
+// 池永远不会像 round_robin 那样把成员摊到端点上——每个成员共享同一份
+// deployment 列表，可用性是路由器的职责，不是分配器的。
+// 在 TeamAgentSpec.build() 时 to_pool_entries 把它展开为携带完整 deployment
+// 列表的单条逻辑 "*" entry（metadata.client.intelli_router），并把
+// model_pool_strategy 置 "intelli_router"——下游所有路径（resolve_member_model、
+// inherit_pool_ids、update_model_pool）继续按扁平池视图工作，无 IntelliRouter
+// 特例分支。与 TeamAgentSpec.model_pool / model_router 互斥。
+// 注意：这是 team 侧 DTO，与 foundation 编译侧 schema.IntelliRouterConfig
+// （schema/config.py:90）是两份同构结构，不合并（总 spec 偏差 D-6）。
+// Python: IntelliRouterConfig (pool.py:329)
+type IntelliRouterConfig struct {
+	// Deployments 路由器可路由的物理部署，永不空——无路由目标的组每次请求必败
+	// Python: pool.py:360 deployments: list[IntelliRouterDeployment] = Field(min_length=1)
+	Deployments []*IntelliRouterDeployment `json:"deployments"`
+	// ModelNames 可选逻辑 Team 名；设置时必须恰为 ["*"]
+	// Python: pool.py:362-364 model_names: list[str] | None = None
+	ModelNames []string `json:"model_names,omitempty"`
+	// Strategy 传给 ReliableRouter 的路由策略名
+	// Python: pool.py:366-368 strategy: str = "simple-shuffle"
+	Strategy string `json:"strategy"`
+	// NumRetries fallback 重试预算
+	// Python: pool.py:369-370 num_retries: int = 3
+	NumRetries int `json:"num_retries"`
+	// Timeout 路由器级请求超时（秒）
+	// Python: pool.py:371-372 timeout: float = 30.0
+	Timeout float64 `json:"timeout"`
+	// StrategyKwargs 策略专属旋钮，原样转发给 ReliableRouter
+	// Python: pool.py:373-375 strategy_kwargs: dict
+	StrategyKwargs map[string]any `json:"strategy_kwargs,omitempty"`
+	// EnableHealthCheck 是否启用路由器健康检查
+	// Python: pool.py:376-377 enable_health_check: bool = False
+	EnableHealthCheck bool `json:"enable_health_check"`
+	// HealthCheckInterval 健康检查间隔（秒）
+	// Python: pool.py:378-379 health_check_interval: float = 300.0
+	HealthCheckInterval float64 `json:"health_check_interval"`
+	// EnableObservability 是否启用路由器可观测钩子
+	// Python: pool.py:380-381 enable_observability: bool = False
+	EnableObservability bool `json:"enable_observability"`
+	// WebDashboardPort 指标 web 面板端口
+	// Python: pool.py:382-383 web_dashboard_port: int = 0
+	WebDashboardPort int `json:"web_dashboard_port"`
+	// VerifySSL 路由器级 TLS 校验；部署级 verify_ssl 显式设置时优先
+	// Python: pool.py:384-386 verify_ssl: bool = True
+	VerifySSL bool `json:"verify_ssl"`
+	// Metadata 可选 ModelPoolEntry.metadata 载荷，拷入每个展开条目。
+	// 保留的 client/request 子键见 ModelPoolEntry.metadata 文档。生成的
+	// 结构化 client.intelli_router 快照与路由器级 verify_ssl 优先于这里
+	// 的同名值；遗留扁平 intelli_router_* metadata 被丢弃而非与规范快照并写。
+	// Python: pool.py:385-389（文档串）
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+// NewIntelliRouterConfig 创建 IntelliRouterConfig 并对齐 Python 字段缺省值。
+// Python: pool.py:359-389（Field default）
+func NewIntelliRouterConfig(deployments []*IntelliRouterDeployment) *IntelliRouterConfig {
+	return &IntelliRouterConfig{
+		Deployments:         deployments,
+		Strategy:            "simple-shuffle",
+		NumRetries:          3,
+		Timeout:             30.0,
+		StrategyKwargs:      map[string]any{},
+		HealthCheckInterval: 300.0,
+		WebDashboardPort:    0,
+		VerifySSL:           true,
+		Metadata:            map[string]any{},
+	}
+}
+
+// Validate 校验 model_names 只能暴露唯一逻辑 Team 名 "*"。
+// Python: _validate_model_names (pool.py:387)
+func (c *IntelliRouterConfig) Validate() error {
+	if c.ModelNames == nil {
+		return nil
+	}
+	if len(c.ModelNames) != 1 || c.ModelNames[0] != INTELLI_ROUTER_UNIFIED_MODEL {
+		return fmt.Errorf("IntelliRouterConfig exposes exactly one logical Team model name: '*'")
+	}
+	return nil
+}
+
+// ResolvedModelNames 返回唯一的逻辑 Team 模型名。
+// Python: resolved_model_names (pool.py:395)
+func (c *IntelliRouterConfig) ResolvedModelNames() []string {
+	return []string{INTELLI_ROUTER_UNIFIED_MODEL}
+}
+
+// clientExtra 构建规范的结构化 IntelliRouter client 快照。
+// 每个 deployment 渲染 wire dict 并补 route_id（缺省 route_{index}）；
+// strategy_kwargs 深拷贝，防后续共享 map 变更污染快照。
+// Python: _client_extra (pool.py:400)
+func (c *IntelliRouterConfig) clientExtra() map[string]any {
+	deployments := make([]any, 0, len(c.Deployments))
+	for index, deployment := range c.Deployments {
+		payload := deployment.ToDeploymentDict()
+		routeID := payload["id"]
+		delete(payload, "id")
+		if routeID == nil || routeID == "" {
+			routeID = fmt.Sprintf("route_%d", index)
+		}
+		if tags, ok := payload["tags"].([]string); ok && len(tags) > 0 {
+			payload["fallback_tag"] = tags[0]
+		}
+		entry := map[string]any{"route_id": routeID}
+		for k, v := range payload {
+			entry[k] = v
+		}
+		deployments = append(deployments, entry)
+	}
+	router := map[string]any{
+		"deployments":         deployments,
+		"strategy":            c.Strategy,
+		"num_retries":         c.NumRetries,
+		"timeout":             c.Timeout,
+		"strategy_kwargs":     deepCopyAny(c.StrategyKwargs),
+		"enable_health_check": c.EnableHealthCheck,
+		"health_check_interval": c.HealthCheckInterval,
+		"enable_observability":  c.EnableObservability,
+		"web_dashboard_port":    c.WebDashboardPort,
+	}
+	return map[string]any{
+		"intelli_router": router,
+		"verify_ssl":     c.VerifySSL,
+	}
+}
+
+// ToPoolEntries 展开为单条逻辑 "*" Team 模型条目。
+// 条目携带完整 deployment 列表。物理部署名留在结构化 client 快照内，
+// 永不暴露给 Team 分配：每个成员拿到同一条逻辑 entry，因此完整 deployment
+// 列表与路由器旋钮产出同一个共享 ReliableRouter 缓存键——换台状态、健康检查、
+// 各部署 tpm/rpm 预算因此对全团队全局；物理部署名绝不成为 Team 分配器条目。
+// api_provider 固定 "intelli_router"，这是物化到 IntelliRouterModelClient 的
+// 路由依据。条目自身 api_key/api_base_url 为空：凭证按部署存放，foundation
+// 层对该 provider 不要求顶层凭证。
+// Python: to_pool_entries (pool.py:438)
+func (c *IntelliRouterConfig) ToPoolEntries() []ModelPoolEntry {
+	metadata := deepCopyAny(c.Metadata).(map[string]any)
+	clientMetadata := map[string]any{}
+	if raw, ok := metadata["client"]; ok {
+		if m, ok := raw.(map[string]any); ok {
+			clientMetadata = m
+		}
+	}
+	// 遗留扁平 intelli_router_* 键被丢弃，不与规范快照并写（pool.py:444-448）
+	for key := range clientMetadata {
+		if strings.HasPrefix(key, "intelli_router_") {
+			delete(clientMetadata, key)
+		}
+	}
+	for k, v := range c.clientExtra() {
+		clientMetadata[k] = v
+	}
+	metadata["client"] = clientMetadata
+	return []ModelPoolEntry{{
+		ModelName:   INTELLI_ROUTER_UNIFIED_MODEL,
+		APIKey:      "",
+		APIBaseURL:  "",
+		APIProvider: INTELLI_ROUTER_PROVIDER,
+		Description: fmt.Sprintf("IntelliRouter unified routing across %d deployment(s)", len(c.Deployments)),
+		ModelID:     uuid.New().String(),
+		Metadata:    metadata,
+	}}
+}
+
 // ModelPoolEntryOption ModelPoolEntry 构造选项函数。
 type ModelPoolEntryOption func(*ModelPoolEntry)
 
@@ -357,6 +526,15 @@ func InheritPoolIDs(currentPool, newPool []ModelPoolEntry) []ModelPoolEntry {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// deepCopyAny map[string]any 的深拷贝（strategy_kwargs 与 metadata 快照用）。
+// 复用 common/utils 既有实现（对齐 Python copy.deepcopy 语义）。
+func deepCopyAny(v any) any {
+	if m, ok := v.(map[string]any); ok {
+		return utils.DeepCopyMap(m)
+	}
+	return v
+}
 
 // entrySignature 计算条目的规范签名（排除 model_id）。
 // 两个具有相同签名的条目描述相同的逻辑端点、相同的认证和请求参数。

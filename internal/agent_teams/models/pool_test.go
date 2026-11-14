@@ -629,3 +629,88 @@ func TestIntelliRouterDeployment_必填Provider(t *testing.T) {
 }
 
 func intPtrOf(v int) *int { return &v }
+
+// TestIntelliRouterConfig_ToPoolEntries 单条 "*" entry、client 快照、遗留键清理、缺省值。
+// Python: pool.py:329-455 IntelliRouterConfig + to_pool_entries + _client_extra
+func TestIntelliRouterConfig_ToPoolEntries(t *testing.T) {
+	cfg := NewIntelliRouterConfig([]*IntelliRouterDeployment{{
+		ModelName: "m1", APIKey: "k1", APIBase: "https://a.com", Provider: "deepseek",
+	}})
+	entries := cfg.ToPoolEntries()
+	if len(entries) != 1 {
+		t.Fatalf("必须展开为单条 entry，got %d", len(entries))
+	}
+	e := entries[0]
+	if e.ModelName != INTELLI_ROUTER_UNIFIED_MODEL || e.APIProvider != INTELLI_ROUTER_PROVIDER {
+		t.Fatalf("形状错误: %s/%s", e.ModelName, e.APIProvider)
+	}
+	if e.APIKey != "" || e.APIBaseURL != "" {
+		t.Fatal("顶层凭证必须为空（凭证在 deployment 内）")
+	}
+	if e.Description != "IntelliRouter unified routing across 1 deployment(s)" {
+		t.Fatalf("description 文案不匹配: %q", e.Description)
+	}
+	client := e.Metadata["client"].(map[string]any)
+	router := client["intelli_router"].(map[string]any)
+	// 路由器级缺省值（pool.py:359-375 Field defaults）
+	if router["strategy"] != "simple-shuffle" {
+		t.Fatalf("strategy 缺省: %v", router["strategy"])
+	}
+	if router["num_retries"] != 3 {
+		t.Fatalf("num_retries 缺省: %v", router["num_retries"])
+	}
+	if router["timeout"] != float64(30.0) {
+		t.Fatalf("timeout 缺省: %v", router["timeout"])
+	}
+	if client["verify_ssl"] != true {
+		t.Fatalf("verify_ssl 缺省 true: %v", client["verify_ssl"])
+	}
+	deps := router["deployments"].([]any)
+	d0 := deps[0].(map[string]any)
+	if d0["route_id"] != "route_0" {
+		t.Fatalf("route_id 缺省应为 route_{index}: %v", d0)
+	}
+	if d0["model_name"] != "m1" {
+		t.Fatalf("deployment 键错误: %v", d0)
+	}
+	// 遗留 intelli_router_* 键被清理（pool.py:444-448）
+	cfg2 := NewIntelliRouterConfig([]*IntelliRouterDeployment{cfg.Deployments[0]})
+	cfg2.Metadata = map[string]any{
+		"client": map[string]any{"intelli_router_api_key": "legacy", "timeout": 99},
+	}
+	c2 := cfg2.ToPoolEntries()[0].Metadata["client"].(map[string]any)
+	if _, ok := c2["intelli_router_api_key"]; ok {
+		t.Fatal("遗留 intelli_router_* 键应被丢弃")
+	}
+	if c2["timeout"] != float64(99) {
+		t.Fatal("非遗留的 client 键应保留")
+	}
+	// 显式 Strategy 覆盖缺省
+	cfg3 := NewIntelliRouterConfig([]*IntelliRouterDeployment{cfg.Deployments[0]})
+	cfg3.Strategy = "ordered-failover"
+	r3 := cfg3.ToPoolEntries()[0].Metadata["client"].(map[string]any)["intelli_router"].(map[string]any)
+	if r3["strategy"] != "ordered-failover" {
+		t.Fatalf("显式 strategy 应生效: %v", r3["strategy"])
+	}
+}
+
+// TestIntelliRouterConfig_ValidateModelNames model_names 只能是 ["*"]。
+// Python: _validate_model_names (pool.py:387-393)
+func TestIntelliRouterConfig_ValidateModelNames(t *testing.T) {
+	cfg := NewIntelliRouterConfig([]*IntelliRouterDeployment{{ModelName: "m", APIKey: "k", APIBase: "b", Provider: "p"}})
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("model_names 缺省应通过: %v", err)
+	}
+	cfg.ModelNames = []string{"x"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "exactly one logical") {
+		t.Fatalf("非 [\"*\"] 应报错: %v", err)
+	}
+	cfg.ModelNames = []string{INTELLI_ROUTER_UNIFIED_MODEL}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("[\"*\"] 应通过: %v", err)
+	}
+	// ResolvedModelNames 恒 ["*"]（pool.py:395-398）
+	if got := cfg.ResolvedModelNames(); len(got) != 1 || got[0] != "*" {
+		t.Fatalf("ResolvedModelNames: %v", got)
+	}
+}
