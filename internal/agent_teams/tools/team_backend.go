@@ -67,6 +67,12 @@ type TeamBackend struct {
 	predefinedMembers []atschema.TeamMemberSpec
 	// modelConfigAllocator 模型配置分配器
 	modelConfigAllocator func(modelName string) *models.Allocation
+	// modelAllocator 当前模型分配器（可经 UpdateModelAllocator 热替换）。
+	// Python: TeamBackend._model_allocator (team.py:284)
+	modelAllocator models.ModelAllocator
+	// modelPoolProvider 活跃模型池提供者（返回副本）。
+	// Python: TeamBackend._model_pool_provider (team.py:286)
+	modelPoolProvider func() []models.ModelPoolEntry
 	// leaderAllocation 领导者资源分配
 	leaderAllocation *models.Allocation
 	// onTeamCleaned 团队清理回调
@@ -208,6 +214,79 @@ func WithPredefinedMembers(members []atschema.TeamMemberSpec) TeamBackendOption 
 // WithModelConfigAllocator 设置模型分配回调。
 func WithModelConfigAllocator(fn func(modelName string) *models.Allocation) TeamBackendOption {
 	return func(tb *TeamBackend) { tb.modelConfigAllocator = fn }
+
+}
+
+// WithModelPoolProvider 设置活跃模型池提供者。
+// Python: TeamBackend.__init__ 的 model_pool_provider 参数（team.py:286）
+func WithModelPoolProvider(provider func() []models.ModelPoolEntry) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.modelPoolProvider = provider }
+}
+
+// WithModelAllocator 设置当前模型分配器。
+// Python: TeamBackend.__init__ 的 model_allocator 参数（team.py:284）
+func WithModelAllocator(alloc models.ModelAllocator) TeamBackendOption {
+	return func(tb *TeamBackend) { tb.modelAllocator = alloc }
+}
+
+// GetModelPool 返回活跃模型池的副本。
+// Python: TeamBackend.get_model_pool (team.py:437)
+func (tb *TeamBackend) GetModelPool() []models.ModelPoolEntry {
+	if tb.modelPoolProvider == nil {
+		return nil
+	}
+	return tb.modelPoolProvider()
+}
+
+// AllocateModel 经当前分配器分配（跨更新保持稳定）。
+// Python: TeamBackend.allocate_model (team.py:443)
+func (tb *TeamBackend) AllocateModel(modelName string) *models.Allocation {
+	if tb.modelAllocator != nil {
+		return tb.modelAllocator.Allocate(modelName)
+	}
+	if tb.modelConfigAllocator == nil {
+		return nil
+	}
+	return tb.modelConfigAllocator(modelName)
+}
+
+// UpdateModelAllocator 无需重建团队工具地替换分配器。
+// Python: TeamBackend.update_model_allocator (team.py:467)
+func (tb *TeamBackend) UpdateModelAllocator(alloc models.ModelAllocator) {
+	tb.modelAllocator = alloc
+}
+
+// IsModelGroupPool 池是否为规范模型组池。
+// Python: TeamBackend.is_model_group_pool (team.py:449)
+func (tb *TeamBackend) IsModelGroupPool() bool {
+	pool := tb.GetModelPool()
+	if len(pool) != 1 {
+		return false
+	}
+	entry := pool[0]
+	client, _ := entry.Metadata["client"].(map[string]any)
+	_, routerOK := client["intelli_router"].(map[string]any)
+	return entry.ModelName == models.INTELLI_ROUTER_UNIFIED_MODEL &&
+		entry.APIProvider == models.INTELLI_ROUTER_PROVIDER &&
+		routerOK
+}
+
+// ModelGroupLabel 团队模型组名；模型组池之外返回空串。
+// Python: TeamBackend.model_group_label (team.py:461)
+func (tb *TeamBackend) ModelGroupLabel() string {
+	return models.ModelGroupLabel(tb.GetModelPool())
+}
+
+// ListRouteTags 模型组成员可点名的标签（模型组池之外为空）。
+// Python: TeamBackend.list_route_tags (team.py:469)
+func (tb *TeamBackend) ListRouteTags() []string {
+	if !tb.IsModelGroupPool() {
+		return nil
+	}
+	if alloc, ok := tb.modelAllocator.(*models.IntelliRouterAllocator); ok {
+		return alloc.ListRouteTags()
+	}
+	return nil
 }
 
 // WithLeaderAllocation 设置 Leader 模型分配。

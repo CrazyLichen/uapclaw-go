@@ -1678,3 +1678,66 @@ func TestResolveLeaderMemberName_读团队行报错(t *testing.T) {
 	tb := NewTeamBackend("t", "m", false, errTeamDB{}, newTestMessager())
 	assert.Equal(t, "", tb.ResolveLeaderMemberName(context.Background()))
 }
+
+// ──────────────────────────── 23.4c 模型组探针 ────────────────────────────
+
+// tbGroupPoolBackend 构造带组池的 backend 测试件。
+func tbGroupPoolBackend(t *testing.T) *TeamBackend {
+	cfg := models.NewIntelliRouterConfig([]*models.IntelliRouterDeployment{
+		{ModelName: "fast", APIKey: "k", APIBase: "b", Provider: "p", FallbackTag: "fast"},
+		{ModelName: "smart", APIKey: "k", APIBase: "b", Provider: "p", FallbackTag: "smart"},
+	})
+	pool := cfg.ToPoolEntries()
+	alloc, err := models.NewIntelliRouterAllocator(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return NewTeamBackend("t1", "leader", true, nil, nil,
+		WithModelPoolProvider(func() []models.ModelPoolEntry { return pool }),
+		WithModelAllocator(alloc),
+	)
+}
+
+// TestTeamBackend_IsModelGroupPool 单条 "*"+intelli_router 才为真。
+// Python: team.py:449-459 is_model_group_pool
+func TestTeamBackend_IsModelGroupPool(t *testing.T) {
+	tb := tbGroupPoolBackend(t)
+	if !tb.IsModelGroupPool() {
+		t.Fatal("组池应识别")
+	}
+	plain := NewTeamBackend("t1", "leader", true, nil, nil,
+		WithModelPoolProvider(func() []models.ModelPoolEntry {
+			return []models.ModelPoolEntry{*models.NewModelPoolEntry("m", "k", "b", "openai")}
+		}))
+	if plain.IsModelGroupPool() {
+		t.Fatal("普通池不应识别")
+	}
+	if NewTeamBackend("t1", "leader", true, nil, nil).IsModelGroupPool() {
+		t.Fatal("无池不应识别")
+	}
+}
+
+// TestTeamBackend_ModelGroupLabel 委托 models.ModelGroupLabel。
+// Python: team.py:461-465 model_group_label
+func TestTeamBackend_ModelGroupLabel(t *testing.T) {
+	tb := tbGroupPoolBackend(t)
+	if tb.ModelGroupLabel() != models.INTELLI_ROUTER_UNIFIED_MODEL {
+		t.Fatalf("label: %q", tb.ModelGroupLabel())
+	}
+	if NewTeamBackend("t1", "leader", true, nil, nil).ModelGroupLabel() != "" {
+		t.Fatal("无池 label 空串")
+	}
+}
+
+// TestTeamBackend_ListRouteTags 委托 allocator；非组池为空。
+// Python: team.py:469-474 list_route_tags
+func TestTeamBackend_ListRouteTags(t *testing.T) {
+	tb := tbGroupPoolBackend(t)
+	tags := tb.ListRouteTags()
+	if len(tags) != 2 || tags[0] != "fast" || tags[1] != "smart" {
+		t.Fatalf("tags: %v", tags)
+	}
+	if NewTeamBackend("t1", "leader", true, nil, nil).ListRouteTags() != nil {
+		t.Fatal("无池 tags 空")
+	}
+}
