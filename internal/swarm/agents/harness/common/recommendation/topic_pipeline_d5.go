@@ -117,6 +117,18 @@ func PreflightStage(counter *StageTokenCounter, limit ContextLimitInfo,
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// RefreshState 刷新共享自然历史与 Memory（topic_pipeline.py:4569-4575
+// refresh_state）。全局与项目生成器共享一份；无刷新原因时补摘要。
+func (p *TopicPipeline) RefreshState(ctx context.Context, config *ArkBackgroundConfig) string {
+	p.stateRefreshMu.Lock()
+	reason := p.statePipeline.RefreshState(ctx, config)
+	p.stateRefreshMu.Unlock()
+	if reason == "" {
+		p.SummarizeCompletedSessions(config)
+	}
+	return reason
+}
+
 // SummaryStageBudget 摘要批的计数与限额（fail-closed）
 // （topic_pipeline.py:5396-5411 _summary_stage_budget）。
 func SummaryStageBudget(config *ArkBackgroundConfig,
