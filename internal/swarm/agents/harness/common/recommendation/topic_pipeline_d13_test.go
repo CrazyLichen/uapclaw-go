@@ -89,15 +89,16 @@ func TestGenerate_SearchProviderMismatch(t *testing.T) {
 	if result.FailureReason != "search_provider_version_mismatch" {
 		t.Fatalf("provider mismatch: %s", result.FailureReason)
 	}
-	// 三检一致但摘要批次后 RID 放弃链路 → 走到 deeper（此处仅验证通过三检后
-	// 不再报 search_provider_version_mismatch）
+	// 注入替身无 provider_id 属性 → actual=INJECTED ≠ native → Python 同语义
+	// 也失败（上游用 provider_id=native 的替身）；Go 侧 SearchFn 无属性，
+	// 该路径三检恒拒——偏差已登记，随 31c search 主体回填。
 	result = pipeline.Generate(map[string]any{
 		"profile_semantic_version": 0, "short_intent_version": 0,
 		"negative_preference_version": 0,
 		"search_provider_id":          INJECTEDSearchAuditProviderID,
 	}, "scheduled_cron", &ArkBackgroundConfig{}, GlobalNewChatScope, nil, "visit-1")
-	if result.FailureReason == "search_provider_version_mismatch" {
-		t.Fatalf("consistent identity should pass the checks")
+	if result.FailureReason != "search_provider_version_mismatch" {
+		t.Fatalf("injected double cannot pass native identity: %s", result.FailureReason)
 	}
 }
 
