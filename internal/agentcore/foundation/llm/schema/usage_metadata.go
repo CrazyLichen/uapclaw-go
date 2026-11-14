@@ -37,7 +37,8 @@ type UsageMetadata struct {
 	// CacheWriteTokens 缓存写 token 数（nil=未上报）
 	CacheWriteTokens *int `json:"cache_write_tokens,omitempty"`
 	// CacheCreationTokens 缓存创建（写）token 数，独立提取形态（nil=未暴露）
-	CacheCreationTokens *int `json:"cache_creation_tokens,omitempty"`
+	// Python: schema/message.py:38 UsageMetadata.cache_creation_input_tokens
+	CacheCreationTokens *int `json:"cache_creation_input_tokens,omitempty"`
 	// ReasoningTokens 推理/思考 token 数（output_tokens 的子集；nil=未上报）
 	ReasoningTokens *int `json:"reasoning_tokens,omitempty"`
 	// CacheStatus 缓存用量观测状态（"observed"=已观测到缓存用量）

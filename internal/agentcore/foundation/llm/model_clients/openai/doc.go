@@ -20,6 +20,7 @@
 //	├── generation.go        # DashScope 原生多模态三方法（image/speech/video）
 //	├── dashscope_native.go  # DashScope 原生 API 响应类型与调用封装
 //	├── kv_cache.go          # vLLM KV cache 释放（extensions.kv_cache.mode=affinity）
+//	├── openrouter_cache.go  # OpenRouter 显式 prompt 缓存 cache_control 注入（Python :95-285, :436-455, :1087-1161）
 //	├── parse_response.go    # 非流式响应解析
 //	├── parse_stream_chunk.go # 流式块解析
 //	├── transcription.go     # 音频转写（Whisper API）
