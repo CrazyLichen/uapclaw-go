@@ -256,6 +256,13 @@ func (tb *TeamBackend) UpdateModelAllocator(alloc models.ModelAllocator) {
 	tb.modelAllocator = alloc
 }
 
+// UpdateModelPoolProvider 无需重建团队工具地替换活跃池提供者。
+// Python: TeamBackend._model_pool_provider（构造参数，team.py:286；
+// Go 侧补充热替换入口供 configurator 接线）
+func (tb *TeamBackend) UpdateModelPoolProvider(provider func() []models.ModelPoolEntry) {
+	tb.modelPoolProvider = provider
+}
+
 // IsModelGroupPool 池是否为规范模型组池。
 // Python: TeamBackend.is_model_group_pool (team.py:449)
 func (tb *TeamBackend) IsModelGroupPool() bool {
