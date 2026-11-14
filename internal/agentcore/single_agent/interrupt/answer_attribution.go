@@ -375,10 +375,13 @@ func saveAutoConfirm(
 
 // requestIDOf 取中断请求的 interrupt_id。
 func requestIDOf(request saschema.InterruptRequester) string {
-	if ir, ok := request.(*saschema.InterruptRequest); ok && ir != nil {
-		return ir.InterruptID
+	// Python: request.interrupt_id（基类属性，任意子类多态可读）。
+	// Go 经 InterruptRequester.GetInterruptID 接口等价实现；旧式 *InterruptRequest
+	// 断言对 ClientToolRequest 等子类失效（2026-11-14 client tool 恢复链实锤）。
+	if request == nil {
+		return ""
 	}
-	return ""
+	return request.GetInterruptID()
 }
 
 // requestOwnerOf 取中断请求的 interrupt_owner。
@@ -433,6 +436,16 @@ func FindOwnAnswer(
 	if !ok {
 		return nil
 	}
+	callAnswers, ok := raw.(CallAnswers)
+	if !ok {
+		return nil
+	}
+	return callAnswers[toolCallID][owner]
+}
+
+// FindCallAnswer 从归属表原始值中按调用与 owner 查答案。
+// CallAnswers 是本包具名类型，跨包断言同名匿名类型必失败，故经导出函数读取。
+func FindCallAnswer(raw any, toolCallID, owner string) *saschema.InterruptAnswer {
 	callAnswers, ok := raw.(CallAnswers)
 	if !ok {
 		return nil

@@ -115,7 +115,7 @@ func (s *TestNativeInterruptKindsSuite) Test审批时编辑参数即拒绝() {
 		return hp.NewUserInputResponse(req.RequestID, hp.InteractionResponseStatusCompleted,
 			hp.UserInputResponseOptions{Content: "yes"})
 	})
-	result, err := s.turnWith(
+	_, err := s.turnWith(
 		host, allCapabilities(),
 		func(params hconfig.CreateDeepAgentParams) hconfig.CreateDeepAgentParams {
 			params.ToolInstances = []tool.Tool{toolInstance}
@@ -129,7 +129,7 @@ func (s *TestNativeInterruptKindsSuite) Test审批时编辑参数即拒绝() {
 	s.Require().NoError(err)
 
 	s.Equal(int32(0), toolInstance.InvokeCount(), "编辑参数不被支持，调用不得执行")
-	s.Contains(toolResultsJoined(result), "editing arguments is not supported",
+	s.Contains(s.llmToolResultsJoined(), "editing arguments is not supported",
 		"模型应收到拒绝反馈")
 }
 
@@ -194,7 +194,7 @@ func (s *TestNativeInterruptKindsSuite) Test客户端工具经动态工具调用
 		return hp.NewDynamicToolCallResponse(req.RequestID, hp.InteractionResponseStatusCompleted,
 			hp.DynamicToolCallResponseOptions{Result: "Meeting at 3 pm"})
 	})
-	result, err := s.turnWith(
+	_, err := s.turnWith(
 		host, allCapabilities(),
 		func(params hconfig.CreateDeepAgentParams) hconfig.CreateDeepAgentParams {
 			params.ToolInstances = []tool.Tool{clientTool}
@@ -206,7 +206,7 @@ func (s *TestNativeInterruptKindsSuite) Test客户端工具经动态工具调用
 	)
 	s.Require().NoError(err)
 
-	seen := toolResultsSeen(result)
+	seen := s.llmToolResultsSeen()
 	s.Require().Len(seen, 1)
 	s.Equal("call_c", seen[0][0])
 	s.Equal("Meeting at 3 pm", seen[0][1])
@@ -310,7 +310,7 @@ func (s *TestNativeInterruptKindsSuite) Test失败的客户端调用是错误而
 				return hp.NewDynamicToolCallResponse(req.RequestID, tc.status,
 					hp.DynamicToolCallResponseOptions{IsError: tc.isError, ErrorMessage: strPtr("no native tool gateway is available")})
 			})
-			result, err := s.turnWith(
+			_, err := s.turnWith(
 				host, allCapabilities(),
 				func(params hconfig.CreateDeepAgentParams) hconfig.CreateDeepAgentParams {
 					params.ToolInstances = []tool.Tool{clientTool}
@@ -321,7 +321,7 @@ func (s *TestNativeInterruptKindsSuite) Test失败的客户端调用是错误而
 				}),
 			)
 			s.Require().NoError(err)
-			seen := toolResultsSeen(result)
+			seen := s.llmToolResultsSeen()
 			s.Require().Len(seen, 1)
 			s.Equal("no native tool gateway is available", seen[0][1])
 		})

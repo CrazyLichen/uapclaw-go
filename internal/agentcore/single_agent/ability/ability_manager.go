@@ -22,6 +22,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+		interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -691,7 +692,13 @@ func (am *AbilityManager) Execute(
 
 		// 错误兜底：ToolMsg 缺失时用 Python 同款文案补（正常错误路径由
 		// errorToExecuteResult 产出，此处只兜异常构造遗漏的情形）
-		if res.ToolMsg == nil && res.Result != nil {
+		// 中断结果除外：Python final_results.append((ToolInterruptException, None))
+		// ——挂起的调用在模型上下文里没有 tool 消息，结果经中断流程交付
+		// （ability_manager.py:1218-1221）。补一条会把挂起错误污染进上下文。
+		var tieCheck *agentschema.ToolInterruptException
+		_, isInterruptResult := res.Result.(*agentschema.ToolInterruptException)
+		_ = tieCheck
+		if res.ToolMsg == nil && res.Result != nil && !isInterruptResult {
 			if err, ok := res.Result.(error); ok {
 				res.ToolMsg = llmschema.NewToolMessage(toolCallIDOf(toolCall),
 					"Ability execution error: "+err.Error())
@@ -764,7 +771,7 @@ func (am *AbilityManager) runToolCallSafely(
 	// @rail(after=AFTER_TOOL_CALL)：只有 after 钩子会看到结果）。
 	// Python: L1171-1178 answered_client_call → execute_call = _finish_client_tool_call
 	if am.isClientToolCard(toolCall.Name) && am.clientAnswer(cbc, toolCall) != nil {
-		return am.finishClientToolCallRailed(ctx, cbc, toolCall, sess, tag)
+			return am.finishClientToolCallRailed(ctx, cbc, toolCall, sess, tag)
 	}
 	return am.railedExecuteSingleToolCall(ctx, cbc, toolCall, sess, tag)
 }
@@ -1585,11 +1592,9 @@ func (am *AbilityManager) clientAnswer(
 	if !ok {
 		return nil
 	}
-	callAnswers, ok := raw.(map[string]map[string]*agentschema.InterruptAnswer)
-	if !ok {
-		return nil
-	}
-	return callAnswers[toolCall.ID][agentschema.ClientToolInterruptOwner]
+	// 归属表读取走 interrupt 包的导出查找（CallAnswers 是 interrupt 包具名类型，
+	// 跨包断言必须用同名类型；经导出函数避免 ability 直接依赖其类型面）
+	return interruptpkg.FindCallAnswer(raw, toolCall.ID, agentschema.ClientToolInterruptOwner)
 }
 
 // pauseClientToolCall 以 client_tool 中断挂起客户端工具调用，携带最终参数。

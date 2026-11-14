@@ -418,11 +418,9 @@ func issueIDFor(
 	toolCallID string,
 	unanswered map[string]saschema.AnswerOwnerAndID,
 ) {
-	ir, ok := request.(*saschema.InterruptRequest)
-	if !ok || ir == nil {
-		return
-	}
-	saschema.IssueInterruptID(ir, toolCallID, unanswered)
+	// Python: issue_interrupt_id(request, tool_call_id, unanswered) —— 对任意
+	// InterruptRequest 子类就地发号（基类属性多态）。Go 经接口方法等价实现。
+	saschema.IssueInterruptRequesterID(request, toolCallID, unanswered)
 }
 
 // isSubAgentInterrupt 检查结果是否为子 Agent 中断 dict。

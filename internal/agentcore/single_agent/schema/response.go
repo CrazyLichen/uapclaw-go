@@ -37,6 +37,15 @@ type InterruptRequester interface {
 	GetInterruptOwner() string
 	// GetInterruptKind 返回中断类型
 	GetInterruptKind() string
+	// GetInterruptID 返回本次中断的唯一标识（处理器发号后有值）。
+	//
+	// Python 侧 interrupt_id 是基类属性，子类天然继承；Go 的类型断言式读取
+	// （*InterruptRequest）对嵌入基类的子类（ClientToolRequest 等）失效，
+	// 经接口方法表达同一多态语义（2026-11-14 client tool 恢复链实锤）。
+	GetInterruptID() string
+	// SetInterruptID 处理器发号时就地写入（Python: issue_interrupt_id 直接
+	// 属性赋值 request.interrupt_id = ...）。
+	SetInterruptID(id string)
 }
 
 // InterruptRequest 工具中断请求，携带需要用户确认的信息。
@@ -184,6 +193,25 @@ func IssueInterruptID(
 	request.InterruptID = NewInterruptID()
 }
 
+// IssueInterruptRequesterID 对任意 InterruptRequester 实现就地发号。
+// Python: issue_interrupt_id(request, tool_call_id, unanswered)（handler.py）——
+// 任意子类经基类属性多态发号；Go 经接口方法等价实现。
+func IssueInterruptRequesterID(
+	request InterruptRequester,
+	toolCallID string,
+	unanswered map[string]AnswerOwnerAndID,
+) {
+	if request == nil {
+		return
+	}
+	previous, ok := unanswered[toolCallID]
+	if ok && previous.Owner == request.GetInterruptOwner() {
+		request.SetInterruptID(previous.InterruptID)
+		return
+	}
+	request.SetInterruptID(NewInterruptID())
+}
+
 // AnswerOwnerAndID 上一轮未答中断的归属信息。
 // Python: _Unanswered 的 value 形态 Tuple[str, str]（owner, interrupt_id）
 type AnswerOwnerAndID struct {
@@ -219,6 +247,12 @@ func (r *InterruptRequest) SetMetadata(metadata map[string]any) { r.Metadata = m
 
 // GetInterruptOwner 实现 InterruptRequester 接口。
 func (r *InterruptRequest) GetInterruptOwner() string { return r.InterruptOwner }
+
+// GetInterruptID 实现 InterruptRequester 接口。
+func (r *InterruptRequest) GetInterruptID() string { return r.InterruptID }
+
+// SetInterruptID 实现 InterruptRequester 接口（处理器发号用）。
+func (r *InterruptRequest) SetInterruptID(id string) { r.InterruptID = id }
 
 // GetInterruptKind 实现 InterruptRequester 接口。
 // 走 InterruptKindOf 以兼容 kind 只存在 metadata 里的历史数据。
@@ -271,6 +305,21 @@ func (r *ToolCallInterruptRequest) GetInterruptOwner() string {
 }
 
 // GetInterruptKind 实现 InterruptRequester 接口，委托给 Request 字段。
+// GetInterruptID 实现 InterruptRequester 接口，委托内嵌请求。
+func (r *ToolCallInterruptRequest) GetInterruptID() string {
+	if r.Request != nil {
+		return r.Request.GetInterruptID()
+	}
+	return ""
+}
+
+// SetInterruptID 实现 InterruptRequester 接口，委托内嵌请求。
+func (r *ToolCallInterruptRequest) SetInterruptID(id string) {
+	if r.Request != nil {
+		r.Request.SetInterruptID(id)
+	}
+}
+
 func (r *ToolCallInterruptRequest) GetInterruptKind() string {
 	if r.Request != nil {
 		return r.Request.GetInterruptKind()

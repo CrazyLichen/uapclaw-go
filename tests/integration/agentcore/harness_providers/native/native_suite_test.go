@@ -18,7 +18,9 @@ import (
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hp "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	nativeprov "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/native"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -310,6 +312,40 @@ func blockContentText(content hp.JsonValue) string {
 func toolResultsJoined(result hp.TurnResult) string {
 	parts := make([]string, 0)
 	for _, item := range toolResultsSeen(result) {
+		parts = append(parts, item[1])
+	}
+	return strings.Join(parts, "\n")
+}
+
+// llmToolResultsSeen 从 MockLLM 最后一次模型调用历史提取 [(tool_call_id, content)]。
+// Python: fixtures/deep_agent_interrupts.py:155-164 tool_results_seen —— 断言对象是
+// 模型收到的 tool role 消息（rendered 文本），不是协议层的结构化 tool_result 块。
+func (s *NativeHarnessSuite) llmToolResultsSeen() [][2]string {
+	// resume 轮走 _streaming=true → 模型调用进 Stream 记录；最后一轮的 tool
+	// 消息在最后一次调用（Invoke 或 Stream 均可能）里
+	var messages modelclients.MessagesParam
+	if n := s.MockLLM.StreamCallCount(); n > 0 {
+		messages = s.MockLLM.GetStreamCall(n - 1).Messages
+	} else if n := s.MockLLM.InvokeCallCount(); n > 0 {
+		messages = s.MockLLM.GetInvokeCall(n - 1).Messages
+	} else {
+		return nil
+	}
+	seen := [][2]string{}
+	for _, message := range messages.Messages() {
+		toolMsg, ok := message.(*llmschema.ToolMessage)
+		if !ok {
+			continue
+		}
+		seen = append(seen, [2]string{toolMsg.ToolCallID, toolMsg.Content.Text()})
+	}
+	return seen
+}
+
+// llmToolResultsJoined 最后一次模型调用的 tool 消息文本拼接。
+func (s *NativeHarnessSuite) llmToolResultsJoined() string {
+	parts := make([]string, 0)
+	for _, item := range s.llmToolResultsSeen() {
 		parts = append(parts, item[1])
 	}
 	return strings.Join(parts, "\n")

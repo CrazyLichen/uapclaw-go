@@ -455,12 +455,13 @@ func interactionPayload(payload any) (string, any) {
 // interruptIDOf 工具调用中断请求的 interrupt_id（issue 后才有值）。
 // Python: harness.py:734 value.interrupt_id
 func interruptIDOf(tcReq *saschema.ToolCallInterruptRequest) string {
-	switch req := tcReq.Request.(type) {
-	case *saschema.InterruptRequest:
-		return req.InterruptID
-	default:
+	// Python: value.interrupt_id（基类属性，任意子类多态可读）。
+	// Go 经 InterruptRequester.GetInterruptID 接口等价实现；此前的
+	// *InterruptRequest 类型断言对 ClientToolRequest 等子类失效。
+	if tcReq == nil || tcReq.Request == nil {
 		return ""
 	}
+	return tcReq.Request.GetInterruptID()
 }
 
 // interruptIdentity 待决值的 interrupt_id 与 kind；workflow 交互两者为空串。

@@ -10,8 +10,8 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -118,12 +118,15 @@ func TestBaseInterruptRail_BeforeToolCall_中断(t *testing.T) {
 	})
 }
 
-// TestBaseInterruptRail_BeforeToolCall_允许 验证有用户输入时放行
+// TestBaseInterruptRail_BeforeToolCall_允许 验证归属表中有本 owner 的答案时放行
+// （Python: resume 时 _get_user_input 经 find_own_answer 读到答案 → Approve）
 func TestBaseInterruptRail_BeforeToolCall_允许(t *testing.T) {
 	r := NewBaseInterruptRail("ask_user")
 	cbc := newTestCBC(map[string]any{
-		saschema.ResumeUserInputKey: map[string]any{
-			"tc1": "用户回答",
+		saschema.ResumeInterruptAnswersKey: interruptpkg.CallAnswers{
+			"tc1": map[string]*saschema.InterruptAnswer{
+				r.InterruptOwner(): {Owner: r.InterruptOwner(), Value: "用户回答"},
+			},
 		},
 	})
 	cbc.SetInputs(&agentinterfaces.ToolCallInputs{
@@ -170,88 +173,62 @@ func TestBaseInterruptRail_GetCallbacks(t *testing.T) {
 	assert.True(t, hasBeforeToolCall, "应包含 BeforeToolCall 回调")
 }
 
-// ──────────────────────────── getUserInput 用户输入获取 ────────────────────────────
+// ──────────────────────────── GetUserInput 用户输入获取 ────────────────────────────
 
-// TestBaseInterruptRail_getUserInput_InteractiveInput 验证从 InteractiveInput 提取
-func TestBaseInterruptRail_getUserInput_InteractiveInput(t *testing.T) {
+// newCallAnswers 构造恢复答案归属表（owner 路由语义）。
+func newCallAnswers(toolCallID, owner, value string) interruptpkg.CallAnswers {
+	return interruptpkg.CallAnswers{
+		toolCallID: map[string]*saschema.InterruptAnswer{
+			owner: {Owner: owner, Value: value},
+		},
+	}
+}
+
+// TestBaseInterruptRail_GetUserInput_答案归属命中 验证按 owner 路由读取答案值。
+// Python: BaseInterruptRail._get_user_input = find_own_answer(ctx.extra, tool_call_id).value
+func TestBaseInterruptRail_GetUserInput_答案归属命中(t *testing.T) {
 	r := NewBaseInterruptRail("ask_user")
 
-	interactive, err := sessioninteraction.NewInteractiveInput()
-	require.NoError(t, err)
-	interactive.UserInputs["tc1"] = "用户回答"
-
 	cbc := newTestCBC(map[string]any{
-		saschema.ResumeUserInputKey: interactive,
+		saschema.ResumeInterruptAnswersKey: newCallAnswers("tc1", r.InterruptOwner(), "用户回答"),
 	})
 
-	userInput := r.getUserInput(cbc, "tc1")
+	userInput := r.GetUserInput(cbc, "tc1")
 	assert.Equal(t, "用户回答", userInput)
 }
 
-// TestBaseInterruptRail_getUserInput_InteractiveInput_未匹配 验证 InteractiveInput 中无匹配
-func TestBaseInterruptRail_getUserInput_InteractiveInput_未匹配(t *testing.T) {
+// TestBaseInterruptRail_GetUserInput_未命中 验证归属表无该调用时返回 nil
+func TestBaseInterruptRail_GetUserInput_未命中(t *testing.T) {
 	r := NewBaseInterruptRail("ask_user")
 
-	interactive, err := sessioninteraction.NewInteractiveInput()
-	require.NoError(t, err)
-	interactive.UserInputs["other_id"] = "其他回答"
-
 	cbc := newTestCBC(map[string]any{
-		saschema.ResumeUserInputKey: interactive,
+		saschema.ResumeInterruptAnswersKey: newCallAnswers("other_id", r.InterruptOwner(), "其他回答"),
 	})
 
-	userInput := r.getUserInput(cbc, "tc1")
+	userInput := r.GetUserInput(cbc, "tc1")
 	assert.Nil(t, userInput)
 }
 
-// TestBaseInterruptRail_getUserInput_Dict 验证从 map 提取
-func TestBaseInterruptRail_getUserInput_Dict(t *testing.T) {
+// TestBaseInterruptRail_GetUserInput_owner隔离 验证只读本 owner 那份答案
+func TestBaseInterruptRail_GetUserInput_owner隔离(t *testing.T) {
 	r := NewBaseInterruptRail("ask_user")
 
 	cbc := newTestCBC(map[string]any{
-		saschema.ResumeUserInputKey: map[string]any{
-			"tc1": "dict回答",
-		},
+		saschema.ResumeInterruptAnswersKey: newCallAnswers("tc1", "other.rail", "别人的答案"),
 	})
 
-	userInput := r.getUserInput(cbc, "tc1")
-	assert.Equal(t, "dict回答", userInput)
-}
-
-// TestBaseInterruptRail_getUserInput_Dict_未匹配 验证 map 中无匹配时返回整个 map
-func TestBaseInterruptRail_getUserInput_Dict_未匹配(t *testing.T) {
-	r := NewBaseInterruptRail("ask_user")
-
-	rawMap := map[string]any{"other_key": "其他值"}
-	cbc := newTestCBC(map[string]any{
-		saschema.ResumeUserInputKey: rawMap,
-	})
-
-	userInput := r.getUserInput(cbc, "tc1")
-	result, ok := userInput.(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "其他值", result["other_key"])
-}
-
-// TestBaseInterruptRail_getUserInput_无输入 验证 extra 中无用户输入
-func TestBaseInterruptRail_getUserInput_无输入(t *testing.T) {
-	r := NewBaseInterruptRail("ask_user")
-	cbc := newTestCBC(nil)
-
-	userInput := r.getUserInput(cbc, "tc1")
+	userInput := r.GetUserInput(cbc, "tc1")
 	assert.Nil(t, userInput)
 }
 
-// TestBaseInterruptRail_getUserInput_其他类型 验证其他类型直接返回
-func TestBaseInterruptRail_getUserInput_其他类型(t *testing.T) {
+// TestBaseInterruptRail_GetUserInput_无归属表 验证无恢复答案时返回 nil
+func TestBaseInterruptRail_GetUserInput_无归属表(t *testing.T) {
 	r := NewBaseInterruptRail("ask_user")
 
-	cbc := newTestCBC(map[string]any{
-		saschema.ResumeUserInputKey: "直接字符串",
-	})
+	cbc := newTestCBC(map[string]any{})
 
-	userInput := r.getUserInput(cbc, "tc1")
-	assert.Equal(t, "直接字符串", userInput)
+	userInput := r.GetUserInput(cbc, "tc1")
+	assert.Nil(t, userInput)
 }
 
 // ──────────────────────────── applyDecision 决策应用 ────────────────────────────

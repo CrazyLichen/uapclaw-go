@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"os"
 	"context"
 	"fmt"
 	"strings"
@@ -1226,6 +1227,15 @@ func (a *ReActAgent) executeToolCalls(
 	am := a.getAbilityManager()
 	if am == nil {
 		return nil, fmt.Errorf("AbilityManager 未初始化")
+	}
+	if raw, ok := cbc.GetExtra(agentschema.ResumeInterruptAnswersKey); ok {
+		if ca, cok := raw.(interrupt.CallAnswers); cok {
+			fmt.Fprintf(os.Stderr, "[dbg-exec] extras callAnswers len=%d\n", len(ca))
+		} else {
+			fmt.Fprintf(os.Stderr, "[dbg-exec] extras rawType=%T\n", raw)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[dbg-exec] extras MISSING\n")
 	}
 
 	results := am.Execute(ctx, cbc, toolCalls, sess, "", a.parallelToolCalls())
