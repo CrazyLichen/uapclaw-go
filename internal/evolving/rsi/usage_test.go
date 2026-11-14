@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -433,4 +434,36 @@ func invokeResultWithUsage() *llmschema.AssistantMessage {
 // usageMetadataOf 构造指定计数的用量元数据。
 func usageMetadataOf(input, output int) *llmschema.UsageMetadata {
 	return &llmschema.UsageMetadata{InputTokens: input, OutputTokens: output}
+}
+
+// TestObserverTotals_并发读无竞争 D7：记录方单写、控制器并发只读 Totals（-race 固化）
+func TestObserverTotals_并发读无竞争(t *testing.T) {
+	o := NewModelUsageObserver(nil)
+	if err := o.Bind(map[string]any{"task_id": "t1"}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	for i := 0; i < 4; i++ {
+		go func() {
+			for j := 0; j < 50; j++ {
+				snap := o.Totals() // atomic 读，与写入并发
+				if snap == nil {
+					t.Error("快照不得为 nil")
+					return
+				}
+			}
+			done <- struct{}{}
+		}()
+	}
+	for j := 0; j < 20; j++ {
+		if err := o.Record(context.Background(), "m", "c"+strconv.Itoa(j), map[string]any{"input_tokens": 1}, "succeeded", nil, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 4; i++ {
+		<-done
+	}
+	if o.Totals().CallCount() != 20 {
+		t.Fatalf("并发读下记账数应完整: %d", o.Totals().CallCount())
+	}
 }

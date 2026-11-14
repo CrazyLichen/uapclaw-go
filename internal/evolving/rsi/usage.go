@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -160,25 +161,36 @@ type pendingCall struct {
 type ModelUsageObserver struct {
 	onEvent       OnEvent
 	state         map[string]any
-	path          string
 	seen          map[string]bool
 	pending       map[string]*pendingCall
-	lock          sync.Mutex // Python asyncio.Lock 等价（记账路径内串行，顺序与单协程一致）
+	lock          sync.Mutex // Python asyncio.Lock 等价：仅护去重/账本写入/累计（记账路径内串行，顺序与单协程一致）
 	deliveryError error
 	sequence      int
-	totals        *RsiUsage
-	// D7：控制器侧只读快照（atomic），写入方仍为观察者单点
-	usageSnap *RsiUsage // 仅在 lock 内读写，外部经 Totals() 取快照
+	// D7：控制器侧只读快照走 atomic，写入方为观察者单点（锁内写、读侧零锁）
+	totals    atomic.Pointer[RsiUsage]
+	usagePath atomic.Pointer[string]
 }
+
+// path 返回账本路径（atomic 读）。
+func (o *ModelUsageObserver) path() string {
+	if p := o.usagePath.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+// setPath 设置账本路径（atomic 写）。
+func (o *ModelUsageObserver) setPath(p string) { o.usagePath.Store(&p) }
 
 // NewModelUsageObserver 创建观察者；totals 初始为 RsiUsage(RsiUsageTokens(0,0,0), None, 0)。
 func NewModelUsageObserver(onEvent OnEvent) *ModelUsageObserver {
-	return &ModelUsageObserver{
+	o := &ModelUsageObserver{
 		onEvent: onEvent,
 		seen:    map[string]bool{},
 		pending: map[string]*pendingCall{},
-		totals:  NewRsiUsage(NewRsiUsageTokens(nil, nil, nil), nil, 0),
 	}
+	o.totals.Store(NewRsiUsage(NewRsiUsageTokens(nil, nil, nil), nil, 0))
+	return o
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -187,9 +199,9 @@ func NewModelUsageObserver(onEvent OnEvent) *ModelUsageObserver {
 // Python: bind()——账本文件存在时逐行重放：task_id 不匹配即报错、
 // sequence 取历史最大 event_id、按 call_id 去重累计。
 func (o *ModelUsageObserver) Bind(state map[string]any, outputDir string) error {
-	o.path = filepath.Join(outputDir, "model_calls.jsonl")
-	if info, err := os.Stat(o.path); err == nil && !info.IsDir() {
-		stream, err := os.Open(o.path)
+	o.setPath(filepath.Join(outputDir, "model_calls.jsonl"))
+	if info, err := os.Stat(o.path()); err == nil && !info.IsDir() {
+		stream, err := os.Open(o.path())
 		if err != nil {
 			return err
 		}
@@ -221,7 +233,7 @@ func (o *ModelUsageObserver) Bind(state map[string]any, outputDir string) error 
 				if modelCall != nil {
 					tokens = modelCall["tokens"]
 				}
-				o.accumulate(UsageTokens(tokens))
+				o.accumulateLocked(UsageTokens(tokens))
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -229,7 +241,7 @@ func (o *ModelUsageObserver) Bind(state map[string]any, outputDir string) error 
 		}
 	}
 	o.state = state
-	o.updateState()
+	o.updateStateLocked()
 	return nil
 }
 
@@ -240,7 +252,7 @@ func (o *ModelUsageObserver) Bind(state map[string]any, outputDir string) error 
 // emit 失败存 deliveryError（不经返回值抛出）。
 func (o *ModelUsageObserver) Record(ctx context.Context, model, callID string, usage any, status string, durationMs *int, nodeRef, stageRef *string) error {
 	// Python: if self.state is None or self.path is None: return（无活动 run 为 no-op）
-	if o.state == nil || o.path == "" {
+	if o.state == nil || o.path() == "" {
 		return nil
 	}
 	// Python: 校验 model/call_id 非空且 status 合法
@@ -269,7 +281,7 @@ func (o *ModelUsageObserver) Record(ctx context.Context, model, callID string, u
 		o.lock.Unlock()
 		return err
 	}
-	stream, err := os.OpenFile(o.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	stream, err := os.OpenFile(o.path(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		o.lock.Unlock()
 		return err
@@ -286,8 +298,8 @@ func (o *ModelUsageObserver) Record(ctx context.Context, model, callID string, u
 	}
 	o.sequence = event.EventID()
 	o.seen[callID] = true
-	o.accumulate(event.ModelCall().Tokens())
-	o.updateState()
+	o.accumulateLocked(event.ModelCall().Tokens())
+	o.updateStateLocked()
 	o.lock.Unlock()
 	// Python: token = _observer.set(None) → emit → finally reset：
 	// 服务侧 sink 工作不是引擎模型调用，不得在持锁期间递归进入本观察者。
@@ -297,11 +309,9 @@ func (o *ModelUsageObserver) Record(ctx context.Context, model, callID string, u
 	return nil
 }
 
-// Totals 当前累计快照（D7：控制器只读；写入方为观察者单点）。
+// Totals 当前累计快照（D7：atomic 读，零锁；写入方为观察者单点）。
 func (o *ModelUsageObserver) Totals() *RsiUsage {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-	return o.totals
+	return o.totals.Load()
 }
 
 // CheckDelivery 在观察周期外暴露投递失败。
@@ -318,14 +328,14 @@ func (o *ModelUsageObserver) CheckDelivery() error {
 // accumulate 累计一笔 token 计数：未上报的计数器不贡献也不清零既有累计
 // （Python: _accumulate——summed 逐键 previous+value if value is not None）。
 // call_count 恒 +1（无论计数器是否上报）。
-func (o *ModelUsageObserver) accumulate(tokens *RsiUsageTokens) {
-	prev := o.totals.Tokens()
+func (o *ModelUsageObserver) accumulateLocked(tokens *RsiUsageTokens) {
+	prev := o.totals.Load().Tokens()
 	summed := NewRsiUsageTokens(
 		addCounter(prev.Input(), tokens.Input()),
 		addCounter(prev.Output(), tokens.Output()),
 		addCounter(prev.CacheHit(), tokens.CacheHit()),
 	)
-	o.totals = NewRsiUsage(summed, nil, o.totals.CallCount()+1)
+	o.totals.Store(NewRsiUsage(summed, nil, o.totals.Load().CallCount()+1))
 }
 
 // addCounter 单键累计：value 为 nil 时保留 previous（不清零）。
@@ -342,16 +352,16 @@ func addCounter(previous, value *int) *int {
 
 // updateState 原地更新共享 state：usage（call_count 为 0 时置 nil）与账本路径。
 // Python: _update_state()——state["usage"] = asdict(self.totals) if call_count else None。
-func (o *ModelUsageObserver) updateState() {
+func (o *ModelUsageObserver) updateStateLocked() {
 	if o.state == nil {
 		return
 	}
-	if o.totals.CallCount() > 0 {
-		o.state["usage"] = o.totals
+	if o.totals.Load().CallCount() > 0 {
+		o.state["usage"] = o.totals.Load()
 	} else {
 		o.state["usage"] = nil
 	}
-	o.state["model_calls_path"] = o.path
+	o.state["model_calls_path"] = o.path()
 }
 
 // toString 把任意值转字符串（state/账本字段读取）。
