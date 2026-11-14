@@ -230,12 +230,12 @@ func RidDecisionContext(snapshot *V6ContextSnapshot, summaries []*SessionSummary
 			content = ""
 		}
 		recentNaturalFeedback = append(recentNaturalFeedback, map[string]any{
-			"event_id":     item.EventID,
-			"observed_at":  item.ObservedAt,
-			"age_seconds":  age,
+			"event_id":       item.EventID,
+			"observed_at":    item.ObservedAt,
+			"age_seconds":    age,
 			"intent_cluster": item.IntentCluster,
-			"action_type":  item.ActionType,
-			"content":      content,
+			"action_type":    item.ActionType,
+			"content":        content,
 		})
 	}
 
@@ -245,13 +245,13 @@ func RidDecisionContext(snapshot *V6ContextSnapshot, summaries []*SessionSummary
 		"activity_group_method": "natural_events_last_30_days_ge_10_v1",
 		// RID 未读的会话里问出的最新问题让它无从纳入；触发随后等待一个
 		// 能回答它的池（spec D7 rev 25）。
-		"short_delta_lineage_required":            len(requiredShortDeltaInterestSummaryIDs) > 0,
+		"short_delta_lineage_required":              len(requiredShortDeltaInterestSummaryIDs) > 0,
 		"required_short_delta_interest_summary_ids": requiredShortDeltaInterestSummaryIDs,
-		"natural_event_count":                     len(naturalMessages),
-		"natural_event_count_last_30_days":        recent30DayCount,
-		"session_summary_ages":                    summaryAges,
-		"profile_interest_ages":                   profileInterestAges,
-		"recent_natural_feedback":                 recentNaturalFeedback,
+		"natural_event_count":                       len(naturalMessages),
+		"natural_event_count_last_30_days":          recent30DayCount,
+		"session_summary_ages":                      summaryAges,
+		"profile_interest_ages":                     profileInterestAges,
+		"recent_natural_feedback":                   recentNaturalFeedback,
 	}
 }
 
@@ -383,9 +383,9 @@ func FlattenEvidence(bundle *EvidenceBundle) map[string]any {
 		"document_revision_id": primary.DocumentRevisionID,
 		"retrieved_at": time.Unix(int64(primary.RetrievedAt), 0).UTC().
 			Format("2006-01-02T15:04:05Z07:00"),
-		"snapshot_date":     bundle.SnapshotDate,
-		"snapshot_version":  bundle.SnapshotVersion,
-		"source_gate_mode":  bundle.SourceGateMode,
+		"snapshot_date":    bundle.SnapshotDate,
+		"snapshot_version": bundle.SnapshotVersion,
+		"source_gate_mode": bundle.SourceGateMode,
 		"content_boundary": map[string]any{
 			"start": primary.Start,
 			"end":   primary.End,

@@ -16,8 +16,8 @@ func feedbackFixture() map[string]any {
 			"units": []any{
 				map[string]any{
 					"companion": map[string]any{
-						"unit_id":                  "unit-1",
-						"evidence_ids":             []any{"s1:e1", "s1:e2"},
+						"unit_id":                   "unit-1",
+						"evidence_ids":              []any{"s1:e1", "s1:e2"},
 						"canonical_source_locators": []any{[]any{"s1", 0}},
 					},
 				},
@@ -193,8 +193,8 @@ func TestInterestFeedbackPauseResume(t *testing.T) {
 			"units": []any{
 				map[string]any{
 					"companion": map[string]any{
-						"unit_id":      "unit-1",
-						"evidence_ids": []any{"s1:e1"},
+						"unit_id":                   "unit-1",
+						"evidence_ids":              []any{"s1:e1"},
 						"canonical_source_locators": []any{[]any{"s1", 0}},
 					},
 				},
@@ -333,12 +333,12 @@ func TestInterestFeedbackLoad_RowsSince(t *testing.T) {
 		"session_id": "s1", "slate_id": "s1", "event_type": "session_summary",
 		"topic_id": "topic:1", "policy_id": POLICY_ID,
 		"payload": map[string]any{
-			"context_scope":           "global_new_chat",
+			"context_scope":            "global_new_chat",
 			"natural_revisit_eligible": true,
-			"completed_at":            300.0,
-			"session_id":              "s1",
-			"source_event_ids":        []any{"e1"},
-			"source_locators":         []any{},
+			"completed_at":             300.0,
+			"session_id":               "s1",
+			"source_event_ids":         []any{"e1"},
+			"source_locators":          []any{},
 		},
 		"created_at": 300.0,
 	})

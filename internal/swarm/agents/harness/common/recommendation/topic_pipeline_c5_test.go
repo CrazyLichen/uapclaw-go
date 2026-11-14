@@ -276,7 +276,7 @@ func (f *fakeStageCounter) EstimateStageTokens(systemPrompt, userPayload string,
 func TestFitSummarySession(t *testing.T) {
 	snapshot := snapshotForC3Tests()
 	payload := map[string]any{
-		"session_id": "s1",
+		"session_id":          "s1",
 		"interaction_pattern": []any{"natural_question", "correction"},
 		"messages": []map[string]any{
 			{"event_id": "e1", "content": "第一问", "assistant_answer": "第一答"},

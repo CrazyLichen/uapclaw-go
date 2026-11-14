@@ -298,11 +298,11 @@ func (f *InterestFeedback) StillWanted(card map[string]any) bool {
 		}
 	}
 	candidate := map[string]any{
-		"intent":                  card["intent"],
-		"persona":                 card["title"],
-		"primary_query":           card["prompt"],
-		"fallback_query":          card["title"],
-		"source_memory_unit_ids":  anySliceToStrings(card["source_memory_unit_ids"]),
+		"intent":                 card["intent"],
+		"persona":                card["title"],
+		"primary_query":          card["prompt"],
+		"fallback_query":         card["title"],
+		"source_memory_unit_ids": anySliceToStrings(card["source_memory_unit_ids"]),
 	}
 	var legacy []map[string]any
 	for _, record := range append(append([]map[string]any(nil), standing.inForce...), standing.dismissedCards...) {
@@ -582,10 +582,10 @@ func (f *InterestFeedback) computeStanding() *interestStanding {
 		record := item.record
 		if !isDismissal(record) {
 			key := f.directionKey(record)
-		if key != "" && pyStr(record["reason"]) == "restored" {
-			appendTimeline(timeline, &timelineOrder, key, timelineEntry{
-				at: toFloatOr(record["restored_at"], 0), kind: "reset", record: nil})
-		}
+			if key != "" && pyStr(record["reason"]) == "restored" {
+				appendTimeline(timeline, &timelineOrder, key, timelineEntry{
+					at: toFloatOr(record["restored_at"], 0), kind: "reset", record: nil})
+			}
 			continue
 		}
 		if pyStr(record["dismissal_kind"]) == "card" {

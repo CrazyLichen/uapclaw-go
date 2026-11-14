@@ -18,11 +18,11 @@ func recordSummaryEvent(t *testing.T, store *TopicStarterStore, scope, sessionID
 		payload = append(payload, eventID)
 	}
 	ok, err := store.RecordEvent(map[string]any{
-		"session_id":     sessionID,
-		"slate_id":       scope,
-		"event_type":     "session_summary",
-		"topic_id":       fmt.Sprintf("topic:%s:%v:%s:%d", sessionID, completedAt, configVersion, len(sourceEventIDs)),
-		"policy_id":      POLICY_ID,
+		"session_id": sessionID,
+		"slate_id":   scope,
+		"event_type": "session_summary",
+		"topic_id":   fmt.Sprintf("topic:%s:%v:%s:%d", sessionID, completedAt, configVersion, len(sourceEventIDs)),
+		"policy_id":  POLICY_ID,
 		"payload": map[string]any{
 			"session_id":             sessionID,
 			"completed_at":           completedAt,
@@ -91,7 +91,7 @@ func TestProfileProjectDiscussion(t *testing.T) {
 			"units": []any{
 				map[string]any{
 					"companion": map[string]any{
-						"unit_id":                  "unit-1",
+						"unit_id":                   "unit-1",
 						"canonical_source_locators": []any{[]any{"p1", 0}},
 					},
 				},
@@ -130,7 +130,7 @@ func TestProjectUnitGlobalDiscussion(t *testing.T) {
 			"units": []any{
 				map[string]any{
 					"companion": map[string]any{
-						"unit_id":                  "unit-1",
+						"unit_id":                   "unit-1",
 						"canonical_source_locators": []any{[]any{"p1", 0}},
 					},
 				},
@@ -207,25 +207,25 @@ func TestDeprojectedLongProfile(t *testing.T) {
 				// 命中 taxonomy 的单元，源会话来自项目 → 剔除项目标识
 				map[string]any{
 					"core": map[string]any{
-						"behavior_pattern":    "tech-ai-ml",
-						"preference_summary":  "用户想深入 proj-a 的大模型评测",
-						"preferred_entities":  []any{"proj-a", "评测基准"},
-						"temporal_activity":   "工作日上午活跃",
+						"behavior_pattern":   "tech-ai-ml",
+						"preference_summary": "用户想深入 proj-a 的大模型评测",
+						"preferred_entities": []any{"proj-a", "评测基准"},
+						"temporal_activity":  "工作日上午活跃",
 					},
 					"companion": map[string]any{
-						"unit_id":                  "unit-1",
-						"evidence_ids":             []any{"unit-1:evt1", "  "},
+						"unit_id":                   "unit-1",
+						"evidence_ids":              []any{"unit-1:evt1", "  "},
 						"canonical_source_locators": []any{[]any{"p1", 0}},
 					},
 				},
 				// provisional 前缀
 				map[string]any{
-					"core":     map[string]any{"behavior_pattern": "provisional:tea-brewing"},
+					"core":      map[string]any{"behavior_pattern": "provisional:tea-brewing"},
 					"companion": map[string]any{"unit_id": "unit-2"},
 				},
 				// 未映射 → general-interest，无源会话 → 摘要取 taxonomy 文案
 				map[string]any{
-					"core":     map[string]any{"behavior_pattern": "unknown-pattern"},
+					"core":      map[string]any{"behavior_pattern": "unknown-pattern"},
 					"companion": map[string]any{"unit_id": "unit-3"},
 				},
 				// 缺 unit_id → 跳过

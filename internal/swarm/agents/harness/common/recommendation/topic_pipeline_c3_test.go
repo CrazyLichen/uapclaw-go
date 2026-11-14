@@ -165,8 +165,8 @@ func lineageFixture(eventIDs, current, reference []string) map[string]any {
 		return out
 	}
 	return map[string]any{
-		"event_ids":          toAny(eventIDs),
-		"current_event_ids":  toAny(current),
+		"event_ids":           toAny(eventIDs),
+		"current_event_ids":   toAny(current),
 		"reference_event_ids": toAny(reference),
 	}
 }

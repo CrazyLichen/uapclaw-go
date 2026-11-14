@@ -90,7 +90,7 @@ func TestRidDecisionContext(t *testing.T) {
 	for index := 0; index < 12; index++ {
 		snapshot.Messages = append(snapshot.Messages, &V6SourceMessage{
 			EventID: fmt.Sprintf("e%d", index), SessionID: "s1", Ordinal: index,
-			ObservedAt: 1000.0 + float64(index),
+			ObservedAt:  1000.0 + float64(index),
 			InputOrigin: "manual_free_text", AssistanceOrigin: "none",
 			IntentCluster: "tech-ai-ml", ActionType: "natural_question",
 			Content: "问题内容",

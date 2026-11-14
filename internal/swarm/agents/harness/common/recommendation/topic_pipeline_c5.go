@@ -306,12 +306,12 @@ func SessionIdentityPayload(sessionID string, messages []*V6SourceMessage) map[s
 		turnPayloads = append(turnPayloads, turnPayload(turn))
 	}
 	return map[string]any{
-		"session_id":        sessionID,
-		"abstract_context":  abstractContext,
+		"session_id":          sessionID,
+		"abstract_context":    abstractContext,
 		"interaction_pattern": interactionPattern,
-		"input_origin":      inputOrigin,
-		"assistance_origin": assistanceOrigin,
-		"messages":          turnPayloads,
+		"input_origin":        inputOrigin,
+		"assistance_origin":   assistanceOrigin,
+		"messages":            turnPayloads,
 	}
 }
 
@@ -515,8 +515,8 @@ func RecentSummarySessions(grouped map[string][]*V6SourceMessage,
 	}
 	cutoff := now - SummarySessionWindowSeconds
 	type recentEntry struct {
-		sessionID  string
-		completed  float64
+		sessionID string
+		completed float64
 	}
 	var recent []recentEntry
 	for sessionID := range grouped {
@@ -608,18 +608,18 @@ func RIDRequestEstimatePayload(ridInputs map[string]any) string {
 		summaryPayloads = append(summaryPayloads, summary.AsPayload())
 	}
 	payload := map[string]any{
-		"binding":                    bindingProvenance,
-		"input_snapshot_id":          ridInputs["input_snapshot_id"],
-		"user_profile":               ridInputs["user_profile"],
+		"binding":                     bindingProvenance,
+		"input_snapshot_id":           ridInputs["input_snapshot_id"],
+		"user_profile":                ridInputs["user_profile"],
 		"long_term_profile_interests": interestPayloads,
-		"session_summaries":          summaryPayloads,
-		"activity_group":             ridInputs["activity_group"],
-		"threshold_version":          ridInputs["threshold_version"],
-		"feedback_context":           ridInputs["feedback_context"],
-		"prompt_version":             RID_API_PROMPT_VERSION,
-		"delta":                      ridInputs["delta"],
-		"decision_context":           ridInputs["decision_context"],
-		"request_id":                 "v6-rid-" + strings.Repeat("0", 32),
+		"session_summaries":           summaryPayloads,
+		"activity_group":              ridInputs["activity_group"],
+		"threshold_version":           ridInputs["threshold_version"],
+		"feedback_context":            ridInputs["feedback_context"],
+		"prompt_version":              RID_API_PROMPT_VERSION,
+		"delta":                       ridInputs["delta"],
+		"decision_context":            ridInputs["decision_context"],
+		"request_id":                  "v6-rid-" + strings.Repeat("0", 32),
 	}
 	encoded, err := utils.MarshalNoEscape(payload)
 	if err != nil {
