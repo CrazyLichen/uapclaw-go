@@ -226,13 +226,14 @@ func (r *BaseInterruptRail) SetInterruptOwner(owner string) error {
 // 中断 ID 由中断处理器在收集暂停调用时填入，此处不设置。
 // Python: InterruptOwnerMixin.stamp_interrupt(request)
 func (r *BaseInterruptRail) StampInterrupt(request saschema.InterruptRequester) {
-	ir, ok := request.(*saschema.InterruptRequest)
-	if !ok || ir == nil {
+	if request == nil {
 		return
 	}
-	ir.InterruptOwner = r.InterruptOwner()
-	if ir.InterruptKind == "" {
-		ir.InterruptKind = r.InterruptKind()
+	// 接口多态写入（Python: request.interrupt_owner/kind = ... 属性赋值）；
+	// 旧式 *InterruptRequest 断言对嵌入基类的子类（AskUserRequest 等）失效。
+	request.SetInterruptOwner(r.InterruptOwner())
+	if request.GetInterruptKind() == "" {
+		request.SetInterruptKind(r.InterruptKind())
 	}
 }
 

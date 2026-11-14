@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"github.com/google/uuid"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -39,6 +40,11 @@ func NewTeamModelConfig() TeamModelConfig {
 // 模型构造失败不中断装配，agent 以无模型继续——与 Python「构造期不抛、
 // 调用期才失败」的可观测行为等价）。
 func (c TeamModelConfig) Build() *llm.Model {
+	// client_id 缺省自动生成（Python: config.py:136 client_id
+	// default_factory=uuid4；缺失会让 CreateModelClient 校验失败）。
+	if c.ModelClientConfig.ClientID == "" {
+		c.ModelClientConfig.ClientID = uuid.NewString()
+	}
 	m, err := llm.NewModel(&c.ModelClientConfig, c.ModelRequestConfig)
 	if err != nil {
 		logger.Warn(logger.ComponentAgentCore).Err(err).

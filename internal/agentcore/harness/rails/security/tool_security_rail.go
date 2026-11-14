@@ -328,8 +328,31 @@ func buildShellAutoConfirmKey(toolName string, command string) string {
 // shouldStoreAutoConfirm 判断是否应存储 auto-confirm key 到 session。
 //
 // Python: PermissionInterruptRail._should_store_auto_confirm(...) (tool_security_rail.py L149-157)
-func shouldStoreAutoConfirm(autoConfirm bool, session sessioninterfaces.SessionFacade, autoConfirmKey string, persisted bool) bool {
-	return autoConfirm && session != nil && autoConfirmKey != "" && !persisted
+// shouldStoreAutoConfirm 判定是否把 auto_confirm 写回会话状态。
+//
+// Python: PermissionInterruptRail._should_store_auto_confirm (tool_security_rail.py L161-187)：
+// 用户想记住（approved + auto_confirm）且会话与键有效即存；仅当**永久（盘）规则
+// 真正落盘**时跳过——那些规则下轮检查会从 host 快照重载；会话级持久化即使
+// persisted=true 也必须存（first_check 重载盘快照会丢内存会话规则）。
+func shouldStoreAutoConfirm(approved, autoConfirm, permanent bool,
+	session sessioninterfaces.SessionFacade, autoConfirmKey string, persisted bool) bool {
+	if !(approved && autoConfirm) || session == nil || autoConfirmKey == "" {
+		return false
+	}
+	if permanent && persisted {
+		return false
+	}
+	return true
+}
+
+// sessionIDOf 取会话 id；无会话时返回空串。
+// Python: PermissionInterruptRail._resolve_session_id 的 get_session_id 分支
+// (tool_security_rail.py L809-818)。
+func sessionIDOf(session sessioninterfaces.SessionFacade) string {
+	if session == nil {
+		return ""
+	}
+	return session.GetSessionID()
 }
 
 // resolvePermissionInterrupt 权限中断解析核心逻辑。
@@ -469,9 +492,13 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				// 跳过 hosted 处理，走下面的标准 interrupt 流程
 			} else {
 				// ConfirmActionConfirm（默认）→ 处理确认结果
+				// Python: tool_security_rail.py:512-520 永久/会话两分支。
 				persisted := false
-				if extOut.Approved && extOut.AutoConfirm {
+				if extOut.WantsPermanentPersist() {
 					persisted = r.persistAllowAlways(ctx, normalizedName, toolArgs)
+				} else if extOut.WantsSessionPersist() {
+					persisted = r.persistSessionAllow(ctx, normalizedName, toolArgs,
+						sessionIDOf(resolveSession(cbc)))
 				}
 				logger.Info(logComponent).
 					Str("tool", toolName).
@@ -480,14 +507,18 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 					Msg("permission.persist.result")
 
 				session := resolveSession(cbc)
-				if shouldStoreAutoConfirm(extOut.AutoConfirm, session, autoConfirmKey, persisted) {
+				if shouldStoreAutoConfirm(extOut.Approved, extOut.AutoConfirm,
+					extOut.WantsPermanentPersist(), session, autoConfirmKey, persisted) {
 					r.storeAutoConfirm(cbc, autoConfirmKey)
 				}
 
 				if extOut.Approved {
+					// Python: tool_security_rail.py:537-542 三档 decision 标签。
 					decision := "allow_once"
-					if extOut.AutoConfirm {
-						decision = "allow_always"
+					if extOut.WantsPermanentPersist() {
+						decision = "allow_always_persist"
+					} else if extOut.AutoConfirm {
+						decision = "allow_always_session"
 					}
 					logger.Info(logComponent).
 						Str("tool", toolName).
@@ -542,25 +573,39 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		})
 	}
 
+	// Python: tool_security_rail.py:607-627 永久/会话两分支持久化，
+	// 会话持久化必须带 session_id（host.persist_session_allow_rule 钩子用）。
 	persisted := false
-	if payload.Approved && payload.AutoConfirm {
+	if payload.WantsPermanentPersist() {
 		persisted = r.persistAllowAlways(ctx, normalizedName, toolArgs)
 		logger.Info(logComponent).
 			Str("tool", toolName).
 			Str("confirm_path", r.confirmPathLabel()).
 			Bool("persisted", persisted).
 			Msg("permission.persist.result")
+	} else if payload.WantsSessionPersist() {
+		persisted = r.persistSessionAllow(ctx, normalizedName, toolArgs,
+			sessionIDOf(resolveSession(cbc)))
+		logger.Info(logComponent).
+			Str("tool", toolName).
+			Str("confirm_path", r.confirmPathLabel()).
+			Bool("persisted", persisted).
+			Msg("permission.session_persist.result")
 	}
 
 	session := resolveSession(cbc)
-	if shouldStoreAutoConfirm(payload.AutoConfirm, session, autoConfirmKey, persisted) {
+	if shouldStoreAutoConfirm(payload.Approved, payload.AutoConfirm,
+		payload.WantsPermanentPersist(), session, autoConfirmKey, persisted) {
 		r.storeAutoConfirm(cbc, autoConfirmKey)
 	}
 
 	if payload.Approved {
+		// Python: tool_security_rail.py:641-646 三档 decision 标签。
 		decision := "allow_once"
-		if payload.AutoConfirm {
-			decision = "allow_always"
+		if payload.WantsPermanentPersist() {
+			decision = "allow_always_persist"
+		} else if payload.AutoConfirm {
+			decision = "allow_always_session"
 		}
 		logger.Info(logComponent).
 			Str("tool", toolName).
@@ -627,6 +672,20 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 		feedback, _ := input["feedback"].(string)
 		autoConfirm, _ := input["auto_confirm"].(bool)
 		persistScope, _ := input["persist_scope"].(string)
+		// persist_allow 三态（Python 应答线格式键，answers.py:121-128 /
+		// models.py:64-65）：true→permanent、false→session、缺省→保留
+		// persist_scope 或空串。原生 harness 的宿主应答（含
+		// interrupt.InterruptAnswerFor 产物）带的是本键，缺失会导致
+		// 「会话内记住」被误判为永久记住。
+		if rawAllow, hasAllow := input["persist_allow"]; hasAllow {
+			if allowFlag, isBool := rawAllow.(bool); isBool {
+				if allowFlag {
+					persistScope = "permanent"
+				} else {
+					persistScope = "session"
+				}
+			}
+		}
 		return &harnesssecurity.PermissionConfirmResponse{
 			Approved:     approved,
 			Feedback:     feedback,
