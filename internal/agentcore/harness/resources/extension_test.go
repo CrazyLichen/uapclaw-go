@@ -80,7 +80,9 @@ func TestLoadAgentTemplatePackage_正常读取(t *testing.T) {
 
 	spec, err := LoadAgentTemplatePackage(path)
 	require.NoError(t, err)
-	assert.Equal(t, "a1", spec.AgentCard.ID)
+	// 15.15 全量对齐修正：Python load_agent_template_package（:226-231）恒用
+	// 顶层 name/description 构造 AgentCard(id=name, name=name)，不读嵌套 agent_card。
+	assert.Equal(t, "expert", spec.AgentCard.ID)
 	assert.Equal(t, "expert", spec.AgentCard.Name)
 	assert.Equal(t, "领域专家", spec.AgentCard.Description)
 }
