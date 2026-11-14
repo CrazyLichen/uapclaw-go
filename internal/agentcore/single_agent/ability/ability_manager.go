@@ -27,6 +27,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	jsonschemaV6 "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -757,6 +758,14 @@ func (am *AbilityManager) runToolCallSafely(
 		}
 		return r
 	}
+
+	// 已应答的客户端调用：恢复轮直接 finish。
+	// 它挂起时已跑过 before_tool_call rails，此处不再重跑（对齐 Python 的
+	// @rail(after=AFTER_TOOL_CALL)：只有 after 钩子会看到结果）。
+	// Python: L1171-1178 answered_client_call → execute_call = _finish_client_tool_call
+	if am.isClientToolCard(toolCall.Name) && am.clientAnswer(cbc, toolCall) != nil {
+		return am.finishClientToolCallRailed(ctx, cbc, toolCall, sess, tag)
+	}
 	return am.railedExecuteSingleToolCall(ctx, cbc, toolCall, sess, tag)
 }
 
@@ -882,6 +891,16 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 					toolCall.Arguments = string(argsJSON)
 				}
 			}
+		}
+
+		// 客户端工具分流：全部 before_tool_call rail 已放行 → 交给客户端执行
+		// （挂起 client_tool 中断）。已应答的客户端调用走恢复分支（见 runToolCallSafely），
+		// 不会进入此处。
+		// Python: L1374-1388 if is_client_tool(self._tools.get(tool_call.name)):
+		//     result, tool_msg = await self._pause_client_tool_call(ctx, tool_call, session, tag)
+		if am.isClientToolCard(toolCall.Name) {
+			am.pauseClientToolCall(toolCall, tag) // 内部以 panic 传播中断，不会返回
+			return nil
 		}
 
 		var err error
@@ -1518,4 +1537,341 @@ func (am *AbilityManager) isToolInMcpServer(toolID string) bool {
 		}
 	}
 	return false
+}
+
+// ──────────────────────────── 客户端工具（client tool）执行链 ────────────────────────────
+
+// isClientToolCard 判定该工具卡对应的调用是否由客户端执行。
+// Python: ability_manager.py:1374 is_client_tool(self._tools.get(tool_call.name))
+// （foundation/tool/client.py:198-200 is_client_tool：card.execution == "client"）
+func (am *AbilityManager) isClientToolCard(toolName string) bool {
+	am.mu.RLock()
+	card := am.tools[toolName]
+	am.mu.RUnlock()
+	return card != nil && tool.IsClientTool(card)
+}
+
+// clientToolOf 从 ResourceManager 取该卡背后的 ClientTool 实例。
+// Python: ability_manager.py:1514-1521 _client_tool(card, tag)
+// —— Runner.resource_mgr.get_tool(tool_id=card.id or card.name, tag=tag)，
+// 非 ClientTool 实例（仅 card 声明）返回 None。
+func (am *AbilityManager) clientToolOf(card *tool.ToolCard, tag string) *tool.ClientTool {
+	toolID := card.ID
+	if toolID == "" {
+		toolID = card.Name
+	}
+	var opts []resourcesmanager.ResourceOption
+	if tag != "" {
+		opts = append(opts, resourcesmanager.WithTag(tag))
+	}
+	resources, err := am.resourceMgr.GetTool([]string{toolID}, opts...)
+	if err != nil || len(resources) == 0 {
+		return nil
+	}
+	if clientTool, ok := resources[0].(*tool.ClientTool); ok {
+		return clientTool
+	}
+	return nil
+}
+
+// clientAnswer 读取恢复输入中归属本调用的客户端工具答案。
+// Python: ability_manager.py:1524-1526 _client_answer(ctx, tool_call)
+// —— ctx.extra[RESUME_INTERRUPT_ANSWERS_KEY][tool_call.id][CLIENT_TOOL_INTERRUPT_OWNER]
+func (am *AbilityManager) clientAnswer(
+	cbc *interfaces.AgentCallbackContext,
+	toolCall *llmschema.ToolCall,
+) *agentschema.InterruptAnswer {
+	raw, ok := cbc.GetExtra(agentschema.ResumeInterruptAnswersKey)
+	if !ok {
+		return nil
+	}
+	callAnswers, ok := raw.(map[string]map[string]*agentschema.InterruptAnswer)
+	if !ok {
+		return nil
+	}
+	return callAnswers[toolCall.ID][agentschema.ClientToolInterruptOwner]
+}
+
+// pauseClientToolCall 以 client_tool 中断挂起客户端工具调用，携带最终参数。
+// 参数与卡片 input_params 不匹配 → 工具错误（注明 JSON 路径），客户端永远
+// 只收到合法输入；build_request 抛 ClientToolUnavailable → 该工具错误结束，
+// 不接触客户端（经返回值表达）；正常路径以 panic(AbortError) 传播中断。
+// 返回非 nil 表示"不可用即结束"的正常结果；panic 即挂起。
+// Python: ability_manager.py:1392-1457 _pause_client_tool_call(ctx, tool_call, session, tag)
+func (am *AbilityManager) pauseClientToolCall(toolCall *llmschema.ToolCall, tag string) *agentschema.ExecuteResult {
+	toolCallID := toolCallIDOf(toolCall)
+
+	// 解析参数（含 JSON 修复）。
+	// Python: _parse_tool_arguments_with_repair → ValueError → execution error
+	arguments, parseErr := ParseToolArguments(toolCall.Arguments)
+	if parseErr != nil {
+		logger.Error(logComponent).
+			Str("tool_name", toolCall.Name).
+			Str("tool_call_id", toolCallID).
+			Err(parseErr).
+			Msg("client tool received malformed parameters")
+		panic(cb.NewAbortError(parseErr.Error(), NewAbilityExecutionError(
+			exception.StatusAbilityMalformedArguments,
+			toolCallID,
+			parseErr.Error(),
+			exception.WithParam("tool_name", toolCall.Name),
+		)))
+	}
+	if arguments == nil {
+		arguments = map[string]any{}
+	}
+
+	am.mu.RLock()
+	card := am.tools[toolCall.Name]
+	am.mu.RUnlock()
+	if card == nil {
+		msg := fmt.Sprintf("client tool '%s' is not registered", toolCall.Name)
+		logger.Error(logComponent).
+			Str("tool_name", toolCall.Name).
+			Str("tool_call_id", toolCallID).
+			Msg("client tool card missing")
+		panic(cb.NewAbortError(msg, NewAbilityExecutionError(
+			exception.StatusAbilityNotFound, toolCallID, msg,
+			exception.WithParam("tool_name", toolCall.Name),
+		)))
+	}
+
+	// schema 校验：参数必须匹配卡片 input_params，失败注明 JSON 路径，
+	// 客户端只收到合法输入。
+	// Python: L1416-1428 jsonschema.validate(arguments, schema) → ValidationError →
+	// f"Client tool '{name}' arguments are invalid at {exc.json_path}: {exc.message}"
+	if schemaErr := validateClientToolArguments(arguments, card.InputParams); schemaErr != nil {
+		logger.Error(logComponent).
+			Str("tool_name", toolCall.Name).
+			Str("tool_call_id", toolCallID).
+			Err(schemaErr).
+			Msg("client tool arguments failed schema validation")
+		panic(cb.NewAbortError(schemaErr.Error(), NewAbilityExecutionError(
+			exception.StatusAbilityMalformedArguments, toolCallID, schemaErr.Error(),
+			exception.WithParam("tool_name", toolCall.Name),
+		)))
+	}
+
+	// build_request：客户端执行说明；ClientToolUnavailable → 工具错误结束，不挂起。
+	// Python: L1502-1515 client_tool = self._client_tool(card, tag) →
+	// client_request = await client_tool.build_request(arguments, context)
+	// except ClientToolUnavailable → logger.info + client_tool_unavailable_output
+	var clientRequest map[string]any = map[string]any{}
+	clientTool := am.clientToolOf(card, tag)
+	if clientTool != nil {
+		built, buildErr := clientTool.BuildRequest(arguments, &tool.ClientToolContext{
+			ToolCall: toolCall,
+		})
+		var unavailable *tool.ClientToolUnavailable
+		if buildErr != nil && errors.As(buildErr, &unavailable) {
+			logger.Info(logComponent).
+				Str("event_type", "client_tool_unavailable").
+				Str("tool_name", toolCall.Name).
+				Str("tool_call_id", toolCallID).
+				Str("reason", unavailable.Message).
+				Msg("client tool not sent to the client")
+			output := tool.ClientToolUnavailableOutput(unavailable)
+			body, _ := json.Marshal(output)
+			// Python：直接 return (output, ToolMessage(content=...))，不抛中断。
+			return &agentschema.ExecuteResult{
+				Result:  output,
+				ToolMsg: llmschema.NewToolMessage(toolCallID, string(body)),
+			}
+		}
+		if buildErr != nil {
+			logger.Error(logComponent).
+				Str("tool_name", toolCall.Name).
+				Str("tool_call_id", toolCallID).
+				Err(buildErr).
+				Msg("client tool build_request failed")
+			panic(cb.NewAbortError(buildErr.Error(), NewAbilityExecutionError(
+				exception.StatusAbilityExecutionError, toolCallID, buildErr.Error(),
+				exception.WithParam("tool_name", toolCall.Name),
+			)))
+		}
+		clientRequest = built
+	}
+
+	// 挂起：抛 client_tool 中断（携带最终参数与 client_request）。
+	// Python: L1494-1503 raise ToolInterruptException(request=ClientToolRequest(...), tool_call=tool_call)
+	request := agentschema.NewClientToolRequest(toolCall.Name, arguments, clientRequest)
+	exc := &agentschema.ToolInterruptException{
+		Request:  request,
+		ToolCall: toolCall,
+	}
+	panic(cb.NewAbortError(fmt.Sprintf("工具执行已中断: %s", toolCall.Name), exc))
+}
+
+// finishClientToolCallRailed 完成（恢复的）客户端工具调用。
+// Python: ability_manager.py:1459-1521 _finish_client_tool_call，装饰器
+// @rail(after=AgentCallbackEvent.AFTER_TOOL_CALL)：before rails 已在挂起时
+// 跑过、不再重跑；after 钩子照常看到结果。
+func (am *AbilityManager) finishClientToolCallRailed(
+	ctx context.Context,
+	cbc *interfaces.AgentCallbackContext,
+	toolCall *llmschema.ToolCall,
+	sess sessioninterfaces.SessionFacade,
+	tag string,
+) (res agentschema.ExecuteResult) {
+	// after-only rail 包装（Python @rail(after=...)）。
+	executor := rail.NewRailExecutor(
+		interfaces.AgentCallbackEvent(""),
+		interfaces.CallbackAfterToolCall,
+		interfaces.AgentCallbackEvent(""),
+	)
+	_ = executor.Execute(ctx, cbc, func() error {
+		res = am.finishClientToolCall(cbc, toolCall, tag)
+		return nil
+	})
+	return res
+}
+
+// finishClientToolCall 完成客户端工具调用的核心逻辑。
+// Python: ability_manager.py:1469-1520（_finish_client_tool_call 函数体）
+func (am *AbilityManager) finishClientToolCall(
+	cbc *interfaces.AgentCallbackContext,
+	toolCall *llmschema.ToolCall,
+	tag string,
+) agentschema.ExecuteResult {
+	toolCallID := toolCallIDOf(toolCall)
+
+	// 读答案：未指定中断的纯文本 → CANCELLED；否则按 ClientToolResult 归一。
+	// Python: answer = self._client_answer(ctx, tool_call)
+	// unaddressed → ClientToolResult(status=CANCELLED, content=f"The user sent a message instead: {answer.value}")
+	// else → ClientToolResult.coerce(answer.value)
+	answer := am.clientAnswer(cbc, toolCall)
+	var result *tool.ClientToolResult
+	if answer == nil || answer.Unaddressed {
+		value := any("")
+		if answer != nil {
+			value = answer.Value
+		}
+		result = tool.NewClientToolResult(tool.ClientToolStatusCancelled,
+			fmt.Sprintf("The user sent a message instead: %v", value), false, nil)
+	} else {
+		result = tool.CoerceClientToolResult(answer.Value)
+	}
+
+	// complete：ClientTool 实例 → complete 钩子；仅 card 声明 → 默认输出。
+	// Python: L1487-1497 client_tool = self._client_tool(...) →
+	// raw_output = complete(request.arguments, result, context) →
+	// output = as_client_tool_output(raw_output, result, tool_name=...)
+	// else → output = default_client_output(result, tool_name=...)
+	//
+	// 偏差登记：Python 取 answer.request.arguments（ClientToolRequest 的最终
+	// 参数）；Go 的 InterruptAnswer.Request 只保留基类字段，而恢复 toolCall 是
+	// 挂起时回写最终参数的深拷贝（pause 内 toolCall.Arguments = 最终参数），
+	// 二者等值，故从 toolCall 解析。
+	am.mu.RLock()
+	card := am.tools[toolCall.Name]
+	am.mu.RUnlock()
+	output := tool.DefaultClientOutput(result, toolCall.Name)
+	if card != nil {
+		if clientTool := am.clientToolOf(card, tag); clientTool != nil {
+			arguments, _ := ParseToolArguments(toolCall.Arguments)
+			if arguments == nil {
+				arguments = map[string]any{}
+			}
+			raw, err := clientTool.Complete(arguments, result, &tool.ClientToolContext{
+				ToolCall: toolCall,
+			})
+			if err != nil {
+				logger.Error(logComponent).
+					Str("tool_name", toolCall.Name).
+					Str("tool_call_id", toolCallID).
+					Err(err).
+					Msg("client tool complete hook failed")
+				output = tool.DefaultClientOutput(result, toolCall.Name)
+			} else {
+				output = tool.AsClientToolOutput(raw, result, toolCall.Name)
+			}
+		}
+	}
+
+	// content = self._render_tool_result(client_tool, ...) / render_tool_output(output)
+	// （两者最终都走 base.py:59-75 render_tool_output 的默认规则）
+	content := renderClientToolOutput(output)
+
+	// Python: logger.info("Client tool '%s' (%s) finished: status=%s", ...)
+	logger.Info(logComponent).
+		Str("tool_name", toolCall.Name).
+		Str("tool_call_id", toolCallID).
+		Str("status", string(result.Status)).
+		Msg("client tool finished")
+
+	toolMsg := llmschema.NewToolMessage(toolCallID, content)
+	// Python: ctx.inputs.tool_result = output; ctx.inputs.tool_msg = tool_msg
+	if inputs, ok := cbc.Inputs().(*interfaces.ToolCallInputs); ok {
+		inputs.ToolResult = output
+		inputs.ToolMsg = toolMsg
+	}
+	return agentschema.ExecuteResult{Result: output, ToolMsg: toolMsg}
+}
+
+// validateClientToolArguments 校验客户端工具参数与卡片 input_params 匹配。
+// input_params 为空（无约束）视为通过；失败错误含校验详情。
+// Python: jsonschema.validate(arguments, schema) 的 ValidationError 语义
+// 用 santhosh-tekuri/jsonschema/v6 等价实现（schema 由 ToJSONSchemaMap 生成）。
+func validateClientToolArguments(arguments map[string]any, inputParams []*schema.Param) error {
+	if len(inputParams) == 0 {
+		return nil
+	}
+	schemaMap := schema.ToJSONSchemaMap(inputParams)
+	doc, err := jsonschemaV6.UnmarshalJSON(strings.NewReader(mustJSON(schemaMap)))
+	if err != nil {
+		return fmt.Errorf("client tool input_params schema invalid: %w", err)
+	}
+	compiler := jsonschemaV6.NewCompiler()
+	if err := compiler.AddResource("client_tool_input.json", doc); err != nil {
+		return fmt.Errorf("client tool input_params schema invalid: %w", err)
+	}
+	compiled, err := compiler.Compile("client_tool_input.json")
+	if err != nil {
+		return fmt.Errorf("client tool input_params schema invalid: %w", err)
+	}
+	if err := compiled.Validate(arguments); err != nil {
+		return fmt.Errorf("client tool arguments are invalid: %w", err)
+	}
+	return nil
+}
+
+// mustJSON map → JSON 字符串（失败返回 "{}"）。
+func mustJSON(value any) string {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return "{}"
+	}
+	return string(body)
+}
+
+// renderClientToolOutput 按默认规则渲染客户端工具输出为 model-facing 文本。
+// 成功渲染 data["content"]；失败渲染 error（空则回退 payload 文本）；渲染为空
+// 时给占位文案，模型永远收不到空白工具结果。
+// Python: foundation/tool/base.py:59-75 render_tool_output（EMPTY_SUCCESS_TEXT/
+// EMPTY_FAILURE_TEXT 常量见 base.py）
+func renderClientToolOutput(output map[string]any) string {
+	success, _ := output["success"].(bool)
+	data, _ := output["data"].(map[string]any)
+	if success {
+		if text := payloadTextOf(data, "content"); text != "" {
+			return text
+		}
+		return "(empty result)"
+	}
+	if errText, _ := output["error"].(string); errText != "" {
+		return errText
+	}
+	if text := payloadTextOf(data, "content"); text != "" {
+		return text
+	}
+	return "(empty failure)"
+}
+
+// payloadTextOf 从输出 data 中取字符串字段。
+func payloadTextOf(data map[string]any, key string) string {
+	if data == nil {
+		return ""
+	}
+	text, _ := data[key].(string)
+	return text
 }

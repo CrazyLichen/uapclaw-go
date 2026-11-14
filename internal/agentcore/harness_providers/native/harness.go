@@ -1287,7 +1287,9 @@ func (h *DeepAgentHarness) requestClientTool(
 			"This host cannot run client tools (it did not declare DYNAMIC_TOOL_CALL).", true, nil)
 	}
 	providerData := interruptProviderData(callID, request)
-	providerData["client_request"] = harness_providers.ToJsonSafe(request.Request)
+	// Python: value.client_request —— ClientToolRequest 子类的 client_request 字段；
+	// Go 的 ToolCallInterruptRequest 用内嵌 Requester 承载子类，取其 ClientRequest。
+	providerData["client_request"] = clientRequestOf(request)
 	dynamicCall, err := hp.NewDynamicToolCallRequest(
 		interruptIDOf(request), callID, request.ToolName, hp.DynamicToolCallRequestOptions{
 			Arguments:         hp.JsonObject(toolArguments(request.ToolArgs)),
@@ -1505,6 +1507,16 @@ func exceptionTypeName(err error) string {
 }
 
 // metadataString 中断元数据的字符串字段。
+// clientRequestOf 提取内嵌 ClientToolRequest 的 client_request 字段。
+// Python: harness.py:586-589 value.client_request（merged ToolCallInterruptRequest
+// 上来自 ClientToolRequest 子类的 extra 字段）。
+func clientRequestOf(request *saschema.ToolCallInterruptRequest) any {
+	if inner, ok := request.Request.(*saschema.ClientToolRequest); ok {
+		return harness_providers.ToJsonSafe(inner.ClientRequest)
+	}
+	return harness_providers.ToJsonSafe(request.Request)
+}
+
 func metadataString(request *saschema.ToolCallInterruptRequest, key string) *string {
 	if value, ok := request.Request.GetMetadata()[key].(string); ok && value != "" {
 		return &value
