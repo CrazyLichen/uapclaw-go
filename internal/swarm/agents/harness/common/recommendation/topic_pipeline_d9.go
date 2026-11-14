@@ -35,7 +35,8 @@ func (p *TopicPipeline) FreezeDocuments(plans []map[string]any,
 	snapshot *V6ContextSnapshot, triggerKey map[string]any,
 	externalAudit *ExternalInvocationAudit, searchProvider WebSearchFn,
 	firstDocumentNumber int, lanes *OptionalLanes,
-	earlyEvidence map[string]*CandidateEvidence, onCandidateReady func(map[string]any, *frozenEvidenceBatch),
+	earlyEvidence map[string]*candidateEvidenceFuture,
+	onCandidateReady func(map[string]any, *frozenEvidenceBatch),
 	fetchTasks *FetchTasks) (*frozenEvidenceBatch, error) {
 	if lanes == nil {
 		lanes = NewOptionalLanes()
@@ -71,9 +72,11 @@ func (p *TopicPipeline) FreezeDocuments(plans []map[string]any,
 		candidateOrder = append(candidateOrder, candidateID)
 		channel := make(chan evidenceOutcome, 1)
 		candidateChannels[candidateID] = channel
-		if early, present := earlyEvidence[candidateID]; present {
-			channel <- evidenceOutcome{plan: plan, result: early}
-			close(channel)
+		if future, present := earlyEvidence[candidateID]; present {
+			go func(future *candidateEvidenceFuture, channel chan evidenceOutcome) {
+				channel <- evidenceOutcome{plan: plan, result: <-future.done}
+				close(channel)
+			}(future, channel)
 			continue
 		}
 		go func(plan map[string]any, channel chan evidenceOutcome) {
@@ -487,7 +490,7 @@ func (p *TopicPipeline) GroundPlans(plans []map[string]any,
 	externalAudit *ExternalInvocationAudit, searchProvider WebSearchFn,
 	firstDocumentNumber int, lanes *OptionalLanes,
 	onRegularReady func([]map[string]any), onLocalReady func([]map[string]any),
-	earlyEvidence map[string]*CandidateEvidence,
+	earlyEvidence map[string]*candidateEvidenceFuture,
 	fetchTasks *FetchTasks) (*pipelineGroundingBatch, error) {
 	if lanes == nil {
 		lanes = NewOptionalLanes()
