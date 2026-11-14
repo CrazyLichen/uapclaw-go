@@ -443,4 +443,3 @@ func TestMachineRun_同会话并发互斥(t *testing.T) {
 	require.ErrorAs(t, err, &guardErr)
 	assert.Equal(t, "SESSION_BUSY", guardErr.Code)
 }
-

@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
-	lifecycle "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	lifecycle "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // 本文件是 channels/process_cli/session_guard.py 的 Go 对应物。

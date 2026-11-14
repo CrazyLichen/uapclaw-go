@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	lifecycle "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/session/lifecycle"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // isolateSessionDir 为单测隔离会话根目录。
