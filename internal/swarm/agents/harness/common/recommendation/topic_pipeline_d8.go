@@ -733,3 +733,14 @@ func (p *TopicPipeline) fetchPage(ctx context.Context, target string) (map[strin
 	}
 	return p.fetch(ctx, target, int(V6FetchWaitSeconds))
 }
+
+// CancelAllOwned 取消全部未完成抓取任务（owns_fetches 分支的清理等价）。
+func (t *FetchTasks) CancelAllOwned() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, entry := range t.tasks {
+		if entry.cancel != nil {
+			entry.cancel()
+		}
+	}
+}
