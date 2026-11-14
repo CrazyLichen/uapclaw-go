@@ -32,7 +32,7 @@ type RosterMember struct {
 	Role atschema.TeamRole
 	// ModelGroup model-group 池的组名，仅 leader 名册携带
 	ModelGroup string
-	// ModelsUsed 该成员被路由到的模型；Go 侧恒空（偏差 D-2，等模型池章节回填）
+	// ModelsUsed 该成员被路由到的模型（模型组记账，23.4c 起由 leader 名册读池填充）
 	ModelsUsed string
 }
 

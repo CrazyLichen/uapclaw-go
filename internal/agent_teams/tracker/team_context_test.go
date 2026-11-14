@@ -8,6 +8,8 @@ import (
 	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 
@@ -831,3 +833,68 @@ func (f *fakeSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
 
 // GetParentSessionID 返回空父会话（测试替身）。
 func (f *fakeSession) GetParentSessionID() string { return "" }
+
+// ──────────────────────────── 23.4c 名册读池 ────────────────────────────
+
+// TestRenderServedModels 空历史 "none yet"；最新一条标 latest call。
+// Python: team_context.py:115-123
+func TestRenderServedModels(t *testing.T) {
+	if renderServedModels(nil) != "none yet" {
+		t.Fatal("空历史应渲染 none yet")
+	}
+	history := []database.MemberServedModel{
+		{Model: "m1", Since: 1700000000000},
+		{Model: "m2", Since: 1700000600000},
+	}
+	got := renderServedModels(history)
+	if !strings.Contains(got, "m1 (since ") || !strings.HasSuffix(got, ", latest call)") {
+		t.Fatalf("渲染格式: %q", got)
+	}
+	if !strings.Contains(got, "m2 (since") {
+		t.Fatalf("最新一条: %q", got)
+	}
+}
+
+// TestListRoster_ModelGroup 组池 leader：entry 含 ModelGroup/ModelsUsed；非组池不写两字段。
+// Python: _list_roster (team_context.py:596-621)
+func TestListRoster_ModelGroup(t *testing.T) {
+	cfg := models.NewIntelliRouterConfig([]*models.IntelliRouterDeployment{
+		{ModelName: "fast", APIKey: "k", APIBase: "b", Provider: "p", FallbackTag: "fast"},
+	})
+	pool := cfg.ToPoolEntries()
+	pool[0].Metadata["model_group"] = map[string]any{"display_name": "测试组"}
+
+	dbMem := database.NewInMemoryTeamDatabase()
+	_ = dbMem.Team().CreateTeam(context.Background(), "t1", "T1", "leader", "", "", "autonomous", false)
+	dbMem.Member().CreateMember(context.Background(), "alice", "t1", "Alice", "{}", "READY", "teammate", "", "", "build_mode", "", "")
+	// 写入 served_models（走记账链）
+	dbMem.Member().UpdateMemberServedModel(context.Background(), "alice", "t1", "fast")
+
+	backend := tools.NewTeamBackend("t1", "leader", true, dbMem, nil,
+		func(b *tools.TeamBackend) { b.UpdateModelPoolProvider(func() []models.ModelPoolEntry { return pool }) })
+	tracker := NewTeamContextTracker(backend, "leader", atschema.TeamRoleLeader, "Leader", "", "", "", "", false, "cn", "", nil)
+
+	roster, ok := tracker.listRoster()
+	if !ok || len(roster) != 1 {
+		t.Fatalf("roster: %v %v", ok, roster)
+	}
+	if roster[0].ModelGroup != "测试组" {
+		t.Fatalf("ModelGroup: %q", roster[0].ModelGroup)
+	}
+	if !strings.Contains(roster[0].ModelsUsed, "fast") {
+		t.Fatalf("ModelsUsed: %q", roster[0].ModelsUsed)
+	}
+
+	// 非组池：两字段零值
+	plainPool := []models.ModelPoolEntry{*models.NewModelPoolEntry("m", "k", "b", "openai")}
+	plainBackend := tools.NewTeamBackend("t1", "leader", true, dbMem, nil,
+		func(b *tools.TeamBackend) { b.UpdateModelPoolProvider(func() []models.ModelPoolEntry { return plainPool }) })
+	plainTracker := NewTeamContextTracker(plainBackend, "leader", atschema.TeamRoleLeader, "Leader", "", "", "", "", false, "cn", "", nil)
+	plain, ok := plainTracker.listRoster()
+	if !ok || len(plain) != 1 {
+		t.Fatal("roster 应有成员")
+	}
+	if plain[0].ModelGroup != "" || plain[0].ModelsUsed != "" {
+		t.Fatalf("非组池两字段应为零值: %+v", plain[0])
+	}
+}

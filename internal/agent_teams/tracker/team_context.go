@@ -577,14 +577,19 @@ func (t *TeamContextTracker) rosterBlock(baseline, updated map[string]any) *stri
 
 // listRoster 读同伴名册（backend 已排除本成员）。
 //
-// 模型池场景下 leader 的名册还要列每个成员被路由到的模型与接管时间
-// （members.py 的 model_group_label / get_member_served_models）——
-// 偏差 D-2：Go 模型池章节未落，ModelGroup / ModelsUsed 恒空，随 25.x 回填。
+// 模型组池下 leader 的名册还要列组名与每个成员被路由到的模型
+// （members.py 的 model_group_label / get_member_served_models）；
+// label 为空时两字段都不写（Python None → 键不存在，而非写空串）。
 //
 // Python: _list_roster (team_context.py L596-621)
 func (t *TeamContextTracker) listRoster() ([]prompts.RosterMember, bool) {
 	if t.teamBackend == nil {
 		return nil, false
+	}
+	// Python: py:608——仅 leader 携带 label
+	label := ""
+	if t.role == atschema.TeamRoleLeader {
+		label = t.teamBackend.ModelGroupLabel()
 	}
 	members, err := t.teamBackend.ListMembers(context.Background())
 	if err != nil {
@@ -592,13 +597,17 @@ func (t *TeamContextTracker) listRoster() ([]prompts.RosterMember, bool) {
 	}
 	roster := make([]prompts.RosterMember, 0, len(members))
 	for _, m := range members {
-		roster = append(roster, prompts.RosterMember{
+		rm := prompts.RosterMember{
 			MemberName:  m.MemberName,
 			DisplayName: m.DisplayName,
 			Desc:        m.Desc,
 			Role:        atschema.TeamRole(m.Role),
-			// ModelGroup / ModelsUsed 留空（偏差 D-2）
-		})
+		}
+		if label != "" {
+			rm.ModelGroup = label
+			rm.ModelsUsed = renderServedModels(loadMemberServedModels(m.Options))
+		}
+		roster = append(roster, rm)
 	}
 	// 不在此处排序：上游 _list_roster 也按后端返回顺序原样组装，渲染层
 	// （BuildRosterSnapshotText / DiffRoster）保持「按输入顺序」不改写。
@@ -1260,3 +1269,29 @@ var (
 	_ TaskEventTracker = (*TaskOutcomeTracker)(nil)
 	_ TaskEventTracker = (*TaskRevisionTracker)(nil)
 )
+
+// renderServedModels 渲染成员被路由到的模型历史（leader 名册用）。
+// 旧的在前，每条带接管的绝对时间（名册进入对话历史并长期驻留，不用相对
+// 时间）；最新一条标注为成员最近一次调用的模型。空历史渲染 "none yet"。
+// Python: _render_served_models (team_context.py:115-123)
+func renderServedModels(history []database.MemberServedModel) string {
+	if len(history) == 0 {
+		return "none yet"
+	}
+	parts := make([]string, 0, len(history))
+	for _, item := range history {
+		parts = append(parts, fmt.Sprintf("%s (since %s)",
+			item.Model, inboundtags.FormatAbsoluteTime(item.Since)))
+	}
+	// 最新一条：替换结尾括号为 ", latest call)"
+	last := parts[len(parts)-1]
+	parts[len(parts)-1] = last[:len(last)-1] + ", latest call)"
+	return strings.Join(parts, ", ")
+}
+
+// loadMemberServedModels 从成员 options JSON 读 served_models 历史。
+// Python: get_member_served_models (member_options.py:290-292)
+func loadMemberServedModels(rawOptions string) []database.MemberServedModel {
+	opts := database.LoadMemberOptions(rawOptions)
+	return opts.ServedModels
+}
