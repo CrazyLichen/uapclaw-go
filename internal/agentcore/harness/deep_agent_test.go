@@ -1025,21 +1025,26 @@ func TestDeepAgent_DrainPendingHarnessConfigs(t *testing.T) {
 	}
 }
 
-// TestDeepAgent_LoadHarnessConfig 返回 stub 错误
+// TestDeepAgent_LoadHarnessConfig manifest 缺失时返回错误（BuildError 包装）。
+// 15.15 起真实现：路径存在则走 LoadPlugin（见 deep_agent_extension_test.go）。
 func TestDeepAgent_LoadHarnessConfig(t *testing.T) {
 	d := newTestDeepAgent()
 	_, err := d.LoadHarnessConfig(context.Background(), "/path/to/config.yaml")
 	if err == nil {
-		t.Fatal("LoadHarnessConfig 应返回 stub 错误")
+		t.Fatal("LoadHarnessConfig manifest 不存在时应返回错误")
 	}
 }
 
-// TestDeepAgent_UnloadHarnessConfig 返回 stub 错误
+// TestDeepAgent_UnloadHarnessConfig manifest 缺失时返回空列表（缺失即无操作）。
+// Python: unload_harness_config 的 FileNotFoundError → return []（deep_agent.py:2414-2417）。
 func TestDeepAgent_UnloadHarnessConfig(t *testing.T) {
 	d := newTestDeepAgent()
-	_, err := d.UnloadHarnessConfig(context.Background(), "/path/to/config.yaml")
-	if err == nil {
-		t.Fatal("UnloadHarnessConfig 应返回 stub 错误")
+	labels, err := d.UnloadHarnessConfig(context.Background(), "/path/to/config.yaml")
+	if err != nil {
+		t.Fatalf("UnloadHarnessConfig manifest 缺失时应无错误: %v", err)
+	}
+	if len(labels) != 0 {
+		t.Fatalf("UnloadHarnessConfig manifest 缺失时应返回空列表，实际 %v", labels)
 	}
 }
 
@@ -3001,7 +3006,8 @@ func TestDeepAgent_上下文引擎方法(t *testing.T) {
 	_ = msgs
 }
 
-// TestDeepAgent_LoadHarnessConfig_Stub 测试 LoadHarnessConfig 返回 stub 错误
+// TestDeepAgent_LoadHarnessConfig_Stub_缺失manifest manifest 缺失时返回错误。
+// 15.15 起真实现（同 TestDeepAgent_LoadHarnessConfig），保留空 agent 形态用例。
 func TestDeepAgent_LoadHarnessConfig_Stub(t *testing.T) {
 	card := makeTestCard("deep-1", "test-deep")
 	agent := NewDeepAgent(card)
@@ -3009,12 +3015,14 @@ func TestDeepAgent_LoadHarnessConfig_Stub(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestDeepAgent_UnloadHarnessConfig_Stub 测试 UnloadHarnessConfig 返回 stub 错误
+// TestDeepAgent_UnloadHarnessConfig_Stub_缺失manifest manifest 缺失时返回空列表。
+// Python: FileNotFoundError → return []（deep_agent.py:2414-2417）。
 func TestDeepAgent_UnloadHarnessConfig_Stub(t *testing.T) {
 	card := makeTestCard("deep-1", "test-deep")
 	agent := NewDeepAgent(card)
-	_, err := agent.UnloadHarnessConfig(context.Background(), "/path/to/config.yaml")
-	assert.Error(t, err)
+	labels, err := agent.UnloadHarnessConfig(context.Background(), "/path/to/config.yaml")
+	assert.NoError(t, err)
+	assert.Empty(t, labels)
 }
 
 // TestDeepAgent_hasPendingSessionSpawn_有控制器 测试有控制器时检查 pending spawn
