@@ -548,7 +548,7 @@ func manifestModelChoice(manifest hschema.AgentTemplateSpec) (harnessprotocol.Mo
 	if model.ModelRequestConfig != nil && model.ModelRequestConfig.ModelName != "" {
 		modelName = model.ModelRequestConfig.ModelName
 	}
-	if model.ModelClientConfig == nil || model.ModelClientConfig.APIBase == "" {
+	if model.ModelClientConfig.APIBase == "" {
 		choice := harnessprotocol.ModelChoice{}
 		if modelName != "" {
 			choice.Model = &modelName

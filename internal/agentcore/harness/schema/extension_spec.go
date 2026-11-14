@@ -76,31 +76,9 @@ type PluginSpec struct {
 }
 
 // ModelSpec 模板自带的模型定义。
-// Python: extension_spec.py 的 ModelSpec（model.json 的结构，见 deep_agent_spec.py）
-type ModelSpec struct {
-	// ModelClientConfig 客户端配置
-	ModelClientConfig *ModelClientConfig `json:"model_client_config,omitempty"`
-	// ModelRequestConfig 请求配置
-	ModelRequestConfig *ModelRequestConfig `json:"model_request_config,omitempty"`
-}
-
-// ModelClientConfig 模型客户端配置。
-// Python: core/foundation/llm/schema 的 ModelClientConfig
-type ModelClientConfig struct {
-	// APIBase 服务地址
-	APIBase string `json:"api_base,omitempty"`
-	// APIKey 凭据
-	APIKey string `json:"api_key,omitempty"`
-	// ClientProvider 客户端厂商（可能是枚举或字符串）
-	ClientProvider any `json:"client_provider,omitempty"`
-}
-
-// ModelRequestConfig 模型请求配置。
-// Python: core/foundation/llm/schema 的 ModelRequestConfig
-type ModelRequestConfig struct {
-	// ModelName 模型名
-	ModelName string `json:"model_name,omitempty"`
-}
+// Python: deep_agent_spec.py:135-138 —— ModelSpec 是 TeamModelConfig 的别名，
+// 两个名字指同一类型，跨 import 路径的 identity 判断（is）一致。
+type ModelSpec = TeamModelConfig
 
 // AgentRuntimeSpec AgentTemplate 包声明的外部 Harness 运行时。
 // Python: extension_spec.py:84-103 AgentRuntimeSpec
