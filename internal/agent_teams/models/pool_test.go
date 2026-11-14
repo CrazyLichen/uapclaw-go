@@ -580,3 +580,52 @@ func TestEntrySignature(t *testing.T) {
 		t.Error("有 Metadata 时 entrySignature 不应为空")
 	}
 }
+
+// TestIntelliRouterDeployment_ToDeploymentDict_可选字段省略 可选字段 omit 非 null、tags[0] 填 fallback_tag。
+// Python: pool.py:297-326 to_deployment_dict
+func TestIntelliRouterDeployment_ToDeploymentDict_可选字段省略(t *testing.T) {
+	id := "d1"
+	dep := &IntelliRouterDeployment{
+		ModelName: "deepseek-chat", APIKey: "sk-1", APIBase: "https://api.deepseek.com",
+		Provider: "deepseek", ID: id, Tags: []string{"deepseek"},
+	}
+	got := dep.ToDeploymentDict()
+	// 必填四键恒在
+	if got["model_name"] != "deepseek-chat" || got["provider"] != "deepseek" ||
+		got["api_key"] != "sk-1" || got["api_base"] != "https://api.deepseek.com" {
+		t.Fatalf("必填键缺失: %v", got)
+	}
+	// tags 非空 → fallback_tag 用 tags[0]；id 保留
+	if got["fallback_tag"] != "deepseek" || got["id"] != "d1" {
+		t.Fatalf("tags/id 处理错误: %v", got)
+	}
+	// 未设置的可选键不得出现（verify_ssl 缺省时由客户端层回退路由器级）
+	for _, k := range []string{"endpoint_profile", "custom_headers", "model_description", "tpm", "rpm", "timeout", "verify_ssl", "model_id", "request_defaults"} {
+		if _, ok := got[k]; ok {
+			t.Fatalf("可选键 %s 不应出现", k)
+		}
+	}
+	// 空 tags 时保留显式 fallback_tag
+	dep2 := &IntelliRouterDeployment{ModelName: "m", APIKey: "k", APIBase: "b", Provider: "p", FallbackTag: "ft"}
+	if dep2.ToDeploymentDict()["fallback_tag"] != "ft" {
+		t.Fatal("空 tags 时应保留显式 fallback_tag")
+	}
+	// 指针可选字段：显式设置才下发
+	ssl := false
+	dep3 := &IntelliRouterDeployment{ModelName: "m", APIKey: "k", APIBase: "b", Provider: "p", VerifySSL: &ssl, TPM: intPtrOf(1000)}
+	got3 := dep3.ToDeploymentDict()
+	if got3["verify_ssl"] != false || got3["tpm"] != 1000 {
+		t.Fatalf("指针字段下发错误: %v", got3)
+	}
+}
+
+// TestIntelliRouterDeployment_APIBase注释锚点 api_base 不带 /v1 的坑以字段注释承载（pool.py:262-276 原文），此处仅防回退改语义。
+func TestIntelliRouterDeployment_必填Provider(t *testing.T) {
+	dep := &IntelliRouterDeployment{ModelName: "m", APIKey: "k", APIBase: "b"}
+	got := dep.ToDeploymentDict()
+	if got["provider"] != "" {
+		t.Fatal("provider 空值应原样下发（校验由 Config/Allocator 构造期做）")
+	}
+}
+
+func intPtrOf(v int) *int { return &v }

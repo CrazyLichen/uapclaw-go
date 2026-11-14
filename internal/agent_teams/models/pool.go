@@ -66,6 +66,125 @@ type ModelRouterConfig struct {
 // ModelPoolEntryOption ModelPoolEntry 构造选项函数。
 type ModelPoolEntryOption func(*ModelPoolEntry)
 
+// IntelliRouterDeployment IntelliRouter 背后的单个物理部署。
+// 镜像 intelli_router.Deployment：单端点服务单模型，自带凭证与限流预算。
+// 与 ModelPoolEntry（分配器逐成员下发）不同：deployments 永不单独分配，
+// 整份列表交给每个成员的客户端，由路由器逐请求挑选、失败换台重试。
+// Python: IntelliRouterDeployment (pool.py:241)
+type IntelliRouterDeployment struct {
+	// ModelName 部署服务的模型名
+	ModelName string `json:"model_name"`
+	// APIKey 部署 API Key
+	APIKey string `json:"api_key"`
+	// APIBase Provider **根** URL —— 不要带 /v1 后缀！
+	// 这是唯一与本仓其余 api_base 约定不同的字段：ModelClientConfig.api_base
+	// （进而 ModelPoolEntry.api_base_url）指向 OpenAI 兼容 *API* base，通常以
+	// /v1 结尾；IntelliRouter 则由各 provider 适配器自行拼路径——OpenAI 适配器
+	// 拼 f"{api_base}/v1/chat/completions"。传了 /v1 结尾的 base 会拼出
+	// /v1/v1/chat/completions 且每个请求 404。但故障形态不像 404：路由器报
+	// ResponseNotRead（错误路径未先消费流就读 response body）。
+	// 正确示例：https://api.deepseek.com，而非 https://api.deepseek.com/v1。
+	// Python: pool.py:262-276（原文教训，注释保留）
+	APIBase string `json:"api_base"`
+	// ID 稳定部署标识，出现在路由器统计与日志中（可选）
+	// Python: pool.py:277-279 id: Optional[str]
+	ID string `json:"id,omitempty"`
+	// ModelID 编译快照中的业务模型标识（可选）
+	// Python: pool.py:280-282 model_id: Optional[str]
+	ModelID string `json:"model_id,omitempty"`
+	// Provider intelli_router 解释的上游 provider 名（必填）
+	// Python: pool.py:283-285 provider: str
+	Provider string `json:"provider"`
+	// EndpointProfile provider 端点方言（可选）
+	EndpointProfile string `json:"endpoint_profile,omitempty"`
+	// CustomHeaders 自定义请求头（可选）
+	CustomHeaders map[string]string `json:"custom_headers,omitempty"`
+	// FallbackTag 模型组成员点名（tag-filtered）用的标签（可选）
+	FallbackTag string `json:"fallback_tag,omitempty"`
+	// ModelDescription 用户提供的模型能力描述（可选）
+	ModelDescription string `json:"model_description,omitempty"`
+	// RequestDefaults 模型层编译出的部署级请求默认值
+	RequestDefaults map[string]any `json:"request_defaults,omitempty"`
+	// TPM 每分钟 token 预算（限流感知策略用，可选）
+	TPM *int `json:"tpm,omitempty"`
+	// RPM 每分钟请求数预算（可选）
+	RPM *int `json:"rpm,omitempty"`
+	// Tags 部署标签列表（ToDeploymentDict 时 tags[0] 兜底 FallbackTag）
+	Tags []string `json:"tags,omitempty"`
+	// Timeout 部署级超时；未设回退路由器级（可选）
+	Timeout *float64 `json:"timeout,omitempty"`
+	// VerifySSL 部署级 TLS 校验；未设回退路由器级——仅键缺失时客户端层才回退（可选）
+	VerifySSL *bool `json:"verify_ssl,omitempty"`
+}
+
+// ToDeploymentDict 渲染 IntelliRouterModelClient 消费的 wire dict。
+// 可选字段省略而非发 null，让客户端层应用自己的回退——尤其 verify_ssl，
+// 只有键缺失时才回退路由器级值。
+// Python: to_deployment_dict (pool.py:297)
+func (d *IntelliRouterDeployment) ToDeploymentDict() map[string]any {
+	payload := map[string]any{
+		"model_name": d.ModelName,
+		"api_key":    d.APIKey,
+		"api_base":   d.APIBase,
+		"provider":   d.Provider,
+	}
+	if len(d.Tags) > 0 {
+		payload["fallback_tag"] = d.Tags[0]
+	}
+	optional := map[string]any{}
+	if d.ID != "" {
+		optional["id"] = d.ID
+	}
+	if d.ModelID != "" {
+		optional["model_id"] = d.ModelID
+	}
+	if d.EndpointProfile != "" {
+		optional["endpoint_profile"] = d.EndpointProfile
+	}
+	if len(d.CustomHeaders) > 0 {
+		optional["custom_headers"] = d.CustomHeaders
+	}
+	if d.FallbackTag != "" {
+		optional["fallback_tag"] = d.FallbackTag
+	}
+	if d.ModelDescription != "" {
+		optional["model_description"] = d.ModelDescription
+	}
+	if d.RequestDefaults != nil {
+		optional["request_defaults"] = d.RequestDefaults
+	}
+	if d.TPM != nil {
+		optional["tpm"] = *d.TPM
+	}
+	if d.RPM != nil {
+		optional["rpm"] = *d.RPM
+	}
+	if d.Timeout != nil {
+		optional["timeout"] = *d.Timeout
+	}
+	if d.VerifySSL != nil {
+		optional["verify_ssl"] = *d.VerifySSL
+	}
+	for k, v := range optional {
+		payload[k] = v
+	}
+	return payload
+}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// INTELLI_ROUTER_PROVIDER 模型池条目的 api_provider 取值，标记该条目由 IntelliRouter 承载。
+// 与 foundation 层 ProviderTypeIntelliRouter（23.3 落地）匹配——create_model_client
+// 据此路由到 IntelliRouterModelClient。
+// Python: INTELLI_ROUTER_PROVIDER (pool.py:221)
+const INTELLI_ROUTER_PROVIDER = "intelli_router"
+
+// INTELLI_ROUTER_UNIFIED_MODEL IntelliRouter 组暴露给 Team 的唯一逻辑模型名。
+// IntelliRouterModelClient 把该通配符转发给底层 ReliableRouter；
+// 分配器 Allocate 无 hint 返回该条目（IntelliRouterAllocator.pool[0]）。
+// Python: INTELLI_ROUTER_UNIFIED_MODEL (pool.py:228)
+const INTELLI_ROUTER_UNIFIED_MODEL = "*"
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewModelPoolEntry 创建 ModelPoolEntry 实例。
