@@ -47,9 +47,8 @@ import (
 //     外部依赖包 jiuwen_memory_adapter——Python 侧 import 失败也返回 None。
 //     Go 侧 buildJiuwenMemoryRail 保留环境开关门卫，恒返回 nil。
 //     回收条件：领域九/后续补 JiuwenMemoryRail + adapter 后回填。
-//   - D-LP（本批新增）：DeepAgent.LoadPlugin 热加载链（deep_agent.py:2232）
-//     未迁移，挂 ⏵ 15.15 templates & plugins；LocalBackend.loadPlugin 为
-//     注入点，默认桩返回未实现，热加载扫描与去重逻辑已按 Python 原样落地。
+//   - D-LP（已回填）：DeepAgent.LoadPlugin 热加载链于 15.15 落地，
+//     LocalBackend.loadPluginFn 默认走真实现；SetLoadPlugin 仅保留测试覆写。
 //   - D-embed：workspace 内容资源以 //go:embed 打包（prompts/content.go），
 //     替代 Python 的文件系统路径读取。
 
