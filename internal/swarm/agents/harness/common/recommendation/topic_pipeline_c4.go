@@ -451,14 +451,17 @@ func summaryTieRankGreater(candidate, kept map[string]any, currentPrefix string)
 }
 
 // pyListStrings 列表到字符串列表（非列表返回 nil）。
+// 同时接受 []any（JSON 解出）与 []string（Go 直接构造的载荷）。
 func pyListStrings(value any) []string {
-	items, ok := value.([]any)
-	if !ok {
-		return nil
+	switch items := value.(type) {
+	case []any:
+		out := make([]string, 0, len(items))
+		for _, item := range items {
+			out = append(out, pyStr(item))
+		}
+		return out
+	case []string:
+		return append([]string(nil), items...)
 	}
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		out = append(out, pyStr(item))
-	}
-	return out
+	return nil
 }
