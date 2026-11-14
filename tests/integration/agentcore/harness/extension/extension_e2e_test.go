@@ -10,15 +10,29 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	toolskillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	hres "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ExtensionSuite 领域 15.15 插件/模板热加载端到端套件。
+type ExtensionSuite struct {
+	isuite.AgentSuite
+}
+
+// TestExtensionSuite 套件入口。
+func TestExtensionSuite(t *testing.T) {
+	suite.Run(t, new(ExtensionSuite))
+}
 
 // 端到端用例：真文件型 plugin 包 → loader → resolver → binder → DeepAgent 台账。
 
