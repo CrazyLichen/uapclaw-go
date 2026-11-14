@@ -1,10 +1,41 @@
 package schema
 
 import (
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
+
+// buildRailsFromSpecs 逐条解析 rail 声明为实例列表（未知类型跳过，nil 过滤）。
+// Python: deep_agent_spec.py:269-278 SubAgentSpec.build 的 rails 段 +
+// extension_resolver.py:189-195 _as_built_list
+func buildRailsFromSpecs(
+	specs []RailSpec,
+	language string,
+	ws *workspace.Workspace,
+	ctx BuildContextInterface,
+) ([]sainterfaces.AgentRail, error) {
+	if len(specs) == 0 {
+		return nil, nil
+	}
+	var rails []sainterfaces.AgentRail
+	for i := range specs {
+		built, err := specs[i].Build(language, ws, ctx)
+		if err != nil {
+			return nil, err
+		}
+		if rail, ok := built.(sainterfaces.AgentRail); ok {
+			rails = append(rails, rail)
+		}
+	}
+	return rails, nil
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -17,6 +48,18 @@ type WorkspaceSpec struct {
 	Language string `json:"language"`
 	// StableBase 是否使用稳定基路径
 	StableBase bool `json:"stable_base"`
+}
+
+// Build 构建工作空间实例。
+// Python: deep_agent_spec.py:193-196 WorkspaceSpec.build
+//
+// root_path 空时回退 "./"；stable_base 的锚定改写由调用方负责（上游同语义）。
+func (s *WorkspaceSpec) Build() *workspace.Workspace {
+	rootPath := s.RootPath
+	if rootPath == "" {
+		rootPath = "./"
+	}
+	return &workspace.Workspace{RootPath: rootPath, Language: s.Language}
 }
 
 // VisionModelSpec 视觉模型规格占位类型。
@@ -85,6 +128,51 @@ type SysOperationSpec struct {
 	GatewayConfig any `json:"gateway_config,omitempty"`
 }
 
+// BuildCard 构建系统操作卡片。
+// Python: deep_agent_spec.py:216-222 SysOperationSpec.build_card
+func (s *SysOperationSpec) BuildCard() (*sysop.SysOperationCard, error) {
+	var mode sysop.OperationMode
+	switch s.Mode {
+	case "local", "":
+		mode = sysop.OperationModeLocal
+	case "sandbox":
+		mode = sysop.OperationModeSandbox
+	default:
+		return nil, fmt.Errorf("unknown sys_operation mode %q", s.Mode)
+	}
+	opts := []sysop.SysOperationCardOption{sysop.WithSysOpMode(mode)}
+	if s.ID != "" {
+		opts = append(opts, sysop.WithSysOpCustomID(s.ID))
+	}
+	// 运行配置透传：Local 用 WorkConfig，Sandbox 用 GatewayConfig
+	switch mode {
+	case sysop.OperationModeLocal:
+		if cfg, ok := s.WorkConfig.(*sysop.LocalWorkConfig); ok {
+			opts = append(opts, sysop.WithSysOpWorkConfig(cfg))
+		}
+	case sysop.OperationModeSandbox:
+		if cfg, ok := s.GatewayConfig.(*sysop.SandboxGatewayConfig); ok {
+			opts = append(opts, sysop.WithSysOpGatewayConfig(cfg))
+		}
+	}
+	return sysop.NewSysOperationCard(opts...), nil
+}
+
+// Resolve 解析成活的 SysOperation 实例。
+// Python: deep_agent_spec.py:224-249 SysOperationSpec.resolve
+//
+// ⚠️ 已知偏差：Python 此处经 Runner.resource_mgr 做 get-or-create（幂等，避免
+// 会话恢复时重复注册），Go 侧既有实现（原 resolve_spec_sysop.go）直接构造新
+// 实例、未接 resource_mgr——该偏差自 9.x 起即存在，本批保持同语义并登记，
+// 待 resource_mgr 接线统一回填。
+func (s *SysOperationSpec) Resolve() (sysop.SysOperation, error) {
+	card, err := s.BuildCard()
+	if err != nil {
+		return nil, err
+	}
+	return sysop.NewSysOperation(card)
+}
+
 // SubAgentSpec 子代理规格占位类型。
 // Python: SubAgentSpec
 type SubAgentSpec struct {
@@ -120,6 +208,108 @@ type SubAgentSpec struct {
 	FactoryName string `json:"factory_name,omitempty"`
 	// FactoryKwargs 工厂参数
 	FactoryKwargs map[string]any `json:"factory_kwargs"`
+}
+
+// Build 物化成运行时 SubAgentConfig。
+// Python: deep_agent_spec.py:254-330 SubAgentSpec.build
+//
+// ⚠️ 已知偏差：Python 先查 _SUBAGENT_PROVIDER_REGISTRY（factory_name 命中时
+// 直接交 provider 构造）。Go 侧注册表 ⤵️ 15.14（manifest catalog）未落地，
+// 该分支条件恒为假、走正常路径——语义在注册表落地前等价。
+func (s *SubAgentSpec) Build(
+	parentModel *llm.Model,
+	language string,
+	ctx BuildContextInterface,
+) (*SubAgentConfig, error) {
+	// Python: resolved_model = self.model.build() if self.model else None
+	var resolvedModel *llm.Model
+	if s.Model != nil {
+		resolvedModel = s.Model.Build()
+	}
+
+	// Python: resolved_workspace = self.workspace.build() if self.workspace else None
+	var resolvedWorkspace *workspace.Workspace
+	if s.Workspace != nil {
+		resolvedWorkspace = s.Workspace.Build()
+	}
+
+	// Python: resolved_rails = [rail_spec.build(...) for rail_spec in self.rails]（:270-278）
+	resolvedRails, err := buildRailsFromSpecs(s.Rails, language, resolvedWorkspace, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: resolved_sys_op = self.sys_operation.resolve() if self.sys_operation else None
+	var resolvedSysOp sysop.SysOperation
+	if s.SysOperation != nil {
+		resolvedSysOp, err = s.SysOperation.Resolve()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Python: 工具解析——BuiltinToolSpec → Tool 实例，ToolCard 透传（:282-291）
+	saPrefix := ""
+	if s.AgentCard != nil {
+		saPrefix = s.AgentCard.ID
+		if saPrefix == "" {
+			saPrefix = s.AgentCard.Name
+		}
+	}
+	var toolCards []*tool.ToolCard
+	var toolInstances []tool.Tool
+	for i := range s.BuiltinTools {
+		item := &s.BuiltinTools[i]
+		tid := fmt.Sprintf("%s.%s", saPrefix, item.Type)
+		built, err := item.Build(language, tid, ctx)
+		if err != nil {
+			return nil, err
+		}
+		switch typed := built.(type) {
+		case nil:
+		case tool.Tool:
+			toolInstances = append(toolInstances, typed)
+		case *tool.ToolCard:
+			toolCards = append(toolCards, typed)
+		default:
+			return nil, fmt.Errorf("builtin tool spec %q built unexpected type %T", item.Type, built)
+		}
+	}
+	toolCards = append(toolCards, s.ToolCards...)
+
+	// Python: prompt_mode 透传
+	promptMode := PromptModeFull
+	if s.PromptMode != "" {
+		parsed, parseErr := ParsePromptMode(s.PromptMode)
+		if parseErr != nil {
+			return nil, fmt.Errorf("subagent prompt_mode: %w", parseErr)
+		}
+		promptMode = parsed
+	}
+
+	maxIterations := 0
+	if s.MaxIterations != nil {
+		maxIterations = *s.MaxIterations
+	}
+
+	return &SubAgentConfig{
+		AgentCard:      s.AgentCard,
+		SystemPrompt:   s.SystemPrompt,
+		Tools:          toolCards,
+		ToolInstances:  toolInstances,
+		Mcps:           s.Mcps,
+		Model:          resolvedModel,
+		Rails:          resolvedRails,
+		Skills:         s.Skills,
+		Workspace:      resolvedWorkspace,
+		SysOperation:   resolvedSysOp,
+		Language:       s.Language,
+		PromptMode:     promptMode,
+		EnableTaskLoop: s.EnableTaskLoop,
+		MaxIterations:  maxIterations,
+		FactoryName:    s.FactoryName,
+		FactoryKwargs:  s.FactoryKwargs,
+	}, nil
 }
 
 // DeepAgentSpec 单角色 DeepAgent 规格。

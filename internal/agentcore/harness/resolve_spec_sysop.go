@@ -1,8 +1,6 @@
 package harness
 
 import (
-	"fmt"
-
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
@@ -11,44 +9,13 @@ import (
 
 // resolveSysOperationSpec 把 hschema.SysOperationSpec 解析成活实例。
 //
-// 上游是 get-or-create（同一稳定 id 复用同一实例）；该语义由资源管理器
-// 与调用方保证，这里只负责按 mode 构造。
-//
-// WorkConfig / GatewayConfig 在 Go 侧仍是 any 占位（见 hschema.SysOperationSpec 注释），
-// 因此按 mode 分支取用：Local 看 WorkConfig，Sandbox 看 GatewayConfig。
+// 构造逻辑已收敛到 schema 的 SysOperationSpec.Resolve/BuildCard
+// （Python deep_agent_spec.py:216-249），此处仅保留 nil 语义并转调。
 func resolveSysOperationSpec(spec *hschema.SysOperationSpec) (sysop.SysOperation, error) {
 	if spec == nil {
 		return nil, nil
 	}
-
-	var mode sysop.OperationMode
-	switch spec.Mode {
-	case "local", "":
-		mode = sysop.OperationModeLocal
-	case "sandbox":
-		mode = sysop.OperationModeSandbox
-	default:
-		return nil, fmt.Errorf("unknown sys_operation mode %q", spec.Mode)
-	}
-
-	opts := []sysop.SysOperationCardOption{sysop.WithSysOpMode(mode)}
-	if spec.ID != "" {
-		opts = append(opts, sysop.WithSysOpCustomID(spec.ID))
-	}
-	// 运行配置透传：Local 用 WorkConfig，Sandbox 用 GatewayConfig
-	switch mode {
-	case sysop.OperationModeLocal:
-		if cfg, ok := spec.WorkConfig.(*sysop.LocalWorkConfig); ok {
-			opts = append(opts, sysop.WithSysOpWorkConfig(cfg))
-		}
-	case sysop.OperationModeSandbox:
-		if cfg, ok := spec.GatewayConfig.(*sysop.SandboxGatewayConfig); ok {
-			opts = append(opts, sysop.WithSysOpGatewayConfig(cfg))
-		}
-	}
-
-	card := sysop.NewSysOperationCard(opts...)
-	return sysop.NewSysOperation(card)
+	return spec.Resolve()
 }
 
 // convertToConfigSubagents 把 spec 形态的子代理转成配置形态。

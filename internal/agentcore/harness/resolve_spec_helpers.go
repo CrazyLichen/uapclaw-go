@@ -24,21 +24,13 @@ const (
 
 // buildModelFromSpec 从 hschema.TeamModelConfig 构造模型实例。
 //
-// 构造失败记 warn 并返回 nil（与上游"模型缺失时 agent 仍可构造"一致，
-// 只是后续 run 会失败）。
+// 构造逻辑已收敛到 schema 的 TeamModelConfig.Build
+// （Python deep_agent_spec.py:127-132 ModelSpec.build），此处仅保留 nil 语义并转调。
 func buildModelFromSpec(spec *hschema.TeamModelConfig) *llm.Model {
 	if spec == nil {
 		return nil
 	}
-	cfg := spec.ModelClientConfig
-	m, err := llm.NewModel(&cfg, spec.ModelRequestConfig)
-	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).Err(err).
-			Str("client_provider", cfg.ClientProvider).
-			Msg("resolve parts: model build failed, agent will have no model")
-		return nil
-	}
-	return m
+	return spec.Build()
 }
 
 // deriveBuildContext 衍生每成员构建上下文（回填 workspace / card id）。
