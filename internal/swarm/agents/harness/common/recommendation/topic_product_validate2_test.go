@@ -174,25 +174,26 @@ func TestValidPoolComposition(t *testing.T) {
 // TestShortDeltaInterestID 对齐 :4046-4102。
 func TestShortDeltaInterestID(t *testing.T) {
 	// 无 selection → 无要求
-	if id, ok := ShortDeltaInterestID(map[string]any{}); !ok || id != nil {
-		t.Fatalf("no selection: %v %v", id, ok)
+	if id, hasValue, valid := ShortDeltaInterestID(map[string]any{}); !valid ||
+		hasValue || id != "" {
+		t.Fatalf("no selection: %q %v %v", id, hasValue, valid)
 	}
 	// 空列表 → 无要求
-	id, ok := ShortDeltaInterestID(map[string]any{
+	id, hasValue, valid := ShortDeltaInterestID(map[string]any{
 		"rid_interest_selection": map[string]any{
 			"short_trigger_delta_event_ids": []any{}}})
-	if !ok || id != nil {
-		t.Fatalf("empty delta: %v %v", id, ok)
+	if !valid || hasValue || id != "" {
+		t.Fatalf("empty delta: %q %v %v", id, hasValue, valid)
 	}
 	// 重复事件 → 契约失败
-	id, ok = ShortDeltaInterestID(map[string]any{
+	id, hasValue, valid = ShortDeltaInterestID(map[string]any{
 		"rid_interest_selection": map[string]any{
 			"short_trigger_delta_event_ids": []any{"e1", "e1"}}})
-	if !ok || id != "" {
-		t.Fatalf("duplicate: %v %v", id, ok)
+	if valid || !hasValue || id != "" {
+		t.Fatalf("duplicate: %q %v %v", id, hasValue, valid)
 	}
 	// 命中链接兴趣
-	id, ok = ShortDeltaInterestID(map[string]any{
+	id, hasValue, valid = ShortDeltaInterestID(map[string]any{
 		"rid_interest_selection": map[string]any{
 			"short_trigger_delta_event_ids":    []any{"e1"},
 			"delta_linked_interest_summary_id": "int-a"},
@@ -200,8 +201,8 @@ func TestShortDeltaInterestID(t *testing.T) {
 			map[string]any{"interest_summary_id": "int-a",
 				"source_event_ids": []any{"e1"},
 				"source_locators":  []any{map[string]any{"event_id": "e1"}}}}}})
-	if !ok || id != "int-a" {
-		t.Fatalf("linked: %v %v", id, ok)
+	if !valid || !hasValue || id != "int-a" {
+		t.Fatalf("linked: %q %v %v", id, hasValue, valid)
 	}
 }
 

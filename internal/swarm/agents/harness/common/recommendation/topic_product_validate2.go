@@ -37,6 +37,8 @@ var cardFields = map[string]bool{
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ValidScope scope 与项目 ID 匹配判定（topic_product.py:3266-3273）。
+// 参数保持 any：Python 对 manifest 解码值做 isinstance(str) 检查，收窄为
+// string 会把类型检查上移到调用方、破坏一比一对拍（2026-11-13 审查决议）。
 func ValidScope(contextScope, projectID any) bool {
 	scope, isStr := contextScope.(string)
 	if !isStr {
@@ -80,34 +82,36 @@ func OrderedCardsForDiagnosis(cards []map[string]any) []map[string]any {
 }
 
 // ShortDeltaInterestID 摘要短增量要求的兴趣 ID（topic_pipeline.py:4046-4102
-// _short_delta_interest_id）。返回 (id, hasValue)：空串为契约失败，nil 为无要求。
-func ShortDeltaInterestID(manifest map[string]any) (any, bool) {
+// _short_delta_interest_id）。三态返回 (id, hasValue, valid)：
+// nil 对齐 Python None（无要求）→ ("", false, true)；
+// 契约失败对齐 "" → ("", true, false)；命中 → (id, true, true)。
+func ShortDeltaInterestID(manifest map[string]any) (string, bool, bool) {
 	selection, _, _ := payloadMap(manifest["rid_interest_selection"])
 	if selection == nil {
-		return nil, true
+		return "", false, true
 	}
 	rawDeltaIDs, present := selection["short_trigger_delta_event_ids"]
 	if !present || rawDeltaIDs == nil {
-		return nil, true
+		return "", false, true
 	}
 	deltaIDs := pyListStrings(rawDeltaIDs)
 	if deltaIDs == nil {
-		return "", true
+		return "", true, false
 	}
 	for _, eventID := range deltaIDs {
 		if eventID == "" {
-			return "", true
+			return "", true, false
 		}
 	}
 	seen := map[string]bool{}
 	for _, eventID := range deltaIDs {
 		if seen[eventID] {
-			return "", true
+			return "", true, false
 		}
 		seen[eventID] = true
 	}
 	if len(deltaIDs) == 0 {
-		return nil, true
+		return "", false, true
 	}
 	interestID := pyStr(selection["delta_linked_interest_summary_id"])
 	ridResult, _, _ := payloadMap(manifest["rid_result"])
@@ -118,7 +122,7 @@ func ShortDeltaInterestID(manifest map[string]any) (any, bool) {
 		}
 	}
 	if interestID == "" || interests == nil {
-		return "", true
+		return "", true, false
 	}
 	deltaSet := map[string]bool{}
 	for _, eventID := range deltaIDs {
@@ -131,32 +135,32 @@ func ShortDeltaInterestID(manifest map[string]any) (any, bool) {
 		}
 		sourceEventIDs := pyListStrings(interest["source_event_ids"])
 		if sourceEventIDs == nil {
-			return "", true
+			return "", true, false
 		}
 		for _, eventID := range sourceEventIDs {
 			if eventID == "" {
-				return "", true
+				return "", true, false
 			}
 		}
 		sourceLocators := pyListMaps(interest["source_locators"])
 		if sourceLocators == nil {
-			return "", true
+			return "", true, false
 		}
 		locatorEventIDs := map[string]bool{}
 		for _, locator := range sourceLocators {
 			if pyStr(locator["event_id"]) == "" {
-				return "", true
+				return "", true, false
 			}
 			locatorEventIDs[pyStr(locator["event_id"])] = true
 		}
 		for _, eventID := range sourceEventIDs {
 			if deltaSet[eventID] || locatorEventIDs[eventID] {
-				return interestID, true
+				return interestID, true, true
 			}
 		}
-		return "", true
+		return "", true, false
 	}
-	return "", true
+	return "", true, false
 }
 
 // ValidPoolComposition 池组成校验（topic_pipeline.py:4027-4043）。

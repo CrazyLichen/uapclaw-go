@@ -200,7 +200,7 @@ func ValidateDiversityAPIBatch(raw any, requestedPairs [][2]string,
 // InvokeBatchedDiversityProxy 在保持完整评分器契约的同时约束单次 Ark 响应
 // （topic_pipeline.py:2383-2479；asyncio.gather → errgroup 并发，§5 已知偏差）。
 func InvokeBatchedDiversityProxy(ctx context.Context, payload map[string]any,
-	invokeStage *ArkStageInvoker) (map[string][]map[string]any, error) {
+	invokeStage TopicStageInvoker) (map[string][]map[string]any, error) {
 	candidates, isList := payload["candidates"].([]any)
 	if !isList {
 		return nil, &TerminalGenerationRejection{
@@ -311,7 +311,7 @@ func InvokeBatchedDiversityProxy(ctx context.Context, payload map[string]any,
 				errs[index] = invokeErr
 				return
 			}
-			RecordProviderValidation(invokeStage, raw, ProviderValidationOutcome(raw))
+			RecordProviderValidationTopic(invokeStage, raw, ProviderValidationOutcome(raw))
 			validated, validateErr := ValidateDiversityAPIBatch(raw, requestedPairs, requestedMarginalIDs)
 			if validateErr != nil {
 				errs[index] = validateErr

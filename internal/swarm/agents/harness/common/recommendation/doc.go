@@ -55,6 +55,21 @@
 //	├── topic_rid.go                    # RID MATCH/NO_MATCH 配对裁判（topic_rid.py，10.3.31c）
 //	├── topic_feedback.go               # 上下文反馈投影（topic_feedback.py，10.3.31c）
 //	├── topic_outcomes.go               # 曝光/点击 outcome 记账（topic_outcomes.py，10.3.31c）
+//	├── topic_pipeline_d1.go           # TopicPipeline 类骨架（topic_pipeline.py:4481-4622，10.3.31b）
+//	├── topic_pipeline_d2.go           # scope_input_revision + refresh_short_intent（:4623-4906）
+//	├── topic_pipeline_d5.go           # 摘要链 8 方法 + RefreshState（:5396-5942）
+//	├── topic_pipeline_d6.go           # RID 提炼/记忆/复用 + 热榜新闻（:5943-6343）
+//	├── topic_pipeline_d7.go           # 曝光问题/全局候选/retained 族/双校验（:6345-7097）
+//	├── topic_pipeline_d8.go           # 项目候选/续聊校验/候选证据（:7098-7712）
+//	├── topic_pipeline_d9.go           # 冻结文档/近期终稿/接地（:7714-8560）
+//	├── topic_pipeline_d10.go          # 效用/多样性/评分选择/latest manifest（:8562-8870）
+//	├── topic_pipeline_d11.go          # 池装配 AssembleResult（:8872-9167）
+//	├── topic_pipeline_d12.go          # 三个生成入口（:9169-9704）
+//	├── topic_pipeline_d13.go          # Generate 主入口 + RefreshNews（:4908-5393）
+//	├── topic_product_validate1.go     # 组件/宿主小票校验族 v1（topic_product.py:3392-3790，⤴️31c 归位）
+//	├── topic_product_validate2.go     # _valid_card 全链/池组成/打开判定（:3843-5603，⤴️31c 归位）
+//	├── topic_product_validate3a.go    # news slot/组件与厂商血缘/模型绑定（:2777-3240，⤴️31c 归位）
+//	├── topic_product_validate3b.go    # 列表搜索/manifest 主链/池读取链（:2427-6502，⤴️31c 归位）
 //	└── topic_product.go               # 池组成契约/终局卡/小票校验/曝光选卡（topic_product.py，10.3.31c）
 //
 // 10.3.31c「topic 产物与呈现」切片：12 文件 / 13811 行（wc -l 实测，原登记 9 文件

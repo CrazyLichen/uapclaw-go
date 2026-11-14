@@ -868,14 +868,11 @@ func ManifestRejectionReason(manifest any, cards []map[string]any,
 			return fmt.Sprintf("card_index_%d_state_maintenance_receipt_mismatch", index)
 		}
 	}
-	shortDeltaID, ok := ShortDeltaInterestID(manifestMap)
-	if !ok || shortDeltaID == "" {
-		if shortDeltaID == "" {
-			return "manifest_field_rid_interest_selection_contract_failed"
-		}
+	shortDeltaID, hasValue, valid := ShortDeltaInterestID(manifestMap)
+	if !valid {
 		return "manifest_field_rid_interest_selection_contract_failed"
 	}
-	if shortDeltaID != nil {
+	if hasValue {
 		if scope != GlobalNewChatScope {
 			return "manifest_short_delta_scope_contract_failed"
 		}

@@ -314,10 +314,8 @@ func (p *TopicPipeline) ScoreDiversityFor(candidates []*SelectionCandidate,
 			coverage = append(coverage, item)
 		}
 		merged["discussion_coverage"] = coverage
-		if direct, ok := invokeStage.(*ArkStageInvoker); ok {
-			return InvokeBatchedDiversityProxy(ctx, merged, direct)
-		}
-		return invokeStage.Invoke(ctx, "v6_diversity_scorer", pipelineDiversityPrompt, compactJSON(merged))
+		// 批代理按接口收 invoke：catalog 注入对一切实现一致（无 fallback 旁路）。
+		return InvokeBatchedDiversityProxy(ctx, merged, invokeStage)
 	})
 	return ScoreDiversity(candidates, invokeDiversity, receipt)
 }
