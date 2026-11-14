@@ -1437,22 +1437,6 @@ func (d *DeepAgent) EnqueueHarnessConfig(configPath string) {
 	d.pendingHarnessConfigs = append(d.pendingHarnessConfigs, configPath)
 }
 
-// LoadHarnessConfig 热加载 harness_config.yaml 中声明的资源。
-// ⤵️ 9.3 回填：内部调 create_deep_agent，完整实现待工厂补全
-// Python: DeepAgent.load_harness_config(config_path) (line 1218)
-func (d *DeepAgent) LoadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
-	// ⤵️ 9.3 回填：HarnessConfigLoader.load + 资源注册逻辑
-	return nil, fmt.Errorf("load_harness_config 尚未实现，⤵️ 9.3 回填")
-}
-
-// UnloadHarnessConfig 卸载 harness_config.yaml 中声明的资源。
-// ⤵️ 9.3 回填：内部调 create_deep_agent，完整实现待工厂补全
-// Python: DeepAgent.unload_harness_config(config_path) (line 1359)
-func (d *DeepAgent) UnloadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
-	// ⤵️ 9.3 回填：资源卸载逻辑
-	return nil, fmt.Errorf("unload_harness_config 尚未实现，⤵️ 9.3 回填")
-}
-
 // EnsureInitialized 执行懒初始化（仅用于测试）。
 // Python: DeepAgent.ensure_initialized() (line 865)
 func (d *DeepAgent) EnsureInitialized(ctx context.Context) (context.Context, error) {
@@ -4981,4 +4965,315 @@ func (d *DeepAgent) syncExpertRoleAttachment(_ *agentinterfaces.InvokeInputs, _ 
 		Str("load_id", active.LoadID).
 		Str("role_name", active.RoleName).
 		Msg("expert_role attachment sync not ported yet, waiting for AgentTemplate hot-load (⤵️ #9.3)")
+}
+
+// ──────────────────────────── 15.15 扩展热加载入口（deep_agent.py:2211-2450）────────────────────────────
+
+// newExtensionContext 衍生扩展构建上下文：外部传入时 derive + extras 深拷贝，
+// 否则按 deep_config 构造最小上下文。
+// Python: DeepAgent._new_extension_context(context) (deep_agent.py:2211-2219)
+func (d *DeepAgent) newExtensionContext(context hschema.BuildContextInterface) *hschema.BuildContext {
+	if context != nil {
+		derived := context.Derive(hschema.BuildContextOverrides{})
+		if typed, ok := derived.(*hschema.BuildContext); ok {
+			freshExtras := make(map[string]any, len(typed.Extras))
+			for key, value := range typed.Extras {
+				freshExtras[key] = value
+			}
+			typed.Extras = freshExtras
+			return typed
+		}
+		// 非具体 BuildContext（平台自定义实现）：走最小构造兜底
+	}
+	d.configMu.RLock()
+	deepCfg := d.deepConfig
+	language := ""
+	workspaceObj := (*workspace.Workspace)(nil)
+	if deepCfg != nil {
+		language = deepCfg.Language
+		workspaceObj = deepCfg.Workspace
+	}
+	d.configMu.RUnlock()
+	if language == "" {
+		language = "cn"
+	}
+	memberCardID := ""
+	if d.card != nil {
+		memberCardID = d.card.GetID()
+	}
+	return &hschema.BuildContext{
+		Language:     language,
+		Workspace:    workspaceObj,
+		MemberCardID: memberCardID,
+		Extras:       map[string]any{},
+	}
+}
+
+// applyExtensionParts 热应用 Parts 并入台账（深拷贝存档）。
+// Python: DeepAgent._apply_extension_parts (deep_agent.py:2220-2230)
+func (d *DeepAgent) applyExtensionParts(ctx context.Context, parts hres.ExtensionParts, sourceURI string) (*hres.LoadRecord, error) {
+	refs, err := ApplyExtensionHot(ctx, d, parts)
+	if err != nil {
+		return nil, err
+	}
+	record := hres.NewLoadRecord()
+	record.SourceURI = sourceURI
+	record.Refs = refs
+	// Python: record.model_copy(deep=True) —— 台账存深拷贝
+	archived := deepCopyLoadRecord(record)
+	d.loadRecordsMu.Lock()
+	if d.loadRecords == nil {
+		d.loadRecords = map[string]hres.LoadRecord{}
+	}
+	d.loadRecords[record.LoadID] = archived
+	d.loadRecordsMu.Unlock()
+	return &record, nil
+}
+
+// deepCopyLoadRecord 深拷贝 LoadRecord（Python model_copy(deep=True) 等价）。
+func deepCopyLoadRecord(record hres.LoadRecord) hres.LoadRecord {
+	out := record
+	out.Refs = make([]hres.ResourceRef, len(record.Refs))
+	for i, ref := range record.Refs {
+		cloned := ref
+		if ref.Extra != nil {
+			extra := make(map[string]any, len(ref.Extra))
+			for k, v := range ref.Extra {
+				extra[k] = v
+			}
+			cloned.Extra = extra
+		}
+		out.Refs[i] = cloned
+	}
+	return out
+}
+
+// LoadPlugin 热加载文件型 Plugin 包。
+// 接受 package_type=plugin 的 manifest.json 或 legacy
+// harness_config.yaml / expert_harness.yaml / harness.yaml 包（见
+// FindPluginManifest 的查找序）；两者都映射为 PluginSpec。
+// Python: DeepAgent.load_plugin (deep_agent.py:2232-2257)
+func (d *DeepAgent) LoadPlugin(ctx context.Context, path string) (*hres.LoadRecord, error) {
+	manifestPath, spec, err := func() (string, hschema.PluginSpec, error) {
+		manifestPath, findErr := hres.FindPluginManifest(path)
+		if findErr != nil {
+			return "", hschema.PluginSpec{}, findErr
+		}
+		spec, loadErr := hres.LoadPluginPackage(manifestPath)
+		if loadErr != nil {
+			return "", hschema.PluginSpec{}, loadErr
+		}
+		return manifestPath, spec, nil
+	}()
+	if err != nil {
+		return nil, exception.BuildError(exception.StatusDeepagentLoadPluginError,
+			exception.WithMsg(err.Error()), exception.WithCause(err))
+	}
+	buildCtx := d.newExtensionContext(nil)
+	buildCtx.Extras["source_root"] = filepath.Dir(manifestPath)
+	parts, err := hres.ResolvePluginParts(spec, buildCtx)
+	if err == nil {
+		var record *hres.LoadRecord
+		record, err = d.applyExtensionParts(ctx, parts, manifestPath)
+		if err == nil {
+			return record, nil
+		}
+	}
+	return nil, exception.BuildError(exception.StatusDeepagentLoadPluginError,
+		exception.WithMsg(err.Error()), exception.WithCause(err))
+}
+
+// LoadPluginSpec 热加载内存 PluginSpec（经 resolve Parts + apply_hot）。
+// 与 LoadPlugin 不同：没有包根，spec 上所有带路径字段必须是绝对路径，否则 resolve 拒绝。
+// Python: DeepAgent.load_plugin_spec (deep_agent.py:2259-2279)
+func (d *DeepAgent) LoadPluginSpec(ctx context.Context, spec hschema.PluginSpec) (*hres.LoadRecord, error) {
+	buildCtx := d.newExtensionContext(nil)
+	parts, err := hres.ResolvePluginParts(spec, buildCtx)
+	if err == nil {
+		var record *hres.LoadRecord
+		record, err = d.applyExtensionParts(ctx, parts, "")
+		if err == nil {
+			return record, nil
+		}
+	}
+	return nil, exception.BuildError(exception.StatusDeepagentLoadPluginError,
+		exception.WithMsg(err.Error()), exception.WithCause(err))
+}
+
+// LoadAgentTemplate 热加载文件型 AgentTemplate 包（根 manifest.json）。
+// 保持本 agent 的 agent_card / model 不变，覆盖根模板的 persona/能力，
+// 并把直接 subagents 物化为运行时 SubAgentConfig。
+// Python: DeepAgent.load_agent_template (deep_agent.py:2281-2308)
+func (d *DeepAgent) LoadAgentTemplate(ctx context.Context, path string) (*hres.LoadRecord, error) {
+	manifestPath, spec, err := func() (string, hschema.AgentTemplateSpec, error) {
+		manifestPath, findErr := hres.FindAgentTemplateManifest(path)
+		if findErr != nil {
+			return "", hschema.AgentTemplateSpec{}, findErr
+		}
+		spec, loadErr := hres.LoadAgentTemplatePackage(manifestPath)
+		if loadErr != nil {
+			return "", hschema.AgentTemplateSpec{}, loadErr
+		}
+		return manifestPath, spec, nil
+	}()
+	if err != nil {
+		return nil, exception.BuildError(exception.StatusDeepagentLoadAgentTemplateError,
+			exception.WithMsg(err.Error()), exception.WithCause(err))
+	}
+	buildCtx := d.newExtensionContext(nil)
+	buildCtx.Extras["source_root"] = filepath.Dir(manifestPath)
+	buildCtx.Extras[hres.ParentModelExtrasKeyRes] = d.deepConfigModel()
+	parts, err := hres.ResolveAgentTemplateParts(spec, buildCtx)
+	if err == nil {
+		var record *hres.LoadRecord
+		record, err = d.applyExtensionParts(ctx, parts, manifestPath)
+		if err == nil {
+			d.loadRecordsMu.Lock()
+			d.activeAgentTemplate = &AgentTemplateRef{
+				LoadID: record.LoadID, RoleName: spec.AgentCard.GetName(),
+			}
+			d.loadRecordsMu.Unlock()
+			return record, nil
+		}
+	}
+	return nil, exception.BuildError(exception.StatusDeepagentLoadAgentTemplateError,
+		exception.WithMsg(err.Error()), exception.WithCause(err))
+}
+
+// LoadAgentTemplateSpec 热加载内存 AgentTemplateSpec。
+// 与 LoadAgentTemplate 不同：不读包 manifest，spec 上所有带路径字段必须已绝对化。
+// 适合跨团队成员构建边界携带的序列化 spec。
+// Python: DeepAgent.load_agent_template_spec (deep_agent.py:2310-2335)
+func (d *DeepAgent) LoadAgentTemplateSpec(ctx context.Context, spec hschema.AgentTemplateSpec) (*hres.LoadRecord, error) {
+	buildCtx := d.newExtensionContext(nil)
+	buildCtx.Extras[hres.ParentModelExtrasKeyRes] = d.deepConfigModel()
+	parts, err := hres.ResolveAgentTemplateParts(spec, buildCtx)
+	if err == nil {
+		var record *hres.LoadRecord
+		record, err = d.applyExtensionParts(ctx, parts, "")
+		if err == nil {
+			d.loadRecordsMu.Lock()
+			d.activeAgentTemplate = &AgentTemplateRef{
+				LoadID: record.LoadID, RoleName: spec.AgentCard.GetName(),
+			}
+			d.loadRecordsMu.Unlock()
+			return record, nil
+		}
+	}
+	return nil, exception.BuildError(exception.StatusDeepagentLoadAgentTemplateError,
+		exception.WithMsg(err.Error()), exception.WithCause(err))
+}
+
+// LoadPluginAbility 热挂载预构建的 tools / rails / skills。
+// Python: DeepAgent.load_plugin_ability (deep_agent.py:2337-2365)
+func (d *DeepAgent) LoadPluginAbility(
+	ctx context.Context,
+	tools []any,
+	rails []agentinterfaces.AgentRail,
+	skills []hres.ResolvedSkill,
+) (*hres.LoadRecord, error) {
+	// Python: _as_ability_list —— None → 空列表；单值包一元列表（Go 由调用方
+	// 传切片，此处仅过滤 nil 元素保持等价）
+	parts := hres.NewExtensionParts()
+	for _, item := range tools {
+		if item != nil {
+			parts.Tools = append(parts.Tools, item)
+		}
+	}
+	parts.Rails = append(parts.Rails, rails...)
+	parts.Skills = append(parts.Skills, skills...)
+	record, err := d.applyExtensionParts(ctx, parts, "")
+	if err != nil {
+		return nil, exception.BuildError(exception.StatusDeepagentLoadPluginError,
+			exception.WithMsg(err.Error()), exception.WithCause(err))
+	}
+	return record, nil
+}
+
+// UnloadExtension 按 LoadRecord 台账卸载一次成功的 Plugin / AgentTemplate load。
+// 未知 / 已卸载的 load_id 是无操作。只应用台账拥有的 refs；调用方 record.refs 被忽略。
+// Python: DeepAgent.unload_extension (deep_agent.py:2367-2385)
+func (d *DeepAgent) UnloadExtension(ctx context.Context, record hres.LoadRecord) ([]string, error) {
+	d.loadRecordsMu.Lock()
+	owned, exists := d.loadRecords[record.LoadID]
+	if !exists {
+		d.loadRecordsMu.Unlock()
+		return []string{}, nil
+	}
+	d.loadRecordsMu.Unlock()
+
+	labels, err := UnapplyExtensionHot(ctx, d, owned.Refs)
+	if err != nil {
+		return nil, exception.BuildError(exception.StatusDeepagentUnloadExtensionError,
+			exception.WithMsg(err.Error()), exception.WithCause(err))
+	}
+	d.loadRecordsMu.Lock()
+	delete(d.loadRecords, record.LoadID)
+	if d.activeAgentTemplate != nil && d.activeAgentTemplate.LoadID == record.LoadID {
+		d.activeAgentTemplate = nil
+	}
+	d.loadRecordsMu.Unlock()
+	return labels, nil
+}
+
+// LoadHarnessConfig 旧热加载入口（已废弃）。请改用 LoadPlugin。
+// Python: DeepAgent.load_harness_config (deep_agent.py:2387-2405)
+//
+// Deprecated: 改用 LoadPlugin；语义为同参转调（偏差 D-15a：Python 的
+// DeprecationWarning 在 Go 以 // Deprecated: 标记表达）。
+func (d *DeepAgent) LoadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
+	record, err := d.LoadPlugin(ctx, configPath)
+	if err != nil {
+		return nil, err
+	}
+	return LoadRecordLabels(*record), nil
+}
+
+// UnloadHarnessConfig 旧卸载入口（已废弃）。请改用 UnloadExtension。
+// 按 manifest 路径在台账中定位 LoadRecord 后转调 UnloadExtension；
+// 无匹配记录返回空列表（对齐旧的「缺失即无操作」）。
+// Python: DeepAgent.unload_harness_config (deep_agent.py:2407-2449)
+//
+// Deprecated: 改用 UnloadExtension。
+func (d *DeepAgent) UnloadHarnessConfig(ctx context.Context, configPath string) ([]string, error) {
+	resolved, err := hres.FindPluginManifest(configPath)
+	if err != nil {
+		// Python: FileNotFoundError → return []
+		return []string{}, nil
+	}
+	d.loadRecordsMu.Lock()
+	var targetRecord *hres.LoadRecord
+	for id, record := range d.loadRecords {
+		if record.SourceURI == resolved {
+			targetRecord = &record
+			_ = id
+			break
+		}
+	}
+	d.loadRecordsMu.Unlock()
+	if targetRecord == nil {
+		return []string{}, nil
+	}
+	return d.UnloadExtension(ctx, *targetRecord)
+}
+
+// LoadRecordLabels 产出人可读的资源标签列表（kind:identity）。
+// Python: DeepAgent._load_record_labels (deep_agent.py:2451-2453)
+func LoadRecordLabels(record hres.LoadRecord) []string {
+	labels := make([]string, 0, len(record.Refs))
+	for _, ref := range record.Refs {
+		labels = append(labels, fmt.Sprintf("%s:%s", ref.Kind, ref.Identity))
+	}
+	return labels
+}
+
+// deepConfigModel 取 deep_config.Model；未配置返回 nil。
+// Python: self.deep_config.model
+func (d *DeepAgent) deepConfigModel() *llm.Model {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	if d.deepConfig == nil {
+		return nil
+	}
+	return d.deepConfig.Model
 }

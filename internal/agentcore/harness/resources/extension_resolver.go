@@ -27,10 +27,10 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// parentModelExtrasKeyRes 父模型在 BuildContext.extras 里的键。
+// ParentModelExtrasKeyRes 父模型在 BuildContext.extras 里的键。
 // Python: deep_agent.py load_agent_template 段 `ctx.extras["_parent_model"]`
 // （与 harness 包的 parentModelExtrasKey 同值；两包互不依赖故各存一份。）
-const parentModelExtrasKeyRes = "_parent_model"
+const ParentModelExtrasKeyRes = "_parent_model"
 
 // templatePlaceholderPattern 模板占位符：{{ name }}，name 为标识符。
 // Python: extension_resolver.py:38 _TEMPLATE_PATTERN
@@ -353,7 +353,7 @@ func ResolveAgentTemplateParts(spec hschema.AgentTemplateSpec, ctx hschema.Build
 	if ctx != nil {
 		parentExtras = ctx.GetExtras()
 	}
-	if raw, ok := parentExtras[parentModelExtrasKeyRes]; ok {
+	if raw, ok := parentExtras[ParentModelExtrasKeyRes]; ok {
 		if m, isModel := raw.(*llm.Model); isModel {
 			parentModel = m
 		}

@@ -609,15 +609,24 @@ func (b *LocalBackend) loadRuntimeExtensions(ctx context.Context) error {
 	return nil
 }
 
-// loadPluginFn 返回当前生效的插件加载函数（nil 时用未实现桩）。
-// 偏差 D-LP：默认桩对应 ⏵ 15.15 的 DeepAgent.LoadPlugin 回填点。
+// loadPluginFn 返回当前生效的插件加载函数。
+// 15.15 回填完成：默认走 DeepAgent.LoadPlugin 真实现（labels 为台账资源标签）；
+// SetLoadPlugin 仅保留测试覆写能力。
 func (b *LocalBackend) loadPluginFn() func(ctx context.Context, path string) (labels []string, err error) {
 	if b.loadPlugin != nil {
 		return func(ctx context.Context, path string) ([]string, error) { return b.loadPlugin(path) }
 	}
-	return func(_ context.Context, _ string) ([]string, error) {
-		return nil, errNotImplemented(
-			"DeepAgent.LoadPlugin is not yet ported (pending 15.15 templates & plugins)")
+	return func(ctx context.Context, path string) ([]string, error) {
+		// Python: factory.py 的 runtime extension 热加载走 agent.load_harness_config
+		// 的 deprecated 转调链（load_harness_config → load_plugin → labels）。
+		if b.agent == nil {
+			return nil, errNotImplemented("agent not started; cannot load plugin")
+		}
+		record, err := b.agent.LoadPlugin(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return harness.LoadRecordLabels(*record), nil
 	}
 }
 

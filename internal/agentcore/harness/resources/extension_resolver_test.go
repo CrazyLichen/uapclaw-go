@@ -167,7 +167,7 @@ func TestResolveAgentTemplateParts_父模型缺失报错(t *testing.T) {
 func TestResolveAgentTemplateParts_subagent物化(t *testing.T) {
 	model := &llm.Model{}
 	ctx := newTestBuildContext(t)
-	ctx.GetExtras()[parentModelExtrasKeyRes] = model
+	ctx.GetExtras()[ParentModelExtrasKeyRes] = model
 	spec := hschema.AgentTemplateSpec{
 		Subagents: []hschema.AgentTemplateSpec{{
 			AgentCard: mustCard(t, "child-1", "child", "子模板"),
@@ -190,7 +190,7 @@ func TestResolveAgentTemplateParts_subagent物化(t *testing.T) {
 // TestResolveAgentTemplateParts_段落ReplaceExisting 对齐 Python :144-147。
 func TestResolveAgentTemplateParts_段落ReplaceExisting(t *testing.T) {
 	ctx := newTestBuildContext(t)
-	ctx.GetExtras()[parentModelExtrasKeyRes] = &llm.Model{}
+	ctx.GetExtras()[ParentModelExtrasKeyRes] = &llm.Model{}
 	spec := hschema.AgentTemplateSpec{
 		PromptSections: []hschema.PromptSectionSpec{
 			{Name: "identity", Content: map[string]string{"cn": "根 persona"}, Priority: 10},
