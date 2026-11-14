@@ -183,6 +183,9 @@ func BuildRequest(task *rsi.RsiTaskEnvelope, validation *rsi.ArtifactValidationR
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// strPtr 取字符串指针（校验助手）。
+func strPtr(s string) *string { return &s }
+
 // nonEmpty Python _non_empty：str 且 strip 后非空。
 func nonEmpty(v *string) bool {
 	return v != nil && strings.TrimSpace(*v) != ""
@@ -199,5 +202,3 @@ func normalizeWebProxy(v *string) *string {
 	}
 	return &trimmed
 }
-
-

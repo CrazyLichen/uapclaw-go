@@ -1,6 +1,7 @@
 package artifactrsi
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
@@ -41,8 +42,6 @@ func TestArtifactRequestError_Error返回首条(t *testing.T) {
 		t.Fatalf("errors.As/Errors() 不符")
 	}
 }
-
-func strPtr(s string) *string { return &s }
 
 // validProgram 返回一条能通过全部校验的 program 请求。
 func validProgram() *rsi.RsiTaskCreateRequest {
@@ -194,5 +193,53 @@ func TestBuildRequest_拒绝路径(t *testing.T) {
 	env := rsi.NewRsiTaskEnvelope("t", "/run", &at, validProgram())
 	if _, err := BuildRequest(env, ValidateArtifactTaskRequest(env.Config()), nil); err == nil || !strings.Contains(err.Error(), "OPTIMIZER_MODEL_INSTANCE_REQUIRED") {
 		t.Fatalf("须报 OPTIMIZER_MODEL_INSTANCE_REQUIRED, got %v", err)
+	}
+}
+
+// ──────────────────────────── 接口编译断言 ────────────────────────────
+
+// fakeProvider 用于编译期验证 ArtifactProvider 接口可被实现。
+type fakeProvider struct{}
+
+func (f *fakeProvider) ArtifactType() rsi.ArtifactType { return rsi.ArtifactTypeProgram }
+
+func (f *fakeProvider) ValidateInput(artifactPath *string) *rsi.ArtifactValidationResult {
+	return rsi.NewArtifactValidationResult(true, nil)
+}
+
+func (f *fakeProvider) Run(ctx context.Context, req *ArtifactEngineRequest, onEvent rsi.OnEvent) (*rsi.EngineResult, error) {
+	return nil, nil
+}
+
+func (f *fakeProvider) Pause(ctx context.Context, taskID string, onEvent rsi.OnEvent) (*rsi.EngineResult, error) {
+	return nil, nil
+}
+
+func (f *fakeProvider) Resume(ctx context.Context, req *ArtifactEngineRequest, onEvent rsi.OnEvent) (*rsi.EngineResult, error) {
+	return nil, nil
+}
+
+func (f *fakeProvider) ReadState(taskID string) *rsi.EngineState   { return nil }
+func (f *fakeProvider) ReadReport(taskID string) *rsi.EngineReport { return nil }
+func (f *fakeProvider) GetTree(taskID string) *rsi.TreeResponse    { return nil }
+
+func (f *fakeProvider) LocateArtifact(taskID string, artifactID *string) *rsi.ArtifactRef {
+	return nil
+}
+
+func (f *fakeProvider) Terminate(ctx context.Context, taskID string, onEvent rsi.OnEvent) (*rsi.EngineResult, error) {
+	return nil, nil
+}
+
+// 编译期断言：fakeProvider 满足 ArtifactProvider。
+var _ ArtifactProvider = (*fakeProvider)(nil)
+
+func TestFakeProvider_满足接口(t *testing.T) {
+	var p ArtifactProvider = &fakeProvider{}
+	if p.ArtifactType() != rsi.ArtifactTypeProgram {
+		t.Fatal("ArtifactType 不符")
+	}
+	if !p.ValidateInput(nil).Valid() {
+		t.Fatal("ValidateInput 不符")
 	}
 }
