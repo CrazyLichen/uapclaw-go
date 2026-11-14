@@ -22,7 +22,6 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/permission_mode"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
@@ -161,10 +160,10 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// ask_user 工具调用不产生中断（duplex 链路级集成用例暴露）。
 	if sschema.IsAgentMode(mode) {
 		rail := commrails.NewStructuredAskUserRail(d.resolveRuntimeLanguage())
-		// Python: StructuredAskUserRail(language=..., strict_continuation_contract=smart)
-		// smart 即启用自动权限（AutoPermissionRail 在场）时为 true（interface_deep.py:5568）
-		rail.SetStrictContinuationContract(
-			permission_mode.IsAutoPermissionEnabled(permowner.DeepCopyPermissionConfig(config)))
+		// Python: StructuredAskUserRail(language=...)（interface_deep.py:10793-10800）
+		// strict_continuation_contract 不传 → 构造默认 False；5568 的 smart 分支是
+		// 子 agent 选 rail 时复制用的（复制时显式 False），根装配恒默认。
+		_ = rail
 		railsList = append(railsList, rail)
 	}
 

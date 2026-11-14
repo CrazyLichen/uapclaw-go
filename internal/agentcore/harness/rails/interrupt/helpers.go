@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
@@ -59,7 +60,34 @@ func ConvertInteractionsToAskUserQuestion(interactions []map[string]any) map[str
 		}
 	}
 
-	// 第二轮：遍历所有 interaction，尝试提取 permission_interrupt
+	// 第二轮：无结构化 questions 的 ask_user（plain query）→ 自由文本问题卡。
+	// Python: _build_plain_ask_user_question（interrupt_helpers.py:1029-1060）+
+	// convert_interactions_to_ask_user_question 的 plain 分支（:1233-1256）——
+	// 缺失时 plain query 的 ask_user 会落入第三轮被标成 permission_interrupt，
+	// 前端按审批语义渲染、答案也无法归属回 ask_user 工具（2026-11-14 问答闭环实锤）。
+	for _, interaction := range interactions {
+		if isLatestInputPlaceholder(interaction) {
+			continue
+		}
+		requestID, valueObj := extractInteractionParts(interaction)
+		if requestID == "" {
+			continue
+		}
+
+		plainQuestion := buildPlainAskUserQuestion(valueObj)
+		if plainQuestion == nil {
+			continue
+		}
+
+		return map[string]any{
+			"event_type": "chat.ask_user_question",
+			"request_id": requestID,
+			"questions":  []map[string]any{plainQuestion},
+			"source":     "ask_user_interrupt",
+		}
+	}
+
+	// 第三轮：遍历所有 interaction，尝试提取 permission_interrupt
 	for _, interaction := range interactions {
 		if isLatestInputPlaceholder(interaction) {
 			continue
@@ -308,4 +336,70 @@ func headerFromToolName(toolName string) string {
 		return fmt.Sprintf("权限审批: %s", toolName)
 	}
 	return "权限审批"
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isAskUserInterruptValue 判断中断值是否为 ask_user 中断。
+//
+// Python: _is_ask_user_interrupt_value (interrupt_helpers.py:997-1027)
+//
+// 判定顺序：①声明的 interrupt_kind == ASK_USER；②tool_name == "ask_user"
+// （优先用显式工具身份——很多工具只有 query 参数，不能把一切 query 形状
+// 的中断都当 ask_user）；③遗留 payload 的结构回退（payload_schema +
+// questions 同时在场）。
+func isAskUserInterruptValue(valueObj any) bool {
+	if kind := interruptKindOfValue(valueObj); kind != "" {
+		return kind == saschema.InterruptKindAskUser
+	}
+	if toolName := readValueField(valueObj, "tool_name"); toolName != "" {
+		return toolName == "ask_user"
+	}
+	// 遗留 ask_user 中断 payload 可能不带 tool_name，保留结构回退。
+	mapping, ok := valueObj.(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasPayloadSchema := mapping["payload_schema"]
+	_, hasQuestions := mapping["questions"]
+	return hasPayloadSchema && hasQuestions
+}
+
+// buildPlainAskUserQuestion 无结构化选项时构建自由文本 ask_user 问题卡。
+//
+// Python: _build_plain_ask_user_question (interrupt_helpers.py:1029-1060)
+//
+// 文案回退顺序：tool_args.query → message → question；全空返回 nil
+// （调用方继续走 permission 投影）。
+func buildPlainAskUserQuestion(valueObj any) map[string]any {
+	if !isAskUserInterruptValue(valueObj) {
+		return nil
+	}
+	if extractQuestionsFromValue(valueObj) != nil {
+		return nil
+	}
+
+	toolName, message, toolArgs := readInterruptFields(valueObj)
+	_ = toolName
+	query := ""
+	if toolArgs != nil {
+		query = strings.TrimSpace(anyToString(toolArgs["query"]))
+	}
+	if query == "" {
+		query = strings.TrimSpace(message)
+	}
+	if query == "" {
+		query = strings.TrimSpace(readValueField(valueObj, "question"))
+	}
+	if query == "" {
+		return nil
+	}
+
+	// Python: {"question": query, "header": "Question", "options": [], "multi_select": False}
+	return map[string]any{
+		"question":     query,
+		"header":       "Question",
+		"options":      []any{},
+		"multi_select": false,
+	}
 }
