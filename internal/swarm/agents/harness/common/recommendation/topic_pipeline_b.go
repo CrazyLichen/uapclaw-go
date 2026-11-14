@@ -160,6 +160,11 @@ func AuditedArkStageInvoker(invokeStage *ArkStageInvoker, audit *ExternalInvocat
 	return &auditedStageInvoker{base: invokeStage, audit: audit}
 }
 
+// AppendInvocationReceipt 透传追加。
+func (w *auditedStageInvoker) AppendInvocationReceipt(receipt map[string]any) {
+	w.base.AppendInvocationReceipt(receipt)
+}
+
 // HostEvidence 宿主自有证据（topic_pipeline.py:1105-1113）。
 func HostEvidence(plan map[string]any) map[string]any {
 	for _, key := range []string{"project_evidence", "profile_evidence", "hot_list_evidence"} {

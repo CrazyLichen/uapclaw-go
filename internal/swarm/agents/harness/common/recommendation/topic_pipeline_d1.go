@@ -88,6 +88,8 @@ type TopicPipeline struct {
 	// StageTokenCounterFactory token 计数工厂（⤴️31d：真实 StageTokenCounter
 	// 随 topic_history.go 落地；nil 时摘要预算 fail-closed）
 	StageTokenCounterFactory func(string) (*StageTokenCounter, error)
+	// lastAuditedInvoker 最近一次 generate 的 audited 调用器（小票回收）
+	lastAuditedInvoker *auditedStageInvoker
 
 	statePipeline *TopicPreparePipeline
 }
