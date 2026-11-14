@@ -137,9 +137,6 @@ func ValidateArtifactTaskRequest(request *rsi.RsiTaskCreateRequest) *rsi.Artifac
 	return rsi.NewArtifactValidationResult(len(errs) == 0, errs)
 }
 
-// artifactErrorsToMaps 将错误转为 ArtifactValidationResult 既有 map 契约。
-func artifactErrorsToMaps(errs []map[string]string) []map[string]string { return errs }
-
 // BuildRequest 在公开/提供方校验之后构建提供方侧工单。
 // 不读文件、不启动任何提供方工作；供 AgentServer 集成层使用，
 // Provider 实现不得实现或覆盖。model 须已由 AgentServer 初始化
