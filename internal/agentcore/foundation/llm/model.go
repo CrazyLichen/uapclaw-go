@@ -121,6 +121,12 @@ func (m *Model) Invoke(
 	messages model_clients.MessagesParam,
 	opts ...model_clients.InvokeOption,
 ) (*llmschema.AssistantMessage, error) {
+	// Python: model.py L166 with LlmCallScope(unified_completion=True):
+	// 作用域覆盖 transform_io → emit_before → client → emit_after 全程，
+	// 保证每步触发的回调都能取到本次调用的 ID（spec 17.1a）。
+	ctx, scopeDone := EnterCallScope(ctx, true)
+	defer scopeDone()
+
 	// 提取参数用于事件数据
 	params := model_clients.NewInvokeParams(opts...)
 	modelName := m.resolveModelName(params.Model)
@@ -218,6 +224,12 @@ func (m *Model) Stream(
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
 ) (<-chan *llmschema.AssistantMessageChunk, error) {
+	// Python: model.py L236 with LlmCallScope(unified_completion=True):
+	// 作用域覆盖 transform_io → emit_before → client 流式全程 → emit_after，
+	// 保证每个分片回调都能取到本次调用的 ID（spec 17.1a）。
+	ctx, scopeDone := EnterCallScope(ctx, true)
+	defer scopeDone()
+
 	// 提取参数用于事件数据
 	params := model_clients.NewStreamParams(opts...)
 	modelName := m.resolveStreamModelName(params.Model)
