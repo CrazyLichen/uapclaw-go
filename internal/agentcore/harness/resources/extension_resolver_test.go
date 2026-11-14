@@ -11,7 +11,6 @@ import (
 
 // TestResolvedPromptSection 等用例引用 single_agent/prompts 的 PromptSection。
 
-
 // ──────────────────────────── 15.15 类型层 ────────────────────────────
 
 // TestResourceKind_成员全集 成员集合对齐 Python extension_resolver.py:41-50。

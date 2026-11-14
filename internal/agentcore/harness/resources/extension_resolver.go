@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	mtypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
