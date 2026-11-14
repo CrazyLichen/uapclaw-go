@@ -739,9 +739,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		// S-55: 对齐 Python L1353——守卫读原始 invoke_inputs（rail 替换前对象），
 		// 结构上消灭 (nil, nil)：守卫 true → reactLoop 成功恒非 nil；守卫 false → 原始对象 Result 非 nil
 		if invokeInputs.Result == nil {
-			qaP2("invoke: 调reactLoop前", "start", startIteration)
 			result, loopErr = a.reactLoop(ctx, cbc, sess, modelCtx, startIteration)
-			qaP2("invoke: reactLoop返回", "err", loopErr)
 		}
 		return loopErr
 	})
@@ -960,7 +958,6 @@ func (a *ReActAgent) reactLoop(
 
 	// S-54: 对齐 Python react_agent.py L1328——get_tools 异常直接传播导致 invoke 失败
 	//（fail-fast，不降级为空工具列表继续执行）
-	qaP2("reactLoop开始", "start", startIteration)
 	tools, err := a.getTools(ctx)
 	if err != nil {
 		logger.Error(logComponent).
@@ -1003,7 +1000,6 @@ func (a *ReActAgent) reactLoop(
 			}
 		}
 
-		qaP2("轮首", "iter", iteration)
 		// 调用 LLM
 		aiMsg, err := a.callModel(ctx, cbc, modelCtx, tools, sess)
 		if err != nil {

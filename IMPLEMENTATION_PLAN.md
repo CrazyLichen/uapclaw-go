@@ -1054,7 +1054,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
-| 17.1 | ☐ | 基础 schema / 事件 / 用量 | `rsi` 数据契约、事件 kind、token 用量累计（缺计数时保留累计值） | `internal/evolving/rsi/{schema,events,usage}.go` ← `openjiuwen/rsi/{schema,events,usage}.py` |
+| 17.1 | ✅ | 基础 schema / 事件 / 用量 | ✅ 三文件落地（schema 13 契约+3 枚举、events 接口+5 事件+Emit、usage 归一化+ModelUsageObserver+Observe 订阅）；✅ **17.1a 前置件 call_scope**（`foundation/llm/call_scope.go` ← `core/foundation/llm/call_scope.py`，Task 0，含 Model.Invoke/Stream 入口接线）；D1-D9 拍板与 P1-P4 偏差见 spec `docs/superpowers/specs/2026-11-14-rsi-17.1-schema-events-usage-design.md`；覆盖率 88.6% | `internal/evolving/rsi/{schema,events,usage}.go` ← `openjiuwen/rsi/{schema,events,usage}.py` |
 | 17.2 | ☐ | artifact 优化服务流 | artifact 提供方契约、优化包安装/浏览/预览、文件与版本管理、任务内生命周期 | 同上 ← `openjiuwen/rsi/artifact_rsi/` |
 | 17.3 | ☐ | PUCT program artifact provider | PUCT 搜索（对齐 agentdescent 语义）、候选打分、solved 阈值提前停止 | 同上 ← `openjiuwen/rsi/artifact_rsi/` |
 | 17.4 | ☐ | harness 演进 | 证据驱动 harness 演进、单 harness 引擎事件、epoch 树、非回归门（全局）、连续两阶段评分 | 同上 ← `openjiuwen/rsi/harness_rsi/` |

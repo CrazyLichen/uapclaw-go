@@ -536,15 +536,12 @@ func (c *DuplexController) readControls(inputCtx context.Context) {
 				"Control input was rejected; no answer was delivered.", false, nil)
 			return
 		}
-		qaProbe("control-answer: pending命中", "id", interactionID, "answers", control.Answers)
 		answer, ansErr := c.answerInput(payload, control.Answers)
 		if ansErr != nil {
-			qaProbe("control-answer: answerInput失败", "err", ansErr)
 			c.terminate("INVALID_CONTROL",
 				"Control input was rejected; no answer was delivered.", false, nil)
 			return
 		}
-		qaProbe("control-answer: 开answer流", "reqID", answer.RequestID)
 		c.addStream(answer.RequestID, c.answerStreamFn(inputCtx, answer))
 	}
 }

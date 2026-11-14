@@ -1,7 +1,6 @@
 package openai
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -77,7 +76,7 @@ func (c *OpenAIModelClient) applyOpenrouterProfile(params map[string]any, modelN
 	if c.enableOpenrouterPromptCachePrefixMatching {
 		previous = c.previousOpenrouterPromptCacheMessages
 		if currentMessages != nil {
-			c.previousOpenrouterPromptCacheMessages = deepCopyMessages(currentMessages)
+			c.previousOpenrouterPromptCacheMessages = deepCopyValue(currentMessages).([]any)
 		} else {
 			c.previousOpenrouterPromptCacheMessages = nil
 		}
@@ -86,10 +85,10 @@ func (c *OpenAIModelClient) applyOpenrouterProfile(params map[string]any, modelN
 		c.previousOpenrouterPromptCacheMessages = nil
 	}
 	if currentMessages != nil {
-		params["messages"] = deepCopyMessages(currentMessages)
+		params["messages"] = deepCopyValue(currentMessages).([]any)
 	}
 	if tools, ok := params["tools"].([]any); ok && len(tools) > 0 {
-		params["tools"] = deepCopyMessages(tools)
+		params["tools"] = deepCopyValue(tools).([]any)
 	}
 	// Python :1123-1136 enable1HTTL 计算 + 开启但不支持时 warning
 	enable1HTTL := c.enableOpenrouter1HPromptCacheTTL &&
@@ -144,19 +143,8 @@ func parseOpenrouterCacheConfigExtra(extra map[string]any) openrouterCacheConfig
 	return cfg
 }
 
-// deepCopyMessages 任意 JSON 树的 []any 深拷贝（对齐 Python deepcopy，走 JSON 往返）。
-// 仅在 profile 方法内对 messages/tools 使用，二者恒为 JSON 可序列化树。
-func deepCopyMessages(value []any) []any {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return value
-	}
-	var out []any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return value
-	}
-	return out
-}
+// 深拷贝复用本包 disabled_thinking.go 既有 deepCopyValue（递归、值类型保型，
+// 对齐 Python deepcopy；JSON 往返会把 int 变 float64 破坏前缀比较，故不走 JSON）。
 
 // openrouterModelProvider 从 "provider/model" 形态取 provider 前缀，剥 "~" 并小写；
 // 无 "/" 或空串返回空串（对应 Python None）。
@@ -172,8 +160,9 @@ func openrouterModelProvider(model string) string {
 	return strings.ToLower(strings.TrimLeft(model[:idx], "~"))
 }
 
-// normalizeOpenrouterProviderSet 归一 provider 集合（逗号串/列表，strip+lower）；
-// value 为 nil 或解析结果为空时回落默认集合。
+// normalizeOpenrouterProviderSet 归一 provider 集合（逗号串/列表，strip+lower）。
+// Python 语义：nil 与不可解析形态（TypeError）回落默认；显式配置空串/空列表返回空集
+// （= 没有任何 provider 支持 = 功能关死），不回落默认。
 // Python: openai_model_client.py:159-167
 func normalizeOpenrouterProviderSet(value any, def map[string]struct{}) map[string]struct{} {
 	out := map[string]struct{}{}
@@ -199,12 +188,10 @@ func normalizeOpenrouterProviderSet(value any, def map[string]struct{}) map[stri
 			}
 		}
 	default:
-		// nil 与其他不可解析形态均回落默认（Python TypeError → return default）
+		// nil 与其他不可解析形态均回落默认（Python value is None / TypeError → return default）
 		return def
 	}
-	if len(out) == 0 {
-		return def
-	}
+	// 显式配置解析出空集也如实返回（Python 返回空 frozenset），不回落默认
 	return out
 }
 
@@ -235,10 +222,19 @@ func withoutCacheControl(value any) any {
 			}
 			normalized[key] = withoutCacheControl(item)
 		}
-		// 剥除后只剩 type=text + text 的单 text 块还原为纯字符串
-		if t, _ := normalized["type"].(string); t == "text" && len(normalized) == 2 {
-			if text, hasText := normalized["text"].(string); hasText {
-				return text
+		// 剥除后只剩 type=text 且 keys ⊆ {type,text} 的单块还原为原值：
+		// Python set(normalized) <= {"type","text"} → return normalized.get("text", "")
+		if t, _ := normalized["type"].(string); t == "text" && len(normalized) <= 2 {
+			_, hasType := normalized["type"]
+			textVal, hasText := normalized["text"]
+			// 键集合 ⊆ {type,text}：len==1 时必是 {type} 或…（text-only 无 type 已被上面 type 判断排除）；
+			// len==2 时须恰好 {type,text}，否则（如 {type,foo}）不还原
+			subset := (len(normalized) == 1 && hasType) || (len(normalized) == 2 && hasType && hasText)
+			if subset {
+				if hasText {
+					return textVal // 值非字符串也原样取出（Python get 语义）
+				}
+				return "" // Python get("text","") 默认空串
 			}
 		}
 		// content 为单字符串元素的 list 还原为字符串

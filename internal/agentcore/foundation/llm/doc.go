@@ -8,6 +8,7 @@
 //	├── doc.go                    # 包文档
 //	├── init_model.go             # InitModel 工厂函数及选项
 //	├── model.go                  # Model 统一 LLM 调用入口（门面）
+//	├── call_scope.go             # 每调用 ID 作用域（Python call_scope.py）
 //	└── model_clients_register.go # 集中 blank import 注册所有内置 provider
 //
 // 对应 Python 代码：openjiuwen/core/foundation/llm/
