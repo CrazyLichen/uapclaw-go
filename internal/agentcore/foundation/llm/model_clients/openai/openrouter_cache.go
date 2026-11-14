@@ -10,6 +10,23 @@ import (
 // Python: openjiuwen/core/foundation/llm/model_clients/openai_model_client.py:95-285
 // 读链（cache 用量解析）已由 model_clients/usage_extract.go 承担，本文件只做写链。
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// openrouterCacheConfig OpenRouter 显式缓存的 5 个配置键解析结果。
+// Python: openai_model_client.py:436-453 __init__ 的 extra.get(...)
+type openrouterCacheConfig struct {
+	// enableExplicitCaching 显式缓存总开关（openrouter_enable_explicit_prompt_caching，默认 true）
+	enableExplicitCaching bool
+	// enablePrefixMatching 跨轮最长前缀匹配开关（openrouter_enable_prompt_cache_prefix_matching，默认 true）
+	enablePrefixMatching bool
+	// enable1HTTL 1h TTL 开关（openrouter_enable_1h_prompt_cache_ttl，默认 false）
+	enable1HTTL bool
+	// explicitProviders 显式缓存 provider 集合
+	explicitProviders map[string]struct{}
+	// ttl1hProviders 1h TTL provider 集合
+	ttl1hProviders map[string]struct{}
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 var (
@@ -21,6 +38,47 @@ var (
 	// Python: openai_model_client.py:104-106
 	openrouter1HPromptCacheTTLProviders = map[string]struct{}{"anthropic": {}}
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// parseOpenrouterCacheConfigExtra 解析 Extra 中的 5 个配置键。
+// 布尔值对齐 Python truthiness：bool 原样；字符串 "true"/"false" 等兼容；未知形态回落默认。
+// Python: openai_model_client.py:436-453
+func parseOpenrouterCacheConfigExtra(extra map[string]any) openrouterCacheConfig {
+	boolKey := func(key string, def bool) bool {
+		v, ok := extra[key]
+		if !ok || v == nil {
+			return def
+		}
+		switch b := v.(type) {
+		case bool:
+			return b
+		case string:
+			s := strings.TrimSpace(strings.ToLower(b))
+			switch s {
+			case "true", "1", "yes", "on":
+				return true
+			case "false", "0", "no", "off", "":
+				return false
+			}
+			return def
+		default:
+			return def
+		}
+	}
+	cfg := openrouterCacheConfig{
+		enableExplicitCaching: boolKey("openrouter_enable_explicit_prompt_caching", true),
+		enablePrefixMatching:  boolKey("openrouter_enable_prompt_cache_prefix_matching", true),
+		enable1HTTL:           boolKey("openrouter_enable_1h_prompt_cache_ttl", false),
+	}
+	// Python: :447-450 显式缓存 provider 集合
+	cfg.explicitProviders = normalizeOpenrouterProviderSet(
+		extra["openrouter_explicit_prompt_cache_providers"], openrouterExplicitPromptCachingProviders)
+	// Python: :451-454 1h TTL provider 集合
+	cfg.ttl1hProviders = normalizeOpenrouterProviderSet(
+		extra["openrouter_prompt_cache_1h_ttl_providers"], openrouter1HPromptCacheTTLProviders)
+	return cfg
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

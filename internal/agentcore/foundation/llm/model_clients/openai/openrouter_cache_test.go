@@ -3,6 +3,8 @@ package openai
 import (
 	"reflect"
 	"testing"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 func TestOpenrouterModelProvider(t *testing.T) {
@@ -208,5 +210,64 @@ func TestApplyOpenrouterPromptCacheControl(t *testing.T) {
 		if _, ok := blk["cache_control"]; !ok {
 			t.Errorf("prefix 场景 messages[%d] 应打标记", i)
 		}
+	}
+}
+
+func TestParseOpenrouterCacheConfigExtra(t *testing.T) {
+	// 全默认
+	cfg := parseOpenrouterCacheConfigExtra(nil)
+	if !cfg.enableExplicitCaching || !cfg.enablePrefixMatching || cfg.enable1HTTL {
+		t.Errorf("默认值: %+v", cfg)
+	}
+	if _, ok := cfg.explicitProviders["qwen"]; !ok {
+		t.Errorf("explicit 默认含 qwen: %v", cfg.explicitProviders)
+	}
+	if _, ok := cfg.ttl1hProviders["anthropic"]; !ok {
+		t.Errorf("ttl1h 默认仅 anthropic: %v", cfg.ttl1hProviders)
+	}
+	// 字符串布尔 + 逗号串 provider
+	cfg = parseOpenrouterCacheConfigExtra(map[string]any{
+		"openrouter_enable_explicit_prompt_caching":  "false",
+		"openrouter_enable_1h_prompt_cache_ttl":      true,
+		"openrouter_explicit_prompt_cache_providers": " Anthropic , Qwen ",
+		"openrouter_prompt_cache_1h_ttl_providers":   []any{"anthropic", "qwen"},
+	})
+	if cfg.enableExplicitCaching || !cfg.enable1HTTL || !cfg.enablePrefixMatching {
+		t.Errorf("字符串布尔: %+v", cfg)
+	}
+	if _, ok := cfg.explicitProviders["qwen"]; !ok {
+		t.Errorf("逗号串 provider: %v", cfg.explicitProviders)
+	}
+	if _, ok := cfg.ttl1hProviders["qwen"]; !ok {
+		t.Errorf("列表 provider: %v", cfg.ttl1hProviders)
+	}
+	// 未知字符串布尔键回落默认
+	cfg = parseOpenrouterCacheConfigExtra(map[string]any{
+		"openrouter_enable_explicit_prompt_caching": "maybe",
+	})
+	if !cfg.enableExplicitCaching {
+		t.Errorf("未知布尔值回落默认: %+v", cfg)
+	}
+}
+
+func TestNewOpenAIModelClient_OpenrouterCacheDefaults(t *testing.T) {
+	c, err := NewOpenAIModelClient(
+		&llmschema.ModelRequestConfig{ModelName: "anthropic/claude-4"},
+		&llmschema.ModelClientConfig{ClientProvider: "OpenRouter", APIBase: "https://openrouter.ai/api/v1", APIKey: "k"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.enableOpenrouterExplicitCaching || !c.enableOpenrouterPromptCachePrefixMatching {
+		t.Error("默认应开启显式缓存与前缀匹配")
+	}
+	if c.enableOpenrouter1HPromptCacheTTL {
+		t.Error("1h TTL 默认应关闭")
+	}
+	if c.previousOpenrouterPromptCacheMessages != nil {
+		t.Error("初始 previous 应为 nil")
+	}
+	if _, ok := c.openrouterCacheProviders["anthropic"]; !ok {
+		t.Errorf("构造期应解析 provider 集合: %v", c.openrouterCacheProviders)
 	}
 }
