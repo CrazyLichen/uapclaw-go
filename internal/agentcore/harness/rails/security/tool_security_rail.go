@@ -13,7 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -47,13 +46,6 @@ type PermissionInterruptRail struct {
 	host *harnesssecurity.ToolPermissionHost
 	// override 子类派发覆写（Go 嵌入不做虚函数派发，用显式钩子复刻 Python MRO）
 	override *PermissionInterruptRailOverride
-}
-
-// InterruptKind 本 rail 抛出的中断类型为 permission。
-//
-// Python: ToolSecurityRail.interrupt_kind = InterruptKind.PERMISSION
-func (r *PermissionInterruptRail) InterruptKind() string {
-	return saschema.InterruptKindPermission
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -102,6 +94,8 @@ func NewPermissionInterruptRail(
 		host:              host,
 	}
 
+	// Python: ToolSecurityRail.interrupt_kind = InterruptKind.PERMISSION（类属性 → 构造期注入）
+	r.SetInterruptKind(saschema.InterruptKindPermission)
 	if r.staticConfig == nil {
 		r.staticConfig = make(map[string]any)
 	}
@@ -198,7 +192,7 @@ func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agent
 		Msg("permission.rail.before_tool_call")
 
 	toolCallID := r.resolveToolCallID(toolInputs.ToolCall)
-	userInput := r.getUserInput(cbc, toolCallID)
+	userInput := r.GetUserInput(cbc, toolCallID)
 
 	// 从 session 获取 auto_confirm 配置
 	var autoConfirmConfig map[string]any
@@ -1079,7 +1073,9 @@ func (r *PermissionInterruptRail) applyDecision(
 	case *interrupt.RejectResult:
 		r.skipPermissionTool(cbc, toolInputs, d)
 	case *interrupt.InterruptResult:
-		r.raiseInterrupt(toolInputs.ToolName, toolInputs.ToolCall, d.Request)
+		// Python: 基类 BaseInterruptRail._raise_interrupt（含 stamp_interrupt）；
+		// Go 侧此前误留本地无盖章副本导致 kind 恒空（embedding 虚方法链路对齐修复）。
+		r.RaiseInterrupt(toolInputs.ToolName, toolInputs.ToolCall, d.Request)
 	}
 }
 
@@ -1099,22 +1095,6 @@ func (r *PermissionInterruptRail) skipPermissionTool(
 	}
 }
 
-// raiseInterrupt 抛出工具中断异常。
-func (r *PermissionInterruptRail) raiseInterrupt(
-	toolName string,
-	toolCall *llmschema.ToolCall,
-	request saschema.InterruptRequester,
-) {
-	exc := &saschema.ToolInterruptException{
-		Request:  request,
-		ToolCall: toolCall,
-	}
-	panic(cb.NewAbortError(
-		fmt.Sprintf("工具执行已中断: %s", toolName),
-		exc,
-	))
-}
-
 // resolveToolCallID 从 ToolCall 中提取 ID。
 func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall) string {
 	if toolCall == nil {
@@ -1124,64 +1104,11 @@ func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall
 }
 
 // getUserInput 从回调上下文中提取用户输入。
-// Python: BaseInterruptRail._get_user_input
+// Python: BaseInterruptRail._get_user_input（owner 路由 find_own_answer）；
+// overrideGetUserInput 是 Go 侧宿主覆写钩子（仓内既有扩展，先于基类逻辑）。
 func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
 	if result, handled := r.overrideGetUserInput(cbc, toolCallID); handled {
 		return result
 	}
-	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
-	// Python: logger.info("[_get_user_input] tool_call_id=%r raw_input_type=%s", ...)
-	if !exists || rawInput == nil {
-		logger.Info(logComponent).
-			Str("tool_call_id", toolCallID).
-			Str("raw_input_type", "None").
-			Msg("extracting user input")
-		return nil
-	}
-	logger.Info(logComponent).
-		Str("tool_call_id", toolCallID).
-		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
-		Msg("extracting user input")
-
-	// InteractiveInput 格式
-	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
-		// Python: logger.info("[_get_user_input] InteractiveInput.user_inputs keys=%r", ...)
-		keys := make([]string, 0, len(interactive.UserInputs))
-		for k := range interactive.UserInputs {
-			keys = append(keys, k)
-		}
-		logger.Info(logComponent).
-			Str("tool_call_id", toolCallID).
-			Strs("keys", keys).
-			Msg("InteractiveInput.user_inputs")
-
-		if val, found := interactive.UserInputs[toolCallID]; found {
-			// Python: logger.info("[_get_user_input] MATCHED! tool_call_id=%r value=%r", ...)
-			valRepr := fmt.Sprintf("%v", val)
-			if len(valRepr) > 200 {
-				valRepr = valRepr[:200]
-			}
-			logger.Info(logComponent).
-				Str("tool_call_id", toolCallID).
-				Str("value", valRepr).
-				Msg("InteractiveInput matched")
-			return val
-		}
-		// Python: logger.warning("[_get_user_input] NO MATCH! tool_call_id=%r not in keys=%r", ...)
-		logger.Warn(logComponent).
-			Str("tool_call_id", toolCallID).
-			Strs("keys", keys).
-			Msg("no matching tool_call_id found in InteractiveInput")
-		return nil
-	}
-
-	// map[string]any 格式
-	if m, ok := rawInput.(map[string]any); ok {
-		if val, found := m[toolCallID]; found {
-			return val
-		}
-		return m
-	}
-
-	return rawInput
+	return r.BaseInterruptRail.GetUserInput(cbc, toolCallID)
 }

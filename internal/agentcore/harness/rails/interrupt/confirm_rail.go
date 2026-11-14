@@ -55,12 +55,6 @@ type ConfirmInterruptRail struct {
 	autoConfirmKeyFn AutoConfirmKeyFn
 }
 
-// InterruptKind 本 rail 抛出的中断类型为 confirm。
-// Python: ConfirmInterruptRail.interrupt_kind = InterruptKind.CONFIRM
-func (r *ConfirmInterruptRail) InterruptKind() string {
-	return saschema.InterruptKindConfirm
-}
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 ConfirmInterruptRail 满足 AgentRail 接口
@@ -87,6 +81,8 @@ func NewConfirmInterruptRail(opts ...ConfirmInterruptRailOption) *ConfirmInterru
 	}
 	// 覆盖 ResolveInterruptFn
 	r.ResolveInterruptFn = r.resolveConfirmInterrupt
+	// Python: ConfirmInterruptRail.interrupt_kind = InterruptKind.CONFIRM（类属性 → 构造期注入）
+	r.SetInterruptKind(saschema.InterruptKindConfirm)
 	// 应用选项
 	for _, opt := range opts {
 		opt(r)

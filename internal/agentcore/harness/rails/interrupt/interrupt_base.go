@@ -8,11 +8,10 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	interruptpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -47,6 +46,8 @@ type InterruptResult struct {
 
 // BaseInterruptRail 中断拦截基础 Rail，提供工具调用的审批/拒绝/中断机制。
 type BaseInterruptRail struct {
+	// interruptKind 本 rail 抛出的中断类型（构造期注入；空串 = UNDECLARED）
+	interruptKind string
 	agentinterfaces.BaseRail
 	// toolNames 需拦截的工具名集合
 	toolNames map[string]struct{}
@@ -150,7 +151,7 @@ func (r *BaseInterruptRail) BeforeToolCall(ctx context.Context, cbc *agentinterf
 	toolCallID := r.resolveToolCallID(toolInputs.ToolCall)
 
 	// 提取用户输入
-	userInput := r.getUserInput(cbc, toolCallID)
+	userInput := r.GetUserInput(cbc, toolCallID)
 
 	// 从 session 获取 auto_confirm 配置
 	var autoConfirmConfig map[string]any
@@ -181,10 +182,22 @@ func (r *BaseInterruptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEven
 }
 
 // InterruptKind 返回本 rail 抛出中断时盖上的类型。
-// 空串表示不声明（对齐 Python InterruptKind.UNDECLARED）。子类可覆盖。
+// 空串表示不声明（对齐 Python InterruptKind.UNDECLARED）。
+// Python 的 interrupt_kind 是类属性，子类赋值即可覆盖；Go 方法在基类方法体内
+// 静态绑定（embedding 虚方法陷阱，第 3 次实锤），故改为字段驱动 + SetInterruptKind
+// 注入，子类不再方法覆盖。
 // Python: InterruptOwnerMixin.interrupt_kind = InterruptKind.UNDECLARED
 func (r *BaseInterruptRail) InterruptKind() string {
+	if r.interruptKind != "" {
+		return r.interruptKind
+	}
 	return saschema.InterruptKindUndeclared
+}
+
+// SetInterruptKind 覆盖本 rail 的中断类型（对齐 Python 子类
+// interrupt_kind 类属性覆盖；传空串即恢复 UNDECLARED）。
+func (r *BaseInterruptRail) SetInterruptKind(kind string) {
+	r.interruptKind = kind
 }
 
 // InterruptOwner 返回本 rail 的稳定 owner 键，答案按此键路由回本 rail。
@@ -265,14 +278,14 @@ func (r *BaseInterruptRail) applyDecision(
 	case *RejectResult:
 		r.skipTool(cbc, toolInputs, d)
 	case *InterruptResult:
-		r.raiseInterrupt(toolInputs.ToolName, toolInputs.ToolCall, d.Request)
+		r.RaiseInterrupt(toolInputs.ToolName, toolInputs.ToolCall, d.Request)
 	}
 }
 
 // raiseInterrupt 抛出工具中断异常，中止当前执行流程。
 // 抛之前先给 request 盖上 owner 与 kind，供中断处理器按 owner 路由答案。
 // Python: BaseInterruptRail._raise_interrupt（内部先 self.stamp_interrupt(request)）
-func (r *BaseInterruptRail) raiseInterrupt(
+func (r *BaseInterruptRail) RaiseInterrupt(
 	toolName string,
 	toolCall *llmschema.ToolCall,
 	request saschema.InterruptRequester,
@@ -312,58 +325,32 @@ func (r *BaseInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall) stri
 	return toolCall.ID
 }
 
-// getUserInput 从回调上下文中提取用户输入。
-func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
-	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
-	if !exists || rawInput == nil {
+// FindOwnAnswer 返回本次恢复中本 rail 在指定调用上的答案（无则 nil）。
+// 答案按 interrupt_owner 路由，rail 只读自己 owner 那份。
+// Python: core/single_agent/interrupt/ownership.py:53-55
+// InterruptOwnerMixin.find_own_answer（InterruptOwnerMixin 的 Go 对应）
+func (r *BaseInterruptRail) FindOwnAnswer(
+	cbc *agentinterfaces.AgentCallbackContext,
+	toolCallID string,
+) *saschema.InterruptAnswer {
+	return interruptpkg.FindOwnAnswer(cbc, r.InterruptOwner(), toolCallID)
+}
+
+// IsCarriedAnswer 本 rail 在此调用上的答案是否来自更早恢复轮（已 acted on）。
+// Python: ownership.py:57-64 is_carried_answer
+func (r *BaseInterruptRail) IsCarriedAnswer(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) bool {
+	return interruptpkg.IsCarriedAnswer(cbc, r.InterruptOwner(), toolCallID)
+}
+
+// getUserInput 从回调上下文中提取本 rail 的用户输入。
+// Python: BaseInterruptRail._get_user_input（interrupt_base.py:279-283）：
+// answer = self.find_own_answer(ctx.extra, tool_call_id)；返回 answer.value。
+// 答案按 owner 路由（RESUME_INTERRUPT_ANSWERS_KEY），与 RESUME_USER_INPUT_KEY
+// 的原始 InteractiveInput 无关。
+func (r *BaseInterruptRail) GetUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
+	answer := r.FindOwnAnswer(cbc, toolCallID)
+	if answer == nil {
 		return nil
 	}
-
-	// Python: logger.info：提取用户输入日志
-	logger.Info(logComponent).
-		Str("tool_call_id", toolCallID).
-		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
-		Msg("extracting user input")
-
-	// InteractiveInput 格式
-	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
-		// Python: logger.info：记录 keys 列表
-		keys := make([]string, 0, len(interactive.UserInputs))
-		for k := range interactive.UserInputs {
-			keys = append(keys, k)
-		}
-		logger.Info(logComponent).
-			Str("tool_call_id", toolCallID).
-			Strs("keys", keys).
-			Msg("InteractiveInput.user_inputs")
-
-		if val, found := interactive.UserInputs[toolCallID]; found {
-			// Python: logger.info：匹配成功，记录 value 截断
-			valRepr := fmt.Sprintf("%v", val)
-			if len(valRepr) > 200 {
-				valRepr = valRepr[:200]
-			}
-			logger.Info(logComponent).
-				Str("tool_call_id", toolCallID).
-				Str("value", valRepr).
-				Msg("InteractiveInput matched")
-			return val
-		}
-		logger.Warn(logComponent).
-			Str("tool_call_id", toolCallID).
-			Strs("keys", keys).
-			Msg("no matching tool_call_id found in InteractiveInput")
-		return nil
-	}
-
-	// map[string]any 格式
-	if m, ok := rawInput.(map[string]any); ok {
-		if val, found := m[toolCallID]; found {
-			return val
-		}
-		return m
-	}
-
-	// 其他类型直接返回
-	return rawInput
+	return answer.Value
 }

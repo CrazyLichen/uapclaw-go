@@ -439,6 +439,11 @@ func interactionPayload(payload any) (string, any) {
 		id, _ := tuple[0].(string)
 		return id, tuple[1]
 	}
+	// 对象属性形态：InteractionOutput{ID, Value}（Python: harness.py:723-725
+	// getattr(payload, "id") / getattr(payload, "value")——Go 侧统一交互输出结构体）
+	if output, ok := payload.(*sessioninteraction.InteractionOutput); ok && output != nil {
+		return output.ID, output.Value
+	}
 	if m, ok := payload.(map[string]any); ok {
 		if id, ok := m["id"].(string); ok {
 			return id, m["value"]
@@ -830,6 +835,7 @@ func (h *DeepAgentHarness) ExecuteTurn(
 	// 主循环：跑一轮 → 待决中断非空且未中止且无错 → 问宿主 → 恢复。
 	for {
 		if err := h.runRound(ctx, agent, turn, state, query); err != nil {
+
 			if !turn.AbortRequested() {
 				logger.Error(logComponent).Err(err).Str("turn_id", turn.TurnID).
 					Msg("[deepagent] turn failed")
@@ -1571,9 +1577,12 @@ func strPtr(value string) *string { return &value }
 func boolPtr(value bool) *bool { return &value }
 
 // toJsonObject 载荷 → JsonObject（非 map 载荷包 data 键，保持信息不丢）。
+// toJsonObject payload 归一为 JSON 对象（先 ToJsonSafe 清洗，非对象包 {"value": ...}）。
+// Python: harness_providers/jsonsafe.py:46-52 to_json_object
 func toJsonObject(payload any) map[string]any {
-	if m, ok := payload.(map[string]any); ok {
-		return m
+	converted := harness_providers.ToJsonSafe(payload)
+	if obj, ok := converted.(map[string]any); ok {
+		return obj
 	}
-	return map[string]any{"data": payload}
+	return map[string]any{"value": converted}
 }

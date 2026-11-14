@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -414,4 +415,35 @@ func requestAsInterruptRequest(request saschema.InterruptRequester) *saschema.In
 		return ir
 	}
 	return nil
+}
+
+// ──────────────────────────── owner 路由读取（InterruptOwnerMixin 对应） ────────────────────────────
+
+// FindOwnAnswer 返回本次恢复中该 owner 在指定调用上的答案（无则 nil）。
+// rail 只读自己 owner 那份：答案按 interrupt_owner 路由（与 kind 无关）。
+// Python: core/single_agent/interrupt/ownership.py:53-55
+// InterruptOwnerMixin.find_own_answer(extra, tool_call_id) —— 
+// extra[RESUME_INTERRUPT_ANSWERS_KEY][tool_call_id][self.interrupt_owner]
+func FindOwnAnswer(
+	cbc *agentinterfaces.AgentCallbackContext,
+	owner string,
+	toolCallID string,
+) *saschema.InterruptAnswer {
+	raw, ok := cbc.GetExtra(saschema.ResumeInterruptAnswersKey)
+	if !ok {
+		return nil
+	}
+	callAnswers, ok := raw.(CallAnswers)
+	if !ok {
+		return nil
+	}
+	return callAnswers[toolCallID][owner]
+}
+
+// IsCarriedAnswer 该 rail 在此调用上的答案是否来自更早恢复轮。
+// 已被 acted on：再次接受但不重复外部副作用（如写盘持久化）。
+// Python: ownership.py:57-64 is_carried_answer
+func IsCarriedAnswer(cbc *agentinterfaces.AgentCallbackContext, owner, toolCallID string) bool {
+	answer := FindOwnAnswer(cbc, owner, toolCallID)
+	return answer != nil && answer.Carried
 }

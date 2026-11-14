@@ -44,12 +44,6 @@ type AskUserRail struct {
 	tools []tool.Tool
 }
 
-// InterruptKind 本 rail 抛出的中断类型为 ask_user。
-// Python: AskUserRail.interrupt_kind = InterruptKind.ASK_USER
-func (r *AskUserRail) InterruptKind() string {
-	return saschema.InterruptKindAskUser
-}
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // _ 编译时验证 AskUserRail 满足 AgentRail 接口
@@ -70,6 +64,8 @@ func NewAskUserRail(toolNames ...string) *AskUserRail {
 	}
 	// 覆盖 ResolveInterruptFn
 	r.ResolveInterruptFn = r.resolveAskUserInterrupt
+	// Python: AskUserRail.interrupt_kind = InterruptKind.ASK_USER（类属性 → 构造期注入）
+	r.SetInterruptKind(saschema.InterruptKindAskUser)
 	return r
 }
 
