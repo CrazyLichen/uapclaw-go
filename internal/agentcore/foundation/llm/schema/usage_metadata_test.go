@@ -162,7 +162,7 @@ func TestUsageMetadata_缓存与推理字段序列化(t *testing.T) {
 	var m map[string]any
 	_ = json.Unmarshal(data, &m)
 	for _, key := range []string{"cache_read_tokens", "cache_miss_tokens", "cache_write_tokens",
-		"cache_creation_tokens", "reasoning_tokens", "cache_status", "cache_source", "cache_authoritative"} {
+		"cache_creation_input_tokens", "reasoning_tokens", "cache_status", "cache_source", "cache_authoritative"} {
 		if _, exists := m[key]; exists {
 			t.Errorf("nil 指针字段 %s 不应序列化（omitempty）", key)
 		}
@@ -178,7 +178,7 @@ func TestUsageMetadata_缓存与推理字段序列化(t *testing.T) {
 	m = map[string]any{}
 	_ = json.Unmarshal(data, &m)
 	if m["cache_read_tokens"] != float64(30) || m["cache_miss_tokens"] != float64(10) ||
-		m["cache_creation_tokens"] != float64(4) || m["reasoning_tokens"] != float64(900) {
+		m["cache_creation_input_tokens"] != float64(4) || m["reasoning_tokens"] != float64(900) {
 		t.Errorf("数值字段: %v", m)
 	}
 	if m["cache_status"] != "observed" || m["cache_source"] != "provider_usage" {
