@@ -369,15 +369,14 @@ func NewsOnlySuccessorResult(predecessor map[string]any, predecessorCards []map[
 	manifest["component_receipts"] = componentReceipts
 	manifest["component_invocation_receipts"] = invocations
 	manifest["ark_invocation_receipts"] = arkReceipts
+	decisionReceipt := mapCopyAny(predecessorDecisionReceipt)
+	decisionReceipt["decision"] = decisionAggregate
+	decisionReceipt["candidate_decisions"] = decisions
+	manifest["grounding_decision_receipt"] = decisionReceipt
 	if groundingEvidenceReceipt != nil {
-		decisionReceipt := mapCopyAny(predecessorDecisionReceipt)
-		decisionReceipt["decision"] = decisionAggregate
-		decisionReceipt["candidate_decisions"] = decisions
-		manifest["grounding_decision_receipt"] = decisionReceipt
 		manifest["grounding_evidence_receipt"] = groundingEvidenceReceipt
 		manifest["document_snapshot"] = documentSnapshot
 	} else {
-		manifest["grounding_decision_receipt"] = mapCopyAny(predecessorDecisionReceipt)
 		manifest["grounding_evidence_receipt"] = mapCopyAny(predecessorEvidenceReceipt)
 		manifest["document_snapshot"] = documentSnapshot
 	}

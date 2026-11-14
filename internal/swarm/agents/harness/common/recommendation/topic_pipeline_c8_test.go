@@ -209,9 +209,10 @@ func TestNewsOnlySuccessorResult(t *testing.T) {
 		result.Cards[1]["generation_batch_id"] != manifest["generation_batch_id"] {
 		t.Fatalf("kept card: %+v", result.Cards[1])
 	}
-	// news-only 前任的效用调用被剔除（本前任非 news-only → 保留）
+	// 旧效用调用只服务被换候选（candidate_ids=["lead"] ⊆ replaced）→ 离开；
+	// rid 全卡调用保留；加上新效用候选共 2 条
 	invocations := pyListMaps(manifest["component_invocation_receipts"])
-	if len(invocations) != 3 { // rid 全卡 + utility 候选 + 新效用候选
+	if len(invocations) != 2 {
 		t.Fatalf("invocations: %d", len(invocations))
 	}
 	// 厂商小票：hot_news_matcher 血缘的整条离开，slot_decision 保留
