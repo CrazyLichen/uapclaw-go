@@ -1055,7 +1055,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | 17.1 | ✅ | 基础 schema / 事件 / 用量 | ✅ 三文件落地（schema 13 契约+3 枚举、events 接口+5 事件+Emit、usage 归一化+ModelUsageObserver+Observe 订阅）；✅ **17.1a 前置件 call_scope**（`foundation/llm/call_scope.go` ← `core/foundation/llm/call_scope.py`，Task 0，含 Model.Invoke/Stream 入口接线）；D1-D9 拍板与 P1-P4 偏差见 spec `docs/superpowers/specs/2026-11-14-rsi-17.1-schema-events-usage-design.md`；覆盖率 88.6% | `internal/evolving/rsi/{schema,events,usage}.go` ← `openjiuwen/rsi/{schema,events,usage}.py` |
-| 17.2 | ☐ | artifact 优化服务流 | artifact 提供方契约、优化包安装/浏览/预览、文件与版本管理、任务内生命周期 | 同上 ← `openjiuwen/rsi/artifact_rsi/` |
+| 17.2 | ✅ | artifact 优化服务流 | ✅ 契约层落地：`ArtifactProvider` 接口（9 方法+ArtifactType）、`ArtifactEngineRequest` 工单（7 字段不可变）、`ValidateArtifactTaskRequest`（12 条错误码逐字对齐）、`BuildRequest`（paper-only 字段保留/program 置 nil、TYPE_MISMATCH/MODEL_INSTANCE_REQUIRED 拒绝路径）；拍板：地基后移 17.3（方案A）/子协议接口嵌入（方案①）/子包随 17.3、17.5 创建（方案Ⅱ）；已知偏差（bool-as-int 类型层不可能、model_refs nil≈非 Mapping）见 spec §8；覆盖率 89.3%；子协议 program/paper provider 延后 | `internal/evolving/rsi/artifact_rsi/{provider,request}.go` ← `openjiuwen/rsi/artifact_rsi/{provider,request}.py` |
 | 17.3 | ☐ | PUCT program artifact provider | PUCT 搜索（对齐 agentdescent 语义）、候选打分、solved 阈值提前停止 | 同上 ← `openjiuwen/rsi/artifact_rsi/` |
 | 17.4 | ☐ | harness 演进 | 证据驱动 harness 演进、单 harness 引擎事件、epoch 树、非回归门（全局）、连续两阶段评分 | 同上 ← `openjiuwen/rsi/harness_rsi/` |
 | 17.5 | ☐ | paper pipeline | paper 上传/评分/评审证据链、报告渲染（tex/pdf）、宽松校验 | 同上 ← `openjiuwen/rsi/`（paper 系列） |
