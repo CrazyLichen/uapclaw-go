@@ -1139,6 +1139,26 @@ func NormalizeSearchMaxResults(value int) int {
 	return value
 }
 
+// RunFreeSearchStructured 返回不带工具/权限集成的自由搜索结构化结果
+// （对齐 Python search_tools.py:302-331 run_free_search_structured；
+// topic_search/topic_sources 的结构化消费面经此进入）。
+func RunFreeSearchStructured(query string, maxResults, timeoutSeconds int) (string, []map[string]string, error) {
+	maxResults = NormalizeSearchMaxResults(maxResults)
+	engine, rows, err := searchFree(query, maxResults, timeoutSeconds)
+	if err != nil {
+		return "", nil, err
+	}
+	out := make([]map[string]string, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, map[string]string{
+			"title":   row.Title,
+			"url":     row.URL,
+			"snippet": row.Snippet,
+		})
+	}
+	return engine, out, nil
+}
+
 // clampInt 钳制整数值到 [lo, hi]，零值取 defaultVal。
 func clampInt(v, lo, hi, defaultVal int) int {
 	if v == 0 {

@@ -131,7 +131,19 @@ func ProjectOrdinaryInterruption(
 		return nil
 	}
 
-	interactions := interactionsOf(result["state"])
+	// Python: state = result.get("state") or []，元素经 _iter_interactions +
+	// _extract_interaction_parts 解包（OutputSchema(type="__interaction__") →
+	// InteractionOutput{id, value}）。Go 侧用本包 interactionOf 等价解包——
+	// BuildInterruptResult 的 state 元素是类型化 *stream.OutputSchema，
+	// 纯 map 断言会得到空列表 → payload=nil → 误发重试提示
+	// （2026-11-14 问答闭环实锤）。
+	stateRaw, _ := result["state"].([]any)
+	interactions := make([]map[string]any, 0, len(stateRaw))
+	for _, item := range stateRaw {
+		if unwrapped := interactionOf(item); unwrapped != nil {
+			interactions = append(interactions, unwrapped)
+		}
+	}
 	if len(interactions) > 0 && len(interrupt.QuestionInteractions(interactions)) == 0 {
 		return nil
 	}
@@ -344,21 +356,6 @@ func interruptPartsOf(result map[string]any) (string, []any, []any) {
 	state, _ := result["state"].([]any)
 	interruptIDs, _ := result["interrupt_ids"].([]any)
 	return resultType, state, interruptIDs
-}
-
-// interactionsOf 把 state 归一化为交互列表。
-func interactionsOf(raw any) []map[string]any {
-	items, ok := raw.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		if mapping, ok := item.(map[string]any); ok {
-			result = append(result, mapping)
-		}
-	}
-	return result
 }
 
 // interruptIDContains 判断 request_id 是否在中断列表里。
