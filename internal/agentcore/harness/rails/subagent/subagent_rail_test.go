@@ -509,3 +509,57 @@ func TestSubagentRail_Uninit_同步模式不清理toolkit(t *testing.T) {
 
 // TeardownTools 测试替身空实现（对齐 AbilityManagerInterface 扩张）。
 func (f *fakeAbilityManagerForTools) TeardownTools() {}
+
+// TestSubagentRail_RefreshAvailableAgents_热重载刷新文案 对齐 Python
+// subagent_rail.py:177-216：卸掉子代理后 task_tool 描述不再广告旧成员。
+func TestSubagentRail_RefreshAvailableAgents_热重载刷新文案(t *testing.T) {
+	r := NewSubagentRail()
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{
+		Subagents: []hschema.SubagentSpec{
+			&hschema.SubAgentConfig{
+				AgentCard: agentschema.NewAgentCard(
+					agentschema.WithAgentName("explore_agent"),
+					agentschema.WithAgentDescription("探索代理"),
+				),
+			},
+		},
+	}
+	require.NoError(t, r.Init(context.Background(), agent))
+	require.Len(t, r.tools, 1)
+	card := r.tools[0].Card()
+	require.Contains(t, card.Description, "explore_agent")
+
+	// 模拟热卸载：config.subagents 清空后刷新
+	agent.deepConfig.Subagents = nil
+	r.RefreshAvailableAgents(agent)
+
+	assert.NotContains(t, card.Description, "explore_agent",
+		"刷新后 task_tool 描述不应再广告已卸载的子代理")
+}
+
+// TestSubagentRail_RefreshAvailableAgents_无工具无操作 对齐 Python :179-180
+// （if not self.tools: return）。
+func TestSubagentRail_RefreshAvailableAgents_无工具无操作(t *testing.T) {
+	r := NewSubagentRail()
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{}
+	// 无 Init：r.tools 为空，直接刷新不应 panic
+	r.RefreshAvailableAgents(agent)
+}
+
+// TestSubagentRail_HasTools 对齐 extension_binder.py:333 的 tools 探测语义。
+func TestSubagentRail_HasTools(t *testing.T) {
+	r := NewSubagentRail()
+	assert.False(t, r.HasTools())
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{
+		Subagents: []hschema.SubagentSpec{
+			&hschema.SubAgentConfig{
+				AgentCard: agentschema.NewAgentCard(agentschema.WithAgentName("explore_agent")),
+			},
+		},
+	}
+	require.NoError(t, r.Init(context.Background(), agent))
+	assert.True(t, r.HasTools())
+}

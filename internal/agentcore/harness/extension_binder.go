@@ -573,10 +573,6 @@ func bindSubagent(agent *DeepAgent, subagent *hschema.SubAgentConfig) (hres.Reso
 // ensureSubagentRailReady subagent 绑定后确保 SubagentRail 存在且任务/会话工具就绪。
 // 非同名冲突场景：共享引导设施按触发者无关的方式幂等复用/创建。
 // Python: extension_binder.py:311-340 _ensure_subagent_rail_ready
-//
-// ⚠️ 已知偏差：Python 依 rail.tools 是否为空决定 init 或 refresh_available_agents；
-// Go 侧 SubagentRail 无公开 tools 访问器与 refresh 方法，恒走 Init（Init 内部
-// 幂等重注册工具并重建可用代理文案），语义等价于 refresh 分支。
 func ensureSubagentRailReady(ctx context.Context, agent *DeepAgent) (*hres.ResourceRef, error) {
 	config, err := requireDeepConfig(agent)
 	if err != nil {
@@ -605,8 +601,14 @@ func ensureSubagentRailReady(ctx context.Context, agent *DeepAgent) (*hres.Resou
 		}
 		created = true
 	}
-	if err := rail.Init(ctx, agent); err != nil {
-		return nil, err
+	// Python: if not getattr(rail, "tools", None): rail.init(agent)
+	//         else: rail.refresh_available_agents(agent)
+	if !rail.HasTools() {
+		if err := rail.Init(ctx, agent); err != nil {
+			return nil, err
+		}
+	} else {
+		rail.RefreshAvailableAgents(agent)
 	}
 	if created {
 		ref := hres.NewResourceRef(hres.ResourceKindRail, railTypeName(rail))
@@ -864,8 +866,13 @@ func unbindSubagent(agent *DeepAgent, ref hres.ResourceRef) error {
 	if name != "" && agent.AbilityManager().Get(name) != nil {
 		agent.AbilityManager().Remove(name)
 	}
-	// Python: rail.refresh_available_agents(agent)。Go 无公开 refresh 方法
-	// （登记偏差），文案由 rail 在下一轮 Init/BeforeModelCall 重建。
+	// Python: for rail in agent.find_rails_by_type((SubagentRail,)):
+	//             rail.refresh_available_agents(agent)  (:456-458)
+	for _, rail := range agent.FindRailsByType(reflect.TypeOf(&subagentrails.SubagentRail{})) {
+		if typed, ok := rail.(*subagentrails.SubagentRail); ok {
+			typed.RefreshAvailableAgents(agent)
+		}
+	}
 	return nil
 }
 

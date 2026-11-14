@@ -2145,6 +2145,40 @@ func (d *DeepAgent) initialConfigure(ctx context.Context, config *hschema.DeepAg
 
 // hotReconfigure 热重配置：不重启 Agent，更新模型/工具/提示词等。
 // Python: DeepAgent._hot_reconfigure(config) (line 239)
+// refreshableAgentsRail Python refresh_available_agents duck-typing（getattr 探测）
+// 的 Go 窄接口等价：实现了该方法的 rail 参与子代理文案刷新。
+type refreshableAgentsRail interface {
+	RefreshAvailableAgents(agent agentinterfaces.BaseAgent)
+}
+
+// refreshSubagentToolDescriptions 刷新 rail 上动态工具名的 available-agents 文案。
+// Python: DeepAgent._refresh_subagent_tool_descriptions (deep_agent.py:560-575)
+func (d *DeepAgent) refreshSubagentToolDescriptions() {
+	d.railsMu.Lock()
+	rails := make([]agentinterfaces.AgentRail, 0, len(d.pendingRails)+len(d.registeredRails))
+	rails = append(rails, d.pendingRails...)
+	rails = append(rails, d.registeredRails...)
+	d.railsMu.Unlock()
+
+	for _, rail := range rails {
+		refresh, ok := rail.(refreshableAgentsRail)
+		if !ok {
+			continue
+		}
+		// Python: try: refresh(self) except Exception: logger.warning(...)
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Warn(logComponent).
+						Str("event_type", "subagent_tool_description_refresh").
+						Msgf("[DeepAgent] Failed to refresh subagent tool descriptions: %v", rec)
+				}
+			}()
+			refresh.RefreshAvailableAgents(d)
+		}()
+	}
+}
+
 func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgentConfig) {
 	previousConfig := d.deepConfig
 	d.deepConfig = config
@@ -2173,6 +2207,8 @@ func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgen
 	}
 
 	d.queuePendingRails(config)
+
+	d.refreshSubagentToolDescriptions()
 
 	// 注：Python 在 hotReconfigure 后调用 _sync_builder_to_active_rails() 将新 builder
 	// 同步到已注册 rail。Go 的策略不同：agent 通过 SystemPromptBuilder() 接口返回最新
