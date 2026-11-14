@@ -480,11 +480,14 @@ func (c *OpenAIModelClient) Stream(
 			var chunkResp ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
 				// Python: JSON 解析错误走日志，非回调
+				// 帧内容必须进日志：坏帧被跳过后下游表现为「工具调用凭空消失」，
+				// 没有原文无法定位是哪一帧格式错误（2026-11-14 duplex 问答用例实锤）
 				logger.Error(logComponent).
 					Str("model_name", modelName).
 					Str("model_provider", c.ClientConfig.ClientProvider).
+					Str("raw_frame", truncateSSEFrame(data)).
 					Err(err).
-					Msg("Stream parser attempt error.")
+					Msg("SSE chunk JSON unmarshal failed, frame skipped")
 				continue
 			}
 
@@ -827,4 +830,14 @@ func (c *OpenAIModelClient) sanitizeToolCalls(messages []map[string]any) {
 		}
 		msg["tool_calls"] = cleaned
 	}
+}
+
+// truncateSSEFrame 截断 SSE 帧原文用于错误日志（按 rune 截断，CJK 安全，上限 2000）。
+func truncateSSEFrame(data string) string {
+	const max = 2000
+	runes := []rune(data)
+	if len(runes) <= max {
+		return data
+	}
+	return string(runes[:max]) + "...(truncated)"
 }

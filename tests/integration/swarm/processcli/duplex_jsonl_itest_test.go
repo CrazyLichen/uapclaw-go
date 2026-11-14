@@ -153,7 +153,7 @@ func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
 			askArgs := strings.ReplaceAll(`{"query":"继续吗"}`, `"`, `\"`)
 			for _, frame := range []string{
 				`data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`,
-				`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-ask","type":"function","function":{"name":"ask_user","arguments":"` + askArgs + `"}}}],"finish_reason":null}]}`,
+				`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-ask","type":"function","function":{"name":"ask_user","arguments":"` + askArgs + `"}}]},"finish_reason":null}]}`,
 				`data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
 				"data: [DONE]",
 			} {
