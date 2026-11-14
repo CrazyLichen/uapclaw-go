@@ -36,9 +36,13 @@ func TestNormalizeOpenrouterProviderSet(t *testing.T) {
 	if _, ok := got["anthropic"]; !ok {
 		t.Errorf("列表解析: %v", got)
 	}
-	got = normalizeOpenrouterProviderSet([]any{}, def)
-	if _, ok := got["qwen"]; !ok {
-		t.Errorf("空集回落默认: %v", got)
+	// D2 对齐 Python：显式配置空串/空列表 → 空集（功能关死），不回落默认
+	// Python: :161-166 value=""→[""]→过滤后空 frozenset 原样返回
+	if got := normalizeOpenrouterProviderSet("", def); len(got) != 0 {
+		t.Errorf("空串应返回空集: %v", got)
+	}
+	if got := normalizeOpenrouterProviderSet([]any{}, def); len(got) != 0 {
+		t.Errorf("空列表应返回空集: %v", got)
 	}
 }
 
@@ -74,6 +78,24 @@ func TestWithoutCacheControl(t *testing.T) {
 	in := map[string]any{"type": "tool_use", "id": "9"}
 	if got := withoutCacheControl(in); !reflect.DeepEqual(got, in) {
 		t.Errorf("非 text 块原样: %#v", got)
+	}
+	// D3 对齐 Python :186-189：仅 {type:text}（无 text 键）→ 空串
+	if got := withoutCacheControl(map[string]any{
+		"type": "text", "cache_control": map[string]any{},
+	}); got != "" {
+		t.Errorf("无 text 键的单 text 块应还原空串: %#v", got)
+	}
+	// D3：text 值非字符串也原样取出（Python get 语义）
+	if got := withoutCacheControl(map[string]any{
+		"type": "text", "text": 42, "cache_control": map[string]any{},
+	}); !reflect.DeepEqual(got, 42) {
+		t.Errorf("text 非字符串应原样还原: %#v", got)
+	}
+	// D3：两键但不是 {type,text} 组合（{type,foo}）不还原
+	if got := withoutCacheControl(map[string]any{
+		"type": "text", "foo": "bar", "cache_control": map[string]any{},
+	}); !reflect.DeepEqual(got, map[string]any{"type": "text", "foo": "bar"}) {
+		t.Errorf("{type,foo} 不应还原: %#v", got)
 	}
 }
 
@@ -373,5 +395,31 @@ func TestApplyOpenrouterProfile_矩阵(t *testing.T) {
 	c.applyOpenrouterProfile(params, "anthropic/claude-4")
 	if c.previousOpenrouterPromptCacheMessages != nil {
 		t.Error("prefix matching 关应重置 previous（Python :1121-1122）")
+	}
+}
+
+// TestDeepCopyValue_保数字类型 D1 回归：JSON 往返会把 int 变 float64，
+// 破坏 longestPrefixOverlapIndex 的 DeepEqual（多轮对话前缀匹配失效）。
+func TestDeepCopyValue_保数字类型(t *testing.T) {
+	in := []any{map[string]any{
+		"role": "assistant",
+		"tool_calls": []any{map[string]any{"id": "1", "index": 0, "weight": 1.5}},
+	}}
+	out := deepCopyValue(in).([]any)
+	blk := out[0].(map[string]any)["tool_calls"].([]any)[0].(map[string]any)
+	if _, isInt := blk["index"].(int); !isInt {
+		t.Errorf("index 应保持 int（不得 float64 化）: %#v", blk["index"])
+	}
+	if w, ok := blk["weight"].(float64); !ok || w != 1.5 {
+		t.Errorf("float64 应保型: %#v", blk["weight"])
+	}
+	// 前缀比较恢复：副本 vs 原树逐值相等
+	if got := longestPrefixOverlapIndex(out, in); got != 0 {
+		t.Errorf("int 保型后前缀应命中 0: %v", got)
+	}
+	// 深拷贝隔离
+	blk["index"] = 99
+	if in[0].(map[string]any)["tool_calls"].([]any)[0].(map[string]any)["index"] != 0 {
+		t.Error("深拷贝不应影响原树")
 	}
 }
