@@ -142,3 +142,80 @@ func expandUserPath(path string) (string, error) {
 	}
 	return path, nil
 }
+
+// ──────────────────────────── 15.15 manifest 定位（extension_loader.py:104-180）────────────────────────────
+
+// manifestName 常量集。Python: extension_loader.py:46-48
+const (
+	// manifestNames legacy YAML 三形态查找序。
+	// Python: _MANIFEST_NAMES = ("harness_config.yaml", "expert_harness.yaml", "harness.yaml")
+	manifestNames = "harness_config.yaml,expert_harness.yaml,harness.yaml"
+)
+
+// findLegacyYamlManifest 定位 legacy harness_config.yaml / expert_harness.yaml / harness.yaml。
+// Python: extension_loader.py:104-123 _find_legacy_yaml_manifest
+//
+// find_plugin_manifest 的 YAML 回退内部助手；不属于公开 loader 表面
+// （没有独立的 legacy-only 入口点）。
+func findLegacyYamlManifest(path string) (string, error) {
+	requestedPath, err := expandUserPath(path)
+	if err != nil {
+		return "", err
+	}
+	info, statErr := os.Stat(requestedPath)
+	if statErr == nil && info.IsDir() {
+		for _, manifestName := range manifestNameList() {
+			manifest := filepath.Join(requestedPath, manifestName)
+			if fileInfo, fileErr := os.Stat(manifest); fileErr == nil && !fileInfo.IsDir() {
+				return filepath.Abs(manifest)
+			}
+		}
+		return "", fmt.Errorf("%s not found: %s", strings.Join(manifestNameList(), " or "), requestedPath)
+	}
+
+	manifest := requestedPath
+	if !containsString(manifestNameList(), filepath.Base(manifest)) {
+		return "", fmt.Errorf("%s not found: %s", strings.Join(manifestNameList(), " or "), manifest)
+	}
+	if _, statErr := os.Stat(manifest); statErr != nil {
+		return "", fmt.Errorf("%s not found: %s", strings.Join(manifestNameList(), " or "), manifest)
+	}
+	return filepath.Abs(manifest)
+}
+
+// FindPluginManifest 定位 load_plugin(path) 用的 manifest。
+// Python: extension_loader.py:140-162 find_plugin_manifest
+//
+// 显式文件按原样解析（不做兄弟目录搜索）。目录先查 manifest.json；
+// 一旦存在即使用，无视其 package_type（类型拒绝交给 LoadPluginPackage——
+// manifest.json 存在时不再尝试 legacy YAML 回退）。仅当 manifest.json
+// 缺席时才做 legacy harness_config.yaml / expert_harness.yaml / harness.yaml 探测。
+func FindPluginManifest(path string) (string, error) {
+	requestedPath, err := expandUserPath(path)
+	if err != nil {
+		return "", err
+	}
+	info, statErr := os.Stat(requestedPath)
+	if statErr == nil && info.IsDir() {
+		manifestJSON := filepath.Join(requestedPath, packageManifestName)
+		if fileInfo, fileErr := os.Stat(manifestJSON); fileErr == nil && !fileInfo.IsDir() {
+			return filepath.Abs(manifestJSON)
+		}
+		return findLegacyYamlManifest(requestedPath)
+	}
+
+	if filepath.Base(requestedPath) == packageManifestName {
+		if info, statErr := os.Stat(requestedPath); statErr != nil || info.IsDir() {
+			return "", fmt.Errorf("Plugin manifest not found: %s", requestedPath)
+		}
+		return filepath.Abs(requestedPath)
+	}
+	return findLegacyYamlManifest(requestedPath)
+}
+
+// manifestNameList 返回 legacy 三形态切片。
+func manifestNameList() []string {
+	return []string{"harness_config.yaml", "expert_harness.yaml", "harness.yaml"}
+}
+
+// containsString 复用 resources.go 的同名助手（语义一致）。
