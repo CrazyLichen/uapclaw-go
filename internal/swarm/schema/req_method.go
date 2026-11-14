@@ -106,6 +106,30 @@ const (
 	// Python: message.py:59 PROMPT_SUGGESTION_CANCEL = "prompt_suggestion.cancel"
 	ReqMethodPromptSuggestionCancel ReqMethod = "prompt_suggestion.cancel"
 
+	// ─── 模型目录（23.4d）───
+	// wire 名逐字对齐上游注册名（app_web_handlers.py:5629-5660 与 vendors.* :5677-5678）。
+
+	// ReqMethodModelsGet 读取单个模型详情
+	ReqMethodModelsGet ReqMethod = "models.get"
+	// ReqMethodModelsUpsert 新增/更新模型条目
+	ReqMethodModelsUpsert ReqMethod = "models.upsert"
+	// ReqMethodModelsDelete 删除模型条目
+	ReqMethodModelsDelete ReqMethod = "models.delete"
+	// ReqMethodModelsReferences 查询模型/模型组引用位置
+	ReqMethodModelsReferences ReqMethod = "models.references"
+	// ReqMethodModelGroupsList 模型组列表
+	ReqMethodModelGroupsList ReqMethod = "model_groups.list"
+	// ReqMethodModelGroupsUpsert 新增/更新模型组
+	ReqMethodModelGroupsUpsert ReqMethod = "model_groups.upsert"
+	// ReqMethodModelGroupsDelete 删除模型组
+	ReqMethodModelGroupsDelete ReqMethod = "model_groups.delete"
+	// ReqMethodVendorsList 厂商预设分组列表
+	ReqMethodVendorsList ReqMethod = "vendors.list"
+	// ReqMethodVendorsFetchModels 按厂商预设拉取远端模型列表
+	ReqMethodVendorsFetchModels ReqMethod = "vendors.fetch_models"
+	// ReqMethodSessionSelectionSet 设置会话模型选择
+	ReqMethodSessionSelectionSet ReqMethod = "session.selection.set"
+
 	// ─── 历史 ───
 
 	// ReqMethodHistoryGet 获取历史

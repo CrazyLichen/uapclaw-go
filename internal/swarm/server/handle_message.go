@@ -119,6 +119,27 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 		resp, err = s.handleHistoryListTurns(ctx, request)
 	case schema.ReqMethodSessionRestoreFiles:
 		resp, err = s.handleSessionRestoreFiles(ctx, request)
+	// 模型目录（23.4d，27.4 回填闭环）
+	case schema.ReqMethodModelsGet:
+		resp, err = s.HandleModelsGet(ctx, request)
+	case schema.ReqMethodModelsUpsert:
+		resp, err = s.HandleModelsUpsert(ctx, request)
+	case schema.ReqMethodModelsDelete:
+		resp, err = s.HandleModelsDelete(ctx, request)
+	case schema.ReqMethodModelsReferences:
+		resp, err = s.HandleModelsReferences(ctx, request)
+	case schema.ReqMethodModelGroupsList:
+		resp, err = s.HandleModelGroupsList(ctx, request)
+	case schema.ReqMethodModelGroupsUpsert:
+		resp, err = s.HandleModelGroupsUpsert(ctx, request)
+	case schema.ReqMethodModelGroupsDelete:
+		resp, err = s.HandleModelGroupsDelete(ctx, request)
+	case schema.ReqMethodVendorsList:
+		resp, err = s.HandleVendorsList(ctx, request)
+	case schema.ReqMethodVendorsFetchModels:
+		resp, err = s.HandleVendorsFetchModels(ctx, request)
+	case schema.ReqMethodSessionSelectionSet:
+		resp, err = s.HandleSessionSelectionSet(ctx, request)
 	// 推荐面板（10.7.2）
 	case schema.ReqMethodRecommendation:
 		resp, err = s.handleRecommendation(ctx, request)
