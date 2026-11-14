@@ -25,16 +25,6 @@ func asString(v any) string {
 	return ""
 }
 
-// copyMap 浅拷贝 map；nil 返回空 map。
-// Python: dict(x) 语义（reasoning_injector.py:65 _runtime_config_copy 等）。
-func copyMap(m map[string]any) map[string]any {
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
-}
-
 // firstNonEmpty 返回第一个非空字符串。
 // Python or 短路语义。
 func firstNonEmpty(values ...string) string {
