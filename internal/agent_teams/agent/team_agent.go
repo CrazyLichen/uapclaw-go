@@ -146,8 +146,34 @@ func NewTeamAgent(ctx context.Context, card *agentschema.AgentCard) *TeamAgent {
 		// S-33: 对齐 Python team_agent.py L83-91，注入协调内核回调
 		WithWakeMailbox(a.coordination.WakeMailboxIfInterruptCleared),
 		WithRequestCompletionPoll(a.requestCompletionPoll),
+		// Python: team_agent.py:216-217——模型组名访问器与路由记账回调
+		WithModelGroupLabelGetter(a.modelGroupLabel),
+		WithServedModelRecorder(a.recordServedModel),
 	)
 	return a
+}
+
+// modelGroupLabel 团队模型组名；非组池或无 backend 返回空串。
+// Python: TeamAgent._model_group_label (team_agent.py:1246-1250)
+func (a *TeamAgent) modelGroupLabel() string {
+	backend := a.TeamBackend()
+	if backend == nil {
+		return ""
+	}
+	return backend.ModelGroupLabel()
+}
+
+// recordServedModel 持久化模型组刚把本成员路由到的模型。
+// backend 缺失或成员名为空返回 false。
+// Python: TeamAgent._record_served_model (team_agent.py:1251-1257)
+func (a *TeamAgent) recordServedModel(modelName string) bool {
+	backend := a.TeamBackend()
+	memberName := a.MemberName()
+	if backend == nil || memberName == "" {
+		return false
+	}
+	return backend.DB().Member().UpdateMemberServedModel(
+		context.Background(), memberName, backend.TeamName(), modelName)
 }
 
 // 属性 — 委托给 configurator
