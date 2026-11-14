@@ -9,23 +9,28 @@ import (
 	"strings"
 	"time"
 
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	mtypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// 本文件对应 Python openjiuwen/harness/resources/extension_resolver.py 的
-// persona 渲染部分：把模板的 prompt_sections 渲染成一段纯文本系统提示词。
+// 本文件对应 Python openjiuwen/harness/resources/extension_resolver.py 全量：
+// 类型层（ResourceKind/ResourceRef/LoadRecord/ExtensionParts）、
+// resolve 装配（resolve_plugin_parts / resolve_agent_template_parts）、
+// persona 渲染（render_agent_template_system_prompt / render_prompt_content）。
 //
 // 用途：无法挂载 PromptSection 对象的 harness provider（Claude Code、Codex、
 // DSH）需要把 persona 当纯文本交给外部 CLI。
-//
-// ⏵ 15.15a：本文件只实现渲染路径。resolve_agent_template_parts /
-// resolve_plugin_parts（ExtensionParts 装配、plugin 能力覆盖、资源引用解析）
-// 属 15.15a。
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// parentModelExtrasKeyRes 父模型在 BuildContext.extras 里的键。
+// Python: deep_agent.py load_agent_template 段 `ctx.extras["_parent_model"]`
+// （与 harness 包的 parentModelExtrasKey 同值；两包互不依赖故各存一份。）
+const parentModelExtrasKeyRes = "_parent_model"
 
 // templatePlaceholderPattern 模板占位符：{{ name }}，name 为标识符。
 // Python: extension_resolver.py:38 _TEMPLATE_PATTERN
@@ -36,19 +41,20 @@ var templatePlaceholderPattern = regexp.MustCompile(`\{\{\s*([a-zA-Z_][a-zA-Z0-9
 // RenderAgentTemplateSystemPrompt 把模板的 persona 段落渲染成一段系统提示词。
 // Python: extension_resolver.py:241-256 render_agent_template_system_prompt
 //
-// 段落按 Priority 升序排序，用空行连接，空段落跳过。
-func RenderAgentTemplateSystemPrompt(spec hschema.AgentTemplateSpec, language string) string {
-	sections := make([]hschema.PromptSectionSpec, len(spec.PromptSections))
-	copy(sections, spec.PromptSections)
+// 段落按 Priority 升序排序，用空行连接，空段落跳过；ctx 为 nil 时按
+// 上游 `BuildContext(language=language)` 兜底。
+func RenderAgentTemplateSystemPrompt(spec hschema.AgentTemplateSpec, language string, ctx hschema.BuildContextInterface) string {
+	orderedSections := make([]hschema.PromptSectionSpec, len(spec.PromptSections))
+	copy(orderedSections, spec.PromptSections)
 	// Python: sorted(spec.prompt_sections, key=lambda item: item.priority)
 	// 稳定排序保证同 priority 时保持声明顺序（与 Python sorted 一致）
-	sort.SliceStable(sections, func(i, j int) bool {
-		return sections[i].Priority < sections[j].Priority
+	sort.SliceStable(orderedSections, func(i, j int) bool {
+		return orderedSections[i].Priority < orderedSections[j].Priority
 	})
 
-	rendered := make([]string, 0, len(sections))
-	for _, section := range sections {
-		text := renderPromptSectionText(section, language)
+	rendered := make([]string, 0, len(orderedSections))
+	for _, section := range orderedSections {
+		text := renderPromptSectionText(section, ctx, language)
 		if text != "" {
 			rendered = append(rendered, text)
 		}
@@ -72,15 +78,46 @@ func RenderPromptContent(content map[string]string, language string, params map[
 //
 // render_params 会先与 BuildContext 派生的值合并（language / workspace），
 // 用户显式给的键覆盖派生值（Python: values.update(dict(render_params or {}))）。
-func renderPromptSectionText(section hschema.PromptSectionSpec, language string) string {
-	params := map[string]any{
-		"language":  defaultLanguage(language),
-		"workspace": "",
+func renderPromptSectionText(section hschema.PromptSectionSpec, ctx hschema.BuildContextInterface, language string) string {
+	content := selectContent(section.Content, language)
+	return renderTemplate(content, renderParams(section.RenderParams, ctx))
+}
+
+// resolvePromptSection 解析一段提示词段落：逐语言渲染占位符后构造 PromptSection。
+// Python: extension_resolver.py:230-234 _resolve_prompt_section
+func resolvePromptSection(spec hschema.PromptSectionSpec, ctx hschema.BuildContextInterface) saprompts.PromptSection {
+	params := renderParams(spec.RenderParams, ctx)
+	content := make(map[string]string, len(spec.Content))
+	for language, text := range spec.Content {
+		content[language] = renderTemplate(text, params)
 	}
-	for key, value := range section.RenderParams {
-		params[key] = value
+	return saprompts.PromptSection{Name: spec.Name, Content: content, Priority: spec.Priority}
+}
+
+// renderParams 汇总占位符参数：language / workspace 派生值在前，render_params 覆盖在后。
+// Python: extension_resolver.py:287-294 _render_params
+func renderParams(renderParamsMap map[string]any, ctx hschema.BuildContextInterface) map[string]any {
+	workspaceRoot := ""
+	if ctx != nil && ctx.GetWorkspace() != nil {
+		workspaceRoot = ctx.GetWorkspace().RootPath
 	}
-	return renderTemplate(selectContent(section.Content, language), params)
+	values := map[string]any{
+		"language":  defaultLanguage(languageFromCtx(ctx)),
+		"workspace": workspaceRoot,
+	}
+	for key, value := range renderParamsMap {
+		values[key] = value
+	}
+	return values
+}
+
+// languageFromCtx 取 ctx 的 language；nil ctx 视为空（由 defaultLanguage 回退 cn）。
+// Python: ctx.language
+func languageFromCtx(ctx hschema.BuildContextInterface) string {
+	if ctx == nil {
+		return ""
+	}
+	return ctx.GetLanguage()
 }
 
 // selectContent 按语言选正文。
@@ -265,4 +302,304 @@ func uuidHex() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return hex.EncodeToString(b[:])
+}
+
+// ──────────────────────────── resolve 装配层（对齐 extension_resolver.py:103-233）────────────────────────────
+
+// ResolvePluginParts 把 PluginSpec 物化成活的 Parts。从不产出 subagents。
+// Python: extension_resolver.py:103-117 resolve_plugin_parts
+func ResolvePluginParts(spec hschema.PluginSpec, ctx hschema.BuildContextInterface) (ExtensionParts, error) {
+	if err := hschema.ValidatePluginPaths(spec); err != nil {
+		return ExtensionParts{}, err
+	}
+	language := defaultLanguage(languageFromCtx(ctx))
+	tools, err := resolveTools(spec.Tools, language, ctx)
+	if err != nil {
+		return ExtensionParts{}, err
+	}
+	rails, err := resolveRails(spec.Rails, language, ctx)
+	if err != nil {
+		return ExtensionParts{}, err
+	}
+	parts := NewExtensionParts()
+	parts.Tools = tools
+	for i := range spec.Mcps {
+		parts.Mcps = append(parts.Mcps, buildMcpServerConfig(&spec.Mcps[i]))
+	}
+	parts.Rails = rails
+	for i := range spec.PromptSections {
+		parts.PromptSections = append(parts.PromptSections, ResolvedPromptSection{
+			Section: resolvePromptSection(spec.PromptSections[i], ctx), ReplaceExisting: false,
+		})
+	}
+	for i := range spec.Skills {
+		parts.Skills = append(parts.Skills, resolveSkill(&spec.Skills[i]))
+	}
+	return parts, nil
+}
+
+// ResolveAgentTemplateParts 把 AgentTemplateSpec 物化成活的 Parts：
+// 覆盖根 persona/能力，并把直接 subagents 物化为 SubAgentConfig。
+// 宿主的 agent_card / model 在此不动，由 DeepAgent 调用方保持不变。
+// Python: extension_resolver.py:119-151 resolve_agent_template_parts
+func ResolveAgentTemplateParts(spec hschema.AgentTemplateSpec, ctx hschema.BuildContextInterface) (ExtensionParts, error) {
+	if err := hschema.ValidatePluginPaths(spec); err != nil {
+		return ExtensionParts{}, err
+	}
+	language := defaultLanguage(languageFromCtx(ctx))
+	// Python: parent_model = (ctx.extras or {}).get("_parent_model")
+	var parentModel *llm.Model
+	var parentExtras map[string]any
+	if ctx != nil {
+		parentExtras = ctx.GetExtras()
+	}
+	if raw, ok := parentExtras[parentModelExtrasKeyRes]; ok {
+		if m, isModel := raw.(*llm.Model); isModel {
+			parentModel = m
+		}
+	}
+	if len(spec.Subagents) > 0 && parentModel == nil {
+		return ExtensionParts{}, fmt.Errorf(
+			"AgentTemplate subagent resolve requires BuildContext.extras['_parent_model']")
+	}
+
+	subagents := make([]hschema.SubAgentConfig, 0, len(spec.Subagents))
+	for i := range spec.Subagents {
+		child := &spec.Subagents[i]
+		// Python: 子模板由 loader 固定 subagents=[]（非递归），此处无需再递归。
+		subagentSpec := adaptAgentTemplateToSubagentSpec(child, ctx, language)
+		built, err := subagentSpec.Build(parentModel, language, ctx)
+		if err != nil {
+			return ExtensionParts{}, err
+		}
+		if built == nil {
+			return ExtensionParts{}, fmt.Errorf(
+				"SubAgentSpec.build returned nil, expected SubAgentConfig")
+		}
+		subagents = append(subagents, *built)
+	}
+
+	tools, err := resolveTools(spec.Tools, language, ctx)
+	if err != nil {
+		return ExtensionParts{}, err
+	}
+	rails, err := resolveRails(spec.Rails, language, ctx)
+	if err != nil {
+		return ExtensionParts{}, err
+	}
+	parts := NewExtensionParts()
+	parts.Tools = tools
+	for i := range spec.Mcps {
+		parts.Mcps = append(parts.Mcps, buildMcpServerConfig(&spec.Mcps[i]))
+	}
+	parts.Rails = rails
+	// AgentTemplate 根 persona 的段落允许替换既有同名段（identity 覆盖语义）。
+	for i := range spec.PromptSections {
+		parts.PromptSections = append(parts.PromptSections, ResolvedPromptSection{
+			Section: resolvePromptSection(spec.PromptSections[i], ctx), ReplaceExisting: true,
+		})
+	}
+	for i := range spec.Skills {
+		parts.Skills = append(parts.Skills, resolveSkill(&spec.Skills[i]))
+	}
+	parts.Subagents = subagents
+	return parts, nil
+}
+
+// adaptAgentTemplateToSubagentSpec 内部适配器：直接子 AgentTemplateSpec → SubAgentSpec。
+// 仅用于根模板的直接 subagents（loader 已固定 subagents=[]，构造上非递归）；
+// 公开包 schema 不接触 SubAgentSpec。
+// Python: extension_resolver.py:153-173 _adapt_agent_template_to_subagent_spec
+func adaptAgentTemplateToSubagentSpec(
+	template *hschema.AgentTemplateSpec,
+	ctx hschema.BuildContextInterface,
+	language string,
+) *hschema.SubAgentSpec {
+	orderedSections := make([]hschema.PromptSectionSpec, len(template.PromptSections))
+	copy(orderedSections, template.PromptSections)
+	sort.SliceStable(orderedSections, func(i, j int) bool {
+		return orderedSections[i].Priority < orderedSections[j].Priority
+	})
+	rendered := make([]string, 0, len(orderedSections))
+	for _, section := range orderedSections {
+		rendered = append(rendered, renderPromptSectionText(section, ctx, language))
+	}
+	// Python: rails=list(template.rails) or None；skills=[skill.dir ...] or None
+	rails := template.Rails
+	if len(rails) == 0 {
+		rails = nil
+	}
+	var skills []string
+	for i := range template.Skills {
+		skills = append(skills, template.Skills[i].Dir)
+	}
+	if len(skills) == 0 {
+		skills = nil
+	}
+	var mcps []*mtypes.McpServerConfig
+	for i := range template.Mcps {
+		cfg := buildMcpServerConfig(&template.Mcps[i])
+		mcps = append(mcps, &cfg)
+	}
+	return &hschema.SubAgentSpec{
+		AgentCard:    &template.AgentCard,
+		SystemPrompt: strings.Join(rendered, "\n\n"),
+		BuiltinTools: template.Tools,
+		Mcps:         mcps,
+		Model:        template.Model,
+		Rails:        rails,
+		Skills:       skills,
+		Language:     language,
+	}
+}
+
+// resolveTools 逐条构建工具声明为实例（或卡片）列表。
+// Python: extension_resolver.py:175-180 _resolve_tools
+// （上游不传 tool_id；Go 签名要求，传空串保持同语义。）
+func resolveTools(specs []hschema.BuiltinToolSpec, language string, ctx hschema.BuildContextInterface) ([]any, error) {
+	tools := []any{}
+	for i := range specs {
+		built, err := specs[i].Build(language, "", ctx)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, asBuiltList(built)...)
+	}
+	return tools, nil
+}
+
+// resolveRails 逐条构建 rail 声明为实例列表。
+// Python: extension_resolver.py:182-187 _resolve_rails
+func resolveRails(specs []hschema.RailSpec, language string, ctx hschema.BuildContextInterface) ([]agentinterfaces.AgentRail, error) {
+	rails := []agentinterfaces.AgentRail{}
+	ws := workspaceOf(ctx)
+	for i := range specs {
+		built, err := specs[i].Build(language, ws, ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range asBuiltList(built) {
+			rail, ok := item.(agentinterfaces.AgentRail)
+			if !ok {
+				return nil, fmt.Errorf("rail spec %q built unexpected type %T", specs[i].Type, item)
+			}
+			rails = append(rails, rail)
+		}
+	}
+	return rails, nil
+}
+
+// asBuiltList 归一 build 产物：nil → 空列表；列表过滤 nil；单值包一元列表。
+// Python: extension_resolver.py:189-195 _as_built_list
+func asBuiltList(built any) []any {
+	if built == nil {
+		return nil
+	}
+	if items, ok := built.([]any); ok {
+		filtered := make([]any, 0, len(items))
+		for _, item := range items {
+			if item != nil {
+				filtered = append(filtered, item)
+			}
+		}
+		return filtered
+	}
+	return []any{built}
+}
+
+// buildMcpServerConfig 把已绝对化的 McpServerSpec 转成运行时配置。
+// 不做相对路径解析：包加载器保证所有路径字段（含 stdio cwd）已绝对化。
+// Python: extension_resolver.py:197-228 _build_mcp_server_config
+func buildMcpServerConfig(spec *hschema.McpServerSpec) mtypes.McpServerConfig {
+	params := map[string]any{}
+	for key, value := range spec.Params {
+		params[key] = value
+	}
+	var serverPath string
+	if spec.Type == "stdio" {
+		// Python: params.setdefault(...) —— 已存在的键不被 spec 字段覆盖
+		if spec.Command != "" {
+			if _, exists := params["command"]; !exists {
+				params["command"] = spec.Command
+			}
+		}
+		if len(spec.Args) > 0 {
+			if _, exists := params["args"]; !exists {
+				params["args"] = append([]string(nil), spec.Args...)
+			}
+		}
+		if len(spec.Env) > 0 {
+			if _, exists := params["env"]; !exists {
+				env := map[string]string{}
+				for k, v := range spec.Env {
+					env[k] = v
+				}
+				params["env"] = env
+			}
+		}
+		if spec.Cwd != "" {
+			if _, exists := params["cwd"]; !exists {
+				params["cwd"] = spec.Cwd
+			}
+		}
+		serverPath = spec.Command
+		if serverPath == "" {
+			serverPath = spec.ServerName
+		}
+		if serverPath == "" {
+			serverPath = "stdio"
+		}
+	} else {
+		serverPath = spec.URL
+		if serverPath == "" {
+			serverPath = spec.Command
+		}
+	}
+
+	serverName := spec.ServerName
+	if serverName == "" {
+		serverName = spec.Command
+	}
+	if serverName == "" {
+		serverName = "mcp_server"
+	}
+
+	config := mtypes.McpServerConfig{
+		ServerName:      serverName,
+		ServerPath:      serverPath,
+		ClientType:      spec.Type,
+		Params:          params,
+		AuthHeaders:     cloneStringMap(spec.AuthHeaders),
+		AuthQueryParams: cloneStringMap(spec.AuthQueryParams),
+	}
+	if spec.ServerID != "" {
+		config.ServerID = spec.ServerID
+	}
+	return config
+}
+
+// resolveSkill 把 SkillSpec 转成解析后的技能引用。
+// Python: extension_resolver.py:271-273 _resolve_skill
+func resolveSkill(spec *hschema.SkillSpec) ResolvedSkill {
+	return ResolvedSkill{Directory: spec.Dir, Mode: spec.Mode, EnabledSkills: spec.EnabledSkills}
+}
+
+// workspaceOf 取 ctx 的活工作空间；nil ctx 返回 nil。
+func workspaceOf(ctx hschema.BuildContextInterface) *workspace.Workspace {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.GetWorkspace()
+}
+
+// cloneStringMap 复制字符串映射，nil 保持 nil（对齐 Python dict(...) 的浅拷贝语义）。
+func cloneStringMap(src map[string]string) map[string]string {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

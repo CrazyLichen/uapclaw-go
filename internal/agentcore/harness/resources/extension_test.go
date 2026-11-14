@@ -162,7 +162,7 @@ func TestRenderAgentTemplateSystemPrompt_按priority排序(t *testing.T) {
 			{Name: "sops", Content: map[string]string{"cn": "流程"}, Priority: 20},
 		},
 	}
-	got := RenderAgentTemplateSystemPrompt(spec, "cn")
+	got := RenderAgentTemplateSystemPrompt(spec, "cn", nil)
 	assert.Equal(t, "身份\n\n流程\n\n安全", got)
 }
 
@@ -175,12 +175,12 @@ func TestRenderAgentTemplateSystemPrompt_空段落跳过(t *testing.T) {
 			{Name: "c", Content: map[string]string{"cn": ""}, Priority: 3},
 		},
 	}
-	assert.Equal(t, "内容", RenderAgentTemplateSystemPrompt(spec, "cn"))
+	assert.Equal(t, "内容", RenderAgentTemplateSystemPrompt(spec, "cn", nil))
 }
 
 // TestRenderAgentTemplateSystemPrompt_无段落 返回空串。
 func TestRenderAgentTemplateSystemPrompt_无段落(t *testing.T) {
-	assert.Equal(t, "", RenderAgentTemplateSystemPrompt(hschema.AgentTemplateSpec{}, "cn"))
+	assert.Equal(t, "", RenderAgentTemplateSystemPrompt(hschema.AgentTemplateSpec{}, "cn", nil))
 }
 
 // TestRenderAgentTemplateSystemPrompt_语言回退 对齐
@@ -192,10 +192,10 @@ func TestRenderAgentTemplateSystemPrompt_语言回退(t *testing.T) {
 	}
 
 	// 命中指定语言
-	assert.Equal(t, "中文", RenderAgentTemplateSystemPrompt(spec, "cn"))
-	assert.Equal(t, "English", RenderAgentTemplateSystemPrompt(spec, "en"))
+	assert.Equal(t, "中文", RenderAgentTemplateSystemPrompt(spec, "cn", nil))
+	assert.Equal(t, "English", RenderAgentTemplateSystemPrompt(spec, "en", nil))
 	// 未命中 → en
-	assert.Equal(t, "English", RenderAgentTemplateSystemPrompt(spec, "fr"))
+	assert.Equal(t, "English", RenderAgentTemplateSystemPrompt(spec, "fr", nil))
 }
 
 // TestRenderAgentTemplateSystemPrompt_语言回退cn 无 en 时回退 cn。
@@ -205,7 +205,7 @@ func TestRenderAgentTemplateSystemPrompt_语言回退cn(t *testing.T) {
 			Content: map[string]string{"cn": "中文"}, Priority: 1,
 		}},
 	}
-	assert.Equal(t, "中文", RenderAgentTemplateSystemPrompt(spec, "fr"))
+	assert.Equal(t, "中文", RenderAgentTemplateSystemPrompt(spec, "fr", nil))
 }
 
 // TestRenderAgentTemplateSystemPrompt_占位符替换 对齐
@@ -218,7 +218,7 @@ func TestRenderAgentTemplateSystemPrompt_占位符替换(t *testing.T) {
 			RenderParams: map[string]any{"workspace": "/tmp/ws"},
 		}},
 	}
-	got := RenderAgentTemplateSystemPrompt(spec, "cn")
+	got := RenderAgentTemplateSystemPrompt(spec, "cn", nil)
 	// workspace 来自 render_params；language 来自派生的 ctx
 	assert.Equal(t, "工作区在 /tmp/ws，语言 cn", got)
 }
@@ -232,7 +232,7 @@ func TestRenderAgentTemplateSystemPrompt_未知占位符原样保留(t *testing.
 			Priority: 1,
 		}},
 	}
-	assert.Equal(t, "保留 {{ unknown }} 原文", RenderAgentTemplateSystemPrompt(spec, "cn"))
+	assert.Equal(t, "保留 {{ unknown }} 原文", RenderAgentTemplateSystemPrompt(spec, "cn", nil))
 }
 
 // TestRenderPromptContent_直接渲染单段 暴露给持有正文而非整模板的调用方。
@@ -251,7 +251,7 @@ func TestRenderAgentTemplateSystemPrompt_空语言回退cn(t *testing.T) {
 			Priority: 1,
 		}},
 	}
-	assert.Equal(t, "语言是 cn", RenderAgentTemplateSystemPrompt(spec, ""))
+	assert.Equal(t, "语言是 cn", RenderAgentTemplateSystemPrompt(spec, "", nil))
 }
 
 // TestSelectContent_兜底取任一语言 三个常见语言都缺时取字典序最小的键。
