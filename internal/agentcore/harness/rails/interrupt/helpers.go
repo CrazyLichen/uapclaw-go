@@ -215,6 +215,12 @@ func extractQuestionsFromValue(valueObj any) []any {
 	if valueObj == nil {
 		return nil
 	}
+	// 类型化对象桥接成 map（Python getattr 分支的 JSON 往返等价）
+	if _, ok := valueObj.(map[string]any); !ok {
+		if m, bridged := valueAsMap(valueObj); bridged {
+			valueObj = m
+		}
+	}
 
 	// 1. 直接从 value dict 中取 questions
 	if m, ok := valueObj.(map[string]any); ok {
@@ -340,6 +346,28 @@ func headerFromToolName(toolName string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// valueAsMap 把非 map 的中断值（如 *ToolCallInterruptRequest 等类型化对象）
+// 桥接成 map。Python: 对象分支由 getattr 直读字段（interrupt_helpers.py 各处）；
+// Go 等价实现是 JSON 往返（utils.PayloadToMap 同款约定——类型化对象的 JSON
+// 标签已覆盖 tool_name/tool_args/questions 等字段名）。
+func valueAsMap(valueObj any) (map[string]any, bool) {
+	if valueObj == nil {
+		return nil, false
+	}
+	if m, ok := valueObj.(map[string]any); ok {
+		return m, true
+	}
+	b, err := json.Marshal(valueObj)
+	if err != nil {
+		return nil, false
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil || m == nil {
+		return nil, false
+	}
+	return m, true
+}
+
 // isAskUserInterruptValue 判断中断值是否为 ask_user 中断。
 //
 // Python: _is_ask_user_interrupt_value (interrupt_helpers.py:997-1027)
@@ -349,6 +377,18 @@ func headerFromToolName(toolName string) string {
 // 的中断都当 ask_user）；③遗留 payload 的结构回退（payload_schema +
 // questions 同时在场）。
 func isAskUserInterruptValue(valueObj any) bool {
+	// 类型化对象（*ToolCallInterruptRequest）先桥接成 map，再走统一读取
+	if m, ok := valueAsMap(valueObj); ok {
+		if raw, ok := m["interrupt_kind"].(string); ok && raw != "" {
+			return raw == saschema.InterruptKindAskUser
+		}
+		if raw, ok := m["tool_name"].(string); ok && strings.TrimSpace(raw) != "" {
+			return strings.TrimSpace(raw) == "ask_user"
+		}
+		_, hasPayloadSchema := m["payload_schema"]
+		_, hasQuestions := m["questions"]
+		return hasPayloadSchema && hasQuestions
+	}
 	if kind := interruptKindOfValue(valueObj); kind != "" {
 		return kind == saschema.InterruptKindAskUser
 	}
@@ -382,6 +422,25 @@ func buildPlainAskUserQuestion(valueObj any) map[string]any {
 	toolName, message, toolArgs := readInterruptFields(valueObj)
 	_ = toolName
 	query := ""
+	if toolArgs == nil {
+		// 类型化对象：从桥接 map 读 tool_args（JSON 字符串）再解出 query
+		if m, ok := valueAsMap(valueObj); ok {
+			if argsRaw, ok := m["tool_args"].(string); ok && argsRaw != "" {
+				var args map[string]any
+				if err := json.Unmarshal([]byte(argsRaw), &args); err == nil {
+					query = strings.TrimSpace(anyToString(args["query"]))
+				}
+			} else if argsMap, ok := m["tool_args"].(map[string]any); ok {
+				query = strings.TrimSpace(anyToString(argsMap["query"]))
+			}
+			if query == "" {
+				query = strings.TrimSpace(anyToString(m["message"]))
+			}
+			if query == "" {
+				query = strings.TrimSpace(anyToString(m["question"]))
+			}
+		}
+	}
 	if toolArgs != nil {
 		query = strings.TrimSpace(anyToString(toolArgs["query"]))
 	}
