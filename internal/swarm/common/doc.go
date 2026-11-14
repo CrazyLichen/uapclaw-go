@@ -16,7 +16,7 @@
 //
 //	common/
 //	├── doc.go                        # 包文档
-//	├── helpers.go                   # 本包共用小工具（asString/copyMap/firstNonEmpty）
+//	├── helpers.go                   # 本包共用小工具（asString/firstNonEmpty/parseFiniteFloat）
 //	├── model_selection.go           # ModelSelection / ResolvedModel / ResolvedRoute / ResolvedModelGroup DTO
 //	├── model_errors.go               # ModelSelectionError 与五个错误码
 //	├── reasoning_config.go           # 思考档位归一 / 档位映射 / 采样覆盖（裁决 A）

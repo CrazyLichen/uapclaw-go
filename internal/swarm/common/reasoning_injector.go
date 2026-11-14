@@ -4,7 +4,10 @@
 // 打补丁；Go 23.3 profiles 为静态表，已覆盖同等语义。
 package common
 
-import "strings"
+import (
+	"maps"
+	"strings"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -12,12 +15,15 @@ import "strings"
 // Python: reasoning_injector.py:71 inject_reasoning_params。
 // 步骤顺序照抄：①转 dict ②归一档位 ③拷贝并 pop reasoning_level ④采样覆盖 ⑤无档位短路返回 ⑥注入 reasoning 字段。
 func InjectReasoningParams(modelClientConfig map[string]any, modelConfigObj map[string]any) map[string]any {
-	// Python: reasoning_injector.py:76 _model_config_to_dict（dict 输入直接浅拷贝）
-	modelConfigDict := copyMap(modelConfigObj)
+	// Python: reasoning_injector.py:76 _model_config_to_dict（dict 输入直接浅拷贝；None → 空 dict）
+	modelConfigDict := maps.Clone(modelConfigObj)
+	if modelConfigDict == nil {
+		modelConfigDict = map[string]any{}
+	}
 	// Python: reasoning_injector.py:77 归一档位
 	level := NormalizeReasoningLevel(asString(modelConfigDict["reasoning_level"]))
 	// Python: reasoning_injector.py:78 拷贝运行时配置并 pop 内部提示 reasoning_level
-	runtimeModelConfig := copyMap(modelConfigDict)
+	runtimeModelConfig := maps.Clone(modelConfigDict)
 	delete(runtimeModelConfig, "reasoning_level")
 	// Python: reasoning_injector.py:79-84 采样覆盖（api_base 或 base_url，model_name 或 model）
 	override := ResolveSamplingOverride(
@@ -44,7 +50,11 @@ func InjectReasoningParams(modelClientConfig map[string]any, modelConfigObj map[
 func BuildReasoningModelRequestKwargs(modelClientConfig map[string]any, modelConfigObj map[string]any, modelName string) map[string]any {
 	// Python: reasoning_injector.py:154 apply_provider_compat_patches()——偏差 E-2 不移植。
 	effectiveModelName := ResolveModelName(modelName, modelConfigObj)
-	reasoningClientConfig := copyMap(modelClientConfig)
+	// Python: reasoning_injector.py:156 dict(mcc) 浅拷贝；nil（None）→ 空 dict 以便下方写入 model_name
+	reasoningClientConfig := maps.Clone(modelClientConfig)
+	if reasoningClientConfig == nil {
+		reasoningClientConfig = map[string]any{}
+	}
 	if effectiveModelName != "" {
 		reasoningClientConfig["model_name"] = effectiveModelName
 	}
@@ -57,7 +67,8 @@ func BuildReasoningModelRequestKwargs(modelClientConfig map[string]any, modelCon
 // buildModelRequestKwargs 构建最终请求 kwargs 并清理内部字段。
 // Python: reasoning_injector.py:91 _build_model_request_kwargs。
 func buildModelRequestKwargs(modelName string, modelConfigDict map[string]any) map[string]any {
-	requestKwargs := copyMap(modelConfigDict)
+	// Python: reasoning_injector.py:96 dict(model_config_dict) 浅拷贝
+	requestKwargs := maps.Clone(modelConfigDict)
 	// Python: reasoning_injector.py:97 _source 判 agentos
 	isAgentos := asString(requestKwargs["_source"]) == "agentos"
 	// Python: reasoning_injector.py:98-105 旧版 AgentOS 用 max_tokens 表示上下文窗口，
