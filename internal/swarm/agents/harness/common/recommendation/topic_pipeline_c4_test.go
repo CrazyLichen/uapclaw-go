@@ -21,7 +21,7 @@ func recordSummaryEvent(t *testing.T, store *TopicStarterStore, scope, sessionID
 		"session_id":     sessionID,
 		"slate_id":       scope,
 		"event_type":     "session_summary",
-		"topic_id":       fmt.Sprintf("topic:%s:%v", sessionID, completedAt),
+		"topic_id":       fmt.Sprintf("topic:%s:%v:%s:%d", sessionID, completedAt, configVersion, len(sourceEventIDs)),
 		"policy_id":      POLICY_ID,
 		"payload": map[string]any{
 			"session_id":             sessionID,
@@ -103,8 +103,9 @@ func TestProfileProjectDiscussion(t *testing.T) {
 	// 全局桶会话属于另一 scope，不触发项目读取
 	recordSummaryEvent(t, store, GlobalNewChatScope, "g1", 12.0, []string{"e2"}, "cfg")
 
+	// 会话标识 p1 在摘要文本里出现，应被剔除
 	coverage, err := ProfileProjectDiscussion(store, state, projectBySession,
-		map[string][]string{"p1": {"proj-a"}})
+		map[string][]string{"p1": {"p1"}})
 	if err != nil {
 		t.Fatalf("coverage: %v", err)
 	}
@@ -263,10 +264,10 @@ func TestDeprojectedLongProfile(t *testing.T) {
 func TestShortDeltaSummaryIDs(t *testing.T) {
 	snapshot := snapshotForC3Tests()
 	snapshot.Messages = []*V6SourceMessage{
-		{EventID: "e1", InputOrigin: "manual_free_text", AssistanceOrigin: "none"},
+		{EventID: "evt", InputOrigin: "manual_free_text", AssistanceOrigin: "none"},
 	}
 	snapshot.PendingShortIntentTriggerLineage = []map[string]any{
-		lineageFixture([]string{"e1"}, nil, nil),
+		lineageFixture([]string{"evt"}, nil, nil),
 	}
 	summary := summaryForTests(t, "summary:s1:aaa", "s1", 10.0)
 	got := ShortDeltaSummaryIDs(snapshot, []*SessionSummaryArtifact{summary})

@@ -196,6 +196,8 @@ type TopicStarterOutcomeCollector struct {
 type CompletedSessionProjection struct {
 	// Boundary 完结边界
 	Boundary *SessionCompletionBoundary
+	// CompletedRequestIDs 已完结请求 ID（写序，session_history.py:213）
+	CompletedRequestIDs []string
 	// CompletedUserOrdinals 已完结用户请求序号
 	CompletedUserOrdinals []int
 }
