@@ -314,6 +314,43 @@ func (r *SkillUseRail) SetSkillsDir(dirs []string) {
 	r.skillsDir = dirs
 }
 
+// SkillsDir 返回当前技能扫描根（扩展热绑/热绑卸载需要读改写该列表）。
+// Python: SkillUseRail.skills_dir 属性读取（extension_binder.py:243 previous_dirs）
+func (r *SkillUseRail) SkillsDir() []string {
+	return r.skillsDir
+}
+
+// SetEnableCache 更新缓存开关（扩展热绑期间临时禁用缓存）。
+// Python: extension_binder.py:264 target.enable_cache = False
+func (r *SkillUseRail) SetEnableCache(enabled bool) {
+	r.enableCache = enabled
+}
+
+// EnabledSkillsSnapshot 返回白名单的副本；空 map 表示未启用白名单（对齐 Python None）。
+// Python: extension_binder.py:246 previous_enabled = set(target.enabled_skills)
+func (r *SkillUseRail) EnabledSkillsSnapshot() map[string]struct{} {
+	snapshot := make(map[string]struct{}, len(r.enabledSkills))
+	for name := range r.enabledSkills {
+		snapshot[name] = struct{}{}
+	}
+	return snapshot
+}
+
+// RestoreEnabledSkills 用快照整体覆盖白名单。
+// Python: extension_binder.py:268 target.enabled_skills = previous_enabled
+func (r *SkillUseRail) RestoreEnabledSkills(snapshot map[string]struct{}) {
+	r.enabledSkills = make(map[string]struct{}, len(snapshot))
+	for name := range snapshot {
+		r.enabledSkills[name] = struct{}{}
+	}
+}
+
+// DiscardEnabledSkill 从白名单摘除单个技能名（兄弟 leaf 卸载用）。
+// Python: extension_binder.py:417 rail.enabled_skills.discard(path.name)
+func (r *SkillUseRail) DiscardEnabledSkill(name string) {
+	delete(r.enabledSkills, name)
+}
+
 // SetDisabledSkills 更新禁用名单（热刷新用）。
 // Python: refresh_skill_rails 赋值 disabled_skills (interface_deep.py:11217-11218)
 func (r *SkillUseRail) SetDisabledSkills(names []string) {

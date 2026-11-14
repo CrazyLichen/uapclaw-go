@@ -115,6 +115,21 @@ var (
 	StatusDeepagentCreateSubagentNotFound = NewStatusCode(
 		"DEEPAGENT_CREATE_SUBAGENT_NOT_FOUND", 123025,
 		"subagent not found, reason: {error_msg}")
+	// StatusDeepagentLoadPluginError 插件热加载失败
+	// Python: codes.py:230 DEEPAGENT_LOAD_PLUGIN_ERROR
+	StatusDeepagentLoadPluginError = NewStatusCode(
+		"DEEPAGENT_LOAD_PLUGIN_ERROR", 123026,
+		"deepagent load plugin error, reason: {error_msg}")
+	// StatusDeepagentLoadAgentTemplateError AgentTemplate 热加载失败
+	// Python: codes.py:231 DEEPAGENT_LOAD_AGENT_TEMPLATE_ERROR
+	StatusDeepagentLoadAgentTemplateError = NewStatusCode(
+		"DEEPAGENT_LOAD_AGENT_TEMPLATE_ERROR", 123027,
+		"deepagent load agent template error, reason: {error_msg}")
+	// StatusDeepagentUnloadExtensionError 扩展卸载失败
+	// Python: codes.py:232 DEEPAGENT_UNLOAD_EXTENSION_ERROR
+	StatusDeepagentUnloadExtensionError = NewStatusCode(
+		"DEEPAGENT_UNLOAD_EXTENSION_ERROR", 123028,
+		"deepagent unload extension error, reason: {error_msg}")
 
 	// 多 Agent 130000–130999
 

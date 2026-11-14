@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	hptoolegistry "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
@@ -210,6 +211,81 @@ func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces
 	r.promptBuilder.RemoveSection(hsections.SectionSessionTools)
 	r.promptBuilder.AddSection(section)
 	return nil
+}
+
+// HasTools 返回是否已注册任务/会话工具。
+// Python: getattr(rail, "tools", None) 的可访问性等价（extension_binder.py:333）。
+func (r *SubagentRail) HasTools() bool { return len(r.tools) > 0 }
+
+// refreshableAgentToolNames 描述可刷新的已注册工具名集合。
+// Python: SubagentRail._REFRESHABLE_TOOL_NAMES = {"task_tool", "sessions_spawn", "subagent_spawn"}
+// subagent_spawn 属 runtime 模式专属（build_subagent_tools），Go rail 未实现
+// runtime 分支（对应 15.6 native_v2），故集合只含前两个。
+var refreshableAgentToolNames = map[string]struct{}{
+	"task_tool":      {},
+	"sessions_spawn": {},
+}
+
+// RefreshAvailableAgents 刷新已注册子代理工具卡片中的 available-agents 文案。
+// 热重载（configure 部分更新）或插件热绑增删子代理后，task_tool / sessions_spawn
+// 的描述仍带旧快照；本方法用当前 DeepAgentConfig.Subagents 重渲染描述。
+// Python: SubagentRail.refresh_available_agents (subagent_rail.py:177-216)
+//
+// 已登记残留（偏差 D-15e 注）：Python 还会调 tool.set_allowed_subagent_types
+// （task_tool.py:230 / subagent_tools.py:125），Go 的 TaskTool / SessionsSpawnTool
+// 尚无 allowedSubagentTypes 字段与校验，该步无处落点，待工具侧补齐后回填。
+func (r *SubagentRail) RefreshAvailableAgents(agent agentinterfaces.BaseAgent) {
+	if len(r.tools) == 0 {
+		return
+	}
+	// Python: self.system_prompt_builder = getattr(agent, "system_prompt_builder", self.system_prompt_builder)
+	if sb := agent.SystemPromptBuilder(); sb != nil {
+		r.promptBuilder = sb
+	}
+	// Python: language = getattr(self.system_prompt_builder, "language", "cn")
+	language := "cn"
+	if r.promptBuilder != nil {
+		language = r.promptBuilder.Language()
+	}
+	// Python: configured_subagents = list(agent.deep_config.subagents or [])
+	var configuredSubagents []hschema.SubagentSpec
+	if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
+		if deepCfg := deepAgent.DeepConfig(); deepCfg != nil {
+			configuredSubagents = deepCfg.Subagents
+		}
+	}
+	// Python: all_agents = self._build_available_agents_description(configured_subagents)
+	// Go rail 无 runtime 分支，sync/async 两条路径的文案均来自全集
+	// （对齐 refresh 的 else 分支：available_agents = all_agents）。
+	allAgents := r.buildAvailableAgentsDescription(configuredSubagents)
+	// Python: agent_id = getattr(getattr(agent, "card", None), "id", None)
+	// （Go 走 provider.GetDescription 重渲染，无需 agent_id）
+	var refreshed []string
+	for _, t := range r.tools {
+		card := t.Card()
+		if card == nil {
+			continue
+		}
+		if _, refreshable := refreshableAgentToolNames[card.Name]; !refreshable {
+			continue
+		}
+		// Python: card.description = get_tool_description(name, language).format(available_agents=...)
+		// Go 等价：从 prompts/tools 注册表取原始描述并重填占位符，原卡指针不变
+		// （ability_manager / resource_mgr 持有的引用保持有效）。
+		provider, ok := hptoolegistry.GetToolProvider(card.Name)
+		if !ok {
+			continue
+		}
+		description := provider.GetDescription(language)
+		description = strings.ReplaceAll(description, "{available_agents}", allAgents)
+		card.Description = description
+		refreshed = append(refreshed, card.Name)
+	}
+	if len(refreshed) > 0 {
+		logger.Info(logComponent).
+			Str("tools", strings.Join(refreshed, ", ")).
+			Msg("[SubagentRail] Refreshed available_agents")
+	}
 }
 
 // Uninit 注销 Rail：移除已注册工具，异步模式清空 session toolkit。

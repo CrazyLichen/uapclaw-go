@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -474,7 +475,7 @@ func TestManifestProviderConfig_native带模板(t *testing.T) {
 		t.Run(provider, func(t *testing.T) {
 			spec := hschema.AgentTemplateSpec{
 				AgentCard: mustCard(t, "a", "expert", "d"),
-				Tools:     []map[string]any{{"name": "t"}},
+				Tools:     []hschema.BuiltinToolSpec{{Type: "t"}},
 			}
 			config, err := ManifestProviderConfig(spec, ManifestProviderConfigOptions{
 				Provider: provider, Language: "en",
@@ -496,8 +497,8 @@ func TestManifestProviderConfig_第三方拒绝DeepAgent专属段(t *testing.T) 
 		section string
 		build   func(*hschema.AgentTemplateSpec)
 	}{
-		{"tools", func(spec *hschema.AgentTemplateSpec) { spec.Tools = []map[string]any{{"name": "t"}} }},
-		{"rails", func(spec *hschema.AgentTemplateSpec) { spec.Rails = []map[string]any{{"type": "r"}} }},
+		{"tools", func(spec *hschema.AgentTemplateSpec) { spec.Tools = []hschema.BuiltinToolSpec{{Type: "t"}} }},
+		{"rails", func(spec *hschema.AgentTemplateSpec) { spec.Rails = []hschema.RailSpec{{Type: "r"}} }},
 		{"subagents", func(spec *hschema.AgentTemplateSpec) {
 			spec.Subagents = []hschema.AgentTemplateSpec{{}}
 		}},
@@ -708,7 +709,7 @@ func TestCreateHarness_DeepAgent段被拒(t *testing.T) {
 
 	spec := hschema.AgentTemplateSpec{
 		AgentCard: mustCard(t, "a", "n", "d"),
-		Tools:     []map[string]any{{"name": "t"}},
+		Tools:     []hschema.BuiltinToolSpec{{Type: "t"}},
 	}
 	_, err := CreateHarness(spec, CreateHarnessOptions{Provider: "ch-third"})
 	require.Error(t, err)
@@ -727,7 +728,7 @@ func TestManifestProviderConfig_模型无端点(t *testing.T) {
 	spec := hschema.AgentTemplateSpec{
 		AgentCard: mustCard(t, "a", "n", "d"),
 		Model: &hschema.ModelSpec{
-			ModelRequestConfig: &hschema.ModelRequestConfig{ModelName: "gpt-x"},
+			ModelRequestConfig: &llmschema.ModelRequestConfig{ModelName: "gpt-x"},
 		},
 	}
 	config, err := ManifestProviderConfig(spec, ManifestProviderConfigOptions{Provider: "mc-model-only"})
@@ -749,12 +750,12 @@ func TestManifestProviderConfig_模型带端点(t *testing.T) {
 	spec := hschema.AgentTemplateSpec{
 		AgentCard: mustCard(t, "a", "n", "d"),
 		Model: &hschema.ModelSpec{
-			ModelClientConfig: &hschema.ModelClientConfig{
+			ModelClientConfig: llmschema.ModelClientConfig{
 				APIBase:        "https://llm/v1",
 				APIKey:         "secret",
 				ClientProvider: "openai",
 			},
-			ModelRequestConfig: &hschema.ModelRequestConfig{ModelName: "gpt-x"},
+			ModelRequestConfig: &llmschema.ModelRequestConfig{ModelName: "gpt-x"},
 		},
 	}
 	_, err := ManifestProviderConfig(spec, ManifestProviderConfigOptions{Provider: "mc-endpoint"})
@@ -833,7 +834,7 @@ func (s stringerValue) String() string { return "typed" }
 // TestHasDeepAgentSection_未知段 白名单外的段名恒 false。
 func TestHasDeepAgentSection_未知段(t *testing.T) {
 	manifest := hschema.AgentTemplateSpec{
-		Tools: []map[string]any{{"name": "t"}},
+		Tools: []hschema.BuiltinToolSpec{{Type: "t"}},
 	}
 	assert.True(t, hasDeepAgentSection(manifest, "tools"))
 	assert.False(t, hasDeepAgentSection(manifest, "rails"))

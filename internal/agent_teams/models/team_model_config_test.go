@@ -20,11 +20,11 @@ func TestNewTeamModelConfig(t *testing.T) {
 	}
 }
 
-// TestTeamModelConfig_Build_留桩 测试 Build 留桩返回
+// TestTeamModelConfig_Build_留桩 测试 Build 不 panic 且返回值可用。
+// 15.15 起真实现（Python deep_agent_spec.py:127-132 ModelSpec.build）：
+// 本包测试未注册 MockLLM 客户端，构造失败按语义降级返回 nil（warn 告警）。
 func TestTeamModelConfig_Build_留桩(t *testing.T) {
 	cfg := NewTeamModelConfig()
-	result, err := cfg.Build()
-	if result != nil || err != nil {
-		t.Errorf("期望 (nil, nil), 实际=(%v, %v)", result, err)
-	}
+	result := cfg.Build()
+	_ = result // 未注册客户端环境下允许 nil；注册环境返回模型实例
 }

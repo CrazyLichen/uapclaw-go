@@ -1,7 +1,9 @@
 package schema
 
 import (
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -30,8 +32,19 @@ func NewTeamModelConfig() TeamModelConfig {
 	}
 }
 
-// Build 构建团队模型配置。
-// ⤵️ 回填: 9.57 — 当前返回 nil, nil
-func (c TeamModelConfig) Build() (any, error) {
-	return nil, nil
+// Build 从配置构建模型实例。
+// Python: deep_agent_spec.py:127-132 ModelSpec.build
+//
+// 构造失败时告警并返回 nil（对齐 Go 侧既有 buildModelFromSpec 语义：
+// 模型构造失败不中断装配，agent 以无模型继续——与 Python「构造期不抛、
+// 调用期才失败」的可观测行为等价）。
+func (c TeamModelConfig) Build() *llm.Model {
+	m, err := llm.NewModel(&c.ModelClientConfig, c.ModelRequestConfig)
+	if err != nil {
+		logger.Warn(logger.ComponentAgentCore).Err(err).
+			Str("client_provider", c.ModelClientConfig.ClientProvider).
+			Msg("model build failed, agent will have no model")
+		return nil
+	}
+	return m
 }

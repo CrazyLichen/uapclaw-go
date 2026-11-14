@@ -390,7 +390,7 @@ func BuildHarnessContext(manifest hschema.AgentTemplateSpec,
 		if language == "" {
 			language = "cn"
 		}
-		if rendered := hresources.RenderAgentTemplateSystemPrompt(template, language); rendered != "" {
+		if rendered := hresources.RenderAgentTemplateSystemPrompt(template, language, nil); rendered != "" {
 			promptParts = append(promptParts, rendered)
 		}
 		mcpServers, err = ManifestMcpServers(template)
@@ -548,7 +548,7 @@ func manifestModelChoice(manifest hschema.AgentTemplateSpec) (harnessprotocol.Mo
 	if model.ModelRequestConfig != nil && model.ModelRequestConfig.ModelName != "" {
 		modelName = model.ModelRequestConfig.ModelName
 	}
-	if model.ModelClientConfig == nil || model.ModelClientConfig.APIBase == "" {
+	if model.ModelClientConfig.APIBase == "" {
 		choice := harnessprotocol.ModelChoice{}
 		if modelName != "" {
 			choice.Model = &modelName

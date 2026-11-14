@@ -47,9 +47,8 @@ import (
 //     外部依赖包 jiuwen_memory_adapter——Python 侧 import 失败也返回 None。
 //     Go 侧 buildJiuwenMemoryRail 保留环境开关门卫，恒返回 nil。
 //     回收条件：领域九/后续补 JiuwenMemoryRail + adapter 后回填。
-//   - D-LP（本批新增）：DeepAgent.LoadPlugin 热加载链（deep_agent.py:2232）
-//     未迁移，挂 ⏵ 15.15 templates & plugins；LocalBackend.loadPlugin 为
-//     注入点，默认桩返回未实现，热加载扫描与去重逻辑已按 Python 原样落地。
+//   - D-LP（已回填）：DeepAgent.LoadPlugin 热加载链于 15.15 落地，
+//     LocalBackend.loadPluginFn 默认走真实现；SetLoadPlugin 仅保留测试覆写。
 //   - D-embed：workspace 内容资源以 //go:embed 打包（prompts/content.go），
 //     替代 Python 的文件系统路径读取。
 
@@ -451,9 +450,8 @@ type LocalBackend struct {
 	sessionID string
 	// loadedExtensions 已热加载的运行时扩展（Python: _loaded_extensions）
 	loadedExtensions map[string]bool
-	// loadPlugin 插件热加载注入点。
+	// loadPlugin 插件热加载测试覆写点（nil 时走 DeepAgent.LoadPlugin 真实现）。
 	// Python: agent.load_plugin(path)（deep_agent.py:2232）。
-	// 偏差 D-LP：DeepAgent.LoadPlugin 未迁移，挂 ⏵ 15.15；默认桩报未实现。
 	loadPlugin func(path string) (labels []string, err error)
 	// abortCount 累计 Abort 调用次数
 	abortCount int
@@ -469,7 +467,7 @@ func NewLocalBackend(cfg CLIConfig) *LocalBackend {
 	}
 }
 
-// SetLoadPlugin 覆写插件热加载实现（测试或后续 15.15 回填时使用）。
+// SetLoadPlugin 覆写插件热加载实现（测试专用；生产链路走 DeepAgent.LoadPlugin）。
 func (b *LocalBackend) SetLoadPlugin(fn func(path string) (labels []string, err error)) {
 	b.loadPlugin = fn
 }
@@ -609,15 +607,24 @@ func (b *LocalBackend) loadRuntimeExtensions(ctx context.Context) error {
 	return nil
 }
 
-// loadPluginFn 返回当前生效的插件加载函数（nil 时用未实现桩）。
-// 偏差 D-LP：默认桩对应 ⏵ 15.15 的 DeepAgent.LoadPlugin 回填点。
+// loadPluginFn 返回当前生效的插件加载函数。
+// 15.15 回填完成：默认走 DeepAgent.LoadPlugin 真实现（labels 为台账资源标签）；
+// SetLoadPlugin 仅保留测试覆写能力。
 func (b *LocalBackend) loadPluginFn() func(ctx context.Context, path string) (labels []string, err error) {
 	if b.loadPlugin != nil {
 		return func(ctx context.Context, path string) ([]string, error) { return b.loadPlugin(path) }
 	}
-	return func(_ context.Context, _ string) ([]string, error) {
-		return nil, errNotImplemented(
-			"DeepAgent.LoadPlugin is not yet ported (pending 15.15 templates & plugins)")
+	return func(ctx context.Context, path string) ([]string, error) {
+		// Python: factory.py 的 runtime extension 热加载走 agent.load_harness_config
+		// 的 deprecated 转调链（load_harness_config → load_plugin → labels）。
+		if b.agent == nil {
+			return nil, errNotImplemented("agent not started; cannot load plugin")
+		}
+		record, err := b.agent.LoadPlugin(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return harness.LoadRecordLabels(*record), nil
 	}
 }
 

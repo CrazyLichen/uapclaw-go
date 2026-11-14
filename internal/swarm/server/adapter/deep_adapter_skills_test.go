@@ -2,6 +2,8 @@ package adapter
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +12,8 @@ import (
 	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	skill "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -42,40 +46,55 @@ func TestSkillScanDirs_workspace兜底(t *testing.T) {
 	assert.Contains(t, dirs, ws)
 }
 
-// TestSkillScanDirs_绑定目录前置去重 绑定包目录优先且不重复
-func TestSkillScanDirs_绑定目录前置去重(t *testing.T) {
-	bound := t.TempDir()
-	d := &DeepAdapter{instanceOverrides: map[string]any{"skills": []any{bound, bound}}}
+// newSkillScanTestAdapter 构造带 DeepAgentConfig.Skills 的 adapter 测试载体。
+// D-5 回填后数据源为 DeepAgentConfig.Skills（extension_binder 提交）。
+func newSkillScanTestAdapter(t *testing.T, skills []string) *DeepAdapter {
+	t.Helper()
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("scan-test"))
+	agent := harness.NewDeepAgent(card)
+	cfg := hschema.NewDeepAgentConfig()
+	cfg.Card = agent.Card()
+	cfg.Skills = skills
+	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
+	return &DeepAdapter{instance: agent, instanceOverrides: map[string]any{}}
+}
+
+// TestSkillScanDirs_读DeepAgentConfigSkills_leaf归一前置去重
+// D-5 回填：绑定包目录读 DeepAgentConfig.Skills（前置、leaf→父目录归一、去重、
+// 空条目跳过），原先错误来源的 instanceOverrides["skills"] 分支已删除。
+func TestSkillScanDirs_读DeepAgentConfigSkills_leaf归一前置去重(t *testing.T) {
+	pkgDir := t.TempDir()
+	leaf := filepath.Join(pkgDir, "my-skill")
+	require.NoError(t, os.MkdirAll(leaf, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(leaf, "SKILL.md"), []byte("# s"), 0o644))
+	plain := t.TempDir()
+
+	d := newSkillScanTestAdapter(t, []string{leaf, leaf, plain, "", plain})
 	dirs := d.skillScanDirs()
 	require.NotEmpty(t, dirs)
-	assert.Equal(t, bound, dirs[0], "绑定目录应前置")
+	assert.Equal(t, pkgDir, dirs[0], "leaf 目录应归一为父目录并前置")
 	count := 0
 	for _, dir := range dirs {
-		if dir == bound {
+		if dir == pkgDir {
 			count++
 		}
 	}
-	assert.Equal(t, 1, count, "重复绑定目录应去重")
+	assert.Equal(t, 1, count, "重复条目应去重")
+	for _, dir := range dirs {
+		assert.NotEmpty(t, dir)
+	}
 }
 
-// TestSkillScanDirs_字符串形式绑定目录 单目录可用 string 声明
-func TestSkillScanDirs_字符串形式绑定目录(t *testing.T) {
-	bound := t.TempDir()
-	d := &DeepAdapter{instanceOverrides: map[string]any{"skills": bound}}
+// TestSkillScanDirs_包目录压过同名workspace技能 包根前置语义（leaf 父目录在前）。
+func TestSkillScanDirs_包目录压过同名workspace技能(t *testing.T) {
+	pkgDir := t.TempDir()
+	d := newSkillScanTestAdapter(t, []string{pkgDir})
 	dirs := d.skillScanDirs()
 	require.NotEmpty(t, dirs)
-	assert.Equal(t, bound, dirs[0])
-}
-
-// TestSkillScanDirs_字符串切片绑定目录 多目录可用 []string 声明
-func TestSkillScanDirs_字符串切片绑定目录(t *testing.T) {
-	first := t.TempDir()
-	second := t.TempDir()
-	d := &DeepAdapter{instanceOverrides: map[string]any{"skills": []string{first, second}}}
-	dirs := d.skillScanDirs()
-	require.GreaterOrEqual(t, len(dirs), 2)
-	assert.Equal(t, first, dirs[0])
-	assert.Equal(t, second, dirs[1])
+	assert.Equal(t, pkgDir, dirs[0], "包目录应先于 workspace 技能目录")
+	if ws := workspace.AgentSkillsDir(); ws != "" {
+		assert.Contains(t, dirs, ws)
+	}
 }
 
 // TestSyncMcpServersForRuntime_空配置仍刷新技能 服务增删收尾必须调用技能刷新（rail 未构建时安全返回）
@@ -92,18 +111,6 @@ func TestRefreshSkillRails_更新禁用名单(t *testing.T) {
 		skillManager: skill.NewSkillManager(t.TempDir()),
 	}
 	require.NoError(t, d.RefreshSkillRails(context.Background()))
-}
-
-// TestSkillScanDirs_忽略空字符串 空条目不得进入扫描根
-func TestSkillScanDirs_忽略空字符串(t *testing.T) {
-	bound := t.TempDir()
-	d := &DeepAdapter{instanceOverrides: map[string]any{"skills": []any{"", bound}}}
-	dirs := d.skillScanDirs()
-	require.NotEmpty(t, dirs)
-	assert.Equal(t, bound, dirs[0])
-	for _, dir := range dirs {
-		assert.NotEmpty(t, dir)
-	}
 }
 
 // TestRefreshSkillRails_未绑定会话时安全返回 实例存在但无活跃会话时不得 panic
