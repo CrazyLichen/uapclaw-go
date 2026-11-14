@@ -244,7 +244,8 @@ func (s *DuplexJSONLSuite) TestRunJsonl_问答闭环() {
 		stderrBuf.String(), strings.Join(rawLines, "\n"))
 
 	// 宿主回答：answer 帧（request_id 与 run 记录一致；session_id 取自事件流）
-	answer := fmt.Sprintf(`{"schema_version":"0.1","type":"answer","request_id":"req-qa","session_id":%q,"interaction_id":%q,"answers":[{"selected_options":["continue"]}]}`,
+	// ask_user 答案契约：question 文本必须与卡片问题一致（buildII/MatchAnswers 按问题文本归属）。
+	answer := fmt.Sprintf(`{"schema_version":"0.1","type":"answer","request_id":"req-qa","session_id":%q,"interaction_id":%q,"answers":[{"question":"继续吗","selected_options":["continue"]}]}`,
 		sessionID, interactionID)
 	writeLine(answer)
 

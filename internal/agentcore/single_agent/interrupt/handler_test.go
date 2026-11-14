@@ -318,8 +318,9 @@ func TestBuildInterruptResult_ToolCallInterruptRequest(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, "interrupt", result["result_type"])
 
-	interruptIDs, _ := result["interrupt_ids"].([]string)
-	assert.Equal(t, []string{"inner_1"}, interruptIDs)
+	// interrupt_ids 存为 []any（对齐 Python 通用 list）——消费方统一按 []any 断言
+	interruptIDs, _ := result["interrupt_ids"].([]any)
+	assert.Equal(t, []any{"inner_1"}, interruptIDs)
 
 	stateOutputs, _ := result["state"].([]any)
 	assert.Len(t, stateOutputs, 1)

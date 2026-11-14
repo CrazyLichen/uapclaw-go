@@ -15,7 +15,10 @@ import (
 	"fmt"
 	"sync"
 
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"os"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -561,6 +564,11 @@ func (q *RootPermissionQueue) Reconcile(
 	if err != nil {
 		return nil, err
 	}
+	// TEMP-PROBE
+	if f, e := os.OpenFile("/tmp/pqa5.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
+		fmt.Fprintf(f, "PROBE reconcile enter resultType=%q stateLen=%d idsLen=%d\n", resultType, len(state), len(interruptIDs))
+		f.Close()
+	}
 	if resultType != "interrupt" {
 		return nil, nil
 	}
@@ -593,6 +601,11 @@ func (q *RootPermissionQueue) Reconcile(
 			return nil, &RootPermissionQueueError{"permission_queue_snapshot_invalid"}
 		}
 		interaction := interactionOf(state[index])
+		// TEMP-PROBE
+		if f, e := os.OpenFile("/tmp/pqa5.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
+			fmt.Fprintf(f, "PROBE reconcile id=%q inner=%q nil=%v\n", interaction["id"], innerID, interaction == nil)
+			f.Close()
+		}
 		if interaction == nil || interaction["id"] != innerID {
 			q.Quarantine(rootSessionID)
 			return nil, &RootPermissionQueueError{"permission_queue_snapshot_mismatch"}
@@ -1035,10 +1048,27 @@ func normalizeRootPermissionAnswer(value map[string]any) (map[string]any, error)
 //
 // Python: _interaction(item)
 func interactionOf(item any) map[string]any {
+	// 类型化 OutputSchema（BuildInterruptResult 的 state 输出）：
+	// 解包 Payload 后按 InteractionOutput 的 id/value 取——Python 的
+	// _interaction(item) 对 OutputSchema/InteractionOutput 对象都能直读属性；
+	// Go 不解包会让普通 ask_user 中断误判 snapshot_mismatch → 会话被隔离
+	// （2026-11-14 问答闭环实锤）。
+	if out, ok := item.(*stream.OutputSchema); ok && out != nil {
+		item = out.Payload
+	}
+	if out, ok := item.(stream.OutputSchema); ok {
+		item = out.Payload
+	}
 	if provider, ok := item.(InteractionItem); ok {
 		return map[string]any{
 			"id":    trimSpace(provider.InteractionID()),
 			"value": provider.InteractionValue(),
+		}
+	}
+	if out, ok := item.(*sessioninteraction.InteractionOutput); ok && out != nil {
+		return map[string]any{
+			"id":    trimSpace(out.ID),
+			"value": out.Value,
 		}
 	}
 	payload, ok := item.(map[string]any)
@@ -1064,6 +1094,17 @@ func interactionOf(item any) map[string]any {
 // 优先使用实现了 InteractionRequestProvider 的具体类型（例如
 // *saschema.InterruptRequest），否则回退到 map 形态读取 kind/metadata/value。
 func toInteractionRequest(value any) (*interactionRequest, bool) {
+	// 类型化 ToolCallInterruptRequest：GetInterruptKind/GetMetadata 与
+	// InteractionRequestProvider 不同名（历史接口），Python 的 getattr 直读
+	// 两种都覆盖——Go 必须显式分支，否则普通 ask_user 中断会被误判
+	// snapshot_mismatch 而隔离会话（2026-11-14 问答闭环实锤）。
+	if typed, ok := value.(*saschema.ToolCallInterruptRequest); ok && typed != nil {
+		request := &interactionRequest{
+			Kind:     typed.GetInterruptKind(),
+			Metadata: typed.GetMetadata(),
+		}
+		return request, true
+	}
 	if provider, ok := value.(InteractionRequestProvider); ok {
 		request := &interactionRequest{
 			Kind:     provider.RequestInterruptKind(),

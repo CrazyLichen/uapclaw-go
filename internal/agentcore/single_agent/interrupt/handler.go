@@ -318,7 +318,12 @@ func (h *ToolInterruptHandler) HandleResume(
 // Python: build_interrupt_result(payloads)
 // 返回 {"result_type": "interrupt", "state": [...], "interrupt_ids": [...]}
 func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
-	interruptIDs := make([]string, 0)
+	// interrupt_ids 必须是 []any：消费方（权限快照校验 interruptPartsOf、
+	// interruptIDContains）统一按 []any 断言读取——[]string 断言失败会让
+	// 普通 ask_user 中断被误判为「快照不合规」→ 会话被隔离 → 恢复轮被
+	// session_runtime_quarantined 拒绝（2026-11-14 问答闭环实锤）。
+	// Python 的 result["interrupt_ids"] 是通用 list，此处对齐其形状。
+	interruptIDs := make([]any, 0)
 	stateOutputs := make([]any, 0)
 
 	for idx, entry := range payloads {
