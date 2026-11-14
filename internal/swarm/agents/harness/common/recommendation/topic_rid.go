@@ -43,8 +43,8 @@ var ridSummaryPairMatchResponseSchema = map[string]any{
 	"properties": map[string]any{
 		"label": map[string]any{"type": "string", "enum": []string{"MATCH", "NO_MATCH"}},
 	},
-	"required":                   []string{"label"},
-	"additionalProperties":       false,
+	"required":             []string{"label"},
+	"additionalProperties": false,
 }
 
 // ridSummaryPairSystemPrompt 系统提示词（对齐 :48-54 _SYSTEM_PROMPT 逐字）。
@@ -494,4 +494,3 @@ func mapValuesEqual(payload, expected map[string]any) bool {
 	}
 	return true
 }
-
