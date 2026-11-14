@@ -742,11 +742,25 @@ func buildModelClientConfig(clientExtra map[string]any, modelID, apiProvider, ap
 			cfg.CustomHeaders = headers
 		}
 	}
+	// 结构化 intelli_router 快照：映射到类型化字段（pydantic 语义——client dict
+	// 的 intelli_router 键成为 ModelClientConfig.intelli_router 字段而非 extra）
+	if v, ok := clientExtra["intelli_router"]; ok {
+		if m, ok := v.(map[string]any); ok {
+			raw, err := json.Marshal(m)
+			if err == nil {
+				ir := llmschema.NewDefaultIntelliRouterConfig()
+				if json.Unmarshal(raw, &ir) == nil {
+					cfg.IntelliRouter = &ir
+				}
+			}
+		}
+	}
 	// 额外字段存入 Extra
 	extra := make(map[string]any)
 	knownClientKeys := map[string]struct{}{
 		"client_id": {}, "client_provider": {}, "api_key": {}, "api_base": {},
 		"timeout": {}, "max_retries": {}, "verify_ssl": {}, "ssl_cert": {}, "custom_headers": {},
+		"intelli_router": {},
 	}
 	for k, v := range clientExtra {
 		if _, known := knownClientKeys[k]; !known {
