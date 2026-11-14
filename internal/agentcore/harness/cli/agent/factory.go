@@ -450,9 +450,8 @@ type LocalBackend struct {
 	sessionID string
 	// loadedExtensions 已热加载的运行时扩展（Python: _loaded_extensions）
 	loadedExtensions map[string]bool
-	// loadPlugin 插件热加载注入点。
+	// loadPlugin 插件热加载测试覆写点（nil 时走 DeepAgent.LoadPlugin 真实现）。
 	// Python: agent.load_plugin(path)（deep_agent.py:2232）。
-	// 偏差 D-LP：DeepAgent.LoadPlugin 未迁移，挂 ⏵ 15.15；默认桩报未实现。
 	loadPlugin func(path string) (labels []string, err error)
 	// abortCount 累计 Abort 调用次数
 	abortCount int
@@ -468,7 +467,7 @@ func NewLocalBackend(cfg CLIConfig) *LocalBackend {
 	}
 }
 
-// SetLoadPlugin 覆写插件热加载实现（测试或后续 15.15 回填时使用）。
+// SetLoadPlugin 覆写插件热加载实现（测试专用；生产链路走 DeepAgent.LoadPlugin）。
 func (b *LocalBackend) SetLoadPlugin(fn func(path string) (labels []string, err error)) {
 	b.loadPlugin = fn
 }

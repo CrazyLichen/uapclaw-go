@@ -13,6 +13,7 @@
 //	├── resolve_spec_parts.go # DeepAgentSpec → parts（转调 ResolveDeepAgentParts）
 //	├── resolve_spec_helpers.go # spec 解析助手（buildCtx 衍生 / rails 展平 / 模型构造）
 //	├── resolve_spec_sysop.go # sys_operation 与 subagents 解析
+//	├── extension_binder.go      # 插件/模板扩展热绑定（15.15：六类绑定+回滚+逆序卸载）
 //	├── research_agent_factory.go    # CreateResearchAgent 工厂函数（9.25）
 //	├── browser_agent_factory.go     # CreateBrowserAgent 工厂函数（9.26）
 //	├── code_agent_factory.go        # CreateCodeAgent 工厂函数（9.27）
