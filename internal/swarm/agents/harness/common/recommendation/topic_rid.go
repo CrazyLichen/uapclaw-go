@@ -357,7 +357,7 @@ func (m *ArkSpecificInterestMatcher) cachedLabel(earlier, later *SessionSummaryA
 		!mapValuesEqual(payload, expected) ||
 		!nonEmptyStringAny(payload["operation_id"]) ||
 		!isBoolAny(payload["match_label"]) ||
-		!anyMapsEqual(payload["provider_config"], m.config.SafeProvenance()) ||
+		!anyMapEqual(payload["provider_config"], m.config.SafeProvenance()) ||
 		!m.validProviderReceipt(providerReceipt, requestID,
 			earlier.SessionSummaryID, later.SessionSummaryID)
 	if rejected {
@@ -462,33 +462,14 @@ func isBoolAny(value any) bool {
 
 // pyJSONSorted 键排序、无空格紧凑 JSON（等价 Python
 // json.dumps(..., ensure_ascii=False, sort_keys=True, separators=(",", ":"))）。
+// Go json.Encoder 对 map 键天然有序；marshalNoEscape 关闭 HTML 转义，
+// 与 Python 不转义 <>& 的行为一致（复用既有助手，不另造序列化）。
 func pyJSONSorted(value any) string {
-	encoded, err := json.Marshal(sortedForJSON(value))
+	encoded, err := marshalNoEscape(value)
 	if err != nil {
 		return ""
 	}
 	return string(encoded)
-}
-
-// sortedForJSON 递归将 map 键排序（Go json.Marshal 默认 map 键有序，
-// 这里仅递归展开嵌套 any 形态）。
-func sortedForJSON(value any) any {
-	switch v := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(v))
-		for key, item := range v {
-			out[key] = sortedForJSON(item)
-		}
-		return out
-	case []any:
-		out := make([]any, len(v))
-		for i, item := range v {
-			out[i] = sortedForJSON(item)
-		}
-		return out
-	default:
-		return value
-	}
 }
 
 // sameStringKeys 键集合恰等（等价 Python set(payload) != expected_fields）。
@@ -514,23 +495,3 @@ func mapValuesEqual(payload, expected map[string]any) bool {
 	return true
 }
 
-// anyMapsEqual any 形态 map 相等（等价 Python == 对 dict）。
-func anyMapsEqual(a, b any) bool {
-	ma, okA := a.(map[string]any)
-	mb, okB := b.(map[string]any)
-	if okA != okB {
-		return false
-	}
-	if !okA {
-		return anyEqual(a, b)
-	}
-	if len(ma) != len(mb) {
-		return false
-	}
-	for key, value := range ma {
-		if !anyEqual(mb[key], value) {
-			return false
-		}
-	}
-	return true
-}
