@@ -1,12 +1,18 @@
 package resources
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	mtypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // 本文件对应 Python openjiuwen/harness/resources/extension_resolver.py 的
@@ -134,4 +140,129 @@ func defaultLanguage(language string) string {
 		return "cn"
 	}
 	return language
+}
+
+// ──────────────────────────── 15.15 类型层（对齐 extension_resolver.py:41-101）────────────────────────────
+
+// ResourceKind Plugin / AgentTemplate 热加载记账的资源叶子类别。
+// Python: extension_resolver.py:41-50 ResourceKind（str 枚举，成员全集不得裁剪）
+type ResourceKind string
+
+const (
+	// ResourceKindTool 工具能力
+	ResourceKindTool ResourceKind = "tool"
+	// ResourceKindMCP MCP 服务器
+	ResourceKindMCP ResourceKind = "mcp"
+	// ResourceKindRail rail
+	ResourceKindRail ResourceKind = "rail"
+	// ResourceKindPromptSection 提示词段落
+	ResourceKindPromptSection ResourceKind = "prompt_section"
+	// ResourceKindSkill 技能目录
+	ResourceKindSkill ResourceKind = "skill"
+	// ResourceKindSubagent 子代理
+	ResourceKindSubagent ResourceKind = "subagent"
+)
+
+// ResourceRef 本次 load 实际应用的一个运行时绑定引用。
+// Python: extension_resolver.py:52-57 ResourceRef
+type ResourceRef struct {
+	// Kind 资源类别
+	Kind ResourceKind `json:"kind"`
+	// Identity 资源标识（工具名 / server_id / rail 类型名 / 段落名 / 技能目录 / subagent key）
+	Identity string `json:"identity"`
+	// Extra 类别相关的附加事实（ability_names / server_name / mode+directory / 快照等）
+	Extra map[string]any `json:"extra,omitempty"`
+}
+
+// LoadRecord 一次 Plugin / AgentTemplate 热加载产出的事实。
+// Python: extension_resolver.py:60-65 LoadRecord
+type LoadRecord struct {
+	// LoadID 32 位十六进制 uuid4().hex 等价
+	LoadID string `json:"load_id"`
+	// SourceURI 文件型加载的 manifest 绝对路径；内存 Spec 加载为 nil
+	SourceURI string `json:"source_uri,omitempty"`
+	// Refs 本次 load 产生的绑定引用（卸载时逆序撤销）
+	Refs []ResourceRef `json:"refs,omitempty"`
+}
+
+// ResolvedSkill 解析后的技能目录引用。
+// Python: extension_resolver.py:68-74 ResolvedSkill（frozen dataclass）
+type ResolvedSkill struct {
+	// Directory 技能目录绝对路径
+	Directory string
+	// Mode 加载模式："all" / "auto_list"
+	Mode string
+	// EnabledSkills 显式启用列表；nil 表示全量启用
+	EnabledSkills []string
+}
+
+// ResolvedPromptSection 一个解析后的提示词段落 + 宿主绑定的冲突策略。
+// Python: extension_resolver.py:77-88 ResolvedPromptSection
+//
+// ReplaceExisting 仅对 AgentTemplate 根 persona 的 identity 段为 true：
+// 绑定时替换（并快照）既有同名段落而非让整批失败，卸载时恢复快照；
+// Plugin 的提示词段落恒为 false。
+type ResolvedPromptSection struct {
+	// Section 段落本体
+	Section saprompts.PromptSection
+	// ReplaceExisting 同名冲突时替换并快照（仅 AgentTemplate identity 段）
+	ReplaceExisting bool
+}
+
+// ExtensionParts 一次 Plugin / AgentTemplate 热加载的 resolve→apply 交接载体。
+// Python: extension_resolver.py:91-100 ExtensionParts（dataclass）
+type ExtensionParts struct {
+	// Tools 预构建的工具或工具卡片
+	Tools []any
+	// Mcps MCP 服务器配置
+	Mcps []mtypes.McpServerConfig
+	// Rails rail 实例
+	Rails []agentinterfaces.AgentRail
+	// PromptSections 解析后的提示词段落
+	PromptSections []ResolvedPromptSection
+	// Skills 解析后的技能
+	Skills []ResolvedSkill
+	// Subagents 物化后的子代理配置
+	Subagents []hschema.SubAgentConfig
+}
+
+// NewResourceRef 构造 ResourceRef，Extra 缺省为空 map。
+// Python: pydantic Field(default_factory=dict)
+func NewResourceRef(kind ResourceKind, identity string) ResourceRef {
+	return ResourceRef{Kind: kind, Identity: identity, Extra: map[string]any{}}
+}
+
+// NewLoadRecord 构造 LoadRecord，load_id 为 uuid4().hex 等价。
+// Python: extension_resolver.py:63 default_factory=lambda: uuid4().hex
+func NewLoadRecord() LoadRecord {
+	return LoadRecord{
+		LoadID: uuidHex(),
+		Refs:   []ResourceRef{},
+	}
+}
+
+// NewExtensionParts 构造 ExtensionParts，各列表缺省为空切片。
+// Python: dataclass field(default_factory=list)
+func NewExtensionParts() ExtensionParts {
+	return ExtensionParts{
+		Tools:          []any{},
+		Mcps:           []mtypes.McpServerConfig{},
+		Rails:          []agentinterfaces.AgentRail{},
+		PromptSections: []ResolvedPromptSection{},
+		Skills:         []ResolvedSkill{},
+		Subagents:      []hschema.SubAgentConfig{},
+	}
+}
+
+// uuidHex 生成 32 位十六进制随机串（uuid4().hex 等价）。
+func uuidHex() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// 随机源失败属不可恢复环境错误；回退到时间戳拼串保唯一性
+		return fmt.Sprintf("%032x", time.Now().UnixNano())
+	}
+	// uuid4：第 7 字节高 4 位置 0b0100，第 9 字节高 2 位置 0b10（RFC 4122 变体）
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return hex.EncodeToString(b[:])
 }
