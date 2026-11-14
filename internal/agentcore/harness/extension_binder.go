@@ -335,7 +335,7 @@ func bindPromptSection(ctx context.Context, agent *DeepAgent, resolved hres.Reso
 		}
 	}
 	builder.AddSection(section)
-	if err := agent.applyPromptBuilderToReactAgent(ctx); err != nil {
+	if err := agent.ApplyPromptBuilderToReactAgent(ctx); err != nil {
 		return ref, err
 	}
 	return ref, nil
@@ -738,7 +738,7 @@ func unbindPromptSection(ctx context.Context, agent *DeepAgent, ref hres.Resourc
 	} else {
 		builder.RemoveSection(ref.Identity)
 	}
-	return agent.applyPromptBuilderToReactAgent(ctx)
+	return agent.ApplyPromptBuilderToReactAgent(ctx)
 }
 
 // unbindSkill 撤销技能挂载：从所有挂载了该根的 SkillUseRail 摘除并 reload；
@@ -902,13 +902,13 @@ func expandUser(raw string) string {
 	return raw
 }
 
-// applyPromptBuilderToReactAgent 把当前 system_prompt_builder 重渲染进内层 ReActAgent。
+// ApplyPromptBuilderToReactAgent 把当前 system_prompt_builder 重渲染进内层 ReActAgent。
 // Python: DeepAgent.apply_prompt_builder_to_react_agent (deep_agent.py:859-882)
 //
 // 模板只携带 identity 段（ReActAgent 每轮会把 prompt_template 重读进自己的
 // identity 节；DeepAgent 与 ReActAgent 共享 builder，其余节由 builder 自身
 // 继续贡献——整份渲染会把 configure 时的所有段折进 identity 并重复输出）。
-func (d *DeepAgent) applyPromptBuilderToReactAgent(ctx context.Context) error {
+func (d *DeepAgent) ApplyPromptBuilderToReactAgent(ctx context.Context) error {
 	builder := d.SystemPromptBuilder()
 	if builder == nil || d.reactAgent == nil {
 		return nil
