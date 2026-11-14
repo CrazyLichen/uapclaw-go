@@ -3,6 +3,9 @@ package models
 import (
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -712,5 +715,108 @@ func TestIntelliRouterConfig_ValidateModelNames(t *testing.T) {
 	// ResolvedModelNames 恒 ["*"]（pool.py:395-398）
 	if got := cfg.ResolvedModelNames(); len(got) != 1 || got[0] != "*" {
 		t.Fatalf("ResolvedModelNames: %v", got)
+	}
+}
+
+// TestMaterializeModelGroup 校验序、metadata 形状、request pop model/model_name。
+// Python: pool.py:460-516
+func TestMaterializeModelGroup(t *testing.T) {
+	routerCfg := llmschema.NewDefaultIntelliRouterConfig()
+	gid := "grp-1"
+	routerCfg.ModelGroupID = &gid
+	routerCfg.Deployments = []llmschema.IntelliRouterDeploymentConfig{{
+		ModelName: "m1", APIKey: "k1", APIBase: "https://a.com", Provider: "deepseek", RouteID: "r1",
+	}}
+	client := &llmschema.ModelClientConfig{ClientProvider: "intelli_router", IntelliRouter: &routerCfg}
+	compiled := &routing.CompiledModelSelection{
+		ModelClientConfig:  client,
+		ModelRequestConfig: &llmschema.ModelRequestConfig{ModelName: "x", Temperature: func() *float64 { v := 0.7; return &v }()},
+		SelectedType:       "model_group",
+		SelectedID:         "grp-1",
+	}
+	entries, err := MaterializeModelGroup(compiled, nil)
+	if err != nil {
+		t.Fatalf("物化失败: %v", err)
+	}
+	e := entries[0]
+	if e.ModelName != INTELLI_ROUTER_UNIFIED_MODEL || e.APIProvider != INTELLI_ROUTER_PROVIDER {
+		t.Fatalf("形状错误: %s/%s", e.ModelName, e.APIProvider)
+	}
+	if e.Description != "IntelliRouter model group grp-1" {
+		t.Fatalf("description: %q", e.Description)
+	}
+	clientMeta := e.Metadata["client"].(map[string]any)
+	router, _ := clientMeta["intelli_router"].(map[string]any)
+	if router == nil || router["model_group_id"] != "grp-1" {
+		t.Fatalf("router 快照缺 model_group_id: %v", router)
+	}
+	deps := router["deployments"].([]any)
+	if len(deps) != 1 || deps[0].(map[string]any)["route_id"] != "r1" {
+		t.Fatalf("deployments 快照: %v", deps)
+	}
+	// request dump：pop model/model_name，其余保留
+	req := e.Metadata["request"].(map[string]any)
+	if _, ok := req["model"]; ok {
+		t.Fatal("request.model 必须被 pop（'*' 是团队逻辑名，不得覆盖 deployment 默认值）")
+	}
+	if _, ok := req["model_name"]; ok {
+		t.Fatal("request.model_name 必须被 pop")
+	}
+	if req["temperature"] != 0.7 {
+		t.Fatalf("其余 request 键保留: %v", req)
+	}
+	// 校验序五连（py:468-490）
+	if _, err = MaterializeModelGroup(nil, nil); err == nil || !strings.Contains(err.Error(), "compiled model selection is required") {
+		t.Fatalf("nil compiled: %v", err)
+	}
+	if _, err = MaterializeModelGroup(compiled, &routing.ModelSelection{Type: "model", ID: "m1"}); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("selection 不匹配: %v", err)
+	}
+	wrongType := *compiled
+	wrongType.SelectedType = "model"
+	if _, err = MaterializeModelGroup(&wrongType, nil); err == nil || !strings.Contains(err.Error(), "selected_type='model_group'") {
+		t.Fatalf("非 model_group: %v", err)
+	}
+	wrongProvider := *compiled
+	wrongProvider.ModelClientConfig = &llmschema.ModelClientConfig{ClientProvider: "openai"}
+	if _, err = MaterializeModelGroup(&wrongProvider, nil); err == nil || !strings.Contains(err.Error(), "client_provider='intelli_router'") {
+		t.Fatalf("provider 错误: %v", err)
+	}
+	noDep := *compiled
+	rd := routerCfg
+	rd.Deployments = nil
+	noDep.ModelClientConfig = &llmschema.ModelClientConfig{ClientProvider: "intelli_router", IntelliRouter: &rd}
+	if _, err = MaterializeModelGroup(&noDep, nil); err == nil || !strings.Contains(err.Error(), "deployments") {
+		t.Fatalf("空 deployments: %v", err)
+	}
+}
+
+// TestModelGroupLabel 回退序 display_name → model_group_id → "*"；非组池空串。
+// Python: model_group_label (pool.py:519)
+func TestModelGroupLabel(t *testing.T) {
+	if ModelGroupLabel(nil) != "" || ModelGroupLabel([]ModelPoolEntry{{}, {}}) != "" {
+		t.Fatal("空池/多条目 → 空串")
+	}
+	plain := NewModelPoolEntry("m", "k", "b", "openai")
+	if ModelGroupLabel([]ModelPoolEntry{*plain}) != "" {
+		t.Fatal("非 intelli_router 条目 → 空串")
+	}
+	entry := NewModelPoolEntry(INTELLI_ROUTER_UNIFIED_MODEL, "", "", INTELLI_ROUTER_PROVIDER,
+		WithMetadata(map[string]any{"client": map[string]any{"intelli_router": map[string]any{}}}))
+	if ModelGroupLabel([]ModelPoolEntry{*entry}) != INTELLI_ROUTER_UNIFIED_MODEL {
+		t.Fatal("无 display_name 且无 model_group_id → '*'")
+	}
+	entry2 := NewModelPoolEntry(INTELLI_ROUTER_UNIFIED_MODEL, "", "", INTELLI_ROUTER_PROVIDER,
+		WithMetadata(map[string]any{
+			"client":      map[string]any{"intelli_router": map[string]any{"model_group_id": "g1"}},
+			"model_group": map[string]any{"display_name": "显示名"},
+		}))
+	if ModelGroupLabel([]ModelPoolEntry{*entry2}) != "显示名" {
+		t.Fatal("display_name 优先")
+	}
+	entry3 := NewModelPoolEntry(INTELLI_ROUTER_UNIFIED_MODEL, "", "", INTELLI_ROUTER_PROVIDER,
+		WithMetadata(map[string]any{"client": map[string]any{"intelli_router": map[string]any{"model_group_id": "g1"}}}))
+	if ModelGroupLabel([]ModelPoolEntry{*entry3}) != "g1" {
+		t.Fatal("无 display_name → model_group_id")
 	}
 }

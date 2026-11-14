@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/routing"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
@@ -178,12 +179,12 @@ func (c *IntelliRouterConfig) clientExtra() map[string]any {
 		deployments = append(deployments, entry)
 	}
 	router := map[string]any{
-		"deployments":         deployments,
-		"strategy":            c.Strategy,
-		"num_retries":         c.NumRetries,
-		"timeout":             c.Timeout,
-		"strategy_kwargs":     deepCopyAny(c.StrategyKwargs),
-		"enable_health_check": c.EnableHealthCheck,
+		"deployments":           deployments,
+		"strategy":              c.Strategy,
+		"num_retries":           c.NumRetries,
+		"timeout":               c.Timeout,
+		"strategy_kwargs":       deepCopyAny(c.StrategyKwargs),
+		"enable_health_check":   c.EnableHealthCheck,
 		"health_check_interval": c.HealthCheckInterval,
 		"enable_observability":  c.EnableObservability,
 		"web_dashboard_port":    c.WebDashboardPort,
@@ -230,6 +231,101 @@ func (c *IntelliRouterConfig) ToPoolEntries() []ModelPoolEntry {
 		ModelID:     uuid.New().String(),
 		Metadata:    metadata,
 	}}
+}
+
+// MaterializeModelGroup 把编译器产物物化为规范的 Team 模型组池。
+// 编译器驱动的模型组被刻意表示为恰好一条逻辑 "*" 条目。物理部署留在结构化
+// metadata.client.intelli_router 快照内，供 Foundation 路由器使用而不会被
+// 误当成 Team 分配器端点。
+// compiled 鸭子类型是为跨包复用；Go 直接取 23.4b 的 CompiledModelSelection
+// 具体类型（无循环依赖），调用方通常还会传对应的 ModelSelection 做一致性校验。
+// Python: materialize_model_group (pool.py:460)
+func MaterializeModelGroup(compiled *routing.CompiledModelSelection, selection *routing.ModelSelection) ([]ModelPoolEntry, error) {
+	if compiled == nil {
+		return nil, fmt.Errorf("compiled model selection is required")
+	}
+	selectedType := compiled.SelectedType
+	selectedID := compiled.SelectedID
+	if selection != nil {
+		if selection.Type != selectedType || selection.ID != selectedID {
+			return nil, fmt.Errorf("model selection does not match compiled selection")
+		}
+	}
+	if selectedType != "model_group" {
+		return nil, fmt.Errorf("materialize_model_group requires selected_type='model_group'")
+	}
+	client := compiled.ModelClientConfig
+	clientProvider := ""
+	if client != nil {
+		clientProvider = client.ClientProvider
+	}
+	if client == nil || clientProvider != INTELLI_ROUTER_PROVIDER {
+		return nil, fmt.Errorf("model group must use client_provider='intelli_router'")
+	}
+	router := client.IntelliRouter
+	if router == nil || len(router.Deployments) == 0 {
+		return nil, fmt.Errorf("model group IntelliRouter configuration must contain deployments")
+	}
+
+	// 路由器快照：JSON 序列化后剔除 null（对齐 model_dump(exclude_none=True)）
+	routerDump := dropNulls(mustMarshalMap(router))
+	// 请求快照：model_dump(exclude_none=True, exclude_unset=True, by_alias=True)
+	requestDump := map[string]any{}
+	if request := compiled.ModelRequestConfig; request != nil {
+		requestDump = dropNulls(mustMarshalMap(request))
+	}
+	// model 是逻辑 Team 字段；模型组的请求模型必须保持 unset，
+	// 否则会覆盖 deployment 级默认值（pool.py:505-509 原文注释）。
+	delete(requestDump, "model")
+	delete(requestDump, "model_name")
+	clientMetadata := map[string]any{"intelli_router": routerDump}
+	// Go 的 ModelClientConfig.VerifySSL 是非指针 bool（schema 侧语义恒有值），
+	// 不做 Python 的 nil 判断，恒写入快照
+	clientMetadata["verify_ssl"] = client.VerifySSL
+	return []ModelPoolEntry{{
+		ModelName:   INTELLI_ROUTER_UNIFIED_MODEL,
+		APIKey:      "",
+		APIBaseURL:  "",
+		APIProvider: INTELLI_ROUTER_PROVIDER,
+		Description: fmt.Sprintf("IntelliRouter model group %s", selectedID),
+		ModelID:     uuid.New().String(),
+		Metadata: map[string]any{
+			"client":  clientMetadata,
+			"request": requestDump,
+		},
+	}}, nil
+}
+
+// ModelGroupLabel 命名模型组池背后的模型组；非组池返回空串。
+// 在池的逻辑 "*" 模型名会泄露给阅读者的场合用它。优先宿主提供的
+// metadata.model_group.display_name，其次路由器的 model_group_id。
+// Python: model_group_label (pool.py:519)（None → 空串）
+func ModelGroupLabel(pool []ModelPoolEntry) string {
+	if len(pool) != 1 {
+		return ""
+	}
+	entry := pool[0]
+	if entry.ModelName != INTELLI_ROUTER_UNIFIED_MODEL || entry.APIProvider != INTELLI_ROUTER_PROVIDER {
+		return ""
+	}
+	client, _ := entry.Metadata["client"].(map[string]any)
+	router, _ := client["intelli_router"].(map[string]any)
+	if router == nil {
+		return ""
+	}
+	group, _ := entry.Metadata["model_group"].(map[string]any)
+	displayName := ""
+	if group != nil {
+		displayName, _ = group["display_name"].(string)
+	}
+	if displayName != "" {
+		return displayName
+	}
+	groupID, _ := router["model_group_id"].(string)
+	if groupID != "" {
+		return groupID
+	}
+	return INTELLI_ROUTER_UNIFIED_MODEL
 }
 
 // ModelPoolEntryOption ModelPoolEntry 构造选项函数。
@@ -534,6 +630,38 @@ func deepCopyAny(v any) any {
 		return utils.DeepCopyMap(m)
 	}
 	return v
+}
+
+// mustMarshalMap 序列化为 map[string]any；失败视为不可达（类型由本包构造保证）。
+func mustMarshalMap(v any) map[string]any {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return map[string]any{}
+	}
+	out := map[string]any{}
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// dropNulls 递归剔除 null 值键，对齐 Python model_dump(exclude_none=True)。
+func dropNulls(m map[string]any) map[string]any {
+	for k, v := range m {
+		if v == nil {
+			delete(m, k)
+			continue
+		}
+		switch t := v.(type) {
+		case map[string]any:
+			dropNulls(t)
+		case []any:
+			for _, item := range t {
+				if im, ok := item.(map[string]any); ok {
+					dropNulls(im)
+				}
+			}
+		}
+	}
+	return m
 }
 
 // entrySignature 计算条目的规范签名（排除 model_id）。
