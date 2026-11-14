@@ -390,7 +390,7 @@ func BuildHarnessContext(manifest hschema.AgentTemplateSpec,
 		if language == "" {
 			language = "cn"
 		}
-		if rendered := hresources.RenderAgentTemplateSystemPrompt(template, language); rendered != "" {
+		if rendered := hresources.RenderAgentTemplateSystemPrompt(template, language, nil); rendered != "" {
 			promptParts = append(promptParts, rendered)
 		}
 		mcpServers, err = ManifestMcpServers(template)
