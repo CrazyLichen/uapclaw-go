@@ -17,13 +17,8 @@ import (
 	cmschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ⏵ 15.14：本文件为最小加载器桩。
-//
-// 完整的包加载（资源解压、相对路径归一化、prompt_sections / memories /
-// rubrics / skills 装配、插件能力覆盖）在 15.14 落地后替换。
-// 此处只提供 15.5 的 factory 需要的两步：定位 manifest、读出 AgentTemplateSpec
-// 并做上游同款的必填校验。
-//
+// 扩展包加载器：manifest.json 与 legacy YAML（harness_config.yaml /
+// expert_harness.yaml / harness.yaml）三形态定位与装载，逐符号 1:1 对齐上游。
 // Python: openjiuwen/harness/resources/extension_loader.py
 
 // ──────────────────────────── 常量 ────────────────────────────
