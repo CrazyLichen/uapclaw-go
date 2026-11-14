@@ -220,12 +220,13 @@ func TestLocalBackend_RunStreaming_假端点整链路(t *testing.T) {
 	assert.Greater(t, count, 0)
 }
 
-// TestLoadPlugin_默认桩未实现 未注入时热加载报未实现（偏差 D-LP）。
-func TestLoadPlugin_默认桩未实现(t *testing.T) {
+// TestLoadPlugin_未启动时报错 agent 未 Start 时默认链路拒绝加载（15.15 起默认走
+// DeepAgent.LoadPlugin 真实现，agent 为 nil 属配置错误）。
+func TestLoadPlugin_未启动时报错(t *testing.T) {
 	backend := NewLocalBackend(CLIConfig{})
 	_, err := backend.loadPluginFn()(context.Background(), "x")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet ported")
+	assert.Contains(t, err.Error(), "agent not started")
 }
 
 // TestGetCliContentBaseDir_路径语义 返回约定的基目录。
