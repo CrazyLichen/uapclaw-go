@@ -3,6 +3,7 @@ package artifactrsi
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -136,5 +137,62 @@ func TestValidateArtifactTaskRequest_逐条规则(t *testing.T) {
 			tc.mut(req)
 			expectCodes(t, ValidateArtifactTaskRequest(req), tc.want...)
 		})
+	}
+}
+
+func TestBuildRequest_program字段置nil(t *testing.T) {
+	at := rsi.ArtifactTypeProgram
+	env := rsi.NewRsiTaskEnvelope("t-1", "/run", &at, validProgram())
+	req, err := BuildRequest(env, ValidateArtifactTaskRequest(env.Config()), newTestModel())
+	if err != nil {
+		t.Fatalf("意外错误: %v", err)
+	}
+	if req.TaskID() != "t-1" || req.RunDir() != "/run" || req.Model() == nil {
+		t.Fatalf("基础字段不符")
+	}
+	if req.OptimizationInstruction() != nil || req.WebProxy() != nil {
+		t.Fatalf("program 工单 instruction/web_proxy 必须为 nil")
+	}
+	if !reflect.DeepEqual(req.ArtifactPath(), strPtr("/tmp/main.py")) || req.MaxIterations() != 3 {
+		t.Fatalf("artifact_path/max_iterations 不符")
+	}
+}
+
+func TestBuildRequest_paper保留instruction与proxy(t *testing.T) {
+	at := rsi.ArtifactTypePaper
+	env2 := rsi.NewRsiTaskEnvelope("t-2", "/run", &at, rsi.NewRsiTaskCreateRequest(
+		rsi.RsiScenarioArtifact, &at, "任务名", nil,
+		strPtr("加强论证"), nil, nil,
+		map[string]string{"optimizer": "m"}, 3, strPtr("  http://p:1  "),
+	))
+	req, err := BuildRequest(env2, ValidateArtifactTaskRequest(env2.Config()), newTestModel())
+	if err != nil {
+		t.Fatalf("意外错误: %v", err)
+	}
+	if req.OptimizationInstruction() == nil || req.WebProxy() == nil || *req.WebProxy() != "http://p:1" {
+		t.Fatalf("paper 工单 instruction/web_proxy 不符（proxy 须 strip）")
+	}
+}
+
+func TestBuildRequest_拒绝路径(t *testing.T) {
+	at := rsi.ArtifactTypeProgram
+	// 校验失败
+	badEnv := rsi.NewRsiTaskEnvelope("t", "/run", &at, rsi.NewRsiTaskCreateRequest(
+		rsi.RsiScenarioArtifact, &at, "", strPtr("/p"), nil, nil, nil,
+		map[string]string{"optimizer": "m"}, 1, nil,
+	))
+	if _, err := BuildRequest(badEnv, ValidateArtifactTaskRequest(badEnv.Config()), newTestModel()); err == nil {
+		t.Fatalf("校验失败须报错")
+	}
+	// TYPE_MISMATCH：envelope 与 config 的 artifact_type 不一致
+	paper := rsi.ArtifactTypePaper
+	mismatchEnv := rsi.NewRsiTaskEnvelope("t", "/run", &paper, validProgram())
+	if _, err := BuildRequest(mismatchEnv, ValidateArtifactTaskRequest(mismatchEnv.Config()), newTestModel()); err == nil || !strings.Contains(err.Error(), "ARTIFACT_TYPE_MISMATCH") {
+		t.Fatalf("须报 ARTIFACT_TYPE_MISMATCH, got %v", err)
+	}
+	// model 为 nil
+	env := rsi.NewRsiTaskEnvelope("t", "/run", &at, validProgram())
+	if _, err := BuildRequest(env, ValidateArtifactTaskRequest(env.Config()), nil); err == nil || !strings.Contains(err.Error(), "OPTIMIZER_MODEL_INSTANCE_REQUIRED") {
+		t.Fatalf("须报 OPTIMIZER_MODEL_INSTANCE_REQUIRED, got %v", err)
 	}
 }

@@ -137,6 +137,50 @@ func ValidateArtifactTaskRequest(request *rsi.RsiTaskCreateRequest) *rsi.Artifac
 	return rsi.NewArtifactValidationResult(len(errs) == 0, errs)
 }
 
+// artifactErrorsToMaps 将错误转为 ArtifactValidationResult 既有 map 契约。
+func artifactErrorsToMaps(errs []map[string]string) []map[string]string { return errs }
+
+// BuildRequest 在公开/提供方校验之后构建提供方侧工单。
+// 不读文件、不启动任何提供方工作；供 AgentServer 集成层使用，
+// Provider 实现不得实现或覆盖。model 须已由 AgentServer 初始化
+// （通常经 Runner.resource_mgr.get_model）。
+// Python: build_request（request.py:132-174 一比一）
+func BuildRequest(task *rsi.RsiTaskEnvelope, validation *rsi.ArtifactValidationResult, model *llm.Model) (*ArtifactEngineRequest, error) {
+	if !validation.Valid() {
+		return nil, &ArtifactRequestError{errors: validation.Errors()}
+	}
+	config := task.Config()
+	if config.Scenario() != rsi.RsiScenarioArtifact {
+		return nil, &ArtifactRequestError{errors: []map[string]string{{"code": "ARTIFACT_SCENARIO_REQUIRED", "message": `task scenario must be "artifact"`}}}
+	}
+	// Python: task.config.artifact_type != task.artifact_type
+	at := task.ArtifactType()
+	cat := config.ArtifactType()
+	if at == nil || cat == nil || *at != *cat {
+		return nil, &ArtifactRequestError{errors: []map[string]string{{"code": "ARTIFACT_TYPE_MISMATCH", "message": "task envelope and config artifact_type must match"}}}
+	}
+	if config.ModelRefs() == nil || !nonEmpty(strPtr(config.ModelRefs()["optimizer"])) {
+		return nil, &ArtifactRequestError{errors: []map[string]string{{"code": "OPTIMIZER_MODEL_REQUIRED", "message": `model_refs must contain a non-empty "optimizer" entry`}}}
+	}
+	// Go 侧 MaxIterations 为 int，Python 的 bool/非 int 检查在类型层不可能，仅保留 <1 分支
+	if config.MaxIterations() < 1 {
+		return nil, &ArtifactRequestError{errors: []map[string]string{{"code": "MAX_ITERATIONS_INVALID", "message": "max_iterations must be at least 1"}}}
+	}
+	if model == nil {
+		return nil, &ArtifactRequestError{errors: []map[string]string{{"code": "OPTIMIZER_MODEL_INSTANCE_REQUIRED", "message": "an initialized Model instance is required"}}}
+	}
+
+	// Python: optimization_instruction/web_proxy 仅 paper 保留（program 为 None）
+	isPaper := *at == rsi.ArtifactTypePaper
+	var instr *string
+	var proxy *string
+	if isPaper {
+		instr = config.OptimizationInstruction()
+		proxy = normalizeWebProxy(config.WebProxy())
+	}
+	return NewArtifactEngineRequest(task.TaskID(), task.RunDir(), config.ArtifactPath(), model, config.MaxIterations(), instr, proxy), nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // nonEmpty Python _non_empty：str 且 strip 后非空。
