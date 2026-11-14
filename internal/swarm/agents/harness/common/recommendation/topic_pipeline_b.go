@@ -98,6 +98,11 @@ func (w *auditedStageInvoker) RecordValidation(response any, outcome string) {
 	w.base.RecordValidation(response, outcome)
 }
 
+// AppendInvocationReceipt 透传追加。
+func (w *v6ArkStageInvoker) AppendInvocationReceipt(receipt map[string]any) {
+	w.base.AppendInvocationReceipt(receipt)
+}
+
 // InvocationReceipts 调用小票透传（对齐 setattr(invocation_receipts, ...)）。
 func (w *auditedStageInvoker) InvocationReceipts() []map[string]any {
 	return w.base.InvocationReceipts()

@@ -272,6 +272,9 @@ type TopicStageInvoker interface {
 	RecordValidation(response any, outcome string)
 	// InvocationReceipts 调用小票
 	InvocationReceipts() []map[string]any
+	// AppendInvocationReceipt 追加一条调用小票（对齐 Python 对
+	// invocation_receipts 列表的就地 append）
+	AppendInvocationReceipt(receipt map[string]any)
 }
 
 type ArkStageInvoker struct {
@@ -338,6 +341,11 @@ func BuildArkStageInvoker(
 // InvocationReceipts 调用小票（对齐 setattr(invoke, "invocation_receipts", ...)）。
 func (inv *ArkStageInvoker) InvocationReceipts() []map[string]any {
 	return inv.invocationReceipts
+}
+
+// AppendInvocationReceipt 就地追加调用小票。
+func (inv *ArkStageInvoker) AppendInvocationReceipt(receipt map[string]any) {
+	inv.invocationReceipts = append(inv.invocationReceipts, receipt)
 }
 
 // Invoke 执行一次后台阶段调用。对齐闭包内 invoke(:214-377)：

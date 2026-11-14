@@ -151,6 +151,10 @@ func NewTopicPipeline(store *TopicStarterStore, contextLoader func(string) *V6Co
 		// Python: search or _unconfigured_v6_search
 		pipeline.searchOverride = UnconfiguredV6Search
 	}
+	// ⤴️31d：真实 StageTokenCounter（tiktoken 等价）落地前 fail-closed
+	pipeline.StageTokenCounterFactory = func(string) (*StageTokenCounter, error) {
+		return nil, &ContextCountingUnverified{Reason: "token counter unavailable"}
+	}
 	pipeline.statePipeline = NewTopicPreparePipeline(store, nil,
 		pipeline.CompletedRecordsLoader, stageInvokerFactory,
 		pipeline.searchOverride, fetch, classifySource, now, nil)

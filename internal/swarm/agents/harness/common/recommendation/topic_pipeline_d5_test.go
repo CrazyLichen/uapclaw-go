@@ -288,3 +288,5 @@ func (f *fakeTopicStageInvoker) Invoke(ctx context.Context, stage, systemPrompt,
 func (f *fakeTopicStageInvoker) RecordValidation(response any, outcome string) {}
 
 func (f *fakeTopicStageInvoker) InvocationReceipts() []map[string]any { return nil }
+
+func (f *fakeTopicStageInvoker) AppendInvocationReceipt(receipt map[string]any) {}
