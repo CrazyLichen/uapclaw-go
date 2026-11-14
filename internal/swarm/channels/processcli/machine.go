@@ -728,6 +728,11 @@ func exceptionInfo(err error) *protocol.RuntimeErrorInfo {
 		message = guardErr.Message
 	}
 	info := &protocol.RuntimeErrorInfo{Code: code, Message: message}
+	// Python: :93 retryable=getattr(error, "retryable", False) is True
+	// 鸭子式属性提取 → 接口断言；SessionGuardError 的 SESSION_BUSY 携带 retryable=true。
+	if retrier, isRetrier := err.(interface{ RetryableValue() bool }); isRetrier {
+		info.Retryable = retrier.RetryableValue()
+	}
 	if len(details) > 0 {
 		info.Details = details
 	}

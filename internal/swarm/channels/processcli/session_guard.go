@@ -68,6 +68,9 @@ func (e *SessionGuardError) Error() string { return e.Message }
 // CodeValue 稳定错误码（exceptionInfo 的提取接口，Python error.code）。
 func (e *SessionGuardError) CodeValue() string { return e.Code }
 
+// RetryableValue 是否可重试（exceptionInfo 的提取接口，Python error.retryable）。
+func (e *SessionGuardError) RetryableValue() bool { return e.Retryable }
+
 // NewSessionLease 构造租约（构造不做 I/O，锁在 Acquire 才加，对齐 Python 构造语义）。
 // Python: session_guard.py:31-42
 func NewSessionLease(sessionID string) *SessionLease {

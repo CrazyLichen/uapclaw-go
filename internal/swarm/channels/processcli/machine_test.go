@@ -442,4 +442,8 @@ func TestMachineRun_同会话并发互斥(t *testing.T) {
 	var guardErr *SessionGuardError
 	require.ErrorAs(t, err, &guardErr)
 	assert.Equal(t, "SESSION_BUSY", guardErr.Code)
+	assert.True(t, guardErr.Retryable)
+	// Python machine.py:93 retryable=getattr(error,"retryable",False) is True
+	// 经 exceptionInfo 提取后须传导到 RuntimeErrorInfo。
+	assert.True(t, exceptionInfo(guardErr).Retryable, "SESSION_BUSY 的 retryable 应回显")
 }
