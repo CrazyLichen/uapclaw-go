@@ -690,3 +690,34 @@ func pyStrOrNilToEmpty(value any) string {
 	}
 	return pyStr(value)
 }
+
+// ProjectCompletedSessionRecords 保留物理序号并隐藏未完结的用户请求
+// （session_history.py:286-301 project_completed_session_records，⤴️31d 归位）。
+func ProjectCompletedSessionRecords(sessionID string, records []map[string]any,
+	allowGaps bool) []map[string]any {
+	prefix := ProjectCompletedSessionPrefix(sessionID, records, allowGaps)
+	completedOrdinals := map[int]bool{}
+	if prefix != nil {
+		for _, ordinal := range prefix.CompletedUserOrdinals {
+			completedOrdinals[ordinal] = true
+		}
+	}
+	projected := []map[string]any{}
+	for ordinal, record := range records {
+		if record == nil {
+			continue
+		}
+		role := strings.ToLower(strings.TrimSpace(pyStr(record["role"])))
+		if (role == "user" || role == "human") && !completedOrdinals[ordinal] {
+			hidden := map[string]any{}
+			for key, value := range record {
+				hidden[key] = value
+			}
+			hidden["role"] = "request_pending"
+			projected = append(projected, hidden)
+		} else {
+			projected = append(projected, record)
+		}
+	}
+	return projected
+}

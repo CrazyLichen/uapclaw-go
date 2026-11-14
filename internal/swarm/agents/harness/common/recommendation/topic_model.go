@@ -262,6 +262,18 @@ type ChatClientFactory func(apiKey, baseURL string) (ChatClient, error)
 // Python 以闭包 + setattr 附加 record_validation/invocation_receipts/aclose
 // （:387-389）；Go 侧用结构体承载三者，属等价转换。
 // 对齐 Python topic_model.py:195-390 build_ark_stage_invoker。
+
+// TopicStageInvoker 阶段调用器消费面（TopicPipeline/TopicPreparePipeline
+// 共用；*ArkStageInvoker 与 *v6ArkStageInvoker 均满足）。
+type TopicStageInvoker interface {
+	// Invoke 套系统提示词后调用阶段模型
+	Invoke(ctx context.Context, stage, systemPrompt, payload string) (any, error)
+	// RecordValidation 透传校验记录
+	RecordValidation(response any, outcome string)
+	// InvocationReceipts 调用小票
+	InvocationReceipts() []map[string]any
+}
+
 type ArkStageInvoker struct {
 	// client 聊天客户端
 	client ChatClient
