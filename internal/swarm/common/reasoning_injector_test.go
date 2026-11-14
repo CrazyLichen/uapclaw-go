@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -122,5 +123,69 @@ func TestResolveModelName_回退链(t *testing.T) {
 	}
 	if got := ResolveModelName("", map[string]any{}); got != "" {
 		t.Errorf("全空返回空串: %q", got)
+	}
+}
+
+// ──────────────────────────── 原 schema 侧用例随双实现收敛迁入 ────────────────────────────
+
+// context_window 新旧并存以新字段为准。
+// 对齐 Python: reasoning_injector.py:104（"新旧字段并存时以新字段为准"）。
+func TestBuildReasoningModelRequestKwargs_ContextWindow新字段优先(t *testing.T) {
+	got := BuildReasoningModelRequestKwargs(
+		map[string]any{"model_name": "m"},
+		map[string]any{"_source": "agentos", "max_tokens": 999, "context_window": 128000},
+		"m",
+	)
+	if got["context_window"] != 128000 {
+		t.Errorf("context_window = %v, 期望 128000（新字段优先）", got["context_window"])
+	}
+}
+
+// 未知字段保留：对齐 pydantic extra="allow"（ModelRequestConfig 收下透传）。
+func TestBuildReasoningModelRequestKwargs_未知字段保留(t *testing.T) {
+	got := BuildReasoningModelRequestKwargs(
+		map[string]any{"model_name": "m"},
+		map[string]any{"frequency_penalty": 0.5, "seed": 42},
+		"m",
+	)
+	if got["frequency_penalty"] != 0.5 {
+		t.Errorf("frequency_penalty 应保留: %v", got)
+	}
+	if got["seed"] != 42 {
+		t.Errorf("seed 应保留: %v", got)
+	}
+}
+
+// 入参不被修改：Python _model_config_to_dict / dict(x) 都是浅拷贝。
+func TestBuildReasoningModelRequestKwargs_不修改入参(t *testing.T) {
+	mco := map[string]any{"reasoning_level": "low", "temperature": 0.5}
+	snapshot := make(map[string]any, len(mco))
+	for k, v := range mco {
+		snapshot[k] = v
+	}
+	_ = BuildReasoningModelRequestKwargs(map[string]any{"model_name": "m"}, mco, "m")
+	if !reflect.DeepEqual(mco, snapshot) {
+		t.Errorf("入参被修改：前 %v 后 %v", snapshot, mco)
+	}
+}
+
+// 字符串数字按 Python int(raw) 语义接受；"128k" 这类带单位串 Python int() 抛
+// ValueError → 丢弃（spec E-9：原 schema 侧 ParsePositiveTokens 接受 128k 属漂移，随收敛修正）。
+func TestBuildReasoningModelRequestKwargs_ContextWindow字符串数字(t *testing.T) {
+	got := BuildReasoningModelRequestKwargs(
+		map[string]any{"model_name": "m"},
+		map[string]any{"context_window": "262144"},
+		"m",
+	)
+	if got["context_window"] != 262144 {
+		t.Errorf("数字字符串应被 int() 接受: %v", got["context_window"])
+	}
+	got = BuildReasoningModelRequestKwargs(
+		map[string]any{"model_name": "m"},
+		map[string]any{"context_window": "128k"},
+		"m",
+	)
+	if _, ok := got["context_window"]; ok {
+		t.Errorf("带单位串 Python int() 抛 ValueError，应丢弃: %v", got)
 	}
 }

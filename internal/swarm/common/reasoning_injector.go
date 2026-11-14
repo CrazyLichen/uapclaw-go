@@ -6,6 +6,7 @@ package common
 
 import (
 	"maps"
+	"strconv"
 	"strings"
 )
 
@@ -130,6 +131,14 @@ func normalizeContextWindow(raw any) any {
 			return nil
 		}
 		return int(v)
+	case string:
+		// Python: reasoning_injector.py:130 int(raw_context_window) 接受纯数字字符串
+		// （如 YAML 引号包裹的 "8192"）；非数字串走 ValueError → 丢弃。
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n <= 0 {
+			return nil
+		}
+		return n
 	case jsonNumber:
 		// YAML 数字经 map[string]any 解码常见 json.Number
 		n, err := v.Int64()
