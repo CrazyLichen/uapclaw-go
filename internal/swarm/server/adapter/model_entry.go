@@ -7,7 +7,7 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
-	swschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	swcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -51,14 +51,14 @@ func BuildModelFromEntry(mcc, mco map[string]any) (*llm.Model, error) {
 
 	// ② 补 endpoint_profile（显式优先，否则由配置的 host 映射推断）
 	// Python: :1286-1292 resolve_endpoint_profile_override(api_base or base_url)
-	mccFields["endpoint_profile"] = swschema.EffectiveEndpointProfile(
+	mccFields["endpoint_profile"] = swcommon.EffectiveEndpointProfile(
 		firstNonEmpty(mccFields["api_base"], mccFields["base_url"]),
-		mccFields["endpoint_profile"],
+		firstNonEmpty(mccFields["endpoint_profile"]),
 	)
 
 	// ③ 共享 kwargs 构造
 	// Python: :1313 request_kwargs = build_reasoning_model_request_kwargs(...)
-	requestKwargs := swschema.BuildReasoningModelRequestKwargs(mccFields, mco, name)
+	requestKwargs := swcommon.BuildReasoningModelRequestKwargs(mccFields, mco, name)
 
 	// ④ 构造两个配置对象
 	// Python: :1314-1319 ModelRequestConfig(**request_kwargs) / ModelClientConfig(**mcc_fields)
