@@ -22,7 +22,7 @@
 2. **cwd/workspace/project_root 三分离**：外部 CLI 是独立进程，不挂载团队工作区。`_resolve_external_paths` 按 `explicit_cwd → worktree_path → project_dir → team_workspace` 选 cwd，四个候选中非 cwd 者（去重、normcase 比对）进 extra_dirs（Claude Code `--add-dir`）。
 3. **workspace meta 暴露**：`_team_workspace_path`（workspace.root_path 或 `team_workspace_dir(team_name)` 默认拼出）与 `team_outputs_dir` 以绝对路径进入 TeamContextTracker（tracker 本体 ⏵ 15.13）；`_build_context_project_dir`/`_build_context_team_outputs_dir` 从 build_context 提取。
 
-**单对话边界（已核实，不预先扩展）**：上游外部 CLI 只有团队 spawn 一条启动路径（`create_harness` 唯一生产调用方为 jiuwenswarm `external_harness_helpers.py`；`external_cli_spawn.py:948` 为真实起进程点）。单对话 REPL（harness/cli）的 `provider` 参数指 LLM 供应商，与外部 CLI 无关。Go 侧按 1:1 对齐团队形态；`_resolve_external_paths` 全候选为空的退化分支即未来单对话扩展缝隙，仅注明不实现。
+**单对话边界（2026-11-28 修正）**：外部 CLI 有**两条**消费路径——①团队 spawn（`external_cli_spawn.py:948`，三分离专属）；②**单会话绑定**（jiuwenswarm `external_harness_helpers.py`：界面配置面板启用第三方专家 → `resolve_external_harness_binding` 会话不可变绑定 AgentTemplate manifest → `start_external_harness` 调 `create_harness` → `HarnessIOAdapter.start`，即 15.1-15.5 协议层与 checkpoint 的首个真实消费方）。两条路径都经 provider `harness.start` 触发 `install_skills`，故 skills.go 不分路径。单会话 cwd 由会话项目上下文直接给定（`start_external_harness(cwd=...)` 入参），不走三分离。单会话接入件（binding/start/IOAdapter/会话 checkpoint/面板配置合并）归 **15.18**（用户 2026-11-28 拍板方案 A）。
 
 ## 3. Go 交付物
 

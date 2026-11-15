@@ -1019,6 +1019,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 15.15a | ✅ | 扩展热绑定（extension binder） | 随 15.15 一批交付（见 15.15 行）；⤴️ 回填完成：`DeepAdapter.skillScanDirs` 数据源已改为读 `DeepAgentConfig.Skills`（leaf→父目录归一、前置、去重），`instanceOverrides["skills"]` 分支已删除（锚点清零） | `internal/agentcore/harness/extension_binder.go` · `extension_resolver.go` · `schema/extension_spec.go` ← `openjiuwen/harness/extension_binder.py` · `resources/extension_resolver.py` · `schema/extension_spec.py` · `deep_agent.py`（load/unload 段） |
 | 15.16 | ☐ | 团队集成 | `spawn_teammate` 合并 external_cli、调度模式内联成员跑外部 CLI、worktree 隔离、第三方面板配置 | `internal/agent_teams/spawn/` · `internal/swarm/server` ← `jiuwenswarm/gateway/channel_manager/web`（external-cli handlers） |
 | 15.17 | ☐ | 测试 | 协议一致性单测（编解码/事件序）+ 假 CLI 进程集成（stdio 双工）+ 失败恢复（崩溃/鉴权失败/超时） | `tests/integration/agentcore/harness_protocol/` |
+| 15.18 | ☐ | 单会话 External Harness 会话接入 | 会话不可变绑定（resolve/persist/load binding，换模板冲突报错）、`start_external_harness`（manifest→create_harness→IOAdapter 启动）、HarnessIOAdapter、会话级 checkpoint 导入导出、`_merge_host_external_cli_config`（读面板 external_cli_agent_* 配置合入 provider config）；消费方=会话适配器 `resolve_runtime_binding` | `internal/swarm/server/agent_adapter/`（或对应 runtime 位置）← `jiuwenswarm/server/runtime/agent_adapter/external_harness_helpers.py` · `interface_deep.py`（resolve_runtime_binding 段）· `config_panel/external_cli_read.py` |
 
 **验证点**：一次对话可由外部 CLI provider 完成，事件、工具结果、审批与轨迹四路可观测且可恢复。
 
