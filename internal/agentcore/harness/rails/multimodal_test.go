@@ -45,7 +45,7 @@ func TestResolveImageMultimodal(t *testing.T) {
 	// 3. 无声明时走探测缓存
 	// Python: return get_cached_image_support(model) is True
 	cfg := &hschema.DeepAgentConfig{Model: &hllm.Model{
-		ModelConfig: &llmschema.ModelRequestConfig{ModelName: "m"},
+		ModelConfig:  &llmschema.ModelRequestConfig{ModelName: "m"},
 		ClientConfig: &llmschema.ModelClientConfig{APIBase: "http://resolve"},
 	}}
 	modalityprobe.ResetImageSupportCache()
@@ -76,7 +76,7 @@ func TestModelSupportsVision(t *testing.T) {
 func TestBuildReadImageMultimodalResolver(t *testing.T) {
 	modalityprobe.ResetImageSupportCache()
 	cfg := &hschema.DeepAgentConfig{Model: &hllm.Model{
-		ModelConfig: &llmschema.ModelRequestConfig{ModelName: "m"},
+		ModelConfig:  &llmschema.ModelRequestConfig{ModelName: "m"},
 		ClientConfig: &llmschema.ModelClientConfig{APIBase: "http://resolver"},
 	}}
 	fake := &fakeDeepAgentForHeartbeat{fakeBaseAgent: *newFakeBaseAgent(), deepConfig: cfg}
