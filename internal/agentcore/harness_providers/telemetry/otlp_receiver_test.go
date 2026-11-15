@@ -14,6 +14,8 @@ import (
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	resourcev1 "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -286,5 +288,74 @@ func TestHandleRequest_坏protobuf(t *testing.T) {
 		t.Fatalf("status=%d", resp.StatusCode)
 	}
 	resp.Body.Close()
+	r.Aclose(t.Context())
+}
+
+// ──────────────────────────── gRPC 门（T4） ────────────────────────────
+
+// TestGrpcExport_扇出 gRPC Export 的事件到达订阅者（Claude Code 只说 gRPC 的主路径）
+func TestGrpcExport_扇出(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	received := make(chan map[string]any, 8)
+	_, _ = r.Subscribe(func(event map[string]any) { received <- event })
+	endpoint := r.GrpcEndpoint()
+	if endpoint == "" {
+		t.Fatal("gRPC 端点应已产出")
+	}
+	conn, err := grpc.NewClient(strings.TrimPrefix(endpoint, "http://"), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	spanReq := &tracev1.ExportTraceServiceRequest{}
+	if err := proto.Unmarshal(spanRequest(t, "claude_code.llm_request", nil), spanReq); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	client := tracev1.NewTraceServiceClient(conn)
+	if _, err := client.Export(t.Context(), spanReq); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	select {
+	case event := <-received:
+		if event["signal"] != "trace" {
+			t.Fatalf("event=%v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("gRPC 事件未到达")
+	}
+	r.Aclose(t.Context())
+}
+
+// TestGrpcExportLogs_扇出 logs 信号走 LogsService
+func TestGrpcExportLogs_扇出(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	received := make(chan map[string]any, 8)
+	_, _ = r.Subscribe(func(event map[string]any) { received <- event })
+	conn, err := grpc.NewClient(strings.TrimPrefix(r.GrpcEndpoint(), "http://"), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	logsReq := &logsv1.ExportLogsServiceRequest{
+		ResourceLogs: []*logspb.ResourceLogs{{
+			ScopeLogs: []*logspb.ScopeLogs{{
+				LogRecords: []*logspb.LogRecord{{
+					Body: &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: "claude_code.api_request_body"}},
+				}},
+			}},
+		}},
+	}
+	client := logsv1.NewLogsServiceClient(conn)
+	if _, err := client.Export(t.Context(), logsReq); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	select {
+	case event := <-received:
+		if event["name"] != "claude_code.api_request_body" {
+			t.Fatalf("event=%v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("logs 事件未到达")
+	}
 	r.Aclose(t.Context())
 }

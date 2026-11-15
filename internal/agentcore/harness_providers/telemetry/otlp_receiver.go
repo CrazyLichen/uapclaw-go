@@ -45,6 +45,20 @@ type SharedOtlpReceiver struct {
 	inFlight sync.WaitGroup
 }
 
+// traceServicer TraceService 的 Export 直通扇出。
+// Python: otlp_receiver.py:270-275 _TraceServicer
+type traceServicer struct {
+	tracev1.UnimplementedTraceServiceServer
+	receiver *SharedOtlpReceiver
+}
+
+// logsServicer LogsService 的 Export 直通扇出。
+// Python: otlp_receiver.py:277-282 _LogsServicer
+type logsServicer struct {
+	logsv1.UnimplementedLogsServiceServer
+	receiver *SharedOtlpReceiver
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -383,6 +397,55 @@ func respond(w http.ResponseWriter, statusCode int) {
 	w.WriteHeader(statusCode)
 }
 
+// startGrpcLocked 在 HTTP 监听旁启动 gRPC OTLP 监听。
+// Claude Code 的 OTLP exporter 只说 gRPC（其 http/protobuf 模式会静默连上
+// 而不发送数据），故 HTTP 门旁伴随一扇 gRPC 门。失败非致命：HTTP 门继续
+// 服务说 HTTP 的 exporter。
+// Python: otlp_receiver.py:259-299 _start_grpc
+func (r *SharedOtlpReceiver) startGrpcLocked() {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		logger.Warn(logComponent).Msg("otel: shared OTLP gRPC listener could not bind; native model-request observation disabled")
+		return
+	}
+	server := grpc.NewServer()
+	tracev1.RegisterTraceServiceServer(server, &traceServicer{receiver: r})
+	logsv1.RegisterLogsServiceServer(server, &logsServicer{receiver: r})
+	go func() {
+		// gRPC 是可选副通道（Python :298 注释），Serve 失败仅记录
+		if serveErr := server.Serve(listener); serveErr != nil {
+			logger.Warn(logComponent).Msgf("otel: shared OTLP gRPC listener failed to start: %v", serveErr)
+		}
+	}()
+	r.grpcServer = server
+	r.grpcEndpoint = fmt.Sprintf("http://127.0.0.1:%d", listener.Addr().(*net.TCPAddr).Port)
+}
+
+// Export Python :274 经 SerializeToString 复用 HTTP 解码路径，Go 一比一保留
+// （Marshal + decodeSpans，而非直接遍历 req）。
+func (s *traceServicer) Export(ctx context.Context, req *tracev1.ExportTraceServiceRequest) (*tracev1.ExportTraceServiceResponse, error) {
+	payload, err := proto.Marshal(req)
+	if err == nil {
+		events, decodeErr := decodeSpans(payload)
+		if decodeErr == nil {
+			s.receiver.fanout(events)
+		}
+	}
+	return &tracev1.ExportTraceServiceResponse{}, nil
+}
+
+// Export 同 traceServicer：Marshal + decodeLogRecords 复用解码路径。
+func (s *logsServicer) Export(ctx context.Context, req *logsv1.ExportLogsServiceRequest) (*logsv1.ExportLogsServiceResponse, error) {
+	payload, err := proto.Marshal(req)
+	if err == nil {
+		events, decodeErr := decodeLogRecords(payload)
+		if decodeErr == nil {
+			s.receiver.fanout(events)
+		}
+	}
+	return &logsv1.ExportLogsServiceResponse{}, nil
+}
+
 // fanout 把解码事件广播给每个订阅者回调。
 // D-tel-1：Python 把事件投递到订阅者的事件循环（claudecode/observation.py:622-625
 // call_soon_threadsafe）；Go 无事件循环，fanout 同步直调，跨线程投递由订阅者
@@ -413,9 +476,6 @@ func invokeSubscriber(callback func(map[string]any), event map[string]any) {
 	}()
 	callback(event)
 }
-
-// startGrpcLocked 占位：Task 4 替换
-func (r *SharedOtlpReceiver) startGrpcLocked() {}
 
 // Aclose 占位：Task 6 替换
 func (r *SharedOtlpReceiver) Aclose(ctx context.Context) {}
