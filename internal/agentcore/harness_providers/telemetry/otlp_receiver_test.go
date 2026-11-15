@@ -388,3 +388,34 @@ func TestFanout_订阅者panic被吞(t *testing.T) {
 	}
 	r.Aclose(t.Context())
 }
+
+// ──────────────────────────── Aclose（T6） ────────────────────────────
+
+// TestAclose_停机与永久禁用 Python :393-419：关双门、清订阅者、Aclose 后
+// Subscribe 返回 false（_disabled = True）
+func TestAclose_停机与永久禁用(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	_, _ = r.Subscribe(func(map[string]any) {})
+	endpoint := r.EndpointURL()
+	r.Aclose(t.Context())
+	if r.EndpointURL() != "" || r.GrpcEndpoint() != "" {
+		t.Fatal("Aclose 后端点应清空")
+	}
+	if _, ok := r.Subscribe(func(map[string]any) {}); ok {
+		t.Fatal("Aclose 后 Subscribe 应返回 false")
+	}
+	// 端点不可再连
+	_, err := http.Post(endpoint, "application/x-protobuf", bytes.NewReader([]byte{0x01}))
+	if err == nil {
+		t.Fatal("Aclose 后旧端点不应可连")
+	}
+}
+
+// TestAclose_未启动实例 直接对未启动实例 Aclose 不 panic、置禁用
+func TestAclose_未启动实例(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	r.Aclose(t.Context())
+	if _, ok := r.Subscribe(func(map[string]any) {}); ok {
+		t.Fatal("未启动实例 Aclose 后也应禁用")
+	}
+}

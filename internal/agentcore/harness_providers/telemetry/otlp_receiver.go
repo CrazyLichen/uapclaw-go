@@ -328,11 +328,13 @@ func (r *SharedOtlpReceiver) startLocked() {
 		WriteTimeout:      responseWriteTimeout,
 		MaxHeaderBytes:    maxHeaderBytes,
 	}
+	// 协程内用局部引用：Aclose 会把 r.httpServer 置 nil，闭包不得回读字段
+	httpServer := r.httpServer
 	r.inFlight.Add(1)
 	go func() {
 		defer r.inFlight.Done()
 		// Serve 返回 ErrServerClosed 属正常停机；其他错误仅记录（best-effort）
-		if serveErr := r.httpServer.Serve(listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		if serveErr := httpServer.Serve(listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 			logger.Warn(logComponent).Msgf("otel: shared OTLP receiver rejected a request: %v", serveErr)
 		}
 	}()
@@ -477,5 +479,43 @@ func invokeSubscriber(callback func(map[string]any), event map[string]any) {
 	callback(event)
 }
 
-// Aclose 占位：Task 6 替换
-func (r *SharedOtlpReceiver) Aclose(ctx context.Context) {}
+// Aclose 停止接收遥测并排空在途请求。
+// 进程级单例通常与进程同寿；本方法供测试与显式停机路径使用。
+// Python: otlp_receiver.py:393-419 aclose
+func (r *SharedOtlpReceiver) Aclose(ctx context.Context) {
+	r.mu.Lock()
+	httpServer := r.httpServer
+	grpcServer := r.grpcServer
+	r.listener = nil
+	r.httpServer = nil
+	r.grpcServer = nil
+	r.endpoint = ""
+	r.grpcEndpoint = ""
+	r.mu.Unlock()
+	if httpServer != nil {
+		shutdownCtx, cancel := context.WithTimeout(ctx, closeTimeout)
+		defer cancel()
+		// Shutdown 关 listener 并等待在途 handler；超时后未完成的连接由
+		// Python _tasks 的 cancel 语义等价兜底（连接随进程收尾，无泄漏面）。
+		_ = httpServer.Shutdown(shutdownCtx)
+	}
+	if grpcServer != nil {
+		grpcServer.Stop() // Python grpc_server.stop(0)：立即停
+	}
+	// 排空在途请求协程（Python :410-416 asyncio.wait + cancel）
+	done := make(chan struct{})
+	go func() {
+		r.inFlight.Wait()
+		close(done)
+	}()
+	timer := time.NewTimer(closeTimeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+	}
+	r.mu.Lock()
+	r.subscribers = map[int]func(map[string]any){}
+	r.disabled = true
+	r.mu.Unlock()
+}
