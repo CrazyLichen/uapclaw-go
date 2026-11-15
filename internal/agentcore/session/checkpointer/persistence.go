@@ -740,7 +740,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 
 				// 8.9a 回填：graph store 状态清理（Persistence 侧注入前为 nil，跳过）
 				if cp.graphStore != nil {
-					if err := cp.graphStore.Delete(sessionID, workflowID); err != nil {
+					if err := cp.graphStore.Delete(ctx, sessionID, workflowID); err != nil {
 						logger.Warn(logComponent).
 							Str("action", "clear_workflow").
 							Str("event_type", "checkpoint_clear").
@@ -800,7 +800,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 
 		// 8.9a 回填：graph store 状态清理（Persistence 侧注入前为 nil，跳过）
 		if cp.graphStore != nil {
-			if err := cp.graphStore.Delete(sessionID, workflowID); err != nil {
+			if err := cp.graphStore.Delete(ctx, sessionID, workflowID); err != nil {
 				logger.Warn(logComponent).
 					Str("action", "workflow_completed").
 					Str("event_type", "checkpoint_clear").

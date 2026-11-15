@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -105,15 +106,15 @@ type fakeStore struct {
 	lastDelNs string
 }
 
-func (f *fakeStore) Get(sessionID, ns string) (*GraphState, error) {
+func (f *fakeStore) Get(_ context.Context, sessionID, ns string) (*GraphState, error) {
 	f.getCalls++
 	return f.getState, f.getErr
 }
-func (f *fakeStore) Save(sessionID, ns string, state *GraphState) error {
+func (f *fakeStore) Save(_ context.Context, sessionID, ns string, state *GraphState) error {
 	f.saveCalls++
 	return f.saveErr
 }
-func (f *fakeStore) Delete(sessionID, ns string) error {
+func (f *fakeStore) Delete(_ context.Context, sessionID, ns string) error {
 	f.delCalls++
 	f.lastDelNs = ns
 	return f.delErr
@@ -121,43 +122,46 @@ func (f *fakeStore) Delete(sessionID, ns string) error {
 
 // TestGraphStore_Get 未命中 debug 日志、异常透传
 func TestGraphStore_Get(t *testing.T) {
+	ctx := context.Background()
 	gs := NewGraphStore(&fakeStore{getState: &GraphState{Ns: "ns"}})
-	st, err := gs.Get("s1", "ns")
+	st, err := gs.Get(ctx, "s1", "ns")
 	if err != nil || st == nil {
 		t.Fatalf("命中透传失败: %v %+v", err, st)
 	}
 
 	gs = NewGraphStore(&fakeStore{}) // 未命中
-	st, err = gs.Get("s1", "ns")
+	st, err = gs.Get(ctx, "s1", "ns")
 	if err != nil || st != nil {
 		t.Fatalf("未命中应透传 (nil,nil): %v %+v", err, st)
 	}
 
 	boom := errors.New("db down")
 	gs = NewGraphStore(&fakeStore{getErr: boom})
-	if _, err = gs.Get("s1", "ns"); err != boom {
+	if _, err = gs.Get(ctx, "s1", "ns"); err != boom {
 		t.Fatalf("异常应原样透传: %v", err)
 	}
 }
 
 // TestGraphStore_Save 前后日志 + 异常透传
 func TestGraphStore_Save(t *testing.T) {
+	ctx := context.Background()
 	boom := errors.New("disk full")
 	gs := NewGraphStore(&fakeStore{saveErr: boom})
-	if err := gs.Save("s1", "ns", &GraphState{}); err != boom {
+	if err := gs.Save(ctx, "s1", "ns", &GraphState{}); err != boom {
 		t.Fatalf("save 异常应透传: %v", err)
 	}
 	ok := NewGraphStore(&fakeStore{})
-	if err := ok.Save("s1", "ns", &GraphState{}); err != nil {
+	if err := ok.Save(ctx, "s1", "ns", &GraphState{}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // TestGraphStore_Delete 空 ns 透传 all 语义 + 异常透传（Python 走 debug 级也 re-raise）
 func TestGraphStore_Delete(t *testing.T) {
+	ctx := context.Background()
 	fs := &fakeStore{}
 	gs := NewGraphStore(fs)
-	if err := gs.Delete("s1", ""); err != nil {
+	if err := gs.Delete(ctx, "s1", ""); err != nil {
 		t.Fatal(err)
 	}
 	if fs.lastDelNs != "" {
@@ -165,7 +169,7 @@ func TestGraphStore_Delete(t *testing.T) {
 	}
 	boom := errors.New("del fail")
 	gs = NewGraphStore(&fakeStore{delErr: boom})
-	if err := gs.Delete("s1", "ns1"); err != boom {
+	if err := gs.Delete(ctx, "s1", "ns1"); err != boom {
 		t.Fatalf("delete 异常应透传: %v", err)
 	}
 }
