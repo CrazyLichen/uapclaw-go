@@ -100,6 +100,15 @@ type PersistenceCheckpointer struct {
 
 // persistenceProvider Persistence 检查点器提供者。
 // Python: PersistenceCheckpointerProvider
+// GraphStore KV 版图状态存储（键形 session:workflow-graph:<ns>:<suffix>，与 workflow 自身状态隔离）。
+// Python: persistence.py:554-720（局部类 GraphStore(Store)）
+type GraphStore struct {
+	// kvStore KV 存储后端（工厂路径为 GORM+SQLite 的 DbBasedKVStore）
+	kvStore kv.BaseKVStore
+	// serde 序列化器（CreateSerializer("pickle") → JSONSerializer，偏差 D-1）
+	serde store.Serializer
+}
+
 type persistenceProvider struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -117,9 +126,135 @@ const (
 	wfUpdateBlobs = "workflow_update_blobs"
 	// wfUpdateBlobsDumpType 工作流更新类型键后缀
 	wfUpdateBlobsDumpType = "workflow_update_blobs_dump_type"
+
+	// graphStoreDataType 图状态数据类型键后缀（Python GraphStore._DATA_TYPE）
+	graphStoreDataType = "checkpoint_data_type"
+	// graphStoreDataValue 图状态数据值键后缀（Python GraphStore._DATA_VALUE）
+	graphStoreDataValue = "checkpoint_data_value"
+	// graphStoreKeyNums 图状态 KV 键数量（Python GraphStore._KEY_NUMS）
+	graphStoreKeyNums = 2
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewPersistenceGraphStore 构造 KV 版图状态存储
+// Python: persistence.py:571-576（__init__）
+func NewPersistenceGraphStore(kvStore kv.BaseKVStore) *GraphStore {
+	serde, _ := store.CreateSerializer("pickle") // "pickle" 分支恒成功（8.9a 偏差 D-1）
+	return &GraphStore{kvStore: kvStore, serde: serde}
+}
+
+// Get 读取图状态：两键 pipeline 读取，未命中/反序列化失败均 (nil, nil)。
+// JSON 往返即副本，无需 Clone（对齐 Python pickle 语义）。
+// Python: persistence.py:603-653
+func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*store.GraphState, error) {
+	pipeline := g.kvStore.Pipeline(ctx)
+	keyType := BuildKeyWithNamespace(sessionID, WorkflowNamespaceGraph, ns, graphStoreDataType)
+	_ = pipeline.Get(ctx, keyType)
+	keyValue := BuildKeyWithNamespace(sessionID, WorkflowNamespaceGraph, ns, graphStoreDataValue)
+	_ = pipeline.Get(ctx, keyValue)
+	results, err := pipeline.Execute(ctx)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "CHECKPOINT_ERROR").
+			Str("session_id", sessionID).
+			Str("namespace", ns).
+			Err(err).
+			Msg("failed to read graph state keys")
+		return nil, err
+	}
+	if len(results) != graphStoreKeyNums {
+		logger.Error(logComponent).
+			Str("event_type", "CHECKPOINT_ERROR").
+			Str("session_id", sessionID).
+			Int("expected_keys", graphStoreKeyNums).
+			Int("actual_keys", len(results)).
+			Str("namespace", ns).
+			Msg("unexpected key count during graph state retrieval")
+		return nil, nil
+	}
+	dataType, blob := results[0].Value, results[1].Value
+	if len(dataType) == 0 || len(blob) == 0 {
+		logger.Debug(logComponent).
+			Str("event_type", "CHECKPOINT_RESTORE").
+			Str("session_id", sessionID).
+			Str("namespace", ns).
+			Msg("graph state not found in KV store")
+		return nil, nil
+	}
+	var state store.GraphState
+	if err := g.serde.LoadsTyped(string(dataType), blob, &state); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "CHECKPOINT_ERROR").
+			Str("session_id", sessionID).
+			Str("namespace", ns).
+			Err(err).
+			Msg("failed to deserialize graph state")
+		return nil, nil
+	}
+	return &state, nil
+}
+
+// Save 保存图状态：序列化失败 warn 后静默返回（Python 不 raise）；pipeline 写入失败 error 后返回 error（Python re-raise）。
+// Python: persistence.py:656-700
+func (g *GraphStore) Save(ctx context.Context, sessionID, ns string, state *store.GraphState) error {
+	dataType, blob, err := g.serde.DumpsTyped(state)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "CHECKPOINT_ERROR").
+			Str("session_id", sessionID).
+			Str("namespace", ns).
+			Str("operation", "serialize").
+			Err(err).
+			Msg("failed to serialize graph state")
+		return nil
+	}
+	pipeline := g.kvStore.Pipeline(ctx)
+	_ = pipeline.Set(ctx, BuildKeyWithNamespace(sessionID, WorkflowNamespaceGraph, ns, graphStoreDataType), []byte(dataType), 0)
+	_ = pipeline.Set(ctx, BuildKeyWithNamespace(sessionID, WorkflowNamespaceGraph, ns, graphStoreDataValue), blob, 0)
+	if _, err := pipeline.Execute(ctx); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "CHECKPOINT_ERROR").
+			Str("session_id", sessionID).
+			Str("namespace", ns).
+			Str("storage_type", "graph").
+			Err(err).
+			Msg("failed to save graph state")
+		return err
+	}
+	logger.Debug(logComponent).
+		Str("event_type", "CHECKPOINT_SAVE").
+		Str("session_id", sessionID).
+		Str("namespace", ns).
+		Str("storage_type", "graph").
+		Msg("graph state saved successfully")
+	return nil
+}
+
+// Delete 删除图状态：ns 空串删该 session 全部图状态（前缀），否则删单 ns 前缀。
+// Python: persistence.py:702-737（batch_size=None 默认 → Go batchSize=0 一次性删除）
+func (g *GraphStore) Delete(ctx context.Context, sessionID, ns string) error {
+	var prefix string
+	if ns == "" {
+		prefix = BuildKey(sessionID, WorkflowNamespaceGraph)
+	} else {
+		prefix = BuildKeyWithNamespace(sessionID, WorkflowNamespaceGraph, ns)
+	}
+	if err := g.kvStore.DeleteByPrefix(ctx, prefix, 0); err != nil {
+		return err
+	}
+	target := ns
+	if target == "" {
+		target = "all namespaces"
+	}
+	logger.Debug(logComponent).
+		Str("event_type", "CHECKPOINT_CLEAR").
+		Str("session_id", sessionID).
+		Str("namespace", ns).
+		Str("storage_type", "graph").
+		Msg("graph checkpoint cleared for " + target)
+	return nil
+}
 
 // NewPersistenceCheckpointer 创建持久化检查点器实例。
 func NewPersistenceCheckpointer(kvStore kv.BaseKVStore) *PersistenceCheckpointer {

@@ -2,10 +2,13 @@ package checkpointer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -1449,5 +1452,88 @@ func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
 	err := cp.PreWorkflowExecute(ctx, session2, nil)
 	if err != nil {
 		t.Fatalf("空 workflowID 不应返回错误：%v", err)
+	}
+}
+
+// ──────────────────────────── KV GraphStore 测试 ────────────────────────────
+
+// newKVGraphStore 构造被测 KV GraphStore（接口级测试用内存后端）
+func newKVGraphStore() *GraphStore {
+	return NewPersistenceGraphStore(kv.NewInMemoryKVStore())
+}
+
+// sampleGraphState 造一条含 kind 与 Exception 的完整状态
+func sampleGraphState() *store.GraphState {
+	return &store.GraphState{
+		Ns: "ns1", Step: 2,
+		ChannelValues: map[string][]pregel.ChannelSnapshot{
+			"n1": {{Messages: []pregel.Message{pregel.NewTriggerMessage("a", "n1")}}},
+		},
+		PendingBuffer: []pregel.Message{pregel.NewBarrierMessage("b", "barrier:x&y->z")},
+		PendingNode:   map[string]store.PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("boom")}}},
+		NodeVersion:   map[string]int{"n1": 3},
+	}
+}
+
+// TestKVGraphStore_SaveGet 往返保真（含 kind 与 Exception）
+func TestKVGraphStore_SaveGet(t *testing.T) {
+	gs := newKVGraphStore()
+	ctx := context.Background()
+	if err := gs.Save(ctx, "s1", "ns1", sampleGraphState()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := gs.Get(ctx, "s1", "ns1")
+	if err != nil || got == nil {
+		t.Fatalf("get 失败: %v %+v", err, got)
+	}
+	if got.Step != 2 || got.NodeVersion["n1"] != 3 {
+		t.Fatalf("标量失真: %+v", got)
+	}
+	if got.ChannelValues["n1"][0].Messages[0].Kind() != pregel.KindTrigger {
+		t.Fatalf("kind 未还原: %+v", got.ChannelValues["n1"][0].Messages[0])
+	}
+	if got.PendingBuffer[0].Kind() != pregel.KindBarrier {
+		t.Fatalf("buffer kind 未还原: %+v", got.PendingBuffer[0])
+	}
+	if got.PendingNode["n2"].Exception[0].Error() != "boom" {
+		t.Fatalf("exception 未还原: %+v", got.PendingNode["n2"])
+	}
+}
+
+// TestKVGraphStore_GetMissing 未命中 (nil, nil)
+func TestKVGraphStore_GetMissing(t *testing.T) {
+	gs := newKVGraphStore()
+	got, err := gs.Get(context.Background(), "s1", "nope")
+	if err != nil || got != nil {
+		t.Fatalf("未命中应 (nil,nil): %v %+v", err, got)
+	}
+}
+
+// TestKVGraphStore_Delete 单 ns / 全 session 前缀
+func TestKVGraphStore_Delete(t *testing.T) {
+	gs := newKVGraphStore()
+	ctx := context.Background()
+	_ = gs.Save(ctx, "s1", "ns1", sampleGraphState())
+	_ = gs.Save(ctx, "s1", "ns2", sampleGraphState())
+	_ = gs.Save(ctx, "s2", "ns1", sampleGraphState())
+
+	if err := gs.Delete(ctx, "s1", "ns1"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gs.Get(ctx, "s1", "ns1"); got != nil {
+		t.Fatal("ns1 应已删除")
+	}
+	if got, _ := gs.Get(ctx, "s1", "ns2"); got == nil {
+		t.Fatal("ns2 不应被删")
+	}
+
+	if err := gs.Delete(ctx, "s1", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gs.Get(ctx, "s1", "ns2"); got != nil {
+		t.Fatal("全删后 ns2 应已删除")
+	}
+	if got, _ := gs.Get(ctx, "s2", "ns1"); got == nil {
+		t.Fatal("s2 不应被连带删除")
 	}
 }
