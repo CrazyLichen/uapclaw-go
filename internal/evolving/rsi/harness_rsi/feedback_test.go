@@ -19,7 +19,7 @@ func TestFeedback_OutputRepairConfig_默认与校验(t *testing.T) {
 	if err == nil || err.Error() != "output_repair.max_stagnant_attempts must be a positive integer" {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg, err := OutputRepairConfigFromDict(nil, false); err != nil || cfg.MaxAttempts != 3 {
+	if cfg, err := OutputRepairConfigFromDict(nil); err != nil || cfg.MaxAttempts != 3 {
 		t.Fatalf("nil dict must return defaults: %+v err=%v", cfg, err)
 	}
 }

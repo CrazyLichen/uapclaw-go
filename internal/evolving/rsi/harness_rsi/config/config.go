@@ -271,7 +271,7 @@ func EvaluatorConfigFromDict(data map[string]any) (EvaluatorConfig, error) {
 	} else {
 		cfg.JudgeBaselineComparison = true
 	}
-	outputRepair, err := harness_rsi.OutputRepairConfigFromDict(mappingValue(data, "output_repair"), data["output_repair"] != nil)
+	outputRepair, err := harness_rsi.OutputRepairConfigFromDict(data["output_repair"])
 	if err != nil {
 		return cfg, err
 	}
@@ -328,7 +328,7 @@ func EvaluationResultAnalyzerConfigFromDict(data map[string]any) (EvaluationResu
 	} else {
 		cfg.CausalInvestigationRequired = true
 	}
-	outputRepair, err := harness_rsi.OutputRepairConfigFromDict(mappingValue(data, "output_repair"), data["output_repair"] != nil)
+	outputRepair, err := harness_rsi.OutputRepairConfigFromDict(data["output_repair"])
 	if err != nil {
 		return cfg, err
 	}
@@ -368,7 +368,15 @@ func MemberOptimizerConfigFromDict(data map[string]any) (MemberOptimizerConfig, 
 		CandidateHoldoutMaxRegression:     floatValue(data, "candidate_holdout_max_regression", 0.0),
 		AdaptFrozenTeamIssues:             boolValueDefault(data, "adapt_frozen_team_issues", false),
 	}
-	cfg.Freeze = boolValueDefault(data, "freeze", false)
+	if raw, exists := data["freeze"]; exists {
+		value, err := boolValue(raw, false)
+		if err != nil {
+			return cfg, err
+		}
+		cfg.Freeze = value
+	} else {
+		cfg.Freeze = false
+	}
 	if raw, exists := data["runtime_iteration_hard_limit"]; exists && raw != nil {
 		limit, err := solverIterationLimit(raw)
 		if err != nil {
@@ -381,7 +389,7 @@ func MemberOptimizerConfigFromDict(data map[string]any) (MemberOptimizerConfig, 
 	if cfg.ActionPlanningMaxAttempts < 1 {
 		return cfg, fmt.Errorf("member_optimizer.action_planning_max_attempts must be a positive integer")
 	}
-	outputRepair, err := harness_rsi.OutputRepairConfigFromDict(mappingValue(data, "output_repair"), data["output_repair"] != nil)
+	outputRepair, err := harness_rsi.OutputRepairConfigFromDict(data["output_repair"])
 	if err != nil {
 		return cfg, err
 	}
@@ -585,10 +593,14 @@ func ModelConfigsFromDict(data map[string]any) ModelConfigs {
 	}
 }
 
-// DataLoaderConfigFromDict 从映射构造数据载入配置（对齐 DataLoaderConfig.from_dict）
+// DataLoaderConfigFromDict 从映射构造数据载入配置（对齐 DataLoaderConfig.from_dict：
+// 键缺失/nil 才用默认均衡键；显式空列表保留为空，交由 validate 报错）
 func DataLoaderConfigFromDict(data map[string]any) DataLoaderConfig {
-	keys := stringList(data, "batch_balance_keys")
-	if len(keys) == 0 {
+	raw, exists := data["batch_balance_keys"]
+	var keys []string
+	if exists && raw != nil {
+		keys = stringList(data, "batch_balance_keys")
+	} else {
 		keys = []string{"dimension", "difficulty", "source", "task_type"}
 	}
 	return DataLoaderConfig{

@@ -218,17 +218,6 @@ func listDatasetFiles(root, pattern string) []string {
 	return out
 }
 
-// isSuiteCase 判断顶层是否基准套件形态（validation/evaluation）
-func isSuiteCase(data any) bool {
-	mapping, ok := data.(map[string]any)
-	if !ok {
-		return false
-	}
-	_, hasValidation := mapping["validation"]
-	_, hasEvaluation := mapping["evaluation"]
-	return hasValidation || hasEvaluation
-}
-
 // suiteSplitError 套件拆分校验错误（对齐 validation/evaluation 分支链）
 func suiteSplitError(mapping map[string]any, path string) error {
 	for _, key := range []string{"validation", "evaluation"} {
