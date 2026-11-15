@@ -233,10 +233,11 @@ func TestInvocationLogScope_路径逃逸(t *testing.T) {
 	os.Mkdir(inner, 0o750)
 	link := filepath.Join(outer, "link")
 	os.Symlink(inner, link)
-	// 配置目录=link/escape，文件经 EvalSymlinks 落 inner/escape，与配置目录(含 link 段)不一致 → 报错
+	// Python 语义核对：self.path 由归一化后 root 构建，parent==root 恒成立，
+	// 逃逸检查为防御性分支；符号链接目录下构造应成功且文件实际落在真实目录内
 	_, err = NewInvocationLogScope(filepath.Join(link, "escape"), "a", "s", "r", nil)
-	if err == nil || !strings.Contains(err.Error(), "Invocation log must remain inside its configured directory") {
-		t.Fatalf("路径逃逸未报错或文案不符: %v", err)
+	if err != nil {
+		t.Fatalf("符号链接目录下构造不应报错（Python 同语义）: %v", err)
 	}
 }
 
