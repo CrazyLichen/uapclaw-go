@@ -280,7 +280,6 @@ func WithEvolutionStore(store *checkpointing.EvolutionStore) SkillUseRailOption 
 	return func(r *SkillUseRail) { r.evolutionStore = store }
 }
 
-
 // SkillsMeta 返回当前技能列表深拷贝。
 // Python: SkillUseRail.skills_meta property
 func (r *SkillUseRail) SkillsMeta() []*skillpkg.Skill {
