@@ -1,8 +1,8 @@
 package interaction
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"testing"
 
 	"github.com/stretchr/testify/require"
