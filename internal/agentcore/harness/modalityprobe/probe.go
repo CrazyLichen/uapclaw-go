@@ -150,6 +150,17 @@ func GetCachedImageSupport(model *llm.Model) *bool {
 	return cachedImageSupport(*key)
 }
 
+// GetCachedImageSupportByKey 按 (api_base, model_name) 直查缓存结论。
+// 供测试与预热断言使用；Python 侧无对应物（tuple 键可直接索引 dict）
+func GetCachedImageSupportByKey(apiBase, modelName string) (bool, bool) {
+	v, ok := probeResults.Load(ProbeCacheKey{APIBase: apiBase, ModelName: modelName})
+	if !ok {
+		return false, false
+	}
+	b, _ := v.(bool)
+	return b, true
+}
+
 // SetCachedImageSupport 预填缓存：模型条目显式声明 supports_vision 时免探测。
 // Python: set_cached_image_support:179-189
 func SetCachedImageSupport(key ProbeCacheKey, supported bool) {
