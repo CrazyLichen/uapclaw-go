@@ -289,7 +289,8 @@ func (s *CodeAgentRealSuite) resumeInterrupts(
 		}
 		s.Require().Equal("interrupt", resultType,
 			"%s结果应为 answer 或 interrupt（非 answer 的中间态只允许 interrupt），实际 %q", round, resultType)
-		interruptIDs, _ := result["interrupt_ids"].([]string)
+		// 生产侧产出 []any，统一取值
+		interruptIDs := testhelpers.InterruptIDsOf(result)
 		s.Require().NotEmpty(interruptIDs, "%s interrupt 结果应携带 interrupt_ids", round)
 		s.Require().Less(attempts, 5, "%s interrupt 恢复轮次超过 5 次，中止防死循环", round)
 

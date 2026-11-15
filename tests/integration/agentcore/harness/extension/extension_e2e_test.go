@@ -85,7 +85,7 @@ func (s *ExtensionSuite) TestLoadPlugin端到端_段落与技能挂载() {
 	require.NoError(s.T(), agent.RegisterRail(ctx, rail))
 
 	pluginDir := s.writePluginFixture(s.T())
-	record, err := agent.LoadPlugin(ctx, pluginDir)
+	record, err := agent.LoadPlugin(ctx, pluginDir, nil)
 	require.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), record.LoadID)
 	assert.Equal(s.T(), pluginDir+string(filepath.Separator)+"manifest.json", record.SourceURI)

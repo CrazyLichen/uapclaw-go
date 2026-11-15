@@ -3669,7 +3669,7 @@ func TestDeepAgent_runSingleRoundInvoke_输入类型不匹配(t *testing.T) {
 	mapInputs := &agentinterfaces.MapInputs{Data: map[string]any{"query": "invalid"}}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, mapInputs, sess)
 
-	_, err := agent.runSingleRoundInvoke(context.Background(), cbc, sess)
+	_, err := agent.runSingleRoundInvoke(context.Background(), cbc, sess, false)
 	assert.Error(t, err)
 }
 
@@ -3683,7 +3683,7 @@ func TestDeepAgent_runSingleRoundInvoke_无ReactAgent(t *testing.T) {
 	fakeSess := newFakeSessionFacade("fake-1")
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, invokeInputs, fakeSess)
 
-	_, err := agent.runSingleRoundInvoke(context.Background(), cbc, fakeSess)
+	_, err := agent.runSingleRoundInvoke(context.Background(), cbc, fakeSess, false)
 	assert.Error(t, err)
 }
 

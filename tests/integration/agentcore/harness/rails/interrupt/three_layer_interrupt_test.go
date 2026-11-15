@@ -77,9 +77,9 @@ func (s *ThreeLayerInterruptSuite) TestThreeLayer_子Agent中断触发() {
 
 	// 验证中断结果包含子 Agent 中断
 	s.Equal("interrupt", result["result_type"], "应为 interrupt 类型")
-	interruptIDs, ok := result["interrupt_ids"].([]string)
-	s.Require().True(ok, "interrupt_ids 应为 []string")
-	s.NotEmpty(interruptIDs, "应有至少一个 interrupt_id")
+	// 生产侧 BuildInterruptResult 产出 []any（对齐 Python 通用 list）
+	interruptIDs := testhelpers.InterruptIDsOf(result)
+	s.Require().NotEmpty(interruptIDs, "应有至少一个 interrupt_id")
 
 	sess.PostRun(ctx)
 }

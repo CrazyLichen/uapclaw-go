@@ -23,7 +23,18 @@ func AssertInterruptResult(t testing.TB, result map[string]any, expectedCount in
 
 	ids, ok := result["interrupt_ids"]
 	if ok && ids != nil {
-		interruptIDs, _ = ids.([]string)
+		// 生产侧 BuildInterruptResult 产出 []any（对齐 Python 通用 list），
+		// 兼容历史 []string 形态，避免静默得到空切片。
+		switch v := ids.(type) {
+		case []any:
+			for _, e := range v {
+				if s, ok := e.(string); ok {
+					interruptIDs = append(interruptIDs, s)
+				}
+			}
+		case []string:
+			interruptIDs = v
+		}
 	}
 	if expectedCount >= 0 {
 		assert.Equal(t, expectedCount, len(interruptIDs), "interrupt_ids 数量")
@@ -169,4 +180,27 @@ func extractFilePathFromPayload(payload any) string {
 		}
 	}
 	return ""
+}
+
+// InterruptIDsOf 从 Invoke 结果中取出 interrupt_ids 字符串切片。
+// 生产侧 BuildInterruptResult 产出 []any（对齐 Python 通用 list），
+// 兼容历史 []string 形态；不存在或形态不符时返回 nil。
+func InterruptIDsOf(result map[string]any) []string {
+	ids, ok := result["interrupt_ids"]
+	if !ok || ids == nil {
+		return nil
+	}
+	switch v := ids.(type) {
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return v
+	}
+	return nil
 }

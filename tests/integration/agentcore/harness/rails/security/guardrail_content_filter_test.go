@@ -15,6 +15,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -304,7 +305,7 @@ func (s *GuardrailContentFilterSuite) TestInterruptResume_端到端确认恢复(
 	s.Equal("interrupt", resultType, "应为中断结果")
 
 	// 确认恢复
-	interruptIDs, _ := result["interrupt_ids"].([]string)
+	interruptIDs := testhelpers.InterruptIDsOf(result)
 	s.Require().NotEmpty(interruptIDs, "应有 interrupt_id")
 
 	interactiveInput := map[string]any{

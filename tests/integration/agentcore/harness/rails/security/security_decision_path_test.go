@@ -331,6 +331,18 @@ func (m *mockInterruptRequest) GetInterruptKind() string { return "" }
 // 真实写入字段，让「rail 覆盖自动确认键」的路径可被断言。
 func (m *mockInterruptRequest) SetAutoConfirmKey(key string) { m.autoConfirmKey = key }
 
+// GetInterruptID 实现 InterruptRequester 接口（2026-11-14 接口扩张）。
+func (m *mockInterruptRequest) GetInterruptID() string { return "" }
+
+// SetInterruptID 实现 InterruptRequester 接口（2026-11-14 接口扩张）。
+func (m *mockInterruptRequest) SetInterruptID(string) {}
+
+// SetInterruptKind 实现 InterruptRequester 接口（2026-11-14 接口扩张）。
+func (m *mockInterruptRequest) SetInterruptKind(string) {}
+
+// SetInterruptOwner 实现 InterruptRequester 接口（2026-11-14 接口扩张）。
+func (m *mockInterruptRequest) SetInterruptOwner(string) {}
+
 // mockInterruptRequestAdapter 适配 InterruptRequester 到 saschema.InterruptRequester。
 type mockInterruptRequestAdapter struct {
 	*mockInterruptRequest
