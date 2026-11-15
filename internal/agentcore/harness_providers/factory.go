@@ -182,7 +182,8 @@ func AvailableProviders() []string {
 // Python: factory.py:112-134 resolve_provider
 //
 // 解析顺序：内置名 → 进程内注册 → 错误。
-// 内置名已声明但尚未链接（15.6-15.9 未落地）时返回明确错误，
+// 内置名已声明但尚未链接（claudecode / codex / native_v2 / 25.1f 未落地；
+// native 与 dsh 已随 15.6 / 15.9 链接）时返回明确错误，
 // 让调用方能区分「名字拼错」与「章节未实现」。
 func ResolveProvider(provider string) (harnessprotocol.HarnessProvider, error) {
 	registeredProvidersMu.RLock()

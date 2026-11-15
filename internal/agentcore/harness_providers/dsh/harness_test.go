@@ -43,7 +43,7 @@ func newRunScript() *runScript {
 type fakeSdkState struct {
 	mu                 sync.Mutex
 	scripts            []*runScript
-	constructorOptions []dshSDKOptions
+	constructorOptions []SDKOptions
 	sessionIDs         []string
 	closeCount         int
 	activeRuns         int
@@ -63,7 +63,7 @@ type fakeSDKSession struct {
 
 // installFakeSDK 返回注入用工厂（Python sys.modules 注入的 Go 等价）。
 func installFakeSDK(state *fakeSdkState) SDKFactory {
-	return func(options dshSDKOptions) (dshSDKHarness, error) {
+	return func(options SDKOptions) (SDKHarness, error) {
 		state.mu.Lock()
 		state.constructorOptions = append(state.constructorOptions, options)
 		state.mu.Unlock()
@@ -73,11 +73,11 @@ func installFakeSDK(state *fakeSdkState) SDKFactory {
 
 // failingFactory 恒失败工厂（Python start_session 失败注入等价）。
 func failingFactory(err error) SDKFactory {
-	return func(options dshSDKOptions) (dshSDKHarness, error) { return nil, err }
+	return func(options SDKOptions) (SDKHarness, error) { return nil, err }
 }
 
 // StartSession Python test_harness.py:125-129
-func (f *fakeSDKHarness) StartSession(sessionID string) (dshSDKSession, error) {
+func (f *fakeSDKHarness) StartSession(sessionID string) (SDKSession, error) {
 	f.state.mu.Lock()
 	f.state.sessionIDs = append(f.state.sessionIDs, sessionID)
 	f.state.mu.Unlock()
@@ -161,9 +161,8 @@ func (s *fakeSDKSession) Run(
 // newTestHarness 构造挂 fake 工厂的 harness。
 func newTestHarness(t *testing.T, state *fakeSdkState) *DshHarness {
 	t.Helper()
-	h, err := NewDshHarness(DefaultDshHarnessConfig())
+	h, err := NewDshHarnessWithFactory(DefaultDshHarnessConfig(), installFakeSDK(state))
 	require.NoError(t, err)
-	h.sdkFactory = installFakeSDK(state)
 	return h
 }
 
@@ -310,9 +309,8 @@ func TestProviderConstructionIsLazy(t *testing.T) {
 
 // Python: test_harness.py:271-300 test_missing_optional_sdk_does_not_open_a_partial_cycle
 func TestMissingSDKDoesNotOpenPartialCycle(t *testing.T) {
-	h, err := NewDshHarness(DefaultDshHarnessConfig())
-	require.NoError(t, err)
-	h.sdkFactory = failingFactory(fmt.Errorf("sdk unavailable"))
+	h, err := NewDshHarnessWithFactory(DefaultDshHarnessConfig(),
+		failingFactory(fmt.Errorf("sdk unavailable")))
 	err = h.Start(context.Background(), testContext())
 	require.Error(t, err)
 	assert.Equal(t, "sdk unavailable", err.Error())
@@ -581,9 +579,7 @@ func TestEventCursorSingleConsumer(t *testing.T) {
 func TestOverlayLifecycle(t *testing.T) {
 	state := &fakeSdkState{scripts: []*runScript{newRunScript()}}
 	config := DefaultDshHarnessConfig()
-	h, err := NewDshHarness(config)
-	require.NoError(t, err)
-	h.sdkFactory = installFakeSDK(state)
+	h, err := NewDshHarnessWithFactory(config, installFakeSDK(state))
 	ctx := context.Background()
 	overlayCtx, ctxErr := harnessprotocol.NewHarnessContext("researcher", "team-a_researcher",
 		"team-session-1", "HOST PROMPT", harnessprotocol.ContextOptions{})
@@ -599,7 +595,7 @@ func TestOverlayLifecycle(t *testing.T) {
 	require.Len(t, state.constructorOptions, 1)
 	options := state.constructorOptions[0]
 	state.mu.Unlock()
-	assert.NotEmpty(t, options.extraEnv[h.overlay.envName])
+	assert.NotEmpty(t, options.ExtraEnv[h.overlay.envName])
 
 	require.NoError(t, h.Stop(ctx))
 	_, err = osStat(overlayPath)
@@ -610,9 +606,7 @@ func TestOverlayLifecycle(t *testing.T) {
 // Python: test_harness.py:784-799 test_failed_start_removes_overlay
 func TestFailedStartRemovesOverlay(t *testing.T) {
 	config := DefaultDshHarnessConfig()
-	h, err := NewDshHarness(config)
-	require.NoError(t, err)
-	h.sdkFactory = failingFactory(fmt.Errorf("boom"))
+	h, err := NewDshHarnessWithFactory(config, failingFactory(fmt.Errorf("boom")))
 	err = h.Start(context.Background(), testContext())
 	require.Error(t, err)
 	assert.Nil(t, h.overlay)

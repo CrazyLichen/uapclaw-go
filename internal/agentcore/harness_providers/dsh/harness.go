@@ -20,42 +20,42 @@ const dshScanDir = ".dsh/skills"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// dshSDKHarness SDK 句柄缝（Python: harness.py:118-121 sdk.DeepSeekHarness 四个调用点）。
+// SDKHarness SDK 句柄缝（Python: harness.py:118-121 sdk.DeepSeekHarness 四个调用点）。
 // 这是 Python importlib.import_module("deepseek_harness") 的 Go 等价缝：
 // 默认实现包装 theoneLee SDK；测试注入 fake（偏差 D-dsh-2：Go 侧 SDK 编译期
 // 内嵌恒存在，缺依赖分支不可达，错误面由 fake 工厂注入覆盖）。
-type dshSDKHarness interface {
+type SDKHarness interface {
 	// StartSession 启动一个可复用会话。Python: harness.py:121 start_session(session_id)
-	StartSession(sessionID string) (dshSDKSession, error)
+	StartSession(sessionID string) (SDKSession, error)
 	// Close 关闭运行时（幂等）。Python: harness.py:143 sdk_harness.close
 	Close() error
 }
 
-// dshSDKSession 一个会话句柄。
+// SDKSession 一个会话句柄。
 // Python: session.run(input, on_notification=cb)（harness.py:166-169）
-type dshSDKSession interface {
+type SDKSession interface {
 	// Run 执行一个 prompt 到 idle；onNotification 在 Run 的订阅循环内同步调用
 	// （偏差 D-dsh-1：Python 经 run_coroutine_threadsafe 回投事件循环，
 	// Go 同步直调，顺序语义一致）。
 	Run(input any, onNotification func(deepseekharness.Notification)) (*deepseekharness.RunResult, error)
 }
 
-// dshSDKOptions 传给 SDK 工厂的完整启动选项。
+// SDKOptions 传给 SDK 工厂的完整启动选项。
 // Python: harness.py:205-228 _sdk_options 的 dict + harness.py:104-113 的
 // overlay env/patches 合并结果。
-type dshSDKOptions struct {
-	// config provider 自有配置
-	config DshHarnessConfig
-	// context 活跃周期上下文（cwd/system prompt/env 源）
-	context *harnessprotocol.HarnessContext
-	// extraEnv overlay 注入的环境变量（Python: options["env"].update(env)）
-	extraEnv map[string]string
-	// extraPatches overlay 注入的 patch 路径（Python: options["patches"] 追加）
-	extraPatches []string
+type SDKOptions struct {
+	// Config provider 自有配置
+	Config DshHarnessConfig
+	// Context 活跃周期上下文（cwd/system prompt/env 源）
+	Context *harnessprotocol.HarnessContext
+	// ExtraEnv overlay 注入的环境变量（Python: options["env"].update(env)）
+	ExtraEnv map[string]string
+	// ExtraPatches overlay 注入的 patch 路径（Python: options["patches"] 追加）
+	ExtraPatches []string
 }
 
-// SDKFactory SDK 工厂缝类型（DshHarness.sdkFactory 字段注入点）。
-type SDKFactory func(options dshSDKOptions) (dshSDKHarness, error)
+// SDKFactory SDK 工厂缝类型（NewDshHarnessWithFactory 注入点）。
+type SDKFactory func(options SDKOptions) (SDKHarness, error)
 
 // DshHarness 把一个可复用的 DeepSeek Harness 会话适配到协议 v1。
 // 每个宿主 Turn 是一段串行化的 DSH 活动区间：输入接受到 whole-agent idle。
@@ -69,9 +69,9 @@ type DshHarness struct {
 	// sdkFactory SDK 工厂缝（Python: _load_dsh_sdk 的 importlib 等价）
 	sdkFactory SDKFactory
 	// sdkHarness SDK 句柄（Python: _sdk_harness）
-	sdkHarness dshSDKHarness
+	sdkHarness SDKHarness
 	// sdkSession 会话句柄（Python: _sdk_session）
-	sdkSession dshSDKSession
+	sdkSession SDKSession
 	// overlay 临时 overlay（Python: _overlay）
 	overlay *overlayResult
 }
@@ -88,6 +88,12 @@ var (
 // NewDshHarness 创建未启动的 DSH 适配器；config 为零值时取 dataclass 缺省。
 // Python: harness.py:57-62 __init__（config or DshHarnessConfig()）
 func NewDshHarness(config DshHarnessConfig) (*DshHarness, error) {
+	return NewDshHarnessWithFactory(config, defaultSDKFactory)
+}
+
+// NewDshHarnessWithFactory 以显式 SDK 工厂创建适配器（测试注入 fake 的缝）。
+// Python 无对应物：importlib 缝在 Go 侧显式化为构造参数（偏差 D-dsh-2）。
+func NewDshHarnessWithFactory(config DshHarnessConfig, factory SDKFactory) (*DshHarness, error) {
 	if config.Provider == "" && config.Model == "" {
 		config = DefaultDshHarnessConfig()
 	} else {
@@ -97,7 +103,10 @@ func NewDshHarness(config DshHarnessConfig) (*DshHarness, error) {
 			return nil, err
 		}
 	}
-	h := &DshHarness{config: config, sdkFactory: defaultSDKFactory}
+	if factory == nil {
+		factory = defaultSDKFactory
+	}
+	h := &DshHarness{config: config, sdkFactory: factory}
 	h.SerializedTurnHarness = hp.NewSerializedTurnHarness(hp.HarnessOptions{
 		Card:                dshCard,
 		Hooks:               h,
@@ -180,9 +189,9 @@ func (h *DshHarness) OpenSession(ctx context.Context, harnessContext harnessprot
 	}
 
 	// Python: harness.py:100-102
-	options := dshSDKOptions{
-		config: h.config, context: &harnessContext,
-		extraEnv: extraEnv, extraPatches: extraPatches,
+	options := SDKOptions{
+		Config: h.config, Context: &harnessContext,
+		ExtraEnv: extraEnv, ExtraPatches: extraPatches,
 	}
 	sdkHarness, err := h.sdkFactory(options)
 	if err != nil {
@@ -340,29 +349,29 @@ func (h *DshHarness) cleanupOverlay() {
 // Python: harness.py:118-120 sdk.DeepSeekHarness(**options)；
 // _sdk_options 的 filter-None → Go 零值省略（SDK mergeHarnessConfig 等价，
 // 偏差 D-dsh-2：缺依赖分支不可达）。
-func defaultSDKFactory(options dshSDKOptions) (dshSDKHarness, error) {
-	config := options.config
+func defaultSDKFactory(options SDKOptions) (SDKHarness, error) {
+	config := options.Config
 	// Python: harness.py:206-209 env 合并：config.env ← context.env ← 系统提示词变量
 	env := map[string]string{}
 	for key, value := range config.Env {
 		env[key] = value
 	}
-	for key, value := range options.context.Env {
+	for key, value := range options.Context.Env {
 		env[key] = value
 	}
-	for key, value := range options.extraEnv {
+	for key, value := range options.ExtraEnv {
 		env[key] = value
 	}
-	if options.context.SystemPrompt != "" && config.SystemPromptEnvVar != "" {
-		env[config.SystemPromptEnvVar] = options.context.SystemPrompt
+	if options.Context.SystemPrompt != "" && config.SystemPromptEnvVar != "" {
+		env[config.SystemPromptEnvVar] = options.Context.SystemPrompt
 	}
 	// Python: harness.py:215 cwd = context.cwd or self._config.cwd
 	cwd := config.Cwd
-	if options.context.Cwd != nil && *options.context.Cwd != "" {
-		cwd = *options.context.Cwd
+	if options.Context.Cwd != nil && *options.Context.Cwd != "" {
+		cwd = *options.Context.Cwd
 	}
 	// Python: harness.py:116-120 launch_args_override 分支
-	patches := append(append([]string{}, config.Patches...), options.extraPatches...)
+	patches := append(append([]string{}, config.Patches...), options.ExtraPatches...)
 	sdkConfig := deepseekharness.DeepSeekHarnessConfig{
 		Provider:                 config.Provider,
 		Model:                    config.Model,
@@ -387,13 +396,13 @@ func defaultSDKFactory(options dshSDKOptions) (dshSDKHarness, error) {
 	return &goSDKHarness{inner: deepseekharness.NewDeepSeekHarness(sdkConfig)}, nil
 }
 
-// goSDKHarness dshSDKHarness 的真实 SDK 包装。
+// goSDKHarness SDKHarness 的真实 SDK 包装。
 type goSDKHarness struct {
 	inner *deepseekharness.DeepSeekHarness
 }
 
 // StartSession Python: harness.py:121 start_session(session_id)
-func (g *goSDKHarness) StartSession(sessionID string) (dshSDKSession, error) {
+func (g *goSDKHarness) StartSession(sessionID string) (SDKSession, error) {
 	session, err := g.inner.StartSession(sessionID)
 	if err != nil {
 		return nil, err
@@ -404,7 +413,7 @@ func (g *goSDKHarness) StartSession(sessionID string) (dshSDKSession, error) {
 // Close Python: harness.py:143 sdk_harness.close
 func (g *goSDKHarness) Close() error { return g.inner.Close() }
 
-// goSDKSession dshSDKSession 的真实 SDK 包装。
+// goSDKSession SDKSession 的真实 SDK 包装。
 type goSDKSession struct {
 	inner *deepseekharness.Session
 }

@@ -15,14 +15,12 @@ import (
 )
 
 // 本文件覆盖 factory.go 中不依赖内置 provider（native / native_v2 /
-// claudecode / codex / dsh）的部分：注册表语义、manifest 转换、
+// claudecode / codex；dsh 已随 15.9 链接）的部分：注册表语义、manifest 转换、
 // BuildHarnessContext、ManifestProviderConfig。
 //
-// ⏵ 15.6-15.9 / 25.1f：以下 23 条上游用例依赖五个内置 provider 真实实现，
-// 本节全部挂起（见 spec §7.5）：
-//   test_factory.py 9 条
-//   test_provider_discovery.py 8 条
-//   test_model_config.py 6 条
+// ⏵ 15.7 / 15.8 / 25.1f：剩余上游用例依赖 claudecode / codex / native_v2
+// 真实实现，仍挂起；dsh 份额已随 15.9 闭合（2026-11-15，见
+// internal/agentcore/harness_providers/dsh/provider_test.go）。
 // factory.go 整文件登记 .coverage-exempt。
 
 // ──────────────────────────── 测试替身 ────────────────────────────
