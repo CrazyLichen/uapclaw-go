@@ -105,3 +105,61 @@ func TestDiscoverBundles(t *testing.T) {
 		t.Fatalf("排序错误: %v", bundles)
 	}
 }
+
+// TestValidateTree_三类拒绝 对齐 _validate_tree（skills.py:93-103）。
+func TestValidateTree_三类拒绝(t *testing.T) {
+	tmp := t.TempDir()
+	root := writeBundle(t, filepath.Join(tmp, "source"), "example", "x")
+	// 合法树不报错
+	if err := validateTree(root, root, nil); err != nil {
+		t.Fatalf("合法树误报: %v", err)
+	}
+	// 逃逸软链 → "escapes"
+	outside := filepath.Join(tmp, "outside")
+	os.WriteFile(outside, []byte("o"), 0o644)
+	os.Symlink(outside, filepath.Join(root, "escape"))
+	if err := validateTree(root, root, nil); err == nil || !strings.Contains(err.Error(), "escapes") {
+		t.Fatalf("逃逸应报错: %v", err)
+	}
+	// 内部软链 → 合法（物化在 copy 阶段）
+	os.Remove(filepath.Join(root, "escape"))
+	os.Symlink(filepath.Join(root, "SKILL.md"), filepath.Join(root, "reference"))
+	if err := validateTree(root, root, nil); err != nil {
+		t.Fatalf("内部软链误报: %v", err)
+	}
+	// 环 → "cyclic"
+	os.Remove(filepath.Join(root, "reference"))
+	os.Symlink(root, filepath.Join(root, "self"))
+	if err := validateTree(root, root, nil); err == nil || !strings.Contains(err.Error(), "cyclic") {
+		t.Fatalf("环应报错: %v", err)
+	}
+}
+
+// TestMatchSkills_双轨名 对齐 _matches（skills.py:106-117）：目录名与 front-matter 名 casefold 双轨。
+func TestMatchSkills_双轨名(t *testing.T) {
+	scan := t.TempDir()
+	writeBundle(t, filepath.Join(scan, "legacy-folder"), "selected", "keep")
+	plain := filepath.Join(scan, "Example")
+	os.MkdirAll(plain, 0o755) // 无 SKILL.md → 用目录名比对
+	m := matchSkills(scan, "SELECTED")
+	if len(m) != 1 || !strings.HasSuffix(m[0], "legacy-folder") {
+		t.Fatalf("front-matter 名匹配失败: %v", m)
+	}
+	m = matchSkills(scan, "example")
+	if len(m) != 1 || !strings.HasSuffix(m[0], "Example") {
+		t.Fatalf("目录名匹配失败: %v", m)
+	}
+}
+
+// TestNextCopyName 对齐 _next_copy_name（skills.py:120-127）：-2 起步、128 截断。
+func TestNextCopyName(t *testing.T) {
+	scan := t.TempDir()
+	// Python _next_copy_name 无条件从 -2 起步（skills.py:120-127 循环结构）
+	if got := nextCopyName(scan, "example"); got != "example-2" {
+		t.Fatalf("空 scan 应返回 example-2: %s", got)
+	}
+	writeBundle(t, filepath.Join(scan, "example"), "example", "x")
+	if got := nextCopyName(scan, "example"); got != "example-2" {
+		t.Fatalf("期望 example-2，实际 %s", got)
+	}
+}

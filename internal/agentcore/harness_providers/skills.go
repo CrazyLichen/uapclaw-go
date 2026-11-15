@@ -122,6 +122,92 @@ func isRelative(parent, child string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// validateTree 校验技能树：软链逃逸/环/非常规文件三类拒绝。
+// Python: _validate_tree (skills.py:93-103)
+func validateTree(path, root string, ancestors map[string]bool) error {
+	resolved, err := resolvePath(path)
+	if err != nil {
+		return err
+	}
+	if !isRelative(root, resolved) {
+		return fmt.Errorf("skill symlink escapes its bundle: %s", path)
+	}
+	fi, err := os.Stat(resolved) // Stat 跟随软链：Python resolved.is_dir() 同义
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		if ancestors[resolved] {
+			return fmt.Errorf("cyclic skill directory: %s", path)
+		}
+		next := make(map[string]bool, len(ancestors)+1)
+		for k, v := range ancestors {
+			next[k] = v
+		}
+		next[resolved] = true
+		entries, err := os.ReadDir(resolved)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if err := validateTree(filepath.Join(resolved, entry.Name()), root, next); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if !fi.Mode().IsRegular() {
+		return fmt.Errorf("skill contains a non-regular file: %s", path)
+	}
+	return nil
+}
+
+// casefoldName Go 侧简化折叠（D-15.12-b：strings.EqualFold 语义以小写化表达，
+// 技能名允许集 [A-Za-z0-9._-] 下与 str.casefold 等价）。
+func casefoldName(s string) string { return strings.ToLower(s) }
+
+// matchSkills 在 scan 目录中找与 name 匹配的既有技能目录（可能多个）。
+// 目录名与 front-matter 名双轨比对；front-matter 解析失败静默跳过（用目录名）。
+// Python: _matches (skills.py:106-117)
+func matchSkills(scan, name string) []string {
+	entries, err := os.ReadDir(scan)
+	if err != nil {
+		return nil
+	}
+	var matches []string
+	for _, entry := range entries {
+		existing := entry.Name()
+		if entry.Type()&os.ModeSymlink == 0 && entry.IsDir() {
+			if fi, err := os.Stat(filepath.Join(scan, entry.Name(), "SKILL.md")); err == nil && fi.Mode().IsRegular() {
+				if parsed, err := parseSkillName(filepath.Join(scan, entry.Name())); err == nil {
+					existing = parsed
+				}
+			}
+		}
+		if casefoldName(name) == casefoldName(entry.Name()) || casefoldName(name) == casefoldName(existing) {
+			matches = append(matches, filepath.Join(scan, entry.Name()))
+		}
+	}
+	return matches
+}
+
+// nextCopyName append 策略下的下一个可用名：-2 起步，总长截到 128。
+// Python: _next_copy_name (skills.py:120-127)
+func nextCopyName(scan, name string) string {
+	for index := 2; ; index++ {
+		suffix := fmt.Sprintf("-%d", index)
+		candidate := name
+		if len(candidate) > 128-len(suffix) {
+			// Python 按字符截断；技能名 ASCII 限集下字节==字符
+			candidate = candidate[:128-len(suffix)]
+		}
+		candidate += suffix
+		if len(matchSkills(scan, candidate)) == 0 {
+			return candidate
+		}
+	}
+}
+
 // skillFrontMatter 解析 SKILL.md 的 YAML front matter，返回元数据。
 // 无 front matter 返回空 map；utf-8-sig BOM 剥离对齐（D-15.12-d）。
 // Python: _name 内嵌逻辑（skills.py:63-77）
