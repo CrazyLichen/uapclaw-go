@@ -16,9 +16,13 @@ func TestCoverage_TopLevelValidateBranches(t *testing.T) {
 		mutate func(map[string]any)
 		want   string
 	}{
-		{func(m map[string]any) { m["data_loader"] = map[string]any{"batch_size": 0, "batch_balance_keys": []any{"d"}} },
+		{func(m map[string]any) {
+			m["data_loader"] = map[string]any{"batch_size": 0, "batch_balance_keys": []any{"d"}}
+		},
 			"data_loader.batch_size must be greater than or equal to 1"},
-		{func(m map[string]any) { m["data_loader"] = map[string]any{"batch_size": 1, "batch_balance_keys": []any{}} },
+		{func(m map[string]any) {
+			m["data_loader"] = map[string]any{"batch_size": 1, "batch_balance_keys": []any{}}
+		},
 			"data_loader.batch_balance_keys must not be empty"},
 		{func(m map[string]any) {
 			m["evaluation_result_analyzer"] = map[string]any{"max_issues": 0}
