@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // 依赖说明：fmt 用于 Flush 的错误文案，sort 用于合成路由键与就绪集/快照排序，
@@ -94,13 +95,14 @@ type BarrierChannel struct {
 //   - readyNodes：就绪节点集合（GetReadyNodes 排序后输出，偏差 D-4）
 //   - buffer：待 Flush 的消息
 //
-// 并发纪律（偏差 D-8）：无锁，对齐 Python。
-// 约定（尚未接入）：计划由 8.3c 的 PregelLoop 在超步循环所在 goroutine 内串行调用
-// 本类型全部方法；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
-// 注意 PregelLoop 目前不存在，本类型在生产代码中零调用方——接入时若改用并发调用，
-// 必须先补锁，现有注释不构成并发安全保证。
+// 并发纪律（原偏差 D-8，2026-11-15 8.3c 拍板方案 A 修订）：各公开方法加 sync.Mutex
+// 互斥锁（Python asyncio 单线程无需锁，Go 侧防御性加锁，spec 8.3c 偏差 B2），
+// -race 并发用例锁定（TestChannelManager_并发安全）。节点任务在其他 goroutine
+// 执行，但不得触碰 ChannelManager——消息统一由主循环经 succeedMessages 转投。
 // Python: channels.py:13-101
 type ChannelManager struct {
+	// mu 保护全部状态的互斥锁（spec 8.3c D1/B2）
+	mu sync.Mutex
 	// keyToChannel 写侧索引：路由键 → 通道
 	keyToChannel map[string]Channel
 	// nodeToChannels 读侧索引：节点名 → 通道列表（注册顺序）
@@ -291,12 +293,18 @@ func NewChannelManager(channels []Channel) *ChannelManager {
 // BufferMessage 把消息暂存到 buffer，等待下一次 Flush。
 // Python: channels.py:33-34
 func (m *ChannelManager) BufferMessage(msg Message) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.buffer = append(m.buffer, msg)
 }
 
 // IsEmpty buffer 是否为空（只看 buffer，不看就绪集）。
 // Python: channels.py:36-37
-func (m *ChannelManager) IsEmpty() bool { return len(m.buffer) == 0 }
+func (m *ChannelManager) IsEmpty() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.buffer) == 0
+}
 
 // Flush 把 buffer 里的消息投递给各自目标通道，并按需更新就绪集。
 // 语义要点（逐条对齐 channels.py:39-58）：
@@ -305,6 +313,8 @@ func (m *ChannelManager) IsEmpty() bool { return len(m.buffer) == 0 }
 //   - 只有 Accept 返 true 的节点才重算就绪——重复的汇聚信号不会把节点重新激活；
 //   - 重算口径是「该节点任一通道就绪即入集」，不是"全部通道就绪"。
 func (m *ChannelManager) Flush() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	updated := make(map[string]struct{}, len(m.buffer))
 	for _, msg := range m.buffer {
 		ch, ok := m.keyToChannel[msg.Target]
@@ -335,6 +345,8 @@ func (m *ChannelManager) Flush() error {
 // 节点都会被提交执行。
 // Python: channels.py:60-61
 func (m *ChannelManager) GetReadyNodes() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	nodes := make([]string, 0, len(m.readyNodes))
 	for nodeName := range m.readyNodes {
 		nodes = append(nodes, nodeName)
@@ -347,6 +359,8 @@ func (m *ChannelManager) GetReadyNodes() []string {
 // 未知节点直接返回（对齐 Python channels.py:64-65 的存在性判断，不是 defaultdict）。
 // Python: channels.py:63-74
 func (m *ChannelManager) Consume(nodeName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	channels, ok := m.nodeToChannels[nodeName]
 	if !ok {
 		return
@@ -375,6 +389,8 @@ func (m *ChannelManager) Consume(nodeName string) {
 // 同包内若确实需要活视图，直接读字段 m.buffer 并在读完立即复制，不必经此方法。
 // Python: engine.py:180（self.manager.buffer）
 func (m *ChannelManager) Buffer() []Message {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return append(make([]Message, 0, len(m.buffer)), m.buffer...)
 }
 
@@ -385,6 +401,8 @@ func (m *ChannelManager) Buffer() []Message {
 //     空快照作为占位保留（Restore 靠下标 zip，占位不可省）；
 //   - 整节点全空则不存该节点。
 func (m *ChannelManager) Snapshot() map[string][]ChannelSnapshot {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	snap := make(map[string][]ChannelSnapshot, len(m.nodeToChannels))
 	for nodeName, channels := range m.nodeToChannels {
 		if nodeName == End {
@@ -416,6 +434,8 @@ func (m *ChannelManager) Snapshot() map[string][]ChannelSnapshot {
 // 恢复后若通道就绪，把节点加入就绪集（对应 channels.py:100-101）。
 // Python: channels.py:88-101
 func (m *ChannelManager) Restore(snapshot map[string][]ChannelSnapshot) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for nodeName, states := range snapshot {
 		channels, ok := m.nodeToChannels[nodeName]
 		if !ok {

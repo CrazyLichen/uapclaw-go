@@ -1,6 +1,7 @@
 package pregel
 
 import (
+	"sync"
 	"testing"
 )
 
@@ -836,4 +837,28 @@ func TestBarrierChannel_检查点恢复不死锁(t *testing.T) {
 	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "end" {
 		t.Fatalf("就绪集 = %v，期望 [end]", got)
 	}
+}
+
+// TestChannelManager_并发安全 多 goroutine 读写与主循环并发无竞态
+// （spec 8.3c D1/B2，-race 门禁用例）
+func TestChannelManager_并发安全(t *testing.T) {
+	m := NewChannelManager([]Channel{NewTriggerChannel("a"), NewTriggerChannel(End)})
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				m.BufferMessage(NewTriggerMessage("a", "a"))
+				_ = m.Snapshot()
+				_ = m.GetReadyNodes()
+				_ = m.Buffer()
+				_ = m.IsEmpty()
+				_ = m.Flush()
+				m.Consume("a")
+				m.Restore(map[string][]ChannelSnapshot{"a": {{Messages: []Message{NewTriggerMessage("a", "a")}}}})
+			}
+		}()
+	}
+	wg.Wait()
 }
