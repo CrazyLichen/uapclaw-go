@@ -118,7 +118,7 @@ func (a *DshTurnAccumulator) BuildTerminalResult(
 	startedAt float64,
 	startedMonotonic time.Time,
 ) (harnessprotocol.TurnEventKind, harnessprotocol.TurnResult, error) {
-	completedAt := float64(time.Now().Unix()) // Python: time.time()
+	completedAt := float64(time.Now().UnixNano()) / 1e9 // Python: time.time()
 	durationMS := max(0, int(time.Since(startedMonotonic).Milliseconds()))
 
 	finishReason := runResult.FinishReason
@@ -239,7 +239,7 @@ func (a *DshTurnAccumulator) BuildFailedResult(
 	startedAt float64,
 	startedMonotonic time.Time,
 ) (harnessprotocol.TurnResult, error) {
-	completedAt := float64(time.Now().Unix())
+	completedAt := float64(time.Now().UnixNano()) / 1e9 // Python: time.time()
 	durationMS := max(0, int(time.Since(startedMonotonic).Milliseconds()))
 	code := fmt.Sprintf("%T", exc) // Python: type(exc).__name__ 等价（Go 用类型字符串）
 	turnErr, err := harnessprotocol.NewTurnError(
@@ -273,7 +273,7 @@ func (a *DshTurnAccumulator) BuildStoppedResult(
 	startedAt float64,
 	startedMonotonic time.Time,
 ) (harnessprotocol.TurnResult, error) {
-	completedAt := float64(time.Now().Unix())
+	completedAt := float64(time.Now().UnixNano()) / 1e9 // Python: time.time()
 	durationMS := max(0, int(time.Since(startedMonotonic).Milliseconds()))
 	message := "DeepSeek Harness stopped before the turn completed"
 	termination, err := harnessprotocol.NewTurnTermination(
@@ -296,7 +296,7 @@ func (a *DshTurnAccumulator) BuildStoppedResult(
 // BuildQueuedStopResult 已接受但未执行即被停止的轮次的终态结果。
 // Python: mapping.py:520-533 build_queued_stop_result
 func BuildQueuedStopResult() (harnessprotocol.TurnResult, error) {
-	now := float64(time.Now().Unix())
+	now := float64(time.Now().UnixNano()) / 1e9 // Python: time.time()
 	zero := 0
 	message := "DeepSeek Harness stopped before the queued turn started"
 	termination, err := harnessprotocol.NewTurnTermination(

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	providers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
+	providers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
