@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -366,6 +367,8 @@ func StartInvocationLog(parent context.Context, directory string, agentID string
 		ctx = logger.WithMemberID(ctx, agentID)
 	}
 	span := &InvocationSpan{Scope: scope, Ctx: ctx}
+	// Python: token = _ACTIVE_INVOCATION.set(scope)——goroutine 级登记近似（D-15）
+	attachScope(scope)
 	// Python: scope.write_record("INFO", "invocation", {...invocation_start...})
 	scope.WriteRecord("INFO", "invocation", map[string]any{
 		"event_type": "invocation_start", "status": "running",
@@ -381,6 +384,7 @@ func StartInvocationLog(parent context.Context, directory string, agentID string
 			"event_type": "invocation_end", "status": status, "exception": exception,
 		}, true)
 		scope.CloseLog()
+		attachScope(nil)
 	}
 	return span, nil
 }
@@ -536,4 +540,105 @@ func mustJSONLine(record map[string]any) []byte {
 		data = []byte("{}")
 	}
 	return append(data, '\n')
+}
+
+// ──────────────────────────── 全局变量（goroutine 活动登记） ────────────────────────────
+
+// goroutineScopes 活动 scope 登记（键为 goroutine id）。
+// Python ContextVar 为协程级隐式继承；Go 日志调用不带 ctx，故用 goroutine 级登记
+// 近似等价（偏差 D-15：线程池 worker 跨 goroutine 传递时可能失联，回收条件=日志 API 携带 ctx）。
+var (
+	goroutineScopes   = make(map[int64]*InvocationLogScope)
+	goroutineScopesMu sync.RWMutex
+)
+
+// ──────────────────────────── 导出函数（capture 入口） ────────────────────────────
+
+// CaptureInvocationLog 在日志后端入口单点捕获（Python capture_invocation_log）。
+// 无活动 scope 时零开销直返；畸形记录计 capture failure 而不中断。
+func CaptureInvocationLog(level string, logType string, message any, args []any, eventType string, exc error) {
+	// Python: scope = _ACTIVE_INVOCATION.get(); if scope is None: return
+	scope := activeScopeForCurrentGoroutine()
+	if scope == nil {
+		return
+	}
+	capture(scope, level, logType, message, args, eventType, exc)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// capture 捕获单条记录（Python _capture）
+func capture(scope *InvocationLogScope, level string, logType string, message any, args []any, eventType string, exc error) {
+	// Python: level_name = level.value if Enum else str(level); DEBUG 直接丢弃
+	if strings.EqualFold(level, "DEBUG") {
+		return
+	}
+	fields := messageFields(message)
+	if len(args) > 0 {
+		// Python: 容器参数绝不 stringify
+		fields = map[string]any{
+			"message": formatSummary(fields["message"], args),
+		}
+	}
+	if eventType != "" {
+		fields = map[string]any{
+			"message":    fields["message"],
+			"event_type": eventType,
+		}
+	}
+	exception := exceptionSummary(exc)
+	if exception != "" {
+		fields = map[string]any{
+			"message":   fields["message"],
+			"exception": exception,
+		}
+	}
+	scope.WriteRecord(strings.ToUpper(level), logType, fields, false)
+}
+
+// goroutineID 取当前 goroutine id（近似 Python ContextVar 的协程标识）
+func goroutineID() int64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	// 格式：goroutine 123 [running]:
+	line := string(buf[10:n])
+	end := strings.IndexByte(line, ' ')
+	if end < 0 {
+		return -1
+	}
+	id, err := strconv.ParseInt(line[:end], 10, 64)
+	if err != nil {
+		return -1
+	}
+	return id
+}
+
+// activeScopeForCurrentGoroutine 当前 goroutine 的活动 scope
+func activeScopeForCurrentGoroutine() *InvocationLogScope {
+	goroutineScopesMu.RLock()
+	defer goroutineScopesMu.RUnlock()
+	return goroutineScopes[goroutineID()]
+}
+
+// attachScope 登记/解除当前 goroutine 的活动 scope
+func attachScope(scope *InvocationLogScope) {
+	goroutineScopesMu.Lock()
+	defer goroutineScopesMu.Unlock()
+	if scope == nil {
+		delete(goroutineScopes, goroutineID())
+		return
+	}
+	goroutineScopes[goroutineID()] = scope
+}
+
+// init 向 logger 注册捕获钩子（Python 在 loguru/base/default 三个 backend 接线，
+// Go logger 单点接线等价——避免 import 环用回调注册，方向 invocation→logger）。
+func init() {
+	logger.SetInvocationCapture(func(level string, logType string, message string, errStr string) {
+		var exc error
+		if errStr != "" {
+			exc = errors.New(errStr)
+		}
+		CaptureInvocationLog(level, logType, message, nil, "", exc)
+	})
 }

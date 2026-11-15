@@ -335,3 +335,74 @@ func TestSuspendContext(t *testing.T) {
 	}
 	span.Finish(nil)
 }
+
+// TestCaptureInvocationLog 无活动 scope 零开销直返
+func TestCaptureInvocationLog(t *testing.T) {
+	// 当前 goroutine 无 scope：不应 panic
+	CaptureInvocationLog("info", "comp", "hello", nil, "", nil)
+}
+
+// TestCaptureInvocationLog_活动scope 经 goroutine 登记捕获到 JSONL
+func TestCaptureInvocationLog_活动scope(t *testing.T) {
+	dir := t.TempDir()
+	span, err := StartInvocationLog(context.Background(), dir, "agent-1", "trace-1", "diag")
+	if err != nil {
+		t.Fatalf("启动失败: %v", err)
+	}
+	CaptureInvocationLog("info", "comp_diag", "diagnosis step", nil, "", nil)
+	// DEBUG 丢弃
+	CaptureInvocationLog("debug", "comp_diag", "hidden", nil, "", nil)
+	// exc 捕获
+	CaptureInvocationLog("error", "comp_diag", "boom occurred", nil, "", errors.New("oops"))
+	span.Finish(nil)
+	data, _ := os.ReadFile(span.Scope.Path)
+	content := string(data)
+	if !strings.Contains(content, `"message":"diagnosis step"`) {
+		t.Fatalf("缺 info 记录: %s", content)
+	}
+	if strings.Contains(content, `"message":"hidden"`) {
+		t.Fatal("DEBUG 不应落盘")
+	}
+	if !strings.Contains(content, "oops") || !strings.Contains(content, `"level":"ERROR"`) {
+		t.Fatalf("error 记录不符: %s", content)
+	}
+	if !strings.Contains(content, `"log_type":"comp_diag"`) {
+		t.Fatalf("log_type 不符: %s", content)
+	}
+}
+
+// TestCaptureInvocationLog_格式化参数 args 走 formatSummary
+func TestCaptureInvocationLog_格式化参数(t *testing.T) {
+	dir := t.TempDir()
+	span, _ := StartInvocationLog(context.Background(), dir, "a", "s", "r")
+	CaptureInvocationLog("info", "comp", "turn {0} of {1}", []any{2, 5}, "", nil)
+	span.Finish(nil)
+	data, _ := os.ReadFile(span.Scope.Path)
+	if !strings.Contains(string(data), `"message":"turn 2 of 5"`) {
+		t.Fatalf("args 格式化失败: %s", data)
+	}
+}
+
+// TestLoggerHook接线 经 logger 包写日志时活动 scope 捕获（capture→logger 单点接线）
+func TestLoggerHook接线(t *testing.T) {
+	dir := t.TempDir()
+	// logger 需先初始化（未初始化时 Info 走 Nop logger，钩子不触发）
+	if err := logger.Setup(logger.WithOutputDir(t.TempDir())); err != nil {
+		t.Fatalf("logger 初始化失败: %v", err)
+	}
+	span, _ := StartInvocationLog(context.Background(), dir, "agent-1", "trace-1", "diag")
+	logger.Info(logger.ComponentAgentCore).Str("k", "v").Msg("invocation wired message")
+	logger.Debug(logger.ComponentAgentCore).Msg("should not capture")
+	span.Finish(nil)
+	data, _ := os.ReadFile(span.Scope.Path)
+	content := string(data)
+	if !strings.Contains(content, `"message":"invocation wired message"`) {
+		t.Fatalf("logger 钩子未捕获: %s", content)
+	}
+	if !strings.Contains(content, `"log_type":"agent_core"`) {
+		t.Fatalf("log_type 应为组件名: %s", content)
+	}
+	if strings.Contains(content, `"message":"should not capture"`) {
+		t.Fatal("Debug 不应被捕获")
+	}
+}

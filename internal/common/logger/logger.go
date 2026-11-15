@@ -458,7 +458,9 @@ func (l *Logger) createComponentLogger(
 		Timestamp().
 		Caller().
 		Str("component", comp.String()).
-		Logger()
+		Logger().
+		// 调用日志捕获：INFO 及以上经级别过滤后单点接 invocation 捕获（17.4b2 增强件）
+		Hook(invocationComponentHook{comp: comp.String()})
 
 	l.componentLoggers[comp] = zl
 }
