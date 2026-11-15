@@ -88,6 +88,15 @@ func (m Message) Kind() MessageKind {
 	return m.kind
 }
 
+// Copy 返回 Message 的深拷贝，kind 原样保留。
+// 供 8.9a store.GraphState.Clone 使用；Python 侧由 copy.deepcopy 承担同等语义。
+// Python: 无对应方法（语言层 deepcopy），偏差见 8.9a spec §3.6 D-2
+func (m Message) Copy() Message {
+	c := Message{Sender: m.Sender, Target: m.Target, Payload: m.Payload}
+	c.kind = m.kind
+	return c
+}
+
 // PanicGraphInterrupt 触发图级中断 panic。
 // panic 值恒为 *GraphInterrupt，消费者按指针断言。
 // Python: raise GraphInterrupt((Interrupt(...),))

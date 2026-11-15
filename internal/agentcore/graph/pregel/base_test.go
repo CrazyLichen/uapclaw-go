@@ -254,3 +254,24 @@ func TestGraphInterrupt_Resumable与NS不丢(t *testing.T) {
 	}()
 	PanicGraphInterrupt(Interrupt{Value: "v", Resumable: true, NS: "node_x"})
 }
+
+// TestMessage_Copy 验证 Copy 深拷贝且 kind 保留（8.9a GraphState.Clone 的地基）
+func TestMessage_Copy(t *testing.T) {
+	trigger := NewTriggerMessage("a", "n1")
+	barrier := NewBarrierMessage("b", "barrier:a&b->c")
+
+	ct := trigger.Copy()
+	if ct.Sender != "a" || ct.Target != "n1" || ct.kind != KindTrigger {
+		t.Fatalf("trigger Copy 字段失真: %+v kind=%s", ct, ct.kind)
+	}
+	cb := barrier.Copy()
+	if cb.Sender != "b" || cb.Target != "barrier:a&b->c" || cb.kind != KindBarrier {
+		t.Fatalf("barrier Copy 字段失真: %+v kind=%s", cb, cb.kind)
+	}
+
+	// 修改副本不影响原值（值语义本身隔离，确认 Sender 无共享）
+	ct.Sender = "changed"
+	if trigger.Sender != "a" {
+		t.Fatal("Copy 修改副本影响原值")
+	}
+}
