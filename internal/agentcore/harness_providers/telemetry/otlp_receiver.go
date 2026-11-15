@@ -305,7 +305,7 @@ func decodeLogRecords(payload []byte) ([]map[string]any, error) {
 	return events, nil
 }
 
-// ──────────────────────────── 占位实现（后续 Task 实装） ────────────────────────────
+// ──────────────────────────── 传输与生命周期（非导出） ────────────────────────────
 
 // startLocked 绑定回环 HTTP 与 gRPC 监听；失败永久禁用（观测 best-effort）。
 // Python: otlp_receiver.py:213-257 _start。
