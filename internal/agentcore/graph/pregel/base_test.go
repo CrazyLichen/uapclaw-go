@@ -1,6 +1,10 @@
 package pregel
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 // TestNewTriggerMessage 激活消息的字段与种类落地。
 // Python: TriggerMessage(sender, target)（pregel/base.py:36-38）
@@ -273,5 +277,46 @@ func TestMessage_Copy(t *testing.T) {
 	ct.Sender = "changed"
 	if trigger.Sender != "a" {
 		t.Fatal("Copy 修改副本影响原值")
+	}
+}
+
+
+// TestMessage_JSONRoundTrip kind 保真往返（D-10）
+func TestMessage_JSONRoundTrip(t *testing.T) {
+	trigger := NewTriggerMessage("a", "n1")
+	barrier := NewBarrierMessage("b", "barrier:x&y->z")
+
+	tb, err := json.Marshal(trigger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tb), `"kind":"trigger"`) {
+		t.Fatalf("trigger 序列化应含 kind 槽: %s", tb)
+	}
+	var ct, cb Message
+	if err := json.Unmarshal(tb, &ct); err != nil {
+		t.Fatal(err)
+	}
+	if ct.Sender != "a" || ct.Target != "n1" || ct.kind != KindTrigger {
+		t.Fatalf("trigger 还原失真: %+v kind=%s", ct, ct.kind)
+	}
+
+	bb, _ := json.Marshal(barrier)
+	if err := json.Unmarshal(bb, &cb); err != nil {
+		t.Fatal(err)
+	}
+	if cb.kind != KindBarrier || cb.Target != "barrier:x&y->z" {
+		t.Fatalf("barrier 还原失真: %+v kind=%s", cb, cb.kind)
+	}
+}
+
+// TestMessage_UnmarshalJSON_Reject 零值/未知 kind 拒绝（守住 8.6 不变式）
+func TestMessage_UnmarshalJSON_Reject(t *testing.T) {
+	var m Message
+	if err := json.Unmarshal([]byte(`{"sender":"a","target":"n"}`), &m); err == nil {
+		t.Fatal("缺 kind 应拒绝")
+	}
+	if err := json.Unmarshal([]byte(`{"sender":"a","target":"n","kind":"weird"}`), &m); err == nil {
+		t.Fatal("未知 kind 应拒绝")
 	}
 }
