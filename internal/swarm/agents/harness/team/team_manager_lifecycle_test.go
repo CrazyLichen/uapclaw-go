@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"os"
 	"path/filepath"
 	"testing"
@@ -191,7 +192,7 @@ func (f *failingCheckpointer) Release(ctx context.Context, sessionID string, age
 }
 
 // GraphStore 获取图状态存储（桩，返回 nil）
-func (f *failingCheckpointer) GraphStore() any { return nil }
+func (f *failingCheckpointer) GraphStore() *store.GraphStore { return nil }
 
 // setupDeleteSessionRuntimeEnv 隔离 sessions 目录与 metadata 缓存，写入指定 metadata。
 // UAPCLAW_DATA_DIR 控制 workspace.AgentSessionsDir()，元数据缓存逐测试清空。

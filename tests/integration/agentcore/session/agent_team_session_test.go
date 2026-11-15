@@ -47,7 +47,7 @@ func (m *mockCheckpointer) SessionExists(_ context.Context, _ string) (bool, err
 func (m *mockCheckpointer) Release(_ context.Context, _ string, _ ...string) error {
 	return nil
 }
-func (m *mockCheckpointer) GraphStore() any { return nil }
+func (m *mockCheckpointer) GraphStore() *store.GraphStore { return nil }
 
 // ──────────────────────────── 测试套件 ────────────────────────────
 
