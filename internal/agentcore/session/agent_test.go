@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"context"
 	"sync/atomic"
 	"testing"
@@ -45,7 +46,7 @@ func (n *noOpCheckpointer) SessionExists(ctx context.Context, sessionID string) 
 func (n *noOpCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (n *noOpCheckpointer) GraphStore() any { return nil }
+func (n *noOpCheckpointer) GraphStore() *store.GraphStore { return nil }
 
 // TestNewSession 测试构造函数
 func TestNewSession(t *testing.T) {

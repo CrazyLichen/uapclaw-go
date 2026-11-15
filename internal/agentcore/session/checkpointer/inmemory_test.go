@@ -382,12 +382,12 @@ func TestInMemoryCheckpointer_Release_不存在Session(t *testing.T) {
 
 // ──────────────────────────── GraphStore 测试 ────────────────────────────
 
-// TestInMemoryCheckpointer_GraphStore 测试 Graph Store 返回 nil（8.9 回填前）
+// TestInMemoryCheckpointer_GraphStore 测试 Graph Store 返回非 nil 壳（8.9a 回填）
 func TestInMemoryCheckpointer_GraphStore(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	gs := cp.GraphStore()
-	if gs != nil {
-		t.Error("8.9 回填前 GraphStore 应返回 nil")
+	if gs == nil {
+		t.Error("8.9a 回填后 GraphStore 应返回非 nil")
 	}
 }
 

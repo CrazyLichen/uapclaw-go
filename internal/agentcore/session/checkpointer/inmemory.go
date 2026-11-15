@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -29,8 +30,7 @@ type InMemoryCheckpointer struct {
 	// sessionToWorkflowIDs 会话到工作流 ID 集合的映射，key=sessionID
 	sessionToWorkflowIDs map[string]map[string]bool
 	// graphStore 图状态存储
-	// ⤵️ 8.9 回填：Graph Store 实现后替换为 Store 实例
-	graphStore any
+	graphStore *store.GraphStore
 }
 
 // baseSingleStateStorage 单实体状态存储基类，提供基于 serde 的序列化存储。
@@ -98,7 +98,7 @@ func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 		agentTeamStores:      make(map[string]*AgentTeamStorage),
 		workflowStores:       make(map[string]*WorkflowStorage),
 		sessionToWorkflowIDs: make(map[string]map[string]bool),
-		graphStore:           nil, // ⤵️ 8.9 回填
+		graphStore:           store.NewGraphStore(store.NewInMemoryStore()),
 	}
 }
 
@@ -178,10 +178,16 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 					Str("storage_type", "inmemory").
 					Msg("force clearing all checkpoints of current workflow")
 
-				// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
-				func() {
-					// 预留 graph store delete 逻辑
-				}()
+				// 8.9a 回填：graph store 状态清理（失败仅告警，不阻断 workflow store 清理）
+				if err := cp.graphStore.Delete(sessionID, workflowID); err != nil {
+					logger.Warn(logComponent).
+						Str("action", "pre_workflow_execute").
+						Str("event_type", "checkpoint_clear").
+						Str("session_id", sessionID).
+						Str("workflow_id", workflowID).
+						Err(err).
+						Msg("failed to delete graph store state")
+				}
 
 				// 无论 graph store 是否成功，都清除 workflow store
 				if err := workflowStore.Clear(ctx, workflowID, sessionID); err != nil {
@@ -565,8 +571,16 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 
 	// 清除 workflow 相关的 graph store 和 workflow store
 	for wid := range workflowIDs {
-		// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, wid)
-		_ = wid // 占位
+		// 8.9a 回填：graph store 状态清理（失败仅告警，不阻断后续清理）
+		if err := cp.graphStore.Delete(sessionID, wid); err != nil {
+			logger.Warn(logComponent).
+				Str("action", "release").
+				Str("event_type", "checkpoint_clear").
+				Str("session_id", sessionID).
+				Str("workflow_id", wid).
+				Err(err).
+				Msg("failed to delete graph store state")
+		}
 	}
 	delete(cp.sessionToWorkflowIDs, sessionID)
 
@@ -616,8 +630,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 }
 
 // GraphStore 获取图状态存储。
-// ⤵️ 8.9 回填：Graph Store 实现后返回 Store 实例
-func (cp *InMemoryCheckpointer) GraphStore() any {
+func (cp *InMemoryCheckpointer) GraphStore() *store.GraphStore {
 	return cp.graphStore
 }
 
@@ -936,7 +949,17 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 
 	isSucceed := false
 
-	// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+	// 8.9a 回填：graph store 状态清理（失败仅告警，不阻断 workflow store 清理）
+	if err := cp.graphStore.Delete(sessionID, workflowID); err != nil {
+		logger.Warn(logComponent).
+			Str("action", "clear_workflow").
+			Str("event_type", "checkpoint_clear").
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Str("reason", reason).
+			Err(err).
+			Msg("failed to delete graph store state")
+	}
 	// 暂时标记为成功（因为没有 graph store 操作）
 	isSucceed = true
 
@@ -992,7 +1015,17 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSessionLocked(ctx context.Cont
 
 	isSucceed := false
 
-	// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+	// 8.9a 回填：graph store 状态清理（失败仅告警，不阻断 workflow store 清理）
+	if err := cp.graphStore.Delete(sessionID, workflowID); err != nil {
+		logger.Warn(logComponent).
+			Str("action", "clear_workflow").
+			Str("event_type", "checkpoint_clear").
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Str("reason", reason).
+			Err(err).
+			Msg("failed to delete graph store state")
+	}
 	isSucceed = true
 
 	// 清除 workflow store（不需要再加锁，调用方已持锁）

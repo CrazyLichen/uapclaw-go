@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"context"
 	"errors"
 	"testing"
@@ -82,7 +83,7 @@ func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID stri
 func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (m *testMockCheckpointer) GraphStore() any { return nil }
+func (m *testMockCheckpointer) GraphStore() *store.GraphStore { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
