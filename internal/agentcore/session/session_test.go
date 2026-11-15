@@ -83,7 +83,7 @@ func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID stri
 func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (m *testMockCheckpointer) GraphStore() *store.GraphStore { return nil }
+func (m *testMockCheckpointer) GraphStore() store.Store { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

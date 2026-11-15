@@ -194,7 +194,7 @@ func (m *testMockCP) SessionExists(ctx context.Context, sessionID string) (bool,
 func (m *testMockCP) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (m *testMockCP) GraphStore() *store.GraphStore { return nil }
+func (m *testMockCP) GraphStore() store.Store { return nil }
 
 // TestAgentSession_WithCheckpointer 测试 WithCheckpointer 选项
 func TestAgentSession_WithCheckpointer(t *testing.T) {

@@ -1,6 +1,9 @@
 package pregel
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -83,9 +86,39 @@ func NewBarrierMessage(sender, target string) Message {
 	return Message{Sender: sender, Target: target, kind: KindBarrier}
 }
 
+// messageJSON Message 的 JSON 形态（Go 侧内部存储格式，Python pickle 无对应物，偏差 D-10'）
+type messageJSON struct {
+	Sender  string      `json:"sender"`
+	Target  string      `json:"target"`
+	Payload any         `json:"payload"`
+	Kind    MessageKind `json:"kind"`
+}
+
 // Kind 返回消息种类。
 func (m Message) Kind() MessageKind {
 	return m.kind
+}
+
+// MarshalJSON 序列化含 kind 槽。Python 无此 JSON 形态（pickle 全保真），偏差 D-10'
+func (m Message) MarshalJSON() ([]byte, error) {
+	return json.Marshal(messageJSON{Sender: m.Sender, Target: m.Target, Payload: m.Payload, Kind: m.kind})
+}
+
+// UnmarshalJSON 按 kind 精确重建；未知/缺失 kind 返回 error，
+// 守住「零值 kind 被任何通道拒绝接收」的 8.6 不变式
+func (m *Message) UnmarshalJSON(data []byte) error {
+	var aux messageJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	switch aux.Kind {
+	case KindTrigger, KindBarrier:
+		m.kind = aux.Kind
+	default:
+		return fmt.Errorf("unknown message kind: %q", aux.Kind)
+	}
+	m.Sender, m.Target, m.Payload = aux.Sender, aux.Target, aux.Payload
+	return nil
 }
 
 // Copy 返回 Message 的深拷贝，kind 原样保留。

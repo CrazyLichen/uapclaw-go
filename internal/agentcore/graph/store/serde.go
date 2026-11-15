@@ -13,8 +13,9 @@ import (
 type Serializer interface {
 	// DumpsTyped 序列化并返回 (类型名, 字节)
 	DumpsTyped(obj any) (string, []byte, error)
-	// LoadsTyped 反序列化；data 为 nil 或类型不匹配时返回 (nil, nil)（对齐 Python 返回 None）
-	LoadsTyped(dataType string, data []byte) (any, error)
+	// LoadsTyped 反序列化到 target（显式还原目标，Python pickle 原对象语义的 Go 等价，偏差 D-12）；
+	// data 为 nil 或类型不匹配时不动 target 并返回 nil error（对齐 Python 返回 None）
+	LoadsTyped(dataType string, data []byte, target any) error
 }
 
 // JSONSerializer JSON 实现。功能上承担 Python PickleSerializer 的默认可用角色
@@ -39,19 +40,15 @@ func (s *JSONSerializer) DumpsTyped(obj any) (string, []byte, error) {
 	return "json", data, nil
 }
 
-// LoadsTyped 反序列化：data 为 nil 或类型不匹配返回 (nil, nil)，对齐 Python 返回 None
-func (s *JSONSerializer) LoadsTyped(dataType string, data []byte) (any, error) {
+// LoadsTyped 反序列化到 target：data 为 nil 或类型不匹配不动 target 返回 nil，对齐 Python 返回 None
+func (s *JSONSerializer) LoadsTyped(dataType string, data []byte, target any) error {
 	if data == nil {
-		return nil, nil
+		return nil
 	}
 	if dataType != "json" {
-		return nil, nil
+		return nil
 	}
-	var out any
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return json.Unmarshal(data, target)
 }
 
 // CreateSerializer 按类型名构造序列化器。

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -47,7 +48,7 @@ func (m *mockCheckpointer) SessionExists(_ context.Context, _ string) (bool, err
 func (m *mockCheckpointer) Release(_ context.Context, _ string, _ ...string) error {
 	return nil
 }
-func (m *mockCheckpointer) GraphStore() *store.GraphStore { return nil }
+func (m *mockCheckpointer) GraphStore() store.Store { return nil }
 
 // ──────────────────────────── 测试套件 ────────────────────────────
 

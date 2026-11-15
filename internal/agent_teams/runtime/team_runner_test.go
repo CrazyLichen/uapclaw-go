@@ -263,7 +263,7 @@ func (p *postRunObserverCheckpointer) SessionExists(ctx context.Context, session
 func (p *postRunObserverCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (p *postRunObserverCheckpointer) GraphStore() *store.GraphStore { return nil }
+func (p *postRunObserverCheckpointer) GraphStore() store.Store { return nil }
 
 // 编译期检查
 var _ interfaces.Checkpointer = (*postRunObserverCheckpointer)(nil)
@@ -450,7 +450,7 @@ func (f *failingCheckpointer) SessionExists(ctx context.Context, sessionID strin
 func (f *failingCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (f *failingCheckpointer) GraphStore() *store.GraphStore { return nil }
+func (f *failingCheckpointer) GraphStore() store.Store { return nil }
 
 // 编译期检查
 var _ interfaces.Checkpointer = (*failingCheckpointer)(nil)

@@ -1,6 +1,10 @@
 package store
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -11,11 +15,18 @@ import (
 // Python: store/base.py:26-29
 type PendingNode struct {
 	// NodeName 节点名
-	NodeName string
+	NodeName string `json:"node_name"`
 	// Status 任务状态（取值对齐 8.3d 的 TaskStatusInterrupt/TaskStatusError 字面量）
-	Status string
-	// Exception 累积的异常列表（Python 默认 None，Go nil 等价）
-	Exception []error
+	Status string `json:"status"`
+	// Exception 累积的异常列表（Python 默认 None，Go nil 等价；JSON 往返经 string 适配，偏差 D-8'）
+	Exception []error `json:"exception,omitempty"`
+}
+
+// pendingNodeJSON PendingNode 的 JSON 形态（Exception 经 string 适配，偏差 D-8'）
+type pendingNodeJSON struct {
+	NodeName  string   `json:"node_name"`
+	Status    string   `json:"status"`
+	Exception []string `json:"exception"`
 }
 
 // GraphState 引擎检查点状态快照。
@@ -37,14 +48,14 @@ type GraphState struct {
 }
 
 // Store 图状态存储抽象
-// Python: store/base.py:59-68（async 三方法，Go 同步化见偏差 D-4）
+// Python: store/base.py:59-68（async 三方法，Go 显式 ctx 传参见偏差 D-13）
 type Store interface {
 	// Get 读取状态，未命中返回 (nil, nil)
-	Get(sessionID, ns string) (*GraphState, error)
+	Get(ctx context.Context, sessionID, ns string) (*GraphState, error)
 	// Save 保存状态
-	Save(sessionID, ns string, state *GraphState) error
+	Save(ctx context.Context, sessionID, ns string, state *GraphState) error
 	// Delete 删除状态；ns 为空串时删整个 session（Python Optional[str]=None，偏差 D-3）
-	Delete(sessionID, ns string) error
+	Delete(ctx context.Context, sessionID, ns string) error
 }
 
 // GraphStore 日志壳：包装 Store 并按 Python 逐条复刻日志与异常透传。
@@ -111,6 +122,35 @@ func (s *GraphState) Clone() *GraphState {
 	return c
 }
 
+// MarshalJSON Exception []error → []string（Go error 接口 JSON 序列化静默丢内容，D-8）
+func (p PendingNode) MarshalJSON() ([]byte, error) {
+	aux := pendingNodeJSON{NodeName: p.NodeName, Status: p.Status}
+	for _, e := range p.Exception {
+		if e != nil {
+			aux.Exception = append(aux.Exception, e.Error())
+		}
+	}
+	return json.Marshal(aux)
+}
+
+// UnmarshalJSON []string → errors.New 重建；null → nil（对齐 Python exception 默认 None）
+func (p *PendingNode) UnmarshalJSON(data []byte) error {
+	var aux pendingNodeJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	p.NodeName, p.Status = aux.NodeName, aux.Status
+	if aux.Exception == nil {
+		p.Exception = nil
+		return nil
+	}
+	p.Exception = make([]error, len(aux.Exception))
+	for i, s := range aux.Exception {
+		p.Exception[i] = errors.New(s)
+	}
+	return nil
+}
+
 // CreateState 工厂：nil 入参兜底为空容器（对齐 Python or [] / or {} 语义）
 // Python: store/base.py:71-82
 func CreateState(ns string, step int, channelSnapshot map[string][]pregel.ChannelSnapshot,
@@ -142,8 +182,8 @@ func NewGraphStore(saver Store) *GraphStore {
 
 // Get 读取图状态：未命中记 debug、异常 error 后原样透传。
 // Python: store/base.py:85-103
-func (g *GraphStore) Get(sessionID, ns string) (*GraphState, error) {
-	state, err := g.saver.Get(sessionID, ns)
+func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*GraphState, error) {
+	state, err := g.saver.Get(ctx, sessionID, ns)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "GRAPH_STORE_GET").
@@ -165,14 +205,14 @@ func (g *GraphStore) Get(sessionID, ns string) (*GraphState, error) {
 
 // Save 保存图状态：前后 debug（含 step）、异常 error 后原样透传。
 // Python: store/base.py:105-130
-func (g *GraphStore) Save(sessionID, ns string, state *GraphState) error {
+func (g *GraphStore) Save(ctx context.Context, sessionID, ns string, state *GraphState) error {
 	logger.Debug(logComponent).
 		Str("event_type", "GRAPH_STORE_SAVE").
 		Str("session_id", sessionID).
 		Int("step", state.Step).
 		Str("graph_id", ns).
 		Msg("Begin to save graph state of super-step")
-	if err := g.saver.Save(sessionID, ns, state); err != nil {
+	if err := g.saver.Save(ctx, sessionID, ns, state); err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "GRAPH_STORE_SAVE").
 			Str("session_id", sessionID).
@@ -193,7 +233,7 @@ func (g *GraphStore) Save(sessionID, ns string, state *GraphState) error {
 
 // Delete 删除图状态：ns 空串打 all、前后 debug、异常走 debug 级（Python 原文即 logger.debug + re-raise，照抄）后透传。
 // Python: store/base.py:132-159
-func (g *GraphStore) Delete(sessionID, ns string) error {
+func (g *GraphStore) Delete(ctx context.Context, sessionID, ns string) error {
 	target := ns
 	if target == "" {
 		target = "all"
@@ -203,7 +243,7 @@ func (g *GraphStore) Delete(sessionID, ns string) error {
 		Str("session_id", sessionID).
 		Str("graph_id", ns).
 		Msg("Begin to delete " + target + " graph states for session")
-	if err := g.saver.Delete(sessionID, ns); err != nil {
+	if err := g.saver.Delete(ctx, sessionID, ns); err != nil {
 		logger.Debug(logComponent).
 			Str("event_type", "GRAPH_STORE_DELETE").
 			Str("session_id", sessionID).
