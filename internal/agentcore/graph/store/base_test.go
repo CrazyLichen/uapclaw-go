@@ -62,7 +62,9 @@ func TestGraphState_Clone(t *testing.T) {
 	cp.ChannelValues["n1"][0].Messages[0].Sender = "changed"
 	cp.ChannelValues["n1"][0].Received[0] = "changed"
 	cp.PendingBuffer[0].Target = "changed"
-	cp.PendingNode["n2"].Status = "changed"
+	pn := cp.PendingNode["n2"]
+	pn.Status = "changed"
+	cp.PendingNode["n2"] = pn
 	cp.NodeVersion["n1"] = 99
 
 	if orig.ChannelValues["n1"][0].Messages[0].Sender != "a" {
