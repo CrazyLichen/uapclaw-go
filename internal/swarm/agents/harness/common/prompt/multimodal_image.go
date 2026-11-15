@@ -8,6 +8,7 @@ package prompt
 // schema.MessageContent（字段一一对应：{"type":"image_url","image_url":{"url":…}}）。
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,11 @@ import (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// multimodalImageFilesCtxKey ctx 袋子键（图片附件列表）。
+// D-23.8-1：Python contextvars「隐形袋子」→ Go request context 携带，
+// 每次 invoke 一个新 ctx，作用域即生命周期（Python set→reset 区间的等价物）。
+type multimodalImageFilesCtxKey struct{}
 
 // ImageContentOmitted 图片内容全量剥离后留下的占位文本。
 // Python: IMAGE_CONTENT_OMITTED:15-18（协议字符串，不本地化）
@@ -61,6 +67,27 @@ type MultimodalImageFile struct {
 	MimeType string `json:"mime_type"`
 	// SizeBytes 字节数（可选，Python 仅在原始条目携带 int 时透传）
 	SizeBytes int64 `json:"size_bytes,omitempty"`
+}
+
+// WithMultimodalImageFiles 把本轮图片附件列表写入 ctx（adapter invoke 入口调用）。
+// Python: set_current_multimodal_image_files（interface_deep.py :18409/:19174/:19681 三处）。
+// files 为空时原样返回 ctx（等价 Python set 空袋子）。
+// 清空无需显式 reset：ctx 随本轮 invoke 结束被丢弃（D-23.8-1）。
+func WithMultimodalImageFiles(ctx context.Context, files []MultimodalImageFile) context.Context {
+	if len(files) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, multimodalImageFilesCtxKey{}, files)
+}
+
+// MultimodalImageFilesFromContext 从 ctx 读取本轮图片附件列表；未设置返回 nil。
+// Python: current_multimodal_image_files
+func MultimodalImageFilesFromContext(ctx context.Context) []MultimodalImageFile {
+	if ctx == nil {
+		return nil
+	}
+	files, _ := ctx.Value(multimodalImageFilesCtxKey{}).([]MultimodalImageFile)
+	return files
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -6,6 +6,7 @@
 //	rails/
 //	├── doc.go                        # 包文档
 //	├── avatar_rail.go                # AvatarPromptRail 数字分身 Rail
+//	├── multimodal_image_rail.go # MultimodalImageRail：原生图片输入适配（multimodal_image_rail.py，priority=75）
 //	├── project_memory_rail.go        # ProjectMemoryRail 项目记忆护栏
 //	├── response_prompt_rail.go       # ResponsePromptRail 响应提示词护栏
 //	├── runtime_prompt_rail.go        # RuntimePromptRail 运行时提示词护栏
