@@ -89,3 +89,82 @@ func TestGraphState_Clone(t *testing.T) {
 		t.Fatal("nil Clone 应返回 nil")
 	}
 }
+
+// ──────────────────────────── GraphStore 日志壳 ────────────────────────────
+
+// fakeStore 可控返回的存储桩
+type fakeStore struct {
+	getState  *GraphState
+	getErr    error
+	saveErr   error
+	delErr    error
+	getCalls  int
+	saveCalls int
+	delCalls  int
+	lastDelNs string
+}
+
+func (f *fakeStore) Get(sessionID, ns string) (*GraphState, error) {
+	f.getCalls++
+	return f.getState, f.getErr
+}
+func (f *fakeStore) Save(sessionID, ns string, state *GraphState) error {
+	f.saveCalls++
+	return f.saveErr
+}
+func (f *fakeStore) Delete(sessionID, ns string) error {
+	f.delCalls++
+	f.lastDelNs = ns
+	return f.delErr
+}
+
+// TestGraphStore_Get 未命中 debug 日志、异常透传
+func TestGraphStore_Get(t *testing.T) {
+	gs := NewGraphStore(&fakeStore{getState: &GraphState{Ns: "ns"}})
+	st, err := gs.Get("s1", "ns")
+	if err != nil || st == nil {
+		t.Fatalf("命中透传失败: %v %+v", err, st)
+	}
+
+	gs = NewGraphStore(&fakeStore{}) // 未命中
+	st, err = gs.Get("s1", "ns")
+	if err != nil || st != nil {
+		t.Fatalf("未命中应透传 (nil,nil): %v %+v", err, st)
+	}
+
+	boom := errors.New("db down")
+	gs = NewGraphStore(&fakeStore{getErr: boom})
+	if _, err = gs.Get("s1", "ns"); err != boom {
+		t.Fatalf("异常应原样透传: %v", err)
+	}
+}
+
+// TestGraphStore_Save 前后日志 + 异常透传
+func TestGraphStore_Save(t *testing.T) {
+	boom := errors.New("disk full")
+	gs := NewGraphStore(&fakeStore{saveErr: boom})
+	if err := gs.Save("s1", "ns", &GraphState{}); err != boom {
+		t.Fatalf("save 异常应透传: %v", err)
+	}
+	ok := NewGraphStore(&fakeStore{})
+	if err := ok.Save("s1", "ns", &GraphState{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGraphStore_Delete 空 ns 透传 all 语义 + 异常透传（Python 走 debug 级也 re-raise）
+func TestGraphStore_Delete(t *testing.T) {
+	fs := &fakeStore{}
+	gs := NewGraphStore(fs)
+	if err := gs.Delete("s1", ""); err != nil {
+		t.Fatal(err)
+	}
+	if fs.lastDelNs != "" {
+		t.Fatal("空 ns 应原样透传")
+	}
+	boom := errors.New("del fail")
+	gs = NewGraphStore(&fakeStore{delErr: boom})
+	if err := gs.Delete("s1", "ns1"); err != boom {
+		t.Fatalf("delete 异常应透传: %v", err)
+	}
+}
