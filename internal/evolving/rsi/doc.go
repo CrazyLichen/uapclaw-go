@@ -14,5 +14,10 @@
 //	├── events.go  # 引擎事件契约（EngineEvent 接口 + 5 事件 + Emit）
 //	└── usage.go  # 用量归一化 + ModelUsageObserver + ctx 标签与公共钩子
 //
+// 子包：
+//
+//	artifact_rsi/  # 17.2 artifact 优化契约层（provider/request）
+//	harness_rsi/   # 17.4a harness 演进地基（顶层散件 + config + data_loader + resource）
+//
 // 对应 Python 代码：openjiuwen/rsi/{schema,events,usage}.py
 package rsi
