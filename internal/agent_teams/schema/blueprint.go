@@ -81,6 +81,9 @@ type TeamAgentSpec struct {
 	Worktree *worktree.WorktreeConfig `json:"worktree,omitempty"`
 	// Workspace 工作空间配置
 	Workspace *team_workspace.TeamWorkspaceConfig `json:"workspace,omitempty"`
+	// BuildContext 构建上下文槽位（物化前为 dict，物化后为 BuildContext 实例）
+	// Python: build_context (blueprint.py:645, Optional[Any])
+	BuildContext any `json:"build_context,omitempty"`
 	// Metadata 元数据
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableHITT 是否启用 Human-in-the-Team

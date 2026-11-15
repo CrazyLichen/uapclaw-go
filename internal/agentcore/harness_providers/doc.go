@@ -22,6 +22,7 @@
 //	├── mcp_naming.go # MCP server 命名规范化
 //	├── stream.go     # 有界事件缓冲与单消费者游标
 //	├── jsonsafe.go   # SDK 对象 → JSON 安全值的递归归一化
+//	├── skills.go     # portable skills 复制
 //	└── native/      # in-process DeepAgent 协议实现（deepagent provider）
 //
 // 对应 Python 代码：openjiuwen/harness_providers/

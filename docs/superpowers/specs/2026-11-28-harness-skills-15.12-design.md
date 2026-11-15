@@ -74,6 +74,7 @@
 | D-15.12-c | `tempfile.TemporaryDirectory(prefix, dir=project)` 上下文管理器 | `os.MkdirTemp(project, ".openjiuwen-skill-*")` + defer 清理 | 语言特性差异；prefix 语义对齐（Go 的 pattern 末尾 `*` 等价 prefix+随机段） | 无 |
 | D-15.12-d | yaml（`yaml.safe_load`/`safe_dump`，utf-8-sig BOM 剥离、`splitlines` 行界） | gopkg.in/yaml.v3 + 既有 splitlines 语义复刻惯例（13.18 先例） | 库差异；dump 的 `sort_keys=False`→yaml.v3 默认保序、`allow_unicode`→默认不转义 | 无 |
 | D-15.12-e | Python 单文件 `external_cli_spawn.py` 由 15.12/15.13 两批填充 | `externalcli` 包同批文件分两批续写 | 方案 ① 提前建包的结构代价 | 15.13 完成后同一文件内合并核对方法清单 |
+| D-15.12-f | `_path_value(value: object)`（239-243，返回 `str \| None`） | `pathValue(value string) string`（空白→空串） | Python 调用面入参恒为 str/None（`configured_cwd`/`ctx.worktree_path`/getattr 结果），Go 收窄为 string + 空串语义等价 | 调用面出现非 str 类型时恢复 any + 类型守卫 |
 
 ## 5. 测试面
 
