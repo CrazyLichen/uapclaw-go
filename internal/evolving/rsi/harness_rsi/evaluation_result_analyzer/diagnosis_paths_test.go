@@ -41,9 +41,10 @@ func TestValidateDiagnosisPaths_超预算报错(t *testing.T) {
 	if tooLong.Length <= 247 {
 		t.Fatalf("长度应超 247, got %d", tooLong.Length)
 	}
-	// 文案逐字对齐（品牌键按映射表 jiuwenswarm→uapclawswarm）
+	// 文案逐字对齐（品牌键按映射表 jiuwenswarm→uapclawswarm）；Python max 取最长限制文件，
+	// 故路径以报告值（tooLong.Path）而非根构造期望
 	want := "Diagnosis runtime path too long: " + itoa(tooLong.Length) +
-		" UTF-16 units exceeds budget 247; case_id=\"case-7\"; stage=\"copy_evidence\"; path=\"" + longRoot +
+		" UTF-16 units exceeds budget 247; case_id=\"case-7\"; stage=\"copy_evidence\"; path=\"" + tooLong.Path +
 		"\". Shorten UAPCLAWSWARM_DATA_DIR for task artifacts or TEMP/TMP for diagnosis runtime, " +
 		"then restart the service. Existing task references are not relocated automatically."
 	if err.Error() != want {
