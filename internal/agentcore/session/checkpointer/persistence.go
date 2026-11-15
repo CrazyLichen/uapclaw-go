@@ -93,9 +93,8 @@ type PersistenceCheckpointer struct {
 	agentTeamStorage *PersistenceAgentTeamStorage
 	// workflowStorage Workflow 持久化状态存储
 	workflowStorage *PersistenceWorkflowStorage
-	// graphStore 图状态存储
-	// ⤵️ 8.9a：真实注入留 5.9 Persistence 接线时回填
-	graphStore *store.GraphStore
+	// graphStore 图状态存储（构造期必注入，Python 同构无空判，偏差 D-11）
+	graphStore store.Store
 }
 
 // persistenceProvider Persistence 检查点器提供者。
@@ -267,7 +266,7 @@ func NewPersistenceCheckpointer(kvStore kv.BaseKVStore) *PersistenceCheckpointer
 		agentStorage:     newPersistenceAgentStorage(kvStore),
 		agentTeamStorage: newPersistenceAgentTeamStorage(kvStore),
 		workflowStorage:  newPersistenceWorkflowStorage(kvStore),
-		graphStore:       nil, // ⤵️ 8.9a：真实注入留 5.9 Persistence 接线时回填
+		graphStore:       NewPersistenceGraphStore(kvStore),
 	}
 }
 
@@ -873,17 +872,15 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 					return nil
 				}
 
-				// 8.9a 回填：graph store 状态清理（Persistence 侧注入前为 nil，跳过）
-				if cp.graphStore != nil {
-					if err := cp.graphStore.Delete(ctx, sessionID, workflowID); err != nil {
-						logger.Warn(logComponent).
-							Str("action", "clear_workflow").
-							Str("event_type", "checkpoint_clear").
-							Str("session_id", sessionID).
-							Str("workflow_id", workflowID).
-							Err(err).
-							Msg("failed to delete graph store state")
-					}
+				// 8.9a 回填：graph store 状态清理（构造期必注入，无空判，D-11）
+				if err := cp.graphStore.Delete(ctx, sessionID, workflowID); err != nil {
+					logger.Warn(logComponent).
+						Str("action", "clear_workflow").
+						Str("event_type", "checkpoint_clear").
+						Str("session_id", sessionID).
+						Str("workflow_id", workflowID).
+						Err(err).
+						Msg("failed to delete graph store state")
 				}
 
 				if err := cp.workflowStorage.Clear(ctx, workflowID, sessionID); err != nil {
@@ -933,17 +930,15 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 			Str("storage_type", "persistence").
 			Msg("workflow completed normally, clearing checkpoint")
 
-		// 8.9a 回填：graph store 状态清理（Persistence 侧注入前为 nil，跳过）
-		if cp.graphStore != nil {
-			if err := cp.graphStore.Delete(ctx, sessionID, workflowID); err != nil {
-				logger.Warn(logComponent).
-					Str("action", "workflow_completed").
-					Str("event_type", "checkpoint_clear").
-					Str("session_id", sessionID).
-					Str("workflow_id", workflowID).
-					Err(err).
-					Msg("failed to delete graph store state")
-			}
+		// 8.9a 回填：graph store 状态清理（构造期必注入，无空判，D-11）
+		if err := cp.graphStore.Delete(ctx, sessionID, workflowID); err != nil {
+			logger.Warn(logComponent).
+				Str("action", "workflow_completed").
+				Str("event_type", "checkpoint_clear").
+				Str("session_id", sessionID).
+				Str("workflow_id", workflowID).
+				Err(err).
+				Msg("failed to delete graph store state")
 		}
 
 		if err := cp.workflowStorage.Clear(ctx, workflowID, sessionID); err != nil {
@@ -1033,7 +1028,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 }
 
 // GraphStore 获取图状态存储。
-func (cp *PersistenceCheckpointer) GraphStore() *store.GraphStore {
+func (cp *PersistenceCheckpointer) GraphStore() store.Store {
 	return cp.graphStore
 }
 

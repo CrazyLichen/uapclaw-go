@@ -544,14 +544,14 @@ func TestPersistenceCheckpointer_Release_nilKVStore(t *testing.T) {
 
 // ──────────────────────────── GraphStore 测试 ────────────────────────────
 
-// TestPersistenceCheckpointer_GraphStore 测试获取图状态存储（未实现）
+// TestPersistenceCheckpointer_GraphStore 测试构造期注入（D-11：构造期必注入，无空判）
 func TestPersistenceCheckpointer_GraphStore(t *testing.T) {
 	store := kv.NewInMemoryKVStore()
 	cp := NewPersistenceCheckpointer(store)
 
 	gs := cp.GraphStore()
-	if gs != nil {
-		t.Error("GraphStore 当前应为 nil（Persistence 侧注入留 5.9 回填）")
+	if gs == nil {
+		t.Error("GraphStore 构造期应已注入")
 	}
 }
 

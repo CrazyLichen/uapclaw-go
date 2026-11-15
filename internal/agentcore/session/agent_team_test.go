@@ -44,7 +44,7 @@ func (n *noOpTeamCheckpointer) SessionExists(ctx context.Context, sessionID stri
 func (n *noOpTeamCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (n *noOpTeamCheckpointer) GraphStore() *store.GraphStore { return nil }
+func (n *noOpTeamCheckpointer) GraphStore() store.Store { return nil }
 
 // TestNewAgentTeamSession 测试构造函数
 func TestNewAgentTeamSession(t *testing.T) {

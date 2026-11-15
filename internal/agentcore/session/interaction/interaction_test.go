@@ -48,7 +48,7 @@ func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) 
 func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (f *fakeCheckpointer) GraphStore() *store.GraphStore { return nil }
+func (f *fakeCheckpointer) GraphStore() store.Store { return nil }
 
 // ──────────────────────────── InteractionOutput 测试 ────────────────────────────
 

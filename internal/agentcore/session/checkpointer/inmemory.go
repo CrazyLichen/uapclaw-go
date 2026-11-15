@@ -630,7 +630,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 }
 
 // GraphStore 获取图状态存储。
-func (cp *InMemoryCheckpointer) GraphStore() *store.GraphStore {
+func (cp *InMemoryCheckpointer) GraphStore() store.Store {
 	return cp.graphStore
 }
 
