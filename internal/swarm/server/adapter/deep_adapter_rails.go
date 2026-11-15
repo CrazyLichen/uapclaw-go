@@ -340,8 +340,9 @@ func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sa
 		[]string{skillsDir},
 		skillrails.WithSkillMode(skillMode),
 		skillrails.WithIncludeTools(includeTools),
-		skillrails.WithEnableImageMultimodal(enableImageMultimodal),
 		skillrails.WithDisabledSkills(disabled),
+		// enable_read_image_multimodal 覆盖值落在 DeepAgentConfig，由 rails 解析链消费
+		// （Python: skill_use_rail.py:337 build_read_image_multimodal_resolver(agent)，rail 不收显式 bool）
 		skillrails.WithSkillBudget(maxSkills, maxTotalChars),
 	)
 	logger.Info(logComponent).

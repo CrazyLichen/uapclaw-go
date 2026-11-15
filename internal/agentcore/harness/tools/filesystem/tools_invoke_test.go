@@ -115,7 +115,7 @@ func TestWriteFileTool_读取后覆盖(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("old"), 0o644))
 
 	op := sys_operation.NewLocalSysOperation(nil)
-	readRes, err := NewReadFileTool(op, "cn", "agent-write", false).Invoke(context.Background(), map[string]any{"file_path": path})
+	readRes, err := NewReadFileTool(op, "cn", "agent-write", func() bool { return false }).Invoke(context.Background(), map[string]any{"file_path": path})
 	require.NoError(t, err)
 	require.Equal(t, true, readRes["success"], fmt.Sprint(readRes["error"]))
 
@@ -137,7 +137,7 @@ func TestWriteFileTool_外部修改检测(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("old"), 0o644))
 
 	op := sys_operation.NewLocalSysOperation(nil)
-	_, err := NewReadFileTool(op, "cn", "agent-write", false).Invoke(context.Background(), map[string]any{"file_path": path})
+	_, err := NewReadFileTool(op, "cn", "agent-write", func() bool { return false }).Invoke(context.Background(), map[string]any{"file_path": path})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, []byte("changed"), 0o644))
 

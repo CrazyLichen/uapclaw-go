@@ -5,6 +5,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // 本文件为 harness rails 共享的原生图片输入策略助手。
@@ -34,26 +35,28 @@ func ModelSupportsVision(model *hllm.Model) *bool {
 // 可以同时可用。
 //
 // Python: should_enable_read_image_multimodal:52-74
-func ShouldEnableReadImageMultimodal(agent hinterfaces.DeepAgentInterface, explicitValue *bool) bool {
+// 参数取 BaseAgent 对齐 Python 的鸭子式 getattr(agent, "deep_config")；
+// 非 DeepAgent（无 deep_config）按 nil 配置解析。
+func ShouldEnableReadImageMultimodal(agent agentinterfaces.BaseAgent, explicitValue *bool) bool {
+	return resolveImageMultimodal(deepConfigOf(agent), explicitValue)
+}
+
+// deepConfigOf 从任意 agent 提取 DeepAgentConfig；非 DeepAgent 返回 nil。
+// Python: getattr(agent, "deep_config", None) or getattr(agent, "_deep_config", None)
+func deepConfigOf(agent agentinterfaces.BaseAgent) *hschema.DeepAgentConfig {
 	if agent == nil {
-		return false
+		return nil
 	}
-	var deepConfig *hschema.DeepAgentConfig
-	if cfg := agent.DeepConfig(); cfg != nil {
-		deepConfig = cfg
+	if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
+		return deepAgent.DeepConfig()
 	}
-	return resolveImageMultimodal(deepConfig, explicitValue)
+	return nil
 }
 
 // BuildReadImageMultimodalResolver 构建运行时动态解析闭包（不持有整个 agent）。
 // Python: build_read_image_multimodal_resolver:77-91
-func BuildReadImageMultimodalResolver(agent hinterfaces.DeepAgentInterface, explicitValue *bool) func() bool {
-	var deepConfig *hschema.DeepAgentConfig
-	if agent != nil {
-		if cfg := agent.DeepConfig(); cfg != nil {
-			deepConfig = cfg
-		}
-	}
+func BuildReadImageMultimodalResolver(agent agentinterfaces.BaseAgent, explicitValue *bool) func() bool {
+	deepConfig := deepConfigOf(agent)
 	return func() bool {
 		return resolveImageMultimodal(deepConfig, explicitValue)
 	}

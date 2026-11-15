@@ -125,26 +125,17 @@ func (r *SysOperationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		agentID = card.ID
 	}
 
-	// 解析 enableReadImageMultimodal: 如果为 nil，从 DeepConfig 推断。
-	// ⤴️ 23.7 Task4：改为走 _multimodal 解析链（声明/探测），当前 nil 回落 true 保持既有行为
-	enableImageMultimodal := true
-	if r.enableReadImageMultimodal != nil {
-		enableImageMultimodal = *r.enableReadImageMultimodal
-	} else {
-		// 类型断言获取 DeepConfig
-		if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
-			if deepCfg := deepAgent.DeepConfig(); deepCfg != nil && deepCfg.EnableReadImageMultimodal != nil {
-				enableImageMultimodal = *deepCfg.EnableReadImageMultimodal
-			}
-		}
-	}
+	// 原生图片输入动态解析闭包：构建 read_file 时传入 resolver 而非静态 bool，
+	// 长生命周期工具可跟随后续探测结论落地与主模型变更。
+	// Python: sys_operation_rail.py:55-57 build_read_image_multimodal_resolver(agent, self._enable_read_image_multimodal)
+	enableReadImageMultimodal := BuildReadImageMultimodalResolver(agent, r.enableReadImageMultimodal)
 
 	// 获取 SysOperation（从 Rail 自身引用）
 	op := r.SysOperation()
 
 	// 创建工具实例
 	// Python: L51-67
-	readTool := filesystem.NewReadFileTool(op, language, agentID, enableImageMultimodal)
+	readTool := filesystem.NewReadFileTool(op, language, agentID, enableReadImageMultimodal)
 	writeTool := filesystem.NewWriteFileTool(op, language, agentID)
 	editTool := filesystem.NewEditFileTool(op, language, agentID)
 	globTool := filesystem.NewGlobTool(op, language, agentID)

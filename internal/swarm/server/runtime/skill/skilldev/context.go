@@ -418,7 +418,7 @@ func (c *SkillDevContext) buildStageTool(toolName, agentID string) (tool.Tool, e
 		}
 		switch toolName {
 		case "read_file":
-			return filesystem.NewReadFileTool(c.stageSysOp, stageToolLanguage, agentID, false), nil
+			return filesystem.NewReadFileTool(c.stageSysOp, stageToolLanguage, agentID, func() bool { return false }), nil
 		case "write_file":
 			return filesystem.NewWriteFileTool(c.stageSysOp, stageToolLanguage, agentID), nil
 		case "edit_file":

@@ -46,7 +46,7 @@ func (e *editTestEnv) write(t *testing.T, name, content string) string {
 // read 通过 read_file 工具登记读取状态（编辑前置条件）。
 func (e *editTestEnv) read(t *testing.T, path string) {
 	t.Helper()
-	tl := NewReadFileTool(e.op, "cn", "agent-edit", false)
+	tl := NewReadFileTool(e.op, "cn", "agent-edit", func() bool { return false })
 	res, err := tl.Invoke(context.Background(), map[string]any{"file_path": path})
 	require.NoError(t, err)
 	require.Equal(t, true, res["success"], fmt.Sprint(res["error"]))

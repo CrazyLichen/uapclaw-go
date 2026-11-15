@@ -3,9 +3,9 @@ package modalityprobe
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestIsProbeInFlight 在途标记（Python: _probe_tasks 字典的观察面，

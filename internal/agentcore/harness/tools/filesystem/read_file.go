@@ -85,7 +85,13 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewReadFileTool 创建文件读取工具。
-func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, enableImageMultimodal bool) tool.Tool {
+func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, enableImageMultimodal func() bool) tool.Tool {
+	// Python: enable_image_multimodal: bool | Callable[[], bool] = True（filesystem.py:536）；
+	// nil 时按静态 True 处理（Python 默认值），动态闭包由调用方注入
+	if enableImageMultimodal == nil {
+		enableImageMultimodal = func() bool { return true }
+	}
+
 	card, _ := tools.BuildToolCard("read_file", "ReadFileTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input ReadFileInput, opts ...tool.ToolOption) (map[string]any, error) {
@@ -180,7 +186,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 		} else if isNotebook {
 			rendered, renderErr = readNotebook(ctx, op, filePath)
 		} else if isImage {
-			rendered, renderErr = readImage(ctx, op, filePath, enableImageMultimodal)
+			rendered, renderErr = readImage(ctx, op, filePath, enableImageMultimodal())
 		} else {
 			rendered, renderErr = readText(ctx, op, filePath, offset, limit, !userSuppliedLimit)
 		}

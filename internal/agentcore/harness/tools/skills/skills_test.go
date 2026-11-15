@@ -69,7 +69,7 @@ func TestSkillTool_Invoke_技能存在(t *testing.T) {
 	}
 	op := &fakeSysOperation{fsOp: fsOp}
 
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "test_agent", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "test_agent", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{
 		"skill_name": "python_coder",
@@ -94,7 +94,7 @@ func TestSkillTool_Invoke_技能存在(t *testing.T) {
 
 func TestSkillTool_Invoke_技能不存在(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{
 		"skill_name": "nonexistent",
@@ -116,7 +116,7 @@ func TestSkillTool_Invoke_技能不存在(t *testing.T) {
 
 func TestSkillTool_Invoke_技能名为空(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{
 		"skill_name": "",
@@ -136,7 +136,7 @@ func TestSkillTool_Invoke_文件读取失败(t *testing.T) {
 		},
 	}
 	op := &fakeSysOperation{fsOp: fsOp}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{
 		"skill_name": "python_coder",
@@ -155,7 +155,7 @@ func TestSkillTool_Invoke_文件读取失败(t *testing.T) {
 func TestSkillTool_Invoke_异常捕获(t *testing.T) {
 	fsOp := &fakeFsOperation{readFileErr: context.DeadlineExceeded}
 	op := &fakeSysOperation{fsOp: fsOp}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{
 		"skill_name": "python_coder",
@@ -176,7 +176,7 @@ func TestSkillTool_Invoke_指定文件路径(t *testing.T) {
 		},
 	}
 	op := &fakeSysOperation{fsOp: fsOp}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{
 		"skill_name":         "python_coder",
@@ -192,7 +192,7 @@ func TestSkillTool_Invoke_指定文件路径(t *testing.T) {
 
 func TestSkillTool_Stream_不支持(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	_, err := st.Stream(context.Background(), map[string]any{})
 	if err == nil {
@@ -202,7 +202,7 @@ func TestSkillTool_Stream_不支持(t *testing.T) {
 
 func TestSkillTool_Card(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "test_agent", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "test_agent", func() bool { return true })
 
 	card := st.Card()
 	if card == nil {
@@ -215,7 +215,7 @@ func TestSkillTool_Card(t *testing.T) {
 
 func TestSkillTool_GetSkillByName(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	skill := st.getSkillByName("web_search", nil)
 	if skill == nil {
@@ -526,7 +526,7 @@ func TestListSkillTool_DumpSkills_SkillMdPath(t *testing.T) {
 
 func TestSkillTool_GetSkillByName_getSkills返回nil(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return nil }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return nil }, "cn", "", func() bool { return true })
 
 	skill := st.getSkillByName("python_coder", nil)
 	if skill != nil {
@@ -611,7 +611,7 @@ func TestSkillTool_按会话视图查找技能(t *testing.T) {
 			return sessionOnly
 		}
 		return all
-	}, "cn", "agent", true)
+	}, "cn", "agent", func() bool { return true })
 
 	sess := &fakeSkillSession{id: "s1"}
 	result, err := skillTool.Invoke(context.Background(), map[string]any{"skill_name": "beta"}, tool.WithToolSession(sess))
@@ -650,7 +650,7 @@ func TestSkillTool_返回目录布局与纯文本内容(t *testing.T) {
 		},
 	}}
 	skillsList := []*skills.Skill{{Name: "demo", Directory: root}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return skillsList }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return skillsList }, "cn", "", func() bool { return true })
 
 	got, err := st.Invoke(context.Background(), map[string]any{"skill_name": "demo"})
 	if err != nil {
@@ -684,7 +684,7 @@ func TestSkillTool_返回目录布局与纯文本内容(t *testing.T) {
 // TestSkillTool_拒绝路径穿越 验证 relative_file_path 安全校验。
 func TestSkillTool_拒绝路径穿越(t *testing.T) {
 	op := &fakeSysOperation{fsOp: &fakeFsOperation{}}
-	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", true)
+	st := NewSkillTool(op, func(sessioninterfaces.SessionFacade) []*skills.Skill { return testSkills }, "cn", "", func() bool { return true })
 
 	for _, bad := range []string{"../../etc/passwd", "/etc/passwd"} {
 		got, err := st.Invoke(context.Background(), map[string]any{
