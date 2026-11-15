@@ -113,9 +113,8 @@ func (p *TaskExecutorPool) WaitAll() error {
 	}
 
 	var (
-		firstErr        error
-		interruptErr    *GraphInterrupt
-		cancelInitiated bool
+		firstErr     error
+		interruptErr *GraphInterrupt
 	)
 	received := make(map[*nodeTask]nodeResult, total)
 	cancelled := make(map[*nodeTask]bool, total)
@@ -141,10 +140,11 @@ func (p *TaskExecutorPool) WaitAll() error {
 		received[t] = res
 		p.mu.Lock()
 		node := p.runningTasks[t]
+		delete(p.runningTasks, t) // Python task.py:53 pop(t)
 		p.mu.Unlock()
 
-		if cancelInitiated {
-			// 取消收尾分支（Python task.py:74-80 的 gather 段）
+		if cancelled[t] {
+			// 取消收尾分支（Python task.py:74-80 的 gather 段）：仅真正被 cancel() 的任务
 			cancelled[t] = true
 			if res.err != nil {
 				logger.Warn(logComponent).
@@ -165,11 +165,12 @@ func (p *TaskExecutorPool) WaitAll() error {
 			} else if firstErr == nil {
 				firstErr = res.err
 			}
-			// FIRST_EXCEPTION：尚有在途 → 进入取消路径（Python task.py:70-72）
+			// FIRST_EXCEPTION：尚有在途 → 进入取消路径（Python task.py:70-72）。
+			// 只取消未完成任务（Python 的 pending 集 = 唤醒时未 done 者）；
+			// 已完成者的结果在后续接收中走正常分支，参与优先级上抛。
 			if len(received) < total {
-				cancelInitiated = true
 				for _, ot := range pending {
-					if ot != t {
+					if ot != t && !ot.finished.Load() {
 						ot.cancel()
 						cancelled[ot] = true
 					}
