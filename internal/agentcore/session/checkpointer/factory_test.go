@@ -2,7 +2,7 @@ package checkpointer
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"os"
 	"strings"
 	"testing"
@@ -411,7 +411,7 @@ func (m *mockCheckpointer) SessionExists(ctx context.Context, sessionID string) 
 func (m *mockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (m *mockCheckpointer) GraphStore() store.Store { return nil }
+func (m *mockCheckpointer) GraphStore() pregel.Store { return nil }
 
 // mockProvider 用于测试的模拟 Provider
 type mockProvider struct{}

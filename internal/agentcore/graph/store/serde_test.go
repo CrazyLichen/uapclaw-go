@@ -1,6 +1,7 @@
 package store
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"bytes"
 	"encoding/json"
 	"testing"
@@ -53,12 +54,12 @@ func TestJSONSerializer_LoadsTyped(t *testing.T) {
 // TestJSONSerializer_LoadsTypedTarget 还原到具体结构体（KV GraphStore 的真实用法，D-12）
 func TestJSONSerializer_LoadsTypedTarget(t *testing.T) {
 	s := &JSONSerializer{}
-	orig := &GraphState{Ns: "ns", Step: 3, NodeVersion: map[string]int{"n": 1}}
+	orig := &pregel.GraphState{Ns: "ns", Step: 3, NodeVersion: map[string]int{"n": 1}}
 	_, data, err := s.DumpsTyped(orig)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var back GraphState
+	var back pregel.GraphState
 	if err := s.LoadsTyped("json", data, &back); err != nil {
 		t.Fatal(err)
 	}

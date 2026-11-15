@@ -2,7 +2,6 @@ package interaction
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,7 +47,7 @@ func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) 
 func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (f *fakeCheckpointer) GraphStore() store.Store { return nil }
+func (f *fakeCheckpointer) GraphStore() pregel.Store { return nil }
 
 // ──────────────────────────── InteractionOutput 测试 ────────────────────────────
 

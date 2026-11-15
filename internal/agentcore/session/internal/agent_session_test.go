@@ -2,7 +2,7 @@ package internal
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
@@ -194,7 +194,7 @@ func (m *testMockCP) SessionExists(ctx context.Context, sessionID string) (bool,
 func (m *testMockCP) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (m *testMockCP) GraphStore() store.Store { return nil }
+func (m *testMockCP) GraphStore() pregel.Store { return nil }
 
 // TestAgentSession_WithCheckpointer 测试 WithCheckpointer 选项
 func TestAgentSession_WithCheckpointer(t *testing.T) {
