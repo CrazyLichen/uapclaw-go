@@ -33,9 +33,9 @@ type SkillTool struct {
 	getSkills skillGetter
 	// language 语言标识（"cn"/"en"）
 	language string
-	// enableReadImageMultimodal 读图多模态是否可用（决定媒体提示档位）
-	// Python: enable_read_image_multimodal (skill_tool.py:347)
-	enableReadImageMultimodal bool
+	// enableReadImageMultimodal 读图多模态动态解析（bool | Callable[[], bool] 的 Go 表达）
+	// Python: skill_tool.py:347-367 property，调用时求值以跟随探测结论/主模型变更
+	enableReadImageMultimodal func() bool
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -76,8 +76,13 @@ func NewSkillTool(
 	getSkills skillGetter,
 	language string,
 	agentID string,
-	enableReadImageMultimodal bool,
+	enableReadImageMultimodal func() bool,
 ) *SkillTool {
+	// Python: skill_tool.py:346 bool | Callable[[], bool] = True；nil 回落静态 True
+	if enableReadImageMultimodal == nil {
+		enableReadImageMultimodal = func() bool { return true }
+	}
+
 	card, _ := ptools.BuildToolCard("skill_tool", "SkillTool", language, nil, agentID)
 
 	return &SkillTool{
@@ -173,7 +178,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	}
 	// Python: hint 模式对 markdown 媒体引用加提示（skill_tool.py:412-419）
 	if skillMarkdownHasMedia(body) {
-		body = applySkillToolMarkdownImagesHint(body, t.enableReadImageMultimodal)
+		body = applySkillToolMarkdownImagesHint(body, t.enableReadImageMultimodal())
 	}
 
 	layout := skillLayoutMetadata(skill.Directory)

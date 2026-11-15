@@ -3511,9 +3511,9 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 		Rails:               railsList, // 对齐 Python: rails=rails (interface_deep.py L2280)
 		VisionModelConfig:   d.visionModelConfig,
 		AudioModelConfig:    d.audioModelConfig,
-		// 注：EnableReadImageMultimodal 保持零值（false）。Python 热重载会回落默认
-		// True，但 Go 的 create 路径（CreateDeepAgentParams 未传）恒为 false，
-		// 中途中翻转会让 read_file 的图片多模态行为在会话内突变。
+		// 注：EnableReadImageMultimodal 不设置（nil=auto）。Python 热重载回落默认
+		// None（schema/config.py:285），auto 语义由 23.7 声明/探测解析链判定，
+		// 会话内不会因中途中翻转而突变。
 	}
 }
 

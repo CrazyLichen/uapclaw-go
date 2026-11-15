@@ -44,7 +44,7 @@ func TestNewListDirTool(t *testing.T) {
 // TestNewReadFileTool 测试创建 ReadFileTool 实例
 func TestNewReadFileTool(t *testing.T) {
 	op := &sys_operation.BaseSysOperation{}
-	tool := NewReadFileTool(op, "cn", "test-agent-id", false)
+	tool := NewReadFileTool(op, "cn", "test-agent-id", func() bool { return false })
 	if tool == nil {
 		t.Error("NewReadFileTool 不应返回 nil")
 	}

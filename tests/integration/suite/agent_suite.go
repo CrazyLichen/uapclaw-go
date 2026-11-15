@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -46,6 +47,17 @@ type AgentSuite struct {
 // SetupSuite 初始化 Agent 测试环境。
 func (s *AgentSuite) SetupSuite() {
 	s.SessionSuite.SetupSuite()
+	// 23.7：预填图像模态缓存（false）并清在途标记。构建期后台探测会真实发起
+	// Invoke，消费 MockLLM 的排队响应，破坏用例的响应队列设计；除非用例专门
+	// 测试模态探测（自建缓存），套件统一按已声明「不支持」隔离。
+	// Python: 探测同样消费 mock 队列，测试侧以显式配置/预填缓存隔离。
+	modalityprobe.ResetImageSupportCache()
+	if s.ClientConfig != nil && s.ModelConfig != nil {
+		modalityprobe.SetCachedImageSupport(modalityprobe.ProbeCacheKey{
+			APIBase:   s.ClientConfig.APIBase,
+			ModelName: s.ModelConfig.ModelName,
+		}, false)
+	}
 }
 
 // TearDownSuite 清理 Agent 测试环境。

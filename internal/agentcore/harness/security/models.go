@@ -68,7 +68,6 @@ func (p *PermissionConfirmResponse) WantsSessionPersist() bool {
 	return p.Approved && p.AutoConfirm && p.PersistAllow != nil && !*p.PersistAllow
 }
 
-
 // PermissionSceneHookInput 传给 PermissionSceneHook 的入参。
 //
 // Python: PermissionSceneHookInput (host.py L15-23)

@@ -18,6 +18,7 @@
 //	├── agent_manager.go      # AgentManager Agent 实例管理器（10.3.12 已实现）
 //	├── agent_manager_evict.go # 连接差异驱逐判定（connDiffKey 八元组，对齐 _ConnDiffKey）
 //	├── agent_config.go       # AgentConfigService 配置 CRUD（10.3.13）
+//	├── image_modality_warmup.go  # 图像模态探测缓存预热（Python: server/runtime/image_modality_warmup.py，23.7）
 //	├── agent_config_yaml.go  # config.yaml react.subagents 联动
 //	├── agent_config_llm.go   # LLM 生成 whenToUse + systemPrompt
 //	├── tenant_pool.go                 # TenantAgentPool 多租户 Agent 池化（10.3.14）

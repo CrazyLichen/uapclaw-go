@@ -29,6 +29,7 @@ import (
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/goal"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -2093,6 +2094,48 @@ func (d *DeepAgent) goalPromptLanguage() string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// resolveReadImageMultimodal 在 enable_read_image_multimodal 处于 auto（nil）时
+// 预热原生图片输入能力判定。
+//
+// 探测一次是一次完整 LLM 往返，因此绝不阻塞构建：缓存结论由图片输入调用点
+// 动态消费；无结论时探测在后台执行。配置保持 nil，auto 模式得以跟随后续探测
+// 完成与主模型变更。
+//
+// Python: DeepAgent._resolve_read_image_multimodal (deep_agent.py:1364-1400)
+func (d *DeepAgent) resolveReadImageMultimodal() {
+	d.configMu.RLock()
+	config := d.deepConfig
+	d.configMu.RUnlock()
+	// Python: config is None or config.enable_read_image_multimodal is not None → return
+	if config == nil || config.EnableReadImageMultimodal != nil {
+		return
+	}
+
+	// Python: config.model is None → debug 日志后返回
+	if config.Model == nil {
+		logger.Debug(logComponent).
+			Msg("[DeepAgent] no model configured; native image input remains unavailable")
+		return
+	}
+
+	// Python: cached = get_cached_image_support(config.model)
+	cached := modalityprobe.GetCachedImageSupport(config.Model)
+	if cached != nil {
+		// Python: info("[DeepAgent] read_file image multimodal from probe cache: %s", cached)
+		logger.Info(logComponent).
+			Str("event_type", "READ_IMAGE_MULTIMODAL_CACHED").
+			Bool("cached", *cached).
+			Msg("[DeepAgent] read_file image multimodal from probe cache")
+		return
+	}
+
+	// Python: info("read_file image multimodal not probed yet; probing in background ...")
+	logger.Info(logComponent).
+		Str("event_type", "READ_IMAGE_MULTIMODAL_PROBE_SCHEDULED").
+		Msg("[DeepAgent] read_file image multimodal not probed yet; probing in background and using metadata-only until resolved")
+	modalityprobe.ScheduleImageSupportProbe(config.Model)
+}
+
 // normalizeContextMessages 规范化上下文消息输入。
 // Python: DeepAgent._normalize_context_messages(messages) (line 614)
 func normalizeContextMessages(messages []llmschema.BaseMessage) []llmschema.BaseMessage {
@@ -2664,6 +2707,10 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 			logger.Warn(logComponent).Err(err).Msg("Workspace initialization failed")
 		}
 	}
+
+	// 原生图片输入能力 auto 模式预热（缓存命中直接用，否则后台探测不阻塞）
+	// Python: DeepAgent._ensure_initialized 中 await self._resolve_read_image_multimodal() (line 1461)
+	d.resolveReadImageMultimodal()
 
 	d.railsMu.Lock()
 	// 注销废弃 Rail

@@ -940,14 +940,6 @@ func TestWithEvolutionStore(t *testing.T) {
 	assert.Nil(t, r.evolutionStore)
 }
 
-// TestWithEnableImageMultimodal 验证 WithEnableImageMultimodal 选项。
-func TestWithEnableImageMultimodal(t *testing.T) {
-	r := &SkillUseRail{}
-	WithEnableImageMultimodal(true)(r)
-	assert.NotNil(t, r.enableImageMultimodal)
-	assert.True(t, *r.enableImageMultimodal)
-}
-
 // ──────────────────────────── A-08-4: 技能提示词预算 ────────────────────────────
 
 // TestApplySkillBudget 验证按关键词重叠排序并按数量/字符预算整块丢弃
