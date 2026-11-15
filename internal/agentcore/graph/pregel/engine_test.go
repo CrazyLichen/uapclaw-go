@@ -227,7 +227,7 @@ func TestPregelLoop_RunStep_重试队列优先(t *testing.T) {
 	// 从落盘状态构造恢复：pending_node = {a}
 	l.retryPendingNodes = map[string]PendingNode{"a": {NodeName: "a", Status: TaskStatusError}}
 	_, err := l.RunStep(context.Background())
-	assert.Error(t, err) // 再次失败，错误路径 more=false
+	assert.Error(t, err)                 // 再次失败，错误路径 more=false
 	assert.Empty(t, l.retryPendingNodes) // 调度即清空（engine.py:118）
 }
 

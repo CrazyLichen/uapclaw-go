@@ -1,9 +1,9 @@
 package store
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"bytes"
 	"encoding/json"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"testing"
 )
 

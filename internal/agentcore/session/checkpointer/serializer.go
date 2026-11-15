@@ -2,7 +2,6 @@ package checkpointer
 
 import (
 	"encoding/json"
-
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
