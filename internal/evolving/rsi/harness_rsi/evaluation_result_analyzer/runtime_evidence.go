@@ -170,12 +170,11 @@ func ReadExecutionContext(caseDir string, execution map[string]any, recordedTerm
 
 // PrepareRuntimeEvidence 拷贝有界调用日志；绝不从共享日志/时间推断隔离。
 // Python: runtime_evidence.py:129-193 prepare_runtime_evidence
-func PrepareRuntimeEvidence(caseDir string, execution map[string]any, runtimeDir string, recordedTerminationReason string) map[string]any {
+func PrepareRuntimeEvidence(caseDir string, execution map[string]any, runtimeDir string, recordedTerminationReason string) (map[string]any, error) {
 	destination := filepath.Join(runtimeDir, "runtime_evidence")
 	if err := os.Mkdir(destination, 0o755); err != nil {
-		// Python: destination.mkdir() 失败抛异常；Go 等价返回含错误状态的 manifest 不现实——
-		// 沿用 Python 行为：调用方传入的 runtime_dir 必须可写，mkdir 失败视为调用契约违约。
-		panic(fmt.Sprintf("runtime evidence dir create failed: %v", err))
+		// Python: destination.mkdir() 失败抛 OSError 上抛调用方；Go 以 error 等价透传。
+		return nil, fmt.Errorf("runtime evidence dir create failed: %w", err)
 	}
 	caseDirResolved := resolvePath(caseDir)
 	context := ReadExecutionContext(caseDir, execution, recordedTerminationReason)
@@ -300,9 +299,14 @@ func PrepareRuntimeEvidence(caseDir string, execution map[string]any, runtimeDir
 	manifest["initial_search"] = initialLogSearch(runtimeDir, manifest)
 
 	// Python: path = runtime_dir / "evidence_manifest.json"; write_text(...)
-	manifestContent, _ := json.MarshalIndent(manifest, "", "  ")
-	_ = os.WriteFile(filepath.Join(runtimeDir, "evidence_manifest.json"), manifestContent, 0o644)
-	return manifest
+	manifestContent, marshalErr := json.MarshalIndent(manifest, "", "  ")
+	if marshalErr != nil {
+		return nil, marshalErr
+	}
+	if err := os.WriteFile(filepath.Join(runtimeDir, "evidence_manifest.json"), manifestContent, 0o644); err != nil {
+		return nil, err
+	}
+	return manifest, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

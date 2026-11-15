@@ -39,9 +39,9 @@ func TestBoundedToolCalls_投影(t *testing.T) {
 // TestSpecToMap_结构转映 对照 Python spec.model_dump() 键面。
 func TestSpecToMap_结构转映(t *testing.T) {
 	spec := hschema.PromptSectionSpec{
-		Name:    "main",
-		Content: map[string]string{"cn": "正文", "en": "body"},
-		Priority: 90,
+		Name:         "main",
+		Content:      map[string]string{"cn": "正文", "en": "body"},
+		Priority:     90,
 		RenderParams: map[string]any{"k": "v"},
 	}
 	got := specToMap(spec)
@@ -89,7 +89,10 @@ func TestRepositorySnapshot_Symlink跟随(t *testing.T) {
 	if err := os.Symlink(filepath.Join(ws, "real"), filepath.Join(ws, "link")); err != nil {
 		t.Skip("symlink 不可用")
 	}
-	manifest := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	if manifest["repository"] != "complete" {
 		t.Fatalf("symlink 跟随拷贝应 complete: %v", manifest)
 	}

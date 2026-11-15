@@ -225,7 +225,10 @@ func TestPrepareRuntimeEvidence_清单与日志拷贝(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifest := PrepareRuntimeEvidence(caseDir, map[string]any{}, runtimeDir, "")
+	manifest, evErr := PrepareRuntimeEvidence(caseDir, map[string]any{}, runtimeDir, "")
+	if evErr != nil {
+		t.Fatal(evErr)
+	}
 
 	// ① manifest 结构
 	if manifest["scope"] == nil || manifest["copy_policy"] == nil {
@@ -312,11 +315,14 @@ func TestPrepareRuntimeEvidence_声明路径与越界(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifest := PrepareRuntimeEvidence(caseDir, map[string]any{
+	manifest, evErr := PrepareRuntimeEvidence(caseDir, map[string]any{
 		"runtime_logs": map[string]any{
 			"paths": []any{"sub/inner", outside},
 		},
 	}, runtimeDir, "")
+	if evErr != nil {
+		t.Fatal(evErr)
+	}
 
 	logs := manifest["logs"].([]any)
 	// 声明 2 项：目录展开为 1 文件 + 越界 1 项（保留行但状态 unknown）
@@ -336,7 +342,10 @@ func TestPrepareRuntimeEvidence_声明路径与越界(t *testing.T) {
 	// 无日志场景 → missing 登记 case_scoped_runtime_logs
 	caseDir2 := t.TempDir()
 	runtimeDir2 := t.TempDir()
-	manifest2 := PrepareRuntimeEvidence(caseDir2, map[string]any{}, runtimeDir2, "")
+	manifest2, evErr2 := PrepareRuntimeEvidence(caseDir2, map[string]any{}, runtimeDir2, "")
+	if evErr2 != nil {
+		t.Fatal(evErr2)
+	}
 	if logs2 := manifest2["logs"].([]any); len(logs2) == 0 {
 		missing := manifest2["missing"].([]any)
 		found := false

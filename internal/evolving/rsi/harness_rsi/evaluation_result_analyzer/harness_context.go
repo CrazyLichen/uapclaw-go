@@ -24,16 +24,16 @@ import (
 // 评估引用优先于调用方当前 Harness：归因必须描述产出记录评估的对象。
 // 无包引用的 legacy 团队运行保持既有 evidence-only 行为。
 // Python: harness_context.py:112-217 prepare_harness_context
-func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[string]any {
+func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) (map[string]any, error) {
 	// Python: evaluation = load_eval_ref(eval_ref_path)
 	evaluation, err := memberoptimizer.LoadEvalRef(evalRefPath)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// Python: refs = evaluation.harness_refs_path or harness_refs_path
 	refs := stringOr(evaluation.HarnessRefsPath, harnessRefsPath)
 	if refs == "" {
-		return map[string]any{"status": "not_provided", "roles": []any{}}
+		return map[string]any{"status": "not_provided", "roles": []any{}}, nil
 	}
 	// Python: refs_path 相对则基于 eval_ref 父目录
 	refsPath, _ := expandUserPath(refs)
@@ -42,17 +42,17 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		refsPath = filepath.Join(filepath.Dir(abs), refsPath)
 	}
 	if _, statErr := os.Stat(refsPath); statErr != nil {
-		panic(fmt.Sprintf("Evaluated Harness references not found: %s", refsPath))
+		return nil, fmt.Errorf("Evaluated Harness references not found: %s", refsPath)
 	}
 	// Python: roles = resolve_candidate_roles(str(refs_path), evaluation)
 	roles := memberoptimizer.ResolveCandidateRoles(refsPath, &evaluation, "")
 	if len(roles) == 0 {
-		panic("Evaluated Harness references contain no roles")
+		return nil, fmt.Errorf("Evaluated Harness references contain no roles")
 	}
 	// Python: destination = runtime_dir / "current_harness"; mkdir(exist_ok=False)
 	destination := filepath.Join(runtimeDir, "current_harness")
 	if err := os.Mkdir(destination, 0o755); err != nil {
-		panic(fmt.Sprintf("current_harness dir create failed (exist_ok=False 语义): %v", err))
+		return nil, fmt.Errorf("current_harness dir create failed (exist_ok=False 语义): %w", err)
 	}
 	result := map[string]any{
 		"status": "available",
@@ -64,11 +64,14 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 	for index, role := range roles {
 		// Python: for index, role in enumerate(roles, 1)
 		roleNumber := index + 1
-		root, raw := declarations(role.HarnessRefPath)
+		root, raw, declErr := declarations(role.HarnessRefPath)
+		if declErr != nil {
+			return nil, declErr
+		}
 		// Python: out = destination / f"role_{index:03d}"; out.mkdir()
 		out := filepath.Join(destination, fmt.Sprintf("role_%03d", roleNumber))
 		if err := os.Mkdir(out, 0o755); err != nil {
-			panic(err)
+			return nil, err
 		}
 		// Python: aliases = role.metadata.get("aliases", [])
 		var aliasesList any
@@ -84,10 +87,17 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		}
 
 		// Python: runtime = _local_path(root, "runtime.yaml")
-		runtimePath := localPath(root, "runtime.yaml")
+		runtimePath, runtimeErr := localPath(root, "runtime.yaml")
+		if runtimeErr != nil {
+			return nil, runtimeErr
+		}
 		runtimeDeclaration := map[string]any{}
 		if isFile(runtimePath) {
-			runtimeDeclaration = readMappingLocal(root, "runtime.yaml")
+			rd, rdErr := readMappingLocal(root, "runtime.yaml")
+			if rdErr != nil {
+				return nil, rdErr
+			}
+			runtimeDeclaration = rd
 		}
 		// Python: restricted_runtime 仅 max_iterations/on_max_iterations
 		restrictedRuntime := map[string]any{}
@@ -98,9 +108,12 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		}
 		// Python: runtime_target = out / "runtime.yaml"; write_text(yaml.safe_dump(..., sort_keys=False))
 		runtimeTarget := filepath.Join(out, "runtime.yaml")
-		yamlContent, _ := yaml.Marshal(restrictedRuntime)
+		yamlContent, yamlErr := yaml.Marshal(restrictedRuntime)
+		if yamlErr != nil {
+			return nil, yamlErr
+		}
 		if err := os.WriteFile(runtimeTarget, yamlContent, 0o644); err != nil {
-			panic(err)
+			return nil, err
 		}
 		relRuntime, _ := filepath.Rel(runtimeDir, runtimeTarget)
 		runtimeStatus := "inherited_defaults"
@@ -120,7 +133,9 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 
 		// Python: for name in ("identity.md", "soul.md"): _local_path(root, name)（路径逃逸校验）
 		for _, name := range []string{"identity.md", "soul.md"} {
-			localPath(root, name)
+			if _, escErr := localPath(root, name); escErr != nil {
+				return nil, escErr
+			}
 		}
 
 		// Python: sections = raw.get("prompt_sections") or raw.get("prompts") or []
@@ -138,7 +153,9 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		// Python: file 条目路径校验
 		for _, section := range asList(sections) {
 			if secMap, isMap := section.(map[string]any); isMap && secMap["file"] != nil {
-				localPath(root, hres.ResolveSectionFile(root, toDisplayString(secMap["file"])))
+				if _, escErr := localPath(root, hres.ResolveSectionFile(root, toDisplayString(secMap["file"]))); escErr != nil {
+					return nil, escErr
+				}
 			}
 		}
 		// Python: manifest.json 存在走 spec 装配，否则 normalize
@@ -146,7 +163,7 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		if isFile(filepath.Join(root, "manifest.json")) {
 			specs, specErr := hres.BuildPromptSectionSpecs(sections, root, root)
 			if specErr != nil {
-				panic(specErr)
+				return nil, specErr
 			}
 			for _, spec := range specs {
 				normalized = append(normalized, specToMap(spec))
@@ -160,11 +177,14 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		}
 		// Python: identity/soul 无 manifest 时追加全文
 		for _, name := range []string{"identity", "soul"} {
-			source := localPath(root, name+".md")
+			source, srcErr := localPath(root, name+".md")
+			if srcErr != nil {
+				return nil, srcErr
+			}
 			if isFile(source) && !isFile(filepath.Join(root, "manifest.json")) {
 				content, readErr := os.ReadFile(source)
 				if readErr != nil {
-					panic(readErr)
+					return nil, readErr
 				}
 				normalized = append(normalized, map[string]any{
 					"name": name, "content": string(content),
@@ -174,9 +194,12 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		// Python: prompt_{number:03d}.json 落盘（content JSON）
 		for number, section := range normalized {
 			target := filepath.Join(out, fmt.Sprintf("prompt_%03d.json", number+1))
-			contentJSON, _ := json.Marshal(valueOr(section, "content", map[string]any{}))
+			contentJSON, marshalErr := json.Marshal(valueOr(section, "content", map[string]any{}))
+			if marshalErr != nil {
+				return nil, marshalErr
+			}
 			if err := os.WriteFile(target, contentJSON, 0o644); err != nil {
-				panic(err)
+				return nil, err
 			}
 			rel, _ := filepath.Rel(runtimeDir, target)
 			row["prompt_sections"] = append(row["prompt_sections"].([]any), map[string]any{
@@ -186,14 +209,18 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 		}
 
 		// Python: skill 文件拷贝（SkillManager 三态发现）
-		for number, source := range skillFiles(root, raw["skills"]) {
+		skillPaths, skillErr := skillFiles(root, raw["skills"])
+		if skillErr != nil {
+			return nil, skillErr
+		}
+		for number, source := range skillPaths {
 			target := filepath.Join(out, fmt.Sprintf("skill_%03d.md", number+1))
 			content, readErr := os.ReadFile(source)
 			if readErr != nil {
-				panic(readErr)
+				return nil, readErr
 			}
 			if err := os.WriteFile(target, content, 0o644); err != nil {
-				panic(err)
+				return nil, err
 			}
 			rel, _ := filepath.Rel(runtimeDir, target)
 			row["skills"] = append(row["skills"].([]any), map[string]any{
@@ -210,14 +237,17 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 				if filePath == "" {
 					continue
 				}
-				source := localPath(root, filePath)
+				source, escErr := localPath(root, filePath)
+				if escErr != nil {
+					return nil, escErr
+				}
 				target := filepath.Join(out, fmt.Sprintf("%s_%03d.py", group, number+1))
 				content, readErr := os.ReadFile(source)
 				if readErr != nil {
-					panic(readErr)
+					return nil, readErr
 				}
 				if err := os.WriteFile(target, content, 0o644); err != nil {
-					panic(err)
+					return nil, err
 				}
 				rel, _ := filepath.Rel(runtimeDir, target)
 				item["path"] = filepath.ToSlash(rel)
@@ -229,11 +259,14 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 	result["roles"] = resultRoles
 
 	// Python: (destination / "index.json").write_text(json.dumps(..., indent=2))
-	indexJSON, _ := json.MarshalIndent(result, "", "  ")
-	if err := os.WriteFile(filepath.Join(destination, "index.json"), indexJSON, 0o644); err != nil {
-		panic(err)
+	indexJSON, marshalErr := json.MarshalIndent(result, "", "  ")
+	if marshalErr != nil {
+		return nil, marshalErr
 	}
-	return result
+	if err := os.WriteFile(filepath.Join(destination, "index.json"), indexJSON, 0o644); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -242,7 +275,7 @@ func PrepareHarnessContext(evalRefPath, harnessRefsPath, runtimeDir string) map[
 // Python: harness_context.py:22-26 _local_path —— Python (root / path) 对绝对路径
 // 是覆盖语义（Path("/r") / "/abs/x" == "/abs/x"），Go filepath.Join 是拼接语义，
 // 须显式分支（对齐审查要点：platform/path 语义逐字段核对）。
-func localPath(root, path string) string {
+func localPath(root, path string) (string, error) {
 	joined := path
 	if !filepath.IsAbs(joined) {
 		joined = filepath.Join(root, joined)
@@ -251,34 +284,37 @@ func localPath(root, path string) string {
 	// Python: if not resolved.is_relative_to(root): raise ValueError(...)
 	rootResolved := resolvePath(root)
 	if !withinBase(resolved, rootResolved) {
-		panic(fmt.Sprintf("Harness evidence reference leaves its package: %s", path))
+		return "", fmt.Errorf("Harness evidence reference leaves its package: %s", path)
 	}
-	return resolved
+	return resolved, nil
 }
 
 // readMappingLocal 读取包内 mapping（JSON/YAML 按后缀）。
 // Python: harness_context.py:29-34 _read_mapping
-func readMappingLocal(root, path string) map[string]any {
-	resolved := localPath(root, path)
-	content, err := os.ReadFile(resolved)
+func readMappingLocal(root, path string) (map[string]any, error) {
+	resolved, err := localPath(root, path)
 	if err != nil {
-		panic(err)
+		return nil, err
+	}
+	content, readErr := os.ReadFile(resolved)
+	if readErr != nil {
+		return nil, readErr
 	}
 	var data any
 	if strings.HasSuffix(path, ".json") {
 		if jsonErr := json.Unmarshal(content, &data); jsonErr != nil {
-			panic(jsonErr)
+			return nil, jsonErr
 		}
 	} else {
 		if yamlErr := yaml.Unmarshal(content, &data); yamlErr != nil {
-			panic(yamlErr)
+			return nil, yamlErr
 		}
 	}
 	m, isMap := data.(map[string]any)
 	if !isMap {
-		panic(fmt.Sprintf("Harness evidence must contain a mapping: %s", path))
+		return nil, fmt.Errorf("Harness evidence must contain a mapping: %s", path)
 	}
-	return m
+	return m, nil
 }
 
 // asList 等价 Python _as_list（None→[]，标量→单元素）。
@@ -295,7 +331,7 @@ func asList(value any) []any {
 
 // declarations 读取 Harness 包声明（仅五键，杜绝子代理配置与凭据读取）。
 // Python: harness_context.py:41-66 _declarations
-func declarations(path string) (string, map[string]any) {
+func declarations(path string) (string, map[string]any, error) {
 	// Python: root = path.resolve() if path.is_dir() else path.resolve().parent
 	abs := resolvePath(path)
 	root := abs
@@ -305,14 +341,21 @@ func declarations(path string) (string, map[string]any) {
 	// Python: main = find_plugin_manifest(path); raw = _read_mapping(root, main)
 	main, mainErr := hres.FindPluginManifest(path)
 	if mainErr != nil {
-		panic(mainErr)
+		return "", nil, mainErr
 	}
-	raw := readMappingLocal(root, main)
+	raw, rawErr := readMappingLocal(root, main)
+	if rawErr != nil {
+		return "", nil, rawErr
+	}
 	// Python: if main.name != "manifest.json": config 合并 + 四个 yaml 列表合并
 	if filepath.Base(main) != "manifest.json" {
 		configPath := filepath.Join(root, "config.json")
 		if isFile(configPath) {
-			for key, value := range readMappingLocal(root, configPath) {
+			configData, configErr := readMappingLocal(root, configPath)
+			if configErr != nil {
+				return "", nil, configErr
+			}
+			for key, value := range configData {
 				if _, exists := raw[key]; !exists {
 					raw[key] = value
 				}
@@ -325,17 +368,20 @@ func declarations(path string) (string, map[string]any) {
 			{"tools", "tools/tools.yaml", "tools"},
 			{"rails", "rails/rails.yaml", "rails"},
 		} {
-			source := localPath(root, spec.relative)
+			source, srcErr := localPath(root, spec.relative)
+			if srcErr != nil {
+				return "", nil, srcErr
+			}
 			if !isFile(source) {
 				continue
 			}
 			content, readErr := os.ReadFile(source)
 			if readErr != nil {
-				panic(readErr)
+				return "", nil, readErr
 			}
 			var items any
 			if yamlErr := yaml.Unmarshal(content, &items); yamlErr != nil {
-				panic(yamlErr)
+				return "", nil, yamlErr
 			}
 			if items == nil {
 				items = []any{}
@@ -345,11 +391,11 @@ func declarations(path string) (string, map[string]any) {
 			}
 			itemsList, isList := items.([]any)
 			if !isList {
-				panic(fmt.Sprintf("Harness evidence %s must contain a list", spec.relative))
+				return "", nil, fmt.Errorf("Harness evidence %s must contain a list", spec.relative)
 			}
 			if _, isList := raw[spec.key].([]any); !isList {
 				if _, exists := raw[spec.key]; exists {
-					panic(fmt.Sprintf("Harness evidence %s must contain a list", spec.relative))
+					return "", nil, fmt.Errorf("Harness evidence %s must contain a list", spec.relative)
 				}
 				raw[spec.key] = []any{}
 			}
@@ -364,7 +410,7 @@ func declarations(path string) (string, map[string]any) {
 			out[key] = value
 		}
 	}
-	return root, out
+	return root, out, nil
 }
 
 // resourceNames 资源声明投影（builtin/name/file/class 等键白名单）。
@@ -390,7 +436,7 @@ func resourceNames(items any) []map[string]any {
 
 // skillFiles 技能文件三态发现（文件 / 技能目录 / 直接父目录）。
 // Python: harness_context.py:85-109 _skill_files
-func skillFiles(root string, declarations any) []string {
+func skillFiles(root string, declarations any) ([]string, error) {
 	var found []string
 	seen := map[string]bool{}
 	for _, declaration := range asList(declarations) {
@@ -401,9 +447,12 @@ func skillFiles(root string, declarations any) []string {
 		}
 		str, isStr := value.(string)
 		if !isStr || str == "" {
-			panic("Declared skill must identify a local directory or SKILL.md")
+			return nil, fmt.Errorf("Declared skill must identify a local directory or SKILL.md")
 		}
-		source := localPath(root, str)
+		source, srcErr := localPath(root, str)
+		if srcErr != nil {
+			return nil, srcErr
+		}
 		if isFile(source) {
 			if !seen[source] {
 				seen[source] = true
@@ -412,12 +461,12 @@ func skillFiles(root string, declarations any) []string {
 			continue
 		}
 		if !isDir(source) {
-			panic(fmt.Sprintf("Declared skill path not found: %s", source))
+			return nil, fmt.Errorf("Declared skill path not found: %s", source)
 		}
 		// Python: children = sorted(source.iterdir())
 		entries, readErr := os.ReadDir(source)
 		if readErr != nil {
-			panic(readErr)
+			return nil, readErr
 		}
 		var children []string
 		for _, entry := range entries {
@@ -433,7 +482,10 @@ func skillFiles(root string, declarations any) []string {
 			}
 		}
 		if direct != "" {
-			resolved := localPath(root, filepath.Join(source, direct))
+			resolved, resErr := localPath(root, filepath.Join(source, direct))
+			if resErr != nil {
+				return nil, resErr
+			}
 			if !seen[resolved] {
 				seen[resolved] = true
 				found = append(found, resolved)
@@ -442,13 +494,16 @@ func skillFiles(root string, declarations any) []string {
 		}
 		// Python: 子目录内找 SKILL.md
 		for _, child := range children {
-			directory := localPath(root, filepath.Join(source, child))
+			directory, dirErr := localPath(root, filepath.Join(source, child))
+			if dirErr != nil {
+				return nil, dirErr
+			}
 			if !isDir(directory) {
 				continue
 			}
 			subEntries, subErr := os.ReadDir(directory)
 			if subErr != nil {
-				panic(subErr)
+				return nil, subErr
 			}
 			var subChildren []string
 			for _, entry := range subEntries {
@@ -457,7 +512,10 @@ func skillFiles(root string, declarations any) []string {
 			sort.Strings(subChildren)
 			for _, file := range subChildren {
 				if strings.EqualFold(file, "skill.md") {
-					resolved := localPath(root, filepath.Join(directory, file))
+					resolved, resErr := localPath(root, filepath.Join(directory, file))
+					if resErr != nil {
+						return nil, resErr
+					}
 					if !seen[resolved] {
 						seen[resolved] = true
 						found = append(found, resolved)
@@ -467,7 +525,7 @@ func skillFiles(root string, declarations any) []string {
 			}
 		}
 	}
-	return found
+	return found, nil
 }
 
 // specToMap PromptSectionSpec → map（等价 Python spec.model_dump()）。
