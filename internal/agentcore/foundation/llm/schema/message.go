@@ -384,3 +384,20 @@ func init() {
 		roleTypeMap[s] = RoleType(i)
 	}
 }
+
+// ──────────────────────────── 消息来源元数据常量（⤴️15.11/22.4） ────────────────────────────
+
+// 消息来源元数据键与取值。
+// Python: core/foundation/llm/schema/message.py:10-14
+const (
+	// OpenjiuwenMessageProvenanceMetadata 消息来源（附件等）元数据键
+	OpenjiuwenMessageProvenanceMetadata = "_openjiuwen_message_provenance"
+	// OpenjiuwenMessageOriginMetadata 消息来源元数据键
+	OpenjiuwenMessageOriginMetadata = "_openjiuwen_message_origin"
+	// OpenjiuwenMessageSourceKindMetadata 消息来源类别元数据键
+	OpenjiuwenMessageSourceKindMetadata = "_openjiuwen_message_source_kind"
+	// OpenjiuwenMessageOriginExternalUser 外部用户消息
+	OpenjiuwenMessageOriginExternalUser = "external_user"
+	// OpenjiuwenMessageOriginHarnessInternal harness 内部消息
+	OpenjiuwenMessageOriginHarnessInternal = "harness_internal"
+)
