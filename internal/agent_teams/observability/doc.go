@@ -14,6 +14,8 @@
 //	├── semconv.go           # 语义约定常量
 //	├── redaction.go         # Prompt/Completion 脱敏
 //	├── span_state.go        # OtelSpanState + ctx 注入
+//	├── span_context.go     # 轨迹上下文窗口规范状态（⤴️22.3a，15.11）
+//	├── trajectory_events.go # 轨迹 v2 事件发射链（⤴️22.4，15.11）
 //	├── callback_handler.go  # OtelCallbackHandler
 //	├── monitor_handler.go   # OtelTeamMonitorHandler
 //	├── rail.go              # ObservabilityRail
