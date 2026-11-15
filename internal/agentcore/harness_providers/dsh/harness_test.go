@@ -483,3 +483,176 @@ func waitActiveRun(t *testing.T, state *fakeSdkState) {
 func eventTypeName(payload harnessprotocol.HarnessEventPayload) string {
 	return stringify(map[string]any{"type": fmt.Sprintf("%T", payload), "detail": payload})
 }
+
+// turn_events 租约有限释放、错误轮次拒绝且不误删：
+// 上游 test_turn_events_is_finite_releases_lease_and_does_not_discard_mismatch (344)。
+func TestTurnEventsFiniteReleasesLease(t *testing.T) {
+	state := &fakeSdkState{scripts: []*runScript{newScript()}}
+	h := newTestHarness(t, state, nil)
+	ctx := context.Background()
+	require.NoError(t, h.Start(ctx, testContext()))
+	receipt, err := h.Send(ctx, harnessprotocol.HarnessInput{Content: "hello"},
+		harnessprotocol.DeliveryModeAuto)
+	require.NoError(t, err)
+
+	// 错误轮次游标：Next 报 HarnessStateError "not the next unconsumed turn"
+	wrongCtx, wrongCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer wrongCancel()
+	wrongCursor := h.TurnEvents(strPtr("not-the-next-turn"))
+	_, wrongErr := wrongCursor.Next(wrongCtx)
+	require.Error(t, wrongErr)
+	assert.Contains(t, wrongErr.Error(), "not the next unconsumed turn")
+
+	// 正确轮次游标：首事件 STARTED、末事件 FINISHED，全部属于本轮
+	turnCtx, turnCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer turnCancel()
+	turnCursor := h.TurnEvents(&receipt.TurnID)
+	defer func() { _ = turnCursor.Close(context.Background()) }()
+	var events []*harnessprotocol.HarnessEvent
+	for {
+		event, err := turnCursor.Next(turnCtx)
+		if err != nil {
+			break
+		}
+		events = append(events, event)
+	}
+	require.NotEmpty(t, events)
+	first, isLifecycle := events[0].Event.(harnessprotocol.TurnLifecycleEvent)
+	require.True(t, isLifecycle)
+	assert.Equal(t, harnessprotocol.TurnEventKindStarted, first.Kind)
+	last, isLifecycle := events[len(events)-1].Event.(harnessprotocol.TurnLifecycleEvent)
+	require.True(t, isLifecycle)
+	assert.Equal(t, harnessprotocol.TurnEventKindFinished, last.Kind)
+	for _, event := range events {
+		assert.Equal(t, receipt.TurnID, event.TurnID)
+	}
+
+	// 全周期游标租约：创建后立即释放（aclose 幂等）
+	nextCursor := h.Events()
+	require.NoError(t, nextCursor.Close(ctx))
+	require.NoError(t, nextCursor.Close(ctx))
+	require.NoError(t, h.Stop(ctx))
+}
+
+// turn/end 错误在终态与 provider 事件双层脱敏：
+// 上游 test_turn_end_error_is_redacted_in_terminal_and_provider_event (536)。
+func TestTurnEndErrorRedacted(t *testing.T) {
+	secret := "provider-secret-diagnostic"
+	childTurnEnd := rootEvent("turn/end", map[string]any{
+		"turn": 1,
+		"reason": map[string]any{"kind": "error", "error": map[string]any{
+			"message": secret, "code": "CHILD_FAILED", "status": 500,
+		}},
+	})
+	childTurnEnd.Payload["sessionId"] = "child-1"
+	rootTurnEnd := rootEvent("turn/end", map[string]any{
+		"turn": 1,
+		"reason": map[string]any{"kind": "error", "error": map[string]any{
+			"message": secret, "code": "RATE_LIMITED", "status": 429,
+		}},
+	})
+	state := &fakeSdkState{scripts: []*runScript{scriptWithEvents(childTurnEnd, rootTurnEnd)}}
+	state.scripts[0].result = &deepseekharness.RunResult{FinalResponse: "", FinishReason: strPtr("error")}
+	h := newTestHarness(t, state, nil)
+	ctx := context.Background()
+	require.NoError(t, h.Start(ctx, testContext()))
+	receipt, err := h.Send(ctx, harnessprotocol.HarnessInput{Content: "fail safely"},
+		harnessprotocol.DeliveryModeAuto)
+	require.NoError(t, err)
+	observed := strings.Join(waitTurnTerminal(t, h), "")
+	require.NoError(t, h.Stop(ctx))
+
+	// 终态 error.code 取根会话的 RATE_LIMITED
+	assert.Contains(t, observed, "RATE_LIMITED")
+	assert.Contains(t, observed, "child.session.event")
+	// 脱敏：secret 不出现在任何事件（repr 等价物）
+	assert.NotContains(t, observed, secret)
+	_ = receipt
+}
+
+// stop 等待监督协程排队终态全部落盘后才关流：
+// 上游 test_stop_waits_for_supervisor_queued_terminals_before_closing (669)。
+// Go 侧无法 monkeypatch _abort_queued_turns（asyncio 注入点无对应物，偏差
+// D-dsh-1 同源）；等价断言：Stop 返回后全周期事件排空，每个被接受轮次恰有
+// 1 条 STARTED + 1 条终态，且所有终态序号先于 terminated 关流事件。
+func TestStopWaitsQueuedTerminals(t *testing.T) {
+	activeScript := &runScript{
+		released: make(chan struct{}), finished: make(chan struct{}),
+		waitReleased: true, err: errors.New("runtime closed"),
+	}
+	state := &fakeSdkState{scripts: []*runScript{activeScript}}
+	h := newTestHarness(t, state, nil)
+	ctx := context.Background()
+	require.NoError(t, h.Start(ctx, testContext()))
+
+	active, err := h.Send(ctx, harnessprotocol.HarnessInput{Content: "active"},
+		harnessprotocol.DeliveryModeAuto)
+	require.NoError(t, err)
+	waitActiveRun(t, state)
+	queuedOne, err := h.Send(ctx, harnessprotocol.HarnessInput{Content: "queued-1"},
+		harnessprotocol.DeliveryModeAuto)
+	require.NoError(t, err)
+	queuedTwo, err := h.Send(ctx, harnessprotocol.HarnessInput{Content: "queued-2"},
+		harnessprotocol.DeliveryModeAuto)
+	require.NoError(t, err)
+
+	require.NoError(t, h.Stop(ctx))
+	assert.Equal(t, harnessprotocol.HarnessStateTerminated, h.State())
+
+	// Stop 关流后排空全周期事件
+	cursor := h.Events()
+	var events []*harnessprotocol.HarnessEvent
+	for {
+		event, err := cursor.Next(ctx)
+		if err != nil {
+			break
+		}
+		events = append(events, event)
+	}
+	_ = cursor.Close(ctx)
+
+	accepted := map[string]bool{
+		active.TurnID: true, queuedOne.TurnID: true, queuedTwo.TurnID: true,
+	}
+	terminalSeqs := []int{}
+	terminatedSeq := -1
+	lifecycleByTurn := map[string][]harnessprotocol.TurnEventKind{}
+	for _, event := range events {
+		if !accepted[event.TurnID] {
+			if stateChange, ok := event.Event.(harnessprotocol.StateChangedEvent); ok {
+				if stateChange.New == harnessprotocol.HarnessStateTerminated {
+					terminatedSeq = event.Sequence
+				}
+			}
+			continue
+		}
+		if lifecycle, ok := event.Event.(harnessprotocol.TurnLifecycleEvent); ok {
+			lifecycleByTurn[event.TurnID] =
+				append(lifecycleByTurn[event.TurnID], lifecycle.Kind)
+			if lifecycle.Kind != harnessprotocol.TurnEventKindStarted {
+				terminalSeqs = append(terminalSeqs, event.Sequence)
+			}
+		}
+	}
+	require.Len(t, terminalSeqs, len(accepted))
+	for turnID, kinds := range lifecycleByTurn {
+		started := 0
+		terminal := 0
+		for _, kind := range kinds {
+			if kind == harnessprotocol.TurnEventKindStarted {
+				started++
+			}
+			if kind == harnessprotocol.TurnEventKindFinished ||
+				kind == harnessprotocol.TurnEventKindAborted ||
+				kind == harnessprotocol.TurnEventKindFailed {
+				terminal++
+			}
+		}
+		assert.Equal(t, 1, started, turnID)
+		assert.Equal(t, 1, terminal, turnID)
+	}
+	require.Greater(t, terminatedSeq, 0)
+	for _, seq := range terminalSeqs {
+		assert.Less(t, seq, terminatedSeq)
+	}
+}
