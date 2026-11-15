@@ -51,7 +51,7 @@
 | `_path_value`（239-243） | `pathValue(value)` — 非 str/空串→nil |
 | `_same_path`（246-247） | `samePath(l, r)` — normcase+normpath → `filepath.Clean` + 大小写归一（Windows 语义保留） |
 | `_append_extra_dir`（250-257） | `appendExtraDir(result, path, cwd)` |
-| `_team_workspace_path`（260-264） | `teamWorkspacePath(workspace, teamName)` — **前置件缺口**：`agent_teams.paths.team_workspace_dir`（paths.py:168，`{team_home}/team-workspace/` 布局）Go 无对应物，本节一并落 `externalcli` 包内最小等价实现（含其依赖 `get_openjiuwen_home`/team_home 的 Go 等价物核对；若 team_home 链路缺失则本函数按既有 9.x workspace 约定登记偏差） |
+| `_team_workspace_path`（260-264） | `teamWorkspacePath(workspace, teamName)` — **前置件缺口**：`agent_teams.paths.team_workspace_dir`（paths.py:168，`{team_home}/team-workspace/`）Go 无对应物；落点为既有 `internal/agent_teams/paths.go`（该文件即 paths.py 的 1:1 对应物，已有 `TeamHome`）新增 `TeamWorkspaceDir(teamName)`，externalcli 的 `teamWorkspacePath` 转调之 |
 | `_build_context_project_dir`（267-271） | `buildContextProjectDir(spec)` |
 | `_build_context_team_outputs_dir`（274-278） | `buildContextTeamOutputsDir(spec)` |
 | `_resolve_external_paths`（281-298） | `ResolveExternalPaths(spec, ctx, configuredCwd, teamName)` — 选 cwd 顺序与 extra_dirs 收集逐行对齐 |
