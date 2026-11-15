@@ -1,7 +1,12 @@
 package telemetry
 
 import (
+	"bytes"
+	"compress/gzip"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	tracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -184,4 +189,102 @@ func TestAnyValue_嵌套结构(t *testing.T) {
 	if anyValue(nil) != nil {
 		t.Fatal("nil AnyValue 应返回 nil（Python which-oneof 无值分支）")
 	}
+}
+
+// ──────────────────────────── HTTP 门（T3） ────────────────────────────
+
+// TestHandleRequest_正常导出扇出 POST /v1/traces 的事件到达订阅者
+func TestHandleRequest_正常导出扇出(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	received := make(chan map[string]any, 8)
+	if _, ok := r.Subscribe(func(event map[string]any) { received <- event }); !ok {
+		t.Fatal("subscribe")
+	}
+	url := "http://" + strings.TrimPrefix(r.EndpointURL(), "http://")
+	resp, err := http.Post(url, "application/x-protobuf", bytes.NewReader(spanRequest(t, "claude_code.llm_request", nil)))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	select {
+	case event := <-received:
+		if event["name"] != "claude_code.llm_request" {
+			t.Fatalf("event=%v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("事件未到达订阅者")
+	}
+	r.Aclose(t.Context())
+}
+
+// TestHandleRequest_拒绝路径 405/404/400 语义（Python :343-361）
+func TestHandleRequest_拒绝路径(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	_, _ = r.Subscribe(func(map[string]any) {})
+	// endpoint 形如 http://127.0.0.1:P/v1/traces，取 origin 拼 404 路径
+	host := strings.TrimSuffix(strings.TrimPrefix(r.EndpointURL(), "http://"), "/v1/traces")
+
+	// 405：GET
+	resp, _ := http.Get("http://" + host + "/v1/traces")
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("GET status=%d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	// 404：未知路径
+	resp, _ = http.Post("http://"+host+"/v1/other", "application/x-protobuf", bytes.NewReader([]byte{0x01}))
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("404 status=%d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	// 400：空 body（Content-Length 0）
+	resp, _ = http.Post("http://"+host+"/v1/traces", "application/x-protobuf", bytes.NewReader([]byte{}))
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("400 status=%d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	r.Aclose(t.Context())
+}
+
+// TestHandleRequest_gzip导出 gzip 编码请求被有限解压后正常扇出
+func TestHandleRequest_gzip导出(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	received := make(chan map[string]any, 8)
+	_, _ = r.Subscribe(func(event map[string]any) { received <- event })
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+	_, _ = writer.Write(spanRequest(t, "claude_code.llm_request", nil))
+	writer.Close()
+	url := "http://" + strings.TrimPrefix(r.EndpointURL(), "http://")
+	req, _ := http.NewRequest(http.MethodPost, url, &buf)
+	req.Header.Set("Content-Encoding", "gzip")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("gzip post: %v status=%v", err, resp)
+	}
+	resp.Body.Close()
+	select {
+	case event := <-received:
+		if event["name"] != "claude_code.llm_request" {
+			t.Fatalf("event=%v", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("gzip 事件未到达")
+	}
+	r.Aclose(t.Context())
+}
+
+// TestHandleRequest_坏protobuf 400（Python ParseFromString 异常路径）
+func TestHandleRequest_坏protobuf(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	_, _ = r.Subscribe(func(map[string]any) {})
+	url := "http://" + strings.TrimPrefix(r.EndpointURL(), "http://")
+	resp, _ := http.Post(url, "application/x-protobuf", bytes.NewReader([]byte{0xff, 0xff, 0xff}))
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	r.Aclose(t.Context())
 }

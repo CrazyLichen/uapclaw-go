@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -14,9 +15,9 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	tracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -292,17 +293,129 @@ func decodeLogRecords(payload []byte) ([]map[string]any, error) {
 
 // ──────────────────────────── 占位实现（后续 Task 实装） ────────────────────────────
 
-// startLocked 占位：Task 5 替换为真实实现（真实 doc 注释随实装移入）
-func (r *SharedOtlpReceiver) startLocked() { r.disabled = true }
+// startLocked 绑定回环 HTTP 与 gRPC 监听；失败永久禁用（观测 best-effort）。
+// Python: otlp_receiver.py:213-257 _start。
+// Python 先 import 探测 protobuf 支持（:216-226）；Go 侧 proto/otlp 为编译期
+// 依赖，无运行时探测对应物（结构性省略，语义无损失）。
+func (r *SharedOtlpReceiver) startLocked() {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		logger.Warn(logComponent).Msgf("otel: shared loopback OTLP receiver could not start; native spans disabled: %v", err)
+		r.disabled = true
+		return
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	r.listener = listener
+	r.endpoint = fmt.Sprintf("http://127.0.0.1:%d/v1/traces", port)
+	r.httpServer = &http.Server{
+		Handler:           http.HandlerFunc(r.handleRequest),
+		ReadTimeout:       requestReadTimeout,
+		ReadHeaderTimeout: requestReadTimeout,
+		WriteTimeout:      responseWriteTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+	}
+	r.inFlight.Add(1)
+	go func() {
+		defer r.inFlight.Done()
+		// Serve 返回 ErrServerClosed 属正常停机；其他错误仅记录（best-effort）
+		if serveErr := r.httpServer.Serve(listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			logger.Warn(logComponent).Msgf("otel: shared OTLP receiver rejected a request: %v", serveErr)
+		}
+	}()
+	r.startGrpcLocked()
+	logger.Info(logComponent).Msgf("otel: shared loopback OTLP receiver started endpoint=%s grpc_endpoint=%s subscribers=%d", r.endpoint, r.grpcEndpoint, len(r.subscribers))
+}
+
+// handleRequest 处理一个 OTLP/HTTP 导出请求。
+// D-tel-2：承载层 net/http（Python _accept 的 408 分支由 ReadTimeout 连接
+// 掐断等价承担），业务校验与 Python :330-375 _handle_request 逐条对应：
+// 仅 POST（405）、仅 /v1/traces /v1/logs（404）、Content-Length 校验（400）、
+// 16MiB 上限、gzip 有限解压（32MiB）、解码失败 400。
+func (r *SharedOtlpReceiver) handleRequest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		respond(w, http.StatusMethodNotAllowed)
+		return
+	}
+	path := req.URL.Path
+	if path != "/v1/traces" && path != "/v1/logs" {
+		respond(w, http.StatusNotFound)
+		return
+	}
+	contentLength := req.ContentLength
+	if contentLength <= 0 || contentLength > maxRequestBytes {
+		respond(w, http.StatusBadRequest)
+		return
+	}
+	payload, err := io.ReadAll(io.LimitReader(req.Body, maxRequestBytes+1))
+	if err != nil || len(payload) > maxRequestBytes {
+		respond(w, http.StatusBadRequest)
+		return
+	}
+	if strings.EqualFold(req.Header.Get("Content-Encoding"), "gzip") {
+		payload, err = decompressGzipLimited(payload)
+		if err != nil {
+			respond(w, http.StatusBadRequest)
+			return
+		}
+	} else if len(payload) > maxDecompressedBytes {
+		respond(w, http.StatusBadRequest)
+		return
+	}
+	var events []map[string]any
+	if path == "/v1/traces" {
+		events, err = decodeSpans(payload)
+	} else {
+		events, err = decodeLogRecords(payload)
+	}
+	if err != nil {
+		respond(w, http.StatusBadRequest)
+		return
+	}
+	r.fanout(events)
+	respond(w, http.StatusOK)
+}
+
+// respond 写最小 HTTP 响应（Python :377-391 _respond：application/x-protobuf、
+// 空 body、Connection: close）。
+func respond(w http.ResponseWriter, statusCode int) {
+	w.Header().Set("Content-Type", "application/x-protobuf")
+	w.Header().Set("Connection", "close")
+	w.WriteHeader(statusCode)
+}
+
+// fanout 把解码事件广播给每个订阅者回调。
+// D-tel-1：Python 把事件投递到订阅者的事件循环（claudecode/observation.py:622-625
+// call_soon_threadsafe）；Go 无事件循环，fanout 同步直调，跨线程投递由订阅者
+// 自行解决（channel/事件）。回调可能来自任意 goroutine（HTTP handler 或
+// gRPC worker），订阅者必须非阻塞。
+// Python: otlp_receiver.py:201-211 _fanout
+func (r *SharedOtlpReceiver) fanout(events []map[string]any) {
+	r.mu.Lock()
+	callbacks := make([]func(map[string]any), 0, len(r.subscribers))
+	for _, callback := range r.subscribers {
+		callbacks = append(callbacks, callback)
+	}
+	r.mu.Unlock()
+	for _, event := range events {
+		for _, callback := range callbacks {
+			invokeSubscriber(callback, event)
+		}
+	}
+}
+
+// invokeSubscriber 调用单个回调；panic 吞掉记 Warn（telemetry best-effort）。
+// Python: otlp_receiver.py:205-211
+func invokeSubscriber(callback func(map[string]any), event map[string]any) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(logComponent).Msgf("otel: shared OTLP receiver subscriber callback failed: %v", rec)
+		}
+	}()
+	callback(event)
+}
 
 // startGrpcLocked 占位：Task 4 替换
 func (r *SharedOtlpReceiver) startGrpcLocked() {}
-
-// handleRequest 占位：Task 3 替换
-func (r *SharedOtlpReceiver) handleRequest(w http.ResponseWriter, req *http.Request) {}
-
-// fanout 占位：Task 5 替换
-func (r *SharedOtlpReceiver) fanout(events []map[string]any) {}
 
 // Aclose 占位：Task 6 替换
 func (r *SharedOtlpReceiver) Aclose(ctx context.Context) {}
