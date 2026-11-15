@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -337,11 +336,9 @@ func stringListField(value any, field string) ([]string, error) {
 	return out, nil
 }
 
-// hasWindowsDrive 判断 Windows 盘符前缀（对齐 PureWindowsPath(value).drive）
+// hasWindowsDrive 判断 Windows 盘符前缀（对齐 PureWindowsPath(value).drive：
+// 平台无关，Linux 上同样识别盘符/UNC）
 func hasWindowsDrive(value string) bool {
-	if runtime.GOOS != "windows" && len(value) < 2 {
-		return false
-	}
 	if len(value) >= 2 && value[1] == ':' && isDriveLetter(value[0]) {
 		return true
 	}

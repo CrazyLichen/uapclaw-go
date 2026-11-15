@@ -53,19 +53,18 @@ func DefaultOutputRepairConfig() OutputRepairConfig {
 	return OutputRepairConfig{MaxAttempts: 3, MaxStagnantAttempts: 2}
 }
 
-// OutputRepairConfigFromDict 从映射构造配置（对齐 OutputRepairConfig.from_dict）
-func OutputRepairConfigFromDict(data map[string]any, ok bool) (OutputRepairConfig, error) {
-	if !ok || data == nil {
+// OutputRepairConfigFromDict 从原始值构造配置（对齐 OutputRepairConfig.from_dict：
+// nil → 默认；非映射 → 报错）
+func OutputRepairConfigFromDict(data any) (OutputRepairConfig, error) {
+	if data == nil {
 		return DefaultOutputRepairConfig(), nil
 	}
-	maxAttempts, err := dictInt(data, "max_attempts", 3)
-	if err != nil {
-		return OutputRepairConfig{}, err
+	mapping, ok := data.(map[string]any)
+	if !ok {
+		return OutputRepairConfig{}, fmt.Errorf("output_repair must be a mapping")
 	}
-	maxStagnant, err := dictInt(data, "max_stagnant_attempts", 2)
-	if err != nil {
-		return OutputRepairConfig{}, err
-	}
+	maxAttempts := extractIntOrZero(mapping, "max_attempts", 3)
+	maxStagnant := extractIntOrZero(mapping, "max_stagnant_attempts", 2)
 	return NewOutputRepairConfig(maxAttempts, maxStagnant)
 }
 
@@ -122,6 +121,26 @@ func CorrectionMessage(original, previous string, errors []string) string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// extractIntOrZero 提取整数字段；非整数（含字符串/bool/浮点非整）返回 0，
+// 交由 NewOutputRepairConfig 产出 __post_init__ 同款错误文案（对齐 Python type(value) is not int 判定）
+func extractIntOrZero(mapping map[string]any, key string, defaultValue int) int {
+	raw, exists := mapping[key]
+	if !exists || raw == nil {
+		return defaultValue
+	}
+	if _, isBool := raw.(bool); isBool {
+		return 0
+	}
+	switch typed := raw.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	default:
+		return 0
+	}
+}
 
 // fingerprintJSON 对 [errors, state] 做 canonical JSON 后取 sha256（对齐 json.dumps sort_keys）
 func fingerprintJSON(value any) string {
