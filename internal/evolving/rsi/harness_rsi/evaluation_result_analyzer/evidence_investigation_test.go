@@ -234,3 +234,223 @@ func TestRequestExecutionFingerprint(t *testing.T) {
 		t.Fatal("指纹应为规范 JSON")
 	}
 }
+
+// TestSafeNumericExpression 白名单表达式求值（Python _safe_numeric_expression）
+func TestSafeNumericExpression(t *testing.T) {
+	if v, err := safeNumericExpression("1 + 2 * 3"); err != nil || v != 7 {
+		t.Fatalf("1+2*3 = %v err=%v", v, err)
+	}
+	if v, err := safeNumericExpression("(1.5 - 0.5) / 2"); err != nil || v != 0.5 {
+		t.Fatalf("(1.5-0.5)/2 = %v err=%v", v, err)
+	}
+	if v, err := safeNumericExpression("-3"); err != nil || v != -3 {
+		t.Fatalf("-3 = %v err=%v", v, err)
+	}
+	// 长度超限
+	if _, err := safeNumericExpression(strings.Repeat("1+", 150) + "1"); err == nil || err.Error() != "expression_length" {
+		t.Fatalf("超长应 expression_length: %v", err)
+	}
+	// 复杂度超限
+	if _, err := safeNumericExpression(strings.Repeat("+1", 45)[1:]); err == nil {
+		t.Fatal("超复杂度应报错")
+	}
+	// 非白名单节点
+	if _, err := safeNumericExpression("__import__('os')"); err == nil {
+		t.Fatal("函数调用应拒绝")
+	}
+	if _, err := safeNumericExpression("1/0"); err == nil {
+		t.Fatal("除零应拒绝")
+	}
+}
+
+// TestCheckRelation 关系判定（Python _check_relation）
+func TestCheckRelation(t *testing.T) {
+	// expected 缺失
+	r := checkRelation(map[string]any{"expression": "1"})
+	if r["availability"] != "invalid" || r["reason"] != "expected_must_be_a_finite_number" {
+		t.Fatalf("缺 expected: %v", r)
+	}
+	// 表达式非法
+	r = checkRelation(map[string]any{"expression": "bad((", "expected": 1.0})
+	if r["availability"] != "invalid" || !strings.HasPrefix(r["reason"].(string), "invalid_numeric_expression") {
+		t.Fatalf("非法表达式: %v", r)
+	}
+	// approximately_equal
+	r = checkRelation(map[string]any{"expression": "1.0", "expected": 1.0, "tolerance": 0.1})
+	if r["availability"] != "available" || r["holds"] != true {
+		t.Fatalf("近似相等: %v", r)
+	}
+	// less_than
+	r = checkRelation(map[string]any{"expression": "1", "expected": 2.0, "operator": "less_than"})
+	if r["holds"] != true {
+		t.Fatalf("less_than: %v", r)
+	}
+	// 不支持的操作符
+	r = checkRelation(map[string]any{"expression": "1", "expected": 2.0, "operator": "wat"})
+	if r["reason"] != "unsupported_relation_operator" {
+		t.Fatalf("操作符: %v", r)
+	}
+}
+
+// TestCompareNumericChange 数值变化（Python _compare_numeric_change）
+func TestCompareNumericChange(t *testing.T) {
+	r := compareNumericChange(map[string]any{"before_expression": "10", "after_expression": "12", "expected_delta": 2.0})
+	if r["availability"] != "available" || r["holds"] != true || r["computed_delta"] != 2.0 {
+		t.Fatalf("delta=2: %v", r)
+	}
+	r = compareNumericChange(map[string]any{"before_expression": "10", "after_expression": "12", "expected_delta": 3.0})
+	if r["holds"] != false {
+		t.Fatalf("delta!=3 应不成立: %v", r)
+	}
+	r = compareNumericChange(map[string]any{"before_expression": "10", "after_expression": "12"})
+	if r["availability"] != "invalid" || r["reason"] != "expected_delta_must_be_a_finite_number" {
+		t.Fatalf("缺 expected_delta: %v", r)
+	}
+}
+
+// TestTraceEvents 事件展平（Python _trace_events）
+func TestTraceEvents(t *testing.T) {
+	traceData := map[string]any{
+		"traces": []any{
+			map[string]any{
+				"trace_id": "t1",
+				"messages": []any{
+					map[string]any{"role": "user", "content": "hello", "message_index": 0},
+					map[string]any{"role": "assistant", "content": "world", "message_index": 1},
+				},
+			},
+		},
+	}
+	events := traceEvents(traceData)
+	if len(events) != 2 || events[0]["trace_id"] != "t1" || events[0]["message_index"] != 0 {
+		t.Fatalf("事件展平不符: %v", events)
+	}
+	// 非法 message_index 回退 sequence
+	traceData["traces"] = []any{map[string]any{"trace_id": "t2", "messages": []any{map[string]any{"role": "u", "content": "x", "message_index": "bad"}}}}
+	events = traceEvents(traceData)
+	if events[0]["message_index"] != 0 {
+		t.Fatalf("非法 index 应回退 sequence: %v", events[0]["message_index"])
+	}
+}
+
+// TestSearchTrace 搜索排序（Python _search_trace）
+func TestSearchTrace(t *testing.T) {
+	events := []map[string]any{
+		{"trace_id": "t1", "message_index": 0, "role": "user", "content": "timeout error happened", "step_pointer": "", "tool_calls": nil},
+		{"trace_id": "t1", "message_index": 1, "role": "assistant", "content": "all good", "step_pointer": "", "tool_calls": nil},
+	}
+	r := searchTrace(events, map[string]any{"query": "timeout", "max_results": 1})
+	if r["availability"] != "available" || r["matched_event_count"] != 1 {
+		t.Fatalf("搜索结果: %v", r)
+	}
+	r = searchTrace(events, map[string]any{"query": "nonexistent"})
+	if r["availability"] != "not_found" {
+		t.Fatalf("无命中: %v", r)
+	}
+}
+
+// TestReadEvent 读事件与歧义（Python _read_event）
+func TestReadEvent(t *testing.T) {
+	events := []map[string]any{
+		{"trace_id": "t1", "message_index": 0, "role": "user", "content": "hello", "step_pointer": "", "tool_calls": nil},
+		{"trace_id": "t2", "message_index": 0, "role": "user", "content": "hello2", "step_pointer": "", "tool_calls": nil},
+	}
+	// 歧义：无 trace_id 多命中
+	r := readEvent(events, map[string]any{"message_index": 0})
+	if r["availability"] != "ambiguous" || r["reason"] != "trace_id_required_for_non_unique_message_index" {
+		t.Fatalf("歧义: %v", r)
+	}
+	// 带 trace_id 命中
+	r = readEvent(events, map[string]any{"message_index": 0, "trace_id": "t2"})
+	if r["availability"] != "available" {
+		t.Fatalf("命中: %v", r)
+	}
+	// 未命中
+	r = readEvent(events, map[string]any{"message_index": 5, "trace_id": "t1"})
+	if r["availability"] != "not_found" {
+		t.Fatalf("未命中: %v", r)
+	}
+	// tool_call_index 收窄
+	events2 := []map[string]any{
+		{"trace_id": "t1", "message_index": 0, "role": "assistant", "content": "x", "step_pointer": "",
+			"tool_calls": []map[string]any{{"name": "read", "input": "a", "output": "b", "error": ""}, {"name": "ls", "input": "c", "output": "d", "error": ""}}},
+	}
+	r = readEvent(events2, map[string]any{"message_index": 0, "tool_call_index": 1})
+	ev := r["event"].(map[string]any)
+	calls := ev["tool_calls"].([]map[string]any)
+	if len(calls) != 1 || calls[0]["name"] != "ls" {
+		t.Fatalf("tool_call_index 收窄: %v", calls)
+	}
+	// 越界 → 空调用列表
+	r = readEvent(events2, map[string]any{"message_index": 0, "tool_call_index": 9})
+	ev = r["event"].(map[string]any)
+	if calls, ok := ev["tool_calls"].([]map[string]any); ok && len(calls) != 0 {
+		t.Fatalf("越界应空: %v", ev["tool_calls"])
+	}
+}
+
+// TestCompareRuns 运行对比（Python _compare_runs）
+func TestCompareRuns(t *testing.T) {
+	r := compareRuns(nil, map[string]any{"query": "x"})
+	if r["availability"] != "not_available" || r["reason"] != "no_paired_candidate_feedback" {
+		t.Fatalf("无反馈: %v", r)
+	}
+	r = compareRuns(map[string]any{"score": 1}, map[string]any{"query": "score"})
+	if r["availability"] != "available" {
+		t.Fatalf("可用: %v", r)
+	}
+	pf := r["paired_feedback"].(map[string]any)
+	if _, ok := pf["exact_spans"]; !ok {
+		t.Fatalf("有词命中应返回 exact_spans: %v", pf)
+	}
+}
+
+// TestQueryTerms 分词去停用词（Python _query_terms）
+func TestQueryTerms(t *testing.T) {
+	terms := queryTerms("The timeout Error in /tmp/log.txt")
+	// the/停用词剔除，timeout/error/tmp/log.txt 保留
+	if len(terms) == 0 || terms[0] != "timeout" {
+		t.Fatalf("分词: %v", terms)
+	}
+	for _, s := range terms {
+		if s == "the" {
+			t.Fatal("停用词未剔除")
+		}
+	}
+}
+
+// TestBoundedExactText 有界文本（Python _bounded_exact_text）
+func TestBoundedExactText(t *testing.T) {
+	r := boundedExactText("short", 10)
+	if r["complete"] != true || r["omission_origin"] != "none" {
+		t.Fatalf("短文本: %v", r)
+	}
+	r = boundedExactText(strings.Repeat("x", 100), 10)
+	if r["complete"] != false || r["omission_origin"] != "controller_bound" || r["omitted_source_chars"] != 90 {
+		t.Fatalf("长文本: %v", r)
+	}
+}
+
+// TestContinuousPrefixEnd 连续前缀（Python _continuous_prefix_end）
+func TestContinuousPrefixEnd(t *testing.T) {
+	if got := continuousPrefixEnd([][2]int{{0, 5}, {5, 10}, {20, 30}}); got != 10 {
+		t.Fatalf("连续前缀 = %d, want 10", got)
+	}
+	if got := continuousPrefixEnd(nil); got != 0 {
+		t.Fatalf("空 = %d", got)
+	}
+}
+
+// TestUniqueAutomaticRequestID 自动 id（Python _unique_automatic_request_id）
+func TestUniqueAutomaticRequestID(t *testing.T) {
+	id := uniqueAutomaticRequestID("q1", "src/a.txt", 100, map[string]bool{})
+	if !strings.HasPrefix(id, "q1.auto.") || !strings.HasSuffix(id, ".100") {
+		t.Fatalf("id 格式: %q", id)
+	}
+	// 冲突加后缀
+	existing := map[string]bool{id: true}
+	id2 := uniqueAutomaticRequestID("q1", "src/a.txt", 100, existing)
+	if id2 == id {
+		t.Fatal("冲突未回避")
+	}
+}
