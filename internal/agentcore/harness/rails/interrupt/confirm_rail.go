@@ -20,9 +20,10 @@ type ConfirmPayload struct {
 	Feedback string `json:"feedback"`
 	// AutoConfirm 是否自动确认（"始终允许"标记）
 	AutoConfirm bool `json:"auto_confirm"`
-	// PersistScope 持久化范围："session"（仅本会话）/ "permanent"（总是允许）
-	// 空串表示未指定，调用方回退到 AutoConfirm 判定。
-	PersistScope string `json:"persist_scope,omitempty"`
+	// PersistAllow 持久化意愿三态（统一线格式键 persist_allow，
+	// Python permission_engine/models.py:65）：nil = 未指定（按永久记住）；
+	// true = 永久记住；false = 会话内记住。
+	PersistAllow *bool `json:"persist_allow,omitempty"`
 }
 
 // ConfirmRequest 确认请求配置。

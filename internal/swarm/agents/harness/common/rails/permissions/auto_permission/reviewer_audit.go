@@ -20,8 +20,8 @@
 // （它提供的是 `wants_session_persist()` / `wants_permanent_persist()` 方法），
 // 因此对确认响应对象该值恒为默认 `False`。
 //
-// Go 侧照此实现：`persist_allow` 恒 `False`，不把 `PersistScope` 映射进来。
-// `PersistScope` 字段本身服务于 9.90d-1 的持久化逻辑，与本文件的判定无关。
+// Go 侧照此实现：`persist_allow` 恒 `False`，不把 `PersistAllow` 映射进来。
+// `PersistAllow` 字段本身服务于 9.90d-1 的持久化逻辑，与本文件的判定无关。
 
 package auto_permission
 
@@ -155,7 +155,7 @@ func ParseConfirmationPayload(userInput any) map[string]any {
 // confirmResponsePayload 把确认响应对象投影成载荷 map。
 //
 // Python: getattr(user_input, "persist_allow", False)
-// PermissionConfirmResponse 无该属性，故恒为 False——不把 PersistScope 映射进来。
+// PermissionConfirmResponse 无该属性，故恒为 False——不把 PersistAllow 映射进来。
 func confirmResponsePayload(response *hsecurity.PermissionConfirmResponse) map[string]any {
 	if response == nil {
 		return nil

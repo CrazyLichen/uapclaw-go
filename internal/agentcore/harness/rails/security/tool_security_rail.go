@@ -659,7 +659,7 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 			Approved:     input.Approved,
 			Feedback:     input.Feedback,
 			AutoConfirm:  input.AutoConfirm,
-			PersistScope: input.PersistScope,
+			PersistAllow: input.PersistAllow,
 		}
 	case map[string]any:
 		approved, _ := input["approved"].(bool)
@@ -671,26 +671,21 @@ func parseConfirmPayload(userInput any) *harnesssecurity.PermissionConfirmRespon
 		}
 		feedback, _ := input["feedback"].(string)
 		autoConfirm, _ := input["auto_confirm"].(bool)
-		persistScope, _ := input["persist_scope"].(string)
-		// persist_allow 三态（Python 应答线格式键，answers.py:121-128 /
-		// models.py:64-65）：true→permanent、false→session、缺省→保留
-		// persist_scope 或空串。原生 harness 的宿主应答（含
-		// interrupt.InterruptAnswerFor 产物）带的是本键，缺失会导致
-		// 「会话内记住」被误判为永久记住。
+		// persist_allow 三态（统一线格式键，Python answers.py:121-128 /
+		// models.py:64-65）：true=永久记住、false=会话内记住、缺省=按永久。
+		// 线格式已全线统一 persist_allow（2026-11-14 裁决废除 persist_scope
+		// 双轨）——缺失会导致「会话内记住」被误判为永久记住。
+		var persistAllow *bool
 		if rawAllow, hasAllow := input["persist_allow"]; hasAllow {
 			if allowFlag, isBool := rawAllow.(bool); isBool {
-				if allowFlag {
-					persistScope = "permanent"
-				} else {
-					persistScope = "session"
-				}
+				persistAllow = &allowFlag
 			}
 		}
 		return &harnesssecurity.PermissionConfirmResponse{
 			Approved:     approved,
 			Feedback:     feedback,
 			AutoConfirm:  autoConfirm,
-			PersistScope: persistScope,
+			PersistAllow: persistAllow,
 		}
 	case string:
 		var raw map[string]any

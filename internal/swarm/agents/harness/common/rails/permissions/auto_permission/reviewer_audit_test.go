@@ -106,7 +106,7 @@ func TestParseConfirmationPayload_对象形态(t *testing.T) {
 		Approved:     true,
 		Feedback:     "ok",
 		AutoConfirm:  false,
-		PersistScope: "",
+		PersistAllow: nil,
 	}
 	got := ParseConfirmationPayload(response)
 	if got["approved"] != true {
@@ -215,12 +215,13 @@ func TestIsAllowOnceConfirmation_对象形态(t *testing.T) {
 	}) {
 		t.Error("AutoConfirm response should not be allow-once")
 	}
-	// PersistScope 不参与判定（Python 的 PermissionConfirmResponse 无
-	// persist_allow 属性，getattr 恒取默认 False）→ 仍算 allow-once
+	// PersistAllow 不参与判定（Python 的 PermissionConfirmResponse 无
+	// wants_session_persist 属性参与 allow-once 判定）→ 仍算 allow-once
+	sessionFlag := false
 	if !IsAllowOnceConfirmation(hsecurity.PermissionConfirmResponse{
-		Approved: true, PersistScope: "session",
+		Approved: true, PersistAllow: &sessionFlag,
 	}) {
-		t.Error("PersistScope should not affect allow-once（对齐 Python）")
+		t.Error("PersistAllow should not affect allow-once（对齐 Python）")
 	}
 }
 

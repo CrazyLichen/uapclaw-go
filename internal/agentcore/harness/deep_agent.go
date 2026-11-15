@@ -447,7 +447,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 			}
 			result = r
 		} else {
-			r, err := d.runSingleRoundInvoke(ctx, cbc, sess)
+			r, err := d.runSingleRoundInvoke(ctx, cbc, sess, false)
 			if err != nil {
 				return err
 			}
@@ -1963,7 +1963,7 @@ func (d *DeepAgent) RunOneRound(ctx context.Context, work *hschema.RoundWorkItem
 			// Python: 生命周期内第一件事就是把专家角色物化成本轮附件（L3787）
 			d.syncExpertRoleAttachment(invokeInputs, sess)
 			if isResumeInput(invokeInputs) {
-				res, runErr := d.runSingleRoundInvoke(ctx, cbc, sess)
+				res, runErr := d.runSingleRoundInvoke(ctx, cbc, sess, true)
 				if runErr != nil {
 					return runErr
 				}
@@ -3131,7 +3131,7 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces
 
 // runSingleRoundInvoke 调用内层 ReActAgent 一次。
 // Python: DeepAgent._run_single_round_invoke(ctx, session) (line 1647)
-func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade, streaming bool) (map[string]any, error) {
 	modified, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	if !ok {
 		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
@@ -3145,11 +3145,14 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfac
 
 	effectiveInputs := toEffectiveInputs(modified)
 
-	// Python: run_one_round 的恢复分支固定传 streaming=True →
-	// react_agent.invoke(effective_inputs, session, _streaming=True)。
-	// ReActAgent.Invoke 读 inputs["_streaming"] 决定流式/非流式模型调用，
-	// 缺失时恢复轮会走非流式 Invoke（2026-11-14 问答闭环实锤）。
-	effectiveInputs["_streaming"] = true
+	// Python: run_single_round_invoke 的 streaming 参数（默认 False）决定是否
+	// 传 _streaming=True：仅 resume 路径传 streaming=True（deep_agent.py:3789），
+	// 普通 Invoke 不传（deep_agent.py:3393 → 走非流式分支）。
+	// ReActAgent.Invoke 读 inputs["_streaming"] 决定流式/非流式模型调用；
+	// 旧实现无条件写死 true 导致普通 Invoke 也走流式（2026-11-15 集成用例实锤）。
+	if streaming {
+		effectiveInputs["_streaming"] = true
+	}
 
 	// 测试覆写优先
 	if invokeOverride != nil {

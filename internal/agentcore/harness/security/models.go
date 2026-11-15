@@ -42,31 +42,30 @@ type PermissionConfirmResponse struct {
 	Feedback string `json:"feedback,omitempty"`
 	// AutoConfirm 是否自动确认（记住并写回策略）
 	AutoConfirm bool `json:"auto_confirm,omitempty"`
-	// PersistScope 持久化范围："session"（仅本会话）/ "permanent"（总是允许）
-	// 空串表示未指定，调用方回退到 AutoConfirm 判定。
-	//
-	// Python: openjiuwen PermissionConfirmResponse.wants_session_persist() /
-	// wants_permanent_persist()（SDK 方法，Go 侧改用显式字段表达）
-	PersistScope string `json:"persist_scope,omitempty"`
+	// PersistAllow 持久化意愿三态（统一线格式键，Python
+	// permission_engine/models.py:65 persist_allow: bool | None）：
+	// nil = 未指定（旧宿主，按永久记住）；true = 永久记住；
+	// false = 会话内记住。与 interrupt.InterruptAnswerFor 产物、
+	// 确认 schema 的线键同名（2026-11-14 裁决：废除 Go 自造的
+	// persist_scope 双轨，全线统一 persist_allow）。
+	PersistAllow *bool `json:"persist_allow,omitempty"`
 }
 
 // WantsPermanentPersist 是否永久记住（走 persist_allow_rule）。
 // Python: PermissionConfirmResponse.wants_permanent_persist (models.py:67-72)：
 // approved 且 auto_confirm 且（persist_allow 缺省或为 True）。
-// Go 的 PersistScope 语义映射："session" → false；""/"permanent" → true
-// （空串对应 Python persist_allow is None 的旧宿主回退）。
 func (p *PermissionConfirmResponse) WantsPermanentPersist() bool {
 	if !p.Approved || !p.AutoConfirm {
 		return false
 	}
-	return p.PersistScope != "session"
+	return p.PersistAllow == nil || *p.PersistAllow
 }
 
 // WantsSessionPersist 是否会话内记住（走 persist_session_allow_rule）。
 // Python: PermissionConfirmResponse.wants_session_persist (models.py:74-75)：
 // approved 且 auto_confirm 且 persist_allow is False。
 func (p *PermissionConfirmResponse) WantsSessionPersist() bool {
-	return p.Approved && p.AutoConfirm && p.PersistScope == "session"
+	return p.Approved && p.AutoConfirm && p.PersistAllow != nil && !*p.PersistAllow
 }
 
 
