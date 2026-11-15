@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,5 +155,179 @@ func TestImageDataURIFromPath_失败路径(t *testing.T) {
 	_ = os.WriteFile(empty, nil, 0o644)
 	if got := ImageDataURIFromPath(empty, "image/png"); got != "" {
 		t.Fatalf("空文件应空串: %q", got)
+	}
+}
+
+// ──────────────────────────── 注入（prepare_multimodal_image_messages） ────────────────────────────
+
+// mkImageFile 构造测试图片记录，写真实文件供 data URI 读取。
+func mkImageFile(t *testing.T, name string) MultimodalImageFile {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte("img-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mime := "image/png"
+	if strings.HasSuffix(name, ".jpg") {
+		mime = "image/jpeg"
+	}
+	return MultimodalImageFile{Type: "image", Filename: name, Path: p, MimeType: mime}
+}
+
+// TestPrepareMultimodalImageMessages_注入最后一条user消息 对齐 :191-215 与 :371-387。
+func TestPrepareMultimodalImageMessages_注入最后一条user消息(t *testing.T) {
+	img := mkImageFile(t, "shot.png")
+	msgs := []llmschema.BaseMessage{
+		llmschema.NewDefaultMessage(llmschema.RoleTypeSystem, "sys"),
+		llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "earlier"),
+		llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "look at this"),
+	}
+	updated, injected := PrepareMultimodalImageMessages(msgs, []MultimodalImageFile{img})
+	if injected != 1 {
+		t.Fatalf("injected = %d", injected)
+	}
+	// 最后一条 user 被改
+	last := updated[2].GetContent()
+	parts := last.Parts()
+	if len(parts) != 2 {
+		t.Fatalf("parts = %d", len(parts))
+	}
+	if parts[0].Type != "text" {
+		t.Fatalf("首块应为文本: %+v", parts[0])
+	}
+	// {query, file} JSON 结构
+	var payload struct {
+		Query string `json:"query"`
+		File  []struct {
+			Filename string `json:"filename"`
+			Path     string `json:"path"`
+			MimeType string `json:"mime_type"`
+		} `json:"file"`
+	}
+	if err := json.Unmarshal([]byte(parts[0].Text), &payload); err != nil {
+		t.Fatalf("JSON 解析失败: %v", err)
+	}
+	if payload.Query != "look at this" {
+		t.Fatalf("query = %q", payload.Query)
+	}
+	if len(payload.File) != 1 || payload.File[0].Filename != "shot.png" || payload.File[0].MimeType != "image/png" {
+		t.Fatalf("file 记录错: %+v", payload.File)
+	}
+	if parts[1].Type != "image_url" || parts[1].ImageURL == nil ||
+		!strings.HasPrefix(parts[1].ImageURL.URL, "data:image/png;base64,") {
+		t.Fatalf("image_url 块错: %+v", parts[1])
+	}
+	// 前面的消息不受影响
+	if updated[1].GetContent().Text() != "earlier" || updated[1].GetContent().IsText() != true {
+		t.Fatal("非目标消息被改动")
+	}
+}
+
+// TestPrepareMultimodalImageMessages_无图与无user 对齐 :194-198/:202-205。
+func TestPrepareMultimodalImageMessages_无图与无user(t *testing.T) {
+	msgs := []llmschema.BaseMessage{llmschema.NewDefaultMessage(llmschema.RoleTypeSystem, "s")}
+	updated, injected := PrepareMultimodalImageMessages(msgs, nil)
+	if injected != 0 || len(updated) != 1 {
+		t.Fatalf("无图应原样: injected=%d", injected)
+	}
+	if _, injected = PrepareMultimodalImageMessages(msgs, []MultimodalImageFile{{Path: "/nonexistent.png", MimeType: "image/png"}}); injected != 0 {
+		t.Fatalf("找不到 user 消息应原样: %d", injected)
+	}
+}
+
+// TestPrepareMultimodalImageMessages_全部读取失败不注入 对齐 :456-466 injected==0。
+func TestPrepareMultimodalImageMessages_全部读取失败不注入(t *testing.T) {
+	msgs := []llmschema.BaseMessage{llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "q")}
+	updated, injected := PrepareMultimodalImageMessages(msgs, []MultimodalImageFile{
+		{Type: "image", Filename: "x.png", Path: "/nonexistent/x.png", MimeType: "image/png"},
+	})
+	if injected != 0 {
+		t.Fatalf("injected = %d", injected)
+	}
+	if !updated[0].GetContent().IsText() || updated[0].GetContent().Text() != "q" {
+		t.Fatal("原消息应未被改动")
+	}
+}
+
+// ──────────────────────────── 剥离（strip_image_content_blocks） ────────────────────────────
+
+// TestStripImageContentBlocks_混合内容 对齐 :218-243 三分支。
+func TestStripImageContentBlocks_混合内容(t *testing.T) {
+	mixed := llmschema.NewMultiModalContent(
+		llmschema.ContentPart{Type: "text", Text: "a"},
+		llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "data:image/png;base64,x"}},
+		llmschema.ContentPart{Type: "text", Text: "b"},
+	)
+	sanitized, removed := StripImageContentBlocks(mixed)
+	if removed != 1 {
+		t.Fatalf("removed = %d", removed)
+	}
+	if !sanitized.IsText() || sanitized.Text() != "a\nb" {
+		t.Fatalf("合并文本错: %q", sanitized.Text())
+	}
+
+	// 全剥光 → IMAGE_CONTENT_OMITTED
+	onlyImg := llmschema.NewMultiModalContent(
+		llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "x"}},
+	)
+	sanitized, removed = StripImageContentBlocks(onlyImg)
+	if removed != 1 || !sanitized.IsText() || sanitized.Text() != ImageContentOmitted {
+		t.Fatalf("全剥光分支错: removed=%d text=%q", removed, sanitized.Text())
+	}
+
+	// 剩余块含非文本 → 保留原 parts
+	nonText := llmschema.NewMultiModalContent(
+		llmschema.ContentPart{Type: "input_audio", InputAudio: &llmschema.InputAudio{Data: "d", Format: "wav"}},
+		llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "x"}},
+	)
+	sanitized, _ = StripImageContentBlocks(nonText)
+	if len(sanitized.Parts()) != 1 {
+		t.Fatalf("非文本块保留失败: %d", len(sanitized.Parts()))
+	}
+
+	// 无图片块 → 原样计数 0
+	plain := llmschema.NewTextContent("plain")
+	sanitized, removed = StripImageContentBlocks(plain)
+	if removed != 0 || sanitized.Text() != "plain" {
+		t.Fatalf("无图块应原样: removed=%d", removed)
+	}
+}
+
+// TestStripImageContentFromModelContext 对齐 :245-256 遍历计数与就地更新。
+func TestStripImageContentFromModelContext(t *testing.T) {
+	msgs := []llmschema.BaseMessage{
+		llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "text only"),
+		func() llmschema.BaseMessage { m := llmschema.NewDefaultMessage(llmschema.RoleTypeAssistant, ""); m.SetContent(llmschema.NewMultiModalContent(llmschema.ContentPart{Type: "text", Text: "with"}, llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "x"}})); return m }(),
+	}
+	total := StripImageContentFromModelContext(msgs)
+	if total != 1 {
+		t.Fatalf("total = %d", total)
+	}
+	if msgs[1].GetContent().Text() != "with" {
+		t.Fatalf("就地更新失败: %q", msgs[1].GetContent().Text())
+	}
+}
+
+// ──────────────────────────── EnsureMultimodalImageWindowMutator（D-23.8-3） ────────────────────────────
+
+// TestEnsureMultimodalImageWindowMutator 对齐 :277-305。
+func TestEnsureMultimodalImageWindowMutator(t *testing.T) {
+	if mutator, ok := EnsureMultimodalImageWindowMutator(nil); ok || mutator != nil {
+		t.Fatal("空图列表应 (nil,false)")
+	}
+	img := mkImageFile(t, "w.png")
+	mutator, ok := EnsureMultimodalImageWindowMutator([]MultimodalImageFile{img})
+	if !ok {
+		t.Fatal("有图应返回闭包")
+	}
+	msgs := []llmschema.BaseMessage{llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "q")}
+	updated := mutator(msgs)
+	if updated[0].GetContent().IsText() {
+		t.Fatal("闭包执行后应注入图片块")
+	}
+	// 重复调用返回各自独立闭包（Python 替换式由 rail 持有层保证）
+	_, ok = EnsureMultimodalImageWindowMutator([]MultimodalImageFile{img})
+	if !ok {
+		t.Fatal("重复构造应成功")
 	}
 }

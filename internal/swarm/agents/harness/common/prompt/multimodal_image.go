@@ -9,6 +9,7 @@ package prompt
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,6 +64,109 @@ type MultimodalImageFile struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// PrepareMultimodalImageMessages 把图片文件注入消息列表最后一条 user 消息。
+// Python: prepare_multimodal_image_messages:191-215
+// 返回更新后的消息列表与注入的图片块数；无图/找不到 user 消息/全部读取失败时原样返回。
+func PrepareMultimodalImageMessages(messages []llmschema.BaseMessage, imageFiles []MultimodalImageFile) ([]llmschema.BaseMessage, int) {
+	images := NormalizeImageFiles(imageFiles)
+	if len(images) == 0 {
+		return messages, 0
+	}
+	targetIndex := LatestUserMessageIndex(messages)
+	if targetIndex < 0 {
+		return messages, 0
+	}
+
+	message := messages[targetIndex]
+	updatedContent, injected := appendImageFilesToContent(message.GetContent(), images)
+	if injected == 0 {
+		return messages, 0
+	}
+
+	updatedMessages := make([]llmschema.BaseMessage, len(messages))
+	copy(updatedMessages, messages)
+	copyMessageWithContent(updatedMessages[targetIndex], updatedContent)
+	return updatedMessages, injected
+}
+
+// StripImageContentBlocks 从消息内容中剥离图片块。
+// Python: strip_image_content_blocks:218-243
+// 返回净化后的内容与剥除数；无图片块时内容原样返回计数 0。
+// Python 纯字符串 content 对应 Go 的 IsText 内容（无 parts，无法含图片块）。
+func StripImageContentBlocks(content llmschema.MessageContent) (llmschema.MessageContent, int) {
+	parts := content.Parts()
+	if len(parts) == 0 {
+		return content, 0
+	}
+
+	keptParts := make([]llmschema.ContentPart, 0, len(parts))
+	removed := 0
+	for _, part := range parts {
+		if IsImageContentBlock(part) {
+			removed++
+			continue
+		}
+		keptParts = append(keptParts, part)
+	}
+	if removed == 0 {
+		return content, 0
+	}
+	if len(keptParts) == 0 {
+		return llmschema.NewTextContent(ImageContentOmitted), removed
+	}
+
+	// Python: 全部剩余块都能取文本时合并为单段文本；任一块无文本则保留原 parts。
+	textParts := make([]string, 0, len(keptParts))
+	for _, part := range keptParts {
+		text, ok := textFromContentPart(part)
+		if !ok {
+			return llmschema.NewMultiModalContent(keptParts...), removed
+		}
+		if text != "" {
+			textParts = append(textParts, text)
+		}
+	}
+	joined := strings.TrimSpace(strings.Join(textParts, "\n"))
+	if joined == "" {
+		return llmschema.NewTextContent(ImageContentOmitted), removed
+	}
+	return llmschema.NewTextContent(joined), removed
+}
+
+// StripImageContentFromModelContext 遍历消息列表剥除图片块，返回剥除总数。
+// Python: strip_image_content_from_model_context:245-256
+func StripImageContentFromModelContext(messages []llmschema.BaseMessage) int {
+	removedTotal := 0
+	for _, message := range messages {
+		sanitized, removed := StripImageContentBlocks(message.GetContent())
+		if removed == 0 {
+			continue
+		}
+		message.SetContent(sanitized)
+		removedTotal += removed
+	}
+	return removedTotal
+}
+
+// NormalizeImageFiles 归一化图片文件列表（导出供窗口装配复用）。
+// Python: _normalize_image_files:308-321
+func NormalizeImageFiles(imageFiles []MultimodalImageFile) []MultimodalImageFile {
+	normalized := make([]MultimodalImageFile, 0, len(imageFiles))
+	seenPaths := make(map[string]struct{})
+	for _, item := range imageFiles {
+		norm := normalizeImageFileStruct(item)
+		if norm == nil {
+			continue
+		}
+		if _, dup := seenPaths[norm.Path]; dup {
+			continue
+		}
+		seenPaths[norm.Path] = struct{}{}
+		normalized = append(normalized, *norm)
+	}
+	return normalized
+}
 
 // IsImageContentBlock 判断 content part 是否为图片块。
 // Python: is_image_content_block:35-42
@@ -152,7 +256,139 @@ func ImageDataURIFromPath(pathText string, mimeType string) string {
 	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
+// MultimodalImageWindowMutator 多模态图片窗口变形器签名。
+// Python: multimodal_image_window_mutator 闭包（ensure_multimodal_image_window_mutator:277-305）。
+// D-23.8-3：Python 的 _window_mutators 列表在 Go 无等价挂点，改为返回闭包由
+// MultimodalImageRail 持有、上下文窗口组装点调用。
+type MultimodalImageWindowMutator func(messages []llmschema.BaseMessage) []llmschema.BaseMessage
+
+// EnsureMultimodalImageWindowMutator 构造把图片注入窗口消息列表的变形器闭包。
+// Python: ensure_multimodal_image_window_mutator:277-305
+// 空图列表返回 (nil, false)（对齐 Python 不安装 mutator）。
+func EnsureMultimodalImageWindowMutator(imageFiles []MultimodalImageFile) (MultimodalImageWindowMutator, bool) {
+	images := NormalizeImageFiles(imageFiles)
+	if len(images) == 0 {
+		return nil, false
+	}
+	return func(messages []llmschema.BaseMessage) []llmschema.BaseMessage {
+		updated, _ := PrepareMultimodalImageMessages(messages, images)
+		return updated
+	}, true
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// normalizeImageFileStruct 对结构体形态的图片记录做与 map 形态相同的归一化校验。
+// Python: _normalize_image_file:323-351（结构体版；mime 白名单与 filename 兜底一致）。
+func normalizeImageFileStruct(item MultimodalImageFile) *MultimodalImageFile {
+	path := strings.TrimSpace(item.Path)
+	if path == "" {
+		return nil
+	}
+	mimeType := strings.ToLower(strings.TrimSpace(item.MimeType))
+	if _, ok := visionInlineImageMimeTypes[mimeType]; !ok {
+		return nil
+	}
+	filename := strings.TrimSpace(item.Filename)
+	if filename == "" {
+		filename = filepath.Base(path)
+	}
+	return &MultimodalImageFile{
+		Type:      "image",
+		Filename:  filename,
+		Path:      path,
+		MimeType:  mimeType,
+		SizeBytes: item.SizeBytes,
+	}
+}
+
+// appendImageFilesToContent 把图片 data URI 追加为 content 的 image_url 块。
+// Python: _append_image_files_to_content:371-387
+// 首块是 {"query":…,"file":[…]} JSON 文本块，其后跟注入成功的图片块。
+func appendImageFilesToContent(content llmschema.MessageContent, imageFiles []MultimodalImageFile) (llmschema.MessageContent, int) {
+	var imageURLParts []llmschema.ContentPart
+	var injectedFiles []MultimodalImageFile
+	for _, imageFile := range imageFiles {
+		dataURI := ImageDataURIFromPath(imageFile.Path, imageFile.MimeType)
+		part, ok := appendImageURLPart(dataURI)
+		if !ok {
+			continue
+		}
+		imageURLParts = append(imageURLParts, part)
+		injectedFiles = append(injectedFiles, imageFile)
+	}
+	if len(injectedFiles) == 0 {
+		return content, 0
+	}
+
+	parts := make([]llmschema.ContentPart, 0, len(imageURLParts)+1)
+	parts = append(parts, llmschema.ContentPart{
+		Type: "text",
+		Text: buildQueryFileText(content, injectedFiles),
+	})
+	parts = append(parts, imageURLParts...)
+	return llmschema.NewMultiModalContent(parts...), len(injectedFiles)
+}
+
+// buildQueryFileText 序列化 {query, file} JSON 文本块。
+// Python: _build_query_file_text:389-408
+func buildQueryFileText(content llmschema.MessageContent, imageFiles []MultimodalImageFile) string {
+	fileRecords := make([]map[string]any, 0, len(imageFiles))
+	for _, imageFile := range imageFiles {
+		fileRecords = append(fileRecords, map[string]any{
+			"filename":  imageFile.Filename,
+			"path":      imageFile.Path,
+			"mime_type": imageFile.MimeType,
+		})
+	}
+	payload := map[string]any{
+		"query": contentToQueryText(content),
+		"file":  fileRecords,
+	}
+	data, _ := json.Marshal(payload)
+	return string(data)
+}
+
+// contentToQueryText 取 content 的纯文本形态。
+// Python: _content_to_query_text:410-423
+func contentToQueryText(content llmschema.MessageContent) string {
+	if content.IsText() {
+		return content.Text()
+	}
+	texts := make([]string, 0, len(content.Parts()))
+	for _, part := range content.Parts() {
+		if text, ok := textFromContentPart(part); ok && text != "" {
+			texts = append(texts, text)
+		}
+	}
+	return strings.Join(texts, "\n")
+}
+
+// textFromContentPart 取 content part 的文本；非文本块返回 ("" , false)。
+// Python: _text_from_content_part:425-431
+func textFromContentPart(part llmschema.ContentPart) (string, bool) {
+	if part.Type == "text" {
+		return part.Text, true
+	}
+	return "", false
+}
+
+// appendImageURLPart 构造 image_url 块。
+// Python: _append_image_url_part:449-454
+func appendImageURLPart(dataURI string) (llmschema.ContentPart, bool) {
+	if !strings.HasPrefix(dataURI, "data:image/") {
+		return llmschema.ContentPart{}, false
+	}
+	return llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: dataURI}}, true
+}
+
+// copyMessageWithContent 用新 content 替换消息内容（就地 SetContent）。
+// Python: _copy_message_with_content:456-464
+func copyMessageWithContent(message llmschema.BaseMessage, content llmschema.MessageContent) {
+	message.SetContent(content)
+}
+
+// ──────────────────────────── 归一化辅助（同文件前段） ────────────────────────────
 
 // normalizeImageFile 归一化单个图片附件条目；非法条目返回 nil。
 // Python: _normalize_image_file:323-351
