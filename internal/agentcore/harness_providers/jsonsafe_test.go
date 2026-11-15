@@ -3,6 +3,7 @@ package harness_providers
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,55 +112,23 @@ func TestToJsonSafe_指针解引用(t *testing.T) {
 	assert.Nil(t, ToJsonSafe((*int)(nil)))
 }
 
-// TestToJsonSafe_ModelDump接缝 验证可选接口 ModelDump 被调用。
-// spec D3：本批无生产实现者，接缝可用即可。
-// Python: jsonsafe.py:36-38
-func TestToJsonSafe_ModelDump接缝(t *testing.T) {
-	got := ToJsonSafe(fakeModel{value: map[string]any{"k": math.NaN()}})
-	obj, ok := got.(map[string]any)
-	require.True(t, ok, "ModelDump 结果必须被递归归一化")
-	assert.Nil(t, obj["k"], "ModelDump 返回的 NaN 也要洗成 nil")
-}
 
-// fakeModel 测试用：实现 ModelDump 可选接口。
-type fakeModel struct {
-	value any
-}
-
-// ModelDump 返回固定值。
-func (f fakeModel) ModelDump(mode string, byAlias bool) (map[string]any, error) {
-	_ = mode
-	_ = byAlias
-	m, _ := f.value.(map[string]any)
-	return m, nil
-}
-
-// fakeModelErr 测试用：ModelDump 返回错误，应走兜底。
-type fakeModelErr struct{}
-
-// ModelDump 恒返回错误。
-func (fakeModelErr) ModelDump(string, bool) (map[string]any, error) {
-	return nil, assert.AnError
-}
-
-// TestToJsonSafe_ModelDump出错拒绝兜底 验证 ModelDump 失败时返回 nil 而
-// 不是 fmt.Sprint 调试串（调试串会把指针地址泄进事件流）。
-// Python: jsonsafe.py:36-38 无对应失败路径（model_dump 不返回 error），
-// 是 Go 侧接口带 error 的必要处理（2026-11-14 语义收紧）。
-func TestToJsonSafe_ModelDump出错拒绝兜底(t *testing.T) {
-	got := ToJsonSafe(fakeModelErr{})
-	assert.Nil(t, got, "ModelDump 失败必须返回 nil 拒绝兜底，实际 %#v", got)
-}
-
-// TestToJsonSafe_兜底转字符串 验证无法识别的类型走 fmt.Sprint。
-// 这是本函数的灵魂：provider payload 绝不把 live SDK 对象泄漏进事件流。
-// Python: jsonsafe.py:43
-func TestToJsonSafe_兜底转字符串(t *testing.T) {
-	type sdkObject struct{ Name string }
+// TestToJsonSafe_结构体走jsonMarshal 验证 struct 统一走 json.Marshal
+// （尊重自定义 MarshalJSON 与 json tag），替代原 fmt.Sprint 兜底。
+func TestToJsonSafe_结构体走jsonMarshal(t *testing.T) {
+	type sdkObject struct{ Name string `json:"name"` }
 	got := ToJsonSafe(sdkObject{Name: "x"})
+	m, ok := got.(map[string]any)
+	require.True(t, ok, "struct 必须走 json.Marshal 得到对象，实际 %T", got)
+	assert.Equal(t, "x", m["name"])
+}
+
+// TestToJsonSafe_自定义MarshalJSON优先 验证类型自带 MarshalJSON 时按其产出。
+func TestToJsonSafe_自定义MarshalJSON优先(t *testing.T) {
+	got := ToJsonSafe(time.Second)
 	s, ok := got.(string)
-	require.True(t, ok, "未知类型必须走 str() 兜底得到字符串，实际 %T", got)
-	assert.Contains(t, s, "x")
+	require.True(t, ok, "time.Duration 自带 MarshalJSON，实际 %T", got)
+	assert.Contains(t, s, "1s")
 }
 
 // TestToJsonSafe_结果可被FreezeJsonValue接受 验证归一化后不再有 NaN。

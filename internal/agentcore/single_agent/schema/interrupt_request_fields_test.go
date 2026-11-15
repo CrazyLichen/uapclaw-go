@@ -111,10 +111,12 @@ func TestInterruptRequest_JSON序列化含新字段(t *testing.T) {
 
 	var back map[string]any
 	require.NoError(t, json.Unmarshal(raw, &back))
-	assert.Equal(t, "intr_1", back["InterruptID"])
-	assert.Equal(t, "ask_user", back["InterruptKind"])
-	assert.Equal(t, "owner-1", back["InterruptOwner"])
-	assert.Equal(t, "v", back["Metadata"].(map[string]any)["k"])
+	// 2026-11-14 补 snake_case json tag（对齐 Python model_dump 键，
+	// jsonsafe struct 分支统一走 json.Marshal 后消费方按小写键读取）。
+	assert.Equal(t, "intr_1", back["interrupt_id"])
+	assert.Equal(t, "ask_user", back["interrupt_kind"])
+	assert.Equal(t, "owner-1", back["interrupt_owner"])
+	assert.Equal(t, "v", back["metadata"].(map[string]any)["k"])
 }
 
 // TestInterruptRequest_JSON往返 验证序列化后能无损还原

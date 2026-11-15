@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"fmt"
+	"encoding/json"
 
 	"github.com/google/uuid"
 
@@ -74,21 +74,54 @@ type InterruptRequester interface {
 //     答案路由**始终按 owner**，与 kind 无关。
 type InterruptRequest struct {
 	// Message 向用户展示的确认消息
-	Message string
+	Message string `json:"message"`
 	// PayloadSchema 用户输入的数据结构定义 (JSON Schema)
-	PayloadSchema map[string]any
+	PayloadSchema map[string]any `json:"payload_schema,omitempty"`
 	// AutoConfirmKey 自动确认的配置键
-	AutoConfirmKey string
+	AutoConfirmKey string `json:"auto_confirm_key,omitempty"`
 	// UIOptions UI 选项（对齐 Python ui_options: list[dict] | None）
-	UIOptions []map[string]any
+	UIOptions []map[string]any `json:"ui_options,omitempty"`
 	// Metadata 中断元数据，承载宿主与 rail 之间传递的附加信息
-	Metadata map[string]any
+	Metadata map[string]any `json:"metadata,omitempty"`
 	// InterruptID 本次中断的唯一标识，由中断处理器填入
-	InterruptID string
+	InterruptID string `json:"interrupt_id,omitempty"`
 	// InterruptKind 中断类型（见 InterruptKind），未声明时为空串
-	InterruptKind string
+	InterruptKind string `json:"interrupt_kind,omitempty"`
 	// InterruptOwner 抛出该中断的 rail 的稳定键，答案按此路由
-	InterruptOwner string
+	InterruptOwner string `json:"interrupt_owner,omitempty"`
+}
+
+// MarshalJSON 实现 json.Marshaler：内嵌请求字段平铺到顶层（工具上下文
+// 字段优先），对齐 Python ToolCallInterruptRequest.from_tool_call
+// （response.py:109-127，request.model_dump() + extra="allow"）。
+// jsonsafe 对 struct 的统一 json.Marshal 分支据此拿到扁平形状，
+// 不再需要 model_dump 探测接口。
+// 注意接收者是值：ToJsonSafe 的 Pointer 分支解引用后以值进入 Struct 分支，
+// 指针接收者的 MarshalJSON 不在值类型 method set 内，会被静默跳过。
+func (r ToolCallInterruptRequest) MarshalJSON() ([]byte, error) {
+	out := map[string]any{
+		"tool_name":    r.ToolName,
+		"tool_call_id": r.ToolCallID,
+		"tool_args":    r.ToolArgs,
+		"index":        r.Index,
+	}
+	if r.Request != nil {
+		inner, err := json.Marshal(r.Request)
+		if err != nil {
+			return nil, err
+		}
+		var base map[string]any
+		if err := json.Unmarshal(inner, &base); err != nil {
+			return nil, err
+		}
+		for key, value := range base {
+			// 工具上下文字段优先（Python: base_fields.update(tool_*)）
+			if _, exists := out[key]; !exists {
+				out[key] = value
+			}
+		}
+	}
+	return json.Marshal(out)
 }
 
 // ToolCallInterruptRequest 工具调用级中断请求，扩展 InterruptRequest。
@@ -275,56 +308,6 @@ func (r *InterruptRequest) SetInterruptKind(kind string) { r.InterruptKind = kin
 
 // SetInterruptOwner 实现 InterruptRequester 接口（stampInterrupt 写入用）。
 func (r *InterruptRequest) SetInterruptOwner(owner string) { r.InterruptOwner = owner }
-
-// ModelDump 实现 harness_providers.ToJsonSafe 的 model_dump 缝（spec D3）。
-// Python: InterruptRequest(BaseModel).model_dump()——键为 snake_case 字段名，
-// jsonsafe.py:36-38 据此把 pydantic 模型转成 dict；没有本方法时 Go 的
-// ToJsonSafe 对 struct 走 fmt.Sprint 兜底，_interrupt_prompt 等消费方拿不到字段。
-func (r *InterruptRequest) ModelDump(_ string, _ bool) (map[string]any, error) {
-	return map[string]any{
-		"message":          r.Message,
-		"payload_schema":   r.PayloadSchema,
-		"auto_confirm_key": r.AutoConfirmKey,
-		"ui_options":       r.UIOptions,
-		"metadata":         r.Metadata,
-		"interrupt_id":     r.InterruptID,
-		"interrupt_kind":   r.InterruptKind,
-		"interrupt_owner":  r.InterruptOwner,
-	}, nil
-}
-
-// ModelDump 实现 model_dump 缝：内嵌请求字段 + 工具上下文字段平铺到顶层。
-// Python: ToolCallInterruptRequest（response.py:92-127，extra="allow"，
-// from_tool_call 用 request.model_dump() 平铺子类字段）。
-func (r *ToolCallInterruptRequest) ModelDump(_ string, _ bool) (map[string]any, error) {
-	out := map[string]any{
-		"tool_name":    r.ToolName,
-		"tool_call_id": r.ToolCallID,
-		"tool_args":    r.ToolArgs,
-		"index":        r.Index,
-	}
-	if r.Request == nil {
-		return out, nil
-	}
-	// 内嵌请求未实现 ModelDump → 直接返回错误，拒绝静默降级：
-	// 静默跳过会让子类字段（questions/message 等）凭空消失，消费方拿到
-	// 残缺 dict 或落回 fmt.Sprint 调试串（2026-11-14 ask_user prompt 实锤）。
-	dumper, ok := r.Request.(interface {
-		ModelDump(mode string, byAlias bool) (map[string]any, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf(
-			"内嵌中断请求 %T 未实现 ModelDump，拒绝静默平铺降级", r.Request)
-	}
-	base, err := dumper.ModelDump("", false)
-	if err != nil {
-		return nil, err
-	}
-	for key, value := range base {
-		out[key] = value
-	}
-	return out, nil
-}
 
 // GetMessage 实现 InterruptRequester 接口，委托给 Request 字段。
 func (r *ToolCallInterruptRequest) GetMessage() string {

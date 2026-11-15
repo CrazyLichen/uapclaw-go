@@ -31,19 +31,7 @@ type AskUserRequest struct {
 	// InterruptRequest 嵌入基础中断请求
 	saschema.InterruptRequest
 	// Questions 要向用户展示的问题列表
-	Questions []map[string]any `json:"questions"`
-}
-
-// ModelDump 实现 harness_providers.ToJsonSafe 的 model_dump 缝（spec D3）：
-// 基础字段 + questions 平铺（Python: AskUserRequest.model_dump，
-// ask_user_rail.py:25-27）。
-func (r *AskUserRequest) ModelDump(mode string, byAlias bool) (map[string]any, error) {
-	m, err := r.InterruptRequest.ModelDump(mode, byAlias)
-	if err != nil {
-		return nil, err
-	}
-	m["questions"] = r.Questions
-	return m, nil
+	Questions []map[string]any `json:"questions,omitempty"`
 }
 
 // AskUserRail 向用户提问的 Rail。

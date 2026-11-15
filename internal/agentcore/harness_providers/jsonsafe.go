@@ -1,12 +1,11 @@
 package harness_providers
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
 	"strings"
-
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // 本文件对应 Python openjiuwen/harness_providers/jsonsafe.py（55 行）：
@@ -39,8 +38,8 @@ import (
 //   - os.PathLike：Go 无对应抽象，仓内路径一律 string，走兜底
 //   - dataclass：Go 无对应物，用「有字段的结构体」启发式会误伤 time.Time
 //     等（Python 对它们走兜底），故不实现
-//   - model_dump：用可选接口 ModelDump 探测（15.6 起有实现者；错误拒绝
-//     fmt.Sprint 兜底，见步骤 4）
+//   - model_dump：Go 独有 json.Marshal 统一承接（含自定义 MarshalJSON），
+//     不再复刻 model_dump 探测接口（2026-11-14 裁决删除 ModelDump 缝）
 //
 // Python: jsonsafe.py:15-43 to_json_safe
 func ToJsonSafe(value any) any {
@@ -78,26 +77,6 @@ func ToJsonSafe(value any) any {
 		return strings.ToValidUTF8(string(b), "\ufffd")
 	}
 
-	// 步骤 4：model_dump 可选接口（spec D3 留缝；15.6 起有真实实现者）。
-	// Python: jsonsafe.py:36-38
-	// 签名收窄为 map[string]any——model_dump 的产物就是 dict，任何具体类型
-	// 断言都发生在实现方内部。实现方返回错误时**拒绝 fmt.Sprint 兜底**：
-	// 那会把含指针地址的调试串泄进事件流（2026-11-14 ask_user prompt 实锤），
-	// 改为 Error 日志 + nil，让消费方显式感知。
-	if dumper, ok := value.(interface {
-		ModelDump(mode string, byAlias bool) (map[string]any, error)
-	}); ok {
-		dumped, err := dumper.ModelDump("json", true)
-		if err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Str("value_type", fmt.Sprintf("%T", value)).
-				Msg("ModelDump failed, refusing fmt.Sprint fallback")
-			return nil
-		}
-		return ToJsonSafe(dumped)
-	}
-
 	// 步骤 5：容器递归
 	// Python: jsonsafe.py:39-42
 	rv := reflect.ValueOf(value)
@@ -124,6 +103,21 @@ func ToJsonSafe(value any) any {
 		// 也返回 "string" 而非空串，该判据不成立。三者 Kind() 都是 String，
 		// 返回原字符串本身，语义与 Python 完全一致。
 		return rv.String()
+	case reflect.Struct:
+		// 统一走 json.Marshal（尊重类型自定义 MarshalJSON 与 json tag），
+		// 替代已删除的 ModelDump 可选接口缝（2026-11-14 裁决：JSON 序列化
+		// 是 Go 独有机制，不再复刻 Python model_dump 探测）。
+		// marshal 失败（循环引用/NaN/不可序列化的 live SDK 对象）才落
+		// str() 兜底——兜底语义收窄为「真的没有结构可说」。
+		b, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Sprint(value)
+		}
+		var out any
+		if err := json.Unmarshal(b, &out); err != nil {
+			return fmt.Sprint(value)
+		}
+		return out
 	case reflect.Pointer, reflect.Interface:
 		// Python 无指针概念；Go 侧解引用后递归，nil 保持 nil。
 		if rv.IsNil() {
