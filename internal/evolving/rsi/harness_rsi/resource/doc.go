@@ -8,7 +8,8 @@
 //
 //	resource/
 //	├── doc.go                       # 包文档
-//	└── orchestrating.default.yaml  # 默认配置模板（go:embed）
+//	├── embed.go                     # DefaultConfigTemplate（go:embed 导出）
+//	└── orchestrating.default.yaml  # 默认配置模板
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/resource/orchestrating.default.yaml
 package resource
