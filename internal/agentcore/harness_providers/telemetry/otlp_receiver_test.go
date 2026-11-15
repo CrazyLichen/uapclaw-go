@@ -359,3 +359,32 @@ func TestGrpcExportLogs_扇出(t *testing.T) {
 	}
 	r.Aclose(t.Context())
 }
+
+// ──────────────────────────── fanout（T5） ────────────────────────────
+
+// TestFanout_多订阅者广播 同一事件广播给全部订阅者（Python :201-211）
+func TestFanout_多订阅者广播(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	countA, countB := make(chan int, 8), make(chan int, 8)
+	_, _ = r.Subscribe(func(event map[string]any) { countA <- 1 })
+	_, _ = r.Subscribe(func(event map[string]any) { countB <- 1 })
+	r.fanout([]map[string]any{{"signal": "trace"}})
+	<-countA
+	<-countB
+	r.Aclose(t.Context())
+}
+
+// TestFanout_订阅者panic被吞 某订阅者 panic 不影响其他订阅者（best-effort）
+func TestFanout_订阅者panic被吞(t *testing.T) {
+	r := NewSharedOtlpReceiver()
+	got := make(chan map[string]any, 8)
+	_, _ = r.Subscribe(func(map[string]any) { panic("boom") })
+	_, _ = r.Subscribe(func(event map[string]any) { got <- event })
+	r.fanout([]map[string]any{{"signal": "trace"}})
+	select {
+	case <-got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("panic 订阅者不应阻断后续订阅者")
+	}
+	r.Aclose(t.Context())
+}
