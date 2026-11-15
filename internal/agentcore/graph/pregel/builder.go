@@ -6,7 +6,7 @@ import "fmt"
 
 // PregelBuilder Pregel 图的构图期组装者：持有节点表与通道列表，
 // 是 PregelNode（8.3）+ Router 三实现（8.5）+ Trigger/Barrier 通道（8.4）
-// 的唯一组装点；Build()（⤴️ 8.3c 回填）将两者交付给调度引擎。
+// 的唯一组装点；Build()（8.3c 已回填）将两者交付给调度引擎。
 // Python: builder.py:13
 type PregelBuilder struct {
 	// nodes 节点名 → 节点（对齐 Python self.nodes dict；重复名后者覆盖）
@@ -18,7 +18,7 @@ type PregelBuilder struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPregelBuilder 创建构图器并预注册 START/END 两个虚拟节点
-//（执行体 NoopNodeFunc、零 routers），各自配一条 TriggerChannel。
+// （执行体 NoopNodeFunc、零 routers），各自配一条 TriggerChannel。
 // Python: builder.py:14-19
 func NewPregelBuilder() *PregelBuilder {
 	b := &PregelBuilder{
@@ -104,4 +104,11 @@ func (b *PregelBuilder) AddBranch(src string, selector Selector) *PregelBuilder 
 	}
 	node.addRouter(NewConditionalRouter(selector))
 	return b
+}
+
+// Build 将节点表与通道交付给调度引擎（Python builder.py:71-77）。
+// store 可为 nil（PregelLoop 对 saver 三重判空，engine.py:43/186）；
+// afterStep 同步单形态（spec 8.3c 偏差 B1）。8.3a 方案 A 承诺的回填兑现点。
+func (b *PregelBuilder) Build(store Store, afterStep AfterStepFunc) *Pregel {
+	return NewPregel(b.nodes, b.channels, Start, store, afterStep)
 }

@@ -178,3 +178,24 @@ func TestAddBranch_未注册源节点panic(t *testing.T) {
 		b.AddBranch("ghost", SelectorFunc(nil))
 	})
 }
+
+// TestPregelBuilder_Build Build 交付调度引擎（Python builder.py:71-77；8.3a 方案 A 回填兑现）
+func TestPregelBuilder_Build(t *testing.T) {
+	b := NewPregelBuilder()
+	b.AddNode("a", NoopNodeFunc)
+	require.NoError(t, b.AddEdge(Start, "a"))
+	require.NoError(t, b.AddEdge("a", End))
+	sv := &fakeSaver{}
+	hooked := 0
+	pg := b.Build(sv, func(_ context.Context, loop *PregelLoop) {
+		hooked++
+		loop.Step += 100 // D6 字段导出的消费面验证
+	})
+	assert.Same(t, sv, pg.Store)
+	assert.Equal(t, Start, pg.Initial)
+	require.Len(t, pg.Nodes, 3) // START/END/a
+	res, err := pg.Run(context.Background(), nil)
+	assert.NoError(t, err)
+	assert.Empty(t, res)
+	assert.Equal(t, 2, hooked) // step0(START)/step1(a)
+}
