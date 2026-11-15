@@ -51,7 +51,7 @@ Python 两个类 → Go 两个类型。
 | `config` | `config *PregelConfig` | |
 | `succeed_messages: List[Message]` | `succeedMessages []Message` | |
 | `failed: Dict[str, PendingNode]` | `failed map[string]store.PendingNode` | |
-| `running_tasks: Dict[asyncio.Task, PregelNode]` | `runningTasks map[*nodeTask]*nodeTask` 键值组合见下 | 偏差 D2 |
+| `running_tasks: Dict[asyncio.Task, PregelNode]` | `runningTasks map[*nodeTask]*PregelNode` | 见下方说明 | 偏差 D2 |
 
 `running_tasks` 以 task 对象为键——Go 无此机制。方案 B 下每任务持单容量 done channel，用 `map[*nodeTask]*PregelNode` 保留「任务→节点」反查表；Python `wait_all`/`cancel_all` 中 `pop(t)` 语义用 `delete` 复刻。
 
