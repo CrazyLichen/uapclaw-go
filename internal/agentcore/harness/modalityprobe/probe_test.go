@@ -1,4 +1,4 @@
-package harness
+package modalityprobe
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -401,7 +401,7 @@ func TestSetCachedImageSupport_Declared(t *testing.T) {
 	defer ResetImageSupportCache()
 	ResetImageSupportCache()
 
-	key := probeCacheKey{APIBase: "http://declared.example", ModelName: "m1"}
+	key := ProbeCacheKey{APIBase: "http://declared.example", ModelName: "m1"}
 	SetCachedImageSupport(key, true)
 	if v := cachedImageSupport(key); v == nil || !*v {
 		t.Error("预填结论应可读")

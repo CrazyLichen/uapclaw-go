@@ -8,7 +8,7 @@
 //	harness/
 //	├── doc.go                       # 包文档
 //	├── deep_agent.go                # DeepAgent 结构体及全部方法实现（含会话级交互监督器：相位机/单输出租约/双队列调度）
-//	├── image_modality_probe.go     # 图像模态探测（Python: image_modality_probe.py，23.7）
+//	├── modalityprobe/              # 图像模态探测子包（Python: image_modality_probe.py，23.7 方案 B）
 //	├── factory.go                   # CreateDeepAgent 工厂函数及辅助函数
 //	├── factory_parts.go             # DeepAgentParts 解析与应用（Resolve/Apply）
 //	├── resolve_spec_parts.go # DeepAgentSpec → parts（转调 ResolveDeepAgentParts）

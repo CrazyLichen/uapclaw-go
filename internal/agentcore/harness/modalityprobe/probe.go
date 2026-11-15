@@ -1,7 +1,15 @@
-// Package harness 内图像输入模态探测：判定模型能否接收原生图片输入。
+// Package modalityprobe 图像输入模态探测：判定模型能否接收原生图片输入。
 //
-// Python: openjiuwen/harness/image_modality_probe.py（一文件一文件移植）
-package harness
+// Python: openjiuwen/harness/image_modality_probe.py（一文件一文件移植，23.7 方案 B）
+//
+// 文件目录：
+//
+//	modalityprobe/
+//	├── doc.go       # 包文档
+//	└── probe.go    # 探测器本体（假图问答/判定/缓存/路由隔离）
+//
+// 对应 Python 代码：openjiuwen/harness/image_modality_probe.py
+package modalityprobe
 
 import (
 	"bytes"
@@ -17,18 +25,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// logComponent 本包日志组件（规则 3：包级定义）
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// probeCacheKey 探测结论缓存键 (api_base, model_name)。
+// ProbeCacheKey 探测结论缓存键 (api_base, model_name)。
 // Python: image_modality_probe.py:160-168 probe_cache_key 返回的 tuple
-type probeCacheKey struct {
+type ProbeCacheKey struct {
 	// APIBase 模型客户端 API 基础 URL
 	APIBase string
 	// ModelName 面向 provider 的模型名
@@ -94,9 +107,9 @@ var imageInputUnsupportedErrorPatterns = [...]string{
 // 去掉开关重试一次的原因。
 // Python: _THINKING_DISABLED_EXTRA_BODY:30-34
 var thinkingDisabledExtraBody = map[string]any{
-	"thinking":         map[string]any{"type": "disabled"},
-	"enable_thinking":  false,
-	"reasoning":        map[string]any{"enabled": false},
+	"thinking":        map[string]any{"type": "disabled"},
+	"enable_thinking": false,
+	"reasoning":       map[string]any{"enabled": false},
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -107,11 +120,11 @@ var dummyImageB64 = makeRedPngB64()
 
 // probeResults 探测结论缓存：(api_base, model_name) → bool，进程生命周期。
 // Python: _probe_results:37
-var probeResults sync.Map // probeCacheKey → bool
+var probeResults sync.Map // ProbeCacheKey → bool
 
 // probeInFlight 防重复调度：在途探测任务集合。
 // Python: _probe_tasks:38（asyncio.Task → goroutine 无句柄需求，只占位防重）
-var probeInFlight sync.Map // probeCacheKey → struct{}
+var probeInFlight sync.Map // ProbeCacheKey → struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -123,7 +136,7 @@ func MakeRedPngB64() string {
 
 // ProbeCacheKeyOf 返回模型的探测缓存键；无法解析（模型名缺失）时返回 nil。
 // Python: probe_cache_key:160-168
-func ProbeCacheKeyOf(model *llm.Model) *probeCacheKey {
+func ProbeCacheKeyOf(model *llm.Model) *ProbeCacheKey {
 	return probeCacheKeyOf(model)
 }
 
@@ -139,7 +152,7 @@ func GetCachedImageSupport(model *llm.Model) *bool {
 
 // SetCachedImageSupport 预填缓存：模型条目显式声明 supports_vision 时免探测。
 // Python: set_cached_image_support:179-189
-func SetCachedImageSupport(key probeCacheKey, supported bool) {
+func SetCachedImageSupport(key ProbeCacheKey, supported bool) {
 	probeResults.Store(key, supported)
 }
 
@@ -247,7 +260,7 @@ func makeRedPngB64() string {
 
 // probeCacheKeyOf 从 Model 提取 (api_base, model_name)；模型名缺失返回 nil。
 // Python: probe_cache_key:160-168
-func probeCacheKeyOf(model *llm.Model) *probeCacheKey {
+func probeCacheKeyOf(model *llm.Model) *ProbeCacheKey {
 	if model == nil || model.ModelConfig == nil {
 		return nil
 	}
@@ -259,11 +272,11 @@ func probeCacheKeyOf(model *llm.Model) *probeCacheKey {
 	if model.ClientConfig != nil {
 		apiBase = strings.TrimSpace(model.ClientConfig.APIBase)
 	}
-	return &probeCacheKey{APIBase: apiBase, ModelName: modelName}
+	return &ProbeCacheKey{APIBase: apiBase, ModelName: modelName}
 }
 
 // cachedImageSupport 读缓存；未命中返回 nil。
-func cachedImageSupport(key probeCacheKey) *bool {
+func cachedImageSupport(key ProbeCacheKey) *bool {
 	if v, ok := probeResults.Load(key); ok {
 		b := v.(bool)
 		return &b
@@ -273,7 +286,7 @@ func cachedImageSupport(key probeCacheKey) *bool {
 
 // probeAndCache 跑一次探测并把结论性结果写入缓存；探测失败仅记日志不缓存。
 // Python: _probe_and_cache:234-251
-func probeAndCache(model *llm.Model, key probeCacheKey) {
+func probeAndCache(model *llm.Model, key ProbeCacheKey) {
 	supported := runProbe(context.Background(), model)
 	if supported == nil {
 		return
