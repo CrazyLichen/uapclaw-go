@@ -66,42 +66,15 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeSkills 冻结 provider 配置，构造期不访问源文件。
+// Go 侧收窄（用户 2026-11-28 拍板，偏差 D-15.12-g）：仅接受已构造的
+// SkillSource；原始 dict/str → SkillSource 的转换由 provider config
+// 的反序列化层完成（Python 三形态收口于此，Go 拆到各 config unmarshal）。
 // Python: normalize_skills (skills.py:43-59)
-func NormalizeSkills(values []any, conflict string) ([]SkillSource, error) {
+func NormalizeSkills(values []SkillSource, conflict string) ([]SkillSource, error) {
 	if conflict != "skip" && conflict != "replace" && conflict != "append" {
 		return nil, fmt.Errorf("skill_conflict must be skip, replace or append")
 	}
-	result := make([]SkillSource, 0, len(values))
-	for _, value := range values {
-		switch v := value.(type) {
-		case SkillSource:
-			result = append(result, v)
-		case string:
-			result = append(result, SkillSource{Dir: v, Mode: "all"})
-		case map[string]any:
-			// Python: SkillSource(**dict(value))——走 __post_init__ 校验
-			dir, _ := v["dir"].(string)
-			mode, _ := v["mode"].(string)
-			if mode == "" {
-				mode = "all"
-			}
-			var enabled []string
-			if raw, ok := v["enabled_skills"].([]any); ok {
-				for _, item := range raw {
-					s, _ := item.(string)
-					enabled = append(enabled, s)
-				}
-			}
-			src, err := NewSkillSource(dir, mode, enabled)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, src)
-		default:
-			return nil, fmt.Errorf("skill source must be a directory or manifest skill declaration")
-		}
-	}
-	return result, nil
+	return values, nil
 }
 
 // InstallSkills 运行时启动前把完整技能包复制进发现目录，保留既有项目技能。

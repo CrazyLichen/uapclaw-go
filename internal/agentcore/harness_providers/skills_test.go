@@ -23,18 +23,16 @@ func TestNewSkillSource_构造校验(t *testing.T) {
 	}
 }
 
-// TestNormalizeSkills_三形态 对齐 normalize_skills（skills.py:43-59）。
-func TestNormalizeSkills_三形态(t *testing.T) {
+// TestNormalizeSkills_收窄 对齐 normalize_skills（skills.py:43-59）的 conflict 校验；
+// 输入面收窄为 []SkillSource（偏差 D-15.12-g，用户 2026-11-28 拍板）。
+func TestNormalizeSkills_收窄(t *testing.T) {
 	if _, err := NormalizeSkills(nil, "merge"); err == nil {
 		t.Fatal("非法 conflict 应报错")
 	}
 	src, _ := NewSkillSource("/d", "all", nil)
-	out, err := NormalizeSkills([]any{src, "/x", map[string]any{"dir": "/y"}}, "skip")
-	if err != nil || len(out) != 3 || out[0].Dir != "/d" || out[1].Dir != "/x" || out[2].Dir != "/y" {
-		t.Fatalf("三形态归一失败: %v %+v", err, out)
-	}
-	if _, err := NormalizeSkills([]any{42}, "skip"); err == nil {
-		t.Fatal("非法元素应报错")
+	out, err := NormalizeSkills([]SkillSource{src}, "skip")
+	if err != nil || len(out) != 1 || out[0].Dir != "/d" {
+		t.Fatalf("归一失败: %v %+v", err, out)
 	}
 }
 
@@ -323,7 +321,8 @@ func TestInstallSkills_库选择与frontMatter冲突(t *testing.T) {
 	project := filepath.Join(tmp, "project")
 	os.MkdirAll(project, 0o755)
 	existing := writeBundle(t, filepath.Join(project, ".agents", "skills", "legacy-folder"), "selected", "keep")
-	sources, err := NormalizeSkills([]any{map[string]any{"dir": library, "enabled_skills": []any{"selected"}, "mode": "auto_list"}}, "skip")
+	enabled := "selected"
+	sources, err := NormalizeSkills([]SkillSource{{Dir: library, Mode: "auto_list", EnabledSkills: []string{enabled}}}, "skip")
 	if err != nil {
 		t.Fatal(err)
 	}

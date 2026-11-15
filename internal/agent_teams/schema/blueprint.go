@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	harnessschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -81,9 +82,11 @@ type TeamAgentSpec struct {
 	Worktree *worktree.WorktreeConfig `json:"worktree,omitempty"`
 	// Workspace 工作空间配置
 	Workspace *team_workspace.TeamWorkspaceConfig `json:"workspace,omitempty"`
-	// BuildContext 构建上下文槽位（物化前为 dict，物化后为 BuildContext 实例）
-	// Python: build_context (blueprint.py:645, Optional[Any])
-	BuildContext any `json:"build_context,omitempty"`
+	// BuildContext 构建上下文运行时载体：活 BuildContext 实例（含 workspace 等
+	// 不可序列化句柄），不参与序列化。跨序列化边界由 BuildContextSeed +
+	// 注册工厂重建（Python materialize_build_context，blueprint.py:685）。
+	// Python: build_context (blueprint.py:645, Optional[Any], exclude=True)
+	BuildContext harnessschema.BuildContextInterface `json:"-"`
 	// Metadata 元数据
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// EnableHITT 是否启用 Human-in-the-Team

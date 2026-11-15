@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	harnessschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
@@ -485,18 +486,18 @@ func TestTeamAgentSpec_Validate_bootstrap需要scheduled(t *testing.T) {
 	}
 }
 
-// TestTeamAgentSpec_BuildContext槽位 验证 build_context any 槽位往返。
+// TestTeamAgentSpec_BuildContext槽位 验证 build_context 活载体语义：
+// 不参与序列化（Python exclude=True），进程内持有活 BuildContext 实例。
 func TestTeamAgentSpec_BuildContext槽位(t *testing.T) {
-	s := `{"agents":{},"team_name":"t","lifecycle":"static","enable_team_plan":false,
-		"teammate_mode":"paired","spawn_mode":"manual","leader":{},
-		"predefined_members":[],"model_pool_strategy":"static",
-		"build_context":{"project_dir":"/tmp/p"}}`
-	var spec TeamAgentSpec
-	if err := json.Unmarshal([]byte(s), &spec); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	spec := TeamAgentSpec{BuildContext: &harnessschema.BuildContext{ProjectDir: "/tmp/p"}}
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
 	}
-	m, ok := spec.BuildContext.(map[string]any)
-	if !ok || m["project_dir"] != "/tmp/p" {
-		t.Fatalf("BuildContext 槽位未按 JSON 原样装载: %#v", spec.BuildContext)
+	if strings.Contains(string(data), "build_context") {
+		t.Fatalf("build_context 不应参与序列化: %s", data)
+	}
+	if spec.BuildContext.GetProjectDir() != "/tmp/p" {
+		t.Fatalf("活载体取值失败: %v", spec.BuildContext)
 	}
 }

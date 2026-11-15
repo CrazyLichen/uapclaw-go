@@ -74,11 +74,6 @@ func TestBuildContextExtractors(t *testing.T) {
 	if buildContextProjectDir(spec) != "" || buildContextTeamOutputsDir(spec) != "" {
 		t.Fatal("nil build_context 应返回空串")
 	}
-	// dict 形态（物化前）→ 空串（Python getattr(dict) 取不到属性）
-	spec.BuildContext = map[string]any{"project_dir": "/p"}
-	if buildContextProjectDir(spec) != "" {
-		t.Fatal("dict 形态应返回空串")
-	}
 }
 
 // TestResolveExternalPaths 对齐 _resolve_external_paths（281-298）：
