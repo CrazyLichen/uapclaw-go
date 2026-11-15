@@ -131,6 +131,11 @@ func (m *Model) Invoke(
 	params := model_clients.NewInvokeParams(opts...)
 	modelName := m.resolveModelName(params.Model)
 	fw := m.callbackFramework
+	// 字面量构造的 Model（测试/探测复印件）可能未关联回调框架：兜底回退全局
+	// 单例，避免 nil receiver panic。Python: Model 始终持有全局 framework。
+	if fw == nil {
+		fw = callback.GetCallbackFramework()
+	}
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
 	if transformed := fw.TransformLLMIOInput(ctx, callback.LLMInvokeInput, messages); transformed != nil {
@@ -234,6 +239,11 @@ func (m *Model) Stream(
 	params := model_clients.NewStreamParams(opts...)
 	modelName := m.resolveStreamModelName(params.Model)
 	fw := m.callbackFramework
+	// 字面量构造的 Model（测试/探测复印件）可能未关联回调框架：兜底回退全局
+	// 单例，避免 nil receiver panic。Python: Model 始终持有全局 framework。
+	if fw == nil {
+		fw = callback.GetCallbackFramework()
+	}
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
 	if transformed := fw.TransformLLMIOInput(ctx, callback.LLMStreamInput, messages); transformed != nil {

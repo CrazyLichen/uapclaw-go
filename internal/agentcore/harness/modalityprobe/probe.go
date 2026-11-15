@@ -169,6 +169,17 @@ func ResetImageSupportCache() {
 	})
 }
 
+// IsProbeInFlight 返回该模型是否有在途探测。供接线测试与预热防抖断言观察。
+// Python: _probe_tasks 字典（模块级可检查），Go 以导出函数提供等价观察面
+func IsProbeInFlight(model *llm.Model) bool {
+	key := probeCacheKeyOf(model)
+	if key == nil {
+		return false
+	}
+	_, running := probeInFlight.Load(*key)
+	return running
+}
+
 // ScheduleImageSupportProbe 在后台探测模型，每个 (api_base, model_name) 至多一次。
 // 调用方不需要等结果：结论落地前 read_file 保持元数据模式，后续同端点模型的
 // Agent 构建时从缓存取结论。
@@ -287,6 +298,17 @@ func cachedImageSupport(key ProbeCacheKey) *bool {
 // probeAndCache 跑一次探测并把结论性结果写入缓存；探测失败仅记日志不缓存。
 // Python: _probe_and_cache:234-251
 func probeAndCache(model *llm.Model, key ProbeCacheKey) {
+	// Python: try/except Exception 全覆盖，探测失败绝不外抛；Go 对应 recover，
+	// 一个探测 panic 不能带走整个进程（探测跑在后台 goroutine）。
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Str("api_base", key.APIBase).
+				Str("model", key.ModelName).
+				Interface("panic", r).
+				Msg("[ImageModalityProbe] background image modality probe panicked; ignored")
+		}
+	}()
 	supported := runProbe(context.Background(), model)
 	if supported == nil {
 		return
