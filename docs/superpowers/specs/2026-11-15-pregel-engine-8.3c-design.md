@@ -97,6 +97,8 @@ Workflow 层（8.1/8.2 PregelGraph/CompiledGraph）
 | B2 | ChannelManager 加 `sync.Mutex`，Python 无锁 | Go 侧防御性并发安全（用户拍板 D1） | 无 |
 | B3 | `asyncio.CancelledError` → `context.Canceled`（`errors.Is` 判定） | 语言层等价物，8.3b D5 同源先例 | 无 |
 | B4 | `defaultdict(int)` → Go map 直读（零值即 0） | Go map 零值语义天然等价 | 无 |
+| B5 | **类型迁移**（2026-11-15 用户拍板方案 Ⅰ）：`GraphState`/`Store` 接口/`CreateState`（含 `IsResumable`/`Clone` 方法随类型走）从 store 包迁入 pregel 包（新文件 `state.go`），store 包保留 `GraphStore`/`InMemory`/serde 改引用 `pregel.GraphState`；消费方 `session/checkpointer/{persistence,inmemory,serializer}.go`、`session/interfaces/interfaces.go` 的 `store.Store`→`pregel.Store` | Go 编译期环：engine.py:20 直接消费 store 四符号，而 store→pregel 已有依赖（GraphState 字段用 Message/ChannelSnapshot/PendingNode）；Python 同款环靠子模块延迟加载容忍，Go 以类型迁移为忠实等价物，与 8.3b D6（PendingNode 迁移）同源 | 无 |
+| B6 | `Run` Go 签名 `(map[string]any, error)`：Python 单返回 dict + raise，Go 以 error 表达 re-raise（正常 `({}, nil)`、顶层中断 `({__interrupt__}, nil)`、其余 `(nil, err)`） | Go 惯用法承载 Python raise 语义 | 无 |
 
 ## 7. 测试与验收
 
