@@ -15,13 +15,21 @@
 package invocation
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -232,4 +240,300 @@ func shortFuncName(full string) string {
 		full = full[i+1:]
 	}
 	return full
+}
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// InvocationLogScope 单次调用的文件与捕获状态（Python InvocationLogScope）。
+// Python ContextVar 隐式继承 → Go 经 context.Context 显式传递（spec D-14）。
+type InvocationLogScope struct {
+	// InvocationID 本次调用唯一标识
+	InvocationID string
+	// Path JSONL 文件路径
+	Path string
+	// Truncated 是否发生过预算丢弃
+	Truncated bool
+	// WriteError 最近一次写失败类型名
+	WriteError string
+	// LastCaptureError 最近一次畸形记录错误名
+	LastCaptureError string
+	// BytesWritten 已写字节
+	BytesWritten int
+	// DroppedRecords 丢弃记录数
+	DroppedRecords int
+
+	// identity 身份字段
+	identity map[string]string
+	// parent 父 scope
+	parent *InvocationLogScope
+	// previousTrace / previousMember 进入前上下文
+	previousTrace  string
+	previousMember string
+	mu             sync.Mutex
+	closed         bool
+	stream         *os.File
+}
+
+// InvocationSpan 作用域句柄（Python invocation_log_scope contextmanager 等价）
+type InvocationSpan struct {
+	// Scope 本次调用 scope
+	Scope *InvocationLogScope
+	// Ctx 注入活动 scope 与身份后的上下文
+	Ctx context.Context
+	// finish 收尾函数
+	finish func(status string, exc error)
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// activeInvocationKey 活动 scope 上下文键（Python _ACTIVE_INVOCATION ContextVar 等价）
+type activeInvocationKey struct{}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ActiveInvocationFrom 读取当前活动 scope（Python _ACTIVE_INVOCATION.get()）
+func ActiveInvocationFrom(ctx context.Context) *InvocationLogScope {
+	if v, ok := ctx.Value(activeInvocationKey{}).(*InvocationLogScope); ok {
+		return v
+	}
+	return nil
+}
+
+// NewInvocationLogScope 构造 scope 并打开独占文件（Python InvocationLogScope.__init__）
+func NewInvocationLogScope(directory string, agentID string, sessionID string, role string, parent *InvocationLogScope) (*InvocationLogScope, error) {
+	// Python: root = Path(normalize_and_validate_log_path(directory)); root.mkdir(mode=0o750, parents=True, exist_ok=True)
+	root, err := logger.NormalizeAndValidateLogPath(directory)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(root, 0o750); err != nil {
+		return nil, err
+	}
+	// Python: root = Path(normalize_and_validate_log_path(root))（归一化回读）
+	root, err = logger.NormalizeAndValidateLogPath(root)
+	if err != nil {
+		return nil, err
+	}
+	s := &InvocationLogScope{parent: parent}
+	// Python: self.invocation_id = uuid4().hex
+	s.InvocationID = strings.ReplaceAll(uuid.NewString(), "-", "")
+	// Python: self.path = root / f"invocation-{id}.jsonl"
+	s.Path = filepath.Join(root, "invocation-"+s.InvocationID+".jsonl")
+	// Python: if self.path.parent != root: raise ValueError(...)
+	// Go：EvalSymlinks 归一化后比对，防符号链接逃逸
+	if realParent, err := filepath.EvalSymlinks(filepath.Dir(s.Path)); err == nil {
+		realRoot, err2 := filepath.EvalSymlinks(root)
+		if err2 != nil || realParent != realRoot {
+			return nil, errors.New("Invocation log must remain inside its configured directory")
+		}
+	}
+	// Python: identity = {...}（_label 摘要）；parent 为 nil 时 parent_invocation_id 为空串
+	parentInvocationID := ""
+	if parent != nil {
+		parentInvocationID = parent.InvocationID
+	}
+	s.identity = map[string]string{
+		"agent_id":             label(agentID),
+		"session_id":           label(sessionID),
+		"invocation_id":        s.InvocationID,
+		"parent_invocation_id": parentInvocationID,
+		"role":                 label(role),
+	}
+	// Python: flags = O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW, 0o600
+	s.stream, err = os.OpenFile(s.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// StartInvocationLog 启动调用日志作用域（Python invocation_log_scope）。
+// 返回 span（含注入后的 ctx）与收尾函数；start 记录在此写入。
+func StartInvocationLog(parent context.Context, directory string, agentID string, sessionID string, role string) (*InvocationSpan, error) {
+	scope, err := NewInvocationLogScope(directory, agentID, sessionID, role, ActiveInvocationFrom(parent))
+	if err != nil {
+		return nil, err
+	}
+	// Python: previous_trace = get_session_id(); previous_member = get_member_id()
+	scope.previousTrace = logger.SessionIDFrom(parent)
+	scope.previousMember = logger.MemberIDFrom(parent)
+	// Python: token = _ACTIVE_INVOCATION.set(scope); set_session_id(session_id or previous_trace); set_member_id(agent_id or previous_member)
+	ctx := context.WithValue(parent, activeInvocationKey{}, scope)
+	if sessionID != "" {
+		ctx = logger.WithSessionID(ctx, sessionID)
+	}
+	if agentID != "" {
+		ctx = logger.WithMemberID(ctx, agentID)
+	}
+	span := &InvocationSpan{Scope: scope, Ctx: ctx}
+	// Python: scope.write_record("INFO", "invocation", {...invocation_start...})
+	scope.WriteRecord("INFO", "invocation", map[string]any{
+		"event_type": "invocation_start", "status": "running",
+	}, false)
+	span.finish = func(status string, exc error) {
+		exception := exceptionSummary(exc)
+		level := "INFO"
+		if status != "success" {
+			level = "ERROR"
+		}
+		// Python: finally { try { write_record(..., final=True) } finally { close; reset; restore } }
+		scope.WriteRecord(level, "invocation", map[string]any{
+			"event_type": "invocation_end", "status": status, "exception": exception,
+		}, true)
+		scope.CloseLog()
+	}
+	return span, nil
+}
+
+// Finish 结束作用域并写 end 记录（Python invocation_log_scope 的 except/finally）。
+// exc==nil → success；context.Canceled → cancelled（Python CancelledError 分支）；否则 failure。
+func (s *InvocationSpan) Finish(exc error) {
+	status := "success"
+	switch {
+	case exc == nil:
+	case errors.Is(exc, context.Canceled):
+		// Python: isinstance(exc, (CancelledError, GeneratorExit, KeyboardInterrupt)) → cancelled
+		status = "cancelled"
+	default:
+		status = "failure"
+	}
+	s.finish(status, exc)
+}
+
+// WriteRecord 写一条 JSONL 记录（Python InvocationLogScope.write_record）
+func (s *InvocationLogScope) WriteRecord(level string, logType string, fields map[string]any, final bool) {
+	ctx := s.ctxForFields()
+	record := map[string]any{
+		"timestamp": utcTimestamp(),
+		"level":     label(level),
+	}
+	for key, value := range s.identity {
+		record[key] = value
+	}
+	record["trace_id"] = label(logger.SessionIDFrom(ctx))
+	record["member_id"] = label(logger.MemberIDFrom(ctx))
+	record["log_type"] = label(logType)
+	record["message"] = summary(fields["message"], 768)
+	record["exception"] = summary(fields["exception"], 512)
+	record["event_type"] = label(fields["event_type"])
+	record["status"] = label(fields["status"])
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Python: if self._closed or self.write_error: return
+	if s.closed || s.WriteError != "" {
+		return
+	}
+	if final {
+		record["truncated"] = s.Truncated
+		record["dropped_records"] = s.DroppedRecords
+	}
+	encoded := mustJSONLine(record)
+	// Python: while len(encoded) > _MAX_RECORD_BYTES: 收缩循环
+	for len(encoded) > maxRecordBytes {
+		if record["message"] == "" && record["exception"] == "" {
+			for _, key := range []string{"role", "trace_id", "member_id", "event_type", "status"} {
+				record[key] = clip(record[key].(string), 32)
+			}
+		}
+		for _, key := range []string{"message", "exception"} {
+			record[key] = clip(record[key].(string), len([]byte(record[key].(string)))/2)
+		}
+		encoded = mustJSONLine(record)
+	}
+	// Python: ceiling = _MAX_FILE_BYTES if final else _MAX_FILE_BYTES - _MAX_RECORD_BYTES
+	ceiling := maxFileBytes
+	if !final {
+		ceiling = maxFileBytes - maxRecordBytes
+	}
+	if s.BytesWritten+len(encoded) > ceiling {
+		// Python: self.truncated = True; self.dropped_records += 1; return
+		s.Truncated = true
+		s.DroppedRecords++
+		return
+	}
+	// Python: stream.write + flush + bytes_written += len; final → closed = True
+	if _, err := s.stream.Write(encoded); err != nil {
+		// 捕获失败绝不中断 agent 或递归进入日志
+		s.WriteError = "*fs.PathError"
+		return
+	}
+	s.stream.Sync()
+	s.BytesWritten += len(encoded)
+	if final {
+		s.closed = true
+	}
+}
+
+// RecordCaptureFailure 计一次畸形记录（Python record_capture_failure）
+func (s *InvocationLogScope) RecordCaptureFailure(errorName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.DroppedRecords++
+	s.LastCaptureError = errorName
+}
+
+// CloseLog 关闭文件（Python close_log）
+func (s *InvocationLogScope) CloseLog() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	if s.stream != nil {
+		if err := s.stream.Close(); err != nil {
+			s.WriteError = "*fs.PathError"
+		}
+	}
+}
+
+// SuspendContext 挂起：返回恢复父上下文的临时 ctx 与还原函数（Python suspend）。
+// 仅当前活动 scope 可挂起自身；否则原样返回。
+func (s *InvocationLogScope) SuspendContext(ctx context.Context) (context.Context, func()) {
+	if ActiveInvocationFrom(ctx) != s {
+		return ctx, func() {}
+	}
+	// Python: token = _ACTIVE_INVOCATION.set(self._parent_scope); set_session_id(self._previous_trace); set_member_id(self._previous_member)
+	currentTrace := logger.SessionIDFrom(ctx)
+	currentMember := logger.MemberIDFrom(ctx)
+	suspended := context.WithValue(ctx, activeInvocationKey{}, s.parent)
+	suspended = logger.WithSessionID(suspended, s.previousTrace)
+	suspended = logger.WithMemberID(suspended, s.previousMember)
+	return suspended, func() {
+		// Python finally: reset(token); set_session_id(current_trace); set_member_id(current_member)
+		_ = currentTrace
+		_ = currentMember
+	}
+}
+
+// ParentInvocationID 父调用标识
+func (s *InvocationLogScope) ParentInvocationID() string { return s.identity["parent_invocation_id"] }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ctxForFields 写记录时用的上下文：scope 自身进入时的身份快照。
+// Python 在 scope 生存期内全局 session/member 已被 set，等价于记录身份快照。
+func (s *InvocationLogScope) ctxForFields() context.Context {
+	ctx := context.Background()
+	ctx = logger.WithSessionID(ctx, s.previousTrace)
+	ctx = logger.WithMemberID(ctx, s.previousMember)
+	if v, ok := s.identity["session_id"]; ok {
+		ctx = logger.WithSessionID(ctx, v)
+	}
+	if v, ok := s.identity["agent_id"]; ok {
+		ctx = logger.WithMemberID(ctx, v)
+	}
+	return ctx
+}
+
+// utcTimestamp UTC ISO8601 时间戳（Python datetime.now(timezone.utc).isoformat()）
+func utcTimestamp() string {
+	return time.Now().UTC().Format("2006-01-02T15:04:05.000000+00:00")
+}
+
+// mustJSONLine 紧凑 JSON + 换行（Python json.dumps(..., ensure_ascii=False)+"\n"）
+func mustJSONLine(record map[string]any) []byte {
+	data, err := json.Marshal(record)
+	if err != nil {
+		data = []byte("{}")
+	}
+	return append(data, '\n')
 }

@@ -1,9 +1,15 @@
 package invocation
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // TestClip 对照 Python _clip：先按 rune 截 limit，再按字节截 limit，坏 rune 丢弃
@@ -132,4 +138,199 @@ func TestExceptionSummary(t *testing.T) {
 	if !strings.HasPrefix(got, "runtimeError: boom detail") && !strings.Contains(got, "boom detail") {
 		t.Fatalf("异常摘要缺类型与详情: %q", got)
 	}
+}
+
+// TestInvocationLogScope 构造与写记录（Python InvocationLogScope.__init__/write_record）
+func TestInvocationLogScope(t *testing.T) {
+	dir := t.TempDir()
+	scope, err := NewInvocationLogScope(dir, "agent-1", "trace-1", "diag", nil)
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	defer scope.CloseLog()
+	// 文件名形如 invocation-<32hex>.jsonl 且在目录内
+	base := filepath.Base(scope.Path)
+	if !strings.HasPrefix(base, "invocation-") || !strings.HasSuffix(base, ".jsonl") {
+		t.Fatalf("文件名 = %q", base)
+	}
+	// 写一条记录
+	scope.WriteRecord("INFO", "invocation", map[string]any{
+		"message": "hello", "event_type": "invocation_start", "status": "running",
+	}, false)
+	// 读回首行校验字段
+	data, _ := os.ReadFile(scope.Path)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &rec); err != nil {
+		t.Fatalf("JSONL 解析失败: %v", err)
+	}
+	for _, key := range []string{"timestamp", "level", "agent_id", "session_id", "invocation_id", "parent_invocation_id", "role", "trace_id", "member_id", "log_type", "message", "exception", "event_type", "status"} {
+		if _, ok := rec[key]; !ok {
+			t.Fatalf("缺字段 %s: %v", key, rec)
+		}
+	}
+	if rec["level"] != "INFO" || rec["agent_id"] != "agent-1" || rec["log_type"] != "invocation" {
+		t.Fatalf("字段值不符: %v", rec)
+	}
+	if rec["parent_invocation_id"] != "" {
+		t.Fatalf("无父 scope 时 parent_invocation_id 应为空串: %v", rec)
+	}
+	// final 记录带 truncated/dropped_records
+	scope.WriteRecord("INFO", "invocation", map[string]any{"event_type": "invocation_end", "status": "success"}, true)
+	data, _ = os.ReadFile(scope.Path)
+	lines = strings.Split(strings.TrimSpace(string(data)), "\n")
+	var fin map[string]any
+	json.Unmarshal([]byte(lines[len(lines)-1]), &fin)
+	if _, ok := fin["truncated"]; !ok {
+		t.Fatalf("final 记录缺 truncated: %v", fin)
+	}
+}
+
+// TestInvocationLogScope_预算与写失败 单记录收缩/文件预算/写失败置位
+func TestInvocationLogScope_预算与写失败(t *testing.T) {
+	dir := t.TempDir()
+	scope, err := NewInvocationLogScope(dir, "a", "s", "r", nil)
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	defer scope.CloseLog()
+	// 超长 message 触发收缩循环：仍写成功且单行 ≤ maxRecordBytes
+	scope.WriteRecord("INFO", "log", map[string]any{"message": strings.Repeat("长", 2000), "exception": strings.Repeat("x", 2000)}, false)
+	data, _ := os.ReadFile(scope.Path)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	last := lines[len(lines)-1]
+	if len(last) > maxRecordBytes {
+		t.Fatalf("收缩后记录超限: %d", len(last))
+	}
+	// 文件预算：把 bytesWritten 抬到 ceiling 后写记录被丢弃并计 dropped
+	scope.BytesWritten = maxFileBytes - 10
+	before := scope.DroppedRecords
+	scope.WriteRecord("INFO", "log", map[string]any{"message": "over"}, false)
+	if scope.DroppedRecords != before+1 {
+		t.Fatal("超预算应计 dropped_records")
+	}
+	if !scope.Truncated {
+		t.Fatal("超预算应置 truncated")
+	}
+	// 关闭后写记录静默丢弃
+	scope.CloseLog()
+	scope.WriteRecord("INFO", "log", map[string]any{"message": "closed"}, false)
+}
+
+// TestInvocationLogScope_路径逃逸 父目录外路径报错
+func TestInvocationLogScope_路径逃逸(t *testing.T) {
+	dir := t.TempDir()
+	// 目录本身即边界：正常构造成功
+	scope, err := NewInvocationLogScope(dir, "a", "s", "r", nil)
+	if err != nil {
+		t.Fatalf("正常目录构造失败: %v", err)
+	}
+	scope.CloseLog()
+	// 路径逃逸：构造出的文件不在配置目录内 → 报错。模拟：配置目录含符号链接且归一化后越界。
+	// Python 判定 path.parent != root；Go 用 EvalSymlinks 归一化后比对，构造符号链接目录验证
+	outer := t.TempDir()
+	inner := filepath.Join(outer, "real")
+	os.Mkdir(inner, 0o750)
+	link := filepath.Join(outer, "link")
+	os.Symlink(inner, link)
+	// 配置目录=link/escape，文件经 EvalSymlinks 落 inner/escape，与配置目录(含 link 段)不一致 → 报错
+	_, err = NewInvocationLogScope(filepath.Join(link, "escape"), "a", "s", "r", nil)
+	if err == nil || !strings.Contains(err.Error(), "Invocation log must remain inside its configured directory") {
+		t.Fatalf("路径逃逸未报错或文案不符: %v", err)
+	}
+}
+
+// TestInvocationLogScope_父链 嵌套 scope 保留 parent_invocation_id
+func TestInvocationLogScope_父链(t *testing.T) {
+	dir := t.TempDir()
+	parent, _ := NewInvocationLogScope(dir, "agent", "trace", "role", nil)
+	defer parent.CloseLog()
+	child, _ := NewInvocationLogScope(dir, "agent", "trace", "role", parent)
+	defer child.CloseLog()
+	if child.ParentInvocationID() != parent.InvocationID {
+		t.Fatalf("parent_invocation_id = %q, want %q", child.ParentInvocationID(), parent.InvocationID)
+	}
+}
+
+// TestStartInvocationLog 作用域入口：start/end 记录与状态分支
+func TestStartInvocationLog(t *testing.T) {
+	dir := t.TempDir()
+	span, err := StartInvocationLog(context.Background(), dir, "agent-1", "trace-1", "diag")
+	if err != nil {
+		t.Fatalf("启动失败: %v", err)
+	}
+	// ctx 已注入活动 scope 与身份
+	if ActiveInvocationFrom(span.Ctx) != span.Scope {
+		t.Fatal("活动 scope 未注入 ctx")
+	}
+	if logger.SessionIDFrom(span.Ctx) != "trace-1" {
+		t.Fatalf("session_id = %q", logger.SessionIDFrom(span.Ctx))
+	}
+	if logger.MemberIDFrom(span.Ctx) != "agent-1" {
+		t.Fatalf("member_id = %q", logger.MemberIDFrom(span.Ctx))
+	}
+	// 成功结束
+	span.Finish(nil)
+	data, _ := os.ReadFile(span.Scope.Path)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var fin map[string]any
+	json.Unmarshal([]byte(lines[len(lines)-1]), &fin)
+	if fin["event_type"] != "invocation_end" || fin["status"] != "success" || fin["level"] != "INFO" {
+		t.Fatalf("成功 end 记录不符: %v", fin)
+	}
+	// 失败分支
+	span2, _ := StartInvocationLog(context.Background(), dir, "agent-1", "trace-1", "diag")
+	span2.Finish(errors.New("boom"))
+	data, _ = os.ReadFile(span2.Scope.Path)
+	lines = strings.Split(strings.TrimSpace(string(data)), "\n")
+	json.Unmarshal([]byte(lines[len(lines)-1]), &fin)
+	if fin["status"] != "failure" || fin["level"] != "ERROR" || !strings.Contains(fin["exception"].(string), "boom") {
+		t.Fatalf("失败 end 记录不符: %v", fin)
+	}
+	// 取消分支
+	span3, _ := StartInvocationLog(context.Background(), dir, "agent-1", "trace-1", "diag")
+	span3.Finish(context.Canceled)
+	data, _ = os.ReadFile(span3.Scope.Path)
+	lines = strings.Split(strings.TrimSpace(string(data)), "\n")
+	json.Unmarshal([]byte(lines[len(lines)-1]), &fin)
+	if fin["status"] != "cancelled" {
+		t.Fatalf("取消 end 记录不符: %v", fin)
+	}
+}
+
+// TestStartInvocationLog_嵌套继承 嵌套 span 恢复父上下文且 parent 链正确
+func TestStartInvocationLog_嵌套继承(t *testing.T) {
+	dir := t.TempDir()
+	outer, _ := StartInvocationLog(context.Background(), dir, "agent", "trace-outer", "role")
+	inner, err := StartInvocationLog(outer.Ctx, dir, "child", "trace-inner", "child-role")
+	if err != nil {
+		t.Fatalf("嵌套启动失败: %v", err)
+	}
+	if inner.Scope.ParentInvocationID() != outer.Scope.InvocationID {
+		t.Fatal("嵌套 parent 链断裂")
+	}
+	inner.Finish(nil)
+	outer.Finish(nil)
+	// 恢复检查：outer 结束后无活动 scope
+	if ActiveInvocationFrom(context.Background()) != nil {
+		t.Fatal("空 ctx 不应有活动 scope")
+	}
+}
+
+// TestSuspendContext 挂起恢复父上下文
+func TestSuspendContext(t *testing.T) {
+	dir := t.TempDir()
+	span, _ := StartInvocationLog(context.Background(), dir, "agent", "trace-1", "role")
+	suspended, restore := span.Scope.SuspendContext(span.Ctx)
+	if ActiveInvocationFrom(suspended) != nil {
+		t.Fatal("挂起后活动 scope 应为父值(nil)")
+	}
+	if logger.SessionIDFrom(suspended) != "default_trace_id" {
+		t.Fatalf("挂起后 session 应恢复: %q", logger.SessionIDFrom(suspended))
+	}
+	restore()
+	if ActiveInvocationFrom(span.Ctx) != span.Scope {
+		t.Fatal("恢复后活动 scope 应还原")
+	}
+	span.Finish(nil)
 }
