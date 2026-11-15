@@ -2,7 +2,13 @@ package pregel
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // 对齐 Python openjiuwen/core/graph/pregel/engine.py（285 行）：
@@ -76,6 +82,170 @@ func NewPregel(nodes map[string]*PregelNode, channels []Channel, initial string,
 // isResume 恢复判定（engine.py:94-96 staticmethod；Go 作包级函数）
 func isResume(state *GraphState) bool {
 	return state != nil && state.IsResumable()
+}
+
+// ──────────────────────────── 非导出变量 ────────────────────────────
+
+// errGraphEnd 图结束信号（engine.py:129-131 return False 的 error 通道等价物，B8）。
+// RunStep 外层最先识别并转为 (false, nil)，不打错误日志、不落盘。
+var errGraphEnd = errors.New("pregel: graph end")
+
+// RunStep 执行一个超步，false 表示图结束（engine.py:64-92）。
+// 两层结构一比一：外层错误处理边界，内层 runStep 步骤（spec D2：同步保存后分类上抛）。
+func (l *PregelLoop) RunStep(ctx context.Context) (bool, error) {
+	err := l.runStep(ctx)
+	if err == nil {
+		return true, nil
+	}
+	// B8：图结束信号 → (false, nil)
+	if errors.Is(err, errGraphEnd) {
+		return false, nil
+	}
+	// engine.py:68-81 非 GraphInterrupt 才打 GRAPH_SUPER_STEP_ERROR
+	var gi *GraphInterrupt
+	if !errors.As(err, &gi) {
+		logger.Error(logComponent).
+			Str("event_type", "GRAPH_SUPER_STEP_ERROR").
+			Err(err).
+			Str("graph_id", l.Config.Ns).
+			Str("session_id", l.Config.SessionID).
+			Str("ns", l.Config.Ns).
+			Int("step", l.Step).
+			Str("active_nodes", strings.Join(l.ActiveNodes, ",")).
+			Msg("Failed to run graph super-step")
+	}
+	// engine.py:82（D2：同步 await，保存完成前不向调用方暴露异常）
+	if serr := l.saveStateOnError(ctx, err); serr != nil {
+		return false, serr
+	}
+	// engine.py:83-92 分类上抛
+	var re *RecursionError
+	var be *exception.BaseError
+	if errors.As(err, &gi) || errors.As(err, &re) || errors.As(err, &be) {
+		return false, err
+	}
+	return false, exception.BuildError(exception.StatusPregelGraphSuperStepExecutionError,
+		exception.WithParam("step", l.Step),
+		exception.WithParam("reason", err.Error()),
+		exception.WithCause(err))
+}
+
+// saveStateOnError 错误状态落盘（engine.py:173-205）
+func (l *PregelLoop) saveStateOnError(ctx context.Context, cause error) error {
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_SUPER_STEP_ERROR").
+		Err(cause).
+		Str("graph_id", l.Config.Ns).
+		Str("session_id", l.Config.SessionID).
+		Str("ns", l.Config.Ns).
+		Int("step", l.Step).
+		Str("active_nodes", strings.Join(l.ActiveNodes, ",")).
+		Msg("Failed to run graph super-step, caused by save state")
+	// engine.py:186-187
+	if l.Config.SessionID == "" || l.Config.Ns == "" || l.Saver == nil {
+		return nil
+	}
+	// engine.py:188-192（manager.buffer 经 Buffer() 副本，偏差 D-9；executor 判空对齐 `if self.executor:`）
+	pendingBuffer := l.Manager.Buffer()
+	pendingNode := map[string]PendingNode{}
+	if l.Executor != nil {
+		pendingBuffer = append(pendingBuffer, l.Executor.succeedMessages...)
+		pendingNode = l.Executor.failed
+	}
+	// engine.py:193-200
+	state := CreateState(l.Config.Ns, l.Step, l.Manager.Snapshot(),
+		pendingBuffer, pendingNode, l.NodeVersion)
+	// engine.py:201-205：保存失败上抛并取代原异常（Python except 块内新异常同语义）
+	if err := l.Saver.Save(ctx, l.Config.SessionID, l.Config.Ns, state); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("graph_id", l.Config.Ns).Msg("save state on error failed")
+		return err
+	}
+	return nil
+}
+
+// runStep 内层超步步骤（engine.py:98-171，步骤编号逐条对应）
+func (l *PregelLoop) runStep(ctx context.Context) error {
+	// engine.py:99-110 debug 日志
+	logger.Debug(logComponent).
+		Str("event_type", "GRAPH_SUPER_STEP_START").
+		Str("graph_id", l.Config.Ns).
+		Str("session_id", l.Config.SessionID).
+		Str("ns", l.Config.Ns).
+		Int("step", l.Step).
+		Str("active_nodes", strings.Join(l.ActiveNodes, ",")).
+		Msg("Start to run graph super-step")
+	// engine.py:111-127 Determine tasks for this round
+	// Retry tasks from graph state
+	if len(l.retryPendingNodes) > 0 {
+		names := make([]string, 0, len(l.retryPendingNodes))
+		for name := range l.retryPendingNodes {
+			names = append(names, name)
+		}
+		sort.Strings(names) // Python dict.keys() 序无契约；对齐 GetReadyNodes D-4 稳定序
+		l.ActiveNodes = names
+		// Clear retry queue (scheduled this round)
+		l.retryPendingNodes = nil
+	} else {
+		// First in
+		readyNodes := l.Manager.GetReadyNodes()
+		// Active nodes
+		l.ActiveNodes = nil
+		for _, n := range readyNodes {
+			if _, ok := l.Graph.Nodes[n]; ok && n != End {
+				l.ActiveNodes = append(l.ActiveNodes, n)
+				l.NodeVersion[n]++
+			}
+		}
+	}
+	// engine.py:129-136
+	if len(l.ActiveNodes) == 0 {
+		if l.Manager.IsEmpty() {
+			return errGraphEnd // End
+		}
+		// Only flush buffer
+		if err := l.Manager.Flush(); err != nil {
+			return err
+		}
+		l.Step++
+		return errGraphEnd
+	}
+	// engine.py:138-141
+	if l.Step > l.MaxStep {
+		return &RecursionError{Limit: l.MaxStep, Step: l.Step}
+	}
+	// engine.py:143-145
+	tasksToRun := make([]*PregelNode, 0, len(l.ActiveNodes))
+	for _, name := range l.ActiveNodes {
+		l.Manager.Consume(name)
+		tasksToRun = append(tasksToRun, l.Graph.Nodes[name])
+	}
+	// engine.py:147-149 Execute tasks
+	for _, node := range tasksToRun {
+		l.Executor.Submit(ctx, node, l.NodeVersion[node.name])
+	}
+	// engine.py:151-155
+	if err := l.Executor.WaitAll(); err != nil {
+		if errors.Is(err, context.Canceled) { // 偏差 B3：asyncio.CancelledError → cancel_all + raise
+			l.Executor.CancelAll()
+			return err
+		}
+		return err
+	}
+	// engine.py:157-161 Summarize results
+	for _, msg := range l.Executor.succeedMessages {
+		l.Manager.BufferMessage(msg)
+	}
+	if err := l.Manager.Flush(); err != nil {
+		return err
+	}
+	l.Executor.Clear()
+	// engine.py:163-169 Hook
+	if l.Graph.AfterStep != nil {
+		l.Graph.AfterStep(ctx, l)
+	}
+	l.Step++
+	return nil
 }
 
 // RecursionError 递归上限超限（Python 内置 RecursionError 的 Go 等价物，spec D3）。

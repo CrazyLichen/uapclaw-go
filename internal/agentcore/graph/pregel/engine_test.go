@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // TestRecursionError_Error 文案复刻 Python engine.py:139-141
@@ -106,4 +108,121 @@ func TestIsResume(t *testing.T) {
 	assert.False(t, isResume(nil))
 	assert.False(t, isResume(&GraphState{}))
 	assert.True(t, isResume(&GraphState{PendingBuffer: []Message{NewTriggerMessage("a", "b")}}))
+}
+
+// innerCfgWith 经 CreateInnerConfig 归一化的内部配置（复刻 engine.py:232 调用时机）
+func innerCfgWith(sessionID, ns string) *InnerPregelConfig {
+	inner := CreateInnerConfig(PregelConfig{SessionID: sessionID, Ns: ns})
+	return &inner
+}
+
+// ──────────────────────────── RunStep / saveStateOnError ────────────────────────────
+
+// failingGraph 节点 a 返回普通错误（非中断）
+func failingGraph() *Pregel {
+	nodes := map[string]*PregelNode{}
+	nodes[Start] = NewPregelNode(Start, NoopNodeFunc)
+	nodes[Start].addRouter(NewStaticRouter("a"))
+	nodes["a"] = NewPregelNode("a", func(_ context.Context, _ NodeInput) error {
+		return errors.New("boom")
+	})
+	nodes[End] = NewPregelNode(End, NoopNodeFunc)
+	channels := []Channel{NewTriggerChannel(Start), NewTriggerChannel("a"), NewTriggerChannel(End)}
+	return NewPregel(nodes, channels, Start, nil, nil)
+}
+
+// interruptingGraph 节点 a 抛图级中断
+func interruptingGraph() *Pregel {
+	nodes := map[string]*PregelNode{}
+	nodes[Start] = NewPregelNode(Start, NoopNodeFunc)
+	nodes[Start].addRouter(NewStaticRouter("a"))
+	nodes["a"] = NewPregelNode("a", func(_ context.Context, _ NodeInput) error {
+		PanicGraphInterrupt(Interrupt{Value: "x"})
+		return nil
+	})
+	nodes[End] = NewPregelNode(End, NoopNodeFunc)
+	channels := []Channel{NewTriggerChannel(Start), NewTriggerChannel("a"), NewTriggerChannel(End)}
+	return NewPregel(nodes, channels, Start, nil, nil)
+}
+
+// TestPregelLoop_RunStep_递归上限（engine.py:138-141）
+func TestPregelLoop_RunStep_递归上限(t *testing.T) {
+	pg := handGraph()
+	l := NewPregelLoop(pg, &InnerPregelConfig{PregelConfig: PregelConfig{RecursionLimit: 25}})
+	assert.NoError(t, l.Init(context.Background()))
+	l.Step = 3
+	l.MaxStep = 2
+	_, err := l.RunStep(context.Background())
+	var re *RecursionError
+	assert.True(t, errors.As(err, &re))
+	assert.Equal(t, 2, re.Limit)
+}
+
+// TestPregelLoop_RunStep_错误保存 主循环错误落盘并包 112104（engine.py:82/173-205）
+func TestPregelLoop_RunStep_错误保存(t *testing.T) {
+	sv := &fakeSaver{}
+	pg := failingGraph()
+	l := NewPregelLoop(pg, innerCfgWith("s", "n"))
+	l.Saver = sv
+	assert.NoError(t, l.Init(context.Background()))
+	var err error
+	for {
+		var more bool
+		more, err = l.RunStep(context.Background())
+		if err != nil || !more {
+			break
+		}
+	}
+	assert.Error(t, err)
+	var be *exception.BaseError
+	assert.True(t, errors.As(err, &be))
+	assert.Equal(t, 112104, be.Code())
+	assert.NotNil(t, sv.saved)
+	assert.NotEmpty(t, sv.saved.PendingNode)
+}
+
+// TestPregelLoop_RunStep_中断保存不包装 GraphInterrupt 原样上抛（engine.py:85-86）
+func TestPregelLoop_RunStep_中断保存不包装(t *testing.T) {
+	pg := interruptingGraph()
+	l := NewPregelLoop(pg, innerCfgWith("s", "n"))
+	l.Saver = &fakeSaver{}
+	assert.NoError(t, l.Init(context.Background()))
+	var err error
+	for {
+		var more bool
+		more, err = l.RunStep(context.Background())
+		if err != nil || !more {
+			break
+		}
+	}
+	var gi *GraphInterrupt
+	assert.True(t, errors.As(err, &gi))
+	assert.Equal(t, "x", gi.Interrupts[0].Value)
+}
+
+// TestPregelLoop_RunStep_图结束 无活跃节点且 buffer 空 → false（engine.py:129-131）
+func TestPregelLoop_RunStep_图结束(t *testing.T) {
+	pg := handGraph()
+	l := NewPregelLoop(pg, &InnerPregelConfig{PregelConfig: PregelConfig{RecursionLimit: 25}})
+	assert.NoError(t, l.Init(context.Background()))
+	more, err := l.RunStep(context.Background()) // step0: 跑 a
+	assert.NoError(t, err)
+	assert.True(t, more)
+	more, err = l.RunStep(context.Background()) // step1: END 就绪但被过滤，buffer 空 → 结束
+	assert.NoError(t, err)
+	assert.False(t, more)
+}
+
+// TestPregelLoop_RunStep_重试队列优先 retryPendingNodes 先于就绪集（engine.py:115-118）
+func TestPregelLoop_RunStep_重试队列优先(t *testing.T) {
+	pg := failingGraph()
+	l := NewPregelLoop(pg, innerCfgWith("s", "n"))
+	l.Saver = &fakeSaver{}
+	assert.NoError(t, l.Init(context.Background()))
+	_, _ = l.RunStep(context.Background()) // a 失败落盘
+	// 从落盘状态构造恢复：pending_node = {a}
+	l.retryPendingNodes = map[string]PendingNode{"a": {NodeName: "a", Status: TaskStatusError}}
+	_, err := l.RunStep(context.Background())
+	assert.Error(t, err) // 再次失败，错误路径 more=false
+	assert.Empty(t, l.retryPendingNodes) // 调度即清空（engine.py:118）
 }
