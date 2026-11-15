@@ -55,7 +55,23 @@ func (b *PregelBuilder) AddEdge(start, end any) error {
 	switch s := start.(type) {
 	case []string:
 		if e, ok := end.(string); ok {
-			return b.addBarrierEdge(s, e)
+			// barrier：每源节点独占一组（全 AND 形态，偏差 A1），建 BarrierChannel
+			// 追加进 channels，并给每个源节点挂 BarrierRouter（目标为合成键）。
+			// Python: builder.py:34-53（内联，按规则 9.4 不抽助手）
+			groups := make([][]string, 0, len(s))
+			for _, item := range s {
+				groups = append(groups, []string{item})
+			}
+			barrier := NewBarrierChannel(e, groups)
+			b.channels = append(b.channels, barrier)
+			for _, item := range s {
+				node, ok := b.nodes[item]
+				if !ok {
+					return fmt.Errorf("unknown node: %s", item)
+				}
+				node.addRouter(NewBarrierRouter(barrier.Key()))
+			}
+			return nil
 		}
 	case string:
 		switch e := end.(type) {
@@ -88,24 +104,4 @@ func (b *PregelBuilder) AddBranch(src string, selector Selector) *PregelBuilder 
 	}
 	node.addRouter(NewConditionalRouter(selector))
 	return b
-}
-
-// addBarrierEdge 构造 BarrierChannel（每源节点独占一组 = 全 AND 形态，偏差 A1），
-// 追加进 channels，并给 start 中每个源节点挂 BarrierRouter（目标为合成键）。
-// Python: builder.py:34-53
-func (b *PregelBuilder) addBarrierEdge(start []string, end string) error {
-	groups := make([][]string, 0, len(start))
-	for _, item := range start {
-		groups = append(groups, []string{item})
-	}
-	barrier := NewBarrierChannel(end, groups)
-	b.channels = append(b.channels, barrier)
-	for _, item := range start {
-		node, ok := b.nodes[item]
-		if !ok {
-			return fmt.Errorf("unknown node: %s", item)
-		}
-		node.addRouter(NewBarrierRouter(barrier.Key()))
-	}
-	return nil
 }

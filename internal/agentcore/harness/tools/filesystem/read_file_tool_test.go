@@ -25,7 +25,8 @@ import (
 // invokeReadFile 调用工具并返回结果 map。
 func invokeReadFile(t *testing.T, multimodal bool, inputs map[string]any) map[string]any {
 	t.Helper()
-	tl := NewReadFileTool(sys_operation.NewLocalSysOperation(nil), "cn", "agent-test", multimodal)
+	// 23.7 后 enableImageMultimodal 为动态 resolver（func() bool），测试用闭包承载固定开关
+	tl := NewReadFileTool(sys_operation.NewLocalSysOperation(nil), "cn", "agent-test", func() bool { return multimodal })
 	res, err := tl.Invoke(context.Background(), inputs)
 	require.NoError(t, err)
 	return res

@@ -124,3 +124,12 @@ builder.py 零 logger 调用 → Go 零日志，对齐。全部注释中文（�
 - 规则 8：不留 Build 壳、不写 `TODO: 删除`
 - 规范 3：builder_test.go 覆盖率 ≥85%
 - 验收门槛：`go build ./...`、`go vet ./...`、`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/graph/pregel/...`
+
+## 7. 交棒承诺兑现对照（2026-11-15 落地回填）
+
+1. **8.3 spec**：`addRouter` 为非导出方法、唯一调用方是本节 builder（node.go）——✅ 已兑现，`AddNode`/`AddEdge`/`AddBranch` 三处调用
+2. **8.4 spec**：`BarrierChannel.Key()` 合成路由键的唯一生产者是 builder，且只转手给 `NewBarrierRouter`——✅ 已兑现，`AddEdge` barrier 分支直接 `NewBarrierRouter(barrier.Key())`
+3. **8.5 spec §9**：barrier 合成键由 8.4 生成、builder 转手——✅ 同上；D3 的 str→[]string 归一化落点=本节——✅ 由 `Selector.Select` 返回 `[]string` 的既有形状承接
+4. **8.3d spec**：`Start`/`End` 常量由 8.3a 用于虚拟节点——✅ 已兑现，`NewPregelBuilder` 预注册
+
+落地事实：`builder.go` 111 行/`builder_test.go` 180 行，包覆盖率 100%；`Build()` 未声明（方案 A，⤴️ 8.3c 回填）；审查后按用户拍板将 barrier 分支逻辑内联回 `AddEdge`（规则 9.4），error 文案维持 Go 现状（`unsupported edge format: start %T -> end %T`）。
