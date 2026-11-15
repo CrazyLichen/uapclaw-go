@@ -170,7 +170,6 @@ func TestGraphStore_Delete(t *testing.T) {
 	}
 }
 
-
 // TestPendingNode_JSONRoundTrip error↔string 双向适配（D-8）
 func TestPendingNode_JSONRoundTrip(t *testing.T) {
 	orig := PendingNode{NodeName: "n1", Status: "error", Exception: []error{errors.New("boom")}}
