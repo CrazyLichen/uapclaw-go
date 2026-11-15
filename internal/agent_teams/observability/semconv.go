@@ -102,3 +102,157 @@ const (
 	// DATaskIsFollowUp deepagent.task.is_follow_up 属性键
 	DATaskIsFollowUp = "deepagent.task.is_follow_up"
 )
+
+// ──────────────────────────── 轨迹 schema v2 语义约定（⤴️22.4，随 15.11 提前交付） ────────────────────────────
+
+// openjiuwen.* 轨迹与关联属性键。
+// Python: extensions/observability/semconv.py:47-125（逐条抄字符串值）
+const (
+	// OJTraceRoot 根 span 标记
+	OJTraceRoot = "openjiuwen.trace.root"
+	// OJSpanInput 无专用标准载体的 span 输入（JSON 字符串）
+	OJSpanInput = "openjiuwen.span.input"
+	// OJSpanOutput 无专用标准载体的 span 输出（JSON 字符串）
+	OJSpanOutput = "openjiuwen.span.output"
+	// OJRequestID 请求标识
+	OJRequestID = "openjiuwen.request.id"
+	// OJRequestMessageCount 请求消息条数
+	OJRequestMessageCount = "openjiuwen.request.message_count"
+	// OJRunID 运行标识
+	OJRunID = "openjiuwen.run.id"
+	// OJTurnID 轮次标识
+	OJTurnID = "openjiuwen.turn.id"
+	// OJTurnNumber 轮次序号（1 起）
+	OJTurnNumber = "openjiuwen.turn.number"
+	// OJStepID 步骤标识
+	OJStepID = "openjiuwen.step.id"
+	// OJStepNumber 步骤序号
+	OJStepNumber = "openjiuwen.step.number"
+	// OJInferenceID 推理 span 标识
+	OJInferenceID = "openjiuwen.inference.id"
+	// OJInferenceInputObserved false=推理未观测到请求本身（缺省=已观测）
+	OJInferenceInputObserved = "openjiuwen.inference.input_observed"
+	// OJRequestNumber 请求序号
+	OJRequestNumber = "openjiuwen.request.number"
+	// OJRequestPurpose 请求用途（assistant / compaction …）
+	OJRequestPurpose = "openjiuwen.request.purpose"
+	// OJTrajectoryRecordKind 轨迹记录类别（闭集见 TrajectoryRecordKinds）
+	OJTrajectoryRecordKind = "openjiuwen.trajectory.record.kind"
+	// OJTrajectorySchemaVersion span 级单一契约版本
+	OJTrajectorySchemaVersion = "openjiuwen.trajectory.schema_version"
+	// OJTrajectoryEventID v2 事件唯一标识
+	OJTrajectoryEventID = "openjiuwen.trajectory.event_id"
+	// OJTrajectoryEventKind v2 事件类别（闭集见 TrajectoryEventKinds）
+	OJTrajectoryEventKind = "openjiuwen.trajectory.event_kind"
+	// OJTrajectorySubjectID 事件归属主体
+	OJTrajectorySubjectID = "openjiuwen.trajectory.subject_id"
+	// OJTrajectorySequenceEpoch 序号纪元
+	OJTrajectorySequenceEpoch = "openjiuwen.trajectory.sequence_epoch"
+	// OJTrajectorySubjectSequence 主体内单调序号
+	OJTrajectorySubjectSequence = "openjiuwen.trajectory.subject_sequence"
+	// OJTrajectoryRecordedAtUnixNano 记录时刻（纳秒）
+	OJTrajectoryRecordedAtUnixNano = "openjiuwen.trajectory.recorded_at_unix_nano"
+	// OJTrajectoryPayload 事件载荷（JSON 字符串）
+	OJTrajectoryPayload = "openjiuwen.trajectory.payload"
+	// OJAgentMode 宿主运行的规范 agent 模式
+	OJAgentMode = "openjiuwen.agent.mode"
+	// OJExecutionSubjectID 执行主体标识
+	OJExecutionSubjectID = "openjiuwen.execution.subject.id"
+	// OJExecutionSubjectDisplayName 执行主体展示名
+	OJExecutionSubjectDisplayName = "openjiuwen.execution.subject.display_name"
+	// OJExecutionSubjectKind 执行主体类别
+	OJExecutionSubjectKind = "openjiuwen.execution.subject.kind"
+	// OJExecutionSubjectParentID 执行主体父标识
+	OJExecutionSubjectParentID = "openjiuwen.execution.subject.parent_id"
+	// OJExecutionSubjectSessionID 执行主体归属会话
+	OJExecutionSubjectSessionID = "openjiuwen.execution.subject.session_id"
+	// OJExecutionSubjectRequestNumber 执行主体请求序号
+	OJExecutionSubjectRequestNumber = "openjiuwen.execution.subject.request.number"
+	// OJGenAIUsageTotalCost 标准不建模的费用事实
+	OJGenAIUsageTotalCost = "openjiuwen.gen_ai.usage.total_cost"
+	// OJGenAIInputMessageProvenance 输入消息来源（附件等）
+	OJGenAIInputMessageProvenance = "openjiuwen.gen_ai.input.message_provenance"
+	// OJGenAIResponseTotalLatencyMs 整次调用端到端毫秒时长
+	OJGenAIResponseTotalLatencyMs = "openjiuwen.gen_ai.response.total_latency_ms"
+	// OJToolAuthoritative 工具可归位到引发它的推理请求
+	OJToolAuthoritative = "openjiuwen.tool.authoritative"
+	// ErrorType 错误类别
+	ErrorType = "error.type"
+)
+
+// 标准 GenAI 键（本文件基线块未覆盖的部分）。
+// Python: extensions/observability/gen_ai_semconv.py（逐条抄字符串值）
+const (
+	// GenAIConversationID 会话/对话标识
+	GenAIConversationID = "gen_ai.conversation.id"
+	// GenAIOperationName 操作名（invoke_agent / chat / execute_tool）
+	GenAIOperationName = "gen_ai.operation.name"
+	// GenAIAgentName Agent 展示名
+	GenAIAgentName = "gen_ai.agent.name"
+	// GenAIProviderName 厂商名
+	GenAIProviderName = "gen_ai.provider.name"
+	// GenAIRequestTopK 采样参数
+	GenAIRequestTopK = "gen_ai.request.top_k"
+	// GenAIRequestSeed 采样参数
+	GenAIRequestSeed = "gen_ai.request.seed"
+	// GenAIRequestChoiceCount 采样参数
+	GenAIRequestChoiceCount = "gen_ai.request.choice.count"
+	// GenAIRequestPresencePenalty 采样参数
+	GenAIRequestPresencePenalty = "gen_ai.request.presence_penalty"
+	// GenAIRequestFrequencyPenalty 采样参数
+	GenAIRequestFrequencyPenalty = "gen_ai.request.frequency_penalty"
+	// GenAIRequestReasoningLevel 采样参数
+	GenAIRequestReasoningLevel = "gen_ai.request.reasoning.level"
+	// GenAIRequestStream 采样参数
+	GenAIRequestStream = "gen_ai.request.stream"
+	// GenAIRequestStopSequences 采样参数
+	GenAIRequestStopSequences = "gen_ai.request.stop_sequences"
+	// GenAIResponseFinishReasons 停止原因列表（JSON）
+	GenAIResponseFinishReasons = "gen_ai.response.finish_reasons"
+	// GenAIResponseID 响应标识
+	GenAIResponseID = "gen_ai.response.id"
+	// GenAIResponseTimeToFirstChunk 到首个流式块的秒数（标准键以秒为单位）
+	GenAIResponseTimeToFirstChunk = "gen_ai.response.time_to_first_chunk"
+	// GenAIUsageInputTokens 输入 token
+	GenAIUsageInputTokens = "gen_ai.usage.input_tokens"
+	// GenAIUsageOutputTokens 输出 token
+	GenAIUsageOutputTokens = "gen_ai.usage.output_tokens"
+	// GenAIUsageCacheReadInputTokens 缓存输入 token
+	GenAIUsageCacheReadInputTokens = "gen_ai.usage.cache_read.input_tokens"
+	// GenAIUsageReasoningOutputTokens 推理输出 token
+	GenAIUsageReasoningOutputTokens = "gen_ai.usage.reasoning.output_tokens"
+	// GenAIToolCallArguments 工具调用参数
+	GenAIToolCallArguments = "gen_ai.tool.call.arguments"
+	// GenAIToolCallID 工具调用标识
+	GenAIToolCallID = "gen_ai.tool.call.id"
+	// GenAIToolCallResult 工具调用结果
+	GenAIToolCallResult = "gen_ai.tool.call.result"
+	// GenAIToolDefinitions 提供给模型的工具定义（JSON）
+	GenAIToolDefinitions = "gen_ai.tool.definitions"
+	// GenAISystemInstructions 对话之外单独提供的指令（JSON）
+	GenAISystemInstructions = "gen_ai.system_instructions"
+	// GenAIInputMessages 请求消息列表（JSON）
+	GenAIInputMessages = "gen_ai.input.messages"
+	// GenAIOutputMessages 响应消息列表（JSON）
+	GenAIOutputMessages = "gen_ai.output.messages"
+)
+
+// ToolReportedFailure 工具结果报告自身失败（区别于框架侧异常）。
+// Python: extensions/observability/tool_outcome.py:27
+const ToolReportedFailure = "ToolReportedFailure"
+
+// TrajectorySpanSchemaVersion span 级单一契约版本。
+// Python: extensions/observability/semconv.py:83
+const TrajectorySpanSchemaVersion = "2"
+
+// TrajectoryRecordKinds OJ_TRAJECTORY_RECORD_KIND 取值闭集。
+// Python: semconv.py:229-232
+var TrajectoryRecordKinds = map[string]struct{}{
+	"turn": {}, "step": {}, "inference": {}, "reasoning": {}, "tool": {}, "agent": {}, "event": {},
+}
+
+// TrajectoryEventKinds OJ_TRAJECTORY_EVENT_KIND 取值闭集。
+// Python: semconv.py:235-240
+var TrajectoryEventKinds = map[string]struct{}{
+	"context.window.commit": {}, "compaction.completed": {}, "ask_user.requested": {}, "ask_user.resolved": {},
+}
