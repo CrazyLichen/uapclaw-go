@@ -17,7 +17,7 @@ import (
 // Python 的 store.base.PendingNode 延迟导入（task.py:23/37）破环，由偏差 D6 承接
 // （类型定义迁入本包 pending.go）。
 
-const logComponent = logger.ComponentAgentCore
+// （PregelLoop 传给 pool 的是 inner_config——见 engine.py:40 审查修正）
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -63,8 +63,12 @@ type nodeTask struct {
 // 串行语义）；runningTasks 的 Submit/WaitAll/CancelAll 交叉访问用 mu 兜底，
 // succeedMessages/failed 与 Python 一样仅由 wait_all/cancel_all/clear 触碰，不加锁。
 type TaskExecutorPool struct {
-	// config 外部配置（Python task.py:21）
-	config *PregelConfig
+	// config 执行配置。Python 侧 PregelLoop.init 把 **inner_config**（create_inner_config
+	// 结果，含 PARENT_NS/NS/SESSION_ID）传给 TaskExecutorPool（engine.py:40），
+	// task.py:141 的 PARENT_NS 正是从它读出——Go 用 *InnerPregelConfig 一比一承接，
+	// ParentNs 的注入通道由此贯通（审查修正：原 *PregelConfig 会使子图 ns 拼接分支
+	// 经 pool 路径永不可达）。
+	config *InnerPregelConfig
 	// succeedMessages 成功任务的路由消息（Python succeed_messages）
 	succeedMessages []Message
 	// failed 失败节点记账（Python failed）
@@ -75,10 +79,16 @@ type TaskExecutorPool struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件常量（规则 3）
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskExecutorPool 构造任务池（Python task.py:20-25）。
-func NewTaskExecutorPool(config *PregelConfig) *TaskExecutorPool {
+// 入参即 Python PregelLoop.init 传入的 inner_config（engine.py:40）。
+func NewTaskExecutorPool(config *InnerPregelConfig) *TaskExecutorPool {
 	return &TaskExecutorPool{
 		config:       config,
 		failed:       make(map[string]PendingNode),
@@ -89,8 +99,8 @@ func NewTaskExecutorPool(config *PregelConfig) *TaskExecutorPool {
 // Submit 提交节点执行任务（Python task.py:27-30）。
 // D5：ctx 形参承载 asyncio create_task 的取消句柄；每任务派生可取消子 ctx。
 func (p *TaskExecutorPool) Submit(ctx context.Context, node *PregelNode, version int) {
-	// Python task.py:29 只是把 config 原样传给 NodeTask；归一化在 run 内做
-	t := newNodeTask(node, &InnerPregelConfig{PregelConfig: *p.config}, version, ctx)
+	// Python task.py:29 把 self.config（inner_config）原样传给 NodeTask；归一化在 run 内做
+	t := newNodeTask(node, p.config, version, ctx)
 	p.mu.Lock()
 	p.runningTasks[t] = node
 	p.mu.Unlock()
@@ -145,7 +155,6 @@ func (p *TaskExecutorPool) WaitAll() error {
 
 		if cancelled[t] {
 			// 取消收尾分支（Python task.py:74-80 的 gather 段）：仅真正被 cancel() 的任务
-			cancelled[t] = true
 			if res.err != nil {
 				logger.Warn(logComponent).
 					Str("event_type", "graph_vertex_call_error").

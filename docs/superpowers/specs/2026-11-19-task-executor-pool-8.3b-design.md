@@ -48,7 +48,7 @@ Python 两个类 → Go 两个类型。
 
 | Python | Go | 说明 |
 |--------|-----|------|
-| `config` | `config *PregelConfig` | |
+| `config` | `config *InnerPregelConfig` | 审查修正：Python PregelLoop.init 传给 pool 的是 **inner_config**（engine.py:40，含 PARENT_NS），一比一改用 InnerPregelConfig，ParentNs 注入通道贯通 |
 | `succeed_messages: List[Message]` | `succeedMessages []Message` | |
 | `failed: Dict[str, PendingNode]` | `failed map[string]store.PendingNode` | |
 | `running_tasks: Dict[asyncio.Task, PregelNode]` | `runningTasks map[*nodeTask]*PregelNode` | 见下方说明 | 偏差 D2 |
@@ -84,7 +84,7 @@ Python 两个类 → Go 两个类型。
 
 ## 5. nodeTask.run 步骤（按 Python task.py:125-174 逐行）
 
-1. `CreateInnerConfig(config)` → 读 `ParentNs` → 非空则拼 `parent:node_name:version` **双写** NS/PARENT_NS（task.py:139-147）。归一化在 run 内做（对齐 task.py:140 的调用时机）；Python TypedDict 动态键 parent_ns 由 `nodeTask.config *InnerPregelConfig` 承载。
+1. `CreateInnerConfig(config)` → 读 `ParentNs` → 非空则拼 `parent:node_name:version` **双写** NS/PARENT_NS（task.py:139-147）。归一化在 run 内做（对齐 task.py:140 的调用时机）；Python PregelLoop.init 把 **inner_config** 传给 pool（engine.py:40），Go 侧 `pool.config *InnerPregelConfig` 一比一承接（审查修正，ParentNs 注入通道由此贯通；回归用例 `TestPool_ParentNs经Pool路径可达拼接` 锁定）。
    - 无条件填进 `NodeInput.Config`：Python「形参含 config 才注入」的反射已被 8.3 D1 固定签名消解（见偏差 D1）。
    - `State` 恒 nil（8.3 拍板，task.py:148-149）。
 2. 直接调 `node.Func(ctx, input)`（Python sync/coroutine 双路调用由 Go 静态签名消解，偏差 D4）。

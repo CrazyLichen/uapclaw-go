@@ -136,7 +136,7 @@ func (r errRouter) Dispatch(context.Context, string) ([]Message, error) { return
 // ──────────────────────────── TaskExecutorPool ────────────────────────────
 
 func TestPool_Submit与Clear(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{Ns: "top"})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{Ns: "top"}})
 	pool.Submit(context.Background(), NewPregelNode("a", NoopNodeFunc), 1)
 	if len(pool.runningTasks) != 1 {
 		t.Fatalf("runningTasks 应有 1 项")
@@ -155,7 +155,7 @@ func TestPool_Submit与Clear(t *testing.T) {
 }
 
 func TestPool_commitFailure首记不覆盖(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	node := NewPregelNode("a", NoopNodeFunc)
 	pool.commitFailure(node, errors.New("first"))
 	pool.commitFailure(node, errors.New("second"))
@@ -169,7 +169,7 @@ func TestPool_commitFailure首记不覆盖(t *testing.T) {
 }
 
 func TestPool_commitFailure中断状态(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	node := NewPregelNode("a", NoopNodeFunc)
 	pool.commitFailure(node, &GraphInterrupt{Interrupts: []Interrupt{{Value: "v"}}})
 	if pool.failed["a"].Status != TaskStatusInterrupt {
@@ -178,7 +178,7 @@ func TestPool_commitFailure中断状态(t *testing.T) {
 }
 
 func TestPool_空池WaitAll安全(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	if err := pool.WaitAll(); err != nil {
 		t.Fatalf("空池应直接返回 nil: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestPool_空池WaitAll安全(t *testing.T) {
 
 func TestWaitAll_单节点异常上抛(t *testing.T) {
 	want := errors.New("boom")
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	pool.Submit(context.Background(), NewPregelNode("a",
 		func(context.Context, NodeInput) error { return want }), 1)
 	err := pool.WaitAll()
@@ -201,7 +201,7 @@ func TestWaitAll_单节点异常上抛(t *testing.T) {
 }
 
 func TestWaitAll_中断上抛(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	pool.Submit(context.Background(), NewPregelNode("a",
 		func(context.Context, NodeInput) error { PanicGraphInterrupt(Interrupt{Value: "v"}); return nil }), 1)
 	err := pool.WaitAll()
@@ -216,7 +216,7 @@ func TestWaitAll_中断上抛(t *testing.T) {
 
 func TestWaitAll_兄弟并发异常取消成功任务(t *testing.T) {
 	// b 先异常 → a 被取消（fn 响应 ctx 取消）→ a 记 context.Canceled
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	slowDone := make(chan struct{})
 	pool.Submit(context.Background(), NewPregelNode("a",
 		func(ctx context.Context, _ NodeInput) error {
@@ -241,7 +241,7 @@ func TestWaitAll_同轮异常优先于中断(t *testing.T) {
 	// 白盒确定性构造：两个任务先同步跑完、结果已入 done，再由 WaitAll 统一收割
 	// ——复刻 Python asyncio.wait 唤醒时双任务均已 done 的场景（task.py:86-90）。
 	// 若中断先醒、错误任务仍在途，Python 同样上抛中断并取消在途（见兄弟并发用例）。
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	ta := newNodeTask(NewPregelNode("a", func(context.Context, NodeInput) error {
 		PanicGraphInterrupt(Interrupt{Value: "i"})
 		return nil
@@ -262,7 +262,7 @@ func TestWaitAll_同轮异常优先于中断(t *testing.T) {
 }
 
 func TestWaitAll_成功消息收集(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	pool.Submit(context.Background(), NewPregelNode("a", NoopNodeFunc, NewStaticRouter("b", "c")), 1)
 	if err := pool.WaitAll(); err != nil {
 		t.Fatalf("WaitAll 报错: %v", err)
@@ -274,7 +274,7 @@ func TestWaitAll_成功消息收集(t *testing.T) {
 
 func TestWaitAll_无异常收满全部才返回(t *testing.T) {
 	// FIRST_EXCEPTION 的另一半语义：无异常时等价全部完成
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	for _, n := range []string{"a", "b", "c"} {
 		pool.Submit(context.Background(), NewPregelNode(n, NoopNodeFunc), 1)
 	}
@@ -291,7 +291,7 @@ func TestWaitAll_无异常收满全部才返回(t *testing.T) {
 func TestCancelAll_取消未完成并记账(t *testing.T) {
 	fin := make(chan struct{})
 	fastDone := make(chan struct{})
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	pool.Submit(context.Background(), NewPregelNode("slow",
 		func(ctx context.Context, _ NodeInput) error {
 			<-ctx.Done()
@@ -319,6 +319,25 @@ func TestCancelAll_取消未完成并记账(t *testing.T) {
 }
 
 func TestCancelAll_空池安全(t *testing.T) {
-	pool := NewTaskExecutorPool(&PregelConfig{})
+	pool := NewTaskExecutorPool(&InnerPregelConfig{PregelConfig: PregelConfig{}})
 	pool.CancelAll() // 不 panic 即通过
+}
+
+func TestPool_ParentNs经Pool路径可达拼接(t *testing.T) {
+	// 审查修正回归：pool 的 config 必须是 inner_config（engine.py:40），
+	// 否则 execute 的 ns 拼接分支经 pool 永不可达（子图断链）。
+	var got NodeInput
+	pool := NewTaskExecutorPool(&InnerPregelConfig{
+		PregelConfig: PregelConfig{Ns: "main"},
+		ParentNs:     "main:Sub:3",
+	})
+	pool.Submit(context.Background(), NewPregelNode("s1",
+		func(_ context.Context, in NodeInput) error { got = in; return nil }), 2)
+	if err := pool.WaitAll(); err != nil {
+		t.Fatalf("WaitAll 报错: %v", err)
+	}
+	want := "main:Sub:3:s1:2"
+	if got.Config.Ns != want || got.Config.ParentNs != want {
+		t.Fatalf("pool 路径 ns 拼接断裂: ns=%q parent=%q", got.Config.Ns, got.Config.ParentNs)
+	}
 }
