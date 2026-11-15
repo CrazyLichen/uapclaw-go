@@ -149,19 +149,19 @@ func TestDefaultImageGenModelBuilder_构造与凭据(t *testing.T) {
 // Python: _get_model_config (multimodal_config.py L28-61)
 func TestGetModelConfigTyped_分支(t *testing.T) {
 	// nil configBase 空配置基线
-	if got := getModelConfigTyped(nil, "image_gen"); len(got) != 0 {
+	if got := getModelConfig(nil, "image_gen"); len(got) != 0 {
 		t.Errorf("nil 应返回空: %v", got)
 	}
 	// models 非 dict
-	if got := getModelConfigTyped(map[string]any{"models": "str"}, "image_gen"); len(got) != 0 {
+	if got := getModelConfig(map[string]any{"models": "str"}, "image_gen"); len(got) != 0 {
 		t.Errorf("models 非 dict 应返回空: %v", got)
 	}
 	// model_config 缺失
-	if got := getModelConfigTyped(map[string]any{"models": map[string]any{"image_gen": map[string]any{}}}, "image_gen"); len(got) != 0 {
+	if got := getModelConfig(map[string]any{"models": map[string]any{"image_gen": map[string]any{}}}, "image_gen"); len(got) != 0 {
 		t.Errorf("无配置应返回空: %v", got)
 	}
 	// model_config 为 nil（or 回退 model_client_config）
-	if got := getModelConfigTyped(map[string]any{
+	if got := getModelConfig(map[string]any{
 		"models": map[string]any{"image_gen": map[string]any{"model_client_config": map[string]any{"k": "v"}}},
 	}, "image_gen"); got["k"] != "v" {
 		t.Errorf("model_client_config 回退异常: %v", got)

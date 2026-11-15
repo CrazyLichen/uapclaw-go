@@ -283,7 +283,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
-	audioDedicated := DedicatedMultimodalModelConfigured(d.configBaseSnapshot(), "audio")
+	audioDedicated := swarmtools.DedicatedMultimodalModelConfigured(d.configBaseSnapshot(), "audio")
 	if !audioDedicated {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 		if d.audioToolsRegistered {
@@ -414,13 +414,13 @@ func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 // 链路: 先 dedicated_multimodal_model_configured 门控 → 再 apply_vision_model_config_from_yaml → 从 env 读取
 func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.VisionModelConfig {
 	// 1. 先检查 models.vision 是否有独立 api_key（对齐 Python 先检查再 apply 的顺序）
-	if !DedicatedMultimodalModelConfigured(configBase, "vision") {
+	if !swarmtools.DedicatedMultimodalModelConfigured(configBase, "vision") {
 		logger.Info(logComponent).Msg("skipping vision tools: no dedicated api_key in config.yaml models.vision")
 		return nil
 	}
 
 	// 2. YAML 配置映射到环境变量
-	ApplyVisionModelConfigFromYAML(configBase)
+	swarmtools.ApplyVisionModelConfigFromYAML(configBase)
 
 	// 3. 从环境变量构建 VisionModelConfig
 	cfg := schema.VisionModelConfig{}.FromEnv()
@@ -437,13 +437,13 @@ func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.
 // 链路: 先 dedicated_multimodal_model_configured 门控 → 再 apply_audio_model_config_from_yaml → 从 env 读取
 func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.AudioModelConfig {
 	// 1. 先检查 models.audio 是否有独立 api_key（对齐 Python 先检查再 apply 的顺序）
-	if !DedicatedMultimodalModelConfigured(configBase, "audio") {
+	if !swarmtools.DedicatedMultimodalModelConfigured(configBase, "audio") {
 		logger.Info(logComponent).Msg("skipping audio tools: no dedicated api_key in config.yaml models.audio")
 		return nil
 	}
 
 	// 2. YAML 配置映射到环境变量
-	ApplyAudioModelConfigFromYAML(configBase)
+	swarmtools.ApplyAudioModelConfigFromYAML(configBase)
 
 	// 3. 从环境变量构建 AudioModelConfig
 	cfg := schema.AudioModelConfig{}.FromEnv()
@@ -462,10 +462,10 @@ func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.A
 // 环境变量也已被设置。vision/audio 的 Apply 在 Dedicated 检查失败时不会执行。
 func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.VideoModelConfig {
 	// 1. YAML 配置映射到环境变量
-	ApplyVideoModelConfigFromYAML(configBase)
+	swarmtools.ApplyVideoModelConfigFromYAML(configBase)
 
 	// 2. 检查 models.video 是否有独立 api_key
-	if !DedicatedMultimodalModelConfigured(configBase, "video") {
+	if !swarmtools.DedicatedMultimodalModelConfigured(configBase, "video") {
 		logger.Info(logComponent).Msg("skipping video_understanding: no dedicated api_key in config.yaml models.video")
 		return nil
 	}
@@ -586,7 +586,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
-	audioDedicated := DedicatedMultimodalModelConfigured(d.configBaseSnapshot(), "audio")
+	audioDedicated := swarmtools.DedicatedMultimodalModelConfigured(d.configBaseSnapshot(), "audio")
 	if !audioDedicated {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 	} else if d.audioModelConfig == nil {

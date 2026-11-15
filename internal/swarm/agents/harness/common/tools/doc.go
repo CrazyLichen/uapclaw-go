@@ -19,6 +19,7 @@
 //	tools/
 //	├── doc.go                    # 包文档
 //	├── wiki_tools.go             # wiki_ingest/wiki_query/wiki_lint + LLMWiki + sourceManifest
+//	├── multimodal_config.go      # MultimodalToolGroups/CompleteMultimodalModelConfigured/MultimodalModelEnabled + Apply{Audio,Vision,Video}ModelConfigFromYAML（multimodal_config.py 327行一比一）
 //	├── image_gen.go              # generate_image + invokeModelImageGeneration + ApplyImageGenModelConfigFromYAML
 //	├── web_file_download.go      # WebFileDownloadManager——HMAC 下载令牌+三级密钥（10.6.24b）
 //	├── send_file.go              # SendFileToolkit——chat.file 事件+双注入（10.6.24b）

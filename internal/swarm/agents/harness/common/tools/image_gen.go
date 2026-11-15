@@ -80,7 +80,7 @@ func ApplyImageGenModelConfigFromYAML(configBase map[string]any) {
 	if configBase == nil {
 		return
 	}
-	mc := getModelConfigTyped(configBase, "image_gen")
+	mc := getModelConfig(configBase, "image_gen")
 
 	apiKey := stripAny(mc["api_key"])
 	apiBase := stripAny(mc["api_base"])
@@ -367,30 +367,6 @@ func stripAny(v any) string {
 		return strings.TrimSpace(s)
 	}
 	return ""
-}
-
-// getModelConfigTyped 从 configBase 提取 models.{modelType}.model_config（或 model_client_config）。
-// Python: _get_model_config (multimodal_config.py L28-61)
-func getModelConfigTyped(configBase map[string]any, modelType string) map[string]any {
-	if configBase == nil {
-		return map[string]any{}
-	}
-	rawModels, ok := configBase["models"].(map[string]any)
-	if !ok {
-		return map[string]any{}
-	}
-	inner, ok := rawModels[modelType].(map[string]any)
-	if !ok {
-		return map[string]any{}
-	}
-	// Python: mc = inner.get("model_config") or inner.get("model_client_config")
-	if mc, ok := inner["model_config"].(map[string]any); ok && mc != nil {
-		return mc
-	}
-	if mc, ok := inner["model_client_config"].(map[string]any); ok && mc != nil {
-		return mc
-	}
-	return map[string]any{}
 }
 
 // loadConfigMapOrEmpty 加载配置，失败返回空 map。
