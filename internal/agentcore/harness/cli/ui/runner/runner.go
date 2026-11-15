@@ -40,9 +40,6 @@ const (
 // Python: runner.py:36-77 run_once
 //
 // 返回退出码：成功 0，错误 1。
-//
-// ⏵ backend 的 run_streaming 依赖 create_agent 回填（15.6-15.9）；
-// 当前骨架后端返回空流，三格式分支本身可测。
 func RunOnce(cfg agent.CLIConfig, prompt string, outputFormat string) int {
 	backend, err := agent.CreateBackend(cfg)
 	if err != nil {

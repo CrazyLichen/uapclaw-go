@@ -46,6 +46,16 @@ type InterruptRequester interface {
 	// SetInterruptID 处理器发号时就地写入（Python: issue_interrupt_id 直接
 	// 属性赋值 request.interrupt_id = ...）。
 	SetInterruptID(id string)
+	// SetInterruptKind 就地写入中断类型（Python: stamp_interrupt 的
+	// request.interrupt_kind = ... 属性赋值）。
+	//
+	// 走接口方法而非 *InterruptRequest 类型断言：嵌入基类的子类
+	// （AskUserRequest 等）在具体类型断言下失效——盖不上 kind/owner，
+	// 答案按 owner 路由整个失效（2026-11-14 ask_user 断链实锤，与
+	// GetInterruptID/SetInterruptID 同款修正）。
+	SetInterruptKind(kind string)
+	// SetInterruptOwner 就地写入中断 owner（同上，stampInterrupt 用）。
+	SetInterruptOwner(owner string)
 }
 
 // InterruptRequest 工具中断请求，携带需要用户确认的信息。
@@ -258,6 +268,53 @@ func (r *InterruptRequest) SetInterruptID(id string) { r.InterruptID = id }
 // 走 InterruptKindOf 以兼容 kind 只存在 metadata 里的历史数据。
 func (r *InterruptRequest) GetInterruptKind() string { return InterruptKindOf(r) }
 
+// SetInterruptKind 实现 InterruptRequester 接口（stampInterrupt 写入用）。
+func (r *InterruptRequest) SetInterruptKind(kind string) { r.InterruptKind = kind }
+
+// SetInterruptOwner 实现 InterruptRequester 接口（stampInterrupt 写入用）。
+func (r *InterruptRequest) SetInterruptOwner(owner string) { r.InterruptOwner = owner }
+
+// ModelDump 实现 harness_providers.ToJsonSafe 的 model_dump 缝（spec D3）。
+// Python: InterruptRequest(BaseModel).model_dump()——键为 snake_case 字段名，
+// jsonsafe.py:36-38 据此把 pydantic 模型转成 dict；没有本方法时 Go 的
+// ToJsonSafe 对 struct 走 fmt.Sprint 兜底，_interrupt_prompt 等消费方拿不到字段。
+func (r *InterruptRequest) ModelDump(_ string, _ bool) (any, error) {
+	return map[string]any{
+		"message":          r.Message,
+		"payload_schema":   r.PayloadSchema,
+		"auto_confirm_key": r.AutoConfirmKey,
+		"ui_options":       r.UIOptions,
+		"metadata":         r.Metadata,
+		"interrupt_id":     r.InterruptID,
+		"interrupt_kind":   r.InterruptKind,
+		"interrupt_owner":  r.InterruptOwner,
+	}, nil
+}
+
+// ModelDump 实现 model_dump 缝：内嵌请求字段 + 工具上下文字段平铺到顶层。
+// Python: ToolCallInterruptRequest（response.py:92-127，extra="allow"，
+// from_tool_call 用 request.model_dump() 平铺子类字段）。
+func (r *ToolCallInterruptRequest) ModelDump(_ string, _ bool) (any, error) {
+	out := map[string]any{
+		"tool_name":    r.ToolName,
+		"tool_call_id": r.ToolCallID,
+		"tool_args":    r.ToolArgs,
+		"index":        r.Index,
+	}
+	if r.Request != nil {
+		if dumped, err := r.Request.(interface {
+			ModelDump(mode string, byAlias bool) (any, error)
+		}).ModelDump("", false); err == nil {
+			if base, ok := dumped.(map[string]any); ok {
+				for key, value := range base {
+					out[key] = value
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 // GetMessage 实现 InterruptRequester 接口，委托给 Request 字段。
 func (r *ToolCallInterruptRequest) GetMessage() string {
 	if r.Request != nil {
@@ -325,4 +382,18 @@ func (r *ToolCallInterruptRequest) GetInterruptKind() string {
 		return r.Request.GetInterruptKind()
 	}
 	return ""
+}
+
+// SetInterruptKind 实现 InterruptRequester 接口，委托内嵌请求。
+func (r *ToolCallInterruptRequest) SetInterruptKind(kind string) {
+	if r.Request != nil {
+		r.Request.SetInterruptKind(kind)
+	}
+}
+
+// SetInterruptOwner 实现 InterruptRequester 接口，委托内嵌请求。
+func (r *ToolCallInterruptRequest) SetInterruptOwner(owner string) {
+	if r.Request != nil {
+		r.Request.SetInterruptOwner(owner)
+	}
 }

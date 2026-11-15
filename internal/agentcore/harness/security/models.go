@@ -50,6 +50,26 @@ type PermissionConfirmResponse struct {
 	PersistScope string `json:"persist_scope,omitempty"`
 }
 
+// WantsPermanentPersist 是否永久记住（走 persist_allow_rule）。
+// Python: PermissionConfirmResponse.wants_permanent_persist (models.py:67-72)：
+// approved 且 auto_confirm 且（persist_allow 缺省或为 True）。
+// Go 的 PersistScope 语义映射："session" → false；""/"permanent" → true
+// （空串对应 Python persist_allow is None 的旧宿主回退）。
+func (p *PermissionConfirmResponse) WantsPermanentPersist() bool {
+	if !p.Approved || !p.AutoConfirm {
+		return false
+	}
+	return p.PersistScope != "session"
+}
+
+// WantsSessionPersist 是否会话内记住（走 persist_session_allow_rule）。
+// Python: PermissionConfirmResponse.wants_session_persist (models.py:74-75)：
+// approved 且 auto_confirm 且 persist_allow is False。
+func (p *PermissionConfirmResponse) WantsSessionPersist() bool {
+	return p.Approved && p.AutoConfirm && p.PersistScope == "session"
+}
+
+
 // PermissionSceneHookInput 传给 PermissionSceneHook 的入参。
 //
 // Python: PermissionSceneHookInput (host.py L15-23)

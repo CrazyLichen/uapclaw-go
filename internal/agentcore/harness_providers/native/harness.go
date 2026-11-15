@@ -503,6 +503,47 @@ func interruptProviderData(callID string, value any) hp.JsonObject {
 	}
 }
 
+// interactionUserResponse 宿主应答取 UserInputResponse（值/指针双形态）。
+// Python isinstance 不区分；Go 的宿主实现两侧形态都存在（adapter 返回
+// 指针、recordedHost 返回值）。
+func interactionUserResponse(response hp.HarnessInteractionResponse) (hp.UserInputResponse, bool) {
+	switch typed := response.(type) {
+	case hp.UserInputResponse:
+		return typed, true
+	case *hp.UserInputResponse:
+		if typed != nil {
+			return *typed, true
+		}
+	}
+	return hp.UserInputResponse{}, false
+}
+
+// interactionApprovalResponse 宿主应答取 ToolApprovalResponse（值/指针双形态）。
+func interactionApprovalResponse(response hp.HarnessInteractionResponse) (hp.ToolApprovalResponse, bool) {
+	switch typed := response.(type) {
+	case hp.ToolApprovalResponse:
+		return typed, true
+	case *hp.ToolApprovalResponse:
+		if typed != nil {
+			return *typed, true
+		}
+	}
+	return hp.ToolApprovalResponse{}, false
+}
+
+// interactionDynamicResponse 宿主应答取 DynamicToolCallResponse（值/指针双形态）。
+func interactionDynamicResponse(response hp.HarnessInteractionResponse) (hp.DynamicToolCallResponse, bool) {
+	switch typed := response.(type) {
+	case hp.DynamicToolCallResponse:
+		return typed, true
+	case *hp.DynamicToolCallResponse:
+		if typed != nil {
+			return *typed, true
+		}
+	}
+	return hp.DynamicToolCallResponse{}, false
+}
+
 // resultText 宿主结果的文本投影；nil → 空串。
 // Python: harness.py:746-749 _result_text
 func resultText(result any) string {
@@ -1130,9 +1171,11 @@ func (h *DeepAgentHarness) answerInterrupt(
 	if _, isList := content.([]any); isList {
 		return content
 	}
+	// Python: interrupt_answer(kind, text=str(content))——只传 text，
+	// 由 _parse_approval_text 从打字内容解析批准与否；传 approved 会
+	// 使空文本也被当作批准（2026-11-14 对齐修正）。
 	answer, err := interruptpkg.InterruptAnswerFor(kind, interruptpkg.InterruptAnswerOptions{
-		Approved: boolPtr(true),
-		Text:     strPtr(fmt.Sprintf("%v", content)),
+		Text: strPtr(fmt.Sprintf("%v", content)),
 	})
 	if err != nil {
 		return nil
@@ -1178,7 +1221,7 @@ func (h *DeepAgentHarness) requestUserInput(
 	if err != nil || response == nil {
 		return nil
 	}
-	userResponse, ok := response.(hp.UserInputResponse)
+	userResponse, ok := interactionUserResponse(response)
 	if !ok || userResponse.Status != hp.InteractionResponseStatusCompleted {
 		return nil
 	}
@@ -1219,7 +1262,7 @@ func (h *DeepAgentHarness) requestApproval(
 	if err != nil || response == nil {
 		return nil
 	}
-	decision, ok := response.(hp.ToolApprovalResponse)
+	decision, ok := interactionApprovalResponse(response)
 	if !ok {
 		return nil
 	}
@@ -1311,7 +1354,7 @@ func (h *DeepAgentHarness) requestClientTool(
 	if err != nil || response == nil {
 		return nil
 	}
-	result, ok := response.(hp.DynamicToolCallResponse)
+	result, ok := interactionDynamicResponse(response)
 	if !ok {
 		return nil
 	}

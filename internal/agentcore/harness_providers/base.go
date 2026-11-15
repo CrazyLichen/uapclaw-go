@@ -1493,23 +1493,36 @@ func errorTypeName(err error) string {
 // interactionRequestID 取交互请求的 request_id。
 // Python: base.py:733/770 的 request.request_id
 func interactionRequestID(request harnessprotocol.HarnessInteractionRequest) string {
+	// 请求有值与指针两种形态：native provider 以构造器值类型投递
+	// （hp.NewXxxRequest 返回值），宿主实现多以指针持有——双形态都要接
+	// （Python isinstance 不区分；2026-11-14 adapter 驱动实锤）。
 	switch typed := request.(type) {
+	case harnessprotocol.ToolApprovalRequest:
+		return typed.RequestID
 	case *harnessprotocol.ToolApprovalRequest:
 		if typed != nil {
 			return typed.RequestID
 		}
+	case harnessprotocol.UserInputRequest:
+		return typed.RequestID
 	case *harnessprotocol.UserInputRequest:
 		if typed != nil {
 			return typed.RequestID
 		}
+	case harnessprotocol.McpElicitationRequest:
+		return typed.RequestID
 	case *harnessprotocol.McpElicitationRequest:
 		if typed != nil {
 			return typed.RequestID
 		}
+	case harnessprotocol.DynamicToolCallRequest:
+		return typed.RequestID
 	case *harnessprotocol.DynamicToolCallRequest:
 		if typed != nil {
 			return typed.RequestID
 		}
+	case harnessprotocol.ProviderInteractionRequest:
+		return typed.RequestID
 	case *harnessprotocol.ProviderInteractionRequest:
 		if typed != nil {
 			return typed.RequestID

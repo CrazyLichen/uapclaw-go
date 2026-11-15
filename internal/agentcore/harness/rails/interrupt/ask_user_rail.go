@@ -34,6 +34,21 @@ type AskUserRequest struct {
 	Questions []map[string]any `json:"questions"`
 }
 
+// ModelDump 实现 harness_providers.ToJsonSafe 的 model_dump 缝（spec D3）：
+// 基础字段 + questions 平铺（Python: AskUserRequest.model_dump，
+// ask_user_rail.py:25-27）。
+func (r *AskUserRequest) ModelDump(mode string, byAlias bool) (any, error) {
+	base, err := r.InterruptRequest.ModelDump(mode, byAlias)
+	if err != nil {
+		return nil, err
+	}
+	if m, ok := base.(map[string]any); ok {
+		m["questions"] = r.Questions
+		return m, nil
+	}
+	return base, nil
+}
+
 // AskUserRail 向用户提问的 Rail。
 // 拦截 ask_user 工具调用，首次触发中断等待用户输入，
 // 用户输入后解析为 AskUserPayload 并通过 Reject 返回格式化结果。

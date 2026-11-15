@@ -364,6 +364,35 @@ func (a *HarnessIOAdapter) safeStopHarness(ctx context.Context) {
 	}
 }
 
+// providerDataToolCallID 取请求 provider_data 里的 tool_call_id（值/指针双形态）。
+// Python: io_adapter.py:196 interaction.request.provider_data.get("tool_call_id")
+func providerDataToolCallID(request harnessprotocol.HarnessInteractionRequest) string {
+	var providerData harnessprotocol.JsonObject
+	switch req := request.(type) {
+	case harnessprotocol.UserInputRequest:
+		providerData = req.ProviderData
+	case *harnessprotocol.UserInputRequest:
+		if req != nil {
+			providerData = req.ProviderData
+		}
+	case harnessprotocol.ToolApprovalRequest:
+		providerData = req.ProviderData
+	case *harnessprotocol.ToolApprovalRequest:
+		if req != nil {
+			providerData = req.ProviderData
+		}
+	default:
+		return ""
+	}
+	if providerData == nil {
+		return ""
+	}
+	if callID, ok := providerData["tool_call_id"].(string); ok {
+		return callID
+	}
+	return ""
+}
+
 // ──────────────────────────── 导出函数：输出流 ────────────────────────────
 
 // OutputIterator 队列背书的单消费者输出迭代器。
@@ -678,12 +707,12 @@ func (a *HarnessIOAdapter) matchedAnswers(userInput *interaction.InteractiveInpu
 	for requestID, entry := range a.pending {
 		pendingList = append(pendingList,
 			interruptpkg.PendingInterrupt{InterruptID: requestID, ToolCallID: requestID})
-		if approval, ok := entry.request.(*harnessprotocol.ToolApprovalRequest); ok {
-			callID := interruptIDFrom(approval.ProviderData)
-			if callID != "" && callID != requestID {
-				pendingList = append(pendingList,
-					interruptpkg.PendingInterrupt{InterruptID: requestID, ToolCallID: callID})
-			}
+		// Python: interaction.request.provider_data.get("tool_call_id")——
+		// 不区分请求类型（UserInputRequest 的 native 宿主也用 call_id 点名）。
+		// 旧式仅 ToolApprovalRequest 指针断言漏掉 user_input 请求且对值形态失效。
+		if callID := providerDataToolCallID(entry.request); callID != "" && callID != requestID {
+			pendingList = append(pendingList,
+				interruptpkg.PendingInterrupt{InterruptID: requestID, ToolCallID: callID})
 		}
 	}
 	a.mu.Unlock()
@@ -910,8 +939,24 @@ func (a *HarnessIOAdapter) projectItem(itemID string, item harnessprotocol.ItemL
 // 投影三函数（projectOutput / projectItem / projectTurnLifecycle）在锁外跑，
 // 走自取锁的 nextOutputIndex。
 func (a *HarnessIOAdapter) interactionChunk(request harnessprotocol.HarnessInteractionRequest) stream.OutputSchema {
+	// 请求可能是值或指针：native provider 以构造器值类型投递
+	// （hp.NewUserInputRequest 返回值），既有宿主以指针实现——两种形态都接
+	// （Python isinstance 不区分；Go 具体类型断言必须双形态，否则误入
+	// ToolApproval 分支对 UserInputRequest panic——2026-11-14 adapter 驱动实锤）。
+	var userInput *harnessprotocol.UserInputRequest
+	var approval *harnessprotocol.ToolApprovalRequest
+	switch req := request.(type) {
+	case harnessprotocol.UserInputRequest:
+		userInput = &req
+	case *harnessprotocol.UserInputRequest:
+		userInput = req
+	case harnessprotocol.ToolApprovalRequest:
+		approval = &req
+	case *harnessprotocol.ToolApprovalRequest:
+		approval = req
+	}
 	var value map[string]any
-	if userInput, ok := request.(*harnessprotocol.UserInputRequest); ok {
+	if userInput != nil {
 		// Python: :558-565
 		value = map[string]any{
 			"kind":          "user_input",
@@ -920,9 +965,8 @@ func (a *HarnessIOAdapter) interactionChunk(request harnessprotocol.HarnessInter
 			"choices":       userInput.Choices,
 			"provider_data": harnessprotocol.JsonValueToBuiltin(userInput.ProviderData),
 		}
-	} else {
+	} else if approval != nil {
 		// ToolApprovalRequest（Python: :566-575）
-		approval := request.(*harnessprotocol.ToolApprovalRequest)
 		value = map[string]any{
 			"kind":          "tool_approval",
 			"interrupt_id":  approval.RequestID,
@@ -930,6 +974,18 @@ func (a *HarnessIOAdapter) interactionChunk(request harnessprotocol.HarnessInter
 			"arguments":     harnessprotocol.JsonValueToBuiltin(approval.Arguments),
 			"reason":        reasonText(approval.Reason),
 			"provider_data": harnessprotocol.JsonValueToBuiltin(approval.ProviderData),
+		}
+	} else {
+		return stream.OutputSchema{
+			Type:  interaction.InteractionType,
+			Index: a.nextOutputIndexLocked(),
+			Payload: interaction.InteractionOutput{
+				ID: interactionRequestID(request),
+				Value: map[string]any{
+					"kind":         "provider_interaction",
+					"interrupt_id": interactionRequestID(request),
+				},
+			},
 		}
 	}
 	return stream.OutputSchema{
@@ -1044,8 +1100,13 @@ func interactiveHarnessInput(input *interaction.InteractiveInput) (harnessprotoc
 // Python: io_adapter.py:597-630 _response_for
 func responseFor(request harnessprotocol.HarnessInteractionRequest,
 	value any) (harnessprotocol.HarnessInteractionResponse, error) {
-	if approval, ok := request.(*harnessprotocol.ToolApprovalRequest); ok {
-		return approvalResponseFor(approval, approvalAnswer(value)), nil
+	switch approval := request.(type) {
+	case *harnessprotocol.ToolApprovalRequest:
+		if approval != nil {
+			return approvalResponseFor(approval, approvalAnswer(value)), nil
+		}
+	case harnessprotocol.ToolApprovalRequest:
+		return approvalResponseFor(&approval, approvalAnswer(value)), nil
 	}
 	content, err := harnessprotocol.FreezeJsonValue(jsonReady(value))
 	if err != nil {
@@ -1208,11 +1269,16 @@ func capabilityLabel(capability harnessprotocol.HarnessCapability) string {
 // requestIDOf 从交互请求取 request_id。
 // Python: :622/646 `request.request_id`
 func requestIDOf(request harnessprotocol.HarnessInteractionRequest) string {
+	// 值/指针双形态（同 interactionRequestID；native provider 以值投递）。
 	switch typed := request.(type) {
+	case harnessprotocol.ToolApprovalRequest:
+		return typed.RequestID
 	case *harnessprotocol.ToolApprovalRequest:
 		if typed != nil {
 			return typed.RequestID
 		}
+	case harnessprotocol.UserInputRequest:
+		return typed.RequestID
 	case *harnessprotocol.UserInputRequest:
 		if typed != nil {
 			return typed.RequestID

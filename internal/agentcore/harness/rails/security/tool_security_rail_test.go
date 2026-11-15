@@ -150,22 +150,27 @@ func TestShouldStoreAutoConfirm(t *testing.T) {
 	mockSession := &mockSessionFacade{}
 	tests := []struct {
 		name           string
+		approved       bool
 		autoConfirm    bool
+		permanent      bool
 		session        sessioninterfaces.SessionFacade
 		autoConfirmKey string
 		persisted      bool
 		expected       bool
 	}{
-		{"全满足", true, mockSession, "bash:ls", false, true},
-		{"autoConfirm为false", false, mockSession, "bash:ls", false, false},
-		{"session为nil", true, nil, "bash:ls", false, false},
-		{"key为空", true, mockSession, "", false, false},
-		{"已持久化", true, mockSession, "bash:ls", true, false},
-		{"key非空且全满足", true, mockSession, "bash", false, true},
+		{"全满足", true, true, false, mockSession, "bash:ls", false, true},
+		{"approved为false", false, true, false, mockSession, "bash:ls", false, false},
+		{"autoConfirm为false", true, false, false, mockSession, "bash:ls", false, false},
+		{"session为nil", true, true, false, nil, "bash:ls", false, false},
+		{"key为空", true, true, false, mockSession, "", false, false},
+		{"永久规则已持久化跳过", true, true, true, mockSession, "bash:ls", true, false},
+		{"会话级持久化仍存储", true, true, false, mockSession, "bash:ls", true, true},
+		{"key非空且全满足", true, true, false, mockSession, "bash", false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, shouldStoreAutoConfirm(tt.autoConfirm, tt.session, tt.autoConfirmKey, tt.persisted))
+			assert.Equal(t, tt.expected, shouldStoreAutoConfirm(tt.approved, tt.autoConfirm,
+				tt.permanent, tt.session, tt.autoConfirmKey, tt.persisted))
 		})
 	}
 }
