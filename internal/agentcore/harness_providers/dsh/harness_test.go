@@ -2,8 +2,8 @@ package dsh
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -93,6 +93,7 @@ type fakeSDKSession struct {
 	state     *fakeSdkState
 	sessionID string
 }
+
 // Python: test_harness.py:145-176 _FakeSession.run
 func (f *fakeSDKSession) Run(input any, onNotification func(deepseekharness.Notification)) (*deepseekharness.RunResult, error) {
 	f.state.mu.Lock()
