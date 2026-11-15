@@ -140,6 +140,10 @@ type Serializer interface {
 | D-4 | async 三方法 | 同步签名 | Go 异步由调用方 goroutine 承担 | 无 |
 | D-5 | `GraphState.channel_values: Dict[str, Any]` | `map[string][]pregel.ChannelSnapshot` | 计划行已拍板的类型收窄；Message.kind 非导出决定快照形态 | 随 8.9b 若需调整同步 |
 | D-6 | `create_state` 关键字仅参 + `node_version: Dict = None` 默认 | 平铺位置参数 + nil 兜底 | Go 无关键字参数/可变默认值陷阱 | 无 |
+| D-8 | pickle 序列化 Exception 完整保真；`json.dumps(Exception)` 直接 TypeError（上游拒绝 json 的根因旁证） | Go `json.Marshal` 对 error 接口**不报错但静默丢内容**（产出 `{}`） | Go encoding-json 对仅含非导出字段的类型静默产出空对象 | ⤴️ 8.3c：serde 真实消费落地时，若需序列化含 `Exception` 的 GraphState，须先做 error→string（`err.Error()`）适配并登记；本节 serde 无消费方，不预做 |
+| D-9 | `json.dumps(..., ensure_ascii=False)` 不转义 `< > &` | `DumpsTyped` 用 `json.Encoder` + `SetEscapeHTML(false)` 对齐（禁用默认 `json.Marshal`，其会把 `< > &` 转义为 `\u003c` 等） | 字节层面与 Python 产物不一致 | 无 |
+
+**上游解锁跟踪标注（用户 2026-11-15 要求）**：上游 `create_serializer("json")` 的 `"json is not yet supported"` raise 是动态状态（类已完整实现，随时可能解锁）。已在 `IMPLEMENTATION_PLAN.md` 8.3c 行（serde 的唯一上游消费方）加 ⤴️ 标注：实施 8.3c 时**必须核对 Python 源码该处是否已解锁 json**，解锁则同步回填 Go 的 `CreateSerializer` 并注销 D-1 的 pickle 承担偏差。
 
 ## 4. 回填清单（同改动内完成，规则 8/13）
 

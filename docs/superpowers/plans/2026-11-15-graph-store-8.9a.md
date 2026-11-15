@@ -584,6 +584,7 @@ git commit -m "feat(store): InMemoryStore 深拷贝读写与前缀删除（8.9a 
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 )
@@ -595,9 +596,9 @@ func TestJSONSerializer_RoundTrip(t *testing.T) {
 	if err != nil || typ != "json" {
 		t.Fatalf("dumps: %v %s", err, typ)
 	}
-	// ensure_ascii=False 语义：非 ASCII 不转义
-	if !json.Valid(data) {
-		t.Fatal("产物非法 JSON")
+	// ensure_ascii=False / SetEscapeHTML(false) 语义：< > & 与非 ASCII 均不转义（D-9）
+	if !json.Valid(data) || bytes.Contains(data, []byte("\\u003c")) {
+		t.Fatal("产物非法或含 HTML 转义")
 	}
 	got, err := s.LoadsTyped("json", data)
 	if err != nil {
@@ -605,6 +606,18 @@ func TestJSONSerializer_RoundTrip(t *testing.T) {
 	}
 	if got.(map[string]any)["k"] != "值" {
 		t.Fatalf("往返失真: %+v", got)
+	}
+}
+
+// TestJSONSerializer_HTMLNoEscape 字节层面验证不转义 < > &
+func TestJSONSerializer_HTMLNoEscape(t *testing.T) {
+	s := &JSONSerializer{}
+	_, data, err := s.DumpsTyped(map[string]string{"k": "a<b>&c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `{"k":"a<b>&c"}` {
+		t.Fatalf("应与 Python ensure_ascii=False 字节一致: %s", data)
 	}
 }
 
@@ -647,6 +660,7 @@ Expected: FAIL（类型未定义）
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -669,12 +683,18 @@ type JSONSerializer struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// DumpsTyped 序列化对象为 JSON 字节（ensure_ascii=False 对齐：Go encoding-json 默认不转义非 ASCII）
+// DumpsTyped 序列化对象为 JSON 字节。
+// ⚠️ 必须用 json.Encoder + SetEscapeHTML(false)：默认 json.Marshal 会把 < > &
+// 转义为 \u003c/\u003e/\u0026，与 Python ensure_ascii=False 字节不一致（偏差 D-9）。
 func (s *JSONSerializer) DumpsTyped(obj any) (string, []byte, error) {
-	data, err := json.Marshal(obj)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(obj); err != nil {
 		return "json", nil, err
 	}
+	// Encoder.Encode 末尾带 \n，json.dumps 无换行，剥掉对齐
+	data := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
 	return "json", data, nil
 }
 
@@ -1054,6 +1074,14 @@ git commit -m "feat(checkpointer): 8.9a 回填 GraphStore 收窄 *store.GraphSto
 ；✅ Go 事实（8.9a）：包 `internal/agentcore/graph/store/`（base/inmemory/serde/doc 四文件一比一映射）；`Message.Copy`（pregel/base.go，kind 原样保留）+ `GraphState.Clone` 承担 deepcopy（偏差 D-2）；`CreateSerializer("json")` 复刻 raise、pickle 由 JSON 承担（D-1）；⚠️ Save 异常日志 Msg 原文为 "Succeed..."（Python 复制粘贴笔误），Go 修正为 Failed（D-7）；5.8 `GraphStore() any` 已收窄 `*store.GraphStore`、4 处 Delete 已落地；⤵️ 8.9b：serde 序列化面的 Message.kind 保真（8.4 偏差 D-10 的 JSON 字节流面）仍留 8.9b；8.8 ⤵️ 维持后移拍板
 ```
 
+- [ ] **Step 2b: 8.3c 行加上游解锁跟踪标注（⤴️，用户 2026-11-15 要求）**
+
+8.3c 行描述**原文保留**，行尾追加：
+
+```markdown
+；⤴️ 8.9a serde 上游解锁跟踪：实施 8.3c 时必须核对 Python `store/serde.py` 的 `create_serializer("json")` 是否仍 raise "json is not yet supported"——若上游已解锁 json，同步回填 Go `CreateSerializer` 放行 json 并注销 8.9a 偏差 D-1（pickle 由 JSON 承担）；另注意上游拒绝 json 的根因是异常不可 json.dumps，Go 侧 error 序列化同样静默丢内容（8.9a spec D-8），届时须 error→string 适配
+```
+
 - [ ] **Step 3: 提交**
 
 ```bash
@@ -1109,3 +1137,5 @@ git push
 | D-5 | channel_values Dict[str, Any] → map[string][]pregel.ChannelSnapshot |
 | D-6 | create_state 关键字参数 → 平铺位置参数 |
 | D-7 | Save 异常日志 Msg "Succeed"（Python 笔误）→ Go "Failed" |
+| D-8 | error 接口 JSON 序列化静默丢内容（Python pickle 保真 / json.dumps Exception 直接 TypeError）——本节无 serde 消费方不预做，⤴️ 8.3c 消费落地时 error→string 适配 |
+| D-9 | DumpsTyped 用 json.Encoder + SetEscapeHTML(false) 对齐 ensure_ascii=False 字节 |
