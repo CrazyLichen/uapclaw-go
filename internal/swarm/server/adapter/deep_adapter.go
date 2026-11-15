@@ -1056,6 +1056,11 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
+
+	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
+	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
+	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
+	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
 	// 步骤 2-3: 模型配置校验
 	params := parseParams(req.Params)
 	reqModelName := paramsString(params, "model_name", "")
@@ -1298,6 +1303,11 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		return ch, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
+
+	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
+	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
+	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
+	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
 	// 步骤 2-3: 模型配置校验
 	params := parseParams(req.Params)
 	reqModelName := paramsString(params, "model_name", "")
@@ -1909,6 +1919,9 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			return child.ProcessInterrupt(ctx, req)
 		}
 	}
+
+	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx（Python: interface_deep.py :19684，D-23.8-1）
+	ctx = commonprompt.WithMultimodalImageFiles(ctx, commonprompt.ExtractMultimodalImageFiles(parseParams(req.Params)))
 
 	// 步骤 3-4: session 规范化 + 活跃检查
 	normalizedSID := "default"
