@@ -328,7 +328,7 @@ func TestSkillMDPath(t *testing.T) {
 
 // TestFilterSkills_仅enabled 测试仅白名单
 func TestFilterSkills_仅enabled(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"},
+	r := NewSkillUseRail([]string{t.TempDir()},
 		WithEnabledSkills([]string{"a"}),
 		WithIncludeTools(false),
 	)
@@ -344,7 +344,7 @@ func TestFilterSkills_仅enabled(t *testing.T) {
 
 // TestFilterSkills_仅disabled 测试仅黑名单
 func TestFilterSkills_仅disabled(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"},
+	r := NewSkillUseRail([]string{t.TempDir()},
 		WithDisabledSkills([]string{"b"}),
 		WithIncludeTools(false),
 	)
@@ -360,7 +360,7 @@ func TestFilterSkills_仅disabled(t *testing.T) {
 
 // TestFilterSkills_同时设置 测试白名单+黑名单
 func TestFilterSkills_同时设置(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"},
+	r := NewSkillUseRail([]string{t.TempDir()},
 		WithEnabledSkills([]string{"a", "b"}),
 		WithDisabledSkills([]string{"b"}),
 		WithIncludeTools(false),
@@ -378,7 +378,7 @@ func TestFilterSkills_同时设置(t *testing.T) {
 
 // TestFilterSkills_空skills 测试空技能列表
 func TestFilterSkills_空skills(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(false))
 	filtered := r.filterSkills(nil)
 	if filtered != nil {
 		t.Errorf("filterSkills(nil) = %v, want nil", filtered)
@@ -629,7 +629,7 @@ func TestPrepareSkills_禁用缓存(t *testing.T) {
 
 // TestGetSkillDescription_无演化经验 测试无演化经验文本
 func TestGetSkillDescription_无演化经验(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(false))
 	skill := skillpkg.NewSkill("test", "原始描述", "/test")
 	desc := r.getSkillDescription(skill)
 	if desc != "原始描述" {
@@ -639,7 +639,7 @@ func TestGetSkillDescription_无演化经验(t *testing.T) {
 
 // TestGetSkillDescription_有演化经验 测试有演化经验文本
 func TestGetSkillDescription_有演化经验(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(false))
 	r.evolutionTexts["test"] = "经验文本"
 	skill := skillpkg.NewSkill("test", "原始描述", "/test")
 	desc := r.getSkillDescription(skill)
@@ -653,7 +653,7 @@ func TestGetSkillDescription_有演化经验(t *testing.T) {
 
 // TestBuildSkillsSection_all模式 测试 all 模式
 func TestBuildSkillsSection_all模式(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 	r.skills = []*skillpkg.Skill{
 		skillpkg.NewSkill("a", "技能 A", "/a"),
@@ -674,7 +674,7 @@ func TestBuildSkillsSection_all模式(t *testing.T) {
 
 // TestBuildSkillsSection_autoList模式 测试 auto_list 模式
 func TestBuildSkillsSection_autoList模式(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 
 	section := r.buildSkillsSectionFor(r.skills)
@@ -688,7 +688,7 @@ func TestBuildSkillsSection_autoList模式(t *testing.T) {
 
 // TestBuildSkillsSection_空skills 测试 all 模式空技能
 func TestBuildSkillsSection_空skills(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 	r.systemPromptBuilder = newMockSystemPromptBuilder("cn")
 	r.skills = nil
 
@@ -704,7 +704,7 @@ func TestBuildSkillsSection_空skills(t *testing.T) {
 // TestBeforeModelCall_注入section 测试 BeforeModelCall 注入 section
 func TestBeforeModelCall_注入section(t *testing.T) {
 	spb := newMockSystemPromptBuilder("cn")
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 	r.systemPromptBuilder = spb
 	r.skills = []*skillpkg.Skill{
 		skillpkg.NewSkill("a", "技能 A", "/a"),
@@ -721,7 +721,7 @@ func TestBeforeModelCall_注入section(t *testing.T) {
 
 // TestBeforeModelCall_空builder 测试 systemPromptBuilder 为 nil 时空操作
 func TestBeforeModelCall_空builder(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 	r.systemPromptBuilder = nil
 
 	err := r.BeforeModelCall(context.Background(), nil)
@@ -738,7 +738,7 @@ func TestInit_工具注册(t *testing.T) {
 	am := newMockAbilityManager()
 	agent := newMockBaseAgent(spb, am)
 
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(true))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAll), WithIncludeTools(true))
 	err := r.Init(context.Background(), agent)
 	if err != nil {
 		t.Fatalf("Init 错误: %v", err)
@@ -754,7 +754,7 @@ func TestInit_autoList注册ListSkillTool(t *testing.T) {
 	am := newMockAbilityManager()
 	agent := newMockBaseAgent(spb, am)
 
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAutoList), WithIncludeTools(false))
 	err := r.Init(context.Background(), agent)
 	if err != nil {
 		t.Fatalf("Init 错误: %v", err)
@@ -771,7 +771,7 @@ func TestUninit_工具注销(t *testing.T) {
 	am := newMockAbilityManager()
 	agent := newMockBaseAgent(spb, am)
 
-	r := NewSkillUseRail([]string{"/tmp"}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithSkillMode(SkillModeAll), WithIncludeTools(false))
 	_ = r.Init(context.Background(), agent)
 	_ = r.Uninit(agent)
 
@@ -787,7 +787,7 @@ func TestUninit_工具注销(t *testing.T) {
 
 // TestSkillsMeta 测试 SkillsMeta 返回副本
 func TestSkillsMeta(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(false))
 	r.skills = []*skillpkg.Skill{
 		skillpkg.NewSkill("a", "desc", "/a"),
 	}
@@ -805,7 +805,7 @@ func TestSkillsMeta(t *testing.T) {
 
 // TestClearSkills 测试 ClearSkills
 func TestClearSkills(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(false))
 	r.skillCache["key"] = skillpkg.NewSkill("a", "desc", "/a")
 	r.skills = []*skillpkg.Skill{skillpkg.NewSkill("a", "desc", "/a")}
 
@@ -859,7 +859,7 @@ func TestLoadSkillsFromDir_空目录(t *testing.T) {
 
 // TestPriority 测试优先级
 func TestPriority(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"})
+	r := NewSkillUseRail([]string{t.TempDir()})
 	if r.Priority() != skillUseRailPriority {
 		t.Errorf("Priority() = %d, want %d", r.Priority(), skillUseRailPriority)
 	}
@@ -886,7 +886,7 @@ func TestBeforeInvoke(t *testing.T) {
 
 // TestAfterInvoke 测试 AfterInvoke
 func TestAfterInvoke(t *testing.T) {
-	r := NewSkillUseRail([]string{"/tmp"}, WithIncludeTools(false))
+	r := NewSkillUseRail([]string{t.TempDir()}, WithIncludeTools(false))
 	err := r.AfterInvoke(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("AfterInvoke 错误: %v", err)
