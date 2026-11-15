@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -278,7 +280,7 @@ func (r *InterruptRequest) SetInterruptOwner(owner string) { r.InterruptOwner = 
 // Python: InterruptRequest(BaseModel).model_dump()——键为 snake_case 字段名，
 // jsonsafe.py:36-38 据此把 pydantic 模型转成 dict；没有本方法时 Go 的
 // ToJsonSafe 对 struct 走 fmt.Sprint 兜底，_interrupt_prompt 等消费方拿不到字段。
-func (r *InterruptRequest) ModelDump(_ string, _ bool) (any, error) {
+func (r *InterruptRequest) ModelDump(_ string, _ bool) (map[string]any, error) {
 	return map[string]any{
 		"message":          r.Message,
 		"payload_schema":   r.PayloadSchema,
@@ -294,23 +296,32 @@ func (r *InterruptRequest) ModelDump(_ string, _ bool) (any, error) {
 // ModelDump 实现 model_dump 缝：内嵌请求字段 + 工具上下文字段平铺到顶层。
 // Python: ToolCallInterruptRequest（response.py:92-127，extra="allow"，
 // from_tool_call 用 request.model_dump() 平铺子类字段）。
-func (r *ToolCallInterruptRequest) ModelDump(_ string, _ bool) (any, error) {
+func (r *ToolCallInterruptRequest) ModelDump(_ string, _ bool) (map[string]any, error) {
 	out := map[string]any{
 		"tool_name":    r.ToolName,
 		"tool_call_id": r.ToolCallID,
 		"tool_args":    r.ToolArgs,
 		"index":        r.Index,
 	}
-	if r.Request != nil {
-		if dumped, err := r.Request.(interface {
-			ModelDump(mode string, byAlias bool) (any, error)
-		}).ModelDump("", false); err == nil {
-			if base, ok := dumped.(map[string]any); ok {
-				for key, value := range base {
-					out[key] = value
-				}
-			}
-		}
+	if r.Request == nil {
+		return out, nil
+	}
+	// 内嵌请求未实现 ModelDump → 直接返回错误，拒绝静默降级：
+	// 静默跳过会让子类字段（questions/message 等）凭空消失，消费方拿到
+	// 残缺 dict 或落回 fmt.Sprint 调试串（2026-11-14 ask_user prompt 实锤）。
+	dumper, ok := r.Request.(interface {
+		ModelDump(mode string, byAlias bool) (map[string]any, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf(
+			"内嵌中断请求 %T 未实现 ModelDump，拒绝静默平铺降级", r.Request)
+	}
+	base, err := dumper.ModelDump("", false)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range base {
+		out[key] = value
 	}
 	return out, nil
 }

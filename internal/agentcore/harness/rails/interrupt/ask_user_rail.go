@@ -37,16 +37,13 @@ type AskUserRequest struct {
 // ModelDump 实现 harness_providers.ToJsonSafe 的 model_dump 缝（spec D3）：
 // 基础字段 + questions 平铺（Python: AskUserRequest.model_dump，
 // ask_user_rail.py:25-27）。
-func (r *AskUserRequest) ModelDump(mode string, byAlias bool) (any, error) {
-	base, err := r.InterruptRequest.ModelDump(mode, byAlias)
+func (r *AskUserRequest) ModelDump(mode string, byAlias bool) (map[string]any, error) {
+	m, err := r.InterruptRequest.ModelDump(mode, byAlias)
 	if err != nil {
 		return nil, err
 	}
-	if m, ok := base.(map[string]any); ok {
-		m["questions"] = r.Questions
-		return m, nil
-	}
-	return base, nil
+	m["questions"] = r.Questions
+	return m, nil
 }
 
 // AskUserRail 向用户提问的 Rail。

@@ -127,27 +127,28 @@ type fakeModel struct {
 }
 
 // ModelDump 返回固定值。
-func (f fakeModel) ModelDump(mode string, byAlias bool) (any, error) {
+func (f fakeModel) ModelDump(mode string, byAlias bool) (map[string]any, error) {
 	_ = mode
 	_ = byAlias
-	return f.value, nil
+	m, _ := f.value.(map[string]any)
+	return m, nil
 }
 
 // fakeModelErr 测试用：ModelDump 返回错误，应走兜底。
 type fakeModelErr struct{}
 
 // ModelDump 恒返回错误。
-func (fakeModelErr) ModelDump(string, bool) (any, error) {
+func (fakeModelErr) ModelDump(string, bool) (map[string]any, error) {
 	return nil, assert.AnError
 }
 
-// TestToJsonSafe_ModelDump出错走兜底 验证 ModelDump 失败时降级为字符串。
+// TestToJsonSafe_ModelDump出错拒绝兜底 验证 ModelDump 失败时返回 nil 而
+// 不是 fmt.Sprint 调试串（调试串会把指针地址泄进事件流）。
 // Python: jsonsafe.py:36-38 无对应失败路径（model_dump 不返回 error），
-// 是 Go 侧接口带 error 的必要处理。
-func TestToJsonSafe_ModelDump出错走兜底(t *testing.T) {
+// 是 Go 侧接口带 error 的必要处理（2026-11-14 语义收紧）。
+func TestToJsonSafe_ModelDump出错拒绝兜底(t *testing.T) {
 	got := ToJsonSafe(fakeModelErr{})
-	_, ok := got.(string)
-	assert.True(t, ok, "ModelDump 失败必须降级为字符串，实际 %T", got)
+	assert.Nil(t, got, "ModelDump 失败必须返回 nil 拒绝兜底，实际 %#v", got)
 }
 
 // TestToJsonSafe_兜底转字符串 验证无法识别的类型走 fmt.Sprint。

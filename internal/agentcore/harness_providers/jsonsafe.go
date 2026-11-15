@@ -5,6 +5,8 @@ import (
 	"math"
 	"reflect"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // 本文件对应 Python openjiuwen/harness_providers/jsonsafe.py（55 行）：
@@ -37,7 +39,8 @@ import (
 //   - os.PathLike：Go 无对应抽象，仓内路径一律 string，走兜底
 //   - dataclass：Go 无对应物，用「有字段的结构体」启发式会误伤 time.Time
 //     等（Python 对它们走兜底），故不实现
-//   - model_dump：用可选接口 ModelDump 探测，本批无实现者
+//   - model_dump：用可选接口 ModelDump 探测（15.6 起有实现者；错误拒绝
+//     fmt.Sprint 兜底，见步骤 4）
 //
 // Python: jsonsafe.py:15-43 to_json_safe
 func ToJsonSafe(value any) any {
@@ -75,14 +78,24 @@ func ToJsonSafe(value any) any {
 		return strings.ToValidUTF8(string(b), "\ufffd")
 	}
 
-	// 步骤 4：model_dump 可选接口（spec D3 留缝，本批无实现者）
+	// 步骤 4：model_dump 可选接口（spec D3 留缝；15.6 起有真实实现者）。
 	// Python: jsonsafe.py:36-38
+	// 签名收窄为 map[string]any——model_dump 的产物就是 dict，任何具体类型
+	// 断言都发生在实现方内部。实现方返回错误时**拒绝 fmt.Sprint 兜底**：
+	// 那会把含指针地址的调试串泄进事件流（2026-11-14 ask_user prompt 实锤），
+	// 改为 Error 日志 + nil，让消费方显式感知。
 	if dumper, ok := value.(interface {
-		ModelDump(mode string, byAlias bool) (any, error)
+		ModelDump(mode string, byAlias bool) (map[string]any, error)
 	}); ok {
-		if dumped, err := dumper.ModelDump("json", true); err == nil {
-			return ToJsonSafe(dumped)
+		dumped, err := dumper.ModelDump("json", true)
+		if err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("value_type", fmt.Sprintf("%T", value)).
+				Msg("ModelDump failed, refusing fmt.Sprint fallback")
+			return nil
 		}
+		return ToJsonSafe(dumped)
 	}
 
 	// 步骤 5：容器递归
