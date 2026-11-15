@@ -209,7 +209,7 @@ func TestAccumulator_toolCall与Result(t *testing.T) {
 		"event": map[string]any{"type": "tool/result", "data": map[string]any{
 			"turn": 1, "step": 2, "error": "boom", "meta": "m",
 			"message": map[string]any{
-				"source": map[string]any{"callId": "c1"},
+				"source":  map[string]any{"callId": "c1"},
 				"content": "contents",
 			},
 		}},
@@ -226,7 +226,7 @@ func TestAccumulator_step与subagent(t *testing.T) {
 	acc := newAccumulator(t)
 	mapped, err := acc.Consume(notification("session.event", deepseekharness.JSONObject{
 		"sessionId": "root-session",
-		"event": map[string]any{"type": "step/start", "data": map[string]any{"turn": 1, "step": 1}},
+		"event":     map[string]any{"type": "step/start", "data": map[string]any{"turn": 1, "step": 1}},
 	}))
 	require.NoError(t, err)
 	item := mapped[0].Payload.(harnessprotocol.ItemLifecycleEvent)
@@ -261,9 +261,9 @@ func TestAccumulator_usage按步去重累计(t *testing.T) {
 		require.NoError(t, err)
 		return mapped
 	}
-	require.Len(t, send(10, 5, 3), 1)   // 首次 → UsageUpdatedEvent
-	assert.Empty(t, send(10, 5, 3))    // 同值去重
-	require.Len(t, send(12, 6, 4), 1)  // 变化 → 更新
+	require.Len(t, send(10, 5, 3), 1) // 首次 → UsageUpdatedEvent
+	assert.Empty(t, send(10, 5, 3))   // 同值去重
+	require.Len(t, send(12, 6, 4), 1) // 变化 → 更新
 
 	usage := acc.totalUsage()
 	require.NotNil(t, usage)
