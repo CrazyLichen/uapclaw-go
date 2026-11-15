@@ -438,12 +438,12 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 // Python: DeepAgentConfig 字段默认值（max_iterations=None 表示不限，completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
-		AutoCreateWorkspace:     true,
+		AutoCreateWorkspace: true,
 		// Python 默认 None=auto（schema/config.py:285），交由声明/探测解析链判定
 		TaskLoopNoProgressGuard: TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
-		CompletionTimeout:         DefaultCompletionTimeout,
-		ToolSearchLimit:           DefaultToolSearchLimit,
-		Language:                  DefaultLanguage,
+		CompletionTimeout:       DefaultCompletionTimeout,
+		ToolSearchLimit:         DefaultToolSearchLimit,
+		Language:                DefaultLanguage,
 	}
 }
 
