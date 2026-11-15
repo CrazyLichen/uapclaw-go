@@ -19,7 +19,10 @@
 //	├── artifact_io.go          # 文件系统 YAML/JSON 产物小助手
 //	├── config/                 # AutoCoordinatingHarnessConfig 全链配置
 //	├── data_loader/            # 评估数据集载入与批次规划
-//	└── resource/              # 默认配置模板（go:embed）
+//	├── resource/               # 默认配置模板（go:embed）
+//	├── evaluator/              # 评估器运行时适配（17.4b1 前置件切片 ⤴️ 17.6）
+//	├── member_optimizer/       # 手术系统载入与模型配置（17.4b1 前置件切片 ⤴️ 17.4c）
+//	└── evaluation_result_analyzer/ # 评估结果诊断分析读件层（17.4b1；b2 待落地）
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/（顶层 8 文件）
 package harnessrsi
