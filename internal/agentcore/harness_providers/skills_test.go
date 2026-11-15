@@ -297,7 +297,7 @@ func TestInstallSkills_逃逸拒绝与自复制(t *testing.T) {
 	source := writeBundle(t, filepath.Join(tmp, "source"), "example", "x")
 	outside := filepath.Join(tmp, "outside")
 	os.WriteFile(outside, []byte("o"), 0o644)
-os.Symlink(outside, filepath.Join(source, "escape"))
+	os.Symlink(outside, filepath.Join(source, "escape"))
 	if _, err := InstallSkills([]SkillSource{{Dir: source, Mode: "all"}}, "dsh", tmp, "skip", ""); err == nil || !strings.Contains(err.Error(), "escapes") {
 		t.Fatalf("逃逸应报错: %v", err)
 	}
