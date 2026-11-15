@@ -112,7 +112,7 @@ func expandUser(path string) string {
 
 // ioPath 文件系统 IO 使用扩展长度路径（仅 Windows），绝不用于模型工具输入。
 // 对齐 Python artifact_io._io_path：UNC 前缀 \\?\UNC、盘符前缀 \\?\X\。
-func ioPath(path string) string {
+func IoPath(path string) string {
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return path
