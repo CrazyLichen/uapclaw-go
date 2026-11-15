@@ -15,6 +15,7 @@ import (
 
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -35,8 +36,8 @@ type handleDomainRouteOptions struct {
 	ToolCallID string
 	// UserInput 用户确认载荷
 	UserInput any
-	// OriginalUserIntent 原始用户意图证据
-	OriginalUserIntent *permissions.OriginalUserIntentEvidence
+	// rootcontext.OriginalUserIntent 原始用户意图证据
+	OriginalUserIntent *rootcontext.OriginalUserIntentEvidence
 	// ChannelKind 通道类型（默认 web）
 	ChannelKind string
 	// RuntimeCtx 运行时上下文
@@ -81,7 +82,7 @@ const (
 // facts, *, original_user_intent, recent_url_sources=())
 func (r *AutoPermissionRail) evaluateDomainRoute(
 	facts permissions.ToolDecisionFacts,
-	originalUserIntent *permissions.OriginalUserIntentEvidence,
+	originalUserIntent *rootcontext.OriginalUserIntentEvidence,
 	recentURLSources []permissions.RecentURLSource,
 ) *permissions.DecisionRoute {
 	return permissions.DeterministicDomainRoute(

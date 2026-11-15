@@ -15,10 +15,12 @@ import (
 	"fmt"
 	"sync"
 
+	"os"
+
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"os"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -45,7 +47,7 @@ type RootPermissionCard struct {
 	// AutoManual 是否为自动转人工
 	AutoManual bool
 	// RootContext 冻结的决策上下文
-	RootContext *RootDecisionContext
+	RootContext *rootcontext.RootDecisionContext
 }
 
 // RootPermissionSnapshot Core 的一次中断快照，按可见的 FIFO 顺序排列。
@@ -316,7 +318,7 @@ func (q *RootPermissionQueue) MarkPending(
 	key *ToolInvocationKeyV1,
 	request *InterruptRequestSnapshot,
 	autoManual bool,
-	rootContext *RootDecisionContext,
+	rootContext *rootcontext.RootDecisionContext,
 ) (RootPermissionCard, error) {
 	if request == nil {
 		return RootPermissionCard{}, &RootPermissionQueueError{"permission_queue_request_invalid"}

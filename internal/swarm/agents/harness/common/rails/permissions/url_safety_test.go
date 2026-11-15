@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // parseURLForTest 解析 URL 供测试用。
@@ -34,9 +36,9 @@ func urlFactsSubject(toolName string, sideEffects []string, args map[string]any)
 }
 
 // hostUserEvidence 构造宿主用户消息证据。
-func hostUserEvidence(text string) *OriginalUserIntentEvidence {
-	return &OriginalUserIntentEvidence{
-		Source: UserIntentSourceHostUserMessage,
+func hostUserEvidence(text string) *rootcontext.OriginalUserIntentEvidence {
+	return &rootcontext.OriginalUserIntentEvidence{
+		Source: rootcontext.UserIntentSourceHostUserMessage,
 		Text:   text,
 	}
 }
@@ -597,7 +599,7 @@ func TestHasTrustedHostUserIntent_各分支(t *testing.T) {
 	if hasTrustedHostUserIntent(nil) {
 		t.Error("nil evidence should be false")
 	}
-	if hasTrustedHostUserIntent(&OriginalUserIntentEvidence{Source: "other", Text: "x"}) {
+	if hasTrustedHostUserIntent(&rootcontext.OriginalUserIntentEvidence{Source: "other", Text: "x"}) {
 		t.Error("non-host source should be false")
 	}
 	if !hasTrustedHostUserIntent(hostUserEvidence("text")) {
@@ -607,10 +609,10 @@ func TestHasTrustedHostUserIntent_各分支(t *testing.T) {
 		t.Error("empty text without context should be false")
 	}
 	// context 里有可信轮次
-	ev := &OriginalUserIntentEvidence{
-		Source: UserIntentSourceHostUserMessage,
-		Context: &RootDecisionContext{
-			TrustedTurns: []RootIntentTurn{{Text: "turn text"}},
+	ev := &rootcontext.OriginalUserIntentEvidence{
+		Source: rootcontext.UserIntentSourceHostUserMessage,
+		Context: &rootcontext.RootDecisionContext{
+			TrustedTurns: []rootcontext.RootIntentTurn{{Text: "turn text"}},
 		},
 	}
 	if !hasTrustedHostUserIntent(ev) {
@@ -800,13 +802,13 @@ func TestEvaluateReviewableURLScope_askUser澄清走语义(t *testing.T) {
 	subject := urlFactsSubject("web_fetch", nil, map[string]any{
 		"url": "https://example.com/a",
 	})
-	ev := &OriginalUserIntentEvidence{
-		Source: UserIntentSourceHostUserMessage,
+	ev := &rootcontext.OriginalUserIntentEvidence{
+		Source: rootcontext.UserIntentSourceHostUserMessage,
 		Text:   "fetch it",
-		Context: &RootDecisionContext{
-			TrustedTurns: []RootIntentTurn{{
-				Kind:           RootIntentTurnKindAskUserClarification,
-				Clarifications: []RootAskUserClarification{{Question: "which?", Answers: []string{"a"}}},
+		Context: &rootcontext.RootDecisionContext{
+			TrustedTurns: []rootcontext.RootIntentTurn{{
+				Kind:           rootcontext.RootIntentTurnKindAskUserClarification,
+				Clarifications: []rootcontext.RootAskUserClarification{{Question: "which?", Answers: []string{"a"}}},
 			}},
 		},
 	}

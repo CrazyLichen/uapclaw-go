@@ -1,6 +1,6 @@
 // 结构化 ask_user 交互的共享有界契约。
-// 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/ask_user_contract.py
-package rails
+// 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/ask_user_contract.py（一文件一包，23.8d 叶子包拆分）
+package askusercontract
 
 // ──────────────────────────── 常量 ────────────────────────────
 

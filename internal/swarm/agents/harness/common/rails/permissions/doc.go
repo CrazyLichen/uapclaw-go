@@ -15,7 +15,7 @@
 //
 // 数据流（详见 docs/superpowers/specs/2026-11-07-root-permission-5-files-design.md）：
 //
-//	root_context_rail       组装 RootDecisionContext（意图窗口）并绑定
+//	root_context_rail       组装 rootcontext.RootDecisionContext（意图窗口）并绑定
 //	        ↓
 //	root_permission_queue_rail  发号码牌 ToolInvocationKeyV1，抛中断
 //	        ↓
@@ -35,12 +35,12 @@
 // categories / package_builtin_rules 的 Host 事实保护、fail-closed 兜底。
 //
 // ⤵️ 意图窗口的消费方待 9.90d（_auto_permission）批次回填：
-// RootDecisionContext 目前只被两个 root rail 读写，尚无判定逻辑消费。
+// rootcontext.RootDecisionContext 目前只被两个 root rail 读写，尚无判定逻辑消费。
 // Python 侧的三处消费方是 auto_reviewer._intent_view、
 // _auto_permission/before_tool.resolve_original_user_intent、
 // url_safety.has_valid_ask_user_clarification。
-// 在此之前本包 RootDecisionContext / OriginalUserIntent / FileDeliveryConstraintText /
-// HasValidAskUserClarification 均无实际调用方，属"管道就位、未接水源"。
+// 在此之前本包 rootcontext.RootDecisionContext / rootcontext.OriginalUserIntent / rootcontext.FileDeliveryConstraintText /
+// rootcontext.HasValidAskUserClarification 均无实际调用方，属"管道就位、未接水源"。
 //
 // ⤵️ 非权限续接的包装器校验（RootPermissionWrapperResume 的完整校验链，
 // 涉及 ProgressiveToolRail._call_discovered_tool / ToolCallTool / Runner.resource_mgr）
@@ -93,11 +93,11 @@
 //	├── sandbox_profile.go                 # 沙箱解析根投影（9.90b）
 //	├── tool_capabilities.go               # 工具能力分类表，28 分支（9.90b）
 //	├── tool_decision_facts.go             # 单次调用决策事实 + DecisionRoute（9.90b）
-//	├── root_context.go                    # RootIntentTurn/RootDecisionContext 意图窗口 + ContextVar 绑定 + 意图投影
 //	├── root_permission_queue.go           # RootPermissionQueue 串行化队列状态机（active/pending/resuming + quarantine）
 //	├── root_permission_queue_rail.go      # RootPermissionQueueRail 身份绑定与闩锁 + RootPermissionCompletionRail
 //	├── root_ask_user.go                   # 用户反问续接：冻结快照 / 还原澄清 / 追加意图窗口
 //	├── root_context_rail.go               # RootContextRail 上下文绑定 rail
+//	├── rootcontext/                       # 叶子包：RootIntentTurn/RootDecisionContext 意图窗口数据类（root_context.py，23.8d 拆分回收 D-23.8-4）
 //	├── permission_rail_group.go           # 权限 rail 组装配配方 + validate/verify
 //	└── auto_permission/                   # 自动权限审查层共享契约 + 身份原语（9.90a）
 //	    ├── models.go                     # ToolInvocation / PermissionHandlingResult / PermissionInterruptRequest + 11 常量

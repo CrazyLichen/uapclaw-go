@@ -42,7 +42,6 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-	commrailspermissions "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
@@ -399,18 +398,11 @@ func SetDefaultSendPushFunc(fn func(ctx context.Context, msg map[string]any) err
 }
 
 func init() {
-	// 23.8: 视频生成盯单交付的注入缝桥接（D-23.8-4/D-23.8-5）。
-	// Python: video_gen_tools.py 直接 import current_root_decision_context /
-	// send_runtime_push；Go 因 permissions→tools 循环依赖与 adapter→tools
-	// 分层，在装配层（本包）桥接。
-	swarmtools.SetVideoWatchContextProvider(func(ctx context.Context) *swarmtools.VideoWatchContext {
-		// Python: current_root_decision_context()
-		rc := commrailspermissions.CurrentRootDecisionContext(ctx)
-		if rc == nil {
-			return nil
-		}
-		return &swarmtools.VideoWatchContext{RequestID: rc.RequestID, SessionID: rc.SessionID, ChannelID: rc.ChannelID}
-	})
+	// 23.8: 视频生成盯单交付的推送桥接（D-23.8-5）。
+	// Python: video_gen_tools.py 的 send_runtime_push；Go 侧经
+	// SetDefaultSendPushFunc（send_runtime_push.go 同一缝）注入。
+	// D-23.8-4 已回收：rootcontext 叶子包拆分后 video_gen_tools 直接
+	// rootcontext.CurrentRootDecisionContext(ctx)，无需装配层注入三元组。
 	swarmtools.SetVideoGenRuntimePush(func(msg map[string]any) bool {
 		// Python: send_runtime_push(msg) 的 pushed 布尔语义
 		fn := defaultSendPushFunc
@@ -422,7 +414,6 @@ func init() {
 	// SetVideoGenSendFileFunc 不注入：Go 侧 SendFileToolkit(send_file_to_user.py)
 	// 未移植，视频文件投递降级为文本通知（spec D-23.8-5，⤴️ send_file_to_user 移植时回填）。
 }
-
 
 // ResetPersistentCheckpointer 重置持久化检查点器就绪标记（仅测试用）。
 // Python 侧 _PERSISTENT_CHECKPOINTER_READY 是进程级标记，但 pytest 每个测试
@@ -1094,7 +1085,6 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
-
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
@@ -1340,7 +1330,6 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		close(ch)
 		return ch, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
-
 
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
@@ -3771,12 +3760,12 @@ func clientToolRequestEventOf(payload map[string]any) map[string]any {
 		return nil
 	}
 	return map[string]any{
-		"event_type":  "chat.client_tool_request",
-		"request_id":  requestID,
+		"event_type":   "chat.client_tool_request",
+		"request_id":   requestID,
 		"interrupt_id": value["interrupt_id"],
-		"source":      schema.ClientToolInterruptSource,
-		"tool_name":   value["tool_name"],
-		"arguments":   value["arguments"],
-		"client_tool": value["client_request"],
+		"source":       schema.ClientToolInterruptSource,
+		"tool_name":    value["tool_name"],
+		"arguments":    value["arguments"],
+		"client_tool":  value["client_request"],
 	}
 }

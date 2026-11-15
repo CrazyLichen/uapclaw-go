@@ -18,6 +18,7 @@ import (
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -247,10 +248,10 @@ func PutRootNonPermissionResumeInInputs(
 	prepared *RootNonPermissionResume,
 	wrappers []*RootPermissionWrapperResume,
 ) map[string]any {
-	result := copyMap(inputs)
-	run := nestedCopyMap(result, "run")
-	ctxMap := nestedCopyMap(run, "context")
-	extra := nestedCopyMap(ctxMap, "extra")
+	result := rootcontext.CopyMap(inputs)
+	run := rootcontext.NestedCopyMap(result, "run")
+	ctxMap := rootcontext.NestedCopyMap(run, "context")
+	extra := rootcontext.NestedCopyMap(ctxMap, "extra")
 
 	delete(extra, RootNonPermissionResumeDTOKey)
 	if prepared != nil {

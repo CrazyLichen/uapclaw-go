@@ -18,6 +18,7 @@ import (
 
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -41,8 +42,8 @@ type reviewerExecutionOptions struct {
 	ToolCallID string
 	// UserInput 用户确认载荷
 	UserInput any
-	// OriginalUserIntent 原始用户意图证据
-	OriginalUserIntent *permissions.OriginalUserIntentEvidence
+	// rootcontext.OriginalUserIntent 原始用户意图证据
+	OriginalUserIntent *rootcontext.OriginalUserIntentEvidence
 	// DomainRoute 领域路由
 	DomainRoute *permissions.DecisionRoute
 	// GuardResult 护栏结果（默认 not_applicable）
@@ -405,7 +406,7 @@ func resolveManualHandoff(
 			Summary: executionProviderSummary,
 		}
 	}
-	executionContext := permissions.CurrentRootDecisionContext(ctx)
+	executionContext := rootcontext.CurrentRootDecisionContext(ctx)
 	if executionContext != nil && executionContext.AutoReviewBlockReason != "" {
 		return &manualHandoffResult{
 			Reason:  executionContext.AutoReviewBlockReason,

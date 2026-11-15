@@ -2,8 +2,9 @@ package permissions
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -11,6 +12,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysoperation "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -571,7 +573,7 @@ func TestToolCallIDOfInputs(t *testing.T) {
 
 // TestNilIfReason 验证失败时置 nil
 func TestNilIfReason(t *testing.T) {
-	dc, _ := NewRootDecisionContext("s", "r", "", nil, "")
+	dc, _ := rootcontext.NewRootDecisionContext("s", "r", "", nil, "")
 	if nilIfReason(dc, "") != dc {
 		t.Fatalf("无原因应原样返回")
 	}
@@ -910,13 +912,13 @@ func TestResolveSandboxed_显式为false(t *testing.T) {
 // ──────────────────────────── RootContextRail 钩子测试 ────────────────────────────
 
 // boundCallback 构造一个带完整上下文绑定的回调
-func boundCallback(t *testing.T, rail *RootContextRail, sessionID string) (*agentinterfaces.AgentCallbackContext, *RootDecisionContext) {
+func boundCallback(t *testing.T, rail *RootContextRail, sessionID string) (*agentinterfaces.AgentCallbackContext, *rootcontext.RootDecisionContext) {
 	t.Helper()
-	turn, err := NewRootIntentTurn("req-1", RootIntentTurnKindFresh, "帮我改配置", nil)
+	turn, err := rootcontext.NewRootIntentTurn("req-1", rootcontext.RootIntentTurnKindFresh, "帮我改配置", nil)
 	if err != nil {
 		t.Fatalf("构造轮次失败: %v", err)
 	}
-	dc, err := NewRootDecisionContext(sessionID, "req-1", "web", []RootIntentTurn{turn}, "")
+	dc, err := rootcontext.NewRootDecisionContext(sessionID, "req-1", "web", []rootcontext.RootIntentTurn{turn}, "")
 	if err != nil {
 		t.Fatalf("构造上下文失败: %v", err)
 	}
@@ -929,7 +931,7 @@ func boundCallback(t *testing.T, rail *RootContextRail, sessionID string) (*agen
 		"extra": map[string]any{},
 	})
 	extra := runExtraOf(cbc)
-	extra[RootContextKey] = dc.ToMapping()
+	extra[rootcontext.RootContextKey] = dc.ToMapping()
 	extra[RootPermissionOwnerKey] = validOwnerMap()
 
 	_ = owner
@@ -966,7 +968,7 @@ func TestFromCallback_缺extra(t *testing.T) {
 	}
 }
 
-// TestFromCallback_上下文非法 验证有 extra 但缺 RootContextKey 时报 invalid
+// TestFromCallback_上下文非法 验证有 extra 但缺 rootcontext.RootContextKey 时报 invalid
 func TestFromCallback_上下文非法(t *testing.T) {
 	q := newTestQueue()
 	rail, _ := NewRootContextRail(q, "sysop", nil, nil)
@@ -1145,7 +1147,7 @@ func TestBeforeToolCall_续接会话不匹配(t *testing.T) {
 	rail, _ := NewRootContextRail(q, "sysop", nil, nil)
 	cbc, _ := boundCallback(t, rail, "sess-1")
 
-	otherCtx, _ := NewRootDecisionContext("other-sess", "req-1", "web", nil, "")
+	otherCtx, _ := rootcontext.NewRootDecisionContext("other-sess", "req-1", "web", nil, "")
 	card := RootPermissionCard{Key: mustKey(t), RootContext: otherCtx}
 	cbc.SetExtra(RootPermissionResumeAttribute, &RootPermissionResume{Card: card, UserInput: "ans"})
 
@@ -1175,7 +1177,7 @@ func TestBeforeToolCall_反问续接正常(t *testing.T) {
 	}
 	prepared := &RootAskUserResume{
 		Continuation:   cont,
-		Clarifications: []RootAskUserClarification{{Question: "哪个配置？", Answers: []string{"dev"}}},
+		Clarifications: []rootcontext.RootAskUserClarification{{Question: "哪个配置？", Answers: []string{"dev"}}},
 	}
 	runExtraOf(cbc)[AskUserResumeDTOKey] = prepared
 
@@ -1200,7 +1202,7 @@ func TestBeforeToolCall_反问续接会话不匹配(t *testing.T) {
 	cbc.Inputs().(*agentinterfaces.ToolCallInputs).ToolName = AskUserToolName
 	cbc.Inputs().(*agentinterfaces.ToolCallInputs).ToolCall.Name = AskUserToolName
 
-	otherCtx, _ := NewRootDecisionContext("other", "req-1", "web", nil, "")
+	otherCtx, _ := rootcontext.NewRootDecisionContext("other", "req-1", "web", nil, "")
 	prepared := &RootAskUserResume{
 		Continuation: &RootAskUserContinuation{
 			ToolCallID: "call-1",
@@ -1260,7 +1262,7 @@ func TestAfterToolCall_写metadata(t *testing.T) {
 	request := &saschema.InterruptRequest{}
 	cbc.SetException(&saschema.ToolInterruptException{Request: request})
 
-	ctx, _ := BindRootDecisionContext(context.Background(), dc)
+	ctx, _ := rootcontext.BindRootDecisionContext(context.Background(), dc)
 	if err := rail.AfterToolCall(ctx, cbc); err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -1293,7 +1295,7 @@ func TestAfterToolCall_非ask_user(t *testing.T) {
 	request := &saschema.InterruptRequest{}
 	cbc.SetException(&saschema.ToolInterruptException{Request: request})
 
-	ctx, _ := BindRootDecisionContext(context.Background(), dc)
+	ctx, _ := rootcontext.BindRootDecisionContext(context.Background(), dc)
 	if err := rail.AfterToolCall(ctx, cbc); err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}

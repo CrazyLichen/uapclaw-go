@@ -1,4 +1,4 @@
-package rails
+package askusercontract
 
 import (
 	"testing"

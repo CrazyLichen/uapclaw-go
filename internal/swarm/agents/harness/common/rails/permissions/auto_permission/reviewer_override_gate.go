@@ -15,6 +15,7 @@ package auto_permission
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -43,7 +44,7 @@ const (
 func (r *AutoPermissionRail) allowOnceReviewerGateDecision(
 	facts permissions.ToolDecisionFacts,
 	policyLevel string,
-	originalUserIntent *permissions.OriginalUserIntentEvidence,
+	originalUserIntent *rootcontext.OriginalUserIntentEvidence,
 	domainRoute *permissions.DecisionRoute,
 ) (bool, any) {
 	if r.autoReviewer == nil {

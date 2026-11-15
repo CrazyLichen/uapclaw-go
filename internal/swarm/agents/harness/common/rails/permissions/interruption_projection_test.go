@@ -11,6 +11,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 测试载体 ────────────────────────────
@@ -434,7 +435,7 @@ func TestTrustedCleanupScope_会话不符报错(t *testing.T) {
 	inputs := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	inputs.RunContext = &agentinterfaces.RunContext{
 		Extra: map[string]any{
-			RootContextKey: &RootDecisionContext{SessionID: "other-sess", RequestID: "req-1"},
+			rootcontext.RootContextKey: &rootcontext.RootDecisionContext{SessionID: "other-sess", RequestID: "req-1"},
 		},
 	}
 
@@ -452,7 +453,7 @@ func TestTrustedCleanupScope_队列缺失报错(t *testing.T) {
 	inputs := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	inputs.RunContext = &agentinterfaces.RunContext{
 		Extra: map[string]any{
-			RootContextKey: &RootDecisionContext{SessionID: "sess-1", RequestID: "req-1"},
+			rootcontext.RootContextKey: &rootcontext.RootDecisionContext{SessionID: "sess-1", RequestID: "req-1"},
 		},
 	}
 
@@ -476,7 +477,7 @@ func TestTrustedCleanupScope_成功返回范围(t *testing.T) {
 	inputs := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	inputs.RunContext = &agentinterfaces.RunContext{
 		Extra: map[string]any{
-			RootContextKey: &RootDecisionContext{SessionID: "sess-1", RequestID: "req-1"},
+			rootcontext.RootContextKey: &rootcontext.RootDecisionContext{SessionID: "sess-1", RequestID: "req-1"},
 		},
 	}
 

@@ -14,6 +14,7 @@ package auto_permission
 import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -140,7 +141,7 @@ func (r *AutoPermissionRail) reviewerRoute(
 	facts permissions.ToolDecisionFacts,
 	policyLevel string,
 	guardResult string,
-	originalUserIntent *permissions.OriginalUserIntentEvidence,
+	originalUserIntent *rootcontext.OriginalUserIntentEvidence,
 	domainRoute *permissions.DecisionRoute,
 	recentURLSources []permissions.RecentURLSource,
 ) permissions.DecisionRoute {

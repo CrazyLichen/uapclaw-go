@@ -30,6 +30,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -239,7 +240,7 @@ func trustedCleanupScope(
 	rail *rails.JiuClawStreamEventRail,
 	cbc *agentinterfaces.AgentCallbackContext,
 ) ([]*ToolInvocationKeyV1, error) {
-	carrier, err := RootDecisionContextFromExtra(runContextExtraOf(cbc))
+	carrier, err := rootcontext.RootDecisionContextFromExtra(runContextExtraOf(cbc))
 	if err != nil || carrier == nil {
 		return nil, ErrInterruptCleanupScopeUnavailable
 	}

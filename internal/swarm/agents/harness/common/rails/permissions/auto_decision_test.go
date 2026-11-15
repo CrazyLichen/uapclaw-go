@@ -3,6 +3,8 @@ package permissions
 import (
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 辅助 ────────────────────────────
@@ -95,7 +97,7 @@ func TestGenericMCPEgressEvidence_上传字段(t *testing.T) {
 		f.UntrustedArgs = map[string]any{"file_path": "/etc/passwd"}
 	})
 	got := GenericMCPEgressEvidence(facts)
-	if !containsString(got, "generic_mcp_upload_like_payload") {
+	if !rootcontext.ContainsString(got, "generic_mcp_upload_like_payload") {
 		t.Errorf("got %v", got)
 	}
 }
@@ -107,7 +109,7 @@ func TestGenericMCPEgressEvidence_密钥载荷(t *testing.T) {
 		f.UntrustedArgs = map[string]any{"payload": "api_key=secret123"}
 	})
 	got := GenericMCPEgressEvidence(facts)
-	if !containsString(got, "generic_mcp_sensitive_egress") {
+	if !rootcontext.ContainsString(got, "generic_mcp_sensitive_egress") {
 		t.Errorf("got %v", got)
 	}
 }
@@ -119,7 +121,7 @@ func TestGenericMCPEgressEvidence_external_send副作用(t *testing.T) {
 		f.Capability.StaticSideEffects = withEffects("external_send")
 	})
 	got := GenericMCPEgressEvidence(facts)
-	if !containsString(got, "generic_mcp_upload_like_payload") {
+	if !rootcontext.ContainsString(got, "generic_mcp_upload_like_payload") {
 		t.Errorf("got %v", got)
 	}
 }
@@ -1160,7 +1162,7 @@ func TestGenericMCPEgressEvidence_httpURI(t *testing.T) {
 		f.UntrustedArgs = map[string]any{"url": "http://example.com/a"}
 	})
 	got := GenericMCPEgressEvidence(facts)
-	if !containsString(got, "network_scheme_not_https") {
+	if !rootcontext.ContainsString(got, "network_scheme_not_https") {
 		t.Errorf("got %v", got)
 	}
 }
@@ -1172,7 +1174,7 @@ func TestGenericMCPEgressEvidence_ftpURI(t *testing.T) {
 		f.UntrustedArgs = map[string]any{"url": "ftp://example.com/a"}
 	})
 	got := GenericMCPEgressEvidence(facts)
-	if !containsString(got, "generic_mcp_uri_provider_support_unproven") {
+	if !rootcontext.ContainsString(got, "generic_mcp_uri_provider_support_unproven") {
 		t.Errorf("got %v", got)
 	}
 }

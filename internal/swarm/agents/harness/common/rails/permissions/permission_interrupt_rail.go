@@ -38,6 +38,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	runtimectx "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 )
 
@@ -642,7 +643,7 @@ func (r *JiuwenSwarmPermissionInterruptRail) persistAllowAlways(
 		return false
 	}
 	persisted := r.exactPersistCallback(
-		normalizedName, copyMap(toolArgs), attempt.Accesses, attempt.SessionOnly, false)
+		normalizedName, rootcontext.CopyMap(toolArgs), attempt.Accesses, attempt.SessionOnly, false)
 	attempt.Persisted = persisted
 	return persisted
 }

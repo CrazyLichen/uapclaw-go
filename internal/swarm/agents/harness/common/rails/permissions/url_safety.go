@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/dlclark/regexp2"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -261,7 +262,7 @@ func InspectAbsoluteUris(value any, workspaceRoot any) []AbsoluteURIFacts {
 // Python: evaluate_reviewable_url_scope(subject, *, evidence, recent_url_sources=())
 func EvaluateReviewableURLScope(
 	subject ToolDecisionFacts,
-	evidence *OriginalUserIntentEvidence,
+	evidence *rootcontext.OriginalUserIntentEvidence,
 	recentURLSources []RecentURLSource,
 ) ReviewableURLDecision {
 	sideEffects, urls, _, _, uploadLike := networkFacts(subject)
@@ -303,7 +304,7 @@ func EvaluateReviewableURLScope(
 	enrichedSummary["registrable_domain"] = RegistrableDomain(host)
 	enrichedSummary["source_kind"] = sourceKind
 
-	if HasValidAskUserClarification(evidence) && sourceKind != "recent_search_result" {
+	if rootcontext.HasValidAskUserClarification(evidence) && sourceKind != "recent_search_result" {
 		return semanticUnresolved(enrichedSummary)
 	}
 	if sourceKind != "" {
@@ -441,7 +442,7 @@ func RegistrableDomain(host string) string {
 // Python: _resolve_url_source_kind(*, normalized_url, host, evidence, recent_url_sources)
 func resolveURLSourceKind(
 	normalizedURL, host string,
-	evidence *OriginalUserIntentEvidence,
+	evidence *rootcontext.OriginalUserIntentEvidence,
 	recentURLSources []RecentURLSource,
 ) string {
 	if matchesHostUserIntent(normalizedURL, host, evidence) {
@@ -458,8 +459,8 @@ func resolveURLSourceKind(
 // hasTrustedHostUserIntent 判定是否存在可信宿主用户意图。
 //
 // Python: _has_trusted_host_user_intent(evidence)
-func hasTrustedHostUserIntent(evidence *OriginalUserIntentEvidence) bool {
-	if evidence == nil || evidence.Source != UserIntentSourceHostUserMessage {
+func hasTrustedHostUserIntent(evidence *rootcontext.OriginalUserIntentEvidence) bool {
+	if evidence == nil || evidence.Source != rootcontext.UserIntentSourceHostUserMessage {
 		return false
 	}
 	if strings.TrimSpace(evidence.Text) != "" {
@@ -479,8 +480,8 @@ func hasTrustedHostUserIntent(evidence *OriginalUserIntentEvidence) bool {
 // matchesHostUserIntent 判定 URL/主机是否匹配宿主用户意图。
 //
 // Python: _matches_host_user_intent(*, normalized_url, host, evidence)
-func matchesHostUserIntent(normalizedURL, host string, evidence *OriginalUserIntentEvidence) bool {
-	if evidence == nil || evidence.Source != UserIntentSourceHostUserMessage {
+func matchesHostUserIntent(normalizedURL, host string, evidence *rootcontext.OriginalUserIntentEvidence) bool {
+	if evidence == nil || evidence.Source != rootcontext.UserIntentSourceHostUserMessage {
 		return false
 	}
 	evidenceURLs, evidenceHosts := extractNetworkIntentTokens(evidence.Text)

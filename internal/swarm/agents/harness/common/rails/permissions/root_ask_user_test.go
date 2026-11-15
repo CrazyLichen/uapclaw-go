@@ -4,19 +4,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/askusercontract"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
 // askUserDecisionContext 构造一个测试用决策上下文
-func askUserDecisionContext(t *testing.T) *RootDecisionContext {
+func askUserDecisionContext(t *testing.T) *rootcontext.RootDecisionContext {
 	t.Helper()
-	turn, err := NewRootIntentTurn("req-1", RootIntentTurnKindFresh, "帮我改配置", nil)
+	turn, err := rootcontext.NewRootIntentTurn("req-1", rootcontext.RootIntentTurnKindFresh, "帮我改配置", nil)
 	if err != nil {
 		t.Fatalf("构造轮次失败: %v", err)
 	}
-	dc, err := NewRootDecisionContext("sess-1", "req-1", "web", []RootIntentTurn{turn}, "")
+	dc, err := rootcontext.NewRootDecisionContext("sess-1", "req-1", "web", []rootcontext.RootIntentTurn{turn}, "")
 	if err != nil {
 		t.Fatalf("构造上下文失败: %v", err)
 	}
@@ -41,8 +42,8 @@ func simpleQuestion(text string) map[string]any {
 
 // TestNewAskUserQuestionReference_正常 验证合法构造
 func TestNewAskUserQuestionReference_正常(t *testing.T) {
-	opt, _ := NewRootAskUserOption("A", "", "")
-	ref, err := NewAskUserQuestionReference("问题", []RootAskUserOption{opt}, true)
+	opt, _ := rootcontext.NewRootAskUserOption("A", "", "")
+	ref, err := NewAskUserQuestionReference("问题", []rootcontext.RootAskUserOption{opt}, true)
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
@@ -60,8 +61,8 @@ func TestNewAskUserQuestionReference_空问题报错(t *testing.T) {
 
 // TestAskUserQuestionReference_往返 验证序列化往返一致
 func TestAskUserQuestionReference_往返(t *testing.T) {
-	opt, _ := NewRootAskUserOption("A", "d", "p")
-	ref, _ := NewAskUserQuestionReference("问题", []RootAskUserOption{opt}, true)
+	opt, _ := rootcontext.NewRootAskUserOption("A", "d", "p")
+	ref, _ := NewAskUserQuestionReference("问题", []rootcontext.RootAskUserOption{opt}, true)
 	back, err := AskUserQuestionReferenceFromMapping(ref.ToMapping())
 	if err != nil {
 		t.Fatalf("反序列化失败: %v", err)
@@ -274,7 +275,7 @@ func TestQuestionsOf_问题数量越界(t *testing.T) {
 	if got, _ := questionsOf(map[string]any{"questions": []any{}}); len(got) != 0 {
 		t.Fatalf("0 条应返回空")
 	}
-	tooMany := make([]any, rails.MaxStructuredQuestions+1)
+	tooMany := make([]any, askusercontract.MaxStructuredQuestions+1)
 	for i := range tooMany {
 		tooMany[i] = simpleQuestion("q")
 	}
@@ -560,7 +561,7 @@ func TestAskUserContinuation_问题非法(t *testing.T) {
 	if got := AskUserContinuation(build([]any{}), "call-1"); got != nil {
 		t.Fatalf("零问题应返回 nil")
 	}
-	tooMany := make([]any, rails.MaxStructuredQuestions+1)
+	tooMany := make([]any, askusercontract.MaxStructuredQuestions+1)
 	for i := range tooMany {
 		tooMany[i] = map[string]any{
 			"question": "q" + string(rune('0'+i)), "options": []any{}, "multi_select": false,
@@ -682,7 +683,7 @@ func TestPrepareAskUserResume_答案非法(t *testing.T) {
 // TestPrepareAskUserResume_容量超限 验证单条澄清超容量时返回 CapacityReason
 func TestPrepareAskUserResume_容量超限(t *testing.T) {
 	// 构造一个超长问题，使澄清轮次超过单轮上限
-	longQuestion := strings.Repeat("q", RootIntentMaxTurnChars-100)
+	longQuestion := strings.Repeat("q", rootcontext.RootIntentMaxTurnChars-100)
 	cont := continuationFor(t, map[string]any{"question": longQuestion})
 	prepared := PrepareAskUserResume(cont, map[string]any{
 		"answers": map[string]any{longQuestion: strings.Repeat("a", 200)},
@@ -690,7 +691,7 @@ func TestPrepareAskUserResume_容量超限(t *testing.T) {
 	if prepared == nil {
 		t.Fatalf("应返回结构")
 	}
-	if prepared.CapacityReason != AutoReviewBlockIntentInputTooLarge {
+	if prepared.CapacityReason != rootcontext.AutoReviewBlockIntentInputTooLarge {
 		t.Fatalf("应标记容量原因，实际 %q", prepared.CapacityReason)
 	}
 	if prepared.Clarifications != nil {
@@ -713,7 +714,7 @@ func TestApplyAskUserResume_正常追加(t *testing.T) {
 	if len(got.TrustedTurns) != 2 {
 		t.Fatalf("应有 2 轮（原 1 + 澄清 1），实际 %d", len(got.TrustedTurns))
 	}
-	if got.TrustedTurns[1].Kind != RootIntentTurnKindAskUserClarification {
+	if got.TrustedTurns[1].Kind != rootcontext.RootIntentTurnKindAskUserClarification {
 		t.Fatalf("末轮应为澄清")
 	}
 }
@@ -723,10 +724,10 @@ func TestApplyAskUserResume_容量原因(t *testing.T) {
 	cont := continuationFor(t, simpleQuestion("q"))
 	prepared := &RootAskUserResume{
 		Continuation:   cont,
-		CapacityReason: AutoReviewBlockIntentInputTooLarge,
+		CapacityReason: rootcontext.AutoReviewBlockIntentInputTooLarge,
 	}
 	got := ApplyAskUserResume(prepared)
-	if got.AutoReviewBlockReason != AutoReviewBlockIntentInputTooLarge {
+	if got.AutoReviewBlockReason != rootcontext.AutoReviewBlockIntentInputTooLarge {
 		t.Fatalf("应标记阻断原因，实际 %q", got.AutoReviewBlockReason)
 	}
 	if len(got.TrustedTurns) != 1 {

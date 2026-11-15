@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // execFacts 构造执行编排用例的 facts。
@@ -333,9 +334,9 @@ func TestMaybeRunReviewer_sendFile被契约检查提前拦截(t *testing.T) {
 
 // TestResolveManualHandoff_意图契约 验证第三优先级（意图窗口超限）。
 func TestResolveManualHandoff_意图契约(t *testing.T) {
-	decisionCtx, _ := permissions.BindRootDecisionContext(
+	decisionCtx, _ := rootcontext.BindRootDecisionContext(
 		context.Background(),
-		&permissions.RootDecisionContext{AutoReviewBlockReason: "intent_window_exceeded"},
+		&rootcontext.RootDecisionContext{AutoReviewBlockReason: "intent_window_exceeded"},
 	)
 	got := resolveManualHandoff(decisionCtx,
 		permissions.DecisionRoute{Source: permissions.SemanticReviewSource},
@@ -353,8 +354,8 @@ func TestResolveManualHandoff_意图契约(t *testing.T) {
 
 // TestResolveManualHandoff_空阻断原因 验证阻断原因为空时不转人工。
 func TestResolveManualHandoff_空阻断原因(t *testing.T) {
-	decisionCtx, _ := permissions.BindRootDecisionContext(
-		context.Background(), &permissions.RootDecisionContext{})
+	decisionCtx, _ := rootcontext.BindRootDecisionContext(
+		context.Background(), &rootcontext.RootDecisionContext{})
 	got := resolveManualHandoff(decisionCtx,
 		permissions.DecisionRoute{Source: permissions.SemanticReviewSource},
 		defaultPolicySource, "")

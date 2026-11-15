@@ -21,7 +21,8 @@
 //	├── wiki_tools.go             # wiki_ingest/wiki_query/wiki_lint + LLMWiki + sourceManifest
 //	├── multimodal_config.go      # MultimodalToolGroups/CompleteMultimodalModelConfigured/MultimodalModelEnabled + Apply{Audio,Vision,Video}ModelConfigFromYAML（multimodal_config.py 327行一比一）
 //	├── video_tools.go            # video_understanding 工具（video_tools.py，白名单/数据URI/假端点）
-//	├── video_gen_tools.go        # generate_video/check_video_status（video_gen_tools.py，提交-轮询+盯单 goroutine+chat.final 交付；后端分发 gen_toolkits ⤵️）
+//	├── video_gen_tools.go        # generate_video/check_video_status（video_gen_tools.py，提交-轮询+盯单 goroutine+chat.final 交付；路由直取 rootcontext 叶子包，后端分发 gen_toolkits ⤵️）
+//	├── video_gen_timing.go       # 轮询/盯单时序测试注入缝（Python 无对应，仅测试装配层使用）
 //	├── image_gen.go              # generate_image + invokeModelImageGeneration + ApplyImageGenModelConfigFromYAML
 //	├── web_file_download.go      # WebFileDownloadManager——HMAC 下载令牌+三级密钥（10.6.24b）
 //	├── send_file.go              # SendFileToolkit——chat.file 事件+双注入（10.6.24b）

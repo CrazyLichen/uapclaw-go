@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -186,7 +187,7 @@ func TestMarkPending_正常(t *testing.T) {
 	q := newTestQueue()
 	card := mustBegin(t, q, "s", "r", "e", "c", "tool")
 	snap := testSnapshot()
-	dc, _ := NewRootDecisionContext("s", "r", "", nil, "")
+	dc, _ := rootcontext.NewRootDecisionContext("s", "r", "", nil, "")
 
 	pending, err := q.MarkPending(card.Key, snap, true, dc)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 辅助 ────────────────────────────
@@ -583,7 +584,7 @@ func TestCoreShellView(t *testing.T) {
 	}
 	// 管道
 	ops, _ = coreShellView("ls | grep foo")
-	if !containsString(ops, "pipeline") {
+	if !rootcontext.ContainsString(ops, "pipeline") {
 		t.Errorf("ops = %v, want pipeline", ops)
 	}
 	// 自定义可执行文件
@@ -802,7 +803,7 @@ func TestBuildReviewerActionView_载荷缺失移除allow_once(t *testing.T) {
 	if got.PayloadError != "reviewer_payload_missing" {
 		t.Errorf("payload_error = %q", got.PayloadError)
 	}
-	if containsString(got.AllowedOutcomes, ReviewerOutcomeAllowOnce) {
+	if rootcontext.ContainsString(got.AllowedOutcomes, ReviewerOutcomeAllowOnce) {
 		t.Errorf("allow_once should be removed, got %v", got.AllowedOutcomes)
 	}
 	if got.NoAutoAllowReason != "reviewer_payload_missing" {
@@ -929,18 +930,18 @@ func TestPathTargetView_读写分离(t *testing.T) {
 
 // TestIntentView_带Context 验证轮次与澄清投影。
 func TestIntentView_带Context(t *testing.T) {
-	evidence := &OriginalUserIntentEvidence{
+	evidence := &rootcontext.OriginalUserIntentEvidence{
 		Text: "fallback text",
-		Context: &RootDecisionContext{
-			TrustedTurns: []RootIntentTurn{
+		Context: &rootcontext.RootDecisionContext{
+			TrustedTurns: []rootcontext.RootIntentTurn{
 				{
-					Kind: RootIntentTurnKindFresh,
+					Kind: rootcontext.RootIntentTurnKindFresh,
 					Text: "please read a.txt",
-					Clarifications: []RootAskUserClarification{
+					Clarifications: []rootcontext.RootAskUserClarification{
 						{
 							Question: "which file?",
 							Answers:  []string{"a.txt"},
-							Options: []RootAskUserOption{
+							Options: []rootcontext.RootAskUserOption{
 								{Label: "a", Description: "first", Preview: "a.txt"},
 							},
 						},
@@ -955,7 +956,7 @@ func TestIntentView_带Context(t *testing.T) {
 		t.Fatalf("got %v", turns)
 	}
 	turn, _ := turns[0].(map[string]any)
-	if turn["kind"] != RootIntentTurnKindFresh || turn["text"] != "please read a.txt" {
+	if turn["kind"] != rootcontext.RootIntentTurnKindFresh || turn["text"] != "please read a.txt" {
 		t.Errorf("got %v", turn)
 	}
 	if _, exists := turn["clarifications"]; !exists {
@@ -965,7 +966,7 @@ func TestIntentView_带Context(t *testing.T) {
 
 // TestIntentView_无Context用Text兜底 验证 Text 兜底。
 func TestIntentView_无Context用Text兜底(t *testing.T) {
-	got := intentView(&OriginalUserIntentEvidence{Text: "hello"})
+	got := intentView(&rootcontext.OriginalUserIntentEvidence{Text: "hello"})
 	turns, _ := got["trusted_user_turns"].([]any)
 	if len(turns) != 1 {
 		t.Fatalf("got %v", turns)
@@ -978,7 +979,7 @@ func TestIntentView_无Context用Text兜底(t *testing.T) {
 
 // TestIntentView_空Context空Text 验证无轮次。
 func TestIntentView_空Context空Text(t *testing.T) {
-	got := intentView(&OriginalUserIntentEvidence{Context: &RootDecisionContext{}})
+	got := intentView(&rootcontext.OriginalUserIntentEvidence{Context: &rootcontext.RootDecisionContext{}})
 	turns, _ := got["trusted_user_turns"].([]any)
 	if len(turns) != 0 {
 		t.Errorf("got %v", turns)
@@ -1304,7 +1305,7 @@ func TestCoreShellView_各操作符(t *testing.T) {
 	}
 	for _, c := range cases {
 		ops, _ := coreShellView(c.command)
-		if !containsString(ops, c.wantOp) {
+		if !rootcontext.ContainsString(ops, c.wantOp) {
 			t.Errorf("%q -> %v, want %s", c.command, ops, c.wantOp)
 		}
 	}

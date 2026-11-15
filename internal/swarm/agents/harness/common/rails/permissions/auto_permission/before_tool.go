@@ -53,6 +53,7 @@ import (
 	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	runpermissions "github.com/uapclaw/uapclaw-go/internal/swarm/runtime/ctx"
 	schemaswarm "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	runtimesandbox "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -495,7 +496,7 @@ func (r *AutoPermissionRail) beforeToolCallImpl(
 	}
 
 	// ⑥ 意图约束 / 领域路由 / 绑定回退
-	originalUserIntent := permissions.OriginalUserIntent(ctx)
+	originalUserIntent := rootcontext.OriginalUserIntent(ctx)
 	pathPolicyRequiresApproval := policyEvaluation.PathResult != nil &&
 		policyEvaluation.PathResult.Level == permissions.AutoDecisionAskLevel
 	initialConfirmationPayload := ParseConfirmationPayload(userInput)
@@ -507,7 +508,7 @@ func (r *AutoPermissionRail) beforeToolCallImpl(
 	}
 	if IsFileDeliveryAction(currentFacts) &&
 		HasUserFileDeliveryProhibition(
-			permissions.FileDeliveryConstraintText(originalUserIntent)) {
+			rootcontext.FileDeliveryConstraintText(originalUserIntent)) {
 		r.emitAudit(currentFacts, auditRecord{
 			Decision: permissions.AutoDecisionDenyLevel,
 			Reason:   ProhibitedFileDeliveryReason,

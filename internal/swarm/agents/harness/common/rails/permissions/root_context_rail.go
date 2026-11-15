@@ -1,6 +1,6 @@
 // 在 OpenJiuwen 回调内绑定紧凑的 root 权限上下文。
 // 该 rail 是"把背景摆到桌上给引擎看"的那一层：每次工具调用前，从回调 extra
-// 里还原 RootDecisionContext 与 PermissionContext，绑定到各自的 context key；
+// 里还原 rootcontext.RootDecisionContext 与 PermissionContext，绑定到各自的 context key；
 // 工具调用结束后成对清理。恢复时优先采用卡里冻结的上下文（那才是用户看到
 // 卡片时的背景），而不是重新推导。
 // 同时它也是 ask_user 反问续接的接线点：
@@ -19,6 +19,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sysoperation "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -158,10 +159,10 @@ func PutPermissionOwnerInInputs(
 	inputs map[string]any,
 	owner *sschema.PermissionContext,
 ) map[string]any {
-	result := copyMap(inputs)
-	run := nestedCopyMap(result, "run")
-	contextMap := nestedCopyMap(run, "context")
-	extra := nestedCopyMap(contextMap, "extra")
+	result := rootcontext.CopyMap(inputs)
+	run := rootcontext.NestedCopyMap(result, "run")
+	contextMap := rootcontext.NestedCopyMap(run, "context")
+	extra := rootcontext.NestedCopyMap(contextMap, "extra")
 
 	delete(extra, RootPermissionOwnerKey)
 	if owner != nil {
@@ -208,10 +209,10 @@ func RootContextFailureFromContext(cbc *agentinterfaces.AgentCallbackContext) st
 // Python: RootContextRail._from_callback(ctx)
 func (r *RootContextRail) fromCallback(
 	cbc *agentinterfaces.AgentCallbackContext,
-) (*RootDecisionContext, *sschema.PermissionContext, string) {
+) (*rootcontext.RootDecisionContext, *sschema.PermissionContext, string) {
 	extra := callbackExtra(cbc)
 
-	decisionContext, err := RootDecisionContextFromExtra(extra)
+	decisionContext, err := rootcontext.RootDecisionContextFromExtra(extra)
 	if err != nil {
 		if extra == nil {
 			return nil, nil, rootContextFailureMissing
@@ -248,14 +249,14 @@ func (r *RootContextRail) resolvedSysOperation() any {
 func (r *RootContextRail) bind(
 	ctx context.Context,
 	cbc *agentinterfaces.AgentCallbackContext,
-	decisionContext *RootDecisionContext,
+	decisionContext *rootcontext.RootDecisionContext,
 	owner *sschema.PermissionContext,
 	reason string,
 ) (context.Context, *rootContextTokens) {
 	tokens := &rootContextTokens{failure: reason}
 
 	// 1. 决策上下文
-	ctx, _ = BindRootDecisionContext(ctx, decisionContext)
+	ctx, _ = rootcontext.BindRootDecisionContext(ctx, decisionContext)
 	if decisionContext != nil {
 		tokens.channelID = decisionContext.ChannelID
 		tokens.requestID = decisionContext.RequestID
@@ -309,11 +310,11 @@ func (r *RootContextRail) bind(
 // Python: RootContextRail._replace(context, owner, *, reason=None)
 func (r *RootContextRail) replace(
 	ctx context.Context,
-	decisionContext *RootDecisionContext,
+	decisionContext *rootcontext.RootDecisionContext,
 	owner *sschema.PermissionContext,
 	reason string,
 ) context.Context {
-	ctx, _ = BindRootDecisionContext(ctx, decisionContext)
+	ctx, _ = rootcontext.BindRootDecisionContext(ctx, decisionContext)
 
 	channelID, requestID := "", ""
 	if decisionContext != nil {
@@ -439,7 +440,7 @@ func ownerFromCallback(
 ) (*sschema.PermissionContext, error) {
 	extra := callbackExtra(cbc)
 	channelID := ""
-	if decisionContext := CurrentRootDecisionContext(ctx); decisionContext != nil {
+	if decisionContext := rootcontext.CurrentRootDecisionContext(ctx); decisionContext != nil {
 		channelID = decisionContext.ChannelID
 	}
 	return ownerFromExtra(extra, channelID)
@@ -576,7 +577,7 @@ func (r *RootContextRail) BeforeToolCall(
 				decisionContext = ApplyAskUserResume(prepared)
 				extra := callbackExtra(cbc)
 				if extra != nil {
-					extra[RootContextKey] = decisionContext.ToMapping()
+					extra[rootcontext.RootContextKey] = decisionContext.ToMapping()
 				}
 				reason = ""
 				ctx = r.replace(ctx, decisionContext, owner, "")
@@ -612,7 +613,7 @@ func (r *RootContextRail) AfterToolCall(
 	if !ok || inputs == nil {
 		return nil
 	}
-	decisionContext := CurrentRootDecisionContext(ctx)
+	decisionContext := rootcontext.CurrentRootDecisionContext(ctx)
 	if decisionContext == nil {
 		return nil
 	}
@@ -672,7 +673,7 @@ func (r *RootContextRail) resetLifecycle(cbc *agentinterfaces.AgentCallbackConte
 }
 
 // nilIfReason 失败时返回 nil 上下文。
-func nilIfReason(decisionContext *RootDecisionContext, reason string) *RootDecisionContext {
+func nilIfReason(decisionContext *rootcontext.RootDecisionContext, reason string) *rootcontext.RootDecisionContext {
 	if reason != "" {
 		return nil
 	}

@@ -9,6 +9,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 用例：allowOnceReviewerGateDecision ───────────────────────────────
@@ -252,8 +253,8 @@ func TestSessionAutoConfirmEligible_各排除条件(t *testing.T) {
 	})
 	t.Run("意图窗口阻断", func(t *testing.T) {
 		rail, cbc := newConsumeRail(t, "key1", nil)
-		decisionCtx, _ := permissions.BindRootDecisionContext(context.Background(),
-			&permissions.RootDecisionContext{AutoReviewBlockReason: "too_long"})
+		decisionCtx, _ := rootcontext.BindRootDecisionContext(context.Background(),
+			&rootcontext.RootDecisionContext{AutoReviewBlockReason: "too_long"})
 		if rail.sessionAutoConfirmEligible(decisionCtx, execFacts(), invocationOf(cbc), nil) {
 			t.Error("blocked intent window should not be eligible")
 		}

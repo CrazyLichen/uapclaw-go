@@ -22,6 +22,7 @@ package rails
 
 import (
 	"fmt"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/askusercontract"
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -109,11 +110,11 @@ func ValidateStructuredQuestions(
 			"instead, omit questions entirely and send only query."
 	}
 	// 条数超上限时让模型分批问，避免一次弹太多问题。
-	if len(questionsList) > MaxStructuredQuestions {
+	if len(questionsList) > askusercontract.MaxStructuredQuestions {
 		return fmt.Sprintf("[INVALID_ARGUMENT] ask_user accepts at most %d questions "+
 			"per call; received %d. Call ask_user again with the first %d questions, "+
 			"and ask the remaining ones in a further call once these are answered.",
-			MaxStructuredQuestions, len(questionsList), MaxStructuredQuestions)
+			askusercontract.MaxStructuredQuestions, len(questionsList), askusercontract.MaxStructuredQuestions)
 	}
 	// 第二层：逐个问题检查形状 —— 问题体、题干、可选标题。
 	for questionIndex, rawQuestion := range questionsList {

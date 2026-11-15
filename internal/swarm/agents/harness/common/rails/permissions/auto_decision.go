@@ -20,6 +20,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -166,7 +168,7 @@ func GenericMCPEgressEvidence(facts ToolDecisionFacts) []string {
 // recent_url_sources=(), browser_runtime_security_profile=None)
 func DeterministicDomainRoute(
 	facts ToolDecisionFacts,
-	originalUserIntent *OriginalUserIntentEvidence,
+	originalUserIntent *rootcontext.OriginalUserIntentEvidence,
 	recentURLSources []RecentURLSource,
 	browserProfile *BrowserRuntimeSecurityProfile,
 ) *DecisionRoute {
@@ -188,7 +190,7 @@ func DeterministicDomainRoute(
 				return &DecisionRoute{Level: AutoDecisionDenyLevel, Reason: reason, Source: "hard_guard"}
 			}
 		}
-		if containsString(network.Schemes, "http") {
+		if rootcontext.ContainsString(network.Schemes, "http") {
 			return &DecisionRoute{Level: AutoDecisionDenyLevel, Reason: "network_scheme_not_https", Source: "hard_guard"}
 		}
 		if anyURIParseFailure(network.AbsoluteURIs) {
@@ -204,7 +206,7 @@ func DeterministicDomainRoute(
 			}
 			return &DecisionRoute{Level: AutoDecisionAskLevel, Reason: reason, Source: "manual_only"}
 		}
-		if containsString(network.Schemes, "ftp") {
+		if rootcontext.ContainsString(network.Schemes, "ftp") {
 			return &DecisionRoute{Level: AutoDecisionAskLevel, Reason: "browser_uri_provider_support_unproven", Source: "manual_only"}
 		}
 		for _, scheme := range network.Schemes {
@@ -567,7 +569,7 @@ func domainOperation(facts ToolDecisionFacts) string {
 		// 浏览器操作名很不统一，这里按关键字优先级逐个尝试：
 		// 先处理特殊工具与破坏性动作（取消/路由/上传/下载），再按只读 → 导航 → 点击 → 输入收口。
 		toolName := facts.Capability.ToolName
-		if toolName == "browser_page_action" && containsString([]string{
+		if toolName == "browser_page_action" && rootcontext.ContainsString([]string{
 			"read_text", "find", "snapshot", "tabs", "wait"}, operation) {
 			return "inspect"
 		}
@@ -606,7 +608,7 @@ func domainOperation(facts ToolDecisionFacts) string {
 				return "type"
 			}
 		}
-		if containsString([]string{"post", "submit", "external_submit"}, operation) {
+		if rootcontext.ContainsString([]string{"post", "submit", "external_submit"}, operation) {
 			return "external_submit"
 		}
 		return "unknown"

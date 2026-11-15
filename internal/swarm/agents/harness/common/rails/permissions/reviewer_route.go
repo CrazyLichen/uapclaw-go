@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -129,7 +130,7 @@ func ReviewerRoute(
 	workspaceRoot string,
 	deliveryMaxFiles int,
 	deliveryExcludedPaths []string,
-	originalUserIntent *OriginalUserIntentEvidence,
+	originalUserIntent *rootcontext.OriginalUserIntentEvidence,
 	domainRoute *DecisionRoute,
 	recentURLSources []RecentURLSource,
 ) DecisionRoute {
@@ -346,7 +347,7 @@ func pathMatchesExclusion(candidate, excludedPath, workspaceRoot string) bool {
 	normalizedExcluded = strings.Trim(normalizedExcluded, "/")
 	excludedParts := splitPathCasefold(normalizedExcluded)
 	if len(excludedParts) == 1 {
-		return containsString(candidateParts, excludedParts[0])
+		return rootcontext.ContainsString(candidateParts, excludedParts[0])
 	}
 	width := len(excludedParts)
 	if width == 0 {

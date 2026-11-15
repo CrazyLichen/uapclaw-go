@@ -20,9 +20,8 @@ package tools
 //
 // 语言差异（偏差登记）：
 //   - D-23.8-2：Python 模块级集合/任务列表（单线程）→ Go map+Mutex / goroutine
-//   - D-23.8-4：Python 直接 import 的 RootDecisionContext 在 Go 因
-//     rails/permissions→tools 循环依赖不可达 → 装配层经
-//     SetVideoWatchContextProvider 注入（Task 13 接线）
+//   - D-23.8-4 已回收：rootcontext 叶子包拆分（对齐 Python root_context.py
+//     文件粒度）后直接 rootcontext.CurrentRootDecisionContext(ctx)，与 Python 一致
 //   - D-23.8-5：send_runtime_push/SendFileToolkit.send_file 在 Go 为注入缝
 //     （SetVideoGenRuntimePush/SetVideoGenSendFileFunc），由 adapter 装配层桥接
 //   - Python httpx.AsyncClient → Go net/http；asyncio.create_task → goroutine
@@ -42,10 +41,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
+	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -144,30 +144,15 @@ var (
 	pollBudget    = maxPollSeconds
 )
 
-// currentVideoWatchContextProvider 取当前请求的盯单交付路由三元组。
-// D-23.8-4：由装配层注入（对齐 Python current_root_decision_context）。
-var currentVideoWatchContextProvider func(ctx context.Context) *VideoWatchContext
-
 // videoGenRuntimePush 推送缝（对齐 Python send_runtime_push）。
 // D-23.8-5：由 adapter 装配层桥接 SetDefaultSendPushFunc。
 var videoGenRuntimePush func(msg map[string]any) bool
 
 // videoGenSendFile 完成视频的文件投递缝（对齐 Python SendFileToolkit.send_file）。
 // D-23.8-5：Go 侧 SendFileToolkit 未移植时为 nil → 走 fallback 文本通知分支。
-var videoGenSendFile func(wctx *VideoWatchContext, localPath string) string
+var videoGenSendFile func(rc *rootcontext.RootDecisionContext, localPath string) string
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// VideoWatchContext 盯单交付所需的最小路由上下文。
-// Python: RootDecisionContext 的 request_id/session_id/channel_id 三元组（D-23.8-4）。
-type VideoWatchContext struct {
-	// RequestID 宿主请求标识
-	RequestID string
-	// SessionID 会话标识
-	SessionID string
-	// ChannelID 渠道标识
-	ChannelID string
-}
 
 // videoJobContext 单个视频生成任务的共享传输上下文。
 // Python: _JobContext:291-299（client/headers/job_id 三件套）。
@@ -182,18 +167,13 @@ type videoJobContext struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// SetVideoWatchContextProvider 注入盯单交付路由上下文提供者（装配层调用，D-23.8-4）。
-func SetVideoWatchContextProvider(fn func(ctx context.Context) *VideoWatchContext) {
-	currentVideoWatchContextProvider = fn
-}
-
 // SetVideoGenRuntimePush 注入运行时推送缝（装配层调用，D-23.8-5）。
 func SetVideoGenRuntimePush(fn func(msg map[string]any) bool) {
 	videoGenRuntimePush = fn
 }
 
 // SetVideoGenSendFileFunc 注入文件投递缝（装配层调用，D-23.8-5）。
-func SetVideoGenSendFileFunc(fn func(wctx *VideoWatchContext, localPath string) string) {
+func SetVideoGenSendFileFunc(fn func(rc *rootcontext.RootDecisionContext, localPath string) string) {
 	videoGenSendFile = fn
 }
 
@@ -384,7 +364,7 @@ func resolveFrameReference(pathOrURL string, argName string) (string, string) {
 	if err != nil {
 		return "", fmt.Sprintf("[ERROR]: %s %q read failed: %v", argName, value, err)
 	}
-// Python: mimetypes.guess_type → Go 图片扩展名推断
+	// Python: mimetypes.guess_type → Go 图片扩展名推断
 	mime := guessImageMimeByExt(expanded)
 	if !strings.HasPrefix(mime, "image/") {
 		mime = "image/png"
@@ -760,11 +740,9 @@ func scheduleCompletionWatchIfPending(ctx context.Context, result string, saveDi
 		watchedPendingJobsMu.Unlock()
 		return
 	}
-	wctx := (*VideoWatchContext)(nil)
-	if currentVideoWatchContextProvider != nil {
-		wctx = currentVideoWatchContextProvider(ctx)
-	}
-	if wctx == nil {
+	// Python: current_root_decision_context()（D-23.8-4 已回收，直接取叶子包）
+	rc := rootcontext.CurrentRootDecisionContext(ctx)
+	if rc == nil {
 		// Python: 无会话/请求可交付（如 CLI/离线调用）——调用方应自行轮询
 		// check_video_status；不布防。
 		watchedPendingJobsMu.Unlock()
@@ -772,12 +750,12 @@ func scheduleCompletionWatchIfPending(ctx context.Context, result string, saveDi
 	}
 	watchedPendingJobs[jobID] = struct{}{}
 	watchedPendingJobsMu.Unlock()
-	go watchUntilSettled(ctx, jobID, saveDir, wctx)
+	go watchUntilSettled(ctx, jobID, saveDir, rc)
 }
 
 // watchUntilSettled 后台盯单：轮询至终态交付或超限放弃。
 // Python: _watch_until_settled:125-157
-func watchUntilSettled(ctx context.Context, jobID string, saveDir string, wctx *VideoWatchContext) {
+func watchUntilSettled(ctx context.Context, jobID string, saveDir string, rc *rootcontext.RootDecisionContext) {
 	defer func() {
 		// Python: finally: _WATCHED_PENDING_JOBS.discard(job_id)
 		watchedPendingJobsMu.Lock()
@@ -803,7 +781,7 @@ func watchUntilSettled(ctx context.Context, jobID string, saveDir string, wctx *
 		elapsed += watchInterval
 		result := checkVideoStatusImpl(ctx, jobID, saveDir)
 		if IsTerminalJobResult(result) {
-			deliverWatchResult(ctx, jobID, result, wctx)
+			deliverWatchResult(ctx, jobID, result, rc)
 			return
 		}
 		if ExtractPendingJobID(result) == "" {
@@ -822,62 +800,62 @@ func watchUntilSettled(ctx context.Context, jobID string, saveDir string, wctx *
 
 // deliverWatchResult 把已结算任务的结果推进其来源聊天。
 // Python: _deliver_watch_result:162-199
-func deliverWatchResult(ctx context.Context, jobID string, result string, wctx *VideoWatchContext) {
+func deliverWatchResult(ctx context.Context, jobID string, result string, rc *rootcontext.RootDecisionContext) {
 	// Python: saved_to = _SAVED_TO_RE.search(result + "\n")
 	savedTo := savedToRe.FindStringSubmatch(result + "\n")
 	if savedTo != nil {
 		localPath := strings.TrimSpace(savedTo[1])
 		if videoGenSendFile != nil {
-			delivery := videoGenSendFile(wctx, localPath)
+			delivery := videoGenSendFile(rc, localPath)
 			if hasSendFileFailurePrefix(delivery) {
 				// 视频本身没问题，只是投递失败：不谎报成功，也不丢视频——
 				// 回落文本通知并说明本地文件位置。
 				logger.Warn(logComponent).
 					Str("job_id", jobID).
-					Str("session_id", wctx.SessionID).
+					Str("session_id", rc.SessionID).
 					Str("delivery", truncate(delivery, 200)).
 					Msg("[generate_video] send_file_to_user failed delivering completed job")
-				pushFallbackNotice(ctx, jobID, wctx,
+				pushFallbackNotice(ctx, jobID, rc,
 					fmt.Sprintf("视频已生成，但自动投递到会话失败：%s\n本地文件：%s", delivery, localPath))
 				return
 			}
 			logger.Info(logComponent).
 				Str("job_id", jobID).
-				Str("session_id", wctx.SessionID).
+				Str("session_id", rc.SessionID).
 				Str("delivery", truncate(delivery, 200)).
 				Msg("[generate_video] delivered completed job")
 			return
 		}
 		// D-23.8-5：Go 侧 SendFileToolkit 未移植 → 与投递失败同路的文本通知。
-		pushFallbackNotice(ctx, jobID, wctx,
+		pushFallbackNotice(ctx, jobID, rc,
 			fmt.Sprintf("视频已生成：\n本地文件：%s", localPath))
 		return
 	}
-	pushFallbackNotice(ctx, jobID, wctx, fmt.Sprintf("视频生成任务 %s 未能成功完成：%s", jobID, result))
+	pushFallbackNotice(ctx, jobID, rc, fmt.Sprintf("视频生成任务 %s 未能成功完成：%s", jobID, result))
 }
 
 // pushFallbackNotice 经 runtime push 推送兜底文本通知（chat.final, append）。
 // Python: _push_fallback_notice:200-215
-func pushFallbackNotice(_ context.Context, jobID string, wctx *VideoWatchContext, content string) {
+func pushFallbackNotice(_ context.Context, jobID string, rc *rootcontext.RootDecisionContext, content string) {
 	if videoGenRuntimePush == nil {
 		logger.Warn(logComponent).
 			Str("job_id", jobID).
-			Str("session_id", wctx.SessionID).
+			Str("session_id", rc.SessionID).
 			Msg("[generate_video] no active push host to deliver job result")
 		return
 	}
 	payload := map[string]any{"content": content}
 	pushed := videoGenRuntimePush(map[string]any{
-		"request_id":  wctx.RequestID,
-		"channel_id":  wctx.ChannelID,
-		"session_id":  wctx.SessionID,
+		"request_id":  rc.RequestID,
+		"channel_id":  rc.ChannelID,
+		"session_id":  rc.SessionID,
 		"payload":     swarmcommon.AnnotateChatFinal(payload, swarmcommon.FinalModeAppend),
 		"is_complete": false,
 	})
 	if !pushed {
 		logger.Warn(logComponent).
 			Str("job_id", jobID).
-			Str("session_id", wctx.SessionID).
+			Str("session_id", rc.SessionID).
 			Msg("[generate_video] no active push host to deliver job result")
 	}
 }

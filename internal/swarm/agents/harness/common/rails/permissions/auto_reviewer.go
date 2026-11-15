@@ -28,6 +28,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/redaction"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -344,7 +345,7 @@ func BuildReviewerActionView(
 	policyReason string,
 	allowedOutcomes []string,
 	noAutoAllowReason string,
-	originalUserIntent *OriginalUserIntentEvidence,
+	originalUserIntent *rootcontext.OriginalUserIntentEvidence,
 	domainRoute *DecisionRoute,
 ) *ReviewerActionView {
 	// 第一步：先做网络与副作用摘要（副作用名排序，保证同一输入输出稳定）。
@@ -863,7 +864,7 @@ func coreShellView(command string) ([]string, []string) {
 		} else if len(raw) > 64 {
 			program = raw[:64]
 		}
-		if !containsString(programs, program) {
+		if !rootcontext.ContainsString(programs, program) {
 			programs = append(programs, program)
 		}
 	}
@@ -876,7 +877,7 @@ func coreShellView(command string) ([]string, []string) {
 // intentView 生成用户意图视图。
 //
 // Python: _intent_view(evidence, *, facts)
-func intentView(evidence *OriginalUserIntentEvidence) map[string]any {
+func intentView(evidence *rootcontext.OriginalUserIntentEvidence) map[string]any {
 	if evidence == nil {
 		return map[string]any{"trusted_user_turns": []any{}}
 	}
@@ -973,7 +974,7 @@ func (r *AutoReviewer) parseResponse(
 		return manualAssessment("unknown_outcome")
 	}
 
-	if outcome != ReviewerOutcomeDeny && !containsString(request.AllowedOutcomes, outcome) {
+	if outcome != ReviewerOutcomeDeny && !rootcontext.ContainsString(request.AllowedOutcomes, outcome) {
 		return manualOutcomeNotAllowed(request, outcome)
 	}
 

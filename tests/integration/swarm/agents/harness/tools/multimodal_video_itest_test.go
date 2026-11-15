@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -36,6 +37,16 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // VideoGenSuite 视频生成与交付集成套件。
+// bindRootCtx 构造携带 RootDecisionContext 的 ctx（D-23.8-4 回收后盯单路由直接取叶子包）。
+func bindRootCtx(sessionID, requestID, channelID string) context.Context {
+	rc, err := rootcontext.NewRootDecisionContext(sessionID, requestID, channelID, nil, "")
+	if err != nil {
+		panic(err)
+	}
+	ctx, _ := rootcontext.BindRootDecisionContext(context.Background(), rc)
+	return ctx
+}
+
 type VideoGenSuite struct {
 	isuite.BaseIntegrationSuite
 }
@@ -99,14 +110,11 @@ func (s *VideoGenSuite) TestVideoGenSuite_提交到盯单推送全链() {
 	})
 	s.T().Cleanup(func() { tools.SetVideoGenRuntimePush(nil) })
 	// D-23.8-5：sendFile 缝不注入 → 文本通知降级（含本地文件路径）
-	tools.SetVideoWatchContextProvider(func(context.Context) *tools.VideoWatchContext {
-		return &tools.VideoWatchContext{RequestID: "itest-req", SessionID: "itest-sess", ChannelID: "itest-ch"}
-	})
-	s.T().Cleanup(func() { tools.SetVideoWatchContextProvider(nil) })
+	// D-23.8-4 已回收：盯单路由经 ctx 绑定的 RootDecisionContext 直达（对齐 Python current_root_decision_context）
 
 	// 工具调用全链（与 adapter 注册的工具闭包一致）
 	gen := tools.CreateGenerateVideoTool()
-	res, err := gen.Invoke(context.Background(), map[string]any{
+	res, err := gen.Invoke(bindRootCtx("itest-sess", "itest-req", "itest-ch"), map[string]any{
 		"prompt": "a tiny clip", "save_dir": saveDir,
 	})
 	s.Require().NoError(err)
@@ -147,10 +155,6 @@ func (s *VideoGenSuite) TestVideoGenSuite_配置门控与防重复盯单() {
 	os.Unsetenv("VIDEO_GEN_API_BASE")
 	os.Unsetenv("VIDEO_GEN_MODEL_NAME")
 	os.Unsetenv("VIDEO_GEN_PROTOCOL")
-	tools.SetVideoWatchContextProvider(func(context.Context) *tools.VideoWatchContext {
-		return &tools.VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"}
-	})
-	s.T().Cleanup(func() { tools.SetVideoWatchContextProvider(nil) })
 
 	gen := tools.CreateGenerateVideoTool()
 	res, err := gen.Invoke(context.Background(), map[string]any{"prompt": "p"})

@@ -20,6 +20,7 @@ import (
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -120,7 +121,7 @@ func (r *AutoPermissionRail) sessionAutoConfirmEligible(
 	if domainRoute != nil && domainRoute.RequiresManual() {
 		return false
 	}
-	if executionContext := permissions.CurrentRootDecisionContext(ctx); executionContext != nil &&
+	if executionContext := rootcontext.CurrentRootDecisionContext(ctx); executionContext != nil &&
 		executionContext.AutoReviewBlockReason != "" {
 		return false
 	}

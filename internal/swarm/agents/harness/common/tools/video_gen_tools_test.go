@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 )
 
@@ -253,17 +254,31 @@ func TestGenerateVideoCore_提交即完成(t *testing.T) {
 	}
 }
 
+// rootCtx 构造携带 RootDecisionContext 的 ctx（D-23.8-4 回收后盯单路由直接取叶子包）。
+// request_id/channel_id 固定 req-1/ch-1，与历史断言的路由字段一致。
+func rootCtx(sessionID string) context.Context {
+	ctx, _ := rootcontext.BindRootDecisionContext(context.Background(), rootRC(sessionID))
+	return ctx
+}
+
+// rootRC 构造路由三元组 rc（request_id/channel_id 固定 req-1/ch-1，与历史断言一致）。
+func rootRC(sessionID string) *rootcontext.RootDecisionContext {
+	rc, err := rootcontext.NewRootDecisionContext(sessionID, "req-1", "ch-1", nil, "")
+	if err != nil {
+		panic(err)
+	}
+	return rc
+}
+
 // TestGenerateVideoCore_轮询到期pending 对齐 :497-503 窗口到期返回 pending 形状并布防盯单。
 func TestGenerateVideoCore_轮询到期pending(t *testing.T) {
 	setFastPoll(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	watchCalls := 0
-	SetVideoWatchContextProvider(func(_ context.Context) *VideoWatchContext {
-		watchCalls++
-		return &VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"}
-	})
-	t.Cleanup(func() { SetVideoWatchContextProvider(nil) })
+	// 在可取消 ctx 上绑定 RootDecisionContext：watcher 随测试结束的 cancel 退出，
+	// 不污染后续用例的 waitForWatchDrain。
+	rc := rootRC("s")
+	ctx, _ = rootcontext.BindRootDecisionContext(ctx, rc)
 
 	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -284,15 +299,17 @@ func TestGenerateVideoCore_轮询到期pending(t *testing.T) {
 	if !strings.HasPrefix(got, "Video job job-slow submitted and still running") {
 		t.Fatalf("pending 形状: %q", got)
 	}
-	if watchCalls != 1 {
-		t.Fatalf("盯单应布防一次: %d", watchCalls)
+	watchedPendingJobsMu.Lock()
+	if n := len(watchedPendingJobs); n != 1 {
+		watchedPendingJobsMu.Unlock()
+		t.Fatalf("盯单应布防一次: %d", n)
 	}
+	watchedPendingJobsMu.Unlock()
 }
 
 // TestGenerateVideoCore_终态失败 对齐 :505-511 失败形状。
 func TestGenerateVideoCore_终态失败(t *testing.T) {
 	setFastPoll(t)
-	SetVideoWatchContextProvider(nil)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			_, _ = w.Write([]byte(`{"id":"job-f","status":"pending"}`))
@@ -397,8 +414,7 @@ func TestWatchUntilSettled_完成交付(t *testing.T) {
 	})
 	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })
 
-	wctx := &VideoWatchContext{RequestID: "req-1", SessionID: "sess-1", ChannelID: "ch-1"}
-	watchUntilSettled(context.Background(), "job-w", saveDir, wctx)
+	watchUntilSettled(rootCtx("sess-1"), "job-w", saveDir, rootRC("sess-1"))
 	waitForWatchDrain(t, time.Second)
 	pushMu.Lock()
 	defer pushMu.Unlock()
@@ -443,7 +459,7 @@ func TestWatchUntilSettled_失败交付(t *testing.T) {
 	})
 	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })
 
-	watchUntilSettled(context.Background(), "job-x", "", &VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"})
+	watchUntilSettled(rootCtx("s"), "job-x", "", rootRC("s"))
 	waitForWatchDrain(t, time.Second)
 	if len(contents) != 1 || !strings.Contains(contents[0], "未能成功完成") || !strings.Contains(contents[0], "cancelled") {
 		t.Fatalf("失败通知: %v", contents)
@@ -465,7 +481,13 @@ func TestWatchUntilSettled_超限放弃(t *testing.T) {
 	SetVideoGenRuntimePush(func(map[string]any) bool { pushCount++; return true })
 	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })
 
-	watchUntilSettled(context.Background(), "job-forever", "", &VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"})
+	// pending 轮询会接力调度盯单（scheduleCompletionWatchIfPending），
+	// 用可取消 ctx 让整条调度链随测试结束退出，不污染后续用例。
+	ctx, cancel := context.WithCancel(context.Background())
+	rc := rootRC("s")
+	ctx, _ = rootcontext.BindRootDecisionContext(ctx, rc)
+	defer cancel()
+	watchUntilSettled(ctx, "job-forever", "", rc)
 	waitForWatchDrain(t, time.Second)
 	if pushCount != 0 {
 		t.Fatalf("超限放弃不应推送: %d", pushCount)
@@ -474,8 +496,6 @@ func TestWatchUntilSettled_超限放弃(t *testing.T) {
 
 // TestScheduleCompletionWatchIfPending_防重复与无上下文 对齐 :109-123。
 func TestScheduleCompletionWatchIfPending_防重复与无上下文(t *testing.T) {
-	SetVideoWatchContextProvider(nil)
-	t.Cleanup(func() { SetVideoWatchContextProvider(nil) })
 	// 无上下文 → 不布防
 	scheduleCompletionWatchIfPending(context.Background(), "Video job j1 is still running.", "")
 	watchedPendingJobsMu.Lock()
@@ -485,13 +505,13 @@ func TestScheduleCompletionWatchIfPending_防重复与无上下文(t *testing.T)
 		t.Fatal("无上下文不应布防")
 	}
 	// 有上下文布防后，同 job_id 重复调用不叠加
-	SetVideoWatchContextProvider(func(context.Context) *VideoWatchContext {
-		return &VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"}
-	})
+	// 用可取消 ctx：j2 盯单 goroutine 随测试结束退出（watchInterval 恢复后不再轮询）。
+	ctx, cancel := context.WithCancel(rootCtx("s"))
+	defer cancel()
 	watchInterval = time.Hour // 阻止真实轮询推进
 	defer func() { watchInterval = watchIntervalSeconds }()
-	scheduleCompletionWatchIfPending(context.Background(), "Video job j2 is still running.", "")
-	scheduleCompletionWatchIfPending(context.Background(), "Video job j2 is still running.", "")
+	scheduleCompletionWatchIfPending(ctx, "Video job j2 is still running.", "")
+	scheduleCompletionWatchIfPending(ctx, "Video job j2 is still running.", "")
 	watchedPendingJobsMu.Lock()
 	n = len(watchedPendingJobs)
 	watchedPendingJobsMu.Unlock()
@@ -542,7 +562,6 @@ func TestCheckVideoStatusImpl_状态分支(t *testing.T) {
 	t.Setenv("VIDEO_GEN_API_BASE", server.URL)
 
 	// pending → 布防盯单（需清 provider 防误布防）
-	SetVideoWatchContextProvider(nil)
 	// pending 状态消息
 	statusServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id":"j1","status":"queued"}`))
@@ -596,7 +615,7 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 
 	// 成功分支：sendFile 返回非失败文案 → 不推送兜底
 	var pushCount int32
-	SetVideoGenSendFileFunc(func(_ *VideoWatchContext, localPath string) string {
+	SetVideoGenSendFileFunc(func(_ *rootcontext.RootDecisionContext, localPath string) string {
 		if !strings.HasSuffix(localPath, "video_job-sf.mp4") {
 			t.Fatalf("投递路径错: %s", localPath)
 		}
@@ -604,11 +623,11 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 	})
 	SetVideoGenRuntimePush(func(map[string]any) bool { return true })
 	t.Cleanup(func() { SetVideoGenSendFileFunc(nil); SetVideoGenRuntimePush(nil) })
-	watchUntilSettled(context.Background(), "job-sf", saveDir, &VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"})
+	watchUntilSettled(rootCtx("s"), "job-sf", saveDir, rootRC("s"))
 	waitForWatchDrain(t, time.Second)
 
 	// 失败分支：sendFile 返回「发送文件失败」前缀 → 回落文本通知含本地文件
-	SetVideoGenSendFileFunc(func(_ *VideoWatchContext, _ string) string { return "发送文件失败: no push host" })
+	SetVideoGenSendFileFunc(func(_ *rootcontext.RootDecisionContext, _ string) string { return "发送文件失败: no push host" })
 	var contents []string
 	SetVideoGenRuntimePush(func(msg map[string]any) bool {
 		payload, _ := msg["payload"].(map[string]any)
@@ -616,7 +635,7 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 		return true
 	})
 	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })
-	watchUntilSettled(context.Background(), "job-sf", saveDir, &VideoWatchContext{RequestID: "r", SessionID: "s", ChannelID: "c"})
+	watchUntilSettled(rootCtx("s"), "job-sf", saveDir, rootRC("s"))
 	waitForWatchDrain(t, time.Second)
 	if len(contents) != 1 || !strings.Contains(contents[0], "自动投递到会话失败") || !strings.Contains(contents[0], "本地文件：") {
 		t.Fatalf("投递失败回落: %v", contents)

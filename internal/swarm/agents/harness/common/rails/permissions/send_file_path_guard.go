@@ -25,6 +25,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security/fileguard"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -385,7 +386,7 @@ func evaluateSendFilePaths(
 			matchedRule = result.MatchedRule
 			resultReason = result.Reason
 		}
-		if matchedRule != "" && !containsString(matchedRules, matchedRule) {
+		if matchedRule != "" && !rootcontext.ContainsString(matchedRules, matchedRule) {
 			matchedRules = append(matchedRules, matchedRule)
 		}
 		if levelRank > strictestRank {

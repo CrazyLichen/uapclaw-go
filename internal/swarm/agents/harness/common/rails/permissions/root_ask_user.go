@@ -2,7 +2,7 @@
 // 当用户对权限卡不是直接"同意/拒绝"，而是反问澄清时，走 ask_user 工具自身的
 // 中断通道。本文件负责把那次反问的上下文（当时问了什么、有哪些选项）冻结进
 // 中断请求的 metadata，并在用户答案回来后把问答对还原成澄清记录，
-// 供 root_context.AppendRootClarification 追加到意图窗口。
+// 供 root_context.rootcontext.AppendRootClarification 追加到意图窗口。
 // 关键点：澄清不是"发给 LLM 的新消息"，而是"给权限判断看的备忘录"。
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/permissions/root_ask_user.py（274 行）
 package permissions
@@ -12,7 +12,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/askusercontract"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -23,7 +24,7 @@ type AskUserQuestionReference struct {
 	// Question 问题文本
 	Question string
 	// Options 选项列表
-	Options []RootAskUserOption
+	Options []rootcontext.RootAskUserOption
 	// MultiSelect 是否多选
 	MultiSelect bool
 }
@@ -34,7 +35,7 @@ type RootAskUserContinuation struct {
 	// ToolCallID 对应的工具调用 ID
 	ToolCallID string
 	// Context 中断发生时的决策上下文
-	Context *RootDecisionContext
+	Context *rootcontext.RootDecisionContext
 	// Questions 问题列表
 	Questions []AskUserQuestionReference
 }
@@ -45,7 +46,7 @@ type RootAskUserResume struct {
 	// Continuation 原始续接上下文
 	Continuation *RootAskUserContinuation
 	// Clarifications 澄清记录；容量不足时为 nil
-	Clarifications []RootAskUserClarification
+	Clarifications []rootcontext.RootAskUserClarification
 	// CapacityReason 容量原因，非空表示未能生成澄清
 	CapacityReason string
 }
@@ -76,7 +77,7 @@ const (
 // Python: AskUserQuestionReference(...) 由 from_mapping 校验
 func NewAskUserQuestionReference(
 	question string,
-	options []RootAskUserOption,
+	options []rootcontext.RootAskUserOption,
 	multiSelect bool,
 ) (AskUserQuestionReference, error) {
 	if strings.TrimSpace(question) == "" {
@@ -109,7 +110,7 @@ func AskUserQuestionReferenceFromMapping(value map[string]any) (AskUserQuestionR
 	if value == nil || len(value) != 3 {
 		return AskUserQuestionReference{}, errors.New("invalid ask-user question")
 	}
-	question, err := strictString(value, "question")
+	question, err := rootcontext.StrictString(value, "question")
 	if err != nil || strings.TrimSpace(question) == "" {
 		return AskUserQuestionReference{}, errors.New("invalid ask-user question")
 	}
@@ -119,13 +120,13 @@ func AskUserQuestionReferenceFromMapping(value map[string]any) (AskUserQuestionR
 		return AskUserQuestionReference{}, errors.New("invalid ask-user question")
 	}
 
-	options := make([]RootAskUserOption, 0, len(rawOptions))
+	options := make([]rootcontext.RootAskUserOption, 0, len(rawOptions))
 	for _, item := range rawOptions {
 		asMap, ok := item.(map[string]any)
 		if !ok {
 			return AskUserQuestionReference{}, errors.New("invalid ask-user question")
 		}
-		option, err := RootAskUserOptionFromMapping(asMap)
+		option, err := rootcontext.RootAskUserOptionFromMapping(asMap)
 		if err != nil {
 			return AskUserQuestionReference{}, errors.New("invalid ask-user question")
 		}
@@ -138,10 +139,10 @@ func AskUserQuestionReferenceFromMapping(value map[string]any) (AskUserQuestionR
 // prepared 为 nil 时只移除旧值（对齐 Python 先 pop 再按需写入）。
 // Python: put_ask_user_resume_in_inputs(inputs, prepared)
 func PutAskUserResumeInInputs(inputs map[string]any, prepared *RootAskUserResume) map[string]any {
-	result := copyMap(inputs)
-	run := nestedCopyMap(result, "run")
-	contextMap := nestedCopyMap(run, "context")
-	extra := nestedCopyMap(contextMap, "extra")
+	result := rootcontext.CopyMap(inputs)
+	run := rootcontext.NestedCopyMap(result, "run")
+	contextMap := rootcontext.NestedCopyMap(run, "context")
+	extra := rootcontext.NestedCopyMap(contextMap, "extra")
 	delete(extra, AskUserResumeDTOKey)
 	if prepared != nil {
 		extra[AskUserResumeDTOKey] = prepared
@@ -156,7 +157,7 @@ func PutAskUserResumeInInputs(inputs map[string]any, prepared *RootAskUserResume
 // 只有工具名是 ask_user 且能解析出问题时才返回非 nil，否则返回 nil。
 // Python: build_ask_user_metadata(*, context, tool_name, tool_call_id, tool_args)
 func BuildAskUserMetadata(
-	decisionContext *RootDecisionContext,
+	decisionContext *rootcontext.RootDecisionContext,
 	toolName any,
 	toolCallID any,
 	toolArgs any,
@@ -211,7 +212,7 @@ func AskUserContinuation(metadata any, expectedToolCallID string) *RootAskUserCo
 	if !okContext {
 		return nil
 	}
-	decisionContext, err := RootDecisionContextFromMapping(contextMap)
+	decisionContext, err := rootcontext.RootDecisionContextFromMapping(contextMap)
 	if err != nil {
 		return nil
 	}
@@ -229,7 +230,7 @@ func AskUserContinuation(metadata any, expectedToolCallID string) *RootAskUserCo
 		questions = append(questions, question)
 	}
 
-	if len(questions) < 1 || len(questions) > rails.MaxStructuredQuestions {
+	if len(questions) < 1 || len(questions) > askusercontract.MaxStructuredQuestions {
 		return nil
 	}
 	seen := make(map[string]struct{}, len(questions))
@@ -272,22 +273,22 @@ func PrepareAskUserResume(
 		}
 	}
 
-	clarifications := make([]RootAskUserClarification, 0, len(continuation.Questions))
+	clarifications := make([]rootcontext.RootAskUserClarification, 0, len(continuation.Questions))
 	for _, question := range continuation.Questions {
 		values, ok := answerValues(answers[question.Question], question.MultiSelect)
 		if !ok {
 			return nil
 		}
-		clarifications = append(clarifications, RootAskUserClarification{
+		clarifications = append(clarifications, rootcontext.RootAskUserClarification{
 			Question: question.Question,
 			Answers:  values,
 			Options:  question.Options,
 		})
 	}
 
-	turn, err := NewRootIntentTurn(
+	turn, err := rootcontext.NewRootIntentTurn(
 		continuation.Context.RequestID,
-		RootIntentTurnKindAskUserClarification,
+		rootcontext.RootIntentTurnKindAskUserClarification,
 		"",
 		clarifications,
 	)
@@ -296,14 +297,14 @@ func PrepareAskUserResume(
 		return &RootAskUserResume{
 			Continuation:   continuation,
 			Clarifications: nil,
-			CapacityReason: AutoReviewBlockIntentInputTooLarge,
+			CapacityReason: rootcontext.AutoReviewBlockIntentInputTooLarge,
 		}
 	}
-	if len(RootIntentTurnText(turn, true)) > RootIntentMaxTurnChars {
+	if len(rootcontext.RootIntentTurnText(turn, true)) > rootcontext.RootIntentMaxTurnChars {
 		return &RootAskUserResume{
 			Continuation:   continuation,
 			Clarifications: nil,
-			CapacityReason: AutoReviewBlockIntentInputTooLarge,
+			CapacityReason: rootcontext.AutoReviewBlockIntentInputTooLarge,
 		}
 	}
 
@@ -316,9 +317,9 @@ func PrepareAskUserResume(
 // ApplyAskUserResume 把续接结果应用到决策上下文。
 // 容量原因非空时只标记阻断原因；否则把澄清追加到意图窗口。
 // Python: apply_ask_user_resume(prepared)
-func ApplyAskUserResume(prepared *RootAskUserResume) *RootDecisionContext {
+func ApplyAskUserResume(prepared *RootAskUserResume) *rootcontext.RootDecisionContext {
 	if prepared.CapacityReason != "" {
-		replaced, err := NewRootDecisionContext(
+		replaced, err := rootcontext.NewRootDecisionContext(
 			prepared.Continuation.Context.SessionID,
 			prepared.Continuation.Context.RequestID,
 			prepared.Continuation.Context.ChannelID,
@@ -333,7 +334,7 @@ func ApplyAskUserResume(prepared *RootAskUserResume) *RootDecisionContext {
 	if prepared.Clarifications == nil {
 		return prepared.Continuation.Context
 	}
-	return AppendRootClarification(prepared.Continuation.Context, prepared.Clarifications)
+	return rootcontext.AppendRootClarification(prepared.Continuation.Context, prepared.Clarifications)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -364,7 +365,7 @@ func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 
 		// 问题列表必须是数组，且条数在上限之内
 		list, ok := rawQuestions.([]any)
-		if !ok || len(list) < 1 || len(list) > rails.MaxStructuredQuestions {
+		if !ok || len(list) < 1 || len(list) > askusercontract.MaxStructuredQuestions {
 			return nil, nil
 		}
 
@@ -414,7 +415,7 @@ func questionsOf(toolArgs any) ([]AskUserQuestionReference, error) {
 // optionsOf 解析选项列表。
 // 空列表合法；非空时必须是 2-4 个、标签唯一且不含 "Other"。
 // Python: _options(value)
-func optionsOf(value any) ([]RootAskUserOption, bool) {
+func optionsOf(value any) ([]rootcontext.RootAskUserOption, bool) {
 	if value == nil {
 		return nil, true
 	}
@@ -423,18 +424,18 @@ func optionsOf(value any) ([]RootAskUserOption, bool) {
 		return nil, false
 	}
 	if len(list) > 0 {
-		if len(list) < rootAskUserOptionMinOptions || len(list) > rootAskUserOptionMaxOptions {
+		if len(list) < rootcontext.RootAskUserOptionMinOptions || len(list) > rootcontext.RootAskUserOptionMaxOptions {
 			return nil, false
 		}
 	}
 
-	result := make([]RootAskUserOption, 0, len(list))
+	result := make([]rootcontext.RootAskUserOption, 0, len(list))
 	for _, item := range list {
 		asMap, ok := item.(map[string]any)
 		if !ok {
 			return nil, false
 		}
-		label, err := strictString(asMap, "label")
+		label, err := rootcontext.StrictString(asMap, "label")
 		if err != nil {
 			return nil, false
 		}
@@ -446,7 +447,7 @@ func optionsOf(value any) ([]RootAskUserOption, bool) {
 		if _, exists := asMap["preview"]; exists && !okPreview {
 			return nil, false
 		}
-		result = append(result, RootAskUserOption{
+		result = append(result, rootcontext.RootAskUserOption{
 			Label: label, Description: description, Preview: preview,
 		})
 	}

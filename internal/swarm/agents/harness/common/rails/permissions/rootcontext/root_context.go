@@ -6,7 +6,7 @@
 //  2. 投影成意图视图交给审查模型，作为判断"这个操作是否违反用户意图"的依据。
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/rails/permissions/root_context.py（528 行）
-package permissions
+package rootcontext
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/askusercontract"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -164,11 +164,11 @@ const (
 	// Python: HOST_USER_ORIGIN_INTERNAL
 	HostUserOriginInternal = "internal_dispatch"
 
-	// rootAskUserOptionMinOptions 选项数量下限（有选项时必须 >= 2）
-	rootAskUserOptionMinOptions = 2
+	// RootAskUserOptionMinOptions 选项数量下限（有选项时必须 >= 2）
+	RootAskUserOptionMinOptions = 2
 
-	// rootAskUserOptionMaxOptions 选项数量上限
-	rootAskUserOptionMaxOptions = 4
+	// RootAskUserOptionMaxOptions 选项数量上限
+	RootAskUserOptionMaxOptions = 4
 
 	// rootAskUserMaxAnswers 单次澄清最多答案数
 	rootAskUserMaxAnswers = 8
@@ -236,9 +236,9 @@ func RootAskUserOptionFromMapping(value map[string]any) (RootAskUserOption, erro
 	if value == nil || len(value) != 3 {
 		return RootAskUserOption{}, errors.New("invalid ask-user option")
 	}
-	label, err1 := strictString(value, "label")
-	description, err2 := strictString(value, "description")
-	preview, err3 := strictString(value, "preview")
+	label, err1 := StrictString(value, "label")
+	description, err2 := StrictString(value, "description")
+	preview, err3 := StrictString(value, "preview")
 	if err := firstErr(err1, err2, err3); err != nil {
 		return RootAskUserOption{}, errors.New("invalid ask-user option")
 	}
@@ -258,7 +258,7 @@ func NewRootAskUserClarification(
 		return RootAskUserClarification{}, errors.New("invalid ask-user question")
 	}
 	if len(options) > 0 {
-		if len(options) < rootAskUserOptionMinOptions || len(options) > rootAskUserOptionMaxOptions {
+		if len(options) < RootAskUserOptionMinOptions || len(options) > RootAskUserOptionMaxOptions {
 			return RootAskUserClarification{}, errors.New("ambiguous ask-user options")
 		}
 	}
@@ -319,7 +319,7 @@ func RootAskUserClarificationFromMapping(value map[string]any) (RootAskUserClari
 	}
 	rawOptions, ok1 := value["options"].([]any)
 	rawAnswers, ok2 := value["answers"].([]any)
-	question, errQ := strictString(value, "question")
+	question, errQ := StrictString(value, "question")
 	if !ok1 || !ok2 || errQ != nil {
 		return RootAskUserClarification{}, errors.New("invalid ask-user clarification")
 	}
@@ -379,7 +379,7 @@ func NewRootIntentTurn(
 	}
 	if kind == RootIntentTurnKindAskUserClarification {
 		if text != "" || len(clarifications) < 1 ||
-			len(clarifications) > rails.MaxStructuredQuestions {
+			len(clarifications) > askusercontract.MaxStructuredQuestions {
 			return RootIntentTurn{}, errors.New("invalid ask-user intent turn")
 		}
 	} else if strings.TrimSpace(text) == "" || len(clarifications) > 0 {
@@ -417,9 +417,9 @@ func RootIntentTurnFromMapping(value map[string]any) (RootIntentTurn, error) {
 	if !ok {
 		return RootIntentTurn{}, errors.New("invalid intent clarifications")
 	}
-	requestID, err1 := strictString(value, "request_id")
-	kind, err2 := strictString(value, "kind")
-	text, err3 := strictString(value, "text")
+	requestID, err1 := StrictString(value, "request_id")
+	kind, err2 := StrictString(value, "kind")
+	text, err3 := StrictString(value, "text")
 	if err := firstErr(err1, err2, err3); err != nil {
 		return RootIntentTurn{}, errors.New("invalid intent turn")
 	}
@@ -574,10 +574,10 @@ func RootDecisionContextFromMapping(value map[string]any) (*RootDecisionContext,
 	if !ok {
 		return nil, errors.New("invalid trusted turns")
 	}
-	sessionID, err1 := strictString(value, "session_id")
-	requestID, err2 := strictString(value, "request_id")
-	channelID, err3 := strictString(value, "channel_id")
-	blockReason, err4 := strictString(value, "auto_review_block_reason")
+	sessionID, err1 := StrictString(value, "session_id")
+	requestID, err2 := StrictString(value, "request_id")
+	channelID, err3 := StrictString(value, "channel_id")
+	blockReason, err4 := StrictString(value, "auto_review_block_reason")
 	if err := firstErr(err1, err2, err3, err4); err != nil {
 		return nil, errors.New("invalid root decision context")
 	}
@@ -640,10 +640,10 @@ func RootDecisionContextFromExtra(extra map[string]any) (*RootDecisionContext, e
 // 分层路径与 Python 一致：inputs["run"]["context"]["extra"][ROOT_CONTEXT_KEY]。
 // Python: put_root_decision_context_in_inputs(inputs, context)
 func PutRootDecisionContextInInputs(inputs map[string]any, decisionContext *RootDecisionContext) map[string]any {
-	result := copyMap(inputs)
-	run := nestedCopyMap(result, "run")
-	ctxMap := nestedCopyMap(run, "context")
-	extra := nestedCopyMap(ctxMap, "extra")
+	result := CopyMap(inputs)
+	run := NestedCopyMap(result, "run")
+	ctxMap := NestedCopyMap(run, "context")
+	extra := NestedCopyMap(ctxMap, "extra")
 	extra[RootContextKey] = decisionContext.ToMapping()
 	ctxMap["extra"] = extra
 	run["context"] = ctxMap
@@ -682,7 +682,7 @@ func AppendRootClarification(
 	turns = append(turns, answer)
 
 	truncated := len(decisionContext.TrustedTurns) >= RootIntentMaxTurns
-	for totalChars(turns) > RootIntentMaxTotalChars {
+	for TotalChars(turns) > RootIntentMaxTotalChars {
 		if len(turns) == 1 {
 			replaced, err := NewRootDecisionContext(
 				decisionContext.SessionID,
@@ -816,7 +816,7 @@ func ExtractPermissionUserContent(renderedPrompt any) *string {
 		}
 	}
 	for key := range keys {
-		if !containsString(requiredEnvelopeKeys, key) && !containsString(optionalEnvelopeKeys, key) {
+		if !ContainsString(requiredEnvelopeKeys, key) && !ContainsString(optionalEnvelopeKeys, key) {
 			return nil
 		}
 	}
@@ -942,8 +942,9 @@ func BuildRootIntentProjection(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// strictString 取映射里的字符串字段，缺失或非字符串均返回错误。
-func strictString(value map[string]any, key string) (string, error) {
+// StrictString 取映射里的字符串字段，缺失或非字符串均返回错误。
+// StrictString 从 map 取非空字符串（原 permissions 包内助手，随 root_context 迁出后导出）。
+func StrictString(value map[string]any, key string) (string, error) {
 	raw, ok := value[key]
 	if !ok {
 		return "", fmt.Errorf("missing %s", key)
@@ -965,8 +966,9 @@ func firstErr(errs ...error) error {
 	return nil
 }
 
-// copyMap 浅拷贝映射，nil 返回空映射。
-func copyMap(source map[string]any) map[string]any {
+// CopyMap 浅拷贝映射，nil 返回空映射。
+// CopyMap 浅拷贝 map。
+func CopyMap(source map[string]any) map[string]any {
 	result := make(map[string]any, len(source)+1)
 	for key, value := range source {
 		result[key] = value
@@ -974,16 +976,18 @@ func copyMap(source map[string]any) map[string]any {
 	return result
 }
 
-// nestedCopyMap 浅拷贝 source[key]（若为映射），否则返回新的空映射。
-func nestedCopyMap(source map[string]any, key string) map[string]any {
+// NestedCopyMap 浅拷贝 source[key]（若为映射），否则返回新的空映射。
+// NestedCopyMap 按 key 取子 map（不存在返回空 map）。
+func NestedCopyMap(source map[string]any, key string) map[string]any {
 	if nested, ok := source[key].(map[string]any); ok {
-		return copyMap(nested)
+		return CopyMap(nested)
 	}
 	return make(map[string]any)
 }
 
-// totalChars 累计一组轮次的容量占用（含问题与选项）。
-func totalChars(turns []RootIntentTurn) int {
+// TotalChars 累计一组轮次的容量占用（含问题与选项）。
+// TotalChars 统计意图轮次总字符。
+func TotalChars(turns []RootIntentTurn) int {
 	total := 0
 	for _, turn := range turns {
 		total += len(RootIntentTurnText(turn, true))
@@ -991,8 +995,9 @@ func totalChars(turns []RootIntentTurn) int {
 	return total
 }
 
-// containsString 判断字符串是否在切片中。
-func containsString(items []string, target string) bool {
+// ContainsString 判断字符串是否在切片中。
+// ContainsString 判断列表是否含目标串。
+func ContainsString(items []string, target string) bool {
 	for _, item := range items {
 		if item == target {
 			return true

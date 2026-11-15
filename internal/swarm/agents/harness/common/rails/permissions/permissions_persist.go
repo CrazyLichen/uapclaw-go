@@ -18,6 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -582,7 +583,7 @@ func persistExactPermissionAllowRule(opts ExactAllowOptions) error {
 		// tools[name] 变了才把工具名加进 allow_tools
 		if !reflect.DeepEqual(nestedTools(merged, name), nestedTools(baseline, name)) {
 			allow := toStringList(updated["allow_tools"])
-			if !containsString(allow, name) {
+			if !rootcontext.ContainsString(allow, name) {
 				allow = append(allow, name)
 			}
 			updated["allow_tools"] = toAnyList(allow)

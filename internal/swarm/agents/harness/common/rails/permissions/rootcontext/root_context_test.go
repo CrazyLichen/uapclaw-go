@@ -1,4 +1,4 @@
-package permissions
+package rootcontext
 
 import (
 	"context"
@@ -734,7 +734,7 @@ func TestAppendRootClarification_字符超限裁剪(t *testing.T) {
 	c, _ := NewRootAskUserClarification(strings.Repeat("q", 500), []string{"a"}, nil)
 
 	got := AppendRootClarification(dc, []RootAskUserClarification{c})
-	total := totalChars(got.TrustedTurns)
+	total := TotalChars(got.TrustedTurns)
 	if total > RootIntentMaxTotalChars {
 		t.Fatalf("总字符仍超限: %d", total)
 	}
@@ -1369,13 +1369,13 @@ func TestRootIntentTurnText_澄清含选项(t *testing.T) {
 
 // TestStrictString_缺键 验证缺键返回错误
 func TestStrictString_缺键(t *testing.T) {
-	if _, err := strictString(map[string]any{}, "k"); err == nil {
+	if _, err := StrictString(map[string]any{}, "k"); err == nil {
 		t.Fatalf("缺键应报错")
 	}
-	if _, err := strictString(map[string]any{"k": 1}, "k"); err == nil {
+	if _, err := StrictString(map[string]any{"k": 1}, "k"); err == nil {
 		t.Fatalf("类型不符应报错")
 	}
-	if got, err := strictString(map[string]any{"k": "v"}, "k"); err != nil || got != "v" {
+	if got, err := StrictString(map[string]any{"k": "v"}, "k"); err != nil || got != "v" {
 		t.Fatalf("正常应返回 v，实际 %q %v", got, err)
 	}
 }
@@ -1436,7 +1436,7 @@ func TestMessageContent_非映射(t *testing.T) {
 
 // TestNestedCopyMap_非映射值 验证 source[key] 非映射时返回空映射
 func TestNestedCopyMap_非映射值(t *testing.T) {
-	got := nestedCopyMap(map[string]any{"run": "string"}, "run")
+	got := NestedCopyMap(map[string]any{"run": "string"}, "run")
 	if len(got) != 0 {
 		t.Fatalf("应返回空映射，实际 %v", got)
 	}

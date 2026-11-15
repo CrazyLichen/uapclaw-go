@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/askusercontract"
 )
 
 // toolCallWithQuestions 构造带 questions 参数的工具调用。
@@ -63,7 +64,7 @@ func TestValidateStructuredQuestions_questions非数组(t *testing.T) {
 
 // TestValidateStructuredQuestions_超限 验证数量上限。
 func TestValidateStructuredQuestions_超限(t *testing.T) {
-	questions := make([]any, MaxStructuredQuestions+1)
+	questions := make([]any, askusercontract.MaxStructuredQuestions+1)
 	for index := range questions {
 		questions[index] = map[string]any{"question": "q"}
 	}
