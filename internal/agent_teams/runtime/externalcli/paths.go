@@ -6,7 +6,6 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	harnessschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -85,30 +84,19 @@ func teamWorkspacePath(spec *schema.TeamAgentSpec, teamName string) string {
 }
 
 // buildContextProjectDir 从 build_context 提取项目目录。
-// Python: _build_context_project_dir (267-271)；getattr 鸭子类型 → 接口断言
+// Python: _build_context_project_dir (267-271)；getattr → 接口方法
 func buildContextProjectDir(spec *schema.TeamAgentSpec) string {
-	return pathValue(buildContextField(spec, func(bc harnessschema.BuildContextInterface) string {
-		return bc.GetProjectDir()
-	}))
+	if spec.BuildContext == nil {
+		return ""
+	}
+	return pathValue(spec.BuildContext.GetProjectDir())
 }
 
 // buildContextTeamOutputsDir 从 build_context 提取团队产物目录。
 // Python: _build_context_team_outputs_dir (274-278)
 func buildContextTeamOutputsDir(spec *schema.TeamAgentSpec) string {
-	return pathValue(buildContextField(spec, func(bc harnessschema.BuildContextInterface) string {
-		return bc.GetTeamOutputsDir()
-	}))
-}
-
-// buildContextField 从 spec.BuildContext 槽位按鸭子类型取字段。
-// 槽位物化前为 dict、物化后为 BuildContext；Python getattr 对 dict 取不到属性
-// 返回 None——Go 侧 dict 形态与未知类型统一返回空串。
-func buildContextField(spec *schema.TeamAgentSpec, getter func(harnessschema.BuildContextInterface) string) string {
 	if spec.BuildContext == nil {
 		return ""
 	}
-	if bc, ok := spec.BuildContext.(harnessschema.BuildContextInterface); ok {
-		return getter(bc)
-	}
-	return ""
+	return pathValue(spec.BuildContext.GetTeamOutputsDir())
 }

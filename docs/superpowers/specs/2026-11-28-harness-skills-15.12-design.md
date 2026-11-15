@@ -31,7 +31,7 @@
 | Python 符号（行号） | Go 符号 | 说明 |
 |---|---|---|
 | `SkillSource`（23-40） | `SkillSource` 值类型 + `NewSkillSource(dir, mode, enabledSkills)` | 构造期校验对齐 `__post_init__`：dir 非空、mode∈{all,auto_list}、enabled_skills 字符串数组且 tuple 化 |
-| `normalize_skills`（43-59） | `NormalizeSkills(values, conflict)` | conflict 先校验 ∈{skip,replace,append}；三种输入形态（SkillSource/string/Mapping）→ tuple |
+| `normalize_skills`（43-59） | `NormalizeSkills(values, conflict)` | conflict 先校验 ∈{skip,replace,append}；输入收窄为 `[]SkillSource`（D-15.12-g），dict/str→SkillSource 由 provider config 反序列化层完成 |
 | `_name`（62-80） | `skillName(dir)` | utf-8-sig 读、front matter 未闭合/非 dict 报错、name 正则校验；SKILL.md 须在包内（resolve 相对性） |
 | `_discover`（83-90） | `discoverBundles(root)` | 根含 SKILL.md 即单包；否则按排序递归子目录（跳过软链目录） |
 | `_validate_tree`（93-103） | `validateTree(path, root, ancestors)` | resolve(strict)→EvalSymlinks 组合（D-15.12-a）；逃逸/环/非常规文件三类拒绝 |
@@ -75,6 +75,8 @@
 | D-15.12-d | yaml（`yaml.safe_load`/`safe_dump`，utf-8-sig BOM 剥离、`splitlines` 行界） | gopkg.in/yaml.v3 + 既有 splitlines 语义复刻惯例（13.18 先例） | 库差异；dump 的 `sort_keys=False`→yaml.v3 默认保序、`allow_unicode`→默认不转义 | 无 |
 | D-15.12-e | Python 单文件 `external_cli_spawn.py` 由 15.12/15.13 两批填充 | `externalcli` 包同批文件分两批续写 | 方案 ① 提前建包的结构代价 | 15.13 完成后同一文件内合并核对方法清单 |
 | D-15.12-f | `_path_value(value: object)`（239-243，返回 `str \| None`） | `pathValue(value string) string`（空白→空串） | Python 调用面入参恒为 str/None（`configured_cwd`/`ctx.worktree_path`/getattr 结果），Go 收窄为 string + 空串语义等价 | 调用面出现非 str 类型时恢复 any + 类型守卫 |
+| D-15.12-g | `normalize_skills` 接受 `list/tuple` 内混合 `SkillSource/str/Mapping` 三形态 | 收窄为 `[]SkillSource`，dict/str→SkillSource 转换移至 provider config 反序列化层 | 用户 2026-11-28 拍板（Go 侧原始配置在 config unmarshal 处即可定型，避免三形态运行时分派）；三分支在 Python 各有真实调用方（config `__post_init__` / `entry.skills` / 二次幂等直通） | 15.7-15.9 接线时若发现 unmarshal 层无法承载，恢复三形态 |
+| D-15.12-h | `TeamAgentSpec.build_context: Optional[Any]`（blueprint.py:645，exclude=True，装活实例） | `BuildContext harnessschema.BuildContextInterface` + `json:"-"` | 计划原定 any 槽位基于"物化前为 dict"的错误前提；Python exclude=True + 活载体语义下接口类型更忠实，且避免 JSON 多吐字段 | `build_context_seed` 字段与 materialize 工厂流程 ⏵ 15.13（Python blueprint.py:660-699） |
 
 ## 5. 测试面
 
