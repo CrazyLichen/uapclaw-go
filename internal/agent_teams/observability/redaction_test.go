@@ -9,7 +9,7 @@ import (
 func TestRedactPrompt_不脱敏时截断(t *testing.T) {
 	cfg := &ObservabilityConfig{AttributeValueMaxLength: 10}
 	result := RedactPrompt("hello world this is long", cfg)
-	if result != "hello worl...<truncated 14 chars>" {
+	if result != "hello worl...<OTel attribute truncated: 14 chars omitted>" {
 		t.Errorf("期望截断结果，实际 %q", result)
 	}
 }
@@ -46,7 +46,7 @@ func TestRedactPrompt_nil输入(t *testing.T) {
 func TestRedactCompletion_不脱敏时截断(t *testing.T) {
 	cfg := &ObservabilityConfig{AttributeValueMaxLength: 5}
 	result := RedactCompletion("abcdefgh", cfg)
-	if result != "abcde...<truncated 3 chars>" {
+	if result != "abcde...<OTel attribute truncated: 3 chars omitted>" {
 		t.Errorf("期望截断结果，实际 %q", result)
 	}
 }
@@ -82,8 +82,8 @@ func TestTruncate_按rune截断(t *testing.T) {
 	if !strings.Contains(got, "中文中") {
 		t.Fatalf("截断结果 = %q, 应包含 '中文中'", got)
 	}
-	if !strings.Contains(got, "truncated 3 chars") {
-		t.Fatalf("截断结果 = %q, 应包含 'truncated 3 chars'（6 字符截到 3，按字符计数）", got)
+	if !strings.Contains(got, "OTel attribute truncated: 3 chars omitted") {
+		t.Fatalf("截断结果 = %q, 应包含 'OTel attribute truncated: 3 chars omitted'（6 字符截到 3，按字符计数）", got)
 	}
 }
 
