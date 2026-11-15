@@ -37,8 +37,8 @@ func llmschemaOriginExternal() string { return llmschema.OpenjiuwenMessageOrigin
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// tracerName 本模块 tracer 名。Python: trajectory.py:115
-	tracerName = "openjiuwen.harness_providers.trajectory"
+	// TracerName 本模块 tracer 名。Python: trajectory.py:115
+	TracerName = "openjiuwen.harness_providers.trajectory"
 	// toolItemType 工具 item 类别。Python: trajectory.py:116
 	toolItemType = "tool"
 	// assistantRequestPurpose 助手请求用途。Python: trajectory.py:117
@@ -156,7 +156,7 @@ func CreateHarnessTrajectoryRecorder(
 		return nil, nil
 	}
 	return NewHarnessTrajectoryRecorder(subject, agentName, agentMode,
-		observability.GetTracer(tracerName), config, attributes)
+		observability.GetTracer(TracerName), config, attributes)
 }
 
 // Subject 返回记录归属的执行主体。

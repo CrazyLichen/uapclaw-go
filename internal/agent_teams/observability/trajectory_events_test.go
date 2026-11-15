@@ -78,7 +78,7 @@ func TestEmitContextWindowCommit_基线与事件属性(t *testing.T) {
 	find := func(key string) (string, bool) {
 		for _, a := range st.Attributes {
 			if string(a.Key) == key {
-				return a.Value.AsString(), true
+				return a.Value.Emit(), true
 			}
 		}
 		return "", false

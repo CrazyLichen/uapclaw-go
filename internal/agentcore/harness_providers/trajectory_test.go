@@ -10,19 +10,19 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/observability"
 )
 
 // ──────────────────────────── 测试基建 ────────────────────────────
 
 // recorderFixture 测试夹具：内存导出器 + tracer + recorder
 type recorderFixture struct {
-	t       *testing.T
-	exp     *tracetest.InMemoryExporter
-	tracer  trace.Tracer
-	rec     *HarnessTrajectoryRecorder
+	t      *testing.T
+	exp    *tracetest.InMemoryExporter
+	tracer trace.Tracer
+	rec    *HarnessTrajectoryRecorder
 }
 
 // newRecorderFixture 构建测试夹具（subject=成员一/session-s1）
@@ -31,7 +31,7 @@ func newRecorderFixture(t *testing.T) *recorderFixture {
 	exp := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
-	tracer := tp.Tracer(tracerName)
+	tracer := tp.Tracer(TracerName)
 	subject := &harness.ExecutionSubject{
 		SubjectID: "m1", DisplayName: "成员一", Kind: "member", SessionID: "session-s1",
 	}
@@ -393,7 +393,7 @@ func TestObserve_脱敏与SchemaVersion(t *testing.T) {
 	cfg.RedactPrompts = true
 	cfg.RedactCompletions = true
 	subject := &harness.ExecutionSubject{SubjectID: "m1", DisplayName: "成员一", Kind: "member", SessionID: "s"}
-	rec, err := NewHarnessTrajectoryRecorder(subject, "test-agent", "agent", tp.Tracer(tracerName), cfg, nil)
+	rec, err := NewHarnessTrajectoryRecorder(subject, "test-agent", "agent", tp.Tracer(TracerName), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func newTestTracerOnly2(t *testing.T) trace.Tracer {
 	exp := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
-	return tp.Tracer(tracerName)
+	return tp.Tracer(TracerName)
 }
 
 var _ = attribute.String
