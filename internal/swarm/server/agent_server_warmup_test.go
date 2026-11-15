@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // 本文件验证图像模态预热统一防抖槽与 agent.reload_config 触发条件。
@@ -26,14 +26,43 @@ func reloadRequest(t *testing.T, scopes []string) *schema.AgentRequest {
 	return schema.NewAgentRequest("req-1", "ch-1", schema.ReqMethodAgentReloadConfig, raw)
 }
 
-// newWarmupTestServer 构造记录调度调用的测试 AgentServer
-func newWarmupTestServer() (*AgentServer, *[][]any) {
-	s := NewAgentServer(nil, nil)
-	var calls [][]any
-	s.imageModalityWarmupFn = func(reason string, resetCache bool) {
-		calls = append(calls, []any{reason, resetCache})
+// warmupRecorder 记录预热调度调用（并发安全）
+type warmupRecorder struct {
+	mu    sync.Mutex
+	calls [][]any
+}
+
+// record 记录一次调度
+func (r *warmupRecorder) record(reason string, resetCache bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, []any{reason, resetCache})
+}
+
+// len 返回已记录次数
+func (r *warmupRecorder) len() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.calls)
+}
+
+// at 返回第 i 次调用
+func (r *warmupRecorder) at(i int) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if i >= len(r.calls) {
+		return "", false
 	}
-	return s, &calls
+	c := r.calls[i]
+	return c[0].(string), c[1].(bool)
+}
+
+// newWarmupTestServer 构造记录调度调用的测试 AgentServer
+func newWarmupTestServer() (*AgentServer, *warmupRecorder) {
+	s := NewAgentServer(nil, nil)
+	rec := &warmupRecorder{}
+	s.imageModalityWarmupFn = rec.record
+	return s, rec
 }
 
 // TestReloadConfig_TriggersImageModalityRefresh reload_scopes 含 model → 重探（reset 缓存）。
@@ -43,10 +72,10 @@ func TestReloadConfig_TriggersImageModalityRefresh(t *testing.T) {
 	_, err := s.handleAgentReloadConfig(context.Background(), reloadRequest(t, []string{"model"}))
 	require.NoError(t, err)
 	// 调度走后台 goroutine，等待其执行注入的记录函数
-	assert.Eventually(t, func() bool { return len(*calls) == 1 }, 2e9, 1e7)
-	require.Len(t, *calls, 1)
-	assert.Equal(t, "model config change", (*calls)[0][0])
-	assert.Equal(t, true, (*calls)[0][1])
+	assert.Eventually(t, func() bool { return calls.len() == 1 }, 2e9, 1e7)
+	reason, reset := calls.at(0)
+	assert.Equal(t, "model config change", reason)
+	assert.True(t, reset)
 }
 
 // TestReloadConfig_NoScopes_TriggersRefresh 不带 reload_scopes → 全域刷新（含重探）。
@@ -55,7 +84,7 @@ func TestReloadConfig_NoScopes_TriggersRefresh(t *testing.T) {
 	s, calls := newWarmupTestServer()
 	_, err := s.handleAgentReloadConfig(context.Background(), reloadRequest(t, nil))
 	require.NoError(t, err)
-	assert.Eventually(t, func() bool { return len(*calls) == 1 }, 2e9, 1e7)
+	assert.Eventually(t, func() bool { return calls.len() == 1 }, 2e9, 1e7)
 }
 
 // TestReloadConfig_NonModelScope_SkipsRefresh 不含 model 的 scope → 不重探。
@@ -64,7 +93,7 @@ func TestReloadConfig_NonModelScope_SkipsRefresh(t *testing.T) {
 	s, calls := newWarmupTestServer()
 	_, err := s.handleAgentReloadConfig(context.Background(), reloadRequest(t, []string{"multimodal"}))
 	require.NoError(t, err)
-	assert.Empty(t, *calls)
+	assert.Equal(t, 0, calls.len())
 }
 
 // TestImageModalityWarmupSlot_Debounce 统一槽位防抖：新调度取消上一轮未完成任务。

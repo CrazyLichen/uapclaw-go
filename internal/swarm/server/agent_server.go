@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
@@ -17,10 +18,9 @@ import (
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
-	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
