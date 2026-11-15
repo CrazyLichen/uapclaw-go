@@ -484,3 +484,19 @@ func TestTeamAgentSpec_Validate_bootstrap需要scheduled(t *testing.T) {
 		t.Fatalf("framework + scheduled 不应报错：%v", err)
 	}
 }
+
+// TestTeamAgentSpec_BuildContext槽位 验证 build_context any 槽位往返。
+func TestTeamAgentSpec_BuildContext槽位(t *testing.T) {
+	s := `{"agents":{},"team_name":"t","lifecycle":"static","enable_team_plan":false,
+		"teammate_mode":"paired","spawn_mode":"manual","leader":{},
+		"predefined_members":[],"model_pool_strategy":"static",
+		"build_context":{"project_dir":"/tmp/p"}}`
+	var spec TeamAgentSpec
+	if err := json.Unmarshal([]byte(s), &spec); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	m, ok := spec.BuildContext.(map[string]any)
+	if !ok || m["project_dir"] != "/tmp/p" {
+		t.Fatalf("BuildContext 槽位未按 JSON 原样装载: %#v", spec.BuildContext)
+	}
+}
