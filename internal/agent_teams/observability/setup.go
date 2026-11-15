@@ -72,6 +72,9 @@ var (
 	// registeredUnsubs 本次注册的注销动作清单，ShutdownObservability 逐条执行
 	// Python: _registered: list[tuple[event, callback]]
 	registeredUnsubs []func()
+	// activeConfig 当前生效的可观测性配置（由 InitObservability 设置）
+	// Python: extensions/observability/setup.py 的模块级 config（get_config() 返回值）
+	activeConfig *ObservabilityConfig
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -97,6 +100,7 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 		logger.Info(logComponent).Msg("observabilitydisabled")
 		return nil
 	}
+	activeConfig = config
 
 	// Python: if _provider is not None: warning; return
 	if provider != nil {
@@ -193,6 +197,7 @@ func ShutdownObservability() {
 	callbackHandler = nil
 	monitorHandler = nil
 	monitorHandle = nil
+	activeConfig = nil
 
 	logger.Info(logComponent).Msg("observability closed")
 }
@@ -349,4 +354,16 @@ func parseOTLPEndpoint(endpoint string) (hostPort, urlPath string, insecure bool
 // Python: _runner_callback_framework()
 func getCallbackFramework() *cb.CallbackFramework {
 	return cb.GetCallbackFramework()
+}
+
+// IsObservabilityInitialized 报告可观测性运行时是否已初始化。
+// Python: extensions/observability/setup.py is_initialized()（⤴️15.11/22.1 最小面）
+func IsObservabilityInitialized() bool {
+	return provider != nil && activeConfig != nil
+}
+
+// GetObservabilityConfig 返回当前生效的可观测性配置，未初始化返回 nil。
+// Python: extensions/observability/setup.py get_config()（⤴️15.11/22.1 最小面）
+func GetObservabilityConfig() *ObservabilityConfig {
+	return activeConfig
 }
