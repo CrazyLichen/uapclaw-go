@@ -18,11 +18,11 @@ import (
 // claudecode / codex / dsh）的部分：注册表语义、manifest 转换、
 // BuildHarnessContext、ManifestProviderConfig。
 //
-// ⏵ 15.6-15.9 / 25.1f：以下 23 条上游用例依赖五个内置 provider 真实实现，
-// 本节全部挂起（见 spec §7.5）：
-//   test_factory.py 9 条
+// ⏵ 15.6-15.8 / 25.1f：以下上游用例依赖剩余内置 provider 真实实现，
+// 仍挂起（见 spec §7.5；dsh 份额已随 15.9 闭合于 factory_dsh_test.go）：
+//   test_factory.py 剩余条目
 //   test_provider_discovery.py 8 条
-//   test_model_config.py 6 条
+//   test_model_config.py 剩余条目
 // factory.go 整文件登记 .coverage-exempt。
 
 // ──────────────────────────── 测试替身 ────────────────────────────
@@ -119,9 +119,11 @@ func TestAvailableProviders_注册名不重复(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-// TestResolveProvider_内置名未链接报错 五个内置名在本节都未注册。
+// TestResolveProvider_内置名未链接报错 未链接的内置名在本测试二进制内报错。
+// dsh 已随 15.9 自注册（factory_dsh_test.go 引入 dsh 包），不再参与本表。
 func TestResolveProvider_内置名未链接报错(t *testing.T) {
-	for _, name := range ProviderNames {
+	// Python: factory.py:134（未注册的内置名）
+	for _, name := range []string{"native", "native_v2", "claudecode", "codex"} {
 		_, err := ResolveProvider(name)
 		require.Error(t, err, name)
 		assert.Contains(t, err.Error(), "is declared but not yet linked")
