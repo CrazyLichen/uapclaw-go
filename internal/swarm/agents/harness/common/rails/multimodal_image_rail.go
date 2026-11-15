@@ -117,6 +117,11 @@ func (r *MultimodalImageRail) BeforeModelCall(ctx context.Context, cbc *agentint
 			logger.Info(multimodalImageLogComponent).
 				Int("image_count", len(imageFiles)).
 				Msg("Installed multimodal image context-window adapter")
+		} else {
+			// 无图轮：清掉上一轮残留（Python 每轮窗口全新，旧 mutator 不会带入本轮）
+			r.imageMu.Lock()
+			r.imageMutator = nil
+			r.imageMu.Unlock()
 		}
 		return nil
 	}
