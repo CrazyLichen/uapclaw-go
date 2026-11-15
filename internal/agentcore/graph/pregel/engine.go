@@ -2,6 +2,9 @@ package pregel
 
 import (
 	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+
 	"errors"
 	"fmt"
 	"sort"
@@ -246,6 +249,81 @@ func (l *PregelLoop) runStep(ctx context.Context) error {
 	}
 	l.Step++
 	return nil
+}
+
+// Run 执行图（engine.py:230-285）。
+// 返回值（B6）：正常 ({}, nil)；顶层中断 ({__interrupt__: gi}, nil)；其余 (nil, err)。
+// config 形参类型 *InnerPregelConfig（偏差 B7）：Python TypedDict 可动态携带
+// parent_ns，8.3b D1 已确立该 Go 承载形状。
+func (g *Pregel) Run(ctx context.Context, config *InnerPregelConfig) (map[string]any, error) {
+	// engine.py:232-237
+	cfg := DefaultPregelConfig()
+	if config != nil {
+		cfg = config.PregelConfig
+	}
+	inner := CreateInnerConfig(cfg)
+	if config != nil && config.ParentNs != "" {
+		inner.ParentNs = config.ParentNs
+	}
+	isTopLevel := inner.ParentNs == ""
+	if isTopLevel && inner.Ns != "" {
+		inner.ParentNs = inner.Ns
+	}
+	// engine.py:239-246 GRAPH_START log
+	logger.Info(logComponent).
+		Str("event_type", "GRAPH_START").
+		Str("graph_id", inner.Ns).
+		Str("session_id", inner.SessionID).
+		Bool("is_top_level", isTopLevel).
+		Msg("Pregel graph engine execution started")
+	loop := NewPregelLoop(g, &inner)
+	// engine.py:249-250：init 异常不经 except GraphInterrupt 转换（Python 同：raw 传播）
+	if err := loop.Init(ctx); err != nil {
+		return nil, err
+	}
+	// engine.py:251-253
+	callback.Trigger(ctx, string(callback.LoopStarted), map[string]any{"graph_id": inner.Ns})
+	// engine.py:254-255 while await loop.run_step()
+	runErr := func() error {
+		for {
+			more, err := loop.RunStep(ctx)
+			if err != nil {
+				return err
+			}
+			if !more {
+				return nil
+			}
+		}
+	}()
+	if runErr == nil {
+		// engine.py:256-268
+		callback.Trigger(ctx, string(callback.LoopFinished),
+			map[string]any{"graph_id": inner.Ns, "total_steps": loop.Step})
+		logger.Info(logComponent).
+			Str("event_type", "GRAPH_END").
+			Str("graph_id", inner.Ns).
+			Str("session_id", inner.SessionID).
+			Int("total_steps", loop.Step).
+			Msg("Pregel graph engine execution completed")
+		return map[string]any{}, nil
+	}
+	// engine.py:269-285 except GraphInterrupt
+	var gi *GraphInterrupt
+	if errors.As(runErr, &gi) {
+		callback.Trigger(ctx, string(callback.LoopFinished),
+			map[string]any{"graph_id": inner.Ns, "total_steps": loop.Step})
+		logger.Info(logComponent).
+			Str("event_type", "GRAPH_END").
+			Str("graph_id", inner.Ns).
+			Str("session_id", inner.SessionID).
+			Int("total_steps", loop.Step).
+			Msg("Pregel graph engine execution interrupted")
+		if isTopLevel {
+			return map[string]any{TaskStatusInterrupt: gi}, nil
+		}
+		return nil, runErr
+	}
+	return nil, runErr
 }
 
 // RecursionError 递归上限超限（Python 内置 RecursionError 的 Go 等价物，spec D3）。

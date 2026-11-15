@@ -47,6 +47,7 @@ func (f *fakeSaver) Delete(_ context.Context, _, _ string) error { return nil }
 func handGraph() *Pregel {
 	nodes := map[string]*PregelNode{}
 	nodes[Start] = NewPregelNode(Start, NoopNodeFunc)
+	nodes[Start].addRouter(NewStaticRouter("a"))
 	a := NewPregelNode("a", NoopNodeFunc)
 	a.addRouter(NewStaticRouter(End))
 	nodes["a"] = a
@@ -205,10 +206,13 @@ func TestPregelLoop_RunStep_图结束(t *testing.T) {
 	pg := handGraph()
 	l := NewPregelLoop(pg, &InnerPregelConfig{PregelConfig: PregelConfig{RecursionLimit: 25}})
 	assert.NoError(t, l.Init(context.Background()))
-	more, err := l.RunStep(context.Background()) // step0: 跑 a
+	more, err := l.RunStep(context.Background()) // step0: 跑 START
 	assert.NoError(t, err)
 	assert.True(t, more)
-	more, err = l.RunStep(context.Background()) // step1: END 就绪但被过滤，buffer 空 → 结束
+	more, err = l.RunStep(context.Background()) // step1: 跑 a
+	assert.NoError(t, err)
+	assert.True(t, more)
+	more, err = l.RunStep(context.Background()) // step2: END 就绪但被过滤，buffer 空 → 结束
 	assert.NoError(t, err)
 	assert.False(t, more)
 }
@@ -225,4 +229,49 @@ func TestPregelLoop_RunStep_重试队列优先(t *testing.T) {
 	_, err := l.RunStep(context.Background())
 	assert.Error(t, err) // 再次失败，错误路径 more=false
 	assert.Empty(t, l.retryPendingNodes) // 调度即清空（engine.py:118）
+}
+
+// ──────────────────────────── Pregel.Run ────────────────────────────
+
+// TestPregel_Run_happyPath 正常跑完返回空 map（engine.py:254-268）
+func TestPregel_Run_happyPath(t *testing.T) {
+	pg := handGraph()
+	res, err := pg.Run(context.Background(), nil)
+	assert.NoError(t, err)
+	assert.Empty(t, res)
+}
+
+// TestPregel_Run_顶层中断 转换 __interrupt__（engine.py:269-284）
+func TestPregel_Run_顶层中断(t *testing.T) {
+	pg := interruptingGraph()
+	res, err := pg.Run(context.Background(), nil)
+	assert.NoError(t, err)
+	v, ok := res[TaskStatusInterrupt]
+	assert.True(t, ok)
+	gi := v.(*GraphInterrupt)
+	assert.Equal(t, "x", gi.Interrupts[0].Value)
+}
+
+// TestPregel_Run_子图中断非顶层 不转换直接上抛（engine.py:284-285）
+func TestPregel_Run_子图中断非顶层(t *testing.T) {
+	pg := interruptingGraph()
+	inner := CreateInnerConfig(PregelConfig{})
+	inner.ParentNs = "parent:ns"
+	_, err := pg.Run(context.Background(), &inner)
+	var gi *GraphInterrupt
+	assert.True(t, errors.As(err, &gi))
+}
+
+// TestPregel_Run_afterStep 回调收到 loop 且可读写导出字段（engine.py:163-169）
+func TestPregel_Run_afterStep(t *testing.T) {
+	pg := handGraph()
+	steps := 0
+	pg.AfterStep = func(_ context.Context, loop *PregelLoop) {
+		steps++
+		loop.Step += 100 // D6 字段导出的消费面验证
+	}
+	res, err := pg.Run(context.Background(), nil)
+	assert.NoError(t, err)
+	assert.Empty(t, res)
+	assert.Equal(t, 2, steps) // step0(START)/step1(a) 两步各回调一次
 }
