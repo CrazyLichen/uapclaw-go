@@ -247,8 +247,10 @@ type DeepAgentConfig struct {
 	VisionModelConfig *VisionModelConfig `json:"vision_model_config,omitempty"`
 	// AudioModelConfig 音频模型配置
 	AudioModelConfig *AudioModelConfig `json:"audio_model_config,omitempty"`
-	// EnableReadImageMultimodal 是否启用图片多模态读取
-	EnableReadImageMultimodal bool `json:"enable_read_image_multimodal"`
+	// EnableReadImageMultimodal 是否启用图片多模态读取。
+	// nil=auto（按 supports_vision 声明/模态探测缓存判定）。
+	// Python: schema/config.py:285 enable_read_image_multimodal: Optional[bool] = None
+	EnableReadImageMultimodal *bool `json:"enable_read_image_multimodal,omitempty"`
 	// Rails Rail 列表
 	Rails []sainterfaces.AgentRail `json:"-"`
 	// EnablePlanMode 是否启用规划模式
@@ -436,9 +438,9 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 // Python: DeepAgentConfig 字段默认值（max_iterations=None 表示不限，completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
-		AutoCreateWorkspace:       true,
-		EnableReadImageMultimodal: true,
-		TaskLoopNoProgressGuard:   TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
+		AutoCreateWorkspace:     true,
+		// Python 默认 None=auto（schema/config.py:285），交由声明/探测解析链判定
+		TaskLoopNoProgressGuard: TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
 		CompletionTimeout:         DefaultCompletionTimeout,
 		ToolSearchLimit:           DefaultToolSearchLimit,
 		Language:                  DefaultLanguage,

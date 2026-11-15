@@ -67,8 +67,9 @@ type CreateDeepAgentParams struct {
 	VisionModelConfig *hschema.VisionModelConfig
 	// AudioModelConfig 音频模型配置
 	AudioModelConfig *hschema.AudioModelConfig
-	// EnableReadImageMultimodal 启用图像多模态读取
-	EnableReadImageMultimodal bool
+	// EnableReadImageMultimodal 启用图像多模态读取；nil=auto（声明/探测解析链判定）。
+	// Python: schema/deep_agent_spec.py:475 enable_read_image_multimodal: Optional[bool] = None
+	EnableReadImageMultimodal *bool
 	// EnableTaskPlanning 启用任务规划
 	EnableTaskPlanning bool
 	// EnableModelAnomalyDetectionRail 是否注册默认的模型异常检测 Rail。

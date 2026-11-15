@@ -166,6 +166,10 @@ type ModelClientConfig struct {
 	// Extensions 模型客户端扩展配置（KV cache / prompt cache 等）。
 	// Python: schema/config.py ModelClientConfig.extensions: Optional[LLMExtensionsConfig]
 	Extensions *LLMExtensionsConfig `json:"extensions,omitempty"`
+	// SupportsVision 模型原生图片输入声明；nil=未声明（交给模态探测）。
+	// Python: ModelClientConfig extra="allow" 的 supports_vision
+	// （harness/rails/_multimodal.py:14-27 读取）
+	SupportsVision *bool `json:"supports_vision,omitempty"`
 	// IntelliRouter 结构化 IntelliRouter 配置，client_provider=intelli_router 时使用。
 	// Python: schema/config.py intelli_router: Optional[IntelliRouterConfig]
 	IntelliRouter *IntelliRouterConfig `json:"intelli_router,omitempty"`
@@ -864,6 +868,8 @@ func init() {
 		"extensions":                 {},
 		// Python: schema/config.py ModelClientConfig.intelli_router
 		"intelli_router": {},
+		// Python: ModelClientConfig extra="allow" 的 supports_vision
+		"supports_vision": {},
 	}
 
 	// 初始化 ModelRequestConfig 已知 JSON 键名集合

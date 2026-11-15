@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -821,5 +822,37 @@ func TestWithReasoning(t *testing.T) {
 	got, ok := cfg.Reasoning.(map[string]string)
 	if !ok || got["effort"] != "high" {
 		t.Errorf("Reasoning = %#v", cfg.Reasoning)
+	}
+}
+
+// TestModelClientConfig_SupportsVision JSON 往返保留 supports_vision 声明。
+// Python: ModelClientConfig extra="allow" 的 supports_vision（23.7 声明链）。
+func TestModelClientConfig_SupportsVision(t *testing.T) {
+	origin := true
+	mcc := ModelClientConfig{ClientProvider: "OpenAI", SupportsVision: &origin}
+	data, err := json.Marshal(mcc)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(data), `"supports_vision":true`) {
+		t.Errorf("marshal 输出缺 supports_vision: %s", data)
+	}
+	var back ModelClientConfig
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.SupportsVision == nil || !*back.SupportsVision {
+		t.Errorf("SupportsVision 往返丢失: %v", back.SupportsVision)
+	}
+	// Extra 通道同样支持 supports_vision 键（extra="allow"）
+	var fromExtra ModelClientConfig
+	if err := json.Unmarshal([]byte(`{"client_provider":"OpenAI","supports_vision":false}`), &fromExtra); err != nil {
+		t.Fatalf("unmarshal extra: %v", err)
+	}
+	if fromExtra.SupportsVision == nil || *fromExtra.SupportsVision {
+		t.Errorf("supports_vision=false 解析错误: %v", fromExtra.SupportsVision)
+	}
+	if _, ok := fromExtra.Extra["supports_vision"]; ok {
+		t.Error("supports_vision 不应落入 Extra")
 	}
 }

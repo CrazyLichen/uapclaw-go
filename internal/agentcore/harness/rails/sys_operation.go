@@ -125,15 +125,16 @@ func (r *SysOperationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		agentID = card.ID
 	}
 
-	// 解析 enableReadImageMultimodal: 如果为 nil，从 DeepConfig 推断，默认 true
+	// 解析 enableReadImageMultimodal: 如果为 nil，从 DeepConfig 推断。
+	// ⤴️ 23.7 Task4：改为走 _multimodal 解析链（声明/探测），当前 nil 回落 true 保持既有行为
 	enableImageMultimodal := true
 	if r.enableReadImageMultimodal != nil {
 		enableImageMultimodal = *r.enableReadImageMultimodal
 	} else {
 		// 类型断言获取 DeepConfig
 		if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
-			if deepCfg := deepAgent.DeepConfig(); deepCfg != nil {
-				enableImageMultimodal = deepCfg.EnableReadImageMultimodal
+			if deepCfg := deepAgent.DeepConfig(); deepCfg != nil && deepCfg.EnableReadImageMultimodal != nil {
+				enableImageMultimodal = *deepCfg.EnableReadImageMultimodal
 			}
 		}
 	}

@@ -19,8 +19,8 @@ func TestNewDeepAgentConfig(t *testing.T) {
 	if !cfg.AutoCreateWorkspace {
 		t.Error("AutoCreateWorkspace 应为 true")
 	}
-	if !cfg.EnableReadImageMultimodal {
-		t.Error("EnableReadImageMultimodal 应为 true")
+	if cfg.EnableReadImageMultimodal != nil {
+		t.Error("EnableReadImageMultimodal 默认应为 nil（auto，Python: schema/config.py:285）")
 	}
 	if cfg.Model != nil {
 		t.Error("Model 应为 nil")
@@ -402,8 +402,8 @@ func TestDeepAgentConfigJSON(t *testing.T) {
 	if !decoded.AutoCreateWorkspace {
 		t.Error("AutoCreateWorkspace 应为 true")
 	}
-	if !decoded.EnableReadImageMultimodal {
-		t.Error("EnableReadImageMultimodal 应为 true")
+	if decoded.EnableReadImageMultimodal != nil {
+		t.Error("EnableReadImageMultimodal 默认应为 nil（auto，Python: schema/config.py:285）")
 	}
 	if decoded.ProgressiveToolEnabled != cfg.ProgressiveToolEnabled {
 		t.Errorf("ProgressiveToolEnabled = %v，期望 %v", decoded.ProgressiveToolEnabled, cfg.ProgressiveToolEnabled)
