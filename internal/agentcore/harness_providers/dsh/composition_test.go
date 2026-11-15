@@ -16,10 +16,10 @@ func TestMCPConfigs_Stdio保留Argv与Env(t *testing.T) {
 	cwd := "/tmp/proj"
 	context := &harnessprotocol.HarnessContext{
 		McpServers: []harnessprotocol.McpServerConfig{{
-			Name:     "fs",
+			Name:      "fs",
 			Transport: harnessprotocol.McpTransportStdio,
-			Command:  []string{"npx", "-y", "server-fs", "/data"},
-			Env:      map[string]string{"A": "1"},
+			Command:   []string{"npx", "-y", "server-fs", "/data"},
+			Env:       map[string]string{"A": "1"},
 		}},
 		Cwd: &cwd,
 	}
