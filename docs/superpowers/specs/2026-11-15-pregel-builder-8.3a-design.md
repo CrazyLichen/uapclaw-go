@@ -68,6 +68,8 @@ func (b *PregelBuilder) AddEdge(start, end any) error
 
 **已知偏差 A1（OR 组形态无入参通道）**：Python barrier 分支的 start 元素可为 `set/frozenset`，即支持 `(a OR b) AND c` 形态；Go 侧 β 收口为 `[]string` 后仅支持全 AND（每组单元素）。理由：单层 `[]string` 无法承载 CNF 两层嵌套（一层切片会把 AND 组与 OR 组压到同一层级产生歧义）；消费侧若需 OR 组，可直用 `NewBarrierChannel` + 手动 `addRouter` 挂 BarrierRouter，能力未丢失。回收条件：出现真实 OR 组构图需求时，重议入参形状（如追加 `AddBarrierEdge(end string, groups ...[]string)` 辅助方法）。
 
+**已知偏差 A2（未注册节点的错误形态）**：Python 对 `add_edge`/`add_branch` 中未注册的源节点名在运行时抛 `KeyError`（`self.nodes[item]` 直取）；Go 侧 `AddEdge` 返回 `error`（`unknown node: <name>`），`AddBranch` 保持链式签名（spec §3.4）、对未注册 src 显式 `panic`（对齐 8.3 `NewPregelNode` 的构造期 panic 纪律）。理由：Go 无异常机制，error 是 KeyError 的等价错误通道；panic 用于签名不带 error 的链式方法，与包内既有「构造期非法输入 panic」口径一致；两者都在构图期立即失败且指名节点。回收条件：无（永久偏差，属语言层差异）。
+
 barrier 语义要点：合成路由键 `barrier:(a|b)&c->target` 由 8.4 `BarrierChannel.Key()` 生成，builder **只转手**给 `NewBarrierRouter`（8.5 spec §9 承诺）。BarrierChannel 满足判定不靠 key（key 只管写侧投递），而靠 `msg.Sender` 记入 `received` 集合后做 CNF 判定（见 8.4 spec §3.4）。
 
 ### 3.4 AddBranch
