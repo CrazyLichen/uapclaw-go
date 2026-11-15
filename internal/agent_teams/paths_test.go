@@ -1,6 +1,7 @@
 package agent_teams
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -23,6 +24,19 @@ func TestDefaultTeamMemoryDir(t *testing.T) {
 	expected := TeamHome("test-team") + "/team-workspace/team-memory"
 	if result != expected {
 		t.Errorf("DefaultTeamMemoryDir = %q, expected %q", result, expected)
+	}
+}
+
+// TestTeamWorkspaceDir_布局 验证共享工作区默认路径。
+// Python: team_workspace_dir (paths.py:168-179)
+func TestTeamWorkspaceDir_布局(t *testing.T) {
+	origHome := configuredHome
+	configuredHome = t.TempDir()
+	defer func() { configuredHome = origHome }()
+	got := TeamWorkspaceDir("alpha")
+	want := filepath.Join(GetAgentTeamsHome(), "alpha", "team-workspace")
+	if got != want {
+		t.Fatalf("TeamWorkspaceDir 期望 %s，实际 %s", want, got)
 	}
 }
 
