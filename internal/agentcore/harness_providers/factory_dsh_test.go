@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers"
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_providers/dsh" // 编译期自注册
-	harnessprotocol "github.com/uapclaw/uapclaw-go/internal/agentcore/harness_protocol"
 )
 
 // ResolveProvider("dsh") 经自注册解析为 DshHarnessProvider
