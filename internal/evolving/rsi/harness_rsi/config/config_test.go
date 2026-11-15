@@ -120,7 +120,7 @@ func TestConfig_TopLevelDerivations(t *testing.T) {
 	cfg, err := AutoCoordinatingHarnessConfigFromDict(map[string]any{
 		"model_configs": map[string]any{},
 		"evaluator": map[string]any{
-			"score_mode": "binary",
+			"score_mode":       "binary",
 			"model_config_ref": "eval-model",
 		},
 		"promotion": map[string]any{"policy_version": "continuous_two_stage_v2"},

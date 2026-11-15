@@ -91,8 +91,8 @@ func ReadRuntimePolicy(harnessPath string, defaultMaxIterations int, defaultOnMa
 		root = filepath.Dir(root)
 	}
 	values := map[string]any{
-		"max_iterations":     defaultMaxIterations,
-		"on_max_iterations":  defaultOnMaxIterations,
+		"max_iterations":    defaultMaxIterations,
+		"on_max_iterations": defaultOnMaxIterations,
 	}
 	source := "evaluator_default"
 	policyPath := filepath.Join(root, RuntimePolicyFile)

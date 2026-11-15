@@ -9,12 +9,12 @@ import (
 // TestSchema_TeamIssue_序列化往返 JSON 序列化字段名 snake_case 对齐 dataclass
 func TestSchema_TeamIssue_序列化往返(t *testing.T) {
 	issue := TeamIssue{
-		IssueID:   "i-1",
-		Category:  "tool",
-		Severity:  "high",
-		Summary:   "工具缺失",
+		IssueID:       "i-1",
+		Category:      "tool",
+		Severity:      "high",
+		Summary:       "工具缺失",
 		AffectedCases: []string{"c1", "c2"},
-		Evidence:  []map[string]any{{"kind": "trace"}},
+		Evidence:      []map[string]any{{"kind": "trace"}},
 	}
 	raw, err := json.Marshal(issue)
 	if err != nil {
