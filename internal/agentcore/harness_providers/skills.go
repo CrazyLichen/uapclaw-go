@@ -56,6 +56,13 @@ var scanDirs = map[string]string{
 // Python: _COPY_LOCK (skills.py:20)
 var copyLock sync.Mutex
 
+var (
+	// copyFn 目录复制注入点（测试替换对齐 Python monkeypatch shutil.copytree）
+	copyFn = copyTree
+	// renameFn 重命名注入点（测试替换对齐 Python monkeypatch Path.rename）
+	renameFn = os.Rename
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NormalizeSkills 冻结 provider 配置，构造期不访问源文件。
@@ -95,6 +102,165 @@ func NormalizeSkills(values []any, conflict string) ([]SkillSource, error) {
 		}
 	}
 	return result, nil
+}
+
+// InstallSkills 运行时启动前把完整技能包复制进发现目录，保留既有项目技能。
+// replace 在发现目录外暂存，rename 失败回滚；复制产物在 harness 停止后留存。
+// 内部软链物化；逃逸/环软链复制前拒绝。
+// Python: install_skills (skills.py:146-221)——步骤逐行对齐。
+func InstallSkills(sources []SkillSource, provider string, cwd string, conflict string, scanDir string) ([]string, error) {
+	// Python: if not sources: return ()
+	if len(sources) == 0 {
+		return nil, nil
+	}
+	if conflict != "skip" && conflict != "replace" && conflict != "append" {
+		return nil, fmt.Errorf("skill_conflict must be skip, replace or append")
+	}
+	relative := scanDir
+	if relative == "" {
+		relative = scanDirs[provider]
+	}
+	if relative == "" {
+		return nil, fmt.Errorf("provider %q declares no skill discovery directory", provider)
+	}
+	projectRaw := cwd
+	if projectRaw == "" {
+		projectRaw, _ = os.Getwd()
+	}
+	// Python: Path(cwd or os.getcwd()).expanduser().resolve(strict=True)
+	project, err := resolvePath(projectRaw)
+	if err != nil {
+		return nil, err
+	}
+	scan := filepath.Join(project, relative)
+	var planned []struct {
+		name   string
+		source string
+	}
+	for _, source := range sources {
+		root, err := resolvePath(source.Dir)
+		if err != nil {
+			return nil, err
+		}
+		if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
+			return nil, fmt.Errorf("skill source is not a directory: %s", root)
+		}
+		bundles, err := discoverBundles(root)
+		if err != nil {
+			return nil, err
+		}
+		if len(bundles) == 0 {
+			return nil, fmt.Errorf("no SKILL.md bundles found in %s", root)
+		}
+		for _, bundle := range bundles {
+			name, err := parseSkillName(bundle)
+			if err != nil {
+				return nil, err
+			}
+			if len(source.EnabledSkills) == 0 || containsString(source.EnabledSkills, name) {
+				planned = append(planned, struct{ name, source string }{name, bundle})
+			}
+		}
+	}
+	var installed []string
+	// Python: with _COPY_LOCK —— 多成员同项目启动互斥
+	copyLock.Lock()
+	defer copyLock.Unlock()
+	// Python: scan.resolve().is_relative_to(project)（非 strict resolve）
+	scanResolved, err := resolvePath(scan)
+	if err == nil && !isRelative(project, scanResolved) {
+		return nil, fmt.Errorf("skill discovery directory escapes the project")
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err := os.MkdirAll(scan, 0o755); err != nil { // parents=True, exist_ok=True
+		return nil, err
+	}
+	for _, item := range planned {
+		matches := matchSkills(scan, item.name)
+		if len(matches) > 0 && conflict == "skip" {
+			continue
+		}
+		if len(matches) > 1 && conflict == "replace" {
+			return nil, fmt.Errorf("multiple existing directories declare skill %q", item.name)
+		}
+		copyName := item.name
+		if len(matches) > 0 && conflict == "append" {
+			copyName = nextCopyName(scan, item.name)
+		}
+		var destination string
+		if len(matches) > 0 && conflict == "replace" {
+			destination = matches[0]
+		} else {
+			destination = filepath.Join(scan, copyName)
+		}
+		// Python: target_location = destination.parent.resolve() / destination.name
+		parentResolved, err := resolvePath(filepath.Dir(destination))
+		if err != nil {
+			return nil, err
+		}
+		targetLocation := filepath.Join(parentResolved, filepath.Base(destination))
+		sourceResolved, err := resolvePath(item.source)
+		if err != nil {
+			return nil, err
+		}
+		if sourceResolved == targetLocation {
+			continue // 自复制 no-op
+		}
+		if isRelative(sourceResolved, targetLocation) || isRelative(targetLocation, sourceResolved) {
+			return nil, fmt.Errorf("skill source and destination must not contain each other")
+		}
+		if err := validateTree(item.source, item.source, nil); err != nil {
+			return nil, err
+		}
+		// Python: TemporaryDirectory(prefix=".openjiuwen-skill-", dir=project)
+		// D-15.12-c：os.MkdirTemp + 手动清理（committed 后保留产物由 rename 迁走，残留即清理）
+		stage, err := os.MkdirTemp(project, ".openjiuwen-skill-*")
+		if err != nil {
+			return nil, err
+		}
+		var installErr error
+		func() {
+			// Python: TemporaryDirectory 上下文退出即删（含提交后的 backup 残留）
+			defer os.RemoveAll(stage)
+			copied := filepath.Join(stage, "new")
+			backup := filepath.Join(stage, "previous")
+			if err := copyFn(item.source, copied); err != nil {
+				installErr = err
+				return
+			}
+			if copyName != item.name {
+				if err := renameCopiedSkill(copied, copyName); err != nil {
+					installErr = err
+					return
+				}
+			}
+			// Python: destination.exists() or destination.is_symlink()
+			existed := lstatExists(destination)
+			if existed && conflict == "append" {
+				installErr = fmt.Errorf("skill destination appeared during copy: %s", destination)
+				return
+			}
+			if existed {
+				if err := renameFn(destination, backup); err != nil {
+					installErr = err
+					return
+				}
+			}
+			if err := renameFn(copied, destination); err != nil {
+				if existed {
+					_ = renameFn(backup, destination) // Python: backup.rename(destination) 回滚
+				}
+				installErr = err
+				return
+			}
+			installed = append(installed, destination)
+		}()
+		if installErr != nil {
+			return nil, installErr
+		}
+	}
+	return installed, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -295,4 +461,137 @@ func discoverBundles(root string) ([]string, error) {
 		}
 	}
 	return result, nil
+}
+
+// renameCopiedSkill 把复制出的包 SKILL.md front matter 的 name 改为 name。
+// 无 front matter 直接返回（目录名即技能名）。
+// Python: _rename_copied_skill (skills.py:130-143)
+func renameCopiedSkill(bundleDir string, name string) error {
+	docPath := filepath.Join(bundleDir, "SKILL.md")
+	raw, err := os.ReadFile(docPath)
+	if err != nil {
+		return err
+	}
+	text := strings.TrimPrefix(string(raw), "\uFEFF")
+	// Python: splitlines(keepends=True) —— 保留行尾
+	lines := splitLinesKeepEnds(text)
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return nil
+	}
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	if end < 0 {
+		return nil // Python 的 next(...) 在此不可达（_name 已校验）；防御返回
+	}
+	var metadata map[string]any
+	body := strings.Join(stripEnds(lines[1:end]), "\n")
+	if err := yaml.Unmarshal([]byte(body), &metadata); err != nil {
+		return err
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadata["name"] = name
+	var buf strings.Builder
+	buf.WriteString("---\n")
+	out, err := yaml.Marshal(metadata) // yaml.v3 默认不转义 Unicode、保插入序（D-15.12-d）
+	if err != nil {
+		return err
+	}
+	buf.Write(out)
+	buf.WriteString("---\n")
+	for _, line := range lines[end+1:] {
+		buf.WriteString(line)
+	}
+	return os.WriteFile(docPath, []byte(buf.String()), 0o644)
+}
+
+// splitLinesKeepEnds 保留行尾的按行切分（Python splitlines(keepends=True) 语义，13.18 惯例）。
+func splitLinesKeepEnds(text string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\n' {
+			lines = append(lines, text[start:i+1])
+			start = i + 1
+		}
+	}
+	if start < len(text) {
+		lines = append(lines, text[start:])
+	}
+	return lines
+}
+
+// stripEnds 去掉各行行尾换行。
+func stripEnds(lines []string) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = strings.TrimRight(line, "\r\n")
+	}
+	return out
+}
+
+// containsString 判含。
+func containsString(list []string, target string) bool {
+	for _, item := range list {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+// lstatExists Lstat 判存在（软链也算存在，对齐 destination.exists() or is_symlink()）。
+func lstatExists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// copyTree 目录复制（shutil.copytree(symlinks=False) 语义：软链物化、保留 mode）。
+func copyTree(src, dst string) error {
+	return copyTreeWalk(src, dst)
+}
+
+// copyTreeWalk copyTree 的递归实现。
+func copyTreeWalk(src, dst string) error {
+	fi, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		// 内部软链物化：读真实目标内容复制（symlinks=False）
+		real, err := resolvePath(src)
+		if err != nil {
+			return err
+		}
+		return copyTreeWalk(real, dst)
+	}
+	if !fi.IsDir() {
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(dst, data, fi.Mode().Perm()); err != nil {
+			return err
+		}
+		return os.Chmod(dst, fi.Mode().Perm())
+	}
+	if err := os.MkdirAll(dst, fi.Mode().Perm()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := copyTreeWalk(filepath.Join(src, entry.Name()), filepath.Join(dst, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
