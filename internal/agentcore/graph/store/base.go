@@ -2,32 +2,12 @@ package store
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// PendingNode 未完成节点的持久化记录
-// Python: store/base.py:26-29
-type PendingNode struct {
-	// NodeName 节点名
-	NodeName string `json:"node_name"`
-	// Status 任务状态（取值对齐 8.3d 的 TaskStatusInterrupt/TaskStatusError 字面量）
-	Status string `json:"status"`
-	// Exception 累积的异常列表（Python 默认 None，Go nil 等价；JSON 往返经 string 适配，偏差 D-8'）
-	Exception []error `json:"exception,omitempty"`
-}
-
-// pendingNodeJSON PendingNode 的 JSON 形态（Exception 经 string 适配，偏差 D-8'）
-type pendingNodeJSON struct {
-	NodeName  string   `json:"node_name"`
-	Status    string   `json:"status"`
-	Exception []string `json:"exception"`
-}
 
 // GraphState 引擎检查点状态快照。
 // ⚠️ 与 8.8 graph_state.GraphState（节点返回值聚合）同名不同义，Go 靠包隔离。
@@ -41,8 +21,8 @@ type GraphState struct {
 	ChannelValues map[string][]pregel.ChannelSnapshot
 	// PendingBuffer 待发消息
 	PendingBuffer []pregel.Message
-	// PendingNode 未完成节点表
-	PendingNode map[string]PendingNode
+	// PendingNode 未完成节点表（类型定义在 pregel 包，破环偏差 D6）
+	PendingNode map[string]pregel.PendingNode
 	// NodeVersion 节点版本
 	NodeVersion map[string]int
 }
@@ -103,7 +83,7 @@ func (s *GraphState) Clone() *GraphState {
 		}
 	}
 	if s.PendingNode != nil {
-		c.PendingNode = make(map[string]PendingNode, len(s.PendingNode))
+		c.PendingNode = make(map[string]pregel.PendingNode, len(s.PendingNode))
 		for k, pn := range s.PendingNode {
 			if pn.Exception != nil {
 				exc := make([]error, len(pn.Exception))
@@ -122,44 +102,15 @@ func (s *GraphState) Clone() *GraphState {
 	return c
 }
 
-// MarshalJSON Exception []error → []string（Go error 接口 JSON 序列化静默丢内容，D-8）
-func (p PendingNode) MarshalJSON() ([]byte, error) {
-	aux := pendingNodeJSON{NodeName: p.NodeName, Status: p.Status}
-	for _, e := range p.Exception {
-		if e != nil {
-			aux.Exception = append(aux.Exception, e.Error())
-		}
-	}
-	return json.Marshal(aux)
-}
-
-// UnmarshalJSON []string → errors.New 重建；null → nil（对齐 Python exception 默认 None）
-func (p *PendingNode) UnmarshalJSON(data []byte) error {
-	var aux pendingNodeJSON
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	p.NodeName, p.Status = aux.NodeName, aux.Status
-	if aux.Exception == nil {
-		p.Exception = nil
-		return nil
-	}
-	p.Exception = make([]error, len(aux.Exception))
-	for i, s := range aux.Exception {
-		p.Exception[i] = errors.New(s)
-	}
-	return nil
-}
-
 // CreateState 工厂：nil 入参兜底为空容器（对齐 Python or [] / or {} 语义）
 // Python: store/base.py:71-82
 func CreateState(ns string, step int, channelSnapshot map[string][]pregel.ChannelSnapshot,
-	pendingBuffer []pregel.Message, pendingNode map[string]PendingNode, nodeVersion map[string]int) *GraphState {
+	pendingBuffer []pregel.Message, pendingNode map[string]pregel.PendingNode, nodeVersion map[string]int) *GraphState {
 	if pendingBuffer == nil {
 		pendingBuffer = []pregel.Message{}
 	}
 	if pendingNode == nil {
-		pendingNode = map[string]PendingNode{}
+		pendingNode = map[string]pregel.PendingNode{}
 	}
 	if nodeVersion == nil {
 		nodeVersion = map[string]int{}

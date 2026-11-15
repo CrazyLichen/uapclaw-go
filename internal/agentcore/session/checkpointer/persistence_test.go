@@ -1470,7 +1470,7 @@ func sampleGraphState() *store.GraphState {
 			"n1": {{Messages: []pregel.Message{pregel.NewTriggerMessage("a", "n1")}}},
 		},
 		PendingBuffer: []pregel.Message{pregel.NewBarrierMessage("b", "barrier:x&y->z")},
-		PendingNode:   map[string]store.PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("boom")}}},
+		PendingNode:   map[string]pregel.PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("boom")}}},
 		NodeVersion:   map[string]int{"n1": 3},
 	}
 }

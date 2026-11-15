@@ -15,7 +15,7 @@ func TestGraphState_IsResumable(t *testing.T) {
 	if empty.IsResumable() {
 		t.Fatal("空状态不应 resumable")
 	}
-	withNode := &GraphState{PendingNode: map[string]PendingNode{"n": {NodeName: "n", Status: "interrupt"}}}
+	withNode := &GraphState{PendingNode: map[string]pregel.PendingNode{"n": {NodeName: "n", Status: "interrupt"}}}
 	if !withNode.IsResumable() {
 		t.Fatal("有 pending_node 应 resumable")
 	}
@@ -55,7 +55,7 @@ func TestGraphState_Clone(t *testing.T) {
 			"n1": {{Messages: []pregel.Message{pregel.NewTriggerMessage("a", "n1")}, Received: []string{"a"}}},
 		},
 		PendingBuffer: []pregel.Message{pregel.NewBarrierMessage("b", "barrier:x&y->z")},
-		PendingNode:   map[string]PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("boom")}}},
+		PendingNode:   map[string]pregel.PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("boom")}}},
 		NodeVersion:   map[string]int{"n1": 1},
 	}
 	cp := orig.Clone()
@@ -174,33 +174,6 @@ func TestGraphStore_Delete(t *testing.T) {
 	}
 }
 
-// TestPendingNode_JSONRoundTrip error↔string 双向适配（D-8）
-func TestPendingNode_JSONRoundTrip(t *testing.T) {
-	orig := PendingNode{NodeName: "n1", Status: "error", Exception: []error{errors.New("boom")}}
-	data, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var back PendingNode
-	if err := json.Unmarshal(data, &back); err != nil {
-		t.Fatal(err)
-	}
-	if back.NodeName != "n1" || back.Status != "error" || len(back.Exception) != 1 || back.Exception[0].Error() != "boom" {
-		t.Fatalf("还原失真: %+v", back)
-	}
-}
-
-// TestPendingNode_JSONNilException null→nil（对齐 Python exception 默认 None）
-func TestPendingNode_JSONNilException(t *testing.T) {
-	var back PendingNode
-	if err := json.Unmarshal([]byte(`{"node_name":"n","status":"interrupt","exception":null}`), &back); err != nil {
-		t.Fatal(err)
-	}
-	if back.Exception != nil {
-		t.Fatalf("null 应还原为 nil: %+v", back.Exception)
-	}
-}
-
 // TestGraphState_JSONRoundTrip 组合往返验证嵌套自动递归（Message kind + PendingNode error）
 func TestGraphState_JSONRoundTrip(t *testing.T) {
 	orig := &GraphState{
@@ -209,7 +182,7 @@ func TestGraphState_JSONRoundTrip(t *testing.T) {
 			"n1": {{Messages: []pregel.Message{pregel.NewBarrierMessage("b", "barrier:a&b->c")}}},
 		},
 		PendingBuffer: []pregel.Message{pregel.NewTriggerMessage("a", "n1")},
-		PendingNode:   map[string]PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("x")}}},
+		PendingNode:   map[string]pregel.PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("x")}}},
 		NodeVersion:   map[string]int{"n1": 7},
 	}
 	var back GraphState
