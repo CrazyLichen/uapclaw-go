@@ -280,7 +280,6 @@ func TestMessage_Copy(t *testing.T) {
 	}
 }
 
-
 // TestMessage_JSONRoundTrip kind 保真往返（D-10）
 func TestMessage_JSONRoundTrip(t *testing.T) {
 	trigger := NewTriggerMessage("a", "n1")
