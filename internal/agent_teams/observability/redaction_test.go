@@ -93,3 +93,51 @@ func TestTruncate_未超长原样返回(t *testing.T) {
 		t.Fatalf("truncate = %q, want 原样", got)
 	}
 }
+
+// TestRedactErrorSummary_脱敏与截断 验证凭据原位脱敏与 4096 上限。
+// Python: redaction.py:56-72
+func TestRedactErrorSummary_脱敏与截断(t *testing.T) {
+	cfg := DefaultObservabilityConfig()
+	got := RedactErrorSummary("authorization: Bearer abcdef123456 failed", cfg)
+	if strings.Contains(got, "abcdef123456") {
+		t.Fatalf("凭据未脱敏: %q", got)
+	}
+	if !strings.Contains(got, "***") {
+		t.Fatalf("应含掩码: %q", got)
+	}
+	// config 为 nil 时仍保留摘要上限
+	long := RedactErrorSummary(strings.Repeat("x", 5000), nil)
+	if len([]rune(long)) > 4096+64 {
+		t.Fatalf("超过错误摘要上限 4096: %d", len([]rune(long)))
+	}
+	// 多行折叠为单行
+	multi := RedactErrorSummary("a\n  b\n\tc", cfg)
+	if strings.ContainsAny(multi, "\n\t") {
+		t.Fatalf("应折叠为单行: %q", multi)
+	}
+}
+
+// TestTruncate后缀对齐Python 验证截断后缀与 Python truncate 逐字一致。
+// Python: redaction.py:93-99
+func TestTruncate后缀对齐Python(t *testing.T) {
+	got := truncate("abcdef", 4)
+	want := "abcd" + "...<OTel attribute truncated: 2 chars omitted>"
+	if got != want {
+		t.Fatalf("截断后缀漂移:\n got  %q\n want %q", got, want)
+	}
+}
+
+// TestRedactSystemPrompt_无长度上限 验证系统提示词不走截断。
+// Python: redaction.py:115-126
+func TestRedactSystemPrompt_无长度上限(t *testing.T) {
+	cfg := DefaultObservabilityConfig()
+	cfg.AttributeValueMaxLength = 4
+	text := "very long system prompt"
+	if got := RedactSystemPrompt(text, cfg); got != text {
+		t.Fatalf("系统提示词不应截断: %q", got)
+	}
+	cfg.RedactPrompts = true
+	if got := RedactSystemPrompt(text, cfg); got == text || !strings.HasPrefix(got, "sha256:") {
+		t.Fatalf("显式脱敏应哈希: %q", got)
+	}
+}
