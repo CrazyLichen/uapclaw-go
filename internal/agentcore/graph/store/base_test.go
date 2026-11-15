@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -167,4 +168,71 @@ func TestGraphStore_Delete(t *testing.T) {
 	if err := gs.Delete("s1", "ns1"); err != boom {
 		t.Fatalf("delete 异常应透传: %v", err)
 	}
+}
+
+
+// TestPendingNode_JSONRoundTrip error↔string 双向适配（D-8）
+func TestPendingNode_JSONRoundTrip(t *testing.T) {
+	orig := PendingNode{NodeName: "n1", Status: "error", Exception: []error{errors.New("boom")}}
+	data, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back PendingNode
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.NodeName != "n1" || back.Status != "error" || len(back.Exception) != 1 || back.Exception[0].Error() != "boom" {
+		t.Fatalf("还原失真: %+v", back)
+	}
+}
+
+// TestPendingNode_JSONNilException null→nil（对齐 Python exception 默认 None）
+func TestPendingNode_JSONNilException(t *testing.T) {
+	var back PendingNode
+	if err := json.Unmarshal([]byte(`{"node_name":"n","status":"interrupt","exception":null}`), &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Exception != nil {
+		t.Fatalf("null 应还原为 nil: %+v", back.Exception)
+	}
+}
+
+// TestGraphState_JSONRoundTrip 组合往返验证嵌套自动递归（Message kind + PendingNode error）
+func TestGraphState_JSONRoundTrip(t *testing.T) {
+	orig := &GraphState{
+		Ns: "ns", Step: 2,
+		ChannelValues: map[string][]pregel.ChannelSnapshot{
+			"n1": {{Messages: []pregel.Message{pregel.NewBarrierMessage("b", "barrier:a&b->c")}}},
+		},
+		PendingBuffer: []pregel.Message{pregel.NewTriggerMessage("a", "n1")},
+		PendingNode:   map[string]PendingNode{"n2": {NodeName: "n2", Status: "error", Exception: []error{errors.New("x")}}},
+		NodeVersion:   map[string]int{"n1": 7},
+	}
+	var back GraphState
+	if err := jsonRoundTrip(orig, &back); err != nil {
+		t.Fatal(err)
+	}
+	mv := back.ChannelValues["n1"][0].Messages[0]
+	if mv.Kind() != pregel.KindBarrier {
+		t.Fatalf("嵌套 Message kind 未还原: %+v", mv)
+	}
+	if back.PendingBuffer[0].Kind() != pregel.KindTrigger {
+		t.Fatalf("PendingBuffer kind 未还原: %+v", back.PendingBuffer[0])
+	}
+	if back.PendingNode["n2"].Exception[0].Error() != "x" {
+		t.Fatalf("嵌套 Exception 未还原: %+v", back.PendingNode["n2"])
+	}
+	if back.NodeVersion["n1"] != 7 || back.Step != 2 {
+		t.Fatalf("标量字段失真: %+v", back)
+	}
+}
+
+// jsonRoundTrip 测试辅助：序列化再还原
+func jsonRoundTrip(in any, out any) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, out)
 }
