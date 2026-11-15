@@ -19,7 +19,7 @@ func SetInvocationCapture(fn invocationCaptureFn) {
 }
 
 // invocationComponentHook 组件级钩子：组件名在 createComponentLogger 构造时固定
-//（zerolog Event API 不暴露已写字段，组件经闭包携带；errStr 恒空——Python exc_info
+// （zerolog Event API 不暴露已写字段，组件经闭包携带；errStr 恒空——Python exc_info
 // 等价信息在结构化 .Err 字段中不可达，偏差登记于提交说明）。
 type invocationComponentHook struct {
 	// comp 组件名（log_type 等价）
