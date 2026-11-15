@@ -33,7 +33,7 @@ Pregel 是 BSP 超步模型：同一轮就绪的兄弟节点**并发**执行，�
 | `Router.Dispatch`（8.5） | ✅ |
 | `PregelNode`（8.3，D1 固定签名） | ✅ |
 | `CreateInnerConfig` / NS / PARENT_NS 常量（8.3d） | ✅ |
-| `store.PendingNode`（8.9a，Exception []error + D-8' string 适配已落） | ✅ |
+| `store.PendingNode`（8.9a 落地；本节按偏差 D6 迁入 pregel 包，store 直接引用） | ✅ |
 | `runner/callback.Trigger` + `WorkflowEvents.EdgeTraversed` | ✅ |
 | `ChannelManager`（8.4） | 本节不直接依赖 |
 
@@ -84,17 +84,17 @@ Python 两个类 → Go 两个类型。
 
 ## 5. nodeTask.run 步骤（按 Python task.py:125-174 逐行）
 
-1. `CreateInnerConfig(config)` → 读 `ParentNs` → 非空则拼 `parent:node_name:version` **双写** NS/PARENT_NS（task.py:139-147）。
+1. `CreateInnerConfig(config)` → 读 `ParentNs` → 非空则拼 `parent:node_name:version` **双写** NS/PARENT_NS（task.py:139-147）。归一化在 run 内做（对齐 task.py:140 的调用时机）；Python TypedDict 动态键 parent_ns 由 `nodeTask.config *InnerPregelConfig` 承载。
    - 无条件填进 `NodeInput.Config`：Python「形参含 config 才注入」的反射已被 8.3 D1 固定签名消解（见偏差 D1）。
    - `State` 恒 nil（8.3 拍板，task.py:148-149）。
 2. 直接调 `node.Func(ctx, input)`（Python sync/coroutine 双路调用由 Go 静态签名消解，偏差 D4）。
 3. 依次 `r.Dispatch(sourceNode=node.name)` 收集 messages（task.py:157-160）。
-4. messages 非空时逐条 `Trigger(EdgeTraversed, {source_node: msg.sender, target_node: msg.target, graph_id: config.Get(NS)})`（task.py:162-168）。
-5. `fn` 返回 `*GraphInterrupt` → 作为 run 的 error 返回（≡ `except GraphInterrupt: return e`，task.py:172-174）。
+4. messages 非空时逐条 `Trigger(EdgeTraversed, {source_node: msg.sender, target_node: msg.target, graph_id: config.Get(NS)})`（task.py:162-168）。**锚点：graph_id 读外部 config 的 Ns（`t.config.Ns`），不是拼过的 inner.Ns。**
+5. 图级中断按 NodeFunc 纪律（node.go:19-23）以 panic（`*GraphInterrupt`）传播，`execute` 的 recover 是唯一 recover 点：只认 `*GraphInterrupt`，其余 panic 原样重抛，中断转为 run 的 error 返回（≡ `except GraphInterrupt: return e`，task.py:172-174）。
 
 ## 6. 中断判定方式
 
-Python 靠 `isinstance(exc, GraphInterrupt)`。Go 用 `errors.As` 判 `*pregel.GraphInterrupt`，容忍 fn 内部包装，语义等价。
+Python 靠 `isinstance(exc, GraphInterrupt)`。Go 传递侧以 panic 承载（承 node.go NodeFunc 纪律），pool 记账/上抛侧用 `errors.As` 判 `*GraphInterrupt`，容忍包装，语义等价。
 
 与 8.7 偏差 D3（禁止 `r.(error)` 判中断）的边界：D3 约束的是 **tracer 场景**（error 接口兜底分支误吞中断导致 span 状态错标）；本节 NodeTask 是**主动捕获点**（对齐 Python 显式 except），不冲突。
 
@@ -106,7 +106,10 @@ Python 靠 `isinstance(exc, GraphInterrupt)`。Go 用 `errors.As` 判 `*pregel.G
 | D2 | `map[*nodeTask]*PregelNode` 替代 `Dict[asyncio.Task, PregelNode]`；goroutine+done channel 替代 asyncio.Task | Go 无 asyncio | 无（平台差异终态） |
 | D3 | `context.Canceled` 复刻 `asyncio.CancelledError` | Go 取消机制等价物 | 无（平台差异终态） |
 | D4 | Python sync/coroutine 双路调用消解为单路直调 | Go 静态签名 | 无（平台差异终态） |
-| D5 | Python `wait_all` 无参 → Go `WaitAll(ctx)`；取消依赖 ctx 派生 | 方案 B 实现所需 | 无 |
+| D5 | Python `submit(node, version)`/`cancel_all()` → Go `Submit(ctx, ...)`/`CancelAll()`；每任务派生可取消子 ctx 承载 `asyncio.Task.cancel` | 方案 B 取消机制所需句柄 | 无 |
+| D6 | `PendingNode` 类型定义自 store/base.py 迁入 pregel/pending.go（含其 MarshalJSON/UnmarshalJSON 与 pendingNodeJSON），store 直接引用 `pregel.PendingNode` 不留别名 | 对应 Python task.py:23/37 函数内延迟导入的破环意图；Go 无延迟导入。2026-11-19 用户拍板（方案①，不留别名） | 无（上游重构 store.base 依赖方向时同步） |
+
+实施补充事实：WaitAll 收割时从 runningTasks 删除（对齐 Python task.py:53/83 的 pop）；取消发起只作用于未完成任务（Python pending 集 = 唤醒时未 done 者），已完成任务的结果走正常分支参与优先级上抛。
 
 ## 8. 测试计划
 

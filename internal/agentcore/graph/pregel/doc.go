@@ -6,9 +6,9 @@
 // GraphInterrupt、产出调度消息的 Router、把执行体与出边绑在一起的 PregelNode，
 // 与落地这些消息的 Channel/ChannelManager（就绪判定 + CNF 汇聚 + 检查点快照），
 // 与把节点/边/分支装配成图并交付给调度引擎的 PregelBuilder（构图期唯一组装者）。
-// 接入状态：Router、Channel 与 PregelNode 已交付（8.4/8.5/8.3），但**尚未接入**
-// 超步循环——PregelLoop 要等 8.3b，届时由它在循环 goroutine 内串行驱动这些类型
-// 并决定下一超步激活哪些节点。当前它们在生产代码中零调用方。
+// 接入状态：Router、Channel、PregelNode 与任务池已交付（8.4/8.5/8.3/8.3b），但**尚未接入**
+// 超步循环——PregelLoop 要等 8.3c，届时由它在循环 goroutine 内串行驱动这些类型
+// （Submit→WaitAll→Buffer→Flush）并决定下一超步激活哪些节点。当前它们在生产代码中零调用方。
 // 配置以值类型结构体表达：字段零值等价于 Python TypedDict(total=False)
 // 的「键缺失/None」，因此不存在指针字段，调用方也无须判空。
 // 分层纪律（审查口径）：
@@ -20,10 +20,12 @@
 //     其 Payload 装 interaction.InteractionOutput）。
 //     消费链路只做存在性判断（checkpointer 的 isWorkflowInterrupted 判 key 存在且非 nil）。
 //   - 用户可见的中断内容不依赖该字段，而是在 raise 之前经 writeInteractionOutput 写入流。
-//   - 本包含 panic 类 GraphInterrupt（Python 侧是 Exception），但仍是叶子包：
-//     不 recover、不打日志、不读取 Interrupts 的内容。
+//   - 本包含 panic 类 GraphInterrupt（Python 侧是 Exception），仍是叶子包：
+//     除 task.go 外不打日志、不读取 Interrupts 的内容。
 //   - recover 点必须用 `case *pregel.GraphInterrupt` 判别；禁止 `r.(error)` 兜底——
 //     GraphInterrupt 实现了 Error()（仅供日志），按 error 兜底会把中断当普通错误吞掉。
+//     唯一 recover 点是 task.go 的 nodeTask.execute（8.3b 把中断降级为返回值，
+//     对齐 task.py:172-174 的 except GraphInterrupt）。
 //   - ChannelManager 无锁（对齐 Python 的 channels.py）：只允许超步循环所在
 //     goroutine 串行调用；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
 //   - any 纪律：能给字段找到具体类型的一律收窄，用 any 必须就地写明理由。当前四处
@@ -39,11 +41,13 @@
 //	├── doc.go         # 包文档
 //	├── base.go        # Message/MessageKind/构造函数/Kind 与 Interrupt 值对象、GraphInterrupt 中断跳转
 //	├── node.go        # NodeInput/NodeFunc 与节点描述体 PregelNode（含 addRouter/NoopNodeFunc）
+//	├── task.go        # TaskExecutorPool 单 step 任务池 + nodeTask 执行体（FIRST_EXCEPTION/取消记账/ns 拼接）
+//	├── pending.go     # PendingNode 失败记账（自 store 迁入破环，偏差 D6）
 //	├── channels.go    # Channel 接口 + ChannelSnapshot + Trigger/Barrier 通道 + ChannelManager
 //	├── router.go      # Router 接口 + Selector/SelectorFunc + Static/Barrier/Conditional 三个路由实现
 //	├── builder.go     # PregelBuilder 构图器（AddNode/AddEdge/AddBranch；Build ⤴️ 8.3c）
 //	├── constants.go   # 保留节点名、终止态键、命名空间键名与分隔符
 //	└── config.go      # PregelConfig/InnerPregelConfig/CreateInnerConfig/DefaultPregelConfig
 //
-// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · builder.py · channels.py · config.py · constants.py · router.py
+// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · builder.py · channels.py · config.py · constants.py · router.py · task.py
 package pregel
