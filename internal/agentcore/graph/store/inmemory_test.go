@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"testing"
 )
 
@@ -10,7 +11,7 @@ func newFilledStore(t *testing.T) *InMemoryStore {
 	t.Helper()
 	ctx := context.Background()
 	s := NewInMemoryStore()
-	if err := s.Save(ctx, "sess", "ns1", &GraphState{Ns: "ns1", Step: 1}); err != nil {
+	if err := s.Save(ctx, "sess", "ns1", &pregel.GraphState{Ns: "ns1", Step: 1}); err != nil {
 		t.Fatalf("save 失败: %v", err)
 	}
 	return s
@@ -39,7 +40,7 @@ func TestInMemoryStore_Get(t *testing.T) {
 func TestInMemoryStore_Save(t *testing.T) {
 	ctx := context.Background()
 	s := NewInMemoryStore()
-	st := &GraphState{Ns: "ns1", Step: 1}
+	st := &pregel.GraphState{Ns: "ns1", Step: 1}
 	if err := s.Save(ctx, "sess", "ns1", st); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestInMemoryStore_Delete(t *testing.T) {
 
 	// 全删（ns 空串）
 	s = newFilledStore(t)
-	_ = s.Save(ctx, "sess", "ns2", &GraphState{Ns: "ns2", Step: 1})
+	_ = s.Save(ctx, "sess", "ns2", &pregel.GraphState{Ns: "ns2", Step: 1})
 	if err := s.Delete(ctx, "sess", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +72,8 @@ func TestInMemoryStore_Delete(t *testing.T) {
 
 	// 前缀删：ns=ns1 应只删 ns1 开头的（含 ns10），ns2 保留；删空后外层键连带删除
 	s = newFilledStore(t)
-	_ = s.Save(ctx, "sess", "ns10", &GraphState{Ns: "ns10", Step: 1})
-	_ = s.Save(ctx, "sess", "ns2", &GraphState{Ns: "ns2", Step: 1})
+	_ = s.Save(ctx, "sess", "ns10", &pregel.GraphState{Ns: "ns10", Step: 1})
+	_ = s.Save(ctx, "sess", "ns2", &pregel.GraphState{Ns: "ns2", Step: 1})
 	if err := s.Delete(ctx, "sess", "ns1"); err != nil {
 		t.Fatal(err)
 	}

@@ -45,9 +45,11 @@
 //	├── pending.go     # PendingNode 失败记账（自 store 迁入破环，偏差 D6）
 //	├── channels.go    # Channel 接口 + ChannelSnapshot + Trigger/Barrier 通道 + ChannelManager
 //	├── router.go      # Router 接口 + Selector/SelectorFunc + Static/Barrier/Conditional 三个路由实现
-//	├── builder.go     # PregelBuilder 构图器（AddNode/AddEdge/AddBranch；Build ⤴️ 8.3c）
+//	├── builder.go     # PregelBuilder 构图器（AddNode/AddEdge/AddBranch/Build）
+//	├── engine.go      # PregelLoop 超步循环 + Pregel/Run 顶层入口 + RecursionError（8.3c）
+//	├── state.go       # GraphState/Store/CreateState（自 store 迁入破环，偏差 B5）
 //	├── constants.go   # 保留节点名、终止态键、命名空间键名与分隔符
 //	└── config.go      # PregelConfig/InnerPregelConfig/CreateInnerConfig/DefaultPregelConfig
 //
-// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · builder.py · channels.py · config.py · constants.py · router.py · task.py
+// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · builder.py · channels.py · config.py · constants.py · engine.py · router.py · task.py · store/base.py(部分，B5)
 package pregel

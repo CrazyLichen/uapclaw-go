@@ -8,7 +8,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -1463,8 +1462,8 @@ func newKVGraphStore() *GraphStore {
 }
 
 // sampleGraphState 造一条含 kind 与 Exception 的完整状态
-func sampleGraphState() *store.GraphState {
-	return &store.GraphState{
+func sampleGraphState() *pregel.GraphState {
+	return &pregel.GraphState{
 		Ns: "ns1", Step: 2,
 		ChannelValues: map[string][]pregel.ChannelSnapshot{
 			"n1": {{Messages: []pregel.Message{pregel.NewTriggerMessage("a", "n1")}}},

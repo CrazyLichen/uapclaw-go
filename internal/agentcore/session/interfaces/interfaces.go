@@ -3,7 +3,7 @@ package interfaces
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -80,7 +80,7 @@ type Checkpointer interface {
 	// Python: release(session_id, agent_id=None)，Go 扩展支持批量 agentID。
 	Release(ctx context.Context, sessionID string, agentID ...string) error
 	// GraphStore 获取图状态存储
-	GraphStore() store.Store
+	GraphStore() pregel.Store
 }
 
 // Storage 状态存储接口，负责单个实体的状态保存/恢复/清除。

@@ -2,7 +2,7 @@ package session
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"sync/atomic"
 	"testing"
 
@@ -46,7 +46,7 @@ func (n *noOpCheckpointer) SessionExists(ctx context.Context, sessionID string) 
 func (n *noOpCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (n *noOpCheckpointer) GraphStore() store.Store { return nil }
+func (n *noOpCheckpointer) GraphStore() pregel.Store { return nil }
 
 // TestNewSession 测试构造函数
 func TestNewSession(t *testing.T) {

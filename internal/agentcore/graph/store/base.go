@@ -9,40 +9,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// GraphState 引擎检查点状态快照。
-// ⚠️ 与 8.8 graph_state.GraphState（节点返回值聚合）同名不同义，Go 靠包隔离。
-// Python: store/base.py:32-39
-type GraphState struct {
-	// Ns 命名空间
-	Ns string
-	// Step super-step 序号
-	Step int
-	// ChannelValues 通道快照（Python Dict[str, Any]，按计划行收窄，偏差 D-5）
-	ChannelValues map[string][]pregel.ChannelSnapshot
-	// PendingBuffer 待发消息
-	PendingBuffer []pregel.Message
-	// PendingNode 未完成节点表（类型定义在 pregel 包，破环偏差 D6）
-	PendingNode map[string]pregel.PendingNode
-	// NodeVersion 节点版本
-	NodeVersion map[string]int
-}
-
-// Store 图状态存储抽象
-// Python: store/base.py:59-68（async 三方法，Go 显式 ctx 传参见偏差 D-13）
-type Store interface {
-	// Get 读取状态，未命中返回 (nil, nil)
-	Get(ctx context.Context, sessionID, ns string) (*GraphState, error)
-	// Save 保存状态
-	Save(ctx context.Context, sessionID, ns string, state *GraphState) error
-	// Delete 删除状态；ns 为空串时删整个 session（Python Optional[str]=None，偏差 D-3）
-	Delete(ctx context.Context, sessionID, ns string) error
-}
-
-// GraphStore 日志壳：包装 Store 并按 Python 逐条复刻日志与异常透传。
+// GraphStore 日志壳：包装 pregel.Store 并按 Python 逐条复刻日志与异常透传。
+// GraphState/Store/CreateState（store/base.py:32-82）已于 2026-11-15 8.3c 实施时
+// 迁入 pregel 包（spec 偏差 B5，engine 依赖破环，与 8.3b D6 同源），本文件只留日志壳。
 // Python: store/base.py:80-159
 type GraphStore struct {
 	// saver 被包装的真实存储
-	saver Store
+	saver pregel.Store
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -52,88 +25,15 @@ const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// IsResumable 有未完成节点/待发消息或 channel 值时引擎 init 才走恢复分支。
-// 恢复判定必须与 8.3c PregelLoop._is_resume 同口径，两处经本方法共享，避免口径漂移。
-// Python: store/base.py:42-47
-func (s *GraphState) IsResumable() bool {
-	return len(s.PendingNode) > 0 || len(s.PendingBuffer) > 0 || len(s.ChannelValues) > 0
-}
-
-// Clone 返回 GraphState 的深拷贝（Python copy.deepcopy 等价物，偏差 D-2）。
-// nil 接收者返回 nil。
-func (s *GraphState) Clone() *GraphState {
-	if s == nil {
-		return nil
-	}
-	c := &GraphState{Ns: s.Ns, Step: s.Step}
-	if s.ChannelValues != nil {
-		c.ChannelValues = make(map[string][]pregel.ChannelSnapshot, len(s.ChannelValues))
-		for k, snaps := range s.ChannelValues {
-			csnaps := make([]pregel.ChannelSnapshot, len(snaps))
-			for i, sn := range snaps {
-				csnaps[i] = cloneSnapshot(sn)
-			}
-			c.ChannelValues[k] = csnaps
-		}
-	}
-	if s.PendingBuffer != nil {
-		c.PendingBuffer = make([]pregel.Message, len(s.PendingBuffer))
-		for i, m := range s.PendingBuffer {
-			c.PendingBuffer[i] = m.Copy()
-		}
-	}
-	if s.PendingNode != nil {
-		c.PendingNode = make(map[string]pregel.PendingNode, len(s.PendingNode))
-		for k, pn := range s.PendingNode {
-			if pn.Exception != nil {
-				exc := make([]error, len(pn.Exception))
-				copy(exc, pn.Exception)
-				pn.Exception = exc
-			}
-			c.PendingNode[k] = pn
-		}
-	}
-	if s.NodeVersion != nil {
-		c.NodeVersion = make(map[string]int, len(s.NodeVersion))
-		for k, v := range s.NodeVersion {
-			c.NodeVersion[k] = v
-		}
-	}
-	return c
-}
-
-// CreateState 工厂：nil 入参兜底为空容器（对齐 Python or [] / or {} 语义）
-// Python: store/base.py:71-82
-func CreateState(ns string, step int, channelSnapshot map[string][]pregel.ChannelSnapshot,
-	pendingBuffer []pregel.Message, pendingNode map[string]pregel.PendingNode, nodeVersion map[string]int) *GraphState {
-	if pendingBuffer == nil {
-		pendingBuffer = []pregel.Message{}
-	}
-	if pendingNode == nil {
-		pendingNode = map[string]pregel.PendingNode{}
-	}
-	if nodeVersion == nil {
-		nodeVersion = map[string]int{}
-	}
-	return &GraphState{
-		Ns:            ns,
-		Step:          step,
-		ChannelValues: channelSnapshot,
-		PendingBuffer: pendingBuffer,
-		PendingNode:   pendingNode,
-		NodeVersion:   nodeVersion,
-	}
-}
-
 // NewGraphStore 构造日志壳
 // Python: store/base.py:81-83（__init__）
-func NewGraphStore(saver Store) *GraphStore {
+func NewGraphStore(saver pregel.Store) *GraphStore {
 	return &GraphStore{saver: saver}
 }
 
 // Get 读取图状态：未命中记 debug、异常 error 后原样透传。
 // Python: store/base.py:85-103
-func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*GraphState, error) {
+func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*pregel.GraphState, error) {
 	state, err := g.saver.Get(ctx, sessionID, ns)
 	if err != nil {
 		logger.Error(logComponent).
@@ -156,7 +56,7 @@ func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*GraphState
 
 // Save 保存图状态：前后 debug（含 step）、异常 error 后原样透传。
 // Python: store/base.py:105-130
-func (g *GraphStore) Save(ctx context.Context, sessionID, ns string, state *GraphState) error {
+func (g *GraphStore) Save(ctx context.Context, sessionID, ns string, state *pregel.GraphState) error {
 	logger.Debug(logComponent).
 		Str("event_type", "GRAPH_STORE_SAVE").
 		Str("session_id", sessionID).
@@ -212,19 +112,3 @@ func (g *GraphStore) Delete(ctx context.Context, sessionID, ns string) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// cloneSnapshot 深拷贝单个通道快照（Python deepcopy 隐式承担，偏差 D-2 的组成部分）
-func cloneSnapshot(sn pregel.ChannelSnapshot) pregel.ChannelSnapshot {
-	c := pregel.ChannelSnapshot{}
-	if sn.Messages != nil {
-		c.Messages = make([]pregel.Message, len(sn.Messages))
-		for i, m := range sn.Messages {
-			c.Messages[i] = m.Copy()
-		}
-	}
-	if sn.Received != nil {
-		c.Received = make([]string, len(sn.Received))
-		copy(c.Received, sn.Received)
-	}
-	return c
-}

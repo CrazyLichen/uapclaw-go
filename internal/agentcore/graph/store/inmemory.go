@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"strings"
 )
 
@@ -11,7 +13,7 @@ import (
 // Python: store/inmemory.py:13-47
 type InMemoryStore struct {
 	// store 最新图状态：session_id → ns → state
-	store map[string]map[string]*GraphState
+	store map[string]map[string]*pregel.GraphState
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -19,21 +21,21 @@ type InMemoryStore struct {
 // NewInMemoryStore 构造内存存储
 // Python: store/inmemory.py:14-16（defaultdict）
 func NewInMemoryStore() *InMemoryStore {
-	return &InMemoryStore{store: map[string]map[string]*GraphState{}}
+	return &InMemoryStore{store: map[string]map[string]*pregel.GraphState{}}
 }
 
 // Get 读取状态，返回深拷贝；未命中返回 (nil, nil)（对齐 Python Optional=None）
 // Python: store/inmemory.py:18-19
-func (s *InMemoryStore) Get(_ context.Context, sessionID, ns string) (*GraphState, error) {
+func (s *InMemoryStore) Get(_ context.Context, sessionID, ns string) (*pregel.GraphState, error) {
 	return s.store[sessionID][ns].Clone(), nil
 }
 
 // Save 保存状态的深拷贝（对齐 Python 双向 deepcopy——存副本防外部篡改）
 // Python: store/inmemory.py:22-24
-func (s *InMemoryStore) Save(_ context.Context, sessionID, ns string, state *GraphState) error {
+func (s *InMemoryStore) Save(_ context.Context, sessionID, ns string, state *pregel.GraphState) error {
 	sub, ok := s.store[sessionID]
 	if !ok {
-		sub = map[string]*GraphState{}
+		sub = map[string]*pregel.GraphState{}
 		s.store[sessionID] = sub
 	}
 	sub[ns] = state.Clone()
@@ -64,7 +66,7 @@ func (s *InMemoryStore) Delete(_ context.Context, sessionID, ns string) error {
 
 // deleteNSByPrefix 按前缀收集并逐个删除命名空间
 // Python: store/inmemory.py:42-47（_delete_ns_by_prefix）
-func deleteNSByPrefix(sub map[string]*GraphState, prefix string) {
+func deleteNSByPrefix(sub map[string]*pregel.GraphState, prefix string) {
 	var toDelete []string
 	for ns := range sub {
 		if strings.HasPrefix(ns, prefix) {

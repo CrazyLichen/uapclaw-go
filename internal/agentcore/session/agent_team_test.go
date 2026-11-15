@@ -2,7 +2,7 @@ package session
 
 import (
 	"context"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -44,7 +44,7 @@ func (n *noOpTeamCheckpointer) SessionExists(ctx context.Context, sessionID stri
 func (n *noOpTeamCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	return nil
 }
-func (n *noOpTeamCheckpointer) GraphStore() store.Store { return nil }
+func (n *noOpTeamCheckpointer) GraphStore() pregel.Store { return nil }
 
 // TestNewAgentTeamSession 测试构造函数
 func TestNewAgentTeamSession(t *testing.T) {

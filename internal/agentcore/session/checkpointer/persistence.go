@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/store"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -94,7 +95,7 @@ type PersistenceCheckpointer struct {
 	// workflowStorage Workflow 持久化状态存储
 	workflowStorage *PersistenceWorkflowStorage
 	// graphStore 图状态存储（构造期必注入，Python 同构无空判，偏差 D-11）
-	graphStore store.Store
+	graphStore pregel.Store
 }
 
 // persistenceProvider Persistence 检查点器提供者。
@@ -146,7 +147,7 @@ func NewPersistenceGraphStore(kvStore kv.BaseKVStore) *GraphStore {
 // Get 读取图状态：两键 pipeline 读取，未命中/反序列化失败均 (nil, nil)。
 // JSON 往返即副本，无需 Clone（对齐 Python pickle 语义）。
 // Python: persistence.py:603-653
-func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*store.GraphState, error) {
+func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*pregel.GraphState, error) {
 	pipeline := g.kvStore.Pipeline(ctx)
 	keyType := BuildKeyWithNamespace(sessionID, WorkflowNamespaceGraph, ns, graphStoreDataType)
 	_ = pipeline.Get(ctx, keyType)
@@ -181,7 +182,7 @@ func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*store.Grap
 			Msg("graph state not found in KV store")
 		return nil, nil
 	}
-	var state store.GraphState
+	var state pregel.GraphState
 	if err := g.serde.LoadsTyped(string(dataType), blob, &state); err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "CHECKPOINT_ERROR").
@@ -196,7 +197,7 @@ func (g *GraphStore) Get(ctx context.Context, sessionID, ns string) (*store.Grap
 
 // Save 保存图状态：序列化失败 warn 后静默返回（Python 不 raise）；pipeline 写入失败 error 后返回 error（Python re-raise）。
 // Python: persistence.py:656-700
-func (g *GraphStore) Save(ctx context.Context, sessionID, ns string, state *store.GraphState) error {
+func (g *GraphStore) Save(ctx context.Context, sessionID, ns string, state *pregel.GraphState) error {
 	dataType, blob, err := g.serde.DumpsTyped(state)
 	if err != nil {
 		logger.Warn(logComponent).
@@ -1028,7 +1029,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 }
 
 // GraphStore 获取图状态存储。
-func (cp *PersistenceCheckpointer) GraphStore() store.Store {
+func (cp *PersistenceCheckpointer) GraphStore() pregel.Store {
 	return cp.graphStore
 }
 

@@ -69,4 +69,8 @@ var (
 	StatusPregelGraphConditionEdgeInvalid = NewStatusCode(
 		"PREGEL_GRAPH_CONDITION_EDGE_INVALID", 112103,
 		"condition edge is invalid, source_id={source_id}, error='{reason}'")
+	// StatusPregelGraphSuperStepExecutionError Pregel 图超步执行失败
+	StatusPregelGraphSuperStepExecutionError = NewStatusCode(
+		"PREGEL_GRAPH_SUPER_STEP_EXECUTION_ERROR", 112104,
+		"graph super-step failed, step={step}, error='{reason}'")
 )
