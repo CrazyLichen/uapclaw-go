@@ -30,7 +30,10 @@ func TestPrepareRepositorySnapshot_完整拷贝(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifest := PrepareRepositorySnapshot(ws, patch, runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot(ws, patch, runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	if manifest["repository"] != "complete" {
 		t.Fatalf("repository 应 complete: %v", manifest["repository"])
 	}
@@ -90,7 +93,10 @@ func TestPrepareRepositorySnapshot_排除集与根级运行时目录(t *testing.
 		t.Fatal(err)
 	}
 
-	manifest := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	if manifest["repository"] != "complete" {
 		t.Fatalf("应 complete: %v", manifest["repository"])
 	}
@@ -140,7 +146,10 @@ func TestPrepareRepositorySnapshot_部分失败收集(t *testing.T) {
 	// 若以 root 运行（0o000 仍可读），改用目录占位冲突制造失败
 	defer func() { _ = os.Chmod(badFile, 0o644) }()
 
-	manifest := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	if isRunningAsRoot() {
 		// root 下 0o000 可读：改用占位冲突验证部分失败
 		t.Log("root 环境，0o000 权限注入无效，跳过部分失败断言（占位冲突由下方 Case2 覆盖）")
@@ -195,7 +204,10 @@ func TestPrepareRepositorySnapshot_占位冲突部分失败(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifest := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot(ws, "", runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	if manifest["repository"] != "partial" {
 		t.Fatalf("应 partial: %v", manifest)
 	}
@@ -222,7 +234,10 @@ func TestPrepareRepositorySnapshot_根不可达(t *testing.T) {
 	caseRoot := t.TempDir()
 	runtimeDir := t.TempDir()
 	// workspace 指向不存在路径
-	manifest := PrepareRepositorySnapshot(filepath.Join(caseRoot, "nope"), "", runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot(filepath.Join(caseRoot, "nope"), "", runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	// Python: OSError → errors 加 {name}/ 条目；manifest[name] 不置 complete/partial
 	errList := manifest["errors"].([]any)
 	found := false
@@ -246,7 +261,10 @@ func TestPrepareRepositorySnapshot_patch失败披露(t *testing.T) {
 	caseRoot := t.TempDir()
 	runtimeDir := t.TempDir()
 	// patch 指向不存在文件
-	manifest := PrepareRepositorySnapshot("", filepath.Join(caseRoot, "missing.diff"), runtimeDir, "")
+	manifest, snapErr := PrepareRepositorySnapshot("", filepath.Join(caseRoot, "missing.diff"), runtimeDir, "")
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
 	if manifest["patch"] != "unavailable" {
 		t.Fatalf("patch 缺失应 unavailable: %v", manifest["patch"])
 	}

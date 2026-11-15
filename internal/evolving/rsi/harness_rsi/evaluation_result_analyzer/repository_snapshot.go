@@ -35,11 +35,11 @@ var rootRuntimeDirs = map[string]bool{
 // PrepareRepositorySnapshot 保留部分快照并向诊断披露每一次失败的拷贝。
 // patch 是独立证据：仓库不可用不得阻止其拷贝。
 // Python: repository_snapshot.py:26-81 prepare_repository_snapshot
-func PrepareRepositorySnapshot(workspace, patch, runtimeDir, artifacts string) map[string]any {
+func PrepareRepositorySnapshot(workspace, patch, runtimeDir, artifacts string) (map[string]any, error) {
 	// Python: runtime = _io_path(runtime_dir); runtime.mkdir(parents=True, exist_ok=True)
 	runtime := harnessrsi.IoPath(runtimeDir)
 	if err := os.MkdirAll(runtime, 0o755); err != nil {
-		panic(fmt.Sprintf("runtime dir create failed: %v", err))
+		return nil, err
 	}
 	manifest := map[string]any{
 		"repository": "unavailable", "patch": "unavailable",
@@ -121,11 +121,15 @@ func PrepareRepositorySnapshot(workspace, patch, runtimeDir, artifacts string) m
 	}
 
 	// Python: (runtime / "repository_snapshot.json").write_text(json.dumps(..., indent=2))
-	content, _ := json.MarshalIndent(manifest, "", "  ")
-	if err := os.WriteFile(filepath.Join(runtime, "repository_snapshot.json"), content, 0o644); err != nil {
-		panic(fmt.Sprintf("repository snapshot manifest write failed: %v", err))
+	content, marshalErr := json.MarshalIndent(manifest, "", "  ")
+	if marshalErr != nil {
+		return nil, marshalErr
 	}
-	return manifest
+	if err := os.WriteFile(filepath.Join(runtime, "repository_snapshot.json"), content, 0o644); err != nil {
+		// Python: write_text OSError 上抛；Go 以 error 等价透传
+		return nil, err
+	}
+	return manifest, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

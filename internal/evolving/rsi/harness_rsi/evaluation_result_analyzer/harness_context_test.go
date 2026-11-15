@@ -1,7 +1,6 @@
 package evaluationresultanalyzer
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,7 +74,10 @@ func TestPrepareHarnessContext_无引用回落(t *testing.T) {
 	if err := os.WriteFile(evalRef, []byte("eval_id: e1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := PrepareHarnessContext(evalRef, "", runtimeDir)
+	got, ctxErr := PrepareHarnessContext(evalRef, "", runtimeDir)
+	if ctxErr != nil {
+		t.Fatal(ctxErr)
+	}
 	if got["status"] != "not_provided" {
 		t.Fatalf("无引用应 not_provided: %v", got)
 	}
@@ -109,7 +111,10 @@ func TestPrepareHarnessContext_完整投映(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := PrepareHarnessContext(evalRef, "", runtimeDir)
+	got, ctxErr := PrepareHarnessContext(evalRef, "", runtimeDir)
+	if ctxErr != nil {
+		t.Fatal(ctxErr)
+	}
 	if got["status"] != "available" {
 		t.Fatalf("应 available: %v", got)
 	}
@@ -207,7 +212,10 @@ func TestPrepareHarnessContext_无runtime继承默认(t *testing.T) {
 	if err := os.WriteFile(evalRef, []byte("harness_refs_path: "+refsPath+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := PrepareHarnessContext(evalRef, "", runtimeDir)
+	got, ctxErr := PrepareHarnessContext(evalRef, "", runtimeDir)
+	if ctxErr != nil {
+		t.Fatal(ctxErr)
+	}
 	roles, _ := got["roles"].([]any)
 	rc := roles[0].(map[string]any)["runtime_config"].(map[string]any)
 	if rc["status"] != "inherited_defaults" {
@@ -239,16 +247,13 @@ func TestPrepareHarnessContext_逃逸拒绝(t *testing.T) {
 	if err := os.WriteFile(evalRef, []byte("harness_refs_path: "+refsPath+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		rec := recover()
-		if rec == nil {
-			t.Fatal("逃逸引用应 panic（Python ValueError 等价）")
-		}
-		if !strings.Contains(fmt.Sprint(rec), "Harness evidence reference leaves its package") {
-			t.Fatalf("错误文案不符: %v", rec)
-		}
-	}()
-	PrepareHarnessContext(evalRef, "", runtimeDir)
+	_, err := PrepareHarnessContext(evalRef, "", runtimeDir)
+	if err == nil {
+		t.Fatal("逃逸引用应报错（Python ValueError 等价）")
+	}
+	if !strings.Contains(err.Error(), "Harness evidence reference leaves its package") {
+		t.Fatalf("错误文案不符: %v", err)
+	}
 }
 
 // TestPrepareHarnessContext_引用缺失报错 对照 Python FileNotFoundError 文案。
@@ -261,16 +266,13 @@ func TestPrepareHarnessContext_引用缺失报错(t *testing.T) {
 	if err := os.WriteFile(evalRef, []byte("harness_refs_path: ./missing_refs.yaml\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		rec := recover()
-		if rec == nil {
-			t.Fatal("缺失引用应 panic（Python FileNotFoundError 等价）")
-		}
-		if !strings.Contains(fmt.Sprint(rec), "Evaluated Harness references not found") {
-			t.Fatalf("错误文案不符: %v", rec)
-		}
-	}()
-	PrepareHarnessContext(evalRef, "", runtimeDir)
+	_, err := PrepareHarnessContext(evalRef, "", runtimeDir)
+	if err == nil {
+		t.Fatal("缺失引用应报错（Python FileNotFoundError 等价）")
+	}
+	if !strings.Contains(err.Error(), "Evaluated Harness references not found") {
+		t.Fatalf("错误文案不符: %v", err)
+	}
 }
 
 // TestResolveSectionFile_回落 对照 Python _resolve_section_file 两级查找。
@@ -344,33 +346,42 @@ func TestSkillFiles_三态发现(t *testing.T) {
 	}
 
 	// ① 直接文件
-	got := skillFiles(root, []any{map[string]any{"dir": "direct-skill.md"}})
+	got, skillErr := skillFiles(root, []any{map[string]any{"dir": "direct-skill.md"}})
+	if skillErr != nil {
+		t.Fatal(skillErr)
+	}
 	if len(got) != 1 || filepath.Base(got[0]) != "direct-skill.md" {
 		t.Fatalf("直接文件发现不符: %v", got)
 	}
 	// ② 目录直含
-	got2 := skillFiles(root, []any{map[string]any{"dir": "skillA"}})
+	got2, err2 := skillFiles(root, []any{map[string]any{"dir": "skillA"}})
+	if err2 != nil {
+		t.Fatal(err2)
+	}
 	if len(got2) != 1 || filepath.Base(got2[0]) != "SKILL.md" {
 		t.Fatalf("目录直含发现不符: %v", got2)
 	}
 	// ③ 父目录扫描子目录
-	got3 := skillFiles(root, []any{map[string]any{"dir": "skills-pool"}})
+	got3, err3 := skillFiles(root, []any{map[string]any{"dir": "skills-pool"}})
+	if err3 != nil {
+		t.Fatal(err3)
+	}
 	if len(got3) != 1 || !strings.Contains(got3[0], "skillB") {
 		t.Fatalf("父目录扫描发现不符: %v", got3)
 	}
 	// ④ 去重（dict.fromkeys）
-	got4 := skillFiles(root, []any{
+	got4, err4 := skillFiles(root, []any{
 		map[string]any{"dir": "direct-skill.md"},
 		map[string]any{"dir": "direct-skill.md"},
 	})
+	if err4 != nil {
+		t.Fatal(err4)
+	}
 	if len(got4) != 1 {
 		t.Fatalf("应去重, got %d", len(got4))
 	}
-	// ⑤ 空值报错
-	defer func() {
-		if rec := recover(); rec == nil {
-			t.Fatal("空声明应 panic（Python ValueError 等价）")
-		}
-	}()
-	skillFiles(root, []any{map[string]any{"dir": ""}})
+	// ⑤ 空值报错（Python ValueError 等价）
+	if _, err := skillFiles(root, []any{map[string]any{"dir": ""}}); err == nil {
+		t.Fatal("空声明应报错")
+	}
 }
