@@ -57,7 +57,7 @@ func TestNewDshHarnessConfig_校验拒绝(t *testing.T) {
 			c.MaxTokens = -1
 		}, "DSH max_tokens must be positive"},
 		{"buffer非正", func(c *DshHarnessConfig) {
-			c.EventBufferCapacity = 0
+			c.EventBufferCapacity = -5 // 0 = 未提供回落默认 1024，负数才显式非法
 		}, "DSH event_buffer_capacity must be positive"},
 		{"initialize_timeout非正", func(c *DshHarnessConfig) {
 			c.InitializeTimeoutSeconds = -0.5
