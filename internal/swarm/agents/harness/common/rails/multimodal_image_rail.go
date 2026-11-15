@@ -58,16 +58,18 @@ func NewMultimodalImageRail(enableImageMultimodal *bool) *MultimodalImageRail {
 
 // Init 注入 agent 引用。
 // Python: init(agent)
-func (r *MultimodalImageRail) Init(agent agentinterfaces.BaseAgent) {
+func (r *MultimodalImageRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	r.deepAgent = agent
+	return nil
 }
 
 // Uninit 反向清理。
-func (r *MultimodalImageRail) Uninit() {
+func (r *MultimodalImageRail) Uninit(_ agentinterfaces.BaseAgent) error {
 	r.deepAgent = nil
 	r.imageMu.Lock()
 	r.imageMutator = nil
 	r.imageMu.Unlock()
+	return nil
 }
 
 // Priority rail 优先级。

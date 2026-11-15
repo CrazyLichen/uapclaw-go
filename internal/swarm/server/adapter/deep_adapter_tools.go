@@ -340,6 +340,57 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 		d.videoToolRegistered = false
 	}
 
+	// ── swarm 视频工具同步（23.8）──
+	// Python: config = self._config_base（_sync_multimodal_tools_for_runtime 上下文）
+	configBase := d.configBaseSnapshot()
+	// Python: providers/tools.py _build_video_tools:425-440
+	//   multimodal_model_enabled(config,"video") && complete_multimodal_model_configured(config,"video")
+	//   → apply_video_model_config_from_yaml → env 三样齐 → [video_understanding]
+	// 注：agentcore video 工具（videoModelConfig 路径）已注册同名工具时跳过，
+	// 防重复注册（Python 两侧工具名相同，实际经 whitelist 去重；Go 以注册态守卫，⤴️ 对齐点）。
+	swarmVideoGate := swarmtools.MultimodalModelEnabled(configBase, "video") &&
+		swarmtools.CompleteMultimodalModelConfigured(configBase, "video")
+	if swarmVideoGate {
+		swarmtools.ApplyVideoModelConfigFromYAML(configBase)
+		envComplete := os.Getenv("VIDEO_API_KEY") != "" && os.Getenv("VIDEO_API_BASE") != "" && os.Getenv("VIDEO_MODEL_NAME") != ""
+		if envComplete && !d.videoToolRegistered && !d.swarmVideoToolRegistered {
+			svt := swarmtools.CreateVideoUnderstandingTool()
+			d.syncToolsToManager(ctx, []*tool.ToolCard{svt.Card()}, []tool.Tool{svt}, nil, "video")
+			d.swarmVideoToolRegistered = true
+		}
+	} else if d.swarmVideoToolRegistered {
+		// 热同步：门控关闭时注销（对齐 vision/audio/video 的双向同步模式）
+		if d.swarmVideoTool != nil {
+			d.removeRegisteredTools([]tool.Tool{d.swarmVideoTool})
+			d.toolCards = d.pruneToolCards(d.toolCards, map[string]bool{d.swarmVideoTool.Card().Name: true})
+			d.swarmVideoTool = nil
+		}
+		d.swarmVideoToolRegistered = false
+	}
+
+	// Python: providers/tools.py _build_video_gen_tools:449-456
+	//   video_gen_enabled() && video_gen_configured() → [generate_video, check_video_status]
+	if swarmtools.VideoGenEnabled() && swarmtools.VideoGenConfigured() {
+		if !d.videoGenToolsRegistered {
+			genTool := swarmtools.CreateGenerateVideoTool()
+			checkTool := swarmtools.CreateCheckVideoStatusTool()
+			d.syncToolsToManager(ctx,
+				[]*tool.ToolCard{genTool.Card(), checkTool.Card()},
+				[]tool.Tool{genTool, checkTool}, nil, "video_gen")
+			d.videoGenTools = []tool.Tool{genTool, checkTool}
+			d.videoGenToolsRegistered = true
+		}
+	} else if d.videoGenToolsRegistered {
+		d.removeRegisteredTools(d.videoGenTools)
+		namesToRemove := make(map[string]bool, len(d.videoGenTools))
+		for _, t := range d.videoGenTools {
+			namesToRemove[t.Card().Name] = true
+		}
+		d.toolCards = d.pruneToolCards(d.toolCards, namesToRemove)
+		d.videoGenTools = nil
+		d.videoGenToolsRegistered = false
+	}
+
 	// 图片生成工具同步
 	// Python: interface_deep.py:1454-1460
 	_, d.imageGenToolRegistered = d.syncToolGroup(

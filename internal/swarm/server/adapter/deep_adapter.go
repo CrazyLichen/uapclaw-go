@@ -42,6 +42,7 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	commrailspermissions "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/recommendation"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
@@ -222,6 +223,9 @@ type DeepAdapter struct {
 	// runtimePromptRail 运行时提示词护栏
 	// ✅ 已回填：RuntimePromptRail（对齐 Python: _runtime_prompt_rail: RuntimePromptRail | None）
 	runtimePromptRail *commrails.RuntimePromptRail
+	// multimodalImageRail 多模态图片输入适配护栏（23.8）
+	// Python: _multimodal_image_rail
+	multimodalImageRail sainterfaces.AgentRail
 	// responsePromptRail 响应提示词护栏
 	// ✅ 10.6.3-10: ResponsePromptRail
 	responsePromptRail sainterfaces.AgentRail
@@ -284,6 +288,14 @@ type DeepAdapter struct {
 	videoToolRegistered bool
 	// imageGenToolRegistered 图片生成工具是否已注册（对齐 Python: self._image_gen_tool_registered）
 	imageGenToolRegistered bool
+	// swarmVideoTool swarm 侧 video_understanding 工具（providers/tools.py _build_video_tools，23.8）
+	swarmVideoTool tool.Tool
+	// swarmVideoToolRegistered swarm 视频理解工具是否已注册
+	swarmVideoToolRegistered bool
+	// videoGenTools 视频生成工具对（providers/tools.py _build_video_gen_tools，23.8）
+	videoGenTools []tool.Tool
+	// videoGenToolsRegistered 视频生成工具是否已注册
+	videoGenToolsRegistered bool
 	// imageGenModelConfig 图片生成模型配置是否就绪（对齐 Python: self._image_gen_model_config: bool）
 	imageGenModelConfig bool
 	// skillManager 技能管理器（已回填 10.3.19-20）
@@ -385,6 +397,32 @@ var placeholderAPIBase = map[string]struct{}{
 func SetDefaultSendPushFunc(fn func(ctx context.Context, msg map[string]any) error) {
 	defaultSendPushFunc = fn
 }
+
+func init() {
+	// 23.8: 视频生成盯单交付的注入缝桥接（D-23.8-4/D-23.8-5）。
+	// Python: video_gen_tools.py 直接 import current_root_decision_context /
+	// send_runtime_push；Go 因 permissions→tools 循环依赖与 adapter→tools
+	// 分层，在装配层（本包）桥接。
+	swarmtools.SetVideoWatchContextProvider(func(ctx context.Context) *swarmtools.VideoWatchContext {
+		// Python: current_root_decision_context()
+		rc := commrailspermissions.CurrentRootDecisionContext(ctx)
+		if rc == nil {
+			return nil
+		}
+		return &swarmtools.VideoWatchContext{RequestID: rc.RequestID, SessionID: rc.SessionID, ChannelID: rc.ChannelID}
+	})
+	swarmtools.SetVideoGenRuntimePush(func(msg map[string]any) bool {
+		// Python: send_runtime_push(msg) 的 pushed 布尔语义
+		fn := defaultSendPushFunc
+		if fn == nil {
+			return false
+		}
+		return fn(context.Background(), msg) == nil
+	})
+	// SetVideoGenSendFileFunc 不注入：Go 侧 SendFileToolkit(send_file_to_user.py)
+	// 未移植，视频文件投递降级为文本通知（spec D-23.8-5，⤴️ send_file_to_user 移植时回填）。
+}
+
 
 // ResetPersistentCheckpointer 重置持久化检查点器就绪标记（仅测试用）。
 // Python 侧 _PERSISTENT_CHECKPOINTER_READY 是进程级标记，但 pytest 每个测试

@@ -91,6 +91,21 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		railsList = append(railsList, resp)
 	}
 
+	// 步骤 4.5: multimodalImageRail — Python: _multimodal_image_rail（rail_infos[2]）
+	// Python: _resolve_enable_read_image_multimodal(config)（:9131-9137）：
+	// config.enable_read_image_multimodal 布尔 → 显式；否则 nil 由 rail 四级解析。
+	multimodalEnabled := false
+	var multimodalExplicit *bool
+	if v, ok := config["enable_read_image_multimodal"].(bool); ok {
+		multimodalEnabled = v
+		multimodalExplicit = &multimodalEnabled
+	}
+	rail := commrails.NewMultimodalImageRail(multimodalExplicit)
+	if rail != nil {
+		d.multimodalImageRail = rail
+		railsList = append(railsList, rail)
+	}
+
 	// 步骤 5: streamEventRail — Python: _stream_event_rail
 	se := d.buildStreamEventRail()
 	if se != nil {

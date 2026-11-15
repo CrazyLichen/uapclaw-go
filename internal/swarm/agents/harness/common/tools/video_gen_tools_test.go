@@ -623,3 +623,21 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 	}
 	_ = pushCount
 }
+
+// ──────────────────────────── Task 13: 装配门控 smoke ────────────────────────────
+
+// TestCreateVideoGenTools_卡片与工具名 验证装配层拿到的工具卡名与多模态集合判定。
+func TestCreateVideoGenTools_卡片与工具名(t *testing.T) {
+	gen := CreateGenerateVideoTool()
+	check := CreateCheckVideoStatusTool()
+	if gen.Card().Name != "generate_video" || check.Card().Name != "check_video_status" {
+		t.Fatalf("工具名错: %s/%s", gen.Card().Name, check.Card().Name)
+	}
+	if !IsMultimodalToolName("generate_video") || !IsMultimodalToolName("check_video_status") {
+		t.Fatal("video_gen 工具应在 MULTIMODAL_TOOL_NAMES 集合内")
+	}
+	vu := CreateVideoUnderstandingTool()
+	if vu.Card().Name != "video_understanding" || !IsMultimodalToolName("video_understanding") {
+		t.Fatalf("video_understanding 卡名: %s", vu.Card().Name)
+	}
+}

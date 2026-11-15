@@ -100,7 +100,7 @@ func TestMultimodalImageRail_Uninit清mutator(t *testing.T) {
 	rail := NewMultimodalImageRail(ptr(true))
 	img := writeTempImage(t, "c.png")
 	rail.BeforeModelCall(prompt.WithMultimodalImageFiles(context.Background(), []prompt.MultimodalImageFile{img}), &agentinterfaces.AgentCallbackContext{})
-	rail.Uninit()
+	rail.Uninit(nil)
 	if rail.ImageMutator() != nil {
 		t.Fatal("Uninit 后 mutator 应清空")
 	}
