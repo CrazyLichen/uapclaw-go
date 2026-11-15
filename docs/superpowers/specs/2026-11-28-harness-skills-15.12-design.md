@@ -1,0 +1,105 @@
+# 15.12 skills 与工作区约定 设计（harness_providers/skills.py + external_cli_spawn 路径段）
+
+- 日期：2026-11-28
+- 状态：已与用户对齐（方案 B + 方案 ①）
+- 上游 Python 锚点：
+  - `openjiuwen/harness_providers/skills.py`（221 行）
+  - `openjiuwen/agent_teams/spawn/external_cli_spawn.py`（路径段，行 239-298）
+  - 测试：`tests/unit_tests/harness_providers/test_skills.py`（175 行，11 用例）
+- 计划条目：`IMPLEMENTATION_PLAN.md` 领域十五 15.12（状态 ☐）
+
+## 1. 背景与流程位置
+
+领域十五把第三方 CLI agent（Claude Code / Codex / DeepSeek Harness）提升为协议层 provider。15.12 是外部成员"正式开工前"的最后一步准备，处于 15.6-15.9（provider 实现）之后、15.13（外部成员生命周期）之前。
+
+**实施顺序（用户拍板：方案 B）**：15.12 提前于 15.7-15.9 实施——skills.py 是独立模块（模块级函数 + 进程锁，不 import provider），可先行落地；provider 侧的接线（config 字段 + 启动调用）挂 ⏵ 15.7/15.8/15.9。
+
+**三分离归属（用户拍板：方案 ①）**：`_resolve_external_paths` 及 workspace meta 路径段随 15.12 一并做，提前建 `internal/agent_teams/runtime/externalcli/` 包；`_build_team_context_tracker` 本体与 spawn 主体留 ⏵ 15.13。
+
+## 2. 三件事的职责（通俗版）
+
+1. **Portable skills 复制**：每个 CLI 有固定的技能发现目录（`_SCAN_DIRS`：claudecode→`.claude/skills`、codex→`.agents/skills`、dsh→`.dsh/skills`）。`install_skills` 在 provider 启动前把技能包整个目录复制到发现目录：名字读自 SKILL.md front matter（缺省用目录名，正则 `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`）；复制前安全校验（软链逃逸/环/非常规文件拒绝，内部软链物化）；重名三策略 skip/replace（备份+失败回滚）/append（`-2`/`-3` 改名并改写 front matter name）；包级 `_COPY_LOCK` 防同项目并发；复制后留存不清理。
+2. **cwd/workspace/project_root 三分离**：外部 CLI 是独立进程，不挂载团队工作区。`_resolve_external_paths` 按 `explicit_cwd → worktree_path → project_dir → team_workspace` 选 cwd，四个候选中非 cwd 者（去重、normcase 比对）进 extra_dirs（Claude Code `--add-dir`）。
+3. **workspace meta 暴露**：`_team_workspace_path`（workspace.root_path 或 `team_workspace_dir(team_name)` 默认拼出）与 `team_outputs_dir` 以绝对路径进入 TeamContextTracker（tracker 本体 ⏵ 15.13）；`_build_context_project_dir`/`_build_context_team_outputs_dir` 从 build_context 提取。
+
+**单对话边界（已核实，不预先扩展）**：上游外部 CLI 只有团队 spawn 一条启动路径（`create_harness` 唯一生产调用方为 jiuwenswarm `external_harness_helpers.py`；`external_cli_spawn.py:948` 为真实起进程点）。单对话 REPL（harness/cli）的 `provider` 参数指 LLM 供应商，与外部 CLI 无关。Go 侧按 1:1 对齐团队形态；`_resolve_external_paths` 全候选为空的退化分支即未来单对话扩展缝隙，仅注明不实现。
+
+## 3. Go 交付物
+
+### 3.1 `internal/agentcore/harness_providers/skills.go`（skills.py 1:1）
+
+| Python 符号（行号） | Go 符号 | 说明 |
+|---|---|---|
+| `SkillSource`（23-40） | `SkillSource` 值类型 + `NewSkillSource(dir, mode, enabledSkills)` | 构造期校验对齐 `__post_init__`：dir 非空、mode∈{all,auto_list}、enabled_skills 字符串数组且 tuple 化 |
+| `normalize_skills`（43-59） | `NormalizeSkills(values, conflict)` | conflict 先校验 ∈{skip,replace,append}；三种输入形态（SkillSource/string/Mapping）→ tuple |
+| `_name`（62-80） | `skillName(dir)` | utf-8-sig 读、front matter 未闭合/非 dict 报错、name 正则校验；SKILL.md 须在包内（resolve 相对性） |
+| `_discover`（83-90） | `discoverBundles(root)` | 根含 SKILL.md 即单包；否则按排序递归子目录（跳过软链目录） |
+| `_validate_tree`（93-103） | `validateTree(path, root, ancestors)` | resolve(strict)→EvalSymlinks 组合（D-15.12-a）；逃逸/环/非常规文件三类拒绝 |
+| `_matches`（106-117） | `matchSkills(scan, name)` | 目录名与 front-matter 名 casefold 双轨比对（D-15.12-b：EqualFold）；YAMLError 容错跳过 |
+| `_next_copy_name`（120-127） | `nextCopyName(scan, name)` | `-2` 起步、128 字符截断 |
+| `_rename_copied_skill`（130-143） | `renameCopiedSkill(bundle, name)` | 无 front matter 直接返回；yaml.safe_dump(allow_unicode, sort_keys=False) 语义对齐 |
+| `install_skills`（146-221） | `InstallSkills(sources, provider, cwd, conflict, scanDir)` | 全量步骤 1:1：sources 空→空；conflict 校验；scan_dir 覆盖 `_SCAN_DIRS`；project resolve(strict)；planned 收集；`_COPY_LOCK`→包级 `sync.Mutex`；scan 逃逸校验；mkdir；逐包 skip/replace/append 分支；tempdir 暂存（D-15.12-c）；existed/backup/rename 回滚序逐行对齐；返回 installed tuple |
+
+包级 `_SCAN_DIRS`/`_COPY_LOCK` → 常量块 + 包级 `sync.Mutex`。
+
+### 3.2 `internal/agent_teams/runtime/externalcli/`（新包，提前建）
+
+本轮只落 external_cli_spawn.py 行 239-298 路径段：
+
+| Python 符号（行号） | Go 符号 |
+|---|---|
+| `_path_value`（239-243） | `pathValue(value)` — 非 str/空串→nil |
+| `_same_path`（246-247） | `samePath(l, r)` — normcase+normpath → `filepath.Clean` + 大小写归一（Windows 语义保留） |
+| `_append_extra_dir`（250-257） | `appendExtraDir(result, path, cwd)` |
+| `_team_workspace_path`（260-264） | `teamWorkspacePath(workspace, teamName)` — **前置件缺口**：`agent_teams.paths.team_workspace_dir`（paths.py:168，`{team_home}/team-workspace/` 布局）Go 无对应物，本节一并落 `externalcli` 包内最小等价实现（含其依赖 `get_openjiuwen_home`/team_home 的 Go 等价物核对；若 team_home 链路缺失则本函数按既有 9.x workspace 约定登记偏差） |
+| `_build_context_project_dir`（267-271） | `buildContextProjectDir(spec)` |
+| `_build_context_team_outputs_dir`（274-278） | `buildContextTeamOutputsDir(spec)` |
+| `_resolve_external_paths`（281-298） | `ResolveExternalPaths(spec, ctx, configuredCwd, teamName)` — 选 cwd 顺序与 extra_dirs 收集逐行对齐 |
+
+`doc.go` 按规则 1 建立并注明「15.13 续写 spawn 主体」。
+
+### 3.3 接线（不在本节，挂 ⏵）
+
+- claudecode/codex/dsh config 的 `skills`/`skill_conflict`/`add_dirs` 字段与构造期 `normalize_skills` → ⏵ 15.7/15.8/15.9
+- provider `harness.py` 启动时 `install_skills` 调用（线程化）→ ⏵ 15.7/15.8/15.9
+- `_build_team_context_tracker`、spawn 主体 → ⏵ 15.13
+- `jiuwenswarm` 侧 external_cli 面板/runtime manifest → ⏵ 15.16
+
+## 4. 已知偏差（全部经用户 2026-11-28 拍板）
+
+| 编号 | Python | Go | 理由 | 回收条件 |
+|---|---|---|---|---|
+| D-15.12-a | `Path.resolve(strict=True)`（169/173/186 等处） | `filepath.Abs` + `os.Stat` + `filepath.EvalSymlinks` 组合 | Go 无 strict resolve | 无；行为等价（不存在→error、软链→真实路径） |
+| D-15.12-b | `str.casefold()`（115） | `strings.EqualFold`（Unicode 简单折叠） | 技能名正则已限 `[A-Za-z0-9._-]`，特殊折叠字符（ß 等）不可达，影响面趋近零 | 技能名允许集放宽时复刻完整折叠表 |
+| D-15.12-c | `tempfile.TemporaryDirectory(prefix, dir=project)` 上下文管理器 | `os.MkdirTemp(project, ".openjiuwen-skill-*")` + defer 清理 | 语言特性差异；prefix 语义对齐（Go 的 pattern 末尾 `*` 等价 prefix+随机段） | 无 |
+| D-15.12-d | yaml（`yaml.safe_load`/`safe_dump`，utf-8-sig BOM 剥离、`splitlines` 行界） | gopkg.in/yaml.v3 + 既有 splitlines 语义复刻惯例（13.18 先例） | 库差异；dump 的 `sort_keys=False`→yaml.v3 默认保序、`allow_unicode`→默认不转义 | 无 |
+| D-15.12-e | Python 单文件 `external_cli_spawn.py` 由 15.12/15.13 两批填充 | `externalcli` 包同批文件分两批续写 | 方案 ① 提前建包的结构代价 | 15.13 完成后同一文件内合并核对方法清单 |
+
+## 5. 测试面
+
+- `test_skills.py` 11 用例全量 1:1 转 Go（参数化还原 pytest parametrize）：
+  1. 完整包 + 三 conflict 策略（×provider×relative 参数化）
+  2. 库选择 + front-matter 名与目录名冲突
+  3. copy 失败保留既有技能（monkeypatch shutil.copytree）
+  4. 软链逃逸拒绝 + 自复制 no-op
+  5. 并发 skip 只落一份完整技能
+  6. 并发 append 保留两份
+  7. cwd 缺省用进程 cwd
+  8. 非法配置/技能名
+  9. install rename 失败恢复原目录
+  10. 内部软链物化
+  11. replace 目标为软链时不改动源
+- 三分离函数用例：从 external_cli_spawn 测试中取路径段对应部分（选 cwd 四级顺序、extra_dirs 去重、normcase 边界）。
+- 并发用例用 `sync.WaitGroup`+goroutine 对齐线程语义；monkeypatch 处用接口/函数变量注入。
+- 覆盖率目标：`harness_providers` 包 ≥85%（skills.go 函数级 100%）、`externalcli` 包 ≥85%。
+
+## 6. 删除清单
+
+无——本节为全新实现，无被替代的旧实现（已核实：Go 侧无 skills.go、无 ResolveExternalPaths、无 externalcli 包；`DeepAdapter.skillScanDirs` 属内部 DeepAgent 技能扫描，与外部 CLI 发现目录复制无关，不动）。
+
+## 7. 锚点核查（完成后验收）
+
+- `rg -i "install_skills|InstallSkills" internal/` 命中且仅 harness_providers/skills.go + 测试
+- `rg "ResolveExternalPaths" internal/` 命中且仅 externalcli 包 + 测试
+- `IMPLEMENTATION_PLAN.md` 15.12 行 ☐→✅，⏵ 15.7/15.8/15.9/15.13 回填标记落对应行
+- `go build ./...`、`go vet ./...`、`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 全绿
