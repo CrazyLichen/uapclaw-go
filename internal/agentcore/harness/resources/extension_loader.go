@@ -264,7 +264,7 @@ func loadPluginManifestJSON(manifest string) (hschema.PluginSpec, error) {
 
 	baseDir := filepath.Dir(manifest)
 	packageRoot := baseDir
-	promptSections, err := buildPromptSectionSpecs(payload["prompt_sections"], baseDir, packageRoot)
+	promptSections, err := BuildPromptSectionSpecs(payload["prompt_sections"], baseDir, packageRoot)
 	if err != nil {
 		return hschema.PluginSpec{}, err
 	}
@@ -735,7 +735,7 @@ func buildRuntimeSpec(runtime any, baseDir, packageRoot string) (*hschema.AgentR
 // buildPromptSectionSpecs prompt_sections 装配：file 条目从 prompt_sections/*.md 装载，
 // name 取 markdown 词干；内联 name+content 条目保持有效。
 // Python: extension_loader.py:456-485 _build_prompt_section_specs
-func buildPromptSectionSpecs(items any, baseDir, packageRoot string) ([]hschema.PromptSectionSpec, error) {
+func BuildPromptSectionSpecs(items any, baseDir, packageRoot string) ([]hschema.PromptSectionSpec, error) {
 	specs := []hschema.PromptSectionSpec{}
 	sectionsRoot := filepath.Join(packageRoot, "prompt_sections")
 	for _, item := range asList(items) {
@@ -1638,19 +1638,19 @@ func mergeSidecarPromptSections(payload map[string]any, packageDir string) {
 	}
 	for _, section := range asList(sectionsMap["sections"]) {
 		if sectionMap, ok := section.(map[string]any); ok {
-			mergeItems(payload, "prompt_sections", normalizePromptSection(sectionMap, packageDir))
+			mergeItems(payload, "prompt_sections", NormalizePromptSection(sectionMap, packageDir))
 		}
 	}
 }
 
 // normalizePromptSection sections.yaml 段落归一化（file 引用展开）。
 // Python: extension_loader.py:964-972 _normalize_prompt_section
-func normalizePromptSection(section map[string]any, packageDir string) map[string]any {
+func NormalizePromptSection(section map[string]any, packageDir string) map[string]any {
 	normalized := copyMap(section)
 	fileName, hasFile := normalized["file"]
 	delete(normalized, "file")
 	if hasFile && fileName != nil {
-		sectionPath := resolveSectionFile(packageDir, fmt.Sprint(fileName))
+		sectionPath := ResolveSectionFile(packageDir, fmt.Sprint(fileName))
 		content, err := os.ReadFile(sectionPath)
 		if err == nil {
 			normalized["content"] = sectionContent(string(content))
@@ -1663,7 +1663,7 @@ func normalizePromptSection(section map[string]any, packageDir string) map[strin
 
 // resolveSectionFile 段落文件定位：绝对 / 包根直下 / prompt_sections/files。
 // Python: extension_loader.py:975-982 _resolve_section_file
-func resolveSectionFile(packageDir, fileName string) string {
+func ResolveSectionFile(packageDir, fileName string) string {
 	if filepath.IsAbs(fileName) {
 		return fileName
 	}
