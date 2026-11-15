@@ -303,6 +303,121 @@ func EnsureMultimodalImageWindowMutator(imageFiles []MultimodalImageFile) (Multi
 	}, true
 }
 
+// ImageInputStatusMessage 用同一段图片输入能力描述服务提示词与降级通知。
+// Python: image_input_status_message:75-83
+func ImageInputStatusMessage(status string, modelLabel string) string {
+	model := "当前模型" + modelLabel
+	switch status {
+	case "disabled":
+		return model + "已在配置中关闭原生图片输入。"
+	case "unsupported":
+		return model + "的当前接口经检测不支持原生图片输入。"
+	default:
+		return "尚未确认" + model + "的接口是否支持原生图片输入。"
+	}
+}
+
+// imageToolHint 按场景生成图片工具提示。
+// Python: _image_tool_hint:85-111
+func imageToolHint(imageInputStatus string, visionToolAvailable bool, steerImageTool string) string {
+	if steerImageTool != "" {
+		invocation := "visual_question_answering(image_path_or_url=mediaPath, question=question)"
+		if steerImageTool == "read_file" {
+			invocation = "read_file(file_path=mediaPath)"
+		}
+		return "This is supplemental input for the current task. The steering queue carries text only; " +
+			"the uploaded images have not yet been read. For every entry in mediaItems, call " +
+			invocation + " using that entry's mediaPath before describing or comparing the images. " +
+			"If reading fails or returns only metadata, explain the failure; do not guess image contents."
+	}
+	var toolHint string
+	if visionToolAvailable {
+		toolHint = "请调用已配置的图片理解工具；" +
+			"优先使用 image_reading(local_url=mediaPath, prompt=question)，" +
+			"或使用 visual_question_answering(image_path_or_url=mediaPath, question=question)。"
+	} else {
+		toolHint = "没有配置可用的视觉模型工具。" +
+			"请根据上述状态向用户说明本次无法直接读图的原因，不要猜测图片内容。" +
+			"能力未确认不等于模型不支持读图。"
+	}
+	return ImageInputStatusMessage(imageInputStatus, "") + "本次图片未作为原生图片输入发送给主模型。" + toolHint
+}
+
+// PrepareImageToolInputs 为普通聊天与纯文本 steer 序列化图片工具上下文。
+// Python: prepare_image_tool_inputs:113-176
+// inputs 的 "_multimodal_image_files" 键在注入后被删除（对齐 :168）。
+func PrepareImageToolInputs(params map[string]any, inputs map[string]any, enableReadImageMultimodal bool, visionToolAvailable bool, imageInputStatus string, steerImageTool string) map[string]any {
+	// Python: if enable_read_image_multimodal and steer_image_tool is None: return inputs
+	if enableReadImageMultimodal && steerImageTool == "" {
+		return inputs
+	}
+	query, ok := inputs["query"].(string)
+	if !ok || (steerImageTool == "" && strings.Contains(query, "jiuwenswarm_image_tool_context")) {
+		return inputs
+	}
+
+	// Python: image_files = inputs.get("_multimodal_image_files")；缺失时从 params 再提取
+	var imageFiles []MultimodalImageFile
+	if raw, ok := inputs["_multimodal_image_files"].([]MultimodalImageFile); ok && len(raw) > 0 {
+		imageFiles = raw
+	} else {
+		imageFiles = ExtractMultimodalImageFiles(params)
+	}
+	if len(imageFiles) == 0 {
+		return inputs
+	}
+
+	// Python: params.get("query") → params.get("content")；空则 steer 场景补默认句
+	rawQuestion := stripAnyGo(params["query"])
+	if rawQuestion == "" {
+		rawQuestion = stripAnyGo(params["content"])
+	}
+	question := rawQuestion
+	if steerImageTool != "" && question == "" {
+		question = "Read the attached images and use them to continue the current task."
+	}
+	firstPath := imageFiles[0].Path
+	if strings.TrimSpace(firstPath) == "" {
+		return inputs
+	}
+
+	// Python: media_items 逐条 {type, filename, mediaPath, mimeType}
+	mediaItems := make([]map[string]any, 0, len(imageFiles))
+	for _, imageFile := range imageFiles {
+		path := strings.TrimSpace(imageFile.Path)
+		if path == "" {
+			continue
+		}
+		mediaItems = append(mediaItems, map[string]any{
+			"type":      "image",
+			"filename":  strOrAnyGo(imageFile.Filename, filepath.Base(path)),
+			"mediaPath": path,
+			"mimeType":  imageFile.MimeType,
+		})
+	}
+	if len(mediaItems) == 0 {
+		return inputs
+	}
+
+	toolContext := map[string]any{
+		"marker":           "jiuwenswarm_image_tool_context",
+		"mediaPath":        firstPath,
+		"mediaItems":       mediaItems,
+		"question":         question,
+		"imageInputStatus": imageInputStatus,
+		"toolHint":         imageToolHint(imageInputStatus, visionToolAvailable, steerImageTool),
+	}
+	updated := make(map[string]any, len(inputs)+1)
+	for k, v := range inputs {
+		updated[k] = v
+	}
+	// Python: updated.pop("_multimodal_image_files", None)
+	delete(updated, "_multimodal_image_files")
+	data, _ := json.Marshal(toolContext)
+	updated["query"] = query + "\n\n图片附件上下文（供 ReAct 选择图片理解工具使用）：\n" + string(data)
+	return updated
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeImageFileStruct 对结构体形态的图片记录做与 map 形态相同的归一化校验。

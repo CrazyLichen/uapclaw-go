@@ -331,3 +331,127 @@ func TestEnsureMultimodalImageWindowMutator(t *testing.T) {
 		t.Fatal("重复构造应成功")
 	}
 }
+
+// ──────────────────────────── prepare_image_tool_inputs 段 ────────────────────────────
+
+// TestImageInputStatusMessage 对齐 :75-83 三态。
+func TestImageInputStatusMessage(t *testing.T) {
+	if msg := ImageInputStatusMessage("disabled", "A"); !strings.Contains(msg, "A已在配置中关闭原生图片输入") {
+		t.Fatalf("disabled: %q", msg)
+	}
+	if msg := ImageInputStatusMessage("unsupported", ""); !strings.Contains(msg, "经检测不支持") {
+		t.Fatalf("unsupported: %q", msg)
+	}
+	if msg := ImageInputStatusMessage("unknown", ""); !strings.Contains(msg, "尚未确认") {
+		t.Fatalf("unknown: %q", msg)
+	}
+}
+
+// TestImageToolHint_不可见 对齐 :85-111 steer 与 vision 两分支。
+func TestImageToolHint_分支(t *testing.T) {
+	hint := imageToolHint("unknown", true, "")
+	if !strings.Contains(hint, "image_reading") || !strings.Contains(hint, "未作为原生图片输入") {
+		t.Fatalf("vision 可用分支: %q", hint)
+	}
+	hint2 := imageToolHint("disabled", false, "")
+	if !strings.Contains(hint2, "没有配置可用的视觉模型工具") {
+		t.Fatalf("vision 不可用分支: %q", hint2)
+	}
+	hint3 := imageToolHint("unknown", true, "read_file")
+	if !strings.Contains(hint3, "read_file(file_path=mediaPath)") {
+		t.Fatalf("steer read_file 分支: %q", hint3)
+	}
+	hint4 := imageToolHint("unknown", true, "other")
+	if !strings.Contains(hint4, "visual_question_answering(image_path_or_url=mediaPath") {
+		t.Fatalf("steer 默认分支: %q", hint4)
+	}
+}
+
+// TestPrepareImageToolInputs_原生输入开启直接返回 对齐 :116-118。
+func TestPrepareImageToolInputs_原生输入开启直接返回(t *testing.T) {
+	inputs := map[string]any{"query": "q"}
+	out := PrepareImageToolInputs(map[string]any{}, inputs, true, true, "unknown", "")
+	if len(out) != 1 || out["query"] != "q" {
+		t.Fatalf("应原样返回: %v", out)
+	}
+}
+
+// TestPrepareImageToolInputs_marker已存在跳过 对齐 :120-124。
+func TestPrepareImageToolInputs_marker已存在跳过(t *testing.T) {
+	img := promptImageFile(t)
+	inputs := map[string]any{"query": "already jiuwenswarm_image_tool_context", "_multimodal_image_files": []MultimodalImageFile{img}}
+	out := PrepareImageToolInputs(map[string]any{}, inputs, false, true, "unknown", "")
+	if out["query"] != inputs["query"] {
+		t.Fatalf("marker 已存在且非 steer 应原样: %q", out["query"])
+	}
+}
+
+// TestPrepareImageToolInputs_注入JSON上下文 对齐 :126-176 主路径。
+func TestPrepareImageToolInputs_注入JSON上下文(t *testing.T) {
+	img := promptImageFile(t)
+	inputs := map[string]any{
+		"query":                   "看看这张图",
+		"_multimodal_image_files": []MultimodalImageFile{img},
+	}
+	out := PrepareImageToolInputs(map[string]any{"query": "看看这张图"}, inputs, false, true, "unknown", "")
+	q, _ := out["query"].(string)
+	if !strings.Contains(q, "图片附件上下文") {
+		t.Fatalf("未注入: %q", q)
+	}
+	if _, still := out["_multimodal_image_files"]; still {
+		t.Fatal("_multimodal_image_files 应被删除")
+	}
+	// JSON 块含全键
+	idx := strings.Index(q, "{")
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(q[idx:]), &payload); err != nil {
+		t.Fatalf("JSON 解析: %v", err)
+	}
+	for _, key := range []string{"marker", "mediaPath", "mediaItems", "question", "imageInputStatus", "toolHint"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("缺键 %s: %v", key, payload)
+		}
+	}
+	if payload["marker"] != "jiuwenswarm_image_tool_context" || payload["question"] != "看看这张图" {
+		t.Fatalf("marker/question 错: %v", payload)
+	}
+}
+
+// TestPrepareImageToolInputs_steer补默认question 对齐 :139-141。
+func TestPrepareImageToolInputs_steer补默认question(t *testing.T) {
+	img := promptImageFile(t)
+	inputs := map[string]any{"query": "s", "_multimodal_image_files": []MultimodalImageFile{img}}
+	out := PrepareImageToolInputs(map[string]any{}, inputs, false, true, "unknown", "read_file")
+	q, _ := out["query"].(string)
+	if !strings.Contains(q, "Read the attached images and use them to continue the current task.") {
+		t.Fatalf("steer 默认 question 未补: %q", q)
+	}
+}
+
+// TestPrepareImageToolInputs_无图返回原样 对齐 :131-134。
+func TestPrepareImageToolInputs_无图返回原样(t *testing.T) {
+	inputs := map[string]any{"query": "q"}
+	out := PrepareImageToolInputs(map[string]any{}, inputs, false, true, "unknown", "")
+	if out["query"] != "q" || len(out) != 1 {
+		t.Fatalf("无图应原样: %v", out)
+	}
+}
+
+// ──────────────────────────── 测试辅助 ────────────────────────────
+
+func promptImageFile(t *testing.T) MultimodalImageFile {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "p.png")
+	if err := os.WriteFile(p, []byte("px"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return MultimodalImageFile{Type: "image", Filename: "p.png", Path: p, MimeType: "image/png"}
+}
+
+func mkImageParamsForPrompt(t *testing.T) map[string]any {
+	t.Helper()
+	img := promptImageFile(t)
+	return map[string]any{"media_items": []any{map[string]any{
+		"type": "image", "path": img.Path, "mime_type": img.MimeType, "filename": img.Filename,
+	}}}
+}
