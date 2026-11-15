@@ -399,7 +399,8 @@ func (d *DeepAgent) Configure(ctx context.Context, config agentinterfaces.AgentC
 
 // Invoke 非流式执行 Agent。
 // Python: DeepAgent.invoke(inputs, session) (line 2261)
-func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+// 17.4b2 增强件：调用体由 invocation 日志作用域包裹（Python _invocation_log_context, deep_agent.py:3364）
+func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (result map[string]any, retErr error) {
 	var initErr error
 	ctx, initErr = d.ensureInitialized(ctx)
 	if initErr != nil {
@@ -431,12 +432,21 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 	}
 	sess = prepared
 
+	// 17.4b2 增强件：invocation 日志作用域（Python with self._invocation_log_context(session), deep_agent.py:3364）
+	invCtx, invFinish, invErr := d.startInvocationLogContext(ctx, sess)
+	if invErr != nil {
+		warnInvocationLogUnavailable(invErr)
+	} else {
+		ctx = invCtx
+	}
+	if invFinish != nil {
+		defer func() { invFinish(retErr) }()
+	}
+
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	d.invokeActive.Store(true)
 	defer d.invokeActive.Store(false)
-
-	var result map[string]any
 
 	// Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 	// 使用 FireLifecycle 包裹核心执行逻辑，保证 AFTER_INVOKE 必定触发
@@ -474,6 +484,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 
 // Stream 流式执行 Agent。
 // Python: DeepAgent.stream(inputs, session, stream_modes) (line 2302)
+// 17.4b2 增强件：调用体由 invocation 日志作用域包裹（Python _invocation_log_context, deep_agent.py:3449）
 func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	var initErr error
 	ctx, initErr = d.ensureInitialized(ctx)
@@ -510,6 +521,14 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	}
 	sess = prepared
 
+	// 17.4b2 增强件：invocation 日志作用域（Python with self._invocation_log_context(session), deep_agent.py:3449）
+	invCtx, invFinish, invErr := d.startInvocationLogContext(ctx, sess)
+	if invErr != nil {
+		warnInvocationLogUnavailable(invErr)
+	} else {
+		ctx = invCtx
+	}
+
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	outCh := make(chan stream.Schema, 64)
@@ -517,6 +536,10 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	d.invokeActive.Store(true)
 
 	go func() {
+		// 作用域收尾随流 goroutine 结束（Python stream 的 context 退出点）
+		if invFinish != nil {
+			defer invFinish(nil)
+		}
 		defer d.invokeActive.Store(false)
 		defer close(outCh)
 
@@ -905,6 +928,15 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 	// 如果 spec 本身就是 *DeepAgent 实例，直接返回
 	if deepAgent, ok := spec.(*DeepAgent); ok {
 		logger.Info(logComponent).Str("subagent_type", subagentType).Msg("DeepAgent instance acquired, returning directly")
+		// Python: parent_log_dir = self._deep_config.invocation_log_dir if ... else None
+		//         spec.inherit_invocation_log_dir(parent_log_dir)（deep_agent.py:1647-1648）
+		d.configMu.RLock()
+		parentLogDir := ""
+		if d.deepConfig != nil {
+			parentLogDir = d.deepConfig.InvocationLogDir
+		}
+		d.configMu.RUnlock()
+		deepAgent.InheritInvocationLogDir(parentLogDir)
 		return deepAgent, nil
 	}
 
@@ -3779,6 +3811,12 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 	// RestrictToWorkDir：创建独立指针，避免取 subCfg 字段地址（悬空风险）
 	restrictToWorkDir := subCfg.RestrictToWorkDir
 
+	// InvocationLogDir：spec 值优先，否则继承父配置（Python create_kwargs["invocation_log_dir"], deep_agent.py:1684-1685）
+	invocationLogDir := subCfg.InvocationLogDir
+	if invocationLogDir == "" {
+		invocationLogDir = cfg.InvocationLogDir
+	}
+
 	return &hschema.SubagentCreateParams{
 		Model:                  model,
 		Card:                   subCfg.AgentCard,
@@ -3792,6 +3830,7 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		Workspace:              subWorkspace,
 		Skills:                 subCfg.Skills,
 		Backend:                backend,
+		InvocationLogDir:       invocationLogDir,
 		SysOperation:           sysOp,
 		Language:               language,
 		PromptMode:             promptMode,

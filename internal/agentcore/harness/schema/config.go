@@ -109,6 +109,8 @@ type SubAgentConfig struct {
 	Skills []string `json:"skills,omitempty"`
 	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
 	Backend any `json:"-"`
+	// InvocationLogDir 调用日志目录（17.4b2 增强件，Python DeepAgentSpec.invocation_log_dir）
+	InvocationLogDir string `json:"invocation_log_dir,omitempty"`
 	// Workspace 工作空间
 	Workspace *workspace.Workspace `json:"workspace,omitempty"`
 	// SysOperation 系统操作实例
@@ -160,6 +162,8 @@ type SubagentCreateParams struct {
 	Skills []string
 	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
 	Backend any
+	// InvocationLogDir 调用日志目录（17.4b2 增强件；spec 值优先，否则继承父配置）
+	InvocationLogDir string
 	// SysOperation 系统操作实例
 	SysOperation sysop.SysOperation
 	// Language 语言
@@ -233,6 +237,8 @@ type DeepAgentConfig struct {
 	EnableSkillDiscovery bool `json:"enable_skill_discovery"`
 	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
 	Backend any `json:"-"`
+	// InvocationLogDir 调用日志目录（17.4b2 增强件，Python DeepAgentConfig.invocation_log_dir）
+	InvocationLogDir string `json:"invocation_log_dir,omitempty"`
 	// SysOperation 系统操作实例
 	SysOperation sysop.SysOperation `json:"-"`
 	// AutoCreateWorkspace 是否自动创建工作空间

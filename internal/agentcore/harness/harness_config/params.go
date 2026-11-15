@@ -83,6 +83,8 @@ type CreateDeepAgentParams struct {
 	// RestrictToWorkDir 限制文件访问到工作空间目录。
 	// 使用 *bool 指针以区分"未设置"(nil)和"显式设为 false"，与 SubagentCreateParams 保持一致。
 	RestrictToWorkDir *bool
+	// InvocationLogDir 调用日志目录（17.4b2 增强件，Python create_deep_agent(invocation_log_dir=...)）
+	InvocationLogDir string
 	// DefaultMode 初始 Agent 模式
 	DefaultMode hschema.AgentMode
 	// ModelSelection 模型选择配置

@@ -190,6 +190,7 @@ func buildDeepAgentConfig(
 	config.EnablePlanMode = params.EnableTaskPlanning
 	config.ModelSelection = params.ModelSelection
 	config.AutoCreateWorkspace = params.AutoCreateWorkspace
+	config.InvocationLogDir = params.InvocationLogDir
 	if params.CompletionTimeout > 0 {
 		config.CompletionTimeout = params.CompletionTimeout
 	}
