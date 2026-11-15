@@ -17,6 +17,8 @@ import (
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
+	serverruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -62,6 +64,18 @@ type AgentServer struct {
 	sessionStreamTasks map[string]*streamTaskEntry
 	// sessionStreamTasksMu 保护 sessionStreamTasks 的读写锁
 	sessionStreamTasksMu sync.RWMutex
+	// imageModalityWarmupFn 图像模态预热入口（测试注入点；默认走统一防抖槽）
+	// Python: self.schedule_image_modality_warmup（agent_ws_server.py:1857）
+	imageModalityWarmupFn func(reason string, resetCache bool)
+	// imageModalityRefreshMu 保护统一预热任务槽
+	// Python: _image_modality_refresh_task 单任务槽（agent_ws_server.py:1862-1865）
+	imageModalityRefreshMu sync.Mutex
+	// imageModalityRefreshCancel 当前在途预热任务的取消函数；nil=无在途任务
+	imageModalityRefreshCancel context.CancelFunc
+	// imageModalityRefreshCtx 当前在途预热任务的上下文（随槽位更替）
+	imageModalityRefreshCtx context.Context
+	// imageModalityRefreshRound 预热轮次序号（防旧 goroutine 清掉新一轮槽位登记）
+	imageModalityRefreshRound uint64
 	// running 是否正在运行
 	running bool
 	// runningMu 保护 running 的读写锁
@@ -209,6 +223,10 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	// AgentWebSocketServer.get_instance() 单例直取——Go 同 24b/24c 启动接线。
 	swarmtools.GetAcpOutputManager().SetSendPushFunc(s.SendPush)
 
+	// 23.7 已接线：服务启动预热图像模态缓存（reason="startup"）。
+	// Python: agent_ws_server preparation 阶段统一调度（schedule_image_modality_warmup）
+	s.scheduleImageModalityWarmup("startup", false)
+
 	// 10.3.31a 已接线：主动推荐引擎（proactive.tick / proactive.feedback 两个 RPC 的服务端）。
 	// Python: server/worker/capabilities.py:73 prepare_proactive →
 	// await init_proactive_engine(server, proactive_config)。
@@ -220,6 +238,59 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	go s.run(ctx)
 
 	return nil
+}
+
+// scheduleImageModalityWarmup 把图像模态预热任务放进统一槽位调度。
+//
+// 启动预热与模型配置变更重探共用一个任务槽：新任务启动前取消上一轮未完成的
+// 任务，避免启动预热在配置变化后继续写已作废的结论。
+//
+// Python: agent_ws_server.py:1857-1880 schedule_image_modality_warmup
+func (s *AgentServer) scheduleImageModalityWarmup(reason string, resetCache bool) {
+	s.imageModalityRefreshMu.Lock()
+	// 取消上一轮未完成任务（含启动预热轮）：旧结论已作废
+	if s.imageModalityRefreshCancel != nil {
+		s.imageModalityRefreshCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.imageModalityRefreshRound++
+	s.imageModalityRefreshCancel = cancel
+	s.imageModalityRefreshCtx = ctx
+	ownRound := s.imageModalityRefreshRound
+	fn := s.imageModalityWarmupFn
+	if fn == nil {
+		fn = func(r string, rc bool) {
+			if rc {
+				modalityprobe.ResetImageSupportCache()
+			}
+			serverruntime.WarmImageModalityCache(nil, r)
+		}
+	}
+	s.imageModalityRefreshMu.Unlock()
+
+	go func() {
+		fn(reason, resetCache)
+		s.imageModalityRefreshMu.Lock()
+		// 仅当仍是自己这一轮时清空槽位，避免误清新一轮的登记
+		if s.imageModalityRefreshRound == ownRound {
+			s.imageModalityRefreshCancel = nil
+			s.imageModalityRefreshCtx = nil
+		}
+		s.imageModalityRefreshMu.Unlock()
+	}()
+}
+
+// imageModalityRefreshContext 返回当前在途预热任务的上下文（测试观察用）；
+// 无在途任务时返回已取消的上下文。
+func (s *AgentServer) imageModalityRefreshContext() context.Context {
+	s.imageModalityRefreshMu.Lock()
+	defer s.imageModalityRefreshMu.Unlock()
+	if s.imageModalityRefreshCtx == nil {
+		cancelled, cancel := context.WithCancel(context.Background())
+		cancel()
+		return cancelled
+	}
+	return s.imageModalityRefreshCtx
 }
 
 // Stop 停止 AgentServer：取消所有任务 → 清理 AgentManager → 等待主循环退出。

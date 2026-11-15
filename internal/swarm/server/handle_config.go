@@ -72,6 +72,22 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 		}
 	}
 
+	// Python: agent_ws_server.py:12908-12921
+	// should_warm_tokenizers = True（scopes 为空）或 "model" in reload_scopes
+	shouldWarmTokenizers := len(opts.ReloadScopes) == 0
+	for _, scope := range opts.ReloadScopes {
+		if scope == "model" {
+			shouldWarmTokenizers = true
+			break
+		}
+	}
+	// Python: agent_ws_server.py:12912-12921 模型配置变了就重探图像模态：
+	// 同 (api_base, model_name) 背后可能已换端点/密钥/后端，旧结论不能留。
+	// 统一槽位调度——上一轮未探完就被取消，reset 缓存后按最新配置重探。
+	if shouldWarmTokenizers {
+		s.scheduleImageModalityWarmup("model config change", true)
+	}
+
 	if err := s.agentManager.ReloadAgentsConfig(ctx, configPayload, envOverrides, opts); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
