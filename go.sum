@@ -809,6 +809,8 @@ github.com/testcontainers/testcontainers-go v0.42.0 h1:He3IhTzTZOygSXLJPMX7n44Xt
 github.com/testcontainers/testcontainers-go v0.42.0/go.mod h1:vZjdY1YmUA1qEForxOIOazfsrdyORJAbhi0bp8plN30=
 github.com/testcontainers/testcontainers-go/modules/chroma v0.40.1-0.20260210100442-3894e5768a31 h1:ImTztHDu747xELISdoP/v1xtnJ/rfsie2deZCe49H84=
 github.com/testcontainers/testcontainers-go/modules/chroma v0.40.1-0.20260210100442-3894e5768a31/go.mod h1:eGu6HHcD1n2x+h9VygYhcjWiN1HiXjeY7r92hYt8lM8=
+github.com/theoneLee/deepseek-harness-sdk-go v0.1.5-alpha.1 h1:TY4QifzdHkP9/jlRhOK2oQBQIbG2WYNrRZm1KAoWTP0=
+github.com/theoneLee/deepseek-harness-sdk-go v0.1.5-alpha.1/go.mod h1:jhFQbcfPj8XIJ5XgERCyngy3N3/XmXITt4trczA/eBo=
 github.com/thoas/go-funk v0.9.1 h1:O549iLZqPpTUQ10ykd26sZhzD+rmR5pWhuElrhbC20M=
 github.com/thoas/go-funk v0.9.1/go.mod h1:+IWnUfUmFO1+WVYQWQtIJHeRRdaIyyYglZN7xzUPe4Q=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
