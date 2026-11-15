@@ -37,6 +37,15 @@ type SysOperationRail struct {
 	// allowPatterns Shell 工具允许模式列表
 	// Python: BashTool(allow_patterns=...)
 	allowPatterns []string
+	// shellOnly 仅挂载 Shell 工具（RSI 评估策略，17.4b1 前置件）
+	// Python: RSISysOperationRail._shell_only（基类无此字段，默认 false 行为不变）
+	shellOnly bool
+	// allowShell 非 shellOnly 模式下是否把 bash 并入 shared（默认 true 行为不变）
+	// Python: RSISysOperationRail._allow_shell
+	allowShell bool
+	// bashDecorator bash 工具装饰器（RSI pipefail 变体；nil 表示不装饰）
+	// Python: RSIBashTool 子类变体，经此扩展点注入基类装配
+	bashDecorator func(tool.Tool) tool.Tool
 }
 
 // SysOperationRailOption 配置选项函数
@@ -93,12 +102,31 @@ func WithAllowPatterns(patterns []string) SysOperationRailOption {
 	return func(r *SysOperationRail) { r.allowPatterns = patterns }
 }
 
+// WithShellOnly 设置仅挂载 Shell 工具（RSI 评估策略）。
+// Python: RSISysOperationRail(shell_only=True)（基类默认 false 行为不变）
+func WithShellOnly(enabled bool) SysOperationRailOption {
+	return func(r *SysOperationRail) { r.shellOnly = enabled }
+}
+
+// WithAllowShell 设置非 shellOnly 模式下 bash 是否并入 shared。
+// Python: RSISysOperationRail(allow_shell=False)（基类默认 true 行为不变）
+func WithAllowShell(enabled bool) SysOperationRailOption {
+	return func(r *SysOperationRail) { r.allowShell = enabled }
+}
+
+// WithBashToolDecorator 设置 bash 工具装饰器（RSI pipefail 变体注入点）。
+// Python: RSIBashTool 子类经 init() 装配；Go 经此扩展点注入基类。
+func WithBashToolDecorator(decorator func(tool.Tool) tool.Tool) SysOperationRailOption {
+	return func(r *SysOperationRail) { r.bashDecorator = decorator }
+}
+
 // NewSysOperationRail 创建系统操作护栏实例。
 // Python: SysOperationRail.__init__()
 func NewSysOperationRail(opts ...SysOperationRailOption) *SysOperationRail {
 	r := &SysOperationRail{
 		DeepAgentRail:  *NewDeepAgentRail(),
 		permissionMode: shell.PermissionModeAuto,
+		allowShell:     true,
 	}
 	r.WithPriority(sysOpRailPriority)
 	for _, opt := range opts {
@@ -144,31 +172,45 @@ func (r *SysOperationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	// 构建权限配置，对齐 Python: BashTool(permission_mode="auto", deny_patterns=..., allow_patterns=...)
 	permConfig := shell.NewPermissionConfig(r.permissionMode, r.denyPatterns, r.allowPatterns)
 	bashTool := shell.NewBashTool(op, language, agentID, permConfig)
+	// RSI pipefail 变体装饰（nil 时 bashTool 原样，基类行为不变）
+	// Python: RSISysOperationRail.init 用 RSIBashTool 替换基类 BashTool
+	if r.bashDecorator != nil {
+		bashTool = r.bashDecorator(bashTool)
+	}
 
 	// 通知权限层登记原生路径工具的具体类型（供路径冻结校验）
 	notifyToolInstances(readTool, writeTool, editTool, globTool, listDirTool, grepTool, bashTool)
 
 	// 构建工具列表
-	// Python: L69-78
-	shared := []tool.Tool{globTool, listDirTool, grepTool, bashTool}
-	if r.readOnly {
-		r.tools = append([]tool.Tool{readTool}, shared...)
+	// Python: RSISysOperationRail.init（runtime_adapters.py:121-164）分支结构：
+	// shellOnly → [bash]；否则 read/shared，allowShell 决定 bash 并入，
+	// readOnly 决定 write/edit，Windows+非只读追加 PowerShell，withCodeTool+非只读追加 Code。
+	// 基类（sys_operation_rail.py）等价于 shellOnly=false/allowShell=true 的分支子集。
+	if r.shellOnly {
+		r.tools = []tool.Tool{bashTool}
 	} else {
-		r.tools = append([]tool.Tool{readTool, writeTool, editTool}, shared...)
-	}
+		shared := []tool.Tool{globTool, listDirTool, grepTool}
+		if r.allowShell {
+			shared = append(shared, bashTool)
+		}
+		if r.readOnly {
+			r.tools = append([]tool.Tool{readTool}, shared...)
+		} else {
+			r.tools = append([]tool.Tool{readTool, writeTool, editTool}, shared...)
+		}
 
-	// PowerShellTool — 仅 Windows
-	// Python: L63-67: PowerShellTool(...) if os.name == "nt" else None
-	if runtime.GOOS == "windows" {
-		powershellTool := shell.NewPowerShellTool(op, language, agentID, permConfig)
-		r.tools = append(r.tools, powershellTool)
-	}
+		// PowerShellTool — 仅 Windows 且非只读
+		// Python: RSISysOperationRail.init os.name == "nt" and not self._read_only
+		if runtime.GOOS == "windows" && !r.readOnly {
+			powershellTool := shell.NewPowerShellTool(op, language, agentID, permConfig)
+			r.tools = append(r.tools, powershellTool)
+		}
 
-	// CodeTool — 仅 withCodeTool && !readOnly
-	// Python: L77-78
-	if r.withCodeTool && !r.readOnly {
-		codeTool := code.NewCodeTool(op, language, agentID)
-		r.tools = append(r.tools, codeTool)
+		// CodeTool — 仅 withCodeTool && !readOnly
+		if r.withCodeTool && !r.readOnly {
+			codeTool := code.NewCodeTool(op, language, agentID)
+			r.tools = append(r.tools, codeTool)
+		}
 	}
 
 	// 幂等注册: 已存在则先 remove, 再 add

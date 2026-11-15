@@ -17,7 +17,7 @@ func TestCoverage_ModelOutputHasMojibake(t *testing.T) {
 
 // TestCoverage_IOPath_Windows分支 Windows 长路径分支（非 Windows 平台恒等返回）
 func TestCoverage_IOPath_Windows分支(t *testing.T) {
-	path := ioPath("/tmp/x")
+	path := IoPath("/tmp/x")
 	if path != "/tmp/x" && path[1] != ':' && path[:4] != `\\?\` {
 		// 非 Windows 平台应返回绝对路径
 		if path == "/tmp/x" {
