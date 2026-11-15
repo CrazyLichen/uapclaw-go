@@ -1,7 +1,12 @@
 package telemetry
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/hex"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -9,7 +14,11 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
+	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	tracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -147,6 +156,141 @@ func (r *SharedOtlpReceiver) GrpcEndpoint() string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// decompressGzipLimited 有限解压一个 gzip body，禁止无界展开。
+// Python: otlp_receiver.py:43-49 _decompress_gzip_limited
+func decompressGzipLimited(payload []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	decompressed, err := io.ReadAll(io.LimitReader(reader, maxDecompressedBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(decompressed) > maxDecompressedBytes {
+		return nil, errors.New("decompressed OTLP request is too large")
+	}
+	return decompressed, nil
+}
+
+// anyValue 把一个 OTLP AnyValue protobuf 转成普通 Go 值。
+// Python: otlp_receiver.py:52-69 _any_value
+func anyValue(value *commonv1.AnyValue) any {
+	if value == nil {
+		return nil
+	}
+	switch inner := value.GetValue().(type) {
+	case *commonv1.AnyValue_StringValue:
+		return inner.StringValue
+	case *commonv1.AnyValue_BoolValue:
+		return inner.BoolValue
+	case *commonv1.AnyValue_IntValue:
+		return inner.IntValue
+	case *commonv1.AnyValue_DoubleValue:
+		return inner.DoubleValue
+	case *commonv1.AnyValue_BytesValue:
+		return bytes.Clone(inner.BytesValue)
+	case *commonv1.AnyValue_ArrayValue:
+		result := make([]any, 0, len(inner.ArrayValue.GetValues()))
+		for _, item := range inner.ArrayValue.GetValues() {
+			result = append(result, anyValue(item))
+		}
+		return result
+	case *commonv1.AnyValue_KvlistValue:
+		result := make(map[string]any, len(inner.KvlistValue.GetValues()))
+		for _, item := range inner.KvlistValue.GetValues() {
+			result[item.GetKey()] = anyValue(item.GetValue())
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+// attributes 把 repeated KeyValue 转成映射。
+// Python: otlp_receiver.py:72-74 _attributes
+func attributes(items []*commonv1.KeyValue) map[string]any {
+	result := make(map[string]any, len(items))
+	for _, item := range items {
+		result[item.GetKey()] = anyValue(item.GetValue())
+	}
+	return result
+}
+
+// decodeSpans 解码一个二进制 OTLP ExportTraceServiceRequest 的全部 span。
+// Python: otlp_receiver.py:77-107 _decode_spans
+func decodeSpans(payload []byte) ([]map[string]any, error) {
+	var request tracev1.ExportTraceServiceRequest
+	if err := proto.Unmarshal(payload, &request); err != nil {
+		return nil, err
+	}
+	var events []map[string]any
+	for _, resourceSpans := range request.GetResourceSpans() {
+		resourceAttributes := attributes(resourceSpans.GetResource().GetAttributes())
+		for _, scopeSpans := range resourceSpans.GetScopeSpans() {
+			scopeName := scopeSpans.GetScope().GetName()
+			for _, span := range scopeSpans.GetSpans() {
+				events = append(events, map[string]any{
+					"signal":              "trace",
+					"name":                span.GetName(),
+					"start_time_ns":       int64(span.GetStartTimeUnixNano()),
+					"end_time_ns":         int64(span.GetEndTimeUnixNano()),
+					"attributes":          attributes(span.GetAttributes()),
+					"resource_attributes": resourceAttributes,
+					"scope_name":          scopeName,
+					"trace_id":            hex.EncodeToString(span.GetTraceId()),
+					"span_id":             hex.EncodeToString(span.GetSpanId()),
+					"parent_span_id":      hex.EncodeToString(span.GetParentSpanId()),
+					"status_code":         int32(span.GetStatus().GetCode()),
+					"status_message":      span.GetStatus().GetMessage(),
+				})
+			}
+		}
+	}
+	return events, nil
+}
+
+// decodeLogRecords 解码一个二进制 OTLP ExportLogsServiceRequest 的全部日志记录。
+// Claude Code 的原始 API body 事件（claude_code.api_request_body /
+// claude_code.api_response_body）走 OTLP logs 信号；每条变成一个带 body 的
+// span 事件形状的事件字典。
+// Python: otlp_receiver.py:110-142 _decode_log_records
+func decodeLogRecords(payload []byte) ([]map[string]any, error) {
+	var request logsv1.ExportLogsServiceRequest
+	if err := proto.Unmarshal(payload, &request); err != nil {
+		return nil, err
+	}
+	var events []map[string]any
+	for _, resourceLogs := range request.GetResourceLogs() {
+		resourceAttributes := attributes(resourceLogs.GetResource().GetAttributes())
+		for _, scopeLogs := range resourceLogs.GetScopeLogs() {
+			scopeName := scopeLogs.GetScope().GetName()
+			for _, logRecord := range scopeLogs.GetLogRecords() {
+				// time_ns 取 time_unix_nano，缺省回落 observed_time_unix_nano，再缺省 0
+				// （Python :133-134 的 `time or observed or 0` 链）
+				timeNS := int64(logRecord.GetTimeUnixNano())
+				if timeNS == 0 {
+					timeNS = int64(logRecord.GetObservedTimeUnixNano())
+				}
+				events = append(events, map[string]any{
+					"signal":              "log",
+					"name":                logRecord.GetBody().GetStringValue(),
+					"time_ns":             timeNS,
+					"attributes":          attributes(logRecord.GetAttributes()),
+					"resource_attributes": resourceAttributes,
+					"scope_name":          scopeName,
+					"trace_id":            hex.EncodeToString(logRecord.GetTraceId()),
+					"span_id":             hex.EncodeToString(logRecord.GetSpanId()),
+				})
+			}
+		}
+	}
+	return events, nil
+}
+
+// ──────────────────────────── 占位实现（后续 Task 实装） ────────────────────────────
 
 // startLocked 占位：Task 5 替换为真实实现（真实 doc 注释随实装移入）
 func (r *SharedOtlpReceiver) startLocked() { r.disabled = true }
