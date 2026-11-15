@@ -1,7 +1,7 @@
 package store
 
 import (
-	"uapclaw-go/internal/agentcore/graph/pregel"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
