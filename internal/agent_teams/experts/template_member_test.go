@@ -74,7 +74,19 @@ func TestTemplateSnapshot_剥段与skills并集(t *testing.T) {
 	require.Len(t, skills, 3)
 
 	spec := ApplyTemplateSnapshot(baseSpec(), snapshot)
-	assert.Equal(t, snapshot, spec.AgentTemplateSpec)
+	// D-5：字段已收敛为类型，快照 map 经 JSON 往返重建；PromptSections 带omitempty，
+	// 空列表在类型化 wire 上省略（Python model_validate 下 [] 与缺省等值，无字节一致性消费方）
+	raw, err := json.Marshal(spec.AgentTemplateSpec)
+	require.NoError(t, err)
+	typedBack := map[string]any{}
+	require.NoError(t, json.Unmarshal(raw, &typedBack))
+	expected := map[string]any{}
+	for k, v := range snapshot {
+		if k != "prompt_sections" {
+			expected[k] = v
+		}
+	}
+	assert.Equal(t, expected, typedBack)
 	assert.Equal(t, []string{"shared", "clip", "storyboard"}, spec.Skills)
 	assert.Nil(t, baseSpec().AgentTemplateSpec, "base spec 不被原地修改")
 }

@@ -367,14 +367,13 @@ type DeepAgentSpec struct {
 	ProgressiveTool *ProgressiveToolSpec `json:"progressive_tool,omitempty"`
 	// ApprovalRequiredTools 需审批的工具列表
 	ApprovalRequiredTools []string `json:"approval_required_tools,omitempty"`
-	// AgentTemplateSpec 序列化的 AgentTemplateSpec，由异步 harness 宿主应用。
-	//
-	// 值刻意保持为纯数据，使包含它的 TeamAgentSpec 能跨成员 spawn 与恢复边界
-	// JSON 序列化。NativeHarness 在成员开始运行前把它重新校验成 AgentTemplateSpec。
-	//
-	// ⤵️ 15.7-15.9：AgentTemplateSpec 类型与热加载链未迁，本版仅存值 + 哨兵。
+	// AgentTemplateSpec 能力快照：模板去掉 prompt_sections 后的整体形态，
+	// 由 NativeHarness 在成员运行前重新校验并热挂载（persona 走成员 prompt lane，
+	// 能力走本快照，二者不混）。字段可 JSON 序列化，使 TeamAgentSpec 跨成员
+	// spawn 与恢复边界持久化。
+	// 已随 15.14 从 map[string]any 占位收敛为类型（原 ⤵️ 15.7-15.9 哨兵消除）。
 	// Python: DeepAgentSpec.agent_template_spec (deep_agent_spec.py:496)
-	AgentTemplateSpec map[string]any `json:"agent_template_spec,omitempty"`
+	AgentTemplateSpec *AgentTemplateSpec `json:"agent_template_spec,omitempty"`
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

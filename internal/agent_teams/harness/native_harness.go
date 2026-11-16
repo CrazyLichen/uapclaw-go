@@ -184,7 +184,8 @@ func (h *NativeHarness) prepare(ctx context.Context) error {
 	if _, err := h.agent.EnsureInitialized(ctx); err != nil {
 		return fmt.Errorf("harness: 初始化失败: %w", err)
 	}
-	// ⤵️ 15.7-15.9：AgentTemplateSpec 真实现（此时应 model_validate + 热加载）
+	// ⤵️ 15.7-15.9：AgentTemplateSpec 热挂载真实现（届时应 model_validate + 走
+	// extension binder 六类绑定链），当前快照存在即拒绝启动（ErrTemplateUnsupported）。
 	if h.spec.AgentTemplateSpec != nil {
 		return ErrTemplateUnsupported
 	}

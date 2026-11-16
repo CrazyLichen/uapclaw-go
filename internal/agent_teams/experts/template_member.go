@@ -1,11 +1,12 @@
 package experts
 
 import (
+	"encoding/json"
 	"path"
+	"strings"
 
 	hres "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"strings"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -99,7 +100,11 @@ func TemplateSkillNames(snapshot map[string]any) []string {
 // ApplyTemplateSnapshot 把能力快照挂到 base spec 并种子 Skill 可见性。
 // 返回 base 的拷贝：agent_template_spec=snapshot，skills = base.skills 后接快照
 // 技能目录名（保序去重）。
-// Python: template_member.py:85-96 apply_template_snapshot
+// Python: template_member.py:85-96 apply_template_snapshot（Python 存 dict）。
+// 偏差 D-5：Go 侧 DeepAgentSpec.AgentTemplateSpec 已收敛为类型，快照 map 经 JSON
+// 往返重建为 *AgentTemplateSpec 存储（Memory/Rubric 为自由 map、其余字段同 tag，
+// 往返无损；wire 形状与 Python 一致）。转换失败不可达（快照仅出自 TemplateSnapshot
+// 的 dump 往返），沿 ModelDump 先例忽略错误。
 func ApplyTemplateSnapshot(baseSpec hschema.DeepAgentSpec, snapshot map[string]any) hschema.DeepAgentSpec {
 	skills := append([]string(nil), baseSpec.Skills...)
 	for _, name := range TemplateSkillNames(snapshot) {
@@ -107,7 +112,17 @@ func ApplyTemplateSnapshot(baseSpec hschema.DeepAgentSpec, snapshot map[string]a
 			skills = append(skills, name)
 		}
 	}
-	baseSpec.AgentTemplateSpec = snapshot
+	var typed *hschema.AgentTemplateSpec
+	if snapshot != nil {
+		raw, err := json.Marshal(snapshot)
+		if err == nil {
+			converted := hschema.AgentTemplateSpec{}
+			if json.Unmarshal(raw, &converted) == nil {
+				typed = &converted
+			}
+		}
+	}
+	baseSpec.AgentTemplateSpec = typed
 	baseSpec.Skills = skills
 	return baseSpec
 }
