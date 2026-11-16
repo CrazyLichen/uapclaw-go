@@ -65,28 +65,19 @@ func TestTemplateSnapshot_剥段与skills并集(t *testing.T) {
 		{Name: "identity", Content: map[string]string{"cn": "x"}},
 	}, "clip", "storyboard", "clip")
 	snapshot := TemplateSnapshot(template)
-	// Python model_dump(mode="json") 保留 prompt_sections 为空列表（非省略键）
-	sections, has := snapshot["prompt_sections"]
-	require.True(t, has, "snapshot 保留 prompt_sections 键（pydantic 默认列表序列化为 []）")
-	assert.Equal(t, []any{}, sections)
-	skills, ok := snapshot["skills"].([]any)
-	require.True(t, ok)
-	require.Len(t, skills, 3)
+	// D-5 收窄：快照为类型化值拷贝，prompt_sections 置空（Python model_copy 语义）
+	assert.Empty(t, snapshot.PromptSections)
+	require.Len(t, snapshot.Skills, 3)
+
+	// wire 形状对齐：json tag 序列化（Python model_dump(mode="json") 等价）
+	raw, err := json.Marshal(snapshot)
+	require.NoError(t, err)
+	typedBack := hschema.AgentTemplateSpec{}
+	require.NoError(t, json.Unmarshal(raw, &typedBack))
+	require.Len(t, typedBack.Skills, 3)
+	assert.Empty(t, typedBack.PromptSections)
 
 	spec := ApplyTemplateSnapshot(baseSpec(), snapshot)
-	// D-5：字段已收敛为类型，快照 map 经 JSON 往返重建；PromptSections 带omitempty，
-	// 空列表在类型化 wire 上省略（Python model_validate 下 [] 与缺省等值，无字节一致性消费方）
-	raw, err := json.Marshal(spec.AgentTemplateSpec)
-	require.NoError(t, err)
-	typedBack := map[string]any{}
-	require.NoError(t, json.Unmarshal(raw, &typedBack))
-	expected := map[string]any{}
-	for k, v := range snapshot {
-		if k != "prompt_sections" {
-			expected[k] = v
-		}
-	}
-	assert.Equal(t, expected, typedBack)
 	assert.Equal(t, []string{"shared", "clip", "storyboard"}, spec.Skills)
 	assert.Nil(t, baseSpec().AgentTemplateSpec, "base spec 不被原地修改")
 }

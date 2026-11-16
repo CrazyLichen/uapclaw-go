@@ -1,7 +1,6 @@
 package experts
 
 import (
-	"encoding/json"
 	"path"
 	"strings"
 
@@ -63,32 +62,33 @@ func RenderTemplatePersona(template hschema.AgentTemplateSpec, language string, 
 	return strings.Join(rendered, "\n\n")
 }
 
-// TemplateSnapshot 能力快照：去掉 prompt_sections 的模板，JSON 数据形态。
+// TemplateSnapshot 能力快照：去掉 prompt_sections 的模板。
 // Python: template_member.py:69-71 template_snapshot
-// （model_copy(update={"prompt_sections": []}).model_dump(mode="json")；
-// pydantic 默认列表序列化保留键为 []，故 Go 侧 dump 后补键）
-func TemplateSnapshot(template hschema.AgentTemplateSpec) map[string]any {
-	template.PromptSections = nil
-	dumped := template.ModelDump()
-	dumped["prompt_sections"] = []any{}
-	return dumped
+//
+// 偏差 D-5（用户 2026-11-30 拍板收窄）：Python 存 dict（model_dump 产物），
+// Go 侧 DeepAgentSpec.AgentTemplateSpec 已收敛为 *AgentTemplateSpec，快照直接
+// 值拷贝返回，不经 map/JSON 往返；wire 形状由字段 json tag（snake_case，对齐
+// pydantic alias）保证，持久化读回等值。Python model_copy 为浅拷贝（嵌套列表
+// 共享），Go 值拷贝的切片共享底层数组，语义一致。
+func TemplateSnapshot(template hschema.AgentTemplateSpec) *hschema.AgentTemplateSpec {
+	snapshot := template
+	snapshot.PromptSections = nil
+	return &snapshot
 }
 
 // TemplateSkillNames 快照的技能目录名，保序去重。
-// Python: template_member.py:74-82 template_skill_names
-func TemplateSkillNames(snapshot map[string]any) []string {
+// Python: template_member.py:74-82 template_skill_names（Python 形参为 dict；
+// D-5 后 Go 侧收类型，目录名取 skills[].dir 基名，语义逐条对应）
+func TemplateSkillNames(snapshot *hschema.AgentTemplateSpec) []string {
 	var names []string
-	rawSkills, _ := snapshot["skills"].([]any)
-	for _, item := range rawSkills {
-		m, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		dir, _ := m["dir"].(string)
+	if snapshot == nil {
+		return names
+	}
+	for _, skill := range snapshot.Skills {
 		name := ""
-		if dir != "" {
+		if skill.Dir != "" {
 			// Python: PurePath(raw).name —— 取路径基名（D-4：path.Base 等价）
-			name = path.Base(dir)
+			name = path.Base(skill.Dir)
 		}
 		if name != "" && !containsString(names, name) {
 			names = append(names, name)
@@ -100,29 +100,16 @@ func TemplateSkillNames(snapshot map[string]any) []string {
 // ApplyTemplateSnapshot 把能力快照挂到 base spec 并种子 Skill 可见性。
 // 返回 base 的拷贝：agent_template_spec=snapshot，skills = base.skills 后接快照
 // 技能目录名（保序去重）。
-// Python: template_member.py:85-96 apply_template_snapshot（Python 存 dict）。
-// 偏差 D-5：Go 侧 DeepAgentSpec.AgentTemplateSpec 已收敛为类型，快照 map 经 JSON
-// 往返重建为 *AgentTemplateSpec 存储（Memory/Rubric 为自由 map、其余字段同 tag，
-// 往返无损；wire 形状与 Python 一致）。转换失败不可达（快照仅出自 TemplateSnapshot
-// 的 dump 往返），沿 ModelDump 先例忽略错误。
-func ApplyTemplateSnapshot(baseSpec hschema.DeepAgentSpec, snapshot map[string]any) hschema.DeepAgentSpec {
+// Python: template_member.py:85-96 apply_template_snapshot（Python 存 dict；
+// D-5 收窄后 Go 直接存类型，序列化由字段 json tag 承担，无中间转换）。
+func ApplyTemplateSnapshot(baseSpec hschema.DeepAgentSpec, snapshot *hschema.AgentTemplateSpec) hschema.DeepAgentSpec {
 	skills := append([]string(nil), baseSpec.Skills...)
 	for _, name := range TemplateSkillNames(snapshot) {
 		if name != "" && !containsString(skills, name) {
 			skills = append(skills, name)
 		}
 	}
-	var typed *hschema.AgentTemplateSpec
-	if snapshot != nil {
-		raw, err := json.Marshal(snapshot)
-		if err == nil {
-			converted := hschema.AgentTemplateSpec{}
-			if json.Unmarshal(raw, &converted) == nil {
-				typed = &converted
-			}
-		}
-	}
-	baseSpec.AgentTemplateSpec = typed
+	baseSpec.AgentTemplateSpec = snapshot
 	baseSpec.Skills = skills
 	return baseSpec
 }
