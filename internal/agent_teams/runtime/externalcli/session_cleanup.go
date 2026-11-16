@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"strings"
 
-	session "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	session "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
