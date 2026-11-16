@@ -139,7 +139,10 @@ func JoyAIUsesNativeVoiceChannel(videoLiveMode string) bool {
 	if protocol != "" {
 		return protocol == "native_ws"
 	}
-	provider := strings.ToLower(strings.TrimSpace(envOr("JOYAI_VOICE_PROVIDER", "openai")))
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("JOYAI_VOICE_PROVIDER")))
+	if provider == "" {
+		provider = "openai"
+	}
 	return provider != "openai" && provider != "openai_compatible" && provider != "siliconflow"
 }
 
@@ -259,7 +262,10 @@ func JoyAIRequestCompletion(frameDataURL, prompt, joyaiSessionID string, maxToke
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-streaming-session", joyaiSessionID)
-	systemPromptKey := strings.TrimSpace(envOr("JOYAI_SYSTEM_PROMPT_KEY", "DEFAULT_SYSTEM_PROMPT_EN"))
+	systemPromptKey := strings.TrimSpace(os.Getenv("JOYAI_SYSTEM_PROMPT_KEY"))
+	if systemPromptKey == "" {
+		systemPromptKey = "DEFAULT_SYSTEM_PROMPT_EN"
+	}
 	if systemPromptKey == "" {
 		systemPromptKey = joyaiSystemPromptKey
 	}

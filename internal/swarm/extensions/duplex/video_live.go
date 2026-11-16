@@ -612,7 +612,7 @@ func appendConversationHandler(ctx context.Context, ws any, reqID string, params
 		content = ""
 	}
 	previousTitle := ""
-	if role == "user" && strings.TrimSpace(content) != "" {
+	if role == "user" && strings.TrimSpace(content) != "" && conversationHistory != nil {
 		// 历史写入前刷新：尊重 AgentServer 的重命名（对齐 :645-647 注释）
 		metadata := conversationHistory.GetSessionMetadata(visibleSessionID, true)
 		previousTitle = toString(metadata["title"])
@@ -621,8 +621,10 @@ func appendConversationHandler(ctx context.Context, ws any, reqID string, params
 			conversationHistory.UpdateSessionMetadata(visibleSessionID, content)
 		}
 	}
+	if conversationHistory != nil {
 	conversationHistory.AppendHistoryRecord(visibleSessionID,
 		"video-duplex-"+eventID, "video_duplex", role, content, timestamp, eventType, extra, "agent")
+	}
 	if previousTitle != "" {
 		metadata := conversationHistory.GetSessionMetadata(visibleSessionID, false)
 		title := toString(metadata["title"])
