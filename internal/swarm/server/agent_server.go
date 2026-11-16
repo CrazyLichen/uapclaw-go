@@ -206,6 +206,10 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	swarmtools.SetSendFilePushFunc(s.SendPush)
 	swarmtools.SetSendFileHistoryFunc(session.AppendHistoryRecord)
 
+	// 23.9 复审批2 后半：语音任务装配缝注入（对齐 Python video_task 直接 import 单例；
+	// Go 编译期成环（videotask→server），等价机制为启动接线）
+	s.injectVideotaskAssembly()
+
 	// 10.6.24c 已回填：注入 MultiSession push/agentProvider 双函数到 swarmtools
 	// Python 为 notify 内 AgentWebSocketServer.get_instance() 单例直取——
 	// Go 编译期成环（swarmtools→server），等价机制为启动接线（与上行 24b 对称）

@@ -166,7 +166,10 @@ func (d *DeepAdapter) attachAndSendInputs(
 	// 会丢掉全部恢复输出。
 	// Python: :16027-16036 previous.wait()——上一轮读者的 finally close 置位 drained。
 	// TEMP-PROBE
-	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil { fmt.Fprintf(f, "PROBE attach: beforeWaitCheck\n"); f.Close() }
+	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
+		fmt.Fprintf(f, "PROBE attach: beforeWaitCheck\n")
+		f.Close()
+	}
 
 	if prev := d.interactionOutputHandoff; prev != nil {
 		if d.isInterruptResumeDispatch(req.Params) && !d.goalRecordIsActive() {
@@ -181,7 +184,10 @@ func (d *DeepAdapter) attachAndSendInputs(
 		return nil, nil, false, err
 	}
 	// TEMP-PROBE
-	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil { fmt.Fprintf(f, "PROBE attach: afterWait beforeAttachOutput\n"); f.Close() }
+	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
+		fmt.Fprintf(f, "PROBE attach: afterWait beforeAttachOutput\n")
+		f.Close()
+	}
 
 	if stream == nil && !sendWithoutOutput {
 		return nil, nil, false, nil
@@ -198,8 +204,11 @@ func (d *DeepAdapter) attachAndSendInputs(
 		Mode:      resolveInputDispatchMode(req.Params),
 	}
 	if sendErr := d.instance.SendInput(ctx, sendReq); sendErr != nil {
-	// TEMP-PROBE
-	if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil { fmt.Fprintf(f, "PROBE attach: beforeSendInput\n"); f.Close() }
+		// TEMP-PROBE
+		if f, e := os.OpenFile("/tmp/pqa3.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); e == nil {
+			fmt.Fprintf(f, "PROBE attach: beforeSendInput\n")
+			f.Close()
+		}
 
 		if stream != nil {
 			stream.Close(ctx, false)

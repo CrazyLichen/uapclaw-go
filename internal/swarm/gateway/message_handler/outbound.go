@@ -1,6 +1,7 @@
 package message_handler
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
+	dupextasks "github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -80,6 +82,15 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 		sessionID = mh.resolveAcpExternalSessionID(sessionID, busMetadata)
 	}
 
+	// 语音任务检查点命令（23.9 复审批2 后半）：网关半边拦截并执行账本命令，
+	// ACK 经 RPC 回 AgentServer（对齐 Python gateway/extensions/video_duplex 半边）
+	if chunk.Payload != nil {
+		if eventType, ok := chunk.Payload["event_type"].(string); ok && eventType == dupextasks.BridgeEvent {
+			mh.handleVoiceTaskCommandPush(chunk.Payload, rid, chunk.ChannelID, sessionID)
+			return
+		}
+	}
+
 	// cron 判断：chunk.Payload["event_type"] == "cron.response"
 	if chunk.Payload != nil {
 		if eventType, ok := chunk.Payload["event_type"].(string); ok && eventType == "cron.response" {
@@ -109,6 +120,41 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 		Str("request_id", rid).
 		Str("channel_id", chunk.ChannelID).
 		Msg("server_push written to robot_messages")
+}
+
+// handleVoiceTaskCommandPush 网关半边：执行语音任务检查点命令并回 ACK。
+// 对齐 gateway/extensions/video_duplex/backend/tasks/bridge.py:77-107 handle_checkpoint_push。
+// Python 侧无对应注册点差异：Python 由 WebChannel 注册 EVENT 处理器，Go 统一在
+// handleAgentServerPush 按 event_type 拦截（与 cron.response 同款）。
+func (mh *MessageHandler) handleVoiceTaskCommandPush(payload map[string]any, requestID, channelID, sessionID string) {
+	frame := dupextasks.CheckpointFrame{
+		EventType: dupextasks.BridgeEvent,
+		ChannelID: channelID,
+		RequestID: requestID,
+		SessionID: sessionID,
+		Payload:   payload,
+	}
+	dupextasks.HandleCheckpointPush(frame, func(params map[string]any) error {
+		// 对齐 bridge.py:104-113：ACK 信封 user_id 取命令 owner
+		commandID, _ := params["command_id"].(string)
+		owner, _ := payload["owner"].(string)
+		env := e2a.E2AFromAgentFields("ack-"+commandID,
+			e2a.WithFieldChannelID("video_tool"),
+			e2a.WithFieldSessionID(sessionID),
+			e2a.WithFieldUserID(owner),
+			e2a.WithFieldReqMethod(string(schema.ReqMethodVoiceTaskCheckpointAck)),
+			e2a.WithFieldParams(params),
+			e2a.WithFieldIsStream(false),
+			e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1e6))
+		resp, err := mh.agentClient.SendRequest(context.Background(), env)
+		if err != nil {
+			return err
+		}
+		if resp != nil && !resp.OK {
+			logger.Warn(logComponent).Msg("语音任务检查点 ACK 被拒")
+		}
+		return nil
+	})
 }
 
 // handleCronPushPayload 处理 cron 推送消息。

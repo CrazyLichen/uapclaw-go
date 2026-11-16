@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"sync"
 
+	"context"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -19,6 +24,7 @@ const railLogComponent = logger.ComponentAgentServer
 // 对齐 rail.py:8-17 VoiceAgentTaskRail(AgentRail)：
 // priority 81——刻意排在 StreamEventRail（80）之前，让检查点先于流事件看到请求。
 type VoiceAgentTaskRail struct {
+	sainterfaces.BaseRail
 	owner any
 	// managedTasks 会话 ID → 绑定（rail per-session、binding per-execution）
 	managedTasks map[string]*TaskExecutionBinding
@@ -39,6 +45,80 @@ func (r *VoiceAgentTaskRail) Owner() any { return r.owner }
 // ManagedTasks 读绑定表（BindTaskExecution/适配器装配用）。
 func (r *VoiceAgentTaskRail) ManagedTasks() map[string]*TaskExecutionBinding {
 	return r.managedTasks
+}
+
+// GetCallbacks 注册三个检查点钩子（对齐 rail.py:18-22 的 before/after_model 与 before_tool）。
+func (r *VoiceAgentTaskRail) GetCallbacks() map[sainterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return r.BuildCallbacks(
+		r.CallbackFrom(sainterfaces.CallbackBeforeModelCall, r.wrapBeforeModelCall),
+		r.CallbackFrom(sainterfaces.CallbackAfterModelCall, r.wrapAfterModelCall),
+		r.CallbackFrom(sainterfaces.CallbackBeforeToolCall, r.wrapBeforeToolCall),
+	)
+}
+
+// wrapBeforeModelCall 模型前钩子。
+func (r *VoiceAgentTaskRail) wrapBeforeModelCall(ctx context.Context, cbcAny any) error {
+	return r.dispatchFromCBC(ctx, "before_model", cbcAny)
+}
+
+// wrapAfterModelCall 模型后钩子。
+func (r *VoiceAgentTaskRail) wrapAfterModelCall(ctx context.Context, cbcAny any) error {
+	return r.dispatchFromCBC(ctx, "after_model", cbcAny)
+}
+
+// wrapBeforeToolCall 工具前钩子。
+func (r *VoiceAgentTaskRail) wrapBeforeToolCall(ctx context.Context, cbcAny any) error {
+	return r.dispatchFromCBC(ctx, "before_tool", cbcAny)
+}
+
+// dispatchFromCBC 从回调上下文提取受管请求 ID 并分派。
+// run_context 透传模式对齐 root_permission_queue_rail.go runExtraOf（cbc.GetExtra("run_context")）。
+func (r *VoiceAgentTaskRail) dispatchFromCBC(_ context.Context, stage string, cbcAny any) error {
+	cbc, ok := cbcAny.(*sainterfaces.AgentCallbackContext)
+	if !ok || cbc == nil {
+		return nil
+	}
+	var runExtra map[string]any
+	if raw, ok := cbc.GetExtra("run_context"); ok {
+		if asMap, ok := raw.(map[string]any); ok {
+			runExtra, _ = asMap["extra"].(map[string]any)
+		}
+	}
+	managedRequest := ""
+	if runExtra != nil {
+		managedRequest = strOf(runExtra["managed_task_request"])
+	}
+	var observed []string
+	if stage == "after_model" && cbc.ModelContext() != nil {
+		if msgs, err := cbc.ModelContext().GetMessages(0, false); err == nil {
+			for _, msg := range msgs {
+				observed = append(observed, fmt.Sprint(messageContentOf(msg)))
+			}
+		}
+	}
+	return TaskCheckpointDispatch(r, stage, managedRequest,
+		map[string]any{"run_context": map[string]any{"extra": runExtra}},
+		func(*TaskExecutionBinding) bool { return true }, // 绑定按 request_id 精确匹配，root 兜底退化为通过
+		func(changeID, instruction string) error {
+			// 注入用户消息（对齐 checkpoint.py:34-38 的 JSON 载荷形状）
+			if cbc.ModelContext() == nil {
+				return nil
+			}
+			payload := fmt.Sprintf(`{"managed_task_change":%q,"instruction":%q,"meaning":%q}`,
+				changeID, instruction,
+				"User changes this task's requirements; retain other constraints and permissions.")
+			_, err := cbc.ModelContext().AddMessages(context.Background(),
+				[]llmschema.BaseMessage{llmschema.NewUserMessage(payload)})
+			return err
+		}, observed)
+}
+
+// messageContentOf 提取消息内容（llm_schema.BaseMessage 的 Content 字段鸭子访问）。
+func messageContentOf(msg llmschema.BaseMessage) any {
+	if msg == nil {
+		return ""
+	}
+	return msg.GetContent()
 }
 
 // LockGuard 暴露锁（execution.go 的 BindTaskExecution 需要并发安全访问）。

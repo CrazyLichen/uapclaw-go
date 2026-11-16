@@ -1086,6 +1086,14 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
+	// 23.9 复审批2 后半: 受管语音任务绑定（对齐 interface_deep.py:18918-18921
+	// async with bind_task_execution）——非流式站点
+	if unbind, bindErr := d.bindVoiceTaskExecution(ctx, req, inputs); bindErr != nil {
+		return nil, bindErr
+	} else if unbind != nil {
+		defer unbind()
+	}
+
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx
 	// Python: set_current_multimodal_image_files(inputs.pop("_multimodal_image_files"))（interface_deep.py :18412/:19177）
 	// D-23.8-1：contextvars → request ctx 携带；ctx 随本轮 invoke 结束丢弃，无需 reset
@@ -1330,6 +1338,22 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		ch := make(chan *schema.AgentResponseChunk)
 		close(ch)
 		return ch, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+	}
+
+	// 23.9 复审批2 后半: 受管语音任务绑定（对齐 interface_deep.py:18918-18921
+	// async with bind_task_execution）——非流式站点
+	if unbind, bindErr := d.bindVoiceTaskExecution(ctx, req, inputs); bindErr != nil {
+		return nil, bindErr
+	} else if unbind != nil {
+		defer unbind()
+	}
+
+	// 23.9 复审批2 后半: 受管语音任务绑定（对齐 interface_deep.py:18128-18131
+	// async with bind_task_execution）——流式站点
+	if unbind, bindErr := d.bindVoiceTaskExecution(ctx, req, inputs); bindErr != nil {
+		return nil, bindErr
+	} else if unbind != nil {
+		defer unbind()
 	}
 
 	// 23.8 步骤 2.5: 本轮图片附件挂进 request ctx

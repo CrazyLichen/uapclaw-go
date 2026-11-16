@@ -7,7 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	duplexpk "github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex"
 	dupextasks "github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // seedTask 经账本事务种入任务行（对齐 Execute 的 owner/core_session_id/request_id 三元组校验）。
@@ -220,5 +223,70 @@ func TestResolveCheckpointAck_身份不匹配(t *testing.T) {
 	ok, err := ResolveCheckpointAck(params, "u1", "s1")
 	if ok || err != nil {
 		t.Fatalf("未知 command_id 应 (false,nil)，得到 %v,%v", ok, err)
+	}
+}
+
+// TestVoiceTaskFiles_真会话历史聚合 跨子系统：真实 session 历史（AppendHistoryRecord
+// 异步落盘 + 元数据归属）→ VoiceTaskServerAdapter FILES 查询聚合 chat.file 产物。
+// 对齐 server_adapter.py:31-50 与 video_live.py 的 chat.file 写入链。
+func TestVoiceTaskFiles_真会话历史聚合(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	path.ResetCache()
+	defer path.ResetCache()
+
+	// 生产等价装配：真实 session 函数 + duplex 附件归一
+	FileHistorySource.GetSessionMetadata = func(sessionID string, _ bool) map[string]any {
+		return sessionpkg.GetSessionMetadata(sessionID)
+	}
+	FileHistorySource.FlushPendingWrites = func(float64) bool { return true }
+	FileHistorySource.LoadHistoryRecords = func(sessionID string) ([]map[string]any, error) {
+		return sessionpkg.ReadHistoryRecords(sessionID)
+	}
+	FileHistorySource.NormalizeFileItems = func(files any) []map[string]any {
+		return duplexpk.NormalizeFileItems(files)
+	}
+	t.Cleanup(func() {
+		FileHistorySource.GetSessionMetadata = nil
+		FileHistorySource.FlushPendingWrites = nil
+		FileHistorySource.LoadHistoryRecords = nil
+		FileHistorySource.NormalizeFileItems = nil
+	})
+
+	// 元数据归属：user_id=u9（对齐 server_adapter 的归属校验）
+	u9 := "u9"
+	sessionpkg.UpdateSessionMetadata(sessionpkg.SessionMetadataUpdate{
+		SessionID: "hist-files-1", UserID: &u9,
+	})
+
+	// 写一条 chat.file 历史（extra 展开到顶层，对齐 append_history_record 序列化语义）
+	sessionpkg.AppendHistoryRecord("hist-files-1", "req-9", "video_duplex",
+		"assistant", "", float64(time.Now().UnixMilli())/1e6, "chat.file",
+		map[string]any{"files": []any{
+			map[string]any{"name": "报告.docx", "path": "/tmp/report.docx"},
+		}}, nil, "agent")
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if records, err := sessionpkg.ReadHistoryRecords("hist-files-1"); err == nil && len(records) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	adapter := &VoiceTaskServerAdapter{}
+	payload, err := adapter.Handle("voice.task.files",
+		map[string]any{"execution_request_id": "req-9"}, "rq", "hist-files-1", "u9")
+	if err != nil {
+		t.Fatalf("FILES 查询失败: %v", err)
+	}
+	files, _ := payload["files"].([]map[string]any)
+	if len(files) != 1 || strOf(files[0]["name"]) != "报告.docx" {
+		t.Fatalf("应聚合出 1 个产物文件，得到 %v", files)
+	}
+
+	// 归属不匹配 → 拒绝
+	if _, err := adapter.Handle("voice.task.files",
+		map[string]any{"execution_request_id": "req-9"}, "rq", "hist-files-1", "other"); err == nil {
+		t.Fatal("归属不匹配应拒绝")
 	}
 }

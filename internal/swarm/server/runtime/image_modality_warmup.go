@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"

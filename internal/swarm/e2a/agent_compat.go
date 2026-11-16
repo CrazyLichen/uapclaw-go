@@ -85,6 +85,11 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		chatID = &env.ChatID
 	}
 
+	var userID *string
+	if env.UserID != "" {
+		userID = &env.UserID
+	}
+
 	// 渠道缺省按 web 处理，对应原来只走 Web 端的历史行为
 	channelID := env.Channel
 	if channelID == "" {
@@ -96,6 +101,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		ChannelID: channelID,
 		SessionID: sessionID,
 		ChatID:    chatID,
+		UserID:    userID,
 		ReqMethod: reqMethod,
 		Params:    params,
 		IsStream:  env.IsStream,

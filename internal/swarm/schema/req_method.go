@@ -71,6 +71,10 @@ const (
 
 	// ─── 会话 ───
 
+	// ReqMethodVoiceTaskCheckpointAck 语音任务检查点 ACK（23.9，对齐 ReqMethod.VOICE_TASK_CHECKPOINT_ACK）
+	ReqMethodVoiceTaskCheckpointAck ReqMethod = "voice.task.checkpoint_ack"
+	// ReqMethodVoiceTaskFiles 语音任务产物文件查询（23.9，对齐 ReqMethod.VOICE_TASK_FILES）
+	ReqMethodVoiceTaskFiles ReqMethod = "voice.task.files"
 	// ReqMethodSessionList 会话列表
 	ReqMethodSessionList ReqMethod = "session.list"
 	// ReqMethodSessionCreate 创建会话

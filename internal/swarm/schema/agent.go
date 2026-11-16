@@ -26,6 +26,8 @@ type AgentRequest struct {
 	SessionID *string `json:"session_id,omitempty"`
 	// ChatID IM 聊天标识
 	ChatID *string `json:"chat_id,omitempty"`
+	// UserID 用户标识（对齐 Python AgentRequest.user_id；语音任务 ACK 身份校验消费）
+	UserID *string `json:"user_id,omitempty"`
 	// ReqMethod 请求方法
 	ReqMethod ReqMethod `json:"req_method,omitempty"`
 
@@ -170,6 +172,11 @@ func NewTerminalChunk(requestID, channelID string) *AgentResponseChunk {
 // WithAgentSessionID 设置会话标识。
 func WithAgentSessionID(id string) AgentRequestOption {
 	return func(req *AgentRequest) { req.SessionID = &id }
+}
+
+// WithAgentUserID 设置用户标识。
+func WithAgentUserID(id string) AgentRequestOption {
+	return func(req *AgentRequest) { req.UserID = &id }
 }
 
 // WithAgentChatID 设置 IM 聊天标识。

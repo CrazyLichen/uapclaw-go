@@ -98,6 +98,11 @@ func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelo
 
 	var resp *schema.AgentResponse
 	switch request.ReqMethod {
+	// 语音任务（23.9 复审批2 后半：checkpoint ACK 与产物文件查询）
+	case schema.ReqMethodVoiceTaskCheckpointAck:
+		resp, err = s.handleVoiceTaskCheckpointAck(ctx, request)
+	case schema.ReqMethodVoiceTaskFiles:
+		resp, err = s.handleVoiceTaskFiles(ctx, request)
 	// Session 管理
 	case schema.ReqMethodSessionList:
 		resp, err = s.handleSessionList(ctx, request)
