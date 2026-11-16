@@ -237,6 +237,11 @@ func WithFieldTimestamp(v float64) AgentFieldOption {
 	return func(d map[string]any) { d["timestamp"] = v }
 }
 
+// WithFieldUserID 设置信封的 user_id 字段（对齐 Python e2a_from_agent_fields 的 user_id 参数）。
+func WithFieldUserID(v string) AgentFieldOption {
+	return func(d map[string]any) { d["user_id"] = v }
+}
+
 // WithFieldMetadata 设置信封的 metadata 字段。
 func WithFieldMetadata(v map[string]any) AgentFieldOption {
 	return func(d map[string]any) { d["metadata"] = v }

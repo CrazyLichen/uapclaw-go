@@ -1,12 +1,15 @@
 package duplex
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // TestBriefMarkers 对齐 video_search.py:32 _brief_markers。
@@ -183,28 +186,28 @@ func TestCoreAgentProgress_事件映射(t *testing.T) {
 
 // fakeAgentClient 测试桩。
 type fakeAgentClient struct {
-	responses []*AgentResponse
-	stream    []*AgentResponse
+	responses []*schema.AgentResponse
+	stream    []*schema.AgentResponse
 	noStream  bool
-	sent      []*AgentRequest
+	sent      []*e2a.E2AEnvelope
 }
 
-func (f *fakeAgentClient) SendRequest(_ any, env *AgentRequest) *AgentResponse {
+func (f *fakeAgentClient) SendRequest(_ context.Context, env *e2a.E2AEnvelope) *schema.AgentResponse {
 	f.sent = append(f.sent, env)
 	if len(f.responses) == 0 {
-		return &AgentResponse{OK: false, Payload: map[string]any{"error": "no more responses"}}
+		return &schema.AgentResponse{OK: false, Payload: map[string]any{"error": "no more responses"}}
 	}
 	resp := f.responses[0]
 	f.responses = f.responses[1:]
 	return resp
 }
 
-func (f *fakeAgentClient) SendRequestStream(_ any, env *AgentRequest) <-chan *AgentResponse {
+func (f *fakeAgentClient) SendRequestStream(_ context.Context, env *e2a.E2AEnvelope) <-chan *schema.AgentResponse {
 	f.sent = append(f.sent, env)
 	if f.noStream {
 		return nil
 	}
-	ch := make(chan *AgentResponse, len(f.stream)+1)
+	ch := make(chan *schema.AgentResponse, len(f.stream)+1)
 	for _, resp := range f.stream {
 		ch <- resp
 	}
@@ -214,7 +217,7 @@ func (f *fakeAgentClient) SendRequestStream(_ any, env *AgentRequest) <-chan *Ag
 
 // TestExecuteCoreAgent_非流式 对齐 video_search.py:414-432。
 func TestExecuteCoreAgent_非流式_假AgentServer(t *testing.T) {
-	client := &fakeAgentClient{responses: []*AgentResponse{{
+	client := &fakeAgentClient{responses: []*schema.AgentResponse{{
 		OK: true,
 		Payload: map[string]any{
 			"content": "答案正文\n" + "[[JIUWEN_BRIEF_BEGIN:n]]\n口头回执\n[[JIUWEN_BRIEF_END:n]]",
@@ -237,7 +240,7 @@ func TestExecuteCoreAgent_非流式_假AgentServer(t *testing.T) {
 		t.Fatal("非流式 tools_used 应空")
 	}
 	sent := client.sent[0]
-	if sent.ReqMethod != "chat.send" || sent.ChannelID != "video_tool" {
+	if sent.Method != "chat.send" || sent.Channel != "video_tool" {
 		t.Fatalf("请求形态不符: %v", sent)
 	}
 	if sent.Params["mode"] != "agent" || sent.Params["work_mode"] != "work" || sent.Params["supports_user_interaction"] != true {
@@ -247,13 +250,13 @@ func TestExecuteCoreAgent_非流式_假AgentServer(t *testing.T) {
 		t.Fatal("prompt 应含任务要求段")
 	}
 	// 失败响应
-	client = &fakeAgentClient{responses: []*AgentResponse{{OK: false, Payload: map[string]any{"error": "Agent 炸了"}}}, noStream: true}
+	client = &fakeAgentClient{responses: []*schema.AgentResponse{{OK: false, Payload: map[string]any{"error": "Agent 炸了"}}}, noStream: true}
 	err := recoverErr(func() { ExecuteCoreAgent(nil, client, CoreAgentOptions{Question: "q"}) })
 	if err == nil || err.Error() != "Agent 炸了" {
 		t.Fatalf("失败响应应上抛: %v", err)
 	}
 	// 空输出
-	client = &fakeAgentClient{responses: []*AgentResponse{{OK: true, Payload: map[string]any{}}}, noStream: true}
+	client = &fakeAgentClient{responses: []*schema.AgentResponse{{OK: true, Payload: map[string]any{}}}, noStream: true}
 	err = recoverErr(func() { ExecuteCoreAgent(nil, client, CoreAgentOptions{Question: "q"}) })
 	if err == nil || err.Error() != "Jiuwen Core Agent returned empty output" {
 		t.Fatalf("空输出应报错: %v", err)
@@ -262,7 +265,7 @@ func TestExecuteCoreAgent_非流式_假AgentServer(t *testing.T) {
 
 // TestExecuteCoreAgent_流式事件全链 对齐 video_search.py:434-539。
 func TestExecuteCoreAgent_流式事件全链(t *testing.T) {
-	client := &fakeAgentClient{stream: []*AgentResponse{
+	client := &fakeAgentClient{stream: []*schema.AgentResponse{
 		{OK: true, Payload: map[string]any{"event_type": "chat.delta", "content": "答案"}},
 		{OK: true, Payload: map[string]any{"event_type": "chat.final", "content": "答案正文"}},
 	}}
@@ -273,14 +276,14 @@ func TestExecuteCoreAgent_流式事件全链(t *testing.T) {
 	}
 
 	// chat.error 上抛
-	client = &fakeAgentClient{stream: []*AgentResponse{{OK: true, Payload: map[string]any{"event_type": "chat.error", "error": "执行失败"}}}}
+	client = &fakeAgentClient{stream: []*schema.AgentResponse{{OK: true, Payload: map[string]any{"event_type": "chat.error", "error": "执行失败"}}}}
 	err := recoverErr(func() { ExecuteCoreAgent(nil, client, CoreAgentOptions{Question: "q"}) })
 	if err == nil || err.Error() != "执行失败" {
 		t.Fatalf("chat.error 应上抛: %v", err)
 	}
 
 	// 无末帧 → ExecutionUncertain
-	client = &fakeAgentClient{stream: []*AgentResponse{{OK: true, Payload: map[string]any{"event_type": "chat.delta", "content": "片段"}}}}
+	client = &fakeAgentClient{stream: []*schema.AgentResponse{{OK: true, Payload: map[string]any{"event_type": "chat.delta", "content": "片段"}}}}
 	err = recoverErr(func() { ExecuteCoreAgent(nil, client, CoreAgentOptions{Question: "q"}) })
 	var uncertain *ExecutionUncertainAlias
 	if !errors.As(err, &uncertain) {
@@ -288,7 +291,7 @@ func TestExecuteCoreAgent_流式事件全链(t *testing.T) {
 	}
 
 	// 交互提问 → InteractionPending
-	client = &fakeAgentClient{stream: []*AgentResponse{
+	client = &fakeAgentClient{stream: []*schema.AgentResponse{
 		{OK: true, Payload: map[string]any{"event_type": "chat.ask_user_question", "source": "ask_user_interrupt", "request_id": "r1", "questions": []any{map[string]any{"question": "预算多少？"}}}},
 	}}
 	var progress []map[string]any
@@ -307,7 +310,7 @@ func TestExecuteCoreAgent_流式事件全链(t *testing.T) {
 	}
 
 	// ask_user（非 interrupt）源不挂起 → 无末帧 → ExecutionUncertain
-	client = &fakeAgentClient{stream: []*AgentResponse{
+	client = &fakeAgentClient{stream: []*schema.AgentResponse{
 		{OK: true, Payload: map[string]any{"event_type": "chat.ask_user_question", "source": "ask_user", "request_id": "r1", "questions": []any{map[string]any{"question": "确认？"}}}},
 	}}
 	err = recoverErr(func() { ExecuteCoreAgent(nil, client, CoreAgentOptions{Question: "q"}) })
@@ -319,7 +322,7 @@ func TestExecuteCoreAgent_流式事件全链(t *testing.T) {
 
 // TestExecuteCoreAgent_附件归一化被调 对齐 video_search.py:383-387。
 func TestExecuteCoreAgent_附件归一化被调(t *testing.T) {
-	client := &fakeAgentClient{responses: []*AgentResponse{{OK: true, Payload: map[string]any{"content": "ok"}}}, noStream: true}
+	client := &fakeAgentClient{responses: []*schema.AgentResponse{{OK: true, Payload: map[string]any{"content": "ok"}}}, noStream: true}
 	called := false
 	opts := CoreAgentOptions{
 		Question: "q", FrameDataURL: "data:image/png;base64,QUJD",
@@ -347,7 +350,7 @@ func TestExecuteCoreAgent_附件归一化被调(t *testing.T) {
 
 // TestExecuteCoreAgent_interaction_answer分支 对齐 video_search.py:389-391。
 func TestExecuteCoreAgent_interaction_answer分支(t *testing.T) {
-	client := &fakeAgentClient{responses: []*AgentResponse{{OK: true, Payload: map[string]any{"content": "ok"}}}, noStream: true}
+	client := &fakeAgentClient{responses: []*schema.AgentResponse{{OK: true, Payload: map[string]any{"content": "ok"}}}, noStream: true}
 	opts := CoreAgentOptions{
 		Question:          "q",
 		InteractionAnswer: map[string]any{"params": map[string]any{"answers": []any{}}, "req_method": "chat.answer"},
@@ -356,8 +359,8 @@ func TestExecuteCoreAgent_interaction_answer分支(t *testing.T) {
 	if got == nil {
 		t.Fatal("answer 分支应成功")
 	}
-	if client.sent[0].ReqMethod != "chat.answer" {
-		t.Fatalf("answer 分支应换请求方法: %s", client.sent[0].ReqMethod)
+	if client.sent[0].Method != "chat.answer" {
+		t.Fatalf("answer 分支应换请求方法: %s", client.sent[0].Method)
 	}
 	if client.sent[0].Params["log_as_user"] != false {
 		t.Fatal("log_as_user 应强制 false")
@@ -366,7 +369,7 @@ func TestExecuteCoreAgent_interaction_answer分支(t *testing.T) {
 
 // TestExecuteCoreAgent_managed_task_binding透传 对齐 video_search.py:393-394。
 func TestExecuteCoreAgent_managed_task_binding透传(t *testing.T) {
-	client := &fakeAgentClient{responses: []*AgentResponse{{OK: true, Payload: map[string]any{"content": "ok"}}}, noStream: true}
+	client := &fakeAgentClient{responses: []*schema.AgentResponse{{OK: true, Payload: map[string]any{"content": "ok"}}}, noStream: true}
 	binding := map[string]any{"job_id": "j1"}
 	ExecuteCoreAgent(nil, client, CoreAgentOptions{Question: "q", ManagedTaskBinding: binding})
 	if gotBinding, ok := client.sent[0].Params["managed_task_binding"].(map[string]any); !ok || gotBinding["job_id"] != "j1" {

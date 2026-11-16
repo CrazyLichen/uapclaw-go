@@ -20,8 +20,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -36,24 +38,24 @@ type DuplexTaskSuite struct {
 // stubAgentClient 集成桩：回放响应序列。
 type stubAgentClient struct {
 	mu        sync.Mutex
-	responses []*duplex.AgentResponse
-	stream    []*duplex.AgentResponse
-	sent      []*duplex.AgentRequest
+	responses []*schema.AgentResponse
+	stream    []*schema.AgentResponse
+	sent      []*e2a.E2AEnvelope
 }
 
-func (s *stubAgentClient) SendRequest(_ any, env *duplex.AgentRequest) *duplex.AgentResponse {
+func (s *stubAgentClient) SendRequest(_ context.Context, env *e2a.E2AEnvelope) *schema.AgentResponse {
 	s.mu.Lock()
 	s.sent = append(s.sent, env)
 	s.mu.Unlock()
 	if len(s.responses) == 0 {
-		return &duplex.AgentResponse{OK: false, Payload: map[string]any{"error": "no responses"}}
+		return &schema.AgentResponse{OK: false, Payload: map[string]any{"error": "no responses"}}
 	}
 	resp := s.responses[0]
 	s.responses = s.responses[1:]
 	return resp
 }
 
-func (s *stubAgentClient) SendRequestStream(_ any, env *duplex.AgentRequest) <-chan *duplex.AgentResponse {
+func (s *stubAgentClient) SendRequestStream(_ context.Context, env *e2a.E2AEnvelope) <-chan *schema.AgentResponse {
 	s.mu.Lock()
 	s.sent = append(s.sent, env)
 	s.mu.Unlock()
@@ -66,13 +68,13 @@ func (s *stubAgentClient) SendRequestStream(_ any, env *duplex.AgentRequest) <-c
 		beginMarker := query[start : start+end+2]
 		nonce := beginMarker[len("[[JIUWEN_BRIEF_BEGIN:") : len(beginMarker)-2]
 		endMarker := "[[JIUWEN_BRIEF_END:" + nonce + "]]"
-		responses = []*duplex.AgentResponse{
+		responses = []*schema.AgentResponse{
 			{OK: true, Payload: map[string]any{"event_type": "chat.delta", "content": "答案正文"}},
 			{OK: true, Payload: map[string]any{"event_type": "chat.final",
 				"content": "答案正文\n" + beginMarker + "\n口头回执\n" + endMarker}},
 		}
 	}
-	ch := make(chan *duplex.AgentResponse, len(responses)+1)
+	ch := make(chan *schema.AgentResponse, len(responses)+1)
 	for _, resp := range responses {
 		ch <- resp
 	}
@@ -165,7 +167,7 @@ func (s *DuplexTaskSuite) TestTaskLifecycleFullChain() {
 	channel := &recordingChannel{methods: map[string]duplex.DuplexMethodHandler{}}
 	taskPath := filepath.Join(s.T().TempDir(), "tasks.sqlite")
 	briefNonce := "nonce-1"
-	client := &stubAgentClient{stream: []*duplex.AgentResponse{
+	client := &stubAgentClient{stream: []*schema.AgentResponse{
 		{OK: true, Payload: map[string]any{"event_type": "chat.delta", "content": "答案正文"}},
 		{OK: true, Payload: map[string]any{
 			"event_type": "chat.final",

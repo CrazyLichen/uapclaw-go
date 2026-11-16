@@ -7,7 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"context"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -36,45 +39,16 @@ const (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentRequest e2a 归一化请求的最小形状。
-// 对齐 video_search.py:399-412 e2a_from_agent_fields 入参形态。
-type AgentRequest struct {
-	// RequestID 请求标识
-	RequestID string
-	// ChannelID 渠道标识
-	ChannelID string
-	// SessionID 会话标识
-	SessionID string
-	// UserID 用户标识（空表匿名）
-	UserID string
-	// ReqMethod 请求方法（如 chat.send）
-	ReqMethod string
-	// Params 请求参数
-	Params map[string]any
-	// IsStream 是否流式
-	IsStream bool
-	// Timestamp 发起时间
-	Timestamp time.Time
-}
-
-// AgentResponse e2a 响应的最小形状。
-// 对齐 video_search.py:415-422 的 response.ok/payload。
-type AgentResponse struct {
-	// OK 是否成功
-	OK bool
-	// Payload 响应载荷
-	Payload map[string]any
-}
-
 // AgentClient AgentServer 客户端窄接口（依赖倒置允许场景）。
 // 偏差 O-3：Python 鸭子类型 client（send_request/send_request_stream），
 // Go 定义窄接口，由网关路由面注入。
 type AgentClient interface {
-	// SendRequest 单次请求
-	SendRequest(ctx any, env *AgentRequest) *AgentResponse
+	// SendRequest 单次请求（信封与响应用仓库共享底座类型，对齐 Python e2a_from_agent_fields
+	// 与 response.ok/.payload；偏差 O-3：Python 鸭子类型 client，Go 定义窄接口注入）
+	SendRequest(ctx context.Context, env *e2a.E2AEnvelope) *schema.AgentResponse
 	// SendRequestStream 流式请求；返回 nil 通道表示客户端不支持流式
 	// （对齐 video_search.py:414 getattr(client,"send_request_stream",None) 的能力探测）
-	SendRequestStream(ctx any, env *AgentRequest) <-chan *AgentResponse
+	SendRequestStream(ctx context.Context, env *e2a.E2AEnvelope) <-chan *schema.AgentResponse
 }
 
 // CoreAgentResult execute_core_agent 的返回结果。
@@ -322,7 +296,7 @@ func CoreAgentProgress(payload map[string]any) map[string]any {
 // 对齐 video_search.py:366-540 execute_core_agent。
 // 流式分支：chat.ask_user_question → 交互挂起；chat.error → 失败；
 // chat.delta 聚合、chat.final 收末帧；无末帧 → ExecutionUncertain。
-func ExecuteCoreAgent(ctx any, client AgentClient, opts CoreAgentOptions) *CoreAgentResult {
+func ExecuteCoreAgent(ctx context.Context, client AgentClient, opts CoreAgentOptions) *CoreAgentResult {
 	requestID := opts.RequestID
 	if requestID == "" {
 		requestID = "video-core-" + newRequestID()
@@ -377,11 +351,11 @@ func ExecuteCoreAgent(ctx any, client AgentClient, opts CoreAgentOptions) *CoreA
 	if opts.ManagedTaskBinding != nil {
 		params["managed_task_binding"] = opts.ManagedTaskBinding
 	}
-	env := &AgentRequest{
-		RequestID: requestID, ChannelID: VideoToolChannelID, UserID: opts.UserID,
-		SessionID: coreSessionID, ReqMethod: reqMethod, Params: params,
-		IsStream: false, Timestamp: time.Now(),
-	}
+	env := e2a.E2AFromAgentFields(requestID,
+		e2a.WithFieldChannelID(VideoToolChannelID), e2a.WithFieldUserID(opts.UserID),
+		e2a.WithFieldSessionID(coreSessionID), e2a.WithFieldReqMethod(reqMethod),
+		e2a.WithFieldParams(params), e2a.WithFieldIsStream(false),
+		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1e6))
 
 	// 非流式分支（send_request_stream 不可用，对齐 :414-432）
 	stream := client.SendRequestStream(ctx, env)

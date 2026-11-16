@@ -11,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -167,23 +169,22 @@ func (e *AgentTaskExecutor) Run(ctx context.Context, task map[string]any, progre
 // Cancel 取消执行（CHAT_CANCEL 确认后等 settled）。
 // 对齐 task_adapter.py:287-305 cancel。
 func (e *AgentTaskExecutor) Cancel(ctx context.Context, task map[string]any) error {
-	request := &AgentRequest{
-		RequestID: "cancel-" + toString(task["request_id"]),
-		ChannelID: VideoToolChannelID,
-		SessionID: toString(task["core_session_id"]),
-		UserID:    orEmptyOwner(task["owner"]),
-		ReqMethod: "chat.cancel",
-		Params: map[string]any{
+	request := e2a.E2AFromAgentFields("cancel-"+toString(task["request_id"]),
+		e2a.WithFieldChannelID(VideoToolChannelID),
+		e2a.WithFieldSessionID(toString(task["core_session_id"])),
+		e2a.WithFieldUserID(orEmptyOwner(task["owner"])),
+		e2a.WithFieldReqMethod("chat.cancel"),
+		e2a.WithFieldParams(map[string]any{
 			"intent": "cancel", "mode": "agent", "work_mode": "work",
 			"managed_task_request": task["request_id"],
-		},
-		IsStream: false, Timestamp: time.Now(),
-	}
-	done := make(chan *AgentResponse, 1)
+		}),
+		e2a.WithFieldIsStream(false),
+		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1e6))
+	done := make(chan *schema.AgentResponse, 1)
 	go func() {
 		done <- e.client.SendRequest(ctx, request)
 	}()
-	var response *AgentResponse
+	var response *schema.AgentResponse
 	select {
 	case response = <-done:
 	case <-time.After(AgentQueryTimeout):
@@ -236,15 +237,14 @@ func (e *AgentTaskExecutor) Answer(ctx context.Context, task map[string]any) err
 	if interaction["interrupt_id"] != nil {
 		params["interrupt_id"] = interaction["interrupt_id"]
 	}
-	request := &AgentRequest{
-		RequestID: requestID,
-		ChannelID: VideoToolChannelID,
-		SessionID: toString(task["core_session_id"]),
-		UserID:    orEmptyOwner(task["owner"]),
-		ReqMethod: "chat.answer",
-		Params:    params,
-		IsStream:  false, Timestamp: time.Now(),
-	}
+	request := e2a.E2AFromAgentFields(requestID,
+		e2a.WithFieldChannelID(VideoToolChannelID),
+		e2a.WithFieldSessionID(toString(task["core_session_id"])),
+		e2a.WithFieldUserID(orEmptyOwner(task["owner"])),
+		e2a.WithFieldReqMethod("chat.answer"),
+		e2a.WithFieldParams(params),
+		e2a.WithFieldIsStream(false),
+		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1e6))
 	response := e.client.SendRequest(ctx, request)
 	if response == nil || !response.OK || response.Payload["success"] == false {
 		return errors.New("Agent did not accept the answer")
@@ -317,14 +317,17 @@ func TaskAgentQuery(client AgentClient, method string, params map[string]any, se
 	if client == nil {
 		return nil, errors.New("AgentServer client is unavailable")
 	}
-	request := &AgentRequest{
-		RequestID: "task-query-" + fmt.Sprintf("%d", time.Now().UnixNano()),
-		ReqMethod: method, Params: params, SessionID: session,
-		UserID: owner, ChannelID: VideoToolChannelID, Timestamp: time.Now(),
-	}
-	done := make(chan *AgentResponse, 1)
+	request := e2a.E2AFromAgentFields("task-query-"+fmt.Sprintf("%d", time.Now().UnixNano()),
+		e2a.WithFieldChannelID(VideoToolChannelID),
+		e2a.WithFieldSessionID(session),
+		e2a.WithFieldUserID(owner),
+		e2a.WithFieldReqMethod(method),
+		e2a.WithFieldParams(params),
+		e2a.WithFieldIsStream(false),
+		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1e6))
+	done := make(chan *schema.AgentResponse, 1)
 	go func() { done <- client.SendRequest(context.Background(), request) }()
-	var response *AgentResponse
+	var response *schema.AgentResponse
 	select {
 	case response = <-done:
 	case <-time.After(AgentQueryTimeout):

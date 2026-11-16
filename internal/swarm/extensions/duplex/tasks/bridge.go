@@ -167,9 +167,9 @@ func (e *GatewayTaskEndpoint) Execute(command map[string]any) (map[string]any, e
 	return result, err
 }
 
-// CheckpointFrame e2a 帧的检查点最小形状。
-// Python 侧无对应实现：Python 直接消费 e2a chunk，Go 跨包解耦需显式形状
-// （duplex 层由 AgentResponse 适配构造，偏差 O-6 spec 登记）。
+// CheckpointFrame 检查点命令帧（bridge 传输载荷；批 2 补移植 video_task/bridge.py 的
+// RemoteTaskEndpoint/resolve_checkpoint_ack 时对齐其消费方）。
+// Python 侧无对应实现：Python 经 e2a chunk 传递，Go 以显式形状在桥上承载。
 type CheckpointFrame struct {
 	// EventType 事件类型
 	EventType string

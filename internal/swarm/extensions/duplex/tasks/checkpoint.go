@@ -12,7 +12,6 @@ import (
 type TaskCheckpoint struct {
 	endpoint  *GatewayTaskEndpoint
 	taskID    string
-	root      any
 	requestID string
 	closed    bool
 
@@ -28,11 +27,10 @@ type TaskCheckpoint struct {
 
 // NewTaskCheckpoint 构造检查点。
 // 对齐 checkpoint.py:7-11 __init__。
-func NewTaskCheckpoint(endpoint *GatewayTaskEndpoint, task map[string]any, root any) *TaskCheckpoint {
+func NewTaskCheckpoint(endpoint *GatewayTaskEndpoint, task map[string]any) *TaskCheckpoint {
 	return &TaskCheckpoint{
 		endpoint:  endpoint,
 		taskID:    toString(task["id"]),
-		root:      root,
 		requestID: toString(task["request_id"]),
 	}
 }
