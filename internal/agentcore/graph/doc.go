@@ -10,12 +10,21 @@
 // 8.10），消费方为 8.11 Vertex 与 8.19/8.20 条件组件；当前无即时消费者，
 // 属后续章节的地基件。
 //
+// Executable（executable.go）为可执行节点契约（8.2）：泛型接口承载四执行入口
+// （OnInvoke/OnStream/OnCollect/OnTransform，"单/流 × 单/流"矩阵）与四策略钩子
+// （SkipTrace/GraphInvoker/PostCommit/ComponentType，由 8.11 Vertex 消费）；
+// 流式语义经 StreamChunk（Err 非 nil 为末元素后关闭）承载。ExecutableGraph
+// （executable_graph.go）为可执行图契约，Invoke 信封拆分（InputsKey/ConfigKey）
+// 对齐 base.py:13-14，默认 pass 流式方法经包级泛型函数承载（spec 偏差 D5）。
+//
 // 文件目录：
 //
 //	graph/
-//	├── doc.go            # 包文档
-//	├── atomic_node.go   # AtomicNode 原子提交包装（8.10）
-//	└── graph_state.go   # GraphState 节点输出聚合 schema
+//	├── doc.go                 # 包文档
+//	├── executable.go          # Executable 泛型接口 + StreamChunk + BaseExecutable 基座（8.2）
+//	├── executable_graph.go    # ExecutableGraph 契约 + InputsKey/ConfigKey 信封常量（8.2）
+//	├── atomic_node.go         # AtomicNode 原子提交包装（8.10）
+//	└── graph_state.go        # GraphState 节点输出聚合 schema
 //
-// 对应 Python 代码：openjiuwen/core/graph/graph_state.py · atomic_node.py
+// 对应 Python 代码：openjiuwen/core/graph/graph_state.py · atomic_node.py · executable.py · base.py
 package graph
