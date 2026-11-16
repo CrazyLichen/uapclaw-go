@@ -124,7 +124,7 @@ func (e *AgentTaskExecutor) Run(ctx context.Context, task map[string]any, progre
 		return runErr
 	}()
 	if err == nil {
-		current, _ := e.store.Read(toString(task["id"]), nil, nil)
+		current, _ := e.store.ReadDirect(toString(task["id"]), nil, nil)
 		if interaction, ok := current["interaction"].(map[string]any); ok &&
 			toString(interaction["state"]) == "pending" {
 			return nil, &tasks.ExecutionUncertain{Msg: "Answer channel closed before the question was answered"}
@@ -157,7 +157,7 @@ func (e *AgentTaskExecutor) Run(ctx context.Context, task map[string]any, progre
 		}
 		return result, nil
 	}
-	current, _ := e.store.Read(toString(task["id"]), nil, nil)
+	current, _ := e.store.ReadDirect(toString(task["id"]), nil, nil)
 	if current != nil && current["execution_bound"] == true && current["execution_settled"] != true {
 		return nil, &tasks.ExecutionUncertain{Msg: "Execution cleanup is unconfirmed; no work was replayed"}
 	}
@@ -195,7 +195,7 @@ func (e *AgentTaskExecutor) Cancel(ctx context.Context, task map[string]any) err
 	// 等确切执行的本地落定（对齐 :303-305）
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		current, _ := e.store.Read(toString(task["id"]), nil, nil)
+		current, _ := e.store.ReadDirect(toString(task["id"]), nil, nil)
 		if current != nil && current["execution_settled"] == true {
 			return nil
 		}
@@ -302,7 +302,7 @@ func (e *AgentTaskExecutor) run(ctx context.Context, task map[string]any, progre
 func (e *AgentTaskExecutor) waitSettled(task map[string]any) error {
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		current, _ := e.store.Read(toString(task["id"]), nil, nil)
+		current, _ := e.store.ReadDirect(toString(task["id"]), nil, nil)
 		if current != nil && current["execution_settled"] == true {
 			return nil
 		}

@@ -333,3 +333,35 @@ func (s *TaskStore) ReplayInTx(tx *sql.Tx, owner, session, commandID string, req
 
 // sqlTxType 事务类型别名（duplex 包引用）。
 type sqlTxType = sql.Tx
+
+// Update 任务变更（跨包/测试使用）。
+func (s *TaskStore) Update(taskID string, change func(map[string]any)) (map[string]any, error) {
+	return s.update(taskID, change)
+}
+
+// ReadDirect 轻量直读（不开写事务；对齐 Python sqlite 直读语义）。
+// Python 侧无对应实现：Python transaction 读与 Go 等价，但 Go _txlock=immediate
+// 使读也取写锁，轮询场景需无锁读避免与派发事务互相饥饿（偏差 O-8 spec 登记）。
+func (s *TaskStore) ReadDirect(taskID string, owner, session any) (map[string]any, error) {
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	row := db.QueryRow("SELECT owner, session, body FROM managed_tasks WHERE id=?", taskID)
+	var rowOwner, rowSession, body string
+	if err := row.Scan(&rowOwner, &rowSession, &body); err != nil {
+		return nil, errors.New("Task not found in this conversation")
+	}
+	if owner != nil && rowOwner != owner.(string) {
+		return nil, errors.New("Task not found in this conversation")
+	}
+	if session != nil && rowSession != session.(string) {
+		return nil, errors.New("Task not found in this conversation")
+	}
+	var task map[string]any
+	if err := json.Unmarshal([]byte(body), &task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}

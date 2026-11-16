@@ -2,13 +2,13 @@ package tasks
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"os"
 	"sort"
-	"database/sql"
 	"strings"
 	"sync"
 	"syscall"
@@ -454,7 +454,7 @@ func (s *TaskService) Cancel(ctx context.Context, owner, session, taskID, comman
 		}
 		receipt = map[string]any{
 			"task_id": taskID, "operation_id": commandID,
-			"state": map[bool]string{true: "cancelling", false: newStatus}[newStatus == "cancelling"],
+			"state":       map[bool]string{true: "cancelling", false: newStatus}[newStatus == "cancelling"],
 			"task_status": newStatus,
 			"stopped":     newStatus == "cancelled",
 			"message":     message,
@@ -477,7 +477,7 @@ func (s *TaskService) Cancel(ctx context.Context, owner, session, taskID, comman
 			task, _ := s.store.read(taskID, nil, nil)
 			go func() {
 				defer close(entry.done)
-				defer func(){ delete(s.cancellations, taskID) }()
+				defer func() { delete(s.cancellations, taskID) }()
 				s.cancelWork(runCtx, task)
 			}()
 		}
@@ -960,11 +960,11 @@ func (s *TaskService) newTask(owner, session, instruction string, request map[st
 		"id": taskID, "owner": owner, "session": session,
 		"instruction": instruction, "request": request,
 		"status": "queued", "revision": 1, "sequence": 1,
-		"position":   time.Now().UnixNano(),
-		"created_at": float64(time.Now().UnixMicro()) / 1e6,
+		"position":        time.Now().UnixNano(),
+		"created_at":      float64(time.Now().UnixMicro()) / 1e6,
 		"core_session_id": coreSessionID,
-		"request_id": "task-" + newHexID(),
-		"changes":    []any{}, "progress": []any{},
+		"request_id":      "task-" + newHexID(),
+		"changes":         []any{}, "progress": []any{},
 		"result": nil, "error": "",
 		"parent_id": parent, "successor_id": nil,
 		"checkpoint_open": false, "execution_settled": false,
@@ -1025,13 +1025,13 @@ func (s *TaskService) cancelWork(ctx context.Context, task map[string]any) {
 		}
 		// 让输出观察者发布任何赢得竞态的完成
 		for i := 0; i < 600; i++ {
-			current, _ = s.store.read(toString(task["id"]), nil, nil)
+			current, _ = s.store.ReadDirect(toString(task["id"]), nil, nil)
 			if truthy(current["output_closed"]) {
 				break
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
-		current, _ = s.store.read(toString(task["id"]), nil, nil)
+		current, _ = s.store.ReadDirect(toString(task["id"]), nil, nil)
 		if !truthy(current["execution_settled"]) {
 			err = errors.New("Stop accepted; execution settlement is not confirmed")
 		}
@@ -1237,6 +1237,7 @@ func (s *TaskService) drain(ctx context.Context, admitted map[string]any) {
 		return
 	}
 	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("任务派发前置事务失败")
 		return
 	}
 	task, _ = s.store.read(taskID, nil, nil)
@@ -1471,7 +1472,7 @@ func setsIntersect(a, b map[string]bool) bool {
 func newHexID() string {
 	var b [16]byte
 	for i := range b {
-		b[i] = byte(time.Now().UnixNano() >> (uint(i)%8) * 8)
+		b[i] = byte(time.Now().UnixNano() >> (uint(i) % 8) * 8)
 		b[i] ^= byte(os.Getpid() + i)
 	}
 	return fmt.Sprintf("%x%x%x%x%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])

@@ -123,7 +123,7 @@ func TestSafeUpstreamError_脱密钥(t *testing.T) {
 // TestSendGatewayError 帧结构对齐 :61-71。
 func TestSendGatewayError_帧结构(t *testing.T) {
 	server := newWSServer(t, func(conn *websocket.Conn) {
-		sendGatewayError(conn, "qwen_gateway_upstream_closed", "连接关闭")
+		sendGatewayError(&safeConn{conn: conn}, "qwen_gateway_upstream_closed", "连接关闭")
 	})
 	conn, _, err := (&websocket.Dialer{HandshakeTimeout: 5 * time.Second}).Dial(
 		"ws://"+strings.TrimPrefix(server.URL, "http://"), nil)

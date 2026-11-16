@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -104,11 +105,12 @@ func ServeQwenOmniWebsocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer browserConn.Close()
+	browser := &safeConn{conn: browserConn}
 	config := QwenOmniRealtimeConfigFromEnvironment()
 	upstreamURL := config.UpstreamWithModel()
 	if err := config.Validate(); err != nil {
-		sendGatewayError(browserConn, "qwen_gateway_config_error", err.Error())
-		closeWithReason(browserConn, 1008, "Qwen-Omni gateway is not configured")
+		sendGatewayError(browser, "qwen_gateway_config_error", err.Error())
+		closeWithReason(browser, 1008, "Qwen-Omni gateway is not configured")
 		return
 	}
 
@@ -119,20 +121,21 @@ func ServeQwenOmniWebsocket(w http.ResponseWriter, r *http.Request) {
 		WriteBufferSize:   8 * 1024 * 1024,
 		EnableCompression: false,
 	}
-	upstreamConn, resp, dialErr := dialer.Dial(upstreamURL, header)
+	upstreamRaw, resp, dialErr := dialer.Dial(upstreamURL, header)
 	if dialErr != nil {
 		logger.Warn(logComponent).Err(dialErr).Str("model", config.Model).Msg("Qwen-Omni Realtime relay failed")
 		message := safeUpstreamError(dialErr, config.APIKey)
-		sendGatewayError(browserConn, "qwen_gateway_upstream_error", message)
-		closeWithReason(browserConn, 1011, "Qwen upstream connection failed")
+		sendGatewayError(browser, "qwen_gateway_upstream_error", message)
+		closeWithReason(browser, 1011, "Qwen upstream connection failed")
 		return
 	}
-	defer upstreamConn.Close()
+	defer upstreamRaw.Close()
+	upstream := &safeConn{conn: upstreamRaw}
 	// ping/pong：gorilla 默认响应 ping；主动 ping 由读侧看门狗等价（ping_interval=20）
 	logger.Info(logComponent).Str("model", config.Model).Msg("Qwen-Omni Realtime relay connected")
 
 	closeCode, closeReason := 1000, ""
-	relayDone := relayBoth(browserConn, upstreamConn)
+	relayDone := relayBoth(browser, upstream)
 	relayErr := <-relayDone
 	if relayErr != nil {
 		if websocket.IsCloseError(relayErr, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
@@ -145,7 +148,7 @@ func ServeQwenOmniWebsocket(w http.ResponseWriter, r *http.Request) {
 			closeCode, closeReason = 1011, "Upstream disconnected without a close frame"
 		}
 		message := safeUpstreamError(errors.New(fmt.Sprintf("Qwen Realtime 连接已关闭（%d）：%s", closeCode, orFallbackReason(closeReason))), config.APIKey)
-		sendGatewayError(browserConn, "qwen_gateway_upstream_closed", message)
+		sendGatewayError(browser, "qwen_gateway_upstream_closed", message)
 	}
 	_ = resp
 	// finally 段（对齐 :160-172）
@@ -157,19 +160,19 @@ func ServeQwenOmniWebsocket(w http.ResponseWriter, r *http.Request) {
 		closeReason = fmt.Sprintf("Upstream close %d: %s", closeCode, closeReason)
 		closeCode = 1011
 	}
-	closeWithReason(browserConn, closeCode, truncateReason(closeReason))
+	closeWithReason(browser, closeCode, truncateReason(closeReason))
 }
 
 // ──────────────────────────── 非导出函数（WS 中继段） ────────────────────────────
 
 // sendGatewayError 向浏览器发送错误帧。
 // 对齐 qwen_omni_gateway.py:61-71 _send_gateway_error（断连后静默返回）。
-func sendGatewayError(conn *websocket.Conn, code, message string) {
+func sendGatewayError(conn *safeConn, code, message string) {
 	payload, _ := json.Marshal(map[string]any{
 		"type":  "error",
 		"error": map[string]any{"code": code, "message": message},
 	})
-	if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+	if err := conn.writeMessage(websocket.TextMessage, payload); err != nil {
 		logger.Debug(logComponent).Err(err).Msg("发送网关错误帧失败")
 	}
 }
@@ -190,19 +193,40 @@ func safeUpstreamError(err error, apiKey string) string {
 	return message
 }
 
+// safeConn 带写锁的连接包装（gorilla 单写者约束）。
+// Python 侧无对应实现：Python asyncio 单线程写天然串行，Go 双 goroutine 中继需显式写锁。
+type safeConn struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+// writeMessage 串行写。
+func (c *safeConn) writeMessage(messageType int, data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteMessage(messageType, data)
+}
+
+// writeControl 串行控制帧。
+func (c *safeConn) writeControl(messageType int, data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteControl(messageType, data, time.Now().Add(time.Second))
+}
+
 // relayBoth 双向中继直到任一侧结束。
 // 对齐 qwen_omni_gateway.py:80-100 两个 relay 协程。
-func relayBoth(browser, upstream *websocket.Conn) <-chan error {
+func relayBoth(browser, upstream *safeConn) <-chan error {
 	done := make(chan error, 2)
 	// browser → upstream（对齐 _relay_browser_to_upstream）
 	go func() {
 		for {
-			messageType, data, err := browser.ReadMessage()
+			messageType, data, err := browser.conn.ReadMessage()
 			if err != nil {
 				done <- err
 				return
 			}
-			if err := upstream.WriteMessage(messageType, data); err != nil {
+			if err := upstream.writeMessage(messageType, data); err != nil {
 				done <- err
 				return
 			}
@@ -211,12 +235,12 @@ func relayBoth(browser, upstream *websocket.Conn) <-chan error {
 	// upstream → browser（对齐 _relay_upstream_to_browser）
 	go func() {
 		for {
-			messageType, data, err := upstream.ReadMessage()
+			messageType, data, err := upstream.conn.ReadMessage()
 			if err != nil {
 				done <- err
 				return
 			}
-			if err := browser.WriteMessage(messageType, data); err != nil {
+			if err := browser.writeMessage(messageType, data); err != nil {
 				done <- err
 				return
 			}
@@ -251,11 +275,11 @@ func orFallbackReason(reason string) string {
 
 // closeWithReason 带原因关闭（123 字节上限内截断）。
 // 对齐 qwen_omni_gateway.py:168-172（close_reason.encode()[:123]）。
-func closeWithReason(conn *websocket.Conn, code int, reason string) {
+func closeWithReason(conn *safeConn, code int, reason string) {
 	reason = truncateReason(reason)
-	_ = conn.WriteControl(websocket.CloseMessage,
-		websocket.FormatCloseMessage(code, reason), time.Now().Add(time.Second))
-	_ = conn.Close()
+	_ = conn.writeControl(websocket.CloseMessage,
+		websocket.FormatCloseMessage(code, reason))
+	_ = conn.conn.Close()
 }
 
 // truncateReason 关闭原因按 UTF-8 安全截断到 123 字节。

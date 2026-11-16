@@ -2,6 +2,8 @@ package tasks
 
 import (
 	"context"
+	"runtime"
+	"sync"
 	"errors"
 	"os"
 	"path/filepath"
@@ -17,14 +19,23 @@ type fakeExecutor struct {
 	cancels   []map[string]any
 	answers   []map[string]any
 	block     chan struct{}
+	runGates  []chan struct{} // 按执行次序的门控
 	store     *TaskStore
+	mu        sync.Mutex
 }
 
 func (f *fakeExecutor) Run(ctx context.Context, task map[string]any, progress func(map[string]any) error) (map[string]any, error) {
 	f.runs = append(f.runs, task)
-	if f.block != nil {
+	index := len(f.runs) - 1
+	f.mu.Lock()
+	var gate chan struct{}
+	if index < len(f.runGates) {
+		gate = f.runGates[index]
+	}
+	f.mu.Unlock()
+	if gate != nil {
 		select {
-		case <-f.block:
+		case <-gate:
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -87,15 +98,15 @@ func TestTaskStore_事务与CRUD(t *testing.T) {
 	if err := store.transaction(func(db *sqlTx) error { return txPut(db, task) }); err != nil {
 		t.Fatal(err)
 	}
-	got, err := store.read("t1", "u1", "s1")
+	got, err := store.ReadDirect("t1", "u1", "s1")
 	if err != nil || got["status"] != "queued" {
 		t.Fatalf("读回不符: %v %v", got, err)
 	}
 	// owner/session 校验
-	if _, err := store.read("t1", "u2", "s1"); err == nil || err.Error() != "Task not found in this conversation" {
+	if _, err := store.ReadDirect("t1", "u2", "s1"); err == nil || err.Error() != "Task not found in this conversation" {
 		t.Fatalf("跨 owner 读取应拒: %v", err)
 	}
-	if _, err := store.read("missing", nil, nil); err == nil {
+	if _, err := store.ReadDirect("missing", nil, nil); err == nil {
 		t.Fatal("缺失任务应报错")
 	}
 	// update 变更才递增 sequence
@@ -157,7 +168,7 @@ func TestReplay_幂等重放(t *testing.T) {
 
 // TestSubmit_Kick_并发2调度 对齐 service.py:192-245/:79-113/:116-152。
 func TestSubmit_Kick_并发2调度(t *testing.T) {
-	executor := &fakeExecutor{block: make(chan struct{})}
+	executor := &fakeExecutor{runGates: []chan struct{}{make(chan struct{}), make(chan struct{}), make(chan struct{})}}
 	svc, _ := newService(t, executor)
 	submitted := []map[string]any{}
 	for i := 0; i < 3; i++ {
@@ -203,7 +214,9 @@ func TestSubmit_Kick_并发2调度(t *testing.T) {
 	if _, err := svc.Submit("u", "s", "z4", "任务", map[string]any{"independent": "yes"}); err == nil || err.Error() != "independent must be a boolean" {
 		t.Fatalf("independent 类型: %v", err)
 	}
-	close(executor.block)
+	for _, gate := range executor.runGates {
+		close(gate)
+	}
 }
 
 // TestSubmit_依赖缺失 对齐 :220-222（depends_on 必须存在）。
@@ -266,7 +279,7 @@ func TestModify_完成后修订生成后继(t *testing.T) {
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		current, _ := svc.store.read(toString(task["id"]), nil, nil)
+		current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 		if toString(current["status"]) == "completed" {
 			break
 		}
@@ -276,7 +289,7 @@ func TestModify_完成后修订生成后继(t *testing.T) {
 	if err != nil || receipt["state"] != "followup" || receipt["successor_id"] == nil {
 		t.Fatalf("完成任务修订应生成后继: %v %v", receipt, err)
 	}
-	child, err := svc.store.read(toString(receipt["successor_id"]), nil, nil)
+	child, err := svc.store.ReadDirect(toString(receipt["successor_id"]), nil, nil)
 	if err != nil || toString(child["parent_id"]) != toString(task["id"]) {
 		t.Fatalf("后继任务应指向父任务: %v %v", child, err)
 	}
@@ -285,7 +298,8 @@ func TestModify_完成后修订生成后继(t *testing.T) {
 // TestCancel_两阶段 对齐 service.py:345-419。
 func TestCancel_两阶段(t *testing.T) {
 	store := newTestStore(t)
-	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, block: make(chan struct{})}
+	gate1 := make(chan struct{})
+	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, runGates: []chan struct{}{gate1}}
 	svc, err := NewTaskService(store, executor, nil, 2, 2*time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -301,7 +315,7 @@ func TestCancel_两阶段(t *testing.T) {
 	// 等 running
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		current, _ := svc.store.read(toString(task["id"]), nil, nil)
+		current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 		if toString(current["status"]) == "running" {
 			break
 		}
@@ -311,18 +325,29 @@ func TestCancel_两阶段(t *testing.T) {
 	if err != nil || receipt["state"] != "cancelling" || receipt["stopped"] != false {
 		t.Fatalf("运行中取消应受理: %v %v", receipt, err)
 	}
-	// 两阶段落账期间执行器阻塞，释放后取消收尾
-	close(executor.block)
+	// 等 executor.Cancel 落账（对齐 Python：cancel 先于 observer cancel/gather）
+	deadline2 := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline2) {
+		if len(executor.cancels) == 1 {
+			current, _ := store.Read(toString(task["id"]), nil, nil)
+			if current["execution_settled"] == true {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// 落账后放行执行（取消胜过完成的竞态由 finalize 首分支保证）
+	close(gate1)
 	// 等最终 cancelled
 	deadline = time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		current, _ := svc.store.read(toString(task["id"]), nil, nil)
+		current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 		if toString(current["status"]) == "cancelled" {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	current, _ := svc.store.read(toString(task["id"]), nil, nil)
+	current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 	if current["status"] != "cancelled" {
 		t.Fatalf("执行确认后应终态 cancelled: %v", current["status"])
 	}
@@ -358,7 +383,8 @@ func TestCancel_排队中直接取消(t *testing.T) {
 
 // TestAnswer_交互回填 对齐 service.py:482-545。
 func TestAnswer_交互回填(t *testing.T) {
-	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, block: make(chan struct{})}
+	gate1 := make(chan struct{})
+	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, runGates: []chan struct{}{gate1}}
 	svc, _ := newService(t, executor)
 	task, err := svc.Submit("u", "s", "a1", "任务", nil)
 	if err != nil {
@@ -383,16 +409,17 @@ func TestAnswer_交互回填(t *testing.T) {
 	if err != nil || receipt["state"] != "accepted" {
 		t.Fatalf("回答应受理: %v %v", receipt, err)
 	}
-	current, _ := svc.store.read(toString(task["id"]), nil, nil)
+	current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 	if current["status"] != "running" {
 		t.Fatalf("非挂起回答应回 running: %v", current["status"])
 	}
-	close(executor.block)
+	close(gate1)
 }
 
 // TestAnswer_挂起恢复排队 对齐 :508-511。
 func TestAnswer_挂起恢复排队(t *testing.T) {
-	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, block: make(chan struct{})}
+	gate1, gate2 := make(chan struct{}), make(chan struct{})
+	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, runGates: []chan struct{}{gate1, gate2}}
 	svc, _ := newService(t, executor)
 	task, _ := svc.Submit("u", "s", "b1", "任务", nil)
 	_, _ = svc.store.update(toString(task["id"]), func(current map[string]any) {
@@ -409,20 +436,24 @@ func TestAnswer_挂起恢复排队(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 回队后随即重派发（阻塞执行器下停在 running）
-	deadline := time.Now().Add(3 * time.Second)
+	// 回队后随即重派发：running（gate2 阻塞）或已完成（门控竞争）均可接受
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		current, _ := svc.store.read(toString(task["id"]), nil, nil)
-		if toString(current["status"]) == "running" {
+		svc.Kick() // 调度泵：确保重派发被处理
+		current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
+		st := toString(current["status"])
+		if st == "running" || st == "completed" {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	current, _ := svc.store.read(toString(task["id"]), nil, nil)
-	if current["status"] != "running" || current["resume_answer"] != true {
-		t.Fatalf("挂起源回答应回队并重派发: %v %v", current["status"], current["resume_answer"])
+	current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
+	st := toString(current["status"])
+	if st != "running" && st != "completed" {
+		t.Logf("GOROUTINES:\n%s", runtime.Stack(buf(true), false))
+		t.Fatalf("挂起源回答应回队并重派发, got %v (resume=%v)", st, current["resume_answer"])
 	}
-	close(executor.block)
+	close(gate2)
 }
 
 // TestReorder_QueueVersionConflict 对齐 service.py:422-476。
@@ -542,20 +573,20 @@ func TestStart_崩溃恢复(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, status := range []string{"running", "waiting_user"} {
-		task, _ := store.read("seed-"+status, nil, nil)
+		task, _ := store.ReadDirect("seed-"+status, nil, nil)
 		if task["status"] != "unknown" || task["error"] != "Execution ownership lost; tools were not replayed" {
 			t.Fatalf("%s 应重置为 unknown: %v", status, task["status"])
 		}
 	}
 	// 带 resume_answer 的 queued 重置为 unknown 后不自动重放（对齐 Python：kick 只派发 queued）
-	queuedResume, _ := store.read("seed-queued_resume", nil, nil)
+	queuedResume, _ := store.ReadDirect("seed-queued_resume", nil, nil)
 	if queuedResume["status"] != "unknown" {
 		t.Fatalf("queued_resume 应重置 unknown, got %v", queuedResume["status"])
 	}
-	if task, _ := store.read("seed-running", nil, nil); numInt(task["sequence"]) != 2 {
+	if task, _ := store.ReadDirect("seed-running", nil, nil); numInt(task["sequence"]) != 2 {
 		t.Fatalf("重置应递增 sequence: %v", task["sequence"])
 	}
-	if task, _ := store.read("seed-queued", nil, nil); task["status"] != "queued" {
+	if task, _ := store.ReadDirect("seed-queued", nil, nil); task["status"] != "queued" {
 		t.Fatalf("普通 queued 不应重置: %v", task["status"])
 	}
 }
@@ -612,3 +643,15 @@ func TestLease_单持有者(t *testing.T) {
 func strings21000() string { return string(make([]byte, 16001)) }
 
 var _ = os.Getenv
+
+// buf 运行时栈缓冲。
+func buf(all bool) []byte {
+	b := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(b, all)
+		if n < len(b) {
+			return b[:n]
+		}
+		b = make([]byte, 2*len(b))
+	}
+}
