@@ -3,13 +3,12 @@ package pregel
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -58,8 +57,24 @@ type Pregel struct {
 	AfterStep AfterStepFunc
 }
 
+// RecursionError 递归上限超限（Python 内置 RecursionError 的 Go 等价物，spec D3）。
+// engine.py:85 按类型名分类上抛（"RecursionError is caught by name at the workflow
+// layer"），Go 以 errors.As 类型断言还原该契约。
+type RecursionError struct {
+	// Limit 递归上限（max_step）
+	Limit int
+	// Step 触发时的步号
+	Step int
+}
+
 // AfterStepFunc 每超步回调（engine.py:216-221 同步/协程双形态 → B1 偏差同步单形态）
 type AfterStepFunc func(ctx context.Context, loop *PregelLoop)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// errGraphEnd 图结束信号（engine.py:129-131 return False 的 error 通道等价物，B8）。
+// RunStep 外层最先识别并转为 (false, nil)，不打错误日志、不落盘。
+var errGraphEnd = errors.New("pregel: graph end")
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -80,18 +95,48 @@ func NewPregel(nodes map[string]*PregelNode, channels []Channel, initial string,
 	return &Pregel{Nodes: nodes, Store: store, Channels: channels, Initial: initial, AfterStep: afterStep}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// isResume 恢复判定（engine.py:94-96 staticmethod；Go 作包级函数）
-func isResume(state *GraphState) bool {
-	return state != nil && state.IsResumable()
+// Error 文案复刻 engine.py:139-141
+func (e *RecursionError) Error() string {
+	return fmt.Sprintf("Recursion limit of %d reached at step %d", e.Limit, e.Step)
 }
 
-// ──────────────────────────── 非导出变量 ────────────────────────────
-
-// errGraphEnd 图结束信号（engine.py:129-131 return False 的 error 通道等价物，B8）。
-// RunStep 外层最先识别并转为 (false, nil)，不打错误日志、不落盘。
-var errGraphEnd = errors.New("pregel: graph end")
+// Init 初始化：构造任务池、恢复检查点或触发 START（engine.py:39-62）
+func (l *PregelLoop) Init(ctx context.Context) error {
+	// engine.py:40-41
+	l.Executor = NewTaskExecutorPool(l.Config)
+	l.MaxStep = l.Config.RecursionLimit
+	// engine.py:42-44：sessionID/ns/saver 三者齐才读存储
+	var state *GraphState
+	if l.Config.SessionID != "" && l.Config.Ns != "" && l.Saver != nil {
+		var err error
+		state, err = l.Saver.Get(ctx, l.Config.SessionID, l.Config.Ns)
+		if err != nil {
+			return err
+		}
+	}
+	// engine.py:45-58
+	if isResume(state) {
+		// Restore barrier channel
+		l.Manager.Restore(state.ChannelValues)
+		// restore loop node version
+		l.NodeVersion = state.NodeVersion
+		// Restore step
+		l.Step = state.Step
+		l.MaxStep = state.Step + l.Config.RecursionLimit
+		// Restore task result message
+		for _, msg := range state.PendingBuffer {
+			l.Manager.BufferMessage(msg)
+		}
+		// Pending node
+		if state.PendingNode != nil {
+			l.retryPendingNodes = state.PendingNode
+		}
+		return nil
+	}
+	// engine.py:59-62 Trigger start node
+	l.Manager.BufferMessage(NewTriggerMessage(l.Graph.Initial, l.Graph.Initial))
+	return l.Manager.Flush()
+}
 
 // RunStep 执行一个超步，false 表示图结束（engine.py:64-92）。
 // 两层结构一比一：外层错误处理边界，内层 runStep 步骤（spec D2：同步保存后分类上抛）。
@@ -103,6 +148,12 @@ func (l *PregelLoop) RunStep(ctx context.Context) (bool, error) {
 	// B8：图结束信号 → (false, nil)
 	if errors.Is(err, errGraphEnd) {
 		return false, nil
+	}
+	// B3：外层取消（asyncio.CancelledError）绕过整个错误处理块原样上抛——
+	// Python 的 CancelledError 继承 BaseException 而非 Exception，
+	// engine.py:67 的 `except Exception` 不捕获它，故不打日志、不落盘、不包装
+	if errors.Is(err, context.Canceled) {
+		return false, err
 	}
 	// engine.py:68-81 非 GraphInterrupt 才打 GRAPH_SUPER_STEP_ERROR
 	var gi *GraphInterrupt
@@ -131,6 +182,88 @@ func (l *PregelLoop) RunStep(ctx context.Context) (bool, error) {
 		exception.WithParam("step", l.Step),
 		exception.WithParam("reason", err.Error()),
 		exception.WithCause(err))
+}
+
+// Run 执行图（engine.py:230-285）。
+// 返回值（B6）：正常 ({}, nil)；顶层中断 ({__interrupt__: gi}, nil)；其余 (nil, err)。
+// config 形参类型 *InnerPregelConfig（偏差 B7）：Python TypedDict 可动态携带
+// parent_ns，8.3b D1 已确立该 Go 承载形状。
+func (g *Pregel) Run(ctx context.Context, config *InnerPregelConfig) (map[string]any, error) {
+	// engine.py:232-237
+	cfg := DefaultPregelConfig()
+	if config != nil {
+		cfg = config.PregelConfig
+	}
+	inner := CreateInnerConfig(cfg)
+	if config != nil && config.ParentNs != "" {
+		inner.ParentNs = config.ParentNs
+	}
+	isTopLevel := inner.ParentNs == ""
+	if isTopLevel && inner.Ns != "" {
+		inner.ParentNs = inner.Ns
+	}
+	// engine.py:239-246 GRAPH_START log
+	logger.Info(logComponent).
+		Str("event_type", "GRAPH_START").
+		Str("graph_id", inner.Ns).
+		Str("session_id", inner.SessionID).
+		Bool("is_top_level", isTopLevel).
+		Msg("Pregel graph engine execution started")
+	loop := NewPregelLoop(g, &inner)
+	// engine.py:249-250：init 异常不经 except GraphInterrupt 转换（Python 同：raw 传播）
+	if err := loop.Init(ctx); err != nil {
+		return nil, err
+	}
+	// engine.py:251-253
+	callback.Trigger(ctx, string(callback.LoopStarted), map[string]any{"graph_id": inner.Ns})
+	// engine.py:254-255 while await loop.run_step()
+	runErr := func() error {
+		for {
+			more, err := loop.RunStep(ctx)
+			if err != nil {
+				return err
+			}
+			if !more {
+				return nil
+			}
+		}
+	}()
+	if runErr == nil {
+		// engine.py:256-268
+		callback.Trigger(ctx, string(callback.LoopFinished),
+			map[string]any{"graph_id": inner.Ns, "total_steps": loop.Step})
+		logger.Info(logComponent).
+			Str("event_type", "GRAPH_END").
+			Str("graph_id", inner.Ns).
+			Str("session_id", inner.SessionID).
+			Int("total_steps", loop.Step).
+			Msg("Pregel graph engine execution completed")
+		return map[string]any{}, nil
+	}
+	// engine.py:269-285 except GraphInterrupt
+	var gi *GraphInterrupt
+	if errors.As(runErr, &gi) {
+		callback.Trigger(ctx, string(callback.LoopFinished),
+			map[string]any{"graph_id": inner.Ns, "total_steps": loop.Step})
+		logger.Info(logComponent).
+			Str("event_type", "GRAPH_END").
+			Str("graph_id", inner.Ns).
+			Str("session_id", inner.SessionID).
+			Int("total_steps", loop.Step).
+			Msg("Pregel graph engine execution interrupted")
+		if isTopLevel {
+			return map[string]any{TaskStatusInterrupt: gi}, nil
+		}
+		return nil, runErr
+	}
+	return nil, runErr
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isResume 恢复判定（engine.py:94-96 staticmethod；Go 作包级函数）
+func isResume(state *GraphState) bool {
+	return state != nil && state.IsResumable()
 }
 
 // saveStateOnError 错误状态落盘（engine.py:173-205）
@@ -227,13 +360,18 @@ func (l *PregelLoop) runStep(ctx context.Context) error {
 	for _, node := range tasksToRun {
 		l.Executor.Submit(ctx, node, l.NodeVersion[node.name])
 	}
-	// engine.py:151-155
+	// engine.py:151-152
 	if err := l.Executor.WaitAll(); err != nil {
-		if errors.Is(err, context.Canceled) { // 偏差 B3：asyncio.CancelledError → cancel_all + raise
-			l.Executor.CancelAll()
-			return err
-		}
 		return err
+	}
+	// engine.py:153-155 except asyncio.CancelledError: cancel_all + raise
+	// 偏差 B3（2026-11-15 审查收窄）：外层取消以 ctx.Err() 判定，而非 WaitAll 返回
+	// context.Canceled——后者可能是节点自身返回的取消错误，属 FIRST_EXCEPTION 常规
+	// 失败路径，Python 不会走 cancel_all 分支。ctx 取消经任务子 ctx 传播，WaitAll
+	// 收割后在此统一 cancel_all 并上抛（CancelledError 语义，见 RunStep 透传分支）。
+	if ctx.Err() != nil {
+		l.Executor.CancelAll()
+		return ctx.Err()
 	}
 	// engine.py:157-161 Summarize results
 	for _, msg := range l.Executor.succeedMessages {
@@ -249,134 +387,4 @@ func (l *PregelLoop) runStep(ctx context.Context) error {
 	}
 	l.Step++
 	return nil
-}
-
-// Run 执行图（engine.py:230-285）。
-// 返回值（B6）：正常 ({}, nil)；顶层中断 ({__interrupt__: gi}, nil)；其余 (nil, err)。
-// config 形参类型 *InnerPregelConfig（偏差 B7）：Python TypedDict 可动态携带
-// parent_ns，8.3b D1 已确立该 Go 承载形状。
-func (g *Pregel) Run(ctx context.Context, config *InnerPregelConfig) (map[string]any, error) {
-	// engine.py:232-237
-	cfg := DefaultPregelConfig()
-	if config != nil {
-		cfg = config.PregelConfig
-	}
-	inner := CreateInnerConfig(cfg)
-	if config != nil && config.ParentNs != "" {
-		inner.ParentNs = config.ParentNs
-	}
-	isTopLevel := inner.ParentNs == ""
-	if isTopLevel && inner.Ns != "" {
-		inner.ParentNs = inner.Ns
-	}
-	// engine.py:239-246 GRAPH_START log
-	logger.Info(logComponent).
-		Str("event_type", "GRAPH_START").
-		Str("graph_id", inner.Ns).
-		Str("session_id", inner.SessionID).
-		Bool("is_top_level", isTopLevel).
-		Msg("Pregel graph engine execution started")
-	loop := NewPregelLoop(g, &inner)
-	// engine.py:249-250：init 异常不经 except GraphInterrupt 转换（Python 同：raw 传播）
-	if err := loop.Init(ctx); err != nil {
-		return nil, err
-	}
-	// engine.py:251-253
-	callback.Trigger(ctx, string(callback.LoopStarted), map[string]any{"graph_id": inner.Ns})
-	// engine.py:254-255 while await loop.run_step()
-	runErr := func() error {
-		for {
-			more, err := loop.RunStep(ctx)
-			if err != nil {
-				return err
-			}
-			if !more {
-				return nil
-			}
-		}
-	}()
-	if runErr == nil {
-		// engine.py:256-268
-		callback.Trigger(ctx, string(callback.LoopFinished),
-			map[string]any{"graph_id": inner.Ns, "total_steps": loop.Step})
-		logger.Info(logComponent).
-			Str("event_type", "GRAPH_END").
-			Str("graph_id", inner.Ns).
-			Str("session_id", inner.SessionID).
-			Int("total_steps", loop.Step).
-			Msg("Pregel graph engine execution completed")
-		return map[string]any{}, nil
-	}
-	// engine.py:269-285 except GraphInterrupt
-	var gi *GraphInterrupt
-	if errors.As(runErr, &gi) {
-		callback.Trigger(ctx, string(callback.LoopFinished),
-			map[string]any{"graph_id": inner.Ns, "total_steps": loop.Step})
-		logger.Info(logComponent).
-			Str("event_type", "GRAPH_END").
-			Str("graph_id", inner.Ns).
-			Str("session_id", inner.SessionID).
-			Int("total_steps", loop.Step).
-			Msg("Pregel graph engine execution interrupted")
-		if isTopLevel {
-			return map[string]any{TaskStatusInterrupt: gi}, nil
-		}
-		return nil, runErr
-	}
-	return nil, runErr
-}
-
-// RecursionError 递归上限超限（Python 内置 RecursionError 的 Go 等价物，spec D3）。
-// engine.py:85 按类型名分类上抛（"RecursionError is caught by name at the workflow
-// layer"），Go 以 errors.As 类型断言还原该契约。
-type RecursionError struct {
-	// Limit 递归上限（max_step）
-	Limit int
-	// Step 触发时的步号
-	Step int
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// Error 文案复刻 engine.py:139-141
-func (e *RecursionError) Error() string {
-	return fmt.Sprintf("Recursion limit of %d reached at step %d", e.Limit, e.Step)
-}
-
-// Init 初始化：构造任务池、恢复检查点或触发 START（engine.py:39-62）
-func (l *PregelLoop) Init(ctx context.Context) error {
-	// engine.py:40-41
-	l.Executor = NewTaskExecutorPool(l.Config)
-	l.MaxStep = l.Config.RecursionLimit
-	// engine.py:42-44：sessionID/ns/saver 三者齐才读存储
-	var state *GraphState
-	if l.Config.SessionID != "" && l.Config.Ns != "" && l.Saver != nil {
-		var err error
-		state, err = l.Saver.Get(ctx, l.Config.SessionID, l.Config.Ns)
-		if err != nil {
-			return err
-		}
-	}
-	// engine.py:45-58
-	if isResume(state) {
-		// Restore barrier channel
-		l.Manager.Restore(state.ChannelValues)
-		// restore loop node version
-		l.NodeVersion = state.NodeVersion
-		// Restore step
-		l.Step = state.Step
-		l.MaxStep = state.Step + l.Config.RecursionLimit
-		// Restore task result message
-		for _, msg := range state.PendingBuffer {
-			l.Manager.BufferMessage(msg)
-		}
-		// Pending node
-		if state.PendingNode != nil {
-			l.retryPendingNodes = state.PendingNode
-		}
-		return nil
-	}
-	// engine.py:59-62 Trigger start node
-	l.Manager.BufferMessage(NewTriggerMessage(l.Graph.Initial, l.Graph.Initial))
-	return l.Manager.Flush()
 }
