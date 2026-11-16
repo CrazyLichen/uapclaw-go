@@ -15,46 +15,49 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
+	memberoptimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
 	"gopkg.in/yaml.v3"
 )
 
+// init 注册父包能力桥（Python 子包 import 父包在 Go 倒置为注册桥，spec §4 D-c1-1）。
+func init() {
+	memberoptimizer.RegisterAgentsBridge(memberoptimizer.AgentsBridge{
+		InvokeStructured: InvokeMemberOptimizerAgentStructured,
+		ParseJSONObject:  ParseJSONObjectResponse,
+		CreateRoleAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
+			agent, err := CreateRoleAttributionAgent(ctx, MemberAgentParams{
+				ModelConfigRef:  params.ModelConfigRef,
+				Workspace:       params.Workspace,
+				AgentSkillsDirs: params.AgentSkillsDirs,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return agent, nil
+		},
+		CreateMechanismAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
+			agent, err := CreateMechanismAttributionAgent(ctx, MemberAgentParams{
+				ModelConfigRef:  params.ModelConfigRef,
+				Workspace:       params.Workspace,
+				AgentSkillsDirs: params.AgentSkillsDirs,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return agent, nil
+		},
+	})
+}
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// StructuredOutputExhaustedError 模型输出在反馈预算内无法满足契约。
-// Python: output.py:30-31 StructuredOutputExhaustedError(RuntimeError)。
-type StructuredOutputExhaustedError struct {
-	// Msg 错误消息
-	Msg string
-}
+// StructuredOutputExhaustedError 结构化输出重试耗尽。
+// Python: output.py:30-31；Go 类型定义上移到父包（包环倒置），此处类型别名指回。
+type StructuredOutputExhaustedError = memberoptimizer.StructuredOutputExhaustedError
 
-// Error 实现 error 接口。
-func (e *StructuredOutputExhaustedError) Error() string { return e.Msg }
+// StructuredInvokeParams 结构化调用参数。Go 类型别名指回父包定义（spec §4 D-c1-1）。
+type StructuredInvokeParams = memberoptimizer.StructuredInvokeParams
 
-// StructuredInvokeParams 结构化调用参数（Python invoke_member_optimizer_agent_structured 关键字参数）。
-type StructuredInvokeParams struct {
-	// Agent DeepAgent 实例（Python 类型 Any；默认实现断言 BaseAgent）
-	Agent any
-	// AgentName agent 名（错误消息与会话兜底卡名）
-	AgentName string
-	// UserMessage 用户消息
-	UserMessage string
-	// SessionID 会话 ID
-	SessionID string
-	// RetryLimit 重试上限
-	RetryLimit int
-	// ParseResponse 解析函数
-	ParseResponse func(string) (map[string]any, error)
-	// ValidateResponse 校验函数（nil 则不校验）
-	ValidateResponse func(map[string]any) []string
-	// BuildRetryMessage 自定义重试消息构造（nil 则用默认）
-	BuildRetryMessage func(map[string]any, string) string
-	// RecoverResponse 重试时的恢复函数（替代 agent 重放；nil 则正常调 agent）
-	RecoverResponse func(message, rawText string) (map[string]any, error)
-	// FeedbackTracker 反馈追踪器（nil 则按 retry_limit 构造）
-	FeedbackTracker *harnessrsi.FeedbackTracker
-	// OutputRepair 输出修复配置（tracker 为 nil 时使用）
-	OutputRepair *harnessrsi.OutputRepairConfig
-}
 
 // fencedMappingRE 代码围栏内映射提取。Python: output.py:16-18 _FENCED_MAPPING_RE。
 var fencedMappingRE = regexp.MustCompile("(?is)```(?:json|yaml|yml)?\\s*(\\{[\\s\\S]*?\\})\\s*```")
