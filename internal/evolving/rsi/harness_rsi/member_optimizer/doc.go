@@ -13,9 +13,9 @@
 //     action_executor（三层并行波次+隔离手术区+确定性手术）/ plugin_manifest /
 //     package_registry（executor 依赖闭包）/ execution_contract /
 //     verification_slice（gopapy AST 安全检查）。
-//   - 17.4c3（⤴️）：verification 全量（1,754 行）/ package_registry 验证归一面
-//     收编 / path_layout / optimizer 门面+发布 / llm-tag 真模型集成测试回填
-//     （D-c2-8）。
+//   - 17.4c3（已落地）：verification 全量（16 静态检查+修复链+修复范围执行）/
+//     optimizer 门面（八阶段编排+发布+refs 写入）/ path_layout / gopapy AST
+//     契约检查；llm-tag 真模型集成测试回填 ⤵️（D-c3-5 登记台账）。
 //
 // 跨包桥接：Go 子包不可反向引用父包（agents/factory.go 引本包 BudgetedRsiModel），
 // agents 能力经 structured_invoke.go 的 AgentsBridge 由 agents 包 init 注册
@@ -43,6 +43,11 @@
 //	├── action_executor.go      # 动刀工具函数群（快照/契约投影/资源指引）
 //	├── action_executor_impl.go # 动刀 agent+登记簿同步+确定性手术
 //	├── action_executor_orchestrator.go # 三层并行编排器
+//	├── verification.go         # 验证/修复 agent 编排
+//	├── verification_checks.go  # 静态检查函数群+Skill 安全扫描+gopapy 契约
+//	├── optimizer.go            # 优化管线门面（八阶段编排）
+//	├── optimizer_publish.go    # 发布与 refs 写入+single_harness 编译
+//	├── path_layout.go          # 短运行时路径布局
 //	├── worktree_coordinator.go # 哈希 worktree 协调
 //	├── plugin_manifest.go      # 登记簿播种与 JSON 编译回写
 //	├── package_registry.go     # 登记簿规则（validate/normalize/upsert）
