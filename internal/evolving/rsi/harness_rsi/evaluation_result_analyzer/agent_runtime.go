@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	hsconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
@@ -246,10 +247,24 @@ func (r *DiagnosisBudgetRail) wrapBeforeModelCall(ctx context.Context, cbcAny an
 	return r.BeforeModelCall(ctx, cbc)
 }
 
-// toStringValue 值转字符串（Python str(...)）
+// toStringValue 值转字符串（Python str(value or "") 语义：nil/None 归空串）
 func toStringValue(raw any) string {
+	if raw == nil {
+		return ""
+	}
 	if s, isStr := raw.(string); isStr {
 		return s
+	}
+	if b, ok := raw.([]byte); ok {
+		return string(b)
+	}
+	switch v := raw.(type) {
+	case bool:
+		return strconv.FormatBool(v)
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64)
+	case int:
+		return strconv.Itoa(v)
 	}
 	b, _ := json.Marshal(raw)
 	return string(b)
