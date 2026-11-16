@@ -437,6 +437,9 @@ func TestAnswer_挂起恢复排队(t *testing.T) {
 	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, runGates: []chan struct{}{gate1, gate2}}
 	svc, _ := newService(t, executor)
 	task, _ := svc.Submit("u", "s", "b1", "任务", nil)
+	// Python 契约：waiting_user 释放的是已结算容量（worker 已结束才进入 waiting）。
+	// 先让首个 worker 结算完，否则同 scope 活动槽被占用，恢复任务按 _ready 永不可派发。
+	close(gate1)
 	_, _ = svc.store.update(toString(task["id"]), func(current map[string]any) {
 		current["status"] = "waiting_user"
 		current["output_closed"] = true

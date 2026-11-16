@@ -650,7 +650,7 @@ type ConversationHistoryBridge struct {
 var conversationHistory *ConversationHistoryBridge
 
 // SetConversationHistoryBridge 注入会话历史桥（网关装配层调用）。
-// Python 侧无对应实现：Python 直接 import 会话模块，Go 跨包注入需显式出口。
+// Python 侧无对应实现：Python 直接 import 会话模块，Go 跨包注入需显式出口（偏差 O-11）。
 func SetConversationHistoryBridge(bridge *ConversationHistoryBridge) {
 	conversationHistory = bridge
 }
