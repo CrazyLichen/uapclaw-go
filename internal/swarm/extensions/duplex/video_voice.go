@@ -424,6 +424,8 @@ type DuplexChannel interface {
 	SendResponse(ctx context.Context, ws any, reqID string, resp *DuplexResponse)
 	// SendEvent 推送事件帧
 	SendEvent(ctx context.Context, ws any, event string, payload map[string]any)
+	// SendEventChecked 推送事件帧并上报错误（changed 通知需要错误语义）
+	SendEventChecked(ctx context.Context, ws any, event string, payload map[string]any) error
 	// RegisterMethod 注册本地 RPC 方法
 	RegisterMethod(method string, handler DuplexMethodHandler, localOnly, availableWhenDisabled bool)
 }

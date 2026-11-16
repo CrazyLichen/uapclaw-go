@@ -304,3 +304,32 @@ func mkdirParent(path string) error {
 }
 
 var _ = fmt.Sprintf
+
+// ──────────────────────────── 导出包装（跨包只读/事务入口） ────────────────────────────
+
+// Transaction 事务入口（task_adapter/bridge 跨包使用）。
+// Python 侧无对应实现：Python 同包直接用 contextmanager。
+func (s *TaskStore) Transaction(fn func(tx *sql.Tx) error) error { return s.transaction(fn) }
+
+// Rows 作用域读取（跨包使用）。
+func (s *TaskStore) Rows(tx *sql.Tx, owner, session any) ([]map[string]any, error) {
+	return txRows(tx, owner, session)
+}
+
+// Read 单任务读取（跨包使用）。
+func (s *TaskStore) Read(taskID string, owner, session any) (map[string]any, error) {
+	return s.read(taskID, owner, session)
+}
+
+// GetInTx 事务内读取（bridge 使用）。
+func (s *TaskStore) GetInTx(tx *sql.Tx, taskID string) (map[string]any, error) {
+	return txGet(tx, taskID, nil, nil)
+}
+
+// ReplayInTx 事务内命令重放（bridge 使用）。
+func (s *TaskStore) ReplayInTx(tx *sql.Tx, owner, session, commandID string, request any) (map[string]any, string, error) {
+	return txReplay(tx, owner, session, commandID, request)
+}
+
+// sqlTxType 事务类型别名（duplex 包引用）。
+type sqlTxType = sql.Tx

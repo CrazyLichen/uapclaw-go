@@ -741,15 +741,7 @@ func orEmptyList(items []map[string]any) []map[string]any {
 	return items
 }
 
-// containsString 判定包含。
-func containsString(list []string, target string) bool {
-	for _, item := range list {
-		if item == target {
-			return true
-		}
-	}
-	return false
-}
+
 
 // copyMap 浅拷贝 map。
 func copyMap(source map[string]any) map[string]any {
