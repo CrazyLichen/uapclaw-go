@@ -186,8 +186,9 @@ func (a *CliAgentAdapter) BuildTurnCommand(prompt string, sessionID string, firs
 // Python: CliAgentAdapter.format_input (adapters.py:172)
 func (a *CliAgentAdapter) FormatInput(text string) string {
 	if a.InputFormat == InputCodexProto {
+		// Python uuid.uuid4().hex——无连字符 32 位十六进制（adapters.py:176）
 		payload, _ := json.Marshal(map[string]any{
-			"id": uuid.New().String(),
+			"id": strings.ReplaceAll(uuid.New().String(), "-", ""),
 			"op": map[string]any{
 				"type":  "user_input",
 				"items": []map[string]any{{"type": "text", "text": text}},

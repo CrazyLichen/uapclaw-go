@@ -25,7 +25,6 @@ package externalcli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -125,6 +124,9 @@ type cliRuntimeBase struct {
 	onRound []roundCallback
 	// turnCancel 在飞轮次的取消函数；IDLE 时 nil。
 	turnCancel context.CancelFunc
+	// turnDone 在飞轮次 goroutine 的退出信号；Stop 等它之后再关输出通道，
+	// 避免对已关闭通道发送（Python stop 先 await task 再推 _END）。
+	turnDone chan struct{}
 	// roundSeq 本 runtime 实例的单调轮次 id。
 	roundSeq int
 	// turnAborted 由 abort 置位，使轮次驱动器把终局分类为 aborted 而非
@@ -136,6 +138,12 @@ type cliRuntimeBase struct {
 	// BindReliabilityContext 注入。CLI adapter runtime（传统 stdin/重起 CLI）
 	// 恒 nil——外部 runtime 可靠性循环的范围之外。
 	reliabilityCtx any
+
+	// driveErr flavor 的 _drive 在轮内产生的错误（注入失败 / premature-EOF）。
+	// Python 经 async generator 异常传播到 _drive_turn 的 except 分支；Go 的
+	// drive 面是 channel，改为先落字段、driveTurn 在排空后读取并归入 crashed
+	// 分类（D-15.13-b 同源偏差）。
+	driveErr error
 
 	// flavor 钩子（构造期注入函数指针；嵌入结构体的方法体静态绑定基类实现，
 	// 子类型覆盖不生效——虚方法派发陷阱，见 Go embedding 陷阱记忆）。
@@ -258,6 +266,8 @@ func (b *cliRuntimeBase) Stop() {
 	b.turnAborted = true
 	cancel := b.turnCancel
 	b.turnCancel = nil
+	done := b.turnDone
+	b.turnDone = nil
 	ch := b.outputCh
 	b.mu.Unlock()
 
@@ -265,7 +275,14 @@ func (b *cliRuntimeBase) Stop() {
 	if cancel != nil {
 		cancel()
 	}
+	// Go 侧先 aclose 再等轮次 goroutine：ExternalCliRuntime.drive 阻塞在
+	// stdout ReadLine（无 ctx 感知），只有终止进程产生的 EOF 能解除阻塞；
+	// Python 的 readline 是 async 可被取消，顺序为 await task → aclose。
+	// 两者净效果一致：轮次任务在推 _END（关通道）前被收编。
 	b.acloseFn()
+	if done != nil {
+		<-done
+	}
 	b.mu.Lock()
 	// 关闭但保留引用：Outputs() 在 stop 后返回已关闭通道，消费者 range 立即
 	// 终止（Python _END 哨兵语义的 Go 等价物）。
@@ -449,10 +466,15 @@ func (b *cliRuntimeBase) sendRaw(text string, immediate bool) (any, error) {
 	b.mu.Unlock()
 	b.emitRound(onRound, "started", roundID)
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	b.mu.Lock()
 	b.turnCancel = cancel
+	b.turnDone = done
 	b.mu.Unlock()
-	go b.driveTurn(ctx, text, roundID)
+	go func() {
+		defer close(done)
+		b.driveTurn(ctx, text, roundID)
+	}()
 	return nil, nil
 }
 
@@ -536,7 +558,6 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 	b.mu.Unlock()
 	finalizedByTurn := false
 	abnormalExit := false
-	crashed := false
 	func() {
 		defer func() {
 			b.mu.Lock()
@@ -570,8 +591,17 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 			}
 		}
 	}()
-	// 异常路径（panic/错误从 drive 内部上抛的场景在 flavor 内捕获为错误块）
-	_ = crashed
+	// flavor 轮内错误（注入失败 / premature-EOF）：Python 经 generator 异常落到
+	// _drive_turn 的 except 分支；Go 在此读取 drive 字段并归入 crashed 分类。
+	b.mu.Lock()
+	driveErr := b.driveErr
+	b.driveErr = nil
+	b.mu.Unlock()
+	if driveErr != nil {
+		// Python: team_logger.exception("[{}] external cli turn crashed", ...)
+		logger.Error(logComponent).Str("member", b.memberName).Err(driveErr).
+			Msg("external cli turn crashed")
+	}
 	b.mu.Lock()
 	terminated := b.phase == harnessprotocol.HarnessStateTerminated
 	aborted := b.turnAborted
@@ -584,7 +614,7 @@ func (b *cliRuntimeBase) driveTurn(ctx context.Context, content string, roundID 
 	switch {
 	case aborted:
 		b.emitRound(onRound, "aborted", roundID)
-	case finalizedByTurn || abnormalExit:
+	case finalizedByTurn || abnormalExit || driveErr != nil:
 		b.emitRound(onRound, "failed", roundID)
 	default:
 		b.emitRound(onRound, "finished", roundID)
@@ -690,6 +720,13 @@ func (b *cliRuntimeBase) RegisterRail(rail any) error {
 	return nil
 }
 
+// FindRails CLI-backed runtime 没有 rail；恒空列表。
+// Python: find_rails (runtime.py:634)
+func (b *cliRuntimeBase) FindRails(railType any) []any {
+	_ = railType
+	return []any{}
+}
+
 // UnregisterRail no-op：CLI runtime 没有 rail 栈。
 func (b *cliRuntimeBase) UnregisterRail(rail any) error {
 	_ = rail
@@ -707,6 +744,11 @@ func (b *cliRuntimeBase) InjectMemberMemory(memoryManager any, query string) {
 
 // SetBackgroundTaskController no-op：外部 CLI 成员不启动需要控制的后台工具。
 func (b *cliRuntimeBase) SetBackgroundTaskController(controller any) { _ = controller }
+
+// BackgroundTaskController 恒 nil：外部 CLI 成员自己不持有后台控制器。
+// 它们的 swarmflow 工作经 ExternalSwarmflowHost 进行（⤵️ swarmflow 章节）。
+// Python: background_task_controller property (runtime.py:658)
+func (b *cliRuntimeBase) BackgroundTaskController() any { return nil }
 
 // Workspace 外部 CLI runtime 不暴露团队工作空间句柄。
 func (b *cliRuntimeBase) Workspace() any { return nil }
@@ -795,7 +837,9 @@ func (r *ExternalCliRuntime) drive(ctx context.Context, inputs map[string]any) (
 		r.abortRequested = false
 		r.mu.Unlock()
 		if err := r.injector.Write(r.adapter.FormatInput(query)); err != nil {
-			fmt.Fprintln(os.Stderr, "DBG inject err", err)
+			// Python: await self._injector.write(...) 抛出经 generator 传播到
+			// _drive_turn 的 failed 分类；Go 落 driveErr 后关闭通道。
+			r.setDriveErr(err)
 			return
 		}
 		chunkIndex := 0
@@ -809,7 +853,9 @@ func (r *ExternalCliRuntime) drive(ctx context.Context, inputs map[string]any) (
 			line, err := r.outputLines.ReadLine()
 			if err != nil {
 				// stdout EOF：premature-EOF 判定
-				r.raiseOnPrematureEOF()
+				if perr := r.raiseOnPrematureEOF(); perr != nil {
+					r.setDriveErr(perr)
+				}
 				return
 			}
 			r.mu.Lock()
@@ -821,6 +867,9 @@ func (r *ExternalCliRuntime) drive(ctx context.Context, inputs map[string]any) (
 			}
 			summary := r.adapter.SummarizeOutputLine(strings.TrimRight(string(line), "\n"))
 			if summary != "" {
+				// Python: team_logger.debug("[{}] {}", member, summary)（runtime.py:730）
+				logger.Debug(logComponent).Str("member", r.memberName).Str("summary", summary).
+					Msg("external cli output")
 				ch <- r.makeChunk(summary, chunkIndex)
 				chunkIndex++
 			}
@@ -835,27 +884,34 @@ func (r *ExternalCliRuntime) drive(ctx context.Context, inputs map[string]any) (
 // raiseOnPrematureEOF 当 stdout EOF 反映子进程死亡时报结构化错误。
 // 区分进程仍在运行（无句柄或退出码未定——输出迭代器提前结束的退化 adapter）
 // 与已崩溃（非干净退出码）。只有后者是错误，且携带排空的 stderr 尾以免失败
-// 原因丢失。
+// 原因丢失。错误经返回值交给 drive 落 driveErr（Python 是 raise_error 上抛）。
 // Python: _raise_on_premature_eof (runtime.py:745)
-func (r *ExternalCliRuntime) raiseOnPrematureEOF() {
+func (r *ExternalCliRuntime) raiseOnPrematureEOF() error {
 	if r.process == nil {
-		return
+		return nil
 	}
 	returncode := r.process.ReturnCode()
 	if returncode == 0 || returncode == -1 {
 		// 无子进程可查、干净退出、或仍在运行：把耗尽的迭代器当良性轮次边界
 		// 而不是崩溃。
-		return
+		return nil
 	}
 	stderrTail := r.peekStderrTail()
 	detail := ""
 	if stderrTail != "" {
 		detail = "; stderr: " + stderrTail
 	}
-	exception.RaiseError(exception.StatusAgentTeamExecutionError,
+	return exception.RaiseError(exception.StatusAgentTeamExecutionError,
 		exception.WithMsg(fmt.Sprintf(
 			"external CLI member '%s' exited with code %d mid-turn (likely auth/quota/credit exhaustion or a crash)%s",
 			r.memberName, returncode, detail)))
+}
+
+// setDriveErr 记录 flavor 轮内错误（drive goroutine 单写、driveTurn 排空后单读）。
+func (b *cliRuntimeBase) setDriveErr(err error) {
+	b.mu.Lock()
+	b.driveErr = err
+	b.mu.Unlock()
 }
 
 // peekStderrTail 不永久阻塞地读后台 stderr 排空的尾。
@@ -970,7 +1026,8 @@ func NewReinvokeCliRuntime(
 	cliSessionID string, launchExtraArgs []string, memberAgentID string,
 ) *ReinvokeCliRuntime {
 	if cliSessionID == "" {
-		cliSessionID = uuid.New().String()
+		// Python: cli_session_id or uuid.uuid4().hex（runtime.py:867）——无连字符
+		cliSessionID = strings.ReplaceAll(uuid.New().String(), "-", "")
 	}
 	r := &ReinvokeCliRuntime{
 		cliRuntimeBase:     cliRuntimeBase{memberName: memberName, memberAgentID: memberAgentID, phase: harnessprotocol.HarnessStateIdle},
