@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
@@ -54,16 +55,46 @@ type TeamSpec struct {
 	TeamName string `json:"team_name"`
 	// DisplayName 显示名
 	DisplayName string `json:"display_name"`
+	// ConversationMode 会话形态："team" 或 "group_chat"。
+	// Python: conversation_mode (team.py:552)
+	ConversationMode string `json:"conversation_mode,omitempty"`
 	// LeaderMemberName Leader 成员名
 	LeaderMemberName string `json:"leader_member_name"`
 	// Language 团队语言（可选）
 	Language string `json:"language,omitempty"`
+	// DispatchMode 任务如何到达成员（"autonomous"/"scheduled"）。
+	// 随 ctx 分发到外部 CLI 成员：member-scope 连接据此解析工具集，
+	// 与 system prompt 在 spawn 时的渲染模式保持一致。
+	// Python: dispatch_mode (team.py:556)
+	DispatchMode string `json:"dispatch_mode,omitempty"`
+	// EnableMemberMessaging scheduled 成员是否可直接给同伴发消息（F_126）。
+	// Python: enable_member_messaging (team.py:563)
+	EnableMemberMessaging bool `json:"enable_member_messaging,omitempty"`
+	// MaxSubtaskDepth scheduled 成员的子任务拆分深度上限（F_128）。
+	// Python: max_subtask_depth (team.py:569)
+	MaxSubtaskDepth int `json:"max_subtask_depth,omitempty"`
+	// TeammateMode 队友执行任务模式（"build_mode"/"plan_mode"）。
+	// Python: teammate_mode (team.py:575)
+	TeammateMode MemberMode `json:"teammate_mode,omitempty"`
 	// Metadata 元数据（可选）
 	Metadata map[string]any `json:"metadata,omitempty"`
 	// ModelPool LLM 端点池
 	ModelPool []models.ModelPoolEntry `json:"model_pool,omitempty"`
 	// ModelPoolStrategy 模型池分配策略
 	ModelPoolStrategy string `json:"model_pool_strategy,omitempty"`
+	// ExternalMessagerConfig 外部 CLI 成员使用的消息传输配置（可选）。
+	// descriptor_from_context 优先取它，其次取 ctx.MessagerConfig，最后回落默认。
+	// Python: external_messager_config (team.py:621)
+	ExternalMessagerConfig *MessagerTransportConfig `json:"external_messager_config,omitempty"`
+	// Workspace 共享工作空间配置（从 TeamAgentSpec 镜像到运行时摘要）。
+	// Python: workspace (team.py:623，dict[str,Any]；Go 用具体类型承接）
+	Workspace *team_workspace.TeamWorkspaceConfig `json:"workspace,omitempty"`
+	// EvolutionEnabled 自演进覆盖开关（从 TeamAgentSpec 镜像）。
+	// Python: evolution_enabled (team.py:625)
+	EvolutionEnabled *bool `json:"evolution_enabled,omitempty"`
+	// MemberWorkspacePrefix 成员工作区前缀开关（从 TeamAgentSpec 镜像）。
+	// Python: member_workspace_prefix (team.py:628)
+	MemberWorkspacePrefix *bool `json:"member_workspace_prefix,omitempty"`
 }
 
 // TeamRuntimeContext 单个团队成员的轻量运行时上下文。
@@ -100,6 +131,11 @@ type TeamRuntimeContext struct {
 	// PermissionsOverride 平台下发的权限覆盖（nil 表示不覆盖）
 	// Python: TeamRuntimeContext.permissions_override
 	PermissionsOverride map[string]string `json:"permissions_override,omitempty"`
+	// CLIAgent 外部 CLI 成员的后端标识（可选，空表示本地 DeepAgent）。
+	// 取值："claude"/"codex"（SDK 后端）、内置 adapter 名（"openclaw"/
+	// "hermes"/"gemini"）、或第三方 harness provider 名（如 "dsh"）。
+	// Python: TeamRuntimeContext.cli_agent (team.py:697)
+	CLIAgent string `json:"cli_agent,omitempty"`
 	// TeamSpec 团队规格（可选）
 	TeamSpec *TeamSpec `json:"team_spec,omitempty"`
 	// MessagerConfig 消息传输配置（可选）

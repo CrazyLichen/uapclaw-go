@@ -10,6 +10,8 @@
 //
 //	externalcli/
 //	├── doc.go           # 包文档
+//	├── paths.go        # 外部成员 cwd/extra_dirs 解析（15.12）
+//	├── descriptor.go    # TeamJoinDescriptor 入团描述符与 to_env（15.13）
 //	└── paths.go        # cwd 三分离与 workspace meta 路径段
 //
 // 对应 Python 代码：openjiuwen/agent_teams/spawn/external_cli_spawn.py（行 239-298 段）
