@@ -70,7 +70,7 @@ func TestCompileOptimizationHypotheses_证据不足分类(t *testing.T) {
 	dir := t.TempDir()
 	analysisPath := buildTestAnalysisRef(t, dir, map[string]any{
 		"attribution": map[string]any{
-			"target_ref": "unassigned",
+			"target_ref":        "unassigned",
 			"decision_contract": map[string]any{"acceptance_observable": "observed", "scope_boundary": []any{"b1", "b1", "b2"}},
 		},
 	})
@@ -93,7 +93,7 @@ func TestLoadOptimizationHypotheses_往返校验(t *testing.T) {
 	dir := t.TempDir()
 	analysisPath := buildTestAnalysisRef(t, dir, map[string]any{
 		"attribution": map[string]any{
-			"target_ref": "identity.md",
+			"target_ref":        "identity.md",
 			"decision_contract": map[string]any{"acceptance_observable": "file exists"},
 		},
 	})
@@ -114,7 +114,7 @@ func TestLoadOptimizationHypotheses_内容漂移拒绝(t *testing.T) {
 	dir := t.TempDir()
 	analysisPath := buildTestAnalysisRef(t, dir, map[string]any{
 		"attribution": map[string]any{
-			"target_ref": "identity.md",
+			"target_ref":        "identity.md",
 			"decision_contract": map[string]any{"acceptance_observable": "file exists"},
 		},
 	})
@@ -200,7 +200,7 @@ func TestWriteCandidateManifest(t *testing.T) {
 	dir := t.TempDir()
 	analysisPath := buildTestAnalysisRef(t, dir, map[string]any{
 		"attribution": map[string]any{
-			"target_ref": "identity.md",
+			"target_ref":        "identity.md",
 			"decision_contract": map[string]any{"acceptance_observable": "file exists"},
 		},
 	})

@@ -186,7 +186,7 @@ func TestBuildHarnessSummary(t *testing.T) {
 
 func TestWriteMechanismAttributionReport_YAML字段(t *testing.T) {
 	report := &MechanismAttributionReport{
-		MechanismAttributionID:  "mechanism_attribution_abcd1234",
+		MechanismAttributionID:    "mechanism_attribution_abcd1234",
 		SourceRoleAttributionPath: "/tmp/role_attribution.yaml",
 		RoleMechanisms: map[string][]RoleMechanismAttribution{
 			"solver": {{IssueID: "i1", Role: "solver", MechanismType: "prompt", FailureSignature: "prompt_instruction_mismatch", Confidence: 0.8, OptimizationSurface: "identity", Evidence: []map[string]any{{"k": "v"}}, EvidenceRefs: []map[string]string{{"case_id": "c1"}}, Rationale: "r"}},

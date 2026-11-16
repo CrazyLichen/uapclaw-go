@@ -234,12 +234,12 @@ func WriteCandidateManifest(outputPath string, sourceHarnessRefsPath string, hyp
 			}
 		}
 		manifestActions = append(manifestActions, map[string]any{
-			"action_id":           pyStr(actionMap["action_id"]),
-			"action_group":        pyStr(actionMap["action_group"]),
-			"operation":           pyStr(actionMap["operation"]),
-			"target_path":         pyStr(actionMap["target_path"]),
+			"action_id":            pyStr(actionMap["action_id"]),
+			"action_group":         pyStr(actionMap["action_group"]),
+			"operation":            pyStr(actionMap["operation"]),
+			"target_path":          pyStr(actionMap["target_path"]),
 			"attributed_issue_ids": pyOrNone(actionMap["attributed_issue_ids"]),
-			"lever_decision":      pyOrNone(leverDecision),
+			"lever_decision":       pyOrNone(leverDecision),
 		})
 	}
 	sourceRefsPath, err := expandAndAbs(sourceHarnessRefsPath)
@@ -251,12 +251,12 @@ func WriteCandidateManifest(outputPath string, sourceHarnessRefsPath string, hyp
 		return "", err
 	}
 	manifest := map[string]any{
-		"version":                     2,
-		"status":                      "planned",
-		"source_harness_refs_path":    sourceRefsPath,
+		"version":                      2,
+		"status":                       "planned",
+		"source_harness_refs_path":     sourceRefsPath,
 		"optimization_hypotheses_path": hypResolved,
-		"hypothesis_ids":              pyOrNoneListAny(hypothesisIDs),
-		"actions":                     pyOrNoneListAny(manifestActions),
+		"hypothesis_ids":               pyOrNoneListAny(hypothesisIDs),
+		"actions":                      pyOrNoneListAny(manifestActions),
 	}
 	// Python: target.write_text(yaml.safe_dump(manifest, ...))
 	target, err := expandAndAbs(outputPath)
@@ -412,12 +412,12 @@ func DecisiveProbe(issue harnessrsi.TeamIssue) map[string]any {
 	contract := DecisionContract(issue, attribution)
 	// Python: return {...七字段...}
 	return map[string]any{
-		"root_cause":             pyOrNone(attribution["root_cause"]),
-		"critical_mistake":       pyOrNone(attribution["critical_mistake"]),
-		"check":                  pyOrNone(contract["acceptance_observable"]),
-		"boundary":               pyOrNone(contract["scope_boundary"]),
+		"root_cause":              pyOrNone(attribution["root_cause"]),
+		"critical_mistake":        pyOrNone(attribution["critical_mistake"]),
+		"check":                   pyOrNone(contract["acceptance_observable"]),
+		"boundary":                pyOrNone(contract["scope_boundary"]),
 		"validation_observations": pyOrNone(metadata["validation_observations"]),
-		"verifier_observations":  pyOrNone(metadata["verifier_observations"]),
+		"verifier_observations":   pyOrNone(metadata["verifier_observations"]),
 	}
 }
 

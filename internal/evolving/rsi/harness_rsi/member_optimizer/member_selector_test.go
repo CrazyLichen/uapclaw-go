@@ -12,10 +12,10 @@ import (
 
 func sevAttribution(conf float64, severity string) RoleIssueAttribution {
 	return RoleIssueAttribution{
-		IssueID:   "i-" + severity,
-		Role:      "solver",
+		IssueID:    "i-" + severity,
+		Role:       "solver",
 		Confidence: conf,
-		Evidence:  []map[string]any{{"severity": severity}},
+		Evidence:   []map[string]any{{"severity": severity}},
 	}
 }
 
@@ -138,15 +138,15 @@ func TestMemberSelector_严重度未知默认1(t *testing.T) {
 
 func TestMemberSelector_WriteReport_YAML字段(t *testing.T) {
 	report := &MemberSelectionReport{
-		SelectionID:                   "member_selection_abcd1234",
-		SourceRoleAttributionPath:     "/tmp/role_attribution.yaml",
+		SelectionID:                    "member_selection_abcd1234",
+		SourceRoleAttributionPath:      "/tmp/role_attribution.yaml",
 		SourceMechanismAttributionPath: "/tmp/mechanism_attribution.yaml",
 		Targets: []MemberOptimizationTarget{{
 			Role: "solver", MemberName: "Main", HarnessRefPath: "h/s",
 			AttributedIssueIDs: []string{"i1"}, Confidence: 0.8,
-			Reason:             "Score=84.90. 2 issue(s)...",
-			EvidenceRefs:       []map[string]string{{"issue_id": "i1"}},
-			MechanismTypes:     []string{"prompt"},
+			Reason:               "Score=84.90. 2 issue(s)...",
+			EvidenceRefs:         []map[string]string{{"issue_id": "i1"}},
+			MechanismTypes:       []string{"prompt"},
 			OptimizationSurfaces: []string{"identity"},
 		}},
 		UnselectedAttributions: []UnselectedAttribution{{IssueID: "i2", Role: "solver", Reason: "r", Confidence: 0.6}},

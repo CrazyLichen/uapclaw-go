@@ -436,6 +436,6 @@ func TestLoadCaseEvidence(t *testing.T) {
 func TestExcerpt(t *testing.T) {
 	require.Equal(t, "", excerpt("", 10))
 	require.Equal(t, "abc", excerpt("abc", 10))
-	require.Equal(t, "abcdefghij", excerpt("abcdefghij", 10)) // len==max 不截断（Python <=）
+	require.Equal(t, "abcdefghij", excerpt("abcdefghij", 10))  // len==max 不截断（Python <=）
 	require.Equal(t, "abcdefg...", excerpt("abcdefghijk", 10)) // 截断：前 7 字符 + "..."
 }

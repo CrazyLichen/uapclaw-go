@@ -233,14 +233,14 @@ func (a *MechanismAttributorAgent) AttributeRoleMechanisms(ctx context.Context, 
 	}
 	// Python: raw = await invoke_member_optimizer_agent_structured(...)
 	raw, err := agentsBridge.InvokeStructured(ctx, StructuredInvokeParams{
-		Agent:       agent,
-		AgentName:   "MechanismAttributorAgent[" + role + "]",
-		UserMessage: userMessage,
-		SessionID:   "mech_attr_" + role,
-		RetryLimit:  a.retryLimit,
-		OutputRepair: &a.outputRepair,
-		ParseResponse:     agentsBridge.ParseYamlOrJSONObject,
-		ValidateResponse:  func(data map[string]any) []string { return ValidateMechanismAttributionOutput(data, assignedRoles) },
+		Agent:            agent,
+		AgentName:        "MechanismAttributorAgent[" + role + "]",
+		UserMessage:      userMessage,
+		SessionID:        "mech_attr_" + role,
+		RetryLimit:       a.retryLimit,
+		OutputRepair:     &a.outputRepair,
+		ParseResponse:    agentsBridge.ParseYamlOrJSONObject,
+		ValidateResponse: func(data map[string]any) []string { return ValidateMechanismAttributionOutput(data, assignedRoles) },
 		BuildRetryMessage: func(_ map[string]any, errText string) string {
 			// Python: lambda _previous, error: self._build_retry_message(user_message, str(error))
 			return MechanismAttributorAgentBuildRetryMessage(userMessage, errText)
@@ -264,15 +264,15 @@ func (a *MechanismAttributorAgent) AttributeRoleMechanisms(ctx context.Context, 
 		}
 		evidenceRefs := pyOrNoneTraceRefsFromAny(attrMap["evidence_refs"])
 		attributions = append(attributions, RoleMechanismAttribution{
-			IssueID:            pyStr(attrMap["issue_id"]),
-			Role:               attributionRole,
-			MechanismType:      pyStr(attrMap["mechanism_type"]),
-			FailureSignature:   pyStr(attrMap["failure_signature"]),
-			Confidence:         pyFloatOrZero(attrMap["confidence"]),
+			IssueID:             pyStr(attrMap["issue_id"]),
+			Role:                attributionRole,
+			MechanismType:       pyStr(attrMap["mechanism_type"]),
+			FailureSignature:    pyStr(attrMap["failure_signature"]),
+			Confidence:          pyFloatOrZero(attrMap["confidence"]),
 			OptimizationSurface: pyStr(attrMap["optimization_surface"]),
-			Evidence:           pyEvidenceAnyToMaps(attrMap["evidence"]),
-			EvidenceRefs:       evidenceRefs,
-			Rationale:          pyStr(attrMap["rationale"]),
+			Evidence:            pyEvidenceAnyToMaps(attrMap["evidence"]),
+			EvidenceRefs:        evidenceRefs,
+			Rationale:           pyStr(attrMap["rationale"]),
 		})
 	}
 	return attributions, nil
@@ -396,12 +396,12 @@ func (o *MechanismAttributor) Attribute(ctx context.Context, params MechanismAtt
 	}
 	if len(assignedRoles) == 0 {
 		return &MechanismAttributionReport{
-			MechanismAttributionID: "mechanism_attribution_" + shortHex8(),
+			MechanismAttributionID:    "mechanism_attribution_" + shortHex8(),
 			SourceRoleAttributionPath: "",
-			RoleMechanisms:         map[string][]RoleMechanismAttribution{},
-			SkippedRoles:           []string{},
-			Warnings:               []string{"No assigned roles to process"},
-			Metadata:               map[string]any{"model_config_ref": params.ModelConfigRef},
+			RoleMechanisms:            map[string][]RoleMechanismAttribution{},
+			SkippedRoles:              []string{},
+			Warnings:                  []string{"No assigned roles to process"},
+			Metadata:                  map[string]any{"model_config_ref": params.ModelConfigRef},
 		}, nil
 	}
 	// Python: grouped = {}; for ri: grouped.setdefault(role, []).append(ri)
@@ -480,11 +480,11 @@ func (o *MechanismAttributor) Attribute(ctx context.Context, params MechanismAtt
 	}
 	// Python: return MechanismAttributionReport(...)
 	return &MechanismAttributionReport{
-		MechanismAttributionID: "mechanism_attribution_" + shortHex8(),
+		MechanismAttributionID:    "mechanism_attribution_" + shortHex8(),
 		SourceRoleAttributionPath: "",
-		RoleMechanisms:         roleMechanisms,
-		SkippedRoles:           skippedRoles,
-		Warnings:               warnings,
+		RoleMechanisms:            roleMechanisms,
+		SkippedRoles:              skippedRoles,
+		Warnings:                  warnings,
 		Metadata: map[string]any{
 			"model_config_ref": params.ModelConfigRef,
 			"roles_processed":  pyStrListSorted(roleMechanisms),
@@ -533,12 +533,12 @@ func WriteMechanismAttributionReport(report *MechanismAttributionReport, outputD
 	}
 	// Python: payload = {...}; yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
 	payload := map[string]any{
-		"mechanism_attribution_id":   report.MechanismAttributionID,
+		"mechanism_attribution_id":     report.MechanismAttributionID,
 		"source_role_attribution_path": report.SourceRoleAttributionPath,
-		"role_mechanisms":            mechanismsByRole,
-		"skipped_roles":              pyStrList(report.SkippedRoles),
-		"warnings":                   pyStrList(report.Warnings),
-		"metadata":                   pyOrNone(report.Metadata),
+		"role_mechanisms":              mechanismsByRole,
+		"skipped_roles":                pyStrList(report.SkippedRoles),
+		"warnings":                     pyStrList(report.Warnings),
+		"metadata":                     pyOrNone(report.Metadata),
 	}
 	data, err := yaml.Marshal(payload)
 	if err != nil {

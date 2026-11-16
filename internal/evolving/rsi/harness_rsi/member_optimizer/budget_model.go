@@ -21,7 +21,7 @@ import (
 //
 // 已知偏差（spec §4 D-1）：Python 的 model_config 为可携带显式 None 键的 dict，
 // 构造期/调用期都需 map 剔除；Go 的 ModelRequestConfig 用指针承载可选性
-//（MaxTokens nil 即"未设置，交由 provider"），非 nil 即"显式配置，保留"——
+// （MaxTokens nil 即"未设置，交由 provider"），非 nil 即"显式配置，保留"——
 // Python 预算化后的目标状态在 Go 类型层天然成立，故构造期转调父类、
 // 调用期仅剔除非正 MaxTokens 选项。
 type BudgetedRsiModel struct {

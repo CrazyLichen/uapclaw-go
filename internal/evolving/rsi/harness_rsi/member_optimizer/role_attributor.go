@@ -201,8 +201,8 @@ func MatchTargetMember(issue harnessrsi.TeamIssue, candidateRoles []MemberRoleCa
 	var matches []MemberRoleCandidate
 	for _, candidate := range candidateRoles {
 		candidateKeys := map[string]bool{
-			NormalizeMemberKey(candidate.Role):        true,
-			NormalizeMemberKey(candidate.MemberName):  true,
+			NormalizeMemberKey(candidate.Role):       true,
+			NormalizeMemberKey(candidate.MemberName): true,
 		}
 		if aliases, ok := candidate.Metadata["aliases"].([]any); ok {
 			for _, alias := range aliases {
@@ -657,20 +657,20 @@ func (o *RoleAttributor) Attribute(ctx context.Context, params AttributeParams) 
 	})
 	// Python: return RoleAttributionReport(...)
 	return &RoleAttributionReport{
-		AttributionID:          "role_attribution_" + shortHex8(),
-		SourceEvalRefPath:      fmt.Sprintf("%v", *params.EvalRef),
+		AttributionID:            "role_attribution_" + shortHex8(),
+		SourceEvalRefPath:        fmt.Sprintf("%v", *params.EvalRef),
 		SourceAnalysisResultPath: "",
-		HarnessRefsPath:        "",
-		CandidateRoles:         params.CandidateRoles,
-		AssignedRoleIssues:     assigned,
-		UnassignedIssues:       unassigned,
-		Warnings:               warnings,
+		HarnessRefsPath:          "",
+		CandidateRoles:           params.CandidateRoles,
+		AssignedRoleIssues:       assigned,
+		UnassignedIssues:         unassigned,
+		Warnings:                 warnings,
 		Metadata: map[string]any{
-			"model_config_ref":       params.ModelConfigRef,
-			"issue_count":            len(params.TeamIssues),
-			"assigned_count":         len(assigned),
-			"unassigned_count":       len(unassigned),
-			"target_member_routing":  "exact_match_or_single_role_alias",
+			"model_config_ref":      params.ModelConfigRef,
+			"issue_count":           len(params.TeamIssues),
+			"assigned_count":        len(assigned),
+			"unassigned_count":      len(unassigned),
+			"target_member_routing": "exact_match_or_single_role_alias",
 		},
 	}, nil
 }
@@ -734,15 +734,15 @@ func WriteRoleAttributionReport(report *RoleAttributionReport, outputDir string)
 	}
 	// Python: payload = {...}; yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
 	payload := map[string]any{
-		"attribution_id":             report.AttributionID,
-		"source_eval_ref_path":       report.SourceEvalRefPath,
+		"attribution_id":              report.AttributionID,
+		"source_eval_ref_path":        report.SourceEvalRefPath,
 		"source_analysis_result_path": report.SourceAnalysisResultPath,
-		"harness_refs_path":          report.HarnessRefsPath,
-		"candidate_roles":            pyOrNoneList(candidateList),
-		"assigned_role_issues":       pyOrNoneList(roleIssues),
-		"unassigned_issues":          pyOrNoneList(unassIssues),
-		"warnings":                   pyStrList(report.Warnings),
-		"metadata":                   pyOrNone(report.Metadata),
+		"harness_refs_path":           report.HarnessRefsPath,
+		"candidate_roles":             pyOrNoneList(candidateList),
+		"assigned_role_issues":        pyOrNoneList(roleIssues),
+		"unassigned_issues":           pyOrNoneList(unassIssues),
+		"warnings":                    pyStrList(report.Warnings),
+		"metadata":                    pyOrNone(report.Metadata),
 	}
 	data, err := yaml.Marshal(payload)
 	if err != nil {
@@ -913,8 +913,8 @@ func (o *RoleAttributor) processOne(ctx context.Context, agent *RoleAttributorAg
 				"assignment_source":   assignmentSource,
 				"evidence_quality":    evidenceQuality,
 			}},
-			TraceRefs: TraceRefsForIssue(issue, raw),
-			Rationale: pyStrOrEmpty(raw["rationale"]),
+			TraceRefs:  TraceRefsForIssue(issue, raw),
+			Rationale:  pyStrOrEmpty(raw["rationale"]),
 			MemberName: memberName,
 		}
 		return roleAttr, nil, "", nil

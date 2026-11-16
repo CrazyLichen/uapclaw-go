@@ -12,13 +12,13 @@ import (
 	"regexp"
 	"strings"
 
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	workspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"gopkg.in/yaml.v3"
 )
 

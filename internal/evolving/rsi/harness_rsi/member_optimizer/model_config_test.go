@@ -291,7 +291,7 @@ func TestWithoutInnerSDKRetries_禁用内层重试(t *testing.T) {
 }
 
 // TestBuildDeepAgentFromModelConfig 对齐 Python build_deep_agent_from_model_config 真身
-//（17.4c1 回填：BudgetedRsiModel 真身 + DeepAgent 装配）。
+// （17.4c1 回填：BudgetedRsiModel 真身 + DeepAgent 装配）。
 // Python: model_config.py:92-119
 func TestBuildDeepAgentFromModelConfig(t *testing.T) {
 	// ① 有 model 键：先变换（reasoning policy + output budget）再校验构建，

@@ -166,17 +166,17 @@ func SelectMemberTargets(roleAttributionReport *RoleAttributionReport, mechanism
 			issueConfidences[a.IssueID] = a.Confidence
 		}
 		roleScores = append(roleScores, roleScore{
-			role:                role,
-			memberName:          memberName,
-			harnessRefPath:      harnessRefPath,
-			score:               score,
-			maxSeverity:         maxSev,
-			avgConfidence:       confidenceScore,
-			issueCount:          len(eligible),
-			attributedIssueIDs:  attributedIssueIDs,
-			mechanismTypes:      mechanismTypes,
+			role:                 role,
+			memberName:           memberName,
+			harnessRefPath:       harnessRefPath,
+			score:                score,
+			maxSeverity:          maxSev,
+			avgConfidence:        confidenceScore,
+			issueCount:           len(eligible),
+			attributedIssueIDs:   attributedIssueIDs,
+			mechanismTypes:       mechanismTypes,
 			optimizationSurfaces: optimizationSurfaces,
-			issueConfidences:    issueConfidences,
+			issueConfidences:     issueConfidences,
 		})
 	}
 	// Python: candidates.sort(key=lambda c: (-c.score, -c.max_severity, c.role))（稳定）
@@ -243,21 +243,21 @@ func SelectMemberTargets(roleAttributionReport *RoleAttributionReport, mechanism
 		deferredRoute = "team_skill"
 	}
 	return &MemberSelectionReport{
-		SelectionID:                   "member_selection_" + shortHex8(),
-		SourceRoleAttributionPath:     "",
+		SelectionID:                    "member_selection_" + shortHex8(),
+		SourceRoleAttributionPath:      "",
 		SourceMechanismAttributionPath: "",
-		Targets:                       selectedTargets,
-		UnselectedAttributions:        unselectedAttrs,
+		Targets:                        selectedTargets,
+		UnselectedAttributions:         unselectedAttrs,
 		Metadata: map[string]any{
-			"selector":                                   "deterministic_priority_selector",
-			"scoring":                                    "severity_weight*10 + confidence*5 + issue_score",
-			"min_attribution_confidence":                 opts.MinAttributionConfidence,
-			"max_roles_per_run":                          opts.MaxRolesPerRun,
-			"total_candidates":                           len(roleScores),
-			"selected_count":                             selectedCount,
-			"filtered_insufficient_role_evidence_count":  filteredInsufficientCount,
-			"deferred_contract_issue_ids":                pyStrListUnique(deferredContractIssueIDs),
-			"deferred_contract_route":                    deferredRoute,
+			"selector":                   "deterministic_priority_selector",
+			"scoring":                    "severity_weight*10 + confidence*5 + issue_score",
+			"min_attribution_confidence": opts.MinAttributionConfidence,
+			"max_roles_per_run":          opts.MaxRolesPerRun,
+			"total_candidates":           len(roleScores),
+			"selected_count":             selectedCount,
+			"filtered_insufficient_role_evidence_count": filteredInsufficientCount,
+			"deferred_contract_issue_ids":               pyStrListUnique(deferredContractIssueIDs),
+			"deferred_contract_route":                   deferredRoute,
 		},
 	}
 }
@@ -274,14 +274,14 @@ func WriteMemberSelectionReport(report *MemberSelectionReport, outputDir string)
 	var targetsOut []map[string]any
 	for _, t := range report.Targets {
 		targetsOut = append(targetsOut, map[string]any{
-			"role":                 t.Role,
-			"member_name":          t.MemberName,
-			"harness_ref_path":     t.HarnessRefPath,
-			"attributed_issue_ids": pyStrList(t.AttributedIssueIDs),
-			"confidence":           t.Confidence,
-			"reason":               t.Reason,
-			"evidence_refs":        pyOrNoneTraceRefs(t.EvidenceRefs),
-			"mechanism_types":      pyStrList(t.MechanismTypes),
+			"role":                  t.Role,
+			"member_name":           t.MemberName,
+			"harness_ref_path":      t.HarnessRefPath,
+			"attributed_issue_ids":  pyStrList(t.AttributedIssueIDs),
+			"confidence":            t.Confidence,
+			"reason":                t.Reason,
+			"evidence_refs":         pyOrNoneTraceRefs(t.EvidenceRefs),
+			"mechanism_types":       pyStrList(t.MechanismTypes),
 			"optimization_surfaces": pyStrList(t.OptimizationSurfaces),
 		})
 	}

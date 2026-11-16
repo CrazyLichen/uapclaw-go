@@ -44,8 +44,8 @@ func TestFailureSignature_枚举值完整(t *testing.T) {
 // TestRoleAttributionReport_YAML往返 snake_case 字段名往返（对齐 Python write_report 字段名）。
 func TestRoleAttributionReport_YAML往返(t *testing.T) {
 	report := RoleAttributionReport{
-		AttributionID:   "attr_1",
-		CandidateRoles:  []MemberRoleCandidate{{Role: "solver", HarnessRefPath: "h1"}},
+		AttributionID:  "attr_1",
+		CandidateRoles: []MemberRoleCandidate{{Role: "solver", HarnessRefPath: "h1"}},
 		AssignedRoleIssues: []RoleIssueAttribution{{
 			IssueID: "i1", Role: "solver", HarnessRefPath: "h1", Confidence: 0.9,
 			Evidence: []map[string]any{{"severity": "high"}},
