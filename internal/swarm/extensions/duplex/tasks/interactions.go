@@ -136,8 +136,8 @@ func ValidateNativeApprovalAnswers(interaction map[string]any, answers []any) ([
 			return nil, errors.New("Approval answer is empty")
 		}
 		item := map[string]any{
-			"question":        answerQuestion,
-			"answer":          text,
+			"question":         answerQuestion,
+			"answer":           text,
 			"selected_options": options,
 		}
 		if cardID, ok := answer["card_id"].(string); ok {

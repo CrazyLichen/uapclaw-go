@@ -83,8 +83,8 @@ func QwenOmniTools() []map[string]any {
 							" existing work must use task_modify. Default false preserves ordering.",
 					},
 					"depends_on": map[string]any{
-						"type":        "array",
-						"items":       map[string]any{"type": "string"},
+						"type":  "array",
+						"items": map[string]any{"type": "string"},
 						"description": "Exact job IDs whose successful results are required. " +
 							"Query to resolve IDs; never guess.",
 					},

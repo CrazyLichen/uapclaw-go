@@ -162,9 +162,9 @@ func TestNormalizeFileItems(t *testing.T) {
 			"path":           "/tmp/f",
 			"size":           42,
 		},
-		map[string]any{"name": "", "path": "/x"},                  // 无名丢弃
-		map[string]any{"name": "b.txt"},                           // 无任一下载途径丢弃
-		map[string]any{"name": "c.txt", "path": "/c", "size": -1}, // 非法 size 归 0
+		map[string]any{"name": "", "path": "/x"},                   // 无名丢弃
+		map[string]any{"name": "b.txt"},                            // 无任一下载途径丢弃
+		map[string]any{"name": "c.txt", "path": "/c", "size": -1},  // 非法 size 归 0
 		map[string]any{"name": "d.txt", "path": "/d", "size": "9"}, // 非 int size 归 0 保留
 	})
 	if len(got) != 3 {
@@ -192,7 +192,8 @@ func defaultsMap() map[string]string {
 // setEnvFileForTest 注入临时 .env 路径（配合 envFileOverride）。
 func setEnvFileForTest(path string) { envFileOverride = path }
 
-func writeFile(t *testing.T, path, content string) {	t.Helper()
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}

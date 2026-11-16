@@ -399,3 +399,6 @@ func (s *TaskStore) RowsDirect(owner, session any) ([]map[string]any, error) {
 	}
 	return tasks, rows.Err()
 }
+
+// TxPut 导出写入口（集成测试与 bridge 使用）。
+func TxPut(db *sql.Tx, task map[string]any) error { return txPut(db, task) }

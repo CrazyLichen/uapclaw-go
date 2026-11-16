@@ -3,11 +3,11 @@ package tasks
 import (
 	"context"
 	"encoding/json"
-	"runtime"
-	"sync"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 )

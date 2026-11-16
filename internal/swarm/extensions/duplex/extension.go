@@ -90,6 +90,53 @@ func (p *VideoDuplexApplicationPlugin) BindWebChannel(ctx context.Context, chann
 	})
 	// 对齐 extension.py:40 self._task_manager = register_video_live_handler(...)
 	p.taskManager = p.searchManager
+
+	// video.duplex.settings.*（对齐 extension.py:42-160）
+	registerDuplexMethod(ctx, channel, "video.duplex.settings.get", true,
+		func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+			return &DuplexResponse{OK: true, Payload: SettingsPayload(p.IsEnabled())}
+		})
+	registerDuplexMethod(ctx, channel, "video.duplex.settings.update", true,
+		func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+			values, _ := params["values"].(map[string]any)
+			if values == nil {
+				return &DuplexResponse{OK: false, Error: "values must be an object", Code: "BAD_REQUEST"}
+			}
+			clearSecrets, ok := params["clear_secrets"].(bool)
+			if !ok {
+				return &DuplexResponse{OK: false, Error: "clear_secrets must be a boolean", Code: "BAD_REQUEST"}
+			}
+			if err := UpdateSettings(values, clearSecrets); err != nil {
+				return &DuplexResponse{OK: false, Error: err.Error(), Code: "BAD_REQUEST"}
+			}
+			return &DuplexResponse{OK: true, Payload: SettingsPayload(p.IsEnabled())}
+		})
+	registerDuplexMethod(ctx, channel, "video.duplex.settings.set_enabled", true,
+		func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+			enabled, ok := params["enabled"].(bool)
+			if !ok {
+				return &DuplexResponse{OK: false, Error: "enabled must be a boolean", Code: "BAD_REQUEST"}
+			}
+			SetEnabled(enabled)
+			return &DuplexResponse{OK: true, Payload: SettingsPayload(p.IsEnabled())}
+		})
+	registerDuplexMethod(ctx, channel, "video.duplex.settings.test", true,
+		func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+			if err := CheckSavedConnection(); err != nil {
+				// 不暴露 provider URL 或凭据（对齐 :130 注释）
+				logger.Warn(logComponent).Err(err).Msg("双工连通性检查失败")
+				return &DuplexResponse{OK: false,
+					Error: "Model connection failed. Check the saved endpoint, API key and model.",
+					Code:  "CONNECTION_FAILED"}
+			}
+			return &DuplexResponse{OK: true, Payload: map[string]any{"connected": true}}
+		})
+}
+
+// registerDuplexMethod 带 local_only/available_when_disabled 元数据的 RPC 注册。
+// Python 侧无对应实现：channel.register_method kwargs 元数据的透传。
+func registerDuplexMethod(ctx context.Context, channel DuplexChannel, method string, availableWhenDisabled bool, handler DuplexMethodHandler) {
+	channel.RegisterMethod(method, handler, true, availableWhenDisabled)
 }
 
 // WebsocketRoutes 返回 WS 代理路由声明。
@@ -123,3 +170,13 @@ func RegisterExtensions(registry interface {
 	registry.RegisterApplicationPlugin(extension)
 	return extension
 }
+
+// SearchManager 暴露装配得到的任务管理器（集成测试/网关读取用）。
+// Python 侧无对应实现：_task_manager 属性读取的显式化。
+func (p *VideoDuplexApplicationPlugin) SearchManager() *VideoSearchManager {
+	return p.searchManager
+}
+
+// SetTaskDBPath 覆盖任务账本路径（集成测试用）。
+// Python 侧无对应实现：task_database() 路径在 Python 由测试 patch 承担。
+func (m *VideoSearchManager) SetTaskDBPath(path string) { m.path = path }

@@ -856,10 +856,10 @@ func (s *TaskService) kickLocked() {
 			continue
 		}
 		if _, hasWorker := s.workers[taskID]; hasWorker {
-				continue
+			continue
 		}
 		if !readySingle(task, tasks, active) {
-				continue
+			continue
 		}
 		runCtx, cancel := context.WithCancel(context.Background())
 		entry := &workerEntry{token: time.Now().UnixNano(), cancel: cancel, done: make(chan struct{})}

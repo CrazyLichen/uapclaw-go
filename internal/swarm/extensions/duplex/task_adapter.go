@@ -35,11 +35,11 @@ func (e *AgentRequestTimeoutError) Error() string { return "AGENT_SERVER_TIMEOUT
 // AgentTaskExecutor Video RPC 与 Agent RPC 的适配器（共享 Host 任务服务）。
 // 对齐 task_adapter.py:130-316 AgentTaskExecutor。
 type AgentTaskExecutor struct {
-	client     AgentClient
-	store      *tasks.TaskStore
-	normalize  func(params map[string]any, coreSessionID string) error
-	endpoint   *tasks.GatewayTaskEndpoint
-	logEvent   func(map[string]any)
+	client    AgentClient
+	store     *tasks.TaskStore
+	normalize func(params map[string]any, coreSessionID string) error
+	endpoint  *tasks.GatewayTaskEndpoint
+	logEvent  func(map[string]any)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -213,8 +213,8 @@ func (e *AgentTaskExecutor) Answer(ctx context.Context, task map[string]any) err
 	for _, a := range answers {
 		am := toMap(a)
 		pair := map[string]any{
-			"question":        am["question"],
-			"custom_input":    am["answer"],
+			"question":         am["question"],
+			"custom_input":     am["answer"],
 			"selected_options": am["selected_options"],
 		}
 		if cardID, ok := am["card_id"].(string); ok && cardID != "" {
@@ -227,10 +227,10 @@ func (e *AgentTaskExecutor) Answer(ctx context.Context, task map[string]any) err
 		requestID = toString(task["request_id"])
 	}
 	params := map[string]any{
-		"answers":   answerPairs,
-		"source":    interaction["source"],
-		"mode":      "agent",
-		"work_mode": "work",
+		"answers":     answerPairs,
+		"source":      interaction["source"],
+		"mode":        "agent",
+		"work_mode":   "work",
 		"log_as_user": false,
 	}
 	if interaction["interrupt_id"] != nil {
@@ -275,10 +275,10 @@ func (e *AgentTaskExecutor) run(ctx context.Context, task map[string]any, progre
 	if task["resume_answer"] == true {
 		opts.InteractionAnswer = map[string]any{
 			"params": map[string]any{
-				"answers":    answerPairsOf(task),
-				"source":     toMap(task["interaction"])["source"],
-				"mode":       "agent",
-				"work_mode":  "work",
+				"answers":      answerPairsOf(task),
+				"source":       toMap(task["interaction"])["source"],
+				"mode":         "agent",
+				"work_mode":    "work",
 				"interrupt_id": toMap(task["interaction"])["interrupt_id"],
 			},
 			"req_method": "chat.answer",
@@ -470,15 +470,15 @@ type VideoSearchManager struct {
 	client     AgentClient
 	normalize  func(map[string]any, string) error
 
-	path       string
-	authorize  func(ws any, scope string) (string, string, error)
+	path        string
+	authorize   func(ws any, scope string) (string, string, error)
 	concurrency int
 
-	mu             sync.Mutex
-	service        *tasks.TaskService
-	subscribers    map[string]any // key: owner|session|wsToken
-	approvalCards  map[string]string
-	executor       *AgentTaskExecutor
+	mu            sync.Mutex
+	service       *tasks.TaskService
+	subscribers   map[string]any // key: owner|session|wsToken
+	approvalCards map[string]string
+	executor      *AgentTaskExecutor
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -489,9 +489,9 @@ func NewVideoSearchManager(channel DuplexChannel, client AgentClient, normalize 
 	return &VideoSearchManager{
 		channel: channel, logEvent: logEvent, qwenActive: qwenActive,
 		client: client, normalize: normalize, path: path,
-		authorize:    TaskIdentity,
-		concurrency:  2,
-		subscribers:  map[string]any{},
+		authorize:     TaskIdentity,
+		concurrency:   2,
+		subscribers:   map[string]any{},
 		approvalCards: map[string]string{},
 	}
 }
@@ -572,34 +572,34 @@ func (m *VideoSearchManager) Public(task map[string]any) map[string]any {
 		}
 	}
 	public := map[string]any{
-		"engine": "Jiuwen Core Agent",
-		"id":     task["id"],
-		"job_id": task["id"],
-		"search_session_id": task["session"],
-		"question":          task["instruction"],
-		"query":             orChainStr(request["query"], task["instruction"]),
-		"status":            task["status"],
-		"revision":          task["revision"],
-		"sequence":          task["sequence"],
-		"result":            result["answer"],
-		"display_result":    result["display_result"],
-		"realtime_brief":    result["realtime_brief"],
-		"files":             files,
+		"engine":                 "Jiuwen Core Agent",
+		"id":                     task["id"],
+		"job_id":                 task["id"],
+		"search_session_id":      task["session"],
+		"question":               task["instruction"],
+		"query":                  orChainStr(request["query"], task["instruction"]),
+		"status":                 task["status"],
+		"revision":               task["revision"],
+		"sequence":               task["sequence"],
+		"result":                 result["answer"],
+		"display_result":         result["display_result"],
+		"realtime_brief":         result["realtime_brief"],
+		"files":                  files,
 		"artifact_lookup_failed": result["artifact_lookup_failed"] == true,
-		"progress_history":  task["progress"],
-		"error":             task["error"],
-		"adjustments":       task["changes"],
-		"successor_id":      task["successor_id"],
-		"parent_id":         task["parent_id"],
-		"tool_call_id":      request["tool_call_id"],
-		"tool_name":         request["tool_name"],
-		"turn_id":           request["turn_id"],
-		"reused":            task["reused"] == true,
-		"independent":       request["independent"] == true,
-		"depends_on":        request["depends_on"],
-		"resources":         request["resources"],
-		"interaction":       task["interaction"],
-		"wait_reason":       task["wait_reason"],
+		"progress_history":       task["progress"],
+		"error":                  task["error"],
+		"adjustments":            task["changes"],
+		"successor_id":           task["successor_id"],
+		"parent_id":              task["parent_id"],
+		"tool_call_id":           request["tool_call_id"],
+		"tool_name":              request["tool_name"],
+		"turn_id":                request["turn_id"],
+		"reused":                 task["reused"] == true,
+		"independent":            request["independent"] == true,
+		"depends_on":             request["depends_on"],
+		"resources":              request["resources"],
+		"interaction":            task["interaction"],
+		"wait_reason":            task["wait_reason"],
 	}
 	if last, ok := lastProgress(task); ok {
 		public["progress"] = last
@@ -861,7 +861,9 @@ func (m *VideoSearchManager) Operate(ctx context.Context, owner, scope string, c
 				waiting = append(waiting, toMap(j))
 			}
 		}
-		sort.Slice(waiting, func(i, j int) bool { return numInt(waiting[i]["queue_position"]) < numInt(waiting[j]["queue_position"]) })
+		sort.Slice(waiting, func(i, j int) bool {
+			return numInt(waiting[i]["queue_position"]) < numInt(waiting[j]["queue_position"])
+		})
 		var target map[string]any
 		for _, j := range toAnySlice(snapshot["jobs"]) {
 			if toString(toMap(j)["id"]) == toString(args["job_id"]) {
@@ -1059,11 +1061,11 @@ func (m *VideoSearchManager) syncApprovalCard(ctx context.Context, ws any, task 
 			return nil
 		}
 		payload := map[string]any{
-			"session_id":     strings.TrimPrefix(session, "task-duplex:"),
-			"duplex_job_id":  task["id"],
-			"request_id":     interaction["request_id"],
-			"source":         interaction["source"],
-			"questions":      interaction["questions"],
+			"session_id":    strings.TrimPrefix(session, "task-duplex:"),
+			"duplex_job_id": task["id"],
+			"request_id":    interaction["request_id"],
+			"source":        interaction["source"],
+			"questions":     interaction["questions"],
 		}
 		if interaction["interrupt_id"] != nil {
 			payload["interrupt_id"] = interaction["interrupt_id"]

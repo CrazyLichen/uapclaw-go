@@ -573,12 +573,12 @@ func joyaiWAVFromPCM16(pcm []byte, sampleRate int) []byte {
 	buffer.WriteString("WAVE")
 	buffer.WriteString("fmt ")
 	binary.Write(buffer, binary.LittleEndian, uint32(16))
-	binary.Write(buffer, binary.LittleEndian, uint16(1))       // PCM
-	binary.Write(buffer, binary.LittleEndian, uint16(1))       // 单声道
+	binary.Write(buffer, binary.LittleEndian, uint16(1)) // PCM
+	binary.Write(buffer, binary.LittleEndian, uint16(1)) // 单声道
 	binary.Write(buffer, binary.LittleEndian, uint32(sampleRate))
 	binary.Write(buffer, binary.LittleEndian, uint32(sampleRate*2)) // 字节率
-	binary.Write(buffer, binary.LittleEndian, uint16(2))       // 块对齐
-	binary.Write(buffer, binary.LittleEndian, uint16(16))      // 位深
+	binary.Write(buffer, binary.LittleEndian, uint16(2))            // 块对齐
+	binary.Write(buffer, binary.LittleEndian, uint16(16))           // 位深
 	buffer.WriteString("data")
 	binary.Write(buffer, binary.LittleEndian, uint32(dataLen))
 	buffer.Write(pcm)

@@ -39,9 +39,9 @@ var settingEnvKeys = map[string]string{
 // secretSettings secret 类配置键集合。
 // 对齐 settings.py:31 SECRET_SETTINGS。
 var secretSettings = map[string]bool{
-	"joyai_api_key":    true,
+	"joyai_api_key":     true,
 	"qwen_omni_api_key": true,
-	"voice_api_key":    true,
+	"voice_api_key":     true,
 }
 
 // allowedReplyLanguages 合法回复语言集合。
@@ -398,3 +398,7 @@ func preferredLanguage() string {
 	}
 	return "zh"
 }
+
+// SetEnvFileOverride 装配/测试层注入 .env 路径。
+// Python 侧无对应实现：envFileOverride 的导出口。
+func SetEnvFileOverride(path string) { envFileOverride = path }

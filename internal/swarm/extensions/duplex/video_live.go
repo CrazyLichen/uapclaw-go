@@ -2,8 +2,8 @@ package duplex
 
 import (
 	"context"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,22 +54,22 @@ var realtimeTelemetryFields = map[string]bool{
 	"replacing_pending_prompt": true, "instruction_chars": true, "frame_time_range": true,
 	"audio_sequence": true, "image_sequence": true, "error_type": true, "raw_event": true,
 	"speech_probability": true,
-	"queued_count": true, "result_kind": true, "brief_chars": true,
+	"queued_count":       true, "result_kind": true, "brief_chars": true,
 	"latency_ms": true, "inference_ms": true, "wait_ms": true, "dropped_chunks": true,
 }
 
 // stagedTelemetryEvents 落 video-live-events.jsonl 的检索结果事件。
 // 对齐 video_live.py:510-520 的 event_name 集合。
 var stagedTelemetryEvents = map[string]bool{
-	"realtime_answer_final": true,
-	"search_result_received":            true,
-	"search_result_duplicate_ignored":   true,
-	"search_result_queued":              true,
-	"search_result_queue_failed":        true,
-	"search_result_dispatched":          true,
-	"search_result_answered":            true,
+	"realtime_answer_final":              true,
+	"search_result_received":             true,
+	"search_result_duplicate_ignored":    true,
+	"search_result_queued":               true,
+	"search_result_queue_failed":         true,
+	"search_result_dispatched":           true,
+	"search_result_answered":             true,
 	"search_result_response_interrupted": true,
-	"search_result_response_empty":      true,
+	"search_result_response_empty":       true,
 }
 
 // logWriteLock JSONL 追加写锁（每行一个完整 JSON 对象）。
@@ -184,7 +184,7 @@ func registerVideoLiveHandler(channel DuplexChannel, opts registerOptions) *Vide
 
 	// 注册完成事件（对齐 :684-690）
 	appendVideoEventLog(map[string]any{
-		"stage": "video_handlers_registered",
+		"stage":                 "video_handlers_registered",
 		"search_status_enabled": true,
 	})
 	return searchManager
@@ -195,9 +195,9 @@ func registerVideoLiveHandler(channel DuplexChannel, opts registerOptions) *Vide
 // registerOptions 注册注入项。
 // Python 侧无对应实现：Python 由 ApplicationPluginServices 鸭子注入，Go 显式结构。
 type registerOptions struct {
-	AgentClient              AgentClient
+	AgentClient               AgentClient
 	NormalizeMediaAttachments func(map[string]any, string) error
-	TaskDBPath               string
+	TaskDBPath                string
 }
 
 // appendRealtimeTelemetry 实时打断遥测。
@@ -250,13 +250,13 @@ func appendJoyaiLog(event map[string]any) {
 		return
 	}
 	rawRecord := map[string]any{
-		"request_id":        record["request_id"],
-		"joyai_session_id":  record["joyai_session_id"],
-		"instruction":       record["instruction"],
-		"request_kind":      record["request_kind"],
-		"frame_time_range":  record["frame_time_range"],
-		"decision":          record["decision"],
-		"raw_content":       rawContent,
+		"request_id":       record["request_id"],
+		"joyai_session_id": record["joyai_session_id"],
+		"instruction":      record["instruction"],
+		"request_kind":     record["request_kind"],
+		"frame_time_range": record["frame_time_range"],
+		"decision":         record["decision"],
+		"raw_content":      rawContent,
 	}
 	adapterContent := toString(record["raw_content"])
 	if adapterContent != rawContent {
@@ -485,9 +485,9 @@ func joyaiFrameHandler(ctx context.Context, ws any, reqID string, params map[str
 	appendJoyaiLog(withEntries(requestLog, map[string]any{
 		"stage": "completed", "decision": result["decision"],
 		"response": result["response"], "delegation": result["delegation"],
-		"raw_content": result["raw_content"],
+		"raw_content":       result["raw_content"],
 		"model_raw_content": result["model_raw_content"],
-		"latency_ms": result["latency_ms"], "timing": result["timing"],
+		"latency_ms":        result["latency_ms"], "timing": result["timing"],
 		"tools_used": toolsUsed, "search_job": searchJob,
 	}))
 	return &DuplexResponse{OK: true, Payload: map[string]any{
@@ -580,7 +580,7 @@ func appendConversationHandler(ctx context.Context, ws any, reqID string, params
 	case "reasoning":
 		eventType = "chat.reasoning"
 		extra = map[string]any{
-			"reasoning_content": content,
+			"reasoning_content":    content,
 			"reasoning_started_at": params["started_at"],
 			"reasoning_updated_at": params["updated_at"],
 		}
@@ -622,8 +622,8 @@ func appendConversationHandler(ctx context.Context, ws any, reqID string, params
 		}
 	}
 	if conversationHistory != nil {
-	conversationHistory.AppendHistoryRecord(visibleSessionID,
-		"video-duplex-"+eventID, "video_duplex", role, content, timestamp, eventType, extra, "agent")
+		conversationHistory.AppendHistoryRecord(visibleSessionID,
+			"video-duplex-"+eventID, "video_duplex", role, content, timestamp, eventType, extra, "agent")
 	}
 	if previousTitle != "" {
 		metadata := conversationHistory.GetSessionMetadata(visibleSessionID, false)
@@ -641,8 +641,8 @@ func appendConversationHandler(ctx context.Context, ws any, reqID string, params
 // ConversationHistoryBridge 会话历史桥（Python append_history_record/get·update_session_metadata 对应物）。
 // Python 侧无对应实现：Python 直接 import 会话模块，Go 由网关装配层注入桥接实现。
 type ConversationHistoryBridge struct {
-	AppendHistoryRecord  func(sessionID, requestID, channelID, role, content string, timestamp float64, eventType string, extra map[string]any, mode string)
-	GetSessionMetadata   func(sessionID string, cacheBust bool) map[string]any
+	AppendHistoryRecord   func(sessionID, requestID, channelID, role, content string, timestamp float64, eventType string, extra map[string]any, mode string)
+	GetSessionMetadata    func(sessionID string, cacheBust bool) map[string]any
 	UpdateSessionMetadata func(sessionID, userContent string)
 }
 

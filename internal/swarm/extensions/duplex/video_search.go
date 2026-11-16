@@ -233,10 +233,10 @@ func CoreAgentProgress(payload map[string]any) map[string]any {
 		detail := CoreAgentText(orNil(tool["formatted_args"], tool["arguments"]), 280)
 		return map[string]any{
 			"stage": "tool_call", "title": "调用工具：" + name, "detail": detail, "status": "running",
-			"tool_call_id":      toString(orChain(tool["id"], tool["tool_call_id"], payload["tool_call_id"], "")),
-			"tool_name":         strings.TrimSpace(toString(orChain(tool["name"], payload["tool_name"], "unknown"))),
-			"tool_arguments":    orFallbackMap(tool["arguments"]),
-			"tool_description":  strings.TrimSpace(toString(tool["description"])),
+			"tool_call_id":        toString(orChain(tool["id"], tool["tool_call_id"], payload["tool_call_id"], "")),
+			"tool_name":           strings.TrimSpace(toString(orChain(tool["name"], payload["tool_name"], "unknown"))),
+			"tool_arguments":      orFallbackMap(tool["arguments"]),
+			"tool_description":    strings.TrimSpace(toString(tool["description"])),
 			"tool_formatted_args": strings.TrimSpace(toString(tool["formatted_args"])),
 			"tool_display_name":   strings.TrimSpace(toString(tool["display_name"])),
 		}
@@ -410,12 +410,12 @@ func ExecuteCoreAgent(ctx any, client AgentClient, opts CoreAgentOptions) *CoreA
 		}
 		presented := PresentCoreAgentResult(rawAnswer, briefNonce, orOther(opts.Question, opts.Query), []string{})
 		return &CoreAgentResult{
-			FinalPayload: payload,
-			DisplayResult: toString(presented["display_result"]),
-			RealtimeBrief: presented["realtime_brief"].(map[string]any),
-			Answer:        toString(presented["display_result"]),
+			FinalPayload:   payload,
+			DisplayResult:  toString(presented["display_result"]),
+			RealtimeBrief:  presented["realtime_brief"].(map[string]any),
+			Answer:         toString(presented["display_result"]),
 			RawAnswerChars: len([]rune(rawAnswer)),
-			ToolsUsed:     []string{},
+			ToolsUsed:      []string{},
 		}
 	}
 
@@ -550,6 +550,7 @@ func resultKind(question, answer string, toolsUsed []string) string {
 // safeBrief 校验模型生成的口播简报是否安全可用。
 // 对齐 video_search.py:79-92 _safe_brief。
 var unsafeBriefPattern = regexp.MustCompile("(?i)https?://|www\\.|```|`[^`]+`|\\[\\[JIUWEN_")
+
 func safeBrief(value string) string {
 	brief := strings.TrimSpace(value)
 	if brief == "" || len([]rune(brief)) > MaxRealtimeBriefChars {
@@ -740,8 +741,6 @@ func orEmptyList(items []map[string]any) []map[string]any {
 	}
 	return items
 }
-
-
 
 // copyMap 浅拷贝 map。
 func copyMap(source map[string]any) map[string]any {

@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
 )
 
 // ───────────── 纯函数段（对齐 video_voice.py:33-115） ─────────────
@@ -25,8 +24,8 @@ func TestIsAllowedAudioDataURL_五种MIME与边界(t *testing.T) {
 		{"data:audio/mp4;base64,AAAA", true},
 		{"data:audio/mpeg;foo;base64,AAAA", true}, // base64 出现在参数列表即认可
 		{"data:audio/mp3;base64,AAAA", false},
-		{"data:audio/wav,AAAA", false},            // 非 base64 编码
-		{"audio/wav;base64,AAAA", false},          // 缺 data: 头
+		{"data:audio/wav,AAAA", false},   // 非 base64 编码
+		{"audio/wav;base64,AAAA", false}, // 缺 data: 头
 		{"data:text/plain;base64,AAAA", false},
 	}
 	for _, c := range cases {
