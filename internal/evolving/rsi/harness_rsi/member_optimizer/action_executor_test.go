@@ -294,24 +294,24 @@ func TestValidateGeneratedActionResources(t *testing.T) {
 
 func TestValidatePackagePythonSource_gopapy扫描(t *testing.T) {
 	// 危险导入
-	errs := ValidatePackagePythonSource("import os\nimport requests\n", "a.py")
+	errs := validatePackagePythonSource("import os\nimport requests\n", "a.py")
 	require.Contains(t, errs[0], "dangerous import 'os'")
 	// from 导入
-	errs = ValidatePackagePythonSource("from subprocess import run\n", "a.py")
+	errs = validatePackagePythonSource("from subprocess import run\n", "a.py")
 	require.Len(t, errs, 1)
 	// 危险调用
-	errs = ValidatePackagePythonSource("eval('1')\n", "a.py")
+	errs = validatePackagePythonSource("eval('1')\n", "a.py")
 	require.Contains(t, errs[0], "dangerous call 'eval'")
 	// builtins 前缀
-	errs = ValidatePackagePythonSource("builtins.eval('1')\n", "a.py")
+	errs = validatePackagePythonSource("builtins.eval('1')\n", "a.py")
 	require.Contains(t, errs[0], "dangerous call 'eval'")
 	// 普通库 API 不拒绝（re.compile）
-	require.Empty(t, ValidatePackagePythonSource("import re\nre.compile('x')\n", "a.py"))
+	require.Empty(t, validatePackagePythonSource("import re\nre.compile('x')\n", "a.py"))
 	// os.system 属性调用：Attribute 值非 builtins → _call_name 返回空 → 不计调用错误
 	// （Python 同语义：os.system 在无 import 场景下 0 错误）
-	require.Empty(t, ValidatePackagePythonSource("os.system('ls')\n", "a.py"))
+	require.Empty(t, validatePackagePythonSource("os.system('ls')\n", "a.py"))
 	// 语法错误
-	require.Len(t, ValidatePackagePythonSource("def f(:\n", "a.py"), 1)
+	require.Len(t, validatePackagePythonSource("def f(:\n", "a.py"), 1)
 }
 
 func TestActionBundleKey(t *testing.T) {

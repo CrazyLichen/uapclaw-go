@@ -85,6 +85,8 @@ type AgentsBridge struct {
 	PackageWriteAllowed func(string, []string) bool
 	// HostReadRoots 支持的主机只读契约根（Python supported_host_read_roots）
 	HostReadRoots func() []string
+	// CreateVerificationRepairAgent 验证补救 agent 构造（Python factory.py:226）
+	CreateVerificationRepairAgent func(context.Context, ExecutorAgentParams) (any, error)
 }
 
 // ExecutorAgentParams 动刀 agent 构造参数（Python create_action_execution_agent 关键字收拢）。

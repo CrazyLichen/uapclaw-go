@@ -45,6 +45,21 @@ func init() {
 		ExtractText:          ExtractAgentText,
 		PackageWriteAllowed:  func(path string, declaredPaths []string) bool { return PackageWriteAllowed(path, declaredPaths, false) },
 		HostReadRoots:        SupportedHostReadRoots,
+		CreateVerificationRepairAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (any, error) {
+			agent, err := CreateVerificationRepairAgent(ctx, MemberAgentParams{
+				ModelConfigRef:  params.ModelConfigRef,
+				Workspace:       params.Workspace,
+				AgentSkillsDirs: params.AgentSkillsDirs,
+			})
+			if err != nil {
+				return nil, err
+			}
+			handle, err := OptimizerAgentResources(agent)
+			if err != nil {
+				return nil, err
+			}
+			return &executionAgentHandle{agent: agent, handle: handle}, nil
+		},
 		CreateRoleAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
 			agent, err := CreateRoleAttributionAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,

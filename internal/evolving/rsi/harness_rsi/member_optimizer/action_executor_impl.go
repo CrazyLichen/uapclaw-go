@@ -359,7 +359,7 @@ func validateGeneratedActionResources(worktreeDir string, action MemberOptimizat
 				errs = append(errs, fmt.Sprintf("python_compile:%s: %v", normalized, parseErr))
 				continue
 			}
-			safetyErrors := ValidatePackagePythonSource(string(content), normalized)
+			safetyErrors := validatePackagePythonSource(string(content), normalized)
 			errs = append(errs, safetyErrors...)
 		case strings.HasSuffix(strings.ToLower(normalized), ".yaml") || strings.HasSuffix(strings.ToLower(normalized), ".yml"):
 			var parsed any
