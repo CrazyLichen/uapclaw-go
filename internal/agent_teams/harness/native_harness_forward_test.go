@@ -59,7 +59,7 @@ func TestNewNativeHarness_nilContext安全(t *testing.T) {
 // ⤵️ 15.7-15.9 换真实现（决策 C2-b）。
 func TestNativeHarness_prepare_模板哨兵(t *testing.T) {
 	spec := atschema.NewDeepAgentSpec()
-	spec.AgentTemplateSpec = map[string]any{"some": "template"}
+	spec.AgentTemplateSpec = &hschema.AgentTemplateSpec{}
 
 	h, err := harness.NewNativeHarness(spec, nil)
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestErrTemplateUnsupported_是明确哨兵(t *testing.T) {
 // 上游：「Idempotent. start calls this first」。
 func TestNativeHarness_prepare_幂等(t *testing.T) {
 	spec := atschema.NewDeepAgentSpec()
-	spec.AgentTemplateSpec = map[string]any{"t": "v"}
+	spec.AgentTemplateSpec = &hschema.AgentTemplateSpec{}
 
 	h, err := harness.NewNativeHarness(spec, nil)
 	require.NoError(t, err)

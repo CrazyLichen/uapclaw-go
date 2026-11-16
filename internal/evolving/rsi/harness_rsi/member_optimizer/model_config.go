@@ -372,3 +372,10 @@ func validateTeamModelConfig(modelData map[string]any) (hschema.TeamModelConfig,
 	}
 	return config, nil
 }
+
+// ValidateTeamModelConfig 校验构建 TeamModelConfig（导出包装）。
+// Python: agent_runtime.py:105 TeamModelConfig.model_validate(without_inner_sdk_retries(model_data))——
+// 17.4b2 诊断 agent 运行时消费；内部实现即 validateTeamModelConfig。
+func ValidateTeamModelConfig(modelData map[string]any) (hschema.TeamModelConfig, error) {
+	return validateTeamModelConfig(modelData)
+}

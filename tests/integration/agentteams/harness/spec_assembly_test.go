@@ -119,7 +119,7 @@ func (s *SpecAssemblySuite) TestI02_ResolveParts端到端() {
 // TestI02b_模板非nil返回哨兵 AgentTemplateSpec 非 nil 时 RunOnce 返回哨兵。
 func (s *SpecAssemblySuite) TestI02b_模板非nil返回哨兵() {
 	spec := atschema.NewDeepAgentSpec()
-	spec.AgentTemplateSpec = map[string]any{"root": "template"}
+	spec.AgentTemplateSpec = &hschema.AgentTemplateSpec{}
 
 	h := teamharness.TeamHarnessBuild(spec, "teammate", "alice", false, nil, nil)
 	s.Require().NotNil(h)

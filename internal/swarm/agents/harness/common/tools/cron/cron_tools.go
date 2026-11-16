@@ -86,12 +86,22 @@ type RuntimeCronContext struct {
 	Metadata map[string]any
 	// Mode 触发模式
 	Mode string
+	// UserID 创建者 user_id（Python _CRON_TOOL_USER_ID；AgentOS 下载路由透传。
+	// ⤴️ Go 侧 AgentRequest 尚无 user_id 字段，绑定暂传空串——缺口已登记）
+	UserID string
 }
 
 // BindRuntimeCronContext 绑定运行时 cron 上下文（对齐 Python _bind_runtime_cron_context）。
 // 4 个 ContextVar → ctx values：channelID 归一化默认 web、sessionID、metadata 注入 request_id、mode。
 // Go ctx 不可变传递，reset 语义天然满足（无需显式 reset）。
 func BindRuntimeCronContext(ctx context.Context, channelID, sessionID string, metadata map[string]any, requestID, mode string) context.Context {
+	// ⤴️ user_id：Python _bind_runtime_cron_context 另设 _CRON_TOOL_USER_ID（cron_user_id 推导）；
+	// Go AgentRequest 无 user_id 源，暂绑空串（缺口登记，非行为降级：AgentOS 路由未移植）。
+	return bindRuntimeCronContextWithUser(ctx, channelID, sessionID, metadata, requestID, mode, "")
+}
+
+// bindRuntimeCronContextWithUser 带 user_id 的绑定（Python L13812-13830 全量对齐位）。
+func bindRuntimeCronContextWithUser(ctx context.Context, channelID, sessionID string, metadata map[string]any, requestID, mode, userID string) context.Context {
 	normalizedChannel := strings.TrimSpace(channelID)
 	if normalizedChannel == "" {
 		normalizedChannel = gwcron.TargetChannelWeb
@@ -110,6 +120,7 @@ func BindRuntimeCronContext(ctx context.Context, channelID, sessionID string, me
 		SessionID: sessionID,
 		Metadata:  normalizedMetadata,
 		Mode:      normalizedMode,
+		UserID:    strings.TrimSpace(userID),
 	})
 }
 

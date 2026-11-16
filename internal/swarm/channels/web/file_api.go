@@ -385,7 +385,7 @@ func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload := swarmtools.ValidateFileDownloadToken(token)
+	payload := swarmtools.ValidateFileDownloadToken(token, "", false)
 	if payload == nil {
 		writeJSONError(w, http.StatusForbidden, "invalid_or_expired_token")
 		return

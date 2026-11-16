@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	verifieddownloadassets "github.com/uapclaw/uapclaw-go/internal/swarm/common/verified_download_assets"
 )
 
 // newTestManagerWithSecret 测试辅助：重置单例并注入固定密钥 loader。
@@ -21,6 +22,9 @@ func newTestManagerWithSecret(t *testing.T, secret string) *WebFileDownloadManag
 	t.Cleanup(func() { webFileDownloadSecretLoader = origLoader })
 	return GetWebFileDownloadManager()
 }
+
+// secondsPtr 可选过期秒数测试助手（nil = 不过期，对齐 Python expires_in=None）。
+func secondsPtr(n int) *int { return &n }
 
 // isolateUserHomeForSecret 隔离用户主目录（密钥文件落点指向临时目录）。
 // 项目既有模式：env 负责指向（UAPCLAW_HOME），SetUserHome("") 仅重置缓存——
@@ -41,11 +45,11 @@ func isolateUserHomeForSecret(t *testing.T) string {
 // Python: generate_token / validate_token (web_file_download.py L88-134)
 func TestWebFileDownloadTokenRoundTrip(t *testing.T) {
 	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	token := m.GenerateToken("/tmp/report.pdf", "sess-1", 600)
+	token := m.GenerateToken("/tmp/report.pdf", "sess-1", secondsPtr(600))
 	if token == "" || !strings.Contains(token, ".") {
 		t.Fatalf("token 格式错误: %q", token)
 	}
-	payload := m.ValidateToken(token)
+	payload := m.ValidateToken(token, "", true)
 	if payload == nil {
 		t.Fatal("验签失败")
 	}
@@ -62,10 +66,10 @@ func TestWebFileDownloadTokenRoundTrip(t *testing.T) {
 // Python: hmac.compare_digest 校验失败返回 None
 func TestWebFileDownloadTokenTampered(t *testing.T) {
 	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	token := m.GenerateToken("/tmp/a.pdf", "", 600)
+	token := m.GenerateToken("/tmp/a.pdf", "", secondsPtr(600))
 	parts := strings.SplitN(token, ".", 2)
 	tampered := parts[0] + "." + strings.Repeat("0", len(parts[1]))
-	if m.ValidateToken(tampered) != nil {
+	if m.ValidateToken(tampered, "", true) != nil {
 		t.Error("篡改签名应拒绝")
 	}
 }
@@ -74,8 +78,8 @@ func TestWebFileDownloadTokenTampered(t *testing.T) {
 // Python: payload.get("exp", 0) < time.time() → None
 func TestWebFileDownloadTokenExpired(t *testing.T) {
 	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	token := m.GenerateToken("/tmp/a.pdf", "", -10) // 已过期
-	if m.ValidateToken(token) != nil {
+	token := m.GenerateToken("/tmp/a.pdf", "", secondsPtr(-10)) // 已过期
+	if m.ValidateToken(token, "", true) != nil {
 		t.Error("过期令牌应拒绝")
 	}
 }
@@ -83,9 +87,9 @@ func TestWebFileDownloadTokenExpired(t *testing.T) {
 // TestWebFileDownloadTokenWrongSecret 错密钥拒绝。
 func TestWebFileDownloadTokenWrongSecret(t *testing.T) {
 	m1 := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	token := m1.GenerateToken("/tmp/a.pdf", "", 600)
+	token := m1.GenerateToken("/tmp/a.pdf", "", secondsPtr(600))
 	m2 := &WebFileDownloadManager{secret: "ffffffffffffffffffffffffffffffff"}
-	if m2.ValidateToken(token) != nil {
+	if m2.ValidateToken(token, "", true) != nil {
 		t.Error("错密钥应拒绝")
 	}
 }
@@ -95,7 +99,7 @@ func TestWebFileDownloadTokenWrongSecret(t *testing.T) {
 func TestWebFileDownloadTokenMalformed(t *testing.T) {
 	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
 	for _, tok := range []string{"", "abc", "a.b.c", "!!.-"} {
-		if m.ValidateToken(tok) != nil {
+		if m.ValidateToken(tok, "", true) != nil {
 			t.Errorf("畸形 token %q 应拒绝", tok)
 		}
 	}
@@ -104,35 +108,134 @@ func TestWebFileDownloadTokenMalformed(t *testing.T) {
 // TestWebFileDownloadTokenChinesePath 中文路径不转义（ensure_ascii=False 对齐）。
 func TestWebFileDownloadTokenChinesePath(t *testing.T) {
 	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	token := m.GenerateToken("/tmp/报告 最终版.pdf", "s", 600)
-	payload := m.ValidateToken(token)
+	token := m.GenerateToken("/tmp/报告 最终版.pdf", "s", secondsPtr(600))
+	payload := m.ValidateToken(token, "", true)
 	if payload == nil || payload["path"] != "/tmp/报告 最终版.pdf" {
 		t.Errorf("中文路径往返失败: %v", payload)
 	}
 }
 
-// TestWebFileDownloadTokenPayloadKeyOrder 载荷键序对齐 Python dict 插入序（path,exp,sid）。
-// Python: json.dumps 按 dict 插入序输出——Go 用结构体保序序列化保证字节级一致。
+// TestWebFileDownloadTokenPayloadKeyOrder 载荷键序对齐 Python dict 插入序（path,sid,exp）。
+// Python: file_download_token.py generate_token L158-171——path,sid 先于可选 exp。
 func TestWebFileDownloadTokenPayloadKeyOrder(t *testing.T) {
 	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	token := m.GenerateToken("/tmp/a.pdf", "s", 600)
+	token := m.GenerateToken("/tmp/a.pdf", "s", secondsPtr(600))
 	payloadB64 := strings.SplitN(token, ".", 2)[0]
 	raw, err := base64.URLEncoding.DecodeString(payloadB64)
 	if err != nil {
 		t.Fatalf("b64 解码失败: %v", err)
 	}
-	if !strings.HasPrefix(string(raw), `{"path":"/tmp/a.pdf","exp":`) {
-		t.Errorf("载荷键序应 path→exp→sid: %s", string(raw))
+	if !strings.HasPrefix(string(raw), `{"path":"/tmp/a.pdf","sid":"s","exp":`) {
+		t.Errorf("载荷键序应 path→sid→exp: %s", string(raw))
 	}
-	if !strings.HasSuffix(string(raw), `"sid":"s"}`) {
-		t.Errorf("载荷应以 sid 结尾: %s", string(raw))
+}
+
+// TestWebFileDownloadTokenPersistent_无exp 不过期令牌：expires_in=None 不写 exp。
+// Python: file_download_token.py generate_token L162-164 + validate L232-236 legacy 白名单。
+func TestWebFileDownloadTokenPersistent_无exp(t *testing.T) {
+	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
+	token := m.GenerateToken("/tmp/report.pdf", "s", nil)
+	payload := m.ValidateToken(token, "", true)
+	if payload == nil {
+		t.Fatal("无 exp 持久令牌应通过（legacy {path,sid} schema）")
+	}
+	if _, ok := payload["exp"]; ok {
+		t.Fatalf("持久令牌不应含 exp: %v", payload)
+	}
+	// legacy 白名单外的键 → 拒绝
+	bad := m.signTokenPayload(map[string]any{"path": "/x", "sid": "s", "extra": 1})
+	if m.ValidateToken(bad, "", true) != nil {
+		t.Fatal("无 exp 且带额外键应拒绝")
+	}
+	// {path,sid,download_http_base} 白名单 schema 通过
+	ok := m.signTokenPayload(map[string]any{"path": "/x", "sid": "s", "download_http_base": "http://b"})
+	if m.ValidateToken(ok, "", true) == nil {
+		t.Fatal("routed schema 应通过")
+	}
+}
+
+// TestValidateToken_sid校验 传入 session_id 时校验 sid 一致。
+// Python: validate_token L239-242。
+func TestValidateToken_sid校验(t *testing.T) {
+	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
+	token := m.GenerateToken("/tmp/a.pdf", "sess-1", secondsPtr(600))
+	if m.ValidateToken(token, "sess-2", true) != nil {
+		t.Fatal("sid 不匹配应拒绝")
+	}
+	if m.ValidateToken(token, "sess-1", true) == nil {
+		t.Fatal("sid 匹配应通过")
+	}
+	if m.ValidateToken(token, "", true) == nil {
+		t.Fatal("未传 session_id 不校验 sid")
+	}
+}
+
+// TestValidateToken_kind非法 kind 非 None/verified_asset_v1 拒绝。
+// Python: validate_token L245-247。
+func TestValidateToken_kind非法(t *testing.T) {
+	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
+	bad := m.signTokenPayload(map[string]any{"kind": "other", "path": "/x", "sid": "s"})
+	if m.ValidateToken(bad, "", true) != nil {
+		t.Fatal("非法 kind 应拒绝")
+	}
+}
+
+// TestGenerateVerifiedAssetToken_资产令牌往返 资产令牌 payload 五字段 + is_active 校验。
+// Python: generate_verified_asset_token L119-147 + validate_token L249-269。
+func TestGenerateVerifiedAssetToken_资产令牌往返(t *testing.T) {
+	m := newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
+	owner, err := verifieddownloadassets.NewVerifiedDownloadAssetOwner(t.TempDir(), verifieddownloadassets.OwnerOptions{StartSweeper: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(t.TempDir(), "video.mp4")
+	if err := os.WriteFile(src, []byte("video-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	asset, err := owner.Stage(src, verifieddownloadassets.StageOptions{
+		FileName:  "video.mp4",
+		ExpiresAt: float64(time.Now().Add(time.Minute).UnixMilli()) / 1000.0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 注入资产宿主（Python WebFileDownloadManager.__init__ asset_owner kwarg）
+	SetWebFileDownloadAssetOwner(owner)
+	t.Cleanup(func() { SetWebFileDownloadAssetOwner(nil) })
+	token := m.GenerateVerifiedAssetToken(asset, "video.mp4", "sess-9")
+	payload := m.ValidateToken(token, "sess-9", true)
+	if payload == nil {
+		t.Fatal("资产令牌应通过验签与 is_active")
+	}
+	if payload["kind"] != "verified_asset_v1" || payload["asset_id"] != asset.AssetID {
+		t.Fatalf("资产令牌 payload 不符: %v", payload)
+	}
+	if payload["path"] != filepath.ToSlash(asset.SealedPath) {
+		t.Fatalf("path 应为密封路径: %v", payload["path"])
+	}
+	// revoke 后 is_active 失败 → 验证拒绝
+	owner.Revoke(asset)
+	if m.ValidateToken(token, "sess-9", true) != nil {
+		t.Fatal("revoke 后资产令牌应拒绝")
+	}
+}
+
+// TestGenerateDownloadURL_带UserID user_id 追加 query（token 在前）。
+// Python: generate_download_url L279-285。
+func TestGenerateDownloadURL_带UserID(t *testing.T) {
+	got := GenerateDownloadURL("tok", "u1")
+	if got != "/file-api/download?token=tok&user_id=u1" {
+		t.Fatalf("download url: %q", got)
+	}
+	if GenerateDownloadURL("tok", "") != "/file-api/download?token=tok" {
+		t.Fatal("空 user_id 不追加")
 	}
 }
 
 // TestGenerateDownloadURL URL 前缀。
 // Python: generate_download_url (web_file_download.py L136-138)
 func TestGenerateDownloadURL(t *testing.T) {
-	if got := GenerateDownloadURL("tok"); got != "/file-api/download?token=tok" {
+	if got := GenerateDownloadURL("tok", ""); got != "/file-api/download?token=tok" {
 		t.Errorf("download url: %q", got)
 	}
 }
@@ -254,7 +357,7 @@ func TestBuildFileDownloadInfo(t *testing.T) {
 	if err := os.WriteFile(fp, []byte("a,b\n1,2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	info := BuildFileDownloadInfo(fp, "data.csv", "sess", 120)
+	info := BuildFileDownloadInfo(fp, "data.csv", "sess", nil, "")
 	if info["name"] != "data.csv" {
 		t.Errorf("name: %v", info["name"])
 	}
@@ -268,8 +371,15 @@ func TestBuildFileDownloadInfo(t *testing.T) {
 	if !strings.HasPrefix(url, "/file-api/download?token=") {
 		t.Errorf("download_url: %v", url)
 	}
-	if info["expires_at"].(int64) <= time.Now().Unix() {
-		t.Errorf("expires_at 应在未来: %v", info["expires_at"])
+	// 新版 payload 无 expires_at（对齐 Python build_file_download_info L326-358 返回结构）
+	if _, ok := info["expires_at"]; ok {
+		t.Errorf("payload 不应含 expires_at: %v", info)
+	}
+	// user_id 维度进 URL
+	info2 := BuildFileDownloadInfo(fp, "data.csv", "sess", secondsPtr(120), "u7")
+	url2, _ := info2["download_url"].(string)
+	if !strings.HasSuffix(url2, "&user_id=u7") {
+		t.Errorf("带 user_id 的 download_url: %v", url2)
 	}
 }
 
@@ -278,7 +388,7 @@ func TestBuildFileDownloadInfo(t *testing.T) {
 func TestBuildFileDownloadInfo_文件不存在(t *testing.T) {
 	newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
 
-	info := BuildFileDownloadInfo("/nonexistent/x.bin", "x.bin", "sess", 60)
+	info := BuildFileDownloadInfo("/nonexistent/x.bin", "x.bin", "sess", nil, "")
 	if info["size"] != int64(0) {
 		t.Errorf("size 应兜底 0: %v", info["size"])
 	}

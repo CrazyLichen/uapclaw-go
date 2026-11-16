@@ -64,6 +64,7 @@ require (
 	github.com/elastic/go-elasticsearch/v8 v8.19.6
 	github.com/elk-language/go-prompt v1.6.7
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/fumiama/go-docx v0.0.0-20250506085032-0c30fd09304b
 	github.com/getkin/kin-openapi v0.140.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gofrs/flock v0.13.2
@@ -144,6 +145,7 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.3+incompatible // indirect
+	github.com/fumiama/imgsz v0.0.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect

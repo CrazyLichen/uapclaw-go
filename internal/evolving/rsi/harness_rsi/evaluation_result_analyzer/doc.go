@@ -11,9 +11,10 @@
 //   - b1（本节）：不碰 DeepAgent 运行时的读件层——接口契约、任务条款、
 //     仓库快照、路径预算、harness 只读投映、案例读取、信号提取、运行时
 //     证据、证据压缩。
-//   - b2（待落地）：evidence_investigation（逐案调查）、agent_runtime
-//     （DiagnosisAgentRuntime/run_deep_agent_text，挂真实 DeepAgent）、
-//     analyzer（门面 + 诊断提示词）、__init__ 导出收口。
+//   - b2（已完成）：evidence_investigation（确定性调查计划执行器，Python 侧
+//     零生产调用方 ⤴️17.4d，偏差 D-12）、agent_runtime（DiagnosisAgentRuntime/
+//     run_deep_agent_text，只读轨+预算轨双 Rail）、analyzer（门面 + 诊断提示词
+//   - 聚合会诊 + TeamIssue 后处理）、导出收口（见下方 __all__ 对照）。
 //
 // 前置件切片（归属在各自未来包，见 harness_rsi/evaluator 与
 // harness_rsi/member_optimizer 的 doc.go）：
@@ -37,7 +38,23 @@
 //	├── evidence_compactor.go     # 决策中心证据压缩
 //	├── evidence_investigation.go # 17.4b2 待落地
 //	├── agent_runtime.go          # 17.4b2 待落地
-//	└── analyzer.go              # 17.4b2 待落地
+//	├── analyzer_prompts.go      # 诊断/聚合提示词常量（AST 脚本逐字提取）
+//	└── analyzer.go              # 策略管线 + 聚合 + G5 映射 + 门面
+//
+// 结构例外（规则 9.6，用户 2026-11-16 拍板）：Python analyzer.py 单文件在 Go 拆为
+// analyzer_prompts.go（提示词常量，AST 脚本逐字提取保证一比一）与 analyzer.go
+// （策略/聚合/门面）两文件；映射经本清单可核对，提取脚本可复现。
+//
+// Python __init__.py __all__ 导出对照（偏差 D-8：Go 以包级导出符号承载）：
+//
+//	CaseAnalysisInput / DeterministicSignals / EvaluationSummaryInput
+//	    → case_reader.go 同名导出类型
+//	EvaluationResultAnalysisStrategy / SignalExtractor
+//	    → interfaces.go 同名导出接口
+//	EvaluationResultAnalyzer / build_analysis_strategy
+//	    → analyzer.go EvaluationResultAnalyzer / BuildAnalysisStrategy
+//	RewardSignalExtractor / build_signal_extractor / register_signal_extractor
+//	    → signal_extractor.go 同名导出类型与工厂
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluation_result_analyzer/
 package evaluationresultanalyzer

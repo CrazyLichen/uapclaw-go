@@ -404,15 +404,16 @@ func TestWatchUntilSettled_完成交付(t *testing.T) {
 	t.Setenv("VIDEO_GEN_API_BASE", server.URL)
 	t.Setenv("VIDEO_GEN_MODEL_NAME", "m")
 
+	// D-23.8-5 回收：完成交付走真实 SendFileToolkit → chat.file push（含 files payload）
 	var pushed []map[string]any
 	var pushMu sync.Mutex
-	SetVideoGenRuntimePush(func(msg map[string]any) bool {
+	SetSendFilePushFunc(func(_ context.Context, msg map[string]any) error {
 		pushMu.Lock()
 		pushed = append(pushed, msg)
 		pushMu.Unlock()
-		return true
+		return nil
 	})
-	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })
+	t.Cleanup(func() { SetSendFilePushFunc(nil) })
 
 	watchUntilSettled(rootCtx("sess-1"), "job-w", saveDir, rootRC("sess-1"))
 	waitForWatchDrain(t, time.Second)
@@ -421,17 +422,24 @@ func TestWatchUntilSettled_完成交付(t *testing.T) {
 	if len(pushed) != 1 {
 		t.Fatalf("应推送一次: %d", len(pushed))
 	}
+	if payload, _ := pushed[0]["payload"].(map[string]any); payload["event_type"] != "chat.file" {
+		t.Fatalf("应推送 chat.file: %v", payload)
+	}
 	msg := pushed[0]
+	// D-23.8-5 回收：files payload 含视频路径与探测标记（is_skill_package=false）
+	payload, _ := pushed[0]["payload"].(map[string]any)
+	files, _ := payload["files"].([]map[string]any)
+	if len(files) != 1 {
+		t.Fatalf("应 1 个文件: %v", files)
+	}
+	if !strings.HasSuffix(fmt.Sprint(files[0]["path"]), "video_job-w.mp4") {
+		t.Fatalf("files path 错: %v", files[0]["path"])
+	}
+	if files[0]["is_skill_package"] != false {
+		t.Fatalf("is_skill_package 应为 false: %v", files[0])
+	}
 	if msg["session_id"] != "sess-1" || msg["request_id"] != "req-1" || msg["channel_id"] != "ch-1" || msg["is_complete"] != false {
 		t.Fatalf("路由字段错: %v", msg)
-	}
-	payload, _ := msg["payload"].(map[string]any)
-	if payload["final_mode"] != swarmcommon.FinalModeAppend || payload["event_type"] != "chat.final" {
-		t.Fatalf("final_mode/event_type 错: %v", payload)
-	}
-	// D-23.8-5：sendFile 缝未注入 → 降级文本通知含本地文件路径
-	if !strings.Contains(fmt.Sprint(payload["content"]), "本地文件：") {
-		t.Fatalf("交付内容缺本地文件: %v", payload["content"])
 	}
 	// 已有显式 final_mode 不覆盖（annotate 语义在 watch 路径同样生效）
 	msg2Payload := swarmcommon.AnnotateChatFinal(map[string]any{"final_mode": "replace_turn"}, swarmcommon.FinalModeAppend)
@@ -613,22 +621,25 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 	t.Setenv("VIDEO_GEN_API_BASE", server.URL)
 	t.Setenv("VIDEO_GEN_MODEL_NAME", "m")
 
-	// 成功分支：sendFile 返回非失败文案 → 不推送兜底
-	var pushCount int32
-	SetVideoGenSendFileFunc(func(_ *rootcontext.RootDecisionContext, localPath string) string {
-		if !strings.HasSuffix(localPath, "video_job-sf.mp4") {
-			t.Fatalf("投递路径错: %s", localPath)
-		}
-		return "sent ok"
-	})
+	// 成功分支：真实 SendFileToolkit（D-23.8-5 已回收）——push 宿主在位 →
+	// chat.file 投递成功 → 不推送兜底
+	SetSendFilePushFunc(func(context.Context, map[string]any) error { return nil })
+	SetSendFileHistoryFunc(func(string, string, string, string, string, float64, string, map[string]any, map[string]any, string) {})
+	t.Cleanup(func() { SetSendFilePushFunc(nil); SetSendFileHistoryFunc(nil) })
 	SetVideoGenRuntimePush(func(map[string]any) bool { return true })
-	t.Cleanup(func() { SetVideoGenSendFileFunc(nil); SetVideoGenRuntimePush(nil) })
+	t.Cleanup(func() { SetVideoGenRuntimePush(nil) })
 	watchUntilSettled(rootCtx("s"), "job-sf", saveDir, rootRC("s"))
 	waitForWatchDrain(t, time.Second)
 
-	// 失败分支：sendFile 返回「发送文件失败」前缀 → 回落文本通知含本地文件
-	SetVideoGenSendFileFunc(func(_ *rootcontext.RootDecisionContext, _ string) string { return "发送文件失败: no push host" })
+	// 清会话去重（新对齐语义：同 session 同路径会被去重跳过）
+	ClearSentFilesForSession("s")
+
+	// 失败分支：push 宿主报错 → send_file 兜底「提交文件失败」前缀 →
+	// 回落文本通知含本地文件（Python _SEND_FILE_FAILURE_PREFIXES 分支）
 	var contents []string
+	SetSendFilePushFunc(func(context.Context, map[string]any) error {
+		return fmt.Errorf("push host unavailable")
+	})
 	SetVideoGenRuntimePush(func(msg map[string]any) bool {
 		payload, _ := msg["payload"].(map[string]any)
 		contents = append(contents, fmt.Sprint(payload["content"]))
@@ -640,7 +651,6 @@ func TestWatchUntilSettled_sendFile注入(t *testing.T) {
 	if len(contents) != 1 || !strings.Contains(contents[0], "自动投递到会话失败") || !strings.Contains(contents[0], "本地文件：") {
 		t.Fatalf("投递失败回落: %v", contents)
 	}
-	_ = pushCount
 }
 
 // ──────────────────────────── Task 13: 装配门控 smoke ────────────────────────────
