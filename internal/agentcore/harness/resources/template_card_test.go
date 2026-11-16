@@ -138,3 +138,15 @@ func TestReadCard_不可读manifest映射为错误(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "JSON object")
 }
+
+// TestSkillNames_非列表读空 卡片侧 _as_list 语义：skills 为字符串（非列表）→ 空目录名。
+// Python: template_card.py:169-170 _as_list 非 list 一律返回空（与 loader 侧标量包装不同）。
+func TestSkillNames_非列表读空(t *testing.T) {
+	card, err := ParseAgentTemplateCard([]byte(`{"package_type":"agent_template","name":"n","description":"d","skills":"py"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(card.Skills) != 0 {
+		t.Fatalf("scalar skills must read empty, got %v", card.Skills)
+	}
+}

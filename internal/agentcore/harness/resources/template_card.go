@@ -262,10 +262,11 @@ func localizedListItems(value any) []any {
 }
 
 // skillNames 技能目录名（str 或 {"dir": ...} 项），取路径基名 + 去重（D-4：PurePath.name→path.Base）。
-// Python: template_card.py:173-180 _skill_names
+// Python: template_card.py:173-180 _skill_names —— 注意用卡片侧 _as_list（非列表→空），
+// 不能用 loader 侧 asList（标量包装），两模块同名函数语义不同。
 func skillNames(items any) []string {
 	var names []string
-	for _, item := range asList(items) {
+	for _, item := range cardAsList(items) {
 		var raw string
 		switch v := item.(type) {
 		case string:
@@ -287,10 +288,10 @@ func skillNames(items any) []string {
 }
 
 // connectorNames connector 名去重。
-// Python: template_card.py:183-190 _connector_names
+// Python: template_card.py:183-190 _connector_names —— 卡片侧 _as_list（非列表→空）
 func connectorNames(items any) []string {
 	var names []string
-	for _, item := range asList(items) {
+	for _, item := range cardAsList(items) {
 		m, ok := item.(map[string]any)
 		if !ok {
 			continue
