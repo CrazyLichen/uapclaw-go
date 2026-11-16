@@ -1,7 +1,15 @@
 package evaluationresultanalyzer
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/xuri/excelize/v2"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -452,5 +460,388 @@ func TestUniqueAutomaticRequestID(t *testing.T) {
 	id2 := uniqueAutomaticRequestID("q1", "src/a.txt", 100, existing)
 	if id2 == id {
 		t.Fatal("冲突未回避")
+	}
+}
+
+// ──────────────────────────── Task 8/9：artifact 与 repository 族 ────────────────────────────
+
+// newInvCase 构造测试用 CaseAnalysisInput（对齐 Python test _case fixture）
+func newInvCase(t *testing.T, metadata map[string]any) *CaseAnalysisInput {
+	t.Helper()
+	caseDir := t.TempDir()
+	judgeDir := filepath.Join(caseDir, "judge")
+	if err := os.MkdirAll(judgeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(caseDir, "result.json")
+	resultJSON, _ := json.Marshal(map[string]any{"evaluation": map[string]any{"metadata": metadataOrEmpty(metadata)}})
+	if err := os.WriteFile(resultPath, resultJSON, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	trace, _ := json.Marshal(map[string]any{"traces": []map[string]any{{
+		"trace_id": "case_001:trial_1",
+		"messages": []map[string]any{{
+			"role": "assistant", "message_index": 7, "step_pointer": "trial_1:message_7",
+			"content": "I need to distinguish the parser and routing hypotheses.",
+			"tool_calls": []map[string]any{{
+				"name": "read_file", "input": `{"path":"public.txt"}`,
+				"output": "prefix\nEXACT_DISCRIMINATOR parser selected legacy mode\nsuffix",
+			}},
+		}},
+	}}})
+	if err := os.WriteFile(filepath.Join(judgeDir, "normalized_trace.json"), trace, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &CaseAnalysisInput{ResultPath: resultPath, EvaluationMetadata: metadataOrEmpty(metadata)}
+}
+
+// metadataOrEmpty nil → 空 map（JSON marshal 需要）
+func metadataOrEmpty(metadata map[string]any) map[string]any {
+	if metadata == nil {
+		return map[string]any{}
+	}
+	return metadata
+}
+
+// TestArtifactPathAliases 快照逻辑名映射（Python _artifact_path_aliases）
+func TestArtifactPathAliases(t *testing.T) {
+	caseDir := t.TempDir()
+	artifacts := filepath.Join(caseDir, "artifacts")
+	workspace := filepath.Join(artifacts, "workspace")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stored := filepath.Join(artifacts, "hashed.xlsx")
+	if err := os.WriteFile(stored, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wsStored := filepath.Join(workspace, "nested.xlsx")
+	if err := os.WriteFile(wsStored, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{ResultPath: filepath.Join(caseDir, "result.json"), EvaluationMetadata: map[string]any{
+		"analysis_artifact_snapshot": map[string]any{"files": []any{
+			map[string]any{"path": "hashed.xlsx", "source_path": "Controlling Contract.xlsx"},
+			map[string]any{"path": "workspace/nested.xlsx", "source_path": "Old Report.xlsx"},
+			map[string]any{"path": "missing.xlsx", "source_path": "Ghost.xlsx"},
+		}},
+	}}
+	aliases := artifactPathAliases(caseInput, artifacts)
+	if len(aliases) != 2 {
+		t.Fatalf("应命中两个实体文件: %v", aliases)
+	}
+	if aliases[stored] != "Controlling Contract.xlsx" || aliases[wsStored] != "Old Report.xlsx" {
+		t.Fatalf("别名不符: %v", aliases)
+	}
+}
+
+// TestSelectStructuredArtifactFiles 提示词过滤与排序裁剪（Python _select_structured_artifact_files）
+func TestSelectStructuredArtifactFiles(t *testing.T) {
+	files := []string{"/a/one.xlsx", "/a/two.xlsx", "/a/three.xlsx"}
+	// 无提示词：全部保留（≤上限）
+	got := selectStructuredArtifactFiles(files, "no hints", nil)
+	if len(got) != 3 {
+		t.Fatalf("无提示词应全保留: %v", got)
+	}
+	// pdf 提示词命中 → 只留 .pdf
+	got = selectStructuredArtifactFiles([]string{"/a/one.xlsx", "/a/report.pdf"}, "pdf page document", nil)
+	if len(got) != 1 || !strings.HasSuffix(got[0], ".pdf") {
+		t.Fatalf("pdf 提示词过滤: %v", got)
+	}
+}
+
+// TestReadArtifactWindow 文本 artifact 窗口（Python _read_artifact_window 主路径）
+func TestReadArtifactWindow(t *testing.T) {
+	caseDir := t.TempDir()
+	artifacts := filepath.Join(caseDir, "artifacts")
+	if err := os.MkdirAll(artifacts, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := strings.Repeat("A", 100) + "NEEDLE" + strings.Repeat("B", 100)
+	if err := os.WriteFile(filepath.Join(artifacts, "report.txt"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{ResultPath: filepath.Join(caseDir, "result.json")}
+	cache := map[string]string{}
+	// 无效路径
+	r := readArtifactWindow(caseInput, map[string]any{"relative_path": ""}, cache)
+	if r["availability"] != "invalid" {
+		t.Fatalf("空路径: %v", r)
+	}
+	// 未找到
+	r = readArtifactWindow(caseInput, map[string]any{"relative_path": "artifacts/ghost.txt"}, cache)
+	if r["availability"] != "not_found" {
+		t.Fatalf("缺失文件: %v", r)
+	}
+	// 全文窗口
+	r = readArtifactWindow(caseInput, map[string]any{"relative_path": "artifacts/report.txt"}, cache)
+	if r["availability"] != "available" || r["window_complete"] != true || r["omission_origin"] != "none" {
+		t.Fatalf("全文窗口: %v", r)
+	}
+	// 带起止偏移窗口（Python: source_char_start + max_chars）
+	r = readArtifactWindow(caseInput, map[string]any{"relative_path": "artifacts/report.txt", "source_char_start": 95, "max_chars": 20}, cache)
+	if r["source_char_start"] != 95 || r["source_char_end"] != 115 || r["window_complete"] != false {
+		t.Fatalf("偏移窗口: %v", r)
+	}
+	if r["omission_origin"] != "controller_read_window" {
+		t.Fatalf("省略来源: %v", r)
+	}
+	if !strings.Contains(r["text"].(string), "NEEDLE") {
+		t.Fatalf("窗口文本: %q", r["text"])
+	}
+	// 不支持的后缀
+	if err := os.WriteFile(filepath.Join(artifacts, "blob.bin"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r = readArtifactWindow(caseInput, map[string]any{"relative_path": "artifacts/blob.bin"}, cache)
+	if r["availability"] != "unsupported" {
+		t.Fatalf("不支持后缀: %v", r)
+	}
+}
+
+// TestUnambiguousLogicalArtifactMatches 逻辑名恢复唯一性与不足阈值（Python _unambiguous_logical_artifact_matches）
+// 词项语义：queryTerms 按 Python 正则切分（下划线连成一个词），requested 词项须 ≥2
+func TestUnambiguousLogicalArtifactMatches(t *testing.T) {
+	aliases := map[string]string{
+		"/a/hashed1.xlsx": "Quarterly Financial Report.xlsx",
+		"/a/hashed2.xlsx": "Monthly Financial Summary.xlsx",
+	}
+	// 请求名损坏但词项重叠唯一且达阈值 → 恢复（quarterly/financial 与第一文件重叠 2）
+	got := unambiguousLogicalArtifactMatches("quarterly financial", aliases)
+	if len(got) != 1 || got[0][1] != "Quarterly Financial Report.xlsx" {
+		t.Fatalf("唯一恢复: %v", got)
+	}
+	// 两文件同分且达阈值 → 返回空（非唯一）
+	aliases2 := map[string]string{
+		"/a/hashed1.xlsx": "Quarterly Financial Report.xlsx",
+		"/a/hashed2.xlsx": "Quarterly Financial Summary.xlsx",
+	}
+	got = unambiguousLogicalArtifactMatches("quarterly financial", aliases2)
+	if len(got) != 0 {
+		t.Fatalf("非唯一应空: %v", got)
+	}
+	// 词项不足 2（下划线连写成一个词）→ 空
+	got = unambiguousLogicalArtifactMatches("quarterly_financial", aliases)
+	if len(got) != 0 {
+		t.Fatalf("词项不足: %v", got)
+	}
+}
+
+// TestInspectArtifact 文本 artifact 检索主路径（Python _inspect_artifact）
+func TestInspectArtifact(t *testing.T) {
+	caseDir := t.TempDir()
+	artifacts := filepath.Join(caseDir, "artifacts")
+	if err := os.MkdirAll(artifacts, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(artifacts, "log.txt"), []byte("EXACT_DISCRIMINATOR parser selected legacy mode"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{ResultPath: filepath.Join(caseDir, "result.json")}
+	// 无 artifacts 目录 → not_available
+	emptyCase := &CaseAnalysisInput{ResultPath: filepath.Join(t.TempDir(), "result.json")}
+	r := inspectArtifact(emptyCase, map[string]any{"query": "x"}, map[string]string{})
+	if r["availability"] != "not_available" || r["reason"] != "physical_artifact_snapshot_not_available" {
+		t.Fatalf("无快照: %v", r)
+	}
+	// 命中
+	r = inspectArtifact(caseInput, map[string]any{"query": "parser legacy"}, map[string]string{})
+	if r["availability"] != "available" {
+		t.Fatalf("命中: %v", r)
+	}
+	matches := r["matches"].([]map[string]any)
+	if len(matches) != 1 || matches[0]["source"] != "artifacts/log.txt" {
+		t.Fatalf("matches: %v", matches)
+	}
+	// 不含检索词 → not_found
+	r = inspectArtifact(caseInput, map[string]any{"query": "zzz_nothing"}, map[string]string{})
+	if r["availability"] != "not_found" {
+		t.Fatalf("未命中: %v", r)
+	}
+}
+
+// TestStructuredArtifactTextXlsx xlsx 公式与单元格文本（Python _xlsx_text；openpyxl data_only=False 对齐）
+func TestStructuredArtifactTextXlsx(t *testing.T) {
+	f := excelize.NewFile()
+	sheet := f.GetSheetName(0)
+	if err := f.SetCellValue(sheet, "A1", 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SetCellValue(sheet, "A2", 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SetCellFormula(sheet, "A3", "SUM(A1:A2)"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "result.xlsx")
+	if err := f.SaveAs(path); err != nil {
+		t.Fatal(err)
+	}
+	text := structuredArtifactText(path)
+	if !strings.Contains(text, "[sheet:"+sheet+"]") {
+		t.Fatalf("sheet 头: %q", text)
+	}
+	if !strings.Contains(text, "A1=10") || !strings.Contains(text, "A3=SUM(A1:A2)") {
+		t.Fatalf("单元格与公式: %q", text)
+	}
+}
+
+// TestStructuredArtifactTextPptx pptx 幻灯片文本（Python _pptx_text；zip+xml 手拆）
+func TestStructuredArtifactTextPptx(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deck.pptx")
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	// 两条 slide + 一条非 slide 文件
+	for i, body := range []struct{ name, text string }{
+		{"ppt/slides/slide2.xml", `<p:sld><p:cSld><p:spTree><a:t>Second Slide</a:t><a:t>更多文本</a:t></p:spTree></p:cSld></p:sld>`},
+		{"ppt/slides/slide1.xml", `<p:sld><p:cSld><p:spTree><a:t>First Slide</a:t></p:spTree></p:cSld></p:sld>`},
+		{"docProps/app.xml", `<a:t>ignored</a:t>`},
+	} {
+		fc, _ := w.Create(body.name)
+		if i >= 2 {
+			fc.Write([]byte(body.text))
+			continue
+		}
+		fc.Write([]byte(body.text))
+	}
+	_ = w.Close()
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	text := structuredArtifactText(path)
+	if !strings.Contains(text, "[ppt/slides/slide1.xml] First Slide") ||
+		!strings.Contains(text, "[ppt/slides/slide2.xml] Second Slide 更多文本") {
+		t.Fatalf("slide 文本: %q", text)
+	}
+	if strings.Contains(text, "ignored") {
+		t.Fatalf("非 slide 文件不应纳入: %q", text)
+	}
+}
+
+// TestStructuredArtifactTextMalformed 畸形结构化文件吞异常返回空串（Python except Exception）
+func TestStructuredArtifactTextMalformed(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.xlsx", "b.docx", "c.pdf", "d.pptx"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("not a real file"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if text := structuredArtifactText(filepath.Join(dir, name)); text != "" {
+			t.Fatalf("畸形 %s 应返回空串: %q", name, text)
+		}
+	}
+}
+
+// TestInspectEvaluation 评估元数据检索（Python _inspect_evaluation）
+func TestInspectEvaluation(t *testing.T) {
+	caseDir := t.TempDir()
+	resultPath := filepath.Join(caseDir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"evaluation":{"metadata":{"summary":"legacy mode failure"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{ResultPath: resultPath, EvaluationMetadata: map[string]any{"summary": "legacy mode failure"}}
+	r := inspectEvaluation(caseInput, map[string]any{"query": "legacy"})
+	if r["availability"] != "available" || r["evidence_class"] != "evaluation_metadata" {
+		t.Fatalf("命中: %v", r)
+	}
+	matches := r["matches"].([]map[string]any)
+	sources := map[string]bool{}
+	for _, m := range matches {
+		sources[m["source"].(string)] = true
+	}
+	if !sources["case.evaluation_metadata"] || !sources["case.result"] {
+		t.Fatalf("两个来源都应可命中: %v", sources)
+	}
+	r = inspectEvaluation(caseInput, map[string]any{"query": "zzz_nothing"})
+	if r["availability"] != "not_found" {
+		t.Fatalf("未命中: %v", r)
+	}
+}
+
+// TestSearchAndReadRepository 仓库检索与防穿越读取（Python _search_repository/_read_repository_file）
+func TestSearchAndReadRepository(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "repository")
+	src := filepath.Join(repo, "src", "router.py")
+	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, []byte("def route(mode):\n    return 'legacy' if mode is None else mode\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 无仓库 → not_available
+	r := searchRepository("", map[string]any{"query": "router"})
+	if r["availability"] != "not_available" || r["reason"] != "repository_snapshot_not_available" {
+		t.Fatalf("无仓库: %v", r)
+	}
+	// 搜索命中
+	r = searchRepository(repo, map[string]any{"query": "router legacy"})
+	if r["availability"] != "available" || r["matched_file_count"] != 1 {
+		t.Fatalf("搜索: %v", r)
+	}
+	files := r["files"].([]map[string]any)
+	if files[0]["relative_path"] != "src/router.py" {
+		t.Fatalf("relative_path: %v", files)
+	}
+	// 读取：须先经 search 返回（discovered_paths 守卫）
+	discovered := map[string]bool{"src/router.py": true}
+	r = readRepositoryFile(repo, map[string]any{"relative_path": "src/router.py"}, discovered)
+	if r["availability"] != "available" {
+		t.Fatalf("读取: %v", r)
+	}
+	content := r["content"].(map[string]any)
+	if !strings.Contains(content["text"].(string), "return 'legacy'") {
+		t.Fatalf("content.text: %v", content)
+	}
+	// 未 discover 过的路径拒绝
+	r = readRepositoryFile(repo, map[string]any{"relative_path": "src/router.py"}, map[string]bool{})
+	if r["availability"] != "invalid" || r["reason"] != "relative_path_not_returned_by_prior_search_repository" {
+		t.Fatalf("未发现路径: %v", r)
+	}
+	// 非法相对路径（穿越/绝对）在 safeRelativePath 阶段即拒绝
+	if safeRelativePath("../secret.txt") != "" || safeRelativePath("/etc/passwd") != "" {
+		t.Fatal("穿越路径应被拒绝")
+	}
+	// 不支持后缀
+	bin := filepath.Join(repo, "blob.bin")
+	if err := os.WriteFile(bin, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	discovered["blob.bin"] = true
+	r = readRepositoryFile(repo, map[string]any{"relative_path": "blob.bin"}, discovered)
+	if r["availability"] != "unsupported" {
+		t.Fatalf("不支持后缀: %v", r)
+	}
+}
+
+// TestRepositoryTextFiles 文本文件清单与 2000 上限（Python _repository_text_files）
+func TestRepositoryTextFiles(t *testing.T) {
+	repo := t.TempDir()
+	for i := 0; i < 3; i++ {
+		if err := os.WriteFile(filepath.Join(repo, fmt.Sprintf("f%d.go", i)), []byte("package x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repo, "skip.bin"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := repositoryTextFiles(repo)
+	if len(got) != 3 {
+		t.Fatalf("应 3 个 .go: %v", got)
+	}
+	// 排序确定性
+	if !sort.StringsAreSorted(got) {
+		t.Fatalf("应有序: %v", got)
+	}
+}
+
+// TestWindowsLongPath 扩展路径前缀（Python _windows_long_path；GOOS 判据）
+func TestWindowsLongPath(t *testing.T) {
+	got := windowsLongPath("/tmp/x")
+	if runtime.GOOS == "windows" {
+		if !strings.HasPrefix(got, `\\?\`) {
+			t.Fatalf("windows 应加前缀: %q", got)
+		}
+	} else if got != "/tmp/x" {
+		t.Fatalf("非 windows 恒等: %q", got)
 	}
 }

@@ -11,19 +11,28 @@ package evaluationresultanalyzer
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/evaluation_result_analyzer/evidence_investigation.py
 
 import (
+	"archive/zip"
 	"crypto/sha256"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+
+	docxlib "github.com/fumiama/go-docx"
+	"github.com/ledongthuc/pdf"
+	"github.com/xuri/excelize/v2"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -1824,42 +1833,953 @@ func queryTerms(query string) []string {
 	return terms
 }
 
-// inspectArtifact artifact 检查（Python _inspect_artifact；Task 8 落地）
+// inspectArtifact artifact 检查（Python _inspect_artifact）
+// 只搜物理落盘的任务产物；评估元数据被有意排除——此前判据或裁判解释
+// 可在源文档缺席时满足 inspect_artifact 请求，把重复的结果描述变成
+// 表面上的因果证据。
 func inspectArtifact(caseInput *CaseAnalysisInput, request map[string]any, textCache map[string]string) map[string]any {
-	_ = caseInput
-	_ = request
-	_ = textCache
-	return map[string]any{"availability": "not_available", "reason": "not_implemented"}
+	query := stringValue(request["query"])
+	artifactHint := strings.TrimSpace(stringValue(request["relative_path"]))
+	purpose := strings.TrimSpace(stringValue(request["purpose"]))
+	selectionQuery := strings.TrimSpace(query + " " + artifactHint + " " + purpose)
+	terms := queryTerms(query)
+	identityTerms := queryTerms(strings.TrimSpace(artifactHint + " " + purpose))
+	caseDir := windowsLongPath(filepath.Dir(caseInput.ResultPath))
+	type artifactSource struct{ source, logicalSource, text string }
+	var sources []artifactSource
+	artifactsDir := filepath.Join(caseDir, "artifacts")
+	if info, err := os.Stat(artifactsDir); err == nil && info.IsDir() {
+		aliases := artifactPathAliases(caseInput, artifactsDir)
+		// 文本类 artifact：排序后截断到 _MAX_ARTIFACT_FILES
+		var textFiles []string
+		_ = filepath.WalkDir(artifactsDir, func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil // Python rglob 忽略不可读项
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if textArtifactSuffixes[strings.ToLower(filepath.Ext(p))] {
+				textFiles = append(textFiles, p)
+			}
+			return nil
+		})
+		sort.Strings(textFiles)
+		if len(textFiles) > maxArtifactFiles {
+			textFiles = textFiles[:maxArtifactFiles]
+		}
+		for _, path := range textFiles {
+			resolved, _ := filepath.Abs(path)
+			if !isRelativeTo(resolved, caseDir) {
+				continue
+			}
+			rel, _ := filepath.Rel(artifactsDir, path)
+			source := "artifacts/" + filepath.ToSlash(rel)
+			logical := source
+			if alias, ok := aliases[resolved]; ok {
+				logical = alias
+			}
+			sources = append(sources, artifactSource{source, logical, readTextInv(path, maxArtifactFileChars)})
+		}
+		// 结构化类 artifact：按请求提示词挑选后解析
+		var structuredFiles []string
+		_ = filepath.WalkDir(artifactsDir, func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if structuredArtifactSuffixes[strings.ToLower(filepath.Ext(p))] {
+				structuredFiles = append(structuredFiles, p)
+			}
+			return nil
+		})
+		sort.Strings(structuredFiles)
+		structuredFiles = selectStructuredArtifactFiles(structuredFiles, selectionQuery, aliases)
+		for _, path := range structuredFiles {
+			resolved, _ := filepath.Abs(path)
+			if !isRelativeTo(resolved, caseDir) {
+				continue
+			}
+			var text string
+			if cached, ok := textCache[resolved]; ok {
+				text = cached
+			} else {
+				text = structuredArtifactText(path)
+				textCache[resolved] = text
+			}
+			if text == "" {
+				continue
+			}
+			rel, _ := filepath.Rel(artifactsDir, path)
+			source := "artifacts/" + filepath.ToSlash(rel)
+			logical := source
+			if alias, ok := aliases[resolved]; ok {
+				logical = alias
+			}
+			sources = append(sources, artifactSource{source, logical, text})
+		}
+	}
+
+	if len(sources) == 0 {
+		return map[string]any{
+			"availability": "not_available",
+			"reason":       "physical_artifact_snapshot_not_available",
+			"query":        query,
+			"matches":      []any{},
+		}
+	}
+
+	if artifactHint != "" {
+		hintTerms := queryTerms(artifactHint)
+		bestScore := 0.0
+		type scoredSource struct {
+			logicalSource string
+			score         float64
+		}
+		identityScores := make([]scoredSource, 0, len(sources))
+		for _, item := range sources {
+			score := queryMatchScore(item.logicalSource, hintTerms)
+			identityScores = append(identityScores, scoredSource{item.logicalSource, score})
+			if score > bestScore {
+				bestScore = score
+			}
+		}
+		if bestScore > 0 {
+			bestLogical := map[string]bool{}
+			for _, s := range identityScores {
+				if s.score == bestScore {
+					bestLogical[s.logicalSource] = true
+				}
+			}
+			filtered := sources[:0]
+			for _, item := range sources {
+				if bestLogical[item.logicalSource] {
+					filtered = append(filtered, item)
+				}
+			}
+			sources = filtered
+		}
+	}
+
+	type artifactMatch struct {
+		score         float64
+		source        string
+		logicalSource string
+		text          string
+	}
+	var matches []artifactMatch
+	for _, item := range sources {
+		lowered := strings.ToLower(item.text)
+		matched := false
+		for _, term := range terms {
+			if strings.Contains(lowered, term) {
+				matched = true
+				break
+			}
+		}
+		logicalLower := strings.ToLower(item.logicalSource)
+		pathMatched := false
+		for _, term := range terms {
+			if strings.Contains(logicalLower, term) {
+				pathMatched = true
+				break
+			}
+		}
+		if matched || pathMatched {
+			score := queryMatchScore(item.text, terms) +
+				2.0*queryMatchScore(item.logicalSource, terms) +
+				4.0*queryMatchScore(item.logicalSource, identityTerms)
+			matches = append(matches, artifactMatch{score, item.source, item.logicalSource, item.text})
+		}
+	}
+	// Python: sorted(matches, key=lambda item: (-item[0], item[1]))[:_MAX_SEARCH_RESULTS]
+	sort.SliceStable(matches, func(i, j int) bool {
+		if matches[i].score != matches[j].score {
+			return matches[i].score > matches[j].score
+		}
+		return matches[i].source < matches[j].source
+	})
+	if len(matches) > maxSearchResults {
+		matches = matches[:maxSearchResults]
+	}
+	availability := "not_found"
+	if len(matches) > 0 {
+		availability = "available"
+	}
+	matchList := make([]map[string]any, 0, len(matches))
+	for _, m := range matches {
+		spans := exactMatchSpans(m.text, terms, 3)
+		if len(spans) == 0 {
+			spans = leadingTextSpan(m.text)
+		}
+		matchList = append(matchList, map[string]any{
+			"source":         m.source,
+			"logical_source": m.logicalSource,
+			"exact_spans":    spans,
+		})
+	}
+	return map[string]any{
+		"availability": availability,
+		"query":        query,
+		"matches":      matchList,
+	}
 }
 
-// readArtifactWindow artifact 窗口读取（Python _read_artifact_window；Task 8 落地）
+// artifactPathAliases 有界快照路径 → 原始逻辑名映射（Python _artifact_path_aliases）
+func artifactPathAliases(caseInput *CaseAnalysisInput, artifactsDir string) map[string]string {
+	aliases := map[string]string{}
+	snapshot, _ := caseInput.EvaluationMetadata["analysis_artifact_snapshot"].(map[string]any)
+	rowsAny, _ := snapshot["files"].([]any)
+	for _, rowAny := range rowsAny {
+		row, ok := rowAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		stored := safeRelativePath(row["path"])
+		logical := strings.TrimSpace(stringValue(row["source_path"]))
+		if stored == "" || logical == "" {
+			continue
+		}
+		// Python: for candidate in (artifacts_dir / stored, artifacts_dir / "workspace" / stored)
+		for _, candidate := range []string{
+			filepath.Join(artifactsDir, filepath.FromSlash(stored)),
+			filepath.Join(artifactsDir, "workspace", filepath.FromSlash(stored)),
+		} {
+			resolved, _ := filepath.Abs(candidate)
+			info, err := os.Stat(resolved)
+			if err == nil && !info.IsDir() && isRelativeTo(resolved, artifactsDir) {
+				aliases[resolved] = logical
+				break
+			}
+		}
+	}
+	return aliases
+}
+
+// selectStructuredArtifactFiles 限制结构化解析并优先请求指名的文件类型（Python _select_structured_artifact_files）
+func selectStructuredArtifactFiles(files []string, query string, aliases map[string]string) []string {
+	loweredQuery := strings.ToLower(query)
+	hintedSuffixes := map[string]bool{}
+	for suffix, hints := range structuredQuerySuffixHints {
+		for _, hint := range hints {
+			if strings.Contains(loweredQuery, hint) {
+				hintedSuffixes[suffix] = true
+				break
+			}
+		}
+	}
+	var candidates []string
+	for _, path := range files {
+		if len(hintedSuffixes) == 0 || hintedSuffixes[strings.ToLower(filepath.Ext(path))] {
+			candidates = append(candidates, path)
+		}
+	}
+	if len(candidates) <= maxStructuredArtifactsPerRequest {
+		return candidates
+	}
+	queryTerms_ := queryTerms(query)
+	type rankedFile struct {
+		score float64
+		size  int64
+		path  string
+	}
+	ranked := make([]rankedFile, 0, len(candidates))
+	for _, path := range candidates {
+		resolved, _ := filepath.Abs(path)
+		identity := ""
+		if alias, ok := aliases[resolved]; ok {
+			identity = alias
+		}
+		score := queryMatchScore(filepath.ToSlash(path)+" "+identity, queryTerms_)
+		var size int64
+		if info, err := os.Stat(path); err == nil {
+			size = info.Size()
+		}
+		ranked = append(ranked, rankedFile{score, size, path})
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score > ranked[j].score
+		}
+		if ranked[i].size != ranked[j].size {
+			return ranked[i].size < ranked[j].size
+		}
+		return filepath.ToSlash(ranked[i].path) < filepath.ToSlash(ranked[j].path)
+	})
+	if len(ranked) > maxStructuredArtifactsPerRequest {
+		ranked = ranked[:maxStructuredArtifactsPerRequest]
+	}
+	out := make([]string, 0, len(ranked))
+	for _, r := range ranked {
+		out = append(out, r.path)
+	}
+	return out
+}
+
+// readArtifactWindow 从先前指名的任务 artifact 读取一个精确有界窗口（Python _read_artifact_window）
 func readArtifactWindow(caseInput *CaseAnalysisInput, request map[string]any, textCache map[string]string) map[string]any {
-	_ = caseInput
-	_ = request
-	_ = textCache
-	return map[string]any{"availability": "not_available", "reason": "not_implemented"}
+	relativePath := safeRelativePath(request["relative_path"])
+	relativePath = strings.TrimPrefix(relativePath, "artifacts/")
+	if relativePath == "" {
+		return map[string]any{"availability": "invalid", "reason": "invalid_relative_path"}
+	}
+	caseDir := windowsLongPath(filepath.Dir(caseInput.ResultPath))
+	artifactsDir, _ := filepath.Abs(filepath.Join(caseDir, "artifacts"))
+	aliases := artifactPathAliases(caseInput, artifactsDir)
+	path, _ := filepath.Abs(filepath.Join(artifactsDir, filepath.FromSlash(relativePath)))
+	logicalSource := aliases[path]
+	if !isRelativeTo(path, artifactsDir) || !isRegularFile(path) {
+		workspacePath, _ := filepath.Abs(filepath.Join(artifactsDir, "workspace", filepath.FromSlash(relativePath)))
+		if isRelativeTo(workspacePath, artifactsDir) && isRegularFile(workspacePath) {
+			path = workspacePath
+			logicalSource = aliases[path]
+		} else {
+			requested := strings.TrimPrefix(relativePath, "workspace/")
+			var logicalMatches [][2]string // [stored, logical]
+			for stored, logical := range aliases {
+				if strings.TrimPrefix(strings.ReplaceAll(logical, "\\", "/"), "workspace/") == requested {
+					logicalMatches = append(logicalMatches, [2]string{stored, logical})
+				}
+			}
+			if len(logicalMatches) == 0 {
+				for _, pair := range unambiguousLogicalArtifactMatches(requested, aliases) {
+					logicalMatches = append(logicalMatches, pair)
+				}
+			}
+			if len(logicalMatches) != 1 {
+				return map[string]any{"availability": "not_found", "relative_path": relativePath}
+			}
+			path = logicalMatches[0][0]
+			logicalSource = logicalMatches[0][1]
+		}
+	}
+	if !isRelativeTo(path, artifactsDir) || !isRegularFile(path) {
+		return map[string]any{"availability": "not_found", "relative_path": relativePath}
+	}
+	suffix := strings.ToLower(filepath.Ext(path))
+	var content string
+	if structuredArtifactSuffixes[suffix] {
+		if cached, ok := textCache[path]; ok {
+			content = cached
+		} else {
+			content = structuredArtifactText(path)
+			textCache[path] = content
+		}
+	} else if textArtifactSuffixes[suffix] {
+		content = readTextInv(path, maxArtifactFileChars)
+	} else {
+		return map[string]any{"availability": "unsupported", "relative_path": relativePath}
+	}
+	if content == "" {
+		return map[string]any{"availability": "not_available", "relative_path": relativePath}
+	}
+	// Python: start = min(len(content), _optional_nonnegative_int(...) or 0)——缺省 0
+	start := 0
+	if ptr := optionalNonnegativeInt(request["source_char_start"]); ptr != nil {
+		start = *ptr
+		if start > len(content) {
+			start = len(content)
+		}
+	}
+	maxChars := positiveInt(request["max_chars"], maxArtifactWindowChars)
+	if maxChars > maxArtifactWindowChars {
+		maxChars = maxArtifactWindowChars
+	}
+	if maxChars < 1 {
+		maxChars = 1
+	}
+	end := len(content)
+	if start+maxChars < end {
+		end = start + maxChars
+	}
+	physicalRel, _ := filepath.Rel(artifactsDir, path)
+	physical := "artifacts/" + filepath.ToSlash(physicalRel)
+	logical := logicalSource
+	if logical == "" {
+		logical = aliases[path]
+	}
+	if logical == "" {
+		logical = physical
+	}
+	windowComplete := start == 0 && end == len(content)
+	nextStart := any(nil)
+	if end < len(content) {
+		nextStart = end
+	}
+	omissionOrigin := "none"
+	if start != 0 || end < len(content) {
+		omissionOrigin = "controller_read_window"
+	}
+	return map[string]any{
+		"availability":           "available",
+		"source":                 physical,
+		"logical_source":         logical,
+		"source_char_start":      start,
+		"source_char_end":        end,
+		"source_char_count":      len(content),
+		"text":                   content[start:end],
+		"window_complete":        windowComplete,
+		"next_source_char_start": nextStart,
+		"omission_origin":        omissionOrigin,
+	}
 }
 
-// inspectEvaluation 成绩单摘要（Python _inspect_evaluation；Task 9 落地）
+// unambiguousLogicalArtifactMatches 演示层路径编码变化时恢复被指名的 artifact（Python _unambiguous_logical_artifact_matches）
+func unambiguousLogicalArtifactMatches(requested string, aliases map[string]string) [][2]string {
+	// Python: requested_terms = {term for term in _query_terms(Path(requested).name) if len(term) >= 3}
+	requestedTerms := map[string]bool{}
+	for _, term := range queryTerms(filepath.Base(requested)) {
+		if len(term) >= 3 {
+			requestedTerms[term] = true
+		}
+	}
+	if len(requestedTerms) < 2 {
+		return nil
+	}
+	type rankedAlias struct {
+		score         int
+		stored        string
+		logicalSource string
+	}
+	var ranked []rankedAlias
+	for stored, logical := range aliases {
+		logicalTerms := map[string]bool{}
+		for _, term := range queryTerms(filepath.Base(logical)) {
+			if len(term) >= 3 {
+				logicalTerms[term] = true
+			}
+		}
+		overlap := 0
+		for term := range requestedTerms {
+			if logicalTerms[term] {
+				overlap++
+			}
+		}
+		if overlap > 0 {
+			ranked = append(ranked, rankedAlias{overlap, stored, logical})
+		}
+	}
+	if len(ranked) == 0 {
+		return nil
+	}
+	best := 0
+	for _, r := range ranked {
+		if r.score > best {
+			best = r.score
+		}
+	}
+	minimum := (len(requestedTerms) + 1) / 2
+	if minimum < 2 {
+		minimum = 2
+	}
+	var winners [][2]string
+	for _, r := range ranked {
+		if r.score == best && r.score >= minimum {
+			winners = append(winners, [2]string{r.stored, r.logicalSource})
+		}
+	}
+	// Python: return winners if len(winners) == 1 else []
+	if len(winners) == 1 {
+		return winners
+	}
+	return nil
+}
+
+// windowsLongPath 深层评估 artifact 树的扩展 Windows 路径（Python _windows_long_path；GOOS 判据）
+func windowsLongPath(path string) string {
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		resolved = path
+	}
+	if runtime.GOOS != "windows" || strings.HasPrefix(resolved, `\\?\`) {
+		return resolved
+	}
+	if strings.HasPrefix(resolved, `\\`) {
+		return `\\?\UNC\` + strings.TrimPrefix(resolved, `\\`)
+	}
+	return `\\?\` + resolved
+}
+
+// isRelativeTo 判断 path 是否位于 base 之下（Python Path.is_relative_to 等价）
+func isRelativeTo(path, base string) bool {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// isRegularFile 判断路径是否存在且为普通文件
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// structuredArtifactText 结构化 artifact 文本提取（Python _structured_artifact_text）
+// 畸形可选 artifact 是不可用证据，异常吞掉返回空串
+func structuredArtifactText(path string) string {
+	defer func() {
+		// Python: except Exception: return ""
+		_ = recover()
+	}()
+	suffix := strings.ToLower(filepath.Ext(path))
+	switch suffix {
+	case ".xlsx":
+		return xlsxText(path)
+	case ".docx":
+		return docxText(path)
+	case ".pdf":
+		return pdfText(path)
+	case ".pptx":
+		return pptxText(path)
+	}
+	return ""
+}
+
+// xlsxText xlsx 单元格文本（Python _xlsx_text；excelize 对齐 openpyxl）
+func xlsxText(path string) string {
+	workbook, err := excelize.OpenFile(path)
+	if err != nil {
+		return ""
+	}
+	defer workbook.Close()
+	var lines []string
+	totalChars := 0
+	cellCount := 0
+	for _, sheet := range workbook.GetSheetList() {
+		lines = append(lines, "[sheet:"+sheet+"]")
+		rows, err := workbook.GetRows(sheet)
+		if err != nil {
+			continue
+		}
+		// Python: max_row=min(worksheet.max_row, 2_000), max_col=min(max_column, 200)
+		maxRows := len(rows)
+		if maxRows > 2000 {
+			maxRows = 2000
+		}
+		for rowIdx, row := range rows[:maxRows] {
+			maxCols := len(row)
+			if maxCols > 200 {
+				maxCols = 200
+			}
+			for colIdx := 0; colIdx < maxCols; colIdx++ {
+				// Python: f"{cell.coordinate}={cell.value}"（coordinate 如 A1）；
+				// openpyxl data_only=False 时公式单元格显示公式串（对齐），excelize 需显式取公式
+				coordinate, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+1)
+				cellValue, _ := workbook.GetCellFormula(sheet, coordinate)
+				if cellValue == "" {
+					cellValue = row[colIdx]
+				}
+				if cellValue == "" {
+					continue // Python: if cell.value is not None
+				}
+				line := coordinate + "=" + cellValue
+				lines = append(lines, line)
+				totalChars += len(line)
+				cellCount++
+				if totalChars >= maxArtifactFileChars || cellCount >= maxStructuredCells {
+					return strings.Join(lines, "\n")
+				}
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// docxText docx 段落与表格文本（Python _docx_text；go-docx 对齐 python-docx）
+func docxText(path string) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return ""
+	}
+	doc, err := docxlib.Parse(file, info.Size())
+	if err != nil {
+		return ""
+	}
+	var lines []string
+	totalChars := 0
+	// Python: enumerate(document.tables, start=1)——按 Body 中表格出现顺序计数
+	tableIndex := 0
+	appendLine := func(line string) bool {
+		lines = append(lines, line)
+		totalChars += len(line)
+		return totalChars < maxArtifactFileChars
+	}
+	for _, item := range doc.Document.Body.Items {
+		switch o := item.(type) {
+		case *docxlib.Paragraph:
+			text := paragraphRunText(o)
+			if text == "" {
+				continue // Python: if not paragraph.text: continue
+			}
+			if !appendLine(text) {
+				return clipRunes(strings.Join(lines, "\n"), maxArtifactFileChars)
+			}
+		case *docxlib.Table:
+			tableIndex++
+			for rowIdx, row := range o.TableRows {
+				values := make([]string, 0, len(row.TableCells))
+				for _, cell := range row.TableCells {
+					cellTexts := make([]string, 0, len(cell.Paragraphs))
+					for _, para := range cell.Paragraphs {
+						cellTexts = append(cellTexts, paragraphRunText(para))
+					}
+					// python-docx cell.text = "\n".join(paragraph texts)
+					values = append(values, strings.Join(cellTexts, "\n"))
+				}
+				line := fmt.Sprintf("[table:%d:row:%d] %s", tableIndex, rowIdx+1, strings.Join(values, " | "))
+				if !appendLine(line) {
+					return clipRunes(strings.Join(lines, "\n"), maxArtifactFileChars)
+				}
+			}
+		}
+	}
+	return clipRunes(strings.Join(lines, "\n"), maxArtifactFileChars)
+}
+
+// paragraphRunText 提取段落纯文本（python-docx paragraph.text = 直接 Run 文本拼接；超链接排除）
+func paragraphRunText(p *docxlib.Paragraph) string {
+	var sb strings.Builder
+	for _, child := range p.Children {
+		run, ok := child.(*docxlib.Run)
+		if !ok {
+			continue
+		}
+		for _, rc := range run.Children {
+			if text, ok := rc.(*docxlib.Text); ok {
+				sb.WriteString(text.Text)
+			}
+		}
+	}
+	return sb.String()
+}
+
+// pdfText pdf 页面文本（Python _pdf_text；ledongthuc/pdf 对齐 pdfplumber extract_text）
+func pdfText(path string) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	reader, err := pdf.NewReader(file, func() int64 {
+		info, statErr := file.Stat()
+		if statErr != nil {
+			return 0
+		}
+		return info.Size()
+	}())
+	if err != nil {
+		return ""
+	}
+	var lines []string
+	totalChars := 0
+	pageCount := reader.NumPage()
+	if pageCount > maxStructuredPages {
+		pageCount = maxStructuredPages
+	}
+	for pageIdx := 1; pageIdx <= pageCount; pageIdx++ {
+		lines = append(lines, fmt.Sprintf("[page:%d]", pageIdx))
+		page := reader.Page(pageIdx)
+		text := ""
+		if !page.V.IsNull() {
+			// Python: page.extract_text() or ""
+			if plain, pErr := page.GetPlainText(nil); pErr == nil {
+				text = plain
+			}
+		}
+		lines = append(lines, text)
+		totalChars += len(fmt.Sprintf("[page:%d]", pageIdx)) + len(text)
+		if totalChars >= maxArtifactFileChars {
+			break // Python: if sum(len(item) for item in lines) >= ...: break
+		}
+	}
+	return clipRunes(strings.Join(lines, "\n"), maxArtifactFileChars)
+}
+
+// pptxText pptx 幻灯片文本（Python _pptx_text；zip+xml 手拆与 Python 同款）
+func pptxText(path string) string {
+	archive, err := zip.OpenReader(path)
+	if err != nil {
+		return ""
+	}
+	defer archive.Close()
+	// Python: sorted(name for name in archive.namelist()
+	//     if re.fullmatch(r"ppt/slides/slide\d+\.xml", name))[:_MAX_STRUCTURED_PAGES]
+	slideRe := regexp.MustCompile(`^ppt/slides/slide\d+\.xml$`)
+	var slideNames []string
+	for _, f := range archive.File {
+		if slideRe.MatchString(f.Name) {
+			slideNames = append(slideNames, f.Name)
+		}
+	}
+	sort.Strings(slideNames)
+	if len(slideNames) > maxStructuredPages {
+		slideNames = slideNames[:maxStructuredPages]
+	}
+	var lines []string
+	for _, slideName := range slideNames {
+		f, err := archive.Open(slideName)
+		if err != nil {
+			continue
+		}
+		data, err := io.ReadAll(f)
+		_ = f.Close()
+		if err != nil {
+			continue
+		}
+		var root pptxSlide
+		if xml.Unmarshal(data, &root) != nil {
+			continue
+		}
+		// Python: texts = [element.text or "" for element in root.iter() if element.tag.endswith("}t")]
+		texts := collectSlideTexts(root.asNode())
+		lines = append(lines, "["+slideName+"] "+strings.Join(texts, " "))
+	}
+	return clipRunes(strings.Join(lines, "\n"), maxArtifactFileChars)
+}
+
+// pptxSlide pptx 幻灯片 XML 通用节点（递归收集 *t 文本，等价 ElementTree.iter()）
+type pptxSlide struct {
+	XMLName  xml.Name
+	Attrs    []xml.Attr `xml:",any,attr"`
+	Content  string     `xml:",chardata"`
+	Children []pptxNode `xml:",any"`
+}
+
+// asNode 幻灯片根节点转通用节点（collectSlideTexts 入参适配）
+func (s *pptxSlide) asNode() *pptxNode {
+	return &pptxNode{XMLName: s.XMLName, Content: s.Content, Children: s.Children}
+}
+
+// pptxNode 通用子节点
+type pptxNode struct {
+	XMLName  xml.Name
+	Content  string     `xml:",chardata"`
+	Children []pptxNode `xml:",any"`
+}
+
+// collectSlideTexts 递归收集 tag 以 "}t" 结尾的元素文本（等价 Python root.iter() 过滤）
+func collectSlideTexts(node *pptxNode) []string {
+	var texts []string
+	var walk func(n *pptxNode)
+	walk = func(n *pptxNode) {
+		// Python: element.tag.endswith("}t")——tag 形如 "{namespace}t"，即 Local 名恰为 "t"
+		if n.XMLName.Local == "t" {
+			texts = append(texts, n.Content)
+		}
+		for i := range n.Children {
+			walk(&n.Children[i])
+		}
+	}
+	// 顶层不算，从子节点开始迭代（Python root.iter() 含 root 本身，
+	// 但 root 是 p:sld，不以 }t 结尾，行为等价）
+	for i := range node.Children {
+		walk(&node.Children[i])
+	}
+	return texts
+}
+
+// clipRunes 按字符数截断（Python 切片 [:_MAX_ARTIFACT_FILE_CHARS] 按字符计）
+func clipRunes(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit])
+}
+
+// inspectEvaluation 成绩单摘要（Python _inspect_evaluation）
+// 搜索评估器所有的结果元数据，但不把它称作 artifact
 func inspectEvaluation(caseInput *CaseAnalysisInput, request map[string]any) map[string]any {
-	_ = caseInput
-	_ = request
-	return map[string]any{"availability": "not_available", "reason": "not_implemented"}
+	query := stringValue(request["query"])
+	terms := queryTerms(query)
+	metadataJSON, _ := json.MarshalIndent(caseInput.EvaluationMetadata, "", "  ")
+	type evalSource struct{ source, content string }
+	sources := []evalSource{
+		{"case.evaluation_metadata", string(metadataJSON)},
+		{"case.result", readTextInv(caseInput.ResultPath, maxArtifactFileChars)},
+	}
+	type evalMatch struct {
+		distinct int
+		source   string
+		content  string
+	}
+	var matches []evalMatch
+	for _, src := range sources {
+		lowered := strings.ToLower(src.content)
+		matchedSet := map[string]bool{}
+		for _, term := range terms {
+			if strings.Contains(lowered, term) {
+				matchedSet[term] = true
+			}
+		}
+		if len(matchedSet) > 0 {
+			matches = append(matches, evalMatch{len(matchedSet), src.source, src.content})
+		}
+	}
+	// Python: sorted(matches, key=lambda item: (-item[0], item[1]))[:_MAX_SEARCH_RESULTS]
+	sort.SliceStable(matches, func(i, j int) bool {
+		if matches[i].distinct != matches[j].distinct {
+			return matches[i].distinct > matches[j].distinct
+		}
+		return matches[i].source < matches[j].source
+	})
+	if len(matches) > maxSearchResults {
+		matches = matches[:maxSearchResults]
+	}
+	availability := "not_found"
+	if len(matches) > 0 {
+		availability = "available"
+	}
+	matchList := make([]map[string]any, 0, len(matches))
+	for _, m := range matches {
+		matchList = append(matchList, map[string]any{
+			"source":      m.source,
+			"exact_spans": exactMatchSpans(m.content, terms, 3),
+		})
+	}
+	return map[string]any{
+		"availability":   availability,
+		"evidence_class": "evaluation_metadata",
+		"query":          query,
+		"matches":        matchList,
+	}
 }
 
-// searchRepository 仓库搜索（Python _search_repository；Task 9 落地）
+// searchRepository 仓库搜索（Python _search_repository）
 func searchRepository(repositoryDir string, request map[string]any) map[string]any {
-	_ = repositoryDir
-	_ = request
-	return map[string]any{"availability": "not_available", "reason": "not_implemented"}
+	if repositoryDir == "" {
+		return map[string]any{"availability": "not_available", "reason": "repository_snapshot_not_available"}
+	}
+	query := stringValue(request["query"])
+	terms := queryTerms(query)
+	type repoMatch struct {
+		distinct int
+		relative string
+		text     string
+	}
+	var ranked []repoMatch
+	for _, path := range repositoryTextFiles(repositoryDir) {
+		text := readTextInv(path, maxArtifactFileChars)
+		lowered := strings.ToLower(text)
+		matchedSet := map[string]bool{}
+		for _, term := range terms {
+			if strings.Contains(lowered, term) {
+				matchedSet[term] = true
+			}
+		}
+		if len(matchedSet) > 0 {
+			rel, _ := filepath.Rel(repositoryDir, path)
+			ranked = append(ranked, repoMatch{len(matchedSet), filepath.ToSlash(rel), text})
+		}
+	}
+	limit := positiveInt(request["max_results"], 3)
+	if limit > maxSearchResults {
+		limit = maxSearchResults
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].distinct != ranked[j].distinct {
+			return ranked[i].distinct > ranked[j].distinct
+		}
+		return ranked[i].relative < ranked[j].relative
+	})
+	if len(ranked) > limit {
+		ranked = ranked[:limit]
+	}
+	availability := "not_found"
+	if len(ranked) > 0 {
+		availability = "available"
+	}
+	files := make([]map[string]any, 0, len(ranked))
+	for _, m := range ranked {
+		files = append(files, map[string]any{
+			"relative_path": m.relative,
+			"exact_spans":   exactMatchSpans(m.text, terms, 3),
+		})
+	}
+	return map[string]any{
+		"availability":       availability,
+		"query":              query,
+		"matched_file_count": len(ranked),
+		"files":              files,
+	}
 }
 
-// readRepositoryFile 仓库文件读取（Python _read_repository_file；Task 9 落地）
+// repositoryCodeSuffixes 仓库可读文本后缀集（Python _TEXT_ARTIFACT_SUFFIXES | {代码后缀}）
+var repositoryCodeSuffixes = map[string]bool{
+	".c": true, ".cc": true, ".cpp": true, ".go": true, ".h": true, ".hpp": true,
+	".java": true, ".js": true, ".jsx": true, ".py": true, ".rs": true, ".sh": true,
+	".ts": true, ".tsx": true,
+}
+
+// readRepositoryFile 仓库文件读取（Python _read_repository_file）
+// 只允许读取先前 search_repository 返回过的路径
 func readRepositoryFile(repositoryDir string, request map[string]any, discoveredPaths map[string]bool) map[string]any {
-	_ = repositoryDir
-	_ = request
-	_ = discoveredPaths
-	return map[string]any{"availability": "not_available", "reason": "not_implemented"}
+	if repositoryDir == "" {
+		return map[string]any{"availability": "not_available", "reason": "repository_snapshot_not_available"}
+	}
+	relativePath := safeRelativePath(request["relative_path"])
+	if relativePath == "" {
+		return map[string]any{"availability": "invalid", "reason": "invalid_relative_path"}
+	}
+	if !discoveredPaths[relativePath] {
+		return map[string]any{
+			"availability":  "invalid",
+			"reason":        "relative_path_not_returned_by_prior_search_repository",
+			"relative_path": relativePath,
+		}
+	}
+	path, _ := filepath.Abs(filepath.Join(repositoryDir, filepath.FromSlash(relativePath)))
+	if !isRelativeTo(path, repositoryDir) || !isRegularFile(path) {
+		return map[string]any{"availability": "not_found", "relative_path": relativePath}
+	}
+	suffix := strings.ToLower(filepath.Ext(path))
+	if !textArtifactSuffixes[suffix] && !repositoryCodeSuffixes[suffix] {
+		return map[string]any{"availability": "unsupported", "relative_path": relativePath}
+	}
+	return map[string]any{
+		"availability":  "available",
+		"relative_path": relativePath,
+		"content":       boundedExactText(readTextInv(path, maxArtifactFileChars), maxEventChars),
+	}
+}
+
+// repositoryTextFiles 仓库可读文本文件清单（Python _repository_text_files）
+func repositoryTextFiles(repositoryDir string) []string {
+	var files []string
+	_ = filepath.WalkDir(repositoryDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // Python rglob 忽略不可读项
+		}
+		if d.IsDir() {
+			return nil
+		}
+		suffix := strings.ToLower(filepath.Ext(p))
+		if !textArtifactSuffixes[suffix] && !repositoryCodeSuffixes[suffix] {
+			return nil
+		}
+		resolved, _ := filepath.Abs(p)
+		if !isRelativeTo(resolved, repositoryDir) {
+			return nil
+		}
+		files = append(files, p)
+		return nil
+	})
+	sort.Strings(files)
+	if len(files) > maxRepositoryFiles {
+		files = files[:maxRepositoryFiles]
+	}
+	return files
 }
 
 // readJSONInv JSON 文件读取，失败返空 map（Python _read_json）
@@ -1884,11 +2804,33 @@ func readTextInv(path string, limit int) string {
 	return string(data[:minInt(len(data), limit)])
 }
 
-// repositoryDirInv 证据仓库根目录（Python _repository_dir，Task 9 补齐实现）
+// repositoryDirInv 证据仓库根目录（Python _repository_dir）
+// 返回 evidence_root/repository，须真实存在且位于根内；否则返回空串
 func repositoryDirInv(evidenceRoot string) string {
-	// Task 9 实现（Python evidence_investigation.py:1260）
-	_ = evidenceRoot
+	if evidenceRoot == "" {
+		return ""
+	}
+	root, _ := filepath.Abs(expandUser(evidenceRoot))
+	repository, _ := filepath.Abs(filepath.Join(root, "repository"))
+	if info, err := os.Stat(repository); err == nil && info.IsDir() && isRelativeTo(repository, root) {
+		return repository
+	}
 	return ""
+}
+
+// expandUser 展开 ~ 前缀（Python Path.expanduser 等价）
+func expandUser(path string) string {
+	if strings.HasPrefix(path, "~") {
+		if home, err := os.UserHomeDir(); err == nil {
+			if path == "~" {
+				return home
+			}
+			if strings.HasPrefix(path, "~/") {
+				return filepath.Join(home, path[2:])
+			}
+		}
+	}
+	return path
 }
 
 // toAnySlice 任意列表 → []any（JSON 往返辅助）
