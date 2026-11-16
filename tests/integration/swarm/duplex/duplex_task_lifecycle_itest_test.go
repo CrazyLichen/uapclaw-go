@@ -19,8 +19,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/duplex/tasks"
+	sessionpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -365,3 +367,67 @@ func (e *stubExecutorForIntegration) Answer(_ context.Context, task map[string]a
 }
 
 func (e *stubExecutorForIntegration) Close() error { return nil }
+
+// TestConversationAppendRealHistory 会话历史真实链：video.conversation.append →
+// 真实 session 包 AppendHistoryRecord 落盘（对齐 video_live.py:538-676 _append_conversation
+// 与 session_history.append_history_record 的跨模块边界）。
+func (s *DuplexTaskSuite) TestConversationAppendRealHistory() {
+	tmpDir := s.T().TempDir()
+	s.T().Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	path.ResetCache()
+
+	// 注入真实会话历史桥（网关装配层在生产中的等价接线）
+	duplex.SetConversationHistoryBridge(&duplex.ConversationHistoryBridge{
+		AppendHistoryRecord: func(sessionID, requestID, channelID, role, content string,
+			timestamp float64, eventType string, extra map[string]any, mode string) {
+			sessionpkg.AppendHistoryRecord(sessionID, requestID, channelID, role, content,
+				timestamp, eventType, extra, nil, mode)
+		},
+		GetSessionMetadata: func(sessionID string, _ bool) map[string]any {
+			return sessionpkg.GetSessionMetadata(sessionID)
+		},
+		UpdateSessionMetadata: func(sessionID, userContent string) {
+			sessionpkg.UpdateSessionMetadata(sessionpkg.SessionMetadataUpdate{
+				SessionID: sessionID, UserContent: &userContent,
+			})
+		},
+	})
+	s.T().Cleanup(func() { duplex.SetConversationHistoryBridge(nil) })
+
+	channel := &recordingChannel{methods: map[string]duplex.DuplexMethodHandler{}}
+	plugin := &duplex.VideoDuplexApplicationPlugin{}
+	plugin.BindWebChannel(context.Background(), channel)
+	handler := channel.methods["video.conversation.append"]
+	s.Require().NotNil(handler)
+
+	// 合法 user 事件
+	resp := handler(context.Background(), nil, "r1", map[string]any{
+		"session_id": "duplex-hist-1", "event_id": "ev-1", "kind": "user",
+		"content": "帮我看看这帧画面", "timestamp": 1700000000.0,
+	}, "")
+	s.Require().True(resp.OK, "append resp: %+v", resp)
+	s.Require().Equal(true, resp.Payload["persisted"])
+
+	// 非法 event_id → INVALID_EVENT_ID
+	resp = handler(context.Background(), nil, "r2", map[string]any{
+		"session_id": "duplex-hist-1", "event_id": "", "kind": "user", "content": "x"}, "")
+	s.Require().False(resp.OK)
+	s.Require().Equal("INVALID_EVENT_ID", resp.Code)
+
+	// 等待异步写入完成并读真实历史文件
+	deadline := time.Now().Add(5 * time.Second)
+	var records []map[string]any
+	var err error
+	for time.Now().Before(deadline) {
+		records, err = sessionpkg.ReadHistoryRecords("duplex-hist-1")
+		if err == nil && len(records) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	s.Require().NoError(err)
+	s.Require().NotEmpty(records)
+	s.Require().Equal("video-duplex-ev-1:user", records[0]["id"])
+	s.Require().Equal("video_duplex", records[0]["channel_id"])
+	s.Require().Equal("帮我看看这帧画面", records[0]["content"])
+}

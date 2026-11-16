@@ -649,6 +649,12 @@ type ConversationHistoryBridge struct {
 // conversationHistory 历史桥注入点（装配层赋值；nil 时跳过持久化）。
 var conversationHistory *ConversationHistoryBridge
 
+// SetConversationHistoryBridge 注入会话历史桥（网关装配层调用）。
+// Python 侧无对应实现：Python 直接 import 会话模块，Go 跨包注入需显式出口。
+func SetConversationHistoryBridge(bridge *ConversationHistoryBridge) {
+	conversationHistory = bridge
+}
+
 // homeLogsPath 日志目录路径。
 // 对齐 Path.home()/.jiuwenswarm/logs（Go 用 HOME 环境变量）。
 func homeLogsPath(name string) string {
