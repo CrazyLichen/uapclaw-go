@@ -576,6 +576,11 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	if runContext, ok := inputs["run_context"].(string); ok {
 		cbc.SetExtra("run_context", runContext)
 	}
+	// 类型化 RunContext 回填（对齐 Python react_agent.py L1289-1296：ctx.extra 携带
+	// run_context 对象；23.9 checkpoint.py:14 经 ctx.extra["run_context"] 读 extra）。
+	if typedRunContext, ok := inputs["run_context"].(*interfaces.RunContext); ok {
+		cbc.SetExtra("run_context", typedRunContext)
+	}
 	if streaming, ok := inputs["_streaming"].(bool); ok {
 		cbc.SetExtra("_streaming", streaming)
 	} else {

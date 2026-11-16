@@ -79,9 +79,30 @@ func (r *VoiceAgentTaskRail) dispatchFromCBC(_ context.Context, stage string, cb
 		return nil
 	}
 	var runExtra map[string]any
-	if raw, ok := cbc.GetExtra("run_context"); ok {
-		if asMap, ok := raw.(map[string]any); ok {
-			runExtra, _ = asMap["extra"].(map[string]any)
+	// 读取顺序：cbc.Inputs() 按 InvokeInputs / TaskIterationInputs 双形状取
+	// RunContext（对齐 task_completion.go:841 与 task_loop/executor.go:179 两处透传），
+	// 回退 cbc.GetExtra("run_context")
+	switch inv := cbc.Inputs().(type) {
+	case *sainterfaces.InvokeInputs:
+		if inv != nil && inv.RunContext != nil {
+			runExtra = inv.RunContext.Extra
+		}
+	case *sainterfaces.TaskIterationInputs:
+		if inv != nil && inv.RunContext != nil {
+			runExtra = inv.RunContext.Extra
+		}
+	}
+	if runExtra == nil {
+		if raw, ok := cbc.GetExtra("run_context"); ok {
+			// 透传有两种形状：类型化 *RunContext 与 map（旧路径）
+			switch rv := raw.(type) {
+			case *sainterfaces.RunContext:
+				if rv != nil {
+					runExtra = rv.Extra
+				}
+			case map[string]any:
+				runExtra, _ = rv["extra"].(map[string]any)
+			}
 		}
 	}
 	managedRequest := ""
