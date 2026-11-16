@@ -2,16 +2,19 @@ package duplex
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -184,7 +187,7 @@ func isAllowedAudioDataURL(value string) bool {
 // 对齐 video_voice.py:41-51 tts_model_config。
 func ttsModelConfig() (string, string, string, string) {
 	return strings.TrimRight(strings.TrimSpace(
-		envOr("VOICE_TTS_ENDPOINT", "TTS_API_BASE")), "/"),
+			envOr("VOICE_TTS_ENDPOINT", "TTS_API_BASE")), "/"),
 		strings.TrimSpace(envOr("VOICE_API_KEY", "TTS_API_KEY")),
 		strings.TrimSpace(envOr("VOICE_TTS_MODEL", "TTS_MODEL_NAME")),
 		strings.TrimSpace(envOr("VOICE_TTS_VOICE", "TTS_VOICE"))
@@ -194,7 +197,7 @@ func ttsModelConfig() (string, string, string, string) {
 // 对齐 video_voice.py:53-61 asr_model_config。
 func asrModelConfig() (string, string, string) {
 	return strings.TrimRight(strings.TrimSpace(
-		envOr("VOICE_ASR_ENDPOINT", "ASR_API_BASE")), "/"),
+			envOr("VOICE_ASR_ENDPOINT", "ASR_API_BASE")), "/"),
 		strings.TrimSpace(envOr("VOICE_API_KEY", "ASR_API_KEY")),
 		strings.TrimSpace(envOr("VOICE_ASR_MODEL", "ASR_MODEL_NAME"))
 }
@@ -393,4 +396,393 @@ func joyaiTranscribeChannel(dataURL string, logEvent func(map[string]any)) strin
 // joyaiSynthesizeChannel 导出函数的包内别名（对齐 video_voice.py:195 调用形态）。
 func joyaiSynthesizeChannel(text string) ([]byte, string, string) {
 	return JoyAISynthesizeChannel(text)
+}
+
+// ──────────────────────────── 结构体（RPC 频道契约，供 extension.go 复用） ────────────────────────────
+
+// DuplexResponse WebChannel 响应描述。
+// 对齐 video_voice.py 各 handler 中 channel.send_response(ws, req_id, ok=..., error=..., code=..., payload=...) 调用形态。
+type DuplexResponse struct {
+	// OK 是否成功
+	OK bool
+	// Error 错误文案（失败时）
+	Error string
+	// Code 错误码（失败时）
+	Code string
+	// Payload 成功载荷
+	Payload map[string]any
+}
+
+// DuplexMethodHandler RPC 方法签名。
+// 对齐 video_voice.py 各 handler 的 (ws, req_id, params, session_id) 形参。
+type DuplexMethodHandler func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse
+
+// DuplexChannel WebChannel 的窄接口（依赖倒置允许场景）。
+// Python 侧无对应接口：Python 鸭子类型直接调用 channel 对象。
+type DuplexChannel interface {
+	// SendResponse 发送 RPC 响应
+	SendResponse(ctx context.Context, ws any, reqID string, resp *DuplexResponse)
+	// SendEvent 推送事件帧
+	SendEvent(ctx context.Context, ws any, event string, payload map[string]any)
+	// RegisterMethod 注册本地 RPC 方法
+	RegisterMethod(method string, handler DuplexMethodHandler, localOnly, availableWhenDisabled bool)
+}
+
+// ──────────────────────────── 导出函数（handlers 段） ────────────────────────────
+
+// CreateVoiceHandlers 构建视频插件的 ASR/TTS RPC handlers。
+// 对齐 video_voice.py:219-558 create_voice_handlers。
+// 偏差 D-2：stream_tasks 的 asyncio.Task → goroutine + context（取消语义用 ctx.Done 对齐 task.cancel）。
+func CreateVoiceHandlers(channel DuplexChannel, useJoyaiVoice func() bool, logEvent func(map[string]any), logASR func(map[string]any)) map[string]DuplexMethodHandler {
+	streamTasks := &ttsStreamRegistry{tasks: map[string]*ttsStreamTask{}}
+
+	ttsSynthesize := func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+		startedAt := time.Now()
+		text := ""
+		if params != nil {
+			text = strings.TrimSpace(toString(params["text"]))
+		}
+		requestLog := map[string]any{
+			"stage": "tts_requested", "request_id": reqID, "session_id": sessionID,
+			"text_chars": len([]rune(text)), "text_preview": runePreview(text, 300),
+		}
+		logEvent(requestLog)
+		if text == "" || len([]rune(text)) > MaxTTSTextChars {
+			logEvent(withEntries(requestLog, map[string]any{
+				"stage":      "tts_failed",
+				"latency_ms": elapsedMS(startedAt),
+				"error":      fmt.Sprintf("text must contain 1-%d characters", MaxTTSTextChars),
+			}))
+			return &DuplexResponse{OK: false, Error: fmt.Sprintf("text must contain 1-%d characters", MaxTTSTextChars), Code: "BAD_REQUEST"}
+		}
+		var audio []byte
+		var mime, model string
+		func() {
+			defer RecoverDuplexError(&duplexErrSlot)
+			audio, mime, model = SynthesizeSpeech(text, useJoyaiVoice())
+		}()
+		if duplexErrSlot != nil {
+			errText := strings.TrimSpace(duplexErrSlot.Error())
+			if errText == "" {
+				errText = "TTS failed"
+			}
+			logEvent(withEntries(requestLog, map[string]any{"stage": "tts_failed", "latency_ms": elapsedMS(startedAt), "error": errText}))
+			duplexErrSlot = nil
+			return &DuplexResponse{OK: false, Error: errText, Code: "TTS_ERROR"}
+		}
+		logEvent(withEntries(requestLog, map[string]any{
+			"stage": "tts_completed", "latency_ms": elapsedMS(startedAt),
+			"audio_bytes": len(audio), "audio_mime": mime, "model": model,
+		}))
+		return &DuplexResponse{OK: true, Payload: map[string]any{
+			"success": true, "audio_base64": base64.StdEncoding.EncodeToString(audio),
+			"audio_mime": mime, "model": model,
+		}}
+	}
+
+	ttsStreamStart := func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+		text := strings.TrimSpace(toString(params["text"]))
+		streamID := strings.TrimSpace(toString(params["stream_id"]))
+		if text == "" || len([]rune(text)) > MaxTTSTextChars {
+			return &DuplexResponse{OK: false, Error: fmt.Sprintf("text must contain 1-%d characters", MaxTTSTextChars), Code: "BAD_REQUEST"}
+		}
+		if !ttsStreamIDPattern.MatchString(streamID) {
+			return &DuplexResponse{OK: false, Error: "stream_id is invalid", Code: "BAD_REQUEST"}
+		}
+		if !useJoyaiVoice() {
+			return &DuplexResponse{OK: false, Error: "streaming TTS is unavailable for the configured voice provider", Code: "TTS_STREAM_UNAVAILABLE"}
+		}
+		key := streamKey(ws, streamID)
+		if streamTasks.active(key) {
+			return &DuplexResponse{OK: false, Error: "stream_id is already active", Code: "CONFLICT"}
+		}
+		logEvent(map[string]any{
+			"stage": "tts_stream_requested", "request_id": reqID, "session_id": sessionID,
+			"stream_id": streamID, "text_chars": len([]rune(text)), "text_preview": runePreview(text, 300),
+		})
+		runCtx, cancel := context.WithCancel(context.Background())
+		streamTasks.set(key, cancel)
+		go runTTSStream(runCtx, channel, ws, streamID, text, reqID, sessionID, startedLogClock(), logEvent, streamTasks, key)
+		return &DuplexResponse{OK: true, Payload: map[string]any{"started": true, "stream_id": streamID, "sample_rate": 24000}}
+	}
+
+	ttsStreamCancel := func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+		streamID := strings.TrimSpace(toString(params["stream_id"]))
+		cancelled := streamTasks.cancel(streamKey(ws, streamID))
+		return &DuplexResponse{OK: true, Payload: map[string]any{"stream_id": streamID, "cancelled": cancelled}}
+	}
+
+	videoTranscribe := func(ctx context.Context, ws any, reqID string, params map[string]any, sessionID string) *DuplexResponse {
+		startedAt := time.Now()
+		var dataURL string
+		if params != nil {
+			dataURL = toString(params["audio_data_url"])
+		}
+		requestLog := map[string]any{
+			"request_id": reqID, "session_id": sessionID,
+			"audio_chars": len(dataURL),
+			"audio_mime":  dataURLMime(dataURL),
+		}
+		if len(dataURL) > MaxAudioChars || !isAllowedAudioDataURL(dataURL) {
+			logASR(withEntries(requestLog, map[string]any{
+				"outcome": "rejected", "transcript": "", "has_transcript": false,
+				"latency_ms": elapsedMS(startedAt), "error": "audio_data_url is invalid",
+			}))
+			return &DuplexResponse{OK: false, Error: "audio_data_url is invalid", Code: "BAD_REQUEST"}
+		}
+		var transcript string
+		func() {
+			defer RecoverDuplexError(&duplexErrSlot)
+			transcript = TranscribeAudio([][2]string{{dataURL, "用户麦克风"}}, useJoyaiVoice(), logASR)
+		}()
+		if duplexErrSlot != nil {
+			errText := duplexErrSlot.Error()
+			if errText == "" {
+				errText = "ASR failed"
+			}
+			logASR(withEntries(requestLog, map[string]any{
+				"outcome": "failed", "transcript": "", "has_transcript": false,
+				"latency_ms": elapsedMS(startedAt), "error": errText,
+			}))
+			duplexErrSlot = nil
+			return &DuplexResponse{OK: false, Error: errText, Code: "ASR_ERROR"}
+		}
+		rawTranscript := transcript
+		ignoredFiller := isIgnorableASRFiller(rawTranscript)
+		if ignoredFiller {
+			transcript = ""
+		}
+		outcome := "empty"
+		if ignoredFiller {
+			outcome = "ignored_filler"
+		} else if strings.TrimSpace(transcript) != "" {
+			outcome = "completed"
+		}
+		asrEvent := withEntries(requestLog, map[string]any{
+			"outcome": outcome, "transcript": transcript,
+			"has_transcript": strings.TrimSpace(transcript) != "",
+			"latency_ms":     elapsedMS(startedAt),
+		})
+		if ignoredFiller {
+			asrEvent["raw_transcript"] = rawTranscript
+			asrEvent["ignored_reason"] = "filler_only"
+		}
+		logASR(asrEvent)
+		stageEvent := map[string]any{
+			"stage": "asr_completed", "request_id": reqID, "transcript": transcript,
+			"has_transcript": strings.TrimSpace(transcript) != "",
+		}
+		if ignoredFiller {
+			stageEvent["stage"] = "asr_ignored_filler"
+			stageEvent["raw_transcript"] = rawTranscript
+			stageEvent["ignored_reason"] = "filler_only"
+		}
+		logEvent(stageEvent)
+		payload := map[string]any{"transcript": transcript}
+		if ignoredFiller {
+			payload["ignored_reason"] = "filler_only"
+		}
+		return &DuplexResponse{OK: true, Payload: payload}
+	}
+
+	return map[string]DuplexMethodHandler{
+		"video.transcribe":  videoTranscribe,
+		"tts.synthesize":    ttsSynthesize,
+		"tts.stream.start":  ttsStreamStart,
+		"tts.stream.cancel": ttsStreamCancel,
+	}
+}
+
+// ──────────────────────────── 非导出函数（handlers 辅助） ────────────────────────────
+
+// duplexErrSlot RecoverDuplexError 的单线程槽位（handlers 串行消费）。
+// Python 侧无对应实现：Python 异常即返回路径，Go 用包级槽承接 panic 捕获结果。
+var duplexErrSlot error
+
+// ttsStreamIDPattern 流 ID 合法字符集。
+// 对齐 video_voice.py:414 re[A-Za-z0-9._:-]{1,128}。
+var ttsStreamIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
+// ttsStreamRegistry 流式 TTS 任务登记表。
+// 对齐 video_voice.py:221 stream_tasks dict。
+type ttsStreamRegistry struct {
+	mu    sync.Mutex
+	tasks map[string]*ttsStreamTask
+}
+
+// ttsStreamTask 单个流式 TTS 任务登记项。
+// Python 侧无对应实现：Python 比较 asyncio.current_task 身份，Go 用序号 token 等价。
+type ttsStreamTask struct {
+	token  int64
+	cancel context.CancelFunc
+}
+
+// active 判断 key 是否仍在跑。
+// 对齐 video_voice.py:431-434 existing is not None and not existing.done()。
+func (r *ttsStreamRegistry) active(key string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.tasks[key]
+	return ok
+}
+
+// set 登记 key。
+func (r *ttsStreamRegistry) set(key string, cancel context.CancelFunc) *ttsStreamTask {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	task := &ttsStreamTask{token: time.Now().UnixNano(), cancel: cancel}
+	r.tasks[key] = task
+	return task
+}
+
+// cancel 取消并清理，返回是否取消了在跑任务。
+// 对齐 video_voice.py:533-539 tts_stream_cancel 的 task.cancel 分支。
+func (r *ttsStreamRegistry) cancel(key string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	task, ok := r.tasks[key]
+	if ok {
+		delete(r.tasks, key)
+		task.cancel()
+	}
+	return ok
+}
+
+// pop 若当前任务仍是登记任务则移除。
+// 对齐 video_voice.py:375-378 finally 分支。
+func (r *ttsStreamRegistry) pop(key string, current *ttsStreamTask) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if current != nil && r.tasks[key] != nil && r.tasks[key].token == current.token {
+		delete(r.tasks, key)
+	}
+}
+
+// runTTSStream 流式合成并发送 chunk/done/error 事件。
+// 对齐 video_voice.py:265-378 run_tts_stream。
+func runTTSStream(ctx context.Context, channel DuplexChannel, ws any, streamID, text, requestID, sessionID string, startedAt time.Time, logEvent func(map[string]any), registry *ttsStreamRegistry, key string) {
+	firstChunkMS := -1.0
+	sequence := 0
+	emitChunk := func(chunk []byte) {
+		sequence++
+		elapsedMS := elapsedMS(startedAt)
+		if firstChunkMS < 0 {
+			firstChunkMS = elapsedMS
+			logEvent(map[string]any{
+				"stage": "tts_stream_first_chunk", "request_id": requestID,
+				"session_id": sessionID, "stream_id": streamID,
+				"text_chars": len([]rune(text)), "first_chunk_ms": firstChunkMS,
+				"chunk_bytes": len(chunk),
+			})
+		}
+		channel.SendEvent(ctx, ws, "video.tts.chunk", map[string]any{
+			"stream_id": streamID, "sequence": sequence, "sample_rate": 24000,
+			"audio_base64": base64.StdEncoding.EncodeToString(chunk),
+		})
+	}
+	var audioBytes, chunkCount int
+	func() {
+		defer RecoverDuplexError(&duplexErrSlot)
+		audioBytes, chunkCount = JoyAIStreamChannelPCM(text, emitChunk)
+	}()
+	var taskToken *ttsStreamTask
+	if task, ok := ctx.Value(ttsCancelKey{}).(*ttsStreamTask); ok {
+		taskToken = task
+	}
+	if duplexErrSlot != nil {
+		errText := strings.TrimSpace(duplexErrSlot.Error())
+		if errText == "" {
+			errText = "TTS stream failed"
+		}
+		duplexErrSlot = nil
+		if ctx.Err() != nil {
+			logEvent(map[string]any{
+				"stage": "tts_stream_cancelled", "request_id": requestID,
+				"session_id": sessionID, "stream_id": streamID,
+				"text_chars": len([]rune(text)), "latency_ms": elapsedMS(startedAt),
+			})
+			channel.SendEvent(ctx, ws, "video.tts.cancelled", map[string]any{"stream_id": streamID})
+		} else {
+			logEvent(withEntries(map[string]any{
+				"stage": "tts_stream_failed", "request_id": requestID,
+				"session_id": sessionID, "stream_id": streamID,
+				"text_chars": len([]rune(text)), "latency_ms": elapsedMS(startedAt),
+			}, map[string]any{"error": errText}))
+			channel.SendEvent(ctx, ws, "video.tts.error", map[string]any{"stream_id": streamID, "error": errText})
+		}
+		registry.pop(key, taskToken)
+		return
+	}
+	latencyMS := elapsedMS(startedAt)
+	logEvent(map[string]any{
+		"stage": "tts_stream_completed", "request_id": requestID,
+		"session_id": sessionID, "stream_id": streamID,
+		"text_chars": len([]rune(text)), "latency_ms": latencyMS,
+		"first_chunk_ms": firstChunkMS, "audio_bytes": audioBytes,
+		"chunk_count": chunkCount, "model": joyaiTTSModelDisplayName,
+	})
+	channel.SendEvent(ctx, ws, "video.tts.done", map[string]any{
+		"stream_id": streamID, "audio_bytes": audioBytes, "chunk_count": chunkCount,
+		"latency_ms": latencyMS, "first_chunk_ms": firstChunkMS,
+	})
+	registry.pop(key, taskToken)
+}
+
+// ttsCancelKey runTTSStream 取消函数的 ctx 键。
+// Python 侧无对应实现：asyncio.current_task 定位自身，Go 需显式携带。
+type ttsCancelKey struct{}
+
+// streamKey 构造 (ws, stream_id) 复合键。
+// 对齐 video_voice.py:274 stream_key = (id(ws), stream_id)。
+func streamKey(ws any, streamID string) string {
+	return fmt.Sprintf("%p|%s", ws, streamID)
+}
+
+// startedLogClock 记录起始时刻。
+// Python 侧无对应实现：perf_counter() 起点取法。
+func startedLogClock() time.Time { return time.Now() }
+
+// elapsedMS 起点到当前的毫秒数（保留 1 位小数）。
+// 对齐 video_voice.py 各 round((perf_counter()-started_at)*1000, 1)。
+func elapsedMS(startedAt time.Time) float64 {
+	return math.Round(float64(time.Since(startedAt).Microseconds())/100.0) / 10.0
+}
+
+// toString any → string（非字符串回空串）。
+// 对齐 str(params.get(key) or "") 的空安全取法。
+func toString(value any) string {
+	s, _ := value.(string)
+	return s
+}
+
+// runePreview 按 rune 截断预览。
+// 对齐 text[:300]（Python 按 rune 截断）。
+func runePreview(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit])
+}
+
+// dataURLMime 提取 dataURL 的 MIME 段。
+// 对齐 video_voice.py:485-488 data_url[5:].partition(";")[0]。
+func dataURLMime(dataURL string) string {
+	if strings.HasPrefix(dataURL, "data:") {
+		return strings.Split(dataURL[5:], ";")[0]
+	}
+	return ""
+}
+
+// withEntries 合并 map（后者覆盖前者）。
+// Python 侧无对应实现：Python {**base, **extra} 字面量，Go 需显式合并。
+func withEntries(base map[string]any, extra map[string]any) map[string]any {
+	merged := make(map[string]any, len(base)+len(extra))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range extra {
+		merged[k] = v
+	}
+	return merged
 }
