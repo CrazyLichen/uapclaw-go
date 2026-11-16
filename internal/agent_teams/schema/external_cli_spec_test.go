@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func ptrBool(b bool) *bool          { return &b }
-func ptrFloat(f float64) *float64   { return &f }
-func ptrInt(i int) *int             { return &i }
+func ptrBool(b bool) *bool        { return &b }
+func ptrFloat(f float64) *float64 { return &f }
+func ptrInt(i int) *int           { return &i }
 func withAdapters(names ...string) func() {
 	old := AdapterNamesFunc
 	AdapterNamesFunc = func() []string { return names }
