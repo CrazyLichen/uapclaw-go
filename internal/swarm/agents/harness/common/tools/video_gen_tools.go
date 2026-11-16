@@ -148,10 +148,6 @@ var (
 // D-23.8-5：由 adapter 装配层桥接 SetDefaultSendPushFunc。
 var videoGenRuntimePush func(msg map[string]any) bool
 
-// videoGenSendFile 完成视频的文件投递缝（对齐 Python SendFileToolkit.send_file）。
-// D-23.8-5：Go 侧 SendFileToolkit 未移植时为 nil → 走 fallback 文本通知分支。
-var videoGenSendFile func(rc *rootcontext.RootDecisionContext, localPath string) string
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // videoJobContext 单个视频生成任务的共享传输上下文。
@@ -170,11 +166,6 @@ type videoJobContext struct {
 // SetVideoGenRuntimePush 注入运行时推送缝（装配层调用，D-23.8-5）。
 func SetVideoGenRuntimePush(fn func(msg map[string]any) bool) {
 	videoGenRuntimePush = fn
-}
-
-// SetVideoGenSendFileFunc 注入文件投递缝（装配层调用，D-23.8-5）。
-func SetVideoGenSendFileFunc(fn func(rc *rootcontext.RootDecisionContext, localPath string) string) {
-	videoGenSendFile = fn
 }
 
 // ExtractPendingJobID 从 pending 消息提取 job_id；不匹配返回空串。
@@ -805,30 +796,27 @@ func deliverWatchResult(ctx context.Context, jobID string, result string, rc *ro
 	savedTo := savedToRe.FindStringSubmatch(result + "\n")
 	if savedTo != nil {
 		localPath := strings.TrimSpace(savedTo[1])
-		if videoGenSendFile != nil {
-			delivery := videoGenSendFile(rc, localPath)
-			if hasSendFileFailurePrefix(delivery) {
-				// 视频本身没问题，只是投递失败：不谎报成功，也不丢视频——
-				// 回落文本通知并说明本地文件位置。
-				logger.Warn(logComponent).
-					Str("job_id", jobID).
-					Str("session_id", rc.SessionID).
-					Str("delivery", truncate(delivery, 200)).
-					Msg("[generate_video] send_file_to_user failed delivering completed job")
-				pushFallbackNotice(ctx, jobID, rc,
-					fmt.Sprintf("视频已生成，但自动投递到会话失败：%s\n本地文件：%s", delivery, localPath))
-				return
-			}
-			logger.Info(logComponent).
+		// Python L170-176: 投递时按 ctx 三元组现建临时 SendFileToolkit 调 send_file
+		// （无注入缝、无生命周期管理；D-23.8-5 已回收）
+		toolkit := NewSendFileToolkit(rc.RequestID, rc.SessionID, rc.ChannelID, SendFileRuntimeContext{})
+		delivery, _ := toolkit.SendFile(ctx, localPath)
+		if hasSendFileFailurePrefix(delivery) {
+			// 视频本身没问题，只是投递失败：不谎报成功，也不丢视频——
+			// 回落文本通知并说明本地文件位置。
+			logger.Warn(logComponent).
 				Str("job_id", jobID).
 				Str("session_id", rc.SessionID).
 				Str("delivery", truncate(delivery, 200)).
-				Msg("[generate_video] delivered completed job")
+				Msg("[generate_video] send_file_to_user failed delivering completed job")
+			pushFallbackNotice(ctx, jobID, rc,
+				fmt.Sprintf("视频已生成，但自动投递到会话失败：%s\n本地文件：%s", delivery, localPath))
 			return
 		}
-		// D-23.8-5：Go 侧 SendFileToolkit 未移植 → 与投递失败同路的文本通知。
-		pushFallbackNotice(ctx, jobID, rc,
-			fmt.Sprintf("视频已生成：\n本地文件：%s", localPath))
+		logger.Info(logComponent).
+			Str("job_id", jobID).
+			Str("session_id", rc.SessionID).
+			Str("delivery", truncate(delivery, 200)).
+			Msg("[generate_video] delivered completed job")
 		return
 	}
 	pushFallbackNotice(ctx, jobID, rc, fmt.Sprintf("视频生成任务 %s 未能成功完成：%s", jobID, result))
