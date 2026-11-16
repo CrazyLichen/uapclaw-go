@@ -21,6 +21,21 @@ const RequestSystemSlotPrefix = "openjiuwen:request-system-slot:"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// stringValueOf 取路由属性中的字符串值（非字符串键返回空串）。
+// Python: parent_span.attributes.get(key) 的取值语义
+func stringValueOf(value attribute.Value) string {
+	if value.Type() == attribute.STRING {
+		return value.AsString()
+	}
+	return ""
+}
+
+// routingValueEmpty 路由透传的空值判定：仅字符串空串视为空
+// （Python: value not in (None, "")，布尔 false 不属空值，照旧透传）。
+func routingValueEmpty(value attribute.Value) bool {
+	return value.Type() == attribute.STRING && value.AsString() == ""
+}
+
 // EmitNativeTrajectoryEvent 用父 span 的具体归属发出一条不可变 v2 事件。
 //
 // 偏差 D-15.11-f：Python 从 parent_span.attributes 读取归属与路由键，
@@ -36,14 +51,14 @@ func EmitNativeTrajectoryEvent(
 	payload map[string]any,
 	subjectSequence *int,
 	sequenceEpoch *string,
-	parentAttributes map[string]string,
+	parentAttributes map[string]attribute.Value,
 ) trace.Span {
 	requireKnownEventKind(eventKind)
 	if !parentSpan.IsRecording() {
 		return nil
 	}
-	sessionID := parentAttributes[GenAIConversationID]
-	subjectID := parentAttributes[OJExecutionSubjectID]
+	sessionID := stringValueOf(parentAttributes[GenAIConversationID])
+	subjectID := stringValueOf(parentAttributes[OJExecutionSubjectID])
 	if subjectID == "" {
 		subjectID = "main"
 	}
@@ -88,8 +103,8 @@ func EmitNativeTrajectoryEvent(
 		OJExecutionSubjectSessionID,
 	}
 	for _, key := range routingKeys {
-		if value := parentAttributes[key]; value != "" {
-			attrs = append(attrs, attribute.String(key, value))
+		if value, ok := parentAttributes[key]; ok && !routingValueEmpty(value) {
+			attrs = append(attrs, attribute.KeyValue{Key: attribute.Key(key), Value: value})
 		}
 	}
 	span.SetAttributes(attrs...)
@@ -107,13 +122,13 @@ func RecordNativeTrajectoryLogEvent(
 	subjectID string,
 	subjectSequence *int,
 	sequenceEpoch *string,
-	parentAttributes map[string]string,
+	parentAttributes map[string]attribute.Value,
 ) bool {
 	requireKnownEventKind(eventKind)
 	if !parentSpan.IsRecording() {
 		return false
 	}
-	sessionID := parentAttributes[GenAIConversationID]
+	sessionID := stringValueOf(parentAttributes[GenAIConversationID])
 	var resolvedEpoch string
 	var sequence int
 	if subjectSequence == nil && sequenceEpoch == nil {
@@ -142,8 +157,8 @@ func RecordNativeTrajectoryLogEvent(
 	}
 	// 关联键透传（Python: trajectory_events.py:150-156）
 	for _, key := range []string{OJTurnID, OJStepID, OJRequestID} {
-		if value := parentAttributes[key]; value != "" {
-			attrs = append(attrs, attribute.String(key, value))
+		if value, ok := parentAttributes[key]; ok && !routingValueEmpty(value) {
+			attrs = append(attrs, attribute.KeyValue{Key: attribute.Key(key), Value: value})
 		}
 	}
 	parentSpan.AddEvent(eventKind, trace.WithAttributes(attrs...), trace.WithTimestamp(time.Unix(0, recordedAt)))
@@ -161,15 +176,15 @@ func EmitContextWindowCommit(
 	llmSpan trace.Span,
 	messages []map[string]any,
 	requestPurpose string,
-	parentAttributes map[string]string,
+	parentAttributes map[string]attribute.Value,
 ) trace.Span {
 	if requestPurpose == "compaction" {
 		// 提前返回、不推进：推进动作会重写主体的规范状态，
 		// 让压缩触达它既会污染链、也会让下一真实轮的 delta 变成近全量窗口。
 		return nil
 	}
-	sessionID := parentAttributes[GenAIConversationID]
-	subjectID := parentAttributes[OJExecutionSubjectID]
+	sessionID := stringValueOf(parentAttributes[GenAIConversationID])
+	subjectID := stringValueOf(parentAttributes[OJExecutionSubjectID])
 	if subjectID == "" {
 		subjectID = "main"
 	}
@@ -190,10 +205,10 @@ func EmitCompactionWindowCommit(
 	messages []map[string]any,
 	operationID string,
 	modelRequests []map[string]string,
-	parentAttributes map[string]string,
+	parentAttributes map[string]attribute.Value,
 ) trace.Span {
-	sessionID := parentAttributes[GenAIConversationID]
-	subjectID := parentAttributes[OJExecutionSubjectID]
+	sessionID := stringValueOf(parentAttributes[GenAIConversationID])
+	subjectID := stringValueOf(parentAttributes[OJExecutionSubjectID])
 	if subjectID == "" {
 		subjectID = "main"
 	}

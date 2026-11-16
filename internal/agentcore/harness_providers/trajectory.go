@@ -67,8 +67,8 @@ var requestParameterAttributes = map[string]string{
 type turnRecord struct {
 	// span 轮次根 span
 	span trace.Span
-	// turnAttributes 轮次 span 携带的身份属性（后续子 span 复用）
-	turnAttributes map[string]string
+	// turnAttributes 轮次 span 携带的身份属性（后续子 span 复用，值保留 Python 的标量类型）
+	turnAttributes map[string]attribute.Value
 	// requestCount 已记录的模型请求数
 	requestCount int
 	// requests request_id → (inference_id, step_number)
@@ -91,7 +91,7 @@ type HarnessTrajectoryRecorder struct {
 	agentMode         string
 	tracer            trace.Tracer
 	config            *observability.ObservabilityConfig
-	attributes        map[string]string
+	attributes        map[string]attribute.Value
 	handler           *observability.OtelCallbackHandler
 	turns             map[string]*turnRecord
 	pendingInputs     map[string]string
@@ -119,7 +119,7 @@ func NewHarnessTrajectoryRecorder(
 	agentName, agentMode string,
 	tracer trace.Tracer,
 	config *observability.ObservabilityConfig,
-	attributes map[string]string,
+	attributes map[string]attribute.Value,
 ) (*HarnessTrajectoryRecorder, error) {
 	if subject.SessionID == "" {
 		return nil, fmt.Errorf("trajectory recorder subject requires a session_id")
@@ -149,7 +149,7 @@ func NewHarnessTrajectoryRecorder(
 func CreateHarnessTrajectoryRecorder(
 	subject *harness.ExecutionSubject,
 	agentName, agentMode string,
-	attributes map[string]string,
+	attributes map[string]attribute.Value,
 ) (*HarnessTrajectoryRecorder, error) {
 	config := observability.GetObservabilityConfig()
 	if !observability.IsObservabilityInitialized() || config == nil {
@@ -198,7 +198,7 @@ func (r *HarnessTrajectoryRecorder) RecordTurnIdentity(protocolTurnID, turnID st
 // 事件加进活动轮次 span 并镜像到属性（部分 OTLP 后端会丢弃 span 事件）。
 // 无活动轮次（启动失败）时发一个零长失败轮次，失败仍显示在 agent 泳道里。
 // Python: trajectory.py:288-324 record_failure
-func (r *HarnessTrajectoryRecorder) RecordFailure(name, summary string, attributes map[string]string) {
+func (r *HarnessTrajectoryRecorder) RecordFailure(name, summary string, attributes map[string]attribute.Value) {
 	var span trace.Span
 	standalone := false
 	record := r.turns[r.activeTurnID]
@@ -214,19 +214,9 @@ func (r *HarnessTrajectoryRecorder) RecordFailure(name, summary string, attribut
 		)
 		standalone = true
 	}
-	keys := make([]string, 0, len(attributes))
-	for key := range attributes {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	eventAttrs := make([]attribute.KeyValue, 0, len(attributes))
-	for _, key := range keys {
-		eventAttrs = append(eventAttrs, attribute.String(key, attributes[key]))
-	}
-	span.AddEvent(name, trace.WithAttributes(eventAttrs...))
-	for _, key := range keys {
-		span.SetAttributes(attribute.String(key, attributes[key]))
-	}
+	// Python: span.add_event(name, dict(attributes)) + set_attribute 循环
+	span.AddEvent(name, trace.WithAttributes(valueMapToAttributes(attributes)...))
+	span.SetAttributes(valueMapToAttributes(attributes)...)
 	span.SetStatus(codes.Error, observability.RedactErrorSummary(summary, r.config))
 	if standalone {
 		span.End()
@@ -314,28 +304,29 @@ func (r *HarnessTrajectoryRecorder) popIdentity(turnID string) (string, *int) {
 
 // turnAttributes 轮次 span 属性。
 // Python: trajectory.py:369-382 _turn_attributes
-func (r *HarnessTrajectoryRecorder) turnAttributes(inputText string) map[string]string {
-	attributes := map[string]string{
-		observability.GenAIOperationName:            "invoke_agent",
-		observability.OJTrajectorySchemaVersion:     observability.TrajectorySpanSchemaVersion,
-		observability.OJTrajectoryRecordKind:        "turn",
-		observability.OJTraceRoot:                   "true",
-		observability.OJAgentMode:                   r.agentMode,
-		observability.GenAIConversationID:           r.subject.SessionID,
-		observability.OJExecutionSubjectID:          r.subject.SubjectID,
-		observability.OJExecutionSubjectDisplayName: r.subject.DisplayName,
-		observability.OJExecutionSubjectKind:        r.subject.Kind,
-		observability.OJExecutionSubjectSessionID:   r.subject.SessionID,
+func (r *HarnessTrajectoryRecorder) turnAttributes(inputText string) map[string]attribute.Value {
+	attributes := map[string]attribute.Value{
+		observability.GenAIOperationName:            attribute.StringValue("invoke_agent"),
+		observability.OJTrajectorySchemaVersion:     attribute.StringValue(observability.TrajectorySpanSchemaVersion),
+		observability.OJTrajectoryRecordKind:        attribute.StringValue("turn"),
+		observability.OJTraceRoot:                   attribute.BoolValue(true),
+		observability.OJAgentMode:                   attribute.StringValue(r.agentMode),
+		observability.GenAIConversationID:           attribute.StringValue(r.subject.SessionID),
+		observability.OJExecutionSubjectID:          attribute.StringValue(r.subject.SubjectID),
+		observability.OJExecutionSubjectDisplayName: attribute.StringValue(r.subject.DisplayName),
+		observability.OJExecutionSubjectKind:        attribute.StringValue(r.subject.Kind),
+		observability.OJExecutionSubjectSessionID:   attribute.StringValue(r.subject.SessionID),
 	}
 	if r.subject.ParentSubjectID != "" {
-		attributes[observability.OJExecutionSubjectParentID] = r.subject.ParentSubjectID
+		attributes[observability.OJExecutionSubjectParentID] = attribute.StringValue(r.subject.ParentSubjectID)
 	}
 	for key, value := range r.attributes {
 		attributes[key] = value
 	}
-	attributes[observability.GenAIAgentName] = r.agentName
+	attributes[observability.GenAIAgentName] = attribute.StringValue(r.agentName)
 	if inputText != "" {
-		attributes[observability.OJSpanInput] = observability.RedactPrompt(inputText, r.config)
+		attributes[observability.OJSpanInput] = attribute.StringValue(
+			observability.RedactPrompt(inputText, r.config))
 	}
 	return attributes
 }
@@ -389,23 +380,24 @@ func (r *HarnessTrajectoryRecorder) observeModelRequest(envelope harness_protoco
 	}
 	stepNumber := record.requestCount + 1
 	model := event.Model
-	attrs := map[string]string{
-		observability.GenAIOperationName:            "chat",
-		observability.OJTrajectorySchemaVersion:     observability.TrajectorySpanSchemaVersion,
-		observability.OJTrajectoryRecordKind:        "inference",
-		observability.OJRequestID:                   event.RequestID,
-		observability.OJRequestPurpose:              assistantRequestPurpose,
-		observability.OJStepNumber:                  fmt.Sprintf("%d", stepNumber),
-		observability.OJAgentMode:                   r.agentMode,
-		observability.GenAIAgentName:                r.agentName,
-		observability.GenAIConversationID:           r.subject.SessionID,
-		observability.OJExecutionSubjectID:          r.subject.SubjectID,
-		observability.OJExecutionSubjectDisplayName: r.subject.DisplayName,
-		observability.OJExecutionSubjectKind:        r.subject.Kind,
-		observability.OJExecutionSubjectSessionID:   r.subject.SessionID,
+	// 数值/布尔属性保留 OTel 类型（Python: int/float/bool 属性）
+	attrs := map[string]attribute.Value{
+		observability.GenAIOperationName:            attribute.StringValue("chat"),
+		observability.OJTrajectorySchemaVersion:     attribute.StringValue(observability.TrajectorySpanSchemaVersion),
+		observability.OJTrajectoryRecordKind:        attribute.StringValue("inference"),
+		observability.OJRequestID:                   attribute.StringValue(event.RequestID),
+		observability.OJRequestPurpose:              attribute.StringValue(assistantRequestPurpose),
+		observability.OJStepNumber:                  attribute.IntValue(stepNumber),
+		observability.OJAgentMode:                   attribute.StringValue(r.agentMode),
+		observability.GenAIAgentName:                attribute.StringValue(r.agentName),
+		observability.GenAIConversationID:           attribute.StringValue(r.subject.SessionID),
+		observability.OJExecutionSubjectID:          attribute.StringValue(r.subject.SubjectID),
+		observability.OJExecutionSubjectDisplayName: attribute.StringValue(r.subject.DisplayName),
+		observability.OJExecutionSubjectKind:        attribute.StringValue(r.subject.Kind),
+		observability.OJExecutionSubjectSessionID:   attribute.StringValue(r.subject.SessionID),
 	}
 	if r.subject.ParentSubjectID != "" {
-		attrs[observability.OJExecutionSubjectParentID] = r.subject.ParentSubjectID
+		attrs[observability.OJExecutionSubjectParentID] = attribute.StringValue(r.subject.ParentSubjectID)
 	}
 	for key, value := range record.turnAttributes {
 		// 轮次身份属性（record.turn_attributes）在子 span 上复用；
@@ -417,28 +409,28 @@ func (r *HarnessTrajectoryRecorder) observeModelRequest(envelope harness_protoco
 		attrs[key] = value
 	}
 	requestNumber := observability.NextExecutionSubjectRequestNumber(r.subject.SessionID, r.subject.SubjectID)
-	attrs[observability.OJExecutionSubjectRequestNumber] = fmt.Sprintf("%d", requestNumber)
+	attrs[observability.OJExecutionSubjectRequestNumber] = attribute.IntValue(requestNumber)
 	if model != "" {
-		attrs[observability.GenAIRequestModel] = model
-		attrs[observability.GenAIResponseModel] = model
+		attrs[observability.GenAIRequestModel] = attribute.StringValue(model)
+		attrs[observability.GenAIResponseModel] = attribute.StringValue(model)
 	}
 	if event.ProviderName != "" {
-		attrs[observability.GenAIProviderName] = event.ProviderName
+		attrs[observability.GenAIProviderName] = attribute.StringValue(event.ProviderName)
 	}
 	if event.ResponseID != "" {
-		attrs[observability.GenAIResponseID] = event.ResponseID
+		attrs[observability.GenAIResponseID] = attribute.StringValue(event.ResponseID)
 	}
 	if len(event.FinishReasons) > 0 {
-		attrs[observability.GenAIResponseFinishReasons] = marshalJSON(event.FinishReasons)
+		attrs[observability.GenAIResponseFinishReasons] = attribute.StringValue(marshalJSON(event.FinishReasons))
 	}
 	if !event.InputObserved {
 		// 仅在为 false 时陈述：进程内推理总是观测自己的请求，缺省保持常态不变
-		attrs[observability.OJInferenceInputObserved] = "false"
+		attrs[observability.OJInferenceInputObserved] = attribute.BoolValue(false)
 	}
 	latencyMS := (event.EndedAt - event.StartedAt) * 1000
-	attrs[observability.OJGenAIResponseTotalLatencyMs] = formatFloat(latencyMS)
+	attrs[observability.OJGenAIResponseTotalLatencyMs] = attribute.Float64Value(latencyMS)
 	if event.TimeToFirstChunk != nil {
-		attrs[observability.GenAIResponseTimeToFirstChunk] = formatFloat(*event.TimeToFirstChunk)
+		attrs[observability.GenAIResponseTimeToFirstChunk] = attribute.Float64Value(*event.TimeToFirstChunk)
 	}
 	for key, value := range requestParameterAttributeValues(event) {
 		attrs[key] = value
@@ -447,7 +439,7 @@ func (r *HarnessTrajectoryRecorder) observeModelRequest(envelope harness_protoco
 		attrs[key] = value
 	}
 	if event.Cost != nil {
-		attrs[observability.OJGenAIUsageTotalCost] = formatFloat(float64(event.Cost.Micros) / 1_000_000)
+		attrs[observability.OJGenAIUsageTotalCost] = attribute.Float64Value(float64(event.Cost.Micros) / 1_000_000)
 	}
 	spanName := "chat"
 	if model != "" {
@@ -459,7 +451,7 @@ func (r *HarnessTrajectoryRecorder) observeModelRequest(envelope harness_protoco
 	_, span := r.tracer.Start(ctx, spanName,
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithTimestamp(nsTime(event.StartedAt)),
-		trace.WithAttributes(stringMapToAttributes(attrs)...),
+		trace.WithAttributes(valueMapToAttributes(attrs)...),
 	)
 	inferenceID := fmt.Sprintf("%016x", span.SpanContext().SpanID())
 	span.SetAttributes(attribute.String(observability.OJInferenceID, inferenceID))
@@ -554,24 +546,24 @@ func (r *HarnessTrajectoryRecorder) startTool(record *turnRecord, envelope harne
 		toolName = v
 	}
 	arguments := observability.RedactPrompt(textOf(values["arguments"]), r.config)
-	attrs := map[string]string{
-		observability.GenAIOperationName:            "execute_tool",
-		observability.GenAIToolName:                 toolName,
-		observability.GenAIToolCallID:               itemID,
-		observability.GenAIToolCallArguments:        arguments,
-		observability.OJSpanInput:                   arguments,
-		observability.OJTrajectorySchemaVersion:     observability.TrajectorySpanSchemaVersion,
-		observability.OJTrajectoryRecordKind:        "tool",
-		observability.OJAgentMode:                   r.agentMode,
-		observability.GenAIAgentName:                r.agentName,
-		observability.GenAIConversationID:           r.subject.SessionID,
-		observability.OJExecutionSubjectID:          r.subject.SubjectID,
-		observability.OJExecutionSubjectDisplayName: r.subject.DisplayName,
-		observability.OJExecutionSubjectKind:        r.subject.Kind,
-		observability.OJExecutionSubjectSessionID:   r.subject.SessionID,
+	attrs := map[string]attribute.Value{
+		observability.GenAIOperationName:            attribute.StringValue("execute_tool"),
+		observability.GenAIToolName:                 attribute.StringValue(toolName),
+		observability.GenAIToolCallID:               attribute.StringValue(itemID),
+		observability.GenAIToolCallArguments:        attribute.StringValue(arguments),
+		observability.OJSpanInput:                   attribute.StringValue(arguments),
+		observability.OJTrajectorySchemaVersion:     attribute.StringValue(observability.TrajectorySpanSchemaVersion),
+		observability.OJTrajectoryRecordKind:        attribute.StringValue("tool"),
+		observability.OJAgentMode:                   attribute.StringValue(r.agentMode),
+		observability.GenAIAgentName:                attribute.StringValue(r.agentName),
+		observability.GenAIConversationID:           attribute.StringValue(r.subject.SessionID),
+		observability.OJExecutionSubjectID:          attribute.StringValue(r.subject.SubjectID),
+		observability.OJExecutionSubjectDisplayName: attribute.StringValue(r.subject.DisplayName),
+		observability.OJExecutionSubjectKind:        attribute.StringValue(r.subject.Kind),
+		observability.OJExecutionSubjectSessionID:   attribute.StringValue(r.subject.SessionID),
 	}
 	if r.subject.ParentSubjectID != "" {
-		attrs[observability.OJExecutionSubjectParentID] = r.subject.ParentSubjectID
+		attrs[observability.OJExecutionSubjectParentID] = attribute.StringValue(r.subject.ParentSubjectID)
 	}
 	for key, value := range record.turnAttributes {
 		switch key {
@@ -583,16 +575,16 @@ func (r *HarnessTrajectoryRecorder) startTool(record *turnRecord, envelope harne
 	if owner := owningRequest(record, envelope); owner != nil {
 		// 只有与引发它的请求绑定的工具是权威的；
 		// 查看器丢弃它无法归位的权威工具
-		attrs[observability.OJInferenceID] = owner.inferenceID
-		attrs[observability.OJStepNumber] = fmt.Sprintf("%d", owner.stepNumber)
-		attrs[observability.OJToolAuthoritative] = "true"
+		attrs[observability.OJInferenceID] = attribute.StringValue(owner.inferenceID)
+		attrs[observability.OJStepNumber] = attribute.IntValue(owner.stepNumber)
+		attrs[observability.OJToolAuthoritative] = attribute.BoolValue(true)
 	}
 	ctx := trace.ContextWithSpanContext(context.Background(), record.span.SpanContext())
 	_, span := r.tracer.Start(ctx,
 		fmt.Sprintf("execute_tool %s", toolName),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithTimestamp(nsTime(envelope.Timestamp)),
-		trace.WithAttributes(stringMapToAttributes(attrs)...),
+		trace.WithAttributes(valueMapToAttributes(attrs)...),
 	)
 	record.tools[itemID] = span
 	return span
@@ -829,13 +821,13 @@ func messageMetadata(message harness_protocol.TurnMessage) map[string]any {
 
 // turnIdentityAttributes 一个轮次内每个 span 都携带的轨迹轮次属性。
 // Python: trajectory.py:582-589 _turn_identity_attributes
-func turnIdentityAttributes(turnID string, turnNumber *int) map[string]string {
-	attributes := map[string]string{}
+func turnIdentityAttributes(turnID string, turnNumber *int) map[string]attribute.Value {
+	attributes := map[string]attribute.Value{}
 	if turnID != "" {
-		attributes[observability.OJTurnID] = turnID
+		attributes[observability.OJTurnID] = attribute.StringValue(turnID)
 	}
 	if turnNumber != nil {
-		attributes[observability.OJTurnNumber] = fmt.Sprintf("%d", *turnNumber)
+		attributes[observability.OJTurnNumber] = attribute.IntValue(*turnNumber)
 	}
 	return attributes
 }
@@ -870,8 +862,8 @@ func setRequestStatus(span trace.Span, event *harness_protocol.ModelRequestEvent
 
 // requestParameterAttributeValues 采样参数属性。
 // Python: trajectory.py:614-627 _request_parameter_attributes
-func requestParameterAttributeValues(event *harness_protocol.ModelRequestEvent) map[string]string {
-	attributes := map[string]string{}
+func requestParameterAttributeValues(event *harness_protocol.ModelRequestEvent) map[string]attribute.Value {
+	attributes := map[string]attribute.Value{}
 	parameters := harness_protocol.JsonValueToBuiltin(event.RequestParameters)
 	params, ok := parameters.(map[string]any)
 	if !ok {
@@ -887,27 +879,31 @@ func requestParameterAttributeValues(event *harness_protocol.ModelRequestEvent) 
 		value := params[name]
 		switch v := value.(type) {
 		case string:
-			attributes[key] = v
+			attributes[key] = attribute.StringValue(v)
 		case bool:
-			attributes[key] = fmt.Sprintf("%v", v)
-		case int, int64, float64:
-			attributes[key] = formatNumber(v)
+			attributes[key] = attribute.BoolValue(v)
+		case int:
+			attributes[key] = attribute.IntValue(v)
+		case int64:
+			attributes[key] = attribute.IntValue(int(v))
+		case float64:
+			attributes[key] = attribute.Float64Value(v)
 		}
 	}
 	if stopSequences, ok := params["stop_sequences"].([]any); ok && len(stopSequences) > 0 {
-		attributes[observability.GenAIRequestStopSequences] = marshalJSON(stopSequences)
+		attributes[observability.GenAIRequestStopSequences] = attribute.StringValue(marshalJSON(stopSequences))
 	}
 	return attributes
 }
 
 // usageAttributeValues 用量属性（nil 值跳过）。
 // Python: trajectory.py:630-640 _usage_attributes
-func usageAttributeValues(event *harness_protocol.ModelRequestEvent) map[string]string {
+func usageAttributeValues(event *harness_protocol.ModelRequestEvent) map[string]attribute.Value {
 	usage := event.Usage
 	if usage == nil {
-		return map[string]string{}
+		return map[string]attribute.Value{}
 	}
-	attributes := map[string]string{}
+	attributes := map[string]attribute.Value{}
 	pairs := []struct {
 		key   string
 		value *int
@@ -919,7 +915,7 @@ func usageAttributeValues(event *harness_protocol.ModelRequestEvent) map[string]
 	}
 	for _, pair := range pairs {
 		if pair.value != nil {
-			attributes[pair.key] = fmt.Sprintf("%d", *pair.value)
+			attributes[pair.key] = attribute.IntValue(*pair.value)
 		}
 	}
 	return attributes
@@ -973,8 +969,9 @@ func isErrorTrue(value any) bool {
 	return ok && b
 }
 
-// stringMapToAttributes 字符串映射 → OTel 属性（键排序保证确定性）
-func stringMapToAttributes(m map[string]string) []attribute.KeyValue {
+// valueMapToAttributes 值映射 → OTel 属性（键排序保证确定性；值类型原样保留，
+// Python 侧无对应实现——Python dict 直接作 span 属性，Go 需显式展开）
+func valueMapToAttributes(m map[string]attribute.Value) []attribute.KeyValue {
 	keys := make([]string, 0, len(m))
 	for key := range m {
 		keys = append(keys, key)
@@ -982,21 +979,21 @@ func stringMapToAttributes(m map[string]string) []attribute.KeyValue {
 	sort.Strings(keys)
 	attrs := make([]attribute.KeyValue, 0, len(keys))
 	for _, key := range keys {
-		attrs = append(attrs, attribute.String(key, m[key]))
+		attrs = append(attrs, attribute.KeyValue{Key: attribute.Key(key), Value: m[key]})
 	}
 	return attrs
 }
 
 // mergeAttributes 合并两个属性映射（后者覆盖前者）
-func mergeAttributes(base, overlay map[string]string) []attribute.KeyValue {
-	merged := make(map[string]string, len(base)+len(overlay))
+func mergeAttributes(base, overlay map[string]attribute.Value) []attribute.KeyValue {
+	merged := make(map[string]attribute.Value, len(base)+len(overlay))
 	for key, value := range base {
 		merged[key] = value
 	}
 	for key, value := range overlay {
 		merged[key] = value
 	}
-	return stringMapToAttributes(merged)
+	return valueMapToAttributes(merged)
 }
 
 // marshalJSON JSON 序列化（ensure_ascii=False 语义）
@@ -1006,23 +1003,4 @@ func marshalJSON(value any) string {
 		return fmt.Sprintf("%v", value)
 	}
 	return string(data)
-}
-
-// formatFloat 浮点格式化（Python float 属性为 double）
-func formatFloat(value float64) string {
-	return fmt.Sprintf("%g", value)
-}
-
-// formatNumber 数值格式化
-func formatNumber(value any) string {
-	switch v := value.(type) {
-	case int:
-		return fmt.Sprintf("%d", v)
-	case int64:
-		return fmt.Sprintf("%d", v)
-	case float64:
-		return formatFloat(v)
-	default:
-		return fmt.Sprintf("%v", value)
-	}
 }

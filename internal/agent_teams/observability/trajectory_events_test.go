@@ -11,6 +11,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// strAttrs 测试辅助：字符串映射 → 值映射（路由参数 D-15.11-f 形状）
+func strAttrs(m map[string]string) map[string]attribute.Value {
+	out := make(map[string]attribute.Value, len(m))
+	for k, v := range m {
+		out[k] = attribute.StringValue(v)
+	}
+	return out
+}
+
 // newTestTracer 建测试用 tracer 与内存导出器。
 func newTestTracer(t *testing.T) (trace.Tracer, *tracetest.InMemoryExporter) {
 	t.Helper()
@@ -42,7 +51,7 @@ func TestEmitContextWindowCommit_compaction拒绝(t *testing.T) {
 	})
 	AdvanceContextWindow("s1", "m1", "w1", []map[string]any{{"message_id": "a", "content": "x"}})
 	got := EmitContextWindowCommit(tracer, span, []map[string]any{{"message_id": "a", "content": "x"}}, "compaction",
-		map[string]string{GenAIConversationID: "s1", OJExecutionSubjectID: "m1"})
+		strAttrs(map[string]string{GenAIConversationID: "s1", OJExecutionSubjectID: "m1"}))
 	if got != nil {
 		t.Fatal("compaction 请求不得推进链")
 	}
@@ -62,7 +71,7 @@ func TestEmitContextWindowCommit_基线与事件属性(t *testing.T) {
 		OJTurnID:               "turn-1",
 	})
 	msgs := []map[string]any{{"message_id": "a", "role": "user", "content": "hi"}}
-	parentAttrs := map[string]string{GenAIConversationID: "s2", OJExecutionSubjectID: "m2", OJTurnID: "turn-1"}
+	parentAttrs := strAttrs(map[string]string{GenAIConversationID: "s2", OJExecutionSubjectID: "m2", OJTurnID: "turn-1"})
 	got := EmitContextWindowCommit(tracer, span, msgs, "assistant", parentAttrs)
 	if got == nil {
 		t.Fatal("应产出事件 span")

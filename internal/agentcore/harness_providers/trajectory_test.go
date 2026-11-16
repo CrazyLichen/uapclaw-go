@@ -294,7 +294,7 @@ func TestRecordFailure_零长Turn(t *testing.T) {
 	f := newRecorderFixture(t)
 	rec := f.rec
 	rec.RecordFailure("startup_failed", "boom: authorization: Bearer abcdef123456 bad",
-		map[string]string{"error.type": "startup"})
+		map[string]attribute.Value{"error.type": attribute.StringValue("startup")})
 	turns := spanNamesByName(t, f.exp, "invoke_agent test-agent")
 	if len(turns) != 1 {
 		t.Fatalf("应有一条 standalone 失败 turn，实际 %d", len(turns))
@@ -450,17 +450,17 @@ func TestRequestParameterAttributes_映射(t *testing.T) {
 		},
 	}
 	got := requestParameterAttributeValues(event)
-	if got[observability.GenAIRequestTemperature] != "0.7" {
-		t.Fatalf("temperature 漂移: %q", got[observability.GenAIRequestTemperature])
+	if v := got[observability.GenAIRequestTemperature]; v.Type() != attribute.FLOAT64 || v.AsFloat64() != 0.7 {
+		t.Fatalf("temperature 应为 float64(0.7): %v", v.Emit())
 	}
-	if got[observability.GenAIRequestStream] != "true" {
-		t.Fatalf("stream 漂移: %q", got[observability.GenAIRequestStream])
+	if v := got[observability.GenAIRequestStream]; v.Type() != attribute.BOOL || !v.AsBool() {
+		t.Fatalf("stream 应为 bool(true): %v", v.Emit())
 	}
-	if got[observability.GenAIRequestMaxTokens] != "100" {
-		t.Fatalf("max_tokens 漂移: %q", got[observability.GenAIRequestMaxTokens])
+	if v := got[observability.GenAIRequestMaxTokens]; v.Type() != attribute.INT64 || v.AsInt64() != 100 {
+		t.Fatalf("max_tokens 应为 int64(100): %v", v.Emit())
 	}
-	if !strings.Contains(got[observability.GenAIRequestStopSequences], "END") {
-		t.Fatalf("stop_sequences 漂移: %q", got[observability.GenAIRequestStopSequences])
+	if v := got[observability.GenAIRequestStopSequences]; v.Type() != attribute.STRING || !strings.Contains(v.AsString(), "END") {
+		t.Fatalf("stop_sequences 漂移: %v", v.Emit())
 	}
 }
 
@@ -473,8 +473,11 @@ func TestUsageAttributes_非nil才落盘(t *testing.T) {
 		Usage: &harness_protocol.TurnUsage{InputTokens: &in, OutputTokens: &out},
 	}
 	got := usageAttributeValues(event)
-	if got[observability.GenAIUsageInputTokens] != "10" || got[observability.GenAIUsageOutputTokens] != "5" {
-		t.Fatalf("usage 漂移: %v", got)
+	if v := got[observability.GenAIUsageInputTokens]; v.Type() != attribute.INT64 || v.AsInt64() != 10 {
+		t.Fatalf("input tokens 应为 int64(10): %v", v.Emit())
+	}
+	if v := got[observability.GenAIUsageOutputTokens]; v.Type() != attribute.INT64 || v.AsInt64() != 5 {
+		t.Fatalf("output tokens 应为 int64(5): %v", v.Emit())
 	}
 	if _, has := got[observability.GenAIUsageCacheReadInputTokens]; has {
 		t.Fatal("nil usage 不得落盘")
