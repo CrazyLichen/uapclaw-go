@@ -1556,7 +1556,7 @@ func containsIncompleteJSONObject(text string) bool {
 		if json.NewDecoder(strings.NewReader(candidate)).Decode(&probe) == nil {
 			continue
 		}
-			var stack []rune
+		var stack []rune
 		inString, escaped, invalidCloser := false, false, false
 		for _, char := range candidate {
 			if inString {
@@ -2382,26 +2382,26 @@ func diagnosisUnavailableResult(caseInput *CaseAnalysisInput, err error) map[str
 		mechanism = "Retryable model-service failure during analyzer diagnosis."
 	}
 	return map[string]any{
-		"case_id":            caseInput.CaseID,
-		"score":              caseInput.Score,
-		"evaluation_passed":  caseInput.EvaluationPassed,
-		"evaluation_reason":  caseInput.EvaluationReason,
-		"analysis_failed":    true,
-		"diagnosis_status":   "unavailable",
-		"issue_category":     "unassigned",
-		"severity":           "low",
-		"summary":            "Per-case diagnosis was unavailable because the diagnosis model returned no usable output.",
-		"failure_mode":       "diagnosis_unavailable",
-		"root_cause":         "Diagnosis model call did not produce usable output for this case.",
-		"critical_mistake":   "No case-level attribution was produced.",
-		"general_mechanism":  mechanism,
-		"target_ref":         "unassigned",
-		"evidence_refs":      []any{},
-		"affected_components": []any{},
-		"recommendation":     "Do not optimize from this case-level diagnosis; rerun analysis or use other case diagnoses.",
-		"confidence":         "low",
+		"case_id":              caseInput.CaseID,
+		"score":                caseInput.Score,
+		"evaluation_passed":    caseInput.EvaluationPassed,
+		"evaluation_reason":    caseInput.EvaluationReason,
+		"analysis_failed":      true,
+		"diagnosis_status":     "unavailable",
+		"issue_category":       "unassigned",
+		"severity":             "low",
+		"summary":              "Per-case diagnosis was unavailable because the diagnosis model returned no usable output.",
+		"failure_mode":         "diagnosis_unavailable",
+		"root_cause":           "Diagnosis model call did not produce usable output for this case.",
+		"critical_mistake":     "No case-level attribution was produced.",
+		"general_mechanism":    mechanism,
+		"target_ref":           "unassigned",
+		"evidence_refs":        []any{},
+		"affected_components":  []any{},
+		"recommendation":       "Do not optimize from this case-level diagnosis; rerun analysis or use other case diagnoses.",
+		"confidence":           "low",
 		"diagnosis_error_type": errorType,
-		"error":              errorText,
+		"error":                errorText,
 	}
 }
 
@@ -2623,21 +2623,21 @@ func aggregateStructuredDiagnoses(perCaseResults []map[string]any, maxIssues, ev
 			"recommendation":       recommendation,
 			"metadata": map[string]any{
 				"attribution": map[string]any{
-					"root_cause":            toStringValue(strongest["root_cause"]),
-					"critical_mistake":      toStringValue(strongest["critical_mistake"]),
-					"general_mechanism":     toStringValue(strongest["general_mechanism"]),
-					"decision_contract":     decisionContract,
-					"failure_cluster":       diagnosisFailureCluster(strongest),
-					"failure_layer":         failureLayer,
-					"observed_failure":      strongest["observed_failure"],
-					"candidate_explanations": candidateExplanations,
+					"root_cause":              toStringValue(strongest["root_cause"]),
+					"critical_mistake":        toStringValue(strongest["critical_mistake"]),
+					"general_mechanism":       toStringValue(strongest["general_mechanism"]),
+					"decision_contract":       decisionContract,
+					"failure_cluster":         diagnosisFailureCluster(strongest),
+					"failure_layer":           failureLayer,
+					"observed_failure":        strongest["observed_failure"],
+					"candidate_explanations":  candidateExplanations,
 					"discriminating_evidence": discriminatingEvidence,
-					"execution_termination":  strongest["execution_termination"],
-					"evidence_manifest_path": toStringValue(strongest["evidence_manifest_path"]),
-					"task_contract_checks":   taskContractChecks,
-					"target_ref":             group.key.targetRef,
-					"evidence_refs":          evidenceRefs,
-					"confidence":             toStringValue(strongest["confidence"]),
+					"execution_termination":   strongest["execution_termination"],
+					"evidence_manifest_path":  toStringValue(strongest["evidence_manifest_path"]),
+					"task_contract_checks":    taskContractChecks,
+					"target_ref":              group.key.targetRef,
+					"evidence_refs":           evidenceRefs,
+					"confidence":              toStringValue(strongest["confidence"]),
 				},
 			},
 		})
@@ -2848,7 +2848,7 @@ func caseDiagnosesValidationConflicts(diagnoses []map[string]any, inventory, ver
 // DiagnosisAgentStrategy 全链路 DeepAgent 策略：拥有读取、提取与诊断。
 // Python: analyzer.py:2558-3145 DiagnosisAgentStrategy。
 // analyze 只接收原始 invocation（Protocol 契约）；全部数据准备
-//（经验检索、CaseReader、SignalExtractor）在类内运行。逐案 DeepAgent 使用
+// （经验检索、CaseReader、SignalExtractor）在类内运行。逐案 DeepAgent 使用
 // 隔离证据与被评估 Harness 声明；原始案例目录不进 agent 工作区。
 // 病历编译是确定性的，不调用第二个模型。
 type DiagnosisAgentStrategy struct {
@@ -2999,14 +2999,14 @@ func (s *DiagnosisAgentStrategy) Analyze(ctx context.Context, invocation harness
 		AnalysisID: filepath.Base(invocation.OutputDir),
 		Issues:     mappedIssues,
 		Metadata: map[string]any{
-			"analysis_status":        analysisStatus,
-			"strategy":               StrategyName,
-			"model_config_ref":       modelRefFinal,
-			"signals_method":         signals.Method,
-			"per_case_count":         len(caseInputs),
-			"diagnosed_case_count":   len(diagnosisCaseInputs),
-			"diagnosis_count":        len(perCaseResults),
-			"diagnosis_failed_count": len(failedCaseIDs),
+			"analysis_status":         analysisStatus,
+			"strategy":                StrategyName,
+			"model_config_ref":        modelRefFinal,
+			"signals_method":          signals.Method,
+			"per_case_count":          len(caseInputs),
+			"diagnosed_case_count":    len(diagnosisCaseInputs),
+			"diagnosis_count":         len(perCaseResults),
+			"diagnosis_failed_count":  len(failedCaseIDs),
 			"diagnosis_partial_count": len(partialCases),
 			"per_case_diagnoses_path": perCaseDiagnosesPath,
 			"retrieved_experience":    retrievedExperience,
@@ -3200,13 +3200,13 @@ func (s *DiagnosisAgentStrategy) diagnoseOne(
 		results := []map[string]any{}
 		for index, diagnosis := range diagnoses {
 			item := map[string]any{
-				"case_id":            caseInput.CaseID,
-				"diagnosis_index":    index + 1,
-				"diagnosis_count":    len(diagnoses),
-				"score":              caseInput.Score,
-				"evaluation_passed":  caseInput.EvaluationPassed,
-				"evaluation_reason":  caseInput.EvaluationReason,
-				"execution_termination": execCtx["execution_termination"],
+				"case_id":                         caseInput.CaseID,
+				"diagnosis_index":                 index + 1,
+				"diagnosis_count":                 len(diagnoses),
+				"score":                           caseInput.Score,
+				"evaluation_passed":               caseInput.EvaluationPassed,
+				"evaluation_reason":               caseInput.EvaluationReason,
+				"execution_termination":           execCtx["execution_termination"],
 				"verifier_failure_output_excerpt": toStringValue(verifierInventory["verifier_failure_output_excerpt"]),
 			}
 			for k, v := range diagnosis {
@@ -3618,8 +3618,8 @@ func buildAnalysisRefDict(
 		}
 	}
 	return map[string]any{
-		"analysis_id":         filepath.Base(outputDir),
-		"created_at":          timeNow().Format("2006-01-02T15:04:05Z07:00"),
+		"analysis_id":          filepath.Base(outputDir),
+		"created_at":           timeNow().Format("2006-01-02T15:04:05Z07:00"),
 		"source_eval_ref_path": invocation.EvalRefPath,
 		"case_results_dir":     invocation.CaseResultsDir,
 		"case_traces_dir":      invocation.CaseTracesDir,
