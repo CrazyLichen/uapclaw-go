@@ -73,6 +73,7 @@ func newService(t *testing.T, executor Executor) (*TaskService, *TaskStore) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = svc.Close() })
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -221,6 +222,7 @@ func TestModify_版本冲突(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = svc.Close() })
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -336,6 +338,7 @@ func TestCancel_排队中直接取消(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = svc.Close() })
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +392,8 @@ func TestAnswer_交互回填(t *testing.T) {
 
 // TestAnswer_挂起恢复排队 对齐 :508-511。
 func TestAnswer_挂起恢复排队(t *testing.T) {
-	svc, _ := newService(t, &fakeExecutor{})
+	executor := &fakeExecutor{runResult: map[string]any{"answer": "done"}, block: make(chan struct{})}
+	svc, _ := newService(t, executor)
 	task, _ := svc.Submit("u", "s", "b1", "任务", nil)
 	_, _ = svc.store.update(toString(task["id"]), func(current map[string]any) {
 		current["status"] = "waiting_user"
@@ -405,10 +409,20 @@ func TestAnswer_挂起恢复排队(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, _ := svc.store.read(toString(task["id"]), nil, nil)
-	if current["status"] != "queued" || current["resume_answer"] != true {
-		t.Fatalf("挂起源回答应回队: %v %v", current["status"], current["resume_answer"])
+	// 回队后随即重派发（阻塞执行器下停在 running）
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		current, _ := svc.store.read(toString(task["id"]), nil, nil)
+		if toString(current["status"]) == "running" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
+	current, _ := svc.store.read(toString(task["id"]), nil, nil)
+	if current["status"] != "running" || current["resume_answer"] != true {
+		t.Fatalf("挂起源回答应回队并重派发: %v %v", current["status"], current["resume_answer"])
+	}
+	close(executor.block)
 }
 
 // TestReorder_QueueVersionConflict 对齐 service.py:422-476。
@@ -418,6 +432,7 @@ func TestReorder_QueueVersionConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = svc.Close() })
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)
 	}
