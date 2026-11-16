@@ -158,7 +158,7 @@ func SynchronizePluginManifest(pkg string) error {
 		case "prompt_sections":
 			compiled := []any{}
 			for _, entry := range entryList {
-				compiledEntry, err := promptEntry(pkg, entry)
+				compiledEntry, err := pluginPromptEntry(pkg, entry)
 				if err != nil {
 					return err
 				}
@@ -187,9 +187,11 @@ func SynchronizePluginManifest(pkg string) error {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// promptEntry 提示段条目规范化（file 别名解析 / content 包装）。
+// pluginPromptEntry 提示段条目规范化（file 别名解析 / content 包装）——
+// plugin_manifest.py:81-89 _prompt_entry；与 package_registry._prompt_entry
+// 是 Python 两份同名函数，Go 各自文件承载（一文件对一文件）。
 // Python: plugin_manifest.py:81-89 _prompt_entry。
-func promptEntry(pkg string, raw any) (map[string]any, error) {
+func pluginPromptEntry(pkg string, raw any) (map[string]any, error) {
 	// Python: entry = dict(item)
 	entryMap, ok := raw.(map[string]any)
 	if !ok {

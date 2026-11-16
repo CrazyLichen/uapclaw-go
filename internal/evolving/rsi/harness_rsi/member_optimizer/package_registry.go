@@ -13,7 +13,29 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// PromptRegistry 提示段登记簿路径。
+// Python: package_registry.py:19 PROMPT_REGISTRY。
+const PromptRegistry = "prompt_sections/sections.yaml"
+
+// SkillRegistry 技能登记簿路径。
+// Python: package_registry.py:20 SKILL_REGISTRY。
+const SkillRegistry = "skills/skills.yaml"
+
+// RegistryGuidance 登记簿写作指引（喂给 LLM 的文案逐字）。
+// Python: package_registry.py:22-23 REGISTRY_GUIDANCE。
+const RegistryGuidance = `Package paths are relative to the integration package root.
+Prompt example: sections: [{name: foo, file: prompt_sections/files/foo.md, priority: 30}].
+Use file, not path. Each effective prompt section name must be unique.
+Skill example: skills: [{dir: skills/foo}]; dir mounts a directory containing
+SKILL.md, or a parent directory of skills, never the SKILL.md file itself.
+Equivalent aliases may be collapsed. Conflicting content, names, priorities or
+mount options require an explicit repair; do not discard unrelated entries.`
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -277,4 +299,462 @@ func windowsDriveLike(value string) bool {
 		return true
 	}
 	return strings.HasPrefix(value, "\\\\")
+}
+
+// ──────────────────────────── c3 前置件补齐（executor 依赖闭包） ────────────────────────────
+
+// RegistryIssue 登记簿问题条目。
+// Python: package_registry.py:24-30 RegistryIssue。
+type RegistryIssue struct {
+	// Code 问题码
+	Code string
+	// Manifest 登记簿相对路径
+	Manifest string
+	// Index 条目索引（-1 = 文件级）
+	Index int
+	// Message 消息
+	Message string
+}
+
+// Describe 渲染问题（Python describe() 文案逐字）。
+func (i RegistryIssue) Describe() string {
+	return fmt.Sprintf("%s: %s[%d]: %s", i.Code, i.Manifest, i.Index, i.Message)
+}
+
+// RegistryNormalizationReport 归一报告。
+// Python: package_registry.py:33-37 RegistryNormalizationReport。
+type RegistryNormalizationReport struct {
+	// ChangedFiles 变更文件清单
+	ChangedFiles []string
+	// Changes 变更描述清单
+	Changes []string
+	// Issues 问题清单
+	Issues []RegistryIssue
+}
+
+// registryPath 逐段拼接并拒绝符号链接。
+// Python: package_registry.py:88-95 _registry_path。
+func registryPath(root, manifest string) (string, error) {
+	path := root
+	for _, part := range strings.Split(manifest, "/") {
+		path = filepath.Join(path, part)
+		if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("registry writes cannot follow symbolic links: %q", manifest)
+		}
+	}
+	return registryRelative(root, manifest)
+}
+
+// registryRead 装载登记簿（list 回落 {key: list}；sections/prompt_sections 别名）。
+// Python: package_registry.py:98-116 _read。
+func registryRead(root, manifest, key string) (map[string]any, []any, error) {
+	path, err := registryPath(root, manifest)
+	if err != nil {
+		return nil, nil, err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	var raw any
+	if err := yaml.Unmarshal(content, &raw); err != nil {
+		return nil, nil, err
+	}
+	if raw == nil {
+		raw = map[string]any{}
+	}
+	if list, isList := raw.([]any); isList {
+		raw = map[string]any{key: list}
+	}
+	data, isMap := raw.(map[string]any)
+	if !isMap {
+		return nil, nil, fmt.Errorf("registry must be a mapping or list")
+	}
+	out := map[string]any{}
+	for key2, value := range data {
+		out[key2] = value
+	}
+	// Python: if key == "sections" and "prompt_sections" in data: 别名合并
+	if key == "sections" {
+		if promptValue, has := out["prompt_sections"]; has {
+			if existing, also := out["sections"]; also && fmt.Sprintf("%v", existing) != fmt.Sprintf("%v", promptValue) {
+				return nil, nil, fmt.Errorf("sections and prompt_sections conflict")
+			}
+			out["sections"] = promptValue
+			delete(out, "prompt_sections")
+		}
+	}
+	entries, _ := out[key].([]any)
+	if out[key] != nil && entries == nil {
+		return nil, nil, fmt.Errorf("%s must be a list", key)
+	}
+	if entries == nil {
+		entries = []any{}
+	}
+	return out, entries, nil
+}
+
+// promptEntry 规范化 prompt 段条目（path/file_path 别名、file|content 互斥、priority 整数）。
+// Python: package_registry.py:119-136 _prompt_entry。
+func promptEntry(root string, raw any) (map[string]any, error) {
+	entryMap, isMap := raw.(map[string]any)
+	if !isMap {
+		return nil, fmt.Errorf("prompt section must be an object")
+	}
+	item := map[string]any{}
+	for key, value := range entryMap {
+		item[key] = value
+	}
+	// Python: if not isinstance(item.get("name"), str) or not item["name"].strip(): raise
+	name, isStr := item["name"].(string)
+	if !isStr || strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("prompt section name must be a non-empty string")
+	}
+	// Python: for alias in ("path", "file_path"): ...
+	for _, alias := range []string{"path", "file_path"} {
+		aliasValue, has := item[alias]
+		if !has {
+			continue
+		}
+		target, err := resolveRegistryResource(root, fmt.Sprintf("%v", aliasValue), false)
+		if err != nil {
+			return nil, err
+		}
+		delete(item, alias)
+		if fileValue, hasFile := item["file"]; hasFile {
+			fileTarget, err := resolveRegistryResource(root, fmt.Sprintf("%v", fileValue), false)
+			if err != nil {
+				return nil, err
+			}
+			if fileTarget != target {
+				return nil, fmt.Errorf("file and %s refer to different resources", alias)
+			}
+		}
+		item["file"] = target
+	}
+	if _, hasFile := item["file"]; hasFile {
+		resolved, err := resolveRegistryResource(root, fmt.Sprintf("%v", item["file"]), false)
+		if err != nil {
+			return nil, err
+		}
+		item["file"] = resolved
+		if _, hasContent := item["content"]; hasContent {
+			return nil, fmt.Errorf("prompt section must declare file or content, not both")
+		}
+	} else if _, isStr := item["content"].(string); !isStr {
+		if _, isMap := item["content"].(map[string]any); !isMap {
+			return nil, fmt.Errorf("prompt section requires file or content")
+		}
+	}
+	// Python: priority = item.get("priority", 100); if type(priority) is not int: raise
+	priority := any(100)
+	if v, has := item["priority"]; has {
+		priority = v
+	}
+	switch p := priority.(type) {
+	case int:
+		item["priority"] = p
+	case int64:
+		item["priority"] = int(p)
+	case float64:
+		if p != float64(int(p)) {
+			return nil, fmt.Errorf("prompt priority must be an integer")
+		}
+		item["priority"] = int(p)
+	default:
+		return nil, fmt.Errorf("prompt priority must be an integer")
+	}
+	return item, nil
+}
+
+// registryDocument 规范化文档并收集问题。
+// Python: package_registry.py:177-211 _document。
+func registryDocument(root, manifest string) (map[string]any, []RegistryIssue, error) {
+	prompt := manifest == PromptRegistry
+	key := "skills"
+	if prompt {
+		key = "sections"
+	}
+	data, entries, err := registryRead(root, manifest, key)
+	if err != nil {
+		return nil, nil, err
+	}
+	var result []any
+	seen := map[string]map[string]any{}
+	var issues []RegistryIssue
+	for index, raw := range entries {
+		// Python: expanded = [raw]; if not prompt and dirs list: 展开
+		expanded := []any{raw}
+		if !prompt {
+			if m, isMap := raw.(map[string]any); isMap {
+				if dirs, isList := m["dirs"].([]any); isList {
+					expanded = []any{}
+					for _, d := range dirs {
+						item := map[string]any{}
+						for k, v := range m {
+							if k != "dirs" {
+								item[k] = v
+							}
+						}
+						item["dir"] = d
+						expanded = append(expanded, item)
+					}
+				}
+			}
+		}
+		for _, value := range expanded {
+			var item map[string]any
+			var itemErr error
+			if prompt {
+				item, itemErr = promptEntry(root, value)
+			} else {
+				item, itemErr = skillEntry(root, value)
+			}
+			if itemErr != nil {
+				issues = append(issues, RegistryIssue{Code: "resource_path_invalid", Manifest: manifest, Index: index, Message: itemErr.Error()})
+				continue
+			}
+			// Python: identity = item["name"] if prompt else item["dir"]
+			identity := fmt.Sprintf("%v", item["dir"])
+			if prompt {
+				identity = fmt.Sprintf("%v", item["name"])
+			}
+			// Python: previous = seen.get(identity); if previous is not None: 冲突或去重
+			if previous, exists := seen[identity]; exists {
+				if fmt.Sprintf("%v", previous) != fmt.Sprintf("%v", item) {
+					code := "registry_conflict"
+					if prompt {
+						code = "prompt_section_duplicate"
+					}
+					issues = append(issues, RegistryIssue{
+						Code: code, Manifest: manifest, Index: index,
+						Message: fmt.Sprintf("conflicting registrations: %v; %v", previous, item),
+					})
+				}
+				continue
+			}
+			seen[identity] = item
+			result = append(result, item)
+		}
+	}
+	data[key] = result
+	// Python: if not prompt and not issues: expand_skill_mounts 校验
+	if !prompt && len(issues) == 0 {
+		if _, err := expandSkillMounts(root, result); err != nil {
+			issues = append(issues, RegistryIssue{Code: "registry_conflict", Manifest: manifest, Index: -1, Message: err.Error()})
+		}
+	}
+	return data, issues, nil
+}
+
+// ValidatePackageRegistries 校验别名与冲突（不改包文件）。
+// Python: package_registry.py:213-223 validate_package_registries。
+func ValidatePackageRegistries(root string) []RegistryIssue {
+	rootAbs, _ := filepath.Abs(root)
+	var issues []RegistryIssue
+	for _, manifest := range []string{PromptRegistry, SkillRegistry} {
+		if _, err := os.Stat(filepath.Join(rootAbs, manifest)); err != nil {
+			continue
+		}
+		_, docIssues, err := registryDocument(rootAbs, manifest)
+		if err != nil {
+			issues = append(issues, RegistryIssue{Code: "registry_schema_invalid", Manifest: manifest, Index: -1, Message: err.Error()})
+			continue
+		}
+		issues = append(issues, docIssues...)
+	}
+	return issues
+}
+
+// registryWritable 路径是否在可写清单内。
+// Python: package_registry.py:226-228 _writable。
+func registryWritable(path string, writablePaths []string) bool {
+	for _, value := range writablePaths {
+		trimmed := strings.TrimSuffix(value, "/")
+		if path == trimmed || strings.HasPrefix(path, trimmed+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// registryReferences 引用报告（不复制任意挂载元数据进反馈）。
+// Python: package_registry.py:231-239 _references。
+func registryReferences(entries []any) []any {
+	var out []any
+	for _, item := range entries {
+		if m, isMap := item.(map[string]any); isMap {
+			ref := map[string]any{}
+			for _, key := range []string{"name", "file", "file_path", "path", "dir", "dirs"} {
+				if value, has := m[key]; has {
+					ref[key] = value
+				}
+			}
+			out = append(out, ref)
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// NormalizePackageRegistries 在许可登记簿上做无歧义事务性修复。
+// Python: package_registry.py:242-268 normalize_package_registries。
+func NormalizePackageRegistries(root string, writablePaths []string) RegistryNormalizationReport {
+	rootAbs, _ := filepath.Abs(root)
+	report := RegistryNormalizationReport{}
+	type pendingEntry struct {
+		path     string
+		manifest string
+		updated  string
+		change   string
+	}
+	var pending []pendingEntry
+	for _, manifest := range []string{PromptRegistry, SkillRegistry} {
+		if !registryWritable(manifest, writablePaths) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(rootAbs, manifest)); err != nil {
+			continue
+		}
+		path, err := registryPath(rootAbs, manifest)
+		if err != nil {
+			report.Issues = append(report.Issues, RegistryIssue{Code: "registry_schema_invalid", Manifest: manifest, Index: -1, Message: err.Error()})
+			continue
+		}
+		data, docIssues, docErr := registryDocument(rootAbs, manifest)
+		report.Issues = append(report.Issues, docIssues...)
+		if docErr != nil {
+			report.Issues = append(report.Issues, RegistryIssue{Code: "registry_schema_invalid", Manifest: manifest, Index: -1, Message: docErr.Error()})
+			continue
+		}
+		original, err := os.ReadFile(path)
+		if err != nil {
+			report.Issues = append(report.Issues, RegistryIssue{Code: "registry_schema_invalid", Manifest: manifest, Index: -1, Message: err.Error()})
+			continue
+		}
+		updated, err := yaml.Marshal(data)
+		if err != nil {
+			report.Issues = append(report.Issues, RegistryIssue{Code: "registry_schema_invalid", Manifest: manifest, Index: -1, Message: err.Error()})
+			continue
+		}
+		if string(original) != string(updated) {
+			key := "skills"
+			if manifest == PromptRegistry {
+				key = "sections"
+			}
+			_, originalEntries, readErr := registryRead(rootAbs, manifest, key)
+			var before []any
+			if readErr == nil {
+				before = originalEntries
+			}
+			after, _ := data[key].([]any)
+			change := fmt.Sprintf("%s: %v -> %v", manifest, registryReferences(before), registryReferences(after))
+			pending = append(pending, pendingEntry{path: path, manifest: manifest, updated: string(updated), change: change})
+		}
+	}
+	if len(report.Issues) > 0 {
+		return report
+	}
+	for _, entry := range pending {
+		if err := os.WriteFile(entry.path, []byte(entry.updated), 0o644); err != nil {
+			report.Issues = append(report.Issues, RegistryIssue{Code: "registry_schema_invalid", Manifest: entry.manifest, Index: -1, Message: err.Error()})
+			return report
+		}
+		report.ChangedFiles = append(report.ChangedFiles, entry.manifest)
+		report.Changes = append(report.Changes, entry.change)
+	}
+	return report
+}
+
+// UpsertPromptSection 注册动作的既有文件（不重复等价别名）。
+// Python: package_registry.py:271-307 upsert_prompt_section。
+func UpsertPromptSection(root string, name, fileRef string, priority *int, writablePaths []string, replaceExisting bool) error {
+	rootAbs, _ := filepath.Abs(root)
+	// Python: if not _writable(PROMPT_REGISTRY, writable_paths): raise
+	if !registryWritable(PromptRegistry, writablePaths) {
+		return fmt.Errorf("prompt action must declare %s", PromptRegistry)
+	}
+	// Python: target = resolve_registry_resource(root, file_ref)
+	target, err := resolveRegistryResource(rootAbs, fileRef, false)
+	if err != nil {
+		return err
+	}
+	var data map[string]any
+	var entries []any
+	if _, statErr := os.Stat(filepath.Join(rootAbs, PromptRegistry)); statErr == nil {
+		data, entries, err = registryRead(rootAbs, PromptRegistry, "sections")
+		if err != nil {
+			return err
+		}
+	} else {
+		data = map[string]any{}
+		entries = []any{}
+	}
+	var kept []any
+	var selected map[string]any
+	for _, raw := range entries {
+		item, itemErr := promptEntry(rootAbs, raw)
+		if itemErr != nil {
+			return itemErr
+		}
+		// Python: if item["name"] != name: kept.append(item); continue
+		if fmt.Sprintf("%v", item["name"]) != name {
+			kept = append(kept, item)
+			continue
+		}
+		// Python: if item.get("file") != target: ...
+		if fmt.Sprintf("%v", item["file"]) != target {
+			if !replaceExisting {
+				existing := "inline content"
+				if v, has := item["file"]; has {
+					existing = fmt.Sprintf("%v", v)
+				}
+				return fmt.Errorf("prompt_section_duplicate: %q already refers to %q", name, existing)
+			}
+			delete(item, "content")
+			item["file"] = target
+		}
+		// Python: if selected is not None: 冲突校验
+		if selected != nil {
+			left := map[string]any{}
+			for k, v := range selected {
+				left[k] = v
+			}
+			right := map[string]any{}
+			for k, v := range item {
+				right[k] = v
+			}
+			if priority != nil {
+				delete(left, "priority")
+				delete(right, "priority")
+			}
+			if fmt.Sprintf("%v", left) != fmt.Sprintf("%v", right) {
+				return fmt.Errorf("prompt_section_duplicate: conflicting metadata for %q", name)
+			}
+		}
+		selected = item
+	}
+	// Python: entry = selected or {"name": name, "file": target, "priority": 30}; priority 覆盖
+	entry := selected
+	if entry == nil {
+		entry = map[string]any{"name": name, "file": target, "priority": 30}
+	}
+	if priority != nil {
+		entry["priority"] = *priority
+	}
+	// Python: data["sections"] = [*kept, entry]; write
+	data["sections"] = append(kept, entry)
+	path, err := registryPath(rootAbs, PromptRegistry)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	out, err := yaml.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
 }

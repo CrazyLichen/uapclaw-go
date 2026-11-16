@@ -239,44 +239,8 @@ func CreateVerificationRepairAgent(ctx context.Context, params MemberAgentParams
 // PackageWriteAllowed 独立于模型声明检查包相对写入范围。
 // Python: factory.py:390-410 package_write_allowed。
 func PackageWriteAllowed(path string, declaredPaths []string, repair bool) bool {
-	candidate := path
-	if filepath.IsAbs(candidate) || candidate == "" {
-		return false
-	}
-	parts := splitPathParts(candidate)
-	if len(parts) == 0 || containsDotDot(parts) {
-		return false
-	}
-	// Python: any(part.startswith(".") or part in _PROTECTED_PACKAGE_NAMES ...)
-	for _, part := range parts {
-		if strings.HasPrefix(part, ".") || protectedPackageNames[part] {
-			return false
-		}
-	}
-	if protectedTopDirs[parts[0]] {
-		return false
-	}
-	if repair {
-		// Python: parts[0] in {"prompt_sections",...} or as_posix() in {...} or suffix in {...}
-		if repairableTopDirs[parts[0]] {
-			return true
-		}
-		if repairableTopFiles[candidate] {
-			return true
-		}
-		return repairableSuffixes[strings.ToLower(filepath.Ext(candidate))]
-	}
-	// Python: any(candidate == Path(declared) or Path(declared) in candidate.parents
-	//         for declared in declared_paths if not absolute and no "..")
-	for _, declared := range declaredPaths {
-		if filepath.IsAbs(declared) || containsDotDot(splitPathParts(declared)) {
-			continue
-		}
-		if candidate == declared || isUnderPath(candidate, declared) {
-			return true
-		}
-	}
-	return false
+	// D-c2-5：核心实现落父包（executor/planner 父包侧消费），本包装保持签名兼容。
+	return memberoptimizer.PackageWriteAllowedCore(path, declaredPaths, repair)
 }
 
 // SupportedHostReadRoots 把实现契约以只读上下文暴露给包作者。

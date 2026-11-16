@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
@@ -25,6 +26,25 @@ func init() {
 		InvokeStructured:      InvokeMemberOptimizerAgentStructured,
 		ParseJSONObject:       ParseJSONObjectResponse,
 		ParseYamlOrJSONObject: ParseYamlOrJsonObjectResponse,
+		CreateActionExecutionAgent: func(ctx context.Context, params memberoptimizer.ExecutorAgentParams) (any, error) {
+			agent, err := CreateActionExecutionAgent(ctx, MemberAgentParams{
+				ModelConfigRef:  params.ModelConfigRef,
+				Workspace:       params.Workspace,
+				AgentSkillsDirs: params.AgentSkillsDirs,
+			}, false, params.DeclaredWritePaths)
+			if err != nil {
+				return nil, err
+			}
+			handle, err := OptimizerAgentResources(agent)
+			if err != nil {
+				return nil, err
+			}
+			return &executionAgentHandle{agent: agent, handle: handle}, nil
+		},
+		InvokeAgent:          invokeFn,
+		ExtractText:          ExtractAgentText,
+		PackageWriteAllowed:  func(path string, declaredPaths []string) bool { return PackageWriteAllowed(path, declaredPaths, false) },
+		HostReadRoots:        SupportedHostReadRoots,
 		CreateRoleAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
 			agent, err := CreateRoleAttributionAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,
@@ -58,6 +78,15 @@ type StructuredOutputExhaustedError = memberoptimizer.StructuredOutputExhaustedE
 
 // StructuredInvokeParams 结构化调用参数。Go 类型别名指回父包定义（spec §4 D-c1-1）。
 type StructuredInvokeParams = memberoptimizer.StructuredInvokeParams
+
+// executionAgentHandle agent + 资源句柄（实现 Release 以对齐 optimizer_agent_resources）。
+type executionAgentHandle struct {
+	agent  *harness.DeepAgent
+	handle *OptimizerResourceHandle
+}
+
+// Release 释放本次调用的原生资源。
+func (h *executionAgentHandle) Release() error { return h.handle.Release() }
 
 
 // fencedMappingRE 代码围栏内映射提取。Python: output.py:16-18 _FENCED_MAPPING_RE。
@@ -430,4 +459,19 @@ func stopReasonOr(stopReason, fallback string) string {
 		return fallback
 	}
 	return stopReason
+}
+
+// SnapshotInvokeFn 取当前 DeepAgent 调用注入点快照（测试注入用）。
+func SnapshotInvokeFn() func(context.Context, any, string, string) (map[string]any, error) {
+	return invokeFn
+}
+
+// RestoreInvokeFnForTest 还原调用注入点快照。
+func RestoreInvokeFnForTest(saved func(context.Context, any, string, string) (map[string]any, error)) {
+	invokeFn = saved
+}
+
+// SetInvokeFnForTest 设置调用注入点（测试注入；生产禁用）。
+func SetInvokeFnForTest(fn func(context.Context, any, string, string) (map[string]any, error)) {
+	invokeFn = fn
 }

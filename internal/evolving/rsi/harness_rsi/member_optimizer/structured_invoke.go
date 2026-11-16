@@ -75,6 +75,28 @@ type AgentsBridge struct {
 	CreateMechanismAttributionAgent func(context.Context, AttributionAgentParams) (any, error)
 	// CreateActionPlanningAgent 开单 agent 构造（Python factory.py:211-228）
 	CreateActionPlanningAgent func(context.Context, PlannerAgentParams) (any, error)
+	// CreateActionExecutionAgent 动刀 agent 构造（Python factory.py:231-249）
+	CreateActionExecutionAgent func(ctx context.Context, params ExecutorAgentParams) (any, error)
+	// InvokeAgent agent 直调（Python agent.invoke(inputs, session) 通道）
+	InvokeAgent func(ctx context.Context, agent any, message, sessionID string) (map[string]any, error)
+	// ExtractText 响应文本提取（Python extract_agent_text）
+	ExtractText func(map[string]any) string
+	// PackageWriteAllowed 包写允许（Python factory.py package_write_allowed）
+	PackageWriteAllowed func(string, []string) bool
+	// HostReadRoots 支持的主机只读契约根（Python supported_host_read_roots）
+	HostReadRoots func() []string
+}
+
+// ExecutorAgentParams 动刀 agent 构造参数（Python create_action_execution_agent 关键字收拢）。
+type ExecutorAgentParams struct {
+	// ModelConfigRef 模型配置引用
+	ModelConfigRef string
+	// Workspace 工作空间（动作 worktree）
+	Workspace string
+	// AgentSkillsDirs agent 技能目录
+	AgentSkillsDirs []string
+	// DeclaredWritePaths 声明写路径
+	DeclaredWritePaths []string
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
