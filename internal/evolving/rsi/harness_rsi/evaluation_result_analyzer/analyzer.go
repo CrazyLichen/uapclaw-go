@@ -2730,7 +2730,8 @@ func verifierTestIDsMatch(observed any, expected []string, failureOutput string)
 // diagnosisValidationConflicts 拒绝与确定性测试/验证器事实矛盾的诊断（Python _diagnosis_validation_conflicts）
 func diagnosisValidationConflicts(diagnosis map[string]any, inventory map[string]any, verifierInventory map[string]any, publicTask string) []string {
 	var errs []string
-	if publicTask != "" {
+	// Python: if public_task is not None——调用方恒传 case.input（可为空串），判据为"提供即校验"
+	if publicTask != "" || true {
 		errs = append(errs, NormalizeContractChecks(diagnosis, publicTask)...)
 	}
 	layer := toStringValue(diagnosis["failure_layer"])
@@ -2858,6 +2859,12 @@ type DiagnosisAgentStrategy struct {
 	caseReader *CaseReader
 	// agentRuntime 诊断 agent 运行时
 	agentRuntime *DiagnosisAgentRuntime
+	// buildAgentFn agent 构建入口（默认 agentRuntime.BuildAgent；测试注入点，
+	// 对齐 Python 测试 monkeypatch strategy._build_agent）
+	buildAgentFn func(ctx context.Context, workspace, systemPrompt, invocationLogDir string) (interfaces.BaseAgent, error)
+	// runAgentFn 运行入口（默认 runAgentWithRepair；测试注入点，对齐 Python
+	// 测试 monkeypatch _run_agent）
+	runAgentFn func(ctx context.Context, agent interfaces.BaseAgent, prompt string, maxRetries int) (string, error)
 }
 
 // StrategyName 策略名（Python DiagnosisAgentStrategy.name）
@@ -2868,11 +2875,14 @@ const StrategyName = "diagnosis_agent"
 // NewDiagnosisAgentStrategy 创建策略。
 // Python: __init__(config)
 func NewDiagnosisAgentStrategy(cfg *rsiconfig.EvaluationResultAnalyzerConfig) *DiagnosisAgentStrategy {
-	return &DiagnosisAgentStrategy{
+	strategy := &DiagnosisAgentStrategy{
 		config:       cfg,
 		caseReader:   NewCaseReader(),
 		agentRuntime: NewDiagnosisAgentRuntime(cfg),
 	}
+	strategy.buildAgentFn = strategy.agentRuntime.BuildAgent
+	strategy.runAgentFn = runAgentWithRepair
+	return strategy
 }
 
 // BuildAnalysisStrategy 工厂：从配置创建策略（Python build_analysis_strategy）。
@@ -3014,6 +3024,21 @@ func (s *DiagnosisAgentStrategy) Analyze(ctx context.Context, invocation harness
 	}, nil
 }
 
+// SetTestHooks 注入 agent 构建与运行测试替身（仅测试使用）。
+// 对齐 Python 测试 monkeypatch strategy._build_agent / _run_agent 的注入面；
+// nil 传入恢复默认实现。
+func (s *DiagnosisAgentStrategy) SetTestHooks(
+	buildAgent func(ctx context.Context, workspace, systemPrompt, invocationLogDir string) (interfaces.BaseAgent, error),
+	runAgent func(ctx context.Context, agent interfaces.BaseAgent, prompt string, maxRetries int) (string, error),
+) {
+	if buildAgent != nil {
+		s.buildAgentFn = buildAgent
+	}
+	if runAgent != nil {
+		s.runAgentFn = runAgent
+	}
+}
+
 // PartialArtifact 部分产物兜底（Python _partial_artifact）
 func (s *DiagnosisAgentStrategy) PartialArtifact(invocation harnessrsi.EvaluationResultAnalysisInvocation, reason string, retrievedExperience map[string]any) harnessrsi.EvaluationResultAnalysisArtifact {
 	return harnessrsi.EvaluationResultAnalysisArtifact{
@@ -3122,13 +3147,13 @@ func (s *DiagnosisAgentStrategy) diagnoseOne(
 			sourceStage, caseFeedback, harnessContext,
 		)
 		// Python: invocation_log_dir=str(attempt_dir / "logs")
-		agent, err := s.agentRuntime.BuildAgent(ctx, runtimeDir, diagnosisSystemPrompt, filepath.Join(attemptDir, "logs"))
+		agent, err := s.buildAgentFn(ctx, runtimeDir, diagnosisSystemPrompt, filepath.Join(attemptDir, "logs"))
 		if err != nil {
 			return nil, err
 		}
 		validationInventory := buildValidationInventory(caseInput)
 		verifierInventory := buildVerifierInventory(caseInput)
-		raw, err := runAgentWithRepair(ctx, agent, prompt, s.config.DiagnosisAgentMaxRetries)
+		raw, err := s.runAgentFn(ctx, agent, prompt, s.config.DiagnosisAgentMaxRetries)
 		if err != nil {
 			return nil, err
 		}
@@ -3139,7 +3164,7 @@ func (s *DiagnosisAgentStrategy) diagnoseOne(
 			diagnoses = normalizeCaseDiagnoses(parsed, caseFeedback)
 		}
 		if len(diagnoses) == 0 {
-			repairRaw, repairErr := RunDeepAgentText(ctx, agent, buildJSONRepairPrompt(prompt, raw), 0, "diagnosis agent JSON repair")
+			repairRaw, repairErr := s.runAgentFn(ctx, agent, buildJSONRepairPrompt(prompt, raw), 0)
 			if repairErr != nil {
 				return nil, repairErr
 			}
@@ -3161,9 +3186,9 @@ func (s *DiagnosisAgentStrategy) diagnoseOne(
 			diagnoses, validationInventory, verifierInventory, caseInput.Input,
 		)
 		if len(validationConflicts) > 0 {
-			repairRaw, repairErr := RunDeepAgentText(ctx, agent, buildEvidenceConflictRepairPrompt(
+			repairRaw, repairErr := s.runAgentFn(ctx, agent, buildEvidenceConflictRepairPrompt(
 				prompt, raw, validationConflicts, validationInventory, verifierInventory,
-			), 0, "diagnosis agent evidence repair")
+			), 0)
 			if repairErr != nil {
 				return nil, repairErr
 			}
@@ -3257,6 +3282,10 @@ func allocateDiagnosisAttempt(runtimeRoot, artifactRoot, caseID, sourceStage str
 		attemptDir := filepath.Join(artifactRoot, filepath.Base(runtimeDir))
 		if err := ValidateDiagnosisPaths(runtimeDir, attemptDir, caseID, sourceStage); err != nil {
 			return "", ""
+		}
+		// Python: attempt_dir.mkdir(parents=True, exist_ok=False)
+		if err := os.MkdirAll(filepath.Dir(attemptDir), 0o755); err != nil {
+			continue
 		}
 		if err := os.Mkdir(attemptDir, 0o755); err != nil {
 			if os.IsExist(err) {
@@ -3426,6 +3455,11 @@ type EvaluationResultAnalyzer struct {
 // NewEvaluationResultAnalyzer 创建门面。
 func NewEvaluationResultAnalyzer(cfg *rsiconfig.EvaluationResultAnalyzerConfig) *EvaluationResultAnalyzer {
 	return &EvaluationResultAnalyzer{config: cfg, strategy: BuildAnalysisStrategy(cfg)}
+}
+
+// Strategy 暴露内部策略（测试注入用；对齐 Python 测试对 strategy 内部方法的 monkeypatch）。
+func (a *EvaluationResultAnalyzer) Strategy() *DiagnosisAgentStrategy {
+	return a.strategy
 }
 
 // Analyze 分析评估结果并返回分析产物引用路径（Python analyze）。
