@@ -38,7 +38,12 @@
 //	├── evidence_compactor.go     # 决策中心证据压缩
 //	├── evidence_investigation.go # 17.4b2 待落地
 //	├── agent_runtime.go          # 17.4b2 待落地
-//	└── analyzer.go              # 17.4b2 待落地
+//	├── analyzer_prompts.go      # 诊断/聚合提示词常量（AST 脚本逐字提取）
+//	└── analyzer.go              # 策略管线 + 聚合 + G5 映射 + 门面
+//
+// 结构例外（规则 9.6，用户 2026-11-16 拍板）：Python analyzer.py 单文件在 Go 拆为
+// analyzer_prompts.go（提示词常量，AST 脚本逐字提取保证一比一）与 analyzer.go
+// （策略/聚合/门面）两文件；映射经本清单可核对，提取脚本可复现。
 //
 // Python __init__.py __all__ 导出对照（偏差 D-8：Go 以包级导出符号承载）：
 //

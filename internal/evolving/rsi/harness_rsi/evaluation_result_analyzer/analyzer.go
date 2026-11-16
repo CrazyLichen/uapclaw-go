@@ -2230,7 +2230,9 @@ func dictToTeamIssue(data map[string]any) harnessrsi.TeamIssue {
 	}
 	issueID := toStringValue(data["issue_id"])
 	if issueID == "" {
-		issueID = fmt.Sprintf("issue_%d", len(data)) // Python: id(data) 内存地址；Go 以长度近似占位
+		// Python: f"issue_{id(data)}"（对象地址保证唯一）；Go 无对象身份对等物，
+		// 以 uuid 兜底（偏差 D-15：唯一性对齐，值每次运行变化）
+		issueID = "issue_" + hexUUID()
 	}
 	var affectedCases []string
 	switch list := data["affected_cases"].(type) {
