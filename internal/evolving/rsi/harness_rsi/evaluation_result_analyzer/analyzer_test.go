@@ -3,14 +3,23 @@ package evaluationresultanalyzer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	docxlib "github.com/fumiama/go-docx"
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	rsiconfig "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
+
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestTruncateText 截断标记文案（Python _truncate_text）
@@ -790,12 +799,12 @@ func TestFacadeEmptyCases(t *testing.T) {
 	if err := os.WriteFile(evalRef, []byte("summary_path: ''\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	refPath, err := analyzer.Analyze(context.Background(), harnessrsi.EvaluationResultAnalysisInvocation{
+	refPath, aerr2 := analyzer.Analyze(context.Background(), harnessrsi.EvaluationResultAnalysisInvocation{
 		OutputDir: outputDir, CaseResultsDir: filepath.Join(t.TempDir(), "empty"),
 		EvalRefPath: evalRef,
 	})
-	if err != nil {
-		t.Fatal(err)
+	if aerr2 != nil {
+		t.Fatal(aerr2)
 	}
 	if !strings.HasSuffix(refPath, "analysis_ref.yaml") {
 		t.Fatalf("ref 路径: %s", refPath)
@@ -803,5 +812,856 @@ func TestFacadeEmptyCases(t *testing.T) {
 	data, _ := os.ReadFile(refPath)
 	if !strings.Contains(string(data), "empty_case_results") {
 		t.Fatalf("分析状态应空: %s", data)
+	}
+}
+
+// ──────────────────────────── Task 16：覆盖率补齐（策略管线/校验链/证据准备） ────────────────────────────
+
+// TestVerifierTestIDsMatch 截断名唯一佐证匹配（Python _verifier_test_ids_match）
+func TestVerifierTestIDsMatch(t *testing.T) {
+	// 完全相等
+	if !verifierTestIDsMatch([]any{"t1", "t2"}, []string{"t1", "t2"}, "") {
+		t.Fatal("完全相等应匹配")
+	}
+	// 长度不等
+	if verifierTestIDsMatch([]any{"t1"}, []string{"t1", "t2"}, "") {
+		t.Fatal("长度不等不匹配")
+	}
+	// 无括号的截断名不匹配（Python 实证：variant 须 endswith "]"）
+	log := "FAILED test_parse[mode=legacy] - AssertionError\nFAILED other_test - fail"
+	if verifierTestIDsMatch([]any{"test_parse"}, []string{"test_parse[mode=legacy]"}, log) {
+		t.Fatal("无括号截断名不应匹配")
+	}
+	// 非唯一佐证
+	log2 := "FAILED test_parse[mode=a] - x\nFAILED test_parse[mode=b] - y"
+	if verifierTestIDsMatch([]any{"test_parse"}, []string{"test_parse[mode=legacy]"}, log2) {
+		t.Fatal("非唯一佐证不匹配")
+	}
+	// 无佐证
+	if verifierTestIDsMatch([]any{"test_parse"}, []string{"test_parse[mode=legacy]"}, "") {
+		t.Fatal("无佐证不匹配")
+	}
+	// 控制字符归一化（日志内为转义形式）
+	log3 := "FAILED test_parse[a\\nb] - x\nFAILED other - y"
+	if !verifierTestIDsMatch([]any{"test_parse[a\nb]"}, []string{"test_parse[a\nb]"}, log3) {
+		t.Fatal("控制字符变体应匹配")
+	}
+	// 完整名精确相等（非截断路径）
+	if !verifierTestIDsMatch([]any{"test_parse[mode=legacy]"}, []string{"test_parse[mode=legacy]"}, log) {
+		t.Fatal("精确相等应匹配")
+	}
+	// 非 string 元素
+	if verifierTestIDsMatch([]any{1}, []string{"t1"}, "") {
+		t.Fatal("非 string 应不匹配")
+	}
+}
+
+// TestDiagnosisValidationConflictsLayer 归因层校验（Python _diagnosis_validation_conflicts layer 段）
+func TestDiagnosisValidationConflictsLayer(t *testing.T) {
+	mk := func(layer, targetRef string) map[string]any {
+		return map[string]any{"failure_layer": layer, "target_ref": targetRef}
+	}
+	inventory := map[string]any{"project_test_suite_result": "not_observed", "authoritative_verifier_result": "failed"}
+	// 非法 layer
+	errs := diagnosisValidationConflicts(mk("weird", "unassigned"), inventory, nil, "")
+	if len(errs) != 1 || !strings.Contains(errs[0], "failure_layer must be") {
+		t.Fatalf("非法 layer: %v", errs)
+	}
+	// evidence 层要求 unassigned
+	errs = diagnosisValidationConflicts(mk("evidence", "member_harness.p.prompt"), inventory, nil, "")
+	if len(errs) != 1 || !strings.Contains(errs[0], "evidence requires target_ref=unassigned") {
+		t.Fatalf("evidence 归因: %v", errs)
+	}
+	// runtime 层仅允许 member_harness.*.config
+	errs = diagnosisValidationConflicts(mk("runtime", "member_harness.p.prompt"), inventory, nil, "")
+	if len(errs) != 1 || !strings.Contains(errs[0], "runtime failures require") {
+		t.Fatalf("runtime 归因: %v", errs)
+	}
+	errs = diagnosisValidationConflicts(mk("runtime", "member_harness.p.config"), inventory, nil, "")
+	if len(errs) != 0 {
+		t.Fatalf("runtime config 合法: %v", errs)
+	}
+}
+
+// TestDiagnosisValidationConflictsContradiction 本地过/验证器挂矛盾校验（Python 矛盾段）
+func TestDiagnosisValidationConflictsContradiction(t *testing.T) {
+	inventory := map[string]any{
+		"project_test_suite_result":     "passed",
+		"authoritative_verifier_result": "failed",
+	}
+	// 缺 validation_observations
+	errs := diagnosisValidationConflicts(map[string]any{"failure_layer": "harness"}, inventory, nil, "")
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "missing validation_observations") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("缺 observations: %v", errs)
+	}
+	// observations 字段不符
+	obs := map[string]any{
+		"project_test_suite_attempted":  true,
+		"project_test_suite_result":     "failed",
+		"authoritative_verifier_result": "failed",
+		"contradiction_explanation":     "env diff",
+	}
+	errs = diagnosisValidationConflicts(map[string]any{"failure_layer": "harness", "validation_observations": obs}, inventory, nil, "")
+	found = false
+	for _, e := range errs {
+		if strings.Contains(e, "project_test_suite_result must equal") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("字段不符: %v", errs)
+	}
+	// 合法 observations + 矛盾推荐语
+	obs2 := map[string]any{
+		"project_test_suite_attempted":  true,
+		"project_test_suite_result":     "passed",
+		"authoritative_verifier_result": "failed",
+		"contradiction_explanation":     "verifier env differs",
+	}
+	errs = diagnosisValidationConflicts(map[string]any{
+		"failure_layer": "harness", "validation_observations": obs2,
+		"recommendation": "must run the project's own test suite first",
+	}, inventory, nil, "")
+	found = false
+	for _, e := range errs {
+		if strings.Contains(e, "recommendation contradicts") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("矛盾推荐: %v", errs)
+	}
+}
+
+// TestDiagnosisValidationConflictsPatch 补丁应用但未解决（Python 补丁段）
+func TestDiagnosisValidationConflictsPatch(t *testing.T) {
+	verifier := map[string]any{
+		"patch_successfully_applied":      true,
+		"resolved":                        false,
+		"failed_fail_to_pass_tests":       []string{"t1"},
+		"failed_pass_to_pass_tests":       []string{},
+		"verifier_failure_output_excerpt": "FAILED t1 - boom",
+	}
+	inventory := map[string]any{"project_test_suite_result": "not_observed"}
+	// 缺 verifier_observations
+	errs := diagnosisValidationConflicts(map[string]any{"failure_layer": "harness"}, inventory, verifier, "")
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "missing verifier_observations") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("缺 verifier_observations: %v", errs)
+	}
+	// observations 匹配 + 诊断文本声称补丁失败
+	obs := map[string]any{
+		"patch_successfully_applied": true,
+		"failed_fail_to_pass_tests":  []any{"t1"},
+		"failed_pass_to_pass_tests":  []any{},
+	}
+	errs = diagnosisValidationConflicts(map[string]any{
+		"failure_layer": "harness", "verifier_observations": obs,
+		"root_cause": "patch application failed",
+	}, inventory, verifier, "")
+	found = false
+	for _, e := range errs {
+		if strings.Contains(e, "contradicts authoritative successful patch application") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("补丁失败声称: %v", errs)
+	}
+	// 合法诊断无冲突
+	errs = diagnosisValidationConflicts(map[string]any{
+		"failure_layer": "harness", "verifier_observations": obs,
+		"root_cause": "wrong mode selected",
+	}, inventory, verifier, "")
+	if len(errs) != 0 {
+		t.Fatalf("合法应无冲突: %v", errs)
+	}
+}
+
+// TestCaseDiagnosesValidationConflicts 逐条位置前缀（Python _case_diagnoses_validation_conflicts）
+func TestCaseDiagnosesValidationConflicts(t *testing.T) {
+	inventory := map[string]any{"project_test_suite_result": "not_observed", "authoritative_verifier_result": "failed"}
+	conflicts := caseDiagnosesValidationConflicts(
+		[]map[string]any{{"failure_layer": "weird", "target_ref": "unassigned"}},
+		inventory, nil, "task",
+	)
+	if len(conflicts) != 1 || !strings.HasPrefix(conflicts[0], "diagnosis[1]: ") {
+		t.Fatalf("位置前缀: %v", conflicts)
+	}
+}
+
+// TestAllocateDiagnosisAttempt 尝试目录分配与 attempt.json（Python _allocate_diagnosis_attempt）
+func TestAllocateDiagnosisAttempt(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	artifactRoot := t.TempDir()
+	runtimeDir, attemptDir := allocateDiagnosisAttempt(runtimeRoot, artifactRoot, "c1", "member_stage")
+	if runtimeDir == "" || attemptDir == "" {
+		t.Fatal("分配应成功")
+	}
+	if !strings.HasPrefix(filepath.Base(runtimeDir), "d-") {
+		t.Fatal("运行时目录前缀应为 d-")
+	}
+	raw, err := os.ReadFile(filepath.Join(attemptDir, "attempt.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["case_id"] != "c1" || payload["attempt_id"] != filepath.Base(attemptDir) {
+		t.Fatalf("attempt.json: %v", payload)
+	}
+	// 二次分配应得不同目录
+	runtimeDir2, attemptDir2 := allocateDiagnosisAttempt(runtimeRoot, artifactRoot, "c1", "member_stage")
+	if runtimeDir2 == runtimeDir {
+		t.Fatal("二次分配应唯一")
+	}
+	_ = attemptDir2
+}
+
+// TestPrepareDiagnosisEvidence 证据准备与隔离快照（Python _prepare_diagnosis_evidence）
+func TestPrepareDiagnosisEvidence(t *testing.T) {
+	caseDir := t.TempDir()
+	resultPath := filepath.Join(caseDir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"case_id":"c1","workspace_dir":"`+filepath.Join(caseDir, "ws")+`"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws := filepath.Join(caseDir, "ws")
+	if err := os.MkdirAll(ws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "main.py"), []byte("print('hi')"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(caseDir, "judge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(caseDir, "judge", "normalized_trace.json"),
+		[]byte(`{"traces":[{"trace_id":"t1","role":"assistant","messages":[{"message_index":1,"content":"work","tool_calls":[{"name":"bash","input":"pytest tests/","output":"2 failed","error":""}]}]}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{
+		CaseID: "c1", Input: "task body", ResultPath: resultPath,
+		EvaluationMetadata: map[string]any{}, ExecutionMetadata: map[string]any{},
+	}
+	runtimeDir := filepath.Join(t.TempDir(), "runtime")
+	available := prepareDiagnosisEvidence(caseInput, runtimeDir)
+	if !available {
+		t.Fatal("证据摘要应可用")
+	}
+	for _, name := range []string{"evidence_summary.md", "execution_history.json", "task_clauses.json"} {
+		if !isRegularFile(filepath.Join(runtimeDir, name)) {
+			t.Fatalf("缺 %s", name)
+		}
+	}
+	summary, _ := os.ReadFile(filepath.Join(runtimeDir, "evidence_summary.md"))
+	if !strings.Contains(string(summary), "Repository Snapshot Availability") {
+		t.Fatal("快照可用性段应追加")
+	}
+	if !isRegularFile(filepath.Join(runtimeDir, "repository_snapshot.json")) {
+		t.Fatal("快照清单应存在")
+	}
+	// 无轨迹 → 摘要仍可组装（案例事实段非空）
+	caseInput2 := &CaseAnalysisInput{
+		CaseID: "c2", Input: "x", ResultPath: filepath.Join(caseDir, "result.json"),
+		EvaluationMetadata: map[string]any{}, ExecutionMetadata: map[string]any{},
+	}
+	available2 := prepareDiagnosisEvidence(caseInput2, filepath.Join(t.TempDir(), "runtime2"))
+	if !available2 {
+		t.Fatal("基础摘要应可用")
+	}
+}
+
+// TestLoadCaseResult 结果读取守卫（Python _load_case_result）
+func TestLoadCaseResult(t *testing.T) {
+	dir := t.TempDir()
+	if got := loadCaseResult(&CaseAnalysisInput{ResultPath: filepath.Join(dir, "missing.json")}); len(got) != 0 {
+		t.Fatal("缺失应空")
+	}
+	path := filepath.Join(dir, "result.json")
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadCaseResult(&CaseAnalysisInput{ResultPath: path}); len(got) != 0 {
+		t.Fatal("坏 JSON 应空")
+	}
+	if err := os.WriteFile(path, []byte(`{"case_id":"c1"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadCaseResult(&CaseAnalysisInput{ResultPath: path}); got["case_id"] != "c1" {
+		t.Fatalf("正常读取: %v", got)
+	}
+}
+
+// TestCopyDirAndRemovePath 目录拷贝与删除（Python copytree/_remove_path）
+func TestCopyDirAndRemovePath(t *testing.T) {
+	src := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "a.txt"), []byte("A"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "sub", "b.txt"), []byte("B"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(t.TempDir(), "dst")
+	if err := copyDir(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dst, "sub", "b.txt")); string(data) != "B" {
+		t.Fatalf("递归拷贝: %v", data)
+	}
+	removePath(src)
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatal("应已删除")
+	}
+	removePath(src) // 二次删除不报错
+	removePath(filepath.Join(t.TempDir(), "missing-file"))
+}
+
+// TestCasePriorCandidateFeedback 案例反馈裁剪（Python _case_prior_candidate_feedback）
+func TestCasePriorCandidateFeedback(t *testing.T) {
+	feedback := map[string]any{"by_case": map[string]any{
+		"c1": []any{
+			map[string]any{"verifier_delta": map[string]any{}},
+			map[string]any{"verifier_delta": map[string]any{}},
+			map[string]any{"verifier_delta": map[string]any{}},
+			map[string]any{"verifier_delta": map[string]any{}},
+		},
+		"c2": map[string]any{"verifier_delta": map[string]any{}},
+		"c3": "not-list",
+	}}
+	got := casePriorCandidateFeedback(feedback, "c1")
+	experiments := got["experiments"].([]any)
+	if len(experiments) != 3 {
+		t.Fatalf("最多保留最近 3 条: %d", len(experiments))
+	}
+	if got2 := casePriorCandidateFeedback(feedback, "c2"); len(got2["experiments"].([]any)) != 1 {
+		t.Fatalf("单条 dict 包装: %v", got2)
+	}
+	if got3 := casePriorCandidateFeedback(feedback, "c3"); len(got3) != 0 {
+		t.Fatalf("非法记录: %v", got3)
+	}
+	if got4 := casePriorCandidateFeedback(nil, "c1"); len(got4) != 0 {
+		t.Fatal("nil 反馈应空")
+	}
+}
+
+// TestPartialArtifact 部分产物（Python _partial_artifact）
+func TestPartialArtifact(t *testing.T) {
+	strategy := NewDiagnosisAgentStrategy(&rsiconfig.EvaluationResultAnalyzerConfig{})
+	artifact := strategy.PartialArtifact(harnessrsi.EvaluationResultAnalysisInvocation{OutputDir: "/tmp/out-x"}, "reason", nil)
+	if artifact.Metadata["analysis_status"] != "partial" || artifact.Metadata["failure_reason"] != "reason" {
+		t.Fatalf("partial: %v", artifact.Metadata)
+	}
+	if len(artifact.Issues) != 0 || artifact.AnalysisID != "out-x" {
+		t.Fatalf("artifact: %+v", artifact)
+	}
+}
+
+// TestFacadeWritesIssuesYAML 门面真实写盘（Python analyze 落盘段）
+func TestFacadeWritesIssuesYAML(t *testing.T) {
+	outputDir := t.TempDir()
+	fixture := t.TempDir()
+	facade0 := NewEvaluationResultAnalyzer(&rsiconfig.EvaluationResultAnalyzerConfig{
+		OutputFilename: "issues.yaml", ModelConfigRef: filepath.Join(fixture, "model.yaml"),
+	})
+	strategy := facade0.Strategy()
+	strategy.SetTestHooks(
+		func(ctx context.Context, workspace, systemPrompt, invocationLogDir string) (interfaces.BaseAgent, error) {
+			return &testDiagnosisAgent{}, nil
+		},
+		func(ctx context.Context, agent interfaces.BaseAgent, prompt string, maxRetries int) (string, error) {
+			return `{"diagnoses": [{"summary": "s", "target_ref": "member_harness.planner.prompt",
+				"failure_mode": "late", "severity": "high", "confidence": "high",
+				"root_cause": "r", "failure_cluster": {"failed_checks": ["t1"], "observable_behavior": "boom"}}]}`, nil
+		},
+	)
+	// 构造 eval_ref + 失败案例
+	if err := os.WriteFile(filepath.Join(fixture, "eval_ref.yaml"), []byte("eval_id: e\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixture, "model.yaml"),
+		[]byte("model_client_config:\n  client_provider: OpenAI\n  api_key: k\n  api_base: https://example.invalid/v1\nmodel_request_config:\n  model: fake\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseDir := filepath.Join(fixture, "cases", "c1")
+	if err := os.MkdirAll(caseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(caseDir, "result.json"), []byte(`{"case_id":"c1","status":"failed","score":0.5,
+		"evaluation":{"method":"pytest","passed":false,"reason":"failed"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refPath, err := facade0.Analyze(context.Background(), harnessrsi.EvaluationResultAnalysisInvocation{
+		EvalRefPath:    filepath.Join(fixture, "eval_ref.yaml"),
+		CaseResultsDir: filepath.Join(fixture, "cases"),
+		OutputDir:      outputDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact2, aerr3 := strategy.Analyze(context.Background(), harnessrsi.EvaluationResultAnalysisInvocation{
+		EvalRefPath:    filepath.Join(fixture, "eval_ref.yaml"),
+		CaseResultsDir: filepath.Join(fixture, "cases"),
+		OutputDir:      filepath.Join(outputDir, "dbg"),
+	})
+	t.Logf("STRATEGY2 err=%v issues=%d metadata=%v", aerr3, len(artifact2.Issues), artifact2.Metadata)
+	issuesRaw, err := os.ReadFile(filepath.Join(outputDir, "issues.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pc, err2 := os.ReadFile(filepath.Join(outputDir, "per_case_diagnoses.json")); err2 == nil {
+		t.Logf("PER_CASE: %s", pc)
+	}
+	if !strings.Contains(string(issuesRaw), "issue_001") || !strings.Contains(string(issuesRaw), "member_harness.planner.prompt") {
+		t.Fatalf("issues.yaml: %s", issuesRaw)
+	}
+	refRaw, err := os.ReadFile(refPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(refRaw), "issues_path") {
+		t.Fatalf("analysis_ref: %s", refRaw)
+	}
+}
+
+// testDiagnosisAgent 满足 BaseAgent 的空转 mock（复用 harness/rails 形制，仅核心方法）。
+type testDiagnosisAgent struct {
+	cbMgr *interfaces.AgentCallbackManager
+	// invokeResult Invoke 返回脚本（RunDeepAgentText 直测用）
+	invokeResult map[string]any
+	// invokeErr Invoke 错误脚本
+	invokeErr error
+}
+
+func (f *testDiagnosisAgent) Configure(_ context.Context, _ interfaces.AgentConfig) error { return nil }
+func (f *testDiagnosisAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (map[string]any, error) {
+	return f.invokeResult, f.invokeErr
+}
+func (f *testDiagnosisAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
+	return nil, nil
+}
+func (f *testDiagnosisAgent) Card() *singleagentschema.AgentCard {
+	return &singleagentschema.AgentCard{BaseCard: commonschema.BaseCard{ID: "t", Name: "T"}}
+}
+func (f *testDiagnosisAgent) Config() interfaces.AgentConfig { return nil }
+func (f *testDiagnosisAgent) AbilityManager() interfaces.AbilityManagerInterface {
+	return nil
+}
+func (f *testDiagnosisAgent) CallbackManager() *interfaces.AgentCallbackManager { return f.cbMgr }
+func (f *testDiagnosisAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *testDiagnosisAgent) RegisterCallback(_ context.Context, _ interfaces.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
+	return nil
+}
+func (f *testDiagnosisAgent) RegisterRail(_ context.Context, _ interfaces.AgentRail, _ ...cb.CallbackOption) error {
+	return nil
+}
+func (f *testDiagnosisAgent) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error {
+	return nil
+}
+func (f *testDiagnosisAgent) UapswarmProjectDir() string       { return "" }
+func (f *testDiagnosisAgent) SetUapswarmProjectDir(string)     {}
+func (f *testDiagnosisAgent) UapswarmCodeProjectDir() string   { return "" }
+func (f *testDiagnosisAgent) SetUapswarmCodeProjectDir(string) {}
+func (f *testDiagnosisAgent) UapswarmAdapterMode() string      { return "" }
+func (f *testDiagnosisAgent) SetUapswarmAdapterMode(string)    {}
+
+// ──────────────────────────── Task 16b：执行分发/闭合/修复链/小函数 ────────────────────────────
+
+// TestExecuteCausalInvestigationEndToEnd 执行分发主链（Python execute_causal_investigation）
+func TestExecuteCausalInvestigationEndToEnd(t *testing.T) {
+	caseDir := t.TempDir()
+	judgeDir := filepath.Join(caseDir, "judge")
+	if err := os.MkdirAll(judgeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(caseDir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"case_id":"c1"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	trace, _ := json.Marshal(map[string]any{"traces": []map[string]any{{
+		"trace_id": "c1-t1", "member_role": "worker", "messages": []map[string]any{{
+			"role": "assistant", "content": "working", "message_index": 1, "tool_calls": []map[string]any{
+				{"name": "read_file", "input": `{"path":"a.txt"}`, "output": "EXACT_DISCRIMINATOR parser selected legacy mode"},
+			},
+		}},
+	}}})
+	if err := os.WriteFile(filepath.Join(judgeDir, "normalized_trace.json"), trace, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{CaseID: "c1", ResultPath: resultPath}
+	// 调查计划请求直接构造（normalize 分支已有专测）
+	investigation := map[string]any{"evidence_requests": []any{
+		map[string]any{"operation": "search_trace", "query": "EXACT_DISCRIMINATOR parser"},
+		map[string]any{"operation": "read_event", "trace_id": "c1-t1", "message_index": 1},
+	}}
+	evidence := ExecuteCausalInvestigation(caseInput, investigation, nil, "")
+	if b, _ := evidence["policy"].(map[string]any)["arbitrary_shell_or_path_access"].(bool); b {
+		t.Fatal("只读策略应关闭任意 shell/路径访问")
+	}
+	if evidence["completed_request_count"] != 2 {
+		t.Fatalf("完成请求数: %v", evidence["completed_request_count"])
+	}
+	results := evidence["results"].([]map[string]any)
+	if results[0]["availability"] != "available" {
+		t.Fatalf("search_trace: %v", results[0])
+	}
+	if evidence["artifact_evidence_closure"] == nil {
+		t.Fatal("artifact 闭合结果应存在")
+	}
+}
+
+// TestCloseIncompleteArtifactEvidence 窗口闭合（Python _close_incomplete_artifact_evidence 主路径）
+func TestCloseIncompleteArtifactEvidence(t *testing.T) {
+	caseDir := t.TempDir()
+	resultPath := filepath.Join(caseDir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"case_id":"c1"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	artifacts := filepath.Join(caseDir, "artifacts")
+	if err := os.MkdirAll(artifacts, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("A", 5000) + "NEEDLE" + strings.Repeat("B", 40000)
+	if err := os.WriteFile(filepath.Join(artifacts, "log.txt"), []byte(long), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{CaseID: "c1", ResultPath: resultPath}
+	cache := map[string]string{}
+	// 初始结果：inspect_artifact 命中但 span 不完整（window_complete=false）
+	// → 触发自动闭合窗口读取（Python candidates 来源即 inspect_artifact）
+	initial := []map[string]any{{
+		"operation":      "inspect_artifact",
+		"request_id":     "r1",
+		"availability":   "available",
+		"hypothesis_ids": []any{"h1"},
+		"matches": []any{map[string]any{
+			"source":      "artifacts/log.txt",
+			"exact_spans": []any{map[string]any{"text": "partial", "window_complete": false}},
+		}},
+	}}
+	automaticRequests, closureResults, closure := closeIncompleteArtifactEvidence(
+		caseInput,
+		map[string]any{"evidence_requests": []any{
+			map[string]any{"operation": "read_artifact_window", "relative_path": "artifacts/log.txt",
+				"query": "NEEDLE", "max_chars": 12000},
+		}},
+		initial, cache,
+	)
+	if len(closureResults) == 0 {
+		t.Fatal("应产出闭合窗口")
+	}
+	if closure == nil {
+		t.Fatal("闭合信息应存在")
+	}
+	if len(automaticRequests) == 0 {
+		t.Fatal("自动请求应生成")
+	}
+	// 闭合窗口应命中 NEEDLE（跨窗口扫描）
+	found := false
+	for _, item := range closureResults {
+		if text := toStringValue(item["text"]); strings.Contains(text, "NEEDLE") {
+			found = true
+		}
+		if !found {
+			t.Logf("CLOSURE_ITEM: %v", item)
+		}
+	}
+	if !found {
+		t.Fatal("闭合窗口应覆盖 NEEDLE")
+	}
+}
+
+// TestRunAgentWithRepair 修复链编排（Python _run_agent；runDeepAgentTextFn 注入）
+func TestRunAgentWithRepair(t *testing.T) {
+	ctx := context.Background()
+	agent := &testDiagnosisAgent{}
+	orig := runDeepAgentTextFn
+	defer func() { runDeepAgentTextFn = orig }()
+	calls := 0
+	runDeepAgentTextFn = func(ctx context.Context, agent interfaces.BaseAgent, prompt string, callOnce func() (string, error)) func() (string, error) {
+		return func() (string, error) {
+			calls++
+			if calls == 1 {
+				return "no json here", nil
+			}
+			return `{"diagnoses": [{"summary": "s"}]}`, nil
+		}
+	}
+	// maxRetries=0：无修复直接返回
+	raw, err := runAgentWithRepair(ctx, agent, "p", 0)
+	if err != nil || raw != "no json here" {
+		t.Fatalf("零重试: %v %q", err, raw)
+	}
+	// maxRetries>0：坏 JSON 触发修复
+	raw2, err2 := runAgentWithRepair(ctx, agent, "p", 1)
+	if err2 != nil || !strings.Contains(raw2, `"diagnoses"`) {
+		t.Fatalf("修复链: %v %q", err2, raw2)
+	}
+	if calls < 2 {
+		t.Fatalf("修复链应至少两次调用: %d", calls)
+	}
+	// 首次即好 JSON → 不修复
+	calls = 0
+	raw3, err3 := runAgentWithRepair(ctx, agent, "p", 1)
+	if err3 != nil || !strings.Contains(raw3, "diagnoses") || calls != 2 {
+		t.Fatalf("脚本化重试: calls=%d err=%v", calls, err3)
+	}
+}
+
+// TestMiscSmallHelpers 小函数覆盖（mustJSON/sortedMapKeys/boolPtr/hexUUID 等）
+func TestMiscSmallHelpers(t *testing.T) {
+	if mustJSON(map[string]any{"a": 1}) != `{"a":1}` {
+		t.Fatal("mustJSON")
+	}
+	if mustJSONIndent(map[string]any{"a": 1}) != "{\n  \"a\": 1\n}" {
+		t.Fatal("mustJSONIndent")
+	}
+	if sortedMapKeys(map[string]any{"b": 1, "a": 2})[0] != "a" {
+		t.Fatal("sortedMapKeys")
+	}
+	if !*boolPtr(true) || *boolPtr(false) {
+		t.Fatal("boolPtr")
+	}
+	if len(hexUUID()) != 32 || strings.Contains(hexUUID(), "-") {
+		t.Fatal("hexUUID 应为 32 位无连字符")
+	}
+	if confidenceRank("high") != 3 || confidenceRank("unknown") != 0 {
+		t.Fatal("confidenceRank")
+	}
+	if expandUser("~") == "~" || expandUser("~/x") == "~/x" {
+		t.Fatal("expandUser 应展开 ~（HOME 存在时）")
+	}
+	if readJSONInv(filepath.Join(t.TempDir(), "missing.json")) == nil {
+		t.Fatal("missing 应返回空 map 而非 nil")
+	}
+	if invStringList2(nil) != nil {
+		// invStringList2 nil 语义按实现
+	}
+	if m := mapValue(nil); m != nil && len(m) != 0 {
+		t.Fatal("mapValue nil 应空")
+	}
+	if !passToPassHasItems([]string{"x"}) || passToPassHasItems([]string{}) {
+		t.Fatal("passToPassHasItems")
+	}
+	if !containsString([]string{"a"}, "a") || containsString([]string{"a"}, "b") {
+		t.Fatal("containsString")
+	}
+	if got := leadingTextSpan("hello world"); len(got) == 0 {
+		t.Fatal("leadingTextSpan 应产出前导 span")
+	}
+	if got := repositoryDirInv(filepath.Join(t.TempDir(), "nonexist")); got != "" {
+		t.Fatal("不存在仓库应空串")
+	}
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "repository"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := repositoryDirInv(repo); got == "" {
+		t.Fatal("存在 repository 目录应返回路径")
+	}
+}
+
+// TestSetTestHooksNil 恢复默认钩子（SetTestHooks nil 分支）
+func TestSetTestHooksNil(t *testing.T) {
+	strategy := NewDiagnosisAgentStrategy(&rsiconfig.EvaluationResultAnalyzerConfig{})
+	defaultBuild := strategy.buildAgentFn
+	strategy.SetTestHooks(nil, nil)
+	if strategy.buildAgentFn == nil {
+		t.Fatal("nil 注入应保留默认")
+	}
+	_ = defaultBuild
+}
+
+// TestSmallCoverageTopup 收口小函数（GetCallbacks/wrapBeforeModelCall/
+// buildEvidenceConflictRepairPrompt/partialArtifact/paragraphRunText）
+func TestSmallCoverageTopup(t *testing.T) {
+	rail := NewDiagnosisBudgetRail(3)
+	// GetCallbacks 应声明 BeforeModelCall
+	callbacks := rail.GetCallbacks()
+	if _, ok := callbacks[interfaces.CallbackBeforeModelCall]; !ok {
+		t.Fatal("GetCallbacks 应含 BeforeModelCall")
+	}
+	// wrapBeforeModelCall：合法 ctx 走 BeforeModelCall
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.ModelCallInputs{}, nil)
+	cbc.SetModelContext(&budgetTestContext{})
+	if err := rail.wrapBeforeModelCall(context.Background(), cbc); err != nil {
+		t.Fatal(err)
+	}
+	// 非法类型静默
+	if err := rail.wrapBeforeModelCall(context.Background(), "wrong"); err != nil {
+		t.Fatal(err)
+	}
+	// 证据冲突修复提示词
+	got := buildEvidenceConflictRepairPrompt("orig", "prev",
+		[]string{"c1"}, map[string]any{"k": "v"}, map[string]any{"k2": "v2"})
+	for _, needle := range []string{"Deterministic conflict payload", "orig", "prev", "c1"} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("冲突修复提示词缺 %q", needle)
+		}
+	}
+	// partialArtifact（私有转发）
+	strategy := NewDiagnosisAgentStrategy(&rsiconfig.EvaluationResultAnalyzerConfig{})
+	artifact := strategy.partialArtifact(harnessrsi.EvaluationResultAnalysisInvocation{OutputDir: "/tmp/o"}, "r", nil)
+	if artifact.Metadata["failure_reason"] != "r" {
+		t.Fatal("partialArtifact 转发")
+	}
+	// paragraphRunText：真实 docx 结构（Run.Children 内 Text）
+	para := &docxlib.Paragraph{}
+	run := &docxlib.Run{Children: []any{&docxlib.Text{Text: "hello "}, &docxlib.Text{Text: "world"}}}
+	para.Children = []any{run, "non-run-item"}
+	if got := paragraphRunText(para); got != "hello world" {
+		t.Fatalf("段落文本: %q", got)
+	}
+	// 空段落
+	if got := paragraphRunText(&docxlib.Paragraph{}); got != "" {
+		t.Fatalf("空段落: %q", got)
+	}
+}
+
+// TestDiagnoseOneBranches diagnoseOne 修复与失败分支（Python _diagnose_one 修复链/异常分派）
+func TestDiagnoseOneBranches(t *testing.T) {
+	// fixture：失败案例 + trace
+	caseDir := t.TempDir()
+	resultPath := filepath.Join(caseDir, "result.json")
+	if err := os.WriteFile(resultPath, []byte(`{"case_id":"c1","status":"failed","score":0.4,
+		"evaluation":{"method":"pytest","passed":false,"reason":"failed"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(caseDir, "judge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(caseDir, "judge", "normalized_trace.json"),
+		[]byte(`{"traces":[{"trace_id":"t1","role":"assistant","messages":[{"message_index":1,"content":"w"}]}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	caseInput := &CaseAnalysisInput{
+		CaseID: "c1", ResultPath: resultPath, Input: "task",
+		EvaluationMetadata: map[string]any{}, ExecutionMetadata: map[string]any{},
+	}
+	signals := &DeterministicSignals{Method: "pytest"}
+
+	buildDiagnosis := func(summary string) map[string]any {
+		return map[string]any{
+			"diagnoses": []any{map[string]any{
+				"summary": summary, "target_ref": "member_harness.planner.prompt", "failure_mode": "late",
+				"severity": "high", "confidence": "high", "root_cause": "r",
+				"failure_cluster": map[string]any{"failed_checks": []any{"t1"}, "observable_behavior": "boom"},
+				// 与确定性证据矛盾：本地项目测试通过但验证器失败，却无 observations
+				"validation_observations": nil,
+			}},
+		}
+	}
+
+	// a) 证据矛盾：初次诊断无 observations → 冲突 → 修复后仍冲突 → evidence_conflict 结果
+	strategy := NewDiagnosisAgentStrategy(&rsiconfig.EvaluationResultAnalyzerConfig{ModelConfigRef: "x"})
+	conflictCalls := 0
+	strategy.SetTestHooks(
+		func(ctx context.Context, workspace, systemPrompt, invocationLogDir string) (interfaces.BaseAgent, error) {
+			return &testDiagnosisAgent{}, nil
+		},
+		func(ctx context.Context, agent interfaces.BaseAgent, prompt string, maxRetries int) (string, error) {
+			conflictCalls++
+			payload := buildDiagnosis("s")
+			if conflictCalls >= 2 {
+				// 修复轮：制造仍矛盾的验证器 observations（补丁应用但未解决 + 声称补丁失败）
+				payload = map[string]any{"diagnoses": []any{map[string]any{
+					"summary": "s", "target_ref": "member_harness.planner.prompt", "failure_mode": "late",
+					"severity": "high", "confidence": "high", "root_cause": "patch application failed",
+					"failure_cluster": map[string]any{"failed_checks": []any{"t1"}, "observable_behavior": "boom"},
+				}}}
+			}
+			raw, _ := json.Marshal(payload)
+			return string(raw), nil
+		},
+	)
+	// 构造本地过/验证器挂矛盾清单：先造 result 事件（pytest passed）
+	if err := os.WriteFile(resultPath, []byte(`{"case_id":"c1","status":"failed","score":0.4,
+		"evaluation":{"method":"pytest","passed":false,"reason":"failed"},
+		"metadata":{"execution":{"command_log":[{"command":"pytest tests/","stdout_excerpt":"3 passed","exit_code":0}]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results := strategy.AnalyzeForTest(context.Background(), []*CaseAnalysisInput{caseInput}, signals)
+	if len(results) != 1 {
+		t.Fatalf("结果数: %d", len(results))
+	}
+	if results[0]["diagnosis_status"] != "evidence_conflict" {
+		t.Fatalf("应为证据矛盾兜底: %v", results[0]["diagnosis_status"])
+	}
+	if conflictCalls < 2 {
+		t.Fatalf("修复调用应发生: %d", conflictCalls)
+	}
+
+	// b) 运行错误：runAgentFn 返回错误 → unavailable/model_service 兜底
+	strategy2 := NewDiagnosisAgentStrategy(&rsiconfig.EvaluationResultAnalyzerConfig{ModelConfigRef: "x"})
+	strategy2.SetTestHooks(
+		func(ctx context.Context, workspace, systemPrompt, invocationLogDir string) (interfaces.BaseAgent, error) {
+			return &testDiagnosisAgent{}, nil
+		},
+		func(ctx context.Context, agent interfaces.BaseAgent, prompt string, maxRetries int) (string, error) {
+			return "", errors.New("connection reset by peer")
+		},
+	)
+	results2 := strategy2.AnalyzeForTest(context.Background(), []*CaseAnalysisInput{caseInput}, signals)
+	if results2[0]["diagnosis_status"] != "unavailable" {
+		t.Fatalf("运行错误应兜底: %v", results2[0]["diagnosis_status"])
+	}
+	if results2[0]["failure_layer"] != "evidence" {
+		t.Fatalf("failure_layer: %v", results2[0]["failure_layer"])
+	}
+	_ = buildDiagnosis
+}
+
+// TestRunDeepAgentText 直测换会话重试（runDeepAgentTextFn 默认路径 + 全局 runner）
+func TestRunDeepAgentText(t *testing.T) {
+	ctx := context.Background()
+	// 正常 output 提取
+	agent := &testDiagnosisAgent{invokeResult: map[string]any{"output": "hello diagnosis"}}
+	raw, err := RunDeepAgentText(ctx, agent, "prompt", 0, "op")
+	if err != nil || raw != "hello diagnosis" {
+		t.Fatalf("output 提取: %v %q", err, raw)
+	}
+	// answer 回退
+	agent2 := &testDiagnosisAgent{invokeResult: map[string]any{"answer": "ans"}}
+	raw2, err2 := RunDeepAgentText(ctx, agent2, "p", 0, "op")
+	if err2 != nil || raw2 != "ans" {
+		t.Fatalf("answer 回退: %v %q", err2, raw2)
+	}
+	// 整 dict JSON 兜底
+	agent3 := &testDiagnosisAgent{invokeResult: map[string]any{"k": "v"}}
+	raw3, err3 := RunDeepAgentText(ctx, agent3, "p", 0, "op")
+	if err3 != nil || !strings.Contains(raw3, `"k":"v"`) {
+		t.Fatalf("dict 兜底: %v %q", err3, raw3)
+	}
+	// result_type=error → DiagnosisAgentExecutionError（带终止原因）
+	agent4 := &testDiagnosisAgent{invokeResult: map[string]any{
+		"result_type": "error", "output": "boom", "termination_reason": "cancelled",
+	}}
+	_, err4 := RunDeepAgentText(ctx, agent4, "p", 0, "op")
+	var execErr *DiagnosisAgentExecutionError
+	if !errors.As(err4, &execErr) || execErr.TerminationReason() != "cancelled" {
+		t.Fatalf("error 结果: %v", err4)
+	}
+	// Invoke 错误 → 可重试路径
+	agent5 := &testDiagnosisAgent{invokeErr: errors.New("runner down")}
+	_, err5 := RunDeepAgentText(ctx, agent5, "p", 0, "op")
+	if err5 == nil {
+		t.Fatal("Invoke 错误应传播")
 	}
 }

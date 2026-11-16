@@ -233,7 +233,12 @@ func RunDeepAgentText(ctx context.Context, agent interfaces.BaseAgent, prompt st
 		return output, nil
 	}
 	// Python: return await run_model_call_with_retries(call_once, operation_name=..., max_retries=max(0, int(max_retries or 0)))
-	return harnessrsi.RunModelCallWithRetries(ctx, callOnce, operationName, maxRetries, 0, 0)
+	return harnessrsi.RunModelCallWithRetries(ctx, runDeepAgentTextFn(ctx, agent, prompt, callOnce), operationName, maxRetries, 0, 0)
+}
+
+// runDeepAgentTextFn 运行注入点（Python 测试对 run_deep_agent_text 的 monkeypatch 等价）
+var runDeepAgentTextFn = func(ctx context.Context, agent interfaces.BaseAgent, prompt string, callOnce func() (string, error)) func() (string, error) {
+	return callOnce
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

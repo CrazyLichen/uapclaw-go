@@ -14,7 +14,7 @@
 //   - b2（已完成）：evidence_investigation（确定性调查计划执行器，Python 侧
 //     零生产调用方 ⤴️17.4d，偏差 D-12）、agent_runtime（DiagnosisAgentRuntime/
 //     run_deep_agent_text，只读轨+预算轨双 Rail）、analyzer（门面 + 诊断提示词
-//     + 聚合会诊 + TeamIssue 后处理）、导出收口（见下方 __all__ 对照）。
+//   - 聚合会诊 + TeamIssue 后处理）、导出收口（见下方 __all__ 对照）。
 //
 // 前置件切片（归属在各自未来包，见 harness_rsi/evaluator 与
 // harness_rsi/member_optimizer 的 doc.go）：

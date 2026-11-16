@@ -15,20 +15,20 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/kv_cache"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"strings"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"strings"
 
 	harness_rsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
+	rsiconfig "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
 	evaluation_result_analyzer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/evaluation_result_analyzer"
 	member_optimizer "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
-	rsiconfig "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/config"
 )
 
 // ──────────────────────────── 测试替身（对齐 harness/rails/agent_fake_test.go 形制） ────────────────────────────
@@ -54,14 +54,16 @@ func (m *diagnosisMockSession) GetState(key state.StateKey) (any, error) {
 	}
 	return value, nil
 }
-func (m *diagnosisMockSession) DumpState() map[string]any                      { return m.state }
-func (m *diagnosisMockSession) WriteStream(_ context.Context, _ any) error     { return nil }
+func (m *diagnosisMockSession) DumpState() map[string]any                        { return m.state }
+func (m *diagnosisMockSession) WriteStream(_ context.Context, _ any) error       { return nil }
 func (m *diagnosisMockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (m *diagnosisMockSession) GetEnv(_ string, _ ...any) any                  { return nil }
-func (m *diagnosisMockSession) Interact(_ context.Context, _ any) error        { return nil }
-func (m *diagnosisMockSession) ClearSession(_ context.Context)                 {}
-func (m *diagnosisMockSession) GetCacheIdentity() kv_cache.KVCacheIdentity     { return kv_cache.KVCacheIdentity{} }
-func (m *diagnosisMockSession) GetParentSessionID() string                     { return "" }
+func (m *diagnosisMockSession) GetEnv(_ string, _ ...any) any                    { return nil }
+func (m *diagnosisMockSession) Interact(_ context.Context, _ any) error          { return nil }
+func (m *diagnosisMockSession) ClearSession(_ context.Context)                   {}
+func (m *diagnosisMockSession) GetCacheIdentity() kv_cache.KVCacheIdentity {
+	return kv_cache.KVCacheIdentity{}
+}
+func (m *diagnosisMockSession) GetParentSessionID() string { return "" }
 
 // diagnosisFakeAgent 满足 BaseAgent 接口的 mock（fake 链路中不参与执行）。
 type diagnosisFakeAgent struct {
@@ -99,12 +101,12 @@ func (f *diagnosisFakeAgent) RegisterRail(_ context.Context, _ agentinterfaces.A
 func (f *diagnosisFakeAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }
-func (f *diagnosisFakeAgent) UapswarmProjectDir() string                { return "" }
-func (f *diagnosisFakeAgent) SetUapswarmProjectDir(string)              {}
-func (f *diagnosisFakeAgent) UapswarmCodeProjectDir() string            { return "" }
-func (f *diagnosisFakeAgent) SetUapswarmCodeProjectDir(string)          {}
-func (f *diagnosisFakeAgent) UapswarmAdapterMode() string               { return "" }
-func (f *diagnosisFakeAgent) SetUapswarmAdapterMode(string)             {}
+func (f *diagnosisFakeAgent) UapswarmProjectDir() string       { return "" }
+func (f *diagnosisFakeAgent) SetUapswarmProjectDir(string)     {}
+func (f *diagnosisFakeAgent) UapswarmCodeProjectDir() string   { return "" }
+func (f *diagnosisFakeAgent) SetUapswarmCodeProjectDir(string) {}
+func (f *diagnosisFakeAgent) UapswarmAdapterMode() string      { return "" }
+func (f *diagnosisFakeAgent) SetUapswarmAdapterMode(string)    {}
 
 var (
 	_ sessioninterfaces.SessionFacade = (*diagnosisMockSession)(nil)

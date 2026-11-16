@@ -2677,10 +2677,10 @@ func verifierTestIDsMatch(observed any, expected []string, failureOutput string)
 	// 要求唯一的 FAILED 日志记录佐证
 	failures := map[string]map[string]bool{}
 	for _, line := range strings.Split(failureOutput, "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) == 2 && fields[0] == "FAILED" {
-			body := strings.TrimSpace(line)[len("FAILED"):]
-			body = strings.TrimSpace(body)
+		// Python: line.strip().split(maxsplit=1)——首 token 与余文整体
+		parts := strings.SplitN(strings.TrimSpace(line), " ", 2)
+		if len(parts) == 2 && parts[0] == "FAILED" {
+			body := strings.TrimSpace(parts[1])
 			head := strings.Fields(body)[0]
 			if failures[head] == nil {
 				failures[head] = map[string]bool{}
@@ -2875,6 +2875,7 @@ const StrategyName = "diagnosis_agent"
 // NewDiagnosisAgentStrategy 创建策略。
 // Python: __init__(config)
 func NewDiagnosisAgentStrategy(cfg *rsiconfig.EvaluationResultAnalyzerConfig) *DiagnosisAgentStrategy {
+	applyConfigDefaults(cfg)
 	strategy := &DiagnosisAgentStrategy{
 		config:       cfg,
 		caseReader:   NewCaseReader(),
@@ -2883,6 +2884,21 @@ func NewDiagnosisAgentStrategy(cfg *rsiconfig.EvaluationResultAnalyzerConfig) *D
 	strategy.buildAgentFn = strategy.agentRuntime.BuildAgent
 	strategy.runAgentFn = runAgentWithRepair
 	return strategy
+}
+
+// AnalyzeForTest 测试注入点：直接驱动逐案诊断管线（绕过文件系统读取）。
+// 对齐 Python 测试对 _per_case_diagnosis 的直接调用面。
+func (s *DiagnosisAgentStrategy) AnalyzeForTest(ctx context.Context, caseInputs []*CaseAnalysisInput, signals *DeterministicSignals) []map[string]any {
+	return s.perCaseDiagnosis(ctx, caseInputs, signals, map[string]any{}, "", nil, "", "", s.outputRootForTest())
+}
+
+// outputRootForTest 临时输出根（测试辅助）。
+func (s *DiagnosisAgentStrategy) outputRootForTest() string {
+	dir, err := os.MkdirTemp("", "ach_analyzer_artifacts_")
+	if err != nil {
+		return ""
+	}
+	return dir
 }
 
 // BuildAnalysisStrategy 工厂：从配置创建策略（Python build_analysis_strategy）。
@@ -3455,6 +3471,20 @@ type EvaluationResultAnalyzer struct {
 // NewEvaluationResultAnalyzer 创建门面。
 func NewEvaluationResultAnalyzer(cfg *rsiconfig.EvaluationResultAnalyzerConfig) *EvaluationResultAnalyzer {
 	return &EvaluationResultAnalyzer{config: cfg, strategy: BuildAnalysisStrategy(cfg)}
+}
+
+// applyConfigDefaults 归零值回填（Python dataclass 默认 max_issues=20/
+// evidence_limit_per_issue=5/output_filename="issues.yaml"——直接构造配置对象时同样生效）
+func applyConfigDefaults(cfg *rsiconfig.EvaluationResultAnalyzerConfig) {
+	if cfg.MaxIssues == 0 {
+		cfg.MaxIssues = 20
+	}
+	if cfg.EvidenceLimitPerIssue == 0 {
+		cfg.EvidenceLimitPerIssue = 5
+	}
+	if cfg.OutputFilename == "" {
+		cfg.OutputFilename = "issues.yaml"
+	}
 }
 
 // Strategy 暴露内部策略（测试注入用；对齐 Python 测试对 strategy 内部方法的 monkeypatch）。
