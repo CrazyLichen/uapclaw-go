@@ -395,6 +395,9 @@ func (o *VerifiedDownloadAssetOwner) Close() {
 	}
 }
 
+// Root 返回资产根目录（测试与校验用）。
+func (o *VerifiedDownloadAssetOwner) Root() string { return o.root }
+
 // GetVerifiedDownloadAssetOwner 返回进程级单例（共享投递根）。
 // Python: get_verified_download_asset_owner (verified_download_assets.py L406-409)
 func GetVerifiedDownloadAssetOwner() *VerifiedDownloadAssetOwner {

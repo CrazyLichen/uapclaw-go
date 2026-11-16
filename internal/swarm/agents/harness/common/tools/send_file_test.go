@@ -835,3 +835,4 @@ func writeZipWithSKILL(t *testing.T, path, entry string) {
 		t.Fatal(err)
 	}
 }
+

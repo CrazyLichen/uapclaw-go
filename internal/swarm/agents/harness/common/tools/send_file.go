@@ -41,6 +41,8 @@ type SendFileRuntimeContext struct {
 	// RequireExecutionAuthorization 要求宿主能力授权（Python require_execution_authorization；
 	// UpdateRuntimeContext 期 nil=不改，对齐 Python L228-231 的 None 语义）
 	RequireExecutionAuthorization *bool
+	// AssetOwner 受管资产宿主（Python asset_owner kwarg；nil → 授权路径回退共享单例）
+	AssetOwner *verifieddownloadassets.VerifiedDownloadAssetOwner
 }
 
 // sendFileRuntimeEnvelope 运行时信封：可变宿主状态在第一次可挂起点前的不可变快照。
@@ -172,7 +174,7 @@ func NewSendFileToolkit(requestID, sessionID, channelID string, ctx SendFileRunt
 		projectDir:                    resolveSendFileAbsPath(ctx.ProjectDir),
 		teamWorkspaceRoot:             resolveSendFileAbsPath(ctx.TeamWorkspaceRoot),
 		requireExecutionAuthorization: ctx.RequireExecutionAuthorization != nil && *ctx.RequireExecutionAuthorization,
-		assetOwner:                    nil,
+		assetOwner:                    ctx.AssetOwner,
 	}
 }
 
