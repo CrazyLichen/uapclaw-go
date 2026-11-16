@@ -6,7 +6,6 @@ package agents
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,7 +30,6 @@ import (
 	harnessschema "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer"
 	rails "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi/member_optimizer/agents/rails"
-	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -133,94 +131,11 @@ func (h *OptimizerResourceHandle) Release() error {
 	return nil
 }
 
-// LoadMemberOptimizerModel 载入独立 member-optimizer 模型配置文件并构建模型。
-// Python: factory.py:82-131 load_member_optimizer_model。
-func LoadMemberOptimizerModel(modelConfigRef string) (*memberoptimizer.BudgetedRsiModel, error) {
-	// Python: if not str(model_config_ref or "").strip(): raise RuntimeError(...)
-	if strings.TrimSpace(modelConfigRef) == "" {
-		return nil, fmt.Errorf("model_config_ref is required for member optimization")
-	}
-	path := expandUserPath(modelConfigRef)
-	if abs, absErr := filepath.Abs(path); absErr == nil {
-		path = abs
-	}
-	if info, statErr := os.Stat(path); statErr != nil || info.IsDir() {
-		return nil, fmt.Errorf("model_config_ref not found: %s", modelConfigRef)
-	}
-	content, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to load model_config_ref %s: %w", path, readErr)
-	}
-	var raw map[string]any
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(content, &raw); err != nil {
-			return nil, fmt.Errorf("failed to load model_config_ref %s: %w", path, err)
-		}
-	default:
-		if err := json.Unmarshal(content, &raw); err != nil {
-			return nil, fmt.Errorf("failed to load model_config_ref %s: %w", path, err)
-		}
-	}
-	if raw == nil {
-		raw = map[string]any{}
-	}
-
-	// Python: model_data = raw.get("model", raw)
-	modelData, exists := raw["model"]
-	if !exists {
-		modelData = raw
-	}
-	modelMap, isMap := modelData.(map[string]any)
-	if !isMap {
-		return nil, fmt.Errorf("model_config_ref model block must be a mapping: %s", path)
-	}
-
-	// Python: data = without_inner_sdk_retries(with_rsi_reasoning_policy(
-	//           with_rsi_output_budget(_expand_env_vars(model_data))))
-	data := memberoptimizer.WithoutInnerSDKRetries(
-		memberoptimizer.WithRSIReasoningPolicy(
-			memberoptimizer.WithRSIOutputBudget(expandEnvVarsAny(modelMap).(map[string]any))))
-	// Python: client_data = data.get("model_client_config"); if not isinstance(dict): raise
-	clientData, ok := data["model_client_config"].(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("model_config_ref must contain a mapping field: model_client_config")
-	}
-	// Python: request_data = data.get("model_request_config"); 非映射时报错
-	requestData, hasRequest := data["model_request_config"]
-	if hasRequest && requestData != nil {
-		if _, isMap := requestData.(map[string]any); !isMap {
-			return nil, fmt.Errorf("model_request_config must be a mapping when provided")
-		}
-	}
-
-	// Python: ModelClientConfig.model_validate(client_data)
-	clientConfig, err := memberoptimizer.ValidateClientConfigJSON(clientData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize model from %s: %w", path, err)
-	}
-	// Python: ModelRequestConfig.model_validate(request_data) if request_data is not None else None
-	var requestConfig *llmschema.ModelRequestConfig
-	if hasRequest && requestData != nil {
-		requestConfig, err = memberoptimizer.ValidateRequestConfigJSON(requestData.(map[string]any))
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize model from %s: %w", path, err)
-		}
-	}
-	// Python: return BudgetedRsiModel(model_client_config=..., model_config=...)
-	model, err := memberoptimizer.NewBudgetedRsiModel(clientConfig, requestConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize model from %s: %w", path, err)
-	}
-	return model, nil
-}
-
 // CreateMemberOptimizerAgent 为一个内部 Member Optimizer Agent 构建配置化 DeepAgent。
 // Python: factory.py:134-176 create_member_optimizer_agent。
 func CreateMemberOptimizerAgent(ctx context.Context, params MemberAgentParams) (*harness.DeepAgent, error) {
 	profile := params.Profile
-	model, err := LoadMemberOptimizerModel(params.ModelConfigRef)
+	model, err := memberoptimizer.LoadMemberOptimizerModel(params.ModelConfigRef)
 	if err != nil {
 		return nil, err
 	}
@@ -623,3 +538,38 @@ var (
 	_ = harnessrsi.DefaultOutputRepairConfig
 	_ = model_clients.NewInvokeParams
 )
+
+// CreatePlannerAgentAdapter 创建开单 agent 并返回证据护栏持有者句柄。
+// Python: factory.py:211-228 create_action_planning_agent + planner agent 内部
+// evidence_rail 创建（action_planner.py:765）；Go 经桥接后以 handle 承载 rail
+// 能力面（D-c2-4 桥接时序等价）。
+func CreatePlannerAgentAdapter(ctx context.Context, params memberoptimizer.PlannerAgentParams) (any, error) {
+	// Python: HarnessStructureRail 构造/update_harness_summaries 等价——构造时注入
+	structureRail := rails.NewHarnessStructureRail(params.HarnessSummaries)
+	holder := rails.NewPlannerEvidenceRail(ActionPlanning.MaxIterations)
+	evidenceRail := holder
+	agent, err := CreateActionPlanningAgent(ctx, MemberAgentParams{
+		ModelConfigRef:  params.ModelConfigRef,
+		Workspace:       params.Workspace,
+		AgentSkillsDirs: params.AgentSkillsDirs,
+		ExtraRails:      []agentinterfaces.AgentRail{structureRail},
+	}, evidenceRail)
+	if err != nil {
+		return nil, err
+	}
+	if holder == nil {
+		return agent, nil
+	}
+	return &plannerAgentHandle{agent: agent, holder: holder}, nil
+}
+
+// plannerAgentHandle agent + 证据护栏句柄（实现 memberoptimizer.PlannerEvidenceHolder）。
+type plannerAgentHandle struct {
+	agent  *harness.DeepAgent
+	holder *rails.PlannerEvidenceRail
+}
+
+// FinalizationMessages 委托证据护栏收尾消息构造。
+func (h *plannerAgentHandle) FinalizationMessages(request, previous string) []llmschema.BaseMessage {
+	return h.holder.FinalizationMessages(request, previous)
+}

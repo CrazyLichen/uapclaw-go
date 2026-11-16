@@ -73,6 +73,8 @@ type AgentsBridge struct {
 	CreateRoleAttributionAgent func(context.Context, AttributionAgentParams) (any, error)
 	// CreateMechanismAttributionAgent 定病根 agent 构造（Python factory.py:196）
 	CreateMechanismAttributionAgent func(context.Context, AttributionAgentParams) (any, error)
+	// CreateActionPlanningAgent 开单 agent 构造（Python factory.py:211-228）
+	CreateActionPlanningAgent func(context.Context, PlannerAgentParams) (any, error)
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -100,4 +102,20 @@ func RestoreAgentsBridge(saved AgentsBridge) {
 // ReplaceAgentsBridge 整体替换能力桥（依赖注入入口；组合根/测试使用）。
 func ReplaceAgentsBridge(bridge AgentsBridge) {
 	agentsBridge = bridge
+}
+
+// ──────────────────────────── 结构体（c2 扩展） ────────────────────────────
+
+// PlannerAgentParams 开单 agent 构造参数（Python create_action_planning_agent 关键字参数收拢）。
+type PlannerAgentParams struct {
+	// ModelConfigRef 模型配置文件引用
+	ModelConfigRef string
+	// Workspace 工作空间路径
+	Workspace string
+	// AgentSkillsDirs agent 技能目录
+	AgentSkillsDirs []string
+	// ActionDefinitions 动作定义清单（harness_rsi.ActionDefinition；类型别名别名导入）
+	ActionDefinitions []harnessrsi.ActionDefinition
+	// HarnessSummaries 角色 harness 结构摘要（结构护栏构造时注入——D-c2-4）
+	HarnessSummaries map[string]string
 }

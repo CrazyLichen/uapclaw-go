@@ -72,11 +72,11 @@ func TestRenderPrompt_枚举注入(t *testing.T) {
 
 // TestLoadMemberOptimizerModel_错误路径 对齐三处 RuntimeError。
 func TestLoadMemberOptimizerModel_错误路径(t *testing.T) {
-	_, err := LoadMemberOptimizerModel("")
+	_, err := memberoptimizer.LoadMemberOptimizerModel("")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "model_config_ref is required for member optimization")
 
-	_, err = LoadMemberOptimizerModel("/nonexistent/ref.yaml")
+	_, err = memberoptimizer.LoadMemberOptimizerModel("/nonexistent/ref.yaml")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "model_config_ref not found")
 
@@ -84,7 +84,7 @@ func TestLoadMemberOptimizerModel_错误路径(t *testing.T) {
 	// 非 dict 顶层（JSON 数组）
 	path := filepath.Join(dir, "bad.json")
 	os.WriteFile(path, []byte(`[1,2]`), 0o644)
-	_, err = LoadMemberOptimizerModel(path)
+	_, err = memberoptimizer.LoadMemberOptimizerModel(path)
 	require.Error(t, err)
 }
 
@@ -102,7 +102,7 @@ func TestLoadMemberOptimizerModel_成功路径(t *testing.T) {
   model_request_config:
     max_tokens: null
 `), 0o644)
-	model, err := LoadMemberOptimizerModel(path)
+	model, err := memberoptimizer.LoadMemberOptimizerModel(path)
 	require.NoError(t, err)
 	require.NotNil(t, model)
 	require.Equal(t, 0, model.ClientConfig.MaxRetries) // without_inner_sdk_retries
@@ -448,7 +448,7 @@ func TestUnwrapModel_分支(t *testing.T) {
 	// 有底层模型 → 转出
 	dir := t.TempDir()
 	modelRef := writeFactoryModelConfig(t, dir)
-	model, err := LoadMemberOptimizerModel(modelRef)
+	model, err := memberoptimizer.LoadMemberOptimizerModel(modelRef)
 	require.NoError(t, err)
 	require.NotNil(t, unwrapModel(model))
 }
