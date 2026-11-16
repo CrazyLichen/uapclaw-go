@@ -86,7 +86,9 @@ func TestTakesAuthFallback_adapter恒false(t *testing.T) {
 // fakeBackendProbeProvider provider 注册探测桩。
 type fakeBackendProbeProvider struct{}
 
-func (f *fakeBackendProbeProvider) Card() harnessprotocol.HarnessCard { return harnessprotocol.HarnessCard{} }
+func (f *fakeBackendProbeProvider) Card() harnessprotocol.HarnessCard {
+	return harnessprotocol.HarnessCard{}
+}
 
 // Create 满足 HarnessProvider 接口（探测桩不会真正创建）。
 func (f *fakeBackendProbeProvider) Create(config harnessprotocol.JsonObject) (harnessprotocol.HarnessProtocol, error) {
