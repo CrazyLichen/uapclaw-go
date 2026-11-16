@@ -275,3 +275,50 @@ func TestPregel_Run_afterStep(t *testing.T) {
 	assert.Empty(t, res)
 	assert.Equal(t, 2, steps) // step0(START)/step1(a) 两步各回调一次
 }
+
+// canceledGraph 节点 a 自身返回 context.Canceled（非外层取消，B3 收窄的反例）
+func canceledGraph() *Pregel {
+	nodes := map[string]*PregelNode{}
+	nodes[Start] = NewPregelNode(Start, NoopNodeFunc)
+	nodes[Start].addRouter(NewStaticRouter("a"))
+	nodes["a"] = NewPregelNode("a", func(_ context.Context, _ NodeInput) error {
+		return context.Canceled
+	})
+	nodes[End] = NewPregelNode(End, NoopNodeFunc)
+	channels := []Channel{NewTriggerChannel(Start), NewTriggerChannel("a"), NewTriggerChannel(End)}
+	return NewPregel(nodes, channels, Start, nil, nil)
+}
+
+// TestPregelLoop_RunStep_外层取消 ctx 取消时 CancelAll 后原样上抛、不包装 112104
+// （B3：asyncio.CancelledError 绕过 except Exception 块）
+func TestPregelLoop_RunStep_外层取消(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	pg := handGraph()
+	l := NewPregelLoop(pg, &InnerPregelConfig{PregelConfig: PregelConfig{SessionID: "s", Ns: "n"}})
+	l.Saver = &fakeSaver{}
+	assert.NoError(t, l.Init(context.Background()))
+	_, err := l.RunStep(ctx)
+	assert.ErrorIs(t, err, context.Canceled)
+	var be *exception.BaseError
+	assert.False(t, errors.As(err, &be)) // 不包装
+}
+
+// TestPregelLoop_RunStep_节点自身取消不算外层取消 节点返回 context.Canceled 走
+// FIRST_EXCEPTION 常规失败路径（B3 收窄：不触发外层取消的 cancel_all 分支）。
+// 上抛语义与外层取消一致——Python 的 CancelledError 继承 BaseException，
+// run_step 的 except Exception 同样不捕获，两者都原样上抛不包装、不落盘。
+func TestPregelLoop_RunStep_节点自身取消不算外层取消(t *testing.T) {
+	sv := &fakeSaver{}
+	pg := canceledGraph()
+	l := NewPregelLoop(pg, &InnerPregelConfig{PregelConfig: PregelConfig{SessionID: "s", Ns: "n", RecursionLimit: 25}})
+	l.Saver = sv
+	assert.NoError(t, l.Init(context.Background()))
+	_, err := l.RunStep(context.Background()) // 第一超步：START
+	assert.NoError(t, err)
+	_, err = l.RunStep(context.Background()) // 第二超步：节点 a 返回 Canceled
+	assert.ErrorIs(t, err, context.Canceled)
+	var be *exception.BaseError
+	assert.False(t, errors.As(err, &be)) // 与 Python except Exception 不捕 CancelledError 一致：不包装
+	assert.Nil(t, sv.saved)              // 不落盘
+}
