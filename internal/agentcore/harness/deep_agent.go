@@ -537,15 +537,18 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 
 	go func() {
 		// 作用域收尾随流 goroutine 结束（Python stream 的 context 退出点）
+		// streamErr 记录执行错误/ctx 取消，供 invFinish 记 cancelled/failure 状态
+		// （对齐 Python：CancelledError → status=cancelled，异常 → status=failure）
+		var streamErr error
 		if invFinish != nil {
-			defer invFinish(nil)
+			defer func() { invFinish(streamErr) }()
 		}
 		defer d.invokeActive.Store(false)
 		defer close(outCh)
 
 		// Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 		// 使用 FireLifecycle 包裹 chunk 循环，保证 AFTER_INVOKE 必定触发
-		_ = cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
+		streamErr = cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 			var streamResult map[string]any
 			var streamOutputParts []string
 
@@ -556,7 +559,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					// （对齐 Python：取消时 generator 终止，不产出 error 帧）
 					if !utils.Canceled(ctx) {
 						logger.Error(logComponent).Err(err).Msg("runTaskLoopStream start failed")
-						emitStreamError(outCh, err)
+						emitStreamError(ctx, outCh, err)
 					}
 					return err
 				}
@@ -565,7 +568,13 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					if chunkResult != nil {
 						streamResult = chunkResult
 					}
-					outCh <- chunk
+					// 消费方提前放弃时不阻塞泄漏：ctx 取消即退出
+					// （对齐 Python：消费方 aclose 生成器时 with 块立即退出）
+					select {
+					case outCh <- chunk:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
 			} else {
 				ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
@@ -573,7 +582,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					// ctx 取消不是错误：不写错误帧（同上）
 					if !utils.Canceled(ctx) {
 						logger.Error(logComponent).Err(err).Msg("runSingleRoundStream start failed")
-						emitStreamError(outCh, err)
+						emitStreamError(ctx, outCh, err)
 					}
 					return err
 				}
@@ -582,7 +591,11 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					if chunkResult != nil {
 						streamResult = chunkResult
 					}
-					outCh <- chunk
+					select {
+					case outCh <- chunk:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
 			}
 
@@ -4016,17 +4029,21 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 // 投一个 Type="error" 的输出帧，由 DeepAdapter.ParseStreamChunk 的
 // `case "error"` 分支映射为 chat.error——否则启动期错误只落日志，
 // 消费者看到空流，ACP 侧最终只剩 idle → end_turn（用户看不到任何错误）。
-func emitStreamError(outCh chan stream.Schema, err error) {
+func emitStreamError(ctx context.Context, outCh chan stream.Schema, err error) {
 	if err == nil {
 		return
 	}
-	// 适配器按 Payload 桥接为 map（utils.PayloadToMap），载荷用 map 最直接
-	outCh <- &stream.OutputSchema{
+	// 适配器按 Payload 桥接为 map（utils.PayloadToMap），载荷用 map 最直接。
+	// ctx 取消时放弃投递（消费方已不在，阻塞发送无意义）
+	select {
+	case outCh <- &stream.OutputSchema{
 		Type: "error",
 		Payload: map[string]any{
 			"error": err.Error(),
 		},
 		IsLastSchema: true,
+	}:
+	case <-ctx.Done():
 	}
 }
 

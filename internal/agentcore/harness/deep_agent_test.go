@@ -4135,7 +4135,7 @@ func TestDeepAgent_EnsureInitialized_RailInit错误上抛(t *testing.T) {
 // （适配器 ParseStreamChunk 的 case "error" 映射为 chat.error）
 func TestEmitStreamError_投递error帧(t *testing.T) {
 	outCh := make(chan stream.Schema, 2)
-	emitStreamError(outCh, errors.New("boom"))
+	emitStreamError(context.Background(), outCh, errors.New("boom"))
 
 	require.Len(t, outCh, 1)
 	raw := <-outCh
@@ -4151,7 +4151,7 @@ func TestEmitStreamError_投递error帧(t *testing.T) {
 // TestEmitStreamError_nil不投递 验证 nil 错误不产生帧（避免空错误事件）
 func TestEmitStreamError_nil不投递(t *testing.T) {
 	outCh := make(chan stream.Schema, 2)
-	emitStreamError(outCh, nil)
+	emitStreamError(context.Background(), outCh, nil)
 	assert.Len(t, outCh, 0)
 }
 
@@ -4346,3 +4346,22 @@ func (f *fakeSessionFacade) GetCacheIdentity() kv_cache.KVCacheIdentity {
 
 // GetParentSessionID 返回空父会话（测试替身）。
 func (f *fakeSessionFacade) GetParentSessionID() string { return "" }
+
+// TestEmitStreamError_ctx取消不投递 验证 ctx 已取消时放弃投递（消费方不在，阻塞发送无意义）
+func TestEmitStreamError_ctx取消不投递(t *testing.T) {
+	outCh := make(chan stream.Schema) // 无缓冲：取消路径下发送方必须让位
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		emitStreamError(ctx, outCh, errors.New("boom"))
+		close(done)
+	}()
+	select {
+	case <-done:
+		// 未阻塞，立即返回（正确行为）
+	case <-time.After(time.Second):
+		t.Fatal("ctx 取消后 emitStreamError 阻塞未返回，存在 goroutine 泄漏")
+	}
+	assert.Len(t, outCh, 0)
+}

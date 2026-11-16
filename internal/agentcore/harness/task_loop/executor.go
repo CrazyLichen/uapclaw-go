@@ -326,7 +326,9 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 				}
 			}
 
-			ch <- &stream.OutputSchema{
+			// 消费方提前退出时不阻塞泄漏（对齐上游 ctx 语义）
+			select {
+			case ch <- &stream.OutputSchema{
 				// Python: ControllerOutputChunk.type 固定默认值 "controller_output"
 				// （不传 type 参数），事件语义在内层 payload.type="task_failed"。
 				// 原实现外层写 "task_failed" 使消费端 case "controller_output"
@@ -340,6 +342,9 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 					},
 				},
 				IsLastSchema: true,
+			}:
+			case <-ctx.Done():
+				return
 			}
 			return
 		}
@@ -402,7 +407,9 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 				Msg("outer loop iteration completed")
 		}
 
-		ch <- &stream.OutputSchema{
+		// 消费方提前退出时不阻塞泄漏（对齐上游 ctx 语义）
+		select {
+		case ch <- &stream.OutputSchema{
 			// Python: ControllerOutputChunk.type 固定默认值 "controller_output"，
 			// 完成语义在内层 payload.type="task_completion"（消费端返回 nil 丢弃）。
 			Type: cschema.ControllerOutputChunkType,
@@ -414,6 +421,9 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 				},
 			},
 			IsLastSchema: true,
+		}:
+		case <-ctx.Done():
+			return
 		}
 	}()
 
