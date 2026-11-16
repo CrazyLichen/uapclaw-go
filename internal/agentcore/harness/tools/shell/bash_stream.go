@@ -169,9 +169,14 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 			for chunk := range streamCh {
 				if !chunk.IsSuccess() {
 					// 流错误：直接返回错误块
-					ch <- map[string]any{
+					// 消费方提前退出时不阻塞泄漏（ctx 取消即放弃投递）
+					select {
+					case ch <- map[string]any{
 						"success": false,
 						"error":   chunk.Message,
+					}:
+					case <-ctx.Done():
+						return
 					}
 					return
 				}
@@ -200,13 +205,18 @@ func NewBashStreamTool(op sys_operation.SysOperation, language, agentID string, 
 
 					// 发送流式输出块
 					// Python: L309-318: yield ToolOutput(success=True, data={...})
-					ch <- map[string]any{
+					// 消费方提前退出时不阻塞泄漏（ctx 取消即放弃投递）
+					select {
+					case ch <- map[string]any{
 						"success":              true,
 						"text":                 text,
 						"type":                 streamType,
 						"chunk_index":          data.ChunkIndex,
 						"exit_code":            data.ExitCode,
 						"elapsed_time_seconds": elapsed,
+					}:
+					case <-ctx.Done():
+						return
 					}
 				}
 			}

@@ -399,7 +399,8 @@ func (d *DeepAgent) Configure(ctx context.Context, config agentinterfaces.AgentC
 
 // Invoke 非流式执行 Agent。
 // Python: DeepAgent.invoke(inputs, session) (line 2261)
-func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+// 17.4b2 增强件：调用体由 invocation 日志作用域包裹（Python _invocation_log_context, deep_agent.py:3364）
+func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (result map[string]any, retErr error) {
 	var initErr error
 	ctx, initErr = d.ensureInitialized(ctx)
 	if initErr != nil {
@@ -431,12 +432,21 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 	}
 	sess = prepared
 
+	// 17.4b2 增强件：invocation 日志作用域（Python with self._invocation_log_context(session), deep_agent.py:3364）
+	invCtx, invFinish, invErr := d.startInvocationLogContext(ctx, sess)
+	if invErr != nil {
+		warnInvocationLogUnavailable(invErr)
+	} else {
+		ctx = invCtx
+	}
+	if invFinish != nil {
+		defer func() { invFinish(retErr) }()
+	}
+
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	d.invokeActive.Store(true)
 	defer d.invokeActive.Store(false)
-
-	var result map[string]any
 
 	// Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 	// 使用 FireLifecycle 包裹核心执行逻辑，保证 AFTER_INVOKE 必定触发
@@ -474,6 +484,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 
 // Stream 流式执行 Agent。
 // Python: DeepAgent.stream(inputs, session, stream_modes) (line 2302)
+// 17.4b2 增强件：调用体由 invocation 日志作用域包裹（Python _invocation_log_context, deep_agent.py:3449）
 func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	var initErr error
 	ctx, initErr = d.ensureInitialized(ctx)
@@ -510,6 +521,14 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	}
 	sess = prepared
 
+	// 17.4b2 增强件：invocation 日志作用域（Python with self._invocation_log_context(session), deep_agent.py:3449）
+	invCtx, invFinish, invErr := d.startInvocationLogContext(ctx, sess)
+	if invErr != nil {
+		warnInvocationLogUnavailable(invErr)
+	} else {
+		ctx = invCtx
+	}
+
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	outCh := make(chan stream.Schema, 64)
@@ -517,12 +536,19 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	d.invokeActive.Store(true)
 
 	go func() {
+		// 作用域收尾随流 goroutine 结束（Python stream 的 context 退出点）
+		// streamErr 记录执行错误/ctx 取消，供 invFinish 记 cancelled/failure 状态
+		// （对齐 Python：CancelledError → status=cancelled，异常 → status=failure）
+		var streamErr error
+		if invFinish != nil {
+			defer func() { invFinish(streamErr) }()
+		}
 		defer d.invokeActive.Store(false)
 		defer close(outCh)
 
 		// Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 		// 使用 FireLifecycle 包裹 chunk 循环，保证 AFTER_INVOKE 必定触发
-		_ = cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
+		streamErr = cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 			var streamResult map[string]any
 			var streamOutputParts []string
 
@@ -533,7 +559,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					// （对齐 Python：取消时 generator 终止，不产出 error 帧）
 					if !utils.Canceled(ctx) {
 						logger.Error(logComponent).Err(err).Msg("runTaskLoopStream start failed")
-						emitStreamError(outCh, err)
+						emitStreamError(ctx, outCh, err)
 					}
 					return err
 				}
@@ -542,7 +568,13 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					if chunkResult != nil {
 						streamResult = chunkResult
 					}
-					outCh <- chunk
+					// 消费方提前放弃时不阻塞泄漏：ctx 取消即退出
+					// （对齐 Python：消费方 aclose 生成器时 with 块立即退出）
+					select {
+					case outCh <- chunk:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
 			} else {
 				ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
@@ -550,7 +582,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					// ctx 取消不是错误：不写错误帧（同上）
 					if !utils.Canceled(ctx) {
 						logger.Error(logComponent).Err(err).Msg("runSingleRoundStream start failed")
-						emitStreamError(outCh, err)
+						emitStreamError(ctx, outCh, err)
 					}
 					return err
 				}
@@ -559,7 +591,11 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 					if chunkResult != nil {
 						streamResult = chunkResult
 					}
-					outCh <- chunk
+					select {
+					case outCh <- chunk:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
 			}
 
@@ -905,6 +941,15 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 	// 如果 spec 本身就是 *DeepAgent 实例，直接返回
 	if deepAgent, ok := spec.(*DeepAgent); ok {
 		logger.Info(logComponent).Str("subagent_type", subagentType).Msg("DeepAgent instance acquired, returning directly")
+		// Python: parent_log_dir = self._deep_config.invocation_log_dir if ... else None
+		//         spec.inherit_invocation_log_dir(parent_log_dir)（deep_agent.py:1647-1648）
+		d.configMu.RLock()
+		parentLogDir := ""
+		if d.deepConfig != nil {
+			parentLogDir = d.deepConfig.InvocationLogDir
+		}
+		d.configMu.RUnlock()
+		deepAgent.InheritInvocationLogDir(parentLogDir)
 		return deepAgent, nil
 	}
 
@@ -3779,6 +3824,12 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 	// RestrictToWorkDir：创建独立指针，避免取 subCfg 字段地址（悬空风险）
 	restrictToWorkDir := subCfg.RestrictToWorkDir
 
+	// InvocationLogDir：spec 值优先，否则继承父配置（Python create_kwargs["invocation_log_dir"], deep_agent.py:1684-1685）
+	invocationLogDir := subCfg.InvocationLogDir
+	if invocationLogDir == "" {
+		invocationLogDir = cfg.InvocationLogDir
+	}
+
 	return &hschema.SubagentCreateParams{
 		Model:                  model,
 		Card:                   subCfg.AgentCard,
@@ -3792,6 +3843,7 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		Workspace:              subWorkspace,
 		Skills:                 subCfg.Skills,
 		Backend:                backend,
+		InvocationLogDir:       invocationLogDir,
 		SysOperation:           sysOp,
 		Language:               language,
 		PromptMode:             promptMode,
@@ -3977,17 +4029,21 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 // 投一个 Type="error" 的输出帧，由 DeepAdapter.ParseStreamChunk 的
 // `case "error"` 分支映射为 chat.error——否则启动期错误只落日志，
 // 消费者看到空流，ACP 侧最终只剩 idle → end_turn（用户看不到任何错误）。
-func emitStreamError(outCh chan stream.Schema, err error) {
+func emitStreamError(ctx context.Context, outCh chan stream.Schema, err error) {
 	if err == nil {
 		return
 	}
-	// 适配器按 Payload 桥接为 map（utils.PayloadToMap），载荷用 map 最直接
-	outCh <- &stream.OutputSchema{
+	// 适配器按 Payload 桥接为 map（utils.PayloadToMap），载荷用 map 最直接。
+	// ctx 取消时放弃投递（消费方已不在，阻塞发送无意义）
+	select {
+	case outCh <- &stream.OutputSchema{
 		Type: "error",
 		Payload: map[string]any{
 			"error": err.Error(),
 		},
 		IsLastSchema: true,
+	}:
+	case <-ctx.Done():
 	}
 }
 
