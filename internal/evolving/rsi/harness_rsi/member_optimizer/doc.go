@@ -1,32 +1,38 @@
-// Package memberoptimizer 提供 RSI 手术系统（member 优化器）的载入与模型配置件。
+// Package memberoptimizer 提供 RSI 手术系统（member 优化器）的完整实现。
 //
-// 本包对应 Python openjiuwen/rsi/harness_rsi/member_optimizer/。17.4b1 按
-// 前置件方案A落地：
+// 本包对应 Python openjiuwen/rsi/harness_rsi/member_optimizer/，按 17.4c1/c2/c3
+// 三子节推进：
 //
-//   - loader.go：evaluation_result_analyzer 实际使用的符号闭包
-//     （EvalRef、load_eval_ref、resolve_candidate_roles 及其私有依赖
-//     _normalize_harness_refs_path/_parse_harness_refs_file/
-//     _parse_harness_refs_dir/_supplement_from_team_skill/
-//     _resolve_harness_ref_path）；load_analysis_ref / resolve_team_issues /
-//     AnalysisUnavailableError / BoundedEvidenceBundle / load_case_evidence
-//     及其依赖 ⤴️ 17.4c 手术系统章节补齐。
-//   - schema.go：schema.py 的 MemberRoleCandidate 切片（analyzer 经 loader
-//     依赖的唯一 schema 类型）；schema.py 其余类型 ⤴️ 17.4c。
-//   - model_config.go：model_config.py 全量对齐（load_model_config_ref +
-//     without_inner_sdk_retries 等），无回填残留；BudgetedRsiModel 占位与
-//     BuildDeepAgentFromModelConfig 桩 ⤴️ 17.4c（budget_model.py 落真身）。
+//   - 17.4c1（已落地）：schema 全量契约 / lever 杠杆分类 / loader 补齐 /
+//     role_attributor + mechanism_attributor 两步 LLM 归因 / member_selector
+//     纯算术选择 / hypothesis 不可变假设契约 / budget_model + model_config
+//     桩回填（BudgetedRsiModel 真身 + BuildDeepAgentFromModelConfig 装配真
+//     DeepAgent）/ agents 子包（factory/output/profiles + 5 提示词 go:embed）。
+//   - 17.4c2（⤴️）：action_planner / action_groups / action_executor /
+//     worktree_coordinator。
+//   - 17.4c3（⤴️）：verification / package_registry / plugin_manifest /
+//     path_layout / execution_contract / optimizer 门面+发布 / gopapy AST 扫描。
 //
-// 包内其余文件（action_executor/action_planner/verification/optimizer/
-// mechanism/role_attributor/hypothesis/budget_model/worktree_coordinator
-// 等）⤴️ 17.4c。
+// 跨包桥接：Go 子包不可反向引用父包（agents/factory.go 引本包 BudgetedRsiModel），
+// agents 能力经 structured_invoke.go 的 AgentsBridge 由 agents 包 init 注册
+// （spec 2026-11-16 §4 D-c1-1）。
 //
 // 文件目录：
 //
 //	member_optimizer/
-//	├── doc.go           # 包文档
-//	├── loader.go        # 评估引用载入与角色解析（17.4b1 切片 ⤴️ 17.4c 补齐）
-//	├── schema.go        # MemberRoleCandidate（schema.py 切片 ⤴️ 17.4c 补齐）
-//	└── model_config.go  # 诊断 agent 模型配置引用载入（全量对齐；桩 ⤴️ 17.4c）
+//	├── doc.go                  # 包文档
+//	├── schema.go               # schema.py 全量契约（3 枚举 + 20 结构体）
+//	├── lever.go                # 杠杆分类与决策策略（lever.py）
+//	├── loader.go               # 评估引用/病历载入 + 角色清单三级解析（loader.py）
+//	├── role_attributor.go      # 第 1 步角色定责（role_attributor.py）
+//	├── mechanism_attributor.go # 第 2 步病根归因（mechanism_attributor.py）
+//	├── member_selector.go      # 第 3 步纯算术选择（member_selector.py）
+//	├── hypothesis.go           # 不可变假设契约（hypothesis.py）
+//	├── structured_invoke.go    # AgentsBridge 子包能力桥（包环倒置 D-c1-1）
+//	├── py_helpers.go           # Python 语义辅助（str/repr/json dumps）
+//	├── budget_model.go         # BudgetedRsiModel 真身（budget_model.py）
+//	├── model_config.go         # 模型配置载入变换（model_config.py，桩已回填删除）
+//	└── agents/                # agents 子包（factory/output/profiles + prompts embed + rails）
 //
 // 对应 Python 代码：openjiuwen/rsi/harness_rsi/member_optimizer/
 package memberoptimizer

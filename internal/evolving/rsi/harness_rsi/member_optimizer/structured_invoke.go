@@ -86,3 +86,18 @@ var agentsBridge = AgentsBridge{}
 func RegisterAgentsBridge(bridge AgentsBridge) {
 	agentsBridge = bridge
 }
+
+// SnapshotAgentsBridge 取当前能力桥快照（依赖注入方/测试可在替换后还原）。
+func SnapshotAgentsBridge() AgentsBridge {
+	return agentsBridge
+}
+
+// RestoreAgentsBridge 还原能力桥快照。
+func RestoreAgentsBridge(saved AgentsBridge) {
+	agentsBridge = saved
+}
+
+// ReplaceAgentsBridge 整体替换能力桥（依赖注入入口；组合根/测试使用）。
+func ReplaceAgentsBridge(bridge AgentsBridge) {
+	agentsBridge = bridge
+}
