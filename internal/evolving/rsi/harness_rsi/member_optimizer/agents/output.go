@@ -22,8 +22,9 @@ import (
 // init 注册父包能力桥（Python 子包 import 父包在 Go 倒置为注册桥，spec §4 D-c1-1）。
 func init() {
 	memberoptimizer.RegisterAgentsBridge(memberoptimizer.AgentsBridge{
-		InvokeStructured: InvokeMemberOptimizerAgentStructured,
-		ParseJSONObject:  ParseJSONObjectResponse,
+		InvokeStructured:      InvokeMemberOptimizerAgentStructured,
+		ParseJSONObject:       ParseJSONObjectResponse,
+		ParseYamlOrJSONObject: ParseYamlOrJsonObjectResponse,
 		CreateRoleAttributionAgent: func(ctx context.Context, params memberoptimizer.AttributionAgentParams) (any, error) {
 			agent, err := CreateRoleAttributionAgent(ctx, MemberAgentParams{
 				ModelConfigRef:  params.ModelConfigRef,

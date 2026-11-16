@@ -79,6 +79,24 @@ func pyRepr(value any) string {
 	switch v := value.(type) {
 	case string:
 		return "'" + v + "'"
+	case []any:
+		out := "["
+		for i, item := range v {
+			if i > 0 {
+				out += ", "
+			}
+			out += pyRepr(item)
+		}
+		return out + "]"
+	case []string:
+		out := "["
+		for i, item := range v {
+			if i > 0 {
+				out += ", "
+			}
+			out += "'" + item + "'"
+		}
+		return out + "]"
 	case map[string]any:
 		// Python dict repr：键带单引号、冒号后无空格、项间 ", "
 		keys := make([]string, 0, len(v))

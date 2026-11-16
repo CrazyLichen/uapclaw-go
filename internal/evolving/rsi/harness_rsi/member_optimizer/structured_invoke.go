@@ -67,6 +67,8 @@ type AgentsBridge struct {
 	InvokeStructured func(context.Context, StructuredInvokeParams) (map[string]any, error)
 	// ParseJSONObject JSON 对象解析（Python output.py parse_json_object_response）
 	ParseJSONObject func(string) (map[string]any, error)
+	// ParseYamlOrJSONObject YAML/JSON 对象解析（Python output.py parse_yaml_or_json_object_response）
+	ParseYamlOrJSONObject func(string) (map[string]any, error)
 	// CreateRoleAttributionAgent 定责 agent 构造（Python factory.py:179）
 	CreateRoleAttributionAgent func(context.Context, AttributionAgentParams) (any, error)
 	// CreateMechanismAttributionAgent 定病根 agent 构造（Python factory.py:196）

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	harnessrsi "github.com/uapclaw/uapclaw-go/internal/evolving/rsi/harness_rsi"
 )
@@ -466,4 +467,21 @@ func TestWriteRoleAttributionReport_YAML字段(t *testing.T) {
 	} {
 		require.Contains(t, text, want, "YAML 缺字段: "+want)
 	}
+}
+
+// readFileForTest 读文件（测试辅助）。
+func readFileForTest(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return data
+}
+
+// yamlUnmarshalMappingForTest 测试用 YAML 映射解析。
+func yamlUnmarshalMappingForTest(text string) (map[string]any, error) {
+	var m map[string]any
+	if err := yaml.Unmarshal([]byte(text), &m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
