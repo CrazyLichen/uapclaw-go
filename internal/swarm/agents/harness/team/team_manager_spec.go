@@ -393,7 +393,7 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 		// 有意偏差（spec 偏差 #2）：WithRefresh() 显式替换旧实例——
 		// Python add_tool 重复注册静默丢弃异常（旧 toolkit 残留 ResourceMgr），
 		// Go 侧修正为显式替换，语义对齐"每次请求重新注册"
-		toolkit := swarmtools.NewSendFileToolkit(*requestID, sessionID, *channelID, requestMetadata)
+		toolkit := swarmtools.NewSendFileToolkit(*requestID, sessionID, *channelID, swarmtools.SendFileRuntimeContext{Metadata: requestMetadata})
 		resourceMgr := runner.GetResourceMgr()
 		for _, sfTool := range toolkit.GetTools() {
 			if err := resourceMgr.AddTool(sfTool, resourcesmanager.WithRefresh()); err != nil {

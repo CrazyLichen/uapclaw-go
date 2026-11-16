@@ -411,8 +411,9 @@ func init() {
 		}
 		return fn(context.Background(), msg) == nil
 	})
-	// SetVideoGenSendFileFunc 不注入：Go 侧 SendFileToolkit(send_file_to_user.py)
-	// 未移植，视频文件投递降级为文本通知（spec D-23.8-5，⤴️ send_file_to_user 移植时回填）。
+	// SetVideoGenSendFileFunc 已删（D-23.8-5 回收）：videoGenSendFile 经
+	// deliverWatchResult 按 RootDecisionContext 三元组 ctx 现建 SendFileToolkit，
+	// 与 Python video_gen_tools.py L172-176 同构，无注入缝。
 }
 
 // ResetPersistentCheckpointer 重置持久化检查点器就绪标记（仅测试用）。

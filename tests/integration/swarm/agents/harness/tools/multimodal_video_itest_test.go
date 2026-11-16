@@ -18,7 +18,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,7 +29,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions/rootcontext"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
-	swarmcommon "github.com/uapclaw/uapclaw-go/internal/swarm/common"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -109,7 +107,19 @@ func (s *VideoGenSuite) TestVideoGenSuite_提交到盯单推送全链() {
 		return true
 	})
 	s.T().Cleanup(func() { tools.SetVideoGenRuntimePush(nil) })
-	// D-23.8-5：sendFile 缝不注入 → 文本通知降级（含本地文件路径）
+	// D-23.8-5 已回收：盯单完成走真实 SendFileToolkit → chat.file 投递；
+	// 注入 send_file push/history 捕获真实文件投递事件。
+	var filePushes []map[string]any
+	var filePushMu sync.Mutex
+	tools.SetSendFilePushFunc(func(_ context.Context, msg map[string]any) error {
+		filePushMu.Lock()
+		filePushes = append(filePushes, msg)
+		filePushMu.Unlock()
+		return nil
+	})
+	tools.SetSendFileHistoryFunc(func(string, string, string, string, string,
+		float64, string, map[string]any, map[string]any, string) {})
+	s.T().Cleanup(func() { tools.SetSendFilePushFunc(nil); tools.SetSendFileHistoryFunc(nil) })
 	// D-23.8-4 已回收：盯单路由经 ctx 绑定的 RootDecisionContext 直达（对齐 Python current_root_decision_context）
 
 	// 工具调用全链（与 adapter 注册的工具闭包一致）
@@ -122,31 +132,39 @@ func (s *VideoGenSuite) TestVideoGenSuite_提交到盯单推送全链() {
 	s.Require().True(strings.HasPrefix(result, "Video job itest-job submitted and still running"),
 		"窗口到期应返回 pending 形状: %q", result)
 
-	// 等盯单 goroutine 结算推送
+	// 等盯单 goroutine 结算真实 chat.file 投递
 	s.Require().Eventually(func() bool {
-		pushMu.Lock()
-		defer pushMu.Unlock()
-		return len(pushed) >= 1
-	}, 5*time.Second, 10*time.Millisecond, "盯单应在时限内推送")
+		filePushMu.Lock()
+		defer filePushMu.Unlock()
+		return len(filePushes) >= 1
+	}, 5*time.Second, 10*time.Millisecond, "盯单应在时限内投递 chat.file")
 
-	pushMu.Lock()
-	defer pushMu.Unlock()
-	msg := pushed[0]
-	s.Equal("itest-sess", msg["session_id"])
-	s.Equal("itest-req", msg["request_id"])
-	s.Equal("itest-ch", msg["channel_id"])
-	s.Equal(false, msg["is_complete"])
-	payload, ok := msg["payload"].(map[string]any)
+	// 真实文件投递事件（chat.file，含 files payload 与视频落盘路径）
+	filePushMu.Lock()
+	defer filePushMu.Unlock()
+	s.Require().NotEmpty(filePushes, "D-23.8-5 回收后应推送真实 chat.file")
+	fileMsg := filePushes[0]
+	s.Equal("itest-sess", fileMsg["session_id"])
+	s.Equal("itest-req", fileMsg["request_id"])
+	s.Equal("itest-ch", fileMsg["channel_id"])
+	filePayload, ok := fileMsg["payload"].(map[string]any)
 	s.Require().True(ok)
-	s.Equal(swarmcommon.FinalModeAppend, payload["final_mode"], "盯单交付必须 final_mode=append（新气泡）")
-	s.Equal("chat.final", payload["event_type"])
-	s.Contains(fmt.Sprint(payload["content"]), "本地文件：")
+	s.Equal("chat.file", filePayload["event_type"])
+	files, ok := filePayload["files"].([]map[string]any)
+	s.Require().True(ok)
+	s.Require().Len(files, 1)
+	videoPath, _ := files[0]["path"].(string)
+	s.True(strings.HasSuffix(videoPath, "video_itest-job.mp4"), "files path 应为视频落盘路径: %v", videoPath)
+	s.Equal(false, files[0]["is_skill_package"], "视频非 skill 包")
 	// 视频已落盘
-	localPath := strings.SplitN(fmt.Sprint(payload["content"]), "本地文件：", 2)[1]
 	s.Require().NoError(func() error {
-		_, err := os.Stat(strings.TrimSpace(localPath))
+		_, err := os.Stat(videoPath)
 		return err
 	}())
+	// 兜底通知不应触发（投递已成功）
+	pushMu.Lock()
+	s.Empty(pushed, "投递成功不应走 fallback 文本通知")
+	pushMu.Unlock()
 }
 
 // TestVideoGenSuite_配置门控与防重复盯单 未配置不布防；同 job 去重。
