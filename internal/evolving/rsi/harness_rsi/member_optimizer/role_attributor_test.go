@@ -485,3 +485,18 @@ func yamlUnmarshalMappingForTest(text string) (map[string]any, error) {
 	}
 	return m, nil
 }
+
+// yamlMarshalForTest YAML 序列化（测试辅助）。
+func yamlMarshalForTest(v any) ([]byte, error) {
+	return yaml.Marshal(v)
+}
+
+// replaceAllForTest 字符串替换（测试辅助）。
+func replaceAllForTest(s, old, new string) string {
+	return strings.ReplaceAll(s, old, new)
+}
+
+// countSubstring 子串计数（测试辅助）。
+func countSubstring(s, sub string) int {
+	return strings.Count(s, sub)
+}
