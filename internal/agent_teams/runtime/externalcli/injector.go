@@ -10,8 +10,8 @@ package externalcli
 import (
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime/externalcli/transport"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 const logComponent = logger.ComponentTeam
