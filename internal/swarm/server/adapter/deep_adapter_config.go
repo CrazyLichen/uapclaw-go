@@ -621,10 +621,25 @@ func (d *DeepAdapter) updateSendFileTools(ctx context.Context, config *runtimeCo
 		}
 	}
 
+	// Python L14355: require_send_authorization = self._enable_auto_permission
+	requireSendAuthorization := d.cachedSessionAutoPermissionEnabled()
+
+	// Python L14363/14377: user_id=_CRON_TOOL_USER_ID.get()（⤴️ Go 绑定暂空串，缺口登记）
+	cronUserID := ""
+	if rcc := cronbridge.FromRuntimeCronContext(ctx); rcc != nil {
+		cronUserID = rcc.UserID
+	}
+
 	if !alreadyRegistered {
 		// Python L3006-3014: 新建 toolkit 并注册
+		// Python L14357-14365: project_dir=self._project_dir、require_execution_authorization
 		d.sendFileToolkit = swarmtools.NewSendFileToolkit(
-			config.RequestID, config.SessionID, channelForTool, metadataForTool)
+			config.RequestID, config.SessionID, channelForTool, swarmtools.SendFileRuntimeContext{
+				Metadata:                      metadataForTool,
+				UserID:                        cronUserID,
+				ProjectDir:                    d.projectDir,
+				RequireExecutionAuthorization: &requireSendAuthorization,
+			})
 		resourceMgr := runner.GetResourceMgr()
 		for _, sfTool := range d.sendFileToolkit.GetTools() {
 			// Python 直调 add_tool 不查重（重复注册异常仅日志降级）
@@ -637,12 +652,22 @@ func (d *DeepAdapter) updateSendFileTools(ctx context.Context, config *runtimeCo
 		}
 		logger.Info(logComponent).Msg("[DeepAdapter] send_file tool registered")
 	} else if d.sendFileToolkit != nil {
-		// Python L3016-3021: 复用刷新
-		d.sendFileToolkit.UpdateRuntimeContext(config.RequestID, config.SessionID, channelForTool, metadataForTool)
+		// Python L3016-3021 + L14369-14382: 复用刷新（update_runtime_context 全量 kwargs）
+		d.sendFileToolkit.UpdateRuntimeContext(config.RequestID, config.SessionID, channelForTool, swarmtools.SendFileRuntimeContext{
+			Metadata:                      metadataForTool,
+			UserID:                        cronUserID,
+			ProjectDir:                    d.projectDir,
+			RequireExecutionAuthorization: &requireSendAuthorization,
+		})
 	} else {
 		// Go 补充分支：ability 有卡但本实例 toolkit 为 nil（跨实例残留）→ 重建绑定
 		d.sendFileToolkit = swarmtools.NewSendFileToolkit(
-			config.RequestID, config.SessionID, channelForTool, metadataForTool)
+			config.RequestID, config.SessionID, channelForTool, swarmtools.SendFileRuntimeContext{
+				Metadata:                      metadataForTool,
+				UserID:                        cronUserID,
+				ProjectDir:                    d.projectDir,
+				RequireExecutionAuthorization: &requireSendAuthorization,
+			})
 	}
 }
 

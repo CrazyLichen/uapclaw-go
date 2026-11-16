@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -69,7 +70,7 @@ func installSendFileHooks(t *testing.T) *sendFileTestHooks {
 func newSendFileToolkitForTest(t *testing.T) *SendFileToolkit {
 	t.Helper()
 	newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	return NewSendFileToolkit("req-1", "sess-1", "web", map[string]any{"user": "u1"})
+	return NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{Metadata: map[string]any{"user": "u1"}})
 }
 
 // ──────────────────── SendFile 核心执行测试 ────────────────────
@@ -249,7 +250,7 @@ func TestSendFile_回退基础模式(t *testing.T) {
 	tk := newSendFileToolkitForTest(t)
 	// downloadInfoBuilder 替换为恒失败 stub（包级变量注入点）
 	origBuilder := downloadInfoBuilder
-	downloadInfoBuilder = func(filePath, baseName, sessionID string) (map[string]any, error) {
+	downloadInfoBuilder = func(filePath, baseName, sessionID, userID string) (map[string]any, error) {
 		return nil, assertFailErr{}
 	}
 	defer func() { downloadInfoBuilder = origBuilder }()
@@ -338,8 +339,8 @@ func TestSendFile_push失败兜底(t *testing.T) {
 // TestSendFile_UpdateRuntimeContext 三元组刷新。
 // Python: update_runtime_context L57-77
 func TestSendFile_UpdateRuntimeContext(t *testing.T) {
-	tk := NewSendFileToolkit("r1", "s1", "web", nil)
-	tk.UpdateRuntimeContext("r2", "s2", "feishu", map[string]any{"k": 1})
+	tk := NewSendFileToolkit("r1", "s1", "web", SendFileRuntimeContext{})
+	tk.UpdateRuntimeContext("r2", "s2", "feishu", SendFileRuntimeContext{Metadata: map[string]any{"k": 1}})
 	if tk.requestID != "r2" || tk.sessionID != "s2" || tk.channelID != "feishu" {
 		t.Errorf("三元组未刷新: %+v", tk)
 	}
@@ -350,13 +351,13 @@ func TestSendFile_UpdateRuntimeContext(t *testing.T) {
 
 // TestSendFile_UpdateRuntimeContext并发 -race 下并发刷新。
 func TestSendFile_UpdateRuntimeContext并发(t *testing.T) {
-	tk := NewSendFileToolkit("r0", "s0", "web", nil)
+	tk := NewSendFileToolkit("r0", "s0", "web", SendFileRuntimeContext{})
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			tk.UpdateRuntimeContext(fmt.Sprintf("r%d", n), "s", "web", nil)
+			tk.UpdateRuntimeContext(fmt.Sprintf("r%d", n), "s", "web", SendFileRuntimeContext{})
 		}(i)
 	}
 	wg.Wait()
@@ -365,7 +366,7 @@ func TestSendFile_UpdateRuntimeContext并发(t *testing.T) {
 // TestSendFile_GetTools 工具卡断言。
 // Python: get_tools L208-254——description 中文逐字复制
 func TestSendFile_GetTools(t *testing.T) {
-	tk := NewSendFileToolkit("r", "s", "web", nil)
+	tk := NewSendFileToolkit("r", "s", "web", SendFileRuntimeContext{})
 	tools := tk.GetTools()
 	if len(tools) != 1 {
 		t.Fatalf("应 1 个工具: %d", len(tools))
@@ -377,7 +378,8 @@ func TestSendFile_GetTools(t *testing.T) {
 	if !strings.Contains(card.Description, "【文件发送工具】") {
 		t.Error("description 应含中文逐字开头")
 	}
-	if len(card.InputParams) != 1 || card.InputParams[0].Name != "abs_file_path_list" {
+	if len(card.InputParams) != 2 || card.InputParams[0].Name != "abs_file_path_list" ||
+		card.InputParams[1].Name != "target_channels" {
 		t.Errorf("InputParams: %+v", card.InputParams)
 	}
 	if !card.InputParams[0].Required {
@@ -389,7 +391,7 @@ func TestSendFile_GetTools(t *testing.T) {
 func TestSendFile_Invoke冒烟(t *testing.T) {
 	hooks := installSendFileHooks(t)
 	newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
-	tk := NewSendFileToolkit("req-9", "sess-9", "web", nil)
+	tk := NewSendFileToolkit("req-9", "sess-9", "web", SendFileRuntimeContext{})
 	got := tk.GetTools()
 
 	tmp := t.TempDir()
@@ -415,14 +417,14 @@ func TestSendFile_Invoke冒烟(t *testing.T) {
 // Python: dict(metadata) 拷贝语义
 func TestSendFile_metadata不拷贝入参(t *testing.T) {
 	md := map[string]any{"k": "v1"}
-	tk := NewSendFileToolkit("r", "s", "web", md)
+	tk := NewSendFileToolkit("r", "s", "web", SendFileRuntimeContext{Metadata: md})
 	md["k"] = "v2"
 	if tk.requestMetadata["k"] != "v1" {
 		t.Error("构造时应拷贝 metadata")
 	}
 
 	md2 := map[string]any{"k": "a"}
-	tk.UpdateRuntimeContext("r", "s", "web", md2)
+	tk.UpdateRuntimeContext("r", "s", "web", SendFileRuntimeContext{Metadata: md2})
 	md2["k"] = "b"
 	if tk.requestMetadata["k"] != "a" {
 		t.Error("刷新时应拷贝 metadata")
@@ -432,8 +434,8 @@ func TestSendFile_metadata不拷贝入参(t *testing.T) {
 // TestSendFile_metadata置nil UpdateRuntimeContext 传 nil 清空。
 // Python: dict(metadata) if metadata else None
 func TestSendFile_metadata置nil(t *testing.T) {
-	tk := NewSendFileToolkit("r", "s", "web", map[string]any{"k": 1})
-	tk.UpdateRuntimeContext("r", "s", "web", nil)
+	tk := NewSendFileToolkit("r", "s", "web", SendFileRuntimeContext{Metadata: map[string]any{"k": 1}})
+	tk.UpdateRuntimeContext("r", "s", "web", SendFileRuntimeContext{})
 	if tk.requestMetadata != nil {
 		t.Errorf("nil 刷新应清空 metadata: %v", tk.requestMetadata)
 	}
@@ -485,7 +487,7 @@ func TestSendFile_会话去重(t *testing.T) {
 	}
 
 	// 不同 session 不去重
-	tk2 := NewSendFileToolkit("req-2", "sess-2", "web", nil)
+	tk2 := NewSendFileToolkit("req-2", "sess-2", "web", SendFileRuntimeContext{})
 	third, _ := tk2.SendFile(context.Background(), fp)
 	if !strings.Contains(third, "成功发送 1 个文件") {
 		t.Fatalf("不同 session 不应去重: %q", third)
@@ -535,7 +537,7 @@ func TestSendFile_静默守卫(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tk := NewSendFileToolkit("req-1", "sess-1", "web", tc.metadata)
+			tk := NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{Metadata: tc.metadata})
 			result, _ := tk.SendFile(context.Background(), fp)
 			// 提示串逐字对齐 Python L388-390
 			want := "静默模式禁止 send_file_to_user；请直接用文件写入工具生成 Skill 目录，不要投递文件给用户。"
@@ -549,5 +551,287 @@ func TestSendFile_静默守卫(t *testing.T) {
 				t.Fatal("静默模式不应写 history")
 			}
 		})
+	}
+}
+
+// ──────────────────── 信封快照 + target_channels + 团队物化 + skill 包（Task 4） ────────────────────
+
+// TestSendFile_targetChannels push metadata 合并 send_file_targets（Python L794-795）。
+func TestSendFile_targetChannels(t *testing.T) {
+	hooks := installSendFileHooks(t)
+	tk := newSendFileToolkitForTest(t)
+	fp := newDedupTestFile(t, "chan.txt")
+
+	result, _ := tk.SendFile(context.Background(), fp, "web", "human-player-1")
+	if !strings.Contains(result, "成功发送 1 个文件") {
+		t.Fatalf("投递应成功: %q", result)
+	}
+	if len(hooks.pushMsgs) != 1 {
+		t.Fatalf("应 push 1 次: %d", len(hooks.pushMsgs))
+	}
+	md, _ := hooks.pushMsgs[0]["metadata"].(map[string]any)
+	if md == nil {
+		t.Fatal("target_channels 非空时应写 metadata")
+	}
+	targets, _ := md["send_file_targets"].([]string)
+	if len(targets) != 2 || targets[0] != "web" || targets[1] != "human-player-1" {
+		t.Fatalf("send_file_targets 不符: %v", md["send_file_targets"])
+	}
+}
+
+// TestSendFile_信封快照 并发换上下文不串话（Python _SendFileRuntimeEnvelope L91-103）。
+func TestSendFile_信封快照(t *testing.T) {
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var mu sync.Mutex
+	var pushed []map[string]any
+	var hist []sendFileTestHistoryEntry
+	SetSendFilePushFunc(func(_ context.Context, msg map[string]any) error {
+		entered <- struct{}{} // 通知测试：SendFile 已越过快照点
+		<-release             // 阻塞 push，制造并发窗口
+		mu.Lock()
+		pushed = append(pushed, msg)
+		mu.Unlock()
+		return nil
+	})
+	SetSendFileHistoryFunc(func(sessionID, requestID, channelID, role, content string,
+		_ float64, eventType string, extra map[string]any, _ map[string]any, _ string) {
+		mu.Lock()
+		hist = append(hist, sendFileTestHistoryEntry{sessionID: sessionID, requestID: requestID,
+			channelID: channelID, role: role, content: content, eventType: eventType, extra: extra})
+		mu.Unlock()
+	})
+	t.Cleanup(func() { SetSendFilePushFunc(nil); SetSendFileHistoryFunc(nil) })
+
+	tk := NewSendFileToolkit("req-1", "sess-orig", "web", SendFileRuntimeContext{})
+	fp := newDedupTestFile(t, "env.txt")
+	done := make(chan string, 1)
+	go func() {
+		result, _ := tk.SendFile(context.Background(), fp)
+		done <- result
+	}()
+	// SendFile 已进入 push（快照已冻结）后，另一轮请求刷新上下文
+	<-entered
+	tk.UpdateRuntimeContext("req-2", "sess-new", "web", SendFileRuntimeContext{})
+	close(release)
+	result := <-done
+	if !strings.Contains(result, "成功发送 1 个文件") {
+		t.Fatalf("投递应成功: %q", result)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(pushed) != 1 {
+		t.Fatalf("应 push 1 次: %d", len(pushed))
+	}
+	if pushed[0]["session_id"] != "sess-orig" {
+		t.Fatalf("投递应使用快照时 session: %v", pushed[0]["session_id"])
+	}
+	if hist[0].sessionID != "sess-orig" {
+		t.Fatalf("history 应使用快照时 session: %v", hist[0].sessionID)
+	}
+}
+
+// TestSendFile_团队物化 team-workspace 交付物复制到项目目录（Python L277-346/L492-516）。
+func TestSendFile_团队物化(t *testing.T) {
+	hooks := installSendFileHooks(t)
+	root := t.TempDir()
+	project := t.TempDir()
+	teamWS := filepath.Join(root, ".agent_teams", "t1", "team-workspace")
+	src := filepath.Join(teamWS, "artifacts", "20260101", "chat-1", "outputs", "out.txt")
+	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, []byte("deliverable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tk := NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{ProjectDir: project})
+	result, _ := tk.SendFile(context.Background(), src)
+	if !strings.Contains(result, "成功发送 1 个文件") {
+		t.Fatalf("投递应成功: %q", result)
+	}
+	// 相对路径保留复制到项目目录
+	dst := filepath.Join(project, "artifacts", "20260101", "chat-1", "outputs", "out.txt")
+	data, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("应复制到项目目录: %v", err)
+	}
+	if string(data) != "deliverable" {
+		t.Fatalf("复制内容不符: %q", string(data))
+	}
+	// 结果串含项目目录提示段（Python L637-640）
+	if !strings.Contains(result, "最终交付文件已位于当前项目目录：") || !strings.Contains(result, "  - "+dst) {
+		t.Fatalf("结果串应含物化提示: %q", result)
+	}
+	// push payload 路径应为物化后路径
+	if len(hooks.pushMsgs) != 1 {
+		t.Fatal("应 push 1 次")
+	}
+	payload := hooks.pushMsgs[0]["payload"].(map[string]any)
+	files := payload["files"].([]map[string]any)
+	if files[0]["path"] != dst {
+		t.Fatalf("payload path 应为物化路径: %v", files[0]["path"])
+	}
+}
+
+// TestSendFile_团队物化_无项目目录 原路径直投（Python L304-305）。
+func TestSendFile_团队物化_无项目目录(t *testing.T) {
+	installSendFileHooks(t)
+	teamWS := filepath.Join(t.TempDir(), ".agent_teams", "t1", "team-workspace")
+	if err := os.MkdirAll(teamWS, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(teamWS, "out.txt")
+	if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tk := NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{})
+	result, _ := tk.SendFile(context.Background(), src)
+	if !strings.Contains(result, "成功发送 1 个文件") || strings.Contains(result, "当前项目目录") {
+		t.Fatalf("无 project_dir 应原路径直投: %q", result)
+	}
+}
+
+// TestSendFile_团队物化_冲突拒绝 目标已存在不同内容（Python L337-339 + L503-511）。
+func TestSendFile_团队物化_冲突拒绝(t *testing.T) {
+	installSendFileHooks(t)
+	root := t.TempDir()
+	project := t.TempDir()
+	teamWS := filepath.Join(root, ".agent_teams", "t1", "team-workspace")
+	if err := os.MkdirAll(teamWS, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(teamWS, "out.txt")
+	if err := os.WriteFile(src, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(project, "out.txt")
+	if err := os.WriteFile(dst, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tk := NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{ProjectDir: project})
+	result, _ := tk.SendFile(context.Background(), src)
+	// Python L509-511 错误串逐字复制
+	if !strings.Contains(result, "发送文件失败：无法将团队交付文件写入当前项目目录") {
+		t.Fatalf("冲突应拒绝: %q", result)
+	}
+}
+
+// TestSendFile_物化projectDir回退 session metadata 回退解析（Python _resolve_project_dir L240-264）。
+func TestSendFile_物化projectDir回退(t *testing.T) {
+	installSendFileHooks(t)
+	root := t.TempDir()
+	project := t.TempDir()
+	teamWS := filepath.Join(root, ".agent_teams", "t1", "team-workspace")
+	if err := os.MkdirAll(teamWS, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(teamWS, "out.txt")
+	if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orig := sendFileProjectDirResolver
+	sendFileProjectDirResolver = func(sessionID string) string {
+		if sessionID == "sess-1" {
+			return project
+		}
+		return ""
+	}
+	t.Cleanup(func() { sendFileProjectDirResolver = orig })
+
+	tk := NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{})
+	result, _ := tk.SendFile(context.Background(), src)
+	if !strings.Contains(result, "成功发送 1 个文件") {
+		t.Fatalf("投递应成功: %q", result)
+	}
+	if _, err := os.Stat(filepath.Join(project, "out.txt")); err != nil {
+		t.Fatalf("回退 project_dir 应生效: %v", err)
+	}
+}
+
+// TestLooksLikeSkillPackage zip 探测矩阵（Python L48-88）。
+func TestLooksLikeSkillPackage(t *testing.T) {
+	dir := t.TempDir()
+	// .skill 扩展名
+	if !LooksLikeSkillPackage(filepath.Join(dir, "pkg.skill")) {
+		t.Fatal(".skill 应为 true")
+	}
+	// .skill.zip
+	if !LooksLikeSkillPackage(filepath.Join(dir, "pkg.skill.zip")) {
+		t.Fatal(".skill.zip 应为 true")
+	}
+	// zip 含根级 SKILL.md
+	zipPath := filepath.Join(dir, "root.zip")
+	writeZipWithSKILL(t, zipPath, "SKILL.md")
+	if !LooksLikeSkillPackage(zipPath) {
+		t.Fatal("根级 SKILL.md zip 应为 true")
+	}
+	// zip 含一层目录 SKILL.md
+	nested := filepath.Join(dir, "nested.zip")
+	writeZipWithSKILL(t, nested, "my-skill/SKILL.md")
+	if !LooksLikeSkillPackage(nested) {
+		t.Fatal("一层目录 SKILL.md zip 应为 true")
+	}
+	// 普通 zip
+	plain := filepath.Join(dir, "plain.zip")
+	writeZipWithSKILL(t, plain, "data/other.txt")
+	if LooksLikeSkillPackage(plain) {
+		t.Fatal("无 SKILL.md zip 应为 false")
+	}
+	// 非 zip 文件
+	if LooksLikeSkillPackage(filepath.Join(dir, "doc.pdf")) {
+		t.Fatal("非 zip 应为 false")
+	}
+	// 不存在路径
+	if LooksLikeSkillPackage(filepath.Join(dir, "missing.zip")) {
+		t.Fatal("不存在路径应为 false")
+	}
+}
+
+// TestSendFile_isSkillPackage payload 携带探测结果（Python L702/732/758/770）。
+func TestSendFile_isSkillPackage(t *testing.T) {
+	hooks := installSendFileHooks(t)
+	newTestManagerWithSecret(t, "0123456789abcdef0123456789abcdef")
+	dir := t.TempDir()
+	skillZip := filepath.Join(dir, "out.skill.zip")
+	writeZipWithSKILL(t, skillZip, "SKILL.md")
+	plainFile := filepath.Join(dir, "plain.txt")
+	if err := os.WriteFile(plainFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tk := NewSendFileToolkit("req-1", "sess-1", "web", SendFileRuntimeContext{})
+	// JSON 数组入参（Python normalize_send_file_paths：JSON list → 候选展开）
+	listInput := fmt.Sprintf(`[%q, %q]`, skillZip, plainFile)
+	if _, err := tk.SendFile(context.Background(), listInput); err != nil {
+		t.Fatal(err)
+	}
+	payload := hooks.pushMsgs[0]["payload"].(map[string]any)
+	files := payload["files"].([]map[string]any)
+	if files[0]["is_skill_package"] != true {
+		t.Fatalf("skill 包应标记 true: %v", files[0])
+	}
+	if files[1]["is_skill_package"] != false {
+		t.Fatalf("普通文件应标记 false: %v", files[1])
+	}
+}
+
+// writeZipWithSKILL 构造含指定条目的 zip（skill 包探测测试用）。
+func writeZipWithSKILL(t *testing.T, path, entry string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	zw := zip.NewWriter(f)
+	w, err := zw.Create(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("---\nname: t\n---\nbody")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
