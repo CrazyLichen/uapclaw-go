@@ -119,6 +119,11 @@ type TeamAgentSpec struct {
 	//
 	// Python: max_subtask_depth (blueprint.py L385)
 	MaxSubtaskDepth int `json:"max_subtask_depth,omitempty"`
+	// ExternalCliAgents 一类外部 CLI agent 的静态启动配置清单（可选）。
+	// 运行时 spawn_member(role_type='external_cli', cli_agent=...) 只需报 CLI
+	// 种类；cli_agent 名在本清单内必须唯一。
+	// Python: external_cli_agents (blueprint.py:262)
+	ExternalCliAgents []ExternalCliAgentSpec `json:"external_cli_agents,omitempty"`
 	// EnableTaskVerification 团队级「验证预期」开关（F_62）
 	//
 	// 纯提示词驱动：True 时 leader 的建任务指引会要求它按自己的判断给每个任务
