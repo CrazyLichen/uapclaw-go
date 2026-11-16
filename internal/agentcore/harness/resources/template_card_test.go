@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,13 +49,13 @@ func TestParseAgentTemplateCard_展示字段按语言渲染(t *testing.T) {
 	assert.Equal(t, "Funds and stocks", card.DisplayText("cn"), "missing language falls back to English")
 	assert.Equal(t, []string{"基金", "plain"}, card.TagLabels("cn"))
 	assert.Equal(t, []string{"Funds", "plain"}, card.TagLabels("en"))
-	// 非文本 tag（数字 3）丢弃；空文本 map tag 保留
-	wantTags := []any{
-		map[string]any{"zh": "基金", "en": "Funds"},
-		"plain",
-		map[string]any{"en": ""},
+	// 非文本 tag（数字 3）丢弃；空文本 map tag 保留（D-1：LocalizedText 结构化两形态）
+	wantTags := []LocalizedText{
+		{Map: map[string]string{"zh": "基金", "en": "Funds"}},
+		{Str: "plain"},
+		{Map: map[string]string{"en": ""}},
 	}
-	assert.True(t, reflect.DeepEqual(card.Tags, wantTags), "tags = %#v", card.Tags)
+	assert.Equal(t, wantTags, card.Tags, "tags = %#v", card.Tags)
 	// skills 取目录名去重（"skills/fund" 与 {"dir": "skills/fund"} 同名）
 	assert.Equal(t, []string{"a-share", "fund"}, card.Skills)
 	assert.Equal(t, []string{"github"}, card.Connectors)
@@ -70,7 +69,7 @@ func TestParseAgentTemplateCard_展示名回退到name(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "finance", card.DisplayLabel("cn"))
 	assert.Equal(t, "Finance", card.DisplayText("en"))
-	assert.Equal(t, "", card.DisplayName)
+	assert.Equal(t, LocalizedText{}, card.DisplayName)
 }
 
 // TestParseAgentTemplateCard_外部runtime标记 Python: test_runtime_marks_an_external_template。
@@ -93,7 +92,7 @@ func TestParseAgentTemplateCard_外部runtime标记(t *testing.T) {
 func TestParseAgentTemplateCard_除packageType外宽松(t *testing.T) {
 	card, err := ParseAgentTemplateCard([]byte(`{"package_type": "agent_template"}`))
 	require.NoError(t, err)
-	want := AgentTemplateCard{Name: "", Description: "", DisplayName: "", DisplayDescription: "", Runtime: "native", RuntimeConfig: map[string]any{}}
+	want := AgentTemplateCard{Name: "", Description: "", DisplayName: LocalizedText{}, DisplayDescription: LocalizedText{}, Runtime: "native", RuntimeConfig: map[string]any{}}
 	assert.Equal(t, want, card)
 	_, err = ParseAgentTemplateCard([]byte(`{"package_type": "plugin"}`))
 	require.Error(t, err)
@@ -102,10 +101,27 @@ func TestParseAgentTemplateCard_除packageType外宽松(t *testing.T) {
 
 // TestLocalizedText_顺序 Python: test_localized_text_order。
 func TestLocalizedText_顺序(t *testing.T) {
-	assert.Equal(t, "中", localizedText(map[string]any{"cn": "中", "zh": "文"}, "cn"), "cn 优先取 cn 键")
-	assert.Equal(t, "bonjour", localizedText(map[string]any{"fr": "bonjour"}, "cn"), "全链缺失取任意非空")
-	assert.Equal(t, "plain", localizedText("  plain ", "en"), "str strip")
-	assert.Equal(t, "", localizedText(map[string]any{}, "en"), "空映射读空")
+	assert.Equal(t, "中", localizedText(LocalizedText{Map: map[string]string{"cn": "中", "zh": "文"}}, "cn"), "cn 优先取 cn 键")
+	assert.Equal(t, "bonjour", localizedText(LocalizedText{Map: map[string]string{"fr": "bonjour"}}, "cn"), "全链缺失取任意非空")
+	assert.Equal(t, "plain", localizedText(LocalizedText{Str: "  plain "}, "en"), "str strip")
+	assert.Equal(t, "", localizedText(LocalizedText{Map: map[string]string{}}, "en"), "空映射读空")
+}
+
+// TestLocalizedText_JSON往返 字符串形态↔纯字符串、map 形态↔对象（wire 对齐 Python union）。
+func TestLocalizedText_JSON往返(t *testing.T) {
+	raw, err := json.Marshal(LocalizedText{Str: "plain"})
+	require.NoError(t, err)
+	assert.Equal(t, `"plain"`, string(raw))
+	raw, err = json.Marshal(LocalizedText{Map: map[string]string{"cn": "中"}})
+	require.NoError(t, err)
+	assert.Equal(t, `{"cn":"中"}`, string(raw))
+	var back LocalizedText
+	require.NoError(t, json.Unmarshal([]byte(`"plain"`), &back))
+	assert.Equal(t, LocalizedText{Str: "plain"}, back)
+	require.NoError(t, json.Unmarshal([]byte(`{"cn":"中","bad":null}`), &back))
+	assert.Equal(t, LocalizedText{Map: map[string]string{"cn": "中"}}, back, "null 值丢弃、非文本值读空")
+	require.NoError(t, json.Unmarshal([]byte(`123`), &back))
+	assert.Equal(t, LocalizedText{}, back)
 }
 
 // TestReadCard_只读manifest不校验包体 Python: test_read_card_reads_only_the_manifest。

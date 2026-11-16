@@ -20,6 +20,50 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// LocalizedText manifest 展示值：纯字符串或多语言映射。
+// Python: template_card.py:26 LocalizedText = str | dict[str, str]
+// 偏差 D-1（二次收窄，用户 2026-11-30 拍板）：union → 结构化两形态类型，
+// 卡片字段不再承载 any；Marshal/Unmarshal 保持 wire 形状（字符串形态↔纯字符串）。
+type LocalizedText struct {
+	// Str 纯字符串形态（Map 为 nil 时生效）
+	Str string `json:"-"`
+	// Map 多语言形态 {语言码: 文本}（nil 表示字符串形态）
+	Map map[string]string `json:"-"`
+}
+
+// MarshalJSON 字符串形态序列化为纯字符串，map 形态为对象（对齐 Python union wire）。
+func (t LocalizedText) MarshalJSON() ([]byte, error) {
+	if t.Map != nil {
+		return json.Marshal(t.Map)
+	}
+	return json.Marshal(t.Str)
+}
+
+// UnmarshalJSON 纯字符串读 Str 形态，对象读 Map 形态（值字符串化，null 值丢弃）。
+// Python: template_card.py:160-166 normalize_localized
+func (t *LocalizedText) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		t.Str = str
+		t.Map = nil
+		return nil
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		// 数字/布尔等非文本值读空（normalize_localized 的 default 分支）
+		t.Str, t.Map = "", nil
+		return nil
+	}
+	t.Str = ""
+	t.Map = make(map[string]string, len(raw))
+	for key, text := range raw {
+		if text != nil {
+			t.Map[key] = fmt.Sprintf("%v", text)
+		}
+	}
+	return nil
+}
+
 // AgentTemplateCard 一个 AgentTemplate 包的展示信息。
 // Python: template_card.py:37-63 AgentTemplateCard（dataclass frozen，D-2：Go 侧不可变靠约定）
 type AgentTemplateCard struct {
@@ -27,14 +71,14 @@ type AgentTemplateCard struct {
 	Name string `json:"name"`
 	// Description manifest.description；缺失为空串
 	Description string `json:"description"`
-	// DisplayName 展示名：纯字符串或 {语言: 文本} map（D-1：union 判别，string 或 map[string]string）
-	DisplayName any `json:"display_name"`
+	// DisplayName 展示名：纯字符串或 {语言: 文本}（D-1：union → 结构化 LocalizedText，无 any）
+	DisplayName LocalizedText `json:"display_name"`
 	// DisplayDescription 展示描述：同 DisplayName 形状
-	DisplayDescription any `json:"display_description"`
+	DisplayDescription LocalizedText `json:"display_description"`
 	// Category 分类；非字符串读空
 	Category string `json:"category"`
-	// Tags manifest tags 原样（纯字符串或本地化 map；非文本项丢弃）
-	Tags []any `json:"tags,omitempty"`
+	// Tags manifest tags（纯字符串或本地化 map；非文本项丢弃）
+	Tags []LocalizedText `json:"tags,omitempty"`
 	// Version 版本
 	Version string `json:"version"`
 	// Avatar 包相对头像路径（manifest 原样）
@@ -87,10 +131,28 @@ func (c AgentTemplateCard) TagLabels(language string) []string {
 	return labels
 }
 
-// LocalizedText 按 language 取值（cn 兼读 zh），再英文，再任意文本。
+// localizedText 按 language 取值（cn 兼读 zh），再英文，再任意文本。
 // Python: template_card.py:79-87 localized_text
-func LocalizedText(value any, language string) string {
-	return localizedText(value, language)
+func localizedText(value LocalizedText, language string) string {
+	if value.Map == nil {
+		return strings.TrimSpace(value.Str)
+	}
+	keys := languageKeys[language]
+	if keys == nil {
+		keys = []string{language}
+	}
+	for _, key := range append(append([]string{}, keys...), "en", "zh", "cn") {
+		if text := strings.TrimSpace(value.Map[key]); text != "" {
+			return text
+		}
+	}
+	// 全链缺失：取任意第一个非空文本
+	for _, text := range value.Map {
+		if text = strings.TrimSpace(text); text != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 // ParseAgentTemplateCard 从已解析的 manifest.json 构造卡片（纯函数）。
@@ -156,37 +218,6 @@ func LoadAgentTemplateCard(manifestPath string) (AgentTemplateCard, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// localizedText LocalizedText 的导出包装本体。
-func localizedText(value any, language string) string {
-	if s, ok := value.(string); ok {
-		return strings.TrimSpace(s)
-	}
-	m, ok := value.(map[string]any)
-	if !ok {
-		if ms, ok2 := value.(map[string]string); ok2 {
-			m = mapToAnyMap(ms)
-		} else {
-			return ""
-		}
-	}
-	keys := languageKeys[language]
-	if keys == nil {
-		keys = []string{language}
-	}
-	for _, key := range append(append([]string{}, keys...), "en", "zh", "cn") {
-		if text := strings.TrimSpace(asString(m[key])); text != "" {
-			return text
-		}
-	}
-	// 全链缺失：取任意第一个非空文本
-	for _, text := range m {
-		if s := strings.TrimSpace(asString(text)); s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
 // readManifestMapping 读 JSON manifest，读/解析失败统一映射 error。
 // Python: template_card.py:140-152 read_manifest_mapping
 func readManifestMapping(pathStr string) (map[string]any, error) {
@@ -221,20 +252,20 @@ func manifestText(value any) string {
 
 // normalizeLocalized 归一化 manifest 展示值：保留字符串，map 值字符串化，其余清空。
 // Python: template_card.py:160-166 normalize_localized
-func normalizeLocalized(value any) any {
+func normalizeLocalized(value any) LocalizedText {
 	switch v := value.(type) {
 	case string:
-		return v
+		return LocalizedText{Str: v}
 	case map[string]any:
-		out := make(map[string]any, len(v))
+		m := make(map[string]string, len(v))
 		for key, text := range v {
 			if text != nil {
-				out[key] = fmt.Sprintf("%v", text)
+				m[key] = fmt.Sprintf("%v", text)
 			}
 		}
-		return out
+		return LocalizedText{Map: m}
 	default:
-		return ""
+		return LocalizedText{}
 	}
 }
 
@@ -250,8 +281,8 @@ func cardAsList(value any) []any {
 
 // localizedListItems tags 归一化：仅保留字符串或 map 项（非文本项丢弃）。
 // Python: template_card.py:109-111 tags=tuple(normalize_localized(tag) for tag in _as_list(...) if isinstance(tag, (str, Mapping)))
-func localizedListItems(value any) []any {
-	var out []any
+func localizedListItems(value any) []LocalizedText {
+	var out []LocalizedText
 	for _, item := range cardAsList(value) {
 		switch item.(type) {
 		case string, map[string]any:
@@ -329,15 +360,6 @@ func asString(value any) string {
 		return s
 	}
 	return ""
-}
-
-// mapToAnyMap map[string]string → map[string]any。
-func mapToAnyMap(in map[string]string) map[string]any {
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 // orString 非空优先。
