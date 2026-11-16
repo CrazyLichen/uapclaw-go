@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,9 +11,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// fakeAtomicState 测试用可提交状态：嵌入 SessionState 补齐接口面，仅 CommitCmp 有实现。
+// fakeAtomicState 测试用可提交状态：嵌入 SessionState + WorkflowState 两个接口补齐
+// 全接口面（接口嵌入为 nil，仅覆盖 CommitCmp；本测试不触达其余方法）。
 type fakeAtomicState struct {
 	state.SessionState
+	state.WorkflowState
 	commitCmpCalled bool
 }
 
