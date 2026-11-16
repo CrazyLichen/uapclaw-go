@@ -396,3 +396,30 @@ func validateTeamModelConfig(modelData map[string]any) (hschema.TeamModelConfig,
 func ValidateTeamModelConfig(modelData map[string]any) (hschema.TeamModelConfig, error) {
 	return validateTeamModelConfig(modelData)
 }
+
+// ValidateClientConfigJSON JSON 解码校验客户端配置（Python ModelClientConfig.model_validate 等价）。
+// agents/factory.go 经 JSON 往返消费。
+func ValidateClientConfigJSON(data map[string]any) (*llmschema.ModelClientConfig, error) {
+	cfg := &llmschema.ModelClientConfig{}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// ValidateRequestConfigJSON JSON 解码校验请求配置（Python ModelRequestConfig.model_validate 等价）。
+func ValidateRequestConfigJSON(data map[string]any) (*llmschema.ModelRequestConfig, error) {
+	cfg := &llmschema.ModelRequestConfig{}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}

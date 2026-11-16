@@ -579,3 +579,41 @@ var (
 	_ harness.TeamIssue
 	_ harness.ActionDefinition
 )
+
+// ──────────────────────────── 导出函数（agents/factory 枚举注入） ────────────────────────────
+
+// MechanismTypeValuesExcludingRail 返回除 rail 外的全部病根枚举值。
+// Python: factory.py:513-515 _mechanism_type_values（if item is not MechanismType.RAIL）。
+func MechanismTypeValuesExcludingRail() []string {
+	out := []string{}
+	for _, v := range AllMechanismTypes() {
+		if v != MechanismTypeRail {
+			out = append(out, string(v))
+		}
+	}
+	return out
+}
+
+// FailureSignatureValuesExcludingConfigOrRailMismatch 返回除 config_or_rail_mismatch 外的全部失败特征。
+// Python: factory.py:517-519。
+func FailureSignatureValuesExcludingConfigOrRailMismatch() []string {
+	out := []string{}
+	for _, v := range AllFailureSignatures() {
+		if v != FailureSignatureConfigOrRailMismatch {
+			out = append(out, string(v))
+		}
+	}
+	return out
+}
+
+// OptimizationSurfaceValuesExcludingRail 返回除 rail 外的全部优化面枚举值。
+// Python: factory.py:521-523。
+func OptimizationSurfaceValuesExcludingRail() []string {
+	out := []string{}
+	for _, v := range AllOptimizationSurfaces() {
+		if v != OptimizationSurfaceRail {
+			out = append(out, string(v))
+		}
+	}
+	return out
+}
