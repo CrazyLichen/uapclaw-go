@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"encoding/json"
 	"runtime"
 	"sync"
 	"errors"
@@ -25,9 +26,9 @@ type fakeExecutor struct {
 }
 
 func (f *fakeExecutor) Run(ctx context.Context, task map[string]any, progress func(map[string]any) error) (map[string]any, error) {
+	f.mu.Lock()
 	f.runs = append(f.runs, task)
 	index := len(f.runs) - 1
-	f.mu.Lock()
 	var gate chan struct{}
 	if index < len(f.runGates) {
 		gate = f.runGates[index]
@@ -44,7 +45,9 @@ func (f *fakeExecutor) Run(ctx context.Context, task map[string]any, progress fu
 }
 
 func (f *fakeExecutor) Cancel(_ context.Context, task map[string]any) error {
+	f.mu.Lock()
 	f.cancels = append(f.cancels, task)
+	f.mu.Unlock()
 	// 真实 adapter 语义：取消落账 settled 标志（对齐 task_adapter.py:287-305）
 	if f.store != nil {
 		_, _ = f.store.update(toString(task["id"]), func(current map[string]any) {
@@ -57,7 +60,9 @@ func (f *fakeExecutor) Cancel(_ context.Context, task map[string]any) error {
 }
 
 func (f *fakeExecutor) Answer(_ context.Context, task map[string]any) error {
+	f.mu.Lock()
 	f.answers = append(f.answers, task)
+	f.mu.Unlock()
 	return nil
 }
 
@@ -304,6 +309,7 @@ func TestCancel_两阶段(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = svc.Close() })
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -327,8 +333,14 @@ func TestCancel_两阶段(t *testing.T) {
 	}
 	// 等 executor.Cancel 落账（对齐 Python：cancel 先于 observer cancel/gather）
 	deadline2 := time.Now().Add(3 * time.Second)
+	executor.mu.Lock()
+	seen := len(executor.cancels)
+	executor.mu.Unlock()
 	for time.Now().Before(deadline2) {
-		if len(executor.cancels) == 1 {
+		executor.mu.Lock()
+		seen = len(executor.cancels)
+		executor.mu.Unlock()
+		if seen == 1 {
 			current, _ := store.Read(toString(task["id"]), nil, nil)
 			if current["execution_settled"] == true {
 				break
@@ -351,8 +363,11 @@ func TestCancel_两阶段(t *testing.T) {
 	if current["status"] != "cancelled" {
 		t.Fatalf("执行确认后应终态 cancelled: %v", current["status"])
 	}
-	if len(executor.cancels) != 1 {
-		t.Fatalf("执行器应收到一次取消: %d", len(executor.cancels))
+	executor.mu.Lock()
+	cancelCount := len(executor.cancels)
+	executor.mu.Unlock()
+	if cancelCount != 1 {
+		t.Fatalf("执行器应收到一次取消: %d", cancelCount)
 	}
 }
 
@@ -450,6 +465,14 @@ func TestAnswer_挂起恢复排队(t *testing.T) {
 	current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 	st := toString(current["status"])
 	if st != "running" && st != "completed" {
+		svc.mu.Lock()
+		t.Logf("DBG workers=%d gates=%d", len(svc.workers), len(executor.runGates))
+		svc.mu.Unlock()
+		executor.mu.Lock()
+		t.Logf("DBG runs=%d", len(executor.runs))
+		executor.mu.Unlock()
+		raw, _ := json.Marshal(current)
+		t.Logf("DBG task=%s", raw)
 		stack := buf(true)
 		t.Logf("GOROUTINES:\n%s", stack)
 		t.Fatalf("挂起源回答应回队并重派发, got %v (resume=%v)", st, current["resume_answer"])

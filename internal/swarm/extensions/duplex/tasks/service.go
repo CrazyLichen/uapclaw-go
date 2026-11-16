@@ -49,6 +49,8 @@ type TaskService struct {
 	concurrency        int
 	notificationTimout time.Duration
 
+	writeMu sync.Mutex // 服务级写互斥：恢复 Python 单线程 asyncio 的变更串行语义（偏差 O-9）
+
 	workers              map[string]*workerEntry
 	cancellations        map[string]*workerEntry
 	notifications        map[string]*workerEntry
@@ -112,7 +114,7 @@ func (s *TaskService) Start() error {
 		return errors.New("another task service owns this ledger")
 	}
 	s.leaseFd = fd
-	err = s.store.transaction(func(db *sqlTx) error {
+	err = s.writeTx(func(db *sqlTx) error {
 		rows, err := txRows(db, nil, nil)
 		if err != nil {
 			return err
@@ -231,7 +233,7 @@ func (s *TaskService) Submit(owner, session, commandID, instruction string, requ
 	}
 	var result map[string]any
 	var kicked bool
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		replay, fingerprint, err := txReplay(db, owner, session, commandID,
 			[]any{"submit", instruction, request})
 		if err != nil {
@@ -293,7 +295,7 @@ func (s *TaskService) List(owner, session string, query, status string, offset, 
 		return nil, nil, errors.New("Invalid pagination")
 	}
 	var tasks []map[string]any
-	if err := s.store.transaction(func(db *sqlTx) error {
+	if err := s.writeTx(func(db *sqlTx) error {
 		var err error
 		tasks, err = txRows(db, owner, session)
 		return err
@@ -344,7 +346,7 @@ func (s *TaskService) Modify(owner, session, taskID, commandID string, change Ta
 		return nil, errors.New("Modification must contain 1–4000 characters")
 	}
 	var receipt map[string]any
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		task, err := txGet(db, taskID, owner, session)
 		if err != nil {
 			return err
@@ -411,7 +413,7 @@ func (s *TaskService) Cancel(ctx context.Context, owner, session, taskID, comman
 	}
 	var receipt map[string]any
 	var cancelling bool
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		task, err := txGet(db, taskID, owner, session)
 		if err != nil {
 			return err
@@ -477,7 +479,11 @@ func (s *TaskService) Cancel(ctx context.Context, owner, session, taskID, comman
 			task, _ := s.store.read(taskID, nil, nil)
 			go func() {
 				defer close(entry.done)
-				defer func() { delete(s.cancellations, taskID) }()
+				defer func() {
+					s.mu.Lock()
+					delete(s.cancellations, taskID)
+					s.mu.Unlock()
+				}()
 				s.cancelWork(runCtx, task)
 			}()
 		}
@@ -497,7 +503,7 @@ func (s *TaskService) Reorder(owner, session, taskID string, revision int, befor
 		return nil, err
 	}
 	var receipt map[string]any
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		task, err := txGet(db, taskID, owner, session)
 		if err != nil {
 			return err
@@ -602,7 +608,7 @@ func (s *TaskService) Answer(ctx context.Context, owner, session, taskID, comman
 	var receipt map[string]any
 	var suspended, needExecutorAnswer bool
 	var executorTask map[string]any
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		task, err := txGet(db, taskID, owner, session)
 		if err != nil {
 			return err
@@ -673,7 +679,7 @@ func (s *TaskService) Answer(ctx context.Context, owner, session, taskID, comman
 		// 这是仍持有输出流的控制输入，不是新任务（对齐 :536 注释）
 		if err := s.executor.Answer(ctx, executorTask); err != nil {
 			errText := err.Error()
-			_, _ = s.store.update(taskID, func(current map[string]any) {
+			_, _ = s.writeUpdate(taskID, func(current map[string]any) {
 				if toString(current["status"]) == "running" &&
 					toString(current["request_id"]) == toString(executorTask["request_id"]) {
 					current["status"] = "unknown"
@@ -699,7 +705,7 @@ func (s *TaskService) Snapshot(owner, session string) ([]map[string]any, int, er
 	}
 	var tasks []map[string]any
 	var version int
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		var err error
 		tasks, err = txRows(db, owner, session)
 		if err != nil {
@@ -818,19 +824,11 @@ func (s *TaskService) Close() error {
 
 // kickLocked 就绪任务补位调度（须持锁调用）。
 // 对齐 tasks/service.py:79-113 kick。
+// 偏差 O-8：SQLite 读移出 s.mu（ReadDirect 直读），避免锁内 IO 与派发事务互相饥饿。
 func (s *TaskService) kickLocked() {
-	db, err := s.store.open()
+	tasks, err := s.store.RowsDirect(nil, nil)
 	if err != nil {
-		return
-	}
-	defer db.Close()
-	tx, err := db.Begin()
-	if err != nil {
-		return
-	}
-	tasks, err := txRows(tx, nil, nil)
-	_ = tx.Rollback()
-	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("任务快照读取失败")
 		return
 	}
 	active := []map[string]any{}
@@ -858,10 +856,10 @@ func (s *TaskService) kickLocked() {
 			continue
 		}
 		if _, hasWorker := s.workers[taskID]; hasWorker {
-			continue
+				continue
 		}
 		if !readySingle(task, tasks, active) {
-			continue
+				continue
 		}
 		runCtx, cancel := context.WithCancel(context.Background())
 		entry := &workerEntry{token: time.Now().UnixNano(), cancel: cancel, done: make(chan struct{})}
@@ -1037,7 +1035,7 @@ func (s *TaskService) cancelWork(ctx context.Context, task map[string]any) {
 		}
 	}
 	if err == nil {
-		current, _ = s.store.update(toString(task["id"]), func(t map[string]any) {
+		current, _ = s.writeUpdate(toString(task["id"]), func(t map[string]any) {
 			if toString(t["status"]) == "cancelling" {
 				t["status"] = "cancelled"
 				t["error"] = ""
@@ -1049,7 +1047,7 @@ func (s *TaskService) cancelWork(ctx context.Context, task map[string]any) {
 			message = "error"
 		}
 		logger.Warn(logComponent).Err(err).Str("task_id", toString(task["id"])).Msg("任务取消执行失败")
-		current, _ = s.store.update(toString(task["id"]), func(t map[string]any) {
+		current, _ = s.writeUpdate(toString(task["id"]), func(t map[string]any) {
 			if toString(t["status"]) == "cancelling" {
 				t["error"] = message
 			}
@@ -1178,7 +1176,7 @@ func (s *TaskService) sendNotifications(ctx context.Context, key string) {
 func (s *TaskService) drain(ctx context.Context, admitted map[string]any) {
 	taskID := toString(admitted["id"])
 	var task map[string]any
-	err := s.store.transaction(func(db *sqlTx) error {
+	err := s.writeTx(func(db *sqlTx) error {
 		current, err := txGet(db, taskID, nil, nil)
 		if err != nil {
 			return err
@@ -1252,7 +1250,7 @@ func (s *TaskService) drain(ctx context.Context, admitted map[string]any) {
 	var progressMu sync.Mutex
 	persistProgress := func(entry map[string]any) {
 		requestID := toString(task["request_id"])
-		_, _ = s.store.update(taskID, func(current map[string]any) {
+		_, _ = s.writeUpdate(taskID, func(current map[string]any) {
 			if toString(current["request_id"]) != requestID {
 				return
 			}
@@ -1331,7 +1329,7 @@ func (s *TaskService) drain(ctx context.Context, admitted map[string]any) {
 	}
 	flushProgress()
 	var current map[string]any
-	_ = s.store.transaction(func(db *sqlTx) error {
+	_ = s.writeTx(func(db *sqlTx) error {
 		current, _ = txGet(db, taskID, nil, nil)
 		if current == nil {
 			return nil
@@ -1530,4 +1528,19 @@ func RecoverDuplexError(errPtr *error) {
 		}
 		panic(r)
 	}
+}
+
+// writeTx 持服务写互斥执行事务。
+// Python 侧无对应实现：Python 单线程 asyncio 天然串行变更，Go 显式互斥等价（偏差 O-9）。
+func (s *TaskService) writeTx(fn func(db *sqlTx) error) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return s.store.transaction(fn)
+}
+
+// writeUpdate 持服务写互斥执行任务变更。
+func (s *TaskService) writeUpdate(taskID string, change func(map[string]any)) (map[string]any, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return s.store.update(taskID, change)
 }

@@ -365,3 +365,37 @@ func (s *TaskStore) ReadDirect(taskID string, owner, session any) (map[string]an
 	}
 	return task, nil
 }
+
+// RowsDirect 轻量直读列表（不开写事务；偏差 O-8 同 ReadDirect）。
+func (s *TaskStore) RowsDirect(owner, session any) ([]map[string]any, error) {
+	db, err := s.open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	var rows *sql.Rows
+	if owner == nil {
+		rows, err = db.Query("SELECT body FROM managed_tasks ORDER BY rowid")
+	} else {
+		rows, err = db.Query(
+			"SELECT body FROM managed_tasks WHERE owner=? AND session=? ORDER BY rowid",
+			owner.(string), session.(string))
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tasks := []map[string]any{}
+	for rows.Next() {
+		var body string
+		if err := rows.Scan(&body); err != nil {
+			return nil, err
+		}
+		var task map[string]any
+		if err := json.Unmarshal([]byte(body), &task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
+}
