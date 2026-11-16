@@ -53,7 +53,7 @@
 
 - **D-x1 enterprise 恒 False**：Python `is_enterprise()` 三处分支不移植——envelope 快照期 asset_owner 选择分支、`_build_files_payload` 的 `obs_file_delivery` 对象存储投递分支、授权资产跳过分支；`_sent_files_key` tenant 维度恒空。理由：Go 无 enterprise 域；移植即不可达代码。回收条件：Go 引入 enterprise 域。
 - **D-x2 MappingProxyType → 拷贝语义**：信封 metadata 用深拷贝 + 不可变约定（Go 无 readonly map），只读性靠约定而非类型强制。
-- **D-x3 push/history 注入缝沿用**：保留 `SetSendFilePushFunc`/`SetSendFileHistoryFunc` 启动接线（Python 为 lazy import 单例，Go swarmtools→server 编译期成环，既有偏差）；push 语义改为对齐 `send_runtime_push` 返回值检查。
+- **D-x3 push/history 注入缝沿用**：保留 `SetSendFilePushFunc`/`SetSendFileHistoryFunc` 启动接线（Python 为 lazy import 单例，Go swarmtools→server 编译期成环，既有偏差）；push 语义改为对齐 `send_runtime_push` 返回值检查——**注入存在时**返回 error 即报错（对齐 Python `send_runtime_push` False → RuntimeError）；**注入不存在（nil）时 Warn 跳过**（Python 会 RuntimeError：requires an active Runtime push host）。nil-skip 原因：Go 测试与单机路径存在无 push 宿主场景，保留既有 10.6.24b 行为。
 - **D-x4 finally 清授权**：Python `send_file` finally 调 `clear_send_file_execution_grant`（contextvars 可变）；Go ctx 不可变，清理语义由 ctx 生命周期（任务结束即丢弃）承担。授权/归一/projectDir 三处 lazy import 改 permissions 包 init 接线（`send_file_authorization_wiring.go`）。
 - **⤴️ user_id 绑定缺口**：Python `_CRON_TOOL_USER_ID`（cron_user_id 推导 L13812-13830）Go 侧 `RuntimeCronContext.UserID` 已备，但 `AgentRequest` 无 user_id 源，绑定暂传空串。影响面：AgentOS 下载 URL 用户路由（Go 无 agentos routing，当前无消费方）。回收条件：E2A 层补 user_id 字段。
 

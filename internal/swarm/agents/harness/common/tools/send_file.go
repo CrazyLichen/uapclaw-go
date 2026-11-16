@@ -212,7 +212,6 @@ func (tk *SendFileToolkit) SendFile(ctx context.Context, absFilePathList string,
 	// （Python L379-390）
 	tk.mu.Lock()
 	md := tk.requestMetadata
-	ownsExecutionGrant := tk.requireExecutionAuthorization
 	tk.mu.Unlock()
 	if md != nil {
 		if silent, _ := md["skills_rebuild_silent"].(bool); silent {
@@ -244,7 +243,6 @@ func (tk *SendFileToolkit) SendFile(ctx context.Context, absFilePathList string,
 
 	// 3. finally 清授权（Python L413-419）——偏差 D-x4：Go ctx 不可变，
 	// clear_send_file_execution_grant 语义由 ctx 生命周期（任务结束即丢弃）承担，此处无需操作。
-	_ = ownsExecutionGrant
 	return result, nil
 }
 
@@ -286,7 +284,11 @@ func (tk *SendFileToolkit) GetTools() []tool.Tool {
 					"或 team 人类席位名（如 'human-player-1'）。" +
 					"省略时默认投给最近发起请求的人类成员；web 发起或无人类成员时投 web。" +
 					"定向到指定 feishu 用户传其 member_name；跨端投递传对应 member_name 或 'web'。",
-				Type: schema.ParamTypeString,
+				Type: schema.ParamTypeArray,
+				Items: &schema.Param{
+					Name: "target_channel",
+					Type: schema.ParamTypeString,
+				},
 			},
 		},
 		nil,
@@ -468,11 +470,9 @@ func (tk *SendFileToolkit) sendFileWithEnvelope(
 		return strings.Join(msgParts, "\n"), nil
 	}
 
-	// ⑥ 会话级去重分流（Python L531-534）；授权路径跳过（授权即投递，L470-478 无 partition）
+	// ⑥ 会话级去重分流（Python L531-534，授权与否均执行——Python 无授权跳过分支）
 	var skippedFiles []string
-	if !envelope.requireExecutionAuthorization {
-		validFiles, skippedFiles = partitionSentFiles(envelope.sessionID, validFiles)
-	}
+	validFiles, skippedFiles = partitionSentFiles(envelope.sessionID, validFiles)
 	if len(validFiles) == 0 {
 		// 全部重复（Python L535-553）
 		msgParts := []string{}
@@ -566,10 +566,8 @@ func (tk *SendFileToolkit) sendFileWithEnvelope(
 			}
 		}
 	}
-	// push 成功 → 标记已发送（Python _mark_files_sent L616）
-	if !envelope.requireExecutionAuthorization {
-		markFilesSent(envelope.sessionID, validFiles)
-	}
+	// push 成功 → 标记已发送（Python _mark_files_sent L616，授权与否均执行）
+	markFilesSent(envelope.sessionID, validFiles)
 
 	// ⑪ history（Python L617-635；注入函数为 nil 时 Warn 跳过；失败不阻断结果串）
 	if sendFileHistoryFunc != nil {
@@ -934,19 +932,6 @@ func buildSendFilePayload(validFiles []string, sessionID, userID string) ([]map[
 		})
 	}
 	return payload, nil
-}
-
-// basicSendFilePayload 回退基础模式载荷（仅 path+name+is_skill_package，Python L766-773）。
-func basicSendFilePayload(validFiles []string) []map[string]any {
-	payload := make([]map[string]any, 0, len(validFiles))
-	for _, fp := range validFiles {
-		payload = append(payload, map[string]any{
-			"path":             fp,
-			"name":             filepath.Base(fp),
-			"is_skill_package": LooksLikeSkillPackage(fp),
-		})
-	}
-	return payload
 }
 
 // defaultDownloadInfoBuilder 默认下载信息构造（持久令牌：expiresIn=nil，对齐 Python
