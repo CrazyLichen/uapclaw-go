@@ -450,7 +450,8 @@ func TestAnswer_挂起恢复排队(t *testing.T) {
 	current, _ := svc.store.ReadDirect(toString(task["id"]), nil, nil)
 	st := toString(current["status"])
 	if st != "running" && st != "completed" {
-		t.Logf("GOROUTINES:\n%s", runtime.Stack(buf(true), false))
+		stack := buf(true)
+		t.Logf("GOROUTINES:\n%s", stack)
 		t.Fatalf("挂起源回答应回队并重派发, got %v (resume=%v)", st, current["resume_answer"])
 	}
 	close(gate2)
