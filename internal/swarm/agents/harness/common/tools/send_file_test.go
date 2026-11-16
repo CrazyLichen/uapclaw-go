@@ -438,3 +438,116 @@ func TestSendFile_metadata置nil(t *testing.T) {
 		t.Errorf("nil 刷新应清空 metadata: %v", tk.requestMetadata)
 	}
 }
+
+// ──────────────────── 会话级去重 + 静默守卫（2026-11-16 对齐批） ────────────────────
+
+// newDedupTestFile 独立内容文件（避免路径归一撞车）。
+func newDedupTestFile(t *testing.T, name string) string {
+	t.Helper()
+	return writeFileSendFileTest(t, t.TempDir(), name)
+}
+
+// writeFileSendFileTest 写测试文件。
+func writeFileSendFileTest(t *testing.T, dir, name string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte("content-"+name), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestSendFile_会话去重 同一 session 重复投递同路径 → 第二次跳过（Python L531-553）。
+func TestSendFile_会话去重(t *testing.T) {
+	hooks := installSendFileHooks(t)
+	tk := newSendFileToolkitForTest(t)
+	fp := newDedupTestFile(t, "dup.txt")
+
+	// 第一次：成功
+	first, _ := tk.SendFile(context.Background(), fp)
+	if !strings.Contains(first, "成功发送 1 个文件") {
+		t.Fatalf("首次投递应成功: %q", first)
+	}
+	if len(hooks.pushMsgs) != 1 {
+		t.Fatalf("首次应 push 1 次: %d", len(hooks.pushMsgs))
+	}
+
+	// 第二次：跳过重复（提示串逐字对齐 Python L544-546）
+	second, _ := tk.SendFile(context.Background(), fp)
+	if !strings.Contains(second, "文件已在本次会话发送过，跳过重复投递：") {
+		t.Fatalf("重复投递应被跳过: %q", second)
+	}
+	if !strings.Contains(second, "  - "+fp) {
+		t.Fatalf("跳过列表应含原路径: %q", second)
+	}
+	if len(hooks.pushMsgs) != 1 {
+		t.Fatalf("第二次不应 push: %d", len(hooks.pushMsgs))
+	}
+
+	// 不同 session 不去重
+	tk2 := NewSendFileToolkit("req-2", "sess-2", "web", nil)
+	third, _ := tk2.SendFile(context.Background(), fp)
+	if !strings.Contains(third, "成功发送 1 个文件") {
+		t.Fatalf("不同 session 不应去重: %q", third)
+	}
+}
+
+// TestSendFile_去重路径归一 归一函数行为：反斜杠转正斜杠 + 小写（Python L121-122）。
+// 注：整路径大写在大小写敏感 FS 上是不同文件，故直接单测归一函数；
+// 大小写不敏感生效场景为 Windows/macOS（case-insensitive FS 上的大小写差异路径）。
+func TestSendFile_去重路径归一(t *testing.T) {
+	got := normalizeSentFilePath(`/TMP/DIR/File.TXT`)
+	want := strings.ToLower("/tmp/dir/File.txt")
+	if got != want {
+		t.Fatalf("归一结果: %q != %q", got, want)
+	}
+	if got := normalizeSentFilePath(`/TMP/DIR\File.TXT`); got != strings.ToLower("/tmp/dir/file.txt") {
+		t.Fatalf("反斜杠应转正斜杠: %q", got)
+	}
+}
+
+// TestClearSentFilesForSession 清理去重状态后可重发（Python L152-155）。
+func TestClearSentFilesForSession(t *testing.T) {
+	installSendFileHooks(t)
+	tk := newSendFileToolkitForTest(t)
+	fp := newDedupTestFile(t, "clear.txt")
+	if _, err := tk.SendFile(context.Background(), fp); err != nil {
+		t.Fatal(err)
+	}
+	ClearSentFilesForSession("sess-1")
+	result, _ := tk.SendFile(context.Background(), fp)
+	if !strings.Contains(result, "成功发送 1 个文件") {
+		t.Fatalf("clear 后应可重发: %q", result)
+	}
+}
+
+// TestSendFile_静默守卫 skills 重建/知识转 Skill 静默 Agent 禁止投递（Python L379-390）。
+func TestSendFile_静默守卫(t *testing.T) {
+	hooks := installSendFileHooks(t)
+	fp := newDedupTestFile(t, "silent.txt")
+
+	cases := []struct {
+		name     string
+		metadata map[string]any
+	}{
+		{"skills_rebuild_silent", map[string]any{"skills_rebuild_silent": true}},
+		{"skills_create_from_knowledge_silent", map[string]any{"skills_create_from_knowledge_silent": true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tk := NewSendFileToolkit("req-1", "sess-1", "web", tc.metadata)
+			result, _ := tk.SendFile(context.Background(), fp)
+			// 提示串逐字对齐 Python L388-390
+			want := "静默模式禁止 send_file_to_user；请直接用文件写入工具生成 Skill 目录，不要投递文件给用户。"
+			if result != want {
+				t.Fatalf("静默提示串不符:\n got=%q\nwant=%q", result, want)
+			}
+			if len(hooks.pushMsgs) != 0 {
+				t.Fatal("静默模式不应 push")
+			}
+			if len(hooks.histCalls) != 0 {
+				t.Fatal("静默模式不应写 history")
+			}
+		})
+	}
+}

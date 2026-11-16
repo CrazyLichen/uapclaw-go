@@ -40,9 +40,26 @@ type SendFileToolkit struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// sendFileSilentMessage 静默模式提示串（Python L388-390 逐字复制，协议串不本地化）
+	sendFileSilentMessage = "静默模式禁止 send_file_to_user；" +
+		"请直接用文件写入工具生成 Skill 目录，不要投递文件给用户。"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
+	// sendFileSentFilePathsMu 会话级去重锁（Python 单线程共享 dict，Go 加锁——asyncio→Go 并发偏差沿用）
+	sendFileSentFilePathsMu sync.Mutex
+
+	// sentFilePathsBySession 会话级去重注册表。
+	// Python: _SENT_FILE_PATHS_BY_SESSION (send_file_to_user.py L109)；
+	// key 为 session id（tenant 维度恒空，偏差 D-x1）。
+	// 压缩可能丢弃历史工具结果导致 Agent 重复调用同一路径，请求级去重挡不住跨轮重复。
+	sentFilePathsBySession = map[string]map[string]struct{}{}
+
 	// sendFilePushFunc E2A 推送函数（agent_server 启动注入）。
 	// Python 通过函数体 lazy import + AgentWebSocketServer.get_instance() 取单例——
 	// Go swarmtools→server 编译期成环，等价机制为启动接线（cronbridge 先例）。
@@ -111,6 +128,26 @@ func (tk *SendFileToolkit) UpdateRuntimeContext(requestID, sessionID, channelID 
 // Python: send_file (send_file_to_user.py L79-206)
 // 返回给 LLM 的中文结果串；error 恒为 nil（Python 语义：异常兜底返回描述串）。
 func (tk *SendFileToolkit) SendFile(ctx context.Context, absFilePathList string) (string, error) {
+	// 0. skills.rebuild / 知识转 Skill 静默 Agent：禁止 push / chat.file，避免保存卡片污染 UI
+	// （Python L379-390；提示串逐字复制）
+	tk.mu.Lock()
+	md := tk.requestMetadata
+	tk.mu.Unlock()
+	if md != nil {
+		if silent, _ := md["skills_rebuild_silent"].(bool); silent {
+			logger.Info(logComponent).
+				Str("session_id", tk.sessionID).
+				Msg("[SendFileToolkit] silent mode skips send_file")
+			return sendFileSilentMessage, nil
+		}
+		if silent, _ := md["skills_create_from_knowledge_silent"].(bool); silent {
+			logger.Info(logComponent).
+				Str("session_id", tk.sessionID).
+				Msg("[SendFileToolkit] silent mode skips send_file")
+			return sendFileSilentMessage, nil
+		}
+	}
+
 	// 1. 参数宽容解析（Python L88-101）
 	paths := parseSendFileInput(absFilePathList)
 
@@ -206,32 +243,49 @@ func (tk *SendFileToolkit) GetTools() []tool.Tool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // sendValidFiles 发送有效文件（history + push + 结果串）。
-// Python L128-199 主体（server.send_push 段）。
+// Python L128-199 主体（server.send_push 段）+ L531-553 会话去重。
 func (tk *SendFileToolkit) sendValidFiles(ctx context.Context, validFiles, missingFiles []string) (string, error) {
 	tk.mu.Lock()
 	requestID, sessionID, channelID := tk.requestID, tk.sessionID, tk.channelID
 	requestMetadata := copySendFileMetadata(tk.requestMetadata)
 	tk.mu.Unlock()
 
-	// 4-5. 下载信息生成（整块失败回退基础模式，Python L133-164）
+	// 4a. 会话级去重分流（Python _partition_sent_files L531-534）
+	// 授权模式下去重不生效（Python 授权路径跳过 partition，L470-478）
+	var skippedFiles []string
+	validFiles, skippedFiles = partitionSentFiles(sessionID, validFiles)
+	if len(validFiles) == 0 {
+		// 全部重复：跳过重复投递（Python L535-553 提示串逐字复制）
+		msgParts := []string{}
+		if len(skippedFiles) > 0 {
+			msgParts = append(msgParts, "文件已在本次会话发送过，跳过重复投递：")
+			for _, sf := range skippedFiles {
+				msgParts = append(msgParts, "  - "+sf)
+			}
+		}
+		if len(missingFiles) > 0 {
+			msgParts = append(msgParts, "以下文件不存在，未发送：")
+			for _, mf := range missingFiles {
+				msgParts = append(msgParts, "  - "+mf)
+			}
+		}
+		if len(msgParts) == 0 {
+			msgParts = append(msgParts, "没有可发送的文件")
+		}
+		logger.Info(logComponent).
+			Str("session_id", sessionID).
+			Int("skipped", len(skippedFiles)).
+			Int("missing", len(missingFiles)).
+			Msg("[SendFileToolkit] skip duplicate send")
+		return strings.Join(msgParts, "\n"), nil
+	}
+
+	// 4b. 下载信息生成（整块失败回退基础模式，Python L133-164）
 	filesPayload, downloadErr := buildSendFilePayload(validFiles, sessionID)
 	if downloadErr != nil {
 		logger.Warn(logComponent).Err(downloadErr).
 			Msg("[SendFileToolkit] build download info failed, fallback to basic mode")
 		filesPayload = basicSendFilePayload(validFiles)
-	}
-
-	// 6. history（Python L166-179；注入函数为 nil 时 Warn 跳过）
-	if sendFileHistoryFunc != nil {
-		sendFileHistoryFunc(
-			sessionID, requestID, channelID,
-			"assistant", "", currentSendFileTimestamp(),
-			"chat.file", map[string]any{"files": filesPayload},
-			nil, "",
-		)
-	} else {
-		logger.Warn(logComponent).
-			Msg("[SendFileToolkit] history func not injected, skip")
 	}
 
 	// 7. push（Python L181-193；手工构造对齐 Python msg 字面量）
@@ -257,8 +311,30 @@ func (tk *SendFileToolkit) sendValidFiles(ctx context.Context, validFiles, missi
 			Msg("[SendFileToolkit] push func not injected, skip")
 	}
 
-	// 8-9. 结果串（Python L194-199）
+	// push 成功 → 标记已发送（Python _mark_files_sent L616）
+	markFilesSent(sessionID, validFiles)
+
+	// 6. history（Python L617-635；注入函数为 nil 时 Warn 跳过；失败不阻断结果串）
+	if sendFileHistoryFunc != nil {
+		sendFileHistoryFunc(
+			sessionID, requestID, channelID,
+			"assistant", "", currentSendFileTimestamp(),
+			"chat.file", map[string]any{"files": filesPayload},
+			nil, "",
+		)
+	} else {
+		logger.Warn(logComponent).
+			Msg("[SendFileToolkit] history func not injected, skip")
+	}
+
+	// 8-9. 结果串（Python L194-199 + L641-644 skipped 段）
 	resultParts := []string{fmt.Sprintf("成功发送 %d 个文件", len(validFiles))}
+	if len(skippedFiles) > 0 {
+		resultParts = append(resultParts, "以下文件已在本次会话发送过，已跳过：")
+		for _, sf := range skippedFiles {
+			resultParts = append(resultParts, "  - "+sf)
+		}
+	}
 	if len(missingFiles) > 0 {
 		resultParts = append(resultParts, "以下文件不存在，未发送：")
 		for _, mf := range missingFiles {
@@ -266,6 +342,74 @@ func (tk *SendFileToolkit) sendValidFiles(ctx context.Context, validFiles, missi
 		}
 	}
 	return strings.Join(resultParts, "\n"), nil
+}
+
+// sentFilesKey 会话去重键（Python _sent_files_key L112-118；
+// enterprise tenant 维度恒空，偏差 D-x1；空 session 落 "default"）。
+func sentFilesKey(sessionID string) string {
+	if sid := strings.TrimSpace(sessionID); sid != "" {
+		return sid
+	}
+	return "default"
+}
+
+// normalizeSentFilePath 去重路径归一：abspath + 反斜杠转正斜杠 + 小写。
+// Python: _normalize_sent_file_path (send_file_to_user.py L121-122)
+// 注：ToSlash 在 Unix 分隔符下为 no-op，反斜杠替换须显式 strings.ReplaceAll
+// （Windows 来源路径在 Linux 服务端落地的场景）。
+func normalizeSentFilePath(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	return strings.ToLower(strings.ReplaceAll(abs, "\\", "/"))
+}
+
+// partitionSentFiles 分流 (new, already_sent)，不改注册表。
+// Python: _partition_sent_files (send_file_to_user.py L125-142)
+func partitionSentFiles(sessionID string, paths []string) (newPaths, skipped []string) {
+	sendFileSentFilePathsMu.Lock()
+	sent := sentFilePathsBySession[sentFilesKey(sessionID)]
+	sendFileSentFilePathsMu.Unlock()
+	seen := make(map[string]struct{}, len(sent))
+	for k := range sent {
+		seen[k] = struct{}{}
+	}
+	newPaths = make([]string, 0, len(paths))
+	for _, path := range paths {
+		key := normalizeSentFilePath(path)
+		if _, ok := seen[key]; ok {
+			skipped = append(skipped, path)
+		} else {
+			newPaths = append(newPaths, path)
+			seen[key] = struct{}{}
+		}
+	}
+	return newPaths, skipped
+}
+
+// markFilesSent push 成功后登记已发送路径。
+// Python: _mark_files_sent (send_file_to_user.py L145-149)
+func markFilesSent(sessionID string, paths []string) {
+	sendFileSentFilePathsMu.Lock()
+	defer sendFileSentFilePathsMu.Unlock()
+	key := sentFilesKey(sessionID)
+	sent := sentFilePathsBySession[key]
+	if sent == nil {
+		sent = make(map[string]struct{}, len(paths))
+		sentFilePathsBySession[key] = sent
+	}
+	for _, path := range paths {
+		sent[normalizeSentFilePath(path)] = struct{}{}
+	}
+}
+
+// ClearSentFilesForSession 会话 adapter 清理时丢弃去重状态（包级导出供清理点调用）。
+// Python: clear_sent_files_for_session (send_file_to_user.py L152-155)
+func ClearSentFilesForSession(sessionID string) {
+	sendFileSentFilePathsMu.Lock()
+	defer sendFileSentFilePathsMu.Unlock()
+	delete(sentFilePathsBySession, sentFilesKey(sessionID))
 }
 
 // parseSendFileInput 宽容解析入参（Python L88-101）。
