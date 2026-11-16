@@ -18,6 +18,7 @@ import (
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/modalityprobe"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	rail "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -75,6 +76,28 @@ func (s *ModelBackupRailSuite) TearDownSuite() {
 	s.AgentSuite.TearDownSuite()
 }
 
+// prefillImageProbeCache 预填模态探测缓存（结论 false=不支持）。
+// 等价 Python 集成测试的净效果：Python schedule_image_support_probe 是
+// asyncio.create_task，同步测试无 running loop → RuntimeError → 探测跳过、
+// mock 队列不被消耗；Go 侧探测是 goroutine（23.7 spec 偏差 D1），会真实
+// 消费 MockModelClient 队列里的预设响应，把 failover 断成「主模型伪成功」。
+// CreateDeepAgent 前预填缓存使 GetCachedImageSupport 命中、跳过调度。
+// Reason: failClient 的错误响应被探测请求吃掉 → ON_MODEL_EXCEPTION 不触发。
+// Scope: 所有向 CreateDeepAgent 传入自定义 Model 且依赖 mock 队列时序的集成用例。
+func prefillImageProbeCache(models ...*llm.Model) {
+	for _, m := range models {
+		if m == nil || m.ModelConfig == nil {
+			continue
+		}
+		apiBase := ""
+		if m.ClientConfig != nil {
+			apiBase = m.ClientConfig.APIBase
+		}
+		modalityprobe.SetCachedImageSupport(
+			modalityprobe.ProbeCacheKey{APIBase: apiBase, ModelName: m.ModelConfig.ModelName}, false)
+	}
+}
+
 // TestModelBackupRailSuite 运行模型备份护栏集成测试套件
 func TestModelBackupRailSuite(t *testing.T) {
 	suite.Run(t, new(ModelBackupRailSuite))
@@ -107,6 +130,8 @@ func (s *ModelBackupRailSuite) TestModelBackupRail_Failover主模型故障切换
 	s.Require().NoError(err, "创建备用 Model 失败")
 
 	// 创建 DeepAgent：主模型 failModel + 挂 ModelBackupRail（内含 backupModel）
+	// 预填模态探测缓存，避免后台探测消耗 failClient 队列（见 prefillImageProbeCache）
+	prefillImageProbeCache(failModel, backupModel)
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
 		Model: failModel,
 		Rails: []agentinterfaces.AgentRail{
@@ -145,6 +170,8 @@ func (s *ModelBackupRailSuite) TestModelBackupRail_备用耗尽异常上抛() {
 	s.Require().NoError(err, "创建失败主 Model 失败")
 
 	// 空备用链：任何异常都不请求重试
+	// 预填模态探测缓存，避免后台探测消耗 failClient 队列（见 prefillImageProbeCache）
+	prefillImageProbeCache(failModel)
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
 		Model: failModel,
 		Rails: []agentinterfaces.AgentRail{

@@ -158,6 +158,9 @@ func (s *ProviderErrorSuite) newAgent() *harness.DeepAgent {
 	)
 	s.Require().NoError(err, "创建 Model 失败")
 
+	// 预填模态探测缓存：后台探测会消费 mock 队列里的错误/空响应，
+	// 把「provider 必须上抛」断链成伪成功（见 prefillImageProbeCache）
+	prefillImageProbeCache(model)
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
 		Model:                           model,
 		EnableModelAnomalyDetectionRail: anomalyRailDisabled(),

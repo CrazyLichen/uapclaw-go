@@ -136,6 +136,8 @@ func (s *ModelBackupReActLoopSuite) TestModelBackupReActLoop_Failover后工具�
 	// 用计数器验证工具被真实执行且参数正确
 	addTool := s.newAddTool()
 
+	// 预填模态探测缓存，避免后台探测消耗 failClient 队列（见 prefillImageProbeCache）
+	prefillImageProbeCache(failModel, backupModel)
 	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
 		Model:         failModel,
 		ToolInstances: []tool.Tool{addTool},
@@ -203,6 +205,8 @@ func (s *ModelBackupReActLoopSuite) TestModelBackupReActLoop_备用模型二轮�
 	addTool := s.newAddTool()
 
 	// 备用链只含 1 个模型：第一次故障切换后 index=1 耗尽
+	// 预填模态探测缓存，避免后台探测消耗 failClient 队列（见 prefillImageProbeCache）
+	prefillImageProbeCache(failModel, backupModel)
 	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
 		Model:         failModel,
 		ToolInstances: []tool.Tool{addTool},
