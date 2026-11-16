@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,4 +67,52 @@ func TestValidateSessionAndState(t *testing.T) {
 // TestNewAtomicNode_Nil panic 对齐 Python 抽象方法必须实现的约束（偏差 D3）
 func TestNewAtomicNode_Nil(t *testing.T) {
 	assert.Panics(t, func() { NewAtomicNode(nil) })
+}
+
+// TestAtomicInvoke_Success 成功路径：回调返回值透传 + CommitCmp 在回调之后被调用
+func TestAtomicInvoke_Success(t *testing.T) {
+	st := &fakeAtomicState{}
+	sess := &fakeAtomicSession{st: st}
+	called := false
+	node := NewAtomicNode(func(ctx context.Context, kwargs map[string]any) (any, error) {
+		called = true
+		assert.False(t, st.commitCmpCalled, "commit 必须发生在回调之后")
+		assert.Equal(t, sess, kwargs["session"])
+		return "ok", nil
+	})
+	result, err := node.AtomicInvoke(context.Background(), map[string]any{"session": sess})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", result)
+	assert.True(t, called)
+	assert.True(t, st.commitCmpCalled, "回调成功后必须提交")
+}
+
+// TestAtomicInvoke_回调错误 回调失败：错误原样上抛、不提交
+func TestAtomicInvoke_回调错误(t *testing.T) {
+	st := &fakeAtomicState{}
+	sess := &fakeAtomicSession{st: st}
+	sentinel := assert.AnError
+	node := NewAtomicNode(func(ctx context.Context, kwargs map[string]any) (any, error) {
+		return nil, sentinel
+	})
+	result, err := node.AtomicInvoke(context.Background(), map[string]any{"session": sess})
+	require.ErrorIs(t, err, sentinel)
+	assert.Nil(t, result)
+	assert.False(t, st.commitCmpCalled, "失败不得提交")
+}
+
+// TestAtomicInvoke_校验失败 session 缺失：不触碰回调、不提交、错误码与 reason 锁定
+func TestAtomicInvoke_校验失败(t *testing.T) {
+	called := false
+	node := NewAtomicNode(func(ctx context.Context, kwargs map[string]any) (any, error) {
+		called = true
+		return nil, nil
+	})
+	result, err := node.AtomicInvoke(context.Background(), map[string]any{})
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.False(t, called, "校验失败不得进入回调")
+	be := err.(*exception.BaseError)
+	assert.Equal(t, exception.StatusGraphStateCommitError, be.Status())
+	assert.Equal(t, "session is None", be.Params()["reason"])
 }

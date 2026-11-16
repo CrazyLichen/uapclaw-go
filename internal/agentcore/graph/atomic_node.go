@@ -30,6 +30,34 @@ func NewAtomicNode(atomicInvokeFunc func(ctx context.Context, kwargs map[string]
 	return AtomicNode{atomicInvokeFunc: atomicInvokeFunc}
 }
 
+// AtomicInvoke 原子调用：校验会话与状态 → 执行回调 → 提交暂存 → 返回结果。
+// Python: AtomicNode.atomic_invoke / AsyncAtomicNode.atomic_invoke（偏差 D1 合并），
+// 步骤顺序对齐 atomic_node.py:26-31，任一步失败不提交、错误原样上抛。
+func (a *AtomicNode) AtomicInvoke(ctx context.Context, kwargs map[string]any) (any, error) {
+	// Python: session = kwargs.get("session", None)
+	var sess session.BaseSession
+	if raw, ok := kwargs["session"].(session.BaseSession); ok {
+		sess = raw
+	}
+
+	// Python: _validate_session_and_state(session)
+	ws, err := validateSessionAndState(sess)
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: result = self._atomic_invoke(**kwargs)
+	result, err := a.atomicInvokeFunc(ctx, kwargs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: session.state().commit_cmp()
+	ws.CommitCmp()
+
+	return result, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateSessionAndState 校验会话与状态可提交（atomic_node.py:13-22 一比一，
