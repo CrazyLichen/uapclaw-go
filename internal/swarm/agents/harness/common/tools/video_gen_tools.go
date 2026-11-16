@@ -23,7 +23,7 @@ package tools
 //   - D-23.8-4 已回收：rootcontext 叶子包拆分（对齐 Python root_context.py
 //     文件粒度）后直接 rootcontext.CurrentRootDecisionContext(ctx)，与 Python 一致
 //   - D-23.8-5：send_runtime_push/SendFileToolkit.send_file 在 Go 为注入缝
-//     （SetVideoGenRuntimePush/SetVideoGenSendFileFunc），由 adapter 装配层桥接
+//     （SetVideoGenRuntimePush），由 adapter 装配层桥接；SendFileToolkit 投递经 ctx 现建（D-23.8-5 已回收）
 //   - Python httpx.AsyncClient → Go net/http；asyncio.create_task → goroutine
 
 import (
